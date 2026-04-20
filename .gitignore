@@ -1,0 +1,11 @@
+.DS_Store
+.venv/
+conda-env/
+.cache/
+.home/
+.conda/
+site/
+__pycache__/
+*.pyc
+.mkdocs-serve.log
+.mkdocs-serve-*.log

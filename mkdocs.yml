@@ -1,0 +1,207 @@
+site_name: AI Systems Atlas
+site_description: 面向扩散模型、VLM、VLA、量化、训练、推理、对比学习、世界模型与具身智能的中文知识库
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.indexes
+    - navigation.tabs
+    - navigation.top
+    - navigation.sections
+    - navigation.expand
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: teal
+      accent: deep orange
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+plugins:
+  - search
+extra_javascript:
+  - assets/javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+extra_css:
+  - assets/stylesheets/extra.css
+nav:
+  - 首页: index.md
+  - 路线图:
+      - roadmap/index.md
+      - 快速对照表: roadmap/comparison-tables.md
+      - 研究与工程学习路径: roadmap/research-and-engineering-study-plan.md
+      - 常见技术决策与取舍: roadmap/common-decision-patterns-and-tradeoffs.md
+  - 术语表: glossary/index.md
+  - 参考文献: references/index.md
+  - 论文导读:
+      - paper-guides/index.md
+      - 扩散模型导读: paper-guides/diffusion-reading-guide.md
+      - 多模态与具身导读: paper-guides/multimodal-embodied-reading-guide.md
+      - 训练与系统导读: paper-guides/training-systems-reading-guide.md
+      - 量化与高效推导读: paper-guides/quantization-efficient-serving-reading-guide.md
+      - VLM 评测导读: paper-guides/vlm-evaluation-reading-guide.md
+      - 世界模型导读: paper-guides/world-models-reading-guide.md
+      - 世界模型与规划专题导读: paper-guides/world-models-planning-reading-guide.md
+      - VLM/VLA 开源系统导读: paper-guides/vlm-vla-open-systems-guide.md
+      - 基础模型系统研究地图: paper-guides/foundation-models-systems-research-map.md
+      - 论文阅读与笔记方法: paper-guides/reading-notes-methodology.md
+      - 论文复现与可复现性导读: paper-guides/reproducibility-and-replication-guide.md
+  - 工程模板:
+      - playbooks/index.md
+      - 实验记录模板: playbooks/experiment-note-template.md
+      - 系统设计模板: playbooks/system-design-template.md
+      - Benchmark 记录模板: playbooks/benchmark-log-template.md
+      - 论文阅读模板: playbooks/paper-reading-template.md
+      - 部署复盘模板: playbooks/deployment-postmortem-template.md
+      - 数据集盘点模板: playbooks/dataset-inventory-template.md
+      - 数据回流模板: playbooks/data-feedback-template.md
+      - 线上事故排查模板: playbooks/incident-triage-template.md
+      - 机器人实机测试模板: playbooks/robot-realworld-test-template.md
+      - 多模态标注规范模板: playbooks/multimodal-annotation-spec-template.md
+      - 研究计划模板: playbooks/research-program-template.md
+      - 评测体系设计模板: playbooks/evaluation-suite-design-template.md
+      - 模型发布检查清单: playbooks/model-release-checklist.md
+      - 数据发布检查清单: playbooks/dataset-release-checklist.md
+  - 扩散模型:
+      - diffusion/index.md
+      - 发展脉络: diffusion/evolution.md
+      - 训练与表示: diffusion/training.md
+      - Score Matching、SDE 与 Probability Flow: diffusion/score-matching-sde-and-probability-flow.md
+      - 噪声日程与参数化: diffusion/noise-schedules-and-parameterization.md
+      - 条件控制与 Guidance: diffusion/guidance-and-conditioning.md
+      - 采样与推理: diffusion/inference.md
+      - 蒸馏与整流: diffusion/distillation.md
+      - 一致性模型与 Rectified Flow: diffusion/consistency-models-and-rectified-flow.md
+      - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
+      - 训练配方与失效分析: diffusion/practical-training-recipes-and-failure-analysis.md
+      - 方法对照表: diffusion/comparison-table.md
+  - VLM:
+      - vlm/index.md
+      - 架构与训练: vlm/architecture-and-training.md
+      - 评测与工具使用: vlm/evaluation-and-tool-use.md
+      - 文档理解与 OCR: vlm/document-understanding-and-ocr.md
+      - 图表、表格与结构化推理: vlm/charts-tables-and-structured-reasoning.md
+      - 屏幕代理与 Grounding: vlm/screen-agents-and-grounding.md
+      - 检索、重排与向量系统: vlm/retrieval-reranking-and-vector-systems.md
+      - 鲁棒性与长尾评测: vlm/robustness-and-long-tail-evaluation.md
+      - 多模态数据治理与合成增强: vlm/multimodal-data-curation-and-synthetic-generation.md
+      - 方法对照表: vlm/comparison-table.md
+  - VLA:
+      - vla/index.md
+      - 数据与策略学习: vla/data-and-policy-learning.md
+      - 动作表示与控制接口: vla/action-representation-and-interfaces.md
+      - 遥操作示范质量与采集: vla/teleoperation-demonstration-quality-and-collection.md
+      - Benchmark 与数据引擎: vla/benchmarks-and-data-engines.md
+      - VLA 的 Sim2Real: vla/sim2real-for-vla.md
+      - 闭环恢复与失败分析: vla/closed-loop-recovery-and-failure-analysis.md
+      - 动作分块、层级策略与潜在技能: vla/action-chunking-hierarchical-policies-and-latent-skills.md
+      - 部署与安全: vla/deployment-and-safety.md
+  - 量化:
+      - quantization/index.md
+      - PTQ 与权重量化: quantization/ptq-gptq-awq-smoothquant.md
+      - QLoRA 与量化训练: quantization/qlora-and-quantized-training.md
+      - FP8 与混合精度服务: quantization/fp8-and-mixed-precision-serving.md
+      - QAT、Kernel 与 KV Cache: quantization/qat-kernels-and-kv-cache.md
+      - 激活离群值与校准策略: quantization/activation-outliers-and-calibration-strategies.md
+      - 服务栈与硬件权衡: quantization/serving-stacks-and-hardware-tradeoffs.md
+      - 多模态与 VLA 模型量化: quantization/quantization-for-multimodal-and-vla-models.md
+      - 评测与部署清单: quantization/evaluation-and-deployment-checklist.md
+      - 方法对照表: quantization/comparison-table.md
+  - 训练:
+      - training/index.md
+      - 预训练、微调与对齐: training/pretraining-finetuning-alignment.md
+      - Megatron-LM、DeepSpeed 与训练系统栈: training/megatron-lm-deepspeed-and-open-training-stacks.md
+      - 集群运维、实验管理与成本治理: training/cluster-operations-and-experiment-management.md
+      - 输入管线、Packing 与吞吐治理: training/input-pipelines-packing-and-throughput-governance.md
+      - 训练稳定性、数值异常与故障排查: training/stability-numerics-and-failure-triage.md
+      - 数据系统与优化: training/data-systems-and-optimization.md
+      - Scaling、课程学习与数据混合: training/scaling-curriculum-and-data-mixture.md
+      - 后训练数据引擎与 Judge 模型: training/post-training-data-engines-and-judge-models.md
+      - 偏好数据与对齐失效模式: training/preference-data-and-alignment-pitfalls.md
+      - 分布式训练与 Checkpoint: training/distributed-training-and-checkpointing.md
+      - 数据质量、去重与治理: training/data-quality-dedup-and-governance.md
+      - 目标函数、优化器与学习率日程: training/objectives-optimizers-and-schedules.md
+      - 评测与消融方法学: training/evaluation-and-ablation-methodology.md
+      - Scaling Law 与实验经济学: training/scaling-laws-and-experiment-economics.md
+  - 算子与编译器:
+      - operators/index.md
+      - CUDA 编程模型与内存层次: operators/cuda-programming-model-and-memory.md
+      - Triton 编程模型与自动调优: operators/triton-programming-model-and-autotuning.md
+      - GEMM、Attention 与融合 Kernel: operators/gemm-attention-and-fused-kernels.md
+      - DeepGEMM 解读: operators/deepgemm-fp8-gemm-and-mega-moe.md
+      - 长上下文与 FlashAttention 演化: operators/long-context-and-flashattention-evolution.md
+      - 服务态 Attention 与 KV Kernel: operators/serving-attention-and-kv-kernels.md
+      - Reduction、Norm 与索引 Kernel: operators/reduction-norm-layout-and-indexing.md
+      - 低精度与量化 Kernel: operators/low-precision-and-quantized-kernels.md
+      - FP8 与优化器 Kernel: operators/fp8-training-and-optimizer-kernels.md
+      - 通信算子与计算重叠: operators/communication-kernels-and-overlap.md
+      - GPU 互联与拓扑映射: operators/gpu-interconnects-and-topology-mapping.md
+      - 高级 Kernel 模式与形状特化: operators/advanced-kernel-patterns-and-shape-specialization.md
+      - 稀疏、MoE 与路由 Kernel: operators/moe-routing-and-sparse-kernels.md
+      - 自定义算子与框架集成: operators/custom-op-development-and-framework-integration.md
+      - 运行时 Dispatch 与 Kernel 选择: operators/runtime-dispatch-and-kernel-selection.md
+      - Roofline、基准与案例拆解: operators/roofline-benchmarking-and-case-studies.md
+      - 性能反模式与失效案例: operators/performance-anti-patterns-and-failure-modes.md
+      - Kernel 成本模型与选型启发式: operators/kernel-cost-models-and-selection-heuristics.md
+      - PTX、SASS 与编译结果检查: operators/ptx-sass-and-compiler-inspection.md
+      - Workload 建模与 Shape Bucket: operators/workload-modeling-and-shape-buckets.md
+      - 硬件感知排查清单: operators/hardware-aware-debug-checklist.md
+      - 测试、回归与维护: operators/testing-regression-and-maintenance.md
+      - CUTLASS、CuTe 与编译栈: operators/cutlass-cute-and-compiler-stack.md
+      - Profiling、调试与数值稳定性: operators/profiling-debugging-and-numerical-stability.md
+  - 推理:
+      - inference/index.md
+      - 服务系统: inference/serving-systems.md
+      - vLLM、SGLang 与 TensorRT-LLM: inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md
+      - 解耦式 Prefill、KV 服务与容量运维: inference/disaggregated-prefill-kv-services-and-capacity-ops.md
+      - 缓存、路由与投机执行: inference/caching-routing-and-speculative.md
+      - 上下文压缩、KV 淘汰与内存分层: inference/context-compression-kv-eviction-and-memory-hierarchies.md
+      - RAG、Agent 与长上下文系统: inference/rag-agents-and-long-context-systems.md
+      - 容量规划与优化清单: inference/optimization-checklist-and-capacity-planning.md
+      - GPU Kernel、Batching 与内存系统: inference/gpu-kernels-batching-and-memory-systems.md
+      - 可观测性与在线评测: inference/observability-and-online-evaluation.md
+      - MoE 路由与多模型服务: inference/moe-routing-and-multi-model-serving.md
+      - 成本建模与 SLO 设计: inference/cost-modeling-and-slo-design.md
+  - 对比学习:
+      - contrastive-learning/index.md
+      - 基础方法: contrastive-learning/foundations.md
+      - 多模态与检索: contrastive-learning/multimodal-and-retrieval.md
+      - 难负样本与增广设计: contrastive-learning/hard-negatives-and-augmentation-design.md
+      - 评测与失效模式: contrastive-learning/evaluation-and-failure-modes.md
+      - 自蒸馏与非对比方法: contrastive-learning/self-distillation-and-non-contrastive-methods.md
+  - 世界模型:
+      - world-models/index.md
+      - WM、WAM、VAM 与动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
+      - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
+      - 模拟器、反事实与合成 Rollout: world-models/simulators-counterfactuals-and-synthetic-rollouts.md
+      - 生成式模拟与视频世界模型: world-models/generative-simulation-and-video.md
+      - Planning as Inference 与潜在动作: world-models/planning-as-inference-and-latent-actions.md
+      - 评测与失效模式: world-models/evaluation-and-failure-modes.md
+      - 机器人与自动驾驶应用: world-models/applications-in-robotics-and-autonomous-driving.md
+      - 数据引擎与自我改进: world-models/data-engines-and-self-improvement.md
+      - 不确定性与风险敏感规划: world-models/uncertainty-and-risk-aware-planning.md
+  - 具身智能:
+      - embodied-ai/index.md
+      - 规划、控制与安全: embodied-ai/planning-control-and-safety.md
+      - Sim2Real 与数据引擎: embodied-ai/sim2real-and-data-engines.md
+      - 家庭机器人流程与失败模式: embodied-ai/household-robotics-workflows-and-failure-patterns.md
+      - 任务谱系与 Benchmark: embodied-ai/task-taxonomy-and-benchmarks.md
+      - 部署模式与安全案例: embodied-ai/deployment-patterns-and-safety-cases.md
+      - 人机协作与交互评测: embodied-ai/human-robot-interaction-and-evaluation.md
