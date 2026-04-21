@@ -1,6 +1,6 @@
-# Charles AI Notes
+# Charles AI notes
 
-一个以 **中文 AI 系统工程笔记** 为核心的文档仓库，站点名为 **AI Systems Atlas**。  
+一个以 **中文 AI 系统工程笔记** 为核心的文档仓库，站点名为 **Charles AI notes**。  
 内容重点不放在零散模型介绍，而是围绕 **训练、推理、量化、算子、世界模型、多模态与具身智能** 这些真正会在工程里反复遇到的问题，持续沉淀成可检索、可扩展的知识库。
 
 项目使用 **MkDocs + Material for MkDocs** 构建，适合本地阅读、持续扩写，以及通过 GitHub Pages 部署成静态站点。
@@ -17,7 +17,7 @@
 - **推理系统**：vLLM、SGLang、TensorRT-LLM、KV cache、长上下文、容量与 SLO
 - **算子与编译器**：CUDA、Triton、CUTLASS、FlashAttention、DeepGEMM、profiling
 - **对比学习与世界模型**：WM / WAM / VAM、Dreamer、视频世界模型、规划与评测
-- **工程模板与论文导读**：实验模板、系统设计模板、阅读路径与研究地图
+- **论文导读与研究地图**：阅读路径、研究脉络、方法关系与系统全景
 
 ## 仓库结构
 

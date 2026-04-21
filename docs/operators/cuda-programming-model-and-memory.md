@@ -385,3 +385,234 @@ CUDA kernel 在训练里更偏向：
 理解 CUDA 编程模型，关键不在于记住多少 API，而在于掌握 GPU 的执行与内存本质：warp 如何执行、SM 如何隐藏延迟、数据在各层内存中如何流动、以及为什么 tile、coalescing、shared memory、register 和 Tensor Core 会成为一切高性能 kernel 的核心词汇。
 
 只要这套心智模型建立起来，后面再去看 Triton、CUTLASS、FlashAttention、PagedAttention、量化 GEMM 或自定义 fused kernel，就不会把它们看成一堆零散技巧，而会看到它们共享的底层逻辑。
+
+## 22. Memory Transaction 视角下该怎么看“访存是否健康”
+
+很多 CUDA 初学者只会说“要 coalesced”，但在真正调 kernel 时，更实用的视角是：**一次 warp 访存到底被拆成了多少个 transaction，搬了多少无用字节，命中了哪一级 cache，以及这些 transaction 是否能与计算重叠。**
+
+### 22.1 为什么 transaction 粒度比源代码更真实
+
+你在代码里看到的是：
+
+1. `x[idx]`
+2. `x[idx + stride]`
+3. `float4` 或 `half2` 向量化加载
+
+但硬件实际执行时关心的是：
+
+1. **warp 内地址是否落在少数连续段上**；
+2. **访问大小是否与 cache line / segment 对齐**；
+3. **是否因为对齐差而多搬了一整块数据**；
+4. **写回时是否触发 read-modify-write 或部分写放大**。
+
+### 22.2 常见的“代码看着连续，硬件其实不连续”
+
+1. **leading dimension 太怪**，导致相邻线程跨行跳跃；
+2. **结构体布局不紧凑**，不同字段交错存放；
+3. **量化权重和 scale 分开放置**，dequant 时访问两套不同行步长数组；
+4. **page/block 索引层级太多**，最终地址映射分散。
+
+### 22.3 一条很实用的判断线
+
+如果某个 kernel 在 profile 里呈现出：
+
+1. **HBM 带宽不高**；
+2. **SM busy 也不高**；
+3. **warp stall reason 偏向 memory dependency**；
+
+那常见原因不是“GPU 太慢”，而是 transaction 组织很差，导致**既没有算满，也没有搬满**。
+
+## 23. Warp Scheduler 真正在隐藏什么
+
+理解 warp scheduler 的价值，关键是明白 GPU 不是让一个 warp 一口气做完所有事，而是在**大量 warp 间切换，用并发去填平等待**。
+
+### 23.1 哪些等待最常见
+
+1. **global memory latency**；
+2. **shared memory 依赖**；
+3. **长流水线指令等待**，如某些 Tensor Core 或特殊函数；
+4. **barrier / sync 等待**；
+5. **scoreboard dependency**，即指令结果尚未准备好。
+
+### 23.2 为什么 occupancy 不是唯一答案
+
+很多人以为只要 occupancy 高，warp scheduler 就能把等待全部藏掉。实际上还要看：
+
+1. **每个 warp 自身有没有足够的 ILP**；
+2. **可运行 warp 是否都卡在同一类依赖上**；
+3. **是否因为 shared memory / register 占用导致 block 太少**；
+4. **访存模式是否让所有 warp 同时被同一热点拖住**。
+
+也就是说，**occupancy 提供的是“可以切换的人多不多”，而不是“切换后一定有活可干”**。
+
+## 24. `cp.async` 与多阶段流水为什么重要
+
+Hopper 之前后，很多高性能 GEMM 和 attention kernel 的质变都来自一件事：**把全局访存搬运和块内计算做成显式流水线**。
+
+### 24.1 传统同步式 tile 流程
+
+1. 从 global memory 搬一块到 shared memory；
+2. `__syncthreads()`；
+3. 计算这一块；
+4. 再搬下一块；
+5. 再同步。
+
+这种流程简单，但会产生明显的“搬运空洞”。
+
+### 24.2 `cp.async` 带来的变化
+
+通过异步复制，kernel 可以：
+
+1. **在计算当前 tile 时，后台预取下一 tile**；
+2. **减少整块阻塞式等待**；
+3. **构造 double buffering / multi-stage pipeline**；
+4. **更细粒度地安排 producer-consumer 节奏**。
+
+### 24.3 为什么不是所有 kernel 都该上多阶段
+
+多阶段流水也有成本：
+
+1. **shared memory 占用增加**；
+2. **同步和状态管理更复杂**；
+3. **寄存器压力上升**；
+4. **小尺寸或低复用场景下收益有限**。
+
+所以它更适合那些**tile 复用高、搬运成本显著、计算与搬运都足够重**的 kernel。
+
+## 25. TMA、Cluster Launch 与 Hopper 之后的新心智
+
+随着 Hopper 架构引入 **Tensor Memory Accelerator**、线程块簇和更强的异步能力，高性能 kernel 的设计边界又往前推了一步。
+
+### 25.1 TMA 主要带来的不是“更快拷贝”这么简单
+
+它实际在改变三件事：
+
+1. **从更高维张量视角描述搬运**，而不是只靠 thread 手工逐元素拷；
+2. **减少拷贝时对通用寄存器和线程参与的依赖**；
+3. **让更复杂的 tile 和 layout 转换更自然地进入流水线**。
+
+### 25.2 Thread Block Cluster 适合什么
+
+当单个 block 的 shared memory 已不足以承载期望工作集时，cluster 允许更大范围的协作，适合：
+
+1. **更大的 tile 协同**；
+2. **跨 block 的 producer-consumer**；
+3. **某些需要局部更大共享域的稀疏或分块算法**。
+
+但 cluster 并不是白送的：**可移植性、调度约束和调优复杂度都更高**。
+
+## 26. Launch Bounds、Register Pressure 与可持续优化
+
+很多 kernel 在第一次调优时会遇到一个经典矛盾：**寄存器多了，单线程更强；寄存器太多，SM 同时驻留 warp 变少。**
+
+### 26.1 `launch_bounds` 在帮你做什么
+
+它本质上是在给编译器一个约束：你预期 block 大小和最少驻留 block 数大概是什么。编译器据此会调整 register 分配与生成策略。
+
+### 26.2 常见误区
+
+1. **盲目压 register**。结果虽然 occupancy 上去了，但 spill 到 local memory，反而更慢；
+2. **盲目追大 tile**。看似 Tensor Core 利用更高，实则把 shared memory 和 register 全吃光；
+3. **只测一个 shape**。某配置在大 shape 好，但在服务态小 shape 下严重退化。
+
+### 26.3 一个更稳妥的调法
+
+建议把调优分成三步：
+
+1. **先确认瓶颈是带宽还是计算**；
+2. **再分别扫 tile、寄存器和 pipeline stages**；
+3. **最后看 shape family，而不是只看单点最佳值**。
+
+## 27. Cache 行为不是黑盒
+
+很多 kernel 不会显式控制 L1/L2，但不意味着 cache 行为不可理解。一个实用角度是区分：
+
+1. **流式读一次就丢的数据**；
+2. **同 SM 内短时间会复用的数据**；
+3. **跨 block 也可能复用的数据**；
+4. **写回后很快又会被后续 kernel 读的数据**。
+
+### 27.1 为什么这对 AI kernel 特别重要
+
+AI kernel 里经常出现下面几类模式：
+
+1. **Q/K/V 块内重用**；
+2. **dequant 时权重块和 scale 块重复读取**；
+3. **MoE 路由索引先读再散射再 gather**；
+4. **epilogue 刚写回的结果下一 kernel 立刻再读**。
+
+如果系统能通过 fusion、layout 或 launch 顺序改善这些复用，收益往往不小。
+
+### 27.2 一个常见错误
+
+把所有数据都当成“希望 cache 住”的对象。其实很多 streaming 数据根本不该强求缓存；更应把缓存预算留给真正会复用的块。
+
+## 28. Occupancy、ILP 与 MLP 的三角关系
+
+讨论 kernel 性能时，单提 occupancy 常常过于粗糙。更完整的视角是：
+
+1. **occupancy**：同时驻留多少 warp；
+2. **ILP**：单个 warp 内独立指令是否足够多；
+3. **MLP**：是否能并发发起多个内存请求。
+
+### 28.1 为什么这三者会互相牵制
+
+1. **更大 tile** 可能提高 ILP，但吃掉 register，压低 occupancy；
+2. **更激进预取** 可能提高 MLP，但增加状态管理复杂度；
+3. **更高 occupancy** 可能要求更小 block 或更少寄存器，从而降低单 warp 效率。
+
+真正的最优解，通常不是某个指标极致，而是三者在特定 shape 和硬件上的平衡点。
+
+## 29. Persistent Kernel 在推理里为什么常见
+
+服务态 decode 场景里，很多请求很碎，kernel launch 开销、调度抖动和形状不规则都会被放大。**persistent kernel** 的价值就在于：让一批常驻 block 持续从工作队列里取任务，而不是为每个小任务都重新 launch。
+
+### 29.1 它解决的问题
+
+1. **减少 launch overhead**；
+2. **提高小任务吞吐稳定性**；
+3. **让 runtime 更容易做细粒度调度**；
+4. **更适合 paged KV、grouped GEMM 这类不规则工作负载**。
+
+### 29.2 它带来的新问题
+
+1. **负载均衡更难**；
+2. **调试更复杂**；
+3. **容易出现某些 block 长期处理重任务导致尾部拖慢**；
+4. **需要更明确的工作队列和同步协议**。
+
+## 30. Kernel 设计常见模式
+
+从 BBuf 的 CUDA 优化笔记、CUTLASS/CuTe 和很多现代推理 kernel 里，可以总结出几类高频模式：
+
+1. **tile + pipeline**：GEMM、FlashAttention、量化 GEMM；
+2. **warp-specialized**：不同 warp 承担加载、计算、归约等不同角色；
+3. **persistent work queue**：服务态小任务或动态 shape；
+4. **split-K / grouped dispatch**：让不规则矩阵也能吃满硬件；
+5. **epilogue fusion**：把 bias、scale、activation、residual、dequant 合入写回前；
+6. **layout-aware kernel**：通过 swizzle、interleave、reorder 减少 bank conflict 和 transaction 浪费。
+
+### 30.1 为什么模式比单个技巧重要
+
+因为真正工程里，硬件架构会变，框架会变，某条指令的最优用法也会变；但**数据搬运、协同粒度、工作分解和复用策略**这四件事不会变。
+
+## 31. 一个面向 AI 算子的 CUDA 设计清单
+
+准备写一个 CUDA kernel 时，建议先强制回答以下问题：
+
+1. **目标 shape family 是什么**；
+2. **它更像 compute-bound 还是 memory-bound**；
+3. **是否存在天然 tile 复用**；
+4. **是否值得用 shared memory 或直接走寄存器/向量化加载**；
+5. **边界块和 mask 会不会特别重**；
+6. **是否应该 persistent 或 grouped**；
+7. **是否需要 fusion 才能体现价值**；
+8. **正确性最脆弱的边界 shape 是什么**。
+
+### 31.1 为什么这份清单重要
+
+因为很多“优化失败”的根因不是实现差，而是一开始就把问题建模错了：把服务态小矩阵当训练态大 GEMM 来做，把 bandwidth-bound 的事情当 compute-bound 来卷，把 runtime 问题误判成 kernel 问题。
+
+## 32. 小结
+
+CUDA 编程模型真正难的地方，不在语法，而在于你是否能从**transaction、warp 调度、流水线、内存层次和形状分解**这几个维度同时看一个 kernel。只要能把这些层真正串起来，看待 GPU 上的 GEMM、Attention、KV Cache、量化算子和融合 kernel 就会从“很多零碎技巧”变成“少数几类可复用设计模式”的组合。

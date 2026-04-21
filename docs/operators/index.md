@@ -224,6 +224,31 @@ $$
 
 前两篇建立编程模型，中间两篇建立常见热点算子的实现直觉，最后一篇帮助你把“会写”变成“会验证、会定位、会迭代”。
 
+## 快速代码示例
+
+```python
+import torch
+import triton
+import triton.language as tl
+
+@triton.jit
+def add_kernel(x_ptr, y_ptr, out_ptr, n, BLOCK: tl.constexpr):
+    pid = tl.program_id(0)
+    offs = pid * BLOCK + tl.arange(0, BLOCK)
+    mask = offs < n
+    x = tl.load(x_ptr + offs, mask=mask)
+    y = tl.load(y_ptr + offs, mask=mask)
+    tl.store(out_ptr + offs, x + y, mask=mask)
+
+def triton_add(x, y):
+    out = torch.empty_like(x)
+    n = x.numel()
+    add_kernel[(triton.cdiv(n, 256),)](x, y, out, n, BLOCK=256)
+    return out
+```
+
+这段代码是一个最小 Triton kernel：通过 `program_id` 映射线程块，`mask` 处理越界元素，再把结果写回输出。它适合作为模板扩展到 layernorm、激活融合等更复杂算子。
+
 ## 13. 小结
 
 算子、编译器和内核实现，不是 AI 系统里的边角知识，而是连接“模型想做什么”和“硬件实际上能做什么”的中间层。大模型训练、推理、量化、长上下文、世界模型和具身控制之所以越来越依赖系统工程，很大程度上就是因为这个中间层不再能被简单忽略。

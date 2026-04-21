@@ -1290,7 +1290,86 @@ tests/test_mega_moe.py
 3. 真正的功能边界主要在 `csrc/apis/`；
 4. JIT 和 kernel 生成是最后一层，而不是第一层阅读入口。
 
-## 20. 建议的阅读方式
+## 20. 把 `DeepGEMM` 接进真实系统前，最该检查什么
+
+如果你已经接受了前面的判断，下一步通常不是“它看起来很强，所以接进系统”，而是先回答一组很现实的问题。  
+`DeepGEMM` 这类库的真正门槛，不是 API 会不会调，而是**你的 workload、layout、运行时和运维习惯是否真的匹配它的假设**。
+
+### 20.1 接入前的五项硬检查
+
+| 检查项 | 应该问什么 | 不满足时会怎样 |
+| --- | --- | --- |
+| **硬件统一性** | 是否主要运行在 `SM90 / SM100` 这类目标 GPU 上 | 强特化收益会被硬件分裂吃掉 |
+| **shape 稳定性** | 热点 batch、token bucket、expert shape 是否足够集中 | JIT 回本慢，cache 命中率低 |
+| **layout 可控性** | 上游是否能稳定提供所需 pack、transpose、scale layout | 前后处理可能比 GEMM 本体还贵 |
+| **服务运行时配合度** | 是否允许热身、JIT cache、图捕获约束和专项 dispatch | 首次延迟、发布复杂度会上升 |
+| **团队维护能力** | 是否有人能长期追驱动、CUDA、架构升级与回归 | 线上收益可能被后续维护成本反噬 |
+
+如果这五项里有三项都答不上来，通常更稳妥的起点还是：
+
+1. 先用 `cuBLASLt` 或现有通用路径跑稳定；
+2. 再把真实热点 shape 抽出来做对照；
+3. 确认回报显著后，再局部切入 `DeepGEMM`。
+
+### 20.2 一个更实用的接入清单
+
+真正准备进系统时，建议至少补齐下面这些验证：
+
+1. **功能正确性**：和现有 `cuBLASLt` 或参考实现逐 shape 对齐；
+2. **数值一致性**：重点看 `FP8`、`FP8xFP4` 和 grouped / masked 路线的误差边界；
+3. **冷热启动差异**：区分首次 JIT 与 cache 命中后的延迟；
+4. **shape 覆盖率**：统计线上前 90% 请求是否真的落在目标热区；
+5. **fallback 策略**：遇到不支持或收益不明显的 shape，是否自动切回通用库；
+6. **回归成本**：CUDA 升级、驱动升级、GPU 代际变更后，是否有自动化回归集。
+
+这份清单的重点是：  
+**不要只证明它在理想 benchmark 上更快，要证明它在真实系统里更值得。**
+
+### 20.3 最常见的 benchmark 误读
+
+`DeepGEMM` 这一类高性能库最容易被误读的地方，不是实现，而是结果。
+
+**误读 1：峰值 TFLOPS 高，就说明线上一定赚。**
+
+不对。  
+线上可能输在：
+
+1. 首次 JIT；
+2. layout transform；
+3. dispatch / combine；
+4. 小 shape 长尾；
+5. cache 不命中。
+
+**误读 2：某个热点 shape 2x 提升，就说明整条链也接近 2x。**
+
+也不对。  
+整条链的瓶颈可能根本不在 expert GEMM 本体，而在：
+
+1. router；
+2. expert token 重排；
+3. 跨卡通信；
+4. graph capture 约束；
+5. 中间 buffer 管理。
+
+**误读 3：对 `cuBLASLt` 快，就说明任何系统都该替换。**
+
+这也不成立。  
+更合理的说法应该是：
+
+**它在某些高度匹配的 `FP8 / MoE / Hopper` 热点路径上，可能比默认官方通用路径更值得单独下沉。**
+
+### 20.4 一个更稳妥的灰度顺序
+
+如果你准备在线上或大规模离线系统里逐步接入，建议按这个顺序推进：
+
+1. **先做离线单算子对照**：证明正确性和局部性能收益；
+2. **再做链路内对照**：把前后处理、dispatch、combine 一起算进去；
+3. **再做热 shape 灰度**：只切最稳定、最常见的一批请求；
+4. **最后再扩大覆盖**：逐步把更多 grouped / masked 路线纳入。
+
+这种顺序的价值在于，能把风险压在最可控的范围里，而不是一上来把整个 GEMM 主路径换掉。
+
+## 21. 建议的阅读方式
 
 如果你想系统读 `DeepGEMM`，建议顺序如下：
 
@@ -1300,7 +1379,24 @@ tests/test_mega_moe.py
 4. **再看 `MQA` 和 `Mega MoE`**：理解它为什么已经不是单纯 GEMM 库；
 5. **最后做 profile 和 shape 对照**：把 benchmark 结果和真实 workload 形状放在一起看。
 
-## 21. 小结
+## 快速代码示例
+
+```python
+def bucket_moe_tokens(expert_ids):
+    buckets = {}
+    for idx, eid in enumerate(expert_ids):
+        buckets.setdefault(int(eid), []).append(idx)
+    return buckets
+
+def choose_gemm_path(m_size, use_masked=True):
+    if use_masked and m_size <= 128:
+        return "grouped_masked_gemm"
+    return "dense_gemm"
+```
+
+这段代码抽象了 `DeepGEMM` 在 MoE 场景常见的两个关键动作：先按 expert 把 token 分桶，再按 shape/布局选择 dense 或 grouped+masked 路径。真实工程中这一步通常与 JIT cache 命中率一起决定端到端收益。
+
+## 22. 小结
 
 `DeepGEMM` 最值得学的，不只是“怎么把 FP8 GEMM 写快”，而是**怎么把低精度、硬件特性、JIT、服务约束、MoE 数据流和系统接口统一进一个算子库设计里**。它提醒我们，现代大模型算子优化的真正边界早就不止于单个矩阵乘公式，而是在向一整条“布局变换 -> 数据搬运 -> 计算 -> 融合 -> 通信 -> 运行时缓存”的系统链路扩展。
 

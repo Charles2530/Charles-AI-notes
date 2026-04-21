@@ -199,3 +199,21 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 - [采样与推理](inference.md)：`DDIM`、`Euler`、`Heun`、`DPM-Solver`
 - [蒸馏与整流](distillation.md)：少步/一步生成的主要路线
 - [方法对照表](comparison-table.md)：快速比较“改了哪一层、是否重训、适合什么需求”
+
+## 快速代码示例
+
+```python
+import torch
+
+def cfg_eps(eps_uncond, eps_cond, scale=6.0):
+    # classifier-free guidance
+    return eps_uncond + scale * (eps_cond - eps_uncond)
+
+@torch.no_grad()
+def ddim_step(x_t, alpha_t, alpha_prev, eps):
+    # 一个简化版 DDIM 更新
+    x0 = (x_t - (1 - alpha_t).sqrt() * eps) / alpha_t.sqrt()
+    return alpha_prev.sqrt() * x0 + (1 - alpha_prev).sqrt() * eps
+```
+
+这段代码把两个常见推理组件放在一起：`cfg_eps` 展示了 **Classifier-Free Guidance** 如何混合条件/无条件噪声预测，`ddim_step` 展示了单步 **DDIM** 更新。实践中你可以先固定步数，再调 `scale` 找到质量与多样性的平衡点。

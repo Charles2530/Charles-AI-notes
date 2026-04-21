@@ -1,8 +1,8 @@
 <div class="atlas-hero">
-  <div class="atlas-kicker">AI Systems Atlas</div>
-  <h1>AI Systems Atlas</h1>
+  <div class="atlas-kicker">Charles AI notes</div>
+  <h1>Charles AI notes</h1>
 
-<p class="atlas-lead">一个面向本地阅读、持续扩写与工程落地的中文 AI 系统知识库，覆盖训练、推理、量化、多模态、世界模型、具身智能与底层算子栈。</p>
+<p class="atlas-lead">一个面向本地阅读、持续扩写与工程落地的中文 AI 系统知识库，围绕训练、推理、量化、多模态、世界模型、具身智能与底层算子栈持续沉淀工程笔记。</p>
 
   <div class="atlas-chip-row">
     <span class="atlas-chip">方法地图</span>
@@ -96,15 +96,6 @@
 
 进入。
 
-### 3. 作为工程工作台
-
-当你准备做实验、评测、系统设计或事故复盘时，可以直接使用：
-
-- [实验记录模板](playbooks/experiment-note-template.md)
-- [系统设计模板](playbooks/system-design-template.md)
-- [评测体系设计模板](playbooks/evaluation-suite-design-template.md)
-- [部署复盘模板](playbooks/deployment-postmortem-template.md)
-
 ## 使用建议
 
 <div class="section-grid">
@@ -115,10 +106,6 @@
   <div>
     <strong>围绕问题跳读</strong>
     <p>真实问题往往跨主题，例如慢、贵、不稳、掉点，通常要同时看训练、推理、评测和系统章节。</p>
-  </div>
-  <div>
-    <strong>把模板真正用起来</strong>
-    <p>如果只阅读不记录，文档价值会打折；把实验、失败和决策写回模板页，收益最高。</p>
   </div>
 </div>
 
@@ -136,5 +123,5 @@ mkdocs serve
 - 每个主题至少覆盖“总览、方法、工程、评测、失败模式”几层。
 - 先解释方法关系，再罗列代表工作。
 - 重点写适用边界、系统约束和真实取舍，而不是只写定义。
-- 能沉淀为流程的内容，优先落到导读页和模板页。
+- 能沉淀为流程的内容，优先落到导读页和专题深度页。
 - 对长期维护有价值的内容，优先补充真实案例、回归清单和决策复盘。

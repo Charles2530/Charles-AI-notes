@@ -1,4 +1,4 @@
-site_name: AI Systems Atlas
+site_name: Charles AI notes
 site_description: 面向扩散模型、VLM、VLA、量化、训练、推理、对比学习、世界模型与具身智能的中文知识库
 theme:
   name: material
@@ -63,22 +63,6 @@ nav:
       - 基础模型系统研究地图: paper-guides/foundation-models-systems-research-map.md
       - 论文阅读与笔记方法: paper-guides/reading-notes-methodology.md
       - 论文复现与可复现性导读: paper-guides/reproducibility-and-replication-guide.md
-  - 工程模板:
-      - playbooks/index.md
-      - 实验记录模板: playbooks/experiment-note-template.md
-      - 系统设计模板: playbooks/system-design-template.md
-      - Benchmark 记录模板: playbooks/benchmark-log-template.md
-      - 论文阅读模板: playbooks/paper-reading-template.md
-      - 部署复盘模板: playbooks/deployment-postmortem-template.md
-      - 数据集盘点模板: playbooks/dataset-inventory-template.md
-      - 数据回流模板: playbooks/data-feedback-template.md
-      - 线上事故排查模板: playbooks/incident-triage-template.md
-      - 机器人实机测试模板: playbooks/robot-realworld-test-template.md
-      - 多模态标注规范模板: playbooks/multimodal-annotation-spec-template.md
-      - 研究计划模板: playbooks/research-program-template.md
-      - 评测体系设计模板: playbooks/evaluation-suite-design-template.md
-      - 模型发布检查清单: playbooks/model-release-checklist.md
-      - 数据发布检查清单: playbooks/dataset-release-checklist.md
   - 扩散模型:
       - diffusion/index.md
       - 发展脉络: diffusion/evolution.md
