@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520">
+  <rect width="920" height="520" rx="28" fill="#fbfaf4"/>
+  <text x="46" y="58" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="30" font-weight="800" fill="#14292b">优化器症状到动作映射</text>
+  <text x="46" y="91" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="16" fill="#607d80">调参不要凭感觉，先看症状属于起跑、平台期、后期还是泛化问题。</text>
+  <g font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="17">
+    <rect x="55" y="125" width="810" height="68" rx="16" fill="#f5e4dc" stroke="#cb5d31"/><text x="90" y="166" font-weight="800" fill="#7f2f3a">刚起跑震荡</text><text x="250" y="166" fill="#36595b">优先调 warmup、peak LR、loss scale、初始化 batch</text>
+    <rect x="55" y="215" width="810" height="68" rx="16" fill="#fff6e8" stroke="#d59745"/><text x="90" y="256" font-weight="800" fill="#8b5a16">中期平台期</text><text x="250" y="256" fill="#36595b">看数据混合、LR 衰减、有效 batch、难例采样</text>
+    <rect x="55" y="305" width="810" height="68" rx="16" fill="#eef6f4" stroke="#1a6d72"/><text x="90" y="346" font-weight="800" fill="#0f5558">后期拖尾</text><text x="250" y="346" fill="#36595b">检查 decay 是否过慢、数据是否重复、目标是否冲突</text>
+    <rect x="55" y="395" width="810" height="68" rx="16" fill="#eef2ff" stroke="#6978b8"/><text x="90" y="436" font-weight="800" fill="#414d89">泛化下降</text><text x="250" y="436" fill="#36595b">降低过拟合数据权重，复查 holdout 与任务桶</text>
+  </g>
+</svg>

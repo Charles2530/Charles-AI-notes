@@ -31,11 +31,11 @@
 ## 推荐入口
 
 <div class="atlas-card-grid">
-  <a class="atlas-card" href="cuda-programming-model-and-memory.md">
+  <a class="atlas-card" href="cuda-programming-model-and-memory/">
     <strong>CUDA 编程模型与内存层次</strong>
     <p>先弄清线程、warp、shared memory、L2、HBM 这些最基础的执行概念。</p>
   </a>
-  <a class="atlas-card" href="triton-programming-model-and-autotuning.md">
+  <a class="atlas-card" href="triton-programming-model-and-autotuning/">
     <strong>Triton 编程模型与自动调优</strong>
     <p>理解更高层的块级编程和自动调优思路，建立与手写 CUDA 的互补视角。</p>
   </a>
@@ -43,7 +43,11 @@
     <strong>DeepGEMM 解读</strong>
     <p>从 FP8 GEMM、JIT、TMA、grouped GEMM 到 Mega MoE，读懂新一代大模型算子库在优化什么。</p>
   </a>
-  <a class="atlas-card" href="profiling-debugging-and-numerical-stability.md">
+  <a class="atlas-card" href="deepgemm-source-and-integration.md">
+    <strong>DeepGEMM 源码与接入</strong>
+    <p>补充源码阅读顺序、API 地图、调用路径和真实服务接入前的检查清单。</p>
+  </a>
+  <a class="atlas-card" href="profiling-debugging-and-numerical-stability/">
     <strong>Profiling、调试与数值稳定性</strong>
     <p>把“会写 kernel”推进到“会验证、会定位、会判断性能问题到底卡在哪”。</p>
   </a>
@@ -52,6 +56,9 @@
 大模型系统讨论如果只停留在“模型结构”“训练配方”“服务框架”三个层面，迟早会撞到一堵墙：很多关键性能问题最终都会落到算子实现、编译路径和硬件执行模型上。你也许已经知道 `FlashAttention`、`PagedAttention`、`Fused RMSNorm`、`Int4 GEMM` 这些名字，但如果不知道它们到底在优化什么、为什么会快、又为什么有些场景并不会快，那么系统层判断就很容易失真。
 
 这一组文档的目的，不是把每个人都训练成 GPU 内核工程师，而是帮助你建立一个足够清晰的算子视角：从模型层需求，一路下钻到编译器、中间表示、kernel、内存层次和硬件执行机制，理解哪些性能瓶颈来自算法，哪些来自实现，哪些来自错误的抽象边界。
+
+!!! tip "基础知识入口"
+    算子专题默认你知道 tensor shape、dtype、显存、带宽和 kernel 的基本含义。如果不熟，先看 [张量、Shape 与计算图](../foundations/tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md) 和 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。
 
 ## 1. 为什么算子会成为主问题
 

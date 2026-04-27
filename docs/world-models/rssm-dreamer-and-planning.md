@@ -4,6 +4,10 @@
 与其每次都在真实环境里撞墙、摔杯子、翻车，不如先学一个潜空间动力学，再在里面做想象、评估和规划。
 
 这条路线是最经典的 `WM` 主线之一。  
+如果按训练来源划分，它属于“交互轨迹驱动的 latent dynamics / model-based RL 世界模型路线”：从观测、动作、奖励和终止信号中学习潜状态转移，再用 imagined rollout 服务规划或策略学习。它和 [生成式模拟与视频世界模型](generative-simulation-and-video.md) 中的 LingBot-World 路线不同，后者是先继承视频生成先验，再补动作控制、长记忆和因果交互能力。
+
+如果要看 DreamerV3 的单篇训练细节，包括 `prediction / dynamics / representation` 三类 world model loss、free bits、uniform mix、symlog 和 imagined actor-critic 更新，可以直接看 [DreamerV3 论文专题讲解](../paper-deep-dives/world-models/dreamerv3.md)。
+
 如果前面的总览页讲的是“世界模型是什么”，那么这一页讲的是：
 
 1. 为什么 `RSSM` 成了经典状态表示；
@@ -425,7 +429,9 @@ def dreamer_actor_update(world_model, actor, z, h, horizon=15):
 这段代码抽象了 Dreamer 的 actor 更新思路：不在真实环境里采样，而是在世界模型的隐空间 rollout 上估计长期回报并优化策略。好处是样本效率高，但前提是动力学与奖励头的偏差要可控。
 
 
-## 补充：用闭环任务重写 **RSSM、Dreamer 与规划**
+## 实践补充与检查
+
+### 用闭环任务重写 **RSSM、Dreamer 与规划**
 
 涉及 VLM、VLA、世界模型和具身系统时，最容易出现的误区是：离线表征写得很完整，但真正和闭环任务、工具链、控制接口、风险治理放在一起时，内容支撑不够。围绕 **RSSM、Dreamer 与规划**，更扎实的组织方式应该首先回答：
 
@@ -433,7 +439,7 @@ def dreamer_actor_update(world_model, actor, z, h, horizon=15):
 
 这些坐标之所以关键，是因为这类系统通常横跨 **数据、模型、动作接口、在线约束和安全责任**。如果页面只讲模型结构，不讲这些接口，读者会很难判断一个方法是“研究上成立”还是“系统上可用”。
 
-## 补充：更实用的任务分解方式
+### 更实用的任务分解方式
 
 围绕 **RSSM、Dreamer 与规划**，建议把问题拆成三层：
 
@@ -443,7 +449,7 @@ def dreamer_actor_update(world_model, actor, z, h, horizon=15):
 
 很多方法在第一层表现不错，但第二层和第三层并没有同步变强。页面若能把这三层明确拆开，读者就更容易看清楚：某些提升究竟是“更会看”，还是“更会做”，或者只是“更会在离线数据上得分”。
 
-## 补充：常见失败模式与误判
+### 常见失败模式与误判
 
 围绕 **RSSM、Dreamer 与规划**，真实失败常见于：
 
@@ -453,7 +459,7 @@ def dreamer_actor_update(world_model, actor, z, h, horizon=15):
 
 这些问题的共同点是：它们很少只靠平均准确率暴露出来，往往要靠 **回放、闭环任务、风险桶、人工抽检和高价值案例分析** 才能看清。也因此，这类页面尤其需要把“怎么验收”写得比“是什么方法”更扎实。
 
-## 补充：验收、上线与回流
+### 验收、上线与回流
 
 对 **RSSM、Dreamer 与规划**，更合理的验收至少应覆盖：
 

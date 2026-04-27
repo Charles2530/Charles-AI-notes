@@ -2,6 +2,12 @@
 
 扩散推理的本质，是把训练好的去噪网络当成一个向量场估计器，再沿着这条向量场从噪声走回数据分布。
 
+采样器可以先按“预算怎么花”来理解。`Euler` 更像低成本快速基线，`Heun` 用额外模型调用换更平滑的修正，`DPM-Solver++` 则更适合作为少步高质量和强 guidance 场景的默认候选。
+
+![扩散采样器选择图](../assets/images/diffusion/generated/diffusion-sampler-selection-map.png){ width="920" }
+
+**读图提示**：采样器不是在提升模型本身的知识，而是在决定同一个去噪网络如何离散求解。实际选型时不要只看单张图效果，应该按步数、guidance、prompt 类型、延迟和失败样本分桶比较。
+
 ## 1. 为什么推理会慢
 
 原始 `DDPM` 往往需要 \(T=1000\) 左右的离散步。若每一步都要跑一次大 UNet，整体时延会很高。
@@ -34,13 +40,16 @@ x_{t-1} = \sqrt{\bar{\alpha}_{t-1}}\hat{x}_0 + \sqrt{1-\bar{\alpha}_{t-1}-\sigma
 
 ## 3. ODE 视角：采样是数值积分
 
-在连续时间视角下，可以把采样写成 probability flow ODE：
+在连续时间视角下，可以把采样写成 probability flow <a class="term-tip" href="../score-matching-sde-and-probability-flow/#6-probability-flow-ode" data-tip="ODE：Ordinary Differential Equation，常微分方程。这里把去噪过程看成确定性的连续轨迹，然后用有限步近似。">ODE</a>：
 
 \[
 \frac{dx}{dt} = f_\theta(x,t)
 \]
 
-这里 \(f_\theta\) 由 score 或噪声预测网络导出。于是采样器就变成了 ODE solver。
+这里 \(f_\theta\) 由 score 或噪声预测网络导出。于是采样器就变成了 <a class="term-tip" href="../score-matching-sde-and-probability-flow/#8" data-tip="ODE solver：常微分方程求解器。扩散采样里，它决定每一步怎样沿向量场移动，例如 Euler、Heun 或 DPM-Solver。">ODE solver</a>。
+
+!!! tip "简称怎么读"
+    `ODE` 是常微分方程，强调确定性轨迹；`SDE` 是随机微分方程，轨迹里还包含随机扰动。扩散模型先有连续过程，再把连续过程离散成有限步采样，所以采样器本质上是在控制数值积分误差。
 
 ## 4. Euler：最简单的一阶方法
 
@@ -184,7 +193,9 @@ image.save("sample.png")
 这段代码展示了一个可直接运行的文生图最小推理链路：加载模型后把 scheduler 切到 `DPMSolverMultistep`，再通过 `num_inference_steps` 与 `guidance_scale` 控制速度和条件强度。通常先用 15 到 30 步做首轮调参，再按任务质量要求细化。
 
 
-## 补充：把 **扩散模型的采样与推理** 从方法名写成设计空间
+## 实践补充与检查
+
+### 把 **扩散模型的采样与推理** 从方法名写成设计空间
 
 这一类页面如果只停留在“概念、公式、论文关系”，读者很容易知道名词却不知道何时该用、何时不该用。围绕 **扩散模型的采样与推理**，更扎实的写法应当把它放回一个明确设计空间：
 
@@ -192,7 +203,7 @@ image.save("sample.png")
 
 只有把这些坐标讲清楚，读者才能理解：某种方法为什么在论文里成立、落到工程里时最容易在哪些环节变形，以及它和相邻方法的真正边界在哪里。
 
-## 补充：更实用的分析顺序
+### 更实用的分析顺序
 
 围绕 **扩散模型的采样与推理**，建议读者和实践者都先按下面顺序思考：
 
@@ -203,7 +214,7 @@ image.save("sample.png")
 
 这比一上来就在方法之间横向比较更有帮助，因为很多“方法优劣”其实是由目标和系统边界决定的，而不是由方法名字决定的。
 
-## 补充：最容易被忽略的失败模式
+### 最容易被忽略的失败模式
 
 围绕 **扩散模型的采样与推理**，常见失败并不只是“指标低”，更常见的是：
 
@@ -217,7 +228,7 @@ image.save("sample.png")
 
 还有一种误判是，把离线单图生成的成功直接外推到交互式系统。真实产品里，预览模式、精修模式、重试逻辑、缓存、并发和用户可感知延迟会一起改写方法价值。某个 solver 离线略优，不代表它在线上就是最优默认。
 
-## 补充：验收与实践清单
+### 验收与实践清单
 
 对 **扩散模型的采样与推理**，更像工程文档的验收至少要覆盖：
 
@@ -240,3 +251,6 @@ image.save("sample.png")
 3. **固定回退门槛**：当某类 prompt 或某档 guidance 出现明显抖动时，系统自动切回更稳的 solver 或更高步数。
 
 只有把这些证据固定下来，采样器选择才会真正变成工程决策，而不只是主观偏好。
+
+*[ODE]: Ordinary Differential Equation，常微分方程；在扩散里常指没有额外随机噪声项的 probability flow 轨迹。
+*[SDE]: Stochastic Differential Equation，随机微分方程；在扩散里常指带随机噪声项的连续时间加噪或反向生成过程。

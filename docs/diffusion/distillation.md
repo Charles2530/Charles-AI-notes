@@ -2,6 +2,118 @@
 
 当 `DDIM`、`Euler`、`DPM-Solver` 已经把推理压到几十步后，下一步问题就变成了：能不能直接把几十步教师，压缩成几步甚至一步学生。
 
+下面这张图把几条加速路线放在同一张路线图里：Progressive Distillation 更像“逐级压缩教师步数”，Consistency/LCM 更像“让同一路径上的点直接映射到一致结果”，DMD/DMD2 更像“直接对齐最终分布”，Rectified Flow 则更像“把路径本身改得更适合少步走完”。
+
+![扩散蒸馏与整流路线图](../assets/images/diffusion/generated/diffusion-distillation-rectified-roadmap.png){ width="920" }
+
+**读图提示**：少步生成不是单纯把采样步数删掉。越接近一步生成，越需要重新验证文本对齐、细节锐度、模式覆盖和长尾稳定性，否则速度提升很容易换来不可控退化。
+
+## 少步蒸馏：从多步教师到 1-8 步学生 { #few-step-distillation }
+
+少步蒸馏要解决的问题很具体：已经有一个质量可靠但很慢的 teacher diffusion model，它可能需要 20、30、50 步甚至更多步才能生成一张图；现在希望训练一个 student，让它只用 1、2、4 或 8 步就达到接近教师的结果。
+
+这件事不能理解成“把采样循环里的步数删掉”。如果原模型是在 30 步里逐渐修正构图、纹理、边缘、文字和条件对齐，那么删到 4 步后，每一步都必须承担原来好几步的信息量。少步蒸馏的核心，就是重新定义训练信号，让学生学会这种“粗粒度跳跃”。
+
+![少步蒸馏 teacher-student 示意图](../assets/images/diffusion/generated/few-step-distillation-teacher-student.png){ width="920" }
+
+**读图提示**：teacher 的轨迹细、慢、稳定；student 的轨迹粗、快、风险更高。蒸馏目标要同时约束轨迹、终点、分布和实际少步推理质量，否则学生很容易只学到“看起来像”，却在复杂 prompt、强 guidance 或细节区域退化。
+
+### 1. 为什么少步蒸馏和普通 teacher-student 不一样
+
+普通分类蒸馏里，teacher 给一个 soft label，student 学这个 label 就可以。扩散少步蒸馏更麻烦，因为 teacher 的输出不是一个静态答案，而是一条从噪声到图像的轨迹：
+
+\[
+x_T \rightarrow x_{t_1} \rightarrow x_{t_2} \rightarrow \cdots \rightarrow x_0.
+\]
+
+如果 student 只有 \(K\) 步，就要学习一个更大的跳跃：
+
+\[
+x_T \rightarrow x_{\tau_1} \rightarrow \cdots \rightarrow x_0,\qquad K \ll T.
+\]
+
+这意味着 student 不只是在模仿 teacher 的单步预测，而是在学习 teacher 多步复合后的结果。直觉上，teacher 每一步像“慢慢擦掉噪声”，student 每一步像“直接跨过一大片噪声区间”。跨度越大，训练目标越难，越需要额外的稳定手段。
+
+### 2. 三类常见蒸馏信号
+
+| 蒸馏信号 | 学什么 | 代表路线 | 优点 | 风险 |
+| --- | --- | --- | --- | --- |
+| 轨迹压缩 | 学 teacher 两步或多步采样后的状态 | Progressive Distillation | 直觉清楚，适合逐级从 32 到 16、8、4 步 | 步数越低，误差累积越明显 |
+| 终点一致性 | 同一 PF-ODE 轨迹上的不同噪声点映射到一致结果 | Consistency Models、LCM | 适合 1-4 步快速生成，和 latent diffusion 结合自然 | 容易牺牲细节或强条件控制 |
+| 分布匹配 | 不要求逐点模仿 teacher，只要求 student 生成分布接近目标 | DMD、DMD2、Phased DMD | 更适合一步生成和极低步数 | 训练稳定性、模式覆盖和锐度都更难管 |
+
+工程上可以先这样判断：如果目标是 4-8 步，轨迹压缩和一致性路线通常更稳；如果目标是一两步，并且能接受更复杂训练和更严格回归，再看 DMD/DMD2 这类分布匹配路线。
+
+### 3. 一个简化的少步蒸馏训练流程
+
+下面的伪代码不是照搬某一篇论文，而是把少步蒸馏的共同骨架抽出来：
+
+```text
+Algorithm: Few-Step Diffusion Distillation
+
+Input:
+  teacher T                 # 多步扩散模型或高精度采样器
+  student S                 # 目标少步模型
+  step budget K             # 例如 1, 2, 4, 8
+  prompts / conditions c
+
+repeat:
+  1. 采样噪声 x_T 和条件 c
+  2. 用 teacher 从 x_T 生成高质量轨迹:
+       x_T -> ... -> x_0^teacher
+  3. 选择 student 的粗时间点:
+       tau_K > ... > tau_1 > 0
+  4. 构造训练目标:
+       path target: teacher 多步结果
+       consistency target: 同轨迹终点
+       distribution target: teacher/真实分布的 score 差
+  5. 更新 student:
+       L = L_path + lambda_c L_consistency + lambda_d L_distribution
+  6. 用 K 步真实推理回放验证:
+       quality, prompt fidelity, control, latency
+
+until validation passes
+```
+
+真正做实验时，第 6 步非常关键。少步模型训练 loss 看起来下降，并不代表真实 4 步或 1 步推理就稳。因为训练时看到的 \(x_t\) 分布和 student 自己推理时产生的中间状态可能不一样，这就是很多少步路线会遇到的 train-inference mismatch。
+
+### 4. 一个例子：把 50 步文生图压到 4 步
+
+假设 teacher 是一个 50 步 latent diffusion 文生图模型。原流程大致是：
+
+1. 前 10 步确定整体构图和主体位置；
+2. 中间 20 步逐渐补物体关系、材质和局部结构；
+3. 最后 20 步修边缘、纹理、文字和高频细节。
+
+如果 student 只有 4 步，就不能指望它按原来的细节节奏慢慢修。更现实的分工是：
+
+1. 第 1 步先把大构图和主要对象拉出来；
+2. 第 2 步把对象关系、颜色和光照压稳；
+3. 第 3 步补关键细节和条件对齐；
+4. 第 4 步做局部锐化和伪影修复。
+
+这就是少步蒸馏最难的地方：student 的每一步不再是“微小去噪”，而是带有阶段性规划意义的大跳跃。步数越少，它越像一个非自回归生成器，而不是传统意义上的逐步扩散采样器。
+
+### 5. 少步蒸馏最该验什么
+
+只比较“生成速度快了多少”是不够的。少步蒸馏至少要固定下面几类对照：
+
+1. **teacher-student 同 seed 对照**：同一个 prompt、seed、guidance 下看退化来自哪里；
+2. **步数桶对照**：1、2、4、8 步分别测，不要只展示最好看的那一档；
+3. **强条件对照**：文本、ControlNet、参考图、局部编辑、风格约束要分开测；
+4. **长尾 prompt 对照**：多对象、计数、空间关系、文字、复杂材质最容易暴露问题；
+5. **真实延迟对照**：报告端到端时延，而不只是 UNet 前向次数。
+
+如果一个少步学生在平均视觉指标上接近 teacher，但在复杂 prompt 里丢对象、文字糊、结构控制漂移，那么它还不能算真正可替代 teacher，只能算快速预览或低风险场景的候选。
+
+### 6. 相关论文入口
+
+1. Progressive Distillation: [Progressive Distillation for Fast Sampling of Diffusion Models](https://arxiv.org/abs/2202.00512)
+2. Consistency Models: [Consistency Models](https://arxiv.org/abs/2303.01469) / [官方 GitHub](https://github.com/openai/consistency_models)
+3. LCM: [Latent Consistency Models](https://arxiv.org/abs/2310.04378)
+4. DMD: [One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)
+5. DMD2: [Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)
+
 ## 1. Progressive Distillation
 
 **它的思想可以写成**：
@@ -183,7 +295,9 @@ def distill_step(student, teacher, x_t, t, cond):
 这段代码给出最小 teacher-student 蒸馏步：用 teacher 生成目标噪声（或速度）预测，student 直接回归。一步或少步扩散蒸馏通常都以这类“轨迹/分布对齐”损失为核心，再叠加对抗或感知约束稳住细节。
 
 
-## 补充：把 **扩散蒸馏、一步生成与整流路线** 从方法名写成设计空间
+## 实践补充与检查
+
+### 把 **扩散蒸馏、一步生成与整流路线** 从方法名写成设计空间
 
 这一类页面如果只停留在“概念、公式、论文关系”，读者很容易知道名词却不知道何时该用、何时不该用。围绕 **扩散蒸馏、一步生成与整流路线**，更扎实的写法应当把它放回一个明确设计空间：
 
@@ -191,7 +305,7 @@ def distill_step(student, teacher, x_t, t, cond):
 
 只有把这些坐标讲清楚，读者才能理解：某种方法为什么在论文里成立、落到工程里时最容易在哪些环节变形，以及它和相邻方法的真正边界在哪里。
 
-## 补充：更实用的分析顺序
+### 更实用的分析顺序
 
 围绕 **扩散蒸馏、一步生成与整流路线**，建议读者和实践者都先按下面顺序思考：
 
@@ -202,7 +316,7 @@ def distill_step(student, teacher, x_t, t, cond):
 
 这比一上来就在方法之间横向比较更有帮助，因为很多“方法优劣”其实是由目标和系统边界决定的，而不是由方法名字决定的。
 
-## 补充：最容易被忽略的失败模式
+### 最容易被忽略的失败模式
 
 围绕 **扩散蒸馏、一步生成与整流路线**，常见失败并不只是“指标低”，更常见的是：
 
@@ -220,7 +334,7 @@ def distill_step(student, teacher, x_t, t, cond):
 
 如果只看平均 FID 或少量精选样图，这些问题几乎都会被遮住。
 
-## 补充：验收与实践清单
+### 验收与实践清单
 
 对 **扩散蒸馏、一步生成与整流路线**，更像工程文档的验收至少要覆盖：
 

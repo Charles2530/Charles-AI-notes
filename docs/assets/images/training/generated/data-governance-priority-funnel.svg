@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520">
+  <rect width="920" height="520" rx="28" fill="#fbfaf4"/>
+  <text x="46" y="58" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="30" font-weight="800" fill="#14292b">数据治理优先级漏斗</text>
+  <text x="46" y="91" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="16" fill="#607d80">先治理最大、最确定、最影响训练的问题，再处理长尾细节。</text>
+  <g font-family="PingFang SC, Noto Sans SC, sans-serif">
+    <path d="M145 130h630l-80 78H225z" fill="#eef6f4" stroke="#1a6d72"/><text x="335" y="180" font-size="20" font-weight="800" fill="#0f5558">1. 高污染源与数据泄漏</text>
+    <path d="M225 222h470l-70 78H295z" fill="#fff6e8" stroke="#d59745"/><text x="345" y="272" font-size="20" font-weight="800" fill="#8b5a16">2. 精确重复与近重复</text>
+    <path d="M295 314h330l-60 78H355z" fill="#f5e4dc" stroke="#cb5d31"/><text x="368" y="364" font-size="20" font-weight="800" fill="#7f2f3a">3. 低质与低信息密度</text>
+    <path d="M355 406h210l-45 55H400z" fill="#eef2ff" stroke="#6978b8"/><text x="407" y="442" font-size="18" font-weight="800" fill="#414d89">4. 细粒度配比</text>
+  </g>
+</svg>

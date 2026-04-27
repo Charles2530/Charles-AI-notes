@@ -31,15 +31,15 @@
 ## 推荐入口
 
 <div class="atlas-card-grid">
-  <a class="atlas-card" href="serving-systems.md">
+  <a class="atlas-card" href="serving-systems/">
     <strong>服务系统</strong>
     <p>先建立 prefill、decode、排队、批处理和尾延迟的总体系统图。</p>
   </a>
-  <a class="atlas-card" href="serving-runtimes-vllm-sglang-and-tensorrt-llm.md">
+  <a class="atlas-card" href="serving-runtimes-vllm-sglang-and-tensorrt-llm/">
     <strong>vLLM、SGLang 与 TensorRT-LLM</strong>
     <p>理解运行时选型如何影响 cache、量化、结构化生成和多模型集成。</p>
   </a>
-  <a class="atlas-card" href="context-compression-kv-eviction-and-memory-hierarchies.md">
+  <a class="atlas-card" href="context-compression-kv-eviction-and-memory-hierarchies/">
     <strong>上下文压缩、KV 淘汰与内存分层</strong>
     <p>快速切入长上下文系统最现实的内存与缓存管理问题。</p>
   </a>
@@ -58,6 +58,9 @@ T \approx T_{\text{queue}} + T_{\text{prefill}} + T_{\text{decode}} + T_{\text{p
 \[
 T_{\text{decode}} \approx n \cdot T_{\text{step}}
 \]
+
+!!! tip "基础知识入口"
+    推理系统里的 `KV Cache`、latency、throughput、runtime、kernel 和低精度路径，都依赖基础执行模型。建议先看 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)、[位置编码、Mask 与上下文](../foundations/positional-encoding-masks-and-context.md) 和 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。
 
 ## 1. 推理系统为什么和训练系统完全不同
 

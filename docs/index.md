@@ -29,12 +29,34 @@
   </div>
 </div>
 
+## 内容地图
+
+这套站点按“公共底座、方法族、系统工程、评测治理、论文索引”组织，而不是按论文发布时间简单堆叠。阅读时可以把每个主题放到同一张图里：
+
+| 层级 | 负责回答的问题 | 对应入口 |
+| --- | --- | --- |
+| 公共底座 | 张量、模型结构、训练、数值和运行时这些共通概念是什么 | [基础知识](foundations/index.md)、[术语表](glossary/index.md) |
+| 方法族 | 某类模型或技术为什么出现、核心假设是什么 | [扩散模型](diffusion/index.md)、[VLM](vlm/index.md)、[VLA](vla/index.md)、[世界模型](world-models/index.md)、[对比学习](contrastive-learning/index.md) |
+| 系统工程 | 训练、推理、量化、算子和部署如何落地 | [训练](training/index.md)、[推理](inference/index.md)、[量化](quantization/index.md)、[算子与编译器](operators/index.md) |
+| 评测治理 | 怎么判断方法真的有效，线上是否稳定、可控、可回滚 | 各主题评测页、[在线评测](inference/observability-and-online-evaluation.md)、[论文复现](paper-guides/reproducibility-and-replication-guide.md) |
+| 论文索引 | 想深入读原文时从哪里开始 | [论文导读](paper-guides/index.md)、[参考文献总表](references/index.md) |
+
+## 章节风格约定
+
+为了让各页面读起来像同一套文档，后续扩写尽量遵循同一粒度：
+
+- 每页优先控制在 5-8 个二级章节，右侧目录只承担主线导航，不把每个小点都升成 `##`。
+- 总览页负责讲地图、边界和路线；专题页负责讲机制、工程实现、评测与失效模式。
+- 单节内容保持适中：先讲问题和判断标准，再放公式、例子、系统约束或论文脉络。
+- 避免在每页末尾重复模板化“小结”；如果需要收口，直接给出可执行清单或决策判断。
+- 跨主题内容优先互链，例如低比特训练、FP8 Kernel、量化服务和推理成本应互相指向，而不是各写一套孤立解释。
+
 ## 主题入口
 
 <div class="atlas-card-grid">
-  <a class="atlas-card" href="roadmap/index.md">
-    <strong>路线图</strong>
-    <p>先看整体结构、推荐阅读路径和跨主题关联，再决定从哪条主线切入。</p>
+  <a class="atlas-card" href="foundations/index.md">
+    <strong>基础知识</strong>
+    <p>先打通张量、卷积、Transformer、概率生成、训练优化、数值精度和运行时这些公共底座。</p>
   </a>
   <a class="atlas-card" href="training/index.md">
     <strong>训练</strong>
@@ -56,7 +78,43 @@
     <strong>量化</strong>
     <p>覆盖 PTQ、QAT、QLoRA、FP8、KV cache 量化与部署取舍。</p>
   </a>
+  <a class="atlas-card" href="diffusion/index.md">
+    <strong>扩散模型</strong>
+    <p>从 DDPM、Score SDE、采样器到少步蒸馏、Rectified Flow、视频与多模态扩散。</p>
+  </a>
+  <a class="atlas-card" href="vlm/index.md">
+    <strong>VLM</strong>
+    <p>覆盖架构训练、OCR、图表推理、Grounding、屏幕代理、检索和长尾评测。</p>
+  </a>
+  <a class="atlas-card" href="vla/index.md">
+    <strong>VLA</strong>
+    <p>从视觉语言动作模型、动作表示、遥操作数据到 Sim2Real、Benchmark 和部署安全。</p>
+  </a>
+  <a class="atlas-card" href="embodied-ai/index.md">
+    <strong>具身智能</strong>
+    <p>关注任务谱系、规划控制、安全部署、人机协作、数据引擎和现实失败模式。</p>
+  </a>
+  <a class="atlas-card" href="contrastive-learning/index.md">
+    <strong>对比学习</strong>
+    <p>从 InfoNCE、负样本、增广、自蒸馏到多模态检索和表示评测。</p>
+  </a>
+  <a class="atlas-card" href="references/index.md">
+    <strong>参考文献总表</strong>
+    <p>按扩散、VLM/VLA、世界模型、量化、训练系统、推理和算子整理核心论文与项目。</p>
+  </a>
 </div>
+
+## 按问题选入口
+
+| 你现在的问题 | 先读哪里 | 再接哪里 |
+| --- | --- | --- |
+| 基础概念不稳，读论文容易卡住 | [基础知识](foundations/index.md) | [术语表](glossary/index.md) |
+| 想理解大模型怎么训出来 | [训练总览](training/index.md) | [低比特训练](training/low-bit-training-and-numerics.md)、[分布式训练](training/distributed-training-and-checkpointing.md) |
+| 线上服务慢、贵、不稳定 | [推理总览](inference/index.md) | [推理服务系统](inference/serving-systems.md)、[vLLM/SGLang/TensorRT-LLM](inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md) |
+| 模型太大，显存或吞吐不够 | [量化总览](quantization/index.md) | [量化运行时](quantization/quantization-runtimes-and-frameworks.md)、[低精度 Kernel](operators/low-precision-and-quantized-kernels.md) |
+| 想做图文、多模态、文档理解 | [VLM 总览](vlm/index.md) | [文档理解与 OCR](vlm/document-understanding-and-ocr.md)、[图表推理](vlm/charts-tables-and-structured-reasoning.md) |
+| 想做机器人、VLA 或具身系统 | [VLA 总览](vla/index.md) | [具身智能](embodied-ai/index.md)、[世界模型](world-models/index.md) |
+| 想系统读论文和找参考 | [论文导读](paper-guides/index.md) | [参考文献总表](references/index.md) |
 
 ## 推荐阅读路径
 
@@ -101,7 +159,7 @@
 <div class="section-grid">
   <div>
     <strong>先建结构，再看细节</strong>
-    <p>进入新主题时先读总览页和路线图，再进入方法页与工程页，避免只记模型名字。</p>
+    <p>进入新主题时先读基础知识和总览页，再进入方法页与工程页，避免只记模型名字。</p>
   </div>
   <div>
     <strong>围绕问题跳读</strong>
@@ -112,11 +170,10 @@
 ## 本地运行
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-mkdocs serve
+make serve
 ```
+
+`make serve` 会启用热更新。若只改单页正文并希望更快，可用 `make serve-fast`；如果页面状态异常，停掉旧进程后重新运行 `make serve`。
 
 ## 扩写原则
 

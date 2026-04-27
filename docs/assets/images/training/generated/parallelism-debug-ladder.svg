@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520">
+  <rect width="920" height="520" rx="28" fill="#fbfaf4"/>
+  <text x="46" y="58" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="30" font-weight="800" fill="#14292b">并行策略排障阶梯</text>
+  <text x="46" y="91" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="16" fill="#607d80">吞吐差时不要马上换框架，按账本逐层定位瓶颈。</text>
+  <g font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="18">
+    <rect x="105" y="380" width="710" height="58" rx="15" fill="#eef6f4" stroke="#1a6d72"/>
+    <text x="140" y="416" font-weight="800" fill="#0f5558">1. 显存账</text><text x="285" y="416" fill="#36595b">参数、梯度、优化器、激活、KV/临时 buffer</text>
+    <rect x="145" y="300" width="630" height="58" rx="15" fill="#fff6e8" stroke="#d59745"/>
+    <text x="180" y="336" font-weight="800" fill="#8b5a16">2. 通信账</text><text x="325" y="336" fill="#36595b">all-reduce、all-gather、p2p、跨机比例</text>
+    <rect x="185" y="220" width="550" height="58" rx="15" fill="#f5e4dc" stroke="#cb5d31"/>
+    <text x="220" y="256" font-weight="800" fill="#7f2f3a">3. 拓扑账</text><text x="365" y="256" fill="#36595b">TP/PP/DP 是否贴合 NVLink/IB</text>
+    <rect x="225" y="140" width="470" height="58" rx="15" fill="#eef2ff" stroke="#6978b8"/>
+    <text x="260" y="176" font-weight="800" fill="#414d89">4. Kernel 账</text><text x="405" y="176" fill="#36595b">shape、融合、重计算、overlap</text>
+  </g>
+  <path d="M460 380v-22M460 300v-22M460 220v-22" stroke="#607d80" stroke-width="3" stroke-linecap="round"/>
+</svg>

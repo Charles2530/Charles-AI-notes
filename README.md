@@ -40,13 +40,39 @@
 
 ## 本地预览
 
+推荐使用项目根目录的开发命令：
+
+```bash
+make serve
+```
+
+这个命令会启用 MkDocs 的 livereload 和增量构建：
+
+- 保存 `docs/` 下的 Markdown、CSS、JS、图片后，浏览器会自动刷新；
+- 修改 `mkdocs.yml` 后也会触发重新构建；
+- 默认会自动打开 `http://127.0.0.1:8000`；
+- 默认使用完整重构，保证导航、搜索、CSS/JS 和页面内容都能稳定更新；
+- 如果只改单页正文、想更快，可以用 `make serve-fast` 开启 dirty reload。
+
+如果页面状态异常，先停掉旧进程，再重新运行：
+
+```bash
+make serve
+```
+
+如果你想换端口：
+
+```bash
+make serve DEV_ADDR=127.0.0.1:8010
+```
+
 ### 方式一：使用 venv
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-mkdocs serve
+make serve MKDOCS=mkdocs
 ```
 
 默认访问：
@@ -60,14 +86,14 @@ http://127.0.0.1:8000
 ```bash
 conda env create -f environment.yml -p ./conda-env
 conda activate ./conda-env
-mkdocs serve
+make serve MKDOCS=mkdocs
 ```
 
 如果你更习惯直接用已有前缀环境，也可以：
 
 ```bash
 conda activate /absolute/path/to/conda-env
-mkdocs serve
+make serve MKDOCS=mkdocs
 ```
 
 ## 构建静态站点

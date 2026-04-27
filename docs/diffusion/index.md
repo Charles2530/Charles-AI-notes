@@ -2,6 +2,15 @@
 
 扩散模型可以看成一类“先破坏，再恢复”的生成模型。训练时，模型不断看到被噪声污染的数据；推理时，模型学习把纯噪声一步步还原成目标样本。
 
+下面这张图先把主线压缩成一个直观流程：上半部分是训练时“把干净样本加噪”的前向过程，下半部分是推理时“从噪声逐步恢复”的反向过程。读扩散模型时，先把这两条方向分清，后面的噪声预测、采样器、蒸馏和整流才不会混在一起。
+
+![扩散模型前向加噪与反向去噪总览](../assets/images/diffusion/generated/diffusion-forward-reverse-overview.png){ width="920" }
+
+**读图提示**：前向过程不需要模型学习，它只是人为定义的破坏过程；真正要学习的是反向去噪。训练目标回答“怎样估计噪声或干净样本”，采样器回答“推理时沿什么路径走回去”，两者不是同一层问题。
+
+!!! tip "基础知识入口"
+    如果你对 `UNet`、`DiT`、`score`、`ELBO`、`SDE/ODE` 或 `Cross-Attention` 还不熟，可以先看 [卷积与特征提取](../foundations/convolution-and-feature-extraction.md)、[Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md) 和 [概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md)。这些是扩散模型后续章节反复使用的公共概念。
+
 ## 一个统一的数学骨架
 
 设原始样本为 \(x_0 \sim q_{\text{data}}(x)\)。前向加噪过程写成：
@@ -61,7 +70,10 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 ### 3. 求解器视角
 
-推理过程能否被看成 ODE/SDE 的数值积分问题。
+推理过程能否被看成 <a class="term-tip" href="score-matching-sde-and-probability-flow/#6-probability-flow-ode" data-tip="ODE：Ordinary Differential Equation，常微分方程。扩散里常指不再额外注入随机噪声、沿 probability flow 连续轨迹求解。">ODE</a>/<a class="term-tip" href="score-matching-sde-and-probability-flow/#4-sde" data-tip="SDE：Stochastic Differential Equation，随机微分方程。扩散里常指带随机噪声项的连续时间加噪或反向生成过程。">SDE</a> 的数值积分问题。
+
+!!! tip "术语快释"
+    `ODE` 更像沿着一条确定路线开车，给定起点和方向场后轨迹可重复；`SDE` 更像开车时还不断受到随机风扰动，同一方向场下也可能走出不同轨迹。扩散采样器把这两类连续过程离散成有限步，因此会出现 `Euler`、`Heun`、`DPM-Solver` 等求解器。
 
 ### 4. 加速视角
 
@@ -197,7 +209,7 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 - [发展脉络](evolution.md)：从 `DDPM` 到 `DMD2/Phased DMD/rDM`
 - [训练与表示](training.md)：前向过程、ELBO、参数化、guidance
 - [采样与推理](inference.md)：`DDIM`、`Euler`、`Heun`、`DPM-Solver`
-- [蒸馏与整流](distillation.md)：少步/一步生成的主要路线
+- [蒸馏与整流](distillation.md)：少步/一步生成的主要路线，尤其先看 [少步蒸馏](distillation.md#few-step-distillation) 这一节
 - [方法对照表](comparison-table.md)：快速比较“改了哪一层、是否重训、适合什么需求”
 
 ## 快速代码示例
@@ -217,3 +229,6 @@ def ddim_step(x_t, alpha_t, alpha_prev, eps):
 ```
 
 这段代码把两个常见推理组件放在一起：`cfg_eps` 展示了 **Classifier-Free Guidance** 如何混合条件/无条件噪声预测，`ddim_step` 展示了单步 **DDIM** 更新。实践中你可以先固定步数，再调 `scale` 找到质量与多样性的平衡点。
+
+*[ODE]: Ordinary Differential Equation，常微分方程；在扩散里常指没有额外随机噪声项的 probability flow 轨迹。
+*[SDE]: Stochastic Differential Equation，随机微分方程；在扩散里常指带随机噪声项的连续时间加噪或反向生成过程。

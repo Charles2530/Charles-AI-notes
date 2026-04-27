@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520">
+  <rect width="920" height="520" rx="28" fill="#fbfaf4"/>
+  <text x="46" y="58" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="30" font-weight="800" fill="#14292b">Scaling 实验 Stop / Go 看板</text>
+  <text x="46" y="91" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="16" fill="#607d80">规模扩大前先做经济学闸门，避免把大实验变成昂贵赌博。</text>
+  <g font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="18">
+    <rect x="70" y="130" width="360" height="250" rx="20" fill="#eef6f4" stroke="#1a6d72"/>
+    <text x="105" y="170" font-size="26" font-weight="800" fill="#0f5558">GO</text>
+    <text x="105" y="220" fill="#36595b">小规模趋势稳定</text>
+    <text x="105" y="260" fill="#36595b">关键桶持续改善</text>
+    <text x="105" y="300" fill="#36595b">失败资产可复用</text>
+    <text x="105" y="340" fill="#36595b">推理成本可接受</text>
+    <rect x="490" y="130" width="360" height="250" rx="20" fill="#f5e4dc" stroke="#cb5d31"/>
+    <text x="525" y="170" font-size="26" font-weight="800" fill="#7f2f3a">STOP</text>
+    <text x="525" y="220" fill="#36595b">收益进入平台期</text>
+    <text x="525" y="260" fill="#36595b">只涨平均分，不涨关键桶</text>
+    <text x="525" y="300" fill="#36595b">失败成本不可控</text>
+    <text x="525" y="340" fill="#36595b">上线成本债过高</text>
+  </g>
+  <text x="110" y="450" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="18" font-weight="800" fill="#9f4624">主指标：</text>
+  <text x="190" y="450" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="18" fill="#36595b">每有效 token 成本，而不是每 GPU 小时成本。</text>
+</svg>

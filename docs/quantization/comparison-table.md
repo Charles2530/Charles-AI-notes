@@ -276,3 +276,4 @@ h_{l+1} = f_l(h_l; W_l),
 - 看量化训练：[QLoRA 与量化训练](qlora-and-quantized-training.md)
 - 看部署核查：[评估与部署检查清单](evaluation-and-deployment-checklist.md)
 - 看混合精度：[FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)
+- 看运行框架：[量化运行时与框架](quantization-runtimes-and-frameworks.md)

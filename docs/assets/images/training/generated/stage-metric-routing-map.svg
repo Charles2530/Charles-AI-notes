@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520">
+  <rect width="920" height="520" rx="28" fill="#fbfaf4"/>
+  <text x="46" y="58" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="30" font-weight="800" fill="#14292b">三阶段训练指标路由图</text>
+  <text x="46" y="91" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="16" fill="#607d80">同一个失败现象，必须路由到正确训练阶段，否则会把预算花错。</text>
+  <g font-family="PingFang SC, Noto Sans SC, sans-serif">
+    <rect x="55" y="128" width="240" height="250" rx="20" fill="#eef6f4" stroke="#1a6d72"/>
+    <text x="85" y="170" font-size="24" font-weight="800" fill="#0f5558">预训练</text>
+    <text x="85" y="210" font-size="17" fill="#36595b">看：知识覆盖、迁移、长上下文</text>
+    <text x="85" y="246" font-size="17" fill="#36595b">错因：底座能力不够</text>
+    <text x="85" y="282" font-size="17" fill="#36595b">动作：补领域数据/继续预训</text>
+    <text x="85" y="332" font-size="15" fill="#607d80">例：模型根本不知道某 API</text>
+    <rect x="340" y="128" width="240" height="250" rx="20" fill="#fff6e8" stroke="#d59745"/>
+    <text x="370" y="170" font-size="24" font-weight="800" fill="#8b5a16">SFT</text>
+    <text x="370" y="210" font-size="17" fill="#36595b">看：任务完成、格式、工具协议</text>
+    <text x="370" y="246" font-size="17" fill="#36595b">错因：示范分布不对</text>
+    <text x="370" y="282" font-size="17" fill="#36595b">动作：修示范/补边界样本</text>
+    <text x="370" y="332" font-size="15" fill="#607d80">例：知道答案但格式总错</text>
+    <rect x="625" y="128" width="240" height="250" rx="20" fill="#f5e4dc" stroke="#cb5d31"/>
+    <text x="655" y="170" font-size="24" font-weight="800" fill="#7f2f3a">对齐</text>
+    <text x="655" y="210" font-size="17" fill="#36595b">看：偏好、安全、拒答精度</text>
+    <text x="655" y="246" font-size="17" fill="#36595b">错因：排序信号偏了</text>
+    <text x="655" y="282" font-size="17" fill="#36595b">动作：重做 rubric/judge 校准</text>
+    <text x="655" y="332" font-size="15" fill="#607d80">例：安全变强但过度拒答</text>
+  </g>
+  <path d="M295 253h45M580 253h45" stroke="#607d80" stroke-width="3" stroke-linecap="round"/>
+  <text x="120" y="444" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="18" font-weight="800" fill="#9f4624">原则：</text>
+  <text x="175" y="444" font-family="PingFang SC, Noto Sans SC, sans-serif" font-size="18" fill="#36595b">一个指标只负责回答一类问题，不要用总分替代阶段诊断。</text>
+</svg>
