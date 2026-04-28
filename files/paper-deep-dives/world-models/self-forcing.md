@@ -1,6 +1,6 @@
 ---
 paper_date: 2025-06
-paper_title: Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion
+paper_title: "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion"
 paper_topic: 世界模型
 ---
 

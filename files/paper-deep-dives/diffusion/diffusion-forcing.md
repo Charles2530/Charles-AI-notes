@@ -1,6 +1,6 @@
 ---
 paper_date: 2024-07
-paper_title: Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion
+paper_title: "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion"
 paper_topic: 扩散模型
 ---
 
