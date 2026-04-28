@@ -1,4 +1,4 @@
-#!/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/bin/python
+#!/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/bin/python
 import sys
 from watchdog.watchmedo import main
 if __name__ == '__main__':

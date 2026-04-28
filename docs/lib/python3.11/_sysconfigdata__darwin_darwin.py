@@ -12,20 +12,20 @@ build_time_vars = {'ABIFLAGS': '',
  'BASECFLAGS': '',
  'BASECPPFLAGS': '-IObjects -IInclude -IPython',
  'BASEMODLIBS': '',
- 'BINDIR': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/bin',
- 'BINLIBDEST': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11',
+ 'BINDIR': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/bin',
+ 'BINLIBDEST': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11',
  'BLDLIBRARY': 'libpython3.11.a',
  'BLDSHARED': 'clang -bundle -undefined '
               'dynamic_lookup '
               ''
               ''
-              '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-              '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+              '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+              '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
               ''
               ''
               ''
-              '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-              '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib',
+              '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+              '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib',
  'BOOTSTRAP_HEADERS': '\\',
  'BUILDEXE': '.exe',
  'BUILDPYTHON': 'python.exe',
@@ -36,13 +36,13 @@ build_time_vars = {'ABIFLAGS': '',
  'CFLAGS': '-DNDEBUG -fwrapv -O2 -Wall '
            ''
            '-fPIC  -O2  -isystem '
-           '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+           '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
            ''
            ''
            '-arch arm64  '
            ''
            '-fPIC  -O2  -isystem '
-           '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+           '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
            ''
            ''
            '-arch arm64 ',
@@ -54,7 +54,7 @@ build_time_vars = {'ABIFLAGS': '',
                      ''
                      '-fPIC  -O2 '
                      '-isystem '
-                     '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                     '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                      ''
                      ''
                      '-arch arm64 ',
@@ -64,54 +64,54 @@ build_time_vars = {'ABIFLAGS': '',
  'CONFIGURE_CPPFLAGS': ''
                        ''
                        '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                       '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                       '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                        '-mmacosx-version-min=12.1 '
-                       '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+                       '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'CONFIGURE_LDFLAGS': ''
                       ''
                       ''
-                      '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-                      '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib',
+                      '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+                      '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib',
  'CONFIGURE_LDFLAGS_NODIST': '-Wl,-export_dynamic -g',
  'CONFIGURE_LDFLAGS_NOLTO': '=thin',
- 'CONFIG_ARGS': "'--prefix=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs'"
+ 'CONFIG_ARGS': "'--prefix=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs'"
                 "'--build=arm64-apple-darwin20.0.0'"
                 "'--host=arm64-apple-darwin20.0.0''--enable-ipv6'"
                 "'--with-ensurepip=no'"
-                "'--with-tzpath=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/share/zoneinfo:/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/share/tzinfo'"
+                "'--with-tzpath=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/share/zoneinfo:/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/share/tzinfo'"
                 "'--with-computed-gotos''--with-system-ffi'"
                 "'--with-system-expat''--enable-loadable-sqlite-extensions'"
-                "'--with-tcltk-includes=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include'"
-                "'--with-tcltk-libs=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib "
+                "'--with-tcltk-includes=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include'"
+                "'--with-tcltk-libs=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib "
                 "-ltcl8.6 -ltk8.6''--with-platlibdir=lib''--with-lto'"
                 "'--enable-optimizations'"
                 "'-oldincludedir=/Users/ec2-user/croot/python-split_1773249019128/_build_env/arm64-apple-darwin20.0.0/sysroot/usr/include'"
                 "'--disable-shared''PROFILE_TASK=-m test --pgo'"
                 "'build_alias=arm64-apple-darwin20.0.0'"
                 "'host_alias=arm64-apple-darwin20.0.0'"
-                "'PKG_CONFIG_PATH=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/pkgconfig'"
+                "'PKG_CONFIG_PATH=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/pkgconfig'"
                 "'MACHDEP=darwin''CC=clang'"
                 "'CFLAGS="
                 ''
                 '-fPIC  -O2  '
                 '-isystem '
-                '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                 ''
                 ''
                 "-arch arm64 ''LDFLAGS="
                 ''
                 ''
-                '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-                "-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib'"
+                '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+                "-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib'"
                 "'CPPFLAGS="
                 ''
                 '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                 '-mmacosx-version-min=12.1 '
-                "-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include'"
+                "-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include'"
                 "'CPP=clang-cpp'",
- 'CONFINCLUDEDIR': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
- 'CONFINCLUDEPY': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include/python3.11',
+ 'CONFINCLUDEDIR': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
+ 'CONFINCLUDEPY': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include/python3.11',
  'COREPYTHONPATH': '',
  'COVERAGE_INFO': '/Users/ec2-user/croot/python-split_1773249019128/work/build-static/coverage.info',
  'COVERAGE_LCOV_OPTIONS': '--rc lcov_branch_coverage=1',
@@ -124,15 +124,15 @@ build_time_vars = {'ABIFLAGS': '',
              ''
              ''
              '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
              '-mmacosx-version-min=12.1 '
-             '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+             '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
              ''
              ''
              '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
              '-mmacosx-version-min=12.1 '
-             '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+             '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'CXX': 'clang++',
  'DECIMAL_CFLAGS': '-I/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_decimal/libmpdec '
                    '-DUNIVERSAL=1',
@@ -143,13 +143,13 @@ build_time_vars = {'ABIFLAGS': '',
                     '/Users/ec2-user/croot/python-split_1773249019128/work/Programs/_freeze_module.py '
                     '\\',
  'DEEPFREEZE_OBJS': 'Python/deepfreeze/deepfreeze.o',
- 'DESTDIRS': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs '
-             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11 '
-             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11/lib-dynload',
- 'DESTLIB': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11',
+ 'DESTDIRS': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs '
+             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11 '
+             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11/lib-dynload',
+ 'DESTLIB': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11',
  'DESTPATH': '',
- 'DESTSHARED': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11/lib-dynload',
+ 'DESTSHARED': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11/lib-dynload',
  'DFLAGS': '',
  'DIRMODE': 755,
  'DIST': 'README.rst ChangeLog configure configure.ac acconfig.h pyconfig.h.in '
@@ -674,12 +674,12 @@ build_time_vars = {'ABIFLAGS': '',
  'HAVE__GETPTY': 0,
  'HOSTRUNNER': '',
  'HOST_GNU_TYPE': 'aarch64-apple-darwin20.0.0',
- 'INCLDIRSTOMAKE': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
-                   '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
-                   '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include/python3.11 '
-                   '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include/python3.11',
- 'INCLUDEDIR': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
- 'INCLUDEPY': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include/python3.11',
+ 'INCLDIRSTOMAKE': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
+                   '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
+                   '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include/python3.11 '
+                   '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include/python3.11',
+ 'INCLUDEDIR': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
+ 'INCLUDEPY': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include/python3.11',
  'INSTALL': '/usr/bin/install -c',
  'INSTALL_DATA': '/usr/bin/install -c -m 644',
  'INSTALL_PROGRAM': '/usr/bin/install -c',
@@ -692,42 +692,42 @@ build_time_vars = {'ABIFLAGS': '',
                 'dynamic_lookup',
  'LDFLAGS': ''
             ''
-            '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-            '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+            '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+            '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
             ''
             ''
-            '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-            '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib',
+            '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+            '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib',
  'LDLIBRARY': 'libpython3.11.a',
  'LDLIBRARYDIR': '',
  'LDSHARED': 'clang -bundle -undefined dynamic_lookup '
              ''
              ''
              ''
-             '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-             '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+             '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+             '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
              ''
              ''
              ''
-             '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-             '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib',
+             '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+             '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib',
  'LDVERSION': '3.11',
  'LIBC': '',
- 'LIBDEST': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11',
- 'LIBDIR': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib',
+ 'LIBDEST': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11',
+ 'LIBDIR': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib',
  'LIBEXPAT_A': 'Modules/expat/libexpat.a',
  'LIBEXPAT_CFLAGS': '-DNDEBUG -fwrapv -O2 -Wall '
                     ''
                     '-fPIC  -O2  '
                     '-isystem '
-                    '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     ''
                     ''
                     '-arch arm64  '
                     ''
                     '-fPIC  -O2  '
                     '-isystem '
-                    '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     ''
                     ''
                     '-arch arm64   -std=c11 '
@@ -739,18 +739,18 @@ build_time_vars = {'ABIFLAGS': '',
                     ''
                     ''
                     '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                    '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     '-mmacosx-version-min=12.1 '
-                    '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     ''
                     ''
                     '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                    '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     '-mmacosx-version-min=12.1 '
-                    '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+                    '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'LIBEXPAT_HEADERS': '\\',
  'LIBEXPAT_OBJS': '\\',
- 'LIBFFI_INCLUDEDIR': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+ 'LIBFFI_INCLUDEDIR': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'LIBM': '',
  'LIBMPDEC_A': 'Modules/_decimal/libmpdec/libmpdec.a',
  'LIBMPDEC_CFLAGS': '-I/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_decimal/libmpdec '
@@ -758,14 +758,14 @@ build_time_vars = {'ABIFLAGS': '',
                     ''
                     '-fPIC  -O2  '
                     '-isystem '
-                    '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     ''
                     ''
                     '-arch arm64  '
                     ''
                     '-fPIC  -O2  '
                     '-isystem '
-                    '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     ''
                     ''
                     '-arch arm64   -std=c11 '
@@ -777,21 +777,21 @@ build_time_vars = {'ABIFLAGS': '',
                     ''
                     ''
                     '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                    '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     '-mmacosx-version-min=12.1 '
-                    '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     ''
                     ''
                     '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                    '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                    '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                     '-mmacosx-version-min=12.1 '
-                    '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+                    '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'LIBMPDEC_HEADERS': '\\',
  'LIBMPDEC_OBJS': '\\',
  'LIBOBJDIR': 'Python/',
  'LIBOBJS': '',
- 'LIBPC': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/pkgconfig',
- 'LIBPL': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11/config-3.11-darwin',
+ 'LIBPC': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/pkgconfig',
+ 'LIBPL': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11/config-3.11-darwin',
  'LIBPYTHON': '',
  'LIBRARY': 'libpython3.11.a',
  'LIBRARY_DEPS': 'libpython3.11.a',
@@ -813,13 +813,13 @@ build_time_vars = {'ABIFLAGS': '',
  'LOCALMODLIBS': '',
  'MACHDEP': 'darwin',
  'MACHDEP_OBJS': '',
- 'MACHDESTLIB': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11',
+ 'MACHDESTLIB': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11',
  'MACOSX_DEPLOYMENT_TARGET': '12.1',
  'MAINCC': 'clang',
  'MAJOR_IN_MKDEV': 0,
  'MAJOR_IN_SYSMACROS': 0,
  'MAKESETUP': '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/makesetup',
- 'MANDIR': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/share/man',
+ 'MANDIR': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/share/man',
  'MKDIR_P': '/Users/ec2-user/croot/python-split_1773249019128/work/install-sh '
             '-c -d',
  'MODBUILT_NAMES': 'atexit  faulthandler  posix  _signal  _tracemalloc  '
@@ -847,8 +847,8 @@ build_time_vars = {'ABIFLAGS': '',
  'MODULE_AUDIOOP_LDFLAGS': '',
  'MODULE_AUDIOOP_STATE': 'yes',
  'MODULE_BINASCII_CFLAGS': '-DUSE_ZLIB_CRC32 '
-                           '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
- 'MODULE_BINASCII_LDFLAGS': '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+                           '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
+ 'MODULE_BINASCII_LDFLAGS': '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                             '-lz',
  'MODULE_BINASCII_STATE': 'yes',
  'MODULE_CMATH_DEPS': '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_math.h',
@@ -889,8 +889,8 @@ build_time_vars = {'ABIFLAGS': '',
  'MODULE_XXLIMITED_35_STATE': 'yes',
  'MODULE_XXLIMITED_STATE': 'yes',
  'MODULE_XXSUBTYPE_LDFLAGS': '',
- 'MODULE_ZLIB_CFLAGS': '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
- 'MODULE_ZLIB_LDFLAGS': '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+ 'MODULE_ZLIB_CFLAGS': '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
+ 'MODULE_ZLIB_LDFLAGS': '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                         '-lz',
  'MODULE_ZLIB_STATE': 'yes',
  'MODULE__ABC_LDFLAGS': '',
@@ -947,9 +947,9 @@ build_time_vars = {'ABIFLAGS': '',
  'MODULE__ELEMENTTREE_STATE': 'yes',
  'MODULE__FUNCTOOLS_LDFLAGS': '',
  'MODULE__GDBM_STATE': 'missing',
- 'MODULE__HASHLIB_CFLAGS': '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+ 'MODULE__HASHLIB_CFLAGS': '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'MODULE__HASHLIB_DEPS': '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/hashlib.h',
- 'MODULE__HASHLIB_LDFLAGS': '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib   '
+ 'MODULE__HASHLIB_LDFLAGS': '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib   '
                             '-lcrypto',
  'MODULE__HASHLIB_STATE': 'yes',
  'MODULE__HEAPQ_STATE': 'yes',
@@ -960,8 +960,8 @@ build_time_vars = {'ABIFLAGS': '',
  'MODULE__JSON_STATE': 'yes',
  'MODULE__LOCALE_LDFLAGS': '',
  'MODULE__LSPROF_STATE': 'yes',
- 'MODULE__LZMA_CFLAGS': '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
- 'MODULE__LZMA_LDFLAGS': '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+ 'MODULE__LZMA_CFLAGS': '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
+ 'MODULE__LZMA_LDFLAGS': '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                          '-llzma',
  'MODULE__LZMA_STATE': 'yes',
  'MODULE__MD5_DEPS': '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/hashlib.h',
@@ -997,7 +997,7 @@ build_time_vars = {'ABIFLAGS': '',
                         '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/getaddrinfo.c '
                         '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/getnameinfo.c',
  'MODULE__SOCKET_STATE': 'yes',
- 'MODULE__SQLITE3_CFLAGS': '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+ 'MODULE__SQLITE3_CFLAGS': '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                            '-I/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_sqlite',
  'MODULE__SQLITE3_DEPS': '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_sqlite/connection.h '
                          '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_sqlite/cursor.h '
@@ -1006,11 +1006,11 @@ build_time_vars = {'ABIFLAGS': '',
                          '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_sqlite/prepare_protocol.h '
                          '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_sqlite/row.h '
                          '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_sqlite/util.h',
- 'MODULE__SQLITE3_LDFLAGS': '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+ 'MODULE__SQLITE3_LDFLAGS': '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                             '-lsqlite3',
  'MODULE__SQLITE3_STATE': 'yes',
  'MODULE__SRE_LDFLAGS': '',
- 'MODULE__SSL_CFLAGS': '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+ 'MODULE__SSL_CFLAGS': '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'MODULE__SSL_DEPS': '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_ssl.h '
                      '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_ssl/cert.c '
                      '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_ssl/debughelpers.c '
@@ -1019,7 +1019,7 @@ build_time_vars = {'ABIFLAGS': '',
                      '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_ssl_data_111.h '
                      '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/_ssl_data_300.h '
                      '/Users/ec2-user/croot/python-split_1773249019128/work/Modules/socketmodule.h',
- 'MODULE__SSL_LDFLAGS': '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib  '
+ 'MODULE__SSL_LDFLAGS': '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib  '
                         '-lssl -lcrypto',
  'MODULE__SSL_STATE': 'yes',
  'MODULE__STATISTICS_LDFLAGS': '',
@@ -1035,9 +1035,9 @@ build_time_vars = {'ABIFLAGS': '',
  'MODULE__TESTINTERNALCAPI_STATE': 'yes',
  'MODULE__TESTMULTIPHASE_STATE': 'yes',
  'MODULE__THREAD_LDFLAGS': '',
- 'MODULE__TKINTER_CFLAGS': '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+ 'MODULE__TKINTER_CFLAGS': '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                            '-Wno-strict-prototypes -DWITH_APPINIT=1',
- 'MODULE__TKINTER_LDFLAGS': '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+ 'MODULE__TKINTER_LDFLAGS': '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                             '-ltk8.6 -ltkstub8.6 -ltcl8.6 -ltclstub8.6',
  'MODULE__TKINTER_STATE': 'yes',
  'MODULE__TRACEMALLOC_LDFLAGS': '',
@@ -1054,8 +1054,8 @@ build_time_vars = {'ABIFLAGS': '',
  'MVWDELCH_IS_EXPRESSION': 1,
  'NO_AS_NEEDED': '-Wl,--no-as-needed',
  'OBJECT_OBJS': '\\',
- 'OPENSSL_INCLUDES': '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
- 'OPENSSL_LDFLAGS': '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib',
+ 'OPENSSL_INCLUDES': '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
+ 'OPENSSL_LDFLAGS': '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib',
  'OPENSSL_LIBS': '-lssl -lcrypto',
  'OPENSSL_RPATH': '',
  'OPT': '-DNDEBUG -fwrapv -O2 -Wall',
@@ -1098,14 +1098,14 @@ build_time_vars = {'ABIFLAGS': '',
                              ''
                              '-fPIC  '
                              '-O2  -isystem '
-                             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                              ''
                              ''
                              '-arch arm64  '
                              ''
                              '-fPIC  '
                              '-O2  -isystem '
-                             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                              ''
                              ''
                              '-arch arm64   -std=c11 '
@@ -1118,28 +1118,28 @@ build_time_vars = {'ABIFLAGS': '',
                              ''
                              ''
                              '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                              '-mmacosx-version-min=12.1 '
-                             '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                             '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                              ''
                              ''
                              '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                             '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                             '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                              '-mmacosx-version-min=12.1 '
-                             '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                             '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                              '-DPy_BUILD_CORE_BUILTIN',
  'PY_CFLAGS': '-DNDEBUG -fwrapv -O2 -Wall '
               ''
               '-fPIC  -O2  '
               '-isystem '
-              '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+              '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
               ''
               ''
               '-arch arm64  '
               ''
               '-fPIC  -O2  '
               '-isystem '
-              '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+              '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
               ''
               ''
               '-arch arm64 ',
@@ -1151,14 +1151,14 @@ build_time_vars = {'ABIFLAGS': '',
                    ''
                    '-fPIC  -O2  '
                    '-isystem '
-                   '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                   '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                    ''
                    ''
                    '-arch arm64  '
                    ''
                    '-fPIC  -O2  '
                    '-isystem '
-                   '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                   '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                    ''
                    ''
                    '-arch arm64   -std=c11 '
@@ -1170,64 +1170,64 @@ build_time_vars = {'ABIFLAGS': '',
                    ''
                    ''
                    '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                   '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                   '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                    '-mmacosx-version-min=12.1 '
-                   '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                   '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                    ''
                    ''
                    '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                   '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                   '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                    '-mmacosx-version-min=12.1 '
-                   '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                   '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                    '-DPy_BUILD_CORE',
  'PY_CORE_LDFLAGS': ''
                     ''
                     ''
-                    '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-                    '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+                    '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+                    '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                     ''
                     ''
                     ''
-                    '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-                    '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+                    '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+                    '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                     '-Wl,-export_dynamic -g',
  'PY_CPPFLAGS': '-IObjects -IInclude -IPython -I. '
                 '-I/Users/ec2-user/croot/python-split_1773249019128/work/Include '
                 ''
                 ''
                 '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                 '-mmacosx-version-min=12.1 '
-                '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                 ''
                 ''
                 '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                 '-mmacosx-version-min=12.1 '
-                '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+                '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'PY_ENABLE_SHARED': 0,
  'PY_FORMAT_SIZE_T': '"z"',
  'PY_LDFLAGS': ''
                ''
                ''
-               '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-               '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+               '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+               '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                ''
                ''
                ''
-               '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-               '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib',
+               '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+               '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib',
  'PY_LDFLAGS_NODIST': '-Wl,-export_dynamic -g',
  'PY_LDFLAGS_NOLTO': ''
                      ''
                      ''
-                     '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-                     '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+                     '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+                     '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                      ''
                      ''
                      ''
-                     '-Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
-                     '-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib '
+                     '-Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
+                     '-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib '
                      '=thin',
  'PY_SQLITE_ENABLE_LOAD_EXTENSION': 1,
  'PY_SQLITE_HAVE_SERIALIZE': 1,
@@ -1237,14 +1237,14 @@ build_time_vars = {'ABIFLAGS': '',
                         ''
                         '-fPIC  -O2 '
                         '-isystem '
-                        '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                        '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                         ''
                         ''
                         '-arch arm64  '
                         ''
                         '-fPIC  -O2 '
                         '-isystem '
-                        '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                        '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                         ''
                         ''
                         '-arch arm64   -std=c11 '
@@ -1257,15 +1257,15 @@ build_time_vars = {'ABIFLAGS': '',
                         ''
                         ''
                         '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                        '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                        '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                         '-mmacosx-version-min=12.1 '
-                        '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                        '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                         ''
                         ''
                         '-D_FORTIFY_SOURCE=2 -DNDEBUG -isystem '
-                        '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include '
+                        '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include '
                         '-mmacosx-version-min=12.1 '
-                        '-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include',
+                        '-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include',
  'PY_SUPPORT_TIER': 2,
  'Py_DEBUG': 0,
  'Py_ENABLE_SHARED': 0,
@@ -1278,7 +1278,7 @@ build_time_vars = {'ABIFLAGS': '',
  'RESSRCDIR': 'Mac/Resources/framework',
  'RETSIGTYPE': 'void',
  'RUNSHARED': '',
- 'SCRIPTDIR': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib',
+ 'SCRIPTDIR': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib',
  'SETPGRP_HAVE_ARG': 0,
  'SHELL': '/bin/sh',
  'SHLIBS': '-ldl  -framework CoreFoundation',
@@ -1332,15 +1332,15 @@ build_time_vars = {'ABIFLAGS': '',
  'TIMEMODULE_LIB': 0,
  'TIME_WITH_SYS_TIME': 1,
  'TM_IN_SYS_TIME': 0,
- 'TZPATH': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/share/zoneinfo:/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/share/tzinfo',
+ 'TZPATH': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/share/zoneinfo:/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/share/tzinfo',
  'UNICODE_DEPS': '\\',
  'UNIVERSALSDK': '',
  'UPDATE_FILE': '/Users/ec2-user/croot/python-split_1773249019128/work/Tools/scripts/update_file.py',
  'USE_COMPUTED_GOTOS': 1,
  'VERSION': '3.11',
  'VPATH': '/Users/ec2-user/croot/python-split_1773249019128/work',
- 'WASM_ASSETS_DIR': './Volumes/Device/charles/coding_files/Charles-AI-notes/docs',
- 'WASM_STDLIB': './Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/python3.11/os.py',
+ 'WASM_ASSETS_DIR': './Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs',
+ 'WASM_STDLIB': './Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/python3.11/os.py',
  'WHEEL_PKG_DIR': '',
  'WINDOW_HAS_FLAGS': 0,
  'WITH_DECIMAL_CONTEXTVAR': 1,
@@ -1357,7 +1357,7 @@ build_time_vars = {'ABIFLAGS': '',
  'XMLLIBSUBDIRS': 'xml xml/dom xml/etree xml/parsers xml/sax',
  'abs_builddir': '/Users/ec2-user/croot/python-split_1773249019128/work/build-static',
  'abs_srcdir': '/Users/ec2-user/croot/python-split_1773249019128/work',
- 'datarootdir': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/share',
- 'exec_prefix': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs',
- 'prefix': '/Volumes/Device/charles/coding_files/Charles-AI-notes/docs',
+ 'datarootdir': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/share',
+ 'exec_prefix': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs',
+ 'prefix': '/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs',
  'srcdir': '/Users/ec2-user/croot/python-split_1773249019128/work'}

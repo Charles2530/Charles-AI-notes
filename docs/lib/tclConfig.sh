@@ -44,11 +44,11 @@ TCL_LIBS=' -lz  -lpthread -framework CoreFoundation '
 
 # Top-level directory in which Tcl's platform-independent files are
 # installed.
-TCL_PREFIX='/Volumes/Device/charles/coding_files/Charles-AI-notes/docs'
+TCL_PREFIX='/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs'
 
 # Top-level directory in which Tcl's platform-specific files (e.g.
 # executables) are installed.
-TCL_EXEC_PREFIX='/Volumes/Device/charles/coding_files/Charles-AI-notes/docs'
+TCL_EXEC_PREFIX='/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs'
 
 # Flags to pass to cc when compiling the components of a shared library:
 TCL_SHLIB_CFLAGS='-fno-common'
@@ -57,7 +57,7 @@ TCL_SHLIB_CFLAGS='-fno-common'
 TCL_CFLAGS_WARNING='-Wall -Wpointer-arith'
 
 # Extra flags to pass to cc:
-TCL_EXTRA_CFLAGS='-ftree-vectorize -fPIC -fPIE -fstack-protector-strong -O2 -pipe -isystem /Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include -fdebug-prefix-map=/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qfnx8ca/croot/tk_1755243786242/work=/usr/local/src/conda/tk-8.6.15 -fdebug-prefix-map=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs=/usr/local/src/conda-prefix -pipe   -mmacosx-version-min=11.1 '
+TCL_EXTRA_CFLAGS='-ftree-vectorize -fPIC -fPIE -fstack-protector-strong -O2 -pipe -isystem /Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include -fdebug-prefix-map=/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qfnx8ca/croot/tk_1755243786242/work=/usr/local/src/conda/tk-8.6.15 -fdebug-prefix-map=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs=/usr/local/src/conda-prefix -pipe   -mmacosx-version-min=11.1 '
 
 # Base command to use for combining object files into a shared library:
 TCL_SHLIB_LD='${CC} -dynamiclib ${CFLAGS} ${LDFLAGS} -Wl,-single_module'
@@ -79,7 +79,7 @@ TCL_DL_LIBS=''
 
 # Flags to pass to the compiler when linking object files into
 # an executable tclsh or tcltest binary.
-TCL_LD_FLAGS='-Wl,-pie -Wl,-headerpad_max_install_names -Wl,-dead_strip_dylibs -Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -headerpad_max_install_names -Wl,-search_paths_first '
+TCL_LD_FLAGS='-Wl,-pie -Wl,-headerpad_max_install_names -Wl,-dead_strip_dylibs -Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -headerpad_max_install_names -Wl,-search_paths_first '
 
 # Flags to pass to cc/ld, such as "-R /usr/local/tcl/lib", that tell the
 # run-time dynamic linker where to look for shared libraries such as
@@ -104,11 +104,11 @@ TCL_BUILD_LIB_SPEC='-L/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/a
 
 # String to pass to linker to pick up the Tcl library from its
 # installed directory.
-TCL_LIB_SPEC='-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -ltcl8.6'
+TCL_LIB_SPEC='-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -ltcl8.6'
 
 # String to pass to the compiler so that an extension can
 # find installed Tcl headers.
-TCL_INCLUDE_SPEC='-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include'
+TCL_INCLUDE_SPEC='-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include'
 
 # Indicates whether a version numbers should be used in -l switches
 # ("ok" means it's safe to use switches like -ltcl7.5;  "nodots" means
@@ -140,7 +140,7 @@ TCL_SRC_DIR='/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qfn
 # List of standard directories in which to look for packages during
 # "package require" commands.  Contains the "prefix" directory plus also
 # the "exec_prefix" directory, if it is different.
-TCL_PACKAGE_PATH='/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib'
+TCL_PACKAGE_PATH='/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib'
 
 # Tcl supports stub.
 TCL_SUPPORTS_STUBS=1
@@ -157,13 +157,13 @@ TCL_BUILD_STUB_LIB_SPEC='-L/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000g
 
 # String to pass to linker to pick up the Tcl stub library from its
 # installed directory.
-TCL_STUB_LIB_SPEC='-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -ltclstub8.6'
+TCL_STUB_LIB_SPEC='-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -ltclstub8.6'
 
 # Path to the Tcl stub library in the build directory.
 TCL_BUILD_STUB_LIB_PATH='/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qfnx8ca/croot/tk_1755243786242/work/tcl8.6.15/unix/libtclstub8.6.a'
 
 # Path to the Tcl stub library in the install directory.
-TCL_STUB_LIB_PATH='/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/libtclstub8.6.a'
+TCL_STUB_LIB_PATH='/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/libtclstub8.6.a'
 
 # Flag, 1: we built Tcl with threads enabled, 0 we didn't
 TCL_THREADS=1

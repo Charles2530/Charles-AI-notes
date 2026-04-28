@@ -214,6 +214,9 @@ nav:
       - 人机协作与交互评测: embodied-ai/human-robot-interaction-and-evaluation.md
   - 论文专题讲解:
       - paper-deep-dives/index.md
+      - 扩散模型:
+          - Diffusion Forcing：Next-token Prediction Meets Full-Sequence Diffusion: paper-deep-dives/diffusion/diffusion-forcing.md
+          - CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models: paper-deep-dives/diffusion/causvid.md
       - 世界模型:
           - PlaNet：Learning Latent Dynamics for Planning from Pixels: paper-deep-dives/world-models/planet.md
           - Dreamer：Dream to Control: paper-deep-dives/world-models/dreamer.md

@@ -82,7 +82,7 @@ MAKESETUP=      $(srcdir)/Modules/makesetup
 OPT=		-DNDEBUG -fwrapv -O2 -Wall
 BASECFLAGS=	
 BASECPPFLAGS=	-IObjects -IInclude -IPython
-CONFIGURE_CFLAGS=	-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -ftree-vectorize -fPIC -fstack-protector-strong -O2 -pipe -isystem /Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include -fdebug-prefix-map=/Users/ec2-user/croot/python-split_1773249019128/work=/usr/local/src/conda/python-3.11.15 -fdebug-prefix-map=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs=/usr/local/src/conda-prefix -arch arm64 
+CONFIGURE_CFLAGS=	-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -ftree-vectorize -fPIC -fstack-protector-strong -O2 -pipe -isystem /Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include -fdebug-prefix-map=/Users/ec2-user/croot/python-split_1773249019128/work=/usr/local/src/conda/python-3.11.15 -fdebug-prefix-map=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs=/usr/local/src/conda-prefix -arch arm64 
 # CFLAGS_NODIST is used for building the interpreter and stdlib C extensions.
 # Use it when a compiler flag should _not_ be part of the distutils CFLAGS
 # once Python is installed (Issue #21121).
@@ -94,8 +94,8 @@ CONFIGURE_LDFLAGS_NODIST=  -Wl,-export_dynamic -g
 # LDFLAGS_NOLTO is an extra flag to disable lto. It is used to speed up building
 # of _bootstrap_python and _freeze_module tools, which don't need LTO.
 CONFIGURE_LDFLAGS_NOLTO==thin
-CONFIGURE_CPPFLAGS=	-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -D_FORTIFY_SOURCE=2 -DNDEBUG -isystem /Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include -mmacosx-version-min=12.1 -I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
-CONFIGURE_LDFLAGS=	-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -Wl,-headerpad_max_install_names -Wl,-dead_strip_dylibs -Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib
+CONFIGURE_CPPFLAGS=	-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -D_FORTIFY_SOURCE=2 -DNDEBUG -isystem /Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include -mmacosx-version-min=12.1 -I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
+CONFIGURE_LDFLAGS=	-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -Wl,-headerpad_max_install_names -Wl,-dead_strip_dylibs -Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib
 # Avoid assigning CFLAGS, LDFLAGS, etc. so users can use them on the
 # command line to append to these values without stomping the pre-set
 # values.
@@ -134,7 +134,7 @@ MULTIARCH=	darwin
 MULTIARCH_CPPFLAGS = -DMULTIARCH=\"darwin\"
 
 # Install prefix for architecture-independent files
-prefix=		/Volumes/Device/charles/coding_files/Charles-AI-notes/docs
+prefix=		/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs
 
 # Install prefix for architecture-dependent files
 exec_prefix=	${prefix}
@@ -211,9 +211,9 @@ LIBMPDEC_A= Modules/_decimal/libmpdec/libmpdec.a
 LIBEXPAT_A= Modules/expat/libexpat.a
 
 # OpenSSL options for setup.py so sysconfig can pick up AC_SUBST() vars.
-OPENSSL_INCLUDES=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
+OPENSSL_INCLUDES=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
 OPENSSL_LIBS=-lssl -lcrypto
-OPENSSL_LDFLAGS=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib
+OPENSSL_LDFLAGS=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib
 OPENSSL_RPATH=
 
 # Module state, compiler flags and linker flags
@@ -308,32 +308,32 @@ MODULE_NIS_STATE=yes
 MODULE_NIS_CFLAGS=
 MODULE_NIS_LDFLAGS=
 MODULE__SQLITE3_STATE=yes
-MODULE__SQLITE3_CFLAGS=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include -I$(srcdir)/Modules/_sqlite
-MODULE__SQLITE3_LDFLAGS=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -lsqlite3
+MODULE__SQLITE3_CFLAGS=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include -I$(srcdir)/Modules/_sqlite
+MODULE__SQLITE3_LDFLAGS=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -lsqlite3
 MODULE__TKINTER_STATE=yes
-MODULE__TKINTER_CFLAGS=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include -Wno-strict-prototypes -DWITH_APPINIT=1
-MODULE__TKINTER_LDFLAGS=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -ltk8.6 -ltkstub8.6 -ltcl8.6 -ltclstub8.6
+MODULE__TKINTER_CFLAGS=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include -Wno-strict-prototypes -DWITH_APPINIT=1
+MODULE__TKINTER_LDFLAGS=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -ltk8.6 -ltkstub8.6 -ltcl8.6 -ltclstub8.6
 MODULE__UUID_STATE=yes
 MODULE__UUID_CFLAGS=
 MODULE__UUID_LDFLAGS=
 MODULE_ZLIB_STATE=yes
-MODULE_ZLIB_CFLAGS=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
-MODULE_ZLIB_LDFLAGS=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -lz
+MODULE_ZLIB_CFLAGS=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
+MODULE_ZLIB_LDFLAGS=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -lz
 MODULE_BINASCII_STATE=yes
-MODULE_BINASCII_CFLAGS=-DUSE_ZLIB_CRC32 -I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
-MODULE_BINASCII_LDFLAGS=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -lz
+MODULE_BINASCII_CFLAGS=-DUSE_ZLIB_CRC32 -I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
+MODULE_BINASCII_LDFLAGS=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -lz
 MODULE__BZ2_STATE=yes
 MODULE__BZ2_CFLAGS=
 MODULE__BZ2_LDFLAGS=-lbz2
 MODULE__LZMA_STATE=yes
-MODULE__LZMA_CFLAGS=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
-MODULE__LZMA_LDFLAGS=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -llzma
+MODULE__LZMA_CFLAGS=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
+MODULE__LZMA_LDFLAGS=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -llzma
 MODULE__SSL_STATE=yes
-MODULE__SSL_CFLAGS=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
-MODULE__SSL_LDFLAGS=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib  -lssl -lcrypto
+MODULE__SSL_CFLAGS=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
+MODULE__SSL_LDFLAGS=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib  -lssl -lcrypto
 MODULE__HASHLIB_STATE=yes
-MODULE__HASHLIB_CFLAGS=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
-MODULE__HASHLIB_LDFLAGS=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib   -lcrypto
+MODULE__HASHLIB_CFLAGS=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
+MODULE__HASHLIB_LDFLAGS=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib   -lcrypto
 MODULE__TESTCAPI_STATE=yes
 MODULE__TESTCLINIC_STATE=yes
 MODULE__TESTINTERNALCAPI_STATE=yes
@@ -348,7 +348,7 @@ MODULE_XXLIMITED_35_STATE=yes
 
 
 # Default zoneinfo.TZPATH. Added here to expose it in sysconfig.get_config_var
-TZPATH=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/share/zoneinfo
+TZPATH=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/share/zoneinfo
 
 # Modes for directories, executables and data files created by the
 # install process.  Default to user-only-writable for all file types.
@@ -357,7 +357,7 @@ EXEMODE=	755
 FILEMODE=	644
 
 # configure script arguments
-CONFIG_ARGS=	 '--prefix=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs' '--build=arm64-apple-darwin20.0.0' '--host=arm64-apple-darwin20.0.0' '--enable-ipv6' '--with-ensurepip=no' '--with-tzpath=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/share/zoneinfo' '--with-computed-gotos' '--with-system-ffi' '--with-system-expat' '--enable-loadable-sqlite-extensions' '--with-tcltk-includes=-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include' '--with-tcltk-libs=-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -ltcl8.6 -ltk8.6' '--with-platlibdir=lib' '--with-lto' '--enable-optimizations' '-oldincludedir=/Users/ec2-user/croot/python-split_1773249019128/_build_env/arm64-apple-darwin20.0.0/sysroot/usr/include' '--disable-shared' 'PROFILE_TASK=-m test --pgo' 'build_alias=arm64-apple-darwin20.0.0' 'host_alias=arm64-apple-darwin20.0.0' 'PKG_CONFIG_PATH=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/pkgconfig' 'MACHDEP=darwin' 'CC=arm64-apple-darwin20.0.0-clang' 'CFLAGS=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -ftree-vectorize -fPIC -fstack-protector-strong -O2 -pipe -isystem /Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include -fdebug-prefix-map=/Users/ec2-user/croot/python-split_1773249019128/work=/usr/local/src/conda/python-3.11.15 -fdebug-prefix-map=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs=/usr/local/src/conda-prefix -arch arm64 ' 'LDFLAGS=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -Wl,-headerpad_max_install_names -Wl,-dead_strip_dylibs -Wl,-rpath,/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib -L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib' 'CPPFLAGS=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -D_FORTIFY_SOURCE=2 -DNDEBUG -isystem /Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include -mmacosx-version-min=12.1 -I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include' 'CPP=arm64-apple-darwin20.0.0-clang-cpp'
+CONFIG_ARGS=	 '--prefix=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs' '--build=arm64-apple-darwin20.0.0' '--host=arm64-apple-darwin20.0.0' '--enable-ipv6' '--with-ensurepip=no' '--with-tzpath=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/share/zoneinfo' '--with-computed-gotos' '--with-system-ffi' '--with-system-expat' '--enable-loadable-sqlite-extensions' '--with-tcltk-includes=-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include' '--with-tcltk-libs=-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -ltcl8.6 -ltk8.6' '--with-platlibdir=lib' '--with-lto' '--enable-optimizations' '-oldincludedir=/Users/ec2-user/croot/python-split_1773249019128/_build_env/arm64-apple-darwin20.0.0/sysroot/usr/include' '--disable-shared' 'PROFILE_TASK=-m test --pgo' 'build_alias=arm64-apple-darwin20.0.0' 'host_alias=arm64-apple-darwin20.0.0' 'PKG_CONFIG_PATH=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/pkgconfig' 'MACHDEP=darwin' 'CC=arm64-apple-darwin20.0.0-clang' 'CFLAGS=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -ftree-vectorize -fPIC -fstack-protector-strong -O2 -pipe -isystem /Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include -fdebug-prefix-map=/Users/ec2-user/croot/python-split_1773249019128/work=/usr/local/src/conda/python-3.11.15 -fdebug-prefix-map=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs=/usr/local/src/conda-prefix -arch arm64 ' 'LDFLAGS=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -Wl,-headerpad_max_install_names -Wl,-dead_strip_dylibs -Wl,-rpath,/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib -L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib' 'CPPFLAGS=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk -D_FORTIFY_SOURCE=2 -DNDEBUG -isystem /Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include -mmacosx-version-min=12.1 -I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include' 'CPP=arm64-apple-darwin20.0.0-clang-cpp'
 
 
 # Subdirectories with code
@@ -475,7 +475,7 @@ IO_OBJS=	\
 
 ##########################################################################
 
-LIBFFI_INCLUDEDIR=	/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
+LIBFFI_INCLUDEDIR=	/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
 
 ##########################################################################
 # Parser

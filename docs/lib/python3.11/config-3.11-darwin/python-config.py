@@ -1,4 +1,4 @@
-#!/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/bin/python3.11
+#!/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/bin/python3.11
 # -*- python -*-
 
 # Keep this script in sync with python-config.sh.in

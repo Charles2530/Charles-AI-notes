@@ -53,6 +53,33 @@
 
 各主题下的论文条目按论文年月从早到晚展示。新增专题页时只需要在页面 front matter 中填写 `paper_date: YYYY-MM`，导航和索引展示会按该字段排序。
 
+### 扩散模型
+
+<table data-paper-sort="asc">
+  <thead>
+    <tr>
+      <th>时间</th>
+      <th>主题</th>
+      <th>论文讲解</th>
+      <th>阅读重点</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2024-07</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/diffusion-forcing/">Diffusion Forcing：Next-token Prediction Meets Full-Sequence Diffusion</a></td>
+      <td>如何用独立 per-token 噪声水平，把因果 next-token 生成、full-sequence diffusion guidance、长视频 rollout 和扩散规划放进同一个训练范式</td>
+    </tr>
+    <tr>
+      <td>2024-12</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/causvid/">CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models</a></td>
+      <td>如何把双向视频 DiT 通过 ODE 初始化、非对称 DMD 和 KV cache 改造成少步流式自回归视频扩散生成器</td>
+    </tr>
+  </tbody>
+</table>
+
 ### 世界模型
 
 <table data-paper-sort="asc">
