@@ -129,10 +129,22 @@
       <td>latent-variable EBM、energy collapse 和 regularized JEPA training 如何支撑层级表征世界模型</td>
     </tr>
     <tr>
+      <td>2023-10</td>
+      <td>世界模型</td>
+      <td><a href="world-models/ringattention/">RingAttention：Ring Attention with Blockwise Transformers for Near-Infinite Context</a></td>
+      <td>如何用 blockwise attention、KV 环形通信和 sequence parallelism 支撑百万 token 视频/语言/轨迹世界模型训练</td>
+    </tr>
+    <tr>
       <td>2024-02</td>
       <td>世界模型</td>
       <td><a href="world-models/v-jepa/">V-JEPA：Latent Video Prediction for Visual Representation Learning</a></td>
       <td>如何用 latent video prediction、3D Multi-Block Masking 和 EMA target encoder 学习视频世界表征</td>
+    </tr>
+    <tr>
+      <td>2024-02</td>
+      <td>世界模型</td>
+      <td><a href="world-models/lwm/">LWM：百万 token 视频语言世界模型</a></td>
+      <td>如何用 RingAttention、VQGAN 离散视觉 token、masked sequence packing 和渐进式 context extension 训练 1M token 多模态自回归世界模型</td>
     </tr>
     <tr>
       <td>2025-07</td>
