@@ -223,6 +223,8 @@ Table 1 reports comparison of PlaNet to model-free algorithms and true-simulator
 | CEM + true simulator | simulator state | 0 | 850 | 964 | 656 | 825 | 993 | 994 |
 | Data efficiency gain PlaNet over D4PG (factor) |  |  | 250 | 40 | 500+ | 300 | 100 | 90 |
 
+<small>表源：`Learning Latent Dynamics for Planning from Pixels`，Table 1。原论文表格要点：该表比较 PlaNet、model-free baselines 和真实 simulator CEM 在 DeepMind Control Suite 六个任务上的分数；重点是 PlaNet 用 `1,000` episodes 从 pixels 学习，就能接近或超过若干使用 `100,000` episodes 的 model-free 结果。</small>
+
 这张表支持两个判断。第一，PlaNet 在 1,000 episodes 下接近或超过强 model-free baseline 的部分结果，尤其 Cheetah Run 上 PlaNet 高于 D4PG。第二，真实 simulator 上的 CEM 上界说明，planner 本身在这些任务中可行，关键瓶颈是 learned dynamics 是否足够准确。
 
 ![Agent designs](../../assets/images/paper-deep-dives/world-models/planet/figure-5-agent-designs.png){ width="920" }

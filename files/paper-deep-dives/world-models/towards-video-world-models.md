@@ -218,7 +218,7 @@ PhyWorld 这类工作用简单 2D 物理数据评估视频模型的 generalizati
 
 ![Simulation approaches](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="920" }
 
-<small>Figure source: `Towards Video World Models`, Figure 9. 原文图注要点：该表比较 Simulation Platform、Neural 3D/4D 和 Video World Model 在 Dynamic Physics、3D consistency、Photorealism、Speed 与 Generalizability 上的优劣。</small>
+<small>图源：`Towards Video World Models`，Figure 9。表格要点：该表比较 Simulation Platform、Neural 3D/4D 和 Video World Model 在 Dynamic Physics、3D consistency、Photorealism、Speed 与 Generalizability 上的优劣。</small>
 
 这个表的重点是：video world model 在 photorealism 和 generalizability 上有优势，但 3D consistency 和 speed 仍弱；传统仿真平台物理强但泛化和 photorealism 受限；neural 3D/4D 渲染快、3D 一致，但动态物理和开放世界泛化仍难。
 

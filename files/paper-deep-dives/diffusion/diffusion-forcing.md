@@ -234,6 +234,8 @@ current token denoising
 | Multi2D Large | 8.0 | - | 13.9 | 132.1 ± 5.8 | 6.9 ± 1.7 | 129.8 ± 1.5 | 167.1 ± 2.7 |
 | Multi-task Average | 21.5 | - | 16.9 | 129.4 | 20.57 | 127.7 | 146.17 |
 
+<small>表源：`Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion`，Table 1。原论文表格要点：该表在 D4RL Maze2D / Multi2D 上比较 MPPI、CQL、IQL、Diffuser 和 Diffusion Forcing；`Ours` 的平均 reward 最高，且 `Ours w/o MCTG` 与 `Ours` 的差距显示 Monte Carlo Tree Guidance 对规划有额外收益。</small>
+
 这张表支持的结论有三层：
 
 1. `Ours` 在平均 reward 上最高，说明 DF 的 causal uncertainty 和 MCTG 对规划有实际收益；

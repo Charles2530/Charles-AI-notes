@@ -127,7 +127,7 @@ V-JEPA 使用两种 mask：
 
 ![V-JEPA pretraining hyperparameters](../../assets/images/paper-deep-dives/world-models/v-jepa/table-5-pretraining-hyperparameters.png){ width="700" }
 
-<small>Table source: `V-JEPA: Latent Video Prediction for Visual Representation Learning`, Table 5. 原论文图注要点：该表列出 V-JEPA 预训练的 data、masking、optimization、architecture 和 hardware 超参数，包括 `VideoMix2M`、`90000` iterations、EMA momentum 从 `0.998` 到 `1.0`、predictor depth `12`、predictor embedding dim `384`、`bfloat16` 和 `A100 80G`。</small>
+<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 5。原论文表格要点：该表列出 V-JEPA 预训练的 data、masking、optimization、architecture 和 hardware 超参数，包括 `VideoMix2M`、`90000` iterations、EMA momentum 从 `0.998` 到 `1.0`、predictor depth `12`、predictor embedding dim `384`、`bfloat16` 和 `A100 80G`。</small>
 
 几个训练细节值得单独记：
 
@@ -202,7 +202,7 @@ V-JEPA-style video pretraining
 
 ![Frozen evaluation on video datasets](../../assets/images/paper-deep-dives/world-models/v-jepa/table-1-video-frozen-eval.png){ width="920" }
 
-<small>Table source: `V-JEPA: Latent Video Prediction for Visual Representation Learning`, Table 1. 原论文图注要点：该表比较 image/video/text 预训练方法在 K400、SSv2 和 AVA 上的 frozen attentive probe 结果；V-JEPA 在 video-pretrained baselines 中整体表现最好，特别是在 SSv2 上体现出视频预训练对 motion understanding 的优势。</small>
+<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 1。原论文表格要点：该表比较 image/video/text 预训练方法在 K400、SSv2 和 AVA 上的 frozen attentive probe 结果；V-JEPA 在 video-pretrained baselines 中整体表现最好，特别是在 SSv2 上体现出视频预训练对 motion understanding 的优势。</small>
 
 几个关键数字：
 
@@ -215,7 +215,7 @@ V-JEPA-style video pretraining
 
 ![Ablating pretraining distribution](../../assets/images/paper-deep-dives/world-models/v-jepa/table-4-pretraining-distribution.png){ width="900" }
 
-<small>Table source: `V-JEPA: Latent Video Prediction for Visual Representation Learning`, Table 4. 原论文图注要点：左侧比较 image vs. video pretraining；右侧在固定计算预算下扩大 video pretraining dataset，V-JEPA 在 SSv2 和 IN1K 上随数据规模增加而持续提升。</small>
+<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 4。原论文表格要点：左侧比较 image vs. video pretraining；右侧在固定计算预算下扩大 video pretraining dataset，V-JEPA 在 SSv2 和 IN1K 上随数据规模增加而持续提升。</small>
 
 这个结论对世界模型训练很重要：如果目标是学习动态世界表示，视频数据分布不能只追求数量，还要覆盖足够多的运动、对象交互和场景变化。
 

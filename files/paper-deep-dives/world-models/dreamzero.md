@@ -232,6 +232,8 @@ Table 1 reports cumulative inference speedups, where each row includes all optim
 | + Quantization (NVFP4) | — | 16.6× |
 | Model-level + DreamZero-Flash | — | 38× |
 
+<small>表源：`World Action Models are Zero-shot Policies`，Table 1。原论文表格要点：该表按累积优化顺序报告 DreamZero 推理加速，从 system-level CFG parallelism、DiT caching，到 torch compile/CUDA Graphs、kernel scheduler、NVFP4 量化和 DreamZero-Flash；核心结论是仅靠系统优化不够，模型级少步化才把 GB200 上速度推到 `38×`。</small>
+
 ![Decoupled noise schedules](../../assets/images/paper-deep-dives/world-models/dreamzero/figure-5-decoupled-noise.png){ width="860" }
 
 <small>Figure source: `World Action Models are Zero-shot Policies`, Figure 5. 原论文图注要点：该图对比 coupled 与 decoupled noise schedules，DreamZero-Flash 让视频更偏高噪声、动作保持均匀噪声，从而训练模型在 noisy visual context 下预测 clean actions。</small>
@@ -245,6 +247,8 @@ Table 3 reports DreamZero-Flash evaluation on table bussing with different denoi
 | DreamZero | 4 | 83% ± 6.1% | 350ms | 1 |
 | DreamZero | 1 | 52% ± 10.2% | 150ms | 2.33× |
 | DreamZero-Flash | 1 | 74% ± 10.1% | 150ms | 2.33× |
+
+<small>表源：`World Action Models are Zero-shot Policies`，Table 3。原论文表格要点：该表比较 DreamZero 与 DreamZero-Flash 在 table bussing 上的 denoising steps、task progress 和 inference speed；DreamZero-Flash 用 1-step 推理把延迟降到 `150ms`，同时比普通 1-step DreamZero 明显保住更多任务进展。</small>
 
 ## 数据与训练配置
 
@@ -312,6 +316,8 @@ Table 2 reports cross-embodiment transfer results on unseen tasks.
 | DreamZero + Human2Robot Transfer | 54.3% ± 10.4% |
 | DreamZero + Robot2Robot Transfer | 55.4% ± 9.5% |
 
+<small>表源：`World Action Models are Zero-shot Policies`，Table 2。原论文表格要点：该表评估 unseen tasks 上的 cross-embodiment transfer；在 DreamZero 基础上加入 human-to-robot 或 robot-to-robot video-only transfer 都把 task progress 从约 `38%` 提升到 `54%` 以上。</small>
+
 ## 模型与数据消融
 
 Table 4 reports model and data ablations on PnP Easy tasks.
@@ -329,6 +335,8 @@ Table 4 reports model and data ablations on PnP Easy tasks.
 | Q3. Architecture (Bidirectional vs. AR) |  |  |  |
 | DreamZero (BD) | 14B | Diverse | 50% ± 14.4% |
 | DreamZero (AR) | 14B | Diverse | 50% ± 6.3% |
+
+<small>表源：`World Action Models are Zero-shot Policies`，Table 4。原论文表格要点：该表从 data diversity、model scale 和 bidirectional vs. autoregressive architecture 三个问题消融 DreamZero；结果显示 diverse data 和 14B scale 对 WAM 成功率很关键，而 AR 与 BD 在进展相近时更适合闭环执行。</small>
 
 这张表支持三个判断。第一，diverse data 比 repetitive data 更有利于 WAM generalization。第二，WAM 对 model scale 更敏感，14B 明显优于 5B。第三，BD 和 AR 的 task progress 接近，但 AR 在速度、KV caching 和动作平滑性上更适合 closed-loop execution。
 

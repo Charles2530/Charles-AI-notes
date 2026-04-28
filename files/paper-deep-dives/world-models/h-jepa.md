@@ -70,7 +70,7 @@ $$
 
 ![Latent variable examples](../../assets/images/paper-deep-dives/world-models/h-jepa/table-1-latent-variable-examples.png){ width="850" }
 
-<small>Table source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Table 1. 原论文图注要点：表格列举了 prediction problems 中可能相关的 latent variables，例如姿态、光照、分割结构、句法结构和字符分割等。</small>
+<small>表源：`Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`，Table 1。原论文表格要点：表格列举了 prediction problems 中可能相关的 latent variables，例如姿态、光照、分割结构、句法结构和字符分割等。</small>
 
 引入 \(z\) 后，模型可以先定义：
 

@@ -215,6 +215,8 @@ when generating a new chunk:
 | Denoising steps | 4 | 4 | 4 |
 | Distribution loss | DMD | SiD | R3GAN / relativistic GAN with R1 + R2 |
 
+<small>表源：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`，Table 3。原论文表格要点：该表汇总 DMD、SiD 和 GAN 三类 Self Forcing objective 的训练超参；DMD/SiD 使用 pretrained score networks 和 4-step generator，GAN 版本则使用 R3GAN-style 对抗目标与更大的 batch。</small>
+
 ## 实验结果
 
 ### Table 1: Comparison with relevant baselines
@@ -232,6 +234,8 @@ when generating a new chunk:
 | NOVA | 0.6B | 480P | 0.88 | 4.1 | 80.12 | 80.39 | 79.05 |
 | Pyramid Flow | 2B | 480P | 6.7 | 2.5 | 81.72 | 84.74 | 69.62 |
 | Self Forcing (Ours, frame-wise) | 1.3B | 480P | 8.9 | 0.45 | 84.26 | 85.25 | 80.30 |
+
+<small>表源：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`，Table 1。原论文表格要点：该表比较同类视频生成模型的参数量、分辨率、吞吐、延迟和 VBench 分数；Self Forcing 在保持 Wan2.1 级别总分的同时，把延迟降到 `0.69s` chunk-wise 或 `0.45s` frame-wise。</small>
 
 这张表支撑三点：
 
@@ -264,6 +268,8 @@ when generating a new chunk:
 | Self Forcing (Ours, DMD) | 84.26 | 85.25 | 80.30 |
 | Self Forcing (Ours, SiD) | 83.54 | 84.71 | 78.86 |
 | Self Forcing (Ours, GAN) | 83.27 | 84.57 | 78.08 |
+
+<small>表源：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`，Table 2。原论文表格要点：该表在 chunk-wise 和 frame-wise AR 两种设置下比较 TF、DF、DMD 后训练和 Self Forcing；frame-wise AR 链更长、误差累积更强，而 Self Forcing 仍保持最高或接近最高 VBench 分数，直接支撑 train-test distribution alignment 的主张。</small>
 
 这张消融最有价值。frame-wise AR 的链更长，更容易暴露误差累积。TF/DF 在 frame-wise 下掉得很明显，而 Self Forcing 仍保持 84 左右的总分，说明训练时 self-rollout 的分布对齐确实解决了关键问题。
 

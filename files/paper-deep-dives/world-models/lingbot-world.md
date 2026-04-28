@@ -38,6 +38,8 @@ paper_topic: 世界模型
 | Real-time | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ |
 | Open-source | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ |
 
+<small>表源：`Advancing Open-source World Models with Video Generation Models`，Table 1。原论文表格要点：该表把近期交互世界模型放在 domain、generation horizon、dynamic degree、resolution、real-time 和 open-source 六个维度下比较，用来突出 LingBot-World 同时追求通用域、长 horizon、高动态、实时和开源。</small>
+
 这张表的重点不是每个标签的绝对定义，而是论文想强调的定位：LingBot-World 试图同时满足通用域、长 horizon、高动态、实时和开源几个约束。
 
 ## 核心问题
@@ -268,6 +270,8 @@ Table 2 reports VBench quantitative comparisons against Yume-1.5 and HY-World 1.
 | Yume-1.5 [mao2025yume15] | 0.5838 | 0.5185 | 0.7612 | 0.9709 | 0.9545 | 0.1994 |
 | HY-World 1.5 [sun2025worldplay] | 0.6512 | 0.5487 | 0.7217 | 0.9897 | 0.9773 | 0.2016 |
 | Ours | 0.6683 | 0.5660 | 0.8857 | 0.9895 | 0.9648 | 0.2178 |
+
+<small>表源：`Advancing Open-source World Models with Video Generation Models`，Table 2。原论文表格要点：该表用 VBench 指标比较 Yume-1.5、HY-World 1.5 和 LingBot-World；LingBot-World 最突出的优势在 `Dynamic Degree`，同时在 imaging/aesthetic/overall consistency 上也略有提升。</small>
 
 ![长时记忆能力原图](../../assets/images/paper-deep-dives/world-models/lingbot-world/figure-12-memory.png){ width="920" }
 
