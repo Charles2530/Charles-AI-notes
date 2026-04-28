@@ -185,6 +185,57 @@
 4. [Crafter: Open-Ended Reinforcement Learning in a Minecraft-like World](https://arxiv.org/abs/2109.06780)  
    轻量、可控、适合快速测试的开放式世界环境。
 
+### 4.6 世界模型训练效率与系统优化
+
+这里的参考文献只收“让训练更高效”的工作，不把普通 world model 训练目标、loss 设计或模型谱系重复列入。阅读时重点看它们优化的是哪一种效率：真实交互步数、训练 wall-clock、显存/序列计算、rollout 复用率，还是把视频基础模型低成本改造成可交互模拟器。
+
+#### 样本效率：更少真实环境交互
+
+1. [Model-Based Reinforcement Learning for Atari](https://arxiv.org/abs/1903.00374)  
+   `SimPLe` 是早期代表：用视频预测模型生成短期模拟轨迹，让 policy 在 learned model 里训练，从而减少 Atari 真实交互量。
+2. [Mastering Atari Games with Limited Data](https://arxiv.org/abs/2111.00210)  
+   `EfficientZero` 重点是有限数据下的 sample-efficient RL，把 learned model、self-supervised consistency、value prefix 和 MCTS 结合起来。
+3. [EfficientZero V2: Mastering Discrete and Continuous Control with Limited Data](https://arxiv.org/abs/2403.00564)  
+   把 EfficientZero 推到离散/连续动作、视觉/低维输入的统一框架，适合看有限数据设置下 world model + planning 的通用化。
+
+#### Transformer world model：并行训练与 token 效率
+
+1. [Transformers are Sample-Efficient World Models](https://arxiv.org/abs/2209.00588)  
+   `IRIS` 用离散 autoencoder 把像素压成 tokens，再用 autoregressive Transformer 建模动态，是 tokenized world model 的重要入口。
+2. [Transformer-based World Models Are Happy With 100k Interactions](https://arxiv.org/abs/2303.07109)  
+   `TWM` 关注 Transformer world model 在 Atari 100k 低数据场景下的训练效率，适合和 IRIS、STORM 对比。
+3. [STORM: Efficient Stochastic Transformer based World Models for Reinforcement Learning](https://arxiv.org/abs/2310.09615)  
+   把 stochastic latent 和 Transformer 序列建模结合，论文直接报告了单卡训练时间，是 wall-clock 维度很值得看的工作。
+4. [Efficient World Models with Context-Aware Tokenization](https://arxiv.org/abs/2406.19320)  
+   `Delta-IRIS / Δ-IRIS` 重点在 tokenization：减少不必要 token 和长序列计算，是“世界模型训练效率”里很直接的一类优化。
+5. [Learning Transformer-based World Models with Contrastive Predictive Coding](https://arxiv.org/abs/2503.04416)  
+   `TWISTER` 用 action-conditioned CPC 改善 Transformer world model 表征学习，重点看表示质量和样本效率的关系。
+
+#### 连续控制：可扩展模型与数据复用
+
+1. [TD-MPC2: Scalable, Robust World Models for Continuous Control](https://arxiv.org/abs/2310.16828)  
+   `TD-MPC2` 关注 decoder-free latent world model、TD learning 与 MPC 的结合，重点看多任务数据、模型规模和固定超参如何提升训练可扩展性。
+
+#### 长上下文训练：降低序列长度带来的系统成本
+
+1. [World Model on Million-Length Video And Language With Blockwise RingAttention](https://arxiv.org/abs/2402.08268)  
+   `LWM` 用 Blockwise RingAttention 处理百万级 video-language token，是长视频世界模型训练系统的直接参考。
+2. [Long-Context State-Space Video World Models](https://arxiv.org/abs/2505.20171)  
+   用 state-space memory 处理长时依赖，并结合 local attention 保留局部视觉细节，重点是让长时 rollout 成本不要随历史长度线性失控。
+
+#### 视频世界模型实时化：从离线生成训练到 streaming rollout
+
+1. [Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion](https://arxiv.org/abs/2407.01392)  
+   用每帧独立噪声水平把 full-sequence diffusion 和 next-token prediction 接起来，适合看视频模型如何获得更自然的 causal rollout 训练形式。
+2. [From Slow Bidirectional to Fast Autoregressive Video Diffusion Models](https://arxiv.org/abs/2412.07772)  
+   `CausVid` 把预训练 bidirectional video diffusion 改造成 causal autoregressive video diffusion，并通过 distillation 和 KV cache 降低交互延迟。
+3. [MAGI-1: Autoregressive Video Generation at Scale](https://arxiv.org/abs/2505.13211)  
+   从 chunk-wise autoregressive video generation 出发讨论大规模训练和部署基础设施，重点看 causal video foundation model 如何保持固定峰值推理成本。
+4. [Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion](https://arxiv.org/abs/2506.08009)  
+   把 inference-time autoregressive rollout 的状态分布带进训练，重点解决 teacher forcing 和自回归推理之间的分布错位。
+5. [Autoregressive Adversarial Post-Training for Real-Time Interactive Video Generation](https://arxiv.org/abs/2506.09350)  
+   `AAPT` 关注少步、实时、交互式视频生成的 post-training，是把视频生成模型推向交互世界模拟器的重要效率方向。
+
 !!! note "为什么世界模型文献要单独强调训练与评测"
     世界模型的核心难点不只是“能不能生成未来帧”，而是生成的 latent 是否能支持下游规划、控制、反事实推理和泛化。重建 loss、next-frame prediction loss、FID 或视频视觉质量指标都只能回答一部分问题。更有价值的 benchmark 应该把下游任务泛化、rollout 误差累积、规划质量和交互控制成功率放到核心位置。
 
@@ -525,4 +576,3 @@
 2. 对 2025-2026 年快速出现的低比特训练、投机解码、世界模型 benchmark，优先保留 arXiv / 官方 GitHub / 官方文档链接。
 3. 避免把参考文献页变成无序书单：每个条目最好说明它回答什么问题。
 4. 对未复现、未验证、只有宣传材料的内容，建议放到“待核验”小节，不要和已成熟基础文献混在一起。
-

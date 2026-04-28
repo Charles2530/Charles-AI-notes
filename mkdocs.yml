@@ -223,6 +223,12 @@ nav:
       - paper-deep-dives/index.md
       - 世界模型:
           - PlaNet：Learning Latent Dynamics for Planning from Pixels: paper-deep-dives/world-models/planet.md
+          - Dreamer：Dream to Control: paper-deep-dives/world-models/dreamer.md
+          - DreamerV2：Mastering Atari with Discrete World Models: paper-deep-dives/world-models/dreamerv2.md
+          - JEPA：A Path Towards Autonomous Machine Intelligence: paper-deep-dives/world-models/jepa.md
           - DreamerV3：Mastering Diverse Domains through World Models: paper-deep-dives/world-models/dreamerv3.md
+          - H-JEPA：Latent Variable EBMs and Hierarchical JEPA: paper-deep-dives/world-models/h-jepa.md
+          - V-JEPA：Latent Video Prediction for Visual Representation Learning: paper-deep-dives/world-models/v-jepa.md
+          - Towards Video World Models：视频生成走向世界模型的五个门槛: paper-deep-dives/world-models/towards-video-world-models.md
           - LingBot-World：从视频生成到开源世界模拟器: paper-deep-dives/world-models/lingbot-world.md
           - DreamZero：World Action Models are Zero-shot Policies: paper-deep-dives/world-models/dreamzero.md

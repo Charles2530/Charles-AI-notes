@@ -288,6 +288,28 @@ Dreamer 系列的阅读重点不在于“它又刷新了几个环境分数”，
 
 **用内部模型去减少现实世界试错，并让决策发生在真正行动之前。**
 
+## 训练优化相关参考文献
+
+这里的“训练优化”只指效率优化：用更少真实交互、更低 wall-clock、更低显存/序列计算、更高 rollout 复用率，或者把离线视频模型更便宜地改造成可交互世界模型。它不等同于“世界模型怎么训练”，所以 PlaNet、Dreamer、JEPA 这类训练目标和建模路线放在前面的谱系里读，这里只作为背景。
+
+| 效率问题 | 推荐参考 | 阅读重点 |
+| --- | --- | --- |
+| 少量真实交互下训练 agent | [SimPLe](https://arxiv.org/abs/1903.00374)、[EfficientZero](https://arxiv.org/abs/2111.00210)、[EfficientZero V2](https://arxiv.org/abs/2403.00564) | 用 learned model / MCTS / value-prefix 等方式，把昂贵环境交互换成模型内部规划和数据复用 |
+| Transformer world model 的样本效率与并行训练 | [IRIS](https://arxiv.org/abs/2209.00588)、[TWM](https://arxiv.org/abs/2303.07109)、[STORM](https://arxiv.org/abs/2310.09615) | 用离散 autoencoder、Transformer-XL、stochastic Transformer 提升 Atari 100k 等低数据场景的训练效率 |
+| world model tokenization 和 rollout 成本 | [Efficient World Models with Context-Aware Tokenization / Δ-IRIS](https://arxiv.org/abs/2406.19320)、[TWISTER](https://arxiv.org/abs/2503.04416) | 减少长 token 序列带来的 Transformer 负担，并用 action-conditioned CPC 提升表示利用率 |
+| 连续控制中的可扩展训练 | [TD-MPC2](https://arxiv.org/abs/2310.16828) | decoder-free latent world model、单套超参、多任务数据复用、模型规模与数据规模的 scaling |
+| 超长视频/多模态上下文训练 | [LWM / Blockwise RingAttention](https://arxiv.org/abs/2402.08268)、[Long-Context State-Space Video World Models](https://arxiv.org/abs/2505.20171) | 用 RingAttention、progressive context extension、SSM memory 和 local attention 降低长上下文训练与 rollout 成本 |
+| 因果视频世界模型与实时化后训练 | [Diffusion Forcing](https://arxiv.org/abs/2407.01392)、[CausVid](https://arxiv.org/abs/2412.07772)、[MAGI-1](https://arxiv.org/abs/2505.13211)、[Self Forcing](https://arxiv.org/abs/2506.08009)、[AAPT](https://arxiv.org/abs/2506.09350) | 把视频扩散从离线整段生成改成 causal / streaming / few-step / KV-cache 友好的训练或后训练形态 |
+
+读这一组论文时，建议把“效率”拆成四个指标，而不是只看最终分数：
+
+1. **环境样本效率**：真实交互步数是否减少；
+2. **训练 wall-clock**：同等数据下训练 agent 或 world model 是否更快；
+3. **序列计算效率**：长上下文训练是否避免二次复杂度或显存爆炸；
+4. **rollout 效率**：模型内部想象轨迹是否能被大量复用，并且不会因为 exposure bias 快速漂移。
+
+更完整的集中索引见 [参考文献总表：世界模型训练效率与系统优化](../references/index.md#46)。
+
 
 ## 实践补充与检查
 
@@ -330,5 +352,3 @@ Dreamer 系列的阅读重点不在于“它又刷新了几个环境分数”，
 ### 后续最值得继续补强的内容
 
 导读页后续最值得加厚的，通常不是再加一串参考文献，而是补：跳读策略、复现优先级、经典误读、系统化做笔记的方法，以及不同背景读者各自最短的入门路径。
-
-

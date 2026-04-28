@@ -72,10 +72,46 @@
       <td>RSSM latent dynamics 如何从像素交互轨迹中学习，并通过 CEM 在 latent space 里做在线规划</td>
     </tr>
     <tr>
+      <td>2019-12</td>
+      <td>世界模型</td>
+      <td><a href="world-models/dreamer/">Dreamer：Dream to Control</a></td>
+      <td>如何把 RSSM world model 从在线规划接口扩展为 latent imagination actor-critic 训练接口</td>
+    </tr>
+    <tr>
+      <td>2020-10</td>
+      <td>世界模型</td>
+      <td><a href="world-models/dreamerv2/">DreamerV2：Mastering Atari with Discrete World Models</a></td>
+      <td>categorical latent、KL balancing 和 image gradients 如何让 Dreamer 路线打到 Atari 强基准</td>
+    </tr>
+    <tr>
+      <td>2022-06</td>
+      <td>世界模型</td>
+      <td><a href="world-models/jepa/">JEPA：A Path Towards Autonomous Machine Intelligence</a></td>
+      <td>representation-space prediction、non-contrastive training 和 H-JEPA 如何定义非生成式世界模型路线</td>
+    </tr>
+    <tr>
       <td>2023-01</td>
       <td>世界模型</td>
       <td><a href="world-models/dreamerv3/">DreamerV3：Mastering Diverse Domains through World Models</a></td>
       <td>RSSM world model 如何通过 latent dynamics、reward prediction 和 imagined rollout 支撑 actor-critic</td>
+    </tr>
+    <tr>
+      <td>2023-06</td>
+      <td>世界模型</td>
+      <td><a href="world-models/h-jepa/">H-JEPA：Latent Variable EBMs and Hierarchical JEPA</a></td>
+      <td>latent-variable EBM、energy collapse 和 regularized JEPA training 如何支撑层级表征世界模型</td>
+    </tr>
+    <tr>
+      <td>2024-02</td>
+      <td>世界模型</td>
+      <td><a href="world-models/v-jepa/">V-JEPA：Latent Video Prediction for Visual Representation Learning</a></td>
+      <td>如何用 latent video prediction、3D Multi-Block Masking 和 EMA target encoder 学习视频世界表征</td>
+    </tr>
+    <tr>
+      <td>2025-07</td>
+      <td>世界模型</td>
+      <td><a href="world-models/towards-video-world-models/">Towards Video World Models：视频生成走向世界模型的五个门槛</a></td>
+      <td>用 causal、interactive、persistent、real-time 和 physical accuracy 五个约束梳理视频生成到世界模型的训练路线</td>
     </tr>
     <tr>
       <td>2026-01</td>
