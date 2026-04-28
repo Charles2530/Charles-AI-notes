@@ -19,4 +19,4 @@ quality:
 	python scripts/content_quality_report.py
 
 clean-appledouble:
-	find docs -name '._*' -type f -delete
+	find files -name '._*' -type f -delete

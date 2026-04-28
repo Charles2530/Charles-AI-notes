@@ -1,15 +1,8 @@
 site_name: Charles AI notes
 site_description: 面向扩散模型、VLM、VLA、量化、训练、推理、对比学习、世界模型与具身智能的中文知识库
+docs_dir: files
 exclude_docs: |
-  bin/**
-  conda-meta/**
-  etc/**
-  include/**
-  lib/**
-  man/**
   roadmap/**
-  share/**
-  ssl/**
 theme:
   name: material
   language: zh

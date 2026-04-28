@@ -23,8 +23,9 @@
 
 ```text
 .
-├── docs/                  # MkDocs 文档正文
-├── docs/assets/           # 站点样式与脚本
+├── files/                 # MkDocs 文档正文
+├── files/assets/          # 站点样式与脚本
+├── docs/                  # 项目本地 Conda 环境前缀
 ├── .github/workflows/     # GitHub Pages 部署工作流
 ├── mkdocs.yml             # 站点导航与配置
 ├── requirements.txt       # Python 依赖
@@ -34,7 +35,8 @@
 
 其中：
 
-- `docs/` 是主要维护区域；
+- `files/` 是主要维护区域，Markdown、CSS、JS、图片都放在这里；
+- `docs/` 保留为项目本地 Conda 环境目录；
 - `mkdocs.yml` 定义导航结构和站点行为；
 - `.github/workflows/deploy-docs.yml` 已配置好 Pages 部署流程。
 
@@ -48,7 +50,7 @@ make serve
 
 这个命令会启用 MkDocs 的 livereload 和增量构建：
 
-- 保存 `docs/` 下的 Markdown、CSS、JS、图片后，浏览器会自动刷新；
+- 保存 `files/` 下的 Markdown、CSS、JS、图片后，浏览器会自动刷新；
 - 修改 `mkdocs.yml` 后也会触发重新构建；
 - 默认会自动打开 `http://127.0.0.1:8000`；
 - 默认使用完整重构，保证导航、搜索、CSS/JS 和页面内容都能稳定更新；
@@ -84,9 +86,9 @@ http://127.0.0.1:8000
 ### 方式二：使用 Conda
 
 ```bash
-conda env create -f environment.yml -p ./conda-env
-conda activate ./conda-env
-make serve MKDOCS=mkdocs
+conda env create -f environment.yml -p ./docs
+conda activate ./docs
+make serve
 ```
 
 如果你更习惯直接用已有前缀环境，也可以：

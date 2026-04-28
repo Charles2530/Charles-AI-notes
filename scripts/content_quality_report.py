@@ -9,17 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-DOCS_ROOT = Path("docs")
+DOCS_ROOT = Path("files")
 EXCLUDED_PARTS = {
-    "bin",
-    "conda-meta",
-    "etc",
-    "include",
-    "lib",
-    "man",
     "roadmap",
-    "share",
-    "ssl",
 }
 
 MIN_CHARS = 2500
@@ -28,18 +20,18 @@ MAX_H2 = 18
 MAX_H3 = 60
 
 FULLY_EXEMPT_PAGES = {
-    Path("docs/references/index.md"),
-    Path("docs/training/page-by-page-visual-guide.md"),
+    Path("files/references/index.md"),
+    Path("files/training/page-by-page-visual-guide.md"),
 }
 
 SHORT_EXEMPT_PREFIXES = (
-    "docs/foundations/",
-    "docs/paper-guides/",
+    "files/foundations/",
+    "files/paper-guides/",
 )
 
 SHORT_EXEMPT_PAGES = {
-    Path("docs/operators/hardware-aware-debug-checklist.md"),
-    Path("docs/operators/kernel-cost-models-and-selection-heuristics.md"),
+    Path("files/operators/hardware-aware-debug-checklist.md"),
+    Path("files/operators/kernel-cost-models-and-selection-heuristics.md"),
 }
 
 TEMPLATE_PATTERNS = [

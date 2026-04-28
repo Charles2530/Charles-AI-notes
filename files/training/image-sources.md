@@ -1,9 +1,9 @@
 # 训练专题图片来源与授权
 
-本页记录 `docs/assets/images/training/` 中图片的来源链接。  
+本页记录 `files/assets/images/training/` 中图片的来源链接。  
 这些图片均来自 Wikimedia Commons，具体授权条款以各文件页面为准。
 
-另有一批 `docs/assets/images/training/generated/` 图片由 GPT / Codex 创建，用于训练专题教学示意图。
+另有一批 `files/assets/images/training/generated/` 图片由 GPT / Codex 创建，用于训练专题教学示意图。
 
 ## 文件清单
 
@@ -40,7 +40,7 @@
 
 ## GPT 生成图片清单
 
-以下图片由 GPT / Codex 生成，存放在 `docs/assets/images/training/generated/`：
+以下图片由 GPT / Codex 生成，存放在 `files/assets/images/training/generated/`：
 
 1. `training-production-line.png`
 2. `pretrain-sft-alignment.png`
