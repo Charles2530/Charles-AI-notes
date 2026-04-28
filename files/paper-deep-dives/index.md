@@ -147,6 +147,12 @@
       <td>如何用 RingAttention、VQGAN 离散视觉 token、masked sequence packing 和渐进式 context extension 训练 1M token 多模态自回归世界模型</td>
     </tr>
     <tr>
+      <td>2025-06</td>
+      <td>世界模型</td>
+      <td><a href="world-models/self-forcing/">Self Forcing：Bridging the Train-Test Gap in Autoregressive Video Diffusion</a></td>
+      <td>如何通过训练时自回归 self-rollout、视频级 distribution matching 和 rolling KV cache 缓解流式视频世界模型的 exposure bias 与误差累积</td>
+    </tr>
+    <tr>
       <td>2025-07</td>
       <td>世界模型</td>
       <td><a href="world-models/towards-video-world-models/">Towards Video World Models：视频生成走向世界模型的五个门槛</a></td>

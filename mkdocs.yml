@@ -227,6 +227,7 @@ nav:
           - RingAttention：Ring Attention with Blockwise Transformers for Near-Infinite Context: paper-deep-dives/world-models/ringattention.md
           - LWM：百万 token 视频语言世界模型: paper-deep-dives/world-models/lwm.md
           - V-JEPA：Latent Video Prediction for Visual Representation Learning: paper-deep-dives/world-models/v-jepa.md
+          - Self Forcing：Bridging the Train-Test Gap in Autoregressive Video Diffusion: paper-deep-dives/world-models/self-forcing.md
           - Towards Video World Models：视频生成走向世界模型的五个门槛: paper-deep-dives/world-models/towards-video-world-models.md
           - LingBot-World：从视频生成到开源世界模拟器: paper-deep-dives/world-models/lingbot-world.md
           - DreamZero：World Action Models are Zero-shot Policies: paper-deep-dives/world-models/dreamzero.md
