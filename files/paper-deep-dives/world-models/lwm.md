@@ -78,7 +78,7 @@ text tokens + image tokens + video frame tokens
 
 ## 模型结构
 
-![LWM model 原图](https://github.com/LargeWorldModel/LWM/raw/main/imgs/model.png){ width="920" }
+![LWM model 原图](https://largeworldmodel.github.io/lwm/materials/model.png){ width="920" }
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 4。原图展示 LWM 是一个 autoregressive Transformer：视频帧经 VQGAN 转为 image tokens，文本经 BPE tokenizer 转为 text tokens，然后拼接进同一个 Transformer 预测下一个 token。</small>
 

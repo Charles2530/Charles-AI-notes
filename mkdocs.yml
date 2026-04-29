@@ -46,6 +46,7 @@ hooks:
 extra_javascript:
   - assets/javascripts/term-tooltips.js
   - assets/javascripts/reading-controls.js
+  - assets/javascripts/image-lightbox.js
   - assets/javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 extra_css:
