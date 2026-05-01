@@ -92,6 +92,11 @@ $$
 
 <small>图源：`Advancing Open-source World Models`，Figure 4。原论文图注要点：该图概览 LingBot-World 的多阶段训练 pipeline，从 foundation video generator 出发，经过 pre-training、middle-training 和 post-training 演进为可交互世界模拟器。</small>
 
+!!! note "这张训练路线图怎么读"
+    这张图的主线是“先保视频生成能力，再逐步加入世界模型能力”。pre-training / foundation stage 让模型继承开放域视频生成先验；middle-training 更关注长序列、空间记忆和多任务视频续写；post-training 才引入动作条件、因果化、少步蒸馏和系统优化。
+
+    关键点是这些阶段不能简单互换。动作条件太早加入，模型可能还没有稳定的视频和长时记忆能力；实时化太早做，少步蒸馏会先损伤质量；只做视频训练不做动作和因果化，又只能得到离线生成器。LingBot-World 的图实际表达了一条工程路线：世界模型不是视频模型加一个动作 token，而是数据、训练目标、注意力结构和推理接口一起改。
+
 ## 数据引擎
 
 LingBot-World 的数据部分很关键，因为世界模型的能力上限很大程度取决于它看到过什么交互。
@@ -194,6 +199,11 @@ LingBot-World 的现实选择是站在视频生成模型上继续训练，而不
 
 <small>图源：`Advancing Open-source World Models`，Figure 5。原论文图注要点：该图左侧展示图像/视频、噪声 latent 和用户动作如何共同生成具备空间记忆、长时一致性和动作跟随的视频；右侧展示 DiT block 中 self-attention、Plücker action embedding、adaptive normalization 与 text cross-attention 的组织方式。</small>
 
+!!! note "动作条件为什么要进 DiT block"
+    这张系统图右侧比左侧更重要。左侧说明输入有历史图像/视频、噪声 latent 和用户动作；右侧说明动作不是只作为 prompt 拼在外面，而是通过 action embedding、Plucker camera representation、adaptive normalization / adapter 等机制调制 DiT block 内部特征。
+
+    这样做的原因是动作要改变未来动态，而不只是改变文本语义。如果动作只在浅层条件里出现，模型很容易忽略它，继续生成“最常见未来”。把动作调制接近生成主干，可以让相机旋转、移动方向、键盘输入等控制信号影响每个 denoising block 的时空表示。读这张图时要抓住一句话：**世界模型的动作条件必须进入动力学生成路径，而不是停留在 caption 级条件**。
+
 ### 第三阶段：动作条件适配
 
 动作条件是视频模型变成世界模型的分水岭。LingBot-World 引入相机运动、键盘控制或离散交互动作，让模型学习：
@@ -228,6 +238,11 @@ $$
 ![因果化与长时训练原图](../../assets/images/paper-deep-dives/world-models/lingbot-world/figure-6-causal-adaptation.png){ width="860" }
 
 <small>图源：`Advancing Open-source World Models`，Figure 6。原论文图注要点：该图说明 causal generator adaptation 和 discriminator architecture，前者用 block causal attention 支持流式自回归生成，后者在长时训练中通过 GAN classification head 与 cross-attention 缓解累积漂移。</small>
+
+!!! note "这张因果化图在解决什么"
+    离线视频扩散模型通常可以看完整个 clip，训练和推理都偏 bidirectional；交互世界模型不能这样做，因为未来动作和未来观测还不存在。causal generator adaptation 的作用，是把模型改成只能依赖历史和当前 chunk，同时保留 chunk 内局部一致性。
+
+    图里的 discriminator / GAN branch 则针对另一个问题：自回归 rollout 时间一长，错误会累积，视频可能漂移、模糊或变得不真实。用长时训练和对抗分类头，可以给生成序列整体质量一个额外约束。读这张图时要把两件事分开：causal attention 解决部署形态，discriminator 解决长期 rollout 质量。
 
 ### 第五阶段：少步蒸馏与实时化
 

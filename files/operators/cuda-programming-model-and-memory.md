@@ -2,6 +2,12 @@
 
 CUDA 之所以长期是 AI kernel 的主语言，不只是因为它能在 GPU 上写程序，而是因为它把并行执行模型、内存层次和同步机制暴露得足够直接。理解 CUDA 的关键不是背 API，而是看清三件事：线程如何被调度，数据如何在 register、shared memory、L2 和 HBM 之间移动，为什么很多优化本质上都是重新安排访存和并发。
 
+!!! note "初学者先抓住"
+    写 CUDA 的核心不是“让每个线程做点事”，而是让一群 thread/warp/block 协作处理一块数据，并尽量少从 HBM 来回搬。高性能 kernel 的很多技巧，本质上都在减少等待和重复搬运。
+
+!!! example "有趣例子：仓库分拣"
+    HBM 像远处大仓库，shared memory 像分拣台，register 像工人手里正拿着的零件。每次都跑去大仓库拿一个零件会很慢；聪明做法是先搬一筐到分拣台，再让一组工人快速组装。
+
 这页是算子专题的基础页，后续 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与 Autotuning](triton-programming-model-and-autotuning.md)、[CUTLASS、CuTe 与编译栈](cutlass-cute-and-compiler-stack.md) 都依赖这里的心智模型。
 
 ## 最小心智模型

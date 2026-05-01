@@ -4,6 +4,14 @@
 
 这页建议和 [数据系统与优化](data-systems-and-optimization.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[评测与消融方法学](evaluation-and-ablation-methodology.md) 一起读。数据系统页讲治理链路，本页聚焦训练消费路径和吞吐治理。
 
+!!! note "初学者先抓住"
+
+    输入管线的任务不是“把数据读出来”这么简单，而是稳定地把正确分布、正确长度、正确 mask、正确顺序的数据送到每张卡。GPU 空转、padding 过多、恢复后重复读样，最后都会变成训练效率和模型质量问题。
+
+!!! example "有趣例子：拼车和空座"
+
+    Packing 像拼车：短样本单独坐一辆车会浪费座位，把多个短样本拼在一起能提高利用率。但如果司机把不同乘客的目的地搞混，训练里就对应 attention mask 或 label mask 泄漏，收益会立刻变成事故。
+
 ## 一、输入系统的真实职责
 
 训练输入系统至少承担五件事：

@@ -10,6 +10,14 @@
 4. MQA/GQA 对读写模式有什么影响；
 5. prefix reuse 和 paged attention 如何互相作用。
 
+!!! note "初学者先抓住"
+
+    服务态 attention 的重点是动态内存系统。Prefill 像大块规则计算，decode 像每步读取不断变化的 KV 历史；KV page、prefix cache、MQA/GQA 和连续批处理会一起决定尾延迟。
+
+!!! example "有趣例子：图书馆借阅系统"
+
+    训练 attention 像一次性处理一整摞固定资料；服务 decode 像许多人不断借还不同书页。书页怎么编号、缓存、复用和回收，往往比单次阅读速度更影响效率。
+
 ## 1. 为什么服务态 attention 要单独讲
 
 **最直接的原因是**：服务里的瓶颈画像和训练不同。

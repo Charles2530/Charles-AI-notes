@@ -66,6 +66,18 @@
   </thead>
   <tbody>
     <tr>
+      <td>2023-11</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/dmd/">DMD：One-step Diffusion with Distribution Matching Distillation</a></td>
+      <td>如何用 real/fake score 差分和 regression loss，把多步扩散 teacher 蒸馏成一步图像生成器</td>
+    </tr>
+    <tr>
+      <td>2024-05</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/dmd2/">DMD2：Improved Distribution Matching Distillation for Fast Image Synthesis</a></td>
+      <td>如何用 TTUR 稳住 fake diffusion critic，用 GAN 真实数据监督和 backward simulation 把 DMD 推向更强的一步/少步生成</td>
+    </tr>
+    <tr>
       <td>2024-07</td>
       <td>扩散模型</td>
       <td><a href="diffusion/diffusion-forcing/">Diffusion Forcing：Next-token Prediction Meets Full-Sequence Diffusion</a></td>
@@ -76,6 +88,12 @@
       <td>扩散模型</td>
       <td><a href="diffusion/causvid/">CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models</a></td>
       <td>如何把双向视频 DiT 通过 ODE 初始化、非对称 DMD 和 KV cache 改造成少步流式自回归视频扩散生成器</td>
+    </tr>
+    <tr>
+      <td>2025-10</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/phased-dmd/">Phased DMD：Few-step Distribution Matching Distillation via Score Matching within Subintervals</a></td>
+      <td>如何把少步 DMD 拆成 SNR 子区间专家训练，并用子区间 score matching 保住图像多样性与视频运动动态</td>
     </tr>
   </tbody>
 </table>

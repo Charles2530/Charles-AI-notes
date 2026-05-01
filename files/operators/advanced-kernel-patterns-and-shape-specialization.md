@@ -2,6 +2,14 @@
 
 真正高性能的 AI kernel，往往并不只靠一个技巧，而是若干模式叠加的结果：tiling、双缓冲、流水线、persistent kernel、epilogue fusion、threadblock swizzle、shape specialization、autotune。理解这些模式，能帮助你把很多看似不同的实现放到同一张设计图里。
 
+!!! note "初学者先抓住"
+
+    高级 kernel 模式的共同目标，是让数据在正确时间到达正确位置，并让计算单元尽量少等。Tiling 管复用，双缓冲管等待，fusion 管少搬中间结果，shape specialization 管高频形状的专门优化。
+
+!!! example "有趣例子：流水厨房"
+
+    好厨师不是等所有菜洗完才开火，而是一边切、一边炒、一边准备下一盘。高性能 kernel 也是把数据搬运、计算和写回组织成流水线。
+
 ## 1. 为什么“高级模式”不是炫技
 
 当算子真正接近硬件上限时，性能差异往往不再来自“会不会做矩阵乘”，而来自：

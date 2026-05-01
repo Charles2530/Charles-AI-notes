@@ -1,6 +1,6 @@
 # Package Information for pkg-config
 
-prefix=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs
+prefix=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include

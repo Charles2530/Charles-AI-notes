@@ -231,6 +231,19 @@ $$
 
 前两篇建立编程模型，中间两篇建立常见热点算子的实现直觉，最后一篇帮助你把“会写”变成“会验证、会定位、会迭代”。
 
+## 阶段检查与下一站
+
+算子专题的学习目标不是背 CUDA API，而是能判断性能问题属于哪一级抽象。
+
+| 阶段 | 先读 | 读完要能回答 |
+| --- | --- | --- |
+| 1. 执行模型 | [CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)、[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) | thread/warp/block、shared memory、HBM、tile 和 mask 如何影响一个 kernel |
+| 2. 热点算子 | [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[Reduction、Norm 与索引 Kernel](reduction-norm-layout-and-indexing.md)、[长上下文与 FlashAttention 演化](long-context-and-flashattention-evolution.md) | 算子是算力受限、带宽受限、同步受限还是 launch 受限 |
+| 3. 低精度与通信 | [低精度与量化 Kernel](low-precision-and-quantized-kernels.md)、[FP8 与优化器 Kernel](fp8-training-and-optimizer-kernels.md)、[通信算子与计算重叠](communication-kernels-and-overlap.md) | 量化、通信和 overlap 的收益是否被 layout、dequant 或拓扑吃掉 |
+| 4. 工程化维护 | [Profiling、调试与数值稳定性](profiling-debugging-and-numerical-stability.md)、[运行时 Dispatch 与 Kernel 选择](runtime-dispatch-and-kernel-selection.md)、[测试、回归与维护](testing-regression-and-maintenance.md) | 一个优化是否正确、稳定、可回归，是否真的命中训练或推理热路径 |
+
+读完后建议回到 [训练总览](../training/index.md) 和 [推理总览](../inference/index.md)：算子优化只有被真实负载消费，才算完成闭环。
+
 ## 快速代码示例
 
 ```python

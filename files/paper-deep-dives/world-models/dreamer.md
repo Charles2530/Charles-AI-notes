@@ -96,6 +96,11 @@ while not converged:
 
 <small>Figure source: `Dream to Control`, Algorithm 1. 原论文图注要点：伪代码把 Dreamer 拆成 dynamics learning、behavior learning 和 environment interaction；模型组件包括 representation、transition、reward、action 和 value，核心超参包括 seed episodes、collect interval、batch size、sequence length、imagination horizon 和 learning rate。</small>
 
+!!! note "这段算法怎么读"
+    Dreamer 的训练循环有三件事交替发生：先从 replay buffer 采样真实轨迹训练 world model；再冻结 world model，在 latent imagination 里 rollout 多步，训练 actor 和 value；最后用更新后的 actor 去环境里收集更多数据。它不是在真实环境里做在线规划，也不是每次行动都跑 CEM，而是把 planning pressure 转移到 actor training 里。
+
+    这段伪代码容易忽略的一点是：behavior learning 时 world model 是 fixed 的。actor 的梯度可以穿过 imagined trajectory 回到动作，但不更新 dynamics model。这能避免 actor 为了拿高 value 直接“篡改”世界模型。Dreamer 的核心工程分工就是：world model 用真实数据学环境，actor/critic 用 imagined trajectories 学控制。
+
 这里最值得注意的是训练顺序：world model 先用 replay 中的真实观测序列训练；actor 和 critic 再在固定 world model 的 imagined trajectories 上训练。论文明确说，behavior learning 时 world model 是 fixed 的，这避免 actor 更新直接改写 dynamics。
 
 ## World Model 训练

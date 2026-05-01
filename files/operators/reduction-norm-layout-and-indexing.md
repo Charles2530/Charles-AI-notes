@@ -9,6 +9,14 @@
 
 因此理解这些小中型 kernel，对于训练和服务都非常关键。
 
+!!! note "初学者先抓住"
+
+    小算子不是小问题。Norm、reduction、gather、scatter、layout transform 单次成本不大，但每层、每步、每个请求反复出现，尤其在 decode 和长上下文里会放大成主瓶颈。
+
+!!! note "难点解释：为什么 layout 变换很贵"
+
+    Layout transform 经常不做太多数学计算，却会搬大量数据、破坏连续访问、增加中间张量和 launch。很多优化的第一步不是写更复杂算法，而是减少不必要的重排。
+
 ## 1. 为什么“小算子”不能被低估
 
 单个 norm 或 reduction kernel 看起来没多少 FLOPs，但真实系统里它们往往：

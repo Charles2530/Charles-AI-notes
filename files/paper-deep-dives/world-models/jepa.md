@@ -83,6 +83,11 @@ $$
 
 <small>Figure source: `A Path Towards Autonomous Machine Intelligence`, Figure 12. 原论文图注要点：JEPA 通过两个 encoding branches 得到 \(s_x\) 和 \(s_y\)，predictor 在 latent variable \(z\) 的帮助下预测 \(s_y\)，能量由目标表示和预测表示之间的误差给出；这种设计的关键优势是只在 representation space 中预测。</small>
 
+!!! note "JEPA 图里的关键转向"
+    这张图的重点是预测对象从“未来观测”变成了“未来表示”。输入 \(x\) 和目标 \(y\) 先分别编码成 \(s_x\) 和 \(s_y\)，predictor 只需要从 \(s_x\) 和 latent \(z\) 预测 \(s_y\)。模型不必重建像素、纹理或所有不可预测细节，只需要预测 encoder 认为重要的抽象状态。
+
+    这对世界模型很关键：如果未来有多个可能视频，像素级生成必须选择或采样一个具体未来；JEPA 可以把不可预测但无关的细节留在表示之外，把容量放在可预测、可规划、可行动的信息上。读这张图时要注意 latent \(z\) 的角色：它不是为了生成漂亮画面，而是为 representation prediction 中真正必要的不确定性提供自由度。
+
 这和生成式视频模型的区别非常重要：
 
 | 维度 | Generative prediction | JEPA prediction |
@@ -108,6 +113,11 @@ JEPA 可以用 contrastive learning 训练，但论文更强调 non-contrastive 
 ![Non-contrastive JEPA training](../../assets/images/paper-deep-dives/world-models/jepa/figure-13-non-contrastive-training.png){ width="840" }
 
 <small>Figure source: `A Path Towards Autonomous Machine Intelligence`, Figure 13. 原论文图注要点：非对比 JEPA 训练同时最大化 \(s_x\) 与 \(s_y\) 对输入的信息量、最小化 prediction error，并约束 latent variable \(z\) 的信息量；论文把 VICReg 和 Barlow Twins 视为这类非对比准则的例子。</small>
+
+!!! note "为什么不能只最小化预测误差"
+    如果训练目标只有 \(D(s_y,\hat{s}_y)\)，最简单的坏解是让 \(s_x\) 和 \(s_y\) 都变成常数，预测误差很低但表示没有信息。另一种坏解是让 latent \(z\) 携带所有目标细节，predictor 绕过 \(s_x\)，模型也没有学会从当前状态预测未来。
+
+    所以非对比 JEPA 的图里同时出现三类约束：表示要保留输入信息，预测误差要低，latent variable 的信息量要受限。这个三角平衡才是训练重点。读这张图时不要把它当成普通回归 loss，而要把它看成防 collapse 的 representation-learning recipe。
 
 这四个约束共同解决两个 collapse 问题。
 

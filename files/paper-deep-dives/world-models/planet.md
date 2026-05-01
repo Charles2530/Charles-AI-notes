@@ -103,6 +103,11 @@ PlaNet 使用 `Recurrent State-Space Model`。RSSM 把状态拆成两部分：
 
 <small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 2. 原论文图注要点：该图比较 RNN、SSM 和 RSSM。RNN 只有确定性路径，SSM 只有随机状态，RSSM 同时保留确定性记忆和随机状态，以更稳健地预测多个未来。</small>
 
+!!! note "这张结构对比图怎么读"
+    PlaNet 的关键不是“用了一个 latent model”，而是选择了 RSSM 这种同时包含确定性状态和随机状态的结构。RNN 只有确定性 hidden state，适合记历史，但不擅长表达同一个过去下可能有多个未来；SSM 有随机状态，但缺少强 recurrent memory，长时部分可观测任务容易丢上下文。
+
+    RSSM 把两者拆开：\(h_t\) 负责累计历史和动作，\(s_t\) 负责当前不确定性。训练时 posterior \(q(s_t\mid h_t,o_t)\) 可以看真实观测修正 belief；规划时只能用 prior \(p(s_t\mid h_t)\) 往前 rollout。读这张图时要抓住这个分工：**记忆靠 deterministic path，不确定未来靠 stochastic latent**。
+
 RSSM 的 generative model 可以写成：
 
 $$
@@ -157,6 +162,11 @@ $$
 ![Latent overshooting](../../assets/images/paper-deep-dives/world-models/planet/figure-3-latent-overshooting.png){ width="860" }
 
 <small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 3. 原论文图注要点：该图比较 standard variational bound、observation overshooting 和 latent overshooting。latent overshooting 不解码所有多步预测图像，而是在 latent space 里约束多步 prior 接近对应 posterior。</small>
+
+!!! note "为什么 overshooting 放在 latent space"
+    标准 ELBO 主要约束一步 prior 接近下一步 posterior，但 PlaNet 的规划要连续想象很多步。一小步模型误差在 CEM 规划中会被放大，所以作者加入 overshooting，让从更早时刻 rollout 多步得到的 prior 也接近后面时刻的 posterior。
+
+    直接在 observation space 做 overshooting 要解码每个多步预测图像，成本高，而且像素误差会把模型拉向视觉细节。latent overshooting 只约束 latent belief 的多步一致性，更贴近规划真正需要的 dynamics accuracy。读这张图时可以把它理解成：不是让模型多步“画得像”，而是让模型多步“状态信念滚得准”。
 
 标准目标只约束：
 

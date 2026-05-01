@@ -24,8 +24,8 @@ TDBC_BUILD_LIB_SPEC="-L/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/
 
 # String to pass to the linker to pick up the TDBC library from its installed
 # dir.
-tdbc_LIB_SPEC="-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/tdbc1.1.9 -ltdbc1.1.9"
-TDBC_LIB_SPEC="-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/tdbc1.1.9 -ltdbc1.1.9"
+tdbc_LIB_SPEC="-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/tdbc1.1.9 -ltdbc1.1.9"
+TDBC_LIB_SPEC="-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/tdbc1.1.9 -ltdbc1.1.9"
 
 # Name of the TBDC stub library
 tdbc_STUB_LIB_FILE="libtdbcstub1.1.9.a"
@@ -38,16 +38,16 @@ TDBC_BUILD_STUB_LIB_SPEC="-L/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000
 
 # String to pass to the linker to pick up the TDBC stub library from its
 # installed directory
-tdbc_STUB_LIB_SPEC="-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/tdbc1.1.9 -ltdbcstub1.1.9"
-TDBC_STUB_LIB_SPEC="-L/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/tdbc1.1.9 -ltdbcstub1.1.9"
+tdbc_STUB_LIB_SPEC="-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/tdbc1.1.9 -ltdbcstub1.1.9"
+TDBC_STUB_LIB_SPEC="-L/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/tdbc1.1.9 -ltdbcstub1.1.9"
 
 # Path name of the TDBC stub library in its build directory
 tdbc_BUILD_STUB_LIB_PATH="/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qfnx8ca/croot/tk_1755243786242/work/tcl8.6.15/unix/pkgs/tdbc1.1.9/libtdbcstub1.1.9.a"
 TDBC_BUILD_STUB_LIB_PATH="/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qfnx8ca/croot/tk_1755243786242/work/tcl8.6.15/unix/pkgs/tdbc1.1.9/libtdbcstub1.1.9.a"
 
 # Path name of the TDBC stub library in its installed directory
-tdbc_STUB_LIB_PATH="/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/tdbc1.1.9/libtdbcstub1.1.9.a"
-TDBC_STUB_LIB_PATH="/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/tdbc1.1.9/libtdbcstub1.1.9.a"
+tdbc_STUB_LIB_PATH="/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/tdbc1.1.9/libtdbcstub1.1.9.a"
+TDBC_STUB_LIB_PATH="/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/tdbc1.1.9/libtdbcstub1.1.9.a"
 
 # Location of the top-level source directories from which TDBC was built.
 # This is the directory that contains doc/, generic/ and so on.  If TDBC
@@ -59,8 +59,8 @@ TDBC_SRC_DIR="/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qf
 
 # String to pass to the compiler so that an extension can find installed TDBC
 # headers
-tdbc_INCLUDE_SPEC="-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include"
-TDBC_INCLUDE_SPEC="-I/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include"
+tdbc_INCLUDE_SPEC="-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include"
+TDBC_INCLUDE_SPEC="-I/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include"
 
 # String to pass to the compiler so that an extension can find TDBC headers
 # in the source directory
@@ -68,8 +68,8 @@ tdbc_BUILD_INCLUDE_SPEC="-I/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000g
 TDBC_BUILD_INCLUDE_SPEC="-I/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qfnx8ca/croot/tk_1755243786242/work/tcl8.6.15/pkgs/tdbc1.1.9/generic"
 
 # Path name where .tcl files in the tdbc package appear at run time.
-tdbc_LIBRARY_PATH="/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/tdbc1.1.9"
-TDBC_LIBRARY_PATH="/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/lib/tdbc1.1.9"
+tdbc_LIBRARY_PATH="/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/tdbc1.1.9"
+TDBC_LIBRARY_PATH="/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/lib/tdbc1.1.9"
 
 # Path name where .tcl files in the tdbc package appear at build time.
 tdbc_BUILD_LIBRARY_PATH="/private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_da6qfnx8ca/croot/tk_1755243786242/work/tcl8.6.15/pkgs/tdbc1.1.9/library"

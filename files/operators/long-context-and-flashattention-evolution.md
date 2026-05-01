@@ -8,6 +8,14 @@
 2. FlashAttention 如何通过重写数据流减少中间矩阵；
 3. 长上下文 decode 又如何逼出 paged attention、flash decoding 和更多服务态特化。
 
+!!! note "初学者先抓住"
+
+    FlashAttention 的核心不是换公式，而是重写 attention 的数据流，避免把巨大 score matrix 来回写 HBM。长上下文越长，这种 I/O 节省越关键；到了在线 decode，KV 布局和分页管理又会成为新的主角。
+
+!!! example "有趣例子：边读边算"
+
+    朴素 attention 像先把所有草稿铺满桌子再整理；FlashAttention 像边读边归纳，只保留必要中间状态。桌子越小、资料越长，后者越重要。
+
 ## 1. 为什么长上下文首先打爆的是 I/O
 
 标准 attention 的核心公式是：

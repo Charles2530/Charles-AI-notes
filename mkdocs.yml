@@ -60,7 +60,7 @@ nav:
       - 扩散模型导读: paper-guides/diffusion-reading-guide.md
       - 多模态与具身导读: paper-guides/multimodal-embodied-reading-guide.md
       - 训练与系统导读: paper-guides/training-systems-reading-guide.md
-      - 量化与高效推导读: paper-guides/quantization-efficient-serving-reading-guide.md
+      - 量化与高效推理导读: paper-guides/quantization-efficient-serving-reading-guide.md
       - VLM 评测导读: paper-guides/vlm-evaluation-reading-guide.md
       - 世界模型导读: paper-guides/world-models-reading-guide.md
       - 世界模型与规划专题导读: paper-guides/world-models-planning-reading-guide.md
@@ -216,8 +216,11 @@ nav:
   - 论文专题讲解:
       - paper-deep-dives/index.md
       - 扩散模型:
+          - DMD：One-step Diffusion with Distribution Matching Distillation: paper-deep-dives/diffusion/dmd.md
+          - DMD2：Improved Distribution Matching Distillation for Fast Image Synthesis: paper-deep-dives/diffusion/dmd2.md
           - Diffusion Forcing：Next-token Prediction Meets Full-Sequence Diffusion: paper-deep-dives/diffusion/diffusion-forcing.md
           - CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models: paper-deep-dives/diffusion/causvid.md
+          - Phased DMD：Few-step Distribution Matching Distillation via Score Matching within Subintervals: paper-deep-dives/diffusion/phased-dmd.md
       - 世界模型:
           - PlaNet：Learning Latent Dynamics for Planning from Pixels: paper-deep-dives/world-models/planet.md
           - Dreamer：Dream to Control: paper-deep-dives/world-models/dreamer.md

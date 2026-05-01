@@ -92,6 +92,11 @@ pretrained bidirectional video DiT
 
 <small>图源：`CausVid` 官方项目页，对应论文 Figure 5。该图展示两阶段训练：先用 bidirectional teacher 的 ODE solution pairs 初始化 causal student，再用 bidirectional teacher 对 causal student 做 asymmetric DMD distillation。</small>
 
+!!! note "这张方法图怎么读"
+    图里的关键是“先初始化，再分布匹配”，而不是直接把双向模型改成 causal 后开训。第一阶段的 ODE initialization 用 bidirectional teacher 生成的轨迹点训练 causal student，让它先学会在 causal attention 约束下走一条合理的去噪路径。这个阶段更像把学生放到一个不会崩的初始区域。
+
+    第二阶段才是 asymmetric DMD：student 是 causal 的，但 teacher score 来自 bidirectional teacher。这个不对称很重要，因为 causal teacher 自己会有未来信息缺失和误差累积问题，如果再拿它蒸馏 causal student，会把弱点传下去。CausVid 的图实际表达的是一个工程判断：**部署形态必须 causal，但监督信号可以继续利用 bidirectional teacher 的强视频先验**。
+
 方法可以拆成四层。
 
 | Layer | Design | Why it matters |
@@ -306,6 +311,11 @@ KV cache 的意义和 LLM 类似：过去 chunk 已经计算过的 key/value 不
 |  | ✓ | Bidirectional | ✓ | 4 | 94.7 | 64.4 | 30.1 |
 
 <small>表源：`From Slow Bidirectional to Fast Autoregressive Video Diffusion Models`，Table 4。原论文表格要点：该表对 many-step causalization、ODE initialization 和 teacher 类型做消融；最终 `ODE Init. + Bidirectional Teacher + causal generator + 4 fwd pass` 的组合最好，说明初始化和非对称 teacher 都不可省。</small>
+
+!!! note "这张消融表怎么读"
+    这张表在回答一个很具体的问题：CausVid 的提升到底来自 causal architecture、ODE init，还是 DMD teacher？上半部分说明，只把 many-step bidirectional model 改成 causal 会掉质量，尤其 temporal quality 和 text alignment 都下降，说明 causal mask 本身不是免费午餐。
+
+    下半部分更关键。没有 ODE init 时，4-step causal student 还能跑，但质量不稳；只有 ODE init、没有 DMD teacher 时，frame quality 掉到 48.1，说明初始化不能替代分布匹配蒸馏；用 causal teacher 又不如 bidirectional teacher，说明强 teacher 的全局视频先验仍然必要。最终最佳组合是 causal student + ODE init + bidirectional teacher DMD。这个表支撑了论文的“asymmetric distillation”主张。
 
 这张消融把论文主张支撑得很扎实：
 

@@ -3,6 +3,14 @@
 很多 kernel 优化最终之所以有效，不是因为它在所有 shape 上都快，而是因为它精准命中了真实 workload 中最常出现的那些 shape bucket。  
 因此在进入特化和 autotune 之前，先理解 workload 分布本身，往往比直接写新 kernel 更重要。
 
+!!! note "初学者先抓住"
+
+    Shape bucket 是 kernel 优化的需求画像。先知道哪些 batch、长度、hidden size、LoRA、量化路径最常出现，再决定哪里值得特化；否则很容易为低频形状写出昂贵但没收益的优化。
+
+!!! note "难点解释：为什么平均 shape 会误导"
+
+    平均长度可能根本不是线上常见长度。真实流量往往由短请求高频、长请求高成本共同组成；benchmark 应按 bucket 覆盖率和成本占比设计，而不是只测一个“平均形状”。
+
 ## 1. 为什么 shape bucket 重要
 
 真实系统的输入通常不是均匀分布的：

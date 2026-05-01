@@ -249,6 +249,19 @@ P95/P99 会不会突然拉高。
 2. [成本建模与 SLO 设计](cost-modeling-and-slo-design.md)
 3. [上下文压缩、KV 淘汰与内存分层](context-compression-kv-eviction-and-memory-hierarchies.md)
 
+## 阶段检查与下一站
+
+推理专题不要按“优化技巧清单”来读，而要按线上请求的生命周期来读。
+
+| 阶段 | 关键问题 | 相关页面 | 下一站 |
+| --- | --- | --- | --- |
+| 1. 请求进入系统 | 如何排队、合批、分流，TTFT 和 TPOT 谁是主瓶颈 | [服务系统](serving-systems.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md) | [训练总览](../training/index.md) 中的评测与成本 |
+| 2. 模型在 GPU 上跑 | runtime、kernel、batching 和 KV cache 如何决定吞吐 | [vLLM、SGLang 与 TensorRT-LLM](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[GPU Kernel、Batching 与内存系统](gpu-kernels-batching-and-memory-systems.md) | [算子与编译器](../operators/index.md) |
+| 3. 上下文被管理 | 长上下文、RAG、agent 和记忆系统如何控制成本与错误传播 | [RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md)、[上下文压缩、KV 淘汰与内存分层](context-compression-kv-eviction-and-memory-hierarchies.md) | [VLM](../vlm/index.md) 或 [世界模型](../world-models/index.md) |
+| 4. 系统可运营 | 线上分桶、异常回放、容量规划和多模型路由如何闭环 | [可观测性与在线评测](observability-and-online-evaluation.md)、[MoE 路由与多模型服务](moe-routing-and-multi-model-serving.md) | [量化](../quantization/index.md) |
+
+读完推理模块后，应该能把“慢、贵、不稳、掉点”拆成请求画像、调度、缓存、runtime、kernel、模型质量和评测口径中的具体责任层。
+
 ## 快速代码示例
 
 ```python

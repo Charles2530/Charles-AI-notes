@@ -62,6 +62,11 @@ $$
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 3. 原论文图注要点：作者用 EBM 替代显式概率预测，把问题转成寻找满足输入约束的低能量输出；图中还展示了一个学习到 \(x\) 与 \(y\) 依赖关系的能量景观。</small>
 
+!!! note "能量图应该怎么读"
+    EBM 图里的纵轴不是概率，而是“不兼容程度”。给定输入 \(x\)，合理的目标 \(y\) 应该落在低能量区域，不合理的 \(y\) 应该高能量。推理时可以通过搜索、优化或采样去找低能量的 \(y\)，不需要模型直接输出一个规范化概率分布。
+
+    这对世界模型有两个好处：第一，它允许同一个当前状态对应多个低能量未来，而不是被迫预测一个平均未来；第二，能量可以定义在 representation space，让模型只关心对预测和规划有用的状态关系。读这张图时要避免把低能量理解成“训练样本 loss 低”这么简单；真正要学的是整个能量景观的形状。
+
 这里有一个容易误解的点：**energy function 是推理时用来找答案的函数，不等于训练时直接最小化的 loss。** 训练 EBM 的目标是塑造整个能量景观：让真实数据附近低能量，让不合理区域高能量。如果只把训练样本能量压低，而不约束其他区域，就会出现低能量区域无限扩张或能量坍缩。
 
 ## Latent Variable EBM
@@ -89,6 +94,11 @@ $$
 ![Latent-variable EBM](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-4-latent-variable-ebm.png){ width="860" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 4. 原论文图注要点：latent variable EBM 在推理时额外对 latent variable 做 minimization 或 marginalization；右侧椭圆例子说明 latent variable 可以表示数据流形上的隐含角度。</small>
+
+!!! note "latent variable 在这里不是普通噪声"
+    图中的 \(z\) 表示输入 \(x\) 中没有显式给出的解释因素。比如当前视频看不到的物体状态、其他 agent 的意图、遮挡后的运动分支，都可能让未来 \(y\) 出现多种合理结果。latent variable EBM 不是直接说“给模型加随机噪声”，而是让推理过程可以为同一个 \(x,y\) 寻找一个合适的隐含解释。
+
+    用 \(\min_z E(x,y,z)\) 看，就是只要存在某个 \(z\) 能解释 \(y\)，这个 \(y\) 就可以低能量；用 marginalization 看，则是把多个解释路径综合起来。对世界模型来说，这比单峰预测更自然，因为真实未来往往是多模态的。
 
 对世界模型来说，\(z\) 的作用可以理解成：
 

@@ -1,4 +1,4 @@
-#!/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/bin/python3.11
+#!/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/bin/python3.11
 import sys
 from lib2to3.main import main
 

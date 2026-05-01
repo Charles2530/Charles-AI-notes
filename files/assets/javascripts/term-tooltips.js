@@ -57,6 +57,98 @@
       tip: "MTP：Multi-Token Prediction，多 token 预测。训练时让模型同时预测后续多个 token，可用于提升表示和推理效率。"
     },
     {
+      aliases: ["acceptance rate", "Acceptance Rate", "acceptance", "Acceptance"],
+      tip: "Acceptance Rate：投机解码中草稿 token 被目标模型接受的比例。接受越多，越可能提速；接受少时，验证开销可能吃掉收益。"
+    },
+    {
+      aliases: ["loss", "Loss", "objective", "Objective"],
+      tip: "Loss / Objective：训练目标函数。它把模型输出和期望结果之间的差距变成一个可优化的数值，决定模型朝哪个方向学习。"
+    },
+    {
+      aliases: ["gradient", "Gradient", "Gradients"],
+      tip: "Gradient：梯度，表示参数往哪个方向改能让 loss 下降。可以把它理解成训练里的“下坡方向”。"
+    },
+    {
+      aliases: ["batch", "Batch", "batch size", "Batch Size"],
+      tip: "Batch：一次送进模型的一组样本。Batch size 越大，统计更稳定但显存更高；越小，噪声更大但资源压力更低。"
+    },
+    {
+      aliases: ["epoch", "Epoch", "step", "Step", "training step"],
+      tip: "Step 是一次参数更新；Epoch 通常表示完整扫过训练集一遍。大模型常按 token 数和 step 管理训练，而不一定按 epoch。"
+    },
+    {
+      aliases: ["learning rate", "Learning Rate", "LR schedule", "scheduler"],
+      tip: "Learning Rate：学习率，控制每次参数更新迈多大步。太大容易发散，太小训练慢；schedule 决定它随训练进度如何变化。"
+    },
+    {
+      aliases: ["warmup", "Warmup", "weight decay", "Weight Decay"],
+      tip: "Warmup 让学习率从小逐渐升高，避免训练初期不稳定；Weight Decay 是对参数大小的约束，常用于减少过拟合。"
+    },
+    {
+      aliases: ["overfitting", "Overfitting", "generalization", "Generalization"],
+      tip: "Overfitting 是模型过度适配训练/验证数据而无法泛化；Generalization 指模型在未见过的数据上仍能表现稳定。"
+    },
+    {
+      aliases: ["train set", "Train Set", "validation set", "Validation Set", "test set", "Test Set"],
+      tip: "数据划分：Train 用来更新参数，Validation 用来调参和选 checkpoint，Test 用来做最终报告，三者混用会污染结论。"
+    },
+    {
+      aliases: ["data leakage", "Data Leakage", "leakage", "污染", "数据污染"],
+      tip: "Data Leakage / 数据污染：训练、调参或提示中意外包含了评测答案或近重复样本，会让离线分数虚高，不能代表真实泛化。"
+    },
+    {
+      aliases: ["bucket", "Bucket", "bucketize", "Bucketize", "分桶"],
+      tip: "Bucket / 分桶：把样本按长度、任务、风险、模态、shape 或失败类型分组看指标。它能暴露平均分掩盖的局部问题。"
+    },
+    {
+      aliases: ["replay", "Replay", "回放", "replay set", "Replay Set"],
+      tip: "Replay / 回放：用固定历史请求、轨迹或失败样本反复测试新模型或新系统，帮助判断改动是否真的修复问题并避免回归。"
+    },
+    {
+      aliases: ["holdout", "Holdout", "holdout set", "Holdout Set"],
+      tip: "Holdout：保留不用来训练和频繁调参的数据集。它用于更可信地检查模型是否泛化，而不是适配了开发过程。"
+    },
+    {
+      aliases: ["checkpoint", "Checkpoint"],
+      tip: "Checkpoint：训练或系统状态快照。好的 checkpoint 不只保存权重，还要能恢复 optimizer、随机数、并行状态和数据进度。"
+    },
+    {
+      aliases: ["effective token", "Effective Token", "effective tokens", "Effective Tokens", "有效 token"],
+      tip: "Effective Token：真正参与学习或有效计算的 token。扣掉 padding、mask 区域、坏样本和重复曝光后，它比名义 token 数更能说明训练价值。"
+    },
+    {
+      aliases: ["data mixture", "Data Mixture", "mixture", "Mixture"],
+      tip: "Data Mixture：训练时不同数据源的采样配比。它像模型的课程表，会直接影响能力结构、风格和长尾覆盖。"
+    },
+    {
+      aliases: ["preflight", "Preflight"],
+      tip: "Preflight：昂贵训练作业启动前的系统检查，通常覆盖节点健康、环境版本、数据状态、checkpoint、显存账本和配置一致性。"
+    },
+    {
+      aliases: ["hyperparameter", "Hyperparameter", "seed", "Seed"],
+      tip: "Hyperparameter 是训练前设定的配置，如学习率、batch size、权重衰减；Seed 是随机种子，用于控制实验可复现性。"
+    },
+    {
+      aliases: ["logits", "Logits", "softmax", "Softmax", "Cross Entropy", "cross entropy"],
+      tip: "Logits 是 softmax 前的未归一化分数；Softmax 把分数变成概率；Cross Entropy 常用于分类和 next-token 训练。"
+    },
+    {
+      aliases: ["MSE", "L1", "MAE"],
+      tip: "回归损失：MSE 强调大误差，L1/MAE 更关注绝对误差。选择哪种 loss 会影响模型对异常值的敏感度。"
+    },
+    {
+      aliases: ["Forward", "forward", "Backward", "backward"],
+      tip: "Forward 是前向计算预测和 loss；Backward 是反向传播梯度。训练显存高，主要因为 backward 需要保留或重算中间激活。"
+    },
+    {
+      aliases: ["shape", "Shape", "dtype", "Dtype", "hidden size", "Hidden Size"],
+      tip: "Shape 描述张量维度，dtype 描述数值格式，hidden size 描述表示向量宽度。三者共同决定接口、显存和计算成本。"
+    },
+    {
+      aliases: ["latency", "Latency", "throughput", "Throughput", "memory bandwidth", "Memory Bandwidth"],
+      tip: "系统性能术语：Latency 是单次请求耗时，Throughput 是单位时间处理量，Memory Bandwidth 是数据搬运速度。三者经常互相拉扯。"
+    },
+    {
       aliases: ["DDPM"],
       tip: "DDPM：Denoising Diffusion Probabilistic Models，现代扩散模型的经典起点，核心是逐步加噪和逐步去噪。"
     },
@@ -119,6 +211,22 @@
     {
       aliases: ["Score Matching"],
       tip: "Score Matching：学习数据分布 score 的训练思想。扩散模型里可理解为学习“从噪声样本往高概率数据区域走”的方向场。"
+    },
+    {
+      aliases: ["noise schedule", "Noise Schedule", "beta schedule", "Beta Schedule"],
+      tip: "Noise Schedule：扩散模型里每个时间步加多少噪声的规则。它会影响训练难度、采样稳定性和不同噪声阶段的学习重点。"
+    },
+    {
+      aliases: ["epsilon prediction", "epsilon-prediction", "v-prediction", "velocity prediction"],
+      tip: "扩散预测目标：epsilon prediction 预测噪声，v-prediction 预测速度变量。它们可以换算，但优化稳定性和 guidance 表现不同。"
+    },
+    {
+      aliases: ["sampler", "Sampler"],
+      tip: "Sampler：采样器。训练里常指如何抽取样本、数据源或长度桶；扩散推理里则指如何从噪声一步步走回数据。"
+    },
+    {
+      aliases: ["sampling steps", "Sampling Steps"],
+      tip: "Sampling Steps：扩散推理里的去噪步数。步数越少越快，但越难保住细节、多样性和条件贴合度。"
     },
     {
       aliases: ["Score SDE"],
@@ -187,6 +295,18 @@
     {
       aliases: ["Conv", "Convolution", "CNN", "Receptive Field"],
       tip: "卷积/CNN 基础：Conv 用共享滑窗提取局部特征，Receptive Field 表示某个输出位置能看到的输入范围。"
+    },
+    {
+      aliases: ["pixel", "Pixel", "patch", "Patch", "patchify", "Patchify"],
+      tip: "视觉输入术语：Pixel 是图像最小网格点，Patch 是把图像切成的小块，Patchify 是把图像变成 patch token 序列。"
+    },
+    {
+      aliases: ["stride", "Stride", "padding", "Padding", "channel", "Channel"],
+      tip: "卷积形状术语：Stride 控制滑窗步长，Padding 控制边界补齐，Channel 表示特征通道数。"
+    },
+    {
+      aliases: ["downsample", "Downsample", "upsample", "Upsample", "skip connection", "Skip Connection"],
+      tip: "UNet/CNN 结构术语：Downsample 降低分辨率看全局，Upsample 恢复分辨率补细节，Skip Connection 把早期细节接回来。"
     },
     {
       aliases: ["Linear", "Linear Layer"],
@@ -397,6 +517,14 @@
       tip: "服务可靠性术语：SLI 是指标，SLO 是目标，SLA 是对外承诺。推理服务常用它们约束延迟和可用性。"
     },
     {
+      aliases: ["observability", "Observability", "trace", "Trace", "dashboard", "Dashboard"],
+      tip: "Observability：可观测性。通过日志、指标、trace 和 dashboard 回答线上系统发生了什么、哪里慢、哪里错。"
+    },
+    {
+      aliases: ["fallback", "Fallback", "rollback", "Rollback", "回退"],
+      tip: "Fallback / Rollback：当新路径质量、延迟或稳定性不达标时切回保守路径。成熟部署必须提前设计回退边界。"
+    },
+    {
       aliases: ["P50", "P95", "P99", "P95/P99"],
       tip: "延迟分位数。P99 表示 99% 请求不超过该延迟，常用来观察尾延迟。"
     },
@@ -449,6 +577,10 @@
       tip: "分布式训练显存优化方法。FSDP 和 ZeRO 都会切分参数、梯度或优化器状态来降低单卡压力。"
     },
     {
+      aliases: ["MFU"],
+      tip: "MFU：Model FLOPs Utilization，模型计算利用率。它衡量实际训练吞吐相对理论模型 FLOPs 的利用程度，比单看 GPU utilization 更贴近训练效率。"
+    },
+    {
       aliases: ["Megatron-LM", "Megatron Core", "Megatron", "DeepSpeed"],
       tip: "大模型训练系统：Megatron-LM/Core 常用于张量/流水/上下文并行，DeepSpeed 以 ZeRO、offload 和 pipeline runtime 闻名。"
     },
@@ -485,12 +617,28 @@
       tip: "VLM 任务术语：Grounding/Referring 关注语言到图像区域的定位，Screen Agent 面向屏幕操作，Document Understanding 处理文档结构与文字。"
     },
     {
+      aliases: ["IoU", "CER", "edit distance", "Edit Distance"],
+      tip: "视觉/文档评测术语：IoU 衡量预测框和真实框重叠，CER 是字符错误率，edit distance 衡量字符串修改距离。"
+    },
+    {
       aliases: ["Retrieval", "Reranking", "Reranker", "Vector Database"],
       tip: "检索系统术语：Retrieval 召回候选，Reranking 重排候选，Vector Database 存储和查询向量表示。"
     },
     {
       aliases: ["InfoNCE"],
       tip: "InfoNCE：对比学习常用目标函数，要求模型在候选集合中把正确匹配项排到更前。"
+    },
+    {
+      aliases: ["hard negative", "Hard Negative", "false negative", "False Negative", "augmentation", "Augmentation"],
+      tip: "对比学习采样术语：Hard negative 是难但确实不同的负样本，false negative 是本该靠近却被误当负样本，augmentation 是构造不同视图的数据变换。"
+    },
+    {
+      aliases: ["collapse", "Collapse", "representation collapse", "Representation Collapse"],
+      tip: "Representation collapse：表征塌缩。模型把大量不同输入映射成几乎相同的向量，导致表示失去区分能力。"
+    },
+    {
+      aliases: ["Alignment", "Uniformity", "alignment", "uniformity"],
+      tip: "对比学习几何指标：Alignment 看正样本是否靠近，Uniformity 看整体表示是否均匀铺开。两者要平衡。"
     },
     {
       aliases: ["BYOL", "MoCo", "SimCLR"],
@@ -517,6 +665,14 @@
       tip: "服务与 kernel 调度术语：Dispatch 决定请求或算子走哪条实现路径，Shape Bucket 把相近形状归桶，Workload 指实际负载分布。"
     },
     {
+      aliases: ["all-to-all", "All-to-All", "A2A"],
+      tip: "All-to-All：每个设备都和其他设备交换数据的通信模式。MoE expert dispatch 和专家并行中很常见，网络拓扑不好时会成为瓶颈。"
+    },
+    {
+      aliases: ["capacity factor", "Capacity Factor"],
+      tip: "Capacity Factor：MoE 中给每个 expert 预留多少 token 容量的系数。太小容易 overflow/drop，太大又会浪费计算和显存。"
+    },
+    {
       aliases: ["RSSM"],
       tip: "RSSM：Recurrent State-Space Model，循环状态空间模型。Dreamer 等世界模型常用的潜动态结构。"
     },
@@ -535,6 +691,18 @@
     {
       aliases: ["Planning", "Affordance", "Teleoperation"],
       tip: "具身智能术语：Planning 负责规划动作序列，Affordance 表示环境中可执行动作机会，Teleoperation 是人工遥操作采集示范。"
+    },
+    {
+      aliases: ["Domain Randomization", "System ID", "Safety Case", "safety case"],
+      tip: "具身部署术语：Domain Randomization 让仿真随机化以提高鲁棒性，System ID 校准真实物理参数，Safety Case 是安全论证证据链。"
+    },
+    {
+      aliases: ["policy", "Policy", "reward", "Reward", "trajectory", "Trajectory"],
+      tip: "控制与强化学习术语：Policy 是从状态到动作的策略，Reward 是反馈信号，Trajectory 是一段观测、动作和结果组成的轨迹。"
+    },
+    {
+      aliases: ["state", "State", "action", "Action", "controller", "Controller"],
+      tip: "控制系统基础：State 描述当前系统状态，Action 是要执行的动作，Controller 把目标或计划转成可执行控制量。"
     },
     {
       aliases: ["PID"],
@@ -572,6 +740,9 @@
     "script",
     "style",
     "textarea",
+    "h1",
+    "h2",
+    "h3",
     ".arithmatex",
     ".MathJax",
     ".highlight",
@@ -584,6 +755,7 @@
   let tooltipElement = null;
   let activeTerm = null;
   let floatingTooltipsReady = false;
+  const MAX_AUTO_DECORATIONS_PER_TIP = 4;
 
   for (const group of TERM_GROUPS) {
     for (const alias of group.aliases) {
@@ -730,7 +902,7 @@
     });
   }
 
-  function decorateTextNode(node) {
+  function decorateTextNode(node, tipCounts) {
     const text = node.nodeValue;
     const fragment = document.createDocumentFragment();
     let lastIndex = 0;
@@ -749,11 +921,18 @@
         continue;
       }
 
+      const currentCount = tipCounts.get(tip) || 0;
+
+      if (currentCount >= MAX_AUTO_DECORATIONS_PER_TIP) {
+        continue;
+      }
+
       if (termStart > lastIndex) {
         fragment.appendChild(document.createTextNode(text.slice(lastIndex, termStart)));
       }
 
       fragment.appendChild(makeTermElement(term, tip));
+      tipCounts.set(tip, currentCount + 1);
       lastIndex = termEnd;
 
       if (pattern.lastIndex === match.index) {
@@ -779,6 +958,7 @@
 
     for (const root of roots) {
       const textNodes = [];
+      const tipCounts = new Map();
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
         acceptNode(node) {
           if (!node.nodeValue || !node.nodeValue.trim() || shouldSkipTextNode(node)) {
@@ -796,7 +976,7 @@
 
       for (const node of textNodes) {
         if (!shouldSkipTextNode(node)) {
-          decorateTextNode(node);
+          decorateTextNode(node, tipCounts);
         }
       }
     }

@@ -6,6 +6,15 @@
 
 **读图提示**：训练显存不够时，不一定先换模型。可以先看 activation checkpointing、batch size、sequence length、ZeRO/FSDP、低精度和重算策略。
 
+!!! note "初学者先抓住"
+    推理只要算出答案，训练还要记住“答案是怎么来的”，这样 backward 才能算 gradient。显存压力很多时候不是权重本身，而是中间激活、梯度和 optimizer state 一起叠加。
+
+!!! example "有趣例子：解题草稿纸"
+    Activation 像解题过程中的草稿。全保存最省时间但占纸；checkpointing 像只保存关键步骤，回头需要时再重算中间过程。它省显存，但会多花计算时间。
+
+!!! tip "学完本页你应该能"
+    看到训练 OOM 时，能估计权重、梯度、optimizer state 和 activation 谁是主因；看到 activation checkpointing、ZeRO/FSDP、offload 或长上下文训练时，能说明它们分别在省哪一类状态、代价是什么。
+
 ## 1. 自动微分在做什么
 
 现代框架会记录前向计算图，然后自动根据链式法则计算梯度。
@@ -90,4 +99,3 @@ x -> L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> loss
 ## 小结
 
 自动微分让训练更容易，但训练系统必须为计算图和中间激活付出显存代价。Activation checkpointing 是最常见的折中：少存一点，多算一点。
-

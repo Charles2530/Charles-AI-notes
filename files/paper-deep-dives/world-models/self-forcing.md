@@ -37,6 +37,11 @@ Self Forcing 和 [Diffusion Forcing](../diffusion/diffusion-forcing.md)、[CausV
 
 <small>图源：`Self Forcing`，Figure 1。原图对比 Teacher Forcing、Diffusion Forcing 和 Self Forcing：前两者训练输出不来自推理时真实模型分布，Self Forcing 在训练中执行 autoregressive self-rollout，并对最终视频序列施加 distribution matching loss。</small>
 
+!!! note "这张图到底在比较什么"
+    这张图比较的不是三种 loss 名字，而是**训练时的上下文分布是否等于推理时的上下文分布**。Teacher Forcing 训练时总是喂真实历史帧，模型从未见过自己生成的错误历史；Diffusion Forcing 会给上下文加不同噪声，增强鲁棒性，但上下文仍不是当前模型真实 rollout 出来的视频。
+
+    Self Forcing 的关键是训练时真的执行 autoregressive self-rollout：前一段视频由当前模型生成，后一段生成时就条件在这些自生成历史上。最后再对整段 rollout 视频施加 DMD / SiD / GAN 这类 distribution matching objective。这样训练信号直接作用在推理时会遇到的分布上，目标不只是“每一步像真实数据”，而是“模型在自己造成的历史误差下仍能继续生成稳定视频”。
+
 ## 核心问题
 
 自回归视频扩散把视频分布拆成时间上的条件分布：
@@ -159,6 +164,11 @@ when generating a new chunk:
 
 <small>图源：`Self Forcing`，Figure 3。原图对比 bidirectional sliding window、causal sliding window with KV recomputation 和 Self Forcing rolling KV cache。Self Forcing 不重算 KV，将长视频外推复杂度降到随长度线性增长。</small>
 
+!!! note "为什么 rolling KV cache 是系统关键"
+    长视频流式生成时，问题不只是模型能不能 causal，还包括历史上下文的计算能不能复用。bidirectional sliding window 每次处理一个窗口都需要看窗口内全部 token，不能自然复用过去计算；普通 causal sliding window 虽然不看未来，但如果每次移动窗口都重算历史 KV，长视频成本仍然很高。
+
+    Self Forcing 的 rolling KV cache 把过去 chunk 的 key/value 缓存下来，新 chunk 只计算自己的 KV，并读最近历史 cache。窗口满了就淘汰最旧 KV。这样每新增一段视频，计算量主要来自新段，而不是反复重算整段历史。对世界模型或交互视频来说，这个设计决定了它能不能长期 rollout，而不只是生成一个短 demo。
+
 论文还发现一个细节：naive rolling KV 会有明显闪烁，因为模型训练时总能看到第一帧 image latent，而 rolling cache 长视频推理时第一帧会被淘汰。解决办法是在训练时限制 attention window，让模型在 denoise 最后一个 chunk 时看不到第一 chunk，从而模拟长视频推理条件。
 
 ## 训练细节
@@ -270,6 +280,11 @@ when generating a new chunk:
 | Self Forcing (Ours, GAN) | 83.27 | 84.57 | 78.08 |
 
 <small>表源：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`，Table 2。原论文表格要点：该表在 chunk-wise 和 frame-wise AR 两种设置下比较 TF、DF、DMD 后训练和 Self Forcing；frame-wise AR 链更长、误差累积更强，而 Self Forcing 仍保持最高或接近最高 VBench 分数，直接支撑 train-test distribution alignment 的主张。</small>
+
+!!! note "为什么这张消融表重要"
+    这张表要分 chunk-wise 和 frame-wise 两部分读。chunk-wise 每次生成一个较大的 latent block，AR 链较短，误差累积压力较小；frame-wise 的生成粒度更细，链更长，更容易暴露 train-test mismatch。若一个方法只在 chunk-wise 好，在 frame-wise 掉很多，说明它可能仍然依赖较短 rollout 掩盖误差。
+
+    Self Forcing 在 frame-wise 下仍保持接近 84 的总分，而 TF/DF 和它们的 DMD 后训练版本掉得更明显。这直接支撑论文主张：训练时使用模型自己的 rollout 分布，比只在真实历史或 noisy context 上训练更能抗长期误差累积。这里的重点不是 Self Forcing 换了一个更强 backbone，而是同一类 AR 设置下训练分布对齐带来的差异。
 
 这张消融最有价值。frame-wise AR 的链更长，更容易暴露误差累积。TF/DF 在 frame-wise 下掉得很明显，而 Self Forcing 仍保持 84 左右的总分，说明训练时 self-rollout 的分布对齐确实解决了关键问题。
 

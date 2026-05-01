@@ -1,6 +1,6 @@
-==> 2026-04-28 12:01:40 <==
+==> 2026-04-28 16:28:16 <==
 # cmd: /Users/charles/anaconda3/bin/conda env create -f environment.yml -p ./docs
-# conda version: 25.7.0
+# conda version: 25.5.1
 +defaults/noarch::pip-26.0.1-pyhc872135_1
 +defaults/noarch::tzdata-2026a-he532380_0
 +defaults/osx-arm64::bzip2-1.0.8-h80987f9_6

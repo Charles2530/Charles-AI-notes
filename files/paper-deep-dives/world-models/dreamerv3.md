@@ -68,6 +68,11 @@ DreamerV3 的主要贡献不是换一个更大的 backbone，而是把 world mod
 
 <small>Figure source: `Mastering Diverse Domains through World Models`, Figure 3(b). 原论文图注要点：actor 和 critic 在 world model 预测出的抽象表示轨迹上学习动作与价值，重建目标用于塑造 latent representation。</small>
 
+!!! note "这两张 DreamerV3 图要一起读"
+    第一张图负责 world model learning：模型从真实观测中学习 latent representation、recurrent dynamics、reward 和 continuation。第二张图负责 behavior learning：actor 和 critic 不直接在真实环境里反复试错，而是在 world model 的 imagined latent trajectories 上训练。
+
+    两张图之间的分工是 Dreamer 系列的核心。world model 要足够准，才能让 imagined rollout 有训练价值；actor/critic 又必须只通过 imagined trajectories 学策略，不能把 world model 当成可随意修改的捷径。DreamerV3 的贡献不是换一个单独模块，而是把这套 pipeline 做到跨 Atari、DM Control、Minecraft 等差异很大的任务仍能用同一组超参工作。
+
 ## World Model 训练细节
 
 DreamerV3 的 world model 使用 `Recurrent State-Space Model`。RSSM 的核心是把状态拆成确定性 recurrent state \(h_t\) 和随机 latent representation \(z_t\)。前者负责记忆历史，后者负责表达当前观测中与未来相关的不确定信息。

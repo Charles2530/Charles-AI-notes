@@ -4,6 +4,14 @@
 
 这页定位为主线解读。源码阅读、API 名称和接入检查放到 [DeepGEMM 源码与接入附录](deepgemm-source-and-integration.md)。如果想先补底层背景，可先读 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 和 [MoE 路由与稀疏 Kernel](moe-routing-and-sparse-kernels.md)。
 
+!!! note "初学者先抓住"
+
+    DeepGEMM 的重点不是“又一个 GEMM 更快”，而是把 FP8 scale layout、JIT、Hopper/Blackwell 数据搬运、MoE grouped GEMM 和服务态热点 shape 放在同一个接口假设里优化。它是强特化系统组件，不是通用数学库替代品。
+
+!!! note "难点解释：为什么 scale layout 也是接口"
+
+    FP8/FP4 低精度矩阵乘需要额外 scale 数据。scale 怎么分块、怎么对齐、怎么被 TMA 搬运，会直接影响性能和数值稳定性。因此 DeepGEMM 把 scale 排布写进 API 语义，而不是把它当成外部细节。
+
 ## 一、DeepGEMM 到底是什么
 
 按照工程定位，`DeepGEMM` 是一组面向大模型热点工作负载的高性能 tensor core kernel 库。它覆盖 `FP8 / FP4 / BF16 GEMM`、MoE grouped GEMM、服务态注意力相关 kernel 和 Mega MoE 等路径，并采用运行时 JIT，而不是安装时预编译所有 kernel。

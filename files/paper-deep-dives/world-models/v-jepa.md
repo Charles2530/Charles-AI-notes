@@ -69,6 +69,11 @@ target encoder 不直接反向传播，而是 context encoder 的 exponential mo
 
 <small>Figure source: `V-JEPA: Latent Video Prediction for Visual Representation Learning`, Figure 3. 原论文图注要点：V-JEPA 将视频 clip 展平成 token sequence；context encoder 只处理 masked sequence，predictor 接收 context output 和 learnable mask tokens，target encoder 处理完整 unmasked token sequence，最后用 \(L_1\) loss 回归对应 masked tokens 的 target encoder output。</small>
 
+!!! note "这张训练图怎么读"
+    V-JEPA 的图里最重要的是：模型预测的不是像素，而是 target encoder 的 latent representation。context encoder 只看未遮挡 token，target encoder 看完整视频，但 target encoder 通过 EMA 更新且 stop-gradient，不直接被当前 loss 反传。这避免了像素重建把容量浪费在纹理细节上，也避免了两个 encoder 一起塌缩成无意义常数。
+
+    predictor 的任务是用少量 context tokens 和 mask tokens 预测被遮挡区域的表示。也就是说，V-JEPA 逼模型学习“什么内容在 latent space 中可预测”，而不是学习如何补每个像素。这就是它和视频 MAE / diffusion-style reconstruction 的关键差别：它更偏向表征型世界模型，而不是生成型视频模型。
+
 训练损失可以写成：
 
 $$
@@ -111,6 +116,11 @@ V-JEPA 使用两种 mask：
 ![3D Multi-Block Masking](../../assets/images/paper-deep-dives/world-models/v-jepa/figure-2-3d-multi-block-masking.png){ width="920" }
 
 <small>Figure source: `V-JEPA: Latent Video Prediction for Visual Representation Learning`, Figure 2. 原论文图注要点：V-JEPA 在预训练中使用 short-range masks 和 long-range masks 两种 3D Multi-Block masking 策略，促使模型捕捉视频中的不同类型特征。</small>
+
+!!! note "为什么 mask 设计这么重要"
+    视频里相邻帧和相邻 patch 冗余很强。如果 mask 太随机、太小，模型可以靠局部插值猜答案，学不到动作、对象状态和长程依赖。V-JEPA 用 short-range 和 long-range 两类 3D block masks，是为了同时制造局部缺失和大范围缺失：前者考验局部运动和细节一致性，后者迫使模型理解更全局的场景和对象关系。
+
+    这里的 `3D` 也很关键。mask 沿时间和空间一起作用，被遮住的是时空块，而不是单帧图像 patch。这样 predictor 必须利用视频上下文推断被遮挡区域在一段时间内的表示，更接近 motion-aware representation learning。
 
 这种 mask 比普通 MAE 式随机遮挡更接近世界模型训练里的“局部不可见未来”。模型不能简单从临近像素复制答案，而要从上下文推断被遮挡区域可能对应的对象状态、运动趋势和场景关系。
 

@@ -4,6 +4,14 @@
 
 这页和 [推理服务系统](serving-systems.md)、[GPU Kernel、Batching 与内存系统](gpu-kernels-batching-and-memory-systems.md)、[可观测性与在线评测](observability-and-online-evaluation.md) 一起读。服务系统页讲资源治理，本页聚焦 runtime 选型。
 
+!!! note "初学者先抓住"
+
+    推理 runtime 是模型和硬件之间的执行层：它决定请求怎么排队、KV 怎么分配、prefix 怎么复用、kernel 走哪条路径、异常 shape 怎么 fallback。选 runtime 时先看 workload，而不是先看榜单。
+
+!!! example "有趣例子：不同餐厅后厨"
+
+    快餐店、宴会厅和私人订制厨房都能做饭，但组织方式完全不同。`vLLM` 更像通用高并发后厨，`SGLang` 更适合多阶段编排，`TensorRT-LLM` 更适合菜单稳定、硬件固定、追求极致效率的场景。
+
 ## 一、Runtime 在推理栈里的位置
 
 在线推理栈可以粗略拆成：

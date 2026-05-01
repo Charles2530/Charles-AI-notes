@@ -206,6 +206,19 @@ $$
 
 读每类工作时建议固定问四个问题：它建模的基本单位是什么，动作条件放在哪一层，模型输出最终被谁消费，它的失败更多出在表示、规划、数据还是系统成本。
 
+## 阶段检查与下一站
+
+世界模型的学习顺序要避免两个误区：把它只当视频生成，或者只当 model-based RL。更稳的检查方式如下：
+
+| 你正在关注 | 关键判断 | 读完后接到哪里 |
+| --- | --- | --- |
+| Latent dynamics | latent state 是否保留决策所需信息，rollout 误差是否会误导 policy | [规划即推断与潜在动作](planning-as-inference-and-latent-actions.md)、[训练](../training/index.md) |
+| 视频/生成式模拟 | 生成未来是否对动作敏感，而不是只顺着视频惯性续写 | [视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md)、[VLA](../vla/index.md) |
+| 数据引擎 | 模型生成的数据是否覆盖 near-miss、失败恢复和长尾状态 | [模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md)、[具身智能](../embodied-ai/index.md) |
+| 风险规划 | 不确定性和风险信号是否真的被 planner 或安全模块消费 | [不确定性与风险敏感规划](uncertainty-and-risk-aware-planning.md)、[部署与安全](../vla/deployment-and-safety.md) |
+
+如果一个世界模型页面只展示预测结果，而没有说明动作条件、规划接口、风险输出和系统成本，就还没有进入决策系统语境。
+
 ## 专题页地图
 
 <div class="atlas-card-grid">

@@ -4,6 +4,14 @@
 
 这页给训练目标和优化配置一个统一入口。更系统的数据配方见 [Scaling、课程学习与数据混合](scaling-curriculum-and-data-mixture.md)，数值异常排查见 [训练稳定性、数值异常与故障排查](stability-numerics-and-failure-triage.md)。
 
+!!! note "初学者先抓住"
+
+    训练配方可以先按“目标、步长、刹车”理解：loss 告诉模型什么叫错，optimizer 决定怎样改参数，learning rate schedule 决定每一步迈多大。三者必须一起看，单独换一个组件，往往会改变整条学习轨迹。
+
+!!! example "有趣例子：厨师调味"
+
+    模型像厨师，loss 像食客反馈，optimizer 像改菜谱的方法，learning rate 像每次加盐的量。反馈再准确，如果一次加半罐盐，菜也会报废；如果每次只加一粒盐，改进又会慢到不可接受。
+
 ## 目标函数在定义学习压力
 
 大多数训练问题可以写成：

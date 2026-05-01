@@ -66,6 +66,19 @@
 | 数据与评测 | 训练、量化、推理、VLM | 为什么平均分不够，为什么需要分桶和回放 |
 | 数值与运行时 | 量化、推理、算子 | 为什么格式能保存不等于能跑快 |
 
+## 进入专题前的检查
+
+基础模块不需要一次性背完，但读后续专题前最好能形成四个判断：
+
+| 检查点 | 你应该能说清什么 | 如果卡住，回看 |
+| --- | --- | --- |
+| 表示 | 数据如何变成 tensor、token、embedding 或 latent state | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md) |
+| 目标 | loss、概率目标或生成目标到底在约束什么 | [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)、[优化与训练基础](optimization-and-training-basics.md) |
+| 执行 | 训练和推理为什么会受显存、带宽、dtype 和 kernel 影响 | [自动微分、激活显存与 Checkpointing](autograd-activation-checkpointing-and-memory.md)、[数值、显存与运行时基础](numerics-memory-and-runtime-basics.md) |
+| 证据 | 一个方法变好，是平均分变好，还是关键任务桶真的变好 | [数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md) |
+
+读扩散、VLM、训练系统或推理服务时，如果发现自己只能记住术语，不能判断它属于哪一层，优先回到这张表补接口。
+
 ## 一个总判断
 
 基础知识不是“学完才能开始”的门槛，而是一个随时回查的地图。读后面的高级专题时，如果发现概念开始混乱，优先回到这里判断它属于哪一层，再继续追具体方法。

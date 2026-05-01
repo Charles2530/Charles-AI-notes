@@ -12,6 +12,10 @@
   </div>
 </div>
 
+!!! note "初学者先抓住"
+
+    第一次读不必按目录从头刷完。先用“我现在的问题是什么”来选入口：概念卡住读基础，工程卡住读训练/推理/量化/算子，论文卡住读导读和参考文献。每个专题都尽量先建立地图，再下钻细节。
+
 ## 站点定位
 
 <div class="atlas-meta-grid">
@@ -118,20 +122,17 @@
 
 ## 推荐阅读路径
 
-<div class="atlas-card-grid">
-  <a class="atlas-card" href="diffusion/index.md">
-    <strong>路线 A：生成与多模态</strong>
-    <p>适合从扩散模型出发，继续读到 VLM、VLA、具身智能和多模态系统。</p>
-  </a>
-  <a class="atlas-card" href="training/index.md">
-    <strong>路线 B：训练到部署</strong>
-    <p>适合关心数据系统、并行训练、量化、推理服务和线上优化的读者。</p>
-  </a>
-  <a class="atlas-card" href="world-models/index.md">
-    <strong>路线 C：表征到智能体</strong>
-    <p>适合把对比学习、世界模型、规划、机器人和具身系统连起来理解。</p>
-  </a>
-</div>
+不要把这些专题当成互不相关的目录。更稳的读法是先过公共底座，再根据目标选择路线，最后回到评测、复现和部署检查。
+
+| 阶段 | 目标 | 建议入口 | 进入下一阶段前最好能回答 |
+| --- | --- | --- | --- |
+| 0. 公共底座 | 先把模型、训练、数值和运行时语言统一 | [基础知识](foundations/index.md)、[术语表](glossary/index.md) | 一个问题属于表示、目标函数、优化、系统还是评测哪一层 |
+| A. 生成与多模态 | 理解从生成模型到图文/动作系统的主线 | [扩散模型](diffusion/index.md) -> [VLM](vlm/index.md) -> [VLA](vla/index.md) | 生成质量、条件控制、视觉理解和动作接口分别解决什么问题 |
+| B. 训练到部署 | 把模型能力变成可运行、可观测、可回滚的系统 | [训练](training/index.md) -> [算子与编译器](operators/index.md) -> [推理](inference/index.md) -> [量化](quantization/index.md) | 同一个掉点、变慢或显存问题，应先查数据、优化、kernel、runtime 还是量化 |
+| C. 表征到智能体 | 从 embedding、内部模拟和闭环控制理解智能体能力 | [对比学习](contrastive-learning/index.md) -> [世界模型](world-models/index.md) -> [具身智能](embodied-ai/index.md) | 表征、世界预测、规划、动作执行和失败恢复之间如何传递证据 |
+| D. 论文与复现 | 用论文建立方法位置，再用正文页补工程判断 | [论文导读](paper-guides/index.md)、[参考文献总表](references/index.md) | 哪些论文必须精读，哪些只需抓方法差异，哪些值得复现或查源码 |
+
+如果时间有限，可以按“0 + 一条主路线 + D”的方式读。不要一开始就横向铺开所有主题，否则容易记住很多名词，却不知道它们在系统里互相依赖什么。
 
 ## 这套站点适合怎么用
 
@@ -150,7 +151,7 @@
 - [论文导读总览](paper-guides/index.md)
 - [训练与系统导读](paper-guides/training-systems-reading-guide.md)
 - [世界模型导读](paper-guides/world-models-reading-guide.md)
-- [量化与高效推导读](paper-guides/quantization-efficient-serving-reading-guide.md)
+- [量化与高效推理导读](paper-guides/quantization-efficient-serving-reading-guide.md)
 
 进入。
 
@@ -164,6 +165,14 @@
   <div>
     <strong>围绕问题跳读</strong>
     <p>真实问题往往跨主题，例如慢、贵、不稳、掉点，通常要同时看训练、推理、评测和系统章节。</p>
+  </div>
+  <div>
+    <strong>用检查点收口</strong>
+    <p>每读完一个模块，都回到“它解决什么问题、依赖哪些前置、如何评测、失败时查哪里”四个问题。</p>
+  </div>
+  <div>
+    <strong>论文服务主线</strong>
+    <p>论文导读用于定位方法关系，专题正文用于补机制和工程边界，不建议只按年份顺序硬读。</p>
   </div>
 </div>
 

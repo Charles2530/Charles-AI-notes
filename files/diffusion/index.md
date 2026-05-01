@@ -185,32 +185,18 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 采样步数越少，系统越快；但想保住细节、多样性和文本对齐，难度也会急剧上升。
 
-## 这组文档怎么读
+## 学习路径与阶段检查
 
-如果你想从零建立地图，建议顺序是：
+扩散专题最容易混在一起的是“训练目标、采样轨迹、条件控制、少步蒸馏”。建议按下面四段读：
 
-1. [发展脉络](evolution.md)
-2. [训练与表示](training.md)
-3. [采样与推理](inference.md)
-4. [蒸馏与整流](distillation.md)
+| 阶段 | 先读 | 读完要能回答 |
+| --- | --- | --- |
+| 1. 建模起点 | [发展脉络](evolution.md)、[训练与表示](training.md) | 前向加噪、反向去噪、ELBO、噪声预测和 \(x_0/v/score\) 参数化分别在解决什么 |
+| 2. 连续视角 | [Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)、[噪声日程与参数化](noise-schedules-and-parameterization.md) | 为什么同一个扩散模型可以被看成 SDE、ODE 或 score field |
+| 3. 推理与控制 | [条件控制与 Guidance](guidance-and-conditioning.md)、[采样与推理](inference.md) | CFG、solver、步数、随机性和文本对齐之间如何权衡 |
+| 4. 加速与变体 | [蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) | 少步采样、一步蒸馏、rectified 路线和视频扩散各自改的是哪一层 |
 
-这样读，会更容易看清：
-
-- 从 DDPM 到 DDIM 的桥梁是什么
-- 为什么会进入 ODE solver 时代
-- 为什么最终又会走到 DMD2 和 rectified 路线
-
-如果你想先用表格快速定位方法，再深入正文，也可以先看：
-
-- [方法对照表](comparison-table.md)
-
-## 这组文档怎么看
-
-- [发展脉络](evolution.md)：从 `DDPM` 到 `DMD2/Phased DMD/rDM`
-- [训练与表示](training.md)：前向过程、ELBO、参数化、guidance
-- [采样与推理](inference.md)：`DDIM`、`Euler`、`Heun`、`DPM-Solver`
-- [蒸馏与整流](distillation.md)：少步/一步生成的主要路线，尤其先看 [少步蒸馏](distillation.md#few-step-distillation) 这一节
-- [方法对照表](comparison-table.md)：快速比较“改了哪一层、是否重训、适合什么需求”
+如果只是快速定位方法，先看 [方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [训练配方与失效分析](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
 
 ## 快速代码示例
 

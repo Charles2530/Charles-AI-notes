@@ -4,6 +4,14 @@
 
 这页把“优化”和“数据系统”放在一起看，因为现实里它们几乎总是耦合的。更细的数据配方讨论见 [Scaling、课程学习与数据混合](scaling-curriculum-and-data-mixture.md)，运维侧见 [训练集群运维、实验管理与成本治理](cluster-operations-and-experiment-management.md)。
 
+!!! note "初学者先抓住"
+
+    大模型训练不是“模型在 GPU 上孤立学习”，而是一条数据生产线不断把样本、token、mask、batch 和状态送进模型。优化器只能处理已经送到它面前的信号；如果数据管线慢、乱、重复或恢复不一致，训练结论就会被系统问题污染。
+
+!!! note "难点解释：为什么有效 token 比步数更重要"
+
+    两个实验都跑了 10 万步，不代表它们学到的东西一样多。若一个实验 padding 很多、坏样本很多，真正参与 loss 的有效 token 少；另一个实验 packing 好、样本质量高，它每一步的学习信号更密。比较训练时应看有效 token、数据曝光和吞吐，而不只是 global step。
+
 ## 有效 Token 是核心资源
 
 设单步训练耗时为 \(T_{\text{step}}\)，有效 token 数为 \(N_{\text{eff}}\)，训练吞吐可以写成：

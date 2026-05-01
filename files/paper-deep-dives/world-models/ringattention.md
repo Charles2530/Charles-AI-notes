@@ -62,6 +62,11 @@ RingAttention 的关键观察是：blockwise attention 中，不同 key/value bl
 
 <small>图源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Figure 2。原图上半部分展示多个 host 形成环，query block 留在本设备，key/value block 沿环传递；下半部分展示 query outer loop 和 key/value inner loop 的 blockwise attention 与 feedforward 组织方式。</small>
 
+!!! note "这张方法图怎么读"
+    这张图的核心是“query 不动，KV 转圈”。每个设备只持有长序列的一段 query block，同时也计算本地的 key/value block。随后 key/value block 沿设备环传递；每个设备拿自己的 query 依次和所有传来的 key/value block 做 blockwise attention，并用稳定 softmax 累积结果。
+
+    这样做和 sparse attention 不同：RingAttention 没有丢掉远处 token，每个 query 最终仍然 attends to 全序列，所以是 exact attention。它改变的是数据放置和计算顺序，而不是模型定义。读这张图时要注意下半部分的 nested loop：外层固定 query block，内层轮转 key/value block；只要通信能被当前 block attention 的计算时间覆盖，长上下文就可以近似随设备数线性扩展。
+
 方法可以拆成五步：
 
 ```text
@@ -178,6 +183,11 @@ RingAttention 要成立，不只是算法正确，还需要硬件上通信能被
 | TPUv5e-256 | 7B | 2 | 8 | 16 | 2048 | 128x |
 
 <small>表源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Table 3。原论文表格要点：该表比较 vanilla、memory-efficient attention、BPT 和 RingAttention 在不同硬件/模型规模下支持的最大 context；RingAttention 的可用 context 随 sequence-parallel 设备数近似线性扩展。</small>
+
+!!! note "这张最大上下文表怎么读"
+    这张表比较的是“端到端训练能放下多长 context”，不是某个 attention kernel 单独能算多长。vanilla、memory-efficient attention 和 BPT 的瓶颈都不只在 \(QK^\top\) 矩阵，还包括每层 hidden states、FFN 激活和跨层存储。RingAttention 把 sequence dimension 切到多个设备上，因此长序列的 hidden states 也被分摊。
+
+    `Ours vs SOTA` 接近设备数，是这张表最重要的信号。例如 32 张 A100 上能从 128K 到 4096K，TPUv4-1024 上能到数百万 token。对长视频世界模型来说，这意味着模型可以把更长的视频、轨迹或文档当成同一个全局上下文训练，而不是依赖滑窗或检索近似。
 
 这张表是论文最核心的结果。RingAttention 的 context 增长近似等于 sequence-parallel 设备数。例如 32 张 A100 上，7B 模型从 prior SOTA 的 128K 到 4096K；TPUv4-1024 上，7B 模型达到 8192K。
 

@@ -4,6 +4,14 @@
 
 这页和 [推理服务系统](serving-systems.md)、[上下文压缩与 KV 层级](context-compression-kv-eviction-and-memory-hierarchies.md)、[服务态 Attention 与 KV Kernel](../operators/serving-attention-and-kv-kernels.md) 互补。服务系统页讲队列和资源治理，本页讲 GPU 热路径和内存行为。
 
+!!! note "初学者先抓住"
+
+    推理性能不是一个 token/s 数字能讲清的。prefill 更像一次性处理大块输入，decode 更像不断读历史 KV 的小步循环；batching 决定 GPU 是否吃满，内存系统决定尾延迟是否稳定。
+
+!!! note "难点解释：为什么训练快不代表推理也快"
+
+    训练通常 batch 大、形状稳定，GEMM 更容易跑满 Tensor Core；在线 decode 请求随时进出、序列长度不同、KV 访问碎片化，更容易被内存带宽和 kernel launch 开销限制。所以推理优化要拆 TTFT、TPOT、P95/P99，而不是照搬训练吞吐直觉。
+
 ## 一、推理延迟拆解：先区分 Queue、Prefill、Decode
 
 一次请求的总时延可以粗略分成：

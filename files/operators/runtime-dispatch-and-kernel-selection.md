@@ -3,6 +3,12 @@
 很多高性能系统并不是靠“一个万能 kernel”获胜，而是靠一整套运行时 dispatch 机制：根据 shape、dtype、layout、设备类型、batch 形态和任务阶段，为当前请求挑选最合适的 kernel 路径。  
 也就是说，真正的性能系统不仅要有好 kernel，还要有**挑 kernel 的能力**。
 
+!!! note "初学者先抓住"
+    Dispatch 就是运行时的“选路器”。同一个算子在不同 shape、dtype、batch 和硬件上，最优 kernel 可能不同；选错路径会让好 kernel 也发挥不出来。
+
+!!! example "有趣例子：导航选路线"
+    市区短途适合走小路，高速长途适合上快速路，货车还要避开限高。Kernel dispatch 也是根据当前请求条件选路线，而不是永远走同一条路。
+
 ## 1. 为什么运行时选择很重要
 
 因为现实工作负载从来不是单一 shape：

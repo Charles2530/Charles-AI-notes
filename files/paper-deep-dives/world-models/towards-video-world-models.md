@@ -36,6 +36,11 @@ paper_topic: 世界模型
 
 <small>Figure source: `Towards Video World Models`, Figure 2. 原文图注要点：该图给出 world model 的 taxonomy，把内部理解型世界模型、外部模拟型世界模型以及 video world model、simulation platform、neural 3D/4D 等路线放在同一张图中。</small>
 
+!!! note "这张分类图怎么读"
+    这张图的价值是把“world model”这个容易泛化过度的词拆开。internal world model 更像 agent 内部的抽象预测器，重点是帮助 reasoning、planning 和 decision making；external world simulation model 则要生成可观察、可交互的外部世界，重点是视觉真实、动作后果和长期一致。
+
+    Video world model 位在后者里面，但又不同于传统 simulator。传统 simulator 依赖显式物理和手工资产，neural video world model 则依赖大规模视频生成先验，再补动作、因果和实时化。读这张图时要先判断项目目标：如果目标是机器人策略学习，可能不需要像素级真实；如果目标是交互世界模拟器，就必须同时满足 causal、interactive、persistent、real-time 和 physical accuracy。
+
 ## 核心判断
 
 普通视频生成模型通常学习：
@@ -85,6 +90,11 @@ $$
 ![CausVid](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-3-causvid.jpg){ width="920" }
 
 <small>Figure source: `Towards Video World Models`, Figure 3. 原文图注要点：CausVid 将预训练的 bidirectional video diffusion model 改造成带 causal attention 的 few-step autoregressive video diffusion model。</small>
+
+!!! note "为什么 CausVid 被放在 causal 门槛下面"
+    这张图说明的是视频世界模型和普通视频生成模型的第一道分界：未来不能泄漏到过去。bidirectional video diffusion 可以一次性生成整段视频，画质高，但推理时当前帧可能隐式依赖未来帧；交互系统里未来动作还没发生，因此这种依赖会破坏闭环。
+
+    CausVid 的意义在于把高质量 bidirectional teacher 改造成 causal student，并用少步蒸馏保证实时性。它不是说所有 video world model 都必须用 CausVid，而是说明一条通用路线：先继承强视频扩散先验，再改成自回归/因果 rollout，最后用 few-step 生成和 KV cache 降低延迟。
 
 这里涉及三类训练路线：
 

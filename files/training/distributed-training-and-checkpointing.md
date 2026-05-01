@@ -4,6 +4,12 @@
 
 这页建议和 [Megatron-LM、DeepSpeed 与训练系统栈](megatron-lm-deepspeed-and-open-training-stacks.md)、[输入管线、Packing 与吞吐治理](input-pipelines-packing-and-throughput-governance.md)、[训练稳定性与故障排查](stability-numerics-and-failure-triage.md) 一起读。它们分别覆盖训练框架、数据吞吐和数值/系统异常，本页聚焦并行拓扑与恢复资产。
 
+!!! note "初学者先抓住"
+    分布式训练不是把模型随便切到多张卡上。你要同时管理显存、通信、pipeline bubble、数据顺序和 checkpoint 恢复语义。
+
+!!! example "有趣例子：多人接力搬家"
+    人多不一定快。如果楼道太窄、箱子交接混乱、有人中途离开还没人记录进度，整体反而慢。分布式训练也要设计分工、通信和恢复点。
+
 ## 一、为什么单卡思维会失效
 
 单卡训练里，主要矛盾通常是模型结构、batch size、优化器和数据质量；分布式训练里，会额外出现六个硬约束：

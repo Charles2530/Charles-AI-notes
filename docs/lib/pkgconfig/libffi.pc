@@ -1,8 +1,8 @@
-prefix=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs
+prefix=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 toolexeclibdir=${libdir}
-includedir=/Users/charles/Documents/coding_file/lab/Charles-AI-notes/docs/include
+includedir=/Volumes/Device/charles/coding_files/Charles-AI-notes/docs/include
 
 Name: libffi
 Description: Library supporting Foreign Function Interfaces
