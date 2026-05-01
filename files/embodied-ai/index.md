@@ -18,11 +18,14 @@ o_t \rightarrow b_t \rightarrow p_t \rightarrow a_t \rightarrow o_{t+1}
 
 只要其中任何一环不稳，系统都会在真实环境中迅速暴露脆弱性。
 
-下面这张图把具身智能压缩成一个闭环系统：感知不是终点，动作也不是终点，系统必须在新观测里持续验证自己是否真的完成了任务。安全约束、失败恢复和数据回流都应该在主路径里，而不是等事故发生后再补。
+RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相机观测进入模型，模型持续输出离散动作 token，机器人执行后又得到新的观测。
 
-![具身智能闭环总览图](../assets/images/embodied-ai/generated/embodied-closed-loop-overview.png){ width="920" }
+![RT-1 overview 原论文图](../assets/images/paper-figures/embodied-ai/rt1-figure-1-overview.png){ width="920" }
 
-**读图提示**：如果一个方案只展示“看懂场景”或“输出动作”，但没有说明执行后的反馈、失败恢复和回流机制，它还不是完整具身系统。
+<small>图源：[RT-1: Robotics Transformer for Real-World Control at Scale](https://arxiv.org/abs/2212.06817)，Figure 1。原论文图意：RT-1 接收自然语言指令和图像历史，经过 tokenization 与 Transformer policy，以约 3Hz 输出机器人动作 token，驱动机械臂完成真实任务。</small>
+
+!!! note "图解：RT-1 图展示的是闭环控制而不是静态识别"
+    图的左侧是任务指令和相机历史，中间是把视觉与语言转成 token 后交给 Transformer policy，右侧是连续执行的机器人动作。关键不是模型“看懂了一张图”，而是每一步动作都会改变环境，下一帧观测又会反过来影响后续动作。如果一个方案只展示“看懂场景”或“输出动作”，但没有说明执行后的反馈、失败恢复和数据回流机制，它还不是完整具身系统。
 
 ## 1. 具身智能和“大模型智能体”有什么不同
 

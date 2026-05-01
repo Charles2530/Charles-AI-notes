@@ -33,7 +33,7 @@
 4. MoE expert 中的 dense matmul；
 5. 量化后的混合精度 GEMM。
 
-数学上 GEMM 可以写成 \(C = AB + D\)，但工程上真正要解决的是：
+标准 GEMM 更准确地写作 \(C \leftarrow \alpha AB + \beta C\)。深度学习里常见的 bias、activation、residual、scale、quant/dequant 等，通常属于 GEMM epilogue 或融合路径，不是 GEMM 定义本身。工程上真正要解决的是：
 
 1. 输入输出 layout 是否适合 Tensor Core；
 2. \(M/N/K\) 如何 tile；

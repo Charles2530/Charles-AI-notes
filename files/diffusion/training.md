@@ -6,11 +6,14 @@
 2. 反向过程到底学什么。
 3. 为什么“预测噪声”会变成一个有效训练目标。
 
-这张图适合先建立“训练目标”的直觉：同一个带噪样本 \(x_t\) 进入网络后，可以被解释成不同预测任务。它们在信息上可以互相换算，但在优化难度、梯度尺度、少步采样稳定性和 CFG 表现上并不等价。
+DDPM 原论文的 graphical model 可以先帮你把训练问题定位清楚：训练不是直接从 \(x_T\) 一口气生成 \(x_0\)，而是在很多时间步上学习局部反向转移。后续的噪声预测、\(x_0\) 预测和 v-prediction，都是在这个骨架上选择不同参数化。
 
-![扩散训练预测目标图](../assets/images/diffusion/generated/diffusion-training-targets-map.png){ width="920" }
+![DDPM graphical model 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="760" }
 
-**读图提示**：如果你只是入门，先把 `epsilon prediction` 当作默认坐标系；如果你在看 latent diffusion、少步采样或强 guidance，再重点理解 `v-prediction` 为什么常更稳。
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原论文图意：DDPM 将数据逐步加噪形成 \(x_1,\ldots,x_T\)，再学习反向链 \(p_\theta(x_{t-1}\mid x_t)\)。</small>
+
+!!! note "图解：训练页里的 DDPM 图要看局部反向转移"
+    图里的每个 \(p_\theta(x_{t-1}\mid x_t)\) 都是在学习一个局部去噪转移，而不是一次从 \(x_T\) 直接跳到 \(x_0\)。训练时随机抽一个时间步 \(t\)，构造带噪样本 \(x_t\)，再让网络预测噪声、干净样本或 velocity。如果你只是入门，先把 `epsilon prediction` 当作默认坐标系；如果你在看 latent diffusion、少步采样或强 guidance，再重点理解 `v-prediction` 为什么常更稳。
 
 !!! note "难点解释：为什么可以直接采样任意时刻"
     前向加噪虽然写成一步步马尔可夫链，但高斯噪声的叠加仍然是高斯。因此训练时不必真的从 \(x_0\) 加噪到 \(x_t\) 走 \(t\) 次，可以用闭式公式一次构造 \(x_t\)。这就是扩散训练能高效做随机时间步监督的关键。

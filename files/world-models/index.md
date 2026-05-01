@@ -15,6 +15,13 @@
 
 世界模型的核心问题不是“能不能生成未来”，而是“能不能把未来预测转化成更好的决策”。它位于表征学习、生成模型、强化学习、机器人、自动驾驶和数据引擎的交叉处。
 
+![World model taxonomy](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-2-world-model-taxonomy.jpg){ width="900" }
+
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 2。原文图意：把 world model 分成内部理解型和外部模拟型两类，并把 `(M)LLM?`、JEPA、Video World Model、Simulation Platforms、Neural 3D/4D 等路线放到同一张 taxonomy 里。</small>
+
+!!! note "难点解释：先分清 internal 和 external"
+    `internal world model` 更像 agent 内部的抽象预测器，目标是帮助 reasoning、planning 和 decision making，不一定要生成像素级画面。`external world simulation model` 则要生成可观察、可交互、可检查的外部世界细节。Dreamer/RSSM 更偏前者的决策接口，LingBot-World、Genie、CausVid 这类视频世界模型更偏后者的交互模拟接口。读后面的页面时，先问清楚模型最后服务的是“内部决策”还是“外部模拟”。
+
 <div class="atlas-meta-grid">
   <div>
     <strong>核心问题</strong>

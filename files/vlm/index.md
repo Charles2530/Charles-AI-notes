@@ -19,6 +19,13 @@ p_\theta(y \mid x_v, x_t)
 - 一次工具调用
 - 一个多步代理动作
 
+![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="920" }
+
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原论文图意：用图像编码器和文本编码器把图文对拉到同一表示空间，并把类别文本 prompt 当作 zero-shot 分类器。</small>
+
+!!! note "图解：为什么 VLM 首先要学“图文对齐”"
+    CLIP 这张图说明了 VLM 的一个基础入口：先不急着让模型长篇回答，而是先让“图片”和“文字描述”在同一个向量空间里靠近。这样做的好处是检索、分类、召回都很高效；缺点是它主要学到全局匹配，未必能精确回答“左下角第二行金额是多少”或“点哪个按钮”。所以后续 VLM 会在这个对齐底座上继续加入 cross-attention、LLM 连接器、高分辨率阅读和 grounding 能力。
+
 ## 1. 为什么 VLM 会成为基础设施
 
 因为很多真实任务本来就是“看图 + 理解语言 + 做决策”：

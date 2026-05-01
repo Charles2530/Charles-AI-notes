@@ -2,14 +2,20 @@
 
 扩散推理的本质，是把训练好的去噪网络当成一个向量场估计器，再沿着这条向量场从噪声走回数据分布。
 
-采样器可以先按“预算怎么花”来理解。`Euler` 更像低成本快速基线，`Heun` 用额外模型调用换更平滑的修正，`DPM-Solver++` 则更适合作为少步高质量和强 guidance 场景的默认候选。
+采样器可以先按“预算怎么花”来理解。`Euler` 更像低成本快速基线，`Heun` 用额外模型调用换更平滑的修正，`DPM-Solver++` 则更适合作为少步高质量和强 guidance 场景的默认候选。DDPM 原论文的 progressive generation 图能直观看到：采样不是一次完成，而是从噪声逐步形成结构和细节。
 
-![扩散采样器选择图](../assets/images/diffusion/generated/diffusion-sampler-selection-map.png){ width="920" }
+![DDPM progressive generation 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-14-progressive-generation.jpg){ width="720" }
 
-**读图提示**：采样器不是在提升模型本身的知识，而是在决定同一个去噪网络如何离散求解。实际选型时不要只看单张图效果，应该按步数、guidance、prompt 类型、延迟和失败样本分桶比较。
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 14。原论文图意：CIFAR-10 unconditional generation 的 progressive generation 过程，展示反向采样链中图像如何从噪声逐步变成可辨认样本。</small>
+
+!!! note "图解：progressive generation 图要看成采样轨迹"
+    这张图展示的是同一条反向链上不同时间点的样子：早期主要从噪声里形成粗结构，中后期逐步补边缘、颜色和纹理。它说明“采样步”本来承担逐层成形的职责。采样器不是在提升模型本身的知识，而是在决定同一个去噪网络如何离散求解。实际选型时不要只看单张图效果，应该按步数、guidance、prompt 类型、延迟和失败样本分桶比较。
 
 !!! note "难点解释：采样器为什么能换"
     训练好的扩散网络给出的是“往哪里去噪”的方向估计。采样器决定每一步沿这个方向怎么走、走多远、是否校正。只要接口一致，同一个模型可以搭配不同 sampler，但步数越少，对 sampler 和预测质量的要求越高。
+
+!!! note "常见误区：步数越少就越先进"
+    少步采样真正要比较的是速度、质量、稳定性和失败分布。4 步模型如果只在简单 prompt 上好看，却在文字、多人、复杂布局或高 guidance 下明显抖动，工程上未必优于 12 或 20 步方案。初学者看采样器时，最好把步数当成预算约束，而不是方法排名。
 
 !!! example "有趣例子：下山路线"
     去噪像从雾山山顶走到山脚村庄。Euler 每次看当前坡度就迈一步；Heun 会先试走再校正；DPM-Solver 像根据山路形状做更聪明的多步预测。路线不同，但目标都是尽快安全到村庄。

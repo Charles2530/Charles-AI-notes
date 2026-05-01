@@ -15,6 +15,10 @@
 
     单个 kernel 跑得快，不代表端到端路径快。真实系统还包括 layout 转换、数据搬运、dispatch、fallback、batching 和通信。选型时要把 kernel 放回完整请求或训练 step 里算账。
 
+!!! example "有趣例子：最快短跑员不等于最快接力队"
+
+    一个队员百米最快，但交接棒混乱，整队仍然会输。单个 kernel microbenchmark 很漂亮，也可能因为前后 layout、dispatch 和同步成本导致端到端路径不快。
+
 ## 1. 一个够用的粗模型
 
 很多 kernel 可以先粗略分成三类成本：

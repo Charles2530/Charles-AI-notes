@@ -2,9 +2,12 @@
 
 训练大模型时，显存压力往往不是权重单独造成的，而是权重、梯度、optimizer state 和中间激活一起造成的。自动微分让训练变简单，也带来了保存计算图和激活的显存成本。
 
-![自动微分、激活显存与 Checkpointing](../assets/images/foundations/generated/autograd-memory-checkpointing-map.png){ width="920" }
+![Sublinear memory computation graph 原论文图](../assets/images/paper-figures/foundations/sublinear-memory-figure-1-computation-graph.png){ width="760" }
 
-**读图提示**：训练显存不够时，不一定先换模型。可以先看 activation checkpointing、batch size、sequence length、ZeRO/FSDP、低精度和重算策略。
+<small>图源：[Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1。原论文图意：把神经网络前向计算表示成有向计算图，反向传播时需要中间节点的值；若不保存全部中间值，就需要在 backward 前重新计算部分节点。</small>
+
+!!! note "图解：checkpointing 的核心是少存、多算"
+    这张图把训练看成一张计算图：前向时每个节点产生中间激活，反向时梯度需要沿图反传并读取这些激活。全保存最省计算但占显存；activation checkpointing 只保存少数关键节点，反向时从最近 checkpoint 重新跑一段前向，换回缺失激活。训练显存不够时，不一定先换模型，可以先看 checkpointing、batch size、sequence length、ZeRO/FSDP、低精度和重算策略。
 
 !!! note "初学者先抓住"
     推理只要算出答案，训练还要记住“答案是怎么来的”，这样 backward 才能算 gradient。显存压力很多时候不是权重本身，而是中间激活、梯度和 optimizer state 一起叠加。

@@ -2,9 +2,12 @@
 
 Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核心结构。它的关键思想是：把输入变成 token，再用 attention 让 token 之间按相关性互相读取信息。
 
-![Transformer 与 Attention](../assets/images/foundations/generated/transformer-attention-tokenization-map.png){ width="920" }
+![Transformer 原论文模型结构图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="620" }
 
-**读图提示**：Self-Attention 建模同一序列内部关系；Cross-Attention 把外部条件注入主干。扩散模型里的文本控制、VLM 里的图文对齐、VLA 里的语言到动作接口，都离不开这两个概念。
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原论文图意：Transformer 由 encoder 和 decoder 组成，核心模块包括 multi-head attention、feed-forward、residual connection、normalization、positional encoding 与输出 softmax。</small>
+
+!!! note "图解：Transformer 总结构先抓三条线"
+    第一次看这张图不要急着背每个框。第一条线是输入 token 先变成 embedding，并叠加 positional encoding，让模型知道顺序。第二条线是每层都交替做 attention 和 feed-forward：attention 负责跨 token 读信息，feed-forward 负责逐 token 变换表示。第三条线是 decoder 比 encoder 多了 masked self-attention 和 encoder-decoder attention，所以它既能按因果顺序生成下一个 token，也能读取 encoder 提供的源序列信息。
 
 !!! note "初学者先抓住"
     Attention 的核心不是“模型很聪明”，而是每个 token 都能按相关性去读取其他 token。Q/K/V 可以先理解成：我想找什么、别人暴露什么、真正读走什么。
@@ -54,6 +57,14 @@ Attention 可以用“提问、匹配、读取”理解：
 \]
 
 这表示每个 token 会根据相似度，从其他 token 里加权读取信息。
+
+![Scaled Dot-Product Attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-left.png){ width="280" }
+![Multi-Head Attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-right.png){ width="360" }
+
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 2。原论文图意：左图是 scaled dot-product attention 的 Q/K/V 计算流程，右图是 multi-head attention 将多组 attention 并行后拼接再投影。</small>
+
+!!! note "难点解释：为什么要 multi-head"
+    单个 attention head 只能在一套相似度空间里读取信息。Multi-head attention 等于让模型同时用多套“问题-匹配-读取”规则看同一段序列：有的 head 可能关注局部语法，有的关注长距离依赖，有的关注对齐关系。最后的线性投影再把这些视角合并起来。
 
 ## 3. Self-Attention 和 Cross-Attention
 

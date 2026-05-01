@@ -149,6 +149,9 @@ q_t(x_t\mid x)
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 4。原论文图意：未加噪时 real / fake distributions 可能不重叠；经过 diffusion perturbation 后，distribution matching objective 在空间中更好定义。</small>
 
+!!! note "图解：为什么要先把样本加噪再匹配"
+    左侧直觉是 real distribution 和 fake distribution 在原始图像空间里可能几乎不重叠，这时直接比较梯度很容易得到不稳定或没意义的方向。加上 diffusion perturbation 后，两个分布被高斯噪声“抹宽”，在同一个 ambient space 里产生更大重叠，score difference 才能提供连续的移动方向。DMD 不是在原图上硬判真假，而是在不同噪声强度下比较 real score 和 fake score，让 generator 逐步靠近 teacher / data 分布。
+
 real score 由冻结 teacher diffusion model 给出：
 
 \[
@@ -516,6 +519,9 @@ w_t
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 5 下半部分。原论文图意：左侧为 DMD，右侧为去掉 regression loss 的 baseline；后者出现 mode collapse / diversity loss，例如大量灰色汽车。</small>
 
+!!! note "图解：两组消融图分别暴露不同失败"
+    ImageNet 图主要说明 distribution matching 不能删：没有它，样本会失去真实感和结构完整性，说明单纯回归 teacher pairs 不足以学好整体分布。CIFAR 图主要说明 regression loss 不能删：没有 paired anchor，generator 容易把多个 noise 映射到相似结果，表现为 mode collapse 或 diversity loss。把两张图合起来看，DMD 的核心不是某一个 loss 单独强，而是 distribution matching 管真实分布，regression 管 noise-to-image 的结构对应。
+
 ### MS COCO-30K, guidance scale 3
 
 表格按论文原始英文格式重绘。
@@ -565,6 +571,9 @@ w_t
 ![DMD qualitative comparison](../../assets/images/paper-deep-dives/diffusion/dmd/gallery2_newest.png){ width="920" }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 6。原论文图意：对比 DMD、InstaFlow、LCM、DPM++ 和 Stable Diffusion 在相同 prompt 下的图像质量与延迟；DMD 一步 90ms，质量接近 50-step SD。</small>
+
+!!! note "图解：质量对比图不要只看速度"
+    这张图把 latency 和视觉质量放在同一处比较。DMD 的卖点不是“比所有方法都快”，而是在一步 90ms 的预算里尽量保住多步 Stable Diffusion 的语义结构、主体完整性和局部细节。读这种 qualitative comparison 时要同时看三点：同一 prompt 下是否遵循文本，复杂结构是否完整，失败样本是否集中在某类 prompt 上。单张好图不能证明上线可用，但它能帮你定位少步蒸馏最常牺牲的质量维度。
 
 ## CIFAR-10 补充结果
 

@@ -131,6 +131,13 @@ y = W x
 `GPTQ` 的核心思想是：  
 量化某一列权重后，不是简单接受误差，而是尽量把误差往后续尚未量化的参数中吸收。
 
+![GPTQ quantization procedure](../assets/images/paper-figures/quantization/gptq-figure-2-procedure.png){ width="780" }
+
+<small>图源：[GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323)，Figure 2。原论文图意：左侧是层内 inverse Hessian 的 Cholesky 形式，右侧是按列递归量化的权重块；已量化列固定，未量化列会根据量化误差被更新补偿。</small>
+
+!!! note "难点解释：GPTQ 为什么要看 Hessian"
+    如果某个方向的输出对权重扰动非常敏感，那么那里的量化误差就更贵。GPTQ 用校准数据估计层内二阶信息，并在按列量化时把误差分摊给还没量化的列。可以把它理解成“不是每列各压各的”，而是边压边修正，让后面的列吸收前面造成的输出偏差。
+
 **可把局部目标近似写成**：
 
 \[
@@ -170,6 +177,13 @@ W = [w_1, w_2, \dots, w_n]
 `AWQ` 的关键观察是：  
 决定输出误差的不是权重本身大小，而是“权重与激活共同作用”。
 
+![AWQ activation-aware weight quantization](../assets/images/paper-figures/quantization/awq-figure-1-activation-aware.png){ width="920" }
+
+<small>图源：[AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978)，Figure 1。原论文图意：普通 RTN 量化会明显升高困惑度；保留少量 activation-salient weights 或在量化前按激活幅度缩放权重，可以显著恢复质量。</small>
+
+!!! note "难点解释：AWQ 的“重要权重”不是单看权重大小"
+    同一个权重误差，如果乘上的激活很小，输出影响也可能很小；如果乘上的激活经常很大，就会被放大成明显输出偏差。AWQ 因此用校准激活去找真正影响输出的通道或权重，再通过缩放和保护让这些位置别被 4bit 误差打坏。
+
 若某通道激活常很大，那么该通道对应权重的小误差也会被放大。  
 **因此 AWQ 更关注**：
 
@@ -194,6 +208,13 @@ W = [w_1, w_2, \dots, w_n]
 
 在很多 LLM 中，激活分布比权重更难量化，因为会出现少数特别大的 outlier。  
 `SmoothQuant` 的核心技巧是引入一个对角缩放矩阵 \(D\)，把激活尺度一部分搬运到权重中：
+
+![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="780" }
+
+<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 2。原论文图意：原始激活 \(X\) 含有 outlier，导致有效量化 bit 变少；SmoothQuant 将一部分难度从 activation 迁移到 weight，让两侧都更容易量化。</small>
+
+!!! note "难点解释：SmoothQuant 不是把 outlier 删掉"
+    SmoothQuant 利用线性层里的等价变换 \(Wx=(WD)(D^{-1}x)\)：输出数学上不变，但数值难度从激活侧搬到权重侧。因为权重是静态的、离线可处理，激活是动态的、线上会随输入变化，所以把难量化的激活尖峰转移一部分到权重里，通常比直接硬量化 activation 更稳。
 
 \[
 W x = (W D)(D^{-1} x)
@@ -394,4 +415,3 @@ def per_channel_int8_quant(w, eps=1e-6):
 ### 还值得继续深挖的问题
 
 围绕 **PTQ、GPTQ、AWQ、SmoothQuant**，后续最值得加厚的内容通常包括：不同任务桶上的量化敏感性；校准集构造和激活尾部分布；多机服务与多模型混部时的真实收益；以及一旦线上出现局部退化，应该如何快速回到更高精度路径。把这些写透，量化页才真正具备上线指导价值。
-

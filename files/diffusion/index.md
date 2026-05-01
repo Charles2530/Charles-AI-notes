@@ -2,11 +2,14 @@
 
 扩散模型可以看成一类“先破坏，再恢复”的生成模型。训练时，模型不断看到被噪声污染的数据；推理时，模型学习把纯噪声一步步还原成目标样本。
 
-下面这张图先把主线压缩成一个直观流程：上半部分是训练时“把干净样本加噪”的前向过程，下半部分是推理时“从噪声逐步恢复”的反向过程。读扩散模型时，先把这两条方向分清，后面的噪声预测、采样器、蒸馏和整流才不会混在一起。
+DDPM 原论文里的 graphical model 很适合建立第一层直觉：左到右的 \(q\) 是人为定义的前向加噪链，右到左的 \(p_\theta\) 是模型要学习的反向生成链。读扩散模型时，先把这两条方向分清，后面的噪声预测、采样器、蒸馏和整流才不会混在一起。
 
-![扩散模型前向加噪与反向去噪总览](../assets/images/diffusion/generated/diffusion-forward-reverse-overview.png){ width="920" }
+![DDPM graphical model 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="760" }
 
-**读图提示**：前向过程不需要模型学习，它只是人为定义的破坏过程；真正要学习的是反向去噪。训练目标回答“怎样估计噪声或干净样本”，采样器回答“推理时沿什么路径走回去”，两者不是同一层问题。
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原论文图意：DDPM 使用固定的正向扩散过程 \(q\) 将数据逐步推向噪声，再学习参数化反向过程 \(p_\theta\) 从噪声逐步生成数据。</small>
+
+!!! note "图解：DDPM 图里的两条方向"
+    左到右的 \(q\) 是前向加噪链：它不需要模型学习，只是人为定义的破坏过程，把 \(x_0\) 一步步推向接近高斯噪声的 \(x_T\)。右到左的 \(p_\theta\) 才是模型要学习的反向去噪链：在每个噪声强度下，估计怎样从 \(x_t\) 回到更干净的 \(x_{t-1}\)。训练目标回答“怎样估计噪声或干净样本”，采样器回答“推理时沿什么路径走回去”，两者不是同一层问题。
 
 !!! tip "基础知识入口"
     如果你对 `UNet`、`DiT`、`score`、`ELBO`、`SDE/ODE` 或 `Cross-Attention` 还不熟，可以先看 [卷积与特征提取](../foundations/convolution-and-feature-extraction.md)、[Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md) 和 [概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md)。这些是扩散模型后续章节反复使用的公共概念。

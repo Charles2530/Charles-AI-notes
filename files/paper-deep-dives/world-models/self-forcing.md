@@ -98,7 +98,8 @@ initialize causal AR diffusion model from Wan2.1 / CausVid-style ODE init
 
 <small>图源：`Self Forcing`，Figure 2。原图展示 TF/DF 需要在整段视频上用特殊 causal mask 并行训练，而 Self Forcing 训练过程直接模仿 AR inference，使用 KV cache，不需要特殊 attention mask。</small>
 
-这个图很关键。TF/DF 看起来并行高效，但需要人为设计 attention mask，让模型“假装”在做因果生成。Self Forcing 反过来：训练时就真的逐步生成，因此上下文分布和推理一致。
+!!! note "图解：attention mask 图在比较训练形态"
+    TF/DF 看起来并行高效，但需要人为设计 attention mask，让模型“假装”在做因果生成；上下文仍主要来自数据或带噪数据。Self Forcing 反过来：训练时就真的逐步生成，并用 KV cache 复用历史，因此模型看到的是自己 rollout 造成的上下文分布。读这张图时重点看“训练时上下文从哪里来”，而不是只看是否用了 causal mask。
 
 ## 自回归 self-rollout
 
@@ -257,6 +258,9 @@ when generating a new chunk:
 
 <small>图源：`Self Forcing`，Figure 5。原图对比 Wan2.1、SkyReels-V2、CausVid 和 Self Forcing 在多个时间点的生成结果，展示 CausVid 随时间出现过饱和，而 Self Forcing 更稳定。</small>
 
+!!! note "图解：定性对比图要沿时间读"
+    这类视频结果不能只看第一帧或最漂亮的一帧，要沿时间检查颜色是否逐步过饱和、主体是否漂移、背景是否跳变、动作是否变慢。图中 CausVid 的问题更像长期 rollout 的统计漂移，而不是单帧能力不足；Self Forcing 的优势在于训练时已经让模型条件在自己生成的历史上，所以更能适应这种推理时分布。它和前面的 self-rollout 训练图是一组因果链：训练分布更接近推理分布，长时视觉漂移更轻。
+
 ### Table 2: Ablation study
 
 | Chunk-wise AR | Total Score | Quality Score | Semantic Score |
@@ -291,6 +295,9 @@ when generating a new chunk:
 ![Self Forcing training efficiency 原图](https://ar5iv.labs.arxiv.org/html/2506.08009/assets/x6.png){ width="920" }
 
 <small>图源：`Self Forcing`，Figure 6。原图左侧比较 DMD loss 下不同训练范式的单 iteration 时间，右侧比较相同 wall-clock budget 下 VBench score。Self Forcing 虽然顺序 rollout，但训练效率不差，且同等时间质量更高。</small>
+
+!!! note "图解：效率图在反驳一个常见担心"
+    常见担心是 Self Forcing 训练时要顺序 rollout，会比 TF/DF 慢太多。左图看单次 iteration 成本，右图看同样 wall-clock budget 下的 VBench 分数；真正要比较的是“单位训练时间换来多少质量”，不是单步是否最并行。图里的结论是：Self Forcing 虽然牺牲了一部分并行形态，但因为训练分布更对齐推理分布，同等时间下质量收益更好。
 
 ## 和 CausVid 的关系
 

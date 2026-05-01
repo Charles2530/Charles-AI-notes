@@ -10,9 +10,15 @@
 3. ONNX Runtime 和 ONNX 量化应该怎么理解；
 4. 真实上线时应该按什么顺序选型和验证。
 
-![量化运行时部署链路](../assets/images/quantization/generated/quantization-runtime-deployment-pipeline.png){ width="920" }
+![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="760" }
 
-**读图提示**：量化收益要穿过算法、保存格式、runtime、kernel 和硬件五层才会兑现。只要其中一层不匹配，就可能出现“模型文件变小了，但线上请求没有更快”的情况。
+<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 6。原论文图意：在 Transformer block 中，部分算子可以走 INT8 路径，LayerNorm、Softmax、残差加法等敏感或不适合低精度的算子仍保留 FP16。</small>
+
+!!! note "图解：SmoothQuant 精度映射图在提醒什么"
+    图里不是所有算子都被强行压成 INT8：GEMM/BMM 等主要计算热点可以低精度执行，LayerNorm、Softmax、残差加法和某些敏感路径仍保留 FP16。量化收益不是“模型文件变小”就结束，而是要穿过算子精度划分、runtime、kernel 和硬件五层才会兑现。实际系统通常是混合精度：重算子尽量低精度，数值敏感或 kernel 不合适的位置保守处理。
+
+!!! note "难点解释：为什么 runtime 比算法名更关键"
+    论文里说某层可量化，不等于 serving stack 就会更快。runtime 必须知道哪些算子能低精度执行、哪些要保留高精度、scale 如何传递、dequant 是否能融合进 kernel。只要其中一环需要频繁反量化或落回普通 GEMM，端到端 TTFT/TPOT 就可能没有改善。
 
 !!! note "初学者先抓住"
     量化算法、权重格式、运行时和硬件是四件不同的事。论文里说“支持 INT4”，不代表你的 serving runtime 能用 INT4 kernel 跑得更快。

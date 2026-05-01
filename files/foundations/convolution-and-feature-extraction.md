@@ -2,9 +2,15 @@
 
 卷积是视觉模型里最经典的结构之一。即使 Transformer 很流行，卷积仍然是理解 CNN、UNet、视觉编码器和扩散模型的重要基础。
 
-![卷积与特征提取](../assets/images/foundations/generated/conv-feature-extraction-map.png){ width="920" }
+![U-Net architecture](../assets/images/paper-figures/foundations/unet-figure-1-architecture.png){ width="860" }
 
-**读图提示**：卷积的核心不是“旧结构”，而是局部归纳偏置。它默认相邻像素关系更重要，因此非常适合图像、特征图和多尺度结构。
+<small>图源：[U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597)，Figure 1。原论文图意：U-Net 左侧 contracting path 逐步下采样并扩大上下文，右侧 expanding path 逐步上采样恢复分辨率，灰色箭头把高分辨率特征复制到对应解码层。</small>
+
+!!! note "图解：U-Net 图里的编码器、解码器和跳连"
+    左侧 contracting path 通过卷积和下采样逐步降低分辨率、扩大感受野，适合理解全局结构；右侧 expanding path 通过上采样逐步恢复空间分辨率，适合输出像素级细节。灰色横向箭头是 skip connection，会把早期高分辨率特征复制到对应解码层。卷积的核心不是“旧结构”，而是局部归纳偏置和多尺度表示；这也是扩散模型里 UNet 去噪网络能同时保全局构图和局部细节的原因。
+
+!!! note "难点解释：为什么 U-Net 要有两条路径"
+    下采样路径让模型看到更大范围，适合判断整体结构；上采样路径负责把低分辨率语义还原成高分辨率输出；skip connection 把早期的边缘、纹理和位置细节直接接回来。没有 skip，解码器容易只知道“是什么”，却丢掉“精确在哪里”。
 
 !!! note "初学者先抓住"
     卷积最重要的不是公式，而是“小窗口反复看局部”。它默认图像里的相邻像素更相关，所以特别适合找边缘、纹理、角点和局部形状。

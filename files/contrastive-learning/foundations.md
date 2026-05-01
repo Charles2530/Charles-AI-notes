@@ -53,11 +53,14 @@ $$
 {\exp(\text{sim}(z_i,z_i^+)/\tau)+\sum_{j}\exp(\text{sim}(z_i,z_j^-)/\tau)}
 $$
 
-从实现角度看，InfoNCE 最常见的形态就是在一个 batch 内计算两路视图的相似度矩阵：对角线是正确匹配，非对角线是负样本，最靠近正样本的非对角项往往就是 hard negative。
+从实现角度看，InfoNCE 最常见的形态就是在一个 batch 内计算两路视图的相似度矩阵：对角线是正确匹配，非对角线是负样本，最靠近正样本的非对角项往往就是 hard negative。CLIP 原论文给了一段非常直观的 Numpy-like 伪代码，正好展示了这种“双向 batch 内分类”的实现骨架。
 
-![InfoNCE batch 相似度矩阵](../assets/images/contrastive-learning/generated/infonce-batch-similarity-matrix.png){ width="920" }
+![CLIP 对比学习伪代码原图](../assets/images/paper-figures/contrastive-learning/clip-figure-3-pseudocode.png){ width="720" }
 
-**读图提示**：把 batch 看成一个小型检索库，训练就是让每一行 softmax 后把对角线概率推高。温度参数 \(\tau\) 越小，模型越重视“最像正样本的负样本”，所以 hard negative 会更强地影响梯度。
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 3。原论文图意：CLIP 将图像特征和文本特征归一化后计算相似度矩阵，并分别做 image-to-text 与 text-to-image 两个方向的 cross entropy。</small>
+
+!!! note "图解：CLIP 伪代码在做一次双向检索"
+    这段伪代码的核心是一个 `logits_per_image` 矩阵：第 \(i\) 行表示第 \(i\) 张图对所有文本的匹配分数，第 \(j\) 列表示第 \(j\) 段文本对所有图像的匹配分数。训练时同时做 image-to-text 和 text-to-image 两个 cross entropy，相当于让每一行、每一列都把正确配对推到最高。温度参数 \(\tau\) 越小，softmax 越尖锐，模型越重视“最像正样本的负样本”，所以 hard negative 会更强地影响梯度。
 
 这里的温度参数 \(\tau\) 控制分布尖锐程度。  
 从直觉上看，这个损失在问模型：
@@ -423,4 +426,3 @@ def simclr_step(encoder, x1, x2, tau=0.07):
 ### 还值得继续深挖的问题
 
 围绕 **对比学习基础方法**，后续最值得继续加厚的通常是：表示漂移如何在线监控；哪些难例和长尾样本最能揭示几何问题；teacher/student 与 non-contrastive 路线在部署上的真实差异；以及一旦下游效果突然退化，应如何把问题回溯到训练目标、样本制度和评测桶。
-

@@ -120,6 +120,13 @@ d(x_t) \ge d_{\min}
 
 这些约束很“土”，但在部署中极有价值，因为它们可解释、可验证、可审计。
 
+![SayCan grounding language with affordances](../assets/images/paper-figures/vla/saycan-intro.png){ width="920" }
+
+<small>图源：[Do As I Can, Not As I Say: Grounding Language in Robotic Affordances](https://arxiv.org/abs/2204.01691)，Figure 1。原论文图意：LLM 可能提出不接地气的建议；SayCan 用 value functions / affordances 约束语言模型，把高层语言规划落到机器人当前可执行的技能上。</small>
+
+!!! note "图解：安全不只是限幅，还要判断“能不能做”"
+    SayCan 这张图说明了 VLA 部署里的一个核心安全问题：语言模型可能给出听起来合理但机器人做不了、场景里不存在或当前不安全的动作。value function / affordance 的作用，是给每个候选技能加上“当前状态下可不可行”的分数。部署时，硬限幅负责防止动作越界；affordance 和任务状态机负责防止模型选择不合场景、不合能力或不合安全边界的动作。
+
 ## 6. 家庭收纳机器人为什么特别暴露问题
 
 机器人要把玻璃杯放进柜子。  

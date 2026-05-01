@@ -7,11 +7,18 @@
 
 如果这两项没理解清楚，很多现象都会显得像经验调参；一旦把它们放回统一公式里，很多设计选择就会变得有逻辑。
 
-下面这张图把噪声日程放回 `SNR` 视角：不同时间段对应不同学习压力。低噪声区间更像“补纹理和边缘”，中噪声区间更像“学物体结构”，高噪声区间更像“从几乎看不见的信号里恢复语义”。
+下面这张 Improved DDPM 原论文图把训练损失拆到不同 diffusion step 上看：不同时间段贡献的学习压力并不均匀。低噪声区间更像“补纹理和边缘”，中噪声区间更像“学物体结构”，高噪声区间更像“从几乎看不见的信号里恢复语义”。
 
-![噪声日程与 SNR 分配图](../assets/images/diffusion/generated/diffusion-noise-schedule-snr-map.png){ width="920" }
+![Improved DDPM VLB terms 原论文图](../assets/images/paper-figures/diffusion/improved-ddpm-figure-2-vlb-terms.png){ width="760" }
 
-**读图提示**：不要只看 \(\beta_t\) 是不是线性，真正影响训练的是不同噪声区间的信噪比分布。少步采样不稳、细节糊、语义弱，很多时候都能回到这张图里的区间分配去排查。
+<small>图源：[Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672)，Figure 2。原论文图意：分析 CIFAR-10 训练中 variational lower bound 各 timestep 项的贡献，显示不同 diffusion step 的损失权重和学习压力差异很大。</small>
+
+!!! note "图解：为什么噪声日程不能只看 beta"
+    图里的重点是不同 timestep 对训练目标的贡献并不平均。某些区间如果权重过大，模型会把容量集中到那段噪声水平；某些区间如果监督太弱，少步采样时就容易出现结构不稳、细节糊或语义弱。实际读噪声日程时，不要只看 \(\beta_t\) 是不是线性，真正影响训练的是 SNR 分布、loss weighting 和采样时选哪些 timestep。
+
+!!! example "有趣例子：调节雾化玻璃"
+
+    噪声日程像调一块可控雾化玻璃：低噪声时还能看清边缘，高噪声时只剩大概轮廓。训练材料如果总停在轻雾区，模型会擅长修细节；如果总停在浓雾区，模型会更会猜语义但容易丢纹理。
 
 ## 1. 噪声日程到底在决定什么
 
@@ -384,5 +391,3 @@ def weighted_mse(pred, target, alpha_t):
 2. 它和系统成本、缓存、编译、服务路径的耦合；
 3. 它在长尾控制、长视频、复杂多条件场景里的真实边界；
 4. 当它失败时，最先该回退到哪一层更稳的方案。
-
-

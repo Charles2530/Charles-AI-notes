@@ -230,7 +230,8 @@ PhyWorld 这类工作用简单 2D 物理数据评估视频模型的 generalizati
 
 <small>图源：`Towards Video World Models`，Figure 9。表格要点：该表比较 Simulation Platform、Neural 3D/4D 和 Video World Model 在 Dynamic Physics、3D consistency、Photorealism、Speed 与 Generalizability 上的优劣。</small>
 
-这个表的重点是：video world model 在 photorealism 和 generalizability 上有优势，但 3D consistency 和 speed 仍弱；传统仿真平台物理强但泛化和 photorealism 受限；neural 3D/4D 渲染快、3D 一致，但动态物理和开放世界泛化仍难。
+!!! note "图解：三类模拟路线没有谁完全替代谁"
+    这个表的重点是权衡：video world model 在 photorealism 和 generalizability 上有优势，但 3D consistency 和 speed 仍弱；传统仿真平台物理强、可控性好，但泛化和 photorealism 受限；neural 3D/4D 渲染快、3D 一致性更好，但动态物理和开放世界泛化仍难。读这张表时不要把它当排行榜，而要先问任务更需要哪一列：训练机器人接触策略更需要物理，做开放世界视觉想象更需要泛化和真实感，做实时交互又会被速度卡住。
 
 因此短期更现实的方向可能是 hybrid system：
 

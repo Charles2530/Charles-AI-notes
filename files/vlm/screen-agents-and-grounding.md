@@ -62,6 +62,13 @@ $$
 2. **语义绑定**：把“订单详情”“保存草稿”“最近一次审批记录”对应到界面元素；
 3. **上下文消歧**：同名按钮很多时，到底该点哪一个。
 
+![SeeClick grounding to agent performance](../assets/images/paper-figures/vlm/seeclick-grounding-to-agent.png){ width="760" }
+
+<small>图源：[SeeClick: Harnessing GUI Grounding for Advanced Visual GUI Agents](https://arxiv.org/abs/2401.10935)，Figure 5。原论文图意：分析 GUI grounding performance 与 downstream agent task performance improvement 的相关性。</small>
+
+!!! note "图解：屏幕代理的核心短板往往是 grounding"
+    这张图的横轴是 GUI grounding 能力，纵轴是 agent 任务表现。曲线向上说明：界面元素定位越准，MiniWob、AITW、Mind2Web 这类下游任务越容易提升。它提醒我们不要只看“模型会不会解释界面”，而要看它能不能把指令落到可执行位置。屏幕代理里，坐标偏一点就可能点错按钮，所以 grounding 是执行能力的底座。
+
 ## 3. 屏幕代理与普通 VLM 的区别
 
 普通 `VLM` 输出往往是文本。  

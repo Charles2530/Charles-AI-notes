@@ -2,9 +2,15 @@
 
 量化的目标，是用更少的比特表示权重和激活，从而降低显存、带宽和推理成本。
 
-![低比特 LLM 量化地图](../assets/images/quantization/generated/low-bit-llm-quantization-map.png){ width="920" }
+![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="760" }
 
-**读图提示**：低比特量化不是单一算法，而是“数值格式、训练策略、推理策略、系统支持”共同决定的部署能力。真正落地时，先看硬件和 runtime 是否支持，再讨论 GPTQ、AWQ、QAT 或 KV cache 量化是否值得做。
+<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原论文图意：模型规模增长速度明显快于单卡 GPU 显存增长速度，量化要解决的首要问题就是把越来越大的模型放进有限显存和带宽预算里。</small>
+
+!!! note "图解：SmoothQuant Figure 1 为什么放在总览开头"
+    这张图的横轴不是某个算法，而是系统压力：模型规模增长速度快于单卡显存增长速度，部署边界会越来越早被显存和带宽碰到。量化不是“为了炫技把 bit 数压低”，而是为了解开这些边界。模型参数、激活、KV cache 和 runtime kernel 都会消耗显存与带宽；真正落地时，先看目标硬件和 runtime 是否支持，再讨论 GPTQ、AWQ、QAT 或 KV cache 量化是否值得做。
+
+!!! note "难点解释：为什么这张图比算法列表更重要"
+    量化新手容易先问“INT4、FP8、GPTQ、AWQ 谁更强”。但工程上更早的问题是：模型是否放得下、decode 时是否被带宽卡住、长上下文是否被 KV cache 卡住、kernel 是否原生支持低比特。SmoothQuant 这张图把问题拉回系统约束：量化的价值来自显存、带宽和吞吐的共同改善，而不是单独的压缩率。
 
 !!! tip "基础知识入口"
     量化里的 `FP8`、`INT4`、显存、带宽、kernel 和 runtime 都可以先看 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。如果涉及 QAT 或低比特训练，再补看 [优化与训练基础](../foundations/optimization-and-training-basics.md)。

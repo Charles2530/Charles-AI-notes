@@ -2,9 +2,12 @@
 
 模型训练不是只看 loss，模型能力也不是只看一个 benchmark 分数。要判断一个模型是否真的更好，必须把数据划分、指标选择、分桶评测和错误分析放在一起。
 
-![数据划分、指标与评测闭环](../assets/images/foundations/generated/data-metrics-evaluation-map.png){ width="920" }
+![Data Cards stakeholder typology 原论文图](../assets/images/paper-figures/foundations/data-cards-typology.png){ width="820" }
 
-**读图提示**：benchmark 是入口，不是结论。真正能支撑迭代的是固定样本、分桶指标、失败案例和上线回放。
+<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。原论文图意：把 dataset 文档相关角色分为 producers、agents 和 users，并说明不同角色在数据创建、使用、评估和影响中的责任与问题。</small>
+
+!!! note "图解：评测不是只有 test set"
+    这张表提醒你：数据和评测结论会被不同角色使用，也会影响不同人群。Train/validation/test 只是第一层划分；真正可信的评测还要说明数据由谁产生、谁会使用、谁会被影响、哪些样本代表真实风险。benchmark 是入口，不是结论。能支撑迭代的是固定样本、分桶指标、失败案例、上线回放和清楚的数据责任边界。
 
 !!! note "初学者先抓住"
     评测不是给模型打一个总分，而是判断模型在哪些场景可靠、在哪些场景危险。平均分只能说明整体趋势，分桶和失败样本才能指导下一步怎么改。
@@ -26,6 +29,9 @@
 | Test | 最终报告结果 | 不应参与调参 |
 
 如果用 test 集反复调参，test 集就会被污染，分数会越来越像“适配测试集”，而不是代表真实泛化。
+
+!!! note "常见误区：验证集可以无限次试到满意"
+    Validation set 本来用于调参，但反复围着同一批样本改 prompt、改数据、改超参，也会慢慢过拟合开发过程。更稳的做法是保留 holdout 或 shadow eval：平时少看它，只在关键节点检查改动是否真的泛化。
 
 ## 2. 指标必须匹配任务
 

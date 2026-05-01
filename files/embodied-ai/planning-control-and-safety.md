@@ -5,11 +5,14 @@
 
 **所以这一页强调的是**：高层智能很重要，但真正让系统站住脚的，仍然是规划、控制与安全。
 
-这张图把具身系统的执行链路拆成三层：高层负责目标分解，中层负责可执行轨迹和技能，低层负责力、速度和实时稳定性。右侧的安全守护不是“出错再调用”的模块，而是贯穿每一层的硬约束。
+SayCan 原论文图很适合解释高层语言规划为什么必须和低层可执行性绑定：LLM 可以判断某个技能是否符合指令，但 value function / affordance 才能判断当前场景里这个技能是否真的做得到。
 
-![规划控制与安全三层协作栈](../assets/images/embodied-ai/generated/embodied-planning-control-safety-stack.png){ width="920" }
+![SayCan LLM and affordance scores 原论文图](../assets/images/paper-figures/embodied-ai/saycan-figure-3-llm-affordance.png){ width="920" }
 
-**读图提示**：大模型可以让任务层更灵活，但不能替代低层控制器和安全层。真实系统里，高层越自由，越需要清晰的 ODD、速度限制、碰撞检查和人工接管边界。
+<small>图源：[Do As I Can, Not As I Say: Grounding Language in Robotic Affordances](https://arxiv.org/abs/2204.01691)，Figure 3。原论文图意：LLM 给候选技能打“是否符合指令”的分数，value functions 给技能打“当前环境是否可执行”的 affordance 分数，二者组合后选择下一步机器人动作。</small>
+
+!!! note "图解：SayCan 图里的 useful 和 possible"
+    左侧 LLM 更像任务层：它知道“把苹果放到桌上”需要先找苹果、拿苹果、再放置；但它不知道当前机器人能不能够到苹果、夹爪是否可抓、桌子是否在附近。右侧 value function / affordance 更像执行层：它不理解完整语言目标，但能评估某个技能在当前观测下是否可行。中间 combined score 才是 SayCan 的核心：选择既符合指令又能执行的下一步。真实系统里，高层越自由，越需要低层控制、安全约束和人工接管边界兜底。
 
 !!! note "初学者先抓住"
     具身系统不是“一个大模型直接控制所有电机”。更稳的结构通常是高层理解任务，中层规划轨迹，低层控制执行，安全层持续检查是否越界。

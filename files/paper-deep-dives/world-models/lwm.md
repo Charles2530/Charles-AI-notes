@@ -37,7 +37,8 @@ LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dre
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 1。原图展示 LWM 在 1 小时 YouTube compilation、超过 500 个 clips 上回答细粒度问题，并与 GPT-4V、Gemini Pro Vision、Video-LLaVA 做定性对比。</small>
 
-这张图的关键不只是“答对问题”，而是问题依赖长视频中很靠后的局部片段。普通 VLM 只能采样少量帧，容易错过证据；LWM 的目标是让模型直接把长视频帧 token 放进同一个上下文窗口。
+!!! note "图解：长视频 QA 图重点看证据跨度"
+    这张图的关键不只是“答对问题”，而是问题依赖长视频中很靠后的局部片段。普通 VLM 只能采样少量帧，容易错过证据；LWM 的目标是让模型直接把长视频帧 token 放进同一个上下文窗口。读这种图时要问三件事：证据是否在长视频远端，模型是否真的看到了足够帧，回答是否依赖细节而不是常识猜测。
 
 ## 核心问题
 
@@ -81,6 +82,9 @@ text tokens + image tokens + video frame tokens
 ![LWM model 原图](https://largeworldmodel.github.io/lwm/materials/model.png){ width="920" }
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 4。原图展示 LWM 是一个 autoregressive Transformer：视频帧经 VQGAN 转为 image tokens，文本经 BPE tokenizer 转为 text tokens，然后拼接进同一个 Transformer 预测下一个 token。</small>
+
+!!! note "图解：LWM 结构图的关键是统一 token 序列"
+    LWM 没有走“视觉编码器输出 embedding，再接 LLM”的常见路线，而是把文本、图像和视频都离散成 token，拼成同一个自回归序列。这样 text-to-image、video QA、image caption 和长文本任务都变成 next-token prediction 的不同格式。代价是 token 数暴涨：视频帧经过 VQGAN 后每帧有大量 image tokens，长视频很快到百万 token，所以 LWM 必须和 RingAttention 这类 exact long-context 训练方法绑定起来读。
 
 LWM 从 LLaMA-2 7B 初始化，保留 decoder-only Transformer 形态。视觉侧使用 aMUSEd 的 VQGAN tokenizer，把图像或视频帧转成离散 token。
 

@@ -2,11 +2,18 @@
 
 当 `DDIM`、`Euler`、`DPM-Solver` 已经把推理压到几十步后，下一步问题就变成了：能不能直接把几十步教师，压缩成几步甚至一步学生。
 
-下面这张图把几条加速路线放在同一张路线图里：Progressive Distillation 更像“逐级压缩教师步数”，Consistency/LCM 更像“让同一路径上的点直接映射到一致结果”，DMD/DMD2 更像“直接对齐最终分布”，Rectified Flow 则更像“把路径本身改得更适合少步走完”。
+DMD 原论文的核心图很适合说明“少步/一步生成”为什么不能只靠删采样步：student generator 需要同时接受回归信号和分布匹配信号，目标不是机械复刻 teacher 的每个中间状态，而是让最终生成分布靠近 teacher / data 分布。
 
-![扩散蒸馏与整流路线图](../assets/images/diffusion/generated/diffusion-distillation-rectified-roadmap.png){ width="920" }
+![DMD overview 原论文图](../assets/images/paper-deep-dives/diffusion/dmd/overview.png){ width="920" }
 
-**读图提示**：少步生成不是单纯把采样步数删掉。越接近一步生成，越需要重新验证文本对齐、细节锐度、模式覆盖和长尾稳定性，否则速度提升很容易换来不可控退化。
+<small>图源：[One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)，Figure 2。原论文图意：一步生成器 \(G_\theta\) 从噪声生成 fake image；一条支路用预计算 noise-image pairs 做 regression loss，另一条支路通过 real / fake score 差异形成 distribution matching gradient。</small>
+
+!!! note "图解：DMD 方法图里的两条训练信号"
+    图中 \(G_\theta\) 是一步 generator，它直接把噪声映射成 fake image。上方 regression branch 用预计算的 teacher pairs 稳住单样本对应关系，避免学生完全偏离教师轨迹；下方 distribution matching branch 把 fake image 加噪后交给 real / fake score models，用两者差异给 generator 一个“整体分布应该往哪里移动”的梯度。少步生成不是单纯把采样步数删掉；越接近一步生成，越需要重新验证文本对齐、细节锐度、模式覆盖和长尾稳定性。
+
+!!! example "有趣例子：把慢教程压成速成课"
+
+    Teacher 像一门 50 节课的绘画教程，每节只教一点构图、线条、明暗和细节。Student 若只上 4 节课，就不能简单删掉 46 节，而要把关键步骤重新编排成更大的学习跳跃。少步扩散蒸馏也是在重新组织这条学习路径。
 
 ## 少步蒸馏：从多步教师到 1-8 步学生 { #few-step-distillation }
 
@@ -14,9 +21,12 @@
 
 这件事不能理解成“把采样循环里的步数删掉”。如果原模型是在 30 步里逐渐修正构图、纹理、边缘、文字和条件对齐，那么删到 4 步后，每一步都必须承担原来好几步的信息量。少步蒸馏的核心，就是重新定义训练信号，让学生学会这种“粗粒度跳跃”。
 
-![少步蒸馏 teacher-student 示意图](../assets/images/diffusion/generated/few-step-distillation-teacher-student.png){ width="920" }
+![DMD2 method 原论文图](../assets/images/paper-deep-dives/diffusion/dmd2/method.png){ width="920" }
 
-**读图提示**：teacher 的轨迹细、慢、稳定；student 的轨迹粗、快、风险更高。蒸馏目标要同时约束轨迹、终点、分布和实际少步推理质量，否则学生很容易只学到“看起来像”，却在复杂 prompt、强 guidance 或细节区域退化。
+<small>图源：[Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)，Figure 3。原论文图意：DMD2 交替训练 generator、fake score function 和 GAN discriminator；generator 同时接收 distribution matching gradient 与 GAN loss。</small>
+
+!!! note "图解：DMD2 为什么多了 fake score 和 GAN 分支"
+    DMD2 图里有三组角色：generator 负责产生少步样本，fake score function 追踪当前 generator 的 fake distribution，GAN discriminator 额外约束视觉真实感。这样做的原因是 teacher 的轨迹细、慢、稳定，而 student 的轨迹粗、快、风险更高；只把 teacher 输出当标签会过于僵硬，只做分布匹配又容易不稳。fake score、real score 和 discriminator 合在一起，是在同时管训练信号稳定、分布覆盖和视觉锐度。
 
 ### 1. 为什么少步蒸馏和普通 teacher-student 不一样
 

@@ -12,6 +12,10 @@
 
     直接最大化奖励容易找到奇怪但高分的动作，尤其当世界模型不完美时。行为先验像一条护栏：它偏向真实数据里可执行、自然、稳定的动作轨迹，减少 planner 利用模型漏洞。
 
+!!! example "有趣例子：导航时不走奇怪捷径"
+
+    如果地图软件只看最短距离，可能会推荐翻墙穿过工地。行为先验就像“人通常会走人行道和门”的常识，帮助规划器避开模型里看似高分但现实不可执行的捷径。
+
 ## 规划为什么可以写成推断
 
 传统控制常写成：
@@ -41,6 +45,13 @@ p(\tau)\prod_{t=1}^{T}\exp(r(s_t,a_t))
 \]
 
 取对数后，奖励项推动轨迹更优，轨迹先验 \(p(\tau)\) 起到正则化作用。这也是为什么 planning as inference 常和 behavior prior、KL-regularized control、maximum-entropy RL 放在一起讨论。
+
+![Uncertain planning with latent variables](../assets/images/paper-deep-dives/world-models/jepa/figure-17-uncertain-planning.png){ width="860" }
+
+<small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 17。原论文图意：在不确定环境中，latent variables 表达不能从先验观测推出的预测信息；规划时可以采样多条 latent trajectory，并通过均值、方差或风险敏感目标选择动作序列。</small>
+
+!!! note "难点解释：为什么规划要保留多种未来"
+    如果世界模型只给一个平均未来，planner 会误以为环境是确定的；但真实场景里可能有遮挡目标、未观测意图或随机干扰。latent variable 让模型保留多条可能轨迹，规划器就能比较“平均收益高但风险大”和“收益略低但更稳”的选择。这也是 planning as inference 比单纯最大化一条 reward 轨迹更自然的地方。
 
 ## 这个视角对世界模型有什么用
 
@@ -81,6 +92,9 @@ z_{1:K} \rightarrow a_{1:T}
 2. 足够可解码，能还原可执行动作；
 3. 足够有语义，能表达任务阶段和技能；
 4. 与世界模型 latent 对齐，方便预测动作后果。
+
+!!! note "常见误区：潜在动作只是压缩"
+    如果潜在动作只是把原始控制序列压短，却不能稳定解码成可执行动作，也不能让世界模型预测不同选择的后果，那么它只是数据压缩。真正有用的 latent action 应该同时降低搜索难度、保留技能语义，并让 planner 能比较不同动作分支的风险和收益。
 
 ## 潜在动作如何学习
 

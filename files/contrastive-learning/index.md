@@ -5,11 +5,14 @@
 !!! tip "基础知识入口"
     对比学习依赖 embedding space、batch 内矩阵计算和 loss 优化。如果这些概念还不稳，可以先看 [张量与计算图](../foundations/tensors-shapes-and-computation-graphs.md)、[Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md) 和 [优化与训练基础](../foundations/optimization-and-training-basics.md)。
 
-下面这张图先把对比学习压缩成一个表示空间问题：原始样本经过 encoder 变成向量，训练目标不是直接输出类别，而是让正确匹配在 embedding space 里靠近，让不匹配样本保持足够距离。
+下面这张 SimCLR 原论文图先把视觉对比学习压缩成一个训练闭环：同一张图经过两种增强形成正对，encoder 和 projection head 得到表示，再用对比损失把正对拉近、把 batch 里的其他样本推远。
 
-![对比学习表示空间几何](../assets/images/contrastive-learning/generated/contrastive-learning-embedding-geometry.png){ width="920" }
+![SimCLR 原论文框架图](../assets/images/paper-figures/contrastive-learning/simclr-figure-1.png){ width="820" }
 
-**读图提示**：图里的 `Anchor` 是当前样本，`Positive` 是应该被拉近的匹配样本，`Negative` 是应该被推远的干扰项。真正难的是右侧三步：正样本定义、负样本选择、表示空间评估，任何一步错了，损失函数本身再漂亮也会学歪。
+<small>图源：[A Simple Framework for Contrastive Learning of Visual Representations](https://arxiv.org/abs/2002.05709)，Figure 1。原论文图意：SimCLR 从同一图像采样两种 augmentation，经过 encoder \(f(\cdot)\) 和 projection head \(g(\cdot)\)，用 contrastive loss 最大化同源视图表示的一致性。</small>
+
+!!! note "图解：SimCLR 图里的训练闭环"
+    先看图的左侧：同一张原图会被做两次随机增强，得到两条不同视图，它们在训练里被当作正样本对。中间的 encoder \(f(\cdot)\) 负责提取可迁移表示，projection head \(g(\cdot)\) 则把表示投到更适合做对比损失的空间。最后的 contrastive loss 不只是拉近这两个正样本，还会把 batch 中其他图像视为负样本推远。真正难的是三件事：增强不能破坏语义，batch 里的负样本不能含太多假负样本，projection head 学到的空间要能服务下游任务。
 
 **最经典的目标是 InfoNCE**：
 

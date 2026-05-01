@@ -272,7 +272,8 @@ x_t
 
 <small>图源：`Phased DMD`，Figure 2。原论文图意：在一维四点分布上比较完整区间训练、正确子区间训练和错误子区间目标。正确子区间目标能复现完整区间采样轨迹，错误目标会产生偏移。</small>
 
-这个 toy 实验很小，但它支撑了论文的核心理论点：如果中间 phase 直接用 \(\epsilon - x_s\) 之类的 naive target，fake score 会偏，DMD 更新方向就不再可靠。正确的子区间目标能让模型在 \((s,1]\) 里学到和完整 score matching 一致的轨迹。
+!!! note "图解：toy flow 图在验证子区间目标是否无偏"
+    这个 toy 实验很小，但它支撑了论文的核心理论点。左图是完整区间目标，等价于不拆 phase；中图说明只训练正确子区间时，采样轨迹仍能复现完整区间方向；右图说明如果中间 phase 直接用 \(\epsilon - x_s\) 之类的 naive target，fake score 会偏，DMD 更新方向就不再可靠。正确的子区间目标能让模型在 \((s,1]\) 里学到和完整 score matching 一致的轨迹。
 
 ## 训练设置
 
@@ -345,6 +346,9 @@ x_t
 
 <small>图源：`Phased DMD`，supplementary Figure 7。原论文图意：训练 phase 的 re-noising timestep 区间由采样 steps 和 timestep shift 决定。Wan 系列使用 shift 5，Qwen-Image 使用 shift 3。</small>
 
+!!! note "图解：timestep interval 图要和 SNR 分工一起看"
+    图里的 interval 不是随便切采样步，而是在规定每个 phase 训练时从哪些噪声强度重新加噪。高噪声 / 低 SNR 区间更负责全局结构、运动和大尺度布局，低噪声 / 高 SNR 区间更负责纹理、边缘和局部细节。timestep shift 会改变这些区间实际落点，所以 Wan 和 Qwen-Image 需要不同设置；这也是 Phased DMD 不能只说“训练几个 expert”而不说明 re-noising schedule 的原因。
+
 对于 Wan2.2，第一阶段只使用 high-noise model，也就是 low-SNR expert。这里的命名容易混淆：**high-noise model 对应低 SNR 区间**，主要负责结构和动态。论文在第一阶段还限制 re-noising timestep：
 
 | Task | Phase 1 re-noising clamp |
@@ -387,6 +391,9 @@ x_t
 </table>
 
 <small>图源：`Phased DMD`，Figure 3 右侧。原论文图意：对比 base、DMD2 和 Phased DMD 在 camera-following prompt 下的镜头控制。DMD2 更容易收成近景，Phased DMD 更接近 base model 的镜头运动。</small>
+
+!!! note "图解：视频对比图重点看 motion collapse"
+    左侧 parkour 样例看的是动作幅度：DMD2 容易把少步模型压成更保守的运动，Phased DMD 则让低 SNR phase 继续承担大尺度动态。右侧 camera-following 样例看的是镜头控制：如果模型为了稳定而收成近景，说明它牺牲了原 teacher 的运动和视角变化。Phased DMD 这些图想证明的是“少步蒸馏不只损失画质，也会损失运动分布”，而分 phase 训练能缓解这种退化。
 
 ### Table 2: Quantitative comparison of video generation performance
 
@@ -439,6 +446,9 @@ x_t
 
 <small>图源：`Phased DMD`，Figure 5。原论文图意：Qwen-Image 经 Phased DMD 蒸馏后的生成样例，展示文字渲染和复杂视觉生成能力仍被保留。</small>
 
+!!! note "图解：Qwen-Image 样例图主要看复杂能力是否被蒸馏掉"
+    文生图蒸馏很容易先保住简单主体，却丢掉文字渲染、复杂布局、多对象关系和细粒度风格。Qwen-Image 这组样例的读法是：少步 Phased DMD 不只要快，还要保留 teacher 在文字和复杂视觉生成上的能力。
+
 ## MoE 为什么在这里重要
 
 论文给出的解释很实用：扩散反向过程里的不同 SNR 段承担不同功能。
@@ -463,7 +473,8 @@ x_t
 
 <small>图源：`Phased DMD`，supplementary Figure 10。原论文图意：只用低 SNR / high-noise expert 时，视频已经具有全局结构和动态；再加高 SNR / low-noise expert 后，局部纹理和视觉细节被进一步补齐。</small>
 
-这解释了为什么 Phased DMD 对视频运动尤其有效。视频里的动态不是最后几步细节补出来的，而是低 SNR 阶段先决定的。如果 SGTS 把训练反复压成一跳，低 SNR expert 的动态建模能力会被削弱，最终表现为 motion intensity 下降。
+!!! note "图解：低 SNR 和高 SNR expert 各补什么"
+    左图只用 low-SNR / high-noise expert 时，视频已经有全局结构和主要动态，说明运动和粗布局是在高噪声阶段先确定的；右图加上 high-SNR / low-noise expert 后，局部纹理、边缘和视觉细节被补齐。这解释了为什么 Phased DMD 对视频运动尤其有效：视频里的动态不是最后几步细节补出来的，而是低 SNR 阶段先决定的。如果 SGTS 把训练反复压成一跳，低 SNR expert 的动态建模能力会被削弱，最终表现为 motion intensity 下降。
 
 ## 子区间选择：Reverse Nested Intervals
 
@@ -489,7 +500,8 @@ x_t
 
 <small>图源：`Phased DMD`，supplementary Figure 8。原论文图意：Disjoint Intervals 容易出现不自然色调和脸部结构退化；Reverse Nested Intervals 生成更正常。</small>
 
-为什么反而要让每个 phase 都覆盖高噪声区？论文的解释是：训练初期 generator 分布和真实分布差距很大。高 SNR 区间噪声低，fake 样本很容易落在 teacher 不可靠的区域；低 SNR / 高噪声区间会把 fake 和 real 分布都模糊掉，重叠更大，teacher score 更可靠。
+!!! note "图解：Reverse Nested Intervals 为什么更稳"
+    Disjoint Intervals 让每个 phase 只看自己的不重叠区间，问题是训练初期 generator 分布和真实分布差距很大，高 SNR / 低噪声区间里 fake 样本很容易落在 teacher score 不可靠的位置。Reverse Nested Intervals 让每个 phase 都覆盖到高噪声端，低 SNR / 高噪声会把 fake 和 real 分布都模糊掉，重叠更大，teacher score 更可靠。图里的脸部结构和色调差异，就是 score 可靠性差异在视觉上的表现。
 
 这个观察也解释了固定 timestep 的消融：
 
@@ -506,7 +518,8 @@ x_t
 
 <small>图源：`Phased DMD`，supplementary Figure 9。原论文图意：在 Wan2.1 T2I 的 vanilla DMD 消融中，只在低噪声 timestep `t=0.357` 注入噪声会训练失败；高噪声 timestep `t=0.882` 可以得到正常结果。</small>
 
-理论上任意 \(0<t<1\) 的 noised KL 都能反映 clean KL，但实践上 teacher score 的可靠性和 fake / real 分布重叠程度不同。高噪声注入更稳，这对 DMD 类训练尤其重要。
+!!! note "图解：固定 timestep 消融说明高噪声更像安全训练区"
+    理论上任意 \(0<t<1\) 的 noised KL 都能反映 clean KL，但实践上 teacher score 的可靠性和 fake / real 分布重叠程度不同。低噪声 `t=0.357` 时，fake 样本还保留很多 generator 自己的错误细节，teacher score 容易给出不稳定方向；高噪声 `t=0.882` 时，样本被充分扰动，real/fake 分布更重叠，训练更稳。这个消融解释了为什么 DMD 类训练经常不能只按理论随便采 timestep。
 
 ## 4-step 4-phase 的补充结果
 

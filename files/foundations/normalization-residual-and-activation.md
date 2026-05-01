@@ -2,9 +2,15 @@
 
 深层网络能稳定训练，不只靠模型结构，还靠一组看似基础但非常关键的组件：归一化、残差连接和激活函数。
 
-![归一化、残差与激活函数](../assets/images/foundations/generated/normalization-residual-activation-map.png){ width="920" }
+![ResNet residual block](../assets/images/paper-figures/foundations/resnet-figure-2-residual-block.png){ width="700" }
 
-**读图提示**：当模型变深、序列变长、精度变低时，数值稳定性会变成核心问题。Norm、residual 和 activation 是稳定训练的基本安全带。
+<small>图源：[Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)，Figure 2。原论文图意：残差块让网络学习 \(F(x)\)，再与 identity shortcut 的 \(x\) 相加，输出 \(F(x)+x\)。</small>
+
+!!! note "图解：ResNet 残差块在保留一条直通路"
+    图中的主分支学习 \(F(x)\)，shortcut 分支直接把输入 \(x\) 送到输出端，两者相加得到 \(F(x)+x\)。这意味着一层网络不必每次重写全部表示，而是可以只学习“在原输入上补一个修正量”。当模型变深、序列变长、精度变低时，数值稳定性会变成核心问题：Residual 提供信息与梯度直通路径，Norm 控制尺度，activation 提供非线性，三者一起构成深层网络的稳定训练基础。
+
+!!! note "难点解释：残差为什么让深层网络好训练"
+    如果一层最优行为接近“不改输入”，普通网络要学出 identity mapping；残差网络只需要把 \(F(x)\) 推近 0，再由 shortcut 保留 \(x\)。这把“每层都重写表示”改成“每层只补一个修正量”，梯度也能沿 shortcut 更直接地传回浅层。
 
 !!! note "初学者先抓住"
     Norm 控制数值尺度，Residual 保留原始信息通路，Activation 提供非线性。三者合在一起，才让很深的网络既能表达复杂关系，又不容易在训练中数值崩掉。

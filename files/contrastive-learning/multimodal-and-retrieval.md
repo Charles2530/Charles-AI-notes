@@ -3,11 +3,18 @@
 对比学习一旦进入多模态，最直接的落地形态就是检索系统。  
 它把“图像和文本是否说的是同一件事”这个问题，转成了共享向量空间中的距离问题。
 
-实际系统通常不是“模型算一个相似度就结束”，而是双塔召回、向量索引、reranker 和业务规则共同工作。下面这张图把图文检索的主链路画在一起。
+实际系统通常不是“模型算一个相似度就结束”，而是双塔召回、向量索引、reranker 和业务规则共同工作。CLIP 原论文 Figure 1 很适合先理解双塔多模态对齐的核心：图像和文本分别编码，然后通过 batch 内配对监督进入共享向量空间。
 
-![图文检索双塔召回与精排流程](../assets/images/contrastive-learning/generated/multimodal-retrieval-two-tower-rerank.png){ width="920" }
+![CLIP 图文对比学习原论文图](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="920" }
 
-**读图提示**：双塔模型负责把文本和图像放进同一个 embedding space，ANN index 负责快速召回 TopK，reranker 再用更重的模型精排。对比学习主要决定“召回池里有没有正确候选”，但最终排序还会被精排模型和业务规则改写。
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原论文图意：CLIP 用 image encoder 和 text encoder 预测 batch 中正确图文配对；测试时，text encoder 可把类别名或描述变成 zero-shot classifier。</small>
+
+!!! note "图解：CLIP 图里的双塔对齐"
+    训练时，一批图像和一批文本分别进入 image encoder 与 text encoder，得到两个向量矩阵；相似度矩阵的对角线是正确图文配对，非对角线就是 batch 内负样本。测试时，文本编码器可以把类别名或检索 query 变成向量，图像编码器把图片变成向量，两者在同一个 embedding space 里比较距离。注意这张图只展示“训练出共享空间”的核心，不是完整检索产品链路；落到系统里，ANN index 负责快速召回 TopK，reranker 再用更重的模型精排。
+
+!!! example "有趣例子：图书馆找书"
+
+    双塔召回像先按书名、主题和索引号把可能相关的书找出来；reranker 像馆员再根据你的具体问题精挑。召回阶段漏掉的书，后面再聪明的馆员也排不上去。
 
 ## 1. 双塔检索的基本形式
 
@@ -290,5 +297,3 @@ def retrieve_topk(query_emb, doc_emb, k=10):
 ### 还值得继续深挖的问题
 
 围绕 **对比学习在多模态与检索中的作用**，后续最值得继续加厚的通常是：表示漂移如何在线监控；哪些难例和长尾样本最能揭示几何问题；teacher/student 与 non-contrastive 路线在部署上的真实差异；以及一旦下游效果突然退化，应如何把问题回溯到训练目标、样本制度和评测桶。
-
-

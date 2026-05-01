@@ -2,9 +2,15 @@
 
 Attention 本身只计算 token 之间的相关性。它并不知道第一个 token 在前、第二个 token 在后，也不知道哪些 token 不应该被看见。位置编码和 mask 就是为了解决这两个问题。
 
-![位置编码、Mask 与上下文](../assets/images/foundations/generated/position-mask-context-map.png){ width="920" }
+![Transformer long-distance attention](../assets/images/paper-figures/foundations/attention-is-all-you-need-figure-3-long-distance-attention.png){ width="700" }
 
-**读图提示**：长上下文问题不是单纯“放更多 token”。位置、可见性、记忆选择、attention 成本和 KV cache 都会一起变化。
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 3。原论文图意：Transformer encoder 的某些 self-attention heads 会关注长距离依赖，例如围绕 `making ... more difficult` 的依赖关系。</small>
+
+!!! note "图解：attention head 为什么能连到远处词"
+    这张图展示的是某些 self-attention head 在句子中捕捉长距离依赖，而不是简单关注相邻词。要做到这一点，模型必须同时知道 token 顺序、哪些 token 可见、以及不同位置之间的相对关系。长上下文问题不是单纯“放更多 token”：模型能否找到远距离依赖，取决于位置编码能否表达顺序、mask 是否限定了正确可见性、attention 成本和 KV cache 是否可承受。
+
+!!! note "难点解释：为什么位置和 mask 是 attention 的前提"
+    Attention 只会比较 token 表示本身；如果没有位置编码，`A 在 B 前面` 和 `B 在 A 前面` 很难区分；如果 mask 写错，模型可能偷看未来、看到 padding，或者看不到本该可见的图像/文本 token。论文图里 attention 能连到远处词，是因为模型既有顺序信息，也有正确的可见性规则。
 
 !!! note "初学者先抓住"
     Transformer 本身像一袋 token，如果没有位置编码，它不知道顺序；如果没有 mask，它不知道哪些内容不该看。位置编码解决“谁在前谁在后”，mask 解决“谁能看谁”。

@@ -44,6 +44,13 @@ $$
 
 但缺点是灵活性下降，需要闭环重规划补偿。
 
+![ACT architecture](../assets/images/paper-figures/vla/aloha-act-algorithm.png){ width="820" }
+
+<small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705)，Figure 2。原论文图意：Action Chunking with Transformers (ACT) 用 CVAE 编码动作序列和关节观测，测试时用多视角图像、关节状态和 latent 生成一段 action sequence，并配合 temporal ensembling。</small>
+
+!!! note "图解：action chunk 是一小段可执行动作，不是一个抽象口号"
+    ACT 图里的彩色小块就是连续动作序列。模型一次预测多个未来动作，而不是每个控制周期只吐一个点；执行时还会把多个时刻预测出的动作块做 temporal ensembling，减少抖动。对初学者来说，关键是分清：chunk 让策略在短时间内更连贯，但它不是开环到底，仍然需要重新观察、重新预测和安全层过滤。
+
 ## 3. Chunk size 的权衡
 
 $K$ 太小，和逐步动作差别不大；$K$ 太大，又容易在执行中偏离真实状态。一个理想的 $K$ 应与技能时间尺度匹配。例如：

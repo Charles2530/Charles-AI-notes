@@ -149,6 +149,18 @@
       tip: "系统性能术语：Latency 是单次请求耗时，Throughput 是单位时间处理量，Memory Bandwidth 是数据搬运速度。三者经常互相拉扯。"
     },
     {
+      aliases: ["tail latency", "Tail Latency", "long-tail latency", "Long-tail Latency"],
+      tip: "Tail Latency：尾延迟，关注最慢一小部分请求的耗时。线上体验常被 P95/P99 决定，而不是平均延迟。"
+    },
+    {
+      aliases: ["head-of-line blocking", "Head-of-line blocking", "Head-of-Line Blocking", "HOL blocking"],
+      tip: "Head-of-line Blocking：队首阻塞。前面的慢请求占住队列或资源，导致后面的快请求也被迫等待。"
+    },
+    {
+      aliases: ["admission control", "Admission Control"],
+      tip: "Admission Control：准入控制。系统在入口判断请求是否接收、排队、降级或拒绝，避免过载把所有请求一起拖垮。"
+    },
+    {
       aliases: ["DDPM"],
       tip: "DDPM：Denoising Diffusion Probabilistic Models，现代扩散模型的经典起点，核心是逐步加噪和逐步去噪。"
     },
@@ -247,6 +259,10 @@
     {
       aliases: ["Progressive Distillation"],
       tip: "Progressive Distillation：渐进式蒸馏。逐轮把 teacher 的多步采样压缩成更少步，让学生逐步学会快速生成。"
+    },
+    {
+      aliases: ["teacher model", "Teacher Model", "student model", "Student Model"],
+      tip: "Teacher / Student：蒸馏语境里的教师模型和学生模型。教师通常质量更高但更慢，学生学习教师行为以换取更低成本或更少步数。"
     },
     {
       aliases: ["Phased DMD"],
@@ -481,6 +497,10 @@
       tip: "JIT：Just-In-Time，即时编译。运行时根据实际形状或硬件生成优化后的代码。"
     },
     {
+      aliases: ["compile cache", "Compile Cache", "compilation cache", "Compilation Cache", "cache hit", "Cache Hit", "cache miss", "Cache Miss"],
+      tip: "编译缓存：把按 shape 或硬件生成的 kernel 版本保存起来。Cache hit 表示复用成功，cache miss 可能带来冷启动延迟和线上抖动。"
+    },
+    {
       aliases: ["CUDA Graph", "Inductor", "XLA", "TVM", "MLIR"],
       tip: "编译与执行优化术语：CUDA Graph 减少 launch 开销，Inductor/XLA/TVM/MLIR 属于图编译或中间表示生态。"
     },
@@ -609,6 +629,10 @@
       tip: "OCR：Optical Character Recognition，光学字符识别。用于从图片、截图或文档中读取文字。"
     },
     {
+      aliases: ["evidence grounding", "Evidence Grounding", "field grounding", "Field Grounding", "field binding", "Field Binding"],
+      tip: "Evidence / Field Grounding：把答案或字段绑定到具体页码、区域框和原文证据。文档系统里，它决定结果是否可审计、可复核。"
+    },
+    {
       aliases: ["VQA"],
       tip: "VQA：Visual Question Answering，视觉问答。模型根据图像内容回答问题。"
     },
@@ -661,7 +685,19 @@
       tip: "量化与训练分析术语：Calibration 用代表性数据估计量化参数，Hessian 描述二阶敏感性，Outlier 是异常大值，Activation 是中间层输出。"
     },
     {
-      aliases: ["Dispatch", "Shape Bucket", "Workload"],
+      aliases: ["dequant", "Dequant", "dequantization", "Dequantization", "requant", "Requant"],
+      tip: "Dequantization / Requant：反量化是把低比特值还原到计算格式，requant 是再压回低比特。频繁转换会吃掉量化收益。"
+    },
+    {
+      aliases: ["layout", "Layout", "memory layout", "Memory Layout", "weight packing", "Weight Packing"],
+      tip: "Layout：排布方式，含义要看语境。文档/VLM 中常指页面二维布局；算子系统中常指张量内存排布和 weight packing，会影响访存与 kernel 效率。"
+    },
+    {
+      aliases: ["microbenchmark", "Microbenchmark", "micro-benchmark", "Micro-benchmark"],
+      tip: "Microbenchmark：只测单个 kernel 或小路径的基准。它能定位局部性能，但不能直接代表端到端服务或训练 step。"
+    },
+    {
+      aliases: ["Dispatch", "Shape Bucket", "shape family", "Shape Family", "Workload"],
       tip: "服务与 kernel 调度术语：Dispatch 决定请求或算子走哪条实现路径，Shape Bucket 把相近形状归桶，Workload 指实际负载分布。"
     },
     {
@@ -681,12 +717,24 @@
       tip: "世界模型术语：World Model 学习环境动态，Dreamer 在潜空间 imagined rollout 中学习策略，Rollout 指向未来展开轨迹。"
     },
     {
+      aliases: ["open-loop", "Open-loop", "closed-loop", "Closed-loop"],
+      tip: "Open-loop 指离线或不把输出反馈回系统的评测；Closed-loop 指模型输出会影响下一步输入的闭环评测，更接近真实决策和控制。"
+    },
+    {
       aliases: ["WM", "WAM", "VAM"],
       tip: "世界模型谱系缩写：WM 是 World Model，WAM 常指 World-Action Model，VAM 常指 Vision-Action Model。"
     },
     {
       aliases: ["MPC"],
       tip: "MPC：Model Predictive Control，模型预测控制。不断用模型预测未来，再滚动选择当前动作。"
+    },
+    {
+      aliases: ["behavior prior", "Behavior Prior", "behaviour prior", "Behaviour Prior"],
+      tip: "Behavior Prior：行为先验。它偏向数据中常见、自然、可执行的动作轨迹，避免 planner 选择模型漏洞里的奇怪高分动作。"
+    },
+    {
+      aliases: ["counterfactual", "Counterfactual", "near-miss", "Near-miss"],
+      tip: "Counterfactual / Near-miss：反事实关注“如果换个条件会怎样”，near-miss 是接近失败但未造成事故的样本，常用于风险和恢复训练。"
     },
     {
       aliases: ["Planning", "Affordance", "Teleoperation"],

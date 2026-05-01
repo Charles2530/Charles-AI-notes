@@ -2,9 +2,12 @@
 
 模型能不能真正部署，不只取决于算法，还取决于数值格式、显存、带宽、kernel 和 runtime 是否匹配。
 
-![数值、显存与运行时基础](../assets/images/foundations/generated/numerics-memory-runtime-map.png){ width="920" }
+![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="760" }
 
-**读图提示**：低精度格式能保存不等于能高效执行；模型文件变小也不等于线上更快。必须同时看数据在哪里、怎么搬、用什么 kernel 算。
+<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原论文图意：比较不同规模 GPT 模型在 BF16 与 FP8 训练下的 loss/perplexity 曲线，展示 FP8 在合适 scaling 与训练配置下可以接近 BF16 收敛行为。</small>
+
+!!! note "图解：低精度不是只看能不能表示"
+    这张图的重点不是“FP8 一定安全”，而是说明低精度能否用于训练，要看 loss 曲线是否稳定跟随高精度基线。FP8 节省显存和带宽，但必须配合合适的 scaling、累加精度、kernel 和异常值处理。低精度格式能保存不等于能高效执行；模型文件变小也不等于线上更快。必须同时看数据在哪里、怎么搬、用什么 kernel 算。
 
 !!! note "初学者先抓住"
     大模型系统里，“算得动”和“跑得快”不是一回事。真正速度常由 dtype、显存、带宽、kernel、runtime 和请求形态共同决定。
@@ -59,7 +62,7 @@ Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负
 
 例如：
 
-- GEMM kernel 负责矩阵乘。
+- GEMM kernel 负责高性能 dense 矩阵-矩阵乘路径。
 - Attention kernel 负责注意力计算。
 - Fused kernel 把多个操作合并，减少中间读写。
 - vLLM、SGLang、ONNX Runtime、TensorRT-LLM 负责更高层的执行调度。

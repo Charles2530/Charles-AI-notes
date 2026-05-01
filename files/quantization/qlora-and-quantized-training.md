@@ -4,6 +4,13 @@
 
 **大模型不必全量微调，也不必全精度驻留，依然能在单机或少量卡上完成高质量适配。**
 
+![QLoRA memory comparison](../assets/images/paper-figures/quantization/qlora-figure-1-memory.png){ width="720" }
+
+<small>图源：[QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)，Figure 1。原论文图意：对比普通 32-bit/16-bit 微调、LoRA 与 QLoRA 的显存组织；QLoRA 将冻结底座量化存储，只训练 adapter，并通过分页机制缓解显存峰值。</small>
+
+!!! note "难点解释：QLoRA 省的不是同一种显存"
+    全量微调要给底座权重、梯度和优化器状态都付钱；普通 LoRA 已经只训练 adapter，但底座通常仍以较高精度驻留；QLoRA 再把冻结底座压到 4bit，并让 optimizer 主要服务 LoRA 参数。它适合低资源任务适配，但不是低比特全量训练，也不保证最终 serving 一定最快。
+
 !!! note "初学者先抓住"
     QLoRA 的关键组合是：主模型用低比特存着省显存，只训练很小的 LoRA 增量。它适合任务适配，不等于低比特全量训练，也不等于部署一定最快。
 
@@ -408,4 +415,3 @@ $$
 ### 还值得继续深挖的问题
 
 围绕 **QLoRA 与量化训练**，后续最值得加厚的内容通常包括：不同任务桶上的量化敏感性；校准集构造和激活尾部分布；多机服务与多模型混部时的真实收益；以及一旦线上出现局部退化，应该如何快速回到更高精度路径。把这些写透，量化页才真正具备上线指导价值。
-
