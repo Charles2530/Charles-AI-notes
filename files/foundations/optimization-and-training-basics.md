@@ -58,11 +58,11 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 
 现代大模型训练通常还会配合：
 
-- learning rate warmup
-- cosine decay
-- gradient clipping
-- mixed precision
-- distributed optimizer
+- learning rate warmup：训练初期逐步升高学习率，避免参数还不稳定时被大步更新冲坏。
+- cosine decay：训练后期平滑降低学习率，让优化从快速探索转向细致收敛。
+- gradient clipping：限制梯度范数，减少 loss spike 或异常 batch 引发的发散。
+- mixed precision：用 FP16/BF16/FP8 等低精度加速计算，同时保留必要的高精度状态。
+- distributed optimizer：把参数、梯度或优化器状态分散到多卡，降低单卡显存压力。
 
 ## 4. 一个标准训练循环
 

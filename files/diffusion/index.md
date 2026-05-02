@@ -66,10 +66,10 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 **模型到底在预测**：
 
-- 噪声
-- 原图
-- score
-- velocity
+- 噪声预测：预测加入到 \(x_t\) 里的高斯噪声 \(\epsilon\)，实现简单、训练稳定，是 DDPM 主线常用形式。
+- 原图预测：直接预测干净样本 \(x_0\)，直觉清楚，但高噪声区的回归更困难。
+- score 预测：预测 \(\nabla_x \log p_t(x)\)，也就是把样本推向高概率数据区域的方向。
+- velocity 预测：预测信号与噪声混合路径上的速度 \(v\)，常用于 latent diffusion 和少步采样，尺度更平衡。
 
 ### 3. 求解器视角
 
@@ -82,10 +82,10 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 **速度提升究竟来自**：
 
-- 更好的采样器
-- 更少的步数
-- 蒸馏
-- 路径整流
+- 更好的采样器：在同一模型上用更准确的数值更新减少采样误差。
+- 更少的步数：直接压缩反向过程长度，用更少网络前向换速度。
+- 蒸馏：训练学生模型模仿多步教师，把推理成本转移到离线训练。
+- 路径整流：把噪声到数据的轨迹训练得更直，让粗步长也更可用。
 
 这四个视角串起来，基本就能覆盖从 DDPM 到 DMD2 / Rectified Diffusion 的主线。
 
@@ -97,18 +97,18 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 最常见的是预测噪声 \(\epsilon_\theta(x_t, t)\)，也可以预测：
 
-- 原图 \(x_0\)
-- score \(\nabla_{x_t} \log q(x_t)\)
-- velocity \(v\)
+- 原图 \(x_0\)：直接回归无噪声样本，适合建立直觉，但对高噪声时刻更敏感。
+- score \(\nabla_{x_t} \log q(x_t)\)：估计当前噪声分布的对数密度梯度，是 score-based SDE 视角的核心量。
+- velocity \(v\)：用混合坐标同时编码信号和噪声方向，常让少步采样与 guidance 更稳。
 
 ### 2. 怎么采样
 
 采样可以理解为解一个逆向 SDE 或 probability flow ODE，因此会出现：
 
-- `DDIM`
-- `Euler`
-- `Heun`
-- `DPM-Solver`
+- `DDIM`：改变采样路径，在不重训模型的前提下减少步数。
+- `Euler`：一阶数值积分方法，简单快速，但低步数时误差更明显。
+- `Heun`：二阶校正方法，先预测再修正，通常比 Euler 更平滑。
+- `DPM-Solver`：利用扩散 ODE 结构的专用高阶求解器，少步高质量采样更常用。
 
 ### 3. 怎么加速
 
@@ -169,10 +169,10 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 **这就自然引出了**：
 
-- Progressive Distillation
-- Consistency / LCM
-- DMD / DMD2 / Phased DMD
-- Rectified Flow / Rectified Diffusion
+- Progressive Distillation：逐级把教师采样步数减半，稳定地把多步模型压到少步。
+- Consistency / LCM：学习不同时间点映射到同一干净结果的一致性，常用于 1 到几步生成。
+- DMD / DMD2 / Phased DMD：用分布匹配蒸馏追求一步或极少步高质量生成。
+- Rectified Flow / Rectified Diffusion：重塑生成路径，让噪声到数据的轨迹更接近直线。
 
 ## 读扩散模型时最容易混淆的几件事
 

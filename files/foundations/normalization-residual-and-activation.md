@@ -53,10 +53,10 @@ y = x + F(x)
 
 常见激活：
 
-- `ReLU`
-- `GELU`
-- `SiLU`
-- `SwiGLU`
+- `ReLU`：把负值截断为 0，简单高效，但可能产生死亡神经元。
+- `GELU`：用平滑门控保留一部分小负值，BERT、GPT 等 Transformer 中很常见。
+- `SiLU`：也叫 Swish，形式平滑，常用于视觉模型和一些现代网络块。
+- `SwiGLU`：把门控机制放进 MLP，中间维度表达力更强，许多 LLM 采用类似变体。
 
 现代 Transformer 常用 GELU 或 SwiGLU 变体，因为它们在表达能力和训练稳定性之间表现较好。
 

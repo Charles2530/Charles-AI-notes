@@ -93,11 +93,11 @@ for batch in dataloader:
 
 训练时，反向传播需要用到前向中的中间激活。因此模型不只要存权重，还要存：
 
-- layer input
-- attention 中间结果
-- activation
-- normalization 统计或中间量
-- optimizer state
+- layer input：反传时常要用输入计算权重梯度，不能只保存输出。
+- attention 中间结果：Q/K/V、attention 权重或等价状态会占用大量显存。
+- activation：非线性层和 MLP 的中间输出，反向传播要用它们算局部梯度。
+- normalization 统计或中间量：均值、方差、RMS 或归一化后的值会影响梯度计算。
+- optimizer state：Adam 一类优化器还要保存动量和二阶矩，训练显存远大于推理。
 
 这解释了为什么推理能跑的模型，训练时可能显存不够。推理通常不需要保存完整计算图，而训练需要。
 
