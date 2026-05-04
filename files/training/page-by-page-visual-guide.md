@@ -48,9 +48,12 @@
 !!! note "图解：偏好数据是比较出来的"
     初学者容易把 reward 想成客观分数，但 InstructGPT 的 reward model 训练首先来自人类排序。它学到的是“同一问题下哪个回答更好”的相对偏好，而不是绝对真理。排序标准一旦偏向长答案、保守答案或固定格式，reward model 和后续 PPO 都会把这种偏差放大。
 
-![PPO Algorithm 1 原论文图](../assets/images/paper-figures/training/ppo-algorithm-1.png){ width="760" }
+```text
+PPO Algorithm 1:
+collect trajectories -> compute advantages -> run minibatch surrogate updates -> refresh old policy
+```
 
-<small>图源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1。原论文图意：多个 actor 用旧策略收集固定长度轨迹，计算 advantage estimates，再用若干个 minibatch epoch 优化 surrogate objective，最后把旧策略更新为当前策略。</small>
+<small>流程源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1。原论文算法要点：多个 actor 用旧策略收集固定长度轨迹，计算 advantage estimates，再用若干个 minibatch epoch 优化 surrogate objective，最后把旧策略更新为当前策略。</small>
 
 !!! note "图解：PPO 是用奖励做小步策略更新"
     在 RLHF 里，actor 可以理解成当前语言模型对一批 prompts 采样回答；advantage 表示某次回答相对预期好多少；surrogate objective 用来更新 policy。PPO 的重点不是“奖励越高改得越猛”，而是通过旧策略、概率比率、clip 和 KL 约束让更新保持在可控范围内。
@@ -84,7 +87,7 @@
 !!! note "图解：低比特训练先拆显存账"
     低比特训练不只是把权重压小。底座权重、adapter、optimizer states、activation、paged optimizer 峰值都会影响是否能训、能训多大 batch、能否稳定恢复。QLoRA 图适合建立一个实用直觉：训练显存由多类状态叠加而来，压低某一类状态后，还要看其他状态是否变成新瓶颈。
 
-![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="760" }
+![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="630" }
 
 <small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原论文图意：比较不同规模 GPT 模型在 BF16 与 FP8 训练下的 loss/perplexity 曲线，展示 FP8 在合适 scaling 与训练配置下可以接近 BF16 收敛行为。</small>
 

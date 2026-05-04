@@ -8,7 +8,7 @@
 
 DDPM 原论文的 graphical model 可以先帮你把训练问题定位清楚：训练不是直接从 \(x_T\) 一口气生成 \(x_0\)，而是在很多时间步上学习局部反向转移。后续的噪声预测、\(x_0\) 预测和 v-prediction，都是在这个骨架上选择不同参数化。
 
-![DDPM graphical model 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="760" }
+![DDPM graphical model 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
 
 <small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原论文图意：DDPM 将数据逐步加噪形成 \(x_1,\ldots,x_T\)，再学习反向链 \(p_\theta(x_{t-1}\mid x_t)\)。</small>
 

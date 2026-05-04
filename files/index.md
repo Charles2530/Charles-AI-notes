@@ -14,7 +14,7 @@
 
 !!! note "初学者先抓住"
 
-    第一次读不必按目录从头刷完。先用“我现在的问题是什么”来选入口：概念卡住读基础，工程卡住读训练/推理/量化/算子，论文卡住读导读和参考文献。每个专题都尽量先建立地图，再下钻细节。
+    第一次读不必按目录从头刷完。先用“我现在的问题是什么”来选入口：概念卡住读基础，工程卡住读训练/推理/量化/算子，论文卡住读专题讲解和参考文献。每个专题都尽量先建立地图，再下钻细节。
 
 ## 站点定位
 
@@ -35,15 +35,35 @@
 
 ## 内容地图
 
-这套站点按“公共底座、方法族、系统工程、评测治理、论文索引”组织，而不是按论文发布时间简单堆叠。阅读时可以把每个主题放到同一张图里：
+这套站点按“公共底座、方法族、系统工程、评测治理、论文深读”组织，而不是按论文发布时间简单堆叠。阅读时可以把每个主题放到同一张图里：
 
 | 层级 | 负责回答的问题 | 对应入口 |
 | --- | --- | --- |
 | 公共底座 | 张量、模型结构、训练、数值和运行时这些共通概念是什么 | [基础知识](foundations/index.md)、[术语表](glossary/index.md) |
-| 方法族 | 某类模型或技术为什么出现、核心假设是什么 | [扩散模型](diffusion/index.md)、[VLM](vlm/index.md)、[VLA](vla/index.md)、[世界模型](world-models/index.md)、[对比学习](contrastive-learning/index.md) |
+| 方法族 | 某类模型或技术为什么出现、核心假设是什么 | [扩散模型](diffusion/index.md)、[VLM/VLA](vlm/index.md)、[强化学习](reinforcement-learning/index.md)、[世界模型](world-models/index.md) |
 | 系统工程 | 训练、推理、量化、算子和部署如何落地 | [训练](training/index.md)、[推理](inference/index.md)、[量化](quantization/index.md)、[算子与编译器](operators/index.md) |
-| 评测治理 | 怎么判断方法真的有效，线上是否稳定、可控、可回滚 | 各主题评测页、[在线评测](inference/observability-and-online-evaluation.md)、[论文复现](paper-guides/reproducibility-and-replication-guide.md) |
-| 论文索引 | 想深入读原文时从哪里开始 | [论文导读](paper-guides/index.md)、[参考文献总表](references/index.md) |
+| 评测治理 | 怎么判断方法真的有效，线上是否稳定、可控、可回滚 | 各主题评测页、[在线评测](inference/observability-and-online-evaluation.md)、[评测与消融](training/evaluation-and-ablation-methodology.md) |
+| 论文深读 | 想深入读原文时从哪里开始 | [论文专题讲解](paper-deep-dives/index.md)、[参考文献总表](references/index.md) |
+
+## 核心学习路线
+
+如果目标是建立“从模型能力到世界模型闭环”的主线，可以按三类内容读：
+
+| 类型 | 作用 | 读法 |
+| --- | --- | --- |
+| 概念主线 | 建立从表示、生成、动作到世界模型的概念链 | 连续读基础、扩散、VLM/VLA、强化学习、世界模型和具身智能 |
+| 工程支撑 | 解释训练、推理、量化、算子、checkpoint 和评测如何让方法落地 | 遇到显存、吞吐、稳定性、成本或部署问题时回查 |
+| 论文深读 | 把关键论文拆成问题、方法、训练、实验和工程启发 | 先读正文建立地图，再用专题讲解精读关键论文 |
+
+若目标是理解世界模型，最短主线是：
+
+```text
+基础知识
+  -> VLM/VLA 中的 CLIP / InfoNCE 静态对齐
+  -> VLM/VLA 的视觉语言对齐、时序表征与动作接口
+  -> 世界模型的动作条件未来预测
+  -> 具身智能里的规划、控制和安全
+```
 
 ## 章节风格约定
 
@@ -58,51 +78,47 @@
 ## 主题入口
 
 <div class="atlas-card-grid">
-  <a class="atlas-card" href="foundations/index.md">
+  <a class="atlas-card" href="foundations/">
     <strong>基础知识</strong>
     <p>先打通张量、卷积、Transformer、概率生成、训练优化、数值精度和运行时这些公共底座。</p>
   </a>
-  <a class="atlas-card" href="training/index.md">
+  <a class="atlas-card" href="training/">
     <strong>训练</strong>
     <p>从预训练、SFT、对齐到 Megatron-LM、DeepSpeed、输入管线、稳定性与 checkpoint。</p>
   </a>
-  <a class="atlas-card" href="inference/index.md">
+  <a class="atlas-card" href="inference/">
     <strong>推理</strong>
     <p>覆盖服务系统、运行时、KV cache、解耦式 prefill、在线评测和容量治理。</p>
   </a>
-  <a class="atlas-card" href="operators/index.md">
+  <a class="atlas-card" href="operators/">
     <strong>算子与编译器</strong>
     <p>从 CUDA、Triton、Attention Kernel、通信重叠到 profiling、PTX 和硬件感知排障。</p>
   </a>
-  <a class="atlas-card" href="world-models/index.md">
+  <a class="atlas-card" href="world-models/">
     <strong>世界模型</strong>
     <p>从 RSSM、Dreamer 到 WM/WAM/VAM、视频世界模型、风险规划与反事实数据引擎。</p>
   </a>
-  <a class="atlas-card" href="quantization/index.md">
+  <a class="atlas-card" href="quantization/">
     <strong>量化</strong>
     <p>覆盖 PTQ、QAT、QLoRA、FP8、KV cache 量化与部署取舍。</p>
   </a>
-  <a class="atlas-card" href="diffusion/index.md">
+  <a class="atlas-card" href="diffusion/">
     <strong>扩散模型</strong>
     <p>从 DDPM、Score SDE、采样器到少步蒸馏、Rectified Flow、视频与多模态扩散。</p>
   </a>
-  <a class="atlas-card" href="vlm/index.md">
-    <strong>VLM</strong>
-    <p>覆盖架构训练、OCR、图表推理、Grounding、屏幕代理、检索和长尾评测。</p>
+  <a class="atlas-card" href="vlm/">
+    <strong>VLM/VLA</strong>
+    <p>从图文对齐、视觉连接器、视频时序表征，到动作 token、策略学习、闭环恢复和世界模型接口。</p>
   </a>
-  <a class="atlas-card" href="vla/index.md">
-    <strong>VLA</strong>
-    <p>从视觉语言动作模型、动作表示、遥操作数据到 Sim2Real、Benchmark 和部署安全。</p>
-  </a>
-  <a class="atlas-card" href="embodied-ai/index.md">
+  <a class="atlas-card" href="embodied-ai/">
     <strong>具身智能</strong>
     <p>关注任务谱系、规划控制、安全部署、人机协作、数据引擎和现实失败模式。</p>
   </a>
-  <a class="atlas-card" href="contrastive-learning/index.md">
-    <strong>对比学习</strong>
-    <p>从 InfoNCE、负样本、增广、自蒸馏到多模态检索和表示评测。</p>
+  <a class="atlas-card" href="reinforcement-learning/">
+    <strong>强化学习</strong>
+    <p>从 MDP、value、policy gradient、PPO/GRPO 到世界模型、RLVR 和 verl 代码流程。</p>
   </a>
-  <a class="atlas-card" href="references/index.md">
+  <a class="atlas-card" href="references/">
     <strong>参考文献总表</strong>
     <p>按扩散、VLM/VLA、世界模型、量化、训练系统、推理和算子整理核心论文与项目。</p>
   </a>
@@ -116,9 +132,9 @@
 | 想理解大模型怎么训出来 | [训练总览](training/index.md) | [低比特训练](training/low-bit-training-and-numerics.md)、[分布式训练](training/distributed-training-and-checkpointing.md) |
 | 线上服务慢、贵、不稳定 | [推理总览](inference/index.md) | [推理服务系统](inference/serving-systems.md)、[vLLM/SGLang/TensorRT-LLM](inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md) |
 | 模型太大，显存或吞吐不够 | [量化总览](quantization/index.md) | [量化运行时](quantization/quantization-runtimes-and-frameworks.md)、[低精度 Kernel](operators/low-precision-and-quantized-kernels.md) |
-| 想做图文、多模态、文档理解 | [VLM 总览](vlm/index.md) | [文档理解与 OCR](vlm/document-understanding-and-ocr.md)、[图表推理](vlm/charts-tables-and-structured-reasoning.md) |
-| 想做机器人、VLA 或具身系统 | [VLA 总览](vla/index.md) | [具身智能](embodied-ai/index.md)、[世界模型](world-models/index.md) |
-| 想系统读论文和找参考 | [论文导读](paper-guides/index.md) | [参考文献总表](references/index.md) |
+| 想从多模态理解过渡到世界模型 | [VLM/VLA 总览](vlm/index.md) | [世界模型](world-models/index.md)、[具身智能](embodied-ai/index.md) |
+| 想做机器人、VLA 或具身系统 | [VLM/VLA 总览](vlm/index.md) | [具身智能](embodied-ai/index.md)、[世界模型](world-models/index.md) |
+| 想系统读论文和找参考 | [论文专题讲解](paper-deep-dives/index.md) | [参考文献总表](references/index.md) |
 
 ## 推荐阅读路径
 
@@ -127,10 +143,10 @@
 | 阶段 | 目标 | 建议入口 | 进入下一阶段前最好能回答 |
 | --- | --- | --- | --- |
 | 0. 公共底座 | 先把模型、训练、数值和运行时语言统一 | [基础知识](foundations/index.md)、[术语表](glossary/index.md) | 一个问题属于表示、目标函数、优化、系统还是评测哪一层 |
-| A. 生成与多模态 | 理解从生成模型到图文/动作系统的主线 | [扩散模型](diffusion/index.md) -> [VLM](vlm/index.md) -> [VLA](vla/index.md) | 生成质量、条件控制、视觉理解和动作接口分别解决什么问题 |
+| A. 生成与多模态 | 理解从生成模型到图文/动作系统的主线 | [扩散模型](diffusion/index.md) -> [VLM/VLA](vlm/index.md) -> [世界模型](world-models/index.md) | 生成质量、条件控制、视觉理解、动作接口和未来预测分别解决什么问题 |
 | B. 训练到部署 | 把模型能力变成可运行、可观测、可回滚的系统 | [训练](training/index.md) -> [算子与编译器](operators/index.md) -> [推理](inference/index.md) -> [量化](quantization/index.md) | 同一个掉点、变慢或显存问题，应先查数据、优化、kernel、runtime 还是量化 |
-| C. 表征到智能体 | 从 embedding、内部模拟和闭环控制理解智能体能力 | [对比学习](contrastive-learning/index.md) -> [世界模型](world-models/index.md) -> [具身智能](embodied-ai/index.md) | 表征、世界预测、规划、动作执行和失败恢复之间如何传递证据 |
-| D. 论文与复现 | 用论文建立方法位置，再用正文页补工程判断 | [论文导读](paper-guides/index.md)、[参考文献总表](references/index.md) | 哪些论文必须精读，哪些只需抓方法差异，哪些值得复现或查源码 |
+| C. 表征到智能体 | 从视觉语言状态、强化学习、内部模拟和闭环控制理解智能体能力 | [VLM/VLA](vlm/index.md) -> [强化学习](reinforcement-learning/index.md) -> [世界模型](world-models/index.md) -> [具身智能](embodied-ai/index.md) | 表征、奖励、世界预测、规划、动作执行和失败恢复之间如何传递证据 |
+| D. 论文与复现 | 用论文建立方法位置，再用正文页补工程判断 | [论文专题讲解](paper-deep-dives/index.md)、[参考文献总表](references/index.md) | 哪些论文必须精读，哪些只需抓方法差异，哪些值得复现或查源码 |
 
 如果时间有限，可以按“0 + 一条主路线 + D”的方式读。不要一开始就横向铺开所有主题，否则容易记住很多名词，却不知道它们在系统里互相依赖什么。
 
@@ -144,16 +160,9 @@
 - 代表方法之间是什么关系
 - 训练、推理和部署分别卡在哪
 
-### 2. 作为论文导读手册
+### 2. 作为论文精读手册
 
-当你知道关键词，但不知道该先读哪些论文时，可以直接从：
-
-- [论文导读总览](paper-guides/index.md)
-- [训练与系统导读](paper-guides/training-systems-reading-guide.md)
-- [世界模型导读](paper-guides/world-models-reading-guide.md)
-- [量化与高效推理导读](paper-guides/quantization-efficient-serving-reading-guide.md)
-
-进入。
+当你知道关键词，但不知道关键论文应该读到什么深度时，可以先看 [参考文献总表](references/index.md) 定位源头，再进入 [论文专题讲解](paper-deep-dives/index.md) 看单篇论文的问题背景、方法结构、训练流程、实验结论和工程边界。
 
 ## 使用建议
 
@@ -172,7 +181,7 @@
   </div>
   <div>
     <strong>论文服务主线</strong>
-    <p>论文导读用于定位方法关系，专题正文用于补机制和工程边界，不建议只按年份顺序硬读。</p>
+    <p>参考文献用于回查源头，专题讲解用于补机制和工程边界，不建议只按年份顺序硬读。</p>
   </div>
 </div>
 
@@ -189,5 +198,5 @@ make serve
 - 每个主题至少覆盖“总览、方法、工程、评测、失败模式”几层。
 - 先解释方法关系，再罗列代表工作。
 - 重点写适用边界、系统约束和真实取舍，而不是只写定义。
-- 能沉淀为流程的内容，优先落到导读页和专题深度页。
+- 能沉淀为流程的内容，优先落到专题总览页和论文专题讲解页。
 - 对长期维护有价值的内容，优先补充真实案例、回归清单和决策复盘。

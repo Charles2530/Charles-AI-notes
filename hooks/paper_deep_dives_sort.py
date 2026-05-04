@@ -75,3 +75,10 @@ def on_nav(nav: Any, config: Any, files: Any) -> Any:
     docs_dir = Path(config["docs_dir"])
     _sort_sections(list(nav.items), docs_dir)
     return nav
+
+
+def on_post_build(config: Any) -> None:
+    site_dir = Path(config["site_dir"])
+    for path in site_dir.rglob("._*"):
+        if path.is_file():
+            path.unlink(missing_ok=True)

@@ -283,7 +283,7 @@ Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变
 这类问题说明：  
 训练低精度不能只测 `Linear` 层误差。Attention kernel、归一化、残差流和激活函数都要纳入排查。
 
-![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="760" }
+![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="630" }
 
 <small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原论文图意：比较不同规模 GPT 模型在 BF16 与 FP8 训练下的 loss/perplexity 曲线，展示 FP8 在合适 scaling 与训练配置下可以接近 BF16 收敛行为。</small>
 

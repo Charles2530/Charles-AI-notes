@@ -53,7 +53,6 @@
 | `instructgpt-labeler-ranking.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b) | 解释同题多答排序数据如何训练 reward model |
 | `instructgpt-main-preference.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 1 | 解释 RLHF 后训练需要看人类偏好胜率 |
 | `instructgpt-preference-facetted.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 4 | 解释不同 prompt 分布和 labeler 分组下的偏好结果 |
-| `ppo-algorithm-1.png` | [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1 | 解释 PPO 的 actor-critic 式采样、advantage 估计和 surrogate 优化流程 |
 | `ppo-clipped-surrogate.png` | [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Figure 1 | 解释 PPO clipped surrogate 如何限制策略概率变化 |
 
 训练页还复用了一些其他专题的论文图：

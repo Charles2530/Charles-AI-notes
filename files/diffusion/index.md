@@ -4,7 +4,7 @@
 
 DDPM 原论文里的 graphical model 很适合建立第一层直觉：左到右的 \(q\) 是人为定义的前向加噪链，右到左的 \(p_\theta\) 是模型要学习的反向生成链。读扩散模型时，先把这两条方向分清，后面的噪声预测、采样器、蒸馏和整流才不会混在一起。
 
-![DDPM graphical model 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="760" }
+![DDPM graphical model 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
 
 <small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原论文图意：DDPM 使用固定的正向扩散过程 \(q\) 将数据逐步推向噪声，再学习参数化反向过程 \(p_\theta\) 从噪声逐步生成数据。</small>
 
@@ -13,6 +13,9 @@ DDPM 原论文里的 graphical model 很适合建立第一层直觉：左到右�
 
 !!! tip "基础知识入口"
     如果你对 `UNet`、`DiT`、`score`、`ELBO`、`SDE/ODE` 或 `Cross-Attention` 还不熟，可以先看 [卷积与特征提取](../foundations/convolution-and-feature-extraction.md)、[Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md) 和 [概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md)。这些是扩散模型后续章节反复使用的公共概念。
+
+!!! note "放到世界模型主线里怎么理解"
+    扩散模型本身不是世界模型，它首先是一类生成分布的方法。但视频世界模型常会借用扩散/flow 的视频生成能力，再补动作条件、时间因果性、长期记忆和实时推理。读扩散专题时，主线应放在“生成路径、条件控制、少步蒸馏和视频扩散如何成为世界模拟器底座”，而不是只停在图像生成效果。
 
 ## 一个统一的数学骨架
 
@@ -199,7 +202,7 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 | 3. 推理与控制 | [条件控制与 Guidance](guidance-and-conditioning.md)、[采样与推理](inference.md) | CFG、solver、步数、随机性和文本对齐之间如何权衡 |
 | 4. 加速与变体 | [蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) | 少步采样、一步蒸馏、rectified 路线和视频扩散各自改的是哪一层 |
 
-如果只是快速定位方法，先看 [方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [训练配方与失效分析](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
+如果目标是过渡到世界模型，读完第 4 阶段后直接接 [视频与多模态扩散](video-and-multimodal-diffusion.md)、[Towards Video World Models 专题](../paper-deep-dives/world-models/towards-video-world-models.md) 和 [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md)。如果只是快速定位方法，先看 [方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [训练配方与失效分析](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
 
 ## 快速代码示例
 

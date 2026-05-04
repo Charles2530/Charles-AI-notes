@@ -2,7 +2,7 @@
 
 量化的目标，是用更少的比特表示权重和激活，从而降低显存、带宽和推理成本。
 
-![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="760" }
+![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="740" }
 
 <small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原论文图意：模型规模增长速度明显快于单卡 GPU 显存增长速度，量化要解决的首要问题就是把越来越大的模型放进有限显存和带宽预算里。</small>
 
@@ -14,6 +14,20 @@
 
 !!! tip "基础知识入口"
     量化里的 `FP8`、`INT4`、显存、带宽、kernel 和 runtime 都可以先看 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。如果涉及 QAT 或低比特训练，再补看 [优化与训练基础](../foundations/optimization-and-training-basics.md)。
+
+## 0. 先分清四层：格式、算法、算子、Infra
+
+量化最容易乱，是因为很多名字不在同一层。`INT4`、`GPTQ`、`Marlin kernel`、`vLLM` 和 `TensorRT-LLM` 不能直接横向比较，它们分别回答不同问题。
+
+| 层级 | 先问什么 | 典型对象 | 容易混淆的点 |
+| --- | --- | --- | --- |
+| 数值格式 | 数字怎么表示 | INT8、INT4、FP8、NF4、group-wise scale | bit 数低不等于一定更快，scale 元数据和硬件支持会改变收益 |
+| 量化算法 | 误差怎么控制 | PTQ、GPTQ、AWQ、SmoothQuant、QAT、QLoRA | PTQ 和 QAT 是训练时机差异，GPTQ/AWQ/SmoothQuant 是具体误差控制策略 |
+| 算子与 Kernel | 低比特怎么真的算 | W4A16 GEMM、W8A8 GEMM、dequant fusion、KV cache quant | 算法精度好，不代表 runtime 有高效 kernel |
+| Runtime / Infra | 谁负责加载、调度和服务 | vLLM、SGLang、TensorRT-LLM、ONNX Runtime、模型格式转换 | 同一个 checkpoint 换 runtime，速度、兼容性和掉点可能完全不同 |
+
+!!! note "难点解释：为什么 PTQ 和 QAT 不该拆成两条孤立目录"
+    `PTQ` 是训练完以后再量化，成本低、适合已有模型；`QAT` 是训练中模拟量化误差，成本高但更能适应低比特。它们都是“算法时机”层的问题。真正落地还要继续问：用什么数值格式、有没有对应 kernel、runtime 是否支持、线上评测是否可回退。`QLoRA` 又是另一类：它主要是量化底座上的参数高效微调，不等同于把模型直接低比特上线。
 
 ## 1. 一个统一数学骨架
 
@@ -74,17 +88,17 @@ Wx \approx \hat{W}\hat{x}
 
 因此量化从来不是“压得越低越先进”，而是“在目标场景里压到多低仍然划算”。
 
-## 4. 量化的三条主线
+## 4. 量化算法的三条主线
 
-### 后训练量化 PTQ
+### PTQ：训练完再压缩
 
 模型训练完后再量化。优点是便宜、快、适合现成模型。
 
-### 量化感知训练 QAT
+### QAT：训练时让模型适应误差
 
 在训练中显式模拟量化误差。优点是效果通常更稳，但训练成本更高。
 
-### 量化底座上的适配训练
+### QLoRA：量化底座上的适配训练
 
 如 `QLoRA`。目标不是只部署，而是让量化模型还能继续做高效微调。
 
@@ -227,20 +241,14 @@ arXiv:2409.16694 对低比特大语言模型量化做了一个很实用的整理
 
 ## 10. 阅读建议
 
-**建议顺序是**：
+**建议按层推进，而不是按算法名横跳**：
 
-1. [PTQ 与权重量化](ptq-gptq-awq-smoothquant.md)
-2. [QLoRA 与量化训练](qlora-and-quantized-training.md)
-3. [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)
-4. [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md)
-5. [服务栈与硬件权衡](serving-stacks-and-hardware-tradeoffs.md)
-6. [量化运行时与框架](quantization-runtimes-and-frameworks.md)
-7. [量化评测与部署清单](evaluation-and-deployment-checklist.md)
+1. 先读 [PTQ、GPTQ、AWQ、SmoothQuant](ptq-gptq-awq-smoothquant.md) 和 [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md)，理解误差从哪里来。
+2. 再读 [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[QLoRA 与量化训练](qlora-and-quantized-training.md)，分清“上线压缩”和“低资源适配训练”。
+3. 接着读 [FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md)、[服务栈与硬件权衡](serving-stacks-and-hardware-tradeoffs.md)，确认收益是否能被 runtime 兑现。
+4. 最后读 [评测与部署清单](evaluation-and-deployment-checklist.md) 和 [方法对照表](comparison-table.md)，把质量、吞吐、显存、成本和回退路径放到同一张表里验收。
 
-如果你关心多模态和具身，再补读：
-
-1. [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)
-2. [FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)
+如果你关心多模态和具身，再补读 [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)：这类系统的量化风险不只是回答掉点，还可能变成视觉定位漂移、动作抖动和闭环恢复失败。
 
 ## 11. 一个总判断
 

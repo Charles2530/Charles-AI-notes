@@ -22,6 +22,28 @@
 !!! note "难点解释：先分清 internal 和 external"
     `internal world model` 更像 agent 内部的抽象预测器，目标是帮助 reasoning、planning 和 decision making，不一定要生成像素级画面。`external world simulation model` 则要生成可观察、可交互、可检查的外部世界细节。Dreamer/RSSM 更偏前者的决策接口，LingBot-World、Genie、CausVid 这类视频世界模型更偏后者的交互模拟接口。读后面的页面时，先问清楚模型最后服务的是“内部决策”还是“外部模拟”。
 
+## 先用 Demo 建立直觉
+
+世界模型的 demo 最好不要只看“画面是否好看”，而要看它是否能维持同一个世界、是否能被用户动作或 agent 动作持续驱动、是否能在长时 rollout 中保持空间和对象一致。
+
+<div class="atlas-video-grid">
+  <figure class="atlas-video-demo">
+    <video controls muted playsinline preload="none">
+      <source src="https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/genie-3__project-genie__promo.webm" type="video/webm">
+    </video>
+    <figcaption>视频源：<a href="https://deepmind.google/models/genie/">Google DeepMind Genie 3 官方页面</a>。页面说明 Genie 3 用文本描述生成可实时探索的 photorealistic environments。</figcaption>
+  </figure>
+  <figure class="atlas-video-demo">
+    <video controls muted playsinline preload="none">
+      <source src="https://images.nvidia.com/aem-dam/Solutions/cosmos/cosmos-predict.mp4" type="video/mp4">
+    </video>
+    <figcaption>视频源：<a href="https://www.nvidia.com/en-us/ai/cosmos/">NVIDIA Cosmos 官方页面</a>，Cosmos Predict demo。页面把 Cosmos 定位为 world foundation models、tokenizers、guardrails 与数据处理管线组成的平台。</figcaption>
+  </figure>
+</div>
+
+!!! note "图解：看世界模型 Demo 时先看四件事"
+    第一，看是否是**可交互 rollout**：用户动作或控制信号是否持续影响未来，而不是一次性生成固定视频。第二，看**环境一致性**：角色走远再回来，场景布局、物体身份和方向感是否还能对上。第三，看**动作敏感性**：同一历史下换动作，未来是否合理分叉。第四，看**系统边界**：demo 能说明模型的视觉和交互潜力，但不能替代闭环成功率、风险校准和真实任务评测。
+
 <div class="atlas-meta-grid">
   <div>
     <strong>核心问题</strong>
@@ -93,6 +115,25 @@ $$
 | 动作联合建模 | 把动作和世界演化放入同一序列 | 动作未来和观测未来是否一致 | 行为先验、离线控制、多任务泛化 |
 | 几何/场景表示 | occupancy、BEV、object state、scene token | 是否保留碰撞、接触和空间结构 | 机器人、驾驶、风险判断 |
 | 数据引擎路线 | 用模型发现、生成和筛选高价值数据 | near-miss 和失败样本是否被覆盖 | 自我改进、主动采样、仿真闭环 |
+
+## 常见世界模型放在这条线里的位置
+
+下面这张表按“从 latent dynamics 到生成式模拟”的学习脉络整理代表模型。它不是最新榜单，而是帮助你判断一篇工作到底在学状态转移、视频未来、行为先验，还是可交互模拟器。
+
+| 模型 / 路线 | 核心贡献 | 与 VLM/VLA 的关系 | 站内专题 |
+| --- | --- | --- | --- |
+| [PlaNet](https://arxiv.org/abs/1811.04551) | 从像素学习 RSSM latent dynamics，并在潜空间里做 planning | 从“看见像素”走向“用潜状态预测动作后果”的经典入口 | [PlaNet 专题](../paper-deep-dives/world-models/planet.md) |
+| [Dreamer](https://arxiv.org/abs/1912.01603) | 在 learned latent dynamics 中 imagined rollout，并训练 actor-critic | 说明世界模型不只是预测器，还能直接服务策略学习 | [Dreamer 专题](../paper-deep-dives/world-models/dreamer.md) |
+| DreamerV2 / DreamerV3 | 把 Dreamer 路线扩展到离散 latent、更大任务集合和更通用训练配方 | 展示 latent imagination 如何从小环境走向更稳的通用控制 | [DreamerV2](../paper-deep-dives/world-models/dreamerv2.md)、[DreamerV3](../paper-deep-dives/world-models/dreamerv3.md) |
+| DayDreamer | 把 Dreamer 式 latent imagination 推向真实机器人任务 | 连接 VLA 和 model-based RL：真实机器人可以用世界模型减少实机试错 | 可先读 [机器人应用](applications-in-robotics-and-autonomous-driving.md) |
+| [JEPA](https://openreview.net/forum?id=BZ5a1r-kVsf) / [V-JEPA](https://arxiv.org/abs/2404.08471) | 在表征空间预测被遮挡或未来的 latent，而不是生成像素细节 | 更偏 internal world model 表征：帮助理解和规划，但不一定直接输出动作 | [JEPA](../paper-deep-dives/world-models/jepa.md)、[V-JEPA](../paper-deep-dives/world-models/v-jepa.md) |
+| [Genie](https://arxiv.org/abs/2402.15391) | 从互联网视频中学习可交互生成环境和 latent actions | 从视频数据走向“可操作世界模拟”的代表路线 | 可先读 [生成式模拟与视频世界模型](generative-simulation-and-video.md) |
+| LWM / 长上下文视频模型 | 用长上下文建模图文视频序列，增强跨时间记忆 | 提醒世界模型需要长时记忆，否则只能做短片段续写 | [LWM 专题](../paper-deep-dives/world-models/lwm.md) |
+| LingBot-World | 从视频基础模型继续训练成可交互世界模拟器 | 代表“视频生成底座 + 动作条件 + 因果化 + 少步蒸馏”的工程路线 | [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md) |
+| DreamZero / WAM 路线 | 把 world-action modeling 用于 zero-shot policy 或动作联合建模 | 更靠近 VLA：动作生成和世界演化不再完全分开，但评测必须看闭环收益 | [DreamZero 专题](../paper-deep-dives/world-models/dreamzero.md) |
+
+!!! note "初学者读世界模型时的抓手"
+    先问模型预测什么：latent state、未来帧、奖励、done、风险、动作还是完整轨迹。再问动作是否真的作为条件进入模型。最后问它被谁消费：planner、policy、风险模块、数据引擎，还是只给人看视频。能生成漂亮未来，不等于能改善决策；能拟合动作，也不等于理解动作后果。
 
 ## 两条训练路线
 
@@ -227,7 +268,7 @@ $$
 | 你正在关注 | 关键判断 | 读完后接到哪里 |
 | --- | --- | --- |
 | Latent dynamics | latent state 是否保留决策所需信息，rollout 误差是否会误导 policy | [规划即推断与潜在动作](planning-as-inference-and-latent-actions.md)、[训练](../training/index.md) |
-| 视频/生成式模拟 | 生成未来是否对动作敏感，而不是只顺着视频惯性续写 | [视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md)、[VLA](../vla/index.md) |
+| 视频/生成式模拟 | 生成未来是否对动作敏感，而不是只顺着视频惯性续写 | [视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md)、[VLM/VLA](../vlm/index.md) |
 | 数据引擎 | 模型生成的数据是否覆盖 near-miss、失败恢复和长尾状态 | [模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md)、[具身智能](../embodied-ai/index.md) |
 | 风险规划 | 不确定性和风险信号是否真的被 planner 或安全模块消费 | [不确定性与风险敏感规划](uncertainty-and-risk-aware-planning.md)、[部署与安全](../vla/deployment-and-safety.md) |
 

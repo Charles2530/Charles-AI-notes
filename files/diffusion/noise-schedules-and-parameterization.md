@@ -9,7 +9,7 @@
 
 下面这张 Improved DDPM 原论文图把训练损失拆到不同 diffusion step 上看：不同时间段贡献的学习压力并不均匀。低噪声区间更像“补纹理和边缘”，中噪声区间更像“学物体结构”，高噪声区间更像“从几乎看不见的信号里恢复语义”。
 
-![Improved DDPM VLB terms 原论文图](../assets/images/paper-figures/diffusion/improved-ddpm-figure-2-vlb-terms.png){ width="760" }
+![Improved DDPM VLB terms 原论文图](../assets/images/paper-figures/diffusion/improved-ddpm-figure-2-vlb-terms.png){ width="660" }
 
 <small>图源：[Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672)，Figure 2。原论文图意：分析 CIFAR-10 训练中 variational lower bound 各 timestep 项的贡献，显示不同 diffusion step 的损失权重和学习压力差异很大。</small>
 

@@ -2,7 +2,7 @@
 
 生成模型的目标不是记住训练样本，而是学习数据背后的分布，并从这个分布中采样出新样本。
 
-![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="760" }
+![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
 
 <small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原论文图意：前向过程 \(q(x_t\mid x_{t-1})\) 逐步加噪，反向生成过程 \(p_\theta(x_{t-1}\mid x_t)\) 逐步去噪，从噪声链条恢复数据样本。</small>
 

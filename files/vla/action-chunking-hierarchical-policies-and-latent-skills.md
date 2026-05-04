@@ -44,7 +44,7 @@ $$
 
 但缺点是灵活性下降，需要闭环重规划补偿。
 
-![ACT architecture](../assets/images/paper-figures/vla/aloha-act-algorithm.png){ width="820" }
+![ACT architecture](../assets/images/paper-figures/vla/aloha-act-algorithm.png){ width="720" }
 
 <small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705)，Figure 2。原论文图意：Action Chunking with Transformers (ACT) 用 CVAE 编码动作序列和关节观测，测试时用多视角图像、关节状态和 latent 生成一段 action sequence，并配合 temporal ensembling。</small>
 

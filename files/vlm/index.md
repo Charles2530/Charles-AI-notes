@@ -1,216 +1,146 @@
-# VLM 总览
+# VLM/VLA 总览：从视觉语言表征到动作世界模型
 
-视觉语言模型（VLM）研究的是如何联合处理视觉输入 \(x_v\) 与文本输入 \(x_t\)，并输出文本、标签、框、检索结果或工具调用。
+本章沿着一条通往世界模型的主线展开：先让模型把视觉和语言对齐，再把视觉压成可用状态，随后把状态接到动作策略，最后自然过渡到动作条件的未来预测。
 
 !!! tip "基础知识入口"
-    VLM 的公共底座是 `Tokenization`、`Embedding`、`Self-Attention`、`Cross-Attention`、位置编码和视觉特征提取。第一次读可以先看 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)、[位置编码、Mask 与上下文](../foundations/positional-encoding-masks-and-context.md) 和 [卷积与特征提取](../foundations/convolution-and-feature-extraction.md)。
+    这条线会反复用到 `Embedding`、`Cross-Attention`、视频 token、动作 token、行为克隆、动作块和闭环评测。第一次读可以先看 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)、[概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md) 和 [优化与训练基础](../foundations/optimization-and-training-basics.md)。
 
-**一个统一抽象是**：
+## 1. 主线问题
+
+VLM 通常回答：
 
 \[
 p_\theta(y \mid x_v, x_t)
 \]
 
-其中 \(y\) 可以是：
+也就是给定视觉输入 \(x_v\) 和文本输入 \(x_t\)，输出回答、框、标签或工具调用。VLA 进一步回答：
 
-- 一段回答：把视觉证据组织成自然语言，常见于 VQA、图表解释和文档问答。
-- 一个类别标签：把图像或图文对归到预定义类别，常见于分类和审核。
-- 一组框坐标：指出目标在图里的位置，服务 grounding、检测或屏幕点击。
-- 一次工具调用：根据图文上下文选择 OCR、搜索、计算器或业务 API。
-- 一个多步代理动作：把视觉理解接到连续操作流程中，如屏幕代理或机器人高层任务。
+\[
+\pi_\theta(a_t \mid o_{\le t}, l)
+\]
 
-![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="920" }
+也就是给定历史观测 \(o_{\le t}\) 和语言指令 \(l\)，输出动作 \(a_t\)。世界模型再往前走一步，回答：
+
+\[
+p_\theta(o_{t+1:t+H}, r, d \mid o_{\le t}, a_{t:t+H-1}, l)
+\]
+
+也就是预测动作之后的未来观测、奖励、终止、风险或其他可用于规划的信号。
+
+| 层级 | 核心问题 | 本章对应内容 |
+| --- | --- | --- |
+| VLM | 当前视觉和语言如何对齐 | CLIP、BLIP-2、视觉连接器 |
+| 视频表征 | 视觉状态如何带上时间和运动 | V-JEPA、长视频/latent 表征 |
+| VLA | 视觉语言状态如何变成动作 | RT-1/RT-2/RT-X、动作 token、行为克隆 |
+| 闭环策略 | 出错后如何恢复，动作如何安全执行 | action chunk、Diffusion Policy、ACT、恢复与安全 |
+| 世界模型 | 动作会让未来如何分叉 | DreamZero、LingBot-World、WAM/VAM |
+
+!!! note "先把 VLM/VLA 放进世界模型路线里"
+    本章不是把所有 VLM 应用逐个展开，而是沿着“视觉语义 -> 时序状态 -> 动作策略 -> 动作后果预测”推进。判断一项内容是否该放在这里，标准不是它是否热门，而是它是否能帮助回答：模型如何从看懂当前画面，走向在动作条件下预测未来。
+
+## 2. VLM：先建立静态语义空间
+
+![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }
 
 <small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原论文图意：用图像编码器和文本编码器把图文对拉到同一表示空间，并把类别文本 prompt 当作 zero-shot 分类器。</small>
 
-!!! note "图解：为什么 VLM 首先要学“图文对齐”"
-    CLIP 这张图说明了 VLM 的一个基础入口：先不急着让模型长篇回答，而是先让“图片”和“文字描述”在同一个向量空间里靠近。这样做的好处是检索、分类、召回都很高效；缺点是它主要学到全局匹配，未必能精确回答“左下角第二行金额是多少”或“点哪个按钮”。所以后续 VLM 会在这个对齐底座上继续加入 cross-attention、LLM 连接器、高分辨率阅读和 grounding 能力。
+!!! note "图解：CLIP 是静态对齐，不是世界动态"
+    CLIP 把图片和文本拉到同一 embedding 空间，让模型知道“这张图和这句话是否匹配”。这对 VLM 是起点：没有语义对齐，就谈不上语言指令和视觉状态交互。但 CLIP 只处理当前图文相似性，不知道对象如何运动，也不知道动作会造成什么后果。
 
-## 1. 为什么 VLM 会成为基础设施
+## 3. 连接器：把视觉压成可消费状态
 
-因为很多真实任务本来就是“看图 + 理解语言 + 做决策”：
+![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="920" }
 
-- 读图表并解释趋势
-- 看发票并抽取字段
-- 看屏幕并决定点击哪个按钮
-- 看机器人相机图像并理解指令
-- 看商品图并完成检索或问答
+<small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。原论文图意：冻结图像编码器，用查询式连接模块抽取视觉信息，并分别服务 image-text contrastive learning、image-grounded text generation 和 image-text matching。</small>
 
-可以说，VLM 是把“感知”和“语言接口”真正接起来的一层。
+!!! note "图解：Q-Former 的关键是信息瓶颈"
+    原始图像 patch 太多，LLM 不能无限接收。Q-Former 用少量查询 token 从视觉特征中抽取任务相关信息。这个问题会一直延续到世界模型：你必须决定哪些视觉信息进入状态 \(z_t\)，哪些细节可以丢掉。VLM 按当前语言任务压缩视觉，世界模型则要按未来可预测性和决策价值压缩视觉。
 
-## 2. 从输入到输出，VLM 在做什么
+## 4. 视频表征：从一张图走向状态
 
-**最常见的内部流程可以概括成**：
+世界模型需要的不是“图像 caption”，而是可持续更新的状态。视频自监督表征是从 VLM 走向世界模型的关键中间层。
 
-\[
-x_v \xrightarrow{f_v} h_v,\qquad x_t \xrightarrow{f_t} h_t,\qquad (h_v,h_t)\xrightarrow{P} z \xrightarrow{\text{decoder}} y
-\]
+![V-JEPA overview](../assets/images/paper-deep-dives/world-models/v-jepa/figure-1-overview.png){ width="920" }
 
-这里：
+<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](../paper-deep-dives/world-models/v-jepa.md)，Figure 1。原论文图意：V-JEPA 在视频 latent space 中预测 masked spatio-temporal regions 的目标表示，用 frozen evaluation 验证 motion-based 与 appearance-based 任务。</small>
 
-- \(f_v\) 是视觉编码器
-- \(f_t\) 是文本编码器或 LLM
-- \(P\) 是跨模态连接器或交互模块
+!!! note "图解：V-JEPA 为什么比普通 VLM 更靠近世界模型"
+    V-JEPA 不重建像素，而是在 latent space 预测被遮挡的时空区域表示。它逼模型学习对象、运动和上下文连续性。它还不是完整世界模型，因为缺少动作条件、奖励和规划接口；但它回答了世界模型的前置问题：怎样得到一个能表达视频动态的视觉状态。
 
-直觉上，VLM 至少要解决三件事：
+## 5. VLA：把视觉语言状态接到动作
 
-1. 看清局部视觉证据
-2. 把视觉实体和文本概念对上
-3. 按任务形式输出结果
+![RT-1-X and RT-2-X action token interface](../assets/images/paper-figures/vla/openx-rt1x-rt2x-model.jpg){ width="920" }
 
-## 3. 一个直观例子：咖啡店收银台
+<small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 2。原论文图意：RT-1-X 与 RT-2-X 都以图像和文本指令为输入并输出离散 end-effector actions；RT-2-X 把动作表示成另一种语言 token，与视觉语言数据一起训练。</small>
 
-输入一张咖啡店收银台照片和问题“哪种甜点卖完了？”  
-纯视觉模型只能识别图片区域；纯语言模型看不到价牌。VLM 则要把两者合在一起，读懂图上的手写标记 `Sold out`，并把视觉证据组织成答案。
+!!! note "图解：动作 token 是 VLM 到 VLA 的接口"
+    RT-X 图展示了一个直接桥接方式：输入仍是图像和语言，输出变成离散化的末端执行器动作。这样可以复用 Transformer 的序列建模能力，也方便把机器人数据和视觉语言数据放到同一训练范式里。代价是连续控制被量化，所以还需要低层控制器、动作平滑和安全过滤。
 
-**这个过程背后其实包含**：
+VLA 章节保留的重点是四件事：
 
-- OCR：先把图片里的可见文字读出来，避免只靠语言先验猜。
-- 文本条件理解：理解问题真正问的是哪个商品、字段或区域。
-- 目标定位：在图像中找到相关价牌、标记或物体位置。
-- 结果组织：把视觉证据整理成用户可读的答案或结构化字段。
+| 重点 | 为什么保留 |
+| --- | --- |
+| [数据与策略学习](../vla/data-and-policy-learning.md) | 行为克隆、covariate shift 和动作生成是 VLA 的基础 |
+| [动作表示与控制接口](../vla/action-representation-and-interfaces.md) | 动作 token、连续控制、坐标系决定策略能否执行 |
+| [动作分块与层级策略](../vla/action-chunking-hierarchical-policies-and-latent-skills.md) | 真实机器人通常需要一段短技能，而不是单步动作 |
+| [闭环恢复与安全](../vla/closed-loop-recovery-and-failure-analysis.md) | VLA 的价值在于执行后还能根据反馈修正 |
 
-## 4. VLM 的四个主要能力层
+常见模型可以按“离世界模型有多近”这样放：
 
-### 感知层
-
-**是否看清**：
-
-- 文本：小字、手写字、表格字段和界面标签是否读对。
-- 物体：主体、零件、商品或 UI 元素是否识别正确。
-- 布局：行列、层级、相对位置和页面结构是否理解。
-- 颜色：颜色属性是否分清，尤其在商品、图表和标注里很重要。
-- 关系：谁在谁旁边、谁属于哪一行、哪个按钮对应哪个标签。
-
-### 对齐层
-
-是否知道问题里说的“那个按钮”“左边那张表”“蓝色柱子”对应图里的什么。
-
-### 推理层
-
-**是否能基于视觉证据做**：
-
-- 比较：判断两个区域、对象或数值之间的大小和差异。
-- 统计：从图表、表格或多个对象里汇总数量与比例。
-- 多跳推理：先读局部证据，再跨区域组合成结论。
-- 因果解释：结合视觉证据说明趋势或结果背后的可能原因。
-
-### 执行层
-
-若接了工具或代理动作，是否真能：
-
-- 选对工具：知道什么时候该 OCR、检索、计算、框选或点击。
-- 调对参数：给工具传正确区域、字段、查询词或坐标。
-- 走对步骤：多步任务中顺序合理，前一步结果能正确进入下一步。
-
-## 5. 为什么 VLM 不是简单“给 LLM 插个眼睛”
-
-很多初学者会把 VLM 理解成“把图像特征喂给 LLM”。  
-这只说对了一部分。真正的难点在于：
-
-- 图像信号：同时包含颜色、纹理、布局、文字和局部细节，信息密度远高于普通 token 序列。
-- 文本序列：由离散符号组成，更抽象，也更依赖上下文和语义约定。
-- 输出形式：定位、检索、问答和代理动作需要不同训练目标与评测方式。
-
-因此一个好 VLM 不仅要语言强，还要具备：
-
-- 稳定视觉表征：换分辨率、裁剪或光照后，关键视觉证据仍能保住。
-- 可解释对齐：能说明文字问题对应图里的哪个区域或对象。
-- 可落地的系统设计：输出能接评测、工具、日志和回退，而不只是生成一句话。
-
-## 6. VLM 常见应用面
-
-### 文档理解
-
-例如：
-
-- 发票抽取
-- 合同审阅
-- 表格问答
-
-### 屏幕代理
-
-例如：
-
-- 理解界面
-- 点击控件
-- 多步操作业务系统
-
-### 多模态问答
-
-例如：
-
-- 图表分析
-- 医疗影像问答
-- 商品问答
-
-### 多模态检索
-
-例如：
-
-- 图搜文
-- 文搜图
-- 商品向量召回
-
-## 7. 三类最常见的工程路线
-
-### 双塔路线
-
-更偏检索和召回。
-
-### 视觉编码器 + LLM 路线
-
-更偏问答和代理。
-
-### 高分辨率文档路线
-
-更偏 OCR、布局、表格和长文档场景。
-
-## 8. 一个足够实用的理解方式
-
-如果把传统 CV 看成“模型会看”，LLM 看成“模型会说”，那么 VLM 真正追求的是：
-
-**让模型既看得见，又说得对，还能在必要时做得动。**
-
-## 9. 推荐阅读顺序
-
-若你是第一次系统看 VLM，建议顺序是：
-
-1. [架构与训练](architecture-and-training.md)
-2. [评测与工具使用](evaluation-and-tool-use.md)
-3. [方法对照表](comparison-table.md)
-
-先理解模型内部结构与训练目标，再看它如何在真实任务链路里被评测和部署。
-
-## 快速代码示例
-
-```python
-from PIL import Image
-from transformers import AutoProcessor, AutoModelForVision2Seq
-
-model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
-processor = AutoProcessor.from_pretrained(model_id)
-model = AutoModelForVision2Seq.from_pretrained(model_id, device_map="auto")
-
-image = Image.open("invoice.png")
-prompt = "提取发票中的金额、日期、开票方。"
-inputs = processor(images=image, text=prompt, return_tensors="pt").to(model.device)
-out = model.generate(**inputs, max_new_tokens=128)
-print(processor.decode(out[0], skip_special_tokens=True))
-```
-
-这段代码展示了 VLM 的标准推理入口：`processor` 负责把图像与文本统一编码，`model.generate` 负责多模态解码输出。用票据类 prompt 可以快速验证 OCR 与结构化信息抽取能力。
-
-
-## 学习路径与阶段检查
-
-VLM 专题建议从“看清 -> 对齐 -> 推理 -> 执行”四层推进。不要只看模型参数量，也不要只看通用问答分数。
-
-| 阶段 | 先读 | 读完要能回答 |
+| 模型族 | 它主要解决什么 | 到世界模型还缺什么 |
 | --- | --- | --- |
-| 1. 架构和数据 | [架构与训练](architecture-and-training.md)、[多模态数据治理与合成增强](multimodal-data-curation-and-synthetic-generation.md) | 视觉编码器、连接器、LLM、指令数据和合成数据分别影响哪类能力 |
-| 2. 视觉证据 | [文档理解与 OCR](document-understanding-and-ocr.md)、[图表、表格与结构化推理](charts-tables-and-structured-reasoning.md) | 模型是否真的读到了文字、布局、表格和图形关系，而不是靠语言先验猜 |
-| 3. 任务闭环 | [评测与工具使用](evaluation-and-tool-use.md)、[屏幕代理与 Grounding](screen-agents-and-grounding.md) | VLM 输出是答案、坐标、工具调用还是多步动作，不同输出如何验收 |
-| 4. 系统消费 | [检索、重排与向量系统](retrieval-reranking-and-vector-systems.md)、[鲁棒性与长尾评测](robustness-and-long-tail-evaluation.md) | 表征、检索、长尾评测和线上回放是否支撑同一套业务目标 |
+| CLIP / ALIGN | 图文语义对齐，建立静态 embedding 空间 | 时间、动作和未来预测 |
+| BLIP-2 / Flamingo | 让语言模型消费视觉信息并进行多模态回答 | 动作接口和闭环反馈 |
+| V-JEPA / video latent prediction | 从视频中学时序表征和可预测 latent | 动作条件、reward、risk 和 planner 接口 |
+| RT-1 / RT-2 / RT-X / OpenVLA | 把视觉语言状态映射到机器人动作 | 显式建模“动作之后会怎样” |
+| Diffusion Policy / ACT / π0 | 用 action chunk、扩散/flow 或连续动作专家生成更稳定动作 | 反事实未来、风险校准和长期规划 |
+| DreamZero / WAM / VAM | 联合建模未来视频与动作 | 真实闭环收益、失败恢复和安全评测仍需验证 |
 
-读完后可以继续接 [VLA 总览](../vla/index.md) 或 [具身智能总览](../embodied-ai/index.md)。判断是否可以进入下一阶段的标准很简单：你能否把一次错误拆成“没看清、没对齐、推理错、工具接口错、评测没覆盖”中的哪一种。
+## 6. 从 VLA 到世界模型：动作后果必须被建模
+
+VLA 主要学习“当前应该做什么”。世界模型还要学习“做了以后会怎样”。这两者的区别很关键：
+
+| 问题 | VLA / policy | 世界模型 / dynamics |
+| --- | --- | --- |
+| 输出 | 动作、动作块、技能调用 | 未来状态、奖励、终止、风险 |
+| 训练信号 | 示范动作、成功轨迹、偏好或奖励 | 下一状态、未来视频、反事实、risk label |
+| 主要失败 | 动作偏、接口不稳、闭环恢复差 | 未来不对动作敏感、rollout 漂移、风险低估 |
+| 典型消费方 | 控制器、安全层、机器人执行器 | planner、policy、数据引擎、风险模块 |
+
+![Joint video and action prediction](../assets/images/paper-deep-dives/world-models/dreamzero/figure-2-joint-video-action.png){ width="920" }
+
+<small>图源：[DreamZero: World Action Models are Zero-shot Policies](../paper-deep-dives/world-models/dreamzero.md)，Figure 2。原论文图意：展示 DreamZero 同时生成未来视频和动作，并强调预测动作与生成视频在未见任务上保持对齐。</small>
+
+!!! note "图解：DreamZero 展示了 VLA 和世界模型的合流点"
+    普通 VLA 可以只预测动作，普通视频模型可以只预测未来画面。DreamZero 把未来视频和未来动作一起建模，让动作必须解释视觉变化，视觉预测也必须对动作敏感。这就是通向 WAM/VAM 的关键：动作不再只是最终输出，而是未来世界分叉的条件变量。
+
+## 7. 技术博客视角：几条代表路线怎么接起来
+
+论文图能解释模型结构，技术博客和项目页更适合观察系统目标。把几个代表系统放在一起看，可以更清楚地看到 VLM/VLA 如何过渡到世界模型。
+
+| 系统 | 公开材料中的定位 | 对本章的启发 |
+| --- | --- | --- |
+| [OpenVLA](https://openvla.github.io/) | 开源 VLA generalist policy，展示真实机器人 rollout、语言 grounding、OOD 任务和失败恢复案例 | VLA 的第一步是把 VLM 表示变成可执行策略；OpenX 预训练能提升跨任务适应，但困难语义泛化仍依赖更强互联网预训练和机器人数据混合 |
+| [π0](https://www.physicalintelligence.company/blog/pi0) | Physical Intelligence 的 generalist robot policy，把互联网规模 VLM 预训练、多机器人数据和连续动作输出结合 | 说明 VLA 不只是“动作 token 化”：高频 dexterous control 可能更适合连续动作专家或 flow matching / diffusion 式动作生成 |
+| [Genie 3](https://deepmind.google/models/genie/) | Google DeepMind 将其定位为可实时探索的 interactive world model | 这条路线从可交互世界生成出发，重点是实时性、动作影响、世界一致性和长时记忆 |
+| [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/) | 面向 physical AI 的 world foundation model 平台，包含世界生成、视频数据处理、评估和 post-training 框架 | 说明世界模型不是单个视频模型，而会变成数据处理、合成数据、评估、后训练和仿真工具链 |
+
+!!! note "难点解释：为什么 OpenVLA / π0 还不是完整世界模型"
+    OpenVLA 和 π0 这类系统主要输出动作，它们的核心评价是动作是否完成任务、是否能泛化和恢复。Genie 3、Cosmos、LingBot-World 这类路线则更强调生成或模拟未来世界。真正的世界模型接口要把两者接起来：动作既是策略输出，也是未来预测的条件；未来预测不仅给人看，还要被 planner、policy、risk module 或数据引擎消费。
+
+!!! example "有趣例子：从会开车到会预判交通"
+    一个 VLA 像新手司机：看到红灯会刹车，看到行人会避让。世界模型像有经验的司机：它会预判旁车是否要变道、雨天刹车距离是否变长、如果现在加速会不会卡在路口。前者强调“现在做什么”，后者强调“做了以后会发生什么”。
+
+## 8. 推荐阅读顺序
+
+如果目标是理解世界模型，建议这样读：
+
+1. [视觉表征、连接器与时序状态](architecture-and-training.md)：理解 CLIP/InfoNCE 静态对齐、视觉 token、连接器和视频 latent。
+2. [数据与策略学习](../vla/data-and-policy-learning.md)：理解 VLA 为什么首先是策略学习问题。
+3. [动作表示与控制接口](../vla/action-representation-and-interfaces.md)：理解动作如何被 token 化、归一化和执行。
+4. [动作分块、层级策略与潜在技能](../vla/action-chunking-hierarchical-policies-and-latent-skills.md)：理解短技能和动作 chunk。
+5. [闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md)：理解策略如何进入真实闭环。
+6. [强化学习总览](../reinforcement-learning/index.md)：理解 reward、policy、PPO/GRPO 和 imagined rollout。
+7. [世界模型总览](../world-models/index.md)：进入动作条件未来预测、imagined rollout 和风险规划。
+
+读完本章后，判断是否可以进入世界模型，只看一个问题：你是否能清楚区分“模型输出动作”和“模型预测动作后果”。

@@ -448,7 +448,7 @@ SD v1.5 用 10:1 的 fake critic update ratio，比 ImageNet 和 SDXL 更高。�
 
     DMD2 完整模型的价值在于平衡三件事：GAN branch 提供真实图像分布信号，DMD score loss 保留 teacher diffusion 的条件控制，backward simulation 让多步输入接近推理时的 synthetic intermediate states。读这张表时应该同时看 FID、Patch FID 和 CLIP：FID 低不等于文生图更可用，Patch FID 更反映高分辨率局部细节，CLIP 才对应 prompt alignment。
 
-![DMD2 SDXL ablation](../../assets/images/paper-deep-dives/diffusion/dmd2/sdxl-ablation.png){ width="760" }
+![DMD2 SDXL ablation](../../assets/images/paper-deep-dives/diffusion/dmd2/sdxl-ablation.png){ width="740" }
 
 <small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 7。原论文图意：SDXL 消融显示，去掉 distribution matching 会伤害 text alignment 和 aesthetic quality；去掉 GAN 会产生过饱和、过平滑图像；去掉 backward simulation 会降低质量。</small>
 

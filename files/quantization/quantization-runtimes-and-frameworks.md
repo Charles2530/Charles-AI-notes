@@ -10,7 +10,7 @@
 3. ONNX Runtime 和 ONNX 量化应该怎么理解；
 4. 真实上线时应该按什么顺序选型和验证。
 
-![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="760" }
+![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="740" }
 
 <small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 6。原论文图意：在 Transformer block 中，部分算子可以走 INT8 路径，LayerNorm、Softmax、残差加法等敏感或不适合低精度的算子仍保留 FP16。</small>
 

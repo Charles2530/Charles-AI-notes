@@ -25,6 +25,43 @@
     body.classList.toggle("atlas-hide-right", !!prefs.hideRight);
     body.classList.remove("atlas-zoom-0", "atlas-zoom-1", "atlas-zoom-2");
     body.classList.add(`atlas-zoom-${prefs.zoom || 0}`);
+    window.requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent("atlas:layoutchange"));
+    });
+  }
+
+  function markPageContext() {
+    const path = window.location.pathname.replace(/\/index\.html$/, "/");
+    document.body.classList.toggle("atlas-paper-deep-dive", path.includes("/paper-deep-dives/"));
+  }
+
+  function directChild(parent, selector) {
+    return Array.from(parent ? parent.children : []).find((child) => child.matches(selector));
+  }
+
+  function markPaperDeepDiveNav() {
+    document.querySelectorAll(".atlas-paper-nav-root, .atlas-paper-nav-topic").forEach((node) => {
+      node.classList.remove("atlas-paper-nav-root", "atlas-paper-nav-topic");
+    });
+
+    const primary = document.querySelector(".md-sidebar--primary");
+    if (!primary) return;
+
+    const rootLink = Array.from(primary.querySelectorAll("a.md-nav__link[href]")).find((anchor) => {
+      return anchor.textContent.replace(/\s+/g, " ").trim() === "论文专题讲解";
+    });
+    const root = rootLink ? rootLink.closest(".md-nav__item--nested") : null;
+    if (!root) return;
+
+    root.classList.add("atlas-paper-nav-root");
+
+    const nav = directChild(root, "nav.md-nav");
+    const list = directChild(nav, "ul.md-nav__list");
+    Array.from(list ? list.children : []).forEach((item) => {
+      if (item.matches(".md-nav__item--nested")) {
+        item.classList.add("atlas-paper-nav-topic");
+      }
+    });
   }
 
   function applyDockState(dock, prefs, toggle) {
@@ -74,10 +111,10 @@
   }
 
   function mountReaderControls() {
-    if (document.querySelector(".atlas-reader-controls")) return;
-
     const prefs = Object.assign({ zoom: 0 }, loadPrefs());
     applyPrefs(prefs);
+
+    if (document.querySelector(".atlas-reader-controls")) return;
 
     const dock = document.createElement("div");
     dock.className = "atlas-reader-controls";
@@ -347,6 +384,8 @@
 
   function init() {
     if (!document.body) return;
+    markPageContext();
+    markPaperDeepDiveNav();
     mountReaderControls();
     mountPaperDeepDiveSorting();
     mountTableCopyButtons();

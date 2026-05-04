@@ -62,7 +62,7 @@ p(\tau)\prod_{t=1}^{T}\exp(r(s_t,a_t))
 3. reward / cost / risk；
 4. 隐变量或 belief state。
 
-设隐状态为 \(s_t\)，动作为 \(a_t\)，世界模型提供：
+设隐状态为 \(s_t\)，动作为 \(a_t\)。世界模型通常提供三类预测分布：
 
 \[
 p(s_{t+1}\mid s_t,a_t),\qquad

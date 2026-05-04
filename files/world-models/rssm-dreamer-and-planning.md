@@ -20,7 +20,7 @@
 !!! example "有趣例子：游戏存档与脑内演练"
     玩游戏前先存档，然后尝试不同路线，看哪条会掉血、哪条能拿奖励。世界模型就是把这种“先在脑中试几条路线”学成模型，减少真实环境里的试错成本。
 
-![Components of Dreamer](../assets/images/paper-deep-dives/world-models/dreamer/figure-3-components.png){ width="920" }
+![Components of Dreamer](../assets/images/paper-deep-dives/world-models/dreamer/figure-3-components.png){ width="890" }
 
 <small>图源：[Dream to Control](https://arxiv.org/abs/1912.01603)，Figure 3。原论文图意：Dreamer 先从经验数据中把观测和动作编码到 compact latent states 并预测 reward；再在 latent space 中想象 trajectories，训练 action 和 value；最后用真实 episode history 编码当前状态并执行动作。</small>
 

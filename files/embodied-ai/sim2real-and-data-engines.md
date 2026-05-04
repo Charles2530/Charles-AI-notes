@@ -8,7 +8,7 @@
 
 Open X-Embodiment 的数据集总览图很适合解释为什么具身智能需要数据引擎：不同机器人本体、场景、技能和物体分布差异很大，真实系统不能指望单一仿真或单一实验室数据覆盖所有长尾。
 
-![Open X-Embodiment dataset overview 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="860" }
+![Open X-Embodiment dataset overview 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="760" }
 
 <small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。原论文图意：统计 Open X-Embodiment 中不同 robot embodiment、scene、trajectory、skill 和 object category 的分布，展示跨机器人数据的异质性。</small>
 

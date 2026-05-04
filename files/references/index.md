@@ -18,8 +18,8 @@
 | --- | --- | --- |
 | 建立主题主线 | 先看每节“必读起点”，只抓问题定义和方法转折 | 对应主题总览页 |
 | 做方案设计 | 找“系统 / Benchmark / 开源实现”条目，核对工程约束 | 训练、推理、量化、算子和评测页面 |
-| 做论文笔记 | 从导读页确定精读论文，再在这里补相关工作 | [论文导读总览](../paper-guides/index.md) |
-| 做复现或调研 | 优先选有代码、数据、benchmark 或官方实现的条目 | [论文复现与可复现性导读](../paper-guides/reproducibility-and-replication-guide.md) |
+| 做论文笔记 | 从对应专题页确定精读论文，再在这里补相关工作 | [论文专题讲解](../paper-deep-dives/index.md) |
+| 做复现或调研 | 优先选有代码、数据、benchmark 或官方实现的条目 | [评测与消融方法学](../training/evaluation-and-ablation-methodology.md) |
 
 不要把这页当成从头到尾阅读的书单。更高效的方式是：遇到具体问题时回来查源头，再把结论写回对应主题页的机制、评测或工程边界里。
 
@@ -66,39 +66,28 @@
 5. [Imagen Video: High Definition Video Generation with Diffusion Models](https://arxiv.org/abs/2210.02303)  
    多级级联视频生成路线，对理解高分辨率视频生成系统很有帮助。
 
-## 2. VLM 与多模态模型
+## 2. VLM/VLA 与多模态到动作模型
 
-对应站内章节：[VLM](../vlm/index.md)。
+对应站内章节：[VLM/VLA](../vlm/index.md)。
 
-### 2.1 视觉语言预训练与指令微调
+### 2.1 视觉语言预训练与时序表征
 
 1. [Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)  
-   `CLIP` 是图文对齐、对比学习、多模态检索和后续 VLM 的基础。
+   `CLIP` 是图文对齐和后续 VLM 的基础。
 2. [Flamingo: a Visual Language Model for Few-Shot Learning](https://arxiv.org/abs/2204.14198)  
    早期强 VLM 代表，适合理解视觉编码器和语言模型之间的桥接。
 3. [BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)  
    `Q-Former` 是连接视觉特征和 LLM 的经典结构。
 4. [Visual Instruction Tuning](https://arxiv.org/abs/2304.08485)  
    `LLaVA` 让开源 VLM 进入指令微调时代，是理解 VLM 数据合成和对话微调的起点。
-5. [PaLM-E: An Embodied Multimodal Language Model](https://arxiv.org/abs/2303.03378)  
+5. [V-JEPA: Latent Video Prediction for Visual Representation Learning](https://openreview.net/forum?id=WFYbBOEOtv)
+   视频 latent prediction 是从静态 VLM 走向世界模型前置状态的重要路线。
+6. [PaLM-E: An Embodied Multimodal Language Model](https://arxiv.org/abs/2303.03378)
    多模态语言模型进入具身控制和机器人任务的重要节点。
-
-### 2.2 文档、图表、OCR 与 Grounding
-
-1. [LayoutLM: Pre-training of Text and Layout for Document Image Understanding](https://arxiv.org/abs/1912.13318)  
-   文档理解中“文字 + 坐标 + 布局”的基础路线。
-2. [Pix2Struct: Screenshot Parsing as Pretraining for Visual Language Understanding](https://arxiv.org/abs/2210.03347)  
-   适合连接截图理解、表格理解和结构化输出。
-3. [Donut: Document Understanding Transformer without OCR](https://arxiv.org/abs/2111.15664)  
-   OCR-free 文档理解代表。
-4. [ChartQA: A Benchmark for Question Answering about Charts with Visual and Logical Reasoning](https://arxiv.org/abs/2203.10244)  
-   图表问答 benchmark，适合评估“看懂图”和“会推理”是否同时成立。
-5. [Referring Expression Comprehension Survey / RefCOCO 系列](https://arxiv.org/abs/1608.00272)  
-   Grounding 和指代表达理解的长期基准入口。
 
 ## 3. VLA、机器人策略与具身智能
 
-对应站内章节：[VLA](../vla/index.md)、[具身智能](../embodied-ai/index.md)。
+对应站内章节：[VLM/VLA](../vlm/index.md)、[具身智能](../embodied-ai/index.md)。
 
 ### 3.1 机器人基础模型与 VLA
 
@@ -177,6 +166,12 @@
    从视频中学可交互世界模型，适合连接“视频生成模型”和“可控世界模型”。
 5. [Video Language Planning](https://arxiv.org/abs/2310.10625)  
    连接视频预测、语言规划和长程任务分解。
+6. [Genie 3 官方页面](https://deepmind.google/models/genie/)
+   官方 demo 适合观察实时探索、长时环境一致性和文本到可交互世界的系统形态。
+7. [NVIDIA Cosmos 官方页面](https://www.nvidia.com/en-us/ai/cosmos/)
+   官方 demo 适合理解 world foundation models 在 physical AI、预测、推理和数据管线中的平台化定位。
+8. [LingBot-World 官方 GitHub](https://github.com/robbyant/lingbot-world)
+   README 提供 Video Demo、Real-Time Interactive Demo 和推理脚本，适合把论文图和可运行系统接口对应起来。
 
 ### 4.4 自动驾驶、数据闭环与大规模仿真
 
@@ -256,29 +251,48 @@
 !!! note "为什么世界模型文献要单独强调训练与评测"
     世界模型的核心难点不只是“能不能生成未来帧”，而是生成的 latent 是否能支持下游规划、控制、反事实推理和泛化。重建 loss、next-frame prediction loss、FID 或视频视觉质量指标都只能回答一部分问题。更有价值的 benchmark 应该把下游任务泛化、rollout 误差累积、规划质量和交互控制成功率放到核心位置。
 
-## 5. 对比学习与表征学习
+## 5. 强化学习、后训练与世界模型
 
-对应站内章节：[对比学习](../contrastive-learning/index.md)。
+对应站内章节：[强化学习](../reinforcement-learning/index.md)。
 
-### 5.1 图文对齐与通用对比学习
+### 5.1 强化学习基础方法
 
-1. [A Simple Framework for Contrastive Learning of Visual Representations](https://arxiv.org/abs/2002.05709)  
-   `SimCLR` 是现代对比学习的基本范式入口。
-2. [Momentum Contrast for Unsupervised Visual Representation Learning](https://arxiv.org/abs/1911.05722)  
-   `MoCo` 用队列和动量编码器解决大规模负样本问题。
-3. [Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning](https://arxiv.org/abs/2006.07733)  
-   `BYOL` 是非对比自监督的重要入口。
-4. [Emerging Properties in Self-Supervised Vision Transformers](https://arxiv.org/abs/2104.14294)  
-   `DINO` 适合连接 ViT、自蒸馏和视觉表征。
-5. [Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)  
-   `CLIP` 也是多模态对比学习的中心论文。
+1. [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)
+   `DQN` 是深度强化学习的经典起点，适合理解 value learning、replay buffer 和 target network。
+2. [Asynchronous Methods for Deep Reinforcement Learning](https://arxiv.org/abs/1602.01783)
+   `A3C` 适合理解并行 actor、异步采样、entropy regularization 和现代 RL 系统中 rollout worker 的来源。
+3. [High-Dimensional Continuous Control Using Generalized Advantage Estimation](https://arxiv.org/abs/1506.02438)
+   `GAE` 是 PPO/actor-critic 中常见的 advantage 估计方法，重点看 bias-variance tradeoff。
+4. [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)
+   `PPO` 是现代 RLHF 和很多 actor-critic 训练栈的核心算法入口。
+5. [Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor](https://arxiv.org/abs/1801.01290)
+   `SAC` 适合理解 off-policy actor-critic、maximum entropy objective、reward scale 和探索稳定性。
+6. [Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems](https://arxiv.org/abs/2005.01643)
+   `Offline RL` 适合理解固定数据集训练、behavior policy、support constraint、trajectory stitching 和机器人数据复用。
+7. [DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models](https://arxiv.org/abs/2402.03300)
+   `GRPO` 的重要来源之一，适合理解组内相对奖励如何减少 critic 依赖。
 
-### 5.2 评测与失败模式
+### 5.2 LLM/VLM 后训练与 verl
 
-1. [An Empirical Study of Training Self-Supervised Vision Transformers](https://arxiv.org/abs/2104.02057)  
-   适合对照不同自监督训练策略。
-2. [Understanding Contrastive Representation Learning through Alignment and Uniformity on the Hypersphere](https://arxiv.org/abs/2005.10242)  
-   `alignment / uniformity` 是解释对比学习几何结构的常用框架。
+1. [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
+   `InstructGPT` 是 SFT、reward model 和 PPO/RLHF 三步流程的基础论文。
+2. [HybridFlow: A Flexible and Efficient RLHF Framework](https://arxiv.org/abs/2409.19256)
+   `HybridFlow / verl` 适合理解大模型 RLHF 为什么需要 dataflow、worker、rollout backend 和资源映射。
+3. [A Framework for Training Large Language Models for Code Generation via Proximal Policy Optimization](https://i.cs.hku.hk/~cwu/papers/gmsheng-NL2Code24.pdf)
+   适合从代码生成任务看 PPO 后训练的数据、奖励和系统约束。
+
+### 5.3 强化学习与世界模型
+
+1. [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)
+   `PlaNet` 是从像素学习 RSSM latent dynamics 并做 latent-space planning 的关键论文。
+2. [Dream to Control: Learning Behaviors by Latent Imagination](https://arxiv.org/abs/1912.01603)
+   `Dreamer` 把 world model 变成 imagined actor-critic 的训练环境。
+3. [Mastering Diverse Domains through World Models](https://arxiv.org/abs/2301.04104)
+   `DreamerV3` 适合理解跨任务鲁棒 world model RL 的稳定化设计。
+4. [TD-MPC2: Scalable, Robust World Models for Continuous Control](https://arxiv.org/abs/2310.16828)
+   `TD-MPC2` 连接 decoder-free latent world model、TD learning 和 MPC。
+5. [RLVR-World: Training World Models with Reinforcement Learning](https://arxiv.org/abs/2505.13934)
+   `RLVR-World` 展示如何用可验证奖励直接优化语言和视频世界模型的任务指标。
 
 ## 6. 量化、数制与低比特训练
 

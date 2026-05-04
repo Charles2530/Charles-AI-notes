@@ -28,6 +28,23 @@
   </div>
 </div>
 
+!!! note "在全站主线里的位置"
+    算子与编译器专题是底层工程支撑。它不会直接解释“什么是世界模型”，但会决定视频世界模型、长上下文 VLA、实时 rollout 和大规模训练能不能跑得动。主线学习时不必先钻进所有 kernel；当你遇到显存、带宽、延迟、吞吐或数值稳定性问题，再回到这里定位瓶颈。
+
+## 先看分层：不要把案例和基础概念放同一层
+
+算子章节现在按四层读：
+
+| 层级 | 解决的问题 | 典型页面 |
+| --- | --- | --- |
+| 执行模型 | GPU 怎么执行、内存怎么搬、编译栈怎么把高层算子落到 kernel | CUDA、Triton、CUTLASS/CuTe、PTX/SASS |
+| 热点算子 | 大模型最常见的计算和访存瓶颈是什么 | GEMM、Attention、Reduction/Norm、低精度 Kernel |
+| 系统场景 | 训练、推理、长上下文、MoE、通信里算子如何组合 | KV Kernel、FP8 optimizer、通信重叠、拓扑、MoE |
+| 案例与进阶 | 某个具体库或某类 shape 特化如何落地 | DeepGEMM、Kernel 成本模型、高级模式 |
+
+!!! note "难点解释：DeepGEMM 不是 GEMM 的基础定义"
+    `GEMM` 是 dense matrix-matrix multiplication 的通用计算形态；`DeepGEMM` 是围绕 FP8、JIT、Hopper/Blackwell、grouped GEMM 和 MoE serving 的特化库案例。把它们放同一层会误导初学者：应该先理解 MatMul/GEMM、tiling、layout、epilogue、dtype 和 dispatch，再读 DeepGEMM 这类工程化案例，才能看出它到底优化的是哪一段。
+
 ## 推荐入口
 
 <div class="atlas-card-grid">
@@ -39,11 +56,11 @@
     <strong>Triton 编程模型与自动调优</strong>
     <p>理解更高层的块级编程和自动调优思路，建立与手写 CUDA 的互补视角。</p>
   </a>
-  <a class="atlas-card" href="deepgemm-fp8-gemm-and-mega-moe.md">
+  <a class="atlas-card" href="deepgemm-fp8-gemm-and-mega-moe/">
     <strong>DeepGEMM 解读</strong>
     <p>从 FP8 GEMM、JIT、TMA、grouped GEMM 到 Mega MoE，读懂新一代大模型算子库在优化什么。</p>
   </a>
-  <a class="atlas-card" href="deepgemm-source-and-integration.md">
+  <a class="atlas-card" href="deepgemm-source-and-integration/">
     <strong>DeepGEMM 源码与接入</strong>
     <p>补充源码阅读顺序、API 地图、调用路径和真实服务接入前的检查清单。</p>
   </a>

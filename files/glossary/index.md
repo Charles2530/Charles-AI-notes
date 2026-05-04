@@ -8,7 +8,7 @@
 
 | 使用场景 | 建议做法 |
 | --- | --- |
-| 读论文时遇到缩写 | 先确认基本含义，再回到论文导读判断它改的是训练、推理、系统还是评测哪一层 |
+| 读论文时遇到缩写 | 先确认基本含义，再回到对应专题页判断它改的是训练、推理、系统还是评测哪一层 |
 | 排查系统问题 | 先区分术语属于训练、推理、量化、runtime 还是部署工具，避免把不同层的问题混在一起 |
 | 扩写新页面 | 新术语优先补到这里，再从正文链接回来，减少各页重复解释 |
 
@@ -20,9 +20,13 @@
 | `AdamW` | Transformer 训练中常用优化器，把 weight decay 与梯度更新解耦。 |
 | `DPO` | Direct Preference Optimization，常用偏好对齐方法，直接利用偏好对优化策略分布。 |
 | `ELBO` | Evidence Lower Bound，变分推断目标，在扩散模型和世界模型中常出现。 |
+| `GRPO` | Group Relative Policy Optimization，用同一输入的多次采样做组内相对奖励，常用于可验证奖励后训练。 |
 | `LoRA` | Low-Rank Adaptation，用低秩增量替代全量参数更新的参数高效微调方法。 |
+| `PPO` | Proximal Policy Optimization，限制新旧策略差距的策略优化方法，是 RLHF 经典算法。 |
 | `QAT` | Quantization-Aware Training，在训练中模拟量化误差，让模型适应低比特约束。 |
 | `PTQ` | Post-Training Quantization，训练完成后再进行量化。 |
+| `RLHF` | Reinforcement Learning from Human Feedback，用人类偏好或 reward model 优化模型行为。 |
+| `RLVR` | Reinforcement Learning with Verifiable Rewards，用规则或任务指标等可验证奖励优化模型。 |
 | `SFT` | Supervised Fine-Tuning，用高质量示范数据教模型遵循任务格式和行为。 |
 
 ## 推理与服务系统
@@ -69,9 +73,9 @@
 | 术语 | 含义 |
 | --- | --- |
 | `CLIP` | Contrastive Language-Image Pre-training，图文对齐和多模态检索代表方法。 |
-| `Embedding` | 向量表示。检索和对比学习中，embedding 空间几何很重要。 |
+| `Embedding` | 向量表示。检索、VLM 对齐和状态建模中，embedding 空间几何很重要。 |
 | `Hard Negative` | 困难负样本，看起来很像但关键语义不同的负样本。 |
-| `InfoNCE` | 对比学习经典目标，要求模型把正确匹配项排到候选最前。 |
+| `InfoNCE` | 图文/样本匹配常用目标，要求模型把正确匹配项排到候选最前。 |
 | `MoCo` | Momentum Contrast，通过动量编码器和队列维护大量负样本。 |
 | `BYOL` | Bootstrap Your Own Latent，不显式依赖负样本的自监督方法。 |
 | `RAG` | Retrieval-Augmented Generation，用检索结果增强生成模型。 |
@@ -80,9 +84,15 @@
 
 | 术语 | 含义 |
 | --- | --- |
+| `Action` | agent 或控制器执行的动作，在 LLM 中可对应 token，在机器人中可对应末端位姿或关节控制量。 |
+| `Advantage` | 某个动作相对当前状态平均预期有多好，常用于 PPO/GRPO 等策略更新。 |
+| `Bellman Equation` | 把当前价值拆成当前奖励和下一状态价值的递推关系，是 value learning 和 model-based planning 的基础。 |
 | `World Model` | 面向决策的环境预测模型，学习世界如何随动作、时间和目标变化。 |
 | `RSSM` | Recurrent State-Space Model，Dreamer 等 latent world model 的核心结构之一。 |
 | `MPC` | Model Predictive Control，滚动优化动作序列的经典规划方法。 |
+| `Policy` | 从状态到动作的规则或概率分布，记作 \(\pi(a\mid s)\)。 |
+| `Reward` | 环境、规则或评测器给出的反馈信号，用来定义什么行为更好。 |
+| `Return` | 从当前时刻开始累计的折扣奖励，是 value function 要估计的目标。 |
 | `WAM` | World-Action Model，强调动作和世界未来的联合建模。 |
 | `VAM` | Video-Action Model，强调视频表示与动作建模的统一。 |
 | `Near-miss` | 接近失败但尚未造成事故的样本，常用于风险训练和数据回流。 |

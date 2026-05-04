@@ -2,7 +2,7 @@
 
 Attention 本身只计算 token 之间的相关性。它并不知道第一个 token 在前、第二个 token 在后，也不知道哪些 token 不应该被看见。位置编码和 mask 就是为了解决这两个问题。
 
-![Transformer long-distance attention](../assets/images/paper-figures/foundations/attention-is-all-you-need-figure-3-long-distance-attention.png){ width="700" }
+![Transformer long-distance attention](../assets/images/paper-figures/foundations/attention-is-all-you-need-figure-3-long-distance-attention.png){ width="590" }
 
 <small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 3。原论文图意：Transformer encoder 的某些 self-attention heads 会关注长距离依赖，例如围绕 `making ... more difficult` 的依赖关系。</small>
 
@@ -117,8 +117,8 @@ output = weights @ V
 
 - [Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)：理解 Q/K/V 和 attention 主体。
 - [推理系统](../inference/index.md)：理解 KV cache、长上下文和上下文压缩。
-- [VLM 文档理解](../vlm/document-understanding-and-ocr.md)：理解页面布局、OCR 和视觉位置。
-- [VLA](../vla/index.md)：理解动作序列和时序控制为什么依赖 mask 与位置。
+- [VLM/VLA](../vlm/index.md)：理解视觉 token、视频状态和动作序列为什么依赖 mask 与位置。
+- [动作表示与控制接口](../vla/action-representation-and-interfaces.md)：理解动作 token、动作块和时序控制的接口。
 
 ## 小结
 

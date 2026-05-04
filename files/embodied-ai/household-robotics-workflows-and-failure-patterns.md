@@ -21,7 +21,7 @@ ALOHA 原论文的任务示例图很适合提醒读者：家庭和桌面操作�
 
 ALOHA/ACT 的结构图则从策略侧补充了同一件事：家庭机器人不应该只输出“下一瞬间动作”，而要输出能跨越一个小阶段的 action chunk，并用时间集成降低抖动和阶段切换错误。
 
-![ACT architecture 原论文图](../assets/images/paper-figures/vla/aloha-act-algorithm.png){ width="820" }
+![ACT architecture 原论文图](../assets/images/paper-figures/vla/aloha-act-algorithm.png){ width="720" }
 
 <small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705)，Figure 2。原论文图意：Action Chunking with Transformers (ACT) 用 CVAE 编码动作序列和关节观测，测试时根据多视角图像、关节状态和 latent 生成一段 action sequence，并用 temporal ensembling 平滑执行。</small>
 

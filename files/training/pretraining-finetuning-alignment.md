@@ -127,11 +127,13 @@ r_\phi(x,y)
 !!! note "难点解释：为什么 RLHF 里要有 value / advantage"
     完整回答结束后才知道奖励，但更新发生在许多 token 决策上。`value` 用来估计“生成到当前前缀时，未来大概能拿多少分”；`advantage` 用来估计“这次采样出来的结果比预期好多少”。如果 advantage 为正，PPO 会倾向提高这段生成路径的概率；如果 advantage 为负，就倾向压低。没有 advantage，训练信号会很吵，因为每个 token 都很难知道自己对最终奖励贡献了多少。
 
-PPO 原论文给出的算法框架可以帮助你把这件事从“抽象奖励”落到训练步骤上。
+PPO 原论文给出的算法框架可以帮助你把这件事从“抽象奖励”落到训练步骤上：
 
-![PPO Algorithm 1 原论文图](../assets/images/paper-figures/training/ppo-algorithm-1.png){ width="760" }
+```text
+collect rollouts -> estimate advantages -> optimize clipped surrogate -> refresh old policy
+```
 
-<small>图源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1。原论文图意：多个 actor 用旧策略收集固定长度轨迹，计算 advantage estimates，再用若干个 minibatch epoch 优化 surrogate objective，最后把旧策略更新为当前策略。</small>
+<small>流程源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1。原论文算法要点：多个 actor 用旧策略收集固定长度轨迹，计算 advantage estimates，再用若干个 minibatch epoch 优化 surrogate objective，最后把旧策略更新为当前策略。</small>
 
 !!! note "图解：PPO 在 RLHF 里做的是小步更新"
     原始 PPO 图里的 actor 在环境里跑 \(T\) 步；RLHF 里可以理解成模型对一批 prompts 采样回答。`Compute advantage estimates` 对应根据 reward model 分数、value 估计和 KL 惩罚计算训练信号；`Optimize surrogate` 对应用 minibatch 更新语言模型。PPO 名字里的 proximal 重点是“不要一步改太远”：模型要朝高奖励回答移动，但不能突然远离 SFT/reference 模型，否则容易牺牲事实性、格式稳定和基础能力。

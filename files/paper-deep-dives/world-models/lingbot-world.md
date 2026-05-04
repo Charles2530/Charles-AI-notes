@@ -235,7 +235,7 @@ $$
 2. 支持 KV cache 复用，降低长序列推理成本；
 3. 减少训练时看全局、推理时只看过去造成的分布偏移。
 
-![因果化与长时训练原图](../../assets/images/paper-deep-dives/world-models/lingbot-world/figure-6-causal-adaptation.png){ width="860" }
+![因果化与长时训练原图](../../assets/images/paper-deep-dives/world-models/lingbot-world/figure-6-causal-adaptation.png){ width="790" }
 
 <small>图源：`Advancing Open-source World Models`，Figure 6。原论文图注要点：该图说明 causal generator adaptation 和 discriminator architecture，前者用 block causal attention 支持流式自回归生成，后者在长时训练中通过 GAN classification head 与 cross-attention 缓解累积漂移。</small>
 
@@ -249,6 +249,16 @@ $$
 即使模型已经能动作条件生成，如果每次 rollout 仍需大量扩散采样步，也无法成为交互模拟器。论文因此加入少步蒸馏，把多步生成压缩到更少采样步。
 
 这一步解决的是系统成本，而不是建模定义。它说明一个关键事实：世界模型要真正被 agent 或用户调用，不仅要“会预测”，还要“预测得足够快”。如果一次未来模拟延迟过高，它只能做离线数据生成，不能进入交互闭环。
+
+<figure class="atlas-video-demo">
+  <video controls muted playsinline preload="none">
+    <source src="https://github.com/user-attachments/assets/79b99272-5258-43b4-a466-8f3ac966fb8f" type="video/mp4">
+  </video>
+  <figcaption>视频源：<a href="https://github.com/robbyant/lingbot-world">LingBot-World 官方 GitHub README</a>，Real-Time Interactive Demo Videos (LingBot-World-Fast)。README 中说明这些视频展示 LingBot-World-Fast 响应用户输入并实时渲染结果。</figcaption>
+</figure>
+
+!!! note "视频解读：实时交互 demo 和离线长视频 demo 的差别"
+    离线长视频 demo 主要检查长时一致性和视觉质量；实时交互 demo 要额外看延迟、动作响应和逐步 rollout 的稳定性。这里最重要的不是某一帧是否漂亮，而是用户连续输入后，模型是否能在短延迟下更新世界状态，并且不因为自回归误差迅速漂移。它对应前面讲的因果化、KV cache 和少步蒸馏：这些设计不是装饰，而是为了让世界模型从“生成一个 clip”变成“持续运行的模拟器”。
 
 ## 和视频模型训练的关系
 

@@ -145,7 +145,7 @@ q_t(x_t\mid x)
 
 加噪后，real 和 fake 的分布会在 ambient space 里有更大重叠，score matching 才稳定。
 
-![DMD diffusion score intuition](../../assets/images/paper-deep-dives/diffusion/dmd/intuition_figure.png){ width="780" }
+![DMD diffusion score intuition](../../assets/images/paper-deep-dives/diffusion/dmd/intuition_figure.png){ width="630" }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 4。原论文图意：未加噪时 real / fake distributions 可能不重叠；经过 diffusion perturbation 后，distribution matching objective 在空间中更好定义。</small>
 
@@ -208,7 +208,7 @@ fake distribution 会随着 \(G_\theta\) 更新不断变化。因此 \(\mu_{\tex
 
 DMD 不能只靠 distribution matching。论文用二维 toy 分布说明了原因。
 
-![DMD objective comparison](../../assets/images/paper-deep-dives/diffusion/dmd/matching_sim_figure.png){ width="780" }
+![DMD objective comparison](../../assets/images/paper-deep-dives/diffusion/dmd/matching_sim_figure.png){ width="630" }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 3。原论文图意：只最大化 real score 会让 fake samples 塌到最近模式；有 distribution matching 但无 regression loss 时覆盖更好但仍会漏掉模式；完整目标加上 regression loss 后能恢复两个目标模式。</small>
 
@@ -511,11 +511,11 @@ w_t
 2. 没有 regression，CIFAR FID 退化到 5.58，且容易 mode collapse；
 3. 权重设计不是装饰项，它直接影响跨 timestep 梯度稳定性。
 
-![DMD ablation ImageNet](../../assets/images/paper-deep-dives/diffusion/dmd/imagenet_pdf_crop.png){ width="760" }
+![DMD ablation ImageNet](../../assets/images/paper-deep-dives/diffusion/dmd/imagenet_pdf_crop.png){ width="630" }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 5 上半部分。原论文图意：左侧为 DMD，右侧为去掉 distribution matching objective 的 baseline；后者 realism 和结构完整性明显较差。</small>
 
-![DMD ablation CIFAR](../../assets/images/paper-deep-dives/diffusion/dmd/cifar10_pdf_crop.png){ width="760" }
+![DMD ablation CIFAR](../../assets/images/paper-deep-dives/diffusion/dmd/cifar10_pdf_crop.png){ width="630" }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 5 下半部分。原论文图意：左侧为 DMD，右侧为去掉 regression loss 的 baseline；后者出现 mode collapse / diversity loss，例如大量灰色汽车。</small>
 

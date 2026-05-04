@@ -111,7 +111,7 @@ update_data_or_training_recipe()
 
 - [训练评测与消融](../training/evaluation-and-ablation-methodology.md)：如何判断训练改动是否可信。
 - [推理在线评测](../inference/observability-and-online-evaluation.md)：如何把离线评测接到线上观测。
-- [对比学习评测](../contrastive-learning/evaluation-and-failure-modes.md)：embedding 和检索系统的分桶评测。
+- [强化学习总览](../reinforcement-learning/index.md)：reward、闭环评测和世界模型任务指标如何影响训练结论。
 - [量化评测与部署清单](../quantization/evaluation-and-deployment-checklist.md)：量化掉点如何验收。
 
 ## 小结

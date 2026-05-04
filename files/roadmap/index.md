@@ -42,11 +42,11 @@
 3. [扩散训练与表示](../diffusion/training.md)
 4. [扩散采样与推理](../diffusion/inference.md)
 5. [扩散蒸馏与整流](../diffusion/distillation.md)
-6. [VLM 总览](../vlm/index.md)
-7. [VLM 架构与训练](../vlm/architecture-and-training.md)
-8. [VLM 评测与工具使用](../vlm/evaluation-and-tool-use.md)
-9. [VLA 总览](../vla/index.md)
-10. [VLA 数据与策略学习](../vla/data-and-policy-learning.md)
+6. [VLM/VLA 总览](../vlm/index.md)
+7. [视觉表征、连接器与时序状态](../vlm/architecture-and-training.md)
+8. [VLA 数据与策略学习](../vla/data-and-policy-learning.md)
+9. [动作表示与控制接口](../vla/action-representation-and-interfaces.md)
+10. [世界模型总览](../world-models/index.md)
 
 **这一条线回答的问题是**：
 
@@ -89,9 +89,9 @@
 
 **推荐顺序**：
 
-1. [对比学习总览](../contrastive-learning/index.md)
-2. [对比学习基础方法](../contrastive-learning/foundations.md)
-3. [多模态与检索](../contrastive-learning/multimodal-and-retrieval.md)
+1. [VLM/VLA 总览](../vlm/index.md)
+2. [强化学习总览](../reinforcement-learning/index.md)
+3. [Policy Gradient、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)
 4. [世界模型总览](../world-models/index.md)
 5. [RSSM、Dreamer 与规划](../world-models/rssm-dreamer-and-planning.md)
 6. [生成式模拟与视频世界模型](../world-models/generative-simulation-and-video.md)
@@ -101,7 +101,7 @@
 
 **这一条线回答的问题是**：
 
-- 无标签表征是怎么学出来的；
+- 视觉语言状态如何进入动作与奖励；
 - 智能体怎样“想象未来”；
 - 机器人怎样在真实世界里稳定行动。
 
@@ -112,7 +112,7 @@
 **优先读**：
 
 - `VLM`
-- 对比学习的多模态部分
+- VLM/VLA 的视觉语言对齐与动作接口
 - 推理系统
 - 量化
 
@@ -183,14 +183,14 @@
 - 路线图
 - 术语表
 - 参考文献
-- 论文导读
+- 论文专题讲解
 - 扩散模型
 - `VLM`
 - `VLA`
 - 量化
 - 训练
 - 推理
-- 对比学习
+- 强化学习
 - 世界模型
 - 具身智能
 
@@ -263,14 +263,14 @@ $$
 | 路线图 | 14165 | 100000 | 85835 |
 | 术语表 | 3101 | 70000 | 66899 |
 | 参考文献 | 5385 | 90000 | 84615 |
-| 论文导读 | 35041 | 240000 | 204959 |
+| 论文专题讲解 | 35041 | 240000 | 204959 |
 | 扩散模型 | 50289 | 540000 | 489711 |
 | VLM | 33195 | 430000 | 396805 |
 | VLA | 27912 | 360000 | 332088 |
 | 量化 | 32626 | 300000 | 267374 |
 | 训练 | 42212 | 420000 | 377788 |
 | 推理 | 39392 | 420000 | 380608 |
-| 对比学习 | 23348 | 210000 | 186652 |
+| 强化学习 | 23348 | 210000 | 186652 |
 | 世界模型 | 28533 | 320000 | 291467 |
 | 具身智能 | 23648 | 280000 | 256352 |
 | 合计 | 396310 | 4000000 | 3603690 |
@@ -279,7 +279,7 @@ $$
 
 1. `扩散 / VLM / 训练 / 推理` 会是最厚的四个主体。
 2. `VLA / 世界模型 / 具身智能` 形成“规划与真实交互”第二梯队。
-3. `量化 / 对比学习` 虽然专题更聚焦，但也需要写到足以支撑系统判断。
+3. `量化 / 强化学习` 虽然专题更聚焦，但也需要写到足以支撑系统判断。
 4. `导读 / 术语 / 参考` 不能只是附录，否则全站会越来越散。
 
 ## 10. 每类页面应该怎样变厚
@@ -329,9 +329,9 @@ $$
 4. 每一组方法各自适合什么场景；
 5. 最常见的误读是什么。
 
-### 10.4 导读页
+### 10.4 专题总览页
 
-导读页未来要承担“把厚内容重新组织成路线”的作用。  
+专题总览页未来要承担“把厚内容重新组织成路线”的作用。
 **可以统一增加**：
 
 1. 为什么先读这篇、后读那篇；
@@ -375,7 +375,7 @@ $$
 - 五条推荐阅读线；
 - “研究问题如何映射到章节”的导航表；
 - 站内常见跳转组合；
-- 如何把导读页和深度页配合使用。
+- 如何把专题总览页和深度页配合使用。
 
 ### 11.2 路线图
 
@@ -412,9 +412,9 @@ $$
 - 代表性论文之间的继承关系；
 - 与站内页面的互链。
 
-### 11.5 论文导读
+### 11.5 论文专题讲解
 
-导读页应当承担“厚内容的导航器”角色。  
+论文专题讲解应当承担“关键论文拆解器”角色。
 **主要扩法包括**：
 
 - 每条研究线补“前史 -> 主线 -> 分叉 -> 工程化”；
@@ -445,12 +445,10 @@ $$
 
 - `index.md` 增加任务地图、输入输出范式、模块边界和选型入口；
 - `architecture-and-training.md` 深写视觉编码、token 压缩、多图多页、训练目标、数据混合和对齐冲突；
-- `evaluation-and-tool-use.md` 深写评测切分、工具链误差分解、代理式多步任务；
-- `document-understanding-and-ocr.md` 增加版式、表格、字段抽取、长页错误模式；
-- `charts-tables-and-structured-reasoning.md` 增加结构化推理链、图表误读、单位与比例陷阱；
-- `screen-agents-and-grounding.md` 增加状态跟踪、动作回执、环境变化和失败恢复；
-- `retrieval-reranking-and-vector-systems.md` 深写召回、重排、向量存储、索引更新、混合检索；
-- `robustness-and-long-tail-evaluation.md` 与 `comparison-table.md` 扩成上线验收与选型总表。
+- `architecture-and-training.md` 保持聚焦在视觉 token、连接器、视频 latent 和状态化；
+- `data-and-policy-learning.md` 深写行为克隆、动作生成、时序 credit assignment、离线数据偏差；
+- `action-representation-and-interfaces.md` 细写动作 token、连续控制、坐标系和安全接口；
+- 与文档 OCR、图表、屏幕代理、检索等偏应用支线相关的页面已从主体章节移除。
 
 ### 11.9 VLA
 
@@ -508,18 +506,17 @@ $$
 - `gpu-kernels-batching-and-memory-systems.md`、`moe-routing-and-multi-model-serving.md` 深写 kernel、batching、MoE、多模型路由；
 - `observability-and-online-evaluation.md` 做成线上观察、归因、回归定位的总页。
 
-### 11.13 对比学习
+### 11.13 强化学习
 
-对比学习专题虽然页数不多，但非常适合继续加厚，因为它是很多多模态与检索系统的基础层。
+强化学习专题需要继续加厚，因为它是 VLA、agent 后训练和世界模型决策闭环的关键层。
 
 **建议的扩写方向**：
 
-- `index.md` 增加表征几何、正负样本结构、与生成模型的关系；
-- `foundations.md` 深写 `InfoNCE`、互信息解释、温度项和 batch 作用；
-- `multimodal-and-retrieval.md` 深写双塔、向量检索、跨模态对齐；
-- `hard-negatives-and-augmentation-design.md` 深写负样本构造、伪负样本风险、增广设计原则；
-- `evaluation-and-failure-modes.md` 增加迁移评测、鲁棒性、线上召回偏差；
-- `self-distillation-and-non-contrastive-methods.md` 深写塌缩、动量编码器、自蒸馏与非对比路线。
+- `index.md` 增加 RLHF/RLVR 与世界模型的总路线图；
+- `mdp-value-bellman.md` 深写 MDP/POMDP、Bellman、value、Q-value 和 advantage；
+- `policy-gradient-actor-critic-ppo-grpo.md` 深写 PPO、GRPO、GAE、KL 和 reward hacking；
+- `rl-for-world-models.md` 深写 PlaNet、Dreamer、RLVR-World 和 model exploitation；
+- `verl-code-flow.md` 深写 actor/rollout/ref/critic/reward 的 dataflow、配置和性能瓶颈。
 
 ### 11.14 世界模型
 
@@ -625,7 +622,7 @@ $$
 | 方法深度页 | 25000 - 45000 |
 | 工程页 / 评测页 | 20000 - 35000 |
 | 对照表页 | 18000 - 28000 |
-| 导读页 | 12000 - 25000 |
+| 专题总览页 | 12000 - 25000 |
 | 术语表 / 参考页 | 持续累积，不设硬上限 |
 
 这意味着后续很多页面完全可以只靠：

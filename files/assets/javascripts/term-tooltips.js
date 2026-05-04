@@ -625,6 +625,18 @@
       tip: "CLIP：Contrastive Language-Image Pre-training，图文对比预训练模型，是多模态对齐和检索的经典基础。"
     },
     {
+      aliases: ["BLIP-2", "Q-Former", "Flamingo", "LLaVA"],
+      tip: "常见 VLM 路线：BLIP-2 用 Q-Former 连接视觉编码器和 LLM；Flamingo 强调交错图文上下文；LLaVA 代表视觉指令微调路线。"
+    },
+    {
+      aliases: ["Qwen-VL", "Qwen2-VL", "InternVL", "Kosmos-2", "SeeClick"],
+      tip: "常见 VLM/grounding 模型：Qwen-VL/InternVL 偏通用多模态能力，Kosmos-2/SeeClick 更强调把语言定位到图像区域或屏幕元素。"
+    },
+    {
+      aliases: ["Pix2Struct", "LayoutLMv3"],
+      tip: "文档/截图 VLM 模型：Pix2Struct 强调截图解析和可变分辨率输入，LayoutLMv3 强调文本、图像和二维布局联合建模。"
+    },
+    {
       aliases: ["OCR"],
       tip: "OCR：Optical Character Recognition，光学字符识别。用于从图片、截图或文档中读取文字。"
     },
@@ -639,6 +651,14 @@
     {
       aliases: ["Grounding", "Referring", "Screen Agent", "Document Understanding"],
       tip: "VLM 任务术语：Grounding/Referring 关注语言到图像区域的定位，Screen Agent 面向屏幕操作，Document Understanding 处理文档结构与文字。"
+    },
+    {
+      aliases: ["PaLM-E", "SayCan", "RT-1", "RT-2", "RT-X", "OpenVLA"],
+      tip: "常见 VLA 模型：PaLM-E 强调 embodied multimodal reasoning，SayCan 用 affordance 约束技能选择，RT-1/RT-2/RT-X/OpenVLA 学习从视觉语言到动作。"
+    },
+    {
+      aliases: ["Diffusion Policy", "ACT", "ALOHA", "action chunk", "Action Chunk"],
+      tip: "机器人动作策略术语：Diffusion Policy 用去噪生成动作序列；ACT/ALOHA 强调 action chunking 和遥操作示范，适合精细双臂操作。"
     },
     {
       aliases: ["IoU", "CER", "edit distance", "Edit Distance"],
@@ -709,20 +729,24 @@
       tip: "Capacity Factor：MoE 中给每个 expert 预留多少 token 容量的系数。太小容易 overflow/drop，太大又会浪费计算和显存。"
     },
     {
-      aliases: ["RSSM"],
-      tip: "RSSM：Recurrent State-Space Model，循环状态空间模型。Dreamer 等世界模型常用的潜动态结构。"
+      aliases: ["RSSM", "PlaNet"],
+      tip: "RSSM：Recurrent State-Space Model，循环状态空间模型。PlaNet 和 Dreamer 等世界模型常用它从像素学习可 rollout 的潜动态。"
     },
     {
-      aliases: ["World Model", "World Models", "Dreamer", "Imagined Rollout", "Rollout"],
-      tip: "世界模型术语：World Model 学习环境动态，Dreamer 在潜空间 imagined rollout 中学习策略，Rollout 指向未来展开轨迹。"
+      aliases: ["World Model", "World Models", "Dreamer", "DreamerV2", "DreamerV3", "Imagined Rollout", "Rollout"],
+      tip: "世界模型术语：World Model 学习环境动态，Dreamer 系列在潜空间 imagined rollout 中学习策略，Rollout 指向未来展开轨迹。"
     },
     {
       aliases: ["open-loop", "Open-loop", "closed-loop", "Closed-loop"],
       tip: "Open-loop 指离线或不把输出反馈回系统的评测；Closed-loop 指模型输出会影响下一步输入的闭环评测，更接近真实决策和控制。"
     },
     {
-      aliases: ["WM", "WAM", "VAM"],
-      tip: "世界模型谱系缩写：WM 是 World Model，WAM 常指 World-Action Model，VAM 常指 Vision-Action Model。"
+      aliases: ["WM", "WAM", "VAM", "Genie", "LingBot-World", "DreamZero"],
+      tip: "世界模型谱系：WM 是 World Model，WAM/VAM 强调动作与视觉未来联合建模；Genie、LingBot-World、DreamZero 代表较新的交互式或 world-action 路线。"
+    },
+    {
+      aliases: ["JEPA", "V-JEPA", "latent prediction", "Latent Prediction"],
+      tip: "JEPA / V-JEPA：在 latent 表征空间预测被遮挡或未来内容，目标是学习对理解和规划有用的内部世界表征，而不是逐像素生成。"
     },
     {
       aliases: ["MPC"],
@@ -763,6 +787,62 @@
     {
       aliases: ["RL", "BC", "IL", "MDP", "POMDP"],
       tip: "控制与强化学习术语：RL 是强化学习，BC 是行为克隆，IL 是模仿学习，MDP/POMDP 是决策过程建模。"
+    },
+    {
+      aliases: ["DQN", "Q-learning", "Q Learning"],
+      tip: "DQN / Q-learning：学习状态-动作价值 Q(s,a)，再选择长期价值更高的动作。DQN 用深度网络近似 Q 函数。"
+    },
+    {
+      aliases: ["TD target", "TD Target", "bootstrapping", "Bootstrapping"],
+      tip: "TD target：用当前奖励加下一状态估计价值构造训练目标；bootstrapping 指用模型自己的未来估计训练当前估计。"
+    },
+    {
+      aliases: ["replay buffer", "Replay Buffer", "experience replay", "Experience Replay"],
+      tip: "Replay Buffer / Experience Replay：保存历史交互样本，训练时随机抽取复用，能降低样本相关性并提高样本效率。"
+    },
+    {
+      aliases: ["target network", "Target Network"],
+      tip: "Target Network：用于计算稳定目标值的慢更新网络。它让 value target 不会随着当前网络每步剧烈漂移。"
+    },
+    {
+      aliases: ["on-policy", "On-policy", "off-policy", "Off-policy", "offline RL", "Offline RL"],
+      tip: "On-policy 用当前策略刚采的数据更新；off-policy 会复用历史策略数据；offline RL 只用固定数据集，不再和环境交互。"
+    },
+    {
+      aliases: ["SAC", "A3C", "entropy regularization", "Entropy Regularization"],
+      tip: "SAC 是最大熵 actor-critic 方法，强调探索和稳定性；A3C 用异步并行 actor 收集经验；entropy regularization 鼓励策略不要过早变确定。"
+    },
+    {
+      aliases: ["behavior policy", "Behavior Policy"],
+      tip: "Behavior Policy：负责产生训练数据的策略。Offline RL 中它可能是旧模型、人类示范或混合系统，通常和正在优化的 target policy 不同。"
+    },
+    {
+      aliases: ["reward hacking", "Reward Hacking"],
+      tip: "Reward Hacking：策略利用奖励函数漏洞拿高分，但真实任务没有变好。RLHF、机器人和世界模型训练都需要专门防范。"
+    },
+    {
+      aliases: ["RLVR"],
+      tip: "RLVR：Reinforcement Learning with Verifiable Rewards，用规则、测试、指标等可验证奖励训练模型，常见于数学、代码和世界模型状态预测。"
+    },
+    {
+      aliases: ["Actor-Critic", "actor-critic", "critic", "Critic", "actor", "Actor"],
+      tip: "Actor-Critic：actor 负责生成动作或 token，critic 估计未来回报作为 baseline，帮助降低策略梯度方差。"
+    },
+    {
+      aliases: ["value", "Value", "value function", "Value Function", "Q-value", "Q Value"],
+      tip: "Value / Q-value：估计从当前状态或状态-动作对出发的未来回报。它不是当前 reward，而是长期收益预期。"
+    },
+    {
+      aliases: ["advantage", "Advantage", "GAE"],
+      tip: "Advantage：某个动作相对当前平均预期有多好；GAE 是 actor-critic/PPO 中常用的低方差 advantage 估计方法。"
+    },
+    {
+      aliases: ["return", "Return", "Bellman", "Bellman Equation"],
+      tip: "Return 是未来折扣奖励总和；Bellman Equation 把当前价值递推为当前奖励加下一状态价值，是 RL 和 world model planning 的基础。"
+    },
+    {
+      aliases: ["HybridFlow", "verl"],
+      tip: "verl 是大模型强化学习训练库，来自 HybridFlow 思路；它把 RL 控制流和 actor/rollout/critic/reward 等分布式模型计算拆开。"
     },
     {
       aliases: ["OOD", "ODD"],

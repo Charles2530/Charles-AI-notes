@@ -68,6 +68,18 @@ Tokenizer 是视频路线的地基。它不只要压缩得好看，还要保留�
 !!! note "难点解释：为什么不是从零训练"
     视频世界模型先继承视频生成底座，是因为视觉纹理、物体持久性和一般运动规律非常昂贵；middle-training 再注入动作控制、世界知识和长程一致性；post-training 最后解决因果注意力、延迟蒸馏和实时交互。也就是说，它的训练重点从“像视频”逐步移动到“能被动作控制、能低延迟 rollout”。
 
+LingBot-World 官方 README 里的 demo 更适合用来建立“从视频生成到交互模拟”的直觉。
+
+<figure class="atlas-video-demo">
+  <video controls muted playsinline preload="none">
+    <source src="https://github.com/user-attachments/assets/ea4a7a8d-5d9e-4ccf-96e7-02f93797116e" type="video/mp4">
+  </video>
+  <figcaption>视频源：<a href="https://github.com/robbyant/lingbot-world">LingBot-World 官方 GitHub README</a>，Video Demo。README 将 LingBot-World 描述为由视频生成模型发展而来的开源世界模拟器，强调长时一致性和实时交互。</figcaption>
+</figure>
+
+!!! note "视频解读：LingBot-World demo 应该看什么"
+    这段 demo 不只是展示画质，而是展示三类世界模型信号：开放场景里画面是否能持续演化，长时间移动时场景结构是否保持，控制信号是否能让未来发生可见变化。读这类 demo 时要主动问：如果固定同一初始画面，换一个相机轨迹或动作序列，未来是否会合理分叉？如果不能验证这一点，它仍可能更接近视频续写器，而不是可规划模拟器。
+
 可以把这类路线拆成三步：
 
 | 阶段 | 训练重点 | 从视频模型到世界模型的变化 |
@@ -91,6 +103,18 @@ $$
 其中动作 \(a\) 可以是键盘输入、相机轨迹、机器人动作或更高层的交互事件。若动作条件只是弱标签，模型很容易仍然靠视频惯性生成“平均合理未来”；只有当数据和目标迫使不同动作产生不同后果时，它才开始接近世界模型。
 
 这也解释了为什么世界模型训练越来越复用视频生成基础设施，但不能等同于视频模型训练。视频预训练提供渲染、纹理、物体持久性和时序先验；动作标注交互数据提供可控性；长序列 curriculum 提供长期一致性；因果注意力、KV cache 和少步蒸馏则把模型推向实时交互。对工程系统来说，最后验收的不是视频是否好看，而是固定同一历史状态、改变动作后，模型能否生成可区分、可验证、对规划有用的未来。
+
+Google DeepMind 的 Genie 3 页面也提供了大量官方 demo，其中“environmental consistency”片段适合观察长时一致性。
+
+<figure class="atlas-video-demo">
+  <video controls muted playsinline preload="none">
+    <source src="https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/genie_environmental_consistency_1_iNVUBuv.webm" type="video/webm">
+  </video>
+  <figcaption>视频源：<a href="https://deepmind.google/models/genie/">Google DeepMind Genie 3 官方页面</a>，environmental consistency demo。官方页面强调生成 AI worlds 的挑战之一，是长时间主动生成时保持环境一致性。</figcaption>
+</figure>
+
+!!! note "视频解读：长时一致性为什么是世界模型门槛"
+    一段普通视频可以在短时间里看起来很自然；世界模型更难，因为用户或 agent 会把模型推到越来越长的自回归历史上。长时 demo 要看地标、房间结构、物体身份和运动方向是否持续可信。如果模型每隔几秒就“重造世界”，planner 看到的未来就不稳定，合成数据也容易污染策略训练。
 
 ## 三、动作条件：VAM、WAM 与反事实的分水岭
 

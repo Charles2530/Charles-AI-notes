@@ -177,7 +177,7 @@ W = [w_1, w_2, \dots, w_n]
 `AWQ` 的关键观察是：  
 决定输出误差的不是权重本身大小，而是“权重与激活共同作用”。
 
-![AWQ activation-aware weight quantization](../assets/images/paper-figures/quantization/awq-figure-1-activation-aware.png){ width="920" }
+![AWQ activation-aware weight quantization](../assets/images/paper-figures/quantization/awq-figure-1-activation-aware.png){ width="830" }
 
 <small>图源：[AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978)，Figure 1。原论文图意：普通 RTN 量化会明显升高困惑度；保留少量 activation-salient weights 或在量化前按激活幅度缩放权重，可以显著恢复质量。</small>
 
@@ -209,7 +209,7 @@ W = [w_1, w_2, \dots, w_n]
 在很多 LLM 中，激活分布比权重更难量化，因为会出现少数特别大的 outlier。  
 `SmoothQuant` 的核心技巧是引入一个对角缩放矩阵 \(D\)，把激活尺度一部分搬运到权重中：
 
-![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="780" }
+![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="730" }
 
 <small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 2。原论文图意：原始激活 \(X\) 含有 outlier，导致有效量化 bit 变少；SmoothQuant 将一部分难度从 activation 迁移到 weight，让两侧都更容易量化。</small>
 

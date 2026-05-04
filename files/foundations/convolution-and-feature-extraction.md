@@ -2,7 +2,7 @@
 
 卷积是视觉模型里最经典的结构之一。即使 Transformer 很流行，卷积仍然是理解 CNN、UNet、视觉编码器和扩散模型的重要基础。
 
-![U-Net architecture](../assets/images/paper-figures/foundations/unet-figure-1-architecture.png){ width="860" }
+![U-Net architecture](../assets/images/paper-figures/foundations/unet-figure-1-architecture.png){ width="830" }
 
 <small>图源：[U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597)，Figure 1。原论文图意：U-Net 左侧 contracting path 逐步下采样并扩大上下文，右侧 expanding path 逐步上采样恢复分辨率，灰色箭头把高分辨率特征复制到对应解码层。</small>
 

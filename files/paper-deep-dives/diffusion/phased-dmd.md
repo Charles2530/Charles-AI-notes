@@ -342,7 +342,7 @@ x_t
 | Wan2.x | 5 |
 | Qwen-Image | 3 |
 
-![Timestep intervals](../../assets/images/paper-deep-dives/diffusion/phased-dmd/timestep-intervals.png){ width="760" }
+![Timestep intervals](../../assets/images/paper-deep-dives/diffusion/phased-dmd/timestep-intervals.png){ width="690" }
 
 <small>图源：`Phased DMD`，supplementary Figure 7。原论文图意：训练 phase 的 re-noising timestep 区间由采样 steps 和 timestep shift 决定。Wan 系列使用 shift 5，Qwen-Image 使用 shift 3。</small>
 

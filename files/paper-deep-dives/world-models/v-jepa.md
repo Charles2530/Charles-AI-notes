@@ -135,7 +135,7 @@ V-JEPA 使用两种 mask：
 
 总体规模约 `2M` videos。所有 V-JEPA 模型都训练 `90,000` iterations。`ViT-L/16_224` 和 `ViT-H/16_224` 使用 batch size `3072`，`ViT-H/16_384` 使用 batch size `2400`。
 
-![V-JEPA pretraining hyperparameters](../../assets/images/paper-deep-dives/world-models/v-jepa/table-5-pretraining-hyperparameters.png){ width="700" }
+![V-JEPA pretraining hyperparameters](../../assets/images/paper-deep-dives/world-models/v-jepa/table-5-pretraining-hyperparameters.png){ width="650" }
 
 <small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 5。原论文表格要点：该表列出 V-JEPA 预训练的 data、masking、optimization、architecture 和 hardware 超参数，包括 `VideoMix2M`、`90000` iterations、EMA momentum 从 `0.998` 到 `1.0`、predictor depth `12`、predictor embedding dim `384`、`bfloat16` 和 `A100 80G`。</small>
 

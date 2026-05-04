@@ -74,7 +74,7 @@ Dreamer 的解法是引入 latent actor-critic：
 
 Dreamer 包含三件事：学 dynamics、学 behavior、和环境交互。
 
-![Components of Dreamer](../../assets/images/paper-deep-dives/world-models/dreamer/figure-3-components.png){ width="920" }
+![Components of Dreamer](../../assets/images/paper-deep-dives/world-models/dreamer/figure-3-components.png){ width="890" }
 
 <small>Figure source: `Dream to Control`, Figure 3. 原论文图注要点：该图展示 Dreamer 的三个组件。模型先从经验数据中把观测和动作编码到 compact latent states，并预测 reward；然后在 compact latent space 里预测 value 和 action，通过 imagined trajectories 反向传播梯度；最后在真实环境中用 episode 历史编码当前 model state 并输出下一步动作。</small>
 

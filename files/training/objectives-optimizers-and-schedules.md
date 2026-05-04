@@ -61,7 +61,7 @@
 
 不同参数化会影响梯度尺度、采样器兼容性和训练稳定性。
 
-对比学习常用 InfoNCE：
+图文对齐和样本匹配常用 InfoNCE：
 
 \[
 \mathcal{L}_{\text{InfoNCE}}

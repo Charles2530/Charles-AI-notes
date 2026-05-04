@@ -4,7 +4,7 @@
 
 采样器可以先按“预算怎么花”来理解。`Euler` 更像低成本快速基线，`Heun` 用额外模型调用换更平滑的修正，`DPM-Solver++` 则更适合作为少步高质量和强 guidance 场景的默认候选。DDPM 原论文的 progressive generation 图能直观看到：采样不是一次完成，而是从噪声逐步形成结构和细节。
 
-![DDPM progressive generation 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-14-progressive-generation.jpg){ width="720" }
+![DDPM progressive generation 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-14-progressive-generation.jpg){ width="670" }
 
 <small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 14。原论文图意：CIFAR-10 unconditional generation 的 progressive generation 过程，展示反向采样链中图像如何从噪声逐步变成可辨认样本。</small>
 
