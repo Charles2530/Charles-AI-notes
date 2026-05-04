@@ -12,6 +12,13 @@
 
     一场三小时会议不应该把逐字稿全部塞进下一次讨论。更好的做法是保留决策、待办、约束和争议点，把闲聊和已废弃方案降级或归档。上下文压缩和 KV 淘汰也是在做类似的记忆整理。
 
+![vLLM logical and physical block table 原论文图](../assets/images/paper-figures/inference/vllm-logical-physical-block-table.png){ width="760" }
+
+<small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 5。原论文图意：vLLM 用 block table 把 logical KV blocks 翻译到 physical KV blocks，使请求的 KV cache 不必连续存放。</small>
+
+!!! note "图解：长上下文的第一问题是 KV 放在哪"
+    这张图把“上下文很长”落到内存管理问题上：每段历史 token 生成的 KV 都要有物理存放位置。logical block 保持序列语义顺序，physical block 负责实际显存布局。理解了这个映射，后面看 KV eviction、prefix cache、swap、CPU/GPU 分层和多租户隔离会更自然。
+
 ## 长上下文为什么贵
 
 KV cache 大小近似随序列长度线性增长：

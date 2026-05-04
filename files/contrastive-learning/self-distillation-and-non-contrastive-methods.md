@@ -50,6 +50,13 @@ $$
 
 这个“慢老师”结构让学习目标更稳定，也被认为是避免塌缩的重要因素之一。
 
+![BYOL architecture 原论文图](../assets/images/paper-figures/contrastive-learning/byol-architecture.png){ width="720" }
+
+<small>图源：[Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning](https://arxiv.org/abs/2006.07733)，Figure 2。原论文图意：BYOL 用 online network 预测 target network 的表示，target 参数由 online 参数的指数滑动平均得到，并通过 stop-gradient 阻断目标分支梯度。</small>
+
+!!! note "图解：BYOL 的关键是不对称"
+    图里 online 分支多了 predictor \(q_\theta\)，target 分支用 EMA 慢更新，并且 target 输出前有 stop-gradient。这个不对称结构是 BYOL 区别于朴素“一致性学习”的关键：它没有显式负样本，但通过慢目标网络、预测头和停止梯度降低所有样本塌缩到同一表示的风险。
+
 ## 4. SimSiam：更少结构，依旧可学
 
 SimSiam 进一步表明，不一定需要动量教师。它保留预测头，并通过 stop-gradient 打断一侧梯度：
@@ -217,4 +224,3 @@ $$
 ### 还值得继续深挖的问题
 
 围绕 **自蒸馏与非对比方法**，后续最值得继续加厚的通常是：表示漂移如何在线监控；哪些难例和长尾样本最能揭示几何问题；teacher/student 与 non-contrastive 路线在部署上的真实差异；以及一旦下游效果突然退化，应如何把问题回溯到训练目标、样本制度和评测桶。
-

@@ -3,7 +3,7 @@
 本页记录 `files/assets/images/training/` 中图片的来源链接。  
 这些图片均来自 Wikimedia Commons，具体授权条款以各文件页面为准。
 
-另有一批 `files/assets/images/training/generated/` 图片由 GPT / Codex 创建，用于训练专题教学示意图。
+训练专题曾经有一批概括图；现在不再在网页中使用。训练页里的方法图统一改为论文原图、论文项目图或明确来源的公共图。
 
 ## 文件清单
 
@@ -38,77 +38,34 @@
 15. `confusion-matrix.png`  
     来源：https://commons.wikimedia.org/wiki/File:Confusion_Matrix.png
 
-## GPT 生成图片清单
+## 训练专题论文原图
 
-以下图片由 GPT / Codex 生成，存放在 `files/assets/images/training/generated/`：
+这些图片位于 `files/assets/images/paper-figures/training/`，用于替换原先的概括图。
 
-1. `training-production-line.png`
-2. `pretrain-sft-alignment.png`
-3. `mtp-vs-speculative.png`
-4. `parallelism-map-dp-tp-pp-cp.png`
-5. `cluster-operations-loop.png`
-6. `input-pipeline-bottlenecks.png`
-7. `stability-triage-tree.png`
-8. `curriculum-data-mixture-strategy.png`
-9. `post-training-data-engine-loop.png`
-10. `checkpoint-lifecycle-distributed.png`
-11. `evaluation-ablation-funnel.png`
-12. `scaling-law-vs-economics.png`
-13. `data-quality-governance-layers.png`
-14. `preference-alignment-failure-modes.png`
-15. `optimizer-lr-schedule-interaction.png`
-16. `data-engine-collect-filter-label-loop.png`
-17. `packing-before-vs-after.png`
-18. `dedup-strategy-exact-near-semantic.png`
-19. `preference-data-pipeline.png`
-20. `judge-model-calibration.png`
-21. `distributed-resume-consistency-check.png`
-22. `experiment-economics-cost-waterfall.png`
-23. `ablation-one-variable-matrix.png`
-24. `data-quality-to-model-behavior-map.png`
-25. `training-release-gate.png`
-26. `pretrain-sft-alignment-metric-map.png`
-27. `speculative-enable-decision-tree.png`
-28. `parallelism-selection-playbook-tree.png`
-29. `training-cluster-slo-board.png`
-30. `dataloader-optimization-order.png`
-31. `stability-signal-action-matrix.png`
-32. `data-strategy-training-outcome-matrix.png`
-33. `curriculum-phase-switch-criteria-gates.png`
-34. `offline-online-evaluation-contract.png`
-35. `optimizer-tuning-order-flowchart.png`
-36. `evaluation-reproducibility-checklist.png`
-37. `training-layer-triage-stack.svg`
-38. `stage-metric-routing-map.svg`
-39. `acceptance-latency-dashboard.svg`
-40. `parallelism-debug-ladder.svg`
-41. `input-metric-map.svg`
-42. `numerics-debug-ladder.svg`
-43. `judge-human-calibration-loop.svg`
-44. `checkpoint-contract-fields.svg`
-45. `evaluation-risk-bucket-map.svg`
-46. `scaling-stop-go-board.svg`
-47. `mixture-governor-loop.svg`
-48. `preference-rubric-scorecard.svg`
-49. `data-governance-priority-funnel.svg`
-50. `optimizer-symptom-action-map.svg`
-51. `training-triage-war-room-poster.png`
-52. `training-card-01-overview.png`
-53. `training-card-02-stages.png`
-54. `training-card-03-mtp.png`
-55. `training-card-04-parallelism.png`
-56. `training-card-05-ops.png`
-57. `training-card-06-input.png`
-58. `training-card-07-stability.png`
-59. `training-card-08-data-opt.png`
-60. `training-card-09-mixture.png`
-61. `training-card-10-judge.png`
-62. `training-card-11-preference.png`
-63. `training-card-12-checkpoint.png`
-64. `training-card-13-quality.png`
-65. `training-card-14-optimizer.png`
-66. `training-card-15-eval.png`
-67. `training-card-16-economics.png`
+| 文件 | 来源 | 用途 |
+| --- | --- | --- |
+| `chinchilla-isoflop-curves.png` | [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)，Figure 4 | 解释固定 FLOP 预算下参数量和 token 数的配平 |
+| `chinchilla-tokens-vs-params.png` | [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)，Figure 15 | 解释 compute-optimal tokens / parameters scaling |
+| `zero-memory-stages.png` | [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1 | 解释数据并行状态冗余和 ZeRO 三阶段分片 |
+| `gpipe-pipeline-parallelism.png` | [GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c) | 解释 micro-batch 如何填充 pipeline bubble |
+| `instructgpt-rlhf-pipeline.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 2 | 解释 SFT、reward model 和 PPO/RLHF 的训练数据接口 |
+| `instructgpt-labeler-likert.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(a) | 解释单条模型输出评分和元信息标注 |
+| `instructgpt-labeler-ranking.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b) | 解释同题多答排序数据如何训练 reward model |
+| `instructgpt-main-preference.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 1 | 解释 RLHF 后训练需要看人类偏好胜率 |
+| `instructgpt-preference-facetted.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 4 | 解释不同 prompt 分布和 labeler 分组下的偏好结果 |
+| `ppo-algorithm-1.png` | [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1 | 解释 PPO 的 actor-critic 式采样、advantage 估计和 surrogate 优化流程 |
+| `ppo-clipped-surrogate.png` | [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Figure 1 | 解释 PPO clipped surrogate 如何限制策略概率变化 |
+
+训练页还复用了一些其他专题的论文图：
+
+| 文件 | 来源 | 用途 |
+| --- | --- | --- |
+| `../quantization/qlora-figure-1-memory.png` | [QLoRA](https://arxiv.org/abs/2305.14314)，Figure 1 | 解释低比特微调的显存构成 |
+| `../foundations/fp8-formats-figure-1-training-loss.png` | [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1 | 解释 FP8 训练需要通过收敛曲线验证 |
+| `../foundations/sublinear-memory-figure-1-computation-graph.png` | [Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1 | 解释 activation checkpointing 的重计算换显存 |
+| `../foundations/data-cards-typology.png` | [Data Cards](https://arxiv.org/abs/2204.01075)，typology figure | 解释数据治理和数据文档的多角色视角 |
+| `../foundations/loss-landscape-figure-resnet56.png` | [Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913) | 解释优化路径和稳定性排查 |
+| `../inference/specinfer-workflow.png` | [SpecInfer](https://arxiv.org/abs/2305.09781)，Figure 3 | 解释投机推理和 token tree verification |
 
 ## 使用说明
 

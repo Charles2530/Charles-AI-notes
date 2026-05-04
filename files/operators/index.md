@@ -57,6 +57,15 @@
 
 这一组文档的目的，不是把每个人都训练成 GPU 内核工程师，而是帮助你建立一个足够清晰的算子视角：从模型层需求，一路下钻到编译器、中间表示、kernel、内存层次和硬件执行机制，理解哪些性能瓶颈来自算法，哪些来自实现，哪些来自错误的抽象边界。
 
+FlashAttention 原论文图很适合作为算子专题的第一张“硬件视角”原图：它强调性能提升来自重写 attention 的数据流，而不是改变 attention 的数学定义。
+
+![FlashAttention IO-aware attention 原论文图](../assets/images/paper-figures/operators/flashattention-io-aware-tiling.png){ width="760" }
+
+<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原论文图意：FlashAttention 用 tiling 避免把完整 \(N \times N\) attention matrix 写入 HBM；Q/K/V 分块进入 SRAM，在线 softmax 和累积输出减少 HBM 读写。</small>
+
+!!! note "图解：算子优化先看数据怎么搬"
+    左图的虚线框是朴素 attention 会显式生成的大矩阵，它很贵不是因为 softmax 公式复杂，而是因为中间结果要在 HBM 里来回读写。FlashAttention 把 K/V 和 Q 分块搬到片上 SRAM，在块内做 softmax 与累积，最后只写回输出。这个例子说明：很多 kernel 优化的核心不是少算一点 FLOPs，而是少搬很多数据。
+
 !!! tip "基础知识入口"
     算子专题默认你知道 tensor shape、dtype、显存、带宽和 kernel 的基本含义。如果不熟，先看 [张量、Shape 与计算图](../foundations/tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md) 和 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。
 

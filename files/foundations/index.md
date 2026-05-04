@@ -2,9 +2,12 @@
 
 这一组页面是后续专题的公共底座。它不追求把数学、深度学习和系统工程全部讲完，而是把阅读扩散模型、VLM、VLA、量化、训练、推理和算子时最常反复出现的概念提前讲清。
 
-![基础知识地图](../assets/images/foundations/generated/foundations-overview-map.png){ width="920" }
+![Transformer architecture 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="720" }
 
-**读图提示**：遇到一个新名词时，先判断它属于哪一层：输入表示、模型结构、概率目标、训练过程，还是运行系统。很多复杂问题并不是新概念本身难，而是这些层被混在一起讨论。
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原论文图意：展示 Transformer encoder-decoder 的整体结构，包括 token embedding、positional encoding、multi-head attention、feed-forward network、residual connection、normalization 和最终 softmax。</small>
+
+!!! note "图解：基础知识最好按层读"
+    这张 Transformer 原图几乎串起了后续所有基础概念：输入先变成 token embedding，再加入位置编码；attention 负责跨 token 信息交互；feed-forward/MLP 负责逐 token 非线性变换；残差和归一化保证深层训练稳定；最后通过 softmax 形成概率输出。遇到新名词时，先判断它属于输入表示、模型结构、训练目标还是运行系统，概念就不容易混在一起。
 
 ## 为什么要单独有基础知识模块
 

@@ -20,6 +20,15 @@ $$
 
 虽然真实系统远比这个复杂，但它提供了一个核心启发：收益通常是递减的，而且不同资源维度的边际收益不一样。
 
+Chinchilla 原论文的 IsoFLOP 图非常适合放在这里：它不是只画“模型越大越好”，而是在固定训练 FLOP 预算下，比较不同参数量和训练 token 数的组合，寻找 loss 的谷底。
+
+![Chinchilla IsoFLOP curves 原论文图](../assets/images/paper-figures/training/chinchilla-isoflop-curves.png){ width="920" }
+
+<small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)，Figure 4。原论文图意：固定 FLOP 预算时，不同模型大小会对应不同最终 loss；曲线谷底给出该预算下更合适的参数量，并外推出参数和 token 的 scaling 关系。</small>
+
+!!! note "图解：为什么 scaling law 不是“大模型崇拜”"
+    左图的每条 IsoFLOP 曲线都有一个谷底：模型太小会欠容量，模型太大则在同样 FLOP 下拿不到足够 token，最终也不划算。中间和右图把这些谷底外推出最优参数量和最优训练 token 数。直觉上，扩规模不是单独把 \(N\) 放大，而是要同时问 \(D\) 是否跟得上。
+
 ## 2. 为什么实验经济学重要
 
 在资源有限时，每个实验都不是纯学术探索，而是投资决策。若实验成本为 $K$，预期收益为 $G$，失败概率为 $p_f$，则可粗略想成：
@@ -70,6 +79,13 @@ $$
 2. 中断风险
 3. checkpoint 成本
 4. 实验并发需求
+
+![Chinchilla optimal tokens and parameters 原论文图](../assets/images/paper-figures/training/chinchilla-tokens-vs-params.png){ width="620" }
+
+<small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)，Figure 15。原论文图意：在固定训练 FLOP 预算下，三种估计方法给出相近的最优 token 数和参数量关系。</small>
+
+!!! note "图解：欠训练常常藏在“模型够大”背后"
+    这张图把最优 token 数和最优参数量放在同一张坐标里。它提醒你：模型规模、训练 token 和计算预算是三角关系。只报告参数量而不报告训练 token，很难判断模型是能力不足、训练不足，还是数据/优化系统没有把预算用好。
 
 ## 7. 研究节奏的经济学
 

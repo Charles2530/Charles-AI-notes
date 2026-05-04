@@ -21,6 +21,49 @@
 
     “可以退款”和“我理解你的困扰，下面按三步帮你发起退款”可能事实都对。偏好数据要决定的是哪种语气、步骤、风险承诺和业务边界更符合产品目标，而不是只判断真假。
 
+## 0. 先用 InstructGPT 图建立全局流程
+
+如果你没有强化学习基础，先不要从 PPO 公式开始。先看 InstructGPT 原论文这张流程图：它把 RLHF 拆成三件相对朴素的事。
+
+![InstructGPT RLHF pipeline 原论文图](../assets/images/paper-figures/training/instructgpt-rlhf-pipeline.png){ width="920" }
+
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 2。原论文图意：展示 InstructGPT 的三步训练流程：收集 demonstration data 做 SFT，收集模型输出排序训练 reward model，再用 PPO 按 reward model 优化 policy。</small>
+
+!!! note "图解：这张图要按数据流读"
+    左栏是 SFT：人类写示范回答，模型学会基本指令跟随。中栏是 reward model：同一个 prompt 下生成多个候选，标注者把 A/B/C/D 排序，reward model 学会预测“哪个更像人类偏好”。右栏才是 PPO：新 prompt 输入当前 policy，policy 生成回答，reward model 给分，PPO 用这个分数更新 policy。强化学习部分不是凭空出现的，它吃的是前两步做出来的 SFT 初始策略和 reward model。
+
+InstructGPT 论文还给了标注界面的截图。它们很适合理解“偏好数据”到底长什么样，而不是把它想成一个抽象公式。
+
+![InstructGPT labeler Likert interface 原论文图](../assets/images/paper-figures/training/instructgpt-labeler-likert.png){ width="860" }
+
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(a)。原论文图意：标注者先对单个模型输出做 Likert 质量评分，并标注输出是否有帮助、真实、无害、是否遵循指令等元信息。</small>
+
+!!! note "图解：单条评分用于拆解质量维度"
+    这张界面不是简单问“好不好”，而是把 helpfulness、truthfulness、harmlessness、instruction following 等维度拆开。这样做的价值是：当模型变差时，你能知道是事实性下降、拒答过度、格式错误，还是安全边界问题。偏好数据如果只保留一个总分，后续排查会非常困难。
+
+![InstructGPT labeler ranking interface 原论文图](../assets/images/paper-figures/training/instructgpt-labeler-ranking.png){ width="860" }
+
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b)。原论文图意：标注者在同一个 prompt 下比较多个模型输出，并把它们从最好到最差排序；这种排序数据用于训练 reward model。</small>
+
+!!! note "图解：reward model 学的是相对偏好"
+    排序界面的关键是“同题多答”。它不要求标注者发明一个绝对完美答案，而是比较几个候选谁更好。reward model 因此学到的是相对顺序：在同一个输入下，什么特征让一个回答比另一个更值得偏好。DPO、RLHF、RLAIF 的许多差别都在优化形式上，但它们共同依赖这类偏好关系是否稳定、可解释、覆盖真实失败模式。
+
+最终，论文用人类偏好胜率来验证后训练是否真的改变了用户侧体验。
+
+![InstructGPT human preference result 原论文图](../assets/images/paper-figures/training/instructgpt-main-preference.png){ width="760" }
+
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 1。原论文图意：在 API prompt 分布上比较不同模型输出相对 175B SFT baseline 的人类偏好胜率，展示 InstructGPT/RLHF 后训练相对 GPT-3 和 SFT baseline 的偏好提升。</small>
+
+!!! note "图解：偏好胜率不是训练 loss"
+    这张图的纵轴是人类更喜欢哪个输出，而不是 reward model loss 或 next-token loss。它提醒你：对齐训练的最终证据应该来自人类偏好、任务成功率和关键风险桶，而不是只看优化目标下降。一个 reward model 可以在验证集上看起来不错，但如果标注指南、候选分布或线上任务变了，真实偏好胜率仍可能不升反降。
+
+![InstructGPT facetted preference result 原论文图](../assets/images/paper-figures/training/instructgpt-preference-facetted.png){ width="860" }
+
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 4。原论文图意：按 prompt 来源和 labeler 分组比较不同模型相对 175B SFT baseline 的偏好胜率，用来检查偏好提升是否跨分布稳定。</small>
+
+!!! note "图解：偏好结果也要分桶"
+    这张图比单个总胜率更接近真实评测习惯：同样是 InstructGPT，不同 prompt 分布、训练标注者和 held-out 标注者的偏好结果都要看。如果只看一个平均胜率，可能掩盖“训练标注者喜欢、held-out 标注者不喜欢”或“某类 prompt 有提升、另一类 prompt 退化”的问题。偏好对齐上线前，也应该按任务类型、风险等级、语言、长度和用户群体做类似分桶。
+
 ## 1. 偏好数据在塑造什么
 
 设输入为 \(x\)，两个候选回答为 \(y^+, y^-\)。  
@@ -67,6 +110,21 @@
 
 所以偏好优化的核心对象是**排序关系**，不是绝对真值。  
 这也解释了为什么偏好数据一旦带着系统性偏差，模型就会很稳定地学偏。
+
+### 2.1 RLHF 和 DPO 的区别先这样记
+
+`RLHF + PPO` 是显式两段式：
+
+1. 先用排序数据训练 reward model；
+2. 再让 policy 生成回答，用 reward model 打分；
+3. PPO 根据 reward、value、advantage 和 KL 约束更新 policy。
+
+`DPO` 则把 reward model 和 PPO 更新压缩成一个偏好优化目标：直接用 \((x,y^+,y^-)\) 更新 policy，让优选回答相对 reference model 更可能，劣选回答相对更不可能。
+
+两者不是“一个有偏好数据，一个没有偏好数据”。它们都依赖偏好数据。区别在于：RLHF 显式学一个可复用的 reward model，再做强化学习；DPO 不显式训练 reward model，训练流程更直接，但同样会受 reference model、\(\beta\)、偏好噪声和候选分布影响。
+
+!!! note "难点解释：为什么 RLHF 需要 KL，DPO 也需要 reference"
+    偏好信号只告诉模型某些回答更受欢迎，不保证这些回答保持底座全部能力。KL 或 reference 项相当于“不要离原模型太远”的约束。没有这个约束，模型可能为了赢偏好样本而牺牲事实性、多样性、长上下文能力或代码能力；约束太强，又学不到足够偏好变化。因此对齐不是单纯追高 reward，而是在偏好收益和能力保持之间找平衡。
 
 ## 3. 好的偏好数据长什么样
 

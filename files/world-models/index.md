@@ -127,6 +127,13 @@ $$
 
 代表方法是 `RSSM / Dreamer / DreamerV3 / DayDreamer` 一类 model-based RL 世界模型。它的核心不是生成高清视频，而是学习“状态、动作、下一状态、奖励和终止”之间的动力学关系，让策略能在 learned latent dynamics 里想象未来。
 
+![PlaNet latent dynamics model designs 原论文图](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="860" }
+
+<small>图源：[Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)，Figure 2。原论文图意：比较 RNN、SSM 和 RSSM 三种 latent dynamics 设计；RSSM 同时保留 deterministic hidden state 和 stochastic state，用于从像素学习可规划的潜空间动力学。</small>
+
+!!! note "图解：RSSM 为什么适合世界模型"
+    RNN 只靠确定性记忆，适合保留历史但不擅长表达多种可能未来；SSM 有随机状态，但长时记忆较弱。RSSM 把两者合起来：确定性状态 \(h_t\) 负责记住历史和动作轨迹，随机状态 \(z_t\) 负责表达当前不确定性。Dreamer 系列沿用这类思想，是因为规划需要的不只是重建当前画面，而是能稳定 rollout 的 latent state。
+
 这条路线的优势是动作因果关系更直接，天然服务规划和控制；风险是交互数据收集贵，真实视觉质量和开放场景覆盖通常不如大视频生成模型，且 latent rollout 的误差会直接传给 policy。
 
 两条路线的对比如下：

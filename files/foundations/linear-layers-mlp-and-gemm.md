@@ -2,10 +2,12 @@
 
 如果把现代大模型拆到最底层，会发现大量计算都在做矩阵乘。但这里要先分清三层概念：`Linear` 是模型层，`MatMul` 是数学/框架里的矩阵乘操作，`GEMM` 是底层线性代数库和 GPU kernel 常用的 dense matrix-matrix multiplication 形式。它们相关，但不是同一个词。
 
-![线性层、MLP 与 GEMM](../assets/images/foundations/generated/linear-mlp-gemm-map.png){ width="920" }
+![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="520" }
 
-!!! note "图解：这张图要按抽象层级读"
-    图里的 `Linear` / `MLP` 是模型结构，`xW+b` 是 MatMul 加 bias 的数学表达，`GEMM` 是很多运行时实际调用或生成的底层 kernel 家族。Transformer 的 QKV 投影、attention 输出投影、MLP 的升维和降维，数学上是矩阵乘；工程上通常会把 token 维展平成二维矩阵，交给 GEMM、batched GEMM 或特化 fused kernel 执行。
+<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原论文图意：在 \(C=AB^T\) 矩阵乘上比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 相对 roofline model 的性能位置。</small>
+
+!!! note "图解：MatMul 是操作，GEMM 是高性能执行形态"
+    这张图选择矩阵乘作为性能比较对象，正好说明本页要分清的层级：`Linear` / `MLP` 是模型结构，`MatMul` 是数学或框架 API 里的矩阵乘操作，`GEMM` 是库和 kernel 层常见的高性能 dense matrix-matrix multiplication。Transformer 的 QKV 投影、attention 输出投影、MLP 升维和降维，数学上常写成 MatMul；工程上通常会 reshape 成二维矩阵并派发到 GEMM、batched GEMM 或 fused GEMM family。Triton 这类 DSL 的价值，就是让自定义矩阵类 kernel 在 tile、layout 和 memory access 上接近成熟库的性能区间。
 
 !!! note "初学者先抓住"
     Linear 层不是神秘模块，它就是把一组数字重新加权组合成另一组数字。MLP 则是在“重新组合 -> 非线性变形 -> 再压回去”之间给每个 token 一个独立的思考空间。

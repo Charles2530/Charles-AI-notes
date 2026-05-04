@@ -58,6 +58,13 @@ Attention 的核心公式是：
 
 FlashAttention 的核心思想是：不改变数学结果，重写数据流。它通过分块、在线 softmax 和片上累积，避免显式写出完整 score 矩阵。
 
+![FlashAttention IO-aware tiling 原论文图](../assets/images/paper-figures/operators/flashattention-io-aware-tiling.png){ width="760" }
+
+<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原论文图意：左侧展示 FlashAttention 如何按块把 Q/K/V 放入 SRAM，避免 materialize 完整 attention matrix；右侧展示在 GPT-2 attention 上相对 PyTorch 实现的加速效果。</small>
+
+!!! note "图解：FlashAttention 为什么是 exact attention"
+    这张图容易被误读成“近似 attention”。实际上 FlashAttention 没有改 \(QK^\top\)、softmax 和 \(AV\) 的数学结果，它改的是计算顺序和内存层级：每次只处理一块 K/V 和一块 Q，用在线 softmax 保持数值正确，再把累积输出写回。它快的原因是减少 HBM 中间读写，而不是牺牲 attention 质量。
+
 Attention 在不同 serving 阶段的画像也不同：
 
 | 场景 | 主要特征 | 优化重点 |

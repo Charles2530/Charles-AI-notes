@@ -62,6 +62,15 @@ T_{\text{decode}} \approx n \cdot T_{\text{step}}
 !!! tip "基础知识入口"
     推理系统里的 `KV Cache`、latency、throughput、runtime、kernel 和低精度路径，都依赖基础执行模型。建议先看 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)、[位置编码、Mask 与上下文](../foundations/positional-encoding-masks-and-context.md) 和 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。
 
+vLLM 原论文图可以作为推理专题的第一张系统图：在线推理不只是模型前向，还包括 scheduler、KV cache manager、GPU/CPU block allocator 和 worker 之间的协同。
+
+![vLLM system overview 原论文图](../assets/images/paper-figures/inference/vllm-system-overview.png){ width="700" }
+
+<small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 3。原论文图意：vLLM 使用 centralized scheduler 协调 GPU workers，并由 KV cache manager 通过 paged block 方式管理 GPU/CPU KV cache。</small>
+
+!!! note "图解：推理 runtime 是执行系统，不是一个 generate 函数"
+    图里的 scheduler 负责把请求编队，KV cache manager 负责把逻辑 token block 映射到物理 cache block，worker 才负责真正执行模型。TTFT、TPOT、吞吐和 P99 往往由这些系统组件共同决定。理解推理时，先把“请求如何进入 GPU”和“KV 如何分配回收”画清楚，再谈 kernel 或量化会更稳。
+
 ## 1. 推理系统为什么和训练系统完全不同
 
 **训练关心的是**：

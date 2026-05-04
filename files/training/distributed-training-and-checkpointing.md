@@ -77,6 +77,13 @@ $$
 3. ZeRO Stage 3 继续分片参数；
 4. FSDP 更贴近 PyTorch 原生 module wrapping 和按需 gather。
 
+![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
+
+<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原论文图意：比较普通数据并行和 ZeRO-DP 三个阶段的单设备模型状态显存；\(\Psi\) 表示参数量，\(K\) 表示优化器状态的显存倍数，\(N_d\) 表示数据并行度。</small>
+
+!!! note "图解：ZeRO 省的是重复模型状态"
+    图里的 `optimizer states`、`gradients`、`parameters` 是训练态显存的三大常驻部分。普通数据并行会在每张卡上完整复制这些状态；ZeRO Stage 1 先把优化器状态按 DP 组切开，Stage 2 再切梯度，Stage 3 连参数也按需分片。它不是减少数学计算量，而是把“每张卡都存一整份”的冗余改成“每张卡只长期保留一部分”，代价是训练过程中需要更多 gather、scatter 和 checkpoint 元数据。
+
 两者的共同代价是状态管理、通信和 checkpoint 复杂度上升。显存不是免费省出来的，而是用更多 gather/scatter、元数据和恢复逻辑换来的。
 
 ### 张量并行、序列并行与上下文并行
@@ -92,6 +99,13 @@ PP 按层切模型，微批次像流水线一样流过不同 stage。若 pipelin
 $$
 \text{utilization} \approx \frac{m}{m + K - 1}.
 $$
+
+![GPipe pipeline parallelism 原论文图](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png){ width="860" }
+
+<small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。原论文图意：将一个 mini-batch 拆成多个 micro-batch，使不同 accelerator 能在同一时间处理不同 micro-batch 的不同模型分段，并在末尾同步应用梯度。</small>
+
+!!! note "图解：micro-batch 是为了填流水线空泡"
+    如果只有一个大 batch 顺序通过所有 stage，很多 GPU 会在等待前后 stage 时空转。GPipe 图中的 \(F_k\) 表示第 \(k\) 段前向，\(B_k\) 表示对应反向；micro-batch 让 stage 1 处理下一小批时，stage 2/3/4 同时处理前面小批的后续层。micro-batch 越多，流水线越容易被填满，但也会增加激活保存、调度和优化器语义的复杂度，所以它不是越大越好。
 
 micro-batch 太少会有大量 bubble，太多又会影响激活保留、优化行为和调度复杂度。`1F1B` 和 interleaved pipeline 的目的都是减少空泡，但会增加调试和恢复复杂度。
 

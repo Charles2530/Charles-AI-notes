@@ -64,6 +64,15 @@ SFT 常见问题包括：
 
 即使经过 SFT，模型仍可能在多个合理答案之间选出不符合人类偏好的回答。偏好对齐引入成对或排序数据，例如优选 \(y^+\) 和劣选 \(y^-\)。
 
+InstructGPT 原论文的流程图很适合先建立全局直觉：对齐不是直接让人类给每个 token 标答案，而是先收集示范，再收集人类排序训练 reward model，最后用强化学习让策略朝高奖励回答移动。
+
+![InstructGPT RLHF pipeline 原论文图](../assets/images/paper-figures/training/instructgpt-rlhf-pipeline.png){ width="920" }
+
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 2。原论文图意：展示 InstructGPT 的三步训练流程：收集 demonstration data 做 SFT，收集模型输出排序训练 reward model，再用 PPO 按 reward model 优化 policy。</small>
+
+!!! note "图解：RLHF 的三步不要混在一起"
+    Step 1 是监督学习：人写出理想回答，模型学习模仿。Step 2 是偏好建模：同一个 prompt 下采样多个回答，让标注者排序，再训练 reward model 预测人类更偏好哪个。Step 3 才是强化学习：当前模型作为 policy 生成回答，reward model 给回答打分，PPO 根据奖励更新 policy。也就是说，RLHF 不是“人类实时教模型每一步怎么写”，而是“先学一个奖励函数，再用这个奖励函数训练生成策略”。
+
 以 DPO 为例：
 
 \[
@@ -79,6 +88,62 @@ SFT 常见问题包括：
 它推动策略相对参考模型提高优选回答概率，压低劣选回答概率。RLHF、DPO、RLAIF 等方法细节不同，但都在回答：模型已经会做很多事，怎样让它更符合人类或系统偏好。
 
 对齐特别敏感，因为它依赖偏好标签质量、参考模型、KL/reference constraint、学习率和样本分布。很多体验问题，例如啰嗦、拒答边界奇怪、自信但不确定，往往更像 SFT/对齐问题，而不是预训练问题。
+
+## 没有强化学习基础时怎么理解 RLHF
+
+强化学习最小直觉是：一个 `policy` 在环境里做 `action`，环境给 `reward`，训练目标是让未来奖励更高。把这个翻译到语言模型里：
+
+| 强化学习词 | 普通 RL 例子 | RLHF 里的对应物 |
+| --- | --- | --- |
+| `state` | 游戏画面、机器人当前状态 | prompt 加上已经生成的前缀 |
+| `action` | 往左走、夹爪闭合 | 生成下一个 token |
+| `policy` \(\pi_\theta\) | 看到状态后选择动作的模型 | 当前语言模型 |
+| `trajectory` | 一串状态和动作 | 从 prompt 到完整回答的 token 序列 |
+| `reward` | 得分、成功、碰撞惩罚 | reward model 对完整回答的分数 |
+| `reference policy` | 更新前的稳定策略 | SFT 模型或旧策略，用来限制别跑太远 |
+| `value` | 估计当前状态未来能拿多少分 | 估计当前前缀最终会得到多少奖励 |
+| `advantage` | 这个动作比预期好多少 | 这个 token/回答相对 value 估计是否更好 |
+
+语言模型的特殊之处在于，reward 通常不是每个 token 都有一个明确分数，而是完整回答结束后才由 reward model 评分。设 prompt 为 \(x\)，回答为 \(y=(y_1,\ldots,y_T)\)，策略概率是：
+
+\[
+\pi_\theta(y\mid x)
+=\prod_{t=1}^T \pi_\theta(y_t\mid x,y_{<t})
+\]
+
+RLHF 想最大化的是类似下面的目标：
+
+\[
+\max_\theta\;
+\mathbb{E}_{y\sim \pi_\theta(\cdot\mid x)}
+\left[
+r_\phi(x,y)
+- \beta\,\mathrm{KL}(\pi_\theta(\cdot\mid x)\|\pi_{\text{ref}}(\cdot\mid x))
+\right].
+\]
+
+这里 \(r_\phi(x,y)\) 是 reward model 给完整回答的分数；KL 项是“别离参考模型太远”的刹车。没有 KL，模型可能学会钻 reward model 的空子，例如变得异常啰嗦、过度自信、固定模板化，甚至输出 reward model 偏爱的奇怪格式。
+
+!!! note "难点解释：为什么 RLHF 里要有 value / advantage"
+    完整回答结束后才知道奖励，但更新发生在许多 token 决策上。`value` 用来估计“生成到当前前缀时，未来大概能拿多少分”；`advantage` 用来估计“这次采样出来的结果比预期好多少”。如果 advantage 为正，PPO 会倾向提高这段生成路径的概率；如果 advantage 为负，就倾向压低。没有 advantage，训练信号会很吵，因为每个 token 都很难知道自己对最终奖励贡献了多少。
+
+PPO 原论文给出的算法框架可以帮助你把这件事从“抽象奖励”落到训练步骤上。
+
+![PPO Algorithm 1 原论文图](../assets/images/paper-figures/training/ppo-algorithm-1.png){ width="760" }
+
+<small>图源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1。原论文图意：多个 actor 用旧策略收集固定长度轨迹，计算 advantage estimates，再用若干个 minibatch epoch 优化 surrogate objective，最后把旧策略更新为当前策略。</small>
+
+!!! note "图解：PPO 在 RLHF 里做的是小步更新"
+    原始 PPO 图里的 actor 在环境里跑 \(T\) 步；RLHF 里可以理解成模型对一批 prompts 采样回答。`Compute advantage estimates` 对应根据 reward model 分数、value 估计和 KL 惩罚计算训练信号；`Optimize surrogate` 对应用 minibatch 更新语言模型。PPO 名字里的 proximal 重点是“不要一步改太远”：模型要朝高奖励回答移动，但不能突然远离 SFT/reference 模型，否则容易牺牲事实性、格式稳定和基础能力。
+
+PPO 的 clipped surrogate 图进一步解释了这个“别改太远”。
+
+![PPO clipped surrogate objective 原论文图](../assets/images/paper-figures/training/ppo-clipped-surrogate.png){ width="760" }
+
+<small>图源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Figure 1。原论文图意：展示 clipped surrogate objective 中单个 timestep 项如何随概率比率 \(r\) 变化；当 advantage 为正或负时，clip 会限制策略概率变化带来的收益。</small>
+
+!!! note "图解：clip 是为了限制奖励驱动的过猛更新"
+    \(r_t(\theta)=\pi_\theta(a_t\mid s_t)/\pi_{\theta_{\text{old}}}(a_t\mid s_t)\) 表示新策略相对旧策略把同一动作概率改了多少。若 advantage 为正，模型想把这个动作概率调高；若 advantage 为负，模型想调低。clip 会在 \(1-\epsilon\) 到 \(1+\epsilon\) 附近限制收益，防止模型因为 reward model 的局部偏好一下子把概率推得太远。放到 RLHF 里，这就是为什么 PPO 训练既看 reward，也要看 KL、clip fraction、回答长度、事实性和拒答边界。
 
 ## 问题归因
 

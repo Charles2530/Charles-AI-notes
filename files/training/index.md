@@ -59,13 +59,30 @@
 
 ## 图解预览
 
-如果你只是打开了“训练总览”页，之前新增的大部分图片都在 [逐页通俗图解](page-by-page-visual-guide.md) 里。这里先放几张总览图，方便确认图片资源是否正常加载。
+如果你只是打开了“训练总览”页，先用论文原图建立“训练预算不是只堆参数”的直觉。Chinchilla 的 scaling law 图说明：在固定 FLOP 预算下，模型参数量和训练 token 数需要一起配平，过大的模型如果训练 token 不够，反而不是 compute-optimal。
 
-![大模型训练排障作战图](../assets/images/training/generated/training-triage-war-room-poster.png){ width="920" }
+![Chinchilla IsoFLOP curves 原论文图](../assets/images/paper-figures/training/chinchilla-isoflop-curves.png){ width="920" }
 
-![训练总览知识卡片](../assets/images/training/generated/training-card-01-overview.png){ width="920" }
+<small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)，Figure 4。原论文图意：在固定 FLOP 预算下比较不同模型大小的最终 loss，并从 IsoFLOP 曲线谷底外推 compute-optimal 的模型参数量和训练 token 数。</small>
 
-![训练问题分层排查栈](../assets/images/training/generated/training-layer-triage-stack.svg){ width="920" }
+!!! note "图解：训练预算要同时分给参数和 token"
+    这张图的重点不是某条曲线的具体数值，而是“固定算力下存在最优模型大小”。模型太小会容量不足，模型太大又会因为训练 token 不够而欠训练。训练专题里讨论数据配方、packing、吞吐和 scaling law，本质上都在服务同一个问题：有限 GPU 小时应该怎样转化成最多有效学习信号。
+
+并行训练和训练系统部分先看 ZeRO 与 GPipe 的两张原论文图：一张解释“状态为什么放不下”，一张解释“流水线为什么要 micro-batch”。这比概括性教学图更贴近原始方法逻辑。
+
+![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
+
+<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原论文图意：比较普通数据并行和 ZeRO-DP 三个阶段的单设备模型状态显存，展示优化器状态、梯度和参数分片如何降低单卡常驻状态。</small>
+
+!!! note "图解：训练系统先要解释显存账"
+    训练页后面会反复出现 DP、FSDP、ZeRO、activation checkpointing、低精度和 checkpoint。它们不是孤立技巧，而是在处理同一张显存账：参数、梯度、优化器状态、激活和通信 buffer 谁常驻、谁按需 gather、谁可以重算、谁必须保存用于恢复。
+
+![GPipe pipeline parallelism 原论文图](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png){ width="860" }
+
+<small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。原论文图意：将 mini-batch 拆成多个 micro-batch，使不同 accelerator 能同时处理不同 micro-batch 的不同模型分段，并在末尾同步应用梯度。</small>
+
+!!! note "图解：吞吐问题还要解释时间账"
+    如果 ZeRO 图解释的是“状态放在哪里”，GPipe 图解释的就是“设备什么时候空转”。micro-batch 能填充 pipeline bubble，但会牵动激活保存、反向时序、梯度累积和优化器更新语义。训练系统优化必须同时看显存账和时间账。
 
 **训练的核心是**：给定数据、模型和算力预算，如何让损失稳定下降，并最终迁移到真实任务。
 

@@ -26,6 +26,13 @@ Runtime 主要负责：模型加载与权重布局、请求编队、prefill/deco
 
 因此 runtime 选型不是“哪个包流行”，而是服务系统架构选择。
 
+![vLLM PagedAttention 原论文图](../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="620" }
+
+<small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 4。原论文图意：PagedAttention 允许 attention 的 K/V 向量存放在非连续物理内存块中，kernel 通过 block table 找到对应 KV block 并完成注意力计算。</small>
+
+!!! note "图解：PagedAttention 把 KV cache 当成分页内存"
+    朴素服务系统常为每个请求预留一大段连续 KV 空间，导致内部碎片和预留浪费。PagedAttention 的关键是把逻辑 token 序列拆成 block，再映射到不连续的物理 block。这样不同请求、beam 或并行生成分支可以更灵活地共享和回收 KV cache，显存利用率会直接影响可并发请求数。
+
 ## 二、三条代表路线
 
 不同 runtime 的差异，往往来自默认假设不同。

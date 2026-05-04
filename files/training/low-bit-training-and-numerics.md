@@ -283,7 +283,12 @@ Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变
 这类问题说明：  
 训练低精度不能只测 `Linear` 层误差。Attention kernel、归一化、残差流和激活函数都要纳入排查。
 
-![训练稳定性排查树](../assets/images/training/generated/stability-triage-tree.png){ width="920" }
+![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="760" }
+
+<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原论文图意：比较不同规模 GPT 模型在 BF16 与 FP8 训练下的 loss/perplexity 曲线，展示 FP8 在合适 scaling 与训练配置下可以接近 BF16 收敛行为。</small>
+
+!!! note "图解：低精度稳定性要看曲线而不是只看格式"
+    FP8 能不能用于训练，不是由“8 bit 看起来够不够”直接决定，而是由 scale 策略、累加精度、outlier 处理、kernel 实现和训练配置共同决定。图中 FP8 与 BF16 曲线接近，说明低精度路径可以稳定，但这是一组经过设计的数值系统结果；迁移到新模型时仍要重新检查 loss spike、梯度范数、activation percentile、scale 饱和率和 NaN/Inf。
 
 ## 9. MTP、投机解码和量化训练为什么会碰到一起
 
@@ -337,7 +342,12 @@ Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变
 
 ### 10.2 低比特训练 dashboard 应该长什么样
 
-![训练集群 SLO 看板](../assets/images/training/generated/training-cluster-slo-board.png){ width="920" }
+![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
+
+<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原论文图意：比较普通数据并行和 ZeRO-DP 三个阶段的单设备模型状态显存；\(\Psi\) 表示参数量，\(K\) 表示优化器状态的显存倍数，\(N_d\) 表示数据并行度。</small>
+
+!!! note "图解：低比特 dashboard 要拆开显存来源"
+    ZeRO 图虽然讲的是状态分片，但它对低比特训练 dashboard 很有启发：不要只看总显存，要拆成参数、梯度、优化器状态、激活、通信 buffer 和 KV/临时 workspace。低精度可能明显减少某一项，却让 scale、metadata、重计算或通信开销增加。监控面板必须能解释“省下的是哪块显存、增加的是哪块开销”，否则很容易把短期能跑误判成长期可训。
 
 一个实用 dashboard 至少要把下面几类图放在一起：
 

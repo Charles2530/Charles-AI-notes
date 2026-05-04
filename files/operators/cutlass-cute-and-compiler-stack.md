@@ -36,6 +36,13 @@ AI kernel 工程里常见误解是：既然已有 `torch.compile`、Triton、cuB
 
 成熟系统不会只押一种抽象，而是在这些层之间混合搭建。
 
+![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="520" }
+
+<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原论文图意：在矩阵乘 \(C=AB^T\) 上比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 相对 roofline model 的性能位置。</small>
+
+!!! note "图解：Triton 的价值在 tile 级表达和编译优化"
+    这张图不是说 Triton 永远比库更快，而是说明合适的 DSL 可以把自定义 kernel 拉近到成熟库的性能区间。对 AI kernel 来说，关键不是只把 Python 换成低层语言，而是让程序员直接表达 tile、block、memory access 和并行粒度，再由编译器做 layout、调度和代码生成。CUTLASS/CuTe 走的是模板化硬件构件路线，Triton 走的是块级张量 DSL 路线，二者都在解决“高层框架太粗、纯 CUDA 太重”的中间地带。
+
 ## 图编译器擅长什么
 
 图编译器的核心不是“把 Python 变快”，而是识别稳定子图、消除 eager 开销、融合小算子、重写 layout，并把部分热点降到更高效的 kernel 后端。

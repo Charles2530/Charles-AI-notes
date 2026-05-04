@@ -120,6 +120,13 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 
 VLA 更像具身智能里的端到端策略接口之一。它回答的是：给定视觉观测和语言指令，模型能否直接给出动作或动作块。
 
+![ACT architecture 原论文图](../assets/images/paper-figures/vla/aloha-act-algorithm.png){ width="820" }
+
+<small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705)，Figure 2。原论文图意：Action Chunking with Transformers (ACT) 用 CVAE 编码动作序列和关节观测，测试时根据多视角图像、关节状态和 latent 生成一段 action sequence，并用 temporal ensembling 平滑执行。</small>
+
+!!! note "图解：动作不是单点输出"
+    ACT 图里的 action sequence 说明了具身策略和普通 VLM 输出的差别：机器人常需要一次生成一小段未来动作，而不是每帧只给一个离散答案。chunk 能减少抖动、保留短时技能结构，但执行时仍要持续重新观察、重新预测，并经过低层控制器和安全过滤。
+
 ### 与世界模型的关系
 
 世界模型更像具身系统里的内部模拟器和前瞻模块。它回答的是：如果现在这样做，未来大概率会怎样变化。
