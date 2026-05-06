@@ -196,6 +196,8 @@
    开放式具身任务 benchmark，可用于讨论 long-horizon world model。
 4. [Crafter: Open-Ended Reinforcement Learning in a Minecraft-like World](https://arxiv.org/abs/2109.06780)  
    轻量、可控、适合快速测试的开放式世界环境。
+5. [A Comprehensive Survey on World Models for Embodied AI](https://arxiv.org/abs/2510.16732)
+   用 functionality、temporal modeling 和 spatial representation 三轴梳理具身世界模型，适合作为世界模型文献地图入口；站内专题见 [具身世界模型综述](../paper-deep-dives/world-models/world-models-embodied-ai-survey.md)。
 
 ### 4.6 世界模型训练效率与系统优化
 
@@ -257,6 +259,9 @@
 
 ### 5.1 强化学习基础方法
 
+1. [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948)  
+   用 GRPO、rule-based reward 和大规模 RLVR 训练长 CoT reasoning model 的关键技术报告；站内专题见 [DeepSeek-R1 讲解](../paper-deep-dives/technical-reports/deepseek-r1.md)。
+
 1. [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)
    `DQN` 是深度强化学习的经典起点，适合理解 value learning、replay buffer 和 target network。
 2. [Asynchronous Methods for Deep Reinforcement Learning](https://arxiv.org/abs/1602.01783)
@@ -269,7 +274,9 @@
    `SAC` 适合理解 off-policy actor-critic、maximum entropy objective、reward scale 和探索稳定性。
 6. [Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems](https://arxiv.org/abs/2005.01643)
    `Offline RL` 适合理解固定数据集训练、behavior policy、support constraint、trajectory stitching 和机器人数据复用。
-7. [DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models](https://arxiv.org/abs/2402.03300)
+7. [Decision Transformer: Reinforcement Learning via Sequence Modeling](https://arxiv.org/abs/2106.01345)
+   `Decision Transformer` 适合理解 return-conditioned trajectory modeling，以及为什么 VLA / 世界模型可以把状态、动作和回报组织成 Transformer 序列。
+8. [DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models](https://arxiv.org/abs/2402.03300)
    `GRPO` 的重要来源之一，适合理解组内相对奖励如何减少 critic 依赖。
 
 ### 5.2 LLM/VLM 后训练与 verl

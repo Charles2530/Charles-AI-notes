@@ -18,6 +18,36 @@
 !!! example "有趣例子：刷题和学骑车"
     监督学习像做带答案解析的选择题，错了能看到标准答案。强化学习更像学骑车：没有人逐帧告诉你脚踏板该转多少度，但摔倒、保持平衡、顺利转弯会给你反馈。世界模型则像在脑中预演“如果现在急刹会不会摔”，再让策略选更稳的动作。
 
+## 0. 最小闭环：先把五个角色分清楚
+
+初学者读 RL 公式前，先把下面五个角色分清楚：
+
+| 角色 | 简洁解释 | 大模型 / VLA 里的对应 |
+| --- | --- | --- |
+| agent | 做决定的系统 | LLM、VLM policy、VLA policy、机器人策略 |
+| environment | 被 agent 改变并返回反馈的外部世界 | prompt 评测器、工具环境、仿真器、真实机器人场景 |
+| observation / state | 当前能看到或能推断出的局面 | prompt、图像、历史动作、latent state |
+| action | agent 实际选择的输出 | token、完整回答、工具调用、动作块、关节命令 |
+| reward | 结果好坏的反馈 | 正确性、偏好分、任务成功、碰撞惩罚、视频预测指标 |
+
+一次 RL 训练可以压成一条循环：
+
+```text
+观察局面 -> 采样动作 -> 得到结果和奖励 -> 估计这次行为比预期好不好 -> 更新策略
+```
+
+!!! note "难点解释：为什么一定要采样"
+    如果模型永远只输出最可能的答案，你只能看到一种行为的结果，也就不知道其他答案会不会更好。采样让模型暴露出多种候选行为，reward 才能比较“哪一种更值得提高概率”。GRPO 里 `rollout.n=5` 就是在同一道题或同一状态下采样多次，用组内比较构造 advantage。
+
+同一套语言可以落到不同系统里：
+
+| 场景 | state / observation | action | reward |
+| --- | --- | --- | --- |
+| Atari | 屏幕像素和历史帧 | 上下左右、开火等按键 | 游戏分数 |
+| 数学 RLVR | 题目 prompt 和当前解题前缀 | 下一段推理或完整答案 | 答案正确、格式正确 |
+| VLA | 图像、语言指令、关节状态、历史动作 | 动作 token 或 action chunk | 成功率、碰撞、平滑度 |
+| 世界模型 | 当前状态、动作和上下文 | 预测下一状态或未来轨迹 | 和真实未来的可验证指标 |
+
 ## 1. 为什么这里需要强化学习
 
 从 VLM/VLA 走向世界模型时，问题会发生变化：
@@ -78,6 +108,9 @@ VLM/VLA 章节里保留的 CLIP/InfoNCE 只解决静态表示问题：
 
 大模型后训练常见的 PPO、GRPO、RLOO、ReMax，本质上都在解决一个共同问题：生成式模型的输出空间太大，奖励又常常只在完整回答或完整轨迹结束后出现，所以需要稳定地把“这次结果好不好”转回 token、动作和参数更新。
 
+!!! note "初学者判断：你看到的到底是哪类 RL"
+    如果论文在真实或仿真环境里反复交互，通常是经典控制 RL。如果论文用 prompt 采样回答、规则或 reward model 打分，通常是 LLM/VLM 后训练。如果论文先学习 \(P(s_{t+1}\mid s_t,a_t)\)，再在模型里想象未来，通常是 model-based RL 或世界模型路线。三者共享 reward、return、advantage 这些语言，但工程瓶颈完全不同。
+
 ## 5. 论文图先建立直觉
 
 经典深度强化学习常从 Atari 游戏讲起，因为它把“看图像、选动作、拿分数、长期优化”压缩在一个容易观察的环境里。
@@ -90,6 +123,22 @@ VLM/VLA 章节里保留的 CLIP/InfoNCE 只解决静态表示问题：
 
 !!! note "图解：为什么 Atari 图适合做 RL 入门"
     每张图都可以按同一套语言读：屏幕像素是 observation，按键是 action，游戏分数变化是 reward，一局游戏是 trajectory。DQN 的难点是模型只能从图像和分数里学到“什么时候开火、什么时候躲避、什么时候等待”，这正好对应 RL 的长期信用分配问题。
+
+Decision Transformer 适合理解“RL 轨迹也可以被看成序列建模问题”：它把 return、state、action 交替放进 Transformer，让模型在给定目标回报的条件下预测动作。
+
+![Decision Transformer architecture 原论文图](../assets/images/paper-figures/reinforcement-learning/decision-transformer-architecture.png){ width="920" }
+
+<small>图源：[Decision Transformer: Reinforcement Learning via Sequence Modeling](https://arxiv.org/abs/2106.01345)，Figure 1。原论文图意：把 return-to-go、state 和 action 三类 token 输入 GPT decoder，用自回归方式预测后续 action。</small>
+
+!!! note "图解：为什么这张图和大模型/VLA 很相关"
+    这张图把 RL 从“显式 Bellman backup”改写成“条件序列建模”：如果希望未来拿到高回报，就把目标 return 作为条件输入，再预测动作。对 VLA 和世界模型来说，这个视角很有用：轨迹可以像语言一样 token 化，动作也可以进入 Transformer；但它仍依赖离线数据质量，不能自动解决分布外动作和闭环失败。
+
+![Decision Transformer return conditioning 原论文图](../assets/images/paper-figures/reinforcement-learning/decision-transformer-retcond-plots.png){ width="920" }
+
+<small>图源：[Decision Transformer](https://arxiv.org/abs/2106.01345)，Figure 4。原论文图意：展示不同任务中目标 return conditioning 与实际性能的关系，虚线表示理想单调趋势。</small>
+
+!!! note "图解：return conditioning 不是魔法按钮"
+    横轴是你告诉模型“我想要多少回报”，纵轴是实际执行表现。理想情况是目标越高，实际越好；但曲线会饱和、波动甚至失效，因为训练数据里未必有足够高质量轨迹。把它迁移到机器人或世界模型时，要检查高目标条件下是否真的能闭环执行，而不是只在离线轨迹上看起来合理。
 
 InstructGPT 的流程图是理解 LLM 强化学习后训练的入口：先做 SFT，再训练 reward model，最后用 PPO 让 policy 朝高奖励回答移动。
 

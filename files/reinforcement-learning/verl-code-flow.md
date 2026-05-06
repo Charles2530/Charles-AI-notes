@@ -5,6 +5,9 @@
 !!! note "初学者先抓住"
     verl 的核心不是“实现了一个 PPO 公式”，而是把 RLHF/RLVR 的控制流和大模型训练/推理的分布式计算拆开。单进程 controller 负责算法步骤，远端 worker 负责 actor、rollout、critic、reference 和 reward 的大模型计算。
 
+!!! tip "先和前面知识点对上"
+    如果你刚读完 MDP 和 PPO，可以把 `verl` 看成一条工程化流水线：`prompt` 是 state，`generate_sequences` 采样 action/trajectory，`reward_manager` 给 reward，`compute_advantage` 把 reward 变成 advantage，`_update_actor` 更新 policy。训练章节里的 FSDP/Megatron 负责让反向传播跑得动，推理章节里的 vLLM/SGLang 负责让 rollout 生成跑得快。
+
 ## 1. HybridFlow 的架构视角
 
 ![HybridFlow architecture 原论文图](../assets/images/paper-figures/reinforcement-learning/hybridflow-architecture.png){ width="920" }
@@ -37,6 +40,19 @@
 
 !!! tip "怎么读源码更顺"
     先读 `examples/grpo_trainer/run_qwen3_8b_fsdp.sh` 或 `examples/ppo_trainer/run_qwen3_8b_fsdp.sh` 看配置，再读 `main_ppo.py` 看配置如何构造 trainer，最后读 `ray_trainer.py::fit` 看一次训练 step 的真实顺序。不要从 worker backend 细节开始，否则很容易被 FSDP/vLLM/SGLang 细节淹没。
+
+最新 `core_algos.py` 里 advantage estimator 已经不止 PPO/GRPO 两种，可以先按下面的用途读：
+
+| estimator | 直觉 | 初学者怎么理解 |
+| --- | --- | --- |
+| `gae` | 用 critic value 做低方差 advantage | 标准 PPO / actor-critic 路线 |
+| `grpo` | 同一 prompt 多个 response 做组内相对奖励 | 不训练 critic，用组平均当 baseline |
+| `rloo` | leave-one-out baseline | 每个回答和同组其他回答比较，减少自我偏置 |
+| `remax` | 额外 baseline generation | 用基线回答降低 reward 方差 |
+| `gpg` / `gdpo` 等扩展 | 针对长推理、多维 reward 或新 policy loss 的变体 | 先看配置和 reward 结构，再看公式 |
+
+!!! note "难点解释：为什么配置里很多名字还叫 ppo"
+    verl 里不少字段叫 `ppo_mini_batch_size`、`ppo_epochs`，但 GRPO、RLOO、ReMax 也会复用这套 rollout 后再更新 actor 的训练循环。这些字段很多是“采样后如何切 mini-batch、做几轮 actor update”的工程参数，不一定只属于 PPO 算法本身。
 
 ## 4. 从命令行配置到 Trainer
 
@@ -76,6 +92,16 @@ Hydra 读取配置
 | `reward.*` | reward model、函数式 reward 或远端 reward 服务 |
 | `algorithm.*` | advantage estimator、gamma、lambda、KL penalty、GRPO 归一化等 |
 
+把这些配置和前面章节对应起来：
+
+| 前面概念 | 典型配置 | 作用 |
+| --- | --- | --- |
+| 采样多样性 / 探索 | `rollout.temperature`、`rollout.top_p`、`rollout.n` | 控制同一 prompt 下生成多少候选，以及候选有多分散 |
+| 策略不要跑太远 | `actor.use_kl_loss`、`actor.kl_loss_coef`、`algorithm.use_kl_in_reward` | 对应 PPO/RLHF 中的 reference/KL 约束 |
+| 训练显存 | `fsdp_config.param_offload`、`optimizer_offload`、`ppo_max_token_len_per_gpu` | 对应训练章节里的 FSDP、offload、动态 batch |
+| rollout 吞吐 | `rollout.name=vllm/sglang`、`tensor_model_parallel_size`、`gpu_memory_utilization` | 对应推理章节里的 KV cache、batching、tensor parallel |
+| 多模态输入 | `processor`、`data.image_key`、`multi_modal_inputs` | 对应 VLM/VLA 章节里的图像 token 和 processor |
+
 ## 5. 一次训练 step 的数据流
 
 `RayPPOTrainer.fit()` 中，一次核心 step 可以简化成：
@@ -111,6 +137,20 @@ batch prompts
 
 !!! note "难点解释：old_log_probs、ref_log_prob 和 rollout_log_probs"
     `old_log_probs` 是这批样本在更新前 actor 下的概率锚点，PPO 的 ratio 依赖它。`ref_log_prob` 来自 reference policy，用于 KL 约束，防止模型离 SFT/reference 太远。`rollout_log_probs` 可能来自生成 backend，本质上记录采样策略的概率；在异步或 off-policy 变体里，它和训练时重新计算的 old log prob 可能不同。
+
+!!! note "代码对照：reward 到 advantage 的三步"
+    `extract_reward(batch)` 得到 `reward_tensor`，训练循环把它放进 `batch.batch["token_level_scores"]`。如果启用 `algorithm.use_kl_in_reward`，`apply_kl_penalty(...)` 会把 reference KL 从 reward 中扣掉，生成 `token_level_rewards`；否则 `token_level_rewards = token_level_scores`。最后 `compute_advantage(...)` 根据 `algorithm.adv_estimator` 选择 GAE、GRPO、RLOO、ReMax 等函数，写入 `advantages` 和 `returns`。
+
+GRPO 的关键代码点是 `uid` 分组：`compute_grpo_outcome_advantage(...)` 会对同一 prompt 的多条 response 求组内均值和标准差。
+
+```text
+scores = token_level_rewards.sum(dim=-1)
+group = data.non_tensor_batch["uid"]
+advantage = (score - group_mean) / (group_std + eps)
+```
+
+!!! example "有趣例子：uid 像题号"
+    假设 batch 里有 64 道题，每题采样 5 个答案，那么实际 response 有 320 条。`uid` 告诉 verl 哪 5 条属于同一道题。GRPO 只在同一道题内部比较好坏，不会把一道特别难的题和一道特别容易的题直接比较。
 
 ## 6. 把前面知识点对应到 verl 变量
 
@@ -155,6 +195,9 @@ data.image_key=images
 !!! example "有趣例子：把一道数学题看成 RL"
     prompt 是题目，response 是模型写出的解法，reward 是答案是否正确或格式是否通过，reference policy 是原来的 SFT 模型。GRPO 对同一道题采样多个解法：正确且格式好的解法 advantage 更高，错误或绕格式漏洞的解法 advantage 更低。`verl` 做的事情，就是把这些步骤批量化、分布式化，并让它能在 vLLM/SGLang 生成和 FSDP/Megatron 训练之间稳定切换。
 
+!!! example "有趣例子：把 VLA 抓取看成 verl dataflow"
+    如果把 prompt 换成“当前图像 + 指令 + 机器人状态”，response 就是未来动作块。reward 可以由仿真成功率、碰撞检测、轨迹平滑度和最终位置误差组成。`rollout.n` 对同一状态采样多个动作块，GRPO 比较哪条更安全、更接近成功。真正工程化时还要把 VLA processor、动作 tokenizer、仿真/真实 reward 服务和安全过滤接入 worker。
+
 ## 7. PPO 和 GRPO 在 verl 里的差别
 
 | 配置/组件 | PPO | GRPO |
@@ -166,6 +209,9 @@ data.image_key=images
 | KL 约束 | 可用 KL reward penalty 或 KL loss | 常用 actor 侧 KL loss |
 
 `core_algos.py` 里 GRPO 的核心就是按 `uid` 把同一 prompt 的多次采样分组，然后对 group reward 做相对归一化。这和 RLVR-World 的世界模型后训练很贴近：同一状态动作输入，采样多种下一状态预测，再看哪一个 decoded prediction 指标更好。
+
+!!! warning "常见误区：GRPO 不需要 critic 不等于更简单"
+    GRPO 省掉了 value model，但增加了 group sampling 的吞吐压力和 reward 方差问题。`rollout.n` 太小，组内比较不稳；太大，生成成本上升。response 长度差异还可能带来 length bias，所以 verl 文档里会讨论 `loss_agg_mode`、DrGRPO 和 `norm_adv_by_std_in_grpo` 这类稳定化配置。
 
 ## 8. 3D-HybridEngine：为什么生成和训练要切换形态
 
@@ -203,3 +249,14 @@ verl 本身主要面向 LLM/VLM RL 后训练，但它的 dataflow 思路可以�
 | VLM/VLA 样本报错 | processor、multi_modal_inputs、图像 token 长度和 batch padding |
 
 读 verl 源码时，把算法循环和系统后端分开：算法循环回答“这一步为什么发生”，系统后端回答“这一步如何在多卡上跑得动”。
+
+## 11. 和前面章节的回看关系
+
+| 你在 verl 里看到的问题 | 回看哪个章节 |
+| --- | --- |
+| 不懂 `adv_estimator=gae/grpo/rloo` | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md) |
+| 不懂 `token_level_scores`、`advantages`、`returns` | [MDP、价值函数与 Bellman](mdp-value-bellman.md) |
+| rollout 慢、KV cache 爆显存 | [推理总览](../inference/index.md)、[服务态 Attention 与 KV Kernel](../operators/serving-attention-and-kv-kernels.md) |
+| actor update OOM 或吞吐低 | [训练总览](../training/index.md)、[分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md) |
+| VLM 数据进不来 | [VLM/VLA 总览](../vlm/index.md)、[视觉表征、连接器与时序状态](../vlm/architecture-and-training.md) |
+| 想把 RLVR 用到世界模型 | [强化学习如何帮助世界模型](rl-for-world-models.md)、[世界模型总览](../world-models/index.md) |

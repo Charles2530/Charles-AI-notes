@@ -218,5 +218,9 @@ nav:
           - V-JEPA：Latent Video Prediction for Visual Representation Learning: paper-deep-dives/world-models/v-jepa.md
           - Self Forcing：Bridging the Train-Test Gap in Autoregressive Video Diffusion: paper-deep-dives/world-models/self-forcing.md
           - Towards Video World Models：视频生成走向世界模型的五个门槛: paper-deep-dives/world-models/towards-video-world-models.md
+          - A Comprehensive Survey on World Models for Embodied AI：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
           - LingBot-World：从视频生成到开源世界模拟器: paper-deep-dives/world-models/lingbot-world.md
           - DreamZero：World Action Models are Zero-shot Policies: paper-deep-dives/world-models/dreamzero.md
+      - 技术报告:
+          - DeepSeek-R1：用强化学习激发大模型推理能力: paper-deep-dives/technical-reports/deepseek-r1.md
+          - DeepSeek-V4 Technical Report：百万上下文、混合注意力与 FP4 后训练: paper-deep-dives/technical-reports/deepseek-v4-pro.md

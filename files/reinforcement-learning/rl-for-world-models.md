@@ -69,7 +69,21 @@ Dreamer 的重点是把世界模型变成策略训练器：
 | value model | imagined return | 估计长时收益 |
 | action model | value gradients 或 policy objective | 输出真实执行动作 |
 
-## 4. RLVR-World：用可验证奖励训练世界模型本身
+## 4. Decision Transformer：轨迹 token 化的另一条入口
+
+Decision Transformer 给世界模型和 VLA 一个重要启发：轨迹不一定只能通过 Bellman backup 学，也可以被组织成序列建模问题。
+
+![Decision Transformer architecture 原论文图](../assets/images/paper-figures/reinforcement-learning/decision-transformer-architecture.png){ width="920" }
+
+<small>图源：[Decision Transformer: Reinforcement Learning via Sequence Modeling](https://arxiv.org/abs/2106.01345)，Figure 1。原论文图意：把 return-to-go、state、action 交替输入 GPT decoder，用目标回报条件化动作预测。</small>
+
+!!! note "图解：它和世界模型有什么关系"
+    世界模型常建模 \(p(s_{t+1:t+H}\mid s_t,a_{t:t+H-1})\)，Decision Transformer 则建模 \(p(a_t\mid \hat R_{\le t},s_{\le t},a_{<t})\)。前者更像“预测动作后果”，后者更像“给定目标回报生成动作”。如果把二者结合起来，可以先用世界模型评估候选未来，再把高回报轨迹作为条件策略学习材料。VLA 中的 action token、action chunk 和 trajectory transformer 都可以从这张图建立直觉。
+
+!!! warning "边界：离线轨迹建模不保证真实闭环"
+    Decision Transformer 在离线数据上很自然，但真实机器人和世界模型会遇到分布外状态。模型可能会在数据中没见过的高 return 条件下输出看似合理、实际不可执行的动作。因此读这类论文时，要额外看 closed-loop evaluation、数据覆盖和失败恢复。
+
+## 5. RLVR-World：用可验证奖励训练世界模型本身
 
 PlaNet/Dreamer 主要把 world model 用于规划或策略学习。RLVR-World 进一步强调：世界模型本身的训练目标也可以从 MLE/SFT 转向任务指标。
 
@@ -93,7 +107,7 @@ RLVR-World 的训练逻辑可以压缩成：
 !!! warning "关键风险：可验证不等于完全正确"
     可验证奖励降低了 reward model 主观性，但仍可能遗漏真实任务关心的东西。比如视频指标可能奖励像素相似，却没有检查物理一致性；结构化状态 F1 可能忽略长期可执行性。因此 RLVR 适合补齐任务指标错位，但仍需要闭环评测和失败样本回放。
 
-## 5. 强化学习给世界模型带来的五个增量
+## 6. 强化学习给世界模型带来的五个增量
 
 | 增量 | 具体作用 |
 | --- | --- |
@@ -103,7 +117,7 @@ RLVR-World 的训练逻辑可以压缩成：
 | 规划与反事实 | world model 支持“如果换个动作会怎样”的内部模拟 |
 | 风险敏感控制 | reward 可以显式加入碰撞、失败、不可恢复状态和不确定性惩罚 |
 
-## 6. 和 VLA 的连接
+## 7. 和 VLA 的连接
 
 VLA 学的是：
 
@@ -136,7 +150,7 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 !!! example "有趣例子：机器人抓杯子"
     VLA 可能学会看到杯子就伸手。世界模型会预测从左侧推可能把杯子推倒，从上方夹取更稳。RL 再把“成功夹起、没有碰撞、动作平滑”变成 reward，让策略在类似状态中更倾向于安全动作。
 
-## 7. 读论文时的检查清单
+## 8. 读论文时的检查清单
 
 | 检查项 | 要问的问题 |
 | --- | --- |

@@ -55,6 +55,16 @@
 | `instructgpt-preference-facetted.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 4 | 解释不同 prompt 分布和 labeler 分组下的偏好结果 |
 | `ppo-clipped-surrogate.png` | [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Figure 1 | 解释 PPO clipped surrogate 如何限制策略概率变化 |
 
+## 强化学习专题论文原图
+
+这些图片位于 `files/assets/images/paper-figures/reinforcement-learning/`。
+
+| 文件 | 来源 | 用途 |
+| --- | --- | --- |
+| `decision-transformer-architecture.png` | [Decision Transformer: Reinforcement Learning via Sequence Modeling](https://arxiv.org/abs/2106.01345)，Figure 1 | 解释 return-to-go、state、action 如何被组织成 GPT-style trajectory token |
+| `decision-transformer-results-summary.png` | [Decision Transformer](https://arxiv.org/abs/2106.01345)，Figure 2 | 对比 Decision Transformer、TD Learning 和 Behavior Cloning 的总体表现 |
+| `decision-transformer-retcond-plots.png` | [Decision Transformer](https://arxiv.org/abs/2106.01345)，Figure 4 | 解释 return conditioning 与实际性能的关系 |
+
 训练页还复用了一些其他专题的论文图：
 
 | 文件 | 来源 | 用途 |

@@ -26,6 +26,17 @@ MDP 通常写成：
 !!! note "难点解释：state 不等于 observation"
     `observation` 是传感器看到的东西，例如当前图像；`state` 是足以预测未来的内部描述，例如物体位置、速度、接触关系和任务进度。VLM 往往处理 observation，世界模型要努力学习更接近 state 的 latent。
 
+!!! example "有趣例子：找钥匙"
+    你站在客厅里只能看到桌面，这就是 observation。钥匙可能在抽屉里、沙发缝里或你刚刚放过的外套口袋里，这些未观测信息属于 state。好的 agent 会记住历史、主动打开抽屉或询问人类；只看当前画面做判断，很容易把“没看见钥匙”误当成“钥匙不存在”。
+
+MDP 的一个隐含假设是 Markov property：只要知道当前 state，未来就不需要额外依赖更早历史。
+
+\[
+P(s_{t+1}\mid s_1,a_1,\ldots,s_t,a_t)=P(s_{t+1}\mid s_t,a_t)
+\]
+
+这不是说真实世界没有历史，而是说我们选的 state 应该已经把有用历史压进去了。世界模型、RSSM、Transformer memory 和 VLA 的历史窗口，本质上都在努力构造更接近 Markov 的内部状态。
+
 ## 2. Policy 是行为规则
 
 策略写成：
@@ -46,7 +57,28 @@ MDP 通常写成：
 !!! example "有趣例子：走迷宫"
     如果每次到路口都固定向左走，这是 deterministic policy。如果有 70% 概率向左、30% 概率向右，这是 stochastic policy。训练早期需要一定随机性，否则 agent 可能永远发现不了右边有出口。
 
-## 3. Reward、Return 和 Value
+!!! note "难点解释：behavior policy 为什么重要"
+    Offline RL 和 VLA 示范数据经常来自旧策略或人类示范，也就是 behavior policy。你要训练的新策略可能想选更好的动作，但如果这个动作在数据里几乎没出现过，value 估计就只能外推，容易虚高。后面讲 support constraint、trajectory stitching 和 verl rollout 时，都要记住“数据到底是谁采来的”。
+
+## 3. Trajectory、Episode 和 Horizon
+
+RL 不只看单个样本，而是看一串状态、动作和奖励：
+
+\[
+\tau=(s_0,a_0,r_0,s_1,a_1,r_1,\ldots)
+\]
+
+| 术语 | 简洁解释 |
+| --- | --- |
+| trajectory | 一段连续交互记录，可以是完整回合，也可以是截断片段 |
+| episode | 从开始到终止的一整局任务，例如一局游戏或一次机器人任务 |
+| horizon | 最多向前看多少步，短 horizon 看局部，长 horizon 看长期后果 |
+| rollout | 用当前 policy 采样一段 trajectory，真实环境或模型环境都可以 |
+
+!!! example "有趣例子：做饭任务的 horizon"
+    如果 horizon 只有 1 步，机器人只会问“现在夹锅铲是否合理”。如果 horizon 有 30 步，它还要考虑夹起锅铲后抽屉是否打开、路径是否会撞到锅、放进去后是否需要松爪。世界模型之所以重要，是因为长 horizon 真实试错很贵，内部 rollout 可以先筛掉明显危险的候选动作。
+
+## 4. Reward、Return 和 Value
 
 单步 reward 是当前反馈：
 
@@ -81,7 +113,10 @@ A^\pi(s,a)=Q^\pi(s,a)-V^\pi(s)
 !!! note "难点解释：reward 和 value 不要混"
     reward 像这一步考试得了几分，value 像从现在开始预计整门课最终能拿多少分。一个动作当前 reward 可能低，但如果它把系统带到更好的未来状态，value 仍然可能很高。很多长时任务难，就难在短期反馈和长期收益不一致。
 
-## 4. Bellman 方程
+!!! warning "常见误区：reward 写得越细越好"
+    奖励太稀疏会难学，但奖励太细也会让模型钻空子。比如只奖励“夹爪靠近杯子”，机器人可能学会一直贴近杯子却不抓；只奖励“回答越长越好”，LLM 可能堆废话。好的 reward 要尽量贴近最终任务，同时监控是否出现投机行为。
+
+## 5. Bellman 方程
 
 Bellman 方程把“当前价值”拆成“当前奖励 + 下一状态价值”：
 
@@ -106,7 +141,7 @@ R(s,a)+\gamma \mathbb{E}_{a'\sim\pi} Q^\pi(s',a')
 !!! note "图像化理解：Bellman 是可递归的未来账本"
     Bellman 不是神秘公式，它只是说：要知道现在值多少钱，就看现在立刻得到多少，加上下一步状态值多少钱。世界模型的价值在这里很直接：如果能预测 \(s'\) 和 \(r\)，就能在执行前估算未来账本。
 
-## 5. 从 Bellman 到 Q-learning
+## 6. 从 Bellman 到 Q-learning
 
 Q-learning 直接学习 \(Q(s,a)\)：在状态 \(s\) 做动作 \(a\) 后，长期看大概能拿多少回报。它用 Bellman 思路构造 TD target：
 
@@ -143,7 +178,7 @@ DQN 把 Q-learning 接到深度网络上，用图像作为输入，用神经网�
 !!! note "图解：reward 曲线为什么抖，value 曲线为什么更平滑"
     平均回合 reward 很容易抖，因为策略一点小变化就会让整局游戏进入不同状态分布。右侧的平均最大 Q-value 用固定状态集合观察模型估计，像一个验证集上的长期价值读数，所以更平滑。初学者读训练曲线时不要只盯 reward：value、KL、entropy、success rate 和真实闭环评测经常要一起看。
 
-## 6. Value 真的学到了什么
+## 7. Value 真的学到了什么
 
 DQN 的 Seaquest 图很适合解释“value 是未来机会”，而不只是当前分数。
 
@@ -172,7 +207,7 @@ DQN 的 Seaquest 图很适合解释“value 是未来机会”，而不只是当
 !!! note "图解：A、B、C 三个点在讲什么"
     A 点敌人出现，模型预测“现在有得分机会”，value 上升。B 点鱼雷快击中敌人，未来得分几乎要兑现，value 达到峰值。C 点敌人消失，机会被消耗，value 回落。这个例子能帮你分清 reward 和 value：reward 是打中那一下的即时分数，value 是打中之前模型已经看到的未来机会。
 
-## 7. Model-free 与 Model-based
+## 8. Model-free 与 Model-based
 
 | 路线 | 学什么 | 优点 | 风险 |
 | --- | --- | --- | --- |
@@ -183,7 +218,7 @@ DQN 的 Seaquest 图很适合解释“value 是未来机会”，而不只是当
 
 VLA 常从 BC 起步，因为机器人实机探索代价高。世界模型和 RL 的作用，是在 BC 之外补上“动作后果”和“长期奖励”的闭环。
 
-## 8. On-policy、Off-policy 与 Offline RL
+## 9. On-policy、Off-policy 与 Offline RL
 
 这三个词很容易混：
 
@@ -218,7 +253,7 @@ Offline RL 也可能从不完整轨迹里拼出更好的策略。
 !!! note "图解：trajectory stitching 是什么"
     数据里可能没有一条完整最优轨迹，但有“从 1 到 2”的片段和“从 2 到 3”的片段。好的 offline RL 应该能把这些片段组合起来，推出从 1 到 3 的更优行为。这比行为克隆更进一步：BC 只模仿已有路径，offline RL 尝试用 Bellman/value 把片段的长期价值接起来。
 
-## 9. 信用分配和探索
+## 10. 信用分配和探索
 
 强化学习最难的两个问题：
 
@@ -232,7 +267,7 @@ Offline RL 也可能从不完整轨迹里拼出更好的策略。
 !!! warning "常见误区：奖励越密越好"
     密集奖励能降低学习难度，但也可能把模型带偏。比如只奖励“靠近杯子”，机器人可能学会把夹爪贴近杯子却不稳定抓取。好的 reward 要贴近最终任务，同时避免被策略钻空子。
 
-## 10. 和世界模型的接口
+## 11. 和世界模型的接口
 
 世界模型本质上补上了 MDP 里的 transition：
 

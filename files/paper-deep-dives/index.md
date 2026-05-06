@@ -175,6 +175,12 @@
       <td>用 causal、interactive、persistent、real-time 和 physical accuracy 五个约束梳理视频生成到世界模型的训练路线</td>
     </tr>
     <tr>
+      <td>2025-10</td>
+      <td>世界模型</td>
+      <td><a href="world-models/world-models-embodied-ai-survey/">A Comprehensive Survey on World Models for Embodied AI：具身世界模型综述</a></td>
+      <td>用 functionality、temporal modeling 和 spatial representation 三轴 taxonomy 梳理具身世界模型、训练数据、评测指标和代表性能表格</td>
+    </tr>
+    <tr>
       <td>2026-01</td>
       <td>世界模型</td>
       <td><a href="world-models/lingbot-world/">LingBot-World：从视频生成到开源世界模拟器</a></td>
@@ -185,6 +191,33 @@
       <td>世界模型</td>
       <td><a href="world-models/dreamzero/">DreamZero：World Action Models are Zero-shot Policies</a></td>
       <td>joint video-action prediction 如何让 WAM 直接成为机器人 policy</td>
+    </tr>
+  </tbody>
+</table>
+
+### 技术报告
+
+<table data-paper-sort="asc">
+  <thead>
+    <tr>
+      <th>时间</th>
+      <th>主题</th>
+      <th>报告讲解</th>
+      <th>阅读重点</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2025-01</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/deepseek-r1/">DeepSeek-R1：用强化学习激发大模型推理能力</a></td>
+      <td>如何用 GRPO、rule-based reward、长 CoT、rejection sampling、两阶段 RL 和蒸馏把可验证推理任务转成大模型自我探索能力</td>
+    </tr>
+    <tr>
+      <td>2026-05</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/deepseek-v4-pro/">DeepSeek-V4 Technical Report：百万上下文、混合注意力与 FP4 后训练</a></td>
+      <td>如何用 CSA/HCA、mHC、Muon、FP4 QAT、异构 KV cache 和 OPD 基础设施把 MoE 大模型推向 1M context 与长流程 agent 场景</td>
     </tr>
   </tbody>
 </table>

@@ -26,6 +26,9 @@ G_t \nabla_\theta \log \pi_\theta(a_t\mid s_t)
 !!! note "难点解释：为什么要乘 \(\nabla \log \pi\)"
     生成式模型不能直接对“采样结果”求导，因为采样是离散动作。但可以对“这个动作的概率”求导。奖励告诉你方向好坏，\(\nabla \log \pi\) 告诉你该怎样改参数才能提高或降低这个动作概率。
 
+!!! example "有趣例子：给骰子调权重"
+    假设一个骰子代表模型的动作分布，掷到 6 分会赢。你不能对“已经掷出的 6”求导，但可以调整骰子内部权重，让以后更容易掷到 6。policy gradient 做的就是这件事：奖励高的采样结果提高概率，奖励低的采样结果降低概率。
+
 ## 2. Baseline 与 Advantage：降低方差
 
 直接用 return 更新策略方差很大。常用做法是减去 baseline：
@@ -67,6 +70,9 @@ critic 不直接执行动作，它负责给 actor 的更新提供低方差 basel
 
 !!! note "难点解释：critic 不是裁判，而是估分器"
     reward 像最终裁判分，critic 像赛前根据局面估一个平均水平。actor 更新时真正用的是“比估分高还是低”。如果 critic 估得准，策略梯度噪声会小很多；如果 critic 估错，actor 也可能被错误信号带偏。
+
+!!! example "有趣例子：餐厅评论"
+    actor 像正在选餐厅的人，critic 像根据地点、价格和排队长度估计“这次大概会满意到什么程度”的朋友。真正有用的信息不是“这顿饭 4 星”，而是“这家在这种条件下本来预期 3 星，结果 4 星，说明选择比预期好”。这就是 advantage。
 
 ## 4. 探索：epsilon、entropy 与 SAC
 
@@ -170,7 +176,27 @@ for iteration = 1, 2, ...:
 !!! warning "常见误区：RLHF 只是把 reward 当 loss"
     reward 通常来自完整回答或外部评测，不能像交叉熵那样直接逐 token 对齐。PPO 要先采样回答，再算 log prob、reward、value 和 advantage，最后才更新 policy。这就是为什么 RLHF 工程比普通 SFT 多出 rollout、reward、reference 和 critic 这些模块。
 
-## 8. GRPO：用组内相对奖励替代 critic
+## 8. Decision Transformer：把轨迹当成序列建模
+
+Decision Transformer 不从 Bellman backup 出发，而是把一段轨迹写成 token 序列：
+
+\[
+(\hat R_1,s_1,a_1,\hat R_2,s_2,a_2,\ldots)
+\]
+
+其中 \(\hat R_t\) 是 return-to-go，也就是“从现在开始还希望拿到多少回报”。模型像 GPT 一样自回归预测 action。
+
+![Decision Transformer results summary 原论文图](../assets/images/paper-figures/reinforcement-learning/decision-transformer-results-summary.png){ width="860" }
+
+<small>图源：[Decision Transformer: Reinforcement Learning via Sequence Modeling](https://arxiv.org/abs/2106.01345)，Figure 2。原论文图意：比较 Decision Transformer、TD Learning 和 Behavior Cloning 在 Atari、OpenAI Gym 与 Key-To-Door 上的总体表现。</small>
+
+!!! note "图解：为什么它是 VLA/世界模型的桥"
+    Decision Transformer 说明“状态、动作、回报”可以统一进 Transformer 序列。VLA 也常把观测、语言和动作 token 放进同一个模型；世界模型也把状态、动作和未来预测组织成序列。但它仍然是离线轨迹建模路线：如果数据里没有好策略或高回报条件落在分布外，单靠 Transformer 不能保证闭环成功。
+
+!!! warning "常见误区：序列建模替代了强化学习"
+    Decision Transformer 简化了算法形态，但没有消灭 RL 问题。它绕开了显式 value backup，却仍然依赖 reward/return 标注、轨迹质量、目标 return 设定和闭环评测。对于大模型和 VLA，它更像一种把轨迹接进 Transformer 的接口，而不是所有 RL 后训练的替代品。
+
+## 9. GRPO：用组内相对奖励替代 critic
 
 GRPO 的思路是：对同一个 prompt 采样多个回答，形成一组：
 
@@ -195,17 +221,22 @@ A_i =
 !!! note "图解：GRPO 适合可验证奖励"
     图中每个输入都会生成一组候选预测。语言世界模型可以解析出结构化状态，视频世界模型可以解码成未来帧，再用 Accuracy、F1、MSE、LPIPS、SSIM 等指标打分。GRPO 不需要额外 critic，而是比较同组样本谁更好。这非常适合 math、code、state prediction 这类能自动判分的任务。
 
-## 9. PPO、GRPO 和 DPO 的边界
+!!! example "有趣例子：同一道题采样 5 个解法"
+    如果同一道数学题采样 5 个答案，两个正确、三个错误，那么正确答案不只是“得 1 分”，而是“比同题其他答案更好”。GRPO 用这组内部比较当 baseline。它不需要 critic 估计每个前缀的未来价值，但代价是一次 prompt 要生成多条 response，rollout 吞吐和 reward 质量会变得更重要。
+
+## 10. PPO、GRPO、RLOO、ReMax 和 DPO 的边界
 
 | 方法 | 是否采样当前策略 | 是否显式 reward | 是否需要 critic | 适合什么 |
 | --- | --- | --- | --- | --- |
 | PPO | 是 | 是 | 通常需要 | reward model、RLHF、连续改进 |
 | GRPO | 是 | 是 | 通常不需要 | 可验证奖励、多样本组内比较 |
+| RLOO | 是 | 是 | 不需要 | 多样本 leave-one-out baseline，减少 critic 成本 |
+| ReMax | 是 | 是 | 不需要 | 用额外 baseline generation 做方差降低 |
 | DPO | 否，主要用偏好对 | 隐式 | 不需要 | 偏好数据稳定、想简化 RL 工程 |
 
-DPO 很重要，但它更像偏好优化的监督化变体；本章重点放 PPO/GRPO，因为它们更直接连接 rollout、reward、世界模型和 verl 这类 RL 工程框架。
+DPO 很重要，但它更像偏好优化的监督化变体；本章重点放 PPO/GRPO/RLOO/ReMax 这类需要 rollout 和 reward 的路线，因为它们更直接连接世界模型、RLVR 和 verl 这类 RL 工程框架。
 
-## 10. 工程检查点
+## 11. 工程检查点
 
 做 LLM/VLM/VLA 强化学习时，至少要检查：
 
