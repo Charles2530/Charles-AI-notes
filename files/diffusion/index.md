@@ -72,7 +72,7 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 - 噪声预测：预测加入到 \(x_t\) 里的高斯噪声 \(\epsilon\)，实现简单、训练稳定，是 DDPM 主线常用形式。
 - 原图预测：直接预测干净样本 \(x_0\)，直觉清楚，但高噪声区的回归更困难。
 - score 预测：预测 \(\nabla_x \log p_t(x)\)，也就是把样本推向高概率数据区域的方向。
-- velocity 预测：预测信号与噪声混合路径上的速度 \(v\)，常用于 latent diffusion 和少步采样，尺度更平衡。
+- velocity 预测：预测信号与噪声混合路径上的速度 \(v\)，常用于 latent diffusion、Flow Matching 风格训练和少步采样，尺度更平衡。
 
 ### 3. 求解器视角
 
@@ -102,7 +102,7 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 - 原图 \(x_0\)：直接回归无噪声样本，适合建立直觉，但对高噪声时刻更敏感。
 - score \(\nabla_{x_t} \log q(x_t)\)：估计当前噪声分布的对数密度梯度，是 score-based SDE 视角的核心量。
-- velocity \(v\)：用混合坐标同时编码信号和噪声方向，常让少步采样与 guidance 更稳。
+- velocity \(v\)：用混合坐标同时编码信号和噪声方向，常让少步采样与 guidance 更稳；注意 `v-prediction` 是扩散参数化，`Flow Matching` 是直接拟合连续速度场的训练框架。
 
 ### 2. 怎么采样
 
@@ -175,7 +175,7 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 - Progressive Distillation：逐级把教师采样步数减半，稳定地把多步模型压到少步。
 - Consistency / LCM：学习不同时间点映射到同一干净结果的一致性，常用于 1 到几步生成。
 - DMD / DMD2 / Phased DMD：用分布匹配蒸馏追求一步或极少步高质量生成。
-- Rectified Flow / Rectified Diffusion：重塑生成路径，让噪声到数据的轨迹更接近直线。
+- Flow Matching / Rectified Flow / Rectified Diffusion：直接拟合噪声到数据路径上的速度场，并重塑生成路径，让少步 ODE 积分更容易。
 
 ## 读扩散模型时最容易混淆的几件事
 
@@ -200,9 +200,9 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 | 1. 建模起点 | [发展脉络](evolution.md)、[训练与表示](training.md) | 前向加噪、反向去噪、ELBO、噪声预测和 \(x_0/v/score\) 参数化分别在解决什么 |
 | 2. 连续视角 | [Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)、[噪声日程与参数化](noise-schedules-and-parameterization.md) | 为什么同一个扩散模型可以被看成 SDE、ODE 或 score field |
 | 3. 推理与控制 | [条件控制与 Guidance](guidance-and-conditioning.md)、[采样与推理](inference.md) | CFG、solver、步数、随机性和文本对齐之间如何权衡 |
-| 4. 加速与变体 | [蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) | 少步采样、一步蒸馏、rectified 路线和视频扩散各自改的是哪一层 |
+| 4. 加速与变体 | [蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) | 少步采样、一步蒸馏、Flow Matching / rectified 路线、Wan 系列视频底座各自改的是哪一层 |
 
-如果目标是过渡到世界模型，读完第 4 阶段后直接接 [视频与多模态扩散](video-and-multimodal-diffusion.md)、[Towards Video World Models 专题](../paper-deep-dives/world-models/towards-video-world-models.md) 和 [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md)。如果只是快速定位方法，先看 [方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [训练配方与失效分析](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
+如果目标是过渡到世界模型，读完第 4 阶段后直接接 [视频与多模态扩散](video-and-multimodal-diffusion.md) 里的 Wan 系列说明、[Towards Video World Models 专题](../paper-deep-dives/world-models/towards-video-world-models.md) 和 [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md)。如果只是快速定位方法，先看 [方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [训练配方与失效分析](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
 
 ## 快速代码示例
 

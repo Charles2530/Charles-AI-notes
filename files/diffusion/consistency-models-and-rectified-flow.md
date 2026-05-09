@@ -107,16 +107,129 @@ Rectified Flow 的目标之一，就是让有效生成路径的曲率更低。
 
 ## 8. Flow Matching 与扩散的关系
 
-Flow Matching 常通过指定中间分布路径，再让模型拟合目标速度场。它与 score matching、概率流 ODE 存在深层联系。若知道条件路径 $p_t(x)$，则理想速度场可写作使该路径演化成立的向量场。训练目标往往是
+Flow Matching 的核心不是“再发明一个采样器”，而是把生成问题直接写成一个连续流：
+
+$$
+\frac{dx_t}{dt}=v_\theta(x_t,t,c),
+$$
+
+其中 \(x_0\) 通常来自简单先验分布，例如高斯噪声；\(x_1\) 来自数据分布；\(c\) 是文本、首帧、视频历史或动作等条件。采样时从噪声出发，沿这个 ODE 积分到数据端：
+
+```text
+z ~ N(0, I)
+  -> integrate dx/dt = v_theta(x,t,c)
+  -> generated sample
+```
+
+训练时先指定一条连接噪声和数据的中间路径，再让模型拟合这条路径上的目标速度。一般写作：
 
 $$
 \mathcal{L}_{\text{FM}}
 =
-\mathbb{E}_{t,x_t}
-\|v_\theta(x_t,t) - u_t(x_t)\|_2^2,
+\mathbb{E}_{t,x_0,x_1}
+\left[
+\|v_\theta(x_t,t,c)-u_t(x_t\mid x_0,x_1)\|_2^2
+\right],
 $$
 
-其中 $u_t$ 是目标速度。不同方法的差别，在于如何选路径、如何定义目标速度，以及如何与现有扩散框架兼容。
+其中 \(u_t\) 是由所选路径给出的目标速度。不同 Flow Matching / Rectified Flow 方法的主要差别，就在于路径怎么选、目标速度怎么构造、时间怎么采样、loss 怎么加权，以及条件 \(c\) 如何注入主干。
+
+最容易理解的是线性插值路径：
+
+$$
+x_t=(1-t)x_0+t x_1,
+\qquad t\in[0,1].
+$$
+
+这时目标速度很简单：
+
+$$
+u_t=x_1-x_0.
+$$
+
+也就是说，模型在训练中看到一堆“从噪声点走向数据点”的中间点，学习在每个中间点该往哪个方向走。Rectified Flow 常从这种直线路径出发，并通过 reflow 或蒸馏让模型自身生成的路径进一步变直，从而让 Euler 这类低阶求解器也能用很少步数生成较好样本。
+
+扩散里的 \(v\)-prediction 可以和 Flow Matching 放在同一张图里看。若路径写成三角形式：
+
+$$
+x_\phi=\cos\phi\,x_0+\sin\phi\,\epsilon,
+$$
+
+那么路径速度是：
+
+$$
+\frac{dx_\phi}{d\phi}
+=-\sin\phi\,x_0+\cos\phi\,\epsilon.
+$$
+
+这正是常见 velocity target：
+
+$$
+v=\alpha_\phi\epsilon-\sigma_\phi x_0.
+$$
+
+所以在这个意义上，`v-prediction` 让扩散模型的输出更像一个速度场；而 Flow Matching 则把“拟合速度场”提升为整个训练框架的中心。
+
+### 8.1 Flow Matching 的训练步骤
+
+一个标准训练循环可以压成：
+
+```text
+sample data x_1 and noise x_0
+sample time t
+construct intermediate x_t along a chosen path
+compute target velocity u_t
+predict v_theta(x_t, t, condition)
+minimize ||v_theta - u_t||^2
+```
+
+这个过程看起来比传统扩散少了“逐步加噪马尔可夫链”的叙事，但监督信号仍然是普通回归。它的优势在于目标更直接：模型不是先预测噪声、再由采样器间接换算更新方向，而是直接预测当前点应沿生成路径移动的向量。
+
+### 8.2 采样时怎么走
+
+训练好速度场后，推理阶段就是数值积分：
+
+$$
+x_{t+\Delta t}=x_t+\Delta t\cdot v_\theta(x_t,t,c)
+$$
+
+这就是 Euler 形式。为了更稳，也可以用 Heun 做预测-校正：
+
+```text
+v1 = v_theta(x_t, t)
+x_pred = x_t + h * v1
+v2 = v_theta(x_pred, t + h)
+x_next = x_t + h * (v1 + v2) / 2
+```
+
+条件生成里，classifier-free guidance 通常也可以在速度场上做：
+
+$$
+v_{\text{cfg}}
+=v_{\text{uncond}}+s\cdot(v_{\text{cond}}-v_{\text{uncond}}).
+$$
+
+但这并不意味着 guidance 问题自动消失。强 guidance 仍会改变 ODE 轨迹，可能造成过饱和、运动僵硬、视频闪烁或条件过拟合。Flow Matching 只是让“被放大的对象”从噪声预测变成速度预测，仍然要配合时间调度、动态 guidance 和负面样本策略。
+
+### 8.3 为什么它常和少步生成绑定
+
+Flow Matching / Rectified Flow 吸引人的地方，在于它们把采样看成沿速度场从先验运输到数据。如果路径足够直、速度场足够平滑，粗步长积分也能接近正确终点；这就是少步生成的基础。
+
+不过“预测速度场”不自动等于“少步高质量”。少步质量还取决于：
+
+1. 训练路径和真实数据几何是否匹配；
+2. 速度场在高噪声和低噪声区间是否平滑；
+3. 条件信号是否被模型真正使用；
+4. solver 的时间网格是否覆盖关键变化区；
+5. 是否经过 reflow、consistency、DMD 或其他蒸馏后训练。
+
+### 8.4 常见误区
+
+第一，Flow Matching 里的 `velocity` 不是视频中物体的运动速度。视频模型预测的是 video latent 空间里的生成向量场；它可能间接编码人物运动、相机运动和物体变化，但目标本身不是 optical flow。
+
+第二，Flow Matching 不是一定比扩散“更真实”。它重写了路径和训练目标，能让少步积分更自然，但模型容量、数据质量、条件设计和 tokenizer 仍然决定上限。
+
+第三，Rectified Flow 里的“直”不是唯一目标。路径太直但条件控制弱，或者低噪声细节学不好，生成仍会失败。现代整流和蒸馏方法往往更关心采样效率、分布匹配、局部细节和条件一致性的综合平衡。
 
 ## 9. 一致性模型与 Rectified Flow 的共同点与差异
 
@@ -251,4 +364,3 @@ Distribution Matching Distillation（DMD）及其后续变体，从另一个角�
 2. 它和系统成本、缓存、编译、服务路径的耦合；
 3. 它在长尾控制、长视频、复杂多条件场景里的真实边界；
 4. 当它失败时，最先该回退到哪一层更稳的方案。
-

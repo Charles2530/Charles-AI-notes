@@ -1,4 +1,4 @@
-"""Sort paper deep-dive navigation entries by paper date."""
+"""Navigation helpers: sort paper pages and sync nav titles from Markdown."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import Any
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(?P<body>.*?)\n---\s*\n", re.DOTALL)
 PAPER_DATE_RE = re.compile(r"^paper_date:\s*['\"]?(?P<date>\d{4}(?:-\d{2})?)['\"]?\s*$", re.MULTILINE)
+H1_RE = re.compile(r"^#\s+(?P<title>.+?)\s*$", re.MULTILINE)
 
 
 def _src_path(item: Any) -> str:
@@ -52,6 +53,40 @@ def _paper_sort_key(item: Any, docs_dir: Path) -> tuple[int, int, str]:
     return (year, month, title)
 
 
+@lru_cache(maxsize=None)
+def _h1_title_from_file(path: str) -> str | None:
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+
+    front = FRONT_MATTER_RE.match(text)
+    if front:
+        text = text[front.end() :]
+
+    match = H1_RE.search(text)
+    if not match:
+        return None
+
+    return match.group("title").strip()
+
+
+def _sync_page_titles(items: list[Any], docs_dir: Path) -> None:
+    for item in items:
+        children = getattr(item, "children", None)
+        if children:
+            _sync_page_titles(list(children), docs_dir)
+            continue
+
+        src_path = _src_path(item)
+        if not src_path:
+            continue
+
+        title = _h1_title_from_file(str(docs_dir / src_path))
+        if title:
+            item.title = title
+
+
 def _sort_sections(items: list[Any], docs_dir: Path) -> None:
     for item in items:
         children = getattr(item, "children", None)
@@ -73,7 +108,9 @@ def _sort_sections(items: list[Any], docs_dir: Path) -> None:
 
 def on_nav(nav: Any, config: Any, files: Any) -> Any:
     docs_dir = Path(config["docs_dir"])
-    _sort_sections(list(nav.items), docs_dir)
+    nav_items = list(nav.items)
+    _sync_page_titles(nav_items, docs_dir)
+    _sort_sections(nav_items, docs_dir)
     return nav
 
 

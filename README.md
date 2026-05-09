@@ -101,13 +101,28 @@ make serve MKDOCS=mkdocs
 ## 构建静态站点
 
 ```bash
-mkdocs build
+make build
 ```
 
 构建产物输出到：
 
 ```text
 site/
+```
+
+## 质量检查
+
+常规提交前建议跑：
+
+```bash
+make quality
+make build
+```
+
+`make quality` 会检查页面长度、标题数量、重复模板、本地链接目标和图片附近的图源说明。若想同时看低优先级提示，例如缺少站内互链或编号式标题风格，可以跑：
+
+```bash
+make quality-hints
 ```
 
 ## GitHub Pages 部署

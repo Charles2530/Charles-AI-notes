@@ -51,6 +51,9 @@
 
 各主题下的论文条目按论文年月从早到晚展示。新增专题页时只需要在页面 front matter 中填写 `paper_date: YYYY-MM`，导航和索引展示会按该字段排序。
 
+!!! tip "技术报告怎么读"
+    技术报告不要只看 benchmark 排名。更稳的读法是先抓“训练目标和系统约束”：模型结构为什么这样选，数据和阶段如何安排，后训练的 reward / SFT / distillation 如何分工，推理或部署是否改变了架构选择。读完一篇报告后，最好能把它接回 [训练](../training/index.md)、[强化学习](../reinforcement-learning/index.md)、[推理](../inference/index.md)、[量化](../quantization/index.md) 或 [算子与编译器](../operators/index.md) 中的某条工程主线。
+
 ### 扩散模型
 
 <table data-paper-sort="asc">
@@ -86,6 +89,12 @@
       <td>扩散模型</td>
       <td><a href="diffusion/causvid/">CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models</a></td>
       <td>如何把双向视频 DiT 通过 ODE 初始化、非对称 DMD 和 KV cache 改造成少步流式自回归视频扩散生成器</td>
+    </tr>
+    <tr>
+      <td>2025-03</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/wan/">Wan2.1：Open and Advanced Large-Scale Video Generative Models</a></td>
+      <td>如何用视频 VAE、Video DiT、Flow Matching、分阶段图文视频训练和系统并行构建开源视频 foundation model，并补充 Wan2.2 README 的 MoE 与 TI2V 路线</td>
     </tr>
     <tr>
       <td>2025-10</td>
@@ -204,20 +213,51 @@
       <th>主题</th>
       <th>报告讲解</th>
       <th>阅读重点</th>
+      <th>站内延伸</th>
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td>2024-12</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/deepseek-v3/">DeepSeek-V3 Technical Report：671B MoE、MLA、FP8 训练与低成本预训练</a></td>
+      <td>如何用 MLA、DeepSeekMoE、auxiliary-loss-free routing、MTP、FP8 mixed precision、DualPipe、SFT/RL 和 R1 reasoning distillation 训练 671B MoE</td>
+      <td><a href="../training/low-bit-training-and-numerics/">低比特训练</a> / <a href="../operators/communication-kernels-and-overlap/">通信重叠</a></td>
+    </tr>
     <tr>
       <td>2025-01</td>
       <td>技术报告</td>
       <td><a href="technical-reports/deepseek-r1/">DeepSeek-R1：用强化学习激发大模型推理能力</a></td>
       <td>如何用 GRPO、rule-based reward、长 CoT、rejection sampling、两阶段 RL 和蒸馏把可验证推理任务转成大模型自我探索能力</td>
+      <td><a href="../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo/">PPO / GRPO</a> / <a href="../training/preference-data-and-alignment-pitfalls/">对齐失效</a></td>
+    </tr>
+    <tr>
+      <td>2025-05</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/qwen3/">Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏</a></td>
+      <td>如何用 36T token 三阶段预训练、四阶段后训练、GRPO、thinking budget 和 strong-to-weak distillation 构建双模式开源模型家族</td>
+      <td><a href="../reinforcement-learning/">强化学习</a> / <a href="../training/post-training-data-engines-and-judge-models/">后训练数据引擎</a></td>
+    </tr>
+    <tr>
+      <td>2025-07</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/kimi-k2/">Kimi K2：Open Agentic Intelligence、MuonClip 与万亿 MoE Agent 模型</a></td>
+      <td>如何用 MuonClip 跑稳 1T MoE 预训练，并通过 agentic data synthesis、tool-use SFT、RLVR/self-critique reward 和 checkpoint engine 训练开放 agent 模型</td>
+      <td><a href="../training/distributed-training-and-checkpointing/">分布式训练</a> / <a href="../inference/rag-agents-and-long-context-systems/">Agent 系统</a></td>
+    </tr>
+    <tr>
+      <td>2026-04</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/qwen35-omni/">Qwen3.5-Omni Technical Report：Thinker-Talker、ARIA 与 256K 全模态 Agent</a></td>
+      <td>如何用 Thinker-Talker、AuT、Hybrid MoE、ARIA、三阶段预训练和分模块后训练构建可流式语音交互的全模态 agent</td>
+      <td><a href="../vlm/">VLM/VLA</a> / <a href="../inference/serving-systems/">推理服务系统</a></td>
     </tr>
     <tr>
       <td>2026-05</td>
       <td>技术报告</td>
       <td><a href="technical-reports/deepseek-v4-pro/">DeepSeek-V4 Technical Report：百万上下文、混合注意力与 FP4 后训练</a></td>
       <td>如何用 CSA/HCA、mHC、Muon、FP4 QAT、异构 KV cache 和 OPD 基础设施把 MoE 大模型推向 1M context 与长流程 agent 场景</td>
+      <td><a href="../inference/context-compression-kv-eviction-and-memory-hierarchies/">KV / 长上下文</a> / <a href="../quantization/fp8-and-mixed-precision-serving/">低精度服务</a></td>
     </tr>
   </tbody>
 </table>

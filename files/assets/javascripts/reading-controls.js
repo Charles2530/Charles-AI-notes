@@ -180,9 +180,24 @@
       window.scrollTo({ top: height, behavior: "smooth" });
     });
 
+    const link = makeButton("链接", "复制当前页链接", async () => {
+      try {
+        await copyText(window.location.href);
+        link.textContent = "已复制";
+        window.setTimeout(() => {
+          link.textContent = "链接";
+        }, 1300);
+      } catch (_) {
+        link.textContent = "失败";
+        window.setTimeout(() => {
+          link.textContent = "链接";
+        }, 1600);
+      }
+    });
+
     const pdf = makeButton("PDF", "导出当前页内容为 PDF；在打印窗口选择“保存为 PDF”", printCurrentPage);
 
-    dock.append(toggle, zoom, wide, focus, left, right, top, bottom, pdf);
+    dock.append(toggle, zoom, wide, focus, left, right, top, bottom, link, pdf);
     applyDockState(dock, prefs, toggle);
     document.body.appendChild(dock);
   }

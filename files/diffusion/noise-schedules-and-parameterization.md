@@ -161,7 +161,14 @@ score 参数化的最大价值，不在于它一定更容易工程落地，而�
 
 ### 4.4 预测 velocity \(v\)
 
-**常见定义是**：
+前面三种参数化都可以从同一条加噪路径推出来。先把前向混合写成更统一的形式：
+
+\[
+x_t = \alpha_t x_0 + \sigma_t \epsilon,
+\qquad \epsilon \sim \mathcal{N}(0,I)
+\]
+
+在 VP / cosine 一类常见设定中，通常有 \(\alpha_t^2+\sigma_t^2=1\)。这时 `velocity` 常定义为：
 
 \[
 v = \alpha_t \epsilon - \sigma_t x_0
@@ -173,11 +180,49 @@ v = \alpha_t \epsilon - \sigma_t x_0
 \hat{v} = v_\theta(x_t,t)
 \]
 
-这类参数化在 latent diffusion、少步采样和某些 guided 场景下经常更稳，因为它在不同 SNR 区间里平衡了 \(x_0\) 和 \(\epsilon\) 两种信息。
+它不是凭空多出来的目标，而是 \((x_0,\epsilon)\) 这组坐标的一个旋转。若模型预测出 \(\hat v\)，就能和当前 \(x_t\) 互相换回 \(\hat x_0\) 和 \(\hat\epsilon\)：
+
+\[
+\hat{x}_0 = \alpha_t x_t - \sigma_t \hat{v}
+\]
+
+\[
+\hat{\epsilon} = \sigma_t x_t + \alpha_t \hat{v}
+\]
+
+这两条换算很实用。训练时模型可以回归 \(v\)，推理时 sampler 或 guidance 仍然可以按需要取 \(\hat{x}_0\)、\(\hat{\epsilon}\) 或 score 形式。很多代码里看起来“模型输出 velocity，但采样器又在用 epsilon 或 x0”，本质就是在做这组坐标变换。
+
+`velocity` 这个名字也有严格来源。若把路径写成角度形式：
+
+\[
+\alpha_\phi=\cos\phi,\qquad \sigma_\phi=\sin\phi
+\]
+
+\[
+x_\phi = \cos\phi\,x_0 + \sin\phi\,\epsilon
+\]
+
+那么对 \(\phi\) 求导：
+
+\[
+\frac{d x_\phi}{d\phi}
+=-\sin\phi\,x_0+\cos\phi\,\epsilon
+=\alpha_\phi \epsilon-\sigma_\phi x_0
+=v
+\]
+
+所以 \(v\) 真的是“沿着信号到噪声混合路径移动的速度”。它不是物理世界里物体运动速度，也不是视频中的 optical flow，而是 latent / data 空间中从干净样本到噪声样本这条路径的切向量。
+
+这类参数化在 latent diffusion、少步采样和 guided 场景下经常更稳，因为它在不同 SNR 区间里平衡了 \(x_0\) 和 \(\epsilon\) 两种信息。
 
 `v` 参数化的受欢迎，很大程度上来自它不像纯 \(\epsilon\) 那样过分偏向噪声，也不像纯 \(x_0\) 那样过分承受尺度变化。它更像在学习“当前状态沿着去噪轨迹应该怎么运动”，因此经常和少步 solver、latent 空间和 guidance 路线配合得更舒服。
 
 这也是为什么很多近年的实践更愿意把它视为一个默认更平衡的坐标系，而不是只把它当成符号替换。
+
+!!! note "v-prediction 和 Flow Matching 的关系"
+    两者都可以被直观理解成“预测速度”，但层级不同。`v-prediction` 通常是在 DDPM / DDIM / latent diffusion 框架里换一个监督坐标，模型仍围绕给定噪声日程学习去噪目标。`Flow Matching` 则更直接：先指定一条从噪声分布到数据分布的连续路径，再让模型回归这条路径上的速度场，并在采样时积分一个 ODE。
+
+    因此可以说：在某些三角路径或扩散路径下，\(v\)-prediction 是 Flow Matching 视角下的一个特例或近邻表达；但不能简单把所有 \(v\)-prediction 都等同于完整的 Flow Matching 训练框架。
 
 ## 5. 这些参数化为什么本质上是等价又不等价
 
@@ -199,13 +244,31 @@ v = \alpha_t \epsilon - \sigma_t x_0
 
 ## 6. 为什么 velocity 参数化近年更常见
 
-因为它在高 SNR 和低 SNR 两端都相对平衡。  
-纯噪声预测在某些区间会让优化更偏向噪声分量，纯 \(x_0\) 预测则更容易受尺度影响。  
-而 \(v\) 参数化在很多实践中表现为：
+因为它在高 SNR 和低 SNR 两端都相对平衡。纯噪声预测在某些区间会让优化更偏向噪声分量，纯 \(x_0\) 预测则更容易受尺度影响。而 \(v\) 参数化在很多实践中表现为：
 
 - 少步采样兼容性更好：压缩步数时不容易只偏向噪声或原图一端。
 - guided generation 更稳：强 guidance 下轨迹尺度更平衡，过冲风险较低。
 - latent space 里更舒服：latent diffusion 中信号和噪声尺度差异较大，\(v\) 坐标常更好优化。
+
+更细一点看，velocity 的收益来自四个层面。
+
+第一，它把高噪声和低噪声两端的目标尺度压得更接近。高噪声时，直接预测 \(x_0\) 要从几乎纯噪声里猜干净样本，误差容易很大；低噪声时，预测 \(\epsilon\) 又可能把训练压力放在很小的残差上。\(v=\alpha\epsilon-\sigma x_0\) 混合了两者，使模型在整条路径上的回归目标更均衡。
+
+第二，它和 `cosine` / 角度式日程天然搭配。若用 \(\phi\) 表示噪声角度，模型预测的就是 \(\frac{dx_\phi}{d\phi}\)。这让很多 ODE solver 更容易把模型输出理解成沿路径前进的方向，而不是在每一步先换回噪声再间接更新。
+
+第三，它对强 guidance 更友好。Classifier-free guidance 本质上会放大条件和无条件输出的差值。如果输出坐标本身在不同噪声段尺度差异很大，放大后更容易过冲，出现高对比、颜色偏移、纹理炸裂或视频闪烁。velocity 坐标通常能让 guidance 的尺度更平滑，但这不是免调参的保证，guidance scale、time schedule 和 solver 仍然要一起看。
+
+第四，它非常适合视频和 latent 模型。视频 latent 里同时有空间结构、时间运动和压缩器带来的尺度变化；如果目标坐标在某些噪声段过于偏向 \(x_0\) 或 \(\epsilon\)，模型容易把容量浪费在局部噪声或静态纹理上。velocity 让模型更像在学习“这个 noisy video latent 接下来应该往哪里流动”，因此和 Flow Matching、Rectified Flow、Wan / Sora 类视频 DiT 的训练语言更接近。
+
+实践上可以这样判断：
+
+| 场景 | 为什么更常选 velocity |
+| --- | --- |
+| latent diffusion | latent 尺度不等同于像素尺度，\(v\) 对 SNR 两端更平衡 |
+| 少步采样 | 轨迹更新更像直接沿路径走，低步数下更不容易极端偏向某一端 |
+| 强 CFG | 条件差值放大后更需要稳定输出坐标 |
+| 视频生成 | 时空 latent 的误差会跨帧累积，目标尺度平衡更重要 |
+| Flow / Rectified 路线 | 训练语言接近“拟合速度场”，便于和 ODE 采样衔接 |
 
 ### 一个直观比喻
 

@@ -43,7 +43,22 @@
 | 方法族 | 某类模型或技术为什么出现、核心假设是什么 | [扩散模型](diffusion/index.md)、[VLM/VLA](vlm/index.md)、[强化学习](reinforcement-learning/index.md)、[世界模型](world-models/index.md) |
 | 系统工程 | 训练、推理、量化、算子和部署如何落地 | [训练](training/index.md)、[推理](inference/index.md)、[量化](quantization/index.md)、[算子与编译器](operators/index.md) |
 | 评测治理 | 怎么判断方法真的有效，线上是否稳定、可控、可回滚 | 各主题评测页、[在线评测](inference/observability-and-online-evaluation.md)、[评测与消融](training/evaluation-and-ablation-methodology.md) |
-| 论文深读 | 想深入读原文时从哪里开始 | [论文专题讲解](paper-deep-dives/index.md)、[参考文献总表](references/index.md) |
+| 论文深读与技术调研 | 想深入读原文、平台和工具链时从哪里开始 | [论文专题讲解](paper-deep-dives/index.md)、[思考探索](thinking-exploration/index.md)、[参考文献总表](references/index.md) |
+
+## 最近新增与专题联动
+
+最近新增的内容主要补齐两条线：一条是大模型技术报告里的训练、后训练、RL、MoE 和全模态 agent；另一条是端侧 AI / XR 平台里的芯片、runtime、量化和设备验证。它们不应该被当成孤立文章读，更适合和正文专题互相跳转。
+
+| 新增内容 | 先读它能解决什么 | 建议继续接到 |
+| --- | --- | --- |
+| [DeepSeek-V3](paper-deep-dives/technical-reports/deepseek-v3.md) | 671B MoE 如何把 MLA、auxiliary-loss-free routing、MTP、FP8 和 DualPipe 组合成低成本大规模训练系统 | [训练](training/index.md)、[低比特训练](training/low-bit-training-and-numerics.md)、[算子与编译器](operators/index.md) |
+| [DeepSeek-R1](paper-deep-dives/technical-reports/deepseek-r1.md) 与 [Qwen3](paper-deep-dives/technical-reports/qwen3.md) | GRPO、RLVR、thinking mode、thinking budget 和强到弱蒸馏怎样进入推理模型后训练 | [强化学习](reinforcement-learning/index.md)、[偏好数据与对齐失效](training/preference-data-and-alignment-pitfalls.md) |
+| [Kimi K2](paper-deep-dives/technical-reports/kimi-k2.md) | 1T MoE、MuonClip、agentic data synthesis、tool-use SFT 和 RL checkpoint engine 如何服务开放 agent 模型 | [推理](inference/index.md)、[训练系统](training/distributed-training-and-checkpointing.md)、[MTP 与投机解码](training/mtp-and-speculative-decoding.md) |
+| [Qwen3.5-Omni](paper-deep-dives/technical-reports/qwen35-omni.md) | Thinker-Talker、ARIA、AuT、RVQ/MTP/Code2Wav 和 256K context 如何组成流式全模态 agent | [VLM/VLA](vlm/index.md)、[推理](inference/index.md)、[世界模型](world-models/index.md) |
+| [Qualcomm XR2 Gen 2 / QCS8450](thinking-exploration/qualcomm-xr2-gen2.md) | XR SoC、AI Hub Workbench、QNN / LiteRT / ONNX Runtime、Proxy 设备和 ViT 量化流程如何进入端侧部署 | [量化](quantization/index.md)、[推理](inference/index.md)、[算子与编译器](operators/index.md) |
+
+!!! note "读新增内容时的一个原则"
+    技术报告里的数字和图表先用来理解设计取舍，不要直接当成自己的系统 KPI。比如 RLVR 的奖励结构要回到任务可验证性，Omni 的 first-packet latency 要回到真实流式交互，AI Hub 的 Proxy profile 要回到真实头显里的热稳定、相机并发和应用帧时间。
 
 ## 核心学习路线
 
@@ -118,6 +133,10 @@
     <strong>强化学习</strong>
     <p>从 MDP、value、policy gradient、PPO/GRPO 到世界模型、RLVR 和 verl 代码流程。</p>
   </a>
+  <a class="atlas-card" href="thinking-exploration/">
+    <strong>思考探索</strong>
+    <p>放芯片平台、软件栈、产品化约束和工程调研，补足论文之外的技术判断。</p>
+  </a>
   <a class="atlas-card" href="references/">
     <strong>参考文献总表</strong>
     <p>按扩散、VLM/VLA、世界模型、量化、训练系统、推理和算子整理核心论文与项目。</p>
@@ -134,6 +153,7 @@
 | 模型太大，显存或吞吐不够 | [量化总览](quantization/index.md) | [量化运行时](quantization/quantization-runtimes-and-frameworks.md)、[低精度 Kernel](operators/low-precision-and-quantized-kernels.md) |
 | 想从多模态理解过渡到世界模型 | [VLM/VLA 总览](vlm/index.md) | [世界模型](world-models/index.md)、[具身智能](embodied-ai/index.md) |
 | 想做机器人、VLA 或具身系统 | [VLM/VLA 总览](vlm/index.md) | [具身智能](embodied-ai/index.md)、[世界模型](world-models/index.md) |
+| 想理解芯片平台、软件栈和产品化部署 | [思考探索](thinking-exploration/index.md) | [量化](quantization/index.md)、[推理](inference/index.md)、[算子与编译器](operators/index.md) |
 | 想系统读论文和找参考 | [论文专题讲解](paper-deep-dives/index.md) | [参考文献总表](references/index.md) |
 
 ## 推荐阅读路径

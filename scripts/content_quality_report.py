@@ -7,6 +7,7 @@ import argparse
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 
 DOCS_ROOT = Path("files")
@@ -46,6 +47,13 @@ TEMPLATE_PATTERNS = [
     "终局小结",
 ]
 
+LOCAL_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+HTML_LINK_RE = re.compile(r"<a\s+[^>]*href=[\"']([^\"']+)[\"']", re.IGNORECASE)
+HTML_IMAGE_RE = re.compile(r"<img\s+[^>]*src=[\"']([^\"']+)[\"']", re.IGNORECASE)
+SOURCE_CAPTION_RE = re.compile(r"(图源|图片来源|表源|Source|source|原论文图|官方截图)")
+FENCED_CODE_RE = re.compile(r"(^|\n)```.*?(\n```|$)", re.DOTALL)
+
 
 @dataclass
 class PageReport:
@@ -54,6 +62,86 @@ class PageReport:
     h2: int
     h3: int
     flags: list[str]
+
+
+def clean_target(raw: str) -> str:
+    target = raw.strip().strip("<>")
+    if not target:
+        return ""
+
+    # Markdown links may include an optional title after whitespace:
+    # (path/to/file.png "caption"). Paths in this repo are currently space-free.
+    if " " in target and not target.startswith(("http://", "https://")):
+        target = target.split(" ", 1)[0]
+    return unquote(target.strip())
+
+
+def is_external_target(target: str) -> bool:
+    parsed = urlparse(target)
+    if parsed.scheme in {"http", "https", "mailto", "tel", "javascript", "data"}:
+        return True
+    if target.startswith("#"):
+        return True
+    return False
+
+
+def target_exists(base_dir: Path, target: str) -> bool:
+    target = clean_target(target)
+    if not target or is_external_target(target):
+        return True
+
+    link_path = target.split("#", 1)[0].split("?", 1)[0]
+    if not link_path:
+        return True
+
+    candidate = (base_dir / link_path).resolve()
+    root = Path.cwd().resolve()
+
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return False
+
+    if candidate.exists():
+        return True
+
+    suffix = candidate.suffix.lower()
+    if suffix:
+        return False
+
+    candidates = [
+        Path(str(candidate).rstrip("/") + ".md"),
+        candidate / "index.md",
+    ]
+
+    if str(link_path).endswith("/"):
+        candidates.append(Path(str(candidate).rstrip("/") + ".md"))
+
+    return any(item.exists() for item in candidates)
+
+
+def resolve_markdown_target(path: Path, target: str) -> bool:
+    return target_exists(path.parent, target)
+
+
+def rendered_page_dir(path: Path) -> Path:
+    rel = path.relative_to(DOCS_ROOT)
+    if rel.name == "index.md":
+        return DOCS_ROOT / rel.parent
+    return DOCS_ROOT / rel.parent / rel.stem
+
+
+def resolve_html_target(path: Path, target: str) -> bool:
+    return target_exists(rendered_page_dir(path), target)
+
+
+def strip_fenced_code(text: str) -> str:
+    return FENCED_CODE_RE.sub("\n", text)
+
+
+def image_has_nearby_source(lines: list[str], line_index: int) -> bool:
+    window = "\n".join(lines[line_index : min(len(lines), line_index + 24)])
+    return bool(SOURCE_CAPTION_RE.search(window))
 
 
 def iter_markdown_pages() -> list[Path]:
@@ -69,6 +157,7 @@ def iter_markdown_pages() -> list[Path]:
 
 def analyze(path: Path, include_hints: bool = False) -> PageReport:
     text = path.read_text(encoding="utf-8", errors="ignore")
+    searchable_text = strip_fenced_code(text)
     lines = text.splitlines()
     h2_lines = [line for line in lines if line.startswith("## ")]
     h3_lines = [line for line in lines if line.startswith("### ")]
@@ -107,6 +196,37 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
 
     if include_hints and numbered_h2 >= 10 and len(h2_lines) <= MAX_H2:
         flags.append("hint:numbered-h2-style")
+
+    markdown_targets = [
+        *LOCAL_LINK_RE.findall(searchable_text),
+        *IMAGE_RE.findall(searchable_text),
+    ]
+    html_targets = [
+        *HTML_LINK_RE.findall(searchable_text),
+        *HTML_IMAGE_RE.findall(searchable_text),
+    ]
+    broken_targets = [
+        *[
+            target for target in markdown_targets if not resolve_markdown_target(path, target)
+        ],
+        *[
+            target for target in html_targets if not resolve_html_target(path, target)
+        ],
+    ]
+    if broken_targets:
+        flags.append(f"broken-local-link:{len(broken_targets)}")
+
+    if include_hints:
+        image_lines = [
+            index
+            for index, line in enumerate(lines)
+            if IMAGE_RE.search(line) or HTML_IMAGE_RE.search(line)
+        ]
+        unsourced_images = [
+            index for index in image_lines if not image_has_nearby_source(lines, index)
+        ]
+        if unsourced_images:
+            flags.append(f"hint:image-without-nearby-source:{len(unsourced_images)}")
 
     return PageReport(path=path, chars=len(text), h2=len(h2_lines), h3=len(h3_lines), flags=flags)
 

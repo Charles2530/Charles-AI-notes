@@ -45,7 +45,7 @@
 2. [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://arxiv.org/abs/2211.01095)  
    更贴近 classifier-free guidance 等实际生成配置。
 3. [Progressive Distillation for Fast Sampling of Diffusion Models](https://arxiv.org/abs/2202.00512)  
-   少步蒸馏的经典路线：把多步 teacher 压成少步 student。
+   少步蒸馏的经典路线：把多步 teacher 压成少步 student；也常作为理解 \(v\)-prediction / velocity 参数化的入口之一。
 4. [Consistency Models](https://arxiv.org/abs/2303.01469)  
    把不同噪声水平映射到同一数据点，适合理解一步/少步生成的另一条路线。
 5. [Latent Consistency Models](https://arxiv.org/abs/2310.04378)  
@@ -57,14 +57,22 @@
 
 1. [Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow](https://arxiv.org/abs/2209.03003)  
    `Rectified Flow` 关注把生成路径“拉直”，降低求解难度。
-2. [InstaFlow: One Step is Enough for High-Quality Diffusion-Based Text-to-Image Generation](https://arxiv.org/abs/2309.06380)  
+2. [Flow Matching for Generative Modeling](https://arxiv.org/abs/2210.02747)  
+   `Flow Matching` 直接拟合连续生成路径上的速度场，是理解 velocity、ODE 采样和现代 flow-style 视频生成的重要论文。
+3. [InstaFlow: One Step is Enough for High-Quality Diffusion-Based Text-to-Image Generation](https://arxiv.org/abs/2309.06380)  
    少步/一步生成与 rectified flow 结合的重要实例。
-3. [Rectified Diffusion: Straightness Is Not Your Need in Rectified Flow](https://arxiv.org/abs/2410.07303)  
+4. [Rectified Diffusion: Straightness Is Not Your Need in Rectified Flow](https://arxiv.org/abs/2410.07303)  
    适合补充 `Rectified Diffusion` 术语：重点不是简单追求路径直，而是重新分析整流目标、采样效率与生成质量之间的关系。
-4. [Video Diffusion Models](https://arxiv.org/abs/2204.03458)  
+5. [Video Diffusion Models](https://arxiv.org/abs/2204.03458)  
    视频扩散的早期代表，适合作为时序生成入口。
-5. [Imagen Video: High Definition Video Generation with Diffusion Models](https://arxiv.org/abs/2210.02303)  
+6. [Imagen Video: High Definition Video Generation with Diffusion Models](https://arxiv.org/abs/2210.02303)  
    多级级联视频生成路线，对理解高分辨率视频生成系统很有帮助。
+7. [Wan: Open and Advanced Large-Scale Video Generative Models](https://arxiv.org/abs/2503.20314)  
+   `Wan2.1` 技术报告，适合理解开源视频 foundation model 的 VAE、DiT、Flow Matching、多任务和系统训练设计；站内专题见 [Wan2.1 深度讲解](../paper-deep-dives/diffusion/wan.md)。
+8. [Wan2.1 官方 GitHub](https://github.com/Wan-Video/Wan2.1)  
+   开源模型、推理脚本和任务接口入口，覆盖 T2V、I2V、editing、T2I 和 V2A 等任务。
+9. [Wan2.2 官方 GitHub](https://github.com/Wan-Video/Wan2.2)  
+   Wan2.2 的 MoE、高低噪声专家、A14B、TI2V-5B、Animate 和 S2V 等模型入口，适合连接视频扩散与世界模型专题。
 
 ## 2. VLM/VLA 与多模态到动作模型
 
@@ -261,6 +269,12 @@
 
 1. [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948)  
    用 GRPO、rule-based reward 和大规模 RLVR 训练长 CoT reasoning model 的关键技术报告；站内专题见 [DeepSeek-R1 讲解](../paper-deep-dives/technical-reports/deepseek-r1.md)。
+2. [Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)  
+   Qwen3 把 thinking / non-thinking 双模式、thinking budget、GRPO、general RL 和 strong-to-weak distillation 合到同一个开源模型家族；站内专题见 [Qwen3 讲解](../paper-deep-dives/technical-reports/qwen3.md)。
+3. [Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)  
+   Kimi K2 用 MuonClip 跑稳 1T MoE 预训练，并把 agentic data synthesis、tool-use SFT、RLVR、self-critique reward 和 RL rollout 基础设施合成一条开放 agent 模型路线；站内专题见 [Kimi K2 讲解](../paper-deep-dives/technical-reports/kimi-k2.md)。
+4. [Qwen3.5-Omni Technical Report](https://arxiv.org/abs/2604.15804)  
+   Qwen3.5-Omni 用 Thinker-Talker、Hybrid MoE、AuT、ARIA、RVQ/MTP/Code2Wav 和 256K context 构建可流式语音交互的全模态 agent；站内专题见 [Qwen3.5-Omni 讲解](../paper-deep-dives/technical-reports/qwen35-omni.md)。
 
 1. [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)
    `DQN` 是深度强化学习的经典起点，适合理解 value learning、replay buffer 和 target network。
@@ -341,15 +355,17 @@
    结合分层量化和系统部署的早期代表。
 3. [FP8-LM: Training FP8 Large Language Models](https://arxiv.org/abs/2310.18313)  
    FP8 训练 LLM 的早期系统路线，重点是梯度、优化器状态和缩放策略。
-4. [COAT: Compressing Optimizer States and Activation for Memory-Efficient FP8 Training](https://arxiv.org/abs/2410.19313)  
+4. [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)  
+   671B MoE、MLA、MTP、FP8 mixed precision、DualPipe 和 SFT/RL 后训练的完整系统报告；站内专题见 [DeepSeek-V3 讲解](../paper-deep-dives/technical-reports/deepseek-v3.md)。
+5. [COAT: Compressing Optimizer States and Activation for Memory-Efficient FP8 Training](https://arxiv.org/abs/2410.19313)  
    重点关注 optimizer states 和 activation，适合作为“低比特训练不只是压权重”的参考。
-5. [Scaling FP8 Training to Trillion-Token LLMs](https://arxiv.org/abs/2409.12517)  
+6. [Scaling FP8 Training to Trillion-Token LLMs](https://arxiv.org/abs/2409.12517)  
    讨论大规模 FP8 训练稳定性，尤其是 SwiGLU outlier 和长训练后期风险。
-6. [To FP8 and Back Again: Quantifying Reduced Precision Effects on LLM Training Stability](https://arxiv.org/abs/2405.18710)  
+7. [To FP8 and Back Again: Quantifying Reduced Precision Effects on LLM Training Stability](https://arxiv.org/abs/2405.18710)  
    低精度训练稳定性评估参考，提醒不要只看短跑 loss。
-7. [μnit Scaling: Simple and Scalable FP8 LLM Training](https://arxiv.org/abs/2502.05967)  
+8. [μnit Scaling: Simple and Scalable FP8 LLM Training](https://arxiv.org/abs/2502.05967)  
    静态缩放和参数化改造路线，适合关注“降低动态 scale 管理复杂度”的读者。
-8. [Recipes for Pre-training LLMs with MXFP8](https://arxiv.org/abs/2506.08027)  
+9. [Recipes for Pre-training LLMs with MXFP8](https://arxiv.org/abs/2506.08027)  
    MXFP8 预训练配方，适合和传统 FP8 训练对比。
 
 ### 6.4 FP4、MXFP4、NVFP4 与前沿低比特训练
@@ -486,6 +502,12 @@
    开源 MoE 模型路线参考。
 4. [DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model](https://arxiv.org/abs/2405.04434)  
    DeepSeek 系 MoE、MLA 和训练成本优化参考。
+5. [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)  
+   DeepSeek-V3 把 auxiliary-loss-free load balancing、node-limited routing、64-way EP、DualPipe 和 FP8 训练放到 671B MoE 规模；站内专题见 [DeepSeek-V3 讲解](../paper-deep-dives/technical-reports/deepseek-v3.md)。
+6. [Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)  
+   Qwen3 同时发布 dense 与 MoE 模型，MoE 采用 128 total experts / 8 activated experts，并用 global-batch load balancing loss；站内专题见 [Qwen3 讲解](../paper-deep-dives/technical-reports/qwen3.md)。
+7. [Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)  
+   Kimi K2 采用 1.04T total / 32.6B activated 的 ultra-sparse MoE，使用 384 total experts / 8 active experts，并通过 sparsity scaling law 选择 sparsity 48；站内专题见 [Kimi K2 讲解](../paper-deep-dives/technical-reports/kimi-k2.md)。
 
 ## 9. 推理系统与服务运行时
 
@@ -607,6 +629,19 @@
 5. [ManiSkill](https://github.com/haosulab/ManiSkill)
 6. [Habitat-Lab](https://github.com/facebookresearch/habitat-lab)
 7. [Isaac Lab](https://github.com/isaac-sim/IsaacLab)
+
+### 12.4 Qualcomm 端侧 AI 与 XR 工具链
+
+1. [Qualcomm AI Hub Workbench Documentation](https://workbench.aihub.qualcomm.com/docs/)  
+   官方云端编译、量化、profile、inference 和部署文档；站内调研见 [Qualcomm XR2 Gen 2 / QCS8450](../thinking-exploration/qualcomm-xr2-gen2.md)。
+2. [Qualcomm AI Hub](https://aihub.qualcomm.com/)  
+   Qualcomm 端侧模型、Workbench 和应用入口，适合查模型兼容性和设备 profile。
+3. [Qualcomm AI Hub Models](https://github.com/qualcomm/ai-hub-models)  
+   开源模型库，包含导出脚本、scorecard、perf/numerics 数据和设备目标。
+4. [QIDK](https://github.com/quic/qidk)  
+   QNN、SNPE、AIMET 和 Android 示例仓库，适合看本地部署和模型 enablement。
+5. [Snapdragon XR2 Gen 2 Platform Product Brief](https://docs.qualcomm.com/doc/87-73689-1/)  
+   XR2 Gen 2 官方产品简介，包含显示、相机、AI、CPU、GPU、连接和安全规格。
 
 ## 13. 后续维护建议
 

@@ -198,6 +198,9 @@ nav:
       - 任务谱系与 Benchmark: embodied-ai/task-taxonomy-and-benchmarks.md
       - 部署模式与安全案例: embodied-ai/deployment-patterns-and-safety-cases.md
       - 人机协作与交互评测: embodied-ai/human-robot-interaction-and-evaluation.md
+  - 思考探索:
+      - thinking-exploration/index.md
+      - Qualcomm XR2 Gen 2 / QCS8450：从芯片平台到 AI Hub 量化部署: thinking-exploration/qualcomm-xr2-gen2.md
   - 论文专题讲解:
       - paper-deep-dives/index.md
       - 扩散模型:
@@ -205,6 +208,7 @@ nav:
           - DMD2：Improved Distribution Matching Distillation for Fast Image Synthesis: paper-deep-dives/diffusion/dmd2.md
           - Diffusion Forcing：Next-token Prediction Meets Full-Sequence Diffusion: paper-deep-dives/diffusion/diffusion-forcing.md
           - CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models: paper-deep-dives/diffusion/causvid.md
+          - Wan2.1：Open and Advanced Large-Scale Video Generative Models: paper-deep-dives/diffusion/wan.md
           - Phased DMD：Few-step Distribution Matching Distillation via Score Matching within Subintervals: paper-deep-dives/diffusion/phased-dmd.md
       - 世界模型:
           - PlaNet：Learning Latent Dynamics for Planning from Pixels: paper-deep-dives/world-models/planet.md
@@ -222,5 +226,9 @@ nav:
           - LingBot-World：从视频生成到开源世界模拟器: paper-deep-dives/world-models/lingbot-world.md
           - DreamZero：World Action Models are Zero-shot Policies: paper-deep-dives/world-models/dreamzero.md
       - 技术报告:
-          - DeepSeek-R1：用强化学习激发大模型推理能力: paper-deep-dives/technical-reports/deepseek-r1.md
-          - DeepSeek-V4 Technical Report：百万上下文、混合注意力与 FP4 后训练: paper-deep-dives/technical-reports/deepseek-v4-pro.md
+        - DeepSeek-V3 Technical Report：671B MoE、MLA 与 FP8 训练: paper-deep-dives/technical-reports/deepseek-v3.md
+        - DeepSeek-R1：用强化学习激发大模型推理能力: paper-deep-dives/technical-reports/deepseek-r1.md
+        - Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏: paper-deep-dives/technical-reports/qwen3.md
+        - Kimi K2：Open Agentic Intelligence、MuonClip 与万亿 MoE Agent 模型: paper-deep-dives/technical-reports/kimi-k2.md
+        - Qwen3.5-Omni Technical Report：Thinker-Talker、ARIA 与 256K 全模态 Agent: paper-deep-dives/technical-reports/qwen35-omni.md
+        - DeepSeek-V4 Technical Report：百万上下文、混合注意力与 FP4 后训练: paper-deep-dives/technical-reports/deepseek-v4-pro.md

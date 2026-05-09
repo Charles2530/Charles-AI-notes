@@ -1,7 +1,7 @@
 MKDOCS ?= $(shell [ -x ./docs/bin/mkdocs ] && echo ./docs/bin/mkdocs || echo mkdocs)
 DEV_ADDR ?= 127.0.0.1:8000
 
-.PHONY: serve serve-fast serve-clean build quality clean-appledouble
+.PHONY: serve serve-fast serve-clean build quality quality-hints clean-appledouble
 
 serve: clean-appledouble
 	$(MKDOCS) serve --livereload --open --dev-addr=$(DEV_ADDR)
@@ -17,6 +17,9 @@ build: clean-appledouble
 
 quality:
 	python scripts/content_quality_report.py
+
+quality-hints:
+	python scripts/content_quality_report.py --include-hints
 
 clean-appledouble:
 	find files -name '._*' -type f -delete
