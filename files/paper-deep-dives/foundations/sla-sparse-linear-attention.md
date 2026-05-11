@@ -229,9 +229,9 @@ P = P_1 + P_2,\quad P_1=P\odot M,\quad P_2=P\odot(1-M)
 
 SLA2 的总体 pipeline 如下：
 
-![SLA2 attention pipeline 原图](https://www.researchgate.net/figure/publication/400812635/figure/fig1/AS%3A11431281942842267%401771213298004/Attention-computation-pipeline-of-SLA2.png){ width="920" }
+![SLA2 attention pipeline 示意图](../../assets/images/paper-deep-dives/foundations/sla2-attention-pipeline.svg){ width="920" }
 
-<small>图源：`SLA2: Sparse-Linear Attention with Learnable Routing and QAT`，Figure 1。原论文图意：SLA2 用 learnable router \(R(Q,K)\) 产生 sparse mask，再用 learnable ratio \(\alpha\) 混合 sparse attention output 和 linear attention output；sparse 分支还可以通过 QAT 引入 low-bit attention。</small>
+<small>图源：`SLA2: Sparse-Linear Attention with Learnable Routing and QAT`，Figure 1；本站按原论文 pipeline 重绘为本地 SVG，避免 ResearchGate 热链失效。原论文图意：SLA2 用 learnable router \(R(Q,K)\) 产生 sparse mask，再用 learnable ratio \(\alpha\) 混合 sparse attention output 和 linear attention output；sparse 分支还可以通过 QAT 引入 low-bit attention。</small>
 
 ## SLA2 的公式：从 `Proj` 补偿改成比例混合
 
@@ -368,5 +368,5 @@ SLA 最值得记住的不是“95% sparsity”这个数字，而是它给近似 
 1. 论文：[SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention](https://arxiv.org/abs/2509.24006).
 2. 后续论文：[SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675).
 3. SLA 原图 HTML：[ar5iv:2509.24006](https://ar5iv.labs.arxiv.org/html/2509.24006).
-4. SLA2 原图来源：[ResearchGate Figure 1 mirror](https://www.researchgate.net/figure/Attention-computation-pipeline-of-SLA2_fig1_400812635).
+4. SLA2 Figure 1 见论文 PDF：[arXiv:2602.12675](https://arxiv.org/abs/2602.12675).
 5. 官方代码：[thu-ml/SLA](https://github.com/thu-ml/SLA).

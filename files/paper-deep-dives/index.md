@@ -309,6 +309,13 @@
     <tr>
       <td>2026-04</td>
       <td>技术报告</td>
+      <td><a href="technical-reports/nemotron-3-super/">Nemotron 3 Super：Hybrid Mamba-MoE、LatentMoE、MTP 与异步多环境 RL</a></td>
+      <td>如何用 Mamba-heavy hybrid backbone、LatentMoE、shared-weight MTP、NVFP4 预训练、多环境异步 GRPO 和 FP8/NVFP4 PTQ 构建高吞吐 agentic MoE</td>
+      <td><a href="../inference/caching-routing-and-speculative/">推测解码</a> / <a href="../quantization/fp8-and-mixed-precision-serving/">低精度服务</a></td>
+    </tr>
+    <tr>
+      <td>2026-04</td>
+      <td>技术报告</td>
       <td><a href="technical-reports/qwen35-omni/">Qwen3.5-Omni Technical Report：Thinker-Talker、ARIA 与 256K 全模态 Agent</a></td>
       <td>如何用 Thinker-Talker、AuT、Hybrid MoE、ARIA、三阶段预训练和分模块后训练构建可流式语音交互的全模态 agent</td>
       <td><a href="../vlm/">VLM/VLA</a> / <a href="../inference/serving-systems/">推理服务系统</a></td>
