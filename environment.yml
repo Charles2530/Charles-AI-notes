@@ -1,4 +1,4 @@
-name: ai-systems-atlas
+name: docs
 channels:
   - defaults
 dependencies:
