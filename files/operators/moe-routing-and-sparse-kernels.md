@@ -143,6 +143,8 @@ MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。
 
 如果 block 设计和硬件不匹配，稀疏反而可能比稠密更慢。
 
+视频 DiT 里的 [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md) 是一个典型例子：SLA 不是只做 block-sparse attention，而是把 critical blocks 交给 sparse exact attention，把 marginal blocks 交给 linear attention 补偿；SLA2 又把路由改成可学习的 \(R(Q,K)\)，并用 QAT 给 sparse branch 加 low-bit attention。
+
 ## 9. 稀疏 kernel 的优化重点
 
 与稠密 kernel 相比，稀疏 kernel 更应优先关注：

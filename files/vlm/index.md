@@ -93,7 +93,7 @@ VLA 章节保留的重点是四件事：
 | BLIP-2 / Flamingo | 让语言模型消费视觉信息并进行多模态回答 | 动作接口和闭环反馈 |
 | V-JEPA / video latent prediction | 从视频中学时序表征和可预测 latent | 动作条件、reward、risk 和 planner 接口 |
 | RT-1 / RT-2 / RT-X / OpenVLA | 把视觉语言状态映射到机器人动作 | 显式建模“动作之后会怎样” |
-| Diffusion Policy / ACT / π0 | 用 action chunk、扩散/flow 或连续动作专家生成更稳定动作 | 反事实未来、风险校准和长期规划 |
+| Diffusion Policy / ACT / π0 / π0.5 | 用 action chunk、扩散/flow 或连续动作专家生成更稳定动作，并开始引入高层子任务推断 | 反事实未来、风险校准和长期记忆 |
 | DreamZero / WAM / VAM | 联合建模未来视频与动作 | 真实闭环收益、失败恢复和安全评测仍需验证 |
 
 ## 6. 从 VLA 到世界模型：动作后果必须被建模
@@ -122,6 +122,7 @@ VLA 主要学习“当前应该做什么”。世界模型还要学习“做了�
 | --- | --- | --- |
 | [OpenVLA](https://openvla.github.io/) | 开源 VLA generalist policy，展示真实机器人 rollout、语言 grounding、OOD 任务和失败恢复案例 | VLA 的第一步是把 VLM 表示变成可执行策略；OpenX 预训练能提升跨任务适应，但困难语义泛化仍依赖更强互联网预训练和机器人数据混合 |
 | [π0](https://www.physicalintelligence.company/blog/pi0) | Physical Intelligence 的 generalist robot policy，把互联网规模 VLM 预训练、多机器人数据和连续动作输出结合 | 说明 VLA 不只是“动作 token 化”：高频 dexterous control 可能更适合连续动作专家或 flow matching / diffusion 式动作生成 |
+| [π0.5](../paper-deep-dives/vla/pi05.md) | Physical Intelligence 的 open-world VLA，用 heterogeneous co-training 和 high-level subtask prediction 在未见家庭中执行长任务 | 说明开放世界泛化需要把 web 语义、跨机器人动作数据、目标机器人数据和人类 verbal instruction 合到同一训练配方 |
 | [Genie 3](https://deepmind.google/models/genie/) | Google DeepMind 将其定位为可实时探索的 interactive world model | 这条路线从可交互世界生成出发，重点是实时性、动作影响、世界一致性和长时记忆 |
 | [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/) | 面向 physical AI 的 world foundation model 平台，包含世界生成、视频数据处理、评估和 post-training 框架 | 说明世界模型不是单个视频模型，而会变成数据处理、合成数据、评估、后训练和仿真工具链 |
 

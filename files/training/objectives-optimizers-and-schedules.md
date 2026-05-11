@@ -168,10 +168,13 @@ A_i=
 | Momentum SGD | 平滑更新方向 | 视觉和表征任务仍常见 |
 | Adam | 一阶/二阶矩自适应 | 状态内存高，超参经验成熟 |
 | AdamW | 解耦 weight decay | Transformer 默认选择 |
+| Muon | 对矩阵权重的动量做正交化 | 主要用于大规模预训练，通常与 AdamW/Adam 混合处理非矩阵参数 |
 | Adafactor | 节省优化器状态 | 行为和调参经验不同于 AdamW |
 | Lion 等变体 | 试图减少状态或改变更新几何 | 需要充分大规模证据 |
 
 工业大模型训练里，AdamW 仍常作为默认起点，不是因为它理论上永远最优，而是因为稳定、可预期、经验最丰富。
+
+Muon 代表另一类思路：把 Transformer 中的矩阵参数当作线性算子来更新，通过 Newton-Schulz 近似正交化 momentum，减少少数奇异方向主导训练的问题。它在 [Muon 专题讲解](../paper-deep-dives/foundations/muon-is-scalable.md) 中被系统验证到 5.7T token MoE 预训练，但在 SFT、后训练和已有 AdamW checkpoint 迁移上仍要单独验证。
 
 ## 学习率日程
 

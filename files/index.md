@@ -53,6 +53,7 @@
 | --- | --- | --- |
 | [DeepSeek-V3](paper-deep-dives/technical-reports/deepseek-v3.md) | 671B MoE 如何把 MLA、auxiliary-loss-free routing、MTP、FP8 和 DualPipe 组合成低成本大规模训练系统 | [训练](training/index.md)、[低比特训练](training/low-bit-training-and-numerics.md)、[算子与编译器](operators/index.md) |
 | [DeepSeek-R1](paper-deep-dives/technical-reports/deepseek-r1.md) 与 [Qwen3](paper-deep-dives/technical-reports/qwen3.md) | GRPO、RLVR、thinking mode、thinking budget 和强到弱蒸馏怎样进入推理模型后训练 | [强化学习](reinforcement-learning/index.md)、[偏好数据与对齐失效](training/preference-data-and-alignment-pitfalls.md) |
+| [Gemini 2.5](paper-deep-dives/technical-reports/gemini-2-5.md) | dynamic thinking、1M context、TPUv5p/Pathways、SFT/RM/RL 和 agentic / multimodal 训练如何组成闭源前沿模型报告 | [训练](training/index.md)、[推理](inference/index.md)、[VLM/VLA](vlm/index.md) |
 | [Kimi K2](paper-deep-dives/technical-reports/kimi-k2.md) | 1T MoE、MuonClip、agentic data synthesis、tool-use SFT 和 RL checkpoint engine 如何服务开放 agent 模型 | [推理](inference/index.md)、[训练系统](training/distributed-training-and-checkpointing.md)、[MTP 与投机解码](training/mtp-and-speculative-decoding.md) |
 | [Qwen3.5-Omni](paper-deep-dives/technical-reports/qwen35-omni.md) | Thinker-Talker、ARIA、AuT、RVQ/MTP/Code2Wav 和 256K context 如何组成流式全模态 agent | [VLM/VLA](vlm/index.md)、[推理](inference/index.md)、[世界模型](world-models/index.md) |
 | [Qualcomm XR2 Gen 2 / QCS8450](thinking-exploration/qualcomm-xr2-gen2.md) | XR SoC、AI Hub Workbench、QNN / LiteRT / ONNX Runtime、Proxy 设备和 ViT 量化流程如何进入端侧部署 | [量化](quantization/index.md)、[推理](inference/index.md)、[算子与编译器](operators/index.md) |

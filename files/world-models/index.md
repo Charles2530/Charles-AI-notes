@@ -127,7 +127,7 @@ $$
 | DreamerV2 / DreamerV3 | 把 Dreamer 路线扩展到离散 latent、更大任务集合和更通用训练配方 | 展示 latent imagination 如何从小环境走向更稳的通用控制 | [DreamerV2](../paper-deep-dives/world-models/dreamerv2.md)、[DreamerV3](../paper-deep-dives/world-models/dreamerv3.md) |
 | DayDreamer | 把 Dreamer 式 latent imagination 推向真实机器人任务 | 连接 VLA 和 model-based RL：真实机器人可以用世界模型减少实机试错 | 可先读 [机器人应用](applications-in-robotics-and-autonomous-driving.md) |
 | [JEPA](https://openreview.net/forum?id=BZ5a1r-kVsf) / [V-JEPA](https://arxiv.org/abs/2404.08471) | 在表征空间预测被遮挡或未来的 latent，而不是生成像素细节 | 更偏 internal world model 表征：帮助理解和规划，但不一定直接输出动作 | [JEPA](../paper-deep-dives/world-models/jepa.md)、[V-JEPA](../paper-deep-dives/world-models/v-jepa.md) |
-| [Genie](https://arxiv.org/abs/2402.15391) | 从互联网视频中学习可交互生成环境和 latent actions | 从视频数据走向“可操作世界模拟”的代表路线 | 可先读 [生成式模拟与视频世界模型](generative-simulation-and-video.md) |
+| [Genie](https://arxiv.org/abs/2402.15391) | 从互联网视频中学习可交互生成环境和 latent actions | 从视频数据走向“可操作世界模拟”的代表路线 | [Genie 专题](../paper-deep-dives/world-models/genie.md) |
 | LWM / 长上下文视频模型 | 用长上下文建模图文视频序列，增强跨时间记忆 | 提醒世界模型需要长时记忆，否则只能做短片段续写 | [LWM 专题](../paper-deep-dives/world-models/lwm.md) |
 | LingBot-World | 从视频基础模型继续训练成可交互世界模拟器 | 代表“视频生成底座 + 动作条件 + 因果化 + 少步蒸馏”的工程路线 | [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md) |
 | DreamZero / WAM 路线 | 把 world-action modeling 用于 zero-shot policy 或动作联合建模 | 更靠近 VLA：动作生成和世界演化不再完全分开，但评测必须看闭环收益 | [DreamZero 专题](../paper-deep-dives/world-models/dreamzero.md) |

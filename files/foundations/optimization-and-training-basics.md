@@ -55,6 +55,7 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 | SGD | 简单、稳定，但调参要求高 |
 | Adam | 自适应学习率，深度学习常用 |
 | AdamW | decoupled weight decay，LLM 训练常见 |
+| Muon | 对矩阵权重做 momentum orthogonalization，大规模预训练中用于提升 token / FLOP efficiency |
 
 现代大模型训练通常还会配合：
 
@@ -63,6 +64,8 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 - gradient clipping：限制梯度范数，减少 loss spike 或异常 batch 引发的发散。
 - mixed precision：用 FP16/BF16/FP8 等低精度加速计算，同时保留必要的高精度状态。
 - distributed optimizer：把参数、梯度或优化器状态分散到多卡，降低单卡显存压力。
+
+Muon 这类优化器说明了一个容易被忽略的点：优化器不只是“步子大不大”，还决定参数更新的几何。AdamW 是当前最稳的默认起点；Muon 更适合放在大规模预训练、矩阵权重占主导、基础设施能支持矩阵正交化的场景里看。更完整的论文解析和 AdamW 对比见 [Muon：面向 LLM 预训练的可扩展优化器](../paper-deep-dives/foundations/muon-is-scalable.md)。
 
 ## 4. 一个标准训练循环
 

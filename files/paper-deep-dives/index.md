@@ -54,6 +54,33 @@
 !!! tip "技术报告怎么读"
     技术报告不要只看 benchmark 排名。更稳的读法是先抓“训练目标和系统约束”：模型结构为什么这样选，数据和阶段如何安排，后训练的 reward / SFT / distillation 如何分工，推理或部署是否改变了架构选择。读完一篇报告后，最好能把它接回 [训练](../training/index.md)、[强化学习](../reinforcement-learning/index.md)、[推理](../inference/index.md)、[量化](../quantization/index.md) 或 [算子与编译器](../operators/index.md) 中的某条工程主线。
 
+### 基础知识
+
+<table data-paper-sort="asc">
+  <thead>
+    <tr>
+      <th>时间</th>
+      <th>主题</th>
+      <th>论文讲解</th>
+      <th>阅读重点</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2025-02</td>
+      <td>基础知识</td>
+      <td><a href="foundations/muon-is-scalable/">Muon：面向 LLM 预训练的可扩展优化器</a></td>
+      <td>如何把 Muon 从矩阵正交化优化器扩展到 5.7T token LLM 预训练，并系统对比 AdamW 的更新几何、状态内存、分布式通信和 SFT 边界</td>
+    </tr>
+    <tr>
+      <td>2025-09</td>
+      <td>基础知识</td>
+      <td><a href="foundations/sla-sparse-linear-attention/">SLA / SLA2：DiT 里的 Sparse-Linear Attention</a></td>
+      <td>如何把视频 DiT 的 attention 分解成 sparse exact、linear compensation 和 skip，并用 learnable routing、比例混合与 QAT 推进到 SLA2</td>
+    </tr>
+  </tbody>
+</table>
+
 ### 扩散模型
 
 <table data-paper-sort="asc">
@@ -101,6 +128,27 @@
       <td>扩散模型</td>
       <td><a href="diffusion/phased-dmd/">Phased DMD：Few-step Distribution Matching Distillation via Score Matching within Subintervals</a></td>
       <td>如何把少步 DMD 拆成 SNR 子区间专家训练，并用子区间 score matching 保住图像多样性与视频运动动态</td>
+    </tr>
+  </tbody>
+</table>
+
+### VLA
+
+<table data-paper-sort="asc">
+  <thead>
+    <tr>
+      <th>时间</th>
+      <th>主题</th>
+      <th>论文讲解</th>
+      <th>阅读重点</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2025-04</td>
+      <td>VLA</td>
+      <td><a href="vla/pi05/">π0.5：面向开放世界泛化的 VLA</a></td>
+      <td>如何用 heterogeneous co-training、FAST 离散动作、flow matching action expert 和 high-level subtask prediction 支撑新家庭长任务泛化</td>
     </tr>
   </tbody>
 </table>
@@ -164,6 +212,12 @@
       <td>世界模型</td>
       <td><a href="world-models/v-jepa/">V-JEPA：Latent Video Prediction for Visual Representation Learning</a></td>
       <td>如何用 latent video prediction、3D Multi-Block Masking 和 EMA target encoder 学习视频世界表征</td>
+    </tr>
+    <tr>
+      <td>2024-02</td>
+      <td>世界模型</td>
+      <td><a href="world-models/genie/">Genie：Generative Interactive Environments</a></td>
+      <td>如何从无标注互联网视频中学习 latent actions，并把视频 token dynamics 变成可逐帧控制的生成式交互环境</td>
     </tr>
     <tr>
       <td>2024-02</td>
@@ -237,6 +291,13 @@
       <td><a href="technical-reports/qwen3/">Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏</a></td>
       <td>如何用 36T token 三阶段预训练、四阶段后训练、GRPO、thinking budget 和 strong-to-weak distillation 构建双模式开源模型家族</td>
       <td><a href="../reinforcement-learning/">强化学习</a> / <a href="../training/post-training-data-engines-and-judge-models/">后训练数据引擎</a></td>
+    </tr>
+    <tr>
+      <td>2025-07</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/gemini-2-5/">Gemini 2.5 Technical Report：动态 Thinking、多模态长上下文与 Agentic 能力</a></td>
+      <td>如何用 native multimodal sparse MoE、teacher distillation、TPUv5p/Pathways、SFT/RM/RL、dynamic thinking 和工具/多模态数据构建 1M context Gemini 2.5</td>
+      <td><a href="../training/">训练</a> / <a href="../inference/rag-agents-and-long-context-systems/">Agent / 长上下文</a></td>
     </tr>
     <tr>
       <td>2025-07</td>

@@ -204,6 +204,9 @@ nav:
       - Qualcomm XR2 Gen 2 / QCS8450：从芯片平台到 AI Hub 量化部署: thinking-exploration/qualcomm-xr2-gen2.md
   - 论文专题讲解:
       - paper-deep-dives/index.md
+      - 基础知识:
+          - Muon：面向 LLM 预训练的可扩展优化器: paper-deep-dives/foundations/muon-is-scalable.md
+          - SLA / SLA2：DiT 里的 Sparse-Linear Attention: paper-deep-dives/foundations/sla-sparse-linear-attention.md
       - 扩散模型:
           - DMD：One-step Diffusion with Distribution Matching Distillation: paper-deep-dives/diffusion/dmd.md
           - DMD2：Improved Distribution Matching Distillation for Fast Image Synthesis: paper-deep-dives/diffusion/dmd2.md
@@ -211,6 +214,8 @@ nav:
           - CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models: paper-deep-dives/diffusion/causvid.md
           - Wan2.1：Open and Advanced Large-Scale Video Generative Models: paper-deep-dives/diffusion/wan.md
           - Phased DMD：Few-step Distribution Matching Distillation via Score Matching within Subintervals: paper-deep-dives/diffusion/phased-dmd.md
+      - VLA:
+          - π0.5：面向开放世界泛化的 VLA: paper-deep-dives/vla/pi05.md
       - 世界模型:
           - PlaNet：Learning Latent Dynamics for Planning from Pixels: paper-deep-dives/world-models/planet.md
           - Dreamer：Dream to Control: paper-deep-dives/world-models/dreamer.md
@@ -221,6 +226,7 @@ nav:
           - RingAttention：Ring Attention with Blockwise Transformers for Near-Infinite Context: paper-deep-dives/world-models/ringattention.md
           - LWM：百万 token 视频语言世界模型: paper-deep-dives/world-models/lwm.md
           - V-JEPA：Latent Video Prediction for Visual Representation Learning: paper-deep-dives/world-models/v-jepa.md
+          - Genie：Generative Interactive Environments: paper-deep-dives/world-models/genie.md
           - Self Forcing：Bridging the Train-Test Gap in Autoregressive Video Diffusion: paper-deep-dives/world-models/self-forcing.md
           - Towards Video World Models：视频生成走向世界模型的五个门槛: paper-deep-dives/world-models/towards-video-world-models.md
           - A Comprehensive Survey on World Models for Embodied AI：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
@@ -230,6 +236,7 @@ nav:
         - DeepSeek-V3 Technical Report：671B MoE、MLA 与 FP8 训练: paper-deep-dives/technical-reports/deepseek-v3.md
         - DeepSeek-R1：用强化学习激发大模型推理能力: paper-deep-dives/technical-reports/deepseek-r1.md
         - Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏: paper-deep-dives/technical-reports/qwen3.md
+        - Gemini 2.5 Technical Report：动态 Thinking、多模态长上下文与 Agentic 能力: paper-deep-dives/technical-reports/gemini-2-5.md
         - Kimi K2：Open Agentic Intelligence、MuonClip 与万亿 MoE Agent 模型: paper-deep-dives/technical-reports/kimi-k2.md
         - Qwen3.5-Omni Technical Report：Thinker-Talker、ARIA 与 256K 全模态 Agent: paper-deep-dives/technical-reports/qwen35-omni.md
         - DeepSeek-V4 Technical Report：百万上下文、混合注意力与 FP4 后训练: paper-deep-dives/technical-reports/deepseek-v4-pro.md

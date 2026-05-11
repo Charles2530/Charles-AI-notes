@@ -111,6 +111,8 @@
    开源 VLA 代表，适合结合代码和数据做复现。
 6. [Octo: An Open-Source Generalist Robot Policy](https://arxiv.org/abs/2405.12213)  
    通用机器人策略的开源入口。
+7. [π0.5: a Vision-Language-Action Model with Open-World Generalization](https://arxiv.org/abs/2504.16054)  
+   Physical Intelligence 的开放世界 VLA 系统，用异构 co-training、FAST 动作 token、flow matching action expert 和 high-level subtask prediction 在未见家庭中执行长任务；站内专题见 [π0.5 讲解](../paper-deep-dives/vla/pi05.md)。
 
 ### 3.2 模仿学习、动作分块与 Diffusion Policy
 
@@ -271,9 +273,11 @@
    用 GRPO、rule-based reward 和大规模 RLVR 训练长 CoT reasoning model 的关键技术报告；站内专题见 [DeepSeek-R1 讲解](../paper-deep-dives/technical-reports/deepseek-r1.md)。
 2. [Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)  
    Qwen3 把 thinking / non-thinking 双模式、thinking budget、GRPO、general RL 和 strong-to-weak distillation 合到同一个开源模型家族；站内专题见 [Qwen3 讲解](../paper-deep-dives/technical-reports/qwen3.md)。
-3. [Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)  
+3. [Gemini 2.5: Pushing the Frontier with Advanced Reasoning, Multimodality, Long Context, and Next Generation Agentic Capabilities](https://arxiv.org/abs/2507.06261)  
+   Gemini 2.5 把 native multimodal sparse MoE、teacher distillation、TPUv5p/Pathways、SFT/RM/RL、dynamic thinking、长上下文和 agentic / multimodal 后训练合到同一条闭源前沿模型路线；站内专题见 [Gemini 2.5 讲解](../paper-deep-dives/technical-reports/gemini-2-5.md)。
+4. [Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)  
    Kimi K2 用 MuonClip 跑稳 1T MoE 预训练，并把 agentic data synthesis、tool-use SFT、RLVR、self-critique reward 和 RL rollout 基础设施合成一条开放 agent 模型路线；站内专题见 [Kimi K2 讲解](../paper-deep-dives/technical-reports/kimi-k2.md)。
-4. [Qwen3.5-Omni Technical Report](https://arxiv.org/abs/2604.15804)  
+5. [Qwen3.5-Omni Technical Report](https://arxiv.org/abs/2604.15804)  
    Qwen3.5-Omni 用 Thinker-Talker、Hybrid MoE、AuT、ARIA、RVQ/MTP/Code2Wav 和 256K context 构建可流式语音交互的全模态 agent；站内专题见 [Qwen3.5-Omni 讲解](../paper-deep-dives/technical-reports/qwen35-omni.md)。
 
 1. [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)
@@ -470,13 +474,15 @@
    Tensor Parallel 和大模型训练系统入口。
 2. [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)  
    ZeRO optimizer state partitioning，是 DeepSpeed 路线基础。
-3. [DeepSpeed: System Optimizations Enable Training Deep Learning Models with Over 100 Billion Parameters](https://arxiv.org/abs/2207.00032)  
+3. [Muon is Scalable for LLM Training](https://arxiv.org/abs/2502.16982)  
+   把矩阵正交化优化器 Muon 扩展到 5.7T token LLM 预训练，重点看 weight decay、update RMS matching、Distributed Muon 以及和 AdamW 的边界；站内专题见 [Muon 讲解](../paper-deep-dives/foundations/muon-is-scalable.md)。
+4. [DeepSpeed: System Optimizations Enable Training Deep Learning Models with Over 100 Billion Parameters](https://arxiv.org/abs/2207.00032)  
    DeepSpeed 系统论文入口。
-4. [PyTorch FSDP Documentation](https://pytorch.org/docs/stable/fsdp.html)  
+5. [PyTorch FSDP Documentation](https://pytorch.org/docs/stable/fsdp.html)  
    FSDP 官方文档，工程实践必看。
-5. [GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)  
+6. [GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)  
    Pipeline parallelism 基础。
-6. [PipeDream: Generalized Pipeline Parallelism for DNN Training](https://arxiv.org/abs/1806.03377)  
+7. [PipeDream: Generalized Pipeline Parallelism for DNN Training](https://arxiv.org/abs/1806.03377)  
    Pipeline 调度、bubble 和权重版本问题参考。
 
 ### 8.2 Attention、长序列与显存优化
@@ -491,6 +497,8 @@
    长上下文 sequence parallel / ring attention 的重要参考。
 5. [Sequence Parallelism: Long Sequence Training from System Perspective](https://arxiv.org/abs/2105.13120)  
    长序列训练并行化入口。
+6. [SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention](https://arxiv.org/abs/2509.24006) / [SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675)  
+   视频 DiT attention 加速路线，把 sparse exact attention、linear compensation、learnable routing 和 QAT 接到同一条工程链路；站内专题见 [SLA / SLA2 讲解](../paper-deep-dives/foundations/sla-sparse-linear-attention.md)。
 
 ### 8.3 MoE、路由与大规模稀疏训练
 
