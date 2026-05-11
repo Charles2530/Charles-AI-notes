@@ -272,6 +272,13 @@
   </thead>
   <tbody>
     <tr>
+      <td>2024-08</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/gpt-4o-system-card/">GPT-4o System Card：端到端 Omni 模型、语音安全与多模态部署评测</a></td>
+      <td>如何把端到端 text/audio/image/video omni model 的训练边界、语音输出安全、red teaming、Preparedness Framework 和第三方 agentic evaluation 串成上线前评测体系</td>
+      <td><a href="../vlm/">VLM/VLA</a> / <a href="../inference/serving-systems/">推理服务系统</a></td>
+    </tr>
+    <tr>
       <td>2024-12</td>
       <td>技术报告</td>
       <td><a href="technical-reports/deepseek-v3/">DeepSeek-V3 Technical Report：671B MoE、MLA、FP8 训练与低成本预训练</a></td>

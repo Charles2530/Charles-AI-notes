@@ -233,6 +233,7 @@ nav:
           - LingBot-World：从视频生成到开源世界模拟器: paper-deep-dives/world-models/lingbot-world.md
           - DreamZero：World Action Models are Zero-shot Policies: paper-deep-dives/world-models/dreamzero.md
       - 技术报告:
+        - GPT-4o System Card：端到端 Omni 模型、语音安全与多模态部署评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
         - DeepSeek-V3 Technical Report：671B MoE、MLA 与 FP8 训练: paper-deep-dives/technical-reports/deepseek-v3.md
         - DeepSeek-R1：用强化学习激发大模型推理能力: paper-deep-dives/technical-reports/deepseek-r1.md
         - Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏: paper-deep-dives/technical-reports/qwen3.md
