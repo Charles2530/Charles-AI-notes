@@ -49,6 +49,26 @@ p_\theta(x) = \int p_\theta(x \mid z)p(z)\,dz
 
 直觉上，潜变量像草稿或内部状态。模型先在潜空间里组织结构，再把它解码成可见样本。
 
+### 2.1 潜变量不是一个东西，而是一类“内部草稿”
+
+读后面的论文专题时，最容易卡住的一点是：大家都在说 latent，但含义并不完全一样。可以把 latent 想成厨师做菜前的“备菜台”：有的 latent 是一张图片的压缩草图，有的是一段视频的时空压缩，有的是智能体脑中的当前局势，有的是扩散模型从噪声走向样本的中间状态。
+
+| 场景 | latent 在表示什么 | 它服务谁 |
+| --- | --- | --- |
+| VAE / 视频 VAE | 把像素压成更短、更容易建模的连续表示 | 让 DiT / U-Net 不必直接处理高分辨率像素 |
+| 扩散模型 | \(x_t\) 是从干净样本到噪声之间的中间状态 | 让模型学会一步步把噪声推回数据分布 |
+| RSSM / Dreamer | belief state 同时记住历史和当前不确定性 | 让 agent 在脑内 rollout，训练 actor / critic |
+| JEPA / V-JEPA | 被预测的不是像素，而是抽象表示 | 让模型学“世界结构”，不被纹理细节拖住 |
+
+![PlaNet latent dynamics model designs](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="860" }
+
+<small>图源：[Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)，Figure 2。原论文图意：比较 RNN、SSM 和 RSSM 三种 latent dynamics 设计；RSSM 同时保留 deterministic hidden state 和 stochastic state，用于从像素学习可规划的潜空间动力学。</small>
+
+!!! note "怎么读这张图"
+    这张图可以把 latent 的作用讲得很直观：模型并不想在像素上直接规划，而是先把过去看到的画面和动作压进内部状态。RNN 路线像一本连续日记，擅长记历史；SSM 路线像每一步都抽一次签，擅长表达不确定性；RSSM 把二者合起来，既有长期记忆，也有随机潜状态。Dreamer 系列后来能在 latent space 里“想象未来”，靠的就是这种内部草稿足够稳定。
+
+所以，看到论文里写 latent，不要马上把它翻译成“隐藏向量”就结束。更应该追问三件事：这个 latent 保留了哪些信息，丢掉了哪些细节；它能不能被稳定 rollout；它最后是服务生成画面、压缩计算，还是服务决策。
+
 ## 3. Likelihood、KL 和 ELBO
 
 很多生成模型想最大化 likelihood：

@@ -14,7 +14,7 @@
 很多专题页面都会反复出现同一批基础概念：
 
 - 扩散模型会讲 `UNet`、`DiT`、`score`、`SDE/ODE`、`ELBO`。
-- VLM 和 VLA 会讲 `token`、`embedding`、`cross-attention`、视觉编码器和动作 token。
+- VLM、VLA 和 agent 会讲 `token`、`embedding`、`cross-attention`、视觉编码器、动作 token、多模态上下文和 CoT。
 - 量化会讲 `FP8`、`INT4`、显存、带宽、kernel 和 runtime。
 - 训练会讲 loss、反向传播、optimizer、checkpoint、mixed precision。
 - 算子与编译器会讲 GEMM、attention kernel、通信、访存和数值误差。
@@ -27,13 +27,14 @@
 2. [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)
 3. [卷积、CNN 与特征提取](convolution-and-feature-extraction.md)
 4. [Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)
-5. [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)
-6. [归一化、残差与激活函数](normalization-residual-and-activation.md)
-7. [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)
-8. [优化与训练基础](optimization-and-training-basics.md)
-9. [自动微分、激活显存与 Checkpointing](autograd-activation-checkpointing-and-memory.md)
-10. [数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md)
-11. [数值、显存与运行时基础](numerics-memory-and-runtime-basics.md)
+5. [多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md)
+6. [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)
+7. [归一化、残差与激活函数](normalization-residual-and-activation.md)
+8. [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)
+9. [优化与训练基础](optimization-and-training-basics.md)
+10. [自动微分、激活显存与 Checkpointing](autograd-activation-checkpointing-and-memory.md)
+11. [数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md)
+12. [数值、显存与运行时基础](numerics-memory-and-runtime-basics.md)
 
 ## 一条最短主线
 
@@ -61,6 +62,7 @@
 | 线性层与 GEMM | Transformer、量化、算子 | 为什么大模型性能经常卡在矩阵乘 |
 | 卷积与特征提取 | 扩散 UNet、视觉编码器、VLM | 为什么局部纹理和层级特征重要 |
 | Transformer 与 Attention | LLM、VLM、DiT、推理 KV cache | 为什么 attention 既强又贵 |
+| 多模态、CoT 与推理 | VLM、Omni、agent、世界模型 | 不同模态如何进模型，thinking token 如何服务复杂任务 |
 | 位置编码与 Mask | 长上下文、VLM、VLA、推理 | 为什么 token 顺序、可见性和上下文成本必须一起看 |
 | 归一化与残差 | 深层网络、低精度训练 | 为什么模型能训深，为什么数值会崩 |
 | 概率与生成模型 | 扩散、世界模型、VAE | 为什么要采样，为什么要学分布 |
@@ -75,7 +77,7 @@
 
 | 检查点 | 你应该能说清什么 | 如果卡住，回看 |
 | --- | --- | --- |
-| 表示 | 数据如何变成 tensor、token、embedding 或 latent state | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md) |
+| 表示 | 数据如何变成 tensor、token、embedding 或 latent state | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)、[多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md) |
 | 目标 | loss、概率目标或生成目标到底在约束什么 | [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)、[优化与训练基础](optimization-and-training-basics.md) |
 | 执行 | 训练和推理为什么会受显存、带宽、dtype 和 kernel 影响 | [自动微分、激活显存与 Checkpointing](autograd-activation-checkpointing-and-memory.md)、[数值、显存与运行时基础](numerics-memory-and-runtime-basics.md) |
 | 证据 | 一个方法变好，是平均分变好，还是关键任务桶真的变好 | [数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md) |

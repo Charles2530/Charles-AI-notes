@@ -149,4 +149,25 @@ Near-miss 往往最值钱，因为它同时具备风险高、可学习、数量�
 6. 世界模型不确定性是否更校准；
 7. 数据采集成本是否被有效降低。
 
+## 从 LingBot-World 看三阶段数据飞轮
+
+世界模型的数据引擎不能只理解成“多收点数据再训一次”。技术报告里更常见的是分阶段飞轮：先继承大规模视频先验，再用交互和长程数据补因果关系，最后用因果化、蒸馏和在线回放把模型推向可交互系统。
+
+![LingBot-World training pipeline](../assets/images/paper-deep-dives/world-models/lingbot-world/figure-4-training-pipeline.png){ width="920" }
+
+<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 4。原论文图意：LingBot-World 从 foundation video generator 出发，经过 pre-training、middle-training 和 post-training，逐步获得通用视频先验、交互逻辑/长时动态和低延迟因果交互能力。</small>
+
+!!! note "这张图帮你补哪块基础"
+    第一阶段像给模型看海量世界录像，让它知道物体、场景和一般运动长什么样。第二阶段开始喂动作、相机、游戏或交互轨迹，让模型知道“做了什么会改变未来”。第三阶段才把系统约束放进来：因果注意力、KV cache、少步蒸馏、延迟预算和实时交互。世界模型的数据飞轮不是单一数据池，而是按能力阶段组织的数据供应链。
+
+这条线和 RSSM/Dreamer 的交互轨迹路线不同。RSSM/Dreamer 从一开始就把 `observation-action-reward-done` 当成训练核心；LingBot-World 这类视频路线先把“世界长什么样、会怎么动”的视觉先验学强，再补动作条件和交互逻辑。两条路线都需要数据回流，但回流重点不同：
+
+| 路线 | 最值钱的回流数据 | 为什么 |
+| --- | --- | --- |
+| RSSM / Dreamer | reward 错、done 错、动作后果错的轨迹 | 直接影响 policy 和 imagined rollout |
+| 视频世界模型 | 动作不敏感、长时不一致、反事实错误的视频片段 | 决定模拟器是否真的可控 |
+| Agentic 世界模型 | 工具轨迹失败、状态记忆错、恢复失败日志 | 决定多轮交互是否闭环 |
+
+一个生动的判断是：如果模型只是把失败视频续写得很漂亮，它还没有完成自我改进；如果它能指出“从哪个动作开始未来变坏”，并帮助系统补采 near-miss、恢复轨迹和反事实样本，它才真正进入数据引擎角色。
+
 世界模型数据引擎的目标不是无限扩数据，而是让每轮数据都更接近系统当前短板。只有当采集、生成、筛选、门禁、训练和评测形成闭环时，“自我改进”才不是口号。

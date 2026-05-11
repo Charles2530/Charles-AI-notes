@@ -147,6 +147,33 @@ PPO 的 clipped surrogate 图进一步解释了这个“别改太远”。
 !!! note "图解：clip 是为了限制奖励驱动的过猛更新"
     \(r_t(\theta)=\pi_\theta(a_t\mid s_t)/\pi_{\theta_{\text{old}}}(a_t\mid s_t)\) 表示新策略相对旧策略把同一动作概率改了多少。若 advantage 为正，模型想把这个动作概率调高；若 advantage 为负，模型想调低。clip 会在 \(1-\epsilon\) 到 \(1+\epsilon\) 附近限制收益，防止模型因为 reward model 的局部偏好一下子把概率推得太远。放到 RLHF 里，这就是为什么 PPO 训练既看 reward，也要看 KL、clip fraction、回答长度、事实性和拒答边界。
 
+## 从 Qwen3 看现代后训练流水线
+
+如果只用“预训练、SFT、对齐”三段来概括今天的模型训练，会有点太粗。技术报告里的后训练已经更像一条生产线：先让模型会按格式推理，再用可验证奖励把推理拉强，再把 thinking / non-thinking、工具、RAG、格式、安全和偏好合回同一个产品模型里。
+
+![Qwen3 post-training pipeline](../assets/images/paper-deep-dives/technical-reports/qwen3/figure-1-posttrain-pipeline.png){ width="920" }
+
+<small>图源：[Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)，Figure 1。原论文图意：Qwen3 系列的 post-training pipeline，旗舰模型经过 Long-CoT Cold Start、Reasoning RL、Thinking Mode Fusion、General RL；轻量模型通过 strong-to-weak distillation 继承大模型能力。</small>
+
+!!! note "这张图帮你补哪块基础"
+    这张图说明 SFT、RL 和 distillation 不是三种互相替代的训练菜谱，而是在流水线上承担不同工序。Cold start SFT 像先教模型“怎么把解题过程写成可读格式”；Reasoning RL 像让模型在可验证题目上反复试错，提高正确率；Thinking Mode Fusion 像把“认真写草稿”和“快速直接答”两种产品行为合进一个模型；General RL 再负责工具、格式、偏好、安全和通用交互。
+
+可以把这条线拆成四个更容易记的动作：
+
+| Stage | 更通俗的理解 | 为什么不是可有可无 |
+| --- | --- | --- |
+| Long-CoT Cold Start | 先给模型几份清楚的解题范文 | 没有基础格式，RL 采样容易又乱又难筛 |
+| Reasoning RL | 在有 verifier 的题上自己试错 | 让模型探索人类示范没覆盖的长推理路径 |
+| Thinking Mode Fusion | 把长思考和短回答合到同一模型 | 产品里不是所有问题都值得长 CoT |
+| General RL | 修工具、格式、偏好和安全边界 | 会推理不等于好用，agent 任务还要会执行流程 |
+
+这也解释了为什么 DeepSeek-R1 和 Qwen3 都很重视 `verifiable rewards`。数学、代码、选择题、格式检查、单元测试这类任务，可以自动判断最终答案是否对；一旦 reward 足够可靠，RL 就能让模型在同一道题上采样多条路径，通过“哪条真的成功”来更新策略。
+
+!!! note "一个公众号式例子：考试和上班不是同一种训练"
+    Cold start SFT 像老师先给你几份优秀解题卷，告诉你步骤该怎么写。Reasoning RL 像刷题系统只看最终答案和代码测试是否通过，让你自己摸索更稳的解法。General RL 像入职后处理真实工单：不只要答案对，还要格式对、工具用对、风险边界对、用户能看懂。
+
+轻量模型的 strong-to-weak distillation 也很关键。大模型完整跑一遍后训练很贵，小模型直接做 RL 又可能探索不动；用强模型产出数据和轨迹，再蒸馏到小模型，是把“旗舰模型的经验”压缩给边缘或低成本模型。这不是简单复制答案，而是在复制任务格式、推理风格、工具流程和偏好边界。
+
 ## 问题归因
 
 诊断模型问题时，可以按下面表格初步归因：

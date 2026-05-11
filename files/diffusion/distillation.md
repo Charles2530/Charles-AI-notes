@@ -232,6 +232,27 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 
 这比硬做一步往往稳得多。
 
+### 5.1 从 Phased DMD 图里理解“少步不等于一步”
+
+少步蒸馏最容易被误解成“把采样步数砍掉”。Phased DMD 的图正好能纠正这个误解：4 步生成仍然可以有阶段分工，高噪声阶段负责大结构和运动，低噪声阶段负责纹理和细节。真正要防止的是训练过程把每一步都逼成“一步解决全部问题”的学生。
+
+![Phased DMD schematic](../assets/images/paper-deep-dives/diffusion/phased-dmd/phased-diagram.png){ width="920" }
+
+<small>图源：[Phased DMD: Few-step Distribution Matching Distillation via Score Matching within Subintervals](https://arxiv.org/abs/2510.27684)，Figure 1。原论文图意：对比 vanilla few-step DMD、DMD2/SGTS、4-phase Phased DMD 和结合 SGTS 的 2-phase Phased DMD；红色表示记录梯度的 generator step，蓝色表示不记录梯度的 forward step。</small>
+
+!!! note "这张图帮你补哪块基础"
+    红色 step 表示训练信号真正反传到哪里，蓝色 step 表示只是向前跑出中间状态。DMD2 / SGTS 通过只记录最后一步梯度来省显存，但随机截断有时会让训练样本退化成近似 one-step distillation。Phased DMD 的补丁是把 SNR 路径切成 phase，让每个 expert 只负责一个子区间。这样少步模型仍保留“先定大局、再修细节”的分工。
+
+这件事和 Wan2.2 的 high-noise / low-noise MoE 设计也能连起来理解。视频里的大运动、镜头变化、主体位置，往往在高噪声 / 低 SNR 阶段先被决定；低噪声 / 高 SNR 阶段再补纹理和局部细节。如果少步蒸馏总把训练压成一跳，模型就可能先保画面稳定，却牺牲运动幅度和多样性。
+
+因此，少步蒸馏的验收不能只看“几步出图”和平均画质，还要看：
+
+1. 视频 motion intensity 有没有被压慢；
+2. 不同 seed 的多样性有没有塌缩；
+3. 复杂镜头和动作 prompt 是否还可控；
+4. 文字、logo、边缘和高频细节是否被低步数牺牲；
+5. 每个 phase 的训练目标是否真的对应正确的噪声子区间。
+
 ## 6. Rectified Flow / Rectified Diffusion
 
 这条路线并不是主要做“教师蒸馏”，而是重新设计从噪声到数据的生成路径，让它更适合少步离散。

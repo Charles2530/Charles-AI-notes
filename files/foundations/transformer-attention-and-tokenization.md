@@ -106,7 +106,51 @@ Self-Attention 的核心矩阵是 \(L \times L\)，其中 \(L\) 是序列长度�
 
 如果你关心为什么长上下文还会涉及位置编码、causal mask、padding mask 和 KV cache，可以继续看 [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)。
 
-## 5. Transformer Block 的基本结构
+## 5. 技术报告里的 Transformer：KV cache、MLA 与 MoE
+
+读 DeepSeek-V3、Kimi K2、Qwen3 这类技术报告时，Transformer 已经不只是“Q/K/V + MLP”这张课堂图了。它更像一个系统接口：attention 决定长上下文怎么存，FFN 决定参数容量怎么用，router 决定 token 会被送到哪台机器上的哪个 expert。
+
+![DeepSeek-V3 architecture](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原论文图意：DeepSeek-V3 的 Transformer block 采用 MLA 和 DeepSeekMoE；MLA 缓存压缩 latent 与 RoPE key，MoE 由 shared experts 和 routed experts 共同组成。</small>
+
+!!! note "这张图帮你补哪块基础"
+    左边仍是熟悉的 Transformer block：attention、FFN、RMSNorm、残差。真正需要补的是右边两个放大框。`MLA` 解决的是长上下文推理时 KV cache 太大的问题；`MoE` 解决的是“想要更多参数容量，但不想每个 token 都跑完整参数”的问题。也就是说，现代大模型架构的很多创新并不是换掉 Transformer，而是在 Transformer 的两个热区上做系统化改造。
+
+### 5.1 KV cache 不是小细节
+
+自回归推理时，每生成一个新 token，模型都要读取历史 token 的 key/value。标准 MHA 会在每层、每个历史 token 上缓存完整 K/V，序列一长，显存就像滚雪球一样增长。很多长上下文模型不是算力先爆，而是 KV cache 先把显存吃满。
+
+`MLA` 的直觉可以理解成“给历史笔记做压缩索引”。模型不再把每个 token 的完整 K/V 原样存下来，而是缓存更紧凑的 latent 表示和必要的位置信息，真正做 attention 时再展开需要的部分。这样做不会让长上下文免费，但会把服务时的内存曲线压低。
+
+### 5.2 MoE 的关键是 activated params
+
+MoE 最容易被误读成“参数越多，每个 token 计算越多”。实际上稀疏 MoE 的核心是：
+
+```text
+总参数很大
+  但每个 token 只激活少数 experts
+  所以单 token 计算更接近 activated params
+```
+
+例如 DeepSeek-V3 报告里的 `671B total params / 37B activated params`，Kimi K2 报告里的 `1.04T total params / 32.6B activated params`，都在强调同一件事：模型仓库很大，但每次只打开其中少数几个抽屉。读 MoE benchmark 时，应同时看 total params、activated params、active experts、shared experts 和路由策略，而不是只盯总参数。
+
+### 5.3 Router 也是系统设计
+
+MoE 里的 router 不只是一个数学函数。它会决定 token 被送到哪些 expert；如果 expert 分布在不同 GPU 或节点上，router 也间接决定了通信路径。某些 expert 过热，就会拖慢对应设备；负载均衡太强，又可能破坏 expert specialization。
+
+这就是为什么 DeepSeek-V3 会讲 auxiliary-loss-free load balancing，Kimi K2 会讲 sparsity scaling 和训练基础设施。MoE 的真实难点不是“把 MLP 复制很多份”，而是让模型容量、专家分工、通信成本和训练稳定性同时成立。
+
+| 技术报告常见词 | 它在基础层面对应什么 | 读的时候先问 |
+| --- | --- | --- |
+| KV cache / MLA / GQA | 历史 token 的 K/V 如何存和读 | 长上下文显存是否可控 |
+| total / activated params | 参数容量和单 token 计算的分离 | 每个 token 实际跑了多少参数 |
+| routed / shared experts | 通用能力与专家能力的分工 | router 是否稳定、专家是否过热 |
+| all-to-all | MoE token dispatch/gather 通信 | 通信是否吃掉训练吞吐 |
+
+所以，学 Transformer 不应停在“attention 会看上下文”。读技术报告时更有用的问题是：上下文怎么缓存，参数怎么稀疏激活，token 怎么路由，通信怎么隐藏，最后这些设计是否真的换来了更好的训练和服务效率。
+
+## 6. Transformer Block 的基本结构
 
 一个常见 block 可以写成：
 
@@ -119,7 +163,7 @@ function TransformerBlock(x):
 
 这里的残差连接和归一化非常关键。没有它们，深层 Transformer 很难稳定训练。
 
-## 6. 和后续专题的关系
+## 7. 和后续专题的关系
 
 - [扩散模型中的 DiT](../diffusion/training.md)：图像 patch token 进入 Transformer 去做去噪。
 - [VLM 架构与训练](../vlm/architecture-and-training.md)：图像 token 和文本 token 如何连接。

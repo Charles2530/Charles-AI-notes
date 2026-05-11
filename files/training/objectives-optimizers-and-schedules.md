@@ -90,6 +90,41 @@ r_\phi(x,y)-\beta\,\mathrm{KL}(\pi_\theta\|\pi_{\text{ref}})
 !!! note "初学者解释：RLHF 不是让 reward 直接替代 loss"
     Reward model 给的是完整回答的偏好分数，不是每个 token 的标准答案。PPO 这类算法要把“这个回答整体更好”转成 token 级概率更新，因此需要 value、advantage、旧策略概率、clip 和 KL 这些稳定装置。缺少这些装置，模型很容易为了追高 reward 走偏，例如变长、套模板、过度拒答或牺牲事实性。
 
+## GRPO / RLVR：同一道题多采样，再做组内比较
+
+DeepSeek-R1、Qwen3 等技术报告里反复出现 `GRPO` 和 `RLVR`。这部分如果只理解成“又一种 PPO 变体”，会漏掉重点。它真正回答的是：当奖励来自数学答案、代码测试、选择题、格式检查这类 verifier 时，怎样把“最终是否成功”转成稳定的策略更新。
+
+![GRPO 原图](../assets/images/paper-deep-dives/technical-reports/deepseek-r1/figure-grpo.png){ width="920" }
+
+<small>图源：[DeepSeek-R1](https://arxiv.org/abs/2501.12948)，Supplementary Fig. 1。原论文图意：PPO 使用 value model 估计 advantage；GRPO 省去 value model，直接从同一问题的一组 sampled outputs 的 reward scores 中估计相对 advantage。</small>
+
+!!! note "这张图帮你补哪块基础"
+    PPO 里通常有 policy、reference、reward model 和 value model。value model 要猜“当前前缀未来大概能拿多少奖励”，这在长 CoT 里很难，因为中间推理可能被后面推翻。GRPO 换了一个更朴素的比较方式：同一道题一次采样多条回答，谁通过 verifier、谁格式正确、谁结果更好，就在这一组里相对更高。
+
+GRPO 的 advantage 通常来自同题组内标准化：
+
+\[
+A_i=
+\frac{r_i-\mathrm{mean}(\{r_1,\ldots,r_G\})}
+{\mathrm{std}(\{r_1,\ldots,r_G\})}.
+\]
+
+这里 \(G\) 是同一道题采样的回答数，\(r_i\) 是第 \(i\) 条回答的奖励。直觉很像同一场考试里比较多份草稿：不是问“这份草稿绝对值多少分”，而是问“它比同题其他解法更好吗”。这样可以省掉 critic / value model，也减少一个大模型训练和显存负担。
+
+`RLVR` 指的是 reinforcement learning with verifiable rewards。它最适合这类任务：
+
+| 任务 | Verifier 例子 | 为什么适合 RL |
+| --- | --- | --- |
+| 数学 | 最终答案匹配、符号化检查 | 中间步骤难标，但结果可验证 |
+| 代码 | 单元测试、编译器、执行结果 | 真实成功信号比偏好打分更可靠 |
+| 选择题 / STEM | 标准答案、格式检查 | reward 稳定，采样成本可控 |
+| 工具调用 | schema、返回码、任务完成信号 | 能评价完整轨迹是否闭环 |
+
+但它也有边界。开放写作、主观审美、复杂安全判断没有天然 verifier，这时仍要依赖 reward model、judge、人审或规则组合。即使有 verifier，也可能出现 reward hacking：模型学会迎合格式、利用测试漏洞、输出不可读但能过检查的答案。因此 GRPO / RLVR 应和 rejection sampling、格式约束、人工抽检、长度监控、通过率分桶和真实任务评测一起看。
+
+!!! example "有趣例子：一题多解的补习班"
+    老师不给每一步打分，只看最后答案是否正确。学生同一道题写 16 种解法，正确且清楚的解法下次更可能被采用，明显错的解法概率下降。GRPO 就是在把这种“同题多解、组内比较”的信号变成模型参数更新。
+
 ## 多目标训练
 
 实际系统很少只优化一个损失。多模态、具身和世界模型常写成：

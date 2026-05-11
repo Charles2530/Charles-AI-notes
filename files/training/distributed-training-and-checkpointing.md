@@ -111,6 +111,35 @@ micro-batch 太少会有大量 bubble，太多又会影响激活保留、优化�
 
 EP 主要服务 MoE。它让 token 只经过部分专家，解耦参数规模和单 token 计算量。但 token dispatch/gather、专家负载均衡、容量因子、token drop 和路由稳定性会成为新瓶颈。MoE 的并行设计通常比稠密模型更依赖拓扑和通信实现。
 
+### 从技术报告看 pipeline bubble 和通信重叠
+
+技术报告里的训练系统图经常看起来像“彩色甘特图”，但它们讲的其实是同一个基础问题：GPU 不应花太多时间等通信、等前后 stage、等 checkpoint。DeepSeek-V3 的 DualPipe 和 Kimi K2 的训练基础设施都在围绕这个问题做不同折中。
+
+![DualPipe schedule](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-5-dualpipe.png){ width="920" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 5。原论文图意：8 个 PP ranks、20 个 micro-batches 的 DualPipe scheduling 示例，两个方向的 micro-batches 对称推进，黑框表示互相 overlap 的计算和通信。</small>
+
+!!! note "这张图帮你补哪块基础"
+    Pipeline parallelism 像多段生产线。前几拍和后几拍必然有人空等，这就是 pipeline bubble。DualPipe 的思路是从 pipeline 两端同时推进 micro-batches，并把 forward/backward 中的通信和计算互相压在一起。图里真正重要的不是颜色本身，而是黑框代表的 overlap：同一段墙钟时间里，GPU 尽量同时做计算和通信。
+
+![Kimi K2 training infrastructure overlap](../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-7-training-infra.png){ width="920" }
+
+<small>图源：[Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)，Figure 7。原论文图意：展示不同 PP phases 中 computation、communication 和 offloading 的 overlap。</small>
+
+!!! note "为什么 Kimi K2 不直接照搬 DualPipe"
+    Kimi K2 是 1T 级 MoE，报告强调 DualPipe 会带来参数和梯度内存翻倍，对超大模型不一定划算。它选择在 interleaved 1F1B 中重叠 EP all-to-all、PP communication、weight-gradient computation 和 activation offload。这个例子提醒我们：训练系统不是“哪个 schedule 最先进就用哪个”，而是看模型规模、内存、通信拓扑和 checkpoint 目标能否一起闭合。
+
+读训练系统图时，可以按三层问：
+
+| 图里看到的东西 | 基础概念 | 应该追问 |
+| --- | --- | --- |
+| 空白或等待段 | pipeline bubble | micro-batch 数和 stage 切分是否合适 |
+| all-to-all / dispatch | MoE 专家通信 | expert 是否跨节点，通信是否被计算隐藏 |
+| offload / recomputation | 显存换时间 | CPU/重计算是否真的不拖慢主链 |
+| async checkpoint | 恢复资产写入 | manifest、一致性和恢复时间是否可验 |
+
+这也是为什么大模型训练论文越来越像系统论文。模型结构决定要通信什么，parallelism 决定在哪里通信，kernel 和调度决定能不能把通信藏起来，checkpoint 决定长跑失败后能不能继续。
+
 ## 三、训练系统栈：Megatron、DeepSpeed、FSDP 与重计算
 
 从工程定位看，可以把常见训练栈粗略拆成四层：

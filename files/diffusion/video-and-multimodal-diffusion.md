@@ -125,6 +125,21 @@ $$
 
 这也是为什么“一致性模型 / Rectified Flow”对视频尤其有吸引力。
 
+### 9.1 为什么现代视频模型越来越像“视频压缩器 + DiT + Flow”
+
+图像扩散时代，很多人先记住的是 U-Net；视频扩散进入 720P、多秒、长时一致性之后，主角逐渐变成三件套：视频 VAE/tokenizer 负责压缩，Video DiT 负责时空建模，Flow Matching / velocity prediction 负责给采样器一条更顺的生成路径。
+
+![Wan DiT architecture](../assets/images/paper-deep-dives/diffusion/wan/figure-4-dit.png){ width="920" }
+
+<small>图源：[Wan: Open and Advanced Large-Scale Video Generative Models](https://arxiv.org/abs/2503.20314)，Figure 5。原论文图意：Wan 架构由 Wan-VAE、Video DiT 和 umT5 text encoder 组成，DiT 通过 cross-attention 接入文本条件。</small>
+
+!!! note "这张图怎么读"
+    先看左边的 Wan-VAE：它把像素视频压到 latent video，等于先把一部长片压成模型能处理的胶片索引。再看中间的 Video DiT：它不是逐帧画图，而是在时空 token 上同时建模空间布局、时间运动和文本条件。最后看右边的 text encoder / cross-attention：prompt 不只是给第一帧用，而是要持续影响整段视频的对象、动作、镜头和风格。
+
+把这张图和 Flow Matching 放在一起看，会更容易理解“velocity”为什么不是物理速度。模型预测的是当前 noisy video latent 应该往哪个方向移动，才能沿着生成路径靠近干净视频 latent。画面里的狗跑得快不快，是视频内容；latent 里的 velocity，则是采样器每一步要走的方向。
+
+视频模型的难点也藏在这张图里：VAE 压缩太狠会丢运动细节，DiT 序列太长会爆显存，文本条件太弱会 prompt drift，采样步数太多会慢，步数太少又容易崩。后面的 Wan、CausVid、DMD、Phased DMD 等论文，其实都在围绕这几个接口做取舍。
+
 ## 10. Wan 系列：开源视频扩散底座怎么组织
 
 `Wan` 系列值得单独放进视频扩散页，不是因为它只是一个效果更好的 demo，而是因为它把现代开源视频基础模型的几个关键部件放在了一起：视频 VAE / tokenizer、DiT 主干、Flow Matching / velocity 风格训练、多任务数据、T2V/I2V/编辑等任务接口，以及面向长视频和高分辨率的系统优化。

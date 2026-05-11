@@ -135,6 +135,25 @@ $$
 !!! note "初学者读世界模型时的抓手"
     先问模型预测什么：latent state、未来帧、奖励、done、风险、动作还是完整轨迹。再问动作是否真的作为条件进入模型。最后问它被谁消费：planner、policy、风险模块、数据引擎，还是只给人看视频。能生成漂亮未来，不等于能改善决策；能拟合动作，也不等于理解动作后果。
 
+### 三种“内部世界”：像素、latent 和表征
+
+论文专题里容易混在一起的还有一个问题：世界模型不一定要生成像素。它可以在像素上模拟，也可以在 latent state 里 rollout，也可以只预测抽象表征。三种路线像三种地图：像素视频是街景实拍，latent dynamics 是可规划的简化地图，JEPA 式表征预测则像只保留路口、墙、障碍物和可行动区域的导航图。
+
+![V-JEPA training procedure](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="900" }
+
+<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原论文图意：V-JEPA 将视频 clip 展平成 token sequence；context encoder 只处理 masked sequence，predictor 接收 context output 和 learnable mask tokens，target encoder 处理完整 unmasked token sequence，最后用 \(L_1\) loss 回归对应 masked tokens 的 target encoder output。</small>
+
+!!! note "这张图和 Dreamer 有什么不同"
+    V-JEPA 不是把遮住的像素画回来，而是预测被遮住区域的 latent representation。它更关心“那里应该有什么语义和运动结构”，不急着生成每一根纹理。Dreamer / RSSM 则更关心动作条件下的状态转移、奖励和 done，目标是让 agent 能在 latent space 里想象并学策略。视频世界模型又进一步要求把未来解码成可看、可交互、可检查的视频。
+
+| 路线 | 输出看起来像什么 | 最适合回答的问题 | 典型风险 |
+| --- | --- | --- | --- |
+| JEPA / V-JEPA | 被遮挡或未来区域的表征 | 世界结构和运动关系是否被理解 | 表征强，但不直接生成可检查未来 |
+| RSSM / Dreamer | latent state、reward、continue、imagined rollout | 这个动作是否会带来更高回报 | latent 漂移会被 policy 放大 |
+| 视频世界模型 | 未来帧或未来视频 | 人和系统能否检查反事实未来 | 视觉逼真不等于动作因果正确 |
+
+这三条路线没有谁天然高级。做机器人闭环控制时，Dreamer 式 latent dynamics 可能比高清视频生成更实用；做开放世界交互 demo 时，视频模拟更直观；做通用视觉理解时，JEPA 式表征预测可能更稳。真正的判断标准是：模型内部的“世界”最后要被谁使用。
+
 ## 两条训练路线
 
 如果按“训练数据从哪里来、模型先学什么”来划分，当前世界模型可以先分成两条主线。它们都会走向动作条件未来预测，但出发点不同。

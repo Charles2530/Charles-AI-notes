@@ -52,6 +52,13 @@ Wan 的核心问题不是“再做一个 text-to-video 模型”，而是回答�
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 3。原论文图意：不同训练阶段的数据供给策略会动态调整 motion、quality 和 category 的比例。</small>
 
+!!! note "Figure 3 怎么读"
+    这张图不要按“一批数据从左到右过滤一次”来读，它更像一张训练数据调度图。左侧的 `Pool` 是原始候选池，先被拆成 `Image Data`、`Video Data` 和 `Textual Data`；后面的 `[I]`、`[V]`、`[T]` 分别表示 image、video、textual 数据流，`192P / 480P / 720P` 表示不同分辨率训练阶段。灰色带子是过滤或去重，绿色块是进入训练的部分，紫色块多和分辨率筛选相关。
+
+    核心信息是：Wan 不是固定一个数据配比从头训到尾，而是在不同阶段重新决定“给模型看什么”。早期 `192P` 阶段更看重规模和覆盖面，用较低成本让模型先学基本语义、构图和粗时序；到 `480P / 720P` 阶段，数据会经过更强的 visual filter、motion filter 和 resolution filter，训练集中高画质、高分辨率、运动更有意义的视频比例会上升；到 SFT 阶段，数据进一步收窄，更多服务最终观感、复杂动作、文字生成和用户偏好。
+
+    图注里的 `motion / quality / category` 可以这样理解：`motion` 是视频运动分布的重采样，避免模型被静态、抖动或低质量运动视频带偏；`quality` 是画质、清晰度、压缩噪声、审美和分辨率门槛随阶段提高；`category` 是图像、视频、文字数据以及内容类别的比例控制，防止只追求高分样本而丢掉长尾场景、物体、风格和文字能力。换句话说，这张图想表达的不是“过滤越多越好”，而是**每个训练阶段都在重新平衡数据的运动、画质和类别覆盖**。
+
 最底层过滤先处理“明显不该进训练集”的样本：OCR/text coverage 过高、审美分低、NSFW、水印和 logo、黑边、过曝、生成图污染、模糊、时长和分辨率不达标。论文特别提到，少量生成图污染也会明显伤害模型表现，所以训练了 synthetic image detector 来过滤。这一步会去掉约 50% 初始数据。
 
 第二层是视觉质量。团队把数据聚成 100 个 cluster，再从每个 cluster 抽样人工打 1 到 5 分，训练专家质量评分器。这比直接全局排序更稳，因为视频数据有长尾：如果只按平均质量筛，很容易把小众但有价值的运动、场景或风格删掉。
@@ -164,6 +171,10 @@ L(\alpha b s h^2+\beta b s^2 h),
 其中 \(L\) 是层数，\(b\) 是 micro batch size，\(s\) 是 sequence length，\(h\) 是 hidden dimension。视频 \(s\) 很容易到几十万甚至百万，attention 的 \(s^2\) 项会逐渐压过线性层。论文说当 sequence length 到 1M 时，attention 可占端到端训练时间 95%。
 
 显存同样麻烦。DiT activation memory 可写成 \(\gamma Lbsh\)，而视频 DiT 的 \(\gamma\) 往往大于普通 LLM；14B DiT 在 1M tokens、micro batch size 1 的场景下，activation 可超过 8 TB。
+
+这里的 \(\gamma\) 可以理解成**每一层、每个 token、每个 hidden channel 需要额外保存多少份中间激活的常数系数**。\(Lbsh\) 只描述了“层数 × batch × 序列长度 × hidden 维度”这个基本体积，但训练反向传播不能只保存 block 输入，还要保存 attention 的 Q/K/V、attention output、MLP 中间结果、norm / modulation、dropout 或 mask 相关状态，以及为了分布式通信和重排产生的临时 buffer。把这些额外项合在一起，就得到论文里用来粗略估算 activation memory 的 \(\gamma\)。
+
+为什么视频 DiT 的 \(\gamma\) 往往更大？一方面，视频 token 同时包含时间和空间维，sequence length \(s\) 已经很大；另一方面，full spatio-temporal attention、3D patch/reshape、cross-attention 和长序列并行会让训练时需要保留更多中间张量。普通 LLM 的 token 序列通常是一维文本，kernel 和并行实现也更成熟，很多 activation 可以更稳定地重算或融合；视频 DiT 的中间状态更重、更碎，所以即使公式都写成 \(Lbsh\) 量级，前面的 \(\gamma\) 也会把显存需求放大很多。
 
 ![Wan DiT parallelism](../../assets/images/paper-deep-dives/diffusion/wan/figure-5-parallel.png){ width="920" }
 
@@ -351,4 +362,3 @@ Wan 最值得复用的不是某个单点 trick，而是完整训练路线：
 7. 用 human-aligned benchmark 把动态质量、画质和指令跟随拆开评估。
 
 如果要把 Wan 当作工程参考，最重要的问题不是“模型有多大”，而是：你的数据过滤、VAE、训练阶段、条件接口和推理预算是否和目标应用一致。视频生成系统的失败往往不是公式错，而是这些接口没有对齐。
-
