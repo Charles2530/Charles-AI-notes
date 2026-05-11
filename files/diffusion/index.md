@@ -204,6 +204,18 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 如果目标是过渡到世界模型，读完第 4 阶段后直接接 [视频与多模态扩散](video-and-multimodal-diffusion.md) 里的 Wan 系列说明、[Towards Video World Models 专题](../paper-deep-dives/world-models/towards-video-world-models.md) 和 [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md)。如果只是快速定位方法，先看 [方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [训练配方与失效分析](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
 
+## 从论文专题回填的扩散知识点
+
+专题页已经把图像、视频、少步蒸馏和世界模型路线连了起来。回到扩散总览时，可以把它们放回下面四个问题：
+
+| 专题来源 | 回填到扩散章节的知识点 | 应接到本章哪里 |
+| --- | --- | --- |
+| [DMD](../paper-deep-dives/diffusion/dmd.md)、[DMD2](../paper-deep-dives/diffusion/dmd2.md) | 少步/一步生成不是只换 solver，而是用 distribution matching、fake critic、regression loss 或 GAN 监督重新训练学生 | [蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) |
+| [Phased DMD](../paper-deep-dives/diffusion/phased-dmd.md) | 高低 SNR 区间承担不同生成职责，few-step 蒸馏可以按噪声子区间拆 expert，以保住视频运动和图像多样性 | [噪声日程与参数化](noise-schedules-and-parameterization.md)、[蒸馏与整流](distillation.md) |
+| [Wan2.1](../paper-deep-dives/diffusion/wan.md) | 视频 foundation model 的质量来自 VAE、Video DiT、Flow Matching、分阶段图文视频训练、Context Parallel 和后训练的系统组合 | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[训练配方与失效分析](practical-training-recipes-and-failure-analysis.md) |
+| [CausVid](../paper-deep-dives/diffusion/causvid.md)、[Self Forcing](../paper-deep-dives/world-models/self-forcing.md) | 双向视频扩散要变成流式世界模型，必须处理 causalization、KV cache、self-rollout 和 train-test gap | [采样与推理](inference.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) |
+| [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md) | 视频 DiT 的 attention 可以拆成 sparse exact、linear compensation 和 skip；这说明扩散加速也可能来自 attention 结构和低比特 kernel | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[训练配方与失效分析](practical-training-recipes-and-failure-analysis.md) |
+
 ## 快速代码示例
 
 ```python

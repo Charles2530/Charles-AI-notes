@@ -177,6 +177,18 @@ VLA 更像具身智能里的端到端策略接口之一。它回答的是：给�
 !!! note "初学者判断标准：看它有没有回答 what-if"
     如果一个系统只能从当前图像直接输出动作，它更像反射式 policy。它可能在训练分布内很好用，但遇到遮挡、卡住、物体滑动时容易连续犯错。接入世界模型后，系统至少应该能比较几个候选动作的后果：向左抓会不会撞杯柄，先开门再伸手是否更安全，失败后退一步是否能恢复。这个 what-if 能力，就是世界模型和具身智能发生关系的核心。
 
+### 从论文专题回填的具身知识点
+
+论文专题里和具身智能关系最紧的，不是“模型会看图”本身，而是视觉、动作、未来预测和真实闭环如何接起来。回看本章时，可以先按下面几条线补知识点：
+
+| 专题来源 | 具身系统层面的补充 | 应接到本章哪里 |
+| --- | --- | --- |
+| [π0.5](../paper-deep-dives/vla/pi05.md) | heterogeneous co-training、FAST 动作离散化、flow matching action expert 和高层子任务预测说明开放家庭任务不能只靠单一机器人数据 | [Sim2Real 与数据引擎](sim2real-and-data-engines.md)、[任务谱系与 Benchmark](task-taxonomy-and-benchmarks.md) |
+| [DreamZero](../paper-deep-dives/world-models/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作既是策略输出，也是未来世界的条件变量；具身系统要评估不同动作会把场景带向哪里 | [规划、控制与安全](planning-control-and-safety.md)、[家庭机器人流程与失败模式](household-robotics-workflows-and-failure-patterns.md) |
+| [PlaNet](../paper-deep-dives/world-models/planet.md)、[Dreamer](../paper-deep-dives/world-models/dreamer.md) | latent dynamics、reward / continue prediction 和 imagined rollout 说明世界模型最有价值的用法是减少真实试错、提前评估风险 | [规划、控制与安全](planning-control-and-safety.md)、[Sim2Real 与数据引擎](sim2real-and-data-engines.md) |
+| [CausVid](../paper-deep-dives/diffusion/causvid.md)、[Self Forcing](../paper-deep-dives/world-models/self-forcing.md) | 视频生成若要服务闭环控制，必须从离线补帧走向 causal rollout，并处理自回归漂移和 train-test gap | [部署模式与安全案例](deployment-patterns-and-safety-cases.md)、[人机协作与交互评测](human-robot-interaction-and-evaluation.md) |
+| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md)、[Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 实时语音、视觉和文本接口会把延迟、安全拒答、身份保护和多模态评测带进机器人交互层 | [人机协作与交互评测](human-robot-interaction-and-evaluation.md)、[部署模式与安全案例](deployment-patterns-and-safety-cases.md) |
+
 ### 与传统控制的关系
 
 传统控制器并没有过时。相反，在很多真实系统里，具身智能真正稳定的形态往往是：

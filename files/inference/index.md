@@ -48,6 +48,17 @@
   </a>
 </div>
 
+## 从论文专题回填的推理知识点
+
+技术报告里的推理结论不要只看 tokens/s。更稳的读法是把它们拆回请求形态、缓存状态、输出长度和系统热路径。
+
+| 专题来源 | 推理层面的补充 | 应接到本章哪里 |
+| --- | --- | --- |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | Mamba-heavy backbone、LatentMoE 和 shared-weight MTP 的核心收益在长上下文、长输出和 speculative decoding 接受率，不只是 benchmark accuracy | [缓存、路由与投机执行](caching-routing-and-speculative.md)、[上下文压缩与 KV 管理](context-compression-kv-eviction-and-memory-hierarchies.md) |
+| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md)、[DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | MLA、混合注意力、异构 KV cache 和 OPD 基础设施说明长上下文推理要同时处理 KV 规模、prefill/decode 拆分和服务容量 | [解耦式 Prefill 与 KV 服务](disaggregated-prefill-kv-services-and-capacity-ops.md)、[长上下文系统](rag-agents-and-long-context-systems.md) |
+| [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md)、[Qwen3](../paper-deep-dives/technical-reports/qwen3.md) | agentic tool use 和 thinking budget 让推理从单次回答变成多步链路，瓶颈常在路由、上下文膨胀和工具 I/O | [RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md)、[在线评测与观测](observability-and-online-evaluation.md) |
+| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md)、[Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 实时语音/全模态服务需要 first-packet latency、streaming output classifier、音频转写 moderation 和多模态请求分流 | [服务系统](serving-systems.md)、[运行时选型](serving-runtimes-vllm-sglang-and-tensorrt-llm.md) |
+
 推理系统的目标，不只是“模型能跑”，而是“在成本、延迟、吞吐和稳定性之间做平衡”。
 
 对自回归模型，单请求时延可粗略写成：

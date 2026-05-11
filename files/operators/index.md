@@ -70,6 +70,17 @@
   </a>
 </div>
 
+## 从论文专题回填的算子与系统知识点
+
+技术报告里的架构收益最终都要落到 kernel、通信、内存层级和 runtime。读算子章节时，可以把这些案例作为“为什么需要底层视角”的证据。
+
+| 专题来源 | 算子 / 编译层面的补充 | 应接到本章哪里 |
+| --- | --- | --- |
+| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 GEMM、DualPipe 和通信重叠说明低成本训练不只是算法，核心在 GEMM dtype、pipeline bubble 和跨卡通信安排 | [FP8 训练与优化器 Kernel](fp8-training-and-optimizer-kernels.md)、[通信 Kernel 与 Overlap](communication-kernels-and-overlap.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | LatentMoE 降低 expert 权重读取和 all-to-all payload，Mamba-heavy 结构改变长序列生成时的状态读写模式 | [MoE 路由与稀疏 Kernel](moe-routing-and-sparse-kernels.md)、[Serving Attention 与 KV Kernel](serving-attention-and-kv-kernels.md) |
+| [DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md)、[RingAttention](../paper-deep-dives/world-models/ringattention.md) | 百万上下文、blockwise attention、sequence parallel 和异构 KV cache 让 attention kernel、KV 管理和通信拓扑成为同一个问题 | [长上下文与 FlashAttention 演进](long-context-and-flashattention-evolution.md)、[GPU 互连与拓扑映射](gpu-interconnects-and-topology-mapping.md) |
+| [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md) | 视频 DiT attention 的 sparse-linear 分解和 QAT 提醒我们：算子优化可以改变 attention 数据流，而不是只换更快 GEMM | [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) |
+
 大模型系统讨论如果只停留在“模型结构”“训练配方”“服务框架”三个层面，迟早会撞到一堵墙：很多关键性能问题最终都会落到算子实现、编译路径和硬件执行模型上。你也许已经知道 `FlashAttention`、`PagedAttention`、`Fused RMSNorm`、`Int4 GEMM` 这些名字，但如果不知道它们到底在优化什么、为什么会快、又为什么有些场景并不会快，那么系统层判断就很容易失真。
 
 这一组文档的目的，不是把每个人都训练成 GPU 内核工程师，而是帮助你建立一个足够清晰的算子视角：从模型层需求，一路下钻到编译器、中间表示、kernel、内存层次和硬件执行机制，理解哪些性能瓶颈来自算法，哪些来自实现，哪些来自错误的抽象边界。

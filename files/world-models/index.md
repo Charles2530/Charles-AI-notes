@@ -135,6 +135,18 @@ $$
 !!! note "初学者读世界模型时的抓手"
     先问模型预测什么：latent state、未来帧、奖励、done、风险、动作还是完整轨迹。再问动作是否真的作为条件进入模型。最后问它被谁消费：planner、policy、风险模块、数据引擎，还是只给人看视频。能生成漂亮未来，不等于能改善决策；能拟合动作，也不等于理解动作后果。
 
+## 从论文专题回填的世界模型知识点
+
+世界模型专题页已经覆盖了从 RSSM 到视频世界模拟器的多条路线。回看总览时，可以把单篇论文压回这几条主线：
+
+| 专题来源 | 回填到世界模型章节的知识点 | 应接到本章哪里 |
+| --- | --- | --- |
+| [PlaNet](../paper-deep-dives/world-models/planet.md)、[Dreamer](../paper-deep-dives/world-models/dreamer.md)、[DreamerV3](../paper-deep-dives/world-models/dreamerv3.md) | RSSM、latent imagination、reward/continue prediction 和 actor-critic 说明世界模型首先是决策接口，不是视频生成器 | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)、[规划即推断与潜在动作](planning-as-inference-and-latent-actions.md) |
+| [V-JEPA](../paper-deep-dives/world-models/v-jepa.md)、[H-JEPA](../paper-deep-dives/world-models/h-jepa.md) | 表征空间预测可以学习世界结构和运动，不一定要重建像素；它更偏 internal world model | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
+| [Genie](../paper-deep-dives/world-models/genie.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 视频世界模型要从被动视频走向可交互模拟，关键是 latent action / action conditioning、causal rollout、长时记忆和实时化 | [生成式模拟与视频世界模型](generative-simulation-and-video.md)、[数据引擎与自我改进](data-engines-and-self-improvement.md) |
+| [Self Forcing](../paper-deep-dives/world-models/self-forcing.md)、[CausVid](../paper-deep-dives/diffusion/causvid.md) | 流式视频世界模型的核心难点是 train-test gap、self-rollout 漂移、KV cache 和少步生成稳定性 | [评测与失败模式](evaluation-and-failure-modes.md)、[生成式模拟与视频世界模型](generative-simulation-and-video.md) |
+| [DreamZero](../paper-deep-dives/world-models/dreamzero.md) | WAM 把未来视频和未来动作联合建模，强调“世界预测能否直接支撑 policy” | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)、[机器人与自动驾驶应用](applications-in-robotics-and-autonomous-driving.md) |
+
 ### 三种“内部世界”：像素、latent 和表征
 
 论文专题里容易混在一起的还有一个问题：世界模型不一定要生成像素。它可以在像素上模拟，也可以在 latent state 里 rollout，也可以只预测抽象表征。三种路线像三种地图：像素视频是街景实拍，latent dynamics 是可规划的简化地图，JEPA 式表征预测则像只保留路口、墙、障碍物和可行动区域的导航图。

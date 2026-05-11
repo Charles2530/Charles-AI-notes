@@ -15,6 +15,17 @@
 !!! tip "基础知识入口"
     量化里的 `FP8`、`INT4`、显存、带宽、kernel 和 runtime 都可以先看 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。如果涉及 QAT 或低比特训练，再补看 [优化与训练基础](../foundations/optimization-and-training-basics.md)。
 
+## 从论文专题回填的量化知识点
+
+论文专题里的低精度案例说明，量化不是一个“统一降到几 bit”的动作，而是按训练、推理、KV、MoE 和敏感模块分别决策。
+
+| 专题来源 | 量化层面的补充 | 应接到本章哪里 |
+| --- | --- | --- |
+| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 训练要和通信、并行、GEMM kernel、loss 稳定性一起看，不能只看权重格式 | [FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | NVFP4 预训练采用 mixed precision：大部分线性层 FP4，但 latent projections、MTP、attention、embedding 和部分网络保留高精 | [FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)、[量化评估与部署检查](evaluation-and-deployment-checklist.md) |
+| [DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | FP4 QAT 与异构 KV cache 提醒我们：长上下文和 MoE 服务中，KV 与动态状态可能比静态权重更早成为显存瓶颈 | [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) |
+| [Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md)、[GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md) | 全模态模型量化要额外保护 audio codec、vision connector、projector、speech head 和安全分类器等非文本路径 | [多模态与 VLA 量化](quantization-for-multimodal-and-vla-models.md)、[部署检查清单](evaluation-and-deployment-checklist.md) |
+
 ## 0. 先分清四层：格式、算法、算子、Infra
 
 量化最容易乱，是因为很多名字不在同一层。`INT4`、`GPTQ`、`Marlin kernel`、`vLLM` 和 `TensorRT-LLM` 不能直接横向比较，它们分别回答不同问题。

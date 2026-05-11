@@ -74,6 +74,18 @@
   </a>
 </div>
 
+## 从论文专题回填的训练知识点
+
+最近几篇技术报告把训练章节里的抽象概念落到了真实系统。回看训练页时，可以按下面这张表把论文结论放回对应知识点：
+
+| 专题来源 | 训练层面的补充 | 应接到本章哪里 |
+| --- | --- | --- |
+| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 mixed precision、DualPipe、auxiliary-loss-free routing 和 MTP 说明训练收益往往来自“架构、低精度、并行和后训练”的共同设计 | [低比特训练与训练数制](low-bit-training-and-numerics.md)、[Megatron-LM / DeepSpeed](megatron-lm-deepspeed-and-open-training-stacks.md)、[MTP 与投机解码](mtp-and-speculative-decoding.md) |
+| [Qwen3](../paper-deep-dives/technical-reports/qwen3.md)、[DeepSeek-R1](../paper-deep-dives/technical-reports/deepseek-r1.md) | thinking / non-thinking、RLVR、GRPO、rejection sampling 和强到弱蒸馏说明后训练不是单阶段 SFT，而是能力塑形和行为约束的多阶段链路 | [预训练、微调与对齐](pretraining-finetuning-alignment.md)、[后训练数据引擎](post-training-data-engines-and-judge-models.md)、[偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md) |
+| [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | MuonClip、agentic data synthesis、tool-use SFT、RL checkpoint engine 说明 agent 模型训练要同时管理优化器稳定性、数据生成和恢复语义 | [分布式训练与 Checkpointing](distributed-training-and-checkpointing.md)、[评测与消融方法学](evaluation-and-ablation-methodology.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | NVFP4 预训练、敏感层 BF16/MXFP8 保留、shared-weight MTP 和异步多环境 GRPO 说明训练配方要和目标硬件、rollout 成本、推理路径一起设计 | [低比特训练与训练数制](low-bit-training-and-numerics.md)、[MTP 与投机解码](mtp-and-speculative-decoding.md)、[后训练数据引擎](post-training-data-engines-and-judge-models.md) |
+| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md)、[Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 端到端语音/视觉/文本训练使后训练扩展到 voice consistency、speaker ID refusal、streaming safety 和模态专项评测 | [预训练、微调与对齐](pretraining-finetuning-alignment.md)、[评测与消融方法学](evaluation-and-ablation-methodology.md) |
+
 ## 图解预览
 
 如果你只是打开了“训练总览”页，先用论文原图建立“训练预算不是只堆参数”的直觉。Chinchilla 的 scaling law 图说明：在固定 FLOP 预算下，模型参数量和训练 token 数需要一起配平，过大的模型如果训练 token 不够，反而不是 compute-optimal。

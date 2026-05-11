@@ -38,6 +38,17 @@ p_\theta(o_{t+1:t+H}, r, d \mid o_{\le t}, a_{t:t+H-1}, l)
 !!! note "先把 VLM/VLA 放进世界模型路线里"
     本章不是把所有 VLM 应用逐个展开，而是沿着“视觉语义 -> 时序状态 -> 动作策略 -> 动作后果预测”推进。判断一项内容是否该放在这里，标准不是它是否热门，而是它是否能帮助回答：模型如何从看懂当前画面，走向在动作条件下预测未来。
 
+## 从论文专题回填的多模态知识点
+
+论文专题把 VLM/VLA 从静态图文对齐推进到了实时语音、全模态 agent 和动作世界模型。回看本章时，可以按下面几条线补知识点：
+
+| 专题来源 | 多模态 / VLA 层面的补充 | 应接到本章哪里 |
+| --- | --- | --- |
+| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md) | 端到端 omni model 让 audio 不再只是 ASR/TTS 外挂；语音身份、声音一致性、实时安全分类器也变成模型系统接口 | [视觉表征、连接器与时序状态](architecture-and-training.md)、[推理服务系统](../inference/serving-systems.md) |
+| [Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | Thinker-Talker、AuT、ARIA、RVQ/MTP/Code2Wav 说明全模态 agent 常需要把理解、规划、语音生成和流式输出拆成协同模块 | [视觉表征、连接器与时序状态](architecture-and-training.md)、[闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md) |
+| [π0.5](../paper-deep-dives/vla/pi05.md) | heterogeneous co-training、FAST 动作离散化、flow matching action expert 和 high-level subtask prediction 说明开放世界 VLA 要同时吃 web 语义、机器人数据和任务分解信号 | [数据与策略学习](../vla/data-and-policy-learning.md)、[动作表示与控制接口](../vla/action-representation-and-interfaces.md) |
+| [DreamZero](../paper-deep-dives/world-models/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作不只是 policy 输出，也可以作为未来视频和世界状态的条件变量；这把 VLA 推向 WAM/VAM | [动作分块与层级策略](../vla/action-chunking-hierarchical-policies-and-latent-skills.md)、[世界模型总览](../world-models/index.md) |
+
 ## 2. VLM：先建立静态语义空间
 
 ![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }

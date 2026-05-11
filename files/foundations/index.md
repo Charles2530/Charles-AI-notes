@@ -71,6 +71,17 @@
 | 数据与评测 | 训练、量化、推理、VLM | 为什么平均分不够，为什么需要分桶和回放 |
 | 数值与运行时 | 量化、推理、算子 | 为什么格式能保存不等于能跑快 |
 
+## 从论文专题回填的基础概念
+
+论文专题里已经出现了一批会反复回到基础层的概念。读这些内容时，不要只记模型名字，先把它们归到下面几类：
+
+| 专题来源 | 回填到基础层的知识点 | 建议回看 |
+| --- | --- | --- |
+| [Muon](../paper-deep-dives/foundations/muon-is-scalable.md)、[Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md)、[DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | 优化器不只是 AdamW 参数表；Muon / MuonClip 强调更新矩阵几何、谱范数约束和大规模 MoE 训练稳定性 | [优化与训练基础](optimization-and-training-basics.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | Mamba-heavy backbone、GQA、LatentMoE 和 shared-weight MTP 说明“注意力、状态空间、MoE、预测头”是不同结构层 | [Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)、[位置编码、Mask 与上下文](positional-encoding-masks-and-context.md) |
+| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md)、[Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 多模态不是“把图片转文字再给 LLM”；音频、视觉、文本、动作 token 都会改变输入表示、评测和安全边界 | [多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md)、[数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md) |
+| [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md)、[RingAttention](../paper-deep-dives/world-models/ringattention.md) | attention 的数学定义和实际执行路径不同；稀疏、线性、blockwise 和 sequence parallel 都是在改变可见性、访存和通信方式 | [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)、[数值、显存与运行时基础](numerics-memory-and-runtime-basics.md) |
+
 ## 进入专题前的检查
 
 基础模块不需要一次性背完，但读后续专题前最好能形成四个判断：

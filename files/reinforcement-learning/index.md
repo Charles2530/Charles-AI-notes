@@ -111,6 +111,18 @@ VLM/VLA 章节里保留的 CLIP/InfoNCE 只解决静态表示问题：
 !!! note "初学者判断：你看到的到底是哪类 RL"
     如果论文在真实或仿真环境里反复交互，通常是经典控制 RL。如果论文用 prompt 采样回答、规则或 reward model 打分，通常是 LLM/VLM 后训练。如果论文先学习 \(P(s_{t+1}\mid s_t,a_t)\)，再在模型里想象未来，通常是 model-based RL 或世界模型路线。三者共享 reward、return、advantage 这些语言，但工程瓶颈完全不同。
 
+## 4.1 从论文专题回填的 RL 知识点
+
+技术报告里的 RL 已经不再只是 InstructGPT 式 RLHF。现在更常见的是 rule-verifiable reward、多环境同步训练、agentic tool environments 和世界模型 imagined rollout。
+
+| 专题来源 | RL 层面的补充 | 应接到本章哪里 |
+| --- | --- | --- |
+| [DeepSeek-R1](../paper-deep-dives/technical-reports/deepseek-r1.md) | 纯 RL / RLVR 可以在可验证任务上激发推理，但 reward 设计、格式约束和 cold-start SFT 决定稳定性 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)、[verl 代码流程](verl-code-flow.md) |
+| [Qwen3](../paper-deep-dives/technical-reports/qwen3.md) | thinking budget 和强到弱蒸馏说明 RL 后的能力还要被蒸馏、压缩和模式化，才能进入可控产品形态 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | 异步 GRPO、多环境同步 RL、masked importance ratio 和 MTP 加速 rollout 说明 RL 系统瓶颈已经扩展到采样吞吐和策略滞后 | [verl 代码流程](verl-code-flow.md)、[强化学习如何帮助世界模型](rl-for-world-models.md) |
+| [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | agentic data synthesis、tool-use SFT、self-critique reward 和 checkpoint engine 说明开放 agent RL 要把环境、数据和恢复机制一起设计 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)、[强化学习如何帮助世界模型](rl-for-world-models.md) |
+| [Dreamer](../paper-deep-dives/world-models/dreamer.md)、[DreamZero](../paper-deep-dives/world-models/dreamzero.md) | 世界模型里的 RL 不是给回答打分，而是在 learned dynamics 或 joint video-action model 中训练/选择动作 | [强化学习如何帮助世界模型](rl-for-world-models.md) |
+
 ## 5. 论文图先建立直觉
 
 经典深度强化学习常从 Atari 游戏讲起，因为它把“看图像、选动作、拿分数、长期优化”压缩在一个容易观察的环境里。
