@@ -337,6 +337,10 @@
       tip: "训练基础：Backprop 用链式法则计算梯度，Optimizer 根据梯度更新参数，Gradient Clipping 用于限制异常梯度。"
     },
     {
+      aliases: ["Muon", "Distributed Muon", "Newton-Schulz", "Update RMS"],
+      tip: "Muon：面向矩阵权重的优化器路线，用 Newton-Schulz 等近似正交化 momentum；Distributed Muon 要处理完整矩阵 momentum 与 optimizer sharding 的冲突。"
+    },
+    {
       aliases: ["Activation Checkpointing", "Checkpointing", "Autograd"],
       tip: "训练显存术语：Autograd 自动记录计算图并回传梯度；Activation Checkpointing 用反向重算换取更低激活显存。"
     },
@@ -371,6 +375,14 @@
     {
       aliases: ["NVFP4", "NVFP"],
       tip: "NVFP4：NVIDIA 低比特浮点格式路线，常结合更小微块、FP8 scale 和分层缩放来提升 FP4 训练或推理精度。"
+    },
+    {
+      aliases: ["Fake Quantization", "fake quantization", "fake quant", "Fake Quant", "STE"],
+      tip: "Fake Quantization：训练时先量化再反量化回高精度 tensor，用高精度算子模拟低比特误差；STE 常用于给不可导量化操作传近似梯度。"
+    },
+    {
+      aliases: ["Attn-QAT", "SageAttention", "SageAttention3", "Q/K smoothing"],
+      tip: "低比特 attention 术语：SageAttention 偏推理 kernel 和启发式平滑；Attn-QAT 强调训练中让 forward、backward 重算和推理 FP4 kernel 对齐。"
     },
     {
       aliases: ["HiFloat8", "HIFP8", "HiF8"],
@@ -465,8 +477,12 @@
       tip: "CuTe：CUTLASS 生态里的张量布局和算法组合抽象，常用于写更复杂的 GPU kernel。"
     },
     {
-      aliases: ["FlashAttention"],
-      tip: "FlashAttention：通过重排 attention 计算和内存访问，减少 HBM 读写，从而提升长序列注意力效率。"
+      aliases: ["FlashAttention", "FA3", "FA4", "FlashAttention-3", "FlashAttention-4"],
+      tip: "FlashAttention：通过重排 attention 计算和内存访问减少 HBM 读写。FA3 主要面向 Hopper，FA4/CuTe 路线开始覆盖 Blackwell。"
+    },
+    {
+      aliases: ["MagiAttention", "AttnSlice", "FFA", "Flex-Flash-Attention"],
+      tip: "MagiAttention：面向超长上下文和异构 mask 的分布式 attention。AttnSlice 描述局部 Q/K mask 子块，FFA 是其灵活 mask attention kernel。"
     },
     {
       aliases: ["PagedAttention"],
@@ -581,8 +597,20 @@
       tip: "并行策略缩写：DP 数据并行，TP 张量并行，PP 流水并行，CP 上下文并行，SP 序列并行。"
     },
     {
+      aliases: ["Context Parallelism", "context parallelism", "Ulysses", "Ring Attention", "USP", "LoongTrain"],
+      tip: "长上下文并行术语：Context Parallelism 沿上下文切分 attention；Ulysses、Ring Attention、USP、LoongTrain 是常见 CP/SP 路线，差别在 head/sequence sharding 和通信模式。"
+    },
+    {
       aliases: ["Sequence Parallelism", "sequence parallelism"],
       tip: "Sequence Parallelism：沿序列维度把 token 或时间步切到多张卡上，适合长序列，但 attention 和状态同步会带来跨卡通信压力。"
+    },
+    {
+      aliases: ["GroupCast", "GroupReduce", "AlltoAll-v", "overlap_degree", "CalcMeta", "CommMeta"],
+      tip: "MagiAttention 通信术语：GroupCast/GroupReduce 只传必要 KV/dKV；AlltoAll-v 支持可变长度交换；CalcMeta/CommMeta 描述本 rank 的计算和通信计划。"
+    },
+    {
+      aliases: ["varlen", "Block-causal mask", "block-causal mask", "Patch-and-Pack", "PnP", "GQA"],
+      tip: "长序列 attention 数据术语：varlen 表示变长样本；block-causal/PnP 会制造异构 mask；GQA 用较少 KV heads 服务更多 query heads。"
     },
     {
       aliases: ["BPTT", "Truncated BPTT", "truncated BPTT"],

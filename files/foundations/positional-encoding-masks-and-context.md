@@ -1,4 +1,4 @@
-# 位置编码、Mask 与上下文
+# 位置编码与上下文 Mask
 
 Attention 本身只计算 token 之间的相关性。它并不知道第一个 token 在前、第二个 token 在后，也不知道哪些 token 不应该被看见。位置编码和 mask 就是为了解决这两个问题。
 
@@ -115,7 +115,7 @@ output = weights @ V
 
 ## 6. 和后续专题的关系
 
-- [Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)：理解 Q/K/V 和 attention 主体。
+- [Transformer 输入与注意力](transformer-attention-and-tokenization.md)：理解 Q/K/V 和 attention 主体。
 - [推理系统](../inference/index.md)：理解 KV cache、长上下文和上下文压缩。
 - [VLM/VLA](../vlm/index.md)：理解视觉 token、视频状态和动作序列为什么依赖 mask 与位置。
 - [动作表示与控制接口](../vla/action-representation-and-interfaces.md)：理解动作 token、动作块和时序控制的接口。

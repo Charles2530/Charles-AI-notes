@@ -1,4 +1,4 @@
-# 卷积、CNN 与特征提取
+# 卷积与视觉特征
 
 卷积是视觉模型里最经典的结构之一。即使 Transformer 很流行，卷积仍然是理解 CNN、UNet、视觉编码器和扩散模型的重要基础。
 
@@ -95,7 +95,7 @@ function UNet(x):
 
 ## 6. 和后续专题的关系
 
-- [扩散训练与表示](../diffusion/training.md)：理解 UNet 为什么适合预测噪声或 velocity。
+- [扩散扩散训练与表示](../diffusion/training.md)：理解 UNet 为什么适合预测噪声或 velocity。
 - [扩散条件控制](../diffusion/guidance-and-conditioning.md)：理解 ControlNet 如何在卷积特征图上注入结构条件。
 - [VLM 架构](../vlm/architecture-and-training.md)：理解视觉编码器如何把图像变成特征。
 

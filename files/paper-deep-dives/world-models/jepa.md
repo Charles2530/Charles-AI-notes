@@ -4,7 +4,7 @@ paper_title: A Path Towards Autonomous Machine Intelligence
 paper_topic: 世界模型
 ---
 
-# JEPA：A Path Towards Autonomous Machine Intelligence
+# JEPA：预测式表征学习路线
 
 !!! info "论文信息"
     - 论文：`A Path Towards Autonomous Machine Intelligence`

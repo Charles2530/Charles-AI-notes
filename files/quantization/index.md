@@ -1,4 +1,4 @@
-# 量化总览
+# 量化路线图
 
 量化的目标，是用更少的比特表示权重和激活，从而降低显存、带宽和推理成本。
 
@@ -13,7 +13,7 @@
     量化新手容易先问“INT4、FP8、GPTQ、AWQ 谁更强”。但工程上更早的问题是：模型是否放得下、decode 时是否被带宽卡住、长上下文是否被 KV cache 卡住、kernel 是否原生支持低比特。SmoothQuant 这张图把问题拉回系统约束：量化的价值来自显存、带宽和吞吐的共同改善，而不是单独的压缩率。
 
 !!! tip "基础知识入口"
-    量化里的 `FP8`、`INT4`、显存、带宽、kernel 和 runtime 都可以先看 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。如果涉及 QAT 或低比特训练，再补看 [优化与训练基础](../foundations/optimization-and-training-basics.md)。
+    量化里的 `FP8`、`INT4`、显存、带宽、kernel 和 runtime 都可以先看 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。如果涉及 QAT 或低比特训练，再补看 [优化与训练入门](../foundations/optimization-and-training-basics.md)。
 
 ## 从论文专题回填的量化知识点
 
@@ -21,8 +21,8 @@
 
 | 专题来源 | 量化层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
-| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 训练要和通信、并行、GEMM kernel、loss 稳定性一起看，不能只看权重格式 | [FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) |
-| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | NVFP4 预训练采用 mixed precision：大部分线性层 FP4，但 latent projections、MTP、attention、embedding 和部分网络保留高精 | [FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)、[量化评估与部署检查](evaluation-and-deployment-checklist.md) |
+| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 训练要和通信、并行、GEMM kernel、loss 稳定性一起看，不能只看权重格式 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | NVFP4 预训练采用 mixed precision：大部分线性层 FP4，但 latent projections、MTP、attention、embedding 和部分网络保留高精 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[量化评估与部署检查](evaluation-and-deployment-checklist.md) |
 | [DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | FP4 QAT 与异构 KV cache 提醒我们：长上下文和 MoE 服务中，KV 与动态状态可能比静态权重更早成为显存瓶颈 | [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) |
 | [Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md)、[GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md) | 全模态模型量化要额外保护 audio codec、vision connector、projector、speech head 和安全分类器等非文本路径 | [多模态与 VLA 量化](quantization-for-multimodal-and-vla-models.md)、[部署检查清单](evaluation-and-deployment-checklist.md) |
 
@@ -33,7 +33,7 @@
 | 层级 | 先问什么 | 典型对象 | 容易混淆的点 |
 | --- | --- | --- | --- |
 | 数值格式 | 数字怎么表示 | INT8、INT4、FP8、NF4、group-wise scale | bit 数低不等于一定更快，scale 元数据和硬件支持会改变收益 |
-| 量化算法 | 误差怎么控制 | PTQ、GPTQ、AWQ、SmoothQuant、QAT、QLoRA | PTQ 和 QAT 是训练时机差异，GPTQ/AWQ/SmoothQuant 是具体误差控制策略 |
+| 量化算法 | 误差怎么控制 | PTQ、GPTQ、AWQ 与 SmoothQuant、QAT、QLoRA | PTQ 和 QAT 是训练时机差异，GPTQ/AWQ/SmoothQuant 是具体误差控制策略 |
 | 算子与 Kernel | 低比特怎么真的算 | W4A16 GEMM、W8A8 GEMM、dequant fusion、KV cache quant | 算法精度好，不代表 runtime 有高效 kernel |
 | Runtime / Infra | 谁负责加载、调度和服务 | vLLM、SGLang、TensorRT-LLM、ONNX Runtime、模型格式转换 | 同一个 checkpoint 换 runtime，速度、兼容性和掉点可能完全不同 |
 
@@ -225,7 +225,7 @@ arXiv:2409.16694 对低比特大语言模型量化做了一个很实用的整理
 3. 目标硬件是否支持对应低精度指令；
 4. batching、prefix cache、LoRA 和多模型调度是否仍然兼容。
 
-这也是为什么本专题单独增加了 [量化运行时与框架](quantization-runtimes-and-frameworks.md)：`vLLM`、`SGLang`、`LightLLM`、`TensorRT-LLM`、`ONNX Runtime` 并不是“论文方法”，而是把量化收益兑现到服务系统里的关键层。
+这也是为什么本专题单独增加了 [量化运行时与框架](quantization-runtimes-and-frameworks.md)：`vLLM`、`SGLang`、`LightLLM`、`TensorRT-LLM`、`ONNX Runtime` 并不是“论文方法”，而是把量化收益兑现到推理服务系统里的关键层。
 
 ### 9.3 训练量化：让模型提前适应误差
 
@@ -254,10 +254,10 @@ arXiv:2409.16694 对低比特大语言模型量化做了一个很实用的整理
 
 **建议按层推进，而不是按算法名横跳**：
 
-1. 先读 [PTQ、GPTQ、AWQ、SmoothQuant](ptq-gptq-awq-smoothquant.md) 和 [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md)，理解误差从哪里来。
+1. 先读 [PTQ、GPTQ、AWQ 与 SmoothQuant](ptq-gptq-awq-smoothquant.md) 和 [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md)，理解误差从哪里来。
 2. 再读 [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[QLoRA 与量化训练](qlora-and-quantized-training.md)，分清“上线压缩”和“低资源适配训练”。
-3. 接着读 [FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md)、[服务栈与硬件权衡](serving-stacks-and-hardware-tradeoffs.md)，确认收益是否能被 runtime 兑现。
-4. 最后读 [评测与部署清单](evaluation-and-deployment-checklist.md) 和 [方法对照表](comparison-table.md)，把质量、吞吐、显存、成本和回退路径放到同一张表里验收。
+3. 接着读 [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md)、[量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)，确认收益是否能被 runtime 兑现。
+4. 最后读 [评测与部署清单](evaluation-and-deployment-checklist.md) 和 [量化方法对照表](comparison-table.md)，把质量、吞吐、显存、成本和回退路径放到同一张表里验收。
 
 如果你关心多模态和具身，再补读 [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)：这类系统的量化风险不只是回答掉点，还可能变成视觉定位漂移、动作抖动和闭环恢复失败。
 
@@ -301,7 +301,7 @@ print("model footprint (GB):", model.get_memory_footprint() / 1024**3)
 | --- | --- | --- |
 | 1. 数值和 PTQ | [PTQ 与权重量化](ptq-gptq-awq-smoothquant.md)、[激活离群值与校准策略](activation-outliers-and-calibration-strategies.md) | 权重、激活、scale、zero-point、离群值和 calibration 各自影响什么 |
 | 2. 训练适配 | [QLoRA 与量化训练](qlora-and-quantized-training.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) | 什么时候 PTQ 不够，什么时候需要 QLoRA、QAT 或继续训练 |
-| 3. 低精度服务 | [FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)、[服务栈与硬件权衡](serving-stacks-and-hardware-tradeoffs.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) | 量化格式、kernel、runtime 和硬件路径是否真的把显存收益转成吞吐收益 |
+| 3. 低精度服务 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) | 量化格式、kernel、runtime 和硬件路径是否真的把显存收益转成吞吐收益 |
 | 4. 场景验收 | [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)、[评测与部署清单](evaluation-and-deployment-checklist.md) | 长上下文、多模态、agent、动作控制和高价值任务桶是否单独验收 |
 
 真正可上线的量化方案必须同时给出四件事：压缩对象、目标硬件和 runtime、端到端收益、回退边界。只报告 bit 数或平均 benchmark，通常不足以支撑部署决策。

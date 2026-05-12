@@ -4,7 +4,7 @@
 
 如果按训练来源划分，本页主要对应“视频生成型世界模型路线”：先从大规模视频生成或视频预测中学习视觉动态，再加入动作、相机、交互和长时记忆。另一条主线是 [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) 中的交互轨迹 latent dynamics 路线，它从观测、动作、奖励和终止信号学习状态转移，更直接服务 policy 和 model-based RL。
 
-这页建议和 [世界模型总览](index.md)、[WM、WAM、VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)、[模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md) 一起读。总览页回答世界模型是什么，本页重点回答“为什么视频生成可以成为世界模型的一种系统接口，以及它何时不足够”。
+这页建议和 [世界模型路线图](index.md)、[WM / WAM / VAM：动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)、[模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md) 一起读。总览页回答世界模型是什么，本页重点回答“为什么视频生成可以成为世界模型的一种系统接口，以及它何时不足够”。
 
 !!! note "初学者先抓住"
     视频世界模型不是普通视频生成。普通视频生成关心“看起来像未来”，视频世界模型还要关心“这个未来是否由动作造成、是否能帮助规划和风险判断”。

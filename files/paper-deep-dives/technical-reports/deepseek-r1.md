@@ -4,7 +4,7 @@ paper_title: "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinfo
 paper_topic: 技术报告
 ---
 
-# DeepSeek-R1：用强化学习激发大模型推理能力
+# DeepSeek-R1：RL 激发推理能力
 
 !!! info "论文信息"
     - 论文：`DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning`

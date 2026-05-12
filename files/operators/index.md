@@ -1,4 +1,4 @@
-# 算子与编译器总览
+# 算子与编译器路线图
 
 <div class="atlas-hero">
   <div class="atlas-kicker">Operators & Compilers</div>
@@ -31,7 +31,9 @@
 !!! note "在全站主线里的位置"
     算子与编译器专题是底层工程支撑。它不会直接解释“什么是世界模型”，但会决定视频世界模型、长上下文 VLA、实时 rollout 和大规模训练能不能跑得动。主线学习时不必先钻进所有 kernel；当你遇到显存、带宽、延迟、吞吐或数值稳定性问题，再回到这里定位瓶颈。
 
-## 先看分层：不要把案例和基础概念放同一层
+## 阅读路径
+
+### 先看分层：不要把案例和基础概念放同一层
 
 算子章节现在按四层读：
 
@@ -45,7 +47,7 @@
 !!! note "难点解释：DeepGEMM 不是 GEMM 的基础定义"
     `GEMM` 是 dense matrix-matrix multiplication 的通用计算形态；`DeepGEMM` 是围绕 FP8、JIT、Hopper/Blackwell、grouped GEMM 和 MoE serving 的特化库案例。把它们放同一层会误导初学者：应该先理解 MatMul/GEMM、tiling、layout、epilogue、dtype 和 dispatch，再读 DeepGEMM 这类工程化案例，才能看出它到底优化的是哪一段。
 
-## 推荐入口
+### 推荐入口
 
 <div class="atlas-card-grid">
   <a class="atlas-card" href="cuda-programming-model-and-memory/">
@@ -65,12 +67,12 @@
     <p>补充源码阅读顺序、API 地图、调用路径和真实服务接入前的检查清单。</p>
   </a>
   <a class="atlas-card" href="profiling-debugging-and-numerical-stability/">
-    <strong>Profiling、调试与数值稳定性</strong>
+    <strong>Profiling、调试与数值稳定</strong>
     <p>把“会写 kernel”推进到“会验证、会定位、会判断性能问题到底卡在哪”。</p>
   </a>
 </div>
 
-## 从论文专题回填的算子与系统知识点
+### 从论文专题回填的算子与系统知识点
 
 技术报告里的架构收益最终都要落到 kernel、通信、内存层级和 runtime。读算子章节时，可以把这些案例作为“为什么需要底层视角”的证据。
 
@@ -95,9 +97,11 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
     左图的虚线框是朴素 attention 会显式生成的大矩阵，它很贵不是因为 softmax 公式复杂，而是因为中间结果要在 HBM 里来回读写。FlashAttention 把 K/V 和 Q 分块搬到片上 SRAM，在块内做 softmax 与累积，最后只写回输出。这个例子说明：很多 kernel 优化的核心不是少算一点 FLOPs，而是少搬很多数据。
 
 !!! tip "基础知识入口"
-    算子专题默认你知道 tensor shape、dtype、显存、带宽和 kernel 的基本含义。如果不熟，先看 [张量、Shape 与计算图](../foundations/tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md) 和 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。
+    算子专题默认你知道 tensor shape、dtype、显存、带宽和 kernel 的基本含义。如果不熟，先看 [张量、Shape 与计算图](../foundations/tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md) 和 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。
 
-## 1. 为什么算子会成为主问题
+## 核心判断框架
+
+### 为什么算子会成为主问题
 
 在大模型时代，很多性能损失已经不是“模型太大”这么简单，而是：
 
@@ -110,7 +114,7 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 
 因此所谓“系统优化”，最后很大一部分其实是在重新安排计算与数据移动的关系。
 
-## 2. 从模型到硬件的六层栈
+### 从模型到硬件的六层栈
 
 一个更完整的 AI 系统栈，至少可以分成六层：
 
@@ -123,7 +127,7 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 
 这六层并不是完全独立的。模型决定算子模式，算子模式决定编译器是否有融合空间，编译器决定 kernel 形态，kernel 决定是否真正利用到硬件能力。
 
-### 2.1 为什么这条链必须连起来看
+### 为什么这条链必须连起来看
 
 如果只看最上层，你会觉得 `FlashAttention` 只是“Attention 的更快实现”；  
 如果只看最底层，你又会陷入“寄存器、warp、bank conflict”的局部细节。  
@@ -134,7 +138,7 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 3. 编译器或手写 kernel 能否改变这些约束；
 4. 这种优化对训练和推理的收益是否一致。
 
-## 3. 算子并不只有 GEMM
+### 算子并不只有 GEMM
 
 很多人入门时会把“算子优化”等同于 GEMM 优化，这只对了一半。GEMM 确实是核心，但现代大模型系统真正常见的热点算子至少包括：
 
@@ -149,7 +153,7 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 
 其中很多算子并不是以 FLOPs 为主导，而是以带宽、布局和同步为主导。
 
-## 4. 训练与推理的算子画像并不一样
+### 训练与推理的算子画像并不一样
 
 **训练阶段更关心**：
 
@@ -169,7 +173,7 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 
 所以“训练里很快的 kernel”不一定等价于“服务里最好用的 kernel”。
 
-## 5. 为什么 Triton 和 CUDA 要单独成组
+### 为什么 Triton 和 CUDA 要单独成组
 
 这两个工具之所以值得单独讲，不只是因为它们流行，而是因为它们分别代表两种常见思路：
 
@@ -181,7 +185,7 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 1. 只懂 CUDA，容易高估手写 kernel 的必要性，低估编译器和模板库的价值；
 2. 只懂 Triton，容易忽略硬件实际限制，对寄存器压力、occupancy、访存细节不够敏感。
 
-## 6. 这组文档会回答哪些问题
+### 这组文档会回答哪些问题
 
 **这组内容主要围绕六类问题组织**：
 
@@ -192,7 +196,9 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 5. 如何用 profiling、roofline、微基准和数值校验来判断优化是否真实有效；
 6. 训练系统、推理引擎和内核实现之间如何连成完整链路。
 
-## 7. 一个算子工程师真正反复做的事情
+## 工程优化方法
+
+### 一个算子工程师真正反复做的事情
 
 现实里，算子优化工作通常不是“凭直觉写更快代码”，而是一套反复循环的过程：
 
@@ -206,7 +212,7 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 
 这和只盯着 benchmark 排行不同，它更像一门系统化实验科学。
 
-## 8. Roofline 思维为什么重要
+### Roofline 思维为什么重要
 
 很多算子优化讨论最终都会回到一个简单问题：这个 kernel 到底是算力受限，还是带宽受限？
 
@@ -224,7 +230,7 @@ $$
 2. 如果算子已经逼近带宽上限，就应该更多关注 fusion、layout 与访存合并；
 3. 如果算子离 roofline 还很远，说明实现层面还有明显浪费。
 
-## 9. 从参考源可以借到什么视角
+### 从参考源可以借到什么视角
 
 你给的几个参考源，刚好覆盖了三条很互补的主线：
 
@@ -234,7 +240,7 @@ $$
 
 也就是说，算子专题不是一个孤立的低层补充，而是可以向上连接训练、推理、世界模型和具身系统的底盘。
 
-## 10. 一个更实用的抽象：算子优化四问
+### 一个更实用的抽象：算子优化四问
 
 读任何 kernel 或框架实现时，都可以先问四个问题：
 
@@ -245,7 +251,7 @@ $$
 
 这四问比“它用了什么黑科技”更重要，因为它能帮助你把技巧还原成原理。
 
-## 11. 为什么系统工程师也应该懂算子
+### 为什么系统工程师也应该懂算子
 
 不是每个系统工程师都要手写 CUDA，但如果完全不懂算子，很容易在架构层做出错误决策，例如：
 
@@ -256,30 +262,32 @@ $$
 
 理解算子，不是为了替代上层系统设计，而是为了让上层系统设计不建立在错误假设上。
 
-## 12. 推荐阅读顺序
+## 学习路径与阶段检查
+
+### 推荐阅读顺序
 
 **建议按下面顺序阅读**：
 
 1. [CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)
 2. [Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)
 3. [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)
-4. [CUTLASS、CuTe 与编译栈](cutlass-cute-and-compiler-stack.md)
-5. [Profiling、调试与数值稳定性](profiling-debugging-and-numerical-stability.md)
+4. [CUTLASS / CuTe 与编译栈](cutlass-cute-and-compiler-stack.md)
+5. [Profiling、调试与数值稳定](profiling-debugging-and-numerical-stability.md)
 
 前两篇建立编程模型，中间两篇建立常见热点算子的实现直觉，最后一篇帮助你把“会写”变成“会验证、会定位、会迭代”。
 
-## 阶段检查与下一站
+### 阶段检查与下一站
 
 算子专题的学习目标不是背 CUDA API，而是能判断性能问题属于哪一级抽象。
 
 | 阶段 | 先读 | 读完要能回答 |
 | --- | --- | --- |
 | 1. 执行模型 | [CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)、[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) | thread/warp/block、shared memory、HBM、tile 和 mask 如何影响一个 kernel |
-| 2. 热点算子 | [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[Reduction、Norm 与索引 Kernel](reduction-norm-layout-and-indexing.md)、[长上下文与 FlashAttention 演化](long-context-and-flashattention-evolution.md) | 算子是算力受限、带宽受限、同步受限还是 launch 受限 |
-| 3. 低精度与通信 | [低精度与量化 Kernel](low-precision-and-quantized-kernels.md)、[FP8 与优化器 Kernel](fp8-training-and-optimizer-kernels.md)、[通信算子与计算重叠](communication-kernels-and-overlap.md) | 量化、通信和 overlap 的收益是否被 layout、dequant 或拓扑吃掉 |
-| 4. 工程化维护 | [Profiling、调试与数值稳定性](profiling-debugging-and-numerical-stability.md)、[运行时 Dispatch 与 Kernel 选择](runtime-dispatch-and-kernel-selection.md)、[测试、回归与维护](testing-regression-and-maintenance.md) | 一个优化是否正确、稳定、可回归，是否真的命中训练或推理热路径 |
+| 2. 热点算子 | [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[Reduction、Norm 与索引 Kernel](reduction-norm-layout-and-indexing.md)、[FlashAttention 与长上下文](long-context-and-flashattention-evolution.md) | 算子是算力受限、带宽受限、同步受限还是 launch 受限 |
+| 3. 低精度与通信 | [低精度与量化 Kernel](low-precision-and-quantized-kernels.md)、[FP8 训练与优化器 Kernel](fp8-training-and-optimizer-kernels.md)、[通信算子与计算重叠](communication-kernels-and-overlap.md) | 量化、通信和 overlap 的收益是否被 layout、dequant 或拓扑吃掉 |
+| 4. 工程化维护 | [Profiling、调试与数值稳定](profiling-debugging-and-numerical-stability.md)、[Runtime Dispatch 与 Kernel 选择](runtime-dispatch-and-kernel-selection.md)、[Kernel 测试、回归与维护](testing-regression-and-maintenance.md) | 一个优化是否正确、稳定、可回归，是否真的命中训练或推理热路径 |
 
-读完后建议回到 [训练总览](../training/index.md) 和 [推理总览](../inference/index.md)：算子优化只有被真实负载消费，才算完成闭环。
+读完后建议回到 [大模型训练路线图](../training/index.md) 和 [推理系统路线图](../inference/index.md)：算子优化只有被真实负载消费，才算完成闭环。
 
 ## 快速代码示例
 
@@ -306,7 +314,7 @@ def triton_add(x, y):
 
 这段代码是一个最小 Triton kernel：通过 `program_id` 映射线程块，`mask` 处理越界元素，再把结果写回输出。它适合作为模板扩展到 layernorm、激活融合等更复杂算子。
 
-## 13. 小结
+## 小结
 
 算子、编译器和内核实现，不是 AI 系统里的边角知识，而是连接“模型想做什么”和“硬件实际上能做什么”的中间层。大模型训练、推理、量化、长上下文、世界模型和具身控制之所以越来越依赖系统工程，很大程度上就是因为这个中间层不再能被简单忽略。
 

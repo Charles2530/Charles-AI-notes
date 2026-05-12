@@ -4,7 +4,7 @@ paper_title: "GPT-4o System Card"
 paper_topic: 技术报告
 ---
 
-# GPT-4o System Card：端到端 Omni 模型、语音安全与多模态部署评测
+# GPT-4o System Card：Omni 安全与多模态评测
 
 !!! info "报告信息"
     - 系统卡：`GPT-4o System Card`

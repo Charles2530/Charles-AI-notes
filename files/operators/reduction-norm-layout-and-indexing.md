@@ -240,4 +240,4 @@ Rotary embedding 等位置编码处理在服务里常被视为“小操作”，
 ## 12. 小结
 
 Reduction、norm、layout transform 和 indexing kernel 的共同主题是：  
-它们常常更受内存系统而非算力系统支配，频率又非常高，因此特别适合从向量化、layout、fusion 和 shape specialization 的角度统一看待。理解这类算子，会让你对“为什么一个看似小的 kernel 能拖慢整个服务系统”有非常扎实的直觉。
+它们常常更受内存系统而非算力系统支配，频率又非常高，因此特别适合从向量化、layout、fusion 和 shape specialization 的角度统一看待。理解这类算子，会让你对“为什么一个看似小的 kernel 能拖慢整个推理服务系统”有非常扎实的直觉。

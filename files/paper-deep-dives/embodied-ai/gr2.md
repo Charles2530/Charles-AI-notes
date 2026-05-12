@@ -4,7 +4,7 @@ paper_title: "GR-2: A Generative Video-Language-Action Model with Web-Scale Know
 paper_topic: 具身智能 / VLA
 ---
 
-# GR-2：用 web-scale 视频知识迁移到机器人操作
+# GR-2：Web 视频知识迁移到机器人
 
 !!! info "论文信息"
     - 论文：`GR-2: A Generative Video-Language-Action Model with Web-Scale Knowledge for Robot Manipulation`

@@ -4,7 +4,7 @@ paper_title: "Phased DMD: Few-step Distribution Matching Distillation via Score 
 paper_topic: 扩散模型
 ---
 
-# Phased DMD：把 DMD 拆成分阶段的少步蒸馏
+# Phased DMD：分阶段少步蒸馏
 
 !!! info "论文信息"
     - 论文：`Phased DMD: Few-step Distribution Matching Distillation via Score Matching within Subintervals`

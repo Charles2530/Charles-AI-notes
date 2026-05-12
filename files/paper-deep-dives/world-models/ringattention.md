@@ -4,7 +4,7 @@ paper_title: Ring Attention with Blockwise Transformers for Near-Infinite Contex
 paper_topic: 世界模型
 ---
 
-# RingAttention：百万上下文世界模型的系统底座
+# RingAttention：近无限上下文训练
 
 !!! info "论文信息"
     - 论文：`Ring Attention with Blockwise Transformers for Near-Infinite Context`

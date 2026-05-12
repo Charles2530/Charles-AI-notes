@@ -4,7 +4,7 @@ paper_title: "One-step Diffusion with Distribution Matching Distillation"
 paper_topic: 扩散模型
 ---
 
-# DMD：用分布匹配把扩散模型蒸馏成一步生成器
+# DMD：一步扩散蒸馏
 
 !!! info "论文信息"
     - 论文：`One-step Diffusion with Distribution Matching Distillation`

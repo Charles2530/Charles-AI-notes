@@ -4,7 +4,7 @@ paper_title: "Qwen3.5-Omni Technical Report"
 paper_topic: 技术报告
 ---
 
-# Qwen3.5-Omni Technical Report：Thinker-Talker、ARIA 与 256K 全模态 Agent
+# Qwen3.5-Omni：Thinker-Talker 与全模态 Agent
 
 !!! info "报告信息"
     - 技术报告：`Qwen3.5-Omni Technical Report`
@@ -351,11 +351,11 @@ Qwen3.5-Omni 给工程项目的启发主要有五条：
 
 ## 延伸阅读
 
-1. [Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏](qwen3.md)：理解 Qwen 系列的文本模型和后训练基础；
-2. [Kimi K2：Open Agentic Intelligence、MuonClip 与万亿 MoE Agent 模型](kimi-k2.md)：对照 agentic data synthesis 和 RL 基础设施；
-3. [VLM/VLA：视觉表征、连接器与时序状态](../../vlm/architecture-and-training.md)：补多模态输入组织和连接器思路；
+1. [Qwen3：Thinking 模式、36T 预训练与蒸馏](qwen3.md)：理解 Qwen 系列的文本模型和后训练基础；
+2. [Kimi K2：MuonClip、万亿 MoE 与 Agent 数据](kimi-k2.md)：对照 agentic data synthesis 和 RL 基础设施；
+3. [VLM/VLA：VLM 架构：视觉表征、连接器与记忆](../../vlm/architecture-and-training.md)：补多模态输入组织和连接器思路；
 4. [推理：RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：把 omni agent 放到工具和应用系统里看；
-5. [训练：数据系统与优化](../../training/data-systems-and-optimization.md)：理解多模态数据、质量过滤和训练阶段设计。
+5. [训练：训练数据系统与吞吐优化](../../training/data-systems-and-optimization.md)：理解多模态数据、质量过滤和训练阶段设计。
 
 ## 参考资料
 

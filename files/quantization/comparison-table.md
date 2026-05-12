@@ -283,9 +283,9 @@ h_{l+1} = f_l(h_l; W_l),
 
 ## 12. 推荐跳转
 
-- 看全局总览：[量化总览](index.md)
+- 看全局总览：[量化路线图](index.md)
 - 看 PTQ 主线：[PTQ、GPTQ、AWQ 与 SmoothQuant](ptq-gptq-awq-smoothquant.md)
 - 看量化训练：[QLoRA 与量化训练](qlora-and-quantized-training.md)
 - 看部署核查：[评估与部署检查清单](evaluation-and-deployment-checklist.md)
-- 看混合精度：[FP8 与混合精度服务](fp8-and-mixed-precision-serving.md)
+- 看混合精度：[FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)
 - 看运行框架：[量化运行时与框架](quantization-runtimes-and-frameworks.md)

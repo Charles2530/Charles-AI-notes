@@ -1,4 +1,4 @@
-# 训练专题图片来源与授权
+# 训练图片来源与授权
 
 本页记录 `files/assets/images/training/` 中图片的来源链接。  
 这些图片均来自 Wikimedia Commons，具体授权条款以各文件页面为准。

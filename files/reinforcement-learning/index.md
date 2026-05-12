@@ -1,4 +1,4 @@
-# 强化学习总览：从奖励信号到世界模型
+# 强化学习路线图：从奖励到世界模型
 
 强化学习是从 VLM/VLA 走向世界模型时必须补上的决策层。VLM 让模型看懂视觉和语言，VLA 让模型输出动作，世界模型让模型预测动作后果，而强化学习负责把“结果好不好”转回策略更新、奖励优化和闭环改进。
 
@@ -75,9 +75,9 @@
 | 页面 | 你会学到什么 |
 | --- | --- |
 | [MDP、价值函数与 Bellman](mdp-value-bellman.md) | state、action、reward、return、value、Q-value、Bellman 的基础语言 |
-| [Policy Gradient、Actor-Critic、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md) | 从 REINFORCE 到 PPO/GRPO，理解 LLM/VLM 后训练为什么这样做 |
-| [强化学习如何帮助世界模型](rl-for-world-models.md) | model-based RL、Dreamer、PlaNet、RLVR-World 与 world model 的关系 |
-| [verl 代码流程：从配置到一次 RL 更新](verl-code-flow.md) | 结合 `verl-project/verl` 理解 actor、rollout、critic、reward 和 Ray trainer |
+| [Policy Gradient 到 PPO / GRPO](policy-gradient-actor-critic-ppo-grpo.md) | 从 REINFORCE 到 PPO/GRPO，理解 LLM/VLM 后训练为什么这样做 |
+| [世界模型中的强化学习](rl-for-world-models.md) | model-based RL、Dreamer、PlaNet、RLVR-World 与 world model 的关系 |
+| [verl 训练流程：从配置到 RL 更新](verl-code-flow.md) | 结合 `verl-project/verl` 理解 actor、rollout、critic、reward 和 Ray trainer |
 
 ## 3. 和 VLM/VLA 的关系
 
@@ -119,9 +119,9 @@ VLM/VLA 章节里保留的 CLIP/InfoNCE 只解决静态表示问题：
 | --- | --- | --- |
 | [DeepSeek-R1](../paper-deep-dives/technical-reports/deepseek-r1.md) | 纯 RL / RLVR 可以在可验证任务上激发推理，但 reward 设计、格式约束和 cold-start SFT 决定稳定性 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)、[verl 代码流程](verl-code-flow.md) |
 | [Qwen3](../paper-deep-dives/technical-reports/qwen3.md) | thinking budget 和强到弱蒸馏说明 RL 后的能力还要被蒸馏、压缩和模式化，才能进入可控产品形态 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md) |
-| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | 异步 GRPO、多环境同步 RL、masked importance ratio 和 MTP 加速 rollout 说明 RL 系统瓶颈已经扩展到采样吞吐和策略滞后 | [verl 代码流程](verl-code-flow.md)、[强化学习如何帮助世界模型](rl-for-world-models.md) |
-| [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | agentic data synthesis、tool-use SFT、self-critique reward 和 checkpoint engine 说明开放 agent RL 要把环境、数据和恢复机制一起设计 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)、[强化学习如何帮助世界模型](rl-for-world-models.md) |
-| [Dreamer](../paper-deep-dives/world-models/dreamer.md)、[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | 世界模型里的 RL 不是给回答打分，而是在 learned dynamics 或 joint video-action model 中训练/选择动作 | [强化学习如何帮助世界模型](rl-for-world-models.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | 异步 GRPO、多环境同步 RL、masked importance ratio 和 MTP 加速 rollout 说明 RL 系统瓶颈已经扩展到采样吞吐和策略滞后 | [verl 代码流程](verl-code-flow.md)、[世界模型中的强化学习](rl-for-world-models.md) |
+| [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | agentic data synthesis、tool-use SFT、self-critique reward 和 checkpoint engine 说明开放 agent RL 要把环境、数据和恢复机制一起设计 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)、[世界模型中的强化学习](rl-for-world-models.md) |
+| [Dreamer](../paper-deep-dives/world-models/dreamer.md)、[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | 世界模型里的 RL 不是给回答打分，而是在 learned dynamics 或 joint video-action model 中训练/选择动作 | [世界模型中的强化学习](rl-for-world-models.md) |
 
 ## 5. 论文图先建立直觉
 

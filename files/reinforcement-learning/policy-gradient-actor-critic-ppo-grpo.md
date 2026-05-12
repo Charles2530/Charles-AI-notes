@@ -1,4 +1,4 @@
-# Policy Gradient、Actor-Critic、PPO 与 GRPO
+# Policy Gradient 到 PPO / GRPO
 
 这页从策略梯度讲到 PPO 和 GRPO。目标不是推完所有公式，而是让你理解：为什么大模型后训练需要采样、奖励、advantage、reference/KL，以及 verl 这类框架为什么围绕 actor、rollout、critic 和 reward 组织。
 

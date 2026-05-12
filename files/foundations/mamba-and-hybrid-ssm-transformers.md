@@ -1,4 +1,4 @@
-# Mamba、状态空间模型与 Mamba-Transformer 架构
+# Mamba 与混合 SSM 架构
 
 Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它的目标不是把 token 之间两两做 attention，而是让序列沿时间方向维护一个紧凑状态，用线性复杂度处理长序列。混合 Mamba-Transformer 架构则更务实：保留一部分 attention 做精确检索和复杂 token 交互，把大量层换成 Mamba / SSM 来降低推理成本。
 
@@ -173,10 +173,10 @@ Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列
 | 如果你想理解 | 回看 |
 | --- | --- |
 | Mamba 里的 projection 和 gate 为什么仍然耗算力 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md) |
-| attention 为什么质量强但 KV cache 贵 | [Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md) |
-| RoPE、mask、上下文窗口和 KV cache | [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md) |
-| hidden state、latent state 和状态递推 | [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md) |
-| kernel、显存带宽和推理 runtime | [数值、显存与运行时基础](numerics-memory-and-runtime-basics.md) |
+| attention 为什么质量强但 KV cache 贵 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md) |
+| RoPE、mask、上下文窗口和 KV cache | [位置编码与上下文 Mask](positional-encoding-masks-and-context.md) |
+| hidden state、latent state 和状态递推 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) |
+| kernel、显存带宽和推理 runtime | [数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
 
 ## 12. 参考资料
 

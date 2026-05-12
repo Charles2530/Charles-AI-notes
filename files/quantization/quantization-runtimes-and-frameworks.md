@@ -1,4 +1,4 @@
-# 量化运行时与框架：vLLM、LightLLM、SGLang、TensorRT-LLM 与 ONNX Runtime
+# 量化运行时与部署框架
 
 量化真正落地时，不能只看“模型被压到几 bit”。  
 更关键的问题是：**目标运行时是否真的支持这种量化格式，并且能把显存、带宽或吞吐收益兑现出来**。
@@ -57,7 +57,7 @@
 
 ## 3. vLLM：最常见的通用 LLM serving 入口
 
-`vLLM` 的量化能力适合从“服务系统”视角理解。它不只是加载一个低比特权重，而是要把量化权重、attention kernel、PagedAttention、KV cache、batching 和调度一起跑起来。
+`vLLM` 的量化能力适合从“推理服务系统”视角理解。它不只是加载一个低比特权重，而是要把量化权重、attention kernel、PagedAttention、KV cache、batching 和调度一起跑起来。
 
 官方量化文档列出的常见路径包括：
 

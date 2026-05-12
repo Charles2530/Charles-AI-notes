@@ -28,8 +28,35 @@
 | `RLHF` | Reinforcement Learning from Human Feedback，用人类偏好或 reward model 优化模型行为。 |
 | `RLVR` | Reinforcement Learning with Verifiable Rewards，用规则或任务指标等可验证奖励优化模型。 |
 | `SFT` | Supervised Fine-Tuning，用高质量示范数据教模型遵循任务格式和行为。 |
+| `Muon` | 面向矩阵权重的优化器路线：先积累 momentum，再用 Newton-Schulz 等方式近似正交化更新方向。 |
+| `Distributed Muon` | Muon 在分布式训练中的实现形态，核心难点是正交化通常需要看到完整矩阵 momentum，而不是单个 optimizer shard。 |
+| `Update RMS` | 参数更新的均方根尺度。Muon 论文用它把不同形状矩阵的更新尺度拉齐，并尽量复用 AdamW 学习率。 |
+| `Newton-Schulz` | 常用于矩阵逆平方根或正交化近似的迭代方法，Muon 用它把 momentum 映射到更均衡的矩阵更新方向。 |
 
-## 推理与服务系统
+## 长上下文与分布式 Attention
+
+| 术语 | 含义 |
+| --- | --- |
+| `Context Parallelism / CP` | 把长序列上下文切到多个 GPU 或 ranks 上共同计算 attention 的并行方式，重点瓶颈通常在 KV 通信、负载均衡和 overlap。 |
+| `GQA` | Grouped-Query Attention，多组 query heads 共享较少的 key/value heads。它能降低 KV 成本，但会让 head-sharding 方法更受可整除约束影响。 |
+| `FlashAttention` | IO-aware 的 exact attention kernel 路线，通过 tiling 和重算减少 \(O(N^2)\) attention matrix 显存写回。 |
+| `FA3 / FA4` | FlashAttention-3/4。FA3 主要面向 Hopper，FA4/CuTe 路线开始覆盖 Hopper 与 Blackwell 的新版实现。 |
+| `MagiAttention` | SandAI 的分布式 attention 方案，用 FFA、dispatch solver、GroupCast/GroupReduce 和 overlap solver 支持超长上下文与异构 mask 训练。 |
+| `AttnSlice` | MagiAttention 中的 mask 表达单元，形如 `(QRange, KRange, MaskType)`，把复杂 attention mask 拆成可调度的 2D 子块。 |
+| `FFA` | Flex-Flash-Attention，MagiAttention 中基于 FlashAttention-3 思路扩展的灵活 mask attention kernel。 |
+| `varlen` | Variable length 的缩写，指 batch 或 packed data 中样本长度不同。长上下文训练里 varlen 会显著影响 mask area 和 rank 负载。 |
+| `Block-causal mask` | 以块为单位的因果注意力 mask，常用于视频或 packed sequence，使某些块只能看历史块，某些块可作为全局块。 |
+| `Patch-and-Pack / PnP` | 把不同尺寸或不同长度样本切成 patch 后 pack 到长序列中的数据组织方式，可提升吞吐，但会制造更复杂的 attention mask。 |
+| `Dispatch solver` | 根据 mask area 把 query chunks 分配到 CP ranks 的调度器，目标是让有效 attention 计算量尽量均衡。 |
+| `CalcMeta / CommMeta` | MagiAttention 中的运行元数据：前者描述本 rank 要算哪些 AttnSlice，后者描述需要向哪些 ranks 收发 KV 或 dKV。 |
+| `GroupCast / GroupReduce` | MagiAttention 的 group communication primitives：只把 KV 发送给需要它的 ranks，并把 backward 中的 partial dKV reduce 回 owner rank。 |
+| `AlltoAll-v` | 可变长度 all-to-all 通信，每个 rank 发给其他 ranks 的数据量可以不同。MagiAttention 用它作为 group collectives 的原型实现。 |
+| `overlap_degree` | MagiAttention 中控制多阶段计算/通信重叠粒度的超参数。过小隐藏不了通信，过大可能增加调度和 kernel 开销。 |
+| `Ulysses` | DeepSpeed 的长序列并行方案，主要通过 head-sharded all-to-all 做 sequence parallel attention。 |
+| `Ring Attention` | 序列块沿 ring 在 ranks 间流动的长上下文 attention 方案，扩展性强但在异构 mask 下可能有冗余通信和负载不均。 |
+| `SLA / SLA2` | Sparse-Linear Attention 及后续版本，针对视频 DiT attention，把少数关键块精确计算，其余部分用 linear compensation、learnable routing 和 QAT 适配。 |
+
+## 推理与推理服务系统
 
 | 术语 | 含义 |
 | --- | --- |
@@ -48,8 +75,16 @@
 | --- | --- |
 | `AWQ` | Activation-aware Weight Quantization，量化时考虑 activation 对权重误差的放大。 |
 | `BF16` | 16 位浮点格式，指数范围接近 FP32，训练稳定性通常好于 FP16。 |
+| `FP4` | 4 位浮点格式，能利用 Blackwell 等硬件的低比特 tensor core，但动态范围和离散值很少，对 attention 这类 heavy-tailed activation 更敏感。 |
 | `FP8` | 8 位浮点格式，常见 E4M3、E5M2 等变体，依赖 scale 策略和硬件支持。 |
 | `GPTQ` | 典型后训练权重量化方法，通过二阶近似减少量化误差。 |
+| `NVFP4` | NVIDIA FP4/microscaling 路线，通常结合小 block、共享 scale 和 FP8 scale，用于 Blackwell 上的 FP4 GEMM 或 attention。 |
+| `Microscaling` | 微缩放低精度格式，让一小块元素共享 scale，再用 FP8/FP4 等低比特元素表示，降低局部动态范围压力。 |
+| `Fake Quantization` | 训练中先量化再反量化回高精度 tensor，用高精度 GEMM 模拟低比特误差，常用于 QAT。 |
+| `STE` | Straight-Through Estimator，量化等不可导操作中常用的梯度近似，backward 近似把量化当作恒等映射。 |
+| `Attn-QAT` | 面向 attention 的 4-bit QAT 方法，重点不是只量化 forward，而是修正 FlashAttention backward 重算和 softmax 梯度中的低精度一致性。 |
+| `SageAttention` | 面向 attention inference 的低比特加速路线，常结合 Q/K smoothing、FP4 tensor core 和 attention probability 量化等技巧。 |
+| `Q/K smoothing` | 量化 attention 时对 Q/K 分布做平滑或重缩放，目标是缓解 outlier 对 \(QK^\top\) 的破坏。 |
 | `MXFP8` | Microscaling FP8，每块配缩放因子，常用于更细粒度低精度训练或推理。 |
 | `Outlier` | 激活或权重中的极端值，会显著影响量化和低精度训练稳定性。 |
 | `Scale` | 量化中的缩放因子，用于把原始数值映射到低比特表示范围。 |
@@ -87,6 +122,11 @@
 | `Action` | agent 或控制器执行的动作，在 LLM 中可对应 token，在机器人中可对应末端位姿或关节控制量。 |
 | `Advantage` | 某个动作相对当前状态平均预期有多好，常用于 PPO/GRPO 等策略更新。 |
 | `Bellman Equation` | 把当前价值拆成当前奖励和下一状态价值的递推关系，是 value learning 和 model-based planning 的基础。 |
+| `Depth Anything / DA` | 单目深度 foundation model 路线，重点是开放域相对深度和细节泛化。 |
+| `Depth Anything 2 / DA2` | DA 的更强版本，常作为单目深度基线或 teacher 参考；它本身主要解决单图深度，不直接给出多视角相机几何。 |
+| `Depth Anything 3 / DA3` | 把 DA/DA2 的深度能力扩展到任意视角几何，输出 depth、ray、camera 和可融合 3D 表示；站内专题见 [DA3 讲解](../paper-deep-dives/embodied-ai/depth-anything-3.md)。 |
+| `Ray Map` | 每个像素对应的相机射线表示，通常包含 ray origin 与 ray direction。DA3 用 depth + ray 恢复 3D 点和相机几何。 |
+| `VGGT` | Visual Geometry Grounded Transformer，feed-forward 3D 几何模型，直接预测 camera parameters、depth maps、point maps 和 3D point tracks。 |
 | `World Model` | 面向决策的环境预测模型，学习世界如何随动作、时间和目标变化。 |
 | `RSSM` | Recurrent State-Space Model，Dreamer 等 latent world model 的核心结构之一。 |
 | `MPC` | Model Predictive Control，滚动优化动作序列的经典规划方法。 |
@@ -109,4 +149,5 @@
 | `ONNX Runtime / ORT` | 跨平台推理 runtime，可通过不同 Execution Provider 对接多类硬件。 |
 | `TensorRT-LLM` | NVIDIA 面向 LLM 推理优化的 runtime / kernel 生态。 |
 | `NCCL` | NVIDIA Collective Communications Library，分布式训练和推理通信基元。 |
+| `DeepEP` | DeepSeek 开源的 expert-parallel communication library。MagiAttention 的 native group collectives 借鉴了其中的分层通信和去重思路。 |
 | `LightLLM` | 偏轻量、高性能和易扩展的 LLM serving framework。 |

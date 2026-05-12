@@ -1,4 +1,4 @@
-# DeepGEMM 源码与接入附录
+# DeepGEMM 源码与接入
 
 这页是 [DeepGEMM 解读](deepgemm-fp8-gemm-and-mega-moe.md) 的工程附录，重点放在源码阅读、API 地图、调用路径和接入检查。主页面负责建立系统判断，这页负责帮助你真的读仓库和评估能不能接进自己的服务链路。
 

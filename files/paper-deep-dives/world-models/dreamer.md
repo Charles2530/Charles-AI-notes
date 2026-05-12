@@ -4,7 +4,7 @@ paper_title: "Dream to Control: Learning Behaviors by Latent Imagination"
 paper_topic: 世界模型
 ---
 
-# Dreamer：Dream to Control
+# Dreamer：Latent Imagination 控制
 
 !!! info "论文信息"
     - 论文：`Dream to Control: Learning Behaviors by Latent Imagination`

@@ -1,4 +1,4 @@
-# 自动微分、激活显存与 Checkpointing
+# 自动微分与激活显存
 
 训练大模型时，显存压力往往不是权重单独造成的，而是权重、梯度、optimizer state 和中间激活一起造成的。自动微分让训练变简单，也带来了保存计算图和激活的显存成本。
 
@@ -96,8 +96,8 @@ x -> L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> loss
 
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：理解 OOM、NaN、梯度异常。
 - [分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md)：理解恢复语义和状态分片。
-- [Megatron-LM、DeepSpeed 与训练系统栈](../training/megatron-lm-deepspeed-and-open-training-stacks.md)：理解 ZeRO、TP、PP、CP。
-- [数值、显存与运行时基础](numerics-memory-and-runtime-basics.md)：理解显存、dtype 和 runtime 的关系。
+- [Megatron、DeepSpeed 与训练栈](../training/megatron-lm-deepspeed-and-open-training-stacks.md)：理解 ZeRO、TP、PP、CP。
+- [数值、显存与运行时](numerics-memory-and-runtime-basics.md)：理解显存、dtype 和 runtime 的关系。
 
 ## 小结
 

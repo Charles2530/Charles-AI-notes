@@ -4,7 +4,7 @@ paper_title: "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intell
 paper_topic: 技术报告
 ---
 
-# DeepSeek-V4 Technical Report：百万上下文、混合注意力与 FP4 后训练
+# DeepSeek-V4：百万上下文与 FP4 后训练
 
 !!! info "报告信息"
     - 技术报告：`DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence`
@@ -164,7 +164,7 @@ $$
 !!! note "Figure 6 里的 state cache 是什么"
     初学者可能会把 KV cache 想成一个简单数组：每来一个 token，就把该 token 的 key/value 追加进去。DeepSeek-V4 不是这样，因为 CSA/HCA 要等到凑够一段 token 才能压缩。没凑够的尾部 token 不能丢，也不能提前压成错误 block，所以需要 state cache 暂存。
 
-    这也是为什么 PagedAttention 的标准假设不够用了。PagedAttention 很适合管理形态较统一的 KV blocks，而 DeepSeek-V4 的 KV 同时包含 SWA、CSA indexer、CSA main、HCA，以及未压缩 tail states。服务系统必须知道每类 cache 的 block alignment、命中策略和 eviction 策略。
+    这也是为什么 PagedAttention 的标准假设不够用了。PagedAttention 很适合管理形态较统一的 KV blocks，而 DeepSeek-V4 的 KV 同时包含 SWA、CSA indexer、CSA main、HCA，以及未压缩 tail states。推理服务系统必须知道每类 cache 的 block alignment、命中策略和 eviction 策略。
 
 报告还提到 on-disk KV cache。对共享长前缀的请求，系统可以把压缩后的 CSA/HCA KV entries 存到磁盘；命中前缀时直接读出，避免重复 prefill。SWA 由于体积约为压缩 KV 的 8 倍，报告给了三种策略：Full SWA Caching、Periodic Checkpointing 和 Zero SWA Caching，分别在存储量和 recomputation 之间取不同平衡。
 
@@ -391,12 +391,12 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 
 如果你想把这篇报告放进现有知识地图，可以按这个顺序读：
 
-1. [训练：Megatron-LM、DeepSpeed 与训练系统栈](../../training/megatron-lm-deepspeed-and-open-training-stacks.md)：理解 ZeRO、pipeline、expert parallel 和大规模训练栈；
+1. [训练：Megatron、DeepSpeed 与训练栈](../../training/megatron-lm-deepspeed-and-open-training-stacks.md)：理解 ZeRO、pipeline、expert parallel 和大规模训练栈；
 2. [训练：MTP 与投机解码](../../training/mtp-and-speculative-decoding.md)：理解 DeepSeek 系列为什么保留 MTP；
-3. [量化：FP8 与混合精度服务](../../quantization/fp8-and-mixed-precision-serving.md)：对照 DeepSeek-V4 的 FP8/FP4 训练和服务选择；
+3. [量化：FP8 与混合精度推理](../../quantization/fp8-and-mixed-precision-serving.md)：对照 DeepSeek-V4 的 FP8/FP4 训练和服务选择；
 4. [量化：QAT、Kernel 与 KV Cache](../../quantization/qat-kernels-and-kv-cache.md)：连接 FP4 QAT、KV cache 和实际 serving；
-5. [算子与编译器：长上下文与 FlashAttention 演化](../../operators/long-context-and-flashattention-evolution.md)：理解为什么百万上下文必须改 attention kernel；
-6. [推理：上下文压缩、KV 淘汰与内存分层](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)：把 DeepSeek-V4 的异构 KV cache 和 on-disk KV 放到推理系统里看；
+5. [算子与编译器：FlashAttention 与长上下文](../../operators/long-context-and-flashattention-evolution.md)：理解为什么百万上下文必须改 attention kernel；
+6. [推理：上下文压缩与 KV 内存管理](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)：把 DeepSeek-V4 的异构 KV cache 和 on-disk KV 放到推理系统里看；
 7. [强化学习：verl 代码流程](../../reinforcement-learning/verl-code-flow.md)：对照 rollout、reward、advantage、policy update 和 OPD/RL 基础设施。
 
 ## 一句话总结

@@ -1,4 +1,4 @@
-# 世界模型总览
+# 世界模型路线图
 
 <div class="atlas-hero">
   <div class="atlas-kicker">World Models</div>
@@ -35,11 +35,11 @@
 
 | 阶段 | 本专题要回答的问题 | 对应入口 |
 | --- | --- | --- |
-| 工程地基 | 数据 schema、相机、pose、焊缝/物体状态是否稳定 | [开发路线：数据、几何、仿真与评测](development-roadmap-data-simulation-and-evaluation.md) |
+| 工程地基 | 数据 schema、相机、pose、焊缝/物体状态是否稳定 | [世界模型开发路线](development-roadmap-data-simulation-and-evaluation.md) |
 | 内部模拟 | latent state 如何在动作条件下 rollout | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) |
 | 动作条件建模 | 未来视频、未来动作和 policy 如何接起来 | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
 | 外部模拟 | 可交互视频世界和生成式仿真如何服务物理 AI | [生成式模拟与视频世界模型](generative-simulation-and-video.md) |
-| 闭环改进 | 失败、near-miss 和 hard case 如何回流 | [数据引擎与自我改进](data-engines-and-self-improvement.md) |
+| 闭环改进 | 失败、near-miss 和 hard case 如何回流 | [世界模型数据引擎与自我改进](data-engines-and-self-improvement.md) |
 
 这样读，分标题就不再是论文名列表，而是一条从“世界如何被表示”到“预测怎样改善行动”的链路。
 
@@ -81,7 +81,7 @@
 </div>
 
 !!! tip "基础知识入口"
-    世界模型会反复用到 latent state、概率分布、序列建模和训练闭环。第一次读可以先看 [概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md) 和 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)。
+    世界模型会反复用到 latent state、概率分布、序列建模和训练闭环。第一次读可以先看 [概率与潜变量模型](../foundations/probability-latent-variables-and-generative-models.md) 和 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)。
 
 ## 世界模型的定义
 
@@ -164,9 +164,9 @@ $$
 | --- | --- | --- |
 | [PlaNet](../paper-deep-dives/world-models/planet.md)、[Dreamer](../paper-deep-dives/world-models/dreamer.md)、[DreamerV3](../paper-deep-dives/world-models/dreamerv3.md) | RSSM、latent imagination、reward/continue prediction 和 actor-critic 说明世界模型首先是决策接口，不是视频生成器 | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)、[规划即推断与潜在动作](planning-as-inference-and-latent-actions.md) |
 | [V-JEPA](../paper-deep-dives/world-models/v-jepa.md)、[H-JEPA](../paper-deep-dives/world-models/h-jepa.md) | 表征空间预测可以学习世界结构和运动，不一定要重建像素；它更偏 internal world model | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
-| [Genie](../paper-deep-dives/world-models/genie.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 视频世界模型要从被动视频走向可交互模拟，关键是 latent action / action conditioning、causal rollout、长时记忆和实时化 | [生成式模拟与视频世界模型](generative-simulation-and-video.md)、[数据引擎与自我改进](data-engines-and-self-improvement.md) |
+| [Genie](../paper-deep-dives/world-models/genie.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 视频世界模型要从被动视频走向可交互模拟，关键是 latent action / action conditioning、causal rollout、长时记忆和实时化 | [生成式模拟与视频世界模型](generative-simulation-and-video.md)、[世界模型数据引擎与自我改进](data-engines-and-self-improvement.md) |
 | [Self Forcing](../paper-deep-dives/world-models/self-forcing.md)、[CausVid](../paper-deep-dives/diffusion/causvid.md) | 流式视频世界模型的核心难点是 train-test gap、self-rollout 漂移、KV cache 和少步生成稳定性 | [评测与失败模式](evaluation-and-failure-modes.md)、[生成式模拟与视频世界模型](generative-simulation-and-video.md) |
-| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | WAM 把未来视频和未来动作联合建模，强调“世界预测能否直接支撑 policy” | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)、[机器人与自动驾驶应用](applications-in-robotics-and-autonomous-driving.md) |
+| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | WAM 把未来视频和未来动作联合建模，强调“世界预测能否直接支撑 policy” | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)、[机器人与自动驾驶中的世界模型](applications-in-robotics-and-autonomous-driving.md) |
 
 ### 三种“内部世界”：像素、latent 和表征
 
@@ -280,7 +280,7 @@ $$
 3. 若评测只看短步动作拟合，会高估真实规划能力；
 4. 模型可能复制离线演示数据里的行为偏差。
 
-具体路线见 [WM、WAM、VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)。
+具体路线见 [WM / WAM / VAM：动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)。
 
 ## 评测与工程边界
 
@@ -298,19 +298,19 @@ $$
 
 训练和推理基础设施也会成为瓶颈。世界模型的数据通常是连续轨迹，不能随便切成独立样本；隐状态误差会沿 rollout 累积；规划器会反复调用模型，单步延迟会被候选数和 horizon 放大。因此世界模型评估必须同时报告收益和成本。
 
-更详细的失效模式与验收方法见 [评测与失效模式](evaluation-and-failure-modes.md)、[不确定性与风险敏感规划](uncertainty-and-risk-aware-planning.md)。
+更详细的失效模式与验收方法见 [世界模型评测与失效模式](evaluation-and-failure-modes.md)、[不确定性与风险敏感规划](uncertainty-and-risk-aware-planning.md)。
 
 ## 推荐阅读路径
 
 如果刚进入这个方向，建议按下面顺序读：
 
-1. [开发路线：数据、几何、仿真与评测](development-roadmap-data-simulation-and-evaluation.md)：先把数据契约、3D encoder、仿真和 success checker 的工程地基立起来；
+1. [世界模型开发路线](development-roadmap-data-simulation-and-evaluation.md)：先把数据契约、3D encoder、仿真和 success checker 的工程地基立起来；
 2. [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)：建立 latent state、belief、reward、rollout 和策略学习的基本概念；
-3. [WM、WAM、VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)：理解现代动作联合建模谱系；
+3. [WM / WAM / VAM：动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)：理解现代动作联合建模谱系；
 4. [生成式模拟与视频世界模型](generative-simulation-and-video.md)：理解为什么视频生成模型会进入控制和数据引擎；
 5. [模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md)：理解如何用模型生成和筛选训练数据；
 6. [规划即推断与潜在动作](planning-as-inference-and-latent-actions.md)：理解世界模型如何接入 planner；
-7. [评测与失效模式](evaluation-and-failure-modes.md)：建立“看起来好”和“真的有用”之间的边界。
+7. [世界模型评测与失效模式](evaluation-and-failure-modes.md)：建立“看起来好”和“真的有用”之间的边界。
 
 读每类工作时建议固定问四个问题：它建模的基本单位是什么，动作条件放在哪一层，模型输出最终被谁消费，它的失败更多出在表示、规划、数据还是系统成本。
 
@@ -331,7 +331,7 @@ $$
 
 <div class="atlas-card-grid">
   <a class="atlas-card" href="development-roadmap-data-simulation-and-evaluation/">
-    <strong>开发路线：数据、几何、仿真与评测</strong>
+    <strong>世界模型开发路线</strong>
     <p>把数据准备、3D 重建、仿真环境、success checker 和焊缝任务整理成工程路线。</p>
   </a>
   <a class="atlas-card" href="rssm-dreamer-and-planning/">
@@ -339,7 +339,7 @@ $$
     <p>经典 latent world model 入口，重点是 belief state、imagined rollout 和 policy learning。</p>
   </a>
   <a class="atlas-card" href="wm-wam-vam-and-action-conditioned-modeling/">
-    <strong>WM、WAM、VAM 与动作条件建模</strong>
+    <strong>WM / WAM / VAM：动作条件建模</strong>
     <p>拆清世界演化、动作生成和视频先验之间的关系。</p>
   </a>
   <a class="atlas-card" href="generative-simulation-and-video/">
@@ -359,15 +359,15 @@ $$
     <p>从“会预测”走向“能制造有价值训练样本”。</p>
   </a>
   <a class="atlas-card" href="data-engines-and-self-improvement/">
-    <strong>数据引擎与自我改进</strong>
+    <strong>世界模型数据引擎与自我改进</strong>
     <p>讨论 near-miss、主动采样、失败回放和闭环数据生成。</p>
   </a>
   <a class="atlas-card" href="applications-in-robotics-and-autonomous-driving/">
-    <strong>机器人与自动驾驶应用</strong>
+    <strong>机器人与自动驾驶中的世界模型</strong>
     <p>把世界模型放回真实具身与驾驶系统里看收益和限制。</p>
   </a>
   <a class="atlas-card" href="evaluation-and-failure-modes/">
-    <strong>评测与失效模式</strong>
+    <strong>世界模型评测与失效模式</strong>
     <p>建立世界模型是否真的改善决策的验收标准。</p>
   </a>
 </div>

@@ -4,7 +4,7 @@ paper_title: "SpatialVLA: Exploring Spatial Representations for Visual-Language-
 paper_topic: 具身智能 / VLA
 ---
 
-# SpatialVLA：把 3D 空间表示接进 VLA
+# SpatialVLA：3D 空间表征接入 VLA
 
 !!! info "论文信息"
     - 论文：`SpatialVLA: Exploring Spatial Representations for Visual-Language-Action Models`

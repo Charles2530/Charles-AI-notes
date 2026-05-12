@@ -103,7 +103,7 @@ for batch in dataloader:
 
 ## 5. 和后续专题的关系
 
-- [训练总览](../training/index.md)：理解 loss、反向传播、checkpoint 和显存。
+- [大模型训练路线图](../training/index.md)：理解 loss、反向传播、checkpoint 和显存。
 - [算子与编译器](../operators/index.md)：理解 kernel 为什么要关心 shape bucket。
 - [推理系统](../inference/index.md)：理解 batch、sequence length 和 KV cache 如何影响延迟。
 - [量化](../quantization/index.md)：理解 dtype、scale 和张量误差如何传播。

@@ -8,7 +8,7 @@ CUDA 之所以长期是 AI kernel 的主语言，不只是因为它能在 GPU �
 !!! example "有趣例子：仓库分拣"
     HBM 像远处大仓库，shared memory 像分拣台，register 像工人手里正拿着的零件。每次都跑去大仓库拿一个零件会很慢；聪明做法是先搬一筐到分拣台，再让一组工人快速组装。
 
-这页是算子专题的基础页，后续 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与 Autotuning](triton-programming-model-and-autotuning.md)、[CUTLASS、CuTe 与编译栈](cutlass-cute-and-compiler-stack.md) 都依赖这里的心智模型。
+这页是算子专题的基础页，后续 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与 Autotuning](triton-programming-model-and-autotuning.md)、[CUTLASS / CuTe 与编译栈](cutlass-cute-and-compiler-stack.md) 都依赖这里的心智模型。
 
 ## 最小心智模型
 

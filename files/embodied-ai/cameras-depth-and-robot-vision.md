@@ -337,9 +337,9 @@ OpenCV 的 `calibrateCamera` 会从多个标定板视角估计内外参；如果
 
 早期做仿真任务时，可以先从固定 RGB-D 或多视角相机开始，因为它更容易 debug。等任务跑通后，再减少 privileged state 或改成更接近真实部署的相机配置。
 
-## 8. 单目、双目、RGB-D 在你的 pipeline 里怎么对应
+## 8. 单目、双目、RGB-D 在数据管线里怎么对应
 
-你的资产生成流程：
+资产生成流程：
 
 ```text
 RGB 图像 -> 背景消除 -> 文字消除 -> 多视角生成 -> 图生 3D
@@ -347,7 +347,7 @@ RGB 图像 -> 背景消除 -> 文字消除 -> 多视角生成 -> 图生 3D
 
 这是离线资产生产。这里的多视角更多是为了让 3D 生成模型补全形状和纹理，不等价于真实双目测距。
 
-你的仿真/轨迹生成流程：
+仿真/轨迹生成流程：
 
 ```text
 导入资产 -> 场景布置 -> 相机渲染 -> 估计状态或直接读取状态
@@ -384,7 +384,7 @@ RGB 图像 -> 背景消除 -> 文字消除 -> 多视角生成 -> 图生 3D
 
 | 继续读 | 你会补上什么 |
 | --- | --- |
-| [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md) | 相机输出如何进入资产、状态估计、抓取和轨迹生成 |
-| [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 深度和 pose 如何支撑尺寸排序、容器匹配和 success checker |
+| [资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) | 相机输出如何进入资产、状态估计、抓取和轨迹生成 |
+| [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 深度和 pose 如何支撑尺寸排序、容器匹配和 success checker |
 | [规划、控制与安全](planning-control-and-safety.md) | 感知到的 3D 状态如何变成可执行轨迹和安全约束 |
-| [VLA、WAM 与世界模型系统地图](vla-wam-world-model-system-map.md) | 相机观测如何进入 VLA、WAM 和世界模型路线 |
+| [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) | 相机观测如何进入 VLA、WAM 和世界模型路线 |

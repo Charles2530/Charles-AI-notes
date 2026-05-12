@@ -1,4 +1,4 @@
-# verl 代码流程：从配置到一次 RL 更新
+# verl 训练流程：从配置到 RL 更新
 
 本页按用户更正后的仓库 [verl-project/verl](https://github.com/verl-project/verl) 展开。verl 是大模型强化学习后训练框架，论文背景是 [HybridFlow: A Flexible and Efficient RLHF Framework](https://arxiv.org/abs/2409.19256)。这里不复述安装命令，而是讲清代码流：配置如何进入 trainer，rollout/reward/critic/actor 如何组成一次 RL 更新。
 
@@ -256,7 +256,7 @@ verl 本身主要面向 LLM/VLM RL 后训练，但它的 dataflow 思路可以�
 | --- | --- |
 | 不懂 `adv_estimator=gae/grpo/rloo` | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md) |
 | 不懂 `token_level_scores`、`advantages`、`returns` | [MDP、价值函数与 Bellman](mdp-value-bellman.md) |
-| rollout 慢、KV cache 爆显存 | [推理总览](../inference/index.md)、[服务态 Attention 与 KV Kernel](../operators/serving-attention-and-kv-kernels.md) |
-| actor update OOM 或吞吐低 | [训练总览](../training/index.md)、[分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md) |
-| VLM 数据进不来 | [VLM/VLA 总览](../vlm/index.md)、[视觉表征、连接器与时序状态](../vlm/architecture-and-training.md) |
-| 想把 RLVR 用到世界模型 | [强化学习如何帮助世界模型](rl-for-world-models.md)、[世界模型总览](../world-models/index.md) |
+| rollout 慢、KV cache 爆显存 | [推理系统路线图](../inference/index.md)、[推理 Attention 与 KV Kernel](../operators/serving-attention-and-kv-kernels.md) |
+| actor update OOM 或吞吐低 | [大模型训练路线图](../training/index.md)、[分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md) |
+| VLM 数据进不来 | [VLM/VLA 总览](../vlm/index.md)、[VLM 架构：视觉表征、连接器与记忆](../vlm/architecture-and-training.md) |
+| 想把 RLVR 用到世界模型 | [世界模型中的强化学习](rl-for-world-models.md)、[世界模型路线图](../world-models/index.md) |

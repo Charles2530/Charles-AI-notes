@@ -4,7 +4,7 @@ paper_title: Mastering Diverse Domains through World Models
 paper_topic: 世界模型
 ---
 
-# DreamerV3：Mastering Diverse Domains through World Models
+# DreamerV3：跨域通用世界模型
 
 !!! info "论文信息"
     - 论文：`Mastering Diverse Domains through World Models`

@@ -1,6 +1,6 @@
-# 训练专题论文原图阅读索引
+# 论文图解索引
 
-这页原来承担“逐页图解”的作用。现在统一改成论文原图索引：只保留来自论文、论文项目页或公共学术资料的图，并在每张图下解释它对应训练专题里的哪类知识点。
+本页作为训练专题的论文原图索引，优先收录来自论文、论文项目页或公共学术资料的图，并在每张图下解释它对应训练专题里的哪类知识点。
 
 读法很简单：先看图，再回到对应页面。训练专题很多问题都可以归到四条主线：
 
@@ -10,11 +10,11 @@
 4. 数值与验证：低精度、稳定性、评测、数据质量和消融。
 
 !!! note "为什么不用概括插图"
-    概括图适合快速沟通，但容易把论文里的关键假设画平。训练系统尤其依赖原始图表里的坐标轴、实验条件和对照对象，所以这里优先使用论文图。没有足够贴合的论文图时，页面宁可只保留文字清单，也不再用概括插图补位。
+    概括图适合快速沟通，但容易把论文里的关键假设画平。训练系统尤其依赖原始图表里的坐标轴、实验条件和对照对象，因此本页优先使用论文图；没有足够贴合的论文图时，则用文字索引说明知识点。
 
 ## 1. 训练预算与 scaling law
 
-对应页面：[训练总览](index.md)、[Scaling Law 与实验经济学](scaling-laws-and-experiment-economics.md)、[集群运维与实验管理](cluster-operations-and-experiment-management.md)。
+对应页面：[大模型训练路线图](index.md)、[Scaling Law 与训练经济学](scaling-laws-and-experiment-economics.md)、[集群运维与实验管理](cluster-operations-and-experiment-management.md)。
 
 ![Chinchilla IsoFLOP curves 原论文图](../assets/images/paper-figures/training/chinchilla-isoflop-curves.png){ width="920" }
 
@@ -67,18 +67,18 @@ collect trajectories -> compute advantages -> run minibatch surrogate updates ->
 
 ## 3. MTP、投机执行与推理联动
 
-对应页面：[MTP 与投机解码](mtp-and-speculative-decoding.md)、[推理缓存、路由与投机执行](../inference/caching-routing-and-speculative.md)。
+对应页面：[MTP 与投机解码](mtp-and-speculative-decoding.md)、[推理缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)。
 
 ![SpecInfer workflow 原论文图](../assets/images/paper-figures/inference/specinfer-workflow.png){ width="920" }
 
 <small>图源：[SpecInfer: Accelerating Generative Large Language Model Serving with Speculative Inference and Token Tree Verification](https://arxiv.org/abs/2305.09781)，Figure 3。原论文图意：多个小型 speculative models 先生成 token tree，request manager 合并候选树，再由大模型做 tree-based parallel decoding 和 verification。</small>
 
 !!! note "图解：训练目标和上线收益要用 acceptance 连接"
-    MTP 让模型训练时学习多个未来 token，投机执行让服务系统用便宜路径先猜、大模型再验证。两者能不能结合，不取决于“平均能多预测几个 token”，而取决于分桶 acceptance、verify 开销、KV 生命周期和 p95/p99 延迟。SpecInfer 图里的 token tree 很适合提醒你：推理加速不是只看模型结构，还要看调度器如何合并候选、验证和回退。
+    MTP 让模型训练时学习多个未来 token，投机执行让推理服务系统用便宜路径先猜、大模型再验证。两者能不能结合，不取决于“平均能多预测几个 token”，而取决于分桶 acceptance、verify 开销、KV 生命周期和 p95/p99 延迟。SpecInfer 图里的 token tree 很适合提醒你：推理加速不是只看模型结构，还要看调度器如何合并候选、验证和回退。
 
 ## 4. 低比特训练与数值稳定
 
-对应页面：[低比特训练与训练数制](low-bit-training-and-numerics.md)、[数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。
+对应页面：[低比特训练与数值格式](low-bit-training-and-numerics.md)、[数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。
 
 ![QLoRA memory comparison 原论文图](../assets/images/paper-figures/quantization/qlora-figure-1-memory.png){ width="720" }
 
@@ -96,7 +96,7 @@ collect trajectories -> compute advantages -> run minibatch surrogate updates ->
 
 ## 5. 分布式训练、并行和 Checkpoint
 
-对应页面：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[Megatron-LM、DeepSpeed 与训练系统栈](megatron-lm-deepspeed-and-open-training-stacks.md)。
+对应页面：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[Megatron、DeepSpeed 与训练栈](megatron-lm-deepspeed-and-open-training-stacks.md)。
 
 ![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
 
@@ -121,7 +121,7 @@ collect trajectories -> compute advantages -> run minibatch surrogate updates ->
 
 ## 6. 数据质量、数据治理与评测
 
-对应页面：[数据质量、去重与治理](data-quality-dedup-and-governance.md)、[数据系统与优化](data-systems-and-optimization.md)、[评测与消融方法](evaluation-and-ablation-methodology.md)。
+对应页面：[数据质量、去重与治理](data-quality-dedup-and-governance.md)、[训练数据系统与吞吐优化](data-systems-and-optimization.md)、[评测与消融方法](evaluation-and-ablation-methodology.md)。
 
 ![Data Cards stakeholder typology 原论文图](../assets/images/paper-figures/foundations/data-cards-typology.png){ width="760" }
 
@@ -152,7 +152,7 @@ collect trajectories -> compute advantages -> run minibatch surrogate updates ->
 
 | 训练子页 | 优先看的论文图 | 主要解释 |
 | --- | --- | --- |
-| 训练总览 | Chinchilla IsoFLOP、ZeRO、GPipe | 预算账、显存账、时间账 |
+| 大模型训练路线图 | Chinchilla IsoFLOP、ZeRO、GPipe | 预算账、显存账、时间账 |
 | 预训练 / SFT / 对齐 | InstructGPT RLHF pipeline | demonstration、comparison、reward、policy 的接口 |
 | MTP 与投机解码 | SpecInfer workflow | draft、token tree、verification、acceptance |
 | 低比特训练 | QLoRA、FP8 Formats | 显存状态拆分和收敛曲线 |

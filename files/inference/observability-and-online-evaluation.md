@@ -2,7 +2,7 @@
 
 模型上线后，真正难的不是“服务有没有活着”，而是能不能持续回答四个问题：线上发生了什么、质量有没有变好、成本和稳定性是否可控、异常能不能回放并进入下一轮修复。可观测性回答“系统现在如何运行”，在线评测回答“这次变化是否值得保留”。两者应被设计成同一套闭环，而不是两个互不相干的 dashboard。
 
-这页建议和 [服务系统](serving-systems.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md)、[RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md) 一起读。前者解释推理链路和容量约束，本页关注上线后如何持续判断系统是否真的变好。
+这页建议和 [推理服务系统](serving-systems.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md)、[RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md) 一起读。前者解释推理链路和容量约束，本页关注上线后如何持续判断系统是否真的变好。
 
 !!! note "初学者先抓住"
     可观测性回答“发生了什么”，在线评测回答“这次变化值不值得保留”。没有可回放的日志和分桶指标，线上质量变化很容易被平均值掩盖。

@@ -4,7 +4,7 @@ paper_title: "Gemini 2.5: Pushing the Frontier with Advanced Reasoning, Multimod
 paper_topic: 技术报告
 ---
 
-# Gemini 2.5 Technical Report：动态 Thinking、多模态长上下文与 Agentic 能力
+# Gemini 2.5：动态 Thinking 与长上下文 Agent
 
 !!! info "报告信息"
     - 技术报告：`Gemini 2.5: Pushing the Frontier with Advanced Reasoning, Multimodality, Long Context, and Next Generation Agentic Capabilities`
@@ -280,8 +280,8 @@ Gemini 2.5 最值得学习的一句话是：前沿模型能力不是单一算法
 
 ## 延伸阅读
 
-- [训练总览](../../training/index.md)：预训练、后训练、数据治理和分布式系统主线。
+- [大模型训练路线图](../../training/index.md)：预训练、后训练、数据治理和分布式系统主线。
 - [后训练数据引擎与 Judge 模型](../../training/post-training-data-engines-and-judge-models.md)：理解 SFT、judge、reward 和数据回流。
 - [Policy Gradient、PPO 与 GRPO](../../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)：连接 reasoning RL 和 reward-driven post-training。
-- [RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：理解搜索、工具调用和长上下文服务系统。
+- [RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：理解搜索、工具调用和长上下文推理服务系统。
 - [VLM/VLA 总览](../../vlm/index.md)：连接多模态表示、视频、音频和动作系统。

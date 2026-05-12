@@ -4,7 +4,7 @@ paper_title: Mastering Atari with Discrete World Models
 paper_topic: 世界模型
 ---
 
-# DreamerV2：Mastering Atari with Discrete World Models
+# DreamerV2：离散世界模型玩 Atari
 
 !!! info "论文信息"
     - 论文：`Mastering Atari with Discrete World Models`

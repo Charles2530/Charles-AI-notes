@@ -1,4 +1,4 @@
-# Megatron-LM、DeepSpeed 与开放训练系统栈
+# Megatron、DeepSpeed 与训练栈
 
 开放训练系统栈要解决的问题不是“选一个最流行框架”，而是在给定模型规模、硬件拓扑、数据吞吐、显存预算、容错要求和团队能力后，组织出一条可长期维护的训练路径。Megatron-LM、Megatron Core、DeepSpeed、ZeRO、FSDP、Accelerate、Ray、Torch Distributed 等组件各自覆盖不同层面，真正难的是组合边界和状态语义。
 
@@ -104,7 +104,7 @@ MoE 会让训练栈从并行工程升级成路由工程。除了专家并行，�
 
 ### FP8 与低精度
 
-低精度训练不只是某个 kernel 的 dtype 变化。FP8/MXFP/NVFP/HiFloat 会影响 scaling、activation 保存、optimizer states、通信、checkpoint 和数值稳定性。相关内容放在 [低比特训练与训练数制](low-bit-training-and-numerics.md)；训练栈层面要关注的是：低精度状态如何保存、恢复、导出，以及是否与后训练和推理数制一致。
+低精度训练不只是某个 kernel 的 dtype 变化。FP8/MXFP/NVFP/HiFloat 会影响 scaling、activation 保存、optimizer states、通信、checkpoint 和数值稳定性。相关内容放在 [低比特训练与数值格式](low-bit-training-and-numerics.md)；训练栈层面要关注的是：低精度状态如何保存、恢复、导出，以及是否与后训练和推理数制一致。
 
 ## 五、不同规模下的策略差异
 

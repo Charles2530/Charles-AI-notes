@@ -6,7 +6,7 @@
 - `投机解码` 首先是**推理加速算法**：用便宜路径草拟，再用目标模型并行验证；
 - `Self-speculative decoding` 是二者交汇的一类系统：草稿路径来自模型自身的中间层、辅助头或 MTP 模块。
 
-这页放在训练专题里，是因为一旦决定训练 `MTP`，改变的不只是 serving 策略，还包括 loss、checkpoint 结构、评测口径和未来推理接口。推理侧实现细节可继续看 [缓存、路由与投机执行](../inference/caching-routing-and-speculative.md)。
+这页放在训练专题里，是因为一旦决定训练 `MTP`，改变的不只是 serving 策略，还包括 loss、checkpoint 结构、评测口径和未来推理接口。推理侧实现细节可继续看 [缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)。
 
 !!! note "初学者先抓住"
 

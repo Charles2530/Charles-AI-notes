@@ -1,4 +1,4 @@
-# VLA、WAM 与世界模型系统地图
+# VLA、WAM 与世界模型地图
 
 这一页专门解决一个容易卡住的问题：`VLA`、`世界模型`、`DreamZero`、`π0.5`、`LingBot-World`、`轨迹生成`、`Sim2Real` 到底是什么关系。
 
@@ -180,7 +180,7 @@ LingBot-World 说明视频生成模型要成为世界模拟器，必须补动作
 
 它不是和 π0.5 / DreamZero 对立的路线，而是在给 VLA、WAM 和传统 planner 提供基础设施：
 
-| 你的 pipeline 组件 | 给模型路线提供什么 |
+| pipeline 组件 | 给模型路线提供什么 |
 | --- | --- |
 | 资产和纹理 | 视觉输入分布、物体类别、尺度变化 |
 | 物理属性 | 接触、摩擦、质量、仿真动力学 |
@@ -190,7 +190,7 @@ LingBot-World 说明视频生成模型要成为世界模拟器，必须补动作
 | cuRobo / STOMP 轨迹 | 行为克隆 GT、planner baseline、任务可行性验证 |
 | 失败复位重试 | 数据引擎、hard case mining、评测稳定性 |
 
-换句话说，π0.5 这类 VLA 需要大量动作轨迹和任务数据；DreamZero 这类 WAM 需要视频和动作对齐轨迹；传统 planner 需要资产、碰撞网格和抓取标注。你的 pipeline 正好是这些路线共同依赖的数据底座。
+换句话说，π0.5 这类 VLA 需要大量动作轨迹和任务数据；DreamZero 这类 WAM 需要视频和动作对齐轨迹；传统 planner 需要资产、碰撞网格和抓取标注。这条 pipeline 正好是这些路线共同依赖的数据底座。
 
 ## 8. 初学者最容易混的六组概念
 
@@ -209,10 +209,10 @@ LingBot-World 说明视频生成模型要成为世界模拟器，必须补动作
 
 如果你现在对具身智能还没有整体感，建议这样读：
 
-1. 先读 [具身智能从零学习路线](beginner-learning-path.md)，把基本名词和学习顺序立住。
+1. 先读 [具身智能从零路线](beginner-learning-path.md)，把基本名词和学习顺序立住。
 2. 再读本页，建立 VLA、WAM、世界模型和工程 pipeline 的层级关系。
-3. 然后读 [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md)，用尺寸排序和容器匹配任务把状态、轨迹、执行和判定连起来。
-4. 再读 [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md)，搞清楚数据从哪里来。
+3. 然后读 [一个任务跑通具身闭环](closed-loop-task-walkthrough.md)，用尺寸排序和容器匹配任务把状态、轨迹、执行和判定连起来。
+4. 再读 [资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md)，搞清楚数据从哪里来。
 5. 接着读 [VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)，理解动作怎么进模型、怎么出模型。
 6. 再读 [规划、控制与安全](planning-control-and-safety.md)，理解为什么动作还要经过 planner/controller/safety。
 7. 然后读 [π0.5](../paper-deep-dives/embodied-ai/pi05.md)，把 VLA 路线放进真实长任务。

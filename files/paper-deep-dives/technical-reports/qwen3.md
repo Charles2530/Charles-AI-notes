@@ -4,7 +4,7 @@ paper_title: "Qwen3 Technical Report"
 paper_topic: 技术报告
 ---
 
-# Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏
+# Qwen3：Thinking 模式、36T 预训练与蒸馏
 
 !!! info "报告信息"
     - 技术报告：`Qwen3 Technical Report`
@@ -153,7 +153,7 @@ Qwen3-235B-A22B-Base 用 235B total、22B activated 对比 Qwen2.5-72B、Qwen2.5
 
 Qwen3 的另一个重点是小模型。报告写到：Qwen3-30B-A3B 只有 3B activated params，但能和更大的 dense base models 接近；Qwen3-8B/4B/1.7B/0.6B 也尽量往上一个代际的更大模型靠近。这和后面的 strong-to-weak distillation 是同一条工程路线：不是只做旗舰模型，而是把旗舰能力压到小规格。
 
-## 后训练总览：四阶段 pipeline
+## 后大模型训练路线图：四阶段 pipeline
 
 Qwen3 最重要的图是后训练 pipeline。
 

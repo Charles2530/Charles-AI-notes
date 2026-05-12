@@ -6,7 +6,7 @@
 \text{retrieval} \rightarrow \text{context assembly} \rightarrow \text{model} \rightarrow \text{tools/agents}
 \]
 
-如果只想先建立 RAG、Prompt Chaining、ReAct 和 CoT 的基础直觉，可以先回看 [提示工程、CoT 与 RAG 基础](../foundations/prompt-engineering-cot-and-rag-basics.md)。本页重点放在推理系统里的容量、状态、上下文装配和线上失效。
+如果只想先建立 RAG、Prompt Chaining、ReAct 和 CoT 的基础直觉，可以先回看 [Prompt、CoT 与 RAG 入门](../foundations/prompt-engineering-cot-and-rag-basics.md)。本页重点放在推理系统里的容量、状态、上下文装配和线上失效。
 
 **这意味着推理系统必须同时处理**：
 
@@ -247,7 +247,7 @@ RAG、Agent 和长上下文系统的结合，代表着推理系统已经从“�
 
 ## 实践补充与检查
 
-### 用服务系统视角重写 **RAG、Agent 与长上下文系统**
+### 用推理服务系统视角重写 **RAG、Agent 与长上下文系统**
 
 推理主题最容易被写成一串优化名词，但线上系统真正关心的从来不是“有没有这个技巧”，而是 **它是否改变了请求、队列、缓存、成本和高价值流量的命运**。围绕 **RAG、Agent 与长上下文系统**，更稳的理解框架是先问：这件事究竟在改变哪一层约束。
 

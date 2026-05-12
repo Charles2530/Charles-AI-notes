@@ -4,7 +4,7 @@ paper_title: Advancing Open-source World Models with Video Generation Models
 paper_topic: 世界模型
 ---
 
-# LingBot-World：从视频生成到开源世界模拟器
+# LingBot-World：视频基础模型到世界模拟器
 
 !!! info "论文信息"
     - 论文：`Advancing Open-source World Models with Video Generation Models`

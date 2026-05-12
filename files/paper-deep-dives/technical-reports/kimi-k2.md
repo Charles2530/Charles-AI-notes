@@ -4,7 +4,7 @@ paper_title: "Kimi K2: Open Agentic Intelligence"
 paper_topic: 技术报告
 ---
 
-# Kimi K2：Open Agentic Intelligence、MuonClip 与万亿 MoE Agent 模型
+# Kimi K2：MuonClip、万亿 MoE 与 Agent 数据
 
 !!! info "报告信息"
     - 技术报告：`Kimi K2: Open Agentic Intelligence`
@@ -223,7 +223,7 @@ Kimi K2 的预训练 recipe 可以压缩成下面这张表：
 
 这里有几个细节值得看。第一，K2 主预训练 context 是 4K，不是一开始就训 128K；长上下文是在预训练后段通过 32K activation 和 YaRN 扩展。第二，global batch size 达到 67M tokens，说明它的训练不是“很大 batch + 很短 schedule”随便组合，而是围绕 15.5T tokens 的长跑。第三，报告强调 loss curve 未 smoothing / 未 sub-sampling 且无 spike，是为了支撑 MuonClip 的稳定性主张。
 
-## 后训练总览
+## 后大模型训练路线图
 
 Kimi K2 的后训练可以分成三层：
 
@@ -406,11 +406,11 @@ Kimi K2 给工程项目的启发主要有五条：
 
 ## 延伸阅读
 
-1. [DeepSeek-V3 Technical Report：671B MoE、MLA 与 FP8 训练](deepseek-v3.md)：对照 K2 的 MoE / MLA / 系统训练取舍；
-2. [DeepSeek-R1：用强化学习激发大模型推理能力](deepseek-r1.md)：理解 RLVR 和可验证奖励；
-3. [Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏](qwen3.md)：对照 thinking / non-thinking 和双模式后训练；
+1. [DeepSeek-V3：671B MoE、MLA 与 FP8 训练](deepseek-v3.md)：对照 K2 的 MoE / MLA / 系统训练取舍；
+2. [DeepSeek-R1：RL 激发推理能力](deepseek-r1.md)：理解 RLVR 和可验证奖励；
+3. [Qwen3：Thinking 模式、36T 预训练与蒸馏](qwen3.md)：对照 thinking / non-thinking 和双模式后训练；
 4. [强化学习：Policy Gradient、PPO 与 GRPO](../../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)：补 RL 目标和 advantage 的基础；
-5. [训练：数据系统与优化](../../training/data-systems-and-optimization.md)：理解 synthetic data、数据质量和训练吞吐；
+5. [训练：训练数据系统与吞吐优化](../../training/data-systems-and-optimization.md)：理解 synthetic data、数据质量和训练吞吐；
 6. [推理：RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：把 K2 的 agentic 能力放到应用系统里看。
 
 ## 参考资料

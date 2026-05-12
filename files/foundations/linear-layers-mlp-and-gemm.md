@@ -1,4 +1,4 @@
-# 线性层、MLP、MatMul 与 GEMM
+# 线性层到 GEMM
 
 如果把现代大模型拆到最底层，会发现大量计算都在做矩阵乘。但这里要先分清三层概念：`Linear` 是模型层，`MatMul` 是数学/框架里的矩阵乘操作，`GEMM` 是底层线性代数库和 GPU kernel 常用的 dense matrix-matrix multiplication 形式。它们相关，但不是同一个词。
 
@@ -173,7 +173,7 @@ function MLP(x):
 - `W8A8`：权重和激活都 INT8。
 - `FP8 W8A8`：权重和激活走 FP8 或近似 FP8 路径。
 
-如果量化格式没有高效 GEMM / batched GEMM / fused dequant MatMul kernel，模型文件虽然变小，推理可能并不会更快。这个问题会在 [量化总览](../quantization/index.md) 和 [数值、显存与运行时基础](numerics-memory-and-runtime-basics.md) 里继续展开。
+如果量化格式没有高效 GEMM / batched GEMM / fused dequant MatMul kernel，模型文件虽然变小，推理可能并不会更快。这个问题会在 [量化路线图](../quantization/index.md) 和 [数值、显存与运行时](numerics-memory-and-runtime-basics.md) 里继续展开。
 
 ## 小结
 

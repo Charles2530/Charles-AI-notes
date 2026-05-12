@@ -4,7 +4,7 @@ paper_title: "Towards Video World Models"
 paper_topic: 世界模型
 ---
 
-# Towards Video World Models：视频生成走向世界模型的五个门槛
+# Towards Video World Models：视频世界模型五个门槛
 
 !!! info "文章信息"
     - 文章：`Towards Video World Models`

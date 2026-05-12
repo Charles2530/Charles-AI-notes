@@ -1,8 +1,8 @@
-# vLLM、SGLang、TensorRT-LLM 与推理运行时栈
+# 推理运行时：vLLM、SGLang、TensorRT-LLM
 
 模型推理已经不只是“加载权重然后调用 `generate()`”。真正决定线上成本和时延的，是一层专门的运行时系统：它管理 continuous batching、KV cache、prefix cache、paged attention、量化 kernel、图捕获、路由、分布式执行、多模型共存和 tracing。`vLLM`、`SGLang`、`TensorRT-LLM` 代表了几条不同取舍路线。
 
-这页和 [推理服务系统](serving-systems.md)、[GPU Kernel、Batching 与内存系统](gpu-kernels-batching-and-memory-systems.md)、[可观测性与在线评测](observability-and-online-evaluation.md) 一起读。服务系统页讲资源治理，本页聚焦 runtime 选型。
+这页和 [推理服务系统](serving-systems.md)、[GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md)、[可观测性与在线评测](observability-and-online-evaluation.md) 一起读。推理服务系统页讲资源治理，本页聚焦 runtime 选型。
 
 !!! note "初学者先抓住"
 
@@ -24,14 +24,14 @@
 
 Runtime 主要负责：模型加载与权重布局、请求编队、prefill/decode 协同、KV cache 分配回收、prefix cache、speculative decoding、量化路径、多 GPU 执行和内部阶段 tracing。它既不是纯模型代码，也不是纯 kernel，而是模型和硬件之间的执行层。
 
-因此 runtime 选型不是“哪个包流行”，而是服务系统架构选择。
+因此 runtime 选型不是“哪个包流行”，而是推理服务系统架构选择。
 
 ![vLLM PagedAttention 原论文图](../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="620" }
 
 <small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 4。原论文图意：PagedAttention 允许 attention 的 K/V 向量存放在非连续物理内存块中，kernel 通过 block table 找到对应 KV block 并完成注意力计算。</small>
 
 !!! note "图解：PagedAttention 把 KV cache 当成分页内存"
-    朴素服务系统常为每个请求预留一大段连续 KV 空间，导致内部碎片和预留浪费。PagedAttention 的关键是把逻辑 token 序列拆成 block，再映射到不连续的物理 block。这样不同请求、beam 或并行生成分支可以更灵活地共享和回收 KV cache，显存利用率会直接影响可并发请求数。
+    朴素推理服务系统常为每个请求预留一大段连续 KV 空间，导致内部碎片和预留浪费。PagedAttention 的关键是把逻辑 token 序列拆成 block，再映射到不连续的物理 block。这样不同请求、beam 或并行生成分支可以更灵活地共享和回收 KV cache，显存利用率会直接影响可并发请求数。
 
 ## 二、三条代表路线
 

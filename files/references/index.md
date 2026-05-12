@@ -19,7 +19,7 @@
 | 建立主题主线 | 先看每节“必读起点”，只抓问题定义和方法转折 | 对应主题总览页 |
 | 做方案设计 | 找“系统 / Benchmark / 开源实现”条目，核对工程约束 | 训练、推理、量化、算子和评测页面 |
 | 做论文笔记 | 从对应专题页确定精读论文，再在这里补相关工作 | [论文专题讲解](../paper-deep-dives/index.md) |
-| 做复现或调研 | 优先选有代码、数据、benchmark 或官方实现的条目 | [评测与消融方法学](../training/evaluation-and-ablation-methodology.md) |
+| 做复现或调研 | 优先选有代码、数据、benchmark 或官方实现的条目 | [训练评测与消融设计](../training/evaluation-and-ablation-methodology.md) |
 
 不要把这页当成从头到尾阅读的书单。更高效的方式是：遇到具体问题时回来查源头，再把结论写回对应主题页的机制、评测或工程边界里。
 
@@ -125,7 +125,20 @@
 4. [BridgeData V2: A Dataset for Robot Learning at Scale](https://arxiv.org/abs/2308.12952)  
    机器人策略学习的数据基础设施参考。
 
-### 3.3 Benchmark 与评测
+### 3.3 3D 感知、深度与几何底座
+
+1. [Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data](https://arxiv.org/abs/2401.10891)
+   DA 系列起点，用大规模未标注数据和辅助监督构建开放域单目深度 foundation model。
+2. [Depth Anything V2](https://arxiv.org/abs/2406.09414)
+   DA2 强化 synthetic teacher、pseudo-labeled real images 和模型尺度，是理解 DA3 teacher-student 路线的前置文献。
+3. [VGGT: Visual Geometry Grounded Transformer](https://arxiv.org/abs/2503.11651)
+   feed-forward 3D 几何路线，直接预测 camera parameters、depth maps、point maps 和 3D point tracks。
+4. [Depth Anything 3: Recovering the Visual Space from Any Views](https://arxiv.org/abs/2511.10647)
+   从任意视角恢复一致 depth、ray、camera 和 3D geometry，并把 DA/DA2 单目深度能力推进到多视角几何；站内专题见 [Depth Anything 3 讲解](../paper-deep-dives/embodied-ai/depth-anything-3.md)。
+5. [ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/depth-anything-3)
+   官方实现与模型仓库，包含 model zoo、Python API、CLI、benchmark pipeline 和 DA3-Streaming。
+
+### 3.4 Benchmark 与评测
 
 1. [RLBench: The Robot Learning Benchmark & Learning Environment](https://arxiv.org/abs/1909.12271)  
    桌面操作任务 benchmark。
@@ -388,9 +401,13 @@
    `4/6` adaptive block scaling，适合理解 NVFP4 中“缩到 6 不一定最优”的问题。
 7. [Quartet II: Accurate LLM Pre-Training in NVFP4 by Improved Unbiased Gradient Estimation](https://arxiv.org/abs/2601.22813)  
    `NVFP4` 预训练的后续路线，重点是更好的无偏梯度估计。
+8. [Attn-QAT: 4-Bit Attention With Quantization-Aware Training](https://arxiv.org/abs/2603.00040)\
+   把 FP4 attention 的问题推进到 forward/backward/kernel 一致性，重点看 FlashAttention backward 重算、softmax 梯度和 real quant inference kernel 如何对齐；站内专题见 [Attn-QAT 讲解](../paper-deep-dives/foundations/attn-qat.md)。
+9. [SageAttention3: Microscaling FP4 Attention for Inference and An Exploration of 8-Bit Training](https://arxiv.org/abs/2505.11594)\
+   FP4 attention inference 和 8-bit attention training 的重要对照，适合理解 Q/K smoothing、FP4 tensor core、attention probability quantization 与 Attn-QAT 的差异。
 
 !!! note "低比特训练的核心阅读线"
-    如果你要研究 FP8/FP4 训练，不要只按 bit 数排序。更好的阅读顺序是：先看 `FP8 Formats` 和 `Microscaling` 理解数制，再看 `FP8-LM / COAT / Scaling FP8` 理解 activation 与 optimizer 状态，再看 `MXFP8 / MXFP4 / NVFP4 / Quartet` 理解 4-bit 训练为什么必须同时改数制、scale、rounding、kernel 和稳定性评测。
+    如果你要研究 FP8/FP4 训练，不要只按 bit 数排序。更好的阅读顺序是：先看 `FP8 Formats` 和 `Microscaling` 理解数制，再看 `FP8-LM / COAT / Scaling FP8` 理解 activation 与 optimizer 状态，再看 `MXFP8 / MXFP4 / NVFP4 / Quartet` 理解 4-bit 训练为什么必须同时改数制、scale、rounding、kernel 和稳定性评测；如果目标是 low-bit attention，还要单独看 `SageAttention3` 和 `Attn-QAT`，因为 fused attention 的 backward 与 softmax 路径会引入普通 GEMM QAT 没有的约束。
 
 ### 6.5 量化运行时、ONNX 与可视化工具
 
@@ -407,7 +424,7 @@
 
 ## 7. MTP、投机解码与推理加速
 
-对应站内章节：[MTP 与投机解码](../training/mtp-and-speculative-decoding.md)、[缓存、路由与投机执行](../inference/caching-routing-and-speculative.md)。
+对应站内章节：[MTP 与投机解码](../training/mtp-and-speculative-decoding.md)、[缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)。
 
 ### 7.1 MTP 与多 token 预测
 
@@ -493,21 +510,35 @@
    更实用的高性能 attention kernel。
 3. [FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision](https://arxiv.org/abs/2407.08608)  
    面向 Hopper 和低精度的 attention 演进。
-4. [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889)  
-   长上下文 sequence parallel / ring attention 的重要参考。
-5. [Sequence Parallelism: Long Sequence Training from System Perspective](https://arxiv.org/abs/2105.13120)  
+4. [Sequence Parallelism: Long Sequence Training from System Perspective](https://arxiv.org/abs/2105.13120)\
    长序列训练并行化入口。
-6. [SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention](https://arxiv.org/abs/2509.24006) / [SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675)  
+5. [DeepSpeed Ulysses: System Optimizations for Enabling Training of Extreme Long Sequence Transformer Models](https://arxiv.org/abs/2309.14509)\
+   通过 head-sharded all-to-all 支持极长序列训练，是理解 context parallelism 和 head divisibility 约束的重要起点。
+6. [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889)\
+   长上下文 sequence parallel / ring attention 的重要参考，适合和 MagiAttention 中的 zero-redundant communication 对照。
+7. [USP: A Unified Sequence Parallelism Approach for Long Context Generative AI](https://arxiv.org/abs/2405.07719)\
+   结合 Ulysses 与 Ring 思路的统一 sequence parallelism 路线，适合理解混合 CP 策略。
+8. [LoongTrain: Efficient Training of Long-Sequence LLMs with Head-Context Parallelism](https://arxiv.org/abs/2406.18485)\
+   Head-context parallelism 代表工作，适合和 Ulysses、USP、MagiAttention 一起看长序列训练的并行边界。
+9. [FlexAttention: A Programming Model for Generating Optimized Attention Kernels](https://arxiv.org/abs/2412.05496)\
+   PyTorch 灵活 attention kernel 路线，适合理解“可表达复杂 mask”和“保持 kernel 性能”之间的工程张力。
+10. [FlashMask: Efficient and Rich Mask Extension of FlashAttention](https://arxiv.org/abs/2410.01359)\
+   面向 rich mask 支持的 FlashAttention 扩展，是 MagiAttention 相关 mask-flexible kernel 讨论的重要背景。
+11. [MagiAttention: A Distributed Attention Towards Linear Scalability for Ultra-Long Context, Heterogeneous Mask Training](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html)\
+   SandAI 的分布式 attention 系统博客，重点看 AttnSlice、FFA、dispatch solver、GroupCast/GroupReduce 和 multi-stage overlap；站内专题见 [MagiAttention 讲解](../paper-deep-dives/foundations/magiattention.md)。
+12. [Long-Context Attention Benchmark](https://sandai-org.github.io/MagiAttention/docs/main/blog/cp_benchmark.html)\
+   MagiAttention 官方 CP benchmark，提供 H100/B200、varlen causal、GQA、TFLOPs/s/GPU 和 distributed baselines 的对照设置。
+13. [SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention](https://arxiv.org/abs/2509.24006) / [SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675)\
    视频 DiT attention 加速路线，把 sparse exact attention、linear compensation、learnable routing 和 QAT 接到同一条工程链路；站内专题见 [SLA / SLA2 讲解](../paper-deep-dives/foundations/sla-sparse-linear-attention.md)。
-7. [Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)  
-   Selective SSM 和 hardware-aware scan 的核心论文；站内基础讲解见 [Mamba、状态空间模型与 Mamba-Transformer 架构](../foundations/mamba-and-hybrid-ssm-transformers.md)。
-8. [Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality](https://arxiv.org/abs/2405.21060)  
+14. [Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)\
+   Selective SSM 和 hardware-aware scan 的核心论文；站内基础讲解见 [Mamba 与混合 SSM 架构](../foundations/mamba-and-hybrid-ssm-transformers.md)。
+15. [Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality](https://arxiv.org/abs/2405.21060)\
    Mamba-2 和 state space duality 入口，适合理解 attention 与 SSM 的统一视角。
-9. [Jamba: A Hybrid Transformer-Mamba Language Model](https://arxiv.org/abs/2403.19887) / [Jamba-1.5](https://arxiv.org/abs/2408.12570)  
+16. [Jamba: A Hybrid Transformer-Mamba Language Model](https://arxiv.org/abs/2403.19887) / [Jamba-1.5](https://arxiv.org/abs/2408.12570)\
    混合 Transformer-Mamba-MoE 架构代表，重点看 layer ratio、MoE 和长上下文部署。
-10. [Nemotron-H: A Family of Accurate and Efficient Hybrid Mamba-Transformer Models](https://arxiv.org/abs/2504.03624)  
+17. [Nemotron-H: A Family of Accurate and Efficient Hybrid Mamba-Transformer Models](https://arxiv.org/abs/2504.03624)\
    NVIDIA 的 hybrid Mamba-Transformer family，重点看以推理成本为目标的架构替换、蒸馏压缩和 FP8 训练 recipe。
-11. [Mamba-3: Improved Sequence Modeling using State Space Principles](https://arxiv.org/abs/2603.15569)  
+18. [Mamba-3: Improved Sequence Modeling using State Space Principles](https://arxiv.org/abs/2603.15569)\
    2026 年的 SSM 改进工作，关注 state tracking、complex-valued state update 和 MIMO formulation。
 
 ### 8.3 MoE、路由与大规模稀疏训练
@@ -573,7 +604,9 @@
    高性能 Python-like GPU kernel 编程框架。
 4. [FlashAttention](https://arxiv.org/abs/2205.14135)  
    attention kernel 的必读系统论文。
-5. [DeepGEMM](https://github.com/deepseek-ai/DeepGEMM)  
+5. [FlashAttention-4 / CuTe implementation](https://github.com/Dao-AILab/flash-attention/tree/main/flash_attn/cute)\
+   FlashAttention 在 CuTeDSL / Blackwell 方向的实现入口，适合理解 MagiAttention `FFA_FA4` backend 的上游生态。
+6. [DeepGEMM](https://github.com/deepseek-ai/DeepGEMM)\
    DeepSeek 的高性能 GEMM kernel 库，包含 FP8、FP4、MoE grouped GEMM 等方向。
 
 ### 10.2 编译器、图优化与 Roofline
@@ -624,6 +657,10 @@
 3. [PyTorch FSDP](https://pytorch.org/docs/stable/fsdp.html)
 4. [NVIDIA Transformer Engine](https://github.com/NVIDIA/TransformerEngine)
 5. [FlashAttention](https://github.com/Dao-AILab/flash-attention)
+6. [MagiAttention](https://github.com/SandAI-org/MagiAttention)\
+   分布式 attention / context parallel backend，适合追踪 FFA、dispatch solver、native group collectives 和 Megatron/FSDP 集成。
+7. [DeepEP](https://github.com/deepseek-ai/DeepEP)\
+   Expert-parallel communication library，也适合作为 group communication、RDMA transfer de-duplication 和层次化通信优化的实现参考。
 
 ### 12.2 推理与量化
 
@@ -637,6 +674,8 @@
 8. [bitsandbytes](https://github.com/bitsandbytes-foundation/bitsandbytes)
 9. [ONNX Runtime](https://github.com/microsoft/onnxruntime)
 10. [Netron](https://github.com/lutzroeder/netron)
+11. [SageAttention](https://github.com/thu-ml/SageAttention)\
+   attention 低比特推理 kernel 入口，适合和 Attn-QAT 的 training-aware attention quantization 对照。
 
 ### 12.3 世界模型、机器人与具身
 

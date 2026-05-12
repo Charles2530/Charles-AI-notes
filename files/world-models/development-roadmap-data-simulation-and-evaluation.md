@@ -1,4 +1,4 @@
-# 世界模型开发路线：数据、几何、仿真与评测
+# 世界模型开发路线
 
 这页把面向机器人任务的世界模型开发路线整理成一条更完整的教程线：从相机和几何数据开始，到 3D encoder、VLA / diffusion policy、仿真环境、success checker，再到一个能服务真实任务的世界模型闭环。
 
@@ -18,32 +18,17 @@
     左侧是数据和真实世界来源，中间是重建、生成和模拟方式，右侧才是策略、评测和交互使用。开发时不要从“选一个模型”开始，而要先问：数据字段是否稳定、相机/pose 是否可复算、仿真和 success checker 是否能给模型提供可验证的闭环。
 
 !!! note "先把这页和总览区分开"
-    [世界模型总览](index.md) 讲方法谱系：RSSM、Dreamer、视频世界模型、WAM、数据引擎。本文更像项目路线图：数据字段怎么定，3D 重建 encoder 怎么接，仿真数据怎么生成，成功判定怎么写，最后怎样把模型测试闭环跑起来。
+    [世界模型路线图](index.md) 讲方法谱系：RSSM、Dreamer、视频世界模型、WAM、数据引擎。本文更像项目路线图：数据字段怎么定，3D 重建 encoder 怎么接，仿真数据怎么生成，成功判定怎么写，最后怎样把模型测试闭环跑起来。
 
-## 本页知识地图：这些主题如何串起来
+## 本页怎么读
 
-| 主题 | 本文位置 | 读的时候抓什么 |
-| --- | --- | --- |
-| 前置知识：相机标定、6D pose、MoGe-2、DUSt3R、AR / AE / Transformer | 四层地基、3D encoder、数据预处理 | 先把坐标、尺度、时序和注意力机制看成同一条工程地基 |
-| 小雨数据与焊缝字段 | 数据准备、小雨焊缝任务 | `cam_pos_list`、`seam_pose`、焊缝局部/全局坐标是任务能否运行的硬约束 |
-| 三类模型路线与复现清单 | 3D、2D/VLA、Diffusion 选型表 | 先判断模型服务几何、策略还是动作轨迹，不要只按模型热度排序 |
-| MapAnything / VGGT 与数据转换 | 3D 重建 encoder | 数据格式、去畸变、渲染监督、共视性和深度置信度比模型名更先决 |
-| RoboTwin / Isaac Sim / ManiSkill / XiaoYu | 仿真环境和数字孪生流水线 | 仿真是任务、资产、轨迹、渲染和判卷的组合系统 |
-| RoboTwin success checker 细则 | Success Checker | 自动评测不能只看最终状态，要记录过程风险和可被钻空子的规则 |
-| 模型测试与开发顺序 | 评测、建议开发顺序 | 离线 loss 只是早筛，最终要看动作条件闭环是否真的改善任务 |
+这页按项目落地顺序组织：先定数据契约和几何坐标，再选 3D / VLA / Diffusion 路线，然后接仿真环境、success checker 和模型测试闭环。读的时候不要只记模型名，重点看每一步交付什么可验证产物：字段是否稳定、pose 是否可复算、仿真是否能自动判卷、闭环评测是否真的能暴露失败。
 
 ## 1. 世界模型项目的四层地基
 
 这条开发路线有一个很强的工程信号：**世界模型不是先选一个大模型就开训，而是先把数据契约、几何坐标、仿真环境和评测口径定住。**
 
-可以把项目拆成四层：
-
-| 层级 | 要交付什么 | 常见失败 |
-| --- | --- | --- |
-| 数据契约 | 相机内外参、机器人状态、目标物体 / 焊缝、动作、轨迹、valid 标记 | 字段名不一致、pose 坐标系不明、缺少关键 GT |
-| 几何表征 | depth、point map、camera pose、object / seam 3D 表示 | 尺度漂移、遮挡区域不可见、相机标定错误 |
-| 动作条件模型 | 给定状态和候选动作，预测未来观测、状态或轨迹 | 只会视觉续写，不理解动作因果 |
-| 仿真与评测 | Isaac Sim / RoboTwin / ManiSkill 中自动生成数据并判定成功 | success checker 太粗，只看最终状态，漏掉过程风险 |
+项目可以拆成四层。第一层是数据契约，必须固定相机内外参、机器人状态、目标物体或焊缝、动作、轨迹和 valid 标记，否则字段名、pose 坐标系和 GT 缺失会反复污染训练。第二层是几何表征，用 depth、point map、camera pose、object / seam 3D 表示建立空间账本。第三层是动作条件模型，回答候选动作之后未来观测、状态或轨迹如何变化。第四层是仿真与评测，把 Isaac Sim、RoboTwin 或 ManiSkill 里的任务生成、轨迹执行和 success checker 接成闭环。
 
 一个最小闭环可以写成：
 
@@ -60,17 +45,7 @@
 
 ### 前置知识地图：先补齐这五块再谈大模型
 
-前置知识看起来像零散关键词，其实正好对应世界模型的五个底座：
-
-| 前置知识 | 在系统里解决什么 | 具体落点 |
-| --- | --- | --- |
-| 相机标定 | 像素、深度、相机位姿能否回到同一坐标系 | 内参、外参、畸变、分辨率、相机安装位姿 |
-| 6D pose | 物体、工件、末端执行器和焊缝是否有可比较的空间状态 | 平移 + 旋转、四元数归一化、local/global frame 转换 |
-| MoGe-2 / DUSt3R | 缺少真值深度或稠密几何时，如何补 3D 先验 | 单目/多视图深度、point map、相机相对位姿 |
-| AR / AE | 世界模型是顺序 rollout，还是把观测压到可重构 latent | 自回归未来预测、autoencoder 表征、latent dynamics |
-| Transformer / Attention | 多视图、多帧、多模态 token 如何互相对齐 | 图像 token、pose token、动作 token、cross-attention |
-
-这五块的作用不是“先学理论再开工”，而是给 debug 提供坐标轴：当模型预测错了，你能判断错在相机、pose、几何、时序建模，还是动作条件没有进入模型。
+前置知识看起来像零散关键词，其实正好对应世界模型的五个底座：相机标定负责把像素、深度和相机位姿放回同一坐标系；6D pose 负责让物体、工件、末端执行器和焊缝有可比较的空间状态；MoGe-2 / DUSt3R 负责在缺少真值深度时补 3D 先验；AR / AE 决定世界模型是在顺序 rollout，还是先把观测压到 latent；Transformer / Attention 则负责让多视图、多帧、多模态 token 对齐。它们的作用不是“先学理论再开工”，而是给 debug 提供坐标轴：当模型预测错了，你能判断错在相机、pose、几何、时序建模，还是动作条件没有进入模型。
 
 ## 2. 数据准备：先把 pose、相机和任务对象讲清楚
 
@@ -102,7 +77,7 @@
 
 | 路线 | 代表技术 | 输入重点 | 输出重点 | 适合什么任务 |
 | --- | --- | --- | --- | --- |
-| 3D 场景理解 | MapAnything、VGGT、DUSt3R / MoGe 系列 | 多视图图像、相机、深度、点云 | depth、camera、point map、3D state | 需要可见性、遮挡、尺度和几何可达性的任务 |
+| 3D 场景理解 | Depth Anything 3、MapAnything、VGGT、DUSt3R / MoGe 系列 | 多视图图像、相机、深度、点云 | depth、camera、ray map、point map、3D state | 需要可见性、遮挡、尺度和几何可达性的任务 |
 | 2D 场景理解 / VLA | π0、π0.5、OpenVLA、GR00T N1、Helix | 图像、语言、本体状态 | 动作 token、动作块、子任务 | 语言到动作、跨场景泛化、桌面操作 |
 | Diffusion policy | Diffusion Policy、RDT、DP3 | 视觉条件、机器人状态、噪声动作 | 连续动作序列 | 平滑动作、模仿学习、灵巧操作 |
 
@@ -110,16 +85,16 @@
 
 | 复现对象 | 属于哪条线 | 先验证什么 |
 | --- | --- | --- |
-| MapAnything、VGGT、VO-DP | 3D / 视觉几何 | 输入相机、depth、pose 后是否能稳定输出可用几何表示 |
+| Depth Anything 3、MapAnything、VGGT、VO-DP | 3D / 视觉几何 | 输入相机、depth、pose 后是否能稳定输出可用几何表示 |
 | π0、π0.5、OpenVLA、GR00T N1 | 2D / VLA policy | 语言、视觉、本体状态能否输出可执行动作块 |
 | Diffusion Policy、DP3、RDT | 动作扩散 | 连续动作序列是否平滑、可执行、能跨对象泛化 |
 | LIBERO、DROID、RoboTwin | 数据 / 评测 | 数据格式、任务定义和 success checker 是否能支持闭环比较 |
 
 ### 3D 路线：先让模型拥有空间账本
 
-3D 路线的价值在于：很多机器人任务不是“识别物体叫什么”，而是“从哪里看、从哪里伸手、是否被挡住、会不会碰”。MapAnything、VGGT 一类模型值得关注，正是因为它们能把相机、深度和场景几何拉回同一张账本。
+3D 路线的价值在于：很多机器人任务不是“识别物体叫什么”，而是“从哪里看、从哪里伸手、是否被挡住、会不会碰”。Depth Anything 3、MapAnything、VGGT 一类模型值得关注，正是因为它们能把相机、深度和场景几何拉回同一张账本。
 
-[MapAnything](https://arxiv.org/abs/2509.13414) 的目标是统一多种 3D 视觉任务：输入一张或多张图像，以及可选的内参、pose、depth 或局部重建，直接回归 metric 3D scene geometry 和 cameras。[VGGT](https://vgg-t.github.io/) 则把 camera parameters、point maps、depth maps、3D point tracks 放进一个 feed-forward Transformer 里，强调快速直接的几何推断。
+[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md) 从任意数量图像和可选 camera pose 中预测一致的 depth / ray，再恢复相机、点云和 3DGS。[MapAnything](https://arxiv.org/abs/2509.13414) 的目标是统一多种 3D 视觉任务：输入一张或多张图像，以及可选的内参、pose、depth 或局部重建，直接回归 metric 3D scene geometry 和 cameras。[VGGT](https://vgg-t.github.io/) 则把 camera parameters、point maps、depth maps、3D point tracks 放进一个 feed-forward Transformer 里，强调快速直接的几何推断。
 
 对机器人世界模型来说，这类 encoder 不一定直接输出动作，但它能提供：
 
@@ -349,6 +324,7 @@ RoboTwin 的评测规则很有价值，因为它提醒我们：很多 benchmark 
 ## 10. 参考资料
 
 - [MapAnything: Universal Feed-Forward Metric 3D Reconstruction](https://arxiv.org/abs/2509.13414)：3D encoder 和统一几何建模路线。
+- [Depth Anything 3: Recovering the Visual Space from Any Views](https://arxiv.org/abs/2511.10647)：从任意视角恢复一致 depth、ray、camera 和 3D geometry；站内专题见 [Depth Anything 3 讲解](../paper-deep-dives/embodied-ai/depth-anything-3.md)。
 - [VGGT: Visual Geometry Grounded Transformer](https://vgg-t.github.io/)：feed-forward 3D 属性预测。
 - [π0.5: a VLA with Open-World Generalization](https://www.pi.website/blog/pi05)：异构数据协同训练、高层子任务和 flow matching 动作专家。
 - [Isaac Sim 5.1 Container Installation](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html)：远程 headless / Docker 部署口径。

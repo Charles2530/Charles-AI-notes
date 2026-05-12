@@ -1,8 +1,8 @@
-# GPU Kernel、Batching 与内存系统
+# GPU Kernel、Batching 与显存
 
 推理优化落到 GPU 上时，很多抽象问题都会变成具体瓶颈：prefill 是否吃满 Tensor Core，decode 是否被 KV 访存拖住，batching 是否让 shape 变得更碎，量化收益是否被 dequant 和布局转换吞掉。理解 GPU kernel、batching 和内存系统，不是为了手写所有 CUDA，而是为了判断性能问题究竟来自模型、runtime、kernel 还是缓存生命周期。
 
-这页和 [推理服务系统](serving-systems.md)、[上下文压缩与 KV 层级](context-compression-kv-eviction-and-memory-hierarchies.md)、[服务态 Attention 与 KV Kernel](../operators/serving-attention-and-kv-kernels.md) 互补。服务系统页讲队列和资源治理，本页讲 GPU 热路径和内存行为。
+这页和 [推理服务系统](serving-systems.md)、[上下文压缩与 KV 层级](context-compression-kv-eviction-and-memory-hierarchies.md)、[推理 Attention 与 KV Kernel](../operators/serving-attention-and-kv-kernels.md) 互补。推理服务系统页讲队列和资源治理，本页讲 GPU 热路径和内存行为。
 
 !!! note "初学者先抓住"
 

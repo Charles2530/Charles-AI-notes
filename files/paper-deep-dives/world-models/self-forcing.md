@@ -4,7 +4,7 @@ paper_title: "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video 
 paper_topic: 世界模型
 ---
 
-# Self Forcing：自回归视频扩散的训练-推理分布对齐
+# Self Forcing：对齐自回归视频训练与推理
 
 !!! info "论文信息"
     - 论文：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`

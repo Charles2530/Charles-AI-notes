@@ -4,7 +4,7 @@ paper_title: "V-JEPA: Latent Video Prediction for Visual Representation Learning
 paper_topic: 世界模型
 ---
 
-# V-JEPA：Latent Video Prediction for Visual Representation Learning
+# V-JEPA：视频潜变量预测表征
 
 !!! info "论文信息"
     - 论文：`V-JEPA: Latent Video Prediction for Visual Representation Learning`

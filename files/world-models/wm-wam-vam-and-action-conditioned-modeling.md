@@ -1,4 +1,4 @@
-# WM、WAM、VAM 与动作条件世界建模
+# WM / WAM / VAM：动作条件建模
 
 近两年世界模型讨论里，很多论文都在谈未来预测、动作建模、视频生成、控制和仿真，但它们强调的对象并不完全相同。`WM / WAM / VAM` 不是社区唯一标准术语，却很适合做阅读地图。
 
@@ -155,10 +155,10 @@ VAM 的吸引力来自几个事实：
 
 建议按下面顺序读本专题：
 
-1. [世界模型总览](index.md)：先建立广义但面向决策的定义；
+1. [世界模型路线图](index.md)：先建立广义但面向决策的定义；
 2. [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)：理解经典 latent dynamics；
 3. [生成式模拟与视频世界模型](generative-simulation-and-video.md)：理解视频路线进入世界模型的原因；
 4. [规划即推断与潜在动作](planning-as-inference-and-latent-actions.md)：理解动作、目标和规划接口；
-5. [评测与失效模式](evaluation-and-failure-modes.md)：判断这些模型是否真的改善决策。
+5. [世界模型评测与失效模式](evaluation-and-failure-modes.md)：判断这些模型是否真的改善决策。
 
 WM、WAM、VAM 最适合作为阅读坐标系，而不是硬标签。真正重要的是模型学习了什么动态结构，这些结构如何进入动作决策，以及闭环收益是否足以覆盖训练和推理成本。

@@ -2,7 +2,7 @@
 
 基础预训练结束后，真正决定模型“像不像产品”的，往往是后训练：指令跟随、偏好对齐、工具使用、拒答边界、风格控制和领域适配。后训练的核心竞争力越来越不是单个算法名词，而是能否持续找到高价值样本、生成有效候选、用 judge 扩大评价吞吐、再把结果稳定回流到 SFT、偏好训练、reward model 和回归集。
 
-这页建议和 [偏好数据与对齐失效模式](preference-data-and-alignment-pitfalls.md)、[评测与消融方法学](evaluation-and-ablation-methodology.md)、[可观测性与在线评测](../inference/observability-and-online-evaluation.md) 一起读。它们分别覆盖偏好数据风险、实验方法学和线上回流。
+这页建议和 [偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md)、[可观测性与在线评测](../inference/observability-and-online-evaluation.md) 一起读。它们分别覆盖偏好数据风险、实验方法学和线上回流。
 
 !!! note "初学者先抓住"
 

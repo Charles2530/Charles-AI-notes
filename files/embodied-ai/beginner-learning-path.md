@@ -1,4 +1,4 @@
-# 具身智能从零学习路线
+# 具身智能从零路线
 
 这一页是具身智能章节的第一入口。它不从论文名开始，而是从一个更朴素的问题开始：
 
@@ -189,9 +189,9 @@ LingBot-World 和 Dreamer 都是世界模型，但用途不同：
 
 所以世界模型不等于“视频生成”。真正要问的是：它预测的未来有没有被用于决策、风险评估、训练或数据回流。
 
-## 7. 你的仿真 pipeline 应该放在哪里
+## 7. 仿真 pipeline 应该放在哪里
 
-你现在做的：
+项目中的资产与轨迹数据链可以抽象为：
 
 ```text
 3D 资产 -> 物理属性 -> 抓取轴 -> 场景 -> success checker -> 轨迹 GT
@@ -199,7 +199,7 @@ LingBot-World 和 Dreamer 都是世界模型，但用途不同：
 
 它是具身智能的数据底座。
 
-| 你的工作 | 支撑什么能力 |
+| 工作项 | 支撑什么能力 |
 | --- | --- |
 | 资产和纹理 | 让视觉模型看到不同物体和尺度 |
 | 物理属性 | 让仿真接触、质量和摩擦更接近真实 |
@@ -210,7 +210,7 @@ LingBot-World 和 Dreamer 都是世界模型，但用途不同：
 
 这条 pipeline 不是“传统方法”，也不是和 π0.5 / DreamZero 脱节。前沿 VLA 和 WAM 都需要可靠数据。没有资产、状态、动作和成功判定，模型训练出来也很难解释。
 
-如果你想知道 Isaac Sim、RoboTwin、cuRobo 在这条 pipeline 里分别干什么，读 [Isaac Sim 与 RoboTwin：仿真和数据生成工具链](isaacsim-and-robotwin.md)。那一页把仿真世界、任务组织、轨迹规划和自动判定拆开解释。
+如果需要区分 Isaac Sim、RoboTwin、cuRobo 在这条 pipeline 里分别承担什么，读 [Isaac Sim 与 RoboTwin 仿真数据链](isaacsim-and-robotwin.md)。那一页把仿真世界、任务组织、轨迹规划和自动判定拆开解释。
 
 ## 8. 一个任务贯穿所有概念
 
@@ -227,7 +227,7 @@ LingBot-World 和 Dreamer 都是世界模型，但用途不同：
 回流: 如果失败，记录是识别错、尺寸错、抓取错、规划错还是判定错
 ```
 
-这就是具身智能的完整闭环。你可以用 [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md) 把这条链详细走一遍。
+这就是具身智能的完整闭环。你可以用 [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) 把这条链详细走一遍。
 
 如果你对“机器人怎么知道物体有多远、多大、在 3D 空间哪里”还不清楚，先读 [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)。那一页用图解释单目、双目、RGB-D、深度图、点云、腕部相机和固定相机。
 
@@ -238,9 +238,9 @@ LingBot-World 和 Dreamer 都是世界模型，但用途不同：
 1. 本页：先建立最小概念框架。
 2. [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)：先弄清单目、双目、RGB-D 和机器人相机长什么样。
 3. [Isaac Sim 与 RoboTwin](isaacsim-and-robotwin.md)：理解仿真、任务组织、轨迹规划和数据生成工具链。
-4. [VLA、WAM 与世界模型系统地图](vla-wam-world-model-system-map.md)：把 π0.5、DreamZero、LingBot-World 放到同一张图里。
-5. [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md)：用具体任务把概念串起来。
-6. [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md)：理解你的项目 pipeline 每一步在做什么。
+4. [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md)：把 π0.5、DreamZero、LingBot-World 放到同一张图里。
+5. [一个任务跑通具身闭环](closed-loop-task-walkthrough.md)：用具体任务把概念串起来。
+6. [资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md)：理解项目 pipeline 每一步在做什么。
 7. [规划、控制与安全](planning-control-and-safety.md)：理解为什么模型输出动作后还要接控制和 safety filter。
 8. [π0.5](../paper-deep-dives/embodied-ai/pi05.md)：理解 VLA 如何做开放世界长任务。
 9. [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)：理解 WAM 如何把未来视频和动作绑在一起。
@@ -256,6 +256,6 @@ LingBot-World 和 Dreamer 都是世界模型，但用途不同：
 4. 为什么 success checker 要比大规模生成轨迹更早写？
 5. 为什么 action chunk 不是完整 trajectory？
 6. 为什么模型输出动作后仍要经过 planner、controller 和 safety filter？
-7. 你的资产/轨迹 pipeline 能给 VLA、WAM 和传统 planner 分别提供什么？
+7. 资产/轨迹 pipeline 能给 VLA、WAM 和传统 planner 分别提供什么？
 
 如果这七个问题都能答清楚，具身智能这部分的主线就基本建立起来了。

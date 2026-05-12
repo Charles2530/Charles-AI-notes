@@ -1,4 +1,4 @@
-# 资产、感知、抓取与轨迹数据管线
+# 资产到轨迹：感知、抓取与数据管线
 
 这一页把一个仿真机器人数据集项目拆成具身智能知识点。核心问题不是“生成一批 3D 模型”这么简单，而是把资产、物理属性、视觉观测、抓取标注、任务脚本和专家轨迹接成一条可复用的数据生产线。
 
@@ -99,7 +99,7 @@ z \approx \frac{fB}{d}
 !!! note "多视图生成 3D 和双目视觉的区别"
     双目视觉是几何测量问题：两台真实相机、同一时刻、已知相机相对位姿，用视差算深度。多视图生成 3D 更像资产生产问题：用多张视角图让 3D 生成模型补全形状和纹理。前者偏在线感知，后者偏离线造资产。二者都用“多张图”，但可靠性和用途不同。
 
-在你的流程里，`RGB 图像 -> 背景消除 -> 文字消除 -> 多视角生成 -> 图生 3D` 属于资产生产；真正部署机器人时，`相机观测 -> 物体检测/分割 -> 6D pose 或点云 -> 抓取/规划` 才是在线感知。
+在这类流程里，`RGB 图像 -> 背景消除 -> 文字消除 -> 多视角生成 -> 图生 3D` 属于资产生产；真正部署机器人时，`相机观测 -> 物体检测/分割 -> 6D pose 或点云 -> 抓取/规划` 才是在线感知。
 
 如果你对单目、双目、RGB-D、腕部相机、固定相机和点云还不熟，先读 [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)。那一页有图解，专门解释这些传感器在机器人上长什么样、为什么双目能估深度、为什么单目有尺度歧义。
 
@@ -319,12 +319,12 @@ for task in tasks:
 
 | 继续读 | 你会补上什么 |
 | --- | --- |
-| [VLA、WAM 与世界模型系统地图](vla-wam-world-model-system-map.md) | π0.5、DreamZero、LingBot-World 和这条资产/轨迹 pipeline 在同一套系统里如何分工 |
-| [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 用尺寸排序和容器匹配任务，把资产、抓取、轨迹、在线执行和 success checker 串成完整例子 |
+| [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) | π0.5、DreamZero、LingBot-World 和这条资产/轨迹 pipeline 在同一套系统里如何分工 |
+| [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 用尺寸排序和容器匹配任务，把资产、抓取、轨迹、在线执行和 success checker 串成完整例子 |
 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md) | 单目、双目、RGB-D、点云和相机安装方式如何影响感知和抓取 |
 | [Isaac Sim 与 RoboTwin](isaacsim-and-robotwin.md) | Isaac Sim、RoboTwin、cuRobo 和 success checker 在数据生成工具链里如何分工 |
 | [规划、控制与安全](planning-control-and-safety.md) | 轨迹、MPC、低层控制、安全约束为什么不能被 VLA 替代 |
-| [Sim2Real 与数据引擎](sim2real-and-data-engines.md) | 物理参数、随机化、失败回流和真实部署之间的关系 |
-| [任务谱系与 Benchmark](task-taxonomy-and-benchmarks.md) | clean/random、尺寸任务、拒绝任务应该怎样组织成评测集 |
+| [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) | 物理参数、随机化、失败回流和真实部署之间的关系 |
+| [具身任务谱系与评测](task-taxonomy-and-benchmarks.md) | clean/random、尺寸任务、拒绝任务应该怎样组织成评测集 |
 | [VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md) | 动作 token、连续控制、关节空间和末端位姿如何进入模型 |
 | [VLA 数据与策略学习](../vla/data-and-policy-learning.md) | 轨迹 GT 如何变成行为克隆或策略学习数据 |

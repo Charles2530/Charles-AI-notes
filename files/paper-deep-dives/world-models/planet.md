@@ -4,7 +4,7 @@ paper_title: Learning Latent Dynamics for Planning from Pixels
 paper_topic: 世界模型
 ---
 
-# PlaNet：Learning Latent Dynamics for Planning from Pixels
+# PlaNet：像素规划的潜变量动力学
 
 !!! info "论文信息"
     - 论文：`Learning Latent Dynamics for Planning from Pixels`

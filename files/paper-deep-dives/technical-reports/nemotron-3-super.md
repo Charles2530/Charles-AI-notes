@@ -4,7 +4,7 @@ paper_title: "Nemotron 3 Super: Open, Efficient Mixture-of-Experts Hybrid Mamba-
 paper_topic: 技术报告
 ---
 
-# Nemotron 3 Super：Hybrid Mamba-MoE、LatentMoE、MTP 与异步多环境 RL
+# Nemotron 3 Super：Mamba-MoE 与异步多环境 RL
 
 !!! info "报告信息"
     - 技术报告：`Nemotron 3 Super: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Model for Agentic Reasoning`
@@ -12,9 +12,9 @@ paper_topic: 技术报告
     - 链接：[NVIDIA Research PDF](https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Super-Technical-Report.pdf)
     - 模型与数据集合：[Hugging Face: NVIDIA Nemotron v3](https://huggingface.co/collections/nvidia/nvidia-nemotron-v3)
     - 代码与训练配方：[NVIDIA-NeMo/Nemotron](https://github.com/NVIDIA-NeMo/Nemotron)
-    - 关键词：Hybrid Mamba-Transformer、LatentMoE、MTP、NVFP4 pretraining、1M context、SFT、asynchronous GRPO、NeMo Gym、NeMo RL、FP8/NVFP4 PTQ
+    - 关键词：Hybrid Mamba-Transformer、LatentMoE、MTP、NVFP4、1M context、asynchronous GRPO、FP8/NVFP4 PTQ
 
-Nemotron 3 Super 这份报告最值得抓住三条主线：**创新的 MoE 架构、创新的 MTP 方式、创新的强化学习范式**。
+Nemotron 3 Super 最值得抓住三条主线：**MoE 架构、MTP 方式、强化学习范式**。
 
 | 主线 | 报告里的具体做法 | 解决的问题 |
 | --- | --- | --- |
@@ -22,16 +22,14 @@ Nemotron 3 Super 这份报告最值得抓住三条主线：**创新的 MoE 架�
 | 创新的 MTP 方式 | 两层 shared-weight MTP head；训练时跨 offset 共享参数，推理时递归做 autoregressive drafting | 避免独立 MTP head 在长 draft 下的 train-test mismatch，提高 speculative decoding 接受率 |
 | 创新的 RL 范式 | SFT 后做多环境 RLVR、SWE-RL、RLHF、MTP healing；异步 GRPO、masked importance ratio、in-flight weight updates | 避免单任务 RL 互相拉扯，让数学、代码、工具、终端、SWE、长上下文等能力同步提升 |
 
-报告日期是 `2026-04-03`。它主讲的是 `Nemotron 3 Super 120B-A12B`，也就是 120B 总参数、约 12B active 的 Super 版本。官方 Hugging Face 集合同时放出了 Nano / Super / GenRM 等模型：其中 Super 有 BF16、FP8、NVFP4 和 Base BF16 版本；Nano 30B-A3B 也有 BF16、FP8、NVFP4 版本。
+报告日期是 `2026-04-03`。它主讲 `Nemotron 3 Super 120B-A12B`，即 120B 总参数、约 12B active 的 Super 版本；官方同时放出 BF16、FP8、NVFP4、Base BF16、Nano 和 GenRM。
 
 ![Nemotron 3 Super benchmark and throughput](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-1-benchmark-throughput.png){ width="920" }
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 1。原图比较 Nemotron 3 Super、GPT-OSS-120B 和 Qwen3.5-122B 在 IFBench、HMMT、SWE-Bench、HLE、Terminal Bench、Tau Bench、RULER 1M 与 8k/64k 生成吞吐上的表现。</small>
 
 !!! note "Figure 1 怎么读"
-    这张图的核心不是“Nemotron 3 Super 每一项都最高”。它真正强调的是：在接近 GPT-OSS-120B / Qwen3.5-122B 的能力区间里，Nemotron 3 Super 的推理吞吐明显更高。报告口径下，在 `8k` 输入、`64k` 输出设置中，Super 相比 GPT-OSS-120B 和 Qwen3.5-122B 分别达到最高 `2.2x` 和 `7.5x` 吞吐提升。
-
-    左侧 accuracy 里，Super 在 IFBench、HMMT Feb25、Terminal Bench、Tau Bench、RULER 1M 等任务上非常强；SWE-Bench、HLE 这类任务仍落后于 Qwen3.5-122B，但明显优于 GPT-OSS-120B。右侧 throughput 才是这篇报告的系统设计落点：Mamba-heavy 主干、LatentMoE、MTP 和 NVFP4 量化最终都服务于长上下文和长输出场景的实际 tokens/s。
+    这张图不是说 Super 每项都最高，而是说它在接近 GPT-OSS-120B / Qwen3.5-122B 的能力区间里，把长上下文和长输出吞吐做得更高。报告口径下，在 `8k` 输入、`64k` 输出设置中，Super 相比 GPT-OSS-120B 和 Qwen3.5-122B 分别达到最高 `2.2x` 和 `7.5x` 吞吐提升。
 
 ## 论文位置
 
@@ -44,36 +42,11 @@ Nemotron 3 Super 可以放在 DeepSeek-V3、Qwen3、Kimi K2 和 DeepSeek-V4 这�
 | Kimi K2 | 1T sparse MoE、MuonClip、agentic data / RL | 重点是 agentic non-thinking 模型和 Muon 稳定训练 |
 | Nemotron 3 Super | Hybrid Mamba-MoE、LatentMoE、NVFP4、MTP、异步多环境 RL | 把长上下文吞吐、MoE 通信/带宽、低精度训练和 agent 后训练放到同一个系统里 |
 
-它不是只做一个更大的 MoE。报告里的关键设计是把**每 token 计算、长序列状态、expert 通信、speculative decoding 和 RL rollout 成本**一起考虑：
-
-```text
-Mamba-heavy hybrid backbone
-  -> 长上下文生成时少存 KV cache
-LatentMoE
-  -> 在 latent space 做 expert routing / compute，降低 expert 权重读取和 all-to-all
-Shared-weight MTP
-  -> 主模型内置 draft head，提升 speculative decoding 接受长度
-NVFP4 pretraining + FP8/NVFP4 PTQ
-  -> 训练和部署都围绕 Blackwell / Hopper 低精度路径设计
-Asynchronous multi-environment RL
-  -> 数学、代码、工具、终端、SWE、长上下文等能力同步后训练
-```
+它不是只做一个更大的 MoE，而是把每 token 计算、长序列状态、expert 通信、speculative decoding、低精度路径和 RL rollout 成本一起优化。
 
 ## 模型家族
 
-报告公开的 Super checkpoint 和配套数据如下：
-
-| Item | Release |
-| --- | --- |
-| Nemotron 3 Super 120B-A12B NVFP4 | post-trained and NVFP4 quantized model |
-| Nemotron 3 Super 120B-A12B FP8 | post-trained and FP8 quantized model |
-| Nemotron 3 Super 120B-A12B BF16 | post-trained model |
-| Nemotron 3 Super 120B-A12B Base BF16 | base model |
-| Qwen3-Nemotron-235B-A22B-GenRM-2603 | GenRM used for RLHF |
-| Nemotron-Pretraining-Specialized-v1.1 | synthetic datasets for code concepts, algorithms, formal logic, economics, MCQ |
-| Nemotron-Super-Post-Training-Data | RL environments and SFT datasets for agentic capabilities |
-
-官方 Hugging Face `NVIDIA Nemotron v3` 集合还包括 Nano 30B-A3B 的 BF16、FP8、NVFP4，以及 Nano Omni / 4B 等变体。本文重点仍按报告主线解析 Super 120B-A12B。
+报告公开了 Super 120B-A12B 的 NVFP4、FP8、BF16、Base BF16 版本，也公开了 GenRM、pretraining specialized data 和 Super post-training data。官方集合还包括 Nano 30B-A3B、Nano Omni / 4B 等变体；本文只按报告主线解析 Super 120B-A12B。
 
 ## 总体架构
 
@@ -160,28 +133,22 @@ Nemotron 3 Super 的处理是：**训练时让多个 MTP heads 共享参数，�
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 4。原图展示 SPEED-Bench 上 draft length = 7 时，不同 draft token index 的 acceptance rate。</small>
 
-报告 Table 2 的 average acceptance length 如下，保留英文原格式：
+报告 Table 2 的 average acceptance length 里，最能代表差异的几行如下：
 
 | Category | DSR1 | Qwen3 Next | Nemotron3 Super |
 | --- | ---: | ---: | ---: |
 | Coding | 2.99 | **4.32** | 3.78 |
-| Humanities | 2.67 | 3.07 | **3.26** |
 | Math | 2.98 | **3.89** | 3.73 |
 | Multilingual | 2.83 | 3.97 | **4.05** |
-| QA | 2.63 | 3.09 | **3.16** |
 | RAG | 2.79 | 3.53 | **3.78** |
 | Reasoning | 2.80 | 3.47 | **3.59** |
-| Roleplay | 2.19 | 2.17 | **2.82** |
-| STEM | 2.79 | **3.37** | 3.30 |
-| Summarization | 2.59 | 3.06 | **3.48** |
-| Writing | 2.41 | 2.69 | **2.99** |
 | Average | 2.70 | 3.33 | **3.45** |
 
 ![MTP throughput frontier](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-5-mtp-throughput.png){ width="560" }
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 5。原图展示 NVFP4 checkpoint 在 TRT-LLM、TP=1、B300 GPU 上，MTP off、MTP D=1、MTP D=3 的 total throughput 与 median user throughput Pareto frontier。</small>
 
-这部分最值得记住的是：MTP 同时是训练目标和推理接口。训练时它给模型更密集的未来 token 信号；推理时它变成内置 draft model，不需要额外训练一个小模型。Super 的创新点在于 shared-weight MTP 把递归 drafting 的分布偏移问题纳入训练设计，而不是只在推理侧调 decoding 参数。
+MTP 同时是训练目标和推理接口：训练时给模型更密集的未来 token 信号，推理时变成内置 draft model。Super 的重点是 shared-weight MTP，把递归 drafting 的分布偏移纳入训练设计。
 
 ## NVFP4 预训练
 
@@ -210,28 +177,18 @@ Nemotron 3 Super 是报告声称的 Nemotron 3 系列中首个使用 NVFP4 预�
 | micro-block scale | E4M3 |
 | second-level scale | FP32 global scale |
 
-这部分最有价值的是报告没有只说“NVFP4 很快”，而是认真分析了低精度训练里的 underflow 和零梯度现象。
-
-![Channel magnitude patterns](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-6-channel-magnitude.png){ width="560" }
-
-<small>图源：`Nemotron 3 Super Technical Report`，Figure 6。原图展示 expert layer 的 FC1/FC2 weight channel magnitude pattern 随训练推进出现低范数通道。</small>
-
-报告观察到：到预训练结束，zero-valued weight gradient elements 约占总参数 `7%`，并且和 expert layer 中 FC1 output channels / FC2 input channels 的低范数 pattern 相关。作者认为 NVFP4 会让 BF16/MXFP8 中仍可表达的小梯度更容易 underflow 成 true zero，但这并不直接等同于训练失败。
+这部分最有价值的是报告没有只说“NVFP4 很快”，而是分析了 underflow 和 zero-valued gradients：到预训练结束，zero-valued weight gradient elements 约占总参数 `7%`，并且和 routed expert 的 FC1/FC2 低范数通道相关。作者认为 NVFP4 会让 BF16/MXFP8 中仍可表达的小梯度更容易 underflow 成 true zero，但这并不直接等同于训练失败。
 
 ![Zero-valued gradients](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-7-zero-gradients.png){ width="760" }
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 7。原图比较 Nemotron 3 Nano 的 BF16 与 NVFP4 recipe 下 zero-valued weight gradient elements 的增长。</small>
-
-![Origin of zero element gradients](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-8-zero-gradient-origin.png){ width="860" }
-
-<small>图源：`Nemotron 3 Super Technical Report`，Figure 8。原图追踪 routed expert layers 中 FC1/FC2 的 zero gradients 与 dgrad/fprop/wgrad underflow 来源。</small>
 
 工程结论是两层：
 
 1. NVFP4 的确会更早、更明显地产生 zero-valued gradients，尤其在 routed expert 的某些通道上；
 2. 但把 19T 后模型切到 MXFP8 虽然改善 loss trajectory，却没有带来持续下游 accuracy 提升，所以最终 Super 仍按 NVFP4 recipe 跑完整 25T token horizon。
 
-这点很重要。低精度训练不是只看 loss 是否更平滑，还要看最终任务指标是否真正变好。报告的结论是：MXFP8 healing 没有兑现成下游收益。
+低精度训练不能只看 loss 是否更平滑，还要看最终任务指标是否真正变好。报告的结论是：MXFP8 healing 没有兑现成下游收益。
 
 ## 预训练数据与超参
 
@@ -246,49 +203,38 @@ Nemotron 3 Super 预训练总量是 `25T` text tokens，分两阶段：
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 10。原图展示 Phase 1 与 Phase 2 的 pre-training data mixture。</small>
 
-报告新增或强调的 specialized synthetic data 包括：
+报告新增或强调的 specialized synthetic data 可以概括为：
 
 | Dataset | Construction Detail |
 | --- | --- |
-| Synthetic Code Concepts | 从 HumanEval 抽出 91 个高层编程概念；GPT-OSS-20B 生成约 14M problems；GPT-OSS-120B 生成 solutions；清洗后约 15M problems |
-| Synthetic Unconditional Algorithmic | Qwen3-235B-A22B Base 与 GPT-OSS-120B 生成算法题；约 0.2B tokens；对 HumanEval、MBPP、CRUXEval、LiveCodeBench 做去污染 |
-| Synthetic Economics | Qwen3-235B-A22B-Thinking-2507 生成微观、宏观、计量经济学 MCQ 与详细解答 |
-| Synthetic Formal Logic | 自然语言、谓词/命题逻辑、真值表等任务；引入随机 persona、letters 和 connective |
+| Synthetic Code Concepts | 91 个 HumanEval 高层编程概念；约 14M problems；清洗后约 15M problems |
+| Synthetic Unconditional Algorithmic | Qwen3-235B-A22B Base + GPT-OSS-120B 生成算法题；约 0.2B tokens；做 benchmark 去污染 |
+| Synthetic Economics / Formal Logic | 覆盖经济学 MCQ、自然语言逻辑、谓词/命题逻辑、真值表等任务 |
 | Synthetic Multiple Choice | 从 MMLU auxiliary training set 扩展；DeepSeek-V3 解题与 majority voting；约 3.5M samples / 1.6B tokens |
 
 核心预训练超参如下：
 
 | Setup | Value |
 | --- | --- |
-| LR schedule | Warmup-Stable-Decay |
-| Total horizon | 25T tokens |
-| Warmup | 200B tokens |
-| Peak LR | `4.5e-4` |
-| Decay | final 5T tokens, minus-sqrt decay |
-| Minimum LR | `4.5e-6` |
-| Optimizer | AdamW |
-| Weight decay | 0.1 |
-| Betas | `beta1=0.9`, `beta2=0.95` |
+| LR schedule | Warmup-Stable-Decay；200B warmup；final 5T minus-sqrt decay |
+| LR range | peak `4.5e-4` -> minimum `4.5e-6` |
+| Optimizer | AdamW；weight decay 0.1；`beta1=0.9`, `beta2=0.95` |
 | Sequence length | 8,192 |
-| Batch size | 3,072 sequences |
-| Tokens per batch | about 25.17M |
-| MoE routing | 512 experts, top-22 |
-| Router | sigmoid router score + expert biasing |
-| Load balancing | auxiliary-loss-free load balancing update rate `1e-3` + standard load balancing loss coefficient `1e-4` |
+| Batch | 3,072 sequences；about 25.17M tokens per batch |
+| MoE routing | 512 experts, top-22；sigmoid router score + expert biasing |
+| Load balancing | auxiliary-loss-free update rate `1e-3` + load balancing loss coefficient `1e-4` |
 | MTP loss scale | 0.3 |
 | Precision | BF16 + NVFP4 |
 
 ### Checkpoint merging
 
-报告还把 pretraining 中的 checkpoint merging 写得很实用。WSD 的 stable phase 中，单个 checkpoint 的 benchmark 可能噪声较大；他们用滑动窗口对近邻 checkpoint 做 weighted averaging，作为更便宜的质量 readout。
+WSD stable phase 中，单个 checkpoint 的 benchmark 可能噪声较大；报告用滑动窗口对近邻 checkpoint 做 weighted averaging，作为更便宜的质量 readout。
 
 ![Checkpoint merge evaluation](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-11-checkpoint-merge.png){ width="760" }
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 11。原图比较 trained checkpoints 与 best offline checkpoint merge 在 25T pretraining 中的 12 benchmark average accuracy。</small>
 
-报告给出的经验是：在 stable LR phase，best merge 比对应 trained checkpoint 平均高 `2-4` 分；到最后 5T LR decay phase，实际 decay checkpoint 逐渐追平。最终 base model checkpoint 本身是一个 `500B` merge。
-
-这对大模型训练很有工程价值：checkpoint merge 不是为了替代最终 decay，而是为了在中间阶段更便宜地估计质量，减少为评估而额外跑 decay 的成本。报告估计类似流程可节省约 `4T` tokens 的 compute readout 成本，约占总 pretraining FLOP 预算的 `16%`。
+经验是：stable LR phase 中，best merge 比对应 trained checkpoint 平均高 `2-4` 分；最后 5T LR decay 后，实际 decay checkpoint 逐渐追平。最终 base model checkpoint 本身是一个 `500B` merge。报告估计该流程可节省约 `4T` tokens 的 compute readout 成本，约占总 pretraining FLOP 预算的 `16%`。
 
 ### Long-context extension
 
@@ -306,7 +252,7 @@ Nemotron 3 Super 预训练总量是 `25T` text tokens，分两阶段：
 | Stage 2 | alternating 1M and 4K sequences for 17B tokens |
 | Data blend | 20% long-context document QA, 80% downscaled Phase 2 data |
 
-这里的细节解释了为什么报告里 RULER 1M 能成为主打指标。模型不是只靠位置外推，而是在 1M context 上做了 continuous pretraining，并通过后续 1M/4K 交替训练缓解数学类 benchmark 的轻微回退。
+这解释了为什么 RULER 1M 能成为主打指标：模型不是只靠位置外推，而是在 1M context 上做 continuous pretraining，并用 1M/4K 交替训练缓解数学 benchmark 的轻微回退。
 
 ## Base Model 结果
 
@@ -333,7 +279,7 @@ Nemotron 3 Super 预训练总量是 `25T` text tokens，分两阶段：
 
 Base 阶段最能说明架构和预训练本身的价值：Super 不是只靠后训练刷 agent 分，而是在 MMLU-Pro、GPQA、MATH Level 5、AIME、RULER 等 base evaluations 上已经拉开明显差距。
 
-## 后训练总览
+## 后大模型训练路线图
 
 Nemotron 3 Super 的后训练分四段：SFT、RLVR、SWE-RL、RLHF，最后补一个 MTP healing。
 
@@ -359,18 +305,16 @@ Nemotron 3 Super 的后训练分四段：SFT、RLVR、SWE-RL、RLHF，最后补�
 
 ## SFT：两阶段损失和 agentic 数据扩容
 
-SFT 采用两阶段设计，原因是单阶段 SFT 会明显伤害 long-input-short-output 场景。
+SFT 采用两阶段设计，核心是处理长输出 reasoning 与 long-input-short-output 任务之间的 loss 权重冲突。
 
 | SFT Stage | Loss Normalization | Setup |
 | --- | --- | --- |
 | Stage 1 | token-level global average | 256K sequence length packing, global batch size 64, constant LR `1e-5`, 30K warmup samples |
 | Stage 2 | sample-level average | 512K sequence length packing, includes long context data up to 512K, global batch size 32, constant LR `1e-5` |
 
-Stage 1 用所有输出 token 的平均 loss，长输出样本天然权重大；Stage 2 先对每个 conversation 按自身输出 token 数归一化，再对 conversation 平均，从而避免超长输出支配训练。这个设计非常实用：reasoning 数据通常输出长，long-input-short-output 任务输出短，单纯 token average 很容易让短输出任务被压没。
+Stage 1 让长输出样本获得更高权重，适合吸收 reasoning、代码和 agent 轨迹；Stage 2 先按每个 conversation 自身输出 token 数归一化，再对 conversation 平均，避免短输出任务被超长输出淹没。MTP 在 SFT 中继续训练：两层 shared-parameter MTP，per-token auxiliary loss，scale 仍是 `0.3`。
 
-MTP 在 SFT 中继续训练：两层 shared-parameter MTP，per-token auxiliary loss，scale 仍是 `0.3`。
-
-### Agentic CLI 数据
+### Agentic 与工具数据
 
 报告把 Agentic Command Line Interface 数据管线单独画出来，说明他们不是只做普通对话 SFT，而是在模拟 Codex/OpenCode/Qwen Code CLI 这类多步工具环境。
 
@@ -378,47 +322,17 @@ MTP 在 SFT 中继续训练：两层 shared-parameter MTP，per-token auxiliary 
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 13。原图展示 Agentic Command Line Interface Dataset Construction & Training Pipeline。</small>
 
-关键数据构造如下：
+关键数据构造可以合并成下面几类：
 
-| Component | Detail |
-| --- | --- |
-| Seed task generation | NeMo Data Designer 生成约 20K queries；GPT-OSS-120B 做 LLM judge filtering |
-| Synthesis tasks | 约 15K direct solution synthesis tasks，并附带 AGENTS.md-style specs |
-| SWE tasks | 约 3K challenging SWE tasks with existing repository and git hash |
-| Web dev tasks | 约 10K Node.js-only web development tasks |
-| Interaction recording | Qwen3-Coder-480B、MiniMax M2.5 等 agentic LLMs 在 Codex、OpenCode、Qwen Code CLI、Stirrup 中执行 |
-| Post-processing | normalize to OpenAI message format with tool definitions |
-| Target capabilities | agent skills, bash-only, multi-step planning, parallel tools, clarification, multi-turn interaction |
+| Data block | Scale / construction | Training intent |
+| --- | --- | --- |
+| Agentic CLI | 20K seed；15K synthesis；3K SWE；10K Node.js web dev | 训练 CLI 规划、文件操作、工具调用、失败恢复 |
+| Long Context | 128K/256K/512K 样本；多条 traces + semantic majority voting | 补 long-input-short-output 和跨文档推理 |
+| Financial Reasoning | 从 565 个 SecQue seed 扩展到 S&P500 公司和 2019-2024 年；最终 366,243 Q&A pairs | 强化结构化金融问答与证据定位 |
+| CUDA | 100K synthetic CUDA samples，含 kernel generation、repair、optimization、Nsight Compute log | 覆盖工程型代码优化任务 |
+| Search / Terminal / Tool Use | conversational tool-use、general-purpose tool-calling、Terminal-Task-Gen | 让模型学习工具 schema、环境反馈和多步轨迹 |
 
-这部分对应用户常见的真实 agent 场景：不是“写一个函数”，而是“在一个 CLI 环境里规划、调用工具、读写文件、处理失败、必要时并行工具调用”。
-
-### 长上下文、金融、CUDA、工具调用
-
-SFT 的数据扩展还包括多类高价值任务：
-
-| Data | Detail |
-| --- | --- |
-| Long Context | 从 books、papers、financial reports、code repositories 等长文档构造 128K/256K/512K 样本；问题要求跨文档或跨章节、多跳，通常 4-7 个 retrieval / reasoning steps；每题生成 8 条独立 reasoning traces，再做 semantic majority voting |
-| Financial Reasoning | 从 565 个 SecQue expert-authored seed questions 扩展到 S&P500 公司和 2019-2024 年；GenSelect 采样 5 个候选答案，由 Qwen3-235B-A22B judge 选择；最终 366,243 financial Q&A pairs |
-| CUDA | 100K synthetic CUDA samples，覆盖 kernel generation、repair、optimization；包括 PyTorch reference、CUDA C++ kernel、error message、Nsight Compute log、optimized kernel |
-| Search | synthetic search-agent SFT，多轮 conversation，包含 supporting URLs |
-| Terminal Use | Terminal-Task-Gen dual-stream methodology，共 84,864 samples |
-
-工具调用数据有两条管线。第一条是 specialized conversational tool-use：
-
-![Conversational tool-use SFT pipeline](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-14-conversation-tool-sft.png){ width="860" }
-
-<small>图源：`Nemotron 3 Super Technical Report`，Figure 14。原图展示 specialized conversational tool-use SFT data 的六阶段 synthetic data generation pipeline。</small>
-
-它分为 domain generation、policy/tools、scenario generation、trajectory collection、verification、SFT selection。报告写到该管线产生 `279,116` conversations，覆盖 `838` domains，相比 Nemotron 3 Nano 的 `15,588` conversations / `5` domains 大幅扩容。
-
-第二条是 general-purpose tool-calling：
-
-![General-purpose tool-calling pipeline](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-15-general-tool-calling.png){ width="560" }
-
-<small>图源：`Nemotron 3 Super Technical Report`，Figure 15。原图展示 general-purpose tool-calling data pipeline，包括 seed & sampling、query generation & gate check、multi-agent simulation 和 judges/verifiers。</small>
-
-它从 ToolEyes、API-Bank、UltraTools、xLAM、自写工具等构造 `144` toolsets，再通过 user/assistant/tool 三方模拟和 turn-level / trajectory-level judge 生成数据。报告写到最终使用 DeepSeek-v3.2 和 GLM-4.7 创建了 `1.5M` diverse tool-calling trajectories。
+工具调用数据分两条管线：specialized conversational tool-use 产生 `279,116` conversations、覆盖 `838` domains；general-purpose tool-calling 从 ToolEyes、API-Bank、UltraTools、xLAM 和自写工具构造 `144` toolsets，并生成约 `1.5M` diverse trajectories。
 
 SFT blend 的整体比例如下：
 
@@ -434,26 +348,22 @@ SFT blend 的整体比例如下：
 | Long Context | 8.0% |
 | Misc. | 2.0% |
 
-这个比例解释了为什么报告一直强调 agentic。SFT blend 里 Agent 占比最高，不是后训练末尾附带补一点工具调用。
+Agent 占比最高，说明工具与 CLI 不是后训练末尾的附加项，而是 Super 的主要能力面之一。
 
 ## 强化学习：多环境同步训练
 
-Nemotron 3 Super 的 RL 不是先把数学训好、再把代码训好、再把工具训好。报告明确说，Stage 1 使用 unified RLVR，同时在多类环境上训练，以避免 single-environment training 对其他 benchmark 造成严重 regression。
+Nemotron 3 Super 的 RL 不是逐个任务串行强化，而是 Stage 1 使用 unified RLVR 同步训练多类环境，避免 single-environment training 造成能力回退。
 
 RLVR 环境覆盖：
 
 | RLVR Domain | Detail |
 | --- | --- |
-| Math | competitive math, with and without Python execution tool; formal proof verification |
-| Code | competition-style code; single-step patch generation for SWE preparation |
-| STEM | Nemotron 3 Nano STEM + harder scientific problems |
-| Instruction Following | multi-challenge dataset with rubric rewards |
-| Safety | reduce over-refusals and improve jailbreak robustness; hard attacks from iterative PAIR-style pipeline |
-| Long Context | long-context environment from Nemotron 3 Nano |
-| Agentic Tool Use | conversational tool use and terminal use |
-| Reasoning Gym | diverse reasoning tasks |
+| Math / STEM / Reasoning | competitive math, Python tool use, formal proof, harder STEM and reasoning gym |
+| Code / SWE prep | competition-style code and single-step patch generation |
+| Instruction / Safety | rubric rewards, over-refusal reduction, jailbreak robustness |
+| Long Context / Agentic Tool Use | long-context environment, conversational tool use, terminal use |
 
-低努力推理也在 RL 中优化。报告做法是把一小部分 prompt 转为 low-effort mode，reward 同时考虑 correctness 和 generated tokens 数。初期 Math、STEM QA、competitive coding 约占所有 RL prompts 的 `2%`，后来缩到 Math 和 STEM QA 的 `1%`。这不是简单要求“回答短一点”，而是把长度成本纳入 reward，让模型学习准确率与成本的折中。
+低努力推理也在 RL 中优化：一小部分 prompt 被转为 low-effort mode，reward 同时考虑 correctness 和 generated tokens 数。初期 Math、STEM QA、competitive coding 约占所有 RL prompts 的 `2%`，后来缩到 Math 和 STEM QA 的 `1%`。这相当于把长度成本显式放进训练目标。
 
 ### 异步 GRPO
 
@@ -462,32 +372,27 @@ RLVR 环境覆盖：
 | Algorithm Detail | Nemotron 3 Super Setup |
 | --- | --- |
 | Training / inference | decoupled across separate GPU devices |
-| Rollout storage | inference workers continuously generate trajectories into rollout buffer |
-| Weight update | updated weights are pushed to inference workers once available |
-| In-flight updates | a single trajectory may contain tokens from different model versions |
-| KV cache | not recomputed after in-flight weight update |
-| Policy lag | inference workers at most one step behind latest model |
-| Off-policy stabilization | mask the importance sampling ratio from training and inference logprobs |
-| RLVR sampling | 256 prompts per step, 16 responses per prompt |
-| Batch size | 4096 |
-| Gradient update | one update per rollout |
-| Max generation length | starts at 49K, later increases to 64K |
+| Rollout | workers continuously fill rollout buffer; updated weights pushed once available |
+| In-flight updates | one trajectory may contain tokens from different model versions; KV cache not recomputed |
+| Policy lag / off-policy fix | workers at most one step behind; masked importance sampling ratio |
+| RLVR batch | 256 prompts x 16 responses = 4096 samples |
+| Generation | one gradient update per rollout; max generation length from 49K to 64K |
 
-这套范式的重点不是“异步更快”这么简单。异步 rollout 会带来 policy lag 和 off-policy 问题；报告用 masked importance sampling ratio 控制训练/rollout 策略不一致的影响，同时限制 worker 至多落后一步，避免数据太旧。
+异步 rollout 会带来 policy lag 和 off-policy 问题；报告用 masked importance sampling ratio 控制训练/rollout 策略不一致，同时限制 worker 至多落后一步，避免 rollout 数据太旧。
 
 ### SWE-RL 和 PivotRL
 
-Stage 2 单独做 SWE-RL，因为软件工程 rollout 很慢、上下文长，和短 horizon 任务一起混训会形成吞吐瓶颈。每个 rollout 会启动 Apptainer container，加载目标仓库，运行 OpenHands agent loop 生成 patch，再跑 ground-truth tests 给 binary reward。为了工具多样性，他们在 OpenHands 里实现 OpenCode 和 Codex agent classes，匹配 Claude Code / Codex CLI 的工具格式。
+Stage 2 单独做 SWE-RL，因为软件工程 rollout 慢、上下文长，和短 horizon 任务混训会拖慢吞吐。每个 rollout 会启动 Apptainer container，加载目标仓库，运行 OpenHands agent loop 生成 patch，再跑 ground-truth tests 给 binary reward。为了工具多样性，报告还在 OpenHands 中实现 OpenCode 和 Codex agent classes，匹配 Claude Code / Codex CLI 的工具格式。
 
-报告还引入 PivotRL 用于 agentic domains，包括 Agentic Programming、Search、Terminal Use、Conversational Tool Use。PivotRL 复用 offline SFT expert trajectories，不对整条长轨迹做昂贵在线 RL，而是在策略对下一步 action 有不确定性的 assistant turns 上做 RL，并用 domain-appropriate reward 允许“相似动作”获得 credit。这是在 agentic RL 成本和泛化之间折中的关键设计。
+PivotRL 用于 Agentic Programming、Search、Terminal Use、Conversational Tool Use。它复用 offline SFT expert trajectories，不对整条长轨迹做昂贵在线 RL，而是在策略对下一步 action 有不确定性的 assistant turns 上做 RL，并用 domain-appropriate reward 给相似动作 credit。这是控制 agentic RL 成本的关键设计。
 
 ### RLHF
 
-RLHF 阶段使用 GenRM。报告写到 GenRM 以 `Qwen3-235B-A22B-Thinking-2507` 初始化，并使用 Helpsteer 3、商业友好的 lmarena-140k 子集和近期 human preference data。不同于 Nemotron 3 Nano，Super 在 multi-environment RL stage 中也使用 GenRM，并在最后额外做一个 RLHF-only stage，以改善 instruction following、robustness 和整体交互质量。
+RLHF 使用 GenRM。报告写到 GenRM 以 `Qwen3-235B-A22B-Thinking-2507` 初始化，并使用 Helpsteer 3、商业友好的 lmarena-140k 子集和近期 human preference data。Super 在 multi-environment RL stage 中也使用 GenRM，并在最后额外做 RLHF-only stage，以改善 instruction following、robustness 和交互质量。
 
 ## Post-trained 结果
 
-报告 Table 5 的 post-trained evaluation 覆盖 general knowledge、reasoning、agentic、instruction following、long context 和 multilingual。下面摘录关键行：
+报告 Table 5 覆盖 general knowledge、reasoning、agentic、instruction following、long context 和 multilingual。下面保留最能说明模型取舍的关键行：
 
 | Benchmark | N-3-Super | Qwen3.5-122B-A10B | GPT-OSS-120B |
 | --- | ---: | ---: | ---: |
@@ -496,28 +401,15 @@ RLHF 阶段使用 GenRM。报告写到 GenRM 以 `Qwen3-235B-A22B-Thinking-2507`
 | HMMT Feb25 (no tools) | 93.67 | 91.40 | 90.00 |
 | HMMT Feb25 (with tools) | 94.73 | 89.55 | - |
 | GPQA (no tools) | 79.23 | 86.60 | 80.10 |
-| GPQA (with tools) | 82.70 | - | 80.09 |
 | LiveCodeBench (v5 2024-07 -> 2024-12) | 81.19 | 78.93 | 88.00 |
-| SciCode (subtask) | 42.05 | 42.00 | 39.00 |
 | HLE (no tools) | 18.26 | 25.30 | 14.90 |
-| HLE (with tools) | 22.82 | - | 19.0 |
 | Terminal Bench (hard subset) | 25.78 | 26.80 | 24.00 |
-| Terminal Bench Core 2.0 | 31.00 | 37.50 | 18.70 |
 | SWE-Bench (OpenHands) | 60.47 | 66.40 | 41.9 |
-| SWE-Bench Multilingual (OpenHands) | 45.78 | - | 30.80 |
-| TauBench V2 Airline | 56.25 | 66.0 | 49.2 |
-| TauBench V2 Retail | 62.83 | 62.6 | 67.80 |
-| TauBench V2 Telecom | 64.36 | 95.00 | 66.00 |
 | TauBench V2 Average | 61.15 | 74.53 | 61.0 |
-| IFBench (prompt) | 72.56 | 73.77 | 68.32 |
-| AA-LCR | 58.31 | 66.90 | 51.00 |
-| RULER256k | 96.83 | 96.74 | 52.30 |
-| RULER512k | 95.22 | 95.95 | 46.70 |
 | RULER1M | 91.64 | 91.33 | 22.30 |
 | MMLU-ProX (avg over langs) | 79.36 | 85.06 | 76.59 |
-| WMT24++ (en -> xx) | 86.67 | 87.84 | 88.89 |
 
-这张表说明 Super 的优势不是平均碾压 Qwen3.5-122B。更准确的结论是：
+这张表说明 Super 的优势不是平均碾压 Qwen3.5-122B，而是几个能力点叠加：
 
 1. **长上下文强**：RULER 256K/512K/1M 基本与 Qwen3.5 持平，远超 GPT-OSS-120B；
 2. **工具和终端能力有竞争力**：Terminal Bench hard、TauBench average 与 GPT-OSS 接近或略优，但 Telecom 项明显落后 Qwen3.5；
@@ -527,33 +419,17 @@ RLHF 阶段使用 GenRM。报告写到 GenRM 以 `Qwen3-235B-A22B-Thinking-2507`
 
 ## 推理量化
 
-报告最后一部分讲 FP8 和 NVFP4 PTQ。这里要区分三件事：
+报告最后一部分讲 FP8 和 NVFP4 PTQ。要区分三件事：
 
 1. **NVFP4 pretraining**：训练阶段大量 GEMM 用 NVFP4；
 2. **FP8 checkpoint**：面向 Hopper 的 W8A8 部署版本；
 3. **NVFP4 checkpoint**：面向 Blackwell 的 W4A4 部署版本。
 
-### FP8 checkpoint
+### FP8 与 NVFP4 checkpoint
 
-FP8 PTQ 使用 `256` 个 post-training SFT samples，context length `65536`。量化设置如下：
+FP8 PTQ 使用 `256` 个 post-training SFT samples，context length `65536`。核心选择是：Embedding、attention projection、attention BMM2、MoE latent projection、1D conv 和 output 保持 BF16；KV cache + attention BMM1、MoE GEMM、Mamba GEMM 用 FP8；Mamba SSM cache 用 FP16。
 
-| Configuration | FP8 Checkpoint | BF16 Baseline |
-| --- | --- | --- |
-| Embedding | BF16 | BF16 |
-| Attention GEMM (QKV and Out Projection) | BF16 | BF16 |
-| KV Cache + Attention BMM1 | FP8 | FP8 |
-| Attention BMM2 | BF16 | BF16 |
-| MoE GEMM (Sparse Experts and Shared Experts) | FP8 | BF16 |
-| MoE Latent Projection GEMM | BF16 | BF16 |
-| Router | FP32 | FP32 |
-| Mamba GEMM | FP8 | BF16 |
-| Mamba SSM Cache | FP16 | FP32 |
-| Mamba 1D Conv | BF16 | BF16 |
-| Output Layers | BF16 | BF16 |
-
-### NVFP4 checkpoint
-
-NVFP4 PTQ 的目标是 Blackwell 上的 W4A4。报告先指出 naive NVFP4 PTQ 会有 accuracy loss，因此最终 recipe 组合了三件事：
+NVFP4 PTQ 面向 Blackwell W4A4。naive NVFP4 PTQ 会有 accuracy loss，所以最终 recipe 组合三件事：
 
 | Component | Role |
 | --- | --- |
@@ -561,25 +437,7 @@ NVFP4 PTQ 的目标是 Blackwell 上的 W4A4。报告先指出 naive NVFP4 PTQ �
 | dynamic per-block max-based activation scaling | activation quantization must be runtime efficient |
 | selective promotion through Model-Optimizer AutoQuantize | sensitive layers promoted to FP8 or BF16 |
 
-最终 NVFP4 precision assignment 的核心是：
-
-| Configuration | AutoQuantize Searched? | NVFP4 Checkpoint | BF16 Baseline |
-| --- | --- | --- | --- |
-| Embedding | No | BF16 | BF16 |
-| Attention QKV Projection GEMM | Yes | BF16 | BF16 |
-| Attention Output Projection GEMM | Yes | FP8 / BF16 | BF16 |
-| KV Cache + Attention BMM1 | No | FP8 | FP8 |
-| Attention BMM2 | No | BF16 | BF16 |
-| Sparse Expert (Routed) GEMM | Yes | NVFP4 | BF16 |
-| Shared Expert GEMM | Yes | NVFP4/FP8/BF16 | BF16 |
-| MoE Latent Projection GEMM | Yes | FP8 / BF16 | BF16 |
-| Router | No | FP32 | FP32 |
-| Mamba Projection GEMM | Yes | FP8 / BF16 | BF16 |
-| Mamba 1D Conv | No | BF16 | BF16 |
-| Mamba SSM Cache | No | FP16 | FP32 |
-| Output Layers | No | BF16 | BF16 |
-
-AutoQuantize 在 `{NVFP4, FP8, BF16}` 里搜索 per-operator assignment，约束 effective precision budget 为 `4.75 bits`。报告写到，完整 mixed-precision PTQ 在单个 `8 x B200` node 上少于 2 小时完成，校准使用 `512` 个 SFT samples，sequence length `4096`，最终 NVFP4 模型达到 BF16 baseline 的 `99.8%` median accuracy。
+AutoQuantize 在 `{NVFP4, FP8, BF16}` 中搜索 per-operator assignment，约束 effective precision budget 为 `4.75 bits`。最终保留 BF16 的主要是 embedding、attention QKV、attention BMM2、Mamba 1D conv、output；保留 FP32 的是 router；可搜索 promotion 的主要是 attention output、shared experts、MoE latent projection 和 Mamba projection；routed sparse expert GEMM 主要落在 NVFP4。完整 mixed-precision PTQ 在单个 `8 x B200` node 上少于 2 小时完成，校准使用 `512` 个 SFT samples、sequence length `4096`，最终 NVFP4 模型达到 BF16 baseline 的 `99.8%` median accuracy。
 
 Table 8 关键行如下：
 
@@ -588,17 +446,11 @@ Table 8 关键行如下：
 | MMLU-Pro | 83.73 | 83.63 | 83.33 |
 | HMMT Feb25 (with tools) | 94.73 | 94.38 | 95.36 |
 | GPQA (no tools) | 79.23 | 79.36 | 79.42 |
-| LiveCodeBench (v5 2024-07 -> 2024-12) | 81.19 | 80.99 | 80.56 |
-| Terminal Bench (hard subset) | 25.78 | 26.04 | 24.48 |
+| LiveCodeBench | 81.19 | 80.99 | 80.56 |
+| Terminal Bench hard | 25.78 | 26.04 | 24.48 |
 | SWE-Bench (OpenCode) | 60.47 | - | 59.90 |
-| TauBench V2 Average | 61.15 | 61.07 | 60.46 |
-| IFBench (prompt) | 72.58 | 72.32 | 73.30 |
-| AA-LCR | 58.31 | 57.69 | 58.06 |
-| RULER128k | 97.04 | 97.17 | 96.89 |
-| RULER256k | 96.83 | 96.84 | 96.81 |
-| RULER512k | 95.22 | 95.15 | 95.21 |
 | RULER1M | 91.64 | 91.43 | 91.60 |
-| MMLU-ProX (avg over languages) | 79.35 | 79.21 | 79.37 |
+| MMLU-ProX avg | 79.35 | 79.21 | 79.37 |
 
 这张表支撑了报告的关键部署主张：NVFP4 不是只压小模型，而是在 120B-A12B Super 上也能基本保持 BF16 精度，同时给 Blackwell 推理吞吐留出空间。
 
@@ -606,14 +458,13 @@ Table 8 关键行如下：
 
 Mamba 的 SSM cache 默认 FP32。报告尝试把 SSM cache 存成 FP16，以减少 memory-bound decoding 的 DRAM read，但发现 naive FP16 cache 会显著增加 verbosity：
 
-| Weight and Activation Precision | SSM cache recipe | livecodebench Accuracy | scicode Accuracy | livecodebench Verbosity Increase | scicode Verbosity Increase |
-| --- | --- | ---: | ---: | ---: | ---: |
-| W16A16 | FP32 | 72.91 | 40.90 | 0.00% | 0.00% |
-| W16A16 | FP16 | 73.24 | 42.01 | 36.95% | 2.19% |
-| W16A16 | FP16+SR (Philox 5) | 72.00 | 41.94 | -1.73% | -2.72% |
-| W8A8 | FP16 | 73.13 | 40.98 | 40.27% | 2.70% |
-| W8A8 | INT16+block128 | 72.22 | 41.46 | 2.90% | -4.30% |
-| W8A8 | FP16+SR (Philox 5) | 72.63 | 41.86 | 1.79% | 1.08% |
+| Precision | SSM cache recipe | Key observation |
+| --- | --- | --- |
+| W16A16 | FP32 | baseline verbosity |
+| W16A16 | FP16 | livecodebench verbosity +36.95% |
+| W16A16 | FP16+SR (Philox 5) | verbosity drops back near baseline |
+| W8A8 | FP16 | livecodebench verbosity +40.27% |
+| W8A8 | FP16+SR (Philox 5) | verbosity increase only +1.79% / +1.08% |
 
 原因是 Mamba decoding 是 recurrent：cache quantization error 不会只影响当前 step，而会沿 recurrent transition 传播并累积。普通 FP16 cast 的 RTNE rounding 会产生系统性 bias；stochastic rounding 在期望上无偏，能把系统性漂移变成零均值噪声。最终报告选择 `FP16+SR (Philox 5)`，因为它不需要额外 block scale，Blackwell 有 stochastic rounding 的专用 PTX 指令，也支持 Philox PRNG。
 
@@ -621,20 +472,18 @@ Mamba 的 SSM cache 默认 FP32。报告尝试把 SSM cache 存成 FP16，以减
 
 这篇报告最值得复用的不是某个单点 trick，而是系统协同：
 
-1. **长上下文效率不能只靠 attention 优化**：Nemotron 3 Super 选择 Mamba-heavy 主干，让大多数层在生成阶段只维护固定状态，再用少量 attention anchor 保留全局交互。
-2. **MoE 的“每 token FLOPs”不是唯一成本**：低延迟时 expert weight bandwidth 重要，吞吐场景 all-to-all 重要。LatentMoE 把 routed expert compute 和 communication 都压进 latent space，直接瞄准真实 serving bottleneck。
-3. **MTP 要为递归 draft 训练**：如果 MTP head 只学固定 offset，长 draft 递归复用会遇到分布偏移。shared-weight MTP 是把推理时的递归使用方式提前暴露给训练。
-4. **低精度训练要看 underflow 机制，不只看最终 loss**：报告分析 zero-valued gradients、FC1/FC2 channel magnitude pattern、dgrad/fprop underflow，并用下游指标判断 MXFP8 healing 是否有真实收益。
-5. **Agent RL 最怕能力跷跷板**：多环境同步 RLVR 是为了避免 single-environment training 损伤其他任务；异步 GRPO 则是为了让 rollout 和 training 都能在千卡规模下持续工作。
-6. **量化不只是 GEMM dtype**：Mamba SSM cache 量化会改变生成长度和 verbosity，这类 recurrent state 的误差累积要单独处理。
+| Theme | Takeaway |
+| --- | --- |
+| Long context | Mamba-heavy 主干让大多数层在生成阶段只维护固定状态，少量 attention anchor 保留全局交互 |
+| MoE serving | LatentMoE 瞄准 expert weight bandwidth 和 all-to-all，而不只看每 token FLOPs |
+| MTP | shared-weight MTP 把递归 drafting 的分布偏移提前暴露给训练 |
+| Low precision | NVFP4 要看 underflow、zero gradients 和下游指标，不只看 loss |
+| Agent RL | 多环境 RLVR 避免能力跷跷板，异步 GRPO 保证 rollout/training 吞吐 |
+| Quantization | Mamba SSM cache 量化会改变 verbosity，recurrent state 误差要单独处理 |
 
 ## 边界与风险
 
-1. **Benchmark 口径仍是作者报告口径**：报告用 Nemo Evaluator SDK、Nemo Skills 和专用 harness，很多 agentic benchmark 对 prompt、tool harness、容器环境和 judge 都敏感。
-2. **吞吐结论绑定硬件与 runtime**：Figure 1 的吞吐在 B200 上用 vLLM 和 TRT-LLM 取最佳框架；MTP throughput 图是 B300 / TRT-LLM / TP=1 / SPEED-Bench Throughput-1k split。
-3. **SWE 能力仍低于 Qwen3.5-122B**：Super 的 SWE-Bench 已显著超过 GPT-OSS-120B，但仍落后 Qwen3.5-122B。
-4. **LatentMoE 复现门槛高**：它不是纯模型结构改动，还依赖 expert parallel、all-to-all、kernel、低精度、路由和 serving runtime 配合。
-5. **异步 RL 的工程复杂度很高**：in-flight weight updates、policy lag、masked importance ratio、Ray/SLURM/vLLM/NeMo Gym/Megatron 协同都不是小团队可轻易复刻的部分。
+几个边界要记住：benchmark 绑定 Nemo Evaluator / harness / prompt / judge；吞吐结论绑定 B200/B300、vLLM/TRT-LLM 和具体 TP 设置；SWE-Bench 仍落后 Qwen3.5-122B；LatentMoE 与异步 RL 都依赖并行策略、kernel、runtime 和训练平台配合，复现门槛很高。
 
 ## 读法总结
 
@@ -646,4 +495,4 @@ Nemotron 3 Super 的核心不是“120B MoE 又多强”，而是一个完整工
 同时让训练和推理都落到 NVFP4 / FP8 / Blackwell / Hopper 的现实硬件路径上。
 ```
 
-如果只读 benchmark，会漏掉它最有价值的部分。真正值得学习的是：Mamba 解决长序列状态，LatentMoE 解决 expert bandwidth / communication，MTP 解决 speculative decoding，NVFP4 解决训练吞吐，异步多环境 RL 解决 agent 能力协同，PTQ 和 SSM cache recipe 解决部署落地。这个组合才是 Nemotron 3 Super 的技术主张。
+真正值得学习的是组合拳：Mamba 解决长序列状态，LatentMoE 解决 expert bandwidth / communication，MTP 解决 speculative decoding，NVFP4 解决训练吞吐，异步多环境 RL 解决 agent 能力协同，PTQ 和 SSM cache recipe 解决部署落地。

@@ -4,7 +4,7 @@ paper_title: "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffu
 paper_topic: 扩散模型
 ---
 
-# Diffusion Forcing：把 next-token 预测和全序列扩散接起来
+# Diffusion Forcing：next-token 与全序列扩散
 
 !!! info "论文信息"
     - 论文：`Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion`
@@ -34,7 +34,7 @@ Diffusion Forcing 把两个轴交叉起来，让每个时间 token 拥有独立�
 | Full-sequence diffusion | strong continuous generation, can use guidance on a whole sequence | fixed horizon, usually non-causal, cannot naturally reuse online feedback |
 | Diffusion Forcing | variable horizon + sequence-level guidance + causal uncertainty | current paper implementation is still small-scale RNN, not internet-scale video generation |
 
-这篇论文值得放进扩散专题，是因为它把扩散从“整段样本一起去噪”的默认形态，推到“序列上每个 token 可以处于不同不确定性”的形态。它和 [视频与多模态扩散](../../diffusion/video-and-multimodal-diffusion.md)、[采样与推理](../../diffusion/inference.md)、[条件控制与 Guidance](../../diffusion/guidance-and-conditioning.md) 都有直接接口。
+这篇论文值得放进扩散专题，是因为它把扩散从“整段样本一起去噪”的默认形态，推到“序列上每个 token 可以处于不同不确定性”的形态。它和 [视频与多模态扩散](../../diffusion/video-and-multimodal-diffusion.md)、[采样与推理加速](../../diffusion/inference.md)、[条件控制与 Guidance](../../diffusion/guidance-and-conditioning.md) 都有直接接口。
 
 ![Diffusion Forcing capabilities 原图](https://www.boyuan.space/diffusion-forcing/static/images/abilities.png){ width="920" }
 

@@ -4,7 +4,7 @@ paper_title: "Video Prediction Policy: A Generalist Robot Policy with Predictive
 paper_topic: 具身智能 / VLA
 ---
 
-# Video Prediction Policy：用预测视觉表征训练通用机器人策略
+# Video Prediction Policy：预测视觉表征训练机器人策略
 
 !!! info "论文信息"
     - 论文：`Video Prediction Policy: A Generalist Robot Policy with Predictive Visual Representations`

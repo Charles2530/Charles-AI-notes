@@ -1,4 +1,4 @@
-# Isaac Sim 与 RoboTwin：仿真和数据生成工具链
+# Isaac Sim 与 RoboTwin 仿真数据链
 
 这一页解释 Isaac Sim 和 RoboTwin 在具身智能项目里分别负责什么。先给结论：
 
@@ -68,7 +68,7 @@ RoboTwin 可以理解为一套面向机器人操作任务的 benchmark / pipelin
 | 问题 | Isaac Sim | RoboTwin 风格 pipeline |
 | --- | --- | --- |
 | 世界在哪里跑 | 提供仿真环境、物理和渲染 | 调用或适配仿真环境 |
-| 任务有哪些 | 不内置你的业务任务 | 定义任务族、对象角色和成功条件 |
+| 任务有哪些 | 不内置具体业务任务 | 定义任务族、对象角色和成功条件 |
 | 物体怎么来 | 加载 USD/OBJ/材质/碰撞体 | 规定资产目录、尺寸、类别和标注格式 |
 | 轨迹怎么来 | 可以执行和验证轨迹 | 组织专家轨迹生成、失败重试和数据保存 |
 | 相机图像怎么来 | 渲染 RGB、Depth、Segmentation | 决定哪些相机视角进入训练/评测 |
@@ -100,7 +100,7 @@ Isaac Sim / simulator 给出当前状态和障碍物
 
 ## 6. 一个最小数据生成闭环
 
-可以把你的项目早期目标写成这个循环：
+项目早期目标可以写成这个循环：
 
 ```python
 for task in task_suite:
@@ -141,7 +141,7 @@ for task in task_suite:
 | Camera prim | 仿真相机 | 内参、外参、分辨率、视野会影响训练分布 |
 | Action / controller | 下发给机器人执行的控制命令 | 位置控制、速度控制、力矩控制语义不同 |
 
-如果你在 Isaac Sim 里“看起来对了但轨迹失败”，优先检查 scale、origin、collision、质量、摩擦、关节限位和坐标系。
+如果 Isaac Sim 里“看起来对了但轨迹失败”，优先检查 scale、origin、collision、质量、摩擦、关节限位和坐标系。
 
 ## 8. RoboTwin 式资产标注为什么重要
 
@@ -188,9 +188,9 @@ RoboTwin 1.0 的生成式数字孪生流程很适合放到这里：它把“从�
 
 如果一个 pipeline 先在 SAPIEN 中生成专家轨迹，再在 Isaac Sim 中对齐和验证，可以理解为：前者偏快速任务生成，后者偏高保真视觉和系统验证。实际项目里怎么组合，取决于速度、视觉质量、物理稳定性和工程生态。
 
-## 11. 你的项目可以怎么落地
+## 11. 项目可以怎么落地
 
-结合你当前目标，建议把工作拆成四个层级：
+具身数据与仿真任务落地时，可以把工作拆成四个层级：
 
 ### 第一层：资产和标注
 
@@ -267,7 +267,7 @@ read state
 | 继续读 | 你会补上什么 |
 | --- | --- |
 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md) | Isaac Sim 中 RGB、Depth、相机外参为什么影响训练分布 |
-| [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md) | 资产、抓取、轨迹和 success checker 的细节 |
-| [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 一个具体任务如何从状态定义走到轨迹和判定 |
-| [Sim2Real 与数据引擎](sim2real-and-data-engines.md) | 仿真数据怎样走向真实系统，以及失败如何回流 |
-| [VLA、WAM 与世界模型系统地图](vla-wam-world-model-system-map.md) | 这些仿真数据如何服务 π0.5 式 VLA 和 DreamZero 式 WAM |
+| [资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) | 资产、抓取、轨迹和 success checker 的细节 |
+| [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 一个具体任务如何从状态定义走到轨迹和判定 |
+| [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) | 仿真数据怎样走向真实系统，以及失败如何回流 |
+| [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) | 这些仿真数据如何服务 π0.5 式 VLA 和 DreamZero 式 WAM |

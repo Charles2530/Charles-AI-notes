@@ -1,9 +1,9 @@
-# VLM/VLA 总览：从视觉语言表征到动作世界模型
+# VLM/VLA 路线图：从看懂到行动
 
 本章沿着一条通往世界模型的主线展开：先让模型把视觉和语言对齐，再把视觉压成可用状态，随后把状态接到动作策略，最后自然过渡到动作条件的未来预测。
 
 !!! tip "基础知识入口"
-    这条线会反复用到 `Embedding`、`Cross-Attention`、视频 token、动作 token、行为克隆、动作块和闭环评测。第一次读可以先看 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)、[概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md) 和 [优化与训练基础](../foundations/optimization-and-training-basics.md)。
+    这条线会反复用到 `Embedding`、`Cross-Attention`、视频 token、动作 token、行为克隆、动作块和闭环评测。第一次读可以先看 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)、[概率与潜变量模型](../foundations/probability-latent-variables-and-generative-models.md) 和 [优化与训练入门](../foundations/optimization-and-training-basics.md)。
 
 ## 1. 主线问题
 
@@ -44,10 +44,10 @@ p_\theta(o_{t+1:t+H}, r, d \mid o_{\le t}, a_{t:t+H-1}, l)
 
 | 专题来源 | 多模态 / VLA 层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
-| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md) | 端到端 omni model 让 audio 不再只是 ASR/TTS 外挂；语音身份、声音一致性、实时安全分类器也变成模型系统接口 | [视觉表征、连接器与时序状态](architecture-and-training.md)、[推理服务系统](../inference/serving-systems.md) |
-| [Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | Thinker-Talker、AuT、ARIA、RVQ/MTP/Code2Wav 说明全模态 agent 常需要把理解、规划、语音生成和流式输出拆成协同模块 | [视觉表征、连接器与时序状态](architecture-and-training.md)、[闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md) |
+| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md) | 端到端 omni model 让 audio 不再只是 ASR/TTS 外挂；语音身份、声音一致性、实时安全分类器也变成模型系统接口 | [VLM 架构：视觉表征、连接器与记忆](architecture-and-training.md)、[推理服务系统](../inference/serving-systems.md) |
+| [Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | Thinker-Talker、AuT、ARIA、RVQ/MTP/Code2Wav 说明全模态 agent 常需要把理解、规划、语音生成和流式输出拆成协同模块 | [VLM 架构：视觉表征、连接器与记忆](architecture-and-training.md)、[VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md) |
 | [π0.5](../paper-deep-dives/embodied-ai/pi05.md) | heterogeneous co-training、FAST 动作离散化、flow matching action expert 和 high-level subtask prediction 说明开放世界 VLA 要同时吃 web 语义、机器人数据和任务分解信号 | [数据与策略学习](../vla/data-and-policy-learning.md)、[动作表示与控制接口](../vla/action-representation-and-interfaces.md) |
-| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作不只是 policy 输出，也可以作为未来视频和世界状态的条件变量；这把 VLA 推向 WAM/VAM | [动作分块与层级策略](../vla/action-chunking-hierarchical-policies-and-latent-skills.md)、[世界模型总览](../world-models/index.md) |
+| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作不只是 policy 输出，也可以作为未来视频和世界状态的条件变量；这把 VLA 推向 WAM/VAM | [动作分块与层级策略](../vla/action-chunking-hierarchical-policies-and-latent-skills.md)、[世界模型路线图](../world-models/index.md) |
 
 ## 2. VLM：先建立静态语义空间
 
@@ -147,12 +147,12 @@ VLA 主要学习“当前应该做什么”。世界模型还要学习“做了�
 
 如果目标是理解世界模型，建议这样读：
 
-1. [视觉表征、连接器与时序状态](architecture-and-training.md)：理解 CLIP/InfoNCE 静态对齐、视觉 token、连接器和视频 latent。
+1. [VLM 架构：视觉表征、连接器与记忆](architecture-and-training.md)：理解 CLIP/InfoNCE 静态对齐、视觉 token、连接器和视频 latent。
 2. [数据与策略学习](../vla/data-and-policy-learning.md)：理解 VLA 为什么首先是策略学习问题。
 3. [动作表示与控制接口](../vla/action-representation-and-interfaces.md)：理解动作如何被 token 化、归一化和执行。
 4. [动作分块、层级策略与潜在技能](../vla/action-chunking-hierarchical-policies-and-latent-skills.md)：理解短技能和动作 chunk。
-5. [闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md)：理解策略如何进入真实闭环。
+5. [VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md)：理解策略如何进入真实闭环。
 6. [强化学习总览](../reinforcement-learning/index.md)：理解 reward、policy、PPO/GRPO 和 imagined rollout。
-7. [世界模型总览](../world-models/index.md)：进入动作条件未来预测、imagined rollout 和风险规划。
+7. [世界模型路线图](../world-models/index.md)：进入动作条件未来预测、imagined rollout 和风险规划。
 
 读完本章后，判断是否可以进入世界模型，只看一个问题：你是否能清楚区分“模型输出动作”和“模型预测动作后果”。

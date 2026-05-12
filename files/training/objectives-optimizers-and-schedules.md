@@ -1,8 +1,8 @@
-# 目标函数、优化器与学习率日程
+# 目标函数、优化器与 LR 日程
 
 模型架构决定系统允许学什么，数据决定系统能看到什么，目标函数、优化器和学习率日程决定系统实际沿着怎样的路径学到什么。同一个模型、同一批数据，仅仅更换 loss 配方和 schedule，就可能得到截然不同的训练轨迹。
 
-这页给训练目标和优化配置一个统一入口。更系统的数据配方见 [Scaling、课程学习与数据混合](scaling-curriculum-and-data-mixture.md)，数值异常排查见 [训练稳定性、数值异常与故障排查](stability-numerics-and-failure-triage.md)。
+这页给训练目标和优化配置一个统一入口。更系统的数据配方见 [Scaling、课程学习与数据配比](scaling-curriculum-and-data-mixture.md)，数值异常排查见 [训练稳定性与故障排查](stability-numerics-and-failure-triage.md)。
 
 !!! note "初学者先抓住"
 

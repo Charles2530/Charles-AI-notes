@@ -4,7 +4,7 @@ paper_title: "GR-3 Technical Report"
 paper_topic: 具身智能 / VLA
 ---
 
-# GR-3：任务状态、少样本人类轨迹与长时程 VLA
+# GR-3：少样本长时程 VLA
 
 !!! info "论文信息"
     - 论文：`GR-3 Technical Report`

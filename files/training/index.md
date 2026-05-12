@@ -1,4 +1,4 @@
-# 训练总览
+# 大模型训练路线图
 
 <div class="atlas-hero">
   <div class="atlas-kicker">Training Systems</div>
@@ -38,8 +38,9 @@
 | 位置 | 负责的问题 | 典型页面 | 不要混淆 |
 | --- | --- | --- | --- |
 | 阶段目标 | 预训练、SFT、偏好/RL、MTP 等到底让模型学什么 | 预训练/微调/对齐、目标函数、MTP、低比特训练 | 目标函数变化不等于系统吞吐问题 |
-| 数据与评测 | 什么样的数据进入训练，如何证明变好 | 数据系统、去重治理、数据混合、Judge、评测消融 | 数据质量问题不能只靠换并行框架解决 |
-| 分布式执行 | 模型状态、激活、通信和 checkpoint 如何被组织 | Megatron/DeepSpeed、分布式训练、输入管线、稳定性、集群运维 | ZeRO/FSDP 省显存，但会增加通信和恢复复杂度 |
+| 数据管线 | 什么样的数据进入训练，如何高效变成有效 token | 数据系统、去重治理、数据混合、输入管线、Packing | 数据质量问题不能只靠换并行框架解决 |
+| 评测回流 | 怎么证明模型真的变好，以及失败如何进入下一轮数据 | Judge、偏好数据、评测消融、后训练数据引擎 | 分数上涨不等于训练信号和真实任务都变好 |
+| 分布式执行 | 模型状态、激活、通信和 checkpoint 如何被组织 | Megatron/DeepSpeed、分布式训练、稳定性、集群运维 | ZeRO/FSDP 省显存，但会增加通信和恢复复杂度 |
 | 经济与治理 | 预算、实验节奏、失败恢复和产物复用是否成立 | Scaling law、实验经济学、运维治理 | loss 曲线好看不代表实验资产可信 |
 
 !!! note "难点解释：ZeRO、Megatron-LM 和 DeepSpeed 分别在管什么"
@@ -57,19 +58,19 @@
     <p>把多 token 预测当成训练目标来理解，并判断它何时能真正换回推理收益。</p>
   </a>
   <a class="atlas-card" href="low-bit-training-and-numerics/">
-    <strong>低比特训练与训练数制</strong>
+    <strong>低比特训练与数值格式</strong>
     <p>把 FP8、FP4、MXFP、NVFP、activation、optimizer states 和 kernel 放回训练稳定性里看。</p>
   </a>
   <a class="atlas-card" href="page-by-page-visual-guide/">
-    <strong>逐页通俗图解</strong>
+    <strong>论文图解索引</strong>
     <p>按训练专题每一页做白话解释、生活化例子和配图入口，适合先建立直觉再看细节。</p>
   </a>
   <a class="atlas-card" href="megatron-lm-deepspeed-and-open-training-stacks/">
-    <strong>Megatron-LM、DeepSpeed 与训练系统栈</strong>
+    <strong>Megatron、DeepSpeed 与训练栈</strong>
     <p>理解 TP、PP、ZeRO、FSDP、CP 等系统栈如何决定训练规模上限。</p>
   </a>
   <a class="atlas-card" href="input-pipelines-packing-and-throughput-governance/">
-    <strong>输入管线、Packing 与吞吐治理</strong>
+    <strong>输入管线、Packing 与吞吐</strong>
     <p>快速定位 GPU 为什么吃不满，以及有效 token 利用率为什么经常比显存更早出问题。</p>
   </a>
 </div>
@@ -80,15 +81,15 @@
 
 | 专题来源 | 训练层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
-| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 mixed precision、DualPipe、auxiliary-loss-free routing 和 MTP 说明训练收益往往来自“架构、低精度、并行和后训练”的共同设计 | [低比特训练与训练数制](low-bit-training-and-numerics.md)、[Megatron-LM / DeepSpeed](megatron-lm-deepspeed-and-open-training-stacks.md)、[MTP 与投机解码](mtp-and-speculative-decoding.md) |
+| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 mixed precision、DualPipe、auxiliary-loss-free routing 和 MTP 说明训练收益往往来自“架构、低精度、并行和后训练”的共同设计 | [低比特训练与数值格式](low-bit-training-and-numerics.md)、[Megatron-LM / DeepSpeed](megatron-lm-deepspeed-and-open-training-stacks.md)、[MTP 与投机解码](mtp-and-speculative-decoding.md) |
 | [Qwen3](../paper-deep-dives/technical-reports/qwen3.md)、[DeepSeek-R1](../paper-deep-dives/technical-reports/deepseek-r1.md) | thinking / non-thinking、RLVR、GRPO、rejection sampling 和强到弱蒸馏说明后训练不是单阶段 SFT，而是能力塑形和行为约束的多阶段链路 | [预训练、微调与对齐](pretraining-finetuning-alignment.md)、[后训练数据引擎](post-training-data-engines-and-judge-models.md)、[偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md) |
-| [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | MuonClip、agentic data synthesis、tool-use SFT、RL checkpoint engine 说明 agent 模型训练要同时管理优化器稳定性、数据生成和恢复语义 | [分布式训练与 Checkpointing](distributed-training-and-checkpointing.md)、[评测与消融方法学](evaluation-and-ablation-methodology.md) |
-| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | NVFP4 预训练、敏感层 BF16/MXFP8 保留、shared-weight MTP 和异步多环境 GRPO 说明训练配方要和目标硬件、rollout 成本、推理路径一起设计 | [低比特训练与训练数制](low-bit-training-and-numerics.md)、[MTP 与投机解码](mtp-and-speculative-decoding.md)、[后训练数据引擎](post-training-data-engines-and-judge-models.md) |
-| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md)、[Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 端到端语音/视觉/文本训练使后训练扩展到 voice consistency、speaker ID refusal、streaming safety 和模态专项评测 | [预训练、微调与对齐](pretraining-finetuning-alignment.md)、[评测与消融方法学](evaluation-and-ablation-methodology.md) |
+| [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | MuonClip、agentic data synthesis、tool-use SFT、RL checkpoint engine 说明 agent 模型训练要同时管理优化器稳定性、数据生成和恢复语义 | [分布式训练与 Checkpointing](distributed-training-and-checkpointing.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | NVFP4 预训练、敏感层 BF16/MXFP8 保留、shared-weight MTP 和异步多环境 GRPO 说明训练配方要和目标硬件、rollout 成本、推理路径一起设计 | [低比特训练与数值格式](low-bit-training-and-numerics.md)、[MTP 与投机解码](mtp-and-speculative-decoding.md)、[后训练数据引擎](post-training-data-engines-and-judge-models.md) |
+| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md)、[Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 端到端语音/视觉/文本训练使后训练扩展到 voice consistency、speaker ID refusal、streaming safety 和模态专项评测 | [预训练、微调与对齐](pretraining-finetuning-alignment.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) |
 
 ## 图解预览
 
-如果你只是打开了“训练总览”页，先用论文原图建立“训练预算不是只堆参数”的直觉。Chinchilla 的 scaling law 图说明：在固定 FLOP 预算下，模型参数量和训练 token 数需要一起配平，过大的模型如果训练 token 不够，反而不是 compute-optimal。
+如果你只是打开了“大模型训练路线图”页，先用论文原图建立“训练预算不是只堆参数”的直觉。Chinchilla 的 scaling law 图说明：在固定 FLOP 预算下，模型参数量和训练 token 数需要一起配平，过大的模型如果训练 token 不够，反而不是 compute-optimal。
 
 ![Chinchilla IsoFLOP curves 原论文图](../assets/images/paper-figures/training/chinchilla-isoflop-curves.png){ width="920" }
 
@@ -134,7 +135,7 @@
 也就是说，训练不是“把样本喂给模型”这么简单，而是把能力目标、数据生产线、优化过程和系统资源组织成一条长期运转的生产线。
 
 !!! tip "基础知识入口"
-    如果你对 loss、backprop、optimizer、mixed precision 或 checkpoint 的角色还不稳，先看 [优化与训练基础](../foundations/optimization-and-training-basics.md) 和 [自动微分、激活显存与 Checkpointing](../foundations/autograd-activation-checkpointing-and-memory.md)。如果问题涉及显存、带宽和 kernel，再接着看 [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。
+    如果你对 loss、backprop、optimizer、mixed precision 或 checkpoint 的角色还不稳，先看 [优化与训练入门](../foundations/optimization-and-training-basics.md) 和 [自动微分与激活显存](../foundations/autograd-activation-checkpointing-and-memory.md)。如果问题涉及显存、带宽和 kernel，再接着看 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。
 
 ## 1. 训练要解决的不是一个问题，而是三层问题
 
@@ -309,10 +310,10 @@ kernel、通信、Triton、CUDA、量化与编译栈，是“训练为什么能�
 2. `MTP` 这类辅助训练目标如何与投机解码、服务时延和模型结构联动；
 3. `FP8 / FP4 / MXFP / NVFP` 这类低比特训练路线如何影响 activation、梯度、优化器状态和 kernel；
 4. `Megatron-LM`、`DeepSpeed`、`ZeRO`、TP/PP/CP 等训练系统栈如何支撑大规模训练；
-5. 集群运维、实验管理与成本治理如何决定研究效率和复现可信度；
+5. 集群运维与实验治理如何决定研究效率和复现可信度；
 6. 输入管线、packing 与 token 利用率如何决定真实吞吐；
 7. 训练稳定性、低精度路径和故障排查如何避免高代价失败；
-8. 数据系统与优化如何影响最终能力；
+8. 训练数据系统与吞吐优化如何影响最终能力；
 9. scaling、课程学习与数据混合如何塑造能力结构；
 10. 分布式训练、checkpoint 与容错为何是主问题；
 11. 后训练数据引擎和 judge 如何影响行为质量；
@@ -340,26 +341,26 @@ kernel、通信、Triton、CUDA、量化与编译栈，是“训练为什么能�
 
 1. [预训练、微调与对齐](pretraining-finetuning-alignment.md)
 2. [MTP 与投机解码](mtp-and-speculative-decoding.md)
-3. [低比特训练与训练数制](low-bit-training-and-numerics.md)
-4. [Megatron-LM、DeepSpeed 与开放训练系统栈](megatron-lm-deepspeed-and-open-training-stacks.md)
-5. [集群运维、实验管理与成本治理](cluster-operations-and-experiment-management.md)
-6. [输入管线、Packing 与吞吐治理](input-pipelines-packing-and-throughput-governance.md)
-7. [训练稳定性、数值异常与故障排查](stability-numerics-and-failure-triage.md)
-8. [数据系统与优化](data-systems-and-optimization.md)
-9. [Scaling、课程学习与数据混合](scaling-curriculum-and-data-mixture.md)
-10. [目标函数、优化器与学习率日程](objectives-optimizers-and-schedules.md)
+3. [低比特训练与数值格式](low-bit-training-and-numerics.md)
+4. [Megatron、DeepSpeed 与训练栈](megatron-lm-deepspeed-and-open-training-stacks.md)
+5. [集群运维与实验治理](cluster-operations-and-experiment-management.md)
+6. [输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md)
+7. [训练稳定性与故障排查](stability-numerics-and-failure-triage.md)
+8. [训练数据系统与吞吐优化](data-systems-and-optimization.md)
+9. [Scaling、课程学习与数据配比](scaling-curriculum-and-data-mixture.md)
+10. [目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md)
 11. [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)
-12. [评测与消融方法学](evaluation-and-ablation-methodology.md)
+12. [训练评测与消融设计](evaluation-and-ablation-methodology.md)
 
 如果你关注部署前的数据闭环，再继续看：
 
 1. [数据质量、去重与治理](data-quality-dedup-and-governance.md)
 2. [后训练数据引擎与 Judge 模型](post-training-data-engines-and-judge-models.md)
-3. [Scaling Law 与实验经济学](scaling-laws-and-experiment-economics.md)
+3. [Scaling Law 与训练经济学](scaling-laws-and-experiment-economics.md)
 
 如果你开始关心训练为什么会被硬件和 kernel 塑形，就继续看：
 
-1. [算子与编译器总览](../operators/index.md)
+1. [算子与编译器路线图](../operators/index.md)
 
 ## 10. 一个总判断
 
@@ -400,9 +401,9 @@ for batch in train_loader:
 
 | 阶段 | 先读 | 读完要能回答 | 下一站 |
 | --- | --- | --- | --- |
-| 1. 训练阶段 | [预训练、微调与对齐](pretraining-finetuning-alignment.md)、[目标函数、优化器与学习率日程](objectives-optimizers-and-schedules.md) | 能力、行为、对齐分别由哪些数据和目标塑造 | [评测与消融方法学](evaluation-and-ablation-methodology.md) |
-| 2. 系统执行 | [Megatron-LM、DeepSpeed 与开放训练系统栈](megatron-lm-deepspeed-and-open-training-stacks.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) | TP/PP/DP/ZeRO/FSDP、checkpoint 和恢复语义如何影响可复现性 | [算子与编译器总览](../operators/index.md) |
-| 3. 数据闭环 | [数据质量、去重与治理](data-quality-dedup-and-governance.md)、[输入管线、Packing 与吞吐治理](input-pipelines-packing-and-throughput-governance.md)、[后训练数据引擎与 Judge 模型](post-training-data-engines-and-judge-models.md) | 数据版本、混合比例、packing 和 judge 是否支撑同一套能力目标 | [推理总览](../inference/index.md) |
-| 4. 成本与稳定性 | [训练稳定性、数值异常与故障排查](stability-numerics-and-failure-triage.md)、[Scaling Law 与实验经济学](scaling-laws-and-experiment-economics.md)、[低比特训练与训练数制](low-bit-training-and-numerics.md) | 一次训练失败是数值、数据、并行、硬件还是实验设计问题 | [量化总览](../quantization/index.md) |
+| 1. 训练阶段 | [预训练、微调与对齐](pretraining-finetuning-alignment.md)、[目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md) | 能力、行为、对齐分别由哪些数据和目标塑造 | [训练评测与消融设计](evaluation-and-ablation-methodology.md) |
+| 2. 系统执行 | [Megatron、DeepSpeed 与训练栈](megatron-lm-deepspeed-and-open-training-stacks.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) | TP/PP/DP/ZeRO/FSDP、checkpoint 和恢复语义如何影响可复现性 | [算子与编译器路线图](../operators/index.md) |
+| 3. 数据闭环 | [数据质量、去重与治理](data-quality-dedup-and-governance.md)、[输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md)、[后训练数据引擎与 Judge 模型](post-training-data-engines-and-judge-models.md) | 数据版本、混合比例、packing 和 judge 是否支撑同一套能力目标 | [推理系统路线图](../inference/index.md) |
+| 4. 成本与稳定性 | [训练稳定性与故障排查](stability-numerics-and-failure-triage.md)、[Scaling Law 与训练经济学](scaling-laws-and-experiment-economics.md)、[低比特训练与数值格式](low-bit-training-and-numerics.md) | 一次训练失败是数值、数据、并行、硬件还是实验设计问题 | [量化路线图](../quantization/index.md) |
 
 读完训练模块后，最重要的不是记住某个训练框架，而是能把一次实验写成可复验资产：数据快照、配置、并行策略、checkpoint 恢复口径、评测桶、回滚条件和上线前转换路径都要能对上。

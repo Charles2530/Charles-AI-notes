@@ -1,4 +1,4 @@
-# 低比特训练、FP8/FP4 与训练数制
+# 低比特训练与数值格式
 
 这一页讨论的是**训练里的低精度**，不是单纯的推理量化。
 
@@ -497,11 +497,11 @@ FP4 尤其如此：没有原生 kernel 支持，收益很容易被系统开销�
 
 建议按下面顺序阅读：
 
-1. [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)
-2. [训练稳定性、数值异常与故障排查](stability-numerics-and-failure-triage.md)
+1. [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)
+2. [训练稳定性与故障排查](stability-numerics-and-failure-triage.md)
 3. [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)
 4. [MTP 与投机解码](mtp-and-speculative-decoding.md)
-5. [FP8 与混合精度服务](../quantization/fp8-and-mixed-precision-serving.md)
+5. [FP8 与混合精度推理](../quantization/fp8-and-mixed-precision-serving.md)
 6. [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)
 
 量化专题更关注“如何压缩和部署”；这一页更关注“训练过程中如何不崩，并且真的换来训练效率”。

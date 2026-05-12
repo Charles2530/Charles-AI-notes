@@ -1,4 +1,4 @@
-# Transformer、Attention 与 Tokenization
+# Transformer 输入与注意力
 
 Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核心结构。它的关键思想是：把输入变成 token，再用 attention 让 token 之间按相关性互相读取信息。
 
@@ -104,7 +104,7 @@ Self-Attention 的核心矩阵是 \(L \times L\)，其中 \(L\) 是序列长度�
 - context compression：压缩或摘要长历史，把有限上下文留给最关键证据。
 - prefix cache：复用相同前缀的 KV 结果，适合模板化 prompt 或多请求共享上下文。
 
-如果你关心为什么长上下文还会涉及位置编码、causal mask、padding mask 和 KV cache，可以继续看 [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)。
+如果你关心为什么长上下文还会涉及位置编码、causal mask、padding mask 和 KV cache，可以继续看 [位置编码与上下文 Mask](positional-encoding-masks-and-context.md)。
 
 ## 5. 技术报告里的 Transformer：KV cache、MLA 与 MoE
 
@@ -170,7 +170,7 @@ function TransformerBlock(x):
 - [推理系统](../inference/index.md)：KV cache 和 attention 决定长上下文成本。
 - [算子与编译器](../operators/index.md)：FlashAttention 和 GEMM 是 Transformer 性能核心。
 - [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)：理解 QKV 投影、MLP 和矩阵乘热路径。
-- [Mamba、状态空间模型与 Mamba-Transformer 架构](mamba-and-hybrid-ssm-transformers.md)：理解为什么一些新模型用 recurrent state 替代大量 attention，并保留少量 attention 做混合架构。
+- [Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)：理解为什么一些新模型用 recurrent state 替代大量 attention，并保留少量 attention 做混合架构。
 
 ## 小结
 

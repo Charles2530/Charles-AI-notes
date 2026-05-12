@@ -1,4 +1,4 @@
-# 扩散模型总览
+# 扩散模型路线图
 
 扩散模型可以看成一类“先破坏，再恢复”的生成模型。训练时，模型不断看到被噪声污染的数据；推理时，模型学习把纯噪声一步步还原成目标样本。
 
@@ -12,10 +12,18 @@ DDPM 原论文里的 graphical model 很适合建立第一层直觉：左到右�
     左到右的 \(q\) 是前向加噪链：它不需要模型学习，只是人为定义的破坏过程，把 \(x_0\) 一步步推向接近高斯噪声的 \(x_T\)。右到左的 \(p_\theta\) 才是模型要学习的反向去噪链：在每个噪声强度下，估计怎样从 \(x_t\) 回到更干净的 \(x_{t-1}\)。训练目标回答“怎样估计噪声或干净样本”，采样器回答“推理时沿什么路径走回去”，两者不是同一层问题。
 
 !!! tip "基础知识入口"
-    如果你对 `UNet`、`DiT`、`score`、`ELBO`、`SDE/ODE` 或 `Cross-Attention` 还不熟，可以先看 [卷积与特征提取](../foundations/convolution-and-feature-extraction.md)、[Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md) 和 [概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md)。这些是扩散模型后续章节反复使用的公共概念。
+    如果你对 `UNet`、`DiT`、`score`、`ELBO`、`SDE/ODE` 或 `Cross-Attention` 还不熟，可以先看 [卷积与特征提取](../foundations/convolution-and-feature-extraction.md)、[Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md) 和 [概率与潜变量模型](../foundations/probability-latent-variables-and-generative-models.md)。这些是扩散模型后续章节反复使用的公共概念。
 
 !!! note "放到世界模型主线里怎么理解"
     扩散模型本身不是世界模型，它首先是一类生成分布的方法。但视频世界模型常会借用扩散/flow 的视频生成能力，再补动作条件、时间因果性、长期记忆和实时推理。读扩散专题时，主线应放在“生成路径、条件控制、少步蒸馏和视频扩散如何成为世界模拟器底座”，而不是只停在图像生成效果。
+
+## 先按三组读
+
+| 分组 | 核心问题 | 先看页面 |
+| --- | --- | --- |
+| 机制与训练 | 加噪、去噪、score、SDE/ODE、噪声日程和 conditioning 到底在学什么 | 演进脉络、训练、Score/SDE、噪声日程、Guidance |
+| 采样、蒸馏与视频 | 怎么少步生成，如何把图像扩散推到视频和多模态 | 推理采样、蒸馏、Consistency / Rectified Flow、视频扩散 |
+| 实践与对照 | 训练失败、配方取舍和路线差异如何判断 | 实战配方、方法对照表 |
 
 ## 一个统一的数学骨架
 
@@ -127,7 +135,7 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 | 原始建模 | DDPM | 学习逐步去噪的反向过程 |
 | 少步采样 | DDIM | 改采样轨迹而不重训 |
 | 数值求解器 | Euler、Heun、DPM-Solver | 把采样视作 ODE/SDE 求解 |
-| 蒸馏与整流 | DMD、DMD2、Phased DMD、Rectified Diffusion | 重训以实现极少步或一步生成 |
+| 一步生成、蒸馏与整流 | DMD、DMD2、Phased DMD、Rectified Diffusion | 重训以实现极少步或一步生成 |
 
 ## 一个生动例子：从噪声里“雕刻”柴犬头像
 
@@ -197,12 +205,12 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 | 阶段 | 先读 | 读完要能回答 |
 | --- | --- | --- |
-| 1. 建模起点 | [发展脉络](evolution.md)、[训练与表示](training.md) | 前向加噪、反向去噪、ELBO、噪声预测和 \(x_0/v/score\) 参数化分别在解决什么 |
-| 2. 连续视角 | [Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)、[噪声日程与参数化](noise-schedules-and-parameterization.md) | 为什么同一个扩散模型可以被看成 SDE、ODE 或 score field |
-| 3. 推理与控制 | [条件控制与 Guidance](guidance-and-conditioning.md)、[采样与推理](inference.md) | CFG、solver、步数、随机性和文本对齐之间如何权衡 |
-| 4. 加速与变体 | [蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) | 少步采样、一步蒸馏、Flow Matching / rectified 路线、Wan 系列视频底座各自改的是哪一层 |
+| 1. 建模起点 | [扩散模型发展脉络](evolution.md)、[扩散训练与表示](training.md) | 前向加噪、反向去噪、ELBO、噪声预测和 \(x_0/v/score\) 参数化分别在解决什么 |
+| 2. 连续视角 | [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md)、[噪声日程与参数化](noise-schedules-and-parameterization.md) | 为什么同一个扩散模型可以被看成 SDE、ODE 或 score field |
+| 3. 推理与控制 | [条件控制与 Guidance](guidance-and-conditioning.md)、[采样与推理加速](inference.md) | CFG、solver、步数、随机性和文本对齐之间如何权衡 |
+| 4. 加速与变体 | [一步生成、蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) | 少步采样、一步蒸馏、Flow Matching / rectified 路线、Wan 系列视频底座各自改的是哪一层 |
 
-如果目标是过渡到世界模型，读完第 4 阶段后直接接 [视频与多模态扩散](video-and-multimodal-diffusion.md) 里的 Wan 系列说明、[Towards Video World Models 专题](../paper-deep-dives/world-models/towards-video-world-models.md) 和 [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md)。如果只是快速定位方法，先看 [方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [训练配方与失效分析](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
+如果目标是过渡到世界模型，读完第 4 阶段后直接接 [视频与多模态扩散](video-and-multimodal-diffusion.md) 里的 Wan 系列说明、[Towards Video World Models 专题](../paper-deep-dives/world-models/towards-video-world-models.md) 和 [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md)。如果只是快速定位方法，先看 [扩散方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
 
 ## 从论文专题回填的扩散知识点
 
@@ -210,11 +218,11 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 | 专题来源 | 回填到扩散章节的知识点 | 应接到本章哪里 |
 | --- | --- | --- |
-| [DMD](../paper-deep-dives/diffusion/dmd.md)、[DMD2](../paper-deep-dives/diffusion/dmd2.md) | 少步/一步生成不是只换 solver，而是用 distribution matching、fake critic、regression loss 或 GAN 监督重新训练学生 | [蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) |
-| [Phased DMD](../paper-deep-dives/diffusion/phased-dmd.md) | 高低 SNR 区间承担不同生成职责，few-step 蒸馏可以按噪声子区间拆 expert，以保住视频运动和图像多样性 | [噪声日程与参数化](noise-schedules-and-parameterization.md)、[蒸馏与整流](distillation.md) |
-| [Wan2.1](../paper-deep-dives/diffusion/wan.md) | 视频 foundation model 的质量来自 VAE、Video DiT、Flow Matching、分阶段图文视频训练、Context Parallel 和后训练的系统组合 | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[训练配方与失效分析](practical-training-recipes-and-failure-analysis.md) |
-| [CausVid](../paper-deep-dives/diffusion/causvid.md)、[Self Forcing](../paper-deep-dives/world-models/self-forcing.md) | 双向视频扩散要变成流式世界模型，必须处理 causalization、KV cache、self-rollout 和 train-test gap | [采样与推理](inference.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) |
-| [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md) | 视频 DiT 的 attention 可以拆成 sparse exact、linear compensation 和 skip；这说明扩散加速也可能来自 attention 结构和低比特 kernel | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[训练配方与失效分析](practical-training-recipes-and-failure-analysis.md) |
+| [DMD](../paper-deep-dives/diffusion/dmd.md)、[DMD2](../paper-deep-dives/diffusion/dmd2.md) | 少步/一步生成不是只换 solver，而是用 distribution matching、fake critic、regression loss 或 GAN 监督重新训练学生 | [一步生成、蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) |
+| [Phased DMD](../paper-deep-dives/diffusion/phased-dmd.md) | 高低 SNR 区间承担不同生成职责，few-step 蒸馏可以按噪声子区间拆 expert，以保住视频运动和图像多样性 | [噪声日程与参数化](noise-schedules-and-parameterization.md)、[一步生成、蒸馏与整流](distillation.md) |
+| [Wan2.1](../paper-deep-dives/diffusion/wan.md) | 视频 foundation model 的质量来自 VAE、Video DiT、Flow Matching、分阶段图文视频训练、Context Parallel 和后训练的系统组合 | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md) |
+| [CausVid](../paper-deep-dives/diffusion/causvid.md)、[Self Forcing](../paper-deep-dives/world-models/self-forcing.md) | 双向视频扩散要变成流式世界模型，必须处理 causalization、KV cache、self-rollout 和 train-test gap | [采样与推理加速](inference.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) |
+| [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md) | 视频 DiT 的 attention 可以拆成 sparse exact、linear compensation 和 skip；这说明扩散加速也可能来自 attention 结构和低比特 kernel | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md) |
 
 ## 快速代码示例
 

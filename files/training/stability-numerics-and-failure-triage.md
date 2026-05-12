@@ -1,8 +1,8 @@
-# 训练稳定性、数值异常与故障排查
+# 训练稳定性与故障排查
 
 大模型训练里最贵的失败，往往不是“效果差一点”，而是训练跑到中后期突然 `nan`、loss spike、恢复后曲线漂移、低精度路径悄悄失真，最后一整段 GPU 小时白白损失。稳定性排障的目标，是把这些高代价问题拆成可观测、可定位、可复现的流程。
 
-这页关注训练故障的 triage 顺序。低精度训练细节可继续看 [低比特训练与数值体系](low-bit-training-and-numerics.md)，平台侧恢复流程见 [训练集群运维、实验管理与成本治理](cluster-operations-and-experiment-management.md)。
+这页关注训练故障的 triage 顺序。低精度训练细节可继续看 [低比特训练与数值体系](low-bit-training-and-numerics.md)，平台侧恢复流程见 [集群运维与实验治理](cluster-operations-and-experiment-management.md)。
 
 !!! note "初学者先抓住"
     训练排障不要从“调参”开始，而要先分类：是立刻爆炸、中途尖刺、缓慢漂移、恢复后失真，还是低精度隐性退化。症状不同，最该查的层完全不同。

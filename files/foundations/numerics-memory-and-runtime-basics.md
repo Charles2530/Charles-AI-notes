@@ -1,4 +1,4 @@
-# 数值、显存与运行时基础
+# 数值、显存与运行时
 
 模型能不能真正部署，不只取决于算法，还取决于数值格式、显存、带宽、kernel 和 runtime 是否匹配。
 
@@ -84,7 +84,7 @@ Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负
 
 ## 6. 和后续专题的关系
 
-- [量化总览](../quantization/index.md)：理解低精度格式和部署收益。
+- [量化路线图](../quantization/index.md)：理解低精度格式和部署收益。
 - [推理系统](../inference/index.md)：理解延迟、吞吐、KV cache 和服务调度。
 - [算子与编译器](../operators/index.md)：理解 kernel、GEMM、attention 和 profiling。
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：理解混合精度和数值异常。

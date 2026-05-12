@@ -4,7 +4,7 @@ paper_title: World Action Models are Zero-shot Policies
 paper_topic: 具身智能 / WAM
 ---
 
-# DreamZero：World Action Models are Zero-shot Policies
+# DreamZero：WAM 零样本策略
 
 !!! info "论文信息"
     - 论文：`World Action Models are Zero-shot Policies`

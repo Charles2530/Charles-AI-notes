@@ -1,4 +1,4 @@
-# 从一个任务跑通具身闭环
+# 一个任务跑通具身闭环
 
 这一页用一个具体任务把具身智能串起来。前面的页面讲了系统地图、资产、轨迹、VLA、WAM 和世界模型，但真正理解它们，最好从一条任务链路开始。
 
@@ -89,7 +89,7 @@ sample task
 -> save episode or retry
 ```
 
-在工具链上，这通常可以理解成：RoboTwin 风格代码负责 `sample task / reset scene / success checker`，Isaac Sim 或其他仿真器负责 `simulate trajectory / render cameras / query states`，cuRobo 或 STOMP 负责 `run planner`。更详细的分工见 [Isaac Sim 与 RoboTwin：仿真和数据生成工具链](isaacsim-and-robotwin.md)。
+在工具链上，这通常可以理解成：RoboTwin 风格代码负责 `sample task / reset scene / success checker`，Isaac Sim 或其他仿真器负责 `simulate trajectory / render cameras / query states`，cuRobo 或 STOMP 负责 `run planner`。更详细的分工见 [Isaac Sim 与 RoboTwin 仿真数据链](isaacsim-and-robotwin.md)。
 
 对应到代码结构可以是：
 

@@ -4,7 +4,7 @@ paper_title: "DeepSeek-V3 Technical Report"
 paper_topic: 技术报告
 ---
 
-# DeepSeek-V3 Technical Report：671B MoE、MLA、FP8 训练与低成本预训练
+# DeepSeek-V3：671B MoE、MLA 与 FP8 训练
 
 !!! info "报告信息"
     - 技术报告：`DeepSeek-V3 Technical Report`

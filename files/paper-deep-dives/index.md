@@ -54,7 +54,10 @@
 !!! tip "技术报告怎么读"
     技术报告不要只看 benchmark 排名。更稳的读法是先抓“训练目标和系统约束”：模型结构为什么这样选，数据和阶段如何安排，后训练的 reward / SFT / distillation 如何分工，推理或部署是否改变了架构选择。读完一篇报告后，最好能把它接回 [训练](../training/index.md)、[强化学习](../reinforcement-learning/index.md)、[推理](../inference/index.md)、[量化](../quantization/index.md) 或 [算子与编译器](../operators/index.md) 中的某条工程主线。
 
-### 基础知识
+### 高效训练
+
+!!! note "这组文章怎么连起来读"
+    高效训练不是单一技巧，而是把同一笔训练预算花得更有效。建议按层级读：先看 Muon 理解 optimizer 如何提升 token/FLOP efficiency；再看 MagiAttention 理解超长上下文训练的 CP、mask 和通信瓶颈；接着看 SLA / SLA2 理解视频 DiT 里如何用 sparse-linear decomposition 减少 attention 计算；最后看 Attn-QAT 理解 FP4 attention 为什么必须同时改 forward、backward 和 inference kernel。四篇合起来，对应“优化器 -> 分布式 attention -> 近似 attention -> 低比特 attention”这条工程链。
 
 <table data-paper-sort="asc">
   <thead>
@@ -68,15 +71,27 @@
   <tbody>
     <tr>
       <td>2025-02</td>
-      <td>基础知识</td>
-      <td><a href="foundations/muon-is-scalable/">Muon：面向 LLM 预训练的可扩展优化器</a></td>
+      <td>高效训练</td>
+      <td><a href="foundations/muon-is-scalable/">Muon：LLM 预训练优化器</a></td>
       <td>如何把 Muon 从矩阵正交化优化器扩展到 5.7T token LLM 预训练，并系统对比 AdamW 的更新几何、状态内存、分布式通信和 SFT 边界</td>
     </tr>
     <tr>
+      <td>2025-04</td>
+      <td>高效训练</td>
+      <td><a href="foundations/magiattention/">MagiAttention：超长上下文分布式 Attention</a></td>
+      <td>如何把超长上下文和 varlen/block-causal 异构 mask 训练拆成 AttnSlice、负载均衡 dispatch、GroupCast/GroupReduce 和多阶段 overlap，并在 H100/B200 上验证分布式 attention 可扩展性</td>
+    </tr>
+    <tr>
       <td>2025-09</td>
-      <td>基础知识</td>
-      <td><a href="foundations/sla-sparse-linear-attention/">SLA / SLA2：DiT 里的 Sparse-Linear Attention</a></td>
+      <td>高效训练</td>
+      <td><a href="foundations/sla-sparse-linear-attention/">SLA / SLA2：DiT 稀疏线性 Attention</a></td>
       <td>如何把视频 DiT 的 attention 分解成 sparse exact、linear compensation 和 skip，并用 learnable routing、比例混合与 QAT 推进到 SLA2</td>
+    </tr>
+    <tr>
+      <td>2026-03</td>
+      <td>高效训练</td>
+      <td><a href="foundations/attn-qat/">Attn-QAT：4-bit Attention 量化感知训练</a></td>
+      <td>为什么 4-bit attention 不能直接套普通 QAT，Attn-QAT 如何修正 FlashAttention backward 的精度假设，并在 Wan、Qwen 与 Llama 实验中恢复 FP4 attention 质量</td>
     </tr>
   </tbody>
 </table>
@@ -96,37 +111,37 @@
     <tr>
       <td>2023-11</td>
       <td>扩散模型</td>
-      <td><a href="diffusion/dmd/">DMD：One-step Diffusion with Distribution Matching Distillation</a></td>
+      <td><a href="diffusion/dmd/">DMD：一步扩散蒸馏</a></td>
       <td>如何用 real/fake score 差分和 regression loss，把多步扩散 teacher 蒸馏成一步图像生成器</td>
     </tr>
     <tr>
       <td>2024-05</td>
       <td>扩散模型</td>
-      <td><a href="diffusion/dmd2/">DMD2：Improved Distribution Matching Distillation for Fast Image Synthesis</a></td>
+      <td><a href="diffusion/dmd2/">DMD2：更稳的少步分布匹配蒸馏</a></td>
       <td>如何用 TTUR 稳住 fake diffusion critic，用 GAN 真实数据监督和 backward simulation 把 DMD 推向更强的一步/少步生成</td>
     </tr>
     <tr>
       <td>2024-07</td>
       <td>扩散模型</td>
-      <td><a href="diffusion/diffusion-forcing/">Diffusion Forcing：Next-token Prediction Meets Full-Sequence Diffusion</a></td>
+      <td><a href="diffusion/diffusion-forcing/">Diffusion Forcing：next-token 与全序列扩散</a></td>
       <td>如何用独立 per-token 噪声水平，把因果 next-token 生成、full-sequence diffusion guidance、长视频 rollout 和扩散规划放进同一个训练范式</td>
     </tr>
     <tr>
       <td>2024-12</td>
       <td>扩散模型</td>
-      <td><a href="diffusion/causvid/">CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models</a></td>
+      <td><a href="diffusion/causvid/">CausVid：流式自回归视频扩散</a></td>
       <td>如何把双向视频 DiT 通过 ODE 初始化、非对称 DMD 和 KV cache 改造成少步流式自回归视频扩散生成器</td>
     </tr>
     <tr>
       <td>2025-03</td>
       <td>扩散模型</td>
-      <td><a href="diffusion/wan/">Wan2.1：Open and Advanced Large-Scale Video Generative Models</a></td>
+      <td><a href="diffusion/wan/">Wan2.1：开源视频生成系统路线</a></td>
       <td>如何用视频 VAE、Video DiT、Flow Matching、分阶段图文视频训练和系统并行构建开源视频 foundation model，并补充 Wan2.2 README 的 MoE 与 TI2V 路线</td>
     </tr>
     <tr>
       <td>2025-10</td>
       <td>扩散模型</td>
-      <td><a href="diffusion/phased-dmd/">Phased DMD：Few-step Distribution Matching Distillation via Score Matching within Subintervals</a></td>
+      <td><a href="diffusion/phased-dmd/">Phased DMD：分阶段少步蒸馏</a></td>
       <td>如何把少步 DMD 拆成 SNR 子区间专家训练，并用子区间 score matching 保住图像多样性与视频运动动态</td>
     </tr>
   </tbody>
@@ -147,37 +162,43 @@
     <tr>
       <td>2024-10</td>
       <td>具身智能</td>
-      <td><a href="embodied-ai/gr2/">GR-2：用 web-scale 视频知识迁移到机器人操作</a></td>
+      <td><a href="embodied-ai/gr2/">GR-2：Web 视频知识迁移到机器人</a></td>
       <td>如何把 38M 视频片段和 50B token 的未来视频预训练迁移到真实机器人轨迹预测，并通过 WBC 落到 Kinova Gen3</td>
     </tr>
     <tr>
       <td>2024-12</td>
       <td>具身智能</td>
-      <td><a href="embodied-ai/video-prediction-policy/">Video Prediction Policy：用预测视觉表征训练通用机器人策略</a></td>
+      <td><a href="embodied-ai/video-prediction-policy/">Video Prediction Policy：预测视觉表征训练机器人策略</a></td>
       <td>如何把 text-guided video prediction 的中间预测表征当作视觉 encoder，用单步 forward 支撑 CALVIN、MetaWorld 和真实机器人策略</td>
     </tr>
     <tr>
       <td>2025-01</td>
       <td>具身智能</td>
-      <td><a href="embodied-ai/spatialvla/">SpatialVLA：把 3D 空间表示接进 VLA</a></td>
+      <td><a href="embodied-ai/spatialvla/">SpatialVLA：3D 空间表征接入 VLA</a></td>
       <td>如何用 Ego3D position encoding 和 adaptive action grids 把 3D 空间与跨机器人动作 token 接进 VLA</td>
     </tr>
     <tr>
       <td>2025-04</td>
       <td>具身智能</td>
-      <td><a href="embodied-ai/pi05/">π0.5：面向开放世界泛化的 VLA</a></td>
+      <td><a href="embodied-ai/pi05/">π0.5：开放世界 VLA</a></td>
       <td>如何用 heterogeneous co-training、FAST 离散动作、flow matching action expert 和 high-level subtask prediction 支撑新家庭长任务泛化</td>
     </tr>
     <tr>
       <td>2025-07</td>
       <td>具身智能</td>
-      <td><a href="embodied-ai/gr3/">GR-3：任务状态、少样本人类轨迹与长时程 VLA</a></td>
+      <td><a href="embodied-ai/gr3/">GR-3：少样本长时程 VLA</a></td>
       <td>如何用 Qwen2.5-VL + flow matching Action DiT、任务状态监督、VR 人类轨迹和 ByteMini 系统推进长时程 VLA</td>
+    </tr>
+    <tr>
+      <td>2025-11</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/depth-anything-3/">Depth Anything 3：任意视角 3D 几何底座</a></td>
+      <td>如何用 depth-ray representation、cross-view attention 和 teacher-student 训练把单目深度扩展成可估姿、可融合、可渲染的任意视角几何</td>
     </tr>
     <tr>
       <td>2026-02</td>
       <td>具身智能</td>
-      <td><a href="embodied-ai/dreamzero/">DreamZero：World Action Models are Zero-shot Policies</a></td>
+      <td><a href="embodied-ai/dreamzero/">DreamZero：WAM 零样本策略</a></td>
       <td>joint video-action prediction 如何让 WAM 直接成为机器人 policy，并把世界模型的动作后果预测放进具身闭环</td>
     </tr>
   </tbody>
@@ -198,55 +219,55 @@
     <tr>
       <td>2018-11</td>
       <td>世界模型</td>
-      <td><a href="world-models/planet/">PlaNet：Learning Latent Dynamics for Planning from Pixels</a></td>
+      <td><a href="world-models/planet/">PlaNet：像素规划的潜变量动力学</a></td>
       <td>RSSM latent dynamics 如何从像素交互轨迹中学习，并通过 CEM 在 latent space 里做在线规划</td>
     </tr>
     <tr>
       <td>2019-12</td>
       <td>世界模型</td>
-      <td><a href="world-models/dreamer/">Dreamer：Dream to Control</a></td>
+      <td><a href="world-models/dreamer/">Dreamer：Latent Imagination 控制</a></td>
       <td>如何把 RSSM world model 从在线规划接口扩展为 latent imagination actor-critic 训练接口</td>
     </tr>
     <tr>
       <td>2020-10</td>
       <td>世界模型</td>
-      <td><a href="world-models/dreamerv2/">DreamerV2：Mastering Atari with Discrete World Models</a></td>
+      <td><a href="world-models/dreamerv2/">DreamerV2：离散世界模型玩 Atari</a></td>
       <td>categorical latent、KL balancing 和 image gradients 如何让 Dreamer 路线打到 Atari 强基准</td>
     </tr>
     <tr>
       <td>2022-06</td>
       <td>世界模型</td>
-      <td><a href="world-models/jepa/">JEPA：A Path Towards Autonomous Machine Intelligence</a></td>
+      <td><a href="world-models/jepa/">JEPA：预测式表征学习路线</a></td>
       <td>representation-space prediction、non-contrastive training 和 H-JEPA 如何定义非生成式世界模型路线</td>
     </tr>
     <tr>
       <td>2023-01</td>
       <td>世界模型</td>
-      <td><a href="world-models/dreamerv3/">DreamerV3：Mastering Diverse Domains through World Models</a></td>
+      <td><a href="world-models/dreamerv3/">DreamerV3：跨域通用世界模型</a></td>
       <td>RSSM world model 如何通过 latent dynamics、reward prediction 和 imagined rollout 支撑 actor-critic</td>
     </tr>
     <tr>
       <td>2023-06</td>
       <td>世界模型</td>
-      <td><a href="world-models/h-jepa/">H-JEPA：Latent Variable EBMs and Hierarchical JEPA</a></td>
+      <td><a href="world-models/h-jepa/">H-JEPA：层级 JEPA 与潜变量 EBM</a></td>
       <td>latent-variable EBM、energy collapse 和 regularized JEPA training 如何支撑层级表征世界模型</td>
     </tr>
     <tr>
       <td>2023-10</td>
       <td>世界模型</td>
-      <td><a href="world-models/ringattention/">RingAttention：Ring Attention with Blockwise Transformers for Near-Infinite Context</a></td>
+      <td><a href="world-models/ringattention/">RingAttention：近无限上下文训练</a></td>
       <td>如何用 blockwise attention、KV 环形通信和 sequence parallelism 支撑百万 token 视频/语言/轨迹世界模型训练</td>
     </tr>
     <tr>
       <td>2024-02</td>
       <td>世界模型</td>
-      <td><a href="world-models/v-jepa/">V-JEPA：Latent Video Prediction for Visual Representation Learning</a></td>
+      <td><a href="world-models/v-jepa/">V-JEPA：视频潜变量预测表征</a></td>
       <td>如何用 latent video prediction、3D Multi-Block Masking 和 EMA target encoder 学习视频世界表征</td>
     </tr>
     <tr>
       <td>2024-02</td>
       <td>世界模型</td>
-      <td><a href="world-models/genie/">Genie：Generative Interactive Environments</a></td>
+      <td><a href="world-models/genie/">Genie：无标注视频到可交互环境</a></td>
       <td>如何从无标注互联网视频中学习 latent actions，并把视频 token dynamics 变成可逐帧控制的生成式交互环境</td>
     </tr>
     <tr>
@@ -258,25 +279,25 @@
     <tr>
       <td>2025-06</td>
       <td>世界模型</td>
-      <td><a href="world-models/self-forcing/">Self Forcing：Bridging the Train-Test Gap in Autoregressive Video Diffusion</a></td>
+      <td><a href="world-models/self-forcing/">Self Forcing：对齐自回归视频训练与推理</a></td>
       <td>如何通过训练时自回归 self-rollout、视频级 distribution matching 和 rolling KV cache 缓解流式视频世界模型的 exposure bias 与误差累积</td>
     </tr>
     <tr>
       <td>2025-07</td>
       <td>世界模型</td>
-      <td><a href="world-models/towards-video-world-models/">Towards Video World Models：视频生成走向世界模型的五个门槛</a></td>
+      <td><a href="world-models/towards-video-world-models/">Towards Video World Models：视频世界模型五个门槛</a></td>
       <td>用 causal、interactive、persistent、real-time 和 physical accuracy 五个约束梳理视频生成到世界模型的训练路线</td>
     </tr>
     <tr>
       <td>2025-10</td>
       <td>世界模型</td>
-      <td><a href="world-models/world-models-embodied-ai-survey/">A Comprehensive Survey on World Models for Embodied AI：具身世界模型综述</a></td>
+      <td><a href="world-models/world-models-embodied-ai-survey/">Embodied World Model Survey：具身世界模型综述</a></td>
       <td>用 functionality、temporal modeling 和 spatial representation 三轴 taxonomy 梳理具身世界模型、训练数据、评测指标和代表性能表格</td>
     </tr>
     <tr>
       <td>2026-01</td>
       <td>世界模型</td>
-      <td><a href="world-models/lingbot-world/">LingBot-World：从视频生成到开源世界模拟器</a></td>
+      <td><a href="world-models/lingbot-world/">LingBot-World：视频基础模型到世界模拟器</a></td>
       <td>视频基础模型如何继续训练成可交互的世界模型</td>
     </tr>
   </tbody>
@@ -298,63 +319,63 @@
     <tr>
       <td>2024-08</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/gpt-4o-system-card/">GPT-4o System Card：端到端 Omni 模型、语音安全与多模态部署评测</a></td>
+      <td><a href="technical-reports/gpt-4o-system-card/">GPT-4o System Card：Omni 安全与多模态评测</a></td>
       <td>如何把端到端 text/audio/image/video omni model 的训练边界、语音输出安全、red teaming、Preparedness Framework 和第三方 agentic evaluation 串成上线前评测体系</td>
       <td><a href="../vlm/">VLM/VLA</a> / <a href="../inference/serving-systems/">推理服务系统</a></td>
     </tr>
     <tr>
       <td>2024-12</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/deepseek-v3/">DeepSeek-V3 Technical Report：671B MoE、MLA、FP8 训练与低成本预训练</a></td>
+      <td><a href="technical-reports/deepseek-v3/">DeepSeek-V3：671B MoE、MLA 与 FP8 训练</a></td>
       <td>如何用 MLA、DeepSeekMoE、auxiliary-loss-free routing、MTP、FP8 mixed precision、DualPipe、SFT/RL 和 R1 reasoning distillation 训练 671B MoE</td>
       <td><a href="../training/low-bit-training-and-numerics/">低比特训练</a> / <a href="../operators/communication-kernels-and-overlap/">通信重叠</a></td>
     </tr>
     <tr>
       <td>2025-01</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/deepseek-r1/">DeepSeek-R1：用强化学习激发大模型推理能力</a></td>
+      <td><a href="technical-reports/deepseek-r1/">DeepSeek-R1：RL 激发推理能力</a></td>
       <td>如何用 GRPO、rule-based reward、长 CoT、rejection sampling、两阶段 RL 和蒸馏把可验证推理任务转成大模型自我探索能力</td>
       <td><a href="../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo/">PPO / GRPO</a> / <a href="../training/preference-data-and-alignment-pitfalls/">对齐失效</a></td>
     </tr>
     <tr>
       <td>2025-05</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/qwen3/">Qwen3 Technical Report：统一 Thinking / Non-Thinking、36T 预训练与强到弱蒸馏</a></td>
+      <td><a href="technical-reports/qwen3/">Qwen3：Thinking 模式、36T 预训练与蒸馏</a></td>
       <td>如何用 36T token 三阶段预训练、四阶段后训练、GRPO、thinking budget 和 strong-to-weak distillation 构建双模式开源模型家族</td>
       <td><a href="../reinforcement-learning/">强化学习</a> / <a href="../training/post-training-data-engines-and-judge-models/">后训练数据引擎</a></td>
     </tr>
     <tr>
       <td>2025-07</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/gemini-2-5/">Gemini 2.5 Technical Report：动态 Thinking、多模态长上下文与 Agentic 能力</a></td>
+      <td><a href="technical-reports/gemini-2-5/">Gemini 2.5：动态 Thinking 与长上下文 Agent</a></td>
       <td>如何用 native multimodal sparse MoE、teacher distillation、TPUv5p/Pathways、SFT/RM/RL、dynamic thinking 和工具/多模态数据构建 1M context Gemini 2.5</td>
       <td><a href="../training/">训练</a> / <a href="../inference/rag-agents-and-long-context-systems/">Agent / 长上下文</a></td>
     </tr>
     <tr>
       <td>2025-07</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/kimi-k2/">Kimi K2：Open Agentic Intelligence、MuonClip 与万亿 MoE Agent 模型</a></td>
+      <td><a href="technical-reports/kimi-k2/">Kimi K2：MuonClip、万亿 MoE 与 Agent 数据</a></td>
       <td>如何用 MuonClip 跑稳 1T MoE 预训练，并通过 agentic data synthesis、tool-use SFT、RLVR/self-critique reward 和 checkpoint engine 训练开放 agent 模型</td>
       <td><a href="../training/distributed-training-and-checkpointing/">分布式训练</a> / <a href="../inference/rag-agents-and-long-context-systems/">Agent 系统</a></td>
     </tr>
     <tr>
       <td>2026-04</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/nemotron-3-super/">Nemotron 3 Super：Hybrid Mamba-MoE、LatentMoE、MTP 与异步多环境 RL</a></td>
+      <td><a href="technical-reports/nemotron-3-super/">Nemotron 3 Super：Mamba-MoE 与异步多环境 RL</a></td>
       <td>如何用 Mamba-heavy hybrid backbone、LatentMoE、shared-weight MTP、NVFP4 预训练、多环境异步 GRPO 和 FP8/NVFP4 PTQ 构建高吞吐 agentic MoE</td>
       <td><a href="../inference/caching-routing-and-speculative/">推测解码</a> / <a href="../quantization/fp8-and-mixed-precision-serving/">低精度服务</a></td>
     </tr>
     <tr>
       <td>2026-04</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/qwen35-omni/">Qwen3.5-Omni Technical Report：Thinker-Talker、ARIA 与 256K 全模态 Agent</a></td>
+      <td><a href="technical-reports/qwen35-omni/">Qwen3.5-Omni：Thinker-Talker 与全模态 Agent</a></td>
       <td>如何用 Thinker-Talker、AuT、Hybrid MoE、ARIA、三阶段预训练和分模块后训练构建可流式语音交互的全模态 agent</td>
       <td><a href="../vlm/">VLM/VLA</a> / <a href="../inference/serving-systems/">推理服务系统</a></td>
     </tr>
     <tr>
       <td>2026-05</td>
       <td>技术报告</td>
-      <td><a href="technical-reports/deepseek-v4-pro/">DeepSeek-V4 Technical Report：百万上下文、混合注意力与 FP4 后训练</a></td>
+      <td><a href="technical-reports/deepseek-v4-pro/">DeepSeek-V4：百万上下文与 FP4 后训练</a></td>
       <td>如何用 CSA/HCA、mHC、Muon、FP4 QAT、异构 KV cache 和 OPD 基础设施把 MoE 大模型推向 1M context 与长流程 agent 场景</td>
       <td><a href="../inference/context-compression-kv-eviction-and-memory-hierarchies/">KV / 长上下文</a> / <a href="../quantization/fp8-and-mixed-precision-serving/">低精度服务</a></td>
     </tr>

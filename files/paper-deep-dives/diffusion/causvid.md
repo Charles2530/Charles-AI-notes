@@ -4,7 +4,7 @@ paper_title: From Slow Bidirectional to Fast Autoregressive Video Diffusion Mode
 paper_topic: 扩散模型
 ---
 
-# CausVid：把双向视频 DiT 蒸馏成流式自回归视频扩散模型
+# CausVid：流式自回归视频扩散
 
 !!! info "论文信息"
     - 论文：`From Slow Bidirectional to Fast Autoregressive Video Diffusion Models`

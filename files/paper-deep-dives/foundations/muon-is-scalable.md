@@ -1,10 +1,10 @@
 ---
 paper_date: 2025-02
 paper_title: Muon is Scalable for LLM Training
-paper_topic: 基础知识
+paper_topic: 高效训练
 ---
 
-# Muon：面向 LLM 预训练的可扩展优化器
+# Muon：LLM 预训练优化器
 
 !!! info "论文信息"
     - 论文：`Muon is Scalable for LLM Training`
@@ -269,7 +269,7 @@ Scaling law 用的是 Llama 架构 dense models，模型和训练规模如下：
 
 Muon 的核心假设是：矩阵正交化能让权重沿更多方向学习。论文用 SVD entropy 检查训练中不同权重组的奇异谱，发现 Muon 训练出的矩阵通常有更高的 SVD entropy，尤其 router 权重差异更明显。
 
-![Muon SVD entropy 原图](https://ar5iv.labs.arxiv.org/html/2502.16982/assets/x5.png){ width="920" }
+![Muon SVD entropy 原图](https://ar5iv.labs.arxiv.org/html/2502.16982/assets/x5.png){ width="760" }
 
 <small>图源：`Muon is Scalable for LLM Training`，Figure 4。原图把权重分成 AttnQO、AttnKV、Experts、SharedExperts、Router、Dense 六组，比较 AdamW 与 Muon 在训练迭代中的平均 SVD entropy。</small>
 
@@ -342,7 +342,7 @@ Muon 的核心假设是：矩阵正交化能让权重沿更多方向学习。论
 4. 然后用 scaling law 和真实 5.7T token 训练同时验证；
 5. 最后再单独检查 SFT 和稳定性边界。
 
-对基础知识学习来说，Muon 是一个很好的例子：优化器不是只改一行 `optimizer = ...`，它会牵动参数分组、学习率尺度、数值范围、通信拓扑、checkpoint 状态和后训练可迁移性。AdamW 仍然是大多数项目的默认起点；Muon 则提示我们，在矩阵权重占主导的大模型预训练中，优化器的几何假设本身仍然有很大改进空间。
+对高效训练学习来说，Muon 是一个很好的例子：优化器不是只改一行 `optimizer = ...`，它会牵动参数分组、学习率尺度、数值范围、通信拓扑、checkpoint 状态和后训练可迁移性。AdamW 仍然是大多数项目的默认起点；Muon 则提示我们，在矩阵权重占主导的大模型预训练中，优化器的几何假设本身仍然有很大改进空间。
 
 ## 参考链接
 

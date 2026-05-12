@@ -4,7 +4,7 @@ paper_title: "Improved Distribution Matching Distillation for Fast Image Synthes
 paper_topic: 扩散模型
 ---
 
-# DMD2：把分布匹配蒸馏推向更稳、更强的少步生成
+# DMD2：更稳的少步分布匹配蒸馏
 
 !!! info "论文信息"
     - 论文：`Improved Distribution Matching Distillation for Fast Image Synthesis`

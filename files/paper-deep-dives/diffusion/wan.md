@@ -4,7 +4,7 @@ paper_title: "Wan: Open and Advanced Large-Scale Video Generative Models"
 paper_topic: 扩散模型
 ---
 
-# Wan2.1：开源大规模视频生成模型的系统路线
+# Wan2.1：开源视频生成系统路线
 
 !!! info "论文信息"
     - 论文：`Wan: Open and Advanced Large-Scale Video Generative Models`

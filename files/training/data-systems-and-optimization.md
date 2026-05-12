@@ -1,8 +1,11 @@
-# 数据系统与优化
+# 训练数据系统与吞吐优化
 
 很多人把训练问题理解成“调优化器”。这只对了一小部分。在大模型训练里，优化器当然重要，但真正决定结果的往往是整套训练系统：数据如何清洗和混合，batch 如何组织，序列如何 packing，学习率如何调度，dataloader 能否持续喂满 GPU，checkpoint 与容错是否可靠。
 
-这页把“优化”和“数据系统”放在一起看，因为现实里它们几乎总是耦合的。更细的数据配方讨论见 [Scaling、课程学习与数据混合](scaling-curriculum-and-data-mixture.md)，运维侧见 [训练集群运维、实验管理与成本治理](cluster-operations-and-experiment-management.md)。
+这页把“优化”和“数据系统”放在一起看，因为现实里它们几乎总是耦合的。更细的数据配方讨论见 [Scaling、课程学习与数据配比](scaling-curriculum-and-data-mixture.md)，运维侧见 [集群运维与实验治理](cluster-operations-and-experiment-management.md)。
+
+!!! note "页面边界"
+    本页是训练数据生产线的总览：把数据治理、有效 token、batch、packing、吞吐和 checkpoint 放到同一张系统图里。具体的 packing、tokenizer、streaming 细节放在 [输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md)；数据质量和去重细节放在 [数据质量、去重与治理](data-quality-dedup-and-governance.md)；数据配比和课程学习放在 [Scaling、课程学习与数据配比](scaling-curriculum-and-data-mixture.md)。
 
 !!! note "初学者先抓住"
 

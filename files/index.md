@@ -14,7 +14,7 @@
 
 !!! note "初学者先抓住"
 
-    第一次读不必按目录从头刷完。先用“我现在的问题是什么”来选入口：概念卡住读基础，工程卡住读训练/推理/量化/算子，论文卡住读专题讲解和参考文献。每个专题都尽量先建立地图，再下钻细节。
+    第一次读不必按目录从头刷完。先按当前阅读目标选入口：概念卡住读基础，工程卡住读训练/推理/量化/算子，论文卡住读专题讲解和参考文献。每个专题都尽量先建立地图，再下钻细节。
 
 ## 站点定位
 
@@ -86,7 +86,7 @@
 为了让各页面读起来像同一套文档，后续扩写尽量遵循同一粒度：
 
 - 每页优先控制在 5-8 个二级章节，右侧目录只承担主线导航，不把每个小点都升成 `##`。
-- 总览页负责讲地图、边界和路线；专题页负责讲机制、工程实现、评测与失效模式。
+- 总览页负责讲地图、边界和路线；专题页负责讲机制、工程实现、世界模型评测与失效模式。
 - 单节内容保持适中：先讲问题和判断标准，再放公式、例子、系统约束或论文脉络。
 - 避免在每页末尾重复模板化“小结”；如果需要收口，直接给出可执行清单或决策判断。
 - 跨主题内容优先互链，例如低比特训练、FP8 Kernel、量化服务和推理成本应互相指向，而不是各写一套孤立解释。
@@ -104,7 +104,7 @@
   </a>
   <a class="atlas-card" href="inference/">
     <strong>推理</strong>
-    <p>覆盖服务系统、运行时、KV cache、解耦式 prefill、在线评测和容量治理。</p>
+    <p>覆盖推理服务系统、运行时、KV cache、解耦式 prefill、在线评测和容量治理。</p>
   </a>
   <a class="atlas-card" href="operators/">
     <strong>算子与编译器</strong>
@@ -149,9 +149,9 @@
 | 你现在的问题 | 先读哪里 | 再接哪里 |
 | --- | --- | --- |
 | 基础概念不稳，读论文容易卡住 | [基础知识](foundations/index.md) | [术语表](glossary/index.md) |
-| 想理解大模型怎么训出来 | [训练总览](training/index.md) | [低比特训练](training/low-bit-training-and-numerics.md)、[分布式训练](training/distributed-training-and-checkpointing.md) |
-| 线上服务慢、贵、不稳定 | [推理总览](inference/index.md) | [推理服务系统](inference/serving-systems.md)、[vLLM/SGLang/TensorRT-LLM](inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md) |
-| 模型太大，显存或吞吐不够 | [量化总览](quantization/index.md) | [量化运行时](quantization/quantization-runtimes-and-frameworks.md)、[低精度 Kernel](operators/low-precision-and-quantized-kernels.md) |
+| 想理解大模型怎么训出来 | [大模型训练路线图](training/index.md) | [低比特训练](training/low-bit-training-and-numerics.md)、[分布式训练](training/distributed-training-and-checkpointing.md) |
+| 线上服务慢、贵、不稳定 | [推理系统路线图](inference/index.md) | [推理服务系统](inference/serving-systems.md)、[推理运行时](inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md) |
+| 模型太大，显存或吞吐不够 | [量化路线图](quantization/index.md) | [量化运行时](quantization/quantization-runtimes-and-frameworks.md)、[低精度 Kernel](operators/low-precision-and-quantized-kernels.md) |
 | 想从多模态理解过渡到世界模型 | [VLM/VLA 总览](vlm/index.md) | [世界模型](world-models/index.md)、[具身智能](embodied-ai/index.md) |
 | 想做机器人、VLA 或具身系统 | [VLM/VLA 总览](vlm/index.md) | [具身智能](embodied-ai/index.md)、[世界模型](world-models/index.md) |
 | 想理解芯片平台、软件栈和产品化部署 | [思考探索](thinking-exploration/index.md) | [量化](quantization/index.md)、[推理](inference/index.md)、[算子与编译器](operators/index.md) |

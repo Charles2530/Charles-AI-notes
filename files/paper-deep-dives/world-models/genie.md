@@ -1,10 +1,10 @@
 ---
 paper_date: 2024-02
-paper_title: Genie: Generative Interactive Environments
+paper_title: "Genie: Generative Interactive Environments"
 paper_topic: 世界模型
 ---
 
-# Genie：从无标注视频到可交互生成环境
+# Genie：无标注视频到可交互环境
 
 !!! info "论文信息"
     - 论文：`Genie: Generative Interactive Environments`

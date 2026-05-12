@@ -4,7 +4,7 @@ paper_title: "Introduction to Latent Variable Energy-Based Models: A Path Toward
 paper_topic: 世界模型
 ---
 
-# H-JEPA：Latent Variable EBMs and Hierarchical JEPA
+# H-JEPA：层级 JEPA 与潜变量 EBM
 
 !!! info "论文信息"
     - 论文：`Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`

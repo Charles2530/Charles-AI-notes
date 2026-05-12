@@ -1,6 +1,6 @@
 # 一致性模型与 Rectified Flow
 
-扩散模型在生成质量上取得巨大成功后，一个越来越现实的问题浮出水面：采样太慢。哪怕 DDIM、DPM-Solver、Euler、Heun 已经把步数从几百降到几十，很多交互式应用仍然希望“一步到几步就出图”。一致性模型（Consistency Models）、Rectified Flow、Flow Matching 以及一系列蒸馏与整流方法，正是在这个背景下快速发展起来的。它们的共同目标，是把原本多步的生成轨迹压缩得更短、更直、更稳定。
+扩散模型在生成质量上取得巨大成功后，一个越来越现实的问题浮出水面：采样太慢。哪怕 DDIM、DPM-Solver、Euler、Heun 已经把步数从几百降到几十，很多交互式应用仍然希望“一步到几步就出图”。一致性模型（Consistency Models）、Rectified Flow、Flow Matching 以及一系列一步生成、蒸馏与整流方法，正是在这个背景下快速发展起来的。它们的共同目标，是把原本多步的生成轨迹压缩得更短、更直、更稳定。
 
 !!! note "初学者先抓住"
 

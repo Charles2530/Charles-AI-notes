@@ -1,4 +1,4 @@
-# 概率、潜变量与生成模型
+# 概率与潜变量模型
 
 生成模型的目标不是记住训练样本，而是学习数据背后的分布，并从这个分布中采样出新样本。
 
@@ -114,9 +114,9 @@ x = decode(z)
 
 ## 6. 和后续专题的关系
 
-- [扩散模型总览](../diffusion/index.md)：理解加噪、去噪和 score。
-- [Score Matching、SDE 与 Probability Flow](../diffusion/score-matching-sde-and-probability-flow.md)：理解连续时间生成轨迹。
-- [世界模型总览](../world-models/index.md)：理解潜状态、未来预测和动作条件分布。
+- [扩散模型路线图](../diffusion/index.md)：理解加噪、去噪和 score。
+- [Score Matching 到 SDE](../diffusion/score-matching-sde-and-probability-flow.md)：理解连续时间生成轨迹。
+- [世界模型路线图](../world-models/index.md)：理解潜状态、未来预测和动作条件分布。
 - [量化](../quantization/index.md)：低精度误差最终也会改变模型分布。
 
 ## 小结
