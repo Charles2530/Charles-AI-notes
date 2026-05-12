@@ -27,15 +27,16 @@
 2. [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)
 3. [卷积、CNN 与特征提取](convolution-and-feature-extraction.md)
 4. [Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)
-5. [提示工程、CoT 与 RAG 基础](prompt-engineering-cot-and-rag-basics.md)
-6. [多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md)
-7. [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)
-8. [归一化、残差与激活函数](normalization-residual-and-activation.md)
-9. [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)
-10. [优化与训练基础](optimization-and-training-basics.md)
-11. [自动微分、激活显存与 Checkpointing](autograd-activation-checkpointing-and-memory.md)
-12. [数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md)
-13. [数值、显存与运行时基础](numerics-memory-and-runtime-basics.md)
+5. [Mamba、状态空间模型与 Mamba-Transformer 架构](mamba-and-hybrid-ssm-transformers.md)
+6. [提示工程、CoT 与 RAG 基础](prompt-engineering-cot-and-rag-basics.md)
+7. [多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md)
+8. [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)
+9. [归一化、残差与激活函数](normalization-residual-and-activation.md)
+10. [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)
+11. [优化与训练基础](optimization-and-training-basics.md)
+12. [自动微分、激活显存与 Checkpointing](autograd-activation-checkpointing-and-memory.md)
+13. [数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md)
+14. [数值、显存与运行时基础](numerics-memory-and-runtime-basics.md)
 
 ## 一条最短主线
 
@@ -63,6 +64,7 @@
 | 线性层与 GEMM | Transformer、量化、算子 | 为什么大模型性能经常卡在矩阵乘 |
 | 卷积与特征提取 | 扩散 UNet、视觉编码器、VLM | 为什么局部纹理和层级特征重要 |
 | Transformer 与 Attention | LLM、VLM、DiT、推理 KV cache | 为什么 attention 既强又贵 |
+| Mamba 与状态空间模型 | 长上下文、流式推理、混合 Mamba-Transformer 架构 | 为什么 recurrent state 能降低 KV cache 压力，为什么混合架构会流行 |
 | 提示工程、CoT 与 RAG | 推理服务、Agent、企业知识库、工具系统 | prompt 如何定义任务边界，RAG 如何组织证据 |
 | 多模态、CoT 与推理 | VLM、Omni、agent、世界模型 | 不同模态如何进模型，thinking token 如何服务复杂任务 |
 | 位置编码与 Mask | 长上下文、VLM、VLA、推理 | 为什么 token 顺序、可见性和上下文成本必须一起看 |
@@ -80,7 +82,7 @@
 | 专题来源 | 回填到基础层的知识点 | 建议回看 |
 | --- | --- | --- |
 | [Muon](../paper-deep-dives/foundations/muon-is-scalable.md)、[Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md)、[DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | 优化器不只是 AdamW 参数表；Muon / MuonClip 强调更新矩阵几何、谱范数约束和大规模 MoE 训练稳定性 | [优化与训练基础](optimization-and-training-basics.md) |
-| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | Mamba-heavy backbone、GQA、LatentMoE 和 shared-weight MTP 说明“注意力、状态空间、MoE、预测头”是不同结构层 | [Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)、[位置编码、Mask 与上下文](positional-encoding-masks-and-context.md) |
+| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | Mamba-heavy backbone、GQA、LatentMoE 和 shared-weight MTP 说明“注意力、状态空间、MoE、预测头”是不同结构层 | [Mamba、状态空间模型与 Mamba-Transformer 架构](mamba-and-hybrid-ssm-transformers.md)、[Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md) |
 | [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md)、[Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 多模态不是“把图片转文字再给 LLM”；音频、视觉、文本、动作 token 都会改变输入表示、评测和安全边界 | [多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md)、[数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md) |
 | [Qwen3](../paper-deep-dives/technical-reports/qwen3.md)、推理与 Agent 系统 | CoT、thinking budget、RAG 和工具调用都属于“上下文如何被组织和使用”的问题；prompt 只是其中一个接口 | [提示工程、CoT 与 RAG 基础](prompt-engineering-cot-and-rag-basics.md)、[多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md) |
 | [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md)、[RingAttention](../paper-deep-dives/world-models/ringattention.md) | attention 的数学定义和实际执行路径不同；稀疏、线性、blockwise 和 sequence parallel 都是在改变可见性、访存和通信方式 | [位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)、[数值、显存与运行时基础](numerics-memory-and-runtime-basics.md) |
@@ -91,7 +93,7 @@
 
 | 检查点 | 你应该能说清什么 | 如果卡住，回看 |
 | --- | --- | --- |
-| 表示 | 数据如何变成 tensor、token、embedding 或 latent state | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)、[多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md) |
+| 表示 | 数据如何变成 tensor、token、embedding、recurrent state 或 latent state | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer、Attention 与 Tokenization](transformer-attention-and-tokenization.md)、[Mamba、状态空间模型与 Mamba-Transformer 架构](mamba-and-hybrid-ssm-transformers.md)、[多模态、CoT 与推理基础](multimodal-cot-and-reasoning-basics.md) |
 | 目标 | loss、概率目标或生成目标到底在约束什么 | [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)、[优化与训练基础](optimization-and-training-basics.md) |
 | 执行 | 训练和推理为什么会受显存、带宽、dtype 和 kernel 影响 | [自动微分、激活显存与 Checkpointing](autograd-activation-checkpointing-and-memory.md)、[数值、显存与运行时基础](numerics-memory-and-runtime-basics.md) |
 | 证据 | 一个方法变好，是平均分变好，还是关键任务桶真的变好 | [数据划分、指标与评测基础](data-splits-metrics-and-evaluation-basics.md) |

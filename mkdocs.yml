@@ -60,6 +60,7 @@ nav:
       - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
       - 卷积、CNN 与特征提取: foundations/convolution-and-feature-extraction.md
       - Transformer、Attention 与 Tokenization: foundations/transformer-attention-and-tokenization.md
+      - Mamba、状态空间模型与混合架构: foundations/mamba-and-hybrid-ssm-transformers.md
       - 提示工程、CoT 与 RAG 基础: foundations/prompt-engineering-cot-and-rag-basics.md
       - 多模态、CoT 与推理基础: foundations/multimodal-cot-and-reasoning-basics.md
       - 位置编码、Mask 与上下文: foundations/positional-encoding-masks-and-context.md

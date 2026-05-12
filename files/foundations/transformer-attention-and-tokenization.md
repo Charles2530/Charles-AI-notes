@@ -170,6 +170,7 @@ function TransformerBlock(x):
 - [推理系统](../inference/index.md)：KV cache 和 attention 决定长上下文成本。
 - [算子与编译器](../operators/index.md)：FlashAttention 和 GEMM 是 Transformer 性能核心。
 - [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)：理解 QKV 投影、MLP 和矩阵乘热路径。
+- [Mamba、状态空间模型与 Mamba-Transformer 架构](mamba-and-hybrid-ssm-transformers.md)：理解为什么一些新模型用 recurrent state 替代大量 attention，并保留少量 attention 做混合架构。
 
 ## 小结
 

@@ -499,6 +499,16 @@
    长序列训练并行化入口。
 6. [SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention](https://arxiv.org/abs/2509.24006) / [SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675)  
    视频 DiT attention 加速路线，把 sparse exact attention、linear compensation、learnable routing 和 QAT 接到同一条工程链路；站内专题见 [SLA / SLA2 讲解](../paper-deep-dives/foundations/sla-sparse-linear-attention.md)。
+7. [Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)  
+   Selective SSM 和 hardware-aware scan 的核心论文；站内基础讲解见 [Mamba、状态空间模型与 Mamba-Transformer 架构](../foundations/mamba-and-hybrid-ssm-transformers.md)。
+8. [Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality](https://arxiv.org/abs/2405.21060)  
+   Mamba-2 和 state space duality 入口，适合理解 attention 与 SSM 的统一视角。
+9. [Jamba: A Hybrid Transformer-Mamba Language Model](https://arxiv.org/abs/2403.19887) / [Jamba-1.5](https://arxiv.org/abs/2408.12570)  
+   混合 Transformer-Mamba-MoE 架构代表，重点看 layer ratio、MoE 和长上下文部署。
+10. [Nemotron-H: A Family of Accurate and Efficient Hybrid Mamba-Transformer Models](https://arxiv.org/abs/2504.03624)  
+   NVIDIA 的 hybrid Mamba-Transformer family，重点看以推理成本为目标的架构替换、蒸馏压缩和 FP8 训练 recipe。
+11. [Mamba-3: Improved Sequence Modeling using State Space Principles](https://arxiv.org/abs/2603.15569)  
+   2026 年的 SSM 改进工作，关注 state tracking、complex-valued state update 和 MIMO formulation。
 
 ### 8.3 MoE、路由与大规模稀疏训练
 
