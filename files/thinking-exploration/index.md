@@ -78,8 +78,8 @@
 | 时间 | 主题 | 文章 | 阅读重点 |
 | --- | --- | --- | --- |
 | 2026-05 | 端侧 AI / XR 芯片 | [Qualcomm XR2 Gen 2 / QCS8450：从芯片平台到 AI Hub 量化部署](qualcomm-xr2-gen2.md) | Snapdragon XR2 Gen 2 与 QCS8450 / Proxy 口径、MR/VR 硬件规格、AI Hub Workbench 软件栈、QIDK 示例和 ViT 量化流程 |
-| 2026-05 | 世界模型 | [世界模型走到哪一步了：从视频模拟到工程闭环](world-models-status-and-pdf-reflections.md) | 视频世界模型、3D 几何、仿真评测和《世界模型开发进度安排.pdf》里的工程路线判断 |
-| 2026-05 | 具身智能 / VLA | [具身智能走到哪一步了：VLA、数据工厂与真实闭环](embodied-ai-status-and-pdf-reflections.md) | VLA、任务状态、数据 recipe、失败恢复和《具身知识库.pdf》里的现状思考 |
+| 2026-05 | 世界模型 | [世界模型走到哪一步了：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md) | 视频世界模型、3D 几何、仿真评测和工程路线判断 |
+| 2026-05 | 具身智能 / VLA | [具身智能走到哪一步了：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md) | VLA、任务状态、数据 recipe、失败恢复和现状思考 |
 
 ## 和正文专题的连接
 

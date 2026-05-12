@@ -212,8 +212,8 @@ nav:
   - 思考探索:
       - thinking-exploration/index.md
       - Qualcomm XR2 Gen 2 / QCS8450：从芯片平台到 AI Hub 量化部署: thinking-exploration/qualcomm-xr2-gen2.md
-      - 世界模型走到哪一步了：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-pdf-reflections.md
-      - 具身智能走到哪一步了：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-pdf-reflections.md
+      - 世界模型走到哪一步了：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
+      - 具身智能走到哪一步了：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
   - 论文专题讲解:
       - paper-deep-dives/index.md
       - 基础知识:

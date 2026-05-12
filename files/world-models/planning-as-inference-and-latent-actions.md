@@ -93,6 +93,13 @@ z_{1:K} \rightarrow a_{1:T}
 3. 足够有语义，能表达任务阶段和技能；
 4. 与世界模型 latent 对齐，方便预测动作后果。
 
+![Hierarchical JEPA planning 原论文图](../assets/images/paper-deep-dives/world-models/jepa/figure-16-hierarchical-planning.png){ width="920" }
+
+<small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 16。原论文图意：分层 JEPA / world model 可以在不同抽象层级上预测和规划，高层处理慢变量与目标，低层处理更细的动作和观测。</small>
+
+!!! note "图解：潜在动作为什么天然适合分层"
+    高层 planner 不应该搜索每一个关节微动作，而应该搜索“接近、抓取、放置、重新观察”这类更粗的技能或 latent action；低层控制器再把它展开成连续轨迹。分层规划图的意义在于把时间尺度、抽象程度和动作粒度对齐，减少长时任务里的组合爆炸。
+
 !!! note "常见误区：潜在动作只是压缩"
     如果潜在动作只是把原始控制序列压短，却不能稳定解码成可执行动作，也不能让世界模型预测不同选择的后果，那么它只是数据压缩。真正有用的 latent action 应该同时降低搜索难度、保留技能语义，并让 planner 能比较不同动作分支的风险和收益。
 

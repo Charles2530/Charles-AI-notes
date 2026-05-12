@@ -1,6 +1,6 @@
 # 世界模型开发路线：数据、几何、仿真与评测
 
-这页把《世界模型开发进度安排.pdf》里的工程笔记整理成一条更完整的教程线：从相机和几何数据开始，到 3D encoder、VLA / diffusion policy、仿真环境、success checker，再到一个能服务真实任务的世界模型闭环。
+这页把面向机器人任务的世界模型开发路线整理成一条更完整的教程线：从相机和几何数据开始，到 3D encoder、VLA / diffusion policy、仿真环境、success checker，再到一个能服务真实任务的世界模型闭环。
 
 它的重点不是再解释“世界模型是什么”，而是回答一个更实际的问题：
 
@@ -10,16 +10,19 @@
 
 <small>图源：[Wikimedia Commons: Equipment for self-driving car.jpg](https://commons.wikimedia.org/wiki/File:Equipment_for_self-driving_car.jpg)。这张照片适合作为世界模型的直觉入口：真实世界系统不是只看 RGB 图像，而是把相机、深度、位姿、传感器外参、运动规划和风险判定接成一条闭环。</small>
 
-![World model engineering loop](../assets/images/world-models/pdf-development-loop.svg){ width="960" }
+![Simulation approaches for video world models 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="960" }
 
-<small>自绘图：把 PDF 里的开发笔记压成一个工程闭环。世界模型不是孤立训练脚本，而是数据 schema、几何 encoder、动作模型、仿真评测和失败回流共同构成的系统。</small>
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 9。真实项目里的世界模型往往要在 data、reconstruction、simulation、policy/evaluation 之间循环，而不是孤立训练一个预测器。</small>
+
+!!! note "图解：把这张图当成项目路线图读"
+    左侧是数据和真实世界来源，中间是重建、生成和模拟方式，右侧才是策略、评测和交互使用。开发时不要从“选一个模型”开始，而要先问：数据字段是否稳定、相机/pose 是否可复算、仿真和 success checker 是否能给模型提供可验证的闭环。
 
 !!! note "先把这页和总览区分开"
     [世界模型总览](index.md) 讲方法谱系：RSSM、Dreamer、视频世界模型、WAM、数据引擎。本文更像项目路线图：数据字段怎么定，3D 重建 encoder 怎么接，仿真数据怎么生成，成功判定怎么写，最后怎样把模型测试闭环跑起来。
 
-## PDF 覆盖审计：这页把哪些材料用到了哪里
+## 本页知识地图：这些主题如何串起来
 
-| PDF 主题 | 已落到本文哪里 | 读的时候抓什么 |
+| 主题 | 本文位置 | 读的时候抓什么 |
 | --- | --- | --- |
 | 前置知识：相机标定、6D pose、MoGe-2、DUSt3R、AR / AE / Transformer | 四层地基、3D encoder、数据预处理 | 先把坐标、尺度、时序和注意力机制看成同一条工程地基 |
 | 小雨数据与焊缝字段 | 数据准备、小雨焊缝任务 | `cam_pos_list`、`seam_pose`、焊缝局部/全局坐标是任务能否运行的硬约束 |
@@ -31,7 +34,7 @@
 
 ## 1. 世界模型项目的四层地基
 
-PDF 里的开发安排有一个很强的工程信号：**世界模型不是先选一个大模型就开训，而是先把数据契约、几何坐标、仿真环境和评测口径定住。**
+这条开发路线有一个很强的工程信号：**世界模型不是先选一个大模型就开训，而是先把数据契约、几何坐标、仿真环境和评测口径定住。**
 
 可以把项目拆成四层：
 
@@ -57,7 +60,7 @@ PDF 里的开发安排有一个很强的工程信号：**世界模型不是先�
 
 ### 前置知识地图：先补齐这五块再谈大模型
 
-PDF 开头列了一批前置知识，它们看起来像零散关键词，其实正好对应世界模型的五个底座：
+前置知识看起来像零散关键词，其实正好对应世界模型的五个底座：
 
 | 前置知识 | 在系统里解决什么 | 具体落点 |
 | --- | --- | --- |
@@ -71,7 +74,7 @@ PDF 开头列了一批前置知识，它们看起来像零散关键词，其实�
 
 ## 2. 数据准备：先把 pose、相机和任务对象讲清楚
 
-PDF 里提到的小雨数据问题很典型：代码需要读取 `cam_pos_list` 和 `seam_pose`，但旧数据里出现 `cam_pose_list` 命名差异且缺少 `seam_pose`，导致模型无法运行。这类问题不是小 bug，而是世界模型项目的根问题：**状态定义不稳定，模型就不知道自己在预测什么。**
+小雨数据问题很典型：代码需要读取 `cam_pos_list` 和 `seam_pose`，但旧数据里出现 `cam_pose_list` 命名差异且缺少 `seam_pose`，导致模型无法运行。这类问题不是小 bug，而是世界模型项目的根问题：**状态定义不稳定，模型就不知道自己在预测什么。**
 
 建议把每个 episode 的数据契约写成固定字段：
 
@@ -95,7 +98,7 @@ PDF 里提到的小雨数据问题很典型：代码需要读取 `cam_pos_list` 
 
 ## 3. 三条模型路线：3D、2D/VLA、Diffusion
 
-PDF 把主流路线分成三类，这个划分很适合作为选型地图。
+主流路线可以先分成三类，这个划分很适合作为选型地图。
 
 | 路线 | 代表技术 | 输入重点 | 输出重点 | 适合什么任务 |
 | --- | --- | --- | --- | --- |
@@ -103,7 +106,7 @@ PDF 把主流路线分成三类，这个划分很适合作为选型地图。
 | 2D 场景理解 / VLA | π0、π0.5、OpenVLA、GR00T N1、Helix | 图像、语言、本体状态 | 动作 token、动作块、子任务 | 语言到动作、跨场景泛化、桌面操作 |
 | Diffusion policy | Diffusion Policy、RDT、DP3 | 视觉条件、机器人状态、噪声动作 | 连续动作序列 | 平滑动作、模仿学习、灵巧操作 |
 
-PDF 的复现清单可以进一步整理成“先复现什么、验证什么”的表：
+复现清单可以进一步整理成“先复现什么、验证什么”的表：
 
 | 复现对象 | 属于哪条线 | 先验证什么 |
 | --- | --- | --- |
@@ -114,7 +117,7 @@ PDF 的复现清单可以进一步整理成“先复现什么、验证什么”�
 
 ### 3D 路线：先让模型拥有空间账本
 
-3D 路线的价值在于：很多机器人任务不是“识别物体叫什么”，而是“从哪里看、从哪里伸手、是否被挡住、会不会碰”。PDF 里关注 MapAnything、VGGT 一类模型，正是因为它们能把相机、深度和场景几何拉回同一张账本。
+3D 路线的价值在于：很多机器人任务不是“识别物体叫什么”，而是“从哪里看、从哪里伸手、是否被挡住、会不会碰”。MapAnything、VGGT 一类模型值得关注，正是因为它们能把相机、深度和场景几何拉回同一张账本。
 
 [MapAnything](https://arxiv.org/abs/2509.13414) 的目标是统一多种 3D 视觉任务：输入一张或多张图像，以及可选的内参、pose、depth 或局部重建，直接回归 metric 3D scene geometry 和 cameras。[VGGT](https://vgg-t.github.io/) 则把 camera parameters、point maps、depth maps、3D point tracks 放进一个 feed-forward Transformer 里，强调快速直接的几何推断。
 
@@ -134,7 +137,7 @@ PDF 的复现清单可以进一步整理成“先复现什么、验证什么”�
 
 ### Diffusion 路线：把动作当成一段可采样轨迹
 
-Diffusion Policy 和 RDT 一类方法适合连续动作生成。相比一步动作，动作块能更平滑，也更接近“技能片段”。PDF 里的很多 VLA 工作也强调 action chunk 或未来轨迹，而不是单步 action。
+Diffusion Policy 和 RDT 一类方法适合连续动作生成。相比一步动作，动作块能更平滑，也更接近“技能片段”。很多 VLA 工作也强调 action chunk 或未来轨迹，而不是单步 action。
 
 动作扩散模型的关键检查点是：
 
@@ -146,7 +149,7 @@ Diffusion Policy 和 RDT 一类方法适合连续动作生成。相比一步动�
 
 ## 4. 3D 重建 Encoder：数据预处理比模型名更重要
 
-PDF 里把 MapAnything 数据转换流程拆成多步，这对任何 3D 世界模型都很关键：
+MapAnything 一类 3D 数据转换流程通常会拆成多步，这对任何 3D 世界模型都很关键：
 
 | 步骤 | 做什么 | 为什么重要 |
 | --- | --- | --- |
@@ -158,7 +161,7 @@ PDF 里把 MapAnything 数据转换流程拆成多步，这对任何 3D 世界�
 | MVSAnywhere / multiview depth | 多视图深度估计 | 提高跨视角几何一致性 |
 | depth consistency confidence | 深度一致性置信度 | 训练时降低错误监督权重 |
 
-PDF 里还记录了 MapAnything 数据池的组织方式：不是只拿一个数据集跑通，而是把合成、室内、室外、物体和机器人仿真数据分层纳入。比如 Aria Synthetic、BlendedMVS、DL3DV-10K、Dynamic Replica、ETH3D、Mapillary、MegaDepth、MVS-Synth、Parallel Domain 4D、ScanNet++ v2、TartanAirV2、Objaverse、HyperSim、Kubric、Omnidata、Habitat 等。真正重要的不是把名字背下来，而是记住这件事：**3D encoder 要吃多源数据，必须同时管理格式状态、下载完整性、相机模型和可用监督类型。**
+MapAnything 这类数据池的组织方式不是只拿一个数据集跑通，而是把合成、室内、室外、物体和机器人仿真数据分层纳入。比如 Aria Synthetic、BlendedMVS、DL3DV-10K、Dynamic Replica、ETH3D、Mapillary、MegaDepth、MVS-Synth、Parallel Domain 4D、ScanNet++ v2、TartanAirV2、Objaverse、HyperSim、Kubric、Omnidata、Habitat 等。真正重要的不是把名字背下来，而是记住这件事：**3D encoder 要吃多源数据，必须同时管理格式状态、下载完整性、相机模型和可用监督类型。**
 
 ![Velodyne LiDAR sensor](../assets/images/thinking-exploration/world-models-embodied-ai/velodyne-lidar.jpg){ width="760" }
 
@@ -185,7 +188,7 @@ PDF 里还记录了 MapAnything 数据池的组织方式：不是只拿一个数
 
 ## 5. 仿真环境：RoboTwin、Isaac Sim、ManiSkill 各司其职
 
-PDF 对仿真环境的整理可以压成一句话：仿真不是“有个模拟器”，而是**任务生成、轨迹生成、观测渲染、成功判定和数据保存的流水线**。
+仿真环境可以压成一句话：仿真不是“有个模拟器”，而是**任务生成、轨迹生成、观测渲染、成功判定和数据保存的流水线**。
 
 | 工具 / 平台 | 在路线中的角色 | 适合关注 |
 | --- | --- | --- |
@@ -194,11 +197,11 @@ PDF 对仿真环境的整理可以压成一句话：仿真不是“有个模拟�
 | ManiSkill | 机器人操作 benchmark 和可复现实验环境 | 快速训练、RL / imitation baseline、任务评测 |
 | cuRobo / motion planner | 从目标位姿生成可执行关节轨迹 | IK、碰撞、平滑、可达性 |
 
-[Isaac Sim 5.1 文档](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html) 明确把容器安装定位到远程 headless server 或 cloud 场景；这和 PDF 里的 Docker + WebRTC Streaming Client 部署方式一致。[RoboTwin 2.0 文档](https://robotwin-platform.github.io/doc/) 则更适合理解任务、资产和数据生成管线。
+[Isaac Sim 5.1 文档](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html) 明确把容器安装定位到远程 headless server 或 cloud 场景；这和常见 Docker + WebRTC Streaming Client 部署方式一致。[RoboTwin 2.0 文档](https://robotwin-platform.github.io/doc/) 则更适合理解任务、资产和数据生成管线。
 
-PDF 中还有一个很有工程价值的环境矩阵：
+一个有工程价值的环境矩阵是：
 
-| 环境 | PDF 里的角色 | 适合放在哪个阶段 |
+| 环境 | 路线中的角色 | 适合放在哪个阶段 |
 | --- | --- | --- |
 | RoboTwin | 基于 SAPIEN 的双臂任务、资产功能点、专家轨迹、自动 success checker | 快速搭任务模板和自动评测 |
 | Isaac Sim / Isaac Lab | Docker、WebRTC、传感器、USD 资产、高保真渲染 | 视觉数据生成、传感器仿真、部署前验证 |
@@ -210,7 +213,7 @@ PDF 中还有一个很有工程价值的环境矩阵：
 
 ### RoboTwin 生成式数字孪生资产流程
 
-PDF 对 RoboTwin 1.0 的资产生成流程记录得很完整，可以整理成一个从单张图到可操作资产的流水线：
+RoboTwin 1.0 的资产生成流程可以整理成一个从单张图到可操作资产的流水线：
 
 | 步骤 | 做什么 | 产物 |
 | --- | --- | --- |
@@ -227,7 +230,7 @@ PDF 对 RoboTwin 1.0 的资产生成流程记录得很完整，可以整理成�
 
 ## 6. Success Checker：自动判卷器也会“作弊”
 
-PDF 对 RoboTwin 评测规则的记录很有价值，因为它提醒我们：很多 benchmark 只检查最后状态，可能漏掉中间过程。
+RoboTwin 的评测规则很有价值，因为它提醒我们：很多 benchmark 只检查最后状态，可能漏掉中间过程。
 
 常见 success checker 信号包括：
 
@@ -240,7 +243,7 @@ PDF 对 RoboTwin 评测规则的记录很有价值，因为它提醒我们：很
 | 夹爪状态 | 任务结束时夹爪打开或闭合 | 夹爪状态不能完全代表抓住物体 |
 | 关节状态 | 抽屉、笔记本、开关是否打开到阈值 | 中间是否碰撞可能没记录 |
 
-PDF 里的几个例子很适合做评测设计模板：
+下面几个例子很适合做评测设计模板：
 
 | 任务 | 判定重点 | 额外建议 |
 | --- | --- | --- |
@@ -251,9 +254,9 @@ PDF 里的几个例子很适合做评测设计模板：
 | 打开笔记本 | 关节打开比例、末端仍在铰链附近 | 加入过力、卡住、回弹判断 |
 | 扫描物体 | 沿扫描轴线对齐、距离区间、双手夹紧 | 加入可见性和扫描持续时间 |
 
-把 PDF 里的任务再归类，可以得到一张更容易扩展的判定地图：
+把这些任务再归类，可以得到一张更容易扩展的判定地图：
 
-| 任务组 | PDF 中的代表任务 | 判定核心 |
+| 任务组 | 代表任务 | 判定核心 |
 | --- | --- | --- |
 | 点击 / 开关 | click alarm clock、click bell、turn switch | 正确手臂、按钮/开关接触、关节或状态触发 |
 | 抬升 / 倾倒 | lift roller、dump trash、shake bottle | 高度阈值、姿态区间、目标物是否进入容器 |
@@ -268,7 +271,7 @@ PDF 里的几个例子很适合做评测设计模板：
 
 ## 7. 以小雨焊缝任务为例：世界模型到底预测什么
 
-PDF 里有一句非常具体的 TODO：用仿真生成相机观测，让模型预测一段相机/机械臂动作轨迹，再用几何/遮挡判断这段轨迹能否把焊缝看全。
+以小雨焊缝观察任务为例，可以把目标写得很具体：用仿真生成相机观测，让模型预测一段相机/机械臂动作轨迹，再用几何/遮挡判断这段轨迹能否把焊缝看全。
 
 这可以整理成一个清晰任务：
 
@@ -329,7 +332,7 @@ PDF 里有一句非常具体的 TODO：用仿真生成相机观测，让模型�
 
 ## 9. 一个建议的开发顺序
 
-结合 PDF 的进度安排，更稳的开发顺序是：
+结合上面的路线，更稳的开发顺序是：
 
 1. **数据契约冻结**：字段、shape、坐标系、单位、控制频率全部写进 schema；
 2. **几何可视化**：相机、工件、焊缝、轨迹、点云在同一坐标系中可视化；
@@ -345,7 +348,6 @@ PDF 里有一句非常具体的 TODO：用仿真生成相机观测，让模型�
 
 ## 10. 参考资料
 
-- 《世界模型开发进度安排.pdf》：本文的项目路线、字段、仿真和 success checker 总结来源。
 - [MapAnything: Universal Feed-Forward Metric 3D Reconstruction](https://arxiv.org/abs/2509.13414)：3D encoder 和统一几何建模路线。
 - [VGGT: Visual Geometry Grounded Transformer](https://vgg-t.github.io/)：feed-forward 3D 属性预测。
 - [π0.5: a VLA with Open-World Generalization](https://www.pi.website/blog/pi05)：异构数据协同训练、高层子任务和 flow matching 动作专家。

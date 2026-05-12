@@ -41,9 +41,9 @@ RT-1 原论文的任务示例图很适合说明具身任务为什么不能只用
 
 这也是为什么具身评测不能只报一个总成功率。π0.5 更像在测开放家庭长任务，DreamZero 更像在测 WAM 是否能当 policy，LingBot-World 更像在测交互模拟器是否动作敏感。它们的指标不应该被简单横向混用。
 
-## 1.2 PDF 中的 Benchmark 快速定位
+## 1.2 Benchmark 快速定位
 
-《具身知识库.pdf》里的 Benchmark 梳理可以作为这页的快捷索引。它们不是同一类考试，先分清“考什么”，再比较模型分数。
+下面这些 Benchmark 不是同一类考试，先分清“考什么”，再比较模型分数。
 
 | Benchmark / 数据环境 | 主要考什么 | 容易误读的地方 |
 | --- | --- | --- |
@@ -55,6 +55,13 @@ RT-1 原论文的任务示例图很适合说明具身任务为什么不能只用
 | RoboTwin | 双臂任务、数字孪生资产、功能点和 success checker | 强在自动生成和自动判卷，但 checker 必须防止最终状态作弊 |
 
 这张表也解释了为什么新增的 [数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md) 会从 Benchmark 开始讲：评测定义了“什么算智能”，模型只是朝这个定义优化。
+
+![π0.5 evaluation environments 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-6-eval-environments.png){ width="920" }
+
+<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 6。原论文图意：展示用于评测 open-world generalization 的真实家庭环境，强调测试场景不在训练数据中。</small>
+
+!!! note "图解：真正的 Benchmark 要把测试环境说清楚"
+    这张图提醒我们，评测不是抽象数字。新家、新物体、新布局和新光照会同时改变视觉分布、任务语义和动作可达性。读具身论文时，先看 train/test 环境是否真的分开，再看是否报告 task progress、语言跟随、失败阶段和人工干预，而不是只盯总成功率。
 
 ## 2. 从低层控制到高层任务的层级
 

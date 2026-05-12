@@ -34,6 +34,13 @@ Open X-Embodiment 的数据集总览图很适合解释为什么具身智能需�
 
 所以 Sim2Real 数据引擎要先确定服务哪条路线。给 VLA 的数据要重视动作监督和任务语义；给 WAM 的数据要重视视频-action 对齐；给传统 planner baseline 的数据要重视几何、碰撞和判定脚本。混在一起收集，后面很难解释模型到底学到了什么。
 
+![π0.5 data ablation 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-10-data-ablation.png){ width="920" }
+
+<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 10。原论文图意：比较去掉 web data、cross-embodiment data、multi-environment data 等不同数据源后，in-distribution 和 OOD 任务表现如何变化。</small>
+
+!!! note "图解：数据引擎要看数据源贡献，而不是只看总量"
+    这张 ablation 图说明，数据 recipe 会决定模型在哪些场景泛化。Web data 更像补开放世界语义，cross-embodiment / multi-environment robot data 更像补动作和场景泛化。做 Sim2Real 回流时，也要问每一类失败样本补的是语义、视觉、动作、动力学还是评测盲区。
+
 ## 1. Sim2Real gap 到底是什么
 
 设仿真环境分布为 \(p_{\text{sim}}\)，真实环境分布为 \(p_{\text{real}}\)。  

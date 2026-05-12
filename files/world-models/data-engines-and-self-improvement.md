@@ -160,6 +160,13 @@ Near-miss 往往最值钱，因为它同时具备风险高、可学习、数量�
 !!! note "这张图帮你补哪块基础"
     第一阶段像给模型看海量世界录像，让它知道物体、场景和一般运动长什么样。第二阶段开始喂动作、相机、游戏或交互轨迹，让模型知道“做了什么会改变未来”。第三阶段才把系统约束放进来：因果注意力、KV cache、少步蒸馏、延迟预算和实时交互。世界模型的数据飞轮不是单一数据池，而是按能力阶段组织的数据供应链。
 
+![LingBot-World long-memory 原论文图](../assets/images/paper-deep-dives/world-models/lingbot-world/figure-12-memory.png){ width="920" }
+
+<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 12。原论文图意：展示模型在长时交互中保持空间记忆与历史一致性的能力。</small>
+
+!!! note "图解：数据引擎为什么要专门收长时失败"
+    长时记忆问题通常不会在短片段 loss 里暴露：模型可能 5 秒内看起来稳定，30 秒后忘记门开没开、物体放到哪里、之前绕过哪个障碍。数据引擎应该把“长时不一致、回到旧位置认错、状态记忆断裂”单独成桶，而不是只按视频质量或短期成功率回流。
+
 这条线和 RSSM/Dreamer 的交互轨迹路线不同。RSSM/Dreamer 从一开始就把 `observation-action-reward-done` 当成训练核心；LingBot-World 这类视频路线先把“世界长什么样、会怎么动”的视觉先验学强，再补动作条件和交互逻辑。两条路线都需要数据回流，但回流重点不同：
 
 | 路线 | 最值钱的回流数据 | 为什么 |

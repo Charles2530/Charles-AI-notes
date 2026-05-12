@@ -24,9 +24,14 @@
 
 ## 一条贯穿路线
 
-结合《世界模型开发进度安排.pdf》补充后，这个专题可以按一条更工程化的路线来读：
+这个专题可以按一条更工程化的路线来读：
 
-![World model engineering loop](../assets/images/world-models/pdf-development-loop.svg){ width="900" }
+![State-space video world model 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-5-state-space-video-world-model.png){ width="900" }
+
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 5。世界模型的工程主线可以理解为把 observation、latent state、action 和 rollout 接成可被 policy / planner 消费的状态空间视频世界模型。</small>
+
+!!! note "图解：这张图是世界模型专题的主轴"
+    图里最重要的不是视频帧，而是 state、action 和 rollout 的接口。`state` 负责压缩历史观测，`action` 负责让未来分叉，`rollout` 负责给 planner / policy 提供可比较的后果。后面读 Dreamer、WAM、LingBot-World、DreamZero 时，都可以回到这三个接口判断它们到底补强了哪一环。
 
 | 阶段 | 本专题要回答的问题 | 对应入口 |
 | --- | --- | --- |
@@ -327,7 +332,7 @@ $$
 <div class="atlas-card-grid">
   <a class="atlas-card" href="development-roadmap-data-simulation-and-evaluation/">
     <strong>开发路线：数据、几何、仿真与评测</strong>
-    <p>把 PDF 中的数据准备、3D 重建、仿真环境、success checker 和小雨焊缝任务整理成工程路线。</p>
+    <p>把数据准备、3D 重建、仿真环境、success checker 和焊缝任务整理成工程路线。</p>
   </a>
   <a class="atlas-card" href="rssm-dreamer-and-planning/">
     <strong>RSSM、Dreamer 与规划</strong>

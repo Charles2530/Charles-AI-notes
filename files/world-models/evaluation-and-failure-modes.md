@@ -10,6 +10,13 @@
 !!! example "有趣例子：天气预报和出门决策"
     一张漂亮的云图不一定能帮你决定带不带伞。真正有用的天气模型要告诉你降雨概率、时间、地点和不确定性。世界模型也是这样：好看的未来不等于可规划的未来。
 
+![PlaNet open-loop predictions 原论文图](../assets/images/paper-deep-dives/world-models/planet/figure-9-open-loop-predictions.png){ width="760" }
+
+<small>图源：[Learning Latent Dynamics for Planning from Pixels](../paper-deep-dives/world-models/planet.md)，Figure 9。原论文图意：展示从真实历史出发的 open-loop latent dynamics 预测，随着 rollout 变长，模型必须在没有真实未来输入的情况下维持世界状态。</small>
+
+!!! note "图解：open-loop 图要看漂移，不只看第一帧"
+    这类图最容易被误读成“像不像视频”。正确读法是沿时间看：物体身份是否保持、空间布局是否漂移、关键任务变量是否还可读、误差是不是越滚越大。世界模型如果只在短 horizon 好看，接入 planner 后会把小误差放大成错误动作。
+
 ## 一、先分清评测对象：WM、WAM、VAM 不一样
 
 世界模型至少有三层能力：
@@ -140,6 +147,13 @@ Near-miss 比真实事故更高频，也更适合回流训练。建议记录：
 | 平均化未来 | 多模态未来被洗成均值 | 随机 latent、分支采样、扩散/token 生成 |
 | 规划漏洞 | planner 找到模型里高回报但现实坏的动作 | adversarial planning test、模型不确定性惩罚、真实回放 |
 | 部署失败 | 太慢、不可监控、无法回退 | 分层使用、低频分析、回退阈值、资源预算 |
+
+![DreamZero failure case 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-16-failure-case.png){ width="920" }
+
+<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 16。原论文图意：展示 video-action model 在特定视觉未来或动作计划上失败时，动作会沿着错误预测继续执行。</small>
+
+!!! note "图解：WAM 的失败往往是“一致地错”"
+    普通策略失败可能只是动作噪声；WAM 失败更危险的一点是，错误未来视频和错误动作可能相互支持，看起来像一条连贯计划。评测时要专门检查失败案例：视频未来错在哪里，动作是否跟着错，真实观测刷新后模型能不能纠正，以及 safety layer 是否能在执行前截停。
 
 一个具体例子是机械臂抓取。模型可能生成“物体靠近夹爪”的画面，但没有学到摩擦、接触和夹爪闭合后的状态转移。视觉上没问题，反事实动作一测就暴露：轻微改变抓取角度后，未来仍然几乎不变。
 

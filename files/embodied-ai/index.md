@@ -68,9 +68,14 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 
 ## 一条贯穿路线
 
-结合《具身知识库.pdf》补充后，这个专题可以按下面这条线读。它从任务和数据开始，经过 VLA、世界模型、控制器和评测，再回到数据 recipe。
+这个专题可以按下面这条线读：从任务和数据开始，经过 VLA、世界模型、控制器和评测，再回到数据 recipe。
 
-![VLA data model evaluation flywheel](../assets/images/embodied-ai/vla-data-model-evaluation-flywheel.svg){ width="900" }
+![Open X-Embodiment dataset 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="900" }
+
+<small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。具身智能的主线首先是跨机器人、跨任务、跨相机和跨动作接口的数据汇聚，再在这个数据底座上连接 VLA policy、世界模型、控制器、评测和失败回流。</small>
+
+!!! note "图解：具身智能为什么先讲数据异质性"
+    这张图里的重点是“同一个机器人数据集并不统一”：机器人本体、场景、物体、技能和轨迹分布都不同。VLA / WAM 要泛化，必须处理跨 embodiment、跨相机、跨动作空间的数据契约；否则模型可能只是在某个固定实验室里成功。
 
 | 阶段 | 关键问题 | 对应入口 |
 | --- | --- | --- |
@@ -336,7 +341,7 @@ def closed_loop_step(robot, perception, planner, controller):
 
 | 阶段 | 先读 | 读完要能回答 |
 | --- | --- | --- |
-| 1. PDF 补充路线 | [数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md) | Benchmark、数据集、VLA 模型族、任务状态、动作表示和数据 recipe 如何连起来 |
+| 1. 数据与模型路线 | [数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md) | Benchmark、数据集、VLA 模型族、任务状态、动作表示和数据 recipe 如何连起来 |
 | 2. 从零主线 | [具身智能从零学习路线](beginner-learning-path.md) | VLM、VLA、world model、WAM、π0.5、DreamZero 和资产/轨迹 pipeline 的基本关系 |
 | 3. 视觉传感器 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md) | 单目、双目、RGB-D、点云、内参/外参和相机安装方式分别是什么 |
 | 4. 仿真工具链 | [Isaac Sim 与 RoboTwin](isaacsim-and-robotwin.md) | Isaac Sim、RoboTwin、cuRobo、success checker 在数据生成中如何分工 |

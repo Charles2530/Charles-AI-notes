@@ -12,6 +12,13 @@
 
     人拿杯子前会预想手碰到杯沿会不会打翻，司机变道前会预想旁车会不会加速。世界模型就是让机器也能在真实动作前做这种内部试演。
 
+![World model paradigms 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-1-world-model-paradigms.jpg){ width="860" }
+
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 1。原论文图意：把 internal world model、external world simulation model 和 action-aware simulation 的关系放在同一张图里，说明世界模型既可以服务内部决策，也可以服务外部可视化仿真。</small>
+
+!!! note "图解：机器人和自动驾驶要先分清世界模型落在哪"
+    如果模型只在 agent 内部输出 latent、reward、risk，它更像决策模块的一部分；如果模型生成可观察未来视频或场景，它更像外部模拟器；如果动作会改变未来分支，它才真正接近可用于规划的 action-aware world model。机器人和自动驾驶常常需要三者组合，而不是押注单一路线。
+
 ## 1. 为什么机器人和自动驾驶特别需要世界模型
 
 ### 1.1 试错成本高
@@ -174,6 +181,13 @@ $$
 4. 如果系统安全要求极高，先把它们作为辅助模块接入，而不是直接闭环接管。
 
 ## 4. 机器人中的应用细化
+
+![DreamZero cross-embodiment transfer 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-11-cross-embodiment.png){ width="920" }
+
+<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 11。原论文图意：展示 World-Action Model 在不同 robot embodiment 和任务设置中的迁移表现。</small>
+
+!!! note "图解：机器人应用最难的是跨 embodiment 和动作接口"
+    同一个“抓取/放置”语义，在不同机器人上会变成不同相机视角、不同关节维度、不同夹爪几何和不同控制频率。世界模型如果只学视频外观，很难跨机器人迁移；如果它同时对齐本体状态、动作表示和未来结果，才更接近可复用的机器人策略底座。
 
 ### 4.1 隐空间规划
 
@@ -605,4 +619,3 @@ VLM、VLA、具身与世界模型类页面，最大的风险不是内容太少�
 ### 还值得继续深挖的问题
 
 围绕 **机器人与自动驾驶应用**，下一轮最值得继续加厚的，往往是这些内容：失败恢复怎么真正进入主逻辑；哪些高价值样本最值得回流；哪些闭环指标才真正决定可用性；以及一旦线上或实机表现和离线不一致，应该优先怀疑数据、接口、执行层还是评测口径。把这些补充写厚，页面就会更像系统设计手册而不只是综述页。
-

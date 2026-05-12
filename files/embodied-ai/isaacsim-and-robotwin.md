@@ -11,7 +11,12 @@ success checker 更像“自动判卷器”
 
 它们不是同一层工具，不能横向比较。一个完整数据生成系统通常会把它们接起来。
 
-![Isaac Sim / RoboTwin pipeline 示意](../assets/images/embodied-ai/isaacsim-robotwin-pipeline.svg){ width="960" }
+![RoboTwin 2.0 benchmark overview 官方图](https://robotwin-platform.github.io/doc/assets/teaser.png){ width="960" }
+
+<small>图源：[RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/index.html)。这张官方 overview 图适合放在开头：它同时展示了双臂任务、物体库、domain randomization、sim2real、benchmark、开源数据和策略部署，正好对应本文后面讨论的“仿真不是一个画面，而是任务、资产、轨迹、判定和数据保存的系统”。</small>
+
+!!! note "图解：RoboTwin 图要看五个环节"
+    先看任务和资产从哪里来，再看 domain randomization 如何扩展场景，然后看 expert trajectory / policy training 如何生成数据，最后看 benchmark 和 sim2real 如何验收。Isaac Sim 提供物理和渲染能力，RoboTwin 风格 pipeline 提供任务、标注、判卷和数据组织方式。
 
 ## 1. Isaac Sim 是什么
 
@@ -155,7 +160,7 @@ RoboTwin 的启发在于：资产标注要服务任务。随机标一个抓取�
 
 ## 9. 生成式数字孪生资产流程
 
-《世界模型开发进度安排.pdf》记录的 RoboTwin 1.0 流程很适合补到这里：它把“从一张图生成仿真资产”拆成了可检查的中间产物。
+RoboTwin 1.0 的生成式数字孪生流程很适合放到这里：它把“从一张图生成仿真资产”拆成了可检查的中间产物。
 
 | 步骤 | 处理 | 为什么对具身数据重要 |
 | --- | --- | --- |

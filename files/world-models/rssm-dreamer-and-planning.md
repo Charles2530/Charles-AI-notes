@@ -163,6 +163,13 @@ $$
 很多初学者只盯着观测重建和奖励预测，但 episode 终止或任务失败信号也非常关键。  
 如果模型不知道“这条 imagined 轨迹其实已经撞墙或任务结束了”，规划器就会在一个错误的未来里继续优化。
 
+![Dreamer algorithm 原论文图](../assets/images/paper-deep-dives/world-models/dreamer/algorithm-1-dreamer.png){ width="820" }
+
+<small>图源：[Dream to Control](https://arxiv.org/abs/1912.01603)，Algorithm 1。原论文图意：Dreamer 交替执行真实环境交互、world model 更新、imagined rollout、actor/value 更新和真实动作执行。</small>
+
+!!! note "图解：算法框里最重要的是两条数据流"
+    第一条是真实经验流：环境 episode 进入 replay buffer，用来更新 representation、transition、reward 和 continue。第二条是想象经验流：从真实历史编码出的 latent state 出发，在模型里 rollout，再训练 actor/value。Dreamer 的精髓不是某个单独 loss，而是真实数据和 imagined data 之间的交替更新。
+
 ## 5. 为什么 KL 项很关键
 
 如果没有 `KL` 约束，posterior 可能高度依赖当前观测 \(x_t\)，变成“只有看见真图才会推理”。  

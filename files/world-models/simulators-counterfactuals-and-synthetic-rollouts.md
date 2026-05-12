@@ -36,6 +36,13 @@ p(o_{t+1:t+H}\mid o_{\le t},a_{t:t+H-1},g)
 | 世界模型 | 真实数据先验、遮挡、交互、反事实生成 | 边界可能幻觉，物理一致性不保证 |
 | 混合系统 | 结构约束 + 真实先验 | 工程复杂，门禁要求高 |
 
+![Simulation approaches 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="920" }
+
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 9。原论文图意：对比不同 simulation approaches 如何从真实世界、重建、生成式模型和交互数据中组织模拟能力。</small>
+
+!!! note "图解：合成 rollout 要看来源链，不只看结果"
+    这张图适合帮助读者判断 synthetic rollout 的可信度：它来自真实日志、经典仿真、3D 重建，还是纯生成模型？每多一层生成，就多一层偏差来源。高风险样本最好进入“评测/人工复核池”，而不是直接混进训练集。
+
 很多现实系统更适合混合：经典模拟器提供结构约束和可控场景，世界模型提供真实感、行为先验和难以显式建模的分布。
 
 ## 反事实生成
@@ -61,6 +68,13 @@ p(o_{t+1:t+H}\mid o_{\le t},a_{t:t+H-1},g)
 | 数据平衡 | 补全真实数据中稀缺边界 |
 | Stress testing | 构造专项验证集，不一定进入训练 |
 | 主动采样 | 帮助决定下一批真实采集区域 |
+
+![Levels of video world models 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-8-levels-pyramid.jpg){ width="760" }
+
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 8。原论文图意：把 video world model 能力按层级组织，从短期视觉预测逐步走向长期、一致、可交互、可用于决策的世界模拟。</small>
+
+!!! note "图解：不是所有生成未来都能进入数据引擎"
+    低层能力可能只说明模型会续写画面；高层能力才涉及长期一致性、动作可控性、交互性和决策价值。把合成 rollout 用于训练前，先问它属于哪一层：只适合做视觉增强，还是能作为风险反事实，还是足够可靠到能影响 planner 或 policy。
 
 机器人和自动驾驶尤其适合这类数据，因为真实边界试错昂贵且危险。抓取偏差、碰撞边界、行人启动、旁车礼让、施工锥桶位置，这些都很难靠真实主动试错系统覆盖。
 

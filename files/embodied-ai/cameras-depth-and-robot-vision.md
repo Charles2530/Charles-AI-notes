@@ -14,7 +14,9 @@
 
 机器人上常见相机不是一种形态，而是几类安装方式：
 
-![机器人相机安装方式示意](../assets/images/embodied-ai/robot-camera-mounts.svg){ width="920" }
+![Eye-in-hand robot camera setup 原论文图](https://pub.mdpi-res.com/robotics/robotics-07-00031/article_deploy/html/images/robotics-07-00031-g003.png){ width="920" }
+
+<small>图源：[A Simple Robotic Eye-In-Hand Camera Positioning and Alignment Control Method Based on Parallelogram Features](https://www.mdpi.com/2218-6581/7/2/31)，Figure 3。图中相机安装在机械臂末端附近，典型对应 eye-in-hand / wrist camera；外部固定相机则通常放在工作站上方或侧面，用来提供全局视角。</small>
 
 | 安装方式 | 长什么样 | 适合做什么 | 局限 |
 | --- | --- | --- | --- |
@@ -33,7 +35,9 @@
 
 单目相机只有一个视角。它把 3D 世界投影到 2D 图像上，投影时会丢掉深度。
 
-![单目尺度歧义示意](../assets/images/embodied-ai/monocular-ambiguity.svg){ width="920" }
+![Pinhole camera model 网页图](https://commons.wikimedia.org/wiki/Special:FilePath/Pinhole_camera_model_technical_version_-_no_annotation.svg){ width="820" }
+
+<small>图源：[Wikimedia Commons: Pinhole camera model technical version - no annotation.svg](https://commons.wikimedia.org/wiki/File:Pinhole_camera_model_technical_version_-_no_annotation.svg)。针孔模型的关键直觉是：3D 点经过相机光心投影到 2D 成像平面，深度在投影过程中被压缩到尺度变化里，所以单张单目图像天然存在绝对尺度歧义。</small>
 
 同一张图里，一个物体看起来大，可能有两种原因：
 
@@ -69,7 +73,9 @@ far large object   -> image also looks big
 
 双目相机有两个相机，左右之间有固定距离 \(B\)，这个距离叫 baseline。两个相机从不同位置看同一个点，这个点在左右图像里的像素位置会不同，差值叫 disparity。
 
-![双目三角测量示意](../assets/images/embodied-ai/stereo-triangulation.svg){ width="920" }
+![Stereo camera model 网页图](https://commons.wikimedia.org/wiki/Special:FilePath/Stereo-camera-model.jpg){ width="760" }
+
+<small>图源：[Wikimedia Commons: Stereo-camera-model.jpg](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。双目相机的深度来自两个相机之间的 baseline 和左右图像的 disparity；同一个 3D 点在左右图上的像素偏移越大，通常表示它离相机越近。</small>
 
 双目深度的直觉公式是：
 
@@ -109,7 +115,9 @@ RGB image: 每个像素是什么颜色
 Depth image: 每个像素离相机多远
 ```
 
-![RGB-D 主动深度相机示意](../assets/images/embodied-ai/rgbd-depth-camera.svg){ width="920" }
+![Intel RealSense D435 RGB-D camera 网页图](https://commons.wikimedia.org/wiki/Special:FilePath/Intel_Realsense_depth_camera_D435.jpg){ width="620" }
+
+<small>图源：[Wikimedia Commons: Intel Realsense depth camera D435.jpg](https://commons.wikimedia.org/wiki/File:Intel_Realsense_depth_camera_D435.jpg)。RealSense D435 这类 RGB-D / depth camera 会同时提供彩色图像和深度相关传感数据；在机器人里，它常用来把像素反投影成点云，再接抓取、避障和 6D pose 估计。</small>
 
 常见 RGB-D 相机有两类主动深度原理：
 
@@ -154,11 +162,14 @@ RGB/RGB-D image
 
 ## 6. 内参、外参和标定：把像素接回真实空间
 
-相机能不能用于机器人，关键不只是有没有图，还要知道图和真实世界怎么对应。你给的 CSDN 文章把入门脉络说得很清楚：先理解世界坐标系、相机坐标系、图像坐标系、像素坐标系，再理解内参和外参。这里把这条线补成具身智能里更实用的版本。
+相机能不能用于机器人，关键不只是有没有图，还要知道图和真实世界怎么对应。入门时可以先理解世界坐标系、相机坐标系、图像坐标系、像素坐标系，再理解内参和外参。这里把这条线补成具身智能里更实用的版本。
 
-![相机标定坐标链路](../assets/images/embodied-ai/camera-calibration-coordinate-chain.svg){ width="960" }
+![Chessboard calibration setup 网页图](https://commons.wikimedia.org/wiki/Special:FilePath/Chessboard_calibration_setup.png){ width="760" }
 
-<small>自绘图，参考 OpenCV pinhole camera model 与常见相机标定教程。核心链路是：世界坐标经过外参变到相机坐标，再透视投影到成像平面，最后由内参映射到像素坐标。</small>
+<small>图源：[Wikimedia Commons: Chessboard calibration setup.png](https://commons.wikimedia.org/wiki/File:Chessboard_calibration_setup.png)。标定的核心是用已知尺寸的棋盘格、Charuco 或 AprilTag 等几何目标，把真实 3D 点和图像 2D 点配对；OpenCV 的 camera calibration 文档也把内参、外参和畸变放在同一套投影模型里解释。</small>
+
+!!! note "图解：标定图要和公式连起来看"
+    棋盘格角点提供已知 3D 几何，图像中的角点提供 2D 像素坐标。标定就是让 \(K[R|t]\) 投影出来的像素尽量对齐真实角点。内参 \(K\) 说明相机自己怎么成像，外参 \([R|t]\) 说明相机相对世界或机器人 base 在哪里。
 
 ### 6.1 四个坐标系：先分清点在哪里
 

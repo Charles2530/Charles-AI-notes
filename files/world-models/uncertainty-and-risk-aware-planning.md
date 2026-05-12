@@ -50,6 +50,13 @@ p(s_{t+1:t+H}\mid s_t,a_{t:t+H-1})
 
 均值轨迹可能生成一条“介于两者之间”的平滑未来，看起来谁也没撞，但对规划毫无帮助。多模态未来必须以分布、样本或风险边界表达，而不是压成一条平均轨迹。
 
+![Uncertain planning with latent variables 原论文图](../assets/images/paper-deep-dives/world-models/jepa/figure-17-uncertain-planning.png){ width="860" }
+
+<small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 17。原论文图意：用 latent variables 表达不可直接从当前观测确定的未来分支，规划时保留多条可能 trajectory，而不是压成单一未来。</small>
+
+!!! note "图解：风险规划要保留未来分叉"
+    图里的 latent variable 可以理解成“现在还看不见但会影响未来的因素”。如果直接取平均，危险分支可能被抹平；如果保留多个 latent trajectory，planner 才能比较平均收益、尾部风险和信息获取动作。对机器人和驾驶来说，真正有价值的不是最漂亮的未来，而是能把危险分支提前显出来。
+
 ## Ensemble 与不确定性分解
 
 若使用模型集合 \(\{M_i\}_{i=1}^K\)，预测量为 \(Y\)，总方差可粗略拆成：

@@ -229,9 +229,9 @@ P = P_1 + P_2,\quad P_1=P\odot M,\quad P_2=P\odot(1-M)
 
 SLA2 的总体 pipeline 如下：
 
-![SLA2 attention pipeline 示意图](../../assets/images/paper-deep-dives/foundations/sla2-attention-pipeline.svg){ width="920" }
+![SLA2 attention pipeline 原论文图](https://arxiv.org/html/2602.12675v1/x1.png){ width="760" }
 
-<small>图源：`SLA2: Sparse-Linear Attention with Learnable Routing and QAT`，Figure 1；本站按原论文 pipeline 重绘为本地 SVG，避免 ResearchGate 热链失效。原论文图意：SLA2 用 learnable router \(R(Q,K)\) 产生 sparse mask，再用 learnable ratio \(\alpha\) 混合 sparse attention output 和 linear attention output；sparse 分支还可以通过 QAT 引入 low-bit attention。</small>
+<small>图源：[SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675)，Figure 1。原论文图意：SLA2 用 learnable router \(R(Q,K)\) 产生 sparse mask，再用 learnable ratio \(\alpha\) 混合 sparse attention output 和 linear attention output；sparse 分支还可以通过 QAT 引入 low-bit attention。</small>
 
 ## SLA2 的公式：从 `Proj` 补偿改成比例混合
 

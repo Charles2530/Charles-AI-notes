@@ -18,6 +18,13 @@
   -> 数据、评测与回流
 ```
 
+![π0.5 model overview 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-3-model-overview.png){ width="920" }
+
+<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 3。原论文图意：π0.5 把 high-level subtask prediction 和 flow-matching action expert 放进同一套 VLA 推理流程。</small>
+
+!!! note "图解：这张图对应系统地图的哪几层"
+    图左侧的多模态输入对应“感知与状态估计”，中间的 high-level prediction 对应“语义与子任务”，右侧的 action expert 对应“动作表示与策略”。它也暴露出 VLA 的边界：图里没有显式展开候选动作未来，也没有替代低层安全控制，所以后面还要接世界模型、planner、controller 和 success checker。
+
 | 层级 | 负责的问题 | 典型对象 | 论文案例 |
 | --- | --- | --- | --- |
 | 感知与状态估计 | 机器人现在看见什么、物体在哪里、自己在哪里 | RGB、RGB-D、多视角、6D pose、proprioception | π0.5 的 4 路相机输入、DreamZero 的 visual context |
@@ -116,11 +123,18 @@ p_\theta(o_{t+1:t+H}, a_{t:t+H} \mid o_{\le t}, q_t, \ell)
 
 ```text
 current visual context + language + robot state
-  -> future video latents
-  -> future action chunk
-  -> execute action
-  -> refresh context with real observation
+-> future video latents
+-> future action chunk
+-> execute action
+-> refresh context with real observation
 ```
+
+![DreamZero architecture 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-4-architecture.png){ width="920" }
+
+<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 4。原论文图意：DreamZero 在视频生成主干中组织 visual context、language、robot state 和 action prediction，使未来视频和动作共享生成上下文。</small>
+
+!!! note "图解：系统地图里的 WAM 不是普通视频生成器"
+    读这张架构图时看四个接口：视觉历史如何进模型，机器人状态如何进模型，动作从哪里解码，执行后如何回到真实观测。只有这四个接口都说清楚，WAM 才能从“会生成未来画面”变成“能进入机器人控制循环”的系统模块。
 
 | DreamZero 设计 | 放回具身系统里怎么理解 |
 | --- | --- |

@@ -16,6 +16,13 @@
 
     `WM` 像场景模拟师，关心世界会怎么变；`WAM` 像动作导演，关心角色该怎么动以及动完画面怎样；`VAM` 像视频导演，先抓住时序画面规律，再把它用于行动。
 
+![DreamZero joint video-action prediction 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-2-joint-video-action.png){ width="920" }
+
+<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 2。原论文图意：把未来视频和未来动作放到同一个生成过程里建模，让动作序列必须和视觉未来对齐。</small>
+
+!!! note "图解：为什么这张图适合作为 WAM 入口"
+    传统世界模型常是“给定动作，预测未来”；普通 VLA 常是“给定观测，输出动作”。DreamZero 这张图把两件事绑在一起：未来视频不再只是展示用的 rollout，动作也不再只是行为克隆标签。读 WAM 时要看三件事：动作 token 在哪里进入模型，未来视觉和动作是否共享上下文，执行后是否用真实新观测刷新，而不是一直相信自己生成的未来。
+
 ## 统一问题
 
 三条路线都围绕同一个基本问题：
@@ -82,6 +89,13 @@ VAM 的吸引力来自几个事实：
 2. 视频数据规模通常远大于机器人动作数据；
 3. 视频预训练可能比静态图像更利于动作泛化；
 4. 视频 latent 可以作为动作模型的动态上下文。
+
+![Video Prediction Policy overview 原论文图](../assets/images/paper-deep-dives/embodied-ai/vpp/figure-1-overview.png){ width="920" }
+
+<small>图源：[Video Prediction Policy](../paper-deep-dives/embodied-ai/video-prediction-policy.md)，Figure 1。原论文图意：先让文本条件视频预测模型学习操作过程中的未来视觉，再用预测表征作为动作生成条件。</small>
+
+!!! note "图解：VAM 不是把视频生成结果直接拿去执行"
+    这张图的重点在中间表征：视频预测模型学到的是“接下来会怎样动”的动态上下文，下游动作模型再利用这些表征生成机器人动作。也就是说，VAM 的价值不一定来自完整解码清晰视频，而是来自视频模型内部保留了物体运动、遮挡、接触和任务阶段信息。
 
 但 VAM 不等于“会生成视频”。真正要验证的是：
 

@@ -12,6 +12,13 @@
 
 只要这条链里有一段不稳，系统都会失败。π0.5、DreamZero、LingBot-World、Dreamer、RoboTwin、cuRobo 这些名字，都是在强化这条链里的不同位置。
 
+![π0.5 model overview 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-3-model-overview.png){ width="920" }
+
+<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 3。原论文图意：π0.5 同一个 VLA 系统先预测 high-level subtask，再由 action expert 输出低层连续动作，从而把长任务语义和机器人控制接起来。</small>
+
+!!! note "图解：从零入门先看高层和低层分工"
+    这张图能把“具身智能不是一个模型名”讲清楚：上半部分像任务理解，回答下一步语义上该做什么；下半部分像身体控制，回答机器人关节和夹爪怎么动。学习具身智能时，先把“任务分解”和“动作执行”分开，再看世界模型、planner 和数据引擎分别补哪一层。
+
 ## 1. 先记住一个核心差别：静态智能 vs 具身智能
 
 普通 VLM / LLM 多数时候回答的是静态问题：
@@ -160,6 +167,13 @@ DreamZero 的关键循环是：
 -> 用真实观测替换模型预测上下文
 -> 继续下一段
 ```
+
+![DreamZero overview 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-1-overview.png){ width="920" }
+
+<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 1。原论文图意：从多源机器人数据训练 world-action model，使模型在执行时同时产生未来视觉和动作，并用真实观测持续闭环刷新。</small>
+
+!!! note "图解：DreamZero 和普通 VLA 的区别"
+    普通 VLA 更像“看一眼，给动作”；DreamZero 让模型同时想象动作会导致怎样的未来。读这张图时关注三条线：视觉上下文从哪里来，动作 chunk 如何生成，真实观测如何回写。没有第三条线，模型会被自己的错误未来带偏。
 
 读 DreamZero 时要抓住一个矛盾：它让模型学会“动作导致什么视觉变化”，这很强；但如果未来视频预测错，它可能会非常一致地执行错误计划。因此 WAM 不能绕过安全层。
 

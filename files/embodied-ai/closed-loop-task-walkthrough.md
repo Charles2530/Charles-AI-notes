@@ -9,6 +9,13 @@
 
 这两个任务很好，因为它们不只是普通 pick-and-place，还会考察尺寸感知、相对比较、空间规划、抓取、放置、任务判定和失败恢复。
 
+![π0.5 cleaning a new kitchen 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-2-cleaning-kitchen.png){ width="920" }
+
+<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 2。原论文图意：展示机器人在未见过的新厨房中执行多个清理子任务，例如关柜门、把物品放入抽屉、擦拭液体和把餐具放入水槽。</small>
+
+!!! note "图解：长任务要按阶段闭环，而不是一次性输出完整答案"
+    这张图里的每个小任务都可以拆成“看见、选择、抓取、移动、放置、判定”。长任务失败通常不是最后一步才发生，而是在任务绑定、对象选择、抓取姿态、轨迹规划或执行反馈中的某一环开始偏离。用具体任务走读时，要把每一阶段的输入、输出和 checker 都写清楚。
+
 ## 1. 同一个任务要被拆成六个问题
 
 以“把圆柱体放入罐口尺寸接近的罐子”为例，系统必须连续回答：
@@ -185,6 +192,13 @@ while not done:
 ```
 
 DreamZero 式路线会让动作和未来画面绑定。它的优势是模型被迫学习“动作会导致什么视觉变化”。风险是，如果未来视频预测错，动作也可能很一致地跟着错。所以它更需要风险检测、真实观测回写和安全层。
+
+![DreamZero seen task evaluation 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-8-seen-task.png){ width="920" }
+
+<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 8。原论文图意：展示 World-Action Model 在机器人任务上的执行与评测样例，用来观察未来视觉和动作输出是否能转化为真实任务进展。</small>
+
+!!! note "图解：闭环走读时要把预测和真实结果对上"
+    WAM 的图不能只看“未来画面像不像”，还要看预测动作执行后真实观测是否朝同一方向变化。实际排查时，把模型预测的未来、下发动作、真实新观测和 success checker 结果并排看，最容易定位失败来自视频预测、动作接口还是执行控制。
 
 ## 6. 失败时应该先查哪一层
 

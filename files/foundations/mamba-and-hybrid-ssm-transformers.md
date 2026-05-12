@@ -2,9 +2,9 @@
 
 Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它的目标不是把 token 之间两两做 attention，而是让序列沿时间方向维护一个紧凑状态，用线性复杂度处理长序列。混合 Mamba-Transformer 架构则更务实：保留一部分 attention 做精确检索和复杂 token 交互，把大量层换成 Mamba / SSM 来降低推理成本。
 
-![Mamba and hybrid Mamba-Transformer architecture](../assets/images/foundations/mamba-hybrid-architecture.svg){ width="920" }
+![Mamba selective SSM overview](https://arxiv.org/html/2312.00752v2/x1.png){ width="920" }
 
-<small>自绘图：左边是典型 Transformer block，中间是 Mamba selective SSM block，右边是混合 Mamba-Transformer stack。核心差别是：attention 为每个 token 读取历史 token 的 key/value；Mamba 把历史压进状态 `h_t`；混合架构在二者之间做层级配比。</small>
+<small>图源：[Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)，Figure 1。原论文图意：Structured SSM 会把输入通道映射到更高维 latent state；Mamba 的 selection mechanism 加入输入相关动态，并用 hardware-aware algorithm 避免把巨大 expanded state 直接物化到 GPU HBM。</small>
 
 !!! note "先抓一句话"
     Transformer 像“每次都翻完整上下文笔记”，Mamba 像“边读边更新一份工作记忆”。前者擅长精确内容寻址，后者擅长低成本长序列流式处理。现在流行的 Mamba-Transformer 不是二选一，而是让 attention 负责少量关键全局交互，让 Mamba 负责多数 token 的状态推进。

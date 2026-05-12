@@ -12,6 +12,13 @@
 
 其中 `GT` 是 ground truth，指可以作为监督信号或评测基准的专家轨迹。对机器人来说，一条 GT 不是一个答案文本，而是一段随时间变化的动作序列。
 
+![SpatialVLA experiment setup 原论文图](../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-3-experiment-setup.png){ width="920" }
+
+<small>图源：[SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md)，Figure 3。原论文图意：展示机器人实验中的多视角相机、机器人本体和任务场景设置，用于说明空间感知、动作网格和跨 embodiment 评测如何连接。</small>
+
+!!! note "图解：资产管线不是离线建模小工具"
+    这张图提醒我们，数据管线最终要落到真实相机、机器人本体、任务物体和动作接口上。资产、scale、camera pose、grasp pose 和 trajectory GT 如果不能在这样的实验设置里对齐，就无法稳定支持 VLA、WAM 或传统 planner。
+
 ## 1. 这套材料里出现了哪些具身知识
 
 | 项目步骤 | 对应的具身智能知识 | 为什么重要 |
@@ -140,6 +147,13 @@ T_{\text{object}\rightarrow\text{gripper}} = (R, t)
 | 任务可行 | 这个抓法是否支持后续任务 | 用锤子时应该抓手柄 |
 
 所以抓取标注最好不要只存一个随机轴，而要存候选集合，并在任务层过滤。早期可以先做手动标注 pipeline：导入物体、移动到夹爪附近、仿真闭合、记录稳定抓取；后续再用自动候选生成加人工筛选提升效率。
+
+![GR-2 bin picking setup 原论文图](../assets/images/paper-deep-dives/embodied-ai/gr2/figure-7-bin-picking-setup.png){ width="900" }
+
+<small>图源：[GR-2](../paper-deep-dives/embodied-ai/gr2.md)，Figure 7。原论文图意：展示 bin picking 真实机器人设置、物体集合和相机/机械臂环境，用来评估机器人在多物体、遮挡和抓取选择中的泛化能力。</small>
+
+!!! note "图解：抓取标注要服务真实任务，而不是只服务夹住"
+    bin picking 的难点不是“有一个抓取点”这么简单，而是多个物体遮挡、候选抓法冲突、抓起后是否还能完成后续放置。读这类图时要把 grasp pose、物体实例、相机视角、夹爪几何和 success checker 放在一起看。
 
 ## 6. 轨迹、动作和 ground truth 是什么关系
 
