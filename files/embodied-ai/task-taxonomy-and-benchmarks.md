@@ -28,6 +28,19 @@ RT-1 原论文的任务示例图很适合说明具身任务为什么不能只用
 
     如果驾考只考直线倒车，学员可能很会完成这个动作，却不会雨天变道、避让行人或处理窄路会车。具身 Benchmark 也是这样：评测桶缺什么，模型就可能在哪些真实场景里脆。
 
+## 1.1 用论文案例定位任务层级
+
+读 π0.5、DreamZero、LingBot-World 这类论文时，先不要急着比较分数，而要先判断它们评测的是哪类任务能力：
+
+| 论文 / 系统 | 评测对象 | 对 Benchmark 的启发 |
+| --- | --- | --- |
+| [π0.5](../paper-deep-dives/vla/pi05.md) | 新家庭厨房/卧室里的多阶段移动操作任务 | 长任务要用 task progress，不只用最终成功率；还要区分语义子任务失败和低层动作失败 |
+| [DreamZero](../paper-deep-dives/world-models/dreamzero.md) | seen / unseen tasks、zero-shot environment、cross-embodiment transfer | WAM 评测要看动作和未来视频是否能转化为真实执行进展，而不是只看视频质量 |
+| [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作条件交互模拟、长 horizon、实时 rollout | 世界模拟器评测要固定历史、改变动作，检查未来是否真的随动作分叉 |
+| 资产/轨迹数据管线 | clean/random 场景、尺寸任务、堆叠/放置/排序 | 自建 Benchmark 要把资产尺度、干扰物、成功判定和失败复位都写进任务定义 |
+
+这也是为什么具身评测不能只报一个总成功率。π0.5 更像在测开放家庭长任务，DreamZero 更像在测 WAM 是否能当 policy，LingBot-World 更像在测交互模拟器是否动作敏感。它们的指标不应该被简单横向混用。
+
 ## 2. 从低层控制到高层任务的层级
 
 ### 2.1 低层控制任务

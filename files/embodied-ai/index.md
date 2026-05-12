@@ -44,6 +44,24 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 !!! note "图解：RT-1 图展示的是闭环控制而不是静态识别"
     图的左侧是任务指令和相机历史，中间是把视觉与语言转成 token 后交给 Transformer policy，右侧是连续执行的机器人动作。关键不是模型“看懂了一张图”，而是每一步动作都会改变环境，下一帧观测又会反过来影响后续动作。如果一个方案只展示“看懂场景”或“输出动作”，但没有说明执行后的反馈、失败恢复和数据回流机制，它还不是完整具身系统。
 
+## 0. 先建立系统地图
+
+具身智能容易难懂，是因为它不是单条模型路线，而是七层系统同时工作：
+
+| 层级 | 先问的问题 | 相关页面 / 论文 |
+| --- | --- | --- |
+| 感知与状态 | 机器人现在看见什么、物体在哪里、自己状态是什么 | [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md) |
+| 语义与任务 | 高层目标要拆成哪些子任务，哪个对象当前最相关 | [π0.5](../paper-deep-dives/vla/pi05.md) |
+| 动作接口 | 动作是 token、末端位姿、关节角，还是一段 action chunk | [VLA 动作表示](../vla/action-representation-and-interfaces.md) |
+| 策略 / VLA | 给定观测和语言，下一段动作是什么 | [π0.5](../paper-deep-dives/vla/pi05.md)、[VLM/VLA 总览](../vlm/index.md) |
+| 世界模型 / WAM | 如果执行动作，未来会怎样；未来视频和动作是否一致 | [DreamZero](../paper-deep-dives/world-models/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) |
+| 规划控制与安全 | 动作能否执行、是否碰撞、是否需要降速或拒绝 | [规划、控制与安全](planning-control-and-safety.md) |
+| 数据与评测 | 数据如何生成，成功如何判定，失败如何回流 | [Sim2Real 与数据引擎](sim2real-and-data-engines.md)、[任务谱系与 Benchmark](task-taxonomy-and-benchmarks.md) |
+
+如果你现在觉得概念散，建议先读 [VLA、WAM 与世界模型系统地图](vla-wam-world-model-system-map.md)。那一页把 π0.5、DreamZero、LingBot-World、Dreamer 和资产/轨迹 pipeline 放进同一张结构图里，先建立“每个方法在系统里负责哪一层”的判断。
+
+如果你想用一个具体任务把整条链路跑通，再读 [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md)。那一页用“按尺寸排序”和“放入匹配容器”解释从任务状态、离线轨迹生成、在线执行、success checker 到失败排查的完整闭环。
+
 ## 1. 具身智能和“大模型智能体”有什么不同
 
 **纯软件智能体的动作常是**：
@@ -133,6 +151,19 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 - 恢复轨迹；
 - 长尾场景；
 - 高质量的任务分解与阶段标签。
+
+## 6.1 从资产到轨迹的工程数据管线
+
+如果从仿真数据集或机械臂任务落地出发，具身智能还要补一条更工程化的线：
+
+```text
+3D 资产和纹理 -> 物理属性 -> 仿真导入 -> 抓取标注
+-> 场景布置 -> 任务判定脚本 -> 轨迹 GT -> 失败复位重试
+```
+
+这条线会把很多容易混淆的概念连在一起：单目、双目、多视图、RGB-D、scale、collision mesh、grasp pose、IK、cuRobo、STOMP、clean/random scene 和 success checker。单独看每个词都像工具名；放回数据管线里，它们分别回答“看见什么、物体是什么、能不能抓、怎么动、成功没有”。
+
+建议结合 [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md) 阅读这一类项目材料。那一页会把资产生成、物理标注、抓取轴、轨迹 ground truth 和任务成功判定拆开解释。
 
 ## 7. 具身智能和 VLA、世界模型的关系
 
@@ -226,9 +257,19 @@ VLA 更像具身智能里的端到端策略接口之一。它回答的是：给�
 
 如果你从世界模型主线进入具身方向，建议先读：
 
-1. [规划、控制与安全](planning-control-and-safety.md)
-2. [Sim2Real 与数据引擎](sim2real-and-data-engines.md)
-3. [任务谱系与 Benchmark](task-taxonomy-and-benchmarks.md)
+1. [VLA、WAM 与世界模型系统地图](vla-wam-world-model-system-map.md)
+2. [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md)
+3. [规划、控制与安全](planning-control-and-safety.md)
+4. [Sim2Real 与数据引擎](sim2real-and-data-engines.md)
+5. [任务谱系与 Benchmark](task-taxonomy-and-benchmarks.md)
+
+如果你是围绕仿真数据集、资产生成或专家轨迹下钻，建议先读：
+
+1. [VLA、WAM 与世界模型系统地图](vla-wam-world-model-system-map.md)
+2. [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md)
+3. [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md)
+4. [Sim2Real 与数据引擎](sim2real-and-data-engines.md)
+5. [规划、控制与安全](planning-control-and-safety.md)
 
 如果你是围绕具体应用下钻，再继续读：
 
@@ -268,9 +309,12 @@ def closed_loop_step(robot, perception, planner, controller):
 
 | 阶段 | 先读 | 读完要能回答 |
 | --- | --- | --- |
-| 1. 任务谱系 | [任务谱系与 Benchmark](task-taxonomy-and-benchmarks.md) | 桌面操作、导航、移动操作、家庭流程和人机协作的评测口径为什么不同 |
-| 2. 规划控制 | [规划、控制与安全](planning-control-and-safety.md) | 高层语义计划、技能库、低层控制器和安全约束如何分工 |
-| 3. 数据迁移 | [Sim2Real 与数据引擎](sim2real-and-data-engines.md)、[家庭机器人流程与失败模式](household-robotics-workflows-and-failure-patterns.md) | 仿真、遥操作、失败样本和恢复轨迹如何共同支撑实机泛化 |
-| 4. 部署协作 | [部署模式与安全案例](deployment-patterns-and-safety-cases.md)、[人机协作与交互评测](human-robot-interaction-and-evaluation.md) | 系统如何在人类共享空间里限制风险、解释状态、支持接管和回放 |
+| 1. 系统地图 | [VLA、WAM 与世界模型系统地图](vla-wam-world-model-system-map.md) | π0.5、DreamZero、LingBot-World、Dreamer 和传统规划分别负责哪一层 |
+| 2. 端到端任务 | [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 一个尺寸排序或容器匹配任务如何从状态定义走到在线执行和失败排查 |
+| 3. 任务谱系 | [任务谱系与 Benchmark](task-taxonomy-and-benchmarks.md) | 桌面操作、导航、移动操作、家庭流程和人机协作的评测口径为什么不同 |
+| 4. 资产与轨迹 | [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md) | 单目/双目/多视图、资产标注、抓取轴、轨迹 GT 和 success checker 分别在管什么 |
+| 5. 规划控制 | [规划、控制与安全](planning-control-and-safety.md) | 高层语义计划、技能库、低层控制器和安全约束如何分工 |
+| 6. 数据迁移 | [Sim2Real 与数据引擎](sim2real-and-data-engines.md)、[家庭机器人流程与失败模式](household-robotics-workflows-and-failure-patterns.md) | 仿真、遥操作、失败样本和恢复轨迹如何共同支撑实机泛化 |
+| 7. 部署协作 | [部署模式与安全案例](deployment-patterns-and-safety-cases.md)、[人机协作与交互评测](human-robot-interaction-and-evaluation.md) | 系统如何在人类共享空间里限制风险、解释状态、支持接管和回放 |
 
 读完后建议回到 [VLM/VLA 总览](../vlm/index.md) 和 [世界模型总览](../world-models/index.md)：前者负责视觉到动作接口，后者负责内部模拟和风险前瞻。一个具身方案如果没有把失败恢复和安全退出写进主路径，就还不能算学习闭环完整。
