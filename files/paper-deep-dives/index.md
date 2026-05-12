@@ -132,7 +132,7 @@
   </tbody>
 </table>
 
-### VLA
+### 具身智能
 
 <table data-paper-sort="asc">
   <thead>
@@ -145,10 +145,40 @@
   </thead>
   <tbody>
     <tr>
+      <td>2024-10</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/gr2/">GR-2：用 web-scale 视频知识迁移到机器人操作</a></td>
+      <td>如何把 38M 视频片段和 50B token 的未来视频预训练迁移到真实机器人轨迹预测，并通过 WBC 落到 Kinova Gen3</td>
+    </tr>
+    <tr>
+      <td>2024-12</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/video-prediction-policy/">Video Prediction Policy：用预测视觉表征训练通用机器人策略</a></td>
+      <td>如何把 text-guided video prediction 的中间预测表征当作视觉 encoder，用单步 forward 支撑 CALVIN、MetaWorld 和真实机器人策略</td>
+    </tr>
+    <tr>
+      <td>2025-01</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/spatialvla/">SpatialVLA：把 3D 空间表示接进 VLA</a></td>
+      <td>如何用 Ego3D position encoding 和 adaptive action grids 把 3D 空间与跨机器人动作 token 接进 VLA</td>
+    </tr>
+    <tr>
       <td>2025-04</td>
-      <td>VLA</td>
-      <td><a href="vla/pi05/">π0.5：面向开放世界泛化的 VLA</a></td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/pi05/">π0.5：面向开放世界泛化的 VLA</a></td>
       <td>如何用 heterogeneous co-training、FAST 离散动作、flow matching action expert 和 high-level subtask prediction 支撑新家庭长任务泛化</td>
+    </tr>
+    <tr>
+      <td>2025-07</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/gr3/">GR-3：任务状态、少样本人类轨迹与长时程 VLA</a></td>
+      <td>如何用 Qwen2.5-VL + flow matching Action DiT、任务状态监督、VR 人类轨迹和 ByteMini 系统推进长时程 VLA</td>
+    </tr>
+    <tr>
+      <td>2026-02</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/dreamzero/">DreamZero：World Action Models are Zero-shot Policies</a></td>
+      <td>joint video-action prediction 如何让 WAM 直接成为机器人 policy，并把世界模型的动作后果预测放进具身闭环</td>
     </tr>
   </tbody>
 </table>
@@ -248,12 +278,6 @@
       <td>世界模型</td>
       <td><a href="world-models/lingbot-world/">LingBot-World：从视频生成到开源世界模拟器</a></td>
       <td>视频基础模型如何继续训练成可交互的世界模型</td>
-    </tr>
-    <tr>
-      <td>2026-02</td>
-      <td>世界模型</td>
-      <td><a href="world-models/dreamzero/">DreamZero：World Action Models are Zero-shot Policies</a></td>
-      <td>joint video-action prediction 如何让 WAM 直接成为机器人 policy</td>
     </tr>
   </tbody>
 </table>

@@ -152,27 +152,167 @@ RGB/RGB-D image
 
 如果只有 RGB，没有深度，也可以用模型估计 6D pose，但通常更依赖训练数据和物体 CAD 模型。对尺寸任务、插入任务、精细抓取来说，真实深度或多视角几何会稳很多。
 
-## 6. 内参、外参和标定
+## 6. 内参、外参和标定：把像素接回真实空间
 
-相机能不能用于机器人，关键不只是有没有图，还要知道图和真实世界怎么对应。
+相机能不能用于机器人，关键不只是有没有图，还要知道图和真实世界怎么对应。你给的 CSDN 文章把入门脉络说得很清楚：先理解世界坐标系、相机坐标系、图像坐标系、像素坐标系，再理解内参和外参。这里把这条线补成具身智能里更实用的版本。
 
-| 概念 | 解释 | 例子 |
+![相机标定坐标链路](../assets/images/embodied-ai/camera-calibration-coordinate-chain.svg){ width="960" }
+
+<small>自绘图，参考 OpenCV pinhole camera model 与常见相机标定教程。核心链路是：世界坐标经过外参变到相机坐标，再透视投影到成像平面，最后由内参映射到像素坐标。</small>
+
+### 6.1 四个坐标系：先分清点在哪里
+
+| 坐标系 | 原点在哪里 | 单位 | 在机器人里对应什么 |
+| --- | --- | --- | --- |
+| 世界坐标系 / world frame | 任务场景或机器人基座定义的参考点 | 米 | 桌面、工件、机器人 base、地图原点 |
+| 相机坐标系 / camera frame | 相机光心 | 米 | 相机自己看到的 3D 空间，通常 \(Z_c\) 指向前方 |
+| 图像坐标系 / image plane | 成像平面中心或光轴交点附近 | 毫米或归一化坐标 | 透视投影后的连续 2D 坐标 |
+| 像素坐标系 / pixel frame | 图像左上角 | 像素 | 图像数组里的 \((u, v)\)，检测框和 mask 都在这里 |
+
+具身系统里最常见的 bug，就是把这四个坐标系混在一起：检测模型输出的是像素坐标，深度反投影得到的是相机坐标，planner 需要的是机器人 base 或 world 坐标，success checker 可能又在仿真 world frame 里判断。
+
+### 6.2 内参 K：相机自己怎么成像
+
+内参描述的是相机自身的成像几何，和相机摆在哪里无关。最常见的 pinhole camera 内参矩阵是：
+
+\[
+K =
+\begin{bmatrix}
+f_x & s & c_x \\
+0 & f_y & c_y \\
+0 & 0 & 1
+\end{bmatrix}
+\]
+
+其中：
+
+| 参数 | 含义 | 直觉 |
 | --- | --- | --- |
-| 内参 / intrinsics | 相机自己的成像参数 | 焦距、主点、畸变 |
-| 外参 / extrinsics | 相机坐标系相对机器人或世界的位置和朝向 | 相机装在桌子上方，离世界原点多远、旋转多少 |
-| 手眼标定 / hand-eye calibration | 腕部相机和机械臂末端之间的变换 | wrist camera 看到杯子后，机械臂知道该往哪里伸 |
-| 时间同步 | 图像、深度、机器人关节状态是否同一时刻 | 移动中不同步会造成 pose 和动作错位 |
+| \(f_x, f_y\) | 以像素为单位的焦距 | 焦距越大，同样大小的物体在图像里越大 |
+| \(c_x, c_y\) | 主点 / principal point | 光轴落在图像上的位置，通常接近图像中心 |
+| \(s\) | skew / 轴倾斜 | 大多数现代相机近似为 0 |
+| distortion | 畸变系数 | 镜头让直线弯曲，常见径向畸变和切向畸变 |
 
-举例：
+一个容易漏掉的细节：如果图像被 resize，\(f_x, f_y, c_x, c_y\) 要按同样比例缩放；畸变系数通常不随分辨率直接缩放。这个细节在 VLA 数据预处理里很重要，否则同一台相机在不同分辨率下会变成两套不一致的几何。
+
+### 6.3 外参 [R|t]：相机在哪里看
+
+外参描述的是世界坐标系和相机坐标系之间的刚体变换：
+
+\[
+P_c = R P_w + t
+\]
+
+齐次坐标写法是：
+
+\[
+\begin{bmatrix}
+X_c \\ Y_c \\ Z_c \\ 1
+\end{bmatrix}
+=
+\begin{bmatrix}
+R & t \\
+0 & 1
+\end{bmatrix}
+\begin{bmatrix}
+X_w \\ Y_w \\ Z_w \\ 1
+\end{bmatrix}
+\]
+
+这里要特别小心两个方向：
+
+| 名称 | 作用 | 机器人里常见叫法 |
+| --- | --- | --- |
+| `w2c` / world-to-camera | 把世界点变到相机坐标 | OpenCV 的很多投影公式使用这个方向 |
+| `c2w` / camera-to-world | 把相机点变到世界坐标 | 常被叫作 camera pose，也就是相机在世界里的位姿 |
+
+两者互为逆矩阵。很多 3D 重建、NeRF、仿真器和机器人库对 pose 的方向约定不同，所以看到 `camera_pose`、`extrinsic`、`T_wc`、`T_cw` 时，第一件事不是写代码，而是确认它到底是 `world -> camera` 还是 `camera -> world`。
+
+### 6.4 从世界点到像素点：一条公式串起来
+
+OpenCV 文档里的 pinhole camera model 可以写成：
+
+\[
+s
+\begin{bmatrix}
+u \\ v \\ 1
+\end{bmatrix}
+=
+K
+\begin{bmatrix}
+R & t
+\end{bmatrix}
+\begin{bmatrix}
+X_w \\ Y_w \\ Z_w \\ 1
+\end{bmatrix}
+\]
+
+拆开看就是：
 
 ```text
-camera frame -> robot base frame -> world frame
+world point Pw
+  -> 外参 [R|t]
+  -> camera point Pc = (Xc, Yc, Zc)
+  -> 透视投影 x = Xc/Zc, y = Yc/Zc
+  -> 内参 K
+  -> pixel point (u, v)
 ```
 
-这中间每个变换都要准确。否则相机看到“杯子在前方 20cm”，机械臂执行时可能偏到旁边。
+反过来，如果你有 RGB-D 图像，就可以用像素和深度反投影：
+
+\[
+X_c = \frac{(u-c_x)Z_c}{f_x},\qquad
+Y_c = \frac{(v-c_y)Z_c}{f_y},\qquad
+Z_c = d(u,v)
+\]
+
+再用 `c2w` 或 `T_base_camera` 把点变到 world / robot base frame。机器人抓取、避障、焊缝观察和尺寸比较，本质上都在反复做这件事。
+
+### 6.5 标定到底在求什么
+
+相机标定就是用已知几何的标定物，把“真实 3D 点”和“图像 2D 点”对应起来，估计内参、畸变和每张图里的外参。常见流程是：
+
+1. 准备棋盘格或 AprilTag / Charuco 这类已知尺寸的标定板；
+2. 从不同位置、角度、距离拍多张图；
+3. 检测角点或 tag 角点，得到 2D image points；
+4. 根据格子尺寸生成对应的 3D object points；
+5. 用 `calibrateCamera` 估计 \(K\)、畸变和每张图的 \(R,t\)；
+6. 用重投影误差检查标定质量；
+7. 对真实机器人，再做手眼标定，把 camera frame 接到 gripper / robot base frame。
+
+OpenCV 的 `calibrateCamera` 会从多个标定板视角估计内外参；如果内参已知，只想求某个物体或标定板相对相机的位姿，通常用 `solvePnP`。这两个函数在具身系统里非常常用：前者回答“这台相机怎么成像”，后者回答“这个已知几何物体现在相对相机在哪里”。
+
+### 6.6 Eye-to-hand、eye-in-hand 和手眼标定
+
+机器人里外参还要分安装方式：
+
+| 安装方式 | 要求的关键变换 | 用来做什么 |
+| --- | --- | --- |
+| eye-to-hand 固定外部相机 | \(T_{\text{base}\leftarrow\text{camera}}\) 或 \(T_{\text{world}\leftarrow\text{camera}}\) | 把相机看到的物体位置变到机器人 base frame |
+| eye-in-hand 腕部相机 | \(T_{\text{gripper}\leftarrow\text{camera}}\) | 末端移动时，相机跟着末端一起动，用于近距离对准 |
+| 多相机 rig | 每台相机到 rig / world / base 的外参 | 多视角融合、遮挡补全、轨迹记录 |
+
+如果是腕部相机，只知道相机内参还不够。你还要知道相机相对夹爪的固定变换，否则相机看到目标在前方 5cm，夹爪并不知道该怎么把这 5cm 转成自己的运动。
+
+### 6.7 具身数据里建议保存哪些字段
+
+| 字段 | 建议含义 | 为什么要存 |
+| --- | --- | --- |
+| `camera_intrinsic` / `K` | \(3 \times 3\) 内参矩阵 | 深度反投影、3D 重建、投影可视化 |
+| `distortion_coeffs` | 径向/切向畸变参数 | 去畸变、真实相机迁移 |
+| `T_world_camera` 或 `T_camera_world` | 明确方向的相机位姿 | 多视图融合、从像素回到世界 |
+| `T_base_camera` | 相机到机器人 base 的变换 | 抓取和轨迹规划 |
+| `T_gripper_camera` | 腕部相机到夹爪的变换 | eye-in-hand 视觉伺服 |
+| `timestamp` | 图像、深度、关节状态的时间戳 | 移动中不同步会造成空间错位 |
+| `image_size` | 图像宽高 | resize 后检查内参是否同步缩放 |
+
+命名上建议避免只写 `extrinsic`。更好的名字是 `T_world_camera`、`T_camera_world`、`T_base_camera` 这种带方向的名字；如果必须用 `extrinsic`，就在 schema 里明确它是 `w2c` 还是 `c2w`。
 
 !!! note "为什么仿真也要关心相机标定"
-    仿真里相机参数可以完美知道，但如果你未来要迁移到真实机器人，就要尽量让仿真相机的焦距、视角、分辨率、安装位置和真实设备接近。否则模型可能在仿真里学会了错误的视觉几何。
+    仿真里相机参数可以完美知道，但如果你未来要迁移到真实机器人，就要尽量让仿真相机的焦距、视角、分辨率、安装位置和真实设备接近。否则模型可能在仿真里学会了错误的视觉几何。更实际一点：仿真数据里也要保存 `K`、外参方向、分辨率和相机 frame，否则训练 VLA / 世界模型时很难复现观测。
+
+!!! warning "最常见的三个坑"
+    第一，把 `w2c` 当成 `c2w` 用，投影结果会整体飞掉。第二，resize 图像后忘了缩放 \(f_x,f_y,c_x,c_y\)，点云会变形。第三，只看平均重投影误差，不检查边缘、远近距离和机器人工作区内的误差，部署时抓取会偏。
 
 ## 7. 不同相机在具身任务里的选择
 
@@ -223,7 +363,13 @@ RGB 图像 -> 背景消除 -> 文字消除 -> 多视角生成 -> 图生 3D
 | 有深度就能抓 | 还需要分割、pose、抓取候选、碰撞检测、控制和 success checker |
 | 仿真里相机随便放 | 相机位置会强烈影响模型学到的策略和真实迁移能力 |
 
-## 10. 和其他具身页面的连接
+## 10. 参考资料
+
+- [OpenCV: Camera Calibration and 3D Reconstruction](https://docs.opencv.org/3.4/d9/d0c/group__calib3d.html)：pinhole camera model、内参矩阵、外参矩阵、畸变和标定函数说明。
+- [OpenCV: Camera Calibration](https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html)：径向/切向畸变、棋盘格标定、去畸变的入门教程。
+- [CSDN：相机标定--内参、外参](https://blog.csdn.net/qq_43508270/article/details/147984900)：四个坐标系、内参/外参、棋盘格标定和重投影误差的中文入门脉络。
+
+## 11. 和其他具身页面的连接
 
 | 继续读 | 你会补上什么 |
 | --- | --- |

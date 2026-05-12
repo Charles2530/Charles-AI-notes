@@ -267,8 +267,8 @@ def check_size_sort_success(objects, gripper_open, eps_order=0.01):
 
 | 论文路线 | 这个 walkthrough 对应的位置 |
 | --- | --- |
-| [π0.5](../paper-deep-dives/vla/pi05.md) | 把高层子任务和低层 action chunk 串进在线闭环 |
-| [DreamZero](../paper-deep-dives/world-models/dreamzero.md) | 把 episode 里的视频、动作和状态变成 WAM 训练信号 |
+| [π0.5](../paper-deep-dives/embodied-ai/pi05.md) | 把高层子任务和低层 action chunk 串进在线闭环 |
+| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | 把 episode 里的视频、动作和状态变成 WAM 训练信号 |
 | [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 把动作条件未来观测用于交互模拟和反事实数据 |
 | [Dreamer](../paper-deep-dives/world-models/dreamer.md) | 把状态、奖励和 continue 信号用于 latent imagination |
 | [RoboTwin](https://robotwin-platform.github.io/doc/tasks/index.html) | 提供任务组织、资产标注和仿真数据生成的参考 |

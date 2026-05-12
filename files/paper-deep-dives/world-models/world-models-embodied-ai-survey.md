@@ -27,7 +27,7 @@ paper_topic: 世界模型
 | representation-space prediction | [JEPA](jepa.md)、[V-JEPA](v-jepa.md)、[H-JEPA](h-jepa.md) | 世界模型是否一定要重建像素，能否只预测高层表征 |
 | long-context multimodal world model | [RingAttention](ringattention.md)、[LWM](lwm.md) | 长视频、语言和轨迹 token 如何支撑长期记忆 |
 | video world model / external simulator | [Towards Video World Models](towards-video-world-models.md)、[LingBot-World](lingbot-world.md) | 视频生成模型如何变成交互式世界模拟器 |
-| world action model | [DreamZero](dreamzero.md) | 能否把未来预测和动作预测统一成 zero-shot policy |
+| world action model | [DreamZero](../embodied-ai/dreamzero.md) | 能否把未来预测和动作预测统一成 zero-shot policy |
 
 这篇 survey 的作用是把这些路线放进一个统一坐标系。它提醒我们不要只问“这个模型是不是 world model”，而要问更具体的三个问题：
 
@@ -566,7 +566,7 @@ Decomposed rendering representation 把世界拆成可渲染组件，比如 NeRF
 | 不重建像素是否可行 | [JEPA](jepa.md)、[V-JEPA](v-jepa.md) | `Gen/Glo/TFS` 和 masked representation prediction |
 | 长上下文如何支持视频世界模型 | [RingAttention](ringattention.md)、[LWM](lwm.md) | token sequence 和 million-length context |
 | 视频生成如何成为交互模拟 | [Towards Video World Models](towards-video-world-models.md)、[LingBot-World](lingbot-world.md) | causal、interactive、persistent、real-time |
-| 动作和未来能否统一建模 | [DreamZero](dreamzero.md) | world action model，把动作预测和未来预测接到 policy |
+| 动作和未来能否统一建模 | [DreamZero](../embodied-ai/dreamzero.md) | world action model，把动作预测和未来预测接到 policy |
 
 !!! note "初学者阅读顺序"
     如果你还没有世界模型基础，建议先读本页的数学定义和 taxonomy，再读 PlaNet/Dreamer 理解 latent dynamics，然后读 V-JEPA 理解 latent prediction，最后读 LingBot-World 和 DreamZero 看视频生成、动作条件和机器人策略如何合流。这样不会把“会生成视频”和“能支持决策”混在一起。
@@ -627,4 +627,3 @@ Decomposed rendering representation 把世界拆成可渲染组件，比如 NeRF
 最后，如果把世界模型放回具身智能主线，可以用一句话总结：
 
 > 世界模型的价值不是“想象未来”本身，而是把动作条件下的未来后果变成可被智能体用来规划、控制、恢复和自我改进的信号。
-

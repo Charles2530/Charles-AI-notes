@@ -89,7 +89,7 @@ p_\theta(o_{t+1:t+H}, a_{t:t+H} \mid o_{\le t}, q_t, \ell)
 
 ## 4. π0.5：它教会我们怎样理解 VLA
 
-[π0.5](../paper-deep-dives/vla/pi05.md) 的重点不是“机械臂又会抓东西了”，而是它把 VLA 拆成了高层语义和低层动作两条输出路径。
+[π0.5](../paper-deep-dives/embodied-ai/pi05.md) 的重点不是“机械臂又会抓东西了”，而是它把 VLA 拆成了高层语义和低层动作两条输出路径。
 
 ```text
 高层任务: clean the kitchen
@@ -112,7 +112,7 @@ p_\theta(o_{t+1:t+H}, a_{t:t+H} \mid o_{\le t}, q_t, \ell)
 
 ## 5. DreamZero：它教会我们怎样理解 WAM
 
-[DreamZero](../paper-deep-dives/world-models/dreamzero.md) 的关键是把视频基础模型改造成 joint video-action model。它不是先预测视频、再用另一个模型反推动作，而是在同一个生成过程中一起预测未来视频和动作。
+[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) 的关键是把视频基础模型改造成 joint video-action model。它不是先预测视频、再用另一个模型反推动作，而是在同一个生成过程中一起预测未来视频和动作。
 
 ```text
 current visual context + language + robot state
@@ -201,7 +201,7 @@ LingBot-World 说明视频生成模型要成为世界模拟器，必须补动作
 4. 再读 [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md)，搞清楚数据从哪里来。
 5. 接着读 [VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)，理解动作怎么进模型、怎么出模型。
 6. 再读 [规划、控制与安全](planning-control-and-safety.md)，理解为什么动作还要经过 planner/controller/safety。
-7. 然后读 [π0.5](../paper-deep-dives/vla/pi05.md)，把 VLA 路线放进真实长任务。
-8. 最后读 [DreamZero](../paper-deep-dives/world-models/dreamzero.md) 和 [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md)，理解世界模型路线怎样进入机器人闭环。
+7. 然后读 [π0.5](../paper-deep-dives/embodied-ai/pi05.md)，把 VLA 路线放进真实长任务。
+8. 最后读 [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) 和 [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md)，理解世界模型路线怎样进入机器人闭环。
 
 读完后，回到一个问题检验是否理解：给定“整理厨房”这个任务，你能否说清楚系统如何看见场景、分解子任务、生成动作、预测风险、执行控制、判定成功，并把失败样本回流到下一轮训练。

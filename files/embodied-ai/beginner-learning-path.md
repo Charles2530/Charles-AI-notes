@@ -99,7 +99,7 @@ DreamZero 是这条路线的代表。它把未来视频和未来动作一起生�
 
 ## 4. π0.5 应该怎么读
 
-[π0.5](../paper-deep-dives/vla/pi05.md) 最适合作为 VLA 入门论文。读它时不要先陷进模型细节，先抓住三件事。
+[π0.5](../paper-deep-dives/embodied-ai/pi05.md) 最适合作为 VLA 入门论文。读它时不要先陷进模型细节，先抓住三件事。
 
 ### 第一，它解决的是开放世界长任务
 
@@ -141,7 +141,7 @@ low-level action chunk: 未来约 1 秒的连续机器人动作
 
 ## 5. DreamZero 应该怎么读
 
-[DreamZero](../paper-deep-dives/world-models/dreamzero.md) 最适合理解 WAM。它和 π0.5 的区别是：
+[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) 最适合理解 WAM。它和 π0.5 的区别是：
 
 | 问题 | π0.5 | DreamZero |
 | --- | --- | --- |
@@ -228,8 +228,8 @@ LingBot-World 和 Dreamer 都是世界模型，但用途不同：
 5. [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md)：用具体任务把概念串起来。
 6. [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md)：理解你的项目 pipeline 每一步在做什么。
 7. [规划、控制与安全](planning-control-and-safety.md)：理解为什么模型输出动作后还要接控制和 safety filter。
-8. [π0.5](../paper-deep-dives/vla/pi05.md)：理解 VLA 如何做开放世界长任务。
-9. [DreamZero](../paper-deep-dives/world-models/dreamzero.md)：理解 WAM 如何把未来视频和动作绑在一起。
+8. [π0.5](../paper-deep-dives/embodied-ai/pi05.md)：理解 VLA 如何做开放世界长任务。
+9. [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)：理解 WAM 如何把未来视频和动作绑在一起。
 10. [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md)：理解视频生成模型如何变成交互世界模拟器。
 
 ## 10. 读懂的检查标准

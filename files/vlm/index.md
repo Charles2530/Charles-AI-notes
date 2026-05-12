@@ -46,8 +46,8 @@ p_\theta(o_{t+1:t+H}, r, d \mid o_{\le t}, a_{t:t+H-1}, l)
 | --- | --- | --- |
 | [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md) | 端到端 omni model 让 audio 不再只是 ASR/TTS 外挂；语音身份、声音一致性、实时安全分类器也变成模型系统接口 | [视觉表征、连接器与时序状态](architecture-and-training.md)、[推理服务系统](../inference/serving-systems.md) |
 | [Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | Thinker-Talker、AuT、ARIA、RVQ/MTP/Code2Wav 说明全模态 agent 常需要把理解、规划、语音生成和流式输出拆成协同模块 | [视觉表征、连接器与时序状态](architecture-and-training.md)、[闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md) |
-| [π0.5](../paper-deep-dives/vla/pi05.md) | heterogeneous co-training、FAST 动作离散化、flow matching action expert 和 high-level subtask prediction 说明开放世界 VLA 要同时吃 web 语义、机器人数据和任务分解信号 | [数据与策略学习](../vla/data-and-policy-learning.md)、[动作表示与控制接口](../vla/action-representation-and-interfaces.md) |
-| [DreamZero](../paper-deep-dives/world-models/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作不只是 policy 输出，也可以作为未来视频和世界状态的条件变量；这把 VLA 推向 WAM/VAM | [动作分块与层级策略](../vla/action-chunking-hierarchical-policies-and-latent-skills.md)、[世界模型总览](../world-models/index.md) |
+| [π0.5](../paper-deep-dives/embodied-ai/pi05.md) | heterogeneous co-training、FAST 动作离散化、flow matching action expert 和 high-level subtask prediction 说明开放世界 VLA 要同时吃 web 语义、机器人数据和任务分解信号 | [数据与策略学习](../vla/data-and-policy-learning.md)、[动作表示与控制接口](../vla/action-representation-and-interfaces.md) |
+| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作不只是 policy 输出，也可以作为未来视频和世界状态的条件变量；这把 VLA 推向 WAM/VAM | [动作分块与层级策略](../vla/action-chunking-hierarchical-policies-and-latent-skills.md)、[世界模型总览](../world-models/index.md) |
 
 ## 2. VLM：先建立静态语义空间
 
@@ -120,7 +120,7 @@ VLA 主要学习“当前应该做什么”。世界模型还要学习“做了�
 
 ![Joint video and action prediction](../assets/images/paper-deep-dives/world-models/dreamzero/figure-2-joint-video-action.png){ width="920" }
 
-<small>图源：[DreamZero: World Action Models are Zero-shot Policies](../paper-deep-dives/world-models/dreamzero.md)，Figure 2。原论文图意：展示 DreamZero 同时生成未来视频和动作，并强调预测动作与生成视频在未见任务上保持对齐。</small>
+<small>图源：[DreamZero: World Action Models are Zero-shot Policies](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 2。原论文图意：展示 DreamZero 同时生成未来视频和动作，并强调预测动作与生成视频在未见任务上保持对齐。</small>
 
 !!! note "图解：DreamZero 展示了 VLA 和世界模型的合流点"
     普通 VLA 可以只预测动作，普通视频模型可以只预测未来画面。DreamZero 把未来视频和未来动作一起建模，让动作必须解释视觉变化，视觉预测也必须对动作敏感。这就是通向 WAM/VAM 的关键：动作不再只是最终输出，而是未来世界分叉的条件变量。
@@ -133,7 +133,7 @@ VLA 主要学习“当前应该做什么”。世界模型还要学习“做了�
 | --- | --- | --- |
 | [OpenVLA](https://openvla.github.io/) | 开源 VLA generalist policy，展示真实机器人 rollout、语言 grounding、OOD 任务和失败恢复案例 | VLA 的第一步是把 VLM 表示变成可执行策略；OpenX 预训练能提升跨任务适应，但困难语义泛化仍依赖更强互联网预训练和机器人数据混合 |
 | [π0](https://www.physicalintelligence.company/blog/pi0) | Physical Intelligence 的 generalist robot policy，把互联网规模 VLM 预训练、多机器人数据和连续动作输出结合 | 说明 VLA 不只是“动作 token 化”：高频 dexterous control 可能更适合连续动作专家或 flow matching / diffusion 式动作生成 |
-| [π0.5](../paper-deep-dives/vla/pi05.md) | Physical Intelligence 的 open-world VLA，用 heterogeneous co-training 和 high-level subtask prediction 在未见家庭中执行长任务 | 说明开放世界泛化需要把 web 语义、跨机器人动作数据、目标机器人数据和人类 verbal instruction 合到同一训练配方 |
+| [π0.5](../paper-deep-dives/embodied-ai/pi05.md) | Physical Intelligence 的 open-world VLA，用 heterogeneous co-training 和 high-level subtask prediction 在未见家庭中执行长任务 | 说明开放世界泛化需要把 web 语义、跨机器人动作数据、目标机器人数据和人类 verbal instruction 合到同一训练配方 |
 | [Genie 3](https://deepmind.google/models/genie/) | Google DeepMind 将其定位为可实时探索的 interactive world model | 这条路线从可交互世界生成出发，重点是实时性、动作影响、世界一致性和长时记忆 |
 | [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/) | 面向 physical AI 的 world foundation model 平台，包含世界生成、视频数据处理、评估和 post-training 框架 | 说明世界模型不是单个视频模型，而会变成数据处理、合成数据、评估、后训练和仿真工具链 |
 

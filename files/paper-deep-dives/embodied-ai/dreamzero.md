@@ -1,7 +1,7 @@
 ---
 paper_date: 2026-02
 paper_title: World Action Models are Zero-shot Policies
-paper_topic: 世界模型
+paper_topic: 具身智能 / WAM
 ---
 
 # DreamZero：World Action Models are Zero-shot Policies
@@ -14,7 +14,7 @@ paper_topic: 世界模型
     - 代码：[GitHub](https://github.com/dreamzero0/dreamzero)
     - 关键词：World Action Model、video-action prediction、robot policy、autoregressive DiT、real-time control、cross-embodiment transfer
 
-这篇论文很适合接在 [LingBot-World](lingbot-world.md) 后面读。LingBot-World 更像“从视频生成模型出发的视觉世界模拟器”；DreamZero 则进一步问：如果模型同时预测未来视频和动作，世界模型本身能不能直接成为机器人 policy？
+这篇论文很适合接在 [LingBot-World](../world-models/lingbot-world.md) 后面读。LingBot-World 更像“从视频生成模型出发的视觉世界模拟器”；DreamZero 则进一步问：如果模型同时预测未来视频和动作，世界模型本身能不能直接成为机器人 policy？
 
 它的核心观点可以概括为一句话：
 

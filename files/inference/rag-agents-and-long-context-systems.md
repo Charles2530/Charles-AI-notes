@@ -6,6 +6,8 @@
 \text{retrieval} \rightarrow \text{context assembly} \rightarrow \text{model} \rightarrow \text{tools/agents}
 \]
 
+如果只想先建立 RAG、Prompt Chaining、ReAct 和 CoT 的基础直觉，可以先回看 [提示工程、CoT 与 RAG 基础](../foundations/prompt-engineering-cot-and-rag-basics.md)。本页重点放在推理系统里的容量、状态、上下文装配和线上失效。
+
 **这意味着推理系统必须同时处理**：
 
 - 检索：从外部文档、数据库或索引中找可用证据。

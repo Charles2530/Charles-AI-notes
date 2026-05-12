@@ -22,6 +22,22 @@
 !!! note "难点解释：先分清 internal 和 external"
     `internal world model` 更像 agent 内部的抽象预测器，目标是帮助 reasoning、planning 和 decision making，不一定要生成像素级画面。`external world simulation model` 则要生成可观察、可交互、可检查的外部世界细节。Dreamer/RSSM 更偏前者的决策接口，LingBot-World、Genie、CausVid 这类视频世界模型更偏后者的交互模拟接口。读后面的页面时，先问清楚模型最后服务的是“内部决策”还是“外部模拟”。
 
+## 一条贯穿路线
+
+结合《世界模型开发进度安排.pdf》补充后，这个专题可以按一条更工程化的路线来读：
+
+![World model engineering loop](../assets/images/world-models/pdf-development-loop.svg){ width="900" }
+
+| 阶段 | 本专题要回答的问题 | 对应入口 |
+| --- | --- | --- |
+| 工程地基 | 数据 schema、相机、pose、焊缝/物体状态是否稳定 | [开发路线：数据、几何、仿真与评测](development-roadmap-data-simulation-and-evaluation.md) |
+| 内部模拟 | latent state 如何在动作条件下 rollout | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) |
+| 动作条件建模 | 未来视频、未来动作和 policy 如何接起来 | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
+| 外部模拟 | 可交互视频世界和生成式仿真如何服务物理 AI | [生成式模拟与视频世界模型](generative-simulation-and-video.md) |
+| 闭环改进 | 失败、near-miss 和 hard case 如何回流 | [数据引擎与自我改进](data-engines-and-self-improvement.md) |
+
+这样读，分标题就不再是论文名列表，而是一条从“世界如何被表示”到“预测怎样改善行动”的链路。
+
 ## 先用 Demo 建立直觉
 
 世界模型的 demo 最好不要只看“画面是否好看”，而要看它是否能维持同一个世界、是否能被用户动作或 agent 动作持续驱动、是否能在长时 rollout 中保持空间和对象一致。
@@ -130,7 +146,7 @@ $$
 | [Genie](https://arxiv.org/abs/2402.15391) | 从互联网视频中学习可交互生成环境和 latent actions | 从视频数据走向“可操作世界模拟”的代表路线 | [Genie 专题](../paper-deep-dives/world-models/genie.md) |
 | LWM / 长上下文视频模型 | 用长上下文建模图文视频序列，增强跨时间记忆 | 提醒世界模型需要长时记忆，否则只能做短片段续写 | [LWM 专题](../paper-deep-dives/world-models/lwm.md) |
 | LingBot-World | 从视频基础模型继续训练成可交互世界模拟器 | 代表“视频生成底座 + 动作条件 + 因果化 + 少步蒸馏”的工程路线 | [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md) |
-| DreamZero / WAM 路线 | 把 world-action modeling 用于 zero-shot policy 或动作联合建模 | 更靠近 VLA：动作生成和世界演化不再完全分开，但评测必须看闭环收益 | [DreamZero 专题](../paper-deep-dives/world-models/dreamzero.md) |
+| DreamZero / WAM 路线 | 把 world-action modeling 用于 zero-shot policy 或动作联合建模 | 更靠近 VLA：动作生成和世界演化不再完全分开，但评测必须看闭环收益 | [DreamZero 专题](../paper-deep-dives/embodied-ai/dreamzero.md) |
 
 !!! note "初学者读世界模型时的抓手"
     先问模型预测什么：latent state、未来帧、奖励、done、风险、动作还是完整轨迹。再问动作是否真的作为条件进入模型。最后问它被谁消费：planner、policy、风险模块、数据引擎，还是只给人看视频。能生成漂亮未来，不等于能改善决策；能拟合动作，也不等于理解动作后果。
@@ -145,7 +161,7 @@ $$
 | [V-JEPA](../paper-deep-dives/world-models/v-jepa.md)、[H-JEPA](../paper-deep-dives/world-models/h-jepa.md) | 表征空间预测可以学习世界结构和运动，不一定要重建像素；它更偏 internal world model | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
 | [Genie](../paper-deep-dives/world-models/genie.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 视频世界模型要从被动视频走向可交互模拟，关键是 latent action / action conditioning、causal rollout、长时记忆和实时化 | [生成式模拟与视频世界模型](generative-simulation-and-video.md)、[数据引擎与自我改进](data-engines-and-self-improvement.md) |
 | [Self Forcing](../paper-deep-dives/world-models/self-forcing.md)、[CausVid](../paper-deep-dives/diffusion/causvid.md) | 流式视频世界模型的核心难点是 train-test gap、self-rollout 漂移、KV cache 和少步生成稳定性 | [评测与失败模式](evaluation-and-failure-modes.md)、[生成式模拟与视频世界模型](generative-simulation-and-video.md) |
-| [DreamZero](../paper-deep-dives/world-models/dreamzero.md) | WAM 把未来视频和未来动作联合建模，强调“世界预测能否直接支撑 policy” | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)、[机器人与自动驾驶应用](applications-in-robotics-and-autonomous-driving.md) |
+| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | WAM 把未来视频和未来动作联合建模，强调“世界预测能否直接支撑 policy” | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)、[机器人与自动驾驶应用](applications-in-robotics-and-autonomous-driving.md) |
 
 ### 三种“内部世界”：像素、latent 和表征
 
@@ -283,12 +299,13 @@ $$
 
 如果刚进入这个方向，建议按下面顺序读：
 
-1. [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)：建立 latent state、belief、reward、rollout 和策略学习的基本概念；
-2. [WM、WAM、VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)：理解现代动作联合建模谱系；
-3. [生成式模拟与视频世界模型](generative-simulation-and-video.md)：理解为什么视频生成模型会进入控制和数据引擎；
-4. [模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md)：理解如何用模型生成和筛选训练数据；
-5. [规划即推断与潜在动作](planning-as-inference-and-latent-actions.md)：理解世界模型如何接入 planner；
-6. [评测与失效模式](evaluation-and-failure-modes.md)：建立“看起来好”和“真的有用”之间的边界。
+1. [开发路线：数据、几何、仿真与评测](development-roadmap-data-simulation-and-evaluation.md)：先把数据契约、3D encoder、仿真和 success checker 的工程地基立起来；
+2. [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)：建立 latent state、belief、reward、rollout 和策略学习的基本概念；
+3. [WM、WAM、VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)：理解现代动作联合建模谱系；
+4. [生成式模拟与视频世界模型](generative-simulation-and-video.md)：理解为什么视频生成模型会进入控制和数据引擎；
+5. [模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md)：理解如何用模型生成和筛选训练数据；
+6. [规划即推断与潜在动作](planning-as-inference-and-latent-actions.md)：理解世界模型如何接入 planner；
+7. [评测与失效模式](evaluation-and-failure-modes.md)：建立“看起来好”和“真的有用”之间的边界。
 
 读每类工作时建议固定问四个问题：它建模的基本单位是什么，动作条件放在哪一层，模型输出最终被谁消费，它的失败更多出在表示、规划、数据还是系统成本。
 
@@ -308,6 +325,10 @@ $$
 ## 专题页地图
 
 <div class="atlas-card-grid">
+  <a class="atlas-card" href="development-roadmap-data-simulation-and-evaluation/">
+    <strong>开发路线：数据、几何、仿真与评测</strong>
+    <p>把 PDF 中的数据准备、3D 重建、仿真环境、success checker 和小雨焊缝任务整理成工程路线。</p>
+  </a>
   <a class="atlas-card" href="rssm-dreamer-and-planning/">
     <strong>RSSM、Dreamer 与规划</strong>
     <p>经典 latent world model 入口，重点是 belief state、imagined rollout 和 policy learning。</p>

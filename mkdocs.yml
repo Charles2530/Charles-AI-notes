@@ -60,6 +60,7 @@ nav:
       - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
       - 卷积、CNN 与特征提取: foundations/convolution-and-feature-extraction.md
       - Transformer、Attention 与 Tokenization: foundations/transformer-attention-and-tokenization.md
+      - 提示工程、CoT 与 RAG 基础: foundations/prompt-engineering-cot-and-rag-basics.md
       - 多模态、CoT 与推理基础: foundations/multimodal-cot-and-reasoning-basics.md
       - 位置编码、Mask 与上下文: foundations/positional-encoding-masks-and-context.md
       - 归一化、残差与激活函数: foundations/normalization-residual-and-activation.md
@@ -182,6 +183,7 @@ nav:
       - verl 代码流程: reinforcement-learning/verl-code-flow.md
   - 世界模型:
       - world-models/index.md
+      - 开发路线：数据、几何、仿真与评测: world-models/development-roadmap-data-simulation-and-evaluation.md
       - WM、WAM、VAM 与动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
       - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
       - 模拟器、反事实与合成 Rollout: world-models/simulators-counterfactuals-and-synthetic-rollouts.md
@@ -193,6 +195,7 @@ nav:
       - 不确定性与风险敏感规划: world-models/uncertainty-and-risk-aware-planning.md
   - 具身智能:
       - embodied-ai/index.md
+      - 数据、模型与评测路线: embodied-ai/vla-data-model-and-evaluation-roadmap.md
       - 从零学习路线: embodied-ai/beginner-learning-path.md
       - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
       - Isaac Sim 与 RoboTwin：仿真和数据生成工具链: embodied-ai/isaacsim-and-robotwin.md
@@ -208,6 +211,8 @@ nav:
   - 思考探索:
       - thinking-exploration/index.md
       - Qualcomm XR2 Gen 2 / QCS8450：从芯片平台到 AI Hub 量化部署: thinking-exploration/qualcomm-xr2-gen2.md
+      - 世界模型走到哪一步了：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-pdf-reflections.md
+      - 具身智能走到哪一步了：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-pdf-reflections.md
   - 论文专题讲解:
       - paper-deep-dives/index.md
       - 基础知识:
@@ -220,8 +225,13 @@ nav:
           - CausVid：From Slow Bidirectional to Fast Autoregressive Video Diffusion Models: paper-deep-dives/diffusion/causvid.md
           - Wan2.1：Open and Advanced Large-Scale Video Generative Models: paper-deep-dives/diffusion/wan.md
           - Phased DMD：Few-step Distribution Matching Distillation via Score Matching within Subintervals: paper-deep-dives/diffusion/phased-dmd.md
-      - VLA:
-          - π0.5：面向开放世界泛化的 VLA: paper-deep-dives/vla/pi05.md
+      - 具身智能:
+          - π0.5：面向开放世界泛化的 VLA: paper-deep-dives/embodied-ai/pi05.md
+          - GR-2：用 web-scale 视频知识迁移到机器人操作: paper-deep-dives/embodied-ai/gr2.md
+          - Video Prediction Policy：用预测视觉表征训练通用机器人策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
+          - SpatialVLA：把 3D 空间表示接进 VLA: paper-deep-dives/embodied-ai/spatialvla.md
+          - GR-3：任务状态、少样本人类轨迹与长时程 VLA: paper-deep-dives/embodied-ai/gr3.md
+          - DreamZero：World Action Models are Zero-shot Policies: paper-deep-dives/embodied-ai/dreamzero.md
       - 世界模型:
           - PlaNet：Learning Latent Dynamics for Planning from Pixels: paper-deep-dives/world-models/planet.md
           - Dreamer：Dream to Control: paper-deep-dives/world-models/dreamer.md
@@ -237,7 +247,6 @@ nav:
           - Towards Video World Models：视频生成走向世界模型的五个门槛: paper-deep-dives/world-models/towards-video-world-models.md
           - A Comprehensive Survey on World Models for Embodied AI：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
           - LingBot-World：从视频生成到开源世界模拟器: paper-deep-dives/world-models/lingbot-world.md
-          - DreamZero：World Action Models are Zero-shot Policies: paper-deep-dives/world-models/dreamzero.md
       - 技术报告:
         - GPT-4o System Card：端到端 Omni 模型、语音安全与多模态部署评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
         - DeepSeek-V3 Technical Report：671B MoE、MLA 与 FP8 训练: paper-deep-dives/technical-reports/deepseek-v3.md

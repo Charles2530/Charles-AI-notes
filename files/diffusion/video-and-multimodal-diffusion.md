@@ -167,7 +167,7 @@ Wan2.1 技术报告 `Wan: Open and Advanced Large-Scale Video Generative Models`
 Wan2.1 的价值在于它成为很多后续视频生成、视频世界模型和机器人世界动作模型的共同底座。站内几篇论文专题都能看到它：
 
 1. [Self Forcing](../paper-deep-dives/world-models/self-forcing.md) 用 Wan2.1 T2V 作为自回归视频扩散改造对象；
-2. [DreamZero](../paper-deep-dives/world-models/dreamzero.md) 使用 Wan2.1-I2V-14B-480P，把视频模型改造成 joint video-action prediction / robot policy；
+2. [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) 使用 Wan2.1-I2V-14B-480P，把视频模型改造成 joint video-action prediction / robot policy；
 3. [Phased DMD](../paper-deep-dives/diffusion/phased-dmd.md) 把 Wan 系列作为视频少步蒸馏和专家分阶段的代表底座之一。
 
 从训练视角看，Wan2.1 说明现代视频扩散不再只是“把图像扩散扩到时间维”。它需要：

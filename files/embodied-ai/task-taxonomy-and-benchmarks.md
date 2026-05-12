@@ -34,12 +34,27 @@ RT-1 原论文的任务示例图很适合说明具身任务为什么不能只用
 
 | 论文 / 系统 | 评测对象 | 对 Benchmark 的启发 |
 | --- | --- | --- |
-| [π0.5](../paper-deep-dives/vla/pi05.md) | 新家庭厨房/卧室里的多阶段移动操作任务 | 长任务要用 task progress，不只用最终成功率；还要区分语义子任务失败和低层动作失败 |
-| [DreamZero](../paper-deep-dives/world-models/dreamzero.md) | seen / unseen tasks、zero-shot environment、cross-embodiment transfer | WAM 评测要看动作和未来视频是否能转化为真实执行进展，而不是只看视频质量 |
+| [π0.5](../paper-deep-dives/embodied-ai/pi05.md) | 新家庭厨房/卧室里的多阶段移动操作任务 | 长任务要用 task progress，不只用最终成功率；还要区分语义子任务失败和低层动作失败 |
+| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | seen / unseen tasks、zero-shot environment、cross-embodiment transfer | WAM 评测要看动作和未来视频是否能转化为真实执行进展，而不是只看视频质量 |
 | [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作条件交互模拟、长 horizon、实时 rollout | 世界模拟器评测要固定历史、改变动作，检查未来是否真的随动作分叉 |
 | 资产/轨迹数据管线 | clean/random 场景、尺寸任务、堆叠/放置/排序 | 自建 Benchmark 要把资产尺度、干扰物、成功判定和失败复位都写进任务定义 |
 
 这也是为什么具身评测不能只报一个总成功率。π0.5 更像在测开放家庭长任务，DreamZero 更像在测 WAM 是否能当 policy，LingBot-World 更像在测交互模拟器是否动作敏感。它们的指标不应该被简单横向混用。
+
+## 1.2 PDF 中的 Benchmark 快速定位
+
+《具身知识库.pdf》里的 Benchmark 梳理可以作为这页的快捷索引。它们不是同一类考试，先分清“考什么”，再比较模型分数。
+
+| Benchmark / 数据环境 | 主要考什么 | 容易误读的地方 |
+| --- | --- | --- |
+| CALVIN | 语言条件下连续 5 个任务的长时操作，ABC 训练、D 测试 | 强在语言任务链，不等于真实机器人接触稳定 |
+| MetaWorld | Sawyer 多任务操作和 oracle 轨迹 | 适合技能广度，不代表开放语言泛化 |
+| RoboChallenge | 真实桌面任务中的 3D 精定位、遮挡和多阶段操作 | 更接近真实难点，但仍要看任务覆盖和判定规则 |
+| BridgeData V2 / Simpler WidowX | 真实 WidowX 数据和仿真镜像评测 | 适合看 Sim2Real 趋势，不能把仿真成功率直接当真机能力 |
+| LIBERO | Spatial / Object / Goal 等任务组合泛化 | 适合早筛语言目标和组合泛化，但还需要真实闭环验证 |
+| RoboTwin | 双臂任务、数字孪生资产、功能点和 success checker | 强在自动生成和自动判卷，但 checker 必须防止最终状态作弊 |
+
+这张表也解释了为什么新增的 [数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md) 会从 Benchmark 开始讲：评测定义了“什么算智能”，模型只是朝这个定义优化。
 
 ## 2. 从低层控制到高层任务的层级
 

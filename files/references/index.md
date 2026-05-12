@@ -112,7 +112,7 @@
 6. [Octo: An Open-Source Generalist Robot Policy](https://arxiv.org/abs/2405.12213)  
    通用机器人策略的开源入口。
 7. [π0.5: a Vision-Language-Action Model with Open-World Generalization](https://arxiv.org/abs/2504.16054)  
-   Physical Intelligence 的开放世界 VLA 系统，用异构 co-training、FAST 动作 token、flow matching action expert 和 high-level subtask prediction 在未见家庭中执行长任务；站内专题见 [π0.5 讲解](../paper-deep-dives/vla/pi05.md)。
+   Physical Intelligence 的开放世界 VLA 系统，用异构 co-training、FAST 动作 token、flow matching action expert 和 high-level subtask prediction 在未见家庭中执行长任务；站内专题见 [π0.5 讲解](../paper-deep-dives/embodied-ai/pi05.md)。
 
 ### 3.2 模仿学习、动作分块与 Diffusion Policy
 

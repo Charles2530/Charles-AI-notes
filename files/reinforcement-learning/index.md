@@ -121,7 +121,7 @@ VLM/VLA 章节里保留的 CLIP/InfoNCE 只解决静态表示问题：
 | [Qwen3](../paper-deep-dives/technical-reports/qwen3.md) | thinking budget 和强到弱蒸馏说明 RL 后的能力还要被蒸馏、压缩和模式化，才能进入可控产品形态 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md) |
 | [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | 异步 GRPO、多环境同步 RL、masked importance ratio 和 MTP 加速 rollout 说明 RL 系统瓶颈已经扩展到采样吞吐和策略滞后 | [verl 代码流程](verl-code-flow.md)、[强化学习如何帮助世界模型](rl-for-world-models.md) |
 | [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | agentic data synthesis、tool-use SFT、self-critique reward 和 checkpoint engine 说明开放 agent RL 要把环境、数据和恢复机制一起设计 | [Policy Gradient、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)、[强化学习如何帮助世界模型](rl-for-world-models.md) |
-| [Dreamer](../paper-deep-dives/world-models/dreamer.md)、[DreamZero](../paper-deep-dives/world-models/dreamzero.md) | 世界模型里的 RL 不是给回答打分，而是在 learned dynamics 或 joint video-action model 中训练/选择动作 | [强化学习如何帮助世界模型](rl-for-world-models.md) |
+| [Dreamer](../paper-deep-dives/world-models/dreamer.md)、[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | 世界模型里的 RL 不是给回答打分，而是在 learned dynamics 或 joint video-action model 中训练/选择动作 | [强化学习如何帮助世界模型](rl-for-world-models.md) |
 
 ## 5. 论文图先建立直觉
 

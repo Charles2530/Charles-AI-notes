@@ -17,7 +17,7 @@ paper_topic: 世界模型
 
 ## 论文位置
 
-DreamerV3 和 [LingBot-World](lingbot-world.md)、[DreamZero](dreamzero.md) 的位置不同。LingBot-World 代表“视频生成模型路线”：先学会生成未来画面，再加入动作、交互、长记忆和实时化。DreamZero 则把视频基础模型改造成 joint video-action prediction，让 WAM 直接输出机器人动作。
+DreamerV3 和 [LingBot-World](lingbot-world.md)、[DreamZero](../embodied-ai/dreamzero.md) 的位置不同。LingBot-World 代表“视频生成模型路线”：先学会生成未来画面，再加入动作、交互、长记忆和实时化。DreamZero 则把视频基础模型改造成 joint video-action prediction，让 WAM 直接输出机器人动作。
 
 DreamerV3 代表另一条更经典的 model-based RL 路线：
 

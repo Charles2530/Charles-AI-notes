@@ -78,6 +78,8 @@
 | 时间 | 主题 | 文章 | 阅读重点 |
 | --- | --- | --- | --- |
 | 2026-05 | 端侧 AI / XR 芯片 | [Qualcomm XR2 Gen 2 / QCS8450：从芯片平台到 AI Hub 量化部署](qualcomm-xr2-gen2.md) | Snapdragon XR2 Gen 2 与 QCS8450 / Proxy 口径、MR/VR 硬件规格、AI Hub Workbench 软件栈、QIDK 示例和 ViT 量化流程 |
+| 2026-05 | 世界模型 | [世界模型走到哪一步了：从视频模拟到工程闭环](world-models-status-and-pdf-reflections.md) | 视频世界模型、3D 几何、仿真评测和《世界模型开发进度安排.pdf》里的工程路线判断 |
+| 2026-05 | 具身智能 / VLA | [具身智能走到哪一步了：VLA、数据工厂与真实闭环](embodied-ai-status-and-pdf-reflections.md) | VLA、任务状态、数据 recipe、失败恢复和《具身知识库.pdf》里的现状思考 |
 
 ## 和正文专题的连接
 
@@ -89,6 +91,8 @@
 | ViT 量化为什么不只看模型大小 | [量化总览](../quantization/index.md)、[评测与部署清单](../quantization/evaluation-and-deployment-checklist.md) | 端侧量化还要看校准数据、NPU placement、CPU fallback、数值误差和整机功耗 |
 | XR 头显里的模型为什么要考虑相机、显示和热稳定 | [推理服务系统](../inference/serving-systems.md)、[算子与编译器](../operators/index.md) | 真实设备里模型推理会和渲染、sensor、无线、系统服务争同一个资源预算 |
 | Proxy profile 能不能当最终指标 | [可观测性与在线评测](../inference/observability-and-online-evaluation.md) | Proxy 适合早筛，最终仍要在真实设备上做延迟、温升、帧时间和质量回归 |
+| 世界模型怎么从 demo 走向工程闭环 | [世界模型总览](../world-models/index.md)、[开发路线：数据、几何、仿真与评测](../world-models/development-roadmap-data-simulation-and-evaluation.md) | 视频模拟、3D 几何、动作条件和 success checker 必须接起来 |
+| 具身智能为什么不能只看 VLA demo | [具身智能总览](../embodied-ai/index.md)、[数据、模型与评测路线](../embodied-ai/vla-data-model-and-evaluation-roadmap.md) | 任务状态、无效指令、动作接口、失败恢复和数据回流决定能否落地 |
 
 !!! note "维护提醒"
     平台资料更新很快，尤其是 release notes、模型库和 runtime 支持矩阵。新增或复查这类文章时，优先跑 `make quality` 和 `make build`，再抽查页面里的图片图源、表格原字段和“官方公开 / 工程推断”的口径是否仍然清楚。
