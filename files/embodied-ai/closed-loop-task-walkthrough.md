@@ -82,6 +82,8 @@ sample task
 -> save episode or retry
 ```
 
+在工具链上，这通常可以理解成：RoboTwin 风格代码负责 `sample task / reset scene / success checker`，Isaac Sim 或其他仿真器负责 `simulate trajectory / render cameras / query states`，cuRobo 或 STOMP 负责 `run planner`。更详细的分工见 [Isaac Sim 与 RoboTwin：仿真和数据生成工具链](isaacsim-and-robotwin.md)。
+
 对应到代码结构可以是：
 
 ```python

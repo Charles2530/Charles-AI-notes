@@ -195,12 +195,13 @@ LingBot-World 说明视频生成模型要成为世界模拟器，必须补动作
 
 如果你现在对具身智能还没有整体感，建议这样读：
 
-1. 先读本页，建立 VLA、WAM、世界模型和工程 pipeline 的层级关系。
-2. 再读 [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md)，用尺寸排序和容器匹配任务把状态、轨迹、执行和判定连起来。
-3. 然后读 [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md)，搞清楚数据从哪里来。
-4. 接着读 [VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)，理解动作怎么进模型、怎么出模型。
-5. 再读 [规划、控制与安全](planning-control-and-safety.md)，理解为什么动作还要经过 planner/controller/safety。
-6. 然后读 [π0.5](../paper-deep-dives/vla/pi05.md)，把 VLA 路线放进真实长任务。
-7. 最后读 [DreamZero](../paper-deep-dives/world-models/dreamzero.md) 和 [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md)，理解世界模型路线怎样进入机器人闭环。
+1. 先读 [具身智能从零学习路线](beginner-learning-path.md)，把基本名词和学习顺序立住。
+2. 再读本页，建立 VLA、WAM、世界模型和工程 pipeline 的层级关系。
+3. 然后读 [从一个任务跑通具身闭环](closed-loop-task-walkthrough.md)，用尺寸排序和容器匹配任务把状态、轨迹、执行和判定连起来。
+4. 再读 [资产、感知、抓取与轨迹数据管线](asset-perception-grasp-and-trajectory-pipeline.md)，搞清楚数据从哪里来。
+5. 接着读 [VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)，理解动作怎么进模型、怎么出模型。
+6. 再读 [规划、控制与安全](planning-control-and-safety.md)，理解为什么动作还要经过 planner/controller/safety。
+7. 然后读 [π0.5](../paper-deep-dives/vla/pi05.md)，把 VLA 路线放进真实长任务。
+8. 最后读 [DreamZero](../paper-deep-dives/world-models/dreamzero.md) 和 [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md)，理解世界模型路线怎样进入机器人闭环。
 
 读完后，回到一个问题检验是否理解：给定“整理厨房”这个任务，你能否说清楚系统如何看见场景、分解子任务、生成动作、预测风险、执行控制、判定成功，并把失败样本回流到下一轮训练。

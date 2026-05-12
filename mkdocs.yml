@@ -193,6 +193,9 @@ nav:
       - 不确定性与风险敏感规划: world-models/uncertainty-and-risk-aware-planning.md
   - 具身智能:
       - embodied-ai/index.md
+      - 从零学习路线: embodied-ai/beginner-learning-path.md
+      - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
+      - Isaac Sim 与 RoboTwin：仿真和数据生成工具链: embodied-ai/isaacsim-and-robotwin.md
       - VLA、WAM 与世界模型系统地图: embodied-ai/vla-wam-world-model-system-map.md
       - 从一个任务跑通具身闭环: embodied-ai/closed-loop-task-walkthrough.md
       - 资产、感知、抓取与轨迹数据管线: embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md
