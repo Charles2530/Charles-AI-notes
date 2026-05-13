@@ -109,3 +109,17 @@ Prefill 产生的状态要交给 decode 层，系统就不只是 GPU 算力问�
 如果没有明确收益，保持单体 runtime 并强化调度和缓存，通常是更稳的选择。
 
 解耦式 prefill 的价值不在架构本身，而在于它是否让异质请求的容量、延迟和显存治理变得更可控。
+
+## 真实排查案例：解耦后 TTFT 好了，TPOT 变差
+
+**输入症状**：长文档问答接入解耦式 prefill 后，TTFT 从 3.4s 降到 2.1s，但生成阶段 TPOT 从 45ms/token 增到 68ms/token，用户看到首 token 更快，后续流式输出变卡。
+
+**关键指标**：prefill tier 利用率下降，decode tier queue depth 上升；KV 转移耗时 P95 达到 180ms；decode tier 上 KV page miss 增多；网络出入流量与长上下文请求峰值高度相关。
+
+**Nsight / trace 观察**：trace 中 prefill 结束后不是立刻 decode，而是出现 KV transfer gap；decode kernel 本身没有退化，但 paged attention 前的 KV metadata 同步和 page lookup 时间增加。
+
+**判断**：解耦收益被 KV 转移与 page locality 侵蚀。系统只优化了 prefill 计算，没有保证 KV 落在 decode 最合适的位置。
+
+**修复**：把长上下文请求按 session 粘到固定 decode pool；限制跨节点 KV 转移，优先同节点共享；KV metadata 做批量同步；按请求桶记录 `prefill_saved_ms - kv_transfer_ms - decode_extra_ms` 的净收益。
+
+**反例**：如果 prefill 占比极高、prefix 复用稳定、KV 转移在同节点内完成，解耦通常会明显改善 TTFT。反过来，短请求和低复用请求不该默认进入复杂解耦路径。

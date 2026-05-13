@@ -5,6 +5,24 @@
 !!! note "初学者先抓住"
     强化学习不是“多一个 loss 名字”，而是一种闭环学习方式：模型先做动作，环境或评测器给奖励，再根据奖励把更好的行为概率提高。它和监督学习最大的差别是，监督学习直接告诉你标准答案；强化学习通常只告诉你这段行为最终好不好。
 
+!!! tip "本专题的读法"
+    先别急着推公式，先把一次循环讲清楚：谁观察、谁行动、谁给反馈、反馈如何变成策略更新。读 PPO、GRPO、RLVR、Dreamer 或 verl 时，都把它们放回这条循环里看，复杂配置就会少很多噪声。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>监督学习、概率采样、loss、梯度和基础序列生成。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>state、action、reward、return、advantage、policy update。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>一个 RL 方法是在改奖励、采样、baseline、KL 约束、rollout 系统还是世界模型。</p>
+  </div>
+</div>
+
 如果你只有监督学习基础，可以先这样迁移概念：
 
 | 监督学习里熟悉的东西 | 强化学习里的对应物 | 不同点 |
@@ -173,3 +191,13 @@ InstructGPT 的流程图是理解 LLM 强化学习后训练的入口：先做 SF
 | PPO 为什么常用 | 它限制新旧策略差距，让高方差的策略更新更稳定 |
 | GRPO 为什么流行 | 它用同一 prompt 的多次采样做组内基线，减少或去掉 critic 成本 |
 | RL 如何帮助世界模型 | 用任务奖励、规划反馈或 imagined rollout，让模型不只拟合数据分布，还服务决策指标 |
+## 深度标杆页
+
+强化学习专题应服务世界模型主线：从 MDP、policy、value 到 imagined rollout 和数据回流。短页需要向下面几页补足定义、公式、例子和失败模式。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [MDP、价值函数与 Bellman](mdp-value-bellman.md) | 把状态、动作、奖励、转移和价值函数讲清楚 |
+| [PG / PPO / GRPO](policy-gradient-actor-critic-ppo-grpo.md) | 说明策略梯度、优势估计、clip 和 group reward 的取舍 |
+| [世界模型中的强化学习](rl-for-world-models.md) | 明确 imagined rollout 如何减少真实交互成本 |
+| [verl 训练流程](verl-code-flow.md) | 把 RL 训练从算法概念落到数据流、worker 和故障排查 |

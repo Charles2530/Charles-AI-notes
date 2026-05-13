@@ -115,3 +115,17 @@ def select_gemm_kernel(m, n, k, dtype):
 ## 工程收束
 
 Runtime dispatch 要让 shape、dtype、layout、cache 状态和运行时队列都可观测。dispatch 规则过多无法解释、热路径命中不到最佳 kernel、回退路径无人监控，都会让性能问题难以复盘；上线前应统计命中率，保留异常 shape 黑名单，并在灰度时观察路径分布。
+
+## 真实排查案例：热路径没有命中最快 kernel
+
+**输入症状**：上线一个 FP8 GEMM 特化后，离线 benchmark 预期提速 20%，线上吞吐只提升 3%，而且不同租户差异很大。
+
+**关键指标**：高频 shape 的理论覆盖率有 65%，但实际特化 kernel 命中率只有 22%；fallback 次数集中在 LoRA 打开、padding 后的 `N/K` 不对齐和少数 batch bucket。
+
+**Nsight / trace 观察**：trace 里多数请求走了通用 GEMM；dispatch 日志显示 dtype 是 FP8，但 layout tag 和 stride 不满足特化路径条件；LoRA 合并前后的张量布局不一致，导致规则被跳过。
+
+**判断**：kernel 没错，dispatch 条件和真实张量状态不一致。离线 benchmark 用的是理想 contiguous shape，线上经过 LoRA、padding、packing 后已经变成另一类 workload。
+
+**修复**：把 dispatch 日志提升为一等指标，记录命中路径、跳过原因和 fallback 代价；为 LoRA 热路径补 layout normalization，或增加一个支持该 stride 的特化版本；灰度时按租户看命中率。
+
+**反例**：如果命中率很高但收益仍低，问题才更可能在 kernel 本身、内存带宽或上游排队。dispatch 排查的第一问永远是“我以为跑的路径，线上真的跑了吗”。

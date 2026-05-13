@@ -135,3 +135,17 @@ MoE 推理尤其要看 expert 热点和 all-to-all。单个 expert 被热门请�
 至少应持续记录 TTFT、TPOT、P50/P95/P99，prefill / decode 分阶段 GPU 时间，实际 batch size 和 shape 分布，HBM 带宽、SM util、kernel 时间分解，KV cache 占用、page 命中、碎片率，prefix cache 命中率，queue depth、admission reject、fallback，以及 LoRA / model / expert route 分桶后的延迟和成本。
 
 核心判断是：推理优化不是微基准游戏。只有当 kernel 性能、runtime 调度、KV 生命周期和真实流量分布一起变好，线上体验才会真正改善。
+
+## 真实排查案例：Batch 变大后吞吐上升，交互体验下降
+
+**输入症状**：连续批处理参数调大后，tokens/s 提升 22%，但聊天产品 TTFT P95 从 1.1s 涨到 2.0s，短请求投诉增多。
+
+**关键指标**：实际 batch size 变大，GPU util 更高；queue time 和 prefill waiting time 上升；短请求被长文档请求一起合批；decode kernel 时间下降，但排队时间吞掉收益。
+
+**Nsight / trace 观察**：GPU 时间线更密集，kernel 间空隙减少；系统 trace 显示请求在 scheduler 队列里等待凑 batch，长 prefill 段把短请求首 token 推迟。
+
+**判断**：优化改善了 GPU 层吞吐，却牺牲了产品层 SLO。问题不是 kernel 慢，而是 batching 策略没有区分短交互和长文档。
+
+**修复**：按输入长度和 SLA 分队列；短请求设置更小 max wait，长文档进入吞吐池；指标同时看 tokens/s、TTFT、TPOT 和任务级完成时间；灰度时按请求桶比较收益。
+
+**反例**：离线批量生成或后台文档处理通常可以牺牲 TTFT 换吞吐。交互产品不能只用全局 tokens/s 判定优化成功。

@@ -15,6 +15,24 @@
 !!! tip "基础知识入口"
     量化里的 `FP8`、`INT4`、显存、带宽、kernel 和 runtime 都可以先看 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。如果涉及 QAT 或低比特训练，再补看 [优化与训练入门](../foundations/optimization-and-training-basics.md)。
 
+!!! tip "本专题的读法"
+    先别问“几 bit 最好”，先问瓶颈在哪里：权重放不下、decode 读权重慢、KV cache 占满、activation 离群值伤质量，还是 runtime 没有对应 kernel。量化不是单个算法名，而是格式、误差控制、算子和服务栈共同兑现收益。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>浮点/整数、scale、显存、带宽、矩阵乘和基础推理流程。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>数值格式、PTQ/QAT、activation outlier、kernel、runtime、评测回退。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>一个量化方案省的是权重、激活、KV、带宽还是部署成本，以及会伤哪类任务。</p>
+  </div>
+</div>
+
 ## 从论文专题回填的量化知识点
 
 论文专题里的低精度案例说明，量化不是一个“统一降到几 bit”的动作，而是按训练、推理、KV、MoE 和敏感模块分别决策。
@@ -95,6 +113,22 @@ Wx \approx \hat{W}\hat{x}
 模型能不能塞进目标硬件，并发能不能提高，带宽和显存是否不再是第一瓶颈，以及能否在不牺牲关键业务质量的前提下降本。
 
 因此量化从来不是“压得越低越先进”，而是“在目标场景里压到多低仍然划算”。
+
+## 3.1 端到端成本账：量化要放回同一个请求里算
+
+量化页面最容易只算“模型文件小了多少”。更贴近工程的做法，是固定同一个请求，比较不同 context、KV、batch 和量化策略的端到端成本。假设输入是一段文档问答，输出 512 token：
+
+| 配置 | 权重 | KV cache | Batch / Context | 你会看到的变化 | 关键验收 |
+| --- | --- | --- | --- | --- | --- |
+| FP16 baseline | FP16 | FP16 | 4k、小 batch | 质量稳，显存贵，吞吐低 | TTFT、TPOT、显存水位 |
+| W8A8 | INT8 / FP8 路径 | FP16 | 4k-32k、中 batch | 权重带宽下降，kernel 支持好时吞吐更稳 | 量化 kernel hit rate、质量掉点 |
+| W4A16 | INT4 权重、较高精计算 | FP16 | 4k-32k、中 batch | 权重显存省，但 dequant 可能拖短请求 | dequant 时间、短问答 TTFT |
+| W4A16 + KV INT8 | INT4 权重 | INT8 KV | 32k、高并发 | 并发和上下文容量改善 | 长任务一致性、KV eviction、TPOT |
+| 混合精度 | 敏感层保高精 | KV 按桶选择 | 128k 或 VLA / 多模态 | 把误差放到低风险模块 | 细粒度视觉、动作稳定性、安全分类 |
+
+这张账要和 [推理成本建模](../inference/cost-modeling-and-slo-design.md) 接起来看：权重量化主要影响模型常驻显存、权重带宽和部分 GEMM；KV 量化主要影响长上下文并发、decode 稳定性和缓存淘汰；激活量化则更容易碰到离群值、动态输入和 kernel 支持问题。
+
+一个实用判断是：**如果服务被权重显存卡住，先看权重量化；如果被长上下文并发卡住，优先看 KV cache；如果被 decode 带宽卡住，看低比特 kernel 是否真的命中；如果是多模态或 VLA，先保护视觉连接器、动作头、安全头和几何/坐标相关模块。**
 
 ## 4. 量化算法的三条主线
 
@@ -243,3 +277,14 @@ print("model footprint (GB):", model.get_memory_footprint() / 1024**3)
 | 4. 场景验收 | [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)、[评测与部署清单](evaluation-and-deployment-checklist.md) | 长上下文、多模态、agent、动作控制和高价值任务桶是否单独验收 |
 
 真正可上线的量化方案必须同时给出四件事：压缩对象、目标硬件和 runtime、端到端收益、回退边界。只报告 bit 数或平均 benchmark，通常不足以支撑部署决策。
+## 深度标杆页
+
+量化专题的标杆页要回答“压缩对象是什么、误差去哪了、runtime 是否兑现、端到端是否划算”。其它页面应避免只比较 bit 数。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [PTQ / GPTQ / AWQ](ptq-gptq-awq-smoothquant.md) | 解释后训练量化的误差控制机制和适用边界 |
+| [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md) | 把 activation outlier、校准集和线上分布漂移讲清楚 |
+| [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) | 把训练适配、低比特 kernel 和 KV cache 放到同一条链路 |
+| [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md) | 说明 FP8/混合精度如何依赖硬件、算子和质量保护 |
+| [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md) | 覆盖视觉、动作、安全和长时序任务的专项风险 |

@@ -73,3 +73,17 @@ Kernel 成本模型不需要一开始就非常精确，但需要足够实用。�
 ## 工程收束
 
 Kernel 选型要按 shape family、算术强度、访存模式、launch 开销和布局变换建成本模型。只按单点 benchmark 选 kernel 很容易忽略边界 shape、runtime 和 cache 交互；上线前应按 workload 建族，区分训练与服务场景，记录回退条件，并把成本模型接进 dispatch。
+
+## 真实排查案例：Fused kernel 单测更快，端到端反而更慢
+
+**输入症状**：把 `bias + gelu + dropout` 合成一个 Triton kernel 后，单 kernel benchmark 快 18%，但训练 step time 只快 1%，某些 micro-batch 反而慢 6%。
+
+**关键指标**：单 kernel latency 下降，端到端 kernel 数减少；但整步 HBM 读写没有明显下降，register 使用升高，低 batch bucket 的 occupancy 降低；fallback 命中率从 0 增到 9%。
+
+**Nsight / trace 观察**：Nsight Compute 显示新 kernel 出现寄存器压力和局部 spill；Nsight Systems 里低频 shape 触发 fallback，前后多了一次 layout 转换；高频 bucket 受益，尾部 bucket 变慢。
+
+**判断**：成本模型只算了 launch 和单 kernel 时间，没有把寄存器压力、layout 转换和 shape 分布放进去。这个 fusion 只适合高频对齐 shape，不适合全流量替换。
+
+**修复**：把 dispatch 改成按 bucket 选择：高频对齐 shape 走 fused path，长尾 shape 走原始实现；把 layout 转换计入 benchmark；新增 “端到端 step time + bucket 覆盖率 + fallback 率” 验收项。
+
+**反例**：如果多个小算子之间确实反复写回大中间张量，且 fused path 没有提高 register pressure、覆盖率又超过 80%，那 fusion 很可能是正确方向。不能因为一次融合失败就否定 fusion，本质是成本项漏算。

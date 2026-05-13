@@ -75,3 +75,17 @@ shape specialization 是有价值的，但如果没有 fallback，就会出现�
 长期看，反模式库本身就是性能团队的知识资产，能让新人少重复踩坑。
 
 它也能让 code review 从“感觉会不会快”变成“哪些代价已经被显式记录”。
+
+## 真实排查案例：低比特路径省显存，却拖慢首 token
+
+**输入症状**：把一个 13B 服务从 FP16 切到 W4A16 后，显存占用下降明显，但 TTFT 从 820ms 增到 1.25s，短问答用户感知变差。
+
+**关键指标**：权重显存下降约一半，batch 上限提高；但短请求 prefill latency 上升，dequant kernel 占比升高，小 batch 下 Tensor Core 利用率下降；长输出请求的 TPOT 反而略有改善。
+
+**Nsight / trace 观察**：trace 显示每层 linear 前后多出 dequant / layout 转换片段；长 decode 中权重带宽收益能摊薄这些开销，短 prefill 中额外 kernel launch 和转换成本更显眼。
+
+**判断**：这是“只看显存，不看请求桶”的反模式。W4A16 并非全局更优，它把瓶颈从显存容量转移到低 batch 的解量化和 kernel 支持上。
+
+**修复**：按请求桶启用量化：长上下文和高并发租户走 W4A16，短问答保留 FP8/FP16 或使用更成熟的 W8A8 路径；把 TTFT、TPOT、显存水位、质量掉点放进同一张验收表。
+
+**反例**：如果服务主要是长输出、高并发、decode 带宽受限，且 runtime 有成熟 fused dequant GEMM，低比特路径可能同时省显存和提吞吐。反模式不是量化本身，而是把一个桶的收益套到所有桶。

@@ -297,7 +297,7 @@
       tip: "Q/K/V：Attention 的三组投影。Query 表示当前位置要找什么，Key 用于匹配，Value 是最终被加权读取的信息。"
     },
     {
-      aliases: ["Embedding", "Tokenizer", "Latent"],
+      aliases: ["Embedding", "embedding", "Tokenizer", "Latent"],
       tip: "基础表示术语：Tokenizer 把输入切成 token，Embedding 把离散 token 映射成向量，Latent 指模型内部更压缩的潜表示。"
     },
     {
@@ -493,7 +493,7 @@
       tip: "GPU 硬件术语：HBM 是高带宽显存，L2 是片上缓存，SM 是流式多处理器，Tensor Core 是矩阵计算单元。"
     },
     {
-      aliases: ["NCCL", "NVLink"],
+      aliases: ["NCCL", "DeepEP", "NVLink"],
       tip: "NVIDIA 多卡通信相关术语。NCCL 是通信库，NVLink 是 GPU 间高速互联。"
     },
     {
@@ -573,7 +573,7 @@
       tip: "LLM 推理阶段术语：Prefill 处理输入上下文，Decode 逐 token 生成输出，Continuous Batching 允许请求动态进出批次。"
     },
     {
-      aliases: ["Prefix Cache", "Speculative Decoding"],
+      aliases: ["Prefix Cache", "Speculative Decoding", "speculative decoding"],
       tip: "推理加速术语：Prefix Cache 复用重复前缀的 prefill 结果，Speculative Decoding 用草稿模型提案、主模型验证来提速。"
     },
     {
@@ -761,7 +761,7 @@
       tip: "RSSM：Recurrent State-Space Model，循环状态空间模型。PlaNet 和 Dreamer 等世界模型常用它从像素学习可 rollout 的潜动态。"
     },
     {
-      aliases: ["World Model", "World Models", "Dreamer", "DreamerV2", "DreamerV3", "Imagined Rollout", "Rollout"],
+      aliases: ["World Model", "world model", "World Models", "Dreamer", "DreamerV2", "DreamerV3", "Imagined Rollout", "Rollout"],
       tip: "世界模型术语：World Model 学习环境动态，Dreamer 系列在潜空间 imagined rollout 中学习策略，Rollout 指向未来展开轨迹。"
     },
     {
@@ -949,6 +949,58 @@
     }
   ];
 
+  const TERM_LINK_GROUPS = [
+    { aliases: ["LLM", "Transformer"], href: "foundations/transformer-attention-and-tokenization/" },
+    { aliases: ["VLM", "VLM/VLA"], href: "vlm/" },
+    { aliases: ["VLA"], href: "vlm/" },
+    { aliases: ["RAG"], href: "foundations/prompt-engineering-cot-and-rag-basics/" },
+    { aliases: ["Embedding", "embedding"], href: "foundations/transformer-attention-and-tokenization/" },
+    { aliases: ["CLIP", "InfoNCE"], href: "vlm/architecture-and-training/" },
+
+    { aliases: ["loss", "Loss", "objective", "Objective", "learning rate", "Learning Rate", "LR schedule", "scheduler"], href: "foundations/optimization-and-training-basics/" },
+    { aliases: ["gradient", "Gradient", "Gradients", "Forward", "forward", "Backward", "backward"], href: "foundations/autograd-activation-checkpointing-and-memory/" },
+    { aliases: ["batch", "Batch", "batch size", "Batch Size", "effective token", "Effective Token", "effective tokens", "Effective Tokens", "有效 token"], href: "training/input-pipelines-packing-and-throughput-governance/" },
+    { aliases: ["checkpoint", "Checkpoint"], href: "training/distributed-training-and-checkpointing/" },
+    { aliases: ["data mixture", "Data Mixture", "mixture", "Mixture"], href: "training/scaling-curriculum-and-data-mixture/" },
+    { aliases: ["train set", "Train Set", "validation set", "Validation Set", "test set", "Test Set", "holdout", "Holdout", "holdout set", "Holdout Set", "data leakage", "Data Leakage", "leakage", "污染", "数据污染", "bucket", "Bucket", "分桶", "replay", "Replay", "回放"], href: "foundations/data-splits-metrics-and-evaluation-basics/" },
+
+    { aliases: ["SFT", "RLHF", "DPO"], href: "training/pretraining-finetuning-alignment/" },
+    { aliases: ["MTP"], href: "training/mtp-and-speculative-decoding/" },
+    { aliases: ["FP8", "FP4", "NVFP4", "QAT", "PTQ", "QLoRA"], href: "training/low-bit-training-and-numerics/" },
+    { aliases: ["MoE", "DeepSeekMoE", "auxiliary-loss-free"], href: "operators/moe-routing-and-sparse-kernels/" },
+    { aliases: ["DualPipe"], href: "training/distributed-training-and-checkpointing/" },
+
+    { aliases: ["KV Cache", "KV cache", "KV"], href: "inference/context-compression-kv-eviction-and-memory-hierarchies/" },
+    { aliases: ["Prefill", "Decode", "TTFT", "TPOT", "Continuous Batching", "Prefix Cache"], href: "inference/serving-systems/" },
+    { aliases: ["Speculative Decoding", "speculative decoding", "acceptance rate", "Acceptance Rate", "acceptance", "Acceptance"], href: "inference/caching-routing-and-speculative/" },
+    { aliases: ["vLLM", "SGLang", "TensorRT-LLM"], href: "inference/serving-runtimes-vllm-sglang-and-tensorrt-llm/" },
+    { aliases: ["MLA"], href: "operators/serving-attention-and-kv-kernels/" },
+
+    { aliases: ["AWQ", "GPTQ"], href: "quantization/ptq-gptq-awq-smoothquant/" },
+    { aliases: ["BF16", "INT4", "INT8", "MXFP8", "MXFP4", "Microscaling", "Outlier", "Fake Quantization", "STE"], href: "quantization/fp8-and-mixed-precision-serving/" },
+    { aliases: ["Activation"], href: "quantization/activation-outliers-and-calibration-strategies/" },
+
+    { aliases: ["CUDA"], href: "operators/cuda-programming-model-and-memory/" },
+    { aliases: ["Triton"], href: "operators/triton-programming-model-and-autotuning/" },
+    { aliases: ["CUTLASS", "CuTe"], href: "operators/cutlass-cute-and-compiler-stack/" },
+    { aliases: ["PTX", "SASS"], href: "operators/ptx-sass-and-compiler-inspection/" },
+    { aliases: ["GEMM"], href: "operators/gemm-attention-and-fused-kernels/" },
+    { aliases: ["FlashAttention", "FA3", "FA4"], href: "operators/long-context-and-flashattention-evolution/" },
+    { aliases: ["NCCL", "DeepEP"], href: "operators/communication-kernels-and-overlap/" },
+
+    { aliases: ["DDPM", "DDIM", "SDE", "ODE", "CFG", "DMD", "DMD2", "DPM-Solver", "Heun"], href: "diffusion/" },
+    { aliases: ["Rectified Flow", "Flow Matching", "LCM", "Phased DMD"], href: "diffusion/consistency-models-and-rectified-flow/" },
+
+    { aliases: ["PPO", "GRPO", "RLVR", "policy", "Policy", "reward", "Reward", "trajectory", "Trajectory", "state", "State", "action", "Action", "advantage", "Advantage", "return", "Return", "Bellman", "Bellman Equation", "value", "Value", "value function", "Value Function", "Q-value", "Q Value"], href: "reinforcement-learning/" },
+    { aliases: ["verl", "HybridFlow"], href: "reinforcement-learning/verl-code-flow/" },
+
+    { aliases: ["World Model", "world model", "WM"], href: "world-models/" },
+    { aliases: ["WAM", "VAM"], href: "world-models/wm-wam-vam-and-action-conditioned-modeling/" },
+    { aliases: ["RSSM", "Dreamer", "MPC", "Counterfactual", "Near-miss"], href: "world-models/rssm-dreamer-and-planning/" },
+    { aliases: ["OOD", "ODD"], href: "world-models/evaluation-and-failure-modes/" },
+    { aliases: ["SLAM", "ROS", "ROS2"], href: "embodied-ai/planning-control-and-safety/" }
+  ];
+
   const SKIP_SELECTOR = [
     "a",
     "abbr",
@@ -971,6 +1023,7 @@
   ].join(",");
 
   const termTips = new Map();
+  const termLinks = new Map();
   let tooltipElement = null;
   let activeTerm = null;
   let floatingTooltipsReady = false;
@@ -982,24 +1035,63 @@
     }
   }
 
+  for (const group of TERM_LINK_GROUPS) {
+    const key = group.aliases[0] + "::" + group.href;
+    for (const alias of group.aliases) {
+      termLinks.set(alias, { href: group.href, key });
+    }
+  }
+
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const aliases = Array.from(termTips.keys()).sort((a, b) => b.length - a.length);
   const pattern = new RegExp("(^|[^A-Za-z0-9_])(" + aliases.map(escapeRegex).join("|") + ")(?![A-Za-z0-9_])", "g");
+
+  function readConfig() {
+    const node = document.getElementById("__config");
+    if (!node) return {};
+    try {
+      return JSON.parse(node.textContent || "{}");
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function siteRoot() {
+    const config = readConfig();
+    const base = config.base || ".";
+    return new URL(base.endsWith("/") ? base : `${base}/`, window.location.href);
+  }
+
+  function normalizePageUrl(url) {
+    const parsed = new URL(url, window.location.href);
+    return parsed.pathname.replace(/\/index\.html$/, "/").replace(/\/$/, "") || "/";
+  }
+
+  function linkHref(target) {
+    return new URL(target, siteRoot()).href;
+  }
 
   function shouldSkipTextNode(node) {
     const parent = node.parentElement;
     return !parent || parent.closest(SKIP_SELECTOR);
   }
 
-  function makeTermElement(text, tip) {
-    const span = document.createElement("span");
-    span.className = "term-tip term-auto";
-    span.dataset.tip = tip;
-    span.textContent = text;
-    span.tabIndex = 0;
-    span.setAttribute("role", "term");
-    span.setAttribute("aria-label", text + "：" + tip);
-    return span;
+  function makeTermElement(text, tip, href) {
+    const term = href ? document.createElement("a") : document.createElement("span");
+    term.className = href ? "term-tip term-auto atlas-term-link" : "term-tip term-auto";
+    term.dataset.tip = tip;
+    term.textContent = text;
+
+    if (href) {
+      term.href = href;
+      term.title = "跳转到相关说明";
+    } else {
+      term.tabIndex = 0;
+      term.setAttribute("role", "term");
+    }
+
+    term.setAttribute("aria-label", text + "：" + tip);
+    return term;
   }
 
   function getTooltipElement() {
@@ -1121,7 +1213,7 @@
     });
   }
 
-  function decorateTextNode(node, tipCounts) {
+  function decorateTextNode(node, tipCounts, linkedTerms) {
     const text = node.nodeValue;
     const fragment = document.createDocumentFragment();
     let lastIndex = 0;
@@ -1141,6 +1233,11 @@
       }
 
       const currentCount = tipCounts.get(tip) || 0;
+      const link = termLinks.get(term);
+      const href = link ? linkHref(link.href) : "";
+      const shouldLink = link
+        && !linkedTerms.has(link.key)
+        && normalizePageUrl(href) !== normalizePageUrl(window.location.href);
 
       if (currentCount >= MAX_AUTO_DECORATIONS_PER_TIP) {
         continue;
@@ -1150,8 +1247,11 @@
         fragment.appendChild(document.createTextNode(text.slice(lastIndex, termStart)));
       }
 
-      fragment.appendChild(makeTermElement(term, tip));
+      fragment.appendChild(makeTermElement(term, tip, shouldLink ? href : ""));
       tipCounts.set(tip, currentCount + 1);
+      if (shouldLink) {
+        linkedTerms.add(link.key);
+      }
       lastIndex = termEnd;
 
       if (pattern.lastIndex === match.index) {
@@ -1178,6 +1278,7 @@
     for (const root of roots) {
       const textNodes = [];
       const tipCounts = new Map();
+      const linkedTerms = new Set();
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
         acceptNode(node) {
           if (!node.nodeValue || !node.nodeValue.trim() || shouldSkipTextNode(node)) {
@@ -1195,7 +1296,7 @@
 
       for (const node of textNodes) {
         if (!shouldSkipTextNode(node)) {
-          decorateTextNode(node, tipCounts);
+          decorateTextNode(node, tipCounts, linkedTerms);
         }
       }
     }

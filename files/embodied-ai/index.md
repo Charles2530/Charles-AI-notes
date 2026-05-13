@@ -8,6 +8,24 @@
 !!! note "主线定位：世界模型负责想象，具身智能负责落地"
     世界模型回答“如果执行动作 \(a_t\)，未来可能变成什么样”；具身智能继续追问“这个预测能不能在真实传感器、真实控制器、真实接触和安全约束里闭环运行”。所以具身智能不是世界模型之后的附录，而是检验世界模型是否真的有用的落地场景。
 
+!!! tip "本专题的读法"
+    具身智能不要先按模型名读，先按闭环读：看见什么、相信什么、计划什么、执行什么、如何知道成功、失败怎么回流。VLM、VLA、世界模型、控制器和仿真数据都只是这条闭环里的不同部件。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>视觉表征、概率状态、动作接口、基础控制和评测指标。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>感知状态、任务语义、动作块、世界前瞻、控制安全、数据回流。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>一个机器人方案是只会看图、只会出动作，还是能闭环执行并处理失败。</p>
+  </div>
+</div>
+
 \[
 o_t \rightarrow b_t \rightarrow p_t \rightarrow a_t \rightarrow o_{t+1}
 \]
@@ -259,3 +277,14 @@ def closed_loop_step(robot, perception, planner, controller):
 | 11. 部署协作 | [具身部署模式与安全案例](deployment-patterns-and-safety-cases.md)、[人机协作与交互评测](human-robot-interaction-and-evaluation.md) | 系统如何在人类共享空间里限制风险、解释状态、支持接管和回放 |
 
 读完后建议回到 [VLM/VLA 总览](../vlm/index.md) 和 [世界模型路线图](../world-models/index.md)：前者负责视觉到动作接口，后者负责内部模拟和风险前瞻。一个具身方案如果没有把失败恢复和安全退出写进主路径，就还不能算学习闭环完整。
+## 深度标杆页
+
+具身智能专题的标杆页要能把传感器、数据、控制、仿真、部署和失败排查接成真实闭环。其它页面应向这些页面补任务上下文和工程案例。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) | 把传感器、资产、抓取、轨迹和数据记录连成一条线 |
+| [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 用完整任务解释观察、决策、执行、反馈和恢复 |
+| [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) | 讲清仿真、真实数据、回放和分布差异 |
+| [VLA 数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md) | 把 VLA 数据 schema、模型训练和评测路线对齐 |
+| [家庭机器人流程与失败排查](household-robotics-workflows-and-failure-patterns.md) | 给出真实任务中的失败模式和排查口径 |

@@ -31,6 +31,24 @@
 !!! note "在全站主线里的位置"
     算子与编译器专题是底层工程支撑。它不会直接解释“什么是世界模型”，但会决定视频世界模型、长上下文 VLA、实时 rollout 和大规模训练能不能跑得动。主线学习时不必先钻进所有 kernel；当你遇到显存、带宽、延迟、吞吐或数值稳定性问题，再回到这里定位瓶颈。
 
+!!! tip "本专题的读法"
+    先看数据怎么搬，再看代码怎么写。算子优化的第一问题通常不是“用了什么黑科技”，而是这个计算在 HBM、L2、shared memory、register 和跨卡网络之间搬了什么，哪里被带宽、同步、布局或 launch 开销卡住。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>tensor shape、GEMM、attention、dtype、显存层级和 GPU 执行模型的基本词汇。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>执行模型、热点算子、通信重叠、低精度 kernel、profiling 和成本模型。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>一个系统瓶颈到底是算力、带宽、通信、布局、数值还是调度抽象不对。</p>
+  </div>
+</div>
+
 ## 阅读路径
 
 ### 先看分层：不要把案例和基础概念放同一层
@@ -230,3 +248,14 @@ def triton_add(x, y):
 算子、编译器和内核实现，不是 AI 系统里的边角知识，而是连接“模型想做什么”和“硬件实际上能做什么”的中间层。大模型训练、推理、量化、长上下文、世界模型和具身控制之所以越来越依赖系统工程，很大程度上就是因为这个中间层不再能被简单忽略。
 
 理解这组内容的最终目标，不是掌握所有底层细节，而是形成一种判断力：当系统变慢、变贵、变不稳时，你能不能快速判断这是模型问题、框架问题、编译器问题，还是 kernel 问题。
+## 深度标杆页
+
+算子与编译器专题的标杆页要有“真实 workload -> profile -> 判断 -> kernel / runtime 选择 -> 回归”的闭环。其它短页后续应向这些页面补案例和反例。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [Workload 建模与 Shape Bucketing](workload-modeling-and-shape-buckets.md) | 先用真实流量决定优化对象，而不是先写 kernel |
+| [Profiling、调试与数值稳定](profiling-debugging-and-numerical-stability.md) | 串起系统 trace、kernel profile 和数值问题 |
+| [Roofline 建模与性能案例](roofline-benchmarking-and-case-studies.md) | 用算术强度、带宽和端到端指标解释瓶颈 |
+| [性能反模式与失败案例](performance-anti-patterns-and-failure-modes.md) | 每个优化都要写适用边界和反例 |
+| [Kernel 成本模型与选型](kernel-cost-models-and-selection-heuristics.md) | 把计算、访存、launch、layout 和维护成本一起算 |

@@ -137,3 +137,17 @@ m^\star =
 7. baseline 路径是否始终可回退。
 
 缓存、路由和投机执行的共同目标，是在不牺牲质量和可靠性的前提下，把有限 GPU 显存和 decode 时间分配给最值得的请求。
+
+## 真实排查案例：Speculative decoding 平均更快，P99 更差
+
+**输入症状**：接入 draft 模型后，平均 TPOT 下降 18%，但 P99 请求延迟上升，且创意写作和多工具 agent 请求更明显。
+
+**关键指标**：speculative acceptance 在普通问答为 72%，创意写作为 38%，工具 agent 为 31%；低 acceptance 桶里验证成本和回滚次数上升；KV 占用时间变长。
+
+**Nsight / trace 观察**：trace 中普通问答出现规整的 draft + verify 节奏；低 acceptance 请求则频繁 verify 失败，decode 路径变成小步回滚和额外验证，GPU kernel 时间没有单调下降。
+
+**判断**：投机解码不是全流量收益。低 acceptance 请求把 draft 成本、验证成本和 KV 生命周期叠加起来，平均收益被高 acceptance 桶掩盖，尾部延迟被低 acceptance 桶放大。
+
+**修复**：按任务、温度、输出长度和工具状态预测 acceptance；低 acceptance 桶自动关闭 speculative 或降低 draft 长度；SLO 报表拆出 accepted tokens、rejected tokens、verify time 和 fallback 率。
+
+**反例**：对于低温、格式稳定、长输出的请求，投机解码常常非常有效。它的问题不在方法本身，而在是否按请求桶启用。

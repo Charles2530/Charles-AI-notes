@@ -17,6 +17,24 @@ DDPM 原论文里的 graphical model 很适合建立第一层直觉：左到右�
 !!! note "放到世界模型主线里怎么理解"
     扩散模型本身不是世界模型，它首先是一类生成分布的方法。但视频世界模型常会借用扩散/flow 的视频生成能力，再补动作条件、时间因果性、长期记忆和实时推理。读扩散专题时，主线应放在“生成路径、条件控制、少步蒸馏和视频扩散如何成为世界模拟器底座”，而不是只停在图像生成效果。
 
+!!! tip "本专题的读法"
+    先用“从噪声里逐步恢复样本”的直觉读一遍，再回到公式和采样器。第一遍不必记住所有 solver 名字，只要能分清：训练目标回答模型学什么，采样器回答推理怎么走，蒸馏回答如何把多步压成少步，视频扩散回答时间一致性和动作条件怎么进入系统。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>概率分布、神经网络训练、UNet/Transformer 和基础采样概念。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>加噪去噪、参数化、采样路径、条件控制、少步生成。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>一个新方法到底改了训练目标、采样器、网络结构、数据配方还是系统执行路径。</p>
+  </div>
+</div>
+
 ## 先按三组读
 
 | 分组 | 核心问题 | 先看页面 |
@@ -190,3 +208,14 @@ def ddim_step(x_t, alpha_t, alpha_prev, eps):
 
 *[ODE]: Ordinary Differential Equation，常微分方程；在扩散里常指没有额外随机噪声项的 probability flow 轨迹。
 *[SDE]: Stochastic Differential Equation，随机微分方程；在扩散里常指带随机噪声项的连续时间加噪或反向生成过程。
+## 深度标杆页
+
+本专题建议先把下面 5 页读深，其它扩散页面向它们的结构对齐：先解释目标，再解释机制，再给训练/采样/失败模式和工程判断。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md) | 要能把扩散目标、噪声过程和概率流解释成一条连续主线 |
+| [噪声日程与参数化](noise-schedules-and-parameterization.md) | 要能说明预测噪声、预测数据、v-prediction 和 schedule 的取舍 |
+| [扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md) | 要有可执行的训练诊断、指标和失败案例 |
+| [一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) | 要能接到少步采样、蒸馏和 world model rollout 加速 |
+| [视频与多模态扩散](video-and-multimodal-diffusion.md) | 要把时序一致性、多模态条件和训练成本讲清楚 |

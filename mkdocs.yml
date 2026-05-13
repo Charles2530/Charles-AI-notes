@@ -89,16 +89,22 @@ nav:
           - 扩散方法对照表: diffusion/comparison-table.md
   - VLM/VLA:
       - vlm/index.md
-      - VLM 表征:
+      - VLM 表征与视频状态:
           - VLM 架构：视觉表征、连接器与记忆: vlm/architecture-and-training.md
+          - 视觉 Tokenizer 与连接器: vlm/visual-tokenizers-and-connectors.md
+          - 视频表征与长时记忆: vlm/video-representation-and-memory.md
       - VLA 策略与动作:
+          - VLA 专题路线图: vla/index.md
           - VLA 数据与策略学习: vla/data-and-policy-learning.md
           - 动作表示与控制接口: vla/action-representation-and-interfaces.md
           - 动作分块、层级策略与潜在技能: vla/action-chunking-hierarchical-policies-and-latent-skills.md
       - 闭环、评测与部署:
+          - 多模态评测与失败模式: vlm/multimodal-evaluation-and-failure-modes.md
           - VLA 评测与数据引擎: vla/benchmarks-and-data-engines.md
           - VLA 闭环恢复与失败分析: vla/closed-loop-recovery-and-failure-analysis.md
           - VLA 部署与安全: vla/deployment-and-safety.md
+      - 世界模型接口:
+          - VLM/VLA 与世界模型高效训练接口: vlm/vlm-vla-for-efficient-world-model-training.md
   - 量化:
       - quantization/index.md
       - 算法与误差控制:

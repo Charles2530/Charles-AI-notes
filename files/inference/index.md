@@ -31,6 +31,24 @@
 !!! note "在全站主线里的位置"
     推理专题是工程支撑，解决“训练好的模型如何稳定、低延迟、低成本地被调用”。对世界模型和 VLA 来说，它尤其重要在实时闭环：rollout、动作预测、视频生成和安全检查都可能反复调用模型。如果只是建立概念主线，可以先跳过大部分推理细节；一旦进入交互式世界模型或机器人部署，再回来读缓存、调度、量化和在线评测。
 
+!!! tip "本专题的读法"
+    先跟踪一条请求，而不是先背 runtime 名字：请求进入队列，长输入做 prefill，逐 token decode 读取 KV cache，路由和缓存决定成本，观测指标决定能否长期运营。vLLM、SGLang、TensorRT-LLM 等工具都可以放回这条请求路径里理解。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>Transformer attention、KV cache、latency、throughput、batch 和 GPU 显存。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>队列、prefill、decode、缓存、路由、容量、观测。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>一次“慢”到底是模型慢、排队慢、上下文太长、KV 爆了还是工具链拖住了。</p>
+  </div>
+</div>
+
 ## 先按三组读
 
 <div class="atlas-route-list">
@@ -92,6 +110,9 @@ T \approx T_{\text{queue}} + T_{\text{prefill}} + T_{\text{decode}} + T_{\text{p
 \[
 T_{\text{decode}} \approx n \cdot T_{\text{step}}
 \]
+
+!!! tip "成本账入口"
+    推理成本不能只用平均 tokens/s 估。建议把同一个请求放到不同 context、KV cache、batch 和量化策略下算一遍：短上下文可能被排队和 launch 主导，长文档可能被 prefill 和 KV 主导，长输出可能被 decode 主导。具体模板见 [成本建模与 SLO 设计](cost-modeling-and-slo-design.md)。
 
 !!! tip "基础知识入口"
     推理系统里的 `KV Cache`、latency、throughput、runtime、kernel 和低精度路径，都依赖基础执行模型。建议先看 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)、[位置编码与上下文 Mask](../foundations/positional-encoding-masks-and-context.md) 和 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。
@@ -267,3 +288,14 @@ print(outputs[0].outputs[0].text)
 推理系统不是“把训练好的模型部署一下”，而是把调度、缓存、路由、上下文管理、加速策略和业务目标放到同一个运行框架里。真正成熟的推理团队，不只是知道某个模型多快，而是知道什么请求该走什么路径、什么成本是值得的、哪些尾部风险正在积累，以及一旦流量和任务形态改变，系统会先从哪里出问题。 
 
 换句话说，推理的难点不是“做一次优化”，而是**持续地和流量分布一起演化**。业务会变，模型会变，请求长度会变，缓存命中模式会变，硬件和 runtime 也会变。只有把系统拆成可观察、可调度、可回退的几层结构，推理优化才不会沦为一次次救火。
+## 深度标杆页
+
+推理专题的标杆页要围绕同一条请求生命周期展开：进入系统、prefill、decode、KV、路由、观测、成本。其它页面应避免只讲工具名。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [推理服务系统](serving-systems.md) | 建立 queue、prefill、decode、batch 和 tail latency 的总体图 |
+| [成本建模与 SLO 设计](cost-modeling-and-slo-design.md) | 用同一个请求算 context、KV、batch、量化和质量成本 |
+| [上下文压缩与 KV 内存管理](context-compression-kv-eviction-and-memory-hierarchies.md) | 把长上下文成本、记忆层级和质量风险连起来 |
+| [GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md) | 把 kernel、batching、KV 生命周期和真实流量一起看 |
+| [可观测性与在线评测](observability-and-online-evaluation.md) | 让线上问题能被分阶段、分请求桶复盘 |

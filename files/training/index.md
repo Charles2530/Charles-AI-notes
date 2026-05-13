@@ -31,6 +31,24 @@
 !!! note "在全站主线里的位置"
     训练专题是工程支撑，不是“从 VLM 到世界模型”的概念主线本身。只有当你需要解释一个世界模型、VLA 或多模态模型为什么训不稳、数据不够、显存不够、吞吐不够、checkpoint 不可恢复时，再从这里下钻。主线读者优先抓住数据、目标函数、分布式状态和评测回流四件事。
 
+!!! tip "本专题的读法"
+    不要把训练页当成“术语表顺序背”。先把一次训练看成生产线：数据进来，目标函数定义学习信号，优化器和并行系统负责把信号转成参数更新，评测和 checkpoint 决定这次实验是否可信。读每个子页面时，都问它在这条生产线里解决哪一段问题。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>loss、反向传播、optimizer、batch、显存和 checkpoint 的基本含义。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>阶段目标、数据管线、分布式状态、低精度路径、评测回流。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>模型变差时，优先怀疑能力、行为、数据、系统还是评测口径。</p>
+  </div>
+</div>
+
 ## 先看训练生产线地图
 
 训练章节容易显得重复，是因为许多页面都在围绕同一条生产线的不同位置展开。建议先按下面这张表定位：
@@ -320,3 +338,14 @@ for batch in train_loader:
 | 4. 成本与稳定性 | [训练稳定性与故障排查](stability-numerics-and-failure-triage.md)、[Scaling Law 与训练经济学](scaling-laws-and-experiment-economics.md)、[低比特训练与数值格式](low-bit-training-and-numerics.md) | 一次训练失败是数值、数据、并行、硬件还是实验设计问题 | [量化路线图](../quantization/index.md) |
 
 读完训练模块后，最重要的不是记住某个训练框架，而是能把一次实验写成可复验资产：数据快照、配置、并行策略、checkpoint 恢复口径、评测桶、回滚条件和上线前转换路径都要能对上。
+## 深度标杆页
+
+训练专题的标杆页要能回答“为什么这样训练更高效”，而不是只罗列技巧。其它短页建议按这些页面补齐目标、成本、指标、排障和反例。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [训练数据系统与吞吐优化](data-systems-and-optimization.md) | 把数据质量、吞吐、缓存、去重和 GPU 利用连起来 |
+| [输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md) | 解释 sequence packing、bucket 和实际 step time 的关系 |
+| [低比特训练与数值格式](low-bit-training-and-numerics.md) | 说明 BF16、FP8、FP4/QAT 的收益、风险和验收 |
+| [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) | 把并行策略、通信、容错和恢复成本讲成系统问题 |
+| [训练稳定性与故障排查](stability-numerics-and-failure-triage.md) | 提供 loss、梯度、数值、硬件和数据问题的排查闭环 |

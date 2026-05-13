@@ -82,3 +82,17 @@ CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和
 自定义算子要从 API 语义、张量布局、autograd、打包发布和兼容矩阵开始设计。原型能跑不代表集成成本可接受；上线前应先定义接口契约，提供参考实现，把构建与测试自动化，并记录支持限制，尤其要同时覆盖 eager、compile 和 runtime 路径。
 
 真正值得保留的 custom op，应该能被新同事理解、被 CI 复验、被框架升级压力测试，并且在不适用的 shape 或硬件上自动走回安全路径。
+
+## 真实排查案例：自定义算子在 `torch.compile` 后悄悄失效
+
+**输入症状**：Eager 模式下 custom RMSNorm 快 30%，接入 `torch.compile` 后端到端没有收益，某些 batch 还出现数值差异报警。
+
+**关键指标**：Eager benchmark 命中 custom op；compile 模式下 kernel 名称消失，图里出现 framework fallback；数值误差集中在 BF16 和非 contiguous 输入；CI 只覆盖了 contiguous FP16。
+
+**Nsight / trace 观察**：trace 显示 compile 路径没有调用自定义 kernel，而是图重写后走了默认实现；fallback 前多了一次 `contiguous` 拷贝；少数输入 stride 触发参考实现。
+
+**判断**：自定义算子只集成了 eager API，没有把图编译、stride 契约和 dtype 边界写进接口。性能收益在真实运行路径里没有兑现。
+
+**修复**：补充 custom op 的 meta function、decomposition / lowering 规则和 stride 检查；CI 覆盖 eager、compile、FP16/BF16、contiguous/non-contiguous；fallback 必须打日志并计入性能回归。
+
+**反例**：如果目标系统永远只跑 eager 离线脚本，compile 集成可以延后；但只要进入生产训练或推理图，custom op 就必须以“完整框架路径”验收，而不是只验单函数。

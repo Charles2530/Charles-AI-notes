@@ -373,6 +373,11 @@
       title.className = "atlas-heading-title";
       title.textContent = match[3];
 
+      const headerlink = Array.from(heading.children).find((child) => child.classList.contains("headerlink"));
+      if (headerlink) {
+        title.appendChild(headerlink);
+      }
+
       firstText.nodeValue = match[1];
       heading.insertBefore(number, firstText.nextSibling);
       heading.insertBefore(title, number.nextSibling);

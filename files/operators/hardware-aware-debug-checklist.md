@@ -55,3 +55,17 @@
 ## 工程收束
 
 硬件感知排查要同时看频率、温度、ECC、PCIe / NVLink 和 NUMA 映射。拓扑退化容易被误判成 kernel 退化，坏卡也可能被误判成模型不稳；上线前应固定探针基准，保留故障前后硬件日志，做节点隔离与复验，并按机型建立健康基线。
+
+## 真实排查案例：多卡吞吐突然掉一截
+
+**输入症状**：同一份推理服务配置，在 8 卡机器上从约 1.0x 基线掉到 0.72x；单卡 microbenchmark 没有明显退化，业务侧表现为长上下文请求 P99 抖动。
+
+**关键指标**：GPU util 仍高，但部分 rank 的 SM active 明显低；NVLink / PCIe counters 不均衡；decode 阶段每步耗时出现周期性尖峰；同一 batch 中尾部 rank 经常晚 10-20ms 完成。
+
+**Nsight / trace 观察**：Nsight Systems 时间线上，计算 kernel 之间夹着不规则的 NCCL wait；慢 rank 的通信跨到 PCIe 路径，和预期 NVLink 邻接关系不一致；CPU 侧调度没有新增同步点。
+
+**判断**：问题不在单个 attention 或 GEMM kernel，而在拓扑映射和并行分组。某次换机后 GPU ordinal 与物理拓扑不一致，TP 分组跨了慢链路，导致局部通信拖住全局 step。
+
+**修复**：重新生成拓扑感知 rank mapping，把高频 TP 通信放回 NVLink 邻接组；启动时打印并保存 `nvidia-smi topo -m`、rank-to-device 映射和 NCCL 选路日志；灰度期按 rank 记录 step time 分布。
+
+**反例**：如果单卡 kernel 也同步变慢、DRAM 吞吐接近上限、没有 rank 间拖尾，那么优先怀疑 kernel / layout / dtype 路径，而不是拓扑。拓扑问题的典型特征是“局部 rank 拖尾 + 通信 wait + 单卡基准正常”。

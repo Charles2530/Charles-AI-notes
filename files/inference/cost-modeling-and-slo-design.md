@@ -71,6 +71,58 @@ Prefill 和 decode 的资源画像不同。长上下文请求主要成本在 pre
 
 用一个统一“每 token 成本”概括，会误导优化方向。
 
+## 端到端成本账：同一个请求怎么估
+
+为了避免成本建模停在抽象公式，可以固定一个请求形态来算：**用户带一段文档问问题，输入上下文为 \(L_{\text{in}}\)，输出为 512 token，服务目标是 P95 TTFT < 2s、TPOT < 60ms/token**。同一个请求在不同 context、KV、batch 和量化策略下，成本结构会完全不同。
+
+一个可落地的估算顺序是：
+
+1. 先估 prefill：输入 token 越长，prefill 计算和写入 KV 的成本越高。
+2. 再估 KV：KV 显存大致随层数、KV head、head dim、上下文长度、batch 和 dtype 线性增长。
+3. 再估 decode：输出越长，逐 token 读取 KV 和权重的时间越长。
+4. 最后估系统项：排队、cache hit/miss、路由、工具、网络和重试。
+
+KV cache 可先用这个粗式子做数量级判断：
+
+\[
+M_{\text{KV}}
+\approx
+2 \times L_{\text{layers}} \times B \times L_{\text{ctx}} \times H_{\text{kv}} \times D_{\text{head}} \times \text{bytes}
+\]
+
+其中前面的 2 分别对应 K 和 V。它不是精确容量模型，但足够帮助判断“长上下文 + 大 batch + 高精 KV”为什么会快速吃掉显存。
+
+| 方案 | Context / KV / Batch / 量化 | 主要收益 | 主要代价 | 适合判断 |
+| --- | --- | --- | --- | --- |
+| A. 4k + FP16 KV + 小 batch + FP16 权重 | 短上下文、低并发、质量保守 | 实现简单，TTFT 稳 | 单请求成本高，显存利用差 | 适合高价值、低并发、质量优先请求 |
+| B. 32k + FP16 KV + 中 batch + W8A8 | 长文档，权重降带宽 | 权重显存和带宽下降 | KV 仍是大头，长 prefill 昂贵 | 若 TTFT 主要被 prefill 卡住，还要配合 prefix cache / prefill 分离 |
+| C. 32k + KV INT8 + 中 batch + W4A16 | 同等上下文提高并发 | KV 和权重都省显存 | 需要专门评测长尾质量、dequant 和 kernel 支持 | 适合并发受 KV 水位限制的服务 |
+| D. 128k + KV INT8/FP8 + 分离 prefill + 分桶 batch | 超长上下文和高复用 | 长请求可运营，短请求不被拖死 | 架构复杂，KV 转移和状态一致性要算进成本 | 适合企业文档、代码库问答、长记忆 agent |
+
+更实用的成本账不是问“每 token 多少钱”，而是问：
+
+| 问题 | 需要记录的量 | 决策含义 |
+| --- | --- | --- |
+| Context 变长后贵在哪里 | prefill time、KV 显存、prefix hit、压缩耗时 | 决定做上下文裁剪、prefill 分离还是 KV 量化 |
+| Batch 变大后是否划算 | queue time、实际 batch、TTFT、tokens/s | 决定按吞吐池和交互池分队列 |
+| KV 量化是否真省 | KV 水位、eviction、长任务质量、decode TPOT | 决定 KV dtype 和敏感任务回退 |
+| 权重量化是否真快 | 权重显存、dequant time、kernel hit、质量掉点 | 决定 W8A8、W4A16、FP8 或混合精度 |
+| Cache 是否可信 | hit rate、saved prefill tokens、miss penalty | 决定 prompt 模板、prefix 规范和 cache 生命周期 |
+
+因此同一个请求的端到端估算可以写成：
+
+\[
+C_{\text{req}}
+\approx
+C_{\text{queue}}
++ C_{\text{prefill}}(L_{\text{in}}, q_w, q_a)
++ C_{\text{KV}}(L_{\text{ctx}}, B, q_{\text{kv}})
++ L_{\text{out}}\cdot C_{\text{decode-step}}(B, q_w, q_{\text{kv}})
++ C_{\text{tool/retry}}
+\]
+
+这里的 \(q_w\)、\(q_a\)、\(q_{\text{kv}}\) 分别表示权重、激活和 KV 的精度策略。上线前最好把这张账按请求桶落到 trace：短问答、长文档、长输出、多工具 agent、多模态和 VLA 闭环不应共用一个平均成本。
+
 ## 质量、成本、延迟三角
 
 很多优化都在三角关系中权衡：

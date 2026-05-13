@@ -22,6 +22,24 @@
 !!! note "难点解释：先分清 internal 和 external"
     `internal world model` 更像 agent 内部的抽象预测器，目标是帮助 reasoning、planning 和 decision making，不一定要生成像素级画面。`external world simulation model` 则要生成可观察、可交互、可检查的外部世界细节。Dreamer/RSSM 更偏前者的决策接口，LingBot-World、Genie、CausVid 这类视频世界模型更偏后者的交互模拟接口。读后面的页面时，先问清楚模型最后服务的是“内部决策”还是“外部模拟”。
 
+!!! tip "本专题的读法"
+    世界模型不要按论文名字背，先按三个问题读：模型预测什么，动作是否真的进入预测，预测结果被谁消费。只要这三问清楚，Dreamer、Genie、V-JEPA、LingBot-World、DreamZero 和 Cosmos 这几条路线就不会混成一团。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>latent state、序列建模、概率预测、reward 和基础强化学习语言。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>状态、动作、rollout、风险、不确定性、planner/policy 消费接口。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>一个模型是在做表征预测、视频续写、动作条件模拟，还是能真正改善决策。</p>
+  </div>
+</div>
+
 ## 一条贯穿路线
 
 这个专题可以按一条更工程化的路线来读：
@@ -344,3 +362,14 @@ $$
     <p>建立世界模型是否真的改善决策的验收标准。</p>
   </a>
 </div>
+## 深度标杆页
+
+世界模型专题的标杆页要围绕“更少真实交互、更少视频 token、更低 rollout 成本、更可用于决策”展开。其它页面应向这几页补充效率贡献、证据和失败边界。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [WM / WAM / VAM：动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) | 清楚区分世界模型、动作世界模型和视频动作模型 |
+| [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) | 解释 latent dynamics、imagined rollout 和样本效率 |
+| [世界模型数据引擎与自我改进](data-engines-and-self-improvement.md) | 把失败回放、合成 rollout 和数据回流接起来 |
+| [世界模型评测与失效模式](evaluation-and-failure-modes.md) | 重点验证 action sensitivity、temporal consistency 和闭环收益 |
+| [世界模型开发路线](development-roadmap-data-simulation-and-evaluation.md) | 给出从数据、仿真、评测到系统落地的工程路线 |

@@ -77,3 +77,17 @@ Triton 最有价值的位置，是把“值得优化但不值得手写 CUDA”�
 写 Triton kernel 后，不要只看一个形状的速度。验收要覆盖正确性、数值稳定、性能分桶、编译成本、端到端收益、回退机制和维护成本：多 dtype、多 shape、边界 mask、随机 seed 要和 baseline 对齐；softmax、reduce、低精度累计和溢出边界要稳定；主流 shape、长尾 shape、batch 变化和动态 shape 要分桶看；首次编译、cache 命中和 autotune 时间也要计入真实收益。
 
 Triton 的核心价值不是让所有人绕过 CUDA，而是让更多工程师能以可控成本写出足够好的张量 kernel，并把 shape-specialization、fusion 和 autotuning 纳入日常优化流程。
+
+## 真实排查案例：Autotune 搜索出了线上冷启动抖动
+
+**输入症状**：Triton attention 原型在离线测试中快 12%，上线灰度后首批请求 TTFT 偶发超过 10s，之后恢复正常。
+
+**关键指标**：热态 kernel latency 符合预期；冷态请求出现编译和 autotune 峰值；编译缓存 miss 集中在少数长上下文 bucket；业务 P99 被首次命中拖高。
+
+**Nsight / trace 观察**：Nsight Systems 里 GPU 空闲但 CPU 侧 JIT 编译占用明显；首次遇到新 shape 时没有马上进入 GPU kernel，而是在编译、加载和候选配置测试上耗时。
+
+**判断**：问题不是 Triton kernel 热态性能，而是 autotune 和编译缓存进入了在线关键路径。离线 benchmark 漏掉了 cold start 成本。
+
+**修复**：固定高频 bucket 的 autotune 结果并做启动预热；限制线上动态 shape 的搜索空间；低频 shape 走保守通用实现；在指标里分开记录 compile time、autotune time 和 kernel time。
+
+**反例**：如果服务是离线批处理，冷启动成本可摊到很长任务里，动态 autotune 可能是可接受的。在线交互服务则必须把首次编译视为用户延迟的一部分。

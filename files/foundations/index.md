@@ -121,3 +121,14 @@
 ## 一个总判断
 
 基础知识不是“学完才能开始”的门槛，而是一个随时回查的地图。读后面的高级专题时，如果发现概念开始混乱，优先回到这里判断它属于哪一层，再继续追具体方法。
+## 深度标杆页
+
+基础知识专题的标杆页要负责给后续世界模型、训练、推理和算子章节打地基。其它基础页应向这些页面补直觉、公式、最小例子和跨专题链接。
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) | 把 shape、计算图、数据流和框架执行联系起来 |
+| [Transformer 输入与注意力](transformer-attention-and-tokenization.md) | 讲清 token、attention、KV 和上下文成本 |
+| [概率与潜变量模型](probability-latent-variables-and-generative-models.md) | 支撑扩散、VAE、RSSM、世界模型和不确定性 |
+| [优化与训练入门](optimization-and-training-basics.md) | 支撑 loss、optimizer、稳定性和训练诊断 |
+| [数值、显存与运行时](numerics-memory-and-runtime-basics.md) | 把 dtype、显存、带宽、runtime 和系统成本接起来 |

@@ -5,6 +5,24 @@
 !!! tip "基础知识入口"
     这条线会反复用到 `Embedding`、`Cross-Attention`、视频 token、动作 token、行为克隆、动作块和闭环评测。第一次读可以先看 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)、[概率与潜变量模型](../foundations/probability-latent-variables-and-generative-models.md) 和 [优化与训练入门](../foundations/optimization-and-training-basics.md)。
 
+!!! tip "本专题的读法"
+    先按“看懂 -> 记住 -> 行动 -> 预判后果”的顺序读。CLIP/BLIP-2 解决看懂和连接，视频表征解决状态，VLA 解决动作输出，WAM/VAM 和世界模型继续追问动作之后会发生什么。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>读前先知道</strong>
+    <p>embedding、attention、视觉 encoder、token、行为克隆和基础概率模型。</p>
+  </div>
+  <div>
+    <strong>读中抓主线</strong>
+    <p>图文对齐、视觉连接器、视频状态、动作表示、闭环恢复。</p>
+  </div>
+  <div>
+    <strong>读完能判断</strong>
+    <p>一个系统停在 VLM、进入 VLA，还是已经开始建模动作后果。</p>
+  </div>
+</div>
+
 ## 1. 主线问题
 
 VLM 通常回答：
@@ -37,6 +55,31 @@ p_\theta(o_{t+1:t+H}, r, d \mid o_{\le t}, a_{t:t+H-1}, l)
 
 !!! note "先把 VLM/VLA 放进世界模型路线里"
     本章不是把所有 VLM 应用逐个展开，而是沿着“视觉语义 -> 时序状态 -> 动作策略 -> 动作后果预测”推进。判断一项内容是否该放在这里，标准不是它是否热门，而是它是否能帮助回答：模型如何从看懂当前画面，走向在动作条件下预测未来。
+
+## 专题层级：从视觉语义到世界模型接口
+
+VLM/VLA 现在按六层来读，而不是只作为世界模型前的桥接章节：
+
+| 层级 | 核心问题 | 入口页 | 为什么重要 |
+| --- | --- | --- | --- |
+| VLM 架构 | 图像、文本和视觉 token 如何对齐 | [VLM 架构：视觉表征、连接器与记忆](architecture-and-training.md) | 建立静态语义空间和多模态基础接口 |
+| 视觉压缩 | 视觉 token、连接器和信息瓶颈如何设计 | [视觉 Tokenizer、连接器与信息瓶颈](visual-tokenizers-and-connectors.md) | 决定长视频和 VLA 训练是否被 token 成本拖垮 |
+| 视频状态 | 多帧如何变成状态、记忆和动态表征 | [视频表征、状态记忆与长时序压缩](video-representation-and-memory.md) | 是从 VLM 走向世界模型的关键中间层 |
+| VLA 策略 | 视觉语言状态如何变成动作 | [VLA 专题路线图](../vla/index.md) | 提供动作分布、执行反馈和失败样本 |
+| 评测闭环 | 多模态系统如何发现细节、时序、动作失败 | [多模态评测与失败模式](multimodal-evaluation-and-failure-modes.md) | 避免只看平均 VQA 分数，忽略闭环任务失败 |
+| 世界模型接口 | VLM/VLA 如何服务高效世界模型训练 | [VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md) | 把状态、动作、失败回流和 rollout 验证接起来 |
+
+## 深度标杆页
+
+本专题建议先把 5 页读深，其它页面按它们的脉络对齐：
+
+| 标杆页 | 对齐标准 |
+| --- | --- |
+| [VLM 架构：视觉表征、连接器与记忆](architecture-and-training.md) | 要能讲清视觉 encoder、连接器、语言模型和记忆的接口 |
+| [视觉 Tokenizer、连接器与信息瓶颈](visual-tokenizers-and-connectors.md) | 要能解释 token 压缩如何影响训练成本和细节保留 |
+| [视频表征、状态记忆与长时序压缩](video-representation-and-memory.md) | 要能把视频从“多张图”提升到“可预测状态” |
+| [VLA 数据与策略学习](../vla/data-and-policy-learning.md) | 要能解释机器人数据、行为克隆和分布偏移 |
+| [VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md) | 要能把 VLM/VLA 明确接到世界模型高效训练主线 |
 
 ## 从论文专题回填的多模态知识点
 
@@ -148,11 +191,12 @@ VLA 主要学习“当前应该做什么”。世界模型还要学习“做了�
 如果目标是理解世界模型，建议这样读：
 
 1. [VLM 架构：视觉表征、连接器与记忆](architecture-and-training.md)：理解 CLIP/InfoNCE 静态对齐、视觉 token、连接器和视频 latent。
-2. [数据与策略学习](../vla/data-and-policy-learning.md)：理解 VLA 为什么首先是策略学习问题。
-3. [动作表示与控制接口](../vla/action-representation-and-interfaces.md)：理解动作如何被 token 化、归一化和执行。
-4. [动作分块、层级策略与潜在技能](../vla/action-chunking-hierarchical-policies-and-latent-skills.md)：理解短技能和动作 chunk。
-5. [VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md)：理解策略如何进入真实闭环。
-6. [强化学习总览](../reinforcement-learning/index.md)：理解 reward、policy、PPO/GRPO 和 imagined rollout。
-7. [世界模型路线图](../world-models/index.md)：进入动作条件未来预测、imagined rollout 和风险规划。
+2. [视觉 Tokenizer、连接器与信息瓶颈](visual-tokenizers-and-connectors.md)：理解视觉信息如何被压成可训练、可消费的状态。
+3. [视频表征、状态记忆与长时序压缩](video-representation-and-memory.md)：理解时序状态和长视频压缩。
+4. [VLA 专题路线图](../vla/index.md)：理解 VLA 为什么首先是策略学习、动作接口和闭环评测问题。
+5. [动作表示与控制接口](../vla/action-representation-and-interfaces.md)：理解动作如何被 token 化、归一化和执行。
+6. [VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md)：理解策略如何进入真实闭环。
+7. [VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md)：把状态、动作、失败回流和 rollout 验证接起来。
+8. [世界模型路线图](../world-models/index.md)：进入动作条件未来预测、imagined rollout 和风险规划。
 
 读完本章后，判断是否可以进入世界模型，只看一个问题：你是否能清楚区分“模型输出动作”和“模型预测动作后果”。
