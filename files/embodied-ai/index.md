@@ -74,11 +74,13 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 | 策略 / VLA | 给定观测和语言，下一段动作是什么 | [π0.5](../paper-deep-dives/embodied-ai/pi05.md)、[VLM/VLA 总览](../vlm/index.md) |
 | 世界模型 / WAM | 如果执行动作，未来会怎样；未来视频和动作是否一致 | [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) |
 | 规划控制与安全 | 动作能否执行、是否碰撞、是否需要降速或拒绝 | [规划、控制与安全](planning-control-and-safety.md) |
-| 数据与评测 | 数据如何生成，成功如何判定，失败如何回流 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)、[具身任务谱系与评测](task-taxonomy-and-benchmarks.md) |
+| 数据与评测 | 数据如何生成，成功如何判定，失败如何回流 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)、[Rerun 多模态时序数据层](rerun-robotics-data-visualization.md)、[具身任务谱系与评测](task-taxonomy-and-benchmarks.md) |
 
 如果现在觉得概念散，先读 [具身智能从零路线](beginner-learning-path.md)。那一页按“看见世界 -> 理解任务 -> 选择动作 -> 预测后果 -> 执行控制 -> 判断成败 -> 回流数据”的顺序，把 VLM、VLA、world model、WAM、π0.5、DreamZero 和资产/轨迹 pipeline 放到同一条学习线上。
 
 如果卡在机器人视觉和仿真工具，先分别读 [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md) 和 [Isaac Sim 与 RoboTwin 仿真数据链](isaacsim-and-robotwin.md)。前者解释单目/双目/RGB-D、相机内参/外参、标定和安装方式，后者解释 Isaac Sim、RoboTwin、cuRobo、success checker 怎么组成数据生成闭环。
+
+如果你已经开始调试真机或仿真 episode，再读 [Rerun 多模态时序数据层](rerun-robotics-data-visualization.md)。它回答的不是“模型怎么训”，而是“失败发生时，RGB、depth、点云、坐标系、动作和事件标签能不能在同一条时间线上被看清楚”。
 
 读完从零路线后，再读 [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md)。那一页把 π0.5、DreamZero、LingBot-World、Dreamer 和资产/轨迹 pipeline 放进同一张结构图里，建立“每个方法在系统里负责哪一层”的判断。
 
@@ -102,7 +104,7 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 | VLA policy | 视觉、语言、本体状态如何输出 action chunk 或轨迹锚点 | [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) |
 | 世界模型前瞻 | 候选动作执行后是否可见、可达、会碰撞、能恢复 | [世界模型开发路线](../world-models/development-roadmap-data-simulation-and-evaluation.md) |
 | 控制和安全 | 高层动作如何落到真实关节、速度、力和急停边界 | [规划、控制与安全](planning-control-and-safety.md) |
-| 失败回流 | 失败轨迹、人工纠正和价值函数如何改进策略 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) |
+| 失败回流 | 失败轨迹、人工纠正和价值函数如何改进策略 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)、[Rerun 多模态时序数据层](rerun-robotics-data-visualization.md) |
 
 ## 1. 具身智能和“大模型智能体”有什么不同
 

@@ -114,6 +114,30 @@
   </tbody>
 </table>
 
+### 高效推理
+
+!!! note "这组文章怎么连起来读"
+    高效推理的核心不是只追 tokens/s，而是把上下文长度、KV cache、decode latency、batch 和质量损失放在同一张成本表里。KVSlimmer 适合作为 KV cache compression 的精读样例：它用谱分析解释为什么 Key 比 Value 更适合合并，再用 exact Hessian 到 forward-only 闭式解的推导说明怎样在不反传的情况下保留二阶信息。
+
+<table data-paper-sort="asc">
+  <thead>
+    <tr>
+      <th>时间</th>
+      <th>主题</th>
+      <th>论文讲解</th>
+      <th>阅读重点</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-03</td>
+      <td>高效推理</td>
+      <td><a href="inference/kvslimmer/">KVSlimmer：非对称 KV 合并</a></td>
+      <td>如何用 Q/K/V 谱分布解释 KV 非对称，再把 Key merge 的 exact Hessian coupling 化简成只依赖 forward-pass 变量的闭式权重，从而降低长上下文推理的 KV memory 和 decoder latency</td>
+    </tr>
+  </tbody>
+</table>
+
 ### 扩散模型
 
 <table data-paper-sort="asc">

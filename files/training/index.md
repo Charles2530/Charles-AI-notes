@@ -59,7 +59,7 @@
 | 数据管线 | 什么样的数据进入训练，如何高效变成有效 token | 数据系统、去重治理、数据混合、输入管线、Packing | 数据质量问题不能只靠换并行框架解决 |
 | 评测回流 | 怎么证明模型真的变好，以及失败如何进入下一轮数据 | Judge、偏好数据、评测消融、后训练数据引擎 | 分数上涨不等于训练信号和真实任务都变好 |
 | 分布式执行 | 模型状态、激活、通信和 checkpoint 如何被组织 | Megatron/DeepSpeed、分布式训练、稳定性、集群运维 | ZeRO/FSDP 省显存，但会增加通信和恢复复杂度 |
-| 经济与治理 | 预算、实验节奏、失败恢复和产物复用是否成立 | Scaling law、实验经济学、运维治理 | loss 曲线好看不代表实验资产可信 |
+| 经济与治理 | 预算、实验节奏、失败恢复和产物复用是否成立 | Scaling law、实验经济学、运维治理、W&B 实验追踪 | loss 曲线好看不代表实验资产可信 |
 
 !!! note "难点解释：ZeRO、Megatron-LM 和 DeepSpeed 分别在管什么"
     `Megatron-LM / Megatron Core` 更偏模型并行和 Transformer 构件：TP、PP、CP、EP、通信 overlap、MoE 等。`DeepSpeed / ZeRO` 更偏运行时内存组织：优化器状态、梯度、参数如何在 DP 组里分片，是否 offload，如何和 pipeline engine 配合。`FSDP` 更贴近 PyTorch 原生生态。它们都影响训练系统，但层级不同：Megatron 先回答模型怎么拆，ZeRO/FSDP 回答状态怎么放，checkpoint/manifest 回答训练资产怎么恢复和复用。
@@ -90,6 +90,10 @@
   <a class="atlas-card" href="input-pipelines-packing-and-throughput-governance/">
     <strong>输入管线、Packing 与吞吐</strong>
     <p>快速定位 GPU 为什么吃不满，以及有效 token 利用率为什么经常比显存更早出问题。</p>
+  </a>
+  <a class="atlas-card" href="wandb-experiment-tracking-and-governance/">
+    <strong>W&B 实验追踪与治理</strong>
+    <p>把 run、config、metrics、artifacts、tables、sweeps 和 registry 接成可复盘的训练证据链。</p>
   </a>
 </div>
 

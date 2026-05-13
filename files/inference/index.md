@@ -92,6 +92,7 @@
 
 | 专题来源 | 推理层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
+| [KVSlimmer](../paper-deep-dives/inference/kvslimmer.md) | 长上下文成本不能只看 prefill；KV cache 会随 context、layers、KV heads 和 batch 线性膨胀。KVSlimmer 用 Q/K/V 谱非对称和 exact Hessian coupling 做 forward-only Key merging，给 KV 压缩提供了比简单 eviction 更可解释的质量-成本取舍 | [上下文压缩与 KV 管理](context-compression-kv-eviction-and-memory-hierarchies.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md) |
 | [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | Mamba-heavy backbone、LatentMoE 和 shared-weight MTP 的核心收益在长上下文、长输出和 speculative decoding 接受率，不只是 benchmark accuracy | [缓存、路由与投机解码](caching-routing-and-speculative.md)、[上下文压缩与 KV 管理](context-compression-kv-eviction-and-memory-hierarchies.md) |
 | [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md)、[DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | MLA、混合注意力、异构 KV cache 和 OPD 基础设施说明长上下文推理要同时处理 KV 规模、prefill/decode 拆分和服务容量 | [解耦式 Prefill 与 KV 服务](disaggregated-prefill-kv-services-and-capacity-ops.md)、[长上下文系统](rag-agents-and-long-context-systems.md) |
 | [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md)、[Qwen3](../paper-deep-dives/technical-reports/qwen3.md) | agentic tool use 和 thinking budget 让推理从单次回答变成多步链路，瓶颈常在路由、上下文膨胀和工具 I/O | [RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md)、[在线评测与观测](observability-and-online-evaluation.md) |

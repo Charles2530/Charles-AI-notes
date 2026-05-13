@@ -149,6 +149,7 @@ nav:
           - 分布式训练与 Checkpoint: training/distributed-training-and-checkpointing.md
           - 训练稳定性与故障排查: training/stability-numerics-and-failure-triage.md
           - 集群运维与实验治理: training/cluster-operations-and-experiment-management.md
+          - W&B：实验追踪与治理: training/wandb-experiment-tracking-and-governance.md
           - Scaling Law 与训练经济学: training/scaling-laws-and-experiment-economics.md
   - 算子与编译器:
       - operators/index.md
@@ -233,6 +234,7 @@ nav:
           - Isaac Sim / RoboTwin: embodied-ai/isaacsim-and-robotwin.md
           - 资产到轨迹：感知、抓取与数据管线: embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md
           - Sim2Real 与具身数据引擎: embodied-ai/sim2real-and-data-engines.md
+          - Rerun：多模态时序数据层: embodied-ai/rerun-robotics-data-visualization.md
       - 闭环、控制与部署:
           - 一个任务跑通具身闭环: embodied-ai/closed-loop-task-walkthrough.md
           - 规划、控制与安全: embodied-ai/planning-control-and-safety.md
@@ -251,6 +253,8 @@ nav:
           - MagiAttention: paper-deep-dives/foundations/magiattention.md
           - SLA / SLA2: paper-deep-dives/foundations/sla-sparse-linear-attention.md
           - Attn-QAT：4-bit Attention: paper-deep-dives/foundations/attn-qat.md
+      - 高效推理:
+          - KVSlimmer：非对称 KV 合并: paper-deep-dives/inference/kvslimmer.md
       - 扩散模型:
           - DMD：一步扩散蒸馏: paper-deep-dives/diffusion/dmd.md
           - DMD2：更稳的少步分布匹配蒸馏: paper-deep-dives/diffusion/dmd2.md

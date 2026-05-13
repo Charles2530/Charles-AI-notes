@@ -149,6 +149,11 @@
 4. [CALVIN: A Benchmark for Language-Conditioned Policy Learning for Long-Horizon Robot Manipulation Tasks](https://arxiv.org/abs/2112.03227)  
    长程语言条件机器人操作常用评测。
 
+### 3.5 具身数据与可视化工具
+
+1. [Rerun Documentation: What is Rerun?](https://rerun.io/docs/overview/what-is-rerun)
+   面向 Physical AI 的多模态时序数据层，适合记录和回放 RGB、depth、point cloud、transforms、text、scalar 和 tensor；站内专题见 [Rerun 讲解](../embodied-ai/rerun-robotics-data-visualization.md)。
+
 ## 4. 世界模型、训练与规划
 
 对应站内章节：[世界模型](../world-models/index.md)。
@@ -560,6 +565,15 @@
 7. [Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)  
    Kimi K2 采用 1.04T total / 32.6B activated 的 ultra-sparse MoE，使用 384 total experts / 8 active experts，并通过 sparsity scaling law 选择 sparsity 48；站内专题见 [Kimi K2 讲解](../paper-deep-dives/technical-reports/kimi-k2.md)。
 
+### 8.4 实验追踪与训练治理工具
+
+1. [Weights & Biases](https://wandb.ai/site)
+   AI developer platform，覆盖 experiment tracking、artifacts、tables、sweeps、reports、registry 等训练治理入口；站内专题见 [W&B 讲解](../training/wandb-experiment-tracking-and-governance.md)。
+2. [W&B Experiments](https://docs.wandb.ai/models/track)
+   记录 metrics、hyperparameters、system metrics 和 model artifacts 的官方文档入口。
+3. [W&B Artifacts](https://docs.wandb.ai/models/artifacts)
+   用 run 的输入/输出追踪和版本化数据集、模型与评测产物。
+
 ## 9. 推理系统与服务运行时
 
 对应站内章节：[推理](../inference/index.md)。
@@ -591,6 +605,8 @@
    Chunked prefill 和 decode piggybacking 参考。
 4. [LMCache](https://github.com/LMCache/LMCache)  
    KV cache 复用和跨请求缓存工程入口。
+5. [KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging](https://arxiv.org/abs/2603.00907)
+   用 Q/K/V 投影矩阵谱分布解释 KV 非对称，并把 Key merge 的 exact Hessian coupling 化简成 forward-only 闭式权重；站内专题见 [KVSlimmer 讲解](../paper-deep-dives/inference/kvslimmer.md)。
 
 ## 10. 算子、Kernel 与编译器
 
