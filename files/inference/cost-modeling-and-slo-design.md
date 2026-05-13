@@ -71,6 +71,20 @@ Prefill 和 decode 的资源画像不同。长上下文请求主要成本在 pre
 
 用一个统一“每 token 成本”概括，会误导优化方向。
 
+## 世界模型 rollout 的硬证据模块
+
+普通 LLM 推理看 `TTFT / TPOT / tokens/s`，世界模型 rollout 还要看动作候选、风险头、长时 latent 和闭环任务。成本模型必须把“更快”转成“每个成功任务更便宜”。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | \(T_{\text{observe}}+T_{\text{encode}}+T_{\text{rollout}}+T_{\text{policy}}+T_{\text{control}}\) 分解 | rollout 快了，但 control loop 仍超时 | P95 loop latency、deadline miss |
+| 候选动作成本 | 每状态 8/16/32 条 candidate 的 latency 和显存 | 候选数翻倍，成功率没变 | cost per candidate、cost per success |
+| KV / latent 生命周期 | 当前窗口、远期 memory、risk path 分开统计 | 远期 cache 省了，当前窗口仍读爆 | KV GiB、memory hit rate、bandwidth |
+| 闭环收益 | 同一任务桶开启/关闭 world model 对照 | latency 降了但 collision 上升 | success、recovery、collision、takeover |
+| 证据等级 | microbench、end-to-end trace、closed-loop eval 分开标 | 只给 kernel speedup | system trace + task metric |
+
+上线判断最好写成：`rollout kernel 1.7x，端到端 loop 1.2x，cost per successful rollout 下降 18%，near-miss recall 不降。` 如果只写前两个数，仍可能是通用推理优化；只有最后两个数能说明它服务了世界模型决策。
+
 ## 端到端成本账：同一个请求怎么估
 
 为了避免成本建模停在抽象公式，可以固定一个请求形态来算：**用户带一段文档问问题，输入上下文为 \(L_{\text{in}}\)，输出为 512 token，服务目标是 P95 TTFT < 2s、TPOT < 60ms/token**。同一个请求在不同 context、KV、batch 和量化策略下，成本结构会完全不同。

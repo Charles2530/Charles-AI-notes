@@ -48,9 +48,65 @@
 3. fallback 比例是否过高；
 4. prefill 和 decode 是否被混在一起评估。
 
-## 5. 小结
+## 5. 硬件排查流程图
+
+```mermaid
+flowchart TD
+    A["性能异常"] --> B{"单卡 microbenchmark 也慢吗？"}
+    B -- "是" --> C["看 kernel / dtype / layout"]
+    B -- "否" --> D{"多卡或服务态才慢吗？"}
+    D -- "是" --> E["看通信、拓扑、调度和 workload"]
+    C --> F{"DRAM 吞吐接近上限？"}
+    F -- "是" --> G["带宽 / layout / fusion"]
+    F -- "否" --> H{"Tensor Core 利用率低？"}
+    H -- "是" --> I["tile、dtype、MMA 路径"]
+    H -- "否" --> J["launch、occupancy、寄存器"]
+    E --> K{"rank 间拖尾？"}
+    K -- "是" --> L["NCCL / NVLink / NUMA / rank mapping"]
+    K -- "否" --> M["shape bucket / cache / fallback"]
+```
+
+这张图能避免一上来就改 kernel。很多线上退化并不是单个算子慢，而是多卡通信、拓扑映射、shape 迁移或 fallback 路径把端到端拖慢。先问“单卡是否也慢”，能把排查范围迅速缩小。
+
+## 6. 节点健康基线
+
+硬件感知不是出事后才看 `nvidia-smi`。建议每类机器保留一组启动基线：
+
+| 基线 | 记录什么 | 用途 |
+| --- | --- | --- |
+| 拓扑 | `nvidia-smi topo -m`、GPU ordinal、NUMA 亲和 | 避免 TP / EP 分组跨慢链路 |
+| 带宽 | HBM copy、PCIe/NVLink P2P、NCCL all-reduce/all-to-all | 区分坏卡、拓扑和通信退化 |
+| Kernel 探针 | GEMM、attention、norm、KV 读取 microbench | 判断底层 kernel 是否异常 |
+| 系统状态 | 温度、功耗、ECC、时钟、驱动版本 | 解释慢节点和不稳定节点 |
+| Runtime 路径 | dtype、quant kernel hit rate、fallback rate | 判断是否走到预期低精度路径 |
+
+如果没有基线，值班时只能凭感觉判断“这台机器是不是怪”。有了基线，性能退化可以快速分成硬件异常、拓扑异常、runtime 异常和 workload 变化。
+
+## 7. 另一个案例：低精度服务没有变快
+
+**输入症状**：把模型从 BF16 切到 FP8 权重后，显存下降 35%，但 TPOT 只提升 3%，P99 还略差。
+
+**关键指标**：权重加载显存确实下降；trace 中部分 GEMM 命中 FP8 kernel，但 connector 和输出头频繁 dequant 回 BF16；decode 阶段 KV cache 仍是 BF16，长上下文请求占成本大头。
+
+**判断**：硬件支持 FP8 不代表整条路径支持 FP8。瓶颈已经从权重常驻显存转移到 KV 读取、格式转换和部分 fallback。
+
+**修复**：按 kernel hit rate 分桶统计；先保留敏感头高精，主干 matmul 确认 FP8 命中；对长上下文桶评估 KV cache 量化；把 dequant/requant 次数计入性能报告。
+
+## 8. 小结
 
 **硬件感知排查的核心是**：不要把所有问题都解释成算法或框架问题。很多性能瓶颈最终都要回到带宽、寄存器、拓扑和 workload 分布这些更底层也更真实的约束上。只要先从这些约束出发，定位通常会快很多。
+
+## 9. 最小排查记录模板
+
+每次硬件相关性能事故，建议至少留下这几项：
+
+| 字段 | 内容 |
+| --- | --- |
+| 机器与拓扑 | GPU 型号、驱动、拓扑、rank mapping |
+| 症状范围 | 单卡、多卡、训练、推理、某个 bucket |
+| 关键证据 | trace、NCCL wait、带宽、fallback、温度 |
+| 修复动作 | 改 mapping、换节点、改 dispatch、回退 kernel |
+| 复验方式 | 哪个探针或业务 bucket 证明恢复 |
 
 ## 工程收束
 

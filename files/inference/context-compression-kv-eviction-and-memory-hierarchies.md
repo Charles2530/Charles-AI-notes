@@ -84,6 +84,20 @@ Agent 系统通常更适合结构压缩，因为很多记忆不是故事，而�
 
 KV 淘汰不是纯缓存问题，它会影响回答质量和任务一致性。任何 eviction 策略都需要任务级回归。
 
+## 世界模型 KV / memory 的硬证据模块
+
+如果 KV 管理服务世界模型 rollout，它保留的不是普通文本历史，而是动作后果、遮挡状态、风险边界和候选轨迹上下文。淘汰策略必须按这些变量验收。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 当前窗口、远期 memory、KV GiB 和 decode bandwidth 分开统计 | KV 降了，但当前接触窗口被淘汰 | KV memory、bandwidth、P95 latency |
+| 重要性规则 | recent / risk / object / action 分层保留 | 早期目标约束被删，后面重复抓取 | memory hit rate、task-state consistency |
+| 动作敏感性 | eviction 前后候选动作排序对比 | 删掉关键历史后动作未来不再分叉 | ranking agreement、latent delta |
+| 风险校准 | high-risk token 或 near-miss memory 强保留 | risk false negative 增加 | near-miss recall、risk ECE |
+| 证据等级 | microbench、离线 replay、闭环桶分开写 | 只报告 KV GiB 下降 | task metric + system trace |
+
+一个安全的 world-model memory 策略通常是：当前 1-2 秒接触窗口不淘汰，高风险事件和目标状态结构化保存，远期背景 token 可压缩或降级。若策略只按 recency 或 attention score 淘汰，很容易把低频但关键的安全约束删掉。
+
 ## 内存分层
 
 长上下文系统应有多层记忆：

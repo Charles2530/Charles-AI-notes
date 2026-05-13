@@ -30,6 +30,20 @@ paper_topic: 扩散模型
 | 主要风险 | causal student 会面对误差累积和 chunk discontinuity；若缺少动作条件和闭环评测，它仍可能只是流式视频生成器，不一定是可决策世界模型 |
 | 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md)、[推理成本建模](../../inference/cost-modeling-and-slo-design.md) |
 
+## 证据等级与外推边界
+
+CausVid 的证据强在流式视频生成质量、延迟和少步蒸馏链路；它弱在动作条件和闭环决策，因为论文目标仍是视频生成系统。读它时要把“可流式生成未来视频”和“可用于世界模型规划”分开。
+
+| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
+| --- | --- | --- | --- | --- |
+| 双向视频 DiT 可以蒸馏成 causal student | ODE initialization、asymmetric DMD、视频样例和指标 | Benchmark + Ablation | 世界模型可先借强双向 teacher，再改造成流式 causal rollout | 不能证明动作因果性和真实控制收益 |
+| few-step student 降低流式延迟 | 50-step teacher 到 4-step student、首块延迟和 FPS | System throughput | 交互式 world model 必须同时优化 causal mask、KV cache 和采样步数 | 不能把视频 FPS 直接等同于机器人控制频率 |
+| KV cache 支持长视频自回归 rollout | block-wise causal attention 和 streaming inference | System design | rollout runtime 应保留过去 chunk KV，避免重复算历史 | 不能证明低精 KV 或长时 memory 不会损伤一致性 |
+| asymmetric teacher 保留视频质量 | bidirectional teacher 监督 causal student 的训练设计 | Ablation | 部署形态可以 causal，但训练监督可来自更强离线模型 | 不能替代反事实动作评测和风险校准 |
+| 仍可能有误差累积和 chunk discontinuity | causal autoregressive 结构的内在风险 | Boundary condition | world model 要单独做长 horizon drift、chunk seam 和恢复评测 | 不能只看短视频主观质量 |
+
+对本站主线，CausVid 提供的是“视频世界模型如何变成低延迟 rollout 模块”的证据，而不是“它已经是完整行动世界模型”的证据。要把它用于 VLA，还必须补动作条件、失败 replay、闭环成功率和 risk head 验收。
+
 ## 论文位置
 
 当前强视频扩散模型大多是 bidirectional video diffusion：模型在生成当前帧时会看整段视频 token，包括未来帧。这对离线生成很好，因为全局注意力能提高一致性；但对交互式应用很糟，因为用户必须等整段视频生成完，不能边生成边看，也不能在中途改变输入。

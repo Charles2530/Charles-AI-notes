@@ -69,6 +69,44 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 
 序列长度下降约 6 倍，attention、激活显存和通信都会明显下降。但这个收益有前提：压缩后仍要保留目标物、夹爪、接触边界、遮挡前位置和多相机几何关系。否则 token 省下来了，world model 可能失去最关键的动作后果信号。
 
+### 压缩前后对比：不要只看 token 数
+
+同一条“从桌面拿起红色量杯”的训练样本，可以把视觉侧压成几种不同形态。下面的数字不追求代表所有系统，而是给一个能复算的口径：4 路相机、16 帧历史、每个 patch token hidden size 为 1024，进入世界模型前用 BF16 保存。
+
+| 方案 | 视觉 token 数 | 视觉激活约占 | 省下了什么 | 最容易丢什么 |
+| --- | ---: | ---: | --- | --- |
+| 原始 patch 全进上下文 | \(4\times16\times196=12,544\) | \(12,544\times1024\times2 \approx 25.7MB\) | 几乎不省 | 计算太贵，长 horizon 难训 |
+| 每帧 resampler 到 32 token | \(4\times16\times32=2,048\) | 约 4.2MB | token 约降 6.1 倍 | 小物体、接触边界、遮挡前位置 |
+| 目标/夹爪优先 token | \(16\times(4\times8+12+12)=896\) | 约 1.8MB | 保留局部控制证据 | 背景布局和远处约束 |
+| 当前窗口 + memory token | 最近 4 帧 512 token + 128 memory token | 约 1.3MB | 长任务上下文压力最低 | memory 写入错误会长期污染 |
+
+如果后续模块对视觉 token 做全局 self-attention，注意力 score 的上界从 \(12,544^2\approx157M\) 个元素降到 \(2,048^2\approx4.2M\)，是约 37 倍差异。真实系统可能用 cross-attention、window attention 或稀疏读取，收益不会完全按平方兑现，但这个量级足以解释：视觉 tokenizer 不是锦上添花，而是能决定长视频世界模型是否训得动。
+
+压缩是否成功，要看四个对照指标：
+
+| 对照项 | 合格信号 | 失败信号 |
+| --- | --- | --- |
+| 语义问答 | 目标物、颜色、数量不变 | VQA 分数基本不掉 |
+| 几何/坐标 | 抓取点、左右、距离稳定 | 坐标误差从 1cm 变 4cm |
+| 动作敏感性 | 左推/右抓预测未来分叉 | 不同动作生成相似未来 |
+| 记忆保真 | 遮挡后仍记得物体去向 | 物体回到常见初始位置 |
+
+这也是为什么“压缩前后图像看起来差不多”不够。世界模型真正关心的是：压缩后的 latent 是否还能解释动作后果。
+
+## 硬证据模块：视觉压缩必须给出 token 账和失败桶
+
+视觉 tokenizer 页最容易退回“少 token 就更高效”。更可靠的证据模块要同时给压缩收益和被压坏的内容。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 原始 patch token、resampler token、memory token 三列对比 | token 降了，但训练 step time 被 gather/scatter 吃掉 | token compression ratio、step time、显存 |
+| 动作敏感性是否保留 | 同一历史下 left/right/grasp/noop 四个动作的 latent 差异 | 不同动作未来都像“继续当前画面” | action sensitivity、candidate ranking |
+| 接触与小物体是否保留 | wrist crop / object token / full-frame 三路对照 | 抓取点、杯沿、按钮边界消失 | contact event F1、坐标误差 |
+| 遮挡记忆是否保留 | 目标被遮挡后 2-6 秒再出现 | 物体回到常见初始位置 | object ID consistency、latent drift |
+| 证据等级 | 只给示意图、离线 token 统计、ablation、闭环结果要分开写 | demo 图好看但策略无收益 | 证据来源明确标成 demo / ablation / closed-loop |
+
+一个最小日志应像 `world-model-mini-chain` 那样可复算：原始 patch token 为 `82368`，压缩后 state token 为 `12292`，压缩约 `6.70x`；但同时必须报告 `top1_safe_success_agreement=2/4` 这类失败指标。否则读者只知道“视觉变省了”，不知道世界模型是否还能用它做动作判断。
+
 ## 面向 VLA 的检查点
 
 判断一个视觉连接器是否适合 VLA，不要只看 VQA 分数，还要看：

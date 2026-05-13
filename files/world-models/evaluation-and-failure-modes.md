@@ -17,6 +17,21 @@
 !!! note "图解：open-loop 图要看漂移，不只看第一帧"
     这类图最容易被误读成“像不像视频”。正确读法是沿时间看：物体身份是否保持、空间布局是否漂移、关键任务变量是否还可读、误差是不是越滚越大。世界模型如果只在短 horizon 好看，接入 planner 后会把小误差放大成错误动作。
 
+## 硬证据模块：评测页先看六道门
+
+世界模型评测的最低要求，不是“给一个平均分”，而是把模型可能服务决策的每条路径都验一遍。一个可发布的评测报告至少要有下面六道门。
+
+| 门禁 | 最小可复算例子 | 失败案例 | 证据等级 | 合格信号 |
+| --- | --- | --- | --- | --- |
+| Action sensitivity | 固定历史，替换 3-8 个动作候选，比较未来 latent / event / risk | 不同动作生成几乎一样的未来 | counterfactual benchmark / ablation | 动作排序和真实结果高度一致 |
+| Latent drift | 从同一状态 open-loop rollout 到 2s/8s/30s | 目标物位置逐步漂移或身份重置 | horizon curve / replay | 漂移曲线可解释，关键状态不过阈值 |
+| Risk calibration | hard-negative 桶计算 ECE、near-miss recall、false negative | 平均 ECE 好但滑落/碰撞桶漏报 | calibration eval | near-miss recall 不低于高精 baseline |
+| Closed-loop gain | 接入 planner/policy，比较 success、recovery、collision | open-loop 好但策略利用模型漏洞 | closed-loop benchmark | 成功率提升且事故不升 |
+| Cost per success | 统计 GPU 秒、真实交互、人工接管和成功任务数 | latency 降了但失败率上升 | system log + task eval | 成本下降不是靠牺牲安全换来 |
+| Failure replay | 保存输入、动作候选、预测、真实结果和人工标签 | 只有总分，无法定位为什么错 | reproducible log | 任意失败都能回放和归因 |
+
+本仓库的 mini-chain fixture 可以作为最小格式参考：它计算 `action_sensitivity_pass=3/4`、`top1_safe_success_agreement=2/4` 和两个 failure replay。这个结果本身是不合格的，恰好说明评测页的作用：不是证明模型强，而是尽早暴露“排序会选错动作”和“遮挡后对象身份漂移”这类世界模型特有风险。
+
 ## 一、先分清评测对象：WM、WAM、VAM 不一样
 
 世界模型至少有三层能力：先把历史观测压成足够充分的 belief 或 latent，再给定状态和动作合理预测未来，最后把这些预测用于规划、控制、探索、风险评估或数据回流。评测时也应沿着这三层往下追问，而不是只停在像素误差。

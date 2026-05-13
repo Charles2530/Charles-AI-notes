@@ -93,6 +93,26 @@ Checkpoint 恢复后曲线漂移是一类单独问题。它危险在于训练表
 
 “先缩圈”比“先调参”更重要。能被最小复现的问题才容易变成团队资产。
 
+```mermaid
+flowchart TD
+    A["训练异常"] --> B{"异常类型"}
+    B --> C["nan/inf"]
+    B --> D["loss spike"]
+    B --> E["恢复后漂移"]
+    B --> F["低精度隐性退化"]
+    C --> G["输入 / 前向 / 反向逐层定位"]
+    D --> H["对齐数据、LR、bucket、checkpoint 时间线"]
+    E --> I["检查 sampler/RNG/optimizer/scheduler"]
+    F --> J["检查 scale、amax、fused kernel、累加精度"]
+    G --> K["最小复现"]
+    H --> K
+    I --> K
+    J --> K
+    K --> L["修复 + 回归样本"]
+```
+
+这张图把训练排障从“调小学习率试试”改成分诊流程。不同异常类型对应不同优先排查层，先分类才能避免乱改超参。
+
 ## 监控与 Playbook
 
 建议至少记录：

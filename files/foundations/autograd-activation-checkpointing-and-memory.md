@@ -77,7 +77,38 @@ x -> L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> loss
 
 这样显存下降，但训练时间会上升。
 
-## 5. 显存排查顺序
+## 5. 训练显存账：为什么长视频最先爆
+
+```mermaid
+flowchart LR
+    A["Forward"] --> B["保存必要激活"]
+    B --> C["Loss"]
+    C --> D["Backward"]
+    D --> E["读取激活 / 重算激活"]
+    E --> F["梯度"]
+    F --> G["Optimizer state"]
+    G --> H["参数更新"]
+    I["Activation checkpointing"] --> E
+    J["FSDP / ZeRO"] --> G
+```
+
+以一个多相机视频 VLA batch 为例：`B=2`、4 路相机、16 帧、每帧 1024 个视觉 token、hidden size 1024、BF16。仅视觉 token 激活一层就是：
+
+\[
+2\times4\times16\times1024\times1024\times2 \approx 256MB
+\]
+
+如果模型有几十层，并且反向传播需要保存多种中间激活，显存会迅速超过权重本身。这也是为什么视频世界模型训练经常要组合使用 gradient checkpointing、短长 horizon 混合、视觉 token 压缩、activation offload 和序列并行。
+
+| 手段 | 省什么 | 代价 |
+| --- | --- | --- |
+| Activation checkpointing | 中间激活 | 反向重算，step time 增加 |
+| 降低视觉 token | 激活、attention、KV | 可能丢小物体和接触线索 |
+| Sequence / context parallel | 长序列激活分摊 | 通信和实现复杂 |
+| ZeRO/FSDP | 参数、梯度、optimizer state | 通信与恢复语义更复杂 |
+| Offload | GPU 显存 | PCIe/NVMe 带宽和尾延迟 |
+
+## 6. 显存排查顺序
 
 遇到 OOM 时，可以按下面顺序检查：
 
@@ -89,7 +120,7 @@ x -> L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> loss
 6. 是否需要 ZeRO、FSDP、TP/PP/CP；
 7. 数据加载或缓存是否意外占显存。
 
-## 6. 和后续专题的关系
+## 7. 和后续专题的关系
 
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：理解 OOM、NaN、梯度异常。
 - [分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md)：理解恢复语义和状态分片。

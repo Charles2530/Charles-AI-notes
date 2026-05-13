@@ -2,8 +2,61 @@
 
 Weights & Biases，常写作 W&B，不是训练框架本身，而是把训练过程里的**配置、指标、系统状态、数据版本、模型产物、报告和协作记录**组织起来的实验平台。官方站点把它称为 AI developer platform，并把 Experiments、Reports、Artifacts、Tables、Sweeps、Models Registry、Launch、Prompts 和 Monitoring 放在产品入口里。[W&B Experiments 文档](https://docs.wandb.ai/models/track)强调的是用少量代码记录 metrics、hyperparameters、system metrics 和 model artifacts；[Artifacts 文档](https://docs.wandb.ai/models/artifacts)则强调把数据和模型作为 run 的输入/输出进行版本追踪。
 
+!!! info "工具入口"
+    - 官网：[wandb.ai/site](https://wandb.ai/site)
+    - 快速开始：[W&B Quickstart](https://docs.wandb.ai/models/quickstart)
+    - 实验追踪：[Experiments](https://docs.wandb.ai/models/track)
+    - 数据/模型版本：[Artifacts](https://docs.wandb.ai/models/artifacts)
+    - 超参搜索：[Sweeps](https://docs.wandb.ai/models/sweeps)
+    - 样本表格：[Tables](https://docs.wandb.ai/models/tables)
+    - 模型注册：[Registry](https://docs.wandb.ai/models/registry)
+
 !!! tip "主线定位：降低无效实验成本、复现成本和评测成本"
     训练页里讨论的 loss、吞吐、数据配方、checkpoint 和评测，如果没有统一证据链，很容易变成散落的曲线截图。W&B 的价值是把一次训练定义成可比较、可复盘、可追溯的实验对象。
+
+## 先看它长什么样
+
+W&B 最常见的第一印象是一张项目面板：左侧是 runs，右侧是随 step 变化的 loss、accuracy 或吞吐曲线。真正有用的是这些曲线不是孤立图片，而是绑定了 config、代码版本、artifact、系统指标和评测结果。
+
+![W&B quickstart 官方效果图](../assets/images/tools/wandb/wandb-quickstart-runs.png){ width="860" }
+
+<small>图源：[W&B Quickstart](https://docs.wandb.ai/models/quickstart)。官方示例记录 simulated accuracy/loss，进入 W&B 后可以看到每个 run 的曲线和 runs 列表。</small>
+
+## 5 分钟跑通
+
+先安装并登录：
+
+```bash
+pip install wandb
+wandb login
+```
+
+新建 `wandb_demo.py`：
+
+```python
+import random
+import wandb
+
+config = {
+    "epochs": 10,
+    "lr": 0.01,
+    "batch_size": 32,
+}
+
+with wandb.init(project="quickstart-demo", config=config) as run:
+    for epoch in range(config["epochs"]):
+        loss = 1.0 / (epoch + 1) + random.random() * 0.05
+        acc = 1.0 - loss * 0.4
+        run.log({"train/loss": loss, "eval/accuracy": acc}, step=epoch)
+```
+
+运行：
+
+```bash
+python wandb_demo.py
+```
+
+终端会打印 project/run 的 URL。打开后你会看到 loss 和 accuracy 曲线，左侧 runs 表里会有这次 run 的名字、配置和 summary。到这一步，W&B 已经能回答最基本的问题：这次实验是什么配置，跑出了什么曲线，结果在哪里看。
 
 ## 为什么训练板块需要 W&B
 
@@ -54,7 +107,7 @@ E =
 
 官方文档里，W&B Sweeps 支持 Bayesian、grid search、random 等搜索方式，并可跨一台或多台机器并行；Tables 用于可视化、查询表格数据和查看样本级预测；Registry 用于在组织内管理 artifact versions、权限、血缘和审计记录。
 
-## 最小接入示意
+## 接到大模型训练里怎么写
 
 下面示例把一次世界模型训练的关键证据挂到同一个 run 下：
 
@@ -88,6 +141,18 @@ with wandb.init(project="world-model-training", config=cfg) as run:
 ```
 
 这段代码的重点不是“多画一条 loss 曲线”，而是把数据版本、配置、指标和 checkpoint 绑定在一起。之后任何人看到 `wm-1b-step-50000`，都能沿 artifact lineage 找回它来自哪个数据版本和哪个训练 run。
+
+## 常用功能速查
+
+| 想做什么 | 最小写法 | 什么时候用 |
+| --- | --- | --- |
+| 记录指标 | `run.log({"loss": loss}, step=step)` | 训练 loss、吞吐、显存、评测分 |
+| 记录配置 | `wandb.init(config=cfg)` | 比较 LR、batch、数据配比、并行参数 |
+| 记录模型 | `wandb.Artifact(..., type="model")` | 保存 checkpoint、tokenizer、导出模型 |
+| 记录数据版本 | `run.use_artifact("dataset:v12")` | 证明模型到底吃了哪个数据版本 |
+| 记录样本表 | `wandb.Table(...)` | 看 prompt、prediction、score、failure_reason |
+| 超参搜索 | `wandb sweep sweep.yaml` | 小规模配方搜索和系统性消融 |
+| 写实验报告 | W&B Reports | 让结论、曲线、反例和下一步在同一页 |
 
 ## 一个排查案例
 

@@ -157,6 +157,22 @@ quantize_dynamic(
 
 研究阶段可以先用 `Transformers + bitsandbytes`、`AutoAWQ`、`GPTQModel`、`LLM Compressor`、`LightCompress/LLMC` 快速得到量化模型；进入部署阶段，再确认目标 runtime 是否能直接消费这些格式。
 
+### 8.4 VLA / 世界模型服务要拆成多段 runtime
+
+VLA 和世界模型通常不是一个单纯的 LLM server。它更像几段 runtime 串起来：视觉 encoder / connector、动作条件 world model、rollout planner、action head、安全与风险头。量化格式也要跟着分段选。
+
+| 子系统 | 常见 runtime 关注点 | 量化策略 |
+| --- | --- | --- |
+| VLM / 语言主干服务 | vLLM、SGLang、TensorRT-LLM 的 batching、prefix cache、VLM 支持 | 权重 FP8/INT8/INT4 取决于框架原生支持 |
+| 视频 latent world model | 自定义 PyTorch/Triton、TensorRT engine、分布式 rollout worker | 主干 FP8，latent cache / KV 可试 FP8/INT8 |
+| action head / action expert | 低延迟本地模块、控制频率、实时调度 | 保 BF16/FP16，最多量化非关键 MLP |
+| risk / safety head | 高召回、可解释日志、回退路径 | 保高精，单独校准 |
+| replay / 离线评测 | 批处理吞吐、可复现版本 | 可使用更激进低精做候选，但用高精复核 |
+
+因此选 runtime 时要先问：瓶颈是在线动作延迟、离线 rollout 吞吐、长上下文 KV，还是视觉 encoder 成本。若瓶颈在离线 rollout，TensorRT / FP8 主干和低精 latent cache 很有价值；若瓶颈在在线控制，action head 的实时稳定性可能比主干吞吐更重要；若瓶颈在长任务记忆，KV cache 和 memory paging 才是关键。
+
+一个常见错误是把 VLA 全部塞进通用 LLM serving 框架里，然后只看 tokens/s。实际验收还要记录控制频率是否稳定、action jitter 是否增加、risk false negative 是否上升、失败 replay 是否能复现，以及量化版本和高精版本能否按任务桶路由。
+
 ## 9. 量化框架上线检查清单
 
 上线前至少回答：量化格式是否被目标 runtime 原生支持，对应 kernel 是否覆盖目标 GPU/CPU/EP，TTFT、TPOT、显存或单位 token 成本是否真的下降，高风险桶是否单独回归，是否有全精度回退或混合精度保护，校准集、量化参数、runtime 版本和硬件版本是否记录完整，以及 KV cache、LoRA、多模型混部和 batch 调度是否做过专项压测。

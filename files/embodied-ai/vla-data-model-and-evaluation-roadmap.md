@@ -23,6 +23,79 @@
 
 先读 benchmark 和数据集，建立“任务到底在考什么、数据到底来自哪里”的判断；再看 GR-2、GR-3、VPP、SpatialVLA、DepthVLA、X-VLA 等模型路线，分清它们是在补视频动态、任务状态、空间尺度，还是跨 embodiment 适配；最后再回到失败轨迹、纠正数据和数据引擎，因为 VLA 真正走向部署时，坏经验和信用分配往往比一次成功 demo 更重要。
 
+## 0. 先把 episode 记对：多相机、动作和结果要同轴
+
+具身数据最容易“看起来很丰富，训练时却很脏”。多相机视频、机器人状态、动作、语言、任务进度和失败原因如果没有对齐到同一条时间轴，后面再大的 VLA 或 world model 都只是在拟合噪声。
+
+```mermaid
+sequenceDiagram
+    participant Cam as Multi-camera rig
+    participant Robot as Robot state/action
+    participant Sync as Sync + calibration
+    participant VLM as Per-view encoder
+    participant WM as World model latent
+    participant Eval as Replay/evaluation
+    Cam->>Sync: frames + timestamps
+    Robot->>Sync: proprioception + action chunk
+    Sync->>VLM: calibrated view packets
+    VLM->>WM: view tokens + geometry tags
+    Robot->>WM: action tokens / chunks
+    WM->>Eval: predicted future + risk
+    Eval->>WM: failure label + hard replay
+```
+
+一条能支撑 world model 训练的具身 episode，至少要能回答下面这些问题。
+
+| 数据字段 | 必须记录什么 | 进入 world model 的方式 | 常见失败 |
+| --- | --- | --- | --- |
+| 多相机观测 | 每路图像、时间戳、fps、内参、外参、延迟 | per-view token，再按几何或任务角色融合 | 相机错位导致抓取点漂移 |
+| 本体状态 | 关节、夹爪、底盘、末端位姿、控制模式 | 作为状态 token 或 action condition | 只看图像，无法区分同画面下不同手臂姿态 |
+| 动作 chunk | 起止时间、控制频率、动作空间、归一化参数 | 作为 rollout 条件和反事实分叉变量 | chunk 和视频不同步，模型误学延迟 |
+| 任务状态 | in-progress、terminate、invalid、progress score | 训练 task-state head 和拒绝/终止逻辑 | 只会继续动作，不知道何时停 |
+| 失败标签 | slip、collision、lost object、wrong target、timeout | hard negative、risk head、恢复策略训练 | 失败只变成低分，不能定位原因 |
+| 评测结果 | success、接管、恢复、碰撞、耗时、cost per success | 作为闭环收益和数据回流依据 | 离线 loss 下降但真实任务不变好 |
+
+最小可用格式可以这样写：
+
+```yaml
+episode:
+  id: home_kitchen_drawer_0042
+  task: "put the sponge in the drawer"
+  environment: unseen_home_03
+  time_base: robot_clock_ns
+  observations:
+    cameras:
+      - name: wrist_left
+        role: contact
+        fps: 20
+        intrinsics: calib/wrist_left_K.json
+        extrinsics: calib/wrist_left_to_ee.json
+      - name: front
+        role: navigation_and_scene
+        fps: 10
+        intrinsics: calib/front_K.json
+        extrinsics: calib/front_to_base.json
+      - name: overhead
+        role: object_layout
+        fps: 10
+        intrinsics: calib/overhead_K.json
+        extrinsics: calib/overhead_to_base.json
+  frames:
+    - t: 8.20
+      images: {wrist_left: wrist/0164.png, front: front/0082.png, overhead: overhead/0082.png}
+      proprioception_ref: state/00820.npy
+      action_chunk_ref: actions/00820.npy
+      task_state: in_progress
+      wm_latent_ref: wm/z_00820.npz
+      risk_label: {collision: 0, slip: 0, wrong_target: 0}
+  result:
+    success: false
+    failure_type: wrong_drawer_after_occlusion
+    human_takeover: true
+```
+
+这个 schema 的重点不是字段多，而是字段能回放。后续排查时应该能重建：某个动作 chunk 执行前，世界模型看到了哪些视角、记住了哪些对象、预测了什么风险、最终为什么失败。只有这种 replay 能闭环，VLA 数据才真正可用于世界模型高效训练。
+
 ## 1. 先看任务和 Benchmark：它到底在考什么
 
 先看 Benchmark 时，不要只记名字，要问四个问题：任务是否长时程、是否跨环境、是否真实机器人、成功判定是否可靠。

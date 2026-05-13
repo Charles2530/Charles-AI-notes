@@ -30,6 +30,31 @@ paper_topic: 具身智能 / WAM
 | 主要风险 | 未来视频和动作联合生成如果缺少真实闭环校验，可能出现动作看似合理但执行不稳；跨机器人迁移仍受动作空间和控制器接口限制 |
 | 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[WM / WAM / VAM：动作条件建模](../../world-models/wm-wam-vam-and-action-conditioned-modeling.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md) |
 
+## 证据等级与外推边界
+
+DreamZero 的证据比普通视频世界模型更接近本站主线，因为它同时给了闭环机器人结果、系统加速表和模型消融。但它仍然不能被简单外推成“WAM 可以直接替代所有 VLA”：真实结论要限制在论文的机器人、动作接口、数据来源、chunk 长度和推理硬件条件内。
+
+```mermaid
+flowchart LR
+    A["Video-action joint training"] --> B["Action chunk generation"]
+    B --> C["Real observation feedback"]
+    C --> D["Closed-loop robot policy"]
+    B --> E["Latency budget"]
+    E --> F["Caching / CUDA graph / quantization / Flash"]
+    D --> G["Evidence: closed-loop success"]
+    F --> H["Evidence: system throughput"]
+```
+
+| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
+| --- | --- | --- | --- | --- |
+| WAM 可以作为 zero-shot policy | 真实机器人闭环实验、跨任务展示和对比评测 | Closed-loop + Benchmark | 世界模型如果输出动作，评测必须看真实闭环成功率，而不是只看视频质量 | 不能说明所有高接触、长时、多机器人任务都能 zero-shot |
+| video latent 和 action latent 应联合建模 | joint video-action flow matching、结构图、任务结果 | Architecture + Benchmark | 动作头最好和未来视觉变化共享时序表示，减少“看懂但动作不对齐” | 不能证明单模型联合生成一定优于两模型分工 |
+| 真实观测刷新 KV cache 能降低误差累积 | autoregressive WAM 推理设计和 attention strategy | System design | rollout 不应完全吃自己生成的视频，部署时要把真实观测回写世界状态 | 不能替代长时 memory、失败恢复和状态估计校正 |
+| 实时控制需要模型级少步化 | Table 1 累积加速：system、kernel、quantization、DreamZero-Flash | System throughput | 优化顺序要同时看 cache、kernel、量化和 denoising steps，不能只盯单 kernel | 不能把 GB200/H100 上的倍数照搬到其他硬件和 batch |
+| decoupled noise schedule 有利于少步动作质量 | DreamZero-Flash 训练设计和结果 | Ablation / System mixed | 世界模型可以牺牲部分视频清晰度，优先保 action clean signal | 不能证明风险头、接触瞬间和长时一致性也同样保住 |
+
+这篇论文对本站最强的启发是“闭环评测和系统吞吐要一起看”。一个 WAM 只会生成未来还不够；它还要在 100-200ms 级预算内输出动作，并且执行后用真实观测修正状态。反过来，系统吞吐再漂亮，如果没有闭环成功率和失败 replay，也不能说明它是可靠 policy。
+
 ## 论文位置
 
 DreamZero 位于 `video world model`、`WAM` 和 `robot policy` 的交叉处。它不是经典 Dreamer 那种只在 latent state 中预测 reward 和 continuation 的 model-based RL，也不是普通 VLA 那种直接从视觉语言映射到动作。

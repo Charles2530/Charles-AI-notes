@@ -62,18 +62,45 @@ Prefill 可以在 token 维大量并行，decode 则是短 query、长 key/value
 
 同一个系统如果不显式区分这两条路径，优化很容易互相牵制。
 
-## 7. Prefix Reuse 为什么会和长上下文 attention 绑定
+## 7. Prefill / Decode 分流图
+
+```mermaid
+flowchart LR
+    A["请求进入"] --> B{"已有共享前缀？"}
+    B -- "是" --> C["prefix cache hit"]
+    B -- "否" --> D["prefill"]
+    D --> E["FlashAttention / 长序列 tile"]
+    C --> F["decode"]
+    E --> F
+    F --> G["paged KV read"]
+    G --> H["flash decoding / small query kernel"]
+    H --> I["输出 token"]
+    I --> F
+```
+
+这张图说明长上下文服务不是单个 attention kernel。prefill 处理长输入，decode 反复读取历史 KV，prefix cache 尝试跳过重复 prefill。FlashAttention 主要解决 prefill 或大块 attention 的 I/O；paged attention 和 flash decoding 主要服务 decode。
+
+### 7.1 一个成本对比
+
+| 阶段 | 高频成本 | 常见优化 | 误用风险 |
+| --- | --- | --- | --- |
+| Prefill | 长序列 \(L^2\) attention、输入编码 | FlashAttention、chunked prefill、prefix cache | 只测 prefill 却推断 decode |
+| Decode | 每步读历史 KV、page lookup、launch | paged KV、KV quant、flash decoding | 只看 tokens/s 不看 P99 |
+| Prefix reuse | 重复上下文计算 | prefix cache、prompt canonicalization | 缓存命中率低时收益很小 |
+| 长尾请求 | KV 水位和调度 | 长短请求分池、上下文压缩 | 长请求拖累短请求 |
+
+## 8. Prefix Reuse 为什么会和长上下文 attention 绑定
 
 长上下文最痛的一部分往往是重复 prefill。  
 如果很多请求共享同样长前缀，一遍遍重新做 prefill 就非常浪费，FlashAttention 再快也挡不住重复工作，prefix cache 因此变得非常重要。这说明长上下文系统的优化不只是 attention kernel，还包括能否避免重复计算、高效复用历史并安全共享页面。
 
-## 8. Sliding Window 与 Chunked Attention 是什么角色
+## 9. Sliding Window 与 Chunked Attention 是什么角色
 
 当完整长历史代价太高时，一些系统会只关注最近窗口、分块保留历史，或对历史做摘要和压缩。这类方法未必总是由 kernel 驱动，但会直接改变 kernel 设计，因为访问范围、KV cache 压力、page 访问模式和长距离依赖都会随之变化。
 
 所以长上下文内核优化，最终常常和模型架构与上下文策略共同演化。
 
-## 9. FlashAttention 的系统启发
+## 10. FlashAttention 的系统启发
 
 它留下的最重要启发并不是某个特定实现，而是一个更一般的原则：
 
@@ -81,11 +108,11 @@ Prefill 可以在 token 维大量并行，decode 则是短 query、长 key/value
 
 这条原则后来几乎扩展到了所有长上下文系统中，包括 KV cache 页面化、decode 特化、prefix reuse、量化 KV、context compression 和 paged serving。
 
-## 10. 一个形象比喻
+## 11. 一个形象比喻
 
 可以把长上下文 attention 看成处理一条越来越长的流水账。最早的做法像每次都把整本账本摊开重新核算；FlashAttention 像改成按页分批核算且不把所有中间草稿反复抄到总账本；而服务态的 paged attention 和 prefix cache，则更像把旧账页按档案盒管理，只把当前需要的部分拿出来核对。系统演化的方向，从来不是“把公式改得更复杂”，而是“让账本管理方式更适合真实工作流”。
 
-## 11. 小结
+## 12. 小结
 
 FlashAttention 及其后续演化，之所以在长上下文时代如此关键，是因为它揭示了一个核心事实：长上下文 attention 的真正主战场在 I/O 与内存系统，而不是孤立的矩阵公式。  
 从 FlashAttention 到 flash decoding、paged attention、prefix cache，再到更广义的长上下文系统设计，这条线展示的其实是一场从“算 attention”到“管理长期上下文”的系统迁移。

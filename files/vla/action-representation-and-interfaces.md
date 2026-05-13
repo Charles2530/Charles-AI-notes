@@ -11,6 +11,20 @@
 !!! example "有趣例子：遥控夹娃娃机"
     玩家说“抓左边那只熊”，但机器真正需要的是横向移动多少、前后移动多少、爪子降多深、什么时候合拢、失败后是否再试一次。VLA 也是这样：语言目标很短，动作接口却很细。
 
+## 硬证据模块：动作接口要用成本和失败一起验
+
+动作接口不是风格选择，而是训练成本、闭环风险和世界模型 action sensitivity 的共同约束。每种动作表示都应该配一张证据卡。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 逐步动作 vs 8-step chunk 的 token/标量数量对比 | chunk 省 token，但第二步出错后连续错 0.8s | action token count、rollout latency |
+| 动作敏感性 | 固定观测，替换 noop / grasp / push / wait | 世界模型对不同动作预测同一未来 | latent delta、event divergence |
+| 控制平滑 | 比较 action L2、jerk、控制器拒绝率 | 离散 token 边界导致抖动 | jerk、controller reject、retry rate |
+| 风险路径 | 高接触动作保留更高频或高精度 | 低频 chunk 漏掉滑落前 200ms | near-miss recall、contact event F1 |
+| 证据边界 | 区分离线动作误差、仿真闭环、真机闭环 | BC loss 低但真实抓取失败 | closed-loop success、cost per success |
+
+一个硬反例是 `fast_grasp -> slip`：模型给 fast grasp 高成功、低风险，但真实事件是滑落。此时不能只说“动作预测误差小”，而要追问动作接口是否把接触速度、夹爪时序和力/阻抗状态表达出来；世界模型是否在候选动作排序时惩罚了高风险动作。
+
 ## 1. 统一问题定义
 
 从策略视角看，模型学习的是：

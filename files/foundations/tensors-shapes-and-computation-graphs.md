@@ -101,7 +101,37 @@ for batch in dataloader:
 
 这解释了为什么推理能跑的模型，训练时可能显存不够。推理通常不需要保存完整计算图，而训练需要。
 
-## 5. 和后续专题的关系
+## 5. Shape 追踪例子：多相机视频如何变成长序列
+
+```mermaid
+flowchart LR
+    A["[B, Cams, Frames, 3, H, W]"] --> B["Patchify"]
+    B --> C["[B, Cams, Frames, Patches, D]"]
+    C --> D["Flatten time/camera/patch"]
+    D --> E["[B, L, D]"]
+    E --> F["Transformer / World Model"]
+    F --> G["future latent / action / risk"]
+```
+
+假设 `Cams=4`、`Frames=16`、每帧 `Patches=256`，那么：
+
+\[
+L = 4\times16\times256 = 16,384
+\]
+
+这还没有加语言、proprioception、action token 和 memory token。读 VLA、视频世界模型或长上下文系统时，先把 \(L\) 算出来，再判断 attention、activation、KV cache 和通信是否可承受。很多“模型设计问题”其实先是 shape 账没算清。
+
+## 6. Shape 调试表
+
+| 症状 | 常见 shape 根因 | 快速检查 |
+| --- | --- | --- |
+| OOM 只发生在多图样本 | `L` 被相机、帧数、patch 数相乘放大 | 打印每个 batch 的 token breakdown |
+| 性能偶发抖动 | 长尾 shape 触发慢 kernel 或重新编译 | 按 shape bucket 记录 latency |
+| 输出坐标错位 | `[B, L, D]` 和 `[B, D, L]` 混用 | 在模块边界写 shape assert |
+| 训练 loss 异常低 | packed segment 或 label mask 错 | 可视化 attention mask 和 label mask |
+| 量化后局部退化 | 某些通道/模态尺度不同 | 按模态统计 activation range |
+
+## 7. 和后续专题的关系
 
 - [大模型训练路线图](../training/index.md)：理解 loss、反向传播、checkpoint 和显存。
 - [算子与编译器](../operators/index.md)：理解 kernel 为什么要关心 shape bucket。

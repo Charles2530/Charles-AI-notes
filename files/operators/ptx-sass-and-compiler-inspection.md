@@ -58,7 +58,34 @@
 5. 是否有明显 spill；
 6. 某些关键内存访问是否按预期被组织。
 
-## 5. 为什么这件事对 Triton 和 CUDA 都有意义
+## 5. Inspection 工作流
+
+```mermaid
+flowchart TD
+    A["profile 指向热点 kernel"] --> B["确认 shape / dtype / launch 参数"]
+    B --> C["保存源码与编译版本"]
+    C --> D["查看 IR / PTX"]
+    D --> E["查看 SASS / 指令路径"]
+    E --> F{"符合预期吗？"}
+    F -- "否" --> G["调整 layout / tile / compiler flag"]
+    F -- "是" --> H["记录证据进入发布单"]
+    G --> A
+```
+
+这张图的关键是：先有 profile，再看 PTX/SASS。不要为了“看起来专业”而在没有热点证据时读汇编；也不要在 profile 已经指向底层路径时继续只改高层源码。
+
+### 5.1 检查记录模板
+
+| 项 | 示例 |
+| --- | --- |
+| kernel | `fp8_gemm_bias_gelu_v3` |
+| shape / dtype | `M=4096,N=11008,K=4096, FP8/BF16 accumulate` |
+| 预期路径 | Tensor Core MMA + vectorized load |
+| 实际观察 | MMA 指令存在，寄存器 128/thread，无 spill |
+| 风险 | tail shape 走 fallback，H100 与 B200 需分开记录 |
+| 结论 | 可发布到指定 bucket，长尾 shape 继续通用路径 |
+
+## 6. 为什么这件事对 Triton 和 CUDA 都有意义
 
 虽然 Triton 抽象更高，但最终也会生成底层代码。  
 因此在调优后期，无论是手写 CUDA 还是 Triton kernel，都可能需要做同样的检查：
@@ -79,11 +106,11 @@
 
 PTX / SASS 检查最容易走偏的地方，是把所有可疑指令都当成瓶颈。真正该优先看的，是 profile 已经指向的热点：如果瓶颈是 memory throughput，就重点看 load/store、coalescing、cache hint 和额外 move；如果瓶颈是 Tensor Core 利用率，就看 MMA 指令、tile 形状和数据类型路径；如果瓶颈是 occupancy，就看寄存器、shared memory 和 block 配置。汇编是证据，不是起点。
 
-## 6. 一个形象比喻
+## 7. 一个形象比喻
 
 可以把 PTX / SASS 检查看成工厂验收时拆开机器外壳看内部传动。设计图纸当然重要，但真正决定机器怎么跑的，是里面最后装出来的齿轮、传动轴和控制逻辑。源码是设计图，编译结果才是实际装配好的机器。高性能调优到后期，很多问题只能通过“拆开机器看内部”才能确认。
 
-## 7. 小结
+## 8. 小结
 
 PTX / SASS 与编译检查，是高性能算子工程里靠近终局的一步。它不需要每次都做，但在关键热点和疑难性能问题上非常有价值。只要你建立了这个意识，就会更容易把“高层代码意图”和“底层真实执行”真正接起来，而不是停留在源码层面的想当然。
 

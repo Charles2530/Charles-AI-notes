@@ -26,6 +26,37 @@ Triton kernel 通常不是从 thread 级别出发，而是从 block / tile 级�
 
 这不是“Python 封装版 CUDA”。Triton 有自己的张量化中间表示和代码生成路径，更像一个面向张量块 kernel 的 DSL、codegen 和 autotune 环境。
 
+## 一个 Triton kernel 的思维图
+
+```mermaid
+flowchart TD
+    A["输出张量"] --> B["切成 BLOCK_M x BLOCK_N"]
+    B --> C["program_id 选择当前块"]
+    C --> D["构造 offsets"]
+    D --> E["tl.load + mask"]
+    E --> F["块内计算 / reduce / matmul"]
+    F --> G["tl.store + mask"]
+    H["autotune configs"] --> B
+    I["shape bucket"] --> H
+```
+
+这个图比 thread-level CUDA 更接近 Triton 的思维方式：一个 program instance 负责一个张量块，offset 和 mask 决定读写边界，autotune 选择块大小和流水参数。写 Triton 时，如果你无法说清“这个 program instance 负责哪块输出”，代码通常就已经偏了。
+
+### 一个最小伪代码骨架
+
+```python
+@triton.jit
+def kernel(x, y, n: tl.constexpr, BLOCK: tl.constexpr):
+    pid = tl.program_id(0)
+    offs = pid * BLOCK + tl.arange(0, BLOCK)
+    mask = offs < n
+    v = tl.load(x + offs, mask=mask, other=0.0)
+    out = v * 2.0
+    tl.store(y + offs, out, mask=mask)
+```
+
+真正复杂的 kernel 只是把这个骨架扩展成二维 tile、分块归约、矩阵乘、shared-memory-like reuse 和 fused epilogue。mask、offset、BLOCK 和 program_id 仍然是基本骨架。
+
 ## 适合的 Kernel 类型
 
 | 类型 | 为什么适合 Triton |

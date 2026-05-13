@@ -86,6 +86,30 @@ Judge 体系也建议分层：筛选 judge 负责快速低成本粗筛，发布 
 
 长尾错误回流最好先做 taxonomy，例如 factuality、style、tool use、memory、safety、refusal、formatting、business policy。taxonomy 的价值在于把错误送到不同修复路径，而不是统统归为“模型质量不够好”。
 
+```mermaid
+flowchart LR
+    A["线上失败 / 人工接管"] --> B["错误 taxonomy"]
+    B --> C["candidate 生成"]
+    C --> D["judge 粗筛"]
+    D --> E["人审复核"]
+    E --> F["导出: SFT / DPO / RM / 回归集"]
+    F --> G["新模型"]
+    G --> H["shadow / 灰度"]
+    H --> A
+```
+
+这张图说明后训练数据引擎不是“收集一些 prompt 再微调”。每个失败样本都要经过归因、候选生成、judge、人审和导出目标选择。否则数据越堆越多，真正修复的问题却不一定变多。
+
+### 导出前检查
+
+| 检查项 | 目的 |
+| --- | --- |
+| 错误类型是否明确 | 避免把不同问题混成一个训练集 |
+| candidate 是否有真实分歧 | 避免 judge 只学格式偏好 |
+| judge-human disagreement 是否记录 | 用于校准 judge |
+| 是否进入回归集 | 防止同类问题复发 |
+| 是否有线上指标闭环 | 验证训练是否真的改善产品 |
+
 ### 真实场景：Judge 分数涨了，线上人工接管没降
 
 一个后训练飞轮常见日志如下：

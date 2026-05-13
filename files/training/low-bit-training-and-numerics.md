@@ -25,6 +25,20 @@
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原论文图意：DeepSeek-V3 展示 FP8 训练框架中不同张量、缩放策略和高精度保护路径的组织方式，说明低精度训练是数值系统设计，而不是单纯把 dtype 改小。</small>
 
+## 硬证据模块：低比特训练要同时证明数值和世界模型行为
+
+低比特训练页如果只报告 loss 曲线和吞吐，就仍然偏通用 LLM。世界模型低比特训练还要证明：动作分叉、未来 latent、risk head 和闭环收益没有被低精度训练过程破坏。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 激活/通信/optimizer state 显存和 step time 对比 | FP8 省显存但 scale 开销抵消收益 | peak memory、step time、throughput |
+| 训练数值稳定 | loss spike、amax、scale、overflow 事件随 step 记录 | 中后期 outlier 让训练突然发散 | loss spike count、overflow rate |
+| Action sensitivity | 低比特 checkpoint 和 BF16 checkpoint 的反事实动作对比 | 低精训练后动作条件被模型忽略 | action sensitivity、event divergence |
+| Risk calibration | hard-negative risk head 校准曲线 | risk head 学成低置信，漏报近失误 | ECE、near-miss recall、false negative |
+| 证据等级 | ablation、系统吞吐、闭环小桶要分开 | 只给 perplexity 或 VBench | benchmark + ablation + task replay |
+
+一个合格结论应写成：`FP8 activation 训练让 peak memory 下降 28%、step time 下降 11%；与 BF16 checkpoint 相比，hard replay 的 action ranking agreement 为 98.7%，near-miss recall 下降 0.3pp，长时 latent drift 无显著增加。` 如果没有后半部分，低比特训练还不能证明适合世界模型。
+
 ## 1. 为什么这属于训练重点内容
 
 训练时，模型每一步都会经过前向计算、loss 计算、反向传播、梯度规约、优化器更新，以及 checkpoint 保存与恢复。每一步都可能被低精度影响。

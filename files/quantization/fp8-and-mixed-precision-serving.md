@@ -115,6 +115,46 @@ OCR 细节丢失、表格边界理解退化或 grounding 精度下降。
 
 这时 FP8 或 FP8 + BF16 混合精度就成为更现实的折中。
 
+### 5.1 世界模型的混合精度模板
+
+动作条件世界模型可以按“是否直接影响决策”来分配精度：
+
+| 路径 | 推荐精度起点 | 原因 |
+| --- | --- | --- |
+| 视频/Transformer 主干 GEMM | FP8 或 BF16/FP8 mixed | 大算量热路径，最容易兑现吞吐 |
+| 当前观测 connector | BF16/FP16，局部试 FP8 | 模态尺度错位会伤动作条件 |
+| 远期 latent memory / cache | FP8 / INT8 可试 | 主要省显存，允许小幅噪声 |
+| 当前窗口和接触帧 latent | BF16/FP16 | 小误差会改变接触判断 |
+| action head / action expert | BF16/FP16 | 输出直接进控制闭环 |
+| risk / safety head | BF16/FP16 | 低估风险比误报更危险 |
+| reward / value head | BF16/FP16 或校准 FP8 | 会影响 imagined rollout 选择 |
+
+这样设计后，FP8 的价值主要来自主干 matmul、远期 memory 和部分 KV/cache，而不是压坏最敏感的动作与风险路径。对 VLA 来说，`FP8 everywhere` 通常不是一个好目标；更合理的目标是“热路径 FP8，决策边界高精度”。
+
+### 5.2 一个 rollout 成本例子
+
+假设每次规划从 1024 个真实状态出发，每个状态采样 16 条候选动作，每条候选 rollout 32 个 latent step。需要评估的 latent transition 数为：
+
+\[
+1024\times16\times32=524,288
+\]
+
+如果主干 matmul 和远期 latent cache 走 FP8，使每秒可评估 transition 从 70k 提到 110k，规划评估时间从约 7.5 秒降到 4.8 秒。若 action head 和 risk head 保 BF16，单步头部计算可能仍占一部分时间，但这是有意保留的质量预算。上线结论应写成：FP8 主要降低 rollout 主干成本，动作输出和风险判断仍由高精路径兜住。
+
+### 5.3 硬证据模块：混合精度报告要有保护路径
+
+FP8 混合精度的报告不能只列吞吐。世界模型场景必须明确哪些路径被压、哪些路径被保护，以及保护是否真的避免了闭环退化。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | rollout 主干 transition/s、显存、P95 latency | FP8 主干快了，但 action/risk 旁路成为新瓶颈 | transition/s、end-to-end rollout latency |
+| 保护路径 | action head、risk head、当前接触窗口保持 BF16 | 主干没掉点，risk head 低估滑落 | near-miss recall、risk false negative |
+| 长时一致性 | FP8 远期 memory vs BF16 memory | 远期 latent 漂移导致重复抓取 | object permanence、latent drift |
+| 证据等级 | microbench、端到端 latency、闭环 eval 分开写 | 只有 kernel throughput，没有任务桶 | throughput + hard replay + closed-loop |
+| 适用边界 | 说明哪些硬件/kernel 命中 FP8，哪些 fallback | 某些 shape 回退 BF16，P99 变差 | kernel hit rate、fallback rate |
+
+推荐写法是：`FP8 只进入主干 GEMM 和远期 memory，当前 2 秒窗口、action head、risk head 保 BF16；rollout 主干 1.55x，端到端 1.22x；hard-negative near-miss recall 不降。` 缺少保护路径和 hard-negative 结果时，不能说“世界模型 FP8 可用”。
+
 ## 6. 服务时应如何看 FP8 价值
 
 真正要看的不是“文件小了多少”，而是 `TTFT` 和 `TPOT` 是否下降，显存释放后并发是否增加，长上下文下是否仍稳，多模态或长尾任务是否有不可接受退化，以及工程链是否更稳定。

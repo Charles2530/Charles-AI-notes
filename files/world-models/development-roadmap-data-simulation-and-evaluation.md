@@ -24,6 +24,20 @@
 
 这页按项目落地顺序组织：先定数据契约和几何坐标，再选 3D / VLA / Diffusion 路线，然后接仿真环境、success checker 和模型测试闭环。读的时候不要只记模型名，重点看每一步交付什么可验证产物：字段是否稳定、pose 是否可复算、仿真是否能自动判卷、闭环评测是否真的能暴露失败。
 
+## 硬证据模块：开发路线要有阶段产物和门禁
+
+开发路线页最怕变成愿景列表。每个阶段都应该交付一个能复算、能回放、能失败归因的产物。
+
+| 阶段 | 最小硬证据 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 数据契约 | episode schema、字段版本、单位、坐标系、时间戳 | `cam_pose_list` / `cam_pos_list` 混用导致训练不可复现 | schema pass rate、missing field rate |
+| 几何账本 | 内外参、depth、point map、object pose 可复算 | 外参漂移让抓取点偏 3cm | reprojection error、pose error |
+| 动作接口 | action chunk 与观测时间轴对齐 | 动作延迟被模型误学成动力学 | timestamp skew、controller reject |
+| 世界模型 | 固定 checkpoint 的 rollout 输出和失败 replay | 视频好看但候选动作排序错 | action sensitivity、risk ECE |
+| 仿真/评测 | success checker、reset、seed、评测桶固定 | success checker 漏判，模型学错目标 | checker agreement、closed-loop success |
+
+最小项目不必一开始做大，但必须能跑通：`数据样例 -> token/几何统计 -> 训练配置 -> rollout 输出 -> 评测结果 -> 失败回放`。这条链路越早存在，后续模型替换、量化、算子优化和数据回流才有共同验收口径。
+
 ## 1. 世界模型项目的四层地基
 
 这条开发路线有一个很强的工程信号：**世界模型不是先选一个大模型就开训，而是先把数据契约、几何坐标、仿真环境和评测口径定住。**

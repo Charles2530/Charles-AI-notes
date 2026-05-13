@@ -32,6 +32,31 @@ experience replay
 
 <small>Figure source: `Dream to Control`, Figure 1. 原论文图注要点：Dreamer 从历史经验中学习 world model，并在其 latent space 中通过把 value estimates 反向传播穿过 imagined trajectories 来高效学习长视野行为。</small>
 
+## 证据等级与外推边界
+
+Dreamer 的证据来自经典 control benchmark、算法消融和学习曲线，而不是视频生成质量或真实机器人部署。它非常适合支撑“latent imagination 可以提升数据效率”这个结论，但不应该被直接外推成“任意视频世界模型都能安全用于真实机器人规划”。
+
+```mermaid
+flowchart LR
+    A["Replay experience"] --> B["RSSM latent dynamics"]
+    B --> C["Latent imagined rollout"]
+    C --> D["Actor / value learning"]
+    D --> E["Environment interaction"]
+    E --> A
+    C --> F["Evidence: benchmark learning curves"]
+    B --> G["Evidence: representation objective ablation"]
+```
+
+| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
+| --- | --- | --- | --- | --- |
+| latent imagination 能减少真实交互需求 | DeepMind Control Suite 等 benchmark 学习曲线 | Benchmark | 世界模型训练应把真实数据转成可重复使用的 imagined rollout，而不是每次都在线试错 | 不能证明开放场景、稀疏长任务和真实硬件同样稳定 |
+| actor-critic 可以替代每步 CEM 搜索 | PlaNet / Dreamer 路线对比和算法结果 | Benchmark + Algorithm evidence | 把 planning 成本摊到策略训练里，是降低在线推理成本的核心思路 | 不能说明所有任务都应放弃在线搜索或 MPC |
+| reconstruction objective 在实验中更稳 | reconstruction、contrastive、reward-only 对比 | Ablation | 表征目标要保留决策相关状态，不能只看 reward loss | 不能推出像素重建永远优于对比学习或 masked latent 目标 |
+| behavior learning 时固定 world model | 算法设计和训练循环 | Algorithm evidence | actor 不应通过梯度“篡改”动力学模型，这对安全 rollout 很重要 | 不能解决 world model 本身错误导致的 exploitation |
+| imagination horizon 需要受模型误差约束 | horizon、value bootstrap 和 actor training 设置 | Benchmark / Design | 长 horizon 要靠 value/risk bootstrap 和短期校正，而不是无限 rollout | 不能把论文里的 horizon 直接照搬到视频 latent 或 VLA |
+
+对本站主线，Dreamer 给的是基础方法论：用世界模型把真实交互压缩成 latent rollout 训练信号。它没有回答现代视频 latent、VLM connector、risk head、action chunk、KV cache 这些工程问题，所以后续要接 LingBot-World、DreamZero、VPP 和量化/算子页一起读。
+
 ## 论文位置
 
 Dreamer 的历史位置可以这样理解：

@@ -39,6 +39,67 @@ flowchart LR
 
 这条链路要同时优化七类成本：真实交互成本、视觉 token 成本、动作条件成本、长序列训练成本、数值和显存成本、rollout 推理成本、闭环验证成本。
 
+## 0. 硬证据模块：一个可复算 mini-chain
+
+为了避免这页只停留在“设计蓝图”，这里放一个最小可复算 fixture。它不是生产模型结果，也不伪装成论文 benchmark；它的作用是把本页要求的证据链变成可运行格式：数据样例、token 统计、训练配置、rollout 输出、失败 replay 和验收指标都能从同一组文件算出来。
+
+```text
+files/assets/examples/world-model-mini-chain/
+  episodes.jsonl
+  rollouts.jsonl
+  training-config.yaml
+  eval_mini_chain.py
+```
+
+运行：
+
+```bash
+python3 files/assets/examples/world-model-mini-chain/eval_mini_chain.py
+```
+
+当前 fixture 输出：
+
+| Metric | Value |
+| --- | ---: |
+| episodes | 4 |
+| raw_patch_tokens | 82368 |
+| compressed_state_tokens | 12292 |
+| compression_ratio | 6.70x |
+| action_sensitivity_pass | 3/4 |
+| top1_safe_success_agreement | 2/4 |
+| risk_ece_3bin | 0.103 |
+
+这条小链路覆盖的是“证据格式”，不是声称模型已经可用。它让读者能看到一条世界模型实验最小应该长什么样：
+
+```mermaid
+flowchart LR
+    A["episodes.jsonl"] --> B["token stats"]
+    C["training-config.yaml"] --> D["model/eval gates"]
+    E["rollouts.jsonl"] --> F["action sensitivity / risk ECE"]
+    F --> G["failure replay"]
+    B --> H["evidence report"]
+    D --> H
+    G --> H
+```
+
+| 证据项 | 这个 fixture 里怎么体现 | 真实实验要替换成什么 |
+| --- | --- | --- |
+| 本页解决哪项成本 | raw patch token 到 compressed state token 的 `6.70x` 压缩账 | 真实 tokenizer / resampler 的统计直方图和训练 step time |
+| 最小可复算例子 | 4 条 episode、12 条候选 rollout、一个无依赖评测脚本 | 固定数据切分、固定 checkpoint、固定 eval seed |
+| 失败案例 | `wm_mini_003` 低估 fast grasp 滑落，`wm_mini_004` 把遮挡目标误判成可抓 | 失败视频、模型预测、真实结果、人工标签和重放日志 |
+| 论文或日志证据 | 当前只是文档 fixture，证据等级是 reproducible toy log | 论文 benchmark、ablation、系统吞吐或真实闭环日志 |
+| 反例和适用边界 | 4 条样本太小，不能说明泛化；没有真实训练和硬件延迟 | 扩到任务桶、环境桶、机器人桶和硬件桶 |
+| 验收指标 | action sensitivity、top-1 safe success、risk ECE、failure replay | 加上闭环成功率、恢复率、cost per success、P95/P99 latency |
+
+两个失败 replay 是这条链路里最值得看的部分：
+
+| episode | top_candidate | predicted_risk | predicted_success | actual_event | 含义 |
+| --- | --- | ---: | ---: | --- | --- |
+| `wm_mini_003` | `fast_grasp` | 0.20 | 0.80 | `slip` | 风险头低估快速抓取导致滑落，说明不能只看成功概率 |
+| `wm_mini_004` | `grasp_visible_decoy` | 0.16 | 0.76 | `wrong_target` | 遮挡后对象身份漂移，说明视觉 memory 和多相机对齐要进评测 |
+
+如果这是真实实验，当前结果不能通过发布门禁：`top1_safe_success_agreement=2/4` 太低，说明模型排序会选错动作；`action_sensitivity_pass=3/4` 暴露遮挡任务中动作分叉不够；虽然 `risk_ece_3bin=0.103` 看起来可接受，但它被小样本掩盖，必须按 hard-negative 桶单独看。这个反例很重要：一个平均风险校准数不错的模型，仍可能在关键失败桶里不可用。
+
 ## 1. 数据 schema：先保证动作和后果能对齐
 
 数据不要只存视频和动作值。一个可训练的动作条件世界模型，至少需要：

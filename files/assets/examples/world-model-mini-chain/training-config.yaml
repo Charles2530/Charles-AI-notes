@@ -1,0 +1,39 @@
+run_id: wm-mini-chain-v0
+purpose: "documentation fixture for a reproducible world-model evidence module"
+seed: 13
+data:
+  episodes: episodes.jsonl
+  rollouts: rollouts.jsonl
+  context_seconds: 4.0
+  rollout_horizon_seconds: 1.6
+  control_rate_hz: 10
+tokenization:
+  raw_patch_size: 14
+  per_view_resampler:
+    wrist_rgbd: 64
+    front_rgb: 96
+    overhead_rgb: 96
+  memory_tokens:
+    normal: 128
+    hard_negative: 96-192
+model:
+  type: action_conditioned_latent_world_model
+  latent_dim: 1024
+  layers: 8
+  attention: block_causal
+  action_interface: 8_step_delta_ee_pose_gripper_chunk
+training:
+  optimizer: adamw
+  learning_rate: 0.0001
+  batch_size: 4
+  max_steps: 200
+  losses:
+    video_latent: 1.0
+    action_sensitivity: 0.4
+    event_head: 0.3
+    risk_head: 0.5
+evaluation_gates:
+  action_sensitivity_latent_delta_min: 8.0
+  risk_ece_max: 0.15
+  top1_safe_success_agreement_min: 0.75
+  hard_negative_required: true

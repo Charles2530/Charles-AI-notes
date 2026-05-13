@@ -66,6 +66,51 @@ VLM 从图片开始，世界模型却必须处理时间。对 VLA 和世界模�
 
 这些能力决定 VLA 能不能从“看一眼做一步”走向“执行、观察、恢复、继续”。
 
+## 一个记忆写入例子：杯子被移到遮挡区
+
+下面是一条 episode 中最容易被短窗口模型遗忘的片段。关键不是把所有帧都长期保存，而是把会改变后续决策的状态写入工作记忆。
+
+| 时间 | 观测 | 动作 | 应写入的 memory | 后续用途 |
+| --- | --- | --- | --- | --- |
+| \(t=18\) | 红杯在桌面左前方，无遮挡 | 机械臂接近 | `object:red_cup pose=left_front visible=true` | 建立对象身份 |
+| \(t=31\) | 夹爪接触杯把 | 闭合夹爪 | `contact:red_cup handle grasped=true confidence=0.82` | 判断是否已抓住 |
+| \(t=42\) | 杯子被移动到箱子后方，部分遮挡 | 放置动作 | `object:red_cup pose=behind_box visible=false last_seen=t42` | 遮挡后仍保留去向 |
+| \(t=57\) | 当前画面只看到箱子 | 继续整理桌面 | `task_state:red_cup already_moved=true` | 避免重复抓取原位置 |
+
+如果只保留最近 8 帧，\(t=57\) 时模型可能看不到杯子，就把它预测回训练集中最常见的桌面位置。一个更稳的世界模型会把“物体已被移动”和“最后可信位姿”作为结构化 memory token 或 latent state 持续携带。
+
+### memory token 不是摘要作文
+
+长时记忆不是把视频写成自然语言摘要就结束。对 VLA / 世界模型更有用的是可验证字段：
+
+```yaml
+memory_event:
+  object_id: red_cup_03
+  event: moved_behind_occluder
+  last_visible_time: 42.1
+  last_pose_base: [0.42, -0.18, 0.09, 0.0, 0.0, 1.57]
+  visibility: occluded
+  evidence_frames: [39, 40, 41, 42]
+  action_caused_by: place_chunk_04
+  confidence: 0.76
+```
+
+这些字段可以直接进入训练：`last_pose_base` 用于几何一致性，`action_caused_by` 用于动作敏感性，`confidence` 用于风险头或不确定性校准。自然语言摘要适合给人看，结构化记忆才适合给模型、planner 和评测脚本消费。
+
+## 硬证据模块：记忆页要证明“长时状态没有漂”
+
+视频记忆的证据不能只靠几帧可视化。世界模型真正要证明的是：压缩后的状态在动作、遮挡和长任务里仍保留可决策变量。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 当前窗口 token + memory token 替代全视频上下文 | memory 写错后污染后续 rollout | memory token 数、context length、读取命中率 |
+| 长时一致性 | 2s/8s/30s horizon 下对象位置和 ID 曲线 | 物体被遮挡后身份重置 | object permanence、latent drift |
+| 动作因果 | `action_caused_by` 字段能否解释状态变化 | 记忆知道物体移动了，但不知道由哪个动作造成 | action-conditioned event accuracy |
+| 风险校准 | 遮挡、滑落、接触前后 risk 是否上升 | 风险在关键接触帧前没有抬头 | near-miss recall、risk ECE |
+| 证据边界 | 说明结果来自 replay、ablation 还是闭环 | 只在离线 replay 保住，闭环仍重复抓取 | closed-loop recovery rate |
+
+最小失败 replay 应记录三件事：最后可信观测、写入 memory 的字段、后续动作选择。若模型在 `wrong_target_after_occlusion` 中选择了可见诱饵，问题可能不是动作头，而是 memory 没有保住被遮挡目标的身份和最后位置。
+
 ## 评测建议
 
 视频表征至少要补三类专项评测：

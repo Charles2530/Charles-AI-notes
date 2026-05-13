@@ -10,6 +10,20 @@
 
 这不是说单目完全不能估深度，而是说**单张单目图像本身没有可靠的绝对尺度**。它需要额外假设、运动、多帧、已知物体尺寸或学习到的先验。
 
+## 硬证据模块：几何页必须能回放标定和失败
+
+机器人视觉页如果只讲相机类型，会缺少工程可信度。对 VLA/world model 来说，几何证据必须能追到 episode：相机时间戳、内参、外参、深度质量、动作坐标系和失败 replay 是否对齐。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 用标定/深度减少盲目真实试错和失败排查成本 | 数据很多，但相机外参漂移导致抓取点错 | reprojection error、pose error |
+| 多相机对齐 | 同一时刻 wrist/front/overhead 的 timestamp skew 和外参版本 | 手臂挡住目标后，全局视角和腕部视角冲突 | max skew、calibration version、view agreement |
+| 深度可信度 | RGB-D / stereo / monocular depth 分桶比较 | 透明杯深度错，risk head 低估碰撞 | depth error、contact boundary F1 |
+| 动作坐标系 | action chunk 明确写 base/ee/camera frame | 坐标系混用，world model 误学动作后果 | action-frame consistency、controller reject |
+| failure replay | 保存原图、深度、点云、标定、动作和结果 | 只有视频，无法判断是感知错还是动作错 | replay completeness、root-cause label |
+
+一个几何 hard case 应能回答：模型选错动作，是因为视觉 tokenizer 丢了目标，深度估计错了距离，外参错了坐标，还是控制器没有执行到位。没有这条证据链，多相机数据越多，越可能只是把噪声喂给世界模型。
+
 ## 1. 相机在机器人上大概长什么样
 
 机器人上常见相机不是一种形态，而是几类安装方式：

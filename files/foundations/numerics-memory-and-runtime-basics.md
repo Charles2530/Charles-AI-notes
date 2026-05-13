@@ -79,7 +79,50 @@ Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负
 - 热点算子有对应 kernel；
 - 端到端 TTFT、TPOT、吞吐和质量都改善。
 
-## 6. 和后续专题的关系
+## 6. 一张部署成本流图
+
+```mermaid
+flowchart LR
+    A["模型参数"] --> B["权重显存"]
+    C["输入 token / 图像 / 视频"] --> D["激活与临时 workspace"]
+    E["长上下文 / 多轮对话"] --> F["KV cache"]
+    B --> G["HBM 读写"]
+    D --> G
+    F --> G
+    G --> H["Kernel 执行"]
+    H --> I["Runtime 调度"]
+    I --> J["TTFT / TPOT / 吞吐 / P99"]
+    K["dtype / quant scale"] --> H
+    L["batch / shape bucket"] --> I
+```
+
+这张图提醒你：低精度格式只是进入系统成本的一条边。真正上线时，权重、activation、KV cache、workspace、kernel、runtime 和 shape bucket 都会共同决定延迟。一个方案若只减少权重显存，却没有减少 decode 时的 KV 读取或没有命中低比特 kernel，端到端收益就会很小。
+
+## 7. 一个可复算的显存小账
+
+假设一个 7B 模型使用 BF16 权重，权重显存约为：
+
+\[
+7\times10^9\times2 \approx 14GB
+\]
+
+但如果服务长上下文，KV cache 可能同样大。以 32 层、hidden size 4096、batch 8、上下文 16k、BF16 KV 为例：
+
+\[
+2\times32\times8\times16384\times4096\times2 \approx 64GiB
+\]
+
+这里前面的 2 表示 K 和 V。这个例子说明：小模型不一定轻，长上下文下 KV cache 会成为主角。量化权重能让模型放得下，但 KV 量化、prefix cache、paged attention 和上下文裁剪才可能让高并发跑得稳。
+
+| 优化动作 | 主要省什么 | 可能不省什么 |
+| --- | --- | --- |
+| 权重量化 | 参数显存、部分权重带宽 | KV cache、视觉 token、runtime overhead |
+| KV 量化 | 长上下文并发显存、decode 读写 | prefill FLOPs、scale/dequant 开销 |
+| Activation checkpointing | 训练激活显存 | 反向重算时间 |
+| FlashAttention | attention 中间写回 | decode KV 生命周期 |
+| Shape bucketing | kernel 命中率、padding 浪费 | 长尾请求和工具延迟 |
+
+## 8. 和后续专题的关系
 
 - [量化路线图](../quantization/index.md)：理解低精度格式和部署收益。
 - [推理系统](../inference/index.md)：理解延迟、吞吐、KV cache 和服务调度。

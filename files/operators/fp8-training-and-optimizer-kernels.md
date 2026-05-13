@@ -32,13 +32,41 @@ FP8 训练则是在“用更低精度直接完成学习过程”。
 
 所以 FP8 训练 kernel 的核心不只是低精度乘法，而是“低精度张量 + 缩放元数据”的联合管理。
 
-## 4. 为什么优化器 kernel 也是主战场
+## 4. FP8 训练主路径图
+
+```mermaid
+flowchart LR
+    A["BF16 master weight"] --> B["cast / scale to FP8"]
+    B --> C["FP8 forward GEMM"]
+    C --> D["loss"]
+    D --> E["backward GEMM"]
+    E --> F["gradient accumulation"]
+    F --> G["unscale / clip"]
+    G --> H["fused optimizer"]
+    H --> A
+    I["amax history / scale metadata"] --> B
+    I --> E
+    J["checkpoint"] --> A
+    J --> I
+```
+
+这张图说明 FP8 训练要保存的不只是权重。`amax history`、scale、master weight、optimizer state 和梯度缩放都属于训练状态。如果 checkpoint 只保存模型权重，恢复后 scale 统计不同，后续 loss 曲线可能悄悄漂移。
+
+### 4.1 一个 scale 失配事故
+
+**症状**：FP8 训练从 checkpoint 恢复后没有立刻 `nan`，但 2k step 后 loss 比连续训练高 0.08，梯度极值更抖。
+
+**排查**：权重和 optimizer state 恢复正常，但 FP8 amax history 没有恢复，scale 从默认值重新 warmup；前几百 step 的 cast 范围和连续训练不同，导致部分层 underflow / overflow 统计改变。
+
+**修复**：checkpoint 中保存 FP8 scale metadata、amax history、loss scaler 和相关随机状态；恢复后跑固定 batch，对比连续训练路径的 loss、amax、grad norm 和参数 diff。
+
+## 5. 为什么优化器 kernel 也是主战场
 
 在大模型训练里，优化器 step 的成本不容忽视，因为参数很多、optimizer state 很大、每步都要更新，还常与 ZeRO / FSDP 分片状态耦合。
 
 如果优化器实现仍然是多次读写参数、动量和方差，并拆成分散的 elementwise kernel，训练吞吐就会被明显拖慢。
 
-## 5. Fused Optimizer 的意义
+## 6. Fused Optimizer 的意义
 
 Fused optimizer kernel 的核心，是把原本分散的多步 elementwise 操作合并起来，例如读梯度、更新一阶矩和二阶矩、计算校正、应用权重衰减、更新参数。
 
@@ -47,7 +75,7 @@ Fused optimizer kernel 的核心，是把原本分散的多步 elementwise 操�
 因为这些步骤本质上都是内存带宽敏感的 elementwise 操作。  
 如果拆成多个 kernel，同一组参数和状态会被反复读写，launch 次数也会增加，大模型下总时间会很可观。
 
-## 6. FP8 与优化器之间的精度分层
+## 7. FP8 与优化器之间的精度分层
 
 **一个很现实的问题是**：  
 即使前向和反向更多地走 FP8，优化器状态也未必适合全面降到同样精度。
@@ -56,18 +84,41 @@ Fused optimizer kernel 的核心，是把原本分散的多步 elementwise 操�
 
 因此实际系统常采用更复杂的精度分层：前向低精度，累加更高精度，optimizer state 保留更稳定格式，最终参数更新路径再做折中。
 
-## 7. 训练态低精度 kernel 的常见热点
+## 8. 训练态低精度 kernel 的常见热点
 
 常见热点包括 FP8 GEMM、cast / scale 相关 kernel、gradient unscale / clip、optimizer step、master weight 更新，以及分布式梯度聚合前后的数据格式转换。这些路径如果彼此不协调，就会让理论上的 FP8 收益被大量格式转换吃掉。
 
-## 8. 一个形象比喻
+## 9. 优化器 kernel 的带宽账
+
+AdamW 更新一个参数通常至少要读写：参数、梯度、一阶动量、二阶动量，很多实现还保留 master weight。若这些 elementwise 操作拆成多个 kernel，同一组张量会被反复读写。
+
+| 路径 | 典型读写 | 风险 |
+| --- | --- | --- |
+| 非融合 AdamW | 多次读写 grad、m、v、param | launch 多，HBM 往返多 |
+| fused optimizer | 一次 kernel 内完成多步更新 | 寄存器压力和数值边界更复杂 |
+| ZeRO/FSDP 分片优化器 | 状态分片，减少单卡显存 | 通信、gather/scatter 和恢复更复杂 |
+| FP8 + BF16 master | 主计算低精，更新保持高精 | scale 与 master weight 一致性要验收 |
+
+验收 fused optimizer 时不要只看 step time，还要看长跑 loss、权重范数、moment 分布和恢复一致性。优化器 kernel 一旦数值错，通常不会立刻炸，而是慢慢改变训练轨迹。
+
+## 10. 一个形象比喻
 
 如果把训练看成一条长期运转的工厂流水线，那么 FP8 训练不只是把原材料改成更轻的包装，而是要求整个仓储、计量、称重和装配流程都能适应更轻、更敏感的零件。优化器 kernel 则像最后的总装和校准工位，如果这一步仍然非常笨重，前面节省下来的吞吐也会被吃掉。
 
-## 9. 小结
+## 11. 小结
 
 FP8 与优化器 kernel 的主题，核心不是“更低精度”，而是“训练主路径是否能以更低精度仍然稳定运行”。这要求 kernel、scale、优化器状态、mixed precision 策略和分布式训练框架一起工作。  
 因此它是训练系统能力的一部分，而不只是单个算子技巧。
+
+## 12. 发布前最小门禁
+
+| 门禁 | 要求 |
+| --- | --- |
+| 数值 | 固定 batch 对齐 BF16 基线，loss、grad norm、amax 不异常 |
+| 性能 | FP8 GEMM、cast、optimizer step 分别报告收益 |
+| 恢复 | checkpoint 恢复后 scale / amax / optimizer state 连续 |
+| 分布式 | 梯度聚合、ZeRO/FSDP、通信 dtype 与主路径一致 |
+| 回退 | 敏感层和异常 bucket 可切回 BF16 |
 
 ## 工程收束
 

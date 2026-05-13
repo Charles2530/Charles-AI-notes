@@ -70,7 +70,37 @@ x = Norm(x + MLP(x))
 
 很多大模型更偏好 Pre-Norm，因为深层训练更稳。Post-Norm 在某些设置下也有价值，但更容易遇到梯度稳定性问题。
 
-## 5. 低精度训练为什么更依赖这些组件
+## 5. 数据流图：一个 Transformer Block 里的稳定性路径
+
+```mermaid
+flowchart LR
+    A["x"] --> B["Norm"]
+    B --> C["Attention / MLP"]
+    C --> D["Dropout / Scale"]
+    D --> E["Residual Add"]
+    A --> E
+    E --> F["next x"]
+    G["dtype / scale / outlier"] --> B
+    G --> C
+    G --> E
+```
+
+读这个图时，不要只看模块名字。`Norm` 决定输入尺度，`Attention / MLP` 决定大部分计算和激活分布，`Residual Add` 决定信息与梯度是否能穿过深层网络。低精度训练或量化时，任何一处尺度偏移都会通过残差路径累积到后续层。
+
+## 6. 一个故障案例：SwiGLU 后 activation outlier 增多
+
+假设把某个 Transformer 的 MLP 从 GELU 换成 SwiGLU 后，短跑 loss 正常，但 20k step 后开始出现 loss spike。排查时不要只调学习率，可以按下面看：
+
+| 观察 | 可能解释 | 应做检查 |
+| --- | --- | --- |
+| MLP 中间激活 amax 变大 | 门控乘法放大少数通道 | 逐层 activation histogram |
+| Norm 输出均值正常但方差长尾 | RMSNorm 控住整体尺度，但 outlier 仍在 | per-channel / per-token 极值 |
+| FP8 scale 频繁上调 | 低精度路径被极值牵着走 | amax history、overflow count |
+| 只有长上下文桶 spike | 长序列累积误差放大 | 按长度桶看 loss 和 grad norm |
+
+修复不一定是回退激活函数。可以先让敏感层保 BF16、调整 FP8 scale granularity、给 MLP 输出加 clipping 或重新校准初始化。关键是把问题定位到尺度、激活分布和低精度路径，而不是笼统说“模型不稳定”。
+
+## 7. 低精度训练为什么更依赖这些组件
 
 当使用 FP16、BF16、FP8 或更激进低精度时，数值范围和舍入误差会更敏感。Norm 和 residual 能减少尺度漂移，激活函数和 MLP 结构则会影响异常值分布。
 
@@ -82,7 +112,7 @@ x = Norm(x + MLP(x))
 4. optimizer state 如何保存；
 5. 梯度缩放和 clipping 是否合理。
 
-## 6. 和后续专题的关系
+## 8. 和后续专题的关系
 
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：排查 loss spike、NaN 和梯度异常。
 - [量化激活离群值](../quantization/activation-outliers-and-calibration-strategies.md)：理解 SmoothQuant 和 activation outlier。

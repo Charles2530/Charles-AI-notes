@@ -27,6 +27,20 @@ KVSlimmer 的核心判断是：相邻 token 的 `Key` 往往更同质，适合�
 | Main risk | Local adjacent merging may miss non-local redundancy; uniform compression ratio may be suboptimal |
 | Connect to | [上下文压缩与 KV 内存管理](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)、[推理系统路线图](../../inference/index.md)、[Transformer 输入与注意力](../../foundations/transformer-attention-and-tokenization.md) |
 
+## 证据等级与外推边界
+
+KVSlimmer 的证据来自谱分析、二阶推导、公开长上下文任务和推理效率对比。它很适合作为 KV cache compression 的工程参考，但世界模型 rollout 里的 KV 还会承载动作分叉、视频 latent 和风险判断，不能只按文本长上下文指标验收。
+
+| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
+| --- | --- | --- | --- | --- |
+| Key 比 Value 更适合合并 | Q/K/V 相似度和投影谱分布分析 | Mechanistic evidence | KV 压缩应区分 K/V，不要统一删或统一合并 | 不能说明视频 latent KV 也有同样谱结构 |
+| forward-only 合并可避免 backprop 开销 | Hessian 化简和闭式权重推导 | Algorithm + System | 在线压缩最好不引入反向传播路径 | 不能替代真实 runtime benchmark |
+| 长上下文任务保持质量 | 文本 benchmark、长上下文评测 | Benchmark | 适合作为 rollout KV 压缩的候选 baseline | 不能证明动作候选排序和 risk calibration 不变 |
+| decoder latency 和 cache memory 可降 | 推理测量和压缩率对比 | System throughput | bandwidth-bound KV 读取场景优先考虑 cache 压缩 | 不能保证端到端收益等于 KV kernel 收益 |
+| 相邻合并有局部性假设 | 方法设计本身和风险讨论 | Assumption boundary | world model 可先压远期 memory KV，再保护当前窗口 | 不能激进压接触帧、动作分叉帧和失败 replay |
+
+如果用于世界模型，应额外做三类验证：低精/合并 KV 下不同动作未来是否仍分叉，risk head 的 near-miss recall 是否下降，规划器 top-k 候选排序是否和高精版本一致。
+
 ## 论文位置
 
 长上下文推理有三类常见省 KV 路线：
@@ -119,16 +133,16 @@ x_t M x_{t+1}^{\top}
 K=[k_1,\ldots,k_n],
 \]
 
-目标是把相邻两个 Key \((k_m,k_{m+1})\) 合成一个 \(k^\*\)，并尽量让 loss 变化最小：
+目标是把相邻两个 Key \((k_m,k_{m+1})\) 合成一个 \(k^*\)，并尽量让 loss 变化最小：
 
 \[
-k^\*=\arg\min_k L(k,k).
+k^*=\arg\min_k L(k,k).
 \]
 
 如果只做平均：
 
 \[
-k^\*=\frac{k_m+k_{m+1}}{2},
+k^*=\frac{k_m+k_{m+1}}{2},
 \]
 
 就默认两个 Key 对 loss 的影响一样大。但 attention 里不同 Key 的影响取决于 query、attention weight、Value residual 和下游 loss，所以更合理的是用二阶近似衡量“改动这个 Key 会让 loss 变多少”。
@@ -178,7 +192,7 @@ g_{11}\|k-k_m\|^2
 整理后得到：
 
 \[
-k^\*
+k^*
 =
 \frac{(g_{11}+g_{12})k_m+(g_{12}+g_{22})k_{m+1}}
 {g_{11}+2g_{12}+g_{22}}.
@@ -326,7 +340,7 @@ g_{ij}
 原始二阶合并可以写成：
 
 \[
-k^\* = w_m k_m + w_{m+1}k_{m+1},
+k^* = w_m k_m + w_{m+1}k_{m+1},
 \]
 
 其中：
@@ -340,7 +354,7 @@ w_{m+1}=\frac{g_{12}+g_{22}}{g_{11}+2g_{12}+g_{22}}.
 利用上面的角度关系，\(\|E\|_2\) 和共同角度项被消去，得到 forward-only 形式：
 
 \[
-k^\*
+k^*
 =
 \left(
 \|c_{11}\|_2-2\|c_{12}\|_2+\|c_{22}\|_2

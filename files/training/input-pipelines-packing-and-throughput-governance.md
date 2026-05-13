@@ -42,6 +42,26 @@ Packing 解决“短样本太多”的问题，把多个短 segment 放入同一
 
 Packing 会影响方法学。同样号称训练 `1T token`，如果一种管线 padding 浪费高，另一种管线 pack 很好，模型实际看到的有效信号并不等价。消融对比时必须报告有效 token 和 packing 策略。
 
+```mermaid
+flowchart LR
+    A["原始样本"] --> B["长度 / 模态 / 任务分桶"]
+    B --> C["packing"]
+    C --> D["attention mask"]
+    C --> E["label mask"]
+    C --> F["position id"]
+    D --> G["batch"]
+    E --> G
+    F --> G
+    G --> H["GPU step"]
+    H --> I["有效 token/s"]
+```
+
+这张图说明 packing 的收益和风险来自同一个地方：把样本装得更满。装得更满能提高有效 token/s，但 mask、label 和 position 只要错一处，就会变成数据泄漏或监督错位。
+
+### Packing 事故例子
+
+如果把两个问答样本 pack 到同一序列，却忘了阻断它们之间的 attention，第二个样本可能看到第一个样本的答案。离线 loss 会变好，真实泛化会变差。这类事故很隐蔽，必须用 toy batch 可视化 attention mask 和 label mask。
+
 ## 三、Streaming、Tokenizer 与数据格式
 
 超大数据集通常不能简单“全量落本地再随机读”，因此会涉及 streaming、对象存储、本地缓存和离线预处理。

@@ -35,7 +35,39 @@ $$
 
 虽然这不是精确公式，但足够指导很多工程判断。
 
-## 2. 什么时候优先考虑 fusion
+## 2. 成本模型决策图
+
+```mermaid
+flowchart TD
+    A["热点路径"] --> B["估算 FLOPs / bytes / launch"]
+    B --> C{"算术强度低？"}
+    C -- "是" --> D["优先减少读写、fusion、layout"]
+    C -- "否" --> E{"Tensor Core 利用低？"}
+    E -- "是" --> F["tile、dtype、MMA、shape specialization"]
+    E -- "否" --> G{"launch / dispatch 占比高？"}
+    G -- "是" --> H["融合、persistent、CUDA graph"]
+    G -- "否" --> I{"通信或 runtime 放大？"}
+    I -- "是" --> J["overlap、bucket、调度"]
+    I -- "否" --> K["现成库可能已经足够"]
+```
+
+成本模型不是为了精确预测毫秒数，而是为了决定第一刀切哪里。低算术强度优先看带宽，高算术强度但 Tensor Core 低再看 tile 和 dtype，launch 多则看融合，端到端不快则回到 runtime 和通信。
+
+### 2.1 一个可复用模板
+
+| 项 | 要填什么 | 例子 |
+| --- | --- | --- |
+| shape | `B/M/N/K/L/H/D` | decode attention: `B=8,H=32,T=8192,D=128` |
+| FLOPs | 主计算量 | QK + PV 约 1.07 GFLOPs |
+| bytes | 主要读写量 | KV 读取约 1.0 GiB |
+| arithmetic intensity | FLOPs / bytes | 约 1 FLOP/byte |
+| 真实耗时 | microbenchmark | 0.55 ms |
+| 端到端占比 | 在请求或 step 中占多少 | 17.6/58 ms |
+| 优先动作 | 该改哪里 | KV layout / quant / paging |
+
+只要每个性能提案都先填这张表，团队就不容易为了一个漂亮 microbenchmark 投入过多维护成本。
+
+## 3. 什么时候优先考虑 fusion
 
 如果一个路径包含很多小算子，且：
 
@@ -45,7 +77,7 @@ $$
 
 那通常优先考虑 fusion。
 
-## 3. 什么时候优先考虑特化
+## 4. 什么时候优先考虑特化
 
 **如果某些 shape**：
 
@@ -55,7 +87,7 @@ $$
 
 那通常值得单独做 shape specialization。
 
-## 4. 什么时候不该急着写自定义 kernel
+## 5. 什么时候不该急着写自定义 kernel
 
 如果：
 
@@ -66,7 +98,7 @@ $$
 
 那更应该先从调度、数据布局或系统级优化入手。
 
-## 5. 小结
+## 6. 小结
 
 Kernel 成本模型不需要一开始就非常精确，但需要足够实用。只要你能先把问题拆成计算、内存和调度三部分，再结合 workload 频率做判断，就比单纯凭直觉选技术路线要稳得多。
 

@@ -43,6 +43,20 @@
   </div>
 </div>
 
+## 硬证据读法
+
+世界模型页面最容易滑成“概念地图”或“系统设想”。为了让判断更可信，后续关键页都尽量按硬证据模块组织：先说解决哪项成本，再给一个可复算例子或数字账，再给失败 replay，最后写清证据等级、反例边界和验收指标。
+
+| 读到的说法 | 先问证据来自哪里 | 世界模型必须追加的问题 |
+| --- | --- | --- |
+| “预测未来更准” | benchmark、open-loop loss、可视化 demo | 对动作敏感吗，长时 latent 会漂吗 |
+| “rollout 更便宜” | kernel throughput、端到端 latency、显存账 | 闭环成功率和 cost per success 是否变好 |
+| “低比特不掉点” | PTQ/QAT eval、KV microbench、线上日志 | risk head、action head、near-miss recall 是否保住 |
+| “数据回流有效” | ablation、失败桶统计、真实重训结果 | 是补了 hard cases，还是扩大了模型偏差 |
+| “demo 很自然” | 作者 demo 或少量 qualitative case | 是否有反事实动作、失败 replay 和闭环任务 |
+
+一个最小可接受证据链是：`episode 样例 -> token / 成本统计 -> 训练或推理配置 -> rollout 输出 -> 失败 replay -> 验收表`。如果只有 demo，它只能支撑“方向值得探索”；如果有 ablation，可以支撑“模块可能有用”；如果还有系统吞吐和闭环成功率，才适合进入工程 baseline。
+
 ## 一条贯穿路线
 
 这个专题可以按一条更工程化的路线来读：

@@ -23,7 +23,34 @@
 
 一个常见 MoE 流程是 router 为每个 token 产生 expert 分数，选出 top-k expert，将 token dispatch 到对应 expert，expert 各自计算后再把结果 combine 回去。真正的代价通常出现在 token permutation、dispatch / combine、all-to-all、负载不均和小批量 expert GEMM。
 
-## 3. Token Permutation 为什么是主痛点
+## 3. MoE token 流程图
+
+```mermaid
+flowchart LR
+    A["tokens [B, L, D]"] --> B["router logits"]
+    B --> C["top-k experts"]
+    C --> D["capacity / drop / pad"]
+    D --> E["token permutation"]
+    E --> F["all-to-all dispatch"]
+    F --> G["expert GEMM"]
+    G --> H["all-to-all combine"]
+    H --> I["unpermute"]
+    I --> J["residual stream"]
+```
+
+这张图说明 MoE 性能瓶颈不只在 `expert GEMM`。路由、容量、重排、通信、合并和反重排都在热路径里。只优化专家矩阵乘，而不看 dispatch 和 all-to-all，常常会得到“FLOPs 少了，系统没快”的结果。
+
+### 3.1 一个 token 数字账
+
+假设 batch 内共有 `B*L=8192` 个 token，`top-k=2`，expert 数为 64。理论上每个 expert 平均接收：
+
+\[
+\frac{8192\times2}{64}=256
+\]
+
+个 token。但真实 router 可能不均匀：热门 expert 收 520 个 token，冷 expert 只收 80 个。若 capacity 设为 320，热门 expert 会 drop 或 reroute；若 capacity 设为 640，padding 和小批量形状会浪费。这个超参同时影响模型质量、kernel shape 和 all-to-all 消息大小。
+
+## 4. Token Permutation 为什么是主痛点
 
 Router 选完 expert 后，token 往往需要按 expert 分组重排。  
 这一步本质上是一个复杂的索引、scatter、gather 问题。
@@ -34,29 +61,29 @@ Router 选完 expert 后，token 往往需要按 expert 分组重排。
 
 在很多 MoE 系统里，真正先成为瓶颈的并不是 expert matmul，而是重排与通信。
 
-## 4. Capacity Factor 与 kernel 的关系
+## 5. Capacity Factor 与 kernel 的关系
 
 MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。  
 这看似是训练稳定性超参，但实际上也影响 kernel 路径：容量越宽松，负载可能更不均；容量越严格，drop token 风险更高；expert batch 大小分布又会直接决定后续 GEMM 形状。
 
 因此它不是纯模型超参，也是系统超参。
 
-## 5. All-to-All 是什么，为什么难
+## 6. All-to-All 是什么，为什么难
 
 在多卡 expert 并行里，不同 token 可能要被发往不同 GPU 上的 expert。  
 这通常意味着 all-to-all 风格的通信：每个 rank 都向多个 rank 发 token，也从多个 rank 收 token。它比 all-reduce 更复杂，因为消息大小不均、负载可能严重偏斜、与 token permutation 耦合很深，也更难重叠。
 
-## 6. 稀疏系统为什么容易出现“理论省 FLOPs，实际不快”
+## 7. 稀疏系统为什么容易出现“理论省 FLOPs，实际不快”
 
 因为虽然只激活部分 expert，但新增了 router、token 重排、dispatch / combine、all-to-all、小而碎的 expert batch 和热门 expert 拥堵等成本。
 
 只要这些额外成本没有被控制住，稀疏计算的收益就会被抵消。
 
-## 7. 服务态 MoE 的额外问题
+## 8. 服务态 MoE 的额外问题
 
 在线推理里，MoE 比训练更麻烦，因为 batch 更小、请求更不规则、每步 decode token 少，热 expert 还可能放大 tail latency，多租户也会让路由分布更复杂。因此 MoE 推理服务特别依赖 expert placement、路由缓存、dispatch kernel 和通信调度。
 
-## 8. 稀疏 attention 与 block-sparse 路线
+## 9. 稀疏 attention 与 block-sparse 路线
 
 除了 expert 稀疏，还有一类稀疏 kernel 出现在 block-sparse attention、局部窗口 attention、检索增强 attention 和动态剪枝路径中。这些方法试图减少不必要计算，但会引入更复杂的索引、block map、稀疏布局管理、边界条件和实际有效算子粒度问题。
 
@@ -64,17 +91,29 @@ MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。
 
 视频 DiT 里的 [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md) 是一个典型例子：SLA 不是只做 block-sparse attention，而是把 critical blocks 交给 sparse exact attention，把 marginal blocks 交给 linear attention 补偿；SLA2 又把路由改成可学习的 \(R(Q,K)\)，并用 QAT 给 sparse branch 加 low-bit attention。
 
-## 9. 稀疏 kernel 的优化重点
+## 10. MoE 验收指标
+
+| 指标 | 看什么 | 失败信号 |
+| --- | --- | --- |
+| expert load | 每个 expert 的 token 数分布 | 热 expert 长期拥堵 |
+| dispatch time | permutation + all-to-all 时间 | GEMM 快但端到端不快 |
+| drop / reroute rate | capacity 是否过紧 | 质量掉点或训练不稳 |
+| expert GEMM shape | 每个 expert 的 batch 大小 | 小而碎，Tensor Core 吃不满 |
+| tail latency | 最慢 expert / rank 拖尾 | P99 被少数 rank 拉坏 |
+
+服务态还要单独看租户和 prompt 类型是否改变 expert 分布。一个 MoE 模型在离线 benchmark 上平衡，不代表线上流量也平衡；热门业务路径可能持续打到少数 expert，变成系统热点。
+
+## 11. 稀疏 kernel 的优化重点
 
 与稠密 kernel 相比，稀疏 kernel 更应优先关注索引和重排开销、局部性、token / block 分组、热点负载均衡和通信路径。
 
 也就是说，稀疏系统优化的第一优先级往往不是“更多 Tensor Core”，而是“更少无意义搬运与更少不均衡”。
 
-## 10. 一个形象比喻
+## 12. 一个形象比喻
 
 如果稠密模型像每个零件都要走同一条大装配线，那么 MoE 更像每个零件会被动态分发到不同的专业工位。好处是主装配线不用让所有工位同时开工，但坏处是零件分拣、转运和工位排队本身会变成新的瓶颈。MoE 系统真正难的地方，不在工位上的加工，而在整个分拣与物流系统是否高效。
 
-## 11. 小结
+## 13. 小结
 
 稀疏、MoE 与路由 kernel 的核心，不是“把矩阵变稀疏”这么简单，而是如何在保持模型容量优势的同时，控制 token 重排、all-to-all、负载不均和小批次 expert 计算带来的系统开销。  
 如果没有这层 kernel 与通信视角，MoE 很容易停留在“理论参数效率很高”的纸面优势，而无法转化成真实训练和推理服务系统里的可观收益。

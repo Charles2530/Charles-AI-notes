@@ -37,7 +37,11 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 plugins:
   - search
 hooks:
@@ -47,6 +51,8 @@ extra_javascript:
   - assets/javascripts/term-tooltips.js
   - assets/javascripts/reading-controls.js
   - assets/javascripts/image-lightbox.js
+  - assets/javascripts/vendor/mermaid.min.js
+  - assets/javascripts/mermaid.js
   - assets/javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 extra_css:

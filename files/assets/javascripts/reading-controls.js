@@ -34,6 +34,7 @@
   function markPageContext() {
     const path = window.location.pathname.replace(/\/index\.html$/, "/");
     document.body.classList.toggle("atlas-paper-deep-dive", path.includes("/paper-deep-dives/"));
+    document.body.classList.toggle("atlas-home", !!document.querySelector(".md-content__inner .atlas-hero"));
   }
 
   function directChild(parent, selector) {
@@ -279,14 +280,7 @@
 
   function mountReaderControls() {
     const storedPrefs = loadPrefs();
-    const prefs = Object.assign({ zoom: 0 }, storedPrefs);
-    if (
-      !Object.prototype.hasOwnProperty.call(storedPrefs, "controlsCollapsed") &&
-      window.matchMedia &&
-      window.matchMedia("(max-width: 760px)").matches
-    ) {
-      prefs.controlsCollapsed = true;
-    }
+    const prefs = Object.assign({ zoom: 0, controlsCollapsed: true }, storedPrefs);
     applyPrefs(prefs);
 
     if (document.querySelector(".atlas-reader-controls")) return;

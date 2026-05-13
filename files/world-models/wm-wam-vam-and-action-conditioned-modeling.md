@@ -19,6 +19,20 @@
 !!! note "图解：为什么这张图适合作为 WAM 入口"
     传统世界模型常是“给定动作，预测未来”；普通 VLA 常是“给定观测，输出动作”。DreamZero 这张图把两件事绑在一起：未来视频不再只是展示用的 rollout，动作也不再只是行为克隆标签。读 WAM 时要看三件事：动作 token 在哪里进入模型，未来视觉和动作是否共享上下文，执行后是否用真实新观测刷新，而不是一直相信自己生成的未来。
 
+## 硬证据模块：先证明动作真的改变未来
+
+WM/WAM/VAM 的共同硬证据，是同一历史下动作改变时，模型输出的未来、风险和动作排序也要合理改变。没有这项证据，模型可能只是一个带动作标签的视频续写器。
+
+| 证据项 | WM 要看 | WAM 要看 | VAM 要看 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 用 imagined rollout 少上真实环境试错 | 用联合建模减少单独 policy 数据需求 | 用视频先验减少机器人视频标注 |
+| 最小可复算例子 | 固定 \(z_t\)，替换 3 个动作，比较 \(z_{t+H}\) | 同时输出未来动作和未来观测，检查对齐 | 用 one-step 视频 latent 训练动作头 |
+| 失败案例 | 长时 latent 漂移，reward/risk 不可信 | 动作看似合理但未来视频不支持 | 视频预测好看但动作成功率不升 |
+| 证据等级 | Dreamer 类 benchmark / RSSM ablation | DreamZero 类闭环 + 系统吞吐 | VPP 类 benchmark + 真实机器人 |
+| 验收指标 | action sensitivity、risk calibration、closed-loop gain | action chunk success、real observation refresh 后稳定性 | predictive representation ablation、cost per success |
+
+对工程读者来说，最小门槛是 `candidate ranking agreement`：世界模型按预测风险和成功率选出的 top-1 动作，是否与真实安全成功动作一致。mini-chain fixture 里这个数只有 `2/4`，所以它暴露的是“不合格 WAM 该怎么被评测抓出来”，而不是证明某个方法有效。
+
 ## 统一问题
 
 三条路线都围绕同一个基本问题：
@@ -102,6 +116,33 @@ VAM 的吸引力来自几个事实：视频包含丰富的时序和交互信息�
 | 安全规划 | WM + risk head | 需要保守、可解释、可回退的未来预测 |
 
 实际系统往往不会纯用一种路线，而是组合：例如用视频模型提供动态先验，用结构化 WM 提供风险和可通行性，用 WAM 或 policy head 输出可执行动作。
+
+## 组合系统图
+
+```mermaid
+flowchart LR
+    A["历史视频 / 状态"] --> B["VAM: 视频时序先验"]
+    C["动作与目标"] --> D["WAM: 动作-未来联合建模"]
+    B --> D
+    D --> E["WM: latent dynamics + risk"]
+    E --> F["planner / policy"]
+    F --> G["执行"]
+    G --> H["新观测 / 失败 replay"]
+    H --> B
+    H --> E
+```
+
+这个图说明 WM、WAM、VAM 更像组合坐标，而不是互斥标签。VAM 提供视频动态先验，WAM 把动作和未来绑在一起，WM 把未来状态、risk、reward 和 planner 接起来。系统设计时要问的是哪一层最弱，而不是争论缩写归属。
+
+## 一个阅读判断表
+
+| 论文声称 | 你要追问 | 如果答不上来 |
+| --- | --- | --- |
+| 视频世界模型 | 动作是否改变未来 | 可能只是视频生成 |
+| 动作模型 | 未来状态是否参与训练或评测 | 可能只是行为克隆 |
+| 联合建模 | 执行时如何用新观测刷新 | 可能会自我滚动漂移 |
+| 低成本 rollout | token、KV、视频 latent 成本怎么算 | 可能无法部署 |
+| 闭环提升 | 是否有失败桶和恢复率 | 可能只提升开环指标 |
 
 ## 常见误区
 

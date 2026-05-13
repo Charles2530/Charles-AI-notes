@@ -23,6 +23,20 @@
 !!! note "难点解释：Dreamer 的三步不是三篇独立算法"
     左边的 `learn dynamics from experience` 是世界模型训练，中间的 `learn behavior in imagination` 是把模型当成可微模拟器训练 actor-critic，右边的 `act in the environment` 是真实执行。核心闭环是：真实经验更新世界模型，世界模型产生 imagined rollout，imagined rollout 更新策略，策略再回到真实环境收集新经验。
 
+## 硬证据模块：latent imagination 要证明省了真实试错
+
+RSSM/Dreamer 路线的证据重点，不是视频清晰度，而是“用 learned dynamics 产生的 imagined rollout 是否减少真实环境试错，并且没有被模型误差骗”。阅读或复现实验时，可以按这张卡检查。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 同样环境 step 下，Dreamer 类方法比 model-free baseline 学得更快 | model exploitation：actor 找到模型漏洞 | return per env step、sample efficiency |
+| latent 是否可规划 | 从 replay state 出发 rollout H 步，预测 reward/done/risk | reconstruction 好但 reward head 不准 | reward prediction、done F1、value error |
+| horizon 边界 | H=1/5/15/30 的 imagined return 曲线 | horizon 拉长后策略变坏 | model error vs horizon、policy gain |
+| 证据等级 | benchmark 学习曲线、ablation、真实环境回报分开写 | 只给 rollout 图像，没有控制结果 | benchmark + ablation 优先于 demo |
+| 世界模型外推 | 能迁移到视频 latent / VLA 之前，要补 action sensitivity 和 risk | RSSM 小任务有效，不代表多相机长任务有效 | action-conditioned eval、closed-loop success |
+
+把它和现代视频世界模型连接时，最容易犯的错是：看到 latent rollout 有用，就以为完整视频生成也自然有用。Dreamer 证明的是“可用于决策的紧凑 dynamics + actor/value 训练”有效；它没有证明高分辨率视频 latent、动作 chunk、risk head 和多相机 memory 都已解决。
+
 ## 1. 统一问题：从观测序列中恢复潜在世界
 
 设环境真实状态为 \(s_t\)，但智能体只能看到观测 \(x_t\)，执行动作 \(a_t\)，获得奖励 \(r_t\)。  

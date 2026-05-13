@@ -25,6 +25,31 @@ paper_topic: 世界模型
 | 主要风险 | 如果动作数据和反事实评测不足，模型可能仍然生成好看但不受动作控制的未来；少步蒸馏也可能损伤长时一致性 |
 | 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[世界模型数据引擎](../../world-models/data-engines-and-self-improvement.md)、[VLM/VLA 与世界模型高效训练接口](../../vlm/vlm-vla-for-efficient-world-model-training.md) |
 
+## 证据等级与外推边界
+
+LingBot-World 很容易被读成“视频模型已经等于世界模型”。更稳的读法是把证据拆开：论文强证据主要来自系统设计、横向定位、训练 pipeline、可视化和交互 demo；它对“真实机器人策略收益”的证据较弱，因为它主要证明的是开放域交互世界模拟器路线，而不是闭环控制成功率。
+
+```mermaid
+flowchart TD
+    A["Video foundation model"] --> B["Long-horizon world training"]
+    B --> C["Action-conditioned generation"]
+    C --> D["Causal rollout + KV cache"]
+    D --> E["Few-step distilled simulator"]
+    E --> F["Engineering claim: interactive world simulation"]
+    C --> G["Open question: action causality under contact-rich control"]
+    E --> H["Open question: long-horizon consistency after distillation"]
+```
+
+| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
+| --- | --- | --- | --- | --- |
+| 视频基础模型可以作为世界模拟器底座 | 训练 pipeline、系统图、横向对比、生成样例 | System design + Demo | 不必从零训练视觉/时序先验，先继承视频底座再补交互数据是合理路线 | 不能推出所有视频模型都能学到可控动力学 |
+| 动作条件必须进入生成主干 | action embedding、Plucker camera representation、AdaLN/adapter 设计 | Architecture evidence + Qualitative case | 动作接口要靠近动力学生成路径，不能只放在 caption 或 prompt 层 | 不能证明离散键盘、相机轨迹和机器人末端动作有同等可迁移性 |
+| 因果化、KV cache 和少步蒸馏降低交互成本 | causal student、KV cache、few-step distillation 的系统路径 | System throughput direction | 世界模型 deployment 要把 attention mask、cache 和采样步数一起设计 | 不能只看实时性，还要单独验收长时漂移和反事实分叉 |
+| 长时记忆是交互世界模型的核心能力 | 中程训练、长 horizon 生成和空间记忆展示 | Benchmark / Demo mixed | 训练集应包含长序列、场景回访、遮挡恢复和对象持久性样本 | 不能把“画面一致”直接当作“物理状态正确” |
+| 开源系统有工程参考价值 | 代码、模型、数据和系统组件公开 | Reproducibility signal | 可以复用接口、shape、训练阶段和评测清单作为 baseline | 开源不等于论文全部 claim 已独立复现 |
+
+对本站主线来说，最值得吸收的是“视频底座 -> 动作条件 -> 因果 rollout -> 少步化”的工程顺序。最需要保留怀疑的是动作因果性：同一历史下换动作，未来是否真的按动作分叉，而不是生成视觉上顺滑但动力学不受控的片段。
+
 ## 论文位置
 
 过去很多视频模型回答的是“接下来的视频看起来是否合理”。世界模型要回答的问题更强：在同一个历史状态下，如果执行不同动作，未来是否会发生可区分、可验证、对规划有用的变化。

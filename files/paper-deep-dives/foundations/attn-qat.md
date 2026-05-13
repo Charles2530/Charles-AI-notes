@@ -26,6 +26,20 @@ paper_topic: 高效训练
 | 主要风险 | 方法依赖专项 kernel 和 QAT 训练；视觉连接器、动作头、risk head 等敏感模块仍需保守精度，不能简单全模型 FP4 |
 | 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[低比特训练与数值格式](../../training/low-bit-training-and-numerics.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md) |
 
+## 证据等级与外推边界
+
+Attn-QAT 的证据强在“训练路径、kernel 路径和视频生成结果对齐”，但它证明的是 4-bit attention 可以被 QAT 修复，不是证明整套世界模型都能全 FP4。读这篇时要把 attention kernel 证据和端到端机器人/世界模型风险分开。
+
+| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
+| --- | --- | --- | --- | --- |
+| FP4 attention 不能只做 naive PTQ | Wan、Qwen、Llama 等实验中的质量退化 | Benchmark + Qualitative | 视频 DiT / world model attention 低比特化需要训练适配 | 不能说明所有模块都需要 QAT |
+| backward 必须和 FP4 forward 语义一致 | FlashAttention backward 推导和梯度爆炸现象 | Algorithm + Ablation | fused attention 的 forward/backward/kernel 要一起设计 | 不能把这个结论照搬到普通 MLP GEMM |
+| Attn-QAT 能恢复视频质量 | Wan 2.1 1.3B / 14B 生成评测和 VBench | Benchmark | 视频 latent 模型可尝试局部低比特 attention | 不能证明动作头、risk head 和 connector 也能 FP4 |
+| 推理 kernel 与 fake quant 要对齐 | Triton training kernel、CUDA inference kernel 对照 | System throughput + Reproducibility | QAT 方案必须绑定可落地 kernel，否则训练收益不会兑现 | 不能保证其他硬件、group size、layout 下同样快 |
+| QAT 训练仍有显存成本 | 额外保存 fake-quant 中间量、checkpointing、分布式配置 | System evidence | 低比特训练不等于训练显存天然下降，要算额外 buffer | 不能只拿推理低比特收益估训练成本 |
+
+对世界模型来说，Attn-QAT 最适合外推到“长视频/长上下文 attention 的低比特训练方法”。它不能替代 VLA 闭环验收：action head、risk head、当前接触窗口和长时一致性仍需要单独保高精或分桶验证。
+
 ## 论文位置
 
 低比特训练和推理通常先从线性层开始。原因很直接：线性层就是矩阵乘，QAT 可以在 forward 里插入 fake quantization，用高精度 backward 近似梯度，再让权重适应低比特误差。

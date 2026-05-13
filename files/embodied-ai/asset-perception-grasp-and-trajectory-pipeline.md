@@ -19,6 +19,20 @@
 !!! note "图解：资产管线不是离线建模小工具"
     这张图提醒我们，数据管线最终要落到真实相机、机器人本体、任务物体和动作接口上。资产、scale、camera pose、grasp pose 和 trajectory GT 如果不能在这样的实验设置里对齐，就无法稳定支持 VLA、WAM 或传统 planner。
 
+## 硬证据模块：数据管线要能从资产追到失败轨迹
+
+资产到轨迹的页面不能只讲 pipeline 步骤，还要说明每一步如何留下可验证证据。否则训练集看起来很大，失败时却不知道是资产尺度、碰撞网格、相机姿态、抓取标注还是轨迹规划出了问题。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 用自动资产/轨迹生成减少人工示范和真机试错 | 自动生成很多轨迹，但真实抓取全滑 | valid trajectory yield、sim validation pass rate |
+| 几何一致性 | asset scale、origin、collision mesh、camera pose 版本化 | 视觉 mesh 对，碰撞 mesh 偏，规划穿模 | collision check、reprojection error |
+| 抓取证据 | grasp pose、approach direction、pregrasp、成功判定脚本 | 抓取标注可视化正确，但夹爪闭合后滑落 | grasp success、contact event F1 |
+| 轨迹 replay | 每条 GT 记录 planner seed、失败重试、controller reject | 只保存最终动作，无法复现失败 | replay determinism、root-cause label |
+| world-model 接口 | 资产/轨迹转成 episode schema 和 hard-negative 桶 | 仿真成功样本太干净，真实 near-miss 不会 | sim2real gap、hard replay coverage |
+
+一个硬证据样例应能这样追溯：`asset scale -> collision mesh -> grasp annotation -> planned trajectory -> rendered multi-camera observation -> action chunk -> success checker -> failure label`。只有这条链能回放，资产数据才真正能进入世界模型数据引擎。
+
 ## 1. 这套材料里出现了哪些具身知识
 
 | 项目步骤 | 对应的具身智能知识 | 为什么重要 |

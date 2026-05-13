@@ -29,6 +29,24 @@ AI kernel 工程里常见误解是：既然已有 `torch.compile`、Triton、cuB
 
 成熟系统不会只押一种抽象，而是在这些层之间混合搭建。
 
+```mermaid
+flowchart TD
+    A["PyTorch / model code"] --> B["graph capture / compile"]
+    B --> C{"已有成熟库可用？"}
+    C -- "是" --> D["cuBLAS / cuDNN / NCCL"]
+    C -- "否" --> E{"中等复杂融合？"}
+    E -- "是" --> F["Triton"]
+    E -- "否" --> G{"GEMM/attention kernel family?"}
+    G -- "是" --> H["CUTLASS / CuTe"]
+    G -- "否" --> I["CUDA / PTX / SASS"]
+    D --> J["profile + regression"]
+    F --> J
+    H --> J
+    I --> J
+```
+
+这张图不是工具排名，而是选型路径：先看现成库，库不覆盖再看 Triton，若需要一整个高性能 kernel 家族再看 CUTLASS/CuTe，极端特化才下到 CUDA/PTX。抽象层越低，控制越强，维护成本也越高。
+
 ![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="520" }
 
 <small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原论文图意：在矩阵乘 \(C=AB^T\) 上比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 相对 roofline model 的性能位置。</small>
@@ -79,8 +97,32 @@ Kernel 设计不能脱离上层系统。一个很快的 kernel 也可能因为�
 
 这就是为什么 AI system 需要全栈视角：硬件、编译器、框架、kernel、runtime 和服务形态必须一起看。
 
+## 一个选型案例：FP8 GEMM + bias + gelu
+
+假设线上热点是固定几组 `M/N/K` 的 FP8 GEMM，后面总是接 `bias + gelu + requant`。可以按下面判断：
+
+| 选项 | 适合条件 | 风险 |
+| --- | --- | --- |
+| cuBLAS / cuBLASLt | 标准 GEMM 已足够快，epilogue 支持满足需求 | 特殊 layout 或 requant 不好融合 |
+| Triton | shape 少、想快速验证 fused epilogue | 极限 Tensor Core pipeline 不一定最佳 |
+| CUTLASS / CuTe | 需要稳定维护一组 FP8 GEMM 家族 | 模板复杂，开发周期长 |
+| 手写 CUDA/PTX | 特殊硬件路径或极端固定 shape | 维护和移植成本最高 |
+
+这类决策不能只看单点延迟。还要看图编译是否能稳定调用、scale metadata 如何传递、fallback 如何处理、不同 GPU 架构是否都支持，以及版本升级后性能是否可回归。
+
 ## 选型清单
 
 做编译栈或 kernel 路线选择时，建议先回答：热点是否已由 profiling 证明，shape 是否集中且能否做 bucket，是否需要特殊 epilogue、layout 或 dtype，图编译器能否稳定捕获并调用，现成库是否已经足够快，Triton 能否以更低维护成本达到目标，CUTLASS / CuTe 是否能复用成 kernel 家族，以及正确性、数值稳定和性能回归是否可自动化。
 
 编译栈的核心判断不是“哪个工具更高级”，而是把问题放在合适抽象层解决。抽象层太高，可能无法控制性能；抽象层太低，维护成本会吞掉收益。
+
+## 读者自查
+
+读完这页，应能把一个热点算子放到正确层级：
+
+| 问题 | 如果答案是肯定 |
+| --- | --- |
+| 现成库已经接近 roofline 吗 | 不要急着自研 |
+| 主要收益来自小算子融合吗 | 先看图编译或 Triton |
+| 需要维护多个 GEMM/attention 变体吗 | 再看 CUTLASS / CuTe |
+| 必须确认底层指令路径吗 | 下钻 PTX / SASS |

@@ -32,7 +32,37 @@
 4. 量化与非量化路径比例如何；
 5. 哪些 bucket 值得特化，哪些应走通用 fallback。
 
-## 3. 为什么这会影响 kernel 设计
+## 3. Shape 画像应该怎么画
+
+```mermaid
+flowchart LR
+    A["线上请求日志"] --> B["抽取 shape: B/L/H/D/M/N/K"]
+    A --> C["抽取成本: latency/GPU time/KV"]
+    A --> D["抽取路径: prefill/decode/quant/cache"]
+    B --> E["流量占比"]
+    C --> F["成本占比"]
+    D --> G["kernel hit / fallback"]
+    E --> H["bucket 策略"]
+    F --> H
+    G --> H
+    H --> I["benchmark matrix + dispatch"]
+```
+
+一个常见错误是只画长度直方图。对 kernel 优化来说，长度只是其中一维，还要看它消耗了多少 GPU 时间、是否命中量化路径、是否触发编译、是否属于 prefill 或 decode。真正的 bucket 应该服务 dispatch 和 benchmark。
+
+### 一个 bucket 表示例
+
+| bucket | 请求占比 | GPU 时间占比 | 主路径 | 优先级 |
+| --- | ---: | ---: | --- | --- |
+| short chat 0-2k | 64% | 18% | decode + launch | 中 |
+| doc QA 8k-16k | 20% | 32% | prefill + KV | 高 |
+| long report 32k+ | 4% | 28% | KV / page / prefill | 高 |
+| image QA | 9% | 16% | vision encoder + prefill | 中 |
+| tool agent | 3% | 6% | tool latency | 低 GPU 优先级 |
+
+如果只按请求占比，短聊天看起来最重要；按 GPU 时间占比，长文档才是最该优化的桶。这就是 workload 建模的价值。
+
+## 4. 为什么这会影响 kernel 设计
 
 因为：
 
@@ -59,11 +89,11 @@
 
 只要模型版本、tokenizer、上下文窗口、流量来源、LoRA 租户或量化策略发生明显变化，旧 bucket 就可能失效。比较成熟的系统会把 bucket 统计做成周期性任务，并把“热桶变化”接进性能回归：如果热桶迁移了，原来的特化 kernel 可能不再值得维护，新的热点则需要进入 benchmark 和 dispatch 规则。
 
-## 4. 一个形象比喻
+## 5. 一个形象比喻
 
 可以把 shape bucket 想成工厂的订单画像。不是每种尺寸的零件都值得单独开一条专用产线，只有那些真正高频、长期出现的规格，才值得配专用模具。kernel 特化也是一样：先知道订单分布，再决定哪里值得投入特化成本。
 
-## 5. 小结
+## 6. 小结
 
 Workload 建模与 shape bucket 的价值，在于把“我能优化什么”转化成“我最应该优化什么”。没有这一步，很多高性能算子开发都会陷入局部最优；有了这一步，特化、autotune、dispatch 和回归测试才会真正围绕真实系统收益展开。
 

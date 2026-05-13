@@ -80,6 +80,20 @@ shape specialization 很大一部分就是在处理这些现实 shape。
 
 Autotune 解决的是在一组候选参数中找最优配置，为不同硬件、不同 shape 选择 tile 和流水线；shape specialization 解决的是不同 shape 本来就该走不同 kernel 路径。二者结合后，系统通常会先按 shape family 分流，再在每类 shape 内用 autotune 找最优配置。
 
+```mermaid
+flowchart LR
+    A["shape bucket"] --> B{"高频且稳定？"}
+    B -- "否" --> C["generic fallback"]
+    B -- "是" --> D["specialized kernel family"]
+    D --> E["autotune per bucket"]
+    E --> F["compile cache / warmup"]
+    F --> G["dispatch"]
+    G --> H["online hit-rate monitor"]
+    H --> A
+```
+
+这个流程能防止 specialization 失控。不是所有 shape 都应该专门优化；只有高频、稳定、端到端占比高的 bucket 才值得进入 specialized kernel family。否则模板、编译缓存、warmup 和维护成本会吞掉收益。
+
 ## 9. Dispatch 逻辑为什么是性能系统的一部分
 
 很多人把 dispatch 当成“小胶水逻辑”，但它实际决定哪种 shape 走哪条路径、是否命中编译缓存、是否误把小 shape 送进大 shape 专用 kernel，以及 fallback 路径触发频率。

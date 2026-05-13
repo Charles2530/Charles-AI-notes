@@ -26,7 +26,26 @@
 
 因为一旦进入真实系统，你还要考虑 contiguous 和 non-contiguous 输入、CPU fallback 或 error path、多卡与 stream 语义、mixed precision、编译缓存和运行时加载。
 
-## 3. 与 PyTorch 集成时要想清楚的几件事
+## 3. 集成链路图
+
+```mermaid
+flowchart TD
+    A["Python API"] --> B["shape / dtype / device check"]
+    B --> C{"dispatch path"}
+    C --> D["CUDA / Triton forward"]
+    C --> E["reference fallback"]
+    D --> F{"training?"}
+    F -- "是" --> G["backward / autograd"]
+    F -- "否" --> H["inference only"]
+    G --> I["torch.compile / graph lowering"]
+    H --> I
+    I --> J["profiler markers"]
+    J --> K["CI correctness + performance"]
+```
+
+自定义算子只写 kernel 等于只完成了中间一格。真正进入系统，需要 API、dispatch、fallback、autograd、compile、profile 和 CI 都接上。每缺一格，线上就可能出现“单测很快，真实路径没用上”的情况。
+
+## 4. 与 PyTorch 集成时要想清楚的几件事
 
 ### 3.1 接口边界
 
@@ -38,11 +57,11 @@
 
 很多 kernel 的集成难点其实不在 forward，而在 backward。
 
-## 4. 与 `torch.compile` / 图编译的关系
+## 5. 与 `torch.compile` / 图编译的关系
 
 自定义算子如果完全绕开图编译器，有时会导致断图、融合机会丢失、上层优化无法继续穿透，profiler 也只能看到一大片黑盒。这并不意味着不能写 custom op，但你需要清楚它是否值得成为黑盒边界，是否会阻断更大的图优化，以及是否只在真正热点处使用。
 
-## 5. Triton 自定义算子与 CUDA 自定义算子的差异
+## 6. Triton 自定义算子与 CUDA 自定义算子的差异
 
 ### 5.1 Triton
 
@@ -52,28 +71,42 @@ Triton 的优势是开发快、适合快速试 fusion、与 Python / PyTorch 路
 
 CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和特定硬件路径支持更充分；代价是集成与维护成本更高，开发调试更慢，对团队要求也更高。
 
-## 6. 什么时候值得做 custom op
+## 7. 什么时候值得做 custom op
 
 通常需要同时满足多项条件才值得做：热点明显、默认实现慢、可融合收益明确、形状相对稳定，并且业务收益足以覆盖维护成本。
 
 如果只是“理论上也许能快一点”，往往不值得。
 
-## 7. 测试与验收不能省
+## 8. 测试与验收不能省
 
 一个可上线的 custom op 至少要经过正确性对比、多 shape 测试、dtype 测试、contiguous / stride 测试、训练或推理端到端回归、profiler 对照和 fallback 验证。
 
 否则一个快 kernel 很容易变成线上隐患。
 
-## 8. 版本演进与兼容
+## 9. 版本演进与兼容
 
 自定义算子不是“一次写完永远不动”的资产。  
 它会持续受新 GPU 架构、新 PyTorch 版本、编译器后端变化、shape 分布变化和模型结构变化影响。因此一个工程上成熟的 custom op，必须有版本管理、持续 benchmark、fallback 和清晰的适用边界。
 
-## 9. 一个形象比喻
+## 10. 接口契约模板
+
+| 契约项 | 要写清楚什么 |
+| --- | --- |
+| 输入 shape | 支持哪些维度、哪些 bucket、是否允许 dynamic shape |
+| dtype | FP32/BF16/FP16/FP8/INT8 各自路径和误差阈值 |
+| layout | contiguous、channels-last、stride、alignment 要求 |
+| autograd | backward 是否自定义，保存哪些中间量 |
+| compile | eager、`torch.compile`、ONNX/TensorRT 是否支持 |
+| fallback | 不支持 shape/dtype/device 时走哪里，是否记录 |
+| profile | kernel name、NVTX range、版本号如何显示 |
+
+这个模板很朴素，但能显著降低维护风险。没有接口契约的 custom op，过几个月后通常没人敢改，也没人知道为什么某些 shape 被排除。
+
+## 11. 一个形象比喻
 
 自定义算子就像为工厂定制一台专用设备。设备本身可能很快，但如果它接不上现有流水线、维护手册不全、只能处理一种规格的零件、坏了又没有备用流程，那么它的工程价值就会大打折扣。真正有价值的 custom op，不只是“局部最快”，而是能顺滑进入整条生产线。
 
-## 10. 小结
+## 12. 小结
 
 自定义算子开发的关键，不只是 kernel 写得快，而是把性能、集成、autograd、图编译、测试、fallback 和版本演进放在同一张设计图里。只有这样，一个自定义 kernel 才会从 demo 变成真正可维护、可部署、可复用的系统组件。
 

@@ -64,4 +64,65 @@ VLM/VLA 的评测不能只看一个总分。静态图文问答、视频理解、
 
 每次 VLM/VLA 改动都要保留失败回放：输入图像/视频、语言指令、模型动作、环境反馈、是否恢复、失败原因和对应 trace。没有失败回放，评测只会告诉你“分数掉了”，不会告诉你“为什么掉、该补数据还是改模型”。
 
+## 一个失败 replay：量杯抓取偏移
+
+失败回放应该能让人复现“模型当时为什么错”，而不是只记录 `failed=true`。下面是一条可用于训练回流的简化 replay：
+
+```yaml
+episode_id: table_pick_red_measuring_cup_2026_05_12_0142
+task: pick red measuring cup and place into gray bin
+robot: 7dof_arm_parallel_gripper
+camera_set: [wrist_rgbd, left_rgb, right_rgb, overhead_rgb]
+policy_version: vla_policy_wm_042
+world_model_version: wm_video_latent_019
+result: failed
+failure_type: grasp_point_shift_after_occlusion
+```
+
+关键 trace 要按时间展开：
+
+| 时间 | 观测 | policy 动作 | world model 预测 | 真实结果 |
+| --- | --- | --- | --- | --- |
+| \(t=12.4s\) | 量杯把手被夹爪遮挡 40% | 向右前方接近 3cm | 杯把仍在可抓区域中心 | 实际杯把中心被遮挡后向左估计错 2.8cm |
+| \(t=13.1s\) | wrist 相机看到杯沿高光 | 闭合夹爪 | 成功接触杯把 | 夹爪碰到杯沿外侧 |
+| \(t=13.8s\) | 杯子旋转并滑动 | 上提 5cm | 杯子随夹爪上移 | 杯子掉落并撞到灰箱 |
+| \(t=15.0s\) | 目标物已偏离初始位置 | 继续执行放置 chunk | 仍预测正在搬运 | policy 没触发恢复 |
+
+这条 replay 至少能切出四个训练/评测样本：
+
+| 样本 | 训练目标 | 用途 |
+| --- | --- | --- |
+| 遮挡前后 grounding | 杯把中心和可抓区域坐标 | 验证视觉 tokenizer 是否保留小结构 |
+| action sensitivity pair | 原接近动作 vs 左移修正动作的未来差异 | 验证世界模型是否对动作分叉敏感 |
+| risk label | `slip_or_collision_probability=high` | 训练风险头，不让好看视频掩盖失败 |
+| recovery target | 重新观察、后退、换抓取点 | 训练闭环恢复而不是硬执行原 chunk |
+
+回放的价值在于它把一次失败拆成“看错、想错、做错、没恢复”四层。量化、token 压缩、动作接口替换或世界模型蒸馏之后，都可以用同一条 replay 检查到底是哪一层退化。
+
+## 评测闭环图
+
+```mermaid
+flowchart LR
+    A["离线评测集"] --> B["分桶指标"]
+    B --> C["失败 replay"]
+    C --> D["人工 / 规则归因"]
+    D --> E["补数据 / 改模型 / 改接口"]
+    E --> F["新模型"]
+    F --> A
+    F --> G["shadow / 真实闭环"]
+    G --> C
+```
+
+多模态评测的成熟形态不是“分数表”，而是能把失败送回训练和系统设计。比如同样是 VLA 失败，视觉定位错要补视觉 token 和 grounding，动作抖动要看 action head，风险低估要看 risk calibration，恢复失败要补 replay 和 recovery policy。
+
+## 发布门禁示例
+
+| 门禁 | 阈值例子 | 阻断原因 |
+| --- | --- | --- |
+| OCR / 数字一致性 | 财务字段错误率不得上升 | 高价值业务风险 |
+| Grounding | 坐标误差 P95 不得明显变大 | UI / 机器人动作会偏 |
+| Action sensitivity | 反事实动作排序不能翻转 | 世界模型会误导规划 |
+| Risk calibration | near-miss recall 不得下降 | 安全相关假阴性 |
+| Recovery | 失败后恢复率不得下降 | 闭环系统最关键能力 |
+
 下一步可接 [VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md)，把评测结果转成训练样本、反事实数据和 rollout 验收。

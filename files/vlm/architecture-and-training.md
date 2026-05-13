@@ -102,7 +102,35 @@ p_\theta(z_{t+1} \mid z_t, a_t, l)
 !!! example "有趣例子：杯子在桌边"
     VLM 状态告诉你“杯子在桌边”。VLA 策略可能输出“夹爪向杯子移动”。世界模型还要预测：如果从右侧推，杯子是否会掉；如果先从上方夹取，是否更安全。只有第三种能力才真正进入动作后果建模。
 
-## 6. 检查点
+## 6. 架构选择图
+
+```mermaid
+flowchart TD
+    A["任务需求"] --> B{"只要静态语义？"}
+    B -- "是" --> C["CLIP / dual encoder"]
+    B -- "否" --> D{"需要语言生成？"}
+    D -- "是" --> E["connector + LLM"]
+    D -- "否" --> F{"需要视频状态？"}
+    F -- "是" --> G["video encoder / latent memory"]
+    F -- "否" --> H["轻量视觉 encoder"]
+    G --> I{"需要动作后果？"}
+    I -- "是" --> J["action-conditioned world model"]
+    I -- "否" --> K["video understanding / retrieval"]
+```
+
+这张图可以当成选型入口。静态检索不必上复杂 VLA；语言生成需要 connector；视频理解需要 temporal state；只有当系统要比较动作后果时，才真正进入世界模型接口。
+
+## 7. 训练目标对照
+
+| 目标 | 学到什么 | 不足 |
+| --- | --- | --- |
+| 图文对比 | 静态语义对齐 | 不学生成和动作后果 |
+| Image-grounded generation | 视觉证据到语言输出 | 可能依赖语言先验补细节 |
+| Masked / latent video prediction | 时序状态和对象持续性 | 通常缺动作条件 |
+| Behavior cloning | 观测到动作 | 不一定知道动作后果 |
+| Action-conditioned rollout | 动作后的未来状态 | 需要高质量动作和失败数据 |
+
+## 8. 检查点
 
 读完这页后，应能回答：
 

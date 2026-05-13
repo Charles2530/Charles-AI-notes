@@ -70,6 +70,71 @@ $$
 
 这意味着评测集必须包含时序任务，而不只是静态问答。
 
+## 7.1 放到世界模型里：哪些能压，哪些要保
+
+世界模型不是一个均匀 Transformer。它通常至少包含视频/视觉 latent、动作条件接口、未来预测 head、reward/value/risk head 和 policy/action head。量化时要按模块分配误差预算。
+
+| 模块 | 能否积极量化 | 推荐起点 | 主要风险 | 验收方式 |
+| --- | --- | --- | --- | --- |
+| 视频 latent cache / memory | 可以尝试 | FP8 或 INT8 per-channel / per-token scale | 长时一致性下降、遮挡状态遗忘 | object permanence、latent rollout drift |
+| 视觉 encoder 主干 | 中等积极 | INT8 / FP8，关键层混合精度 | 小物体、边界、OCR、抓取点退化 | grounding、contact boundary、坐标误差 |
+| VLM/VLA connector | 谨慎 | BF16/FP16 或 FP8 小范围试点 | 模态对齐尺度漂移 | 图文对齐、动作敏感性 |
+| action head / action expert | 保守 | BF16/FP16，最多对非关键 MLP 试 FP8 | 动作抖动、chunk 内误差累积 | action L2、jerk、闭环成功率 |
+| risk / safety head | 很保守 | BF16/FP16 | 低估碰撞、滑落、越界概率 | calibration、near-miss recall、false negative |
+| reward / value head | 谨慎 | FP16/BF16 或校准后 FP8 | imagined rollout 被错误奖励牵引 | value calibration、policy improvement |
+
+一句话：视频 latent 和中间缓存可以先压，因为它们主要省显存和带宽；动作头、risk head 和安全相关分类器不能激进压，因为小误差会直接变成闭环风险。
+
+```mermaid
+flowchart LR
+    A["raw video / cameras"] --> B["vision encoder"]
+    B --> C["video latent cache"]
+    C --> D["world model rollout"]
+    D --> E["reward / value"]
+    D --> F["risk head"]
+    D --> G["action head"]
+    C -. "FP8 / INT8 trial" .-> C
+    D -. "KV / memory quant" .-> D
+    F == "BF16 / FP16 guardrail" ==> H["safety decision"]
+    G == "BF16 / FP16 guardrail" ==> I["robot control"]
+```
+
+这张图的意思是：低精度优先放在“缓存和中间状态”上试，不能先从安全决策和动作输出开刀。世界模型量化不是一条直线，而是一圈防火墙：越靠近真实控制和风险判断，越要保守。
+
+## 7.2 视频 latent 能不能压：一个具体账
+
+假设视频世界模型每个训练/rollout 起点保存 8 秒历史，采样 8Hz，共 64 个 latent frame。每帧 latent grid 是 \(16\times16=256\) token，hidden size 为 1024。
+
+BF16 存储一条历史 latent 约为：
+
+\[
+64\times256\times1024\times2 \approx 33.6MB
+\]
+
+如果改成 FP8 / INT8 latent cache，理论存储约降到 16.8MB，再加 scale metadata。对大规模 imagined rollout 来说，这能直接换来更长 horizon 或更大 batch。但它不等于可以把所有视频训练目标都低精度化：
+
+| 场景 | 可以压的部分 | 不建议压的部分 |
+| --- | --- | --- |
+| 离线 replay 读取 | 历史 latent cache、非关键背景 token | 监督标签、关键接触帧、失败 replay |
+| imagined rollout | 远期 memory、候选轨迹缓存 | 当前窗口、动作分叉附近 latent |
+| 部署推理 | 长时 memory、KV cache | risk head 输入、action head 输出 |
+
+验收时不要只看视频重建误差。更关键的是低精 latent 下的三件事：同一状态接不同动作，未来是否仍分叉；遮挡物体是否仍被记住；风险概率是否仍能在滑落、碰撞、越界前上升。
+
+### 7.3 长时一致性如何验收
+
+低精视频 latent 最隐蔽的问题是“短片看不出来，长 rollout 才坏”。例如 2 秒预测里杯子还在桌上，12 秒后模型已经把杯子位置漂到另一侧；或者当前窗口里风险分数正常，遮挡 5 秒后 risk head 不再记得物体边缘。世界模型量化要专门做长时一致性回归。
+
+| 验收桶 | 构造方式 | 看什么指标 | 常见低精失败 |
+| --- | --- | --- | --- |
+| 遮挡再出现 | 目标物体被手臂或人遮挡 2-6 秒后重新出现 | object ID consistency、位置误差、风险恢复时间 | 物体身份被重置，risk head 低估碰撞 |
+| 动作分叉 | 固定历史，分别执行 left / right / push / grasp | future latent distance、ranking agreement、event accuracy | 不同动作未来变得太像 |
+| 长任务记忆 | 30-120 秒任务，中途多次离开目标区域 | layout recall、subtask progress、memory hit rate | 模型忘记已完成步骤，重复抓同一物体 |
+| 接触瞬间 | 抓取、插入、滑落、碰撞前后 1 秒高频片段 | contact event F1、near-miss recall、action jerk | 视频质量尚可，但接触事件错过 |
+| 候选轨迹排序 | 同一状态下比较 8-32 条动作候选 | top-k ranking agreement、cost per success | BF16 排名第一的安全动作被低精版本排低 |
+
+一个推荐的上线表述是：`FP8 latent cache 在普通短视频桶中 LPIPS 变化很小，但在遮挡再出现桶里 object ID consistency 从 97.8% 降到 94.1%，near-miss recall 降 2.3 个百分点，因此只用于远期 memory，不用于当前 2 秒窗口和 risk head 输入。` 这种结论比“平均指标掉 0.4%”更能指导部署。
+
 ## 8. 校准集的扩展原则
 
 多模态量化校准集应覆盖高分辨率文档与低质扫描、图表与表格、UI 截图与深浅色主题、视频关键帧、机器人长时轨迹片段，以及数字、公式、细粒度文本。
@@ -95,6 +160,20 @@ $$
 ## 12. 例子：仓库机器人 VLA
 
 量化后，机器人在简单抓取任务上仍然成功，但在细长物体和狭窄容器放置中恢复能力变差。说明量化误差主要影响了动作精细调节和时序稳定性，而不是高层任务理解。此时应优先恢复动作头和关键感知层精度，而不是整体回退到高比特。
+
+### 12.1 更贴近世界模型的排查方式
+
+如果一个 VLA + 世界模型系统量化后闭环掉点，可以按下面顺序拆：
+
+| 排查问题 | 对照实验 | 结论指向 |
+| --- | --- | --- |
+| 是视觉压坏了吗 | 低精视觉 + 高精 action/risk | grounding 或状态 latent 问题 |
+| 是动作头压坏了吗 | 高精视觉 + 低精 action head | 控制输出和 chunk 稳定性问题 |
+| 是风险头压坏了吗 | 高精 rollout + 低精 risk head | near-miss 低估和校准问题 |
+| 是 KV / memory 压坏了吗 | 短 horizon 正常、长 horizon 退化 | rollout cache 或 memory 量化问题 |
+| 是 runtime 没兑现吗 | 同量化权重换高精 kernel 对照 | kernel / dequant / layout 问题 |
+
+一个常见结论是：视觉主干和视频 latent 可以低精，动作头和 risk head 先保高精；等闭环稳定后，再对非关键 MLP 或候选轨迹缓存做局部 FP8/INT8。这样比“全模型统一 8bit”更符合世界模型的风险结构。
 
 ## 13. 设计建议
 

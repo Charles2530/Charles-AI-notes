@@ -98,7 +98,44 @@ output = weights @ V
 
 所以 VLM、视频模型和 VLA 不只是“把所有 token 拼起来”，还要设计位置编码和 mask，让模型知道哪些关系重要。
 
-## 6. 和后续专题的关系
+## 6. 一个多模态拼接例子
+
+```mermaid
+flowchart LR
+    A["文本指令"] --> E["统一序列"]
+    B["图像 patch"] --> E
+    C["视频帧 token"] --> E
+    D["动作 token"] --> E
+    E --> F{"Mask 规则"}
+    F --> G["文本可看视觉证据"]
+    F --> H["未来动作不可泄漏"]
+    F --> I["不同 packed sample 互不可见"]
+    F --> J["当前帧可看历史帧"]
+```
+
+例如一个 VLA 训练样本可能拼成：
+
+```text
+[BOS] instruction tokens
+[IMG_CAM1_T0 ... IMG_CAM4_T0]
+[IMG_CAM1_T1 ... IMG_CAM4_T1]
+[PROPRIO_T0] [ACTION_T0]
+[PROPRIO_T1] [ACTION_T1]
+```
+
+这里至少有三类可见性规则：语言目标可以看全部历史观测；预测 `ACTION_T1` 时不能偷看未来动作；如果多个短轨迹被 packing 到同一序列，不同轨迹之间必须互相 mask 掉。许多多模态训练 bug 不是模型结构错，而是这个 mask 矩阵有一个区域漏了。
+
+## 7. 常见 mask 事故
+
+| 事故 | 表现 | 排查方式 |
+| --- | --- | --- |
+| 未来 token 泄漏 | validation loss 异常好，上线退化 | 构造 toy sequence，看未来 label 是否可见 |
+| padding 未 mask | 长短样本混 batch 后输出漂移 | 检查 padding token attention 权重 |
+| packed segment 泄漏 | 一个样本影响另一个样本答案 | 按 segment id 可视化 mask |
+| 图像/动作时间错位 | 模型预测像慢半拍 | 检查 frame index、action timestamp 和 position id |
+| sliding window 太短 | 长任务遗忘早期约束 | 按 horizon 分桶评测 |
+
+## 8. 和后续专题的关系
 
 - [Transformer 输入与注意力](transformer-attention-and-tokenization.md)：理解 Q/K/V 和 attention 主体。
 - [推理系统](../inference/index.md)：理解 KV cache、长上下文和上下文压缩。

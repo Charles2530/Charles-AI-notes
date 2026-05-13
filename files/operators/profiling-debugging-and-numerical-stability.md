@@ -113,4 +113,33 @@ Softmax 通常写成：
 6. 把 shape、dtype、误差阈值和性能基线写入回归测试；
 7. 记录硬件、驱动、编译器、框架和 kernel 版本。
 
+```mermaid
+flowchart LR
+    A["系统 trace"] --> B["定位阶段"]
+    B --> C["kernel profile"]
+    C --> D["瓶颈归因"]
+    D --> E["实现修改"]
+    E --> F["正确性对齐"]
+    F --> G["真实 workload 分桶"]
+    G --> H["端到端收益"]
+    H --> I["回归测试"]
+    I --> A
+```
+
+这张闭环图的重点是不要跳步。只做系统 trace，容易不知道 kernel 为什么慢；只做 microbenchmark，容易不知道端到端有没有收益；只做性能，不做正确性，低精度和归约类 kernel 会埋隐患。
+
 算子优化的基本纪律是：没有 profiling，不谈优化；没有正确性，不谈性能；没有端到端验证，不谈上线收益。
+
+## 世界模型算子的硬证据模块
+
+如果优化对象服务世界模型 rollout，profiling 报告要比通用 LLM 多三项：候选动作排序是否变、风险校准是否变、长时 latent 是否漂。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 单 kernel、端到端 rollout、闭环 loop 三层时间线 | kernel 2x，端到端只有 1.05x | kernel latency、loop latency、Amdahl breakdown |
+| 正确性 | 与 BF16/reference 比较未来 latent、event、risk | 逐元素误差小，但 top-1 动作排序翻转 | ranking agreement、event F1 |
+| 数值稳定 | 长 horizon 反复 rollout 误差曲线 | 8s 后对象漂移，短测不暴露 | latent drift、object permanence |
+| 低精度路径 | scale、dequant、fallback 和 layout transform 计入 trace | 量化 kernel 快，前后 cast 慢 | kernel hit rate、dequant count |
+| 闭环回归 | 固定 hard replay 和小闭环任务桶 | profiler 显示快，但 near-miss 漏报 | near-miss recall、cost per success |
+
+一个世界模型 kernel PR 的证据不应只写“attention kernel 快 1.6x”。更稳的写法是：`视频 latent attention kernel 1.6x，端到端候选 rollout 1.23x；与参考实现相比 top-1 candidate ranking agreement 99.4%，risk ECE 变化 +0.002，hard replay 无新增 false negative。`

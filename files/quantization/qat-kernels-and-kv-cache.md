@@ -46,6 +46,20 @@ QAT 不是简单“重新训一遍”，而是在优化权重分布与量化区�
 
 QAT 更像 PTQ 不够稳时的下一层保险，而不是默认第一步。
 
+### 世界模型里什么时候值得做 QAT
+
+如果对象是 VLM/VLA 或动作条件世界模型，QAT 的触发条件要比文本模型更具体：
+
+| 现象 | 说明 | QAT 是否值得 |
+| --- | --- | --- |
+| 文本/VQA 几乎不掉，但动作坐标抖 | 误差集中在 connector 或 action head | 先混合精度保护，必要时对 action path 做 QAT |
+| 短视频预测正常，长 rollout 漂移 | KV / memory / latent cache 误差累积 | 值得做 KV 或 latent cache fake quant 训练 |
+| 风险概率整体偏低 | risk head 校准被破坏 | 不宜激进低精，优先重校准和高精保留 |
+| kernel 支持 FP8 主干，但 connector 回退 | runtime 路径不一致 | 先修 kernel / layout，再考虑 QAT |
+| 低精 rollout 能省大量并发成本 | 系统收益明确 | 值得用小规模 QAT 换稳定上线 |
+
+世界模型 QAT 的目标不是“所有层都适应低精度”，而是让误差出现在不影响决策的地方。对接触、风险、动作输出这些小误差会放大的路径，保高精通常比强行 QAT 更划算。
+
 ## Kernel 决定收益是否兑现
 
 量化方案理论上好，不代表部署一定快。真正落点取决于 kernel 是否支持该 bit 宽和 packing，是否支持 group size、scale 粒度和 layout，是否能 fuse dequant、GEMM、bias、activation、requant，是否避免频繁 dequant-requant，是否能高效利用 Tensor Core、寄存器和带宽，以及是否与 serving runtime 的 batch 和 KV 管理兼容。
@@ -64,6 +78,47 @@ M_{\text{KV}}\sim
 KV 量化的收益直接作用于并发容量和长上下文成本，但风险也更大。decode 每步都依赖历史 KV，误差会持续影响输出；attention 对 K/V 误差的敏感度和层、head、位置有关；不同请求长度和动态 batch 会改变 cache 访问模式；KV scale、page layout、eviction 策略也会和 runtime 深度耦合。
 
 KV cache 量化必须在真实长上下文、长输出和多轮任务上验证，不能只看短文本困惑度。
+
+### rollout KV 量化：一笔显存账
+
+以 32 层、hidden size 4096、batch 16、上下文 8192、BF16 KV 为例，KV cache 近似为：
+
+\[
+2\times B\times L\times T\times d_{\text{model}}\times b
+=2\times16\times32\times8192\times4096\times2
+\approx64GiB
+\]
+
+如果 KV 改成 INT8 / FP8，理论上可降到约 32GiB，再加 scale metadata。对世界模型 rollout，这个差异很实际：同样显存下可以把候选动作数从 8 提到 16，或者把 horizon 从 4 秒拉到 8 秒。
+
+但 rollout KV 和普通聊天 KV 不一样。聊天任务里 KV 误差主要伤下一 token；世界模型里 KV 误差会伤未来 latent、动作分叉和风险估计。低精 KV 如果让“向左抓”和“向右推”的未来变得更像，规划器会以为动作无关紧要。
+
+### rollout KV 量化验收清单
+
+不要用单个 perplexity 或短视频 loss 验收 rollout KV。建议同时过四道门：
+
+| 门禁 | 指标 | 合格信号 |
+| --- | --- | --- |
+| 开环预测 | latent MSE / LPIPS / temporal consistency | 相对 BF16 只小幅退化，关键对象不漂移 |
+| 动作敏感性 | 不同动作未来差异、counterfactual ranking | 低精 KV 下 action ranking 不翻转 |
+| 风险校准 | collision / slip / lost-object ECE、near-miss recall | 风险不系统性偏低 |
+| 闭环收益 | success rate、recovery rate、collision rate、cost per success | 显存或吞吐收益没有被失败率吃掉 |
+
+一个实用灰度标准可以写成：在 hard replay 桶里，低精 KV 的动作候选排序与 BF16 一致率不低于 98%，near-miss recall 下降不超过 1 个百分点，闭环成功率下降不超过预设业务阈值；否则先只量化远期 memory KV，不量化当前窗口和风险相关层。
+
+### 硬证据模块：KV/QAT 必须用 world-model 指标验收
+
+KV cache 和 QAT 页最容易滑回通用 LLM 指标，例如 perplexity、MMLU 或 tokens/s。对世界模型来说，这些只能算基础门禁，真正要看低精度是否改变了未来分叉和风险排序。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | BF16 KV vs INT8/FP8 KV 的 GiB、带宽、latency 对比 | 文件小了，但 dequant/layout 让端到端不快 | KV GiB、kernel hit rate、P95 rollout latency |
+| Action sensitivity | 同一历史下 8 条候选动作的低精/高精未来排序 | 低精 KV 让 left/right/grasp 未来更像 | candidate ranking agreement、latent delta |
+| Risk calibration | hard-negative replay 上 risk head 对比 | 低精后滑落/碰撞风险系统性偏低 | near-miss recall、ECE、false negative |
+| Long-horizon consistency | 2s/8s/30s rollout 对比 | 远期 memory KV 压坏，物体身份漂移 | object permanence、latent drift |
+| 证据等级 | microbench、end-to-end latency、闭环小桶要分开报告 | 只给 KV kernel speedup，没有任务结果 | throughput + task bucket + failure replay |
+
+一个可接受的报告格式应写成：`INT8 rollout KV 让显存从 64GiB 降到 32GiB，单 kernel 1.6x，但端到端 rollout 只有 1.18x；hard replay 中 top-1 action ranking agreement 为 99.1%，near-miss recall 下降 0.4pp，因此只量化远期 KV 和非风险路径。` 如果缺少后半句，就还不是世界模型量化证据。
 
 ## 端到端链路
 

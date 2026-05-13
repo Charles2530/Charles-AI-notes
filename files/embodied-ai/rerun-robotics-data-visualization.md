@@ -4,8 +4,70 @@ Rerun 不是一个 VLA 模型，也不是仿真器。它更像具身智能系统
 
 Rerun 官方把它定位为面向 Physical AI 的 unified data layer，用于理解和改进包含 2D、3D、文本、时间序列和 tensor 的复杂多模态过程。官方文档还特别强调它服务 robotics、spatial computing、embodied AI、computer vision、simulation 等传感器随时间变化的系统。[Rerun 文档](https://rerun.io/docs/overview/what-is-rerun)里也说得很清楚：它不是训练平台、不是部署工具、也不是机器人操作系统，而是帮助准备数据、理解系统和调试开发链路的工具。
 
+!!! info "工具入口"
+    - 官网 / 产品入口：[rerun.io](https://rerun.io/)
+    - 官方说明：[What is Rerun?](https://rerun.io/docs/overview/what-is-rerun)
+    - Python 快速开始：[Log and Ingest](https://rerun.io/docs/getting-started/data-in)
+    - 示例库：[Rerun Examples](https://rerun.io/examples)
+    - Python API：[Rerun Python API](https://ref.rerun.io/docs/python/)
+
 !!! tip "主线定位：降低调试成本、数据清洗成本和评测错误成本"
     具身智能最贵的不是单次 forward，而是失败不可解释。Rerun 在世界模型和 VLA 主线里负责把多传感器日志、坐标系、动作、预测和真实结果对齐，降低定位失败、清洗数据和构建 hard set 的成本。
+
+## 先看它长什么样
+
+Rerun 的基本体验是：代码或日志把多模态数据送进 Rerun，Viewer 里同步显示 2D 图像、3D 场景、时间线、曲线和文本；需要做数据清洗或训练集构造时，再从 recording 查询 dataframe。
+
+![Rerun overview 官方效果图](../assets/images/tools/rerun/rerun-overview.png){ width="860" }
+
+<small>图源：[Rerun docs](https://rerun.io/docs/overview/what-is-rerun)。这张图说明 Rerun 的位置：SDK / data loader 把多模态 streams 送入 Viewer / Storage，用户既能配置 layout，也能查询结果。</small>
+
+下面是官方 quickstart 里第一次把 3D points 送进 Viewer 后的效果。对具身智能来说，把这里的 `Points3D` 换成点云、机械臂末端轨迹、抓取候选或相机坐标系，排查思路是一样的。
+
+![Rerun Points3D viewer 官方效果图](../assets/images/tools/rerun/rerun-first-points.png){ width="860" }
+
+<small>图源：[Rerun Log and Ingest](https://rerun.io/docs/getting-started/data-in)。官方示例用 `rr.Points3D` 记录两个螺旋点云，并在 Viewer 中交互查看。</small>
+
+时间线是 Rerun 对机器人特别有用的地方：同一个 step 上可以同时看 RGB、depth、点云、动作、控制状态和事件日志。
+
+![Rerun timeline 官方效果图](../assets/images/tools/rerun/rerun-timeline.png){ width="860" }
+
+<small>图源：[Rerun Log and Ingest](https://rerun.io/docs/getting-started/data-in)。时间线让多模态数据按 frame、step 或 sensor timestamp 对齐。</small>
+
+## 5 分钟跑通
+
+最小使用路径很简单：
+
+```bash
+pip install rerun-sdk
+```
+
+新建 `rerun_demo.py`：
+
+```python
+import numpy as np
+import rerun as rr
+
+rr.init("robot_debug_demo", spawn=True)
+
+for step in range(100):
+    rr.set_time_sequence("step", step)
+
+    points = np.random.randn(200, 3)
+    points[:, 2] += step * 0.01
+
+    rr.log("world/points", rr.Points3D(points, radii=0.02))
+    rr.log("metrics/gripper_width", rr.Scalar(0.08 - step * 0.0003))
+    rr.log("events/status", rr.TextLog("running"))
+```
+
+运行：
+
+```bash
+python rerun_demo.py
+```
+
+你应该看到 Rerun Viewer 被拉起，里面有一个 3D 点云、一个标量曲线和文本事件。这个 demo 还不是机器人系统，但它已经包含 Rerun 的三个核心动作：`init` 创建 recording，`set_time_sequence` 设定时间线，`log` 写入不同类型的数据。
 
 ## 它解决什么现场问题
 
@@ -84,9 +146,9 @@ Rerun 最适合放在下面这条链路中间：
 
 这和 [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) 的关系很直接：Sim2Real 页面讲“失败样本为什么值钱”，Rerun 负责让失败样本可看、可切片、可复盘、可导出。
 
-## 最小接入示意
+## 接到机器人日志里怎么写
 
-下面不是完整工程代码，而是展示应该记录哪些对象：
+真实接入时，不要只记 RGB 或最终 action。更实用的 recording 应该把观测、几何、动作、控制状态和事件标签落在同一条 timeline 上：
 
 ```python
 import rerun as rr
@@ -115,6 +177,18 @@ for step, sample in enumerate(episode):
 ```
 
 这段代码的重点不是 API 本身，而是记录粒度：观测、几何、动作、控制状态和事件标签要落在同一条 `step` timeline 上。
+
+## 常用对象速查
+
+| 想看什么 | 常用 Rerun 对象 | 具身智能里的用途 |
+| --- | --- | --- |
+| RGB / 深度 | `rr.Image`, `rr.DepthImage` | 检查相机画面、遮挡、深度边缘和异常曝光 |
+| 相机模型 | `rr.Pinhole` | 把 2D 像素和 3D 空间对应起来 |
+| 坐标系 / 外参 | `rr.Transform3D`, `rr.TransformAxes3D` | 检查 camera、base、end-effector 是否对齐 |
+| 点云 / 轨迹 | `rr.Points3D`, `rr.LineStrips3D` | 查看重建点云、抓取候选、末端轨迹 |
+| 标量曲线 | `rr.Scalar` | 看置信度、gripper width、力觉、速度、延迟 |
+| 文本事件 | `rr.TextLog` | 记录 failure reason、planner state、人工接管原因 |
+| 模型输出 | `rr.Tensor` 或结构化对象 | 保存 action chunk、logits、embedding 或中间特征 |
 
 ## 一个真实排查案例
 
@@ -169,4 +243,5 @@ Rerun 观察：RGB 检测框正确，depth 边缘破碎；点云投到 base fram
 ## 参考
 
 1. [What is Rerun?](https://rerun.io/docs/overview/what-is-rerun)
-2. [Rerun Documentation](https://rerun.io/docs)
+2. [Rerun Log and Ingest](https://rerun.io/docs/getting-started/data-in)
+3. [Rerun Documentation](https://rerun.io/docs)

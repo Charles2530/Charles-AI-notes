@@ -29,6 +29,20 @@ MagiAttention 讨论的不是“attention 又快了一点”这种单点优化�
 | 主要风险 | 依赖复杂调度、kernel 支持和训练数据形态；如果 workload mask 很规则或上下文不长，收益可能不足以覆盖系统复杂度 |
 | 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[训练路线图](../../training/index.md)、[算子与编译器](../../operators/index.md) |
 
+## 证据等级与外推边界
+
+MagiAttention 的证据主要是系统吞吐、负载均衡、通信冗余和长上下文 attention benchmark。它证明的是“异构 mask 下分布式 attention 可以更接近线性扩展”，不是证明某个 world model 训练目标更好。
+
+| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
+| --- | --- | --- | --- | --- |
+| 异构 mask 需要显式表达为可调度片段 | AttnSlice 抽象、mask pattern 图和 kernel 元数据 | System design | 视频/VLA 的 packed sequence、block-causal 和多段 memory 要先建模 mask | 不能说明所有训练都需要复杂 mask solver |
+| CP rank 负载不能只按 token 数切 | dispatch solver、mask area 均衡和 benchmark | System throughput + Ablation | world model 长序列训练要按有效 attention area 做 workload modeling | 不能把收益照搬到短序列或规则 full attention |
+| GroupCast/GroupReduce 减少冗余通信 | Ring P2P 冗余案例、通信路径设计 | System throughput | 长视频训练的通信优化要知道哪些 rank 真需要 KV/dKV | 不能证明通信永远是主瓶颈，GEMM/MLP 也可能接管 |
+| overlap solver 影响端到端扩展 | forward/backward timeline 和 CP benchmark | System throughput | 训练系统要同时报告 kernel、通信和 step time | 不能只用单 kernel numbers 判断训练收益 |
+| 复杂调度依赖 workload 分布 | chunk size、mask、CP size 和硬件拓扑 | Boundary condition | 世界模型应先采集真实 shape/mask 直方图再选方案 | 不能为小模型或离线实验引入过度复杂性 |
+
+这篇适合外推到世界模型的部分是“长视频训练的 attention 不是单 kernel 问题”。要先把 episode packing、因果 mask、memory token 和多相机 token 的真实形状画出来，再决定是否值得上 CP、AttnSlice 和通信重叠。
+
 ## 系统位置
 
 MagiAttention 的直接背景是 Magi-1 这类大规模自回归视频生成训练。视频 token 数本来就长，再加上 Patch-and-Pack 这类数据管线，实际 batch 里经常出现 variable-length sequences、block-causal attention、局部块和全局块混合等模式。结果是 mask 不再是简单 full 或 causal，而是很多不规则子区域拼出来的 heterogeneous mask。
@@ -128,7 +142,7 @@ n = \frac{seqlen}{chunk\_size}
 每个 chunk \(C_i\) 有对应的有效 mask area，记作 \(\mathrm{Area}(C_i)\)。dispatch solver 要把 chunks 分到 `cp_size` 个 buckets 中，并约束每个 bucket 的 chunk 数相同：
 
 \[
-f^\*=\arg\min_f \max_j \sum_{C_i \in B_j} \mathrm{Area}(C_i)
+f^*=\arg\min_f \max_j \sum_{C_i \in B_j} \mathrm{Area}(C_i)
 \]
 
 约束是：

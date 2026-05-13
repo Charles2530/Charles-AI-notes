@@ -14,6 +14,20 @@
 
     飞行员可以在模拟器里练紧急情况，但前提是模拟器不能在关键边界上胡编。世界模型合成 rollout 也一样：越接近事故边界，越需要额外校验，而不是因为画面合理就直接进训练集。
 
+## 硬证据模块：合成 rollout 必须有门禁日志
+
+合成 rollout 的证据不能是“生成了很多未来”。它必须说明这些未来解决哪项数据成本，哪些被拒绝，哪些进入训练，进入后是否改善目标失败桶。
+
+| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
+| --- | --- | --- | --- |
+| 本页解决哪项成本 | 用 imagined rollout 减少真实 near-miss 采集 | 合成样本多，但都远离真实失败边界 | accepted hard cases per GPU-hour |
+| 反事实局部性 | 固定历史，只改动作或场景一个变量 | 改了动作，背景和物体身份也乱变 | counterfactual consistency |
+| 门禁日志 | generated / rejected / accepted / human-reviewed 分桶 | 错误合成样本直接回流污染训练 | rejection rate、human agreement |
+| 风险校准 | 合成 near-miss 是否提升真实 near-miss recall | 模型把事故边界平滑成安全未来 | near-miss recall、false negative |
+| 闭环收益 | 回流前后固定任务桶对比 | 训练集变大，真实成功率不升 | target bucket success、cost per success |
+
+推荐把合成 rollout 分成四个出口：`train`、`risk-ranking`、`stress-test-only`、`reject`。高风险但未经验证的样本更适合进 `stress-test-only`，不要直接进入训练；这能避免世界模型把自己的幻觉蒸馏给策略。
+
 ## 世界模型为什么会模拟器化
 
 一旦模型能够学习：

@@ -1026,6 +1026,13 @@ body.atlas-lightbox-open {
   background: rgba(18, 95, 99, 0.04);
 }
 
+.md-typeset table .term-tip.term-auto,
+.md-typeset table a.term-tip.term-auto {
+  color: inherit;
+  font-weight: 700;
+  border-bottom-color: rgba(203, 93, 49, 0.42);
+}
+
 .md-typeset .admonition,
 .md-typeset details {
   border: 1px solid var(--atlas-line);
@@ -1174,6 +1181,11 @@ body.atlas-lightbox-open {
 .md-search__form {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
+}
+
+.md-tabs__link {
+  font-size: 0.68rem;
+  letter-spacing: 0;
 }
 
 .atlas-search-fallback__item .md-search-result__article {
@@ -1408,8 +1420,8 @@ body.atlas-lightbox-open {
 
 .atlas-reader-controls {
   position: fixed;
-  right: 1rem;
-  bottom: 1rem;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
   z-index: 60;
   display: flex;
   flex-wrap: wrap;
@@ -1494,6 +1506,27 @@ body.atlas-lightbox-open {
 
 body.atlas-wide .md-grid {
   max-width: min(100%, 92rem);
+}
+
+@media screen and (min-width: 76.25em) {
+  body.atlas-home .md-sidebar--primary {
+    display: none !important;
+  }
+
+  body.atlas-home .md-main__inner {
+    max-width: min(100%, 94rem);
+  }
+
+  body.atlas-home .md-content {
+    max-width: min(100%, 88rem);
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  body.atlas-home .md-content__inner {
+    margin-right: auto;
+    margin-left: auto;
+  }
 }
 
 body.atlas-focus .md-header,
@@ -1723,6 +1756,33 @@ body.atlas-zoom-2 .md-typeset {
 }
 
 @media screen and (max-width: 76.2344em) {
+  .md-sidebar--primary .md-nav[data-md-level="0"] > .md-nav__title {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: 4rem;
+    padding: 0.95rem 1rem 0.85rem 3.45rem;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .md-sidebar--primary .md-nav[data-md-level="0"] > .md-nav__title .md-logo,
+  .md-sidebar--primary .md-nav[data-md-level="0"] > .md-nav__title .md-nav__button.md-logo {
+    position: absolute;
+    left: 0.9rem;
+    top: 50%;
+    flex: 0 0 auto;
+    margin: 0;
+    transform: translateY(-50%);
+  }
+
+  .md-sidebar--primary .md-nav[data-md-level="0"] > .md-nav__title .md-ellipsis {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .md-sidebar--primary .md-sidebar__scrollwrap,
   .md-sidebar--secondary .md-sidebar__scrollwrap {
     border: 0;
@@ -1744,9 +1804,31 @@ body.atlas-zoom-2 .md-typeset {
 }
 
 @media screen and (max-width: 44.9375em) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  .md-main__inner,
+  .md-content,
+  .md-content__inner,
+  .hero-card,
+  .atlas-hero {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .md-typeset h1,
+  .atlas-hero h1,
+  .hero-card h1 {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
   .atlas-reader-controls {
-    right: 0.55rem;
-    bottom: 0.55rem;
+    right: max(0.55rem, env(safe-area-inset-right));
+    bottom: max(0.55rem, env(safe-area-inset-bottom));
     max-width: min(21rem, calc(100vw - 1.1rem));
     border-radius: 12px;
   }
@@ -1843,6 +1925,84 @@ body.atlas-zoom-2 .md-typeset {
     padding: 1.2rem 1.05rem;
     border-radius: 20px;
   }
+}
+
+.md-typeset .mermaid,
+.md-typeset pre.mermaid {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 1.15rem 0;
+  padding: 0.9rem;
+  overflow-x: auto;
+  border: 1px solid rgba(18, 95, 99, 0.12);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(238, 246, 244, 0.82), rgba(255, 246, 232, 0.58)),
+    rgba(255, 255, 255, 0.94) !important;
+  box-shadow: var(--atlas-shadow-soft);
+  color: var(--atlas-ink) !important;
+  font-family: var(--atlas-body-font);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.md-typeset pre.mermaid > code {
+  color: inherit !important;
+  background: transparent !important;
+}
+
+.md-typeset .mermaid svg {
+  display: block;
+  max-width: none;
+  height: auto;
+  margin: 0 auto;
+}
+
+.md-typeset .mermaid .node rect,
+.md-typeset .mermaid .node polygon,
+.md-typeset .mermaid .node circle,
+.md-typeset .mermaid .node ellipse {
+  rx: 8px;
+  ry: 8px;
+  fill: #fffdf8 !important;
+  stroke: #0f5558 !important;
+  stroke-width: 1.6px !important;
+}
+
+.md-typeset .mermaid text,
+.md-typeset .mermaid .label,
+.md-typeset .mermaid .nodeLabel,
+.md-typeset .mermaid .edgeLabel,
+.md-typeset .mermaid .edgeLabel p {
+  color: var(--atlas-ink) !important;
+  fill: var(--atlas-ink) !important;
+  font-size: 0.86rem !important;
+  line-height: 1.35 !important;
+}
+
+.md-typeset .mermaid .edgePath .path,
+.md-typeset .mermaid .flowchart-link {
+  stroke: #0f5558 !important;
+  stroke-width: 1.7px !important;
+}
+
+.md-typeset .mermaid .arrowheadPath,
+.md-typeset .mermaid marker path {
+  fill: #0f5558 !important;
+  stroke: #0f5558 !important;
+}
+
+.md-typeset .mermaid .edgeLabel,
+.md-typeset .mermaid .edgeLabel p {
+  background-color: #fffdf8 !important;
+}
+
+.md-typeset .mermaid.atlas-mermaid-error {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--atlas-code-fg);
+  background: linear-gradient(180deg, var(--atlas-code-bg-top), var(--atlas-code-bg-bottom));
+  font-family: var(--md-code-font-family);
 }
 
 @media print {
