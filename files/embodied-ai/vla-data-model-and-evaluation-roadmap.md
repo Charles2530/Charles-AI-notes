@@ -185,7 +185,7 @@ SpatialVLA 有几个关键设计：先用深度估计模型预测 depth，再用
 
 ### DepthVLA
 
-DepthVLA 强调深度和绝对尺度。它采用 MoT 结构，基于 π0 风格路线，使用 DA2 预训练权重，并通过尺度不变损失学习绝对尺度深度。数据上，它在 Galaxea Open-World 和 BridgeData 上预训练，在 Galaxea R1 Lite 以及 LIBERO / Simpler 等仿真环境里评估。
+DepthVLA 强调深度和绝对尺度。它采用 MoT 结构，基于 π0 风格路线，使用 [DA2](../paper-deep-dives/embodied-ai/depth-anything-v2.md) 预训练权重，并通过尺度不变损失学习绝对尺度深度。数据上，它在 Galaxea Open-World 和 BridgeData 上预训练，在 Galaxea R1 Lite 以及 LIBERO / Simpler 等仿真环境里评估。
 
 对抓取、放置、插入、避障来说，纯 RGB 很容易误判距离和遮挡。深度分支可以提供更稳定的空间推理，尤其适合陌生物体和复杂摆放。
 

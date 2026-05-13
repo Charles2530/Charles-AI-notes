@@ -65,7 +65,7 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 
 | 层级 | 先问的问题 | 相关页面 / 论文 |
 | --- | --- | --- |
-| 感知与状态 | 机器人现在看见什么、物体在哪里、自己状态是什么 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md)、[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) |
+| 感知与状态 | 机器人现在看见什么、物体在哪里、自己状态是什么 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[Depth Anything](../paper-deep-dives/embodied-ai/depth-anything.md)、[Depth Anything V2](../paper-deep-dives/embodied-ai/depth-anything-v2.md)、[VGGT](../paper-deep-dives/embodied-ai/vggt.md)、[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md)、[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) |
 | 语义与任务 | 高层目标要拆成哪些子任务，哪个对象当前最相关 | [π0.5](../paper-deep-dives/embodied-ai/pi05.md) |
 | 动作接口 | 动作是 token、末端位姿、关节角，还是一段 action chunk | [VLA 动作表示](../vla/action-representation-and-interfaces.md) |
 | 策略 / VLA | 给定观测和语言，下一段动作是什么 | [π0.5](../paper-deep-dives/embodied-ai/pi05.md)、[VLM/VLA 总览](../vlm/index.md) |
@@ -208,7 +208,7 @@ VLA 更像具身智能里的端到端策略接口之一。它回答的是：给�
 
 | 专题来源 | 具身系统层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
-| [Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md) | depth-ray、cross-view attention 和 teacher-student 深度监督把 RGB / 多视角 / 视频转成可融合点云、相机和 3DGS，是 VLA 与世界模型之前的几何状态层 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) |
+| [Depth Anything](../paper-deep-dives/embodied-ai/depth-anything.md)、[Depth Anything V2](../paper-deep-dives/embodied-ai/depth-anything-v2.md)、[VGGT](../paper-deep-dives/embodied-ai/vggt.md)、[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md) | DA1/DA2 提供开放域单目深度底座；VGGT 用 feed-forward Transformer 直接预测 camera、depth、point map 和 point tracks；DA3 再把单目深度扩展成 depth-ray、多视角点云、相机和 3DGS | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) |
 | [π0.5](../paper-deep-dives/embodied-ai/pi05.md) | heterogeneous co-training、FAST 动作离散化、flow matching action expert 和高层子任务预测说明开放家庭任务不能只靠单一机器人数据 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)、[具身任务谱系与评测](task-taxonomy-and-benchmarks.md) |
 | [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作既是策略输出，也是未来世界的条件变量；具身系统要评估不同动作会把场景带向哪里 | [规划、控制与安全](planning-control-and-safety.md)、[家庭机器人流程与失败排查](household-robotics-workflows-and-failure-patterns.md) |
 | [PlaNet](../paper-deep-dives/world-models/planet.md)、[Dreamer](../paper-deep-dives/world-models/dreamer.md) | latent dynamics、reward / continue prediction 和 imagined rollout 说明世界模型最有价值的用法是减少真实试错、提前评估风险 | [规划、控制与安全](planning-control-and-safety.md)、[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) |

@@ -20,6 +20,16 @@ paper_topic: 扩散模型
 
 如果说 [Diffusion Forcing](diffusion-forcing.md) 重点回答“序列扩散应该怎样表达不同时间 token 的不确定性”，CausVid 更进一步回答：“怎样把这种因果序列扩散真正做成低延迟视频生成系统”。
 
+## 它的效率贡献是什么
+
+| 维度 | 贡献 |
+| --- | --- |
+| 节省的成本 | 把多步双向视频扩散压成少步 causal streaming 生成，主要节省 rollout 推理延迟和长视频生成成本 |
+| 核心机制 | 双向 teacher 提供视频质量，causal student 满足流式依赖，KV cache 降低自回归 rollout 成本，DMD 蒸馏减少采样步数 |
+| 对世界模型主线的意义 | 交互式世界模型不能等完整视频离线生成；CausVid 展示了视频扩散如何被改造成可流式、可缓存、低延迟的 rollout 模块 |
+| 主要风险 | causal student 会面对误差累积和 chunk discontinuity；若缺少动作条件和闭环评测，它仍可能只是流式视频生成器，不一定是可决策世界模型 |
+| 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md)、[推理成本建模](../../inference/cost-modeling-and-slo-design.md) |
+
 ## 论文位置
 
 当前强视频扩散模型大多是 bidirectional video diffusion：模型在生成当前帧时会看整段视频 token，包括未来帧。这对离线生成很好，因为全局注意力能提高一致性；但对交互式应用很糟，因为用户必须等整段视频生成完，不能边生成边看，也不能在中途改变输入。

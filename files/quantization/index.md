@@ -2,6 +2,9 @@
 
 量化的目标，是用更少的比特表示权重和激活，从而降低显存、带宽和推理成本。
 
+!!! note "在主线里的位置"
+    量化在世界模型高效训练里解决的是显存、带宽、通信和 rollout 成本，但它不是“全模型一键降 bit”。视觉连接器、动作头、风险/安全头、长时序 KV cache 和 reward/value 相关模块常常比文本权重更敏感，必须按任务桶分别验收质量、延迟和失败模式。
+
 ![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="740" }
 
 <small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原论文图意：模型规模增长速度明显快于单卡 GPU 显存增长速度，量化要解决的首要问题就是把越来越大的模型放进有限显存和带宽预算里。</small>

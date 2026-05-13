@@ -22,9 +22,9 @@ DA3 的主线可以概括成一句话：把 Depth Anything 系列的单目深度
 
 这里有三条前置线索需要先分清：
 
-- `Depth Anything / DA`：核心是强单目深度估计。它把大规模视觉先验转成相对深度，对细节和开放域泛化很强，但主要处理单张图像。
-- `Depth Anything 2 / DA2`：是 DA 路线的更强版本，也是 DA3 对比和继承的重要对象。DA2 在单目相对深度上很稳，但它本身不解决多视角一致性、相机位姿和点云融合。
-- `VGGT`：是另一条 feed-forward visual geometry 路线，目标是一次前向预测 camera parameters、depth maps、point maps、tracks 等 3D 属性。DA3 和 VGGT 对的是同一类多视角几何问题，但 DA3 认为更简单的 depth-ray 目标和单个预训练 Transformer 更有效。
+- [Depth Anything / DA](depth-anything.md)：核心是强单目深度估计。它把大规模视觉先验转成相对深度，对细节和开放域泛化很强，但主要处理单张图像。
+- [Depth Anything 2 / DA2](depth-anything-v2.md)：是 DA 路线的更强版本，也是 DA3 对比和继承的重要对象。DA2 在单目相对深度上很稳，但它本身不解决多视角一致性、相机位姿和点云融合。
+- [VGGT](vggt.md)：是另一条 feed-forward visual geometry 路线，目标是一次前向预测 camera parameters、depth maps、point maps、tracks 等 3D 属性。DA3 和 VGGT 对的是同一类多视角几何问题，但 DA3 认为更简单的 depth-ray 目标和单个预训练 Transformer 更有效。
 
 所以 DA3 不是简单的 “DA2 + 多图输入”。它更像是把 DA/DA2 的深度细节、VGGT 的任意视角几何目标，以及具身系统需要的相机/点云/3DGS 接口合到了一起。
 
@@ -87,7 +87,7 @@ DA3 的训练有两层：先训练一个强单目 teacher，再用 teacher-stude
 
 ### Teacher 如何继承又改造 DA2
 
-论文明确说 teacher 是在 Depth Anything 2 路线上扩展出来的，但改了两个关键点。
+论文明确说 teacher 是在 [Depth Anything 2](depth-anything-v2.md) 路线上扩展出来的，但改了两个关键点。
 
 第一，数据更偏 synthetic geometry。真实 RGB-D、COLMAP 或 LiDAR 深度常常稀疏、噪声大、边界不干净；如果直接监督，会把错误深度也教给模型。因此 teacher 主要用高质量合成数据训练，再给真实数据生成更干净的 relative depth pseudo-label。
 

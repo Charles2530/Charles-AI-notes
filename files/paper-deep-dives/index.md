@@ -178,6 +178,18 @@
   </thead>
   <tbody>
     <tr>
+      <td>2024-01</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/depth-anything/">Depth Anything：大规模无标注单目深度</a></td>
+      <td>如何用 1.5M labeled images、62M unlabeled images、strong perturbation、CutMix 和 DINOv2 feature alignment 训练开放域相对深度基础模型</td>
+    </tr>
+    <tr>
+      <td>2024-06</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/depth-anything-v2/">Depth Anything V2：单目深度的数据配方</a></td>
+      <td>如何用 synthetic teacher、62M pseudo-labeled real images、DINOv2 + DPT 和 gradient matching loss 构建更细、更稳、更高效的单目深度底座</td>
+    </tr>
+    <tr>
       <td>2024-10</td>
       <td>具身智能</td>
       <td><a href="embodied-ai/gr2/">GR-2：Web 视频知识迁移到机器人</a></td>
@@ -194,6 +206,12 @@
       <td>具身智能</td>
       <td><a href="embodied-ai/spatialvla/">SpatialVLA：3D 空间表征接入 VLA</a></td>
       <td>如何用 Ego3D position encoding 和 adaptive action grids 把 3D 空间与跨机器人动作 token 接进 VLA</td>
+    </tr>
+    <tr>
+      <td>2025-03</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/vggt/">VGGT：feed-forward 3D 几何</a></td>
+      <td>如何用 DINOv2 tokenization、Alternating-Attention、多任务 loss 和 3D annotated datasets 一次前向预测 camera、depth、point map 与 point tracks</td>
     </tr>
     <tr>
       <td>2025-04</td>

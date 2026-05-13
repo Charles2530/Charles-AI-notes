@@ -15,6 +15,16 @@ paper_topic: 世界模型
 
 这篇论文是理解“交互轨迹驱动的 latent dynamics 世界模型路线”的核心入口。它不从大规模视频生成出发，而是从 agent 与环境交互产生的 \((x_t, a_t, r_t, c_t)\) 轨迹中学习世界模型，再在模型内部 rollout 出抽象未来，用这些 imagined trajectories 训练 actor 和 critic。
 
+## 它的效率贡献是什么
+
+| 维度 | 贡献 |
+| --- | --- |
+| 节省的成本 | 用 latent imagined rollout 替代大量真实环境试错，核心节省真实交互和策略训练样本成本 |
+| 核心机制 | RSSM 学习动作条件 latent dynamics，actor/critic 在模型内部生成的 imagined trajectories 上训练 |
+| 对世界模型主线的意义 | DreamerV3 是“内部模拟服务决策”的标杆：它不追求像素级视频质量，而是追求对 reward、continuation 和 policy improvement 有用的 latent |
+| 主要风险 | imagined rollout 一旦模型偏差累积，policy 会利用模型漏洞；跨到开放视觉/机器人任务时还需要更强状态表示和失败回流 |
+| 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md)、[RSSM、Dreamer 与规划](../../world-models/rssm-dreamer-and-planning.md) |
+
 ## 论文位置
 
 DreamerV3 和 [LingBot-World](lingbot-world.md)、[DreamZero](../embodied-ai/dreamzero.md) 的位置不同。LingBot-World 代表“视频生成模型路线”：先学会生成未来画面，再加入动作、交互、长记忆和实时化。DreamZero 则把视频基础模型改造成 joint video-action prediction，让 WAM 直接输出机器人动作。

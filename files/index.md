@@ -33,7 +33,7 @@
 <div class="atlas-meta-grid">
   <div>
     <strong>10 分钟抓主线</strong>
-    <p>先读高效训练路线图，只回答一个问题：这项技术到底降低了数据、token、显存、通信、rollout 还是评测成本。</p>
+    <p>先读高效训练路线图，再用端到端案例落地，只回答一个问题：这项技术到底降低了数据、token、显存、通信、rollout 还是评测成本。</p>
   </div>
   <div>
     <strong>1 小时补概念</strong>
@@ -79,6 +79,10 @@
   <a class="atlas-card" href="world-models/efficient-training-roadmap/">
     <strong>主线：世界模型高效训练</strong>
     <p>从数据效率、视觉 token、动作条件、长序列训练、低精度、rollout 到闭环评测建立总地图。</p>
+  </a>
+  <a class="atlas-card" href="world-models/action-conditioned-video-world-model-training-case/">
+    <strong>端到端训练案例</strong>
+    <p>用一个动作条件视频世界模型案例串起数据、动作、训练、推理、量化和闭环评测。</p>
   </a>
   <a class="atlas-card" href="foundations/">
     <strong>基础知识</strong>

@@ -20,6 +20,16 @@ paper_topic: 具身智能 / WAM
 
 > World Action Model 不只是模拟器，也可以是 zero-shot policy。
 
+## 它的效率贡献是什么
+
+| 维度 | 贡献 |
+| --- | --- |
+| 节省的成本 | 复用视频基础模型的世界先验，并通过 joint video-action prediction 减少从零训练机器人 policy 和收集大量目标机器人数据的需求 |
+| 核心机制 | 将未来视频 latent 和 action latent 放进同一个生成/去噪过程，推理时用真实观测刷新 KV cache 降低误差累积 |
+| 对世界模型主线的意义 | DreamZero 是 WAM 方向的关键例子：动作既是模型输出，也是未来世界分叉的条件，世界模型开始直接靠近 policy |
+| 主要风险 | 未来视频和动作联合生成如果缺少真实闭环校验，可能出现动作看似合理但执行不稳；跨机器人迁移仍受动作空间和控制器接口限制 |
+| 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[WM / WAM / VAM：动作条件建模](../../world-models/wm-wam-vam-and-action-conditioned-modeling.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md) |
+
 ## 论文位置
 
 DreamZero 位于 `video world model`、`WAM` 和 `robot policy` 的交叉处。它不是经典 Dreamer 那种只在 latent state 中预测 reward 和 continuation 的 model-based RL，也不是普通 VLA 那种直接从视觉语言映射到动作。

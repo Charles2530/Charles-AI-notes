@@ -36,6 +36,22 @@ p_\theta(z_{t+1:t+H}, x_{t+1:t+H}, r, d, u \mid z_{\le t}, a_{t:t+H-1}, c)
 | Rollout 效率 | 推理延迟、生成步数、KV 生命周期 | causalization、KV cache、few-step diffusion、DMD/consistency distillation | [推理](../inference/index.md)、[扩散蒸馏](../diffusion/consistency-models-and-rectified-flow.md) |
 | 验证效率 | 无效 demo、人眼主观判断、线上试错 | action sensitivity、temporal consistency、risk calibration、cost per successful rollout | [世界模型评测](evaluation-and-failure-modes.md)、[多模态评测](../vlm/multimodal-evaluation-and-failure-modes.md) |
 
+## 成本账：先把“高效”拆成可估算数字
+
+读任何方法前，先不要急着问“是不是最新”。更稳的做法是把它放进同一张成本账：它到底减少了哪一项，是否把成本转移到了另一项。
+
+| 成本项 | 粗略估算方式 | 常见放大因子 | 优先回看 |
+| --- | --- | --- | --- |
+| 真实交互 | 机器人小时数、环境重置次数、人工接管次数、失败回放时长 | reset 慢、长尾任务少、near-miss 没成桶 | [世界模型数据引擎](data-engines-and-self-improvement.md) |
+| 视频 token | 相机数 \(\times\) 帧数 \(\times\) 每帧 patch/token 数 \(/\) 压缩率 | 多相机、长 horizon、高分辨率、无选择性 resampler | [视觉 Tokenizer](../vlm/visual-tokenizers-and-connectors.md) |
+| 长序列训练 | 有效序列长度、padding 率、attention mask 复杂度、通信 payload | 变长轨迹、block mask、跨样本 packing、context parallel | [训练系统](../training/index.md)、[MagiAttention](../paper-deep-dives/foundations/magiattention.md) |
+| 动作条件 | 动作频率 \(\times\) horizon / chunk size，动作和观测时间戳误差 | 高频控制、动作太细、坐标系不统一、动作记录延迟 | [动作表示与控制接口](../vla/action-representation-and-interfaces.md) |
+| 数值显存 | 权重、激活、optimizer state、KV cache、通信 buffer 分别计算 | 低比特 kernel 未命中、敏感模块误压、KV 比权重更早爆 | [低比特训练](../training/low-bit-training-and-numerics.md)、[量化](../quantization/index.md) |
+| Rollout 推理 | \(T_{\text{observe}}+T_{\text{encode}}+T_{\text{rollout}}+T_{\text{policy}}+T_{\text{control}}\) | 采样步数多、KV 生命周期长、长短请求混排、risk head 旁路慢 | [推理成本建模](../inference/cost-modeling-and-slo-design.md) |
+| 闭环验证 | 场景桶数 \(\times\) rollout 次数 \(\times\) 重复实验 \(\times\) 人审/真机成本 | 只看 demo、没有反事实动作、失败样本不回流 | [世界模型评测](evaluation-and-failure-modes.md) |
+
+一个方法如果说自己“高效”，至少要能填出：节省哪一项、增加哪一项、证据是什么、失败时怎么回滚。比如视觉 tokenizer 省 token，但可能丢接触状态；KV 量化省显存，但可能伤长时一致性；少步视频生成省 rollout 延迟，但可能让 action sensitivity 下降。
+
 ## 一条推荐学习路径
 
 ```mermaid
@@ -55,7 +71,29 @@ flowchart LR
 2. 再读 [VLM/VLA 与世界模型高效训练接口](../vlm/vlm-vla-for-efficient-world-model-training.md)，理解视觉状态和动作数据从哪里来。
 3. 接 [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) 和 [WM/WAM/VAM](wm-wam-vam-and-action-conditioned-modeling.md)，分清 latent dynamics、视频未来预测和动作世界模型。
 4. 进入 [世界模型数据引擎](data-engines-and-self-improvement.md)，看失败、near-miss、反事实和合成 rollout 如何降低真实交互成本。
-5. 按瓶颈回到支撑专题：长序列看训练和算子，显存看量化，实时 rollout 看推理，闭环落地看具身智能。
+5. 用 [动作条件视频世界模型端到端训练案例](action-conditioned-video-world-model-training-case.md) 把数据、动作、训练系统、推理和评测串成一条完整链路。
+6. 按瓶颈回到支撑专题：长序列看训练和算子，显存看量化，实时 rollout 看推理，闭环落地看具身智能。
+
+## 主线必读 12 页
+
+如果读者只想抓住“世界模型高效训练技术”这一条主线，建议先把下面 12 页读成闭环。其它页面可以作为背景、查阅或论文扩展，不必一开始全刷。
+
+| 顺序 | 页面 | 读完要能回答 |
+| --- | --- | --- |
+| 1 | [世界模型路线图](index.md) | 世界模型和普通视频生成、VLM、VLA 的边界在哪里 |
+| 2 | [世界模型高效训练技术路线图](efficient-training-roadmap.md) | 高效训练到底省的是数据、token、显存、推理还是验证成本 |
+| 3 | [VLM/VLA 与世界模型高效训练接口](../vlm/vlm-vla-for-efficient-world-model-training.md) | 状态、动作、失败回流和闭环验证分别从哪里来 |
+| 4 | [视觉 Tokenizer、连接器与信息瓶颈](../vlm/visual-tokenizers-and-connectors.md) | 哪些视觉信息该保留，哪些 token 可以省 |
+| 5 | [视频表征、状态记忆与长时序压缩](../vlm/video-representation-and-memory.md) | 视频如何从多帧图片变成可预测状态 |
+| 6 | [动作表示与控制接口](../vla/action-representation-and-interfaces.md) | 动作粒度、坐标系、chunk 和控制器如何影响训练成本 |
+| 7 | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) | latent imagined rollout 如何节省真实交互 |
+| 8 | [WM / WAM / VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) | 动作如何成为未来分叉的条件，而不只是策略输出 |
+| 9 | [世界模型数据引擎与自我改进](data-engines-and-self-improvement.md) | near-miss、失败和反事实如何变成高价值训练数据 |
+| 10 | [动作条件视频世界模型端到端训练案例](action-conditioned-video-world-model-training-case.md) | 一条训练链路如何从数据 schema 跑到闭环评测 |
+| 11 | [推理成本建模与 SLO 设计](../inference/cost-modeling-and-slo-design.md) | rollout、KV、batch 和量化如何进入同一张请求成本账 |
+| 12 | [世界模型评测与失效模式](evaluation-and-failure-modes.md) | 如何证明世界模型真的改善决策，而不只是生成好看未来 |
+
+读完这 12 页后，再回到训练、推理、量化、算子和论文页，会更容易判断哪些内容是主线必需，哪些只是某个瓶颈下的工具。
 
 ## 支撑知识怎么保留
 

@@ -69,6 +69,8 @@ far large object   -> image also looks big
 !!! note "单目深度模型是不是能解决问题"
     单目深度网络可以从大量数据中学到“地面、桌面、物体大小、透视关系”等先验，所以能估一个看起来合理的深度图。但它不是几何测量：换一个新场景、新相机、新尺度物体时，绝对深度可能偏。机器人抓取和插入任务通常不能只依赖单目估计。
 
+    [Depth Anything](../paper-deep-dives/embodied-ai/depth-anything.md) 和 [Depth Anything V2](../paper-deep-dives/embodied-ai/depth-anything-v2.md) 这类模型的价值在于把单目相对深度的开放域鲁棒性和细节显著拉高，尤其对复杂场景、薄结构、透明/反光物体更有帮助。但基础模型仍输出相对深度，不等价于厘米级测距；需要绝对尺度时，还要接 metric fine-tuning、标定、多视角或 RGB-D。
+
 ## 3. 双目为什么能估计深度
 
 双目相机有两个相机，左右之间有固定距离 \(B\)，这个距离叫 baseline。两个相机从不同位置看同一个点，这个点在左右图像里的像素位置会不同，差值叫 disparity。

@@ -1,5 +1,6 @@
 (function () {
   const STORAGE_KEY = "atlas-reading-preferences";
+  const SIDEBAR_NAV_STORAGE_KEY = "atlas-sidebar-nav-open-topics";
 
   function loadPrefs() {
     try {
@@ -39,28 +40,157 @@
     return Array.from(parent ? parent.children : []).find((child) => child.matches(selector));
   }
 
-  function markPaperDeepDiveNav() {
-    document.querySelectorAll(".atlas-paper-nav-root, .atlas-paper-nav-topic").forEach((node) => {
-      node.classList.remove("atlas-paper-nav-root", "atlas-paper-nav-topic");
+  function loadSidebarNavState() {
+    try {
+      return JSON.parse(localStorage.getItem(SIDEBAR_NAV_STORAGE_KEY) || "{}");
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveSidebarNavState(state) {
+    try {
+      localStorage.setItem(SIDEBAR_NAV_STORAGE_KEY, JSON.stringify(state));
+    } catch (_) {
+      // Ignore storage failures in private browsing or locked environments.
+    }
+  }
+
+  function sidebarTopicLabel(item) {
+    const link = directChild(item, "label.md-nav__link");
+    if (link) return link.textContent.replace(/\s+/g, " ").trim();
+
+    const container = directChild(item, ".md-nav__container");
+    const anchor = directChild(container, "a.md-nav__link");
+    return anchor ? anchor.textContent.replace(/\s+/g, " ").trim() : "";
+  }
+
+  function sidebarTopicToggle(item) {
+    const link = directChild(item, "label.md-nav__link");
+    if (link) return link;
+
+    const container = directChild(item, ".md-nav__container");
+    return directChild(container, "label.md-nav__link");
+  }
+
+  function sidebarTopicHeader(item) {
+    return directChild(item, "label.md-nav__link") || directChild(item, ".md-nav__container");
+  }
+
+  function sidebarTopicKey(item) {
+    const primary = document.querySelector(".md-sidebar--primary");
+    const labels = [];
+    let current = item;
+
+    while (current && current !== primary) {
+      if (current.matches && current.matches(".md-nav__item--nested")) {
+        const label = sidebarTopicLabel(current);
+        if (label) labels.unshift(label);
+      }
+      current = current.parentElement ? current.parentElement.closest(".md-nav__item--nested") : null;
+    }
+
+    return labels.join(" / ");
+  }
+
+  function setSidebarTopicExpanded(item, expanded, persist) {
+    const input = directChild(item, "input.md-nav__toggle");
+    const nav = directChild(item, "nav.md-nav");
+    const link = sidebarTopicHeader(item);
+    const toggle = sidebarTopicToggle(item);
+    const label = sidebarTopicLabel(item);
+    const key = sidebarTopicKey(item);
+
+    item.classList.toggle("atlas-sidebar-nav-expanded", expanded);
+    item.classList.toggle("atlas-sidebar-nav-collapsed", !expanded);
+    item.classList.toggle("atlas-paper-nav-expanded", expanded);
+    item.classList.toggle("atlas-paper-nav-collapsed", !expanded);
+    item.dataset.atlasSidebarNavExpanded = String(expanded);
+
+    if (input) input.checked = expanded;
+    if (nav) nav.setAttribute("aria-expanded", String(expanded));
+    if (link) {
+      link.setAttribute("aria-expanded", String(expanded));
+      link.title = expanded ? `折叠 ${label}` : `展开 ${label}`;
+    }
+    if (toggle && toggle !== link) {
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.title = expanded ? `折叠 ${label}` : `展开 ${label}`;
+    }
+
+    if (persist && key) {
+      const state = loadSidebarNavState();
+      state[key] = expanded;
+      saveSidebarNavState(state);
+    }
+  }
+
+  function bindSidebarTopicToggle(item) {
+    const input = directChild(item, "input.md-nav__toggle");
+    const link = sidebarTopicToggle(item);
+    if (!input || !link || link.dataset.atlasSidebarNavBound) return;
+
+    const nav = directChild(item, "nav.md-nav");
+    if (nav && !nav.id) {
+      nav.id = `${link.getAttribute("for") || "atlas-sidebar-nav"}_panel`;
+    }
+
+    link.dataset.atlasSidebarNavBound = "true";
+    link.setAttribute("role", "button");
+    if (nav) link.setAttribute("aria-controls", nav.id);
+
+    input.addEventListener("change", () => {
+      setSidebarTopicExpanded(item, input.checked, true);
+    });
+
+    link.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setSidebarTopicExpanded(item, item.dataset.atlasSidebarNavExpanded !== "true", true);
+      }
+    });
+  }
+
+  function markSidebarTopicNav() {
+    document.querySelectorAll(".atlas-sidebar-nav-topic, .atlas-paper-nav-root, .atlas-paper-nav-topic").forEach((node) => {
+      node.classList.remove(
+        "atlas-sidebar-nav-topic",
+        "atlas-sidebar-nav-expanded",
+        "atlas-sidebar-nav-collapsed",
+        "atlas-paper-nav-root",
+        "atlas-paper-nav-topic",
+        "atlas-paper-nav-expanded",
+        "atlas-paper-nav-collapsed"
+      );
     });
 
     const primary = document.querySelector(".md-sidebar--primary");
     if (!primary) return;
 
-    const rootLink = Array.from(primary.querySelectorAll("a.md-nav__link[href]")).find((anchor) => {
-      return anchor.textContent.replace(/\s+/g, " ").trim() === "论文专题讲解";
-    });
-    const root = rootLink ? rootLink.closest(".md-nav__item--nested") : null;
-    if (!root) return;
+    const state = loadSidebarNavState();
+    primary.querySelectorAll(".md-nav__item--nested").forEach((item) => {
+      const input = directChild(item, "input.md-nav__toggle");
+      const link = sidebarTopicToggle(item);
+      const nav = directChild(item, "nav.md-nav");
+      const list = directChild(nav, "ul.md-nav__list");
+      const key = sidebarTopicKey(item);
+      const level = Number(nav ? nav.getAttribute("data-md-level") : 0);
 
-    root.classList.add("atlas-paper-nav-root");
+      if (!input || !link || !nav || !list || !key || level < 2) return;
 
-    const nav = directChild(root, "nav.md-nav");
-    const list = directChild(nav, "ul.md-nav__list");
-    Array.from(list ? list.children : []).forEach((item) => {
-      if (item.matches(".md-nav__item--nested")) {
-        item.classList.add("atlas-paper-nav-topic");
-      }
+      item.classList.add("atlas-sidebar-nav-topic");
+      if (key === "论文专题讲解") item.classList.add("atlas-paper-nav-root");
+      if (key.startsWith("论文专题讲解 /")) item.classList.add("atlas-paper-nav-topic");
+
+      const hasActivePage = !!item.querySelector(".md-nav__link--active, .md-nav__item--active");
+      const expanded = hasActivePage
+        ? true
+        : Object.prototype.hasOwnProperty.call(state, key)
+          ? !!state[key]
+          : false;
+
+      setSidebarTopicExpanded(item, expanded, false);
+      bindSidebarTopicToggle(item);
     });
   }
 
@@ -603,7 +733,7 @@
   function init() {
     if (!document.body) return;
     markPageContext();
-    markPaperDeepDiveNav();
+    markSidebarTopicNav();
     softenNumberedHeadings();
     mountReadingProgress();
     mountReaderControls();

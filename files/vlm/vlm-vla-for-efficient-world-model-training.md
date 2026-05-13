@@ -51,6 +51,7 @@ flowchart LR
 | VLA 动作如何接到未来预测 | [VLA 专题路线图](../vla/index.md)、[动作表示与控制接口](../vla/action-representation-and-interfaces.md) | 动作粒度如何影响 rollout 训练 |
 | 失败如何变成训练信号 | [VLA 评测与数据引擎](../vla/benchmarks-and-data-engines.md) | near-miss、恢复和人工纠错如何回流 |
 | 世界模型是否真的有用 | [多模态评测与失败模式](multimodal-evaluation-and-failure-modes.md)、[世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md) | 如何验证预测改善了闭环决策 |
+| 一条训练链路如何跑通 | [动作条件视频世界模型端到端训练案例](../world-models/action-conditioned-video-world-model-training-case.md) | 如何把状态、动作、训练系统、rollout 和评测连成案例 |
 
 ## 深度标杆页
 

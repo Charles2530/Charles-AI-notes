@@ -26,6 +26,13 @@ VLM 从图片开始，世界模型却必须处理时间。对 VLA 和世界模�
 
 这对高效训练很重要，因为像素级重建昂贵且容易把容量花在纹理上；latent prediction 更容易把学习压力放到对象、运动和结构上。
 
+![V-JEPA training procedure](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="760" }
+
+<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原论文图意：context encoder 只处理 masked video 中可见 token，predictor 结合 context output 和 mask tokens 去预测 target encoder 对完整视频产生的 masked token representations。</small>
+
+!!! note "图解：V-JEPA 支撑的是状态学习，不是像素复读"
+    V-JEPA 的目标不是把遮挡区域画得多清楚，而是在 latent space 预测被遮挡时空区域的表示。这给世界模型一个重要启发：视频状态应优先保留对象、运动、遮挡和上下文结构，而不是把容量花在纹理复原上。但 V-JEPA 仍缺动作条件、reward、risk 和 planner 接口，所以它更适合作为视频状态学习依据，而不是完整世界模型答案。
+
 ### 3. 记忆层级
 
 长视频不能把所有帧都放进上下文。更现实的做法是分层：
@@ -68,5 +75,16 @@ VLM 从图片开始，世界模型却必须处理时间。对 VLA 和世界模�
 | 时间一致性 | 物体进出遮挡后是否仍识别 | 物体持久性 |
 | 动作敏感性 | 同一画面接不同动作，未来是否分叉 | action conditioning |
 | 长时恢复 | 第 1 步约束在第 20 步是否仍有效 | 记忆保真 |
+
+## 真实排查案例：短视频指标好，长任务中忘了物体在哪里
+
+| 环节 | 观察 |
+| --- | --- |
+| 输入症状 | 模型在 2-4 秒短 clip 上预测稳定，但机器人把杯子移到遮挡区域后，后续 rollout 又把杯子预测回原位置 |
+| 指标 | short-horizon video loss 正常；object permanence、long-horizon consistency、closed-loop recovery 明显差 |
+| Trace / 回放观察 | 当前窗口只保留最近几帧，工作记忆没有记录“杯子已被移动”；遮挡发生后，模型回到训练集中最常见的桌面布局 |
+| 判断 | 视频 encoder 学到了局部运动，但没有把关键状态写入可持续记忆；这类错误短 horizon loss 很难暴露 |
+| 修复 | 给关键对象建立 memory token；加入遮挡前后身份一致性 loss；把长时失败、回到旧位置、任务阶段遗忘单独成桶回流 |
+| 反例 | 如果任务只是短视频问答或短片段摘要，当前窗口可能足够；只有当系统要做长时 VLA 或世界模型 rollout 时，长期状态才变成核心成本 |
 
 如果一个视频表征只在静态识别上好，却不能支撑动作敏感预测，它更适合 VLM，不适合作为世界模型的核心状态。

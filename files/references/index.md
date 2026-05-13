@@ -128,11 +128,11 @@
 ### 3.3 3D 感知、深度与几何底座
 
 1. [Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data](https://arxiv.org/abs/2401.10891)
-   DA 系列起点，用大规模未标注数据和辅助监督构建开放域单目深度 foundation model。
+   DA 系列起点，用大规模未标注数据、strong perturbation 和 DINOv2 feature alignment 构建开放域单目深度 foundation model；站内专题见 [Depth Anything 讲解](../paper-deep-dives/embodied-ai/depth-anything.md)。
 2. [Depth Anything V2](https://arxiv.org/abs/2406.09414)
-   DA2 强化 synthetic teacher、pseudo-labeled real images 和模型尺度，是理解 DA3 teacher-student 路线的前置文献。
+   DA2 强化 synthetic teacher、pseudo-labeled real images 和模型尺度，是理解 DA3 teacher-student 路线的前置文献；站内专题见 [Depth Anything V2 讲解](../paper-deep-dives/embodied-ai/depth-anything-v2.md)。
 3. [VGGT: Visual Geometry Grounded Transformer](https://arxiv.org/abs/2503.11651)
-   feed-forward 3D 几何路线，直接预测 camera parameters、depth maps、point maps 和 3D point tracks。
+   feed-forward 3D 几何路线，直接预测 camera parameters、depth maps、point maps 和 3D point tracks；站内专题见 [VGGT 讲解](../paper-deep-dives/embodied-ai/vggt.md)。
 4. [Depth Anything 3: Recovering the Visual Space from Any Views](https://arxiv.org/abs/2511.10647)
    从任意视角恢复一致 depth、ray、camera 和 3D geometry，并把 DA/DA2 单目深度能力推进到多视角几何；站内专题见 [Depth Anything 3 讲解](../paper-deep-dives/embodied-ai/depth-anything-3.md)。
 5. [ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/depth-anything-3)

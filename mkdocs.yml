@@ -57,20 +57,25 @@ nav:
   - 参考文献: references/index.md
   - 基础知识:
       - foundations/index.md
-      - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
-      - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
-      - 卷积与视觉特征: foundations/convolution-and-feature-extraction.md
-      - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
-      - Mamba 与混合 SSM 架构: foundations/mamba-and-hybrid-ssm-transformers.md
-      - Prompt、CoT 与 RAG 入门: foundations/prompt-engineering-cot-and-rag-basics.md
-      - 多模态推理入门: foundations/multimodal-cot-and-reasoning-basics.md
-      - 位置编码与 Mask：顺序和可见性: foundations/positional-encoding-masks-and-context.md
-      - Norm、残差与激活函数: foundations/normalization-residual-and-activation.md
-      - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
-      - 优化与训练入门: foundations/optimization-and-training-basics.md
-      - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
-      - 数据划分与评测指标: foundations/data-splits-metrics-and-evaluation-basics.md
-      - 数值、显存与运行时: foundations/numerics-memory-and-runtime-basics.md
+      - 表示与计算:
+          - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
+          - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
+          - 卷积与视觉特征: foundations/convolution-and-feature-extraction.md
+      - 结构与上下文:
+          - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
+          - 位置编码与 Mask：顺序和可见性: foundations/positional-encoding-masks-and-context.md
+          - Mamba 与混合 SSM 架构: foundations/mamba-and-hybrid-ssm-transformers.md
+          - Norm、残差与激活函数: foundations/normalization-residual-and-activation.md
+      - 交互与多模态:
+          - Prompt、CoT 与 RAG 入门: foundations/prompt-engineering-cot-and-rag-basics.md
+          - 多模态推理入门: foundations/multimodal-cot-and-reasoning-basics.md
+      - 训练目标与证据:
+          - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
+          - 优化与训练入门: foundations/optimization-and-training-basics.md
+          - 数据划分与评测指标: foundations/data-splits-metrics-and-evaluation-basics.md
+      - 系统执行与成本:
+          - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
+          - 数值、显存与运行时: foundations/numerics-memory-and-runtime-basics.md
   - 扩散模型:
       - diffusion/index.md
       - 机制与训练:
@@ -202,6 +207,7 @@ nav:
   - 世界模型:
       - world-models/index.md
       - 主线：世界模型高效训练: world-models/efficient-training-roadmap.md
+      - 端到端案例：动作条件视频世界模型训练: world-models/action-conditioned-video-world-model-training-case.md
       - 建模与规划:
           - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
           - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
@@ -257,6 +263,9 @@ nav:
           - GR-2：Web 视频知识迁移到机器人: paper-deep-dives/embodied-ai/gr2.md
           - VPP：预测表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
           - SpatialVLA：3D 表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
+          - Depth Anything：大规模无标注单目深度: paper-deep-dives/embodied-ai/depth-anything.md
+          - Depth Anything V2：单目深度数据配方: paper-deep-dives/embodied-ai/depth-anything-v2.md
+          - VGGT：feed-forward 3D 几何: paper-deep-dives/embodied-ai/vggt.md
           - Depth Anything 3：3D 几何底座: paper-deep-dives/embodied-ai/depth-anything-3.md
           - GR-3：少样本长时程 VLA: paper-deep-dives/embodied-ai/gr3.md
           - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md

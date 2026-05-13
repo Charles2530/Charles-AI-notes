@@ -122,11 +122,11 @@
 | `Action` | agent 或控制器执行的动作，在 LLM 中可对应 token，在机器人中可对应末端位姿或关节控制量。 |
 | `Advantage` | 某个动作相对当前状态平均预期有多好，常用于 PPO/GRPO 等策略更新。 |
 | `Bellman Equation` | 把当前价值拆成当前奖励和下一状态价值的递推关系，是 value learning 和 model-based planning 的基础。 |
-| `Depth Anything / DA` | 单目深度 foundation model 路线，重点是开放域相对深度和细节泛化。 |
-| `Depth Anything 2 / DA2` | DA 的更强版本，常作为单目深度基线或 teacher 参考；它本身主要解决单图深度，不直接给出多视角相机几何。 |
+| `Depth Anything / DA` | 单目深度 foundation model 路线，重点是开放域相对深度和细节泛化；站内专题见 [DA1 讲解](../paper-deep-dives/embodied-ai/depth-anything.md)。 |
+| `Depth Anything 2 / DA2` | DA 的更强版本，常作为单目深度基线或 teacher 参考；它用 synthetic teacher 和 pseudo-labeled real images 提升细节与鲁棒性，本身主要解决单图深度，不直接给出多视角相机几何；站内专题见 [DA2 讲解](../paper-deep-dives/embodied-ai/depth-anything-v2.md)。 |
 | `Depth Anything 3 / DA3` | 把 DA/DA2 的深度能力扩展到任意视角几何，输出 depth、ray、camera 和可融合 3D 表示；站内专题见 [DA3 讲解](../paper-deep-dives/embodied-ai/depth-anything-3.md)。 |
 | `Ray Map` | 每个像素对应的相机射线表示，通常包含 ray origin 与 ray direction。DA3 用 depth + ray 恢复 3D 点和相机几何。 |
-| `VGGT` | Visual Geometry Grounded Transformer，feed-forward 3D 几何模型，直接预测 camera parameters、depth maps、point maps 和 3D point tracks。 |
+| `VGGT` | Visual Geometry Grounded Transformer，feed-forward 3D 几何模型，直接预测 camera parameters、depth maps、point maps 和 3D point tracks；站内专题见 [VGGT 讲解](../paper-deep-dives/embodied-ai/vggt.md)。 |
 | `World Model` | 面向决策的环境预测模型，学习世界如何随动作、时间和目标变化。 |
 | `RSSM` | Recurrent State-Space Model，Dreamer 等 latent world model 的核心结构之一。 |
 | `MPC` | Model Predictive Control，滚动优化动作序列的经典规划方法。 |

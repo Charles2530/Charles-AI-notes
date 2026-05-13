@@ -16,6 +16,16 @@ paper_topic: 高效训练
 
 论文的答案不是“再加一个 outlier trick”，而是把问题推进到训练和 kernel 的交界处：attention 是融合算子，FlashAttention backward 会重算中间量并使用一些默认的高精度恒等式。普通 QAT 只把 forward 做成 FP4，再沿用 BF16 backward，会破坏这些隐含假设，导致梯度不稳。Attn-QAT 的核心贡献，就是把 4-bit attention 的 forward、backward 重计算、softmax 梯度和推理 kernel 放到同一套精度约束里重新设计。
 
+## 它的效率贡献是什么
+
+| 维度 | 贡献 |
+| --- | --- |
+| 节省的成本 | 降低 attention 的激活、带宽和推理 kernel 成本，为视频 DiT / 长序列世界模型进入 FP4 训练和部署提供路径 |
+| 核心机制 | forward 中模拟 FP4 attention，backward 重算也对齐低精度语义，并修正 FlashAttention softmax 梯度中的高精度恒等式假设 |
+| 对世界模型主线的意义 | 世界模型常被视频 token 和长序列 attention 卡住；Attn-QAT 展示低比特不能只压 GEMM，必须理解 fused attention 的 forward/backward/kernel 闭环 |
+| 主要风险 | 方法依赖专项 kernel 和 QAT 训练；视觉连接器、动作头、risk head 等敏感模块仍需保守精度，不能简单全模型 FP4 |
+| 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[低比特训练与数值格式](../../training/low-bit-training-and-numerics.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md) |
+
 ## 论文位置
 
 低比特训练和推理通常先从线性层开始。原因很直接：线性层就是矩阵乘，QAT 可以在 forward 里插入 fake quantization，用高精度 backward 近似梯度，再让权重适应低比特误差。

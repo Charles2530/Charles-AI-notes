@@ -2,6 +2,9 @@
 
 这一组页面是后续专题的公共底座。它不追求把数学、深度学习和系统工程全部讲完，而是把阅读扩散模型、VLM、VLA、量化、训练、推理和算子时最常反复出现的概念提前讲清。
 
+!!! note "在主线里的位置"
+    基础知识不是世界模型高效训练的终点，而是全站共用语言。读这里时优先抓住张量、token、attention、概率、优化、显存和 runtime 如何支撑后续的状态表示、动作条件、长序列训练与低比特系统；不必把它当成从头刷完的教材。
+
 ![Transformer architecture 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="500" .atlas-figure-tall }
 
 <small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原论文图意：展示 Transformer encoder-decoder 的整体结构，包括 token embedding、positional encoding、multi-head attention、feed-forward network、residual connection、normalization 和最终 softmax。</small>
@@ -39,22 +42,17 @@
 
 如果每个专题都从零解释，页面会重复且分散；如果完全不解释，初学者会很难把概念串起来。因此这里把通用部分抽出来，后面专题只需要链接回来。
 
-## 建议阅读顺序
+## 建议按折叠分组阅读
 
-1. [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)
-2. [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)
-3. [卷积与视觉特征](convolution-and-feature-extraction.md)
-4. [Transformer 输入与注意力](transformer-attention-and-tokenization.md)
-5. [Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)
-6. [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)
-7. [多模态推理入门](multimodal-cot-and-reasoning-basics.md)
-8. [位置编码与上下文 Mask](positional-encoding-masks-and-context.md)
-9. [Norm、残差与激活函数](normalization-residual-and-activation.md)
-10. [概率与潜变量模型](probability-latent-variables-and-generative-models.md)
-11. [优化与训练入门](optimization-and-training-basics.md)
-12. [自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)
-13. [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)
-14. [数值、显存与运行时](numerics-memory-and-runtime-basics.md)
+基础知识现在按“先看数据如何表示，再看模型如何处理，再看训练如何成立，最后看系统如何跑起来”的顺序组织。侧边栏里的二级分组可以折叠；读者不必一次展开全部，遇到后续专题卡壳时回到对应分组即可。
+
+| 分组 | 先解决的问题 | 页面 |
+| --- | --- | --- |
+| 表示与计算 | 数据如何变成张量，基础模块如何把张量变成特征 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)、[卷积与视觉特征](convolution-and-feature-extraction.md) |
+| 结构与上下文 | token 之间如何交互，长序列和深层网络为什么能工作 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md)、[位置编码与上下文 Mask](positional-encoding-masks-and-context.md)、[Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)、[Norm、残差与激活函数](normalization-residual-and-activation.md) |
+| 交互与多模态 | prompt、RAG、CoT、视觉和多模态上下文如何接到模型 | [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)、[多模态推理入门](multimodal-cot-and-reasoning-basics.md) |
+| 训练目标与证据 | 模型在优化什么，能力是否真的变好，评测证据是否可靠 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md)、[优化与训练入门](optimization-and-training-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
+| 系统执行与成本 | 训练为什么吃显存，低精度、runtime 和硬件瓶颈如何限制效率 | [自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
 
 ## 一条最短主线
 

@@ -13,6 +13,15 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 | 连接器 | projector、Q-Former、resampler、cross-attention | 如何控制 token 数和语义密度 | 回答泛泛、定位不准、细节丢失 |
 | 消费端 | LLM、policy head、world model latent | 如何服务语言、动作或未来预测 | 会描述但不会行动，或会行动但不能解释失败 |
 
+## 论文依据：BLIP-2 把连接器做成信息瓶颈
+
+![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="760" }
+
+<small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。原论文图意：冻结图像编码器，用 Q-Former 通过少量 query token 从视觉特征中抽取信息，并分别服务 image-text contrastive learning、image-grounded text generation 和 image-text matching。</small>
+
+!!! note "图解：连接器不是简单投影层"
+    这张图的关键是 query token：后续语言模型并不直接吞下所有图像 patch，而是通过一个可训练瓶颈读取视觉证据。放到世界模型高效训练里，问题会更尖锐：VLM 的 query 主要为当前问答服务，世界模型的视觉 latent 还必须保留未来预测、动作后果和风险判断需要的信息。因此连接器不能只按 VQA 分数选，还要按动作敏感性、接触状态和长时记忆验收。
+
 ## 为什么连接器是高效训练关键
 
 视觉 token 太多，会直接放大训练成本：
@@ -44,6 +53,22 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 
 这更接近长视频和世界模型场景：当前动作只需要一部分视觉证据，但失败恢复和反事实预测可能需要回看更早状态。
 
+## 一个 token 成本小账
+
+假设桌面机器人使用 4 路相机、16 帧历史，每帧视觉 encoder 输出 \(14\times14=196\) 个 patch token：
+
+\[
+4 \times 16 \times 196 = 12544
+\]
+
+这还没有算语言、动作、proprioception、memory 和未来预测 token。若连接器把每个相机帧压到 32 个任务 token，则视觉侧变成：
+
+\[
+4 \times 16 \times 32 = 2048
+\]
+
+序列长度下降约 6 倍，attention、激活显存和通信都会明显下降。但这个收益有前提：压缩后仍要保留目标物、夹爪、接触边界、遮挡前位置和多相机几何关系。否则 token 省下来了，world model 可能失去最关键的动作后果信号。
+
 ## 面向 VLA 的检查点
 
 判断一个视觉连接器是否适合 VLA，不要只看 VQA 分数，还要看：
@@ -64,6 +89,17 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 | latent 是否对动作敏感 | 动作不同但未来一样，说明状态压缩错了 |
 | token 数是否支持长 horizon | 视觉 token 过多会让长序列训练成本爆炸 |
 | 是否能接入 3D / 深度 / 位姿 | 机器人和自动驾驶常需要几何一致性 |
+
+## 真实排查案例：视觉 token 省了，抓取开始飘
+
+| 环节 | 观察 |
+| --- | --- |
+| 输入症状 | 换成更小 resampler 后，VQA 指标几乎不变，但机器人抓小物体时经常偏 2-4 cm，遮挡后更容易抓空 |
+| 指标 | token 数下降、step time 变好；grasp success、contact event accuracy、object permanence 明显下降 |
+| Trace / 回放观察 | attention 主要集中在物体大轮廓和语言目标，夹爪附近 crop、接触点和遮挡前位置 token 被压掉 |
+| 判断 | 连接器按语义问答压缩是成功的，但按动作和未来预测压缩是失败的 |
+| 修复 | 增加 gripper-centric crop token；给接触、目标物和遮挡区域更高采样权重；在评测中加入抓取点、接触事件和 action sensitivity |
+| 反例 | 如果任务只是图片问答或静态检索，这种压缩可能完全合理。问题不在 resampler 本身，而在把 VQA 合格误当成 VLA / world model 合格 |
 
 ## 一个实践建议
 

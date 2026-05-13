@@ -57,6 +57,7 @@
 | 阶段 | 本专题要回答的问题 | 对应入口 |
 | --- | --- | --- |
 | 高效训练主线 | 真实交互、视频 token、显存、通信、rollout 和评测成本如何一起降低 | [世界模型高效训练技术路线图](efficient-training-roadmap.md) |
+| 端到端案例 | 一个动作条件视频世界模型如何从数据、动作、训练、推理到评测跑通 | [动作条件视频世界模型端到端训练案例](action-conditioned-video-world-model-training-case.md) |
 | 工程地基 | 数据 schema、相机、pose、焊缝/物体状态是否稳定 | [世界模型开发路线](development-roadmap-data-simulation-and-evaluation.md) |
 | 内部模拟 | latent state 如何在动作条件下 rollout | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) |
 | 动作条件建模 | 未来视频、未来动作和 policy 如何接起来 | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
@@ -373,6 +374,7 @@ $$
 | 标杆页 | 对齐标准 |
 | --- | --- |
 | [世界模型高效训练技术路线图](efficient-training-roadmap.md) | 把数据、表示、动作、长序列、数值、rollout 和评测成本放到同一张主线图 |
+| [动作条件视频世界模型端到端训练案例](action-conditioned-video-world-model-training-case.md) | 用完整案例串起数据 schema、视觉 token、动作 chunk、长序列训练、低比特、rollout 和闭环评测 |
 | [WM / WAM / VAM：动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) | 清楚区分世界模型、动作世界模型和视频动作模型 |
 | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) | 解释 latent dynamics、imagined rollout 和样本效率 |
 | [世界模型数据引擎与自我改进](data-engines-and-self-improvement.md) | 把失败回放、合成 rollout 和数据回流接起来 |

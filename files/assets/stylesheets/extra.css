@@ -664,22 +664,222 @@ body {
   display: none;
 }
 
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__link {
+  position: relative;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container {
+  align-items: center;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container > .md-nav__link {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container > a.md-nav__link {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container > label.md-nav__link {
+  display: flex !important;
+  width: auto;
+  min-width: 2.45rem;
+  height: 1.45rem;
+  flex: 0 0 auto;
+  justify-content: center;
+  margin-left: 0.28rem;
+  padding: 0;
+  border-radius: 999px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container > label.md-nav__link .md-nav__icon {
+  display: none;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__link:focus-visible {
+  outline: 2px solid rgba(203, 93, 49, 0.35);
+  outline-offset: 2px;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__link .md-nav__icon {
+  order: 3;
+  margin-left: 0.2rem;
+  color: var(--atlas-teal);
+  transform: rotate(0deg);
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__link::after {
+  content: "展开";
+  order: 2;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0.1rem 0.34rem;
+  border: 1px solid rgba(18, 95, 99, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--atlas-teal);
+  font-size: 0.52rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container::after {
+  content: none;
+  display: none;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container > label.md-nav__link::after {
+  content: "展开";
+  flex: 0 0 auto;
+  padding: 0.1rem 0.34rem;
+  border: 1px solid rgba(18, 95, 99, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--atlas-teal);
+  font-size: 0.52rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic.atlas-sidebar-nav-expanded > .md-nav__link::after,
+.md-sidebar--primary .atlas-sidebar-nav-topic > input.md-nav__toggle:checked ~ .md-nav__link::after {
+  content: "收起";
+  border-color: rgba(203, 93, 49, 0.2);
+  color: var(--atlas-accent-deep);
+  background: rgba(255, 245, 238, 0.86);
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic.atlas-sidebar-nav-expanded > .md-nav__container::after,
+.md-sidebar--primary .atlas-sidebar-nav-topic > input.md-nav__toggle:checked ~ .md-nav__container::after {
+  content: none;
+  display: none;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic.atlas-sidebar-nav-expanded > .md-nav__container > label.md-nav__link::after,
+.md-sidebar--primary .atlas-sidebar-nav-topic > input.md-nav__toggle:checked ~ .md-nav__container > label.md-nav__link::after {
+  content: "收起";
+  border-color: rgba(203, 93, 49, 0.2);
+  color: var(--atlas-accent-deep);
+  background: rgba(255, 245, 238, 0.86);
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic.atlas-sidebar-nav-expanded > .md-nav__link .md-nav__icon,
+.md-sidebar--primary .atlas-sidebar-nav-topic > input.md-nav__toggle:checked ~ .md-nav__link .md-nav__icon {
+  color: var(--atlas-accent-deep);
+  transform: rotate(90deg);
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic.atlas-sidebar-nav-collapsed > .md-nav {
+  display: none;
+}
+
+.md-sidebar--primary .atlas-sidebar-nav-topic.atlas-sidebar-nav-expanded > .md-nav,
+.md-sidebar--primary .atlas-sidebar-nav-topic > input.md-nav__toggle:checked ~ .md-nav {
+  display: block;
+}
+
 body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > .md-nav__link {
+  position: relative;
   margin-top: 0.28rem;
   border: 1px solid rgba(18, 95, 99, 0.12);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.7);
   font-weight: 800;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > .md-nav__link:hover {
   background: rgba(238, 246, 244, 0.92);
 }
 
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > .md-nav__link:focus-visible {
+  outline: 2px solid rgba(203, 93, 49, 0.35);
+  outline-offset: 2px;
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > .md-nav__link .md-nav__icon {
+  order: 3;
+  margin-left: 0.2rem;
+  color: var(--atlas-teal);
+  transform: rotate(0deg);
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > .md-nav__link::after {
+  content: "展开";
+  order: 2;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0.12rem 0.38rem;
+  border: 1px solid rgba(18, 95, 99, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--atlas-teal);
+  font-size: 0.56rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic.atlas-paper-nav-expanded > .md-nav__link::after {
+  content: "收起";
+  border-color: rgba(203, 93, 49, 0.2);
+  color: var(--atlas-accent-deep);
+  background: rgba(255, 245, 238, 0.86);
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > input.md-nav__toggle:checked ~ .md-nav__link::after {
+  content: "收起";
+  border-color: rgba(203, 93, 49, 0.2);
+  color: var(--atlas-accent-deep);
+  background: rgba(255, 245, 238, 0.86);
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic.atlas-paper-nav-expanded > .md-nav__link .md-nav__icon {
+  color: var(--atlas-accent-deep);
+  transform: rotate(90deg);
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > input.md-nav__toggle:checked ~ .md-nav__link .md-nav__icon {
+  color: var(--atlas-accent-deep);
+  transform: rotate(90deg);
+}
+
 body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > .md-nav {
   margin-top: 0.22rem;
   margin-left: 0.35rem;
   border-left: 1px solid rgba(18, 95, 99, 0.12);
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic.atlas-paper-nav-collapsed > .md-nav {
+  display: none;
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic > input.md-nav__toggle:checked ~ .md-nav {
+  display: block;
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic.atlas-paper-nav-collapsed > .md-nav__link {
+  background: rgba(238, 246, 244, 0.72);
+}
+
+body.atlas-paper-deep-dive .md-sidebar--primary .atlas-paper-nav-topic.atlas-paper-nav-expanded > .md-nav__link {
+  background:
+    linear-gradient(135deg, rgba(18, 95, 99, 0.1), rgba(203, 93, 49, 0.06)),
+    rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 18px rgba(20, 41, 43, 0.05);
 }
 
 body.atlas-lightbox-open {
@@ -877,6 +1077,13 @@ body.atlas-lightbox-open {
   box-shadow: 0 10px 18px rgba(20, 41, 43, 0.06);
 }
 
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container > .md-nav__link,
+.md-sidebar--primary .atlas-sidebar-nav-topic > .md-nav__container > .md-nav__link--active {
+  border: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .md-sidebar--primary .md-nav__item .md-nav {
   margin: 0.18rem 0.45rem 0.42rem 0.95rem;
   padding-left: 0.72rem;
@@ -895,6 +1102,26 @@ body.atlas-lightbox-open {
   height: 0.34rem;
   border-radius: 999px;
   background: rgba(18, 95, 99, 0.28);
+}
+
+.md-sidebar--primary .md-nav__item .md-nav .atlas-sidebar-nav-topic > .md-nav__link::before {
+  content: none;
+  display: none;
+}
+
+.md-sidebar--primary .md-nav__item .md-nav .atlas-sidebar-nav-topic > .md-nav__container::before,
+.md-sidebar--primary .md-nav__item .md-nav .atlas-sidebar-nav-topic > .md-nav__container > .md-nav__link::before {
+  content: none;
+  display: none;
+}
+
+.md-sidebar--primary .md-nav__item .md-nav .atlas-sidebar-nav-topic > .md-nav__link .md-ellipsis {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.md-sidebar--primary .md-nav__item .md-nav .atlas-sidebar-nav-topic > .md-nav__link::after {
+  white-space: nowrap;
 }
 
 .md-sidebar--primary .md-nav__item .md-nav .md-nav__item--active > .md-nav__link::before,
