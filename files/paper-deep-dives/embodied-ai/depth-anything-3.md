@@ -187,6 +187,109 @@ Python API 的核心接口是 `DepthAnything3.from_pretrained(...).inference(...
 
 CLI 则更适合批处理：可以对图片集、视频帧目录或机器人采集序列直接导出 `glb`、`ply`、`npz`、depth images、3DGS video 等结果。对具身数据管线来说，这意味着 DA3 可以作为“把 RGB 轨迹转成几何资产”的中间层：先跑 DA3 得到 depth / pose / point cloud，再交给抓取候选生成、可达性检查、仿真资产构建或数据质检。
 
+### 本地 demo：SOH 两视角导出点云
+
+下面这个命令可以当作仓库 CLI 的最小可读案例：
+
+```bash
+da3 auto assets/examples/SOH \
+  --model-dir depth-anything/DA3-SMALL \
+  --export-format mini_npz-glb \
+  --export-dir workspace/demo_soh \
+  --process-res 336 \
+  --auto-cleanup
+```
+
+这次运行可以理解成：把 `assets/examples/SOH` 里的两张图当作同一个场景的多视角输入，分别估计深度、相机内外参，再融合导出一个 3D 点云场景。输入目录里有：
+
+```text
+assets/examples/SOH/000.png
+assets/examples/SOH/010.png
+```
+
+把输入图也放进日志里会更直观：读者可以先看到两个 view 只是相机位置略有变化，后面再理解为什么 DA3 能把它们当作同一场景融合。
+
+| View 0：`000.png` | View 1：`010.png` |
+| --- | --- |
+| ![DA3 SOH 示例输入 view 0](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-input-view-000.png){ width="360" } | ![DA3 SOH 示例输入 view 1](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-input-view-010.png){ width="360" } |
+
+<small>图源：DA3 的 GitHub 示例图片。两张图来自同一个场景，是悉尼歌剧院附近的相邻视角，适合作为多视角几何恢复 demo。</small>
+
+它们会按文件名排序，作为第 0、1 个 view 输入。原图是 `1208x680`，推理时长边被缩到 `336`，并调整到 patch size 的倍数，所以日志里看到：
+
+```text
+torch.Size([2, 3, 196, 336])
+```
+
+含义是 `2` 张图，`3` 个 RGB 通道，处理后高度 `196`、宽度 `336`。这也提醒一个容易漏掉的点：后面导出的内参对应的是处理后的 `336x196` 分辨率，而不是原始 `1208x680`。
+
+输出目录是 `workspace/demo_soh`，关键文件可以这样读：
+
+| 文件 | 作用 | 怎么看 |
+| --- | --- | --- |
+| `scene.glb` | 融合后的 3D 点云 / 相机场景 | 用 GLB viewer 打开，快速检查两张图是否拼到同一几何空间里 |
+| `scene.jpg` | 快速预览图 | 这次实际是第 0 张 `depth_vis`，适合打开目录时先看一眼结果 |
+| `depth_vis/0000.jpg` | 第 0 张输入图的深度可视化 | 看近远关系是否合理，薄结构、边缘和遮挡处是否破碎 |
+| `depth_vis/0001.jpg` | 第 1 张输入图的深度可视化 | 和第 0 张一起检查跨视角深度是否一致 |
+| `exports/mini_npz/results.npz` | 数值结果 | 后续接点云融合、数据质检、机器人几何管线时主要读这个 |
+
+对应的 `depth_vis` 可以一起作为运行日志保存。每张图左侧是处理后的输入视图，右侧是 DA3 产生的深度伪彩色可视化：
+
+| `depth_vis/0000.jpg` | `depth_vis/0001.jpg` |
+| --- | --- |
+| ![DA3 SOH view 0 depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0000.jpg){ width="420" } | ![DA3 SOH view 1 depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0001.jpg){ width="420" } |
+
+<small>图源：输入图来自 DA3 的 GitHub 示例图片；右侧深度图是用上面命令在本地运行 DA3 后生成的 `depth_vis` 输出。暖色区域通常表示相对更近，冷色区域通常表示相对更远，重点是看同一建筑轮廓在两个 view 中是否保持一致。</small>
+
+`results.npz` 里这次包含四类数组：
+
+| 字段 | 形状 | 含义 |
+| --- | --- | --- |
+| `depth` | `(2, 196, 336)` | 每张图的深度 |
+| `conf` | `(2, 196, 336)` | 每个深度像素的置信度 |
+| `extrinsics` | `(2, 3, 4)` | 每个 view 的相机外参，方向是 `world-to-camera` |
+| `intrinsics` | `(2, 3, 3)` | 每个 view 的相机内参，对应处理后的 `336x196` 图像 |
+
+实际 inspect 一遍 `results.npz`，可以把下面这张表当作运行日志里的“数值体检”：
+
+| 字段 | dtype | min / max / mean | 读法 |
+| --- | --- | --- | --- |
+| `depth` | `float32` | `0.5287 / 3.5556 / 1.4738` | 深度值范围正常，但这里是相对几何尺度，不能直接解释成米 |
+| `conf` | `float32` | `1.0000 / 2.8500 / 1.4005` | 置信度不是 0 到 1 概率，更适合做相对过滤和低质量像素筛选 |
+| `extrinsics` | `float32` | `-0.2169 / 1.0000 / 0.2439` | 这是两个 `3x4` 的 `world-to-camera` 矩阵；统计值只能检查是否有限、是否量级异常，真正调试要看矩阵本身 |
+| `intrinsics` | `float32` | `0.0000 / 420.9074 / 113.4363` | 内参对应处理后分辨率；第一张图里能看到 \(c_x=168\)、\(c_y=98\)，正好接近 `336x196` 的图像中心 |
+
+??? note "`results.npz` inspect 摘要"
+
+    ```text
+    keys (4): ['depth', 'conf', 'extrinsics', 'intrinsics']
+
+    depth:      shape (2, 196, 336), dtype float32, min 0.5287, max 3.5556, mean 1.4738
+    conf:       shape (2, 196, 336), dtype float32, min 1.0000, max 2.8500, mean 1.4005
+    extrinsics: shape (2, 3, 4),     dtype float32, min -0.2169, max 1.0000, mean 0.2439
+    intrinsics: shape (2, 3, 3),     dtype float32, min 0.0000, max 420.9074, mean 113.4363
+    ```
+
+这段日志对博客是有用的，因为它把“模型输出了什么”从概念变成了可复现的数组契约。读者照着这四个字段，就能知道后处理代码该读取哪些 key、按什么形状遍历、哪些值能做点云、哪些值只能做质量筛选。
+
+这里用的是 `DA3-SMALL`，它属于 any-view / relative depth 模型，不是 metric depth 专用模型。因此 `depth` 里的数值更适合理解为模型内部一致的相对深度尺度，用于重建和相对几何；不要直接当成真实世界的“米”。如果要做机器人抓取距离、避障安全距离或尺寸测量，就需要 metric 模型、真实 RGB-D / 双目、标定尺度，或额外的尺度对齐。
+
+日志里几个关键项也很有信息量：
+
+```text
+Detected input type: IMAGES
+Auto-cleaning existing export directory: workspace/demo_soh
+conf_thresh_percentile: 40.0
+num max points: 1000000
+```
+
+`Detected input type: IMAGES` 说明 `da3 auto` 判断输入是图片目录。`--auto-cleanup` 会让旧的 `workspace/demo_soh` 输出被清掉后重新生成。`conf_thresh_percentile: 40.0` 表示导出 `scene.glb` 时会按置信度过滤低质量点；`num max points: 1000000` 表示最多保留 100 万个点。这次只有 `2 * 196 * 336 = 131712` 个像素点，所以上限不是瓶颈。
+
+!!! warning "目录输入不是无关图片批处理"
+    这里最重要的输入理解是：目录输入不是“批量处理两张无关图片”，而是“把多张图片当作同一场景的多视角输入”。如果两张图是同一物体或同一场景的不同视角，`scene.glb` 才有几何意义；如果是完全无关的两张图，建议分开跑，每张图一个输出目录。
+
+放到具身智能里看，这个 demo 是一个很小但很实用的桥：它把普通 RGB 多视角图像转成 `depth + confidence + camera pose + point cloud`。这些结果可以继续接到点云融合、可见性检查、抓取候选生成、世界模型数据质检，或者仿真资产构建流程里。
+
 `DA3-Streaming` 是仓库里值得单独看的部分。它基于 DA3 和 VGGT-Long 思路，用滑窗 chunk 处理超长视频，输出 `camera_poses.txt`、`intrinsic.txt` 和融合点云。README 报告在 A100 上接近 10 FPS 的视频处理速度，并给出 KITTI / TUM RGB-D 的 ATE RMSE 对比。这个模块的意义不是替代成熟 SLAM，而是把 DA3 的几何先验变成更适合长序列工程处理的形态。
 
 ## 对具身智能的启发

@@ -17,6 +17,10 @@
 
     噪声日程像调一块可控雾化玻璃：低噪声时还能看清边缘，高噪声时只剩大概轮廓。训练材料如果总停在轻雾区，模型会擅长修细节；如果总停在浓雾区，模型会更会猜语义但容易丢纹理。
 
+!!! tip "主线定位：降低训练成本、少步采样成本和评测错误成本"
+
+    噪声日程页在世界模型高效训练中负责回答：模型应该在哪些不确定性区间花容量，少步采样时哪些误差会被放大，训练 loss 为什么不能只看总平均。它能降低无效训练成本和 rollout 成本；若日程、参数化和 sampler 不匹配，省下的步数会以视频闪烁、动作不敏感或长尾风险漏报的形式还回来。
+
 ## 1. 噪声日程到底在决定什么
 
 在离散扩散里，正向过程通常写成：
@@ -265,6 +269,39 @@ x_\phi = \cos\phi\,x_0 + \sin\phi\,\epsilon
 因此合理做法不是“分别调最优”，而是把噪声日程、参数化、loss weighting 和 sampler 放在同一框架下考虑：日程决定训练样本落在哪些噪声区间和 SNR 如何变化，参数化决定模型用 \(\epsilon\)、\(x_0\)、score 还是 \(v\) 这样的坐标来学习，loss weighting 决定不同噪声区间的误差在优化里有多重要，sampler 决定推理时如何把学到的向量场离散成有限步更新。
 
 更直白地说，日程决定“样本在哪些噪声段被看到得更多”，参数化决定“模型用什么坐标系理解这些噪声段”，reweighting 决定“哪些段更值得认真学”，而 sampler 决定“这些训练成果最终如何被兑现”。它们像同一条链上的四个齿轮，只要有一个齿轮啮合不顺，整条链都会表现怪异。
+
+![EDM sampler design space 原论文图](../assets/images/paper-figures/diffusion/edm-figure-2-sampler-design-space.png){ width="920" }
+
+<small>图源：[Elucidating the Design Space of Diffusion-Based Generative Models](https://arxiv.org/abs/2206.00364)，Figure 2。原论文图意：在三个预训练模型上比较确定性采样设计，横轴是 NFE，纵轴是 FID；重新实现、Heun、噪声日程 \(\sigma(t)\) 和 scaling \(s(t)\) 等改动会显著改变少步质量。</small>
+
+!!! note "图解：这张图支撑的是联动设计判断"
+    EDM 图里最有用的不是某条曲线“更好看”，而是同一个预训练模型在不同 sampler、时间离散、\(\sigma(t)\) 与 scaling 组合下，少步 FID 会明显变化。这说明噪声日程、参数化、solver 和步数预算是一个联合设计空间；把其中一个当独立开关，常会得到短跑漂亮、少步采样崩的结果。
+
+### 8.1 真实排查：总 loss 下降，4-step 视频更抖
+
+假设一个视频扩散世界模型换成新的 loss weighting 后，训练总 loss 从 `0.162` 降到 `0.151`，但 `4-step` 采样的未来视频出现身份闪烁，闭环 planner 的 risk recall 也下降：
+
+```text
+total_loss=0.162 -> 0.151
+low_noise_loss=0.041 -> 0.033
+mid_noise_loss=0.088 -> 0.091
+high_noise_loss=0.231 -> 0.255
+4_step_fvd=168 -> 214
+risk_recall=72.4% -> 61.8%
+```
+
+这时问题不应归因成“模型变差”。更可能是新权重让低噪声细节区间占了更多梯度，训练平均 loss 更低；但少步采样依赖中高噪声区间快速定结构和动作后果，高噪声区学弱后，`4-step` 没有足够机会修正早期错误。
+
+排查链应该写成：
+
+```text
+症状：训练 loss 更好，但少步视频抖、动作后果不敏感
+指标：按 SNR/timestep 分桶 loss、4/8/16 step 质量曲线、action sensitivity、risk recall
+机制：loss weighting 改变容量分配；少步 solver 放大中高噪声区误差
+修复：恢复中高噪声权重、按采样步数做验证、调 sigma grid、换 Heun/solver 或做少步蒸馏
+反例：如果部署只用 50-step 离线生成，低噪声细节权重更高可能是值得的
+边界：用于在线控制时，少步闭环指标比总 loss 更优先
+```
 
 ## 9. 三个实践场景
 

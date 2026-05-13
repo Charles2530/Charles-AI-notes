@@ -18,6 +18,13 @@
 
     推理量化像把账本复印得更省纸，偶尔字边缘模糊还能读；低比特训练像每天都用更粗的笔继续记账，写错的数字会进入下一天的余额。训练里的低精度误差会被参数更新继承，所以比部署后压缩更敏感。
 
+!!! tip "为什么现在要学这个：FP8、KV INT8 和世界模型效率"
+    世界模型的低比特问题不只在权重。长视频训练会被 activation cache 和通信 payload 卡住，长上下文 rollout 会被 KV cache 和 HBM 带宽卡住，闭环服务还会被低精度 kernel 是否成熟影响延迟。`FP8` 主要服务训练吞吐、激活和通信；`KV INT8` 更常服务长上下文推理显存和 decode 带宽。真正要比较的是“显存下降、token/s 上升、loss/成功率不掉、长时一致性不坏”这四件事是否同时成立。
+
+![DeepSeek-V3 FP8 framework 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="920" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原论文图意：DeepSeek-V3 展示 FP8 训练框架中不同张量、缩放策略和高精度保护路径的组织方式，说明低精度训练是数值系统设计，而不是单纯把 dtype 改小。</small>
+
 ## 1. 为什么这属于训练重点内容
 
 训练时，模型每一步都会经过前向计算、loss 计算、反向传播、梯度规约、优化器更新，以及 checkpoint 保存与恢复。每一步都可能被低精度影响。

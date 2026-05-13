@@ -89,3 +89,67 @@ shape specialization 是有价值的，但如果没有 fallback，就会出现�
 **修复**：按请求桶启用量化：长上下文和高并发租户走 W4A16，短问答保留 FP8/FP16 或使用更成熟的 W8A8 路径；把 TTFT、TPOT、显存水位、质量掉点放进同一张验收表。
 
 **反例**：如果服务主要是长输出、高并发、decode 带宽受限，且 runtime 有成熟 fused dequant GEMM，低比特路径可能同时省显存和提吞吐。反模式不是量化本身，而是把一个桶的收益套到所有桶。
+
+## 真实排查案例：kernel launch 太碎，GPU 看着忙但吞吐不涨
+
+**输入症状**：给视频世界模型加了 action head、risk head 和若干 mask 处理后，单步训练从 `1.8s` 涨到 `2.4s`。GPU utilization 面板看起来不低，但 tokens/s 明显下降，CPU 侧也开始出现周期性尖峰。
+
+**关键指标**：每 step kernel launch 数从约 `3k` 增到 `12k`；大量 kernel 的持续时间低于 `20us`；SM active 并不稳定，GPU trace 里出现细密的空洞；PyTorch profiler 中 dispatcher、shape check、cast、contiguous 的 self time 上升。
+
+**Nsight / trace 观察**：热点不在某一个大 GEMM，而在 `permute -> contiguous -> mask fill -> cast -> small reduce -> scatter` 这类碎片链路。每个小算子本身都不慢，但它们反复打断主干 GEMM 和 attention，CPU launch 和 HBM 往返被放大。
+
+**判断**：这是 launch-bound 和 memory-movement-bound，不是 compute-bound。继续调大 GEMM tile 或换更激进的 attention kernel 不会解决主因。
+
+**修复**：把 mask 构造提前到 GPU 常驻 buffer；按固定 shape bucket 做 graph capture；把 residual、norm、cast、quant/dequant 放进融合 epilogue；把多个小 head 合并成一次 batched projection；让 action/risk 旁路共享已经存在的 hidden state，避免重复 materialize。
+
+**反例**：如果处在模型探索期、shape 每天变化，过早 CUDA graph 和深度融合会拖慢迭代。此时先做 profile guard 和少量高频链路融合，比一次性写专用 kernel 更稳。
+
+## 真实排查案例：attention mask 让部分 rank 一直等
+
+![MagiAttention ring attention load balance 原论文图](../assets/images/paper-deep-dives/foundations/magiattention/figure-2-ring-attention-load-balance.png){ width="860" }
+
+<small>图源：[MagiAttention: A Distributed Attention System for Hyper-Scale Long Context Training](https://arxiv.org/abs/2506.09394)，Figure 2。原论文图意：不同 attention 切分策略会导致计算块在设备间分布不均，长上下文训练需要显式处理 mask 与负载均衡。</small>
+
+**输入症状**：把单样本多视角视频、语言指令和动作历史 pack 到同一条长序列后，平均 step time 只涨一点，但 p95 step time 明显变差；多卡训练里经常看到部分 GPU 先算完，随后等待其它 rank。
+
+**关键指标**：不同 rank 的有效 attention block 数差异超过 `2x`；padding rate 表面不高，但 dense block 集中在少数样本；NCCL wait time 上升；CP 或 ring attention 的每 stage 耗时出现长尾。
+
+**Nsight / trace 观察**：视觉历史段、动作段和语言段的 mask 密度不同。某些 rank 分到的块接近 dense attention，另一些 rank 分到大量空块或短块。通信必须等慢 rank 完成，于是整体吞吐由最重的 mask 分片决定。
+
+**判断**：这是 attention mask topology 和负载均衡问题，不是单卡 kernel 不够快。长上下文训练里 \(L\) 相同不代表工作量相同，mask 形状会改变每个 rank 的真实计算。
+
+**修复**：按 mask 类型和有效长度做 bucket；把 dense 视频段、causal 文本段、局部动作段拆成更可调度的 attention slices；使用能感知异构 mask 的 dispatch/load-balance 方案；减少无效 padding；把高密度段和低密度段错开分配，避免慢 rank 固定出现。
+
+**反例**：如果所有样本长度和 mask 都很规则，简单 sequence parallel 或 context parallel 可能已经足够。复杂 load-balance solver 只有在异构 mask 成为 p95 瓶颈时才值得引入。
+
+## 真实排查案例：通信 overlap 失败，扩到多机后更慢
+
+![DeepSeek-V3 DualPipe 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-5-dualpipe.png){ width="900" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 5。原论文图意：DualPipe 通过更细粒度地组织前向、反向、通信与 pipeline 阶段，减少流水线气泡并提高通信和计算重叠。</small>
+
+**输入症状**：8 卡单机训练吞吐正常，扩到 64 卡多机后 scaling efficiency 掉到 `45%` 左右。显存没满，单卡 kernel 看起来也不慢，但 step time 被 NCCL 片段拉长。
+
+**关键指标**：all-gather 或 reduce-scatter 紧跟在大 GEMM 后串行出现；overlap ratio 低；网络带宽没有跑满；不同 pipeline stage 的 bubble 扩大；梯度 bucket 的 ready time 分布很散。
+
+**Nsight / trace 观察**：collective 没有在 backward 早期启动，而是等一大段反向算完后集中发出。部分 stream 之间存在不必要依赖，MoE dispatch、activation recompute 和 gradient reduce 互相抢同一段窗口。
+
+**判断**：问题不是“通信本身不可避免”，而是通信没有被调度到计算窗口里。分布式训练的瓶颈从单卡算子转成了 schedule、bucket、拓扑和 stream dependency。
+
+**修复**：按层切小 gradient bucket，让 reduce-scatter 在梯度 ready 后尽早启动；把 TP/PP/CP/EP 的通信映射到更贴近硬件拓扑的组；拆开过大的 all-gather；为通信和计算使用独立 stream 并清理多余同步；必要时采用类似 DualPipe 的流水线组织，把前向、反向和通信交错起来。
+
+**反例**：小模型、单机训练或网络很空闲时，过度 overlap 调度会增加复杂度和调试成本。只有当 trace 显示 collective 占据端到端关键路径时，才应该把工程复杂度花在这里。
+
+## 真实排查案例：FP8 训练长跑后突然数值爆炸
+
+**输入症状**：短跑 `5k` step 的 FP8 世界模型训练和 BF16 对齐，但完整训练到中后期后 loss 突然 spike，随后出现 NaN。问题集中在长视频 bucket、接触密集任务和高亮度相机视角。
+
+**关键指标**：某些层 activation amax 长时间贴近 scale 上限；SwiGLU 或 attention output 的 percentile 尾部变厚；gradient norm 在 spike 前数百 step 开始抬升；BF16 shadow run 没有同步爆炸。
+
+**Nsight / trace 观察**：异常前没有明显性能回退，说明不是单纯 kernel 超时。逐层 dump 发现少数 outlier token 经过 FP8 quant/dequant 后误差被放大，随后在 residual 分支和反向梯度里累积。
+
+**判断**：这是数值动态问题，不是吞吐问题。低精度训练的风险会随数据分布、序列长度和训练阶段变化，短实验稳定不能证明长训练稳定。
+
+**修复**：对高风险层保留 BF16 或使用更细粒度 scale；给 activation scale 加滞后和上限监控；对长视频 bucket 单独做 loss/amax dashboard；在 attention output、SwiGLU、final norm 等敏感位置加入高精度保护；保留 BF16 shadow batch 做周期性对照。
+
+**反例**：如果 loss spike 同时伴随数据 loader 重试、坏样本集中或 learning rate schedule 变化，不能先把锅甩给 FP8。数值排查要把数据、优化器、scale 和 kernel 版本一起对齐。

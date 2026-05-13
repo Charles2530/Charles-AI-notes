@@ -12,6 +12,9 @@
 !!! note "初学者先抓住"
     Linear 层就是把一组数字重新加权组合成另一组数字。MLP 则是在“重新组合 -> 非线性变形 -> 再压回去”之间给每个 token 一个独立的变换空间。看到量化或 kernel 优化论文时，重点判断它优化的是权重矩阵、激活矩阵、layout、epilogue 还是底层矩阵乘 kernel。
 
+!!! tip "遇到这些症状，回看本页"
+    profile 显示大部分时间在 QKV、MLP 或 expert GEMM，低比特权重变小但吞吐没升，MoE expert 负载不均导致某些 GEMM 特别慢，或者小 batch decode 里矩阵乘效率很差时，回看本页。本页能帮你判断问题在 \(M/N/K\) shape、layout、epilogue fusion、dequant 路径还是矩阵乘本身。
+
 ## 0. 先分清 MatMul 和 GEMM
 
 `MatMul` 更像数学操作或框架算子名：给定两个张量，按最后两个维度做矩阵乘，可能带 batch 维、broadcast、transpose 或不同 backend lowering。

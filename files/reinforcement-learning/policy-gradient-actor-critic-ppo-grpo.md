@@ -2,6 +2,10 @@
 
 这页从策略梯度讲到 PPO 和 GRPO。目标不是推完所有公式，而是让你理解：为什么大模型后训练需要采样、奖励、advantage、reference/KL，以及 verl 这类框架为什么围绕 actor、rollout、critic 和 reward 组织。
 
+!!! tip "主线定位：降低数据成本和评测成本，但增加 rollout 成本"
+
+    PPO/GRPO 在世界模型高效训练里负责把“真实人工标注或真实环境试错”替换成可验证 reward、组内比较和自动回放。它能降低数据成本、评测成本和部分人工偏好成本，但会显著增加 rollout token、reward 打分、reference logprob 和训练同步成本。
+
 ## 1. Policy Gradient：直接让好动作更可能
 
 策略目标可以写成：
@@ -235,6 +239,40 @@ A_i =
 | DPO | 否，主要用偏好对 | 隐式 | 不需要 | 偏好数据稳定、想简化 RL 工程 |
 
 DPO 很重要，但它更像偏好优化的监督化变体；本章重点放 PPO/GRPO/RLOO/ReMax 这类需要 rollout 和 reward 的路线，因为它们更直接连接世界模型、RLVR 和 verl 这类 RL 工程框架。
+
+### 10.1 算一遍：GRPO 的 rollout token 账
+
+假设一轮 GRPO 用 `8,192` 个 prompt，每题采样组大小 `G=8`，平均 response 长度 `512` tokens，则 rollout 生成量是：
+
+\[
+8192 \times 8 \times 512 \approx 33.6\text{M tokens}
+\]
+
+如果 rollout 集群端到端吞吐是 `80k tokens/s`，仅生成就约 `420s`。这还没算 reward model、规则执行、reference logprob、old logprob 和训练更新。若把组大小从 `8` 提到 `16`，方差可能下降，但 rollout token 直接翻倍到 `67.1M`；如果平均 response 因奖励鼓励长答案从 `512` 涨到 `768`，成本又再乘 `1.5x`。
+
+PPO 的成本结构不同：它通常还要 value model / critic，并在训练时计算 actor、reference、value 等多路 logprob/value。GRPO 省掉 critic，不代表免费；它把一部分成本换成“同题多样本采样 + 组内比较”。所以判断时要同时看：
+
+```text
+质量指标：pass@1、pass@k、closed-loop success、risk recall
+成本指标：rollout tokens/s、reward latency、samples per prompt、训练更新耗时
+稳定性指标：KL、advantage std、reward hacking rate、重复答案率
+```
+
+### 10.2 真实排查：reward 上升，世界模型闭环不升
+
+一个典型日志是：
+
+```text
+train_reward=0.71 -> 0.84
+video_mse=0.042 -> 0.039
+lpips=0.181 -> 0.176
+closed_loop_success=64.2% -> 63.5%
+action_sensitivity_pass=58.0% -> 46.5%
+```
+
+这时不能只说“RL 没用”。更可能的链条是：reward 主要奖励未来帧像不像，但没有奖励“换动作时未来是否按动作变化”。模型学会生成更平均、更安全的视觉未来，MSE/LPIPS 变好；planner 需要的是反事实差异，因此闭环不升甚至下降。
+
+修复要把 reward 拆开：加入 action-conditioned contrastive check，要求同一状态下不同动作的预测差异与真实后果一致；按接触、遮挡、反光、失败恢复分桶统计；对 reward model 加入 holdout bucket 和 adversarial prompt；限制 response/action chunk 过长导致的 reward hacking。边界也要写清：如果 reward 不能自动验证，或者验证指标与控制目标错位，GRPO 只会把成本从人工标注转移到无效 rollout。
 
 ## 11. 工程检查点
 

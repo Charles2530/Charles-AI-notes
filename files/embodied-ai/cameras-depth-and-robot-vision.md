@@ -295,7 +295,37 @@ Z_c = d(u,v)
 
 OpenCV 的 `calibrateCamera` 会从多个标定板视角估计内外参；如果内参已知，只想求某个物体或标定板相对相机的位姿，通常用 `solvePnP`。这两个函数在具身系统里非常常用：前者回答“这台相机怎么成像”，后者回答“这个已知几何物体现在相对相机在哪里”。
 
-### 6.6 Eye-to-hand、eye-in-hand 和手眼标定
+### 6.6 到底需要几个外参
+
+先给一个最容易记的答案：
+
+```text
+内参：通常每台相机一套 K。
+外参：每个“相机/时间点”相对目标坐标系都需要一个 pose。
+```
+
+更精确地说，外参不是“越多越高级”，而是看你要把哪些坐标系接起来。如果只有一台固定相机，想把相机点变到机器人 base，就需要一条 \(T_{\text{base}\leftarrow\text{camera}}\)。如果有 \(N\) 台相机想融合到同一个 world / base frame，通常需要 \(N\) 个相机到同一参考系的外参。任意两台相机之间的相对外参可以由这两个外参相减出来。
+
+| 场景 | 需要的外参数量 | 能做什么 | 不能自动做什么 |
+| --- | --- | --- | --- |
+| 单目 RGB，只有内参 \(K\) | 0 或 1 个相机到 world/base 的外参 | 把已知深度的点投影/反投影；如果有外参，可把相机观测放进机器人坐标系 | 单张 RGB 本身仍没有绝对深度 |
+| 单台 RGB-D 固定相机 | 1 个 \(T_{\text{base}\leftarrow\text{camera}}\) | 把 depth 反投影成相机点云，再变到机器人 base，用于抓取、避障、测距 | 看不到遮挡背面；深度噪声仍要处理 |
+| 双目相机 | 左右相机各自内参 + 左右相机相对外参，常写作 \(T_{\text{left}\leftarrow\text{right}}\) | 用 baseline 和 disparity 三角测量深度 | 如果没有接到 robot base，只知道相机内部深度，不知道机器人该往哪动 |
+| 双目 / RGB-D 装在机器人上 | stereo/RGB-D 内部标定 + 1 个 \(T_{\text{base}\leftarrow\text{camera}}\) 或 \(T_{\text{gripper}\leftarrow\text{camera}}\) | 既能算深度，又能把 3D 点转到机器人可执行坐标系 | 还需要时间同步和手眼标定质量 |
+| 多个固定相机 | \(N\) 个相机到同一 world/base 的外参 | 多视角融合、减少遮挡、轨迹记录、重建场景 | 每台相机时间不同步或标定漂移会导致点云重影 |
+| 移动相机视频 / SLAM | 每一帧一个 camera pose，或关键帧 pose | 用多帧做 SfM/SLAM、重建轨迹和地图 | 单目视频如果没有尺度来源，metric scale 可能仍漂 |
+| 腕部相机 eye-in-hand | 固定的 \(T_{\text{gripper}\leftarrow\text{camera}}\)，再乘每时刻机器人 forward kinematics | 末端动到哪里，相机 pose 就能算到哪里，适合视觉伺服和近距离校正 | 只标定一次不代表永远准确，碰撞、松动会让外参变 |
+
+这几个例子可以压缩成三条判断：
+
+1. **只做投影到图像**：通常要 \(K\) 和 `w2c`，把世界点画到像素上。
+2. **从像素回到 3D**：要 \(K\) 加深度；如果还要给机器人执行，再要 `c2w` / \(T_{\text{base}\leftarrow\text{camera}}\)。
+3. **多视角融合**：每个视角都要知道自己到同一参考系的 pose，否则点云会各在各的坐标系里，拼不起来。
+
+!!! example "一个桌面抓取例子"
+    固定 RGB-D 相机看到杯子中心在像素 \((u,v)\)，depth 是 0.62m。用内参 \(K\) 可以把它反投影成相机坐标 \(P_c\)。但机械臂不能直接执行“到相机坐标前方 0.62m”，它需要 base 坐标。因此还要 \(T_{\text{base}\leftarrow\text{camera}}\)，把 \(P_c\) 变成 \(P_{\text{base}}\)。这就是为什么只知道内参不够，外参把“相机看见了”变成“机器人知道怎么动”。
+
+### 6.7 Eye-to-hand、eye-in-hand 和手眼标定
 
 机器人里外参还要分安装方式：
 
@@ -307,7 +337,7 @@ OpenCV 的 `calibrateCamera` 会从多个标定板视角估计内外参；如果
 
 如果是腕部相机，只知道相机内参还不够。你还要知道相机相对夹爪的固定变换，否则相机看到目标在前方 5cm，夹爪并不知道该怎么把这 5cm 转成自己的运动。
 
-### 6.7 具身数据里建议保存哪些字段
+### 6.8 具身数据里建议保存哪些字段
 
 | 字段 | 建议含义 | 为什么要存 |
 | --- | --- | --- |
@@ -326,6 +356,33 @@ OpenCV 的 `calibrateCamera` 会从多个标定板视角估计内外参；如果
 
 !!! warning "最常见的三个坑"
     第一，把 `w2c` 当成 `c2w` 用，投影结果会整体飞掉。第二，resize 图像后忘了缩放 \(f_x,f_y,c_x,c_y\)，点云会变形。第三，只看平均重投影误差，不检查边缘、远近距离和机器人工作区内的误差，部署时抓取会偏。
+
+### 6.9 一个 DA3 多视角 demo 怎么接到几何管线
+
+[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md) 的 GitHub demo 可以作为这一节的实操例子。比如：
+
+```bash
+da3 auto assets/examples/SOH \
+  --model-dir depth-anything/DA3-SMALL \
+  --export-format mini_npz-glb \
+  --export-dir workspace/demo_soh \
+  --process-res 336 \
+  --auto-cleanup
+```
+
+这里 `assets/examples/SOH/000.png` 和 `assets/examples/SOH/010.png` 会被当作同一个场景的两个 view，而不是两张互不相关的 batch 图片。DA3 会输出每个 view 的深度、置信度、内参和外参，并把它们融合成一个可查看的 3D 场景：
+
+| 输出 | 在具身管线里的意义 |
+| --- | --- |
+| `scene.glb` | 点云和相机的可视化结果，用来肉眼检查几何是否拼对 |
+| `depth_vis/*.jpg` | 深度可视化，用来快速看近远关系、边缘、遮挡和低置信区域 |
+| `exports/mini_npz/results.npz` | 真正给程序读取的数值结果，包含 `depth`、`conf`、`extrinsics`、`intrinsics` |
+
+这个例子尤其适合帮助你把几个概念连起来：`depth` 可以反投影成相机坐标点，`intrinsics` 决定像素怎么回到相机射线，`extrinsics` 决定多个 view 怎么放进同一个 world frame，`conf` 则可以在融合点云时过滤不可靠像素。
+
+但工程上要特别注意两件事。第一，这次导出的 `extrinsics` 是 `world-to-camera`，如果下游要的是 `camera-to-world` 或 \(T_{\text{base}\leftarrow\text{camera}}\)，就要先确认方向并求逆。第二，原图是 `1208x680`，推理处理后是 `336x196`，所以 `intrinsics` 对应的是处理后图像；如果你拿原图像素去反投影，必须同步处理坐标和内参。
+
+对具身智能来说，这类 demo 的价值不是直接得到动作，而是把 RGB 观测转成可检查的几何中间层。后面可以接点云融合、可见性检查、抓取候选生成、世界模型数据质检，或者把真实采集轨迹变成仿真里更容易复现的几何资产。
 
 ## 7. 不同相机在具身任务里的选择
 

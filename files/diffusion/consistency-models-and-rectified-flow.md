@@ -10,6 +10,10 @@
 
     多步扩散可以在每一步修正一点错误；一步模型没有这种反复校正机会。训练时必须把全局构图、局部纹理、条件对齐和分布覆盖都压进一次映射里，所以蒸馏、教师质量、噪声采样和 loss weighting 会非常关键。
 
+!!! tip "主线定位：降低 rollout 成本和部署成本"
+
+    Consistency、Rectified Flow、DMD/DMD2 这条线在世界模型高效训练里负责把“未来想象”的单次成本压低。它不一定减少训练成本，甚至常常增加教师采样、蒸馏和消融成本；真正收益发生在需要大量 rollout、候选规划或低延迟部署的阶段。
+
 ## 1. 从扩散采样的本质说起
 
 标准扩散模型训练的是一个逐步去噪过程。推理时，我们从噪声 $x_T$ 出发，沿着离散时间网格逐步更新到 $x_0$。无论是 DDPM 还是 DDIM，本质都在近似求解一个随时间演化的逆过程。
@@ -258,6 +262,13 @@ Distribution Matching Distillation（DMD）及其后续变体，从另一个角�
 
 **不同路线的区别在于**：是直接蒸馏终点分布，还是蒸馏轨迹结构，或重建流场。
 
+![DMD2 method 原论文图](../assets/images/paper-deep-dives/diffusion/dmd2/method.png){ width="920" }
+
+<small>图源：[Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)，Figure 3。原论文图意：DMD2 交替训练 generator、fake score function 和 GAN discriminator，让少步 generator 同时接收 distribution matching gradient 与真实图像监督。</small>
+
+!!! note "图解：少步蒸馏不是把采样器调小"
+    DMD2 的方法图说明了一个关键点：少步生成的训练难度被转移到在线 fake critic、真实数据监督和推理链路模拟上。也就是说，部署端少跑几十步，不是因为模型“白捡速度”，而是因为训练端额外付了更复杂的分布匹配与稳定性成本。
+
 ## 11. 一步生成为何仍然困难
 
 一步生成虽快，但任务更“硬”。模型必须在一次前向中解决：
@@ -287,6 +298,35 @@ Distribution Matching Distillation（DMD）及其后续变体，从另一个角�
 ## 13. 采样器视角下的收益
 
 即使不做到一步，若生成轨迹更直，Euler、Heun、DPM-Solver 等显式求解器也能在更少步下保持质量。也就是说，一致性和整流方法不只是“替代采样器”，还可以被视作“让采样器更容易工作”的轨迹重构方法。
+
+### 13.1 算一遍：50 步、8 候选动作和 10Hz 闭环
+
+假设一个视频世界模型用于在线规划，每个候选未来要生成 `16` 帧，单次去噪 forward 为 `90ms`。如果沿用 `50` 步扩散：
+
+```text
+1 个候选未来：50 x 90ms = 4.5s
+8 个候选动作：8 x 4.5s = 36s
+```
+
+这类成本只能用于离线数据生成或低频 shadow evaluation。若蒸馏到 `4` 步：
+
+```text
+1 个候选未来：4 x 90ms = 360ms
+8 个候选动作：8 x 360ms = 2.88s
+```
+
+它仍然不适合 `10Hz` 控制，但可以用于 `1Hz` 左右的高层重规划，或先用轻量 policy 预筛到 `2` 个候选后再调用世界模型。若做到一步，`8` 个候选是 `720ms`，延迟终于可讨论，但代价是模型失去逐步修正机会，必须额外看 long-tail risk recall、action sensitivity 和 closed-loop recovery。
+
+这个例子给出的设计判断是：少步生成首先降低 rollout 和部署成本，不自动降低训练成本。替代方案也要一起比较：
+
+```text
+症状：质量可接受，但规划延迟超过控制周期
+指标：P50/P95 latency、候选数、每候选步数、闭环成功率、风险漏报率
+机制：推理成本随 denoising steps 线性放大，随候选动作数再次放大
+取舍：少步蒸馏、候选预筛、分层规划、低分辨率 risk model、高分辨率 verifier
+失败反例：一步模型 FID 好，但对接触边界和遮挡变化不敏感
+适用边界：交互预览和离线回放可激进少步；安全关键控制要保留验证器或多步复核
+```
 
 ## 14. 一个形象例子
 

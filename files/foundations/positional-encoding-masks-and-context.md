@@ -9,6 +9,9 @@ Attention 本身只计算 token 之间的相关性。它并不知道第一个 to
 !!! note "初学者先抓住"
     Transformer 本身像一袋 token。位置编码解决“谁在前谁在后”，mask 解决“谁能看谁”。看到长上下文、packing、VLM 多图输入或 agent 历史记忆时，先问三个问题：位置机制能不能表达顺序，mask 有没有限定正确可见性，padding 或未来 token 有没有泄漏。
 
+!!! tip "遇到这些症状，回看本页"
+    packed sequence 训练后验证集异常变好、长视频模型偷看未来帧、图像/动作 token 的时间顺序错乱，或者 attention mask 让某些 rank 负载极不均时，回看本页。本页能帮你判断问题是位置编码外推、causal/padding mask 泄漏、block mask 设计，还是长上下文可见性规则和系统调度不匹配。
+
 ## 1. 为什么需要位置编码
 
 如果没有位置编码，Transformer 对输入顺序不敏感。句子：

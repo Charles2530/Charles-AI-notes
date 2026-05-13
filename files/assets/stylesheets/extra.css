@@ -444,24 +444,53 @@ body {
 
 .md-typeset p:has(> img.atlas-figure-tall) {
   width: fit-content;
-  max-width: min(100%, 34rem);
+  max-width: min(100%, 24rem);
   margin: 1.25rem auto;
   padding: 0.42rem;
 }
 
 .md-typeset img.atlas-figure-tall {
-  max-width: min(100%, 34rem);
+  width: auto !important;
+  max-width: min(100%, 24rem);
+  max-height: min(72vh, 32rem);
+  object-fit: contain;
+}
+
+.md-typeset p:has(> img.atlas-figure-portrait-auto) {
+  width: fit-content;
+  max-width: min(100%, 26rem);
+  margin: 1.25rem auto;
+  padding: 0.42rem;
+}
+
+.md-typeset img.atlas-figure-portrait-auto {
+  width: auto !important;
+  max-width: min(100%, 26rem);
+  max-height: min(72vh, 34rem);
+  object-fit: contain;
+}
+
+.md-typeset p:has(> img.atlas-figure-tall.atlas-figure-portrait-auto) {
+  max-width: min(100%, 24rem);
+}
+
+.md-typeset img.atlas-figure-tall.atlas-figure-portrait-auto {
+  max-width: min(100%, 24rem);
+  max-height: min(72vh, 32rem);
 }
 
 .md-typeset p:has(> img.atlas-figure-page) {
   width: fit-content;
-  max-width: min(100%, 42rem);
+  max-width: min(100%, 28rem);
   margin: 1.25rem auto;
   padding: 0.42rem;
 }
 
 .md-typeset img.atlas-figure-page {
-  max-width: min(100%, 42rem);
+  width: auto !important;
+  max-width: min(100%, 28rem);
+  max-height: min(78vh, 40rem);
+  object-fit: contain;
 }
 
 .md-typeset img.atlas-zoomable-image {

@@ -2,6 +2,10 @@
 
 世界模型的核心不是“生成未来帧”，而是“预测动作后果，并让这些预测能改善决策”。强化学习在这里有三种作用：训练策略、训练或校准世界模型、把世界模型接入规划闭环。
 
+!!! tip "主线定位：降低真实数据成本，控制 rollout 成本"
+
+    这页在“世界模型高效训练”主线里负责回答：什么时候用 learned model 替代真实环境试错，什么时候 imagined rollout 反而会放大模型误差。强化学习能把人工轨迹、真实机器人时间和在线试错成本降下来，但会新增 imagined rollout、value learning、reward 校准和 model exploitation 的成本。
+
 ## 1. 世界模型补上了 transition
 
 在 MDP 里，真实环境 transition 是：
@@ -68,6 +72,37 @@ Dreamer 的重点是把世界模型变成策略训练器：
 | reward model | 真实 reward | 给 imagined rollout 打分 |
 | value model | imagined return | 估计长时收益 |
 | action model | value gradients 或 policy objective | 输出真实执行动作 |
+
+### 3.1 算一遍：真实机器人时间和 latent imagination 的差距
+
+假设一个机器人以 `20Hz` 收集真实交互。一次训练 round 如果需要 `1024` 个起点、每个起点 rollout horizon `15`、每个状态比较 `16` 个 action samples，则 imagined transition 数是：
+
+\[
+1024 \times 15 \times 16 = 245{,}760
+\]
+
+如果 latent world model 的单步 transition 平均 `0.04ms`，这一轮想象约 `9.8s`。同样数量的真实机器人 transition 在 `20Hz` 下需要：
+
+\[
+245{,}760 / 20 = 12{,}288s \approx 3.4h
+\]
+
+这就是 model-based RL 的价值来源：它不是让决策免费，而是把真实世界时间换成 GPU 上的 latent rollout。但误差也会随 horizon 叠加。若每一步有 `1%` 的关键接触误判概率，`15` 步里至少一次误判的概率约为：
+
+\[
+1 - 0.99^{15} \approx 14.0\%
+\]
+
+所以设计取舍是：
+
+```text
+问题症状：真实样本贵，策略在少量数据上学不稳
+指标观察：real interaction hours、imagined transition/s、reward prediction error、closed-loop success
+技术机制：用 learned transition 生成便宜训练信号，但误差随 horizon 和 action branching 放大
+替代方案：纯 BC、offline RL、PlaNet/CEM、Dreamer actor、短 horizon MPC + verifier
+失败反例：policy 学会利用模型漏洞，在 latent 里高分，真实环境失败
+适用边界：短 horizon、低风险、模型误差可校准时最值得用；长接触链和安全关键任务必须接真实回放或约束验证器
+```
 
 ## 4. Decision Transformer：轨迹 token 化的另一条入口
 

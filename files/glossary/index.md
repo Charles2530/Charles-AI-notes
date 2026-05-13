@@ -122,6 +122,8 @@
 | `Action` | agent 或控制器执行的动作，在 LLM 中可对应 token，在机器人中可对应末端位姿或关节控制量。 |
 | `Advantage` | 某个动作相对当前状态平均预期有多好，常用于 PPO/GRPO 等策略更新。 |
 | `Bellman Equation` | 把当前价值拆成当前奖励和下一状态价值的递推关系，是 value learning 和 model-based planning 的基础。 |
+| `Camera Intrinsics / K / 内参` | 相机自身的成像参数，包括 \(f_x,f_y,c_x,c_y\) 和畸变；回答“这台相机怎么把相机坐标投到像素”。 |
+| `Camera Extrinsics / [R\|t] / 外参` | 相机坐标系和 world / robot base / gripper 坐标系之间的刚体变换；回答“这台相机在哪里、朝哪看”。 |
 | `Depth Anything / DA` | 单目深度 foundation model 路线，重点是开放域相对深度和细节泛化；站内专题见 [DA1 讲解](../paper-deep-dives/embodied-ai/depth-anything.md)。 |
 | `Depth Anything 2 / DA2` | DA 的更强版本，常作为单目深度基线或 teacher 参考；它用 synthetic teacher 和 pseudo-labeled real images 提升细节与鲁棒性，本身主要解决单图深度，不直接给出多视角相机几何；站内专题见 [DA2 讲解](../paper-deep-dives/embodied-ai/depth-anything-v2.md)。 |
 | `Depth Anything 3 / DA3` | 把 DA/DA2 的深度能力扩展到任意视角几何，输出 depth、ray、camera 和可融合 3D 表示；站内专题见 [DA3 讲解](../paper-deep-dives/embodied-ai/depth-anything-3.md)。 |

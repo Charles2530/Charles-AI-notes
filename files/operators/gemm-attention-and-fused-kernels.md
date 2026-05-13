@@ -7,6 +7,9 @@
 !!! note "初学者先抓住"
     GEMM 负责大量计算，Attention 负责序列信息读取，Fused Kernel 负责少搬数据。性能问题经常不是数学公式慢，而是中间张量写回 HBM、再读回来，浪费了大量带宽。
 
+!!! tip "为什么现在要学这个：世界模型跑不跑得动看现场热点"
+    世界模型高效训练最后一定会落到这些算子上：视频 patch 进入 QKV projection，长上下文进入 FlashAttention 或 context parallel，低比特训练进入 FP8/INT8 GEMM，action head 和 risk head 又会带来很多小算子。如果 trace 里 kernel launch 太碎、attention mask 负载不均、通信 overlap 失败，模型结构再漂亮也会变成吞吐掉线。学 GEMM、Attention 和融合 kernel，是为了能把“训练慢”拆成可定位的 shape、dtype、layout、mask、通信和数值问题。
+
 !!! example "有趣例子：厨房流水线"
     如果切菜、炒菜、装盘每一步都要把食材搬回仓库，再从仓库拿出来，厨房会很慢。Fused Kernel 像把连续工序放在同一个操作台上完成，减少来回搬运。
 

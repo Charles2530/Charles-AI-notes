@@ -12,6 +12,12 @@ Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核�
 !!! note "初学者先抓住"
     Attention 的核心不是“模型很聪明”，而是每个 token 都能按相关性读取其他 token。Q/K/V 可以先理解成：我想找什么、别人暴露什么、真正读走什么。看到 LLM、VLM、DiT 或 agent 模型时，先分清 tokenization、embedding、self-attention、cross-attention 和输出 head 分别在哪一层。
 
+!!! tip "为什么现在要学这个：世界模型的 token 成本"
+    世界模型不是只读一句文本，而是同时读多相机图像、视频历史、机器人状态、动作、语言指令和可能的未来 rollout。Attention 决定这些 token 如何互相读取，KV cache 决定长历史在推理时占多少显存，mask 决定哪些过去和未来能被看见。比如 `4` 路相机、`16` 帧、`224x224`、`14x14` patch 就已经有 `16,384` 个视觉 token；如果分辨率提高到 `448x448`，视觉 token 会到 `65,536`，直接超过 `32k` context。学 attention 不是为了背公式，而是为了能判断 token、context、KV、mask 和吞吐之间的取舍。
+
+!!! tip "遇到这些症状，回看本页"
+    视觉 token 一多吞吐就断崖下降、长上下文 decode 被 KV cache 卡住、动作 token 加进去后模型不再关注关键帧、或者不同动作的未来几乎一样时，先回到 tokenization、Q/K/V、self-attention 和 cross-attention 的分工。本页能帮你判断该压视觉 token、改连接器、换 GQA/MLA/KV 量化，还是检查 action token 是否真的进入了可被 attention 读取的位置。
+
 ## 1. Tokenization：模型如何“切开”输入
 
 Token 是模型处理信息的基本单位。不同模态有不同 token：
@@ -89,6 +95,40 @@ y = softmax(Q @ K.T / sqrt(d)) @ V
 ## 4. 为什么 Attention 强也贵
 
 Self-Attention 的核心矩阵是 \(L \times L\)，其中 \(L\) 是序列长度。序列越长，attention 计算和显存压力越大。
+
+![FlashAttention IO-aware attention 原论文图](../assets/images/paper-figures/transformer/flashattention-figure-1-io-aware.png){ width="920" }
+
+<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原论文图意：FlashAttention 用 tiling 避免把巨大的 \(N\times N\) attention matrix 写到 HBM，并把 attention 的多步 PyTorch 实现融合成更少的高效内核。</small>
+
+!!! note "图解：这张图支撑的是 IO 成本判断"
+    Attention 贵不只是因为 FLOPs 多，还因为朴素实现会把 score、mask、softmax、dropout 等中间结果反复读写到 HBM。FlashAttention 图里的核心证据是：把 Q/K/V 分块搬进 SRAM 并融合计算，可以避免物化完整 \(N\times N\) 矩阵。这解释了为什么同样数学公式，kernel 和 memory layout 会让长上下文吞吐差一个量级。
+
+### 4.1 算一遍：视觉 token 一多，score matrix 先爆
+
+沿用前面的机器人世界模型例子：`4` 路相机、`16` 帧、`224x224`、`14x14` patch，共 `16,384` 个视觉 token。单个 attention head 的 score matrix 是：
+
+\[
+16{,}384^2 \approx 268\text{M elements}
+\]
+
+如果用 BF16 物化，只是一个 head 的 score 就约：
+
+\[
+268\text{M} \times 2 \text{ bytes} \approx 512\text{MiB}
+\]
+
+`16` 个 heads 就是约 `8GiB`，这还没算 softmax/dropout 中间结果、反向传播保存、QKV、MLP 激活和多层堆叠。FlashAttention 可以避免把完整 score matrix 落到 HBM，但它没有把 attention 的数学复杂度变成线性；如果 token 数从 `16k` 涨到 `65k`，\(L^2\) 仍然会把算力和调度压力推上去。
+
+所以真正的取舍链是：
+
+```text
+症状：多相机长历史一接入，显存爆或 token/s 掉到不可用
+指标：visual tokens、attention FLOPs、HBM read/write、kernel time、KV cache、P95 latency
+机制：token 数同时放大 score matrix、KV cache 和跨模态对齐成本
+修法：增大 patch、视觉 resampler、分层 token、局部/稀疏 attention、FlashAttention、GQA/MLA
+反例：只换 FlashAttention 不压 token，训练也许能跑，但 rollout latency 仍可能不达标
+边界：需要毫米级接触判断时，盲目压视觉 token 会把动作条件成本转移成失败率
+```
 
 这解释了为什么长上下文推理会重点优化：
 

@@ -9,6 +9,9 @@ Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它的目
 !!! note "先抓一句话"
     Transformer 像“每次都翻完整上下文笔记”，Mamba 像“边读边更新一份工作记忆”。前者擅长精确内容寻址，后者擅长低成本长序列流式处理。现在流行的 Mamba-Transformer 不是二选一，而是让 attention 负责少量关键全局交互，让 Mamba 负责多数 token 的状态推进。
 
+!!! tip "遇到这些症状，回看本页"
+    长上下文 KV cache 成本压不住、流式视频/机器人历史需要长期状态但不需要每个 token 精确互查，或者混合架构质量下降但延迟很好时，回看本页。本页能帮你判断该用 attention 做内容寻址、用 SSM 承接历史状态，还是调整 hybrid 中 attention 层的位置和比例。
+
 ## 1. 为什么需要 Mamba
 
 Transformer 的 self-attention 很强，因为它能让任意两个 token 直接交互。但代价也明显：

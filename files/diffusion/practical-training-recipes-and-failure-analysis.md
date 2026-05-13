@@ -10,6 +10,10 @@
 
     同样是面粉、鸡蛋和糖，温度、搅拌顺序和烘烤时间不同，蛋糕会完全不同。扩散训练也是这样：很多关键差异藏在论文表格和附录里，而不是主公式里。
 
+!!! tip "主线定位：降低训练成本、rollout 成本和部署成本"
+
+    扩散页在“世界模型高效训练”主线里负责回答：什么时候值得用更贵的生成目标换更强的多模态建模，什么时候必须通过 latent、patch、少步蒸馏或 action chunk 把成本压回来。它能降低真实数据成本和候选轨迹搜索成本，但如果采样步数、token 数和候选数没有账本，训练成本会被转移到部署和 rollout 上。
+
 ## 1. 扩散训练不是“把数据喂进去就行”
 
 **训练目标表面很简单**：
@@ -81,6 +85,46 @@ AdamW + 混合精度是常见组合。关键不只在于学习率，还在于全
 
 扩散训练尤其容易在数据混杂、分辨率变化大、caption 质量参差时出现不稳定 batch。
 
+![DiT compute scaling and FID 原论文图](../assets/images/paper-figures/diffusion/dit-gflops-fid-compute.png){ width="920" }
+
+<small>图源：[Scalable Diffusion Models with Transformers](https://arxiv.org/abs/2212.09748)，Figures 8-9。原论文图意：DiT 用 forward pass GFLOPs 衡量模型计算量，展示更高 GFLOPs 与更低 FID 的强相关，以及更大训练计算预算下模型质量的变化。</small>
+
+!!! note "图解：扩散质量常常不是免费来的"
+    这张图支撑一个工程判断：在 latent diffusion / DiT 路线里，提高 token 数、深度或宽度通常会改善生成质量，但也会直接提高每次去噪 forward 的成本。对世界模型和机器人规划来说，这不是单纯训练指标问题，因为推理阶段还要乘以采样步数、候选 action 数和重规划频率。
+
+### 7.1 算一遍：视频世界模型扩散训练的成本账
+
+假设一个机器人视频世界模型输入 `4` 路相机、`16` 帧、每路 `256 x 256`，VAE 下采样 `8x` 后 latent 网格是 `32 x 32`。如果 DiT 直接按 latent patch `1 x 1` 建 token：
+
+\[
+4 \times 16 \times 32 \times 32 = 65{,}536 \text{ tokens}
+\]
+
+如果 patch 改成 `2 x 2`，每帧每路变成 `16 x 16`，总 token 变为：
+
+\[
+4 \times 16 \times 16 \times 16 = 16{,}384 \text{ tokens}
+\]
+
+注意力主干的显存和计算会随 token 数显著增长。即使 patch `2 x 2` 已经降了 `4x` token，只要采样还要 `50` 步，每个候选未来都要 `50` 次 forward。若在线规划一次比较 `8` 个候选 action sequence，就是：
+
+\[
+50 \times 8 = 400 \text{ forward passes / decision}
+\]
+
+若单次 forward 在目标 GPU 上是 `90ms`，一次决策要 `36s`，根本进不了闭环。蒸馏到 `4` 步后变成 `32` 次 forward，理想延迟约 `2.88s`；再配合候选预筛到 `2` 条，是 `720ms`，才接近低频 replan。一步模型是 `8 x 90ms = 720ms`，看起来更快，但把“多步修错”的能力压进一次映射，长尾风险通常要用更硬的评测补回来。
+
+所以设计链条不是“扩散好不好”，而是：
+
+```text
+症状：open-loop 视频像，但 planner 太慢或动作不敏感
+指标：tokens/clip、forward latency、denoising steps、candidate count、closed-loop success
+机制：总成本 ≈ token 成本 × 去噪步数 × 候选数 × 重规划频率
+取舍：增大 patch / 降帧 / 减相机 / latent 压缩 / 少步蒸馏 / 候选预筛
+反例：高风险任务里，一步蒸馏可能漏掉接触、碰撞和遮挡长尾
+边界：如果任务是低频离线数据生成，多步高质量可能值得；如果是在线控制，步数预算先于画面美感
+```
+
 ## 8. 验证集不要只看 FID
 
 FID 重要，但不够。实际训练中还应观察 prompt fidelity、构图稳定性、细节完整性、人脸/手部/文字等敏感区域质量、长尾类别表现、多样性与模式坍缩迹象。
@@ -122,6 +166,20 @@ FID 重要，但不够。实际训练中还应观察 prompt fidelity、构图稳
 如果扩散用于动作轨迹生成，失效模式会变成轨迹平滑但不可执行、长时动作后段漂移、条件目标被部分满足但最终失败，以及多样性很好但稳定性差。
 
 因此验证集要看成功率、碰撞率和恢复能力，而不是只看轨迹相似度。
+
+### 15.1 真实排查：轨迹更平滑，成功率反而下降
+
+一个常见场景是：action diffusion 的验证 MSE 从 `0.084` 降到 `0.071`，动作 jerk 也下降，但真实机械臂成功率从 `78%` 掉到 `61%`。输入日志看起来像这样：
+
+```text
+bucket=reflective_cup  mse=0.068  jerk=0.31  success=52%  collision=18%
+bucket=matte_block     mse=0.073  jerk=0.29  success=84%  collision=3%
+bucket=occluded_grasp  mse=0.079  jerk=0.34  success=49%  recovery=11%
+```
+
+判断过程应从平均误差转向动作后果：反光杯和遮挡抓取都属于多模态动作分布，同一个目标可能有左夹、右夹、先推再夹等几种策略。MSE 会奖励“平均动作”，而平均动作可能正好碰到杯沿或错过抓取点。扩散模型看起来输出更平滑，是因为去噪过程把多峰轨迹压成了中间轨迹；这在离线曲线上好看，在闭环里却会失败。
+
+修复不应只是继续训练。更有效的链条是：按物体材质、遮挡、接触阶段和失败后恢复分桶；增加 action-conditioned counterfactual 检查，确认换动作时预测未来真的变化；在推理时只执行 action chunk 前半段并 receding-horizon 重规划；对高风险桶加入碰撞、接触成功和恢复窗口指标。反例也要写清：如果任务几乎是单峰、低自由度、低频执行，普通行为克隆或小型 transformer policy 可能比 action diffusion 更省。
 
 ## 16. 设计建议
 

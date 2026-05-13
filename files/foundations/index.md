@@ -91,6 +91,21 @@
 | 数据与评测 | 训练、量化、推理、VLM | 为什么平均分不够，为什么需要分桶和回放 |
 | 数值与运行时 | 量化、推理、算子 | 为什么格式能保存不等于能跑快 |
 
+## 反向症状索引：训练里出事时先回看哪页
+
+基础知识最有用的读法，是从真实故障倒推概念。世界模型训练或 VLA/WAM 系统里遇到下面这些症状时，可以先回到对应基础页，而不是只在模型名之间横跳。
+
+| 现场症状 | 先回看 | 能做出的判断 |
+| --- | --- | --- |
+| 多相机视频一接入就 OOM，或者 `32k` context 很快被吃满 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer 输入与注意力](transformer-attention-and-tokenization.md) | 是 patch/token 数、activation、KV cache 还是中间 materialize 在爆 |
+| 长上下文 rollout token/s 掉得很快，KV 显存压不住 | [位置编码与上下文 Mask](positional-encoding-masks-and-context.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) | 是 \(L^2\) attention、KV 生命周期、mask 结构还是 dtype/kernel 支持问题 |
+| rollout 越滚越漂，risk head 很自信但错 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) | 是不确定性没校准、latent 丢了关键状态，还是评测桶没覆盖长尾 |
+| loss 下降但闭环成功率不涨 | [优化与训练入门](optimization-and-training-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) | 是目标函数不对、数据分布偏了，还是平均指标掩盖关键任务退化 |
+| FP8/低比特短跑稳定，长跑后 loss spike 或 NaN | [Norm、残差与激活函数](normalization-residual-and-activation.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) | 是 activation outlier、scale 策略、累加精度还是敏感层保护不足 |
+| 训练吞吐低但 GPU 利用率看似不差 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)、[自动微分与激活显存](autograd-activation-checkpointing-and-memory.md) | 是 GEMM shape 不合适、launch 太碎、checkpoint 重算过多还是数据搬运问题 |
+| 视频状态很会描述画面，但控制时丢小物体或接触细节 | [卷积与视觉特征](convolution-and-feature-extraction.md)、[多模态推理入门](multimodal-cot-and-reasoning-basics.md) | 是视觉 encoder 没保局部细节、token 压缩太狠，还是多模态对齐丢了任务变量 |
+| Agent/RAG 工具链回答像样但不可回放、不可评测 | [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) | 是输入契约、证据组织、输出 schema 还是评测闭环没建立 |
+
 ## 从论文专题回填的基础概念
 
 论文专题里已经出现了一批会反复回到基础层的概念。读这些内容时，不要只记模型名字，先把它们归到下面几类：

@@ -107,6 +107,54 @@ Near-miss 比真实事故更高频，也更适合回流训练。记录时不只�
 
 世界模型如果只拟合“常见正常情况”，在低概率危险事件上错误但自信，就不应进入高风险闭环。
 
+### 一个评测样本怎么从日志变成门槛
+
+以移动操作机器人“把杯子放进上层橱柜”为例，线上失败日志可能长这样：
+
+```json
+{
+  "episode_id": "cabinet_place_0417",
+  "scene_bucket": "new_kitchen_glossy_cabinet",
+  "instruction": "put the mug on the top shelf",
+  "action_a": "raise_arm_then_extend",
+  "action_b": "step_closer_then_raise_arm",
+  "real_outcome_a": "mug_hits_shelf_lip",
+  "real_outcome_b": "success",
+  "wm_pred_a": {"risk": 0.21, "future": "mug clears shelf"},
+  "wm_pred_b": {"risk": 0.34, "future": "base moves closer"},
+  "takeover": true
+}
+```
+
+这条样本进入评测集前要变成四个判定任务，而不是只存一段失败视频：
+
+| 判定任务 | 问题 | 通过标准 |
+| --- | --- | --- |
+| Open-loop state | 给定真实历史，未来关键状态是否保持 | 杯子、柜门、架沿位置可读，`H=3s` 内不漂移 |
+| Counterfactual ranking | `action_a` 和 `action_b` 谁更安全 | 模型应把 `action_b` 排在 `action_a` 前面 |
+| Risk calibration | 高风险动作是否高分 | `action_a` risk 应进入高风险分桶，而不是低于阈值 |
+| Closed-loop guard | planner 依赖该预测时会不会被截停 | 若模型低估风险，安全层必须触发拒绝或人审 |
+
+打分时不要只给一个总分。更稳的记录是：
+
+| 指标 | 样本级观测 | 归因 |
+| --- | --- | --- |
+| `state_probe/cup_pose` | 预测误差 `4.8cm` | 状态表示不足，杯子高度漂移 |
+| `counterfactual_order` | `a` 被错误排在 `b` 前 | 动作条件失败 |
+| `risk_ece_bucket` | 低风险桶真实失败率过高 | 不确定性过度自信 |
+| `planner_regret` | 选错动作导致接管 | 决策层失败 |
+
+发布门槛可以因此写得很硬：
+
+| 门槛 | 规则 |
+| --- | --- |
+| 高风险桶不退化 | near-miss / collision / human takeover 三个桶任一退化超过 `2%`，拒绝发布 |
+| 反事实排序必须提升 | 目标任务桶 counterfactual ranking 至少提升 `5%`，否则不能声称“更懂动作后果” |
+| 主分布不被牺牲 | 常规 pick-place success 下降超过 `1%`，需要单独审批 |
+| 失败可回放 | 每个新失败必须能定位到状态、动作条件、风险或系统预算中的至少一类 |
+
+这样评测才会从“视频像不像”变成“模型能不能支持更好的动作选择”。如果一个模型在这条样本上生成的视频更清晰，但仍然把 `raise_arm_then_extend` 判断为安全，它就没有通过世界模型评测。
+
 ## 五、典型失效模式
 
 世界模型的 failure mode 最好按“修复动作”分类，而不是只写现象。

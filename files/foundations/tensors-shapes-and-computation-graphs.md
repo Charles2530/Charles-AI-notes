@@ -12,6 +12,12 @@
 !!! note "初学者先抓住"
     读任何模型结构时，先不要急着看公式。先问三件事：输入张量是什么 shape，中间每一步 shape 怎么变，最后输出要交给谁。只要 shape 链条通了，大多数结构图都会突然变清楚；遇到报错时，也能先区分是 shape、dtype、device 还是计算图断开。
 
+!!! tip "为什么现在要学这个：shape 就是成本账入口"
+    世界模型里的很多“显存突然爆了”都能先写成 shape。多相机视频常从 `[B, camera, frame, patch, D]` 变成 `[B, L, D]`，其中 \(L = camera \times frame \times patch\)。一旦 `camera=4`、`frame=16`、`patch=256`，单样本视觉长度就是 `16,384`；再乘 batch、层数、KV heads 和 dtype，就变成真实显存账。计算图也同样重要：一个看似无害的 `permute + contiguous` 可能 materialize 大张量，一个没 checkpoint 的分支可能把长视频激活全留到 backward。
+
+!!! tip "遇到这些症状，回看本页"
+    `CUDA OOM` 只发生在多相机/长视频 bucket、同样 batch 下某个 resize 版本突然爆显存、profile 里出现异常大的 `contiguous` / `clone` / `view_as_real`，或者模型接口总在 `[B, L, D]` 和 `[B, D, L]` 之间错位时，先把每一步 shape、dtype、device 和是否 materialize 写出来。本页能帮你判断问题是在输入展开、patch/token 计数、计算图保存，还是张量布局转换。
+
 ## 1. Tensor 到底是什么
 
 可以把 tensor 理解成带维度的数字容器：

@@ -12,6 +12,13 @@
 !!! note "初学者先抓住"
     训练循环可以先记成四步：算预测、算 loss、反传 gradient、更新参数。后面所有复杂训练系统，本质上都是在让这四步更稳定、更高效、更可信。看到训练曲线异常时，先区分 loss 设计、学习率、batch、梯度裁剪、数据分布和系统恢复问题。
 
+!!! tip "遇到这些症状，回看本页"
+    训练 loss 稳定下降但闭环成功率不涨、长视频 bucket 反复 loss spike、换 optimizer 后短跑更快但最终指标不稳，或者恢复 checkpoint 后曲线悄悄偏离基线时，先回到 loss、gradient、optimizer、scheduler 和评测闭环。本页能帮你判断这是优化路径问题、目标函数问题、数据分布问题，还是系统恢复破坏了训练状态。
+
+!!! tip "主线定位：降低训练成本和错误优化成本"
+
+    优化基础在世界模型高效训练里负责判断“训练到底在朝哪里走”。它能降低无效训练成本：早识别 loss 代理目标和闭环指标错位、learning rate 或 batch 设计不合适、optimizer 让短跑好看但长跑不稳，以及系统恢复让曲线不可比较。
+
 ## 1. Loss：模型错在哪里
 
 Loss 是训练的方向盘。它定义模型输出和目标之间的差距：
@@ -95,6 +102,29 @@ Loss 是训练信号，但最终还要看任务指标。常见误判包括：
 5. 离线 benchmark 提升，线上延迟或成本不可接受。
 
 因此训练系统必须绑定评测和回放，而不是只看 loss 曲线。
+
+### 5.1 真实场景：平均 loss 下降，关键桶变差
+
+假设一个 action-conditioned video world model 新 recipe 的训练 loss 从 `0.214` 降到 `0.198`，团队很容易认为它更好。但分桶后发现：
+
+| Bucket | Token Share | Baseline Loss | New Loss | Closed-loop |
+| --- | ---: | ---: | ---: | ---: |
+| easy static scene | `72%` | `0.180` | `0.158` | `+0.3%` |
+| moving object | `18%` | `0.246` | `0.241` | `+0.1%` |
+| contact / occlusion | `10%` | `0.310` | `0.337` | `-6.8%` |
+
+平均 loss 下降，是因为 `72%` 的 easy bucket 变好；真正影响机器人成败的 contact/occlusion bucket 变差。优化器没有“犯错”，它只是忠实优化了被数据占比加权后的目标。
+
+排查链应是：
+
+```text
+症状：loss 更低，但闭环成功率或风险召回下降
+指标：per-bucket loss、grad norm contribution、数据曝光、closed-loop success、risk recall
+机制：平均目标被大桶主导，稀有高价值样本梯度不足
+修复：重加权、hard bucket oversampling、auxiliary risk loss、评测门槛按桶而非平均
+反例：过度重加权长尾会牺牲主分布稳定性，甚至让模型过拟合少量异常样本
+边界：当主分布任务已经是上线瓶颈时，平均 loss 仍有意义；当失败成本高度不均时，必须看加权业务指标
+```
 
 ## 6. 和后续专题的关系
 

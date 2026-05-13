@@ -12,6 +12,10 @@
 
     几百张 GPU 同步训练，像一列很长的车：一个车厢掉队，整列车都要慢下来。节点健康、网络拓扑、checkpoint 写入和数据读取，看似是运维细节，实际都会改变整趟训练的到站时间。
 
+!!! tip "主线定位：降低训练成本、恢复成本和评测成本"
+
+    集群治理页在“世界模型高效训练”主线里不负责提出新模型，而是负责让训练结论可信：减少失败重跑、恢复偏移、数据路径污染、无效实验和评测不可复现。它降低的是训练成本、恢复成本和评测成本；如果治理缺失，任何模型收益都可能被系统事故淹掉。
+
 ## 训练集群是一条生产线
 
 训练平台不是“很多 GPU 的集合”，而是一条由调度、环境、数据、checkpoint、监控和实验元数据组成的生产线。任意一层不稳，都会让 GPU 小时变成不可解释的消耗。
@@ -72,6 +76,38 @@
 
 告警也应从“作业挂了才报警”前移到早期异常。吞吐突然下跌、某些 rank step time 漂移、checkpoint 写盘延迟拉长、对象存储重试率上升、节点温度/ECC/链路错误开始变坏，或者 loss、grad norm、loader stall 与系统异常同时间出现，都应进入同一条事件线。
 
+### 运行中案例：一次世界模型训练变慢该怎么判
+
+假设一个 `64` 卡视频世界模型作业从第 `18k` step 开始变慢：
+
+```text
+step=17980 token_s=1.02M loader_stall=3%  ckpt_pause=0s   loss=2.31
+step=18120 token_s=0.74M loader_stall=18% ckpt_pause=0s   loss=2.30
+step=18200 token_s=0.71M loader_stall=22% ckpt_pause=0s   loss=2.33
+step=18300 token_s=0.69M loader_stall=25% ckpt_pause=41s  loss=2.34
+```
+
+如果只看 GPU utilization，可能会误判为 kernel 退化。治理面板应该把四条信号放到一张事件线上：
+
+| 观察 | 证据 | 初步判断 |
+| --- | --- | --- |
+| token/s 从 `1.02M` 掉到 `0.69M` | 吞吐层告警 | 端到端训练效率下降 |
+| loader stall 从 `3%` 升到 `25%` | 数据层告警 | 数据输入开始阻塞 |
+| 对象存储 retry 同步升高 | 系统层告警 | 很可能是存储或缓存路径问题 |
+| loss 没有同步 spike | 损失层正常 | 暂不优先怀疑优化器或数值 |
+| checkpoint pause 在后段升高 | Checkpoint 层告警 | 存储路径被训练数据和 checkpoint 共同踩踏 |
+
+治理动作也要有退出条件：
+
+| 动作 | 触发条件 | 验收 |
+| --- | --- | --- |
+| 切换到本地 NVMe cache | loader stall 连续 `50` step 超过 `15%` | token/s 恢复到基线 `90%` 以上 |
+| 延后 checkpoint 或改异步队列 | checkpoint pause 超过 `30s` | pause 不再进入关键路径 |
+| 标记本段实验为受污染 | 数据 stall 与训练曲线重叠超过 `500` step | 后续评测解释中排除这段吞吐异常 |
+| 开 postmortem | 单次事故浪费超过 `100 GPU-hour` | playbook 增加对象存储重试阈值 |
+
+这类案例的重点是：训练治理不是“作业慢了重启一下”，而是能把慢归因到数据、存储、checkpoint 或模型本身，并把影响写进实验证据链。否则同一个模型改动可能被错误地判成“训练 recipe 更慢”。
+
 ## 恢复要证明等价
 
 训练恢复不是“重新跑起来”这么简单。团队真正需要证明的是：恢复后的训练状态与失败前的逻辑状态足够等价。
@@ -79,6 +115,44 @@
 恢复流程建议固定下来：先把故障归到节点、网络、存储、数据、数值或代码，再自动回退到最近可信 checkpoint；启动前检查模型、优化器、RNG、sampler、数据游标和配置；恢复后 shadow 观察若干 step，比较 loss、吞吐和数据曝光；最后把恢复事件写入实验证据链，并对高成本失败做 postmortem。
 
 Checkpoint 路径最好与训练数据路径分开治理。checkpoint 高峰写入、恢复时大规模读取、多个作业同时落盘，都会互相踩踏。成熟系统通常会有独立带宽策略、异步写入队列、生命周期管理和热/温/冷归档分层。
+
+![Kimi K2 RL checkpoint engine 原论文图](../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-10-rl-checkpoint-engine.png){ width="760" }
+
+<small>图源：[Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)，Figure 10。原论文图意：co-located distributed checkpoint engine 在 training engine 与 inference engine 之间管理参数状态，避免通过普通网络文件系统重新切分和广播超大模型参数。</small>
+
+!!! note "图解：checkpoint 是训练系统的一等组件"
+    Kimi K2 的图不是在讲“多保存几个文件”，而是在说明大规模 RL / agentic 训练里，参数更新、推理引擎、训练引擎和环境服务会形成循环。checkpoint engine 如果只被当成落盘脚本，权重同步、恢复一致性和 rollout freshness 都会成为隐形瓶颈。
+
+### 算一遍：checkpoint 频率不是越高越好
+
+假设一个 `512` 卡世界模型训练作业，单步 `2.4s`，同步 checkpoint 每次暂停 `75s`。如果每 `500` step 存一次，训练 `500` step 本身耗时 `1200s`，checkpoint 开销占：
+
+\[
+\frac{75}{1200+75}=5.9\%
+\]
+
+如果改成每 `2000` step 存一次，占比降到：
+
+\[
+\frac{75}{4800+75}=1.5\%
+\]
+
+但故障恢复成本会上升。若集群平均每 `10h` 遇到一次会导致作业重启的故障，`500` step 间隔最多丢 `20min`，期望丢 `10min`；`2000` step 间隔最多丢 `80min`，期望丢 `40min`。因此真实目标是最小化：
+
+```text
+总成本 = checkpoint 暂停成本 + 期望丢失训练成本 + 存储/带宽成本 + 恢复验证成本
+```
+
+判断链应写成：
+
+```text
+症状：token/s 周期性下跌，训练 wall-clock 明显拉长
+指标：ckpt_pause、save bandwidth、failed restart rate、lost steps、恢复后 loss 偏移
+机制：频繁同步保存会拖慢主训练；保存太稀会放大故障丢失
+修复：异步写入、增量状态、分层归档、独立 checkpoint 网络路径、恢复 shadow run
+反例：短小实验或高风险新 recipe 早期，宁愿多保存；稳定长跑后再拉长间隔
+边界：如果恢复不能证明等价，checkpoint 再频繁也只是“可重启”，不是“可比较”
+```
 
 ## 实验管理要管理证据链
 

@@ -146,6 +146,13 @@ current visual context + language + robot state
 
 DreamZero 最适合理解“世界模型和 policy 的边界正在变模糊”。传统世界模型是给 planner 用的；DreamZero 让 WAM 自己直接成为 policy。但这也带来新风险：如果未来视频预测错，动作可能不是随机错，而是很一致地执行错误未来。
 
+![DreamZero failure case 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-16-failure-case.png){ width="920" }
+
+<small>图源：[World Action Models are Zero-shot Policies](https://arxiv.org/abs/2602.15922)，Figure 16。原论文图意：展示 WAM 生成视频与真实执行的失败配对；当生成未来偏离任务目标时，执行动作也会沿着错误未来走。</small>
+
+!!! note "图解：这张图支撑的是 WAM 风险判断"
+    这不是普通“视频生成失败”的例子，而是 WAM 路线最关键的双刃剑：视频计划和动作计划高度绑定。绑定成功时，动作更能解释未来；绑定失败时，动作也会忠实执行错误未来。因此 WAM 的验收不能只看视频像不像，还要看 predicted future、issued action、real observation 和 success checker 是否一致。
+
 !!! note "读 DreamZero 时先抓住这个矛盾"
     它比 VLA 多学了未来后果，因此更能利用异质数据和跨任务动态；但它比普通 VLA 更贵、更慢，也更依赖视频预测质量。它不是免费升级，而是把“会想象未来”引入策略后必须付出的系统代价。
 

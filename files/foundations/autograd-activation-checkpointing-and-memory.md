@@ -12,6 +12,9 @@
 !!! note "初学者先抓住"
     推理只要算出答案，训练还要记住“答案是怎么来的”，这样 backward 才能算 gradient。显存压力很多时候不是权重本身，而是中间激活、梯度和 optimizer state 一起叠加。看到训练 OOM 时，先估计这几类状态谁是主因，再决定是 checkpointing、ZeRO/FSDP、offload 还是降 batch。
 
+!!! tip "遇到这些症状，回看本页"
+    同一模型推理能跑、训练一开就 OOM，activation checkpointing 后吞吐掉得过多，或者恢复训练后梯度和数据游标对不上时，回看本页。本页能帮你判断显存该从 activation、optimizer state、重算策略还是 checkpoint 恢复语义入手。
+
 ## 1. 自动微分在做什么
 
 现代框架会记录前向计算图，然后自动根据链式法则计算梯度。

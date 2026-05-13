@@ -12,6 +12,10 @@
 
     模型像厨师，loss 像食客反馈，optimizer 像改菜谱的方法，learning rate 像每次加盐的量。反馈再准确，如果一次加半罐盐，菜也会报废；如果每次只加一粒盐，改进又会慢到不可接受。
 
+!!! tip "主线定位：降低训练成本和错误优化成本"
+
+    目标函数、优化器与 LR 日程在世界模型高效训练里负责回答：训练信号到底在奖励什么，哪些能力被大桶数据主导，哪些阶段切换会破坏稳定性。它降低训练成本和错误优化成本；如果 loss 与闭环目标错位，算力会被稳定地花在错误方向上。
+
 ## 目标函数在定义学习压力
 
 大多数训练问题可以写成：
@@ -101,6 +105,8 @@ DeepSeek-R1、Qwen3 等技术报告里反复出现 `GRPO` 和 `RLVR`。这部分
 !!! note "这张图帮你补哪块基础"
     PPO 里通常有 policy、reference、reward model 和 value model。value model 要猜“当前前缀未来大概能拿多少奖励”，这在长 CoT 里很难，因为中间推理可能被后面推翻。GRPO 换了一个更朴素的比较方式：同一道题一次采样多条回答，谁通过 verifier、谁格式正确、谁结果更好，就在这一组里相对更高。
 
+    这张图支撑的工程判断是：GRPO 省掉 value model，降低 critic 训练和显存成本；但它把成本转移到组内多采样、reward/verifier 吞吐和 rollout freshness 上。因此不能只问“要不要 critic”，还要算每个 prompt 的采样组大小、平均输出长度和 verifier 延迟。
+
 GRPO 的 advantage 通常来自同题组内标准化：
 
 \[
@@ -151,6 +157,35 @@ A_i=
 !!! note "常见误区：loss 降了就一定更好"
 
     Loss 是训练压力的代理，不是最终能力本身。某个辅助 loss 下降，可能只是模型学会了更容易的中间任务；偏好 loss 改善，也可能伴随事实性、长上下文或格式稳定性退化。更稳的读法是：每次改 loss、权重或 schedule，都要同步看分桶评测、失败样本和关键能力回归。
+
+### 多目标训练的排查链：辅助 loss 把主目标压住了
+
+假设一个 VLA/world model 同时训练视频预测、动作重建和风险预测：
+
+```text
+L = 1.0 * video_loss + 0.2 * action_loss + 0.05 * risk_loss
+```
+
+训练后 `video_loss` 从 `0.092` 降到 `0.078`，但真实抓取 success 从 `74%` 掉到 `66%`，risk recall 从 `69%` 掉到 `55%`。这时不能只看 loss 权重数字，因为不同 loss 的尺度和梯度范数不一定可比：
+
+| Signal | Loss Weight | Loss Change | Grad Norm Share | 任务后果 |
+| --- | ---: | ---: | ---: | --- |
+| video prediction | `1.0` | `-15%` | `82%` | 画面更像 |
+| action reconstruction | `0.2` | `-3%` | `13%` | 动作差异弱 |
+| risk prediction | `0.05` | `+9%` | `5%` | 风险漏报 |
+
+这里的机制是：视频预测 token 多、loss 稳、梯度占比大，模型自然把容量花在让未来“看起来像”；动作和风险信号稀疏，虽然更接近闭环成败，却被主损失淹没。
+
+修复链应该按目标函数而不是按模块拍脑袋：
+
+```text
+症状：视频预测更好，动作执行和风险指标下降
+指标：per-loss grad norm、bucket loss、action sensitivity、risk recall、closed-loop success
+机制：多目标 loss 的数值权重不等于梯度贡献，也不等于任务价值
+修复：梯度归一化、分阶段训练、提高高价值桶采样、risk/action 辅助头延后冻结或单独 warmup
+反例：过度放大稀有风险 loss 会让模型保守，主分布动作变慢或拒绝执行
+边界：如果模型只做离线视频生成，video loss 可以主导；一旦接 planner，动作和风险目标必须有硬门槛
+```
 
 ## 优化器的角色
 

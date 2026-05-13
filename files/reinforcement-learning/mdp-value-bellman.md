@@ -5,6 +5,10 @@
 !!! note "初学者先抓住"
     强化学习要解决的是“现在做什么会让未来更好”。所以它不只关心当前动作是否看起来合理，还关心这个动作会把系统带到什么状态，以及后面还能拿到多少奖励。
 
+!!! tip "主线定位：降低真实试错成本和动作条件错误成本"
+
+    MDP/Bellman 页在世界模型高效训练中负责把“预测未来”转成“选择动作”。它降低真实试错成本，因为 agent 可以先用价值函数或世界模型估计后果；也暴露动作条件成本：如果 transition、reward 或 value 错了，策略会把这些错误系统性放大。
+
 ## 1. MDP 是最小决策模型
 
 MDP 通常写成：
@@ -140,6 +144,39 @@ R(s,a)+\gamma \mathbb{E}_{a'\sim\pi} Q^\pi(s',a')
 
 !!! note "图像化理解：Bellman 是可递归的未来账本"
     Bellman 不是神秘公式，它只是说：要知道现在值多少钱，就看现在立刻得到多少，加上下一步状态值多少钱。世界模型的价值在这里很直接：如果能预测 \(s'\) 和 \(r\)，就能在执行前估算未来账本。
+
+### 5.1 算一遍：discount 不是哲学参数，是 horizon 预算
+
+\(\gamma\) 决定未来奖励还能影响当前决策多久。一个粗略有效 horizon 是：
+
+\[
+H_{\text{eff}}\approx\frac{1}{1-\gamma}
+\]
+
+如果机器人控制频率是 `20Hz`：
+
+| \(\gamma\) | 约等效步数 | 约等效真实时间 |
+| ---: | ---: | ---: |
+| `0.95` | `20` steps | `1s` |
+| `0.99` | `100` steps | `5s` |
+| `0.995` | `200` steps | `10s` |
+
+这不是说 \(\gamma=0.995\) 一定更好。更长 horizon 会让价值更关注长期后果，但也会放大世界模型 transition error 和 reward misspecification。若每步关键接触误判概率是 `2%`，`100` 步内至少一次误判的概率约为：
+
+\[
+1-0.98^{100}\approx86.7\%
+\]
+
+所以真实取舍是：
+
+```text
+症状：短 horizon 策略贪心，长 horizon 策略在真实环境崩
+指标：effective horizon、reward prediction error、TD error、model exploitation、closed-loop success
+机制：Bellman backup 会递归使用下一状态价值；transition/reward 错误会沿 horizon 放大
+修复：缩短 rollout、加入 uncertainty penalty、使用 value clipping、用真实回放校准 reward/done/risk
+反例：只做短 horizon 会漏掉清障、绕行、开门这类延迟收益动作
+边界：\(\gamma\) 和 rollout horizon 要跟任务时间尺度、模型误差和控制频率一起定
+```
 
 ## 6. 从 Bellman 到 Q-learning
 

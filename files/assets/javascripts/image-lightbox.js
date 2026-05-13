@@ -1,6 +1,8 @@
 (function () {
   const IMAGE_SELECTOR = ".md-content .md-typeset img";
   const ZOOMABLE_CLASS = "atlas-zoomable-image";
+  const PORTRAIT_CLASS = "atlas-figure-portrait-auto";
+  const PORTRAIT_RATIO = 1.08;
   let overlay;
   let imageEl;
   let captionEl;
@@ -29,6 +31,26 @@
       !img.closest("a, button") &&
       !img.matches("[data-no-lightbox], .no-lightbox")
     );
+  }
+
+  function markImageShape(img) {
+    if (!img || img.closest(".atlas-lightbox")) return;
+
+    const applyShape = () => {
+      if (!img.naturalWidth || !img.naturalHeight) return;
+      const isPortrait = img.naturalHeight > img.naturalWidth * PORTRAIT_RATIO;
+      img.classList.toggle(PORTRAIT_CLASS, isPortrait);
+      img.dataset.atlasImageAspect = isPortrait ? "portrait" : "landscape";
+    };
+
+    if (img.complete) {
+      applyShape();
+      return;
+    }
+
+    if (img.dataset.atlasShapeBound === "true") return;
+    img.dataset.atlasShapeBound = "true";
+    img.addEventListener("load", applyShape, { once: true });
   }
 
   function ensureOverlay() {
@@ -104,6 +126,7 @@
 
   function decorateImages() {
     document.querySelectorAll(IMAGE_SELECTOR).forEach((img) => {
+      markImageShape(img);
       if (!shouldUseLightbox(img) || img.dataset.lightboxReady === "true") return;
 
       img.dataset.lightboxReady = "true";
