@@ -9,6 +9,24 @@
 !!! note "图解：基础知识最好按层读"
     这张 Transformer 原图几乎串起了后续所有基础概念：输入先变成 token embedding，再加入位置编码；attention 负责跨 token 信息交互；feed-forward/MLP 负责逐 token 非线性变换；残差和归一化保证深层训练稳定；最后通过 softmax 形成概率输出。遇到新名词时，先判断它属于输入表示、模型结构、训练目标还是运行系统，概念就不容易混在一起。
 
+!!! tip "这一组怎么读"
+    基础知识不是考试大纲，先按“够用即止”读。每页只需要抓住三件事：这个概念解决什么问题，它在后续哪个专题会反复出现，遇到错误时它能帮你排查哪一类原因。公式和实现细节可以第二遍再补。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>先建立词汇表</strong>
+    <p>知道 tensor、token、embedding、loss、gradient、runtime 分别属于哪一层。</p>
+  </div>
+  <div>
+    <strong>再理解数据流</strong>
+    <p>看清输入如何变成表示，表示如何经过模块，loss 如何反向影响参数。</p>
+  </div>
+  <div>
+    <strong>最后接工程问题</strong>
+    <p>把显存、带宽、dtype、kernel、checkpoint 和评测指标接到真实系统里。</p>
+  </div>
+</div>
+
 ## 为什么要单独有基础知识模块
 
 很多专题页面都会反复出现同一批基础概念：

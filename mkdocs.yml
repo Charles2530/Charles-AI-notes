@@ -43,6 +43,7 @@ plugins:
 hooks:
   - hooks/paper_deep_dives_sort.py
 extra_javascript:
+  - assets/javascripts/search-fallback.js
   - assets/javascripts/term-tooltips.js
   - assets/javascripts/reading-controls.js
   - assets/javascripts/image-lightbox.js

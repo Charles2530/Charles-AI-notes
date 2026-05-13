@@ -15,6 +15,30 @@
 !!! note "先选一个入口"
     第一次读不必顺着左侧目录从头刷。概念卡住先看 [基础知识](foundations/index.md) 和 [术语表](glossary/index.md)；工程卡住先看训练、推理、量化或算子；论文卡住先看 [论文专题讲解](paper-deep-dives/index.md) 和 [参考文献总表](references/index.md)。
 
+## 怎么使用这个知识库
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>10 分钟建地图</strong>
+    <p>先扫首页和目标专题的路线图，只回答一个问题：这个主题在训练、推理、部署或闭环系统里负责哪一层。</p>
+  </div>
+  <div>
+    <strong>1 小时补概念</strong>
+    <p>遇到硬词不要硬读，先跳到基础知识或术语表，把它放回表示、目标、执行、评测这几层。</p>
+  </div>
+  <div>
+    <strong>半天查工程问题</strong>
+    <p>带着具体问题进入训练、推理、量化或算子页面，优先看瓶颈、取舍、失败模式和检查清单。</p>
+  </div>
+  <div>
+    <strong>精读一篇论文</strong>
+    <p>先用专题页定位它解决的系统问题，再读论文讲解，最后回到主题页更新自己的判断框架。</p>
+  </div>
+</div>
+
+!!! tip "读完首页先做一个选择"
+    如果你不知道从哪里开始，先选一种身份：想补基础，就走 [基础知识](foundations/index.md)；想做工程，就走 [训练](training/index.md)、[推理](inference/index.md)、[量化](quantization/index.md) 或 [算子](operators/index.md)；想理解世界模型和机器人闭环，就走 [世界模型](world-models/index.md) 与 [具身智能](embodied-ai/index.md)；想跟论文，就走 [论文专题讲解](paper-deep-dives/index.md)。
+
 ## 读者路径
 
 <div class="section-grid">

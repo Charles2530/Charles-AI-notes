@@ -199,73 +199,25 @@ VLA 更像具身智能里的端到端策略接口之一。它回答的是：给�
 
 ### 与传统控制的关系
 
-传统控制器并没有过时。相反，在很多真实系统里，具身智能真正稳定的形态往往是：
-
-1. 高层由 VLM/VLA 或任务规划模块负责；
-2. 中层由技能库和状态机负责；
-3. 低层由经典控制器和安全约束负责。
+传统控制器并没有过时。相反，很多真实系统里更稳定的形态是分层协作：高层由 VLM/VLA 或任务规划模块决定意图，中层由技能库和状态机组织执行，低层再由经典控制器和安全约束把动作落到真实硬件边界里。
 
 ## 8. 具身智能中的核心矛盾
 
-几乎所有路线最终都会回到几组长期矛盾：
-
-1. `通用性 vs 可靠性`
-2. `端到端学习 vs 分层控制`
-3. `仿真扩展性 vs 真实世界真实性`
-4. `更强模型 vs 更稳数据与评测`
-5. `更激进自治 vs 更保守安全`
+几乎所有路线最终都会回到几组长期矛盾：`通用性 vs 可靠性`、`端到端学习 vs 分层控制`、`仿真扩展性 vs 真实世界真实性`、`更强模型 vs 更稳数据与评测`、`更激进自治 vs 更保守安全`。
 
 真正成熟的系统，不是简单地站队某一边，而是根据目标场景决定哪一边应该更重。
 
 ## 9. 一个更实际的理解方式
 
-如果把具身智能系统想成一位进入真实家庭或工厂的新员工，那么他至少要做到：
-
-1. 看得明白；
-2. 记得住刚刚发生了什么；
-3. 知道下一步做什么；
-4. 手脚协调；
-5. 出错时别慌；
-6. 不要伤人、不要砸物、不要把现场越弄越乱。
+如果把具身智能系统想成一位进入真实家庭或工厂的新员工，那么他至少要看得明白，记得住刚刚发生了什么，知道下一步做什么，手脚协调，出错时能恢复，并且始终不伤人、不砸物、不把现场越弄越乱。
 
 这六点缺一不可，而今天很多系统往往只在其中一两点上看起来很强。
 
 ## 10. 阅读建议
 
-如果你从世界模型主线进入具身方向，建议先读：
+如果你从世界模型主线进入具身方向，可以先用 [VLA 数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md)、[具身智能从零路线](beginner-learning-path.md)、[VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) 建立主线，再接 [规划、控制与安全](planning-control-and-safety.md)、[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) 和 [具身任务谱系与评测](task-taxonomy-and-benchmarks.md)。
 
-1. [VLA 数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md)
-2. [具身智能从零路线](beginner-learning-path.md)
-3. [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)
-4. [Isaac Sim 与 RoboTwin](isaacsim-and-robotwin.md)
-5. [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md)
-6. [一个任务跑通具身闭环](closed-loop-task-walkthrough.md)
-7. [规划、控制与安全](planning-control-and-safety.md)
-8. [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)
-9. [具身任务谱系与评测](task-taxonomy-and-benchmarks.md)
-
-如果你是围绕仿真数据集、资产生成或专家轨迹下钻，建议先读：
-
-1. [VLA 数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md)
-2. [具身智能从零路线](beginner-learning-path.md)
-3. [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)
-4. [Isaac Sim 与 RoboTwin](isaacsim-and-robotwin.md)
-5. [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md)
-6. [一个任务跑通具身闭环](closed-loop-task-walkthrough.md)
-7. [资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md)
-8. [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)
-9. [规划、控制与安全](planning-control-and-safety.md)
-
-如果你是围绕具体应用下钻，再继续读：
-
-1. [具身部署模式与安全案例](deployment-patterns-and-safety-cases.md)
-2. [人机协作与交互评测](human-robot-interaction-and-evaluation.md)
-3. [家庭机器人流程与失败排查](household-robotics-workflows-and-failure-patterns.md)
-
-如果你更偏机器人产品或部署视角，再补读：
-
-1. [VLM/VLA 总览](../vlm/index.md)
-2. [世界模型路线图](../world-models/index.md)
+如果你更关心仿真数据集、资产生成或专家轨迹，就把 [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[Isaac Sim 与 RoboTwin](isaacsim-and-robotwin.md)、[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) 提前读。进入产品或部署视角后，再补 [具身部署模式与安全案例](deployment-patterns-and-safety-cases.md)、[人机协作与交互评测](human-robot-interaction-and-evaluation.md)、[家庭机器人流程与失败排查](household-robotics-workflows-and-failure-patterns.md)，并回看 [VLM/VLA 总览](../vlm/index.md) 与 [世界模型路线图](../world-models/index.md)。
 
 ## 11. 一个总判断
 

@@ -107,31 +107,13 @@ vLLM 原论文图可以作为推理专题的第一张系统图：在线推理不
 
 ## 1. 推理系统为什么和训练系统完全不同
 
-**训练关心的是**：
-
-- loss：优化目标是否下降，训练信号是否合理。
-- 收敛：参数更新是否稳定走向可用解，而不是震荡或发散。
-- 泛化：模型在未见数据和长尾任务上是否仍然可靠。
-
-**推理关心的是**：
-
-- 首 token 延迟：用户看到第一段输出前等多久。
-- 每 token 生成速度：流式输出过程中每个 token 的间隔。
-- QPS：单位时间能处理多少请求。
-- tail latency：P95/P99 是否稳定，决定最差体验。
-- 单位请求成本：每次调用消耗多少 GPU、显存和工程资源。
+训练主要关心 loss 是否下降、参数更新是否稳定、未见数据上的泛化是否可靠。推理关心的是另一套指标：用户多久看到首 token，流式输出是否顺，单位时间能服务多少请求，P95/P99 是否稳定，以及每次调用实际消耗多少 GPU、显存和工程资源。
 
 因此同一个模型，训练做得很好，不代表在线服务就自然高效。
 
 ### 1.1 为什么很多团队会误判推理问题
 
-因为训练视角很容易把问题看成“模型是否强”。但推理视角里，很多关键问题其实是：
-
-1. 请求是否被正确分流；
-2. 上下文是否被合理装配；
-3. KV cache 是否被有效管理；
-4. prefill 和 decode 是否被分开优化；
-5. 尾延迟是否被控制。
+因为训练视角很容易把问题看成“模型是否强”。但推理视角会继续追问：请求有没有被正确分流，上下文有没有合理装配，KV cache 有没有被有效管理，prefill 和 decode 是否分开优化，尾延迟是否被持续控制。
 
 所以推理更多是系统设计问题，而不是单模型问题。
 
@@ -139,21 +121,13 @@ vLLM 原论文图可以作为推理专题的第一张系统图：在线推理不
 
 用户问一句很短的话，但带了 20 页 PDF。真正贵的往往不是解码，而是前面的 prefill，因为要先把整段上下文编码进 KV cache。
 
-**这说明推理至少要区分两类负载**：
-
-- prefill：一次性处理输入上下文并写入 KV cache，长输入时成本高。
-- decode：逐 token 生成输出，常受 KV cache 读写和调度影响。
+这说明推理至少要区分两类负载：`prefill` 一次性处理输入上下文并写入 KV cache，长输入时成本高；`decode` 逐 token 生成输出，常受 KV cache 读写和调度影响。
 
 它们的瓶颈和优化手段并不一样。
 
 ### 2.1 再看一个反例：短轮次 agent
 
-如果系统是屏幕 agent 或工具 agent，请求上下文可能不长，但每次都需要快速多轮调用。此时瓶颈可能不在 prefill，而在：
-
-1. 小 batch 下的 kernel 利用率；
-2. 高频工具链切换；
-3. 路由和缓存污染；
-4. 多轮状态膨胀。
+如果系统是屏幕 agent 或工具 agent，请求上下文可能不长，但每次都需要快速多轮调用。此时瓶颈可能转移到小 batch 下的 kernel 利用率、高频工具链切换、路由和缓存污染，以及多轮状态膨胀。
 
 这说明“推理慢”并不是一个统一问题。
 
@@ -197,21 +171,11 @@ P95/P99 会不会突然拉高。
 \text{requests} \rightarrow \text{scheduling} \rightarrow \text{GPU compute} \rightarrow \text{responses}
 \]
 
-因此很多问题其实不是“模型慢”，而是：
-
-- 调度不合理：长短请求、在线和后台任务没有被正确排队。
-- cache 管理差：KV、prefix 或检索缓存没有被有效复用和回收。
-- 请求类型混在一起：长文档、短聊天、agent 和多模态请求互相拖慢。
-- 路由策略没分层：简单任务和高价值复杂任务走了同一条昂贵路径。
+因此很多问题其实不是“模型慢”，而是请求进入系统后的路径不清楚：长短请求、在线和后台任务没有被正确排队，KV、prefix 或检索缓存没有被有效复用和回收，长文档、短聊天、agent 和多模态请求互相拖慢，简单任务和高价值复杂任务又走了同一条昂贵路径。
 
 ### 4.1 推理为什么天然是多目标优化
 
-很多优化只能同时改善一部分目标：
-
-1. 更 aggressive batching 提升吞吐，但可能拉高 TTFT；
-2. 更强检索提升质量，但拉长关键路径；
-3. 量化降低成本，但可能损伤长尾能力；
-4. 小模型更快，但复杂任务可能需要升级回大模型。
+很多优化只能改善一部分目标。更激进的 batching 会提升吞吐，但可能拉高 TTFT；更强检索会提升质量，但也会拉长关键路径；量化能降低成本，却可能损伤长尾能力；小模型响应更快，但复杂任务又常常需要升级回大模型。
 
 所以推理决策本质上是多目标权衡，而不是“尽量更快”这么单一。
 
@@ -249,48 +213,21 @@ P95/P99 会不会突然拉高。
 
 ### 5.1 为什么这些抓手必须一起看
 
-**因为单点优化常常会转移瓶颈**：
-
-1. 量化后显存省了，但 cache 成了新瓶颈；
-2. 检索做强了，但上下文拼接太长；
-3. speculative 解码快了，但排队和路由变差；
-4. continuous batching 提升了吞吐，却把尾延迟拉高。
+因为单点优化常常会转移瓶颈：量化后显存省了，cache 可能成为新瓶颈；检索做强了，上下文拼接可能变得过长；speculative 解码变快了，排队和路由可能开始拖后腿；continuous batching 提升了吞吐，也可能把尾延迟拉高。
 
 **推理系统的难点就在这里**：你很少能只动一个旋钮而不影响其他部分。
 
 ## 6. 推理文档在本知识库里的位置
 
-这里的推理章节不是只讲某个 kernel 或某个 serving 框架，而是把完整的在线系统拆成若干关键层：
-
-1. 推理服务系统与调度；
-2. `vLLM`、`SGLang`、`TensorRT-LLM` 等运行时如何承接 cache、batching 与 kernel；
-3. 解耦式 prefill、KV 服务与容量运维如何把上下文和增量生成分层处理；
-4. 缓存、路由与投机解码；
-5. RAG、agent 与长上下文；
-6. 上下文压缩与内存分层；
-7. GPU kernel、batching 与显存系统；
-8. 多模型与 MoE 路由；
-9. 成本建模、SLO 和线上评测。
+这里的推理章节不是只讲某个 kernel 或某个 serving 框架，而是把完整在线系统拆成几层来看：先看服务系统与调度，再看 `vLLM`、`SGLang`、`TensorRT-LLM` 等运行时如何承接 cache、batching 与 kernel；随后进入解耦式 prefill、KV 服务、缓存、路由、投机解码、RAG、agent、长上下文和上下文压缩；最后回到 GPU kernel、多模型路由、成本建模、SLO 与线上评测。
 
 这样阅读时会更容易建立系统图，而不是只记一些零散优化技巧。
 
 ## 7. 推荐阅读顺序
 
-**建议先读**：
+建议先读 [推理服务系统](serving-systems.md) 和 [推理运行时：vLLM、SGLang、TensorRT-LLM](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)，建立请求、batch、runtime 和 KV cache 的系统图；再接 [解耦 Prefill 与 KV 服务](disaggregated-prefill-kv-services-and-capacity-ops.md)、[缓存、路由与投机解码](caching-routing-and-speculative.md)、[RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md)，理解长上下文和多步链路为什么会改变瓶颈；最后读 [GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md) 与 [可观测性与在线评测](observability-and-online-evaluation.md)，把优化落回可诊断的线上系统。
 
-1. [推理服务系统](serving-systems.md)
-2. [推理运行时：vLLM、SGLang、TensorRT-LLM](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)
-3. [解耦 Prefill 与 KV 服务](disaggregated-prefill-kv-services-and-capacity-ops.md)
-4. [缓存、路由与投机解码](caching-routing-and-speculative.md)
-5. [RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md)
-6. [GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md)
-7. [可观测性与在线评测](observability-and-online-evaluation.md)
-
-如果你更关心成本与容量规划，再继续看：
-
-1. [MoE 路由与多模型服务](moe-routing-and-multi-model-serving.md)
-2. [成本建模与 SLO 设计](cost-modeling-and-slo-design.md)
-3. [上下文压缩与 KV 内存管理](context-compression-kv-eviction-and-memory-hierarchies.md)
+如果你更关心成本与容量规划，再补 [MoE 路由与多模型服务](moe-routing-and-multi-model-serving.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md) 和 [上下文压缩与 KV 内存管理](context-compression-kv-eviction-and-memory-hierarchies.md)。
 
 ## 阶段检查与下一站
 

@@ -886,6 +886,69 @@
     }
   ];
 
+  const TERM_OVERRIDES = [
+    {
+      aliases: ["KV Cache", "KV cache", "KV"],
+      tip: "KV Cache：自回归 Transformer 推理时保存历史 token 的 Key/Value 张量。Prefill 会把输入上下文写进 KV cache，Decode 每生成一个 token 都要读它；上下文越长、并发越高，KV cache 越容易成为显存和带宽瓶颈。判断相关方案时先问：它省的是权重显存，还是动态 KV 显存？"
+    },
+    {
+      aliases: ["FP8"],
+      tip: "FP8：8 位浮点格式，常见 E4M3/E5M2 等变体。它比 INT4 更保留动态范围，常用于训练或推理中的混合精度路径；真正收益取决于硬件 tensor core、scale 策略、kernel 支持和哪些敏感层保留高精度。不要只看 bit 数，要看端到端吞吐和掉点。"
+    },
+    {
+      aliases: ["FP4", "NVFP4"],
+      tip: "FP4 / NVFP4：4 位浮点与 NVIDIA 微缩放低精度路线。它能显著降低带宽和显存，但离散值极少，对 attention、激活离群值和敏感层更危险；通常需要 QAT、分块 scale、混合精度保留和专用 kernel 才能可靠落地。"
+    },
+    {
+      aliases: ["MTP"],
+      tip: "MTP：Multi-Token Prediction，多 token 预测。训练时让同一位置不仅预测下一个 token，也预测更远 token，以增加监督密度；推理时这些额外模块可丢弃，也可作为 speculative decoding 的 draft 路径。读技术报告时要分清：MTP 提升训练信号，不等于自动降低常规推理成本。"
+    },
+    {
+      aliases: ["GRPO"],
+      tip: "GRPO：Group Relative Policy Optimization。对同一 prompt 采样多条回答，用组内相对分数构造 advantage，减少或绕开 critic 成本。它常用于可验证奖励后训练，但仍依赖 reward 设计、采样吞吐、KL 约束和格式稳定性；不是把 PPO 名字换掉就会更稳。"
+    },
+    {
+      aliases: ["WAM"],
+      tip: "WAM：World-Action Model，世界-动作模型。它试图把未来世界变化和动作序列放进同一个建模问题里，让动作既是 policy 输出，也是未来分叉的条件。判断 WAM 是否有用，要看闭环任务收益、动作敏感性和 rollout 漂移，而不是只看未来视频是否好看。"
+    },
+    {
+      aliases: ["WM", "VAM"],
+      tip: "WM/VAM：WM 指 World Model，学习世界如何随动作、时间和任务变化；VAM 通常强调 Video-Action Model，把视频未来和动作建模结合起来。读这类缩写时先问输出被谁消费：planner、policy、风险模块，还是只给人看 demo。"
+    },
+    {
+      aliases: ["DualPipe"],
+      tip: "DualPipe：DeepSeek-V3 报告中的双向 pipeline 调度方案。它把 forward/backward、MoE all-to-all 和 PP 通信重新排布，尽量用计算隐藏通信和 pipeline bubble；代价是调度复杂度、参数/激活驻留和实现约束增加。它是训练系统技巧，不是模型架构本身。"
+    },
+    {
+      aliases: ["MLA"],
+      tip: "MLA：Multi-head Latent Attention。DeepSeek 系列用它把 K/V 压到 latent 表示，推理时主要缓存压缩 latent 与位置相关信息，从而降低长上下文 KV cache 成本。注意它解决的是 attention 缓存和带宽压力，不等同于 MoE 的稀疏激活。"
+    },
+    {
+      aliases: ["DeepSeekMoE", "auxiliary-loss-free"],
+      tip: "DeepSeekMoE / auxiliary-loss-free routing：MoE 中用大量 routed experts 扩容量，但每个 token 只激活少数 expert。auxiliary-loss-free 路由用动态 bias 调整专家负载，尽量不让负载均衡目标直接干扰语言建模 loss。"
+    },
+    {
+      aliases: ["Prefill"],
+      tip: "Prefill：推理时一次性处理输入上下文并写入 KV cache 的阶段。长 PDF、长聊天历史和 RAG 大上下文通常贵在 prefill；优化方向包括 prefix cache、上下文压缩、解耦 prefill 和更好的调度。"
+    },
+    {
+      aliases: ["Decode"],
+      tip: "Decode：自回归逐 token 生成阶段。它通常反复读取 KV cache，单步 batch 小、带宽敏感，优化重点和 prefill 不同；TPOT、tail latency、continuous batching 和 speculative decoding 都主要影响这里。"
+    },
+    {
+      aliases: ["MoE"],
+      tip: "MoE：Mixture of Experts，专家混合模型。它通过路由让每个 token 只走少数 expert，用较低激活计算换更大总容量；工程瓶颈常在 expert 负载均衡、all-to-all 通信、路由稳定性和 serving 时的批处理碎片。"
+    },
+    {
+      aliases: ["QAT"],
+      tip: "QAT：Quantization-Aware Training，量化感知训练。训练中模拟低比特误差，让模型提前适应目标精度；它比 PTQ 更贵，但在 FP4/INT4 attention、多模态和高风险业务里常更稳。关键问题是 forward、backward、scale 和最终推理 kernel 是否一致。"
+    },
+    {
+      aliases: ["PTQ"],
+      tip: "PTQ：Post-Training Quantization，后训练量化。训练完成后用校准数据估计 scale 并压低权重或激活，成本低、上线快；风险是校准集不贴近真实流量时，长上下文、多模态细节和工具/代码任务会出现局部掉点。"
+    }
+  ];
+
   const SKIP_SELECTOR = [
     "a",
     "abbr",
@@ -911,9 +974,9 @@
   let tooltipElement = null;
   let activeTerm = null;
   let floatingTooltipsReady = false;
-  const MAX_AUTO_DECORATIONS_PER_TIP = 4;
+  const MAX_AUTO_DECORATIONS_PER_TIP = 6;
 
-  for (const group of TERM_GROUPS) {
+  for (const group of [...TERM_GROUPS, ...TERM_OVERRIDES]) {
     for (const alias of group.aliases) {
       termTips.set(alias, group.tip);
     }

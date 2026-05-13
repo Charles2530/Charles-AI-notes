@@ -325,7 +325,20 @@
           }, 1600);
         }
       });
+
+      const expand = document.createElement("button");
+      expand.type = "button";
+      expand.className = "atlas-table-copy atlas-table-expand";
+      expand.textContent = "展开";
+      expand.title = "展开或收起长表格";
+      expand.addEventListener("click", () => {
+        const collapsed = wrapper.classList.toggle("atlas-table-wrap--collapsed");
+        expand.textContent = collapsed ? "展开" : "收起";
+        window.dispatchEvent(new CustomEvent("atlas:layoutchange"));
+      });
+
       toolbar.appendChild(hint);
+      toolbar.appendChild(expand);
       toolbar.appendChild(button);
       wrapper.appendChild(toolbar);
       wrapper.appendChild(table);
@@ -333,7 +346,38 @@
         if ((table.rows[0]?.cells.length || 0) > 3 || table.scrollWidth > wrapper.clientWidth + 8) {
           wrapper.classList.add("atlas-table-wrap--wide");
         }
+        if (table.rows.length > 14) {
+          wrapper.classList.add("atlas-table-wrap--long", "atlas-table-wrap--collapsed");
+        } else {
+          expand.hidden = true;
+        }
       });
+    });
+  }
+
+  function softenNumberedHeadings() {
+    document.querySelectorAll(".md-content .md-typeset h2").forEach((heading) => {
+      if (heading.dataset.atlasNumberedHeading) return;
+
+      const firstText = Array.from(heading.childNodes).find((node) => node.nodeType === Node.TEXT_NODE && node.nodeValue.trim());
+      if (!firstText) return;
+
+      const match = firstText.nodeValue.match(/^(\s*)(\d+(?:\.\d+)*[.、])\s+(.+)$/);
+      if (!match) return;
+
+      const number = document.createElement("span");
+      number.className = "atlas-heading-number";
+      number.textContent = match[2].replace(/[.、]$/, "");
+
+      const title = document.createElement("span");
+      title.className = "atlas-heading-title";
+      title.textContent = match[3];
+
+      firstText.nodeValue = match[1];
+      heading.insertBefore(number, firstText.nextSibling);
+      heading.insertBefore(title, number.nextSibling);
+      heading.classList.add("atlas-numbered-heading");
+      heading.dataset.atlasNumberedHeading = "true";
     });
   }
 
@@ -472,14 +516,95 @@
     content.appendChild(nav);
   }
 
+  function currentNavItem() {
+    const current = normalizeUrl(window.location.href);
+    const links = Array.from(document.querySelectorAll(".md-sidebar--primary a.md-nav__link[href]"));
+    return links
+      .map((anchor) => ({ anchor, info: navLinkInfo(anchor) }))
+      .find((item) => item.info && item.info.key === current)?.anchor.closest(".md-nav__item") || null;
+  }
+
+  function navItemLinkInfo(item) {
+    if (!item) return null;
+    const anchor = directChild(item, "a.md-nav__link");
+    if (!anchor) return null;
+    return navLinkInfo(anchor);
+  }
+
+  function siblingTopicLinks(item) {
+    const parentList = item && item.parentElement;
+    if (!parentList) return [];
+
+    return Array.from(parentList.children)
+      .filter((sibling) => sibling !== item && sibling.matches(".md-nav__item"))
+      .map(navItemLinkInfo)
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  function childTopicLinks(item) {
+    const nav = directChild(item, "nav.md-nav");
+    const list = directChild(nav, "ul.md-nav__list");
+    if (!list) return [];
+
+    return Array.from(list.children)
+      .filter((child) => child.matches(".md-nav__item"))
+      .map(navItemLinkInfo)
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  function mountTopicRelatedLinks() {
+    const content = document.querySelector(".md-content__inner");
+    if (!content || content.querySelector(".atlas-topic-links")) return;
+
+    const item = currentNavItem();
+    if (!item) return;
+
+    const links = childTopicLinks(item).length ? childTopicLinks(item) : siblingTopicLinks(item);
+    if (links.length < 2) return;
+
+    const section = document.createElement("section");
+    section.className = "atlas-topic-links";
+    section.setAttribute("aria-label", "本专题相关页面");
+
+    const title = document.createElement("h2");
+    title.textContent = "本专题相关";
+
+    const intro = document.createElement("p");
+    intro.textContent = "读到这里时，不必退回左侧目录重新找路。下面这些页面和当前页面处在同一组主题里，适合作为下一步横向补读。";
+
+    const list = document.createElement("div");
+    list.className = "atlas-topic-links__grid";
+
+    links.forEach((link) => {
+      const anchor = document.createElement("a");
+      anchor.href = link.href;
+      anchor.className = "atlas-topic-links__item";
+      anchor.textContent = link.label;
+      list.appendChild(anchor);
+    });
+
+    section.append(title, intro, list);
+
+    const pageNav = content.querySelector(".atlas-page-nav");
+    if (pageNav) {
+      content.insertBefore(section, pageNav);
+    } else {
+      content.appendChild(section);
+    }
+  }
+
   function init() {
     if (!document.body) return;
     markPageContext();
     markPaperDeepDiveNav();
+    softenNumberedHeadings();
     mountReadingProgress();
     mountReaderControls();
     mountPaperDeepDiveSorting();
     mountTableCopyButtons();
+    mountTopicRelatedLinks();
     mountPageNav();
   }
 

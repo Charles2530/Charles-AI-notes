@@ -280,7 +280,7 @@
 
 对应站内章节：[强化学习](../reinforcement-learning/index.md)。
 
-### 5.1 强化学习基础方法
+### 5.1 大模型 RLVR 与后训练技术报告
 
 1. [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948)  
    用 GRPO、rule-based reward 和大规模 RLVR 训练长 CoT reasoning model 的关键技术报告；站内专题见 [DeepSeek-R1 讲解](../paper-deep-dives/technical-reports/deepseek-r1.md)。
@@ -292,6 +292,8 @@
    Kimi K2 用 MuonClip 跑稳 1T MoE 预训练，并把 agentic data synthesis、tool-use SFT、RLVR、self-critique reward 和 RL rollout 基础设施合成一条开放 agent 模型路线；站内专题见 [Kimi K2 讲解](../paper-deep-dives/technical-reports/kimi-k2.md)。
 5. [Qwen3.5-Omni Technical Report](https://arxiv.org/abs/2604.15804)  
    Qwen3.5-Omni 用 Thinker-Talker、Hybrid MoE、AuT、ARIA、RVQ/MTP/Code2Wav 和 256K context 构建可流式语音交互的全模态 agent；站内专题见 [Qwen3.5-Omni 讲解](../paper-deep-dives/technical-reports/qwen35-omni.md)。
+
+### 5.2 经典强化学习基础方法
 
 1. [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)
    `DQN` 是深度强化学习的经典起点，适合理解 value learning、replay buffer 和 target network。
@@ -310,7 +312,7 @@
 8. [DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models](https://arxiv.org/abs/2402.03300)
    `GRPO` 的重要来源之一，适合理解组内相对奖励如何减少 critic 依赖。
 
-### 5.2 LLM/VLM 后训练与 verl
+### 5.3 LLM/VLM 后训练与 verl
 
 1. [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
    `InstructGPT` 是 SFT、reward model 和 PPO/RLHF 三步流程的基础论文。
@@ -319,7 +321,7 @@
 3. [A Framework for Training Large Language Models for Code Generation via Proximal Policy Optimization](https://i.cs.hku.hk/~cwu/papers/gmsheng-NL2Code24.pdf)
    适合从代码生成任务看 PPO 后训练的数据、奖励和系统约束。
 
-### 5.3 强化学习与世界模型
+### 5.4 强化学习与世界模型
 
 1. [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)
    `PlaNet` 是从像素学习 RSSM latent dynamics 并做 latent-space planning 的关键论文。
