@@ -33,11 +33,23 @@
 
 ## 先按三组读
 
-| 分组 | 核心问题 | 先看页面 |
-| --- | --- | --- |
-| 服务入口与运行时 | 请求怎么进入系统，runtime 怎么组织 batch、kernel 和结构化输出 | 推理服务系统、推理运行时、GPU kernel 与内存 |
-| KV 与请求编排 | 长上下文、prefill/decode、cache、路由和投机解码如何互相影响 | 解耦式 Prefill 与 KV 服务、缓存路由、上下文压缩 |
-| 容量与观测 | 成本、SLO、P99、在线评测和容量规划怎么闭环 | 容量优化、成本与 SLO、在线评测与观测 |
+<div class="atlas-route-list">
+  <a class="atlas-route atlas-route--compact" href="serving-systems/">
+    <span>服务入口与运行时</span>
+    <strong>先看请求怎么进系统</strong>
+    <p>理解 serving、runtime、batch、kernel、结构化输出和基础内存路径。</p>
+  </a>
+  <a class="atlas-route atlas-route--compact" href="disaggregated-prefill-kv-services-and-capacity-ops/">
+    <span>KV 与请求编排</span>
+    <strong>再看长上下文怎么被调度</strong>
+    <p>把 prefill/decode、cache、路由、投机解码和上下文压缩放在一起看。</p>
+  </a>
+  <a class="atlas-route atlas-route--compact" href="optimization-checklist-and-capacity-planning/">
+    <span>容量与观测</span>
+    <strong>最后看系统怎么长期运营</strong>
+    <p>围绕成本、SLO、P99、在线评测和容量规划建立闭环。</p>
+  </a>
+</div>
 
 ## 推荐入口
 

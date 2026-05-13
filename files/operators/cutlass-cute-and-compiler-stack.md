@@ -14,14 +14,7 @@ AI kernel 工程里常见误解是：既然已有 `torch.compile`、Triton、cuB
 
 ## 从模型图到硬件执行
 
-一个训练或推理系统从上到下大致经过：
-
-1. Python / 框架前端；
-2. 图捕获与图优化；
-3. 中间表示与代码生成；
-4. 库调用或自定义 kernel；
-5. PTX / SASS；
-6. GPU 硬件执行。
+一个训练或推理系统从上到下大致经过 Python / 框架前端、图捕获与图优化、中间表示与代码生成、库调用或自定义 kernel、PTX / SASS，最后落到 GPU 硬件执行。
 
 不同工具大致落在不同位置：
 
@@ -47,13 +40,7 @@ AI kernel 工程里常见误解是：既然已有 `torch.compile`、Triton、cuB
 
 图编译器的核心不是“把 Python 变快”，而是识别稳定子图、消除 eager 开销、融合小算子、重写 layout，并把部分热点降到更高效的 kernel 后端。
 
-它擅长：
-
-1. elementwise 链融合；
-2. layout 传播；
-3. 消除中间张量；
-4. 调度多个小算子；
-5. 对稳定 shape 做 codegen。
+它擅长 elementwise 链融合、layout 传播、消除中间张量、调度多个小算子，并对稳定 shape 做 codegen。
 
 它困难的地方包括动态 shape、复杂控制流、稀疏和不规则访存、极致 GEMM/attention 模板优化，以及跨节点通信与计算的全局协同。这也是图编译器和手工内核不会彻底互相替代的原因。
 
@@ -61,26 +48,13 @@ AI kernel 工程里常见误解是：既然已有 `torch.compile`、Triton、cuB
 
 ## CUTLASS 是什么
 
-`CUTLASS` 可以理解为 CUDA 高性能线性代数与相关 kernel 的模板工具箱。它把高性能 GEMM 常见复杂模式做成可组合构件，例如：
-
-1. tile decomposition；
-2. warp-level MMA；
-3. shared memory pipeline；
-4. 数据布局与 iterator；
-5. epilogue fusion；
-6. 不同 dtype 和 Tensor Core 路径。
+`CUTLASS` 可以理解为 CUDA 高性能线性代数与相关 kernel 的模板工具箱。它把高性能 GEMM 常见复杂模式做成可组合构件，例如 tile decomposition、warp-level MMA、shared memory pipeline、数据布局与 iterator、epilogue fusion，以及不同 dtype 和 Tensor Core 路径。
 
 cuBLAS 更像成熟通用库接口；CUTLASS 更像构建高性能 GEMM 变体的工具箱。当你需要特殊 layout、特殊 epilogue、融合额外逻辑、固定 shape family 或自己控制流水线时，CUTLASS 的价值会变高。
 
 ## CuTe 的价值
 
-CuTe 可以看成 CUTLASS 中更强调 layout algebra 和 tensor/tile 组合表达的一层。它尝试把高性能 kernel 中很多原本写死的几何关系抽象出来：
-
-1. tile 如何映射到线程；
-2. layout 如何映射到 memory transaction；
-3. MMA pipeline 如何拼接；
-4. swizzle、ldmatrix、fragment 等概念如何统一表达；
-5. 新硬件特性如何进入可组合 kernel。
+CuTe 可以看成 CUTLASS 中更强调 layout algebra 和 tensor / tile 组合表达的一层。它尝试把高性能 kernel 中很多原本写死的几何关系抽象出来：tile 如何映射到线程，layout 如何映射到 memory transaction，MMA pipeline 如何拼接，swizzle、ldmatrix、fragment 等概念如何统一表达，以及新硬件特性如何进入可组合 kernel。
 
 CuTe 的价值不是“更高级”本身，而是让复杂 GEMM、attention 和 Hopper/Blackwell 以后更复杂的 pipeline 能以更系统的方式表达和复用。
 
@@ -97,49 +71,16 @@ CuTe 的价值不是“更高级”本身，而是让复杂 GEMM、attention 和
 
 ## 什么时候信任库，什么时候自己写
 
-优先用现成库的场景：
-
-1. GEMM/conv/attention 形状常规；
-2. 通用性要求高；
-3. 性能已经够用；
-4. 团队不是 kernel 团队；
-5. 后续维护比极限性能更重要。
-
-值得写自定义 kernel 的场景：
-
-1. 默认实现明显慢；
-2. 算子出现频率极高；
-3. 有明显可融合空间；
-4. 目标 GPU 和 shape 相对固定；
-5. 业务收益足以覆盖维护成本；
-6. 库实现无法表达目标 epilogue、layout 或调度。
-
-值得用模板库而不是完全手写的场景，是你需要一整个 kernel 家族，而不是一个一次性特化点。
+当 GEMM / conv / attention 形状常规、通用性要求高、性能已经够用，或者后续维护比极限性能更重要时，优先用现成库。只有默认实现明显慢、算子出现频率极高、有明确融合空间、目标 GPU 和 shape 相对固定，并且业务收益足以覆盖维护成本时，才值得写自定义 kernel；如果需要一整个 kernel 家族，而不是一个一次性特化点，再考虑模板库路线。
 
 ## 全栈约束
 
-Kernel 设计不能脱离上层系统。一个很快的 kernel 也可能因为以下原因无法带来端到端收益：
-
-1. 图编译器无法稳定捕获调用路径；
-2. runtime dynamic batching 让 shape 过于分散；
-3. layout 转换成本抵消了 kernel 收益；
-4. kernel 与通信、KV 管理或调度无法重叠；
-5. 低精度数值路径没有通过回归；
-6. fallback 行为不稳定。
+Kernel 设计不能脱离上层系统。一个很快的 kernel 也可能因为图编译器无法稳定捕获调用路径、runtime dynamic batching 让 shape 过于分散、layout 转换成本抵消收益、kernel 无法与通信或 KV 管理重叠、低精度数值路径没有通过回归、fallback 行为不稳定，而无法带来端到端收益。
 
 这就是为什么 AI system 需要全栈视角：硬件、编译器、框架、kernel、runtime 和服务形态必须一起看。
 
 ## 选型清单
 
-做编译栈或 kernel 路线选择时，建议先回答：
-
-1. 热点是否已由 profiling 证明；
-2. shape 是否集中，能否做 bucket；
-3. 是否需要特殊 epilogue、layout 或 dtype；
-4. 图编译器能否稳定捕获并调用；
-5. 现成库是否已经足够快；
-6. Triton 能否以更低维护成本达到目标；
-7. CUTLASS/CuTe 是否能复用成 kernel 家族；
-8. 正确性、数值稳定和性能回归是否可自动化。
+做编译栈或 kernel 路线选择时，建议先回答：热点是否已由 profiling 证明，shape 是否集中且能否做 bucket，是否需要特殊 epilogue、layout 或 dtype，图编译器能否稳定捕获并调用，现成库是否已经足够快，Triton 能否以更低维护成本达到目标，CUTLASS / CuTe 是否能复用成 kernel 家族，以及正确性、数值稳定和性能回归是否可自动化。
 
 编译栈的核心判断不是“哪个工具更高级”，而是把问题放在合适抽象层解决。抽象层太高，可能无法控制性能；抽象层太低，维护成本会吞掉收益。

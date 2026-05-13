@@ -10,13 +10,7 @@
     这张图选择矩阵乘作为性能比较对象，正好说明本页要分清的层级：`Linear` / `MLP` 是模型结构，`MatMul` 是数学或框架 API 里的矩阵乘操作，`GEMM` 是库和 kernel 层常见的高性能 dense matrix-matrix multiplication。Transformer 的 QKV 投影、attention 输出投影、MLP 升维和降维，数学上常写成 MatMul；工程上通常会 reshape 成二维矩阵并派发到 GEMM、batched GEMM 或 fused GEMM family。Triton 这类 DSL 的价值，就是让自定义矩阵类 kernel 在 tile、layout 和 memory access 上接近成熟库的性能区间。
 
 !!! note "初学者先抓住"
-    Linear 层不是神秘模块，它就是把一组数字重新加权组合成另一组数字。MLP 则是在“重新组合 -> 非线性变形 -> 再压回去”之间给每个 token 一个独立的思考空间。
-
-!!! example "有趣例子：调音台"
-    可以把 Linear 层想成调音台。输入有很多旋钮：低音、人声、鼓点、环境声；输出是新的混音轨道。权重矩阵决定每个输出轨道从哪些输入旋钮里取多少。GEMM 就是很多轨道一起高速混音。
-
-!!! tip "学完本页你应该能"
-    看到 Transformer block 时，能指出哪些位置是 Linear，哪些地方会落到 MatMul/BMM/GEMM 类执行路径；看到量化或 kernel 优化论文时，能判断它主要在优化权重矩阵、激活矩阵、layout、epilogue 还是底层矩阵乘 kernel。
+    Linear 层就是把一组数字重新加权组合成另一组数字。MLP 则是在“重新组合 -> 非线性变形 -> 再压回去”之间给每个 token 一个独立的变换空间。看到量化或 kernel 优化论文时，重点判断它优化的是权重矩阵、激活矩阵、layout、epilogue 还是底层矩阵乘 kernel。
 
 ## 0. 先分清 MatMul 和 GEMM
 

@@ -12,14 +12,7 @@
 
 ## 一、为什么单卡思维会失效
 
-单卡训练里，主要矛盾通常是模型结构、batch size、优化器和数据质量；分布式训练里，会额外出现六个硬约束：
-
-1. 参数、梯度、优化器状态和激活放不下；
-2. 通信吞吐会吞掉理论 FLOPs；
-3. pipeline bubble 和 micro-batch 设计会影响利用率；
-4. 数据顺序和随机状态必须可恢复；
-5. 任意一台机器故障都可能拖垮整个作业；
-6. checkpoint 保存、恢复、迁移和归档本身会变成系统工程。
+单卡训练里，主要矛盾通常是模型结构、batch size、优化器和数据质量；分布式训练里，会额外遇到一组硬约束：参数、梯度、优化器状态和激活放不下，通信吞吐会吃掉理论 FLOPs，pipeline bubble 和 micro-batch 设计会影响利用率，数据顺序与随机状态必须可恢复，任意一台机器故障都可能拖垮整个作业，而 checkpoint 的保存、恢复、迁移和归档也会变成系统工程。
 
 设模型参数量为 $P$，每个参数字节数为 $b_p$，优化器状态倍数为 $c_{\text{opt}}$，仅模型状态所需显存约为：
 
@@ -29,14 +22,7 @@ $$
 
 对 Adam/AdamW 来说，参数本身往往不是最大头，梯度、master weights、一阶动量、二阶动量和混合精度状态会一起放大内存压力。再叠加长上下文激活、MoE dispatch buffer 和通信 bucket，真实峰值通常高于纸面估算。
 
-分布式设计的目标不是“把所有并行开关都打开”，而是让模型结构、序列长度、全局 batch、硬件拓扑、网络带宽和恢复策略匹配。一个好的设计应同时回答：
-
-1. 单卡峰值显存是否安全；
-2. 高频通信是否留在高速互联域；
-3. pipeline bubble 是否可接受；
-4. checkpoint 是否能在目标时间内保存和恢复；
-5. world size 或节点故障变化后是否还能续训；
-6. 训练产物是否能直接服务 SFT、评测和推理导出。
+分布式设计的目标不是“把所有并行开关都打开”，而是让模型结构、序列长度、全局 batch、硬件拓扑、网络带宽和恢复策略匹配。一个好的设计应同时回答：单卡峰值显存是否安全，高频通信是否留在高速互联域，pipeline bubble 是否可接受，checkpoint 是否能在目标时间内保存和恢复，world size 或节点故障变化后是否还能续训，以及训练产物是否能直接服务 SFT、评测和推理导出。
 
 ## 二、并行维度：从 DP 到 ND Parallelism
 
@@ -70,12 +56,7 @@ $$
 
 普通 DP 每张卡保存完整模型副本，通过 AllReduce 同步梯度。它概念简单，但会完整复制参数、梯度和优化器状态。ZeRO 和 FSDP 的核心思想是减少这种冗余：平时只保存自己负责的状态分片，需要计算时再 gather，用完释放。
 
-可以粗略理解为：
-
-1. ZeRO Stage 1 分片优化器状态；
-2. ZeRO Stage 2 继续分片梯度；
-3. ZeRO Stage 3 继续分片参数；
-4. FSDP 更贴近 PyTorch 原生 module wrapping 和按需 gather。
+可以粗略理解为：ZeRO Stage 1 先分片优化器状态，Stage 2 继续分片梯度，Stage 3 连参数也分片；FSDP 更贴近 PyTorch 原生 module wrapping 和按需 gather。
 
 ![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
 
@@ -142,12 +123,7 @@ EP 主要服务 MoE。它让 token 只经过部分专家，解耦参数规模和
 
 ## 三、训练系统栈：Megatron、DeepSpeed、FSDP 与重计算
 
-从工程定位看，可以把常见训练栈粗略拆成四层：
-
-1. **模型并行与 Transformer 构件**：Megatron-LM、Megatron Core；
-2. **运行时与内存优化**：DeepSpeed、ZeRO、FSDP；
-3. **通信和 kernel 优化**：NCCL、Transformer Engine、FlashAttention、融合算子；
-4. **作业与资产管理**：checkpoint、日志、数据进度、实验配置、恢复流程。
+从工程定位看，常见训练栈可以粗略拆成四层：Megatron-LM / Megatron Core 负责模型并行与 Transformer 构件，DeepSpeed / ZeRO / FSDP 负责运行时和内存优化，NCCL / Transformer Engine / FlashAttention / 融合算子负责通信与 kernel，checkpoint、日志、数据进度、实验配置和恢复流程则负责作业资产管理。
 
 ### Megatron 路线
 
@@ -171,26 +147,13 @@ Activation checkpointing 用重计算换显存：前向时只保存边界激活�
 
 ## 四、通信、拓扑与容量预算
 
-分布式训练的实际吞吐常由通信而不是理论 FLOPs 决定。常见通信包括：
-
-1. DP 梯度 AllReduce / Reduce-Scatter；
-2. ZeRO/FSDP 参数 AllGather 和状态分片通信；
-3. TP 层内 AllReduce / AllGather；
-4. PP stage 间点对点传输；
-5. EP token dispatch / combine；
-6. CP 长上下文 attention 通信。
+分布式训练的实际吞吐常由通信而不是理论 FLOPs 决定。常见通信包括 DP 梯度 AllReduce / Reduce-Scatter、ZeRO/FSDP 参数 AllGather 和状态分片通信、TP 层内 AllReduce / AllGather、PP stage 间点对点传输、EP token dispatch / combine，以及 CP 长上下文 attention 通信。
 
 一个实用原则是：通信越频繁，越应该放在越近的拓扑域内。常见设计是 TP 留在单机 NVLink 域，PP 跨少量节点扩展，DP 在更外层复制，ZeRO/FSDP 在 DP 组内分片。MoE 还要考虑专家放置、热门专家负载和 dispatch 路径。
 
 ### 通信重叠
 
-通信重叠的目标是让 GPU 不要在等待网络时空转。典型手段包括：
-
-1. 梯度 reduce 与反向计算重叠；
-2. 参数 gather 与前向计算重叠；
-3. TP 通信与 kernel 执行重叠；
-4. PP 点对点传输与 micro-batch 调度重叠；
-5. 异步 checkpoint 与训练主链解耦。
+通信重叠的目标是让 GPU 不要在等待网络时空转。典型手段包括梯度 reduce 与反向计算重叠、参数 gather 与前向计算重叠、TP 通信与 kernel 执行重叠、PP 点对点传输与 micro-batch 调度重叠，以及异步 checkpoint 与训练主链解耦。
 
 但重叠不是无风险收益。它会增加调度复杂度，使 trace 更难读，也可能让失败恢复更复杂。评估通信优化时，应同时看吞吐提升、显存峰值、可调试性和恢复一致性。
 
@@ -211,18 +174,7 @@ Activation checkpointing 用重计算换显存：前向时只保存边界激活�
 
 ## 五、Checkpoint 应按训练资产设计
 
-很多人把 checkpoint 理解成“权重文件”，这在大规模训练里是不够的。一个可恢复训练状态至少包括：
-
-1. 模型参数；
-2. 梯度或必要的梯度累积状态；
-3. 优化器状态；
-4. 学习率调度器状态；
-5. AMP/loss scaler 状态；
-6. 随机数状态；
-7. 数据加载进度、sampler 状态和 packing 状态；
-8. 全局 step、epoch、consumed samples/tokens；
-9. 并行拓扑和分片元数据；
-10. tokenizer、数据版本、代码版本和关键配置。
+很多人把 checkpoint 理解成“权重文件”，这在大规模训练里是不够的。一个可恢复训练状态至少要覆盖模型参数、梯度或梯度累积状态、优化器、学习率调度器、AMP/loss scaler、随机数状态、数据加载进度、sampler 与 packing 状态、全局 step / epoch / consumed tokens、并行拓扑与分片元数据，以及 tokenizer、数据版本、代码版本和关键配置。
 
 缺少其中任何一类，都可能导致“权重恢复成功，但训练轨迹已经不连续”。
 
@@ -240,30 +192,13 @@ Activation checkpointing 用重计算换显存：前向时只保存边界激活�
 
 ### Manifest 是关键文件
 
-Checkpoint manifest 应像训练资产目录一样记录：
-
-1. 每个 shard 属于哪个 rank、哪个并行维度、哪个参数范围；
-2. 模型、优化器、调度器和数据状态的版本；
-3. world size、DP/TP/PP/CP/EP 配置；
-4. 数据 consumed tokens、sampler offset、packing 配置；
-5. 保存开始和提交完成时间；
-6. 校验和、文件大小、对象存储路径；
-7. 是否可用于 full weight 导出。
+Checkpoint manifest 应像训练资产目录一样记录：每个 shard 属于哪个 rank、哪个并行维度、哪个参数范围，模型、优化器、调度器和数据状态的版本，world size 与 DP/TP/PP/CP/EP 配置，consumed tokens、sampler offset、packing 配置，保存开始和提交完成时间，校验和、文件大小、对象存储路径，以及是否可用于 full weight 导出。
 
 没有 manifest，checkpoint 只是“一堆文件”；有 manifest，才是可恢复、可迁移、可审计的训练资产。
 
 ## 六、恢复、一致性与故障演练
 
-恢复训练最常见的坑不是“文件读不回来”，而是读回来以后状态不一致：
-
-1. 数据重复或跳样；
-2. 学习率调度不连续；
-3. 梯度累积边界错位；
-4. 随机数状态改变；
-5. loss scaler 重置；
-6. 并行拓扑变化后分片映射错误；
-7. world size 变化后 batch 语义改变；
-8. packing 后的 sample/token 边界恢复不准。
+恢复训练最常见的坑不是“文件读不回来”，而是读回来以后状态不一致：数据重复或跳样、学习率调度不连续、梯度累积边界错位、随机数状态改变、loss scaler 重置、拓扑变化后分片映射错误、world size 变化后 batch 语义改变，以及 packing 后的 sample/token 边界恢复不准。
 
 因此 checkpoint 验收不能只看“能 load”。更实用的是短跑一致性验证：从同一个 checkpoint 启动两条短训练，一条按原拓扑恢复，一条按目标恢复路径恢复，比较若干 step 内的 loss、grad norm、参数 checksum、consumed tokens 和关键指标是否一致或在可解释范围内。
 
@@ -275,13 +210,7 @@ Checkpoint manifest 应像训练资产目录一样记录：
 
 ### 异步与对象存储
 
-异步 checkpoint 不是“后台写盘”这么简单。可靠实现至少需要：
-
-1. 主链快照和后台写入之间有一致性边界；
-2. manifest 最后提交，避免半成品被当成可用 checkpoint；
-3. 后台失败能告警并阻断错误清理；
-4. 对象存储路径、分片命名和生命周期策略可审计；
-5. 定期做恢复演练，而不是等真实故障时第一次验证。
+异步 checkpoint 不是“后台写盘”这么简单。可靠实现至少需要主链快照和后台写入之间有一致性边界，manifest 最后提交以避免半成品被当成可用 checkpoint，后台失败能告警并阻断错误清理，对象存储路径、分片命名和生命周期策略可审计，并且定期做恢复演练。
 
 对象存储 checkpoint 还要考虑 list consistency、跨区域带宽、权限、生命周期、冷热分层和删除策略。它不是把路径从本地盘换成 `s3://` 就结束。
 
@@ -301,27 +230,11 @@ Checkpoint manifest 应像训练资产目录一样记录：
 
 ### 训练前验收
 
-正式长跑前至少做一次短跑验收：
-
-1. 单步吞吐、MFU、显存峰值符合预期；
-2. 各并行维度的 rank mapping 与物理拓扑一致；
-3. 通信热点和 pipeline bubble 可解释；
-4. checkpoint 能保存、列举、校验和恢复；
-5. 恢复后 consumed tokens、LR、loss scaler、数据顺序一致；
-6. 异步保存失败能被发现；
-7. full/portable 导出能服务后训练或推理转换；
-8. 关键配置、代码版本和数据版本进入实验记录。
+正式长跑前至少做一次短跑验收：单步吞吐、MFU、显存峰值要符合预期，各并行维度的 rank mapping 要和物理拓扑一致，通信热点和 pipeline bubble 要能解释，checkpoint 要能保存、列举、校验和恢复，恢复后的 consumed tokens、LR、loss scaler、数据顺序要一致，异步保存失败要能被发现，full/portable 导出要能服务后训练或推理转换，关键配置、代码版本和数据版本也要进入实验记录。
 
 ### 排障顺序
 
-分布式训练出问题时，不建议一开始就改模型。更稳的排查顺序是：
-
-1. 先确认数据输入吞吐和 batch/packing 是否稳定；
-2. 再看单卡显存峰值和 OOM 是否来自参数、激活还是通信 buffer；
-3. 再看 NCCL、AllReduce、all-to-all、TP/PP 通信热点；
-4. 再看 checkpoint 是否阻塞训练主链；
-5. 再看 loss spike、grad norm、NaN 和混合精度状态；
-6. 最后再判断是否需要改并行拓扑或训练超参。
+分布式训练出问题时，不建议一开始就改模型。更稳的排查顺序是：先确认数据输入吞吐和 batch/packing 是否稳定，再看单卡显存峰值和 OOM 是否来自参数、激活还是通信 buffer，再看 NCCL、AllReduce、all-to-all、TP/PP 通信热点，然后检查 checkpoint 是否阻塞训练主链，最后再看 loss spike、grad norm、NaN、混合精度状态，并判断是否需要改并行拓扑或训练超参。
 
 ### 最小恢复脚本形态
 

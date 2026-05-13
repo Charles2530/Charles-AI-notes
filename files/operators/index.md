@@ -103,27 +103,13 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 
 ### 为什么算子会成为主问题
 
-在大模型时代，很多性能损失已经不是“模型太大”这么简单，而是：
-
-1. 访问模式不连续，HBM 带宽被打满；
-2. kernel 太碎，launch 开销和中间张量读写太多；
-3. 跨卡通信和单卡 kernel 没有重叠；
-4. 同样的数学公式，因为数据布局不同，性能差一个数量级；
-5. 量化虽然让权重更小，但反量化和布局变换把收益吃掉；
-6. 编译器没有抓住融合机会，导致系统一直在“搬数据而不是算数据”。
+在大模型时代，很多性能损失已经不是“模型太大”这么简单，而是访问模式不连续导致 HBM 带宽被打满，kernel 太碎带来 launch 开销和中间张量读写，跨卡通信和单卡 kernel 没有重叠，同样的数学公式因为布局不同性能差一个数量级，量化收益被反量化和布局变换吃掉，或者编译器没有抓住融合机会，系统一直在“搬数据而不是算数据”。
 
 因此所谓“系统优化”，最后很大一部分其实是在重新安排计算与数据移动的关系。
 
 ### 从模型到硬件的六层栈
 
-一个更完整的 AI 系统栈，至少可以分成六层：
-
-1. **模型层**：Transformer、MoE、Diffusion、World Model、VLA 等；
-2. **框架层**：PyTorch、JAX、OneFlow 等提供张量和自动微分抽象；
-3. 图与编译层：`torch.compile`、Inductor、XLA、TensorRT、TVM、MLIR 等做图级重写和代码生成；
-4. **库与模板层**：cuBLAS、cuDNN、NCCL、CUTLASS、CuTe、FlashAttention 等提供高性能基元；
-5. **Kernel 层**：CUDA、Triton 或框架自带 codegen 生成的具体 GPU 程序；
-6. **硬件层**：SM、Tensor Core、register、shared memory、L2、HBM、NVLink 等。
+一个更完整的 AI 系统栈，至少包括模型层、框架层、图与编译层、库与模板层、kernel 层和硬件层。模型层决定 Transformer、MoE、Diffusion、World Model、VLA 等计算模式；PyTorch、JAX、OneFlow 提供张量和自动微分抽象；`torch.compile`、Inductor、XLA、TensorRT、TVM、MLIR 做图级重写和代码生成；cuBLAS、cuDNN、NCCL、CUTLASS、CuTe、FlashAttention 提供高性能基元；CUDA、Triton 或框架 codegen 生成具体 GPU 程序；最终这些程序落到 SM、Tensor Core、register、shared memory、L2、HBM、NVLink 上执行。
 
 这六层并不是完全独立的。模型决定算子模式，算子模式决定编译器是否有融合空间，编译器决定 kernel 形态，kernel 决定是否真正利用到硬件能力。
 
@@ -131,84 +117,35 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 
 如果只看最上层，你会觉得 `FlashAttention` 只是“Attention 的更快实现”；  
 如果只看最底层，你又会陷入“寄存器、warp、bank conflict”的局部细节。  
-真正有用的视角，是把这两端接起来：
-
-1. 为什么模型里会出现这个算子；
-2. 这个算子到底受什么硬件约束；
-3. 编译器或手写 kernel 能否改变这些约束；
-4. 这种优化对训练和推理的收益是否一致。
+真正有用的视角，是把这两端接起来：为什么模型里会出现这个算子，它到底受什么硬件约束，编译器或手写 kernel 能否改变这些约束，以及这种优化对训练和推理的收益是否一致。
 
 ### 算子并不只有 GEMM
 
-很多人入门时会把“算子优化”等同于 GEMM 优化，这只对了一半。GEMM 确实是核心，但现代大模型系统真正常见的热点算子至少包括：
-
-1. GEMM 与 batched GEMM；
-2. Attention 及其变体；
-3. Softmax、Reduce、LayerNorm、RMSNorm；
-4. Embedding / gather / scatter；
-5. KV cache 读写与页面管理；
-6. 量化与反量化；
-7. 通信相关 kernel，如 all-reduce、all-gather 的 overlap；
-8. 布局变换、transpose、swizzle、packing。
+很多人入门时会把“算子优化”等同于 GEMM 优化，这只对了一半。GEMM 确实是核心，但现代大模型系统真正常见的热点还包括 Attention 及其变体、Softmax、Reduce、LayerNorm、RMSNorm、Embedding / gather / scatter、KV cache 读写与页面管理、量化与反量化、通信相关 kernel，以及布局变换、transpose、swizzle、packing。
 
 其中很多算子并不是以 FLOPs 为主导，而是以带宽、布局和同步为主导。
 
 ### 训练与推理的算子画像并不一样
 
-**训练阶段更关心**：
-
-1. 大 batch 下的高吞吐 GEMM；
-2. 反向传播与 activation recompute；
-3. 分布式通信与计算重叠；
-4. 混合精度、loss scaling 和 optimizer kernel；
-5. 长上下文训练中的 attention 和 activation 内存。
-
-**推理阶段更关心**：
-
-1. prefill 与 decode 的不同负载形态；
-2. 小 batch 或 continuous batching 下的 kernel 粒度；
-3. KV cache 管理；
-4. 量化 kernel 是否真正提速；
-5. tail latency 与多租户隔离。
+训练阶段更关心大 batch 下的高吞吐 GEMM、反向传播与 activation recompute、分布式通信与计算重叠、混合精度、loss scaling、optimizer kernel，以及长上下文训练中的 attention 和 activation 内存。推理阶段更关心 prefill 与 decode 的不同负载形态、小 batch 或 continuous batching 下的 kernel 粒度、KV cache 管理、量化 kernel 是否真正提速，以及 tail latency 与多租户隔离。
 
 所以“训练里很快的 kernel”不一定等价于“服务里最好用的 kernel”。
 
 ### 为什么 Triton 和 CUDA 要单独成组
 
-这两个工具之所以值得单独讲，不只是因为它们流行，而是因为它们分别代表两种常见思路：
+这两个工具之所以值得单独讲，不只是因为它们流行，而是因为它们分别代表两种常见思路：`CUDA` 更接近硬件与执行细节，让你直接控制线程层级、共享内存、warp 原语、异步拷贝和 Tensor Core 使用方式；`Triton` 更接近张量块级编程和 kernel 生成，让你用更高层的抽象表达 tile、mask、block pointer 和自动调优。
 
-1. `CUDA` 更接近硬件与执行细节，让你直接控制线程层级、共享内存、warp 原语、异步拷贝和 Tensor Core 使用方式；
-2. `Triton` 更接近张量块级编程和 kernel 生成，让你用更高层的抽象表达 tile、mask、block pointer 和自动调优。
-
-如果你只理解其中一种，很容易在工程判断上失衡：
-
-1. 只懂 CUDA，容易高估手写 kernel 的必要性，低估编译器和模板库的价值；
-2. 只懂 Triton，容易忽略硬件实际限制，对寄存器压力、occupancy、访存细节不够敏感。
+如果只懂 CUDA，容易高估手写 kernel 的必要性，低估编译器和模板库的价值；如果只懂 Triton，又容易忽略硬件实际限制，对寄存器压力、occupancy 和访存细节不够敏感。
 
 ### 这组文档会回答哪些问题
 
-**这组内容主要围绕六类问题组织**：
-
-1. GPU 为什么适合 AI，CUDA 的执行模型是什么；
-2. Triton 的 block-level 编程范式和自动调优逻辑是什么；
-3. GEMM、Attention、Norm、Reduce 为什么是最核心的优化对象；
-4. CUTLASS、CuTe、编译器、模板库和手写 kernel 之间如何分工；
-5. 如何用 profiling、roofline、微基准和数值校验来判断优化是否真实有效；
-6. 训练系统、推理引擎和内核实现之间如何连成完整链路。
+这组内容主要围绕六类问题组织：GPU 为什么适合 AI、CUDA 的执行模型是什么，Triton 的 block-level 编程和自动调优逻辑是什么，GEMM / Attention / Norm / Reduce 为什么是核心优化对象，CUTLASS、CuTe、编译器、模板库和手写 kernel 如何分工，怎样用 profiling、roofline、微基准和数值校验判断优化是否真实有效，以及训练系统、推理引擎和内核实现如何连成完整链路。
 
 ## 工程优化方法
 
 ### 一个算子工程师真正反复做的事情
 
-现实里，算子优化工作通常不是“凭直觉写更快代码”，而是一套反复循环的过程：
-
-1. 先确定热点算子；
-2. 判断它是算力受限还是带宽受限；
-3. 找到关键数据布局与访存模式；
-4. 设计 tile、分块、流水线和 fusion；
-5. 验证正确性与数值稳定性；
-6. 做 profile；
-7. 再根据寄存器压力、occupancy、stall reason 和带宽利用率继续迭代。
+现实里，算子优化工作通常不是“凭直觉写更快代码”，而是一套反复循环的过程：先确定热点算子，判断它是算力受限还是带宽受限，找到关键数据布局与访存模式，设计 tile、分块、流水线和 fusion，验证正确性与数值稳定性，再用 profile 结果根据寄存器压力、occupancy、stall reason 和带宽利用率继续迭代。
 
 这和只盯着 benchmark 排行不同，它更像一门系统化实验科学。
 
@@ -224,41 +161,23 @@ $$
 \min(\text{Peak FLOPs}, \text{Bandwidth} \times \text{Arithmetic Intensity}).
 $$
 
-它并不是精确预测器，但非常适合做第一层判断：
-
-1. 如果算子算术强度很低，就别幻想纯靠 Tensor Core 提升巨大性能；
-2. 如果算子已经逼近带宽上限，就应该更多关注 fusion、layout 与访存合并；
-3. 如果算子离 roofline 还很远，说明实现层面还有明显浪费。
+它并不是精确预测器，但非常适合做第一层判断：算术强度很低时，不要幻想纯靠 Tensor Core 获得巨大提升；算子已经逼近带宽上限时，应更多关注 fusion、layout 与访存合并；如果离 roofline 还很远，说明实现层面还有明显浪费。
 
 ### 从参考源可以借到什么视角
 
-你给的几个参考源，刚好覆盖了三条很互补的主线：
-
-1. `AI System Docs` 更像全栈课程，提供从芯片、编译、框架到推理系统的完整纵深；
-2. `how-to-optim-algorithm-in-cuda` 更像算子与 kernel 优化实践仓库，覆盖 GEMM、Softmax、LayerNorm、FlashAttention、Triton、Cutlass、profiling 等大量具体技巧；
-3. `AwesomeWorldModels` 则提醒我们，世界模型一侧也越来越依赖生成式模拟、视频建模、长上下文和系统实现能力，最终也会回到训练与推理内核问题。
+你给的几个参考源，刚好覆盖了三条互补主线：`AI System Docs` 更像全栈课程，提供从芯片、编译、框架到推理系统的纵深；`how-to-optim-algorithm-in-cuda` 更像算子与 kernel 优化实践仓库，覆盖 GEMM、Softmax、LayerNorm、FlashAttention、Triton、Cutlass、profiling 等技巧；`AwesomeWorldModels` 则提醒我们，世界模型一侧也越来越依赖生成式模拟、视频建模、长上下文和系统实现能力，最终也会回到训练与推理内核问题。
 
 也就是说，算子专题不是一个孤立的低层补充，而是可以向上连接训练、推理、世界模型和具身系统的底盘。
 
 ### 一个更实用的抽象：算子优化四问
 
-读任何 kernel 或框架实现时，都可以先问四个问题：
-
-1. 这个算子主要搬了什么数据；
-2. 这些数据在哪一级内存里来回移动；
-3. 哪些操作本来可以融合但还没融合；
-4. 这个算子真正卡在什么地方，是带宽、寄存器、同步还是 launch 开销。
+读任何 kernel 或框架实现时，都可以先问四个问题：这个算子主要搬了什么数据，这些数据在哪一级内存里移动，哪些操作本来可以融合但还没融合，它真正卡在什么地方，是带宽、寄存器、同步还是 launch 开销。
 
 这四问比“它用了什么黑科技”更重要，因为它能帮助你把技巧还原成原理。
 
 ### 为什么系统工程师也应该懂算子
 
-不是每个系统工程师都要手写 CUDA，但如果完全不懂算子，很容易在架构层做出错误决策，例如：
-
-1. 选了一个数学上看似更省的算法，却在 kernel 层面非常难高效实现；
-2. 引入了过多布局变换，让 pipeline 在搬运数据上损失远大于节省的 FLOPs；
-3. 误把模型服务问题当成调度问题，实际瓶颈却是 decode kernel；
-4. 误把训练不稳定归因于优化器，实际问题却来自数值精度与 fused kernel 实现。
+不是每个系统工程师都要手写 CUDA，但如果完全不懂算子，很容易在架构层做出错误决策。例如选了一个数学上看似更省、但在 kernel 层面很难高效实现的算法；引入过多布局变换，让 pipeline 在搬运数据上损失远大于节省的 FLOPs；把模型服务问题误判成调度问题，实际瓶颈却是 decode kernel；或者把训练不稳定归因于优化器，实际问题来自数值精度与 fused kernel 实现。
 
 理解算子，不是为了替代上层系统设计，而是为了让上层系统设计不建立在错误假设上。
 
@@ -266,15 +185,7 @@ $$
 
 ### 推荐阅读顺序
 
-**建议按下面顺序阅读**：
-
-1. [CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)
-2. [Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)
-3. [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)
-4. [CUTLASS / CuTe 与编译栈](cutlass-cute-and-compiler-stack.md)
-5. [Profiling、调试与数值稳定](profiling-debugging-and-numerical-stability.md)
-
-前两篇建立编程模型，中间两篇建立常见热点算子的实现直觉，最后一篇帮助你把“会写”变成“会验证、会定位、会迭代”。
+建议先读 [CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md) 和 [Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) 建立编程模型，再读 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md) 和 [CUTLASS / CuTe 与编译栈](cutlass-cute-and-compiler-stack.md) 建立热点算子直觉，最后用 [Profiling、调试与数值稳定](profiling-debugging-and-numerical-stability.md) 把“会写”推进到“会验证、会定位、会迭代”。
 
 ### 阶段检查与下一站
 

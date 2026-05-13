@@ -3,12 +3,7 @@
 稀疏计算和 `MoE`（Mixture of Experts）常被看成“模型结构创新”，但一旦真正训练或部署，问题很快就会变成 kernel 与通信系统问题。原因很简单：  
 **稠密模型的热点大多是规则大矩阵，稀疏和 MoE 的热点则往往是 token 重排、路由、gather/scatter、all-to-all 和不均匀负载。**
 
-这使得稀疏系统的工程难点，不在公式，而在：
-
-1. 如何把 token 送到正确专家；
-2. 如何让热门专家不成为热点；
-3. 如何让重排和通信不把节省下来的 FLOPs 吃掉；
-4. 如何让路由 kernel 和主计算 kernel 协同。
+这使得稀疏系统的工程难点不在公式，而在如何把 token 送到正确专家、如何让热门专家不成为热点、如何让重排和通信不把省下来的 FLOPs 吃掉，以及如何让路由 kernel 和主计算 kernel 协同。
 
 !!! note "初学者先抓住"
 
@@ -20,38 +15,13 @@
 
 ## 1. 为什么稀疏 kernel 和稠密 kernel 不一样
 
-**稠密 kernel 往往假设**：
-
-1. 数据布局规则；
-2. 工作量较均匀；
-3. 可用大块 GEMM 吃满硬件。
-
-而稀疏 / MoE 场景下，常见特点是：
-
-1. token 分布不均；
-2. 某些 expert 很热，某些很闲；
-3. 需要先 route，再重排，再算；
-4. 工作负载随每批输入变化。
+稠密 kernel 往往假设数据布局规则、工作量均匀，并且可以用大块 GEMM 吃满硬件。稀疏 / MoE 场景则相反：token 分布不均，某些 expert 很热、某些很闲，计算前要先 route 和重排，工作负载还会随每批输入变化。
 
 这意味着稀疏系统的优化目标不只是“把 GEMM 做快”，更是“把不规则性控制住”。
 
 ## 2. Top-k Routing 的核心代价
 
-**一个常见 MoE 流程是**：
-
-1. router 为每个 token 产生 expert 分数；
-2. 选 top-k expert；
-3. 将 token dispatch 到对应 expert；
-4. expert 各自计算；
-5. 再把结果 combine 回去。
-
-**真正的代价通常出现在**：
-
-1. token permutation；
-2. dispatch / combine；
-3. all-to-all；
-4. 负载不均；
-5. 小批量 expert GEMM。
+一个常见 MoE 流程是 router 为每个 token 产生 expert 分数，选出 top-k expert，将 token dispatch 到对应 expert，expert 各自计算后再把结果 combine 回去。真正的代价通常出现在 token permutation、dispatch / combine、all-to-all、负载不均和小批量 expert GEMM。
 
 ## 3. Token Permutation 为什么是主痛点
 
@@ -60,86 +30,35 @@ Router 选完 expert 后，token 往往需要按 expert 分组重排。
 
 ### 3.1 为什么它会很慢
 
-因为：
-
-1. 访问不连续；
-2. 写入位置动态；
-3. 常要配合 prefix sum 或计数；
-4. 很难像 GEMM 那样规则向量化。
+它慢在访问不连续、写入位置动态，常要配合 prefix sum 或计数，也很难像 GEMM 那样规则向量化。
 
 在很多 MoE 系统里，真正先成为瓶颈的并不是 expert matmul，而是重排与通信。
 
 ## 4. Capacity Factor 与 kernel 的关系
 
 MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。  
-这看似是训练稳定性超参，但实际上也影响 kernel 路径：
-
-1. 容量越宽松，负载可能更不均；
-2. 容量越严格，drop token 风险更高；
-3. expert batch 大小分布直接决定后续 GEMM 形状。
+这看似是训练稳定性超参，但实际上也影响 kernel 路径：容量越宽松，负载可能更不均；容量越严格，drop token 风险更高；expert batch 大小分布又会直接决定后续 GEMM 形状。
 
 因此它不是纯模型超参，也是系统超参。
 
 ## 5. All-to-All 是什么，为什么难
 
 在多卡 expert 并行里，不同 token 可能要被发往不同 GPU 上的 expert。  
-这通常意味着 all-to-all 风格的通信：
-
-1. 每个 rank 都向多个 rank 发 token；
-2. 每个 rank 也从多个 rank 收 token。
-
-这比 all-reduce 更复杂，因为：
-
-1. 消息大小不均；
-2. 负载可能严重偏斜；
-3. 与 token permutation 耦合很深；
-4. 更难重叠。
+这通常意味着 all-to-all 风格的通信：每个 rank 都向多个 rank 发 token，也从多个 rank 收 token。它比 all-reduce 更复杂，因为消息大小不均、负载可能严重偏斜、与 token permutation 耦合很深，也更难重叠。
 
 ## 6. 稀疏系统为什么容易出现“理论省 FLOPs，实际不快”
 
-因为虽然只激活部分 expert，但新增成本包括：
-
-1. router；
-2. token 重排；
-3. dispatch / combine；
-4. all-to-all；
-5. 小而碎的 expert batch；
-6. 热门 expert 拥堵。
+因为虽然只激活部分 expert，但新增了 router、token 重排、dispatch / combine、all-to-all、小而碎的 expert batch 和热门 expert 拥堵等成本。
 
 只要这些额外成本没有被控制住，稀疏计算的收益就会被抵消。
 
 ## 7. 服务态 MoE 的额外问题
 
-在线推理里，MoE 比训练更麻烦，因为：
-
-1. batch 更小；
-2. 请求更不规则；
-3. 每步 decode token 少；
-4. 热 expert 可能放大 tail latency；
-5. 多租户会让路由分布更复杂。
-
-**因此 MoE 推理服务系统特别依赖**：
-
-1. expert placement；
-2. 路由缓存；
-3. dispatch kernel；
-4. 通信调度。
+在线推理里，MoE 比训练更麻烦，因为 batch 更小、请求更不规则、每步 decode token 少，热 expert 还可能放大 tail latency，多租户也会让路由分布更复杂。因此 MoE 推理服务特别依赖 expert placement、路由缓存、dispatch kernel 和通信调度。
 
 ## 8. 稀疏 attention 与 block-sparse 路线
 
-除了 expert 稀疏，还有一类稀疏 kernel 出现在：
-
-1. block-sparse attention；
-2. 局部窗口 attention；
-3. 检索增强 attention；
-4. 动态剪枝路径。
-
-这类方法试图减少不必要计算，但也会引入：
-
-1. 更复杂的索引；
-2. block map；
-3. 稀疏布局管理；
-4. 边界条件和实际有效算子粒度问题。
+除了 expert 稀疏，还有一类稀疏 kernel 出现在 block-sparse attention、局部窗口 attention、检索增强 attention 和动态剪枝路径中。这些方法试图减少不必要计算，但会引入更复杂的索引、block map、稀疏布局管理、边界条件和实际有效算子粒度问题。
 
 如果 block 设计和硬件不匹配，稀疏反而可能比稠密更慢。
 
@@ -147,13 +66,7 @@ MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。
 
 ## 9. 稀疏 kernel 的优化重点
 
-与稠密 kernel 相比，稀疏 kernel 更应优先关注：
-
-1. 索引和重排开销；
-2. 局部性；
-3. token / block 分组；
-4. 热点负载均衡；
-5. 通信路径。
+与稠密 kernel 相比，稀疏 kernel 更应优先关注索引和重排开销、局部性、token / block 分组、热点负载均衡和通信路径。
 
 也就是说，稀疏系统优化的第一优先级往往不是“更多 Tensor Core”，而是“更少无意义搬运与更少不均衡”。
 
@@ -166,53 +79,6 @@ MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。
 稀疏、MoE 与路由 kernel 的核心，不是“把矩阵变稀疏”这么简单，而是如何在保持模型容量优势的同时，控制 token 重排、all-to-all、负载不均和小批次 expert 计算带来的系统开销。  
 如果没有这层 kernel 与通信视角，MoE 很容易停留在“理论参数效率很高”的纸面优势，而无法转化成真实训练和推理服务系统里的可观收益。
 
+## 工程收束
 
-## 实践补充与检查
-
-### 把 **MoE 路由与稀疏 Kernel** 放回真实系统里理解
-
-很多页面在介绍算子或排查方法时，读者最容易获得的是一组术语，但真正落地时更关键的是：**这个主题究竟在训练、推理、编译器、运行时和硬件拓扑之间扮演什么角色**。围绕 **MoE 路由与稀疏 Kernel**，更实用的切入方式不是先记定义，而是先把问题拆成几个稳定坐标：
-
-1. **top-k 路由、token dispatch、expert 负载、combine 路径、稀疏访存**。
-
-之所以要先做这一步，是因为大量“优化失败”并不是实现不够努力，而是一开始就把问题建模错了。比如明明是 **shape family** 失控，却去盯某个单一 kernel；明明是 **拓扑或缓存生命周期** 在拖后腿，却把矛头指向单步 FLOPs；明明应该在 **运行时** 解决，却试图把所有复杂度压进一个更重的 fused kernel。只要坐标系没建立，后续 benchmark、profile、灰度和上线都容易失真。
-
-### 更像工程手册的排查顺序
-
-针对 **MoE 路由与稀疏 Kernel**，一个更稳妥的工程排查顺序通常是：
-
-1. **先确认真实工作负载**。不要只拿一个热 shape 或论文默认配置来代表全系统；
-2. **再确认瓶颈层级**。区分是算子本身、调度路径、拓扑链路、还是缓存/内存生命周期在主导；
-3. **然后才进入 microbenchmark**。只有当端到端关键路径已被确认，单算子基准才有解释力；
-4. **把热路径和尾路径分开**。很多主题在平均值上看起来很好，但在尾部 shape、极端长度或混合流量上完全是另一回事；
-5. **最后写清回退条件**。没有回退条件的优化，就不算真正可上线的优化。
-
-如果团队把这套顺序固化下来，**MoE 路由与稀疏 Kernel** 就不再只是“某个高手会调的点”，而会逐渐变成组织可继承的能力。
-
-### 最常见的误判与失败模式
-
-围绕 **MoE 路由与稀疏 Kernel**，最常见的误判往往不是“完全不知道问题”，而是知道一半：
-
-1. **只盯 expert matmul**。
-2. **忽略重排成本**。
-3. **负载不均导致尾部极差**。
-
-这些误判之所以反复出现，是因为算子工程天然跨层。一个现象可能同时带着 **kernel**、**runtime**、**拓扑**、**数据布局** 和 **服务负载** 五层因素。若团队只盯其中一层，很容易做出“局部更优、全局更差”的决策。因此，这类主题最需要的往往不是更多零碎技巧，而是**把失败模式写成制度化案例**：什么情况下该怀疑布局，什么情况下该怀疑 cache，什么情况下应先改 dispatch，什么情况下必须回到硬件日志与链路测量。
-
-### 验收、回归与长期维护
-
-真正让 **MoE 路由与稀疏 Kernel** 站得住，不是一次 benchmark 跑得漂亮，而是它能否进入长期维护循环。更成熟的验收方式通常包括：
-
-1. **把 dispatch/gather 一并 profile**。
-2. **监控 expert load**。
-3. **长尾 expert 单独看**。
-4. **建立 router 回归**。
-
-除此之外，还建议把 **MoE 路由与稀疏 Kernel** 相关改动长期绑定四类材料：
-
-1. **代表性 probe**，用于快速复验是否退化；
-2. **端到端案例**，用于防止只赢 microbenchmark；
-3. **已知黑名单 shape / 路径**，避免后来人重复踩坑；
-4. **升级对照记录**，包括驱动、编译器、框架、运行时变化前后的差异。
-
-做到这一步后，**MoE 路由与稀疏 Kernel** 才会真正从“概念页”变成“方法页”，再从“方法页”变成“平台资产页”。
+MoE 路由与稀疏 kernel 要同时看 top-k 路由、token dispatch、expert 负载、combine 路径和稀疏访存。只盯 expert matmul 会忽略重排成本，负载不均也会把尾延迟拉坏；上线前应把 dispatch / gather 一并 profile，监控 expert load，并为 router 建立回归。

@@ -12,29 +12,15 @@ Triton 在 AI 系统里越来越重要，不是因为它能完全替代 CUDA，�
 
 ## Triton 解决的问题
 
-在 Triton 之前，很多团队面临两难：
+在 Triton 之前，很多团队面临两难：完全依赖框架默认 kernel，难以做深度 fusion 和特定 shape 优化；凡事写 CUDA，开发门槛和维护成本又过高。
 
-1. 完全依赖框架默认 kernel，难以做深度 fusion 和特定 shape 优化；
-2. 凡事写 CUDA，开发门槛和维护成本过高。
-
-Triton 正好落在中间：
-
-1. 抽象层次足够高，矩阵与块运算比 CUDA 更自然；
-2. 抽象层次又不至于完全失控，仍可显式决定 tile、block 和加载方式；
-3. 天然适合 autotuning 和 shape-specialized kernel；
-4. 与 PyTorch 生态集成顺滑，便于快速验证热点优化。
+Triton 正好落在中间：抽象层次足够高，矩阵与块运算比 CUDA 更自然；抽象层次又不至于完全失控，仍可显式决定 tile、block 和加载方式；同时它天然适合 autotuning、shape-specialized kernel，并与 PyTorch 生态集成顺滑，便于快速验证热点优化。
 
 它更适合“中等复杂度但高频”的算子：norm、softmax、elementwise fusion、专用 matmul、部分 attention、quant/dequant 和 MoE 周边搬运。
 
 ## 编程心智模型
 
-Triton kernel 通常不是从 thread 级别出发，而是从 block / tile 级别出发。你更常思考：
-
-1. 一个 program instance 负责哪一块输出；
-2. 这块输出需要加载哪几块输入；
-3. offsets 如何构造；
-4. 边界是否需要 mask；
-5. 块内数据如何复用。
+Triton kernel 通常不是从 thread 级别出发，而是从 block / tile 级别出发。你更常思考一个 program instance 负责哪一块输出，这块输出需要加载哪几块输入，offsets 如何构造，边界是否需要 mask，块内数据如何复用。
 
 `tl.program_id(axis=...)` 用来取得当前 program instance 的块索引，再计算输入输出偏移。`tl.load` 和 `tl.store` 负责加载与写回，mask 用于处理 shape 不是 tile 整数倍时的边界。
 
@@ -66,14 +52,7 @@ Attention 适合用 Triton 原型化，因为它具备明确块结构、大量�
 
 不同 GPU、shape、dtype 下最优 tile 参数不同。Triton 的实用性很大程度来自 autotune。
 
-常见搜索维度包括：
-
-1. `BLOCK_M/N/K`；
-2. `num_warps`；
-3. `num_stages`；
-4. 向量化宽度；
-5. layout 或 swizzle 开关；
-6. 是否使用某些融合路径。
+常见搜索维度包括 `BLOCK_M/N/K`、`num_warps`、`num_stages`、向量化宽度、layout 或 swizzle 开关，以及是否使用某些融合路径。
 
 Autotune 不能替代理解。如果访存模式本身不合理，autotune 只是在一堆差配置里找相对不差的。更合理的顺序是：先根据数据流设计候选，再用 autotune 搜索，最后配合 profiling 解释为什么某个配置更好。
 
@@ -81,52 +60,20 @@ Autotune 不能替代理解。如果访存模式本身不合理，autotune 只�
 
 ## 与 PyTorch 和编译器的关系
 
-Triton 在 PyTorch 生态里常见于三种路径：
+Triton 在 PyTorch 生态里常见于三种路径：手写 `@triton.jit` 自定义 kernel，作为 `torch.compile` / Inductor 的后端生成目标，或被高层库封装成特定算子的加速实现。
 
-1. 手写 `@triton.jit` 自定义 kernel；
-2. 作为 `torch.compile` / Inductor 的后端生成目标；
-3. 被高层库封装成特定算子的加速实现。
-
-这带来一个工程现实：同一个算子可能同时存在框架默认实现、Inductor 生成实现、Triton 手写实现和 CUDA 库实现。上线前要明确：
-
-1. 哪条路径实际被调用；
-2. shape 变化时是否会重新编译；
-3. cache miss 和 warmup 成本是否可接受；
-4. fallback 路径是否数值一致；
-5. graph rewrite 是否破坏预期融合。
+这带来一个工程现实：同一个算子可能同时存在框架默认实现、Inductor 生成实现、Triton 手写实现和 CUDA 库实现。上线前要明确哪条路径实际被调用，shape 变化时是否会重新编译，cache miss 和 warmup 成本是否可接受，fallback 路径是否数值一致，graph rewrite 是否破坏预期融合。
 
 只看单次 microbenchmark 很容易误判。要把编译、缓存、动态 shape 和端到端调度算进去。
 
 ## 选型边界
 
-适合优先用 Triton 的情况：
-
-1. 框架默认 kernel 明显慢；
-2. 算子热点稳定且形状集中；
-3. 需要融合多个小算子；
-4. 需要快速验证一种数据流设计；
-5. CUDA 手写成本过高，库又覆盖不到。
-
-不适合优先用 Triton 的情况：
-
-1. 热点不稳定，还没 profile 清楚；
-2. shape 过于发散，编译和 autotune 成本过高；
-3. 需要极端手调的 Tensor Core pipeline；
-4. 涉及复杂跨 block 协作；
-5. 已有成熟库实现足够快且维护成本更低。
+当框架默认 kernel 明显慢、算子热点稳定且形状集中、需要融合多个小算子或快速验证一种数据流设计，而 CUDA 手写成本过高、库又覆盖不到时，适合优先用 Triton。反过来，如果热点还没 profile 清楚、shape 过于发散、编译和 autotune 成本过高、需要极端手调的 Tensor Core pipeline、涉及复杂跨 block 协作，或已有成熟库足够快且维护成本更低，就不适合优先上 Triton。
 
 Triton 最有价值的位置，是把“值得优化但不值得手写 CUDA”的大片中间地带覆盖起来。
 
 ## 验收清单
 
-写 Triton kernel 后，不要只看一个形状的速度。建议验收：
-
-1. **正确性**：多 dtype、多 shape、边界 mask、随机 seed、和 baseline 对齐；
-2. **数值稳定**：softmax、reduce、低精度累计和溢出边界；
-3. **性能分桶**：主流 shape、长尾 shape、batch 变化、动态 shape；
-4. **编译成本**：首次编译、cache 命中、autotune 时间；
-5. **端到端收益**：单 kernel 加速是否真的改善训练或 serving；
-6. **回退机制**：异常 shape 或不支持 dtype 时能否稳定 fallback；
-7. **维护成本**：参数、注释、测试和 profiling 记录是否足够清楚。
+写 Triton kernel 后，不要只看一个形状的速度。验收要覆盖正确性、数值稳定、性能分桶、编译成本、端到端收益、回退机制和维护成本：多 dtype、多 shape、边界 mask、随机 seed 要和 baseline 对齐；softmax、reduce、低精度累计和溢出边界要稳定；主流 shape、长尾 shape、batch 变化和动态 shape 要分桶看；首次编译、cache 命中和 autotune 时间也要计入真实收益。
 
 Triton 的核心价值不是让所有人绕过 CUDA，而是让更多工程师能以可控成本写出足够好的张量 kernel，并把 shape-specialization、fusion 和 autotuning 纳入日常优化流程。

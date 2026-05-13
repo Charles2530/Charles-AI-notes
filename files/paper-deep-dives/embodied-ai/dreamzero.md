@@ -33,11 +33,7 @@ video foundation model
   -> closed-loop robot policy
 ```
 
-所以它比 LingBot-World 更靠近机器人执行，比传统 VLA 更强调未来视频和动作的一致性。它的训练目标不是只回答“我该做什么动作”，而是同时回答：
-
-1. 未来画面会怎样变化；
-2. 为了产生这样的未来，动作应该是什么；
-3. 生成的视频和动作是否对齐。
+所以它比 LingBot-World 更靠近机器人执行，比传统 VLA 更强调未来视频和动作的一致性。它的训练目标不是只回答“我该做什么动作”，而是同时回答未来画面会怎样变化、为了产生这样的未来动作应该是什么，以及生成的视频和动作是否对齐。
 
 ![DreamZero overview](../../assets/images/paper-deep-dives/world-models/dreamzero/figure-1-overview.png){ width="920" }
 
@@ -75,19 +71,7 @@ $$
 
 ## 方法结构
 
-DreamZero 使用 Wan2.1-I2V-14B-480P 作为视频扩散 backbone。为了保留视频模型的泛化能力，论文只加入少量机器人相关模块：state encoder、action encoder 和 action decoder。
-
-整体输入包括：
-
-1. visual context：由 VAE 编码；
-2. language instruction：由 text encoder 编码；
-3. proprioceptive state：由 state encoder 编码；
-4. noisy video latents 和 noisy action latents。
-
-输出包括：
-
-1. future video frames；
-2. future action chunks。
+DreamZero 使用 Wan2.1-I2V-14B-480P 作为视频扩散 backbone。为了保留视频模型的泛化能力，论文只加入少量机器人相关模块：state encoder、action encoder 和 action decoder。整体输入由 VAE 编码的 visual context、text encoder 编码的 language instruction、state encoder 编码的 proprioceptive state，以及 noisy video latents / noisy action latents 组成；输出则是 future video frames 和 future action chunks。
 
 ![DreamZero architecture](../../assets/images/paper-deep-dives/world-models/dreamzero/figure-4-architecture.png){ width="920" }
 
@@ -108,15 +92,15 @@ DreamZero 的训练可以理解成：把 image-to-video diffusion model 改造�
 
 论文把一条机器人轨迹切成多个 chunk。每个 chunk 包含固定数量的视频 latent frames 和对应的 action horizon。
 
-关键设置如下：
+关键设置如下。
 
-1. 每个 chunk 默认包含 \(K=2\) 个 latent frames；
-2. 默认使用 \(M=4\) 个 chunks；
-3. AgiBot 视频按 5 FPS 采样，动作按 30Hz 采样；
-4. AgiBot action horizon 为 \(H=48\)，所以每个 chunk 覆盖 1.6 秒；
-5. DROID 视频同样按 5 FPS 采样，动作按 15Hz 采样；
-6. DROID action horizon 为 \(H=24\)，同样覆盖 1.6 秒；
-7. 最大 context 为 8 个 latent frames，对应约 33 个 raw frames，约 6.6 秒视觉上下文。
+| Setting | Value | Note |
+| --- | --- | --- |
+| Latent frames per chunk | \(K=2\) | default |
+| Number of chunks | \(M=4\) | default autoregressive window |
+| AgiBot sampling | video 5 FPS, action 30Hz | \(H=48\), about 1.6s per chunk |
+| DROID sampling | video 5 FPS, action 15Hz | \(H=24\), about 1.6s per chunk |
+| Max context | 8 latent frames | about 33 raw frames / 6.6s visual context |
 
 这些数字很重要，因为它说明 DreamZero 当前仍是短上下文 WAM。它能做 real-time policy，但还不是分钟级长记忆世界模型；长时任务仍需要外部 planner 或更长 context。
 
@@ -165,28 +149,13 @@ clean history chunks
 
 ### 动作、状态和多视角如何进入模型
 
-DreamZero 只对视频 foundation model 做最小结构改造。论文新增：
-
-1. state encoder：编码 proprioceptive state；
-2. action encoder：把 action 变成可与 latent 对齐的表示；
-3. action decoder：从 DiT 输出解码 action chunk。
+DreamZero 只对视频 foundation model 做最小结构改造：state encoder 编码 proprioceptive state，action encoder 把 action 变成可与 latent 对齐的表示，action decoder 再从 DiT 输出解码 action chunk。
 
 对于多视角机器人数据，论文没有改 backbone，而是把多视角拼接成单帧输入。这是一个很工程化的选择：它牺牲了一部分结构优雅性，但避免重新设计视频模型架构，最大程度复用预训练视频模型。
 
 ### 哪些参数更新，哪些冻结
 
-DreamZero 的 pretraining 不是只训练 adapter。论文使用 Wan2.1-I2V-14B-480P 作为 backbone，并更新：
-
-1. all DiT blocks；
-2. state encoder；
-3. action encoder；
-4. action decoder。
-
-同时冻结：
-
-1. text encoder；
-2. image encoder；
-3. VAE。
+DreamZero 的 pretraining 不是只训练 adapter。论文使用 Wan2.1-I2V-14B-480P 作为 backbone，更新 all DiT blocks、state encoder、action encoder 和 action decoder，同时冻结 text encoder、image encoder 和 VAE。
 
 这个选择和 LingBot-World 的 action adapter 微调不同。DreamZero 要把视频模型改造成真正的 robot WAM，因此需要更新 DiT 主干来学习 video-action alignment；但仍冻结编码器和 VAE，以保留基础视觉/语言表示和 latent 空间稳定性。
 
@@ -194,20 +163,13 @@ DreamZero 的 pretraining 不是只训练 adapter。论文使用 Wan2.1-I2V-14B-
 
 标准 DreamZero 对 video 和 action 使用 coupled timestep，也就是 \(t_{vid}=t_{act}\)。这样训练初期收敛更快，因为两个模态处于同一噪声尺度。
 
-DreamZero-Flash 则使用 decoupled noise schedule：
-
-1. \(t_{vid} \sim \mathrm{Beta}(7,1)\)，让视频更偏向 high-noise states；
-2. \(t_{act} \sim \mathcal{U}(0,1)\)，动作仍保持 uniform。
+DreamZero-Flash 则使用 decoupled noise schedule：\(t_{vid} \sim \mathrm{Beta}(7,1)\)，让视频更偏向 high-noise states；\(t_{act} \sim \mathcal{U}(0,1)\)，动作仍保持 uniform。
 
 这背后的动机是：实时 policy 最需要 clean action，未必需要每一步都生成高质量 clean video。通过让模型从更 noisy 的 visual context 中预测动作，DreamZero-Flash 可以用更少 denoising steps 保留较强动作质量。
 
 ## 为什么采用 autoregressive WAM
 
-论文专门比较了 bidirectional 和 autoregressive WAM。DreamZero 选择 autoregressive，原因主要有三个：
-
-1. 可以用 KV cache 加速推理；
-2. 能保留原始视频帧率，减少 video-action-language 对齐问题；
-3. 在闭环控制中，每次真实观测回来后可以刷新上下文，降低视频预测误差向后传播。
+论文专门比较了 bidirectional 和 autoregressive WAM。DreamZero 选择 autoregressive，主要因为它可以用 KV cache 加速推理，能保留原始视频帧率、减少 video-action-language 对齐问题，并且在闭环控制中每次真实观测回来后都可以刷新上下文，降低视频预测误差向后传播。
 
 这点和 LingBot-World 的因果化思路相似，但落点不同。LingBot 是为了让视觉模拟器流式生成未来；DreamZero 是为了让 WAM 成为可执行 policy。
 
@@ -219,11 +181,7 @@ DreamZero-Flash 则使用 decoupled noise schedule：
 
 视频扩散模型直接做机器人 policy 会遇到一个硬约束：机器人控制需要几十毫秒到几百毫秒级反应，而原始 14B DiT 多步扩散很慢。
 
-论文将问题称为 `reactivity gap`。朴素实现需要约 5.7 秒生成一个 action chunk，无法闭环控制。DreamZero 用三层优化把它推进到实时：
-
-1. system-level：asynchronous execution、CFG parallelism、DiT caching；
-2. implementation-level：torch.compile、CUDA Graphs、kernel/scheduler optimizations、NVFP4 quantization；
-3. model-level：DreamZero-Flash，用 decoupled noise schedules 减少 denoising step。
+论文将问题称为 `reactivity gap`。朴素实现需要约 5.7 秒生成一个 action chunk，无法闭环控制。DreamZero 用三层优化把它推进到实时：system-level 侧做 asynchronous execution、CFG parallelism 和 DiT caching；implementation-level 侧用 torch.compile、CUDA Graphs、kernel / scheduler optimizations 和 NVFP4 quantization；model-level 侧引入 DreamZero-Flash，用 decoupled noise schedules 减少 denoising step。
 
 Table 1 reports cumulative inference speedups, where each row includes all optimizations above it.
 
@@ -264,19 +222,16 @@ Table 3 reports DreamZero-Flash evaluation on table bussing with different denoi
 
 DreamZero 的数据策略和很多 VLA 不同。VLA 常依赖结构化、重复性强的 task-focused demonstrations；DreamZero 则强调 diverse, non-repetitive data，因为 WAM 的 video-action objective 可以利用异质数据里的动态信息。
 
-论文使用两类机器人数据：
+论文使用两类机器人数据：AgiBot G1 提供约 500 小时 teleoperation data，覆盖 homes、restaurants、supermarkets、coffee shops 和 offices 等 22 个真实环境；DROID-Franka 则用于验证 WAM 在公开异质机器人数据上的有效性和可复现性。
 
-1. AgiBot G1：约 500 小时 teleoperation data，覆盖 22 个真实环境，包括 homes、restaurants、supermarkets、coffee shops 和 offices；
-2. DROID-Franka：用于验证 WAM 在公开异质机器人数据上的有效性和可复现性。
-
-训练设置包括：
-
-1. backbone：Wan2.1-I2V-14B-480P；
-2. AgiBot pretraining：100K steps，global batch size 128；
-3. DROID pretraining：100K steps，global batch size 128；
-4. 更新 DiT blocks、state encoder、action encoder 和 action decoder；
-5. 冻结 text encoder、image encoder 和 VAE；
-6. 默认动作表示为 relative joint positions。
+| Setting | Value |
+| --- | --- |
+| Backbone | Wan2.1-I2V-14B-480P |
+| AgiBot pretraining | 100K steps, global batch size 128 |
+| DROID pretraining | 100K steps, global batch size 128 |
+| Updated parameters | DiT blocks, state encoder, action encoder, action decoder |
+| Frozen modules | text encoder, image encoder, VAE |
+| Action representation | relative joint positions |
 
 这里的训练目标和普通 VLA 的差异在于，VLA 只需要从当前观测和语言中回归动作，而 DreamZero 的每个训练样本都要求模型同时解释未来视觉和未来动作。论文认为这使模型能从更异质的数据中学习，因为即使动作标签本身很 noisy，未来视频仍然提供了动作后果的监督。
 
@@ -366,13 +321,7 @@ DreamZero 和 LingBot-World 都从视频模型获得时空先验，但两者目�
 
 ## 主要贡献
 
-这篇论文的贡献可以概括为五点：
-
-1. 提出 World Action Model 可以作为 zero-shot robot policy；
-2. 用 joint video-action prediction 替代单纯 observation-to-action 的 VLA 目标；
-3. 采用 autoregressive WAM，并在闭环中用真实观测刷新 KV cache；
-4. 通过系统、实现和模型层优化把大视频扩散模型推进到实时控制；
-5. 在 diverse data、unseen tasks、post-training 和 cross-embodiment transfer 上展示优势。
+这篇论文的贡献可以概括为五点：提出 World Action Model 可以作为 zero-shot robot policy；用 joint video-action prediction 替代单纯 observation-to-action 的 VLA 目标；采用 autoregressive WAM，并在闭环中用真实观测刷新 KV cache；通过系统、实现和模型层优化把大视频扩散模型推进到实时控制；在 diverse data、unseen tasks、post-training 和 cross-embodiment transfer 上展示优势。
 
 ## 局限与风险
 

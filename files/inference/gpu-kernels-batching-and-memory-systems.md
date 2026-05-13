@@ -45,13 +45,7 @@ $$
 
 Prefill 更像大块矩阵并行：输入上下文可以并行处理，长 prompt 会产生较大的 attention 和 GEMM 工作量。它适合大 batch、FlashAttention、prefix cache、chunked prefill 和高吞吐资源池。
 
-Decode 更像动态小步迭代：每轮只生成新 token，活动请求集合不断变化。它的主要问题是“碎”：
-
-1. 小 `M` 的 skinny GEMM；
-2. 频繁 kernel launch；
-3. 请求随时加入和退出；
-4. KV page 访问不连续；
-5. LoRA、采样参数、输出长度让 batch 更难合并。
+Decode 更像动态小步迭代：每轮只生成新 token，活动请求集合不断变化。它的主要问题是“碎”：小 `M` 的 skinny GEMM、频繁 kernel launch、请求随时加入和退出、KV page 访问不连续，以及 LoRA、采样参数、输出长度让 batch 更难合并。
 
 因此很多系统会把 prefill 和 decode 拆成不同队列、不同资源池或不同调度策略。长文档问答更可能 prefill 主导，聊天和 agent 更可能 decode 主导。优化前先拆阶段，否则很容易把 prefill 问题错当成 decode kernel 问题。
 
@@ -59,13 +53,7 @@ Decode 更像动态小步迭代：每轮只生成新 token，活动请求集合�
 
 Batching 不只是“把请求拼在一起”。它决定 GPU 是否吃满，也决定用户等待多久。
 
-常见方式包括：
-
-1. **静态批处理**：适合离线推理，交互延迟差；
-2. **动态批处理**：用短窗口聚合请求，平衡吞吐和等待；
-3. **continuous batching**：每个 decode step 都允许请求加入和离开；
-4. **bucketing**：按长度、模型、LoRA、采样参数或优先级分桶；
-5. **batch shaping**：让 runtime 主动选择对 kernel 更友好的 shape family。
+常见方式包括静态批处理、动态批处理、continuous batching、bucketing 和 batch shaping。静态批处理适合离线推理但交互延迟差；动态批处理用短窗口聚合请求；continuous batching 允许每个 decode step 加入和离开请求；bucketing 按长度、模型、LoRA、采样参数或优先级分桶；batch shaping 则让 runtime 主动选择对 kernel 更友好的 shape family。
 
 若当前活动请求为 $\mathcal{B}_t$，continuous batching 每步都在更新：
 
@@ -79,13 +67,7 @@ $$
 
 ### 何时吞吐会伤害体验
 
-为了吞吐拉长 batching 窗口、把长短请求混在一起、或让 prefill 抢占 decode，可能让 token/s 更漂亮，但 TTFT 和 P99 更差。推理系统必须同时看：
-
-1. 平均吞吐；
-2. TTFT 和 TPOT；
-3. P95/P99；
-4. 长短请求公平性；
-5. 高价值租户是否被低价值长请求拖慢。
+为了吞吐拉长 batching 窗口、把长短请求混在一起、或让 prefill 抢占 decode，可能让 token/s 更漂亮，但 TTFT 和 P99 更差。推理系统必须同时看平均吞吐、TTFT、TPOT、P95/P99、长短请求公平性，以及高价值租户是否被低价值长请求拖慢。
 
 ## 四、KV Cache 是推理内存系统的核心
 
@@ -122,14 +104,7 @@ $$
 
 ### Attention Kernel
 
-推理里的 attention kernel 至少要区分：
-
-1. prefill attention；
-2. decode attention；
-3. paged attention；
-4. MQA/GQA attention；
-5. sliding window / chunked attention；
-6. speculative decoding 下的验证 attention。
+推理里的 attention kernel 至少要区分 prefill attention、decode attention、paged attention、MQA/GQA attention、sliding window / chunked attention，以及 speculative decoding 下的验证 attention。
 
 它们都叫 attention，但访问模式和热点不同。FlashAttention 类方法通过分块和在线 softmax 归约避免 materialize 巨大 score 矩阵；paged attention 则更关注 KV page 布局和动态请求。
 
@@ -139,26 +114,13 @@ decode 每步工作量小，小算子和 launch 开销更容易显性化。Fusio
 
 ### Quantization Kernel
 
-量化推理不是把权重变小就一定更快。若 kernel 内要频繁读取 scale/zero-point、做 dequant、处理不友好的 group layout，收益会被内存 stall 和额外指令吃掉。评估量化时应看：
-
-1. 是否有 fused quantized GEMM；
-2. group size 和 layout 是否匹配 kernel；
-3. 小 batch decode 是否仍然快；
-4. scale 访问是否成为新带宽瓶颈；
-5. 多 LoRA、多模型是否破坏量化布局收益。
+量化推理不是把权重变小就一定更快。若 kernel 内要频繁读取 scale / zero-point、做 dequant、处理不友好的 group layout，收益会被内存 stall 和额外指令吃掉。评估量化时应看是否有 fused quantized GEMM，group size 和 layout 是否匹配 kernel，小 batch decode 是否仍然快，scale 访问是否成为新带宽瓶颈，以及多 LoRA、多模型是否破坏量化布局收益。
 
 ## 六、多模型、LoRA、MoE 与多 GPU 的额外复杂度
 
 真实推理节点往往不是单模型、单租户、单形状服务。多 LoRA、adapter、MoE、量化版本和多模型路由会把 kernel 选择问题放大。
 
-典型影响包括：
-
-1. adapter 切换破坏 batch 合并；
-2. 权重局部性下降；
-3. 不同请求 shape family 更杂；
-4. expert routing 造成负载不均；
-5. TP/EP 跨卡同步放大 decode 延迟；
-6. 多租户隔离限制 prefix cache 复用。
+典型影响包括 adapter 切换破坏 batch 合并、权重局部性下降、不同请求 shape family 更杂、expert routing 造成负载不均、TP/EP 跨卡同步放大 decode 延迟，以及多租户隔离限制 prefix cache 复用。
 
 MoE 推理尤其要看 expert 热点和 all-to-all。单个 expert 被热门请求集中命中时，即使整体 GPU 利用率看起来不低，某些 rank 仍会成为系统瓶颈。
 
@@ -166,27 +128,10 @@ MoE 推理尤其要看 expert 热点和 all-to-all。单个 expert 被热门请�
 
 ## 七、诊断与优化顺序
 
-推理系统变慢时，不建议一开始就换 GPU 或重写 kernel。更稳的排查顺序是：
-
-1. 按 queue / prefill / decode / post 拆时延；
-2. 判断主瓶颈是 TTFT、TPOT、吞吐还是 P99；
-3. 若 prefill 主导，先看上下文长度、attention、prefix cache 和 chunking；
-4. 若 decode 主导，先看 continuous batching、KV cache、kernel launch、fusion 和 page locality；
-5. 若显存主导，先看 KV 占用、碎片、page size、量化和 memory tiering；
-6. 若多租户主导，先看分池、优先级、LoRA/adapter 分桶和路由策略；
-7. 最后再决定是否需要写新 kernel、换 runtime 或改模型结构。
+推理系统变慢时，不建议一开始就换 GPU 或重写 kernel。更稳的排查顺序是先按 queue / prefill / decode / post 拆时延，判断主瓶颈是 TTFT、TPOT、吞吐还是 P99；若 prefill 主导，先看上下文长度、attention、prefix cache 和 chunking；若 decode 主导，先看 continuous batching、KV cache、kernel launch、fusion 和 page locality；若显存主导，先看 KV 占用、碎片、page size、量化和 memory tiering；若多租户主导，先看分池、优先级、LoRA / adapter 分桶和路由策略；最后再决定是否需要写新 kernel、换 runtime 或改模型结构。
 
 ### 最小观测集
 
-至少应持续记录：
-
-1. TTFT、TPOT、P50/P95/P99；
-2. prefill/decode 分阶段 GPU 时间；
-3. 实际 batch size 和 shape 分布；
-4. HBM 带宽、SM util、kernel 时间分解；
-5. KV cache 占用、page 命中、碎片率；
-6. prefix cache 命中率；
-7. queue depth、admission reject、fallback；
-8. LoRA/model/expert route 分桶后的延迟和成本。
+至少应持续记录 TTFT、TPOT、P50/P95/P99，prefill / decode 分阶段 GPU 时间，实际 batch size 和 shape 分布，HBM 带宽、SM util、kernel 时间分解，KV cache 占用、page 命中、碎片率，prefix cache 命中率，queue depth、admission reject、fallback，以及 LoRA / model / expert route 分桶后的延迟和成本。
 
 核心判断是：推理优化不是微基准游戏。只有当 kernel 性能、runtime 调度、KV 生命周期和真实流量分布一起变好，线上体验才会真正改善。

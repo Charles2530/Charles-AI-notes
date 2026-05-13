@@ -14,25 +14,11 @@
 
 ## 一、输入系统的真实职责
 
-训练输入系统至少承担五件事：
-
-1. 正确读取、解析和解码数据；
-2. 保持足够高且稳定的吞吐；
-3. 维持 mixture、curriculum 和采样策略的统计正确性；
-4. 支持 deterministic resume；
-5. 为不同长度、模态和任务构造有效 batch。
+训练输入系统至少要正确读取、解析和解码数据，保持足够高且稳定的吞吐，维持 mixture、curriculum 和采样策略的统计正确性，支持 deterministic resume，并为不同长度、模态和任务构造有效 batch。
 
 任何一件做不好，最后都会表现为 GPU 等数据、有效 token 利用率低、数据源曝光失真、恢复后重复/跳样、或长上下文训练成本被无效 padding 放大。
 
-输入系统优化不应只看样本条数或原始 token/s，而要看：
-
-1. 有效 token/s；
-2. padding ratio；
-3. pack fill ratio；
-4. per-source 曝光偏差；
-5. batch ready latency；
-6. data stall ratio；
-7. 恢复前后采样分布是否一致。
+输入系统优化不应只看样本条数或原始 token/s，而要看有效 token/s、padding ratio、pack fill ratio、per-source 曝光偏差、batch ready latency、data stall ratio，以及恢复前后采样分布是否一致。
 
 ## 二、Bucketing 与 Packing：提高有效 token 利用率
 
@@ -48,12 +34,7 @@ $$
 
 Bucketing 是第一层基本功：先按长度、模态、任务或 kernel-friendly shape 分桶，再在桶内组 batch。bucket 太少会浪费 padding；bucket 太多会降低随机性、增加调度复杂度，并让每个桶内样本不足。
 
-一个实用原则是同时考虑：
-
-1. 数据真实长度分布；
-2. 模型和 kernel 友好形状；
-3. mixture 统计稳定性；
-4. 长尾样本是否需要专门桶。
+一个实用原则是同时考虑数据真实长度分布、模型和 kernel 友好形状、mixture 统计稳定性，以及长尾样本是否需要专门桶。
 
 ### Packing
 
@@ -91,36 +72,15 @@ Tokenizer 常是被忽略的瓶颈，尤其在多语种、文档解析、OCR、�
 
 多模态输入不只有文本长度，还要处理图像分辨率、页数、视频帧数、OCR、音频帧、动作 token 和跨模态对齐。batch 代价取决于文本 token、视觉 token、编码器前端计算和模态混合比例。
 
-多模态 packing 比文本更容易出事故。团队应先定义 segment contract，再写 packer：
-
-1. 每种模态的边界 token；
-2. 跨模态 attention mask；
-3. 哪些模态之间允许信息流动；
-4. 哪些 supervision 只在局部 segment 内有效；
-5. padding 对各模态如何处理；
-6. 动作 token 是条件还是监督目标。
+多模态 packing 比文本更容易出事故。团队应先定义 segment contract，再写 packer，包括每种模态的边界 token、跨模态 attention mask、哪些模态之间允许信息流动、哪些 supervision 只在局部 segment 内有效、padding 对各模态如何处理，以及动作 token 是条件还是监督目标。
 
 长上下文训练还会把输入系统推到极限。最大长度从 `4k` 到 `32k/128k` 后，packing 不只是“装满”，还要控制算子形状。理论填充率最高的 packer，可能导致 shape 高度离散、mask 构造复杂、position 处理更重、kernel cache 命中下降，最终反而更慢。
 
-长上下文数据层要回答：
-
-1. 是否真的有足够高质量长样本；
-2. 长样本采样是否改变 mixture；
-3. bucket 是否匹配 attention/kernel shape；
-4. 恢复训练后长样本曝光是否连续；
-5. 有效长上下文能力是否在评测桶里体现。
+长上下文数据层要回答是否真的有足够高质量长样本，长样本采样是否改变 mixture，bucket 是否匹配 attention / kernel shape，恢复训练后长样本曝光是否连续，以及有效长上下文能力是否在评测桶里体现。
 
 ## 五、Deterministic Resume 与统计契约
 
-恢复训练不能只恢复模型、优化器和学习率。输入系统至少还要恢复：
-
-1. sampler 状态；
-2. 每个数据源游标；
-3. shuffle buffer 随机种子与位置；
-4. packing buffer 内未消费样本；
-5. 对象存储 shard 分配状态；
-6. 多模态窗口位置和字幕/动作偏移；
-7. 在线过滤器状态和失败重试记录。
+恢复训练不能只恢复模型、优化器和学习率。输入系统至少还要恢复 sampler 状态、每个数据源游标、shuffle buffer 随机种子与位置、packing buffer 内未消费样本、对象存储 shard 分配状态、多模态窗口位置和字幕 / 动作偏移，以及在线过滤器状态和失败重试记录。
 
 只恢复 `global_step` 不够。启用按长度分桶、混合数据源、packing、动态过滤、流式读取失败重试后，同一个 step 下真实曝光样本集合可能不同。恢复后曲线看似正常，但若高权重数据源被重复曝光，模型会出现隐蔽偏差：loss 更低但泛化更差。
 
@@ -137,14 +97,7 @@ Deterministic resume 的验收应看恢复前后采样分布、长度桶、数�
 | Batch 层 | padding ratio、pack fill ratio、bucket 命中、worker skew |
 | 训练层 | GPU 空转、step time 抖动、有效 token/s、恢复后分布偏移 |
 
-排障顺序建议：
-
-1. 先看 GPU 是否在等数据；
-2. 再看 padding、packing 和 bucket 效率；
-3. 再看 tokenizer、OCR、图像/视频前处理；
-4. 再看对象存储、NVMe cache、worker skew；
-5. 再看 sampler、mixture 和恢复状态；
-6. 最后才判断是否需要改模型或并行策略。
+排障顺序建议先看 GPU 是否在等数据，再看 padding、packing 和 bucket 效率，然后看 tokenizer、OCR、图像 / 视频前处理、对象存储、NVMe cache、worker skew、sampler、mixture 和恢复状态，最后才判断是否需要改模型或并行策略。
 
 常见失效包括：GPU 利用率低但继续加机、packing 破坏任务边界、bucket 太细导致随机性变差、只优化文本忽略多模态前处理、恢复后数据曝光偏移。
 
@@ -152,13 +105,6 @@ Deterministic resume 的验收应看恢复前后采样分布、长度桶、数�
 
 每次改 tokenizer、pack 逻辑、bucket 配置、streaming 路径、数据源权重或长样本采样比例，都应做输入系统专项回归。
 
-验收至少包括：
-
-1. **功能正确性**：mask、segment、label、模态边界和 position 全部正确；
-2. **吞吐稳定性**：长跑中 step time 无周期性抖动；
-3. **恢复一致性**：checkpoint 恢复后采样分布和 pack 行为一致；
-4. **混合正确性**：数据源权重、长度桶、任务比例符合设计；
-5. **观测完备性**：故障能定位到数据源、worker、shard、tokenizer 或 packer；
-6. **方法学记录**：消融中报告有效 token、padding、packing 和数据曝光口径。
+验收至少包括功能正确性、吞吐稳定性、恢复一致性、混合正确性、观测完备性和方法学记录：mask、segment、label、模态边界和 position 要正确，长跑 step time 不能周期性抖动，checkpoint 恢复后采样分布和 pack 行为要一致，数据源权重、长度桶和任务比例要符合设计，故障要能定位到数据源、worker、shard、tokenizer 或 packer，消融中也要报告有效 token、padding、packing 和数据曝光口径。
 
 最终判断是：输入系统不是把数据喂进模型这么简单，而是把样本统计契约、吞吐契约、恢复契约和监控契约统一起来。只要进入多源混合、长上下文、多模态和对象存储流式训练阶段，这一层就会直接决定训练平台上限。

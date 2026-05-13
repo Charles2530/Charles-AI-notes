@@ -10,13 +10,7 @@ Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核�
     第一次看这张图不要急着背每个框。第一条线是输入 token 先变成 embedding，并叠加 positional encoding，让模型知道顺序。第二条线是每层都交替做 attention 和 feed-forward：attention 负责跨 token 读信息，feed-forward 负责逐 token 变换表示。第三条线是 decoder 比 encoder 多了 masked self-attention 和 encoder-decoder attention，所以它既能按因果顺序生成下一个 token，也能读取 encoder 提供的源序列信息。
 
 !!! note "初学者先抓住"
-    Attention 的核心不是“模型很聪明”，而是每个 token 都能按相关性去读取其他 token。Q/K/V 可以先理解成：我想找什么、别人暴露什么、真正读走什么。
-
-!!! example "有趣例子：开会做笔记"
-    Self-Attention 像会议里每个人听同一桌其他人发言；Cross-Attention 像写报告的人去查外部资料。前者整理内部上下文，后者把图片、文本提示、工具结果等外部信息读进来。
-
-!!! tip "学完本页你应该能"
-    看到一个 LLM、VLM、DiT 或 agent 模型时，能分清 tokenization、embedding、self-attention、cross-attention 和输出 head 分别在哪一层；看到 KV cache 或长上下文问题时，能理解它为什么来自 attention 的历史读取机制。
+    Attention 的核心不是“模型很聪明”，而是每个 token 都能按相关性读取其他 token。Q/K/V 可以先理解成：我想找什么、别人暴露什么、真正读走什么。看到 LLM、VLM、DiT 或 agent 模型时，先分清 tokenization、embedding、self-attention、cross-attention 和输出 head 分别在哪一层。
 
 ## 1. Tokenization：模型如何“切开”输入
 

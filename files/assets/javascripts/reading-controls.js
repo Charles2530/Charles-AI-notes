@@ -110,8 +110,53 @@
     }, 80);
   }
 
+  function updateReadingProgress() {
+    const bar = document.querySelector(".atlas-scroll-progress__bar");
+    const shell = document.querySelector(".atlas-scroll-progress");
+    if (!bar || !shell) return;
+
+    const doc = document.documentElement;
+    const maxScroll = Math.max(1, doc.scrollHeight - window.innerHeight);
+    const scrolled = Math.min(1, Math.max(0, (window.scrollY || doc.scrollTop || 0) / maxScroll));
+    bar.style.transform = "none";
+    bar.style.width = `${Math.round(scrolled * 1000) / 10}%`;
+    shell.hidden = maxScroll < 80;
+  }
+
+  function mountReadingProgress() {
+    if (!document.querySelector(".atlas-scroll-progress")) {
+      const shell = document.createElement("div");
+      shell.className = "atlas-scroll-progress";
+      shell.setAttribute("aria-hidden", "true");
+
+      const bar = document.createElement("div");
+      bar.className = "atlas-scroll-progress__bar";
+      shell.appendChild(bar);
+      document.body.appendChild(shell);
+    }
+
+    if (!document.body.dataset.atlasProgressBound) {
+      window.addEventListener("scroll", updateReadingProgress, { passive: true });
+      window.addEventListener("resize", updateReadingProgress);
+      window.addEventListener("atlas:layoutchange", updateReadingProgress);
+      document.body.dataset.atlasProgressBound = "true";
+    }
+
+    updateReadingProgress();
+    window.requestAnimationFrame(updateReadingProgress);
+    window.setTimeout(updateReadingProgress, 120);
+  }
+
   function mountReaderControls() {
-    const prefs = Object.assign({ zoom: 0 }, loadPrefs());
+    const storedPrefs = loadPrefs();
+    const prefs = Object.assign({ zoom: 0 }, storedPrefs);
+    if (
+      !Object.prototype.hasOwnProperty.call(storedPrefs, "controlsCollapsed") &&
+      window.matchMedia &&
+      window.matchMedia("(max-width: 760px)").matches
+    ) {
+      prefs.controlsCollapsed = true;
+    }
     applyPrefs(prefs);
 
     if (document.querySelector(".atlas-reader-controls")) return;
@@ -200,6 +245,22 @@
     dock.append(toggle, zoom, wide, focus, left, right, top, bottom, link, pdf);
     applyDockState(dock, prefs, toggle);
     document.body.appendChild(dock);
+
+    let idleTimer = 0;
+    const markActive = () => {
+      dock.classList.remove("atlas-reader-controls--idle");
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => {
+        dock.classList.add("atlas-reader-controls--idle");
+      }, 2600);
+    };
+
+    dock.addEventListener("pointerenter", markActive);
+    dock.addEventListener("focusin", markActive);
+    dock.addEventListener("pointerleave", markActive);
+    dock.addEventListener("focusout", markActive);
+    window.addEventListener("scroll", markActive, { passive: true });
+    markActive();
   }
 
   function tableToText(table) {
@@ -237,10 +298,17 @@
       wrapper.className = "atlas-table-wrap";
       table.parentNode.insertBefore(wrapper, table);
 
+      const toolbar = document.createElement("div");
+      toolbar.className = "atlas-table-tools";
+
+      const hint = document.createElement("span");
+      hint.className = "atlas-table-hint";
+      hint.textContent = "可横向滚动";
+
       const button = document.createElement("button");
       button.type = "button";
       button.className = "atlas-table-copy";
-      button.textContent = "复制表格";
+      button.textContent = "复制";
       button.title = "复制当前表格内容，不包含术语浮窗说明";
       button.addEventListener("click", async () => {
         const text = tableToText(table);
@@ -248,17 +316,24 @@
           await copyText(text);
           button.textContent = "已复制";
           window.setTimeout(() => {
-            button.textContent = "复制表格";
+            button.textContent = "复制";
           }, 1300);
         } catch (_) {
           button.textContent = "复制失败";
           window.setTimeout(() => {
-            button.textContent = "复制表格";
+            button.textContent = "复制";
           }, 1600);
         }
       });
-      wrapper.appendChild(button);
+      toolbar.appendChild(hint);
+      toolbar.appendChild(button);
+      wrapper.appendChild(toolbar);
       wrapper.appendChild(table);
+      window.requestAnimationFrame(() => {
+        if ((table.rows[0]?.cells.length || 0) > 3 || table.scrollWidth > wrapper.clientWidth + 8) {
+          wrapper.classList.add("atlas-table-wrap--wide");
+        }
+      });
     });
   }
 
@@ -401,6 +476,7 @@
     if (!document.body) return;
     markPageContext();
     markPaperDeepDiveNav();
+    mountReadingProgress();
     mountReaderControls();
     mountPaperDeepDiveSorting();
     mountTableCopyButtons();
