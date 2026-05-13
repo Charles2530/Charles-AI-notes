@@ -10,7 +10,7 @@
 !!! example "有趣例子：天气预报和出门决策"
     一张漂亮的云图不一定能帮你决定带不带伞。真正有用的天气模型要告诉你降雨概率、时间、地点和不确定性。世界模型也是这样：好看的未来不等于可规划的未来。
 
-![PlaNet open-loop predictions 原论文图](../assets/images/paper-deep-dives/world-models/planet/figure-9-open-loop-predictions.png){ width="760" }
+![PlaNet open-loop predictions 原论文图](../assets/images/paper-deep-dives/world-models/planet/figure-9-open-loop-predictions.png){ width="560" .atlas-figure-tall }
 
 <small>图源：[Learning Latent Dynamics for Planning from Pixels](../paper-deep-dives/world-models/planet.md)，Figure 9。原论文图意：展示从真实历史出发的 open-loop latent dynamics 预测，随着 rollout 变长，模型必须在没有真实未来输入的情况下维持世界状态。</small>
 

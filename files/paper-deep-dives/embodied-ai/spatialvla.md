@@ -23,7 +23,7 @@ SpatialVLA 的方案是两边一起改：
 1. 输入侧加入 `Ego3D Position Encoding`；
 2. 输出侧用 `Adaptive Action Grids` 把连续动作离散成空间 action tokens。
 
-![SpatialVLA model](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-1-model.png){ width="920" }
+![SpatialVLA model](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-1-model.png){ width="600" }
 
 <small>Figure source: `SpatialVLA`, Figure 1. 原论文图意：SpatialVLA 在视觉语言模型上加入 Ego3D position encoding 和 adaptive action grids，把 3D 空间上下文和动作 token 接入 VLA。</small>
 
@@ -48,7 +48,7 @@ RGB image
 
 动作侧，SpatialVLA 不直接预测连续 \(\Delta x,\Delta y,\Delta z,\Delta R\)，而是根据数据集中动作分布，把 translation / rotation movement 离散成 adaptive spatial grids。
 
-![SpatialVLA adaptive action grids](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-2-action-grids.png){ width="920" }
+![SpatialVLA adaptive action grids](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-2-action-grids.png){ width="760" }
 
 <small>Figure source: `SpatialVLA`, Figure 2. 原论文图意：Adaptive action grids 先统计 translation 和 rotation action movement 的分布，再根据 Gaussian fitting 对每个动作变量划分等概率区间，形成空间动作 token。</small>
 
@@ -66,7 +66,7 @@ RGB image
 
 论文先在约 `1.1M real-world robot dataset` 上预训练，数据混合由 OXE 和 RH20T 子集组成，并参考 OpenVLA 的 mixture weight 做修改。
 
-![SpatialVLA experiment setup](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-3-experiment-setup.png){ width="920" }
+![SpatialVLA experiment setup](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-3-experiment-setup.png){ width="720" }
 
 <small>Figure source: `SpatialVLA`, Figure 3. 原论文图意：评测覆盖 7 robot learning scenarios、24 real-robot tasks 和 3 simulation environments，关注 zero-shot control、new setup adaptation 和 spatial understanding。</small>
 
@@ -96,7 +96,7 @@ Table III from the paper can be redrawn as follows, keeping the original English
 
 <small>表源：`SpatialVLA`，Table III。原表含义：LIBERO Simulation Benchmark Results，汇报四个 task suites 的 success rate 和 rank，并对三次随机种子、500 trials 求均值。关键点是 SpatialVLA 的平均成功率最高，尤其在 LIBERO-Spatial 和 LIBERO-Long 上排名第一；这比单纯“加深度”更具体地说明 3D spatial encoding 对空间关系和长链任务都有帮助。</small>
 
-![SpatialVLA spatial understanding](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-6-spatial-understanding.png){ width="920" }
+![SpatialVLA spatial understanding](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-6-spatial-understanding.png){ width="760" }
 
 <small>Figure source: `SpatialVLA`, Figure 6. 原论文图意：展示 SpatialVLA 在空间提示和复杂空间布局任务上的评测，说明 Ego3D position encoding 对 spatial understanding 有帮助。</small>
 

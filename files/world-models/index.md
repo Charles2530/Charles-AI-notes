@@ -25,6 +25,9 @@
 !!! tip "本专题的读法"
     世界模型不要按论文名字背，先按三个问题读：模型预测什么，动作是否真的进入预测，预测结果被谁消费。只要这三问清楚，Dreamer、Genie、V-JEPA、LingBot-World、DreamZero 和 Cosmos 这几条路线就不会混成一团。
 
+!!! tip "主线入口：高效训练视角"
+    如果你的目标是“世界模型的高效训练技术”，建议先读 [世界模型高效训练技术路线图](efficient-training-roadmap.md)。本页负责建立世界模型的概念地图；高效训练路线图则把数据效率、视觉 token、动作条件、长序列训练、低精度、rollout 推理和闭环评测放到同一张成本账里。
+
 <div class="atlas-meta-grid">
   <div>
     <strong>读前先知道</strong>
@@ -53,6 +56,7 @@
 
 | 阶段 | 本专题要回答的问题 | 对应入口 |
 | --- | --- | --- |
+| 高效训练主线 | 真实交互、视频 token、显存、通信、rollout 和评测成本如何一起降低 | [世界模型高效训练技术路线图](efficient-training-roadmap.md) |
 | 工程地基 | 数据 schema、相机、pose、焊缝/物体状态是否稳定 | [世界模型开发路线](development-roadmap-data-simulation-and-evaluation.md) |
 | 内部模拟 | latent state 如何在动作条件下 rollout | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) |
 | 动作条件建模 | 未来视频、未来动作和 policy 如何接起来 | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
@@ -368,6 +372,7 @@ $$
 
 | 标杆页 | 对齐标准 |
 | --- | --- |
+| [世界模型高效训练技术路线图](efficient-training-roadmap.md) | 把数据、表示、动作、长序列、数值、rollout 和评测成本放到同一张主线图 |
 | [WM / WAM / VAM：动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) | 清楚区分世界模型、动作世界模型和视频动作模型 |
 | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) | 解释 latent dynamics、imagined rollout 和样本效率 |
 | [世界模型数据引擎与自我改进](data-engines-and-self-improvement.md) | 把失败回放、合成 rollout 和数据回流接起来 |

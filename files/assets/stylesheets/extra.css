@@ -442,6 +442,28 @@ body {
   max-height: 42rem;
 }
 
+.md-typeset p:has(> img.atlas-figure-tall) {
+  width: fit-content;
+  max-width: min(100%, 34rem);
+  margin: 1.25rem auto;
+  padding: 0.42rem;
+}
+
+.md-typeset img.atlas-figure-tall {
+  max-width: min(100%, 34rem);
+}
+
+.md-typeset p:has(> img.atlas-figure-page) {
+  width: fit-content;
+  max-width: min(100%, 42rem);
+  margin: 1.25rem auto;
+  padding: 0.42rem;
+}
+
+.md-typeset img.atlas-figure-page {
+  max-width: min(100%, 42rem);
+}
+
 .md-typeset img.atlas-zoomable-image {
   cursor: zoom-in;
   transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;

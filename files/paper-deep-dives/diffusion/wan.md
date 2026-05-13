@@ -21,7 +21,7 @@ Wan 这篇技术报告值得精读，不只是因为它把开源视频生成模�
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 1。原论文图意：Wan 与开源、闭源视频生成模型在 benchmark 和人工评测下的总体比较。</small>
 
-![Wan generated examples](../../assets/images/paper-deep-dives/diffusion/wan/figure-2-examples.png){ width="920" }
+![Wan generated examples](../../assets/images/paper-deep-dives/diffusion/wan/figure-2-examples.png){ width="720" .atlas-figure-tall }
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 2。原论文图意：Wan 生成样例，覆盖大幅运动、高保真细节、中英文视觉文字、T2V、I2V 和视频编辑能力。</small>
 
@@ -176,7 +176,7 @@ L(\alpha b s h^2+\beta b s^2 h),
 
 为什么视频 DiT 的 \(\gamma\) 往往更大？一方面，视频 token 同时包含时间和空间维，sequence length \(s\) 已经很大；另一方面，full spatio-temporal attention、3D patch/reshape、cross-attention 和长序列并行会让训练时需要保留更多中间张量。普通 LLM 的 token 序列通常是一维文本，kernel 和并行实现也更成熟，很多 activation 可以更稳定地重算或融合；视频 DiT 的中间状态更重、更碎，所以即使公式都写成 \(Lbsh\) 量级，前面的 \(\gamma\) 也会把显存需求放大很多。
 
-![Wan DiT parallelism](../../assets/images/paper-deep-dives/diffusion/wan/figure-5-parallel.png){ width="920" }
+![Wan DiT parallelism](../../assets/images/paper-deep-dives/diffusion/wan/figure-5-parallel.png){ width="720" }
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 8。原论文图意：128 GPUs 下，内层用 Ulysses=8 与 Ring=2 组成 2D Context Parallelism，外层用 FSDP=32 和 DP=4。</small>
 

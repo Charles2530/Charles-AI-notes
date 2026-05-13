@@ -12,7 +12,7 @@
 
 其中 `GT` 是 ground truth，指可以作为监督信号或评测基准的专家轨迹。对机器人来说，一条 GT 不是一个答案文本，而是一段随时间变化的动作序列。
 
-![SpatialVLA experiment setup 原论文图](../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-3-experiment-setup.png){ width="920" }
+![SpatialVLA experiment setup 原论文图](../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-3-experiment-setup.png){ width="720" }
 
 <small>图源：[SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md)，Figure 3。原论文图意：展示机器人实验中的多视角相机、机器人本体和任务场景设置，用于说明空间感知、动作网格和跨 embodiment 评测如何连接。</small>
 
@@ -148,7 +148,7 @@ T_{\text{object}\rightarrow\text{gripper}} = (R, t)
 
 所以抓取标注最好不要只存一个随机轴，而要存候选集合，并在任务层过滤。早期可以先做手动标注 pipeline：导入物体、移动到夹爪附近、仿真闭合、记录稳定抓取；后续再用自动候选生成加人工筛选提升效率。
 
-![GR-2 bin picking setup 原论文图](../assets/images/paper-deep-dives/embodied-ai/gr2/figure-7-bin-picking-setup.png){ width="900" }
+![GR-2 bin picking setup 原论文图](../assets/images/paper-deep-dives/embodied-ai/gr2/figure-7-bin-picking-setup.png){ width="760" }
 
 <small>图源：[GR-2](../paper-deep-dives/embodied-ai/gr2.md)，Figure 7。原论文图意：展示 bin picking 真实机器人设置、物体集合和相机/机械臂环境，用来评估机器人在多物体、遮挡和抓取选择中的泛化能力。</small>
 

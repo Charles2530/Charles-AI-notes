@@ -19,6 +19,16 @@ MagiAttention 讨论的不是“attention 又快了一点”这种单点优化�
 
 它的答案是把分布式 attention 拆成四层一起设计：kernel 层要能表达异构 mask，dispatch 层要把计算量均匀分给 CP ranks，通信层要避免 Ring P2P 里的冗余 KV/dKV 传输，调度层还要把通信和计算尽量重叠起来。这个视角很适合放在“高效训练”里，因为它展示了一个大模型训练瓶颈如何从公式里的 \(O(N^2)\)，一路落到 mask 表达、数据 pack、rank 负载、NCCL buffer、kernel backend 和 overlap tuning。
 
+## 它的效率贡献是什么
+
+| 维度 | 贡献 |
+| --- | --- |
+| 节省的成本 | 降低超长上下文和视频训练中的 attention 计算失衡、冗余 KV 通信和 CP rank 等待时间 |
+| 核心机制 | 用 AttnSlice 表达异构 mask，用 dispatch solver 均衡有效 mask area，用 GroupCast/GroupReduce 减少无效通信，再用 overlap solver 重叠通信与计算 |
+| 对世界模型主线的意义 | 视频世界模型和 VLA 长任务训练会遇到变长、block-causal、patch-and-pack 等复杂 mask；MagiAttention 展示了长序列效率不是单个 kernel 问题，而是 mask、分布式和通信共同问题 |
+| 主要风险 | 依赖复杂调度、kernel 支持和训练数据形态；如果 workload mask 很规则或上下文不长，收益可能不足以覆盖系统复杂度 |
+| 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[训练路线图](../../training/index.md)、[算子与编译器](../../operators/index.md) |
+
 ## 系统位置
 
 MagiAttention 的直接背景是 Magi-1 这类大规模自回归视频生成训练。视频 token 数本来就长，再加上 Patch-and-Pack 这类数据管线，实际 batch 里经常出现 variable-length sequences、block-causal attention、局部块和全局块混合等模式。结果是 mask 不再是简单 full 或 causal，而是很多不规则子区域拼出来的 heterogeneous mask。

@@ -85,7 +85,7 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 
 这个专题可以按下面这条线读：从任务和数据开始，经过 VLA、世界模型、控制器和评测，再回到数据 recipe。
 
-![Open X-Embodiment dataset 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="900" }
+![Open X-Embodiment dataset 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="740" }
 
 <small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。具身智能的主线首先是跨机器人、跨任务、跨相机和跨动作接口的数据汇聚，再在这个数据底座上连接 VLA policy、世界模型、控制器、评测和失败回流。</small>
 

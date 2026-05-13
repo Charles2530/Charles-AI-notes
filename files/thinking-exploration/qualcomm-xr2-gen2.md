@@ -79,7 +79,7 @@ Qualcomm 的[官方发布稿](https://www.qualcomm.com/news/releases/2023/09/qua
 
 这也解释了为什么 Product Brief 很少把重点放在单个 CPU benchmark 上。XR 设备最怕的不是某个单点任务慢一点，而是整个感知-渲染闭环断掉：用户转头之后，传感器要读数，相机要输入，SLAM 和追踪要更新，渲染要补偿，显示要刷新，中间还可能有手势、语音、场景理解和网络同步。只要链路里某一段持续抖动，用户感受到的就是延迟、眩晕或交互不跟手。
 
-![Snapdragon XR2 Gen 2 Product Brief page 1](../assets/images/thinking-exploration/qualcomm-xr2-gen2/xr2-gen2-product-brief-page-1.png){ width="920" }
+![Snapdragon XR2 Gen 2 Product Brief page 1](../assets/images/thinking-exploration/qualcomm-xr2-gen2/xr2-gen2-product-brief-page-1.png){ width="720" .atlas-figure-page }
 
 <small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 1。该页给出平台定位：next-generation MR and VR、on-device AI、3K-by-3K display、2.5x GPU、8x AI、10 concurrent cameras、12ms video see-through latency、Wi-Fi 7 / Wi-Fi 6E 等。</small>
 
@@ -125,7 +125,7 @@ XR2 Gen 2 的核心场景是**一体式 MR/VR 头显**，特别是无需外接�
 
 下面这张图是 Product Brief 的完整规格页，适合直接查官方参数。
 
-![Snapdragon XR2 Gen 2 specifications and features](../assets/images/thinking-exploration/qualcomm-xr2-gen2/xr2-gen2-product-brief-page-2.png){ width="920" }
+![Snapdragon XR2 Gen 2 specifications and features](../assets/images/thinking-exploration/qualcomm-xr2-gen2/xr2-gen2-product-brief-page-2.png){ width="720" .atlas-figure-page }
 
 <small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 2。完整官方字段保留在原图里；正文只提炼模型部署最相关的部分。</small>
 

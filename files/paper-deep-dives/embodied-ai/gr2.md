@@ -25,7 +25,7 @@ GR-2 的核心价值在于把“互联网视频里的动态先验”正式放进
 
 GR-2 多走一步：让模型先通过视频预训练学“接下来会发生什么”，再在机器人数据上把未来视频和动作轨迹绑起来。论文 Figure 1 很好地展示了这条线。
 
-![GR-2 overview](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-1-overview.png){ width="920" }
+![GR-2 overview](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-1-overview.png){ width="720" }
 
 <small>Figure source: `GR-2`, Figure 1. 原论文图意：GR-2 先在大规模视频数据上预训练，学习未来视频预测，再通过真实机器人轨迹微调，输出机器人动作轨迹并部署到真实机器人操作。</small>
 
@@ -44,7 +44,7 @@ GR-2 是一个 GPT-style visual manipulation policy，输入语言指令、历�
 | Pre-training head | VQGAN decoder for future video frames | 让模型从普通视频中学动态先验 |
 | Fine-tuning head | conditional VAE for future video and action | 把视频预测和动作轨迹预测对齐 |
 
-![GR-2 data and model](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-2-pretraining-data.png){ width="920" }
+![GR-2 data and model](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-2-pretraining-data.png){ width="720" }
 
 <small>Figure source: `GR-2`, Figure 2. 原论文图意：展示 GR-2 使用的大规模视频预训练数据分布，以及从 web-scale 视频到机器人操作数据的训练路线。</small>
 
@@ -77,7 +77,7 @@ GR-2 使用约 `38M video clips` 和 `50B tokens` 做预训练。通用视频数
 | End-to-end bin picking | about 94K pick-and-place trajectories, 55 training objects | 测 clutter、unseen objects 和连续 picking |
 | CALVIN ABC-D | 20K+ demonstrations, 34 tasks | 测语言条件长任务序列 |
 
-![GR-2 tabletop tasks](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-4-tasks.png){ width="900" }
+![GR-2 tabletop tasks](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-4-tasks.png){ width="760" }
 
 <small>Figure source: `GR-2`, Figure 4. 原论文图意：展示 105 个桌面任务和 8 类操作技能，说明 GR-2 的真实机器人训练覆盖了多个操作原语。</small>
 
@@ -114,7 +114,7 @@ GR-2 的实验覆盖多任务学习、bin picking 和 CALVIN。
 2. 在机器人数据稀缺时，视频预训练带来的收益更明显；
 3. 轨迹预测比单步 action prediction 更适合平滑执行和实时控制。
 
-![GR-2 bin picking setup](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-7-bin-picking-setup.png){ width="900" }
+![GR-2 bin picking setup](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-7-bin-picking-setup.png){ width="760" }
 
 <small>Figure source: `GR-2`, Figure 7. 原论文图意：展示 end-to-end bin picking 的源篮、目标篮、seen / unseen objects 和 cluttered settings。</small>
 

@@ -28,7 +28,7 @@ experience replay
 
 它回答的问题不是“未来视频长什么样”，而是“如果我在当前 latent state 里采取某个动作，未来 latent state、reward 和 value 会怎么变化”。这让 Dreamer 成为交互轨迹驱动 latent dynamics 世界模型路线的核心节点。
 
-![Dreamer overview](../../assets/images/paper-deep-dives/world-models/dreamer/figure-1-overview.png){ width="430" }
+![Dreamer overview](../../assets/images/paper-deep-dives/world-models/dreamer/figure-1-overview.png){ width="320" .atlas-figure-tall }
 
 <small>Figure source: `Dream to Control`, Figure 1. 原论文图注要点：Dreamer 从历史经验中学习 world model，并在其 latent space 中通过把 value estimates 反向传播穿过 imagined trajectories 来高效学习长视野行为。</small>
 

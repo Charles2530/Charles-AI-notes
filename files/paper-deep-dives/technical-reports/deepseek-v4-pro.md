@@ -263,7 +263,7 @@ Base model
 
 同时，DeepSeek-V4 引入新的 tool-call schema，使用 `|DSML|` special token 和 XML-like invocation format，目的是减少 escaping failures 和 tool-call errors。更重要的是，报告把 thinking trace 的保留策略分成两类：
 
-![DeepSeek-V4 thinking management](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-7-thinking-management.png){ width="760" }
+![DeepSeek-V4 thinking management](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-7-thinking-management.png){ width="620" .atlas-figure-tall }
 
 <small>图源：`DeepSeek-V4 Technical Report`，Figure 7。原报告图意：tool-calling scenarios 中保留跨轮 reasoning content；general conversational scenarios 中沿用新用户消息到来后丢弃旧 thinking content 的策略。</small>
 

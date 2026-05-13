@@ -38,7 +38,7 @@ Stage 2: train inverse dynamics policy
   -> robot actions
 ```
 
-![VPP training pipeline](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-3-training-pipeline.png){ width="920" }
+![VPP training pipeline](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-3-training-pipeline.png){ width="760" }
 
 <small>Figure source: `Video Prediction Policy`, Figure 3. 原论文图意：VPP 先从预训练视频 foundation model 出发训练 text-guided video prediction model，再基于 TVP 内部预测表征学习机器人动作。</small>
 
@@ -46,7 +46,7 @@ Stage 2: train inverse dynamics policy
 
 论文的关键工程选择是：VPP 把视频 diffusion model 主要当作 vision encoder，而不是完整 denoiser。它只做 single forward step，得到并不清晰但含有未来运动趋势的中间表征。
 
-![One-step prediction](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-5-one-step-prediction.png){ width="920" }
+![One-step prediction](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-5-one-step-prediction.png){ width="720" }
 
 <small>Figure source: `Video Prediction Policy`, Figure 5. 原论文图意：比较 ground-truth video、完整 denoised video 和 one-step forward predictions；one-step 纹理不清晰，但已经包含物理演化信息。</small>
 
@@ -98,7 +98,7 @@ Table 1 from the paper can be redrawn as follows, keeping the original English f
 
 <small>表源：`Video Prediction Policy`，Table 1。原表含义：CALVIN ABC→D zero-shot long-horizon evaluation，`1` 到 `5` 表示连续完成第 1 到第 5 个任务的比例，`Avg. Len` 是平均完成链长。最值得注意的是，VPP 不用 depth / point cloud，仍把平均链长从 3D Diffuser Actor 的 `3.35` 推到 `4.29`；只用 `10%ABC` 标注数据时也达到 `3.25`。</small>
 
-![VPP real robots](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-7-real-robot.png){ width="920" }
+![VPP real robots](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-7-real-robot.png){ width="760" }
 
 <small>Figure source: `Video Prediction Policy`, Figure 7. 原论文图意：展示 Panda arm 和 xArm + 12-DoF XHand 两个真实硬件平台及任务可视化。</small>
 

@@ -1,26 +1,39 @@
 <div class="atlas-hero">
   <div class="atlas-kicker">Charles AI notes</div>
-  <h1>AI 系统知识库</h1>
+  <h1>世界模型高效训练技术知识库</h1>
 
-  <p class="atlas-lead">面向本地阅读、持续扩写与工程落地的中文 AI 知识库。内容围绕训练、推理、量化、多模态、世界模型、具身智能与底层算子栈展开，重点不是堆论文名，而是把方法、系统约束和工程判断接起来。</p>
+  <p class="atlas-lead">以世界模型的高效训练技术为主线，串起 VLM/VLA、具身智能、训练系统、推理、量化、扩散模型、强化学习和底层算子栈。这里不是只保留单一方向，而是把基础知识和关键旁支放到同一张工程地图里：哪些内容支撑状态表示，哪些内容降低训练成本，哪些内容决定 rollout 和闭环评测是否可用。</p>
 
   <div class="atlas-chip-row">
-    <span class="atlas-chip">先建地图</span>
-    <span class="atlas-chip">再读论文</span>
-    <span class="atlas-chip">回到工程</span>
-    <span class="atlas-chip">持续复盘</span>
+    <span class="atlas-chip">世界模型</span>
+    <span class="atlas-chip">高效训练</span>
+    <span class="atlas-chip">系统约束</span>
+    <span class="atlas-chip">闭环验证</span>
   </div>
 </div>
 
 !!! note "先选一个入口"
-    第一次读不必顺着左侧目录从头刷。概念卡住先看 [基础知识](foundations/index.md) 和 [术语表](glossary/index.md)；工程卡住先看训练、推理、量化或算子；论文卡住先看 [论文专题讲解](paper-deep-dives/index.md) 和 [参考文献总表](references/index.md)。
+    如果你是围绕主线阅读，先看 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。如果概念卡住，再回到 [基础知识](foundations/index.md) 和 [术语表](glossary/index.md)；工程卡住看训练、推理、量化或算子；论文卡住看 [论文专题讲解](paper-deep-dives/index.md) 和 [参考文献总表](references/index.md)。主线会帮你决定旁支内容该读到什么深度。
+
+## 主线与支撑层
+
+本站的主线是“如何用更少真实交互、更少视频 token、更低显存/通信/rollout 成本，训练出对动作敏感、能长时推演、能改善决策的世界模型”。但高效训练不是孤立专题，它需要一组支撑层共同工作。
+
+| 层级 | 回答的问题 | 推荐入口 |
+| --- | --- | --- |
+| 主线枢纽 | 世界模型高效训练到底省什么成本，技术栈如何组织 | [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md) |
+| 状态与动作接口 | 视觉状态、视频 latent、动作 token、VLA 数据如何进入世界模型 | [VLM/VLA](vlm/index.md)、[VLA 专题](vla/index.md) |
+| 建模与数据闭环 | RSSM/Dreamer、WAM/VAM、反事实、near-miss 和失败回流如何工作 | [世界模型](world-models/index.md)、[世界模型数据引擎](world-models/data-engines-and-self-improvement.md) |
+| 训练系统支撑 | 长序列、低比特、分布式、checkpoint 和数据管线如何降低训练成本 | [训练](training/index.md)、[算子与编译器](operators/index.md) |
+| 推理与部署支撑 | KV cache、batch、量化、蒸馏和 SLO 如何决定 rollout 是否可用 | [推理](inference/index.md)、[量化](quantization/index.md) |
+| 必要背景 | 张量、Attention、概率、优化、强化学习、扩散模型等公共语言 | [基础知识](foundations/index.md)、[扩散模型](diffusion/index.md)、[强化学习](reinforcement-learning/index.md) |
 
 ## 怎么使用这个知识库
 
 <div class="atlas-meta-grid">
   <div>
-    <strong>10 分钟建地图</strong>
-    <p>先扫首页和目标专题的路线图，只回答一个问题：这个主题在训练、推理、部署或闭环系统里负责哪一层。</p>
+    <strong>10 分钟抓主线</strong>
+    <p>先读高效训练路线图，只回答一个问题：这项技术到底降低了数据、token、显存、通信、rollout 还是评测成本。</p>
   </div>
   <div>
     <strong>1 小时补概念</strong>
@@ -37,7 +50,7 @@
 </div>
 
 !!! tip "读完首页先做一个选择"
-    如果你不知道从哪里开始，先选一种身份：想补基础，就走 [基础知识](foundations/index.md)；想做工程，就走 [训练](training/index.md)、[推理](inference/index.md)、[量化](quantization/index.md) 或 [算子](operators/index.md)；想理解世界模型和机器人闭环，就走 [世界模型](world-models/index.md) 与 [具身智能](embodied-ai/index.md)；想跟论文，就走 [论文专题讲解](paper-deep-dives/index.md)。
+    如果你不知道从哪里开始，默认先走 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。如果目标很明确，再选身份：想补基础，就走 [基础知识](foundations/index.md)；想做工程，就走 [训练](training/index.md)、[推理](inference/index.md)、[量化](quantization/index.md) 或 [算子](operators/index.md)；想理解机器人闭环，就走 [具身智能](embodied-ai/index.md)；想跟论文，就走 [论文专题讲解](paper-deep-dives/index.md)。
 
 ## 读者路径
 
@@ -63,6 +76,10 @@
 ## 主题入口
 
 <div class="atlas-card-grid">
+  <a class="atlas-card" href="world-models/efficient-training-roadmap/">
+    <strong>主线：世界模型高效训练</strong>
+    <p>从数据效率、视觉 token、动作条件、长序列训练、低精度、rollout 到闭环评测建立总地图。</p>
+  </a>
   <a class="atlas-card" href="foundations/">
     <strong>基础知识</strong>
     <p>张量、Shape、Transformer、概率模型、优化、数值和运行时。</p>

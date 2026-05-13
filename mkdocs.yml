@@ -201,6 +201,7 @@ nav:
       - verl 训练流程: reinforcement-learning/verl-code-flow.md
   - 世界模型:
       - world-models/index.md
+      - 主线：世界模型高效训练: world-models/efficient-training-roadmap.md
       - 建模与规划:
           - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
           - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md

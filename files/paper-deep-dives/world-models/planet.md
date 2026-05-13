@@ -250,7 +250,7 @@ Figure 5 的结论更偏系统设计：如果只用 random actions 收集数据�
 
 论文还用 open-loop video prediction 检查 latent dynamics 是否真的能往前滚。
 
-![Open-loop predictions](../../assets/images/paper-deep-dives/world-models/planet/figure-9-open-loop-predictions.png){ width="760" }
+![Open-loop predictions](../../assets/images/paper-deep-dives/world-models/planet/figure-9-open-loop-predictions.png){ width="560" .atlas-figure-tall }
 
 <small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 9. 原论文图注要点：该图展示测试 episode 上的 open-loop video predictions，前 5 列是 reconstructed context frames，后续帧由模型 open-loop 生成，用于观察不同 dynamics model 的长期预测质量。</small>
 

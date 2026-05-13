@@ -140,7 +140,7 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 
 机器人场景里，很多真实数据来自历史实验或遥操作日志，不能像游戏一样无限重开。Offline RL 教会我们：历史数据不只是“模仿材料”，也可以通过 value learning 变成决策材料，但必须处理分布外动作和价值高估。
 
-![Offline RL robotic grasping data](../assets/images/paper-figures/reinforcement-learning/offline-rl-qtopt-robot-grasping.png){ width="560" }
+![Offline RL robotic grasping data](../assets/images/paper-figures/reinforcement-learning/offline-rl-qtopt-robot-grasping.png){ width="420" }
 
 <small>图源：[Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems](https://arxiv.org/abs/2005.01643)，Figure 7。原论文图意：展示大规模机器人抓取数据收集，相关工作用超过 500,000 次抓取试验训练视觉抓取策略，并比较纯离线训练与在线微调。</small>
 
