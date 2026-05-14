@@ -106,20 +106,71 @@ for batch in dataloader:
 ```mermaid
 flowchart LR
     A["[B, Cams, Frames, 3, H, W]"] --> B["Patchify"]
-    B --> C["[B, Cams, Frames, Patches, D]"]
-    C --> D["Flatten time/camera/patch"]
-    D --> E["[B, L, D]"]
-    E --> F["Transformer / World Model"]
-    F --> G["future latent / action / risk"]
+    B --> C["[B, Cams, Frames, Patches, patch_dim]"]
+    C --> D["Project / visual encoder"]
+    D --> E["[B, Cams, Frames, Patches, D]"]
+    E --> F["Flatten camera/time/patch"]
+    F --> G["[B, L_vision, D]"]
+    G --> H["concat language / proprioception / action / memory"]
+    H --> I["[B, L_total, D]"]
+    I --> J["Transformer / World Model"]
+    J --> K["future latent / action / risk"]
 ```
 
-假设 `Cams=4`、`Frames=16`、每帧 `Patches=256`，那么：
+这张图要读成一张成本账，而不只是“把视频塞进 Transformer”。一条机器人轨迹片段通常先是 `[B, Cams, Frames, 3, H, W]`：`B` 是 batch，`Cams` 是相机数，`Frames` 是历史帧数，`3` 是 RGB 通道，`H, W` 是每帧分辨率。Patchify 会把每张图切成 patch；如果 patch 边长是 \(p\)，那么每帧 patch 数是：
 
 \[
-L = 4\times16\times256 = 16,384
+Patches = \frac{H}{p}\times\frac{W}{p}
 \]
 
-这还没有加语言、proprioception、action token 和 memory token。读 VLA、视频世界模型或长上下文系统时，先把 \(L\) 算出来，再判断 attention、activation、KV cache 和通信是否可承受。很多“模型设计问题”其实先是 shape 账没算清。
+例如 `H=W=224`、`p=14`，就是 \(16\times16=256\) 个 patch。每个 patch 原本可以看成长度为 \(p\times p\times3\) 的小向量，经过线性投影或视觉 encoder 后变成 `D` 维 token，于是 shape 从 `[B, Cams, Frames, Patches, patch_dim]` 变成 `[B, Cams, Frames, Patches, D]`。
+
+接着 flatten 的不是一个无关紧要的 reshape。它把相机、时间和空间 patch 三个轴合成一条 token 序列：
+
+\[
+L_{\text{vision}} = Cams \times Frames \times Patches
+\]
+
+假设 `Cams=4`、`Frames=16`、每帧 `Patches=256`，那么单样本视觉 token 数就是：
+
+\[
+L_{\text{vision}} = 4\times16\times256 = 16,384
+\]
+
+这还没有加语言、proprioception、action token 和 memory token。完整输入长度应该写成：
+
+\[
+L_{\text{total}} = L_{\text{vision}} + L_{\text{text}} + L_{\text{prop}} + L_{\text{action}} + L_{\text{memory}}
+\]
+
+语言 token 可能只有几十到几百个，proprioception 也可能很短；但 action token 如果按未来 horizon、关节维度或 action chunk 展开，memory token 如果保留长时历史，也会明显增加上下文。更重要的是，flatten 后必须保留位置信息：模型需要知道某个 token 来自哪个相机、哪一帧、图像哪个 patch。常见做法是加 spatial position、temporal position、camera/view embedding，或者在 attention mask 里显式限制哪些 token 能互相读取。
+
+!!! example "把 16,384 个视觉 token 换成显存和计算"
+    下面不是精确 profiler，而是读模型设计时的数量级估算。假设 `B=1`、`D=1024`、`BF16=2 bytes`、标准 MHA、`Heads=16`、`Layers=24`：
+
+    | 项目 | 粗略公式 | 这组 shape 的数量级 | 说明 |
+    | --- | --- | --- | --- |
+    | 一个 hidden tensor | \(B\times L\times D\times bytes\) | \(1\times16,384\times1,024\times2\approx32\) MiB | 只是一个 `[B, L, D]` 激活，不含梯度和其它中间量 |
+    | Q/K/V 激活 | \(3\times B\times L\times D\times bytes\) | 约 `96` MiB / layer | 训练时还要考虑 backward 保存与重算策略 |
+    | 若显式存 attention score | \(B\times Heads\times L^2\times bytes\) | 约 `8` GiB / layer | 这就是为什么长序列必须用 FlashAttention、block attention、window attention 或其它稀疏/压缩策略 |
+    | 推理 KV cache | \(Layers\times2\times B\times L\times D_{\text{kv}}\times bytes\) | 若 \(D_{\text{kv}}=D\)，约 `1.5` GiB / sample | `2` 来自 K 和 V；GQA/MQA/MLA 会降低 \(D_{\text{kv}}\)，但不会减少原始视觉 token 数 |
+    | Attention matmul FLOPs | 约 \(4\times B\times L^2\times D\) / layer | 约 `1.1` TFLOPs / layer | FlashAttention 能省 score 显存和 HBM 往返，但 full attention 的 \(L^2\) 计算关系仍在 |
+
+    这就是“shape 账”有用的地方：`16,384` 看起来只是一个长度，但它进入 attention 后会平方放大；进入 KV cache、activation 和通信时则大多线性放大。
+
+同一个例子里，设计旋钮的影响也能直接从 shape 看出来：
+
+| 设计改动 | Shape 怎么变 | 成本直觉 |
+| --- | --- | --- |
+| `Frames` 从 `16` 到 `32` | \(L_{\text{vision}}\) 变成 `2x` | hidden/KV 约 `2x`，full attention 约 `4x` |
+| `Cams` 从 `4` 到 `8` | \(L_{\text{vision}}\) 变成 `2x` | 多视角信息更全，但长序列成本同样翻倍/平方放大 |
+| 分辨率从 `224` 到 `448`，patch 仍是 `14` | 每帧 patch 从 `256` 到 `1,024`，\(L\) 变成 `4x` | hidden/KV 约 `4x`，full attention 约 `16x`；这是很多视频模型突然 OOM 的来源 |
+| patch 从 `14` 改成 `28` | 每帧 patch 约变成 `1/4` | 成本大降，但小物体、接触点、末端执行器细节可能丢失 |
+| 视觉 resampler 把每帧 `256` token 压到 `64` | `Patches` 等效变成 `64` | Transformer 主干便宜很多，但瓶颈会转移到 resampler 是否保留任务相关细节 |
+| 只让局部时间窗做 full attention | \(L^2\) 变成多个小窗口的平方和 | 长历史可用 memory token 或压缩状态承载，不能默认所有帧两两互看 |
+| 用 GQA/MQA/MLA 或 KV 量化 | \(D_{\text{kv}}\) 或 `bytes` 下降 | 主要救 KV cache 和 decode 带宽，不等于视觉 tokenization 已经便宜 |
+
+读 VLA、视频世界模型或长上下文系统时，先把 \(L_{\text{total}}\) 算出来，再判断 attention、activation、KV cache 和通信是否可承受。很多“模型设计问题”其实先是 shape 账没算清：到底是相机太多、帧太长、分辨率太高、patch 太密，还是 memory/action token 没有分层压缩。
 
 ## 6. Shape 调试表
 
