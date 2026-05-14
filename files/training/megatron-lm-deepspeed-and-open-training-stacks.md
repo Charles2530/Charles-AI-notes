@@ -12,6 +12,19 @@
 
     同样是 128 张卡，模型层宽、序列长度、MoE 路由、网络拓扑和 checkpoint 策略不同，最佳并行方式会完全不同。框架能提供能力，但不能替团队决定 rank mapping、通信域、数据恢复和状态导出语义。
 
+## 先用两篇论文建立底座
+
+Megatron-LM 和 ZeRO 适合成对读。前者从 Transformer layer 内部出发，问的是“单层 MLP、attention、词表 logits 太大时，怎么把 GEMM 切到多张 GPU 上”；后者从数据并行状态出发，问的是“每张卡都完整复制 optimizer states、gradients、parameters，显存为什么会被浪费掉”。
+
+| 论文 | 先解决哪张账 | 核心动作 | 对训练栈选型的启发 |
+| --- | --- | --- | --- |
+| [Megatron-LM](../paper-deep-dives/foundations/megatron-lm.md) | 单层计算和参数太大 | MLP 用 column-parallel + row-parallel GEMM，attention 按 heads 切 Q/K/V，词表 loss 避免大 logits all-gather | 当 hidden size、attention heads 或 vocab projection 太大时，优先考虑 TP，并把高频通信放在节点内高速互联 |
+| [ZeRO](../paper-deep-dives/foundations/zero.md) | DP 重复模型状态太贵 | 在 DP ranks 间分片 optimizer states、gradients、parameters，并处理 activation、buffer 和 fragmentation | 当优化器状态、梯度和参数副本占满显存时，优先考虑 ZeRO/FSDP，而不是盲目加 TP/PP |
+
+这两个问题经常同时出现，但层级不同。Megatron-LM 让一个模型实例能被多卡共同计算；ZeRO 让多个 data-parallel 副本不再重复保存整份训练状态。现代训练栈里的 `TP + PP + DP + ZeRO/FSDP`，本质上就是把这两张账叠起来。
+
+一个实用心法是：**先拆显存，再拆通信，再拆代码所有权**。显存里要分清 parameters、gradients、optimizer states、activations、temporary buffers 和 fragmentation；通信里要分清 TP layer 内 all-reduce、DP reduce-scatter/all-gather、PP 点对点、CP attention 通信和 checkpoint I/O；代码所有权里要分清模型构件、运行时、数据进度和导出格式分别由谁负责。
+
 ## 一、训练系统栈到底在解决什么
 
 一个大模型训练栈至少要同时管理计算、显存、通信、数据和状态资产。计算层涉及 GEMM、Attention、MoE、activation recompute 和混合精度；显存层要容纳参数、梯度、优化器状态、激活和通信 buffer；通信层处理 DP、TP、PP、CP、EP、ZeRO / FSDP 的 collective；数据层负责输入吞吐、packing、随机顺序和断点恢复；状态资产则包括 checkpoint、配置、日志、指标、导出和后训练接口。
@@ -40,6 +53,8 @@ Megatron 路线更适合超大稠密 Transformer 或 MoE，尤其是需要 TP、
 
 Megatron Core 的价值不只是“把脚本库模块化”。更重要的是，它把 Transformer block、并行线性层、sequence/context parallel、MoE、通信 overlap、混合精度和 checkpoint 这些构件变成更可复用的积木。对组织而言，这意味着训练栈可以从“复制一套脚本”逐步走向“维护一套可组合训练基础设施”。
 
+从 Megatron-LM 原论文看，TP 的关键不是“任意切矩阵”，而是避开会强制同步的位置：MLP 第一层按列切，让 GeLU 可以本地做；第二层按行切，只在 block 输出处 all-reduce。Attention 则利用 head 级并行，把 Q/K/V projection 切到不同 ranks，再在 output projection 后同步。这个设计把单个 Transformer layer 的通信压缩到少数几个 `all-reduce`，也解释了为什么 TP size、attention heads、hidden size 和 vocab padding 会直接影响吞吐。
+
 ## 三、DeepSpeed、ZeRO 与 FSDP：状态分片和运行时组织
 
 DeepSpeed 的代表能力是 ZeRO、offload、pipeline engine 和训练运行时配置。ZeRO 的核心是把 DP 中重复保存的优化器状态、梯度和参数逐步分片，从而降低单卡显存压力。
@@ -52,6 +67,8 @@ FSDP 的思想相近，但更贴近 PyTorch 原生生态，强调按 module 包�
 | 优势 | ZeRO/offload 成熟，工程配套多 | 原生集成好，定制模型更自然 |
 | 主要风险 | 运行时黑盒感更强，配置组合复杂 | wrap、state dict、通信策略要自己管细 |
 | 适合场景 | 状态显存是主瓶颈，需要快速组合能力 | 更重视原生生态、代码可控和框架一致性 |
+
+ZeRO 论文给了一个非常有用的估算：mixed precision Adam 训练 \(\Psi\) 个参数时，fp16 parameters、fp16 gradients、fp32 master parameters、Adam momentum 和 Adam variance 合起来大约是 \(16\Psi\) bytes。也就是说，1.5B 参数的 fp16 权重看似只有 3GB，训练态模型状态却至少约 24GB，还没算 activation 和 buffer。ZeRO Stage 1/2/3 分别切 optimizer states、gradients、parameters，真正省的是“每个 DP rank 都长期保存一整份”的冗余。
 
 ### Offload 的边界
 

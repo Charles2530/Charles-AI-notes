@@ -23,6 +23,18 @@
   </div>
 </div>
 
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | [视觉 Tokenizer](visual-tokenizers-and-connectors.md)、[视频表征](video-representation-and-memory.md)、[VLM/VLA 与世界模型接口](vlm-vla-for-efficient-world-model-training.md) | 能把视觉输入压成可预测、可行动、可评测的状态 |
+| 工程查阅 | 多模态评测、VLM 架构、VLA 专题 | 做数据 schema、连接器或失败排查时查 |
+| 论文扩展 | CLIP、BLIP-2、V-JEPA、RT-X、DreamZero、LingBot-World | 看图源、原图意和本站读法如何支撑“状态/动作接口”判断 |
+| 基础补课 | Embedding、Cross-Attention、概率与优化 | 卡在视觉 token、连接器或 loss 时补 |
+| 暂时可跳过 | 纯问答产品形态和泛用多模态榜单 | 如果目标是世界模型，先抓视觉状态和动作后果 |
+
+本专题服务世界模型高效训练里的**状态入口和动作接口**。先读视觉压缩、视频状态和 VLA 接口三页；读完后接到 [VLA 专题](../vla/index.md)、[世界模型路线图](../world-models/index.md) 和 [具身智能](../embodied-ai/index.md)。
+
 ## 1. 主线问题
 
 VLM 通常回答：

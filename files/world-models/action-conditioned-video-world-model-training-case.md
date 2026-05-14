@@ -39,6 +39,10 @@ flowchart LR
 
 这条链路要同时优化七类成本：真实交互成本、视觉 token 成本、动作条件成本、长序列训练成本、数值和显存成本、rollout 推理成本、闭环验证成本。
 
+![DreamZero joint video-action 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-2-joint-video-action.png){ width="860" }
+
+<small>图源：`World Action Models are Zero-shot Policies`，Figure 2。原论文图意：DreamZero 同时生成未来视频和动作，强调动作预测与生成视频在未见任务上保持对齐。本站读法：这张图说明动作条件世界模型不能只预测“未来画面”，还要让动作、未来状态和执行结果互相约束；下面的 mini-chain 就按这个思路把 episode、rollout、risk 和失败 replay 接起来。</small>
+
 ## 0. 硬证据模块：一个可复算 mini-chain
 
 为了避免这页只停留在“设计蓝图”，这里放一个最小可复算 fixture。它不是生产模型结果，也不伪装成论文 benchmark；它的作用是把本页要求的证据链变成可运行格式：数据样例、token 统计、训练配置、rollout 输出、失败 replay 和验收指标都能从同一组文件算出来。

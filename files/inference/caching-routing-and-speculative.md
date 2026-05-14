@@ -97,6 +97,30 @@ m^\star =
 
 投机执行有用的条件是：draft 足够便宜、接受率足够高、verify 能高效并行、系统开销没有把收益吃掉。
 
+### 从 EAGLE 系列看投机解码
+
+EAGLE、EAGLE-2 和 EAGLE-3 适合当作投机解码的三层读法：先看 draft model 怎么训练，再看 draft tree 怎么分配预算，最后看 runtime 是否真的把 acceptance 转成吞吐。
+
+| 论文 | 关键问题 | 对系统设计的启发 |
+| --- | --- | --- |
+| [EAGLE](../paper-deep-dives/inference/eagle.md) | draft 不一定是独立小 LLM，也可以预测 target LLM 的 second-to-top-layer feature，再复用 target embedding / LM head 出 token | 投机解码的接口可以是 hidden-state interface；训练损失、shifted-token 输入和 tree attention 会影响 acceptance |
+| [EAGLE-2](../paper-deep-dives/inference/eagle-2.md) | 固定 draft tree 会把候选浪费在低接受率路径上，能否根据 draft confidence 动态扩展 | 线上要按路径 value 分配 draft budget，观测 average acceptance length，而不是只看 draft token accuracy |
+| [EAGLE-3](../paper-deep-dives/inference/eagle-3.md) | 训练时 teacher-forcing 的 draft 分布和测试时递归 draft 分布不一致，会导致深层接受率掉 | draft 训练要模拟 inference-time recursion；SGLang/vLLM 里的 verification、KV 分支和 batching 决定真实 speedup |
+
+这三篇共同提醒一件事：投机解码不是“接一个小模型”这么简单。真正的收益来自一条闭环：
+
+```text
+draft training distribution
+  -> token / feature confidence
+  -> draft tree expansion
+  -> target verification
+  -> accepted prefix length
+  -> runtime batching + KV branch management
+  -> end-to-end TPOT / P99
+```
+
+如果只优化 draft loss，却不看接受率随深度变化；或者只看 acceptance，却不看验证 kernel、KV 分支和调度开销，最后很容易出现离线表格好看、线上 P99 变差的情况。
+
 ## 三者如何耦合
 
 缓存、路由和投机执行不是三套独立机制。

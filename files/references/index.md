@@ -43,7 +43,7 @@
 1. [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://arxiv.org/abs/2206.00927)  
    从数值积分角度设计扩散采样器，适合连接站内“求解器视角”内容。
 2. [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://arxiv.org/abs/2211.01095)  
-   更贴近 classifier-free guidance 等实际生成配置。
+   更贴近 classifier-free guidance 等实际生成配置；站内专题见 [DPM-Solver++ 讲解](../paper-deep-dives/diffusion/dpm-solver-plus-plus.md)。
 3. [Progressive Distillation for Fast Sampling of Diffusion Models](https://arxiv.org/abs/2202.00512)  
    少步蒸馏的经典路线：把多步 teacher 压成少步 student；也常作为理解 \(v\)-prediction / velocity 参数化的入口之一。
 4. [Consistency Models](https://arxiv.org/abs/2303.01469)  
@@ -104,7 +104,7 @@
 2. [RT-1: Robotics Transformer for Real-World Control at Scale](https://arxiv.org/abs/2212.06817)  
    把机器人策略学习推向大规模真实数据的代表工作。
 3. [RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control](https://arxiv.org/abs/2307.15818)  
-   `VLA` 概念的重要入口，把网页视觉语言知识迁移到机器人动作。
+   `VLA` 概念的重要入口，把网页视觉语言知识迁移到机器人动作；站内专题见 [RT-2 讲解](../paper-deep-dives/embodied-ai/rt2.md)。
 4. [Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)  
    多机器人、多任务数据聚合的重要数据工程论文。
 5. [OpenVLA: An Open-Source Vision-Language-Action Model](https://arxiv.org/abs/2406.09246)  

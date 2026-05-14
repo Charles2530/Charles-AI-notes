@@ -35,6 +35,18 @@ DDPM 原论文里的 graphical model 很适合建立第一层直觉：左到右�
   </div>
 </div>
 
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | 采样与推理加速、一步生成/蒸馏、视频与多模态扩散 | 能判断方法改的是训练目标、采样路径、蒸馏学生还是流式执行 |
+| 工程查阅 | 实战配方、失败分析、方法对照表 | 出现画质、运动、条件控制或速度问题时查 |
+| 论文扩展 | [DPM-Solver++](../paper-deep-dives/diffusion/dpm-solver-plus-plus.md)、DMD、DMD2、CausVid、Self Forcing | 区分少步 solver、分布匹配蒸馏、流式 causal rollout 和 train-test gap |
+| 基础补课 | 概率潜变量、ODE/SDE、Transformer/DiT | 卡在 score、velocity 或 solver 时补 |
+| 暂时可跳过 | 纯图像生成风格细节 | 如果目标是世界模型，先抓采样成本、视频一致性和动作条件 |
+
+本专题在世界模型主线里是**生成和少步 rollout 的支撑层**。扩散论文里的原图要读出“它节省的是采样步数、训练成本、流式延迟还是分布匹配误差”，不要只停在样例图好不好看。
+
 ## 先按三组读
 
 | 分组 | 核心问题 | 先看页面 |
@@ -182,6 +194,7 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 
 | 专题来源 | 回填到扩散章节的知识点 | 应接到本章哪里 |
 | --- | --- | --- |
+| [DPM-Solver++](../paper-deep-dives/diffusion/dpm-solver-plus-plus.md) | 少步扩散加速不一定要重训；guided sampling 下要把 CFG 放大、data prediction、thresholding 和 multistep solver 作为同一个数值稳定问题看 | [采样与推理加速](inference.md)、[噪声日程与参数化](noise-schedules-and-parameterization.md)、[扩散方法对照表](comparison-table.md) |
 | [DMD](../paper-deep-dives/diffusion/dmd.md)、[DMD2](../paper-deep-dives/diffusion/dmd2.md) | 少步/一步生成不是只换 solver，而是用 distribution matching、fake critic、regression loss 或 GAN 监督重新训练学生 | [一步生成、蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) |
 | [Phased DMD](../paper-deep-dives/diffusion/phased-dmd.md) | 高低 SNR 区间承担不同生成职责，few-step 蒸馏可以按噪声子区间拆 expert，以保住视频运动和图像多样性 | [噪声日程与参数化](noise-schedules-and-parameterization.md)、[一步生成、蒸馏与整流](distillation.md) |
 | [Wan2.1](../paper-deep-dives/diffusion/wan.md) | 视频 foundation model 的质量来自 VAE、Video DiT、Flow Matching、分阶段图文视频训练、Context Parallel 和后训练的系统组合 | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md) |

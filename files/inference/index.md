@@ -34,6 +34,9 @@
 !!! tip "本专题的读法"
     先跟踪一条请求，而不是先背 runtime 名字：请求进入队列，长输入做 prefill，逐 token decode 读取 KV cache，路由和缓存决定成本，观测指标决定能否长期运营。vLLM、SGLang、TensorRT-LLM 等工具都可以放回这条请求路径里理解。
 
+!!! note "从新加论文反推推理主线"
+    EAGLE 系列说明 decode 加速不能只看 tokens/s：draft model 的训练分布、draft tree 的候选预算、target verification 的并行效率、KV 分支管理和 runtime batching 会一起决定真实 TPOT 与 P99。Low-bit LLM Survey 则提醒量化不能只看 checkpoint bitwidth：number format、scale granularity、Q/DQ、packing、kernel、KV cache 和硬件指令必须在同一条请求热路径里验收。读推理章节时，建议固定一条请求，分开估 `prefill`、`decode`、`KV memory`、`verification overhead` 和 `fallback`，再判断某个优化是否真的省钱。
+
 <div class="atlas-meta-grid">
   <div>
     <strong>读前先知道</strong>
@@ -48,6 +51,18 @@
     <p>一次“慢”到底是模型慢、排队慢、上下文太长、KV 爆了还是工具链拖住了。</p>
   </div>
 </div>
+
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | [推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[缓存、路由与投机解码](caching-routing-and-speculative.md)、[成本建模与 SLO](cost-modeling-and-slo-design.md) | 能把一次 rollout 请求拆成 prefill、decode、KV、verification 和 fallback |
+| 工程查阅 | 解耦 prefill、MoE serving、在线观测、容量规划 | 有真实服务压力或 P99 问题时逐页查 |
+| 论文扩展 | [EAGLE](../paper-deep-dives/inference/eagle.md)、[EAGLE-2](../paper-deep-dives/inference/eagle-2.md)、[EAGLE-3](../paper-deep-dives/inference/eagle-3.md)、[KVSlimmer](../paper-deep-dives/inference/kvslimmer.md) | 区分 decode 加速、draft 成本、KV 成本和 runtime 成本 |
+| 基础补课 | Transformer、KV cache、显存带宽、队列系统 | 不熟请求热路径时先补 |
+| 暂时可跳过 | 多租户平台治理和复杂路由策略 | 还没有线上流量时先略读 |
+
+本专题服务世界模型高效训练里的**rollout 成本和在线验证成本**。先固定一个请求画像，再算 TTFT、TPOT、显存水位、接受率、KV 分支和失败回退；读完后接到 [量化](../quantization/index.md)、[算子](../operators/index.md) 和 [世界模型评测](../world-models/evaluation-and-failure-modes.md)。
 
 ## 先按三组读
 
@@ -92,6 +107,10 @@
 
 | 专题来源 | 推理层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
+| [Low-bit LLM Survey](../paper-deep-dives/inference/low-bit-llm-survey.md) | 低比特推理不能只看 checkpoint bitwidth，要把 number format、scale granularity、dynamic/static calibration、packing、Q/DQ、低比特 MatMul、KV cache 和硬件指令放回同一条请求热路径 | [推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[GPU Kernel 与 Batching](gpu-kernels-batching-and-memory-systems.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md) |
+| [EAGLE](../paper-deep-dives/inference/eagle.md) | 投机解码的 draft 不一定是独立小 LLM，也可以是复用 target embedding/LM head 的 feature-level Autoregression Head。EAGLE 说明 hidden-state interface、shifted-token 输入、tree attention 和标准 verification 如何共同决定 lossless decode speedup | [缓存、路由与投机解码](caching-routing-and-speculative.md)、[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[GPU Kernel 与 Batching](gpu-kernels-batching-and-memory-systems.md) |
+| [EAGLE-2](../paper-deep-dives/inference/eagle-2.md) | 投机解码不只是 draft model 准不准，还要看 draft tree 如何把候选预算分给高接受概率路径。EAGLE-2 用 confidence calibration、路径 value、reranking 和 ancestor-only mask，在不额外训练 tree policy 的情况下提升 average acceptance length | [缓存、路由与投机解码](caching-routing-and-speculative.md)、[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[GPU Kernel 与 Batching](gpu-kernels-batching-and-memory-systems.md) |
+| [EAGLE-3](../paper-deep-dives/inference/eagle-3.md) | 投机解码的收益不只取决于 draft model 小不小，还取决于训练时是否模拟测试时的递归 draft 分布、接受率是否随深度保持稳定，以及 SGLang/vLLM 里的 verification、KV 分支和 batching 是否把 acceptance 转成真实吞吐 | [缓存、路由与投机解码](caching-routing-and-speculative.md)、[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md) |
 | [KVSlimmer](../paper-deep-dives/inference/kvslimmer.md) | 长上下文成本不能只看 prefill；KV cache 会随 context、layers、KV heads 和 batch 线性膨胀。KVSlimmer 用 Q/K/V 谱非对称和 exact Hessian coupling 做 forward-only Key merging，给 KV 压缩提供了比简单 eviction 更可解释的质量-成本取舍 | [上下文压缩与 KV 管理](context-compression-kv-eviction-and-memory-hierarchies.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md) |
 | [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | Mamba-heavy backbone、LatentMoE 和 shared-weight MTP 的核心收益在长上下文、长输出和 speculative decoding 接受率，不只是 benchmark accuracy | [缓存、路由与投机解码](caching-routing-and-speculative.md)、[上下文压缩与 KV 管理](context-compression-kv-eviction-and-memory-hierarchies.md) |
 | [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md)、[DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | MLA、混合注意力、异构 KV cache 和 OPD 基础设施说明长上下文推理要同时处理 KV 规模、prefill/decode 拆分和服务容量 | [解耦式 Prefill 与 KV 服务](disaggregated-prefill-kv-services-and-capacity-ops.md)、[长上下文系统](rag-agents-and-long-context-systems.md) |

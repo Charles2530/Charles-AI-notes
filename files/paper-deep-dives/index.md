@@ -65,6 +65,35 @@
 
 专题页不追求把论文所有细节逐字复述，而是优先解释“为什么这样设计”。如果某个公式、模块或实验无法改变对论文的理解，就不必展开太长。相反，数据构造、训练阶段、推理约束和评测口径这类容易影响工程判断的部分，应写得更具体。
 
+### 统一模板：让单篇讲解能横向比较
+
+后续新增或重写论文页时，优先按下面结构收敛。不是每篇都要写得一样长，但关键位置要齐，方便读者把单篇论文接回全站主线。
+
+| 模块 | 必须写清 |
+| --- | --- |
+| 论文解决什么旧问题 | 旧方法的瓶颈、默认假设和失效场景 |
+| 它节省哪项成本 | 数据、视频 token、显存、通信、推理步数、KV、验证或人工成本 |
+| 方法结构 | 数据、模型、训练目标、推理路径和 runtime 约束 |
+| 训练 / 推理链路 | 训练阶段、损失、采样、并行、量化、KV 或缓存是否改变 |
+| 关键实验支持什么 | benchmark、ablation、system throughput、closed-loop、demo 分开写 |
+| 证据等级 | 明确标成 demo / benchmark / ablation / system throughput / closed-loop / reproduction |
+| 可外推与不可外推 | 哪些能进入本站主线，哪些只是在论文设置下成立 |
+| 对本站主线的启发 | 回填到世界模型高效训练的成本账、验收指标和下一站阅读 |
+
+### 图文规则：每张图都要支持一个判断
+
+论文页优先使用论文原图、官方项目图或 arXiv HTML/PDF 截图。表格可以重绘，但保留原表字段名和英文表头；如果改写或合并，要在表下注明“表源”和本站读法。
+
+每张图下方至少写三件事：
+
+| 图下注释 | 目的 |
+| --- | --- |
+| 图源 | 论文标题 / Figure 编号 / 官方页面 / arXiv source 或截图来源 |
+| 原图意 | 作者用这张图想说明什么 |
+| 本站读法 | 这张图支持了哪一个工程判断，或暴露了哪个边界 |
+
+信息密度低、长条竖图或纯 qualitative gallery 不要占满屏；真正占大宽度的图应能解释模型结构、训练 pipeline、系统路径、消融证据或失败案例。贴图不是装饰，图要帮助读者判断“这篇论文到底证明了什么”。
+
 ## 证据等级：先分清论文证明了什么
 
 论文专题页不只要讲“作者提出了什么”，还要回答“证据强到什么程度”。尤其是世界模型、VLA、量化和算子论文，很多结论会混在一起：有些来自公开 benchmark，有些来自消融，有些来自系统吞吐，有些来自真实闭环，有些其实只是 demo。读者需要知道哪些结论能迁移到本站的“世界模型高效训练”主线，哪些只能作为方向线索。
@@ -112,6 +141,7 @@ flowchart LR
 | `论文证据 / closed-loop` | 作者报告仿真或真实环境闭环成功率 | “结论限制在该任务、机器人、场景和评测规则内” |
 | `论文证据 / demo` | 作者展示少量定性样例 | “说明方向有潜力，不能证明稳健性” |
 | `本站推断` | 本站把论文结论接到世界模型工程主线 | “这是工程外推，需要单独实验验证” |
+| `工程外推` | 把论文方法迁移到不同硬件、数据、机器人或业务链路 | “必须重新验证成本账、失败桶和回退路径” |
 
 一个最容易误导读者的句式是“这说明 X 可以用于世界模型训练”。更稳的写法是：“论文证据证明 X 在某 benchmark/demo/system setting 下成立；本站推断它可能帮助世界模型的 Y 成本项；但在 action sensitivity、risk calibration 或 closed-loop success 上仍需补实验。”
 
@@ -125,7 +155,7 @@ flowchart LR
 ### 高效训练
 
 !!! note "这组文章怎么连起来读"
-    高效训练不是单一技巧，而是把同一笔训练预算花得更有效。建议按层级读：先看 Muon 理解 optimizer 如何提升 token/FLOP efficiency；再看 MagiAttention 理解超长上下文训练的 CP、mask 和通信瓶颈；接着看 SLA / SLA2 理解视频 DiT 里如何用 sparse-linear decomposition 减少 attention 计算；最后看 Attn-QAT 理解 FP4 attention 为什么必须同时改 forward、backward 和 inference kernel。四篇合起来，对应“优化器 -> 分布式 attention -> 近似 attention -> 低比特 attention”这条工程链。
+    高效训练不是单一技巧，而是把同一笔训练预算花得更有效。建议按层级读：先看 Megatron-LM，理解 tensor model parallel、data parallel group、mixed precision 和 activation checkpointing 如何组成大模型训练底座；再看 ZeRO，理解 optimizer states、gradients、parameters 和 activations 的零冗余显存账；然后看 Muon 理解 optimizer 如何提升 token/FLOP efficiency；接着看 MagiAttention 理解超长上下文训练的 CP、mask 和通信瓶颈；再看 SLA / SLA2 理解视频 DiT 里如何用 sparse-linear decomposition 减少 attention 计算；最后看 Attn-QAT 理解 FP4 attention 为什么必须同时改 forward、backward 和 inference kernel。六篇合起来，对应“模型并行 -> 状态分片 -> 优化器 -> 分布式 attention -> 近似 attention -> 低比特 attention”这条工程链。
 
 <table data-paper-sort="asc">
   <thead>
@@ -137,6 +167,18 @@ flowchart LR
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td>2019-09</td>
+      <td>高效训练</td>
+      <td><a href="foundations/megatron-lm/">Megatron-LM：Tensor Model Parallel</a></td>
+      <td>如何把 Transformer 的 MLP、attention 和词表 loss 切成 tensor parallel，并结合 mixed precision、activation checkpointing、数据去重和 8-way MP + 64-way DP 训练 8.3B GPT-2 / 3.9B BERT</td>
+    </tr>
+    <tr>
+      <td>2019-10</td>
+      <td>高效训练</td>
+      <td><a href="foundations/zero/">ZeRO：大模型训练的零冗余状态优化</a></td>
+      <td>如何把 data parallel 中重复保存的 optimizer states、gradients、parameters 逐步分片，并用 activation partition、constant buffers 和 defragmentation 支撑 100B/170B 级 GPT-like 训练</td>
+    </tr>
     <tr>
       <td>2025-02</td>
       <td>高效训练</td>
@@ -167,7 +209,7 @@ flowchart LR
 ### 高效推理
 
 !!! note "这组文章怎么连起来读"
-    高效推理的核心不是只追 tokens/s，而是把上下文长度、KV cache、decode latency、batch 和质量损失放在同一张成本表里。KVSlimmer 适合作为 KV cache compression 的精读样例：它用谱分析解释为什么 Key 比 Value 更适合合并，再用 exact Hessian 到 forward-only 闭式解的推导说明怎样在不反传的情况下保留二阶信息。
+    高效推理的核心不是只追 tokens/s，而是把上下文长度、KV cache、decode latency、batch 和质量损失放在同一张成本表里。先读 EAGLE，理解 feature-level draft 和 speculative verification；再读 EAGLE-2，理解 dynamic draft tree；接着读 Low-bit LLM Survey，建立量化格式、系统数据流、低比特训练和 PTQ/QAT 的全景；然后读 EAGLE-3，理解 draft model 训练、投机验证和 runtime 吞吐如何耦合；最后读 KVSlimmer，进入 KV cache compression 的具体机制。
 
 <table data-paper-sort="asc">
   <thead>
@@ -179,6 +221,30 @@ flowchart LR
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td>2024-01</td>
+      <td>高效推理</td>
+      <td><a href="inference/eagle/">EAGLE：Feature-level Draft 投机推理</a></td>
+      <td>如何用 target LLM 的 second-to-top-layer feature、shifted-token 输入和轻量 Autoregression Head 构造 lossless speculative sampling，并通过训练损失、tree attention 与 batch/throughput 实验解释速度边界</td>
+    </tr>
+    <tr>
+      <td>2024-06</td>
+      <td>高效推理</td>
+      <td><a href="inference/eagle-2/">EAGLE-2：动态 Draft Tree 投机推理</a></td>
+      <td>如何用 draft model confidence 近似 acceptance rate，按路径 value 动态扩展和 rerank draft tree，在不额外训练、不改原模型、不放宽接受条件的前提下提升 average acceptance length 和 speedup</td>
+    </tr>
+    <tr>
+      <td>2024-09</td>
+      <td>高效推理</td>
+      <td><a href="inference/low-bit-llm-survey/">Low-bit LLM Survey：低比特大模型量化</a></td>
+      <td>如何把低比特 LLM 拆成 number format、granularity、dynamic/static quantization、system support、low-bit training、PEFT、QAT 和 PTQ，并理解为什么量化必须落到 runtime、kernel 与 KV cache 数据流上</td>
+    </tr>
+    <tr>
+      <td>2025-03</td>
+      <td>高效推理</td>
+      <td><a href="inference/eagle-3/">EAGLE-3：Training-time Test 的投机推理加速</a></td>
+      <td>如何把 speculative decoding 的 draft model 从 feature prediction 改成 direct token prediction，并用 training-time test、多层 feature fusion 和真实 runtime 表验证多步 draft 的接受率与吞吐收益</td>
+    </tr>
     <tr>
       <td>2026-03</td>
       <td>高效推理</td>
@@ -200,6 +266,12 @@ flowchart LR
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td>2022-11</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/dpm-solver-plus-plus/">DPM-Solver++：Guided Sampling 求解器</a></td>
+      <td>如何把扩散 ODE 从 noise prediction 改写到 data prediction，用 \(x_\theta\)、thresholding 和 multistep 更新在不训练的前提下稳定加速 CFG / guided sampling</td>
+    </tr>
     <tr>
       <td>2023-11</td>
       <td>扩散模型</td>
@@ -251,6 +323,12 @@ flowchart LR
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td>2023-07</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/rt2/">RT-2：把 VLM 变成机器人动作模型</a></td>
+      <td>如何把 6-DoF 机器人动作离散成语言 token，并用 PaLI-X / PaLM-E 与 web VQA、caption 和机器人轨迹做 co-fine-tuning</td>
+    </tr>
     <tr>
       <td>2024-01</td>
       <td>具身智能</td>

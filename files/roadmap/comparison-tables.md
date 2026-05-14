@@ -163,3 +163,77 @@
 - 看扩散主线：[扩散模型](../diffusion/index.md)
 - 看多模态主线：[VLM](../vlm/index.md)
 - 看系统层主线：[推理](../inference/index.md)
+
+## 12. 横向比较：推理加速与 KV 成本
+
+这组方法都容易被归到“推理更快”，但省的成本不一样：有的减少 decode 步数，有的让 draft 更准，有的压 KV，有的把训练目标改成可服务投机解码。
+
+![EAGLE-3 inference pipeline 原论文图](../assets/images/paper-deep-dives/inference/eagle-3/figure-5-inference-pipeline.png){ width="860" }
+
+<small>图源：`EAGLE-3`，Figure 5。原论文图意：展示 EAGLE-3 在推理时由 draft model 递归生成候选，再由 target LLM 执行 verification 的 pipeline。本站读法：投机解码的收益取决于 draft 时间、verification 并行效率、接受长度、KV 分支和 runtime batching，而不是单独看 draft loss。</small>
+
+| 方法 | 主要省什么 | 改了哪一层 | 关键证据 | 不能直接外推 |
+| --- | --- | --- | --- | --- |
+| [EAGLE](../paper-deep-dives/inference/eagle.md) | decode step / target forward 次数 | feature-level draft + tree attention + lossless verification | speedup、draft 输入消融、tree attention 实验 | 不能证明所有 runtime / batch 形态都有同等收益 |
+| [EAGLE-2](../paper-deep-dives/inference/eagle-2.md) | draft tree 候选预算 | confidence calibration + dynamic draft tree | average acceptance length、静态/动态树对比 | confidence 在新任务桶上可能失准 |
+| [EAGLE-3](../paper-deep-dives/inference/eagle-3.md) | draft 训练分布和递归接受率 | training-time test + direct token prediction + 多层 feature fusion | acceptance depth、SGLang/vLLM throughput | 离线接受率不等价于 P99 降低 |
+| [MTP](../training/mtp-and-speculative-decoding.md) | 训练信号密度 / 可选 draft 能力 | 多 token prediction objective | DeepSeek-V3 / Nemotron 等技术报告的 ablation 和吞吐说明 | MTP 训练有效不等于上线必然用作 speculative draft |
+| [KVSlimmer](../paper-deep-dives/inference/kvslimmer.md) | KV memory / decoder latency | 非对称 KV 合并，重点压 Key | KV memory、decoder efficiency、head alignment | 压 KV 后仍需检查长时一致性和候选排序 |
+
+![KVSlimmer 原论文图](../assets/images/paper-deep-dives/inference/kvslimmer/figure-1-asymkv-vs-kvslimmer.png){ width="820" }
+
+<small>图源：`KVSlimmer`，Figure 1。原论文图意：对比 AsymKV 和 KVSlimmer 的 KV 合并方式。本站读法：KV 优化要问“压的是哪个 cache、压缩后 attention 语义是否保持、长上下文 decode 是否真的变快”。</small>
+
+## 13. 横向比较：少步生成、流式视频与 train-test gap
+
+这组方法共同服务世界模型的 rollout 效率，但它们处理的是不同环节：solver、蒸馏、分布匹配、因果化和训练/推理分布一致性。
+
+![DPM-Solver++ solver comparison 原论文表](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/table-1-solver-comparison.png){ width="820" }
+
+<small>表源：`DPM-Solver++`，Table 1。原表保留英文算法字段。本站读法：DPM-Solver++ 是“不重训模型、换采样器”的加速路线，和 DMD/DMD2 这类重新训练学生的路线不是同一层。</small>
+
+| 方法 | 解决哪一环 | 训练是否改变 | 推理路径 | 证据等级 | 世界模型读法 |
+| --- | --- | --- | --- | --- | --- |
+| [DPM-Solver++](../paper-deep-dives/diffusion/dpm-solver-plus-plus.md) | guided sampling 少步稳定性 | 不改变模型训练 | 换 ODE solver、data prediction、thresholding | benchmark + ablation | 适合先降采样步数，但不能解决动作因果 |
+| [DMD](../paper-deep-dives/diffusion/dmd.md) | 一步分布匹配蒸馏 | 训练学生 | real/fake score 差分 + regression | benchmark + qualitative | 把推理成本转移到离线训练 |
+| [DMD2](../paper-deep-dives/diffusion/dmd2.md) | DMD 稳定性和质量 | 训练学生和 fake critic | TTUR、GAN 监督、backward simulation | benchmark + ablation | 适合少步生成 baseline，但仍需动作敏感评测 |
+| [CausVid](../paper-deep-dives/diffusion/causvid.md) | 双向视频扩散转流式 AR | causal student 后训练 | ODE init + asymmetric DMD + KV cache | system latency + benchmark | 解决 streaming rollout，但要看长期漂移 |
+| [Self Forcing](../paper-deep-dives/world-models/self-forcing.md) | train-test gap / self-rollout 漂移 | 训练中执行 AR self-rollout | rolling KV cache + distribution matching | ablation + system efficiency | 最接近“训练时就暴露推理分布”的世界模型需求 |
+
+## 14. 横向比较：Dreamer、Genie、LingBot-World、DreamZero
+
+这组路线回答的是“世界模型到底被谁消费”。Dreamer 被 actor/value 消费，Genie 被交互 latent action 消费，LingBot-World 被实时世界模拟消费，DreamZero 则直接把未来视频和动作放进同一模型。
+
+![Dreamer components 原论文图](../assets/images/paper-deep-dives/world-models/dreamer/figure-3-components.png){ width="820" }
+
+<small>图源：`Dreamer`，Figure 3。原论文图意：Dreamer 学习 latent world model，并在 imagined trajectories 上训练 action model 和 value model。本站读法：世界模型最硬的证据不是视频好看，而是 imagined rollout 是否改善策略学习。</small>
+
+| 方法 | 核心接口 | 训练信号 | 被谁消费 | 强证据 | 边界 |
+| --- | --- | --- | --- | --- | --- |
+| [Dreamer](../paper-deep-dives/world-models/dreamer.md) | RSSM latent dynamics | observation、reward、continue、actor/value | policy / value | control benchmark、ablation | 不证明高清视频世界模拟自然有效 |
+| [Genie](../paper-deep-dives/world-models/genie.md) | latent action + video tokens | 大规模视频、自监督 latent action | 交互式 dynamics | scaling、latent action 可控性 | latent action 不等于真实机器人动作 |
+| [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 视频生成底座 + action conditioning | 多阶段视频/交互训练 | 实时世界模拟器 | system pipeline、实时化、benchmark | demo 和世界一致性仍需闭环评测 |
+| [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | joint video-action WAM | 视频动作联合去噪、post-training | policy / robot execution | real robot task progress、ablation、failure case | 视频预测错时，动作会跟着错 |
+
+![DreamZero joint video-action 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-2-joint-video-action.png){ width="860" }
+
+<small>图源：`World Action Models are Zero-shot Policies`，Figure 2。原论文图意：DreamZero 同时生成未来视频和动作。本站读法：WAM 的优势是动作和未来视觉被迫对齐，风险也是错误视频计划会牵引错误动作。</small>
+
+## 15. 横向比较：DA3、VGGT、SpatialVLA、VPP
+
+这组方法都和具身状态有关，但层级不同：DA3 和 VGGT 更偏几何状态，SpatialVLA 把 3D 表征接入动作接口，VPP 用视频预测表征直接改善 policy。
+
+![Depth Anything 3 pipeline 原论文图](../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-2-pipeline.png){ width="860" }
+
+<small>图源：`Depth Anything 3`，Figure 2。原论文图意：DA3 使用跨视角 self-attention 和 Dual-DPT head 输出 depth 与 ray。本站读法：几何状态不是漂亮点云，而是相机、深度、ray、点云能否稳定进入 episode schema 和 world-model state。</small>
+
+| 方法 | 提供什么状态 | 和动作的关系 | 证据类型 | 接到哪里 |
+| --- | --- | --- | --- | --- |
+| [DA3](../paper-deep-dives/embodied-ai/depth-anything-3.md) | depth、ray、camera、点云/3DGS | 给 world model 和 VLA 提供多视角几何状态 | benchmark、ablation、demo、teacher 训练说明 | 相机/深度、episode schema、几何状态 |
+| [VGGT](../paper-deep-dives/embodied-ai/vggt.md) | camera、depth、point map、track | 给动态场景和多视角状态提供 feed-forward 3D 表征 | benchmark、runtime、ablation | 多相机状态、点云、轨迹回放 |
+| [SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md) | Ego3D position encoding、adaptive action grids | 把 3D 空间直接接到动作 token | simulation + real robot success | VLA 动作接口、空间泛化 |
+| [VPP](../paper-deep-dives/embodied-ai/video-prediction-policy.md) | video prediction intermediate features | 用预测表征训练机器人 policy | CALVIN/MetaWorld/真实机器人 | 视觉 tokenizer、policy 表征、失败 replay |
+
+![VPP predictive representations 原论文图](../assets/images/paper-deep-dives/embodied-ai/vpp/figure-12-predictive-representations.png){ width="860" }
+
+<small>图源：`Video Prediction Policy`，Figure 12。原论文图意：绿色是真实未来，红色是预测未来，蓝色是 predictive representations。本站读法：预测表征不必生成清晰像素，但必须保留会影响动作的未来变化。</small>

@@ -49,6 +49,18 @@
   </div>
 </div>
 
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | CUDA/Triton、GEMM/Attention、低精度 Kernel、Profiling/Roofline | 能判断瓶颈是 FLOPs、HBM、layout、通信、launch 还是数值 |
+| 工程查阅 | DeepGEMM、CUTLASS/CuTe、Runtime dispatch、测试回归 | 接 kernel、调 runtime 或做回归时查 |
+| 论文扩展 | FlashAttention、MagiAttention、SLA、Attn-QAT、DeepSeek-V3/V4 | 把论文系统收益拆成数据流、通信和 kernel 命中率 |
+| 基础补课 | 张量 shape、GEMM、显存与运行时 | 卡在线程、tile、dtype 或带宽时补 |
+| 暂时可跳过 | 专项库源码细节 | 还没确认热点前不要先钻实现 |
+
+本专题服务世界模型高效训练里的**算力、带宽、通信和端到端 rollout 延迟**。算子页的结论不能只写 kernel speedup，还要说明端到端 loop 是否变快、候选动作排序是否保持、risk false negative 是否没有新增。
+
 ## 阅读路径
 
 ### 先看分层：不要把案例和基础概念放同一层

@@ -26,6 +26,18 @@
   </div>
 </div>
 
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | MDP/Value/Bellman、PPO/GRPO、[世界模型中的强化学习](rl-for-world-models.md) | 能把 state、action、reward、value 和 imagined rollout 放进同一条闭环 |
+| 工程查阅 | verl 代码流程、RLHF/RLVR 数据引擎、评测回流 | 做 rollout 系统或后训练工程时查 |
+| 论文扩展 | Dreamer、RLVR-World、Decision Transformer、Nemotron 3 Super | 区分真实交互、模型内 rollout 和语言任务 RL 的证据边界 |
+| 基础补课 | 概率、优化、序列生成和采样 | 卡在 advantage、KL、return 时补 |
+| 暂时可跳过 | 纯算法推导细节 | 如果目标是世界模型，先抓闭环和证据 |
+
+本专题服务世界模型高效训练里的**真实交互成本和策略改进证据**。先读循环，再读 world model 中的 imagined rollout；读完后接 [世界模型评测](../world-models/evaluation-and-failure-modes.md) 和 [VLA 数据引擎](../vla/benchmarks-and-data-engines.md)。
+
 如果你只有监督学习基础，可以先这样迁移概念：
 
 | 监督学习里熟悉的东西 | 强化学习里的对应物 | 不同点 |

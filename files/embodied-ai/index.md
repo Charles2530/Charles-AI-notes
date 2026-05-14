@@ -26,6 +26,18 @@
   </div>
 </div>
 
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[VLA 数据模型与评测路线](vla-data-model-and-evaluation-roadmap.md)、[一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 能把多相机、深度、pose、动作和 success checker 放进同一条 episode |
+| 工程查阅 | Isaac Sim/RoboTwin、Rerun、Sim2Real、规划控制与安全 | 做仿真数据、真机排障或部署安全时查 |
+| 论文扩展 | DA3、VGGT、SpatialVLA、VPP、π0.5、DreamZero | 看几何状态、动作接口和未来 latent 如何共同服务闭环 |
+| 基础补课 | 坐标系、深度、点云、控制与 RL | 卡在内外参、轨迹或 success checker 时补 |
+| 暂时可跳过 | 宏观趋势和产品式 demo | 没有任务 schema 和失败回放前先略读 |
+
+本专题是世界模型主线的**落地验证层**：它把内部模拟放回真实传感器、真实控制器、真实接触和安全边界。读完后应能回答：失败来自感知、动作、世界模型、控制器还是评测脚本。
+
 \[
 o_t \rightarrow b_t \rightarrow p_t \rightarrow a_t \rightarrow o_{t+1}
 \]
@@ -214,6 +226,7 @@ VLA 更像具身智能里的端到端策略接口之一。它回答的是：给�
 | 专题来源 | 具身系统层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
 | [Depth Anything](../paper-deep-dives/embodied-ai/depth-anything.md)、[Depth Anything V2](../paper-deep-dives/embodied-ai/depth-anything-v2.md)、[VGGT](../paper-deep-dives/embodied-ai/vggt.md)、[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md) | DA1/DA2 提供开放域单目深度底座；VGGT 用 feed-forward Transformer 直接预测 camera、depth、point map 和 point tracks；DA3 再把单目深度扩展成 depth-ray、多视角点云、相机和 3DGS | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) |
+| [RT-2](../paper-deep-dives/embodied-ai/rt2.md) | 把机器人动作离散成 VLM 可生成的 action token，并用 web VQA / caption 与机器人轨迹 co-fine-tuning，说明语义泛化可以迁移到闭环动作，但新 motor skill 仍需要动作数据 | [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md)、[VLA 数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md) |
 | [π0.5](../paper-deep-dives/embodied-ai/pi05.md) | heterogeneous co-training、FAST 动作离散化、flow matching action expert 和高层子任务预测说明开放家庭任务不能只靠单一机器人数据 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)、[具身任务谱系与评测](task-taxonomy-and-benchmarks.md) |
 | [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 动作既是策略输出，也是未来世界的条件变量；具身系统要评估不同动作会把场景带向哪里 | [规划、控制与安全](planning-control-and-safety.md)、[家庭机器人流程与失败排查](household-robotics-workflows-and-failure-patterns.md) |
 | [PlaNet](../paper-deep-dives/world-models/planet.md)、[Dreamer](../paper-deep-dives/world-models/dreamer.md) | latent dynamics、reward / continue prediction 和 imagined rollout 说明世界模型最有价值的用法是减少真实试错、提前评估风险 | [规划、控制与安全](planning-control-and-safety.md)、[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) |

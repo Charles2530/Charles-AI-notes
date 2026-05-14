@@ -67,6 +67,26 @@ p_\theta(z_{t+1:t+H}, x_{t+1:t+H}, r, d, u \mid z_{\le t}, a_{t:t+H-1}, c)
 
 本站的最小可复算样例放在 [动作条件视频世界模型端到端训练案例](action-conditioned-video-world-model-training-case.md) 的“可复算 mini-chain”小节。它用 `episodes.jsonl -> token stats -> training-config.yaml -> rollouts.jsonl -> eval_mini_chain.py` 串出一个小链路。它不是生产证据，但给出了页面应该追求的证据形状：读者不只看到“应该这样做”，还可以复算“这一页的指标从哪里来”。
 
+## 主线定位框模板
+
+后续打磨主线 12 页和关键支撑页时，页面开头尽量补一个相同口径的定位框。它不需要很长，但要让读者在 30 秒内知道这页为什么存在。
+
+| 字段 | 写法 |
+| --- | --- |
+| 本页解决的成本 | 视频 token、真实交互、KV 显存、rollout 延迟、验证成本、通信或训练显存 |
+| 核心风险 | 这项技术最可能伤什么：动作敏感性、风险召回、长时一致性、吞吐、恢复语义 |
+| 读完要能判断 | 读者应该能做出的工程判断 |
+| 适合接到 | 下一页、相邻专题或论文专题 |
+
+示例：
+
+```text
+本页解决的成本：KV 显存和长上下文 rollout 延迟
+核心风险：低精 KV 改变候选动作排序，降低 near-miss recall
+读完要能判断：是否该压权重、压 KV，还是先改 runtime / batch
+适合接到：推理成本建模、QAT/KV Cache、世界模型评测
+```
+
 ## 算一遍：4 路相机、16 帧、32k context 的账
 
 下面这个例子不是推荐配置，而是给“世界模型高效训练”一个数量级锚点。假设系统输入 `4` 路相机、每路 `16` 帧，视觉 encoder 用 `14x14` patch，主干上下文上限是 `32k` token，batch size 是 `16`，模型有 `32` 层、`32` 个 attention heads、GQA 下 `8` 个 KV heads，head dim 是 `128`。

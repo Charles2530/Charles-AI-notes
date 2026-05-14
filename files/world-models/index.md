@@ -43,6 +43,18 @@
   </div>
 </div>
 
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | [高效训练路线图](efficient-training-roadmap.md)、[RSSM/Dreamer](rssm-dreamer-and-planning.md)、[WM/WAM/VAM](wm-wam-vam-and-action-conditioned-modeling.md)、[端到端案例](action-conditioned-video-world-model-training-case.md) | 能判断模型输出的是 latent、视频、动作、风险还是可被 policy 消费的信号 |
+| 工程查阅 | 数据引擎、评测失效、风险规划、机器人/驾驶应用 | 做数据回流、闭环验证或风险模块时查 |
+| 论文扩展 | Dreamer、Genie、LingBot-World、DreamZero、CausVid、Self Forcing | 区分论文证据、本站推断和工程外推 |
+| 基础补课 | 概率潜变量、Transformer、强化学习、扩散采样 | 卡在 dynamics、rollout 或采样时补 |
+| 暂时可跳过 | 开放式技术展望和产品 demo | 还没建立成本账和评测口径时先略读 |
+
+本专题解决的是：世界模型如何从“预测未来”变成“改善决策”。它服务的核心成本是**真实交互、视频 token、rollout 延迟和验证预算**。先读 3-5 页建立 state-action-rollout 接口，读完后接到 [VLM/VLA](../vlm/index.md)、[具身智能](../embodied-ai/index.md)、[推理](../inference/index.md) 和 [量化](../quantization/index.md)。
+
 ## 硬证据读法
 
 世界模型页面最容易滑成“概念地图”或“系统设想”。为了让判断更可信，后续关键页都尽量按硬证据模块组织：先说解决哪项成本，再给一个可复算例子或数字账，再给失败 replay，最后写清证据等级、反例边界和验收指标。

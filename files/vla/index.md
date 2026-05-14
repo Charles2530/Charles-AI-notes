@@ -5,6 +5,18 @@ VLA 的核心不是“让 VLM 多输出几个动作 token”，而是把视觉�
 !!! note "初学者先抓住"
     VLM 主要回答“我看到了什么”，VLA 进一步回答“现在该做什么”。世界模型还会追问“做了以后会发生什么”。读 VLA 时不要只看模型结构，要同时看动作表示、数据来源、闭环恢复和评测指标。
 
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | [数据与策略学习](data-and-policy-learning.md)、[动作表示与控制接口](action-representation-and-interfaces.md)、[闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md) | 能解释动作从哪里来、怎么执行、失败如何回流 |
+| 工程查阅 | 评测与数据引擎、部署与安全、动作 chunk / latent skill | 有真实 episode、仿真任务或真机部署时查 |
+| 论文扩展 | RT-2、π0.5、SpatialVLA、DreamZero、VPP | 把论文图和表回填到动作 schema、闭环和世界模型接口 |
+| 基础补课 | 行为克隆、策略、动作分布、控制接口 | 卡在 BC、chunk 或坐标系时补 |
+| 暂时可跳过 | 纯模型榜单和未接闭环的 demo | 先建立 episode schema 和失败 replay |
+
+本专题解决的是世界模型高效训练里的**动作条件成本和闭环证据来源**。它回答先读哪 3-5 页、读完接哪里：先读数据、动作、恢复；随后接 [VLM/VLA 接口](../vlm/vlm-vla-for-efficient-world-model-training.md)、[WM/WAM/VAM](../world-models/wm-wam-vam-and-action-conditioned-modeling.md) 和 [具身智能](../embodied-ai/index.md)。
+
 ## 专题层级
 
 | 层级 | 核心问题 | 推荐页面 | 和世界模型高效训练的关系 |

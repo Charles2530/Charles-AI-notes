@@ -21,6 +21,9 @@
 !!! tip "本专题的读法"
     先别问“几 bit 最好”，先问瓶颈在哪里：权重放不下、decode 读权重慢、KV cache 占满、activation 离群值伤质量，还是 runtime 没有对应 kernel。量化不是单个算法名，而是格式、误差控制、算子和服务栈共同兑现收益。
 
+!!! note "从 Low-bit LLM Survey 反推量化主线"
+    新增的 Low-bit LLM 综述可以当作本章的索引：第一层看 number format 和 scale granularity，第二层看 PTQ/QAT/QLoRA 等误差控制方法，第三层看 Q/DQ、packing、GEMM、attention 与 KV cache kernel，第四层看 vLLM、SGLang、TensorRT-LLM 等 runtime 能否真的跑到低比特路径。量化选型时不要只记录“W4A16”或“FP8”，而要写清它省的是权重、激活、KV、带宽还是训练/微调显存，以及哪条任务路径必须保高精。
+
 <div class="atlas-meta-grid">
   <div>
     <strong>读前先知道</strong>
@@ -36,12 +39,25 @@
   </div>
 </div>
 
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[多模态与 VLA 量化](quantization-for-multimodal-and-vla-models.md)、[部署检查清单](evaluation-and-deployment-checklist.md) | 能说清省的是权重、激活、KV、带宽还是训练显存 |
+| 工程查阅 | GPTQ/AWQ/SmoothQuant、运行时框架、硬件取舍 | 选具体 checkpoint、runtime 或硬件时查 |
+| 论文扩展 | [Low-bit LLM Survey](../paper-deep-dives/inference/low-bit-llm-survey.md)、DeepSeek-V3/V4、Nemotron 3 Super | 把低比特论文拆成格式、算法、kernel 和 runtime 证据 |
+| 基础补课 | 数值范围、scale、矩阵乘、显存带宽 | 卡在 INT/FP/NF4 或 Q/DQ 时补 |
+| 暂时可跳过 | 具体框架转换脚本和格式兼容细节 | 没有部署目标时先略读 |
+
+本专题服务世界模型高效训练里的**显存、带宽和低成本 rollout**。不要只问“几 bit”，要把 `action sensitivity`、`long-horizon consistency`、`risk calibration`、`candidate ranking agreement` 和 `cost per successful rollout` 一起放进验收表。
+
 ## 从论文专题回填的量化知识点
 
 论文专题里的低精度案例说明，量化不是一个“统一降到几 bit”的动作，而是按训练、推理、KV、MoE 和敏感模块分别决策。
 
 | 专题来源 | 量化层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
+| [Low-bit LLM Survey](../paper-deep-dives/inference/low-bit-llm-survey.md) | 低比特 LLM 要同时区分格式、粒度、动态/静态校准、weight-only、W&A、KV cache、QAT/PTQ 和低比特训练；是否真快取决于 Q/DQ、packing、kernel 与硬件路径 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) |
 | [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 训练要和通信、并行、GEMM kernel、loss 稳定性一起看，不能只看权重格式 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) |
 | [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | NVFP4 预训练采用 mixed precision：大部分线性层 FP4，但 latent projections、MTP、attention、embedding 和部分网络保留高精 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[量化评估与部署检查](evaluation-and-deployment-checklist.md) |
 | [DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | FP4 QAT 与异构 KV cache 提醒我们：长上下文和 MoE 服务中，KV 与动态状态可能比静态权重更早成为显存瓶颈 | [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) |

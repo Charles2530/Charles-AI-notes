@@ -255,13 +255,20 @@ nav:
   - 论文专题讲解:
       - paper-deep-dives/index.md
       - 高效训练:
+          - Megatron-LM：Tensor Model Parallel: paper-deep-dives/foundations/megatron-lm.md
+          - ZeRO：零冗余优化器: paper-deep-dives/foundations/zero.md
           - Muon：LLM 预训练优化器: paper-deep-dives/foundations/muon-is-scalable.md
           - MagiAttention: paper-deep-dives/foundations/magiattention.md
           - SLA / SLA2: paper-deep-dives/foundations/sla-sparse-linear-attention.md
           - Attn-QAT：4-bit Attention: paper-deep-dives/foundations/attn-qat.md
       - 高效推理:
+          - EAGLE：Feature-level Draft: paper-deep-dives/inference/eagle.md
+          - EAGLE-2：动态 Draft Tree: paper-deep-dives/inference/eagle-2.md
+          - Low-bit LLM Survey：低比特大模型量化: paper-deep-dives/inference/low-bit-llm-survey.md
+          - EAGLE-3：投机推理加速: paper-deep-dives/inference/eagle-3.md
           - KVSlimmer：非对称 KV 合并: paper-deep-dives/inference/kvslimmer.md
       - 扩散模型:
+          - DPM-Solver++：Guided Sampling 求解器: paper-deep-dives/diffusion/dpm-solver-plus-plus.md
           - DMD：一步扩散蒸馏: paper-deep-dives/diffusion/dmd.md
           - DMD2：更稳的少步分布匹配蒸馏: paper-deep-dives/diffusion/dmd2.md
           - Diffusion Forcing：序列扩散: paper-deep-dives/diffusion/diffusion-forcing.md
@@ -269,6 +276,7 @@ nav:
           - Wan2.1：开源视频生成系统路线: paper-deep-dives/diffusion/wan.md
           - Phased DMD：分阶段少步蒸馏: paper-deep-dives/diffusion/phased-dmd.md
       - 具身智能:
+          - RT-2：VLM 到机器人动作: paper-deep-dives/embodied-ai/rt2.md
           - π0.5：开放世界 VLA: paper-deep-dives/embodied-ai/pi05.md
           - GR-2：Web 视频知识迁移到机器人: paper-deep-dives/embodied-ai/gr2.md
           - VPP：预测表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md

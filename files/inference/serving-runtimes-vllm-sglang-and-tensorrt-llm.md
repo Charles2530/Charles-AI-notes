@@ -84,6 +84,14 @@ KV cache 是 decode 的核心资源。runtime 需要管理页面/块分配、回
 
 量化不是 runtime 的外挂功能。runtime 决定权重布局、scale 访问、dequant 位置、kernel 替换、KV cache 是否量化和 fallback 路径。同一量化方案在不同 runtime 上表现不同，常常是 layout 和 kernel 协同不同。
 
+Low-bit LLM Survey 的系统视角很适合放在这里：一个低比特 checkpoint 只有在 runtime 能稳定命中对应 Q/DQ、packing、GEMM、attention 和 KV cache kernel 时，才会变成端到端收益。否则文件变小了，但请求路径里可能多出 dequant、layout transform 或 fallback kernel，短请求 TTFT 甚至会变差。
+
+### 投机解码路径
+
+EAGLE-3 这类方法也把 runtime 推到前台。投机解码至少需要管理 draft forward、target verification、tree attention 或动态 draft tree、临时 KV 分支、接受 token 的 commit，以及失败路径的回滚。runtime 如果不能把这些步骤和 batching、KV page 管理、prefix cache、tracing 接好，离线 acceptance rate 不会自动变成线上 speedup。
+
+验收 speculative runtime 时，不要只看平均 tokens/s。至少要拆出 draft time、verify time、accepted tokens、rejected tokens、KV branch memory、fallback 率，以及不同任务桶里的 P95/P99。
+
 ### 编排能力
 
 Agent 请求不是一次输入一次输出，而是生成、调工具、解析、再生成的多阶段程序。runtime 需要支持状态复用、阶段切换、结构化输出和 trace。复杂 agent 系统不应只看裸 token/s。

@@ -34,6 +34,9 @@
 !!! tip "本专题的读法"
     不要把训练页当成“术语表顺序背”。先把一次训练看成生产线：数据进来，目标函数定义学习信号，优化器和并行系统负责把信号转成参数更新，评测和 checkpoint 决定这次实验是否可信。读每个子页面时，都问它在这条生产线里解决哪一段问题。
 
+!!! note "从新加论文反推训练主线"
+    Megatron-LM 和 ZeRO 可以作为训练系统的两个锚点：Megatron-LM 解释为什么要把 Transformer 的 MLP、attention 和词表 loss 切成 tensor parallel，ZeRO 解释为什么普通 DP 会把 optimizer states、gradients、parameters 重复存到每张卡。读训练章节时，先把问题拆成三张账：**显存账**看参数、梯度、优化器状态、激活和 buffer；**通信账**看 TP all-reduce、DP reduce-scatter/all-gather、PP 点对点和 checkpoint I/O；**质量账**看数据去重、batch、LR schedule、validation loss 和 downstream 指标。这样再看 Megatron、DeepSpeed、FSDP、FP8 或 checkpoint，就不会只是在记工具名。
+
 <div class="atlas-meta-grid">
   <div>
     <strong>读前先知道</strong>
@@ -48,6 +51,18 @@
     <p>模型变差时，优先怀疑能力、行为、数据、系统还是评测口径。</p>
   </div>
 </div>
+
+## 阅读分层与小地图
+
+| 分层 | 推荐内容 | 读到什么程度 |
+| --- | --- | --- |
+| 主线必读 | [Megatron、DeepSpeed 与训练栈](megatron-lm-deepspeed-and-open-training-stacks.md)、[分布式训练与 Checkpointing](distributed-training-and-checkpointing.md)、[低比特训练与数值格式](low-bit-training-and-numerics.md) | 能算清参数、梯度、优化器状态、激活、通信和 checkpoint 的账 |
+| 工程查阅 | 输入管线、稳定性、集群运维、W&B 治理 | 出现吞吐、恢复、数据版本和实验可比性问题时再查 |
+| 论文扩展 | [Megatron-LM](../paper-deep-dives/foundations/megatron-lm.md)、[ZeRO](../paper-deep-dives/foundations/zero.md)、Muon、MagiAttention、Attn-QAT | 把论文里的系统证据回填到训练账本 |
+| 基础补课 | 自动微分、优化器、数值、显存与运行时 | 卡在公式或 dtype 时补，不需要一开始全刷 |
+| 暂时可跳过 | 具体平台治理和工具细节 | 还没有真实训练项目时先略读 |
+
+本专题解决的是世界模型高效训练里的**训练成本和训练可信度**：显存是否够、通信是否划算、数据是否有效、实验是否能恢复。先读系统栈、低比特和分布式三页；读完后接到 [世界模型高效训练技术路线图](../world-models/efficient-training-roadmap.md)、[推理系统](../inference/index.md) 和 [算子与编译器](../operators/index.md)。
 
 ## 先看训练生产线地图
 
@@ -103,6 +118,8 @@
 
 | 专题来源 | 训练层面的补充 | 应接到本章哪里 |
 | --- | --- | --- |
+| [Megatron-LM](../paper-deep-dives/foundations/megatron-lm.md) | 经典 tensor model parallel 把 Transformer MLP、attention 和输出词表切成 column/row parallel pairs，用少量 all-reduce 训练 8.3B GPT-2 / 3.9B BERT，说明 TP/DP 混合、mixed precision、activation checkpointing、随机数语义和数据去重是大模型训练系统的基础账本 | [Megatron-LM / DeepSpeed](megatron-lm-deepspeed-and-open-training-stacks.md)、[分布式训练与 Checkpointing](distributed-training-and-checkpointing.md)、[低比特训练与数值格式](low-bit-training-and-numerics.md) |
+| [ZeRO](../paper-deep-dives/foundations/zero.md) | Zero Redundancy Optimizer 把 DP 中重复保存的 optimizer states、gradients、parameters 分阶段切到 data-parallel ranks，并把 activation partition、constant-size buffers、memory defragmentation 纳入同一张显存账，说明训练系统优化要同时计算状态生命周期、通信量和 batch / convergence 边界 | [Megatron-LM / DeepSpeed](megatron-lm-deepspeed-and-open-training-stacks.md)、[分布式训练与 Checkpointing](distributed-training-and-checkpointing.md)、[输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md) |
 | [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 mixed precision、DualPipe、auxiliary-loss-free routing 和 MTP 说明训练收益往往来自“架构、低精度、并行和后训练”的共同设计 | [低比特训练与数值格式](low-bit-training-and-numerics.md)、[Megatron-LM / DeepSpeed](megatron-lm-deepspeed-and-open-training-stacks.md)、[MTP 与投机解码](mtp-and-speculative-decoding.md) |
 | [Qwen3](../paper-deep-dives/technical-reports/qwen3.md)、[DeepSeek-R1](../paper-deep-dives/technical-reports/deepseek-r1.md) | thinking / non-thinking、RLVR、GRPO、rejection sampling 和强到弱蒸馏说明后训练不是单阶段 SFT，而是能力塑形和行为约束的多阶段链路 | [预训练、微调与对齐](pretraining-finetuning-alignment.md)、[后训练数据引擎](post-training-data-engines-and-judge-models.md)、[偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md) |
 | [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | MuonClip、agentic data synthesis、tool-use SFT、RL checkpoint engine 说明 agent 模型训练要同时管理优化器稳定性、数据生成和恢复语义 | [分布式训练与 Checkpointing](distributed-training-and-checkpointing.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) |

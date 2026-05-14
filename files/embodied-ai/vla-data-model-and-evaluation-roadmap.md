@@ -331,6 +331,7 @@ Flat / Instruction-Following Setting 很有用：同一个桌面清理任务，�
 ## 14. 参考资料
 
 - [RT-1: Robotics Transformer](https://robotics-transformer1.github.io/)：真实机器人 Transformer policy 的经典入口。
+- [RT-2 论文专题讲解](../paper-deep-dives/embodied-ai/rt2.md)：把 VLM 的 web 语义知识通过 action token 和 co-fine-tuning 接到真实机器人闭环。
 - [Open X-Embodiment](https://robotics-transformer-x.github.io/)：跨机器人公开数据集和 RT-X 模型。
 - [DROID Dataset](https://droid-dataset.github.io/)：in-the-wild 机器人操作数据集。
 - [π0.5 论文专题讲解](../paper-deep-dives/embodied-ai/pi05.md)：异构协同训练和开放世界家庭任务。

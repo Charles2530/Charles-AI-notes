@@ -58,6 +58,8 @@ $$
 
 可以粗略理解为：ZeRO Stage 1 先分片优化器状态，Stage 2 继续分片梯度，Stage 3 连参数也分片；FSDP 更贴近 PyTorch 原生 module wrapping 和按需 gather。
 
+ZeRO 论文里最值得记住的一笔账是 mixed precision Adam 的 \(16\Psi\)：fp16 参数 \(2\Psi\)、fp16 梯度 \(2\Psi\)、fp32 master parameters \(4\Psi\)、Adam momentum \(4\Psi\)、Adam variance \(4\Psi\)。因此一个 1.5B 模型的 fp16 权重约 3GB，但训练态模型状态至少约 24GB。ZeRO/FSDP 省的不是数学计算，而是 DP ranks 之间重复保存这些状态的显存。
+
 ![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
 
 <small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原论文图意：比较普通数据并行和 ZeRO-DP 三个阶段的单设备模型状态显存；\(\Psi\) 表示参数量，\(K\) 表示优化器状态的显存倍数，\(N_d\) 表示数据并行度。</small>
@@ -70,6 +72,8 @@ $$
 ### 张量并行、序列并行与上下文并行
 
 TP 把单个线性层、注意力投影或 MLP 矩阵拆到多卡。它适合 hidden size 很大、单层 GEMM 太大的模型，但通信非常频繁，通常应优先限制在节点内高速互联域。
+
+Megatron-LM 的 TP 直觉可以更具体一点：MLP 第一层按列切，让每个 rank 本地做 GeLU；第二层按行切，只在输出处 all-reduce。Attention 则按 heads 切 Q/K/V，让每个 rank 本地完成部分 heads 的 attention，再在 output projection 后同步。这样做的重点是减少 nonlinear 或 attention 中途的同步点，把高频通信留在少数明确位置。
 
 SP 常和 TP 搭配，把一部分原本重复保存的序列维激活分摊到不同 rank。CP 更直接面向超长上下文，把上下文片段切到多个设备，并在注意力阶段做必要通信。序列长度从 `4k` 走向 `32k`、`128k` 以后，长上下文训练往往必须联合使用 CP、activation checkpointing、FlashAttention 变体和通信重叠。
 
