@@ -329,8 +329,8 @@
       tip: "Linear Layer：线性层，通常做 xW+b 投影，是 QKV、输出投影和 MLP 中最常见的基础模块。"
     },
     {
-      aliases: ["LayerNorm", "BatchNorm", "RMSNorm", "Residual", "SwiGLU", "GELU"],
-      tip: "深层网络稳定组件：Norm 控制数值尺度，Residual 保留梯度通路，GELU/SwiGLU 等激活函数提供非线性表达。"
+      aliases: ["LayerNorm", "BatchNorm", "RMSNorm", "Residual", "残差连接", "shortcut connection", "identity shortcut", "SwiGLU", "GELU"],
+      tip: "深层网络稳定组件：Norm 控制数值尺度，Residual/残差连接保留信息和梯度通路，GELU/SwiGLU 等激活函数提供非线性表达。"
     },
     {
       aliases: ["Backprop", "Backpropagation", "Optimizer", "AdamW", "Gradient Clipping"],
