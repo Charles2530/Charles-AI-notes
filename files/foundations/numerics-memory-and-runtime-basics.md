@@ -112,7 +112,18 @@ flowchart LR
 2\times32\times8\times16384\times4096\times2 \approx 64GiB
 \]
 
-这里前面的 2 表示 K 和 V。这个例子说明：小模型不一定轻，长上下文下 KV cache 会成为主角。量化权重能让模型放得下，但 KV 量化、prefix cache、paged attention 和上下文裁剪才可能让高并发跑得稳。
+这里前面的 2 表示 K 和 V。把这行拆开看会更直观：在单层里，单独一个 K cache 的大小是 \(B\times T\times d\times bytes = 8\times16,384\times4,096\times2\)，约 `1GiB`；再乘 V 就是 `2GiB / layer`；32 层合起来就是约 `64GiB`。这还只是 KV 本体，没有算 page metadata、碎片、runtime workspace、临时 buffer 和其它并发请求。
+
+这类小账要注意公式里的 \(d\) 更准确地说是 KV 宽度。标准 MHA 里它通常接近 hidden size；如果用了 GQA/MQA，KV head 数少于 query head 数，KV 宽度会按比例下降；如果用了 MLA，则缓存的可能是压缩 latent，而不是完整 K/V。因此判断一个模型“长上下文贵不贵”时，不能只看参数量，还要看 `layers`、`context`、`batch`、`KV heads`、`head dim` 和 `dtype`。
+
+| 变量变化 | KV 显存怎么变 | 直觉 |
+| --- | --- | --- |
+| context 从 `16k` 到 `32k` | 约 `2x` | 历史 token 多一倍，每层都要多存一倍 K/V |
+| batch 从 `8` 到 `16` | 约 `2x` | 并发上下文一起常驻显存 |
+| BF16 KV 改 INT8 KV | 约 `1/2` | bytes 从 2 降到 1，但要考虑 scale/dequant 和质量回归 |
+| MHA 改 GQA，KV heads 降到 `1/4` | KV 宽度约 `1/4` | 主要省 KV cache 和 decode 读带宽，不等于 prefill 计算免费 |
+
+这个例子说明：小模型不一定轻，长上下文下 KV cache 会成为主角。量化权重能让模型放得下，但 KV 量化、prefix cache、paged attention 和上下文裁剪才可能让高并发跑得稳。
 
 | 优化动作 | 主要省什么 | 可能不省什么 |
 | --- | --- | --- |

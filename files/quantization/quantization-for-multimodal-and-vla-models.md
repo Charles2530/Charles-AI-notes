@@ -111,7 +111,9 @@ BF16 存储一条历史 latent 约为：
 64\times256\times1024\times2 \approx 33.6MB
 \]
 
-如果改成 FP8 / INT8 latent cache，理论存储约降到 16.8MB，再加 scale metadata。对大规模 imagined rollout 来说，这能直接换来更长 horizon 或更大 batch。但它不等于可以把所有视频训练目标都低精度化：
+这行可以先拆成 token 数：`64` 帧乘每帧 `256` 个 latent token，等于 `16,384` 个历史 token；每个 token 是 `1024` 维 BF16，所以是 \(16,384\times1024\times2\) bytes。它只是在算一条起点历史的 latent cache，不含后续 Transformer 的 KV cache、decoder 临时激活、候选动作分支和 dataloader 预取。
+
+如果改成 FP8 / INT8 latent cache，理论存储约降到 16.8MB，再加 scale metadata。对大规模 imagined rollout 来说，这个数会被起点数和候选数放大：例如同时保留 `1024` 个起点，就是约 `34GB` BF16 latent history；每个起点再展开 `16` 条候选，就会把缓存、读取带宽和调度压力继续放大。但它不等于可以把所有视频训练目标都低精度化：
 
 | 场景 | 可以压的部分 | 不建议压的部分 |
 | --- | --- | --- |

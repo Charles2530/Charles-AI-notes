@@ -48,7 +48,13 @@ flowchart LR
 \frac{8192\times2}{64}=256
 \]
 
-个 token。但真实 router 可能不均匀：热门 expert 收 520 个 token，冷 expert 只收 80 个。若 capacity 设为 320，热门 expert 会 drop 或 reroute；若 capacity 设为 640，padding 和小批量形状会浪费。这个超参同时影响模型质量、kernel shape 和 all-to-all 消息大小。
+个 token。这个 `256` 是平均负载，不是每个 expert 实际收到的数量。工程上常用 capacity factor 给每个 expert 预留容量：
+
+\[
+capacity \approx \frac{B L \times topk}{N_{\text{expert}}}\times factor
+\]
+
+所以 capacity 设为 `320` 相当于 factor 约 `1.25`，设为 `640` 相当于 factor `2.5`。但真实 router 可能不均匀：热门 expert 收 520 个 token，冷 expert 只收 80 个。若 capacity 是 320，热门 expert 会 drop 或 reroute；若 capacity 是 640，padding、空槽和小批量 GEMM shape 会浪费。这个超参同时影响模型质量、kernel shape 和 all-to-all 消息大小。
 
 ## 4. Token Permutation 为什么是主痛点
 

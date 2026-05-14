@@ -248,6 +248,8 @@ DPO 很重要，但它更像偏好优化的监督化变体；本章重点放 PPO
 8192 \times 8 \times 512 \approx 33.6\text{M tokens}
 \]
 
+这个 `33.6M` 只是在数 response decode token。prompt 侧也要算：如果平均 prompt 长度是 `1,024` token，并且 `G=8` 条样本各自独立 prefill，那么输入侧还会有 \(8192\times8\times1024\approx67.1M\) prompt token；如果 serving runtime 能对同一 prompt 做 prefix/KV 复用，则 prefill 更接近 \(8192\times1024\approx8.4M\) token，再分叉出 8 条 decode。两种实现的训练数据“数学上”一样，但 rollout 集群成本完全不同。
+
 如果 rollout 集群端到端吞吐是 `80k tokens/s`，仅生成就约 `420s`。这还没算 reward model、规则执行、reference logprob、old logprob 和训练更新。若把组大小从 `8` 提到 `16`，方差可能下降，但 rollout token 直接翻倍到 `67.1M`；如果平均 response 因奖励鼓励长答案从 `512` 涨到 `768`，成本又再乘 `1.5x`。
 
 PPO 的成本结构不同：它通常还要 value model / critic，并在训练时计算 actor、reference、value 等多路 logprob/value。GRPO 省掉 critic，不代表免费；它把一部分成本换成“同题多样本采样 + 组内比较”。所以判断时要同时看：

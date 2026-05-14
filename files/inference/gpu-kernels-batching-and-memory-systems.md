@@ -78,6 +78,18 @@ M_{\text{KV}}
 \approx 2 \cdot L \cdot B \cdot T \cdot d \cdot b.
 $$
 
+这里的 \(d\) 要按 KV 实际宽度理解，而不是盲目等同于模型 hidden size。标准 MHA 通常每个 query head 都有自己的 K/V，\(d\) 接近 hidden size；GQA/MQA 会减少 KV head 数，所以更常写成 \(H_{\text{kv}}\times D_{\text{head}}\)。
+
+例如 `32` 层、batch `4`、上下文 `32k`、BF16 KV：
+
+| KV 结构 | 代入方式 | KV cache 数量级 |
+| --- | --- | ---: |
+| MHA，`32` 个 KV heads，`head_dim=128` | \(2\times32\times4\times32768\times32\times128\times2\) | 约 `64GiB` |
+| GQA，`8` 个 KV heads，`head_dim=128` | \(2\times32\times4\times32768\times8\times128\times2\) | 约 `16GiB` |
+| GQA + INT8 KV | 上式 bytes 从 `2` 改成 `1` | 约 `8GiB` |
+
+这张表只是在算常驻 KV 本体。线上还要给 paged KV 的 block metadata、空闲页碎片、speculative 分支、临时 workspace 和不同请求长度的浪费留余量。
+
 长上下文和大 batch 下，KV cache 往往比权重更先成为瓶颈。它的难点不只是“大”，还包括生命周期不同步、请求长度差异大、prefix 复用、page 回收、多租户隔离、speculative decoding 的临时分支和显存碎片。
 
 ### Paged KV 与 Prefix Cache

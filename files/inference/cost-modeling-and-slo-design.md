@@ -106,6 +106,14 @@ M_{\text{KV}}
 
 其中前面的 2 分别对应 K 和 V。它不是精确容量模型，但足够帮助判断“长上下文 + 大 batch + 高精 KV”为什么会快速吃掉显存。
 
+举个可复算的口径：`32` 层模型、batch `4`、context `32k`、GQA 下 `8` 个 KV heads、`head_dim=128`、BF16 KV：
+
+\[
+2\times32\times4\times32768\times8\times128\times2 \approx 16GiB
+\]
+
+如果其它条件不变，只是换成 `32` 个 KV heads 的 MHA，KV 宽度变成 4 倍，显存也会到约 `64GiB`。如果 context 从 `32k` 拉到 `128k`，GQA 版本也会从约 `16GiB` 变成约 `64GiB`。所以成本表里写“支持 128k”不够，还要写清楚：支持的是多大 batch、什么 KV 精度、什么 KV head 结构，以及 prefix cache 命中率是多少。
+
 | 方案 | Context / KV / Batch / 量化 | 主要收益 | 主要代价 | 适合判断 |
 | --- | --- | --- | --- | --- |
 | A. 4k + FP16 KV + 小 batch + FP16 权重 | 短上下文、低并发、质量保守 | 实现简单，TTFT 稳 | 单请求成本高，显存利用差 | 适合高价值、低并发、质量优先请求 |

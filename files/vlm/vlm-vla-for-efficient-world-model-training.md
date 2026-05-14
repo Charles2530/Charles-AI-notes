@@ -191,6 +191,8 @@ multi_camera_frame:
 | latent skill | 6-12 个 skill token | 60-120 万 token | 长任务便宜 | 需要额外 skill decoder，语义漂移难查 |
 | diffusion / flow action head | 每个状态采样 8-32 条候选轨迹 | 训练量看采样数放大 | 多峰动作更自然 | rollout 和筛选成本高 |
 
+这张表里的单位故意不一样，因为动作接口改变的是“监督对象”。逐步连续动作是 \(100,000\times60\times7=42,000,000\) 个标量；离散 action token 如果每个维度单独量化，数量级仍是 \(100,000\times60\times7\) 个 token；8-step chunk 则是每条样本 \(\lceil60/8\rceil=8\) 个 chunk，所以一轮是 `80` 万 chunk。latent skill 更短，但它把成本转移给 skill tokenizer / decoder：如果 skill 边界切错，世界模型看到的 action token 会很省，却不再对应真实可执行动作。
+
 如果世界模型每个起点要评估 16 个候选动作序列，逐步连续接口要预测 \(16\times60=960\) 个未来控制步；8-step chunk 只需比较 \(16\times8=128\) 个 chunk。训练和 rollout 会便宜很多，但风险是：一旦第 2 个 chunk 已经偏离，系统要等 chunk 结束才纠正。对高接触任务，chunk 省下的成本可能被失败恢复成本吃回去。
 
 一个实用折中是双接口：高层 policy 输出 0.5-1 秒 chunk，低层控制器或 action expert 在 chunk 内保留连续高频修正；世界模型评估 chunk 级后果，同时对接触瞬间保留更高时间分辨率。

@@ -67,11 +67,11 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 4 \times 16 \times 32 = 2048
 \]
 
-序列长度下降约 6 倍，attention、激活显存和通信都会明显下降。但这个收益有前提：压缩后仍要保留目标物、夹爪、接触边界、遮挡前位置和多相机几何关系。否则 token 省下来了，world model 可能失去最关键的动作后果信号。
+序列长度下降约 \(12,544 / 2,048 \approx 6.1\) 倍。这个比例会线性进入 hidden activation、KV cache 和很多通信量；如果后续做全局 self-attention，attention score 的上界还会按平方下降，约 \((12,544 / 2,048)^2 \approx 37.5\) 倍。但这个收益有前提：压缩后仍要保留目标物、夹爪、接触边界、遮挡前位置和多相机几何关系。否则 token 省下来了，world model 可能失去最关键的动作后果信号。
 
 ### 压缩前后对比：不要只看 token 数
 
-同一条“从桌面拿起红色量杯”的训练样本，可以把视觉侧压成几种不同形态。下面的数字不追求代表所有系统，而是给一个能复算的口径：4 路相机、16 帧历史、每个 patch token hidden size 为 1024，进入世界模型前用 BF16 保存。
+同一条“从桌面拿起红色量杯”的训练样本，可以把视觉侧压成几种不同形态。下面的数字不追求代表所有系统，而是给一个能复算的口径：4 路相机、16 帧历史、每个 patch token hidden size 为 1024，进入世界模型前用 BF16 保存。表里的“视觉激活约占”只算一个 `[L, D]` buffer，即 \(L\times1024\times2\) bytes；真实训练还会叠加 Q/K/V、MLP activation、梯度保存或 checkpoint 重算。
 
 | 方案 | 视觉 token 数 | 视觉激活约占 | 省下了什么 | 最容易丢什么 |
 | --- | ---: | ---: | --- | --- |
@@ -80,7 +80,7 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 | 目标/夹爪优先 token | \(16\times(4\times8+12+12)=896\) | 约 1.8MB | 保留局部控制证据 | 背景布局和远处约束 |
 | 当前窗口 + memory token | 最近 4 帧 512 token + 128 memory token | 约 1.3MB | 长任务上下文压力最低 | memory 写入错误会长期污染 |
 
-如果后续模块对视觉 token 做全局 self-attention，注意力 score 的上界从 \(12,544^2\approx157M\) 个元素降到 \(2,048^2\approx4.2M\)，是约 37 倍差异。真实系统可能用 cross-attention、window attention 或稀疏读取，收益不会完全按平方兑现，但这个量级足以解释：视觉 tokenizer 不是锦上添花，而是能决定长视频世界模型是否训得动。
+如果后续模块对视觉 token 做全局 self-attention，注意力 score 的上界从 \(12,544^2\approx157M\) 个元素降到 \(2,048^2\approx4.2M\)，是约 37 倍差异。若按 16 个 heads、BF16 显式 materialize score 来粗看，前者会是数 GiB 级别的单层中间量；FlashAttention 等实现通常不会这样完整写回，但 \(L^2\) 的计算压力仍然存在。真实系统可能用 cross-attention、window attention 或稀疏读取，收益不会完全按平方兑现，但这个量级足以解释：视觉 tokenizer 不是锦上添花，而是能决定长视频世界模型是否训得动。
 
 压缩是否成功，要看四个对照指标：
 
