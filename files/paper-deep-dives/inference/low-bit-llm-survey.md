@@ -58,8 +58,12 @@ number format
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 1。原论文图意：低比特 LLM 被拆成 basics、inference frameworks、efficient training、efficient inference 和 future trends。</small>
 
-!!! note "这张图怎么读"
-    图里最关键的是分层，而不是方法名数量。`Number Formats` 和 `Granularity` 决定误差形态；`Framework / System Support` 决定速度是否兑现；`Low-bit Training / PEFT` 决定训练显存和稳定性；`QAT / PTQ` 决定现成模型如何低成本部署。
+!!! note "解释框：Figure 1 怎么读"
+    先从左侧 `LLM Quantization` 往右读，不要从某个具体算法名开始。第一层把低比特 LLM 分成四件事：基础概念、推理系统、低比特训练和低比特推理算法。也就是说，论文默认“量化”不是一个算法，而是一条从数值格式到部署系统的链路。
+
+    红色的 `Basics` 是所有后续方法的共同前提：先确定 number format，再确定 scale 覆盖多大范围，最后决定 dynamic / static quantization。橙色的 `Inference Frameworks and System Support` 是速度能否兑现的部分：同样叫 INT4，如果 runtime 没有低比特 MatMul、packing、Q/DQ fusion 和 KV cache 路径，端到端不一定快。蓝色的 `Efficient Training` 和 `Efficient Inference` 则回答两个不同问题：训练时如何稳定地用低比特，部署已有模型时如何用 QAT / PTQ 压低成本。
+
+    这张图最容易误读成“方法列表”。更好的读法是把它当检查清单：看到任何量化方案，都追问它改了哪一层，省的是权重、activation、KV cache、通信还是训练状态；同时有没有把额外的 scale、packing、dequant 和 kernel 复杂度算进去。
 
 ## 基础层：低比特不是只有 INT4
 
@@ -114,14 +118,25 @@ X_{\mathrm{INT}_k}=\operatorname{clamp}\left(\operatorname{round}\left(\frac{X_{
 | Group-wise | 每组 token 或 channel 一个 scale | GPTQ/AWQ 类权重量化常用，平衡 scale 元数据和误差 |
 | Element-wise | 训练时可用更细 scale | 推理前通常要合并进 weight，否则元数据和计算太重 |
 
-!!! note "为什么粒度会影响推理速度"
-    细粒度 scale 不只是精度问题，也会改变 kernel 读数据的方式。group-wise 或 channel-wise scale 如果不能和 dequant / GEMM 融合，就会增加额外 global memory 读取和寄存器压力。量化方案是否快，往往取决于这些 scale 是否能被布局、packing 和 kernel 一起消化。
+!!! note "解释框：Figure 2 怎么读"
+    图中的浅绿色大矩阵可以理解成一个 \(T \times C\) tensor：\(T\) 常对应 token / sequence 维，\(C\) 常对应 channel / hidden 维。小绿色块是 scale，红色虚线框表示这个 scale 管住哪一片数据。scale 管得越大，元数据越少、kernel 越简单，但离群值越容易拉大量化间隔；scale 管得越小，误差更容易控制，但会带来更多 scale 读取、在线统计和 layout 约束。
+
+    (a) `Tensor-wise` 是整块 tensor 共用一个 scale，成本最低，但一个 outlier 会影响整层。 (b) `Token-wise` 是每个 token 一套 scale，适合 activation 因输入而变的场景，但推理时通常要动态计算。 (c) `Channel-wise` 是每个 channel 一套 scale，常用于 weight 或 activation 的列维度控制。 (d) `Group-wise` 把 token 或 channel 分组，是 GPTQ/AWQ 等权重量化常见折中。 (e) `Element-wise` 最细，误差最小，但元数据和算子成本通常太重，更多出现在训练技巧或可合并的参数化里。
+
+    工程上要把这张图和 kernel 一起看。`group-wise` 或 `channel-wise` 如果能被 dequant + GEMM 融合，质量收益可能很划算；如果 scale 需要在热路径里反复从 global memory 读，或者让寄存器占用明显上升，理论上的低 bit 可能变成实际延迟里的额外负担。
 
 ### 动态和静态量化：一个省准备成本，一个省在线成本
 
 ![Dynamic and static quantization 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-3-dynamic-static.png){ width="840" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 3。原论文图意：比较 dynamic quant、static weight & activation quant 和 static weight-only quant 的准备阶段与推理阶段。</small>
+
+!!! note "解释框：Figure 3 怎么读"
+    这张图分上下两层：上半部分是 `Preparing`，表示离线准备或校准；绿色阴影里的下半部分是 `Inference`，表示每次线上请求都会发生的事情。斜线阴影代表预存的量化参数，例如 weight scale / zero point，或者静态 activation quantization 的校准参数。
+
+    左边 `Dynamic Quant` 的权重可以提前量化，但 activation 的 scale 要在推理时根据当前 \(X_{\mathrm{FP}}\) 现算，所以它对输入分布变化更稳，代价是每次请求多了统计和 quantize 开销。中间 `Static Quant (weight & activation)` 用 calibration data 提前固定 weight 和 activation 的参数，推理时能更直接进入 INT MatMul，但校准数据如果不像真实流量，质量会掉。右边 `Static Quant (weight only)` 只把权重存成低比特，推理时再 dequant 成 FP weight，最后走 FP MatMul。
+
+    读这张图时关键看 MatMul 框：前两种想进入 `INT MatMul Kernels`，更可能获得真实计算收益；weight-only 更像“省显存和权重带宽”，计算核心仍可能是 FP kernel。它部署最稳，但如果 dequant 路径没有融合好，加速未必明显。
 
 动态量化在推理时根据当前 batch 计算 activation scale，部署准备简单，对输入分布变化更灵活，但会增加在线计算。静态量化用校准数据提前固定 scale，推理更快，但校准集必须覆盖真实流量。weight-only quantization 则更保守：权重低比特存储，推理时常把权重 dequant 到浮点，再和 FP activation 做 MatMul。
 
@@ -145,14 +160,27 @@ host memory / model storage
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 4。原论文图意：以 NVIDIA A100 为例展示 weight 和 activation 在 host、global memory、L2、shared memory、registers 与 MatMul kernel 之间的数据传输。</small>
 
-!!! note "这张图支撑什么判断"
-    量化收益最容易发生在慢链路：模型从 host / storage 到 device、global memory 到 on-chip cache、KV cache 读写等。如果低比特只减少了存储，但每次计算前都要高成本 dequant，或者 runtime 没有命中低比特 kernel，端到端延迟未必下降。
+!!! note "解释框：Figure 4 怎么读"
+    这张图要从左到右读：数据先在 host memory / storage 里，经过 PCIe 到 GPU global memory，再进入 L2 cache、shared memory、registers，最后喂给 MatMul kernel。上方的带宽和延迟数字告诉你一件事：越靠近计算单元，带宽越高、延迟越低；真正贵的是跨 PCIe、读 global memory、以及把大量权重和 activation 反复搬进片上缓存。
+
+    图里上半条更像 weight 路径，下半条更像 activation 路径。权重 \(W_{\mathrm{FP}}\) 和输入 \(X_{\mathrm{FP}}\) 最终都要进入 register 才能参与矩阵乘。量化能帮忙的地方，不只是“模型文件小了”，而是让这些链路上搬运的字节数变少，尤其是 off-chip global memory 到 on-chip cache、KV cache 读写、或者多卡通信里的数据量。
+
+    但这张图也解释了为什么量化可能不快：如果低比特数据进 shared memory 后必须先 dequant 成 FP，再占用额外寄存器和指令，或者 scale / zero point 读取破坏了原本的内存访问模式，节省的带宽会被额外计算吃掉。所以看量化速度，不能只看 bitwidth，要看 Q/DQ 放在哪一层、是否融合进 kernel、以及瓶颈到底是 memory-bound 还是 compute-bound。
 
 ### Weight-only、W&A 和 KV cache 是三种不同系统问题
 
 ![Quantization data transmission 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-5-data-transmission.png){ width="920" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 5。原论文图意：展示 quantized weight preparation、weight-only quantization 和 weight & activation quantization 的数据传输过程。</small>
+
+!!! note "解释框：Figure 5 怎么读"
+    这张图有三栏，先看底部标题。左栏 `(a) Prepare` 是离线阶段：把 FP 权重量化成低比特权重，再 pack 到 `uint32` 这类更适合搬运和访存的容器里。图里以 4-bit 为例，8 个 4-bit 值可以塞进一个 32-bit word，所以存储和传输有接近 8x 的潜在节省。这里的 packing 不是装饰，它决定后续 kernel 能不能连续、合并、对齐地读数据。
+
+    中栏 `(b) Weight-only` 是很多部署方案的真实路径：host / global memory 里搬的是 packed low-bit weight，但进入计算前会 multi-thread dequant 成 FP16 register，然后用 FP MatMul kernel。绿色箭头表示少搬数据带来的加速，深灰箭头表示 dequant 等操作带来的减速。它的好处是兼容性强，风险是“显存省了，但算力路径没变”。
+
+    右栏 `(c) Weight & activation` 把 activation 也量化并重新布局，目标是直接进入 INT MatMul kernel。它更有机会同时省 weight 带宽、activation 带宽和计算成本，但条件也更苛刻：硬件要支持对应指令，runtime 要有 kernel，layout 要适配，Q/DQ 和 packing 不能把收益吃掉。
+
+    因此这张图不是在说 W&A 一定优于 weight-only，而是在教你拆账：每个绿色收益旁边都要问“哪里新增了 quantize / dequantize / layout 转换”；每个减速项都要问“能不能融合或摊薄到大 batch / 长上下文里”。
 
 | Scope | What is quantized | MatMul path | 真正的收益来源 | 主要风险 |
 | --- | --- | --- | --- | --- |
@@ -180,8 +208,12 @@ B \cdot L \cdot N_{\mathrm{layer}}
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 6。原论文图意：展示 quantized KV cache 如何减少缓存存储和数据传输，并在 attention forward 前 dequantize。</small>
 
-!!! note "KV cache 量化不能只看平均精度"
-    KV cache 承载的是历史 token 对当前 token 的可访问信息。普通问答上掉点小，不代表长文档、多轮 agent、工具轨迹、代码 repo 和 VLA 历史状态都安全。真正上线前要按请求类型验收：长上下文引用、跨轮一致性、数字/代码细节、检索引用和安全分类是否退化。
+!!! note "解释框：Figure 6 怎么读"
+    先分清三条线：左边 \(Q\) 通常只服务当前 token 的 attention 计算，不需要长期缓存；中间 \(K\) 和右边 \(V\) 会随着每个新 token 追加进 cache，所以它们随 batch 和 context length 线性增长。图里的 `K_prev / V_prev` 是已经缓存的历史，`K_new / V_new` 是当前 token 产生的新项。
+
+    KV cache quantization 的基本路径是：K/V projection 之后先 quantize，把低比特 `K_INT / V_INT` 存进 cache；attention forward 需要用它们时，再 fetch 历史 cache 并 dequantize 成 `K_FP / V_FP`。绿色收益主要来自“缓存更小、读写更少”，不一定来自 attention 计算本身，因为很多实现最终仍会在 attention kernel 前恢复到 FP。
+
+    图里的风险点在两个地方。第一，cache 是在线增长的，scale 粒度、scale 存储和 append layout 都会影响吞吐。第二，KV cache 不是普通中间激活，它保存的是历史 token 可被未来 token 访问的信息。普通问答平均掉点小，不代表长文档、多轮 agent、工具轨迹、代码 repo 和 VLA 历史状态都安全。上线前要按请求类型验收：长上下文引用、跨轮一致性、数字/代码细节、检索引用和安全分类是否退化。
 
 ## 训练层：低比特训练不是把 dtype 改小
 
@@ -260,6 +292,13 @@ Y=X\cdot \operatorname{dequant}(W_q)+X\cdot AB
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 7。原论文图意：比较 QLoRA 类完整 LoRA、QA-LoRA 类修改 LoRA 结构、L4Q 类接近 QAT 的 LoRA 结构。</small>
 
+!!! note "解释框：Figure 7 怎么读"
+    这张图看的是“量化底座”和“LoRA 增量”如何放在同一条前向路径里。蓝色的 \(W_q\) 是量化后的主权重，橙色的 \(A,B\) 是 LoRA 的低秩分支，火焰符号表示训练时更新的部分。输入 \(x\) 同时走量化底座和 LoRA 分支，输出把两路结果合起来。
+
+    (a) 是 QLoRA 最容易理解的形态：底座权重量化并冻结，LoRA 分支训练。它主要解决 fine-tuning 显存问题，但部署时可能仍要保留 adapter 分支，或者做额外合并。 (b) 修改 LoRA 结构，让 LoRA 与量化 group / scale 更协调，目标是让微调结果更容易合成可部署的量化权重。 (c) 更像 QAT：从 full-precision \(W_{fp}\) 出发，用 LoRA 或可学习 scale / bias 帮助训练一个新的 \(W'_q\)，部署结果更直接，但训练成本更高，因为 full-precision 权重仍参与流程。
+
+    所以这张图回答的是“QLoRA 省训练显存”和“得到一个好部署的低比特模型”之间的差别。前者关注训练时 optimizer state 和 activation 是否省下来，后者关注 adapter 能否合并、量化误差是否被校正、推理时有没有额外分支。
+
 这张图里的三种结构很有工程意义：
 
 | Structure | 代表方法 | 微调时是否改底座 | 部署含义 |
@@ -296,6 +335,13 @@ QAT 的代表逻辑是：LLM-QAT 用 data-free knowledge distillation 对齐 ful
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 8。原论文图意：把 LLM PTQ 分为 equivalent transformation、compensation、mix-precision、combination 和更多 quantization forms。</small>
 
+!!! note "解释框：Figure 8 怎么读"
+    这张图是 PTQ 的地图，不是排行榜。左边 `Category` 是方法家族，中间 `Key Tech.` 是它们处理量化误差的手段，右边 `Related works` 是代表论文。读它时先问“我的量化失败来自哪里”：activation outlier、权重量化误差累积、少量敏感参数、还是标准 INT/FP 格式不贴合分布。
+
+    `Equivalent transformation` 的思路是在函数尽量等价的前提下改变分布，例如 shifting、scaling、rotation，让 activation 更平滑或把量化难度迁移到 weight。`Compensation` 承认量化会造成输出误差，于是用 Hessian、局部重建或 block-wise 优化把误差补回来。`Mix-precision` 则承认有些元素或 channel 太敏感，应该保留高精，其余部分再压低 bit。`Combination` 和 `More` 说明真实方法经常把低秩、稀疏、向量量化或特殊数据类型混在一起用。
+
+    工程上，这张图帮你避免“看到 GPTQ/AWQ/SmoothQuant 就直接横向排名”。更稳的流程是：先定位误差来源，再选方法家族，最后检查该方法在目标 runtime 上有没有对应 kernel、scale 布局和校准流程。
+
 PTQ 的核心难点是：你不想重新训练整个模型，却要让低比特模型接近高精模型。论文把常见方法拆成几组：
 
 | PTQ family | 代表思想 | 解决的主要问题 |
@@ -312,6 +358,13 @@ PTQ 的核心难点是：你不想重新训练整个模型，却要让低比特�
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 9。原论文图意：shifting transformation 通过可合并的偏移项调整 activation 分布，并把对应变换合并进权重路径。</small>
 
+!!! note "解释框：Figure 9 怎么读"
+    这张图把 shifting transformation 放回 Transformer block 里。上方是简化后的主干：embedding 进入 attention，再进入 FFN，最后到 output head。下方两个虚线大框分别展开 attention 和 feed-forward。红色小块可以理解成对 LayerNorm 后 activation 的 shift，例如图中的 \(\beta-\Delta\)；绿色块表示可以并入权重路径的补偿项，例如 \(\Delta W^T + b\)。
+
+    核心技巧是：直接量化 activation 时，某些 channel 的 outlier 会迫使 scale 变大，导致大多数正常值被粗糙表示。shifting 先把 activation 分布往更好量化的位置挪，再把由这个 shift 引起的线性层输出变化合并进相邻权重或 bias。这样做的目标不是随便加一个在线偏置，而是在尽量不改变原函数的情况下，让 activation quantization 更容易。
+
+    图里 attention 侧同时标了 Q/K/V projection、RoPE、Softmax、\(W_o\) 和 KV-cache quantization，是为了提醒读者：outlier 处理不是只发生在 MLP，attention 的 Q/K/V 和 cache 路径同样会受影响。部署时最关键的问题是这些 shift 和补偿项能否提前 merge；如果不能 merge，就会变成额外在线算子，低比特收益会被削弱。
+
 SmoothQuant 一类 scaling 方法的直觉是：
 
 \[
@@ -324,8 +377,12 @@ Y=XW=(X\operatorname{diag}(\Phi)^{-1})(\operatorname{diag}(\Phi)W)
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 11。原论文图意：rotation transformation 让 activation outlier 减少，其中部分 rotation 可以合并进权重，部分通常不能合并。</small>
 
-!!! note "这张图怎么读"
-    rotation 的吸引力在于它不只是“发现 outlier 后保高精”，而是尝试改变坐标系，让 outlier 变少。代价是并非所有旋转都能合并进权重；不能合并的 Hadamard / rotation 操作会增加在线计算或 kernel 复杂度。
+!!! note "解释框：Figure 11 怎么读"
+    这张图和 Figure 9 的共同点是都在处理 outlier，不同点是 Figure 9 用 shift / scale 移动分布，Figure 11 用 rotation 改变坐标系。粉色的 \(R_1,R_2,R_3,R_4\) 是不同位置的旋转矩阵，虚线框表示某些旋转可以和线性权重合并后再量化，例如 \(R_1^{-1}W_q\)、\(R_2^{-1}W_oR_1\) 或 \(R_4W_{down}R_1\) 这类形式。
+
+    直觉可以这样想：如果某个 hidden channel 承担了特别大的 outlier，低比特量化会被它拖累；正交旋转会把能量重新分散到多个 channel，让每个维度更均匀，activation 和 KV cache 更容易量化。图中的红线表示 rotated activation path，灰线表示原始 activation path，竖条标出 activation / KV-cache quantization 发生的位置。
+
+    最容易漏掉的是“能否合并”。能合并进权重的 rotation 大多是离线成本，部署时只看到新的量化权重；不能合并的 rotation 或 Hadamard 操作会留在在线热路径里，增加 kernel 复杂度、寄存器压力和访存。对于 RoPE、KV cache、residual connection 这类有结构约束的路径，还要保证旋转前后的语义一致，否则可能省了 bit 却破坏 attention 几何。
 
 ### Compensation 与 mixed precision：承认有些误差不能平均抹掉
 
