@@ -161,7 +161,7 @@ flowchart LR
 各主题下的论文条目按论文年月从早到晚展示。新增专题页时只需要在页面 front matter 中填写 `paper_date: YYYY-MM`，导航和索引展示会按该字段排序。
 
 !!! tip "技术报告怎么读"
-    技术报告不要只看 benchmark 排名。更稳的读法是先抓“训练目标和系统约束”：模型结构为什么这样选，数据和阶段如何安排，后训练的 reward / SFT / distillation 如何分工，推理或部署是否改变了架构选择。读完一篇报告后，最好能把它接回 [训练](../training/index.md)、[强化学习](../reinforcement-learning/index.md)、[推理](../inference/index.md)、[量化](../quantization/index.md) 或 [算子与编译器](../operators/index.md) 中的某条工程主线。
+    技术报告不要只看 benchmark 排名。更稳的读法是先抓“训练目标和系统约束”：模型结构为什么这样选，数据和阶段如何安排，后训练的 reward / SFT / distillation 如何分工，推理或部署是否改变了架构选择。如果报告里出现 MoE、activated params、shared/routed experts、EP/all-to-all，先回到 [MoE 与大模型架构表](../foundations/moe-and-large-model-architecture-basics.md) 拆清容量、计算、路由训练和系统成本。读完一篇报告后，最好能把它接回 [训练](../training/index.md)、[强化学习](../reinforcement-learning/index.md)、[推理](../inference/index.md)、[量化](../quantization/index.md) 或 [算子与编译器](../operators/index.md) 中的某条工程主线。
 
 ### 高效训练
 
@@ -220,7 +220,7 @@ flowchart LR
 ### 高效推理
 
 !!! note "这组文章怎么连起来读"
-    高效推理的核心不是只追 tokens/s，而是把上下文长度、KV cache、decode latency、batch 和质量损失放在同一张成本表里。先读 EAGLE，理解 feature-level draft 和 speculative verification；再读 EAGLE-2，理解 dynamic draft tree；接着读 Low-bit LLM Survey，建立量化格式、系统数据流、低比特训练和 PTQ/QAT 的全景；然后读 EAGLE-3，理解 draft model 训练、投机验证和 runtime 吞吐如何耦合；最后读 KVSlimmer，进入 KV cache compression 的具体机制。
+    高效推理的核心不是只追 tokens/s，而是把上下文长度、KV cache、decode latency、batch、视觉感知延迟和质量损失放在同一张成本表里。先读 EAGLE，理解 feature-level draft 和 speculative verification；再读 EAGLE-2，理解 dynamic draft tree；接着读 Low-bit LLM Survey，建立量化格式、系统数据流、低比特训练和 PTQ/QAT 的全景；然后读 EAGLE-3，理解 draft model 训练、投机验证和 runtime 吞吐如何耦合；再读 Fast-FoundationStereo，把视角扩展到机器人/AR 场景里的实时视觉 foundation model 加速；最后读 KVSlimmer，进入 KV cache compression 的具体机制。
 
 <table data-paper-sort="asc">
   <thead>
@@ -255,6 +255,12 @@ flowchart LR
       <td>高效推理</td>
       <td><a href="inference/eagle-3/">EAGLE-3：Training-time Test 的投机推理加速</a></td>
       <td>如何把 speculative decoding 的 draft model 从 feature prediction 改成 direct token prediction，并用 training-time test、多层 feature fusion 和真实 runtime 表验证多步 draft 的接受率与吞吐收益</td>
+    </tr>
+    <tr>
+      <td>2025-12</td>
+      <td>高效推理</td>
+      <td><a href="inference/fast-foundation-stereo/">Fast-FoundationStereo：实时 Zero-Shot 双目匹配</a></td>
+      <td>如何把 FoundationStereo 的 feature backbone、cost filtering 和 refinement 三个瓶颈分别用蒸馏、分块 NAS、结构化剪枝和 in-the-wild pseudo labels 压到实时感知推理</td>
     </tr>
     <tr>
       <td>2026-03</td>
@@ -596,6 +602,8 @@ flowchart LR
 ## 阅读建议
 
 读专题讲解时，建议先看“论文位置”和“训练路线”，再看实验与局限。很多论文的真正价值不在某个单点指标，而在它把数据、模型、训练目标和系统接口组织成一条可执行路径。
+
+如果读任意一篇专题页时发现自己卡在 token/latent/action、loss/reward/score、KV/runtime、benchmark/ablation 这些公共语言上，先回到 [论文专题前置知识地图](../foundations/paper-reading-prerequisites.md)。那一页把所有专题需要的前置知识按“表示、结构、目标、训练、执行、证据”六层串起来，适合当作读论文前的检查清单。
 
 如果只是想快速建立方向地图，先看对应主题总览页和 [参考文献总表](../references/index.md)。如果已经选定某篇论文准备精读、复现或用于项目设计，再看这里的专题讲解。
 

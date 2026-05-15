@@ -63,6 +63,7 @@ nav:
   - 参考文献: references/index.md
   - 基础知识:
       - foundations/index.md
+      - 论文专题前置知识地图: foundations/paper-reading-prerequisites.md
       - 表示与计算:
           - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
           - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
@@ -70,6 +71,7 @@ nav:
       - 结构与上下文:
           - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
           - 位置编码与 Mask：顺序和可见性: foundations/positional-encoding-masks-and-context.md
+          - MoE 与大模型架构表: foundations/moe-and-large-model-architecture-basics.md
           - Mamba 与混合 SSM 架构: foundations/mamba-and-hybrid-ssm-transformers.md
           - Norm、残差与激活函数: foundations/normalization-residual-and-activation.md
       - 交互与多模态:
@@ -266,6 +268,7 @@ nav:
           - EAGLE-2：动态 Draft Tree: paper-deep-dives/inference/eagle-2.md
           - Low-bit LLM Survey：低比特大模型量化: paper-deep-dives/inference/low-bit-llm-survey.md
           - EAGLE-3：投机推理加速: paper-deep-dives/inference/eagle-3.md
+          - Fast-FoundationStereo：实时双目匹配: paper-deep-dives/inference/fast-foundation-stereo.md
           - KVSlimmer：非对称 KV 合并: paper-deep-dives/inference/kvslimmer.md
       - 扩散模型:
           - DPM-Solver++：Guided Sampling 求解器: paper-deep-dives/diffusion/dpm-solver-plus-plus.md

@@ -35,7 +35,7 @@
     先跟踪一条请求，而不是先背 runtime 名字：请求进入队列，长输入做 prefill，逐 token decode 读取 KV cache，路由和缓存决定成本，观测指标决定能否长期运营。vLLM、SGLang、TensorRT-LLM 等工具都可以放回这条请求路径里理解。
 
 !!! note "从新加论文反推推理主线"
-    EAGLE 系列说明 decode 加速不能只看 tokens/s：draft model 的训练分布、draft tree 的候选预算、target verification 的并行效率、KV 分支管理和 runtime batching 会一起决定真实 TPOT 与 P99。Low-bit LLM Survey 则提醒量化不能只看 checkpoint bitwidth：number format、scale granularity、Q/DQ、packing、kernel、KV cache 和硬件指令必须在同一条请求热路径里验收。读推理章节时，建议固定一条请求，分开估 `prefill`、`decode`、`KV memory`、`verification overhead` 和 `fallback`，再判断某个优化是否真的省钱。
+    EAGLE 系列说明 decode 加速不能只看 tokens/s：draft model 的训练分布、draft tree 的候选预算、target verification 的并行效率、KV 分支管理和 runtime batching 会一起决定真实 TPOT 与 P99。Low-bit LLM Survey 则提醒量化不能只看 checkpoint bitwidth：number format、scale granularity、Q/DQ、packing、kernel、KV cache 和硬件指令必须在同一条请求热路径里验收。Fast-FoundationStereo 把同一原则扩展到实时视觉感知：feature extraction、cost filtering、refinement、伪标签数据和 TensorRT path 要一起进入成本账。读推理章节时，建议固定一条请求，分开估 `prefill`、`decode`、`KV memory`、`vision latency`、`verification overhead` 和 `fallback`，再判断某个优化是否真的省钱。
 
 <div class="atlas-meta-grid">
   <div>
@@ -58,7 +58,7 @@
 | --- | --- | --- |
 | 主线必读 | [推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[缓存、路由与投机解码](caching-routing-and-speculative.md)、[成本建模与 SLO](cost-modeling-and-slo-design.md) | 能把一次 rollout 请求拆成 prefill、decode、KV、verification 和 fallback |
 | 工程查阅 | 解耦 prefill、MoE serving、在线观测、容量规划 | 有真实服务压力或 P99 问题时逐页查 |
-| 论文扩展 | [EAGLE](../paper-deep-dives/inference/eagle.md)、[EAGLE-2](../paper-deep-dives/inference/eagle-2.md)、[EAGLE-3](../paper-deep-dives/inference/eagle-3.md)、[KVSlimmer](../paper-deep-dives/inference/kvslimmer.md) | 区分 decode 加速、draft 成本、KV 成本和 runtime 成本 |
+| 论文扩展 | [EAGLE](../paper-deep-dives/inference/eagle.md)、[EAGLE-2](../paper-deep-dives/inference/eagle-2.md)、[EAGLE-3](../paper-deep-dives/inference/eagle-3.md)、[Fast-FoundationStereo](../paper-deep-dives/inference/fast-foundation-stereo.md)、[KVSlimmer](../paper-deep-dives/inference/kvslimmer.md) | 区分 decode 加速、draft 成本、视觉感知延迟、KV 成本和 runtime 成本 |
 | 基础补课 | Transformer、KV cache、显存带宽、队列系统 | 不熟请求热路径时先补 |
 | 暂时可跳过 | 多租户平台治理和复杂路由策略 | 还没有线上流量时先略读 |
 
