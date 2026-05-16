@@ -28,6 +28,11 @@ RT-2 的核心不是“又做了一个机器人策略”，而是把一个非常
 | 对世界模型高效训练的意义 | RT-2 给出一个动作条件接口：世界模型若要服务具身闭环，不能只预测未来画面，还要知道 VLA 输出的动作 token 会怎样改变状态 |
 | 主要风险 | 大模型推理慢、依赖云端服务；web 语义迁移不等于物理可执行性；动作离散化会把连续控制误差藏进 token 分类误差里 |
 
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2307.15818](https://arxiv.org/abs/2307.15818) | Paper Only | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
+
 ## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
@@ -209,10 +214,10 @@ RT-2 的实证重点是 `6k` 条机器人 evaluation trajectories。总体结果
 
 | Model | Seen Tasks | Unseen Objects Easy | Unseen Objects Hard | Unseen Backgrounds Easy | Unseen Backgrounds Hard | Unseen Environments Easy | Unseen Environments Hard | Unseen Average |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| R3M (Nair et al., 2022b) | 45 | 32 | 14 | 13 | 9 | 0 | 2 | 12 |
-| VC-1 (Majumdar et al., 2023a) | 63 | 34 | 10 | 13 | 3 | 0 | 0 | 10 |
-| RT-1 (Brohan et al., 2022) | 92 | 31 | 43 | 71 | 9 | 26 | 14 | 32 |
-| MOO (Stone et al., 2023) | 75 | 58 | 48 | 38 | 41 | 19 | 3 | 35 |
+| [R3M (Nair et al., 2022)](https://arxiv.org/abs/2203.12601) | 45 | 32 | 14 | 13 | 9 | 0 | 2 | 12 |
+| [VC-1 (Majumdar et al., 2023)](https://arxiv.org/abs/2303.18240) | 63 | 34 | 10 | 13 | 3 | 0 | 0 | 10 |
+| [RT-1 (Brohan et al., 2022)](https://arxiv.org/abs/2212.06817) | 92 | 31 | 43 | 71 | 9 | 26 | 14 | 32 |
+| [MOO (Stone et al., 2023)](https://arxiv.org/abs/2303.00905) | 75 | 58 | 48 | 38 | 41 | 19 | 3 | 35 |
 | RT-2-PaLI-X-55B (ours) | 91 | 70 | 62 | 96 | 48 | 63 | 35 | 62 |
 | RT-2-PaLM-E-12B (ours) | 93 | 84 | 76 | 75 | 71 | 36 | 33 | 62 |
 
@@ -252,13 +257,13 @@ RT-2 的实证重点是 `6k` 条机器人 evaluation trajectories。总体结果
   </thead>
   <tbody>
     <tr>
-      <td>VC-1 (Majumdar et al., 2023a)</td>
+      <td><a href="https://arxiv.org/abs/2303.18240">VC-1 (Majumdar et al., 2023)</a></td>
       <td>7</td><td>25</td><td>0</td><td>11</td>
       <td>0</td><td>8</td><td>20</td><td>13</td><td>10</td>
       <td>20</td><td>7</td><td>13</td><td>11</td>
     </tr>
     <tr>
-      <td>RT-1 (Brohan et al., 2022)</td>
+      <td><a href="https://arxiv.org/abs/2212.06817">RT-1 (Brohan et al., 2022)</a></td>
       <td>27</td><td>20</td><td>0</td><td>16</td>
       <td>5</td><td>0</td><td>32</td><td>28</td><td>16</td>
       <td>20</td><td>20</td><td>20</td><td>17</td>
@@ -344,9 +349,9 @@ z =
 
 | Model | Language-Table |
 | --- | ---: |
-| BC-Zero (Jang et al., 2021) | 72 ± 3 |
-| RT-1 (Brohan et al., 2022) | 74 ± 13 |
-| LAVA (Lynch et al., 2022) | 77 ± 4 |
+| [BC-Z (Jang et al., 2022)](https://arxiv.org/abs/2202.02005) | 72 ± 3 |
+| [RT-1 (Brohan et al., 2022)](https://arxiv.org/abs/2212.06817) | 74 ± 13 |
+| [LAVA (Lynch et al., 2022)](https://arxiv.org/abs/2210.06407) | 77 ± 4 |
 | RT-2-PaLI-3B (ours) | 90 ± 10 |
 
 这组实验说明“动作当文本 token”的接口不只适用于 Google 的移动机械臂，也能迁移到一个不同机器人和仿真环境。但它仍是相对简单的 2D table manipulation，不应直接外推到高频、强接触、长时程家庭任务。

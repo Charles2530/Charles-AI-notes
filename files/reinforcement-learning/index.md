@@ -26,6 +26,29 @@
   </div>
 </div>
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先分清 MDP、policy/value、reward、verifier 和 replay 支持集。
+    **深入读法**：深读 PPO/GRPO/world-model RL 时，看 reward 是否可验证、是否闭环、是否有 hacking。
+    **实验/工程读法**：实验上记录 reward source、policy update、KL/value、success、failure replay 和 verifier 错误。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | reward hacking | verifier 和 reward model 质量决定 RL 是否真有效 |
+    | off-policy 偏差 | replay 和 offline data 的支持集必须可查 |
+    | closed-loop 外推 | 仿真提升不等于真实部署安全 |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | RL 信号可信 | reward/verifier 准确率、hacking case、人工抽查 | reward 曲线 |
+    | 策略真变好 | closed-loop success、regret/risk、失败桶改善 | 训练回报 |
+    | 成本可控 | rollout 数、judge 成本、样本效率 | 单次 benchmark |
+
+
+!!! failure "最佳反例"
+    reward 或 verifier 很便宜，但 policy 学会钻规则漏洞，线上失败更多。RL 的效率只有在 reward hacking、失败回放和闭环收益都过关后才可信。
+
 ## 阅读分层与小地图
 
 | 分层 | 推荐内容 | 读到什么程度 |

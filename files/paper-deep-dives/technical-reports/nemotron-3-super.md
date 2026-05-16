@@ -14,15 +14,9 @@ paper_topic: 技术报告
     - 代码与训练配方：[NVIDIA-NeMo/Nemotron](https://github.com/NVIDIA-NeMo/Nemotron)
     - 关键词：Hybrid Mamba-Transformer、LatentMoE、MTP、NVFP4、1M context、asynchronous GRPO、FP8/NVFP4 PTQ
 
-Nemotron 3 Super 最值得抓住三条主线：**MoE 架构、MTP 方式、强化学习范式**。
+Nemotron 3 Super 最值得抓住三条主线：Hybrid Mamba-Attention + LatentMoE 降低长上下文和 MoE 带宽成本，shared-weight MTP 缓解草稿头 train-test mismatch，异步多环境 GRPO 让数学、代码、工具、终端和长上下文能力同步后训练。
 
-| 主线 | 报告里的具体做法 | 解决的问题 |
-| --- | --- | --- |
-| 创新的 MoE 架构 | Hybrid Mamba-Attention + LatentMoE；120.6B total、12.7B active；512 experts、top-22 routing | 用 MoE 扩容量，用 Mamba 降长上下文生成成本，用 latent space 降 expert 权重读取和 all-to-all 流量 |
-| 创新的 MTP 方式 | 两层 shared-weight MTP head；训练时跨 offset 共享参数，推理时递归做 autoregressive drafting | 避免独立 MTP head 在长 draft 下的 train-test mismatch，提高 speculative decoding 接受率 |
-| 创新的 RL 范式 | SFT 后做多环境 RLVR、SWE-RL、RLHF、MTP healing；异步 GRPO、masked importance ratio、in-flight weight updates | 避免单任务 RL 互相拉扯，让数学、代码、工具、终端、SWE、长上下文等能力同步提升 |
-
-报告日期是 `2026-04-03`。它主讲 `Nemotron 3 Super 120B-A12B`，即 120B 总参数、约 12B active 的 Super 版本；官方同时放出 BF16、FP8、NVFP4、Base BF16、Nano 和 GenRM。
+报告主讲 `Nemotron 3 Super 120B-A12B`，官方同时放出 BF16、FP8、NVFP4、Base BF16、Nano 和 GenRM。
 
 ![Nemotron 3 Super benchmark and throughput](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-1-benchmark-throughput.png){ width="920" }
 
@@ -37,7 +31,6 @@ Nemotron 3 Super 最值得抓住三条主线：**MoE 架构、MTP 方式、强�
 | --- | --- | --- | --- | --- | --- | --- |
 | Nemotron 3 Super 将 Hybrid Mamba-Transformer、LatentMoE 和 shared-weight MTP 组合成高效 agent 模型 | [NVIDIA technical report](https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Super-Technical-Report.pdf), [Nemotron repo](https://github.com/NVIDIA-NeMo/Nemotron) | Figure 1, architecture and MTP sections | Paper Result | Author Code / Official Repo | 混合架构和 MTP 可作为低成本长上下文/agent 推理设计案例 | 不证明所有 claim 已独立复现 |
 | NVFP4、FP8/NVFP4 PTQ 与异步 GRPO 服务训练和推理效率 | 同上 | NVFP4, RL, throughput settings | System Throughput | Author Code / Official Repo | 低比特训练/部署和多环境 RL 需要联合验收 | 不证明 FP4 对所有能力和安全评测无损 |
-| 本站将其接到低比特训练、MTP 和 rollout 成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可启发世界模型 rollout 的低成本执行链 | 不等于 VLA/world model 闭环复现 |
 
 ## 论文位置
 

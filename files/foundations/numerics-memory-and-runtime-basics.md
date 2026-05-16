@@ -42,14 +42,39 @@
 
 这解释了为什么同一个模型“能推理”不代表“能训练”，也不代表“能高并发服务”。
 
-## 3. FLOPs、带宽和延迟
+## 3. FLOPs、MACs、带宽和延迟
 
 常见指标：
 
 - `FLOPs`：算了多少浮点操作。
+- `MACs`：multiply-accumulate 次数，也就是一次乘法加一次累加。
 - `memory bandwidth`：数据搬运速度。
 - `latency`：单次请求耗时。
 - `throughput`：单位时间处理多少请求或 token。
+
+`MACs` 和 `FLOPs` 经常被混用，但最好先立一个约定：一个 MAC 包含一次 multiply 和一次 add，所以在很多硬件/论文的 FLOPs 口径里，`1 MAC ≈ 2 FLOPs`。但有些模型统计工具会把 fused multiply-add 当成 1 次操作。读报告或 profile 时，先确认工具到底在数 `MACs`、`FLOPs`，还是只数矩阵乘里的乘加主项。
+
+一个 Linear 层 \(y=xW\) 最适合建立直觉：
+
+\[
+W\in\mathbb{R}^{d_{\text{in}}\times d_{\text{out}}}
+\]
+
+\[
+\text{Params}=d_{\text{in}}d_{\text{out}}\quad(\text{不含 bias})
+\]
+
+\[
+\text{MACs per token}=d_{\text{in}}d_{\text{out}}
+\]
+
+如果一次处理 \(B\) 个 batch、每个 batch 有 \(T\) 个 token，那么 Linear 主体 MACs 约为：
+
+\[
+B T d_{\text{in}}d_{\text{out}}
+\]
+
+这也是为什么 `Params` 和 `MACs` 有时看起来很接近：对单个 token 来说，一个被用到的权重通常贡献一次乘加。但它们不是同一个概念。`Params` 是模型静态存了多少权重；`MACs` 是某个输入 shape、某个推理/训练阶段实际做了多少乘加。MoE、长上下文 attention、batch、prefill/decode 都会让两者分开。
 
 一个算子可能不是算不动，而是数据搬不动。比如低算术强度算子经常受带宽限制，而不是算力限制。
 
@@ -133,7 +158,240 @@ flowchart LR
 | FlashAttention | attention 中间写回 | decode KV 生命周期 |
 | Shape bucketing | kernel 命中率、padding 浪费 | 长尾请求和工具延迟 |
 
-## 8. 和后续专题的关系
+## 8. DeepSeek-V3：Params 和 MACs 怎么手算
+
+下面用 DeepSeek-V3 做一个可复算例子。它适合这个主题，因为它是 MoE：`Total Params` 很大，但每个 token 只激活一小部分 routed experts。
+
+![DeepSeek-V3 architecture](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原论文图意：DeepSeek-V3 的 Transformer block 采用 MLA 和 DeepSeekMoE；MLA 缓存压缩 latent 与 RoPE key，MoE 由 shared experts 和 routed experts 共同组成。</small>
+
+!!! note "先说明口径"
+    下面按 DeepSeek-V3 官方 671B 主模型配置手算，不把额外的 MTP module 算进主模型参数。为了让初学者能复算，计算只抓主要权重矩阵，RMSNorm、router bias 等小项会说明但不作为直觉重点。MACs 也只先数矩阵乘主项；softmax、SiLU、RMSNorm、top-k、dispatch/combine、通信和 kernel padding 都会影响真实延迟。
+
+关键数字来自 DeepSeek-V3 技术报告和官方 [`config_671B.json`](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/configs/config_671B.json)：
+
+| 符号 | 含义 | DeepSeek-V3 值 |
+| --- | --- | ---: |
+| \(V\) | vocabulary size | 129,280 |
+| \(d\) | hidden dimension | 7,168 |
+| \(N\) | Transformer layers | 61 |
+| \(N_{\text{dense}}\) | 前置 dense FFN 层数 | 3 |
+| \(N_{\text{moe}}\) | MoE 层数 | 58 |
+| \(d_{\text{ff}}\) | dense MLP intermediate dim | 18,432 |
+| \(d_e\) | 单个 expert intermediate dim | 2,048 |
+| \(E\) | routed experts per MoE layer | 256 |
+| \(K\) | activated routed experts per token | 8 |
+| \(S\) | shared experts per MoE layer | 1 |
+| \(H\) | attention heads | 128 |
+| \(r_q\) | query compression rank | 1,536 |
+| \(r_{kv}\) | KV compression rank | 512 |
+| \(d_{\text{nope}}\) | non-RoPE Q/K head dim | 128 |
+| \(d_{\text{rope}}\) | RoPE Q/K head dim | 64 |
+| \(d_v\) | value head dim | 128 |
+
+### 8.1 先算 embedding 和输出头
+
+输入 embedding 和输出 LM head 都是 \(V\times d\)：
+
+\[
+Vd = 129{,}280\times7{,}168 = 926{,}679{,}040 \approx 0.927B
+\]
+
+如果输入 embedding 和输出头不共享权重，仅这两块合计约：
+
+\[
+2Vd \approx 1.853B
+\]
+
+注意：embedding lookup 本身主要是查表读权重，不是大矩阵乘；输出 head 计算 logits 时才是 \(d\times V\) 的 MACs。
+
+### 8.2 再算每层 MLA 参数
+
+DeepSeek-V3 的 attention 不是普通 Q/K/V/O 四个 \(d\times d\) 投影，而是 MLA。按官方实现，可以把主要权重拆成：
+
+\[
+P_{\text{MLA}} =
+d r_q
++ r_q H(d_{\text{nope}}+d_{\text{rope}})
++ d(r_{kv}+d_{\text{rope}})
++ r_{kv}H(d_{\text{nope}}+d_v)
++ Hd_vd
+\]
+
+代入数字：
+
+\[
+\begin{aligned}
+P_{\text{MLA}}
+&=7168\times1536\\
+&+1536\times128\times(128+64)\\
+&+7168\times(512+64)\\
+&+512\times128\times(128+128)\\
+&+128\times128\times7168\\
+&\approx 187.1M
+\end{aligned}
+\]
+
+61 层 MLA 合计约：
+
+\[
+61\times187.1M\approx11.4B
+\]
+
+### 8.3 Dense MLP 和单个 expert
+
+DeepSeek-V3 的 MLP/Expert 都是 SwiGLU 形态，核心有三块矩阵：`w1`、`w3` 升维，`w2` 降维。因此 dense MLP 每层参数是：
+
+\[
+P_{\text{dense-MLP}}=3dd_{\text{ff}}
+=3\times7168\times18432
+\approx396.4M
+\]
+
+前 3 层是 dense FFN，所以：
+
+\[
+3\times396.4M\approx1.19B
+\]
+
+单个 expert 的宽度是 \(d_e=2048\)，所以单个 expert 参数是：
+
+\[
+P_{\text{expert}}=3dd_e
+=3\times7168\times2048
+\approx44.0M
+\]
+
+### 8.4 MoE 层的 total params
+
+每个 MoE 层有 256 个 routed experts 和 1 个 shared expert。router gate 还要给每个 expert 打分，主要权重约为 \(Ed\)：
+
+\[
+P_{\text{MoE-total}}
+= E P_{\text{expert}} + S P_{\text{expert}} + Ed
+\]
+
+\[
+=256\times44.0M+1\times44.0M+256\times7168
+\approx11.32B
+\]
+
+58 个 MoE 层合计：
+
+\[
+58\times11.32B\approx656.6B
+\]
+
+把 embedding、输出头、MLA、前 3 层 dense MLP、58 层 MoE 加起来：
+
+\[
+\begin{aligned}
+P_{\text{total}}
+&\approx 2Vd + 61P_{\text{MLA}} + 3P_{\text{dense-MLP}} + 58P_{\text{MoE-total}}\\
+&\approx 1.85B + 11.4B + 1.19B + 656.6B\\
+&\approx 671.0B
+\end{aligned}
+\]
+
+这就对上了 DeepSeek-V3 报告里的 `671B total params`。关键点是：大头来自所有 routed experts 的总仓库，而不是每个 token 都会跑完这 671B。
+
+### 8.5 MoE 层的 activated params
+
+每个 token 在 MoE 层不会用 256 个 routed experts，只会用 Top-8 routed experts，再加 shared expert：
+
+\[
+P_{\text{MoE-active}}
+= K P_{\text{expert}} + S P_{\text{expert}} + Ed
+\]
+
+\[
+=8\times44.0M+1\times44.0M+256\times7168
+\approx398.2M
+\]
+
+这个数很有意思：\(8+1=9\)，而 \(9\times2048=18432\)，正好接近 dense MLP 的 \(d_{\text{ff}}\)。所以单 token 的 FFN 乘加量接近一个 \(18,432\) 宽度的 dense SwiGLU MLP，但模型总容量因为 256 个 routed experts 被放大很多。
+
+把单 token 会用到的矩阵权重加起来：
+
+\[
+\begin{aligned}
+P_{\text{active, MAC-producing}}
+&\approx P_{\text{head}} + 61P_{\text{MLA}} + 3P_{\text{dense-MLP}} + 58P_{\text{MoE-active}}\\
+&\approx 0.927B + 11.4B + 1.19B + 23.1B\\
+&\approx 36.6B
+\end{aligned}
+\]
+
+如果把输入 embedding 查表也放进“activated params”口径里，则约为：
+
+\[
+36.6B + 0.927B \approx 37.6B
+\]
+
+这就是报告里 `37B activated params per token` 的来源直觉。它不是精确 latency，也不是每步只有 37B 次所有操作，而是说明稀疏 MoE 下每个 token 实际触达的权重规模远小于 `671B total params`。
+
+### 8.6 从 activated params 到 MACs
+
+对单个 decode token，如果只看被用到的矩阵乘主项，MACs 约等于 MAC-producing active weights：
+
+\[
+\text{weight MACs/token}\approx36.6B\ \text{MACs}
+\]
+
+如果换成常见 FLOPs 口径：
+
+\[
+36.6B\ \text{MACs}\times2\approx73.2B\ \text{FLOPs}
+\]
+
+但真实 LLM 推理还有 attention score/value 聚合。这个部分不随参数量固定，而随上下文长度变。用 MLA 的 absorb 实现做一个粗略估计，decode 一个新 token、历史长度为 \(T\) 时，每层 score/value 聚合主项可写成：
+
+\[
+H T \left((r_{kv}+d_{\text{rope}})+r_{kv}\right)
+\]
+
+当 \(T=4096\)：
+
+\[
+128\times4096\times((512+64)+512)\approx0.57B\ \text{MACs/layer}
+\]
+
+61 层约：
+
+\[
+61\times0.57B\approx34.8B\ \text{MACs}
+\]
+
+所以在 4K 历史长度下，一个 decode token 的粗略矩阵乘账可以写成：
+
+\[
+36.6B\ \text{weight MACs}+34.8B\ \text{attention MACs}\approx71.4B\ \text{MACs}
+\]
+
+如果是 prefill 一个 4K prompt，weight MACs 会乘上 4096：
+
+\[
+4096\times36.6B\approx150.0\ \text{TMACs}
+\]
+
+attention pairwise 部分按 causal triangle 粗算约：
+
+\[
+\frac{1}{2}\times61\times128\times4096^2\times((512+64)+512)
+\approx71.3\ \text{TMACs}
+\]
+
+所以 4K prefill 的主项大约是：
+
+\[
+150.0\ \text{TMACs}+71.3\ \text{TMACs}\approx221.3\ \text{TMACs}
+\]
+
+!!! warning "不要把这当成线上延迟"
+    这只是手算主项。真实服务还会受 FP8/BF16 kernel、MoE dispatch/combine、expert batch size、all-to-all、KV cache layout、logits 是否全量计算、batching、prefix cache、padding、采样和 runtime 调度影响。`Params` 帮你看存储和容量，`MACs` 帮你看乘加规模，最终线上速度仍要用 profiler 和端到端压测确认。
+
+## 9. 和后续专题的关系
 
 - [量化路线图](../quantization/index.md)：理解低精度格式和部署收益。
 - [推理系统](../inference/index.md)：理解延迟、吞吐、KV cache 和服务调度。

@@ -270,14 +270,14 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 ## 快速代码示例
 
 ```python
-import torch
-import torch.nn.functional as F
+import torch  # 使用 no_grad 控制 teacher 前向
+import torch.nn.functional as F  # 使用 MSE 蒸馏损失
 
-def distill_step(student, teacher, x_t, t, cond):
-    with torch.no_grad():
-        target = teacher(x_t, t, cond=cond).sample
-    pred = student(x_t, t, cond=cond).sample
-    return F.mse_loss(pred, target)
+def distill_step(student, teacher, x_t, t, cond):  # 定义 teacher-student 蒸馏单步
+    with torch.no_grad():  # teacher 只提供目标，不参与梯度更新
+        target = teacher(x_t, t, cond=cond).sample  # 生成 teacher 目标预测
+    pred = student(x_t, t, cond=cond).sample  # 生成 student 预测
+    return F.mse_loss(pred, target)  # 用 MSE 让 student 贴近 teacher
 ```
 
 这段代码给出最小 teacher-student 蒸馏步：用 teacher 生成目标噪声（或速度）预测，student 直接回归。一步或少步扩散蒸馏通常都以这类“轨迹/分布对齐”损失为核心，再叠加对抗或感知约束稳住细节。

@@ -5,6 +5,11 @@
 
 所以动作表示与控制接口其实是 `VLA` 成败的底层结构之一。很多系统看起来都是“图像 + 语言 -> 动作”，但真正决定它能不能学、能不能迁移、能不能落地的，常常就是动作这一层怎么定义。
 
+!!! tip "快速定位"
+    **一句话结论**：动作接口决定 VLA 的训练成本、控制风险和世界模型 action sensitivity。
+    **适合读者**：正在比较离散 action token、连续控制、动作 chunk、低层控制器和安全门禁的人。
+    **先看哪张表**：先看“硬证据模块：动作接口要用成本和失败一起验”，再看各类动作表示。
+
 !!! note "难点解释：动作不是一句话的翻译"
     VLA 的输出不是“把语言翻译成命令”这么简单。一个动作可能同时包含位置、旋转、夹爪、速度、力和模式切换。不同分量的尺度、频率和风险都不同，动作接口定义错了，模型再大也很难稳定执行。
 
@@ -358,19 +363,19 @@ $$
 ### 快速代码示例
 
 ```python
-import torch
+import torch  # 使用张量拼接、重复和裁剪
 
-def chunk_actions(action_seq, chunk_size=8):
-    # [T, act_dim] -> [num_chunks, chunk_size, act_dim]
-    T, dim = action_seq.shape
-    pad = (chunk_size - T % chunk_size) % chunk_size
-    if pad:
-        action_seq = torch.cat([action_seq, action_seq[-1:].repeat(pad, 1)], dim=0)
-    return action_seq.view(-1, chunk_size, dim)
+def chunk_actions(action_seq, chunk_size=8):  # 把连续动作序列切成固定长度块
+    # [T, act_dim] -> [num_chunks, chunk_size, act_dim]  # 输入序列到块状动作的形状变化
+    T, dim = action_seq.shape  # 读取时间长度和动作维度
+    pad = (chunk_size - T % chunk_size) % chunk_size  # 计算对齐 chunk 所需的补齐步数
+    if pad:  # 只有长度不能整除时才补齐
+        action_seq = torch.cat([action_seq, action_seq[-1:].repeat(pad, 1)], dim=0)  # 用最后一个动作填充尾部
+    return action_seq.view(-1, chunk_size, dim)  # 重排成按块预测的动作张量
 
-def safe_project(action, low, high):
-    # 控制接口安全投影
-    return torch.clamp(action, low, high)
+def safe_project(action, low, high):  # 对动作做执行边界约束
+    # 控制接口安全投影  # 防止策略输出越过执行器允许范围
+    return torch.clamp(action, low, high)  # 将动作裁剪到上下界之间
 ```
 
 这段代码把动作接口里最常见的两步拆开：`chunk_actions` 负责把长序列动作重排成固定块，便于策略按块预测；`safe_project` 负责把动作约束在执行器允许范围内，降低越界风险。

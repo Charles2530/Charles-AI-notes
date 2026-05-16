@@ -34,7 +34,12 @@ paper_topic: 扩散模型
 
 CausVid 的证据强在流式视频生成质量、延迟和少步蒸馏链路；它弱在动作条件和闭环决策，因为论文目标仍是视频生成系统。读它时要把“可流式生成未来视频”和“可用于世界模型规划”分开。
 
-### Evidence Snapshot
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2412.07772](https://arxiv.org/abs/2412.07772) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
+
+## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
 | --- | --- | --- | --- | --- | --- | --- |

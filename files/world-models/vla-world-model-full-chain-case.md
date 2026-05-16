@@ -15,6 +15,11 @@
 | 世界模型 | 是否学习动作条件 latent dynamics | [RSSM / Dreamer](rssm-dreamer-and-planning.md) | reward/continue、候选动作排序、model exploitation replay |
 | 闭环评测 | 是否真的改善决策 | [评测失效](evaluation-and-failure-modes.md) | closed-loop success、risk ECE、cost per success |
 
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2307.15818](https://arxiv.org/abs/2307.15818) | Paper Only | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
+
 ## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |

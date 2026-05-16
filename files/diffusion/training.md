@@ -71,7 +71,7 @@ p_\theta(x_{t-1}\mid x_t)=\mathcal{N}(x_{t-1}; \mu_\theta(x_t,t), \Sigma_\theta(
 \mathcal{L}_{\text{vlb}} = \mathbb{E}_q \left[-\log p_\theta(x_0 \mid x_1) + \sum_{t=2}^{T} D_{\text{KL}}\left(q(x_{t-1}\mid x_t, x_0)\,\|\,p_\theta(x_{t-1}\mid x_t)\right) + D_{\text{KL}}\left(q(x_T\mid x_0)\,\|\,p(x_T)\right)\right]
 \]
 
-在 Ho et al. 的参数化下，这个目标可简化为加权的噪声回归：
+在 [DDPM（Ho et al., 2020）](https://arxiv.org/abs/2006.11239) 的参数化下，这个目标可简化为加权的噪声回归：
 
 \[
 \mathcal{L}_{\epsilon} = \mathbb{E}_{x_0,\epsilon,t}\left[\left\|\epsilon - \epsilon_\theta(x_t,t)\right\|_2^2\right]
@@ -95,6 +95,15 @@ p_\theta(x_{t-1}\mid x_t)=\mathcal{N}(x_{t-1}; \mu_\theta(x_t,t), \Sigma_\theta(
 
 噪声预测之所以长期成为主流，不只是因为它最早出现，而是因为它把训练目标写成了非常统一的监督形式。网络不必直接恢复完整图像，只需要回答“这张带噪图里混进来了什么噪声”。这种目标在实现、调参和稳定性上都相对友好。
 
+代表模型/方法：
+
+| 代表 | 链接 | 为什么放这里 |
+| --- | --- | --- |
+| DDPM | [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) | 经典 \(\epsilon\)-prediction 起点，把训练目标简化成噪声回归 |
+| Improved DDPM | [Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672) | 在 DDPM 主线中改进 variance learning、schedule 和 likelihood 训练细节 |
+| ADM | [Diffusion Models Beat GANs on Image Synthesis](https://arxiv.org/abs/2105.05233) | 像素空间 class-conditional diffusion 代表，很多后续 sampler 论文会拿它当 pixel-space DPM 基线 |
+| Latent Diffusion / Stable Diffusion v1 | [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) | 把噪声预测搬到 VAE latent 空间，成为早期文生图开源生态的核心底座 |
+
 ### 原图预测
 
 \[
@@ -104,6 +113,16 @@ p_\theta(x_{t-1}\mid x_t)=\mathcal{N}(x_{t-1}; \mu_\theta(x_t,t), \Sigma_\theta(
 对图像恢复直觉更强，但不同噪声区间的尺度差异更敏感。
 
 `x_0` 预测看上去更接近最终任务，因为网络直接去猜干净样本本身。但也正因为如此，它会在高噪声区间承受更大的回归压力。离真实图像越远的样本，直接回归原图越容易受到尺度和细节缺失影响。
+
+代表模型/方法：
+
+| 代表 | 链接 | 为什么放这里 |
+| --- | --- | --- |
+| EDM | [Elucidating the Design Space of Diffusion-Based Generative Models](https://arxiv.org/abs/2206.00364) | 用预条件 denoiser \(D_\theta(x,\sigma)\) 直接输出 denoised sample，工程上常按 data prediction 理解 |
+| DPM-Solver++ | [DPM-Solver++](https://arxiv.org/abs/2211.01095) | 不重新训练模型，但把 solver 围绕 \(x_\theta\) / data prediction 形式重写，说明 \(x_0\) 坐标对少步 guided sampling 很重要 |
+| Consistency Models / LCM | [Consistency Models](https://arxiv.org/abs/2303.01469) / [Latent Consistency Models](https://arxiv.org/abs/2310.04378) | 学不同噪声水平到同一干净样本/一致点的映射，是少步生成里很典型的 clean-sample 风格目标 |
+
+这里要把“模型训练目标”和“采样器内部改写”分开：EDM/Consistency 更像训练目标或模型输出定义；DPM-Solver++ 则是把已有模型输出转换到 \(x_\theta\) 后设计 solver。
 
 ### 速度预测
 
@@ -116,6 +135,16 @@ v = \alpha_t \epsilon - \sigma_t x_0
 网络预测 \(v_\theta(x_t,t)\)。这类参数化在 latent diffusion 和少步采样场景里常更稳。
 
 `v` 参数化更像是在学习“当前状态该往哪个混合方向移动”。它同时吸收了信号项和噪声项的信息，因此在不少 latent diffusion、少步采样和 guidance 路线里会显得更平衡。也正因为如此，近年的很多工程实现更愿意把它当成默认更舒服的训练坐标系。
+
+代表模型/方法：
+
+| 代表 | 链接 | 为什么放这里 |
+| --- | --- | --- |
+| Progressive Distillation | [Progressive Distillation for Fast Sampling of Diffusion Models](https://arxiv.org/abs/2202.00512) | 少步蒸馏经典入口，也常作为理解 \(v\)-prediction / velocity 参数化的代表 |
+| Imagen | [Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding](https://arxiv.org/abs/2205.11487) | 大规模级联文生图模型代表，常和 \(v\)-prediction、dynamic thresholding、CFG 等工程选择一起讨论 |
+| Wan2.1 | [Wan: Open and Advanced Large-Scale Video Generative Models](https://arxiv.org/abs/2503.20314) | 视频 DiT 代表，采用 Flow Matching / Rectified Flow 风格 velocity 目标，适合理解视频 latent 的“生成方向” |
+
+严格说，DDPM/DDIM 语境里的 \(v\)-prediction 和 Flow Matching 的 velocity 不完全等价：前者是 \((x_0,\epsilon)\) 坐标旋转，后者是先定义一条从噪声到数据的连续路径，再学习路径速度场。但从读论文的角度，它们都在提醒你：模型不一定只需要预测“噪声是多少”，也可以直接预测“当前状态应该往哪里走”。
 
 ## 5. 从噪声预测恢复 \(x_0\)
 
@@ -186,18 +215,18 @@ v = \alpha_t \epsilon - \sigma_t x_0
 ## 快速代码示例
 
 ```python
-import torch
-import torch.nn.functional as F
+import torch  # 提供随机采样与张量操作
+import torch.nn.functional as F  # 使用 MSE loss
 
-def train_step(unet, scheduler, x0, text_embed):
-    bsz = x0.size(0)
-    t = torch.randint(0, scheduler.config.num_train_timesteps, (bsz,), device=x0.device)
-    noise = torch.randn_like(x0)
-    x_t = scheduler.add_noise(x0, noise, t)
+def train_step(unet, scheduler, x0, text_embed):  # 定义扩散训练单步
+    bsz = x0.size(0)  # 读取 batch 大小
+    t = torch.randint(0, scheduler.config.num_train_timesteps, (bsz,), device=x0.device)  # 为每个样本随机采样时间步
+    noise = torch.randn_like(x0)  # 生成与输入同形状的高斯噪声
+    x_t = scheduler.add_noise(x0, noise, t)  # 按时间步把干净样本加噪
 
-    noise_pred = unet(x_t, t, encoder_hidden_states=text_embed).sample
-    loss = F.mse_loss(noise_pred, noise)  # epsilon-prediction
-    return loss
+    noise_pred = unet(x_t, t, encoder_hidden_states=text_embed).sample  # 预测当前噪声
+    loss = F.mse_loss(noise_pred, noise)  # epsilon-prediction 损失
+    return loss  # 返回训练目标
 ```
 
 这段代码对应标准的扩散训练单步：随机采样时间步 `t`，把干净样本加噪得到 `x_t`，再让网络回归真实噪声。它体现了最核心的 **epsilon-prediction** 训练目标，便于和 `v-pred`、`x0-pred` 做等价对比。

@@ -4,6 +4,11 @@
 
 它不是要替代基础知识、训练、推理、量化、算子、VLM/VLA 或具身智能章节。相反，这些章节都被放到同一条主线下：它们分别解决世界模型训练中的不同成本项。
 
+!!! tip "快速定位"
+    **一句话结论**：世界模型高效训练是一张成本账，不是一组论文名。
+    **适合读者**：想判断 Dreamer/RSSM、Masked/JEPA、视频 rollout、低比特/KV 和数据引擎如何组合的人。
+    **先看哪张表**：先看“初读版：先按瓶颈选路线”，再看“效率技术矩阵（工程审计版）”。
+
 !!! note "读法提醒"
     主线是世界模型高效训练，但这不是说其它内容不重要。基础知识提供公共语言，训练/推理/量化/算子提供工程能力，VLM/VLA 和具身智能提供状态、动作、数据和闭环场景。读的时候先抓主线，再按需要回到支撑专题补工具。
 
@@ -345,15 +350,7 @@ flowchart LR
     F --> G
 ```
 
-第一次读可以按这条线推进：
-
-1. 先读 [世界模型路线图](index.md)，建立 state、action、rollout、planner 的基本接口。
-2. 再读 [VLM/VLA 与世界模型高效训练接口](../vlm/vlm-vla-for-efficient-world-model-training.md)，理解视觉状态和动作数据从哪里来。
-3. 接 [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)，分清 pixel reconstruction、latent prediction、joint embedding 和 action-conditioned dynamics。
-4. 接 [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) 和 [WM/WAM/VAM](wm-wam-vam-and-action-conditioned-modeling.md)，分清 latent dynamics、视频未来预测和动作世界模型。
-5. 进入 [世界模型数据引擎](data-engines-and-self-improvement.md)，看失败、near-miss、反事实和合成 rollout 如何降低真实交互成本。
-6. 用 [动作条件视频世界模型端到端训练案例](action-conditioned-video-world-model-training-case.md) 把数据、动作、训练系统、推理和评测串成一条完整链路。
-7. 按瓶颈回到支撑专题：长序列看训练和算子，显存看量化，实时 rollout 看推理，闭环落地看具身智能。
+第一次读按图推进即可：先建立 state/action/rollout 接口，再接 VLM/VLA 状态和动作来源，随后读 Masked/JEPA、RSSM/Dreamer、WAM/VAM 与数据引擎，最后按瓶颈回到训练、推理、量化、算子和具身智能专题。
 
 ### 主线必读 13 页
 

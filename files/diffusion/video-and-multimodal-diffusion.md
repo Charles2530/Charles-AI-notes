@@ -234,12 +234,12 @@ $$
 ### 快速代码示例
 
 ```python
-import torch
+import torch  # 使用张量差分与均值计算
 
-def temporal_smooth_loss(video_latent):
-    # video_latent: [B, T, C, H, W]
-    delta = video_latent[:, 1:] - video_latent[:, :-1]
-    return delta.pow(2).mean()
+def temporal_smooth_loss(video_latent):  # 定义时序平滑正则
+    # video_latent: [B, T, C, H, W]  # 视频潜变量的 batch、时间和空间维度
+    delta = video_latent[:, 1:] - video_latent[:, :-1]  # 计算相邻帧潜变量差分
+    return delta.pow(2).mean()  # 惩罚相邻帧的平均平方变化
 ```
 
 这段代码是视频扩散里最常见的时序一致性正则之一：惩罚相邻帧潜变量突变。它通常与主去噪损失共同优化，用来减少闪烁和跳帧，但权重过大也可能抹掉真实运动细节。

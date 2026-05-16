@@ -62,6 +62,7 @@ nav:
   - 术语表: glossary/index.md
   - 参考文献:
       - references/index.md
+      - 本站判断原则: references/site-judgement-principles.md
       - 全站证据与复现状态标准: references/evidence-and-reproducibility-standard.md
       - 全站效率技术覆盖矩阵: references/site-efficiency-coverage-matrix.md
       - Claim Ledger: references/claim-ledger.md

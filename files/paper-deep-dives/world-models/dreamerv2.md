@@ -13,6 +13,22 @@ paper_topic: 世界模型
     - 项目页：[danijar.com/dreamerv2](https://danijar.com/dreamerv2)
     - 关键词：DreamerV2、discrete world model、categorical latent、KL balancing、straight-through gradient、Atari、model-based RL
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2010.02193](https://arxiv.org/abs/2010.02193) | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Mastering Atari with Discrete World Models` 的核心结果在论文设置下成立 | [arXiv:2010.02193](https://arxiv.org/abs/2010.02193) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 DreamerV2 是 [Dreamer](dreamer.md) 到 [DreamerV3](dreamerv3.md) 之间的关键版本。DreamerV1 已经证明了可以在 RSSM 的 latent imagination 中训练 actor-critic，但主要成功集中在连续控制。DreamerV2 把这条路线推进到 Atari 这种更成熟、更竞争激烈的离散动作视觉基准上。
 
 这篇论文最重要的结论是：**一个单独训练的 world model，如果 latent dynamics 足够准确，也可以支撑 Atari 级别的 policy learning，而不只是服务连续控制或小规模视觉任务。**
@@ -41,6 +57,12 @@ image x_t, action a_t, reward r_t, discount gamma_t
 ![Human-level Atari performance](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-1-first.png){ width="520" }
 
 <small>Figure source: `Mastering Atari with Discrete World Models`, Figure 1. 原论文图注要点：DreamerV2 在 55 个 sticky-action Atari games 的 gamer-normalized median score 上达到 human-level，并超过 Rainbow 和 IQN 等 single-GPU model-free baselines。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是 Atari 像素、动作和 reward，输出是离散 latent dynamics 与 imagined actor-critic。  
+    **效率机制**：离散 latent 和 world model actor-critic 提升像素控制样本效率。  
+    **对主线意义**：它说明 latent dynamics 可以从控制 benchmark 扩展到更复杂离散状态。  
+    **不能证明什么**：Atari 结果不能外推为真实机器人、开放视频或 VLA 安全性。
 
 ## 核心问题
 

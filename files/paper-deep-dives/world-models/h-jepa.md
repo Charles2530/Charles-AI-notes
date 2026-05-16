@@ -14,6 +14,22 @@ paper_topic: 世界模型
     - 类型：Les Houches lecture notes / 方法路线综述，不是带 benchmark 的实验论文
     - 关键词：H-JEPA、latent variable EBM、energy collapse、regularized EBM training、representation prediction、hierarchical planning
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv PDF](https://arxiv.org/pdf/2306.02572) | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence` 的核心结果在论文设置下成立 | [arXiv PDF](https://arxiv.org/pdf/2306.02572) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 这篇文章不是一篇“训练出某个 H-JEPA 模型并刷榜”的论文。它更像一篇把 LeCun 世界模型路线讲清楚的教学型论文：先解释为什么高维连续世界不适合只靠显式概率建模，再引入 `energy-based model`、`latent variable`、`JEPA` 和最终的 `H-JEPA`。
 
 放在世界模型专题里，它的价值是补上一个关键问题：**如果世界模型不直接生成未来像素，而是在表征空间里预测未来状态，训练时到底要约束什么，为什么会坍缩，以及为什么需要层级结构。**
@@ -25,6 +41,12 @@ paper_topic: 世界模型
 ![Autonomous AI architecture](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-1-autonomous-ai-architecture.png){ width="920" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 1. 原论文图注要点：该图展示 LeCun 提出的 modular autonomous AI 结构，其中 world model 负责预测 actor 设想动作导致的未来世界状态，short-term memory 维护当前与预测状态，cost/critic 评估这些状态。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是 context/target 表征和层级 latent，输出是 joint embedding prediction 与能量式目标。  
+    **效率机制**：在 embedding 空间预测，减少像素重建冗余并鼓励抽象状态学习。  
+    **对主线意义**：它补强“世界模型可以预测表征而非像素”的理论路线。  
+    **不能证明什么**：JEPA 表征本身不证明有 action/reward/done 或可规划 rollout。
 
 这张图里最重要的是 `world model` 的位置。它不是直接回答“下一步动作是什么”的 policy，而是回答：
 

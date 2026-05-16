@@ -18,6 +18,11 @@ paper_topic: 高效训练
 
 因此这篇讲解把两篇合在一起看：SLA 是 sparse-linear attention 的第一版，证明“高秩少数精确算、低秩多数便宜补”这条路线可行；SLA2 是第二版，补上可学习路由、比例混合和 QAT，让它更接近可部署的高稀疏注意力方案。
 
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2509.24006](https://arxiv.org/abs/2509.24006) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
+
 ## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |

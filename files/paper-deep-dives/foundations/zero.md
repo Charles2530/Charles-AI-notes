@@ -32,7 +32,12 @@ ZeRO 的核心想法很漂亮：保持数据并行的使用方式和计算粒度
 
 ZeRO 的证据分两层：前半部分是内存和通信量的理论分析，后半部分是 ZeRO-100B 在 400 张 V100 上的系统实验。它证明的是“状态分片能大幅降低 DP 的显存冗余，并保留较高训练吞吐”，不是证明“万亿参数训练在当时已经经济可行”。
 
-### Evidence Snapshot
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:1910.02054](https://arxiv.org/abs/1910.02054) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
+
+## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
 | --- | --- | --- | --- | --- | --- | --- |

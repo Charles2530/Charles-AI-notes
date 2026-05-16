@@ -12,6 +12,22 @@ paper_topic: 世界模型
     - 项目页：[Genie: Generative Interactive Environments](https://sites.google.com/view/genie-2024/)
     - 关键词：生成式交互环境、视频世界模型、latent action、ST-transformer、MaskGIT、无动作标签训练
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2402.15391](https://arxiv.org/abs/2402.15391) | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Genie: Generative Interactive Environments` 的核心结果在论文设置下成立 | [arXiv:2402.15391](https://arxiv.org/abs/2402.15391) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 Genie 的关键点不是“视频生成质量更好”，而是它把一个更难的问题拆出来：**只有互联网视频，没有动作标签，也要学出可以被用户逐帧控制的潜在动作接口。**
 
 这使它在世界模型谱系里处在一个很特殊的位置。Dreamer 这类方法从环境交互轨迹中学习 \(p(z_{t+1}\mid z_t,a_t)\)，动作是天然给定的；普通视频模型学习 \(p(x_{t+1:T}\mid x_{\le t}, c)\)，通常没有逐帧控制。Genie 试图从纯视频里同时学出“世界如何动”和“什么动作造成这种变化”。
@@ -29,6 +45,12 @@ Genie 把自己定义成 `generative interactive environments`。这不是普通
 | Genie | Video | Frame-level |
 
 <small>表源：`Genie: Generative Interactive Environments`，Table 1。原论文表格要点：传统 world models 依赖视频和动作，video models 通常只做到 video-level 控制；Genie 强调只用 video data，却学习 frame-level latent action 控制。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是无标注视频 token，输出是 latent action 和可交互生成环境。  
+    **效率机制**：用视频数据学习可操作动态，减少对显式动作标注和手写模拟器的依赖。  
+    **对主线意义**：它展示外部世界模拟器路线如何从视频中提取交互结构。  
+    **不能证明什么**：latent action 可交互不等于真实机器人动作因果或安全规划可用。
 
 这张表里的 `Genie = Video + Frame-level` 是整篇论文的核心声明。它不是说 Genie 已经解决了所有世界模型问题，而是说：如果动作标签是构建可交互世界模型的主要瓶颈，那么可以先从视频中无监督地抽出一套离散潜在动作，再用这套潜在动作驱动未来帧生成。
 
@@ -378,7 +400,7 @@ $$
 |  | #Params | Memory | FVD (↓) | ∆tPSNR(↑) |
 | --- | --- | --- | --- | --- |
 | ViT | 230M | 0.3GB | 114.5 | 1.39 |
-| C-ViViT (Villegas et al., 2023) | 225M | 1.6GB | 272.7 | 1.37 |
+| [C-ViViT / Phenaki (Villegas et al., 2022)](https://arxiv.org/abs/2210.02399) | 225M | 1.6GB | 272.7 | 1.37 |
 | ST-ViViT (ours) | 205M | 0.9GB | 81.4 | 1.66 |
 
 <small>表源：`Genie: Generative Interactive Environments`，Table 3。原论文表格要点：ST-ViViT 在相近参数下同时取得更好 FVD 与 ∆tPSNR，并在 memory 上低于 C-ViViT。</small>

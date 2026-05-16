@@ -12,6 +12,22 @@ paper_topic: 具身智能 / VLA
     - 项目页：[ByteDance Seed GR-3](https://seed.bytedance.com/en/GR3)
     - 关键词：VLA、Qwen2.5-VL、flow matching、Action DiT、task status、few-shot human trajectories、ByteMini
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2507.15493](https://arxiv.org/abs/2507.15493) | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `GR-3 Technical Report` 的核心结果在论文设置下成立 | [arXiv:2507.15493](https://arxiv.org/abs/2507.15493) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 GR-3 是一篇很适合放进具身智能专题的技术报告，因为它把 VLA 从“看图出动作”继续推向三个更真实的问题：严格语言跟随、少样本新物体适配，以及长时程/灵巧任务执行。
 
 它最值得记的一点是：**VLA 不只要输出 action chunk，还要知道任务是在进行、结束，还是根本无效。**
@@ -23,6 +39,12 @@ GR-3 接在 π0 / π0.5、GR-2 之后看最顺。GR-2 重点是视频知识迁�
 ![GR-3 teaser](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-1-teaser.jpeg){ width="920" }
 
 <small>Figure source: `GR-3 Technical Report`, Figure 1. 原论文图意：展示 GR-3 在新物体、新环境、抽象指令、长时程任务和灵巧衣物操作上的能力。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是少量机器人数据、视觉语言上下文和任务条件，输出是长时程操作策略。  
+    **效率机制**：通过数据配方和模型结构提高少样本真实机器人任务覆盖。  
+    **对主线意义**：它服务 VLA 的数据效率与开放任务泛化讨论。  
+    **不能证明什么**：少样本结果不能证明所有新 embodiment 或安全恢复都解决。
 
 ## 模型结构
 

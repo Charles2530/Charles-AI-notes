@@ -12,6 +12,22 @@ paper_topic: 具身智能 / VLA
     - 代码：[roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)
     - 关键词：predictive visual representations、text-guided video prediction、inverse dynamics、CALVIN、MetaWorld、real-world robots
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2412.14803](https://arxiv.org/abs/2412.14803) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Video Prediction Policy: A Generalist Robot Policy with Predictive Visual Representations` 的核心结果在论文设置下成立 | [arXiv:2412.14803](https://arxiv.org/abs/2412.14803) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 VPP 的核心观点很漂亮：很多视觉策略只编码当前图像，而视频扩散模型内部包含“未来会怎样”的预测表征。把这些 predictive visual representations 拿来当 policy 的视觉条件，可以让机器人从视频模型的动态先验中受益。
 
 ## 证据等级与外推边界
@@ -47,6 +63,12 @@ GR-2 是“视频预训练 + 机器人轨迹微调”；DreamZero 是“joint vi
 ![VPP overview](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-1-overview.png){ width="920" }
 
 <small>Figure source: `Video Prediction Policy`, Figure 1. 原论文图意：视频 diffusion model 内部表征同时包含当前信息和未来预测信息；VPP 基于这些表征在多个 benchmark 上提升机器人策略表现。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是 text-guided video prediction 的中间表征和机器人观测，输出是 policy 动作。  
+    **效率机制**：复用预测表征而非完整生成视频，降低把动态先验接入策略的成本。  
+    **对主线意义**：它说明“未来 latent”可以直接服务 VLA policy。  
+    **不能证明什么**：预测表征提升不能证明显式世界模型或反事实动作规划已成立。
 
 ## 两阶段训练
 

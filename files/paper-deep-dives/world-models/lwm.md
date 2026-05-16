@@ -15,6 +15,22 @@ paper_topic: 世界模型
     - 代码与模型：[GitHub](https://github.com/LargeWorldModel/LWM)、[Hugging Face](https://huggingface.co/LargeWorldModel)
     - 关键词：长上下文、多模态自回归、视频语言模型、VQGAN、RingAttention、百万 token、any-to-any generation
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2402.08268](https://arxiv.org/abs/2402.08268) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `World Model on Million-Length Video And Language With Blockwise RingAttention` 的核心结果在论文设置下成立 | [arXiv:2402.08268](https://arxiv.org/abs/2402.08268) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dreamer 那样训练一个能规划的 latent dynamics。它回答的是另一个世界模型问题：**如果把长视频、图像和文本都离散成 token，能不能训练一个 7B 自回归 Transformer 在 1M token 上下文里同时理解和生成这些序列？**
 
 这篇论文最值得放进世界模型专题，是因为它把“世界模型”推向了长上下文记忆和多模态序列建模方向：模型不只看几秒钟视频，而是可以在上万帧、一本书、一个小时视频里做检索、问答和生成。
@@ -36,6 +52,12 @@ LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dre
 ![LWM long video chat 原图](https://github.com/LargeWorldModel/LWM/raw/main/imgs/long_video_chat_main.png){ width="920" }
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 1。原图展示 LWM 在 1 小时 YouTube compilation、超过 500 个 clips 上回答细粒度问题，并与 GPT-4V、Gemini Pro Vision、Video-LLaVA 做定性对比。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是文本、图像和长视频 token，输出是百万 token 上下文中的自回归预测。  
+    **效率机制**：把长视频记忆和统一 token 序列放进一个 Transformer，降低跨模态接口复杂度。  
+    **对主线意义**：它说明世界模型需要长时记忆，但仍偏视频语言建模。  
+    **不能证明什么**：长上下文问答不能证明动作条件动力学或闭环控制收益。
 
 !!! note "图解：长视频 QA 图重点看证据跨度"
     这张图的关键不只是“答对问题”，而是问题依赖长视频中很靠后的局部片段。普通 VLM 只能采样少量帧，容易错过证据；LWM 的目标是让模型直接把长视频帧 token 放进同一个上下文窗口。读这种图时要问三件事：证据是否在长视频远端，模型是否真的看到了足够帧，回答是否依赖细节而不是常识猜测。

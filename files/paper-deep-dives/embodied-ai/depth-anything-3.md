@@ -14,6 +14,22 @@ paper_topic: 具身智能
     - 代码与模型：[ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/depth-anything-3)
     - 关键词：monocular depth、multi-view geometry、depth-ray representation、Dual-DPT、teacher-student、VGGT、Depth Anything 2
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2511.10647](https://arxiv.org/abs/2511.10647) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Depth Anything 3: Recovering the Visual Space from Any Views` 的核心结果在论文设置下成立 | [arXiv:2511.10647](https://arxiv.org/abs/2511.10647) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 Depth Anything 3 放在具身智能专题里，是因为它补的是机器人闭环最基础的一层：**从 RGB、多视角或视频恢复稳定的 3D 几何状态**。VLA 可以输出动作，世界模型可以预测未来，但真正执行抓取、导航、避障和视角规划时，系统仍然要知道物体在哪里、相机在哪里、深度是否一致、点云能不能融合。
 
 ## 论文位置
@@ -31,6 +47,12 @@ DA3 的主线可以概括成一句话：把 Depth Anything 系列的单目深度
 ![Depth Anything 3 teaser 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-1-teaser.png){ width="760" }
 
 <small>图源：`Depth Anything 3`，Figure 1。原论文图意：DA3 接收任意数量图像和可选相机位姿，输出一致的 depth maps 与 ray maps，并进一步融合为点云、相机和 3D Gaussian 表示。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是任意视角图像，输出是 depth、ray、camera 和 3D geometry。  
+    **效率机制**：把多视角几何恢复做成统一前向感知底座，减少手写几何管线成本。  
+    **对主线意义**：它服务世界模型的 geometry/state interface，而不是替代 dynamics。  
+    **不能证明什么**：几何重建不能证明动作因果、接触建模或真实机器人策略安全。
 
 ## 核心表示：Depth + Ray
 

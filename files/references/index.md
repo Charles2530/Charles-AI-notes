@@ -1,5 +1,18 @@
 # 参考文献总表
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先用本站判断原则、证据标准和 Claim Ledger 确认证据等级，再查具体论文。
+    **深入读法**：按主题回到论文专题和方法页，核对 Figure/Table、setting、代码和复现状态。
+    **实验/工程读法**：做调研表时只摘 claim、source、evidence、repro 和 cannot prove，不堆标题列表。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | 证据陈旧 | 前沿 claim 必须写核验日期和官方来源 |
+    | 复现状态误写 | 没有第三方证据时不写 Independent Reproduced |
+    | 站内推断越界 | Site Inference 只能作为路线假设，不能当论文结论 |
+
+
 这一页不是简单罗列论文名，而是把全站内容按研究问题整理成可长期维护的索引。  
 阅读时建议先按主题找到入口，再回到对应章节做细读。
 
@@ -13,11 +26,25 @@
 !!! tip "证据账入口"
     如果要核对世界模型高效训练相关 claim 的证据等级和复现状态，先看 [Claim Ledger：世界模型高效训练证据账](claim-ledger.md)。那里会区分论文结果、消融、系统吞吐、闭环实验、官方 demo、toy fixture、本站推断，以及是否只有论文、官方代码或独立复现。
 
+!!! tip "本站判断原则"
+    如果要判断一项技术是否真的服务世界模型高效训练，先用 [本站判断原则](site-judgement-principles.md) 做门禁：高效必须写成成本向量，表征压缩必须保留决策变量，系统吞吐不能替代任务质量，open-loop 指标不能替代 closed-loop utility。
+
 !!! tip "全站证据标准"
     如果要给论文页、技术报告页或系统优化页补证据框，统一使用 [全站证据与复现状态标准](evidence-and-reproducibility-standard.md)。前沿 claim 先写 `Evidence Snapshot`，不要把 demo、benchmark、系统吞吐、closed-loop 和本站推断混成同一种结论。
 
 !!! tip "覆盖矩阵与前沿系统"
     如果要查某项技术属于数据效率、训练效率、推理效率、显存效率、验证效率还是部署效率，先读 [全站效率技术覆盖矩阵](site-efficiency-coverage-matrix.md)；如果只关心世界模型主线，再读 [世界模型效率技术覆盖矩阵](../world-models/efficiency-technique-coverage-matrix.md)。前沿系统和待核验 claim 不要和成熟基础文献混读；先看 `Repro Status`，再决定能外推到哪里。
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 引用可追踪 | 论文/报告/仓库/项目页直链和版本日期 | 站内转述 |
+    | 复现状态可信 | Paper Only、Author Code、Official Demo 分开 | 官方代码当独立复现 |
+    | 外推边界清楚 | 每条前沿 claim 有 Cannot Prove | 只列参考文献 |
+
+
+!!! failure "最佳反例"
+    引用最多不等于证据最强。一个页面列了很多论文，但没有 Figure/Table、实验设置、Repro Status 和 Cannot Prove，读者仍然无法判断 claim 能支撑到哪里。
 
 ## 如何使用这张索引
 

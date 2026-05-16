@@ -228,11 +228,11 @@ h(x_t)\ge 0,\qquad \forall t
 ## 快速代码示例
 
 ```python
-def control_tick(state, planner, mpc, shield):
-    ref_traj = planner.plan(state)             # 高层规划
-    u = mpc.solve(state, ref_traj)             # 低层控制
-    u_safe = shield.project(u, state)          # 安全投影
-    return u_safe
+def control_tick(state, planner, mpc, shield):  # 定义一次控制周期
+    ref_traj = planner.plan(state)  # 高层规划
+    u = mpc.solve(state, ref_traj)  # 低层控制
+    u_safe = shield.project(u, state)  # 安全投影
+    return u_safe  # 返回可安全执行的控制量
 ```
 
 这段代码强调分层控制接口：高层 `planner` 先给参考轨迹，低层 `mpc` 生成控制量，最后由 `shield` 做安全投影。这样能把任务性能与安全约束解耦，便于单独调参和审计。

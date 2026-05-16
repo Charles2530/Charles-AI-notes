@@ -11,6 +11,34 @@
   </div>
 </div>
 
+!!! tip "快速定位"
+    **一句话结论**：训练效率要同时看吞吐、显存、通信、可恢复性和质量回归。
+    **适合读者**：正在比较训练栈、数据版本、checkpoint、低精度或分布式并行方案的人。
+    **先看哪张表**：先看“最小验收指标”，再看“阅读分层与小地图”。
+
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先把训练看成数据、loss、优化器、并行、checkpoint 和评测的生产线。
+    **深入读法**：深读 Megatron/ZeRO/FP8/packing 时，把 MFU、显存、通信和收敛一起看。
+    **实验/工程读法**：工程上必须保存 config、数据版本、checkpoint manifest、loss 曲线、指标和失败恢复记录。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | 训练不可复现 | 数据版本、config、seed、checkpoint 和环境要成证据链 |
+    | 吞吐压倒质量 | step time 下降不能证明任务能力变好 |
+    | 长序列显存爆炸 | activation、optimizer state、communication 和 packing 一起算 |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 训练更省 | MFU/step time、峰值显存、通信 trace、吞吐 | 单次速度截图 |
+    | 训练可信 | 数据版本、seed、config、checkpoint 可恢复 | loss 曲线 |
+    | 质量没退 | validation、downstream、ablation 和失败桶 | 系统吞吐 |
+
+
+!!! failure "最佳反例"
+    MFU 或 step time 提升，但数据版本漂移、checkpoint 不可恢复、validation 退化。训练效率必须同时保住吞吐、可恢复性和质量链路。
+
 ## 专题定位
 
 <div class="atlas-meta-grid">
@@ -326,25 +354,25 @@ kernel、通信、Triton、CUDA、量化与编译栈，是“训练为什么能�
 ### 快速代码示例
 
 ```python
-import deepspeed
+import deepspeed  # 引入 DeepSpeed 训练引擎
 
-ds_config = {
-    "train_micro_batch_size_per_gpu": 2,
-    "gradient_accumulation_steps": 8,
-    "bf16": {"enabled": True},
-    "zero_optimization": {"stage": 2},
-}
+ds_config = {  # 定义分布式与混合精度训练配置
+    "train_micro_batch_size_per_gpu": 2,  # 单卡 micro batch 大小
+    "gradient_accumulation_steps": 8,  # 梯度累积步数，用来放大有效 batch
+    "bf16": {"enabled": True},  # 启用 BF16 混合精度
+    "zero_optimization": {"stage": 2},  # 使用 ZeRO-2 切分优化器状态和梯度
+}  # DeepSpeed 配置结束
 
 engine, optimizer, _, _ = deepspeed.initialize(
-    model=model,
-    model_parameters=model.parameters(),
-    config=ds_config,
-)
+    model=model,  # 传入待训练模型
+    model_parameters=model.parameters(),  # 交给 DeepSpeed 管理的参数集合
+    config=ds_config,  # 应用上面的 ZeRO/BF16 配置
+)  # 返回 DeepSpeed engine 与封装后的优化器
 
-for batch in train_loader:
-    loss = engine(**batch).loss
-    engine.backward(loss)
-    engine.step()
+for batch in train_loader:  # 遍历训练数据
+    loss = engine(**batch).loss  # 前向计算并取得 loss
+    engine.backward(loss)  # 由 DeepSpeed 处理反向传播与通信
+    engine.step()  # 执行参数更新、梯度清零和 ZeRO 状态同步
 ```
 
 这段代码展示了 DeepSpeed 的标准训练环：`initialize` 注入并行与 ZeRO 配置，循环中用 `engine.backward/step` 管理梯度与参数更新。相比原生 PyTorch，它把通信、分片和混合精度细节统一封装到 engine 内。

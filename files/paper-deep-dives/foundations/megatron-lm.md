@@ -14,6 +14,22 @@ paper_topic: 高效训练
     - 日期：2019-09
     - 关键词：tensor model parallelism、intra-layer model parallelism、Megatron-LM、GPT-2、BERT、mixed precision、activation checkpointing、hybrid model and data parallelism、NCCL
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:1909.08053](https://arxiv.org/abs/1909.08053) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism` 的核心结果在论文设置下成立 | [arXiv:1909.08053](https://arxiv.org/abs/1909.08053) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 Megatron-LM 是很多后续大模型训练栈的起点之一。它讨论的问题非常朴素：当 Transformer 参数、激活和 Adam optimizer state 已经放不进单卡时，能不能不引入复杂 compiler，也不依赖 pipeline bubble，把一个 Transformer layer 内部的 GEMM 切到多张 GPU 上训练？
 
 它的答案就是后来被大家称作 **tensor parallelism** 的方案：在 MLP、attention 和词表 logits 上按张量维度切分，让每个 GPU 只持有一部分权重和计算，并把通信压缩到少数几个 `all-reduce`。论文用这个方法在 512 张 V100 上训练 8.3B GPT-2-like 模型和 3.9B BERT-like 模型，展示了模型并行和数据并行可以组合成可训练的大模型系统。
@@ -47,6 +63,12 @@ Megatron-LM 是很多后续大模型训练栈的起点之一。它讨论的问�
 ![FLOPS scaling 原论文图](../../assets/images/paper-deep-dives/foundations/megatron-lm/figure-1-flops-scaling.png){ width="820" }
 
 <small>图源：Megatron-LM Figure 1。原图展示 model parallel 与 model+data parallel 在 GPU 数增加时的应用级 FLOPS 扩展；论文报告 8.3B 模型在 512 V100 上达到 15.1 PFLOPs，并相对单 GPU strong baseline 保持约 76% scaling efficiency。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是 Transformer 层、张量并行 rank 和数据并行副本，输出是分片 GEMM 与同步路径。  
+    **效率机制**：把 MLP、attention 和 vocab projection 切到多卡，降低单卡计算/显存压力。  
+    **对主线意义**：它是训练系统成本账的底座，帮助解释世界模型长轨迹训练怎么扩展。  
+    **不能证明什么**：TP/DP 结构图不能证明任务质量、收敛稳定性或具体集群效率。
 
 这张图有两个读法：
 
@@ -251,13 +273,13 @@ Table 5 很宽，这里按原论文列名重绘，保留英文指标格式。
 
 | Model | trained tokens ratio | MNLI m/mm accuracy (dev set) | QQP accuracy (dev set) | SQuAD 1.1 F1 / EM (dev set) | SQuAD 2.0 F1 / EM (dev set) | RACE m/h accuracy (test set) |
 | --- | --- | --- | --- | --- | --- | --- |
-| RoBERTa (Liu et al., 2019b) | 2 | 90.2 / 90.2 | 92.2 | 94.6 / 88.9 | 89.4 / 86.5 | 83.2 (86.5 / 81.8) |
-| ALBERT (Lan et al., 2019) | 3 | 90.8 | 92.2 | 94.8 / 89.3 | 90.2 / 87.4 | 86.5 (89.0 / 85.5) |
-| XLNet (Yang et al., 2019) | 2 | 90.8 / 90.8 | 92.3 | 95.1 / 89.7 | 90.6 / 87.9 | 85.4 (88.6 / 84.0) |
+| [RoBERTa (Liu et al., 2019)](https://arxiv.org/abs/1907.11692) | 2 | 90.2 / 90.2 | 92.2 | 94.6 / 88.9 | 89.4 / 86.5 | 83.2 (86.5 / 81.8) |
+| [ALBERT (Lan et al., 2019)](https://arxiv.org/abs/1909.11942) | 3 | 90.8 | 92.2 | 94.8 / 89.3 | 90.2 / 87.4 | 86.5 (89.0 / 85.5) |
+| [XLNet (Yang et al., 2019)](https://arxiv.org/abs/1906.08237) | 2 | 90.8 / 90.8 | 92.3 | 95.1 / 89.7 | 90.6 / 87.9 | 85.4 (88.6 / 84.0) |
 | Megatron-336M | 1 | 89.7 / 90.0 | 92.3 | 94.2 / 88.0 | 88.1 / 84.8 | 83.0 (86.9 / 81.5) |
 | Megatron-1.3B | 1 | 90.9 / 91.0 | 92.6 | 94.9 / 89.1 | 90.2 / 87.1 | 87.3 (90.4 / 86.1) |
 | Megatron-3.9B | 1 | 91.4 / 91.4 | 92.7 | 95.5 / 90.0 | 91.2 / 88.5 | 89.5 (91.8 / 88.6) |
-| ALBERT ensemble (Lan et al., 2019) | - | - | - | 95.5 / 90.1 | 91.4 / 88.9 | 89.4 (91.2 / 88.6) |
+| [ALBERT ensemble (Lan et al., 2019)](https://arxiv.org/abs/1909.11942) | - | - | - | 95.5 / 90.1 | 91.4 / 88.9 | 89.4 (91.2 / 88.6) |
 | Megatron-3.9B ensemble | - | - | - | 95.8 / 90.5 | 91.7 / 89.0 | 90.9 (93.1 / 90.0) |
 
 这组结果适合放回训练章节的稳定性讨论：BERT 扩展失败并不一定说明“大模型没用”，也可能是 normalization、residual path、初始化和优化器配方没有跟上模型规模。

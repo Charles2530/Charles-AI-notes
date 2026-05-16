@@ -29,6 +29,29 @@
   </div>
 </div>
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先看任务、传感器、动作空间、控制器和安全回退。
+    **深入读法**：深读 VLA/几何/仿真时，把 sim2real、embodiment gap 和真实闭环分开。
+    **实验/工程读法**：工程上记录机器人平台、相机、环境、接管、失败恢复和真实任务成功率。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | sim2real gap | 仿真成功率要用真实机器人闭环校验 |
+    | embodiment gap | 形态、相机、控制器和动作空间会改变结论 |
+    | 安全回退不足 | 失败恢复、人机接管和风险 case 要独立写 |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 真实闭环有效 | real-robot success、intervention、recovery | 仿真成功率 |
+    | 跨场景稳健 | 未见物体/环境/视角分桶 | 平均成功率 |
+    | 安全可控 | risk case、E-stop、human takeover、fallback | demo 视频 |
+
+
+!!! failure "最佳反例"
+    仿真成功率很高，但真机因为相机标定、接触、延迟、安全策略或恢复动作失败。具身智能的反例经常不是模型不会看，而是闭环系统没有承受真实世界。
+
 ## 阅读分层与小地图
 
 | 分层 | 推荐内容 | 读到什么程度 |
@@ -265,15 +288,15 @@ VLA 更像具身智能里的端到端策略接口之一。它回答的是：给�
 ## 快速代码示例
 
 ```python
-def closed_loop_step(robot, perception, planner, controller):
-    state = perception(robot.sensors())
-    plan = planner(state, goal=robot.goal)
-    cmd = controller(plan, state)
+def closed_loop_step(robot, perception, planner, controller):  # 定义一次机器人闭环控制步骤
+    state = perception(robot.sensors())  # 从传感器读取数据并估计当前状态
+    plan = planner(state, goal=robot.goal)  # 基于状态和目标生成高层计划
+    cmd = controller(plan, state)  # 将计划转换成可执行控制命令
 
-    if not robot.safety_guard(cmd):
-        cmd = robot.recover_cmd(state)     # 失败恢复 / 安全回退
+    if not robot.safety_guard(cmd):  # 检查命令是否满足安全约束
+        cmd = robot.recover_cmd(state)  # 失败恢复 / 安全回退
 
-    robot.execute(cmd)
+    robot.execute(cmd)  # 下发最终命令到机器人
 ```
 
 这段代码把具身系统写成最小闭环：**感知 -> 规划 -> 控制 -> 安全检查 -> 执行**。关键点在于把 `safety_guard` 和 `recover_cmd` 放在主路径里，而不是异常路径里，这样系统在分布外场景下更可控。

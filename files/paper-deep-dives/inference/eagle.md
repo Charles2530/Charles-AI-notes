@@ -13,6 +13,22 @@ paper_topic: 高效推理
     - 代码：[GitHub: SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)
     - 关键词：speculative sampling、feature-level autoregression、feature uncertainty、tree attention、Autoregression Head、lossless acceleration
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2401.15077](https://arxiv.org/abs/2401.15077) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `EAGLE: Speculative Sampling Requires Rethinking Feature Uncertainty` 的核心结果在论文设置下成立 | [arXiv:2401.15077](https://arxiv.org/abs/2401.15077) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 EAGLE 是 EAGLE 系列的第一块地基。它解决的问题不是“再找一个更小的 LLM 当 draft model”，而是：**能不能用 target LLM 已经算出来的高层 feature 来生成草稿，从而避免小 draft model 太慢、太弱、还要重新预训练的问题？**
 
 它的答案是 feature-level autoregression：用 target LLM 的 second-to-top-layer feature 作为连续表示，让一个很小的 Autoregression Head 预测下一步 feature，再复用 target LLM 的 LM head 采样 token。为了处理采样随机性带来的 feature uncertainty，EAGLE 又把提前一位的 token sequence 输入 draft model，让 draft model 知道上一轮到底采到了哪个 token。
@@ -51,6 +67,12 @@ EAGLE 的判断是：target LLM 在上一轮 forward 已经产生了非常有用
 ![EAGLE speedup temperature 0 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-1-speedup-temp0.png){ width="760" }
 
 <small>图源：`EAGLE`，Figure 1。原论文图意：temperature=0 的 MT-bench 上，EAGLE 相比 Medusa、Lookahead、speculative sampling 等方法取得更高 speedup；论文只比较不微调 backbone 且保持输出分布不变的方法。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是 target LLM 的 hidden features 和当前上下文，输出是 draft tokens 及 target verification 结果。  
+    **效率机制**：把草稿生成放在 feature level，减少目标模型完整 decode 次数，收益取决于 acceptance rate。  
+    **对主线意义**：它说明 rollout/agent 服务里的解码成本可以用投机路径压低，但必须保留质量回归。  
+    **不能证明什么**：EAGLE speedup 不能证明任务答案更好，也不能证明长链路 agent 或世界模型规划更可靠。
 
 ![EAGLE speedup temperature 1 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-2-speedup-temp1.png){ width="760" }
 

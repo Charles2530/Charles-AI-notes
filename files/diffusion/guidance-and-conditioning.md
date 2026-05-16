@@ -229,10 +229,10 @@ c = \{c_{\text{text}}, c_{\text{neg}}, c_{\text{structure}}, c_{\text{image}}\}
 ## 快速代码示例
 
 ```python
-def cfg_eps(model, x_t, t, cond, uncond, scale=7.5):
-    eps_u = model(x_t, t, cond=uncond)   # 无条件分支
-    eps_c = model(x_t, t, cond=cond)     # 条件分支
-    return eps_u + scale * (eps_c - eps_u)
+def cfg_eps(model, x_t, t, cond, uncond, scale=7.5):  # 定义 CFG 噪声组合函数
+    eps_u = model(x_t, t, cond=uncond)  # 无条件分支
+    eps_c = model(x_t, t, cond=cond)  # 条件分支
+    return eps_u + scale * (eps_c - eps_u)  # 按 guidance scale 做线性外推
 ```
 
 这段代码展示了最常见的 **Classifier-Free Guidance** 组合方式：同一步上分别预测条件/无条件噪声，再按 `scale` 做线性外推。`scale` 越大，条件遵从性通常越强，但过大时也更容易引入伪影或不稳定。

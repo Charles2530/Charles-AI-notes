@@ -486,8 +486,21 @@
       const firstText = Array.from(heading.childNodes).find((node) => node.nodeType === Node.TEXT_NODE && node.nodeValue.trim());
       if (!firstText) return;
 
-      const match = firstText.nodeValue.match(/^(\s*)(\d+(?:\.\d+)*[.、])\s+(.+)$/);
+      const match = firstText.nodeValue.match(/^(\s*)(\d+(?:\.\d+)*[.、])(?:\s+(.+)|\s*)$/);
       if (!match) return;
+
+      const titleText = match[3] || "";
+      const trailingNodes = [];
+      let node = firstText.nextSibling;
+      while (node) {
+        const next = node.nextSibling;
+        trailingNodes.push(node);
+        node = next;
+      }
+
+      const headerlink = trailingNodes.find((child) => child.nodeType === Node.ELEMENT_NODE && child.classList.contains("headerlink"));
+      const hasTrailingTitle = trailingNodes.some((child) => child !== headerlink && child.textContent.replace(/\s+/g, "").length);
+      if (!titleText.trim() && !hasTrailingTitle) return;
 
       const number = document.createElement("span");
       number.className = "atlas-heading-number";
@@ -495,9 +508,15 @@
 
       const title = document.createElement("span");
       title.className = "atlas-heading-title";
-      title.textContent = match[3];
+      if (titleText) {
+        title.appendChild(document.createTextNode(titleText));
+      }
 
-      const headerlink = Array.from(heading.children).find((child) => child.classList.contains("headerlink"));
+      trailingNodes.forEach((child) => {
+        if (child !== headerlink) {
+          title.appendChild(child);
+        }
+      });
       if (headerlink) {
         title.appendChild(headerlink);
       }

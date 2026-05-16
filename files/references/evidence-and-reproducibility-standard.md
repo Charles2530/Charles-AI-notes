@@ -19,6 +19,35 @@
 Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove
 ```
 
+## 事实版本块
+
+`Evidence Snapshot` 附近应补一个短事实版本块，尤其是前沿论文、官方技术报告、系统吞吐页和具身/世界模型闭环页：
+
+| Checked Date | Official Source | Repro Status | Notes |
+| --- | --- | --- | --- |
+| `2026-05-16` | arXiv / official PDF / official repo / official project page | 固定复现标签之一 | 写清是否只有论文、是否有作者代码、是否只是官方 demo，未见第三方证据时不要写 `Independent Reproduced` |
+
+推荐写法：
+
+```markdown
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+| 2026-05-16 | arXiv / official PDF / official repo | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
+```
+
+### 资源类型补充
+
+`Repro Status` 不是“链接数量”的同义词。页面如果写 `Author Code / Official Repo`，正文或事实版本附近应能看到 GitHub、Hugging Face、模型卡、权重、benchmark script 或官方仓库等可检查资源；如果只有项目页、视频或 demo，应优先写 `Official Demo` 或 `Paper Only`，并说明它不能支撑平均成功率。
+
+| 资源类型 | 可以支持的 Repro Status | 仍然不能证明 |
+| --- | --- | --- |
+| arXiv / official PDF | `Paper Only` | 代码可运行、结果已独立复现 |
+| GitHub / official repo | `Author Code / Official Repo` | 所有论文 claim 都已复现 |
+| Hugging Face model card / weights | `Author Code / Official Repo` | benchmark 数字和闭环任务自动成立 |
+| official project page / video / interactive demo | `Official Demo` | 平均成功率、鲁棒性、跨硬件泛化 |
+| 本站脚本或 mini fixture | `Toy Fixture` | 真实模型、真实机器人或论文方法有效 |
+
 ## 固定证据标签
 
 | Evidence Type | 何时使用 | 典型能支持什么 | 不能证明什么 |
@@ -41,6 +70,18 @@ Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Ca
 | `Official Demo` | 主要证据来自官方 demo、项目页或视频 | 只能支持展示能力，不支持平均收益 |
 | `Site Inference` | 主要是本站归纳和工程判断 | 必须说明需要单独实验验证 |
 | `Toy Fixture` | 主要是本站小型可复算样例 | 只能证明证据链写法和指标脚本可运行 |
+
+## 成熟度分层
+
+全站读法里还要区分“技术成熟度”。同样是 `Paper Result`，经典基础方法、工程常用系统、前沿模型报告和本站推断的采用风险完全不同。
+
+| 成熟度 | 典型形态 | 采用建议 | 必须补的边界 |
+| --- | --- | --- | --- |
+| 经典已验证 | PlaNet、Dreamer、ZeRO、Megatron-LM、SmoothQuant 等被广泛讨论的基础路线 | 可作为 baseline 或解释框架 | 仍要核对任务、硬件和数据分布 |
+| 工程常用 | vLLM/KV、FSDP/ZeRO、FP8 路径、profiling 与 SLO 工具链 | 可进入工程方案比较 | 端到端 trace 和质量回归必须同表 |
+| 前沿待复现 | 2025-2026 新模型、技术报告、闭源系统或新视频世界模型 | 适合作为实验假设 | 默认不写独立复现，不能外推到生产 |
+| 官方展示 | 官方 demo、项目视频、少量 qualitative case | 适合说明能力形态 | 不能支持平均成功率或稳定收益 |
+| 本站推断 | 跨论文合成、路线判断、toy fixture | 适合设计实验和阅读路径 | 不能替代论文结果或真实闭环 |
 
 ## 图与表的解释规则
 

@@ -11,6 +11,29 @@
   </div>
 </div>
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先用 roofline、memory hierarchy 和 shape bucket 定位瓶颈。
+    **深入读法**：深读 kernel 时同时看 microbench、端到端 trace、数值误差和 fallback。
+    **实验/工程读法**：工程上记录输入 shape、dtype、硬件、kernel 版本、occupancy、带宽和端到端收益。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | microbench 外推 | kernel 快不等于端到端快 |
+    | 数值稳定性 | 低精度、reduction 和 atomic 路径要看误差 |
+    | 形状错配 | shape bucket、layout 和 fallback 决定真实收益 |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | kernel 真快 | microbench + end-to-end trace 都提升 | 单个 shape 峰值 |
+    | 数值可靠 | 误差、溢出、reduction 顺序和随机性可控 | 吞吐 |
+    | 可部署 | shape 覆盖、fallback、回归测试通过 | demo kernel |
+
+
+!!! failure "最佳反例"
+    microbench 快很多，但端到端 trace 里被数据搬运、shape mismatch、fallback kernel 或数值误差吃掉收益。算子优化只有进入真实 workload 才算数。
+
 ## 专题定位
 
 <div class="atlas-meta-grid">
@@ -236,24 +259,24 @@ $$
 ## 快速代码示例
 
 ```python
-import torch
-import triton
-import triton.language as tl
+import torch  # 分配输出张量
+import triton  # 提供 Triton JIT 和 launch 配置
+import triton.language as tl  # Triton kernel 内部语言
 
-@triton.jit
-def add_kernel(x_ptr, y_ptr, out_ptr, n, BLOCK: tl.constexpr):
-    pid = tl.program_id(0)
-    offs = pid * BLOCK + tl.arange(0, BLOCK)
-    mask = offs < n
-    x = tl.load(x_ptr + offs, mask=mask)
-    y = tl.load(y_ptr + offs, mask=mask)
-    tl.store(out_ptr + offs, x + y, mask=mask)
+@triton.jit  # 将函数编译为 Triton kernel
+def add_kernel(x_ptr, y_ptr, out_ptr, n, BLOCK: tl.constexpr):  # 定义向量加法 kernel
+    pid = tl.program_id(0)  # 当前 program/block 的编号
+    offs = pid * BLOCK + tl.arange(0, BLOCK)  # 计算本 block 处理的元素偏移
+    mask = offs < n  # 标记未越界的有效元素
+    x = tl.load(x_ptr + offs, mask=mask)  # 从 x 中加载有效元素
+    y = tl.load(y_ptr + offs, mask=mask)  # 从 y 中加载有效元素
+    tl.store(out_ptr + offs, x + y, mask=mask)  # 写回逐元素相加结果
 
-def triton_add(x, y):
-    out = torch.empty_like(x)
-    n = x.numel()
-    add_kernel[(triton.cdiv(n, 256),)](x, y, out, n, BLOCK=256)
-    return out
+def triton_add(x, y):  # Python 侧封装 Triton kernel 调用
+    out = torch.empty_like(x)  # 创建与输入同形状的输出张量
+    n = x.numel()  # 统计元素总数
+    add_kernel[(triton.cdiv(n, 256),)](x, y, out, n, BLOCK=256)  # 按 block 数启动 kernel
+    return out  # 返回计算结果
 ```
 
 这段代码是一个最小 Triton kernel：通过 `program_id` 映射线程块，`mask` 处理越界元素，再把结果写回输出。它适合作为模板扩展到 layernorm、激活融合等更复杂算子。

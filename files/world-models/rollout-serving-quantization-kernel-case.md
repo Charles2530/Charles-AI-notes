@@ -15,6 +15,11 @@
 | 显存带宽不足 | SmoothQuant、FP8/INT8、混合精度、敏感头保护 | task bucket、long-horizon consistency、安全头回归 |
 | 服务延迟不稳 | batching、prefill/decode 分离、SLO、fallback | P95/P99、cost per success、失败回放 |
 
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [SmoothQuant](https://arxiv.org/abs/2211.10438) / MagiAttention docs / CausVid / KVSlimmer | Site Inference | 本页是跨论文与官方系统材料的 rollout 服务案例；各 claim 以局部 Evidence Snapshot 为准，不写成统一复现。 |
+
 ## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |

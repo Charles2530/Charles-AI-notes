@@ -16,6 +16,22 @@ paper_topic: 世界模型
     - 代码与模型：[GitHub](https://github.com/guandeh17/Self-Forcing)、[Hugging Face](https://huggingface.co/gdhe17/Self-Forcing)
     - 关键词：视频世界模型、autoregressive video diffusion、exposure bias、KV cache、DMD、SiD、GAN、实时流式生成
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2506.08009](https://arxiv.org/abs/2506.08009) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion` 的核心结果在论文设置下成立 | [arXiv:2506.08009](https://arxiv.org/abs/2506.08009) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 这篇论文的核心问题非常直接：**自回归视频扩散模型训练时看的是 ground-truth 上下文，推理时却只能看自己生成的上下文。** 这种 train-test mismatch 会导致 exposure bias，误差沿时间累积，视频越往后越容易过饱和、过锐化、闪烁或漂移。
 
 Self Forcing 的答案是：训练时就执行和推理一样的自回归 rollout，用模型自己生成的历史帧作为上下文，再用视频级 distribution matching loss 对完整生成序列做监督。
@@ -36,6 +52,12 @@ Self Forcing 和 [Diffusion Forcing](../diffusion/diffusion-forcing.md)、[CausV
 ![Self Forcing training paradigms 原图](https://ar5iv.labs.arxiv.org/html/2506.08009/assets/x1.png){ width="920" }
 
 <small>图源：`Self Forcing`，Figure 1。原图对比 Teacher Forcing、Diffusion Forcing 和 Self Forcing：前两者训练输出不来自推理时真实模型分布，Self Forcing 在训练中执行 autoregressive self-rollout，并对最终视频序列施加 distribution matching loss。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是自回归视频模型的训练片段和自身 rollout，输出是更贴近推理分布的训练信号。  
+    **效率机制**：把训练时 teacher-forcing 分布向推理时自回归分布靠拢，减轻长视频漂移。  
+    **对主线意义**：它服务视频 world model 的长时 rollout 稳定性，而不是动作策略本身。  
+    **不能证明什么**：视频自回归更稳不能证明 action-conditioned planning utility。
 
 !!! note "这张图到底在比较什么"
     这张图比较的不是三种 loss 名字，而是**训练时的上下文分布是否等于推理时的上下文分布**。Teacher Forcing 训练时总是喂真实历史帧，模型从未见过自己生成的错误历史；Diffusion Forcing 会给上下文加不同噪声，增强鲁棒性，但上下文仍不是当前模型真实 rollout 出来的视频。

@@ -12,6 +12,22 @@ paper_topic: 高效推理
     - 代码：[GitHub: SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)
     - 关键词：speculative decoding、draft model、training-time test、feature fusion、dynamic draft tree、SGLang、vLLM
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2503.01840](https://arxiv.org/abs/2503.01840) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `EAGLE-3: Scaling up Inference Acceleration of Large Language Models via Training-Time Test` 的核心结果在论文设置下成立 | [arXiv:2503.01840](https://arxiv.org/abs/2503.01840) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 这篇论文的核心不是“再训练一个更小的 draft model”，而是指出 EAGLE 系列原来的 feature prediction 约束会限制 draft model 的表达能力。EAGLE-3 直接预测 token，同时在训练时模拟推理时会发生的多步自回归输入分布，把 draft model 真的会遇到的错误前缀暴露给训练。
 
 一句话概括：**EAGLE-3 把投机解码里的 draft model 训练成更像线上推理时的自己，从而提高多步 draft 的接受率。**
@@ -57,6 +73,12 @@ EAGLE-3 的改动有三件：
 ![EAGLE-3 scaling law 原图](../../assets/images/paper-deep-dives/inference/eagle-3/figure-1-scaling-law-eagle3.png){ width="720" }
 
 <small>图源：`EAGLE-3`，Figure 1。原论文图意：在 LLaMA-Instruct 3.1 8B + MT-bench 上，EAGLE 随 draft 训练数据增加的收益有限，而 EAGLE-3 的 speedup 和 acceptance length 随数据规模继续提高。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是训练时 test 特征、草稿模型和目标模型状态，输出是更贴近测试分布的 draft token。  
+    **效率机制**：训练时模拟 test 行为，提升 draft acceptance，从而压低 decode 成本。  
+    **对主线意义**：它把投机解码从纯 serving trick 拉回训练-推理一致性问题。  
+    **不能证明什么**：acceptance 提升不能替代答案质量、长上下文稳定性或 agent 安全评测。
 
 !!! note "这张图怎么读"
     横轴是相对 ShareGPT 的训练数据规模，纵轴分别看 speedup 和 average acceptance length。EAGLE-3 的关键不是“某个点更高”，而是斜率还在：draft model 训练数据增加后，线上可接受 token 数也继续增加。

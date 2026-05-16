@@ -15,12 +15,7 @@ paper_topic: 技术报告
 
 这篇论文最重要的结论不是“DeepSeek-R1 分数很高”，而是：**只要任务有可靠 verifier，大模型可以通过大规模强化学习自己发现更长、更会反思、更会验证的推理行为，而不必先模仿人工写好的推理轨迹。**
 
-报告里有两条主线：
-
-| 线索 | 模型 | 关键问题 |
-| --- | --- | --- |
-| 纯 RL 探索 | DeepSeek-R1-Zero | 不做 SFT，直接从 DeepSeek-V3-Base 用 GRPO + rule-based reward 训练，观察推理行为是否自然涌现 |
-| 产品化推理模型 | DeepSeek-R1 | 在 R1-Zero 的基础上加入 cold-start SFT、两阶段 RL、rejection sampling、通用 SFT 和安全/有用性对齐 |
+报告里有两条主线：`R1-Zero` 验证纯 RL 能否自然涌现推理行为，`R1` 则在此基础上加入 cold-start SFT、两阶段 RL、rejection sampling 和安全/有用性对齐。
 
 !!! warning "阅读边界"
     这篇论文后来有 Nature 版本，但这里仍按论文/技术报告自述来读。训练成本、数据规模、RL 超参、benchmark 分数和安全结论都应理解为作者报告的系统结果，而不是第三方独立复现实验。
@@ -30,8 +25,6 @@ paper_topic: 技术报告
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
 | --- | --- | --- | --- | --- | --- | --- |
 | GRPO + rule-based reward 可在可验证任务上激发推理行为 | [arXiv:2501.12948](https://arxiv.org/abs/2501.12948) | R1-Zero training curves, AIME/Codeforces/math settings | Paper Result | Paper Only | 可验证 reward 是低人工标注 RL 的重要路线 | 不证明所有开放任务都有可靠 verifier |
-| R1 的冷启动、两阶段 RL 和蒸馏改善产品化可用性 | 同上 | post-training recipe, distillation results | Paper Result | Paper Only | reasoning model 需要能力塑形和行为约束分阶段设计 | 不证明完整训练配方可被第三方复现 |
-| 本站把 R1 接到世界模型高效训练中的 verifier / rollout 成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | RLVR 思路可启发 action/risk verifier 设计 | 不等于机器人闭环或世界模型训练已复现 |
 
 ## 论文位置
 
@@ -44,18 +37,7 @@ base model
   -> PPO or related RL algorithm
 ```
 
-这个流程适合做指令跟随和偏好对齐，但对复杂推理有一个潜在问题：人工标注的 reasoning trace 会把模型限制在人类写法里。人类解题过程通常不够长，也未必包含所有反思、回溯、验证和换路尝试。DeepSeek-R1-Zero 的问题意识正是：如果不给人工 reasoning trace，只给可验证题目和最终正确性奖励，模型能不能自己学出更强推理策略？
-
-DeepSeek-R1-Zero 的训练目标可以压成一句话：
-
-```text
-同一道题采样多个长回答
-  -> 用规则或执行器判断最终答案是否正确
-  -> 用组内相对奖励更新 policy
-  -> 让高奖励推理轨迹更容易再次出现
-```
-
-这也是 `RLVR`（reinforcement learning with verifiable rewards）的核心直觉。它和一般 RLHF 的区别是：reward 不是主要来自人类偏好模型，而是来自能自动验证的答案、编译器、测试用例、选择题标准答案或格式检查器。
+这个流程适合指令跟随和偏好对齐，但复杂推理会受人工 reasoning trace 的风格和覆盖限制。R1-Zero 的核心问题是：不给人工推理轨迹，只给可验证题目和最终正确性奖励，模型能否自己学出反思、回溯和验证策略。这里的 `RLVR` reward 主要来自标准答案、编译器、测试用例或格式检查器，而不是人类偏好模型。
 
 ## 为什么强化学习是核心
 
@@ -401,7 +383,7 @@ SFT hyperparameters:
 !!! note "为什么 SFT 在这里不是倒退"
     R1-Zero 的纯 RL 证明了探索能力，但用户面对的是最终模型，不是实验曲线。SFT 的作用是把“RL 发现的高分轨迹”变成稳定可读的数据分布，同时补回写作、问答、翻译、自我认知、软件工程等非纯 reasoning 能力。也就是说，RL 负责发现，SFT 负责固化和整理。
 
-## RL Infrastructure：训练系统如何支撑长 CoT
+### RL Infrastructure：训练系统如何支撑长 CoT
 
 大模型 RL 的瓶颈不只是反向传播。一次训练迭代要先生成大量长回答，再打分，再算 reference logprob / reward，再训练 policy。R1 附录的系统图把这件事拆成四个模块。
 
@@ -419,7 +401,7 @@ SFT hyperparameters:
 !!! note "为什么 RL infrastructure 要 offload"
     Rollout、reward/reference inference 和 training 需要的模型实例不同。如果所有模型同时常驻 GPU，671B MoE 级别的显存压力会非常高。论文说除 rule-based reward module 外，每个模块结束后都会把模型实例从 VRAM offload 到系统内存或磁盘，为下一阶段释放显存。这类工程细节决定了大规模 RL 能不能跑，而不是只影响速度。
 
-## 训练成本
+### 训练成本
 
 论文附录给出成本估计，保留原表英文格式：
 
@@ -441,7 +423,7 @@ SFT hyperparameters:
 
 这个成本很值得单独看。R1 的结论不是“强化学习便宜”，而是“当 base model 足够强、verifier 足够可靠、系统吞吐足够高时，大规模 RL 可以比大规模人工 reasoning annotation 更可扩展”。
 
-## 阶段效果：每个训练阶段改变了什么
+### 阶段效果：每个训练阶段改变了什么
 
 原论文给出 R1 各阶段的 benchmark 表。下面保留核心表格英文格式：
 
@@ -478,7 +460,7 @@ SFT hyperparameters:
 3. `R1-Dev2 -> R1-Dev3`：大规模 SFT 混合 reasoning 与 non-reasoning，Aider-Polyglot 和通用偏好相关分数提升。
 4. `R1-Dev3 -> R1`：final RL 主要把 AlpacaEval2.0、ArenaHard、IF-Eval 等用户偏好和指令能力推上去，数学/代码边际收益较小。
 
-## Benchmark 结论与 test-time scaling
+### Benchmark 结论与 test-time scaling
 
 论文用一张图把 R1/R1-Zero 和人类成绩放在一起：
 
@@ -497,7 +479,7 @@ SFT hyperparameters:
 !!! note "test-time scaling 和 majority voting 的区别"
     majority voting 是并行采样很多条独立答案，再投票。R1 的长 CoT 是在单条轨迹内部投入更多计算，让模型自己检查、修正和回溯。两者可以叠加，但不是一回事。论文也指出，R1 在 AIME 2024 上 pass@64 明显高于 pass@1，说明独立多采样仍有帮助。
 
-## Distillation：小模型更适合先学强模型轨迹
+### Distillation：小模型更适合先学强模型轨迹
 
 R1 还把长 CoT 能力蒸馏到 Qwen 和 LLaMA 系模型。蒸馏阶段只做 SFT，不加 RL。
 
@@ -536,7 +518,7 @@ R1 还把长 CoT 能力蒸馏到 Qwen 和 LLaMA 系模型。蒸馏阶段只做 S
 !!! note "为什么小模型直接 RL 不如蒸馏"
     论文的判断是：纯 RL 的效果高度依赖 base checkpoint 能力。7B dense 和 16B MoE 早期实验没有显著收益，32B 起才开始可见，230B/671B 更明显。小模型如果自己探索长 CoT，容易重复、卡住或无法有效利用长推理；但如果直接学习强模型已经发现的高质量 reasoning trajectories，SFT 蒸馏更经济。
 
-## 和普通 RLHF 的关系
+### 和普通 RLHF 的关系
 
 DeepSeek-R1 和 InstructGPT 式 RLHF 都是后训练，但目标和奖励完全不同。
 
@@ -550,7 +532,7 @@ DeepSeek-R1 和 InstructGPT 式 RLHF 都是后训练，但目标和奖励完全�
 
 这也是为什么 R1 最强的提升首先出现在 AIME、MATH、LiveCodeBench、Codeforces 和 MMLU-Pro STEM 类任务。它不是简单“更会聊天”，而是在有强 verifier 的任务上获得了强探索信号。
 
-## 失败尝试：PRM 和 MCTS
+### 失败尝试：PRM 和 MCTS
 
 论文讨论了两个没有成为主路线的方向。
 
@@ -562,7 +544,7 @@ DeepSeek-R1 和 InstructGPT 式 RLHF 都是后训练，但目标和奖励完全�
 !!! note "MCTS 为什么在文本里比棋类难"
     棋类动作空间有限、规则明确、状态转移确定，搜索树节点有清楚含义。文本生成每个 token 都可能分叉，语义状态又很难离散化。你可以限制每个节点扩展数量，但这会让搜索更容易错过关键路径；而 value model 如果判断不准，会系统性地把搜索带向坏分支。
 
-## 局限与风险
+### 局限与风险
 
 这篇论文的局限也很有工程价值。
 
@@ -576,7 +558,7 @@ DeepSeek-R1 和 InstructGPT 式 RLHF 都是后训练，但目标和奖励完全�
 8. **软件工程 RL 还不充分**：真实 SWE 任务评测耗时长，难以大规模纳入 RL loop，因此 SWE 类任务提升有限。
 9. **安全风险更复杂**：透明 CoT 和更强推理能力可能暴露更多潜在风险知识；部署时需要外部 risk control system。
 
-## 对项目的启发
+### 对项目的启发
 
 如果要把 DeepSeek-R1 的经验迁移到自己的训练项目，可以抽出几条实用原则：
 
@@ -589,7 +571,7 @@ DeepSeek-R1 和 InstructGPT 式 RLHF 都是后训练，但目标和奖励完全�
 7. 对小模型，优先考虑从强模型蒸馏长 CoT；直接纯 RL 探索可能成本高且收益不稳。
 8. 评估时要把 pass@1、consensus、多采样、token 数和延迟一起看，不能只看最高分。
 
-## 阅读结论
+### 阅读结论
 
 DeepSeek-R1 最值得学习的地方，是它把“推理能力”重新放回一个可训练的闭环里：
 

@@ -33,7 +33,12 @@ MagiAttention 讨论的不是“attention 又快了一点”这种单点优化�
 
 MagiAttention 的证据主要是系统吞吐、负载均衡、通信冗余和长上下文 attention benchmark。它证明的是“异构 mask 下分布式 attention 可以更接近线性扩展”，不是证明某个 world model 训练目标更好。
 
-### Evidence Snapshot
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [MagiAttention docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
+
+## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
 | --- | --- | --- | --- | --- | --- | --- |

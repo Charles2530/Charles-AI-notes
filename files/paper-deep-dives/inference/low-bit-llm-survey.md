@@ -29,7 +29,12 @@ paper_topic: 高效推理
 
 这篇是 survey，不是 benchmark 论文。它能给出分类框架、系统账本和代表性方法谱系，但不能直接证明某个量化方案在你的模型、硬件和业务流量上最好。
 
-### Evidence Snapshot
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2409.16694](https://arxiv.org/abs/2409.16694) | Paper Only | 综述页只支持分类框架和证据地图；不写成可运行复现。 |
+
+## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
 | --- | --- | --- | --- | --- | --- | --- |

@@ -14,6 +14,22 @@ paper_topic: 世界模型
     - 代码：[GitHub](https://github.com/haoliuhl/ringattention)
     - 关键词：长上下文、精确注意力、Blockwise Transformer、sequence parallelism、通信计算重叠、百万 token
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2310.01889](https://arxiv.org/abs/2310.01889) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Ring Attention with Blockwise Transformers for Near-Infinite Context` 的核心结果在论文设置下成立 | [arXiv:2310.01889](https://arxiv.org/abs/2310.01889) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 RingAttention 不是一个直接预测未来视频的世界模型，但它是 [LWM](lwm.md) 这类百万 token 视频语言世界模型的关键系统底座。它解决的是一个更底层的问题：**如果世界经验是长视频、长文本、动作轨迹和多轮交互，Transformer 怎样在不做稀疏近似的情况下看完整序列？**
 
 论文的答案是：把序列维度切到多个设备上，每个设备持有一个 query block，让 key/value blocks 沿设备环流动；同时用 blockwise attention 让通信被计算覆盖。
@@ -41,6 +57,12 @@ RingAttention 不是一个直接预测未来视频的世界模型，但它是 [L
 ![RingAttention max context 原图](https://ar5iv.labs.arxiv.org/html/2310.01889/assets/figures/context_len.png){ width="920" }
 
 <small>图源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Figure 1。原图比较 TPUv4-1024 上端到端大规模训练可支持的最大 context length，RingAttention 明显高于 vanilla、memory-efficient attention 与 BPT baseline。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是超长序列块、设备 ring 和 attention mask，输出是分块 attention 计算结果。  
+    **效率机制**：通过环形传输和块级调度把长上下文显存/通信压力摊开。  
+    **对主线意义**：它服务长视频/长轨迹世界模型训练的上下文成本。  
+    **不能证明什么**：长上下文可训练不等于模型学到可靠 dynamics 或规划策略。
 
 !!! note "图解：最大上下文图看的是端到端可训练长度"
     这张图不是只在比较 attention kernel 的瞬时显存，而是在比较端到端训练能支撑多长 context。FlashAttention / memory-efficient attention 可以省掉显式 attention matrix，但层输出、KV 分块、前馈层和跨层状态仍会随序列长度增长。RingAttention 的意义是把长序列沿设备切分，并通过环形 KV 传递做 exact attention，让可训练 context 随设备数扩展。对世界模型来说，这决定了模型能不能直接读长视频和长交互历史，而不是只看短窗口摘要。

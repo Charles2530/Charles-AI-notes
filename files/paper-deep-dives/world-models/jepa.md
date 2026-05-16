@@ -13,6 +13,22 @@ paper_topic: 世界模型
     - 类型：研究路线与架构提案，不是带完整 benchmark 的实验论文
     - 关键词：JEPA、H-JEPA、energy-based model、representation prediction、non-contrastive learning、world model、planning
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [https://openreview.net/forum?id=BZ5a1r-kVsf](https://openreview.net/forum?id=BZ5a1r-kVsf) | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `A Path Towards Autonomous Machine Intelligence` 的核心结果在论文设置下成立 | [https://openreview.net/forum?id=BZ5a1r-kVsf](https://openreview.net/forum?id=BZ5a1r-kVsf) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 这篇论文的价值不在某个实验指标，而在于给出了一条和“生成未来像素”不同的世界模型路线：**世界模型不一定要重建未来画面的每个细节，而可以预测未来的抽象表征。** 这就是 `Joint-Embedding Predictive Architecture`，也就是 JEPA。
 
 如果把 LingBot-World 看作“从视频生成模型发展出的视觉世界模拟器路线”，Dreamer 看作“从交互轨迹学习 latent dynamics 的 model-based RL 路线”，那么 JEPA 更像一条上层架构原则：用可预测、可规划、可组合的 latent representation 来承载世界动态。
@@ -24,6 +40,12 @@ paper_topic: 世界模型
 ![Autonomous intelligence architecture](../../assets/images/paper-deep-dives/world-models/jepa/figure-2-autonomous-agent-architecture.png){ width="860" }
 
 <small>Figure source: `A Path Towards Autonomous Machine Intelligence`, Figure 2. 原论文图注要点：该图把自主智能系统拆成 perception、world model、actor、cost/critic、short-term memory 和 configurator；其中 world model 根据 actor 设想的动作序列预测可能的未来世界状态，cost 模块给这些状态分配能量。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是 context 表征和 target 表征，输出是 joint embedding space 中的预测。  
+    **效率机制**：预测抽象 embedding 而非像素细节，减少无关重建负担。  
+    **对主线意义**：它解释 masked/JEPA 为什么适合作为世界模型前置状态层。  
+    **不能证明什么**：没有 action/reward/done 时，JEPA 不能直接等同于可规划世界模型。
 
 这张图说明 JEPA 不是单独的自监督学习模块，而是服务于一个完整 agent 架构。论文里的世界模型承担的不是“把输入视频补全得漂亮”，而是：
 

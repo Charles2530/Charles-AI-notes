@@ -34,7 +34,12 @@ paper_topic: 具身智能 / WAM
 
 DreamZero 的证据比普通视频世界模型更接近本站主线，因为它同时给了闭环机器人结果、系统加速表和模型消融。但它仍然不能被简单外推成“WAM 可以直接替代所有 VLA”：真实结论要限制在论文的机器人、动作接口、数据来源、chunk 长度和推理硬件条件内。
 
-### Evidence Snapshot
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2602.15922](https://arxiv.org/abs/2602.15922) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
+
+## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
 | --- | --- | --- | --- | --- | --- | --- |

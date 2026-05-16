@@ -35,6 +35,29 @@ DDPM 原论文里的 graphical model 很适合建立第一层直觉：左到右�
   </div>
 </div>
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先分清训练目标、采样器、蒸馏和视频扩散在改哪一层。
+    **深入读法**：深读少步采样、DMD/CausVid/Phased DMD 时，把视频质量、延迟和任务收益分开验。
+    **实验/工程读法**：工程上重点记录采样步数、延迟、显存、FVD/VBench、失败样例和下游任务回归。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | 视频质量不等于规划收益 | FVD/VBench 不能直接证明 world-model utility |
+    | 少步蒸馏退化 | 检查 mode collapse、motion shrink 和 teacher bias |
+    | 采样加速外推 | 少步质量、延迟和下游闭环要分开验 |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 采样更省 | steps、latency、显存和质量回归同表 | 单张样例图 |
+    | 视频更稳 | motion、temporal consistency、prompt/control 分项 | 只看自然度 |
+    | 服务世界模型 | action-conditioned rollout 或任务指标另验 | FVD/VBench 直接外推 |
+
+
+!!! failure "最佳反例"
+    少步采样让视频生成更快、画面更自然，但下游策略没有更好，甚至动作条件不敏感。这时扩散效率只证明采样成本下降，不能证明世界模型或规划收益。
+
 ## 阅读分层与小地图
 
 | 分层 | 推荐内容 | 读到什么程度 |
@@ -204,17 +227,17 @@ x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsil
 ## 快速代码示例
 
 ```python
-import torch
+import torch  # 使用 no_grad 装饰器与张量操作
 
-def cfg_eps(eps_uncond, eps_cond, scale=6.0):
-    # classifier-free guidance
-    return eps_uncond + scale * (eps_cond - eps_uncond)
+def cfg_eps(eps_uncond, eps_cond, scale=6.0):  # 定义 CFG 噪声混合函数
+    # classifier-free guidance  # 条件分支相对无条件分支的外推
+    return eps_uncond + scale * (eps_cond - eps_uncond)  # 返回增强后的噪声预测
 
-@torch.no_grad()
-def ddim_step(x_t, alpha_t, alpha_prev, eps):
-    # 一个简化版 DDIM 更新
-    x0 = (x_t - (1 - alpha_t).sqrt() * eps) / alpha_t.sqrt()
-    return alpha_prev.sqrt() * x0 + (1 - alpha_prev).sqrt() * eps
+@torch.no_grad()  # 推理更新不记录梯度
+def ddim_step(x_t, alpha_t, alpha_prev, eps):  # 定义简化版 DDIM 单步更新
+    # 一个简化版 DDIM 更新  # 从当前噪声状态估计 x0 并推进到前一时间步
+    x0 = (x_t - (1 - alpha_t).sqrt() * eps) / alpha_t.sqrt()  # 由当前状态和噪声预测还原 x0
+    return alpha_prev.sqrt() * x0 + (1 - alpha_prev).sqrt() * eps  # 根据 alpha_prev 合成前一时间步状态
 ```
 
 这段代码把两个常见推理组件放在一起：`cfg_eps` 展示了 **Classifier-Free Guidance** 如何混合条件/无条件噪声预测，`ddim_step` 展示了单步 **DDIM** 更新。实践中你可以先固定步数，再调 `scale` 找到质量与多样性的平衡点。

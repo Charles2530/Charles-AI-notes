@@ -1,5 +1,31 @@
 # Megatron、DeepSpeed 与训练栈
 
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | 原论文 / 官方材料 | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Megatron、DeepSpeed 与训练栈` 的核心结果在论文设置下成立 | 原论文 / 官方材料 | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
+![Megatron hybrid parallelism](../assets/images/paper-deep-dives/foundations/megatron-lm/figure-8-hybrid-mp-dp.png){ width="780" }
+
+<small>图源：`Megatron-LM`，Figure 8。原论文图意：把 tensor model parallel 与 data parallel 组合，说明单层计算切分和数据并行副本可以叠加。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是 Transformer 层、GPU rank 和数据 batch，输出是 tensor-parallel 组内计算与 data-parallel 组间同步的训练拓扑。  
+    **效率机制**：TP 降低单层矩阵和词表投影的单卡压力，DP 保持数据吞吐，两者共同决定显存和通信账。  
+    **对主线意义**：世界模型长轨迹训练遇到显存/通信瓶颈时，要先把并行拓扑和状态分片讲清楚。  
+    **不能证明什么**：这张系统结构图不能证明任意模型质量提升，也不能替代端到端吞吐、恢复和收敛评测。
+
+
 开放训练系统栈要解决的问题不是“选一个最流行框架”，而是在给定模型规模、硬件拓扑、数据吞吐、显存预算、容错要求和团队能力后，组织出一条可长期维护的训练路径。Megatron-LM、Megatron Core、DeepSpeed、ZeRO、FSDP、Accelerate、Ray、Torch Distributed 等组件各自覆盖不同层面，真正难的是组合边界和状态语义。
 
 本页和 [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) 分工如下：那一页讲并行拓扑、通信、checkpoint 和恢复资产；本页讲训练系统栈的定位、选型和工程组织，避免把所有并行细节再展开一遍。

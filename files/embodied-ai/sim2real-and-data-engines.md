@@ -227,17 +227,17 @@ Sim2Real 不是一个单点技术问题，而是一条持续运营的问题链�
 ## 快速代码示例
 
 ```python
-import random
+import random  # 用于采样仿真随机化参数
 
-def sample_sim_params():
-    return {
-        "friction": random.uniform(0.4, 1.2),
-        "mass_scale": random.uniform(0.8, 1.2),
-        "cam_exposure": random.uniform(0.7, 1.3),
-    }
+def sample_sim_params():  # 采样一组仿真域随机化参数
+    return {  # 返回可注入仿真的参数字典
+        "friction": random.uniform(0.4, 1.2),  # 随机化摩擦系数
+        "mass_scale": random.uniform(0.8, 1.2),  # 随机化物体质量缩放
+        "cam_exposure": random.uniform(0.7, 1.3),  # 随机化相机曝光
+    }  # 参数采样结束
 
-def replay_priority(sample):
-    return 2.0 if sample.get("failed", False) else 1.0
+def replay_priority(sample):  # 计算回放样本优先级
+    return 2.0 if sample.get("failed", False) else 1.0  # 失败样本获得更高采样权重
 ```
 
 这段代码示意了 Sim2Real 的两件基础工作：训练时做域随机化，回流时提升失败样本优先级。它对应“先让策略有鲁棒性，再让数据引擎把真实失败持续喂回训练”的闭环思路。

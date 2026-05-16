@@ -256,14 +256,14 @@ SmoothQuant 像是搬仓库。
 ## 快速代码示例
 
 ```python
-import torch
+import torch  # 使用 PyTorch 张量与 int8 dtype
 
-def per_channel_int8_quant(w, eps=1e-6):
-    # w: [out_features, in_features]
-    scales = w.abs().amax(dim=1, keepdim=True).clamp_min(eps) / 127.0
-    q = torch.round(w / scales).clamp(-127, 127).to(torch.int8)
-    w_hat = q.float() * scales
-    return q, scales.squeeze(1), w_hat
+def per_channel_int8_quant(w, eps=1e-6):  # 定义按输出通道量化的函数
+    # w: [out_features, in_features]  # 权重矩阵形状说明
+    scales = w.abs().amax(dim=1, keepdim=True).clamp_min(eps) / 127.0  # 每个输出通道单独计算 scale
+    q = torch.round(w / scales).clamp(-127, 127).to(torch.int8)  # 缩放、取整、裁剪并转成 int8
+    w_hat = q.float() * scales  # 反量化回浮点，便于观察重建误差
+    return q, scales.squeeze(1), w_hat  # 返回量化权重、scale 和反量化权重
 ```
 
 这段代码实现了按输出通道的 INT8 量化：先用每通道最大绝对值求 `scale`，再量化到 `int8` 并反量化得到 `w_hat`。它可以直观看到量化误差来源，是理解 GPTQ/AWQ 权重重建思想的基础。

@@ -26,6 +26,29 @@
   </div>
 </div>
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先看视觉 tokenizer、connector、视频记忆和动作接口如何进入世界模型状态。
+    **深入读法**：深读时分清 VLM 理解、VLA 动作、world model rollout 和 closed-loop policy。
+    **实验/工程读法**：工程上检查 token budget、action schema、task bucket、失败回放和安全回退。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | 视觉 token 过多 | 先查 tokenizer、connector、video memory 和状态压缩 |
+    | 语义理解不等于动作可用 | VLM 分数不能替代 action sensitivity |
+    | 跨模态接口漂移 | 图文、视频、动作 token 要有一致 schema |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 视觉状态可用 | token 压缩后保留目标、接触、遮挡和风险 | 图文 benchmark |
+    | 动作接口清楚 | action token/chunk、控制频率和反解约束写明 | 语言输出 |
+    | 跨模态闭环 | task success、failure replay、action sensitivity | 静态 VQA 分数 |
+
+
+!!! failure "最佳反例"
+    VLM 在静态图文 benchmark 上更强，却在动作、遮挡、接触和长时记忆上没有改进。这样的表征可以是好视觉先验，但还不能被写成 VLA 或世界模型的闭环能力。
+
 ## 阅读分层与小地图
 
 | 分层 | 推荐内容 | 读到什么程度 |

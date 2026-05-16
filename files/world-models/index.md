@@ -11,6 +11,29 @@
   </div>
 </div>
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先问模型预测什么、动作是否进入预测、rollout 被谁消费。
+    **深入读法**：深读 Dreamer/JEPA/WAM/视频世界模型时，把 latent、video、reward/risk 和 policy 接口分开。
+    **实验/工程读法**：实验上优先验 action sensitivity、closed-loop gain、risk ECE、latency 和 failure replay。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | compounding error | 多步 latent/video rollout 会累积误差 |
+    | 动作不敏感 | 同一历史下不同动作必须导致可区分未来 |
+    | 视频自然度误导 | 好看的未来不等于 planning utility |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 动作条件成立 | counterfactual actions 产生可区分未来 | 自然视频续写 |
+    | 规划有收益 | closed-loop success、cost per success、risk calibration | open-loop loss |
+    | rollout 可用 | latency、drift、uncertainty、failure replay | 单步预测 |
+
+
+!!! failure "最佳反例"
+    视频 rollout 很自然，但替换候选动作后未来状态、风险和成功排序几乎不变。这说明它可能是好视频模型，却还不是对决策有用的 action-conditioned world model。
+
 ## 专题定位
 
 世界模型的核心问题不是“能不能生成未来”，而是“能不能把未来预测转化成更好的决策”。它位于表征学习、生成模型、强化学习、机器人、自动驾驶和数据引擎的交叉处。

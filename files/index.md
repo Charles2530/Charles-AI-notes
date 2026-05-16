@@ -30,12 +30,12 @@
 
 | 路径 | 先读 | 读完要能回答 |
 | --- | --- | --- |
-| 10 分钟抓主线 | [高效训练路线图](world-models/efficient-training-roadmap.md) → [全站效率矩阵](references/site-efficiency-coverage-matrix.md) → [Claim Ledger](references/claim-ledger.md) | 技术省哪类成本，证据强到哪里 |
+| 10 分钟抓主线 | [高效训练路线图](world-models/efficient-training-roadmap.md) → [全站效率矩阵](references/site-efficiency-coverage-matrix.md) → [本站判断原则](references/site-judgement-principles.md) → [Claim Ledger](references/claim-ledger.md) | 技术省哪类成本，证据强到哪里 |
 | 深读技术 | [Masked/JEPA](world-models/masked-jepa-and-latent-prediction.md) → [RSSM/Dreamer](world-models/rssm-dreamer-and-planning.md) → [训练](training/index.md) / [推理](inference/index.md) / [量化](quantization/index.md) / [算子](operators/index.md) | 模型、数据、系统和验证如何互相制约 |
 | 做实验 | [完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md) → [VLA 全链路案例](world-models/vla-world-model-full-chain-case.md) → [Rollout 服务案例](world-models/rollout-serving-quantization-kernel-case.md) | 怎样把数据、配置、系统账、闭环结果和失败回放写成证据链 |
 
 !!! tip "三种最短路径"
-    **如果只看一页**：读 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。**如果要做实验**：读 [完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md)。**如果要查证据**：读 [Claim Ledger](references/claim-ledger.md)，先确认 claim 是论文结果、官方 demo、系统吞吐、toy fixture 还是站内推断。
+    **如果只看一页**：读 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。**如果要做实验**：读 [完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md)。**如果要查证据**：先读 [本站判断原则](references/site-judgement-principles.md) 和 [Claim Ledger](references/claim-ledger.md)，确认 claim 是论文结果、官方 demo、系统吞吐、toy fixture 还是站内推断。
 
 ## 主线与支撑层
 
@@ -105,6 +105,32 @@
     <p>把 VLM/VLA、强化学习、世界模型和具身智能放进感知、规划、动作、反馈和失败恢复的同一条线上。</p>
   </div>
 </div>
+
+!!! quote "本站核心 thesis"
+    世界模型效率不是单一训练技巧，而是表示、交互、系统与验证共同决定的闭环问题。全站所有专题最终都要回到同一组问题：省什么成本、牺牲什么、证据能证明什么、什么时候不能外推。
+
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先读高效训练路线图、全站效率矩阵和本站判断原则，抓住“成本向量 + 证据等级 + 不能外推”三件事。
+    **深入读法**：沿世界模型、训练、推理、量化、算子、VLA/具身链路下钻，看每个专题如何服务表示、交互、系统或验证。
+    **实验/工程读法**：从实验报告样例或全链路案例出发，把数据、配置、系统账、指标和失败 replay 写成一条证据链。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | 世界模型 compounding error | 多步 rollout 漂移时先查评测页、实验报告和 Claim Ledger |
+    | 证据混读 | 不要把 demo、benchmark、系统吞吐和 closed-loop 混成一种结论 |
+    | 路线失焦 | 所有旁支都要回到“省什么成本、证据是什么、何时失效” |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 全站主线可信 | 每个关键 claim 有 Evidence Type、Repro Status、Cannot Prove | 页面数量或引用数量 |
+    | 效率结论可比较 | 成本项、验收指标、失败边界同表出现 | 笼统“更快/更强” |
+    | 世界模型闭环成立 | action sensitivity、closed-loop gain、risk/latency/cost per success | open-loop demo |
+
+
+!!! failure "最佳反例"
+    全站最危险的反例，是某篇新系统论文同时报告 demo 很自然、吞吐很高、主表很亮眼，但没有说明证据类型、复现状态和不能外推项。这样的内容只能证明“值得看”，不能证明“值得采用”。
 
 ## 主题入口
 

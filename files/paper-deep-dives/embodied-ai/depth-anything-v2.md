@@ -14,6 +14,22 @@ paper_topic: 具身智能
     - 代码与模型：[DepthAnything/Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)
     - 关键词：monocular depth、DINOv2、DPT、synthetic data、pseudo label、teacher-student、metric depth、DA-2K
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2406.09414](https://arxiv.org/abs/2406.09414) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Depth Anything V2` 的核心结果在论文设置下成立 | [arXiv:2406.09414](https://arxiv.org/abs/2406.09414) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 Depth Anything V2 放在具身智能专题里，不是因为它直接输出机器人动作，而是因为它补了机器人闭环里最基础的视觉状态：**从普通 RGB 图像得到更细、更稳、更开放域的深度先验**。抓取、导航、避障、重建、VLA 状态编码和仿真数据质检，都需要这层几何信号。
 
 DA2 的核心贡献很朴素：它几乎没有靠新奇结构取胜，而是把单目深度训练的数据链路重新排了一遍：
@@ -53,6 +69,12 @@ DA2 的目标是把这两边的优点合起来：
 ![Depth Anything V2 teaser 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-1-teaser.png){ width="920" }
 
 <small>图源：`Depth Anything V2`，Figure 1。原论文图意：DA2 相比 DA1 有更细的结构和更强鲁棒性；相比 SD-based depth model，在效率、参数量和精度上更适合实际使用。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是真实/合成图像、伪标签和深度监督，输出是更稳的单目深度模型。  
+    **效率机制**：通过数据配方和伪标签质量控制改善深度泛化。  
+    **对主线意义**：它帮助世界模型获得更稳几何观测，但不负责动作后果。  
+    **不能证明什么**：深度 benchmark 不能替代机器人闭环和接触失败回放。
 
 ## 为什么真实深度标签反而会伤模型
 

@@ -13,6 +13,22 @@ paper_topic: 扩散模型
     - 期刊版本：`Machine Intelligence Research`，2025
     - 关键词：diffusion ODE、guided sampling、classifier-free guidance、data prediction、dynamic thresholding、multistep solver、training-free sampler
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2211.01095](https://arxiv.org/abs/2211.01095) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models` 的核心结果在论文设置下成立 | [arXiv:2211.01095](https://arxiv.org/abs/2211.01095) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 DPM-Solver++ 解决的是扩散模型推理里很实用的问题：**已经有一个训练好的扩散模型，不想再蒸馏或重训，只想在 classifier guidance / classifier-free guidance 下把采样步数从上百步压到 15 到 20 步，还不要因为 guidance scale 大而炸图。**
 
 它不是 DPM-Solver 的简单改名，而是针对 guided sampling 改了三件事：
@@ -49,6 +65,12 @@ DPM-Solver++ 属于第一类。它的工程价值是：如果你已经有 Stable
 ![Guided sampling instability 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-1-guided-instability.png){ width="760" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 1。原论文图意：在 ImageNet 256×256、classifier guidance scale 8.0、15 NFE 下，若直接使用此前高阶 solver，图像会明显失真；DPM-Solver++ 能生成更稳定的样本。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是 guided diffusion ODE/SDE 的 noisy state 和少量时间步，输出是更稳定的采样轨迹。  
+    **效率机制**：改进 solver 以减少采样步数，尤其面向 guidance 场景的数值稳定。  
+    **对主线意义**：它服务视频/rollout 预览成本，但属于采样器证据。  
+    **不能证明什么**：少步采样质量不能证明动作因果、世界模型规划或真实闭环收益。
 
 !!! note "这张图支撑什么判断"
     这张图的判断不是“高阶 solver 总是更好”，而是相反：guidance 会放大模型输出和导数，大步长高阶展开可能超出收敛半径。DPM-Solver++ 的目标，就是让少步高阶求解器在大 guidance scale 下仍然稳定。
@@ -236,7 +258,7 @@ e^\lambda
 
 | Item | Setting |
 | --- | --- |
-| Pixel-space DPM | ImageNet 256×256 pretrained DPMs from Dhariwal & Nichol |
+| Pixel-space DPM | ImageNet 256×256 pretrained DPMs from [ADM / Diffusion Models Beat GANs (Dhariwal & Nichol, 2021)](https://arxiv.org/abs/2105.05233) |
 | Guidance | Classifier guidance; guidance scale \(s=8.0,4.0,2.0\) |
 | Metric | FID, lower is better |
 | Samples for FID | 10K samples |

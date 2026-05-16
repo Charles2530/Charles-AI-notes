@@ -13,6 +13,22 @@ paper_topic: 高效推理
     - 代码：[GitHub: SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)
     - 关键词：speculative sampling、dynamic draft tree、tree attention、confidence calibration、lossless acceleration、average acceptance length
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2406.16858](https://arxiv.org/abs/2406.16858) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees` 的核心结果在论文设置下成立 | [arXiv:2406.16858](https://arxiv.org/abs/2406.16858) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 EAGLE-2 的核心很漂亮：**不重新训练 draft model，只用 draft model 自己的 confidence score 动态调整 draft tree 的形状。** 它抓住了 EAGLE 里一个被低估的事实：draft token 的接受率不仅和它在树里的位置有关，也和当前上下文有关。
 
 如果 EAGLE 是“用 feature-level draft 提高草稿质量”，EAGLE-2 就是“把固定草稿树改成按上下文自适应的草稿树”。它仍然使用原 LLM 做验证，不微调原模型，也不放宽接受条件，因此在标准 speculative sampling 规则下保持 lossless acceleration。
@@ -50,6 +66,12 @@ EAGLE-2 认为这个假设太粗。比如问题是 `10+2=`，下一个 token 很
 ![EAGLE-2 speedup temperature 1 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-1-speedup-temp1.png){ width="760" }
 
 <small>图源：`EAGLE-2`，Figure 1。原论文图意：temperature=1 时，EAGLE-2 在 MT-bench 上相对多种 speculative sampling 方法取得更高 speedup；论文只比较保持输出分布不变的 speculative sampling 方法。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是上下文特征、候选草稿树和置信度信号，输出是动态 draft tree 与被接受 token。  
+    **效率机制**：动态树把计算集中到更可能被接受的位置，减少低收益 draft 分支。  
+    **对主线意义**：它适合说明推理成本里的“平均吞吐”和“acceptance 分布”要一起看。  
+    **不能证明什么**：动态 draft tree 不能证明模型知识、推理能力或闭环任务质量提升。
 
 ![EAGLE-2 speedup temperature 0 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-2-speedup-temp0.png){ width="760" }
 

@@ -10,6 +10,11 @@
 
 如果前面的总览页讲的是“世界模型是什么”，那么这一页讲的是为什么 `RSSM` 成了经典状态表示，为什么 `Dreamer` 让世界模型真正和控制连上，以及经典潜空间 `WM` 和最近 `WAM / VAM` 路线到底是什么关系。
 
+!!! tip "快速定位"
+    **一句话结论**：RSSM/Dreamer 的核心证据是 latent imagination 能省真实交互，而不是视频生成更清晰。
+    **适合读者**：想把 model-based RL、潜空间世界模型和现代 WAM/VAM 路线接起来的人。
+    **先看哪张表**：先看“硬证据模块：latent imagination 要证明省了真实试错”，再回到公式细节。
+
 !!! note "难点解释：世界模型不是会生成视频就够了"
     面向决策的世界模型要回答“如果我这样做，接下来会怎样”。它不仅要预测画面，还要保留会影响奖励、风险、终止和动作选择的信息。视觉上合理但对动作不敏感的未来，对规划帮助有限。
 
@@ -368,16 +373,16 @@ $$
 ### 快速代码示例
 
 ```python
-def dreamer_actor_update(world_model, actor, z, h, horizon=15):
-    # 在 imagined rollout 上优化策略（示意）
-    traj = []
-    for _ in range(horizon):
-        a = actor(z, h)
-        z, h = world_model.prior_step(z, h, a)
-        r = world_model.reward_head(z, h)
-        traj.append(r)
+def dreamer_actor_update(world_model, actor, z, h, horizon=15):  # 定义 Dreamer 风格 actor 更新
+    # 在 imagined rollout 上优化策略（示意）  # 不直接访问真实环境
+    traj = []  # 保存 imagined rollout 中的奖励预测
+    for _ in range(horizon):  # 在潜空间里向前展开固定步数
+        a = actor(z, h)  # actor 根据当前潜状态输出动作
+        z, h = world_model.prior_step(z, h, a)  # 世界模型预测下一潜状态
+        r = world_model.reward_head(z, h)  # 奖励头估计当前 imagined reward
+        traj.append(r)  # 记录该步奖励
     loss = -sum(traj) / len(traj)  # maximize imagined return
-    return loss
+    return loss  # 返回用于最小化的 actor loss
 ```
 
 这段代码抽象了 Dreamer 的 actor 更新思路：不在真实环境里采样，而是在世界模型的隐空间 rollout 上估计长期回报并优化策略。好处是样本效率高，但前提是动力学与奖励头的偏差要可控。

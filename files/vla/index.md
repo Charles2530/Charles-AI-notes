@@ -1,5 +1,18 @@
 # VLA 专题路线图：从视觉语言到可执行动作
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先看动作表示、数据 schema、控制接口和评测桶。
+    **深入读法**：深读时把 web knowledge transfer、机器人轨迹、动作 chunk 和世界模型接口分开。
+    **实验/工程读法**：实验上记录平台、相机、动作空间、控制频率、success、恢复和安全 case。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | embodiment gap | 跨机器人迁移先看动作空间、控制频率和观测视角 |
+    | 动作 token 幻觉 | 语言能力不能直接外推为稳定控制 |
+    | 闭环恢复薄弱 | 失败 replay、接管和安全回退要单独评测 |
+
+
 VLA 的核心不是“让 VLM 多输出几个动作 token”，而是把视觉语言状态、机器人数据、动作接口、闭环反馈和安全约束接成一条可执行系统。对世界模型高效训练来说，VLA 还承担一个更关键的角色：它提供动作分布、失败轨迹和闭环验证信号，让世界模型不只学会生成未来画面，而是学会预测**动作之后的后果**。
 
 !!! note "初学者先抓住"
@@ -7,6 +20,17 @@ VLA 的核心不是“让 VLM 多输出几个动作 token”，而是把视觉�
 
 !!! tip "证据与全站矩阵"
     前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。VLA 结论必须区分 behavior cloning benchmark、真实机器人 closed-loop、官方 demo、系统吞吐和本站推断。
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 动作可执行 | 动作 schema、频率、控制器和约束完整 | 自然语言计划 |
+    | 跨 embodiment 有证据 | 不同机器人/相机/任务桶分开报告 | 单平台成功率 |
+    | 闭环安全 | success、recovery、intervention、risk case | 离线 imitation loss |
+
+
+!!! failure "最佳反例"
+    离线动作误差下降，但真实机器人因为动作接口、频率、控制器拒绝或接触风险而失败。VLA 的好分数只有经过 closed-loop、failure replay 和 safety gate 后才算进入工程判断。
 
 ## 阅读分层与小地图
 

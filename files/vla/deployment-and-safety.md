@@ -185,12 +185,12 @@ VLA 部署真正考验的，不是模型会不会输出动作，而是它能否�
 ## 快速代码示例
 
 ```python
-import torch
+import torch  # 使用张量裁剪实现安全投影
 
-def safety_project(action, prev_action, low, high, max_delta):
+def safety_project(action, prev_action, low, high, max_delta):  # 定义部署侧动作安全投影
     a = torch.clamp(action, low, high)  # 执行器硬约束
-    a = torch.clamp(a, prev_action - max_delta, prev_action + max_delta)
-    return a
+    a = torch.clamp(a, prev_action - max_delta, prev_action + max_delta)  # 限制单步动作变化幅度
+    return a  # 返回经过边界和速率约束后的动作
 ```
 
 这段代码给出部署侧常见的动作安全投影：先做物理边界裁剪，再做步进变化约束。它能显著降低“单步异常动作”带来的风险，通常与状态机和接管逻辑一起使用。

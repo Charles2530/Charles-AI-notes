@@ -14,6 +14,22 @@ paper_topic: 扩散模型
     - 代码与模型：[ModelTC/Wan2.2-Lightning](https://github.com/ModelTC/Wan2.2-Lightning)
     - 关键词：Distribution Matching Distillation、DMD、DMD2、SGTS、few-step diffusion、score matching、SNR subinterval、MoE、Wan2.2、Qwen-Image
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2510.27684](https://arxiv.org/abs/2510.27684) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Phased DMD: Few-step Distribution Matching Distillation via Score Matching within Subintervals` 的核心结果在论文设置下成立 | [arXiv:2510.27684](https://arxiv.org/abs/2510.27684) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对少步蒸馏机制和局部效率收益的介绍 | 不证明跨模型、跨视频分布、真实交互规划或第三方独立复现成立 |
+| 本页把少步扩散接回世界模型/rollout 成本 | 本站综合判断 | 采样步数、显存、延迟与失败边界 | Site Inference | Site Inference | 支撑“少步生成可降低 rollout/预览成本”的工程假设 | 不能证明视频自然度等同于 planning utility 或 closed-loop success |
+
+!!! warning "读数边界"
+    本页结果只按论文 benchmark、teacher/student 设置、采样步数和硬件条件解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现。
+
 这篇论文的核心价值是把 DMD 类少步蒸馏从“把整个反向过程一次性压到少数步”改成“沿 SNR 子区间逐段训练专家”。它要解决的不是普通采样器加速，而是一个更具体的问题：**DMD2 这类带随机梯度截断的少步蒸馏虽然省显存、稳定，但会把一部分训练迭代退化成近似一跳生成，进而损失图像多样性和视频运动强度。**
 
 Phased DMD 的答案是两件事：
@@ -41,16 +57,11 @@ DMD / DMD2 的吸引力在于，它不要求学生模型逐步模仿 teacher 的
 
 <small>图源：`Phased DMD`，Figure 1。原论文图意：对比 vanilla few-step DMD、DMD2/SGTS、4-phase Phased DMD 和结合 SGTS 的 2-phase Phased DMD。红色表示记录梯度的 generator step，蓝色表示不记录梯度的 forward step。</small>
 
-!!! note "这张图到底在比较什么"
-    这张图的核心不是采样步数本身，而是**训练时梯度如何穿过少步生成链**。红色 step 表示这一段会进入反向传播，模型参数会因为这一步的 DMD loss 更新；蓝色 step 表示只是为了模拟当前少步 generator 的推理状态而向前跑，不记录梯度。换句话说，红色决定训练信号真正作用在哪里，蓝色决定训练样本来自什么中间分布。
-
-    **Vanilla few-step DMD** 的做法最直接：如果推理是 4 步，训练时也把 4 个 generator step 都放进计算图，然后从最终样本上的 DMD loss 一路反传回前面每一步。这样理论上最贴近真实 4-step 推理链，因为每个 step 都知道最终质量会怎样影响自己。但代价也最大：计算图很深，显存随步数和视频长度快速增长；在 Wan2.2 这类大视频模型上，还会让优化非常不稳。
-
-    **DMD2 / SGTS** 是为了解决这个显存问题。它会先用若干个蓝色 step 跑出一个中间状态，然后只把最后一个红色 step 放进计算图。这样训练时显存接近 one-step DMD，但仍然让模型看到一部分由自己生成出来的中间输入。这就是 SGTS 的好处：省显存，也比完全不用 backward simulation 更接近推理分布。问题在于，SGTS 的截断点是随机的；当截断停得很早时，红色 step 实际上要从接近纯噪声的位置直接承担全部生成任务，训练信号就退化成类似 one-step distillation。反复出现这种训练样本，会把 few-step 模型往“每一步都试图独自解决全部问题”的方向推，结果常见是多样性下降、视频运动变弱、不同 seed 的结构更相似。
-
-    **4-phase Phased DMD** 的想法是把整条 SNR 路径拆开。每个 phase 只训练自己负责的子区间：前面的 phase 负责高噪声 / 低 SNR 区间里的全局结构和运动，后面的 phase 负责低噪声 / 高 SNR 区间里的纹理和细节。这样每个 expert 只需要解决一个更短的 denoising subproblem，而不是在每次训练中都被要求从纯噪声直接走到干净样本。它的训练目标也因此改变：中间 phase 的 fake score 不能再假设 clean target 是 \(x_0\)，而要估计“从当前中间状态继续加噪后”的子区间 score。
-
-    **2-phase Phased DMD with SGTS** 是更工程化的折中。它不为 4 个采样 step 都单独训练一个 phase，而是把它们合并成两个 phase，并在每个 phase 内继续使用 SGTS 控制显存。这样既保留了 Phased DMD 的核心好处：不同 SNR 区间有不同 expert、不同 score matching 目标；又不至于引入过多专家和训练成本。论文在 Wan2.2 上采用这类设置，是因为 Wan2.2 本身有高噪声 / 低噪声 MoE 分工，2-phase 设计正好能和这种结构对齐。
+!!! note "这张图怎么读"
+    **输入输出**：输入是少步 denoising 链、SNR phase 和红/蓝两类训练 step，输出是每个 phase/expert 该承担的分布匹配子问题。  
+    **效率机制**：把深计算图拆成分段训练，尽量保留 few-step 容量，同时控制显存和 SGTS 退化。  
+    **对主线意义**：它服务的是 rollout/视频生成成本，而不是动作条件 dynamics 本身；可作为世界模型外部模拟器的系统加速证据。  
+    **不能证明什么**：自动视频指标和少步采样速度不能证明 planning utility、真实闭环收益或跨 teacher 复现。
 
 这张图可以按四种训练图来读：
 

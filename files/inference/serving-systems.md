@@ -254,16 +254,16 @@ Admission control、分池、fallback 和多租户隔离应该被当成一等设
 ## 快速代码示例
 
 ```python
-from fastapi import FastAPI
-from vllm import LLM, SamplingParams
+from fastapi import FastAPI  # 提供 HTTP 服务框架
+from vllm import LLM, SamplingParams  # 引入 vLLM 推理引擎和采样参数
 
-app = FastAPI()
-llm = LLM(model="Qwen/Qwen2.5-7B-Instruct", max_model_len=8192)
+app = FastAPI()  # 创建 FastAPI 应用实例
+llm = LLM(model="Qwen/Qwen2.5-7B-Instruct", max_model_len=8192)  # 初始化模型并限制最大上下文长度
 
-@app.post("/generate")
-def generate(prompt: str):
-    out = llm.generate([prompt], SamplingParams(max_tokens=128, temperature=0.2))
-    return {"text": out[0].outputs[0].text}
+@app.post("/generate")  # 注册文本生成接口
+def generate(prompt: str):  # 接收用户 prompt
+    out = llm.generate([prompt], SamplingParams(max_tokens=128, temperature=0.2))  # 调用 vLLM 生成短回复
+    return {"text": out[0].outputs[0].text}  # 返回第一条生成文本
 ```
 
 这段代码展示了一个最小服务化形态：`FastAPI` 负责 HTTP 接口，`vLLM` 负责高吞吐生成，采样参数在请求入口统一配置。后续通常再加队列、鉴权、限流和观测指标接入，形成可运维服务。

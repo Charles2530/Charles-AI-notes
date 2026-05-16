@@ -2,6 +2,11 @@
 
 量化的目标，是用更少的比特表示权重和激活，从而降低显存、带宽和推理成本。
 
+!!! tip "快速定位"
+    **一句话结论**：量化只有在任务质量、kernel 路径和端到端延迟同表通过时才算省成本。
+    **适合读者**：正在选择 PTQ/QAT、FP8/FP4、KV 量化或多模态/VLA 低比特部署的人。
+    **先看哪张表**：先看“最小验收指标”，再看“阅读分层与小地图”。
+
 !!! note "在主线里的位置"
     量化在世界模型高效训练里解决的是显存、带宽、通信和 rollout 成本，但它不是“全模型一键降 bit”。视觉连接器、动作头、风险/安全头、长时序 KV cache 和 reward/value 相关模块常常比文本权重更敏感，必须按任务桶分别验收质量、延迟和失败模式。
 
@@ -41,6 +46,29 @@
     <p>一个量化方案省的是权重、激活、KV、带宽还是部署成本，以及会伤哪类任务。</p>
   </div>
 </div>
+
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先按权重、activation、KV、scale metadata 和 kernel 支持拆成本。
+    **深入读法**：深读时看 PTQ/QAT/FP8/FP4 对任务桶、敏感头和长上下文的影响。
+    **实验/工程读法**：工程上必须同表记录质量回归、显存、带宽、latency、fallback 和目标硬件。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | accuracy cliff | 按任务桶和敏感头检查，而不是只看平均分 |
+    | KV/activation 误差积累 | 长上下文和 rollout 要单独验 |
+    | 硬件收益错配 | 低比特收益依赖 kernel、带宽和 fallback 路径 |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 低比特不伤关键任务 | 任务桶、长上下文、敏感头回归通过 | 平均分不掉 |
+    | 系统真加速 | 端到端 latency/throughput 和 kernel trace | 权重体积变小 |
+    | 部署可回滚 | fallback、校准集、监控和阈值 | 离线一次评测 |
+
+
+!!! failure "最佳反例"
+    权重体积降到 INT4，但 latency 没降、kernel 不走低比特路径，或者风险头/动作头排序变坏。这不是有效量化，只是把压缩率误当成系统收益。
 
 ## 阅读分层与小地图
 
@@ -267,21 +295,21 @@ arXiv:2409.16694 对低比特大语言模型量化做了一个很实用的整理
 ### 快速代码示例
 
 ```python
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+import torch  # 提供 BF16 dtype 与张量能力
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig  # 加载模型、分词器和量化配置
 
-model_id = "Qwen/Qwen2.5-7B-Instruct"
-quant_cfg = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-)
+model_id = "Qwen/Qwen2.5-7B-Instruct"  # 指定要加载的基础模型
+quant_cfg = BitsAndBytesConfig(  # 配置 bitsandbytes 4bit 量化
+    load_in_4bit=True,  # 以 4bit 权重形式加载模型
+    bnb_4bit_quant_type="nf4",  # 使用 NF4 量化格式
+    bnb_4bit_compute_dtype=torch.bfloat16,  # 前向计算使用 BF16
+)  # 量化配置结束
 
-tokenizer = AutoTokenizer.from_pretrained(model_id)
+tokenizer = AutoTokenizer.from_pretrained(model_id)  # 加载与模型匹配的分词器
 model = AutoModelForCausalLM.from_pretrained(
-    model_id, quantization_config=quant_cfg, device_map="auto"
-)
-print("model footprint (GB):", model.get_memory_footprint() / 1024**3)
+    model_id, quantization_config=quant_cfg, device_map="auto"  # 应用量化并自动放置到可用设备
+)  # 得到 4bit 加载后的因果语言模型
+print("model footprint (GB):", model.get_memory_footprint() / 1024**3)  # 打印估算显存占用
 ```
 
 这段代码演示了 `bitsandbytes` 的 4bit 加载流程：`nf4` 用于权重量化，`bf16` 用于计算类型，最后用 `get_memory_footprint` 快速估算显存占用。部署前还应补充任务精度回归，确认压缩收益可接受。

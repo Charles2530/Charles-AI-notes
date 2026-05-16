@@ -361,15 +361,15 @@ risk_recall=72.4% -> 61.8%
 ## 快速代码示例
 
 ```python
-import torch
+import torch  # 使用 PyTorch 张量操作
 
-def snr_weight(alpha_t, gamma=5.0, eps=1e-6):
-    snr = alpha_t / (1.0 - alpha_t).clamp_min(eps)
-    return snr.clamp(max=gamma) / snr
+def snr_weight(alpha_t, gamma=5.0, eps=1e-6):  # 计算每个时间步的 SNR 权重
+    snr = alpha_t / (1.0 - alpha_t).clamp_min(eps)  # 由 alpha_t 估算信噪比
+    return snr.clamp(max=gamma) / snr  # 对高 SNR 区间做截断重加权
 
-def weighted_mse(pred, target, alpha_t):
-    w = snr_weight(alpha_t).view(-1, 1, 1, 1)
-    return ((pred - target) ** 2 * w).mean()
+def weighted_mse(pred, target, alpha_t):  # 定义带 SNR 权重的 MSE
+    w = snr_weight(alpha_t).view(-1, 1, 1, 1)  # reshape 成可广播到图像张量的权重
+    return ((pred - target) ** 2 * w).mean()  # 对误差平方加权后求均值
 ```
 
 这段代码给出一个常见的 **SNR reweighting** 训练写法：先由 `alpha_t` 计算每个时间步的权重，再对 MSE 做重加权。它的目的通常是平衡不同噪声区间的学习难度，避免训练被少数区间主导。

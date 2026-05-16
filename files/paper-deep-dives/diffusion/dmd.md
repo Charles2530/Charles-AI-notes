@@ -15,6 +15,22 @@ paper_topic: 扩散模型
     - 项目页：[DMD](https://tianweiy.github.io/dmd/)
     - 关键词：one-step diffusion、distribution matching、fake score、real score、reverse KL、regression loss、Stable Diffusion distillation
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2311.18828](https://arxiv.org/abs/2311.18828) | Paper Only | 未见本站第三方复现；按论文保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `DMD` 核心结果在论文设置下成立 | [arXiv:2311.18828](https://arxiv.org/abs/2311.18828) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑少步蒸馏机制和局部效率收益 | 不证明跨模型、真实规划或独立复现 |
+| 接回世界模型/rollout 成本 | 本站综合判断 | 采样步数、显存、延迟与失败边界 | Site Inference | Site Inference | 支撑 rollout/预览成本下降的工程假设 | 不能证明 planning utility 或闭环成功率 |
+
+!!! warning "读数边界"
+    只按论文 benchmark、teacher/student、采样步数和硬件条件解释；closed-loop、真实机器人、系统吞吐和独立复现要另验。
+
 这篇论文是后来 DMD2、CausVid、Phased DMD 一系列少步扩散蒸馏方法的基础。它的核心思想很直接：**不要强迫学生模型逐步复刻 teacher 的采样轨迹，而是让学生的一步输出分布看起来像 teacher 的多步输出分布。**
 
 论文把这个目标落成两个损失：
@@ -29,8 +45,8 @@ paper_topic: 扩散模型
 | Route | Main idea | Limitation |
 | --- | --- | --- |
 | Fast samplers | keep the same pretrained denoiser and improve ODE/SDE integration | very few steps often collapse in quality |
-| Trajectory distillation | train a student to mimic teacher noise-to-image trajectories | each target pair requires expensive teacher sampling, and exact trajectory matching is too hard |
-| DMD | match output distribution with score difference, plus a regression regularizer | one-step model is fast, but training needs fake score model and paired teacher outputs |
+| Trajectory distillation | mimic teacher outputs | expensive teacher sampling and hard exact matching |
+| DMD | score-difference distribution matching + regression | fast one-step student, but needs fake score and paired teacher outputs |
 
 DMD 的关键转向是：它不再问“同一个 noise 经过 teacher 50 步会到哪里，student 一步是否也到那里”，而是问“student 产生的一批图像整体上是否落在 teacher / real data 分布里”。这也是它和 [Phased DMD](phased-dmd.md) 的关系：Phased DMD 后来要解决的 SGTS 退化、SNR 子区间、MoE phase 等问题，都建立在 DMD 这套 real/fake score 差分框架上。
 
@@ -40,10 +56,11 @@ DMD 的关键转向是：它不再问“同一个 noise 经过 teacher 50 步会
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 2。原论文图意：一步生成器 \(G_\theta\) 从随机噪声生成 fake image；一条支路用预计算 noise-image pairs 做 regression loss，另一条支路把 fake image 加噪后分别送入 real score diffusion model 和 fake score diffusion model，用两者差异形成 distribution matching gradient。</small>
 
-!!! note "这张训练图怎么读"
-    这张图最容易被误读成“DMD 只是给一步生成器加了一个扩散判别器”。更准确的读法是：它同时有一条**分布级路径**和一条**配对回归路径**。分布级路径从 generator 产生的 fake image 出发，加噪到 \(x_t\)，再分别送入 frozen real score model 和 trainable fake score model；两个 score 的差值给 generator 一个“往 teacher/data 分布移动”的方向。
-
-    另一条 regression 路径则完全不同：它不关心一批样本整体像不像 teacher 分布，而是拿同一个 noise \(z\) 对齐 teacher deterministic sampler 生成的 \(y\)。这条路径像安全绳，防止纯 reverse-KL 分布匹配出现 mode dropping 或结构漂移。理解 DMD 时要把这两条信号分开：**score difference 负责真实感和分布对齐，regression loss 负责保住 teacher 对同一 noise 的大尺度语义映射**。
+!!! note "这张图怎么读"
+    **输入输出**：输入是随机噪声、teacher 样本和 fake image 加噪版，输出是一步图像与 real/fake score 差分。  
+    **效率机制**：把多步 teacher 采样压成一步学生，并用 regression loss 保住大尺度语义。  
+    **对主线意义**：说明分布匹配蒸馏可降预览/rollout 成本，但质量和任务评测要分开。  
+    **不能证明什么**：图像指标不能证明动作条件世界模型、闭环收益或真实机器人安全。
 
 DMD 的训练图可以拆成四个对象：
 
@@ -477,7 +494,7 @@ w_t
 | DFNO | 1 | 7.83 |
 | BOOT | 1 | 16.30 |
 | TRACT | 1 | 7.43 |
-| Meng et al. | 1 | 7.54 |
+| [Guided Distill. (Meng et al., 2022)](https://arxiv.org/abs/2210.03142) | 1 | 7.54 |
 | Diff-Instruct | 1 | 5.57 |
 | Consistency Model | 1 | 6.20 |
 | **DMD (Ours)** | 1 | **2.62** |

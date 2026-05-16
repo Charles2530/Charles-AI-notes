@@ -102,12 +102,12 @@
 ## 快速代码示例
 
 ```python
-def select_gemm_kernel(m, n, k, dtype):
-    if dtype == "fp8" and n % 128 == 0 and k % 128 == 0:
-        return "gemm_fp8_tc_128"
-    if m <= 128 and n <= 128:
-        return "gemm_small_tile"
-    return "gemm_default"
+def select_gemm_kernel(m, n, k, dtype):  # 根据 shape 和 dtype 选择 GEMM 实现
+    if dtype == "fp8" and n % 128 == 0 and k % 128 == 0:  # 优先匹配 FP8 Tensor Core 对齐路径
+        return "gemm_fp8_tc_128"  # 返回 FP8 特化 kernel
+    if m <= 128 and n <= 128:  # 小矩阵走更适合的 tile 策略
+        return "gemm_small_tile"  # 返回小矩阵 kernel
+    return "gemm_default"  # 其它情况回退到通用实现
 ```
 
 这段代码是一个最小 dispatch 规则示例：先匹配高收益特化路径，再匹配小矩阵场景，最后回退到通用实现。核心思想是让“规则可解释、可观测、可回退”，避免上线后出现黑盒命中问题。

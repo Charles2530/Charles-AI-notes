@@ -20,7 +20,17 @@
 | [强化学习](../reinforcement-learning/index.md) | replay、offline RL、verifiable reward | policy gradient、GRPO、world-model RL | rollout batching、reward 评估 | actor/critic/value state | closed-loop、reward hacking、risk | 自动验证、失败回流 | RL for world models、verl 流程 | verifier 质量决定 RL 是否真省人工 |
 | [论文专题](../paper-deep-dives/index.md) | 汇总数据配方证据 | 汇总训练链路证据 | 汇总推理/系统证据 | 汇总显存/KV/低比特证据 | 汇总 benchmark、ablation、closed-loop | 汇总代码、demo、部署证据 | [证据标准](evidence-and-reproducibility-standard.md) | 新增专题必须同步补 Evidence Snapshot |
 
-## 瓶颈驱动决策树
+## 成熟度分层：别把前沿方向和工程基线混读
+
+| 成熟度 | 典型技术 | 采用风险 | 进入实验前先问 |
+| --- | --- | --- | --- |
+| 经典已验证 | Dreamer/RSSM、ZeRO、Megatron-LM、SmoothQuant | 主要风险来自任务迁移和实现细节 | 新任务的状态、动作、硬件和数据分布是否相同 |
+| 工程常用 | KV cache、FSDP、profiling、SLO、低比特 runtime | 主要风险来自端到端收益打折 | microbench、trace、质量回归是否同表 |
+| 前沿待复现 | 新视频世界模型、2025-2026 技术报告、闭源能力 claim | 主要风险来自证据不完整 | 是否只有论文主表或官方 claim |
+| 官方展示 | 项目视频、interactive demo、少量 qualitative case | 主要风险来自选择性展示 | 是否有平均指标、失败 case 和闭环评测 |
+| 本站推断 | 成本账、路线树、toy fixture、跨论文综合 | 主要风险来自把假设当结论 | 是否已写清 `Site Inference` 和下一步实验 |
+
+## 方法选择树：按瓶颈选路线
 
 ```mermaid
 flowchart TD
@@ -31,20 +41,34 @@ flowchart TD
     A --> F["闭环验证不可信"]
     A --> G["部署成本或端侧预算太紧"]
 
-    B --> B1["Dreamer/RSSM、MWM、数据引擎、offline-online hybrid"]
-    C --> C1["visual tokenizer、MWM、V-JEPA、geometry state"]
-    D --> D1["ZeRO/FSDP、checkpointing、sequence packing、MagiAttention、FP8"]
-    E --> E1["KV cache、KVSlimmer、CausVid/DMD、batching/SLO"]
-    F --> F1["action sensitivity、closed-loop gain、risk calibration、failure replay"]
-    G --> G1["量化、runtime、kernel fallback、cost per success"]
+    B --> B1["读世界模型：Dreamer/RSSM、MWM、数据引擎、offline-online hybrid"]
+    C --> C1["读 VLM/VLA：visual tokenizer、MWM、V-JEPA、geometry state"]
+    D --> D1["读训练/算子：ZeRO/FSDP、checkpointing、packing、MagiAttention、FP8"]
+    E --> E1["读推理/扩散：KV cache、KVSlimmer、CausVid/DMD、batching/SLO"]
+    F --> F1["读评测：action sensitivity、closed-loop gain、risk calibration、failure replay"]
+    G --> G1["读量化/部署：低比特、runtime、kernel fallback、cost per success"]
 
-    B1 --> H["进入 VLA 全链路案例"]
+    B1 --> H["进入 VLA / 世界模型全链路案例"]
     C1 --> H
-    D1 --> I["进入 rollout 服务/量化/kernel 案例"]
+    D1 --> I["进入 rollout 服务、量化与 kernel 案例"]
     E1 --> I
     F1 --> J["进入完整实验报告样例"]
     G1 --> I
 ```
+
+!!! tip "方法选择树怎么用"
+    这棵树只负责把瓶颈导向专题和案例，不替代论文证据。进入具体页面后仍要回到 `Evidence Snapshot`：确认 claim 是 `Paper Result`、`Ablation`、`System Throughput`、`Closed-loop`、`Official Demo`、`Toy Fixture` 还是 `Site Inference`。
+
+## 从瓶颈到技术选择
+
+| 瓶颈 | 优先技术 | 先读页面 | 必须通过的验收门禁 |
+| --- | --- | --- | --- |
+| 真实数据不足 | RSSM/Dreamer、MWM、offline-online hybrid、failure replay | [世界模型高效训练路线图](../world-models/efficient-training-roadmap.md)、[完整实验报告样例](../world-models/world-model-efficient-training-experiment-report.md) | 学习曲线、数据预算、failure bucket、closed-loop gain |
+| 视觉 token 太多 | visual tokenizer、masked/JEPA、geometry state、latent dynamics | [Masked / JEPA 与潜变量预测](../world-models/masked-jepa-and-latent-prediction.md)、[VLM/VLA 接口](../vlm/vlm-vla-for-efficient-world-model-training.md) | 压缩率、action sensitivity、遮挡/接触/risk case 回归 |
+| 训练显存/通信不足 | ZeRO/FSDP、checkpointing、sequence packing、MagiAttention、FP8 | [训练](../training/index.md)、[算子与编译器](../operators/index.md) | MFU/step time、峰值显存、通信 trace、checkpoint 恢复、收敛指标 |
+| rollout 延迟过高 | KV cache、KVSlimmer、CausVid/DMD、batching、低比特 serving | [推理](../inference/index.md)、[Rollout 服务案例](../world-models/rollout-serving-quantization-kernel-case.md) | TTFT/TPOT、P95/P99、KV memory、quality regression、cost per success |
+| 闭环验证不可信 | action sensitivity、closed-loop success、risk calibration、failure replay | [世界模型评测](../world-models/evaluation-and-failure-modes.md)、[VLA 闭环恢复](../vla/closed-loop-recovery-and-failure-analysis.md) | counterfactual action、risk ECE、失败回放、真实/仿真闭环分开报告 |
+| 部署成本过高 | 量化、kernel fallback、runtime、SLO、fallback policy | [量化](../quantization/index.md)、[推理成本建模](../inference/cost-modeling-and-slo-design.md) | 任务桶回归、敏感头保护、硬件 kernel 支持、SLO 和回滚路径 |
 
 ## 使用门槛
 

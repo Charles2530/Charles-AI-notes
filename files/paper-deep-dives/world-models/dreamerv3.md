@@ -25,6 +25,11 @@ paper_topic: 世界模型
 | 主要风险 | imagined rollout 一旦模型偏差累积，policy 会利用模型漏洞；跨到开放视觉/机器人任务时还需要更强状态表示和失败回流 |
 | 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md)、[RSSM、Dreamer 与规划](../../world-models/rssm-dreamer-and-planning.md) |
 
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2301.04104](https://arxiv.org/abs/2301.04104) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
+
 ## Evidence Snapshot
 
 | Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |

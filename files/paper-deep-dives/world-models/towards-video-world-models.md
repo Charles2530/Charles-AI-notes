@@ -14,6 +14,22 @@ paper_topic: 世界模型
     - 类型：路线综述 / 研究判断，不是带完整 benchmark 的实验论文
     - 关键词：video world model、causality、interactivity、persistence、real-time、physical accuracy、AR-DiT
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [https://www.xunhuang.me/blogs/world_model.html](https://www.xunhuang.me/blogs/world_model.html) | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Towards Video World Models` 的核心结果在论文设置下成立 | [https://www.xunhuang.me/blogs/world_model.html](https://www.xunhuang.me/blogs/world_model.html) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 这篇文章很适合放在 LingBot-World 前面读。它不提出一个新模型，而是回答一个更基础的问题：**为什么 Sora、Veo 这类强视频生成模型还不能直接等价于 video world model，以及从视频生成走向世界模型需要补哪些训练和系统能力。**
 
 作者把 video world model 的核心要求概括成五个属性：`causal`、`interactive`、`persistent`、`real-time` 和 `physically accurate`。这五个词可以直接变成评估视频世界模型的 checklist。
@@ -29,6 +45,12 @@ paper_topic: 世界模型
 ![World model paradigms](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-1-world-model-paradigms.jpg){ width="860" }
 
 <small>Figure source: `Towards Video World Models`, Figure 1. 原文图注要点：图中对比 internal world model 和 external world model，前者像人脑内部对粗粒度未来的预测，后者则试图模拟现实世界的完整细节。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是视频世界模型方法谱系和能力门槛，输出是 taxonomy 与评估维度。  
+    **效率机制**：用门槛框架减少概念混淆，避免把视频生成直接当世界模型。  
+    **对主线意义**：它为全站判断“视频模型是否服务决策”提供检查表。  
+    **不能证明什么**：taxonomy 不能证明具体系统具备闭环控制收益。
 
 这个区分很重要。前者不一定需要生成像素，甚至可以故意丢掉视觉细节；后者则必须尽可能真实地模拟未来画面、对象、运动和交互后果。文章讨论的重点是后者，也就是 video world model。
 

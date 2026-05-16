@@ -239,13 +239,13 @@ FP8 与混合精度推理的价值，在于它提供了一条更稳的压缩与�
 ## 快速代码示例
 
 ```python
-import transformer_engine.pytorch as te
+import transformer_engine.pytorch as te  # 引入 NVIDIA Transformer Engine
 
-def forward_step(model, x):
-    with te.fp8_autocast(enabled=True):
-        h = model.backbone(x)   # 主干矩阵计算走 FP8
+def forward_step(model, x):  # 定义一次前向推理步骤
+    with te.fp8_autocast(enabled=True):  # 在上下文中启用 FP8 自动转换
+        h = model.backbone(x)  # 主干矩阵计算走 FP8
     logits = model.lm_head(h.float())  # 输出头保留更高精度
-    return logits
+    return logits  # 返回最终 logits
 ```
 
 这段代码演示了一个常见混合精度策略：主干高算量模块用 FP8 提升吞吐，敏感输出头保留更高精度以稳住质量。实际部署时还会配合分桶回归，确认长上下文和长尾任务不退化。

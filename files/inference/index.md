@@ -11,6 +11,29 @@
   </div>
 </div>
 
+!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **10 分钟读法**：先按 prefill、decode、KV、batching、routing 和 SLO 拆服务成本。
+    **深入读法**：深读时把平均吞吐、P95/P99、TTFT/TPOT、KV memory 和质量回归分开。
+    **实验/工程读法**：工程上用真实请求 trace、capacity model、online eval 和回滚策略验收。
+
+!!! warning "核心失败模式"
+    | 失败模式 | 先查什么 |
+    | --- | --- |
+    | tail latency | 平均延迟不能代表 P95/P99 SLO |
+    | KV 成本失控 | 上下文压缩、eviction、量化要和质量一起验 |
+    | 服务指标越界 | 吞吐提升不能证明规划或回答质量提升 |
+
+!!! info "最小验收指标"
+    | 要证明什么 | 最小指标 | 不能替代什么 |
+    | --- | --- | --- |
+    | 延迟达标 | TTFT/TPOT、P95/P99、SLO breach rate | 平均 latency |
+    | KV 成本受控 | KV memory、eviction/merge、长上下文质量回归 | 短上下文分数 |
+    | 服务质量稳定 | online eval、shadow、fallback 和监控 | 离线 benchmark |
+
+
+!!! failure "最佳反例"
+    平均延迟很好看，但 P99 抖动、KV 显存爆、fallback 频繁，或者质量回归没有跑。推理系统的反例通常藏在 tail latency 和质量门禁里。
+
 ## 专题定位
 
 <div class="atlas-meta-grid">
@@ -289,19 +312,19 @@ P95/P99 会不会突然拉高。
 ## 快速代码示例
 
 ```python
-from vllm import LLM, SamplingParams
+from vllm import LLM, SamplingParams  # 引入 vLLM 推理入口和采样配置
 
-llm = LLM(
-    model="Qwen/Qwen2.5-7B-Instruct",
-    tensor_parallel_size=2,
-    max_model_len=8192,
-)
-params = SamplingParams(temperature=0.2, max_tokens=256)
+llm = LLM(  # 初始化推理引擎
+    model="Qwen/Qwen2.5-7B-Instruct",  # 指定服务模型
+    tensor_parallel_size=2,  # 使用 2 路张量并行
+    max_model_len=8192,  # 设置最大上下文长度
+)  # vLLM 引擎创建完成
+params = SamplingParams(temperature=0.2, max_tokens=256)  # 统一管理采样温度和输出长度
 outputs = llm.generate(
-    ["请总结下面错误日志并给出修复建议：..."],
-    params,
-)
-print(outputs[0].outputs[0].text)
+    ["请总结下面错误日志并给出修复建议：..."],  # 输入待处理请求
+    params,  # 使用上面定义的采样参数
+)  # 执行生成
+print(outputs[0].outputs[0].text)  # 打印第一条输出文本
 ```
 
 这段代码给出一个最小 `vLLM` 推理入口：初始化模型时设置并行与上下文长度，采样参数独立管理，再统一走 `generate`。在生产中可继续扩展成批处理、流式输出和多路路由。

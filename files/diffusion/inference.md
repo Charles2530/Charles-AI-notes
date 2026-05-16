@@ -179,21 +179,21 @@ x_{t_{n+1}} = \Phi(x_{t_n}, \epsilon_\theta, t_n, t_{n+1})
 ## 快速代码示例
 
 ```python
-from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
-import torch
+from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler  # 加载扩散管线和 DPM-Solver 调度器
+import torch  # 指定半精度 dtype
 
-pipe = DiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-xl-base-1.0",
-    torch_dtype=torch.float16,
-).to("cuda")
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+pipe = DiffusionPipeline.from_pretrained(  # 从权重仓库加载 SDXL 管线
+    "stabilityai/stable-diffusion-xl-base-1.0",  # 基础模型名称
+    torch_dtype=torch.float16,  # 使用 FP16 降低显存占用
+).to("cuda")  # 把管线移动到 GPU
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)  # 切换为 DPM-Solver 多步调度器
 
-image = pipe(
-    "rainy cyberpunk street, neon sign, ultra detailed",
-    num_inference_steps=20,   # 步数预算
-    guidance_scale=6.0,       # 条件强度
-).images[0]
-image.save("sample.png")
+image = pipe(  # 执行一次文生图推理
+    "rainy cyberpunk street, neon sign, ultra detailed",  # 输入提示词
+    num_inference_steps=20,  # 步数预算
+    guidance_scale=6.0,  # 条件强度
+).images[0]  # 取第一张生成图
+image.save("sample.png")  # 保存结果图片
 ```
 
 这段代码展示了一个可直接运行的文生图最小推理链路：加载模型后把 scheduler 切到 `DPMSolverMultistep`，再通过 `num_inference_steps` 与 `guidance_scale` 控制速度和条件强度。通常先用 15 到 30 步做首轮调参，再按任务质量要求细化。

@@ -14,6 +14,22 @@ paper_topic: 扩散模型
     - 代码：[GitHub](https://github.com/buoyancy99/diffusion-forcing)
     - 关键词：序列扩散、因果扩散、next-token prediction、full-sequence diffusion、视频预测、扩散规划、Monte Carlo Tree Guidance
 
+
+!!! info "事实版本"
+    | Checked Date | Official Source | Repro Status | Notes |
+    | --- | --- | --- | --- |
+    | 2026-05-16 | [arXiv:2407.01392](https://arxiv.org/abs/2407.01392) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
+
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion` 的核心结果在论文设置下成立 | [arXiv:2407.01392](https://arxiv.org/abs/2407.01392) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
+| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+
+!!! warning "读数边界"
+    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+
 这篇论文的核心不是再发明一个采样器，而是改了扩散模型处理序列的训练方式：**每个 token 都可以有自己的噪声水平**。这样一个因果序列模型既能像 next-token 模型一样逐步向前生成，又能像 full-sequence diffusion 一样对整段未来做 guidance。
 
 如果只用一句话概括：
@@ -39,6 +55,12 @@ Diffusion Forcing 把两个轴交叉起来，让每个时间 token 拥有独立�
 ![Diffusion Forcing capabilities 原图](https://www.boyuan.space/diffusion-forcing/static/images/abilities.png){ width="920" }
 
 <small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 1。该图用 Guidance、Tree Search、Compositionality、Causal Uncertainty 和 Flexible Horizon 对比 Teacher Forcing、Full-Seq. Diffusion 与 Diffusion Forcing。</small>
+
+!!! note "这张图怎么读"
+    **输入输出**：输入是序列 token、时间 mask 和噪声水平，输出是可按不同上下文生成的序列样本。  
+    **效率机制**：把 next-token 风格的因果结构和全序列扩散结合，支持灵活条件生成。  
+    **对主线意义**：它可服务视频/轨迹 rollout 的训练-推理一致性讨论。  
+    **不能证明什么**：序列扩散能力不能证明动作条件规划或真实闭环策略收益。
 
 !!! note "图解：能力矩阵先看缺口互补"
     这张图最重要的读法不是“DF 什么都赢”，而是看它在能力组合上的定位：full-sequence diffusion 可以做整段 guidance，但不擅长树搜索、组合生成、因果不确定性和可变 horizon；teacher forcing 可以变长生成和在线决策，但缺少扩散式整段引导；DF 试图把二者同时放进一个训练目标里。

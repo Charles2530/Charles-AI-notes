@@ -320,7 +320,7 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 !!! note "和 verl/RL 框架的呼应"
     在 [verl 代码流程](../../reinforcement-learning/verl-code-flow.md) 里，rollout、reward、advantage、policy update 是 RLHF/RLVR 的核心数据流。DeepSeek-V4 报告展示的是同一类系统问题在百万上下文和多 teacher OPD 下的放大版本：rollout 不能只管“生成文本”，还要能容错、恢复、保留 KV、管理超长 token 字段，并让 teacher/student forward 的调度不把 GPU 内存打爆。
 
-## 实验结果怎么读
+### 实验结果怎么读
 
 ### Base model 对比
 
@@ -372,7 +372,7 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 !!! note "Figure 10 要看斜率"
     这张图不是只说“Max 最强”，而是看额外 tokens 换来了多少分数。HLE 上，V4-Pro 从 None 到 High 的提升很大，从 High 到 Max 仍有提升但斜率变小；TerminalBench 2.0 上 V4-Pro 的 High/Max 也继续涨。V4-Flash 更便宜，但在 agentic coding 这类任务上和 Pro 有明显差距。选择模型时要问的是：你的任务是缺 reasoning tokens，还是缺模型容量和领域知识？
 
-## 最值得复用的工程经验
+### 最值得复用的工程经验
 
 这份报告有几条经验适合迁移到自己的系统设计里：
 
@@ -385,7 +385,7 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 | QAT 要贴近真实 rollout | RL/OPD 采样阶段用 native FP4，可减少训练采样与线上部署的分布差 |
 | 长上下文 agent 是系统问题 | context retention、tool schema、sandbox、WAL、KV persistence 都会影响模型是否可用 |
 
-## 局限与风险
+### 局限与风险
 
 第一，DeepSeek-V4 的架构很复杂。CSA、HCA、SWA、mHC、MoE、MTP、Muon、FP4 QAT、异构 KV cache、on-disk cache 和 OPD infrastructure 都有耦合。报告自己也承认未来要进一步提炼架构，把真正必要的设计筛出来。
 
@@ -395,7 +395,7 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 
 第四，FP4 的硬件收益有一部分是面向未来硬件的。报告中提到 FP4 x FP8 在现有硬件上的 peak FLOPs 和 FP8 x FP8 相同，但未来硬件理论上可更高效。因此当前收益更多来自内存占用和 memory traffic，不能简单等同为所有场景 1/3 compute speedup。
 
-## 和站内章节连接
+### 和站内章节连接
 
 如果你想把这篇报告放进现有知识地图，可以按这个顺序读：
 
@@ -407,6 +407,6 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 6. [推理：上下文压缩与 KV 内存管理](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)：把 DeepSeek-V4 的异构 KV cache 和 on-disk KV 放到推理系统里看；
 7. [强化学习：verl 代码流程](../../reinforcement-learning/verl-code-flow.md)：对照 rollout、reward、advantage、policy update 和 OPD/RL 基础设施。
 
-## 一句话总结
+### 一句话总结
 
 DeepSeek-V4 的重点不是某个单点指标，而是展示了一条百万上下文大模型的完整路线：**用 CSA/HCA 和异构 KV cache 压低长上下文边际成本，用 mHC/Muon/稳定性补丁把 trillion-scale MoE 训练跑稳，用 specialist + OPD 把多领域后训练能力合并到一个统一模型里，再用 FP4 QAT、rollout service 和 sandbox 把模型放进真实 agent 系统。**
