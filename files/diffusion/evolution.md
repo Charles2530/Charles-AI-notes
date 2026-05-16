@@ -16,6 +16,8 @@
 x_t=\alpha_t x_0+\sigma_t\epsilon,\qquad \epsilon\sim\mathcal{N}(0,I)
 \]
 
+\(\epsilon\sim\mathcal{N}(0,I)\) 读作：噪声 \(\epsilon\) 从标准高斯分布采样；括号里的第 1 个参数 \(0\) 是均值，表示噪声整体不偏向正或负；第 2 个参数 \(I\) 是单位协方差，表示每个维度独立、方差为 1。
+
 在 DDPM 文献中常见等价写法是：
 
 \[

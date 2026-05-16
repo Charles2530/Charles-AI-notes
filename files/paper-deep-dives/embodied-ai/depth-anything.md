@@ -15,21 +15,6 @@ paper_topic: 具身智能
     - 关键词：monocular depth、unlabeled data、pseudo label、self-training、DINOv2、DPT、feature alignment、metric depth
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2401.10891](https://arxiv.org/abs/2401.10891) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data` 的核心结果在论文设置下成立 | [arXiv:2401.10891](https://arxiv.org/abs/2401.10891) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 Depth Anything 放在具身智能专题里，是因为它补的是机器人闭环里最常被低估的一层：**从普通 RGB 图像得到开放域、 dense、可复用的相对深度先验**。它不直接输出动作，也不替代 RGB-D 或标定，但它能让 VLA、抓取、导航、重建、数据质检和仿真资产流程拥有更强的几何输入。
 
 这篇论文的主张很清楚：单目深度基础模型的瓶颈不只在结构，而在数据覆盖。作者没有设计一个复杂新架构，而是把训练数据从 1.5M labeled images 扩到 62M unlabeled images，并用 teacher-student、自训练强扰动和 DINOv2 feature alignment 让这些无标注图像真正产生增益。

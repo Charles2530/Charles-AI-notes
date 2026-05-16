@@ -14,21 +14,6 @@ paper_topic: 高效推理
     - 关键词：stereo matching、zero-shot generalization、foundation model acceleration、knowledge distillation、blockwise NAS、structured pruning、pseudo-labeling、real-time perception
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2512.11130](https://arxiv.org/abs/2512.11130) / [GitHub: NVlabs/Fast-FoundationStereo](https://github.com/NVlabs/Fast-FoundationStereo) | Author Code / Official Repo | 作者提供代码与数据入口；未见本站记录的第三方独立复现，按论文/官方资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Fast-FoundationStereo: Real-Time Zero-Shot Stereo Matching` 的核心结果在论文设置下成立 | [arXiv:2512.11130](https://arxiv.org/abs/2512.11130) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 这篇论文解决的是一个很典型的高效推理矛盾：**强泛化的 stereo foundation model 太慢，实时 stereo 网络又常常依赖目标域微调，泛化不稳。**
 
 Fast-FoundationStereo 的路线不是从零设计一个小模型，而是从 FoundationStereo 出发，把它的三个主要瓶颈分别拆开处理：feature backbone 用蒸馏压缩，cost filtering 用分块 NAS 找低延迟结构，disparity refinement 用结构化剪枝压掉冗余，再用 1.4M in-the-wild stereo pseudo labels 补真实数据分布。

@@ -17,21 +17,6 @@ paper_topic: 扩散模型
     - 关键词：distribution matching distillation、two time-scale update rule、fake diffusion critic、GAN loss、backward simulation、SDXL distillation
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2405.14867](https://arxiv.org/abs/2405.14867) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Improved Distribution Matching Distillation for Fast Image Synthesis` 的核心结果在论文设置下成立 | [arXiv:2405.14867](https://arxiv.org/abs/2405.14867) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 DMD2 是 [DMD](dmd.md) 的直接续作。它不是简单把 DMD 多训一会儿，而是正面修补 DMD 在大规模文生图蒸馏中的三个痛点：**回归配对数据太贵、fake score 跟不上 generator、一步模型容量不足以吃下 SDXL 这种大模型的复杂分布**。
 
 一句话概括：DMD2 把 DMD 从“分布匹配 + paired regression regularizer”推进到“更纯的分布匹配 + fake critic 两时间尺度训练 + GAN 真实数据监督 + 多步 backward simulation”。

@@ -14,21 +14,6 @@ paper_topic: 扩散模型
     - 关键词：Video DiT、Flow Matching、velocity prediction、3D causal VAE、T2V、I2V、VACE、V2A、Wan-Bench、2D Context Parallelism、Wan2.2 MoE
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2503.20314](https://arxiv.org/abs/2503.20314) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Wan: Open and Advanced Large-Scale Video Generative Models` 的核心结果在论文设置下成立 | [arXiv:2503.20314](https://arxiv.org/abs/2503.20314) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 Wan 这篇技术报告值得精读，不只是因为它把开源视频生成模型的效果往前推了一步，更因为它把**视频基础模型从数据、VAE、DiT、Flow Matching、分布式训练、后训练、评测和推理优化**完整摊开了。很多视频扩散论文只讲一个模块，Wan 更像一份系统设计说明：为什么要先训视频 VAE，为什么 DiT 要用 full spatio-temporal attention，为什么速度预测适合视频 latent，为什么 14B 视频模型必须把 Context Parallel、FSDP、offloading 和 cache 一起考虑。
 
 如果把 Wan2.1 看作开源视频 foundation model 的基线，Wan2.2 则是它后续工程演进的一次明显升级。用户补充说 Wan2.2 没有单独论文，这一点需要在阅读时区分清楚：**本页前半部分以 Wan2.1 论文为主，后半部分把 Wan2.2 官方 README 的介绍作为补充资料**，不把 README 内容说成论文结论。

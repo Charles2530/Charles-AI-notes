@@ -17,21 +17,6 @@ paper_topic: 世界模型
     - 关键词：视频世界模型、autoregressive video diffusion、exposure bias、KV cache、DMD、SiD、GAN、实时流式生成
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2506.08009](https://arxiv.org/abs/2506.08009) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion` 的核心结果在论文设置下成立 | [arXiv:2506.08009](https://arxiv.org/abs/2506.08009) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 这篇论文的核心问题非常直接：**自回归视频扩散模型训练时看的是 ground-truth 上下文，推理时却只能看自己生成的上下文。** 这种 train-test mismatch 会导致 exposure bias，误差沿时间累积，视频越往后越容易过饱和、过锐化、闪烁或漂移。
 
 Self Forcing 的答案是：训练时就执行和推理一样的自回归 rollout，用模型自己生成的历史帧作为上下文，再用视频级 distribution matching loss 对完整生成序列做监督。

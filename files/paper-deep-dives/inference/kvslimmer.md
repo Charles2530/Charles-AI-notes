@@ -31,18 +31,6 @@ KVSlimmer 的核心判断是：相邻 token 的 `Key` 往往更同质，适合�
 
 KVSlimmer 的证据来自谱分析、二阶推导、公开长上下文任务和推理效率对比。它很适合作为 KV cache compression 的工程参考，但世界模型 rollout 里的 KV 还会承载动作分叉、视频 latent 和风险判断，不能只按文本长上下文指标验收。
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2603.00907](https://arxiv.org/abs/2603.00907) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
-
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| 非对称 KV 合并可降低长上下文推理的 cache memory 和 decoder latency | [arXiv:2603.00907](https://arxiv.org/abs/2603.00907), [GitHub](https://github.com/lianjunl13-sudo/KVSlimmer) | Figure 1/4/5/6, long-context settings | System Throughput | Author Code / Official Repo | KV compression 是 rollout 服务成本候选路线 | 不证明动作候选排序、risk calibration 和视频 latent 记忆不受损 |
-| 本站将其接到世界模型 KV 保护策略 | 本页与 [Rollout 服务案例](../../world-models/rollout-serving-quantization-kernel-case.md) | 工程归纳 | Site Inference | Site Inference | 可启发 current window / contact frame / failure replay 保护 | 不等于文本 KV 结果可直接外推到 VLA |
-
 | 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
 | --- | --- | --- | --- | --- |
 | Key 比 Value 更适合合并 | Q/K/V 相似度和投影谱分布分析 | Mechanistic evidence | KV 压缩应区分 K/V，不要统一删或统一合并 | 不能说明视频 latent KV 也有同样谱结构 |

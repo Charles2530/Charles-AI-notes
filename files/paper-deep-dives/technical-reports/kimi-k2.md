@@ -32,14 +32,6 @@ Kimi K2 这份报告的核心不是“又发布了一个大模型”，而是围
 
     这会影响我们解读分数：SWE-bench、Tau2-Bench、ACEBench 这些任务更接近“模型是否能执行任务流程”，不是单纯知识问答。因此 Kimi K2 的亮点更偏 agentic capability，而不是只在数学榜单上卷。
 
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| Kimi K2 将 MoE、MuonClip 和 agentic data synthesis 组合成开源 agent 路线 | [arXiv:2507.20534](https://arxiv.org/abs/2507.20534), [Hugging Face](https://huggingface.co/moonshotai/Kimi-K2-Instruct) | Figure 1, training and agentic eval settings | Paper Result | Author Code / Official Repo | 开源权重和报告支持 agentic training route 的接口分析 | 不证明完整预训练和后训练可第三方复现 |
-| MuonClip、QK-Clip 和 checkpoint engine 服务稳定高效训练 | 同上 | optimizer, infra, RL checkpoint sections | System Throughput | Paper Only | agent 模型训练要把优化器、数据生成和恢复语义一起看 | 不证明同配方适合所有 MoE 或 VLA |
-| 本站将其接到训练治理和 agent rollout 成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可启发工具调用和可验证任务数据引擎 | 不等于机器人/世界模型闭环收益 |
-
 ## 论文位置
 
 Kimi K2 可以放在 DeepSeek-V3、DeepSeek-R1、Qwen3 之后一起看：

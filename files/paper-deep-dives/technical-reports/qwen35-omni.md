@@ -34,14 +34,6 @@ Qwen3.5-Omni 这份报告的核心不是“把文本、图像、音频、视频�
 
     这也是为什么报告反复强调 real-time、streaming、first-packet latency 和 tool use。全模态模型如果不能及时返回第一段语音，用户体验会明显退化；如果不能稳定调用工具，它就仍然只是感知模型，而不是 omni agent。
 
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| Qwen3.5-Omni 将 text/audio/image/video 和流式语音输出组织成 omni agent | [arXiv:2604.15804](https://arxiv.org/abs/2604.15804) | Figure 1, architecture and modality sections | Paper Result | Paper Only | 全模态 agent 需要同时设计 Thinker、Talker、长上下文和低延迟交互 | 不证明训练配方、数据和模型权重可复现 |
-| AuT、ARIA、MTP 和 chunked prefilling 服务低延迟多模态系统 | 同上 | streaming and latency sections | System Throughput | Paper Only | 多模态推理成本要看 first-packet latency、RVQ token 和工具调用 | 不证明所有安全和长时任务稳定 |
-| 本站将其接到 VLM/VLA、推理和安全评测主线 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可作为 omni 系统读法和证据分层案例 | 不等于 world model planning utility |
-
 ## 论文位置
 
 Qwen3.5-Omni 继承 Qwen2.5-Omni / Qwen3-Omni 的 Thinker-Talker 思路，同时吸收 Qwen3.5 在文本、视觉、tokenizer、Hybrid MoE 和长上下文上的能力。报告中明确写到，它相对 Qwen3-Omni 有五个关键升级：

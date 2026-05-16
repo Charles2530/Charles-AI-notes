@@ -29,14 +29,6 @@ DeepSeek-V3 最值得拆开的地方不是单个 benchmark 分数，而是它把
 !!! warning "阅读边界"
     这是一份模型技术报告，里面的训练成本、稳定性、benchmark、数据处理和系统效率都应按作者自述来理解。它很适合学习大模型工程设计，但不能等同于第三方复现实验。
 
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| MLA、DeepSeekMoE、MTP、FP8 和 DualPipe 共同降低大模型训练/推理成本 | [arXiv:2412.19437](https://arxiv.org/abs/2412.19437), [GitHub](https://github.com/deepseek-ai/DeepSeek-V3) | architecture, FP8, DualPipe, cost tables | Paper Result | Author Code / Official Repo | 技术报告可作为 MoE + FP8 + 并行系统协同设计案例 | 不证明所有数字已被第三方独立复现 |
-| FP8 训练需要配合 scale、通信、GEMM 和稳定性保护 | 同上 | FP8 framework and training system sections | System Throughput | Author Code / Official Repo | 低比特训练不是单独改 dtype，而是系统配方 | 不证明任意模型都可直接 FP8 预训练 |
-| 本站将其接到训练、量化、算子和世界模型系统成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可作为效率维度拆账模板 | 不能直接推出世界模型 dynamics 或 VLA 闭环收益 |
-
 ## 论文位置
 
 DeepSeek-V3 接在 DeepSeek-V2 之后。V2 已经验证了两条关键路线：一是 `MLA` 用低秩 latent 压缩 KV cache，二是 `DeepSeekMoE` 用细粒度专家和 shared expert 降低激活计算。V3 没有把重点放在重新发明 Transformer，而是把路线推到更大规模：

@@ -15,21 +15,6 @@ paper_topic: 扩散模型
     - 关键词：Distribution Matching Distillation、DMD、DMD2、SGTS、few-step diffusion、score matching、SNR subinterval、MoE、Wan2.2、Qwen-Image
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2510.27684](https://arxiv.org/abs/2510.27684) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Phased DMD: Few-step Distribution Matching Distillation via Score Matching within Subintervals` 的核心结果在论文设置下成立 | [arXiv:2510.27684](https://arxiv.org/abs/2510.27684) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对少步蒸馏机制和局部效率收益的介绍 | 不证明跨模型、跨视频分布、真实交互规划或第三方独立复现成立 |
-| 本页把少步扩散接回世界模型/rollout 成本 | 本站综合判断 | 采样步数、显存、延迟与失败边界 | Site Inference | Site Inference | 支撑“少步生成可降低 rollout/预览成本”的工程假设 | 不能证明视频自然度等同于 planning utility 或 closed-loop success |
-
-!!! warning "读数边界"
-    本页结果只按论文 benchmark、teacher/student 设置、采样步数和硬件条件解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现。
-
 这篇论文的核心价值是把 DMD 类少步蒸馏从“把整个反向过程一次性压到少数步”改成“沿 SNR 子区间逐段训练专家”。它要解决的不是普通采样器加速，而是一个更具体的问题：**DMD2 这类带随机梯度截断的少步蒸馏虽然省显存、稳定，但会把一部分训练迭代退化成近似一跳生成，进而损失图像多样性和视频运动强度。**
 
 Phased DMD 的答案是两件事：

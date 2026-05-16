@@ -29,18 +29,6 @@ paper_topic: 世界模型
 
 LingBot-World 很容易被读成“视频模型已经等于世界模型”。更稳的读法是把证据拆开：论文强证据主要来自系统设计、横向定位、训练 pipeline、可视化和交互 demo；它对“真实机器人策略收益”的证据较弱，因为它主要证明的是开放域交互世界模拟器路线，而不是闭环控制成功率。
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2601.20540](https://arxiv.org/abs/2601.20540) | Official Demo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
-
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| 视频基础模型可继续训练成开放域交互世界模拟器 | [arXiv:2601.20540](https://arxiv.org/abs/2601.20540), [GitHub](https://github.com/robbyant/lingbot-world) | Figure 4/5/6/12, official demos | Official Demo | Author Code / Official Repo | 视频底座、动作注入、因果化和长时记忆是可检查的工程路线 | 不证明真实机器人 closed-loop utility 或独立复现 |
-| 本站将其接到“视频底座 -> 因果 rollout -> 少步化”的世界模型效率链 | 本页与 [Claim Ledger](../../references/claim-ledger.md) | 工程归纳 | Site Inference | Site Inference | 可作为前沿路线和评测设计参考 | 不等于视频自然度可替代规划收益 |
-
 ```mermaid
 flowchart TD
     A["Video foundation model"] --> B["Long-horizon world training"]

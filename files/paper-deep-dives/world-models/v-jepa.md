@@ -16,18 +16,6 @@ paper_topic: 世界模型
 
 放在世界模型谱系里，V-JEPA 更适合被看作“表征型世界模型”的基础模块：它学习视频中的时空结构、运动线索和对象动态，但还没有动作条件、奖励预测、规划接口，也不会像 LingBot-World 那样直接生成可交互视频画面。
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | official paper / project page | Paper Only | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
-
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| V-JEPA 的 joint-embedding latent prediction 可减少像素重建冗余 | [OpenReview](https://openreview.net/forum?id=WFYbBOEOtv) | Figure 3, Table 1/4/5, frozen evaluation | Ablation | Paper Only | latent prediction 是高效视频表征预训练路线 | 原始 V-JEPA 不含 action、reward、done，不能直接等同于可规划世界模型 |
-| 本站将其接到 masked/JEPA 状态层和 V-JEPA 2-AC planning | 本页与 [Masked / JEPA](../../world-models/masked-jepa-and-latent-prediction.md) | 工程归纳 | Site Inference | Site Inference | 可作为世界模型前置状态层候选 | 不替代 closed-loop 评测 |
-
 ## 论文位置
 
 JEPA 的原则是：不要预测所有像素细节，而要预测抽象表示。V-JEPA 把这个原则落到视频上：

@@ -13,21 +13,6 @@ paper_topic: 世界模型
     - 关键词：生成式交互环境、视频世界模型、latent action、ST-transformer、MaskGIT、无动作标签训练
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2402.15391](https://arxiv.org/abs/2402.15391) | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Genie: Generative Interactive Environments` 的核心结果在论文设置下成立 | [arXiv:2402.15391](https://arxiv.org/abs/2402.15391) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 Genie 的关键点不是“视频生成质量更好”，而是它把一个更难的问题拆出来：**只有互联网视频，没有动作标签，也要学出可以被用户逐帧控制的潜在动作接口。**
 
 这使它在世界模型谱系里处在一个很特殊的位置。Dreamer 这类方法从环境交互轨迹中学习 \(p(z_{t+1}\mid z_t,a_t)\)，动作是天然给定的；普通视频模型学习 \(p(x_{t+1:T}\mid x_{\le t}, c)\)，通常没有逐帧控制。Genie 试图从纯视频里同时学出“世界如何动”和“什么动作造成这种变化”。

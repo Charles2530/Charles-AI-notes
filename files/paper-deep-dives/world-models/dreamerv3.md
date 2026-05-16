@@ -25,18 +25,6 @@ paper_topic: 世界模型
 | 主要风险 | imagined rollout 一旦模型偏差累积，policy 会利用模型漏洞；跨到开放视觉/机器人任务时还需要更强状态表示和失败回流 |
 | 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md)、[RSSM、Dreamer 与规划](../../world-models/rssm-dreamer-and-planning.md) |
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2301.04104](https://arxiv.org/abs/2301.04104) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
-
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| RSSM + imagined actor-critic 是样本效率强的 model-based RL 路线 | [arXiv:2301.04104](https://arxiv.org/abs/2301.04104), [GitHub](https://github.com/danijar/dreamerv3) | Figure 3(a)/(b), Figure 6, multi-domain benchmarks | Paper Result | Author Code / Official Repo | latent imagination 可减少真实环境试错并服务 policy learning | 不证明高分辨率视频模拟器或任意 VLA 都可直接规划 |
-| 本站将其作为世界模型高效训练的 latent dynamics 基线 | 本页与 [Claim Ledger](../../references/claim-ledger.md) | 工程归纳 | Site Inference | Site Inference | 可作为实验报告的 world model / policy learning 分离模板 | 不等于真实机器人长任务已复现 |
-
 ## 论文位置
 
 DreamerV3 和 [LingBot-World](lingbot-world.md)、[DreamZero](../embodied-ai/dreamzero.md) 的位置不同。LingBot-World 代表“视频生成模型路线”：先学会生成未来画面，再加入动作、交互、长记忆和实时化。DreamZero 则把视频基础模型改造成 joint video-action prediction，让 WAM 直接输出机器人动作。

@@ -15,21 +15,6 @@ paper_topic: 高效训练
     - 关键词：tensor model parallelism、intra-layer model parallelism、Megatron-LM、GPT-2、BERT、mixed precision、activation checkpointing、hybrid model and data parallelism、NCCL
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:1909.08053](https://arxiv.org/abs/1909.08053) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism` 的核心结果在论文设置下成立 | [arXiv:1909.08053](https://arxiv.org/abs/1909.08053) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 Megatron-LM 是很多后续大模型训练栈的起点之一。它讨论的问题非常朴素：当 Transformer 参数、激活和 Adam optimizer state 已经放不进单卡时，能不能不引入复杂 compiler，也不依赖 pipeline bubble，把一个 Transformer layer 内部的 GEMM 切到多张 GPU 上训练？
 
 它的答案就是后来被大家称作 **tensor parallelism** 的方案：在 MLP、attention 和词表 logits 上按张量维度切分，让每个 GPU 只持有一部分权重和计算，并把通信压缩到少数几个 `all-reduce`。论文用这个方法在 512 张 V100 上训练 8.3B GPT-2-like 模型和 3.9B BERT-like 模型，展示了模型并行和数据并行可以组合成可训练的大模型系统。

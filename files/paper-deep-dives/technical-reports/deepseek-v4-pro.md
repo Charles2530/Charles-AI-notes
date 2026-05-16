@@ -27,14 +27,6 @@ paper_topic: 技术报告
 !!! warning "阅读边界"
     这是一份模型技术报告，不是经过同行评审的论文。里面的闭源/开源模型对比、内部 benchmark、Codeforces 评分、agent harness 和生产系统细节都应按“报告自述结果”理解。它很适合学习大模型系统设计，但不应把每个数值当成独立复现实验结论。
 
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| mHC/CSA/HCA 与异构 KV cache 是百万上下文效率路线 | [DeepSeek_V4.pdf](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/main/DeepSeek_V4.pdf) | architecture, long-context, KV cache sections | Paper Result | Paper Only | 长上下文效率需要架构、训练和服务栈一起改 | 不证明所有 1M context 任务都可靠 |
-| FP4 QAT 和 on-policy distillation 服务低成本长上下文模型 | 同上 | FP4 QAT, OPD, agentic eval settings | System Throughput | Paper Only | 低比特后训练和推理路径可作为部署成本路线 | 不证明 FP4 对所有能力无损 |
-| 本站将其接到 KV、量化和 rollout 服务成本账 | 本页与 [Rollout 服务案例](../../world-models/rollout-serving-quantization-kernel-case.md) | 工程归纳 | Site Inference | Site Inference | 可启发 world model 长上下文状态压缩 | 不等于动作分叉和风险判断已保真 |
-
 ## 论文位置
 
 DeepSeek-V3/V3.2 已经把 DeepSeekMoE、Multi-Token Prediction、FP8 训练和 sparse attention 等设计推到很强的开源基线。DeepSeek-V4 的问题意识更靠近下一阶段：

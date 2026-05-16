@@ -30,18 +30,6 @@ paper_topic: 高效训练
 
 Attn-QAT 的证据强在“训练路径、kernel 路径和视频生成结果对齐”，但它证明的是 4-bit attention 可以被 QAT 修复，不是证明整套世界模型都能全 FP4。读这篇时要把 attention kernel 证据和端到端机器人/世界模型风险分开。
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2603.00040](https://arxiv.org/abs/2603.00040) | Paper Only | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
-
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| 4-bit Attention QAT 可在视频模型中配套训练和 kernel 路径 | [arXiv:2603.00040](https://arxiv.org/abs/2603.00040) | Wan 2.1 quality eval, kernel throughput figures | Ablation | Paper Only | 低比特 attention 可作为视频/world-model 训练系统候选 | 不证明动作头、risk head 或所有 connector 可 FP4 |
-| 本站将其接到低比特训练和 rollout 成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可启发敏感模块保高精的验收表 | 不等于闭环质量无损 |
-
 | 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
 | --- | --- | --- | --- | --- |
 | FP4 attention 不能只做 naive PTQ | Wan、Qwen、Llama 等实验中的质量退化 | Benchmark + Qualitative | 视频 DiT / world model attention 低比特化需要训练适配 | 不能说明所有模块都需要 QAT |

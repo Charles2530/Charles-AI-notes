@@ -33,18 +33,6 @@ MagiAttention 讨论的不是“attention 又快了一点”这种单点优化�
 
 MagiAttention 的证据主要是系统吞吐、负载均衡、通信冗余和长上下文 attention benchmark。它证明的是“异构 mask 下分布式 attention 可以更接近线性扩展”，不是证明某个 world model 训练目标更好。
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [MagiAttention docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按当前官方材料保守引用。 |
-
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| 异构 mask 长上下文 attention 可通过 AttnSlice、dispatch 和 overlap 降低系统成本 | [MagiAttention docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html), [GitHub](https://github.com/SandAI-org/MagiAttention) | Figure 1/3/4/6/9, official CP benchmark | System Throughput | Author Code / Official Repo | 长视频/VLA 训练要把 mask、通信和负载均衡同表报告 | 不证明 world model dynamics 或闭环策略更好 |
-| 本站将其接到世界模型轨迹 packing 与长上下文训练账 | 本页与 [Rollout 服务案例](../../world-models/rollout-serving-quantization-kernel-case.md) | 工程归纳 | Site Inference | Site Inference | 可作为复杂 mask 训练系统选型依据 | 不等于任意 workload 都值得上复杂调度 |
-
 | 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
 | --- | --- | --- | --- | --- |
 | 异构 mask 需要显式表达为可调度片段 | AttnSlice 抽象、mask pattern 图和 kernel 元数据 | System design | 视频/VLA 的 packed sequence、block-causal 和多段 memory 要先建模 mask | 不能说明所有训练都需要复杂 mask solver |

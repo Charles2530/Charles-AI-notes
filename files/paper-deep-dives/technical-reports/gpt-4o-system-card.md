@@ -22,14 +22,6 @@ paper_topic: 技术报告
 2. 语音不是简单的 ASR -> LLM -> TTS 级联，而是训练阶段和后训练阶段都把 audio modality 纳入模型行为对齐。
 3. 系统卡的重点不是 benchmark 排名，而是围绕 voice generation、speaker identification、sensitive trait attribution、disallowed audio content、Preparedness risks 和第三方 agentic assessment 建立评测与缓解链路。
 
-## Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| GPT-4o 是端到端多模态系统卡，重点在安全与部署评测 | [GPT-4o System Card](https://openai.com/index/gpt-4o-system-card/), [arXiv:2410.21276](https://arxiv.org/abs/2410.21276) | system card risk and evaluation sections | Paper Result | Paper Only | 多模态系统需要语音、图像、视频和 agentic 风险分开评估 | 不公开训练配方、参数规模或完整数据 |
-| 语音/多模态安全评测不能照搬文本模型评测 | 同上 | voice safety, preparedness, red teaming settings | Paper Result | Paper Only | 端到端模态引入新风险桶和缓解链路 | 不证明所有部署环境安全 |
-| 本站将其接到多模态评测与证据边界 | 本页与 [全站证据标准](../../references/evidence-and-reproducibility-standard.md) | 工程归纳 | Site Inference | Site Inference | 可作为 system card 读法模板 | 不等同于模型能力复现 |
-
 ## 论文位置
 
 GPT-4o System Card 适合和 GPT-4 / GPT-4V System Card、以及后来的 Gemini / Qwen Omni 类技术报告放在一起读：

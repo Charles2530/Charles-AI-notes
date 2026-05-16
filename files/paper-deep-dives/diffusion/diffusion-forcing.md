@@ -15,21 +15,6 @@ paper_topic: 扩散模型
     - 关键词：序列扩散、因果扩散、next-token prediction、full-sequence diffusion、视频预测、扩散规划、Monte Carlo Tree Guidance
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2407.01392](https://arxiv.org/abs/2407.01392) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion` 的核心结果在论文设置下成立 | [arXiv:2407.01392](https://arxiv.org/abs/2407.01392) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 这篇论文的核心不是再发明一个采样器，而是改了扩散模型处理序列的训练方式：**每个 token 都可以有自己的噪声水平**。这样一个因果序列模型既能像 next-token 模型一样逐步向前生成，又能像 full-sequence diffusion 一样对整段未来做 guidance。
 
 如果只用一句话概括：

@@ -15,21 +15,6 @@ paper_topic: 具身智能
     - 关键词：feed-forward 3D geometry、camera pose、depth map、point map、point tracking、DINOv2、DPT、alternating attention、multi-task learning
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2503.11651](https://arxiv.org/abs/2503.11651) | Author Code / Official Repo | 未见本站记录的第三方独立复现；按论文与作者代码/模型资源保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `VGGT: Visual Geometry Grounded Transformer` 的核心结果在论文设置下成立 | [arXiv:2503.11651](https://arxiv.org/abs/2503.11651) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 VGGT 放在具身智能专题里，是因为它把机器人视觉里几件经常分开的事接到同一个 feed-forward 模型里：**相机参数、深度图、point map 和 3D point tracks**。它不直接输出动作，但它能把多张 RGB 图像快速变成几何状态，为导航、抓取、视角规划、重建、VLA 状态编码和世界模型提供可消费的 3D 表示。
 
 这篇论文的核心不是“再做一个 SfM / MVS 模块”，而是把传统上依赖匹配、几何优化、bundle adjustment 和任务专用后处理的视觉几何问题，改写成一个大 Transformer 的多任务监督问题。输入可以是一张、几张，甚至上百张图；输出一次前向给出 cameras、depth maps、point maps 和 tracking features。

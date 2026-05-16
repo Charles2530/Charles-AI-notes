@@ -14,21 +14,6 @@ paper_topic: 世界模型
     - 关键词：Dreamer、RSSM、latent imagination、analytic value gradients、model-based RL、actor-critic
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:1912.01603](https://arxiv.org/abs/1912.01603) | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Dream to Control: Learning Behaviors by Latent Imagination` 的核心结果在论文设置下成立 | [arXiv:1912.01603](https://arxiv.org/abs/1912.01603) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
-
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
-
 这篇论文是从 [PlaNet](planet.md) 到 [DreamerV3](dreamerv3.md) 之间最关键的一步。PlaNet 已经证明了可以从像素交互轨迹中学习 RSSM world model，并在 latent space 中用 CEM 做在线规划。Dreamer 的核心变化是：不再每个环境 step 都做昂贵的在线搜索，而是在 learned world model 的 latent imagination 中训练 action model 和 value model。
 
 可以把 Dreamer 压缩成一句话：

@@ -16,21 +16,6 @@ paper_topic: 扩散模型
     - 关键词：one-step diffusion、distribution matching、fake score、real score、reverse KL、regression loss、Stable Diffusion distillation
 
 
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
-    | 2026-05-16 | [arXiv:2311.18828](https://arxiv.org/abs/2311.18828) | Paper Only | 未见本站第三方复现；按论文保守引用。 |
-
-### Evidence Snapshot
-
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `DMD` 核心结果在论文设置下成立 | [arXiv:2311.18828](https://arxiv.org/abs/2311.18828) | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑少步蒸馏机制和局部效率收益 | 不证明跨模型、真实规划或独立复现 |
-| 接回世界模型/rollout 成本 | 本站综合判断 | 采样步数、显存、延迟与失败边界 | Site Inference | Site Inference | 支撑 rollout/预览成本下降的工程假设 | 不能证明 planning utility 或闭环成功率 |
-
-!!! warning "读数边界"
-    只按论文 benchmark、teacher/student、采样步数和硬件条件解释；closed-loop、真实机器人、系统吞吐和独立复现要另验。
-
 这篇论文是后来 DMD2、CausVid、Phased DMD 一系列少步扩散蒸馏方法的基础。它的核心思想很直接：**不要强迫学生模型逐步复刻 teacher 的采样轨迹，而是让学生的一步输出分布看起来像 teacher 的多步输出分布。**
 
 论文把这个目标落成两个损失：
