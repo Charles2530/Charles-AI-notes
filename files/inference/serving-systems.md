@@ -1,273 +1,236 @@
 # 推理服务系统
 
-训练决定了模型“会不会”，推理系统决定了模型“能不能以可接受的成本稳定地服务用户”。  
-这一页重点不是模型原理，而是从系统角度解释：为什么同一个模型，在不同服务栈上，成本和延迟可能差一个数量级。
+这页是推理章节的第一课。目标不是让你记住所有 serving 框架名字，而是让你能跟着一次请求，分清它什么时候在排队、什么时候在 prefill、什么时候在 decode、什么时候被 KV cache 和调度拖住。
 
 !!! note "初学者先抓住"
-    推理系统的核心不是“启动模型”。它要管理请求排队、prefill、decode、KV cache、batching、路由和尾延迟。用户感受到的慢，可能来自模型，也可能来自队列、缓存或调度。
+    训练决定模型“会不会”，推理服务系统决定模型“能不能稳定、便宜、低延迟地服务用户”。线上慢不一定是模型能力问题，可能是队列、长上下文、KV cache、batching、路由、工具或后处理中的任何一段出了问题。
 
 !!! example "有趣例子：餐厅厨房"
-    Prefill 像一次性备菜：订单越复杂，备菜越久；Decode 像一道道出菜：每一步都要等上一道完成。厨房如果只追求一次做很多单，可能吞吐高但客人等第一道菜更久，这就是 TTFT 和吞吐的拉扯。
-
-## 一、先建立推理服务系统的基本心智模型
-
-### 1. 端到端时延分解
-
-对自回归模型，一次请求总时延可粗略写成：
-
-\[
-T_{\text{req}} = T_{\text{queue}} + T_{\text{prefill}} + T_{\text{decode}} + T_{\text{post}}
-\]
-
-进一步地，若输出长度为 \(n\)，则 decode 阶段可近似展开为：
-
-\[
-T_{\text{decode}} \approx \sum_{i=1}^{n} T_{\text{step}}^{(i)}
-\]
-
-其中：
-
-\(T_{\text{queue}}\) 是排队等待 GPU 资源，受并发、调度和优先级影响；\(T_{\text{prefill}}\) 是把输入上下文一次性编码进 KV cache，长上下文场景最容易变贵；\(T_{\text{decode}}\) 是逐 token 生成，输出越长越接近线性累积；\(T_{\text{post}}\) 则是反序列化、过滤、工具编排等后处理，常被忽略但仍会进入端到端延迟。
-
-#### 一个直观例子：长文档问答
-
-用户只问一句“总结这份 80 页 PDF 的关键风险”。  
-输出可能只有 200 token，但输入上下文很长。  
-此时最贵的往往不是 decode，而是 prefill，因为模型要先把整份文档过一遍并写入 KV cache。
-
-### 2. Prefill 和 Decode 的计算特征完全不同
-
-Prefill 的输入 token 可以一次性并行处理，大矩阵乘占主导，因此更容易吃满算力，也更依赖硬件 tile、dtype 和 GEMM kernel。Decode 则相反：每步只生成一个或少量 token，GPU 容易吃不满，还要反复读取 KV cache 和权重，所以更受显存带宽、cache 分配和调度策略影响。
-
-**这导致一个很重要的工程事实**：  
-**同一套优化不一定同时优化 prefill 和 decode。**
-
-例如：
-
-大 batch prefill 通常能提高矩阵乘利用率、摊薄输入编码成本；但过大的 decode batch 可能让新请求等待更久，反而拉高首 token 延迟。
-
-### 3. 吞吐与 QPS 的基础公式
-
-若单机 token 生成能力为 \(R_{\text{tok}}\) token/s，平均每个请求输出 \(n\) 个 token，则理想吞吐上界近似为：
-
-\[
-\text{QPS}_{\max} \lesssim \frac{R_{\text{tok}}}{n}
-\]
-
-若把输入长度 \(m\) 也计入，可以写成更现实的资源消耗近似：
-
-\[
-C_{\text{req}} \approx \alpha m + \beta n
-\]
-
-其中：
-
-\(\alpha\) 表示 prefill 单 token 成本，和输入长度、attention 实现、上下文组织强相关；\(\beta\) 表示 decode 单 token 成本，和 KV cache 读写、batching、采样逻辑强相关。
-
-在长上下文场景，\(\alpha m\) 往往主导；在长回答场景，\(\beta n\) 更关键。
-
-### 4. 推理服务系统最常见的瓶颈不是算力，而是调度
-
-很多团队一开始以为“换更大的 GPU”就能解决问题，结果发现真正拖垮系统的是调度：短请求和超长请求混跑时资源占用完全不同，长上下文 prefill 会拖高短请求尾延迟，decode 小步运行容易造成 GPU 气泡，KV cache 分配和回收碎片化还会让显存容量被悄悄吃掉。
-
-#### 例子：企业知识库问答
-
-白天高峰期会同时混入短闲聊、普通问答和文档总结：它们可能分别是几十 token、几千 token 和几万 token 的请求。若全部混在一个队列里，长请求会把短请求的 p95 延迟拖得很高。这时问题不再是“模型慢”，而是“调度策略错误”。
-
-## 二、核心执行机制：批处理、并行与 KV Cache
-
-### 5. Continuous Batching 为什么有效
-
-**传统静态 batch 的问题是**：要等整批请求都准备好再一起跑。  
-而连续批处理允许在 decode 过程中动态插入新请求。粗略理解为，每个解码步在处理一个随时间变化的活动集合 \(\mathcal{B}_t\)：
-
-\[
-\mathcal{B}_{t+1} = (\mathcal{B}_t \setminus \mathcal{F}_t)\cup \mathcal{A}_t
-\]
-
-其中：
-
-\(\mathcal{F}_t\) 是在时刻 \(t\) 完成的请求，\(\mathcal{A}_t\) 是在时刻 \(t\) 新加入的请求。
-
-这样做的好处是 decode 过程中也能不断补入新请求，GPU 更少空转；短请求不必等待固定 batch 凑齐，也更容易插入活动批次，减少被长任务拖住的时间。
-
-#### 例子：文档问答服务
-
-若不做 continuous batching，GPU 常会在一批请求 decode 完之前闲等下一批。  
-做了之后，新请求可在旧请求之间穿插进入，整体利用率会明显上升。
-
-### 6. 并行策略：TP、PP、DP 各解决什么问题
-
-#### 6.1 Tensor Parallel
-
-Tensor Parallel 把大矩阵切到多卡上：
-
-\[
-Y = XW = \sum_{k=1}^{K} XW_k
-\]
-
-它适合权重或激活超过单卡容量、必须把层内矩阵拆到多卡同时执行的场景。代价是每层都要通信，切分后的中间结果需要 all-reduce 或 gather；在小 batch decode 下，单步计算太少，通信延迟更难被掩盖。
-
-#### 6.2 Pipeline Parallel
-
-把模型按层切成多段，形成流水线。  
-适合超大模型，但会引入 pipeline bubble。若流水线分为 \(S\) 段、微批数为 \(M\)，一个经典近似是：
-
-\[
-\text{bubble fraction} \approx \frac{S-1}{M+S-1}
-\]
-
-微批越少，bubble 越严重。  
-这也是为什么 pipeline 在低并发在线服务里不总是理想。
-
-#### 6.3 Data Parallel
-
-**多副本各自处理请求**：
-
-\[
-\text{capacity} \propto N_{\text{replica}}
-\]
-
-它最容易扩展服务吞吐，但前提是单卡或单节点已经能装下模型。
-
-### 7. KV Cache 才是大模型在线服务的“第二套权重”
-
-在长上下文场景里，KV cache 可能比你想象中更贵。  
-**粗略估算**：
-
-\[
-\text{KV bytes} \approx 2 \cdot L \cdot T \cdot H \cdot d \cdot b
-\]
-
-其中：
-
-\(L\) 是层数，\(T\) 是上下文长度，\(H\) 是注意力头数或 KV 头数，\(d\) 是每头维度，\(b\) 是每个元素的字节数。长上下文会线性放大 KV 占用，GQA/MQA、FP8 或 KV 量化会改变这个估算。
-
-前面的 2 表示 key 和 value 各一份。
-
-#### 一个例子：32k 上下文聊天
-
-模型权重本身可能已经量化到能装进单机，但一旦几十个用户同时跑 32k context，KV cache 会迅速吃满显存。  
-这就是为什么很多推理服务系统表面上看是“推理”，实际上首先是在管理缓存。
-
-### 8. 为什么请求分层和路由很重要
-
-设请求特征为 \(\phi(x)\)，模型池为 \(\mathcal{M}\)。  
-**路由器可以做如下选择**：
-
-\[
-m^\star = \arg\min_{m\in\mathcal{M}} \lambda_1 \cdot \text{cost}(m) + \lambda_2 \cdot \text{latency}(m) - \lambda_3 \cdot \text{quality}(m, x)
-\]
-
-这意味着简单问答可以走小模型，长文档总结可以走大上下文模型，高价值请求可以走更高质量但更贵的路由。路由不是为了炫技，而是把质量、成本和延迟按业务价值分层。
-
-#### 例子：客服网关
-
-“你好，在吗”这种请求没必要占用 70B 模型。  
-但“根据这 3 份合同和 2 份邮件，判断违约责任归属”显然不能走同一条链路。
-
-### 9. 首 token 延迟和长尾延迟要分开看
-
-很多系统只盯平均吞吐，忽视了用户真正感受到的是 TTFT、TPOT 和 P95 / P99 tail latency。TTFT 是用户看到第一段输出前等待多久，TPOT 是生成过程中每个 token 的平均间隔，P95 / P99 则反映最慢一批请求的体验，决定线上稳定性。
-
-如果首 token 很慢，用户会觉得系统“卡住了”；  
-如果长尾很高，用户会随机遇到糟糕体验。
-
-### 10. 四个真实部署场景
-
-#### 10.1 对话助手
-
-对话助手最看重低 TTFT、中短回答稳定和高并发排队可控。用户要尽快看到第一段输出，常见聊天不应被少量长请求拖慢，高峰期也要限制队列膨胀和尾延迟。策略上通常优先 continuous batching，提高 decode 阶段利用率，同时减少固定 batch 等待；还要控制 prompt 长度，避免上下文随会话无节制增长；超长上下文最好异步或分层处理，把慢路径和普通对话路径隔离。
-
-#### 10.2 RAG 文档问答
-
-RAG 文档问答的瓶颈常在 prefill。召回片段越长，进入模型前的上下文编码越贵；检索质量也会直接影响成本，低质量召回会把无关文本塞进 prompt，既慢又误导。更稳的做法是压缩召回片段，只保留回答所需证据；用 chunk rerank 把最相关证据排到前面；超长任务则拆成多轮总结，把一次超大 prefill 拆成可控的阶段任务。
-
-#### 10.3 Agent 工具调用
-
-Agent 工具调用的请求数不一定大，但链路通常很长，一次任务可能包含多轮模型调用和工具调用。模型推理与工具等待交替出现，端到端延迟不仅来自 GPU，也来自外部服务。因此只加速模型不一定缩短整条 agent 任务，还要优化工具并发、缓存和中间状态复用，减少重复检索、重复 OCR 和重复上下文拼装。
-
-#### 10.4 多模态服务
-
-多模态服务还要处理图像编码的额外开销。视觉前端会带来独立的计算和排队成本，文本 token 与视觉 token 混合后，上下文长度和 KV cache 预算要同时考虑两类 token。工程上最好区分视觉前端和语言后端资源池，避免图像编码把语言 decode 资源拖住；高分辨率图像也应分级处理，先低成本判断是否需要裁剪、放大或多区域读取。
-
-### 11. 常见失败模式
-
-#### 11.1 Head-of-line blocking
-
-一个超长请求堵在前面，后面一串短请求全被拖慢。解决思路通常是分队列、限流和最大上下文长度隔离：把短请求、长请求和后台任务拆到不同执行路径，防止少量超长或高成本请求挤垮普通流量，并让极长上下文走专门资源池或异步路径。
-
-#### 11.2 显存没爆，但性能突然崩
-
-这常常是 KV cache 碎片、调度抖动、通信瓶颈或 CPU/GPU 数据搬运出了问题。
-
-#### 11.3 GPU 利用率很高，但用户仍然觉得慢
-
-因为高 GPU utilization 不代表低用户时延。  
-系统可能只是把很多请求堆在一起“忙碌地慢”，而不是“高效地快”。
-
-#### 11.4 指标只看平均值
-
-平均时延漂亮，但 P99 巨差，会在生产里持续伤害体验。  
-推理服务系统必须默认关注 tail latency。
-
-### 12. 工程上的最小闭环
-
-一个像样的推理服务系统，至少应该持续观测请求数、拒绝率、排队时长，TTFT、TPOT、P50/P95/P99，GPU 利用率、显存占用、KV cache 命中与回收，各长度区间请求分布，以及超时、OOM、工具失败、格式错误等错误类型分布。
-
-没有这层观测，所有“优化”都很容易变成拍脑袋。
-
-### 13. 核心判断
-
-推理服务系统的核心，不是让模型跑起来，而是让它在真实流量下表现稳定。  
-真正决定体验的，往往不是某个 kernel 再快 8%，而是负载拆分、批处理策略、KV cache 管理和请求路由：系统是否区分 prefill 和 decode 两种完全不同的执行画像，是否用好了 continuous batching 而不是固定 batch 硬等，是否把 cache 当成一级资源而不是显存附属品，以及是否让不同长度、价值和任务类型的请求走不同服务路径。
-
-如果把训练看作“造一台引擎”，那推理系统就是整辆车的变速箱、冷却系统和道路调度。  
-引擎再强，没有推理服务系统，最终也只会在实验室里跑得漂亮。
-
-## 三、资源治理：把真实流量接住
-
-在线推理服务首先是一个排队系统，而不是一次孤立的模型调用。更准确的抽象是：
-
-\[
-\text{arrival} \rightarrow \text{queue} \rightarrow \text{scheduler} \rightarrow \text{prefill/decode workers} \rightarrow \text{post-processing}.
-\]
-
-很多“模型太慢”的问题，其实来自请求分布和调度策略：瞬时流量波峰会挤满队列，长请求会拖住短请求，某类高价值用户可能触发更昂贵的路由，KV cache 碎片也会让同样流量下的有效容量下降。因此优化前先看请求分布和排队形态，比直接盯单请求 benchmark 更可靠。
-
-推理平台管理的资源也不只有 GPU 算力。GPU compute、显存与 KV cache、CPU 预处理、网络传输、检索/OCR/数据库/工具 API 配额都会进入关键路径。在 RAG 或 agent 场景里，外部依赖经常是隐形瓶颈：GPU 看起来不忙，模型日志也没报错，但用户体感仍然很慢。根因可能只是检索慢、OCR 慢、工具接口抖动，或者回退路径比主路径还慢。
-
-成熟系统通常会显式区分 prefill 和 decode。Prefill 更像一次性吃下大段上下文的重计算节点，受 batch 合并、attention kernel 和 prefix 复用影响大；decode 更像高频、小步、持续调度的服务循环，受 KV 布局、continuous batching 和尾延迟抖动影响更大。长文档、PDF 问答和复杂 RAG 常常需要把 prefill-heavy 请求和普通对话 decode 隔离，否则一个巨长输入就会把短对话体验拖坏。
-
-Admission control、分池、fallback 和多租户隔离应该被当成一等设计对象。准入控制不是简单“拒绝用户”，而是把不可控拥塞变成可控服务策略：简单请求及时返回，极长任务转异步，高价值流量优先，昂贵任务被明确限额。分池也不是越多越好，它会带来资源碎片和路由复杂度；但当短问答、长上下文、多模态、工具链和后台批任务混在一起时，完全不分池通常更危险。
-
-观测系统要把“请求、模型、资源、业务”串起来。只看 GPU utilization 或 API 平均时延都不够；真正需要同时看到租户、任务类型、输入长度、附件、路由模型、量化版本、KV cache、外部依赖、任务完成率和用户反馈 proxy。否则一个优化可能在资源层看起来更快，却在业务层让工具调用失败率升高。
-
-容量规划也不能围绕平均值。线上系统常常死于少量极端但昂贵的请求：长文档、图片附件、复杂 agent、多轮工具链和大模型升级请求一旦同时出现，就会把 queue、KV 和外部依赖一起推到极限。更稳的容量规划要围绕峰值流量、长度分布变化、最坏桶尾延迟和故障演练来做。
-
-## 四、平台化设计：从单服务到可运营系统
-
-把推理系统画清楚，最好从一次请求的生命周期入手：入口接入、请求归类、admission control、预处理、模型路由、prefill/decode、工具调用、后处理、观测记录。很多“模型慢”的抱怨，最后查出来其实是 tokenizer、OCR、路由、工具调用或 fallback 语义出了问题。生命周期链画不完整，团队就容易在错误位置优化。
-
-平台化之后，几个判断尤其重要。请求是否已按长度、模态和价值分层；prefill 与 decode 是否被分别观测和治理；fallback 是否平时就有少量真实流量演练；失败域是否能定位到入口、路由、执行、缓存或外部依赖；trace 是否能一路贯通到业务指标。这些问题比“某个 kernel 又快了多少”更能决定系统能不能长期运营。
-
-## 快速代码示例
-
-```python
-from fastapi import FastAPI  # 提供 HTTP 服务框架
-from vllm import LLM, SamplingParams  # 引入 vLLM 推理引擎和采样参数
-
-app = FastAPI()  # 创建 FastAPI 应用实例
-llm = LLM(model="Qwen/Qwen2.5-7B-Instruct", max_model_len=8192)  # 初始化模型并限制最大上下文长度
-
-@app.post("/generate")  # 注册文本生成接口
-def generate(prompt: str):  # 接收用户 prompt
-    out = llm.generate([prompt], SamplingParams(max_tokens=128, temperature=0.2))  # 调用 vLLM 生成短回复
-    return {"text": out[0].outputs[0].text}  # 返回第一条生成文本
+    用户点菜后，先排队，再备菜，再一道道出菜。Prefill 像备菜：订单越复杂越慢；decode 像一道道出菜：每一步都依赖上一口。厨房如果为了吞吐把太多订单硬塞在一起，整体出菜量可能更高，但某位客人的第一道菜会更晚到。
+
+## 1. 一次请求到底经历什么
+
+一个最小推理服务可以画成：
+
+```text
+client
+  -> gateway / auth / quota
+  -> scheduler queue
+  -> prefill worker
+  -> KV cache manager
+  -> decode loop
+  -> post-process / safety / tool
+  -> response stream
+  -> trace and metrics
 ```
 
-这段代码展示了一个最小服务化形态：`FastAPI` 负责 HTTP 接口，`vLLM` 负责高吞吐生成，采样参数在请求入口统一配置。后续通常再加队列、鉴权、限流和观测指标接入，形成可运维服务。
+每一段都可能成为瓶颈：
 
-## 小结
+| 阶段 | 做什么 | 用户会怎么感受到 |
+| --- | --- | --- |
+| gateway | 鉴权、限流、解析请求 | 请求还没进模型就变慢或被拒 |
+| queue | 等 GPU、等 batch、等优先级 | 首 token 迟迟不来 |
+| prefill | 一次性处理输入上下文 | 长文档、长历史特别慢 |
+| KV cache | 保存历史 token 的 K/V | 并发一高显存吃紧 |
+| decode | 逐 token 生成输出 | 流式输出卡顿、TPOT 变大 |
+| post | detokenize、过滤、工具编排 | 模型算完后仍然返回慢 |
+| trace | 记录阶段耗时和质量指标 | 没有它就很难排障 |
 
-推理服务系统的核心，不是“让模型跑起来”，而是让**请求、队列、缓存、模型、工具和降级策略**共同组成一套稳定的生产机制。谁能把这些层串成一张有失败域、有回退、有容量边界的系统图，谁才能把模型能力真正稳定地交付给用户。
+## 2. 端到端时延公式
+
+一次请求总时延可以先写成：
+
+\[
+T_{\text{req}}
+=
+T_{\text{queue}}
++ T_{\text{prefill}}
++ T_{\text{decode}}
++ T_{\text{post}}
++ T_{\text{network}}
+\]
+
+| 符号 | 中文含义 | 常用指标 | 初学者判断 |
+| --- | --- | --- | --- |
+| \(T_{\text{req}}\) | 请求总耗时 | end-to-end latency | 用户完整等待时间 |
+| \(T_{\text{queue}}\) | 排队耗时 | queue time、admission wait | GPU 还没开始为它算 |
+| \(T_{\text{prefill}}\) | 输入编码耗时 | prefill time、prefill tokens/s | 和输入长度强相关 |
+| \(T_{\text{decode}}\) | 输出生成耗时 | TPOT、decode tokens/s | 和输出长度、KV 读写强相关 |
+| \(T_{\text{post}}\) | 后处理耗时 | post latency | 工具、过滤、格式化也会慢 |
+| \(T_{\text{network}}\) | 网络耗时 | client/server transfer | 流式传输时也要算 |
+
+TTFT 主要由 \(T_{\text{queue}}\)、\(T_{\text{prefill}}\) 和首个 decode step 决定：
+
+\[
+\text{TTFT}
+\approx
+T_{\text{queue}}
++ T_{\text{prefill}}
++ T_{\text{first-step}}
+\]
+
+TPOT 则更接近稳定 decode 阶段每个输出 token 的间隔：
+
+\[
+\text{TPOT}
+\approx
+\frac{T_{\text{decode}}}{L_{\text{out}}}
+\]
+
+这里 \(L_{\text{out}}\) 是输出 token 数。这个近似适合先估数量级；真实系统中，decode batch 大小变化、KV page 访问、投机解码验证和采样参数都会让每步不同。
+
+!!! warning "常见误解"
+    TTFT 好不代表整段回答流畅，TPOT 好也不代表用户马上看到首 token。聊天产品通常先看 TTFT，长生成和代码补全更关心 TPOT，多步 agent 还要看整条任务完成时间。
+
+## 3. Prefill：首 token 前最容易被忽略的成本
+
+Prefill 做的是：把输入 token 一次性送进模型，计算每层 hidden states，同时为后续 decode 写好 KV cache。输入越长，prefill 越重。
+
+粗略地，可以把 prefill 成本写成：
+
+\[
+T_{\text{prefill}}
+\approx
+f(L_{\text{in}}, B_{\text{prefill}}, \text{attention kernel}, \text{cache hit})
+\]
+
+| 符号 | 含义 |
+| --- | --- |
+| \(L_{\text{in}}\) | 输入 token 数，包括系统 prompt、用户问题、RAG 片段、历史对话 |
+| \(B_{\text{prefill}}\) | prefill 阶段合批大小 |
+| attention kernel | 用什么 attention 实现，如 FlashAttention、PagedAttention 相关路径 |
+| cache hit | prefix cache 是否命中，命中后可少算公共前缀 |
+
+长文档问答的典型陷阱是：用户问题只有一句，但 RAG 或附件塞进了几万 token。输出也许只有 200 token，最贵却是首 token 前的 prefill。
+
+## 4. Decode：为什么逐 token 生成更像服务循环
+
+Decode 每一步只新增一个或少量 token，但要反复读取历史 KV cache 和模型权重。若输出长度为 \(L_{\text{out}}\)，可以写成：
+
+\[
+T_{\text{decode}}
+\approx
+\sum_{i=1}^{L_{\text{out}}}
+T_{\text{step}}^{(i)}
+\]
+
+每个 \(T_{\text{step}}^{(i)}\) 会受这些因素影响：
+
+1. 当前活跃请求数；
+2. 每个请求的上下文长度；
+3. KV cache 是否连续、是否 page miss；
+4. batch 中请求的长度和采样参数是否相近；
+5. logits 后处理、采样、结构化输出约束；
+6. 是否启用 speculative decoding。
+
+训练时 batch 大、shape 稳，GEMM 容易吃满 GPU；在线 decode 则是动态小步循环，shape 碎、请求进出频繁、KV 访存重，所以经常被内存带宽和调度限制。
+
+## 5. KV Cache：服务系统的隐藏容量上限
+
+KV cache 的数量级公式是：
+
+\[
+M_{\text{KV}}
+\approx
+2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
+\]
+
+| 符号 | 含义 | 为什么重要 |
+| --- | --- | --- |
+| \(M_{\text{KV}}\) | KV cache 显存占用 | 决定并发和上下文上限 |
+| \(2\) | K 和 V 两份缓存 | attention 需要 key/value |
+| \(L\) | 层数 | 模型越深 KV 越大 |
+| \(B\) | 活跃请求数 | 并发越高 KV 越大 |
+| \(T\) | 上下文长度 | 长上下文线性放大 KV |
+| \(H_{\text{kv}}\) | KV head 数 | GQA/MQA 可以减少它 |
+| \(D_{\text{head}}\) | 每个 head 维度 | 由模型结构决定 |
+| \(b\) | 每个元素字节数 | BF16=2，INT8=1 |
+
+例子：32 层、batch 4、context 32k、8 个 KV heads、head dim 128、BF16：
+
+\[
+2\times32\times4\times32768\times8\times128\times2
+\approx 16\text{GiB}
+\]
+
+如果 KV heads 从 8 变成 32，显存直接变成约 4 倍。若 context 从 32k 变成 128k，也再变 4 倍。这就是为什么“支持长上下文”必须同时说明 batch、KV 精度、KV head 结构和服务 SLO。
+
+## 6. Continuous Batching：吞吐和尾延迟的拉扯
+
+静态 batch 要等一批请求凑齐再跑；continuous batching 允许 decode 过程中动态加入和移除请求：
+
+\[
+\mathcal{B}_{t+1}
+=
+(\mathcal{B}_t \setminus \mathcal{F}_t)
+\cup
+\mathcal{A}_t
+\]
+
+| 符号 | 含义 |
+| --- | --- |
+| \(\mathcal{B}_t\) | 第 \(t\) 个 decode step 的活跃请求集合 |
+| \(\mathcal{F}_t\) | 这一轮结束后完成的请求集合 |
+| \(\mathcal{A}_t\) | 新加入的请求集合 |
+
+它的好处是 GPU 不容易空转；代价是调度更复杂，长短请求混在一起时，短请求可能等长请求 prefill 或大 batch 窗口，导致 TTFT 和 P99 上升。
+
+!!! example "排查案例：吞吐上去了，用户更慢了"
+    某聊天服务把 batch window 拉大后，tokens/s 提升 20%，但短问答 TTFT P95 变差。原因不是模型变慢，而是短请求为了合批在 queue 里等更久。修复通常是按输入长度和 SLO 分队列：短交互走低等待窗口，长文档走吞吐池。
+
+## 7. 路由：不是所有请求都该走最大模型
+
+路由可以按请求特征 \(\phi(x)\) 选择模型或链路：
+
+\[
+m^\star
+=
+\arg\min_{m\in\mathcal{M}}
+\left(
+\lambda_1 \text{cost}(m)
++ \lambda_2 \text{latency}(m)
+- \lambda_3 \text{quality}(m,x)
+\right)
+\]
+
+| 符号 | 含义 |
+| --- | --- |
+| \(x\) | 当前请求 |
+| \(\phi(x)\) | 请求特征，如长度、任务类型、用户等级、风险等级 |
+| \(\mathcal{M}\) | 可选模型或服务链路集合 |
+| \(m^\star\) | 被选中的模型或链路 |
+| \(\lambda_1,\lambda_2,\lambda_3\) | 成本、延迟、质量的业务权重 |
+
+实际系统中，闲聊、长文档、代码、工具 agent、多模态、高风险任务不应该默认共用一条路径。路由做得好，可以省成本；路由做坏，会让复杂任务走弱模型，或者让简单任务占用昂贵资源。
+
+## 8. 最小观测闭环
+
+一个新手容易低估的事实是：没有分阶段 trace，推理优化几乎只能猜。
+
+最小观测集应包括：
+
+| 类别 | 必看指标 |
+| --- | --- |
+| 请求形态 | 输入长度、输出长度、任务类型、模型路由 |
+| 队列 | queue time、admission reject、priority |
+| prefill | prefill time、prefill tokens/s、prefix hit |
+| decode | TPOT、decode batch、tokens/s、sampling config |
+| KV | KV GiB、page usage、eviction、fragmentation |
+| 尾延迟 | P50/P95/P99 TTFT、TPOT、end-to-end latency |
+| 质量 | 任务成功率、引用正确率、格式错误、fallback |
+| 成本 | 每请求成本、每 token 成本、每成功任务成本 |
+
+## 9. 四个典型请求桶
+
+| 请求桶 | 主瓶颈 | 常见策略 |
+| --- | --- | --- |
+| 短聊天 | queue、首步 decode、调度等待 | 小 batch 等待窗口、短请求池、低 TTFT SLO |
+| 长文档问答 | prefill、KV、检索噪声 | RAG 裁剪、prefix cache、分离 prefill、上下文压缩 |
+| 长输出生成 | decode、KV 生命周期 | speculative decoding、输出长度控制、低 TPOT 路径 |
+| agent / 工具链 | 多轮调用、外部工具、状态膨胀 | 工具缓存、状态结构化、端到端 trace、回放评测 |
+
+同一个模型，在这四个请求桶里的瓶颈可能完全不同。推理服务系统的第一原则，就是不要用一个平均 tokens/s 代表所有用户体验。
+
+## 10. 小结
+
+推理服务系统的基本功，是把“模型慢”拆成具体责任层：排队慢、prefill 慢、decode 慢、KV 爆了、batching 策略伤害尾延迟、路由不合理、工具或后处理拖慢。先画请求生命周期，再看 TTFT、TPOT、KV、P95/P99 和质量指标，最后才决定是换 runtime、改 batch、压上下文、做量化，还是接入 speculative decoding。

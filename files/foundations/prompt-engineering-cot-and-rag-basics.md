@@ -186,6 +186,16 @@ ReAct 适合开放域问答、数据查询、代码调试、网页操作和多�
 
 RAG（Retrieval-Augmented Generation）解决的是模型知识不够新、不够私有、不可追溯的问题。它先从外部知识库检索证据，再把证据放进上下文，让模型基于证据回答。
 
+![RAG overview 原论文图](../assets/images/paper-figures/foundations/rag-figure-1-overview.png){ width="920" }
+
+<small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原论文图意：RAG 把 query encoder、document index 和 seq2seq generator 接起来，对输入问题先检索 top-K 文档，再让生成器基于不同文档生成并边缘化预测。</small>
+
+!!! note "论文图解卡：RAG 图不要只看生成器"
+    **先看哪里**：从左侧 query 进入 query encoder，看它如何到 document index 里检索，再看右侧 generator 如何用检索文档生成答案。  
+    **图中模块**：retriever 是外部记忆入口，document index 是非参数知识库，generator 是参数模型。  
+    **对应公式**：可以把 retrieved document \(z\) 当成 latent variable，模型在 top-K 文档上综合生成概率。  
+    **容易误读**：RAG 不是“把资料全部塞进 prompt”。关键是检索、排序、上下文装配和引用边界是否可靠。
+
 一个标准 RAG 流程是：
 
 ```text

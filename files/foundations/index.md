@@ -1,188 +1,161 @@
 # AI 基础知识地图
 
-这一组页面是后续专题的公共底座。它不追求把数学、深度学习和系统工程全部讲完，而是把阅读扩散模型、VLM、VLA、量化、训练、推理和算子时最常反复出现的概念提前讲清。
+这一组页面是本站后续专题的公共地基。它不要求你先学完整本数学教材，而是帮你把论文和工程文档里最常见的概念按顺序串起来：
 
-!!! note "在主线里的位置"
-    基础知识不是世界模型高效训练的终点，而是全站共用语言。读这里时优先抓住张量、token、attention、概率、优化、显存和 runtime 如何支撑后续的状态表示、动作条件、长序列训练与低比特系统；不必把它当成从头刷完的教材。
+```text
+数据 -> 张量 / Token -> 模型模块 -> Loss -> 梯度 -> Runtime -> 评测证据
+```
+
+如果你刚开始读 AI 论文，先别急着背模型名字。先弄清数据怎么进模型、模型每一步在算什么、训练信号从哪里来、最后用什么证据证明它真的变好。
+
+!!! note "先读哪几页"
+    推荐顺序是：本页 -> [符号与最小数学地图](symbols-and-minimal-math.md) -> [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) -> [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md) -> [Transformer 输入与注意力](transformer-attention-and-tokenization.md) -> [概率与潜变量模型](probability-latent-variables-and-generative-models.md) -> [优化与训练入门](optimization-and-training-basics.md)。读完这些，再按兴趣补多模态、MoE、Mamba、显存和评测。
+
+## 1. 一张图先建立全局感
 
 ![Transformer architecture 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="500" .atlas-figure-tall }
 
 <small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原论文图意：展示 Transformer encoder-decoder 的整体结构，包括 token embedding、positional encoding、multi-head attention、feed-forward network、residual connection、normalization 和最终 softmax。</small>
 
-!!! note "图解：基础知识最好按层读"
-    这张 Transformer 原图几乎串起了后续所有基础概念：输入先变成 token embedding，再加入位置编码；attention 负责跨 token 信息交互；feed-forward/MLP 负责逐 token 非线性变换；残差和归一化保证深层训练稳定；最后通过 softmax 形成概率输出。遇到新名词时，先判断它属于输入表示、模型结构、训练目标还是运行系统，概念就不容易混在一起。
+!!! note "论文图解卡：这张 Transformer 图怎么读"
+    **先看哪里**：从底部的 input/output embedding 看起，再沿着 attention、feed-forward、residual、normalization 往上走。  
+    **图中模块**：embedding 把 token 变成向量；attention 让 token 互相读取信息；feed-forward/MLP 逐 token 做非线性变换；residual 和 norm 让深层训练更稳；softmax 把输出变成概率。  
+    **对应基础页**：token 和 attention 看 Transformer 页，MLP 看线性层页，residual/norm 看稳定性页，softmax 和概率看符号页与概率页。  
+    **容易误读**：这张图是结构图，不是显存图。真实系统还要考虑 KV cache、dtype、kernel、batch 和 runtime。
 
-!!! tip "这一组怎么读"
-    基础知识不是考试大纲，先按“够用即止”读。每页只需要抓住三件事：这个概念解决什么问题，它在后续哪个专题会反复出现，遇到错误时它能帮你排查哪一类原因。公式和实现细节可以第二遍再补。
+## 2. 基础主线：从数据到证据
 
-!!! tip "如果目标是读论文专题"
-    先看 [论文专题前置知识地图](paper-reading-prerequisites.md)。那一页把高效训练、推理、扩散、具身、世界模型和技术报告需要的公共前置知识放到同一张图里，并给出“卡住时回看哪一页”的索引。
+### 2.1 数据先变成张量和 token
 
-<div class="atlas-meta-grid">
-  <div>
-    <strong>先建立词汇表</strong>
-    <p>知道 tensor、token、embedding、loss、gradient、runtime 分别属于哪一层。</p>
-  </div>
-  <div>
-    <strong>再理解数据流</strong>
-    <p>看清输入如何变成表示，表示如何经过模块，loss 如何反向影响参数。</p>
-  </div>
-  <div>
-    <strong>最后接工程问题</strong>
-    <p>把显存、带宽、dtype、kernel、checkpoint 和评测指标接到真实系统里。</p>
-  </div>
-</div>
+文本、图像、视频、音频、动作轨迹，进入模型前都会变成张量。张量的 shape 决定模块能不能接上，也决定显存和计算大概有多贵。
 
-!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
-    **10 分钟读法**：先补张量、attention、概率、优化、数值和评测这些公共语言。
-    **深入读法**：读每个概念时问它服务哪类论文判断：表示、目标函数、显存、运行时还是评测。
-    **实验/工程读法**：写实验配置前用基础页检查 shape、dtype、loss、metric 和 data split 是否说清。
+```text
+文本 -> token id -> embedding: [B, L, D]
+图像 -> patch token -> visual embedding: [B, N, D]
+视频 -> frame / patch / time token -> long sequence
+动作 -> action value / action token -> policy input or target
+```
 
-!!! warning "核心失败模式"
-    | 失败模式 | 先查什么 |
-    | --- | --- |
-    | 概念迁移错误 | 把基础概念接到具体任务前先确认假设 |
-    | 数学符号空转 | 公式必须能回到成本、状态或评测口径 |
-    | 实现层级混淆 | 算法目标、系统吞吐和硬件行为分层读 |
+先读：
 
-!!! info "最小验收指标"
-    | 要证明什么 | 最小指标 | 不能替代什么 |
-    | --- | --- | --- |
-    | 概念能迁移 | 能解释一个论文图或训练配置里的同名概念 | 背定义 |
-    | 数学服务判断 | 公式能落到状态、损失、成本或指标 | 孤立推导 |
-    | 实现不误读 | shape/dtype/memory/runtime 边界写清 | 只写算法名 |
+| 页面 | 解决的问题 |
+| --- | --- |
+| [符号与最小数学地图](symbols-and-minimal-math.md) | 公式和 shape 字母到底怎么读 |
+| [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) | 数据如何组织成张量，shape 为什么是接口 |
+| [卷积与视觉特征](convolution-and-feature-extraction.md) | 图像局部特征、多尺度和 UNet 怎么理解 |
 
+### 2.2 模型模块把表示一步步变换
 
-!!! failure "最佳反例"
-    只会背 attention、反向传播或 FLOPs 公式，却不能用它们校准显存、梯度、MACs/FLOPs 和证据边界，是基础知识最常见的失效方式。基础页的目标不是堆概念，而是服务后续论文判断。
+大多数模型结构都可以先拆成几类模块：线性层负责投影，MLP 负责逐 token 非线性变换，attention 负责跨 token 读信息，norm/residual 负责稳定深层网络。
 
-## 阅读分层与小地图
-
-| 分层 | 推荐内容 | 读到什么程度 |
+| 模块 | 初学者理解 | 先读 |
 | --- | --- | --- |
-| 论文专题前置 | [论文专题前置知识地图](paper-reading-prerequisites.md) | 能把一篇论文归到表示、结构、目标、训练、执行和证据六层里 |
-| 主线必读 | 张量/Shape、Transformer/Attention、概率潜变量、优化、数值显存运行时 | 能读懂后续页面里的状态、动作、loss、KV 和低比特成本 |
-| 工程查阅 | 自动微分、位置编码与 mask、GEMM、运行时基础 | 碰到显存、shape、mask 或 kernel 问题时查 |
-| 论文扩展 | Transformer、DDPM、Chinchilla、FlashAttention 等原图 | 用原图建立概念，不把二手解释当作证据 |
-| 基础补课 | 线性代数、概率、优化、计算图 | 哪个概念卡住补哪个 |
-| 暂时可跳过 | 与当前专题无关的细节推导 | 先服务主线阅读，不追求一次学完 |
+| Linear / MLP | 把向量重新组合，再加入非线性 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md) |
+| Attention | 每个 token 按相关性读取其它 token | [Transformer 输入与注意力](transformer-attention-and-tokenization.md) |
+| Position / Mask | 告诉模型顺序和可见性 | [位置编码与 Mask](positional-encoding-masks-and-context.md) |
+| Norm / Residual | 让深层训练更稳定 | [Norm、残差与激活函数](normalization-residual-and-activation.md) |
+| MoE / Mamba | 在容量、长上下文和推理成本上做结构取舍 | [MoE](moe-and-large-model-architecture-basics.md)、[Mamba](mamba-and-hybrid-ssm-transformers.md) |
 
-本专题是**公共语言层**。它不直接证明世界模型能训练得更高效，但能让读者看懂后面每个成本账为什么成立。
+### 2.3 Loss 和梯度让模型学习
 
-## 为什么要单独有基础知识模块
+训练不是“模型突然懂了”，而是反复做四件事：
 
-很多专题页面都会反复出现同一批基础概念：
+```text
+算预测 -> 算 loss -> 反向传播 gradient -> optimizer 更新参数
+```
 
-- 扩散模型会讲 `UNet`、`DiT`、`score`、`SDE/ODE`、`ELBO`。
-- VLM、VLA 和 agent 会讲 `token`、`embedding`、`cross-attention`、视觉编码器、动作 token、多模态上下文和 CoT。
-- 量化会讲 `FP8`、`INT4`、显存、带宽、kernel 和 runtime。
-- 训练会讲 loss、反向传播、optimizer、checkpoint、mixed precision。
-- 算子与编译器会讲 GEMM、attention kernel、通信、访存和数值误差。
-
-如果每个专题都从零解释，页面会重复且分散；如果完全不解释，初学者会很难把概念串起来。因此这里把通用部分抽出来，后面专题只需要链接回来。
-
-## 建议按折叠分组阅读
-
-基础知识现在按“先看数据如何表示，再看模型如何处理，再看训练如何成立，最后看系统如何跑起来”的顺序组织。侧边栏里的二级分组可以折叠；读者不必一次展开全部，遇到后续专题卡壳时回到对应分组即可。
-
-| 分组 | 先解决的问题 | 页面 |
-| --- | --- | --- |
-| 论文前置地图 | 读单篇论文前，先判断缺的是表示、结构、目标、训练、执行还是证据 | [论文专题前置知识地图](paper-reading-prerequisites.md) |
-| 表示与计算 | 数据如何变成张量，基础模块如何把张量变成特征 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)、[卷积与视觉特征](convolution-and-feature-extraction.md) |
-| 结构与上下文 | token 之间如何交互，长序列和深层网络为什么能工作 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md)、[位置编码与上下文 Mask](positional-encoding-masks-and-context.md)、[MoE 与大模型架构表](moe-and-large-model-architecture-basics.md)、[Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)、[Norm、残差与激活函数](normalization-residual-and-activation.md) |
-| 交互与多模态 | prompt、RAG、CoT、视觉和多模态上下文如何接到模型 | [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)、[多模态推理入门](multimodal-cot-and-reasoning-basics.md) |
-| 训练目标与证据 | 模型在优化什么，能力是否真的变好，评测证据是否可靠 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md)、[优化与训练入门](optimization-and-training-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
-| 系统执行与成本 | 训练为什么吃显存，低精度、runtime 和硬件瓶颈如何限制效率 | [自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
-
-## 一条最短主线
-
-如果只想快速建立直觉，可以抓住这条链：
+最小公式是：
 
 \[
-\text{Tensor} \rightarrow \text{Module} \rightarrow \text{Loss} \rightarrow \text{Gradient} \rightarrow \text{Runtime}
+\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}
 \]
 
-也就是：
+这里 \(\theta\) 是模型参数，\(\mathcal{L}\) 是 loss，\(\nabla_\theta \mathcal{L}\) 是梯度，\(\eta\) 是学习率。第一次看到这行公式时，只要把它读成“沿着让错误变小的方向更新参数”就够了。
 
-1. 数据先被组织成张量。
-2. 张量通过 Conv、Attention、MLP 等模块流动。
-3. 模型输出和目标之间形成 loss。
-4. 反向传播把 loss 转成参数梯度。
-5. runtime、kernel 和硬件决定这套计算能否高效执行。
+先读：
 
-这条链一旦打通，后面读扩散、量化和训练系统时会容易很多。
-
-## 和后续专题的接口
-
-| 基础页 | 后续最常用在哪里 | 典型问题 |
-| --- | --- | --- |
-| 张量与计算图 | 训练、算子、VLM、VLA | 为什么 shape 对不上，为什么显存爆了 |
-| 线性层与 GEMM | Transformer、量化、算子 | 为什么大模型性能经常卡在矩阵乘 |
-| 卷积与特征提取 | 扩散 UNet、视觉编码器、VLM | 为什么局部纹理和层级特征重要 |
-| Transformer 与 Attention | LLM、VLM、DiT、推理 KV cache | 为什么 attention 既强又贵 |
-| MoE 与大模型架构表 | 大模型技术报告、稀疏专家训练、MoE 推理 | 如何区分 total params、activated params、top-k experts、shared/routed experts 和 EP/all-to-all 成本 |
-| Mamba 与状态空间模型 | 长上下文、流式推理、混合 Mamba-Transformer 架构 | 为什么 recurrent state 能降低 KV cache 压力，为什么混合架构会流行 |
-| 提示工程、CoT 与 RAG | 推理服务、Agent、企业知识库、工具系统 | prompt 如何定义任务边界，RAG 如何组织证据 |
-| 多模态、CoT 与推理 | VLM、Omni、agent、世界模型 | 不同模态如何进模型，thinking token 如何服务复杂任务 |
-| 位置编码与 Mask | 长上下文、VLM、VLA、推理 | 为什么 token 顺序、可见性和上下文成本必须一起看 |
-| 归一化与残差 | 深层网络、低精度训练 | 为什么模型能训深，为什么数值会崩 |
-| 概率与生成模型 | 扩散、世界模型、VAE | 为什么要采样，为什么要学分布 |
-| 优化与训练 | 预训练、后训练、QAT | 为什么 loss 下降不等于能力可靠 |
-| 自动微分与显存 | 大模型训练、多模态训练 | 为什么训练显存远高于推理，checkpointing 如何省显存 |
-| 数据与评测 | 训练、量化、推理、VLM | 为什么平均分不够，为什么需要分桶和回放 |
-| 数值与运行时 | 量化、推理、算子 | 为什么格式能保存不等于能跑快 |
-
-## 反向症状索引：训练里出事时先回看哪页
-
-基础知识最有用的读法，是从真实故障倒推概念。世界模型训练或 VLA/WAM 系统里遇到下面这些症状时，可以先回到对应基础页，而不是只在模型名之间横跳。
-
-| 现场症状 | 先回看 | 能做出的判断 |
-| --- | --- | --- |
-| 多相机视频一接入就 OOM，或者 `32k` context 很快被吃满 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer 输入与注意力](transformer-attention-and-tokenization.md) | 是 patch/token 数、activation、KV cache 还是中间 materialize 在爆 |
-| 长上下文 rollout token/s 掉得很快，KV 显存压不住 | [位置编码与上下文 Mask](positional-encoding-masks-and-context.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) | 是 \(L^2\) attention、KV 生命周期、mask 结构还是 dtype/kernel 支持问题 |
-| rollout 越滚越漂，risk head 很自信但错 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) | 是不确定性没校准、latent 丢了关键状态，还是评测桶没覆盖长尾 |
-| loss 下降但闭环成功率不涨 | [优化与训练入门](optimization-and-training-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) | 是目标函数不对、数据分布偏了，还是平均指标掩盖关键任务退化 |
-| FP8/低比特短跑稳定，长跑后 loss spike 或 NaN | [Norm、残差与激活函数](normalization-residual-and-activation.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) | 是 activation outlier、scale 策略、累加精度还是敏感层保护不足 |
-| 训练吞吐低但 GPU 利用率看似不差 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)、[自动微分与激活显存](autograd-activation-checkpointing-and-memory.md) | 是 GEMM shape 不合适、launch 太碎、checkpoint 重算过多还是数据搬运问题 |
-| 视频状态很会描述画面，但控制时丢小物体或接触细节 | [卷积与视觉特征](convolution-and-feature-extraction.md)、[多模态推理入门](multimodal-cot-and-reasoning-basics.md) | 是视觉 encoder 没保局部细节、token 压缩太狠，还是多模态对齐丢了任务变量 |
-| Agent/RAG 工具链回答像样但不可回放、不可评测 | [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) | 是输入契约、证据组织、输出 schema 还是评测闭环没建立 |
-
-## 从论文专题回填的基础概念
-
-论文专题里已经出现了一批会反复回到基础层的概念。读这些内容时，不要只记模型名字，先把它们归到下面几类：
-
-| 专题来源 | 回填到基础层的知识点 | 建议回看 |
-| --- | --- | --- |
-| [Muon](../paper-deep-dives/foundations/muon-is-scalable.md)、[Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md)、[DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | 优化器不只是 AdamW 参数表；Muon / MuonClip 强调更新矩阵几何、谱范数约束和大规模 MoE 训练稳定性 | [优化与训练入门](optimization-and-training-basics.md) |
-| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | Mamba-heavy backbone、GQA、LatentMoE 和 shared-weight MTP 说明“注意力、状态空间、MoE、预测头”是不同结构层 | [MoE 与大模型架构表](moe-and-large-model-architecture-basics.md)、[Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)、[Transformer 输入与注意力](transformer-attention-and-tokenization.md) |
-| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md)、[Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 多模态不是“把图片转文字再给 LLM”；音频、视觉、文本、动作 token 都会改变输入表示、评测和安全边界 | [多模态推理入门](multimodal-cot-and-reasoning-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
-| [Qwen3](../paper-deep-dives/technical-reports/qwen3.md)、推理与 Agent 系统 | CoT、thinking budget、RAG 和工具调用都属于“上下文如何被组织和使用”的问题；prompt 只是其中一个接口 | [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)、[多模态推理入门](multimodal-cot-and-reasoning-basics.md) |
-| [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md)、[RingAttention](../paper-deep-dives/world-models/ringattention.md) | attention 的数学定义和实际执行路径不同；稀疏、线性、blockwise 和 sequence parallel 都是在改变可见性、访存和通信方式 | [位置编码与上下文 Mask](positional-encoding-masks-and-context.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
-
-## 进入专题前的检查
-
-基础模块不需要一次性背完，但读后续专题前最好能形成四个判断：
-
-| 检查点 | 你应该能说清什么 | 如果卡住，回看 |
-| --- | --- | --- |
-| 表示 | 数据如何变成 tensor、token、embedding、expert route、recurrent state 或 latent state | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer 输入与注意力](transformer-attention-and-tokenization.md)、[MoE 与大模型架构表](moe-and-large-model-architecture-basics.md)、[Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)、[多模态推理入门](multimodal-cot-and-reasoning-basics.md) |
-| 目标 | loss、概率目标或生成目标到底在约束什么 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md)、[优化与训练入门](optimization-and-training-basics.md) |
-| 执行 | 训练和推理为什么会受显存、带宽、dtype 和 kernel 影响 | [自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
-| 证据 | 一个方法变好，是平均分变好，还是关键任务桶真的变好 | [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
-
-读扩散、VLM、训练系统或推理服务时，如果发现自己只能记住术语，不能判断它属于哪一层，优先回到这张表补接口。
-
-## 一个总判断
-
-基础知识不是“学完才能开始”的门槛，而是一个随时回查的地图。读后面的高级专题时，如果发现概念开始混乱，优先回到这里判断它属于哪一层，再继续追具体方法。
-## 深度标杆页
-
-基础知识专题的标杆页要负责给后续世界模型、训练、推理和算子章节打地基。其它基础页应向这些页面补直觉、公式、最小例子和跨专题链接。
-
-| 标杆页 | 对齐标准 |
+| 页面 | 解决的问题 |
 | --- | --- |
-| [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) | 把 shape、计算图、数据流和框架执行联系起来 |
-| [Transformer 输入与注意力](transformer-attention-and-tokenization.md) | 讲清 token、attention、KV 和上下文成本 |
-| [概率与潜变量模型](probability-latent-variables-and-generative-models.md) | 支撑扩散、VAE、RSSM、世界模型和不确定性 |
-| [优化与训练入门](optimization-and-training-basics.md) | 支撑 loss、optimizer、稳定性和训练诊断 |
-| [数值、显存与运行时](numerics-memory-and-runtime-basics.md) | 把 dtype、显存、带宽、runtime 和系统成本接起来 |
+| [概率与潜变量模型](probability-latent-variables-and-generative-models.md) | 为什么模型学的是分布，\(p_\theta\)、latent、KL、ELBO 怎么读 |
+| [优化与训练入门](optimization-and-training-basics.md) | loss、gradient、optimizer、训练曲线怎么连起来 |
+| [自动微分与激活显存](autograd-activation-checkpointing-and-memory.md) | 为什么训练要保存计算图和激活，checkpointing 为什么省显存 |
+
+### 2.4 Runtime 决定能不能跑得动
+
+算法公式正确，不代表工程上能跑。长上下文、多图视频、MoE、低比特和高并发都会把问题变成系统成本。
+
+```text
+参数量 -> 权重显存
+序列长度 -> attention / KV cache
+dtype -> bytes / kernel 支持
+batch 和 shape -> 吞吐 / 延迟
+runtime -> 调度、缓存、融合和 fallback
+```
+
+先读 [数值、显存与运行时](numerics-memory-and-runtime-basics.md)。读完后至少能分清：模型文件变小、FLOPs 下降、延迟下降、显存下降不是同一件事。
+
+### 2.5 评测证据决定结论是否可信
+
+一个方法说“更好”，要追问它到底在哪个证据上更好：
+
+| 证据 | 能说明什么 | 不能说明什么 |
+| --- | --- | --- |
+| train loss | 训练目标是否被优化 | 真实任务一定成功 |
+| validation / test | 固定数据上的泛化趋势 | 部署长尾和安全边界 |
+| ablation | 哪个设计可能有用 | 全部场景都适用 |
+| latency / throughput | 系统成本 | 质量一定不掉 |
+| closed-loop / online eval | 真实交互表现 | 所有风险都已覆盖 |
+
+先读 [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。如果只看一个总分，很容易把平均收益误读成关键场景可靠。
+
+## 3. 两条常见学习路线
+
+### 3.1 从零读 AI 模型
+
+| 顺序 | 页面 |
+| --- | --- |
+| 1 | [符号与最小数学地图](symbols-and-minimal-math.md) |
+| 2 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) |
+| 3 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md) |
+| 4 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md) |
+| 5 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) |
+| 6 | [优化与训练入门](optimization-and-training-basics.md) |
+| 7 | [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
+
+### 3.2 为后续专题补课
+
+| 你想读 | 先补什么 |
+| --- | --- |
+| 扩散模型 | 卷积/UNet、概率分布、score、优化 |
+| VLM / VLA | token、视觉特征、attention、位置/mask、动作符号 |
+| 量化 | dtype、bytes、GEMM、runtime、评测 |
+| 推理系统 | attention、KV cache、batch、latency、runtime |
+| 训练系统 | loss、梯度、自动微分、activation、checkpoint |
+| 世界模型 | latent、动作条件分布、rollout、评测桶 |
+| 技术报告 | MoE、Mamba、低精度、activated params、证据边界 |
+
+## 4. 读论文时的四步法
+
+读任何新论文，先按这四步拆：
+
+1. **变量**：输入、输出、token、latent、action、reward 是什么 shape 和语义？
+2. **路径**：数据经过哪些模块，哪些参数被训练，推理时哪些状态被缓存？
+3. **目标**：loss 或概率目标到底在优化什么？
+4. **证据**：图表证明的是 benchmark、消融、系统吞吐、真实闭环，还是 demo？
+
+如果这四步还不熟，先不要急着读 [论文专题前置知识地图](paper-reading-prerequisites.md)。那一页更适合读完基础页后，用来对照不同论文方向。
+
+## 5. 进阶查阅：遇到症状回看哪页
+
+| 现场症状 | 先回看 |
+| --- | --- |
+| shape 对不上、长视频一接入就 OOM | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) |
+| attention 一长就慢，KV cache 压不住 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
+| loss 下降但关键任务不涨 | [优化与训练入门](optimization-and-training-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
+| latent 很省但 planner 用不了 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) |
+| 低比特模型变小但不快 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
+| RAG 或工具调用结果不可复现 | [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
+
+## 小结
+
+基础知识不是“学完才能开始”的门槛，而是一张回查地图。第一次读只要打通主线：数据变成张量，模块处理表示，loss 产生梯度，runtime 决定成本，评测决定结论。后面读扩散、VLM、量化、训练、推理和世界模型时，遇到卡点再回到对应基础页补细节。

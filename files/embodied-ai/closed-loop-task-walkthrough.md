@@ -1,39 +1,61 @@
 # 一个任务跑通具身闭环
 
-这一页用一个具体任务把具身智能串起来。前面的页面讲了系统地图、资产、轨迹、VLA、WAM 和世界模型，但真正理解它们，最好从一条任务链路开始。
+这一页用一个具体任务把具身智能串起来。前面的页面讲了闭环、符号、VLA、WAM、世界模型和系统边界；这里把它们放进同一条 episode。
 
-我们用两个任务作为主例子：
+主例子：
 
-1. `按从小到大的顺序从左向右排序`
-2. `将圆柱体放入罐口尺寸接近的罐子`
+```text
+将圆柱体放入罐口尺寸接近的罐子
+```
 
-这两个任务很好，因为它们不只是普通 pick-and-place，还会考察尺寸感知、相对比较、空间规划、抓取、放置、任务判定和失败恢复。
+这个任务看起来像普通 pick-and-place，但它会同时考察尺寸感知、目标绑定、抓取、路径规划、动作执行、成功判定和失败恢复。
 
 ![π0.5 cleaning a new kitchen 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-2-cleaning-kitchen.png){ width="920" }
 
-<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 2。原论文图意：展示机器人在未见过的新厨房中执行多个清理子任务，例如关柜门、把物品放入抽屉、擦拭液体和把餐具放入水槽。</small>
+<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 2。原论文图意：展示机器人在未见过的新厨房中执行多个清理子任务，例如关柜门、把物品放入抽屉、擦拭液体和把餐具放进水槽。</small>
 
 !!! note "图解：长任务要按阶段闭环，而不是一次性输出完整答案"
-    这张图里的每个小任务都可以拆成“看见、选择、抓取、移动、放置、判定”。长任务失败通常不是最后一步才发生，而是在任务绑定、对象选择、抓取姿态、轨迹规划或执行反馈中的某一环开始偏离。用具体任务走读时，要把每一阶段的输入、输出和 checker 都写清楚。
+    图里的每个小任务都可以拆成“看见、选择、抓取、移动、放置、判定”。长任务失败通常不是最后一步才发生，而是在任务绑定、对象选择、抓取姿态、轨迹规划或执行反馈中的某一环开始偏离。walkthrough 的目的，就是把每一阶段的输入、输出和 checker 写清楚。
 
-## 1. 同一个任务要被拆成六个问题
+## 1. 先统一符号
 
-以“把圆柱体放入罐口尺寸接近的罐子”为例，系统必须连续回答：
+这条任务里会反复用到同一组符号：
 
-| 问题 | 系统要知道什么 | 常见模块 |
+| 符号 | 含义 | 在本任务里的例子 |
 | --- | --- | --- |
-| 看见什么 | 圆柱在哪里，几个罐子在哪里，罐口尺寸是多少 | RGB/RGB-D、多视角、检测、分割、pose estimation |
-| 选哪个 | 哪个罐口和圆柱尺寸最匹配 | VLM/VLA、高层 planner、规则脚本 |
-| 怎么抓 | 从哪里接近圆柱，夹爪朝向如何 | grasp annotation、grasp sampler、affordance |
-| 怎么走 | 机械臂如何从当前位置移动到抓取点和放置点 | IK、cuRobo、STOMP、motion planner |
-| 怎么执行 | 每个控制周期下发什么动作，碰撞和力是否安全 | controller、MPC、safety filter |
-| 成功没有 | 圆柱是否在正确罐子里，夹爪是否打开，物体是否稳定 | success checker、termination script、task progress |
+| \(o_t\) | 当前观测 | 多视角 RGB、深度、圆柱和罐子画面 |
+| \(o_{\le t}\) | 历史观测 | 最近几帧图像和执行反馈 |
+| \(q_t\) | 机器人本体状态 | 关节角、夹爪状态、末端位姿 |
+| \(\ell\) | 语言指令 | “把圆柱体放入尺寸接近的罐子” |
+| \(z_t\) | 模型内部状态 | 融合视觉、机器人状态和任务进度后的 latent |
+| \(a_t\) | 单步动作 | 末端移动一点、夹爪闭合 |
+| \(A_{t:t+H-1}\) | action chunk | 未来约 1 秒动作 |
+| \(H\) | horizon | chunk 覆盖的未来步数 |
+| \(r_t\) | 任务收益 / 进度 | 已抓住圆柱、靠近目标罐子 |
+| \(c_t\) | 风险 / 代价 | 碰撞、滑落、放错罐子 |
+| \(d_t\) | 结束信号 | 成功、失败、超时、中止 |
 
-具身智能难，不是因为某个问题单独不可解，而是这些问题必须在一个闭环里连续成立。
+在线闭环可以写成：
 
-## 2. 先定义任务状态，而不是先选模型
+\[
+(o_{\le t}, q_t, \ell)
+\rightarrow
+\text{state / subtask}
+\rightarrow
+A_{t:t+H-1}
+\rightarrow
+\text{safety + controller}
+\rightarrow
+o_{t+1}
+\rightarrow
+\text{checker}.
+\]
 
-在写模型或轨迹生成前，先把任务状态定义清楚。一个最小状态可以写成：
+白话读法：先看见并估计状态，再决定下一小段动作，安全过滤后执行，拿到新观测，再由 checker 判断进度。
+
+## 2. 不要先选模型，先定义任务状态
+
+如果状态定义不清，VLA、WAM、planner 和 checker 都会混乱。一个最小状态可以写成：
 
 ```json
 {
@@ -54,109 +76,109 @@
   ],
   "robot": {
     "joint_pos": [],
-    "gripper_open": true
+    "gripper_open": true,
+    "eef_pose_w": [0.20, -0.20, 0.30, 1, 0, 0, 0]
   },
   "task": {
     "instruction": "put the cylinder into the closest matching container",
     "target_object": "cylinder_0",
-    "target_container": null
+    "target_container": null,
+    "phase": "select_container"
   }
 }
 ```
 
 这里有几个重点：
 
-- `pose_w` 表示物体在 world frame 下的位置和朝向。
-- `size_m` 和 `opening_diameter_m` 是尺寸任务的关键状态。
-- `target_container` 可以先为空，由高层模块根据尺寸匹配算出来。
-- `grasp_candidates` 来自手动标注、自动抓取生成或离线筛选。
+- `pose_w` 表示物体在 world frame 下的位置和朝向；
+- `size_m` 和 `opening_diameter_m` 是尺寸任务的关键状态；
+- `target_container` 可以先为空，由高层模块根据尺寸匹配算出来；
+- `grasp_candidates` 来自手动标注、自动抓取生成或离线筛选；
+- `phase` 让 checker 和策略知道任务走到哪一步。
 
-如果状态定义不清，后面用 VLA、WAM、planner 都会混乱。模型输出错了也很难判断错在哪里。
+!!! warning "常见错误：把任务状态藏在自然语言里"
+    “放进尺寸接近的罐子”听起来很简单，但系统必须知道圆柱直径、罐口直径、物体坐标、抓取候选和当前阶段。若这些状态没有被记录，模型失败后很难判断是看错、选错、抓错还是放错。
 
-## 3. 离线数据生成怎么跑
+## 3. 把任务拆成七步
 
-离线生成专家轨迹时，比较稳的流程是：
+| 步骤 | 输入 | 模块 | 输出 | checker 关心什么 |
+| --- | --- | --- | --- | --- |
+| 1. 看见 | \(o_t, q_t\) | 感知、深度、pose | 圆柱和罐子的状态 | 物体是否被正确检测和定位 |
+| 2. 绑定目标 | 状态 + \(\ell\) | 规则 / VLM / planner | `target_container` | 尺寸是否匹配，目标是否唯一 |
+| 3. 选抓取 | 物体状态 | grasp sampler / affordance | grasp pose | 抓取是否可达、是否稳定 |
+| 4. 生成动作 | \(o_{\le t}, q_t, \ell\) | VLA / planner | \(A_{t:t+H-1}\) 或轨迹 | 动作是否朝目标推进 |
+| 5. 预测风险 | \(z_t, A_{t:t+H-1}\) | world model / risk head | \(\hat r, \hat c, \hat d\) | 是否可能碰撞、滑落、放错 |
+| 6. 执行控制 | action + constraints | controller / safety | robot command | 是否越界、过快、碰撞 |
+| 7. 判定回流 | 新观测 + 状态 | success checker | success / failure reason | 是否完成，失败属于哪一类 |
+
+这张表是整页的骨架。任何路线都要能填这几列，只是“模块”不同。
+
+## 4. 第一步：看见和估计状态
+
+输入是：
+
+\[
+o_t = \{\text{RGB views}, \text{depth}, \text{robot proprioception}\}.
+\]
+
+系统要从 \(o_t\) 中估计：
 
 ```text
-sample task
--> sample assets and sizes
--> place objects
--> choose target by task rule
--> sample grasp
--> run planner
--> simulate trajectory
--> check success
--> save episode or retry
+cylinder pose
+cylinder size
+container poses
+container opening diameters
+robot eef pose
+gripper state
 ```
 
-在工具链上，这通常可以理解成：RoboTwin 风格代码负责 `sample task / reset scene / success checker`，Isaac Sim 或其他仿真器负责 `simulate trajectory / render cameras / query states`，cuRobo 或 STOMP 负责 `run planner`。更详细的分工见 [Isaac Sim 与 RoboTwin 仿真数据链](isaacsim-and-robotwin.md)。
+| 输出字段 | 为什么重要 | 失败症状 |
+| --- | --- | --- |
+| 物体 6D pose | planner 需要知道抓取点和放置点 | 抓取点偏到物体旁边 |
+| 尺寸和 scale | 任务要求匹配罐口尺寸 | 放进过大或过小的罐子 |
+| 深度 / 点云 | 判断距离、遮挡和碰撞 | 夹爪高度错、撞桌面 |
+| 机器人状态 \(q_t\) | 同一画面下手臂姿态可能不同 | 模型输出不可达动作 |
 
-对应到代码结构可以是：
+checker 在这一步不判断最终成功，而是判断状态是否足够可信。例如深度缺失、目标被遮挡、罐口尺寸不确定时，可以进入重新观察或请求调整视角，而不是硬执行。
+
+## 5. 第二步：绑定目标和任务阶段
+
+语言指令是：
+
+\[
+\ell = \text{``put the cylinder into the closest matching container''}.
+\]
+
+目标绑定可以先用规则写清楚：
 
 ```python
-def generate_episode(task, asset_pool, planner, simulator):
-    scene = sample_scene(task, asset_pool)
-    state = observe_symbolic_state(scene)
-
-    target = solve_task_binding(state, task)
-    grasp = sample_grasp(state[target.object_id])
-    plan = planner.solve(
-        robot_state=state["robot"],
-        grasp=grasp,
-        target_pose=target.place_pose,
-        obstacles=scene.obstacles,
+def choose_container(cylinder, containers):
+    radius = cylinder.size_m[0] / 2
+    feasible = [
+        can for can in containers
+        if can.opening_diameter_m > cylinder.size_m[0] + 0.005
+    ]
+    return min(
+        feasible,
+        key=lambda can: can.opening_diameter_m - cylinder.size_m[0],
+        default=None,
     )
-
-    if plan is None:
-        return None, "planner_failed"
-
-    rollout = simulator.run(plan)
-    if not task.success_checker(rollout):
-        return None, "success_check_failed"
-
-    return {
-        "scene": scene.to_record(),
-        "instruction": task.instruction,
-        "states": rollout.states,
-        "actions": rollout.actions,
-        "success": True,
-    }, None
 ```
 
-这段逻辑说明一件事：专家轨迹不是直接“生成动作文件”就结束，而是必须经过仿真验证和成功判定。否则错误轨迹会进入训练集，后面模型会学到错误行为。
+这段代码不是最终实现，而是说明“尺寸匹配”必须落到可检查的状态上。
 
-## 4. 在线执行怎么跑
+| 可能输出 | 系统动作 |
+| --- | --- |
+| 找到唯一合适罐子 | 进入抓取阶段 |
+| 多个罐子都合适 | 选择 margin 最小或请求澄清 |
+| 没有合适罐子 | 拒绝执行或报告不可完成 |
+| 尺寸估计不确定 | 重新观察或换视角 |
 
-在线执行时，系统不是一次性把完整任务做完，而是循环：
+这里对应 \(r_t\)、\(c_t\)、\(d_t\) 的早期版本：选对目标提高 progress，尺寸不确定提高 risk，无可行目标触发 done / invalid。
 
-```text
-observe
--> estimate state
--> decide next subtask
--> generate action or plan
--> safety check
--> execute short horizon
--> observe again
-```
+## 6. 第三步：生成动作有三种路线
 
-可以写成：
-
-```python
-while not done:
-    obs = sensors.read()
-    state = state_estimator(obs)
-    subtask = high_level_policy(state, instruction)
-    action_chunk = low_level_policy(state, subtask)
-    safe_action = safety_filter(action_chunk, state)
-    robot.execute(safe_action)
-    done = success_checker(robot, scene)
-```
-
-这和离线轨迹生成不同。离线可以用完整状态和 planner 慢慢算；在线必须处理传感器噪声、执行误差、物体滑动、人类干扰和实时延迟。
-
-## 5. 三种路线会怎样解决同一个任务
-
-### 经典 pipeline
+### 6.1 经典 pipeline
 
 ```text
 检测圆柱和罐子
@@ -167,21 +189,39 @@ while not done:
 -> success checker 判定
 ```
 
-它的优点是可解释、容易 debug。缺点是每个接口都要手工定义，遇到开放语言和新物体时扩展比较慢。
+| 输入 | 输出 | 优点 | 风险 |
+| --- | --- | --- | --- |
+| 结构化状态、抓取候选、障碍物 | 完整或分段轨迹 | 可解释、容易 debug、容易加安全约束 | 开放语言和新物体扩展慢 |
 
-### π0.5 式 VLA
+适合工业、高精度或任务规则清楚的场景。
+
+### 6.2 π0.5 式 VLA
+
+\[
+A_{t:t+H-1} \sim \pi_\theta(o_{\le t}, q_t, \ell).
+\]
 
 ```text
 多视角图像 + 机器人状态 + 语言任务
 -> high-level subtask: pick up the cylinder
--> flow action expert 输出 1 秒 action chunk
+-> action expert 输出短动作块
 -> 执行并重新观测
 -> high-level subtask: place into the matching container
 ```
 
-π0.5 式路线会把任务分解和动作生成放进模型里。它更适合开放环境，但仍然需要 success checker、低层控制和安全过滤。否则模型动作看起来合理，也可能撞到物体或放错容器。
+| 输入 | 输出 | 优点 | 风险 |
+| --- | --- | --- | --- |
+| 图像、状态、语言、历史 | high-level subtask + action chunk | 适合开放任务和长任务 | 仍需 checker、控制器、安全过滤 |
 
-### DreamZero 式 WAM
+π0.5 式路线把任务分解和动作生成放进模型里，但不意味着模型可以绕过 success checker。
+
+### 6.3 DreamZero 式 WAM
+
+\[
+(o_{t+1:t+H}, A_{t:t+H-1})
+\sim
+p_\theta(o, A \mid o_{\le t}, q_t, \ell).
+\]
 
 ```text
 当前视觉上下文 + 语言 + 机器人状态
@@ -191,7 +231,11 @@ while not done:
 -> 继续下一段 video-action prediction
 ```
 
-DreamZero 式路线会让动作和未来画面绑定。它的优势是模型被迫学习“动作会导致什么视觉变化”。风险是，如果未来视频预测错，动作也可能很一致地跟着错。所以它更需要风险检测、真实观测回写和安全层。
+| 输入 | 输出 | 优点 | 风险 |
+| --- | --- | --- | --- |
+| 视觉历史、状态、语言 | 未来视频 + 动作 chunk | 动作和未来视觉互相约束 | 未来视频错时，动作也可能跟错 |
+
+DreamZero 式路线尤其要把 predicted future、issued action、real observation 和 checker 结果并排看。
 
 ![DreamZero seen task evaluation 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-8-seen-task.png){ width="920" }
 
@@ -200,50 +244,80 @@ DreamZero 式路线会让动作和未来画面绑定。它的优势是模型被�
 !!! note "图解：闭环走读时要把预测和真实结果对上"
     WAM 的图不能只看“未来画面像不像”，还要看预测动作执行后真实观测是否朝同一方向变化。实际排查时，把模型预测的未来、下发动作、真实新观测和 success checker 结果并排看，最容易定位失败来自视频预测、动作接口还是执行控制。
 
-## 6. 失败时应该先查哪一层
+## 7. 第四步：安全过滤和控制执行
 
-具身任务失败后，不要先说“模型不行”。更好的做法是按责任层排查：
+无论动作来自 VLA、WAM 还是 planner，都应该经过执行接口：
 
-| 失败现象 | 先查什么 | 可能原因 |
-| --- | --- | --- |
-| 目标物体识别错 | 感知和数据 | 纹理太相似、遮挡、单目深度错误、标签/OCR 错 |
-| 尺寸比较错 | 状态估计和任务绑定 | scale 错、深度错、尺寸字段缺失、规则阈值不合理 |
-| 抓取点很奇怪 | grasp annotation | 抓取轴随机、候选没有任务语义、物体 origin 错 |
-| 轨迹规划失败 | planner 和 collision mesh | IK 无解、障碍物太近、碰撞网格过粗或过碎 |
-| 仿真执行掉落 | 物理属性和控制 | 摩擦/质量不合理、夹爪力不够、接触模型不稳 |
-| 最后状态看似成功但判失败 | success checker | 阈值太严、坐标系不一致、夹爪状态读取错 |
-| VLA 会做短动作但长任务崩 | 高层子任务和记忆 | 没有 task progress、没有状态跟踪、没有失败恢复 |
-| WAM 生成视频合理但执行失败 | video-action alignment 和安全层 | 视觉未来缺少物理可执行性，动作没有被控制层约束 |
+```text
+action chunk
+-> action adapter
+-> collision / workspace / speed / force checks
+-> controller
+-> robot command
+```
 
-这张表是具身 debug 的核心。真实系统里大多数问题不是单一模型替换能解决的，而是某个接口没有定义或验证清楚。
+对这个任务，安全层至少检查：
 
-## 7. success checker 应该比模型更早写
+| 检查项 | 例子 |
+| --- | --- |
+| 工作空间 | 末端是否越过桌面边界或机器人可达范围 |
+| 碰撞 | 轨迹是否会撞罐子、桌面、其他物体 |
+| 速度 / 加速度 | 抓取或放置是否太快 |
+| 夹爪状态 | 抓取前是否打开，移动前是否夹稳 |
+| 力 / 接触 | 插入罐口时是否卡住或用力过大 |
+| 中断条件 | 物体滑落、人手进入、目标消失 |
 
-很多项目会先生成资产和轨迹，最后才写任务判定。这个顺序容易返工。更稳的顺序是先写 success checker 的草案，因为它定义了“什么叫成功”。
+这里的关键是：模型动作不是最终命令。controller 把动作变成高频控制，safety filter 决定是否执行、缩放、重规划或中止。
 
-以“按从小到大排序”为例，success checker 至少要判断：
+## 8. 第五步：success checker 比模型更早写
 
-1. 所有目标物体都在指定区域内；
-2. 按 \(x\) 方向从左到右排序；
-3. 尺寸顺序和空间顺序一致；
-4. 物体间距在目标范围内；
-5. 夹爪已打开；
-6. 物体稳定，没有继续滑动。
+很多项目会先生成资产和轨迹，最后才写任务判定。这个顺序容易返工。更稳的做法是先写 success checker 草案，因为它定义了“什么叫成功”。
+
+对“把圆柱体放入尺寸匹配的罐子”，checker 至少要判断：
+
+1. 圆柱在目标罐子内部；
+2. 目标罐子确实是尺寸匹配的罐子；
+3. 夹爪已经打开并离开物体；
+4. 圆柱稳定，没有继续滑动或弹出；
+5. 过程中没有碰撞、越界或人工接管；
+6. 若没有合适罐子，系统应拒绝而不是乱放。
 
 伪代码可以写成：
 
 ```python
-def check_size_sort_success(objects, gripper_open, eps_order=0.01):
-    sorted_by_x = sorted(objects, key=lambda obj: obj.pose_w[0])
-    sizes = [obj.size_m[0] * obj.size_m[1] * obj.size_m[2] for obj in sorted_by_x]
-    order_ok = all(sizes[i] <= sizes[i + 1] + eps_order for i in range(len(sizes) - 1))
-    stable = all(obj.linear_speed < 0.01 for obj in objects)
-    return order_ok and stable and gripper_open
+def check_container_success(state, target_object, target_container):
+    obj = state.objects[target_object]
+    can = state.objects[target_container]
+
+    inside = is_inside_opening(obj.pose_w, can.pose_w, can.opening_diameter_m)
+    size_match = can.opening_diameter_m >= obj.size_m[0] + 0.005
+    stable = obj.linear_speed < 0.01 and obj.angular_speed < 0.02
+    released = state.robot.gripper_open and distance(state.robot.eef_pose_w, obj.pose_w) > 0.05
+    safe = not state.events.collision and not state.events.human_takeover
+
+    return inside and size_match and stable and released and safe
 ```
 
 这段代码不是最终实现，而是告诉你：任务定义要落到可查询状态和阈值上。否则模型、planner、数据集之间没有共同标准。
 
-## 8. 训练数据应该保存哪些字段
+## 9. 失败时按责任层排查
+
+具身任务失败后，不要先说“模型不行”。先按责任层排查：
+
+| 失败现象 | 先查什么 | 可能原因 |
+| --- | --- | --- |
+| 目标物体识别错 | 感知和数据 | 纹理太相似、遮挡、单目深度错误、标签错 |
+| 尺寸比较错 | 状态估计和任务绑定 | scale 错、深度错、尺寸字段缺失、规则阈值不合理 |
+| 抓取点很奇怪 | grasp annotation / affordance | 抓取轴随机、候选没有任务语义、物体 origin 错 |
+| 轨迹规划失败 | planner 和 collision mesh | IK 无解、障碍物太近、碰撞网格过粗或过碎 |
+| 仿真执行掉落 | 物理属性和控制 | 摩擦/质量不合理、夹爪力不够、接触模型不稳 |
+| 看似成功但判失败 | success checker | 阈值太严、坐标系不一致、夹爪状态读取错 |
+| VLA 会短动作但长任务崩 | 高层子任务和记忆 | 没有 task progress、没有状态跟踪、没有失败恢复 |
+| WAM 生成视频合理但执行失败 | video-action alignment 和安全层 | 视觉未来缺少物理可执行性，动作没有被控制层约束 |
+
+这张表是具身 debug 的核心。真实系统里大多数问题不是单一模型替换能解决的，而是某个接口没有定义或验证清楚。
+
+## 10. 训练数据应该保存哪些字段
 
 一条 episode 至少建议保存：
 
@@ -257,27 +331,29 @@ def check_size_sort_success(objects, gripper_open, eps_order=0.01):
 | `subtasks` | π0.5 式 high-level supervision |
 | `object_states` | success checker、状态估计、错误分析 |
 | `success` / `task_progress` | 过滤数据、训练 reward/judge、评测 |
+| `risk` / `cost` | 训练 risk head 和 safety gate |
+| `done` / `termination` | 学会停止、失败或拒绝 |
 | `failure_reason` | 后续回流和 hard case mining |
 | `asset_metadata` | 追踪 scale、质量、材质、碰撞网格、抓取标注版本 |
 
 如果未来想接 DreamZero 这类 WAM，尤其要保证视频、动作和机器人状态严格时间同步。WAM 学的是 video-action 对齐，时间戳漂移会直接破坏监督信号。
 
-## 9. clean 到 random 的升级顺序
+## 11. clean 到 random 的升级顺序
 
 不要一开始就上复杂随机场景。更稳的升级顺序：
 
 | 阶段 | 场景设置 | 目标 |
 | --- | --- | --- |
-| clean-0 | 单物体、无干扰、固定相机 | 验证资产、scale、抓取、planner 和 success checker |
-| clean-1 | 单物体、多初始位姿 | 验证 grasp 和 planner 是否泛化 |
-| clean-2 | 同类多尺寸物体 | 验证尺寸比较和任务绑定 |
+| clean-0 | 单圆柱、单罐子、固定相机 | 验证资产、scale、抓取、planner 和 checker |
+| clean-1 | 单圆柱、多初始位姿 | 验证 grasp 和 planner 是否泛化 |
+| clean-2 | 多个不同尺寸罐子 | 验证尺寸比较和目标绑定 |
 | random-1 | 加少量非目标干扰物 | 验证检测、避障和任务筛选 |
 | random-2 | 加纹理、光照、位置随机化 | 验证视觉鲁棒性 |
 | random-3 | 加失败复位、重试和 hard cases | 生成更接近训练/评测需要的数据 |
 
 这样做可以保证每一步失败都能定位。如果一开始就 random，很容易出现“看起来哪里都错，但不知道先修什么”。
 
-## 10. 和论文路线的关系
+## 12. 和论文路线的关系
 
 | 论文路线 | 这个 walkthrough 对应的位置 |
 | --- | --- |
@@ -288,3 +364,17 @@ def check_size_sort_success(objects, gripper_open, eps_order=0.01):
 | [RoboTwin](https://robotwin-platform.github.io/doc/tasks/index.html) | 提供任务组织、资产标注和仿真数据生成的参考 |
 
 最终你应该能把任何具身论文放回这条链路：它到底在改感知、子任务、动作、世界预测、规划控制、数据生成，还是评测回流。
+
+## 13. 最小验收
+
+读完这一页后，你应该能为一个新任务写出：
+
+1. 任务状态 schema；
+2. \(o_t, q_t, \ell, A_{t:t+H-1}, r_t, c_t, d_t\) 在任务里的含义；
+3. 离线数据生成流程；
+4. 在线闭环执行流程；
+5. success checker 草案；
+6. 失败分类表；
+7. clean 到 random 的升级计划。
+
+如果这七项都能写出来，具身系统就不再是一堆论文名，而是一条能被实现、调试和持续改进的闭环。

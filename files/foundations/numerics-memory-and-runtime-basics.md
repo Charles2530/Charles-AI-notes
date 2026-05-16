@@ -15,7 +15,26 @@
 !!! tip "遇到这些症状，回看本页"
     KV INT8 省了显存但 token/s 没升，FP8 loss 曲线短期对齐但长跑漂移，或者某个 runtime 宣称支持低比特却在 trace 里频繁 dequant 回 FP16 时，回看本页。本页能帮你判断收益是否被带宽、workspace、kernel fallback、scale 读取或数值保护抵消。
 
-## 1. 数值格式：精度和范围的取舍
+## 1. 最小字节账：先把数字换成显存
+
+数值格式首先决定每个数字占多少 bytes。
+
+| 格式 | 粗略 bytes / value | 直觉 |
+| --- | ---: | --- |
+| FP32 | 4 | 准但贵 |
+| FP16 / BF16 | 2 | 大模型训练和推理常用 |
+| FP8 / INT8 | 1 | 更省，但依赖 scale 和 kernel |
+| INT4 / FP4 | 0.5 | 压缩强，硬件和 runtime 支持更关键 |
+
+一个 hidden tensor 的最小显存可以先估：
+
+\[
+B\times L\times D\times bytes
+\]
+
+这不是完整显存，只是把 shape 换成 bytes 的第一步。训练还要加激活、梯度和 optimizer state；推理还要加 KV cache 和 workspace。
+
+## 2. 数值格式：精度和范围的取舍
 
 常见格式：
 
@@ -29,7 +48,7 @@
 
 低精度的本质是牺牲部分表示能力，换取更低显存、更低带宽和更高吞吐。
 
-## 2. 显存主要被谁占用
+## 3. 显存主要被谁占用
 
 不同阶段显存构成不同：
 
@@ -42,7 +61,7 @@
 
 这解释了为什么同一个模型“能推理”不代表“能训练”，也不代表“能高并发服务”。
 
-## 3. FLOPs、MACs、带宽和延迟
+## 4. FLOPs、MACs、带宽和延迟
 
 常见指标：
 
@@ -78,7 +97,7 @@ B T d_{\text{in}}d_{\text{out}}
 
 一个算子可能不是算不动，而是数据搬不动。比如低算术强度算子经常受带宽限制，而不是算力限制。
 
-## 4. Kernel 和 Runtime
+## 5. Kernel 和 Runtime
 
 Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负责把模型图、请求、batch、缓存和 kernel 组织起来。
 
@@ -89,7 +108,7 @@ Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负
 - Fused kernel 把多个操作合并，减少中间读写。
 - vLLM、SGLang、ONNX Runtime、TensorRT-LLM 负责更高层的执行调度。
 
-## 5. 为什么“格式支持”不等于“性能收益”
+## 6. 为什么“格式支持”不等于“性能收益”
 
 一个 INT4 模型文件很小，但如果 runtime 没有 INT4 高效 kernel，可能会发生：
 
@@ -104,7 +123,7 @@ Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负
 - 热点算子有对应 kernel；
 - 端到端 TTFT、TPOT、吞吐和质量都改善。
 
-## 6. 一张部署成本流图
+## 7. 一张部署成本流图
 
 ```mermaid
 flowchart LR
@@ -123,7 +142,7 @@ flowchart LR
 
 这张图提醒你：低精度格式只是进入系统成本的一条边。真正上线时，权重、activation、KV cache、workspace、kernel、runtime 和 shape bucket 都会共同决定延迟。一个方案若只减少权重显存，却没有减少 decode 时的 KV 读取或没有命中低比特 kernel，端到端收益就会很小。
 
-## 7. 一个可复算的显存小账
+## 8. 一个可复算的显存小账
 
 假设一个 7B 模型使用 BF16 权重，权重显存约为：
 
@@ -158,7 +177,7 @@ flowchart LR
 | FlashAttention | attention 中间写回 | decode KV 生命周期 |
 | Shape bucketing | kernel 命中率、padding 浪费 | 长尾请求和工具延迟 |
 
-## 8. DeepSeek-V3：Params 和 MACs 怎么手算
+## 9. 进阶案例：DeepSeek-V3 的 Params 和 MACs 怎么手算
 
 下面用 DeepSeek-V3 做一个可复算例子。它适合这个主题，因为它是 MoE：`Total Params` 很大，但每个 token 只激活一小部分 routed experts。
 
@@ -190,7 +209,7 @@ flowchart LR
 | \(d_{\text{rope}}\) | RoPE Q/K head dim | 64 |
 | \(d_v\) | value head dim | 128 |
 
-### 8.1 先算 embedding 和输出头
+### 9.1 先算 embedding 和输出头
 
 输入 embedding 和输出 LM head 都是 \(V\times d\)：
 
@@ -206,7 +225,7 @@ Vd = 129{,}280\times7{,}168 = 926{,}679{,}040 \approx 0.927B
 
 注意：embedding lookup 本身主要是查表读权重，不是大矩阵乘；输出 head 计算 logits 时才是 \(d\times V\) 的 MACs。
 
-### 8.2 再算每层 MLA 参数
+### 9.2 再算每层 MLA 参数
 
 DeepSeek-V3 的 attention 不是普通 Q/K/V/O 四个 \(d\times d\) 投影，而是 MLA。按官方实现，可以把主要权重拆成：
 
@@ -239,7 +258,7 @@ P_{\text{MLA}}
 61\times187.1M\approx11.4B
 \]
 
-### 8.3 Dense MLP 和单个 expert
+### 9.3 Dense MLP 和单个 expert
 
 DeepSeek-V3 的 MLP/Expert 都是 SwiGLU 形态，核心有三块矩阵：`w1`、`w3` 升维，`w2` 降维。因此 dense MLP 每层参数是：
 
@@ -263,7 +282,7 @@ P_{\text{expert}}=3dd_e
 \approx44.0M
 \]
 
-### 8.4 MoE 层的 total params
+### 9.4 MoE 层的 total params
 
 每个 MoE 层有 256 个 routed experts 和 1 个 shared expert。router gate 还要给每个 expert 打分，主要权重约为 \(Ed\)：
 
@@ -296,7 +315,7 @@ P_{\text{total}}
 
 这就对上了 DeepSeek-V3 报告里的 `671B total params`。关键点是：大头来自所有 routed experts 的总仓库，而不是每个 token 都会跑完这 671B。
 
-### 8.5 MoE 层的 activated params
+### 9.5 MoE 层的 activated params
 
 每个 token 在 MoE 层不会用 256 个 routed experts，只会用 Top-8 routed experts，再加 shared expert：
 
@@ -331,7 +350,7 @@ P_{\text{active, MAC-producing}}
 
 这就是报告里 `37B activated params per token` 的来源直觉。它不是精确 latency，也不是每步只有 37B 次所有操作，而是说明稀疏 MoE 下每个 token 实际触达的权重规模远小于 `671B total params`。
 
-### 8.6 从 activated params 到 MACs
+### 9.6 从 activated params 到 MACs
 
 对单个 decode token，如果只看被用到的矩阵乘主项，MACs 约等于 MAC-producing active weights：
 
@@ -391,7 +410,7 @@ attention pairwise 部分按 causal triangle 粗算约：
 !!! warning "不要把这当成线上延迟"
     这只是手算主项。真实服务还会受 FP8/BF16 kernel、MoE dispatch/combine、expert batch size、all-to-all、KV cache layout、logits 是否全量计算、batching、prefix cache、padding、采样和 runtime 调度影响。`Params` 帮你看存储和容量，`MACs` 帮你看乘加规模，最终线上速度仍要用 profiler 和端到端压测确认。
 
-## 9. 和后续专题的关系
+## 10. 和后续专题的关系
 
 - [量化路线图](../quantization/index.md)：理解低精度格式和部署收益。
 - [推理系统](../inference/index.md)：理解延迟、吞吐、KV cache 和服务调度。

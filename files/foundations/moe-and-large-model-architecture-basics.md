@@ -24,6 +24,20 @@ flowchart LR
 !!! note "读图重点"
     MoE 通常替换的是 Transformer block 中的 FFN/MLP 子层，而不是 attention 本身。一个 token 不会经过所有专家，只会经过 router 选中的少数专家；这就是为什么 MoE 可以有很大的总参数量，但每个 token 的激活计算量相对小。
 
+## 符号卡：MoE 公式怎么读
+
+| 符号 | 含义 |
+| --- | --- |
+| \(h\) | 当前 token 的 hidden state |
+| \(W_r\) | router 的权重 |
+| \(g\) | router 给各个 expert 的分数或概率 |
+| \(E_i\) | 第 \(i\) 个 expert |
+| \(k\) | 每个 token 选择几个 routed experts |
+| \(\tilde g_i\) | top-k 后重新归一化的 expert 权重 |
+| \(E_{\text{shared}}\) | shared expert，所有 token 都可走的公共专家 |
+
+最小读法：router 先给 expert 打分，选 top-k 个 expert 处理当前 token，再把这些 expert 的输出按权重合回来。
+
 ## Dense 与 MoE 的差别
 
 Dense 模型里，每个 token 都经过同一套 MLP 参数；MoE 模型里，每个 token 会被分配给少数 expert。
@@ -40,6 +54,16 @@ MoE 的一个常见误读是：看到 `671B`、`1T` 之类的总参数，就把�
 
 - `Total Params`：模型仓库里一共存了多少参数，代表容量和存储成本。
 - `Activated Params`：单个 token 前向时大约用了多少参数，更接近 per-token compute。
+
+![DeepSeek-V3 architecture](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原论文图意：DeepSeek-V3 的 Transformer block 采用 MLA 和 DeepSeekMoE；MLA 用压缩 latent 降低 KV cache，DeepSeekMoE 由 shared experts 和 routed experts 共同组成。</small>
+
+!!! note "论文图解卡：DeepSeek-V3 的 MoE 应该先看哪里"
+    **先看哪里**：先看右侧 DeepSeekMoE 放大框，再回到左侧 Transformer block。  
+    **图中模块**：shared experts 是所有 token 都能走的公共能力；routed experts 是 router 按 token 选择的专家；MLA 是 attention/KV 路径的压缩，不是 MoE 本身。  
+    **对应公式**：\(y=E_{\text{shared}}(h)+\sum_{i\in\operatorname{TopK}(g)}\tilde g_iE_i(h)\)。  
+    **容易误读**：这张图里同时有 MLA 和 MoE。MLA 主要省 KV cache，MoE 主要改变 FFN 容量和激活计算，二者不是同一件事。
 
 ## 一个 token 怎么走过 MoE
 
@@ -168,6 +192,16 @@ flowchart LR
 ## MoE 和其他结构不要混
 
 大模型报告常把 MoE、MTP、Mamba、MLA/GQA、Muon、FP8/FP4 放在同一段里。它们属于不同层。
+
+![Nemotron 3 Super LatentMoE](../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-3-latent-moe.png){ width="880" }
+
+<small>图源：[Nemotron 3 Super Technical Report](../paper-deep-dives/technical-reports/nemotron-3-super.md)，Figure 3。原论文图意：LatentMoE 用 latent routing 组织专家选择，并把稀疏专家能力接入大模型主干。</small>
+
+!!! note "论文图解卡：为什么再看一张 Nemotron 图"
+    **先看哪里**：先找 router 或 latent routing 的位置，再看 token/hidden state 如何进入专家。  
+    **图中模块**：不同报告里的 MoE 画法不完全一样，但核心总是 token 表示、router、专家计算和 combine。  
+    **对应问题**：它帮助你读懂“专家怎么被选中”，而不是只看模型表里的专家数量。  
+    **容易误读**：不同模型的 MoE 细节会变化，不能把某一张图里的 routing 机制直接套到所有 MoE。
 
 | 名词 | 改的是哪一层 | 主要解决什么 | 不要误解成 |
 | --- | --- | --- | --- |

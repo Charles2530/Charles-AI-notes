@@ -2,9 +2,15 @@
 
 Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它的目标不是把 token 之间两两做 attention，而是让序列沿时间方向维护一个紧凑状态，用线性复杂度处理长序列。混合 Mamba-Transformer 架构则更务实：保留一部分 attention 做精确检索和复杂 token 交互，把大量层换成 Mamba / SSM 来降低推理成本。
 
-![Mamba selective SSM overview](https://arxiv.org/html/2312.00752v2/x1.png){ width="920" }
+![Mamba selective SSM overview](../assets/images/paper-figures/foundations/mamba-selective-ssm-overview.png){ width="920" }
 
 <small>图源：[Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)，Figure 1。原论文图意：Structured SSM 会把输入通道映射到更高维 latent state；Mamba 的 selection mechanism 加入输入相关动态，并用 hardware-aware algorithm 避免把巨大 expanded state 直接物化到 GPU HBM。</small>
+
+!!! note "论文图解卡：Mamba 图先看三件事"
+    **先看哪里**：先看左侧 Structured SSM，再看中间 selection mechanism，最后看右侧 hardware-aware scan。  
+    **图中模块**：SSM 用内部状态承接历史；selection 让状态更新依赖当前输入；hardware-aware algorithm 让训练和推理不把巨大 expanded state 全部写回显存。  
+    **对应公式**：先用 \(h_t=Ah_{t-1}+Bx_t\) 建直觉，再理解 Mamba 把它改成输入相关的 \(h_t=A_t h_{t-1}+B_t x_t\)。  
+    **容易误读**：Mamba 不是没有矩阵乘，也不是普通 RNN；它的重点是用内容选择和并行 scan 把 recurrent state 做到现代 GPU 友好。
 
 !!! note "先抓一句话"
     Transformer 像“每次都翻完整上下文笔记”，Mamba 像“边读边更新一份工作记忆”。前者擅长精确内容寻址，后者擅长低成本长序列流式处理。现在流行的 Mamba-Transformer 不是二选一，而是让 attention 负责少量关键全局交互，让 Mamba 负责多数 token 的状态推进。

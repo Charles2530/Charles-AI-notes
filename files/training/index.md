@@ -2,8 +2,10 @@
 
 <div class="atlas-hero">
   <div class="atlas-kicker">Training Systems</div>
-  <p class="atlas-lead">这一专题围绕大模型训练的完整生产线展开：从预训练、SFT、对齐，到 Megatron-LM、DeepSpeed、输入管线、稳定性、checkpoint 与评测方法学。</p>
+  <p class="atlas-lead">这一专题围绕大模型训练的完整生产线展开：先建立 batch、loss、梯度、优化器和训练阶段的基础直觉，再进入 Megatron-LM、DeepSpeed、输入管线、稳定性、checkpoint 与评测方法学。</p>
   <div class="atlas-chip-row">
+    <span class="atlas-chip">从零入门</span>
+    <span class="atlas-chip">公式符号</span>
     <span class="atlas-chip">预训练</span>
     <span class="atlas-chip">系统栈</span>
     <span class="atlas-chip">数据配方</span>
@@ -11,10 +13,18 @@
   </div>
 </div>
 
+!!! tip "第一次读训练专题怎么走"
+    如果你还不熟 loss、梯度、optimizer、RLHF 或分布式训练，先按这条线走：
+
+    1. [模型训练从零入门](beginner-model-training-primer.md)：按数据与 batch、预测、loss、梯度、optimizer、阶段、分布式和评测建立完整闭环。
+    2. [目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md)：逐个拆公式里的 \(x,y,\theta,\mathcal{L},\pi_\theta,r,\beta,\lambda\)。
+    3. [预训练、微调与对齐](pretraining-finetuning-alignment.md)：理解预训练、SFT、偏好/RL 分别在塑造什么。
+    4. [论文图解索引](page-by-page-visual-guide.md)：用 Chinchilla、InstructGPT、PPO、ZeRO、GPipe 等原论文图建立直觉。
+
 !!! tip "快速定位"
     **一句话结论**：训练效率要同时看吞吐、显存、通信、可恢复性和质量回归。
-    **适合读者**：正在比较训练栈、数据版本、checkpoint、低精度或分布式并行方案的人。
-    **先看哪张表**：先看“最小验收指标”，再看“阅读分层与小地图”。
+    **适合读者**：研究入门读者、正在比较训练栈的人，以及需要把训练实验写成可信证据链的人。
+    **先看哪张表**：初学者先看“第一次读训练专题怎么走”，工程读者再看“最小验收指标”和“阅读分层与小地图”。
 
 !!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
     **10 分钟读法**：先把训练看成数据、loss、优化器、并行、checkpoint 和评测的生产线。
@@ -87,6 +97,7 @@
 
 | 分层 | 推荐内容 | 读到什么程度 |
 | --- | --- | --- |
+| 初学者必读 | [模型训练从零入门](beginner-model-training-primer.md)、[目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md)、[预训练、微调与对齐](pretraining-finetuning-alignment.md)、[论文图解索引](page-by-page-visual-guide.md) | 能把 batch、loss、梯度、optimizer、训练阶段和论文图讲成一条线 |
 | 主线必读 | [Megatron、DeepSpeed 与训练栈](megatron-lm-deepspeed-and-open-training-stacks.md)、[分布式训练与 Checkpointing](distributed-training-and-checkpointing.md)、[低比特训练与数值格式](low-bit-training-and-numerics.md) | 能算清参数、梯度、优化器状态、激活、通信和 checkpoint 的账 |
 | 工程查阅 | 输入管线、稳定性、集群运维、W&B 治理 | 出现吞吐、恢复、数据版本和实验可比性问题时再查 |
 | 论文扩展 | [Megatron-LM](../paper-deep-dives/foundations/megatron-lm.md)、[ZeRO](../paper-deep-dives/foundations/zero.md)、Muon、MagiAttention、Attn-QAT | 把论文里的系统证据回填到训练账本 |
@@ -113,6 +124,14 @@
 ## 推荐入口
 
 <div class="atlas-card-grid">
+  <a class="atlas-card" href="beginner-model-training-primer/">
+    <strong>模型训练从零入门</strong>
+    <p>按 batch、预测、loss、梯度、优化器、训练阶段、分布式和评测建立一条适合研究入门的学习主线。</p>
+  </a>
+  <a class="atlas-card" href="objectives-optimizers-and-schedules/">
+    <strong>目标函数、优化器与 LR 日程</strong>
+    <p>逐个拆解交叉熵、扩散损失、DPO、RLHF/GRPO 和多目标训练公式里的符号含义。</p>
+  </a>
   <a class="atlas-card" href="pretraining-finetuning-alignment/">
     <strong>预训练、微调与对齐</strong>
     <p>先建立训练阶段分工，明确哪些问题该回看底座，哪些问题该回看 SFT 与偏好对齐。</p>

@@ -13,6 +13,9 @@
 !!! note "难点解释：动作不是一句话的翻译"
     VLA 的输出不是“把语言翻译成命令”这么简单。一个动作可能同时包含位置、旋转、夹爪、速度、力和模式切换。不同分量的尺度、频率和风险都不同，动作接口定义错了，模型再大也很难稳定执行。
 
+!!! tip "本页读法"
+    先看动作到底由哪些子变量组成，再看这些变量用什么坐标系、连续还是离散、单步还是 chunk。符号不熟时可以对照 [VLM/VLA 符号与最小数学地图](../vlm/vlm-vla-symbols-and-minimal-math.md)。
+
 !!! example "有趣例子：遥控夹娃娃机"
     玩家说“抓左边那只熊”，但机器真正需要的是横向移动多少、前后移动多少、爪子降多深、什么时候合拢、失败后是否再试一次。VLA 也是这样：语言目标很短，动作接口却很细。
 
@@ -38,11 +41,16 @@ $$
 \pi_\theta(a_t \mid o_{\le t}, l),
 $$
 
-其中：
+| 符号 | 含义 | 红杯例子 |
+| --- | --- | --- |
+| \(\pi_\theta\) | VLA policy | 决定夹爪下一步怎么动 |
+| \(a_t\) | 动作表示 | 位姿增量、夹爪开合、动作 token 或 action chunk |
+| \(o_{\le t}\) | 当前及历史观测 | 图像、深度、关节状态、夹爪宽度 |
+| \(l\) | 语言指令 | “把红杯放到托盘上” |
 
-- \(o_{\le t}\) 是当前及历史观测；
-- \(l\) 是语言指令；
-- \(a_t\) 是模型输出的动作表示。
+**读作什么**：模型根据历史观测和语言指令输出动作。
+
+**这个公式不说明什么**：它没有规定动作单位、坐标系、控制频率、是否可中断，也没有保证控制器能安全执行。
 
 但 \(a_t\) 到底是什么，会直接决定学习难度、跨机器人迁移难度、控制平滑性、低层控制器接口、安全约束方式，以及数据采集和标注的统一性。
 
@@ -61,6 +69,16 @@ $$
 - \(g_t\)：夹爪开合；
 - \(m_t\)：模式切换，如抓取、导航、对齐；
 - \(f_t\)：力或阻抗相关量。
+
+**读作什么**：一个动作不是一个数字，而是一组物理含义不同的子变量。
+
+| 子变量 | 常见单位 | 学习风险 |
+| --- | --- | --- |
+| \(p_t\) | 米、厘米或归一化坐标 | 尺度不统一会导致位移过大或过小 |
+| \(r_t\) | 弧度、欧拉角、四元数或旋转 token | 姿态表示不连续会抖 |
+| \(g_t\) | 0/1、毫米开度或归一化值 | 夹爪时序错会抓空或夹坏 |
+| \(m_t\) | 离散模式 ID | 技能边界错会导致状态机混乱 |
+| \(f_t\) | 力、阻抗或柔顺参数 | 风险高，常需要安全约束 |
 
 这件事很重要，因为现实任务里这些分量的统计性质完全不同：平移通常连续且范围较大，旋转存在角度表示问题，夹爪往往接近离散开关，力控制则更稀疏也更危险。
 
@@ -120,6 +138,16 @@ $$
 
 如果目标是做跨平台或高层策略，很多系统更偏向先学更稳健的相对表示，再通过中间适配层映射到具体机器人控制接口。
 
+![SpatialVLA adaptive action grids](../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-2-action-grids.png){ width="760" }
+
+<small>图源：[SpatialVLA: Exploring Spatial Representations for Visual-Language-Action Models](../paper-deep-dives/embodied-ai/spatialvla.md)，Figure 2。原论文图意：Adaptive action grids 先统计 translation 和 rotation action movement 的分布，再根据 Gaussian fitting 对每个动作变量划分等概率区间，形成空间动作 token。</small>
+
+!!! note "读图：SpatialVLA 为什么要管动作网格"
+    **先看哪里**：translation 和 rotation 的动作分布，以及如何被切成 adaptive grids。  
+    **它证明什么**：动作离散化不是随便分桶，分桶方式会影响跨机器人、跨动作尺度的适配。  
+    **它不证明什么**：更聪明的动作网格不自动解决深度误差、接触控制和长时恢复。  
+    **和红杯例子的关系**：如果“下降 1cm”和“下降 5cm”被粗暴放在同一个桶里，夹杯时就可能撞杯或抓空。
+
 ## 5. 笛卡尔空间与关节空间
 
 ### 5.1 笛卡尔空间动作
@@ -163,8 +191,11 @@ $$
 
 <small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 2。原论文图意：RT-1-X 与 RT-2-X 都以图像和文本指令为输入并输出离散 end-effector actions；RT-2-X 把动作表示成另一种语言 token，与视觉语言数据一起训练。</small>
 
-!!! note "图解：离散动作 token 的优势和代价"
-    这张图把“动作也可以 token 化”画得很直观：输入仍是图像和指令，输出不再是自然语言，而是 gripper、位置增量、旋转等离散动作 token。优势是可以复用 Transformer/LLM 的序列建模和多任务训练框架；代价是连续控制被量化，精细接触时可能出现不够平滑或边界抖动。因此离散动作更适合通用策略和跨任务统一接口，低层执行仍需要控制器和安全滤波兜底。
+!!! note "读图：离散动作 token 的优势和代价"
+    **先看哪里**：输入仍是图像和指令，输出却变成 gripper、位置增量、旋转等动作 token。  
+    **它证明什么**：动作可以接入 Transformer/LLM 的序列建模和多任务训练框架。  
+    **它不证明什么**：连续控制被分桶后不会抖，或者精细接触一定够准。  
+    **和红杯例子的关系**：token 可以表达“下降、闭爪、抬起”，但低层控制器仍要保证动作平滑、安全、不过界。
 
 ### 6.3 何时离散更合适
 
@@ -177,6 +208,17 @@ $$
 $$
 \hat{A}_{t:t+H-1} = \pi_\theta(o_{\le t}, l).
 $$
+
+| 符号 | 含义 |
+| --- | --- |
+| \(\hat A_{t:t+H-1}\) | 模型预测的一段未来动作 |
+| \(H\) | chunk horizon，动作块长度 |
+| \(o_{\le t}\) | 当前及历史观测 |
+| \(l\) | 语言指令 |
+
+**读作什么**：策略一次输出未来几步动作，而不是只输出下一步。
+
+**这个公式不说明什么**：chunk 内每一步是否真的会执行、是否可中断、执行中是否重新观察，都需要数据 schema 和控制接口额外记录。
 
 优点是减少抖动、学出更完整的技能片段，降低感知噪声对每步决策的影响，并让模型在时间上看得更远。
 
@@ -197,8 +239,11 @@ $$
 
 <small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705)，Figure 2。原论文图意：Action Chunking with Transformers (ACT) 用 CVAE 编码动作序列和关节观测，测试时根据多视角图像、关节状态和 latent 生成一段 action sequence，并用 temporal ensembling 平滑执行。</small>
 
-!!! note "图解：action chunk 是为了解决时间结构"
-    ACT 图说明了为什么很多机器人策略不只输出下一步动作：一段短动作能保留技能内部结构，减少逐帧抖动。π0.5 也采用高层子任务加连续 action chunk 的路线：先预测“现在该做什么”，再生成约 1 秒的连续动作。对世界模型高效训练来说，chunk size 不是小细节，它直接改变动作 token 数、rollout horizon、恢复频率和安全回退难度。
+!!! note "读图：action chunk 是为了解决时间结构"
+    **先看哪里**：模型输出的是 action sequence，并用 temporal ensembling 平滑执行。  
+    **它证明什么**：一段短动作能保留技能内部结构，减少逐帧抖动。  
+    **它不证明什么**：chunk 越长越好。环境变化时，长 chunk 会让系统更偏开环。  
+    **和红杯例子的关系**：抓杯动作适合用短 chunk 表达“对准、闭爪、抬起”，但杯子滑动时必须能打断和重规划。
 
 ### 7.2 算一遍：chunk 从 4 提到 16
 
@@ -212,6 +257,12 @@ $$
 ![π0.5 model overview 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-3-model-overview.png){ width="920" }
 
 <small>图源：[π0.5: a Vision-Language-Action Model with Open-World Generalization](https://arxiv.org/abs/2504.16054)，Figure 3。原论文图意：模型把视觉语言上下文、高层任务理解和动作专家连接起来，面向真实机器人输出连续动作 chunk。</small>
+
+!!! note "读图：π0.5 为什么分高层和低层"
+    **先看哪里**：上方 high-level subtask prediction 和下方 action expert 的分工。  
+    **它证明什么**：长任务常需要先决定语义子任务，再生成短时连续动作。  
+    **它不证明什么**：有 high-level subtask 不等于动作一定安全执行，仍要控制器、反馈和失败恢复。  
+    **和红杯例子的关系**：高层可以决定“先拿红杯”，低层 action expert 负责约 1 秒内怎么靠近和夹取。
 
 这里有两个容易混淆的成本：
 

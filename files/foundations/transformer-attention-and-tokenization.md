@@ -42,6 +42,13 @@ x = [x_1, x_2, \ldots, x_L]
 h_i = \text{Embedding}(x_i)
 \]
 
+| 符号 | 含义 |
+| --- | --- |
+| \(x_i\) | 第 \(i\) 个 token，可以是文本 token、图像 patch 或动作 token |
+| \(h_i\) | 第 \(i\) 个 token 的向量表示 |
+| \(L\) | 序列长度，token 总数 |
+| \(D\) | hidden dimension，每个 token 向量的长度 |
+
 ## 2. Attention 的 Q/K/V 直觉
 
 Attention 可以用“提问、匹配、读取”理解：
@@ -57,6 +64,16 @@ Attention 可以用“提问、匹配、读取”理解：
 \]
 
 这表示每个 token 会根据相似度，从其他 token 里加权读取信息。
+
+!!! note "公式拆读：softmax 里面到底是什么"
+    \(QK^\top\) 是“每个 query 和每个 key 的匹配分数”，shape 大致是 `[L, L]`；\(\sqrt d\) 用来缩放分数，避免维度大时点积过大；`softmax` 把分数变成权重；最后乘 \(V\)，表示按权重把 value 读回来。最简读法是：先匹配，再归一化，再读取。
+
+| 符号 | 读法 | 含义 |
+| --- | --- | --- |
+| \(Q\) | query | 当前位置想找什么信息 |
+| \(K\) | key | 每个位置提供什么可匹配线索 |
+| \(V\) | value | 真正被读走的内容 |
+| \(d\) | head dimension | 单个 attention head 的维度 |
 
 ![Scaled Dot-Product Attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-left.png){ width="280" }
 ![Multi-Head Attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-right.png){ width="360" }
@@ -140,7 +157,7 @@ Self-Attention 的核心矩阵是 \(L \times L\)，其中 \(L\) 是序列长度�
 
 如果你关心为什么长上下文还会涉及位置编码、causal mask、padding mask 和 KV cache，可以继续看 [位置编码与上下文 Mask](positional-encoding-masks-and-context.md)。
 
-## 5. 技术报告里的 Transformer：KV cache、MLA 与 MoE
+## 5. 进阶读法：技术报告里的 Transformer、KV cache、MLA 与 MoE
 
 读 DeepSeek-V3、Kimi K2、Qwen3 这类技术报告时，Transformer 已经不只是“Q/K/V + MLP”这张课堂图了。它更像一个系统接口：attention 决定长上下文怎么存，FFN 决定参数容量怎么用，router 决定 token 会被送到哪台机器上的哪个 expert。
 

@@ -1,206 +1,288 @@
 # 扩散采样与推理加速
 
-扩散推理的本质，是把训练好的去噪网络当成一个向量场估计器，再沿着这条向量场从噪声走回数据分布。
+训练阶段，模型学会在任意噪声水平下给出去噪方向。推理阶段，我们从纯噪声 \(x_T\) 出发，反复调用模型，逐步得到 \(x_0\)。
 
-采样器可以先按“预算怎么花”来理解。`Euler` 更像低成本快速基线，`Heun` 用额外模型调用换更平滑的修正，`DPM-Solver++` 则更适合作为少步高质量和强 guidance 场景的默认候选。DDPM 原论文的 progressive generation 图能直观看到：采样不是一次完成，而是从噪声逐步形成结构和细节。
+这页的核心问题是：**模型告诉我们往哪里去噪，采样器决定每一步怎么走。**
+
+## 先看图：采样是逐步成形
 
 ![DDPM progressive generation 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-14-progressive-generation.jpg){ width="670" }
 
-<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 14。原论文图意：CIFAR-10 unconditional generation 的 progressive generation 过程，展示反向采样链中图像如何从噪声逐步变成可辨认样本。</small>
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 14。</small>
 
-!!! note "图解：progressive generation 图要看成采样轨迹"
-    这张图展示的是同一条反向链上不同时间点的样子：早期主要从噪声里形成粗结构，中后期逐步补边缘、颜色和纹理。它说明“采样步”本来承担逐层成形的职责。采样器不是在提升模型本身的知识，而是在决定同一个去噪网络如何离散求解。实际选型时不要只看单张图效果，应该按步数、guidance、prompt 类型、延迟和失败样本分桶比较。
+<small>原论文图意：CIFAR-10 unconditional generation 的 progressive generation 过程，展示反向采样链中图像如何从噪声逐步变成可辨认样本。</small>
 
-!!! note "常见误区：步数越少就越先进"
-    训练好的扩散网络给出的是“往哪里去噪”的方向估计，采样器决定每一步怎么走、走多远、是否校正。少步采样真正要比较的是速度、质量、稳定性和失败分布。4 步模型如果只在简单 prompt 上好看，却在文字、多人、复杂布局或高 guidance 下明显抖动，工程上未必优于 12 或 20 步方案。
+<small>本教程读法：早期采样主要确定大结构，中后期逐渐补边缘、颜色和纹理。这说明采样步不是装饰，而是在把模型的局部去噪能力串成完整图像。</small>
 
-## 1. 为什么推理会慢
+## 1. 为什么需要采样器
 
-原始 `DDPM` 往往需要 \(T=1000\) 左右的离散步。若每一步都要跑一次大 UNet，整体时延会很高。
-
-**所以采样加速主要在做两件事**：
-
-- 用更少的时间点离散同一条轨迹。
-- 用更高阶的数值方法减少离散误差。
-
-## 2. DDIM：把随机链改成确定路径
-
-`DDIM` 的常见更新可以写成：
+模型通常输出的是某种方向信息，例如噪声预测：
 
 \[
-x_{t-1} = \sqrt{\bar{\alpha}_{t-1}}\hat{x}_0 + \sqrt{1-\bar{\alpha}_{t-1}-\sigma_t^2}\,\hat{\epsilon} + \sigma_t z
+\hat{\epsilon}=\epsilon_\theta(x_t,t)
 \]
 
-当 \(\sigma_t = 0\) 时，采样变成确定性的。这样做的好处是：
+这行式子在说：模型根据当前带噪样本 \(x_t\) 和时间步 \(t\)，预测里面的噪声 \(\hat{\epsilon}\)。
 
-- 同样模型可以跳过很多中间步。
-- 轨迹更可控。
-- 图像插值和反演更方便。
+但光有方向还不够。推理时还要决定：
 
-### 例子：草图成图
+- 这一步从 \(x_t\) 更新到哪个 \(x_{t-1}\)；
+- 时间步是否可以跳过；
+- 要不要额外加入随机噪声；
+- 每一步走多远；
+- 是否用校正或高阶方法减少误差。
 
-你给模型一张简单线稿和提示词“日落下的海边灯塔”。
+这些规则合起来就是采样器，也常叫 sampler 或 solver。
 
-- 用很多步时，灯塔、海面、霞光会逐层细化。
-- 用 DDIM 减少到 20 或 30 步时，整体结构仍可保住，但一些浪花和云层细节会更依赖模型本身的先验。
+## 2. 原始 DDPM：随机反向链
 
-## 3. ODE 视角：采样是数值积分
-
-在连续时间视角下，可以把采样写成 probability flow <a class="term-tip" href="../score-matching-sde-and-probability-flow/#6-probability-flow-ode" data-tip="ODE：Ordinary Differential Equation，常微分方程。这里把去噪过程看成确定性的连续轨迹，然后用有限步近似。">ODE</a>：
+DDPM 的反向一步可以粗略写成：
 
 \[
-\frac{dx}{dt} = f_\theta(x,t)
+x_{t-1}=\mu_\theta(x_t,t)+\sigma_t z,
+\qquad
+z\sim\mathcal{N}(0,I)
 \]
 
-这里 \(f_\theta\) 由 score 或噪声预测网络导出。于是采样器就变成了 <a class="term-tip" href="../score-matching-sde-and-probability-flow/#8" data-tip="ODE solver：常微分方程求解器。扩散采样里，它决定每一步怎样沿向量场移动，例如 Euler、Heun 或 DPM-Solver。">ODE solver</a>。
+这行式子在说：下一步 \(x_{t-1}\) 由模型预测的均值 \(\mu_\theta\) 加上一点随机噪声组成。
 
-!!! tip "简称怎么读"
-    `ODE` 是常微分方程，强调确定性轨迹；`SDE` 是随机微分方程，轨迹里还包含随机扰动。扩散模型先有连续过程，再把连续过程离散成有限步采样，所以采样器本质上是在控制数值积分误差。
+符号含义：
 
-## 4. Euler：最简单的一阶方法
+| 符号 | 含义 |
+| --- | --- |
+| \(x_t\) | 当前噪声状态 |
+| \(x_{t-1}\) | 更干净的下一状态 |
+| \(\mu_\theta(x_t,t)\) | 模型推导出的反向均值 |
+| \(\sigma_t\) | 这一步额外加入的噪声标准差 |
+| \(z\) | 新采样的标准高斯噪声 |
 
-若把时间离散成 \(t_n\)，Euler 更新写成：
+DDPM 的好处是贴近原始概率建模，坏处是通常需要很多步。早期设置里 \(T\) 常接近 1000，意味着要调用模型很多次。
+
+## 3. DDIM：为什么可以跳步
+
+DDIM 的重要贡献是：不重新训练模型，也可以改变采样路径，让反向过程更确定、更少步。
+
+![DDIM accelerated generation 原论文图](../assets/images/paper-figures/diffusion/ddim-figure-2-accelerated-generation.png){ width="640" }
+
+<small>图源：[Denoising Diffusion Implicit Models](https://arxiv.org/abs/2010.02502)，Figure 2。</small>
+
+<small>原论文图意：accelerated generation 可以只使用子序列 \(\tau=[1,3]\)，跳过中间部分时间步，从而减少生成所需步骤。</small>
+
+<small>本教程读法：图中的虚线时间点表示训练时存在、采样时可以跳过的中间状态。DDIM 的关键是改采样路径，而不是重训模型。</small>
+
+DDIM 常见更新形式为：
 
 \[
-x_{n+1} = x_n + h f_\theta(x_n, t_n)
+x_{t-1}
+=
+\sqrt{\bar{\alpha}_{t-1}}\hat{x}_0
++
+\sqrt{1-\bar{\alpha}_{t-1}-\sigma_t^2}\hat{\epsilon}
++
+\sigma_t z
 \]
 
-**优点**：
+这行式子在说：下一步 \(x_{t-1}\) 由三部分组成：预测干净图贡献、预测噪声方向贡献、以及可选随机噪声。
 
-- 每步只需一次模型调用。
-- 实现最简单。
+符号含义：
 
-**缺点**：
+| 符号 | 含义 |
+| --- | --- |
+| \(\hat{x}_0\) | 根据模型输出估计的干净图 |
+| \(\hat{\epsilon}\) | 模型预测的噪声 |
+| \(\bar{\alpha}_{t-1}\) | 下一时间步的累计信号保留比例 |
+| \(\sigma_t z\) | 额外随机项 |
+| \(\sigma_t=0\) | 确定性 DDIM 采样 |
 
-- 局部截断误差是一阶，步数太少时容易损细节。
+当 \(\sigma_t=0\) 时，同一个初始噪声和同一组条件会得到确定性轨迹，更适合复现、反演和插值。
 
-### 例子：四步速写采样
+## 4. ODE 视角：采样是数值积分
 
-假设我们只允许 4 步采样一张“蓝色陶瓷杯放在木桌上”的图像：
-
-1. 第一步决定大布局，是俯视还是侧视。
-2. 第二步拉出杯子和桌面的轮廓。
-3. 第三步补蓝釉反光和阴影。
-4. 第四步修边缘与背景景深。
-
-Euler 在这种极少步场景下速度很高，但每一步都很“硬”，容易让杯口边缘略粗糙。
-
-## 5. Heun：预测后再校正
-
-Heun 方法先预测，再修正：
+从 Score/SDE 视角看，确定性采样可以写成 probability flow ODE：
 
 \[
-\tilde{x}_{n+1} = x_n + h f_\theta(x_n,t_n)
+\frac{dx}{dt}=f_\theta(x,t)
 \]
+
+这行式子在说：样本 \(x\) 随时间连续变化，变化速度由模型导出的向量场 \(f_\theta(x,t)\) 决定。
+
+符号含义：
+
+| 符号 | 含义 |
+| --- | --- |
+| ODE | 常微分方程，表示确定性连续轨迹 |
+| \(\frac{dx}{dt}\) | 当前样本随时间变化的速度 |
+| \(f_\theta(x,t)\) | 由模型输出、噪声日程和参数化共同导出的更新方向 |
+
+现实机器不能连续积分，只能选有限个时间点离散更新。采样器就是数值求解器：它决定如何用有限步近似这条连续轨迹。
+
+## 5. Euler：最简单的一阶方法
+
+Euler 更新写成：
 
 \[
-x_{n+1} = x_n + \frac{h}{2}\left(f_\theta(x_n,t_n) + f_\theta(\tilde{x}_{n+1}, t_{n+1})\right)
+x_{n+1}=x_n+h f_\theta(x_n,t_n)
 \]
 
-它本质上用两次斜率平均来提升精度。
+这行式子在说：从当前点 \(x_n\) 出发，沿当前方向 \(f_\theta(x_n,t_n)\) 走一步，步长是 \(h\)。
 
-**优点**：
+符号含义：
 
-- 在同样步数下，常比 Euler 更平滑。
-- 中低步数下更容易保住轮廓和细节。
+| 符号 | 含义 |
+| --- | --- |
+| \(x_n\) | 当前离散采样点 |
+| \(x_{n+1}\) | 下一离散采样点 |
+| \(h\) | 步长 |
+| \(f_\theta(x_n,t_n)\) | 当前模型给出的方向 |
 
-**代价**：
+Euler 简单、便宜、每步只需一次方向估计。但步数太少时，它容易因为只看当前斜率而走偏。
 
-- 近似每步两次网络调用。
+## 6. Heun：先预测，再校正
 
-## 6. DPM-Solver：为 diffusion ODE 定制的高阶解法
-
-`DPM-Solver` 的思路不是机械套用通用 Runge-Kutta，而是利用扩散 ODE 的特殊结构，把线性项做更准确处理。
-
-**可以把它粗略理解为**：
+Heun 方法先做一次 Euler 预测：
 
 \[
-x_{t_{n+1}} = \Phi(x_{t_n}, \epsilon_\theta, t_n, t_{n+1})
+\tilde{x}_{n+1}
+=
+x_n+h f_\theta(x_n,t_n)
 \]
 
-其中 \(\Phi\) 不是普通的 Euler 步，而是考虑了噪声日程与网络输出结构的专用更新算子。
+这行式子在说：先用当前方向试着走到一个临时点 \(\tilde{x}_{n+1}\)。
 
-**这类方法的价值在于**：
+然后用当前点和临时点的方向做平均：
 
-- 当步数压到 10 到 20 时，仍能保持较高质量。
-- 对大型文生图模型尤其有用。
+\[
+x_{n+1}
+=
+x_n
++
+\frac{h}{2}
+\left[
+f_\theta(x_n,t_n)
++
+f_\theta(\tilde{x}_{n+1},t_{n+1})
+\right]
+\]
 
-## 7. DPM-Solver++ 与 guidance
+这行式子在说：不要完全相信起点方向，而是看看走到临时点后方向变成什么，再用两个方向的平均值更新。
 
-在 classifier-free guidance 下，向量场会更“陡”，数值求解更容易不稳。`DPM-Solver++` 通过更适合 guided sampling 的参数化改善这个问题。
+Heun 通常比 Euler 更平滑，但代价是每步大约需要两次模型方向估计。
 
-**工程上可以把这看成**：
+## 7. DPM-Solver：为扩散 ODE 定制
 
-- 无 guidance 时，求解路径较平缓。
-- 高 guidance 时，系统更像高曲率轨迹，低阶方法更容易偏。
-- `DPM-Solver++` 正是在这种情况下更稳。
+DPM-Solver 的思想不是简单套通用 ODE solver，而是利用 diffusion ODE 的特殊结构，把一部分线性项解析处理，再用模型输出近似剩下的非线性部分。
 
-## 8. 如何选
+可以粗略写成：
 
-### 只想快，不想重训
+\[
+x_{t_{n+1}}
+=
+\Phi(x_{t_n}, \epsilon_\theta, t_n, t_{n+1})
+\]
 
-- 先试 `DPM-Solver++`
-- 其次 `Euler`
-- 再根据细节需求看 `Heun`
+这行式子在说：DPM-Solver 用一个专门设计的更新算子 \(\Phi\)，根据当前状态、模型输出和两个时间点，直接计算下一状态。
 
-这一类需求最典型的场景，是你手里已经有一个训练好的扩散模型，希望**只改推理栈、不动训练栈**。此时应优先选择对现有权重最友好的 solver，而不是一上来就引入蒸馏、Consistency 或一步模型。`DPM-Solver++` 往往是默认优先项，因为它在少步和 guidance 场景下通常更稳；`Euler` 更像一个快速、直接、好调试的基线；`Heun` 则适合你愿意多付一点计算，去换更平滑的边缘和更稳的中低步质量。
+符号含义：
 
-一个很实用的策略是，先固定同一组 prompt、seed 和 guidance，把 `Euler`、`Heun`、`DPM-Solver++` 在 8 步、12 步、20 步几个延迟桶上拉出速度-质量曲线。这样你看到的不只是“哪个平均更好”，而是同一模型在不同预算下最合适的 solver。
+| 符号 | 含义 |
+| --- | --- |
+| \(\Phi\) | DPM-Solver 的专用更新算子 |
+| \(t_n,t_{n+1}\) | 当前和下一采样时间点 |
+| \(\epsilon_\theta\) | 模型预测的噪声或等价参数化输出 |
 
-### 想做交互式预览
+它的目标是在 10 到 20 步这类少步预算下，尽量逼近很多步采样的质量。
 
-- 用很少步的 `Euler` 或 `DDIM`
-- 先给用户低成本草图
-- 再切高质量采样器二次精修
+## 8. DPM-Solver++：为什么 guidance 场景更稳
 
-交互式预览的重点并不是一次把终图做到最好，而是**尽快给用户一个可判断方向的中间结果**。因此预览阶段更看重 TTFT 和整体构图是否对，而不是纹理是否已经打磨完整。少步 `Euler` 或 `DDIM` 的价值就在这里：先把主体、构图、色调和大轮廓给出来，让用户尽早决定要不要继续。
+高 guidance 会放大条件方向，让采样轨迹变陡。普通高阶 solver 在这种情况下可能不稳。
 
-这类场景通常适合做两段式工作流。第一段用 4 到 8 步左右的便宜采样快速出草图；第二段只对用户确认后的候选图切到更高质量 solver、更多步数，甚至叠加超分与修复。这样能把总系统成本从“每张图都精修”改成“只有值得的图才精修”。
+![DPM-Solver++ guided instability 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-1-guided-instability.png){ width="760" }
 
-### 想做生产级文生图
+<small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 1。</small>
 
-- 用 `DPM-Solver++` 或同类高阶 solver 作为默认
-- 为高 guidance 场景单独做参数搜索
+<small>原论文图意：在 ImageNet 256×256、classifier guidance scale 8.0、15 NFE 下，直接使用此前高阶 solver 可能产生明显失真；DPM-Solver++ 生成更稳定。</small>
 
-生产级文生图更在意的是**稳定收益**，而不是偶尔出一张更好的样例图。因此默认 solver 不能只看最好看的展示图，而要看不同 prompt 类型、不同 guidance、不同分辨率和不同 seed 下的整体波动。高阶 solver 往往更适合作为默认路径，是因为它们在少步情况下更容易同时兼顾成本和可接受质量。
+<small>本教程读法：高阶方法不是无条件更好。强 guidance 会改变方向场形状，使少步求解更难；DPM-Solver++ 的价值在于专门改善 guided sampling 的少步稳定性。</small>
 
-此外，生产场景下 guidance 往往不是一个固定值。广告图、写实人像、二次元、logo 或海报的最优 guidance 可能完全不同。更稳的做法是把 solver 和 guidance 一起做桶化配置，而不是假设一组全局参数能覆盖所有流量。
+DPM-Solver++ 还给出更具体的算法形式：
 
-## 9. 一个直观结论
+![DPM-Solver++ algorithms 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/algorithms-1-2.png){ width="860" }
 
-**采样器像不同的开车方式**：
+<small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Algorithm 1/2。</small>
 
-- `Euler` 像直来直去地快速修正方向。
-- `Heun` 像先试探一下方向，再回头纠偏。
-- `DPM-Solver` 像对道路曲率有更多先验，因此在少量转向中也能更平滑地开到终点。
+<small>原论文图意：DPM-Solver++(2S) 使用 singlestep 中间点；DPM-Solver++(2M) 使用 multistep buffer 复用历史 \(x_\theta\) 预测。</small>
 
-如果把这个比喻再往工程上落一点，可以把采样器理解成“在相同模型能力下，决定你怎样花推理预算”的执行策略。`Euler` 更适合做低成本基线和快速预览，`Heun` 更像在同等步数下争取更稳的折中，`DPM-Solver` 系列则是在明确追求少步高质量时更像默认主力。真正的设计问题，从来不是哪一个名字更先进，而是你的预算、任务和质量门槛更适合哪种开车方式。
+<small>本教程读法：算法图里的细节可以后读。入门时只抓住两点：它是训练后的 sampler，不需要重训模型；它通过更合适的参数化和多步信息，在少 NFE 下控制误差。</small>
 
-## 快速代码示例
+收敛和步数关系可以看这张图：
 
-```python
-from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler  # 加载扩散管线和 DPM-Solver 调度器
-import torch  # 指定半精度 dtype
+![DPM-Solver++ convergence 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-4-convergence.png){ width="860" }
 
-pipe = DiffusionPipeline.from_pretrained(  # 从权重仓库加载 SDXL 管线
-    "stabilityai/stable-diffusion-xl-base-1.0",  # 基础模型名称
-    torch_dtype=torch.float16,  # 使用 FP16 降低显存占用
-).to("cuda")  # 把管线移动到 GPU
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)  # 切换为 DPM-Solver 多步调度器
+<small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 4。</small>
 
-image = pipe(  # 执行一次文生图推理
-    "rainy cyberpunk street, neon sign, ultra detailed",  # 输入提示词
-    num_inference_steps=20,  # 步数预算
-    guidance_scale=6.0,  # 条件强度
-).images[0]  # 取第一张生成图
-image.save("sample.png")  # 保存结果图片
+<small>原论文图意：在 pixel-space DPM 和 latent-space DPM 中比较不同 sampler 随 NFE 变化的 FID / MSE。</small>
+
+<small>本教程读法：横轴 NFE 是模型前向调用次数。少 NFE 更快，但更考验 solver。不同 solver 在同样 NFE 下质量差异明显，说明“采样器怎么走”确实重要。</small>
+
+## 9. NFE：采样成本怎么数
+
+NFE 是 Number of Function Evaluations，通常可以粗略理解成模型前向调用次数。
+
+| 设置 | 直觉成本 |
+| --- | --- |
+| DDPM 1000 步 | 很慢，但接近原始反向链 |
+| DDIM 50 步 | 少步、可跳步，常用于加速 |
+| DPM-Solver++ 15-30 NFE | 少步高质量常用选择 |
+| CFG 采样 | 如果条件和无条件不能合批，单步可能需要两次前向 |
+
+NFE 不是唯一指标。真实选型还要看质量、多样性、prompt 对齐、失败样本类型和延迟预算。
+
+## 10. 几个采样器怎么选
+
+| 采样器 | 随机性 | 典型优点 | 典型代价 |
+| --- | --- | --- | --- |
+| DDPM | 有 | 理论自然，多样性强 | 步数多 |
+| DDIM | 可设为无 | 可跳步，可复现，适合反演 | 极少步时细节可能损失 |
+| Euler | 通常确定 | 简单、快、好调试 | 低步数误差明显 |
+| Heun | 通常确定 | 预测后校正，更平滑 | 每步更贵 |
+| DPM-Solver++ | 通常确定或可扩展 SDE 版 | 少步质量好，强 guidance 更稳 | 参数和实现更复杂 |
+
+初学时不用背所有名字。只要记住：
+
+```text
+DDPM：原始慢链
+DDIM：改路径，能跳步
+Euler / Heun：通用数值积分思路
+DPM-Solver++：面向扩散 ODE 和 guidance 的少步高阶求解器
 ```
 
-这段代码展示了一个可直接运行的文生图最小推理链路：加载模型后把 scheduler 切到 `DPMSolverMultistep`，再通过 `num_inference_steps` 与 `guidance_scale` 控制速度和条件强度。通常先用 15 到 30 步做首轮调参，再按任务质量要求细化。
+## 11. 采样器不能补模型不会的东西
 
-## 工程收束
+采样器能减少数值误差，提高同一模型在给定步数下的质量和速度。但它不能凭空让模型学会训练数据里没有的概念，也不能修复严重的数据偏差。
 
-扩散推理要按采样步数、solver 稳定性、guidance 强度、延迟预算和部署路径一起选型。最容易踩坑的是只追更少步数、忽略质量抖动、把离线单图生成结论外推到交互式系统；更稳的验收方式是记录速度-质量曲线，为不同延迟桶保留多档策略，并固定 prompt 套件、延迟桶和回退门槛。
+所以比较采样器时要固定：
 
-*[ODE]: Ordinary Differential Equation，常微分方程；在扩散里常指没有额外随机噪声项的 probability flow 轨迹。
-*[SDE]: Stochastic Differential Equation，随机微分方程；在扩散里常指带随机噪声项的连续时间加噪或反向生成过程。
+- 同一个模型；
+- 同一组 prompt；
+- 同一组 seed；
+- 同一 guidance scale；
+- 同一分辨率；
+- 同一 NFE 或延迟桶。
+
+否则很容易把模型能力、prompt 难度和采样器差异混在一起。
+
+## 12. 和后续页面的关系
+
+基础主线到这里已经闭环：训练学会去噪方向，噪声日程定义训练区间，score/SDE 解释方向场，guidance 改变条件方向，采样器负责数值求解。
+
+后续 [一步生成、蒸馏与整流](distillation.md) 和 [一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) 会继续问：如果 15 到 30 步还嫌慢，能不能训练一个学生模型，把多步生成压到几步甚至一步？
+
+!!! tip "进阶理解"
+    在生产系统和世界模型 rollout 里，采样器还会影响吞吐、显存、交互延迟和闭环控制频率。少步不是唯一目标，真正要优化的是“在任务可接受质量下，用最少成本稳定地产生结果”。
+
+## 小结
+
+采样器是扩散推理的执行策略。模型提供去噪方向，采样器把方向变成有限步更新。DDPM、DDIM、Euler、Heun、DPM-Solver++ 的差异，本质上都在回答同一个问题：在有限 NFE 下，怎样更快、更稳、更准地从噪声走回数据。
+
+*[NFE]: Number of Function Evaluations，模型前向调用次数。
+*[ODE]: Ordinary Differential Equation，常微分方程。

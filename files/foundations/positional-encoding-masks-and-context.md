@@ -12,6 +12,20 @@ Attention 本身只计算 token 之间的相关性。它并不知道第一个 to
 !!! tip "遇到这些症状，回看本页"
     packed sequence 训练后验证集异常变好、长视频模型偷看未来帧、图像/动作 token 的时间顺序错乱，或者 attention mask 让某些 rank 负载极不均时，回看本页。本页能帮你判断问题是位置编码外推、causal/padding mask 泄漏、block mask 设计，还是长上下文可见性规则和系统调度不匹配。
 
+## 0. 符号卡：位置和可见性
+
+| 符号或词 | 含义 |
+| --- | --- |
+| \(i,j\) | token 位置编号 |
+| \(L\) | 序列长度 |
+| `position id` | 每个 token 的位置编号 |
+| `causal mask` | 当前 token 只能看过去和自己 |
+| `padding mask` | 补齐用的 padding token 不参与 attention |
+| `block mask` | 只允许某些区块互相可见 |
+| \(-\infty\) | mask 里常用的不可见分数，softmax 后权重接近 0 |
+
+一句话记法：position 告诉模型“我在哪里”，mask 告诉模型“我能看谁”。
+
 ## 1. 为什么需要位置编码
 
 如果没有位置编码，Transformer 对输入顺序不敏感。句子：

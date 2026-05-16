@@ -5,6 +5,9 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 !!! note "初学者先抓住"
     视觉连接器的本质是信息瓶颈：保留任务需要的信息，丢掉暂时不重要的细节。VLM 关心回答问题，VLA 关心动作可执行，世界模型关心未来可预测性，这三者需要的视觉信息并不完全相同。
 
+!!! example "贯穿例子：红杯到托盘"
+    如果任务是“把红杯从桌边放到托盘上”，VLM 问答只需要知道“红杯在哪里”。VLA 还要知道杯沿、夹爪、托盘边界和障碍物。世界模型更进一步，要保留“从侧面推会不会滑落、从上方夹会不会更稳”这类动作后果信号。
+
 ## 三层接口
 
 | 层级 | 典型形式 | 主要问题 | 失败表现 |
@@ -13,14 +16,34 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 | 连接器 | projector、Q-Former、resampler、cross-attention | 如何控制 token 数和语义密度 | 回答泛泛、定位不准、细节丢失 |
 | 消费端 | LLM、policy head、world model latent | 如何服务语言、动作或未来预测 | 会描述但不会行动，或会行动但不能解释失败 |
 
+连接器可以先用一个简化公式理解：
+
+\[
+c = g_\theta(h_v, q)
+\]
+
+| 符号 | 含义 |
+| --- | --- |
+| \(h_v\) | 视觉 encoder 输出的大量视觉特征 |
+| \(q\) | learnable query、文本查询或任务查询 |
+| \(g_\theta\) | 连接器，例如 projector、Q-Former、resampler、cross-attention |
+| \(c\) | 压缩后交给 LLM、VLA policy 或 world model 的视觉 token |
+
+**读作什么**：连接器从大量视觉特征里抽取少量后续模型能消费的信息。
+
+**这个公式不说明什么**：它没有自动告诉我们该保留什么。VLM、VLA、world model 的验收指标不同，连接器的训练目标也要跟着不同。
+
 ## 论文依据：BLIP-2 把连接器做成信息瓶颈
 
 ![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="760" }
 
 <small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。原论文图意：冻结图像编码器，用 Q-Former 通过少量 query token 从视觉特征中抽取信息，并分别服务 image-text contrastive learning、image-grounded text generation 和 image-text matching。</small>
 
-!!! note "图解：连接器不是简单投影层"
-    这张图的关键是 query token：后续语言模型并不直接吞下所有图像 patch，而是通过一个可训练瓶颈读取视觉证据。放到世界模型高效训练里，问题会更尖锐：VLM 的 query 主要为当前问答服务，世界模型的视觉 latent 还必须保留未来预测、动作后果和风险判断需要的信息。因此连接器不能只按 VQA 分数选，还要按动作敏感性、接触状态和长时记忆验收。
+!!! note "读图：连接器不是简单投影层"
+    **先看哪里**：看中间的 query token，它们从冻结视觉 encoder 的输出中读取信息，而不是把所有 patch 原样交给 LLM。  
+    **它证明什么**：视觉信息可以通过少量 query token 变成语言模型可用的证据。  
+    **它不证明什么**：这类证据不一定保留机器人动作需要的接触、几何和遮挡信息。  
+    **和红杯例子的关系**：如果 query 只保留“红杯”这个语义，丢掉杯口边缘和夹爪距离，问答仍可能正确，抓取却会偏。
 
 ## 为什么连接器是高效训练关键
 
@@ -32,6 +55,35 @@ VLM/VLA 的第一个工程问题不是“模型够不够大”，而是视觉信
 4. 世界模型训练还要保留未来预测所需的时序信息。
 
 因此高效训练常常不是先换更大模型，而是先问：视觉 token 是否过密，连接器是否能按任务抽取信息，视频帧是否需要全部进入上下文，哪些状态可以放进 latent memory。
+
+### 先算清楚 token，再谈模型大小
+
+若一帧图像被切成 \(N\) 个 patch token，\(V\) 路相机、\(T\) 帧历史的原始视觉 token 量可以粗写成：
+
+\[
+L_{\text{vision}} = V \times T \times N
+\]
+
+若连接器把每帧每路相机压成 \(K\) 个任务 token，则：
+
+\[
+L_{\text{compressed}} = V \times T \times K
+\]
+
+| 符号 | 含义 |
+| --- | --- |
+| \(V\) | 相机路数 |
+| \(T\) | 历史帧数 |
+| \(N\) | 每帧原始 patch token 数 |
+| \(K\) | 每帧压缩后的任务 token 数 |
+| \(L_{\text{vision}}\) | 原始视觉序列长度 |
+| \(L_{\text{compressed}}\) | 压缩后视觉序列长度 |
+
+**读作什么**：压缩收益来自 \(K \ll N\)，但前提是被保留下来的 token 仍然对任务有用。
+
+**红杯例子**：若 \(K\) 太小，模型可能保留“红杯在桌上”，却丢掉“杯子已经靠近桌边、夹爪应从上方抓”的细节。
+
+**这个公式不说明什么**：它只说明序列长度，不说明压缩后的状态是否还支持动作敏感预测。
 
 ## 三种常见路线
 

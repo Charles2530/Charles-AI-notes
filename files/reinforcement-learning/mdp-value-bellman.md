@@ -3,35 +3,37 @@
 强化学习的基础不是某个算法，而是一套描述闭环决策的语言。只要把 `state`、`action`、`reward`、`policy`、`value` 和 `Bellman equation` 理顺，后面的 PPO、GRPO、Dreamer 和世界模型都会清楚很多。
 
 !!! note "初学者先抓住"
-    强化学习要解决的是“现在做什么会让未来更好”。所以它不只关心当前动作是否看起来合理，还关心这个动作会把系统带到什么状态，以及后面还能拿到多少奖励。
+    强化学习要解决的是“现在做什么会让未来更好”。所以它不只关心当前动作看起来是否合理，还关心这个动作会把系统带到什么状态，以及后面还能拿到多少奖励。
 
-!!! tip "主线定位：降低真实试错成本和动作条件错误成本"
-
-    MDP/Bellman 页在世界模型高效训练中负责把“预测未来”转成“选择动作”。它降低真实试错成本，因为 agent 可以先用价值函数或世界模型估计后果；也暴露动作条件成本：如果 transition、reward 或 value 错了，策略会把这些错误系统性放大。
+!!! tip "主线定位：从预测未来到选择动作"
+    MDP/Bellman 页在世界模型高效训练中负责把“预测未来”转成“选择动作”。如果 transition、reward 或 value 错了，策略会把这些错误系统性放大；如果它们足够可靠，agent 就能先在模型或价值函数里估计后果，减少真实试错。
 
 ## 1. MDP 是最小决策模型
 
-MDP 通常写成：
+MDP（Markov Decision Process，马尔可夫决策过程）通常写成：
 
 \[
 \mathcal{M}=(\mathcal{S}, \mathcal{A}, P, R, \gamma)
 \]
 
-| 符号 | 简洁解释 |
-| --- | --- |
-| \(\mathcal{S}\) | state space：环境可能处在的状态集合 |
-| \(\mathcal{A}\) | action space：agent 可以选择的动作集合 |
-| \(P(s_{t+1}\mid s_t,a_t)\) | transition：执行动作后状态如何变化 |
-| \(R(s_t,a_t)\) | reward：当前动作或结果带来的反馈 |
-| \(\gamma\) | discount factor：未来奖励打多少折扣 |
+逐项读法：一个 MDP 是五件东西的组合：有哪些状态、有哪些动作、动作会怎样改变状态、动作会得到什么奖励、未来奖励要打多少折扣。
+
+| 符号 | 英文 | 直觉 |
+| --- | --- | --- |
+| \(\mathcal{M}\) | Markov Decision Process | 一个完整决策问题 |
+| \(\mathcal{S}\) | state space | 环境可能处在的所有状态集合 |
+| \(\mathcal{A}\) | action space | agent 可以选择的所有动作集合 |
+| \(P\) | transition function | 执行动作后状态如何变化 |
+| \(R\) | reward function | 当前动作或结果带来的反馈 |
+| \(\gamma\) | discount factor | 未来奖励折算到当前的系数 |
+
+!!! example "生活例子：找钥匙"
+    状态是“你知道或不知道钥匙可能在哪里”，动作是“看桌面、打开抽屉、翻外套口袋”，奖励是“找到钥匙加分、浪费时间扣分”。如果只看当前画面，桌上没有钥匙很容易被误读成“钥匙不存在”；如果状态里保留了历史记忆，就能知道刚才还没查过外套口袋。
 
 如果状态不能完全观测，就变成 POMDP。机器人和 VLA 常常是 POMDP，因为摄像头只能看到一部分世界，抽屉里、遮挡后、过去发生过的接触都可能影响下一步。
 
-!!! note "难点解释：state 不等于 observation"
+!!! note "state 不等于 observation"
     `observation` 是传感器看到的东西，例如当前图像；`state` 是足以预测未来的内部描述，例如物体位置、速度、接触关系和任务进度。VLM 往往处理 observation，世界模型要努力学习更接近 state 的 latent。
-
-!!! example "有趣例子：找钥匙"
-    你站在客厅里只能看到桌面，这就是 observation。钥匙可能在抽屉里、沙发缝里或你刚刚放过的外套口袋里，这些未观测信息属于 state。好的 agent 会记住历史、主动打开抽屉或询问人类；只看当前画面做判断，很容易把“没看见钥匙”误当成“钥匙不存在”。
 
 MDP 的一个隐含假设是 Markov property：只要知道当前 state，未来就不需要额外依赖更早历史。
 
@@ -39,17 +41,35 @@ MDP 的一个隐含假设是 Markov property：只要知道当前 state，未来
 P(s_{t+1}\mid s_1,a_1,\ldots,s_t,a_t)=P(s_{t+1}\mid s_t,a_t)
 \]
 
+逐项读法：左边说“下一状态可能依赖完整历史”，右边说“如果当前状态 \(s_t\) 已经足够好，预测下一状态只需要 \(s_t\) 和当前动作 \(a_t\)”。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(s_1,a_1,\ldots,s_t,a_t\) | 从过去到当前的状态和动作历史 |
+| \(s_{t+1}\) | 下一步状态 |
+| \(P(\cdot\mid\cdot)\) | 条件概率：在已知右边条件时，左边事件发生的概率 |
+
 这不是说真实世界没有历史，而是说我们选的 state 应该已经把有用历史压进去了。世界模型、RSSM、Transformer memory 和 VLA 的历史窗口，本质上都在努力构造更接近 Markov 的内部状态。
 
 ## 2. Policy 是行为规则
 
-策略写成：
+策略（policy）写成：
 
 \[
 \pi_\theta(a_t\mid s_t)
 \]
 
-意思是：给定当前状态 \(s_t\)，模型以什么概率选择动作 \(a_t\)。在语言模型 RLHF 中，状态可以理解为 prompt 加已经生成的前缀，动作就是下一个 token。
+逐项读法：给定当前状态 \(s_t\)，参数为 \(\theta\) 的模型选择动作 \(a_t\) 的概率是多少。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(\pi\) | policy，策略，也就是行为规则 |
+| \(\theta\) | policy 的参数，例如神经网络权重 |
+| \(s_t\) | 第 \(t\) 步状态 |
+| \(a_t\) | 第 \(t\) 步动作 |
+| \(\pi_\theta(a_t\mid s_t)\) | 在状态 \(s_t\) 下选中动作 \(a_t\) 的概率 |
+
+在语言模型 RLHF 中，状态可以理解为 prompt 加已经生成的前缀，动作就是下一个 token。在机器人里，状态可能是图像、关节角、任务指令和历史动作的组合，动作可能是一个连续控制向量或动作 token。
 
 | 术语 | 简洁解释 |
 | --- | --- |
@@ -58,11 +78,11 @@ P(s_{t+1}\mid s_1,a_1,\ldots,s_t,a_t)=P(s_{t+1}\mid s_t,a_t)
 | behavior policy | 负责采样数据的策略，可能是旧模型或示范策略 |
 | target policy | 正在被优化或评估的策略 |
 
-!!! example "有趣例子：走迷宫"
+!!! example "生活例子：走迷宫"
     如果每次到路口都固定向左走，这是 deterministic policy。如果有 70% 概率向左、30% 概率向右，这是 stochastic policy。训练早期需要一定随机性，否则 agent 可能永远发现不了右边有出口。
 
-!!! note "难点解释：behavior policy 为什么重要"
-    Offline RL 和 VLA 示范数据经常来自旧策略或人类示范，也就是 behavior policy。你要训练的新策略可能想选更好的动作，但如果这个动作在数据里几乎没出现过，value 估计就只能外推，容易虚高。后面讲 support constraint、trajectory stitching 和 verl rollout 时，都要记住“数据到底是谁采来的”。
+!!! note "behavior policy 为什么重要"
+    Offline RL 和 VLA 示范数据经常来自旧策略或人类示范，也就是 behavior policy。你要训练的新策略可能想选更好的动作，但如果这个动作在数据里几乎没出现过，value 估计就只能外推，容易虚高。
 
 ## 3. Trajectory、Episode 和 Horizon
 
@@ -72,14 +92,19 @@ RL 不只看单个样本，而是看一串状态、动作和奖励：
 \tau=(s_0,a_0,r_0,s_1,a_1,r_1,\ldots)
 \]
 
-| 术语 | 简洁解释 |
+逐项读法：\(\tau\) 是一段交互记录。第 0 步在状态 \(s_0\) 做动作 \(a_0\)，得到奖励 \(r_0\)，进入状态 \(s_1\)，再继续。
+
+| 符号 / 术语 | 含义 |
 | --- | --- |
-| trajectory | 一段连续交互记录，可以是完整回合，也可以是截断片段 |
+| \(\tau\) | trajectory，一段连续交互记录 |
+| \(s_t\) | 第 \(t\) 步状态 |
+| \(a_t\) | 第 \(t\) 步动作 |
+| \(r_t\) | 第 \(t\) 步奖励 |
 | episode | 从开始到终止的一整局任务，例如一局游戏或一次机器人任务 |
 | horizon | 最多向前看多少步，短 horizon 看局部，长 horizon 看长期后果 |
 | rollout | 用当前 policy 采样一段 trajectory，真实环境或模型环境都可以 |
 
-!!! example "有趣例子：做饭任务的 horizon"
+!!! example "生活例子：做饭任务的 horizon"
     如果 horizon 只有 1 步，机器人只会问“现在夹锅铲是否合理”。如果 horizon 有 30 步，它还要考虑夹起锅铲后抽屉是否打开、路径是否会撞到锅、放进去后是否需要松爪。世界模型之所以重要，是因为长 horizon 真实试错很贵，内部 rollout 可以先筛掉明显危险的候选动作。
 
 ## 4. Reward、Return 和 Value
@@ -90,11 +115,27 @@ RL 不只看单个样本，而是看一串状态、动作和奖励：
 r_t = R(s_t,a_t)
 \]
 
+逐项读法：在第 \(t\) 步，如果状态是 \(s_t\)，动作是 \(a_t\)，奖励函数 \(R\) 会给出一个反馈 \(r_t\)。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(r_t\) | 第 \(t\) 步实际拿到的奖励 |
+| \(R\) | reward function，奖励函数 |
+| \(R(s_t,a_t)\) | 在状态 \(s_t\) 做动作 \(a_t\) 的奖励 |
+
 return 是从当前时刻开始累计的未来奖励：
 
 \[
 G_t = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots
 \]
+
+逐项读法：\(G_t\) 是从第 \(t\) 步往后看的总收益。当前奖励权重是 1，下一步奖励乘 \(\gamma\)，再下一步乘 \(\gamma^2\)，越远的奖励影响越小。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(G_t\) | return，从第 \(t\) 步开始累计的未来奖励 |
+| \(r_{t+k}\) | 未来第 \(k\) 步的奖励 |
+| \(\gamma^k\) | 未来第 \(k\) 步奖励的折扣权重 |
 
 value 是在某个策略下，从状态 \(s\) 出发能拿到的期望 return：
 
@@ -102,11 +143,27 @@ value 是在某个策略下，从状态 \(s\) 出发能拿到的期望 return：
 V^\pi(s)=\mathbb{E}_\pi[G_t\mid s_t=s]
 \]
 
+逐项读法：如果当前状态是 \(s\)，之后都按照策略 \(\pi\) 行动，那么平均下来能拿到多少 return。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(V^\pi(s)\) | 策略 \(\pi\) 下状态 \(s\) 的价值 |
+| \(\mathbb{E}_\pi[\cdot]\) | 按策略 \(\pi\) 采样动作和轨迹后取平均 |
+| \(G_t\mid s_t=s\) | 条件是“当前状态等于 \(s\)”时的 return |
+
 Q-value 则多固定了当前动作：
 
 \[
 Q^\pi(s,a)=\mathbb{E}_\pi[G_t\mid s_t=s,a_t=a]
 \]
+
+逐项读法：如果当前在状态 \(s\)，第一步强制做动作 \(a\)，之后再按策略 \(\pi\) 行动，平均能拿到多少 return。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(Q^\pi(s,a)\) | 策略 \(\pi\) 下，状态 \(s\) 做动作 \(a\) 的长期价值 |
+| \(a_t=a\) | 当前动作被固定为 \(a\) |
+| 之后按 \(\pi\) | 第一步之后继续按当前策略行动 |
 
 Advantage 衡量“这个动作比平均策略好多少”：
 
@@ -114,7 +171,15 @@ Advantage 衡量“这个动作比平均策略好多少”：
 A^\pi(s,a)=Q^\pi(s,a)-V^\pi(s)
 \]
 
-!!! note "难点解释：reward 和 value 不要混"
+逐项读法：同一个状态里，如果先做动作 \(a\) 的长期价值高于这个状态的平均价值，advantage 为正；如果更差，advantage 为负。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(A^\pi(s,a)\) | 动作 \(a\) 相对策略平均行为的优势 |
+| \(Q^\pi(s,a)\) | 先做动作 \(a\) 的预期回报 |
+| \(V^\pi(s)\) | 不指定动作、按策略平均选择时的预期回报 |
+
+!!! note "reward 和 value 不要混"
     reward 像这一步考试得了几分，value 像从现在开始预计整门课最终能拿多少分。一个动作当前 reward 可能低，但如果它把系统带到更好的未来状态，value 仍然可能很高。很多长时任务难，就难在短期反馈和长期收益不一致。
 
 !!! warning "常见误区：reward 写得越细越好"
@@ -131,6 +196,16 @@ R(s,a)+\gamma V^\pi(s')
 \right]
 \]
 
+逐项读法：在状态 \(s\) 时，先按策略 \(\pi\) 采样动作 \(a\)，环境再按 transition \(P\) 给出下一状态 \(s'\)。当前状态的价值，等于当前奖励 \(R(s,a)\) 加上打折后的下一状态价值 \(\gamma V^\pi(s')\)，再对可能发生的动作和下一状态取平均。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(a\sim\pi\) | 动作 \(a\) 按策略 \(\pi\) 采样 |
+| \(s'\sim P\) | 下一状态 \(s'\) 按环境转移概率采样 |
+| \(R(s,a)\) | 当前状态动作的即时奖励 |
+| \(\gamma V^\pi(s')\) | 下一状态价值折算回当前 |
+| \(\mathbb{E}_{a\sim\pi,\,s'\sim P}\) | 对动作随机性和环境随机性取平均 |
+
 Q-value 也可以写成：
 
 \[
@@ -140,7 +215,13 @@ R(s,a)+\gamma \mathbb{E}_{a'\sim\pi} Q^\pi(s',a')
 \right]
 \]
 
-这就是动态规划、TD learning、actor-critic 和世界模型规划的共同基础。
+逐项读法：先固定当前动作 \(a\)，所以外层只需要对下一状态 \(s'\) 取平均；到了下一状态后，后续动作 \(a'\) 又按策略 \(\pi\) 采样。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(Q^\pi(s,a)\) | 当前状态先做动作 \(a\) 的长期价值 |
+| \(a'\) | 下一状态里要选择的后续动作 |
+| \(\mathbb{E}_{a'\sim\pi} Q^\pi(s',a')\) | 下一状态按策略平均选择动作后的价值 |
 
 !!! note "图像化理解：Bellman 是可递归的未来账本"
     Bellman 不是神秘公式，它只是说：要知道现在值多少钱，就看现在立刻得到多少，加上下一步状态值多少钱。世界模型的价值在这里很直接：如果能预测 \(s'\) 和 \(r\)，就能在执行前估算未来账本。
@@ -152,6 +233,8 @@ R(s,a)+\gamma \mathbb{E}_{a'\sim\pi} Q^\pi(s',a')
 \[
 H_{\text{eff}}\approx\frac{1}{1-\gamma}
 \]
+
+逐项读法：当 \(\gamma\) 越接近 1，未来奖励衰减越慢，当前决策会受到更远未来的影响。这个近似不是严格任务边界，而是一个帮助估算时间尺度的经验读法。
 
 如果机器人控制频率是 `20Hz`：
 
@@ -174,8 +257,7 @@ H_{\text{eff}}\approx\frac{1}{1-\gamma}
 指标：effective horizon、reward prediction error、TD error、model exploitation、closed-loop success
 机制：Bellman backup 会递归使用下一状态价值；transition/reward 错误会沿 horizon 放大
 修复：缩短 rollout、加入 uncertainty penalty、使用 value clipping、用真实回放校准 reward/done/risk
-反例：只做短 horizon 会漏掉清障、绕行、开门这类延迟收益动作
-边界：\(\gamma\) 和 rollout horizon 要跟任务时间尺度、模型误差和控制频率一起定
+边界：gamma 和 rollout horizon 要跟任务时间尺度、模型误差和控制频率一起定
 ```
 
 ## 6. 从 Bellman 到 Q-learning
@@ -186,11 +268,27 @@ Q-learning 直接学习 \(Q(s,a)\)：在状态 \(s\) 做动作 \(a\) 后，长�
 y_t = r_t + \gamma \max_{a'} Q_{\text{target}}(s_{t+1}, a')
 \]
 
+逐项读法：训练目标 \(y_t\) 等于这一步真实拿到的奖励 \(r_t\)，加上下一状态里“当前估计最好的动作价值”的折扣值。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(y_t\) | TD target，用来训练当前 Q 网络的目标 |
+| \(\max_{a'}\) | 在下一状态的所有动作中挑估计价值最高的 |
+| \(Q_{\text{target}}\) | target network 给出的较稳定 Q 估计 |
+
 再让当前网络的 \(Q(s_t,a_t)\) 靠近这个 target：
 
 \[
 L=\left(y_t-Q_\theta(s_t,a_t)\right)^2
 \]
+
+逐项读法：如果当前 Q 网络预测的 \(Q_\theta(s_t,a_t)\) 和 TD target \(y_t\) 差很多，平方误差就大；优化会让当前预测向 target 靠近。
+
+| 符号 | 含义 |
+| --- | --- |
+| \(L\) | value loss |
+| \(Q_\theta\) | 参数为 \(\theta\) 的 Q 网络 |
+| \((\cdot)^2\) | 平方误差，差距越大惩罚越大 |
 
 | 术语 | 简洁解释 |
 | --- | --- |
@@ -200,7 +298,7 @@ L=\left(y_t-Q_\theta(s_t,a_t)\right)^2
 | replay buffer | 保存过去交互样本，训练时随机抽取，减少样本相关性 |
 | target network | 慢更新或延迟更新的目标网络，让 TD target 不至于每步剧烈漂移 |
 
-!!! example "有趣例子：餐厅排队"
+!!! example "生活例子：餐厅排队"
     你在商场里选择排哪家餐厅。reward 是这次吃得是否满意，value 是“排这家之后，等待、用餐、赶电影整体值不值”。Q-learning 不只记“这家好吃”，还要记“现在排队 50 分钟时还值不值”。
 
 DQN 把 Q-learning 接到深度网络上，用图像作为输入，用神经网络预测每个动作的 Q-value。它的两个关键工程技巧是 experience replay 和 target network。
@@ -244,7 +342,7 @@ DQN 的 Seaquest 图很适合解释“value 是未来机会”，而不只是当
 !!! note "图解：A、B、C 三个点在讲什么"
     A 点敌人出现，模型预测“现在有得分机会”，value 上升。B 点鱼雷快击中敌人，未来得分几乎要兑现，value 达到峰值。C 点敌人消失，机会被消耗，value 回落。这个例子能帮你分清 reward 和 value：reward 是打中那一下的即时分数，value 是打中之前模型已经看到的未来机会。
 
-## 8. Model-free 与 Model-based
+## 8. Model-free、Model-based、Imitation 和 Offline
 
 | 路线 | 学什么 | 优点 | 风险 |
 | --- | --- | --- | --- |
@@ -290,21 +388,7 @@ Offline RL 也可能从不完整轨迹里拼出更好的策略。
 !!! note "图解：trajectory stitching 是什么"
     数据里可能没有一条完整最优轨迹，但有“从 1 到 2”的片段和“从 2 到 3”的片段。好的 offline RL 应该能把这些片段组合起来，推出从 1 到 3 的更优行为。这比行为克隆更进一步：BC 只模仿已有路径，offline RL 尝试用 Bellman/value 把片段的长期价值接起来。
 
-## 10. 信用分配和探索
-
-强化学习最难的两个问题：
-
-| 问题 | 简洁解释 |
-| --- | --- |
-| credit assignment | 一段轨迹最后成功了，究竟是哪几个早期动作贡献最大 |
-| exploration | 当前策略没试过的动作，怎么知道有没有更高回报 |
-
-在 LLM/VLM 后训练里，credit assignment 也很明显：完整回答最后得 1 分，但哪几个 token 真的让答案正确？在机器人里更明显：任务成功可能来自前 30 秒里某个微小对齐动作。
-
-!!! warning "常见误区：奖励越密越好"
-    密集奖励能降低学习难度，但也可能把模型带偏。比如只奖励“靠近杯子”，机器人可能学会把夹爪贴近杯子却不稳定抓取。好的 reward 要贴近最终任务，同时避免被策略钻空子。
-
-## 11. 和世界模型的接口
+## 10. 和世界模型的接口
 
 世界模型本质上补上了 MDP 里的 transition：
 
@@ -312,10 +396,12 @@ Offline RL 也可能从不完整轨迹里拼出更好的策略。
 \hat P_\theta(s_{t+1}\mid s_t,a_t)
 \]
 
+逐项读法：\(\hat P_\theta\) 是模型学出来的环境转移近似。给它当前状态 \(s_t\) 和动作 \(a_t\)，它预测下一状态 \(s_{t+1}\) 的分布。
+
 如果还能预测 reward、done 和 risk：
 
 \[
-\hat r_t,\hat d_t,\hat \rho_t = f_\theta(s_t,a_t)
+(\hat r_t,\hat d_t,\hat \rho_t)=f_\theta(s_t,a_t)
 \]
 
-就可以在模型内部做 planning 或 imagined rollout。后面的 PlaNet、Dreamer、RLVR-World 都在围绕这件事展开：用可学习模型近似环境，再把强化学习的长期优化接上去。
+逐项读法：世界模型不只预测下一画面，还预测这一步奖励、任务是否结束、风险是否升高。后面的 PlaNet、Dreamer、RLVR-World 都在围绕这件事展开：用可学习模型近似环境，再把强化学习的长期优化接上去。

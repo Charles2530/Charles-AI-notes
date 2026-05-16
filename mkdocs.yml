@@ -68,7 +68,7 @@ nav:
       - Claim Ledger: references/claim-ledger.md
   - 基础知识:
       - foundations/index.md
-      - 论文专题前置知识地图: foundations/paper-reading-prerequisites.md
+      - 符号与最小数学地图: foundations/symbols-and-minimal-math.md
       - 表示与计算:
           - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
           - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
@@ -76,29 +76,30 @@ nav:
       - 结构与上下文:
           - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
           - 位置编码与 Mask：顺序和可见性: foundations/positional-encoding-masks-and-context.md
+          - Norm、残差与激活函数: foundations/normalization-residual-and-activation.md
           - MoE 与大模型架构表: foundations/moe-and-large-model-architecture-basics.md
           - Mamba 与混合 SSM 架构: foundations/mamba-and-hybrid-ssm-transformers.md
-          - Norm、残差与激活函数: foundations/normalization-residual-and-activation.md
-      - 交互与多模态:
-          - Prompt、CoT 与 RAG 入门: foundations/prompt-engineering-cot-and-rag-basics.md
-          - 多模态推理入门: foundations/multimodal-cot-and-reasoning-basics.md
       - 训练目标与证据:
           - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
           - 优化与训练入门: foundations/optimization-and-training-basics.md
+          - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
           - 数据划分与评测指标: foundations/data-splits-metrics-and-evaluation-basics.md
       - 系统执行与成本:
-          - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
           - 数值、显存与运行时: foundations/numerics-memory-and-runtime-basics.md
+      - 交互与多模态:
+          - Prompt、CoT 与 RAG 入门: foundations/prompt-engineering-cot-and-rag-basics.md
+          - 多模态推理入门: foundations/multimodal-cot-and-reasoning-basics.md
+      - 论文专题前置知识地图: foundations/paper-reading-prerequisites.md
   - 扩散模型:
       - diffusion/index.md
-      - 机制与训练:
-          - 扩散模型发展脉络: diffusion/evolution.md
+      - 基础主线:
           - 扩散训练与表示: diffusion/training.md
-          - Score Matching 到 SDE: diffusion/score-matching-sde-and-probability-flow.md
           - 噪声日程与参数化: diffusion/noise-schedules-and-parameterization.md
+          - Score Matching 到 SDE: diffusion/score-matching-sde-and-probability-flow.md
           - 条件控制与 Guidance: diffusion/guidance-and-conditioning.md
-      - 采样、蒸馏与视频:
           - 采样与推理加速: diffusion/inference.md
+      - 进阶路线:
+          - 扩散模型发展脉络: diffusion/evolution.md
           - 一步生成、蒸馏与整流: diffusion/distillation.md
           - 一致性模型与 Rectified Flow: diffusion/consistency-models-and-rectified-flow.md
           - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
@@ -107,6 +108,7 @@ nav:
           - 扩散方法对照表: diffusion/comparison-table.md
   - VLM/VLA:
       - vlm/index.md
+      - VLM/VLA 符号与最小数学地图: vlm/vlm-vla-symbols-and-minimal-math.md
       - VLM 表征与视频状态:
           - VLM 架构：视觉表征、连接器与记忆: vlm/architecture-and-training.md
           - 视觉 Tokenizer 与连接器: vlm/visual-tokenizers-and-connectors.md
@@ -125,22 +127,26 @@ nav:
           - VLM/VLA 与世界模型高效训练接口: vlm/vlm-vla-for-efficient-world-model-training.md
   - 量化:
       - quantization/index.md
-      - 算法与误差控制:
-          - PTQ / GPTQ / AWQ: quantization/ptq-gptq-awq-smoothquant.md
+      - 入门导读:
+          - 量化符号与最小数学地图: quantization/symbols-and-minimal-math.md
+          - 量化论文图解导读: quantization/page-by-page-visual-guide.md
+          - 量化方法对照表: quantization/comparison-table.md
+      - 基础算法与误差控制:
+          - PTQ / GPTQ / AWQ / SmoothQuant: quantization/ptq-gptq-awq-smoothquant.md
           - 激活离群值与校准策略: quantization/activation-outliers-and-calibration-strategies.md
-          - QAT、Kernel 与 KV Cache: quantization/qat-kernels-and-kv-cache.md
           - QLoRA 与量化训练: quantization/qlora-and-quantized-training.md
+          - QAT、Kernel 与 KV Cache: quantization/qat-kernels-and-kv-cache.md
       - 数制、算子与服务:
           - FP8 与混合精度推理: quantization/fp8-and-mixed-precision-serving.md
           - 量化服务栈与硬件选择: quantization/serving-stacks-and-hardware-tradeoffs.md
           - 量化运行时与部署框架: quantization/quantization-runtimes-and-frameworks.md
-      - 评测与专项:
+      - 专项与上线:
           - 多模态与 VLA 模型量化: quantization/quantization-for-multimodal-and-vla-models.md
           - 评测与部署清单: quantization/evaluation-and-deployment-checklist.md
-          - 量化方法对照表: quantization/comparison-table.md
   - 训练:
       - training/index.md
       - 阅读索引:
+          - 模型训练从零入门: training/beginner-model-training-primer.md
           - 论文图解索引: training/page-by-page-visual-guide.md
           - 训练图片来源与授权: training/image-sources.md
       - 阶段与目标:
@@ -198,19 +204,19 @@ nav:
           - Kernel 成本模型与选型: operators/kernel-cost-models-and-selection-heuristics.md
   - 推理:
       - inference/index.md
-      - 服务入口与运行时:
+      - 概念与请求生命周期:
           - 推理服务系统: inference/serving-systems.md
-          - 推理运行时: inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md
           - GPU Kernel 与 Batching: inference/gpu-kernels-batching-and-memory-systems.md
-      - KV、长上下文与请求编排:
-          - 解耦 Prefill 与 KV 服务: inference/disaggregated-prefill-kv-services-and-capacity-ops.md
-          - 缓存、路由与投机解码: inference/caching-routing-and-speculative.md
+          - 推理运行时: inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md
+      - KV、缓存与长上下文:
           - 上下文压缩与 KV 内存管理: inference/context-compression-kv-eviction-and-memory-hierarchies.md
+          - 缓存、路由与投机解码: inference/caching-routing-and-speculative.md
+          - 解耦 Prefill 与 KV 服务: inference/disaggregated-prefill-kv-services-and-capacity-ops.md
           - RAG、Agent 与长上下文系统: inference/rag-agents-and-long-context-systems.md
           - MoE 路由与多模型服务: inference/moe-routing-and-multi-model-serving.md
       - 容量、成本与观测:
-          - 容量规划与推理优化: inference/optimization-checklist-and-capacity-planning.md
           - 成本建模与 SLO 设计: inference/cost-modeling-and-slo-design.md
+          - 容量规划与推理优化: inference/optimization-checklist-and-capacity-planning.md
           - 可观测性与在线评测: inference/observability-and-online-evaluation.md
   - 强化学习:
       - reinforcement-learning/index.md
@@ -220,6 +226,7 @@ nav:
       - verl 训练流程: reinforcement-learning/verl-code-flow.md
   - 世界模型:
       - world-models/index.md
+      - 从零理解世界模型: world-models/beginner-world-models-primer.md
       - 主线：世界模型高效训练: world-models/efficient-training-roadmap.md
       - 效率技术覆盖矩阵: world-models/efficiency-technique-coverage-matrix.md
       - 端到端案例：动作条件视频世界模型训练: world-models/action-conditioned-video-world-model-training-case.md
@@ -227,9 +234,9 @@ nav:
       - VLA / 世界模型全链路案例: world-models/vla-world-model-full-chain-case.md
       - Rollout 服务、量化与 Kernel 案例: world-models/rollout-serving-quantization-kernel-case.md
       - 建模与规划:
-          - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
           - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
           - Masked / JEPA 与潜变量预测: world-models/masked-jepa-and-latent-prediction.md
+          - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
           - 规划即推理与潜在动作: world-models/planning-as-inference-and-latent-actions.md
           - 不确定性与风险敏感规划: world-models/uncertainty-and-risk-aware-planning.md
       - 数据、模拟与评测:

@@ -15,6 +15,20 @@
 !!! tip "遇到这些症状，回看本页"
     同一模型推理能跑、训练一开就 OOM，activation checkpointing 后吞吐掉得过多，或者恢复训练后梯度和数据游标对不上时，回看本页。本页能帮你判断显存该从 activation、optimizer state、重算策略还是 checkpoint 恢复语义入手。
 
+## 0. 符号卡：自动微分里的几个词
+
+| 符号或词 | 含义 |
+| --- | --- |
+| forward | 从输入算到 loss 的过程 |
+| backward | 从 loss 把梯度传回参数的过程 |
+| activation | 前向中间结果，反向常要用 |
+| checkpoint | 被刻意保存下来的中间节点 |
+| recompute | 反向时重新计算丢掉的激活 |
+| \(\frac{\partial L}{\partial \theta}\) | loss 对参数的偏导数 |
+| optimizer state | AdamW 等优化器保存的动量、二阶矩等状态 |
+
+推理只需要 forward；训练需要 forward、保存或重算激活、backward 和 optimizer update。因此训练显存通常明显高于推理。
+
 ## 1. 自动微分在做什么
 
 现代框架会记录前向计算图，然后自动根据链式法则计算梯度。

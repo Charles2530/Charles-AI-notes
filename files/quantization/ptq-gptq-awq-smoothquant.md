@@ -1,274 +1,207 @@
 # PTQ、GPTQ、AWQ 与 SmoothQuant
 
-量化的目标不是“把模型数字变小”这么简单，而是在尽量不损坏输出质量的前提下，把权重和激活压到更低比特，从而降低显存占用、带宽压力、推理成本和部署门槛。
-
-这一页主要讲后训练量化路线，也就是模型已经训练完，不想再做昂贵重训时，如何尽量稳地压缩。
+这一页讲最常见的后训练量化路线。它们都在回答同一个问题：模型已经训练好了，不想重新大规模训练，怎样把权重或激活压低 bit，同时让输出尽量不变。
 
 !!! note "初学者先抓住"
-    量化不是把所有数字粗暴变小，而是把误差放到模型不敏感的位置。真正要看的是输出是否还稳定、runtime 是否真的加速、长尾任务是否没有明显退化。
+    `PTQ` 是大类，意思是 post-training quantization，训练后再量化。`GPTQ`、`AWQ` 和 `SmoothQuant` 是 PTQ 里的代表方法：GPTQ 做误差补偿，AWQ 保护激活敏感通道，SmoothQuant 把 activation outlier 的难度迁移到权重侧。
 
-!!! example "有趣例子：压缩地图"
-    如果把城市地图压缩成低清版，公园草坪少几条纹理没关系，但医院入口、桥、地铁站位置不能错。量化也是这样：有些权重可以粗一点，有些通道和层必须保护。
+## 1. PTQ 先解决什么
 
-## 1. 量化的统一形式
-
-**最基本的线性量化可写成**：
+PTQ 的基本形式仍然是量化和反量化：
 
 \[
-q = \text{clip}\left(\left\lfloor \frac{x}{s} \rceil + z \right., q_{\min}, q_{\max}\right)
+q=\mathrm{clip}\left(\mathrm{round}\left(\frac{x}{s}\right)+z,\ q_{\min},q_{\max}\right)
 \]
-
-**反量化为**：
 
 \[
-\hat{x} = s(q-z)
+\hat{x}=s(q-z)
 \]
 
-其中 \(s\) 是 scale，\(z\) 是 zero-point，\(q_{\min}, q_{\max}\) 由 bit 数决定。
+| 符号 | 含义 |
+| --- | --- |
+| \(x\) | 原始浮点权重或激活 |
+| \(q\) | 低比特整数值 |
+| \(\hat{x}\) | 反量化后的近似值 |
+| \(s\) | scale，控制格子宽度 |
+| \(z\) | zero-point，让真实 0 对齐整数格点 |
+| \(q_{\min},q_{\max}\) | 当前 bit 数可表示的整数范围 |
 
-若使用对称量化，通常 \(z=0\)。  
-若是 4bit 对称量化，整数范围常为：
+**读作什么**：PTQ 不改变原始训练过程，而是在模型训练完成后，把部分张量映射到低比特表示，再尽量让推理输出保持接近。
+
+**初学者直觉**：像把一张高清照片压缩。大块颜色可能没问题，小字、边缘和暗部细节最容易先坏。量化里，小字和边缘常对应 outlier 通道、敏感层、长上下文 KV 或高风险任务。
+
+## 2. 量化后真正要保的是矩阵乘输出
+
+线性层原本是：
 
 \[
-q \in \{-8,\dots,7\}
+Y=XW
 \]
 
-## 2. 真正的问题不是量化权重，而是量化后的乘法是否还“像原来”
-
-**对一个线性层**：
+量化后希望：
 
 \[
-y = W x
+\hat{Y}=\hat{X}\hat{W}\approx Y
 \]
 
-**量化后变成**：
+| 符号 | 含义 | 常见 shape |
+| --- | --- | --- |
+| \(X\) | 输入激活 | \(B\times T\times d_{\text{in}}\) |
+| \(W\) | 权重矩阵 | \(d_{\text{in}}\times d_{\text{out}}\) |
+| \(Y\) | 原始输出 | \(B\times T\times d_{\text{out}}\) |
+| \(\hat{X}\) | 量化再反量化后的激活 | 同 \(X\) |
+| \(\hat{W}\) | 量化再反量化后的权重 | 同 \(W\) |
+
+**读作什么**：量化不是让每个数字都一模一样，而是让这些数字参与矩阵乘后，输出还足够像原模型。
+
+!!! warning "常见误解"
+    权重 MSE 小，不一定代表模型输出好。某些权重误差虽小，但如果正好落在高敏感方向或高激活通道上，输出会明显变差。
+
+## 3. 基础 PTQ：便宜，但不懂哪里敏感
+
+最朴素的 PTQ 会按层或按组估计 scale，然后直接 round。它的优点是快、便宜、容易跑通，适合做第一个 baseline。
+
+| 设计点 | 初学者问题 | 常见选择 |
+| --- | --- | --- |
+| 压什么 | 只压权重，还是权重和激活都压 | 先从 weight-only 更稳 |
+| scale 粒度 | 一个 scale 管整层还是一组通道 | group-wise 常是折中 |
+| 校准数据 | 用什么输入估计分布 | 要贴近真实流量 |
+| bit 数 | INT8、INT4 还是混合 | 越低越需要保护 |
+
+**它的短板**：基础 PTQ 通常不知道哪些层、哪些通道、哪些方向更敏感。因此 8bit 可能还好，4bit 或 W&A 量化就容易出现明显掉点。
+
+## 4. GPTQ：用补偿减少一层输出误差
+
+GPTQ 常用下面的目标来理解：
 
 \[
-\hat{y} = \hat{W}\hat{x}
+\min_{\hat{W}}\ \|WX-\hat{W}X\|_2^2
 \]
 
-**我们真正想控制的是输出误差**：
+| 符号 | 含义 |
+| --- | --- |
+| \(W\) | 原始权重 |
+| \(\hat{W}\) | 量化后的权重 |
+| \(X\) | 校准集激活，用来代表真实输入 |
+| \(\|\cdot\|_2^2\) | 输出差异的平方和 |
 
-\[
-\min_{\hat{W},\hat{x}} \|Wx - \hat{W}\hat{x}\|_2^2
-\]
-
-如果只看单个权重误差 \(\|W-\hat{W}\|\)，可能会误导。  
-因为某个权重虽误差大，但若它对应的输入激活几乎总是很小，对最终输出未必有大影响。
-
-这也是为什么现代量化方法越来越关注激活分布、通道敏感性、Hessian 或二阶近似，以及校准集上的真实输出误差。
-
-## 3. PTQ 的核心矛盾
-
-后训练量化的基本约束是不能重新做大规模训练、最多只能用一小批校准数据，同时还希望尽量不掉点。
-
-**于是问题可写成**：
-
-\[
-\min_{\hat{W}} \mathbb{E}_{x \sim \mathcal{D}_{\text{calib}}}\left[\|Wx-\hat{W}x\|_2^2\right]
-\]
-
-这里 \(\mathcal{D}_{\text{calib}}\) 很小，因此所有方法都在想办法：  
-如何用极少数据，尽可能估计“哪些权重或通道最不能乱动”。
-
-### 一个直观例子：客服模型上线
-
-假设你有个 13B 客服模型，原本在 FP16 下答复质量稳定。  
-你把它压成 4bit 后，如果没有校准，常见闲聊可能仍然正常，但一到长表格、时间线推理、法律条款抽取就开始乱。
-
-原因常常不是“模型整体坏了”，而是少数关键层在校准不足时被量化得太狠。
-
-## 4. PTQ 的几个基本设计点
-
-### 4.1 权重量化还是激活量化
-
-`W-only` 量化只量化权重，部署简单，质量通常更稳；`W+A` 量化同时量化激活，硬件收益更大，但更容易掉点。
-
-对 LLM 来说，很多实际方案先上权重量化，因为权重静态、容易离线处理，而激活动态变化大、更难稳定。
-
-### 4.2 Per-tensor、Per-channel、Per-group
-
-如果整块矩阵只用一个 scale，简单但粗糙。  
-更细的方案是每通道一个 scale，或每组若干列一个 scale。
-
-量化单元越细，精度通常越好，但元数据和 kernel 实现更复杂。
-
-### 4.3 校准集该怎么选
-
-校准集最好能覆盖真实部署分布。  
-例如代码模型的校准集若全是短自然语言，量化后往往在真实代码任务上掉得更厉害。
-
-## 5. GPTQ：用二阶近似做“误差补偿”
-
-`GPTQ` 的核心思想是：  
-量化某一列权重后，不是简单接受误差，而是尽量把误差往后续尚未量化的参数中吸收。
+**读作什么**：GPTQ 不只是让 \(\hat{W}\) 接近 \(W\)，而是让它们乘上校准激活后，输出尽量接近。
 
 ![GPTQ quantization procedure](../assets/images/paper-figures/quantization/gptq-figure-2-procedure.png){ width="780" }
 
 <small>图源：[GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323)，Figure 2。原论文图意：左侧是层内 inverse Hessian 的 Cholesky 形式，右侧是按列递归量化的权重块；已量化列固定，未量化列会根据量化误差被更新补偿。</small>
 
-!!! note "难点解释：GPTQ 为什么要看 Hessian"
-    如果某个方向的输出对权重扰动非常敏感，那么那里的量化误差就更贵。GPTQ 用校准数据估计层内二阶信息，并在按列量化时把误差分摊给还没量化的列。可以把它理解成“不是每列各压各的”，而是边压边修正，让后面的列吸收前面造成的输出偏差。
+!!! note "图解：怎么读 GPTQ Figure 2"
+    右边的矩阵块可以想成一排待量化的列。GPTQ 量化一列后，不是把误差丢掉，而是用近似二阶信息把误差传播给后面还没量化的列。这样做的目标不是让每个权重数值最像，而是让这一层在校准输入上的输出最像。
 
-**可把局部目标近似写成**：
+### GPTQ 的关键直觉
+
+如果某个方向对输出或 loss 很敏感，同样大小的量化误差会造成更大伤害。GPTQ 使用 Hessian 或近似二阶信息来判断这些敏感方向，并在逐列量化时做补偿。
+
+| 优点 | 代价 |
+| --- | --- |
+| 对 4bit weight-only 友好，离线效果常较稳 | 量化预处理比基础 PTQ 更复杂 |
+| 不需要重新训练全模型 | 强依赖校准数据和具体实现 |
+| 适合已有大模型 checkpoint | 速度收益仍取决于 runtime 和 kernel |
+
+## 5. AWQ：重要不只看权重，还看激活
+
+AWQ 的核心可以用通道贡献来理解：
 
 \[
-\min_{\hat{w}} (w-\hat{w})^\top H (w-\hat{w})
+Y=\sum_i X_iW_i
 \]
 
-其中 \(H\) 是由校准数据诱导出的近似 Hessian 或输入相关二阶矩阵。  
-直觉上，如果某个方向上的曲率大，说明那里的误差更“贵”，GPTQ 会尽量避免在这些方向上犯大错。
+| 符号 | 含义 |
+| --- | --- |
+| \(i\) | 输入通道或 hidden 维索引 |
+| \(X_i\) | 第 \(i\) 个通道的激活 |
+| \(W_i\) | 第 \(i\) 个通道对应的权重 |
+| \(X_iW_i\) | 该通道对输出的贡献 |
 
-### 列级量化的直觉
-
-把矩阵 \(W\) 视作一列一列处理：
-
-\[
-W = [w_1, w_2, \dots, w_n]
-\]
-
-当量化第 \(i\) 列后，会根据误差残差修正剩余列。  
-这有点像做高斯消元式的误差传递。
-
-### GPTQ 适合什么
-
-GPTQ 适合大模型离线权重量化、不想重训、但能接受较复杂离线预处理的场景。
-
-### GPTQ 的现实感受
-
-**它常像在说**：  
-“我知道你必须把这列压成 4bit，但至少让我聪明地决定怎么压，以及把误差甩给谁。”
-
-## 6. AWQ：权重是否重要，要看激活怎么打到它
-
-`AWQ` 的关键观察是：  
-决定输出误差的不是权重本身大小，而是“权重与激活共同作用”。
+**读作什么**：某个权重是否重要，不只取决于它自己多大，还取决于真实输入里对应激活是否经常很大。
 
 ![AWQ activation-aware weight quantization](../assets/images/paper-figures/quantization/awq-figure-1-activation-aware.png){ width="830" }
 
 <small>图源：[AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978)，Figure 1。原论文图意：普通 RTN 量化会明显升高困惑度；保留少量 activation-salient weights 或在量化前按激活幅度缩放权重，可以显著恢复质量。</small>
 
-!!! note "难点解释：AWQ 的“重要权重”不是单看权重大小"
-    同一个权重误差，如果乘上的激活很小，输出影响也可能很小；如果乘上的激活经常很大，就会被放大成明显输出偏差。AWQ 因此用校准激活去找真正影响输出的通道或权重，再通过缩放和保护让这些位置别被 4bit 误差打坏。
+!!! note "图解：怎么读 AWQ Figure 1"
+    这张图的重点是“少量关键权重很重要”。AWQ 用校准激活找出那些被真实输入频繁放大的通道，并通过缩放或保护让这些通道在量化后少受伤。
 
-若某通道激活常很大，那么该通道对应权重的小误差也会被放大。  
-**因此 AWQ 更关注**：
+### AWQ 和 GPTQ 的区别
 
-\[
-\text{sensitivity} \propto |W| \odot |X|
-\]
+| 方法 | 更关注什么 | 初学者理解 |
+| --- | --- | --- |
+| GPTQ | 量化误差如何通过一层输出传播 | 量一部分，补后一部分 |
+| AWQ | 哪些权重通道被真实激活放大 | 重要通道别粗暴压 |
 
-虽然不同实现细节不同，但总体思想都是找出少量高敏感权重或通道，并通过缩放与保护策略减少其量化伤害。
+AWQ 往往适合工程部署，因为它流程相对轻，和 weight-only 低比特服务路径结合得比较自然。
 
-### 一个直观例子：会议纪要模型
+## 6. SmoothQuant：把 activation outlier 的难度迁移到权重
 
-假设模型在处理长会议纪要时，某些注意力输出通道经常承载“说话人切换”“时间顺序”“结论句”这类重要信息。  
-如果这些通道的激活峰值大，那么同样 4bit 误差落在它们上面，比落在普通通道上更致命。
-
-**AWQ 的价值就在于**：  
-它不把所有权重一视同仁。
-
-## 7. SmoothQuant：不是只压权重，还要“驯服”激活离群值
-
-在很多 LLM 中，激活分布比权重更难量化，因为会出现少数特别大的 outlier。  
-`SmoothQuant` 的核心技巧是引入一个对角缩放矩阵 \(D\)，把激活尺度一部分搬运到权重中：
-
-![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="730" }
-
-<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 2。原论文图意：原始激活 \(X\) 含有 outlier，导致有效量化 bit 变少；SmoothQuant 将一部分难度从 activation 迁移到 weight，让两侧都更容易量化。</small>
-
-!!! note "难点解释：SmoothQuant 不是把 outlier 删掉"
-    SmoothQuant 利用线性层里的等价变换 \(Wx=(WD)(D^{-1}x)\)：输出数学上不变，但数值难度从激活侧搬到权重侧。因为权重是静态的、离线可处理，激活是动态的、线上会随输入变化，所以把难量化的激活尖峰转移一部分到权重里，通常比直接硬量化 activation 更稳。
+激活量化比权重量化难，主要因为 activation 是动态的，且容易出现 outlier。SmoothQuant 的核心等价变换是：
 
 \[
-W x = (W D)(D^{-1} x)
+Y=XW=(XD^{-1})(DW)
 \]
 
-设 \(D=\text{diag}(d_1,\dots,d_n)\)，则可以通过调节各维 \(d_i\)，让新激活 \(D^{-1}x\) 更平滑，让新权重 \(WD\) 稍微更难但总体更适合量化。这本质上是在做数值重分配：原本“激活太尖，权重很温和”，调整后变成“激活没那么尖，权重稍微变难一点”。
+| 符号 | 含义 |
+| --- | --- |
+| \(X\) | 原始 activation |
+| \(W\) | 原始 weight |
+| \(D\) | 对角缩放矩阵，每个通道一个缩放因子 |
+| \(XD^{-1}\) | 被平滑后的 activation |
+| \(DW\) | 承接缩放后的 weight |
 
-只要总体更平衡，低比特量化就更稳。
+**读作什么**：输出 \(Y\) 不变，但 activation 的尖峰被压平一部分，难度被转移到更容易离线处理的权重上。
 
-### 一个生动例子：搬货而不是减货
+![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="740" }
 
-SmoothQuant 像是搬仓库。  
-原本一辆车上堆了太多重货，另一辆车很轻。你不是把货扔掉，而是把一部分重货搬过去，让两辆车都处在可承受范围内。
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 2。原论文图意：原始激活 \(X\) 含有 outlier，导致有效量化 bit 变少；SmoothQuant 将一部分难度从 activation 迁移到 weight，让两侧都更容易量化。</small>
 
-## 8. 这几个方法的关系
+!!! note "图解：怎么读 SmoothQuant Figure 2"
+    左边说明 activation outlier 会占据量化范围，让主体数值只有很少格子可用。右边说明 SmoothQuant 不是简单裁剪 outlier，而是通过等价缩放把 activation 变平滑，同时让权重吸收相反缩放。
 
-可以把它们粗略看成几种视角：`PTQ` 定义“不重训如何直接量化”的总问题，`GPTQ` 从二阶近似和离线误差补偿出发，`AWQ` 从激活敏感性出发保护重要通道，`SmoothQuant` 则通过重参数化缓解激活 outlier。它们并不完全互斥，而是回答不同子问题。
+![SmoothQuant main idea](../assets/images/paper-figures/quantization/smoothquant-figure-5-main-idea.png){ width="780" }
 
-## 9. 什么时候选哪种
+<small>图源：SmoothQuant，Figure 5。原论文图意：通过离线迁移 activation 的量化难度，让权重和激活都更适合 INT8 量化。</small>
 
-### 9.1 只做权重量化，想快速部署
+!!! note "图解：怎么读 SmoothQuant Figure 5"
+    这张图强调“迁移”。activation 是线上动态生成的，处理 outlier 更麻烦；权重是静态的，可以离线吸收一部分缩放。因此 SmoothQuant 更适合推动 `W8A8` 这类权重和激活都低比特的路径。
 
-优先考虑 GPTQ 或 AWQ，前者更偏二阶补偿，后者更偏激活敏感通道保护。
+## 7. 哪些算子该低精，哪些要保高精
 
-### 9.2 想继续向激活量化推进
+![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="760" }
 
-重点看 SmoothQuant，因为很多时候真正卡住 INT8/INT4 激活部署的不是权重，而是激活 outlier。
+<small>图源：SmoothQuant，Figure 6。原论文图意：Transformer block 中，部分矩阵乘可以走 INT8 路径，LayerNorm、Softmax、残差加法等敏感或不适合低精度的算子仍保留 FP16。</small>
 
-### 9.3 模型已经很大，长上下文服务压力大
+!!! note "图解：怎么读 SmoothQuant Figure 6"
+    这张图告诉你：成熟部署通常是混合精度。GEMM 更适合低比特加速，但 LayerNorm、Softmax、residual add、某些输出头和安全/动作模块常常要保高精。
 
-这时不能只看权重量化，还要联动看 KV cache、激活精度和 kernel 支持，否则你可能把权重压小了，但整机显存还是被 cache 吃满。
+## 8. 这几种方法怎么选
 
-## 10. 三个部署案例
+| 场景 | 推荐起点 | 原因 |
+| --- | --- | --- |
+| 先让大模型放进单卡 | AWQ 或 GPTQ 的 W4A16 | weight-only 成熟，部署风险较低 |
+| 追求 INT8 W&A 服务 | SmoothQuant | 重点处理 activation outlier |
+| 只有少量校准数据 | 先用基础 PTQ 或 AWQ 小步试 | 复杂方法也需要代表性校准 |
+| 高质量生产服务 | 混合精度 + 任务桶回归 | 关键层不必都压到最低 bit |
+| 长上下文并发压力大 | 权重量化后继续看 KV cache | 权重不是唯一显存大头 |
 
-### 10.1 13B 客服模型
+!!! warning "不要这样选"
+    不要只根据“论文里哪个困惑度最低”选方案。还要看目标模型结构、校准集、runtime 支持、目标 GPU、batch/context 分布和任务桶。
 
-目标是单机部署、回答长度中等，且质量要求高于极限压缩。常见策略是先上 AWQ 或 GPTQ 的 4bit 权重量化，同时保持关键激活仍用较高精度。
+## 9. 一个最小实践顺序
 
-### 10.2 RAG 文档问答模型
+1. 先跑 FP16/BF16 baseline，记录质量、显存、TTFT、TPOT、吞吐。
+2. 先试 W8 或 W4 weight-only，确认模型能加载、质量基本可接受。
+3. 对比 GPTQ/AWQ 的校准样本和 group size，观察任务桶差异。
+4. 如果要推进 activation 量化，再看 SmoothQuant 或更稳的 FP8/W8A8 路线。
+5. 用 profiler 确认低比特 kernel 是否命中，记录 dequant 时间和 fallback。
+6. 对长上下文、多轮工具、多模态、代码、数学和高价值业务样本单独回归。
 
-目标是服务长上下文和重 prefill，请求吞吐同时受显存与 cache 限制。常见策略是把权重量化和 KV cache 优化一起考虑；若激活量化不稳，宁可保守一点，也不要让长文档任务崩。
+## 10. 总结
 
-### 10.3 边端代码助手
+PTQ 是训练后压缩的大框架；GPTQ 用补偿保护层输出；AWQ 用激活统计保护关键通道；SmoothQuant 把激活离群值迁移到权重侧，让 W&A 量化更容易。它们都不是“越低 bit 越好”的证明，而是在不同约束下，把误差安排到更不伤模型输出的位置。
 
-目标是适应极小显存和受限设备带宽。常见策略是采用更激进的低比特权重量化，但要接受某些复杂推理任务退化更明显。
-
-## 11. 常见失败模式
-
-### 11.1 校准集太短、太简单
-
-模型在长推理、代码、多轮对话上掉点严重。
-
-### 11.2 只看困惑度，不看真实任务
-
-有时 PPL 只略升，但工具使用、结构化抽取、长上下文对齐明显变差。
-
-### 11.3 量化配置和 kernel 不匹配
-
-理论上很优的分组方案，实际硬件上反而跑不快。
-
-### 11.4 权重压下去了，系统瓶颈却转移了
-
-例如权重变小后，KV cache、数据搬运、调度才成了主瓶颈。
-
-## 12. 工程建议
-
-一个更稳的量化流程通常是：先明确目标是省显存、提吞吐还是边端落地，再做 W-only 量化建立基线；随后用贴近真实流量的校准集评估，再决定是否引入激活量化或更激进比特数，最后用真实任务指标而不是单一 PPL 做验收。
-
-## 13. 总结
-
-后训练量化真正难的地方，不在“把 16bit 变成 4bit”，而在“哪些误差能忍，哪些误差绝对不能犯”。  
-`GPTQ` 用二阶近似回答这个问题，`AWQ` 用激活敏感性回答这个问题，`SmoothQuant` 则从激活 outlier 的角度重新整理数值分布。  
-**它们共同指向一个结论**：量化不是粗暴压缩，而是一次受约束的误差重分配。
-
-## 快速代码示例
-
-```python
-import torch  # 使用 PyTorch 张量与 int8 dtype
-
-def per_channel_int8_quant(w, eps=1e-6):  # 定义按输出通道量化的函数
-    # w: [out_features, in_features]  # 权重矩阵形状说明
-    scales = w.abs().amax(dim=1, keepdim=True).clamp_min(eps) / 127.0  # 每个输出通道单独计算 scale
-    q = torch.round(w / scales).clamp(-127, 127).to(torch.int8)  # 缩放、取整、裁剪并转成 int8
-    w_hat = q.float() * scales  # 反量化回浮点，便于观察重建误差
-    return q, scales.squeeze(1), w_hat  # 返回量化权重、scale 和反量化权重
-```
-
-这段代码实现了按输出通道的 INT8 量化：先用每通道最大绝对值求 `scale`，再量化到 `int8` 并反量化得到 `w_hat`。它可以直观看到量化误差来源，是理解 GPTQ/AWQ 权重重建思想的基础。
-
-
-## 工程收束
-
-PTQ、GPTQ、AWQ 与 SmoothQuant 的差异不只是公式不同，更在于它们如何把精度损失转移到校准数据、离群值治理、scale、runtime 和硬件路径里。选型时先确定目标场景和硬件边界，再决定量化对象，并同时验证平均质量、任务桶、`TTFT`、`TPOT`、cache 占用、编译启动成本、shadow 和回退路径。
+下一步建议读 [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md)，因为理解 outlier 和 calibration 后，GPTQ、AWQ、SmoothQuant 的取舍会清楚很多。

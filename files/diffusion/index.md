@@ -1,257 +1,175 @@
 # 扩散模型路线图
 
-扩散模型可以看成一类“先破坏，再恢复”的生成模型。训练时，模型不断看到被噪声污染的数据；推理时，模型学习把纯噪声一步步还原成目标样本。
+扩散模型可以先用一句话理解：**训练时学会从不同程度的噪声里找回数据，推理时从纯噪声一步步走回一张图像。**
 
-DDPM 原论文里的 graphical model 很适合建立第一层直觉：左到右的 \(q\) 是人为定义的前向加噪链，右到左的 \(p_\theta\) 是模型要学习的反向生成链。读扩散模型时，先把这两条方向分清，后面的噪声预测、采样器、蒸馏和整流才不会混在一起。
+这页是扩散专题的入口，目标不是一次讲完所有论文名，而是先建立一套不会乱的心智模型。读扩散时，先分清四件事：
+
+1. **前向加噪**：人为把干净图 \(x_0\) 逐步破坏成噪声 \(x_T\)。
+2. **训练目标**：让神经网络在任意噪声程度 \(t\) 下，预测“噪声是什么”或“干净图该是什么”。
+3. **反向去噪**：推理时从噪声出发，用模型给出的方向一步步变干净。
+4. **采样器**：决定每一步怎么走、走多远、要不要加随机性、能不能跳步。
+
+## 先看 DDPM 图
 
 ![DDPM graphical model 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
 
-<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原论文图意：DDPM 使用固定的正向扩散过程 \(q\) 将数据逐步推向噪声，再学习参数化反向过程 \(p_\theta\) 从噪声逐步生成数据。</small>
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。</small>
 
-!!! note "图解：DDPM 图里的两条方向"
-    左到右的 \(q\) 是前向加噪链：它不需要模型学习，只是人为定义的破坏过程，把 \(x_0\) 一步步推向接近高斯噪声的 \(x_T\)。右到左的 \(p_\theta\) 才是模型要学习的反向去噪链：在每个噪声强度下，估计怎样从 \(x_t\) 回到更干净的 \(x_{t-1}\)。训练目标回答“怎样估计噪声或干净样本”，采样器回答“推理时沿什么路径走回去”，两者不是同一层问题。
+<small>原论文图意：左到右的 \(q\) 是固定的前向扩散过程，把数据 \(x_0\) 逐步推向噪声 \(x_T\)；右到左的 \(p_\theta\) 是模型学习的反向生成过程，从噪声逐步回到数据。</small>
 
-!!! tip "基础知识入口"
-    如果你对 `UNet`、`DiT`、`score`、`ELBO`、`SDE/ODE` 或 `Cross-Attention` 还不熟，可以先看 [卷积与特征提取](../foundations/convolution-and-feature-extraction.md)、[Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md) 和 [概率与潜变量模型](../foundations/probability-latent-variables-and-generative-models.md)。这些是扩散模型后续章节反复使用的公共概念。
+<small>本教程读法：先不要急着看公式。只要记住左边是“人为破坏”，右边是“模型修复”。训练目标回答模型在每个局部步骤里学什么，采样器回答推理时如何把很多局部步骤连成完整生成过程。</small>
 
-!!! note "放到世界模型主线里怎么理解"
-    扩散模型本身不是世界模型，它首先是一类生成分布的方法。但视频世界模型常会借用扩散/flow 的视频生成能力，再补动作条件、时间因果性、长期记忆和实时推理。读扩散专题时，主线应放在“生成路径、条件控制、少步蒸馏和视频扩散如何成为世界模拟器底座”，而不是只停在图像生成效果。
+## 四件事分开看
 
-!!! tip "本专题的读法"
-    先用“从噪声里逐步恢复样本”的直觉读一遍，再回到公式和采样器。第一遍不必记住所有 solver 名字，只要能分清：训练目标回答模型学什么，采样器回答推理怎么走，蒸馏回答如何把多步压成少步，视频扩散回答时间一致性和动作条件怎么进入系统。
+### 1. 前向加噪：制造训练题目
 
-<div class="atlas-meta-grid">
-  <div>
-    <strong>读前先知道</strong>
-    <p>概率分布、神经网络训练、UNet/Transformer 和基础采样概念。</p>
-  </div>
-  <div>
-    <strong>读中抓主线</strong>
-    <p>加噪去噪、参数化、采样路径、条件控制、少步生成。</p>
-  </div>
-  <div>
-    <strong>读完能判断</strong>
-    <p>一个新方法到底改了训练目标、采样器、网络结构、数据配方还是系统执行路径。</p>
-  </div>
-</div>
+前向过程不是模型学出来的，而是我们自己设计的。给一张干净图 \(x_0\)，不断混入高斯噪声：
 
-!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
-    **10 分钟读法**：先分清训练目标、采样器、蒸馏和视频扩散在改哪一层。
-    **深入读法**：深读少步采样、DMD/CausVid/Phased DMD 时，把视频质量、延迟和任务收益分开验。
-    **实验/工程读法**：工程上重点记录采样步数、延迟、显存、FVD/VBench、失败样例和下游任务回归。
-
-!!! warning "核心失败模式"
-    | 失败模式 | 先查什么 |
-    | --- | --- |
-    | 视频质量不等于规划收益 | FVD/VBench 不能直接证明 world-model utility |
-    | 少步蒸馏退化 | 检查 mode collapse、motion shrink 和 teacher bias |
-    | 采样加速外推 | 少步质量、延迟和下游闭环要分开验 |
-
-!!! info "最小验收指标"
-    | 要证明什么 | 最小指标 | 不能替代什么 |
-    | --- | --- | --- |
-    | 采样更省 | steps、latency、显存和质量回归同表 | 单张样例图 |
-    | 视频更稳 | motion、temporal consistency、prompt/control 分项 | 只看自然度 |
-    | 服务世界模型 | action-conditioned rollout 或任务指标另验 | FVD/VBench 直接外推 |
-
-
-!!! failure "最佳反例"
-    少步采样让视频生成更快、画面更自然，但下游策略没有更好，甚至动作条件不敏感。这时扩散效率只证明采样成本下降，不能证明世界模型或规划收益。
-
-## 阅读分层与小地图
-
-| 分层 | 推荐内容 | 读到什么程度 |
-| --- | --- | --- |
-| 主线必读 | 采样与推理加速、一步生成/蒸馏、视频与多模态扩散 | 能判断方法改的是训练目标、采样路径、蒸馏学生还是流式执行 |
-| 工程查阅 | 实战配方、失败分析、方法对照表 | 出现画质、运动、条件控制或速度问题时查 |
-| 论文扩展 | [DPM-Solver++](../paper-deep-dives/diffusion/dpm-solver-plus-plus.md)、DMD、DMD2、CausVid、Self Forcing | 区分少步 solver、分布匹配蒸馏、流式 causal rollout 和 train-test gap |
-| 基础补课 | 概率潜变量、ODE/SDE、Transformer/DiT | 卡在 score、velocity 或 solver 时补 |
-| 暂时可跳过 | 纯图像生成风格细节 | 如果目标是世界模型，先抓采样成本、视频一致性和动作条件 |
-
-本专题在世界模型主线里是**生成和少步 rollout 的支撑层**。扩散论文里的原图要读出“它节省的是采样步数、训练成本、流式延迟还是分布匹配误差”，不要只停在样例图好不好看。
-
-## 先按三组读
-
-| 分组 | 核心问题 | 先看页面 |
-| --- | --- | --- |
-| 机制与训练 | 加噪、去噪、score、SDE/ODE、噪声日程和 conditioning 到底在学什么 | 演进脉络、训练、Score/SDE、噪声日程、Guidance |
-| 采样、蒸馏与视频 | 怎么少步生成，如何把图像扩散推到视频和多模态 | 推理采样、蒸馏、Consistency / Rectified Flow、视频扩散 |
-| 实践与对照 | 训练失败、配方取舍和路线差异如何判断 | 实战配方、方法对照表 |
-
-## 一个统一的数学骨架
-
-设原始样本为 \(x_0 \sim q_{\text{data}}(x)\)。前向加噪过程写成：
-
-\[
-q(x_t \mid x_{t-1}) = \mathcal{N}\left(x_t; \sqrt{1-\beta_t}\,x_{t-1}, \beta_t I\right)
-\]
-
-把它展开到任意时刻 \(t\)，可以直接写成：
-
-\[
-q(x_t \mid x_0) = \mathcal{N}\left(x_t; \sqrt{\bar{\alpha}_t}x_0, (1-\bar{\alpha}_t)I\right)
-\]
-
-其中：
-
-\[
-\alpha_t = 1 - \beta_t,\qquad \bar{\alpha}_t = \prod_{s=1}^{t}\alpha_s
-\]
-
-这意味着我们可以一次采样到任意噪声时刻：
-
-\[
-x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,\qquad \epsilon \sim \mathcal{N}(0, I)
-\]
-
-这条式子非常重要，因为它把“长链加噪”变成了“直接构造带噪样本”的监督学习问题。
-
-## 为什么它有效
-
-直觉上，扩散模型把一个很难直接学的高维分布，拆成很多个更容易学的局部恢复问题。噪声很大时，模型先学粗结构；噪声变小时，模型再补细节和纹理。这有点像修复一张被雾化的照片：先判断画面里大概是人、树、房子，还是猫、桌子、杯子，再慢慢把轮廓、边缘和纹理补回来。
-
-## 四个最重要的视角
-
-理解扩散模型时，最好不要只盯某一篇论文，而是始终从四个视角来读：
-
-### 1. 建模视角
-
-数据如何被逐步加噪、又如何被逐步恢复。
-
-### 2. 参数化视角
-
-这一视角关心模型到底在预测什么。DDPM 主线常用噪声预测，直接估计加入到 \(x_t\) 里的高斯噪声 \(\epsilon\)，实现简单且训练稳定；原图预测直接回归干净样本 \(x_0\)，直觉清楚但高噪声区更难；score 预测估计 \(\nabla_x \log p_t(x)\)，也就是把样本推向高概率数据区域的方向；velocity 预测则估计信号与噪声混合路径上的速度 \(v\)，常用于 latent diffusion、Flow Matching 风格训练和少步采样，尺度更平衡。
-
-### 3. 求解器视角
-
-推理过程能否被看成 <a class="term-tip" href="score-matching-sde-and-probability-flow/#6-probability-flow-ode" data-tip="ODE：Ordinary Differential Equation，常微分方程。扩散里常指不再额外注入随机噪声、沿 probability flow 连续轨迹求解。">ODE</a>/<a class="term-tip" href="score-matching-sde-and-probability-flow/#4-sde" data-tip="SDE：Stochastic Differential Equation，随机微分方程。扩散里常指带随机噪声项的连续时间加噪或反向生成过程。">SDE</a> 的数值积分问题。
-
-!!! tip "术语快释"
-    `ODE` 更像沿着一条确定路线开车，给定起点和方向场后轨迹可重复；`SDE` 更像开车时还不断受到随机风扰动，同一方向场下也可能走出不同轨迹。扩散采样器把这两类连续过程离散成有限步，因此会出现 `Euler`、`Heun`、`DPM-Solver` 等求解器。
-
-### 4. 加速视角
-
-这一视角关心速度提升究竟来自哪里。更好的采样器是在同一模型上用更准确的数值更新减少采样误差；更少的步数是直接压缩反向过程长度，用更少网络前向换速度；蒸馏把多步教师的能力迁移到学生模型上，将推理成本转移到离线训练；路径整流则把噪声到数据的轨迹训练得更直，让粗步长也更可用。
-
-这四个视角串起来，基本就能覆盖从 DDPM 到 DMD2 / Rectified Diffusion 的主线。
-
-## 三类核心问题
-
-理解扩散模型时，可以一直抓住三个问题：
-
-### 1. 训练什么
-
-最常见的是预测噪声 \(\epsilon_\theta(x_t, t)\)。除此之外，也可以直接回归无噪声样本 \(x_0\)，估计当前噪声分布的对数密度梯度 score \(\nabla_{x_t} \log q(x_t)\)，或用 velocity \(v\) 在混合坐标里同时编码信号和噪声方向。这里要注意，`v-prediction` 是扩散参数化，`Flow Matching` 是直接拟合连续速度场的训练框架，二者经常相关但不是同一个概念。
-
-### 2. 怎么采样
-
-采样可以理解为解一个逆向 SDE 或 probability flow ODE，因此会出现一批求解器。`DDIM` 改变采样路径，在不重训模型的前提下减少步数；`Euler` 是简单快速的一阶积分方法，但低步数时误差更明显；`Heun` 用二阶校正先预测再修正，通常比 Euler 更平滑；`DPM-Solver` 则利用扩散 ODE 结构做专用高阶求解，常用于少步高质量采样。
-
-### 3. 怎么加速
-
-主要有两条路线：一种不重训模型，只换求解器；另一种重新训练学生模型，把几十步压到几步甚至一步，例如 `DMD2`、`Phased DMD`、`Rectified Diffusion`。
-
-如果再细一点，可以把整条路线拆成四类方法：
-
-| 类别 | 代表方法 | 本质 |
-| --- | --- | --- |
-| 原始建模 | DDPM | 学习逐步去噪的反向过程 |
-| 少步采样 | DDIM | 改采样轨迹而不重训 |
-| 数值求解器 | Euler、Heun、DPM-Solver | 把采样视作 ODE/SDE 求解 |
-| 一步生成、蒸馏与整流 | DMD、DMD2、Phased DMD、Rectified Diffusion | 重训以实现极少步或一步生成 |
-
-## 一个生动例子：从噪声里“雕刻”柴犬头像
-
-假设我们要生成一张“戴红围巾的柴犬正脸照片”。在 \(t=T\) 时，输入只是纯高斯噪声，什么也看不出来；前几步去噪后，模型先决定圆形头部、两只耳朵和正脸构图；中间阶段逐渐出现“狗脸”“围巾”“背景虚化”等语义；后期阶段再修胡须、毛发、眼球高光和围巾褶皱。
-
-**扩散模型的强项就在这里**：它天然适合把“全局语义 -> 中观结构 -> 局部细节”拆成多个阶段来学。
-
-### 再换一个例子：城市夜景海报
-
-如果提示词是“下雨的赛博朋克街道，远处有霓虹招牌和出租车”，扩散过程通常会先确定透视结构和大块亮暗区域，再形成道路、楼体、招牌和车辆轮廓，最后补雨丝、反光、灯牌字体和局部高光。
-
-这也是为什么扩散模型在图像生成里常被认为比一次性生成更容易兼顾结构与细节。
-
-## 为什么扩散模型会有这么多采样器
-
-因为训练目标通常定义的是一个连续或近连续的去噪场，而真正出图时必须把这条轨迹离散成有限步。  
-于是你会看到 `DDIM` 这类早期少步采样方法，`Euler / Heun` 这类数值积分器，以及 `DPM-Solver / DPM-Solver++` 这类扩散 ODE 专用高阶求解器。
-
-也就是说，采样器多并不是因为大家随便发明新名字，而是因为“怎么走回去”本来就是一个数值求解问题。
-
-## 为什么后来又会转向蒸馏和一步生成
-
-因为光靠更好的 solver，通常很难把几十步压到一步。  
-于是研究开始进一步问：能不能让学生直接学会更短的生成映射，能不能不模仿整条轨迹而直接对齐最终分布，能不能把生成路径改得更适合少步离散。Progressive Distillation 逐级把教师采样步数减半，Consistency / LCM 学习不同时间点映射到同一干净结果的一致性，DMD / DMD2 / Phased DMD 用分布匹配蒸馏追求一步或极少步高质量生成，Flow Matching / Rectified Flow / Rectified Diffusion 则直接拟合噪声到数据路径上的速度场，并重塑生成路径，让少步 ODE 积分更容易。
-
-## 读扩散模型时最容易混淆的几件事
-
-### 训练目标和采样器不是一回事
-
-同一个训练好的模型，往往能搭配多种采样器。
-
-### 少步采样和一步蒸馏不是一回事
-
-前者通常是推理侧优化，后者通常需要重训学生模型。
-
-### 质量与速度始终在拉扯
-
-采样步数越少，系统越快；但想保住细节、多样性和文本对齐，难度也会急剧上升。
-
-## 学习路径与阶段检查
-
-扩散专题最容易混在一起的是“训练目标、采样轨迹、条件控制、少步蒸馏”。建议按下面四段读：
-
-| 阶段 | 先读 | 读完要能回答 |
-| --- | --- | --- |
-| 1. 建模起点 | [扩散模型发展脉络](evolution.md)、[扩散训练与表示](training.md) | 前向加噪、反向去噪、ELBO、噪声预测和 \(x_0/v/score\) 参数化分别在解决什么 |
-| 2. 连续视角 | [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md)、[噪声日程与参数化](noise-schedules-and-parameterization.md) | 为什么同一个扩散模型可以被看成 SDE、ODE 或 score field |
-| 3. 推理与控制 | [条件控制与 Guidance](guidance-and-conditioning.md)、[采样与推理加速](inference.md) | CFG、solver、步数、随机性和文本对齐之间如何权衡 |
-| 4. 加速与变体 | [一步生成、蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) | 少步采样、一步蒸馏、Flow Matching / rectified 路线、Wan 系列视频底座各自改的是哪一层 |
-
-如果目标是过渡到世界模型，读完第 4 阶段后直接接 [视频与多模态扩散](video-and-multimodal-diffusion.md) 里的 Wan 系列说明、[Towards Video World Models 专题](../paper-deep-dives/world-models/towards-video-world-models.md) 和 [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md)。如果只是快速定位方法，先看 [扩散方法对照表](comparison-table.md)。如果要做训练或部署决策，最后一定补 [扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md)：扩散系统的很多失败不是公式错，而是数据、噪声日程、采样器和评测口径没有对齐。
-
-## 从论文专题回填的扩散知识点
-
-专题页已经把图像、视频、少步蒸馏和世界模型路线连了起来。回到扩散总览时，可以把它们放回下面四个问题：
-
-| 专题来源 | 回填到扩散章节的知识点 | 应接到本章哪里 |
-| --- | --- | --- |
-| [DPM-Solver++](../paper-deep-dives/diffusion/dpm-solver-plus-plus.md) | 少步扩散加速不一定要重训；guided sampling 下要把 CFG 放大、data prediction、thresholding 和 multistep solver 作为同一个数值稳定问题看 | [采样与推理加速](inference.md)、[噪声日程与参数化](noise-schedules-and-parameterization.md)、[扩散方法对照表](comparison-table.md) |
-| [DMD](../paper-deep-dives/diffusion/dmd.md)、[DMD2](../paper-deep-dives/diffusion/dmd2.md) | 少步/一步生成不是只换 solver，而是用 distribution matching、fake critic、regression loss 或 GAN 监督重新训练学生 | [一步生成、蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) |
-| [Phased DMD](../paper-deep-dives/diffusion/phased-dmd.md) | 高低 SNR 区间承担不同生成职责，few-step 蒸馏可以按噪声子区间拆 expert，以保住视频运动和图像多样性 | [噪声日程与参数化](noise-schedules-and-parameterization.md)、[一步生成、蒸馏与整流](distillation.md) |
-| [Wan2.1](../paper-deep-dives/diffusion/wan.md) | 视频 foundation model 的质量来自 VAE、Video DiT、Flow Matching、分阶段图文视频训练、Context Parallel 和后训练的系统组合 | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md) |
-| [CausVid](../paper-deep-dives/diffusion/causvid.md)、[Self Forcing](../paper-deep-dives/world-models/self-forcing.md) | 双向视频扩散要变成流式世界模型，必须处理 causalization、KV cache、self-rollout 和 train-test gap | [采样与推理加速](inference.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) |
-| [SLA / SLA2](../paper-deep-dives/foundations/sla-sparse-linear-attention.md) | 视频 DiT 的 attention 可以拆成 sparse exact、linear compensation 和 skip；这说明扩散加速也可能来自 attention 结构和低比特 kernel | [视频与多模态扩散](video-and-multimodal-diffusion.md)、[扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md) |
-
-## 快速代码示例
-
-```python
-import torch  # 使用 no_grad 装饰器与张量操作
-
-def cfg_eps(eps_uncond, eps_cond, scale=6.0):  # 定义 CFG 噪声混合函数
-    # classifier-free guidance  # 条件分支相对无条件分支的外推
-    return eps_uncond + scale * (eps_cond - eps_uncond)  # 返回增强后的噪声预测
-
-@torch.no_grad()  # 推理更新不记录梯度
-def ddim_step(x_t, alpha_t, alpha_prev, eps):  # 定义简化版 DDIM 单步更新
-    # 一个简化版 DDIM 更新  # 从当前噪声状态估计 x0 并推进到前一时间步
-    x0 = (x_t - (1 - alpha_t).sqrt() * eps) / alpha_t.sqrt()  # 由当前状态和噪声预测还原 x0
-    return alpha_prev.sqrt() * x0 + (1 - alpha_prev).sqrt() * eps  # 根据 alpha_prev 合成前一时间步状态
+```text
+x_0（干净图） -> x_1 -> x_2 -> ... -> x_T（近似纯噪声）
 ```
 
-这段代码把两个常见推理组件放在一起：`cfg_eps` 展示了 **Classifier-Free Guidance** 如何混合条件/无条件噪声预测，`ddim_step` 展示了单步 **DDIM** 更新。实践中你可以先固定步数，再调 `scale` 找到质量与多样性的平衡点。
+这里 \(t\) 是时间步，\(T\) 是最大噪声步数。\(t\) 越大，图像里真实信号越少，噪声越多。
 
-*[ODE]: Ordinary Differential Equation，常微分方程；在扩散里常指没有额外随机噪声项的 probability flow 轨迹。
-*[SDE]: Stochastic Differential Equation，随机微分方程；在扩散里常指带随机噪声项的连续时间加噪或反向生成过程。
-## 深度标杆页
+### 2. 训练目标：让模型学会回答“噪声在哪里”
 
-本专题建议先把下面 5 页读深，其它扩散页面向它们的结构对齐：先解释目标，再解释机制，再给训练/采样/失败模式和工程判断。
+训练时我们随机抽一个时间步 \(t\)，构造带噪图 \(x_t\)，再让模型预测某种目标。最常见的是预测噪声：
 
-| 标杆页 | 对齐标准 |
+\[
+\hat{\epsilon} = \epsilon_\theta(x_t,t)
+\]
+
+这行式子在说：模型 \(\epsilon_\theta\) 输入当前带噪图 \(x_t\) 和时间步 \(t\)，输出它估计的噪声 \(\hat{\epsilon}\)。
+
+符号含义：
+
+| 符号 | 含义 |
 | --- | --- |
-| [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md) | 要能把扩散目标、噪声过程和概率流解释成一条连续主线 |
-| [噪声日程与参数化](noise-schedules-and-parameterization.md) | 要能说明预测噪声、预测数据、v-prediction 和 schedule 的取舍 |
-| [扩散训练配方与排障](practical-training-recipes-and-failure-analysis.md) | 要有可执行的训练诊断、指标和失败案例 |
-| [一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) | 要能接到少步采样、蒸馏和 world model rollout 加速 |
-| [视频与多模态扩散](video-and-multimodal-diffusion.md) | 要把时序一致性、多模态条件和训练成本讲清楚 |
+| \(\epsilon\) | 真实加入的高斯噪声 |
+| \(\hat{\epsilon}\) | 模型预测出来的噪声 |
+| \(\epsilon_\theta\) | 带参数 \(\theta\) 的神经网络，常见实现是 U-Net 或 DiT |
+| \(x_t\) | 第 \(t\) 个噪声水平下的样本 |
+| \(t\) | 当前噪声时间步 |
+
+如果模型能准确预测噪声，就可以把噪声从 \(x_t\) 里减掉，得到更干净的估计。
+
+### 3. 反向去噪：从噪声里逐步恢复图像
+
+推理时没有干净图 \(x_0\)，只有一张随机噪声 \(x_T\)。模型会在每个时间步估计当前应该往哪里去噪：
+
+```text
+x_T -> x_{T-1} -> x_{T-2} -> ... -> x_0
+```
+
+这和训练方向正好相反。训练时我们知道原图和噪声，所以能出题；推理时模型只看到当前噪声状态，必须靠学到的去噪方向一步步恢复。
+
+### 4. 采样器：把方向变成具体步子
+
+模型通常只告诉你“往哪里去噪”，但没有单独决定“这一步怎么走”。采样器负责把模型输出变成更新规则：
+
+- 每一步走多远；
+- 是否跳过某些中间时间点；
+- 是否加入随机噪声；
+- 是否用预测-校正或高阶方法减少误差；
+- 总共用多少次模型前向计算。
+
+所以扩散里常说：**模型学的是方向，采样器决定走法。**
+
+## 最小数学骨架
+
+离散 DDPM 的前向单步加噪通常写成：
+
+\[
+q(x_t \mid x_{t-1})
+=
+\mathcal{N}\left(x_t;\sqrt{1-\beta_t}x_{t-1}, \beta_t I\right)
+\]
+
+这行式子在说：给定上一时刻的样本 \(x_{t-1}\)，下一时刻 \(x_t\) 来自一个高斯分布；它的均值是衰减后的 \(x_{t-1}\)，方差由 \(\beta_t\) 控制。
+
+符号含义：
+
+| 符号 | 含义 |
+| --- | --- |
+| \(q\) | 人为定义的前向加噪分布，不是模型 |
+| \(x_{t-1}\) | 上一个噪声状态 |
+| \(x_t\) | 当前噪声状态 |
+| \(\mathcal{N}(\cdot;\mu,\Sigma)\) | 均值为 \(\mu\)、协方差为 \(\Sigma\) 的高斯分布 |
+| \(\beta_t\) | 第 \(t\) 步加入多少噪声的小正数 |
+| \(I\) | 单位矩阵，表示各维度加入独立同分布噪声 |
+
+训练时不会真的一步步加噪到 \(x_t\)。因为高斯噪声叠加后仍是高斯，可以直接写成闭式形式：
+
+\[
+x_t
+=
+\sqrt{\bar{\alpha}_t}x_0
++
+\sqrt{1-\bar{\alpha}_t}\epsilon,
+\qquad
+\epsilon \sim \mathcal{N}(0,I)
+\]
+
+这行式子在说：任意时间步的带噪图 \(x_t\)，都可以看成“保留下来的原图信号”加上“混入的高斯噪声”。
+
+符号含义：
+
+| 符号 | 含义 |
+| --- | --- |
+| \(x_0\) | 干净训练样本 |
+| \(x_t\) | 第 \(t\) 个噪声水平下的样本 |
+| \(\epsilon\) | 标准高斯噪声 |
+| \(\alpha_t = 1-\beta_t\) | 第 \(t\) 步保留多少信号 |
+| \(\bar{\alpha}_t = \prod_{s=1}^{t}\alpha_s\) | 从第 1 步到第 \(t\) 步累计保留多少信号 |
+| \(\sqrt{\bar{\alpha}_t}\) | 原图信号的权重 |
+| \(\sqrt{1-\bar{\alpha}_t}\) | 噪声的权重 |
+
+直觉上，\(t\) 小时 \(\bar{\alpha}_t\) 接近 1，图像还很清楚；\(t\) 大时 \(\bar{\alpha}_t\) 接近 0，图像几乎变成纯噪声。
+
+## 统一符号表
+
+| 符号 / 术语 | 先这样理解 |
+| --- | --- |
+| \(x_0\) | 干净数据，比如原始图像 |
+| \(x_t\) | 第 \(t\) 个噪声水平下的图像 |
+| \(x_T\) | 接近纯高斯噪声的最终状态 |
+| \(t\) | 当前噪声时间步 |
+| \(T\) | 最大噪声步数 |
+| \(\epsilon\) | 真实加入的标准高斯噪声 |
+| \(\epsilon_\theta(x_t,t)\) | 模型预测的噪声 |
+| \(x_{0,\theta}(x_t,t)\) | 模型预测的干净图 |
+| \(\beta_t\) | 每一步新增噪声强度 |
+| \(\alpha_t\) | 每一步保留信号比例，常写作 \(1-\beta_t\) |
+| \(\bar{\alpha}_t\) | 到第 \(t\) 步为止累计保留信号比例 |
+| \(\sigma_t\) | 噪声标准差，经常用来描述连续噪声尺度 |
+| SNR | Signal-to-Noise Ratio，信噪比，表示信号相对噪声有多强 |
+| score | \(\nabla_x \log p_t(x)\)，指向更高概率区域的梯度方向 |
+| \(s_\theta(x_t,t)\) | 模型估计的 score |
+| \(c\) | 条件信息，如文本、类别、边缘图、参考图 |
+| guidance scale | 推理时把条件方向放大的强度 |
+| sampler / solver | 采样器 / 求解器，决定推理时怎么沿去噪方向移动 |
+| NFE | Number of Function Evaluations，模型前向调用次数，常用来衡量采样成本 |
+
+## 推荐阅读顺序
+
+如果你是第一次系统学扩散，建议按下面顺序读：
+
+| 顺序 | 页面 | 读完应能回答 |
+| --- | --- | --- |
+| 1 | [扩散训练与表示](training.md) | 训练样本怎么构造，模型到底预测什么 |
+| 2 | [噪声日程与参数化](noise-schedules-and-parameterization.md) | \(\beta_t\)、\(\bar{\alpha}_t\)、SNR、\(\epsilon/x_0/v\) 为什么重要 |
+| 3 | [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md) | 为什么“预测噪声”也可以理解成学习概率梯度 |
+| 4 | [条件控制与 Guidance](guidance-and-conditioning.md) | 文本条件和 guidance scale 如何改变去噪方向 |
+| 5 | [采样与推理加速](inference.md) | DDPM、DDIM、Euler、Heun、DPM-Solver 为什么都是“怎么走”的选择 |
+
+读完基础主线之后，再看 [扩散模型发展脉络](evolution.md)、[一步生成、蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) 和 [视频与多模态扩散](video-and-multimodal-diffusion.md)，会更容易判断一个新方法到底改了训练目标、采样器、路径几何还是系统执行方式。
+
+!!! tip "进阶理解"
+    扩散方法进入视频、世界模型和机器人控制后，关心点会从“单张图好不好看”扩展到时间一致性、动作条件、采样延迟和闭环稳定性。但这些进阶问题仍建立在同一个基础链条上：加噪、预测、去噪、采样。
+
+## 一句话收束
+
+扩散模型不是魔法式地“一次生成图片”，而是把生成拆成很多个可学习、可控制、可数值求解的小去噪问题。先把 \(x_0 \rightarrow x_t \rightarrow x_T\) 和 \(x_T \rightarrow x_0\) 两个方向分清，后面的 DDPM、DDIM、score、SDE、Guidance 和 DPM-Solver 才会自然接上。
+
+*[SNR]: Signal-to-Noise Ratio，信噪比。
+*[NFE]: Number of Function Evaluations，模型前向调用次数。

@@ -18,6 +18,27 @@
 !!! tip "遇到这些症状，回看本页"
     `CUDA OOM` 只发生在多相机/长视频 bucket、同样 batch 下某个 resize 版本突然爆显存、profile 里出现异常大的 `contiguous` / `clone` / `view_as_real`，或者模型接口总在 `[B, L, D]` 和 `[B, D, L]` 之间错位时，先把每一步 shape、dtype、device 和是否 materialize 写出来。本页能帮你判断问题是在输入展开、patch/token 计数、计算图保存，还是张量布局转换。
 
+## 0. 符号卡：axis 和 shape 怎么读
+
+张量的每一维都叫一个 axis。读 shape 时不要只看数字，要读出“这一维代表什么”。
+
+| 写法 | 读法 | 含义 |
+| --- | --- | --- |
+| `[B, L, D]` | batch, length, hidden | 一批 token 序列 |
+| `[B, C, H, W]` | batch, channel, height, width | 一批图像 |
+| `[B, T, C, H, W]` | batch, time, channel, height, width | 一批视频 |
+| `[B, Cams, Frames, Patches, D]` | batch, 相机, 帧, patch, hidden | 多相机视频 token |
+| `dtype` | data type | BF16、FP16、FP32、INT8 等数值格式 |
+| `device` | 设备 | CPU、GPU、NPU 等 |
+
+例如：
+
+\[
+x \in \mathbb{R}^{B \times L \times D}
+\]
+
+这行公式不是在炫数学，而是在说：输入 \(x\) 是一个三维数字表；第 1 维是样本数，第 2 维是 token 数，第 3 维是每个 token 的向量长度。
+
 ## 1. Tensor 到底是什么
 
 可以把 tensor 理解成带维度的数字容器：
@@ -71,6 +92,9 @@ head:       [B, num_classes]
 
 这比直接看代码更容易发现接口问题。
 
+!!! note "公式拆读：矩阵乘为什么只看最后一维"
+    \((B,L,D)\times(D,D_{\text{out}})\rightarrow(B,L,D_{\text{out}})\) 里，真正相乘的是每个 token 的 \(D\) 维向量和权重矩阵的 \(D\) 维输入轴。前面的 \(B,L\) 可以先理解成“有很多个 token 并行做同一类变换”。所以最后一维对不上，Linear 层就接不上。
+
 ## 3. 计算图是什么
 
 计算图记录了张量如何从输入变成输出。训练时通常有两条路径：
@@ -101,7 +125,7 @@ for batch in dataloader:
 
 这解释了为什么推理能跑的模型，训练时可能显存不够。推理通常不需要保存完整计算图，而训练需要。
 
-## 5. Shape 追踪例子：多相机视频如何变成长序列
+## 5. 进阶例子：多相机视频如何变成长序列
 
 ```mermaid
 flowchart LR

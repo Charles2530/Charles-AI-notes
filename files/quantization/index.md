@@ -1,340 +1,143 @@
 # 量化路线图
 
-量化的目标，是用更少的比特表示权重和激活，从而降低显存、带宽和推理成本。
+量化不是把模型文件压小这么简单。它更像给大模型重新分配数值预算：哪些张量可以用更少 bit 表示，哪些层必须保高精，哪些收益会被 kernel、KV cache、反量化和服务调度吃掉。
 
-!!! tip "快速定位"
-    **一句话结论**：量化只有在任务质量、kernel 路径和端到端延迟同表通过时才算省成本。
-    **适合读者**：正在选择 PTQ/QAT、FP8/FP4、KV 量化或多模态/VLA 低比特部署的人。
-    **先看哪张表**：先看“最小验收指标”，再看“阅读分层与小地图”。
+![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="760" }
 
-!!! note "在主线里的位置"
-    量化在世界模型高效训练里解决的是显存、带宽、通信和 rollout 成本，但它不是“全模型一键降 bit”。视觉连接器、动作头、风险/安全头、长时序 KV cache 和 reward/value 相关模块常常比文本权重更敏感，必须按任务桶分别验收质量、延迟和失败模式。
+<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原论文图意：模型规模增长速度明显快于单卡 GPU 显存增长速度，量化首先是在解决模型部署的显存和带宽压力。</small>
 
-!!! tip "证据与全站矩阵"
-    前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。量化结论要分开写权重、activation、KV、kernel 和任务桶，不能把 bit 数下降直接外推成质量稳定。
+!!! note "初学者先抓住"
+    先不要问“INT4、FP8、GPTQ、AWQ 谁最好”。先问四件事：压的是权重、激活还是 KV cache；误差会不会伤关键任务；runtime 有没有对应 kernel；端到端延迟、吞吐和显存是否真的改善。
 
-![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="740" }
+!!! warning "最常见误解"
+    `4bit` 只说明每个量化值本身更小，不自动说明系统更快。真实服务里还会有 scale 元数据、packing、dequant、kernel fallback、KV cache、batch 调度和质量回归。
 
-<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原论文图意：模型规模增长速度明显快于单卡 GPU 显存增长速度，量化要解决的首要问题就是把越来越大的模型放进有限显存和带宽预算里。</small>
+## 1. 量化到底在做什么
 
-!!! note "图解：SmoothQuant Figure 1 为什么放在总览开头"
-    这张图的横轴不是某个算法，而是系统压力：模型规模增长速度快于单卡显存增长速度，部署边界会越来越早被显存和带宽碰到。量化不是“为了炫技把 bit 数压低”，而是为了解开这些边界。模型参数、激活、KV cache 和 runtime kernel 都会消耗显存与带宽；真正落地时，先看目标硬件和 runtime 是否支持，再讨论 GPTQ、AWQ、QAT 或 KV cache 量化是否值得做。
+最常见的均匀量化可以写成：
 
-!!! note "难点解释：为什么这张图比算法列表更重要"
-    量化新手容易先问“INT4、FP8、GPTQ、AWQ 谁更强”。但工程上更早的问题是：模型是否放得下、decode 时是否被带宽卡住、长上下文是否被 KV cache 卡住、kernel 是否原生支持低比特。SmoothQuant 这张图把问题拉回系统约束：量化的价值来自显存、带宽和吞吐的共同改善，而不是单独的压缩率。
+\[
+q = \mathrm{clip}\left(\mathrm{round}\left(\frac{x}{s}\right)+z,\ q_{\min},\ q_{\max}\right)
+\]
 
-!!! tip "基础知识入口"
-    量化里的 `FP8`、`INT4`、显存、带宽、kernel 和 runtime 都可以先看 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。如果涉及 QAT 或低比特训练，再补看 [优化与训练入门](../foundations/optimization-and-training-basics.md)。
+反量化写成：
 
-!!! tip "本专题的读法"
-    先别问“几 bit 最好”，先问瓶颈在哪里：权重放不下、decode 读权重慢、KV cache 占满、activation 离群值伤质量，还是 runtime 没有对应 kernel。量化不是单个算法名，而是格式、误差控制、算子和服务栈共同兑现收益。
+\[
+\hat{x}=s(q-z)
+\]
 
-!!! note "从 Low-bit LLM Survey 反推量化主线"
-    新增的 Low-bit LLM 综述可以当作本章的索引：第一层看 number format 和 scale granularity，第二层看 PTQ/QAT/QLoRA 等误差控制方法，第三层看 Q/DQ、packing、GEMM、attention 与 KV cache kernel，第四层看 vLLM、SGLang、TensorRT-LLM 等 runtime 能否真的跑到低比特路径。量化选型时不要只记录“W4A16”或“FP8”，而要写清它省的是权重、激活、KV、带宽还是训练/微调显存，以及哪条任务路径必须保高精。
-
-<div class="atlas-meta-grid">
-  <div>
-    <strong>读前先知道</strong>
-    <p>浮点/整数、scale、显存、带宽、矩阵乘和基础推理流程。</p>
-  </div>
-  <div>
-    <strong>读中抓主线</strong>
-    <p>数值格式、PTQ/QAT、activation outlier、kernel、runtime、评测回退。</p>
-  </div>
-  <div>
-    <strong>读完能判断</strong>
-    <p>一个量化方案省的是权重、激活、KV、带宽还是部署成本，以及会伤哪类任务。</p>
-  </div>
-</div>
-
-!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
-    **10 分钟读法**：先按权重、activation、KV、scale metadata 和 kernel 支持拆成本。
-    **深入读法**：深读时看 PTQ/QAT/FP8/FP4 对任务桶、敏感头和长上下文的影响。
-    **实验/工程读法**：工程上必须同表记录质量回归、显存、带宽、latency、fallback 和目标硬件。
-
-!!! warning "核心失败模式"
-    | 失败模式 | 先查什么 |
-    | --- | --- |
-    | accuracy cliff | 按任务桶和敏感头检查，而不是只看平均分 |
-    | KV/activation 误差积累 | 长上下文和 rollout 要单独验 |
-    | 硬件收益错配 | 低比特收益依赖 kernel、带宽和 fallback 路径 |
-
-!!! info "最小验收指标"
-    | 要证明什么 | 最小指标 | 不能替代什么 |
-    | --- | --- | --- |
-    | 低比特不伤关键任务 | 任务桶、长上下文、敏感头回归通过 | 平均分不掉 |
-    | 系统真加速 | 端到端 latency/throughput 和 kernel trace | 权重体积变小 |
-    | 部署可回滚 | fallback、校准集、监控和阈值 | 离线一次评测 |
-
-
-!!! failure "最佳反例"
-    权重体积降到 INT4，但 latency 没降、kernel 不走低比特路径，或者风险头/动作头排序变坏。这不是有效量化，只是把压缩率误当成系统收益。
-
-## 阅读分层与小地图
-
-| 分层 | 推荐内容 | 读到什么程度 |
+| 符号 | 读法 | 含义 |
 | --- | --- | --- |
-| 主线必读 | [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[多模态与 VLA 量化](quantization-for-multimodal-and-vla-models.md)、[部署检查清单](evaluation-and-deployment-checklist.md) | 能说清省的是权重、激活、KV、带宽还是训练显存 |
-| 工程查阅 | GPTQ/AWQ/SmoothQuant、运行时框架、硬件取舍 | 选具体 checkpoint、runtime 或硬件时查 |
-| 论文扩展 | [Low-bit LLM Survey](../paper-deep-dives/inference/low-bit-llm-survey.md)、DeepSeek-V3/V4、Nemotron 3 Super | 把低比特论文拆成格式、算法、kernel 和 runtime 证据 |
-| 基础补课 | 数值范围、scale、矩阵乘、显存带宽 | 卡在 INT/FP/NF4 或 Q/DQ 时补 |
-| 暂时可跳过 | 具体框架转换脚本和格式兼容细节 | 没有部署目标时先略读 |
+| \(x\) | original value | 原始浮点值，通常是权重、激活或 KV cache 里的元素 |
+| \(q\) | quantized value | 低比特整数表示 |
+| \(\hat{x}\) | dequantized value | 反量化回浮点后的近似值 |
+| \(s\) | scale | 一个量化格子的宽度 |
+| \(z\) | zero-point | 让真实 0 对齐到整数格点的偏移 |
+| \(q_{\min}, q_{\max}\) | integer range | 当前 bit 数能表示的整数范围 |
 
-本专题服务世界模型高效训练里的**显存、带宽和低成本 rollout**。不要只问“几 bit”，要把 `action sensitivity`、`long-horizon consistency`、`risk calibration`、`candidate ranking agreement` 和 `cost per successful rollout` 一起放进验收表。
+**读作什么**：先用 scale 把浮点数除成“第几个格子”，四舍五入到整数，再限制到低比特能表示的范围；计算时再用 scale 把它近似还原。
 
-## 从论文专题回填的量化知识点
+**直觉例子**：如果 \(s=0.1\)，那么 \(x=1.23\) 会落到大约第 12 个格子，反量化后可能变成 \(1.2\)。量化省了存储，但丢了 \(0.03\) 的细节。
 
-论文专题里的低精度案例说明，量化不是一个“统一降到几 bit”的动作，而是按训练、推理、KV、MoE 和敏感模块分别决策。
+更完整的符号、shape 和 KV 显存公式放在 [量化符号与最小数学地图](symbols-and-minimal-math.md)。读后面的公式前，建议先把这页当速查表。
 
-| 专题来源 | 量化层面的补充 | 应接到本章哪里 |
+## 2. 一条更顺的阅读路径
+
+| 阶段 | 先读什么 | 读完要能回答 |
 | --- | --- | --- |
-| [Low-bit LLM Survey](../paper-deep-dives/inference/low-bit-llm-survey.md) | 低比特 LLM 要同时区分格式、粒度、动态/静态校准、weight-only、W&A、KV cache、QAT/PTQ 和低比特训练；是否真快取决于 Q/DQ、packing、kernel 与硬件路径 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) |
-| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | FP8 训练要和通信、并行、GEMM kernel、loss 稳定性一起看，不能只看权重格式 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) |
-| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | NVFP4 预训练采用 mixed precision：大部分线性层 FP4，但 latent projections、MTP、attention、embedding 和部分网络保留高精 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[量化评估与部署检查](evaluation-and-deployment-checklist.md) |
-| [DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | FP4 QAT 与异构 KV cache 提醒我们：长上下文和 MoE 服务中，KV 与动态状态可能比静态权重更早成为显存瓶颈 | [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) |
-| [Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md)、[GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md) | 全模态模型量化要额外保护 audio codec、vision connector、projector、speech head 和安全分类器等非文本路径 | [多模态与 VLA 量化](quantization-for-multimodal-and-vla-models.md)、[部署检查清单](evaluation-and-deployment-checklist.md) |
+| 建立直觉 | 本页、[符号与最小数学地图](symbols-and-minimal-math.md)、[论文图解导读](page-by-page-visual-guide.md) | 量化压什么、公式变量是什么、论文图该怎么看 |
+| 方法入门 | [量化方法对照表](comparison-table.md)、[PTQ/GPTQ/AWQ/SmoothQuant](ptq-gptq-awq-smoothquant.md) | 每种方法在保护哪类误差 |
+| 难点补课 | [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md) | 为什么 activation 比权重难量化 |
+| 训练与适配 | [QLoRA 与量化训练](qlora-and-quantized-training.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) | 什么时候 PTQ 不够，什么时候要训练时适应 |
+| 系统落地 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[服务栈与硬件](serving-stacks-and-hardware-tradeoffs.md)、[运行时框架](quantization-runtimes-and-frameworks.md) | 量化收益能不能被硬件和 runtime 兑现 |
+| 上线验收 | [多模态与 VLA 量化](quantization-for-multimodal-and-vla-models.md)、[评测与部署清单](evaluation-and-deployment-checklist.md) | 关键任务、长上下文和回退路径是否过关 |
 
-## 0. 先分清四层：格式、算法、算子、Infra
+!!! tip "怎么避免读乱"
+    量化名词不在同一层。`INT4/FP8/NF4` 是数值格式，`GPTQ/AWQ/SmoothQuant` 是误差控制方法，`W4A16/W8A8` 是权重和激活的精度组合，`Marlin/TensorRT-LLM/vLLM` 才是具体执行路径。
 
-量化最容易乱，是因为很多名字不在同一层。`INT4`、`GPTQ`、`Marlin kernel`、`vLLM` 和 `TensorRT-LLM` 不能直接横向比较，它们分别回答不同问题。
+## 3. 先分清四层
 
-| 层级 | 先问什么 | 典型对象 | 容易混淆的点 |
+| 层级 | 它回答的问题 | 例子 | 初学者常犯错 |
 | --- | --- | --- | --- |
-| 数值格式 | 数字怎么表示 | INT8、INT4、FP8、NF4、group-wise scale | bit 数低不等于一定更快，scale 元数据和硬件支持会改变收益 |
-| 量化算法 | 误差怎么控制 | PTQ、GPTQ、AWQ 与 SmoothQuant、QAT、QLoRA | PTQ 和 QAT 是训练时机差异，GPTQ/AWQ/SmoothQuant 是具体误差控制策略 |
-| 算子与 Kernel | 低比特怎么真的算 | W4A16 GEMM、W8A8 GEMM、dequant fusion、KV cache quant | 算法精度好，不代表 runtime 有高效 kernel |
-| Runtime / Infra | 谁负责加载、调度和服务 | vLLM、SGLang、TensorRT-LLM、ONNX Runtime、模型格式转换 | 同一个 checkpoint 换 runtime，速度、兼容性和掉点可能完全不同 |
-
-!!! note "难点解释：为什么 PTQ 和 QAT 不该拆成两条孤立目录"
-    `PTQ` 是训练完以后再量化，成本低、适合已有模型；`QAT` 是训练中模拟量化误差，成本高但更能适应低比特。它们都是“算法时机”层的问题。真正落地还要继续问：用什么数值格式、有没有对应 kernel、runtime 是否支持、线上评测是否可回退。`QLoRA` 又是另一类：它主要是量化底座上的参数高效微调，不等同于把模型直接低比特上线。
-
-## 1. 一个统一数学骨架
-
-把浮点数 \(x\) 映射到整数 \(q\)：
-
-\[
-q = \text{round}\left(\frac{x}{s}\right) + z
-\]
-
-**反量化为**：
-
-\[
-\hat{x} = s(q-z)
-\]
-
-其中：
-
-- \(s\) 是 scale
-- \(z\) 是 zero-point
-
-这看起来只是数值压缩，但真正要保住的是模型输出：
-
-\[
-Wx \approx \hat{W}\hat{x}
-\]
-
-也就是说，量化真正关心的不是单个参数值，而是最终算子的误差传播。
-
-## 2. 为什么量化在大模型时代变成核心工程问题
-
-因为大模型部署的成本主要集中在：
-
-- 权重显存：模型参数本身占用的显存，决定能否装进目标硬件。
-- KV cache：长上下文和高并发时的动态显存大户。
-- 带宽：权重、激活和 cache 反复读写会限制 token 生成速度。
-- 推理吞吐：单位时间能服务多少 token 或请求，直接影响成本。
-
-如果不做量化，一个 7B 或 13B 模型很快就会撞上部署门槛。
-
-### 一个直观例子：7B 模型显存
-
-若 7B 参数模型用 FP16 存储，权重约占：
-
-\[
-7 \times 10^9 \times 2 \text{ bytes} \approx 14 \text{ GB}
-\]
-
-若改成 INT4，则理论上只需约 3.5GB 左右，再加上量化元数据，整体仍会显著下降。这就是为什么“能不能量到 4bit 且还能用”在工程上这么重要。
-
-## 3. 量化真正解决的不是压缩，而是部署边界
-
-从研究视角看，量化像在研究数值逼近；从工程视角看，它更像在回答：
-
-模型能不能塞进目标硬件，并发能不能提高，带宽和显存是否不再是第一瓶颈，以及能否在不牺牲关键业务质量的前提下降本。
-
-因此量化从来不是“压得越低越先进”，而是“在目标场景里压到多低仍然划算”。
-
-## 3.1 端到端成本账：量化要放回同一个请求里算
-
-量化页面最容易只算“模型文件小了多少”。更贴近工程的做法，是固定同一个请求，比较不同 context、KV、batch 和量化策略的端到端成本。假设输入是一段文档问答，输出 512 token：
-
-| 配置 | 权重 | KV cache | Batch / Context | 你会看到的变化 | 关键验收 |
-| --- | --- | --- | --- | --- | --- |
-| FP16 baseline | FP16 | FP16 | 4k、小 batch | 质量稳，显存贵，吞吐低 | TTFT、TPOT、显存水位 |
-| W8A8 | INT8 / FP8 路径 | FP16 | 4k-32k、中 batch | 权重带宽下降，kernel 支持好时吞吐更稳 | 量化 kernel hit rate、质量掉点 |
-| W4A16 | INT4 权重、较高精计算 | FP16 | 4k-32k、中 batch | 权重显存省，但 dequant 可能拖短请求 | dequant 时间、短问答 TTFT |
-| W4A16 + KV INT8 | INT4 权重 | INT8 KV | 32k、高并发 | 并发和上下文容量改善 | 长任务一致性、KV eviction、TPOT |
-| 混合精度 | 敏感层保高精 | KV 按桶选择 | 128k 或 VLA / 多模态 | 把误差放到低风险模块 | 细粒度视觉、动作稳定性、安全分类 |
-
-这张账要和 [推理成本建模](../inference/cost-modeling-and-slo-design.md) 接起来看：权重量化主要影响模型常驻显存、权重带宽和部分 GEMM；KV 量化主要影响长上下文并发、decode 稳定性和缓存淘汰；激活量化则更容易碰到离群值、动态输入和 kernel 支持问题。
-
-一个实用判断是：**如果服务被权重显存卡住，先看权重量化；如果被长上下文并发卡住，优先看 KV cache；如果被 decode 带宽卡住，看低比特 kernel 是否真的命中；如果是多模态或 VLA，先保护视觉连接器、动作头、安全头和几何/坐标相关模块。**
-
-## 4. 量化算法的三条主线
-
-### PTQ：训练完再压缩
-
-模型训练完后再量化。优点是便宜、快、适合现成模型。
-
-### QAT：训练时让模型适应误差
-
-在训练中显式模拟量化误差。优点是效果通常更稳，但训练成本更高。
-
-### QLoRA：量化底座上的适配训练
-
-如 `QLoRA`。目标不是只部署，而是让量化模型还能继续做高效微调。
-
-### 4.1 还有一条现实系统主线：混合精度
-
-很多上线系统并不会全模型统一到同一比特，而是：
-
-权重先低比特化，敏感层保留高精，激活采用更保守精度，KV cache 再按上下文长度和并发压力单独折中。
-
-这条混合精度路线往往比“最小比特挑战”更接近真实工程。
-
-## 5. 权重和激活是两个不同问题
-
-### 权重量化
-
-静态、离线、相对容易控制。
-
-### 激活量化
-
-动态、分布变化大、易受离群值影响。
-
-很多系统先做权重量化，再视硬件和任务决定是否推进激活量化。
-
-### 5.1 为什么激活更难
-
-激活分布会随输入长度、prompt 类型、多模态输入结构、工具返回结果和长上下文记忆状态持续变化。所以很多离线看起来稳定的量化方案，一到线上复杂请求就暴露问题。
-
-## 6. 多模态和长上下文为什么让量化更复杂
-
-**一旦系统进入**：
-
-文档理解、图表表格、屏幕代理、视频理解和机器人动作这类任务后，数值误差会从“平均精度掉点”变成局部能力问题：小字、坐标、图例、按钮位置、跨帧记忆、动作平滑性和安全边界都可能被放大。
-
-因此，多模态量化要额外检查细粒度定位是否还准、数字一致性是否还在、长时动作是否更抖，以及长上下文和 KV cache 是否成为新的瓶颈。
-
-这也是为什么量化在多模态和具身系统里需要更谨慎的混合精度与专项评测。
-
-## 7. 一个够用的理解方式
-
-**量化本质上是在做一件事**：把不可避免的数值误差，尽量安排到模型最不敏感的地方去。
-
-**这也是为什么后面会出现**：
-
-GPTQ 用近似二阶信息降低后训练权重量化误差；AWQ 借助激活统计保护重要权重通道；SmoothQuant 把激活离群值压力迁移到权重；FP8 用低精度浮点换取硬件友好的训练或推理吞吐；混合精度服务则按层、张量或模块选择不同精度，平衡质量和性能。
-
-这些方法其实都在回答同一个问题：
-
-**误差到底该落在哪，才最不伤输出。**
-
-## 8. 量化在系统中的位置
-
-量化不是孤立模块，它会和 kernel 实现、serving runtime、KV cache 管理、batching、路由、目标硬件、线上评测和回退路径强耦合。因此看量化方案时，不能只看论文压到几 bit，还要问运行栈是否支持、系统是否真的更快、线上是否有可回退路径，以及高风险任务是否被保护。
-
-## 9. 用低比特 LLM 综述补一层分类
-
-arXiv:2409.16694 对低比特大语言模型量化做了一个很实用的整理：不要只按算法名字记，而要按**基础格式、系统支持、训练量化、推理量化**四条线来看。这个框架适合工程选型，因为它把“论文方法”和“能不能跑起来”放在同一张图上。
-
-### 9.1 基础格式：先问数字怎么表示
-
-基础格式回答的是“低比特数值本身长什么样”。常见选项包括工程生态成熟的 `INT8 / INT4`，更贴近浮点表达并常与新 GPU 张量核心结合的 `FP8`，服务于 QLoRA 等训练/微调场景的 `NF4`，以及通过 block-wise / group-wise scale 降低极值拖累的分组缩放。
-
-这里最容易犯的错，是只比较 bit 数。`INT4` 的理论压缩率更高，但如果 scale 元数据、dequant 开销和 kernel 支持不理想，端到端收益未必比 `FP8` 或 `INT8` 更好。
-
-### 9.2 系统支持：再问谁能高效执行
-
-系统支持回答的是“这个低比特模型由谁跑”。同一个 `AWQ` 或 `GPTQ` checkpoint，在不同 runtime 里可能表现完全不同。选型时至少要确认 runtime 是否原生支持该格式，GEMM、attention、KV cache 是否有对应 kernel，目标硬件是否支持对应低精度指令，以及 batching、prefix cache、LoRA 和多模型调度是否仍然兼容。
-
-这也是为什么本专题单独增加了 [量化运行时与框架](quantization-runtimes-and-frameworks.md)：`vLLM`、`SGLang`、`LightLLM`、`TensorRT-LLM`、`ONNX Runtime` 并不是“论文方法”，而是把量化收益兑现到推理服务系统里的关键层。
-
-### 9.3 训练量化：让模型提前适应误差
-
-训练量化包括 `QAT`、`QLoRA` 和一些量化友好的继续训练策略。它们关心的不是“能不能离线压缩”，而是训练时是否显式模拟量化误差，量化底座上能否继续做任务适配，低资源微调是否仍能稳定收敛，以及高风险任务是否需要保留部分高精层。
-
-如果业务质量门槛很高，单纯 PTQ 掉点不可接受，训练量化通常比继续硬压 bit 数更有价值。
-
-### 9.4 推理量化：把在线瓶颈拆开处理
-
-推理量化不只压权重，还可能覆盖 activation、KV cache、attention 中间张量、MoE expert 权重，以及多模态 projector 或动作头。
-
-一个很现实的例子是长上下文服务：权重量化后，模型也许已经能放进显存，但并发仍然上不去，因为 KV cache 随上下文长度线性膨胀。此时继续纠结 `W4A16` 和 `W8A8`，不如直接评估 KV cache 量化、prefix cache 和上下文裁剪。
-
-## 10. 阅读建议
-
-**建议按层推进，而不是按算法名横跳**：
-
-1. 先读 [PTQ、GPTQ、AWQ 与 SmoothQuant](ptq-gptq-awq-smoothquant.md) 和 [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md)，理解误差从哪里来。
-2. 再读 [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)、[QLoRA 与量化训练](qlora-and-quantized-training.md)，分清“上线压缩”和“低资源适配训练”。
-3. 接着读 [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md)、[量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)，确认收益是否能被 runtime 兑现。
-4. 最后读 [评测与部署清单](evaluation-and-deployment-checklist.md) 和 [量化方法对照表](comparison-table.md)，把质量、吞吐、显存、成本和回退路径放到同一张表里验收。
-
-如果你关心多模态和具身，再补读 [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)：这类系统的量化风险不只是回答掉点，还可能变成视觉定位漂移、动作抖动和闭环恢复失败。
-
-## 11. 一个总判断
-
-量化的真正价值，不在于把模型变成一个更小的文件，而在于把“原本难以部署、难以扩并发、难以降成本的系统”推回可运营区间。它既是数值近似问题，也是服务架构问题，更是业务取舍问题。理解量化，不能只盯住 bit 数，而要同时盯住误差传播、系统瓶颈和最终可交付收益。 
-
-## 12. 延伸阅读
-
-1. *A Survey of Low-bit Large Language Models: Basics, Systems, and Algorithms*：<https://arxiv.org/abs/2409.16694>
-2. [量化运行时与框架](quantization-runtimes-and-frameworks.md)
-
-### 快速代码示例
-
-```python
-import torch  # 提供 BF16 dtype 与张量能力
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig  # 加载模型、分词器和量化配置
-
-model_id = "Qwen/Qwen2.5-7B-Instruct"  # 指定要加载的基础模型
-quant_cfg = BitsAndBytesConfig(  # 配置 bitsandbytes 4bit 量化
-    load_in_4bit=True,  # 以 4bit 权重形式加载模型
-    bnb_4bit_quant_type="nf4",  # 使用 NF4 量化格式
-    bnb_4bit_compute_dtype=torch.bfloat16,  # 前向计算使用 BF16
-)  # 量化配置结束
-
-tokenizer = AutoTokenizer.from_pretrained(model_id)  # 加载与模型匹配的分词器
-model = AutoModelForCausalLM.from_pretrained(
-    model_id, quantization_config=quant_cfg, device_map="auto"  # 应用量化并自动放置到可用设备
-)  # 得到 4bit 加载后的因果语言模型
-print("model footprint (GB):", model.get_memory_footprint() / 1024**3)  # 打印估算显存占用
+| 数值格式 | 数字怎么存 | INT8、INT4、FP8、NF4、MXFP | 只看 bit 数，不看动态范围和 scale |
+| 量化粒度 | 一个 scale 管多大范围 | per-tensor、per-channel、group-wise、per-token | scale 越细越准，但元数据和 kernel 越贵 |
+| 误差控制算法 | 怎么让输出尽量不变 | PTQ、GPTQ、AWQ、SmoothQuant、QAT、QLoRA | 把算法效果当成所有硬件都能兑现 |
+| 系统执行 | 谁真正跑低比特 | vLLM、SGLang、TensorRT-LLM、ONNX Runtime、GEMM kernel | 模型文件小了，却仍然反量化回 FP16 算 |
+
+一个量化方案的完整描述应该像这样：
+
+```text
+Qwen 7B, W4A16, group-wise INT4 weight-only, AWQ calibration,
+served by vLLM on A100, FP16 KV cache, measured by TTFT/TPOT and task buckets.
 ```
 
-这段代码演示了 `bitsandbytes` 的 4bit 加载流程：`nf4` 用于权重量化，`bf16` 用于计算类型，最后用 `get_memory_footprint` 快速估算显存占用。部署前还应补充任务精度回归，确认压缩收益可接受。
+这句话比“用了 4bit”有用得多，因为它同时说明了压缩对象、算法、runtime、硬件和验收口径。
 
+## 4. 为什么权重、激活和 KV cache 要分开看
 
-### 学习路径与阶段检查
+| 对象 | 什么时候出现 | 好不好量化 | 主要收益 | 主要风险 |
+| --- | --- | --- | --- | --- |
+| 权重 \(W\) | 模型加载后常驻 | 相对容易 | 模型显存、权重带宽 | dequant 开销、敏感层掉点 |
+| 激活 \(X\) | 每次前向按输入生成 | 更难 | activation 带宽、W8A8 kernel | outlier、动态分布、校准不准 |
+| KV cache \(K,V\) | 自回归生成时逐 token 累积 | 任务相关 | 长上下文并发显存、decode 带宽 | 长程记忆、检索、推理一致性受损 |
 
-量化专题建议从“数值表示 -> 误差来源 -> 训练适配 -> runtime 兑现 -> 上线验收”推进。
+**读作什么**：权重量化解决“模型放不放得下”，激活量化解决“低比特算子能不能真的跑起来”，KV cache 量化解决“长上下文和高并发能不能撑住”。
 
-| 阶段 | 先读 | 读完要能回答 |
+!!! example "小账：为什么 KV cache 会反客为主"
+    7B 模型的 BF16 权重约 \(7\times10^9\times2\approx14GB\)。但长上下文服务里，KV cache 会随 batch、上下文长度、层数和 KV 宽度线性增长。权重已经 INT4 后，并发仍然上不去，常常就是 KV cache 成了新瓶颈。
+
+## 5. 主要方法放在同一张地图里
+
+| 方法 | 主要解决什么 | 初学者理解 | 常见用法 |
+| --- | --- | --- | --- |
+| 基础 PTQ | 训练后直接量化 | 便宜快速的 baseline | 先看能否压缩和基本可用 |
+| GPTQ | 权重量化误差补偿 | 量一列，补后面的列 | 大模型 weight-only 4bit |
+| AWQ | 保护被激活放大的权重通道 | 真正常用的通道要更小心 | 低成本部署、边端和在线服务 |
+| SmoothQuant | 把 activation outlier 难度迁移到 weight | 把难搬的货挪到更好处理的一边 | INT8 weight+activation |
+| QLoRA | 量化底座上做低资源微调 | 底座冻结，训练小 adapter | 领域适配、对话格式适配 |
+| QAT | 训练时模拟量化误差 | 让模型提前适应低比特噪声 | 高质量门槛或极低比特 |
+| FP8/混合精度 | 硬件友好的低精度服务或训练 | 不全压，敏感部分保高精 | Hopper/Blackwell 等新硬件 |
+| KV cache quant | 压缩在线缓存 | 长上下文的动态显存账 | 长文档、多轮、高并发服务 |
+
+## 6. 量化是否成功，要同表验收
+
+| 要证明什么 | 最小指标 | 不能用什么替代 |
 | --- | --- | --- |
-| 1. 数值和 PTQ | [PTQ 与权重量化](ptq-gptq-awq-smoothquant.md)、[激活离群值与校准策略](activation-outliers-and-calibration-strategies.md) | 权重、激活、scale、zero-point、离群值和 calibration 各自影响什么 |
-| 2. 训练适配 | [QLoRA 与量化训练](qlora-and-quantized-training.md)、[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) | 什么时候 PTQ 不够，什么时候需要 QLoRA、QAT 或继续训练 |
-| 3. 低精度服务 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)、[量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)、[量化运行时与框架](quantization-runtimes-and-frameworks.md) | 量化格式、kernel、runtime 和硬件路径是否真的把显存收益转成吞吐收益 |
-| 4. 场景验收 | [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)、[评测与部署清单](evaluation-and-deployment-checklist.md) | 长上下文、多模态、agent、动作控制和高价值任务桶是否单独验收 |
+| 质量没伤关键任务 | 任务桶、长上下文、代码/数学/工具、多模态专项回归 | 只看平均 benchmark |
+| 系统真的更省 | 峰值显存、TTFT、TPOT、吞吐、P95/P99、单位 token 成本 | 只看 checkpoint 文件大小 |
+| kernel 路径命中 | profiler、kernel trace、dequant 时间、fallback 次数 | 文档里写“支持 INT4” |
+| 可部署可回滚 | 校准集记录、量化参数版本、runtime 版本、全精回退或混合精度保护 | 一次离线脚本成功 |
 
-真正可上线的量化方案必须同时给出四件事：压缩对象、目标硬件和 runtime、端到端收益、回退边界。只报告 bit 数或平均 benchmark，通常不足以支撑部署决策。
-### 深度标杆页
+!!! failure "最佳反例"
+    权重从 FP16 压到 INT4，模型文件小了 4 倍，但线上 `TPOT` 没降，因为 runtime 每层都先 dequant 到 FP16 再做 GEMM；同时长文档任务掉点，因为 KV cache 仍然高精且并发被卡住。这不是有效上线，只是有效压缩。
 
-量化专题的标杆页要回答“压缩对象是什么、误差去哪了、runtime 是否兑现、端到端是否划算”。其它页面应避免只比较 bit 数。
+## 7. 多模态和 VLA 为什么要更谨慎
 
-| 标杆页 | 对齐标准 |
-| --- | --- |
-| [PTQ / GPTQ / AWQ](ptq-gptq-awq-smoothquant.md) | 解释后训练量化的误差控制机制和适用边界 |
-| [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md) | 把 activation outlier、校准集和线上分布漂移讲清楚 |
-| [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) | 把训练适配、低比特 kernel 和 KV cache 放到同一条链路 |
-| [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md) | 说明 FP8/混合精度如何依赖硬件、算子和质量保护 |
-| [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md) | 覆盖视觉、动作、安全和长时序任务的专项风险 |
+文本聊天模型量化后偶尔措辞变差，用户还可能追问；文档 VLM 少看一个小数点，金额可能错一百倍；VLA 动作头偏一点，夹爪可能撞到杯沿。量化误差在多模态和控制系统里更容易被局部细节放大。
+
+所以多模态/VLA 量化要额外保护：
+
+| 模块 | 默认策略 | 重点验收 |
+| --- | --- | --- |
+| vision encoder | 可先试温和量化 | 小字、边缘、表格、UI 元素 |
+| projector/connector | 更保守 | 图文对齐、grounding、OCR |
+| LLM 主体 | 可用成熟 W-only 或 FP8 | 文本任务桶、工具调用 |
+| action/risk head | 优先保高精 | 动作抖动、near-miss、闭环成功率 |
+| KV/memory | 单独评估 | 长程一致性、检索、rollout drift |
+
+## 8. 一个总判断
+
+量化的核心不是“压到最低 bit”，而是在目标硬件、目标 runtime 和目标任务里，把误差放到模型最不敏感、系统最能兑现收益的位置。读任何量化论文或框架文档时，都用这四句检查：
+
+1. 它压的是权重、激活、KV cache，还是训练状态？
+2. 它用什么 scale 粒度和校准数据控制误差？
+3. 它是否需要特定 kernel、硬件或 runtime 才能变快？
+4. 它用哪些任务桶证明低比特版本真的可用？
+
+这四句答清楚，再讨论 GPTQ、AWQ、SmoothQuant、QLoRA、FP8 或 QAT，路径就不会乱。
+
+## 延伸阅读
+
+1. [量化符号与最小数学地图](symbols-and-minimal-math.md)
+2. [量化论文图解导读](page-by-page-visual-guide.md)
+3. [Low-bit LLM Survey：低比特大模型从格式到推理系统](../paper-deep-dives/inference/low-bit-llm-survey.md)

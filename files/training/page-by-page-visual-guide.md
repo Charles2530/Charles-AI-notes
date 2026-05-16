@@ -12,6 +12,20 @@
 !!! note "为什么不用概括插图"
     概括图适合快速沟通，但容易把论文里的关键假设画平。训练系统尤其依赖原始图表里的坐标轴、实验条件和对照对象，因此本页优先使用论文图；没有足够贴合的论文图时，则用文字索引说明知识点。
 
+## 初学者先看 7 张图
+
+如果你是研究入门读者，建议先读 [模型训练从零入门](beginner-model-training-primer.md)，再按下面 7 张图建立直觉。顺序是故意安排的：先知道训练预算，再知道训练阶段，然后理解奖励更新、优化稳定性和系统显存/吞吐。
+
+| 顺序 | 图 | 先看什么 | 回到哪页 |
+| --- | --- | --- | --- |
+| 1 | Chinchilla IsoFLOP | 参数量、token 数和固定算力怎么配平 | [从零入门](beginner-model-training-primer.md)、[Scaling Law](scaling-laws-and-experiment-economics.md) |
+| 2 | InstructGPT RLHF pipeline | SFT、reward model、PPO 是三道工序 | [预训练、微调与对齐](pretraining-finetuning-alignment.md) |
+| 3 | InstructGPT ranking interface | 偏好数据来自同题多回答排序 | [目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md) |
+| 4 | PPO clipped surrogate | reward 不能让 policy 一步跑太远 | [目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md) |
+| 5 | Loss landscape | optimizer 是在复杂 loss 地形里走路 | [从零入门](beginner-model-training-primer.md) |
+| 6 | ZeRO memory stages | 数据并行为什么会重复保存状态 | [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) |
+| 7 | GPipe pipeline parallelism | micro-batch 如何减少流水线空转 | [Megatron / DeepSpeed](megatron-lm-deepspeed-and-open-training-stacks.md) |
+
 ## 1. 训练预算与 scaling law
 
 对应页面：[大模型训练路线图](index.md)、[Scaling Law 与训练经济学](scaling-laws-and-experiment-economics.md)、[集群运维与实验管理](cluster-operations-and-experiment-management.md)。

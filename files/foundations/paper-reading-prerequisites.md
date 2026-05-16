@@ -2,7 +2,10 @@
 
 论文专题讲解覆盖的论文很多：高效训练、推理、扩散、VLA、世界模型、几何视觉和大模型技术报告都有。真正难的不是“论文太多”，而是它们默认读者已经掌握几套公共语言：**张量和注意力怎么流动，训练目标在约束什么，推理成本从哪里来，实验表到底证明了什么。**
 
-这一页专门补这张前置地图。它不是让你在读论文前先学完全部基础，而是帮你判断：读到某个概念卡住时，应该回前面哪一页补。
+这一页是读完基础知识后的论文导航，不是新手第一站。建议先读 [符号与最小数学地图](symbols-and-minimal-math.md)、[张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[Transformer 输入与注意力](transformer-attention-and-tokenization.md)、[概率与潜变量模型](probability-latent-variables-and-generative-models.md) 和 [优化与训练入门](optimization-and-training-basics.md)，再用本页判断：读到某个概念卡住时，应该回前面哪一页补。
+
+!!! note "使用方式"
+    本页不按“从零教程”写，而按论文类型组织。读单篇论文时，先找它属于哪一类，再回看对应的基础页。这样可以避免一上来被所有专题名词淹没。
 
 ## 总图：论文专题需要的六层前置知识
 

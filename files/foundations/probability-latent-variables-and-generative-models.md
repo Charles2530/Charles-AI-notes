@@ -19,6 +19,20 @@
 
     概率与潜变量不是抽象基础课，而是在世界模型里决定“模型知道自己不知道什么”。好的 latent 能降低 token 成本和训练成本；好的不确定性建模能降低 rollout 误判成本。反过来，若分布假设错了，模型会把多种未来平均掉，让 planner 在低成本想象里做高风险决策。
 
+## 0. 符号卡：概率页先认这些
+
+| 符号 | 读法 | 含义 |
+| --- | --- | --- |
+| \(p_{\text{data}}(x)\) | data distribution | 真实数据背后的分布 |
+| \(p_\theta(x)\) | model distribution | 参数为 \(\theta\) 的模型分布 |
+| \(p_\theta(x\mid c)\) | conditional distribution | 给定条件 \(c\) 时生成 \(x\) |
+| \(z\) | latent variable | 模型内部看不见但要推断的隐藏因素 |
+| \(q_\phi(z\mid x)\) | inference distribution | 看到 \(x\) 后推断 \(z\) 的近似分布 |
+| \(\operatorname{KL}(q\|p)\) | KL divergence | 两个分布之间的差异 |
+| ELBO | evidence lower bound | 带潜变量模型里常用的可优化目标 |
+
+看到 \(p\) 和 \(q\) 时先不要慌。一个很常见的约定是：\(p_\theta\) 负责“生成或预测”，\(q_\phi\) 负责“看到真实数据后反推 latent”。不同论文会有差异，但先按这个方向读通常不容易迷路。
+
 ## 1. 分布是什么
 
 可以把数据看成来自某个未知分布：
@@ -105,6 +119,9 @@ ELBO 常见形式可以粗略理解为：
 \]
 
 这解释了为什么 VAE 既要重建样本，又要约束 latent 不要乱跑。
+
+!!! note "公式拆读：ELBO 不用一开始就会推导"
+    初学者先把 ELBO 读成两股力：一股力让模型从 latent 还原出像真实数据的样本，另一股力让 latent 分布别跑得太散、太怪。前者保证有用，后者保证可采样、可泛化。扩散、VAE、RSSM 和世界模型虽然公式不同，但常常都在平衡“解释观测”和“约束内部状态”。
 
 ## 4. Score 和扩散模型
 

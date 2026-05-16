@@ -1,137 +1,30 @@
 # 成本建模与 SLO 设计
 
-推理系统上线后，技术讨论很快会落到两个现实问题：服务到底贵不贵，多快才算足够快。前者对应成本建模，后者对应 SLO。没有成本模型，团队很难判断量化、缓存、路由、蒸馏是否带来净收益；没有 SLO，优化会陷入无限追求更低时延，却不清楚哪些改动值得做。
+推理系统上线后，所有优化最后都会落到两个问题：这次请求到底花多少钱，用户体验底线有没有守住。成本模型回答“值不值”，SLO 回答“能不能接受”。没有这两者，tokens/s、显存节省和 benchmark 分数都很容易误导决策。
 
 !!! note "初学者先抓住"
-    成本模型回答“这次优化省了多少钱”，SLO 回答“服务体验最低要守住什么线”。没有这两者，推理优化很容易变成单纯追求更快，但不知道是否值得。
+    成本不是只有 GPU 小时，SLO 也不是只有平均延迟。一次推理请求会消耗 queue、prefill、KV cache、decode、工具、重试和运维成本；体验要看 TTFT、TPOT、P95/P99、错误率和任务质量。
 
 !!! example "有趣例子：外卖配送"
-    不同餐厅可以承诺不同送达时间，但承诺必须和骑手数量、距离、餐品准备时间匹配。推理服务也是这样：SLO 不能脱离模型大小、上下文长度、GPU 资源和缓存命中率。
+    一单外卖成本不只是骑手时间，还包括备餐、排队、距离、平台补贴和失败退款。承诺 30 分钟送达也要看高峰期和远距离订单。推理服务同理：不能只用平均 token 成本或平均延迟定义成功。
 
-## SLO 是决策约束
+## 1. 先把 SLO 当成约束
 
-SLO 不是“越快越好”，而是明确的服务目标，例如：
+SLO 是 Service Level Objective，即服务目标。它不是“越快越好”，而是明确什么体验必须守住。
 
-1. P95 首 token 延迟低于 2 秒；
-2. P99 请求成功率高于 99.5%；
-3. 普通问答平均成本低于某阈值；
-4. agent 任务完成率高于某水平；
-5. 高风险任务必须触发工具校验或人工审核。
-
-SLO 的价值是把优化目标变成可决策的约束条件。不同业务的 SLO 不同：企业问答更重正确率和引用证据，屏幕 agent 更重交互延迟，批处理文档分析更重吞吐和成本。
-
-## 成本组成
-
-单位时间总成本可粗略表示为：
-
-\[
-C_{\text{total}}
-=
-C_{\text{compute}}
-+C_{\text{memory}}
-+C_{\text{storage}}
-+C_{\text{network}}
-+C_{\text{ops}}
-\]
-
-换成单请求视角：
-
-\[
-C_{\text{req}}
-\approx
-C_{\text{prefill}}(L_{\text{in}})
-+C_{\text{decode}}(L_{\text{out}})
-+C_{\text{tool}}
-+C_{\text{overhead}}
-\]
-
-单位 token 成本可近似为：
-
-\[
-\text{Cost/token}
-=
-\frac{C_h}{3600\cdot \Theta}
-\]
-
-其中 \(C_h\) 是集群每小时成本，\(\Theta\) 是 token/s 吞吐。但这只是平均数。真实系统中，不同请求长度、路由、缓存命中和工具调用会让成本波动很大。
-
-## Prefill 与 Decode 的经济学
-
-Prefill 和 decode 的资源画像不同。长上下文请求主要成本在 prefill 和 KV 显存；长答案请求主要成本在 decode；agent 可能成本在多轮工具调用和等待。
-
-因此成本建模要按请求桶拆：
-
-| 请求桶 | 主要成本 | 常见优化 |
+| 业务 | 典型 SLO | 为什么 |
 | --- | --- | --- |
-| 短问答 | queue、launch、模型常驻 | 小模型、batching、prefix cache |
-| 长文档 | prefill、KV、检索 | 上下文压缩、检索裁剪、分离式 prefill |
-| 长生成 | decode、KV 生命周期 | speculative、输出策略、draft |
-| 多工具 agent | 工具延迟、轮次、状态 | 工具缓存、流程压缩、异步 |
-| 多模态 | 视觉编码、跨模态 token | 图像裁剪、视觉缓存、模型路由 |
+| 聊天助手 | P95 TTFT < 2s，TPOT < 80ms/token | 用户要尽快看到反馈 |
+| 长文档问答 | P95 TTFT 可稍高，但引用正确率要高 | 质量和证据比首 token 更重要 |
+| 代码补全 | 低 TTFT、低 TPOT、低失败率 | 卡顿会打断编辑流 |
+| Agent 工具链 | 端到端任务完成时间和成功率 | 单次模型调用快不代表任务快 |
+| 高风险任务 | 强质量门禁和 fallback | 错误成本高于延迟成本 |
 
-用一个统一“每 token 成本”概括，会误导优化方向。
+SLO 写清楚后，优化才有判断标准：一个改动若让平均 TPOT 下降，但 P99、错误率或引用质量变差，就不一定成功。
 
-## 世界模型 rollout 的硬证据模块
+## 2. 单请求成本公式
 
-普通 LLM 推理看 `TTFT / TPOT / tokens/s`，世界模型 rollout 还要看动作候选、风险头、长时 latent 和闭环任务。成本模型必须把“更快”转成“每个成功任务更便宜”。
-
-| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
-| --- | --- | --- | --- |
-| 本页解决哪项成本 | \(T_{\text{observe}}+T_{\text{encode}}+T_{\text{rollout}}+T_{\text{policy}}+T_{\text{control}}\) 分解 | rollout 快了，但 control loop 仍超时 | P95 loop latency、deadline miss |
-| 候选动作成本 | 每状态 8/16/32 条 candidate 的 latency 和显存 | 候选数翻倍，成功率没变 | cost per candidate、cost per success |
-| KV / latent 生命周期 | 当前窗口、远期 memory、risk path 分开统计 | 远期 cache 省了，当前窗口仍读爆 | KV GiB、memory hit rate、bandwidth |
-| 闭环收益 | 同一任务桶开启/关闭 world model 对照 | latency 降了但 collision 上升 | success、recovery、collision、takeover |
-| 证据等级 | microbench、end-to-end trace、closed-loop eval 分开标 | 只给 kernel speedup | system trace + task metric |
-
-上线判断最好写成：`rollout kernel 1.7x，端到端 loop 1.2x，cost per successful rollout 下降 18%，near-miss recall 不降。` 如果只写前两个数，仍可能是通用推理优化；只有最后两个数能说明它服务了世界模型决策。
-
-## 端到端成本账：同一个请求怎么估
-
-为了避免成本建模停在抽象公式，可以固定一个请求形态来算：**用户带一段文档问问题，输入上下文为 \(L_{\text{in}}\)，输出为 512 token，服务目标是 P95 TTFT < 2s、TPOT < 60ms/token**。同一个请求在不同 context、KV、batch 和量化策略下，成本结构会完全不同。
-
-一个可落地的估算顺序是：
-
-1. 先估 prefill：输入 token 越长，prefill 计算和写入 KV 的成本越高。
-2. 再估 KV：KV 显存大致随层数、KV head、head dim、上下文长度、batch 和 dtype 线性增长。
-3. 再估 decode：输出越长，逐 token 读取 KV 和权重的时间越长。
-4. 最后估系统项：排队、cache hit/miss、路由、工具、网络和重试。
-
-KV cache 可先用这个粗式子做数量级判断：
-
-\[
-M_{\text{KV}}
-\approx
-2 \times L_{\text{layers}} \times B \times L_{\text{ctx}} \times H_{\text{kv}} \times D_{\text{head}} \times \text{bytes}
-\]
-
-其中前面的 2 分别对应 K 和 V。它不是精确容量模型，但足够帮助判断“长上下文 + 大 batch + 高精 KV”为什么会快速吃掉显存。
-
-举个可复算的口径：`32` 层模型、batch `4`、context `32k`、GQA 下 `8` 个 KV heads、`head_dim=128`、BF16 KV：
-
-\[
-2\times32\times4\times32768\times8\times128\times2 \approx 16GiB
-\]
-
-如果其它条件不变，只是换成 `32` 个 KV heads 的 MHA，KV 宽度变成 4 倍，显存也会到约 `64GiB`。如果 context 从 `32k` 拉到 `128k`，GQA 版本也会从约 `16GiB` 变成约 `64GiB`。所以成本表里写“支持 128k”不够，还要写清楚：支持的是多大 batch、什么 KV 精度、什么 KV head 结构，以及 prefix cache 命中率是多少。
-
-| 方案 | Context / KV / Batch / 量化 | 主要收益 | 主要代价 | 适合判断 |
-| --- | --- | --- | --- | --- |
-| A. 4k + FP16 KV + 小 batch + FP16 权重 | 短上下文、低并发、质量保守 | 实现简单，TTFT 稳 | 单请求成本高，显存利用差 | 适合高价值、低并发、质量优先请求 |
-| B. 32k + FP16 KV + 中 batch + W8A8 | 长文档，权重降带宽 | 权重显存和带宽下降 | KV 仍是大头，长 prefill 昂贵 | 若 TTFT 主要被 prefill 卡住，还要配合 prefix cache / prefill 分离 |
-| C. 32k + KV INT8 + 中 batch + W4A16 | 同等上下文提高并发 | KV 和权重都省显存 | 需要专门评测长尾质量、dequant 和 kernel 支持 | 适合并发受 KV 水位限制的服务 |
-| D. 128k + KV INT8/FP8 + 分离 prefill + 分桶 batch | 超长上下文和高复用 | 长请求可运营，短请求不被拖死 | 架构复杂，KV 转移和状态一致性要算进成本 | 适合企业文档、代码库问答、长记忆 agent |
-
-更实用的成本账不是问“每 token 多少钱”，而是问：
-
-| 问题 | 需要记录的量 | 决策含义 |
-| --- | --- | --- |
-| Context 变长后贵在哪里 | prefill time、KV 显存、prefix hit、压缩耗时 | 决定做上下文裁剪、prefill 分离还是 KV 量化 |
-| Batch 变大后是否划算 | queue time、实际 batch、TTFT、tokens/s | 决定按吞吐池和交互池分队列 |
-| KV 量化是否真省 | KV 水位、eviction、长任务质量、decode TPOT | 决定 KV dtype 和敏感任务回退 |
-| 权重量化是否真快 | 权重显存、dequant time、kernel hit、质量掉点 | 决定 W8A8、W4A16、FP8 或混合精度 |
-| Cache 是否可信 | hit rate、saved prefill tokens、miss penalty | 决定 prompt 模板、prefix 规范和 cache 生命周期 |
-
-因此同一个请求的端到端估算可以写成：
+从请求生命周期看，单请求成本可以写成：
 
 \[
 C_{\text{req}}
@@ -140,74 +33,196 @@ C_{\text{queue}}
 + C_{\text{prefill}}(L_{\text{in}}, q_w, q_a)
 + C_{\text{KV}}(L_{\text{ctx}}, B, q_{\text{kv}})
 + L_{\text{out}}\cdot C_{\text{decode-step}}(B, q_w, q_{\text{kv}})
-+ C_{\text{tool/retry}}
++ C_{\text{tool}}
++ C_{\text{retry}}
++ C_{\text{ops}}
 \]
 
-这里的 \(q_w\)、\(q_a\)、\(q_{\text{kv}}\) 分别表示权重、激活和 KV 的精度策略。上线前最好把这张账按请求桶落到 trace：短问答、长文档、长输出、多工具 agent、多模态和 VLA 闭环不应共用一个平均成本。
+| 符号 | 含义 |
+| --- | --- |
+| \(C_{\text{req}}\) | 一次请求总成本 |
+| \(C_{\text{queue}}\) | 排队和容量冗余成本 |
+| \(L_{\text{in}}\) | 输入 token 数 |
+| \(q_w\) | 权重精度策略，如 FP16、INT8、INT4 |
+| \(q_a\) | 激活精度策略 |
+| \(L_{\text{ctx}}\) | 需要保留的上下文长度 |
+| \(B\) | 活跃 batch 或并发数 |
+| \(q_{\text{kv}}\) | KV cache 精度策略 |
+| \(L_{\text{out}}\) | 输出 token 数 |
+| \(C_{\text{decode-step}}\) | 每个 decode step 平均成本 |
+| \(C_{\text{tool}}\) | 检索、OCR、数据库、外部 API 等工具成本 |
+| \(C_{\text{retry}}\) | 失败重试、fallback、升级路由成本 |
+| \(C_{\text{ops}}\) | 监控、冗余、工程维护和容量预留成本 |
 
-## 质量、成本、延迟三角
+这个公式不是为了精确到小数点，而是让你知道成本来自哪里。短聊天、长文档、长输出、多工具 agent、多模态请求不能共用一个平均成本。
 
-很多优化都在三角关系中权衡：
+## 3. 单位 token 成本为什么容易误导
 
-1. 大模型质量更好，但更贵更慢；
-2. aggressive batching 吞吐更高，但 TTFT 可能变差；
-3. 低比特量化更便宜，但可能损失质量；
-4. 更强检索提高正确率，但链路更长；
-5. 级联路由省成本，但失败升级会增加尾延迟。
-
-可以把决策写成：
+常见粗公式是：
 
 \[
-\max \text{Utility} = \alpha Q-\beta C-\gamma L
+\text{Cost/token}
+=
+\frac{C_h}{3600\cdot \Theta}
 \]
 
-其中 \(Q\) 是质量，\(C\) 是成本，\(L\) 是延迟。不同业务中 \(\alpha,\beta,\gamma\) 完全不同。
+| 符号 | 含义 |
+| --- | --- |
+| \(C_h\) | 集群每小时成本 |
+| \(\Theta\) | 平均 token/s 吞吐 |
 
-## 分层 SLO
+它适合做第一眼估算，但有三个问题：
 
-成熟系统常有多层 SLO：
+1. 没区分 prefill token 和 decode token；
+2. 没算 KV cache、工具、重试和失败；
+3. 平均吞吐会掩盖 P99 和低效请求桶。
+
+更稳的口径是：每个请求桶分别算 cost/request、cost/output token、cost/successful task，再和 SLO、质量指标一起看。
+
+## 4. Prefill、Decode 和 KV 的经济学
+
+| 请求桶 | 主要成本项 | 常见误判 | 更合适的优化 |
+| --- | --- | --- | --- |
+| 短问答 | queue、launch、模型常驻 | 用大模型统一服务 | 小模型路由、短请求池、低等待 batch |
+| 长文档 | prefill、KV、检索噪声 | 只看输出 token 成本 | RAG 裁剪、prefix cache、分离 prefill |
+| 长输出 | decode、KV 生命周期 | 只优化 prefill | speculative decoding、输出长度控制 |
+| Agent | 多轮模型调用、工具等待、状态膨胀 | 单次调用快就够了 | 工具缓存、状态压缩、端到端 trace |
+| 多模态 | 视觉编码、跨模态 token、后处理 | 只算语言模型 token | 图像裁剪、视觉缓存、模态分池 |
+
+KV cache 也可以直接进入成本账：
+
+\[
+M_{\text{KV}}
+\approx
+2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
+\]
+
+如果显存被 KV 占满，系统要么降低并发，要么增加机器，要么做 KV 量化/压缩/eviction。任何一种都会影响成本或质量。
+
+## 5. 一个可复算例子：32k 文档问答
+
+假设请求形态如下：
+
+| 项 | 数值 |
+| --- | --- |
+| 输入上下文 | 32k token |
+| 输出 | 512 token |
+| 模型 | 32 层，GQA 8 个 KV heads，head dim 128 |
+| batch | 4 |
+| KV dtype | BF16，2 bytes |
+| SLO | P95 TTFT < 2s，TPOT < 60ms/token |
+
+KV 数量级：
+
+\[
+2\times32\times4\times32768\times8\times128\times2
+\approx 16\text{GiB}
+\]
+
+这还只是 KV 本体，不包括权重、workspace、page metadata、碎片、speculative 分支、临时 buffer。若 context 变成 128k，KV 会约变 4 倍；若 batch 从 4 到 8，也再约变 2 倍。
+
+因此这个请求的成本判断应拆成：
+
+| 问题 | 需要记录 |
+| --- | --- |
+| TTFT 为什么高 | queue time、prefill time、prefix hit、输入长度 |
+| TPOT 为什么高 | decode batch、KV read、page miss、sampling |
+| 显存为什么紧 | KV GiB、fragmentation、eviction、dtype |
+| 质量是否保持 | 引用正确率、长文档问答分桶、压缩前后回归 |
+| 是否值得优化 | cost/request、cost/success、SLO breach rate |
+
+## 6. 质量、成本、延迟的三角
+
+很多推理决策都可以看成一个效用函数：
+
+\[
+\max \text{Utility}
+=
+\alpha Q
+- \beta C
+- \gamma L
+- \delta R
+\]
+
+| 符号 | 含义 |
+| --- | --- |
+| \(Q\) | 质量，如正确率、引用、任务成功 |
+| \(C\) | 成本 |
+| \(L\) | 延迟 |
+| \(R\) | 风险，如安全、合规、错误代价 |
+| \(\alpha,\beta,\gamma,\delta\) | 业务权重 |
+
+不同业务的权重完全不同。客服闲聊可能更重成本和延迟；法律合同问答更重质量和风险；代码补全更重低延迟；批量离线生成更重吞吐和成本。
+
+!!! warning "常见误解"
+    低成本模型不一定更省钱。如果它错误率高，导致升级、重试、用户重复提问或人工介入，端到端 cost/success 可能更高。
+
+## 7. 分层 SLO
+
+成熟系统通常至少有四层 SLO：
 
 | 层级 | 指标 |
 | --- | --- |
-| 平台层 | 可用性、错误率、资源利用、排队时延 |
-| 模型层 | TTFT、TPOT、上下文上限、质量代理指标 |
-| 产品层 | 任务完成率、人工接管率、用户满意度 |
-| 业务层 | 工单关闭时间、转化率、成本预算 |
+| 平台层 | 可用性、错误率、queue time、admission reject |
+| 模型层 | TTFT、TPOT、上下文上限、fallback |
+| 产品层 | 任务完成率、引用正确率、用户中断率 |
+| 业务层 | 工单关闭时间、人工接管率、预算消耗 |
 
-若只设平台 SLO，可能把一个快速但胡说的系统误判为健康。质量必须进入 SLO 讨论。
+只设平台 SLO 会把“快速但错误”的系统误判为健康；只设质量指标又可能让成本不可控。推理验收必须把体验、质量和成本放在同一张表里。
 
-尾延迟尤其关键。用户不会因为 P50 漂亮而接受频繁 P99 超时；多步 agent 的尾延迟还会层层叠加。
+## 8. 降级和预算控制
 
-## 降级与预算控制
+资源紧张时，系统不应所有请求一起变慢。更好的做法是有预案地降级：
 
-资源紧张时，系统不应一起变慢。更好的做法是按优先级降级：
+| 降级动作 | 适合场景 | 风险 |
+| --- | --- | --- |
+| 免费用户走小模型 | 峰值流量、低价值请求 | 质量下降，需要提示或回退 |
+| 限制上下文长度 | 长文档过多 | 可能漏证据 |
+| 关闭 speculative | low acceptance 请求桶 | 长输出 TPOT 变差 |
+| 关闭高成本工具 | 工具 API 限流 | agent 成功率下降 |
+| 后台任务延后 | 高峰期保护在线 SLO | 批处理完成时间变长 |
+| 高风险任务强制校验 | 医疗、法律、金融、安全 | 延迟和成本上升 |
 
-1. 免费用户切到小模型；
-2. 长上下文请求限制最大长度；
-3. 低优先级批处理延后；
-4. 关闭二次重排、多样本采样或高成本工具；
-5. 高风险任务保留强模型和校验；
-6. 超预算租户限流或排队。
+降级策略要提前进入成本模型。高峰期临时拍脑袋，很容易让系统变成“看似在线，实际体验不可控”。
 
-降级策略应在成本模型中预先设计，而不是高峰期临时拍脑袋。否则优化会变成一堆不可复现的特判。
+## 9. 成本复盘表
 
-## 建模与复盘清单
+每次推理优化发布后，建议用同一张表复盘：
 
-成本和 SLO 设计至少要记录：
+| 问题 | 发布前估算 | 发布后真实 | 是否达标 |
+| --- | --- | --- | --- |
+| 哪个请求桶受益 | 短问答/长文档/长输出/agent | trace 分桶结果 | 是否命中目标 |
+| 降低哪段成本 | prefill/KV/decode/tool | 阶段耗时和账单 | 是否真实下降 |
+| SLO 是否守住 | TTFT/TPOT/P99 | P50/P95/P99 | 是否有尾部回归 |
+| 质量是否保持 | 离线集/online eval | 质量分桶 | 是否掉点 |
+| 回退是否可靠 | fallback 预案 | 灰度/演练结果 | 是否可回滚 |
 
-1. 输入/输出长度分布；
-2. 模型路由分布；
-3. cache 命中率；
-4. 工具调用轮次和耗时；
-5. p50/p95/p99 延迟；
-6. 错误率、超时率、降级率；
-7. 每请求成本、每 token 成本、每任务成功成本；
-8. 不同请求桶的质量指标。
+最重要的不是一次估算很准，而是每次发布后校准模型。GPU 价格、请求长度、缓存命中、模型版本、外部工具价格都会变，成本模型也必须更新。
 
-每次优化都要回答：它降低了哪个请求桶的成本，是否伤害质量或尾延迟，峰值流量下是否仍成立，回退路径是否清楚。成本模型和 SLO 的目标不是做漂亮报表，而是让团队知道哪些优化值得做、哪些成本应该被接受、哪些流量必须被降级。
+## 10. 世界模型和 VLA 场景的额外成本
 
-成本模型还应定期用真实账单和 trace 校准。GPU 单价、实例利用率、缓存命中、模型路由和外部工具价格都会变化；如果模型不更新，容量规划会逐渐变成过期假设。
+如果推理服务的是世界模型 rollout 或 VLA 闭环控制，还要把成本写成任务闭环：
 
-实践中建议每次发布后做一次成本复盘：对比发布前估算和发布后真实成本，拆出哪些变化来自请求分布，哪些来自模型版本，哪些来自调度或缓存。长期看，这比单次优化更重要，因为它能让团队的容量估算越来越接近真实生产负载。
+\[
+T_{\text{loop}}
+=
+T_{\text{observe}}
++ T_{\text{encode}}
++ T_{\text{rollout}}
++ T_{\text{policy}}
++ T_{\text{control}}
+\]
 
-如果一个优化只降低平均成本，却让高价值请求的尾延迟或失败率变差，它不应被视为成功。成本建模必须始终和 SLO 绑定，否则团队会把系统优化成“账面更便宜、体验更不可控”的状态。
+| 符号 | 含义 |
+| --- | --- |
+| \(T_{\text{observe}}\) | 传感器或输入采集 |
+| \(T_{\text{encode}}\) | 图像、视频、状态编码 |
+| \(T_{\text{rollout}}\) | 世界模型预测候选未来 |
+| \(T_{\text{policy}}\) | 策略选择动作 |
+| \(T_{\text{control}}\) | 控制执行与安全检查 |
+
+这时“推理更快”只有在降低 deadline miss、collision、takeover，或提高 success/cost 时才有意义。kernel speedup 不能自动证明闭环收益。
+
+## 11. 小结
+
+成本建模和 SLO 设计的核心，是把优化从“看起来更快”变成“在指定请求桶里，守住质量和尾延迟，并降低单位成功任务成本”。先拆 queue、prefill、KV、decode、tool 和 retry，再按短问答、长文档、长输出、agent、多模态分桶验收，推理系统才不会被平均值带偏。

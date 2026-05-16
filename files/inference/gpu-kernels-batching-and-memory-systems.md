@@ -1,163 +1,201 @@
 # GPU Kernel、Batching 与显存
 
-推理优化落到 GPU 上时，很多抽象问题都会变成具体瓶颈：prefill 是否吃满 Tensor Core，decode 是否被 KV 访存拖住，batching 是否让 shape 变得更碎，量化收益是否被 dequant 和布局转换吞掉。理解 GPU kernel、batching 和内存系统，不是为了手写所有 CUDA，而是为了判断性能问题究竟来自模型、runtime、kernel 还是缓存生命周期。
-
-这页和 [推理服务系统](serving-systems.md)、[上下文压缩与 KV 层级](context-compression-kv-eviction-and-memory-hierarchies.md)、[推理 Attention 与 KV Kernel](../operators/serving-attention-and-kv-kernels.md) 互补。推理服务系统页讲队列和资源治理，本页讲 GPU 热路径和内存行为。
+这一页把 [推理服务系统](serving-systems.md) 里的 queue、prefill、decode 和 KV cache 落到 GPU 执行层。你不需要先会写 CUDA，但要能判断：慢是因为 GPU 算不过来，还是因为 batch 太碎、KV 访存太重、量化 kernel 没命中，或者调度让用户等太久。
 
 !!! note "初学者先抓住"
-
-    推理性能不是一个 token/s 数字能讲清的。prefill 更像一次性处理大块输入，decode 更像不断读历史 KV 的小步循环；batching 决定 GPU 是否吃满，内存系统决定尾延迟是否稳定。
-
-!!! note "难点解释：为什么训练快不代表推理也快"
-
-    训练通常 batch 大、形状稳定，GEMM 更容易跑满 Tensor Core；在线 decode 请求随时进出、序列长度不同、KV 访问碎片化，更容易被内存带宽和 kernel launch 开销限制。所以推理优化要拆 TTFT、TPOT、P95/P99，而不是照搬训练吞吐直觉。
+    训练通常 batch 大、shape 稳定，GPU 容易吃满；在线推理尤其是 decode，batch 动态变化、每步只生成少量 token、KV cache 反复读取，更容易被显存带宽、kernel launch 和调度限制。
 
 !!! example "有趣例子：自助餐和点菜"
+    Prefill 像一次做一大盘自助餐，适合批量处理；decode 像顾客一口一口点菜，每一步都要查上一口吃了什么。GPU 对这两种工作负载的表现完全不同。
 
-    Prefill 像自助餐后厨一次做一大盘，容易批量处理；decode 像顾客一口一口点菜，每次只做一点，还要记住每桌之前点过什么。GPU 在这两种场景下的瓶颈完全不同。
+## 1. 从公式回到 GPU 时间线
 
-## 一、推理延迟拆解：先区分 Queue、Prefill、Decode
+请求总时延仍然先拆成：
 
-一次请求的总时延可以粗略分成：
-
-$$
-T_{\text{total}}
+\[
+T_{\text{req}}
 =
 T_{\text{queue}}
 + T_{\text{prefill}}
 + T_{\text{decode}}
 + T_{\text{post}}
-+ T_{\text{network}}.
-$$
++ T_{\text{network}}
+\]
 
-其中 `TTFT` 主要受排队、prefill 和首步 decode 影响；`TPOT` 更接近后续 decode 稳态。很多优化误判都来自只看平均 token/s，而不拆 queue、prefill 和 decode。
+GPU 页面重点看中间两段：
 
-| 阶段 | 典型瓶颈 | 关键指标 |
+| 阶段 | GPU 上主要发生什么 | 常见瓶颈 |
 | --- | --- | --- |
-| Queue | 调度、批处理窗口、优先级 | queue time、admission reject、P95/P99 |
-| Prefill | 长上下文 attention、大 GEMM、KV 写入 | TTFT、prefill tokens/s、HBM 带宽 |
-| Decode | 小 batch、KV 读取、kernel launch、碎 shape | TPOT、decode batch size、KV page miss |
-| Post | detokenize、工具编排、网络 | post latency、RPC error、tool latency |
+| prefill | 大块 GEMM、长上下文 attention、写 KV | Tensor Core 利用率、attention kernel、HBM 带宽 |
+| decode | 小步 GEMM、读历史 KV、采样和后处理 | KV 访存、batch 太小、kernel launch、shape 碎 |
 
-推理比训练更容易暴露带宽问题。训练时 batch 大、shape 稳定，GEMM 更容易吃满硬件；decode 阶段 batch 动态变化、每步工作量小、KV cache 访问频繁，更容易变成 memory-bound 和 launch-bound。
+TTFT 通常受 \(T_{\text{queue}} + T_{\text{prefill}}\) 影响很大；TPOT 更接近 decode 稳态。若只看全局 tokens/s，就容易把 prefill 问题错当成 decode 问题，或把调度问题错当成 kernel 问题。
 
-## 二、Prefill 与 Decode 是两种工作负载
+## 2. Prefill 为什么更像训练
 
-Prefill 更像大块矩阵并行：输入上下文可以并行处理，长 prompt 会产生较大的 attention 和 GEMM 工作量。它适合大 batch、FlashAttention、prefix cache、chunked prefill 和高吞吐资源池。
+Prefill 一次处理所有输入 token。输入长度为 \(L_{\text{in}}\)，batch 为 \(B\) 时，很多矩阵乘的形状比较大，GPU 更容易发挥 Tensor Core 吞吐。
 
-Decode 更像动态小步迭代：每轮只生成新 token，活动请求集合不断变化。它的主要问题是“碎”：小 `M` 的 skinny GEMM、频繁 kernel launch、请求随时加入和退出、KV page 访问不连续，以及 LoRA、采样参数、输出长度让 batch 更难合并。
+常见优化包括：
 
-因此很多系统会把 prefill 和 decode 拆成不同队列、不同资源池或不同调度策略。长文档问答更可能 prefill 主导，聊天和 agent 更可能 decode 主导。优化前先拆阶段，否则很容易把 prefill 问题错当成 decode kernel 问题。
+| 方法 | 直觉 | 风险 |
+| --- | --- | --- |
+| 更大的 prefill batch | 合并更多输入，摊薄启动和调度开销 | 新请求等待更久，TTFT 变差 |
+| FlashAttention / 高效 attention | 减少 attention 中间矩阵读写 | 需要匹配 dtype、shape 和 mask |
+| prefix cache | 复用系统 prompt 或共享前缀 | prompt 版本和权限隔离要做好 |
+| chunked prefill | 长输入切块，避免一次阻塞 decode | 调度更复杂，可能引入额外等待 |
 
-## 三、Batching：吞吐、尾延迟与 Shape Shaping
+Prefill 最常见的错觉是“只要 GPU 利用率高就好”。如果长文档 prefill 抢占短聊天 decode，GPU 看起来很忙，用户却会觉得系统卡住。
 
-Batching 不只是“把请求拼在一起”。它决定 GPU 是否吃满，也决定用户等待多久。
+## 3. Decode 为什么更难跑满 GPU
 
-常见方式包括静态批处理、动态批处理、continuous batching、bucketing 和 batch shaping。静态批处理适合离线推理但交互延迟差；动态批处理用短窗口聚合请求；continuous batching 允许每个 decode step 加入和离开请求；bucketing 按长度、模型、LoRA、采样参数或优先级分桶；batch shaping 则让 runtime 主动选择对 kernel 更友好的 shape family。
+Decode 每一步通常只生成一个 token。第 \(i\) 步成本可以粗略理解为：
 
-若当前活动请求为 $\mathcal{B}_t$，continuous batching 每步都在更新：
+\[
+T_{\text{step}}^{(i)}
+\approx
+T_{\text{weight-read}}
++ T_{\text{KV-read}}(T_i)
++ T_{\text{matmul}}
++ T_{\text{sampling}}
++ T_{\text{runtime-overhead}}
+\]
 
-$$
+| 符号 | 含义 |
+| --- | --- |
+| \(T_i\) | 第 \(i\) 步时已有上下文长度 |
+| \(T_{\text{weight-read}}\) | 读模型权重的时间 |
+| \(T_{\text{KV-read}}\) | 读历史 KV cache 的时间，随上下文增长 |
+| \(T_{\text{matmul}}\) | 本步矩阵乘计算 |
+| \(T_{\text{sampling}}\) | logits 后处理、温度、top-p、结构化约束 |
+| \(T_{\text{runtime-overhead}}\) | 调度、kernel launch、page table、fallback 等开销 |
+
+decode 的难点不是某一步公式复杂，而是它要重复很多次，并且每一步的活跃请求集合都可能变化。
+
+## 4. Batching：吞吐和等待时间一起变
+
+Continuous batching 的核心公式是：
+
+\[
 \mathcal{B}_{t+1}
 =
-(\mathcal{B}_t \setminus \mathcal{F}_t) \cup \mathcal{A}_t.
-$$
+(\mathcal{B}_t \setminus \mathcal{F}_t)
+\cup
+\mathcal{A}_t
+\]
 
-这里 $\mathcal{F}_t$ 是完成请求，$\mathcal{A}_t$ 是新加入请求。它能提高 GPU 利用率，但也会让内存生命周期和 shape 更动态。
+| 符号 | 含义 |
+| --- | --- |
+| \(\mathcal{B}_t\) | 第 \(t\) 步正在一起 decode 的请求集合 |
+| \(\mathcal{F}_t\) | 本轮完成并退出的请求 |
+| \(\mathcal{A}_t\) | 新加入的请求 |
 
-### 何时吞吐会伤害体验
+batching 的收益和风险：
 
-为了吞吐拉长 batching 窗口、把长短请求混在一起、或让 prefill 抢占 decode，可能让 token/s 更漂亮，但 TTFT 和 P99 更差。推理系统必须同时看平均吞吐、TTFT、TPOT、P95/P99、长短请求公平性，以及高价值租户是否被低价值长请求拖慢。
+| 目标 | 更大 batch 可能带来什么 | 需要同时监控什么 |
+| --- | --- | --- |
+| 吞吐 | GPU 更少空转，tokens/s 上升 | queue time 是否上升 |
+| TTFT | 有时可复用批处理，但也可能等 batch | P95/P99 TTFT |
+| TPOT | decode kernel 更饱满 | 长短请求混合后的 per-bucket TPOT |
+| 公平性 | 高吞吐池更便宜 | 短请求是否被长请求拖住 |
 
-## 四、KV Cache 是推理内存系统的核心
+因此 batching 参数不能只按全局 tokens/s 调。在线服务通常要按长度、SLO、租户、模型、LoRA、采样参数分桶，让相似请求更容易合并。
 
-自回归生成时，KV cache 保存历史 token 的 key/value，避免每步重算全部上下文。若层数为 $L$，hidden size 为 $d$，序列长度为 $T$，batch 为 $B$，每元素字节数为 $b$，KV 大小近似为：
+## 5. KV Cache 是显存系统的核心
 
-$$
+KV cache 数量级：
+
+\[
 M_{\text{KV}}
-\approx 2 \cdot L \cdot B \cdot T \cdot d \cdot b.
-$$
+\approx
+2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
+\]
 
-这里的 \(d\) 要按 KV 实际宽度理解，而不是盲目等同于模型 hidden size。标准 MHA 通常每个 query head 都有自己的 K/V，\(d\) 接近 hidden size；GQA/MQA 会减少 KV head 数，所以更常写成 \(H_{\text{kv}}\times D_{\text{head}}\)。
+这个公式在 GPU 页面有三个含义：
 
-例如 `32` 层、batch `4`、上下文 `32k`、BF16 KV：
+1. \(T\) 越长，每个 decode step 要读的历史越多；
+2. \(B\) 越大，同时常驻的 KV 越多；
+3. \(b\) 从 BF16 降到 INT8 可以省显存，但需要看 dequant 和 kernel 支持。
 
-| KV 结构 | 代入方式 | KV cache 数量级 |
-| --- | --- | ---: |
-| MHA，`32` 个 KV heads，`head_dim=128` | \(2\times32\times4\times32768\times32\times128\times2\) | 约 `64GiB` |
-| GQA，`8` 个 KV heads，`head_dim=128` | \(2\times32\times4\times32768\times8\times128\times2\) | 约 `16GiB` |
-| GQA + INT8 KV | 上式 bytes 从 `2` 改成 `1` | 约 `8GiB` |
+Paged KV 把 cache 拆成 block/page 管理，减少连续显存需求，但会引入地址间接和 page locality 问题。监控时不能只看显存总量，还要看 free page 分布、fragmentation、page reuse、eviction 和 page miss。
 
-这张表只是在算常驻 KV 本体。线上还要给 paged KV 的 block metadata、空闲页碎片、speculative 分支、临时 workspace 和不同请求长度的浪费留余量。
+![vLLM logical and physical block table 原论文图](../assets/images/paper-figures/inference/vllm-logical-physical-block-table.png){ width="760" }
 
-长上下文和大 batch 下，KV cache 往往比权重更先成为瓶颈。它的难点不只是“大”，还包括生命周期不同步、请求长度差异大、prefix 复用、page 回收、多租户隔离、speculative decoding 的临时分支和显存碎片。
+<small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 5。原论文图意：vLLM 用 block table 把 logical KV blocks 翻译到 physical KV blocks，使请求的 KV cache 不必连续存放。</small>
 
-### Paged KV 与 Prefix Cache
+!!! note "这张图怎么看"
+    logical block 是请求语义上的上下文顺序，physical block 是显存里的实际位置。block table 负责翻译。这样系统可以灵活复用和回收 KV，但 decode attention kernel 每一步都要按表找到历史 KV，因此 page 布局和局部性会影响 TPOT。
 
-Paged KV 把 cache 拆成页，像虚拟内存一样管理，适合 continuous batching 下动态加入和退出请求。收益是降低连续大块显存需求、便于复用和回收；代价是地址间接、访存离散和 page size 选择问题。
+## 6. Roofline 直觉：算力不等于速度
 
-Prefix cache 复用公共前缀，例如系统 prompt、热门文档块或共享工具上下文。它可以显著降低 prefill 成本，但要处理权限隔离、失效策略、租户边界和 cache locality。prefix 复用策略如果和 decode 调度脱节，也会破坏局部性。
+GPU 性能常用 roofline 直觉理解：
 
-### 内存碎片为什么线上才暴露
-
-碎片常常不是单个请求造成的，而是长短请求、LoRA、多模型、prefix cache 和 page 回收交错运行后积累的。监控应包括 free page 分布、page reuse rate、KV 命中率、碎片率、OOM 前显存布局和分桶后的 KV 占用。
-
-## 五、Kernel 热点：Attention、Fusion、Quantization
-
-GPU 性能可用 roofline 直觉判断：
-
-$$
+\[
 \text{Performance}
 \le
-\min(\text{Peak FLOPs}, \text{Bandwidth} \times \text{Arithmetic Intensity}).
-$$
+\min(
+\text{Peak FLOPs},
+\text{Bandwidth}\times\text{Arithmetic Intensity}
+)
+\]
 
-如果一个算子搬很多数据但计算很少，即使 GPU 峰值 FLOPs 很高，也会被 HBM 带宽限制。推理中的 attention、RMSNorm、embedding gather、KV 读取、dequant 和 logits 后处理都可能落入这一类。
+| 符号 | 含义 |
+| --- | --- |
+| Peak FLOPs | GPU 理论峰值计算能力 |
+| Bandwidth | 显存带宽，如 HBM 读写速度 |
+| Arithmetic Intensity | 每搬运 1 byte 数据能做多少计算 |
 
-### Attention Kernel
+如果一个操作搬很多数据但计算很少，它就更容易 memory-bound；如果计算量很大、数据复用好，它才更可能 compute-bound。推理 decode 里 KV 读取、RMSNorm、embedding gather、dequant 和 logits 后处理经常受带宽或 launch 开销限制。
 
-推理里的 attention kernel 至少要区分 prefill attention、decode attention、paged attention、MQA/GQA attention、sliding window / chunked attention，以及 speculative decoding 下的验证 attention。
+## 7. 量化为什么不等于一定更快
 
-它们都叫 attention，但访问模式和热点不同。FlashAttention 类方法通过分块和在线 softmax 归约避免 materialize 巨大 score 矩阵；paged attention 则更关注 KV page 布局和动态请求。
+Low-bit survey 的数据传输图很适合说明这个坑：低比特会减少某些数据搬运，但也可能增加 dequant、scale 读取、layout 转换和不友好 shape 的开销。
 
-### Kernel Fusion
+![Low-bit cache hierarchy data transmission 原图](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-4-cache-hierarchy.png){ width="860" }
 
-decode 每步工作量小，小算子和 launch 开销更容易显性化。Fusion 可以减少全局内存往返，例如 RMSNorm + scale、dequant + matmul、rotary + QK 后处理、residual + norm、logits 后处理。代价是实现复杂、调试困难、硬件兼容性和 shape 覆盖更难。
+<small>图源：`A Survey of Low-bit Large Language Models`，Figure 4。原论文图意：以 NVIDIA A100 为例展示 weight 和 activation 在 host、global memory、L2、shared memory、registers 与 MatMul kernel 之间的数据传输。</small>
 
-### Quantization Kernel
+!!! note "这张图怎么看"
+    顺着箭头看数据在哪里移动：host、global memory、L2、shared memory、registers。推理慢时不一定是矩阵乘不够快，也可能是数据在层级之间搬得太多。量化只有在 kernel 能把低比特存储、dequant 和 matmul 高效融合时，才更可能转成真实加速。
 
-量化推理不是把权重变小就一定更快。若 kernel 内要频繁读取 scale / zero-point、做 dequant、处理不友好的 group layout，收益会被内存 stall 和额外指令吃掉。评估量化时应看是否有 fused quantized GEMM，group size 和 layout 是否匹配 kernel，小 batch decode 是否仍然快，scale 访问是否成为新带宽瓶颈，以及多 LoRA、多模型是否破坏量化布局收益。
+KV cache 量化也一样。它能减少 KV 存储和读取，但 attention 前往往需要 dequant：
 
-## 六、多模型、LoRA、MoE 与多 GPU 的额外复杂度
+![KV cache quantization 原图](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="820" }
 
-真实推理节点往往不是单模型、单租户、单形状服务。多 LoRA、adapter、MoE、量化版本和多模型路由会把 kernel 选择问题放大。
+<small>图源：`A Survey of Low-bit Large Language Models`，Figure 6。原论文图意：展示 quantized KV cache 如何减少缓存存储和数据传输，并在 attention forward 前 dequantize。</small>
 
-典型影响包括 adapter 切换破坏 batch 合并、权重局部性下降、不同请求 shape family 更杂、expert routing 造成负载不均、TP/EP 跨卡同步放大 decode 延迟，以及多租户隔离限制 prefix cache 复用。
+!!! note "这张图怎么看"
+    左边是压缩后的 KV 存储，右边是 attention 计算前的恢复路径。收益来自少存少搬，代价来自 dequant 和可能的精度损失。长上下文服务尤其要用长任务质量回归验证，不能只看短 benchmark。
 
-MoE 推理尤其要看 expert 热点和 all-to-all。单个 expert 被热门请求集中命中时，即使整体 GPU 利用率看起来不低，某些 rank 仍会成为系统瓶颈。
+## 8. Kernel 热点怎么分
 
-多 GPU 推理也不只是通信问题。KV cache 如何分布、page metadata 如何同步、prefix cache 是否跨 rank 可用、fallback 是否改变拓扑，都会影响尾延迟。
+| 热点 | 出现在哪里 | 看什么指标 |
+| --- | --- | --- |
+| Prefill attention | 长输入、RAG、PDF | prefill time、HBM bandwidth、attention kernel time |
+| Decode attention | 长输出、长会话 | TPOT、KV read bandwidth、page miss |
+| GEMM / quant GEMM | 权重计算 | Tensor Core util、kernel hit rate、dtype |
+| Fusion | 小算子密集路径 | kernel launch count、memory round trip |
+| Sampling / logits | 大 vocab、结构化输出 | logits processor time、CPU/GPU sync |
+| Communication | TP/PP/EP/MoE | all-reduce/all-to-all time、rank imbalance |
 
-## 七、诊断与优化顺序
+新手排查顺序建议：
 
-推理系统变慢时，不建议一开始就换 GPU 或重写 kernel。更稳的排查顺序是先按 queue / prefill / decode / post 拆时延，判断主瓶颈是 TTFT、TPOT、吞吐还是 P99；若 prefill 主导，先看上下文长度、attention、prefix cache 和 chunking；若 decode 主导，先看 continuous batching、KV cache、kernel launch、fusion 和 page locality；若显存主导，先看 KV 占用、碎片、page size、量化和 memory tiering；若多租户主导，先看分池、优先级、LoRA / adapter 分桶和路由策略；最后再决定是否需要写新 kernel、换 runtime 或改模型结构。
+1. 先按 queue / prefill / decode / post 拆时延；
+2. prefill 慢，先看输入长度、prefix cache、attention kernel；
+3. decode 慢，先看 batch、KV cache、page locality、sampling；
+4. 显存紧，先看 KV 而不是只看权重；
+5. tokens/s 好但 P99 差，先看分桶和调度；
+6. 只有确认热路径在 kernel 上，再考虑写新 kernel 或换 runtime。
 
-### 最小观测集
+## 9. 真实排查案例：Batch 变大后体验下降
 
-至少应持续记录 TTFT、TPOT、P50/P95/P99，prefill / decode 分阶段 GPU 时间，实际 batch size 和 shape 分布，HBM 带宽、SM util、kernel 时间分解，KV cache 占用、page 命中、碎片率，prefix cache 命中率，queue depth、admission reject、fallback，以及 LoRA / model / expert route 分桶后的延迟和成本。
+**症状**：连续批处理参数调大后，tokens/s 提升 22%，但聊天产品 TTFT P95 从 1.1s 涨到 2.0s。
 
-核心判断是：推理优化不是微基准游戏。只有当 kernel 性能、runtime 调度、KV 生命周期和真实流量分布一起变好，线上体验才会真正改善。
+**关键指标**：实际 batch size 变大，GPU utilization 更高；queue time 和 prefill waiting time 同时上升；短请求被长文档请求拖住。
 
-## 真实排查案例：Batch 变大后吞吐上升，交互体验下降
+**判断**：GPU 层吞吐更好，但产品层 SLO 变差。问题不是 kernel 慢，而是 batching 策略没有区分短交互和长文档。
 
-**输入症状**：连续批处理参数调大后，tokens/s 提升 22%，但聊天产品 TTFT P95 从 1.1s 涨到 2.0s，短请求投诉增多。
+**修复**：按输入长度和 SLO 分队列；短请求设置更小 max wait；长文档进入吞吐池；灰度指标同时看 tokens/s、TTFT、TPOT 和 P99。
 
-**关键指标**：实际 batch size 变大，GPU util 更高；queue time 和 prefill waiting time 上升；短请求被长文档请求一起合批；decode kernel 时间下降，但排队时间吞掉收益。
+## 10. 小结
 
-**Nsight / trace 观察**：GPU 时间线更密集，kernel 间空隙减少；系统 trace 显示请求在 scheduler 队列里等待凑 batch，长 prefill 段把短请求首 token 推迟。
-
-**判断**：优化改善了 GPU 层吞吐，却牺牲了产品层 SLO。问题不是 kernel 慢，而是 batching 策略没有区分短交互和长文档。
-
-**修复**：按输入长度和 SLA 分队列；短请求设置更小 max wait，长文档进入吞吐池；指标同时看 tokens/s、TTFT、TPOT 和任务级完成时间；灰度时按请求桶比较收益。
-
-**反例**：离线批量生成或后台文档处理通常可以牺牲 TTFT 换吞吐。交互产品不能只用全局 tokens/s 判定优化成功。
+GPU 推理优化不是微基准游戏。真正要改善线上体验，需要同时看请求分桶、queue、prefill、decode、KV 生命周期、kernel 热点和 SLO。一个优化只有在真实请求桶里同时改善成本、延迟和质量，才算真的有效。

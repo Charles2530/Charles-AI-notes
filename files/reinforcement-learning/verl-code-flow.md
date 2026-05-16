@@ -8,6 +8,21 @@
 !!! tip "先和前面知识点对上"
     如果你刚读完 MDP 和 PPO，可以把 `verl` 看成一条工程化流水线：`prompt` 是 state，`generate_sequences` 采样 action/trajectory，`reward_manager` 给 reward，`compute_advantage` 把 reward 变成 advantage，`_update_actor` 更新 policy。训练章节里的 FSDP/Megatron 负责让反向传播跑得动，推理章节里的 vLLM/SGLang 负责让 rollout 生成跑得快。
 
+## 0. 先把公式翻译成变量名
+
+读 `verl` 前，先把前面几页的数学符号换成工程变量。这样看到 trainer 日志、batch 字段和 worker 名字时，不会觉得它们是另一套语言。
+
+| 数学概念 | 常见公式符号 | verl 里的名字 | 初学者读法 |
+| --- | --- | --- | --- |
+| 状态 | \(s_t\) | `prompt`、`input_ids`、多模态 `inputs` | LLM/RLVR 里，prompt 和已生成前缀就是当前局面 |
+| 动作 / 轨迹 | \(a_t,\tau\) | `responses`、`sequences` | response 是一串 token 动作组成的轨迹 |
+| 奖励 | \(r_t,R_i\) | `token_level_scores`、`reward_tensor` | reward manager 或 verifier 给出的分数 |
+| KL 约束 | \(D_{\mathrm{KL}}\) | `ref_log_prob`、`kl_loss`、`kl_penalty` | 当前 actor 和 reference 的距离 |
+| 价值 | \(V(s_t)\) | `values`、`returns` | PPO critic 对未来回报的估计和训练目标 |
+| 优势 | \(A_t,A_i\) | `advantages` | 这次回答或 token 比预期好多少 |
+| 旧策略概率 | \(\pi_{\theta_{\text{old}}}\) | `old_log_probs` | PPO ratio 的分母，来自更新前 actor |
+| 组内比较 | \(\{o_i\}_{i=1}^G\) | `uid`、`rollout.n` | 同一 prompt 的多条采样回答属于同一组 |
+
 ## 1. HybridFlow 的架构视角
 
 ![HybridFlow architecture 原论文图](../assets/images/paper-figures/reinforcement-learning/hybridflow-architecture.png){ width="920" }
@@ -135,6 +150,21 @@ batch prompts
 | 更新 actor | `_update_actor(...)` |
 | 同步 rollout 权重 | `checkpoint_manager.update_weights(...)` |
 
+训练 step 中最常见的 batch 字段可以这样读：
+
+| 字段 | 对应概念 | 读法 |
+| --- | --- | --- |
+| `prompts` / `input_ids` | state | 当前题目、指令、图像 token 或上下文 |
+| `responses` | action sequence | actor 采样出来的回答或动作块 |
+| `attention_mask` | 有效 token 范围 | 告诉模型哪些位置是真 token，哪些是 padding |
+| `token_level_scores` | raw reward | verifier / reward model 给出的原始分数 |
+| `token_level_rewards` | reward after KL | 如果启用 KL reward penalty，这里已经扣掉偏离 reference 的代价 |
+| `old_log_probs` | old policy log prob | PPO ratio 的旧策略锚点 |
+| `ref_log_prob` | reference log prob | KL 约束的 reference 侧概率 |
+| `values` | critic value | PPO 用来估计未来回报的 baseline |
+| `advantages` | advantage | actor update 真正关心的相对好坏 |
+| `returns` | value target | critic update 要拟合的目标 |
+
 !!! note "难点解释：old_log_probs、ref_log_prob 和 rollout_log_probs"
     `old_log_probs` 是这批样本在更新前 actor 下的概率锚点，PPO 的 ratio 依赖它。`ref_log_prob` 来自 reference policy，用于 KL 约束，防止模型离 SFT/reference 太远。`rollout_log_probs` 可能来自生成 backend，本质上记录采样策略的概率；在异步或 off-policy 变体里，它和训练时重新计算的 old log prob 可能不同。
 
@@ -166,6 +196,9 @@ advantage = (score - group_mean) / (group_std + eps)
 | KL penalty | `apply_kl_penalty(...)`、`algorithm.use_kl_in_reward` | 把偏离 reference 的代价从 reward 里扣掉 |
 | value / critic | `_compute_values(...)`、`_update_critic(...)`、`critic.*` | PPO 用 critic 估计未来回报；GRPO 通常不训练 critic |
 | advantage | `compute_advantage(...)`、`algorithm.adv_estimator` | 把 reward/value 变成“这次回答比预期好多少” |
+| return | `returns` | critic 要学习的目标；GRPO 里也可能作为后续统计字段存在 |
+| old policy | `old_log_probs`、`rollout_log_probs` | PPO/异步变体用来知道样本来自哪个策略分布 |
+| group baseline | `uid`、`rollout.n`、`norm_adv_by_std_in_grpo` | GRPO/RLOO 用同题多样本构造相对优势 |
 | rollout backend | `actor_rollout_ref.rollout.name=vllm/sglang/trtllm` | 对应推理章节里的高吞吐生成、KV cache 和 batching |
 | distributed training | `actor.strategy`、`fsdp_config`、`megatron`、`trainer.n_gpus_per_node` | 对应训练章节里的 FSDP、Megatron-LM、offload 和资源池 |
 | VLM/VLA 输入 | `processor`、`data.image_key`、`multi_modal_inputs`、`images_seqlens` | 对应 VLM/VLA 章节里的视觉 token、processor 和 padding |

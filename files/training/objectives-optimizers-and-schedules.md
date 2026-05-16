@@ -16,6 +16,30 @@
 
     目标函数、优化器与 LR 日程在世界模型高效训练里负责回答：训练信号到底在奖励什么，哪些能力被大桶数据主导，哪些阶段切换会破坏稳定性。它降低训练成本和错误优化成本；如果 loss 与闭环目标错位，算力会被稳定地花在错误方向上。
 
+## 符号速查：先把公式读顺
+
+训练公式常显得吓人，通常不是因为数学很深，而是符号太多。先记住这张表：
+
+| 符号 | 常见含义 | 直觉 |
+| --- | --- | --- |
+| \(x\) | 输入 | prompt、图像、视频片段、状态、观测 |
+| \(y\) | 目标输出 | 正确 token、参考回答、标签、动作、偏好答案 |
+| \(t\) | 序列位置或训练步 | 第几个 token，或第几步更新 |
+| \(\theta\) | 当前模型参数 | 正在被训练的权重 |
+| \(f_\theta(x)\) | 模型预测 | 当前模型看到输入后的输出 |
+| \(p_\theta(\cdot)\) | 模型给出的概率 | 某个 token、类别或动作有多可能 |
+| \(\mathcal{L}\)、\(\ell\) | loss | 错误有多大，训练压力来自哪里 |
+| \(\mathcal{J}(\theta)\) | 总目标 | 把多个 loss、正则和约束合起来后的训练目标 |
+| \(\nabla_\theta \mathcal{L}\) | 梯度 | 参数往哪个方向改能降低 loss |
+| \(\eta_t\) | 学习率 | 第 \(t\) 步迈多大 |
+| \(\lambda\) | loss 权重或正则权重 | 多个目标之间谁更响亮 |
+| \(\pi_\theta\) | policy / 策略模型 | RLHF/GRPO 中正在被训练的生成模型 |
+| \(r\) 或 \(r_\phi\) | reward | 完整回答、动作或轨迹得到的分数 |
+| \(\beta\) | KL 或偏好强度系数 | 偏好/RL 里的刹车或温度 |
+
+!!! note "读公式的固定顺序"
+    先找输入 \(x\) 和目标 \(y\)，再找模型预测 \(f_\theta(x)\) 或 \(p_\theta\)，然后看 loss 在比较什么，最后看 \(\lambda\)、\(\beta\)、KL、正则这些项在加什么约束。这样读公式，比一开始就追求推导完整得多。
+
 ## 目标函数在定义学习压力
 
 大多数训练问题可以写成：
@@ -30,6 +54,13 @@
 
 现代基础模型复杂在于：\(y\) 可能是下一个 token、噪声、偏好排序、奖励信号、图像 patch 或动作；\(\ell\) 可能由多个子目标组成；样本分布是多源、分阶段、随时间变化的。
 
+| 公式片段 | 符号含义 | 白话读法 |
+| --- | --- | --- |
+| \(\min_\theta\) | 寻找一组模型参数 | 让模型变成更少犯错的版本 |
+| \((x,y)\sim p_{\text{data}}\) | 从训练数据分布采样输入和目标 | batch 不是凭空来的，它代表你给模型看的世界 |
+| \(\ell(f_\theta(x),y)\) | 比较模型预测和目标 | 预测离目标越远，惩罚越大 |
+| \(\lambda\Omega(\theta)\) | 正则项或约束项 | 让模型不要用不希望的方式降低主 loss |
+
 不同目标本质上在回答不同问题：
 
 | 目标 | 问题 | 常见用途 |
@@ -43,41 +74,133 @@
 
 所以“哪种 loss 更好”没有统一答案，必须看它给模型施加了什么学习压力。
 
-## 常见目标族
+## 常见目标族：按学习信号从直接到间接读
+
+目标函数可以按“答案有多直接”来读。监督学习最直接，扩散和对比学习需要构造中间任务，偏好/RL 最间接，因为模型要先采样，再用人类偏好、reward model 或 verifier 判断结果。
+
+### 1. 监督学习：交叉熵和 SFT
 
 自回归语言模型最经典的目标是 next-token prediction：
 
 \[
-\mathcal{L}_{\text{CE}} =
--\sum_{t=1}^{T}\log p_\theta(x_t\mid x_{<t})
+\mathcal{L}_{\text{CE}}
+=
+-
+\sum_{t=1}^{T}
+\log p_\theta(x_t\mid x_{<t}).
 \]
 
-它简单、稳定、可扩展，但不直接优化有用性、偏好和业务风险。
+| 符号 | 含义 | 白话 |
+| --- | --- | --- |
+| \(T\) | 序列长度 | 一段文本里要预测多少个位置 |
+| \(x_t\) | 第 \(t\) 个 token | 当前标准答案 token |
+| \(x_{<t}\) | 前文上下文 | 模型已经看见的 token |
+| \(p_\theta(x_t\mid x_{<t})\) | 模型给正确 token 的概率 | 模型有多相信正确答案 |
 
-扩散模型常用噪声、\(x_0\) 或 velocity 预测目标，例如：
+**白话读法**：每个位置都让模型猜下一个 token。正确 token 概率越高，\(-\log p_\theta\) 越小；正确 token 概率越低，惩罚越大。
+
+SFT 仍然是交叉熵，只是输入变成 prompt，目标变成高质量回答：
+
+\[
+\mathcal{L}_{\text{SFT}}
+=
+-
+\sum_{t=1}^{T}
+\log p_\theta(y_t\mid x,y_{<t}).
+\]
+
+这里 \(x\) 是用户指令或任务输入，\(y_t\) 是示范回答的第 \(t\) 个 token，\(y_{<t}\) 是示范回答前缀。它教模型“在这个输入下应该怎样回答”，但不保证回答一定最受偏好，也不保证真实任务风险最低。
+
+### 2. 生成建模：扩散损失
+
+扩散模型常用噪声、\(x_0\) 或 velocity 预测目标。以噪声预测为例：
 
 \[
 \mathcal{L}_{\text{diff}}
 =
 \mathbb{E}_{x_0,\epsilon,t}
-\left[\|\epsilon-\epsilon_\theta(x_t,t,c)\|_2^2\right]
+\left[
+\|\epsilon-\epsilon_\theta(x_t,t,c)\|_2^2
+\right].
 \]
 
-不同参数化会影响梯度尺度、采样器兼容性和训练稳定性。
+| 符号 | 含义 | 白话 |
+| --- | --- | --- |
+| \(x_0\) | 干净样本 | 原图、原视频或原 latent |
+| \(\epsilon\) | 真实噪声 | 训练时加进去的噪声 |
+| \(t\) | 噪声时间步 | 当前破坏到什么程度 |
+| \(x_t\) | 加噪后的样本 | 模型实际看到的输入 |
+| \(c\) | 条件 | 文本、类别、图像、动作等条件 |
+| \(\epsilon_\theta\) | 模型预测的噪声 | 模型猜应该去掉什么 |
+
+**白话读法**：把干净样本加噪，模型根据 \(x_t,t,c\) 猜噪声 \(\epsilon\)。猜得越接近，平方误差越小。不同参数化会影响梯度尺度、采样器兼容性和训练稳定性。
+
+### 3. 表征学习：InfoNCE 和对比目标
 
 图文对齐和样本匹配常用 InfoNCE：
 
 \[
 \mathcal{L}_{\text{InfoNCE}}
 =
--\log
+-
+\log
 \frac{\exp(\mathrm{sim}(z,z^+)/\tau)}
-{\exp(\mathrm{sim}(z,z^+)/\tau)+\sum_i\exp(\mathrm{sim}(z,z_i^-)/\tau)}
+{\exp(\mathrm{sim}(z,z^+)/\tau)+\sum_i\exp(\mathrm{sim}(z,z_i^-)/\tau)}.
 \]
 
-它优化的是表示几何，而不是直接分类。
+| 符号 | 含义 | 白话 |
+| --- | --- | --- |
+| \(z\) | anchor 表征 | 当前样本的向量表示 |
+| \(z^+\) | 正样本表征 | 应该靠近的配对样本 |
+| \(z_i^-\) | 第 \(i\) 个负样本表征 | 应该远离的错误配对 |
+| \(\mathrm{sim}(\cdot)\) | 相似度函数 | 两个向量有多像 |
+| \(\tau\) | 温度系数 | 控制分布尖锐程度 |
 
-偏好学习如 DPO 会比较优选回答和劣选回答，推动策略相对参考模型向偏好方向移动。这类目标对参考模型、偏好数据、KL 约束和学习率非常敏感。
+**白话读法**：让正确配对在一堆候选里更相似，让错误配对相对更远。它优化的是表示空间几何，不是直接生成答案。
+
+### 4. 偏好学习：DPO 和人类排序
+
+偏好学习会比较优选回答 \(y^+\) 和劣选回答 \(y^-\)。InstructGPT 的标注界面图能提醒你：很多 reward 信号不是天然分数，而是人类在同一个 prompt 下比较出来的。
+
+![InstructGPT labeler ranking interface 原论文图](../assets/images/paper-figures/training/instructgpt-labeler-ranking.png){ width="860" }
+
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b)。原论文图意：标注者在同一个 prompt 下比较多个模型输出，并把它们从最好到最差排序。</small>
+
+!!! note "图解：这张图在回答什么"
+    偏好数据不是“每个 token 的标准答案”，而是“同一问题下哪个回答更好”。如果标注口径偏向长答案、保守答案或固定格式，后续 reward model、DPO 或 PPO 都会把这种偏好继续放大。
+
+DPO 的常见形式是：
+
+\[
+\mathcal{L}_{\text{DPO}}
+=
+-
+\log \sigma
+\left(
+\beta
+\log
+\frac{\pi_\theta(y^+\mid x)}
+{\pi_{\text{ref}}(y^+\mid x)}
+-
+\beta
+\log
+\frac{\pi_\theta(y^-\mid x)}
+{\pi_{\text{ref}}(y^-\mid x)}
+\right).
+\]
+
+| 符号 | 含义 | 白话 |
+| --- | --- | --- |
+| \(y^+\) | 优选回答 | 人类或规则更喜欢的回答 |
+| \(y^-\) | 劣选回答 | 相比之下更差的回答 |
+| \(\pi_\theta\) | 当前策略模型 | 正在训练的模型 |
+| \(\pi_{\text{ref}}\) | 参考模型 | 通常是 SFT 模型，用来约束变化幅度 |
+| \(\beta\) | 偏好强度/温度 | 控制相对参考模型移动多猛 |
+| \(\sigma\) | sigmoid 函数 | 把偏好差异压成概率式目标 |
+
+**白话读法**：相对参考模型，提高优选回答的概率，压低劣选回答的概率。它不需要显式训练 reward model，但仍然非常依赖偏好数据质量、参考模型和学习率。
+
+### 5. 强化学习：先采样，再用 reward 判断
 
 强化学习目标比普通监督学习多一层间接性。监督学习里，目标答案 \(y\) 通常已经给定；强化学习里，模型先按当前策略采样动作或回答，再根据奖励判断这次采样是否值得加强。语言模型 RLHF 可以简化成：
 
@@ -85,11 +208,20 @@
 \max_\theta\;
 \mathbb{E}_{y\sim \pi_\theta(\cdot\mid x)}
 \left[
-r_\phi(x,y)-\beta\,\mathrm{KL}(\pi_\theta\|\pi_{\text{ref}})
+r_\phi(x,y)
+-
+\beta\,\mathrm{KL}(\pi_\theta\|\pi_{\text{ref}})
 \right].
 \]
 
-这里 \(\pi_\theta\) 是当前模型，\(r_\phi\) 是 reward model，\(\pi_{\text{ref}}\) 常是 SFT/reference 模型。这个目标和交叉熵最大的区别是：模型不是模仿固定答案，而是在一组可能回答里尝试提高高奖励回答的概率，同时用 KL 防止自己离参考模型太远。
+| 符号 | 含义 | 白话 |
+| --- | --- | --- |
+| \(y\sim \pi_\theta(\cdot\mid x)\) | 从当前模型采样回答 | 模型自己先试着回答 |
+| \(r_\phi(x,y)\) | reward model 分数 | 这次完整回答有多好 |
+| \(D_{\mathrm{KL}}(\pi_\theta,\pi_{\text{ref}})\) | 当前模型和参考模型的距离 | 跑偏程度 |
+| \(\beta\) | KL 惩罚强度 | 刹车有多强 |
+
+**白话读法**：鼓励当前模型更常生成高奖励回答，同时用 KL 项限制它不要离参考模型太远。
 
 !!! note "初学者解释：RLHF 不是让 reward 直接替代 loss"
     Reward model 给的是完整回答的偏好分数，不是每个 token 的标准答案。PPO 这类算法要把“这个回答整体更好”转成 token 级概率更新，因此需要 value、advantage、旧策略概率、clip 和 KL 这些稳定装置。缺少这些装置，模型很容易为了追高 reward 走偏，例如变长、套模板、过度拒答或牺牲事实性。
@@ -115,7 +247,15 @@ A_i=
 {\mathrm{std}(\{r_1,\ldots,r_G\})}.
 \]
 
-这里 \(G\) 是同一道题采样的回答数，\(r_i\) 是第 \(i\) 条回答的奖励。直觉很像同一场考试里比较多份草稿：不是问“这份草稿绝对值多少分”，而是问“它比同题其他解法更好吗”。这样可以省掉 critic / value model，也减少一个大模型训练和显存负担。
+| 符号 | 含义 | 白话 |
+| --- | --- | --- |
+| \(G\) | 同一道题采样的回答数 | 一题多解里有多少份草稿 |
+| \(r_i\) | 第 \(i\) 条回答的奖励 | 这份草稿得分 |
+| \(\mathrm{mean}\) | 组内平均奖励 | 这道题这组回答的平均水平 |
+| \(\mathrm{std}\) | 组内奖励标准差 | 这组回答差异有多大 |
+| \(A_i\) | 第 \(i\) 条回答的 advantage | 它比同题其他回答好多少 |
+
+直觉很像同一场考试里比较多份草稿：不是问“这份草稿绝对值多少分”，而是问“它比同题其他解法更好吗”。这样可以省掉 critic / value model，也减少一个大模型训练和显存负担。
 
 `RLVR` 指的是 reinforcement learning with verifiable rewards。它最适合这类任务：
 
@@ -143,6 +283,14 @@ A_i=
 +\lambda_3\mathcal{L}_{\text{align}}
 +\lambda_4\mathcal{L}_{\text{reg}}
 \]
+
+| 符号 | 含义 | 白话 |
+| --- | --- | --- |
+| \(\mathcal{L}_{\text{task}}\) | 主任务 loss | 最想优化的核心目标 |
+| \(\mathcal{L}_{\text{aux}}\) | 辅助 loss | 帮助表示、稳定性或中间能力的目标 |
+| \(\mathcal{L}_{\text{align}}\) | 对齐 loss | 让模型更符合偏好、格式或安全边界 |
+| \(\mathcal{L}_{\text{reg}}\) | 正则 loss | 限制模型不要走到不希望的位置 |
+| \(\lambda_i\) | 每个目标的权重 | 每个声音在总 loss 里有多大 |
 
 真正难点不是写公式，而是：
 
@@ -188,6 +336,15 @@ L = 1.0 * video_loss + 0.2 * action_loss + 0.05 * risk_loss
 ```
 
 ## 优化器的角色
+
+目标函数定义了地形，优化器决定怎么在地形上走。Loss landscape 图适合提醒读者：学习率、batch、归一化、残差和 optimizer 不是单个旋钮，而是在共同改变训练路径。
+
+![Loss landscape visualization 原论文图](../assets/images/paper-figures/foundations/loss-landscape-figure-resnet56.png){ width="820" }
+
+<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)，loss landscape visualization。原论文图意：通过二维切片可视化网络周围的 loss surface，帮助比较不同结构或训练配置下优化地形的平滑程度。</small>
+
+!!! note "图解：这张图在回答什么"
+    训练不是一次跳到最低点，而是在复杂地形里按梯度慢慢走。学习率太大可能越过稳定区域，太小会走得太慢；优化器的历史统计、weight decay、warmup 和 clipping 都是在塑造这条路径。
 
 一阶优化器可以抽象为：
 

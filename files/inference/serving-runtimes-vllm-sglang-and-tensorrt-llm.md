@@ -4,6 +4,9 @@
 
 这页和 [推理服务系统](serving-systems.md)、[GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md)、[可观测性与在线评测](observability-and-online-evaluation.md) 一起读。推理服务系统页讲资源治理，本页聚焦 runtime 选型。
 
+!!! tip "新手阅读顺序"
+    如果还不熟 `TTFT`、`TPOT`、`prefill`、`decode` 和 `KV cache`，先读 [推理服务系统](serving-systems.md) 与 [GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md)。本页默认你已经知道一次请求的生命周期，然后再比较 `vLLM`、`SGLang` 和 `TensorRT-LLM` 这些工具如何承接调度、KV、kernel 和量化路径。
+
 !!! note "初学者先抓住"
 
     推理 runtime 是模型和硬件之间的执行层：它决定请求怎么排队、KV 怎么分配、prefix 怎么复用、kernel 走哪条路径、异常 shape 怎么 fallback。选 runtime 时先看 workload，而不是先看榜单。
