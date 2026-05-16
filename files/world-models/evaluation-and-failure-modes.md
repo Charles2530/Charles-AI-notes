@@ -32,6 +32,15 @@
 
 本仓库的 mini-chain fixture 可以作为最小格式参考：它计算 `action_sensitivity_pass=3/4`、`top1_safe_success_agreement=2/4` 和两个 failure replay。这个结果本身是不合格的，恰好说明评测页的作用：不是证明模型强，而是尽早暴露“排序会选错动作”和“遮挡后对象身份漂移”这类世界模型特有风险。
 
+## Claim Ledger
+
+| Claim | Source | Evidence Type | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- |
+| Open-loop rollout 图只能说明模型能沿真实历史预测一段未来 | [PlaNet 专题](../paper-deep-dives/world-models/planet.md) | Paper Result | horizon drift 和状态保持是必要评测项 | open-loop 好就能 closed-loop 好 |
+| Action sensitivity 是动作条件世界模型的最低门槛 | 本页评测框架 | Site Inference | 固定历史替换动作能暴露“平均未来”问题 | 单一反事实测试能覆盖所有风险 |
+| Closed-loop gain 比视频质量更接近 world model utility | [RSSM/Dreamer](rssm-dreamer-and-planning.md) | Closed-loop | 接入 planner/policy 后的任务收益是强证据 | 闭环成功率一定能解释失败原因 |
+| mini-chain 的失败回放是证据形状示例 | [端到端案例](action-conditioned-video-world-model-training-case.md) | Toy Fixture | 可复算日志应包含候选动作、预测、真实结果和失败标签 | 不是生产模型的性能证明 |
+
 ## 一、先分清评测对象：WM、WAM、VAM 不一样
 
 世界模型至少有三层能力：先把历史观测压成足够充分的 belief 或 latent，再给定状态和动作合理预测未来，最后把这些预测用于规划、控制、探索、风险评估或数据回流。评测时也应沿着这三层往下追问，而不是只停在像素误差。

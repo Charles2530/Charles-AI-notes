@@ -108,7 +108,7 @@ shape specialization 是有价值的，但如果没有 fallback，就会出现�
 
 ![MagiAttention ring attention load balance 原论文图](../assets/images/paper-deep-dives/foundations/magiattention/figure-2-ring-attention-load-balance.png){ width="860" }
 
-<small>图源：[MagiAttention: A Distributed Attention System for Hyper-Scale Long Context Training](https://arxiv.org/abs/2506.09394)，Figure 2。原论文图意：不同 attention 切分策略会导致计算块在设备间分布不均，长上下文训练需要显式处理 mask 与负载均衡。</small>
+<small>图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/docs/main/index.html) 与 [GitHub](https://github.com/SandAI-org/MagiAttention)，Figure 2。原图意：不同 attention 切分策略会导致计算块在设备间分布不均，长上下文训练需要显式处理 mask 与负载均衡。</small>
 
 **输入症状**：把单样本多视角视频、语言指令和动作历史 pack 到同一条长序列后，平均 step time 只涨一点，但 p95 step time 明显变差；多卡训练里经常看到部分 GPU 先算完，随后等待其它 rank。
 

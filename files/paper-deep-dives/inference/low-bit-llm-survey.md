@@ -29,6 +29,13 @@ paper_topic: 高效推理
 
 这篇是 survey，不是 benchmark 论文。它能给出分类框架、系统账本和代表性方法谱系，但不能直接证明某个量化方案在你的模型、硬件和业务流量上最好。
 
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| 低比特 LLM 要同时看格式、粒度、系统实现和算法 | [arXiv:2409.16694](https://arxiv.org/abs/2409.16694) | survey taxonomy, Table 1, system figures | Paper Result | Paper Only | 量化选型应拆成 format、scale、Q/DQ、kernel、KV 和 runtime | 不证明某个具体 bitwidth 在本地硬件最优 |
+| 本站将其接到量化、推理和 rollout 服务成本账 | 本页与 [Rollout 服务案例](../../world-models/rollout-serving-quantization-kernel-case.md) | 工程归纳 | Site Inference | Site Inference | 可作为低比特证据分类入口 | 不等于世界模型低比特质量已验证 |
+
 | 论文结论 | 证据来源 | 证据等级 | 可外推到高效推理 | 不能直接外推 |
 | --- | --- | --- | --- | --- |
 | 低比特 LLM 要同时看格式、粒度、动态/静态策略 | Section 2 的概念整理和 Table 1 | Survey taxonomy | 选型时先确定数据格式、scale 粒度和校准方式 | 不能仅凭 bit 数预测质量 |

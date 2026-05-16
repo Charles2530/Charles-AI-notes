@@ -17,6 +17,13 @@ paper_topic: 高效训练
 
 但工程上不能把这句话读成“所有阶段都换成 Muon”。这篇论文真正有价值的部分在于，它把 Muon 从一个小模型优化器改造成能跑 5.7T token MoE 预训练的系统方案，并且清楚暴露了它和 AdamW 的边界：Muon 更适合矩阵权重的预训练更新，非矩阵参数、已有 AdamW checkpoint 的 SFT、以及很多短周期后训练任务，仍然要谨慎对待。
 
+## Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| Muon 在 compute-optimal LLM 预训练中可降低达到同等 loss 所需 FLOPs | [arXiv:2502.16982](https://arxiv.org/abs/2502.16982), [Moonlight](https://github.com/MoonshotAI/Moonlight) | Figure 1, Moonlight pre-training setting | Paper Result | Author Code / Official Repo | 优化器可成为 token/FLOP efficiency 的主要来源 | 不证明所有后训练、SFT 或非矩阵参数都适合 Muon |
+| 本站将其接到训练效率和技术报告读法 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可作为优化器效率证据框样例 | 不等于世界模型训练已验证 |
+
 ## 论文位置
 
 AdamW 是当前 LLM 训练最常用的默认优化器。它受欢迎不是因为理论上永远最优，而是因为它有三个工程优势：对不同参数形状都能工作，学习率经验丰富，分布式训练实现成熟。

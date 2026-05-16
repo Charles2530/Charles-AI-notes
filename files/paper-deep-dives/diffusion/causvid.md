@@ -34,6 +34,13 @@ paper_topic: 扩散模型
 
 CausVid 的证据强在流式视频生成质量、延迟和少步蒸馏链路；它弱在动作条件和闭环决策，因为论文目标仍是视频生成系统。读它时要把“可流式生成未来视频”和“可用于世界模型规划”分开。
 
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| 双向视频 DiT 可蒸馏为少步 causal streaming student | [arXiv:2412.07772](https://arxiv.org/abs/2412.07772), [GitHub](https://github.com/tianweiy/CausVid) | Figure 1/5, latency and VBench settings | Paper Result | Author Code / Official Repo | 视频 rollout 可通过因果化、KV cache 和 DMD 少步化降低延迟 | 不证明动作因果性、规划收益或真实机器人闭环 |
+| 本站将其接到 world model rollout 服务链 | 本页与 [Rollout 服务案例](../../world-models/rollout-serving-quantization-kernel-case.md) | 工程归纳 | Site Inference | Site Inference | 可作为低延迟视频模拟模块设计参考 | 不等于完整行动世界模型 |
+
 | 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
 | --- | --- | --- | --- | --- |
 | 双向视频 DiT 可以蒸馏成 causal student | ODE initialization、asymmetric DMD、视频样例和指标 | Benchmark + Ablation | 世界模型可先借强双向 teacher，再改造成流式 causal rollout | 不能证明动作因果性和真实控制收益 |

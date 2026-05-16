@@ -43,11 +43,24 @@
   </div>
 </div>
 
+## 三层阅读入口
+
+第一次读不需要刷完所有专题。先选一个目标，再沿对应路径读。
+
+| 路径 | 适合谁 | 推荐顺序 |
+| --- | --- | --- |
+| 10 分钟版 | 想知道世界模型到底是什么 | 本页定义与方法谱系 → [高效训练路线图](efficient-training-roadmap.md) → [Claim Ledger](../references/claim-ledger.md) |
+| 深读版 | 想理解关键路线差异 | [Masked / JEPA](masked-jepa-and-latent-prediction.md) → [RSSM/Dreamer](rssm-dreamer-and-planning.md) → [WM/WAM/VAM](wm-wam-vam-and-action-conditioned-modeling.md) → [评测失效](evaluation-and-failure-modes.md) |
+| 实验版 | 想复现证据链或写方案 | [完整实验报告样例](world-model-efficient-training-experiment-report.md) → [VLA 全链路案例](vla-world-model-full-chain-case.md) → [Rollout 服务案例](rollout-serving-quantization-kernel-case.md) → [效率技术覆盖矩阵](efficiency-technique-coverage-matrix.md) |
+
+!!! tip "如果只看一页 / 如果要做实验 / 如果要查证据"
+    只看一页就读 [高效训练路线图](efficient-training-roadmap.md)；要做实验就读 [完整实验报告样例](world-model-efficient-training-experiment-report.md)、[VLA 全链路案例](vla-world-model-full-chain-case.md) 和 [Rollout 服务案例](rollout-serving-quantization-kernel-case.md)；要查证据就读 [Claim Ledger](../references/claim-ledger.md) 与 [全站证据标准](../references/evidence-and-reproducibility-standard.md)，先区分论文结果、官方 demo、系统吞吐、toy fixture 和站内推断。
+
 ## 阅读分层与小地图
 
 | 分层 | 推荐内容 | 读到什么程度 |
 | --- | --- | --- |
-| 主线必读 | [高效训练路线图](efficient-training-roadmap.md)、[RSSM/Dreamer](rssm-dreamer-and-planning.md)、[WM/WAM/VAM](wm-wam-vam-and-action-conditioned-modeling.md)、[端到端案例](action-conditioned-video-world-model-training-case.md) | 能判断模型输出的是 latent、视频、动作、风险还是可被 policy 消费的信号 |
+| 主线必读 | [高效训练路线图](efficient-training-roadmap.md)、[Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)、[RSSM/Dreamer](rssm-dreamer-and-planning.md)、[WM/WAM/VAM](wm-wam-vam-and-action-conditioned-modeling.md)、[端到端案例](action-conditioned-video-world-model-training-case.md) | 能判断模型输出的是 latent、视频、动作、风险还是可被 policy 消费的信号 |
 | 工程查阅 | 数据引擎、评测失效、风险规划、机器人/驾驶应用 | 做数据回流、闭环验证或风险模块时查 |
 | 论文扩展 | Dreamer、Genie、LingBot-World、DreamZero、CausVid、Self Forcing | 区分论文证据、本站推断和工程外推 |
 | 基础补课 | 概率潜变量、Transformer、强化学习、扩散采样 | 卡在 dynamics、rollout 或采样时补 |
@@ -85,52 +98,13 @@
 | 高效训练主线 | 真实交互、视频 token、显存、通信、rollout 和评测成本如何一起降低 | [世界模型高效训练技术路线图](efficient-training-roadmap.md) |
 | 端到端案例 | 一个动作条件视频世界模型如何从数据、动作、训练、推理到评测跑通 | [动作条件视频世界模型端到端训练案例](action-conditioned-video-world-model-training-case.md) |
 | 工程地基 | 数据 schema、相机、pose、焊缝/物体状态是否稳定 | [世界模型开发路线](development-roadmap-data-simulation-and-evaluation.md) |
+| 表征路线 | masked / JEPA-style latent prediction 如何降低像素重建和视频 token 成本 | [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md) |
 | 内部模拟 | latent state 如何在动作条件下 rollout | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) |
 | 动作条件建模 | 未来视频、未来动作和 policy 如何接起来 | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
 | 外部模拟 | 可交互视频世界和生成式仿真如何服务物理 AI | [生成式模拟与视频世界模型](generative-simulation-and-video.md) |
 | 闭环改进 | 失败、near-miss 和 hard case 如何回流 | [世界模型数据引擎与自我改进](data-engines-and-self-improvement.md) |
 
 这样读，分标题就不再是论文名列表，而是一条从“世界如何被表示”到“预测怎样改善行动”的链路。
-
-## 先用 Demo 建立直觉
-
-世界模型的 demo 最好不要只看“画面是否好看”，而要看它是否能维持同一个世界、是否能被用户动作或 agent 动作持续驱动、是否能在长时 rollout 中保持空间和对象一致。
-
-<div class="atlas-video-grid">
-  <figure class="atlas-video-demo">
-    <video controls muted playsinline preload="none">
-      <source src="https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/genie-3__project-genie__promo.webm" type="video/webm">
-    </video>
-    <figcaption>视频源：<a href="https://deepmind.google/models/genie/">Google DeepMind Genie 3 官方页面</a>。页面说明 Genie 3 用文本描述生成可实时探索的 photorealistic environments。</figcaption>
-  </figure>
-  <figure class="atlas-video-demo">
-    <video controls muted playsinline preload="none">
-      <source src="https://images.nvidia.com/aem-dam/Solutions/cosmos/cosmos-predict.mp4" type="video/mp4">
-    </video>
-    <figcaption>视频源：<a href="https://www.nvidia.com/en-us/ai/cosmos/">NVIDIA Cosmos 官方页面</a>，Cosmos Predict demo。页面把 Cosmos 定位为 world foundation models、tokenizers、guardrails 与数据处理管线组成的平台。</figcaption>
-  </figure>
-</div>
-
-!!! note "图解：看世界模型 Demo 时先看四件事"
-    第一，看是否是**可交互 rollout**：用户动作或控制信号是否持续影响未来，而不是一次性生成固定视频。第二，看**环境一致性**：角色走远再回来，场景布局、物体身份和方向感是否还能对上。第三，看**动作敏感性**：同一历史下换动作，未来是否合理分叉。第四，看**系统边界**：demo 能说明模型的视觉和交互潜力，但不能替代闭环成功率、风险校准和真实任务评测。
-
-<div class="atlas-meta-grid">
-  <div>
-    <strong>核心问题</strong>
-    <p>如何让模型不只理解当前观测，还能对动作条件下的未来、风险和反事实做内部模拟。</p>
-  </div>
-  <div>
-    <strong>适合读者</strong>
-    <p>适合做机器人、自动驾驶、世界模型规划、视频未来预测、合成数据和数据闭环的人。</p>
-  </div>
-  <div>
-    <strong>阅读方式</strong>
-    <p>先读定义和 RSSM/Dreamer，再看 WM/WAM/VAM、视频模拟、风险规划和数据引擎。</p>
-  </div>
-</div>
-
-!!! tip "基础知识入口"
-    世界模型会反复用到 latent state、概率分布、序列建模和训练闭环。第一次读可以先看 [概率与潜变量模型](../foundations/probability-latent-variables-and-generative-models.md) 和 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)。
 
 ## 世界模型的定义
 
@@ -171,6 +145,7 @@ $$
 | 路线 | 建模重点 | 代表问题 | 典型价值 |
 | --- | --- | --- | --- |
 | Latent dynamics | 在潜空间学习可 rollout 的状态演化 | \(p(z_{t+1}\mid z_t,a_t)\) 是否稳定 | imagined rollout、策略学习、MPC |
+| Masked / JEPA-style world models | 在遮挡或未来区域预测 token / latent / joint embedding | 表征是否保留世界结构、运动和下游控制变量 | 视觉表征预训练、样本效率、状态压缩 |
 | 视频/生成式模拟 | 直接预测未来观测或视频片段 | 未来是否视觉合理且动作敏感 | 数据扩增、反事实、可视化规划 |
 | 动作联合建模 | 把动作和世界演化放入同一序列 | 动作未来和观测未来是否一致 | 行为先验、离线控制、多任务泛化 |
 | 几何/场景表示 | occupancy、BEV、object state、scene token | 是否保留碰撞、接触和空间结构 | 机器人、驾驶、风险判断 |
@@ -186,7 +161,8 @@ $$
 | [Dreamer](https://arxiv.org/abs/1912.01603) | 在 learned latent dynamics 中 imagined rollout，并训练 actor-critic | 说明世界模型不只是预测器，还能直接服务策略学习 | [Dreamer 专题](../paper-deep-dives/world-models/dreamer.md) |
 | DreamerV2 / DreamerV3 | 把 Dreamer 路线扩展到离散 latent、更大任务集合和更通用训练配方 | 展示 latent imagination 如何从小环境走向更稳的通用控制 | [DreamerV2](../paper-deep-dives/world-models/dreamerv2.md)、[DreamerV3](../paper-deep-dives/world-models/dreamerv3.md) |
 | DayDreamer | 把 Dreamer 式 latent imagination 推向真实机器人任务 | 连接 VLA 和 model-based RL：真实机器人可以用世界模型减少实机试错 | 可先读 [机器人应用](applications-in-robotics-and-autonomous-driving.md) |
-| [JEPA](https://openreview.net/forum?id=BZ5a1r-kVsf) / [V-JEPA](https://arxiv.org/abs/2404.08471) | 在表征空间预测被遮挡或未来的 latent，而不是生成像素细节 | 更偏 internal world model 表征：帮助理解和规划，但不一定直接输出动作 | [JEPA](../paper-deep-dives/world-models/jepa.md)、[V-JEPA](../paper-deep-dives/world-models/v-jepa.md) |
+| [Masked World Models](https://arxiv.org/abs/2206.14244) / [V-JEPA 2-AC](https://arxiv.org/abs/2506.09985) | 用 masked / JEPA-style latent prediction 提高表示和样本效率，并在 V-JEPA 2-AC 中接入动作条件规划 | 连接 VLM 表征和 world-model dynamics：先省 token/像素成本，再补 action-conditioned rollout | [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md) |
+| [JEPA](https://openreview.net/forum?id=BZ5a1r-kVsf) / [V-JEPA](https://arxiv.org/abs/2404.08471) | 在表征空间预测被遮挡或未来的 latent，而不是生成像素细节 | 更偏 internal world model 表征：帮助理解和规划，但不一定直接输出动作 | [JEPA](../paper-deep-dives/world-models/jepa.md)、[V-JEPA](../paper-deep-dives/world-models/v-jepa.md)、[Masked / JEPA 主线页](masked-jepa-and-latent-prediction.md) |
 | [Genie](https://arxiv.org/abs/2402.15391) | 从互联网视频中学习可交互生成环境和 latent actions | 从视频数据走向“可操作世界模拟”的代表路线 | [Genie 专题](../paper-deep-dives/world-models/genie.md) |
 | LWM / 长上下文视频模型 | 用长上下文建模图文视频序列，增强跨时间记忆 | 提醒世界模型需要长时记忆，否则只能做短片段续写 | [LWM 专题](../paper-deep-dives/world-models/lwm.md) |
 | LingBot-World | 从视频基础模型继续训练成可交互世界模拟器 | 代表“视频生成底座 + 动作条件 + 因果化 + 少步蒸馏”的工程路线 | [LingBot-World 专题](../paper-deep-dives/world-models/lingbot-world.md) |
@@ -202,7 +178,7 @@ $$
 | 专题来源 | 回填到世界模型章节的知识点 | 应接到本章哪里 |
 | --- | --- | --- |
 | [PlaNet](../paper-deep-dives/world-models/planet.md)、[Dreamer](../paper-deep-dives/world-models/dreamer.md)、[DreamerV3](../paper-deep-dives/world-models/dreamerv3.md) | RSSM、latent imagination、reward/continue prediction 和 actor-critic 说明世界模型首先是决策接口，不是视频生成器 | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)、[规划即推断与潜在动作](planning-as-inference-and-latent-actions.md) |
-| [V-JEPA](../paper-deep-dives/world-models/v-jepa.md)、[H-JEPA](../paper-deep-dives/world-models/h-jepa.md) | 表征空间预测可以学习世界结构和运动，不一定要重建像素；它更偏 internal world model | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
+| [V-JEPA](../paper-deep-dives/world-models/v-jepa.md)、[H-JEPA](../paper-deep-dives/world-models/h-jepa.md)、[MWM](https://arxiv.org/abs/2206.14244) | 表征空间预测可以学习世界结构和运动，不一定要重建像素；但原始形式通常还缺 action、reward、done | [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)、[WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
 | [Genie](../paper-deep-dives/world-models/genie.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md) | 视频世界模型要从被动视频走向可交互模拟，关键是 latent action / action conditioning、causal rollout、长时记忆和实时化 | [生成式模拟与视频世界模型](generative-simulation-and-video.md)、[世界模型数据引擎与自我改进](data-engines-and-self-improvement.md) |
 | [Self Forcing](../paper-deep-dives/world-models/self-forcing.md)、[CausVid](../paper-deep-dives/diffusion/causvid.md) | 流式视频世界模型的核心难点是 train-test gap、self-rollout 漂移、KV cache 和少步生成稳定性 | [评测与失败模式](evaluation-and-failure-modes.md)、[生成式模拟与视频世界模型](generative-simulation-and-video.md) |
 | [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) | WAM 把未来视频和未来动作联合建模，强调“世界预测能否直接支撑 policy” | [WM/WAM/VAM 与动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)、[机器人与自动驾驶中的世界模型](applications-in-robotics-and-autonomous-driving.md) |
@@ -218,6 +194,8 @@ $$
 !!! note "这张图和 Dreamer 有什么不同"
     V-JEPA 不是把遮住的像素画回来，而是预测被遮住区域的 latent representation。它更关心“那里应该有什么语义和运动结构”，不急着生成每一根纹理。Dreamer / RSSM 则更关心动作条件下的状态转移、奖励和 done，目标是让 agent 能在 latent space 里想象并学策略。视频世界模型又进一步要求把未来解码成可看、可交互、可检查的视频。
 
+更系统的 masked / JEPA / latent prediction 对照见 [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)，那里把 pixel reconstruction、token/latent reconstruction、joint-embedding prediction 和 action-conditioned latent dynamics 放在同一张效率表里。
+
 | 路线 | 输出看起来像什么 | 最适合回答的问题 | 典型风险 |
 | --- | --- | --- | --- |
 | JEPA / V-JEPA | 被遮挡或未来区域的表征 | 世界结构和运动关系是否被理解 | 表征强，但不直接生成可检查未来 |
@@ -225,6 +203,46 @@ $$
 | 视频世界模型 | 未来帧或未来视频 | 人和系统能否检查反事实未来 | 视觉逼真不等于动作因果正确 |
 
 这三条路线没有谁天然高级。做机器人闭环控制时，Dreamer 式 latent dynamics 可能比高清视频生成更实用；做开放世界交互 demo 时，视频模拟更直观；做通用视觉理解时，JEPA 式表征预测可能更稳。真正的判断标准是：模型内部的“世界”最后要被谁使用。
+
+## 先用 Demo 建立直觉
+
+世界模型的 demo 最好不要只看“画面是否好看”，而要看它是否能维持同一个世界、是否能被用户动作或 agent 动作持续驱动、是否能在长时 rollout 中保持空间和对象一致。
+
+<div class="atlas-video-grid">
+  <figure class="atlas-video-demo">
+    <video controls muted playsinline preload="none">
+      <source src="https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/genie-3__project-genie__promo.webm" type="video/webm">
+    </video>
+    <figcaption>视频源：<a href="https://deepmind.google/models/genie/">Google DeepMind Genie 3 官方页面</a>。页面说明 Genie 3 用文本描述生成可实时探索的 photorealistic environments。</figcaption>
+  </figure>
+  <figure class="atlas-video-demo">
+    <video controls muted playsinline preload="none">
+      <source src="https://images.nvidia.com/aem-dam/Solutions/cosmos/cosmos-predict.mp4" type="video/mp4">
+    </video>
+    <figcaption>视频源：<a href="https://www.nvidia.com/en-us/ai/cosmos/">NVIDIA Cosmos 官方页面</a>，Cosmos Predict demo。页面把 Cosmos 定位为 world foundation models、tokenizers、guardrails 与数据处理管线组成的平台。</figcaption>
+  </figure>
+</div>
+
+!!! note "图解：看世界模型 Demo 时先看四件事"
+    第一，看是否是**可交互 rollout**：用户动作或控制信号是否持续影响未来，而不是一次性生成固定视频。第二，看**环境一致性**：角色走远再回来，场景布局、物体身份和方向感是否还能对上。第三，看**动作敏感性**：同一历史下换动作，未来是否合理分叉。第四，看**系统边界**：demo 能说明模型的视觉和交互潜力，但不能替代闭环成功率、风险校准和真实任务评测。
+
+<div class="atlas-meta-grid">
+  <div>
+    <strong>核心问题</strong>
+    <p>如何让模型不只理解当前观测，还能对动作条件下的未来、风险和反事实做内部模拟。</p>
+  </div>
+  <div>
+    <strong>适合读者</strong>
+    <p>适合做机器人、自动驾驶、世界模型规划、视频未来预测、合成数据和数据闭环的人。</p>
+  </div>
+  <div>
+    <strong>阅读方式</strong>
+    <p>先读定义和 RSSM/Dreamer，再看 WM/WAM/VAM、视频模拟、风险规划和数据引擎。</p>
+  </div>
+</div>
+
+!!! tip "基础知识入口"
+    世界模型会反复用到 latent state、概率分布、序列建模和训练闭环。第一次读可以先看 [概率与潜变量模型](../foundations/probability-latent-variables-and-generative-models.md) 和 [Transformer 与 Attention](../foundations/transformer-attention-and-tokenization.md)。
 
 ## 两条训练路线
 

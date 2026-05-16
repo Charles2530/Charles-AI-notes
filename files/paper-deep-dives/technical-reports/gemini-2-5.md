@@ -29,6 +29,14 @@ Gemini 2.5 这份报告的核心不是单个 benchmark 第一，而是展示 Goo
 !!! warning "阅读边界"
     这是闭源模型技术报告。报告披露了系统设计、训练阶段、基础设施和大量评测，但没有公开参数规模、精确数据配比、完整优化器超参和权重。因此它适合学习大模型系统路线和训练组织方式，不适合当作可完全复现的 recipe。
 
+## Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| Gemini 2.5 把 native multimodal、long context 和 dynamic thinking 组织成闭源前沿模型路线 | [arXiv:2507.06261](https://arxiv.org/abs/2507.06261) | model family, evaluation and infrastructure sections | Paper Result | Paper Only | 技术报告可支持系统设计和能力分层分析 | 不证明训练配方、数据或权重可复现 |
+| TPU/Pathways/JAX/PAX 基础设施支撑大规模多模态训练 | 同上 | training infrastructure description | System Throughput | Paper Only | 前沿模型训练依赖跨系统协同 | 不证明其他硬件栈可获得同等收益 |
+| 本站将其作为闭源技术报告阅读样例 | 本页与 [证据标准](../../references/evidence-and-reproducibility-standard.md) | 工程归纳 | Site Inference | Site Inference | 可训练读者区分报告自述与复现实验 | 不应作为独立复现证据 |
+
 ## 论文位置
 
 Gemini 2.5 可以放在 Gemini 1.5 / 2.0 之后看。Gemini 1.5 的代表特征是长上下文和多模态输入，Gemini 2.0 强调更强的 agentic / tool-use 能力，Gemini 2.5 则把“模型会不会思考、思考多久、何时使用工具、如何处理长视频和长上下文”推到更中心的位置。

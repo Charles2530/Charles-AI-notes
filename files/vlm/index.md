@@ -8,6 +8,9 @@
 !!! tip "本专题的读法"
     先按“看懂 -> 记住 -> 行动 -> 预判后果”的顺序读。CLIP/BLIP-2 解决看懂和连接，视频表征解决状态，VLA 解决动作输出，WAM/VAM 和世界模型继续追问动作之后会发生什么。
 
+!!! tip "证据与全站矩阵"
+    前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。VLM/VLA 页面要把表征 benchmark、动作闭环、官方 demo 和本站接口推断分开写。
+
 <div class="atlas-meta-grid">
   <div>
     <strong>读前先知道</strong>

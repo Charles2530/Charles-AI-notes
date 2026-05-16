@@ -31,6 +31,9 @@
 !!! note "在全站主线里的位置"
     训练专题是工程支撑，不是“从 VLM 到世界模型”的概念主线本身。只有当你需要解释一个世界模型、VLA 或多模态模型为什么训不稳、数据不够、显存不够、吞吐不够、checkpoint 不可恢复时，再从这里下钻。主线读者优先抓住数据、目标函数、分布式状态和评测回流四件事。
 
+!!! tip "证据与全站矩阵"
+    前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。训练页里的系统吞吐、benchmark、消融和本站推断要分开写，不能把 step time 下降直接外推成闭环任务变好。
+
 !!! tip "本专题的读法"
     不要把训练页当成“术语表顺序背”。先把一次训练看成生产线：数据进来，目标函数定义学习信号，优化器和并行系统负责把信号转成参数更新，评测和 checkpoint 决定这次实验是否可信。读每个子页面时，都问它在这条生产线里解决哪一段问题。
 
@@ -320,7 +323,7 @@ kernel、通信、Triton、CUDA、量化与编译栈，是“训练为什么能�
 
 而一旦规模足够大，这条生产线就会自然延伸到更底层的问题：并行、通信、kernel、量化、编译器、缓存和部署。理解训练，最终一定会理解系统；理解系统，也反过来会帮助你重新理解训练。
 
-## 快速代码示例
+### 快速代码示例
 
 ```python
 import deepspeed
@@ -347,7 +350,7 @@ for batch in train_loader:
 这段代码展示了 DeepSpeed 的标准训练环：`initialize` 注入并行与 ZeRO 配置，循环中用 `engine.backward/step` 管理梯度与参数更新。相比原生 PyTorch，它把通信、分片和混合精度细节统一封装到 engine 内。
 
 
-## 学习路径与阶段检查
+### 学习路径与阶段检查
 
 训练专题建议按“阶段 -> 系统 -> 数据评测 -> 经济学”的顺序读，不要一开始就陷入单个框架或超参。
 
@@ -359,7 +362,7 @@ for batch in train_loader:
 | 4. 成本与稳定性 | [训练稳定性与故障排查](stability-numerics-and-failure-triage.md)、[Scaling Law 与训练经济学](scaling-laws-and-experiment-economics.md)、[低比特训练与数值格式](low-bit-training-and-numerics.md) | 一次训练失败是数值、数据、并行、硬件还是实验设计问题 | [量化路线图](../quantization/index.md) |
 
 读完训练模块后，最重要的不是记住某个训练框架，而是能把一次实验写成可复验资产：数据快照、配置、并行策略、checkpoint 恢复口径、评测桶、回滚条件和上线前转换路径都要能对上。
-## 深度标杆页
+### 深度标杆页
 
 训练专题的标杆页要能回答“为什么这样训练更高效”，而不是只罗列技巧。其它短页建议按这些页面补齐目标、成本、指标、排障和反例。
 

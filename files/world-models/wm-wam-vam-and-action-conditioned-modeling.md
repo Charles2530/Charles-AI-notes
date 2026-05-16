@@ -33,6 +33,15 @@ WM/WAM/VAM 的共同硬证据，是同一历史下动作改变时，模型输出
 
 对工程读者来说，最小门槛是 `candidate ranking agreement`：世界模型按预测风险和成功率选出的 top-1 动作，是否与真实安全成功动作一致。mini-chain fixture 里这个数只有 `2/4`，所以它暴露的是“不合格 WAM 该怎么被评测抓出来”，而不是证明某个方法有效。
 
+## Claim Ledger
+
+| Claim | Source | Evidence Type | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- |
+| WM 的核心接口是给定状态和动作预测未来状态、奖励、风险或终止 | [RSSM/Dreamer](rssm-dreamer-and-planning.md) | Paper Result | latent dynamics 是可规划世界模型的经典形态 | 所有视频生成模型都天然满足 WM 接口 |
+| WAM 把未来视频和未来动作联合建模，可让动作预测与未来视觉变化对齐 | [DreamZero 专题](../paper-deep-dives/embodied-ai/dreamzero.md) | Closed-loop | DreamZero 类系统展示了 WAM 作为 policy 的潜力 | WAM 一定优于单独 policy 或所有 VLA |
+| VAM 使用视频时序先验支撑动作泛化 | [Video Prediction Policy](../paper-deep-dives/embodied-ai/video-prediction-policy.md) | Paper Result | 视频 latent 可作为动作模型动态上下文 | 视频质量指标能替代动作成功率 |
+| mini-chain 的 candidate ranking agreement 可暴露动作分叉失败 | [端到端案例](action-conditioned-video-world-model-training-case.md) | Toy Fixture | 说明评测格式和失败回放应如何组织 | 不能证明任何真实 WAM 方法有效 |
+
 ## 统一问题
 
 三条路线都围绕同一个基本问题：

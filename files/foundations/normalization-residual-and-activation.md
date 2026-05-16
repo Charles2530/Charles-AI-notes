@@ -99,14 +99,37 @@ x = x + MLP(Norm(x))
 
 如果网络只有线性层，那么多层线性叠加仍然等价于一个线性变换。激活函数提供非线性，让模型能表达复杂关系。
 
-常见激活：
+直觉上，activation 不是“给线性层后面随便接一个弯曲函数”。它决定了哪些 pre-activation 会被压掉、哪些会接近原样通过、负值区域是否还有梯度，以及 MLP 中间层会产生稀疏表示还是更密的连续表示。
 
-- `ReLU`：把负值截断为 0，简单高效，但可能产生死亡神经元。
-- `GELU`：用平滑门控保留一部分小负值，BERT、GPT 等 Transformer 中很常见。
-- `SiLU`：也叫 Swish，形式平滑，常用于视觉模型和一些现代网络块。
-- `SwiGLU`：把门控机制放进 MLP，中间维度表达力更强，许多 LLM 采用类似变体。
+![GELU、ReLU 与 Swish 激活曲线](../assets/images/paper-figures/foundations/activation-functions-naoki-shibuya.png){ width="720" }
 
-现代 Transformer 常用 GELU 或 SwiGLU 变体，因为它们在表达能力和训练稳定性之间表现较好。
+<small>图源：[SwiGLU: GLU Variants Improve Transformer (2020)](https://naokishibuya.github.io/blog/2023-04-30-swiglu-2020/index.html)，Activation Functions 图（本地保存原图副本）。原文图意：对比 GELU、ReLU、Swish 和不同 \(\beta\) 下的 Swish 曲线；Swish 在 \(\beta=1\) 时就是常见 SiLU 形式。</small>
+
+常见激活可以按公式和曲线形状这样记：
+
+| 激活 | 公式 | 曲线怎么读 | 常见位置与风险 |
+| --- | --- | --- | --- |
+| `ReLU` | \(\operatorname{ReLU}(x)=\max(0,x)\) | 负值直接变 0，正值近似原样通过；曲线在 0 处有尖角 | 计算便宜、稀疏性强；负区间梯度为 0，可能出现死亡神经元 |
+| `GELU` | \(\operatorname{GELU}(x)=x\Phi(x)=\frac{x}{2}[1+\operatorname{erf}(x/\sqrt{2})]\) | 用 Gaussian CDF 软门控输入；小负值不会被硬切掉，而是留下轻微负输出 | BERT、GPT 早期 Transformer 中常见；精确 erf 较贵，工程里常用 tanh 近似 |
+| `SiLU / Swish` | \(\operatorname{SiLU}(x)=x\sigma(x)\)，\(\operatorname{Swish}_\beta(x)=x\sigma(\beta x)\) | 和 GELU 类似，也是“输入乘一个软门”；负值区域更平滑，且有更深的负向小谷 | 视觉模型、EfficientNet 系列和不少现代 decoder block 常见；输出更密，低精度时要关注尾部 |
+| `SwiGLU` | \(\operatorname{SwiGLU}(x,W,V)=\operatorname{Swish}_1(xW)\otimes xV\) | 严格说不是单输入标量曲线，而是“Swish/SiLU 门控分支 × value 分支” | LLaMA、PaLM 等 LLM 的 MLP 常用；表达力强，但门控乘法可能放大 activation outlier |
+
+!!! note "SwiGLU 为什么不能画成一条普通曲线"
+    ReLU、GELU、SiLU 都是逐元素标量函数：给一个 \(x\)，输出一个 \(f(x)\)。SwiGLU 更像一个带门控的 MLP 子层：同一个 token 表示会被投影成 gate 分支 \(xW\) 和 value 分支 \(xV\)，gate 过 Swish/SiLU 后再和 value 逐元素相乘。因此上图里的 Swish/SiLU 曲线只对应 SwiGLU 的门控分支形状，真正的 SwiGLU 输出还取决于另一条 value 分支。
+
+GELU 论文还给出常用近似：
+
+\[
+\operatorname{GELU}(x)
+\approx
+0.5x\left(1+\tanh\left[\sqrt{2/\pi}(x+0.044715x^3)\right]\right)
+\]
+
+这解释了为什么很多框架会区分 exact GELU 和 approximate GELU：数学定义是 \(x\Phi(x)\)，但推理和训练 kernel 往往更关心能否用更便宜的 tanh 近似跑快。
+
+现代 Transformer 常用 GELU、SiLU 或 SwiGLU 变体，因为它们在表达能力和训练稳定性之间表现较好。简单地说：ReLU 是硬门，GELU/SiLU 是软门，SwiGLU 则把软门直接放进 MLP 的通道混合里。
+
+<small>公式来源：[Rectified Linear Units Improve Restricted Boltzmann Machines](https://www.cs.toronto.edu/~hinton/absps/reluICML.pdf)、[Gaussian Error Linear Units (GELUs)](https://arxiv.org/abs/1606.08415)、[Searching for Activation Functions](https://arxiv.org/abs/1710.05941)、[GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202)。</small>
 
 ## 4. Pre-Norm 和 Post-Norm
 

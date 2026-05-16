@@ -31,6 +31,14 @@ Nemotron 3 Super 最值得抓住三条主线：**MoE 架构、MTP 方式、强�
 !!! note "Figure 1 怎么读"
     这张图不是说 Super 每项都最高，而是说它在接近 GPT-OSS-120B / Qwen3.5-122B 的能力区间里，把长上下文和长输出吞吐做得更高。报告口径下，在 `8k` 输入、`64k` 输出设置中，Super 相比 GPT-OSS-120B 和 Qwen3.5-122B 分别达到最高 `2.2x` 和 `7.5x` 吞吐提升。
 
+## Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| Nemotron 3 Super 将 Hybrid Mamba-Transformer、LatentMoE 和 shared-weight MTP 组合成高效 agent 模型 | [NVIDIA technical report](https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Super-Technical-Report.pdf), [Nemotron repo](https://github.com/NVIDIA-NeMo/Nemotron) | Figure 1, architecture and MTP sections | Paper Result | Author Code / Official Repo | 混合架构和 MTP 可作为低成本长上下文/agent 推理设计案例 | 不证明所有 claim 已独立复现 |
+| NVFP4、FP8/NVFP4 PTQ 与异步 GRPO 服务训练和推理效率 | 同上 | NVFP4, RL, throughput settings | System Throughput | Author Code / Official Repo | 低比特训练/部署和多环境 RL 需要联合验收 | 不证明 FP4 对所有能力和安全评测无损 |
+| 本站将其接到低比特训练、MTP 和 rollout 成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可启发世界模型 rollout 的低成本执行链 | 不等于 VLA/world model 闭环复现 |
+
 ## 论文位置
 
 Nemotron 3 Super 可以放在 DeepSeek-V3、Qwen3、Kimi K2 和 DeepSeek-V4 这几条技术报告线旁边看：

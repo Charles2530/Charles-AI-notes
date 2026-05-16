@@ -72,9 +72,31 @@ h_t = A_t h_{t-1} + B_t x_t,\quad y_t = C_t h_t
 | Hybrid Mamba-Transformer | 大多数层做状态推进，少数层做 attention | 状态 + 少量 KV cache | 在质量和推理成本之间折中 | 层比例、attention 位置、训练 recipe 很敏感 |
 
 !!! tip "不要把 Mamba 理解成普通 RNN"
-    Mamba 推理时确实像 recurrent model 一步步更新状态，但训练时会用并行 scan 和硬件感知 kernel 提高吞吐。它的卖点正是同时兼顾 recurrent decode 和并行训练，而不是回到传统 RNN 的慢训练时代。
+    Mamba 推理时确实像 recurrent model 一步步更新状态，但训练时会用并行 scan 和硬件感知 kernel 提高吞吐。下面这组对照是理解 Mamba 的关键：它不是回到传统 RNN 的慢训练时代，而是把 recurrent state 重新做成适合现代长上下文和 GPU 的序列层。
 
-## 4. Selective scan 为什么重要
+## 4. Mamba 相比 RNN 改进在哪
+
+最容易产生的误会是：既然 Mamba 也是
+
+\[
+h_t = \text{update}(h_{t-1}, x_t)
+\]
+
+那它是不是“换皮 RNN”？答案是：**推理形态像 RNN，但训练算法、状态参数化和硬件实现都更现代**。
+
+传统 RNN / LSTM / GRU 的基本思路也是维护一个 hidden state，把历史压进 \(h_t\)。它们的问题不只是“会不会遗忘”，而是三件事叠在一起：训练强依赖时间步顺序，不容易吃满 GPU；隐藏状态是紧瓶颈，长历史和稀疏信息会互相挤压；门控虽然能选择忘/写，但整体计算没有围绕大模型长上下文推理做系统优化。
+
+| 维度 | 传统 RNN / LSTM / GRU | Mamba 的改进 | 仍然要小心 |
+| --- | --- | --- | --- |
+| 状态更新 | 通常用固定权重和少量门控更新 \(h_t\)，输入会影响 gate，但转移结构比较固定 | Selective SSM 让 \(A_t, B_t, C_t\) 这类读写/衰减参数随输入变化，更像“内容感知的状态更新” | 输入相关不等于无限记忆，历史仍被压缩进状态 |
+| 长程记忆 | LSTM/GRU 缓解梯度消失，但长序列信息仍容易被 hidden state bottleneck 挤掉 | SSM 参数化可以表示不同时间尺度的衰减与保留，expanded state 提供更大的线性动态容量 | 精确复制、needle retrieval、复杂变量绑定仍常需要 attention 帮忙 |
+| 训练吞吐 | 时间步递推天然串行，长序列训练很难像 attention 那样并行展开 | Selective scan 把递推组织成可并行的 scan，在训练时能更好利用 GPU | causal decode 仍是一 token 一 token 往前推 |
+| 推理缓存 | 只保留 hidden state，缓存低，但传统结构在大规模语言建模质量上不够稳 | 每层保留固定大小 state，避免 Transformer 那种随上下文增长的 KV cache | 仍有 state cache、projection、kernel 和 batch 调度成本 |
+| 工程形态 | 经典 RNN block 相对简单，缺少现代大模型里的高吞吐组件组合 | Mamba block 结合 projection、depthwise conv、gate、residual/norm 和硬件感知 kernel | 不是公式线性就必然快，真实速度取决于 kernel 和 runtime |
+
+所以更短的判断是：**Mamba 不是把 RNN 重新包装，而是把 recurrent state 做成了“可并行训练、内容选择、GPU 友好”的状态空间层**。它继承了 RNN 推理时固定状态的便宜，也努力补上了传统 RNN 在训练并行度、长程动态和现代硬件效率上的短板。
+
+## 5. Selective scan 为什么重要
 
 如果只看数学，Mamba 像一个输入相关的递推模型；如果落到 GPU，难点是如何把这个递推跑快。
 
@@ -85,7 +107,7 @@ h_t = A_t h_{t-1} + B_t x_t,\quad y_t = C_t h_t
 
 这也是 Mamba 比很多“线性 attention”路线更受关注的原因：它不只提出了一个低复杂度公式，还给出了能在现代 GPU 上实际跑起来的层实现。
 
-## 5. Mamba-2：为什么说 Transformers are SSMs
+## 6. Mamba-2：为什么说 Transformers are SSMs
 
 Mamba-2 的论文标题很有意思：`Transformers are SSMs`。它不是说 Transformer 和 Mamba 完全一样，而是指出 attention、SSM 和一类 structured semiseparable matrix 之间有统一视角。
 
@@ -98,7 +120,7 @@ Mamba-2 的论文标题很有意思：`Transformers are SSMs`。它不是说 Tra
 
 从学习路线看，Mamba-2 的价值不是多背一个名字，而是帮你理解：现代长序列模型正在从“attention vs RNN”走向“不同结构矩阵的高效实现”。
 
-## 6. Mamba-3：新的推理优先视角
+## 7. Mamba-3：新的推理优先视角
 
 截至 2026 年，Mamba-3 继续沿着“推理效率和模型质量同时优化”的方向推进。论文强调当前 Transformer 强在质量，但 quadratic compute 和线性 KV memory 让推理昂贵；很多线性模型虽然理论上高效，却会牺牲状态追踪等能力。
 
@@ -113,7 +135,7 @@ Mamba-3 的几个关键词是：
 
 这说明 Mamba 路线还在快速演化：早期重点是“能不能替代 attention 的长序列成本”，后续重点会变成“能不能在真实推理任务里保持状态、检索和推理质量”。
 
-## 7. 什么是 Mamba-Transformer 混合架构
+## 8. 什么是 Mamba-Transformer 混合架构
 
 `Mamba-Transformer` 通常不是一个固定模型名，而是一类混合架构：
 
@@ -135,7 +157,7 @@ token embedding
 | GQA / sliding / local attention | 降低剩余 attention 层的 KV 和计算压力 |
 | Norm / residual | 保证深层混合训练稳定 |
 
-## 8. 代表工作：Jamba、Jamba-1.5、Nemotron-H
+## 9. 代表工作：Jamba、Jamba-1.5、Nemotron-H
 
 | 工作 | 核心设计 | 为什么值得看 |
 | --- | --- | --- |
@@ -145,7 +167,7 @@ token embedding
 
 Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列、MoE 放在哪里都会影响大规模训练。Nemotron-H 的重点是“为什么组合”：当 inference-time scaling 变重要时，模型越会推理，越需要把每个生成 token 的成本降下来。
 
-## 9. 设计混合架构时看哪些旋钮
+## 10. 设计混合架构时看哪些旋钮
 
 读任何 Mamba-Transformer 技术报告时，可以按下面清单拆：
 
@@ -161,7 +183,7 @@ Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列
 
 混合架构不是把两种 block 随便拼起来。它更像系统设计：质量、吞吐、显存、上下文长度、训练稳定性和服务 runtime 需要一起调。
 
-## 10. 常见误解
+## 11. 常见误解
 
 | 误解 | 更准确的说法 |
 | --- | --- |
@@ -171,7 +193,7 @@ Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列
 | Mamba 不需要位置编码 | 递推本身有顺序，但混合架构里的 attention 层仍可能需要位置机制 |
 | 线性复杂度一定带来真实速度提升 | 只有 kernel、内存布局、batching 和 runtime 配合好，理论复杂度才会变成 wall-clock 收益 |
 
-## 11. 和现有基础知识怎么接
+## 12. 和现有基础知识怎么接
 
 | 如果你想理解 | 回看 |
 | --- | --- |
@@ -181,7 +203,7 @@ Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列
 | hidden state、latent state 和状态递推 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) |
 | kernel、显存带宽和推理 runtime | [数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
 
-## 12. 参考资料
+## 13. 参考资料
 
 - [Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)：selective SSM、hardware-aware scan 和 Mamba block 的起点。
 - [Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality](https://arxiv.org/abs/2405.21060)：Mamba-2 和 SSD 统一视角。

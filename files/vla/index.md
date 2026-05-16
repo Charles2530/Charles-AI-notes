@@ -5,6 +5,9 @@ VLA 的核心不是“让 VLM 多输出几个动作 token”，而是把视觉�
 !!! note "初学者先抓住"
     VLM 主要回答“我看到了什么”，VLA 进一步回答“现在该做什么”。世界模型还会追问“做了以后会发生什么”。读 VLA 时不要只看模型结构，要同时看动作表示、数据来源、闭环恢复和评测指标。
 
+!!! tip "证据与全站矩阵"
+    前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。VLA 结论必须区分 behavior cloning benchmark、真实机器人 closed-loop、官方 demo、系统吞吐和本站推断。
+
 ## 阅读分层与小地图
 
 | 分层 | 推荐内容 | 读到什么程度 |

@@ -30,6 +30,14 @@ Qwen3 这份报告的核心不是“又发布了一组模型”，而是把两�
 !!! warning "阅读边界"
     这是一份模型技术报告，训练数据、评测、消融和对比结果都应按作者报告理解。它很适合学习开源大模型训练和后训练 recipe，但不应把所有 benchmark 数值当作第三方独立复现结果。
 
+## Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| Qwen3 将 thinking / non-thinking 统一到同一模型家族 | [arXiv:2505.09388](https://arxiv.org/abs/2505.09388), [GitHub](https://github.com/QwenLM/Qwen3) | model family, post-training pipeline, benchmark tables | Paper Result | Author Code / Official Repo | thinking budget 是能力/延迟折中的产品化接口 | 不证明所有报告分数可独立复现 |
+| Long-CoT cold start、reasoning RL 和 distillation 构成后训练链路 | 同上 | post-training stages and distillation settings | Ablation | Paper Only | 后训练要分阶段处理推理能力、通用行为和成本 | 不证明同流程适合所有领域模型 |
+| 本站将其接到训练、RLVR 和推理成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可启发 verifier 和 thinking budget 设计 | 不等于世界模型或 VLA 策略收益 |
+
 ## 论文位置
 
 Qwen3 接在 Qwen2.5 和 QwQ-32B 之后。Qwen2.5 更像通用 chat / base model 系列，QwQ-32B 更像专门的 reasoning model。Qwen3 的问题意识是：能不能不用在“普通对话模型”和“推理模型”之间切换，而是在同一个模型里控制是否思考、思考多久。

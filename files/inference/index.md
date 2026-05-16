@@ -31,6 +31,9 @@
 !!! note "在全站主线里的位置"
     推理专题是工程支撑，解决“训练好的模型如何稳定、低延迟、低成本地被调用”。对世界模型和 VLA 来说，它尤其重要在实时闭环：rollout、动作预测、视频生成和安全检查都可能反复调用模型。如果只是建立概念主线，可以先跳过大部分推理细节；一旦进入交互式世界模型或机器人部署，再回来读缓存、调度、量化和在线评测。
 
+!!! tip "证据与全站矩阵"
+    前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。推理页里的 P95/P99、tokens/s、KV GiB 和系统吞吐只能证明运行成本，不能自动证明世界模型规划收益。
+
 !!! tip "本专题的读法"
     先跟踪一条请求，而不是先背 runtime 名字：请求进入队列，长输入做 prefill，逐 token decode 读取 KV cache，路由和缓存决定成本，观测指标决定能否长期运营。vLLM、SGLang、TensorRT-LLM 等工具都可以放回这条请求路径里理解。
 

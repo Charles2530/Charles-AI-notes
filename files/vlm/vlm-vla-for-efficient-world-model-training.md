@@ -27,6 +27,15 @@ VLM/VLA 与世界模型的接口不能只写“提供状态和动作”。每个
 
 本仓库的 `world-model-mini-chain` fixture 是接口证据的最小形态：`episodes.jsonl` 记录多相机 token 和任务结果，`rollouts.jsonl` 记录候选动作的预测/真实事件，脚本输出 token 压缩、动作敏感、risk ECE 和失败 replay。真实项目里可以把它替换成 Rerun 日志、训练配置和固定 checkpoint，但字段关系不应变。
 
+## Claim Ledger
+
+| Claim | Source | Evidence Type | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- |
+| VLM/VLA 可为世界模型提供状态、动作、数据和验证接口 | 本页接口分解 | Site Inference | 能把视觉 token、动作 chunk、失败回流和闭环评测放进统一 schema | VLM/VLA 本身就是完整世界模型 |
+| 视觉 tokenizer / resampler 可降低视频 token 和长时记忆成本 | [视觉 Tokenizer 与连接器](visual-tokenizers-and-connectors.md) | Ablation | 压缩视觉输入是世界模型训练常见瓶颈治理手段 | 压缩后必然保留接触、风险和对象身份 |
+| VLA 动作数据能提供 action-conditioned rollout 的监督 | [动作表示与控制接口](../vla/action-representation-and-interfaces.md) | Paper Result | 动作 token、连续动作和 chunk 是世界模型输入接口 | 动作数据对齐错误不会影响未来预测 |
+| mini-chain schema 可作为接口证据最小格式 | [端到端案例](../world-models/action-conditioned-video-world-model-training-case.md) | Toy Fixture | 说明 episode、rollout、risk 和 failure replay 字段如何接起来 | 不能证明真实系统已经降低训练成本 |
+
 ## 高效训练的核心问题
 
 世界模型训练昂贵，通常不是因为缺一个模型名，而是因为以下成本同时存在：

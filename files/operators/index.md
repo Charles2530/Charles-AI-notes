@@ -31,6 +31,9 @@
 !!! note "在全站主线里的位置"
     算子与编译器专题是底层工程支撑。它不会直接解释“什么是世界模型”，但会决定视频世界模型、长上下文 VLA、实时 rollout 和大规模训练能不能跑得动。主线学习时不必先钻进所有 kernel；当你遇到显存、带宽、延迟、吞吐或数值稳定性问题，再回到这里定位瓶颈。
 
+!!! tip "证据与全站矩阵"
+    前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。算子页里的 microbenchmark、roofline、kernel speedup 和端到端 trace 要分开写，不能把 kernel 变快直接外推成任务成功率提升。
+
 !!! tip "本专题的读法"
     先看数据怎么搬，再看代码怎么写。算子优化的第一问题通常不是“用了什么黑科技”，而是这个计算在 HBM、L2、shared memory、register 和跨卡网络之间搬了什么，哪里被带宽、同步、布局或 launch 开销卡住。
 

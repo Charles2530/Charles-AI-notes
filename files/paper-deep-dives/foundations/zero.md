@@ -32,6 +32,13 @@ ZeRO 的核心想法很漂亮：保持数据并行的使用方式和计算粒度
 
 ZeRO 的证据分两层：前半部分是内存和通信量的理论分析，后半部分是 ZeRO-100B 在 400 张 V100 上的系统实验。它证明的是“状态分片能大幅降低 DP 的显存冗余，并保留较高训练吞吐”，不是证明“万亿参数训练在当时已经经济可行”。
 
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| ZeRO-DP 通过分片 optimizer states、gradients、parameters 降低数据并行冗余显存 | [arXiv:1910.02054](https://arxiv.org/abs/1910.02054), [DeepSpeed](https://github.com/microsoft/DeepSpeed) | Figure 1, Table 1/2, ZeRO-100B setting | System Throughput | Author Code / Official Repo | 训练显存账必须拆参数、梯度、优化器状态、激活和 buffer | 不证明所有模型/网络拓扑都获得同等 scaling |
+| 本站将其接到世界模型长轨迹训练和低比特训练状态账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可作为 FSDP/ZeRO/checkpoint 选型基准 | 不等于 world model 任务质量提升 |
+
 | 论文结论 | 证据来源 | 证据等级 | 可外推到高效训练 | 不能直接外推 |
 | --- | --- | --- | --- | --- |
 | mixed precision Adam 的模型状态显存远大于 fp16 参数本身 | Section 3 memory accounting、Figure 1 | Analytical accounting | 训练系统要拆开 parameters、gradients、optimizer states、activations、buffers 和 fragmentation | 不包含现代 FP8/FP4 optimizer、8-bit optimizer 或 CPU/NVMe offload 的完整成本 |

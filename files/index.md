@@ -13,10 +13,29 @@
 </div>
 
 !!! note "先选一个入口"
-    如果你是围绕主线阅读，先看 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。如果概念卡住，再回到 [基础知识](foundations/index.md) 和 [术语表](glossary/index.md)；工程卡住看训练、推理、量化或算子；论文卡住看 [论文专题讲解](paper-deep-dives/index.md) 和 [参考文献总表](references/index.md)。主线会帮你决定旁支内容该读到什么深度。
+    如果你是围绕主线阅读，先看 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。如果概念卡住，再回到 [基础知识](foundations/index.md) 和 [术语表](glossary/index.md)；工程卡住看训练、推理、量化或算子；论文卡住看 [论文专题讲解](paper-deep-dives/index.md)、[参考文献总表](references/index.md) 和 [Claim Ledger](references/claim-ledger.md)。主线会帮你决定旁支内容该读到什么深度。
 
 !!! tip "全站定位"
     本站不是 AI 全栈百科，而是围绕**世界模型高效训练**组织支撑知识。每一章都要尽量回答：它降低了什么成本，证据强到什么程度，如何落地，什么时候会失效。
+
+## 三层阅读入口
+
+| 路径 | 适合谁 | 先读什么 |
+| --- | --- | --- |
+| 10 分钟版 | 想快速抓住主线和边界 | [世界模型路线图](world-models/index.md)、[高效训练路线图](world-models/efficient-training-roadmap.md)、[Claim Ledger](references/claim-ledger.md) |
+| 深读版 | 想理解关键技术路线 | [Masked / JEPA](world-models/masked-jepa-and-latent-prediction.md)、[RSSM/Dreamer](world-models/rssm-dreamer-and-planning.md)、[WM/WAM/VAM](world-models/wm-wam-vam-and-action-conditioned-modeling.md)、[评测失效](world-models/evaluation-and-failure-modes.md) |
+| 实验版 | 想写实验、复现或方案 | [端到端案例](world-models/action-conditioned-video-world-model-training-case.md)、[完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md)、[效率技术覆盖矩阵](world-models/efficiency-technique-coverage-matrix.md) |
+
+## 全站 9+ 阅读路径
+
+| 路径 | 先读 | 读完要能回答 |
+| --- | --- | --- |
+| 10 分钟抓主线 | [高效训练路线图](world-models/efficient-training-roadmap.md) → [全站效率矩阵](references/site-efficiency-coverage-matrix.md) → [Claim Ledger](references/claim-ledger.md) | 技术省哪类成本，证据强到哪里 |
+| 深读技术 | [Masked/JEPA](world-models/masked-jepa-and-latent-prediction.md) → [RSSM/Dreamer](world-models/rssm-dreamer-and-planning.md) → [训练](training/index.md) / [推理](inference/index.md) / [量化](quantization/index.md) / [算子](operators/index.md) | 模型、数据、系统和验证如何互相制约 |
+| 做实验 | [完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md) → [VLA 全链路案例](world-models/vla-world-model-full-chain-case.md) → [Rollout 服务案例](world-models/rollout-serving-quantization-kernel-case.md) | 怎样把数据、配置、系统账、闭环结果和失败回放写成证据链 |
+
+!!! tip "三种最短路径"
+    **如果只看一页**：读 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。**如果要做实验**：读 [完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md)。**如果要查证据**：读 [Claim Ledger](references/claim-ledger.md)，先确认 claim 是论文结果、官方 demo、系统吞吐、toy fixture 还是站内推断。
 
 ## 主线与支撑层
 
@@ -30,6 +49,17 @@
 | 训练系统支撑 | 长序列、低比特、分布式、checkpoint 和数据管线如何降低训练成本 | [训练](training/index.md)、[算子与编译器](operators/index.md) |
 | 推理与部署支撑 | KV cache、batch、量化、蒸馏和 SLO 如何决定 rollout 是否可用 | [推理](inference/index.md)、[量化](quantization/index.md) |
 | 必要背景 | 张量、Attention、概率、优化、强化学习、扩散模型等公共语言 | [基础知识](foundations/index.md)、[扩散模型](diffusion/index.md)、[强化学习](reinforcement-learning/index.md) |
+
+## 核心术语速查
+
+| 术语 | 本站里的使用边界 |
+| --- | --- |
+| World model | 面向决策的内部或外部世界预测器，必须说明状态、动作、rollout 和消费方 |
+| Latent dynamics | 在压缩状态 \(z_t\) 上预测未来，常用于 imagined rollout 和 planning |
+| Masked prediction | 遮挡输入的一部分并预测 token / latent，用来提高表征效率 |
+| JEPA | 在 joint embedding space 预测目标表征，不等同于像素重建 |
+| Action-conditioned rollout | 固定历史、改变动作时未来应合理分叉，是规划型世界模型的硬门槛 |
+| Claim Ledger | 全站证据账，区分论文结果、系统吞吐、闭环实验、官方 demo 和站内推断 |
 
 ## 怎么使用这个知识库
 

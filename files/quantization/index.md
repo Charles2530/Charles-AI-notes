@@ -5,6 +5,9 @@
 !!! note "在主线里的位置"
     量化在世界模型高效训练里解决的是显存、带宽、通信和 rollout 成本，但它不是“全模型一键降 bit”。视觉连接器、动作头、风险/安全头、长时序 KV cache 和 reward/value 相关模块常常比文本权重更敏感，必须按任务桶分别验收质量、延迟和失败模式。
 
+!!! tip "证据与全站矩阵"
+    前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。量化结论要分开写权重、activation、KV、kernel 和任务桶，不能把 bit 数下降直接外推成质量稳定。
+
 ![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="740" }
 
 <small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原论文图意：模型规模增长速度明显快于单卡 GPU 显存增长速度，量化要解决的首要问题就是把越来越大的模型放进有限显存和带宽预算里。</small>
@@ -261,7 +264,7 @@ arXiv:2409.16694 对低比特大语言模型量化做了一个很实用的整理
 1. *A Survey of Low-bit Large Language Models: Basics, Systems, and Algorithms*：<https://arxiv.org/abs/2409.16694>
 2. [量化运行时与框架](quantization-runtimes-and-frameworks.md)
 
-## 快速代码示例
+### 快速代码示例
 
 ```python
 import torch
@@ -284,7 +287,7 @@ print("model footprint (GB):", model.get_memory_footprint() / 1024**3)
 这段代码演示了 `bitsandbytes` 的 4bit 加载流程：`nf4` 用于权重量化，`bf16` 用于计算类型，最后用 `get_memory_footprint` 快速估算显存占用。部署前还应补充任务精度回归，确认压缩收益可接受。
 
 
-## 学习路径与阶段检查
+### 学习路径与阶段检查
 
 量化专题建议从“数值表示 -> 误差来源 -> 训练适配 -> runtime 兑现 -> 上线验收”推进。
 
@@ -296,7 +299,7 @@ print("model footprint (GB):", model.get_memory_footprint() / 1024**3)
 | 4. 场景验收 | [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)、[评测与部署清单](evaluation-and-deployment-checklist.md) | 长上下文、多模态、agent、动作控制和高价值任务桶是否单独验收 |
 
 真正可上线的量化方案必须同时给出四件事：压缩对象、目标硬件和 runtime、端到端收益、回退边界。只报告 bit 数或平均 benchmark，通常不足以支撑部署决策。
-## 深度标杆页
+### 深度标杆页
 
 量化专题的标杆页要回答“压缩对象是什么、误差去哪了、runtime 是否兑现、端到端是否划算”。其它页面应避免只比较 bit 数。
 

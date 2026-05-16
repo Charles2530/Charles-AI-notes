@@ -37,6 +37,15 @@ RSSM/Dreamer 路线的证据重点，不是视频清晰度，而是“用 learne
 
 把它和现代视频世界模型连接时，最容易犯的错是：看到 latent rollout 有用，就以为完整视频生成也自然有用。Dreamer 证明的是“可用于决策的紧凑 dynamics + actor/value 训练”有效；它没有证明高分辨率视频 latent、动作 chunk、risk head 和多相机 memory 都已解决。
 
+## Claim Ledger
+
+| Claim | Source | Evidence Type | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- |
+| RSSM 把 deterministic memory 和 stochastic state 结合，适合从部分可观测像素历史中学习 belief state | [PlaNet 专题](../paper-deep-dives/world-models/planet.md) | Paper Result | latent belief dynamics 是经典 model-based control 表示 | 任意高维视频模型都能保持长时物体身份和风险状态 |
+| Dreamer 在 latent imagination 中训练 actor-critic，可减少真实环境试错 | [Dreamer 专题](../paper-deep-dives/world-models/dreamer.md) | Paper Result | imagined rollout 能在 benchmark 中支撑策略学习 | 视觉上好看的视频 rollout 会自动提升策略 |
+| DreamerV3 的通用训练配方提升了跨任务稳定性 | [DreamerV3 专题](../paper-deep-dives/world-models/dreamerv3.md) | Ablation | symlog、free bits、uniform mix 等配方对稳定训练有帮助 | 多相机、真实机器人、动作 chunk 和 risk head 都已解决 |
+| 本页把 Dreamer 接到现代 WAM/VAM 是工程归纳 | 本页机制对照 | Site Inference | 可帮助判断哪些新系统继承了 latent imagination 思想 | 不能替代新系统自己的 closed-loop 或 ablation 证据 |
+
 ## 1. 统一问题：从观测序列中恢复潜在世界
 
 设环境真实状态为 \(s_t\)，但智能体只能看到观测 \(x_t\)，执行动作 \(a_t\)，获得奖励 \(r_t\)。  
@@ -356,7 +365,7 @@ $$
 `Dreamer` 则把这套骨架真正用于控制：先在潜空间里想象，再用想象轨迹优化策略。  
 它们共同构成了最经典的 `WM` 主线，也是理解后续 `WAM / VAM` 路线时最重要的参照系。 
 
-## 快速代码示例
+### 快速代码示例
 
 ```python
 def dreamer_actor_update(world_model, actor, z, h, horizon=15):
@@ -374,6 +383,6 @@ def dreamer_actor_update(world_model, actor, z, h, horizon=15):
 这段代码抽象了 Dreamer 的 actor 更新思路：不在真实环境里采样，而是在世界模型的隐空间 rollout 上估计长期回报并优化策略。好处是样本效率高，但前提是动力学与奖励头的偏差要可控。
 
 
-## 工程收束
+### 工程收束
 
 RSSM / Dreamer 的价值不只在重建画面，而在 belief state、latent rollout、planner 接口、reward readout 和不确定性是否能共同支撑规划。验收时要拆分表征、动力学和规划评测，保留反事实测试，让不确定性进入回退逻辑；世界模型一旦被策略使用，视频质量就不能替代闭环效果。

@@ -34,6 +34,13 @@ paper_topic: 具身智能 / WAM
 
 DreamZero 的证据比普通视频世界模型更接近本站主线，因为它同时给了闭环机器人结果、系统加速表和模型消融。但它仍然不能被简单外推成“WAM 可以直接替代所有 VLA”：真实结论要限制在论文的机器人、动作接口、数据来源、chunk 长度和推理硬件条件内。
 
+### Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| WAM 可把 joint video-action prediction 推向可执行策略 | [arXiv:2602.15922](https://arxiv.org/abs/2602.15922), [GitHub](https://github.com/dreamzero0/dreamzero) | Figure 1/2/4/5/14, robot eval tables | Closed-loop | Author Code / Official Repo | 论文设置下 WAM 有真实机器人闭环和少步动作生成证据 | 不证明 WAM 是通用 VLA 替代品或已独立复现 |
+| decoupled noise schedule 优先保动作信号 | 同上 | DreamZero-Flash design and ablations | Ablation | Paper Only | 实时控制可牺牲部分视觉清晰度来保护 action clean signal | 不证明风险头、接触瞬间和长时一致性同样保住 |
+
 ```mermaid
 flowchart LR
     A["Video-action joint training"] --> B["Action chunk generation"]

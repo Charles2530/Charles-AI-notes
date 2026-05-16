@@ -28,6 +28,13 @@ RT-2 的核心不是“又做了一个机器人策略”，而是把一个非常
 | 对世界模型高效训练的意义 | RT-2 给出一个动作条件接口：世界模型若要服务具身闭环，不能只预测未来画面，还要知道 VLA 输出的动作 token 会怎样改变状态 |
 | 主要风险 | 大模型推理慢、依赖云端服务；web 语义迁移不等于物理可执行性；动作离散化会把连续控制误差藏进 token 分类误差里 |
 
+## Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| Web-scale VLM 知识可通过 action token 接到真实机器人闭环 | [arXiv:2307.15818](https://arxiv.org/abs/2307.15818) | Figure 1, robot evaluation and ablations | Closed-loop | Paper Only | VLA 可以把视觉语言能力迁移到动作输出接口 | 不证明新 motor skill、长时安全或任意硬件泛化 |
+| 本站将其接到 VLA / 世界模型全链路案例 | 本页与 [VLA 全链路案例](../../world-models/vla-world-model-full-chain-case.md) | 工程归纳 | Site Inference | Site Inference | 可作为动作 token 与世界模型 dynamics 对接样例 | 不等于世界模型预测能力已具备 |
+
 ## 论文位置
 
 RT-1 证明了大规模真实机器人数据可以训练一个 Transformer policy，但它本质上仍是机器人数据内的行为克隆。RT-2 往前推进了一步：不只把语言当条件，而是把动作也塞进 VLM 的输出空间。

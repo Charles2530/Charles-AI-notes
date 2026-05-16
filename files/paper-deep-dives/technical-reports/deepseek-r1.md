@@ -25,6 +25,14 @@ paper_topic: 技术报告
 !!! warning "阅读边界"
     这篇论文后来有 Nature 版本，但这里仍按论文/技术报告自述来读。训练成本、数据规模、RL 超参、benchmark 分数和安全结论都应理解为作者报告的系统结果，而不是第三方独立复现实验。
 
+## Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| GRPO + rule-based reward 可在可验证任务上激发推理行为 | [arXiv:2501.12948](https://arxiv.org/abs/2501.12948) | R1-Zero training curves, AIME/Codeforces/math settings | Paper Result | Paper Only | 可验证 reward 是低人工标注 RL 的重要路线 | 不证明所有开放任务都有可靠 verifier |
+| R1 的冷启动、两阶段 RL 和蒸馏改善产品化可用性 | 同上 | post-training recipe, distillation results | Paper Result | Paper Only | reasoning model 需要能力塑形和行为约束分阶段设计 | 不证明完整训练配方可被第三方复现 |
+| 本站把 R1 接到世界模型高效训练中的 verifier / rollout 成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | RLVR 思路可启发 action/risk verifier 设计 | 不等于机器人闭环或世界模型训练已复现 |
+
 ## 论文位置
 
 传统 LLM 后训练通常是：

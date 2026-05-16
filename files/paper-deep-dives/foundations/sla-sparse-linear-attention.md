@@ -18,6 +18,13 @@ paper_topic: 高效训练
 
 因此这篇讲解把两篇合在一起看：SLA 是 sparse-linear attention 的第一版，证明“高秩少数精确算、低秩多数便宜补”这条路线可行；SLA2 是第二版，补上可学习路由、比例混合和 QAT，让它更接近可部署的高稀疏注意力方案。
 
+## Evidence Snapshot
+
+| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
+| --- | --- | --- | --- | --- | --- | --- |
+| Sparse-linear attention 可降低视频 DiT 长序列 attention 成本 | [arXiv:2509.24006](https://arxiv.org/abs/2509.24006), [arXiv:2602.12675](https://arxiv.org/abs/2602.12675), [GitHub](https://github.com/thu-ml/SLA) | attention distribution, quality/throughput settings | Ablation | Author Code / Official Repo | 视频/world-model attention 可用 sparse exact + linear compensation 分担成本 | 不证明所有视频任务或动作条件模型质量无损 |
+| 本站将其接到长视频训练、低比特 attention 和 kernel 成本账 | 本页与 [全站效率矩阵](../../references/site-efficiency-coverage-matrix.md) | 工程归纳 | Site Inference | Site Inference | 可作为系统/算法混合效率路线 | 不等于 closed-loop planning utility |
+
 ## 论文位置
 
 标准 attention 是：

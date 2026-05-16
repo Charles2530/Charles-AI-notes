@@ -10,6 +10,15 @@
 !!! tip "使用方式"
     如果你刚入门，优先看每节的“必读起点”。如果你准备做课题或工程复现，优先看“系统 / Benchmark / 开源实现”。如果某篇论文名字后面写了“工程意义”，说明它不只是理论参考，还会影响训练、推理、评测或部署决策。
 
+!!! tip "证据账入口"
+    如果要核对世界模型高效训练相关 claim 的证据等级和复现状态，先看 [Claim Ledger：世界模型高效训练证据账](claim-ledger.md)。那里会区分论文结果、消融、系统吞吐、闭环实验、官方 demo、toy fixture、本站推断，以及是否只有论文、官方代码或独立复现。
+
+!!! tip "全站证据标准"
+    如果要给论文页、技术报告页或系统优化页补证据框，统一使用 [全站证据与复现状态标准](evidence-and-reproducibility-standard.md)。前沿 claim 先写 `Evidence Snapshot`，不要把 demo、benchmark、系统吞吐、closed-loop 和本站推断混成同一种结论。
+
+!!! tip "覆盖矩阵与前沿系统"
+    如果要查某项技术属于数据效率、训练效率、推理效率、显存效率、验证效率还是部署效率，先读 [全站效率技术覆盖矩阵](site-efficiency-coverage-matrix.md)；如果只关心世界模型主线，再读 [世界模型效率技术覆盖矩阵](../world-models/efficiency-technique-coverage-matrix.md)。前沿系统和待核验 claim 不要和成熟基础文献混读；先看 `Repro Status`，再决定能外推到哪里。
+
 ## 如何使用这张索引
 
 参考文献页不是学习起点，而是查证和扩展入口。建议按下面顺序使用：
@@ -188,18 +197,24 @@
    预测表征而非像素，适合理解“好世界模型不一定要重建像素”的观点。
 2. [V-JEPA: Video Joint Embedding Predictive Architecture](https://arxiv.org/abs/2404.08471)  
    视频预测表征，对世界模型训练和视频理解都有参考价值。
-3. [Learning Interactive Real-World Simulators](https://arxiv.org/abs/2310.06114)  
+3. [V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning](https://arxiv.org/abs/2506.09985)  
+   把 V-JEPA 表征推进到 action-conditioned planning，是 masked / JEPA 路线接回世界模型控制主线的重要论文。
+4. [Learning Interactive Real-World Simulators](https://arxiv.org/abs/2310.06114)  
    `UniSim` 代表把真实世界交互建模成可模拟环境。
-4. [Genie: Generative Interactive Environments](https://arxiv.org/abs/2402.15391)  
+5. [Genie: Generative Interactive Environments](https://arxiv.org/abs/2402.15391)  
    从视频中学可交互世界模型，适合连接“视频生成模型”和“可控世界模型”。
-5. [Video Language Planning](https://arxiv.org/abs/2310.10625)  
+6. [Video Language Planning](https://arxiv.org/abs/2310.10625)  
    连接视频预测、语言规划和长程任务分解。
-6. [Genie 3 官方页面](https://deepmind.google/models/genie/)
+7. [Genie 3 官方页面](https://deepmind.google/models/genie/)
    官方 demo 适合观察实时探索、长时环境一致性和文本到可交互世界的系统形态。
-7. [NVIDIA Cosmos 官方页面](https://www.nvidia.com/en-us/ai/cosmos/)
+8. [NVIDIA Cosmos 官方页面](https://www.nvidia.com/en-us/ai/cosmos/)
    官方 demo 适合理解 world foundation models 在 physical AI、预测、推理和数据管线中的平台化定位。
-8. [LingBot-World 官方 GitHub](https://github.com/robbyant/lingbot-world)
+9. [LingBot-World](https://arxiv.org/abs/2601.20540)
+   前沿视频世界模型系统，适合关注视频底座、动作注入、因果化、长时记忆和实时交互的工程路线。
+10. [LingBot-World 官方 GitHub](https://github.com/robbyant/lingbot-world)
    README 提供 Video Demo、Real-Time Interactive Demo 和推理脚本，适合把论文图和可运行系统接口对应起来。
+11. [DreamZero: World Action Models are Zero-shot Policies](https://arxiv.org/abs/2602.15922)
+   WAM / joint video-action prediction 路线，适合核对未来视频、动作 chunk、真实观测刷新和实时闭环控制的证据边界。
 
 ### 4.4 自动驾驶、数据闭环与大规模仿真
 

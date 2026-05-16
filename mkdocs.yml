@@ -60,7 +60,11 @@ extra_css:
 nav:
   - 首页: index.md
   - 术语表: glossary/index.md
-  - 参考文献: references/index.md
+  - 参考文献:
+      - references/index.md
+      - 全站证据与复现状态标准: references/evidence-and-reproducibility-standard.md
+      - 全站效率技术覆盖矩阵: references/site-efficiency-coverage-matrix.md
+      - Claim Ledger: references/claim-ledger.md
   - 基础知识:
       - foundations/index.md
       - 论文专题前置知识地图: foundations/paper-reading-prerequisites.md
@@ -216,10 +220,15 @@ nav:
   - 世界模型:
       - world-models/index.md
       - 主线：世界模型高效训练: world-models/efficient-training-roadmap.md
+      - 效率技术覆盖矩阵: world-models/efficiency-technique-coverage-matrix.md
       - 端到端案例：动作条件视频世界模型训练: world-models/action-conditioned-video-world-model-training-case.md
+      - 完整实验报告样例: world-models/world-model-efficient-training-experiment-report.md
+      - VLA / 世界模型全链路案例: world-models/vla-world-model-full-chain-case.md
+      - Rollout 服务、量化与 Kernel 案例: world-models/rollout-serving-quantization-kernel-case.md
       - 建模与规划:
           - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
           - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
+          - Masked / JEPA 与潜变量预测: world-models/masked-jepa-and-latent-prediction.md
           - 规划即推理与潜在动作: world-models/planning-as-inference-and-latent-actions.md
           - 不确定性与风险敏感规划: world-models/uncertainty-and-risk-aware-planning.md
       - 数据、模拟与评测:

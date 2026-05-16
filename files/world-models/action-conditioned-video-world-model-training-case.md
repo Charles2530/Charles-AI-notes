@@ -5,6 +5,9 @@
 !!! note "读法提醒"
     这是一页“整合案例”，不是新概念百科。遇到具体术语时，可以回到 [世界模型高效训练技术路线图](efficient-training-roadmap.md)、[VLM/VLA 与世界模型高效训练接口](../vlm/vlm-vla-for-efficient-world-model-training.md)、[VLA 专题路线图](../vla/index.md)、[训练](../training/index.md)、[推理](../inference/index.md) 和 [量化](../quantization/index.md) 补背景。
 
+!!! warning "证据等级：Toy Fixture"
+    本页 mini-chain 是可复算的文档 fixture，用来展示世界模型证据链应该怎样组织；它不能证明任何真实模型、机器人策略或论文方法已经有效。若要看论文式报告写法，读 [完整实验报告样例](world-model-efficient-training-experiment-report.md)。
+
 ## 任务设定
 
 假设我们要训练一个模型，用于桌面机器人任务：
