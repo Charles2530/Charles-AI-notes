@@ -585,7 +585,7 @@
 
 读专题讲解时，建议先看“论文位置”和“训练路线”，再看实验与局限。很多论文的真正价值不在某个单点指标，而在它把数据、模型、训练目标和系统接口组织成一条可执行路径。
 
-如果读任意一篇专题页时发现自己卡在 token/latent/action、loss/reward/score、KV/runtime、benchmark/ablation 这些公共语言上，先回到 [论文专题前置知识地图](../foundations/paper-reading-prerequisites.md)。那一页把所有专题需要的前置知识按“表示、结构、目标、训练、执行、证据”六层串起来，适合当作读论文前的检查清单。
+如果读任意一篇专题页时发现自己卡在 token/latent/action、loss/reward/score、KV/runtime、benchmark/ablation 这些公共语言上，先回到 [基础知识](../foundations/index.md)。那里把常见卡点按主题拆开，适合当作读论文前的检查清单。
 
 如果只是想快速建立方向地图，先看对应主题总览页和 [参考文献总表](../references/index.md)。如果已经选定某篇论文准备精读、复现或用于项目设计，再看这里的专题讲解。
 

@@ -91,7 +91,6 @@ nav:
       - 交互与多模态:
           - Prompt、CoT 与 RAG 入门: foundations/prompt-engineering-cot-and-rag-basics.md
           - 多模态推理入门: foundations/multimodal-cot-and-reasoning-basics.md
-      - 论文专题前置知识地图: foundations/paper-reading-prerequisites.md
   - 扩散模型:
       - diffusion/index.md
       - 基础主线:

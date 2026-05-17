@@ -227,13 +227,71 @@ x_t=\alpha_t x_0+\sigma_t\epsilon
 
 这行式子在说：\(x_t\) 是干净图和噪声按两个权重混合出来的状态。
 
+这里的 \(\alpha_t\) 和 \(\sigma_t\) 通常就是上一节闭式加噪里的两个系数：
+
+\[
+\alpha_t=\sqrt{\bar{\alpha}_t},
+\qquad
+\sigma_t=\sqrt{1-\bar{\alpha}_t}
+\]
+
+所以它们满足：
+
+\[
+\alpha_t^2+\sigma_t^2=1
+\]
+
+这意味着 \((\alpha_t,\sigma_t)\) 可以看成一个单位圆上的坐标：低噪声时 \(\alpha_t\approx 1,\sigma_t\approx 0\)，\(x_t\) 更接近 \(x_0\)；高噪声时 \(\alpha_t\approx 0,\sigma_t\approx 1\)，\(x_t\) 更接近 \(\epsilon\)。
+
 velocity 通常定义为：
 
 \[
 v=\alpha_t\epsilon-\sigma_t x_0
 \]
 
-这行式子在说：\(v\) 是沿混合路径移动的方向，既包含噪声信息，也包含数据信号信息。
+这个定义不是凭空来的。可以把混合路径写成一个角度参数 \(\phi_t\)：
+
+\[
+\alpha_t=\cos\phi_t,\qquad \sigma_t=\sin\phi_t
+\]
+
+于是：
+
+\[
+x_t=\cos\phi_t\,x_0+\sin\phi_t\,\epsilon
+\]
+
+如果沿着这条“从干净图转向噪声”的路径移动，对 \(\phi_t\) 求导：
+
+\[
+\frac{\partial x_t}{\partial \phi_t}
+=
+-\sin\phi_t\,x_0+\cos\phi_t\,\epsilon
+=
+\alpha_t\epsilon-\sigma_t x_0
+\]
+
+右边正好就是 \(v\)。所以 \(v\) 可以理解成这条混合路径上的“切向方向”：\(x_t\) 告诉你当前混到哪里了，\(v\) 告诉你沿噪声日程继续移动时，干净信号和噪声信号怎样互相替换。
+
+也可以把它看成一次坐标旋转：
+
+\[
+\begin{bmatrix}
+x_t\\
+v
+\end{bmatrix}
+=
+\begin{bmatrix}
+\alpha_t & \sigma_t\\
+-\sigma_t & \alpha_t
+\end{bmatrix}
+\begin{bmatrix}
+x_0\\
+\epsilon
+\end{bmatrix}
+\]
+
+第一行就是前面的混合公式；第二行就是 velocity 定义。因为 \(\alpha_t^2+\sigma_t^2=1\)，这个矩阵是旋转矩阵，不会丢信息，只是把 \((x_0,\epsilon)\) 换成了 \((x_t,v)\) 这套坐标。
 
 如果模型预测 \(\hat{v}\)，常可以换回：
 
@@ -245,7 +303,27 @@ v=\alpha_t\epsilon-\sigma_t x_0
 \hat{\epsilon}=\sigma_t x_t+\alpha_t\hat{v}
 \]
 
-这两行式子在说：velocity 不是新的神秘信息，而是一个坐标系。第一行把带噪样本 \(x_t\) 和预测速度 \(\hat{v}\) 换算成干净图估计 \(\hat{x}_0\)；第二行把它们换算成噪声估计 \(\hat{\epsilon}\)。预测 \(v\) 后，采样器仍然能得到需要的 \(\hat{x}_0\) 或 \(\hat{\epsilon}\)。
+这两行可以直接从上面的旋转矩阵反解出来。旋转矩阵的逆等于转置，所以：
+
+\[
+\begin{bmatrix}
+x_0\\
+\epsilon
+\end{bmatrix}
+=
+\begin{bmatrix}
+\alpha_t & -\sigma_t\\
+\sigma_t & \alpha_t
+\end{bmatrix}
+\begin{bmatrix}
+x_t\\
+v
+\end{bmatrix}
+\]
+
+展开第一行得到 \(x_0=\alpha_t x_t-\sigma_t v\)，展开第二行得到 \(\epsilon=\sigma_t x_t+\alpha_t v\)。把真实 \(v\) 换成模型预测的 \(\hat{v}\)，就得到 \(\hat{x}_0\) 和 \(\hat{\epsilon}\)。
+
+这也是为什么 \(v\)-prediction 常被说成一种更稳定的参数化：低噪声时 \(\alpha_t\approx 1,\sigma_t\approx 0\)，\(v\approx\epsilon\)，目标更像噪声预测；高噪声时 \(\alpha_t\approx 0,\sigma_t\approx 1\)，\(v\approx -x_0\)，目标更像数据预测。它在不同 SNR 区间之间平滑切换，而不是只固定预测 \(\epsilon\) 或只固定预测 \(x_0\)。
 
 ### 4.5 预测值怎样真正作用到去噪过程
 
