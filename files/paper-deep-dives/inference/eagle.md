@@ -6,6 +6,11 @@ paper_topic: 高效推理
 
 # EAGLE：Feature-level Draft 的投机推理
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [推理](../../inference/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「推理」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`EAGLE: Speculative Sampling Requires Rethinking Feature Uncertainty`
     - 链接：[arXiv:2401.15077](https://arxiv.org/abs/2401.15077)
@@ -49,7 +54,7 @@ EAGLE 的证据包括方法图、输入消融、训练数据消融、tree attent
 
 EAGLE 的判断是：target LLM 在上一轮 forward 已经产生了非常有用的 feature。与其再训练一个完整小 LLM，不如训练一个轻量 Autoregression Head，沿着 target feature 的轨迹预测下一步。
 
-![EAGLE speedup temperature 0 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-1-speedup-temp0.png){ width="760" }
+![EAGLE speedup temperature 0 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-1-speedup-temp0.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 1。原论文图意：temperature=0 的 MT-bench 上，EAGLE 相比 Medusa、Lookahead、speculative sampling 等方法取得更高 speedup；论文只比较不微调 backbone 且保持输出分布不变的方法。</small>
 
@@ -59,7 +64,7 @@ EAGLE 的判断是：target LLM 在上一轮 forward 已经产生了非常有用
     **对主线意义**：它说明 rollout/agent 服务里的解码成本可以用投机路径压低，但必须保留质量回归。  
     **不能证明什么**：EAGLE speedup 不能证明任务答案更好，也不能证明长链路 agent 或世界模型规划更可靠。
 
-![EAGLE speedup temperature 1 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-2-speedup-temp1.png){ width="760" }
+![EAGLE speedup temperature 1 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-2-speedup-temp1.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 2。原论文图意：temperature=1 的 MT-bench 上，Lookahead 仅限 greedy decoding，Medusa 非贪心生成不保证 lossless，因此 EAGLE 不与这些非 lossless 设置直接比较。</small>
 
@@ -70,13 +75,13 @@ EAGLE 的判断是：target LLM 在上一轮 forward 已经产生了非常有用
 
 Feature-level draft 看起来很自然，但有一个麻烦：token 是离散采样的，feature 是连续轨迹。如果当前 token 可能采到 `am`，也可能采到 `always`，那么下一步 feature 应该沿哪条分支走？只看前一 feature \(f_I\)，draft model 无法知道实际采样结果。
 
-![Feature uncertainty 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-3-feature-uncertainty.png){ width="760" }
+![Feature uncertainty 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-3-feature-uncertainty.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 3。原论文图意：在 token `I` 后，采样结果可能是 `am` 或 `always`，对应不同 feature sequence；仅靠 \(f_I\) 预测下一 feature 会产生歧义。</small>
 
 EAGLE 的修正是把 token sequence 向前移动一个 time step 输入 draft model。也就是说，预测下一 feature 时，不只看 feature prefix，还看上一轮实际采出来的 token。论文把这个输入称为 `feature&shifted-token`。
 
-![Feature and shifted-token ablation 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-4-draft-input-ablation.png){ width="760" }
+![Feature and shifted-token ablation 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-4-draft-input-ablation.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 4。原论文图意：在 Vicuna 7B + MT-bench + temperature=0 上，feature-level draft 优于 token-level draft；加入 shifted-token 后进一步提升 speedup。</small>
 
@@ -86,9 +91,12 @@ EAGLE 的修正是把 token sequence 向前移动一个 time step 输入 draft m
 
 EAGLE 与其他 draft 方法的区别在 drafting phase。普通 speculative sampling 和 Lookahead 从 token 到 token；Medusa 从 target feature 直接预测多个未来 token；EAGLE 从 feature + shifted token 预测下一步 feature，再经 LM head 得到 token。
 
-![Drafting methods comparison 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-5-drafting-comparison.png){ width="760" }
+![Drafting methods comparison 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-5-drafting-comparison.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 5。原论文图意：对比 speculative sampling、Lookahead、Medusa 和 EAGLE 如何 draft 第四、第五个 token；红框是 draft model 的预测部分。</small>
+
+!!! note "图解：方法对比图看红框"
+    每一列都在问同一个问题：草稿 token 从哪里来。Speculative sampling 用小 LLM，Lookahead 用 n-gram 风格搜索，Medusa 从 target feature 直接出多 token，EAGLE 则先预测下一步 feature 再复用 LM head。红框越贴近 target model 内部接口，draft model 越不像一个完整小模型。
 
 EAGLE 的 draft model 包含三块：
 
@@ -110,9 +118,12 @@ shifted token sequence T_{2:i+1}
   -> target LM head samples t_{i+2}
 ```
 
-![EAGLE pipeline 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-6-pipeline.png){ width="760" }
+![EAGLE pipeline 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-6-pipeline.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 6。原论文图意：绿色块是 token embedding，橙色块是 feature，红框是 draft model prediction，蓝色雪花模块复用 frozen target LLM 参数。</small>
+
+!!! note "图解：pipeline 图按颜色读"
+    绿色是 shifted token embedding，橙色是 target LLM 的 feature，红框是唯一训练的 draft head，蓝色雪花表示复用并冻结 target 模型组件。图想证明的是 draft head 的计算很轻，并且和 target LM head 对齐；最终输出仍要经过 target verification 才保持 lossless。
 
 EAGLE 还用 tree attention 生成 tree-structured draft。比如 Figure 6 里用 3 次 draft forward 生成 10-token tree，然后 target LLM 一次性并行验证候选树。
 
@@ -291,7 +302,7 @@ EAGLE 也可以和底层加速叠加。论文把 EAGLE 接到 gpt-fast 上，展
 
 EAGLE 使用 tree attention 生成和验证 tree-structured draft。相比 chain draft，tree attention 不增加 target LLM 和 draft model 的 forward 次数，但会让每次 forward 处理更多候选 token。
 
-![Tree attention speedup 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-7-tree-attention-speedup.png){ width="760" }
+![Tree attention speedup 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-7-tree-attention-speedup.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 7。原论文图意：MT-bench、temperature=0 上，使用 tree attention 的 EAGLE 比 chain draft 有更高 speedup。</small>
 
@@ -305,7 +316,7 @@ EAGLE 使用 tree attention 生成和验证 tree-structured draft。相比 chain
 
 Appendix 还给了 EAGLE 使用的静态树结构：
 
-![EAGLE draft structure 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-9-draft-structure.png){ width="760" }
+![EAGLE draft structure 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-9-draft-structure.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 9。原论文图意：左侧是使用 tree attention 时的 draft structure，右侧是不使用 tree attention 的 chain draft structure。</small>
 
@@ -315,7 +326,7 @@ Appendix 还给了 EAGLE 使用的静态树结构：
 
 Figure 8 是 EAGLE 最关键的消融之一：
 
-![EAGLE input ablation 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-8-inputs-ablation.png){ width="760" }
+![EAGLE input ablation 原论文图](../../assets/images/paper-deep-dives/inference/eagle/figure-8-inputs-ablation.png){ width="690" }
 
 <small>图源：`EAGLE`，Figure 8。原论文图意：Vicuna 7B + MT-bench 上比较 `feature&shifted-token`、`feature&unshifted-token`、`token`、`feature` 四类 draft input；指标包括 speed、\(\tau\)、\(0\text{-}\alpha\)、\(1\text{-}\alpha\)。</small>
 
@@ -355,3 +366,8 @@ EAGLE 最值得带走的不是某个 speedup 数字，而是一个设计范式�
 | batch 分桶是否开启 | 小 batch 长输出优先，饱和大 batch 要单独测 throughput |
 
 把 EAGLE、EAGLE-2、EAGLE-3 连起来看，会看到一条很清楚的演化线：先找到 feature-level draft 这个低成本接口，再让 draft tree 按上下文动态分配预算，最后把 draft model 的训练分布改得更接近真正的多步推理。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[推理](../../inference/index.md)。
+    - 按导航顺序继续：[EAGLE-2：动态 Draft Tree](eagle-2.md)。

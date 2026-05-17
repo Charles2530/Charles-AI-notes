@@ -2,10 +2,15 @@
 
 FP8 是低精度路线里很重要的一类：它比 FP16/BF16 更省显存和带宽，又比 INT4/INT8 更保留浮点的动态范围直觉。很多生产系统会把 FP8 放进混合精度方案，而不是全模型统一压到最低 bit。
 
+!!! note "读法定位"
+    这页先回答“FP8 与混合精度推理”在「量化」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂张量、线性层和基本推理成本；遇到 FP8、KV Cache、outlier 时回前置页补概念。 必要时先回 [量化入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把数值格式、误差来源、校准/训练方法、kernel 和服务部署连成一条效率链，而不是只比较 bit 数。
+
 !!! note "初学者先抓住"
     FP8 不是“8bit 的 INT”。它仍然是浮点数，有 sign、exponent 和 mantissa。指数位让它更擅长覆盖大动态范围，尾数位决定局部精度。
 
-## 1. FP8 在解决什么问题
+## FP8 在解决什么问题
 
 大模型推理和训练常被三类成本卡住：
 
@@ -17,7 +22,7 @@ FP8 是低精度路线里很重要的一类：它比 FP16/BF16 更省显存和�
 
 但 FP8 的收益不是自动的。它需要硬件、kernel、scale 策略、累加精度和敏感层保护一起成立。
 
-## 2. E4M3 和 E5M2 怎么读
+## E4M3 和 E5M2 怎么读
 
 FP8 常见两种格式：
 
@@ -43,7 +48,7 @@ x\approx (-1)^{\mathrm{sign}}\times 2^{e}\times m
 !!! warning "常见误解"
     同样是 8bit，FP8 和 INT8 误差形态不同。INT8 依赖 scale 把真实数映射到均匀整数格子；FP8 用指数覆盖动态范围，但每个数量级里的精度有限。
 
-## 3. FP8 也需要 scale
+## FP8 也需要 scale
 
 深度学习里的 FP8 通常不会直接裸用，而是配合 scale：
 
@@ -71,7 +76,7 @@ x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
 | delayed scaling | 用历史 amax 更新 scale | 稳定但可能滞后 |
 | dynamic scaling | 当前 batch 即时统计 | 灵活但有在线开销 |
 
-## 4. 为什么 FP8 常比 INT4 更容易进生产
+## 为什么 FP8 常比 INT4 更容易进生产
 
 | 维度 | FP8 | INT4/W4A16 |
 | --- | --- | --- |
@@ -83,7 +88,7 @@ x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
 
 **读作什么**：FP8 不一定压得最狠，但它常常是质量、硬件和维护成本之间更稳的折中。
 
-## 5. 混合精度不是妥协，而是资源分配
+## 混合精度不是妥协，而是资源分配
 
 成熟系统不会把所有东西都降到同一精度。常见混合方式：
 
@@ -97,14 +102,14 @@ x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
 | KV cache | FP16/BF16/FP8/INT8 按场景 | 长上下文显存大，但质量风险要验 |
 | 多模态 projector/action head | 常保高精 | 对齐、坐标、动作更敏感 |
 
-![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="760" }
+![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="740" }
 
 <small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 6。原论文图意：Transformer block 中，部分矩阵乘可以走 INT8 路径，LayerNorm、Softmax、残差加法等敏感或不适合低精度的算子仍保留 FP16。</small>
 
 !!! note "图解：这也是 FP8/混合精度的核心思路"
     虽然这张图来自 SmoothQuant 的 INT8 路线，但它表达的系统原则同样适用于 FP8：低精度优先放在收益最大的矩阵乘路径，数值敏感或不划算的路径保高精。
 
-## 6. FP8 服务要看哪些收益
+## FP8 服务要看哪些收益
 
 | 指标 | 为什么重要 |
 | --- | --- |
@@ -131,7 +136,7 @@ x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
 
 **读作什么**：FP8 是否值得，不是只看快了多少，还要看质量和维护成本。
 
-## 7. 哪些层优先尝试 FP8
+## 哪些层优先尝试 FP8
 
 | 优先级 | 模块 | 原因 |
 | --- | --- | --- |
@@ -142,7 +147,7 @@ x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
 
 **实用做法**：先让大块 GEMM 进 FP8，再用混合精度保护掉点层，而不是一开始追求全模型 FP8。
 
-## 8. 三个部署场景
+## 三个部署场景
 
 ### 场景 A：70B 文本模型服务
 
@@ -156,7 +161,7 @@ FP8 可以用于 LLM 主体和部分视觉 MLP，但 projector、OCR 相关层�
 
 低精度优先放在高吞吐的中间 backbone；动作头、risk head、控制接口和短 horizon 纠错路径优先保高精。验收看闭环成功率、动作抖动、near-miss recall 和长时 latent drift。
 
-## 9. FP8 的短板
+## FP8 的短板
 
 | 短板 | 说明 |
 | --- | --- |
@@ -166,7 +171,7 @@ FP8 可以用于 LLM 主体和部分视觉 MLP，但 projector、OCR 相关层�
 | 不适合所有算子 | 归一化、softmax、残差常要保高精 |
 | 仍需专项回归 | 平均 benchmark 不足以证明生产稳定 |
 
-## 10. 落地顺序
+## 落地顺序
 
 1. 固定 BF16/FP16 baseline，记录质量、显存、TTFT、TPOT、吞吐。
 2. 确认目标硬件和 runtime 是否支持 FP8 GEMM、FP8 KV 或相关格式。
@@ -175,6 +180,11 @@ FP8 可以用于 LLM 主体和部分视觉 MLP，但 projector、OCR 相关层�
 5. 对任务桶做回归，尤其是长上下文、代码、数学、多模态细节和安全/动作模块。
 6. 如果掉点集中在少数层，优先混合精度保护，而不是整体放弃 FP8。
 
-## 11. 小结
+## 本页结论
 
 FP8 的价值不是最低 bit，而是把显存、带宽、硬件吞吐和质量稳定性放进同一个折中点。它适合和混合精度一起理解：大块矩阵乘低精，敏感路径保高精，最终用端到端指标和任务桶决定是否上线。
+
+!!! tip "下一站"
+    - 回到本专题入口：[量化](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

@@ -6,6 +6,11 @@ paper_topic: 高效训练
 
 # SLA / SLA2：DiT 稀疏线性 Attention
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [训练与基础系统](../../training/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「训练与基础系统」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 主论文：`SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention`
     - 后续改进：`SLA2: Sparse-Linear Attention with Learnable Routing and QAT`
@@ -52,7 +57,7 @@ SLA 的判断是：这两类路线各自失败，是因为它们都试图用一�
 
 论文先看 Wan2.1 中的 attention weight 分布。大多数权重很小，但不能简单把它们全删掉，因为中间权重虽然单个不大，数量很多，合起来会影响输出。
 
-![SLA attention distribution 原图](https://ar5iv.labs.arxiv.org/html/2509.24006/assets/x1.png){ width="760" }
+![SLA attention distribution 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla-attention-distribution-原图.png){ width="760" }
 
 <small>图源：`SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention`，Figure 1。原论文图意：左图展示 Wan2.1 attention weights 的分布，约 8.1% 为 critical，约 46.5% 为 marginal，约 45.4% 为 negligible；右图说明只跳过最小 45% 权重误差很小，但只保留最大约 8% 会导致输出误差显著增大。</small>
 
@@ -61,9 +66,12 @@ SLA 的判断是：这两类路线各自失败，是因为它们都试图用一�
 
 论文进一步用 stable rank 观察 attention matrix。完整 attention 和 top weights 部分仍然高秩，而去掉 top 8% 后，剩余 bottom 92% 的 stable rank 很低。
 
-![SLA attention decomposition 原图](https://ar5iv.labs.arxiv.org/html/2509.24006/assets/x3.png){ width="760" }
+![SLA attention decomposition 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla-attention-decomposition-原图.png){ width="760" }
 
 <small>图源：`SLA`，Figure 3。原论文图意：Wan2.1 attention weights 可分成 top-8% 高秩部分和 bottom-92% 低秩部分；前者适合 sparse attention，后者适合 low-rank / linear attention。</small>
+
+!!! note "图解"
+    这张图不要只看 top-8% 的稀疏性，而要看 stable rank。红色高权重部分仍然高秩，所以需要 sparse exact attention；剩下的大量低权重部分更低秩，才适合 linear attention 补偿。SLA 的核心假设就是“不同权重区间对应不同结构”。
 
 这就是 SLA 名字里的 “Sparse-Linear”：不是把 sparse attention 和 linear attention 机械相加，而是让它们分别处理 attention matrix 的不同结构。
 
@@ -77,9 +85,12 @@ SLA 先按 query/key block 估计一个压缩 attention weight matrix。论文�
 | Marginal | middle predicted weight | Linear Attention | 用 \(O(N)\) 低秩补偿中间权重 |
 | Negligible | tiny predicted weight | Skip | 直接省掉计算 |
 
-![SLA overview 原图](https://ar5iv.labs.arxiv.org/html/2509.24006/assets/x4.png){ width="820" }
+![SLA overview 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla-overview-原图.png){ width="820" }
 
 <small>图源：`SLA`，Figure 4。原论文图意：左侧展示 SLA 的 high-level idea：先预测压缩 attention weights，再把 block 分成 critical / marginal / negligible；右侧展示 forward algorithm：critical blocks 用 Sparse FlashAttention，marginal blocks 用 Linear Attention，negligible blocks skip。</small>
+
+!!! note "图解"
+    左半边读分类，右半边读执行。critical block 走精确 sparse FlashAttention，marginal block 走 linear branch，negligible block 直接跳过；颜色表示 block 的计算路径。作者想证明的不是“稀疏越高越好”，而是三类 block 必须承担不同角色。
 
 SLA 的输出可以理解成两部分：
 
@@ -165,17 +176,23 @@ forward 的关键优化是：对 linear attention 路径预先计算每个 key/v
 
 从表里看，SLA 的重点不是单个质量指标超过 full attention，而是它在 `2.74T` FLOPs 下保持了接近 full attention 的 VA/VT/IQ/OC/AQ/SC，而其他稀疏方法在更高 FLOPs 或更低 sparsity 下质量明显下降。
 
-![SLA qualitative comparison 原图](https://ar5iv.labs.arxiv.org/html/2509.24006/assets/x2.png){ width="820" }
+![SLA qualitative comparison 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla-qualitative-comparison-原图.png){ width="820" }
 
 <small>图源：`SLA`，Figure 2。原论文图意：在 Wan2.1 上对比 Full Attention、Linear Only、Sparse Only 和 SLA，SLA 在 95% sparsity 下保持接近 full attention 的视频质量；Linear Only 和 Sparse Only 出现明显质量退化。</small>
+
+!!! note "图解"
+    按列比较方法，按行比较同一 prompt 的生成质量。Linear Only 便宜但容易丢细节和一致性，Sparse Only 保留大权重但漏掉大量中间贡献，SLA 通过 sparse exact 加 linear compensation 接近 full attention。它是视觉证据，不替代表格指标。
 
 ### 效率：attention 变得接近不再是瓶颈
 
 论文在 RTX 5090 上比较 attention kernel 和端到端生成延迟。
 
-![SLA efficiency 原图](https://ar5iv.labs.arxiv.org/html/2509.24006/assets/x6.png){ width="760" }
+![SLA efficiency 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla-efficiency-原图.png){ width="760" }
 
 <small>图源：`SLA`，Figure 6。原论文图意：SLA 在 forward attention kernel 上相对 FlashAttention2 达到 13.7x speedup；端到端视频生成中 attention latency 从 97s 降到 11s，整体 E2E speedup 为 2.2x。</small>
+
+!!! note "图解"
+    左侧看 attention kernel 自身，右侧看端到端生成。attention 从主要瓶颈变成较小部分后，VAE、MLP、采样循环和其他算子会显得更突出，所以 13.7x kernel speedup 只转化为约 2.2x E2E speedup。这是部署时最容易误读的地方。
 
 这张图说明一个系统事实：即使 attention kernel 加速很多，端到端不一定等比例加速，因为视频生成里还有 VAE、MLP、norm、sampling loop、数据搬运等其他部分。SLA 把 attention 从 97s 降到 11s 后，剩下的 62s “Others” 成为主要时间，整体速度提升约 2.2x。也就是说，SLA 的成功会把瓶颈推向 attention 之外的模块。
 
@@ -235,9 +252,12 @@ P = P_1 + P_2,\quad P_1=P\odot M,\quad P_2=P\odot(1-M)
 
 SLA2 的总体 pipeline 如下：
 
-![SLA2 attention pipeline 原论文图](https://arxiv.org/html/2602.12675v1/x1.png){ width="760" }
+![SLA2 attention pipeline 原论文图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla2-attention-pipeline-原论文图.png){ width="390" }
 
 <small>图源：[SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675)，Figure 1。原论文图意：SLA2 用 learnable router \(R(Q,K)\) 产生 sparse mask，再用 learnable ratio \(\alpha\) 混合 sparse attention output 和 linear attention output；sparse 分支还可以通过 QAT 引入 low-bit attention。</small>
+
+!!! note "图解"
+    这张小图按三步读：router \(R(Q,K)\) 先决定哪些 block 进入 sparse 分支，\(\alpha\) 再决定 sparse output 和 linear output 的混合比例，QAT 则让 sparse 分支在低比特 forward 下训练适配。它补的是 SLA 的两个缺口：路由可学习、分支比例显式可学。
 
 ### SLA2 的公式：从 `Proj` 补偿改成比例混合
 
@@ -376,3 +396,8 @@ SLA 最值得记住的不是“95% sparsity”这个数字，而是它给近似 
 3. SLA 原图 HTML：[ar5iv:2509.24006](https://ar5iv.labs.arxiv.org/html/2509.24006).
 4. SLA2 Figure 1 见论文 PDF：[arXiv:2602.12675](https://arxiv.org/abs/2602.12675).
 5. 官方代码：[thu-ml/SLA](https://github.com/thu-ml/SLA).
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。
+    - 按导航顺序继续：[Attn-QAT：4-bit Attention](attn-qat.md)。

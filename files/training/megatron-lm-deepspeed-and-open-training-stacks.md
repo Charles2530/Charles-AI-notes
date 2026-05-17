@@ -1,5 +1,10 @@
 # Megatron、DeepSpeed 与训练栈
 
+!!! note "读法定位"
+    这页先回答“Megatron、DeepSpeed 与训练栈”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
+
 !!! info "事实版本"
     | Checked Date | Official Source | Repro Status | Notes |
     | --- | --- | --- | --- |
@@ -176,3 +181,8 @@ def build_training_stack(cfg):
 ```
 
 这段伪代码的重点是分层：模型构建、并行包装、优化器、运行时和 checkpoint 不应混成一团。只有边界清楚，后续替换 Megatron、DeepSpeed、FSDP、低精度策略或 checkpoint 后端时，系统才不会整体失控。
+
+!!! tip "下一站"
+    - 回到本专题入口：[训练](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

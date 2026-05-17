@@ -2,10 +2,15 @@
 
 这一页讲最常见的后训练量化路线。它们都在回答同一个问题：模型已经训练好了，不想重新大规模训练，怎样把权重或激活压低 bit，同时让输出尽量不变。
 
+!!! note "读法定位"
+    这页先回答“PTQ、GPTQ、AWQ 与 SmoothQuant”在「量化」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂张量、线性层和基本推理成本；遇到 FP8、KV Cache、outlier 时回前置页补概念。 必要时先回 [量化入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把数值格式、误差来源、校准/训练方法、kernel 和服务部署连成一条效率链，而不是只比较 bit 数。
+
 !!! note "初学者先抓住"
     `PTQ` 是大类，意思是 post-training quantization，训练后再量化。`GPTQ`、`AWQ` 和 `SmoothQuant` 是 PTQ 里的代表方法：GPTQ 做误差补偿，AWQ 保护激活敏感通道，SmoothQuant 把 activation outlier 的难度迁移到权重侧。
 
-## 1. PTQ 先解决什么
+## PTQ 先解决什么
 
 PTQ 的基本形式仍然是量化和反量化：
 
@@ -30,7 +35,7 @@ q=\mathrm{clip}\left(\mathrm{round}\left(\frac{x}{s}\right)+z,\ q_{\min},q_{\max
 
 **初学者直觉**：像把一张高清照片压缩。大块颜色可能没问题，小字、边缘和暗部细节最容易先坏。量化里，小字和边缘常对应 outlier 通道、敏感层、长上下文 KV 或高风险任务。
 
-## 2. 量化后真正要保的是矩阵乘输出
+## 量化后真正要保的是矩阵乘输出
 
 线性层原本是：
 
@@ -57,7 +62,7 @@ Y=XW
 !!! warning "常见误解"
     权重 MSE 小，不一定代表模型输出好。某些权重误差虽小，但如果正好落在高敏感方向或高激活通道上，输出会明显变差。
 
-## 3. 基础 PTQ：便宜，但不懂哪里敏感
+## 基础 PTQ：便宜，但不懂哪里敏感
 
 最朴素的 PTQ 会按层或按组估计 scale，然后直接 round。它的优点是快、便宜、容易跑通，适合做第一个 baseline。
 
@@ -70,7 +75,7 @@ Y=XW
 
 **它的短板**：基础 PTQ 通常不知道哪些层、哪些通道、哪些方向更敏感。因此 8bit 可能还好，4bit 或 W&A 量化就容易出现明显掉点。
 
-## 4. GPTQ：用补偿减少一层输出误差
+## GPTQ：用补偿减少一层输出误差
 
 GPTQ 常用下面的目标来理解：
 
@@ -104,7 +109,7 @@ GPTQ 常用下面的目标来理解：
 | 不需要重新训练全模型 | 强依赖校准数据和具体实现 |
 | 适合已有大模型 checkpoint | 速度收益仍取决于 runtime 和 kernel |
 
-## 5. AWQ：重要不只看权重，还看激活
+## AWQ：重要不只看权重，还看激活
 
 AWQ 的核心可以用通道贡献来理解：
 
@@ -137,7 +142,7 @@ Y=\sum_i X_iW_i
 
 AWQ 往往适合工程部署，因为它流程相对轻，和 weight-only 低比特服务路径结合得比较自然。
 
-## 6. SmoothQuant：把 activation outlier 的难度迁移到权重
+## SmoothQuant：把 activation outlier 的难度迁移到权重
 
 激活量化比权重量化难，主要因为 activation 是动态的，且容易出现 outlier。SmoothQuant 的核心等价变换是：
 
@@ -155,7 +160,7 @@ Y=XW=(XD^{-1})(DW)
 
 **读作什么**：输出 \(Y\) 不变，但 activation 的尖峰被压平一部分，难度被转移到更容易离线处理的权重上。
 
-![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="740" }
+![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="730" }
 
 <small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 2。原论文图意：原始激活 \(X\) 含有 outlier，导致有效量化 bit 变少；SmoothQuant 将一部分难度从 activation 迁移到 weight，让两侧都更容易量化。</small>
 
@@ -169,16 +174,16 @@ Y=XW=(XD^{-1})(DW)
 !!! note "图解：怎么读 SmoothQuant Figure 5"
     这张图强调“迁移”。activation 是线上动态生成的，处理 outlier 更麻烦；权重是静态的，可以离线吸收一部分缩放。因此 SmoothQuant 更适合推动 `W8A8` 这类权重和激活都低比特的路径。
 
-## 7. 哪些算子该低精，哪些要保高精
+## 哪些算子该低精，哪些要保高精
 
-![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="760" }
+![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="740" }
 
 <small>图源：SmoothQuant，Figure 6。原论文图意：Transformer block 中，部分矩阵乘可以走 INT8 路径，LayerNorm、Softmax、残差加法等敏感或不适合低精度的算子仍保留 FP16。</small>
 
 !!! note "图解：怎么读 SmoothQuant Figure 6"
     这张图告诉你：成熟部署通常是混合精度。GEMM 更适合低比特加速，但 LayerNorm、Softmax、residual add、某些输出头和安全/动作模块常常要保高精。
 
-## 8. 这几种方法怎么选
+## 这几种方法怎么选
 
 | 场景 | 推荐起点 | 原因 |
 | --- | --- | --- |
@@ -191,7 +196,7 @@ Y=XW=(XD^{-1})(DW)
 !!! warning "不要这样选"
     不要只根据“论文里哪个困惑度最低”选方案。还要看目标模型结构、校准集、runtime 支持、目标 GPU、batch/context 分布和任务桶。
 
-## 9. 一个最小实践顺序
+## 一个最小实践顺序
 
 1. 先跑 FP16/BF16 baseline，记录质量、显存、TTFT、TPOT、吞吐。
 2. 先试 W8 或 W4 weight-only，确认模型能加载、质量基本可接受。
@@ -200,8 +205,13 @@ Y=XW=(XD^{-1})(DW)
 5. 用 profiler 确认低比特 kernel 是否命中，记录 dequant 时间和 fallback。
 6. 对长上下文、多轮工具、多模态、代码、数学和高价值业务样本单独回归。
 
-## 10. 总结
+## 本页结论
 
 PTQ 是训练后压缩的大框架；GPTQ 用补偿保护层输出；AWQ 用激活统计保护关键通道；SmoothQuant 把激活离群值迁移到权重侧，让 W&A 量化更容易。它们都不是“越低 bit 越好”的证明，而是在不同约束下，把误差安排到更不伤模型输出的位置。
 
 下一步建议读 [激活离群值与校准策略](activation-outliers-and-calibration-strategies.md)，因为理解 outlier 和 calibration 后，GPTQ、AWQ、SmoothQuant 的取舍会清楚很多。
+
+!!! tip "下一站"
+    - 回到本专题入口：[量化](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[激活离群值与校准策略](activation-outliers-and-calibration-strategies.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

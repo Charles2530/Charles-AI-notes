@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # Diffusion Forcing：next-token 与全序列扩散
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [扩散模型](../../diffusion/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「扩散模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion`
     - 链接：[arXiv:2407.01392](https://arxiv.org/abs/2407.01392)
@@ -37,7 +42,7 @@ Diffusion Forcing 把两个轴交叉起来，让每个时间 token 拥有独立�
 
 这篇论文值得放进扩散专题，是因为它把扩散从“整段样本一起去噪”的默认形态，推到“序列上每个 token 可以处于不同不确定性”的形态。它和 [视频与多模态扩散](../../diffusion/video-and-multimodal-diffusion.md)、[采样与推理加速](../../diffusion/inference.md)、[条件控制与 Guidance](../../diffusion/guidance-and-conditioning.md) 都有直接接口。
 
-![Diffusion Forcing capabilities 原图](https://www.boyuan.space/diffusion-forcing/static/images/abilities.png){ width="920" }
+![Diffusion Forcing capabilities 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/diffusion-forcing-capabilities-原图.png){ width="920" }
 
 <small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 1。该图用 Guidance、Tree Search、Compositionality、Causal Uncertainty 和 Flexible Horizon 对比 Teacher Forcing、Full-Seq. Diffusion 与 Diffusion Forcing。</small>
 
@@ -110,7 +115,7 @@ sample sequence x_1:T
 
 论文在序列生成中使用的是 Causal Diffusion Forcing，简称 CDF。它要求模型在时间上因果，只能依赖过去和当前 token 的 noisy observation，而不能偷看未来干净 token。
 
-![Diffusion Forcing method 原图](https://www.boyuan.space/diffusion-forcing/static/images/method.png){ width="920" }
+![Diffusion Forcing method 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/diffusion-forcing-method-原图.png){ width="920" }
 
 <small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 2。原图展示 noise as masking、Diffusion Forcing、Teacher Forcing 和 Full-Seq. Diffusion 的训练与采样差异。</small>
 
@@ -171,7 +176,7 @@ step 5:     0    0    0    0    0
 
 这个矩阵只是示意，真实 schedule 可以按任务设计。关键是：近处未来可以更干净，远处未来可以保持更 noisy。这样模型在做规划或视频 rollout 时，不必假装所有未来同样确定。
 
-![Diffusion Forcing usage 原图](https://www.boyuan.space/diffusion-forcing/static/images/usage.png){ width="920" }
+![Diffusion Forcing usage 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/diffusion-forcing-usage-原图.png){ width="920" }
 
 <small>图源：`Diffusion Forcing` 官方项目页。该图概览稳定自回归 rollout、带因果不确定性的去噪、整段轨迹 guidance 和 corrupted observation conditioning 等用法。</small>
 
@@ -201,11 +206,11 @@ DF 的稳定性来自一个很细但很关键的设计：在自回归 rollout �
 
 实验结论是：DF 在训练 horizon 外仍能保持更稳定的视频结构，而 teacher forcing 和 causal full-sequence diffusion 更容易出现漂移或帧间跳变。
 
-![DMLab video prediction 原图](https://www.boyuan.space/diffusion-forcing/static/images/dmlab_df_1.png){ width="760" }
+![DMLab video prediction 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/dmlab-video-prediction-原图.png){ width="610" }
 
 <small>图源：`Diffusion Forcing` 官方项目页。DMLab 结果展示 DF 的视频预测样例，红框是 conditioning frames。</small>
 
-![Minecraft video prediction 原图](https://www.boyuan.space/diffusion-forcing/static/images/minecraft_df_1.png){ width="920" }
+![Minecraft video prediction 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/minecraft-video-prediction-原图.png){ width="920" }
 
 <small>图源：`Diffusion Forcing` 官方项目页。Minecraft 结果展示 DF 在 128x128 Minecraft 视频上的自回归预测样例。</small>
 
@@ -265,7 +270,7 @@ current token denoising
 
 论文还把 DF 用在真实 Franka 机器人长时模仿学习上。任务是把苹果和橙子通过第三个空槽交换位置。这个任务的难点是非 Markov：只看当前画面，有时无法判断下一步应该移动哪个水果，必须记住初始配置。
 
-![Robot imitation learning 原图](https://www.boyuan.space/diffusion-forcing/static/images/robot.png){ width="920" }
+![Robot imitation learning 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/robot-imitation-learning-原图.png){ width="920" }
 
 <small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 4。图中展示有记忆依赖的水果交换任务、生成视频预测和双相机观测。</small>
 
@@ -426,6 +431,11 @@ Diffusion Forcing 的关键贡献是把扩散模型从“一段序列共享一�
 5. 规划和模仿学习中的闭环记忆。
 
 从工程角度看，它最值得借鉴的不是某个 RNN 结构，而是一个训练原则：**不要把所有未来 token 都当成同等不确定，也不要把模型自己生成的历史当成完全可信。把不确定性做成每个 token 的噪声水平，训练和采样就能表达更真实的序列状态。**
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。
+    - 按导航顺序继续：[CausVid：流式自回归视频扩散](causvid.md)。
 
 ## 参考资料
 

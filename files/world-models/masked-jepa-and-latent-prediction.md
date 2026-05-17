@@ -2,12 +2,17 @@
 
 这页回答一个初学者很容易忽略的问题：**世界模型为什么不总是直接预测像素？**
 
+!!! note "读法定位"
+    这页先回答“Masked / JEPA 与潜变量预测”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先回 [世界模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把表征预测、潜变量动力学、规划、rollout 服务和具身/视频应用连成“可模拟、可评估、可行动”的主线。
+
 如果目标是生成视频，像素或视频 latent 当然重要；但如果目标是规划和控制，模型真正需要保留的是会改变动作选择的变量：物体位置、运动趋势、接触、遮挡、任务阶段、奖励、风险和终止。Masked / JEPA 路线的价值，就是把训练压力从逐像素复原转向更抽象、更稳定的 latent 或 embedding。
 
 !!! note "一句话结论"
     Masked / JEPA 可以提高表示效率和样本效率，但原始形式通常还不包含 action、reward、done 和 closed-loop 消费接口。要成为可规划世界模型，还必须接 action-conditioned dynamics、risk/reward heads 和闭环评测。
 
-## 1. 为什么不直接预测像素
+## 为什么不直接预测像素
 
 像素预测有一个好处：监督信号密集，输出直观。但它对世界模型也有明显副作用。
 
@@ -29,7 +34,7 @@
 
 这不是否定像素视频。可视化、人审、数据回流和生成式模拟仍然需要视频输出。关键是：控制主路径不一定要逐帧生成高清未来。
 
-## 2. 四种训练目标对照
+## 四种训练目标对照
 
 | 目标 | 简化 loss | 输入输出 | 省下什么 | 不能证明什么 |
 | --- | --- | --- | --- | --- |
@@ -40,7 +45,7 @@
 
 可以把它理解成学习阶梯：pixel reconstruction 证明模型能看见，latent prediction 证明模型能压缩，JEPA 证明模型能预测抽象结构，action-conditioned dynamics 才开始回答“如果我这样做，会发生什么”。
 
-## 3. MWM：先压视觉，再学 dynamics
+## MWM：先压视觉，再学 dynamics
 
 `Masked World Models for Visual Control` 的核心思路是把视觉表征和 dynamics 解耦：先用 masked convolutional features 训练视觉 autoencoder，并加入 reward prediction；再冻结或解耦这个表示，在 latent space 中训练 dynamics model。
 
@@ -67,7 +72,7 @@
 !!! warning "读数边界"
     Figure 4 是论文设置下的 Meta-world / RLBench paper result。它支持“MWM 在这些视觉控制任务中改善样本效率”，但不能证明任意视频世界模型都应优先用 MWM，也不能替代 action sensitivity 和真实部署评测。
 
-## 4. V-JEPA：预测 latent，不画回像素
+## V-JEPA：预测 latent，不画回像素
 
 V-JEPA 的关键转向是：让模型预测 target encoder 产生的 latent representation，而不是用 decoder 把被遮挡区域逐像素画回来。这样可以减少对低层纹理的依赖，把容量更多放在对象、运动和场景结构上。
 
@@ -101,7 +106,7 @@ V-JEPA 的关键转向是：让模型预测 target encoder 产生的 latent repr
     **公式对应**：视频 token 是 \(x_t\) 到 \(z_t\) 的前置压缩接口。<br>
     **容易误读**：token 更少不等于控制更好；必须检查接触、遮挡、风险和动作敏感性是否保留。
 
-## 5. V-JEPA 2-AC：从表征预测走向动作条件规划
+## V-JEPA 2-AC：从表征预测走向动作条件规划
 
 V-JEPA 2-AC 更接近世界模型主线，因为它把视频自监督表征接到 action-conditioned predictor，并用 `MPC/CEM` 搜索动作序列，使未来 latent 接近目标图像 latent。
 
@@ -125,7 +130,7 @@ V-JEPA 2-AC 更接近世界模型主线，因为它把视频自监督表征接�
     **公式对应**：模型输出未来 latent 后，planner 选择让未来 latent 更接近目标的动作。<br>
     **容易误读**：表格不是跨平台通用控制结论，仍受目标图像、动作空间、任务集和硬件设置限制。
 
-## 6. 什么时候它还不是完整世界模型
+## 什么时候它还不是完整世界模型
 
 | 情况 | 为什么不够 | 需要补什么 |
 | --- | --- | --- |
@@ -135,7 +140,7 @@ V-JEPA 2-AC 更接近世界模型主线，因为它把视频自监督表征接�
 | latent 太压缩 | 省 token 但可能丢接触、透明物体、遮挡身份 | task-state probing、failure replay、hard-negative eval |
 | mask 或 tokenizer 只在静态数据上验证 | 静态泛化不能覆盖控制分布 shift | offline-online hybrid、真实 rollout 回流 |
 
-## 7. 工程选择
+## 工程选择
 
 | 需求 | 优先路线 | 原因 |
 | --- | --- | --- |
@@ -145,7 +150,7 @@ V-JEPA 2-AC 更接近世界模型主线，因为它把视频自监督表征接�
 | 需要生成可检查视频反事实 | action-conditioned video world model | 需要外部模拟和人类/系统审查 |
 | 实时闭环控制 | latent dynamics + 短 horizon refresh | 优先压延迟和 drift，而不是追求像素质量 |
 
-## 8. Claim Ledger
+## Claim Ledger
 
 | Claim | Source | Evidence Type | Can Support | Cannot Prove |
 | --- | --- | --- | --- | --- |
@@ -153,6 +158,11 @@ V-JEPA 2-AC 更接近世界模型主线，因为它把视频自监督表征接�
 | V-JEPA 通过 latent target prediction 避免部分像素重建成本 | [V-JEPA](https://arxiv.org/abs/2404.08471) | Ablation | joint-embedding prediction 是高效视频表征预训练路线 | 原始 V-JEPA 已经包含动作、奖励和终止建模 |
 | V-JEPA 2-AC 把 JEPA 表征接到动作条件 latent planning | [V-JEPA 2](https://arxiv.org/abs/2506.09985) | Closed-loop | 表征空间 MPC 可以在特定机器人设置中执行目标驱动任务 | 跨平台通用控制、长时风险规划和真实部署安全性 |
 
-## 9. 接回主线
+## 接回主线
 
 读完这页后，回到 [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) 看 latent dynamics 如何真正进入 actor-critic；再读 [WM / WAM / VAM](wm-wam-vam-and-action-conditioned-modeling.md)，判断动作是条件、输出还是和世界未来联合生成；最后用 [世界模型评测与失效模式](evaluation-and-failure-modes.md) 检查表征是否真的改善决策。
+
+!!! tip "下一站"
+    - 回到本专题入口：[世界模型](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[WM / WAM / VAM：动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

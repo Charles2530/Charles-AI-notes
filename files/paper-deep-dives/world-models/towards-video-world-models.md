@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Towards Video World Models：视频世界模型五个门槛
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "文章信息"
     - 文章：`Towards Video World Models`
     - 作者：`Xun Huang`
@@ -86,7 +91,7 @@ $$
 
 前两个是硬约束。没有 causal，就无法在生成过程中插入新动作；没有 interactive，就只是 observer-mode simulator。后三个更像连续谱：不同应用对 persistence、real-time 和 physical accuracy 的优先级不同。
 
-## 1. Causal：从双向视频生成到自回归世界模拟
+## Causal：从双向视频生成到自回归世界模拟
 
 当前很多强视频模型使用 diffusion transformer，在一个视频块内用双向注意力同时生成所有帧。这对离线视频生成很有效，但对世界模型有根本问题：模型在生成当前帧时可以利用未来帧信息，时间结构不是因果的。
 
@@ -113,7 +118,7 @@ $$
 
 这对训练框架的启发是：如果目标是交互式世界模型，训练和推理都必须避免“未来帧泄漏”。否则离线生成质量再高，闭环交互时也会出现训练-推理不一致。
 
-## 2. Interactive：动作不是附加条件，而是未来分叉变量
+## Interactive：动作不是附加条件，而是未来分叉变量
 
 interactive controllability 是 video world model 的分水岭。文章把它定义为：用户或 agent 可以在运行过程中注入动作，并让模型预测随动作改变的未来。
 
@@ -138,7 +143,7 @@ interactive controllability 是 video world model 的分水岭。文章把它定
 
 这也解释了 LingBot-World 为什么强调 interaction data engine、action adapter 和 causal rollout。没有动作对齐数据，视频模型只能做视觉续写；有了动作但没有因果推理，模型也很难实时响应新输入。
 
-## 3. Persistent：长时记忆不能只靠无限长上下文
+## Persistent：长时记忆不能只靠无限长上下文
 
 世界模拟不能只生成几秒视频。游戏、机器人训练和导航都要求模型在长时间内保持同一个世界：房间结构不能变、对象身份不能漂移、走过的路径不能被重新生成。
 
@@ -164,7 +169,7 @@ interactive controllability 是 video world model 的分水岭。文章把它定
 4. 生成速度是否随历史增长明显下降；
 5. 错误是否会在自回归 rollout 中持续累积。
 
-## 4. Real-Time：吞吐和延迟是两个指标
+## Real-Time：吞吐和延迟是两个指标
 
 文章对 real-time 的区分很有工程价值：吞吐量和延迟不是一回事。
 
@@ -188,7 +193,7 @@ causal / autoregressive generation
 
 这个训练细节很重要：如果训练只看 teacher-forced clean context，推理时却不断吃自己生成的历史，误差会滚雪球。Self-Forcing、APT2 这类方向的共同点，是把 inference-time rollout 的状态分布提前带进训练。
 
-## 5. Physically Accurate：视觉真实不等于物理可用
+## Physically Accurate：视觉真实不等于物理可用
 
 video world model 作为模拟器，不能只生成“看起来像真的”视频，还要尽量遵守物理约束。文章指出一个现实问题：模型规模和数据量会提升物理 realism，但不等于模型学会可外推的物理规律。
 
@@ -300,3 +305,8 @@ WonderPlay 这类方向就是把物理仿真、3D Gaussian 表示和视频扩散
 5. 对人类交互娱乐来说，低延迟可能比严格物理更重要，不能用同一套指标评价所有应用。
 
 最实用的读法是：把这篇文章当作视频世界模型的“需求规格说明”。如果一个视频模型要从生成器升级成世界模拟器，至少要逐项回答：是否因果、是否可控、是否持久、是否低延迟、是否物理可信。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[具身世界模型综述](world-models-embodied-ai-survey.md)。

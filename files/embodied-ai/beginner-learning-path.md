@@ -2,6 +2,11 @@
 
 这一页是具身智能章节的第一入口。它不是从论文名开始，而是从一个最朴素的任务开始：
 
+!!! note "读法定位"
+    这页先回答“具身智能从零路线”在「具身智能」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 VLA、世界模型、相机/深度和评测集的基本角色。 必要时先回 [具身智能入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把感知、数据、仿真、策略、控制、安全和真实闭环连起来，看机器人系统为什么不能只靠离线指标判断。
+
 **机器人听到“把红杯放到托盘上”，到底要连续做对哪些事？**
 
 它至少要看见杯子和托盘，理解“放到”是一个空间目标，选择抓取方式，输出动作，执行后重新观察，判断杯子是否真的在托盘上。如果杯子滑了、托盘被遮住了、夹爪没夹稳，它还要能停下来、重试或请求帮助。
@@ -14,11 +19,11 @@
 
 只要这条链里有一段不稳，机器人就会失败。π0.5、DreamZero、LingBot-World、Dreamer、RoboTwin、cuRobo 这些名字，都是在强化这条链里的不同位置。
 
-## 1. 先用一张图建立闭环直觉
+## 先用一张图建立闭环直觉
 
 RT-1 原论文图很适合作为第一张具身智能图：左边是语言和图像历史，中间是 Transformer policy，右边是机器人动作。注意它不是“看图回答问题”，而是每输出一个动作，世界都会变，下一帧观测又会影响后续动作。
 
-![RT-1 overview 原论文图](../assets/images/paper-figures/embodied-ai/rt1-figure-1-overview.png){ width="820" }
+![RT-1 overview 原论文图](../assets/images/paper-figures/embodied-ai/rt1-figure-1-overview.png){ width="760" }
 
 <small>图源：[RT-1: Robotics Transformer for Real-World Control at Scale](https://arxiv.org/abs/2212.06817)，Figure 1。原论文图意：RT-1 接收自然语言指令和图像历史，经过 tokenization 与 Transformer policy，以约 3Hz 输出机器人动作 token，驱动机械臂完成真实任务。</small>
 
@@ -49,7 +54,7 @@ RT-1 原论文图很适合作为第一张具身智能图：左边是语言和图
 3. 如果变化不对，能不能恢复；
 4. 如果有危险，能不能停下、降级或拒绝。
 
-## 2. 七个基本问题
+## 七个基本问题
 
 任何具身系统都可以按七个问题拆开。读论文或看项目时，先问它主要解决哪一格。
 
@@ -65,7 +70,7 @@ RT-1 原论文图很适合作为第一张具身智能图：左边是语言和图
 
 如果一篇论文没有告诉你它在回答哪一个问题，就很容易读乱。
 
-## 3. 符号速查：先别怕公式
+## 符号速查：先别怕公式
 
 具身智能公式的作用，通常只是把“谁输入、谁输出、看多远”写清楚。先记住下面这些符号，后面的 VLM、VLA、世界模型和 WAM 就不会散。
 
@@ -107,7 +112,7 @@ o_{t+1}.
 
 这个公式说明了闭环接口；它不说明动作一定安全，也不说明任务一定成功。
 
-## 4. 四类模型先分清楚
+## 四类模型先分清楚
 
 ### 4.1 VLM：看懂当前画面
 
@@ -154,7 +159,7 @@ A_{t:t+H-1} \sim \pi_\theta(o_{\le t}, q_t, \ell)
 
 ACT 这张图能帮助理解 action chunk：策略不是每次只吐一个动作点，而是生成一段短动作序列，并在执行时用 temporal ensembling 等方式平滑。
 
-![ACT architecture 原论文图](../assets/images/paper-figures/vla/aloha-act-algorithm.png){ width="760" }
+![ACT architecture 原论文图](../assets/images/paper-figures/vla/aloha-act-algorithm.png){ width="720" }
 
 <small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705)，Figure 2。原论文图意：Action Chunking with Transformers (ACT) 用 CVAE 编码动作序列和关节观测，测试时根据多视角图像、关节状态和 latent 生成一段 action sequence，并用 temporal ensembling 平滑执行。</small>
 
@@ -215,7 +220,7 @@ DreamZero 这条路线正是把未来视频和未来动作绑在一起。
 !!! note "图解：WAM 的关键词是对齐"
     这张图不要只看未来视频是否清晰，而要看动作和视频是否互相解释。动作说“夹起杯子”，未来画面就应该出现杯子被夹起；如果画面没有变化或变化与动作无关，说明模型没有真正学到 action-conditioned future。
 
-## 5. π0.5：把长任务分成高层语义和低层动作
+## π0.5：把长任务分成高层语义和低层动作
 
 [π0.5](../paper-deep-dives/embodied-ai/pi05.md) 适合作为 VLA 入门论文。它面对的不是单个桌面抓取，而是“clean the kitchen”“clean the bedroom”这类开放世界长任务。
 
@@ -234,7 +239,7 @@ DreamZero 这条路线正是把未来视频和未来动作绑在一起。
 
 所以 π0.5 的核心启发是：**VLA 不是只收更多动作轨迹，而是要把语义、任务分解和动作控制放进同一个训练体系。**
 
-## 6. DreamZero：让动作和未来画面互相约束
+## DreamZero：让动作和未来画面互相约束
 
 [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) 适合理解 WAM。它的关键循环是：
 
@@ -265,7 +270,7 @@ DreamZero 和 π0.5 的差别可以压成一张表：
 
 读 DreamZero 时要抓住一个矛盾：它让模型学会“动作导致什么视觉变化”，这很强；但如果未来视频预测错，它可能会非常一致地执行错误计划。因此 WAM 不能绕过安全层。
 
-## 7. 为什么还需要 planner、controller 和 safety filter
+## 为什么还需要 planner、controller 和 safety filter
 
 模型输出动作后，真实机器人通常还要经过一层或多层执行接口：
 
@@ -288,7 +293,7 @@ SayCan 的图很适合解释“会说”和“能做”的区别。LLM 给候选
 !!! note "图解：useful 和 possible 要一起看"
     左边语言模型更像“这个动作对任务有没有用”，右边 affordance 更像“这个动作在当前环境能不能做”。真实机器人需要两者相乘或共同约束：只 useful 可能会撞，只 possible 可能和任务无关。
 
-## 8. 数据和评测：闭环能不能进步
+## 数据和评测：闭环能不能进步
 
 具身智能的数据不是一堆图片，也不是一堆孤立动作。它应该能回放一条 episode：
 
@@ -303,7 +308,7 @@ instruction
 
 Open X-Embodiment 这张图提醒我们：跨机器人、跨场景、跨任务的数据非常异质。不同机器人有不同相机、动作空间、夹爪、控制频率和任务分布。
 
-![Open X-Embodiment dataset 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="820" }
+![Open X-Embodiment dataset 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="760" }
 
 <small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。原论文图意：统计 Open X-Embodiment 中不同 robot embodiment、scene、trajectory、skill 和 object category 的分布，展示跨机器人数据的异质性。</small>
 
@@ -320,7 +325,7 @@ Open X-Embodiment 这张图提醒我们：跨机器人、跨场景、跨任务�
 
 这里 success checker 很关键。它定义“什么叫成功”，也决定失败样本能不能被统计和回流。没有 success checker，模型训练出来也很难解释。
 
-## 9. 一个任务贯穿所有概念
+## 一个任务贯穿所有概念
 
 以“把圆柱体放入尺寸匹配的罐子”为例：
 
@@ -336,7 +341,7 @@ Open X-Embodiment 这张图提醒我们：跨机器人、跨场景、跨任务�
 
 这就是具身智能的完整闭环。下一页建议读 [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md)，它会把这些模块的边界讲清楚；再读 [一个任务跑通具身闭环](closed-loop-task-walkthrough.md)，用同一套符号把任务走完整。
 
-## 10. 推荐学习顺序
+## 推荐学习顺序
 
 如果你现在还觉得散，按这个顺序读：
 
@@ -350,7 +355,7 @@ Open X-Embodiment 这张图提醒我们：跨机器人、跨场景、跨任务�
 8. [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)：理解 WAM 如何把未来视频和动作绑在一起。
 9. [LingBot-World](../paper-deep-dives/world-models/lingbot-world.md)：理解视频生成模型如何变成交互世界模拟器。
 
-## 11. 读懂的检查标准
+## 检查标准
 
 读完这一组页面后，你应该能回答：
 
@@ -363,3 +368,8 @@ Open X-Embodiment 这张图提醒我们：跨机器人、跨场景、跨任务�
 7. 为什么 success checker 和失败回流要比大规模生成轨迹更早设计？
 
 如果这些问题都能答清楚，具身智能的主线就立住了。
+
+!!! tip "下一站"
+    - 回到本专题入口：[具身智能](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[VLA 数据、模型与评测路线](vla-data-model-and-evaluation-roadmap.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

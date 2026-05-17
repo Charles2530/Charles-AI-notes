@@ -2,6 +2,11 @@
 
 深层网络能稳定训练，不只靠模型结构，还靠一组看似基础但非常关键的组件：归一化、残差连接和激活函数。
 
+!!! note "读法定位"
+    这页先回答“Norm、残差与激活函数”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 ![ResNet residual block](../assets/images/paper-figures/foundations/resnet-figure-2-residual-block.png){ width="700" }
 
 <small>图源：[Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)，Figure 2。原论文图意：残差块让网络学习 \(F(x)\)，再与 identity shortcut 的 \(x\) 相加，输出 \(F(x)+x\)。</small>
@@ -15,7 +20,7 @@
 !!! tip "遇到这些症状，回看本页"
     FP8/FP16 训练短跑正常但长跑爆、某些层 activation amax 长期贴上限、加深模型后梯度开始异常，或者换 SwiGLU/MLP 配置后 loss spike 变多时，回看本页。本页能帮你判断问题来自尺度漂移、残差通路、activation outlier，还是低精度下敏感层缺少高精保护。
 
-## 0. 符号卡：稳定性组件怎么读
+## 符号卡：稳定性组件怎么读
 
 | 符号或词 | 含义 |
 | --- | --- |
@@ -29,7 +34,7 @@
 
 这页的公式都可以先按“尺度、通路、非线性”三件事读：Norm 管尺度，Residual 管通路，Activation 管表达能力。
 
-## 1. 归一化在解决什么
+## 归一化在解决什么
 
 神经网络每层输出的数值尺度可能不断漂移。尺度过大，梯度可能爆炸；尺度过小，梯度可能消失。
 
@@ -43,7 +48,7 @@
 | LayerNorm | Transformer | 按 token 内部 hidden 维统计 |
 | RMSNorm | LLM | 只用均方根尺度，更简单高效 |
 
-## 2. 残差连接：让深层网络学“改动量”
+## 残差连接：让深层网络学“改动量”
 
 残差连接是 ResNet 论文里最值得牢牢记住的基础结构。它不是简单多画一根线，而是把一个深层模块拆成两条路径：一条主分支学习变换 \(F(x)\)，另一条 shortcut 分支尽量原样保留输入 \(x\)。最后把两条路径相加：
 
@@ -109,13 +114,13 @@ x = x + MLP(Norm(x))
 !!! warning "残差不是万能保险"
     残差连接保留了信息和梯度通路，但它也会把尺度问题继续传下去。如果主分支输出过大、Norm 位置不合适，或者低精度加法累积误差明显，残差流会把这些异常带到后续层。因此实际训练里常和 LayerNorm/RMSNorm、合适初始化、residual scaling、gradient clipping 一起使用。
 
-## 3. 激活函数为什么不能省
+## 激活函数为什么不能省
 
 如果网络只有线性层，那么多层线性叠加仍然等价于一个线性变换。激活函数提供非线性，让模型能表达复杂关系。
 
 直觉上，activation 不是“给线性层后面随便接一个弯曲函数”。它决定了哪些 pre-activation 会被压掉、哪些会接近原样通过、负值区域是否还有梯度，以及 MLP 中间层会产生稀疏表示还是更密的连续表示。
 
-![GELU、ReLU 与 Swish 激活曲线](../assets/images/paper-figures/foundations/activation-functions-naoki-shibuya.png){ width="720" }
+![GELU、ReLU 与 Swish 激活曲线](../assets/images/paper-figures/foundations/activation-functions-naoki-shibuya.png){ width="570" }
 
 <small>图源：[SwiGLU: GLU Variants Improve Transformer (2020)](https://naokishibuya.github.io/blog/2023-04-30-swiglu-2020/index.html)，Activation Functions 图（本地保存原图副本）。原文图意：对比 GELU、ReLU、Swish 和不同 \(\beta\) 下的 Swish 曲线；Swish 在 \(\beta=1\) 时就是常见 SiLU 形式。</small>
 
@@ -145,7 +150,7 @@ GELU 论文还给出常用近似：
 
 <small>公式来源：[Rectified Linear Units Improve Restricted Boltzmann Machines](https://www.cs.toronto.edu/~hinton/absps/reluICML.pdf)、[Gaussian Error Linear Units (GELUs)](https://arxiv.org/abs/1606.08415)、[Searching for Activation Functions](https://arxiv.org/abs/1710.05941)、[GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202)。</small>
 
-## 4. Pre-Norm 和 Post-Norm
+## Pre-Norm 和 Post-Norm
 
 Transformer 里常见两种写法：
 
@@ -161,7 +166,7 @@ x = Norm(x + MLP(x))
 
 很多大模型更偏好 Pre-Norm，因为深层训练更稳。Post-Norm 在某些设置下也有价值，但更容易遇到梯度稳定性问题。
 
-## 5. 数据流图：一个 Transformer Block 里的稳定性路径
+## 数据流图：一个 Transformer Block 里的稳定性路径
 
 ```mermaid
 flowchart LR
@@ -178,7 +183,7 @@ flowchart LR
 
 读这个图时，不要只看模块名字。`Norm` 决定输入尺度，`Attention / MLP` 决定大部分计算和激活分布，`Residual Add` 决定信息与梯度是否能穿过深层网络。低精度训练或量化时，任何一处尺度偏移都会通过残差路径累积到后续层。
 
-## 6. 一个故障案例：SwiGLU 后 activation outlier 增多
+## 一个故障案例：SwiGLU 后 activation outlier 增多
 
 假设把某个 Transformer 的 MLP 从 GELU 换成 SwiGLU 后，短跑 loss 正常，但 20k step 后开始出现 loss spike。排查时不要只调学习率，可以按下面看：
 
@@ -191,7 +196,7 @@ flowchart LR
 
 修复不一定是回退激活函数。可以先让敏感层保 BF16、调整 FP8 scale granularity、给 MLP 输出加 clipping 或重新校准初始化。关键是把问题定位到尺度、激活分布和低精度路径，而不是笼统说“模型不稳定”。
 
-## 7. 低精度训练为什么更依赖这些组件
+## 低精度训练为什么更依赖这些组件
 
 当使用 FP16、BF16、FP8 或更激进低精度时，数值范围和舍入误差会更敏感。Norm 和 residual 能减少尺度漂移，激活函数和 MLP 结构则会影响异常值分布。
 
@@ -203,12 +208,17 @@ flowchart LR
 4. optimizer state 如何保存；
 5. 梯度缩放和 clipping 是否合理。
 
-## 8. 和后续专题的关系
+## 和后续专题的关系
 
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：排查 loss spike、NaN 和梯度异常。
 - [量化激活离群值](../quantization/activation-outliers-and-calibration-strategies.md)：理解 SmoothQuant 和 activation outlier。
 - [Transformer 基础](transformer-attention-and-tokenization.md)：理解 block 内 norm、residual 和 MLP 的位置。
 
-## 小结
+## 本页结论
 
 Norm 控制尺度，residual 保留路径，activation 提供非线性。深层模型的很多“高级能力”都建立在这些基础组件稳定工作的前提上。
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[MoE 与大模型架构表](moe-and-large-model-architecture-basics.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

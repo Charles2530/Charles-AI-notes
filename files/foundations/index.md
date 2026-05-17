@@ -2,6 +2,11 @@
 
 这一组页面是本站后续专题的公共地基。它不要求你先学完整本数学教材，而是帮你把论文和工程文档里最常见的概念按顺序串起来：
 
+!!! note "读法定位"
+    这页先回答“AI 基础知识地图”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先看本页路线，或查 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 ```text
 数据 -> 张量 / Token -> 模型模块 -> Loss -> 梯度 -> Runtime -> 评测证据
 ```
@@ -11,7 +16,7 @@
 !!! note "先读哪几页"
     推荐顺序是：本页 -> [符号与最小数学地图](symbols-and-minimal-math.md) -> [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) -> [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md) -> [Transformer 输入与注意力](transformer-attention-and-tokenization.md) -> [概率与潜变量模型](probability-latent-variables-and-generative-models.md) -> [优化与训练入门](optimization-and-training-basics.md)。读完这些，再按兴趣补多模态、MoE、Mamba、显存和评测。
 
-## 1. 一张图先建立全局感
+## 一张图先建立全局感
 
 ![Transformer architecture 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="500" .atlas-figure-tall }
 
@@ -23,7 +28,7 @@
     **对应基础页**：token 和 attention 看 Transformer 页，MLP 看线性层页，residual/norm 看稳定性页，softmax 和概率看符号页与概率页。  
     **容易误读**：这张图是结构图，不是显存图。真实系统还要考虑 KV cache、dtype、kernel、batch 和 runtime。
 
-## 2. 基础主线：从数据到证据
+## 基础主线：从数据到证据
 
 ### 2.1 数据先变成张量和 token
 
@@ -108,7 +113,7 @@ runtime -> 调度、缓存、融合和 fallback
 
 先读 [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。如果只看一个总分，很容易把平均收益误读成关键场景可靠。
 
-## 3. 两条常见学习路线
+## 两条常见学习路线
 
 ### 3.1 从零读 AI 模型
 
@@ -134,7 +139,7 @@ runtime -> 调度、缓存、融合和 fallback
 | 世界模型 | latent、动作条件分布、rollout、评测桶 |
 | 技术报告 | MoE、Mamba、低精度、activated params、证据边界 |
 
-## 4. 读论文时的四步法
+## 读论文时的四步法
 
 读任何新论文，先按这四步拆：
 
@@ -145,7 +150,7 @@ runtime -> 调度、缓存、融合和 fallback
 
 如果这四步还不熟，先不要急着读 [论文专题前置知识地图](paper-reading-prerequisites.md)。那一页更适合读完基础页后，用来对照不同论文方向。
 
-## 5. 进阶查阅：遇到症状回看哪页
+## 进阶查阅：遇到症状回看哪页
 
 | 现场症状 | 先回看 |
 | --- | --- |
@@ -156,6 +161,10 @@ runtime -> 调度、缓存、融合和 fallback
 | 低比特模型变小但不快 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
 | RAG 或工具调用结果不可复现 | [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
 
-## 小结
+## 本页结论
 
 基础知识不是“学完才能开始”的门槛，而是一张回查地图。第一次读只要打通主线：数据变成张量，模块处理表示，loss 产生梯度，runtime 决定成本，评测决定结论。后面读扩散、VLM、量化、训练、推理和世界模型时，遇到卡点再回到对应基础页补细节。
+
+!!! tip "下一站"
+    - 按导航顺序继续：[符号与最小数学地图](symbols-and-minimal-math.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

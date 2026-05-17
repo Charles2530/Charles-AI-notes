@@ -2,6 +2,11 @@
 
 卷积是视觉模型里最经典的结构之一。即使 Transformer 很流行，卷积仍然是理解 CNN、UNet、视觉编码器和扩散模型的重要基础。
 
+!!! note "读法定位"
+    这页先回答“卷积与视觉特征”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 ![U-Net architecture](../assets/images/paper-figures/foundations/unet-figure-1-architecture.png){ width="830" }
 
 <small>图源：[U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597)，Figure 1。原论文图意：U-Net 左侧 contracting path 逐步下采样并扩大上下文，右侧 expanding path 逐步上采样恢复分辨率，灰色箭头把高分辨率特征复制到对应解码层。</small>
@@ -15,7 +20,7 @@
 !!! tip "遇到这些症状，回看本页"
     世界模型视频看起来整体合理但小物体、接触边缘、文字或把手位置丢失，VLA 换背景就退化，或者视觉 tokenizer 一压缩就失去抓取相关细节时，回看本页。本页能帮你判断是局部特征没保住、stride 下采样太狠、skip connection 不够，还是视觉 encoder 过早把决策相关细节平均掉。
 
-## 0. 符号卡：卷积公式怎么读
+## 符号卡：卷积公式怎么读
 
 | 符号 | 含义 |
 | --- | --- |
@@ -35,7 +40,7 @@ y_{i,j} = \sum_{u,v} k_{u,v} x_{i+u,j+v}
 
 读作：用一个小窗口 \(k\) 去看输入 \(x\) 周围的一小块区域，把窗口权重和局部像素相乘求和，得到输出位置 \(y_{i,j}\)。
 
-## 1. 卷积在做什么
+## 卷积在做什么
 
 卷积可以理解为一个小窗口在图像上滑动。窗口里的参数叫 kernel，它会和局部像素相乘求和，得到输出特征。
 
@@ -53,7 +58,7 @@ y_{i,j} = \sum_{u,v} k_{u,v} x_{i+u,j+v}
 
 浅层卷积看局部纹理，深层卷积通过多层叠加看到更大的结构。
 
-## 2. Stride、Padding 和 Channel
+## Stride、Padding 和 Channel
 
 | 概念 | 作用 | 直观例子 |
 | --- | --- | --- |
@@ -65,7 +70,7 @@ y_{i,j} = \sum_{u,v} k_{u,v} x_{i+u,j+v}
 如果 stride 变大，输出图会变小，模型计算更省，但细节也更容易丢。  
 如果 channel 变多，模型能表达更多特征，但参数量和计算量也会上升。
 
-## 3. Receptive Field：模型到底看到了多大范围
+## Receptive Field：模型到底看到了多大范围
 
 感受野指输出某个位置能看到输入的多大区域。单层 3x3 卷积只看很小范围，但多层叠加后感受野会扩大。
 
@@ -77,7 +82,7 @@ y_{i,j} = \sum_{u,v} k_{u,v} x_{i+u,j+v}
 
 在扩散模型的 UNet 中，这种多尺度结构非常重要：低分辨率层负责大构图，高分辨率层负责细节和边缘。
 
-## 4. 为什么 UNet 常用于扩散模型
+## 为什么 UNet 常用于扩散模型
 
 UNet 有两条关键设计：
 
@@ -87,7 +92,7 @@ UNet 有两条关键设计：
 
 因此 UNet 很适合做“输入一张带噪图，输出去噪结果”这类 dense prediction 任务。
 
-## 5. 多尺度视觉特征怎么服务 VLA
+## 多尺度视觉特征怎么服务 VLA
 
 ```mermaid
 flowchart TD
@@ -104,7 +109,7 @@ flowchart TD
 
 这张图说明卷积和多尺度结构在 VLA 中仍然有价值。高层语义告诉系统“这是红杯、目标是灰箱”，浅层局部特征告诉系统“杯把边界在哪里、夹爪会不会碰到杯沿”。如果视觉 tokenizer 或下采样路径过早丢掉浅层细节，模型仍可能会描述正确，却在动作上偏几厘米。
 
-## 6. 一个设计取舍：stride 省计算，也会丢控制线索
+## 一个设计取舍：stride 省计算，也会丢控制线索
 
 假设输入是 \(640\times480\) 图像。如果早期 stride 总倍率为 16，特征图约为 \(40\times30\)；若总倍率为 32，特征图约为 \(20\times15\)。后者 token 更少、算得更快，但每个 token 覆盖的原图区域更大。
 
@@ -116,7 +121,7 @@ flowchart TD
 
 对世界模型和 VLA，最稳的做法往往不是全程高分辨率，而是为任务关键区域保留高分辨率分支，例如 gripper-centric crop、目标物 crop、接触区域 token 或深度边界特征。
 
-## 7. 简化伪代码
+## 简化伪代码
 
 ```text
 function ConvBlock(x):
@@ -136,12 +141,17 @@ function UNet(x):
 
 这段伪代码展示了 UNet 的基本思想：先压缩，再恢复，同时把早期细节接回来。
 
-## 8. 和后续专题的关系
+## 和后续专题的关系
 
 - [扩散扩散训练与表示](../diffusion/training.md)：理解 UNet 为什么适合预测噪声或 velocity。
 - [扩散条件控制](../diffusion/guidance-and-conditioning.md)：理解 ControlNet 如何在卷积特征图上注入结构条件。
 - [VLM 架构](../vlm/architecture-and-training.md)：理解视觉编码器如何把图像变成特征。
 
-## 小结
+## 本页结论
 
 卷积适合局部结构，UNet 适合多尺度重建。读扩散模型时，如果先理解卷积、下采样、上采样和 skip connection，后面看去噪网络会更自然。
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

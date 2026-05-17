@@ -2,6 +2,11 @@
 
 Rerun 不是一个 VLA 模型，也不是仿真器。它更像具身智能系统里的**黑盒飞行记录仪 + 可视化回放器 + 可查询数据层**：把相机、深度、点云、机器人位姿、动作、文本、标量和模型输出放到同一条时间线上，让你能复盘“机器人到底在什么时候看到了什么、相信了什么、做了什么”。
 
+!!! note "读法定位"
+    这页先回答“Rerun：具身智能的多模态时序数据层”在「具身智能」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 VLA、世界模型、相机/深度和评测集的基本角色。 必要时先回 [具身智能入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把感知、数据、仿真、策略、控制、安全和真实闭环连起来，看机器人系统为什么不能只靠离线指标判断。
+
 Rerun 官方把它定位为面向 Physical AI 的 unified data layer，用于理解和改进包含 2D、3D、文本、时间序列和 tensor 的复杂多模态过程。官方文档还特别强调它服务 robotics、spatial computing、embodied AI、computer vision、simulation 等传感器随时间变化的系统。[Rerun 文档](https://rerun.io/docs/overview/what-is-rerun)里也说得很清楚：它不是训练平台、不是部署工具、也不是机器人操作系统，而是帮助准备数据、理解系统和调试开发链路的工具。
 
 !!! info "工具入口"
@@ -245,3 +250,8 @@ Rerun 观察：RGB 检测框正确，depth 边缘破碎；点云投到 base fram
 1. [What is Rerun?](https://rerun.io/docs/overview/what-is-rerun)
 2. [Rerun Log and Ingest](https://rerun.io/docs/getting-started/data-in)
 3. [Rerun Documentation](https://rerun.io/docs)
+
+!!! tip "下一站"
+    - 回到本专题入口：[具身智能](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[一个任务跑通具身闭环](closed-loop-task-walkthrough.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # Wan2.1：开源视频生成系统路线
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [扩散模型](../../diffusion/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「扩散模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Wan: Open and Advanced Large-Scale Video Generative Models`
     - 链接：[arXiv:2503.20314](https://arxiv.org/abs/2503.20314)
@@ -116,11 +121,14 @@ L=(1+T/4)\times H/16\times W/16.
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 5。原论文图意：Wan 架构由 Wan-VAE、Video DiT 和 umT5 text encoder 组成，DiT 通过 cross-attention 接入文本条件。</small>
 
+!!! note "图解：Video DiT 图先看条件怎么进入主干"
+    左侧 latent video tokens 来自 Wan-VAE，文本条件来自 umT5，二者在 DiT block 中通过 self-attention 和 cross-attention 交互。图里的箭头重点说明条件注入路径，而不是证明某个单独模块带来全部性能；真正的效果还要和数据配方、VAE 压缩、训练阶段和采样设置一起看。
+
 Transformer block 内部用 full spatio-temporal self-attention 建模时空关系，再通过 cross-attention 注入文本。时间步 embedding 经过一个共享 MLP 预测六组 modulation 参数；这个 MLP 在所有 blocks 间共享，但每个 block 学不同 bias。论文说这个设计减少约 25% 参数，并在同等规模下带来更好表现。这个点很像在问：参数应该花在每层 adaLN 上，还是花在更深的主干上？Wan 的消融支持后者。
 
 ### 速度预测到底在预测什么
 
-Wan 使用 Flow Matching / Rectified Flow 风格目标。训练时先取真实视频或图片 latent \(x_1\)，再取高斯噪声 \(x_0\sim\mathcal{N}(0,I)\)，时间 \(t\in[0,1]\) 从 logit-normal distribution 采样。中间状态是线性插值：
+Wan 使用 Flow Matching / Rectified Flow 风格目标。训练时先取真实视频或图片 latent \(x_1\)，再取高斯噪声 \(x_0\sim\mathcal{N}(0,I)\)，时间 \(t\in[0,1]\) 从 logit-normal distribution 采样。这里 \(\mathcal{N}(0,I)\) 表示标准高斯，括号里的 \(0\) 是均值、\(I\) 是单位协方差。中间状态是线性插值：
 
 \[
 x_t=t x_1+(1-t)x_0.
@@ -183,7 +191,7 @@ L(\alpha b s h^2+\beta b s^2 h),
 
 为什么视频 DiT 的 \(\gamma\) 往往更大？一方面，视频 token 同时包含时间和空间维，sequence length \(s\) 已经很大；另一方面，full spatio-temporal attention、3D patch/reshape、cross-attention 和长序列并行会让训练时需要保留更多中间张量。普通 LLM 的 token 序列通常是一维文本，kernel 和并行实现也更成熟，很多 activation 可以更稳定地重算或融合；视频 DiT 的中间状态更重、更碎，所以即使公式都写成 \(Lbsh\) 量级，前面的 \(\gamma\) 也会把显存需求放大很多。
 
-![Wan DiT parallelism](../../assets/images/paper-deep-dives/diffusion/wan/figure-5-parallel.png){ width="720" }
+![Wan DiT parallelism](../../assets/images/paper-deep-dives/diffusion/wan/figure-5-parallel.png){ width="640" }
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 8。原论文图意：128 GPUs 下，内层用 Ulysses=8 与 Ring=2 组成 2D Context Parallelism，外层用 FSDP=32 和 DP=4。</small>
 
@@ -283,6 +291,9 @@ V2A 模块说明 Wan 不只把视频扩散当作视觉生成器。它用 DiT + F
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 23。原论文图意：V2A 模型同时处理视频 chunk 和文本描述，合成语义一致且时间对齐的音频。</small>
 
+!!! note "图解：三张应用框架图要看统一接口"
+    I2V 图看的是 mask 如何把首帧、续写和首尾帧任务统一成条件生成；editing 图看的是 context latent、mask 和 concept decoupling 怎样把局部编辑接回视频扩散主干；V2A 图看的是视频 chunk 与文本描述如何共同约束音频生成。这组图支撑的是 Wan 把视频生成主干扩到多任务接口，不等于所有任务都已经有同等强度的闭环评测。
+
 ## Wan2.2 README 补充：没有单独论文，但有官方路线说明
 
 Wan2.2 官方 GitHub README 仍然把论文链接指向 Wan2.1 的 arXiv 报告。因此更准确的说法是：**Wan2.2 目前主要由官方 README、模型权重、Diffusers/ComfyUI 集成和若干分支技术报告构成，不应把它当成一篇独立论文来读**。不过 README 的介绍非常值得放进 Wan 专题，因为它展示了 Wan 系列从 2.1 到 2.2 的工程演进。
@@ -335,6 +346,9 @@ Wan2.2 的另一个重点是 TI2V-5B。README 介绍它使用 high-compression W
 
 <small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/performance.png`。原 README 图意：Wan2.2 在 Wan-Bench 2.0 上与主流闭源商业模型对比。</small>
 
+!!! note "图解：performance 图只读 benchmark 口径"
+    横向比较要先看 Wan-Bench 2.0 的任务、评分器和模型设置，再看柱状差距。它能说明 Wan2.2 在该 benchmark 口径下的相对位置，但不能直接推出所有真实创作场景、编辑任务或长视频一致性都优于闭源模型。
+
 把 Wan2.1 和 Wan2.2 放在一起看，演进逻辑很清楚：Wan2.1 先证明开放视频 DiT 底座可行，公开了训练和系统方案；Wan2.2 再围绕**更大容量但不显著增加每步成本**和**更高压缩下的 720P 部署**继续推进。MoE 是模型容量方向，TI2V-5B 是部署方向。
 
 ## 消融与工程结论
@@ -369,3 +383,8 @@ Wan 最值得复用的不是某个单点 trick，而是完整训练路线：
 7. 用 human-aligned benchmark 把动态质量、画质和指令跟随拆开评估。
 
 如果要把 Wan 当作工程参考，最重要的问题不是“模型有多大”，而是：你的数据过滤、VAE、训练阶段、条件接口和推理预算是否和目标应用一致。视频生成系统的失败往往不是公式错，而是这些接口没有对齐。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。
+    - 按导航顺序继续：[Phased DMD：分阶段少步蒸馏](phased-dmd.md)。

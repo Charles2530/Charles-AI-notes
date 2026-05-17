@@ -6,6 +6,11 @@ paper_topic: 高效训练
 
 # Attn-QAT：4-bit Attention 量化感知训练
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [训练与基础系统](../../training/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「训练与基础系统」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Attn-QAT: 4-Bit Attention With Quantization-Aware Training`
     - 链接：[arXiv:2603.00040](https://arxiv.org/abs/2603.00040)
@@ -365,8 +370,13 @@ SLA2 更像“把 attention 结构改轻”，Attn-QAT 更像“让原 attention
 4. **kernel 支持仍在演进**：论文当前实现主要围绕 RTX 5090 / SageAttention3 kernel，结论部分也提到未来要做 SM100 上的 native FP4 attention kernel。
 5. **评测覆盖还有限**：视频侧主要是 Wan 2.1 和 VBench，人类盲测为 99 prompts；语言侧是继续训练和 SFT 的代表性 benchmark，还不足以说明所有任务都无损。
 
-## 总结
+## 本页结论
 
 Attn-QAT 的贡献可以压缩成一句话：**它把 4-bit attention 的问题从“怎么量化 forward”推进到“怎么让 forward、backward 重算、softmax 梯度和 inference kernel 在同一套低比特语义下闭合”。**
 
 这也是为什么它应该放在“高效训练”里。它表面上是量化论文，实际给出的经验更像训练系统原则：当一个算子已经被高度融合和数值优化后，低比特训练不能只在外面包一层 fake quantization。真正稳定的方案必须理解这个算子的内部计算图，并重新定义哪些中间量低精度、哪些中间量必须保持高精度，以及这些选择如何落到 kernel 和分布式训练里。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。
+    - 按导航顺序继续：[EAGLE：Feature-level Draft](../inference/eagle.md)。

@@ -2,6 +2,11 @@
 
 这页是一份具身智能和 VLA 的扩展教程，重点放在三件事：常用 benchmark 和数据集到底在测什么，VLA / 视频预测策略 / 空间与深度 VLA 各自解决什么，以及怎样把“数据更多”升级成“数据 recipe 更好、评测更真实、闭环更稳”。
 
+!!! note "读法定位"
+    这页先回答“VLA 数据、模型与评测路线”在「具身智能」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 VLA、世界模型、相机/深度和评测集的基本角色。 必要时先回 [具身智能入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把感知、数据、仿真、策略、控制、安全和真实闭环连起来，看机器人系统为什么不能只靠离线指标判断。
+
 ![Franka Emika robot arm](../assets/images/thinking-exploration/world-models-embodied-ai/franka-emika2.jpg){ width="880" }
 
 <small>图源：[Wikimedia Commons: Franka Emika2.jpg](https://commons.wikimedia.org/wiki/File:Franka_Emika2.jpg)。具身智能的关键不是机器人“像不像智能”，而是视觉、语言、动作、控制器、接触和任务判定能否形成稳定闭环。</small>
@@ -23,7 +28,7 @@
 
 先读 benchmark 和数据集，建立“任务到底在考什么、数据到底来自哪里”的判断；再看 GR-2、GR-3、VPP、SpatialVLA、DepthVLA、X-VLA 等模型路线，分清它们是在补视频动态、任务状态、空间尺度，还是跨 embodiment 适配；最后再回到失败轨迹、纠正数据和数据引擎，因为 VLA 真正走向部署时，坏经验和信用分配往往比一次成功 demo 更重要。
 
-## 0. 先把 episode 记对：多相机、动作和结果要同轴
+## 先把 episode 记对：多相机、动作和结果要同轴
 
 具身数据最容易“看起来很丰富，训练时却很脏”。多相机视频、机器人状态、动作、语言、任务进度和失败原因如果没有对齐到同一条时间轴，后面再大的 VLA 或 world model 都只是在拟合噪声。
 
@@ -96,7 +101,7 @@ episode:
 
 这个 schema 的重点不是字段多，而是字段能回放。后续排查时应该能重建：某个动作 chunk 执行前，世界模型看到了哪些视角、记住了哪些对象、预测了什么风险、最终为什么失败。只有这种 replay 能闭环，VLA 数据才真正可用于世界模型高效训练。
 
-## 1. 先看任务和 Benchmark：它到底在考什么
+## 先看任务和 Benchmark：它到底在考什么
 
 先看 Benchmark 时，不要只记名字，要问四个问题：任务是否长时程、是否跨环境、是否真实机器人、成功判定是否可靠。
 
@@ -112,7 +117,7 @@ episode:
 !!! tip "读 Benchmark 的小口诀"
     先看 train-test split，再看 success checker，最后看 episode 长度。很多模型在短桌面任务上表现不错，但一到新环境、长任务、无效指令和失败恢复，能力边界会很快暴露。
 
-## 2. 数据集：真正重要的是异质性
+## 数据集：真正重要的是异质性
 
 具身数据集不是“越大越好”这么简单。不同数据集的机器人、相机、动作空间、场景和任务标签都不一样。RT-1、DROID、RH20T、Mobile ALOHA、Open X-Embodiment、BridgeData V2、Galaxea Open-World 等数据集，正好说明了今天 VLA 的核心难题：**跨机器人、跨场景、跨动作接口学习同一类物理技能。**
 
@@ -128,7 +133,7 @@ episode:
 
 [Open X-Embodiment](https://robotics-transformer-x.github.io/) 的公开页面强调统一数据格式和跨机器人策略；[DROID](https://droid-dataset.github.io/) 则强调真实场景、便携采集平台和丰富视角。把这两类数据放在一起看，可以得到一个重要结论：具身模型的泛化不是单一数据集堆出来的，而是靠数据来源之间的互补。
 
-## 3. VLA 模型族：从“看图出动作”走向任务状态和世界后果
+## VLA 模型族：从“看图出动作”走向任务状态和世界后果
 
 VLA / 机器人基础模型可以按能力层次分成几类。
 
@@ -156,7 +161,7 @@ VLA / 机器人基础模型可以按能力层次分成几类。
 
 如果要精读单篇论文，建议顺着 [GR-2](../paper-deep-dives/embodied-ai/gr2.md) -> [Video Prediction Policy](../paper-deep-dives/embodied-ai/video-prediction-policy.md) -> [SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md) -> [GR-3](../paper-deep-dives/embodied-ai/gr3.md) -> [π0.5](../paper-deep-dives/embodied-ai/pi05.md) -> [DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md) 读：前两篇讲“预测未来怎样帮助动作”，SpatialVLA 补空间坐标，GR-3 和 π0.5 补长任务与任务状态，DreamZero 则把 world-action modeling 推到可直接输出策略的位置。
 
-## 4. GR-2：视频知识怎样迁移到机器人操作
+## GR-2：视频知识怎样迁移到机器人操作
 
 GR-2 的关键观点是：大规模视频中包含大量人类活动和物理动态先验，即使这些视频没有机器人动作，也能帮助机器人理解“事情接下来会怎样”。它先在大规模视频片段和文本 token 上预训练，再在机器人微调阶段同时学习未来视频生成和动作预测；真实部署时，用 WBC 将笛卡尔轨迹转成低层关节动作。这里最重要的系统启发是：预测轨迹通常比单步动作更利于平滑执行，在机器人数据稀缺时，物体 / 背景增强也能补一部分覆盖。
 
@@ -183,7 +188,7 @@ GR-2 的关键细节可以整理成这样：
 
 它和世界模型天然相连：如果模型能预测动作后的未来视频，再把未来视频与动作轨迹对齐，就开始具备“动作后果”的内部模拟能力。
 
-## 5. GR-3：任务状态和拒绝能力很关键
+## GR-3：任务状态和拒绝能力很关键
 
 GR-3 的总结很重要：模型不只要输出动作，还要估计任务状态。`in progress` 表示任务仍在执行，避免模型过早停止；`terminate` 表示任务已经成功完成，避免继续乱动；`invalid` 表示当前观察下指令不可完成，让模型学会拒绝无效任务。
 
@@ -214,7 +219,7 @@ GR-3 还补了很多工程细节：
 
 GR-3 的部署和 few-shot 也值得单独记。人类轨迹微调用 PICO 4 Ultra Enterprise 收集少量轨迹，约 450 条/小时，高于机器人遥操作约 250 条/小时，但要处理缺少腕部视图、关节和夹爪状态的问题。机器人平台侧，ByteMini 双手移动机器人使用全身顺应性控制，策略 rollout 控制 19 DoF，并加入 pure pursuit 和轨迹优化，说明 VLA 的动作块必须经过全身控制和轨迹平滑，才能在长任务里稳定。泛化抓取约 35k 机器人轨迹、101 个对象、69 小时，unseen objects 中每个对象最多 10 条人类轨迹，强调 few-shot 适配的价值在于快速接入新物体。长线桌面清理用 Flat / Instruction-Following 两种设置，invalid 任务要求 10 秒内不操纵任何对象才算成功，说明同一任务要同时考高层目标、精确指令和拒绝能力；灵巧衣物操作约 116 小时轨迹，则会暴露单纯桌面 pick-place 看不到的柔体和长时程问题。
 
-## 6. Video Prediction Policy：把未来视频变成动作条件
+## Video Prediction Policy：把未来视频变成动作条件
 
 VPP 的核心观点是：只看单张图像的 policy 容易停在静态特征，视频预测模型则能捕捉“接下来会怎么动”的动态表征。它不是直接拿未来视频当结果，而是让下游策略跟踪预测表征中的机器人运动，隐式学一个逆动力学模型。
 
@@ -227,7 +232,7 @@ VPP 的核心观点是：只看单张图像的 policy 容易停在静态特征�
 
 这条路线和世界模型的连接非常直接：未来视频不是展示品，而是动作生成的中间条件。更有趣的是，它把“先想象未来，再反推动作”做成了一个可训练策略。
 
-## 7. 动作表示：单步 action 通常不够
+## 动作表示：单步 action 通常不够
 
 这条路线里反复出现“轨迹”“action chunk”“30 个锚点”“50-step chunk”“EEF pose”“控制模式”等词。这说明动作表示是 VLA 成败的底层接口。
 
@@ -246,7 +251,7 @@ VPP 的核心观点是：只看单张图像的 policy 容易停在静态特征�
 
 <small>图源：[Wikimedia Commons: Hydraulic toy robot arm gripper.jpg](https://commons.wikimedia.org/wiki/File:Hydraulic_toy_robot_arm_gripper.jpg)。动作表示最后要落到真实末端执行器：同样是“抓住”，不同夹爪的开合范围、力控能力、摩擦和接触反馈都不同。</small>
 
-## 8. 空间、深度和跨 embodiment：VLA 的下一层骨架
+## 空间、深度和跨 embodiment：VLA 的下一层骨架
 
 ### SpatialVLA
 
@@ -274,7 +279,7 @@ X-VLA-0.9B 路线可以压成三句话：第一阶段在 DROID、RoboMind、Agib
 
 <small>图源：[Wikimedia Commons: Baxter robot's gripper.JPG](https://commons.wikimedia.org/wiki/File:Baxter_robot%27s_gripper.JPG)。同样是“夹爪”，不同机器人的几何、自由度、相机位置和控制接口都可能不同；跨 embodiment VLA 的难点就在这里。</small>
 
-## 9. 数据 recipe：不要只收“干净演示”
+## 数据 recipe：不要只收“干净演示”
 
 这些资料里反复出现的“发现”非常值得展开：一些 VLA 指令跟随能力存在问题，可能过拟合图像；很多系统缺乏当前任务执行状态判断能力，需要学会拒绝任务；主线越来越像跨领域、跨数据集预训练，再在专用场景下微调并评测；现有模型规模可能偏小，很多低于 3B；数据也常常太干净，缺乏能暴露恢复、遮挡、干扰和拒绝能力的脏数据。
 
@@ -294,7 +299,7 @@ Spirit-v1.5 的思路则提醒另一件事：高度脚本化、摆放整齐、�
 
 一个更健康的数据 recipe 不应只收成功演示。成功演示负责教会基本任务，失败轨迹让模型知道哪里会坏，人工纠正让模型学会从自己造成的状态恢复，无效指令训练拒绝和请求澄清，脏场景覆盖干扰物、遮挡和非理想摆放，长时连续任务训练子任务转换和任务进度判断，跨机器人数据则让模型学习共享物理技能而不是绑定某个硬件。
 
-## 10. RECAP：从坏经验里提取好训练信号
+## RECAP：从坏经验里提取好训练信号
 
 RECAP / π0.6 路线可以概括为一句话：如果策略只是复制过去行为，它也会复制过去错误。要从自主经验中进步，必须做信用分配。
 
@@ -302,11 +307,11 @@ RECAP 的思路是先用离线 RL 预训练 VLA，再在部署中收集真实结
 
 这和世界模型的数据引擎高度一致：不是所有失败都一样。若机器人最后插不进咖啡粉罐，错误可能发生在早期抓取姿态，而不是最后插入动作。没有价值函数、世界模型或分阶段任务状态，系统很难把责任分配到正确动作。
 
-## 11. 暂存但未展开的线索
+## 暂存但未展开的线索
 
 还有一些值得进入后续专题的线索，但它们不必打断本文主线。LingBot-VA / Motus 可以接到视频世界模型和 VLA 记忆机制；Unitree UnifoLM-VLA-0 适合跟硬件生态和开源机器人平台一起整理；Octo 可以放入跨 embodiment robot policy 与动作接口章节；Helix / Hi Robot 更适合和 π0.5、GEN-0、Spirit 一起讨论开放家庭任务和数据工厂路线；VO-DP 则可以放到世界模型与动作扩散的交叉章节。这样正文主线保持清楚，后续材料也有归宿。
 
-## 12. 评测路线：从离线预测到真实闭环
+## 评测路线：从离线预测到真实闭环
 
 具身智能评测至少要分四层：
 
@@ -322,13 +327,13 @@ Flat / Instruction-Following Setting 很有用：同一个桌面清理任务，�
 !!! warning "离线分数只能做早筛"
     具身智能最终要看闭环。动作 MSE 很低的模型可能在真实执行中积累误差；success checker 很高的策略可能只钻了最终状态规则空子；语言跟随很好也不代表接触稳定。闭环日志和失败分析才是硬证据。
 
-## 13. 一个推荐学习和落地顺序
+## 一个推荐学习和落地顺序
 
 如果要继续扩展具身项目，建议先选任务族，比如桌面操作、长时家务、焊缝观察或双臂传递，不要一开始泛化到所有机器人；随后定义动作接口，明确关节、EEF、轨迹锚点、action chunk 和控制模式；再定数据 schema，把图像、depth、相机、关节、本体状态、动作、任务状态和语言固定下来；早筛可以先用 CALVIN / LIBERO / RoboTwin / Simpler 看趋势；训练和评测必须加入 `in progress / terminate / invalid` 任务状态；数据侧要保留失败和纠正，不只收成功演示；候选动作进入真实执行前，最好先经过世界模型的风险、可见性、可达性和未来状态预测；真实小闭环每轮只扩大一个维度，新物体、新背景、新任务、新机器人不要全一起变。
 
 这条路线听起来朴素，但很抗返工。具身智能最怕的是先把模型训大，最后发现动作接口、任务状态、success checker 和数据回流都没定。
 
-## 14. 参考资料
+## 参考资料
 
 - [RT-1: Robotics Transformer](https://robotics-transformer1.github.io/)：真实机器人 Transformer policy 的经典入口。
 - [RT-2 论文专题讲解](../paper-deep-dives/embodied-ai/rt2.md)：把 VLM 的 web 语义知识通过 action token 和 co-fine-tuning 接到真实机器人闭环。
@@ -343,3 +348,8 @@ Flat / Instruction-Following Setting 很有用：同一个桌面清理任务，�
 - [GEN-0: Embodied Foundation Models That Scale with Physical Interaction](https://generalistai.com/blog/nov-04-2025-GEN-0)：大规模真实物理交互数据和具身模型 scaling 观察。
 - [Spirit-v1.5](https://github.com/Spirit-AI-Team/spirit-v1.5)：开放式、目标驱动、多样化机器人数据采集。
 - [Isaac Sim](https://developer.nvidia.com/isaac/sim)、[RoboTwin](https://robotwin-platform.github.io/doc/) 和 [ManiSkill](https://maniskill.readthedocs.io/en/latest/)：仿真、数据生成和评测工具链。
+
+!!! tip "下一站"
+    - 回到本专题入口：[具身智能](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

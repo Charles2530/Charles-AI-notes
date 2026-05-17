@@ -6,6 +6,11 @@ paper_topic: 具身智能
 
 # Depth Anything 3：任意视角的 3D 几何底座
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [具身智能](../../embodied-ai/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「具身智能」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Depth Anything 3: Recovering the Visual Space from Any Views`
     - 系统：`Depth Anything 3 / DA3`
@@ -61,15 +66,21 @@ DA3 的建模思路很克制。它没有堆两个专用 Transformer，也没有�
 
 <small>图源：`Depth Anything 3`，Figure 2。原论文图意：DA3 使用单个 DINOv2 主干，通过 input-adaptive cross-view self-attention 做跨视角推理，再用 Dual-DPT head 输出 depth 与 ray。</small>
 
+!!! note "图解：pipeline 要按三段读"
+    第一段是 image tokens 进入 DINOv2 主干，提供单视角视觉先验；第二段是 cross-view attention 和 camera token，把不同视角放到同一个几何上下文里；第三段是 Dual-DPT head，同时输出 depth 和 ray。图里的重点不是“多了一个 head”，而是 DA3 把多视角一致性放进 backbone 推理过程，再把结果落到可融合的几何接口。
+
 架构里有三个容易混淆的点：
 
 1. **Input-adaptive self-attention**：前几层主要做单视角视觉特征提取，后续层按比例插入 cross-view attention。输入只有单张图时，它自然退化成单目深度模型；输入多视角时，同一主干又能跨视角对齐几何。
 2. **Camera token**：如果有相机参数，就把 FOV、quaternion、translation 编码成每个视角的 camera token；如果没有，就用可学习 token。camera token 会参与所有 attention，而不是只在输出端做后处理。
 3. **Dual-DPT head**：depth 和 ray 共用 DPT reassembly 的一部分，再分成两个分支输出。这样比完全独立 head 更轻，也比单一混合输出更容易分别约束深度细节和相机几何。
 
-![Dual-DPT head 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-dual-dpt.png){ width="420" }
+![Dual-DPT head 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-dual-dpt.png){ width="420" .atlas-figure-compact }
 
 <small>图源：`Depth Anything 3`，Dual-DPT architecture figure。图本身信息密度较低，这里缩小显示，重点看 shared reassembly 与 depth/ray 两个分支的关系。</small>
+
+!!! note "图解：Dual-DPT 看 shared 和 split"
+    上半部分的 shared reassembly 负责把 ViT token 还原成多尺度 spatial features；下半部分再拆成 depth branch 和 ray branch。读这张图时不要把 ray 当成相机参数表，它更像每个像素对应的空间射线表示，和 depth 相乘后才能落成 3D 点。
 
 ## 为什么说它不是 VGGT-style
 
@@ -109,6 +120,9 @@ DA3 训练时会遇到一个现实问题：多视角真实数据需要 pose 泛�
 ![Teacher supervision 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-10-teacher-supervision.png){ width="820" }
 
 <small>图源：`Depth Anything 3`，teacher supervision visualization figure。原论文图意：真实深度可能稀疏或噪声明显，teacher 提供更连续的相对深度，再通过 robust alignment 变成可用于 DA3 的监督。</small>
+
+!!! note "图解：teacher 不是替代真实深度"
+    这张图要从监督质量读：真实 metric depth 提供尺度和几何锚点，但会有空洞、噪声或边界问题；teacher depth 更连续，负责补充可学习的相对结构。DA3 的做法是先对齐 teacher 与真实深度，再把二者组合成训练信号，所以它证明的是监督清洗和对齐的重要性，不是说伪标签天然比传感器真值可靠。
 
 DA3 主模型的 loss 由 depth、ray、point、optional camera、gradient 等部分组成，整体以 L1 类损失为主。训练细节里最值得记的是这些数字：
 
@@ -244,9 +258,12 @@ torch.Size([2, 3, 196, 336])
 
 | `depth_vis/0000.jpg` | `depth_vis/0001.jpg` |
 | --- | --- |
-| ![DA3 SOH view 0 depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0000.jpg){ width="420" } | ![DA3 SOH view 1 depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0001.jpg){ width="420" } |
+| ![DA3 SOH view 0 depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0000.jpg){ width="420" .atlas-figure-compact } | ![DA3 SOH view 1 depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0001.jpg){ width="420" .atlas-figure-compact } |
 
 <small>图源：输入图来自 DA3 的 GitHub 示例图片；右侧深度图是用上面命令在本地运行 DA3 后生成的 `depth_vis` 输出。暖色区域通常表示相对更近，冷色区域通常表示相对更远，重点是看同一建筑轮廓在两个 view 中是否保持一致。</small>
+
+!!! note "图解：depth_vis 看一致性，不看绝对米制"
+    两张可视化要横向比较同一建筑、栏杆和地面边界在不同视角下是否保持近远关系一致。颜色是相对深度提示，不是直接的物理距离标尺；真正接机器人几何管线时，还要回到 `results.npz` 里的 depth、confidence、intrinsics 和 extrinsics 做数值检查。
 
 `results.npz` 里这次包含四类数组：
 
@@ -316,3 +333,8 @@ DA3 对机器人和 VLA 的价值，不是让模型“看图更清楚”这么�
 3. [ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/depth-anything-3)
 4. [DepthAnything3 API documentation](https://github.com/ByteDance-Seed/Depth-Anything-3/blob/main/docs/API.md)
 5. [DA3-Streaming README](https://github.com/ByteDance-Seed/Depth-Anything-3/tree/main/da3_streaming)
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。
+    - 按导航顺序继续：[GR-3：少样本长时程 VLA](gr3.md)。

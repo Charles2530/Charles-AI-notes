@@ -2,7 +2,12 @@
 
 量化不是把模型文件压小这么简单。它更像给大模型重新分配数值预算：哪些张量可以用更少 bit 表示，哪些层必须保高精，哪些收益会被 kernel、KV cache、反量化和服务调度吃掉。
 
-![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="760" }
+!!! note "读法定位"
+    这页先回答“量化路线图”在「量化」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂张量、线性层和基本推理成本；遇到 FP8、KV Cache、outlier 时回前置页补概念。 必要时先看本页路线，或回 [基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把数值格式、误差来源、校准/训练方法、kernel 和服务部署连成一条效率链，而不是只比较 bit 数。
+
+![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="740" }
 
 <small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原论文图意：模型规模增长速度明显快于单卡 GPU 显存增长速度，量化首先是在解决模型部署的显存和带宽压力。</small>
 
@@ -12,7 +17,7 @@
 !!! warning "最常见误解"
     `4bit` 只说明每个量化值本身更小，不自动说明系统更快。真实服务里还会有 scale 元数据、packing、dequant、kernel fallback、KV cache、batch 调度和质量回归。
 
-## 1. 量化到底在做什么
+## 量化到底在做什么
 
 最常见的均匀量化可以写成：
 
@@ -41,7 +46,7 @@ q = \mathrm{clip}\left(\mathrm{round}\left(\frac{x}{s}\right)+z,\ q_{\min},\ q_{
 
 更完整的符号、shape 和 KV 显存公式放在 [量化符号与最小数学地图](symbols-and-minimal-math.md)。读后面的公式前，建议先把这页当速查表。
 
-## 2. 一条更顺的阅读路径
+## 一条更顺的阅读路径
 
 | 阶段 | 先读什么 | 读完要能回答 |
 | --- | --- | --- |
@@ -55,7 +60,7 @@ q = \mathrm{clip}\left(\mathrm{round}\left(\frac{x}{s}\right)+z,\ q_{\min},\ q_{
 !!! tip "怎么避免读乱"
     量化名词不在同一层。`INT4/FP8/NF4` 是数值格式，`GPTQ/AWQ/SmoothQuant` 是误差控制方法，`W4A16/W8A8` 是权重和激活的精度组合，`Marlin/TensorRT-LLM/vLLM` 才是具体执行路径。
 
-## 3. 先分清四层
+## 先分清四层
 
 | 层级 | 它回答的问题 | 例子 | 初学者常犯错 |
 | --- | --- | --- | --- |
@@ -73,7 +78,7 @@ served by vLLM on A100, FP16 KV cache, measured by TTFT/TPOT and task buckets.
 
 这句话比“用了 4bit”有用得多，因为它同时说明了压缩对象、算法、runtime、硬件和验收口径。
 
-## 4. 为什么权重、激活和 KV cache 要分开看
+## 为什么权重、激活和 KV cache 要分开看
 
 | 对象 | 什么时候出现 | 好不好量化 | 主要收益 | 主要风险 |
 | --- | --- | --- | --- | --- |
@@ -86,7 +91,7 @@ served by vLLM on A100, FP16 KV cache, measured by TTFT/TPOT and task buckets.
 !!! example "小账：为什么 KV cache 会反客为主"
     7B 模型的 BF16 权重约 \(7\times10^9\times2\approx14GB\)。但长上下文服务里，KV cache 会随 batch、上下文长度、层数和 KV 宽度线性增长。权重已经 INT4 后，并发仍然上不去，常常就是 KV cache 成了新瓶颈。
 
-## 5. 主要方法放在同一张地图里
+## 主要方法放在同一张地图里
 
 | 方法 | 主要解决什么 | 初学者理解 | 常见用法 |
 | --- | --- | --- | --- |
@@ -99,7 +104,7 @@ served by vLLM on A100, FP16 KV cache, measured by TTFT/TPOT and task buckets.
 | FP8/混合精度 | 硬件友好的低精度服务或训练 | 不全压，敏感部分保高精 | Hopper/Blackwell 等新硬件 |
 | KV cache quant | 压缩在线缓存 | 长上下文的动态显存账 | 长文档、多轮、高并发服务 |
 
-## 6. 量化是否成功，要同表验收
+## 量化是否成功，要同表验收
 
 | 要证明什么 | 最小指标 | 不能用什么替代 |
 | --- | --- | --- |
@@ -111,7 +116,7 @@ served by vLLM on A100, FP16 KV cache, measured by TTFT/TPOT and task buckets.
 !!! failure "最佳反例"
     权重从 FP16 压到 INT4，模型文件小了 4 倍，但线上 `TPOT` 没降，因为 runtime 每层都先 dequant 到 FP16 再做 GEMM；同时长文档任务掉点，因为 KV cache 仍然高精且并发被卡住。这不是有效上线，只是有效压缩。
 
-## 7. 多模态和 VLA 为什么要更谨慎
+## 多模态和 VLA 为什么要更谨慎
 
 文本聊天模型量化后偶尔措辞变差，用户还可能追问；文档 VLM 少看一个小数点，金额可能错一百倍；VLA 动作头偏一点，夹爪可能撞到杯沿。量化误差在多模态和控制系统里更容易被局部细节放大。
 
@@ -125,7 +130,7 @@ served by vLLM on A100, FP16 KV cache, measured by TTFT/TPOT and task buckets.
 | action/risk head | 优先保高精 | 动作抖动、near-miss、闭环成功率 |
 | KV/memory | 单独评估 | 长程一致性、检索、rollout drift |
 
-## 8. 一个总判断
+## 本页结论
 
 量化的核心不是“压到最低 bit”，而是在目标硬件、目标 runtime 和目标任务里，把误差放到模型最不敏感、系统最能兑现收益的位置。读任何量化论文或框架文档时，都用这四句检查：
 
@@ -135,6 +140,10 @@ served by vLLM on A100, FP16 KV cache, measured by TTFT/TPOT and task buckets.
 4. 它用哪些任务桶证明低比特版本真的可用？
 
 这四句答清楚，再讨论 GPTQ、AWQ、SmoothQuant、QLoRA、FP8 或 QAT，路径就不会乱。
+
+!!! tip "下一站"
+    - 按导航顺序继续：[量化符号与最小数学地图](symbols-and-minimal-math.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。
 
 ## 延伸阅读
 

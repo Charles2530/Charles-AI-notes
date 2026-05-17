@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # GPT-4o System Card：Omni 安全与多模态评测
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "报告信息"
     - 系统卡：`GPT-4o System Card`
     - 模型：`GPT-4o`
@@ -102,7 +107,7 @@ GPT-4o 的后训练不只是让文本回答更安全，还要约束模型“用�
 
 报告的一个关键工程点是评测迁移。OpenAI 用 TTS 把已有 text-based evaluations 转成 audio input，再喂给 GPT-4o，并主要基于输出 transcript 做评分。只有在需要直接评估音频本身时，例如 voice generation，才评估 audio output。
 
-![GPT-4o evaluation task conversion](https://images.ctfassets.net/kftzwdyauwt9/7K7GyzclzNrCr68CGq8qVk/37c74b0ae21945abe0cee4c3f8016bf7/task_visual-light.svg?q=90&w=3840){ width="920" }
+![GPT-4o evaluation task conversion](../../assets/images/localized-remote/paper-deep-dives/technical-reports/gpt-4o-system-card/gpt-4o-evaluation-task-conversion.svg){ width="720" }
 
 <small>图源：OpenAI `GPT-4o System Card`，Evaluation methodology figure。原图展示把 text tasks 通过 TTS 转成 audio tasks，再对 GPT-4o 输出进行评分的流程。</small>
 
@@ -163,11 +168,11 @@ Speaker identification 的风险是从音频识别说话人。系统卡给出的
 
 报告用固定 assistant voice 和多种 user TTS voice 评估能力与安全行为。user voice 包含 3 个官方 system voices，以及来自数据活动的 27 个英语人声样本，覆盖多个国家和性别。
 
-![Capability evaluations across system and human voices](https://images.ctfassets.net/kftzwdyauwt9/3DwTXYVHjd6A26D2HsQPg5/fa370924ff18f82afa5e46ffb1611f50/Capability_evaluations_across_system_and_human_voices-light.svg?q=90&w=3840){ width="920" }
+![Capability evaluations across system and human voices](../../assets/images/localized-remote/paper-deep-dives/technical-reports/gpt-4o-system-card/capability-evaluations-across-system-and-human-voices.svg){ width="920" }
 
 <small>图源：OpenAI `GPT-4o System Card`，Capability evaluations across system and human voices。原图比较 TriviaQA、MMLU subset、HellaSwag 和 LAMBADA 等任务在 system voices 与 human voices 下的表现。</small>
 
-![Safety evaluations across system and human voices](https://images.ctfassets.net/kftzwdyauwt9/2rFRY2YN9a4UwNCTAuVHGj/586d1ff1e4dbb956625704356dbe63ac/Safety_evaluations_across_system_and_human_voices-light.svg?q=90&w=3840){ width="920" }
+![Safety evaluations across system and human voices](../../assets/images/localized-remote/paper-deep-dives/technical-reports/gpt-4o-system-card/safety-evaluations-across-system-and-human-voices.svg){ width="670" }
 
 <small>图源：OpenAI `GPT-4o System Card`，Safety evaluations across system and human voices。原图比较不同声音输入下模型遵守和拒绝行为的一致性。</small>
 
@@ -292,7 +297,7 @@ Model autonomy 评估的是自我复制、自我改进、资源获取和自动�
 
 METR 用 GPT-4o-based simple LLM agent 跑 long-horizon multi-step tasks，任务来自软件工程、机器学习、网络安全、一般研究和计算机使用等域，用来近似评估自治相关威胁模型的前置能力。
 
-![METR agent performance vs humans](https://images.ctfassets.net/kftzwdyauwt9/1bz4nlqXvxIonvTk92ku69/e2ebf524148d26bb4e4323eae892a98a/Agent_Performance_vs_Humans_with_Time_Limits.png?fm=webp&q=90&w=3840){ width="760" }
+![METR agent performance vs humans](../../assets/images/localized-remote/paper-deep-dives/technical-reports/gpt-4o-system-card/metr-agent-performance-vs-humans.png){ width="760" }
 
 <small>图源：OpenAI `GPT-4o System Card`，METR assessment figure。原图比较 GPT-4o、GPT-4o mini、GPT-4t、Claude 3 Sonnet、Claude 3 Opus 和 Claude 3.5 Sonnet 在 METR 长时任务上的完成比例，并标出人类不同时间预算水平。</small>
 
@@ -343,11 +348,11 @@ System Card 也把 GPT-4o 放进 scientific capabilities 和 health case studies
 
 报告展示了 GPT-4o 能解释部分科学图像，也展示了复杂多面板图和术语抽取上的错误。
 
-![Quantum physics example](https://cdn.openai.com/gpt-4o-system-card/quantum-phsysics.jpg?fm=webp&q=90&w=3840){ width="820" }
+![Quantum physics example](../../assets/images/localized-remote/paper-deep-dives/technical-reports/gpt-4o-system-card/quantum-physics-example.jpg){ width="820" }
 
 <small>图源：OpenAI `GPT-4o System Card`，scientific capabilities example。原图来自量子物理实验示意，用于展示模型可处理专业科学图像并解释实验设置。</small>
 
-![Correlation functions limitation example](https://cdn.openai.com/gpt-4o-system-card/correlation-functions.jpg?fm=webp&q=90&w=3840){ width="820" }
+![Correlation functions limitation example](../../assets/images/localized-remote/paper-deep-dives/technical-reports/gpt-4o-system-card/correlation-functions-limitation-example.jpg){ width="820" }
 
 <small>图源：OpenAI `GPT-4o System Card`，scientific limitations example。原图用于展示复杂科学图表理解中的错误风险，尤其是多面板图、坐标和术语抽取。</small>
 
@@ -423,8 +428,13 @@ GPT-4o System Card 对做多模态产品比对做模型复现更有参考价值�
 4. **科学与健康能力不是部署许可**：报告中的 health benchmark 是知识评估，不等于临床可用；science examples 也同时展示了错误。
 5. **低资源语言仍不充分**：五种非洲语言评估只是起点，不能代表全球 underrepresented languages。
 
-## 总结
+## 本页结论
 
 GPT-4o System Card 最值得记住的不是某个 benchmark，而是它把多模态模型上线前的工程问题说清楚了：**当模型开始直接听声音、说话、看图、看视频，并以接近人类反应时间对话时，安全评估必须从文本规则扩展到音频身份、输出声音、实时拦截、情感依赖、语音说服力和跨模态能力迁移。**
 
 如果说 GPT-4 技术报告证明了大语言模型的通用能力，GPT-4o System Card 则说明：omni model 的关键挑战不只是“更强”，而是“更像人类交互以后，系统边界要怎么重新设计”。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
+    - 按导航顺序继续：[DeepSeek-V3：MoE 与 FP8](deepseek-v3.md)。

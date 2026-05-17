@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # H-JEPA：层级 JEPA 与潜变量 EBM
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`
     - 作者：`Anna Dawid, Yann LeCun`
@@ -23,7 +28,7 @@ paper_topic: 世界模型
 
 论文沿用 LeCun 提出的自主智能架构。这个架构不是把模型看成一个端到端 policy，而是拆成 perception、world model、actor、cost/critic、short-term memory 和 configurator 等模块。
 
-![Autonomous AI architecture](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-1-autonomous-ai-architecture.png){ width="920" }
+![Autonomous AI architecture](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-1-autonomous-ai-architecture.png){ width="850" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 1. 原论文图注要点：该图展示 LeCun 提出的 modular autonomous AI 结构，其中 world model 负责预测 actor 设想动作导致的未来世界状态，short-term memory 维护当前与预测状态，cost/critic 评估这些状态。</small>
 
@@ -65,7 +70,7 @@ $$
 \hat{y}=\arg\min_y F_w(x,y)
 $$
 
-![Towards energy-based models](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-3-energy-based-models.png){ width="920" }
+![Towards energy-based models](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-3-energy-based-models.png){ width="850" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 3. 原论文图注要点：作者用 EBM 替代显式概率预测，把问题转成寻找满足输入约束的低能量输出；图中还展示了一个学习到 \(x\) 与 \(y\) 依赖关系的能量景观。</small>
 
@@ -80,9 +85,12 @@ $$
 
 世界模型需要处理不确定性。仅凭当前观测，很多未来因素并不在 \(x\) 里，例如遮挡物体、他人意图、未观测场景结构、未来随机事件。论文用 latent variable \(z\) 表达这些不可直接从输入读出的解释因素。
 
-![Latent variable examples](../../assets/images/paper-deep-dives/world-models/h-jepa/table-1-latent-variable-examples.png){ width="850" }
+![Latent variable examples](../../assets/images/paper-deep-dives/world-models/h-jepa/table-1-latent-variable-examples.png){ width="840" }
 
 <small>表源：`Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`，Table 1。原论文表格要点：表格列举了 prediction problems 中可能相关的 latent variables，例如姿态、光照、分割结构、句法结构和字符分割等。</small>
+
+!!! note "图解：这张表要按不可观测因素读"
+    表中每一行都在提醒同一件事：很多预测问题里，\(x\) 本身不足以唯一决定 \(y\)，中间还缺姿态、光照、结构、句法等隐变量。它支撑的是 latent variable EBM 的动机，而不是给出一个固定 latent taxonomy；真实世界模型里的 \(z\) 还要被容量约束，否则会变成偷带答案的通道。
 
 引入 \(z\) 后，模型可以先定义：
 
@@ -98,7 +106,7 @@ $$
 
 也可以用 free-energy 式的边缘化形式。直觉是：同一个 \(x\) 可能允许多个合理 \(y\)，而不同 \(z\) 对应不同解释路径。
 
-![Latent-variable EBM](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-4-latent-variable-ebm.png){ width="860" }
+![Latent-variable EBM](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-4-latent-variable-ebm.png){ width="790" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 4. 原论文图注要点：latent variable EBM 在推理时额外对 latent variable 做 minimization 或 marginalization；右侧椭圆例子说明 latent variable 可以表示数据流形上的隐含角度。</small>
 
@@ -122,9 +130,12 @@ $$
 
 EBM 最大的训练风险是 `collapse`。在 joint embedding 结构中，如果两个 encoder 都输出常数表示，那么任意 \((x,y)\) 的表示距离都很小，训练误差看起来很好，但模型没有学到任何世界结构。
 
-![Energy collapse](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-5-energy-collapse.png){ width="700" }
+![Energy collapse](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-5-energy-collapse.png){ width="620" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 5. 原论文图注要点：标准 deterministic prediction 架构不容易发生这种表示坍缩，但 joint embedding architecture 如果只最小化表示距离，就可能让 encoder 忽略输入并输出无信息常数。</small>
+
+!!! note "图解：collapse 图看的是坏解"
+    左侧 deterministic prediction 仍要输出目标空间里的内容，常数输出很难骗过任务；右侧 joint embedding 如果只让两个 embedding 接近，两个 encoder 都输出常数也能把距离压低。图里的关键箭头是训练目标本身给了模型一条捷径，所以 JEPA/EBM 需要额外的方差、协方差、信息量或 latent capacity 约束。
 
 这对世界模型尤其危险。一个坍缩的模型可能在训练 loss 上很好看，却无法回答任何反事实问题：
 
@@ -136,9 +147,12 @@ EBM 最大的训练风险是 `collapse`。在 joint embedding 结构中，如果
 
 论文把 EBM 训练概括成“塑造低能量区域”。训练样本附近要低能量，但训练集外、不兼容或不合理的配置不能也低能量。
 
-![EBM training](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-6-ebm-training.png){ width="920" }
+![EBM training](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-6-ebm-training.png){ width="820" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 6. 原论文图注要点：proper training 要压低训练样本能量并防止 energy collapse；contrastive methods 通过负样本抬高训练集外能量，regularized methods 则限制低能量区域能占据的空间体积。</small>
+
+!!! note "图解：EBM training 看低能量区域的形状"
+    左侧目标是让训练样本附近低能量，但不能让低能量区域无限扩张。contrastive 路线靠负样本把不合理区域抬高，regularized 路线靠表示约束限制低能量区域体积。图想说明训练 EBM 不是只把正样本 loss 降低，而是塑造整个能量景观。
 
 论文区分两类训练方式：
 
@@ -169,9 +183,12 @@ $$
 F_{w_1,w_2,w_3}(x,y,z)=D(\bar{s}_y,s_y)
 $$
 
-![JEPA architecture](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-9-jepa.png){ width="680" }
+![JEPA architecture](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-9-jepa.png){ width="620" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 9. 原论文图注要点：JEPA 使用两个 encoder 学习 \(x\) 与 \(y\) 的表征，predictor 借助 latent variable \(z\) 从 \(s_x\) 预测 \(s_y\)，能量由两种表征之间的距离定义。</small>
+
+!!! note "图解：JEPA 图先分清三条路径"
+    \(x\) 经过 context encoder 得到 \(s_x\)，\(y\) 经过 target encoder 得到 \(s_y\)，predictor 再用 \(s_x\) 和 latent \(z\) 预测 \(\bar{s}_y\)。训练比较的是 \(\bar{s}_y\) 与 \(s_y\)，不是重建 \(y\) 的像素。图想说明的是“预测表征”这条路线，不能直接证明这个表征已经能支持动作规划或奖励预测。
 
 训练 JEPA 不能只最小化 \(D(\bar{s}_y,s_y)\)。论文给出的 regularized loss 思路包含三类约束：
 
@@ -179,9 +196,12 @@ $$
 2. 最大化 \(s_x\) 和 \(s_y\) 对各自输入的信息量，防止 encoder 输出常数；
 3. 最小化 \(z\) 的信息量，防止 predictor 只依赖 latent variable 搬运答案。
 
-![Regularized JEPA loss](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-10-regularized-jepa-loss.png){ width="820" }
+![Regularized JEPA loss](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-10-regularized-jepa-loss.png){ width="760" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 10. 原论文图注要点：JEPA 的训练除了 prediction error，还需要让 \(s_x\)、\(s_y\) 保留输入信息，并限制 latent variable \(z\) 的信息量；图中把这些正则项和预测误差一起放入训练目标。</small>
+
+!!! note "图解：regularized loss 同时踩三块刹车"
+    预测误差让 \(\bar{s}_y\) 贴近 \(s_y\)，表示正则防止 \(s_x\)、\(s_y\) 坍缩成常数，latent 正则限制 \(z\) 把答案全带进去。三者缺一都容易出问题：没有预测误差学不到未来关系，没有表示约束会 collapse，没有 latent 约束会把不确定性通道变成作弊通道。
 
 论文提到的一个具体方向是 VICReg 类正则：通过 variance、invariance、covariance 约束让表示既不坍缩，又减少冗余相关性。这里的重点不是某个固定公式，而是训练原则：**预测目标、表示保真和 latent 压缩必须同时存在。**
 
@@ -196,9 +216,12 @@ H-JEPA 的核心是把多个 JEPA 堆叠起来：
 3. 层与层之间可以用 CNN、pooling 或其他 coarse-graining 模块降低细节密度；
 4. 每一层都需要自己的 prediction loss、collapse prevention 和 latent capacity control。
 
-![H-JEPA architecture](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-11-h-jepa.png){ width="820" }
+![H-JEPA architecture](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-11-h-jepa.png){ width="690" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 11. 原论文图注要点：H-JEPA 由堆叠的 JEPA 组成，低层 JEPA-1 基于更多细节做短期预测，高层 JEPA-2 基于更少细节做长期预测，从而支持 multiscale planning。</small>
+
+!!! note "图解：H-JEPA 图看时间尺度而不是层数炫技"
+    低层 JEPA 保留更多局部细节，适合短期预测；高层 JEPA 在 coarse-graining 后接收更抽象的状态，适合长时间尺度规划。箭头里的信息逐层变少但语义变粗，这正是它想解决的矛盾：不能用同一套细节密度同时服务接触级短期动态和任务级长期计划。
 
 从世界模型角度看，可以把 H-JEPA 写成多时间尺度预测：
 
@@ -281,3 +304,8 @@ $$
 5. representation-space prediction 可能丢掉规划需要的细节，例如小物体、接触状态、危险区域或可操作 affordance。
 
 更稳妥的读法是：把这篇论文当成“表征型世界模型如何训练”的原则说明。它补充了 Dreamer 系列偏 RL recipe、V-JEPA 偏视频表征、LingBot 偏视频生成系统的部分，重点回答一个更底层的问题：**世界模型的 latent space 如何既可预测、又不坍缩、还能支持长时层级规划。**
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[RingAttention：近无限上下文训练](ringattention.md)。

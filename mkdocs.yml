@@ -64,6 +64,8 @@ nav:
       - references/index.md
       - 本站判断原则: references/site-judgement-principles.md
       - 全站证据与复现状态标准: references/evidence-and-reproducibility-standard.md
+      - 图片与公式质量标准: references/image-and-formula-quality-standard.md
+      - 图片资产治理台账: references/image-asset-governance-ledger.md
       - 全站效率技术覆盖矩阵: references/site-efficiency-coverage-matrix.md
       - Claim Ledger: references/claim-ledger.md
   - 基础知识:

@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # DMD：一步扩散蒸馏
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [扩散模型](../../diffusion/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「扩散模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`One-step Diffusion with Distribution Matching Distillation`
     - 方法：`Distribution Matching Distillation`，简称 `DMD`
@@ -89,6 +94,8 @@ x = G_\theta(z),
 \qquad z\sim \mathcal N(0,I).
 \]
 
+\(z\sim\mathcal N(0,I)\) 读作：起点噪声 \(z\) 从均值为 0、协方差为 \(I\) 的标准高斯中采样；\(G_\theta\) 负责把这份噪声一次映射成图像样本 \(x\)。
+
 DMD 想最小化 fake distribution 到 real distribution 的 reverse KL：
 
 \[
@@ -144,6 +151,8 @@ q_t(x_t\mid x)
 \sim
 \mathcal N(\alpha_t x,\sigma_t^2I).
 \]
+
+这里的高斯可按 \(\mathcal N(x_t;\alpha_t x,\sigma_t^2I)\) 来读：\(x_t\) 是加噪后的样本，\(\alpha_t x\) 是均值，\(\sigma_t^2I\) 是协方差，表示以当前样本为中心按噪声尺度 \(\sigma_t\) 扩散开。
 
 加噪后，real 和 fake 的分布会在 ambient space 里有更大重叠，score matching 才稳定。
 
@@ -645,6 +654,11 @@ regularizer: LPIPS regression to precomputed teacher outputs
 ```
 
 如果只记一个工程结论，就是：**一步扩散生成器要同时有分布级 realism 信号和 teacher-pair structure 信号。缺前者会不真实，缺后者会掉模式。**
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。
+    - 按导航顺序继续：[DMD2：更稳的少步分布匹配蒸馏](dmd2.md)。
 
 ## 参考资料
 

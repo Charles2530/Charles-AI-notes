@@ -2,6 +2,11 @@
 
 很多训练讨论在谈模型结构，但真正决定大模型成长曲线的，往往是 `Scaling`、课程学习和数据混合。它们共同决定有限计算预算会被分给哪些样本、哪些阶段、哪些能力。
 
+!!! note "读法定位"
+    这页先回答“Scaling、课程学习与数据配比”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
+
 这页关注训练配方层的决策，和 [训练数据系统与吞吐优化](data-systems-and-optimization.md)、[数据质量、去重与治理](data-quality-dedup-and-governance.md)、[评测与消融方法](evaluation-and-ablation-methodology.md) 应该一起看。
 
 !!! note "初学者先抓住"
@@ -159,3 +164,8 @@ p_t(x) = \sum_{k=1}^{K}\alpha_k(t)p_k(x)
 | 私域数据污染 | 模型背诵敏感内容 | 权限、脱敏、记忆评测和回收机制 |
 
 Scaling、课程学习和数据混合的核心不是“某个比例最优”，而是建立一套可被复盘的预算分配机制。真正成熟的训练配方，会把模型规模、数据质量、阶段顺序、评测桶和系统成本放在同一张表里讨论。
+
+!!! tip "下一站"
+    - 回到本专题入口：[训练](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

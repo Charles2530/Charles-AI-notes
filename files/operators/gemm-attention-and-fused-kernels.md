@@ -2,6 +2,11 @@
 
 现代 AI kernel 的性能，大多围绕数据如何穿过 GEMM、Attention、Norm、Quantization 和 Memory Movement 这一串热点算子被决定。GEMM 是计算主引擎，Attention 是序列模型的结构性热点，融合 kernel 则试图减少中间读写和 launch 开销，让系统更接近硬件上限。
 
+!!! note "读法定位"
+    这页先回答“GEMM、Attention 与融合 Kernel”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 这页不重复数学推导，而是解释这些算子为什么重要、共享哪些优化模式，以及训练和推理系统为什么一再围绕它们重构。
 
 !!! note "初学者先抓住"
@@ -118,3 +123,8 @@ Softmax、LayerNorm、RMSNorm、Reduce、RoPE、activation 单次看起来小，
 排查 GEMM、Attention 和融合 kernel 时，建议先用 trace 定位热点，而不是凭直觉；再区分瓶颈来自 Tensor Core 利用不足、HBM 带宽、L2、同步、launch 还是调度；随后看 shape 分布和长尾 bucket，检查是否有本可避免的中间张量 materialize 和额外读写，确认低精度是否真的走到硬件加速路径；最后做数值回归和端到端对比，因为单 kernel 变快不等于训练或推理真的变快。
 
 GEMM、Attention 和融合 kernel 的共同原则是：不只优化公式，更要优化数据流。现代 AI 系统的很多性能跃迁，来自把原本在 HBM 中反复读写的中间状态，改成在片上存储和寄存器里连续完成。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[FlashAttention 与长上下文](long-context-and-flashattention-evolution.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

@@ -2,10 +2,15 @@
 
 量化最容易被简化成“把 FP16 换成 INT8/INT4”。但真正决定成败的，常常不是权重，而是 activation。权重是训练后固定的；activation 会随着每个 prompt、每张图、每段上下文和每个 batch 动态变化。
 
+!!! note "读法定位"
+    这页先回答“激活离群值与校准策略”在「量化」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂张量、线性层和基本推理成本；遇到 FP8、KV Cache、outlier 时回前置页补概念。 必要时先回 [量化入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把数值格式、误差来源、校准/训练方法、kernel 和服务部署连成一条效率链，而不是只比较 bit 数。
+
 !!! note "初学者先抓住"
     activation outlier 指的是某层激活里少数特别大的值。它们会迫使 scale 变粗，让大多数普通值挤在很少的量化格子里。于是平均误差可能看起来还行，但关键细节已经丢了。
 
-## 1. 先复习量化误差从哪里来
+## 先复习量化误差从哪里来
 
 均匀量化：
 
@@ -36,7 +41,7 @@ e=x-\hat{x}
 
 **读作什么**：量化误差来自三处：rounding 会把值吸到最近格点；clip 会把超出范围的值截断；后续层会把前面的误差继续放大或改变方向。
 
-## 2. outlier 怎样把 scale 拉粗
+## outlier 怎样把 scale 拉粗
 
 对称量化里，一个常见 scale 选择是：
 
@@ -61,7 +66,7 @@ s=\frac{30}{7}\approx4.29
 !!! warning "常见误解"
     “不裁掉任何 outlier”听起来安全，但它会让 scale 变大，牺牲主体区域分辨率。低比特量化经常是在 clipping error 和 rounding resolution 之间折中。
 
-## 3. clipping 和 resolution 的权衡
+## clipping 和 resolution 的权衡
 
 如果设置截断阈值 \(\alpha\)，可以把量化范围限制在 \([-\alpha,\alpha]\)：
 
@@ -87,7 +92,7 @@ s=\frac{\alpha}{q_{\max}}
 | 很小 | 主体值更细 | 关键 outlier 被截断 |
 | 任务校准 | 按真实数据折中 | 依赖校准集代表性 |
 
-## 4. 为什么 LLM 里 activation outlier 常见
+## 为什么 LLM 里 activation outlier 常见
 
 | 来源 | 直觉 | 后果 |
 | --- | --- | --- |
@@ -99,7 +104,7 @@ s=\frac{\alpha}{q_{\max}}
 
 **一句话**：权重分布是静态的，activation 分布是输入驱动的。校准集越不像真实流量，activation scale 越可能选错。
 
-## 5. per-tensor、per-channel、group-wise 怎么选
+## per-tensor、per-channel、group-wise 怎么选
 
 设激活：
 
@@ -123,7 +128,7 @@ X\in\mathbb{R}^{B\times T\times d}
 
 **读作什么**：更细的粒度能把 outlier 影响限制在更小范围，但会增加 scale 元数据和 kernel 复杂度。
 
-## 6. 校准本质上在选什么
+## 校准本质上在选什么
 
 校准不是随便喂几条样本。它是在用一小批代表性输入，估计线上会出现的张量范围、scale、zero-point、截断阈值和敏感通道。
 
@@ -145,7 +150,7 @@ X\in\mathbb{R}^{B\times T\times d}
 
 **读作什么**：最小 MSE 不一定等于最高任务质量。任务越复杂，越要用真实任务桶参与校准和选择。
 
-## 7. 动态量化和静态量化
+## 动态量化和静态量化
 
 | 类型 | scale 什么时候确定 | 优点 | 代价 |
 | --- | --- | --- | --- |
@@ -155,7 +160,7 @@ X\in\mathbb{R}^{B\times T\times d}
 
 **读作什么**：动态更灵活，静态更容易快。生产选择不是绝对优劣，而是看输入分布变化、目标延迟和 kernel 支持。
 
-## 8. SmoothQuant 为什么能帮 activation
+## SmoothQuant 为什么能帮 activation
 
 线性层：
 
@@ -177,14 +182,14 @@ Y=(XD^{-1})(DW)
 
 **读作什么**：输出保持不变，但 activation 的量化难度降低。因为权重是静态的，放大后的权重可以离线处理；activation 是动态的，线上更难临时补救。
 
-![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="740" }
+![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="730" }
 
 <small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 2。原论文图意：activation outlier 会减少有效量化 bit；SmoothQuant 把一部分难度从 activation 迁移到 weight。</small>
 
 !!! note "图解"
     图里的 activation 尖峰就是本页说的 outlier。它们不一定多，但会决定 scale。SmoothQuant 的价值在于先改变数值分布形态，再做量化。
 
-## 9. outlier channel 是否应该保高精
+## outlier channel 是否应该保高精
 
 有些系统会对严重 outlier 通道做特殊处理：
 
@@ -197,7 +202,7 @@ Y=(XD^{-1})(DW)
 
 **核心逻辑**：不是所有维度都值得同等低比特对待。保护少数关键通道，常常比全层提高 bit 更划算。
 
-## 10. 校准集怎么选
+## 校准集怎么选
 
 一个好的校准集不一定大，但必须像真实流量。
 
@@ -213,7 +218,7 @@ Y=(XD^{-1})(DW)
 !!! warning "校准集太干净的后果"
     如果校准集只有短、干净、常见的样本，scale 会过于乐观。上线后遇到长上下文、代码块、复杂表格或机器人异常状态时，activation 分布可能完全不同。
 
-## 11. KV cache 里的离群问题
+## KV cache 里的离群问题
 
 KV cache 也是 activation 的一种动态状态。长上下文中，K/V 张量会随层数、位置、输入内容变化。
 
@@ -232,7 +237,7 @@ KV cache 也是 activation 的一种动态状态。长上下文中，K/V 张量�
 
 **读作什么**：KV cache 低比特能显著省长上下文显存，但如果 K/V 的量化误差改变注意力分布，模型可能丢长程细节、引用错位或推理不稳。
 
-## 12. 评测时看什么
+## 评测时看什么
 
 | 检查项 | 为什么重要 |
 | --- | --- |
@@ -243,7 +248,7 @@ KV cache 也是 activation 的一种动态状态。长上下文中，K/V 张量�
 | kernel trace | 确认动态统计和 Q/DQ 没吃掉收益 |
 | 高风险样本回放 | 找安全头、动作头、OCR、代码等局部能力退化 |
 
-## 13. 一个财务文档 VLM 例子
+## 一个财务文档 VLM 例子
 
 常规问答样本里，量化模型几乎不掉分；但上线后，复杂发票的税率、小数点、跨页金额关联频繁出错。排查发现校准集里缺少高分辨率表格和低清扫描件，activation scale 主要适配了普通段落问答，导致表格结构和小字通道的分辨率不足。
 
@@ -253,6 +258,11 @@ KV cache 也是 activation 的一种动态状态。长上下文中，K/V 张量�
 2. 对视觉 connector、OCR 相关层和结构头保守混合精度。
 3. 按字段级准确率、金额误差、跨页一致性单独回归。
 
-## 14. 小结
+## 本页结论
 
 activation outlier 是低比特量化中最容易让初学者低估的问题。它让 scale 变粗，让普通值失去分辨率，也让校准集质量变成部署成败的关键。理解 outlier 后，再看 AWQ、SmoothQuant、KV cache quant 和混合精度，就会发现它们都在处理同一个核心问题：把有限的数值表示能力分给最需要的地方。
+
+!!! tip "下一站"
+    - 回到本专题入口：[量化](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[QLoRA 与量化训练](qlora-and-quantized-training.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

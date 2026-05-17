@@ -2,11 +2,16 @@
 
 这一页是入门页之后的第二层地图。入门页已经讲了基本符号和四类模型；这里专门回答更工程化的问题：
 
+!!! note "读法定位"
+    这页先回答“VLA、WAM 与世界模型地图”在「具身智能」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 VLA、世界模型、相机/深度和评测集的基本角色。 必要时先回 [具身智能入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把感知、数据、仿真、策略、控制、安全和真实闭环连起来，看机器人系统为什么不能只靠离线指标判断。
+
 **VLA、world model、WAM、planner、controller、data engine 到底谁负责什么，彼此怎么接？**
 
 先给结论：具身智能不是某一个模型名字，而是一套闭环系统。模型只负责其中一部分，真正落地还要有感知、状态估计、动作接口、规划控制、安全、数据引擎和评测脚本。
 
-## 1. 一张系统地图
+## 一张系统地图
 
 可以把具身系统压成下面这条链：
 
@@ -48,7 +53,7 @@ o_{t+1}.
 
 这张表比“某个模型强不强”更重要。读论文时先问：它主要强化的是哪一层？是更会看、更会拆任务、更会出动作、更会预测未来，还是让数据和评测更可靠？
 
-## 2. VLA 的边界：动作从哪里来
+## VLA 的边界：动作从哪里来
 
 VLA 通常学习：
 
@@ -84,7 +89,7 @@ A_{t:t+H-1} \sim \pi_\theta(o_{\le t}, q_t, \ell).
 | flow matching action expert | 真实控制仍需要连续、平滑的动作块 |
 | task progress rubric | 长任务要看阶段进度，不只看最终成功 |
 
-## 3. 世界模型的边界：未来怎么被消费
+## 世界模型的边界：未来怎么被消费
 
 世界模型通常学习：
 
@@ -114,7 +119,7 @@ p_\theta(z_{t+1:t+H}, r_{t:t+H}, c_{t:t+H}, d_{t:t+H}
 3. 它的 latent 是否能支持 planner 或 policy 选择动作？
 4. 它是否用真实观测定期刷新，避免 rollout 漂移？
 
-## 4. WAM 的边界：未来和动作一起生成
+## WAM 的边界：未来和动作一起生成
 
 DreamZero 代表的 WAM 可以写成：
 
@@ -150,7 +155,7 @@ DreamZero 失败图很好地说明了 WAM 的双刃剑。
 !!! note "图解：这张图支撑的是 WAM 风险判断"
     这不是普通“视频生成失败”的例子，而是动作和未来高度绑定后的失败。绑定成功时，动作更能解释未来；绑定失败时，动作也会忠实执行错误未来。因此 WAM 的验收不能只看视频像不像，还要看 predicted future、issued action、real observation 和 success checker 是否一致。
 
-## 5. Planner、controller 和 safety 的边界
+## Planner、controller 和 safety 的边界
 
 模型动作通常不是最终电机命令。更稳的部署链路是：
 
@@ -178,7 +183,7 @@ SayCan 提供了一个直观例子：语言模型判断 useful，affordance 判�
 !!! note "图解：模型的聪明必须被可执行性约束"
     一个候选动作可能非常符合语言目标，但当前夹爪够不到、路径会碰撞、物体不可抓。planner 和 safety 的作用就是把“语义上正确”投影到“物理上可执行”。
 
-## 6. Data engine 的边界：让系统能进步
+## Data engine 的边界：让系统能进步
 
 VLA、world model 和 WAM 都需要数据，但需要的数据形态不同。
 
@@ -194,7 +199,7 @@ VLA、world model 和 WAM 都需要数据，但需要的数据形态不同。
 
 Open X-Embodiment 这张图说明了为什么 data engine 不是“把轨迹堆起来”这么简单。
 
-![Open X-Embodiment dataset overview 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="820" }
+![Open X-Embodiment dataset overview 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="760" }
 
 <small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。原论文图意：统计 Open X-Embodiment 中不同 robot embodiment、scene、trajectory、skill 和 object category 的分布，展示跨机器人数据的异质性。</small>
 
@@ -221,7 +226,7 @@ Open X-Embodiment 这张图说明了为什么 data engine 不是“把轨迹堆�
 | cuRobo / STOMP 轨迹 | 行为克隆 GT、planner baseline、任务可行性验证 |
 | 失败复位重试 | 数据引擎、hard case mining、评测稳定性 |
 
-## 7. 四条路线怎么选
+## 四条路线怎么选
 
 | 路线 | 什么时候优先 | 不适合单独承担什么 |
 | --- | --- | --- |
@@ -240,7 +245,7 @@ success checker 判断结果
 data engine 回流失败
 ```
 
-## 8. 初学者最容易混的六组概念
+## 初学者最容易混的六组概念
 
 | 容易混的概念 | 正确区分 |
 | --- | --- |
@@ -253,7 +258,7 @@ data engine 回流失败
 
 记住这六组，读 π0.5、DreamZero 和具身数据 pipeline 会清楚很多。
 
-## 9. 继续阅读
+## 继续阅读
 
 建议这样接下去：
 
@@ -264,3 +269,8 @@ data engine 回流失败
 5. [π0.5](../paper-deep-dives/embodied-ai/pi05.md)、[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)、[LingBot-World](../paper-deep-dives/world-models/lingbot-world.md)：把具体论文放回这张地图。
 
 读完后，用一个问题自测：给定“整理厨房”这个任务，你能否说清楚系统如何看见场景、分解子任务、生成动作、预测风险、执行控制、判定成功，并把失败样本回流到下一轮训练。
+
+!!! tip "下一站"
+    - 回到本专题入口：[具身智能](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[具身任务谱系与评测](task-taxonomy-and-benchmarks.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

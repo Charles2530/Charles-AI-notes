@@ -6,6 +6,11 @@ paper_topic: 高效推理
 
 # EAGLE-2：用动态 Draft Tree 加速投机解码
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [推理](../../inference/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「推理」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees`
     - 链接：[arXiv:2406.16858](https://arxiv.org/abs/2406.16858)
@@ -48,7 +53,7 @@ EAGLE-2 的核心很漂亮：**不重新训练 draft model，只用 draft model 
 
 EAGLE-2 认为这个假设太粗。比如问题是 `10+2=`，下一个 token 很可能是 `1`，继续扩多个低概率分支是在浪费；但如果 prompt 是 `10+2`，下一步可能还没形成确定答案，多保留候选分支就更合理。
 
-![EAGLE-2 speedup temperature 1 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-1-speedup-temp1.png){ width="760" }
+![EAGLE-2 speedup temperature 1 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-1-speedup-temp1.png){ width="690" }
 
 <small>图源：`EAGLE-2`，Figure 1。原论文图意：temperature=1 时，EAGLE-2 在 MT-bench 上相对多种 speculative sampling 方法取得更高 speedup；论文只比较保持输出分布不变的 speculative sampling 方法。</small>
 
@@ -58,7 +63,7 @@ EAGLE-2 认为这个假设太粗。比如问题是 `10+2=`，下一个 token 很
     **对主线意义**：它适合说明推理成本里的“平均吞吐”和“acceptance 分布”要一起看。  
     **不能证明什么**：动态 draft tree 不能证明模型知识、推理能力或闭环任务质量提升。
 
-![EAGLE-2 speedup temperature 0 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-2-speedup-temp0.png){ width="760" }
+![EAGLE-2 speedup temperature 0 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-2-speedup-temp0.png){ width="690" }
 
 <small>图源：`EAGLE-2`，Figure 2。原论文图意：temperature=0 时，EAGLE-2 在 MT-bench 上同样优于 EAGLE 等方法；部分模型缺少合适 draft model 时标为 N/A。</small>
 
@@ -69,9 +74,9 @@ EAGLE-2 认为这个假设太粗。比如问题是 `10+2=`，下一个 token 很
 
 EAGLE 不像普通 speculative sampling 那样用小 LLM 直接预测 token chain。它在 target model 的 feature space 里自回归预测，然后复用原 LLM 的 LM head 得到 draft token。为了处理采样带来的 feature uncertainty，EAGLE 还把前一步采样 token 的 embedding 输入 draft model。
 
-![EAGLE drafting stage 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-3a-drafting-stage.png){ width="760" }
+![EAGLE drafting stage 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-3a-drafting-stage.png){ width="690" }
 
-![EAGLE verification stage 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-3b-verification-stage.png){ width="760" }
+![EAGLE verification stage 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-3b-verification-stage.png){ width="690" }
 
 <small>图源：`EAGLE-2`，Figure 3。原论文图意：EAGLE 在 drafting stage 做 feature-level autoregression，在 verification stage 使用 tree-structured draft；图中 \(e_i\) 表示 token embedding，\(f_i\) 表示 LM head 前的 feature vector。</small>
 
@@ -93,9 +98,12 @@ EAGLE、Medusa 这类 static draft tree 隐含一个假设：树里某个位置�
 
 如果要动态建树，最自然的信号是每个 draft token 的真实接受率。但真实接受率需要 target model forward 才知道，这会抵消 speculative decoding 的目标。EAGLE-2 的关键发现是：EAGLE draft model 的 confidence score 和 acceptance rate 相关性很强。
 
-![Draft confidence calibration 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-6-confidence-calibration.png){ width="680" }
+![Draft confidence calibration 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-6-confidence-calibration.png){ width="690" }
 
 <small>图源：`EAGLE-2`，Figure 6。原论文图意：Vicuna 7B 上，draft confidence score 分桶后的平均 acceptance rate 接近红色 \(y=x\) 参考线；低于 0.05 的 confidence 对应约 0.04 的接受率，高于 0.95 的 confidence 对应约 0.98 的接受率。</small>
+
+!!! note "图解：校准图看红线附近"
+    横轴是 draft model 自己给出的 confidence，纵轴是真实被 target 接受的比例。点越贴近红色 \(y=x\)，说明 confidence 越能当作 acceptance rate 的便宜代理。EAGLE-2 后面的动态树算法就建立在这个代理足够可靠的前提上。
 
 这就是 EAGLE-2 可行的原因：不用 target model 先验验证，也不用训练额外 policy model，直接用 draft model 已经输出的概率来估计接受概率。
 
@@ -121,11 +129,11 @@ V_i=\prod_{t_j \in \mathrm{Path}(\mathrm{root},t_i)}p_j
 | Flattening | Flatten selected nodes into a 1D sequence for verification | 让 target model 可以一次 forward 验证候选 |
 | Attention mask | Each token can only see its ancestor nodes | 保持 tree branch 之间不可见，避免破坏自回归一致性 |
 
-![EAGLE vs EAGLE-2 static and dynamic tree 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-4-static-vs-dynamic-tree.png){ width="760" }
+![EAGLE vs EAGLE-2 static and dynamic tree 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-4-static-vs-dynamic-tree.png){ width="690" }
 
 <small>图源：`EAGLE-2`，Figure 4。原论文图意：EAGLE 使用固定 draft shape；EAGLE-2 根据上下文调整分支数量，简单上下文少扩分支，困难上下文多保留候选。</small>
 
-![EAGLE-2 dynamic draft tree 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-7-eagle2-dynamic-tree.png){ width="760" }
+![EAGLE-2 dynamic draft tree 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-7-eagle2-dynamic-tree.png){ width="690" }
 
 <small>图源：`EAGLE-2`，Figure 7。原论文图意：边上的数字是 draft model confidence，方块中的括号数字是节点 value；expansion phase 选择当前层 value 最高的节点扩展，rerank phase 从所有节点里选 top nodes，最后根据树结构构造 attention mask。</small>
 
@@ -274,3 +282,8 @@ EAGLE-2 最值得记住的是：**推理时的候选结构也可以用模型自�
 | Draft training data 是否覆盖目标任务 | SFT-only draft 在知识问答和总结任务上可能吃亏 |
 
 如果把 EAGLE-2 接到线上推理系统，它不是一个孤立算法，而是一套 draft policy、tree attention、verification mask、runtime scheduler 和观测指标共同组成的工程路径。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[推理](../../inference/index.md)。
+    - 按导航顺序继续：[Low-bit LLM Survey：低比特大模型量化](low-bit-llm-survey.md)。

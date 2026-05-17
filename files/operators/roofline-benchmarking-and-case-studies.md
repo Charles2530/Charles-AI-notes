@@ -2,6 +2,11 @@
 
 做算子优化时，最常见的失败不是“技术不够强”，而是没有先判断瓶颈类型，benchmark 设计不可靠，看到局部提速就误以为端到端受益，或者没有把案例还原成通用方法。
 
+!!! note "读法定位"
+    这页先回答“Roofline 建模与性能案例”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 因此这一页专门把 roofline、benchmark 设计和几个典型案例放在一起，帮助你把“性能感觉”变成“性能判断”。
 
 这页适合和 [GEMM 与 Attention Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) 一起读。前者提供热点算子的具体结构，后者解释 tile、program id 和 autotune 如何落到实现；Roofline 则负责先判断该往算力、带宽、layout 还是 launch 开销上用力。
@@ -12,7 +17,7 @@
 !!! example "有趣例子：工厂产线"
     如果工人已经很快但原料送不上来，继续培训工人没用；如果原料充足但机器算得慢，才该升级设备。Roofline 就是在判断 bottleneck 是算力还是带宽。
 
-## 1. Roofline 的真正用途
+## Roofline 的真正用途
 
 Roofline 不是为了精确预测每个 kernel 的最终性能，而是为了先问一个更关键的问题：
 
@@ -33,7 +38,7 @@ $$
 
 这能帮你决定该优先想 tile 和 Tensor Core，还是优先想 fusion、layout、向量化与减少写回。
 
-## 2. 完整案例：decode attention 为什么常被 KV 带宽卡住
+## 完整案例：decode attention 为什么常被 KV 带宽卡住
 
 先看一个单层 decode attention。假设：
 
@@ -200,55 +205,60 @@ Roofline 报告的最低格式是 shape、FLOPs、bytes、arithmetic intensity�
 
 因此，一个完整结论应像这样：`该 video latent block 的 AI 约 1500 FLOPs/byte，更偏 compute/occupancy；token 压缩让 block latency 4.1ms -> 1.35ms，但端到端 rollout 38ms -> 29ms。hard replay 中 contact event F1 不降、top-1 candidate ranking 不翻转，才允许上线。`
 
-## 3. Benchmark 设计的三层目标
+## Benchmark 设计的三层目标
 
 一个有价值的 benchmark 应至少服务三个目标：看单 kernel 极限，看真实 shape 分布下的稳定收益，看端到端系统是否真的受益。
 
 如果只满足第一个，很容易得到“实验室很快，线上不明显”的结论。
 
-## 4. 微基准的基本规范
+## 微基准的基本规范
 
 较稳妥的 microbenchmark 通常要充分 warmup，固定 shape、dtype 和 layout，区分单 kernel latency 与 end-to-end latency，多轮重复，避免把 JIT 或首次编译成本算进去，并报告环境。
 
-## 5. 一个 GEMM 案例怎么看
+## 一个 GEMM 案例怎么看
 
 面对 GEMM 案例时，建议先看 \(M/N/K\) 多大、shape 是否规则、是否是高频服务热点、是否已经走 Tensor Core，以及 epilogue 是否可融合。
 
 如果是规则大矩阵，roofline 往往提示它更偏 compute-heavy；  
 如果是小而碎的 GEMM，真正的问题可能反而是 launch 和 shape。
 
-## 6. 一个 Softmax / Norm 案例怎么看
+## 一个 Softmax / Norm 案例怎么看
 
 这类算子的关键问题通常不是 FLOPs，而是数据读写次数、reduction 路径、向量化和是否可融合。
 
 roofline 常提醒你：这类算子更可能是 bandwidth-bound，因此优化方向应偏向减少中间写回、提高向量化、改善访存局部性和融合周边操作。
 
-## 7. 一个 Attention 案例怎么看
+## 一个 Attention 案例怎么看
 
 Attention 常常是混合型案例：数学公式看起来计算很多，但真正性能又常被 I/O 主导；长上下文下 score matrix materialization 很痛，decode 场景下 KV cache 读取更痛。
 
 因此对 attention 来说，roofline 的价值在于提醒你先拆阶段：prefill、decode、paged KV 和 prefix reuse 的访问模式并不相同。
 
-## 8. 端到端收益为什么常常小于单 kernel 收益
+## 端到端收益为什么常常小于单 kernel 收益
 
 原因通常是该 kernel 在整体中占比有限，优化后出现了新瓶颈，额外引入了数据准备成本，或者调度和通信没有同步优化。
 
 这也是为什么好的案例拆解，不会只给“kernel 提速 2 倍”，还会解释端到端提升多少、为什么不是同等倍数，以及剩余瓶颈在哪里。
 
-## 9. 如何把案例拆解成可复用方法
+## 如何把案例拆解成可复用方法
 
 面对任何优化案例，都可以问四件事：它解决的是带宽问题、算力问题，还是 launch / layout 问题；它复用了 tiling、fusion、online reduction、persistent、specialization 中的哪些通用模式；它依赖什么 shape、dtype、拓扑和请求分布边界；它能迁移到哪些别的算子上。
 
 这样案例才会变成“方法库”，而不是孤立技巧。
 
-## 10. 一个形象比喻
+## 直觉例子
 
 Roofline 像是在看一台机器究竟是马力不够，还是输送带太慢；benchmark 像是在不同工况下测这台机器；案例拆解则是在弄清楚某次改造到底是换了更强的引擎，还是把物流路径改顺了。只有把这三件事放在一起，性能优化才会从“感觉更快”变成“知道为什么更快”。
 
-## 11. 小结
+## 本页结论
 
 Roofline 建模与性能案例的核心意义，在于把性能优化从“经验活”变成“结构化分析”。只要你能先判断瓶颈类型，再设计可信 benchmark，再把案例抽象成可复用模式，就会比单纯堆技巧更接近真正成熟的算子工程。
 
 ## 工程收束
 
 Roofline 不是展示图，而是把 FLOPs、带宽、算术强度、steady state 和真实 workload 对齐的排查工具。最容易出错的是字节数估错、只跑理想 shape、忽略服务态请求；上线前应同时做理论估算和实测，用 case study 解释偏差，并保留基准脚本。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Shape Bucketing](workload-modeling-and-shape-buckets.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

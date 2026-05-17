@@ -2,6 +2,11 @@
 
 Triton 在 AI 系统里越来越重要，不是因为它能完全替代 CUDA，而是因为它提供了一种适合张量 kernel 的中层抽象：比手写 CUDA 更接近矩阵块和张量块思维，又比纯图编译的黑盒代码生成更可控。
 
+!!! note "读法定位"
+    这页先回答“Triton 编程模型与自动调优”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 典型分工是：最关键、最极致的内核仍可能用 CUDA 或模板库；大量中高频、自定义、融合型算子优先尝试 Triton；上层编译器如 Inductor 也会把一部分 kernel 降到 Triton。
 
 !!! note "初学者先抓住"
@@ -122,3 +127,8 @@ Triton 的核心价值不是让所有人绕过 CUDA，而是让更多工程师�
 **修复**：固定高频 bucket 的 autotune 结果并做启动预热；限制线上动态 shape 的搜索空间；低频 shape 走保守通用实现；在指标里分开记录 compile time、autotune time 和 kernel time。
 
 **反例**：如果服务是离线批处理，冷启动成本可摊到很长任务里，动态 autotune 可能是可接受的。在线交互服务则必须把首次编译视为用户延迟的一部分。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[CUTLASS / CuTe 与编译栈](cutlass-cute-and-compiler-stack.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

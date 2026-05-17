@@ -6,6 +6,9 @@ paper_topic: 技术报告
 
 # DeepSeek-R1：RL 激发推理能力
 
+!!! note "读法定位"
+    先按技术报告证据读：它证明 verifier + RL 能改变哪些推理行为，哪些训练成本和安全结论仍不能外推；背景回 [论文专题讲解](../index.md) 与 [Claim Ledger](../../references/claim-ledger.md)。
+
 !!! info "论文信息"
     - 论文：`DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning`
     - 模型：`DeepSeek-R1-Zero`、`DeepSeek-R1`、`DeepSeek-R1-Distill-*`
@@ -580,3 +583,6 @@ DeepSeek-R1 最值得学习的地方，是它把“推理能力”重新放回�
 ```
 
 但这条路线并不是所有任务的通用答案。它在数学、代码、STEM、逻辑等可验证任务上最强；一旦进入开放式写作、安全偏好或真实工具任务，reward 可靠性、环境成本和 reward hacking 会重新成为核心瓶颈。更准确地说，DeepSeek-R1 证明了：**当正确性可以自动验证时，强化学习可以把大模型从“模仿推理”推向“通过试错发现推理策略”。**
+
+!!! tip "下一站"
+    - 回到 [论文专题讲解](../index.md) 横向比较，或继续读 [Qwen3：Thinking 与蒸馏](qwen3.md)。

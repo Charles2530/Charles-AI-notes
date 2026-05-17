@@ -2,6 +2,11 @@
 
 训练大模型时，显存压力往往不是权重单独造成的，而是权重、梯度、optimizer state 和中间激活一起造成的。自动微分让训练变简单，也带来了保存计算图和激活的显存成本。
 
+!!! note "读法定位"
+    这页先回答“自动微分与激活显存”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 ![Sublinear memory computation graph 原论文图](../assets/images/paper-figures/foundations/sublinear-memory-figure-1-computation-graph.png){ width="760" }
 
 <small>图源：[Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1。原论文图意：把神经网络前向计算表示成有向计算图，反向传播时需要中间节点的值；若不保存全部中间值，就需要在 backward 前重新计算部分节点。</small>
@@ -15,7 +20,7 @@
 !!! tip "遇到这些症状，回看本页"
     同一模型推理能跑、训练一开就 OOM，activation checkpointing 后吞吐掉得过多，或者恢复训练后梯度和数据游标对不上时，回看本页。本页能帮你判断显存该从 activation、optimizer state、重算策略还是 checkpoint 恢复语义入手。
 
-## 0. 符号卡：自动微分里的几个词
+## 符号卡：自动微分里的几个词
 
 | 符号或词 | 含义 |
 | --- | --- |
@@ -29,7 +34,7 @@
 
 推理只需要 forward；训练需要 forward、保存或重算激活、backward 和 optimizer update。因此训练显存通常明显高于推理。
 
-## 1. 自动微分在做什么
+## 自动微分在做什么
 
 现代框架会记录前向计算图，然后自动根据链式法则计算梯度。
 
@@ -46,7 +51,7 @@ loss.backward()
 3. backward 时需要哪些中间值；
 4. 梯度应该累积到哪些参数上。
 
-## 2. 为什么训练比推理更占显存
+## 为什么训练比推理更占显存
 
 推理只需要前向输出，训练还需要保存反向传播所需状态。
 
@@ -60,7 +65,7 @@ loss.backward()
 
 AdamW 训练中，单个参数可能对应权重、梯度、一阶动量、二阶动量等多份状态，因此训练显存通常远高于推理。
 
-## 3. Activation Checkpointing 的核心折中
+## Activation Checkpointing 的核心折中
 
 Activation checkpointing 的思想是：前向时不保存所有中间激活，只保存少数 checkpoint；反向时重新计算丢掉的激活。
 
@@ -78,7 +83,7 @@ Backward:
 
 这在大模型训练中非常常见，尤其是长上下文、多模态和视频模型。
 
-## 4. 一个简单例子
+## 一个简单例子
 
 假设有 6 层网络：
 
@@ -91,7 +96,7 @@ x -> L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> loss
 
 这样显存下降，但训练时间会上升。
 
-## 5. 训练显存账：为什么长视频最先爆
+## 训练显存账：为什么长视频最先爆
 
 ```mermaid
 flowchart LR
@@ -122,7 +127,7 @@ flowchart LR
 | ZeRO/FSDP | 参数、梯度、optimizer state | 通信与恢复语义更复杂 |
 | Offload | GPU 显存 | PCIe/NVMe 带宽和尾延迟 |
 
-## 6. 显存排查顺序
+## 显存排查顺序
 
 遇到 OOM 时，可以按下面顺序检查：
 
@@ -134,13 +139,18 @@ flowchart LR
 6. 是否需要 ZeRO、FSDP、TP/PP/CP；
 7. 数据加载或缓存是否意外占显存。
 
-## 7. 和后续专题的关系
+## 和后续专题的关系
 
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：理解 OOM、NaN、梯度异常。
 - [分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md)：理解恢复语义和状态分片。
 - [Megatron、DeepSpeed 与训练栈](../training/megatron-lm-deepspeed-and-open-training-stacks.md)：理解 ZeRO、TP、PP、CP。
 - [数值、显存与运行时](numerics-memory-and-runtime-basics.md)：理解显存、dtype 和 runtime 的关系。
 
-## 小结
+## 本页结论
 
 自动微分让训练更容易，但训练系统必须为计算图和中间激活付出显存代价。Activation checkpointing 是最常见的折中：少存一点，多算一点。
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

@@ -2,6 +2,11 @@
 
 在很多大模型系统里，真正频繁拖慢整体速度的，并不总是最大的 GEMM，而是那些“单次看起来不大、但出现极其频繁”的算子：reduction、softmax、layernorm、rmsnorm、rope、gather、scatter、layout transform。它们通常更偏带宽受限，很适合做融合，对 shape、stride 和向量化极度敏感，也容易在 decode、小 batch 和长上下文场景中放大存在感。
 
+!!! note "读法定位"
+    这页先回答“Reduction、Norm 与索引 Kernel”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 因此理解这些小中型 kernel，对于训练和服务都非常关键。
 
 !!! note "初学者先抓住"
@@ -12,13 +17,13 @@
 
     Layout transform 经常不做太多数学计算，却会搬大量数据、破坏连续访问、增加中间张量和 launch。很多优化的第一步不是写更复杂算法，而是减少不必要的重排。
 
-## 1. 为什么“小算子”不能被低估
+## 为什么“小算子”不能被低估
 
 单个 norm 或 reduction kernel 看起来没多少 FLOPs，但真实系统里它们每层都要跑、每步 decode 都要跑，前后还常夹着 layout 变换和 mask 处理，因此极易受带宽和 launch 开销影响。
 
 如果这些算子没有被很好融合，系统就会不断读取中间结果、做一点小计算、再写回、再 launch 下一个小 kernel。这正是很多推理系统效率不高的根源之一。
 
-## 2. Reduction 的基本模式
+## Reduction 的基本模式
 
 Reduction 的任务，是把一组值压成更少的统计量，例如 sum、max、mean、variance、argmax，以及 top-k 前的局部统计。
 
@@ -30,7 +35,7 @@ Reduction 的任务，是把一组值压成更少的统计量，例如 sum、max
 
 常见层级包括 warp 内 reduction、block 内 reduction 和多 block 全局 reduction。不同问题规模适合不同层级，不能一律套模板。
 
-## 3. Softmax 为什么是 reduction 的典型代表
+## Softmax 为什么是 reduction 的典型代表
 
 **Softmax 看似只是**：
 
@@ -47,7 +52,7 @@ $$
 在线 softmax 允许你边读块、边更新局部最大值与归一化项。  
 这不仅是数学技巧，更是 kernel 设计基础。
 
-## 4. LayerNorm / RMSNorm 的 kernel 画像
+## LayerNorm / RMSNorm 的 kernel 画像
 
 Norm 类算子的核心不是“公式难”，而是每行要先算统计量、再应用归一化；数据通常是连续向量，很适合向量化加载，也很适合和 residual、scale、bias 融合。
 
@@ -59,7 +64,7 @@ Norm 类算子的核心不是“公式难”，而是每行要先算统计量、
 
 常见优化点包括向量化 load/store、warp/block reduction、高精度累加统计量、与 residual / scale 融合，以及对齐 hidden size 和向量宽度。
 
-## 5. Rope 与位置编码周边 kernel
+## Rope 与位置编码周边 kernel
 
 Rotary embedding 等位置编码处理在服务里常被视为“小操作”，但它们高频、紧跟在 Q/K 生成路径上、形状相对稳定，因此很适合融合。
 
@@ -69,7 +74,7 @@ Rotary embedding 等位置编码处理在服务里常被视为“小操作”，
 
 所以在实践里，rope 往往被当成一部分 post-projection fused path 来思考。
 
-## 6. Gather / Scatter / Indexing 为什么难
+## Gather / Scatter / Indexing 为什么难
 
 这类 kernel 的核心难点不在计算，而在不规则访存。
 
@@ -83,7 +88,7 @@ Rotary embedding 等位置编码处理在服务里常被视为“小操作”，
 
 对这类 kernel，光盯 FLOPs 往往没有意义。
 
-## 7. Layout Transform 是被低估的大头
+## Layout Transform 是被低估的大头
 
 很多算子本身不慢，慢的是前后 layout transform，例如 transpose、permute、reshape 后的实际重排、pack/unpack 和 swizzle 相关变换。
 
@@ -93,7 +98,7 @@ Rotary embedding 等位置编码处理在服务里常被视为“小操作”，
 
 很多系统瓶颈其实不是某个主算子，而是主算子前后不断发生的布局切换。
 
-## 8. 向量化与对齐
+## 向量化与对齐
 
 向量化 load/store 对这些小中型 kernel 特别重要。  
 如果数据按更宽的向量边界对齐，kernel 可以：
@@ -106,7 +111,7 @@ shape 不整齐、stride 奇怪、对齐不足、最后几个元素需要 mask�
 
 这也是为什么很多 kernel 会针对常见 hidden size、head dim 做 shape-specialized 路径。
 
-## 9. 为什么这些 kernel 很适合融合
+## 为什么这些 kernel 很适合融合
 
 **典型可融合链包括** `residual + norm`、`bias + activation`、`rope + qk post-process`、`dequant + norm` 周边操作，以及 top-k 前后的局部 reduction。
 
@@ -116,7 +121,7 @@ shape 不整齐、stride 奇怪、对齐不足、最后几个元素需要 mask�
 
 对小算子来说，这种收益尤其明显。
 
-## 10. 常见失效模式
+## 常见失效模式
 
 ### 10.1 Norm 很快，但整体还是慢
 
@@ -134,11 +139,16 @@ shape 不整齐、stride 奇怪、对齐不足、最后几个元素需要 mask�
 
 重排数据、提高局部性，并尽量降低不规则访问频率。
 
-## 11. 一个形象比喻
+## 直觉例子
 
 如果 GEMM 是主装配线，那么 reduction、norm 和索引 kernel 更像装配线上的检验、分拣、校准和搬运工位。单个工位看起来不大，但因为每批货都要经过，而且经常紧贴主线，它们一旦组织不好，整条产线都会被拖慢。现代 AI 系统里很多所谓“小 kernel 优化”，本质上就是在优化这些高频工位之间的物流和工序衔接。
 
-## 12. 小结
+## 本页结论
 
 Reduction、norm、layout transform 和 indexing kernel 的共同主题是：  
 它们常常更受内存系统而非算力系统支配，频率又非常高，因此特别适合从向量化、layout、fusion 和 shape specialization 的角度统一看待。理解这类算子，会让你对“为什么一个看似小的 kernel 能拖慢整个推理服务系统”有非常扎实的直觉。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[低精度与量化 Kernel](low-precision-and-quantized-kernels.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

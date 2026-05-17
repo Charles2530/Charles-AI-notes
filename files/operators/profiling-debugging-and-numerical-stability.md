@@ -2,6 +2,11 @@
 
 很多 kernel 优化最后不是败在“不会写更快代码”，而是败在三件事上：没有正确测量，优化方向从一开始就错了；没有可靠验证，性能上去了但结果悄悄错了；没有处理数值稳定性，速度和精度之间出现不可接受的偏差。
 
+!!! note "读法定位"
+    这页先回答“Profiling、调试与数值稳定”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 成熟算子工程不是“会写 kernel”，而是建立从热点识别、性能定位、正确性验证到数值验收的完整闭环。
 
 !!! note "初学者先抓住"
@@ -143,3 +148,8 @@ flowchart LR
 | 闭环回归 | 固定 hard replay 和小闭环任务桶 | profiler 显示快，但 near-miss 漏报 | near-miss recall、cost per success |
 
 一个世界模型 kernel PR 的证据不应只写“attention kernel 快 1.6x”。更稳的写法是：`视频 latent attention kernel 1.6x，端到端候选 rollout 1.23x；与参考实现相比 top-1 candidate ranking agreement 99.4%，risk ECE 变化 +0.002，hard replay 无新增 false negative。`
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[性能反模式与失败案例](performance-anti-patterns-and-failure-modes.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

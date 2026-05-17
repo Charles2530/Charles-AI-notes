@@ -12,13 +12,18 @@
   </div>
 </div>
 
+!!! note "读法定位"
+    这页先回答“世界模型路线图”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先看本页路线，或回 [基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把表征预测、潜变量动力学、规划、rollout 服务和具身/视频应用连成“可模拟、可评估、可行动”的主线。
+
 !!! tip "第一次读的顺序"
     先读 [从零理解世界模型](beginner-world-models-primer.md)，再回到本页。那页负责解释 \(x_t/o_t\)、\(s_t\)、\(z_t\)、\(h_t\)、\(a_t\)、\(r_t\)、\(d_t/c_t\)、\(p_\theta\)、\(q_\phi\)、\(\pi_\psi\)、\(V_\eta\) 等符号；本页负责把这些符号接到完整路线图。
 
 !!! warning "最常见误区"
     会生成未来视频，不等于拥有可规划世界模型。关键要看动作是否真正改变未来、预测是否能被 planner / policy / risk checker 消费、接入闭环后是否改善成功率或风险控制。
 
-## 1. 先看一个智能体循环
+## 先看一个智能体循环
 
 世界模型不是孤立模型，而是智能体循环中的“内部沙盘”。
 
@@ -42,7 +47,7 @@ $$
 
 其中 \(z\) 是潜状态，\(x\) 是观测或视频，\(a\) 是动作，\(r\) 是奖励或任务进展，\(d\) 是终止/失败，\(u\) 是不确定性或风险，\(c\) 是语言、地图、目标图像、场景结构等上下文。初学者不用一口气记住这个式子，只要抓住：**状态 + 动作 -> 未来 + 可决策信号**。
 
-## 2. 世界模型回答什么问题
+## 世界模型回答什么问题
 
 | 问题 | 如果答得好 | 如果答不好 |
 | --- | --- | --- |
@@ -54,7 +59,7 @@ $$
 
 对机器人来说，它要预测抓取是否稳定、杯子是否滑动、夹爪是否会撞到桌沿。对自动驾驶来说，它要预测变道、刹车、让行会怎样改变周围车辆和风险。对网页或工具 agent 来说，它要预测点击、提交、调用 API 后系统状态怎么变。
 
-## 3. 三个基础概念
+## 三个基础概念
 
 ### 3.1 观测、状态和 latent
 
@@ -76,7 +81,7 @@ $$
 | Data engine | hard negative、失败回放、反事实样本 |
 | 人类审查 | 可视化未来、错误归因、数据标注线索 |
 
-## 4. 一张 taxonomy 图先建立方位
+## 一张 taxonomy 图先建立方位
 
 ![World model taxonomy](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-2-world-model-taxonomy.jpg){ width="900" }
 
@@ -88,7 +93,7 @@ $$
     **公式对应**：internal 常先看 \(p(z_{t+1}\mid z_t,a_t)\)，external 常先看 \(p(x_{t+1:t+H}\mid x_{\le t},a_{t:t+H-1},c)\)。<br>
     **容易误读**：两类不是高低关系，而是服务位置不同；真实系统常把二者组合起来。
 
-## 5. 方法谱系：按学习顺序读
+## 方法谱系：按学习顺序读
 
 ### 5.1 RSSM / Dreamer：经典 latent dynamics
 
@@ -124,7 +129,7 @@ $$
 
 入口页：[生成式模拟与视频世界模型](generative-simulation-and-video.md)。
 
-## 6. 工程主线图
+## 工程主线图
 
 ![State-space video world model](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-5-state-space-video-world-model.png){ width="900" }
 
@@ -136,7 +141,7 @@ $$
     **公式对应**：\(p(z_{t+1:t+H},x_{t+1:t+H}\mid z_{\le t},a_{t:t+H-1},c)\)。<br>
     **容易误读**：视频帧不是全部；真正关键的是 state、action 和下游消费接口是否连通。
 
-## 7. 高效训练怎么放进来
+## 高效训练怎么放进来
 
 世界模型高效训练是一张成本账，不是一组论文名。核心成本包括：
 
@@ -150,7 +155,7 @@ $$
 
 更完整的工程审计见 [世界模型高效训练技术路线图](efficient-training-roadmap.md) 和 [效率技术覆盖矩阵](efficiency-technique-coverage-matrix.md)。
 
-## 8. 硬证据读法
+## 硬证据读法
 
 世界模型最容易滑成概念地图，所以每个关键 claim 都应尽量回答：
 
@@ -175,7 +180,7 @@ episode 样例
 
 如果只有 demo，它只能支撑“方向值得探索”；如果有 ablation，可以支撑“模块可能有用”；如果还有系统吞吐和闭环成功率，才适合进入工程 baseline。
 
-## 9. 推荐阅读路径
+## 继续阅读
 
 | 路径 | 适合谁 | 推荐顺序 |
 | --- | --- | --- |
@@ -183,7 +188,7 @@ episode 样例
 | 深读版 | 想理解关键路线差异 | [RSSM/Dreamer](rssm-dreamer-and-planning.md) -> [Masked/JEPA](masked-jepa-and-latent-prediction.md) -> [WM/WAM/VAM](wm-wam-vam-and-action-conditioned-modeling.md) -> [生成式模拟](generative-simulation-and-video.md) |
 | 工程版 | 想写方案或复现实验 | [高效训练路线图](efficient-training-roadmap.md) -> [端到端案例](action-conditioned-video-world-model-training-case.md) -> [完整实验报告样例](world-model-efficient-training-experiment-report.md) -> [Rollout 服务案例](rollout-serving-quantization-kernel-case.md) |
 
-## 10. 专题页地图
+## 专题页地图
 
 <div class="atlas-card-grid">
   <a class="atlas-card" href="beginner-world-models-primer/">
@@ -224,7 +229,7 @@ episode 样例
   </a>
 </div>
 
-## 11. 读完本页应能判断
+## 检查标准
 
 读世界模型论文时，不要先背模型名，先定位五件事：
 
@@ -235,3 +240,7 @@ episode 样例
 5. 它省下的成本是否会转移成新的风险，例如 latent 丢接触、视频采样太慢、低比特改变候选动作排序。
 
 只要这五件事清楚，Dreamer、JEPA、WAM、VAM、Genie、LingBot-World、CausVid 和 Cosmos 就不会混成一团。
+
+!!! tip "下一站"
+    - 按导航顺序继续：[从零理解世界模型](beginner-world-models-primer.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

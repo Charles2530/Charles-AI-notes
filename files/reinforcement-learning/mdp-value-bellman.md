@@ -2,13 +2,18 @@
 
 强化学习的基础不是某个算法，而是一套描述闭环决策的语言。只要把 `state`、`action`、`reward`、`policy`、`value` 和 `Bellman equation` 理顺，后面的 PPO、GRPO、Dreamer 和世界模型都会清楚很多。
 
+!!! note "读法定位"
+    这页先回答“MDP、价值函数与 Bellman”在「强化学习」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂概率、优化和基本训练曲线；PPO/GRPO 不必先记公式，先抓更新对象。 必要时先回 [强化学习入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把状态、动作、奖励、策略优化和世界模型闭环连起来，看模型如何通过反馈改进决策。
+
 !!! note "初学者先抓住"
     强化学习要解决的是“现在做什么会让未来更好”。所以它不只关心当前动作看起来是否合理，还关心这个动作会把系统带到什么状态，以及后面还能拿到多少奖励。
 
 !!! tip "主线定位：从预测未来到选择动作"
     MDP/Bellman 页在世界模型高效训练中负责把“预测未来”转成“选择动作”。如果 transition、reward 或 value 错了，策略会把这些错误系统性放大；如果它们足够可靠，agent 就能先在模型或价值函数里估计后果，减少真实试错。
 
-## 1. MDP 是最小决策模型
+## MDP 是最小决策模型
 
 MDP（Markov Decision Process，马尔可夫决策过程）通常写成：
 
@@ -51,7 +56,7 @@ P(s_{t+1}\mid s_1,a_1,\ldots,s_t,a_t)=P(s_{t+1}\mid s_t,a_t)
 
 这不是说真实世界没有历史，而是说我们选的 state 应该已经把有用历史压进去了。世界模型、RSSM、Transformer memory 和 VLA 的历史窗口，本质上都在努力构造更接近 Markov 的内部状态。
 
-## 2. Policy 是行为规则
+## Policy 是行为规则
 
 策略（policy）写成：
 
@@ -84,7 +89,7 @@ P(s_{t+1}\mid s_1,a_1,\ldots,s_t,a_t)=P(s_{t+1}\mid s_t,a_t)
 !!! note "behavior policy 为什么重要"
     Offline RL 和 VLA 示范数据经常来自旧策略或人类示范，也就是 behavior policy。你要训练的新策略可能想选更好的动作，但如果这个动作在数据里几乎没出现过，value 估计就只能外推，容易虚高。
 
-## 3. Trajectory、Episode 和 Horizon
+## Trajectory、Episode 和 Horizon
 
 RL 不只看单个样本，而是看一串状态、动作和奖励：
 
@@ -107,7 +112,7 @@ RL 不只看单个样本，而是看一串状态、动作和奖励：
 !!! example "生活例子：做饭任务的 horizon"
     如果 horizon 只有 1 步，机器人只会问“现在夹锅铲是否合理”。如果 horizon 有 30 步，它还要考虑夹起锅铲后抽屉是否打开、路径是否会撞到锅、放进去后是否需要松爪。世界模型之所以重要，是因为长 horizon 真实试错很贵，内部 rollout 可以先筛掉明显危险的候选动作。
 
-## 4. Reward、Return 和 Value
+## Reward、Return 和 Value
 
 单步 reward 是当前反馈：
 
@@ -185,7 +190,7 @@ A^\pi(s,a)=Q^\pi(s,a)-V^\pi(s)
 !!! warning "常见误区：reward 写得越细越好"
     奖励太稀疏会难学，但奖励太细也会让模型钻空子。比如只奖励“夹爪靠近杯子”，机器人可能学会一直贴近杯子却不抓；只奖励“回答越长越好”，LLM 可能堆废话。好的 reward 要尽量贴近最终任务，同时监控是否出现投机行为。
 
-## 5. Bellman 方程
+## Bellman 方程
 
 Bellman 方程把“当前价值”拆成“当前奖励 + 下一状态价值”：
 
@@ -260,7 +265,7 @@ H_{\text{eff}}\approx\frac{1}{1-\gamma}
 边界：gamma 和 rollout horizon 要跟任务时间尺度、模型误差和控制频率一起定
 ```
 
-## 6. 从 Bellman 到 Q-learning
+## 从 Bellman 到 Q-learning
 
 Q-learning 直接学习 \(Q(s,a)\)：在状态 \(s\) 做动作 \(a\) 后，长期看大概能拿多少回报。它用 Bellman 思路构造 TD target：
 
@@ -313,7 +318,7 @@ DQN 把 Q-learning 接到深度网络上，用图像作为输入，用神经网�
 !!! note "图解：reward 曲线为什么抖，value 曲线为什么更平滑"
     平均回合 reward 很容易抖，因为策略一点小变化就会让整局游戏进入不同状态分布。右侧的平均最大 Q-value 用固定状态集合观察模型估计，像一个验证集上的长期价值读数，所以更平滑。初学者读训练曲线时不要只盯 reward：value、KL、entropy、success rate 和真实闭环评测经常要一起看。
 
-## 7. Value 真的学到了什么
+## Value 真的学到了什么
 
 DQN 的 Seaquest 图很适合解释“value 是未来机会”，而不只是当前分数。
 
@@ -342,7 +347,7 @@ DQN 的 Seaquest 图很适合解释“value 是未来机会”，而不只是当
 !!! note "图解：A、B、C 三个点在讲什么"
     A 点敌人出现，模型预测“现在有得分机会”，value 上升。B 点鱼雷快击中敌人，未来得分几乎要兑现，value 达到峰值。C 点敌人消失，机会被消耗，value 回落。这个例子能帮你分清 reward 和 value：reward 是打中那一下的即时分数，value 是打中之前模型已经看到的未来机会。
 
-## 8. Model-free、Model-based、Imitation 和 Offline
+## Model-free、Model-based、Imitation 和 Offline
 
 | 路线 | 学什么 | 优点 | 风险 |
 | --- | --- | --- | --- |
@@ -353,7 +358,7 @@ DQN 的 Seaquest 图很适合解释“value 是未来机会”，而不只是当
 
 VLA 常从 BC 起步，因为机器人实机探索代价高。世界模型和 RL 的作用，是在 BC 之外补上“动作后果”和“长期奖励”的闭环。
 
-## 9. On-policy、Off-policy 与 Offline RL
+## On-policy、Off-policy 与 Offline RL
 
 这三个词很容易混：
 
@@ -388,7 +393,7 @@ Offline RL 也可能从不完整轨迹里拼出更好的策略。
 !!! note "图解：trajectory stitching 是什么"
     数据里可能没有一条完整最优轨迹，但有“从 1 到 2”的片段和“从 2 到 3”的片段。好的 offline RL 应该能把这些片段组合起来，推出从 1 到 3 的更优行为。这比行为克隆更进一步：BC 只模仿已有路径，offline RL 尝试用 Bellman/value 把片段的长期价值接起来。
 
-## 10. 和世界模型的接口
+## 和世界模型的接口
 
 世界模型本质上补上了 MDP 里的 transition：
 
@@ -405,3 +410,8 @@ Offline RL 也可能从不完整轨迹里拼出更好的策略。
 \]
 
 逐项读法：世界模型不只预测下一画面，还预测这一步奖励、任务是否结束、风险是否升高。后面的 PlaNet、Dreamer、RLVR-World 都在围绕这件事展开：用可学习模型近似环境，再把强化学习的长期优化接上去。
+
+!!! tip "下一站"
+    - 回到本专题入口：[强化学习](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[PG / PPO / GRPO](policy-gradient-actor-critic-ppo-grpo.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

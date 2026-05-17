@@ -177,3 +177,6 @@
 | `NCCL` | NVIDIA Collective Communications Library，分布式训练和推理通信基元。 |
 | `DeepEP` | DeepSeek 开源的 expert-parallel communication library。MagiAttention 的 native group collectives 借鉴了其中的分层通信和去重思路。 |
 | `LightLLM` | 偏轻量、高性能和易扩展的 LLM serving framework。 |
+
+!!! tip "下一站"
+    - 按导航顺序继续：[index](../references/index.md)。

@@ -2,10 +2,15 @@
 
 世界模型的核心不是“生成未来帧”，而是“预测动作后果，并让这些预测能改善决策”。强化学习在这里有三种作用：训练策略、训练或校准世界模型、把世界模型接入规划闭环。
 
+!!! note "读法定位"
+    这页先回答“世界模型中的强化学习”在「强化学习」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂概率、优化和基本训练曲线；PPO/GRPO 不必先记公式，先抓更新对象。 必要时先回 [强化学习入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把状态、动作、奖励、策略优化和世界模型闭环连起来，看模型如何通过反馈改进决策。
+
 !!! tip "主线定位：降低真实数据成本，控制 rollout 成本"
     这页负责回答：什么时候用 learned model 替代真实环境试错，什么时候 imagined rollout 反而会放大模型误差。强化学习能把人工轨迹、真实机器人时间和在线试错成本降下来，但会新增 imagined rollout、value learning、reward 校准和 model exploitation 的成本。
 
-## 1. 从 MDP transition 接到世界模型
+## 从 MDP transition 接到世界模型
 
 在 MDP 里，真实环境 transition 是：
 
@@ -52,7 +57,7 @@ P(s_{t+1}\mid s_t,a_t)
 !!! warning "常见误区：预测越逼真，控制一定越好"
     逼真的未来帧可能仍然缺少控制需要的细节，例如接触力、遮挡后物体位置、动作导致的反事实差异。world model 的关键验收不是只看 open-loop video quality，而是看它接入 policy、planner 或 verifier 后是否提高 closed-loop success。
 
-## 2. PlaNet：学 latent dynamics，再在线规划
+## PlaNet：学 latent dynamics，再在线规划
 
 PlaNet 是从像素控制走向现代世界模型 RL 的关键节点。它先学 RSSM latent dynamics，再用 CEM 在 latent space 里搜索未来动作序列。
 
@@ -88,7 +93,7 @@ PlaNet 的规划闭环可以理解为：
 !!! note "PlaNet 的取舍"
     PlaNet 每一步都重新规划，能利用最新观测修正模型误差；代价是执行时要持续搜索。它适合帮初学者理解 model-based RL 的核心思想：不是直接背一个 policy，而是先学一个内部环境，再在内部环境里比较候选动作。
 
-## 3. Dreamer：在想象中训练 Actor-Critic
+## Dreamer：在想象中训练 Actor-Critic
 
 PlaNet 每一步都要在线搜索，成本高。Dreamer 的关键变化是：在 learned world model 的 imagined trajectories 上训练 actor 和 value model，执行时 actor 直接给动作。
 
@@ -117,7 +122,7 @@ DreamerV2 的 actor-critic 图更直观地展示了“想象轨迹上训练行�
 !!! note "图解：这张图该看哪里"
     先看 imagined trajectory 从真实 replay state 出发，而不是凭空生成无限未来；再看 reward、discount/value 和 action model 如何连在一起。它对应前面 Bellman 的语言：world model 提供 \(s'\) 和 \(r\)，critic 估计未来价值，actor 选择让 imagined return 更高的动作。
 
-## 4. 算一遍：真实机器人时间和 latent imagination 的差距
+## 算一遍：真实机器人时间和 latent imagination 的差距
 
 假设一个机器人以 `20Hz` 收集真实交互。一次训练 round 如果需要 `1024` 个起点、每个起点 rollout horizon `15`、每个状态比较 `16` 个 action samples，则 imagined transition 数是：
 
@@ -153,7 +158,7 @@ DreamerV2 的 actor-critic 图更直观地展示了“想象轨迹上训练行�
 !!! warning "常见误区：imagined rollout 越长越好"
     rollout 越长，策略越能看到长期后果，但 world model 错误也越容易累积。很多实践会用较短 horizon、value bootstrap、不确定性惩罚、真实 replay 校准和 closed-loop validation 来控制这个问题。
 
-## 5. Decision Transformer：轨迹 token 化的另一条入口
+## Decision Transformer：轨迹 token 化的另一条入口
 
 Decision Transformer 给世界模型和 VLA 一个重要启发：轨迹不一定只能通过 Bellman backup 学，也可以被组织成序列建模问题。
 
@@ -167,7 +172,7 @@ Decision Transformer 给世界模型和 VLA 一个重要启发：轨迹不一定
 !!! warning "边界：离线轨迹建模不保证真实闭环"
     Decision Transformer 在离线数据上很自然，但真实机器人和世界模型会遇到分布外状态。模型可能会在数据中没见过的高 return 条件下输出看似合理、实际不可执行的动作。因此读这类论文时，要额外看 closed-loop evaluation、数据覆盖和失败恢复。
 
-## 6. RLVR-World：用可验证奖励训练世界模型本身
+## RLVR-World：用可验证奖励训练世界模型本身
 
 PlaNet/Dreamer 主要把 world model 用于规划或策略学习。RLVR-World 进一步强调：世界模型本身的训练目标也可以从 MLE/SFT 转向任务指标。
 
@@ -201,7 +206,7 @@ RLVR-World 的训练逻辑可以压缩成：
 !!! warning "关键风险：可验证不等于完全正确"
     可验证奖励降低了 reward model 主观性，但仍可能遗漏真实任务关心的东西。比如视频指标可能奖励像素相似，却没有检查物理一致性；结构化状态 F1 可能忽略长期可执行性。因此 RLVR 适合补齐任务指标错位，但仍需要闭环评测和失败样本回放。
 
-## 7. 强化学习给世界模型带来的五个增量
+## 强化学习给世界模型带来的五个增量
 
 | 增量 | 具体作用 | 常见风险 |
 | --- | --- | --- |
@@ -211,7 +216,7 @@ RLVR-World 的训练逻辑可以压缩成：
 | 规划与反事实 | world model 支持“如果换个动作会怎样”的内部模拟 | action sensitivity 不足 |
 | 风险敏感控制 | reward 可以显式加入碰撞、失败、不可恢复状态和不确定性惩罚 | 惩罚过强会让策略保守 |
 
-## 8. 和 VLA 的连接
+## 和 VLA 的连接
 
 VLA 学的是：
 
@@ -248,7 +253,7 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 !!! example "生活例子：机器人抓杯子"
     VLA 可能学会看到杯子就伸手。世界模型会预测从左侧推可能把杯子推倒，从上方夹取更稳。RL 再把“成功夹起、没有碰撞、动作平滑”变成 reward，让策略在类似状态中更倾向于安全动作。
 
-## 9. 读论文时的检查清单
+## 读论文时的检查清单
 
 | 检查项 | 要问的问题 |
 | --- | --- |
@@ -258,3 +263,8 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 | 是否有闭环验证 | 只做 open-loop prediction，还是进入控制或规划 |
 | 是否评估 model exploitation | policy 或 planner 会不会利用模型漏洞拿虚高回报 |
 | 是否有真实回放校准 | imagined rollout 的错误有没有被 replay / online data 修正 |
+
+!!! tip "下一站"
+    - 回到本专题入口：[强化学习](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[verl 训练流程](verl-code-flow.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

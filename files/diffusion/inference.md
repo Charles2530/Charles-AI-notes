@@ -2,6 +2,11 @@
 
 训练阶段，模型学会在任意噪声水平下给出去噪方向。推理阶段，我们从纯噪声 \(x_T\) 出发，反复调用模型，逐步得到 \(x_0\)。
 
+!!! note "读法定位"
+    这页先回答“扩散采样与推理加速”在「扩散模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道张量、损失函数和高斯噪声的基本读法；不熟时回基础知识再继续。 必要时先回 [扩散模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把训练目标、噪声日程、采样器、条件控制和蒸馏看成同一条链：带噪状态如何一步步被推回数据分布。
+
 这页的核心问题是：**模型告诉我们往哪里去噪，采样器决定每一步怎么走。**
 
 ## 先看图：采样是逐步成形
@@ -14,7 +19,7 @@
 
 <small>本教程读法：早期采样主要确定大结构，中后期逐渐补边缘、颜色和纹理。这说明采样步不是装饰，而是在把模型的局部去噪能力串成完整图像。</small>
 
-## 1. 为什么需要采样器
+## 为什么需要采样器
 
 模型通常输出的是某种方向信息，例如噪声预测：
 
@@ -34,7 +39,16 @@
 
 这些规则合起来就是采样器，也常叫 sampler 或 solver。
 
-## 2. 原始 DDPM：随机反向链
+所以一次采样步可以拆成两层：
+
+```text
+model:   x_t, t -> predicted target
+sampler: predicted target + schedule + step rule -> x_{t'}
+```
+
+其中 \(t' < t\)，表示往更低噪声水平走。模型负责估计方向或终点，采样器负责决定这一步走到哪里。
+
+## 原始 DDPM：随机反向链
 
 DDPM 的反向一步可以粗略写成：
 
@@ -60,7 +74,7 @@ z\sim\mathcal{N}(0,I)
 
 DDPM 的好处是贴近原始概率建模，坏处是通常需要很多步。早期设置里 \(T\) 常接近 1000，意味着要调用模型很多次。
 
-## 3. DDIM：为什么可以跳步
+## DDIM：为什么可以跳步
 
 DDIM 的重要贡献是：不重新训练模型，也可以改变采样路径，让反向过程更确定、更少步。
 
@@ -86,6 +100,8 @@ x_{t-1}
 
 这行式子在说：下一步 \(x_{t-1}\) 由三部分组成：预测干净图贡献、预测噪声方向贡献、以及可选随机噪声。
 
+如果把 \(\sigma_t z\) 设为 0，就可以看到最核心的确定性部分：采样器不是直接输出 \(\hat{x}_0\)，而是把 \(\hat{x}_0\) 和 \(\hat{\epsilon}\) 按下一时间步的噪声强度重新混合。这样 \(x_t\) 会逐步变成 \(x_{t-1}\)、\(x_{t-2}\)，而不是一次跳到最终图。
+
 符号含义：
 
 | 符号 | 含义 |
@@ -98,7 +114,7 @@ x_{t-1}
 
 当 \(\sigma_t=0\) 时，同一个初始噪声和同一组条件会得到确定性轨迹，更适合复现、反演和插值。
 
-## 4. ODE 视角：采样是数值积分
+## ODE 视角：采样是数值积分
 
 从 Score/SDE 视角看，确定性采样可以写成 probability flow ODE：
 
@@ -118,7 +134,7 @@ x_{t-1}
 
 现实机器不能连续积分，只能选有限个时间点离散更新。采样器就是数值求解器：它决定如何用有限步近似这条连续轨迹。
 
-## 5. Euler：最简单的一阶方法
+## Euler：最简单的一阶方法
 
 Euler 更新写成：
 
@@ -139,7 +155,7 @@ x_{n+1}=x_n+h f_\theta(x_n,t_n)
 
 Euler 简单、便宜、每步只需一次方向估计。但步数太少时，它容易因为只看当前斜率而走偏。
 
-## 6. Heun：先预测，再校正
+## Heun：先预测，再校正
 
 Heun 方法先做一次 Euler 预测：
 
@@ -170,7 +186,7 @@ f_\theta(\tilde{x}_{n+1},t_{n+1})
 
 Heun 通常比 Euler 更平滑，但代价是每步大约需要两次模型方向估计。
 
-## 7. DPM-Solver：为扩散 ODE 定制
+## DPM-Solver：为扩散 ODE 定制
 
 DPM-Solver 的思想不是简单套通用 ODE solver，而是利用 diffusion ODE 的特殊结构，把一部分线性项解析处理，再用模型输出近似剩下的非线性部分。
 
@@ -194,11 +210,11 @@ x_{t_{n+1}}
 
 它的目标是在 10 到 20 步这类少步预算下，尽量逼近很多步采样的质量。
 
-## 8. DPM-Solver++：为什么 guidance 场景更稳
+## DPM-Solver++：为什么 guidance 场景更稳
 
 高 guidance 会放大条件方向，让采样轨迹变陡。普通高阶 solver 在这种情况下可能不稳。
 
-![DPM-Solver++ guided instability 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-1-guided-instability.png){ width="760" }
+![DPM-Solver++ guided instability 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-1-guided-instability.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 1。</small>
 
@@ -208,7 +224,7 @@ x_{t_{n+1}}
 
 DPM-Solver++ 还给出更具体的算法形式：
 
-![DPM-Solver++ algorithms 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/algorithms-1-2.png){ width="860" }
+![DPM-Solver++ algorithms 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/algorithms-1-2.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Algorithm 1/2。</small>
 
@@ -218,7 +234,7 @@ DPM-Solver++ 还给出更具体的算法形式：
 
 收敛和步数关系可以看这张图：
 
-![DPM-Solver++ convergence 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-4-convergence.png){ width="860" }
+![DPM-Solver++ convergence 原论文图](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-4-convergence.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 4。</small>
 
@@ -226,7 +242,7 @@ DPM-Solver++ 还给出更具体的算法形式：
 
 <small>本教程读法：横轴 NFE 是模型前向调用次数。少 NFE 更快，但更考验 solver。不同 solver 在同样 NFE 下质量差异明显，说明“采样器怎么走”确实重要。</small>
 
-## 9. NFE：采样成本怎么数
+## NFE：采样成本怎么数
 
 NFE 是 Number of Function Evaluations，通常可以粗略理解成模型前向调用次数。
 
@@ -239,7 +255,7 @@ NFE 是 Number of Function Evaluations，通常可以粗略理解成模型前向
 
 NFE 不是唯一指标。真实选型还要看质量、多样性、prompt 对齐、失败样本类型和延迟预算。
 
-## 10. 几个采样器怎么选
+## 几个采样器怎么选
 
 | 采样器 | 随机性 | 典型优点 | 典型代价 |
 | --- | --- | --- | --- |
@@ -258,7 +274,7 @@ Euler / Heun：通用数值积分思路
 DPM-Solver++：面向扩散 ODE 和 guidance 的少步高阶求解器
 ```
 
-## 11. 采样器不能补模型不会的东西
+## 采样器不能补模型不会的东西
 
 采样器能减少数值误差，提高同一模型在给定步数下的质量和速度。但它不能凭空让模型学会训练数据里没有的概念，也不能修复严重的数据偏差。
 
@@ -273,7 +289,7 @@ DPM-Solver++：面向扩散 ODE 和 guidance 的少步高阶求解器
 
 否则很容易把模型能力、prompt 难度和采样器差异混在一起。
 
-## 12. 和后续页面的关系
+## 和后续页面的关系
 
 基础主线到这里已经闭环：训练学会去噪方向，噪声日程定义训练区间，score/SDE 解释方向场，guidance 改变条件方向，采样器负责数值求解。
 
@@ -282,9 +298,14 @@ DPM-Solver++：面向扩散 ODE 和 guidance 的少步高阶求解器
 !!! tip "进阶理解"
     在生产系统和世界模型 rollout 里，采样器还会影响吞吐、显存、交互延迟和闭环控制频率。少步不是唯一目标，真正要优化的是“在任务可接受质量下，用最少成本稳定地产生结果”。
 
-## 小结
+## 本页结论
 
 采样器是扩散推理的执行策略。模型提供去噪方向，采样器把方向变成有限步更新。DDPM、DDIM、Euler、Heun、DPM-Solver++ 的差异，本质上都在回答同一个问题：在有限 NFE 下，怎样更快、更稳、更准地从噪声走回数据。
 
 *[NFE]: Number of Function Evaluations，模型前向调用次数。
 *[ODE]: Ordinary Differential Equation，常微分方程。
+
+!!! tip "下一站"
+    - 回到本专题入口：[扩散模型](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[扩散模型发展脉络](evolution.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

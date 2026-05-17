@@ -2,6 +2,11 @@
 
 这一页讨论的是**训练里的低精度**，不是单纯的推理量化。
 
+!!! note "读法定位"
+    这页先回答“低比特训练与数值格式”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
+
 推理量化常问的是：模型已经训好了，能不能用更低比特部署。  
 低比特训练问的是：模型还在训练中，前向、反向、激活、梯度、优化器状态和通信能不能都用更低精度，同时不让训练发散。
 
@@ -39,7 +44,7 @@
 
 一个合格结论应写成：`FP8 activation 训练让 peak memory 下降 28%、step time 下降 11%；与 BF16 checkpoint 相比，hard replay 的 action ranking agreement 为 98.7%，near-miss recall 下降 0.3pp，长时 latent drift 无显著增加。` 如果没有后半部分，低比特训练还不能证明适合世界模型。
 
-## 1. 为什么这属于训练重点内容
+## 为什么这属于训练重点内容
 
 训练时，模型每一步都会经过前向计算、loss 计算、反向传播、梯度规约、优化器更新，以及 checkpoint 保存与恢复。每一步都可能被低精度影响。
 如果只是推理量化，错误通常只影响一次输出；如果是训练低精度，错误会通过参数更新写回模型，后续每一步都会继续继承它。
@@ -48,7 +53,7 @@
 
 **在更低精度里保持可收敛、可扩展、可复现的训练动力学。**
 
-## 2. 训练里到底哪些东西可以降精度
+## 训练里到底哪些东西可以降精度
 
 低比特训练至少涉及六类对象：
 
@@ -64,7 +69,7 @@
 这里最容易被低估的是**激活**。  
 权重、梯度和优化器状态很多时候可以通过 ZeRO/FSDP 分片到多卡上，但激活强依赖当前 micro-batch、sequence length 和模型层数，通常直接压在单卡显存上。长上下文训练里，激活经常比权重更早成为瓶颈。
 
-## 3. 数制不是名字问题，而是表示预算问题
+## 数制不是名字问题，而是表示预算问题
 
 低精度训练里常见的格式可以粗略分成四类。
 
@@ -117,7 +122,7 @@ x_i \approx s_{\text{block}} \cdot q_i
 例如 `NVFP4` 相比普通 `MXFP4`，会通过更小微块、更精确 scale 和分层缩放改善 FP4 的有效表达范围。  
 `HiFloat8` 则通过不同的指数和尾数安排，试图在同样 8 bit 内获得更适合深度学习张量的动态范围。
 
-## 4. 低比特训练的核心矛盾
+## 低比特训练的核心矛盾
 
 低比特训练要同时优化三件事：**表示误差**决定低精度表示是否足够接近原张量，**更新误差**决定反向传播和优化器是否仍然给出正确方向，**系统收益**决定 kernel、通信和显存是否真的变快变省。
 
@@ -132,7 +137,7 @@ x_i \approx s_{\text{block}} \cdot q_i
 
 推理量化通常只走一次前半段；训练低精度会不断循环，所以后期 outlier、rounding bias 和 loss spike 更危险。
 
-## 5. 为什么 activation 是主战场
+## 为什么 activation 是主战场
 
 训练显存里，激活会随 batch size、sequence length 和层数一起增长，反向传播又必须读取它，并且很难像 optimizer state 那样简单分片掉。
 
@@ -146,7 +151,7 @@ x_i \approx s_{\text{block}} \cdot q_i
 
 所以常见解决思路包括 per-token 或 per-group scale、SmoothQuant 这类难度迁移、Hadamard rotation 分散 outlier、保留敏感层高精度，以及对 SwiGLU、LayerNorm、Attention 等结构做专项处理。
 
-## 6. FP8 训练路线：从可用到长稳
+## FP8 训练路线：从可用到长稳
 
 **FP8 Formats：先定义可用格式。**
 
@@ -195,7 +200,7 @@ x_i \approx s_{\text{block}} \cdot q_i
 但 scale 越细，系统问题越明显。  
 `MOSS` 这类工作关注的就是：per-group 量化虽好，但 dequant、scale 计算和内维缩放可能引入很大开销。低精度训练最终必须和 kernel 设计一起看。
 
-## 7. FP4 训练路线：更低 bit，更强系统耦合
+## FP4 训练路线：更低 bit，更强系统耦合
 
 `FP4` 的诱惑很直接：相比 BF16，理论存储更小，tensor core 路径也可能更快。  
 但 FP4 的表示预算极小，训练稳定性比 FP8 更难。
@@ -240,7 +245,7 @@ scale = max_abs / qmax
 
 而是一个要和格式离散点分布共同优化的问题。
 
-## 8. FlashAttention 与低精度训练稳定性
+## FlashAttention 与低精度训练稳定性
 
 低精度训练不只影响 linear。  
 Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变数值误差形态。
@@ -257,7 +262,7 @@ Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变
 !!! note "图解：低精度稳定性要看曲线而不是只看格式"
     FP8 能不能用于训练，不是由“8 bit 看起来够不够”直接决定，而是由 scale 策略、累加精度、outlier 处理、kernel 实现和训练配置共同决定。图中 FP8 与 BF16 曲线接近，说明低精度路径可以稳定，但这是一组经过设计的数值系统结果；迁移到新模型时仍要重新检查 loss spike、梯度范数、activation percentile、scale 饱和率和 NaN/Inf。
 
-## 9. MTP、投机解码和量化训练为什么会碰到一起
+## MTP、投机解码和量化训练为什么会碰到一起
 
 你前面提到的 `QSpec` 很值得单独放在训练系统视角里看。  
 它不是传统意义上的“把模型压小”，而是把不同精度路径用于不同推理角色：低精度路径负责 draft，高精度路径负责 verify，两者共享权重或部分状态以减少额外显存。
@@ -271,7 +276,7 @@ Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变
 这就是为什么 `MTP`、`Speculative Decoding`、`QSpec`、`FP8/FP4` 最终都会回到同一个系统问题：  
 **用更便宜的计算产生足够可信的中间结果，再用更贵的路径兜底。**
 
-## 10. 一个低比特训练实验应该怎么设计
+## 一个低比特训练实验应该怎么设计
 
 不要一上来就全模型 FP8 或 FP4。更稳的推进顺序是先建立 BF16 baseline，并固定数据版本、token 预算和评测桶；再只打开主干 GEMM 的 FP8，确认 loss 和吞吐；随后压 activation cache，看显存收益和反向误差；再尝试梯度、optimizer states 或通信低精度；最后才推进 FP4 / NVFP4 这类更激进路线。每一步都要保留可回退配置和逐层数值对照。
 
@@ -303,7 +308,7 @@ Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变
 
 如果只看 loss，你会很晚才发现问题；如果只看吞吐，你会高估低精度收益。
 
-## 11. 伪代码：低精度 Linear 的核心形态
+## 伪代码：低精度 Linear 的核心形态
 
 下面是一个简化后的伪代码，用来说明低比特训练里的基本动作。真实实现会更复杂，并且会使用 fused kernel。
 
@@ -326,7 +331,7 @@ def low_precision_linear(x, w, group_size=128):
 
 这段代码背后的关键不是 `round`，而是 scale 如何选、group size 如何定、accumulator 用什么精度、反向传播如何处理量化误差，以及是否能被 kernel 高效执行。
 
-## 12. 伪代码：训练时的低精度保护策略
+## 伪代码：训练时的低精度保护策略
 
 ```python
 for step, batch in enumerate(loader):
@@ -351,7 +356,7 @@ for step, batch in enumerate(loader):
 这个伪代码表达的是低比特训练的基本态度：  
 低精度应该是可控区域，而不是全局赌博。敏感模块、异常恢复和自动降级必须提前设计。
 
-## 13. 论文路线图：按问题而不是年份读
+## 论文路线图：按问题而不是年份读
 
 **数制和格式。**
 
@@ -393,7 +398,7 @@ for step, batch in enumerate(loader):
 | [EAGLE-3](https://arxiv.org/abs/2503.01840) | training-time test 与多层特征融合 |
 | [TorchSpec](https://github.com/torchspec-project/TorchSpec) | speculative decoding 训练框架 |
 
-## 14. 常见误区
+## 常见误区
 
 **把低比特训练当作推理量化的自然延伸。**
 
@@ -415,12 +420,17 @@ FP4 尤其如此：没有原生 kernel 支持，收益很容易被系统开销�
 低精度训练更容易出现偶发 NaN、loss spike 和不可重复问题。  
 因此 checkpoint 必须保存足够信息，包括 scale 状态、混合精度配置、随机数状态、optimizer 状态和数据游标。
 
-## 15. 最小落地清单
+## 最小落地清单
 
 如果要做一个低比特训练项目，至少先准备 BF16 baseline、每层 activation percentile 统计、梯度范数与 NaN/Inf/loss spike 告警、逐层数值对照脚本、kernel profile、高精度保护层列表、自动回退策略、长跑验证计划、下游 benchmark 分桶，以及 checkpoint 恢复一致性测试。
 
-## 16. 和相邻章节怎么连起来
+## 和相邻章节怎么连起来
 
 建议按这条路线阅读：[数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md) → [训练稳定性与故障排查](stability-numerics-and-failure-triage.md) → [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) → [MTP 与投机解码](mtp-and-speculative-decoding.md) → [FP8 与混合精度推理](../quantization/fp8-and-mixed-precision-serving.md) → [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。
 
 量化专题更关注“如何压缩和部署”；这一页更关注“训练过程中如何不崩，并且真的换来训练效率”。
+
+!!! tip "下一站"
+    - 回到本专题入口：[训练](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[训练数据系统与吞吐优化](data-systems-and-optimization.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

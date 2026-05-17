@@ -2,6 +2,11 @@
 
 Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核心结构。它的关键思想是：把输入变成 token，再用 attention 让 token 之间按相关性互相读取信息。
 
+!!! note "读法定位"
+    这页先回答“Transformer 输入与注意力”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 ![Transformer 原论文模型结构图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="500" .atlas-figure-tall }
 
 <small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原论文图意：Transformer 由 encoder 和 decoder 组成，核心模块包括 multi-head attention、feed-forward、residual connection、normalization、positional encoding 与输出 softmax。</small>
@@ -18,7 +23,7 @@ Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核�
 !!! tip "遇到这些症状，回看本页"
     视觉 token 一多吞吐就断崖下降、长上下文 decode 被 KV cache 卡住、动作 token 加进去后模型不再关注关键帧、或者不同动作的未来几乎一样时，先回到 tokenization、Q/K/V、self-attention 和 cross-attention 的分工。本页能帮你判断该压视觉 token、改连接器、换 GQA/MLA/KV 量化，还是检查 action token 是否真的进入了可被 attention 读取的位置。
 
-## 1. Tokenization：模型如何“切开”输入
+## Tokenization：模型如何“切开”输入
 
 Token 是模型处理信息的基本单位。不同模态有不同 token：
 
@@ -49,7 +54,7 @@ h_i = \text{Embedding}(x_i)
 | \(L\) | 序列长度，token 总数 |
 | \(D\) | hidden dimension，每个 token 向量的长度 |
 
-## 2. Attention 的 Q/K/V 直觉
+## Attention 的 Q/K/V 直觉
 
 Attention 可以用“提问、匹配、读取”理解：
 
@@ -83,7 +88,7 @@ Attention 可以用“提问、匹配、读取”理解：
 !!! note "难点解释：为什么要 multi-head"
     单个 attention head 只能在一套相似度空间里读取信息。Multi-head attention 等于让模型同时用多套“问题-匹配-读取”规则看同一段序列：有的 head 可能关注局部语法，有的关注长距离依赖，有的关注对齐关系。最后的线性投影再把这些视角合并起来。
 
-## 3. Self-Attention 和 Cross-Attention
+## Self-Attention 和 Cross-Attention
 
 ### Self-Attention
 
@@ -109,7 +114,7 @@ V = text_embedding @ Wv
 y = softmax(Q @ K.T / sqrt(d)) @ V
 ```
 
-## 4. 为什么 Attention 强也贵
+## 为什么 Attention 强也贵
 
 Self-Attention 的核心矩阵是 \(L \times L\)，其中 \(L\) 是序列长度。序列越长，attention 计算和显存压力越大。
 
@@ -157,7 +162,7 @@ Self-Attention 的核心矩阵是 \(L \times L\)，其中 \(L\) 是序列长度�
 
 如果你关心为什么长上下文还会涉及位置编码、causal mask、padding mask 和 KV cache，可以继续看 [位置编码与上下文 Mask](positional-encoding-masks-and-context.md)。
 
-## 5. 进阶读法：技术报告里的 Transformer、KV cache、MLA 与 MoE
+## 进阶读法：技术报告里的 Transformer、KV cache、MLA 与 MoE
 
 读 DeepSeek-V3、Kimi K2、Qwen3 这类技术报告时，Transformer 已经不只是“Q/K/V + MLP”这张课堂图了。它更像一个系统接口：attention 决定长上下文怎么存，FFN 决定参数容量怎么用，router 决定 token 会被送到哪台机器上的哪个 expert。
 
@@ -201,7 +206,7 @@ MoE 里的 router 不只是一个数学函数。它会决定 token 被送到哪�
 
 所以，学 Transformer 不应停在“attention 会看上下文”。读技术报告时更有用的问题是：上下文怎么缓存，参数怎么稀疏激活，token 怎么路由，通信怎么隐藏，最后这些设计是否真的换来了更好的训练和服务效率。
 
-## 6. Transformer Block 的基本结构
+## Transformer Block 的基本结构
 
 一个常见 block 可以写成：
 
@@ -214,7 +219,7 @@ function TransformerBlock(x):
 
 这里的残差连接和归一化非常关键。没有它们，深层 Transformer 很难稳定训练。
 
-## 7. 和后续专题的关系
+## 和后续专题的关系
 
 - [扩散模型中的 DiT](../diffusion/training.md)：图像 patch token 进入 Transformer 去做去噪。
 - [VLM 架构与训练](../vlm/architecture-and-training.md)：图像 token 和文本 token 如何连接。
@@ -223,6 +228,11 @@ function TransformerBlock(x):
 - [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)：理解 QKV 投影、MLP 和矩阵乘热路径。
 - [Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)：理解为什么一些新模型用 recurrent state 替代大量 attention，并保留少量 attention 做混合架构。
 
-## 小结
+## 本页结论
 
 Transformer 的核心不是“一个大模型名字”，而是一套 token 之间动态通信的机制。理解 token、embedding、Q/K/V、self-attention 和 cross-attention，就能读懂很多现代 AI 系统的共同骨架。
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[位置编码与 Mask：顺序和可见性](positional-encoding-masks-and-context.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

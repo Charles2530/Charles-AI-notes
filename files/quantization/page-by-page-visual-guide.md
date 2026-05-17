@@ -2,12 +2,17 @@
 
 这页把量化章节最常用的论文图放在一条线上。读法不是背图，而是用每张图回答一个问题：量化为什么必要，误差在哪里，系统为什么不一定变快，哪些方法在保护关键路径。
 
+!!! note "读法定位"
+    这页先回答“量化论文图解导读”在「量化」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂张量、线性层和基本推理成本；遇到 FP8、KV Cache、outlier 时回前置页补概念。 必要时先回 [量化入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把数值格式、误差来源、校准/训练方法、kernel 和服务部署连成一条效率链，而不是只比较 bit 数。
+
 !!! tip "看图顺序"
     先看 SmoothQuant Figure 1 建立系统压力，再看 Low-bit LLM Survey Figure 1/2/3 分清分类和基础概念，随后看 GPTQ/AWQ/SmoothQuant/QLoRA 的方法图，最后看 Low-bit LLM Survey 的系统、KV、PTQ 和 transformation 图。
 
 ## 1. SmoothQuant Figure 1：为什么量化是部署问题
 
-![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="760" }
+![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="620" }
 
 <small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 1。原论文图意：模型规模增长快于单卡 GPU 显存增长，低精度部署成为大模型落地的重要路径。</small>
 
@@ -19,7 +24,7 @@
 
 ## 2. Low-bit LLM Survey Figure 1：量化不是一个算法名
 
-![Low-bit LLM survey skeleton](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-1-skeleton.png){ width="840" }
+![Low-bit LLM survey skeleton](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-1-skeleton.png){ width="690" }
 
 <small>图源：`A Survey of Low-bit Large Language Models: Basics, Systems, and Algorithms`，Figure 1。原论文图意：把低比特 LLM 拆成基础、系统、训练、推理算法和未来方向。</small>
 
@@ -31,7 +36,7 @@
 
 ## 3. Low-bit LLM Survey Figure 2：scale 粒度决定误差和成本
 
-![Quantization granularity](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-2-granularity.png){ width="840" }
+![Quantization granularity](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-2-granularity.png){ width="690" }
 
 <small>图源：Low-bit LLM Survey，Figure 2。原论文图意：展示 tensor-wise、token-wise、channel-wise、group-wise 和 element-wise 的量化粒度。</small>
 
@@ -43,7 +48,7 @@
 
 ## 4. Low-bit LLM Survey Figure 3：动态和静态量化的准备成本不同
 
-![Dynamic and static quantization](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-3-dynamic-static.png){ width="840" }
+![Dynamic and static quantization](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-3-dynamic-static.png){ width="690" }
 
 <small>图源：Low-bit LLM Survey，Figure 3。原论文图意：比较 dynamic quant、static weight & activation quant 和 static weight-only quant 的准备阶段与推理阶段。</small>
 
@@ -55,7 +60,7 @@
 
 ## 5. GPTQ Figure 2：量一列，补后面的误差
 
-![GPTQ quantization procedure](../assets/images/paper-figures/quantization/gptq-figure-2-procedure.png){ width="780" }
+![GPTQ quantization procedure](../assets/images/paper-figures/quantization/gptq-figure-2-procedure.png){ width="690" }
 
 <small>图源：[GPTQ](https://arxiv.org/abs/2210.17323)，Figure 2。原论文图意：按列递归量化权重块，并用 inverse Hessian 相关信息补偿尚未量化列。</small>
 
@@ -67,7 +72,7 @@
 
 ## 6. AWQ Figure 1：重要权重由激活决定
 
-![AWQ activation-aware weight quantization](../assets/images/paper-figures/quantization/awq-figure-1-activation-aware.png){ width="830" }
+![AWQ activation-aware weight quantization](../assets/images/paper-figures/quantization/awq-figure-1-activation-aware.png){ width="690" }
 
 <small>图源：[AWQ](https://arxiv.org/abs/2306.00978)，Figure 1。原论文图意：少量 activation-salient weights 对量化质量影响很大，按激活幅度做保护或缩放可显著恢复效果。</small>
 
@@ -79,7 +84,7 @@
 
 ## 7. SmoothQuant Figure 2：把 activation outlier 压平
 
-![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="760" }
+![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="610" }
 
 <small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 2。原论文图意：activation 中的 outlier 会减少有效量化 bit；SmoothQuant 把一部分难度迁移到更容易离线处理的权重侧。</small>
 
@@ -91,7 +96,7 @@
 
 ## 8. SmoothQuant Figure 5：核心方法图
 
-![SmoothQuant main idea](../assets/images/paper-figures/quantization/smoothquant-figure-5-main-idea.png){ width="780" }
+![SmoothQuant main idea](../assets/images/paper-figures/quantization/smoothquant-figure-5-main-idea.png){ width="650" }
 
 <small>图源：SmoothQuant，Figure 5。原论文图意：通过离线迁移 activation 的量化难度，让权重和激活都更适合 INT8 量化。</small>
 
@@ -103,7 +108,7 @@
 
 ## 9. SmoothQuant Figure 6：不是所有算子都该 INT8
 
-![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="780" }
+![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="620" }
 
 <small>图源：SmoothQuant，Figure 6。原论文图意：Transformer block 中部分矩阵乘可以走 INT8，LayerNorm、Softmax、残差等仍保留 FP16。</small>
 
@@ -115,7 +120,7 @@
 
 ## 10. QLoRA Figure 1：省的是微调显存
 
-![QLoRA memory comparison](../assets/images/paper-figures/quantization/qlora-figure-1-memory.png){ width="760" }
+![QLoRA memory comparison](../assets/images/paper-figures/quantization/qlora-figure-1-memory.png){ width="680" }
 
 <small>图源：[QLoRA](https://arxiv.org/abs/2305.14314)，Figure 1。原论文图意：比较 32-bit/16-bit 全量微调、LoRA 和 QLoRA 的显存组织。</small>
 
@@ -127,7 +132,7 @@
 
 ## 11. Low-bit LLM Survey Figure 4：数据搬运决定速度
 
-![Cache hierarchy data transmission](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-4-cache-hierarchy.png){ width="860" }
+![Cache hierarchy data transmission](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-4-cache-hierarchy.png){ width="690" }
 
 <small>图源：Low-bit LLM Survey，Figure 4。原论文图意：以 A100 为例展示 weight 和 activation 在 host、global memory、L2、shared memory、registers 与 MatMul kernel 间的数据传输。</small>
 
@@ -139,7 +144,7 @@
 
 ## 12. Low-bit LLM Survey Figure 5：weight-only 和 W&A 是两条路径
 
-![Quantization data transmission](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-5-data-transmission.png){ width="900" }
+![Quantization data transmission](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-5-data-transmission.png){ width="690" }
 
 <small>图源：Low-bit LLM Survey，Figure 5。原论文图意：展示 quantized weight preparation、weight-only quantization 和 weight & activation quantization 的数据传输过程。</small>
 
@@ -151,7 +156,7 @@
 
 ## 13. Low-bit LLM Survey Figure 6：KV cache 是长上下文主角
 
-![KV cache quantization](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="820" }
+![KV cache quantization](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="620" }
 
 <small>图源：Low-bit LLM Survey，Figure 6。原论文图意：量化 KV cache 可减少缓存存储和传输，并在 attention forward 前反量化。</small>
 
@@ -163,7 +168,7 @@
 
 ## 14. Low-bit LLM Survey Figure 7：QLoRA 不是唯一低比特训练结构
 
-![Low-bit LoRA structures](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-7-training.png){ width="800" }
+![Low-bit LoRA structures](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-7-training.png){ width="690" }
 
 <small>图源：Low-bit LLM Survey，Figure 7。原论文图意：比较 QLoRA 类完整 LoRA、QA-LoRA 类修改 LoRA 结构、L4Q 类接近 QAT 的 LoRA 结构。</small>
 
@@ -175,7 +180,7 @@
 
 ## 15. Low-bit LLM Survey Figure 8：PTQ 是一组方法族
 
-![PTQ algorithms overview](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-8-ptq.png){ width="820" }
+![PTQ algorithms overview](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-8-ptq.png){ width="690" }
 
 <small>图源：Low-bit LLM Survey，Figure 8。原论文图意：把 LLM PTQ 分成 equivalent transformation、compensation、mixed precision、combination 和更多量化形式。</small>
 
@@ -187,7 +192,7 @@
 
 ## 16. Low-bit LLM Survey Figure 9：平移变换处理 outlier
 
-![Shifting transformation](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-9-outlier.png){ width="880" }
+![Shifting transformation](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-9-outlier.png){ width="690" }
 
 <small>图源：Low-bit LLM Survey，Figure 9。原论文图意：shifting transformation 通过可合并偏移项调整 activation 分布，并把对应变换合并进权重路径。</small>
 
@@ -199,7 +204,7 @@
 
 ## 17. Low-bit LLM Survey Figure 11：旋转把 outlier 分散
 
-![Rotation transformation](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-11-rotation.png){ width="900" }
+![Rotation transformation](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-11-rotation.png){ width="690" }
 
 <small>图源：Low-bit LLM Survey，Figure 11。原论文图意：rotation transformation 可减少 activation outlier，其中部分 rotation 可合并进权重，部分通常不能完全合并。</small>
 
@@ -223,3 +228,8 @@
 | 不懂 QLoRA | QLoRA Figure 1、Low-bit LLM Survey Figure 7 |
 | 不懂为什么量了不快 | Low-bit LLM Survey Figure 4/5 |
 | 不懂长上下文显存 | Low-bit LLM Survey Figure 6 |
+
+!!! tip "下一站"
+    - 回到本专题入口：[量化](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[量化方法对照表](comparison-table.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

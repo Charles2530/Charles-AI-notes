@@ -2,9 +2,16 @@
 
 上一页讲了扩散训练如何构造带噪样本：
 
+!!! note "读法定位"
+    这页先回答“噪声日程与参数化”在「扩散模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道张量、损失函数和高斯噪声的基本读法；不熟时回基础知识再继续。 必要时先回 [扩散模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把训练目标、噪声日程、采样器、条件控制和蒸馏看成同一条链：带噪状态如何一步步被推回数据分布。
+
 \[
 x_t=\sqrt{\bar{\alpha}_t}x_0+\sqrt{1-\bar{\alpha}_t}\epsilon
 \]
+
+这条式子把带噪样本拆成两部分：\(\sqrt{\bar{\alpha}_t}x_0\) 是保留下来的干净信号，\(\sqrt{1-\bar{\alpha}_t}\epsilon\) 是混入的噪声。
 
 这页继续问两个更细的问题：
 
@@ -23,7 +30,7 @@ x_t=\sqrt{\bar{\alpha}_t}x_0+\sqrt{1-\bar{\alpha}_t}\epsilon
 
 <small>本教程读法：不要把所有时间步想成一样难。低噪声区间更像补边缘和纹理，中噪声区间更像恢复结构，高噪声区间更像从几乎看不见的信号里猜语义。噪声日程和 loss weighting 会决定模型把精力花在哪里。</small>
 
-## 1. 噪声日程决定什么
+## 噪声日程决定什么
 
 离散扩散里，单步前向过程是：
 
@@ -72,7 +79,7 @@ q(x_t \mid x_{t-1})
 | \(\bar{\alpha}_t\) | 累计信号保留比例 |
 | \(\prod\) | 连乘，表示把多个时间步的保留比例乘起来 |
 
-## 2. SNR：比 \(\beta_t\) 更贴近学习难度
+## SNR：比 \(\beta_t\) 更贴近学习难度
 
 闭式加噪是：
 
@@ -114,7 +121,7 @@ x_t
 
 所以线性 \(\beta_t\) 不等于线性学习难度。真正影响训练体验的，是整个 SNR 曲线怎么变化。
 
-## 3. 常见噪声日程
+## 常见噪声日程
 
 ### 3.1 线性 \(\beta_t\)
 
@@ -151,7 +158,7 @@ x = x_0 + \sigma \epsilon
 
 这种写法更容易和 ODE / SDE 采样器连接，因为采样器可以直接沿着连续噪声尺度安排步长。
 
-## 4. 参数化：模型到底输出什么
+## 参数化：模型到底输出什么
 
 同一个带噪状态 \(x_t\)，模型可以学习不同目标。它们表达的信息可以互相转换，但训练难度和采样稳定性不完全一样。
 
@@ -238,9 +245,37 @@ v=\alpha_t\epsilon-\sigma_t x_0
 \hat{\epsilon}=\sigma_t x_t+\alpha_t\hat{v}
 \]
 
-这两行式子在说：velocity 不是新的神秘信息，而是一个坐标系。预测 \(v\) 后，采样器仍然能得到需要的 \(\hat{x}_0\) 或 \(\hat{\epsilon}\)。
+这两行式子在说：velocity 不是新的神秘信息，而是一个坐标系。第一行把带噪样本 \(x_t\) 和预测速度 \(\hat{v}\) 换算成干净图估计 \(\hat{x}_0\)；第二行把它们换算成噪声估计 \(\hat{\epsilon}\)。预测 \(v\) 后，采样器仍然能得到需要的 \(\hat{x}_0\) 或 \(\hat{\epsilon}\)。
 
-## 5. 为什么“等价”又“不等价”
+### 4.5 预测值怎样真正作用到去噪过程
+
+不管模型预测的是 \(\hat{\epsilon}\)、\(\hat{x}_0\)、score，还是 \(\hat{v}\)，采样时都要落到同一个问题：给定当前状态 \(x_t\)，怎样得到更低噪声的下一个状态 \(x_{t'}\)。
+
+最常见的执行链条是：
+
+```text
+model output
+  -> convert to x0_hat / eps_hat / score-like direction
+  -> sampler applies noise schedule and step rule
+  -> next lower-noise sample x_{t'}
+```
+
+例如确定性 DDIM 可以粗略写成：
+
+\[
+x_{t'}
+=
+\alpha_{t'}\hat{x}_0
++
+\sigma_{t'}\hat{\epsilon},
+\qquad t' < t
+\]
+
+这里的关键不是“把噪声直接从图上擦掉一次”，而是：模型先告诉采样器当前样本里哪些部分像数据、哪些部分像噪声；采样器再按照下一个噪声水平 \(t'\) 重新组合这两部分。\(t'\) 如果离 \(t\) 很近，就是小步去噪；如果跳得很远，就是少步采样，对模型预测和 solver 都更苛刻。
+
+如果模型直接预测 \(\hat{x}_0\)，采样器已经拿到了“数据端估计”；如果模型预测 \(\hat{\epsilon}\)，就先用反解公式得到 \(\hat{x}_0\)；如果模型预测 \(\hat{v}\)，就先用上面的坐标变换得到 \(\hat{x}_0\) 和 \(\hat{\epsilon}\)。所以 \(v\)-prediction 发挥作用的方式通常不是多了一个神秘步骤，而是给采样器一个更稳定的坐标，再由采样器把它兑现成每一步移动。
+
+## 为什么“等价”又“不等价”
 
 从信息表达看，只要知道 \(x_t\)、时间步和其中一种预测目标，很多情况下可以解析换算到其他目标。
 
@@ -254,7 +289,7 @@ v=\alpha_t\epsilon-\sigma_t x_0
 
 所以 \(\epsilon\)-prediction、\(x_0\)-prediction、score prediction 和 \(v\)-prediction 像是用不同坐标系描述同一个去噪问题。坐标系不同，优化几何也不同。
 
-## 6. 日程、参数化、采样器要一起看
+## 日程、参数化、采样器要一起看
 
 ![EDM sampler design space 原论文图](../assets/images/paper-figures/diffusion/edm-figure-2-sampler-design-space.png){ width="920" }
 
@@ -266,16 +301,21 @@ v=\alpha_t\epsilon-\sigma_t x_0
 
 一句话：**噪声日程决定训练样本落在哪些噪声区间，参数化决定模型用什么坐标理解这些样本，采样器决定推理时如何兑现这些学习成果。**
 
-## 7. 和下一页的关系
+## 和下一页的关系
 
 这一页解释了噪声水平和预测坐标。下一页 [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md) 会把“预测噪声”进一步解释成“学习概率分布的梯度方向”，并说明为什么扩散采样可以被看成 SDE / ODE 的数值求解。
 
 !!! tip "进阶理解"
     在视频扩散和世界模型里，噪声日程还会影响运动是否连续、身份是否漂移、动作条件是否敏感。基础图像扩散先把 SNR 和参数化理解清楚，后面看高低噪声 expert、Flow Matching 或 Phased DMD 会轻松很多。
 
-## 小结
+## 本页结论
 
 噪声日程控制“训练题目有多难、难题分布在哪里”；参数化控制“模型用哪个坐标系回答题目”。它们不是孤立技巧，而是扩散训练和采样之间最重要的连接层。
 
 *[SNR]: Signal-to-Noise Ratio，信噪比。
 *[NFE]: Number of Function Evaluations，模型前向调用次数。
+
+!!! tip "下一站"
+    - 回到本专题入口：[扩散模型](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Score Matching 到 SDE](score-matching-sde-and-probability-flow.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

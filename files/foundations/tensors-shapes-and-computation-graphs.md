@@ -2,6 +2,11 @@
 
 张量是深度学习里最基本的数据结构。模型看到的文本、图像、音频、动作轨迹，最终都会被组织成不同形状的张量，然后交给算子处理。
 
+!!! note "读法定位"
+    这页先回答“张量、Shape 与计算图”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 ![TensorFlow computation graph 原论文图](../assets/images/paper-figures/foundations/tensorflow-figure-2-simple-graph.svg){ .atlas-figure-compact width="340" }
 
 <small>图源：[TensorFlow: Large-Scale Machine Learning on Heterogeneous Distributed Systems](https://arxiv.org/abs/1603.04467)，Figure 2。原论文图意：一个简单计算图由输入、常量和算子节点组成，边表示张量在节点之间流动。</small>
@@ -18,7 +23,7 @@
 !!! tip "遇到这些症状，回看本页"
     `CUDA OOM` 只发生在多相机/长视频 bucket、同样 batch 下某个 resize 版本突然爆显存、profile 里出现异常大的 `contiguous` / `clone` / `view_as_real`，或者模型接口总在 `[B, L, D]` 和 `[B, D, L]` 之间错位时，先把每一步 shape、dtype、device 和是否 materialize 写出来。本页能帮你判断问题是在输入展开、patch/token 计数、计算图保存，还是张量布局转换。
 
-## 0. 符号卡：axis 和 shape 怎么读
+## 符号卡：axis 和 shape 怎么读
 
 张量的每一维都叫一个 axis。读 shape 时不要只看数字，要读出“这一维代表什么”。
 
@@ -39,7 +44,7 @@ x \in \mathbb{R}^{B \times L \times D}
 
 这行公式不是在炫数学，而是在说：输入 \(x\) 是一个三维数字表；第 1 维是样本数，第 2 维是 token 数，第 3 维是每个 token 的向量长度。
 
-## 1. Tensor 到底是什么
+## Tensor 到底是什么
 
 可以把 tensor 理解成带维度的数字容器：
 
@@ -70,7 +75,7 @@ x \in \mathbb{R}^{B \times C \times H \times W}
 x \in \mathbb{R}^{B \times L \times D}
 \]
 
-## 2. Shape 是接口契约
+## Shape 是接口契约
 
 Shape 决定张量能不能进入某个模块。比如矩阵乘：
 
@@ -95,7 +100,7 @@ head:       [B, num_classes]
 !!! note "公式拆读：矩阵乘为什么只看最后一维"
     \((B,L,D)\times(D,D_{\text{out}})\rightarrow(B,L,D_{\text{out}})\) 里，真正相乘的是每个 token 的 \(D\) 维向量和权重矩阵的 \(D\) 维输入轴。前面的 \(B,L\) 可以先理解成“有很多个 token 并行做同一类变换”。所以最后一维对不上，Linear 层就接不上。
 
-## 3. 计算图是什么
+## 计算图是什么
 
 计算图记录了张量如何从输入变成输出。训练时通常有两条路径：
 
@@ -113,7 +118,7 @@ for batch in dataloader:
     optimizer.zero_grad()
 ```
 
-## 4. 为什么显存会被计算图吃掉
+## 为什么显存会被计算图吃掉
 
 训练时，反向传播需要用到前向中的中间激活。因此模型不只要存权重，还要存：
 
@@ -125,7 +130,7 @@ for batch in dataloader:
 
 这解释了为什么推理能跑的模型，训练时可能显存不够。推理通常不需要保存完整计算图，而训练需要。
 
-## 5. 进阶例子：多相机视频如何变成长序列
+## 进阶例子：多相机视频如何变成长序列
 
 ```mermaid
 flowchart LR
@@ -196,7 +201,7 @@ L_{\text{total}} = L_{\text{vision}} + L_{\text{text}} + L_{\text{prop}} + L_{\t
 
 读 VLA、视频世界模型或长上下文系统时，先把 \(L_{\text{total}}\) 算出来，再判断 attention、activation、KV cache 和通信是否可承受。很多“模型设计问题”其实先是 shape 账没算清：到底是相机太多、帧太长、分辨率太高、patch 太密，还是 memory/action token 没有分层压缩。
 
-## 6. Shape 调试表
+## Shape 调试表
 
 | 症状 | 常见 shape 根因 | 快速检查 |
 | --- | --- | --- |
@@ -206,13 +211,18 @@ L_{\text{total}} = L_{\text{vision}} + L_{\text{text}} + L_{\text{prop}} + L_{\t
 | 训练 loss 异常低 | packed segment 或 label mask 错 | 可视化 attention mask 和 label mask |
 | 量化后局部退化 | 某些通道/模态尺度不同 | 按模态统计 activation range |
 
-## 7. 和后续专题的关系
+## 和后续专题的关系
 
 - [大模型训练路线图](../training/index.md)：理解 loss、反向传播、checkpoint 和显存。
 - [算子与编译器](../operators/index.md)：理解 kernel 为什么要关心 shape bucket。
 - [推理系统](../inference/index.md)：理解 batch、sequence length 和 KV cache 如何影响延迟。
 - [量化](../quantization/index.md)：理解 dtype、scale 和张量误差如何传播。
 
-## 小结
+## 本页结论
 
 张量是数据，shape 是接口，计算图是训练链路。只要这三件事清楚，很多看起来很复杂的模型结构都会变成“张量经过一组模块变形和计算”的过程。
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

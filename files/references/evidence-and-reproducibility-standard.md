@@ -2,6 +2,11 @@
 
 这页是全站统一证据规范。它不替代正文、论文专题或 [Claim Ledger](claim-ledger.md)，而是规定每个关键结论应该怎样写清楚：证据来自哪里、强到什么程度、能支持什么、不能外推到哪里。
 
+!!! note "读法定位"
+    这页先回答“全站证据与复现状态标准”在「参考与证据标准」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道本站不是论文列表，而是带证据边界的工程知识库。 必要时先回 [参考与证据标准入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把全站的证据、复现、图片、公式和判断口径统一起来，帮助读者知道哪些结论能信到什么程度。
+
 !!! note "使用原则"
     任何“更高效”“更稳定”“更适合世界模型 / VLA / agent”的说法，都要尽量落到一个可追踪的证据单元。论文结果、消融、系统吞吐、闭环成功率、官方 demo、toy fixture 和本站推断不能混成同一种可信度。
 
@@ -118,3 +123,7 @@ Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Ca
 ## 和 Claim Ledger 的关系
 
 [Claim Ledger](claim-ledger.md) 是世界模型高效训练主线的证据总账；本页是全站写作标准。正文页面最好两者都接入：局部 `Evidence Snapshot` 让读者在当前页读懂证据边界，Claim Ledger 则用于跨页面核对前沿 claim、复现状态和不能外推项。
+
+!!! tip "下一站"
+    - 回到本专题入口：[参考与证据标准](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[图片与公式质量标准](image-and-formula-quality-standard.md)。

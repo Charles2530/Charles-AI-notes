@@ -2,6 +2,11 @@
 
 这页是 [DeepGEMM 解读](deepgemm-fp8-gemm-and-mega-moe.md) 的工程附录，重点放在源码阅读、API 地图、调用路径和接入检查。主页面负责建立系统判断，这页负责帮助你真的读仓库和评估能不能接进自己的服务链路。
 
+!!! note "读法定位"
+    这页先回答“DeepGEMM 源码与接入”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 !!! note "初学者先抓住"
 
     读高性能 kernel 仓库时，不要从最底层汇编或 JIT 模板开始。先看 README、测试、Python API 和 benchmark 口径，确认它对外承诺什么 shape、layout、dtype 和硬件路径，再向下看实现为什么这样写。
@@ -121,3 +126,8 @@ def moe_expert_compute(tokens, expert_ids, runtime):
 ```
 
 这段伪代码强调两个判断：先按 expert 组织 token，再根据 shape、JIT cache 和 fallback 状态选择路径。真实工程里，端到端收益往往取决于这个选择逻辑，而不只是底层 kernel 的峰值 TFLOPS。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[高级 Kernel 模式与形状特化](advanced-kernel-patterns-and-shape-specialization.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

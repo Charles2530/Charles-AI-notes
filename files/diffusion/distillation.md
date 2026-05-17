@@ -2,6 +2,11 @@
 
 当 `DDIM`、`Euler`、`DPM-Solver` 已经把推理压到几十步后，下一步问题就变成了：能不能直接把几十步教师，压缩成几步甚至一步学生。
 
+!!! note "读法定位"
+    这页先回答“一步生成、蒸馏与整流”在「扩散模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道张量、损失函数和高斯噪声的基本读法；不熟时回基础知识再继续。 必要时先回 [扩散模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把训练目标、噪声日程、采样器、条件控制和蒸馏看成同一条链：带噪状态如何一步步被推回数据分布。
+
 DMD 原论文的核心图很适合说明“少步/一步生成”为什么不能只靠删采样步：student generator 需要同时接受回归信号和分布匹配信号，目标不是机械复刻 teacher 的每个中间状态，而是让最终生成分布靠近 teacher / data 分布。
 
 ![DMD overview 原论文图](../assets/images/paper-deep-dives/diffusion/dmd/overview.png){ width="920" }
@@ -36,11 +41,15 @@ DMD 原论文的核心图很适合说明“少步/一步生成”为什么不能
 x_T \rightarrow x_{t_1} \rightarrow x_{t_2} \rightarrow \cdots \rightarrow x_0.
 \]
 
+这里 \(x_T\) 是起点噪声，\(x_0\) 是最终干净图，中间的 \(x_{t_i}\) 是 teacher 采样过程中经过的若干噪声状态。
+
 如果 student 只有 \(K\) 步，就要学习一个更大的跳跃：
 
 \[
 x_T \rightarrow x_{\tau_1} \rightarrow \cdots \rightarrow x_0,\qquad K \ll T.
 \]
+
+\(\tau_i\) 表示学生保留的少量粗时间点，\(K\ll T\) 表示学生步数远少于教师步数。少步蒸馏本质上是在让学生跨过教师原来很多个小修正。
 
 这意味着 student 不只是在模仿 teacher 的单步预测，而是在学习 teacher 多步复合后的结果。直觉上，teacher 每一步像“慢慢擦掉噪声”，student 每一步像“直接跨过一大片噪声区间”。跨度越大，训练目标越难，越需要额外的稳定手段。
 
@@ -118,7 +127,7 @@ until validation passes
 4. DMD: [One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)
 5. DMD2: [Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)
 
-## 1. Progressive Distillation
+## Progressive Distillation
 
 **它的思想可以写成**：
 
@@ -126,7 +135,7 @@ until validation passes
 \text{student}(x_t, t) \approx \text{teacher}^{(2)}(x_t, t)
 \]
 
-也就是让学生学会“教师两步完成的事”。不断重复后，步数可以从 \(N\) 压到 \(N/2\)、\(N/4\) 甚至更低。
+也就是让学生学会“教师两步完成的事”。这里输入仍是同一个带噪状态 \(x_t\) 和时间 \(t\)，右上角的 \((2)\) 表示 teacher 连续走两步后的等效结果。不断重复后，步数可以从 \(N\) 压到 \(N/2\)、\(N/4\) 甚至更低。
 
 这条路线的价值，在于它尽量保留了原始扩散教师的行为方式。学生不是从零发明一条新路径，而是在教师已经验证过的多步轨迹上逐级压缩。这样做的优点是直觉清楚、过渡自然，也更容易和原有训练框架兼容。
 
@@ -136,7 +145,7 @@ until validation passes
 
 老师原本需要 16 笔画完一张苹果静物，学徒先学“两笔合成一笔”，再学“四笔合成一笔”，最后压缩成 4 笔或 2 笔完成。
 
-## 2. Consistency / LCM
+## Consistency / LCM
 
 **一致性路线希望直接学会**：
 
@@ -144,7 +153,7 @@ until validation passes
 f_\theta(x_t, t) \approx f_\theta(x_s, s), \qquad \text{当 } x_t, x_s \text{ 属于同一数据轨迹}
 \]
 
-直觉上，不同噪声层级的点，只要它们对应同一个真实样本，就应该被映射到接近的干净结果。
+直觉上，不同噪声层级的点，只要它们对应同一个真实样本，就应该被映射到接近的干净结果。左边和右边的输入时间不同，但目标输出应该一致，这就是 consistency 的数学含义。
 
 这类方法适合一步或少步采样，也适合保留与大教师模型的一致性，并与 latent diffusion 结合。
 
@@ -152,7 +161,7 @@ f_\theta(x_t, t) \approx f_\theta(x_s, s), \qquad \text{当 } x_t, x_s \text{ �
 
 这类方法因此特别适合交互式预览、少步 latent diffusion 和需要快速试错的产品场景。风险则在于，一旦一致性目标定义得不够稳，学生很容易在高难 prompt、强 guidance 或长尾视觉模式上丢掉细节和条件敏感性。
 
-## 3. DMD：从轨迹模仿转向分布匹配
+## DMD：从轨迹模仿转向分布匹配
 
 `DMD` 的关键不是“模仿教师每一步动作”，而是直接优化学生分布与目标分布的差异。
 
@@ -164,6 +173,8 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 
 论文中利用真实分布侧和生成分布侧的 score 差来构造训练信号。直觉上，如果学生样本分布偏离真实数据，两个 score 会给出方向差，并推动一步生成器朝正确分布移动。
 
+这里 \(D(\cdot,\cdot)\) 表示某种“分布差异”度量：第 1 个位置是学生生成分布 \(p_{\text{student}}(x)\)，第 2 个位置是希望靠近的目标分布 \(p_{\text{target}}(x)\)。\(x\) 不是单张固定图片，而是用来表示整个样本空间里的随机样本。
+
 `DMD` 的关键突破，不是简单让学生“少走几步”，而是把问题改写成“学生最终落到的分布对不对”。这会带来一种完全不同的蒸馏哲学：不再要求学生逐帧模仿老师，而是允许它用自己的方式，只要最终分布足够接近目标。
 
 这也正是一步生成难度陡增的地方。因为你抛开了轨迹监督之后，学生获得了更大自由度，但训练稳定性、模式覆盖和锐度也更容易一起失控。
@@ -174,7 +185,7 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 
 `DMD` 更像只看最终面包是否外形、口感和香气都接近目标产品，然后用“结果差异”反推哪里需要改。
 
-## 4. DMD2：解决模糊与训练不稳
+## DMD2：解决模糊与训练不稳
 
 `DMD2` 延续分布匹配思路，但更强调稳定性。可以用一个近似的总目标来理解：
 
@@ -184,13 +195,44 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 
 这里的直觉是：分布匹配负责把总体分布拉对，对抗损失负责提升清晰度和锐度。
 
+拆开看，\(\mathcal{L}_{\text{dist-match}}\) 是分布匹配项，\(\mathcal{L}_{\text{gan}}\) 是对抗损失项，\(\lambda_{\text{gan}}\) 是权重系数：它决定 GAN 分支在总损失里说话有多大声。
+
 **这很像图像生成里常见的分工**：一个目标保“方向对”，另一个目标保“画面利”。
 
 `DMD2` 更像是在承认一个现实：只靠分布级别的方向信号，往往还不足以把视觉清晰度和细节锐度也一起拉起来。于是它通过更稳定的训练耦合和更清楚的损失分工，把“分布对齐”和“视觉可用”重新接到一起。
 
 从方法演化上看，`DMD2` 说明一步生成真正困难的，不是目标本身够不够激进，而是训练信号是否既能管大方向，又能管高频细节。只要这两者失衡，结果不是糊，就是不稳。
 
-## 5. Phased DMD：把一步难题拆成多个阶段
+### 4.1 训练曲线里该看什么
+
+在少步蒸馏或 Flow / DMD 混合训练里，常会同时看到两类曲线：
+
+```text
+v-prediction / velocity loss:  当前点的局部方向回归准不准
+distribution matching loss:   当前生成分布是否靠近 teacher / real 分布
+```
+
+这两条曲线的读法不同。`v-prediction loss` 是局部监督信号，下降通常说明学生更会在给定噪声状态上预测正确移动方向；`distribution matching loss` 是分布信号，依赖 real / fake score、fake critic 或 discriminator，曲线更容易震荡，也更受 critic 是否跟上 generator 的影响。
+
+![DMD objective comparison](../assets/images/paper-deep-dives/diffusion/dmd/matching_sim_figure.png){ width="630" }
+
+<small>图源：[One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)，Figure 3。原论文图意：比较只用 real score、加入 distribution matching、再加入 regression loss 后的二维 toy 分布覆盖效果。</small>
+
+<small>本教程读法：这张图支撑“distribution matching loss 不能只看数值下降”。只往 real score 高密度区走可能会塌到少数模式；加入 fake score 差分后分布覆盖改善；再加 regression anchor 才更容易保住不同 noise 对应的结构多样性。</small>
+
+可以把它们放进一个诊断矩阵：
+
+| 现象 | 解释 |
+| --- | --- |
+| \(L_v\) 降，\(L_{\text{dm}}\) 也降 | 局部方向和整体分布都在变好，通常是健康信号 |
+| \(L_v\) 降，\(L_{\text{dm}}\) 不降 | 学生会做训练点上的回归，但生成分布还不像 teacher / real |
+| \(L_v\) 不降，\(L_{\text{dm}}\) 降 | 分布梯度可能在拉结果，但单步/少步轨迹本身不稳，低步采样容易漂 |
+| \(L_{\text{dm}}\) 剧烈震荡 | fake score / critic 可能滞后，generator 更新太快，或 timestep 采样太激进 |
+| 两者都好看，样例不好 | 训练分布和真实少步推理分布错配，必须回放真实 sampler 验证 |
+
+所以看训练曲线时，不要问“哪个 loss 更低”，而要问三件事：第一，\(L_v\) 是否在不同 SNR 桶里都下降；第二，distribution matching 是否让多 seed 输出保持多样而不是收缩到少数安全模式；第三，真实 1/2/4 步采样结果是否同步改善。DMD 类方法尤其要额外看 fake critic 的 denoising loss 和更新比例，因为 generator 的 distribution matching 梯度是借它算出来的。
+
+## Phased DMD：把一步难题拆成多个阶段
 
 `Phased DMD` 把噪声空间按 phase 划开，每个 phase 内再做局部分布匹配。可以写成：
 
@@ -199,6 +241,8 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 \]
 
 这里 \(k\) 表示不同阶段。这样做的好处是让早期 phase 先学大结构，中期 phase 学物体关系和构图，后期 phase 再盯住纹理与细节。
+
+这条求和式从 \(k=1\) 加到 \(K\)，表示每个 phase 都有自己的训练项。括号里的两部分分别是第 \(k\) 个阶段的 distribution matching loss 和 score loss；\(\lambda_k,\gamma_k\) 控制这个阶段两种损失的相对权重。
 
 ### 例子：画一辆赛车
 
@@ -223,7 +267,7 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 
 因此，少步蒸馏的验收不能只看“几步出图”和平均画质，还要看视频 motion intensity 有没有被压慢、不同 seed 的多样性有没有塌缩、复杂镜头和动作 prompt 是否还可控、文字 / logo / 边缘 / 高频细节是否被低步数牺牲，以及每个 phase 的训练目标是否真的对应正确的噪声子区间。
 
-## 6. Rectified Flow / Rectified Diffusion
+## Rectified Flow / Rectified Diffusion
 
 这条路线并不是主要做“教师蒸馏”，而是重新设计从噪声到数据的生成路径，让它更适合少步离散。
 
@@ -233,7 +277,7 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 \frac{dx}{dt} = v_\theta(x,t)
 \]
 
-若轨迹足够规则，一步或少步 Euler 就可能已经足够。
+\(\frac{dx}{dt}\) 是样本沿时间变化的速度，\(v_\theta(x,t)\) 是模型预测的速度场。若轨迹足够规则，一步或少步 Euler 就可能已经足够。
 
 `Rectified Diffusion` 进一步说明：真正关键的不一定是几何意义上的“绝对直”，而是轨迹和配对方式是否适合粗离散。
 
@@ -241,7 +285,7 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 
 因此 rectified 路线和 DMD 路线虽然都在追求极少步，但关注点并不一样。前者更像重画道路，后者更像在结果空间里直接纠偏。
 
-## 7. 什么时候选哪条路线
+## 什么时候选哪条路线
 
 ### 你不想重训
 
@@ -261,7 +305,7 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 
 这类目标往往只在两种情况下值得认真投入：一是交互预算极紧，二是推理成本极敏感。因为一步生成不是“更快一点”，而是会显著改变训练、评测和回退设计。只要你决定走这条路，就等于接受了更复杂的训练流程和更严格的长尾验收要求。
 
-## 8. 一个总判断
+## 本页结论
 
 一步生成的难点，不是“把 20 步删成 1 步”，而是如何保住分布正确性、高频细节、模式覆盖和文本条件。
 
@@ -285,3 +329,8 @@ def distill_step(student, teacher, x_t, t, cond):  # 定义 teacher-student 蒸�
 ## 工程收束
 
 一步生成、蒸馏与整流要按 teacher-student 差距、步数压缩、模式覆盖、稳定性和部署收益来验收。最容易踩坑的是蒸馏后快了但控制性变差、只看单一视觉指标、teacher 偏差继承到 student；少步学生尤其容易在强条件控制、高频细节和长尾 prompt 上露怯。上线前应固定 teacher-student、步数桶、控制桶和回退门槛四类对照。
+
+!!! tip "下一站"
+    - 回到本专题入口：[扩散模型](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

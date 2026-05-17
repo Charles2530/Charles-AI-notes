@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # LWM：百万 token 视频语言世界模型
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`World Model on Million-Length Video And Language With Blockwise RingAttention`
     - 系统：`Large World Model (LWM)`
@@ -34,7 +39,7 @@ LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dre
 
 因此，LWM 更像“长上下文多模态记忆型世界模型”。它不直接输出控制动作，也不保证物理一致的交互模拟；但它证明了一个重要方向：当模型能直接读入海量视频帧和文本时，很多过去需要外部检索或视频摘要的任务可以被统一进一个自回归序列模型。
 
-![LWM long video chat 原图](https://github.com/LargeWorldModel/LWM/raw/main/imgs/long_video_chat_main.png){ width="920" }
+![LWM long video chat 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/lwm/lwm-long-video-chat-原图.png){ width="920" }
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 1。原图展示 LWM 在 1 小时 YouTube compilation、超过 500 个 clips 上回答细粒度问题，并与 GPT-4V、Gemini Pro Vision、Video-LLaVA 做定性对比。</small>
 
@@ -86,7 +91,7 @@ text tokens + image tokens + video frame tokens
 
 ## 模型结构
 
-![LWM model 原图](https://largeworldmodel.github.io/lwm/materials/model.png){ width="920" }
+![LWM model 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/lwm/lwm-model-原图.png){ width="640" }
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 4。原图展示 LWM 是一个 autoregressive Transformer：视频帧经 VQGAN 转为 image tokens，文本经 BPE tokenizer 转为 text tokens，然后拼接进同一个 Transformer 预测下一个 token。</small>
 
@@ -135,7 +140,7 @@ Stage II: Long-context vision-language model
     -> LWM / LWM-Chat
 ```
 
-![LWM data and stages 原图](https://github.com/LargeWorldModel/LWM/raw/main/imgs/data.png){ width="920" }
+![LWM data and stages 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/lwm/lwm-data-and-stages-原图.png){ width="920" }
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 3。原图展示 Stage 1 从 Books3 做 32K 到 1M context extension；Stage 2 混合图像、短视频、长视频和文本数据，总计约 495B text-vision tokens 与 33B text tokens。</small>
 
@@ -356,6 +361,11 @@ LWM 最重要的启发是：世界模型不一定只能是 latent dynamics 或�
 3. 视觉 token、文本 token 和特殊分隔符统一进 next-token prediction；
 4. masked sequence packing 和 loss weighting 是多模态长序列训练的必要条件；
 5. 没有 RingAttention，1M token exact attention 基本不可行。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[V-JEPA：视频潜变量预测表征](v-jepa.md)。
 
 ## 参考资料
 

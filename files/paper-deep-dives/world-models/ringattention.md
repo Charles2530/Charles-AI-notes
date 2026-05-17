@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # RingAttention：近无限上下文训练
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Ring Attention with Blockwise Transformers for Near-Infinite Context`
     - 方法：`Ring Attention`
@@ -39,7 +44,7 @@ RingAttention 不是一个直接预测未来视频的世界模型，但它是 [L
 
 因此，RingAttention 在世界模型专题中的意义不是“更快 attention”，而是：它让长视频和长交互历史可以被当作一个完整上下文来训练。
 
-![RingAttention max context 原图](https://ar5iv.labs.arxiv.org/html/2310.01889/assets/figures/context_len.png){ width="920" }
+![RingAttention max context 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/ringattention/ringattention-max-context-原图.png){ width="920" }
 
 <small>图源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Figure 1。原图比较 TPUv4-1024 上端到端大规模训练可支持的最大 context length，RingAttention 明显高于 vanilla、memory-efficient attention 与 BPT baseline。</small>
 
@@ -68,7 +73,7 @@ RingAttention 的关键观察是：blockwise attention 中，不同 key/value bl
 
 ## 方法结构
 
-![RingAttention method 原图](https://ar5iv.labs.arxiv.org/html/2310.01889/assets/figures/merged.png){ width="860" }
+![RingAttention method 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/ringattention/ringattention-method-原图.png){ width="860" }
 
 <small>图源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Figure 2。原图上半部分展示多个 host 形成环，query block 留在本设备，key/value block 沿环传递；下半部分展示 query outer loop 和 key/value inner loop 的 blockwise attention 与 feedforward 组织方式。</small>
 
@@ -241,7 +246,7 @@ RingAttention 还被用于长交互轨迹建模。论文在 ExoRL 上比较 BC�
 
 论文还把 LLaMA-13B finetune 到 512K context，并在 line retrieval 上评估。
 
-![RingAttention line retrieval 原图](https://ar5iv.labs.arxiv.org/html/2310.01889/assets/figures/context_acc.png){ width="920" }
+![RingAttention line retrieval 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/ringattention/ringattention-line-retrieval-原图.png){ width="920" }
 
 <small>图源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Figure 3。原图展示 Ring Attention-13B-512K 在长上下文 line retrieval 上维持高准确率，而短上下文模型无法覆盖更长范围。</small>
 
@@ -302,6 +307,11 @@ world experience is long
   -> RingAttention makes sequence sharding practical
   -> LWM uses it to train million-token video-language models
 ```
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[LWM：百万 token 视频语言世界模型](lwm.md)。
 
 ## 参考资料
 

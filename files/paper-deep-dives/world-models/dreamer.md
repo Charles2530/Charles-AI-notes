@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Dreamer：Latent Imagination 控制
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Dream to Control: Learning Behaviors by Latent Imagination`
     - 系统：`Dreamer`
@@ -238,7 +243,7 @@ $$
 | Return parameters | \(\gamma=0.99,\lambda=0.95\) |
 | Seed dataset | \(S=5\) random episodes |
 | Collection schedule | 100 training steps, then collect 1 episode |
-| Exploration noise | \(\mathcal{N}(0,0.3)\) |
+| Exploration noise | \(\mathcal{N}(0,0.3)\)：均值为 0、方差或尺度参数为 0.3 的高斯探索噪声 |
 | Action repeat | \(R=2\) across tasks |
 
 论文还明确提到几个“没有使用”的设计：latent overshooting、action model entropy bonus、value target networks 在这里都不是必要的。这个信息很有用，因为它说明 Dreamer 的核心提升不是靠更复杂的 world model 正则，而是靠把 behavior learning 改成 latent actor-critic。
@@ -286,6 +291,8 @@ a_\tau
 \quad
 \epsilon\sim\mathcal{N}(0,I)
 $$
+
+\(\epsilon\sim\mathcal{N}(0,I)\) 表示从标准高斯采样动作噪声；\(0\) 是均值，\(I\) 是单位协方差。网络输出的 \(\mu_\phi(s_\tau)\) 是动作均值，\(\sigma_\phi(s_\tau)\) 决定噪声缩放。
 
 这个 reparameterization 很关键。它让 sampled action 可以看成网络输出的可微函数，从而允许梯度从 value estimates 反向穿过 action、transition、reward 和 future value。
 
@@ -487,3 +494,8 @@ Dreamer 最值得记住的是三点：
 3. value model 是解决有限 imagination horizon 短视问题的关键。
 
 一句话总结：Dreamer 是交互轨迹型世界模型路线从“会模拟、会规划”走向“会在模拟中训练策略”的关键论文。它把 RSSM latent world model 变成了一个可微的 imagination environment，并用 analytic value gradients 在里面学习长视野控制行为。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[DreamerV2：离散世界模型玩 Atari](dreamerv2.md)。

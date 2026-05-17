@@ -6,6 +6,11 @@ paper_topic: 高效推理
 
 # Low-bit LLM Survey：低比特大模型从格式到推理系统
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [推理](../../inference/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「推理」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`A Survey of Low-bit Large Language Models: Basics, Systems, and Algorithms`
     - 链接：[arXiv:2409.16694](https://arxiv.org/abs/2409.16694)
@@ -106,7 +111,7 @@ X_{\mathrm{INT}_k}=\operatorname{clamp}\left(\operatorname{round}\left(\frac{X_{
 
 ### 量化粒度：scale 越细，误差越小，元数据和计算越贵
 
-![Quantization granularity 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-2-granularity.png){ width="840" }
+![Quantization granularity 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-2-granularity.png){ width="830" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 2。原论文图意：展示 tensor-wise、token-wise、channel-wise、group-wise 和 element-wise 五类 quantization granularity。</small>
 
@@ -127,7 +132,7 @@ X_{\mathrm{INT}_k}=\operatorname{clamp}\left(\operatorname{round}\left(\frac{X_{
 
 ### 动态和静态量化：一个省准备成本，一个省在线成本
 
-![Dynamic and static quantization 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-3-dynamic-static.png){ width="840" }
+![Dynamic and static quantization 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-3-dynamic-static.png){ width="830" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 3。原论文图意：比较 dynamic quant、static weight & activation quant 和 static weight-only quant 的准备阶段与推理阶段。</small>
 
@@ -156,7 +161,7 @@ host memory / model storage
   -> write back
 ```
 
-![Cache hierarchy data transmission 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-4-cache-hierarchy.png){ width="860" }
+![Cache hierarchy data transmission 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-4-cache-hierarchy.png){ width="830" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 4。原论文图意：以 NVIDIA A100 为例展示 weight 和 activation 在 host、global memory、L2、shared memory、registers 与 MatMul kernel 之间的数据传输。</small>
 
@@ -169,7 +174,7 @@ host memory / model storage
 
 ### Weight-only、W&A 和 KV cache 是三种不同系统问题
 
-![Quantization data transmission 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-5-data-transmission.png){ width="920" }
+![Quantization data transmission 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-5-data-transmission.png){ width="830" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 5。原论文图意：展示 quantized weight preparation、weight-only quantization 和 weight & activation quantization 的数据传输过程。</small>
 
@@ -204,7 +209,7 @@ B \cdot L \cdot N_{\mathrm{layer}}
 
 其中 \(B\) 是 batch size，\(L\) 是缓存序列长度，前面的 \(2\) 对应 Key 和 Value。这个量随上下文长度和 batch 线性增长，长上下文服务里很容易超过静态模型权重。
 
-![KV cache quantization 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="820" }
+![KV cache quantization 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="740" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 6。原论文图意：展示 quantized KV cache 如何减少缓存存储和数据传输，并在 attention forward 前 dequantize。</small>
 
@@ -354,7 +359,7 @@ PTQ 的核心难点是：你不想重新训练整个模型，却要让低比特�
 
 ### Equivalent transformation：把难量化的分布变得更好量
 
-![Shifting transformation 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-9-outlier.png){ width="880" }
+![Shifting transformation 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-9-outlier.png){ width="830" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 9。原论文图意：shifting transformation 通过可合并的偏移项调整 activation 分布，并把对应变换合并进权重路径。</small>
 
@@ -373,7 +378,7 @@ Y=XW=(X\operatorname{diag}(\Phi)^{-1})(\operatorname{diag}(\Phi)W)
 
 如果 activation 某些 channel 的离群值很大，可以把一部分量化难度迁移到 weight 上，让 activation 更平滑。OmniQuant / AffineQuant 则把 shift 和 scale 设成可学习参数。Rotation 路线更进一步，用正交变换打散 outlier，使激活分布更均匀。
 
-![Rotation transformation 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-11-rotation.png){ width="900" }
+![Rotation transformation 原图](../../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-11-rotation.png){ width="830" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 11。原论文图意：rotation transformation 让 activation outlier 减少，其中部分 rotation 可以合并进权重，部分通常不能合并。</small>
 
@@ -426,3 +431,8 @@ Mixed precision 则承认一个更现实的问题：少量 outlier 或 salient w
 低比特 LLM 的核心不是“把模型压到几 bit”，而是把数值格式、量化粒度、校准方式、低比特 kernel、KV cache、训练稳定性和质量回归放进同一条工程链里。一个量化方案是否高效，取决于它省掉的内存和带宽是否大于它引入的 scale、packing、Q/DQ、kernel 分支和质量回退成本。
 
 如果只能记一句话：**量化是系统工程，不是单个压缩算法。**
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[推理](../../inference/index.md)。
+    - 按导航顺序继续：[EAGLE-3：投机推理加速](eagle-3.md)。

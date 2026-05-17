@@ -2,6 +2,11 @@
 
 这页把世界模型 rollout 从“模型能预测未来”推进到“系统能以可接受成本服务规划器”。它串起视频/world-model rollout、KV cache、低比特、MagiAttention、KVSlimmer、CausVid、SLO 和失败回放，重点回答：**怎样证明系统成本下降没有把动作分叉、风险判断和闭环收益一起压坏。**
 
+!!! note "读法定位"
+    这页先回答“Rollout 服务、量化与 Kernel 全链路案例”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先回 [世界模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把表征预测、潜变量动力学、规划、rollout 服务和具身/视频应用连成“可模拟、可评估、可行动”的主线。
+
 !!! warning "证据边界"
     本页复用论文原图和站内 toy fixture 组织工程路线。系统吞吐、视频生成质量和 KV 压缩都不能直接证明世界模型更会规划；规划收益必须用 action sensitivity、closed-loop success、risk calibration 和 failure replay 单独验收。
 
@@ -34,7 +39,7 @@
 
 量化不只是“模型文件变小”。对 rollout 服务来说，它决定同一块 GPU 能同时保留多少历史、多少候选动作、多少并发请求，以及是否能在规划器等待窗口内返回结果。
 
-![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="820" }
+![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="740" }
 
 <small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原图意：模型规模增长速度明显快于单卡 GPU 显存增长速度，量化要解决的是模型越来越难装进有限显存和带宽预算的问题。</small>
 
@@ -72,7 +77,7 @@
 
 长历史 rollout 的 KV cache 可能比权重更早成为瓶颈。KVSlimmer 说明 KV 合并可以更细：Key 和 Value 不应被当成同一种对象压缩；但世界模型还要额外保护当前窗口、接触帧、动作切换帧和失败 replay。
 
-![KVSlimmer vs AsymKV](../assets/images/paper-deep-dives/inference/kvslimmer/figure-1-asymkv-vs-kvslimmer.png){ width="820" }
+![KVSlimmer vs AsymKV](../assets/images/paper-deep-dives/inference/kvslimmer/figure-1-asymkv-vs-kvslimmer.png){ width="780" }
 
 <small>图源：[KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging](https://arxiv.org/abs/2603.00907)，Figure 1。原图意：AsymKV 依赖反向传播和近似 Hessian；KVSlimmer 用 forward-only 变量构造 Key 合并权重，避免 gradient 路径。</small>
 
@@ -117,3 +122,8 @@ CausVid 提供了把高质量双向视频模型蒸馏成 causal streaming studen
 更稳的结论不是“量化和 KV 压缩让世界模型更好”，而是：
 
 > 在指定硬件、runtime、context、batch 和候选动作数下，某条系统路线降低了 rollout 成本；同时 action sensitivity、risk calibration、candidate ranking 和 failure replay 没有超过预设退化门槛。若只满足前半句，它只是系统优化候选，不是闭环世界模型改进。
+
+!!! tip "下一站"
+    - 回到本专题入口：[世界模型](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

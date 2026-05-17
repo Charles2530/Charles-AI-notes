@@ -2,6 +2,11 @@
 
 Prompt Engineering 经常被误解成“找一句神奇咒语”。更准确地说，它是在设计模型的**输入契约**：告诉模型任务是什么、可用信息是什么、输出应长什么样、哪些事情不能做，以及什么时候需要借助外部证据或工具。
 
+!!! note "读法定位"
+    这页先回答“Prompt、CoT 与 RAG 入门”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 这页参考 [Prompt Engineering Guide](https://www.promptingguide.ai/zh) 中的基础概念、提示词要素、Zero-shot / Few-shot、CoT、Self-Consistency、Prompt Chaining、ReAct 和 RAG 等主题，重点补一条初学者可用的主线：**从单次 prompt，到分步推理，再到检索增强和工具系统**。
 
 !!! note "初学者先抓住"
@@ -10,7 +15,7 @@ Prompt Engineering 经常被误解成“找一句神奇咒语”。更准确地�
 !!! tip "遇到这些症状，回看本页"
     评测失败无法复现、模型引用了错误证据、工具调用结果被当成指令、输出 JSON 经常坏，或者世界模型数据引擎里 judge/标注 prompt 改一句分数就变时，回看本页。本页能帮你判断问题是输入契约不清、证据边界不稳、输出 schema 太松，还是缺少可回放的评测集。
 
-## 1. Prompt Engineering 到底在设计什么
+## Prompt Engineering 到底在设计什么
 
 一个大语言模型在推理时只能看到上下文窗口里的内容。Prompt Engineering 设计的就是这个窗口里的信息结构：
 
@@ -39,7 +44,7 @@ system / developer instruction
 
 一个好的 prompt 通常不是最长的，而是边界最清楚的：模型知道该做什么、用什么做、做到什么程度、以什么格式交付。
 
-## 2. 基础提示模式
+## 基础提示模式
 
 ### 2.1 Zero-shot：直接描述任务
 
@@ -108,7 +113,7 @@ Few-shot 的关键不是堆很多样例，而是选能覆盖边界情况的样�
 
 结构化输出的好处是可解析、可评测、可回放；代价是 prompt 要更严格，并且需要在外部做 schema 校验。
 
-## 3. 模型参数也是提示工程的一部分
+## 模型参数也是提示工程的一部分
 
 Prompt 决定模型看什么，采样参数决定模型怎么生成。
 
@@ -122,7 +127,7 @@ Prompt 决定模型看什么，采样参数决定模型怎么生成。
 
 不要把所有问题都交给 prompt 文字解决。需要稳定分类时，低温度、严格 schema 和外部校验往往比继续加一句“请认真”更有效。
 
-## 4. CoT：让模型有中间工作区
+## CoT：让模型有中间工作区
 
 CoT（Chain-of-Thought）可以理解成让模型在复杂任务里先形成中间推理，再给出答案。它常用于数学、代码、规划、逻辑比较和多约束决策。
 
@@ -144,7 +149,7 @@ CoT 有用的原因不是“多写字就更聪明”，而是复杂任务往往�
 !!! warning "不要把 CoT 当成事实证明"
     模型写出推理过程，不代表推理真实可靠。工程上更常暴露“简洁理由、证据来源、关键检查点”，而不是把完整内部草稿原样展示给用户。
 
-## 5. Self-Consistency：多想几条路再投票
+## Self-Consistency：多想几条路再投票
 
 Self-Consistency 的直觉是：对同一个复杂问题采样多条推理路径，再根据最终答案投票或筛选。它适合答案可验证、路径可能多样的任务。
 
@@ -154,7 +159,7 @@ Self-Consistency 的直觉是：对同一个复杂问题采样多条推理路径
 
 它的优势是能降低单条推理路径偶然出错的概率；代价是 token 成本和延迟会成倍增加。因此它更适合数学、代码、离线评测和高价值任务，不适合每个在线请求默认开启。
 
-## 6. Prompt Chaining：把复杂任务拆成多步
+## Prompt Chaining：把复杂任务拆成多步
 
 当一个 prompt 同时要求“读文档、抽取事实、判断风险、生成报告、输出 JSON”时，失败概率会明显上升。Prompt Chaining 的做法是把任务拆成多个稳定步骤：
 
@@ -167,7 +172,7 @@ Step 4: 生成最终摘要和结构化输出
 
 拆链的好处是每一步更容易调试、评测和重试。某一步失败时，不必重新跑完整任务，也更容易定位是检索错、抽取错、判断错还是格式错。
 
-## 7. ReAct：推理和行动交替
+## ReAct：推理和行动交替
 
 ReAct 可以理解成 Reasoning + Acting。模型不只在文本里推理，还会决定何时调用工具、读工具返回、再继续下一步。
 
@@ -182,11 +187,11 @@ ReAct 可以理解成 Reasoning + Acting。模型不只在文本里推理，还�
 
 ReAct 适合开放域问答、数据查询、代码调试、网页操作和多步业务流程。它的关键风险是工具循环、错误参数、错误解读工具结果，以及把工具返回中的恶意文本当成系统指令。
 
-## 8. RAG：把外部证据接进模型
+## RAG：把外部证据接进模型
 
 RAG（Retrieval-Augmented Generation）解决的是模型知识不够新、不够私有、不可追溯的问题。它先从外部知识库检索证据，再把证据放进上下文，让模型基于证据回答。
 
-![RAG overview 原论文图](../assets/images/paper-figures/foundations/rag-figure-1-overview.png){ width="920" }
+![RAG overview 原论文图](../assets/images/paper-figures/foundations/rag-figure-1-overview.png){ width="790" }
 
 <small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原论文图意：RAG 把 query encoder、document index 和 seq2seq generator 接起来，对输入问题先检索 top-K 文档，再让生成器基于不同文档生成并边缘化预测。</small>
 
@@ -234,7 +239,7 @@ RAG 的核心不是“多塞资料”，而是让正确证据在正确位置被�
 
 如果知识经常变、需要引用来源，优先 RAG；如果行为格式不稳定，考虑 SFT 或规则后处理；如果只是偶尔读取一份长文档，长上下文可能比搭 RAG 更简单。
 
-## 9. RAG Prompt 怎么写
+## RAG Prompt 怎么写
 
 RAG 的 prompt 应强调证据边界、无法回答时的行为，以及引用要求。
 
@@ -258,7 +263,7 @@ RAG 的 prompt 应强调证据边界、无法回答时的行为，以及引用�
 
 这类 prompt 仍然不能单独保证可靠性。系统还需要检索评测、引用校验、版本控制和人工抽检。
 
-## 10. 常见失败模式
+## 常见失败模式
 
 | 失败模式 | 表现 | 改进方向 |
 | --- | --- | --- |
@@ -271,7 +276,7 @@ RAG 的 prompt 应强调证据边界、无法回答时的行为，以及引用�
 | Prompt injection | 文档里的恶意文本改变模型行为 | 分隔指令和数据，降低外部文本权限 |
 | 无评测闭环 | 改 prompt 靠感觉 | 建立测试集、回归集和线上失败回放 |
 
-## 11. 一个实用选择表
+## 一个实用选择表
 
 | 你遇到的问题 | 优先尝试 |
 | --- | --- |
@@ -283,7 +288,7 @@ RAG 的 prompt 应强调证据边界、无法回答时的行为，以及引用�
 | 需要查资料、跑代码或调系统 | ReAct / Agent + 工具权限控制 |
 | 改动后不知道有没有变好 | 建立固定评测集和回归测试 |
 
-## 12. 和后续专题的接口
+## 和后续专题的接口
 
 | 基础概念 | 后续会在哪里出现 | 读法 |
 | --- | --- | --- |
@@ -304,3 +309,8 @@ Prompt Engineering 是入口，RAG 和工具系统是延伸。真正稳定的系
 - [Prompt Engineering Guide：Prompt Chaining](https://www.promptingguide.ai/zh/techniques/prompt_chaining)
 - [Prompt Engineering Guide：ReAct Prompting](https://www.promptingguide.ai/zh/techniques/react)
 - [Prompt Engineering Guide：Retrieval Augmented Generation](https://www.promptingguide.ai/zh/techniques/rag)
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[多模态推理入门](multimodal-cot-and-reasoning-basics.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

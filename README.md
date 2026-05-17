@@ -116,10 +116,11 @@ site/
 
 ```bash
 make quality
+make image-quality
 make build
 ```
 
-`make quality` 会检查页面长度、标题数量、重复模板、本地链接目标和图片附近的图源说明。若想同时看低优先级提示，例如缺少站内互链或编号式标题风格，可以跑：
+`make quality` 会检查页面长度、标题数量、重复模板、本地链接目标和图片附近的图源说明。`make image-quality` 会检查本地图片引用、显示宽度、疑似低清/裁剪问题、复杂图解释框和未引用图片，并在 `/private/tmp/charles-ai-notes-image-quality/` 生成临时 contact sheet 方便人工复核。若想同时看低优先级提示，例如缺少站内互链或编号式标题风格，可以跑：
 
 ```bash
 make quality-hints

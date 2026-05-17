@@ -2,6 +2,11 @@
 
 模型推理已经不只是“加载权重然后调用 `generate()`”。真正决定线上成本和时延的，是一层专门的运行时系统：它管理 continuous batching、KV cache、prefix cache、paged attention、量化 kernel、图捕获、路由、分布式执行、多模型共存和 tracing。`vLLM`、`SGLang`、`TensorRT-LLM` 代表了几条不同取舍路线。
 
+!!! note "读法定位"
+    这页先回答“推理运行时：vLLM、SGLang、TensorRT-LLM”在「推理」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 transformer 解码、GPU kernel、显存和吞吐/延迟的区别。 必要时先回 [推理入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把请求生命周期、KV Cache、batching、runtime、SLO 和成本连接起来，看模型上线后每一毫秒花在哪里。
+
 这页和 [推理服务系统](serving-systems.md)、[GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md)、[可观测性与在线评测](observability-and-online-evaluation.md) 一起读。推理服务系统页讲资源治理，本页聚焦 runtime 选型。
 
 !!! tip "新手阅读顺序"
@@ -150,3 +155,8 @@ def choose_runtime(workload):
 ```
 
 这段伪代码只是表达判断顺序：先看是否能吃静态特化，再看是否有强编排需求，否则从更通用的 serving runtime 起步。
+
+!!! tip "下一站"
+    - 回到本专题入口：[推理](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[上下文压缩与 KV 内存管理](context-compression-kv-eviction-and-memory-hierarchies.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

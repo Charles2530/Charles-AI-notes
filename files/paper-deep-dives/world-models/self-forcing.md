@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Self Forcing：对齐自回归视频训练与推理
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`
     - 方法：`Self Forcing`
@@ -34,7 +39,7 @@ Self Forcing 和 [Diffusion Forcing](../diffusion/diffusion-forcing.md)、[CausV
 
 从世界模型角度看，这篇论文重要，是因为流式视频世界模拟器最终必须长期 rollout。一个只在固定短片段里好看的模型，不一定能在交互闭环里稳定；Self Forcing 把训练目标改成“模型要学会处理自己造成的历史误差”。
 
-![Self Forcing training paradigms 原图](https://ar5iv.labs.arxiv.org/html/2506.08009/assets/x1.png){ width="920" }
+![Self Forcing training paradigms 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-training-paradigms-原图.png){ width="760" }
 
 <small>图源：`Self Forcing`，Figure 1。原图对比 Teacher Forcing、Diffusion Forcing 和 Self Forcing：前两者训练输出不来自推理时真实模型分布，Self Forcing 在训练中执行 autoregressive self-rollout，并对最终视频序列施加 distribution matching loss。</small>
 
@@ -64,6 +69,8 @@ x_t^{\tau} = \alpha_\tau x_t^0 + \sigma_\tau \epsilon,
 \qquad
 \epsilon \sim \mathcal N(0,I).
 \]
+
+\(\epsilon\sim\mathcal N(0,I)\) 表示标准高斯噪声：\(0\) 是均值，\(I\) 是单位协方差；\(\alpha_\tau\) 保留原 latent，\(\sigma_\tau\) 控制噪声强度。
 
 Teacher Forcing 训练的是：
 
@@ -101,7 +108,7 @@ initialize causal AR diffusion model from Wan2.1 / CausVid-style ODE init
   -> update generator and optional critic / fake score network
 ```
 
-![Self Forcing attention masks 原图](https://ar5iv.labs.arxiv.org/html/2506.08009/assets/x2.png){ width="920" }
+![Self Forcing attention masks 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-attention-masks-原图.png){ width="760" }
 
 <small>图源：`Self Forcing`，Figure 2。原图展示 TF/DF 需要在整段视频上用特殊 causal mask 并行训练，而 Self Forcing 训练过程直接模仿 AR inference，使用 KV cache，不需要特殊 attention mask。</small>
 
@@ -168,7 +175,7 @@ when generating a new chunk:
   append new KV entry
 ```
 
-![Self Forcing rolling KV cache 原图](https://ar5iv.labs.arxiv.org/html/2506.08009/assets/x3.png){ width="920" }
+![Self Forcing rolling KV cache 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-rolling-kv-cache-原图.png){ width="760" }
 
 <small>图源：`Self Forcing`，Figure 3。原图对比 bidirectional sliding window、causal sliding window with KV recomputation 和 Self Forcing rolling KV cache。Self Forcing 不重算 KV，将长视频外推复杂度降到随长度线性增长。</small>
 
@@ -261,7 +268,7 @@ when generating a new chunk:
 2. frame-wise Self Forcing 延迟最低，为 0.45s；
 3. 相对 Wan2.1，Self Forcing 基本保住 VBench 总分，同时把 latency 从 103s 降到 0.69s 或 0.45s。
 
-![Self Forcing qualitative comparison 原图](https://ar5iv.labs.arxiv.org/html/2506.08009/assets/x5.png){ width="760" }
+![Self Forcing qualitative comparison 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-qualitative-comparison-原图.png){ width="760" }
 
 <small>图源：`Self Forcing`，Figure 5。原图对比 Wan2.1、SkyReels-V2、CausVid 和 Self Forcing 在多个时间点的生成结果，展示 CausVid 随时间出现过饱和，而 Self Forcing 更稳定。</small>
 
@@ -299,7 +306,7 @@ when generating a new chunk:
 
 这张消融最有价值。frame-wise AR 的链更长，更容易暴露误差累积。TF/DF 在 frame-wise 下掉得很明显，而 Self Forcing 仍保持 84 左右的总分，说明训练时 self-rollout 的分布对齐确实解决了关键问题。
 
-![Self Forcing training efficiency 原图](https://ar5iv.labs.arxiv.org/html/2506.08009/assets/x6.png){ width="920" }
+![Self Forcing training efficiency 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-training-efficiency-原图.png){ width="920" }
 
 <small>图源：`Self Forcing`，Figure 6。原图左侧比较 DMD loss 下不同训练范式的单 iteration 时间，右侧比较相同 wall-clock budget 下 VBench score。Self Forcing 虽然顺序 rollout，但训练效率不差，且同等时间质量更高。</small>
 
@@ -374,6 +381,11 @@ autoregressive inference uses self-generated history
 ```
 
 对视频世界模型来说，这个思想很重要：如果未来的模拟器要在闭环里长期运行，就不能只在 ground-truth 上下文上训练。模型必须学会在自己的错误历史上继续生成，并把错误控制在不会快速崩坏的范围内。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[Video World Models：五个门槛](towards-video-world-models.md)。
 
 ## 参考资料
 

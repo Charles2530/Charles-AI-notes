@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,10 @@ MAX_H3 = 60
 
 FULLY_EXEMPT_PAGES = {
     Path("files/references/index.md"),
+}
+
+NUMBERED_SEQUENCE_PAGES = {
+    Path("files/quantization/page-by-page-visual-guide.md"),
     Path("files/training/page-by-page-visual-guide.md"),
 }
 
@@ -62,6 +67,24 @@ class PageReport:
     h2: int
     h3: int
     flags: list[str]
+
+
+def page_group(path: Path) -> str:
+    parts = path.relative_to(DOCS_ROOT).parts
+    if len(parts) >= 3 and parts[0] == "paper-deep-dives":
+        return "/".join(parts[:2])
+    return parts[0] if parts else path.name
+
+
+def page_type(path: Path) -> str:
+    rel = path.relative_to(DOCS_ROOT)
+    if rel.name == "index.md":
+        return "index"
+    if rel.parts and rel.parts[0] == "paper-deep-dives":
+        return "paper-deep-dive"
+    if "page-by-page-visual-guide" in path.stem:
+        return "visual-guide"
+    return "topic"
 
 
 def clean_target(raw: str) -> str:
@@ -180,6 +203,7 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
         flags.append("too-many-h3")
 
     numbered_h2 = sum(1 for line in h2_lines if re.match(r"##\s+\d+[.、]", line))
+    intentional_sequence = path in NUMBERED_SEQUENCE_PAGES
     if len(h2_lines) > MAX_H2 and numbered_h2 >= 10:
         flags.append("numbered-h2-run")
 
@@ -194,7 +218,9 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
         if len(local_links) == 0:
             flags.append("hint:no-local-cross-link")
 
-    if include_hints and numbered_h2 >= 10 and len(h2_lines) <= MAX_H2:
+    if include_hints and intentional_sequence and numbered_h2 >= 3:
+        flags.append("info:intentional-numbered-sequence")
+    elif include_hints and numbered_h2 >= 10 and len(h2_lines) <= MAX_H2:
         flags.append("hint:numbered-h2-style")
 
     markdown_targets = [
@@ -231,6 +257,32 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
     return PageReport(path=path, chars=len(text), h2=len(h2_lines), h3=len(h3_lines), flags=flags)
 
 
+def hard_flags(flags: list[str]) -> list[str]:
+    return [flag for flag in flags if not flag.startswith("info:")]
+
+
+def print_summary(reports: list[PageReport], flagged: list[PageReport]) -> None:
+    if not flagged:
+        return
+
+    flag_counts = Counter(flag for report in flagged for flag in report.flags)
+    group_counts = Counter(page_group(report.path) for report in flagged)
+    type_counts = Counter(page_type(report.path) for report in flagged)
+
+    print("\nSummary:")
+    print("  by flag:")
+    for flag, count in flag_counts.most_common():
+        print(f"    {flag}: {count}")
+
+    print("  by directory:")
+    for group, count in group_counts.most_common(12):
+        print(f"    {group}: {count}")
+
+    print("  by page type:")
+    for item, count in type_counts.most_common():
+        print(f"    {item}: {count}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -247,6 +299,7 @@ def main() -> int:
 
     reports = [analyze(path, include_hints=args.include_hints) for path in iter_markdown_pages()]
     flagged = [report for report in reports if report.flags]
+    failing = [report for report in reports if hard_flags(report.flags)]
     flagged.sort(key=lambda r: (len(r.flags), r.chars, r.h2), reverse=True)
 
     print(f"Scanned {len(reports)} markdown pages under {DOCS_ROOT}/")
@@ -260,6 +313,8 @@ def main() -> int:
         print("No content quality warnings.")
         return 0
 
+    print_summary(reports, flagged)
+
     print("\nFlagged pages:")
     for report in flagged:
         rel = report.path.as_posix()
@@ -269,7 +324,7 @@ def main() -> int:
             f"h3={report.h3}, flags={flag_text}"
         )
 
-    return 1 if args.fail_on_warn else 0
+    return 1 if args.fail_on_warn and failing else 0
 
 
 if __name__ == "__main__":

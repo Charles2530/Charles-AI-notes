@@ -2,6 +2,11 @@
 
 这页讲世界模型最经典的一条路线：从真实交互轨迹里学习一个 latent dynamics，然后在这个模型里“想象未来”，用 imagined rollout 做规划或训练策略。
 
+!!! note "读法定位"
+    这页先回答“RSSM、Dreamer 与规划”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先回 [世界模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把表征预测、潜变量动力学、规划、rollout 服务和具身/视频应用连成“可模拟、可评估、可行动”的主线。
+
 如果总览页回答“世界模型是什么”，本页回答三个更具体的问题：
 
 1. 为什么要把观测压成 latent state，而不是直接在像素上规划。
@@ -14,7 +19,7 @@
 !!! note "符号承接"
     如果 \(x_t/o_t\)、\(z_t\)、\(h_t\)、\(a_t\)、\(r_t\)、\(c_t/d_t\)、\(p_\theta\)、\(q_\phi\)、\(\pi_\psi\)、\(V_\eta\) 还不熟，先读 [从零理解世界模型](beginner-world-models-primer.md)。
 
-## 1. 为什么从像素转向 latent
+## 为什么从像素转向 latent
 
 真实观测 \(x_t\) 往往很大：图像、视频、多相机、深度、机器人本体状态。直接在像素空间做规划有三个问题：
 
@@ -34,7 +39,7 @@ $$
 
 其中 \(z_t\) 是模型学到的潜状态。它不必和真实物理状态逐维对应，但必须足够支持未来预测、奖励估计和动作选择。
 
-## 2. RSSM 的图先看一遍
+## RSSM 的图先看一遍
 
 ![PlaNet latent dynamics model designs](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="860" }
 
@@ -46,7 +51,7 @@ $$
     **公式对应**：\(h_t=f_\theta(h_{t-1},z_{t-1},a_{t-1})\)，\(p_\theta(z_t\mid h_t)\)，\(q_\phi(z_t\mid h_t,x_t)\)。<br>
     **容易误读**：RSSM 不是把 VAE 和 RNN 简单拼起来，而是在部分可观测环境中维护可 rollout 的 belief state。
 
-## 3. RSSM 公式拆成五张卡
+## RSSM 公式拆成五张卡
 
 ### 卡 1：确定性记忆 \(h_t\)
 
@@ -162,7 +167,7 @@ $$
 
 这就是 Dreamer 的核心：把真实环境 step 换成 GPU 上的 latent imagination。但它也带来风险：如果 world model 错了，actor 可能学会利用模型漏洞，在 imagined future 里高分，真实环境却失败。
 
-## 4. Dreamer 的训练闭环
+## Dreamer 的训练闭环
 
 ![Components of Dreamer](../assets/images/paper-deep-dives/world-models/dreamer/figure-3-components.png){ width="890" }
 
@@ -184,7 +189,7 @@ $$
     **公式对应**：真实观测训练 \(q_\phi\) 和 decoder，imagined rollout 主要依赖 \(p_\theta\)。<br>
     **容易误读**：算法图不是“先把模型训完再训策略”的单向流程，而是持续交替。
 
-## 5. DreamerV3 图：world model 和 actor-critic 分开看
+## DreamerV3 图：world model 和 actor-critic 分开看
 
 ![DreamerV3 world model learning](../assets/images/paper-deep-dives/world-models/dreamerv3/x2.png){ width="900" }
 
@@ -198,7 +203,7 @@ $$
     **公式对应**：第一张图对应 \(\mathcal{L}_{wm}\)，第二张图对应 imagined return、value target 和 policy objective。<br>
     **容易误读**：DreamerV3 的结果不能直接证明高清视频模拟器可规划；它证明的是 learned latent dynamics 可以支撑行为学习。
 
-## 6. Planning 和 policy learning 的区别
+## Planning 和 policy learning 的区别
 
 世界模型有两种主要用法。
 
@@ -219,7 +224,7 @@ $$
 
 它像 `MPC`：每次只执行前一小段动作，再用新观测刷新状态并重新规划。机器人、自动驾驶和目标图像规划里经常用这种形式。
 
-## 7. 为什么 continue / done 头很重要
+## 为什么 continue / done 头很重要
 
 很多初学者只盯着观测重建和 reward，但 \(c_t/d_t\) 对规划很关键。如果模型不知道 imagined trajectory 已经撞墙、掉落或任务结束，planner 会继续在一个不该存在的未来里优化。
 
@@ -231,7 +236,7 @@ $$
 
 真实系统常会在 Dreamer 式结构上再加 risk、success、contact、visibility、reachability 等头，让 latent 不只服务 reward，也服务安全和恢复。
 
-## 8. 最怕的失败模式
+## 最怕的失败模式
 
 | 失败模式 | 表现 | 先查什么 |
 | --- | --- | --- |
@@ -249,7 +254,7 @@ $$
 
 所以世界模型不是 horizon 越长越好。实用系统通常会短 horizon 规划、频繁用真实新观测刷新，并让不确定性参与回退逻辑。
 
-## 9. 最小复现实验应该看什么
+## 最小复现实验应该看什么
 
 | 证据项 | 最小要求 |
 | --- | --- |
@@ -261,7 +266,7 @@ $$
 
 这套检查也适用于新的视频世界模型和 WAM/VAM 工作：无论模型多大，最后都要回答预测是否改善决策。
 
-## 10. 和后续路线的关系
+## 和后续路线的关系
 
 | 后续路线 | 与 RSSM/Dreamer 的关系 |
 | --- | --- |
@@ -271,8 +276,13 @@ $$
 | 风险规划 | 在 latent rollout 上额外预测 risk、uncertainty、termination |
 | 数据引擎 | 用失败 replay、near-miss 和反事实样本修正 world model 盲点 |
 
-## 11. 小结
+## 本页结论
 
 RSSM 提供了经典世界模型的状态骨架：确定性记忆 \(h_t\) 加随机潜状态 \(z_t\)。Dreamer 则把这套骨架真正接到控制：先从真实经验学习 world model，再在 latent imagination 中训练 actor/value，最后回到真实环境收集新数据。
 
 读完本页后，再看 [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md) 会更清楚：为什么很多方法先优化 latent 表征。再看 [WM / WAM / VAM](wm-wam-vam-and-action-conditioned-modeling.md) 会更清楚：新路线到底是在保留 Dreamer 的分层接口，还是把动作和世界未来联合起来。
+
+!!! tip "下一站"
+    - 回到本专题入口：[世界模型](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

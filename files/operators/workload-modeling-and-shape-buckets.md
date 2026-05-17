@@ -3,6 +3,11 @@
 很多 kernel 优化最终之所以有效，不是因为它在所有 shape 上都快，而是因为它精准命中了真实 workload 中最常出现的那些 shape bucket。  
 因此在进入特化和 autotune 之前，先理解 workload 分布本身，往往比直接写新 kernel 更重要。
 
+!!! note "读法定位"
+    这页先回答“Workload 建模与 Shape Bucketing”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 !!! note "初学者先抓住"
 
     Shape bucket 是 kernel 优化的需求画像。先知道哪些 batch、长度、hidden size、LoRA、量化路径最常出现，再决定哪里值得特化；否则很容易为低频形状写出昂贵但没收益的优化。
@@ -11,7 +16,7 @@
 
     平均长度可能根本不是线上常见长度。真实流量往往由短请求高频、长请求高成本共同组成；benchmark 应按 bucket 覆盖率和成本占比设计，而不是只测一个“平均形状”。
 
-## 1. 为什么 shape bucket 重要
+## 为什么 shape bucket 重要
 
 真实系统的输入通常不是均匀分布的：
 
@@ -22,7 +27,7 @@
 
 如果不先做 workload 建模，很容易把大量工程时间浪费在低频 shape 上。
 
-## 2. Workload 建模在回答什么
+## Workload 建模在回答什么
 
 **至少要回答**：
 
@@ -32,7 +37,7 @@
 4. 量化与非量化路径比例如何；
 5. 哪些 bucket 值得特化，哪些应走通用 fallback。
 
-## 3. Shape 画像应该怎么画
+## Shape 画像应该怎么画
 
 ```mermaid
 flowchart LR
@@ -62,7 +67,7 @@ flowchart LR
 
 如果只按请求占比，短聊天看起来最重要；按 GPU 时间占比，长文档才是最该优化的桶。这就是 workload 建模的价值。
 
-## 4. 为什么这会影响 kernel 设计
+## 为什么这会影响 kernel 设计
 
 因为：
 
@@ -89,11 +94,11 @@ flowchart LR
 
 只要模型版本、tokenizer、上下文窗口、流量来源、LoRA 租户或量化策略发生明显变化，旧 bucket 就可能失效。比较成熟的系统会把 bucket 统计做成周期性任务，并把“热桶变化”接进性能回归：如果热桶迁移了，原来的特化 kernel 可能不再值得维护，新的热点则需要进入 benchmark 和 dispatch 规则。
 
-## 5. 一个形象比喻
+## 直觉例子
 
 可以把 shape bucket 想成工厂的订单画像。不是每种尺寸的零件都值得单独开一条专用产线，只有那些真正高频、长期出现的规格，才值得配专用模具。kernel 特化也是一样：先知道订单分布，再决定哪里值得投入特化成本。
 
-## 6. 小结
+## 本页结论
 
 Workload 建模与 shape bucket 的价值，在于把“我能优化什么”转化成“我最应该优化什么”。没有这一步，很多高性能算子开发都会陷入局部最优；有了这一步，特化、autotune、dispatch 和回归测试才会真正围绕真实系统收益展开。
 
@@ -122,3 +127,8 @@ Workload 建模要把长度桶、批量桶、head 维、expert 分布和请求�
 **修复**：重算 shape bucket，把请求数占比和 GPU 时间占比分开看；长文档请求进入单独队列，prefill 分离并限制最大并发；为 16k/32k/64k bucket 单独记录 cache 命中、KV 水位和 P99。
 
 **反例**：如果所有 bucket 的 P99 都同步上涨，且 queue time 明显升高，问题更可能是整体容量不足；如果只有某个 kernel 的时间上涨，才回到 kernel 版本或 dtype 路径排查。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Profiling、调试与数值稳定](profiling-debugging-and-numerical-stability.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

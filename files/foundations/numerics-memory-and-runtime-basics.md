@@ -2,6 +2,11 @@
 
 模型能不能真正部署，不只取决于算法，还取决于数值格式、显存、带宽、kernel 和 runtime 是否匹配。
 
+!!! note "读法定位"
+    这页先回答“数值、显存与运行时”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 ![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="630" }
 
 <small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原论文图意：比较不同规模 GPT 模型在 BF16 与 FP8 训练下的 loss/perplexity 曲线，展示 FP8 在合适 scaling 与训练配置下可以接近 BF16 收敛行为。</small>
@@ -15,7 +20,7 @@
 !!! tip "遇到这些症状，回看本页"
     KV INT8 省了显存但 token/s 没升，FP8 loss 曲线短期对齐但长跑漂移，或者某个 runtime 宣称支持低比特却在 trace 里频繁 dequant 回 FP16 时，回看本页。本页能帮你判断收益是否被带宽、workspace、kernel fallback、scale 读取或数值保护抵消。
 
-## 1. 最小字节账：先把数字换成显存
+## 最小字节账：先把数字换成显存
 
 数值格式首先决定每个数字占多少 bytes。
 
@@ -34,7 +39,7 @@ B\times L\times D\times bytes
 
 这不是完整显存，只是把 shape 换成 bytes 的第一步。训练还要加激活、梯度和 optimizer state；推理还要加 KV cache 和 workspace。
 
-## 2. 数值格式：精度和范围的取舍
+## 数值格式：精度和范围的取舍
 
 常见格式：
 
@@ -48,7 +53,7 @@ B\times L\times D\times bytes
 
 低精度的本质是牺牲部分表示能力，换取更低显存、更低带宽和更高吞吐。
 
-## 3. 显存主要被谁占用
+## 显存主要被谁占用
 
 不同阶段显存构成不同：
 
@@ -61,7 +66,7 @@ B\times L\times D\times bytes
 
 这解释了为什么同一个模型“能推理”不代表“能训练”，也不代表“能高并发服务”。
 
-## 4. FLOPs、MACs、带宽和延迟
+## FLOPs、MACs、带宽和延迟
 
 常见指标：
 
@@ -97,7 +102,7 @@ B T d_{\text{in}}d_{\text{out}}
 
 一个算子可能不是算不动，而是数据搬不动。比如低算术强度算子经常受带宽限制，而不是算力限制。
 
-## 5. Kernel 和 Runtime
+## Kernel 和 Runtime
 
 Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负责把模型图、请求、batch、缓存和 kernel 组织起来。
 
@@ -108,7 +113,7 @@ Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负
 - Fused kernel 把多个操作合并，减少中间读写。
 - vLLM、SGLang、ONNX Runtime、TensorRT-LLM 负责更高层的执行调度。
 
-## 6. 为什么“格式支持”不等于“性能收益”
+## 为什么“格式支持”不等于“性能收益”
 
 一个 INT4 模型文件很小，但如果 runtime 没有 INT4 高效 kernel，可能会发生：
 
@@ -123,7 +128,7 @@ Kernel 是实际在 GPU 或加速器上执行的底层计算程序。Runtime 负
 - 热点算子有对应 kernel；
 - 端到端 TTFT、TPOT、吞吐和质量都改善。
 
-## 7. 一张部署成本流图
+## 一张部署成本流图
 
 ```mermaid
 flowchart LR
@@ -142,7 +147,7 @@ flowchart LR
 
 这张图提醒你：低精度格式只是进入系统成本的一条边。真正上线时，权重、activation、KV cache、workspace、kernel、runtime 和 shape bucket 都会共同决定延迟。一个方案若只减少权重显存，却没有减少 decode 时的 KV 读取或没有命中低比特 kernel，端到端收益就会很小。
 
-## 8. 一个可复算的显存小账
+## 一个可复算的显存小账
 
 假设一个 7B 模型使用 BF16 权重，权重显存约为：
 
@@ -177,7 +182,7 @@ flowchart LR
 | FlashAttention | attention 中间写回 | decode KV 生命周期 |
 | Shape bucketing | kernel 命中率、padding 浪费 | 长尾请求和工具延迟 |
 
-## 9. 进阶案例：DeepSeek-V3 的 Params 和 MACs 怎么手算
+## 进阶案例：DeepSeek-V3 的 Params 和 MACs 怎么手算
 
 下面用 DeepSeek-V3 做一个可复算例子。它适合这个主题，因为它是 MoE：`Total Params` 很大，但每个 token 只激活一小部分 routed experts。
 
@@ -410,7 +415,7 @@ attention pairwise 部分按 causal triangle 粗算约：
 !!! warning "不要把这当成线上延迟"
     这只是手算主项。真实服务还会受 FP8/BF16 kernel、MoE dispatch/combine、expert batch size、all-to-all、KV cache layout、logits 是否全量计算、batching、prefix cache、padding、采样和 runtime 调度影响。`Params` 帮你看存储和容量，`MACs` 帮你看乘加规模，最终线上速度仍要用 profiler 和端到端压测确认。
 
-## 10. 和后续专题的关系
+## 和后续专题的关系
 
 - [量化路线图](../quantization/index.md)：理解低精度格式和部署收益。
 - [推理系统](../inference/index.md)：理解延迟、吞吐、KV cache 和服务调度。
@@ -418,6 +423,11 @@ attention pairwise 部分按 causal triangle 粗算约：
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：理解混合精度和数值异常。
 - [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)：理解为什么矩阵乘是低精度和算子优化的主战场。
 
-## 小结
+## 本页结论
 
 数值格式决定误差和存储，显存与带宽决定瓶颈，kernel 和 runtime 决定收益能否兑现。理解这一层，才能把“模型方法”真正落到“能跑、跑快、跑稳”。
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

@@ -2,7 +2,12 @@
 
 如果把现代大模型拆到最底层，会发现大量计算都在做矩阵乘。但这里要先分清三层概念：`Linear` 是模型层，`MatMul` 是数学/框架里的矩阵乘操作，`GEMM` 是底层线性代数库和 GPU kernel 常用的 dense matrix-matrix multiplication 形式。它们相关，但不是同一个词。
 
-![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="520" }
+!!! note "读法定位"
+    这页先回答“线性层到 GEMM”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
+![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="490" }
 
 <small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原论文图意：在 \(C=AB^T\) 矩阵乘上比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 相对 roofline model 的性能位置。</small>
 
@@ -15,7 +20,7 @@
 !!! tip "遇到这些症状，回看本页"
     profile 显示大部分时间在 QKV、MLP 或 expert GEMM，低比特权重变小但吞吐没升，MoE expert 负载不均导致某些 GEMM 特别慢，或者小 batch decode 里矩阵乘效率很差时，回看本页。本页能帮你判断问题在 \(M/N/K\) shape、layout、epilogue fusion、dequant 路径还是矩阵乘本身。
 
-## 0. 先看线性层公式
+## 先看线性层公式
 
 线性层最常见的公式是：
 
@@ -46,7 +51,7 @@ y\in\mathbb{R}^{B\times L\times D_{\text{out}}}
 
 读作：batch 和 token 数不变，每个 token 的向量从 \(D\) 维被投影到 \(D_{\text{out}}\) 维。
 
-## 1. 再分清 MatMul 和 GEMM
+## 再分清 MatMul 和 GEMM
 
 `MatMul` 更像数学操作或框架算子名：给定两个张量，按最后两个维度做矩阵乘，可能带 batch 维、broadcast、transpose 或不同 backend lowering。
 
@@ -70,7 +75,7 @@ C \leftarrow \alpha A B + \beta C
 
 因此，**不是所有 MatMul 都是 GEMM**：向量乘、稀疏乘法、带复杂 broadcast 的高维张量乘、attention 的 fused kernel、某些 tiny shape 的专用 kernel，都可能不走普通 GEMM 路径。反过来，很多 `Linear` 层虽然代码里写的是 `matmul`，运行时会被 reshape、pack、dispatch 到 GEMM 或 fused GEMM kernel。
 
-## 2. Linear 层在做什么
+## Linear 层在做什么
 
 线性层最常见的形式是：
 
@@ -101,7 +106,7 @@ y \in \mathbb{R}^{B \times L \times D_{\text{out}}}
 !!! note "实现细节：权重矩阵方向可能和公式不同"
     上面的公式用的是教学里常见的 \(xW+b\) 写法，所以 \(W\) 写成 \(D \times D_{\text{out}}\)。PyTorch 的 `nn.Linear(in_features, out_features)` 通常把权重存成 `[out_features, in_features]`，前向等价于 \(xW^\top+b\)。这只是存储布局和 API 约定不同，不改变 Linear、MatMul、GEMM 的层级关系。
 
-## 3. 为什么 Transformer 到处都是 Linear
+## 为什么 Transformer 到处都是 Linear
 
 一个 Transformer block 里常见的 Linear 包括：
 
@@ -116,7 +121,7 @@ y \in \mathbb{R}^{B \times L \times D_{\text{out}}}
 
 所以当你听到“优化 Transformer 性能”时，很多时候其实是在优化这些 Linear 对应的 MatMul/GEMM 执行路径，而不是在改 Linear 的数学定义。
 
-## 4. MLP 为什么通常先升维再降维
+## MLP 为什么通常先升维再降维
 
 Transformer 里的 MLP 常写成：
 
@@ -134,7 +139,7 @@ Transformer 里的 MLP 常写成：
 
 如果没有 MLP，Transformer 只有 attention 的信息混合能力，逐 token 的非线性变换会弱很多。
 
-## 5. Linear 如何落到 GEMM
+## Linear 如何落到 GEMM
 
 以一个 `Linear` 为例：
 
@@ -163,7 +168,7 @@ y \in \mathbb{R}^{B \times L \times D_{\text{out}}}
 
 这个二维 dense matrix multiplication 很适合落到 GEMM。若 \(B L\) 很小，例如 decode 阶段每次只来少量 token，它仍然可能走 GEMM family，但性能画像会变成小 \(M\)、skinny GEMM、batched GEMM 或专用 kernel 问题。
 
-## 6. GEMM 为什么是硬件热路径
+## GEMM 为什么是硬件热路径
 
 GPU、TPU、NPU 等加速器都非常擅长规则 dense 矩阵-矩阵乘。大模型性能优化里，很多问题最终会变成：
 
@@ -175,7 +180,7 @@ GPU、TPU、NPU 等加速器都非常擅长规则 dense 矩阵-矩阵乘。大�
 
 这也是为什么 [算子与编译器](../operators/index.md) 章节会反复讨论 GEMM、layout、tile 和 kernel。
 
-## 7. 一个最小伪代码
+## 一个最小伪代码
 
 ```text
 function Linear(x, W, b):
@@ -192,7 +197,7 @@ function MLP(x):
     return y
 ```
 
-## 8. 和量化有什么关系
+## 和量化有什么关系
 
 权重量化最常压的就是 Linear 层权重，因为它们占参数量大头。常见形式包括：
 
@@ -203,6 +208,11 @@ function MLP(x):
 
 如果量化格式没有高效 GEMM / batched GEMM / fused dequant MatMul kernel，模型文件虽然变小，推理可能并不会更快。这个问题会在 [量化路线图](../quantization/index.md) 和 [数值、显存与运行时](numerics-memory-and-runtime-basics.md) 里继续展开。
 
-## 小结
+## 本页结论
 
 Linear 是表示投影，MLP 是逐 token 非线性变换，MatMul 是数学/API 操作，GEMM 是常见的底层 dense 矩阵-矩阵执行核心。理解这几层的边界，能帮助你把 Transformer、量化、算子优化和推理性能连成一条线。
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[卷积与视觉特征](convolution-and-feature-extraction.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

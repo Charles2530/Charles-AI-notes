@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # DeepSeek-V4：百万上下文与 FP4 后训练
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "报告信息"
     - 技术报告：`DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence`
     - 模型：`DeepSeek-V4-Pro`、`DeepSeek-V4-Flash`
@@ -402,3 +407,8 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 ### 一句话总结
 
 DeepSeek-V4 的重点不是某个单点指标，而是展示了一条百万上下文大模型的完整路线：**用 CSA/HCA 和异构 KV cache 压低长上下文边际成本，用 mHC/Muon/稳定性补丁把 trillion-scale MoE 训练跑稳，用 specialist + OPD 把多领域后训练能力合并到一个统一模型里，再用 FP4 QAT、rollout service 和 sandbox 把模型放进真实 agent 系统。**
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
+    - 概念或符号卡住时，先查 [术语表](../../glossary/index.md)，再回到当前页。

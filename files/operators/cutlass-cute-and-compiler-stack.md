@@ -2,6 +2,11 @@
 
 AI kernel 工程里常见误解是：既然已有 `torch.compile`、Triton、cuBLAS、TensorRT，为什么还要理解 `CUTLASS`、`CuTe`、模板库、DSL 和图编译器？真正原因是，AI 系统不是单一抽象层能解决的。不同工具分别负责图级融合、库级高性能基元、模板级可组合 kernel，以及更低层的 layout、MMA、流水线和访存控制。
 
+!!! note "读法定位"
+    这页先回答“CUTLASS / CuTe 与编译栈”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 这页建立一张从模型图到 GPU 指令的中间栈地图。
 
 !!! note "初学者先抓住"
@@ -47,7 +52,7 @@ flowchart TD
 
 这张图不是工具排名，而是选型路径：先看现成库，库不覆盖再看 Triton，若需要一整个高性能 kernel 家族再看 CUTLASS/CuTe，极端特化才下到 CUDA/PTX。抽象层越低，控制越强，维护成本也越高。
 
-![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="520" }
+![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="490" }
 
 <small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原论文图意：在矩阵乘 \(C=AB^T\) 上比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 相对 roofline model 的性能位置。</small>
 
@@ -126,3 +131,8 @@ Kernel 设计不能脱离上层系统。一个很快的 kernel 也可能因为�
 | 主要收益来自小算子融合吗 | 先看图编译或 Triton |
 | 需要维护多个 GEMM/attention 变体吗 | 再看 CUTLASS / CuTe |
 | 必须确认底层指令路径吗 | 下钻 PTX / SASS |
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[PTX / SASS 与编译检查](ptx-sass-and-compiler-inspection.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

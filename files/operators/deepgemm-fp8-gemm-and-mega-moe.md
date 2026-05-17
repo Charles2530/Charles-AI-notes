@@ -2,6 +2,11 @@
 
 `DeepGEMM` 值得单独讲，不是因为它只是一个更快的 GEMM 库，而是因为它把现代大模型算子工程中的几个关键趋势压缩到同一个样本里：细粒度 FP8 scaling、Hopper/Blackwell 硬件特化、运行时 JIT、MoE grouped GEMM、decode masked layout，以及从单个 GEMM 走向融合通信与计算的 Mega MoE 思路。
 
+!!! note "读法定位"
+    这页先回答“DeepGEMM：FP8 GEMM 与 Mega-MoE”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 这页定位为主线解读。源码阅读、API 名称和接入检查放到 [DeepGEMM 源码与接入](deepgemm-source-and-integration.md)。如果想先补底层背景，可先读 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 和 [MoE 路由与稀疏 Kernel](moe-routing-and-sparse-kernels.md)。
 
 !!! note "初学者先抓住"
@@ -138,3 +143,8 @@ tokens
 3. **从 kernel 走向系统热路径**：MoE serving 的瓶颈不只在 GEMM，还在 dispatch、layout、JIT、通信、combine 和 runtime 调度之间的边界。
 
 如果只记一句话：`DeepGEMM` 展示的是现代大模型算子优化的新边界，已经从“写快一个矩阵乘”扩展到“围绕低精度、MoE、JIT、硬件和服务运行时共同设计热路径”。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[DeepGEMM 源码与接入](deepgemm-source-and-integration.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

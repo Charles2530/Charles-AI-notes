@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Genie：无标注视频到可交互环境
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Genie: Generative Interactive Environments`
     - 链接：[arXiv:2402.15391](https://arxiv.org/abs/2402.15391)
@@ -39,7 +44,7 @@ Genie 把自己定义成 `generative interactive environments`。这不是普通
 
 这张表里的 `Genie = Video + Frame-level` 是整篇论文的核心声明。它不是说 Genie 已经解决了所有世界模型问题，而是说：如果动作标签是构建可交互世界模型的主要瓶颈，那么可以先从视频中无监督地抽出一套离散潜在动作，再用这套潜在动作驱动未来帧生成。
 
-![Genie model training 原论文图](https://arxiv.org/html/2402.15391v1/figures/genie_architecture.png){ width="920" }
+![Genie model training 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/genie-model-training-原论文图.png){ width="920" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 2。原论文图意：输入视频帧先经过 video tokenizer 得到离散视频 token，同时由 latent action model 推断相邻帧之间的 latent actions；二者一起输入 dynamics model，迭代预测下一帧。</small>
 
@@ -88,7 +93,7 @@ $$
 
 Genie 的 latent action model、video tokenizer 和 dynamics model 都采用 ST-transformer。原因很直接：视频 token 数量很大，全局 self-attention 对 \(T\times H\times W\) token 做二次复杂度不现实。
 
-![ST-transformer architecture 原论文图](https://arxiv.org/html/2402.15391v1/figures/sttransformer.png){ width="860" }
+![ST-transformer architecture 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/st-transformer-architecture-原论文图.png){ width="860" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 3。原论文图意：每个 spatiotemporal block 由 spatial attention、temporal attention 和 feed-forward layer 组成；spatial layer 在同一帧内做注意力，temporal layer 在相同空间位置跨时间做注意力。</small>
 
@@ -109,9 +114,12 @@ $$
 
 它使用 VQ-VAE 风格目标，并在 encoder 和 decoder 中加入 ST-transformer。论文强调这和只做 spatial compression 的 tokenizer 不同：ST-ViViT 的编码 \(z_t\) 含有过去帧 \(x_{1:t}\) 的时序信息，因此更适合后续 dynamics model 做视频预测。
 
-![Video tokenizer 原论文图](https://arxiv.org/html/2402.15391v1/figures/tokenizer_architecture.png){ width="820" }
+![Video tokenizer 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/video-tokenizer-原论文图.png){ width="820" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 5。原论文图意：video tokenizer 是带 ST-transformer 的 VQ-VAE，用于把视频帧压缩到离散 video tokens，再由 decoder 还原回图像空间。</small>
+
+!!! note "图解"
+    从 encoder 到 codebook 再到 decoder 读：encoder 把视频压成离散 token，codebook 让状态空间变成可预测的符号，decoder 检查这些 token 是否还能还原画面。这里的重点是 tokenization 稳定，不是直接学习动作。
 
 训练细节里最值得注意的是：tokenizer 先单独训练，之后 dynamics model 使用冻结后的 token 表示。这样可以把“视频压缩质量”和“动作条件动力学”拆开，避免在大模型训练初期同时解决像素重建和长期预测两个难题。
 
@@ -119,7 +127,7 @@ $$
 
 Latent Action Model（LAM）是 Genie 的核心。它做的不是 policy，也不是最终推理时会保留的完整模块，而是训练阶段用于学习 action codebook 的辅助模型。
 
-![Latent action model 原论文图](https://arxiv.org/html/2402.15391v1/figures/LAM_architecture.png){ width="860" }
+![Latent action model 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/latent-action-model-原论文图.png){ width="860" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 4。原论文图意：LAM encoder 读取历史帧和下一帧，输出连续 latent actions；VQ codebook 将其离散化；decoder 只拿历史帧和 latent action 来预测下一帧，从而迫使 latent action 编码关键变化。</small>
 
@@ -140,9 +148,12 @@ LAM 的训练逻辑可以拆成三步：
 
 Genie 的 dynamics model 是 decoder-only MaskGIT transformer。它接收历史 video tokens 和 stop-gradient latent actions，预测未来 frame tokens。
 
-![Dynamics model 原论文图](https://arxiv.org/html/2402.15391v1/figures/dynamics_architecture.png){ width="820" }
+![Dynamics model 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/dynamics-model-原论文图.png){ width="820" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 6。原论文图意：dynamics model 接收 video tokens 与 action embeddings，预测 masked future video tokens。</small>
+
+!!! note "图解"
+    读这张图时把 history tokens、latent action embeddings 和 masked future tokens 分开看。dynamics model 学的是“给定过去状态和动作，下一帧 token 应该是什么”，而不是像素级一步到位生成；MaskGIT 解码让它能逐步补全未来帧 token。
 
 训练目标是 token-level cross-entropy：
 
@@ -157,9 +168,12 @@ $$
 
 ## 推理：像按一个新手柄一样控制生成环境
 
-![Genie inference 原论文图](https://arxiv.org/html/2402.15391v1/figures/genie_inference.png){ width="920" }
+![Genie inference 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/genie-inference-原论文图.png){ width="920" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 7。原论文图意：prompt frame 先被 tokenizer encoder 编码，用户输入 latent action，dynamics model 迭代预测下一帧 token，再由 tokenizer decoder 解码回图像空间。</small>
+
+!!! note "图解"
+    推理时按闭环读：prompt frame 编码成 token，用户选择 latent action，dynamics model 预测下一帧 token，decoder 还原图像，再把新帧接回下一步。这个闭环体现 frame-level control，但也暴露了 16 帧记忆和约 1 FPS 推理速度的局限。
 
 推理流程是：
 
@@ -319,9 +333,12 @@ dynamics model 的学习率比 tokenizer 低一个数量级，且使用 decay。
 
 ### Scaling experiments
 
-![Scaling results 原论文图](https://arxiv.org/html/2402.15391v1/x2.png){ width="920" }
+![Scaling results 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/scaling-results-原论文图.png){ width="920" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 8。原论文图意：左图展示不同 dynamics model size 的 training curves，中图展示最后 300 updates 平均 training loss，右图展示 2.3B 模型在不同 batch size 下的 final training loss。</small>
+
+!!! note "图解"
+    三个面板要连着读：左图看模型规模增大后训练 loss 曲线是否整体下移，中图用最后 300 updates 平均 loss 汇总规模趋势，右图固定 2.3B 模型看 batch size 对 final loss 的影响。它证明的是 token dynamics 可以 scale，不证明 latent action 一定具备真实世界因果语义。
 
 论文做了两个 scaling 方向：model size 和 batch size。model size 实验固定 batch size 256，每个模型训练 200k steps，总计 750B training tokens。
 
@@ -394,21 +411,30 @@ $$
 
 ## Qualitative 结果怎么读
 
-![Playing from image prompts 原论文图](https://arxiv.org/html/2402.15391v1/x3.png){ width="920" }
+![Playing from image prompts 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/playing-from-image-prompts-原论文图.png){ width="740" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 9。原论文图意：Genie 可以用 text-to-image 生成图、手绘草图或真实照片作为 prompt，并在连续执行同一 latent action 后产生可见角色移动。</small>
 
+!!! note "图解"
+    每一行先看 prompt 来源，再看连续执行同一个 latent action 后角色或物体是否朝一致方向变化。图的重点不是画质，而是 OOD prompt 下 latent action 仍有可解释控制效果；它不能证明长时物理一致性或真实动作 grounding。
+
 Figure 9 最重要的不是画质，而是 OOD prompt 下的可玩性。训练数据来自 2D platformer 视频，但 prompt 可以是生成图、草图和真实照片。模型仍然能把这些图片解释成可交互平台环境，并让角色发生运动。这说明 dynamics model 学到了一种“平台游戏式世界演化先验”。
 
-![Robotics latent actions 原论文图](https://arxiv.org/html/2402.15391v1/figures/action_grid_robotics.png){ width="900" }
+![Robotics latent actions 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/robotics-latent-actions-原论文图.png){ width="900" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 12。原论文图意：Robotics 数据集上，同一 latent action 在不同起始帧中产生一致语义，例如 down、up 和 left，且训练时没有使用动作标签。</small>
 
+!!! note "图解"
+    按列看 latent action，按行看不同起始画面。若同一列在不同场景里都让机械臂产生类似方向变化，就说明 codebook 里出现了可复用动作语义。注意这仍是视频 latent action，不等价于真实机器人控制器里的标定动作。
+
 Robotics 结果更接近世界模型的泛化论点。论文把 RT1、仿真数据和 209k real robot episodes 当作视频使用，不使用其中动作标签。模型仍然能学出一致的机械臂动作方向，并能生成物体交互和形变。
 
-![Deformable object 原论文图](https://arxiv.org/html/2402.15391v1/figures/chips.png){ width="860" }
+![Deformable object 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/deformable-object-原论文图.png){ width="860" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 10。原论文图意：模型在连续 rollout 中模拟机械臂与薯片袋等可变形物体的交互。</small>
+
+!!! note "图解"
+    读这张图时看接触前后物体形状是否随机械臂动作发生连续变化。它支撑的是“模型捕捉到一些短期接触和形变后果”，不是“它已经是可用于机器人安全规划的物理仿真器”。
 
 这类结果说明 Genie 不只是移动相机或平移贴图。它在一定程度上学到了对象状态变化和接触后果。但需要保持边界意识：论文展示的是短序列视觉预测，不等于可作为真实机器人控制的高保真物理仿真器。
 
@@ -426,9 +452,12 @@ expert video without actions
   -> execute in CoinRun
 ```
 
-![Playing from RL environments 原论文图](https://arxiv.org/html/2402.15391v1/x4.png){ width="820" }
+![Playing from RL environments 原论文图](../../assets/images/localized-remote/paper-deep-dives/world-models/genie/playing-from-rl-environments-原论文图.png){ width="820" }
 
 <small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 13。原论文图意：Genie 可以在未见过的 RL 环境初始图像上生成多样轨迹。</small>
+
+!!! note "图解"
+    先看初始 RL 环境图，再看不同 latent actions 是否产生不同但合理的轨迹。图想说明 latent action interface 能被用作 imitation-from-observation 的中间标签；它不能单独证明 policy 已经学会真实环境 reward 或长期最优策略。
 
 这个实验的意义是：latent action 不只是给人玩 demo 的按钮，也可能成为 imitation-from-observation 的中间表示。如果一个视频里没有真实动作，LAM 仍然可以给每个相邻帧打上“潜在动作标签”；policy 学的是这些标签，再通过少量真实动作样本校准到环境动作空间。
 
@@ -532,3 +561,8 @@ unlabelled Internet videos
 ```
 
 如果你在做机器人、游戏或视频世界模型，而手头大量视频没有动作标签，Genie 是必须读的一篇。它提醒我们：动作不一定一开始就来自传感器或控制器，也可以先作为“解释相邻状态变化的离散潜变量”被学习出来。真正落到工程系统时，再把这套 latent action interface 接到真实动作、策略、规划器或交互 UI。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[Self Forcing：视频自回归对齐](self-forcing.md)。

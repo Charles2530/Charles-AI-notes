@@ -2,10 +2,15 @@
 
 这一页把三件常被混在一起的事情拆开：`QAT` 解决模型怎样适应量化误差，`kernel` 决定低比特是否真的跑得快，`KV cache quantization` 解决长上下文推理里的动态显存和带宽。
 
+!!! note "读法定位"
+    这页先回答“QAT、Kernel 与 KV Cache”在「量化」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂张量、线性层和基本推理成本；遇到 FP8、KV Cache、outlier 时回前置页补概念。 必要时先回 [量化入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把数值格式、误差来源、校准/训练方法、kernel 和服务部署连成一条效率链，而不是只比较 bit 数。
+
 !!! note "初学者先抓住"
     QAT 是训练方法，kernel 是执行路径，KV cache 是推理时不断增长的缓存。它们都和量化有关，但不在同一层。
 
-## 1. QAT 在优化什么
+## QAT 在优化什么
 
 QAT，quantization-aware training，会在训练时模拟量化误差。一个简化目标可以写成：
 
@@ -40,7 +45,7 @@ QAT，quantization-aware training，会在训练时模拟量化误差。一个�
 
 **读作什么**：前向时加入量化误差，反向时通常用近似梯度让训练能继续。这和 PTQ 的区别是：PTQ 是训练完才压，QAT 是训练时就适应。
 
-## 2. 什么时候值得做 QAT
+## 什么时候值得做 QAT
 
 | 场景 | 为什么 PTQ 可能不够 |
 | --- | --- |
@@ -52,7 +57,7 @@ QAT，quantization-aware training，会在训练时模拟量化误差。一个�
 
 **一句话**：PTQ 是低成本起点；QAT 是质量门槛更高时，让模型主动适应低比特。
 
-## 3. Kernel 决定收益是否兑现
+## Kernel 决定收益是否兑现
 
 量化线性层不只是 \(Y=XW\)，真实执行常包含：
 
@@ -75,7 +80,7 @@ load packed low-bit weight
 !!! warning "常见误解"
     “runtime 支持 INT4”不等于每个请求都走高效 INT4 kernel。实际可能因为模型结构、group size、GPU 架构、batch shape 或 LoRA 组合而 fallback。
 
-## 4. Q/DQ、packing、dequant fusion 分别是什么
+## Q/DQ、packing、dequant fusion 分别是什么
 
 | 名称 | 含义 | 初学者理解 |
 | --- | --- | --- |
@@ -87,14 +92,14 @@ load packed low-bit weight
 
 **读作什么**：量化收益常常死在 Q/DQ 和 scale 读取上。好的 kernel 会尽量把 unpack、scale 和 matmul 融合进一条高效路径。
 
-![Quantization data transmission](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-5-data-transmission.png){ width="900" }
+![Quantization data transmission](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-5-data-transmission.png){ width="830" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 5。原论文图意：展示 quantized weight preparation、weight-only quantization 和 weight & activation quantization 的数据传输过程。</small>
 
 !!! note "图解：怎么读这张系统图"
     左边是离线准备和 packing；中间是 weight-only，搬运低比特权重但计算前可能 dequant 到 FP；右边是 W&A，目标是让 activation 和 MatMul 也进入低比特路径。绿色箭头是潜在收益，灰色箭头是新增开销。
 
-## 5. KV cache 为什么是长上下文主角
+## KV cache 为什么是长上下文主角
 
 生成模型每生成一个 token，都要保存每层历史 token 的 Key 和 Value。KV cache 显存可粗略估算为：
 
@@ -114,14 +119,14 @@ load packed low-bit weight
 
 **读作什么**：上下文越长、并发越高、层数越多，KV cache 越大。权重已经量化后，KV cache 可能成为新的显存瓶颈。
 
-![KV cache quantization](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="820" }
+![KV cache quantization](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="740" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 6。原论文图意：quantized KV cache 减少缓存存储和数据传输，并在 attention forward 前 dequantize。</small>
 
 !!! note "图解：KV 量化省在哪里"
     图里的低比特 KV 主要省缓存存储和读写带宽。attention 真正计算前可能仍然要 dequant，所以要同时看显存下降、decode 带宽、dequant 开销和长程任务质量。
 
-## 6. KV 量化的小账
+## KV 量化的小账
 
 假设：
 
@@ -141,7 +146,7 @@ load packed low-bit weight
 
 如果 KV 改成 INT8，bytes 从 2 降到 1，理论上 KV 本体接近减半。但实际还要加 scale 元数据、page 管理、碎片、workspace，以及 dequant 成本。
 
-## 7. KV cache 量化的质量风险
+## KV cache 量化的质量风险
 
 | 风险 | 表现 |
 | --- | --- |
@@ -153,7 +158,7 @@ load packed low-bit weight
 
 **验收重点**：KV 量化不能只看短问答。必须看长文档、代码、多轮、RAG 引用、长推理和业务高风险样本。
 
-## 8. QAT、kernel、KV 的端到端链路
+## QAT、kernel、KV 的端到端链路
 
 ```mermaid
 flowchart LR
@@ -170,7 +175,7 @@ flowchart LR
 
 这张图的重点是：QAT 只解决模型能否适应量化误差；kernel 才决定速度；KV cache 决定长上下文并发；最终仍要由任务桶质量决定是否可上线。
 
-## 9. 实践检查清单
+## 实践检查清单
 
 | 问题 | 要看什么 |
 | --- | --- |
@@ -181,6 +186,11 @@ flowchart LR
 | KV 量化是否划算 | 长上下文显存、TPOT、任务一致性 |
 | 是否有回退路径 | 敏感层保高精、KV dtype 可切换、全精 checkpoint |
 
-## 10. 小结
+## 本页结论
 
 QAT、kernel 和 KV cache 是量化落地的三块拼图。QAT 让模型适应误差，kernel 把低比特转成真实速度，KV cache 解决长上下文动态显存。只有三者和任务质量一起过关，量化才算从论文数字变成可用系统。
+
+!!! tip "下一站"
+    - 回到本专题入口：[量化](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

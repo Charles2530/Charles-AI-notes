@@ -6,6 +6,11 @@ paper_topic: 具身智能 / VLA
 
 # Video Prediction Policy：预测视觉表征训练机器人策略
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [具身智能](../../embodied-ai/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「具身智能」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Video Prediction Policy: A Generalist Robot Policy with Predictive Visual Representations`
     - 链接：[arXiv:2412.14803](https://arxiv.org/abs/2412.14803)
@@ -173,3 +178,8 @@ VPP 的表征依赖 TVP 的预测质量。若 TVP 在新场景里预测错误动
 1. [arXiv:2412.14803](https://arxiv.org/abs/2412.14803)
 2. [GitHub: roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)
 3. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2412.14803)
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。
+    - 按导航顺序继续：[SpatialVLA：3D 表征接入 VLA](spatialvla.md)。

@@ -113,6 +113,31 @@
 | 可复用机制 | 明确对应数据、训练、推理、显存、验证或部署哪项成本 | “效果很好” |
 | 下一步证据 | 需要补 ablation、closed-loop、system trace、质量回归或独立复现 | “值得关注” |
 
+## 论文图读法示例
+
+论文图要回答：模块做什么、支撑哪条 claim、不能证明什么。下面是三类读法。
+
+![V-JEPA training procedure 原论文图](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="920" }
+
+<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原论文图意：context encoder 只处理 masked video 中未遮挡 token；predictor 接收 context output 和 mask tokens，预测 target encoder 对完整视频产生的 masked token representations。</small>
+
+!!! note "图解：先分清两条 encoder 路径"
+    左侧蓝色 token 是可见上下文，经 context encoder 得到 \(N\times d\) 表示；predictor 把 context output 和红色 mask tokens 拼接，预测被遮挡位置的 representation。右侧 target encoder 看完整视频，但 loss 只作用在 masked target representations 上，并通过 stop-gradient 阻止 teacher 分支被 predictor 反向更新。这张图支撑的是 latent prediction，不是像素重建，也不能单独证明闭环规划能力。
+
+![DeepSeek-V3 architecture 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原论文图意：展示 MLA、DeepSeekMoE、shared/routed experts 与 Multi-Token Prediction 在整体架构中的位置。</small>
+
+!!! note "图解：架构图要按成本链路读"
+    先看 token 在主干里的路径，再看哪些模块改变显存、通信和训练目标。MLA 影响 KV cache 与长上下文成本，MoE 决定每个 token 激活哪些专家，MTP 是额外训练信号而不是推理时必须多吐 token。读技术报告时不要把“结构存在”直接等同于“端到端更快”，还要回到吞吐、负载均衡、FP8、并行策略和 serving 约束。
+
+![EAGLE-3 inference pipeline 原论文图](../assets/images/paper-deep-dives/inference/eagle-3/figure-5-inference-pipeline.png){ .atlas-figure-page width="560" }
+
+<small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 5。原论文图意：展示 EAGLE-3 在推理时用 draft model 生成候选 token tree，再由 target LLM 验证和接受部分 token 的 speculative decoding 流程。</small>
+
+!!! note "图解：推理 pipeline 要抓住草稿和验证"
+    这类图的核心不是“多了一个小模型”，而是把昂贵 target LLM 的逐 token 解码改成“先草拟一批候选，再一次验证一段”。draft model 决定候选质量和树形展开，target model 决定哪些 token 能被接受。它支撑的是吞吐/延迟优化 claim，不能证明模型回答质量提升；如果 acceptance rate 下降，额外 draft 成本可能抵消收益。
+
 ## 当前专题
 
 各主题下的论文条目按论文年月从早到晚展示。新增专题页时只需要在页面 front matter 中填写 `paper_date: YYYY-MM`，导航和索引展示会按该字段排序。
@@ -614,9 +639,11 @@
 5. 世界模型、仿真和数据引擎方向的系统论文。
 
 新增专题时优先保持“少而深”。这个模块不是论文收藏夹，而是为那些值得反复回看、适合支撑工程判断的论文建立稳定讲解入口。
+下一站：见标杆页。
+
 ## 深度标杆页
 
-论文专题的标杆页不只复述论文，而要明确“问题、方法、证据、效率贡献、适用边界”。其它论文页后续应向这些页面补齐这五块。
+标杆页要明确问题、方法、证据、效率贡献和适用边界；其它论文页后续向这些页补齐。
 
 | 标杆页 | 对齐标准 |
 | --- | --- |

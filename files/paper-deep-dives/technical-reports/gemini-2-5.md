@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # Gemini 2.5：动态 Thinking 与长上下文 Agent
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "报告信息"
     - 技术报告：`Gemini 2.5: Pushing the Frontier with Advanced Reasoning, Multimodality, Long Context, and Next Generation Agentic Capabilities`
     - 模型：`Gemini 2.5 Pro`、`Gemini 2.5 Flash`、`Gemini 2.5 Flash-Lite`
@@ -47,7 +52,7 @@ Gemini 2.0 native multimodal sparse MoE
 
 和 DeepSeek-R1 / Qwen3 一类报告相比，Gemini 2.5 的公开细节更少，但系统跨度更大。DeepSeek-R1 更聚焦可验证推理 RL，Qwen3 更聚焦开源模型家族和 thinking / non-thinking 统一，Gemini 2.5 则把 reasoning、工具、长上下文、视频、音频、搜索和多产品部署放进同一套模型报告里。
 
-![Gemini 2.5 cost-quality Pareto original](https://ar5iv.labs.arxiv.org/html/2507.06261/assets/x1.png){ width="920" }
+![Gemini 2.5 cost-quality Pareto original](../../assets/images/localized-remote/paper-deep-dives/technical-reports/gemini-2-5/gemini-2-5-cost-quality-pareto-original.png){ width="920" }
 
 <small>图源：`Gemini 2.5` technical report，Figure 1，ar5iv 从 arXiv source 渲染的原图。原图展示 Gemini 2.X 不同模型在 cost / price 与 internal quality aggregate 之间的 Pareto 关系，强调 2.5 Pro、2.5 Flash 和 2.5 Flash-Lite 覆盖不同成本和质量点。</small>
 
@@ -277,6 +282,11 @@ Gemini 2.5 报告很强，但也有明显边界。
 | Infra | 分布式训练、checkpoint、replay、故障恢复和数据输入 | 长 run 是否能在硬件故障下继续稳定推进 |
 
 Gemini 2.5 最值得学习的一句话是：前沿模型能力不是单一算法堆出来的，而是训练数据、teacher、post-training、推理预算、工具环境和大规模基础设施一起优化出来的。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
+    - 按导航顺序继续：[Kimi K2：MuonClip 与 Agent](kimi-k2.md)。
 
 ## 延伸阅读
 

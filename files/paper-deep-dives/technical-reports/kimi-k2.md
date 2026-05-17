@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # Kimi K2：MuonClip、万亿 MoE 与 Agent 数据
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "报告信息"
     - 技术报告：`Kimi K2: Open Agentic Intelligence`
     - 模型：`Kimi-K2-Base`、`Kimi-K2-Instruct`
@@ -102,6 +107,9 @@ Kimi K2 的模型选择来自一组 sparsity scaling law 实验。报告把 spar
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 6，来自 arXiv source 包 `figures/doubleQheads.pdf` 转 PNG。原图比较 attention heads 等于 layers 与 doubled attention heads 的 scaling curves。</small>
 
+!!! note "图解：两张 scaling 图要一起读"
+    Figure 5 说明在固定 active experts 时提高 sparsity 能降低 validation loss；Figure 6 则说明翻倍 attention heads 的收益很小但长上下文成本会上升。两张图合在一起支撑 K2 的架构选择：容量优先放到 MoE experts，而不是把 attention 头数继续做大。
+
 这里的工程判断很清楚：agentic 应用常常需要长上下文，如果 attention head 数太多，推理成本会在长序列下放大。K2 宁愿把容量放到 MoE experts 上，而不是把 attention heads 翻倍。
 
 ## MuonClip：为什么 K2 不只用 AdamW
@@ -132,14 +140,17 @@ $$
 
     这类设计很适合大规模训练：它不是频繁改 loss，也不是给每层都加额外 normalization，而是只在某些 head 超阈值时介入。报告附录还说 K2 中 QK-Clip 在前 70000 steps 有 12.7% heads 至少触发一次，之后所有 heads 都降到阈值以下，机制自然失活。
 
-![Muon logits explosion vs MuonClip](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-2a-muon-logits-mid.png){ width="460" }
-![Kimi K2 max logits with MuonClip](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-2b-muonclip-logits-k2.png){ width="460" }
+![Muon logits explosion vs MuonClip](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-2a-muon-logits-mid.png){ width="460" .atlas-figure-compact }
+![Kimi K2 max logits with MuonClip](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-2b-muonclip-logits-k2.png){ width="460" .atlas-figure-compact }
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 2 左右子图，来自 arXiv source 包 `figures/muon-MN-max-logits.pdf` 与 `figures/muon-K2-max-logits.pdf` 转 PNG。原图左侧展示 mid-scale Muon 训练中 attention logits 快速超过 1000；右侧展示 Kimi K2 使用 MuonClip 且 \(\tau=100\) 时 max logits 被稳定控制。</small>
 
 ![Kimi K2 training loss curve](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-3-loss-curve.png){ width="760" }
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 3，来自 arXiv source 包 `figures/loss_vs_tokens_white.pdf` 转 PNG。原图展示 Kimi K2 per-step training loss curve，强调未 smoothing / 未 sub-sampling，整个训练过程无 spike。</small>
+
+!!! note "图解：logit 曲线和 loss 曲线要连起来读"
+    Figure 2 看的是 Muon 不受控时 attention logits 会爆、MuonClip 如何把 max logits 压回阈值；Figure 3 看的是这种控制有没有反映到长程训练稳定性上。它们共同支撑“MuonClip 是大规模训练稳定性补丁”，但不能单独证明 Muon 一定比 AdamW 在所有数据和模型规模上更好。
 
 训练稳定性是这篇报告最值得认真看的部分之一。很多模型报告只给最终 benchmark，K2 把“为什么能用 Muon 训练 1T MoE 不炸”写得比较具体。它说明大模型训练的优化器选择不是简单换名字：Muon 的 token efficiency 需要 QK-Clip 这类稳定性补丁才能安全扩展到 trillion-scale MoE。
 
@@ -242,8 +253,8 @@ RL 阶段，K2 沿用 K1.5 的 policy optimization 目标，但扩大任务多�
 
 Kimi K2 把工具使用数据合成写得比较完整，因为 agentic 能力很难只靠自然语料得到。报告认为真实环境信号丰富，但难以大规模构建；纯 synthetic data 可扩展但 fidelity 有风险。因此它采用 hybrid pipeline：大规模模拟 + 关键场景真实执行沙箱。
 
-![Kimi K2 tool repository synthesis](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-8a-tool-repo-synthesis.png){ width="460" }
-![Kimi K2 tool trajectory synthesis](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-8b-tool-trajectory-synthesis.png){ width="460" }
+![Kimi K2 tool repository synthesis](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-8a-tool-repo-synthesis.png){ width="460" .atlas-figure-compact }
+![Kimi K2 tool trajectory synthesis](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-8b-tool-trajectory-synthesis.png){ width="460" .atlas-figure-compact }
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 8 左右子图，来自 arXiv source 包 `figures/tool_repo_synthesis.pdf` 与 `figures/tool_traj_synthesis.pdf` 转 PNG。原图展示 tool specs / agents / tasks 的合成，以及 multi-agent trajectory generation 与 filtering 流程。</small>
 
@@ -257,8 +268,8 @@ Kimi K2 把工具使用数据合成写得比较完整，因为 agentic 能力很
 
 工具来源也分两类。第一类是 3000+ real MCP tools，从 GitHub repositories 抓取。第二类是 20,000+ synthetic tools，通过 hierarchical domain generation 从 financial trading、software applications、robot control 等大类扩展出具体应用域和工具接口。
 
-![Kimi K2 real MCP tools t-SNE](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-9a-tsne-mcp-tools.png){ width="460" }
-![Kimi K2 synthetic tools t-SNE](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-9b-tsne-synthetic-tools.png){ width="460" }
+![Kimi K2 real MCP tools t-SNE](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-9a-tsne-mcp-tools.png){ width="460" .atlas-figure-compact }
+![Kimi K2 synthetic tools t-SNE](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-9b-tsne-synthetic-tools.png){ width="460" .atlas-figure-compact }
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 9 左右子图，来自 arXiv source 包 `figures/tsne_tool_mcp.pdf` 与 `figures/tsne_tool_synthetic.pdf` 转 PNG。原图用 t-SNE 可视化 real-world MCP tools 与 synthetic tools 的 embedding 分布。</small>
 
@@ -403,6 +414,11 @@ Kimi K2 给工程项目的启发主要有五条：
 5. **self-critique reward 可以扩展 RL，但要保留偏差意识。** 它适合补足无 verifier 的开放任务，但 critic 的 rubrics 会塑造模型风格和价值取向，不能当作无偏人类偏好。
 
 一句话总结：**Kimi K2 的价值不是某个单点 benchmark，而是给出了一条 open agentic model 的完整工程路线：用 MuonClip 跑稳 1T MoE 预训练，用高 sparsity 提升 token efficiency，用合成工具数据和真实环境补齐 agent 行为，再用 verifiable rewards + self-critique reward + RL 系统基础设施把模型推向多步任务执行。**
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
+    - 按导航顺序继续：[Nemotron 3 Super：异步 RL](nemotron-3-super.md)。
 
 ## 延伸阅读
 

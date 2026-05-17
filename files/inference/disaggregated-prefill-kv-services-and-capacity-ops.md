@@ -2,6 +2,11 @@
 
 随着上下文越来越长、请求越来越异质、模型越来越多，把所有工作都塞进一套统一推理实例，不再总是合理。长文档问答、RAG、Agent 和多模型路由场景中，prefill 与 decode 的资源特征明显不同，KV cache 也越来越像独立资源层。解耦式 prefill、KV 服务化和更细粒度容量运维，正是在这个背景下出现。
 
+!!! note "读法定位"
+    这页先回答“解耦 Prefill 与 KV 服务”在「推理」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 transformer 解码、GPU kernel、显存和吞吐/延迟的区别。 必要时先回 [推理入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把请求生命周期、KV Cache、batching、runtime、SLO 和成本连接起来，看模型上线后每一毫秒花在哪里。
+
 !!! note "初学者先抓住"
     Prefill 像一次性处理长输入，decode 像逐 token 生成答案。两者瓶颈不同，长上下文系统里把它们拆开，常常是为了避免长请求拖垮短请求。
 
@@ -123,3 +128,8 @@ Prefill 产生的状态要交给 decode 层，系统就不只是 GPU 算力问�
 **修复**：把长上下文请求按 session 粘到固定 decode pool；限制跨节点 KV 转移，优先同节点共享；KV metadata 做批量同步；按请求桶记录 `prefill_saved_ms - kv_transfer_ms - decode_extra_ms` 的净收益。
 
 **反例**：如果 prefill 占比极高、prefix 复用稳定、KV 转移在同节点内完成，解耦通常会明显改善 TTFT。反过来，短请求和低复用请求不该默认进入复杂解耦路径。
+
+!!! tip "下一站"
+    - 回到本专题入口：[推理](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

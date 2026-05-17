@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # V-JEPA：视频潜变量预测表征
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`V-JEPA: Latent Video Prediction for Visual Representation Learning`
     - 链接：[OpenReview](https://openreview.net/forum?id=WFYbBOEOtv)
@@ -260,3 +265,8 @@ $$
 另一个局限是，V-JEPA 不生成未来视频。它可以学到 motion-aware features，但不能直接作为可视化 simulator 使用。如果工程目标是 LingBot-World 这类实时交互世界模拟器，还需要 decoder/generator、causal rollout、action conditioning 和长时一致性训练。
 
 最后，V-JEPA 的实验主要证明“latent video prediction 能学到强视频表征”。把它迁移到机器人、自动驾驶或游戏世界模型时，还需要额外验证表示是否保留任务关键状态，例如接触、可操作物体、小目标、障碍物、风险事件和长期空间记忆。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[Genie：无标注视频到可交互环境](genie.md)。

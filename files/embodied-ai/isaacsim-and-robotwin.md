@@ -2,6 +2,11 @@
 
 这一页解释 Isaac Sim 和 RoboTwin 在具身智能项目里分别负责什么。先给结论：
 
+!!! note "读法定位"
+    这页先回答“Isaac Sim 与 RoboTwin 仿真数据链”在「具身智能」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 VLA、世界模型、相机/深度和评测集的基本角色。 必要时先回 [具身智能入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把感知、数据、仿真、策略、控制、安全和真实闭环连起来，看机器人系统为什么不能只靠离线指标判断。
+
 ```text
 Isaac Sim 更像“高保真机器人世界”
 RoboTwin 更像“任务、资产、标注和专家数据的组织范式”
@@ -11,14 +16,14 @@ success checker 更像“自动判卷器”
 
 它们不是同一层工具，不能横向比较。一个完整数据生成系统通常会把它们接起来。
 
-![RoboTwin 2.0 benchmark overview 官方图](https://robotwin-platform.github.io/doc/assets/teaser.png){ width="960" }
+![RoboTwin 2.0 benchmark overview 官方图](../assets/images/localized-remote/embodied-ai/isaacsim-and-robotwin/robotwin-2-0-benchmark-overview-官方图.png){ width="960" }
 
 <small>图源：[RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/index.html)。这张官方 overview 图适合放在开头：它同时展示了双臂任务、物体库、domain randomization、sim2real、benchmark、开源数据和策略部署，正好对应本文后面讨论的“仿真不是一个画面，而是任务、资产、轨迹、判定和数据保存的系统”。</small>
 
 !!! note "图解：RoboTwin 图要看五个环节"
     先看任务和资产从哪里来，再看 domain randomization 如何扩展场景，然后看 expert trajectory / policy training 如何生成数据，最后看 benchmark 和 sim2real 如何验收。Isaac Sim 提供物理和渲染能力，RoboTwin 风格 pipeline 提供任务、标注、判卷和数据组织方式。
 
-## 1. Isaac Sim 是什么
+## Isaac Sim 是什么
 
 Isaac Sim 是 NVIDIA 基于 Omniverse / USD 生态的机器人仿真平台。对具身智能来说，它主要提供：
 
@@ -33,7 +38,7 @@ Isaac Sim 是 NVIDIA 基于 Omniverse / USD 生态的机器人仿真平台。对
 
 你可以把 Isaac Sim 理解成一个“可编程的机器人实验室”。它不是只展示 3D 画面，而是要让机器人在里面看见、行动、碰撞、抓取、失败和重试。
 
-## 2. Isaac Sim 不自动解决什么
+## Isaac Sim 不自动解决什么
 
 Isaac Sim 很强，但它不会自动替你解决所有问题。
 
@@ -48,7 +53,7 @@ Isaac Sim 很强，但它不会自动替你解决所有问题。
 
 所以如果你看到“用 Isaac Sim 做机器人”，要继续问：任务怎么定义？资产怎么标？轨迹谁生成？成功怎么判？失败怎么回流？
 
-## 3. RoboTwin 是什么
+## RoboTwin 是什么
 
 RoboTwin 可以理解为一套面向机器人操作任务的 benchmark / pipeline 参考。它的价值不只是“有一些任务”，而是给出了一套组织方式：
 
@@ -63,7 +68,7 @@ RoboTwin 可以理解为一套面向机器人操作任务的 benchmark / pipelin
 
 你可以把 RoboTwin 当作“怎么把一个仿真机器人任务做成可规模化数据集”的参考模板。它告诉你：只导入一个 3D 物体远远不够，还要有任务脚本、标注、重置、轨迹、判定和评测。
 
-## 4. Isaac Sim 和 RoboTwin 的分工
+## Isaac Sim 和 RoboTwin 的分工
 
 | 问题 | Isaac Sim | RoboTwin 风格 pipeline |
 | --- | --- | --- |
@@ -76,7 +81,7 @@ RoboTwin 可以理解为一套面向机器人操作任务的 benchmark / pipelin
 
 一句话：Isaac Sim 是“仿真世界和传感器”，RoboTwin 是“任务和数据集组织方式”。
 
-## 5. cuRobo / STOMP 在哪里
+## cuRobo / STOMP 在哪里
 
 Isaac Sim 不是轨迹规划算法本身。你通常还需要 planner：
 
@@ -98,7 +103,7 @@ Isaac Sim / simulator 给出当前状态和障碍物
 
 如果 planner 生成失败，不一定是 planner 不行，也可能是抓取点不可达、collision mesh 过大、机器人初始姿态不合理，或目标物体摆放太靠边。
 
-## 6. 一个最小数据生成闭环
+## 一个最小数据生成闭环
 
 项目早期目标可以写成这个循环：
 
@@ -129,7 +134,7 @@ for task in task_suite:
 - `planner` 可以是 cuRobo、STOMP 或手写 waypoint；
 - `save_episode` 是后续训练 VLA/WAM 的数据来源。
 
-## 7. Isaac Sim 里常见对象
+## Isaac Sim 里常见对象
 
 | 名词 | 含义 | 容易踩的坑 |
 | --- | --- | --- |
@@ -143,7 +148,7 @@ for task in task_suite:
 
 如果 Isaac Sim 里“看起来对了但轨迹失败”，优先检查 scale、origin、collision、质量、摩擦、关节限位和坐标系。
 
-## 8. RoboTwin 式资产标注为什么重要
+## RoboTwin 式资产标注为什么重要
 
 机器人任务里的资产不只是 mesh，还需要可操作语义。
 
@@ -158,7 +163,7 @@ for task in task_suite:
 
 RoboTwin 的启发在于：资产标注要服务任务。随机标一个抓取轴可能能拿起物体，但未必能完成后续任务。比如锤子抓锤头可以拿起来，但无法正常使用锤子。
 
-## 9. 生成式数字孪生资产流程
+## 生成式数字孪生资产流程
 
 RoboTwin 1.0 的生成式数字孪生流程很适合放到这里：它把“从一张图生成仿真资产”拆成了可检查的中间产物。
 
@@ -175,7 +180,7 @@ RoboTwin 1.0 的生成式数字孪生流程很适合放到这里：它把“从�
 
 这条链路的重点是：生成式资产只有进入“物理属性 + 碰撞体 + 功能点 + success checker”的格式后，才真正变成具身智能训练数据。否则它只是好看的 3D 模型。
 
-## 10. Isaac Sim 和 SAPIEN 怎么理解
+## Isaac Sim 和 SAPIEN 怎么理解
 
 很多机器人项目会同时提到 Isaac Sim、SAPIEN、MuJoCo、PyBullet 等仿真器。它们都能做机器人仿真，但侧重点不同。
 
@@ -188,7 +193,7 @@ RoboTwin 1.0 的生成式数字孪生流程很适合放到这里：它把“从�
 
 如果一个 pipeline 先在 SAPIEN 中生成专家轨迹，再在 Isaac Sim 中对齐和验证，可以理解为：前者偏快速任务生成，后者偏高保真视觉和系统验证。实际项目里怎么组合，取决于速度、视觉质量、物理稳定性和工程生态。
 
-## 11. 项目可以怎么落地
+## 项目可以怎么落地
 
 具身数据与仿真任务落地时，可以把工作拆成四个层级：
 
@@ -245,7 +250,7 @@ read state
 | failure reason | 数据回流和 hard case mining |
 | asset metadata | 追踪 scale、材质、抓取标注版本 |
 
-## 12. 常见 debug 顺序
+## 常见 debug 顺序
 
 如果在 Isaac Sim / RoboTwin 风格任务里失败，按这个顺序排查：
 
@@ -262,7 +267,7 @@ read state
 
 不要一开始就怀疑模型。大多数早期失败来自资产、坐标系、碰撞、抓取和任务判定。
 
-## 13. 和其他页面的连接
+## 和其他页面的连接
 
 | 继续读 | 你会补上什么 |
 | --- | --- |
@@ -271,3 +276,8 @@ read state
 | [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 一个具体任务如何从状态定义走到轨迹和判定 |
 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) | 仿真数据怎样走向真实系统，以及失败如何回流 |
 | [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) | 这些仿真数据如何服务 π0.5 式 VLA 和 DreamZero 式 WAM |
+
+!!! tip "下一站"
+    - 回到本专题入口：[具身智能](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

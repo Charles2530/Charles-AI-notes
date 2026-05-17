@@ -32,6 +32,9 @@
 !!! tip "全站证据标准"
     如果要给论文页、技术报告页或系统优化页补证据框，统一使用 [全站证据与复现状态标准](evidence-and-reproducibility-standard.md)。前沿 claim 先写 `Evidence Snapshot`，不要把 demo、benchmark、系统吞吐、closed-loop 和本站推断混成同一种结论。
 
+!!! tip "图片与资产治理"
+    如果要新增、替换或清理图片，先看 [图片与公式质量标准](image-and-formula-quality-standard.md) 和 [图片资产治理台账](image-asset-governance-ledger.md)。远程图要本地化，公共图要写“网页图源”，未引用资产默认先记录来源和用途，不直接删除。
+
 !!! tip "覆盖矩阵与前沿系统"
     如果要查某项技术属于数据效率、训练效率、推理效率、显存效率、验证效率还是部署效率，先读 [全站效率技术覆盖矩阵](site-efficiency-coverage-matrix.md)；如果只关心世界模型主线，再读 [世界模型效率技术覆盖矩阵](../world-models/efficiency-technique-coverage-matrix.md)。前沿系统和待核验 claim 不要和成熟基础文献混读；先看 `Repro Status`，再决定能外推到哪里。
 
@@ -59,7 +62,7 @@
 
 不要把这页当成从头到尾阅读的书单。更高效的方式是：遇到具体问题时回来查源头，再把结论写回对应主题页的机制、评测或工程边界里。
 
-## 1. 扩散模型与生成模型
+## 扩散模型与生成模型
 
 对应站内章节：[扩散模型](../diffusion/index.md)。
 
@@ -110,7 +113,7 @@
 9. [Wan2.2 官方 GitHub](https://github.com/Wan-Video/Wan2.2)  
    Wan2.2 的 MoE、高低噪声专家、A14B、TI2V-5B、Animate 和 S2V 等模型入口，适合连接视频扩散与世界模型专题。
 
-## 2. VLM/VLA 与多模态到动作模型
+## VLM/VLA 与多模态到动作模型
 
 对应站内章节：[VLM/VLA](../vlm/index.md)。
 
@@ -129,7 +132,7 @@
 6. [PaLM-E: An Embodied Multimodal Language Model](https://arxiv.org/abs/2303.03378)
    多模态语言模型进入具身控制和机器人任务的重要节点。
 
-## 3. VLA、机器人策略与具身智能
+## VLA、机器人策略与具身智能
 
 对应站内章节：[VLM/VLA](../vlm/index.md)、[具身智能](../embodied-ai/index.md)。
 
@@ -190,7 +193,7 @@
 1. [Rerun Documentation: What is Rerun?](https://rerun.io/docs/overview/what-is-rerun)
    面向 Physical AI 的多模态时序数据层，适合记录和回放 RGB、depth、point cloud、transforms、text、scalar 和 tensor；站内专题见 [Rerun 讲解](../embodied-ai/rerun-robotics-data-visualization.md)。
 
-## 4. 世界模型、训练与规划
+## 世界模型、训练与规划
 
 对应站内章节：[世界模型](../world-models/index.md)。
 
@@ -323,7 +326,7 @@
 !!! note "为什么世界模型文献要单独强调训练与评测"
     世界模型的核心难点不只是“能不能生成未来帧”，而是生成的 latent 是否能支持下游规划、控制、反事实推理和泛化。重建 loss、next-frame prediction loss、FID 或视频视觉质量指标都只能回答一部分问题。更有价值的 benchmark 应该把下游任务泛化、rollout 误差累积、规划质量和交互控制成功率放到核心位置。
 
-## 5. 强化学习、后训练与世界模型
+## 强化学习、后训练与世界模型
 
 对应站内章节：[强化学习](../reinforcement-learning/index.md)。
 
@@ -381,7 +384,7 @@
 5. [RLVR-World: Training World Models with Reinforcement Learning](https://arxiv.org/abs/2505.13934)
    `RLVR-World` 展示如何用可验证奖励直接优化语言和视频世界模型的任务指标。
 
-## 6. 量化、数制与低比特训练
+## 量化、数制与低比特训练
 
 对应站内章节：[量化](../quantization/index.md)。
 
@@ -471,7 +474,7 @@
 5. [Qualcomm AI Engine Direct SDK / QNN](https://www.qualcomm.com/developer/software/qualcomm-ai-engine-direct-sdk)  
    `QNN` 路线入口，`QNN_DLC` 相关部署常需要结合 SDK 文档、转换工具和目标芯片支持矩阵看。
 
-## 7. MTP、投机解码与推理加速
+## MTP、投机解码与推理加速
 
 对应站内章节：[MTP 与投机解码](../training/mtp-and-speculative-decoding.md)、[缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)。
 
@@ -530,7 +533,7 @@
 !!! note "MTP 与投机解码的阅读重点"
     `MTP` 是训练目标或模型结构；`speculative decoding` 是推理算法。二者可以互相增强，但不能互相替代。阅读时要同时盯三类指标：主模型质量、多步预测接受率、端到端 latency / throughput。只看 future-token accuracy 或平均 speedup 都容易误判。
 
-## 8. 训练系统、分布式与大规模训练
+## 训练系统、分布式与大规模训练
 
 对应站内章节：[训练](../training/index.md)。
 
@@ -616,7 +619,7 @@
 3. [W&B Artifacts](https://docs.wandb.ai/models/artifacts)
    用 run 的输入/输出追踪和版本化数据集、模型与评测产物。
 
-## 9. 推理系统与服务运行时
+## 推理系统与服务运行时
 
 对应站内章节：[推理](../inference/index.md)。
 
@@ -650,7 +653,7 @@
 5. [KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging](https://arxiv.org/abs/2603.00907)
    用 Q/K/V 投影矩阵谱分布解释 KV 非对称，并把 Key merge 的 exact Hessian coupling 化简成 forward-only 闭式权重；站内专题见 [KVSlimmer 讲解](../paper-deep-dives/inference/kvslimmer.md)。
 
-## 10. 算子、Kernel 与编译器
+## 算子、Kernel 与编译器
 
 对应站内章节：[算子与编译器](../operators/index.md)。
 
@@ -680,7 +683,7 @@
 4. [NVIDIA Tensor Core Evolution from Volta to Blackwell](https://newsletter.semianalysis.com/p/nvidia-tensor-core-evolution-from-volta-to-blackwell)  
    适合理解硬件数制和 tensor core 演进，但建议和官方规格交叉核对。
 
-## 11. 对齐、后训练与评测
+## 对齐、后训练与评测
 
 对应站内章节：[预训练、微调与对齐](../training/pretraining-finetuning-alignment.md)。
 
@@ -708,7 +711,7 @@
 5. [MT-Bench / Chatbot Arena](https://arxiv.org/abs/2306.05685)  
    对话模型评测入口。
 
-## 12. 官方工具与开源项目索引
+## 官方工具与开源项目索引
 
 ### 12.1 训练与分布式
 
@@ -760,9 +763,12 @@
 5. [Snapdragon XR2 Gen 2 Platform Product Brief](https://docs.qualcomm.com/doc/87-73689-1/)  
    XR2 Gen 2 官方产品简介，包含显示、相机、AI、CPU、GPU、连接和安全规格。
 
-## 13. 后续维护建议
+## 后续维护建议
 
 1. 每次新增一个技术页时，在本页补一个对应“必读起点”和一个“工程实现入口”。
 2. 对 2025-2026 年快速出现的低比特训练、投机解码、世界模型 benchmark，优先保留 arXiv / 官方 GitHub / 官方文档链接。
 3. 避免把参考文献页变成无序书单：每个条目最好说明它回答什么问题。
 4. 对未复现、未验证、只有宣传材料的内容，建议放到“待核验”小节，不要和已成熟基础文献混在一起。
+
+!!! tip "下一站"
+    - 按导航顺序继续：[本站判断原则](site-judgement-principles.md)。

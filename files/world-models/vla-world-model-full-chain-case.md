@@ -2,6 +2,11 @@
 
 这页把 VLA、世界模型、训练系统和评测放到同一条工程链里。它不是新论文综述，而是一个可执行的方案模板：当你要做“机器人数据 + VLA 动作 + 世界模型预测 + 闭环评测”时，每一层该省什么成本、看什么证据、不能外推什么。
 
+!!! note "读法定位"
+    这页先回答“VLA / 世界模型全链路案例：从机器人数据到闭环评测”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先回 [世界模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把表征预测、潜变量动力学、规划、rollout 服务和具身/视频应用连成“可模拟、可评估、可行动”的主线。
+
 !!! warning "证据边界"
     本页复用论文原图和站内 mini-chain 指标组织证据链。它不是独立复现实验，也不证明任一真实机器人系统已经达到部署标准；所有前沿 claim 仍应回到 [Claim Ledger](../references/claim-ledger.md) 和 [证据标准](../references/evidence-and-reproducibility-standard.md) 核对。
 
@@ -105,3 +110,8 @@ VLA / 世界模型项目最常见的失败，不是模型不够大，而是数�
 3. 训练时报告数据、显存、吞吐、loss、reward/risk head 和 checkpoint。
 4. 评测时报告 action sensitivity、closed-loop success、risk ECE、failure replay 和 cost per success。
 5. 写结论时必须同时给 `Can Support` 和 `Cannot Prove`。
+
+!!! tip "下一站"
+    - 回到本专题入口：[世界模型](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Rollout 服务、量化与 Kernel 案例](rollout-serving-quantization-kernel-case.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

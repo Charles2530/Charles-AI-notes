@@ -12,13 +12,18 @@
   </div>
 </div>
 
+!!! note "读法定位"
+    这页先回答“模型推理系统入门路线图”在「推理」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 transformer 解码、GPU kernel、显存和吞吐/延迟的区别。 必要时先看本页路线，或回 [基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把请求生命周期、KV Cache、batching、runtime、SLO 和成本连接起来，看模型上线后每一毫秒花在哪里。
+
 !!! note "初学者先抓住"
     推理不是“训练完模型后调用一次 `generate()`”。线上推理是一条服务链路：请求先排队，长输入先做 prefill，模型逐 token decode，历史 token 的 KV cache 一直占显存，调度器把许多请求合批，路由器决定走哪条模型链路，最后用成本和 SLO 判断这套系统值不值得。
 
 !!! example "有趣例子：餐厅出餐"
     用户下单后不会直接吃到菜。前台排队、后厨备菜、厨师一道道出菜、餐具和桌位周转、外卖配送都会影响体验。推理系统也一样：模型本身只是厨师，队列、KV cache、batching、路由和监控共同决定用户看到首 token 的速度、整段回答的流畅度和系统成本。
 
-## 0. 先认一遍术语
+## 先认一遍术语
 
 | 术语 | 初学者解释 | 你应该问的问题 |
 | --- | --- | --- |
@@ -34,7 +39,7 @@
 | P95/P99 | 最慢 5%/1% 请求的体验 | 平均值好看时，尾部用户是否仍然很慢？ |
 | SLO | 服务必须守住的目标 | 什么情况算可接受，什么情况必须降级或回滚？ |
 
-## 1. 一次请求的生命周期
+## 一次请求的生命周期
 
 最推荐的新手读法，是先固定一条请求路径：
 
@@ -58,7 +63,7 @@ vLLM 原论文图适合作为第一张系统图。它提醒我们：推理 runti
 !!! note "这张图怎么看"
     先看左侧 scheduler：它决定哪些请求一起进入 GPU。再看中间 KV cache manager：它决定历史 token 的 key/value 放在哪里。最后看右侧 workers：它们才执行模型计算。TTFT、TPOT、吞吐和 P99 往往不是某一个模块单独决定的，而是这三层一起决定。
 
-## 2. 最重要的时延公式
+## 最重要的时延公式
 
 对自回归大模型，一次请求总时延可以先粗略写成：
 
@@ -98,7 +103,7 @@ n\cdot T_{\text{step}}
 !!! warning "常见误解"
     tokens/s 高，不代表用户体验一定好。一个系统可以在大 batch 下 tokens/s 很高，但新请求等待 batch 凑齐，导致 \(T_{\text{queue}}\) 和 TTFT 变差。推理性能必须拆成 queue、prefill、decode 和 post 看。
 
-## 3. Prefill 和 Decode 为什么要分开学
+## Prefill 和 Decode 为什么要分开学
 
 用户给模型一段输入，模型先做 prefill：把所有输入 token 过一遍 Transformer，算出每层 attention 需要的 key/value，并写进 KV cache。之后 decode 时，每生成一个新 token，就读取历史 KV，再追加这个新 token 的 KV。
 
@@ -109,7 +114,7 @@ n\cdot T_{\text{step}}
 
 一个 80 页 PDF 问答可能输出不长，但 \(T_{\text{prefill}}\) 很大；一个短 prompt 写长文可能输入不长，但 \(T_{\text{decode}}\) 很大。新手最容易犯的错，是把两者都叫“模型慢”。
 
-## 4. KV Cache 是第二套显存账本
+## KV Cache 是第二套显存账本
 
 自回归 decode 不能每一步都从头重算全部历史，所以会保存历史 token 的 key/value。KV cache 大小可用数量级公式估算：
 
@@ -150,7 +155,7 @@ PagedAttention 图把这个问题讲得很直观：KV 不必连续摆放，而�
 !!! note "这张图怎么看"
     左侧是逻辑上的 token 顺序，右侧是实际显存里的物理 block。请求看到的是连续上下文，但系统内部可以把 KV 放进不连续 block，再用表查到它们。这样可以降低显存碎片和预留浪费，也让 continuous batching 更容易运行。
 
-## 5. Batching、Routing 和 Speculative Decoding
+## Batching、Routing 和 Speculative Decoding
 
 当许多请求同时来，系统会尝试合批。continuous batching 可以在 decode 过程中动态加入新请求：
 
@@ -186,7 +191,7 @@ m^\star
 !!! note "这张图怎么看"
     先看 draft model：它用更便宜的路径提出候选 token。再看 target LLM：它不逐个慢慢生成，而是一次验证候选树。最后看 accepted prefix：只有通过验证的前缀才真正进入输出。投机解码的收益取决于接受率、验证开销、KV 分支管理和 runtime batching，不能只看 draft model 有多小。
 
-## 6. 成本和 SLO：什么时候算“优化成功”
+## 成本和 SLO：什么时候算“优化成功”
 
 推理优化不是单纯追求更快，而是让单位可接受质量的成本下降。单请求成本可先写成：
 
@@ -224,7 +229,7 @@ Low-bit survey 的 cache hierarchy 图提醒我们：低比特、cache、kernel 
 !!! note "这张图怎么看"
     从 host memory 到 global memory，再到 L2、shared memory、registers，数据每搬一次都有成本。量化能减少搬运量，但如果 dequant、scale 读取或 layout 转换太贵，真实 TPOT 未必下降。推理成本要看完整热路径。
 
-## 7. 推荐阅读顺序
+## 继续阅读
 
 | 阶段 | 先读什么 | 读完要会什么 |
 | --- | --- | --- |
@@ -234,7 +239,7 @@ Low-bit survey 的 cache hierarchy 图提醒我们：低比特、cache、kernel 
 | 4. 学长上下文和复杂链路 | [解耦 Prefill 与 KV 服务](disaggregated-prefill-kv-services-and-capacity-ops.md)、[RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md) | 能解释长文档、agent、多轮记忆为什么改变瓶颈 |
 | 5. 学运营闭环 | [成本建模与 SLO 设计](cost-modeling-and-slo-design.md)、[容量规划与推理优化](optimization-checklist-and-capacity-planning.md)、[可观测性与在线评测](observability-and-online-evaluation.md) | 能按请求桶复盘成本、质量、尾延迟和回退 |
 
-## 8. 阶段检查
+## 检查标准
 
 读完本章最少要能回答这些问题：
 
@@ -255,3 +260,7 @@ Low-bit survey 的 cache hierarchy 图提醒我们：低比特、cache、kernel 
 | [缓存、路由与投机解码](caching-routing-and-speculative.md) | 讲清 KV、prefix、routing 和 speculative 的耦合 |
 | [上下文压缩与 KV 内存管理](context-compression-kv-eviction-and-memory-hierarchies.md) | 讲长上下文为什么是记忆管理问题 |
 | [成本建模与 SLO 设计](cost-modeling-and-slo-design.md) | 把优化结果转成可验收的成本和体验目标 |
+
+!!! tip "下一站"
+    - 按导航顺序继续：[推理服务系统](serving-systems.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

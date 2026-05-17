@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # CausVid：流式自回归视频扩散
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [扩散模型](../../diffusion/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「扩散模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`From Slow Bidirectional to Fast Autoregressive Video Diffusion Models`
     - 系统：`CausVid`
@@ -59,7 +64,7 @@ CausVid 的目标不是单纯提高 VBench 分数，而是改变视频扩散的�
 | Long video | expensive full-sequence or sliding windows | autoregressive rollout with KV cache |
 | Main risk | high latency, fixed horizon | error accumulation and chunk discontinuity |
 
-![CausVid teaser 原图](https://causvid.github.io/images/teaser.png){ width="920" }
+![CausVid teaser 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/causvid/causvid-teaser-原图.png){ width="920" }
 
 <small>图源：`CausVid` 官方项目页，对应论文 Figure 1。原图对比传统 bidirectional diffusion 生成完整 128-frame 视频需要 219s，而 CausVid 通过 asymmetric distillation with DMD 得到 causal student，初始延迟 1.3s，随后约 9.4 FPS 流式生成。</small>
 
@@ -75,6 +80,8 @@ x_t = \alpha_t x_0 + \sigma_t \epsilon,
 \qquad
 \epsilon \sim \mathcal N(0,I).
 \]
+
+\(\epsilon\sim\mathcal N(0,I)\) 表示和视频 latent 同形状的标准高斯噪声；\(0\) 是均值，\(I\) 是单位协方差。公式里的 \(\alpha_t\) 控制保留多少原 latent，\(\sigma_t\) 控制噪声加多强。
 
 如果视频 latent 被组织成多个 chunk：
 
@@ -113,7 +120,7 @@ pretrained bidirectional video DiT
 
 ## 方法总览
 
-![CausVid method 原图](https://causvid.github.io/images/methods.jpg){ width="920" }
+![CausVid method 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/causvid/causvid-method-原图.jpg){ width="920" }
 
 <small>图源：`CausVid` 官方项目页，对应论文 Figure 5。该图展示两阶段训练：先用 bidirectional teacher 的 ODE solution pairs 初始化 causal student，再用 bidirectional teacher 对 causal student 做 asymmetric DMD distillation。</small>
 
@@ -349,11 +356,11 @@ KV cache 的意义和 LLM 类似：过去 chunk 已经计算过的 key/value 不
 3. 用 causal teacher 蒸馏不如 bidirectional teacher；
 4. 最终方案必须是 `ODE Init. + Bidirectional Teacher + causal student + 4 fwd pass`。
 
-![CausVid preference 原图](https://causvid.github.io/images/preference.jpg){ width="820" }
+![CausVid preference 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/causvid/causvid-preference-原图.jpg){ width="820" }
 
 <small>图源：`CausVid` 官方项目页，对应论文的人类偏好实验可视化。CausVid 在偏好研究中相对 PyramidFlow、CogVideoX、MovieGen 取得明显优势，并与 bidirectional teacher 接近。</small>
 
-![CausVid radar 原图](https://causvid.github.io/images/radar.jpg){ width="820" }
+![CausVid radar 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/causvid/causvid-radar-原图.jpg){ width="820" }
 
 <small>图源：`CausVid` 官方项目页。Radar plot 展示 CausVid 在 VBench 多项指标上的表现，项目页报告其 VBench 总分为 84.27。</small>
 
@@ -461,6 +468,11 @@ strong bidirectional teacher
 ```
 
 这条路线很适合接在 Diffusion Forcing、视频世界模型和少步蒸馏之后读。它把“因果视频扩散”从概念推进到了一个可测延迟、可跑 benchmark、能支持 streaming UI 的系统形态。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。
+    - 按导航顺序继续：[Wan2.1：开源视频生成系统路线](wan.md)。
 
 ## 参考资料
 

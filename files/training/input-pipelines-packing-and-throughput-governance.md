@@ -2,6 +2,11 @@
 
 很多训练团队把精力放在模型、优化器、并行和混合精度上，最后却发现 GPU 利用率仍然不高。原因常常在输入管线：数据切片太碎、tokenizer 太慢、packing 太差、shuffle buffer 不合理、长样本让 padding 放大、恢复训练后数据游标错位。输入系统不是后台搬运工，而是训练统计分布、吞吐和可复现性的共同塑形者。
 
+!!! note "读法定位"
+    这页先回答“输入管线、Packing 与吞吐”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
+
 这页建议和 [训练数据系统与吞吐优化](data-systems-and-optimization.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) 一起读。数据系统页讲治理链路，本页聚焦训练消费路径和吞吐治理。
 
 !!! note "初学者先抓住"
@@ -128,3 +133,8 @@ Deterministic resume 的验收应看恢复前后采样分布、长度桶、数�
 验收至少包括功能正确性、吞吐稳定性、恢复一致性、混合正确性、观测完备性和方法学记录：mask、segment、label、模态边界和 position 要正确，长跑 step time 不能周期性抖动，checkpoint 恢复后采样分布和 pack 行为要一致，数据源权重、长度桶和任务比例要符合设计，故障要能定位到数据源、worker、shard、tokenizer 或 packer，消融中也要报告有效 token、padding、packing 和数据曝光口径。
 
 最终判断是：输入系统不是把数据喂进模型这么简单，而是把样本统计契约、吞吐契约、恢复契约和监控契约统一起来。只要进入多源混合、长上下文、多模态和对象存储流式训练阶段，这一层就会直接决定训练平台上限。
+
+!!! tip "下一站"
+    - 回到本专题入口：[训练](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[后训练数据引擎与 Judge 模型](post-training-data-engines-and-judge-models.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

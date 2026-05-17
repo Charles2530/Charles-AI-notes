@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # LingBot-World：视频基础模型到世界模拟器
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`Advancing Open-source World Models with Video Generation Models`
     - 系统：`LingBot-World`
@@ -383,3 +388,8 @@ Table 2 reports VBench quantitative comparisons against Yume-1.5 and HY-World 1.
 LingBot-World 最值得放进世界模型专题，不是因为它单独解决了所有动力学问题，而是因为它把当前视频世界模型的训练路径讲得很完整：**视频基础模型提供世界外观和时序先验，交互数据提供动作后果，长序列训练提供记忆，因果化提供在线 rollout，少步蒸馏提供可交互速度。**
 
 这条路径也解释了为什么“视频模型”和“世界模型”会越来越接近，但不会完全等价。视频模型负责让未来看起来合理；世界模型必须让未来对动作、风险和规划有用。
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
+    - 按导航顺序继续：[GPT-4o：Omni 安全评测](../technical-reports/gpt-4o-system-card.md)。

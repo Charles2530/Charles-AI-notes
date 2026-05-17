@@ -2,6 +2,11 @@
 
 训练是把数据、模型、目标函数和优化器组织成一个闭环。模型不是一次性“学会”，而是在大量 batch 上反复计算 loss、回传梯度、更新参数。
 
+!!! note "读法定位"
+    这页先回答“优化与训练入门”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+
 ![Loss landscape visualization 原论文图](../assets/images/paper-figures/foundations/loss-landscape-figure-resnet56.png){ width="820" }
 
 <small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)，loss landscape visualization。原论文图意：通过 filter normalization 等方法可视化网络周围的 loss surface，帮助比较不同结构或训练配置下优化地形的平滑程度。</small>
@@ -19,7 +24,7 @@
 
     优化基础在世界模型高效训练里负责判断“训练到底在朝哪里走”。它能降低无效训练成本：早识别 loss 代理目标和闭环指标错位、learning rate 或 batch 设计不合适、optimizer 让短跑好看但长跑不稳，以及系统恢复让曲线不可比较。
 
-## 1. 先看标准训练循环
+## 先看标准训练循环
 
 训练可以先记成四步：
 
@@ -45,7 +50,7 @@ optimizer.step()            # 用梯度更新参数
 
 这行公式的直觉是：沿着让 loss 下降的方向，小步修改参数。
 
-## 2. Loss：模型错在哪里
+## Loss：模型错在哪里
 
 Loss 是训练的方向盘。它定义模型输出和目标之间的差距：
 
@@ -81,7 +86,7 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 !!! note "解释框：这些 loss 到底在逼模型学什么"
     世界模型的 loss 通常在问“世界会怎么变”：未来观测像不像、latent 能不能往前 rollout、reward/continue/risk 能不能被读出来。具身智能 / VLA 的 loss 通常在问“该怎么动”：动作是否像专家、动作块是否连贯、采样策略是否带来更高成功率。两者会在 WAM、Dreamer、VLA+WM 系统里合到一起：前者提供可预测的未来，后者把未来变成可执行动作。但最终不能只看训练 loss，必须看闭环 success、failure bucket、risk recall 和真实执行成本。
 
-## 3. Backprop：把错误传回参数
+## Backprop：把错误传回参数
 
 反向传播使用链式法则计算每个参数对 loss 的影响：
 
@@ -91,7 +96,7 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 
 这里 \(\eta\) 是学习率。学习率太大容易震荡或发散，太小则训练慢甚至停滞。
 
-## 4. 梯度爆炸和梯度消失：错误传不回来或传过头
+## 梯度爆炸和梯度消失：错误传不回来或传过头
 
 反向传播会把后面层的误差信号一层层传回前面。深层网络或长序列模型里，这个过程会反复乘 Jacobian：
 
@@ -126,7 +131,7 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 !!! warning "不要只凭 loss 形状下结论"
     loss spike 不一定都是梯度爆炸，也可能是坏数据、混合精度 scale、分布式恢复或评测 bucket 变化；loss 平台期也不一定都是梯度消失，可能是模型容量、标签噪声或目标函数不对。最稳的排查方式是把 `loss`、`global grad norm`、`per-layer grad norm`、`LR`、`overflow/NaN`、数据 bucket 和 checkpoint 恢复事件放在同一条时间线上看。
 
-## 5. Optimizer：怎么走下一步
+## Optimizer：怎么走下一步
 
 常见 optimizer：
 
@@ -147,7 +152,7 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 
 Muon 这类优化器说明了一个容易被忽略的点：优化器不只是“步子大不大”，还决定参数更新的几何。AdamW 是当前最稳的默认起点；Muon 更适合放在大规模预训练、矩阵权重占主导、基础设施能支持矩阵正交化的场景里看。更完整的论文解析和 AdamW 对比见 [Muon：LLM 预训练优化器](../paper-deep-dives/foundations/muon-is-scalable.md)。
 
-## 6. 一个完整训练循环
+## 一个完整训练循环
 
 ```text
 for step, batch in enumerate(dataloader):
@@ -170,7 +175,7 @@ for step, batch in enumerate(dataloader):
 
 如果你关心 `loss.backward()` 背后为什么要保存中间激活、为什么 activation checkpointing 能省显存，可以继续看 [自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)。
 
-## 7. 为什么 loss 下降不等于模型可用
+## 为什么 loss 下降不等于模型可用
 
 Loss 是训练信号，但最终还要看任务指标。常见误判包括：
 
@@ -205,7 +210,7 @@ Loss 是训练信号，但最终还要看任务指标。常见误判包括：
 边界：当主分布任务已经是上线瓶颈时，平均 loss 仍有意义；当失败成本高度不均时，必须看加权业务指标
 ```
 
-## 8. 和后续专题的关系
+## 和后续专题的关系
 
 - [大模型训练路线图](../training/index.md)：进入完整训练生产线。
 - [训练评测与消融设计](../training/evaluation-and-ablation-methodology.md)：判断训练改动是否可信。
@@ -213,6 +218,11 @@ Loss 是训练信号，但最终还要看任务指标。常见误判包括：
 - [量化训练](../quantization/qlora-and-quantized-training.md)：理解低精度训练为什么更难。
 - [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)：理解为什么训练结论必须绑定分桶评测。
 
-## 小结
+## 本页结论
 
 训练不是“跑一个 loss”而是一个闭环系统：loss 决定方向，梯度推动参数，optimizer 控制步伐，评测决定结论是否可信。
+
+!!! tip "下一站"
+    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

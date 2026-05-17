@@ -2,13 +2,18 @@
 
 本页按用户更正后的仓库 [verl-project/verl](https://github.com/verl-project/verl) 展开。verl 是大模型强化学习后训练框架，论文背景是 [HybridFlow: A Flexible and Efficient RLHF Framework](https://arxiv.org/abs/2409.19256)。这里不复述安装命令，而是讲清代码流：配置如何进入 trainer，rollout/reward/critic/actor 如何组成一次 RL 更新。
 
+!!! note "读法定位"
+    这页先回答“verl 训练流程：从配置到 RL 更新”在「强化学习」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂概率、优化和基本训练曲线；PPO/GRPO 不必先记公式，先抓更新对象。 必要时先回 [强化学习入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把状态、动作、奖励、策略优化和世界模型闭环连起来，看模型如何通过反馈改进决策。
+
 !!! note "初学者先抓住"
     verl 的核心不是“实现了一个 PPO 公式”，而是把 RLHF/RLVR 的控制流和大模型训练/推理的分布式计算拆开。单进程 controller 负责算法步骤，远端 worker 负责 actor、rollout、critic、reference 和 reward 的大模型计算。
 
 !!! tip "先和前面知识点对上"
     如果你刚读完 MDP 和 PPO，可以把 `verl` 看成一条工程化流水线：`prompt` 是 state，`generate_sequences` 采样 action/trajectory，`reward_manager` 给 reward，`compute_advantage` 把 reward 变成 advantage，`_update_actor` 更新 policy。训练章节里的 FSDP/Megatron 负责让反向传播跑得动，推理章节里的 vLLM/SGLang 负责让 rollout 生成跑得快。
 
-## 0. 先把公式翻译成变量名
+## 先把公式翻译成变量名
 
 读 `verl` 前，先把前面几页的数学符号换成工程变量。这样看到 trainer 日志、batch 字段和 worker 名字时，不会觉得它们是另一套语言。
 
@@ -23,7 +28,7 @@
 | 旧策略概率 | \(\pi_{\theta_{\text{old}}}\) | `old_log_probs` | PPO ratio 的分母，来自更新前 actor |
 | 组内比较 | \(\{o_i\}_{i=1}^G\) | `uid`、`rollout.n` | 同一 prompt 的多条采样回答属于同一组 |
 
-## 1. HybridFlow 的架构视角
+## HybridFlow 的架构视角
 
 ![HybridFlow architecture 原论文图](../assets/images/paper-figures/reinforcement-learning/hybridflow-architecture.png){ width="920" }
 
@@ -32,7 +37,7 @@
 !!! note "图解：为什么 RLHF 框架要比 SFT 框架复杂"
     读这张图可以从左到右看：用户先给出 RLHF dataflow、模型配置和设备配置；中间的 ParallelWorker、Transfer Protocol、Auto Mapping 决定逻辑节点如何落到 worker；右侧的 3D-HybridEngine 负责在训练形态和生成形态之间切换。SFT 主要是一次前向、loss、反向和 optimizer step。RLHF/GRPO 多了 rollout 生成、reward 评分、reference log prob、value/advantage、actor update、critic update 和权重同步，每个节点本身又可能是 FSDP、Megatron-LM、vLLM 或 SGLang 的分布式程序。
 
-## 2. RLHF dataflow：PPO、Safe-RLHF、ReMax 为什么不同
+## RLHF dataflow：PPO、Safe-RLHF、ReMax 为什么不同
 
 ![HybridFlow RLHF dataflow 原论文图](../assets/images/paper-figures/reinforcement-learning/hybridflow-rlhf-dataflow.png){ width="920" }
 
@@ -41,7 +46,7 @@
 !!! note "图解：算法差异就是 dataflow 差异"
     这张图不要逐个箭头硬背，先看多出来的模块。PPO 需要 actor generation、reference/reward/critic forward，再更新 actor 和 critic。Safe-RLHF 多了 cost model 和额外约束。ReMax 不训练 critic，而是用额外 generation 构造 variance reduction baseline。verl 这类框架要支持多算法，就必须让用户能重组这些节点，而不是把 PPO 写死在一个巨大训练循环里。
 
-## 3. verl 的关键源码入口
+## verl 的关键源码入口
 
 | 入口 | 作用 |
 | --- | --- |
@@ -69,7 +74,7 @@
 !!! note "难点解释：为什么配置里很多名字还叫 ppo"
     verl 里不少字段叫 `ppo_mini_batch_size`、`ppo_epochs`，但 GRPO、RLOO、ReMax 也会复用这套 rollout 后再更新 actor 的训练循环。这些字段很多是“采样后如何切 mini-batch、做几轮 actor update”的工程参数，不一定只属于 PPO 算法本身。
 
-## 4. 从命令行配置到 Trainer
+## 从命令行配置到 Trainer
 
 典型 PPO/GRPO 示例最后都会进入：
 
@@ -117,7 +122,7 @@ Hydra 读取配置
 | rollout 吞吐 | `rollout.name=vllm/sglang`、`tensor_model_parallel_size`、`gpu_memory_utilization` | 对应推理章节里的 KV cache、batching、tensor parallel |
 | 多模态输入 | `processor`、`data.image_key`、`multi_modal_inputs` | 对应 VLM/VLA 章节里的图像 token 和 processor |
 
-## 5. 一次训练 step 的数据流
+## 一次训练 step 的数据流
 
 `RayPPOTrainer.fit()` 中，一次核心 step 可以简化成：
 
@@ -182,7 +187,7 @@ advantage = (score - group_mean) / (group_std + eps)
 !!! example "有趣例子：uid 像题号"
     假设 batch 里有 64 道题，每题采样 5 个答案，那么实际 response 有 320 条。`uid` 告诉 verl 哪 5 条属于同一道题。GRPO 只在同一道题内部比较好坏，不会把一道特别难的题和一道特别容易的题直接比较。
 
-## 6. 把前面知识点对应到 verl 变量
+## 把前面知识点对应到 verl 变量
 
 初学者读 `verl` 时最容易迷路，因为同一个概念会在算法、数据、worker 和配置里出现不同名字。可以按下面这张表对齐：
 
@@ -231,7 +236,7 @@ data.image_key=images
 !!! example "有趣例子：把 VLA 抓取看成 verl dataflow"
     如果把 prompt 换成“当前图像 + 指令 + 机器人状态”，response 就是未来动作块。reward 可以由仿真成功率、碰撞检测、轨迹平滑度和最终位置误差组成。`rollout.n` 对同一状态采样多个动作块，GRPO 比较哪条更安全、更接近成功。真正工程化时还要把 VLA processor、动作 tokenizer、仿真/真实 reward 服务和安全过滤接入 worker。
 
-## 7. PPO 和 GRPO 在 verl 里的差别
+## PPO 和 GRPO 在 verl 里的差别
 
 | 配置/组件 | PPO | GRPO |
 | --- | --- | --- |
@@ -246,7 +251,7 @@ data.image_key=images
 !!! warning "常见误区：GRPO 不需要 critic 不等于更简单"
     GRPO 省掉了 value model，但增加了 group sampling 的吞吐压力和 reward 方差问题。`rollout.n` 太小，组内比较不稳；太大，生成成本上升。response 长度差异还可能带来 length bias，所以 verl 文档里会讨论 `loss_agg_mode`、DrGRPO 和 `norm_adv_by_std_in_grpo` 这类稳定化配置。
 
-## 8. 3D-HybridEngine：为什么生成和训练要切换形态
+## 3D-HybridEngine：为什么生成和训练要切换形态
 
 ![HybridFlow one RLHF iteration 原论文图](../assets/images/paper-figures/reinforcement-learning/hybridflow-one-iteration.png){ width="920" }
 
@@ -255,7 +260,7 @@ data.image_key=images
 !!! note "图解：actor 同时是训练模型和生成模型"
     读这张图时先抓住颜色和阶段：生成前要把训练切分下的权重转换成推理可用形态，生成 response 后又要回到训练切分来算 log prob、advantage 和梯度。RLHF 里 actor 既要像训练模型一样做反向传播，又要像推理服务一样高吞吐生成 response。训练更关心参数、梯度和 optimizer sharding；生成更关心 KV cache、tensor parallel 和 decode 吞吐。3D-HybridEngine 的核心就是减少 actor 在这两种形态之间切换时的权重搬运和显存冗余。
 
-## 9. 把 verl 思路迁移到世界模型
+## 把 verl 思路迁移到世界模型
 
 verl 本身主要面向 LLM/VLM RL 后训练，但它的 dataflow 思路可以迁移到世界模型：
 
@@ -271,7 +276,7 @@ verl 本身主要面向 LLM/VLM RL 后训练，但它的 dataflow 思路可以�
 !!! warning "工程边界：视频世界模型不只是把文本换成图像"
     如果输出是视频或机器人轨迹，还需要 tokenizer/decoder、动作量化、时序 mask、视觉指标、显存更大的 rollout 和更严格的闭环评测。verl 的控制流有参考价值，但具体 worker、reward 和数据管线需要按 world model 任务改造。
 
-## 10. 调试时先看什么
+## 调试时先看什么
 
 | 现象 | 优先检查 |
 | --- | --- |
@@ -283,7 +288,7 @@ verl 本身主要面向 LLM/VLM RL 后训练，但它的 dataflow 思路可以�
 
 读 verl 源码时，把算法循环和系统后端分开：算法循环回答“这一步为什么发生”，系统后端回答“这一步如何在多卡上跑得动”。
 
-## 11. 和前面章节的回看关系
+## 和前面章节的回看关系
 
 | 你在 verl 里看到的问题 | 回看哪个章节 |
 | --- | --- |
@@ -293,3 +298,8 @@ verl 本身主要面向 LLM/VLM RL 后训练，但它的 dataflow 思路可以�
 | actor update OOM 或吞吐低 | [大模型训练路线图](../training/index.md)、[分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md) |
 | VLM 数据进不来 | [VLM/VLA 总览](../vlm/index.md)、[VLM 架构：视觉表征、连接器与记忆](../vlm/architecture-and-training.md) |
 | 想把 RLVR 用到世界模型 | [世界模型中的强化学习](rl-for-world-models.md)、[世界模型路线图](../world-models/index.md) |
+
+!!! tip "下一站"
+    - 回到本专题入口：[强化学习](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[index](../world-models/index.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

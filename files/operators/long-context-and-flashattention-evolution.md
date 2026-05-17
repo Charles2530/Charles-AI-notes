@@ -2,6 +2,11 @@
 
 长上下文系统和 FlashAttention 的关系，不只是“长上下文需要更快 attention”这么简单。更准确地说，长上下文之所以会不断推动 attention 内核演化，是因为随着序列长度上升，attention 的瓶颈会从“算没算对”迅速转向“数据怎么搬、历史怎么存、解码时怎么读”。
 
+!!! note "读法定位"
+    这页先回答“FlashAttention 与长上下文”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 因此看 FlashAttention 的演化，最好把它放在一条更大的长上下文系统主线上看：朴素 attention 如何被 I/O 打爆，FlashAttention 如何通过重写数据流减少中间矩阵，长上下文 decode 又如何逼出 paged attention、flash decoding 和更多服务态特化。
 
 !!! note "初学者先抓住"
@@ -12,7 +17,7 @@
 
     朴素 attention 像先把所有草稿铺满桌子再整理；FlashAttention 像边读边归纳，只保留必要中间状态。桌子越小、资料越长，后者越重要。
 
-## 1. 为什么长上下文首先打爆的是 I/O
+## 为什么长上下文首先打爆的是 I/O
 
 标准 attention 的核心公式是：
 
@@ -24,7 +29,7 @@ $$
 
 也就是说，长上下文 attention 常常不是单纯 FLOPs 问题，而是 I/O 问题。
 
-## 2. FlashAttention 真正改变了什么
+## FlashAttention 真正改变了什么
 
 FlashAttention 的关键贡献，不是换了一个新的 attention 公式，而是通过分块、在线 softmax、避免显式 materialize score matrix，并尽可能在片上存储内完成局部计算来重写数据流。
 
@@ -33,22 +38,22 @@ FlashAttention 的关键贡献，不是换了一个新的 attention 公式，而
 因为序列越长，完整 score 矩阵越不可能高效存和搬。  
 FlashAttention 的思路让 attention 更接近“边读边算边归一化”的流式过程，而不是“先把所有中间量写出来再处理”。
 
-## 3. 从训练 attention 到服务 attention
+## 从训练 attention 到服务 attention
 
 FlashAttention 最先显著改善的是长序列训练、大 batch prefill 和大块矩阵式 attention。但服务态特别是 decode 场景很快暴露出新的问题：每步只新增少量 token，主要成本是读历史 K/V，KV cache 需要长时间驻留，请求长度分布也高度动态。
 
 这意味着“训练里有效的 attention kernel”不能原封不动拿来服务。
 
-## 4. FlashAttention 之后为什么还会出现 Flash Decoding
+## FlashAttention 之后为什么还会出现 Flash Decoding
 
 因为 decode 的并行轴和 prefill 不一样。  
 Prefill 可以在 token 维大量并行，decode 则是短 query、长 key/value、重历史缓存和小步工作量的组合。这推动内核设计从完整 attention block 吞吐，转向长历史读取、短 query 并行和服务态 tail latency。
 
-## 5. 长上下文服务为什么把问题推向 KV 系统
+## 长上下文服务为什么把问题推向 KV 系统
 
 当上下文从几千走到几万甚至更长时，问题不再只是 attention 算得快不快，还包括 KV cache 放不放得下、KV page 如何管理、prefix 能不能共享、decode 时长历史是否拖垮带宽，以及长请求和短请求如何共存。因此长上下文 attention 的后半段演化，实际上是在向 paged attention、prefix cache、sliding window 和 context compression 这些系统方向延伸。
 
-## 6. 为什么长上下文系统经常要分 prefill 和 decode 两条路径
+## 为什么长上下文系统经常要分 prefill 和 decode 两条路径
 
 因为它们的热点完全不同。
 
@@ -62,7 +67,7 @@ Prefill 可以在 token 维大量并行，decode 则是短 query、长 key/value
 
 同一个系统如果不显式区分这两条路径，优化很容易互相牵制。
 
-## 7. Prefill / Decode 分流图
+## Prefill / Decode 分流图
 
 ```mermaid
 flowchart LR
@@ -89,18 +94,18 @@ flowchart LR
 | Prefix reuse | 重复上下文计算 | prefix cache、prompt canonicalization | 缓存命中率低时收益很小 |
 | 长尾请求 | KV 水位和调度 | 长短请求分池、上下文压缩 | 长请求拖累短请求 |
 
-## 8. Prefix Reuse 为什么会和长上下文 attention 绑定
+## Prefix Reuse 为什么会和长上下文 attention 绑定
 
 长上下文最痛的一部分往往是重复 prefill。  
 如果很多请求共享同样长前缀，一遍遍重新做 prefill 就非常浪费，FlashAttention 再快也挡不住重复工作，prefix cache 因此变得非常重要。这说明长上下文系统的优化不只是 attention kernel，还包括能否避免重复计算、高效复用历史并安全共享页面。
 
-## 9. Sliding Window 与 Chunked Attention 是什么角色
+## Sliding Window 与 Chunked Attention 是什么角色
 
 当完整长历史代价太高时，一些系统会只关注最近窗口、分块保留历史，或对历史做摘要和压缩。这类方法未必总是由 kernel 驱动，但会直接改变 kernel 设计，因为访问范围、KV cache 压力、page 访问模式和长距离依赖都会随之变化。
 
 所以长上下文内核优化，最终常常和模型架构与上下文策略共同演化。
 
-## 10. FlashAttention 的系统启发
+## FlashAttention 的系统启发
 
 它留下的最重要启发并不是某个特定实现，而是一个更一般的原则：
 
@@ -108,11 +113,11 @@ flowchart LR
 
 这条原则后来几乎扩展到了所有长上下文系统中，包括 KV cache 页面化、decode 特化、prefix reuse、量化 KV、context compression 和 paged serving。
 
-## 11. 一个形象比喻
+## 直觉例子
 
 可以把长上下文 attention 看成处理一条越来越长的流水账。最早的做法像每次都把整本账本摊开重新核算；FlashAttention 像改成按页分批核算且不把所有中间草稿反复抄到总账本；而服务态的 paged attention 和 prefix cache，则更像把旧账页按档案盒管理，只把当前需要的部分拿出来核对。系统演化的方向，从来不是“把公式改得更复杂”，而是“让账本管理方式更适合真实工作流”。
 
-## 12. 小结
+## 本页结论
 
 FlashAttention 及其后续演化，之所以在长上下文时代如此关键，是因为它揭示了一个核心事实：长上下文 attention 的真正主战场在 I/O 与内存系统，而不是孤立的矩阵公式。  
 从 FlashAttention 到 flash decoding、paged attention、prefix cache，再到更广义的长上下文系统设计，这条线展示的其实是一场从“算 attention”到“管理长期上下文”的系统迁移。
@@ -120,3 +125,8 @@ FlashAttention 及其后续演化，之所以在长上下文时代如此关键�
 ## 工程收束
 
 FlashAttention 与长上下文要按 IO-aware attention、长序列 tile、paged KV、prefill/decode 分化来排查。最容易误判的是把 prefill 优化误用到 decode、只看理论复杂度、忽略 cache 生命周期；上线前要分开测 prefill 与 decode，对长序列建立专项基准，并按长度桶验收。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Reduction / Norm Kernel](reduction-norm-layout-and-indexing.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

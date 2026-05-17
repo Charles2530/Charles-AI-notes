@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # DPM-Solver++：为 Guidance 场景设计的扩散 ODE 求解器
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [扩散模型](../../diffusion/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「扩散模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 论文：`DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models`
     - 链接：[arXiv:2211.01095](https://arxiv.org/abs/2211.01095)
@@ -47,7 +52,7 @@ DPM-Solver++ 属于第一类。它的工程价值是：如果你已经有 Stable
 
 论文的直接前作是 DPM-Solver。DPM-Solver 在无 guidance 或弱 guidance 采样里很强，但 DPM-Solver++ 指出：在大 guidance scale 下，原先的高阶求解器可能不但不快，反而比一阶 DDIM 更不稳定。
 
-![Guided sampling instability 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-1-guided-instability.png){ width="760" }
+![Guided sampling instability 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-1-guided-instability.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 1。原论文图意：在 ImageNet 256×256、classifier guidance scale 8.0、15 NFE 下，若直接使用此前高阶 solver，图像会明显失真；DPM-Solver++ 能生成更稳定的样本。</small>
 
@@ -70,11 +75,15 @@ q_{t0}(x_t\mid x_0)
 \mathcal N(x_t;\alpha_t x_0,\sigma_t^2 I),
 \]
 
+这里 \(\mathcal N(x_t;\alpha_t x_0,\sigma_t^2I)\) 的三个位置分别是：被采样/评估的带噪样本 \(x_t\)，均值 \(\alpha_t x_0\)，协方差 \(\sigma_t^2I\)。
+
 也就是：
 
 \[
 x_t=\alpha_t x_0+\sigma_t\epsilon,\qquad \epsilon\sim\mathcal N(0,I).
 \]
+
+\(\epsilon\sim\mathcal N(0,I)\) 是标准高斯噪声采样，\(0\) 是均值，\(I\) 是单位协方差；\(\sigma_t\) 再把这份标准噪声缩放到当前噪声水平。
 
 这里 \(\alpha_t/\sigma_t\) 控制 signal-to-noise ratio。论文把 logSNR 定义为：
 
@@ -202,7 +211,7 @@ e^\lambda
 1. **Singlestep 2S**：在 \(t_{i-1}\) 和 \(t_i\) 中间额外取一个 \(s_i\)，用 \(x_\theta(t_{i-1})\) 和 \(x_\theta(s_i)\) 估计导数；
 2. **Multistep 2M**：复用前两步的 \(x_\theta(t_{i-1})\)、\(x_\theta(t_{i-2})\)，不额外插中间点。
 
-![DPM-Solver++ algorithms 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/algorithms-1-2.png){ width="860" }
+![DPM-Solver++ algorithms 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/algorithms-1-2.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Algorithm 1/2。原论文图意：DPM-Solver++(2S) 使用 singlestep 中间点；DPM-Solver++(2M) 使用 multistep buffer 复用历史 \(x_\theta\) 预测。</small>
 
@@ -258,7 +267,7 @@ e^\lambda
 
 Figure 3 的三个子图分别对应本文三步改造：从 \(\epsilon_\theta\) 到 \(x_\theta\)、从 singlestep 到 multistep、加不加 thresholding。
 
-![DPM-Solver++ ablation 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-3-ablation.png){ width="860" }
+![DPM-Solver++ ablation 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-3-ablation.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 3。原论文图意：在 ImageNet 256×256、guidance scale 8.0 下，比较 DPM-Solver++ 的参数化、singlestep/multistep 和 thresholding 消融。</small>
 
@@ -267,9 +276,12 @@ Figure 3 的三个子图分别对应本文三步改造：从 \(\epsilon_\theta\)
 
 Figure 4 展示更完整的步数和 guidance scale 变化。
 
-![DPM-Solver++ convergence 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-4-convergence.png){ width="860" }
+![DPM-Solver++ convergence 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-4-convergence.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 4。原论文图意：在 pixel-space DPM 和 latent-space DPM 中比较不同 sampler 随 NFE 变化的 FID/MSE。</small>
+
+!!! note "这张收敛图怎么读"
+    横轴是 NFE，也就是 denoiser 前向次数；纵轴是 FID 或 MSE，越低越好。先比较同一个 NFE 下不同颜色曲线的位置，再看曲线随 NFE 增加是否平稳下降。Figure 4 支撑的结论是 DPM-Solver++ 在 15 到 25 NFE 附近能接近更多步 DDIM 的质量，尤其在 latent-space DPM 里 multistep 版本更省前向调用；它不能证明任意 prompt、任意 CFG scale 都可以无损降到极低步数。
 
 ## 表格结果：保留原英文格式看关键数字
 
@@ -309,21 +321,24 @@ latent-space Stable Diffusion 里，论文用 MSE 到 1000-step DDIM 参考结�
 
 ## 图像样例：ImageNet、Stable Diffusion、DeepFloyd
 
-![ImageNet samples 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-5-imagenet-samples.png){ width="760" }
+![ImageNet samples 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-5-imagenet-samples.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 5。原论文图意：ImageNet 256×256、guidance scale 8.0 下，不同 sampler 的图像质量对比。</small>
 
-![Stable Diffusion castle samples 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-6-stable-diffusion-castle.png){ width="760" }
+![Stable Diffusion castle samples 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-6-stable-diffusion-castle.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 6。原论文图意：Stable Diffusion 在 classifier-free guidance scale 7.5 下，不同 sampler 和 NFE 的样例对比。</small>
 
-![DeepFloyd IF capybara samples 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-2-deepfloyd-capybara.png){ width="760" }
+![DeepFloyd IF capybara samples 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-2-deepfloyd-capybara.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 2。原论文图意：DeepFloyd-IF 的 pixel-space guided sampling 示例，展示 DPM-Solver++(2M) 随 NFE 增加的收敛，以及与 DDPM、SDE-DPM-Solver++ 的对比。</small>
 
-![DeepFloyd IF samples 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-7-deepfloyd-lemon.png){ width="760" }
+![DeepFloyd IF samples 原论文图](../../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-7-deepfloyd-lemon.png){ width="670" }
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 7。原论文图意：DeepFloyd-IF 的 pixel-space guided sampling 示例，比较 DPM-Solver++、DDPM、SDE-DPM-Solver++ 等不同 solver。</small>
+
+!!! note "这组样例图怎么读"
+    样例图不是单纯看哪张更好看，而是看同一个 prompt / guidance 条件下，少步 solver 是否保持主体结构、文字或物体边界。Figure 5/6 是对 ImageNet 与 Stable Diffusion 的定性补充；Figure 2/7 展示 DeepFloyd-IF 随 NFE 增加的视觉收敛。它们支撑“少步采样更稳”的直观证据，但真正比较仍要回到 Table 3/4 的 NFE、FID/MSE 和 guidance 设置。
 
 ## 工程上怎么用
 
@@ -369,7 +384,7 @@ DPM-Solver++ 不降低训练成本，它降低的是**推理成本、评测成�
 
 第四，FID/MSE/样例图不能覆盖所有生成任务。产品里还要看 prompt 分桶、人审偏好、文字渲染、失败率和 tail latency。
 
-## 一句话总结
+## 本页结论
 
 DPM-Solver++ 最值得记住的是：**guided diffusion 的少步采样不能只追求高阶；大 guidance scale 会放大方向场和导数，使原本高阶的 \(\epsilon_\theta\) solver 不稳。DPM-Solver++ 改用 \(x_\theta\) 的 exact solution、结合 thresholding 和 multistep 更新，在无需训练的前提下把 guided sampling 推到约 15 到 20 NFE。**
 
@@ -377,3 +392,8 @@ DPM-Solver++ 最值得记住的是：**guided diffusion 的少步采样不能只
 
 1. [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://arxiv.org/abs/2211.01095)
 2. [LuChengTHU/dpm-solver](https://github.com/LuChengTHU/dpm-solver)
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。
+    - 按导航顺序继续：[DMD：一步扩散蒸馏](dmd.md)。

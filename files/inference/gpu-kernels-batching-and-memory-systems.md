@@ -2,13 +2,18 @@
 
 这一页把 [推理服务系统](serving-systems.md) 里的 queue、prefill、decode 和 KV cache 落到 GPU 执行层。你不需要先会写 CUDA，但要能判断：慢是因为 GPU 算不过来，还是因为 batch 太碎、KV 访存太重、量化 kernel 没命中，或者调度让用户等太久。
 
+!!! note "读法定位"
+    这页先回答“GPU Kernel、Batching 与显存”在「推理」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先知道 transformer 解码、GPU kernel、显存和吞吐/延迟的区别。 必要时先回 [推理入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把请求生命周期、KV Cache、batching、runtime、SLO 和成本连接起来，看模型上线后每一毫秒花在哪里。
+
 !!! note "初学者先抓住"
     训练通常 batch 大、shape 稳定，GPU 容易吃满；在线推理尤其是 decode，batch 动态变化、每步只生成少量 token、KV cache 反复读取，更容易被显存带宽、kernel launch 和调度限制。
 
 !!! example "有趣例子：自助餐和点菜"
     Prefill 像一次做一大盘自助餐，适合批量处理；decode 像顾客一口一口点菜，每一步都要查上一口吃了什么。GPU 对这两种工作负载的表现完全不同。
 
-## 1. 从公式回到 GPU 时间线
+## 从公式回到 GPU 时间线
 
 请求总时延仍然先拆成：
 
@@ -31,7 +36,7 @@ GPU 页面重点看中间两段：
 
 TTFT 通常受 \(T_{\text{queue}} + T_{\text{prefill}}\) 影响很大；TPOT 更接近 decode 稳态。若只看全局 tokens/s，就容易把 prefill 问题错当成 decode 问题，或把调度问题错当成 kernel 问题。
 
-## 2. Prefill 为什么更像训练
+## Prefill 为什么更像训练
 
 Prefill 一次处理所有输入 token。输入长度为 \(L_{\text{in}}\)，batch 为 \(B\) 时，很多矩阵乘的形状比较大，GPU 更容易发挥 Tensor Core 吞吐。
 
@@ -46,7 +51,7 @@ Prefill 一次处理所有输入 token。输入长度为 \(L_{\text{in}}\)，bat
 
 Prefill 最常见的错觉是“只要 GPU 利用率高就好”。如果长文档 prefill 抢占短聊天 decode，GPU 看起来很忙，用户却会觉得系统卡住。
 
-## 3. Decode 为什么更难跑满 GPU
+## Decode 为什么更难跑满 GPU
 
 Decode 每一步通常只生成一个 token。第 \(i\) 步成本可以粗略理解为：
 
@@ -71,7 +76,7 @@ T_{\text{weight-read}}
 
 decode 的难点不是某一步公式复杂，而是它要重复很多次，并且每一步的活跃请求集合都可能变化。
 
-## 4. Batching：吞吐和等待时间一起变
+## Batching：吞吐和等待时间一起变
 
 Continuous batching 的核心公式是：
 
@@ -100,7 +105,7 @@ batching 的收益和风险：
 
 因此 batching 参数不能只按全局 tokens/s 调。在线服务通常要按长度、SLO、租户、模型、LoRA、采样参数分桶，让相似请求更容易合并。
 
-## 5. KV Cache 是显存系统的核心
+## KV Cache 是显存系统的核心
 
 KV cache 数量级：
 
@@ -125,7 +130,7 @@ Paged KV 把 cache 拆成 block/page 管理，减少连续显存需求，但会�
 !!! note "这张图怎么看"
     logical block 是请求语义上的上下文顺序，physical block 是显存里的实际位置。block table 负责翻译。这样系统可以灵活复用和回收 KV，但 decode attention kernel 每一步都要按表找到历史 KV，因此 page 布局和局部性会影响 TPOT。
 
-## 6. Roofline 直觉：算力不等于速度
+## Roofline 直觉：算力不等于速度
 
 GPU 性能常用 roofline 直觉理解：
 
@@ -146,11 +151,11 @@ GPU 性能常用 roofline 直觉理解：
 
 如果一个操作搬很多数据但计算很少，它就更容易 memory-bound；如果计算量很大、数据复用好，它才更可能 compute-bound。推理 decode 里 KV 读取、RMSNorm、embedding gather、dequant 和 logits 后处理经常受带宽或 launch 开销限制。
 
-## 7. 量化为什么不等于一定更快
+## 量化为什么不等于一定更快
 
 Low-bit survey 的数据传输图很适合说明这个坑：低比特会减少某些数据搬运，但也可能增加 dequant、scale 读取、layout 转换和不友好 shape 的开销。
 
-![Low-bit cache hierarchy data transmission 原图](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-4-cache-hierarchy.png){ width="860" }
+![Low-bit cache hierarchy data transmission 原图](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-4-cache-hierarchy.png){ width="830" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 4。原论文图意：以 NVIDIA A100 为例展示 weight 和 activation 在 host、global memory、L2、shared memory、registers 与 MatMul kernel 之间的数据传输。</small>
 
@@ -159,14 +164,14 @@ Low-bit survey 的数据传输图很适合说明这个坑：低比特会减少�
 
 KV cache 量化也一样。它能减少 KV 存储和读取，但 attention 前往往需要 dequant：
 
-![KV cache quantization 原图](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="820" }
+![KV cache quantization 原图](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="740" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 6。原论文图意：展示 quantized KV cache 如何减少缓存存储和数据传输，并在 attention forward 前 dequantize。</small>
 
 !!! note "这张图怎么看"
     左边是压缩后的 KV 存储，右边是 attention 计算前的恢复路径。收益来自少存少搬，代价来自 dequant 和可能的精度损失。长上下文服务尤其要用长任务质量回归验证，不能只看短 benchmark。
 
-## 8. Kernel 热点怎么分
+## Kernel 热点怎么分
 
 | 热点 | 出现在哪里 | 看什么指标 |
 | --- | --- | --- |
@@ -186,7 +191,7 @@ KV cache 量化也一样。它能减少 KV 存储和读取，但 attention 前�
 5. tokens/s 好但 P99 差，先看分桶和调度；
 6. 只有确认热路径在 kernel 上，再考虑写新 kernel 或换 runtime。
 
-## 9. 真实排查案例：Batch 变大后体验下降
+## 真实排查案例：Batch 变大后体验下降
 
 **症状**：连续批处理参数调大后，tokens/s 提升 22%，但聊天产品 TTFT P95 从 1.1s 涨到 2.0s。
 
@@ -196,6 +201,11 @@ KV cache 量化也一样。它能减少 KV 存储和读取，但 attention 前�
 
 **修复**：按输入长度和 SLO 分队列；短请求设置更小 max wait；长文档进入吞吐池；灰度指标同时看 tokens/s、TTFT、TPOT 和 P99。
 
-## 10. 小结
+## 本页结论
 
 GPU 推理优化不是微基准游戏。真正要改善线上体验，需要同时看请求分桶、queue、prefill、decode、KV 生命周期、kernel 热点和 SLO。一个优化只有在真实请求桶里同时改善成本、延迟和质量，才算真的有效。
+
+!!! tip "下一站"
+    - 回到本专题入口：[推理](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

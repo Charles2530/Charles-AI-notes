@@ -2,6 +2,11 @@
 
 低精度计算和量化，表面上看是在“减少位宽、节省显存”，但真正落到系统里时，本质上是内核与数据布局问题。很多团队第一次做量化时都会踩到同一个坑：权重文件变小了，理论带宽需求下降了，但端到端吞吐并没有变好，甚至变差。原因往往不是量化方法本身，而是 kernel 路径没有真正适配低精度数据格式。
 
+!!! note "读法定位"
+    这页先回答“低精度与量化 Kernel”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 这一页讨论的重点，不是量化算法本身，而是：  
 **当你已经决定使用 BF16、FP8、INT8、INT4 或权重量化之后，kernel 层到底发生了什么变化，为什么有些格式容易提速，有些则只是在节省存储。**
 
@@ -9,7 +14,7 @@
 
     低精度 kernel 的难点不只是位宽小，而是数据要打包、解包、读取 scale、反量化、累加、再写回。只有这些步骤和 Tensor Core、寄存器、缓存、layout 配合好，低精度才会真正变快；如果运行时频繁 dequant、layout 转换或走 fallback，节省的权重带宽会被额外开销抵消。
 
-## 1. 低精度不是单一概念
+## 低精度不是单一概念
 
 常见路径可以先按“它会改变 kernel 的哪一层”来记：
 
@@ -23,7 +28,7 @@
 | Activation quantization | 动态范围随 token / batch 变化，online scaling 更重 |
 | 训练态量化 | 还要考虑反向、梯度累加和优化器状态 |
 
-## 2. 为什么低精度会让 kernel 设计变复杂
+## 为什么低精度会让 kernel 设计变复杂
 
 在高精度路径里，一个 GEMM 大致就是读取输入、做乘加、写回输出。低精度路径则会把 `unpack`、scale 读取、zero-point 修正、dequant 甚至 requant 插进主路径里。
 
@@ -39,7 +44,7 @@ $$
 
 如果这些步骤不能被很好融合，量化收益就很容易被吃掉。
 
-## 3. BF16、FP16、FP8 的内核差异
+## BF16、FP16、FP8 的内核差异
 
 ### 3.1 FP16
 
@@ -59,7 +64,7 @@ FP8 的吸引力在于进一步降低带宽与存储，但它更依赖 scaling �
 
 FP8 真正难的地方并不是“位宽更小”，而是其数值管理与 kernel 协同更难。
 
-## 4. INT8 / INT4 的核心不是整数乘法，而是数据布局
+## INT8 / INT4 的核心不是整数乘法，而是数据布局
 
 许多初学者会以为量化提速来自“整数乘法更便宜”。这只对了一小部分。真正的收益与代价通常是成对出现的：
 
@@ -72,7 +77,7 @@ FP8 真正难的地方并不是“位宽更小”，而是其数值管理与 ker
 
 也就是说，量化 kernel 的关键是把“压缩后的参数格式”变成“硬件喜欢的读取与计算路径”。
 
-## 5. Weight-only Quantization 与 Activation Quantization
+## Weight-only Quantization 与 Activation Quantization
 
 ### 5.1 只量化权重
 
@@ -84,7 +89,7 @@ FP8 真正难的地方并不是“位宽更小”，而是其数值管理与 ker
 
 因此全量化 kernel 对系统能力要求更高。
 
-## 6. Group-wise、Channel-wise、Token-wise 的 kernel 含义
+## Group-wise、Channel-wise、Token-wise 的 kernel 含义
 
 很多量化论文从误差角度谈 group size，但从 kernel 角度看，group size 还会影响 scale 读取次数、scale 与主数据的对齐方式、矩阵 tile 是否能整齐匹配 group 边界，以及 dequant 是否能向量化。
 
@@ -94,7 +99,7 @@ FP8 真正难的地方并不是“位宽更小”，而是其数值管理与 ker
 
 所以 group size 在工程上是精度与 kernel 复杂度的共同折中。
 
-## 7. Dequant 到底该放在哪里
+## Dequant 到底该放在哪里
 
 量化 kernel 设计最关键的问题之一是：dequant 发生在什么位置。
 
@@ -120,7 +125,7 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 
 现实里，真正高性能的量化推理一般都在朝第二种方向走。
 
-## 8. 量化 GEMM 的常见融合模式
+## 量化 GEMM 的常见融合模式
 
 量化推理里高频出现的融合链包括 `weight unpack + dequant + GEMM`、`dequant + GEMM + bias`、`dequant + GEMM + activation`、`dequant + GEMM + residual` 和 `dequant + GEMM + requant`。
 
@@ -128,7 +133,7 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 
 因为如果拆开执行，就会出现中间高精度张量写回、再读回来做下一个操作、多个小 kernel launch 等额外成本，低比特格式带来的带宽优势很容易被抹掉。
 
-## 9. AWQ、GPTQ、SmoothQuant 与 kernel 的关系
+## AWQ、GPTQ、SmoothQuant 与 kernel 的关系
 
 这些方法常被当作“量化算法”讨论，但工程里还要追问它们对 kernel 的要求：权重格式是什么、scale 的粒度是什么、是否支持 fused dequant GEMM、是否要求特定 layout，以及更适合 prefill、decode 还是离线 batch inference。
 
@@ -138,7 +143,7 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 
 所以量化的系统价值，必须经过 kernel 层验证。
 
-## 10. 训练中的低精度 kernel 与推理中的低精度 kernel 不同
+## 训练中的低精度 kernel 与推理中的低精度 kernel 不同
 
 | 场景 | 更关注什么 |
 | --- | --- |
@@ -147,7 +152,7 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 
 这意味着同样叫“低精度 kernel”，训练和推理的最优设计目标未必一致。
 
-## 11. KV Cache 量化
+## KV Cache 量化
 
 随着长上下文服务越来越普遍，KV cache 量化也变得重要。它的目标通常不是大幅提升 FLOPs，而是降低显存占用、增加可服务并发、减轻带宽压力，并延缓 OOM 和 page pressure。
 
@@ -158,7 +163,7 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 若 dequant 太重，又会抵消空间收益。  
 所以 KV 量化在工程上往往比权重量化更挑剔。
 
-## 12. 低精度 kernel 的常见热点症状
+## 低精度 kernel 的常见热点症状
 
 如果量化后没有提速，常见原因包括 dequant 与 GEMM 没融合、group size 与 tile 不匹配、scale 读取成为新瓶颈、layout 转换太多、decode 下 batch 太小，或量化后反而让 kernel 路径更碎。
 
@@ -167,7 +172,7 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 “模型权重从 16 bit 变成 4 bit，所以理论上应该快 4 倍。”  
 这在系统里几乎从不成立，因为不是所有时间都花在搬权重，还要访问激活、scale、KV，dequant 和布局处理也要花时间，某些阶段本来就不是 weight-bound。
 
-## 13. 数值稳定性与累加精度
+## 数值稳定性与累加精度
 
 低精度 kernel 一个核心设计问题是：  
 **输入可以低精度，累加是否也低精度？**
@@ -176,17 +181,17 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 
 这是因为量化和低精度最容易损伤的常常不是单次乘法，而是长链累加和归约过程。
 
-## 14. 一个更系统的判断框架
+## 一个更系统的判断框架
 
 看一个低精度 kernel 时，可以依次问：节省的是显存、带宽还是计算；核心瓶颈是 weight movement、activation movement 还是 dequant；scale / zero-point 是否与 tile 对齐；解量化发生在主路径内还是外部；prefill 和 decode 谁受益更大；精度损失是否集中在某些层、某些头或某些长序列场景。
 
 这比只看“多少 bit”更有价值。
 
-## 15. 一个形象比喻
+## 直觉例子
 
 可以把量化想成把大箱零件压缩装箱。压缩后运货成本变低，但如果到了工厂现场还要先把每个箱子全部拆开、重新分类、再搬到生产线，那运输节省就可能被现场拆箱成本吃掉。真正高效的量化 kernel，等于把拆箱、分拣和装配合并在一条流水线上完成，而不是先压缩、再在现场把所有收益吐回去。
 
-## 16. 小结
+## 本页结论
 
 低精度与量化 kernel 的核心，不是“把位宽降下来”，而是让更小的数据格式真正成为更高效的计算路径。这要求算法、数据布局、dequant 位置、tile 设计、scale 粒度和 Tensor Core 路径彼此匹配。
 
@@ -219,3 +224,8 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 ### 收束口径
 
 真正让低精度 kernel 站得住，不是一次 benchmark 跑得漂亮，而是它能否进入长期维护循环。建议把每次改动绑定四类材料：代表性 probe、端到端案例、已知黑名单 shape / 路径、驱动与编译器升级前后的对照记录。这样量化就不只是“文件更小”，而是能被复验、回退和持续演进的平台能力。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Attention 与 KV Kernel](serving-attention-and-kv-kernels.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

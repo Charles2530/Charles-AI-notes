@@ -2,13 +2,18 @@
 
 VLM 的第一件事不是“让 LLM 看到图片”，而是把图片变成一串模型能处理的 token，再把这些 token 和语言对齐。若继续走向 VLA 和世界模型，这些 token 还要保留动作、接触、遮挡和时间变化。
 
+!!! note "读法定位"
+    这页先回答“VLM 架构：视觉表征、连接器与记忆”在「VLM/VLA」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先分清 token、embedding、attention 和评测指标；动作相关问题可跳到 VLA 专题。 必要时先回 [VLM/VLA 入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把视觉表征、语言模型接口、视频记忆和动作策略连起来，看多模态系统怎样从“看懂”走向“可行动”。
+
 !!! note "初学者先抓住"
     一张图片进入 VLM，通常会经历四步：像素切成 patch，patch 变成视觉 token，视觉 token 通过连接器进入语言模型，多帧视觉再被压成带记忆的状态。读公式前先把这四步放进脑子里。
 
 !!! tip "符号入口"
     本页公式使用的 \(I, H_{\text{img}}, W_{\text{img}}, C, P, N, d, x_v, x_t, z_t, a_t\) 都可以在 [符号与最小数学地图](vlm-vla-symbols-and-minimal-math.md) 里查。
 
-## 1. 从像素到视觉 token
+## 从像素到视觉 token
 
 先把图像写成一个数组：
 
@@ -60,7 +65,7 @@ h_v = f_v(e_1, e_2, \dots, e_N)
 
 **读作什么**：视觉 encoder 把一组 patch token 变成更高层的视觉特征 \(h_v\)。
 
-## 2. CLIP：建立静态图文语义空间
+## CLIP：建立静态图文语义空间
 
 ![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }
 
@@ -100,7 +105,7 @@ s(v,t)=\frac{\langle v,t\rangle}{\|v\|\|t\|}
     **它不证明什么**：这个目标不要求模型生成回答，更不要求模型控制机器人。  
     **和后续关系**：它提供静态语义坐标系，后面还要接连接器、视频状态和动作接口。
 
-## 3. BLIP-2：连接器是视觉信息瓶颈
+## BLIP-2：连接器是视觉信息瓶颈
 
 ![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="920" }
 
@@ -136,7 +141,7 @@ c = g_\theta(h_v, q)
 | Cross-attention | 文本或策略 token 按需读取视觉 memory | 成本更高，长视频更难 |
 | 统一 token 序列 | 图像、文本、动作都放进同一序列 | 训练和推理成本高 |
 
-## 4. 视频状态：从静态语义走向时间记忆
+## 视频状态：从静态语义走向时间记忆
 
 静态 VLM 解决“这张图里有什么”。VLA 和世界模型还要知道“刚刚发生了什么”和“动作后会怎样”。
 
@@ -168,7 +173,7 @@ z_t = f_\theta(o_{\le t})
     **它不证明什么**：它缺少动作条件、奖励、风险和 planner 接口，所以还不是完整世界模型。  
     **和红杯例子的关系**：它能帮助模型理解红杯在视频中如何持续存在，但还需要动作条件才能预测“抓快了会不会滑”。
 
-## 5. 从 VLM 到 VLA，再到世界模型
+## 从 VLM 到 VLA，再到世界模型
 
 VLA 和世界模型常被两条式子区分：
 
@@ -190,7 +195,7 @@ p_\theta(z_{t+1} \mid z_t, a_t, l)
 !!! example "红杯在桌边"
     VLM 能说红杯在桌边。VLA 能输出接近红杯的动作。世界模型还要比较：从侧面推可能把杯子推下桌，从上方夹取更稳。只有第三种能力才进入动作后果建模。
 
-## 6. 架构选择图
+## 架构选择图
 
 ```mermaid
 flowchart TD
@@ -208,7 +213,7 @@ flowchart TD
 
 这张图可以当成选型入口。静态检索不必上复杂 VLA；语言生成需要 connector；视频理解需要 temporal state；只有当系统要比较动作后果时，才真正进入世界模型接口。
 
-## 7. 检查点
+## 检查点
 
 读完这页后，应能回答：
 
@@ -219,3 +224,8 @@ flowchart TD
 | Q-Former 解决什么 | 从大量视觉 token 中抽取少量语言可用证据 |
 | 视频 latent 为什么重要 | VLA 和世界模型需要时序状态，而不是单帧 caption |
 | VLA 和世界模型差在哪 | VLA 输出动作，世界模型预测动作后的状态变化 |
+
+!!! tip "下一站"
+    - 回到本专题入口：[VLM/VLA](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[视觉 Tokenizer 与连接器](visual-tokenizers-and-connectors.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

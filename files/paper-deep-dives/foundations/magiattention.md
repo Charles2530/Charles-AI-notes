@@ -6,6 +6,11 @@ paper_topic: 高效训练
 
 # MagiAttention：超长上下文分布式 Attention
 
+!!! note "读法定位"
+    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [训练与基础系统](../../training/index.md)。
+    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
+    **主线关系**：读完后把结论回填到「训练与基础系统」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
+
 !!! info "论文信息"
     - 技术博客：`MagiAttention: A Distributed Attention Towards Linear Scalability for Ultra-Long Context, Heterogeneous Mask Training`
     - 链接：[MagiAttention official blog](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html)
@@ -51,6 +56,9 @@ MagiAttention 的直接背景是 Magi-1 这类大规模自回归视频生成训�
 
 <small>图源：`MagiAttention` 官方博客，Figure 1。原图概览了 FFA kernel、dispatch solver、GroupCast/GroupReduce、overlap solver，以及 forward/backward 时间线如何共同支撑超长上下文和异构 mask 训练。</small>
 
+!!! note "图解"
+    从左到右读这张总图：先把全局 heterogeneous mask 切成可调度的 AttnSlice，再由 dispatch solver 分配到 CP ranks；中间的 FFA kernel 负责真正算 attention，右侧的 GroupCast/GroupReduce 和 overlap timeline 说明 KV/dKV 通信怎样避开无效传输并尽量覆盖在计算后面。它证明的是系统路径完整，不等于任何 mask 都能自动线性扩展。
+
 这张图可以先读成一条流水线：
 
 ```text
@@ -79,6 +87,9 @@ global heterogeneous mask
 ![Ring-Attention load balance 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-2-ring-attention-load-balance.png){ width="760" }
 
 <small>图源：`MagiAttention` 官方博客，Figure 2。原图对比 full、causal、varlen full 和 varlen causal mask 下 Ring-Attention 的 sharding 策略，重点展示 varlen causal 会带来更强的碎片化、padding 和负载不均。</small>
+
+!!! note "图解"
+    读图时看每个 rank 分到的有效 QK 区域，而不是只看 token 数。full mask 比较均匀，causal mask 已经出现三角形面积差，varlen causal 又叠加样本边界和 padding；作者想说明固定 ring 传递在真实 packed 长序列里会产生 straggler 和冗余通信。
 
 这里的关键不是“某个 baseline 不好”，而是 attention 的计算量并不等于每个 rank 拿到的 token 数。对 full mask 来说，按 sequence 均匀切分通常还可以；对 causal 或 varlen causal 来说，不同 query chunk 对应的 valid key area 差很多。更麻烦的是，视频训练中的 block-causal + PnP 会让 mask area 变得更不规则，手工 zigzag 很难覆盖所有情况。
 
@@ -121,11 +132,17 @@ MagiAttention 的 kernel 层叫 `FFA`，全称 Flex-Flash-Attention。它基于 
 
 <small>图源：`MagiAttention` 官方博客，Figure 4。原图展示 AttnSlice 能覆盖 FA3 常见 mask，以及 varlen block-causal 等 FA3 原生不方便表达的 irregular masks。</small>
 
+!!! note "图解"
+    Figure 3 先看“复杂 mask 被拆成矩形子片段”，Figure 4 再看这些片段能拼出哪些常见模式。`QRange` 和 `KRange` 给出子矩形边界，`MaskType` 决定子矩形内部是 full、causal 还是反向/双向 causal；这样 kernel 不需要理解整张全局 mask，只要消费一串规则局部块。
+
 这个抽象很实用。传统 fused attention kernel 通常假设 mask 形状比较规则，例如 full、causal、local window 或 varlen causal。可是训练数据一旦被 pack，某些样本可能有全局块、某些块只看局部历史、某些 query 段还要跨样本边界禁看。把这些全部硬编码进 kernel 会爆炸；AttnSlice 则把它们拆成若干相对规则的小区域，让 kernel 只需要处理有限种局部 mask。
 
 ![FFA kernel 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-5-ffa-kernel.png){ width="780" }
 
 <small>图源：`MagiAttention` 官方博客，Figure 5。原图展示 FFA forward/backward kernel 中的数据加载、on-chip 计算，以及 slice-level parallelism 下通过 atomic reduction 合并 partial results。</small>
+
+!!! note "图解"
+    这张图读 kernel 内部：左侧是 Q/K/V tile 进入片上计算，中央是每个 AttnSlice 的局部 softmax attention，右侧是多个 slice 对同一输出产生 partial results 后的合并。重点是 forward 和 backward 都要支持 slice-level metadata，否则训练阶段会被梯度路径卡住。
 
 训练角度最重要的是：FFA 不是只做 inference forward。它要支持 backward，还要和分布式的 `CalcMeta`、`CommMeta` 配合。也就是说，AttnSlice 不是一个可视化概念，而是进入了训练时的 kernel 参数、远端 KV 获取、partial output reduce 和 backward dKV reduce。
 
@@ -157,6 +174,9 @@ f^*=\arg\min_f \max_j \sum_{C_i \in B_j} \mathrm{Area}(C_i)
 
 <small>图源：`MagiAttention` 官方博客，Figure 10。原图展示 dispatch solver 如何用 Min-Heap 近似解决 query chunks 到 CP buckets 的负载均衡分配。</small>
 
+!!! note "图解"
+    横向看 chunks，纵向看 CP buckets。solver 不是平均分 token，而是按每个 chunk 的有效 mask area 做贪心装箱，同时约束每个 bucket 的 chunk 数相同。它想避免两个问题：attention 面积不均导致某些 rank 慢，token 数不均又让 MLP/norm 等非 attention 层失衡。
+
 这里有一个容易忽略的训练细节：为什么要强制每个 bucket 的 chunk 数一样？因为一个 Transformer block 不只有 attention。MLP、norm、residual、embedding、loss 等通常按 token 数计费。假如 dispatch 只追求 attention area 均衡，可能会让某些 rank token 数过多，非 attention 部分又失衡。MagiAttention 的约束是在大训练系统里更稳的选择。
 
 ## 通信与重叠
@@ -166,6 +186,9 @@ Ring P2P 的问题不是“不能工作”，而是在异构 mask 下会传很�
 ![Ring P2P redundancy 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-7-ring-p2p-redundancy.png){ width="760" }
 
 <small>图源：`MagiAttention` 官方博客，Figure 11。原图展示 Ring P2P 在 simple causal 和 irregular varlen block-causal mask 下的冗余 KV 传输。</small>
+
+!!! note "图解"
+    图里的箭头表示 KV 沿 ring 传递，阴影/标记区域表示接收 rank 是否真的需要这些 KV。simple causal 里已经会传到不需要的 rank，varlen block-causal 更严重；作者想证明通信拓扑必须感知 mask，而不是固定把 KV 绕一圈。
 
 MagiAttention 用 `GroupCast` 和 `GroupReduce` 改写这个通信模型：
 
@@ -178,6 +201,9 @@ MagiAttention 用 `GroupCast` 和 `GroupReduce` 改写这个通信模型：
 
 <small>图源：`MagiAttention` 官方博客，Figure 12。原图展示基于 AlltoAll-v 的 GroupCast/GroupReduce：通过 transfer table、Range-Gather 和 Range-Scatter-Reduce 支持 zero-redundant KV/dKV 通信。</small>
 
+!!! note "图解"
+    先看 transfer table：它记录哪个 sender 的哪段 KV 被哪些 receiver 需要。GroupCast 只把 KV 送给相关 Q slices，GroupReduce 则在 backward 把多个 receiver 产生的 dKV partial 聚回 owner。重点不是通信消失了，而是无关 rank 不再接收无用 KV。
+
 最初实现基于 `AlltoAll-v`，需要额外的 `Range-Gather`、`Range-Scatter-Reduce` 等 pre/post kernels。这能消除冗余通信，但 D2D 重排开销不小。后续 benchmark 中还加入了 `magi_attn-native`，也就是基于 DeepEP 思路的 native group collectives，用来减少 AlltoAll-v 方案的重排和 launch overhead。
 
 通信减少以后，还要处理 overlap。MagiAttention 把远端 KV 获取和 FFA partial attention 拆成多阶段：
@@ -185,6 +211,9 @@ MagiAttention 用 `GroupCast` 和 `GroupReduce` 改写这个通信模型：
 ![Multi-stage overlap 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-9-multi-stage-overlap.png){ width="760" }
 
 <small>图源：`MagiAttention` 官方博客，Figure 13。原图展示 forward 中 prefetch next-stage KV 与 current-stage FFA overlap，以及 backward 中 KV prefetch、partial dKV reduce 和 current-stage attention 的多阶段重叠。</small>
+
+!!! note "图解"
+    时间轴上方看通信，下方看 FFA 计算。理想状态是当前 stage 正在算时，下一 stage 的远端 KV 已经在预取；backward 还要同时安排 dKV reduce。颜色块之间若出现空白，就是通信或调度没有被计算覆盖，端到端 step time 会被拉长。
 
 forward 里，本地 qkv 已经可用，所以初始 stage 可以先算，同时预取下一阶段远端 KV；理想情况下通信被当前阶段计算覆盖，只暴露最后一个远端 stage 的计算。backward 更复杂：既要预取下一阶段 KV，又要 reduce 上一阶段 partial dKV，还要算当前 stage，因此 overlap solver 要同时安排 prefetch、FFA backward 和 GroupReduce。
 
@@ -274,6 +303,9 @@ Blackwell 上有一个额外细节：`FFA` 本体基于 FA3，而 FA3 主要面�
 
 <small>图源：`MagiAttention` 官方博客，B200 varlen causal backward benchmark 原图。原图用于验证 Blackwell 上 MagiAttention 分布式 attention 的 backward scalability。</small>
 
+!!! note "图解"
+    这组四张图按硬件和方向读：H100 forward/backward、B200 forward/backward。横轴是 CP size 或总上下文扩展，纵轴是每 GPU 吞吐；最该看的不是单点最高值，而是 CP size 增大后曲线掉得快不快。forward 主要看远端 KV 获取和 FFA 计算，backward 还要看 dKV reduce，因此 backward 曲线更能暴露通信重叠是否有效。
+
 这些图的读法不要只看最高点，而要看曲线随 `cp_size` 增大是否保持斜率。对超长上下文训练来说，CP size 增大通常意味着总 sequence length 也增大。如果 throughput per GPU 很快掉下去，说明通信、负载不均或 kernel fragmentation 已经吃掉了并行收益。MagiAttention 的结果想证明的是：在 varlen causal 这种更接近真实训练的 mask 下，AttnSlice + dispatch + group collectives + overlap 能让分布式 attention 更接近线性扩展。
 
 `magi_attn-native` 和 `magi_attn-a2av` 的差别也很有信息量。前者说明 AlltoAll-v 虽然能表达 zero-redundant group communication，但额外 gather/scatter 和 D2D copy 仍会成为 overhead；native group collectives 能进一步把设计收益释放出来。换句话说，MagiAttention 的系统贡献不止是“少传数据”，还包括把少传数据这件事变成可用的高效通信 primitive。
@@ -309,3 +341,8 @@ MagiAttention 最值得记住的一点是：**超长上下文训练的瓶颈不�
 2. 官方 benchmark：[Long-Context Attention Benchmark](https://sandai-org.github.io/MagiAttention/docs/main/blog/cp_benchmark.html).
 3. 代码仓库：[SandAI-org/MagiAttention](https://github.com/SandAI-org/MagiAttention).
 4. 相关模型：[SandAI-org/MAGI-1](https://github.com/SandAI-org/MAGI-1).
+
+!!! tip "下一站"
+    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
+    - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。
+    - 按导航顺序继续：[SLA / SLA2](sla-sparse-linear-attention.md)。

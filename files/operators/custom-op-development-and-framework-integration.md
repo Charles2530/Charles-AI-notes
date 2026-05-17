@@ -2,6 +2,11 @@
 
 很多人第一次写自定义 kernel 时，会把注意力放在“这个 kernel 跑得够不够快”。但在真实工程里，性能只是其中一部分。一个自定义算子想真正进入训练或推理系统，还必须解决框架调用、autograd、图编译、profiler、shape / dtype / device dispatch、fallback、测试和版本演进。
 
+!!! note "读法定位"
+    这页先回答“自定义算子与框架集成”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
+
 因此“自定义算子开发”其实更像一条完整集成链，而不是孤立的 kernel 编写。
 
 !!! note "初学者先抓住"
@@ -12,13 +17,13 @@
 
     发动机单独测试很强，但如果接口、散热、变速箱和维护都不匹配，整车上路仍然失败。自定义算子也是：kernel 快只是零件好，框架集成才决定能不能上生产线。
 
-## 1. 为什么很多高性能 kernel 最终没被用起来
+## 为什么很多高性能 kernel 最终没被用起来
 
 常见原因不是它不够快，而是集成太难、只支持少量 shape、autograd 路径缺失、无法进入 graph compile、fallback 和错误处理太弱，或部署、打包和兼容成本太高。
 
 也就是说，真正让一个 kernel 有工程价值的，不只是性能，而是可接入性。
 
-## 2. 自定义算子的典型组成
+## 自定义算子的典型组成
 
 一个较完整的 custom op 通常包含前端 API、shape / dtype 检查、forward kernel、backward kernel 或 autograd 定义、dispatch 注册、测试与 benchmark，必要时还要补图编译兼容和 profiler 标记。
 
@@ -26,7 +31,7 @@
 
 因为一旦进入真实系统，你还要考虑 contiguous 和 non-contiguous 输入、CPU fallback 或 error path、多卡与 stream 语义、mixed precision、编译缓存和运行时加载。
 
-## 3. 集成链路图
+## 集成链路图
 
 ```mermaid
 flowchart TD
@@ -45,7 +50,7 @@ flowchart TD
 
 自定义算子只写 kernel 等于只完成了中间一格。真正进入系统，需要 API、dispatch、fallback、autograd、compile、profile 和 CI 都接上。每缺一格，线上就可能出现“单测很快，真实路径没用上”的情况。
 
-## 4. 与 PyTorch 集成时要想清楚的几件事
+## 与 PyTorch 集成时要想清楚的几件事
 
 ### 3.1 接口边界
 
@@ -57,11 +62,11 @@ flowchart TD
 
 很多 kernel 的集成难点其实不在 forward，而在 backward。
 
-## 5. 与 `torch.compile` / 图编译的关系
+## 与 `torch.compile` / 图编译的关系
 
 自定义算子如果完全绕开图编译器，有时会导致断图、融合机会丢失、上层优化无法继续穿透，profiler 也只能看到一大片黑盒。这并不意味着不能写 custom op，但你需要清楚它是否值得成为黑盒边界，是否会阻断更大的图优化，以及是否只在真正热点处使用。
 
-## 6. Triton 自定义算子与 CUDA 自定义算子的差异
+## Triton 自定义算子与 CUDA 自定义算子的差异
 
 ### 5.1 Triton
 
@@ -71,24 +76,24 @@ Triton 的优势是开发快、适合快速试 fusion、与 Python / PyTorch 路
 
 CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和特定硬件路径支持更充分；代价是集成与维护成本更高，开发调试更慢，对团队要求也更高。
 
-## 7. 什么时候值得做 custom op
+## 什么时候值得做 custom op
 
 通常需要同时满足多项条件才值得做：热点明显、默认实现慢、可融合收益明确、形状相对稳定，并且业务收益足以覆盖维护成本。
 
 如果只是“理论上也许能快一点”，往往不值得。
 
-## 8. 测试与验收不能省
+## 测试与验收不能省
 
 一个可上线的 custom op 至少要经过正确性对比、多 shape 测试、dtype 测试、contiguous / stride 测试、训练或推理端到端回归、profiler 对照和 fallback 验证。
 
 否则一个快 kernel 很容易变成线上隐患。
 
-## 9. 版本演进与兼容
+## 版本演进与兼容
 
 自定义算子不是“一次写完永远不动”的资产。  
 它会持续受新 GPU 架构、新 PyTorch 版本、编译器后端变化、shape 分布变化和模型结构变化影响。因此一个工程上成熟的 custom op，必须有版本管理、持续 benchmark、fallback 和清晰的适用边界。
 
-## 10. 接口契约模板
+## 接口契约模板
 
 | 契约项 | 要写清楚什么 |
 | --- | --- |
@@ -102,11 +107,11 @@ CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和
 
 这个模板很朴素，但能显著降低维护风险。没有接口契约的 custom op，过几个月后通常没人敢改，也没人知道为什么某些 shape 被排除。
 
-## 11. 一个形象比喻
+## 直觉例子
 
 自定义算子就像为工厂定制一台专用设备。设备本身可能很快，但如果它接不上现有流水线、维护手册不全、只能处理一种规格的零件、坏了又没有备用流程，那么它的工程价值就会大打折扣。真正有价值的 custom op，不只是“局部最快”，而是能顺滑进入整条生产线。
 
-## 12. 小结
+## 本页结论
 
 自定义算子开发的关键，不只是 kernel 写得快，而是把性能、集成、autograd、图编译、测试、fallback 和版本演进放在同一张设计图里。只有这样，一个自定义 kernel 才会从 demo 变成真正可维护、可部署、可复用的系统组件。
 
@@ -129,3 +134,8 @@ CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和
 **修复**：补充 custom op 的 meta function、decomposition / lowering 规则和 stride 检查；CI 覆盖 eager、compile、FP16/BF16、contiguous/non-contiguous；fallback 必须打日志并计入性能回归。
 
 **反例**：如果目标系统永远只跑 eager 离线脚本，compile 集成可以延后；但只要进入生产训练或推理图，custom op 就必须以“完整框架路径”验收，而不是只验单函数。
+
+!!! tip "下一站"
+    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[Runtime Dispatch](runtime-dispatch-and-kernel-selection.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

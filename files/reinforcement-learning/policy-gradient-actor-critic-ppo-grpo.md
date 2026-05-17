@@ -2,10 +2,15 @@
 
 这页从“采样为什么能学习”讲到 PPO 和 GRPO。目标不是推完所有数学细节，而是让你理解：为什么大模型后训练需要 rollout、reward、advantage、reference/KL，以及 verl 这类框架为什么围绕 actor、rollout、critic 和 reward 组织。
 
+!!! note "读法定位"
+    这页先回答“Policy Gradient 到 PPO / GRPO”在「强化学习」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
+    **前置**：先懂概率、优化和基本训练曲线；PPO/GRPO 不必先记公式，先抓更新对象。 必要时先回 [强化学习入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
+    **主线关系**：把状态、动作、奖励、策略优化和世界模型闭环连起来，看模型如何通过反馈改进决策。
+
 !!! tip "主线定位：降低标注和试错成本，但增加 rollout 成本"
     PPO/GRPO 在世界模型高效训练里负责把“真实人工标注或真实环境试错”替换成可验证 reward、组内比较和自动回放。它能降低数据成本、评测成本和部分人工偏好成本，但会显著增加 rollout token、reward 打分、reference logprob 和训练同步成本。
 
-## 1. 采样为什么能学习
+## 采样为什么能学习
 
 生成式模型的输出经常是离散的：token、动作编号、工具调用、代码片段。离散采样本身不能直接反向传播，但“采到这个动作的概率”可以反向传播。Policy gradient 的核心就是：如果某个采样结果带来高奖励，就提高它以后被采到的概率；如果带来低奖励，就降低概率。
 
@@ -23,7 +28,7 @@ prompt -> policy 采样 response -> reward/verifier 打分
 !!! warning "常见误区：RLHF 只是把 reward 当 loss"
     reward 通常来自完整回答或外部评测，不能像交叉熵那样直接逐 token 对齐。PPO/GRPO 要先采样回答，再算 log prob、reward、advantage 和 KL，最后才更新 policy。
 
-## 2. Policy Gradient：直接让好动作更可能
+## Policy Gradient：直接让好动作更可能
 
 策略目标可以写成：
 
@@ -64,7 +69,7 @@ G_t \nabla_\theta \log \pi_\theta(a_t\mid s_t)
 !!! note "为什么要乘 \(\nabla \log \pi\)"
     生成式模型不能直接对“采样结果”求导，因为采样是离散动作。但可以对“这个动作的概率”求导。奖励告诉你方向好坏，\(\nabla \log \pi\) 告诉你该怎样改参数才能提高或降低这个动作概率。
 
-## 3. Baseline 与 Advantage：把绝对分数变成相对好坏
+## Baseline 与 Advantage：把绝对分数变成相对好坏
 
 直接用 return 更新策略方差很大。常用做法是减去 baseline：
 
@@ -102,7 +107,7 @@ A_t = G_t - V(s_t)
 !!! example "生活例子：考试平均分"
     如果你考了 85 分，不能只看 85 高不高，还要看平均分是多少。平均 60 时，85 是好结果；平均 95 时，85 反而差。Advantage 就是“相对预期的好坏”。
 
-## 4. Actor-Critic：actor 负责行动，critic 负责估分
+## Actor-Critic：actor 负责行动，critic 负责估分
 
 Actor-Critic 把模型拆成两个角色：
 
@@ -119,7 +124,7 @@ critic 不直接执行动作，它负责给 actor 的更新提供低方差 basel
 !!! example "生活例子：餐厅评论"
     actor 像正在选餐厅的人，critic 像根据地点、价格和排队长度估计“这次大概会满意到什么程度”的朋友。真正有用的信息不是“这顿饭 4 星”，而是“这家在这种条件下本来预期 3 星，结果 4 星，说明选择比预期好”。这就是 advantage。
 
-## 5. 探索与 rollout：先看到更多候选，reward 才能比较
+## 探索与 rollout：先看到更多候选，reward 才能比较
 
 探索不是“随机乱试”，而是在不知道哪个动作更好时，给策略保留发现更好行为的机会。
 
@@ -131,7 +136,7 @@ critic 不直接执行动作，它负责给 actor 的更新提供低方差 basel
 
 SAC 是理解“熵为什么有用”的经典论文。它把目标写成“最大化 reward，同时最大化 policy entropy”，也就是既要完成任务，又不要太早把策略压成单一路径。
 
-![SAC stochastic versus deterministic stability](../assets/images/paper-figures/reinforcement-learning/sac-seeds-humanoid-rllab.png){ width="720" }
+![SAC stochastic versus deterministic stability](../assets/images/paper-figures/reinforcement-learning/sac-seeds-humanoid-rllab.png){ width="690" }
 
 <small>图源：[Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor](https://arxiv.org/abs/1801.01290)，Figure 4。原论文图意：比较 SAC 与 deterministic SAC variant 在 Humanoid (rllab) 上不同随机种子的稳定性。</small>
 
@@ -147,7 +152,7 @@ RL 训练常被数据采样卡住：要先用当前策略和环境交互，才�
 !!! note "图解：从 A3C 并行 actor 到 verl rollout worker"
     图里的核心不是某条曲线绝对更好，而是“采样、评估、更新”可以拆成并行工作流。大模型 RLHF/GRPO 中，rollout worker 负责高吞吐生成，reward worker 负责打分，actor/critic worker 负责训练。`verl` 的 dataflow 设计可以看作把这种并行交互思想搬到 LLM/VLM 后训练上，只是环境从 Atari 模拟器变成了 prompt、工具、规则奖励或 reward model。
 
-## 6. PPO：用概率比限制更新幅度
+## PPO：用概率比限制更新幅度
 
 PPO 使用新旧策略概率比：
 
@@ -213,7 +218,7 @@ for iteration = 1, 2, ...:
 !!! note "图解：PPO 的两层循环"
     外层循环负责采样新轨迹，内层循环负责在这批轨迹上做多轮 minibatch 更新。它不是无限重复使用旧数据的离线训练；PPO 仍然是近似 on-policy 方法，所以采样策略和更新策略不能差太远。这也是为什么 rollout、old log prob、reference log prob 和 KL 控制在工程上很重要。
 
-## 7. RLHF 里的 Reference/KL 约束
+## RLHF 里的 Reference/KL 约束
 
 大模型后训练通常不希望 policy 为了 reward 完全跑偏，所以会保留一个 reference policy，常常是 SFT 模型或旧策略。KL divergence 用来衡量新策略和 reference 的分布差距：
 
@@ -262,7 +267,7 @@ r^{\text{total}} = r^{\text{task}} - \beta D_{\mathrm{KL}}(\pi_\theta\|\pi_{\mat
 !!! warning "常见误区：KL 越小越好"
     KL 太大，模型可能为了 reward 牺牲语言质量、格式稳定性或安全边界；KL 太小，模型几乎学不动。实际训练要一起看 reward、KL、pass rate、长度、重复率和人工抽查。
 
-## 8. GRPO：用组内相对奖励替代 critic
+## GRPO：用组内相对奖励替代 critic
 
 GRPO 的思路是：对同一个 prompt 采样多个回答，形成一组：
 
@@ -301,7 +306,7 @@ A_i =
 !!! example "生活例子：同一道题采样 5 个解法"
     如果同一道数学题采样 5 个答案，两个正确、三个错误，那么正确答案不只是“得 1 分”，而是“比同题其他答案更好”。GRPO 用这组内部比较当 baseline。它不需要 critic 估计每个前缀的未来价值，但代价是一次 prompt 要生成多条 response，rollout 吞吐和 reward 质量会变得更重要。
 
-## 9. DeepSeek-R1：可验证奖励怎样改变推理行为
+## DeepSeek-R1：可验证奖励怎样改变推理行为
 
 DeepSeek-R1-Zero 的重要启发是：如果 reward 足够可靠，模型可以通过大规模 GRPO 从结果反馈中学出更长的推理、检查和回溯行为。
 
@@ -319,7 +324,7 @@ DeepSeek-R1-Zero 的重要启发是：如果 reward 足够可靠，模型可以�
 !!! note "图解：长推理不是 prompt 硬拉长"
     如果 reward 只看最终正确性，模型会探索各种能提高正确率的行为。对难题来说，短答案经常不够稳定；更长的推理给模型更多空间去枚举条件、重新计算、发现错误和切换策略。只要这些额外 token 带来的正确率收益超过 KL 和采样成本，策略更新就会提高这类长推理轨迹的概率。
 
-## 10. Reward Hacking：reward 升高不等于能力提升
+## Reward Hacking：reward 升高不等于能力提升
 
 RL 最危险的地方是：policy 会优化你给它的 reward，而不是你心里真正想要的目标。如果 reward model 或 verifier 有漏洞，policy 会找到漏洞。
 
@@ -340,7 +345,7 @@ RL 最危险的地方是：policy 会优化你给它的 reward，而不是你心
 | advantage 方差是否过大 | 方差大会导致训练不稳或奖励曲线虚高 |
 | 评测是否闭环 | 离线 reward 提升不一定等于真实任务成功 |
 
-## 11. PPO、GRPO、RLOO、ReMax 和 DPO 的边界
+## PPO、GRPO、RLOO、ReMax 和 DPO 的边界
 
 | 方法 | 是否采样当前策略 | 是否显式 reward | 是否需要 critic | 适合什么 |
 | --- | --- | --- | --- | --- |
@@ -386,3 +391,8 @@ action_sensitivity_pass=58.0% -> 46.5%
 这时不能只说“RL 没用”。更可能的链条是：reward 主要奖励未来帧像不像，但没有奖励“换动作时未来是否按动作变化”。模型学会生成更平均、更安全的视觉未来，MSE/LPIPS 变好；planner 需要的是反事实差异，因此闭环不升甚至下降。
 
 修复要把 reward 拆开：加入 action-conditioned contrastive check，要求同一状态下不同动作的预测差异与真实后果一致；按接触、遮挡、反光、失败恢复分桶统计；对 reward model 加入 holdout bucket 和 adversarial prompt；限制 response/action chunk 过长导致的 reward hacking。
+
+!!! tip "下一站"
+    - 回到本专题入口：[强化学习](index.md)，确认这页在整条路线中的位置。
+    - 按导航顺序继续：[世界模型中的强化学习](rl-for-world-models.md)。
+    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。
