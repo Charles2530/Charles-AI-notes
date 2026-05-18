@@ -71,7 +71,8 @@ nav:
   - 基础知识:
       - foundations/index.md
       - 符号与最小数学地图: foundations/symbols-and-minimal-math.md
-      - 表示与计算:
+      - 数据、表示与计算:
+          - 数据与数据集基础: foundations/data-and-dataset-basics.md
           - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
           - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
           - 卷积与视觉特征: foundations/convolution-and-feature-extraction.md
@@ -83,12 +84,16 @@ nav:
           - Mamba 与混合 SSM 架构: foundations/mamba-and-hybrid-ssm-transformers.md
       - 训练目标与证据:
           - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
+          - 预训练目标与表示学习: foundations/pretraining-objectives-and-representation-learning.md
           - 优化与训练入门: foundations/optimization-and-training-basics.md
+          - 泛化、正则化与分布偏移: foundations/generalization-regularization-and-distribution-shift.md
+          - 模型蒸馏入门: foundations/model-distillation-basics.md
           - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
           - 数据划分与评测指标: foundations/data-splits-metrics-and-evaluation-basics.md
       - 系统执行与成本:
           - 数值、显存与运行时: foundations/numerics-memory-and-runtime-basics.md
-      - 交互与多模态:
+      - 生成、交互与多模态:
+          - 生成与解码基础: foundations/generation-and-decoding-basics.md
           - Prompt、CoT 与 RAG 入门: foundations/prompt-engineering-cot-and-rag-basics.md
           - 多模态推理入门: foundations/multimodal-cot-and-reasoning-basics.md
   - 扩散模型:
@@ -289,6 +294,7 @@ nav:
           - Fast-FoundationStereo：实时双目匹配: paper-deep-dives/inference/fast-foundation-stereo.md
           - KVSlimmer：非对称 KV 合并: paper-deep-dives/inference/kvslimmer.md
       - 扩散模型:
+          - Score SDE：连续时间扩散框架: paper-deep-dives/diffusion/score-sde.md
           - DPM-Solver++：Guided Sampling 求解器: paper-deep-dives/diffusion/dpm-solver-plus-plus.md
           - DMD：一步扩散蒸馏: paper-deep-dives/diffusion/dmd.md
           - DMD2：更稳的少步分布匹配蒸馏: paper-deep-dives/diffusion/dmd2.md
@@ -330,6 +336,7 @@ nav:
         - Qwen3：Thinking 与蒸馏: paper-deep-dives/technical-reports/qwen3.md
         - Gemini 2.5：动态 Thinking: paper-deep-dives/technical-reports/gemini-2-5.md
         - Kimi K2：MuonClip 与 Agent: paper-deep-dives/technical-reports/kimi-k2.md
+        - InCoder-32B：工业代码模型: paper-deep-dives/technical-reports/incoder-32b.md
         - Nemotron 3 Super：异步 RL: paper-deep-dives/technical-reports/nemotron-3-super.md
         - Qwen3.5-Omni：全模态 Agent: paper-deep-dives/technical-reports/qwen35-omni.md
         - DeepSeek-V4：百万上下文与 FP4: paper-deep-dives/technical-reports/deepseek-v4-pro.md

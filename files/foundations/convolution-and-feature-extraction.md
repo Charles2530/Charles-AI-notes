@@ -143,7 +143,7 @@ function UNet(x):
 
 ## 和后续专题的关系
 
-- [扩散扩散训练与表示](../diffusion/training.md)：理解 UNet 为什么适合预测噪声或 velocity。
+- [扩散训练与表示](../diffusion/training.md)：理解 UNet 为什么适合预测噪声或 velocity。
 - [扩散条件控制](../diffusion/guidance-and-conditioning.md)：理解 ControlNet 如何在卷积特征图上注入结构条件。
 - [VLM 架构](../vlm/architecture-and-training.md)：理解视觉编码器如何把图像变成特征。
 

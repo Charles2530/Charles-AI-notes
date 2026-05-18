@@ -37,7 +37,7 @@ x_t=\sqrt{\bar{\alpha}_t}x_0+\sqrt{1-\bar{\alpha}_t}\epsilon
 
 1. 把生成过程写成更容易训练的逐步去噪问题；
 2. 把逐步去噪解释成 SDE/ODE 数值求解，引入 Euler、Heun、DPM-Solver；
-3. 用蒸馏、分布匹配、整流流把多步采样压缩成少步甚至一步。
+3. 用蒸馏、分布匹配、Rectified Flow 把多步采样压缩成少步甚至一步。
 
 一个简化路线是：
 

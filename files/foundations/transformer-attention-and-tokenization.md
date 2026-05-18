@@ -17,6 +17,9 @@ Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核�
 !!! note "初学者先抓住"
     Attention 的核心不是“模型很聪明”，而是每个 token 都能按相关性读取其他 token。Q/K/V 可以先理解成：我想找什么、别人暴露什么、真正读走什么。看到 LLM、VLM、DiT 或 agent 模型时，先分清 tokenization、embedding、self-attention、cross-attention 和输出 head 分别在哪一层。
 
+!!! tip "和数据页、解码页的边界"
+    本页从 tokenizer / processor 之后开始讲 token 如何进入 Transformer。若你还不清楚样本、标签、schema、清洗、去重和数据版本，先看 [数据与数据集基础](data-and-dataset-basics.md)。若你关心 logits 出来以后怎么采样、temperature/top-p 怎么影响生成、KV cache 如何进入 decode 成本，继续看 [生成与解码基础](generation-and-decoding-basics.md)。
+
 !!! tip "为什么现在要学这个：世界模型的 token 成本"
     世界模型不是只读一句文本，而是同时读多相机图像、视频历史、机器人状态、动作、语言指令和可能的未来 rollout。Attention 决定这些 token 如何互相读取，KV cache 决定长历史在推理时占多少显存，mask 决定哪些过去和未来能被看见。比如 `4` 路相机、`16` 帧、`224x224`、`14x14` patch 就已经有 `16,384` 个视觉 token；如果分辨率提高到 `448x448`，视觉 token 会到 `65,536`，直接超过 `32k` context。学 attention 不是为了背公式，而是为了能判断 token、context、KV、mask 和吞吐之间的取舍。
 
@@ -221,6 +224,8 @@ function TransformerBlock(x):
 
 ## 和后续专题的关系
 
+- [数据与数据集基础](data-and-dataset-basics.md)：理解 token 之前的样本、标签和 processor 边界。
+- [生成与解码基础](generation-and-decoding-basics.md)：理解 logits、采样参数、自回归生成和 KV cache。
 - [扩散模型中的 DiT](../diffusion/training.md)：图像 patch token 进入 Transformer 去做去噪。
 - [VLM 架构与训练](../vlm/architecture-and-training.md)：图像 token 和文本 token 如何连接。
 - [推理系统](../inference/index.md)：KV cache 和 attention 决定长上下文成本。

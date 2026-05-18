@@ -36,6 +36,27 @@
 !!! failure "最佳反例"
     最坏的术语用法，是把 world model、simulator、policy、rollout、agent 都当成气氛词。术语只有在能约束输入输出、证据等级和失败边界时，才真的帮上后续判断。
 
+## 数据、泛化与生成基础
+
+| 术语 | 含义 |
+| --- | --- |
+| `Autoregressive Generation` | 自回归生成，每一步根据已有前缀预测下一个 token，并把生成结果追加回上下文。 |
+| `Beam Search` | 解码时保留多条高概率候选序列并继续扩展，常用于翻译等结构较固定任务；开放式生成中可能更模板化。 |
+| `Behavior Cloning / BC` | 行为克隆，用专家示范数据训练策略模仿动作，常写成 \(-\log \pi_\theta(a\mid o,l)\)。 |
+| `Contrastive Learning` | 对比学习，让匹配样本表示更近、不匹配样本更远；CLIP 和 InfoNCE 是常见代表。 |
+| `Data Leakage` | 数据泄漏，训练或调参过程看到了本应保留给验证、测试或线上判断的数据。 |
+| `Dataset` | 数据集，不只是文件集合，还包括来源、样本定义、标签规则、split、metadata 和版本。 |
+| `Deduplication` | 去重，移除完全重复或近重复样本，降低训练偏置和 train/test 污染风险。 |
+| `Distribution Shift / OOD` | 分布偏移或分布外输入，指训练分布与测试、部署或真实使用分布不一致。 |
+| `Greedy Decoding` | 贪心解码，每一步选择概率最高的 token，稳定快速但容易重复或卡在局部最优。 |
+| `Label` | 标签或监督信号，可以是类别、下一个 token、动作、reward、偏好排序或伪标签。 |
+| `Logits` | softmax 前的未归一化分数。解码、分类和蒸馏通常先看 logits，再看概率。 |
+| `Masked Modeling` | 遮挡建模，把输入一部分 mask 掉，让模型预测被遮挡的 token、像素或 latent 表示。 |
+| `Next-token Prediction` | 下一个 token 预测，自回归语言模型的核心预训练目标。 |
+| `Sample` | 数据样本，训练和评测的最小语义单位，可以是一段文本、一张图、一个 clip 或一条机器人轨迹。 |
+| `Top-k Sampling` | 只在概率最高的 \(k\) 个 token 中采样。\(k\) 固定，可能不适应不同上下文的分布形状。 |
+| `Top-p / Nucleus Sampling` | 选择累计概率达到 \(p\) 的最小 token 集合再采样，候选集合大小会随上下文动态变化。 |
+
 ## 训练与优化
 
 | 术语 | 含义 |
@@ -44,14 +65,21 @@
 | `AdamW` | Transformer 训练中常用优化器，把 weight decay 与梯度更新解耦。 |
 | `DPO` | Direct Preference Optimization，常用偏好对齐方法，直接利用偏好对优化策略分布。 |
 | `ELBO` | Evidence Lower Bound，变分推断目标，在扩散模型和世界模型中常出现。 |
+| `Feature Distillation` | 特征蒸馏，让 student 对齐 teacher 的中间 hidden states、feature maps 或 attention/relation 结构，而不只学最终输出。 |
 | `GRPO` | Group Relative Policy Optimization，用同一输入的多次采样做组内相对奖励，常用于可验证奖励后训练。 |
+| `Knowledge Distillation / KD` | 知识蒸馏，用 teacher model 的输出分布、中间表示、rationale 或生成轨迹训练 student model，常用于压缩、提速和行为迁移。 |
+| `Logit Distillation` | Logit 蒸馏，让 student 对齐 teacher 的 pre-softmax logits 或 temperature softmax 分布，保留类别或 token 间相对偏好。 |
 | `LoRA` | Low-Rank Adaptation，用低秩增量替代全量参数更新的参数高效微调方法。 |
 | `PPO` | Proximal Policy Optimization，限制新旧策略差距的策略优化方法，是 RLHF 经典算法。 |
 | `QAT` | Quantization-Aware Training，在训练中模拟量化误差，让模型适应低比特约束。 |
 | `PTQ` | Post-Training Quantization，训练完成后再进行量化。 |
+| `Rationale Distillation` | Rationale 蒸馏，用 teacher 生成的解释、CoT 或中间步骤作为额外监督，帮助 student 学任务过程而不只是最终标签。 |
 | `RLHF` | Reinforcement Learning from Human Feedback，用人类偏好或 reward model 优化模型行为。 |
 | `RLVR` | Reinforcement Learning with Verifiable Rewards，用规则或任务指标等可验证奖励优化模型。 |
 | `SFT` | Supervised Fine-Tuning，用高质量示范数据教模型遵循任务格式和行为。 |
+| `Soft Target` | teacher 产生的软目标分布，例如每个类别或 token 的概率；相比 one-hot hard label，它保留了相似类别之间的相对关系。 |
+| `Teacher / Student` | 蒸馏语境里的教师模型和学生模型。teacher 通常能力更强但更慢或更贵，student 通过学习 teacher 信号换取低成本部署。 |
+| `Temperature` | softmax 中控制分布尖锐程度的温度参数；蒸馏里较高 temperature 会让 teacher 分布更软，暴露更多非最大类信息。 |
 | `Muon` | 面向矩阵权重的优化器路线：先积累 momentum，再用 Newton-Schulz 等方式近似正交化更新方向。 |
 | `Distributed Muon` | Muon 在分布式训练中的实现形态，核心难点是正交化通常需要看到完整矩阵 momentum，而不是单个 optimizer shard。 |
 | `Update RMS` | 参数更新的均方根尺度。Muon 论文用它把不同形状矩阵的更新尺度拉齐，并尽量复用 AdamW 学习率。 |

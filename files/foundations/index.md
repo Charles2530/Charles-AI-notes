@@ -8,13 +8,13 @@
     **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
 
 ```text
-数据 -> 张量 / Token -> 模型模块 -> Loss -> 梯度 -> Runtime -> 评测证据
+数据 -> 张量 / Token -> 模型模块 -> 目标 / Loss -> 泛化 -> 解码 / Runtime -> 评测证据
 ```
 
 如果你刚开始读 AI 论文，先别急着背模型名字。先弄清数据怎么进模型、模型每一步在算什么、训练信号从哪里来、最后用什么证据证明它真的变好。
 
 !!! note "先读哪几页"
-    推荐顺序是：本页 -> [符号与最小数学地图](symbols-and-minimal-math.md) -> [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) -> [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md) -> [Transformer 输入与注意力](transformer-attention-and-tokenization.md) -> [概率与潜变量模型](probability-latent-variables-and-generative-models.md) -> [优化与训练入门](optimization-and-training-basics.md)。读完这些，再按兴趣补多模态、MoE、Mamba、显存和评测。
+    推荐顺序是：本页 -> [数据与数据集基础](data-and-dataset-basics.md) -> [符号与最小数学地图](symbols-and-minimal-math.md) -> [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) -> [Transformer 输入与注意力](transformer-attention-and-tokenization.md) -> [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md) -> [优化与训练入门](optimization-and-training-basics.md) -> [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)。读完这些，再按兴趣补生成解码、模型蒸馏、多模态、MoE、Mamba、显存和评测。
 
 ## 一张图先建立全局感
 
@@ -30,11 +30,13 @@
 
 ## 基础主线：从数据到证据
 
-### 2.1 数据先变成张量和 token
+### 2.1 先看数据本身，再变成张量和 token
 
-文本、图像、视频、音频、动作轨迹，进入模型前都会变成张量。张量的 shape 决定模块能不能接上，也决定显存和计算大概有多贵。
+文本、图像、视频、音频、动作轨迹，进入模型前先是样本、标签、schema、来源、split 和版本。然后它们才会经过 tokenizer / processor 变成张量。张量的 shape 决定模块能不能接上，也决定显存和计算大概有多贵。
 
 ```text
+数据来源 / 样本 / 标签 / schema / split / version
+  -> tokenizer / processor
 文本 -> token id -> embedding: [B, L, D]
 图像 -> patch token -> visual embedding: [B, N, D]
 视频 -> frame / patch / time token -> long sequence
@@ -45,6 +47,7 @@
 
 | 页面 | 解决的问题 |
 | --- | --- |
+| [数据与数据集基础](data-and-dataset-basics.md) | 数据来源、样本/标签、processor、清洗、去重、泄漏和版本怎么读 |
 | [符号与最小数学地图](symbols-and-minimal-math.md) | 公式和 shape 字母到底怎么读 |
 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) | 数据如何组织成张量，shape 为什么是接口 |
 | [卷积与视觉特征](convolution-and-feature-extraction.md) | 图像局部特征、多尺度和 UNet 怎么理解 |
@@ -61,7 +64,7 @@
 | Norm / Residual | 让深层训练更稳定 | [Norm、残差与激活函数](normalization-residual-and-activation.md) |
 | MoE / Mamba | 在容量、长上下文和推理成本上做结构取舍 | [MoE](moe-and-large-model-architecture-basics.md)、[Mamba](mamba-and-hybrid-ssm-transformers.md) |
 
-### 2.3 Loss 和梯度让模型学习
+### 2.3 目标、Loss 和梯度让模型学习
 
 训练不是“模型突然懂了”，而是反复做四件事：
 
@@ -82,10 +85,13 @@
 | 页面 | 解决的问题 |
 | --- | --- |
 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) | 为什么模型学的是分布，\(p_\theta\)、latent、KL、ELBO 怎么读 |
+| [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md) | next-token、masked modeling、contrastive、denoising 和行为克隆分别在学什么 |
 | [优化与训练入门](optimization-and-training-basics.md) | loss、gradient、optimizer、训练曲线怎么连起来 |
+| [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md) | loss 下降后，为什么还要看 train-val gap、正则化和 OOD |
+| [模型蒸馏入门](model-distillation-basics.md) | teacher/student、soft target、rationale 和少步生成蒸馏怎么读 |
 | [自动微分与激活显存](autograd-activation-checkpointing-and-memory.md) | 为什么训练要保存计算图和激活，checkpointing 为什么省显存 |
 
-### 2.4 Runtime 决定能不能跑得动
+### 2.4 解码和 Runtime 决定能不能跑得动
 
 算法公式正确，不代表工程上能跑。长上下文、多图视频、MoE、低比特和高并发都会把问题变成系统成本。
 
@@ -97,7 +103,7 @@ batch 和 shape -> 吞吐 / 延迟
 runtime -> 调度、缓存、融合和 fallback
 ```
 
-先读 [数值、显存与运行时](numerics-memory-and-runtime-basics.md)。读完后至少能分清：模型文件变小、FLOPs 下降、延迟下降、显存下降不是同一件事。
+先读 [生成与解码基础](generation-and-decoding-basics.md) 和 [数值、显存与运行时](numerics-memory-and-runtime-basics.md)。读完后至少能分清：temperature/top-p 改的是生成选择，KV cache 和 runtime 改的是执行成本；模型文件变小、FLOPs 下降、延迟下降、显存下降也不是同一件事。
 
 ### 2.5 评测证据决定结论是否可信
 
@@ -113,30 +119,47 @@ runtime -> 调度、缓存、融合和 fallback
 
 先读 [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。如果只看一个总分，很容易把平均收益误读成关键场景可靠。
 
+### 2.6 决策和 RL 的最小入口
+
+如果你要读世界模型、VLA、机器人或 RLHF，基础区至少要认得这五个词：
+
+| 词 | 最小读法 | 后面会用在哪里 |
+| --- | --- | --- |
+| state | 当前局势或历史压缩状态 | 世界模型 latent、VLA 观测 |
+| action | 模型或 agent 选择的下一步 | token、工具调用、机器人动作 |
+| reward | 行为好坏的反馈信号 | RLHF、RLVR、控制任务 |
+| policy | 从 state 到 action 的规则或分布 | LLM 采样策略、VLA 策略 |
+| value | 从当前状态预计未来能拿多少回报 | PPO、Dreamer、规划 |
+
+这部分不在基础区展开算法推导。要系统学习，直接进 [MDP、价值函数与 Bellman](../reinforcement-learning/mdp-value-bellman.md)。
+
 ## 两条常见学习路线
 
 ### 3.1 从零读 AI 模型
 
 | 顺序 | 页面 |
 | --- | --- |
-| 1 | [符号与最小数学地图](symbols-and-minimal-math.md) |
-| 2 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) |
-| 3 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md) |
-| 4 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md) |
-| 5 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) |
-| 6 | [优化与训练入门](optimization-and-training-basics.md) |
-| 7 | [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
+| 1 | [数据与数据集基础](data-and-dataset-basics.md) |
+| 2 | [符号与最小数学地图](symbols-and-minimal-math.md) |
+| 3 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) |
+| 4 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md) |
+| 5 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md) |
+| 6 | [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md) |
+| 7 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) |
+| 8 | [优化与训练入门](optimization-and-training-basics.md) |
+| 9 | [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md) |
+| 10 | [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
 
 ### 3.2 为后续专题补课
 
 | 你想读 | 先补什么 |
 | --- | --- |
 | 扩散模型 | 卷积/UNet、概率分布、score、优化 |
-| VLM / VLA | token、视觉特征、attention、位置/mask、动作符号 |
+| VLM / VLA | 数据 schema、token、视觉特征、attention、位置/mask、动作符号、BC |
 | 量化 | dtype、bytes、GEMM、runtime、评测 |
-| 推理系统 | attention、KV cache、batch、latency、runtime |
-| 训练系统 | loss、梯度、自动微分、activation、checkpoint |
-| 世界模型 | latent、动作条件分布、rollout、评测桶 |
+| 推理系统 | 解码、attention、KV cache、batch、latency、runtime |
+| 训练系统 | 数据版本、预训练目标、loss、梯度、自动微分、activation、checkpoint、蒸馏信号 |
+| 世界模型 | latent、动作条件分布、state/action/reward、rollout、评测桶 |
 | 技术报告 | MoE、Mamba、低精度、activated params、证据边界 |
 
 ## 读论文时的四步法
@@ -154,17 +177,22 @@ runtime -> 调度、缓存、融合和 fallback
 
 | 现场症状 | 先回看 |
 | --- | --- |
+| 数据来源、标签或版本说不清 | [数据与数据集基础](data-and-dataset-basics.md) |
 | shape 对不上、长视频一接入就 OOM | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) |
 | attention 一长就慢，KV cache 压不住 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
-| loss 下降但关键任务不涨 | [优化与训练入门](optimization-and-training-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
+| 不知道某个预训练 loss 在学什么 | [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md) |
+| loss 下降但关键任务不涨 | [优化与训练入门](optimization-and-training-basics.md)、[泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
+| 采样参数一改，输出质量和成本都变 | [生成与解码基础](generation-and-decoding-basics.md) |
+| 小模型很像 teacher，但上线关键桶退化 | [模型蒸馏入门](model-distillation-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
 | latent 很省但 planner 用不了 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) |
 | 低比特模型变小但不快 | [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
+| 看世界模型或 VLA 时分不清 state/action/reward | [MDP、价值函数与 Bellman](../reinforcement-learning/mdp-value-bellman.md) |
 | RAG 或工具调用结果不可复现 | [Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) |
 
 ## 本页结论
 
-基础知识不是“学完才能开始”的门槛，而是一张回查地图。第一次读只要打通主线：数据变成张量，模块处理表示，loss 产生梯度，runtime 决定成本，评测决定结论。后面读扩散、VLM、量化、训练、推理和世界模型时，遇到卡点再回到对应基础页补细节。
+基础知识不是“学完才能开始”的门槛，而是一张回查地图。第一次读只要打通主线：数据有来源和版本，数据变成张量/token，模块处理表示，目标和 loss 产生梯度，泛化决定能否离开训练集，解码和 runtime 决定成本，评测决定结论。后面读扩散、VLM、量化、训练、推理、强化学习和世界模型时，遇到卡点再回到对应基础页补细节。
 
 !!! tip "下一站"
-    - 按导航顺序继续：[符号与最小数学地图](symbols-and-minimal-math.md)。
+    - 按导航顺序继续：[数据与数据集基础](data-and-dataset-basics.md)。
     - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

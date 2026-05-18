@@ -20,6 +20,9 @@
 !!! tip "遇到这些症状，回看本页"
     训练 loss 稳定下降但闭环成功率不涨、长视频 bucket 反复 loss spike、换 optimizer 后短跑更快但最终指标不稳，或者恢复 checkpoint 后曲线悄悄偏离基线时，先回到 loss、gradient、optimizer、scheduler 和评测闭环。本页能帮你判断这是优化路径问题、目标函数问题、数据分布问题，还是系统恢复破坏了训练状态。
 
+!!! tip "先分清目标和泛化"
+    本页讲怎么优化 loss；如果你还不清楚 next-token、masked modeling、contrastive learning、denoising 或 behavior cloning 分别在训练什么，先看 [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md)。如果 loss 下降但 validation、holdout 或线上桶不涨，继续看 [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)。
+
 !!! tip "主线定位：降低训练成本和错误优化成本"
 
     优化基础在世界模型高效训练里负责判断“训练到底在朝哪里走”。它能降低无效训练成本：早识别 loss 代理目标和闭环指标错位、learning rate 或 batch 设计不合适、optimizer 让短跑好看但长跑不稳，以及系统恢复让曲线不可比较。
@@ -212,6 +215,8 @@ Loss 是训练信号，但最终还要看任务指标。常见误判包括：
 
 ## 和后续专题的关系
 
+- [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md)：理解不同 loss 到底在逼模型学什么。
+- [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)：判断 loss 下降后是否真的可用。
 - [大模型训练路线图](../training/index.md)：进入完整训练生产线。
 - [训练评测与消融设计](../training/evaluation-and-ablation-methodology.md)：判断训练改动是否可信。
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：排查 loss spike、NaN、梯度异常。

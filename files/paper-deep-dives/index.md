@@ -266,6 +266,12 @@
   </thead>
   <tbody>
     <tr>
+      <td>2020-11</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/score-sde/">Score SDE：连续时间扩散框架</a></td>
+      <td>如何把 SMLD 和 DDPM 统一成前向 SDE、反向 SDE 与 probability flow ODE，并用 NCSN++ / DDPM++ 训练配方、PC sampler 和 continuous score matching 推动生成质量与 likelihood</td>
+    </tr>
+    <tr>
       <td>2022-11</td>
       <td>扩散模型</td>
       <td><a href="diffusion/dpm-solver-plus-plus/">DPM-Solver++：Guided Sampling 求解器</a></td>
@@ -544,6 +550,13 @@
       <td><a href="technical-reports/kimi-k2/">Kimi K2：MuonClip、万亿 MoE 与 Agent 数据</a></td>
       <td>如何用 MuonClip 跑稳 1T MoE 预训练，并通过 agentic data synthesis、tool-use SFT、RLVR/self-critique reward 和 checkpoint engine 训练开放 agent 模型</td>
       <td><a href="../training/distributed-training-and-checkpointing/">分布式训练</a> / <a href="../inference/rag-agents-and-long-context-systems/">Agent 系统</a></td>
+    </tr>
+    <tr>
+      <td>2026-03</td>
+      <td>技术报告</td>
+      <td><a href="technical-reports/incoder-32b/">InCoder-32B：工业代码基础模型与执行验证训练</a></td>
+      <td>如何用 Code-Flow 三阶段训练、工业代码召回/清洗、8K -> 32K -> 128K mid-training、execution-grounded SFT 和仿真/编译/性能验证，把 32B dense code model 推向 Verilog、CUDA/Triton、嵌入式、CAD 和代码优化场景</td>
+      <td><a href="../operators/triton-programming-model-and-autotuning/">Triton / GPU kernel</a> / <a href="../training/post-training-data-engines-and-judge-models/">后训练数据引擎</a></td>
     </tr>
     <tr>
       <td>2026-04</td>

@@ -20,6 +20,9 @@
 !!! tip "遇到这些症状，回看本页"
     平均分提高但高风险任务失败更多、上线回流的问题离线集里从没出现、消融表里每个版本都“略有提升”但无法复现，或者模型开始过拟合同一批验证样本时，回看本页。它能帮你判断该建哪些 bucket、哪些样本要进 holdout、哪些指标能指导回流，而不是继续追一个总分。
 
+!!! tip "和数据、泛化页的边界"
+    如果问题是样本来源、标签、schema、去重、泄漏或版本不清，先看 [数据与数据集基础](data-and-dataset-basics.md)。如果问题是 train-val gap、过拟合、正则化或 OOD，继续看 [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)。本页重点放在评测证据如何组织。
+
 ## 读法卡：评测先问四件事
 
 | 问题 | 为什么重要 |
@@ -150,6 +153,8 @@ flowchart LR
 
 ## 和后续专题的关系
 
+- [数据与数据集基础](data-and-dataset-basics.md)：评测可信度先依赖干净的数据边界和版本。
+- [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)：解释 train-val gap、OOD 和上线分布偏移。
 - [训练评测与消融](../training/evaluation-and-ablation-methodology.md)：如何判断训练改动是否可信。
 - [推理在线评测](../inference/observability-and-online-evaluation.md)：如何把离线评测接到线上观测。
 - [强化学习总览](../reinforcement-learning/index.md)：reward、闭环评测和世界模型任务指标如何影响训练结论。
