@@ -11,6 +11,15 @@ paper_topic: 高效推理
     **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
     **主线关系**：读完后把结论回填到「推理」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
 
+!!! tip "前置阅读路线"
+    | 先补什么 | 站内页面 | 读到什么程度 |
+    | --- | --- | --- |
+    | 一篇串读 | [读懂 Fast-FoundationStereo：从双目几何到高效推理](../../thinking-exploration/fast-foundation-stereo-prerequisite-map.md) | 用一条知识路径把双目几何、cost volume、蒸馏、NAS/剪枝、伪标签和 runtime 串起来 |
+    | 双目几何 | [相机、深度与机器人视觉](../../embodied-ai/cameras-depth-and-robot-vision.md)、[双目匹配与 Cost Volume 入门](../../embodied-ai/stereo-matching-and-cost-volume.md) | 知道 rectified stereo、disparity、baseline、cost volume 和 BP/D1 指标 |
+    | 视觉特征 | [卷积与视觉特征](../../foundations/convolution-and-feature-extraction.md)、[Transformer 输入与注意力](../../foundations/transformer-attention-and-tokenization.md)、[VLM 架构](../../vlm/architecture-and-training.md) | 知道 feature map、backbone、patch token、ViT / DINO / DPT 的角色 |
+    | 深度 foundation model 与伪标签 | [Depth Anything](../embodied-ai/depth-anything.md)、[Depth Anything V2](../embodied-ai/depth-anything-v2.md) | 知道 teacher-student、pseudo-label 和真实分布补齐为什么重要 |
+    | 压缩与推理成本 | [模型蒸馏入门](../../foundations/model-distillation-basics.md)、[模型压缩、剪枝与 NAS 入门](../../foundations/model-compression-pruning-and-nas-basics.md)、[数值、显存与运行时](../../foundations/numerics-memory-and-runtime-basics.md) | 知道 distillation、structured pruning、blockwise NAS、MACs、latency 和 TensorRT 的区别 |
+
 !!! info "论文信息"
     - 论文：`Fast-FoundationStereo: Real-Time Zero-Shot Stereo Matching`
     - 链接：[arXiv:2512.11130](https://arxiv.org/abs/2512.11130)

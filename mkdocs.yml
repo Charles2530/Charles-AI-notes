@@ -88,6 +88,7 @@ nav:
           - 优化与训练入门: foundations/optimization-and-training-basics.md
           - 泛化、正则化与分布偏移: foundations/generalization-regularization-and-distribution-shift.md
           - 模型蒸馏入门: foundations/model-distillation-basics.md
+          - 模型压缩、剪枝与 NAS 入门: foundations/model-compression-pruning-and-nas-basics.md
           - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
           - 数据划分与评测指标: foundations/data-splits-metrics-and-evaluation-basics.md
       - 系统执行与成本:
@@ -262,6 +263,7 @@ nav:
           - 具身任务谱系与评测: embodied-ai/task-taxonomy-and-benchmarks.md
       - 感知、仿真与数据:
           - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
+          - 双目匹配与 Cost Volume 入门: embodied-ai/stereo-matching-and-cost-volume.md
           - Isaac Sim / RoboTwin: embodied-ai/isaacsim-and-robotwin.md
           - 资产到轨迹：感知、抓取与数据管线: embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md
           - Sim2Real 与具身数据引擎: embodied-ai/sim2real-and-data-engines.md
@@ -277,6 +279,7 @@ nav:
       - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
       - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
       - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
+      - 读懂 Fast-FoundationStereo：从双目几何到高效推理: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
   - 论文专题讲解:
       - paper-deep-dives/index.md
       - 高效训练:

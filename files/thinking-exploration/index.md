@@ -141,6 +141,7 @@ flowchart TD
 | 2026-05 | 端侧 AI / XR 芯片 | [XR2 Gen 2：端侧 AI 与量化部署](qualcomm-xr2-gen2.md) | Snapdragon XR2 Gen 2 与 QCS8450 / Proxy 口径、MR/VR 硬件规格、AI Hub Workbench 软件栈、QIDK 示例和 ViT 量化流程 |
 | 2026-05 | 世界模型 | [世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md) | 视频世界模型、3D 几何、仿真评测和工程路线判断 |
 | 2026-05 | 具身智能 / VLA | [具身智能现状：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md) | VLA、任务状态、数据 recipe、失败恢复和现状思考 |
+| 2026-05 | 高效推理 / 双目视觉 | [读懂 Fast-FoundationStereo：从双目几何到高效推理](fast-foundation-stereo-prerequisite-map.md) | 用双目几何、cost volume、蒸馏、NAS/剪枝、伪标签和 runtime 证据串起 Fast-FoundationStereo 的前置知识 |
 
 ## 和正文专题的连接
 
@@ -154,6 +155,7 @@ flowchart TD
 | Proxy profile 能不能当最终指标 | [可观测性与在线评测](../inference/observability-and-online-evaluation.md) | Proxy 适合早筛，最终仍要在真实设备上做延迟、温升、帧时间和质量回归 |
 | 世界模型怎么从 demo 走向工程闭环 | [世界模型路线图](../world-models/index.md)、[世界模型开发路线](../world-models/development-roadmap-data-simulation-and-evaluation.md) | 视频模拟、3D 几何、动作条件和 success checker 必须接起来 |
 | 具身智能为什么不能只看 VLA demo | [具身智能路线图](../embodied-ai/index.md)、[VLA 数据、模型与评测路线](../embodied-ai/vla-data-model-and-evaluation-roadmap.md) | 任务状态、无效指令、动作接口、失败恢复和数据回流决定能否落地 |
+| Fast-FoundationStereo 为什么需要跨专题读 | [相机、深度与机器人视觉](../embodied-ai/cameras-depth-and-robot-vision.md)、[双目匹配与 Cost Volume 入门](../embodied-ai/stereo-matching-and-cost-volume.md)、[模型压缩、剪枝与 NAS 入门](../foundations/model-compression-pruning-and-nas-basics.md)、[Fast-FoundationStereo](../paper-deep-dives/inference/fast-foundation-stereo.md) | 它同时涉及双目几何、视觉 backbone、训练监督、结构压缩、伪标签数据和实时推理证据 |
 
 !!! note "维护提醒"
     平台资料更新很快，尤其是 release notes、模型库和 runtime 支持矩阵。新增或复查这类文章时，优先跑 `make quality` 和 `make build`，再抽查页面里的图片图源、表格原字段和“官方公开 / 工程推断”的口径是否仍然清楚。

@@ -463,6 +463,7 @@ RGB 图像 -> 背景消除 -> 文字消除 -> 多视角生成 -> 图生 3D
 | 继续读 | 你会补上什么 |
 | --- | --- |
 | [资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) | 相机输出如何进入资产、状态估计、抓取和轨迹生成 |
+| [双目匹配与 Cost Volume 入门](stereo-matching-and-cost-volume.md) | 双目 disparity 如何进入 stereo matching、cost volume、refinement 和评测指标 |
 | [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 深度和 pose 如何支撑尺寸排序、容器匹配和 success checker |
 | [规划、控制与安全](planning-control-and-safety.md) | 感知到的 3D 状态如何变成可执行轨迹和安全约束 |
 | [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) | 相机观测如何进入 VLA、WAM 和世界模型路线 |

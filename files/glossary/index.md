@@ -70,6 +70,7 @@
 | `Knowledge Distillation / KD` | 知识蒸馏，用 teacher model 的输出分布、中间表示、rationale 或生成轨迹训练 student model，常用于压缩、提速和行为迁移。 |
 | `Logit Distillation` | Logit 蒸馏，让 student 对齐 teacher 的 pre-softmax logits 或 temperature softmax 分布，保留类别或 token 间相对偏好。 |
 | `LoRA` | Low-Rank Adaptation，用低秩增量替代全量参数更新的参数高效微调方法。 |
+| `NAS / Neural Architecture Search` | 神经架构搜索，在候选 layer、通道、kernel、head 或 block 组合中寻找质量和成本更好的结构；站内入门见 [模型压缩、剪枝与 NAS](../foundations/model-compression-pruning-and-nas-basics.md)。 |
 | `PPO` | Proximal Policy Optimization，限制新旧策略差距的策略优化方法，是 RLHF 经典算法。 |
 | `QAT` | Quantization-Aware Training，在训练中模拟量化误差，让模型适应低比特约束。 |
 | `PTQ` | Post-Training Quantization，训练完成后再进行量化。 |
@@ -78,6 +79,7 @@
 | `RLVR` | Reinforcement Learning with Verifiable Rewards，用规则或任务指标等可验证奖励优化模型。 |
 | `SFT` | Supervised Fine-Tuning，用高质量示范数据教模型遵循任务格式和行为。 |
 | `Soft Target` | teacher 产生的软目标分布，例如每个类别或 token 的概率；相比 one-hot hard label，它保留了相似类别之间的相对关系。 |
+| `Structured Pruning` | 结构化剪枝，按通道、filter、head、block 或 layer 删除结构，使 dense kernel 能直接跑更小 shape，通常比单 weight 稀疏更容易兑现 latency 收益。 |
 | `Teacher / Student` | 蒸馏语境里的教师模型和学生模型。teacher 通常能力更强但更慢或更贵，student 通过学习 teacher 信号换取低成本部署。 |
 | `Temperature` | softmax 中控制分布尖锐程度的温度参数；蒸馏里较高 temperature 会让 teacher 分布更软，暴露更多非最大类信息。 |
 | `Muon` | 面向矩阵权重的优化器路线：先积累 momentum，再用 Newton-Schulz 等方式近似正交化更新方向。 |
@@ -176,10 +178,16 @@
 | `Bellman Equation` | 把当前价值拆成当前奖励和下一状态价值的递推关系，是 value learning 和 model-based planning 的基础。 |
 | `Camera Intrinsics / K / 内参` | 相机自身的成像参数，包括 \(f_x,f_y,c_x,c_y\) 和畸变；回答“这台相机怎么把相机坐标投到像素”。 |
 | `Camera Extrinsics / [R\|t] / 外参` | 相机坐标系和 world / robot base / gripper 坐标系之间的刚体变换；回答“这台相机在哪里、朝哪看”。 |
+| `BP-1 / BP-2` | Stereo bad-pixel 指标，统计 disparity 误差超过 1 或 2 像素的比例；越低越好。 |
+| `ConvGRU` | 把卷积和 GRU 门控结合的 recurrent module，常用于视频、光流或 stereo refinement，在空间特征图上迭代更新 hidden state。 |
+| `Cost Volume` | 双目匹配中按像素和 disparity 候选组织的匹配代价或匹配特征，常见形状类似 \(C \times D \times H \times W\)。 |
+| `D1` | KITTI stereo 常用 bad disparity 指标，统计超过阈值的坏像素比例；越低越好。 |
 | `Depth Anything / DA` | 单目深度 foundation model 路线，重点是开放域相对深度和细节泛化；站内专题见 [DA1 讲解](../paper-deep-dives/embodied-ai/depth-anything.md)。 |
 | `Depth Anything 2 / DA2` | DA 的更强版本，常作为单目深度基线或 teacher 参考；它用 synthetic teacher 和 pseudo-labeled real images 提升细节与鲁棒性，本身主要解决单图深度，不直接给出多视角相机几何；站内专题见 [DA2 讲解](../paper-deep-dives/embodied-ai/depth-anything-v2.md)。 |
 | `Depth Anything 3 / DA3` | 把 DA/DA2 的深度能力扩展到任意视角几何，输出 depth、ray、camera 和可融合 3D 表示；站内专题见 [DA3 讲解](../paper-deep-dives/embodied-ai/depth-anything-3.md)。 |
+| `Disparity` | 双目左右图中同一个 3D 点的横向像素位移。已知焦距 \(f\) 和 baseline \(B\) 时，可用 \(z=fB/d\) 直观看深度关系。 |
 | `Ray Map` | 每个像素对应的相机射线表示，通常包含 ray origin 与 ray direction。DA3 用 depth + ray 恢复 3D 点和相机几何。 |
+| `Stereo Rectification` | 双目校正，把左右图变换到同一水平扫描线，使匹配点主要沿横向 disparity 搜索；是 stereo matching 的关键输入假设。 |
 | `VGGT` | Visual Geometry Grounded Transformer，feed-forward 3D 几何模型，直接预测 camera parameters、depth maps、point maps 和 3D point tracks；站内专题见 [VGGT 讲解](../paper-deep-dives/embodied-ai/vggt.md)。 |
 | `World Model` | 面向决策的环境预测模型，学习世界如何随动作、时间和目标变化。 |
 | `RSSM` | Recurrent State-Space Model，Dreamer 等 latent world model 的核心结构之一。 |
@@ -201,6 +209,7 @@
 | `CUTLASS` | CUDA 高性能线性代数和 GEMM 类 kernel 模板库。 |
 | `CuTe` | CUTLASS 中强调 layout algebra 和 tile 组合表达的抽象层。 |
 | `ONNX Runtime / ORT` | 跨平台推理 runtime，可通过不同 Execution Provider 对接多类硬件。 |
+| `TensorRT` | NVIDIA 面向深度学习推理的优化和部署 runtime，常用于图优化、kernel 选择、低精度和固定 shape 场景。 |
 | `TensorRT-LLM` | NVIDIA 面向 LLM 推理优化的 runtime / kernel 生态。 |
 | `NCCL` | NVIDIA Collective Communications Library，分布式训练和推理通信基元。 |
 | `DeepEP` | DeepSeek 开源的 expert-parallel communication library。MagiAttention 的 native group collectives 借鉴了其中的分层通信和去重思路。 |
