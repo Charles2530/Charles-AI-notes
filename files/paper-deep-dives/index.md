@@ -313,6 +313,12 @@
       <td><a href="diffusion/phased-dmd/">Phased DMD：分阶段少步蒸馏</a></td>
       <td>如何把少步 DMD 拆成 SNR 子区间专家训练，并用子区间 score matching 保住图像多样性与视频运动动态</td>
     </tr>
+    <tr>
+      <td>2026-05</td>
+      <td>扩散模型</td>
+      <td><a href="diffusion/anyflow/">AnyFlow：任意步视频扩散蒸馏</a></td>
+      <td>如何把 endpoint consistency 蒸馏改成 flow map transition 学习，并用 on-policy flow map distillation 让同一个视频学生模型支持 4 到 32 step 的测试时质量伸缩</td>
+    </tr>
   </tbody>
 </table>
 
@@ -381,6 +387,12 @@
       <td>具身智能</td>
       <td><a href="embodied-ai/gr3/">GR-3：少样本长时程 VLA</a></td>
       <td>如何用 Qwen2.5-VL + flow matching Action DiT、任务状态监督、VR 人类轨迹和 ByteMini 系统推进长时程 VLA</td>
+    </tr>
+    <tr>
+      <td>2025-10</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/vodp/">VO-DP：纯视觉语义-几何自适应扩散策略</a></td>
+      <td>如何把 VGGT 的 DINOv2 语义特征与 Alternating-Attention 几何特征融合，接入 DDPM policy head，在只用单视角 RGB 的情况下逼近或超过点云 DP3</td>
     </tr>
     <tr>
       <td>2025-11</td>

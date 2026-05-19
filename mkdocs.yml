@@ -305,6 +305,7 @@ nav:
           - CausVid：流式自回归视频扩散: paper-deep-dives/diffusion/causvid.md
           - Wan2.1：开源视频生成系统路线: paper-deep-dives/diffusion/wan.md
           - Phased DMD：分阶段少步蒸馏: paper-deep-dives/diffusion/phased-dmd.md
+          - AnyFlow：任意步视频扩散蒸馏: paper-deep-dives/diffusion/anyflow.md
       - 具身智能:
           - RT-2：VLM 到机器人动作: paper-deep-dives/embodied-ai/rt2.md
           - π0.5：开放世界 VLA: paper-deep-dives/embodied-ai/pi05.md
@@ -314,6 +315,7 @@ nav:
           - Depth Anything：大规模无标注单目深度: paper-deep-dives/embodied-ai/depth-anything.md
           - Depth Anything V2：单目深度数据配方: paper-deep-dives/embodied-ai/depth-anything-v2.md
           - VGGT：feed-forward 3D 几何: paper-deep-dives/embodied-ai/vggt.md
+          - VO-DP：纯视觉扩散策略: paper-deep-dives/embodied-ai/vodp.md
           - Depth Anything 3：3D 几何底座: paper-deep-dives/embodied-ai/depth-anything-3.md
           - GR-3：少样本长时程 VLA: paper-deep-dives/embodied-ai/gr3.md
           - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md

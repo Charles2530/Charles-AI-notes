@@ -66,6 +66,17 @@ flowchart LR
 
 cost volume 只是原始证据，还很嘈杂。低纹理墙面、玻璃、反光金属、重复花纹和遮挡区域都会制造错误匹配。因此模型还需要 cost filtering：用 3D convolution、hourglass、axial/planar convolution 或 Transformer 在空间和 disparity 维度上传播上下文，判断哪些匹配更可信。
 
+这些名字可以先不用当成新算法背。它们在这里都服务同一件事：**让一个像素的匹配判断不要只看自己，而是参考周围像素、相邻 disparity 和更大范围的几何上下文**。
+
+| 模块 | 在 cost filtering 里做什么 | 可以怎么直觉理解 |
+| --- | --- | --- |
+| 3D convolution | 同时沿 \(D,H,W\) 三个维度看邻居，让相邻 disparity 和相邻像素互相校正 | 不只问“这个像素像不像”，还问“附近像素和附近深度候选是否也支持这个判断” |
+| 3D hourglass | 先下采样聚合大范围上下文，再上采样回到细分辨率 | 先远看整块墙、桌面和物体轮廓，再回来修每个像素的 disparity |
+| axial / planar convolution | 把大范围 3D 处理拆成沿轴或平面传播，减少直接 3D 卷积的成本 | 不一次看完整大方块，而是分方向、分平面传递信息，省一些计算 |
+| Transformer | 用 attention 让远处但相关的位置互相参考，建模长程匹配关系 | 重复纹理或遮挡时，允许模型参考更远的上下文，而不是困在局部窗口里 |
+
+所以 cost filtering 的输出不是“重新拍脑袋预测深度”，而是在清理 cost volume：压低不一致的候选 disparity，抬高被上下文支持的候选 disparity，最后形成更可靠的 initial disparity。
+
 最后还需要 refinement。初始 disparity 往往在边界、薄结构和遮挡区域不够细，迭代 refinement 会用图像特征和 hidden state 一轮轮修正它。Fast-FoundationStereo 里提到的 ConvGRU refinement，就属于这条路径。
 
 ## 为什么 Foundation Stereo 强但慢

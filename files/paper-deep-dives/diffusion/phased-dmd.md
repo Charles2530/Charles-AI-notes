@@ -608,7 +608,7 @@ strong image/video diffusion teacher
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。
-    - 按导航顺序继续：[RT-2：VLM 到机器人动作](../embodied-ai/rt2.md)。
+    - 按导航顺序继续：[AnyFlow：任意步视频扩散蒸馏](anyflow.md)。
 
 ## 参考资料
 
