@@ -389,6 +389,12 @@
       <td>如何用 Qwen2.5-VL + flow matching Action DiT、任务状态监督、VR 人类轨迹和 ByteMini 系统推进长时程 VLA</td>
     </tr>
     <tr>
+      <td>2025-09</td>
+      <td>具身智能</td>
+      <td><a href="embodied-ai/mapanything/">MapAnything：统一前向 Metric 3D 重建骨干</a></td>
+      <td>如何用 factored scene representation、geometric input augmentation、DINOv2 + Alternating-Attention 和 two-stage view curriculum 统一 SfM、MVS、depth completion 与 metric 3D reconstruction</td>
+    </tr>
+    <tr>
       <td>2025-10</td>
       <td>具身智能</td>
       <td><a href="embodied-ai/vodp/">VO-DP：纯视觉语义-几何自适应扩散策略</a></td>

@@ -24,7 +24,7 @@
 
 第二股是 **视频世界模型和生成式模拟**。[Genie 3](https://deepmind.google/models/genie/) 把世界模型描述成能用文本生成实时可探索的 photorealistic environments；[NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/) 则把 world foundation models、tokenizer、guardrails 和合成数据管线接到 physical AI。它们展示的是外部模拟器方向：世界模型可以成为训练 agent 的世界生成器。
 
-第三股是 **几何基础模型和具身感知**。[VGGT](https://vgg-t.github.io/) 和 [MapAnything](https://arxiv.org/abs/2509.13414) 一类工作说明：如果世界模型要进入机器人、自动驾驶和工业检测，它不能只靠像素续写，还要知道 camera、depth、point map、scale、pose 和可见性。
+第三股是 **几何基础模型和具身感知**。[VGGT](../paper-deep-dives/embodied-ai/vggt.md) 和 [MapAnything](../paper-deep-dives/embodied-ai/mapanything.md) 一类工作说明：如果世界模型要进入机器人、自动驾驶和工业检测，它不能只靠像素续写，还要知道 camera、depth、point map、scale、pose 和可见性。
 
 这三股力量最终会合到同一个问题：**模型预测的未来，是否能被 planner、policy、controller 或 evaluator 使用？**
 
@@ -138,6 +138,6 @@ flowchart LR
 
 - [Genie 3](https://deepmind.google/models/genie/)。
 - [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)。
-- [MapAnything](https://arxiv.org/abs/2509.13414)。
+- [MapAnything](../paper-deep-dives/embodied-ai/mapanything.md)。
 - [VGGT](https://vgg-t.github.io/)。
 - [RLVR-World](https://arxiv.org/abs/2505.13934)。

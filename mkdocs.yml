@@ -315,6 +315,7 @@ nav:
           - Depth Anything：大规模无标注单目深度: paper-deep-dives/embodied-ai/depth-anything.md
           - Depth Anything V2：单目深度数据配方: paper-deep-dives/embodied-ai/depth-anything-v2.md
           - VGGT：feed-forward 3D 几何: paper-deep-dives/embodied-ai/vggt.md
+          - MapAnything：统一 Metric 3D 重建: paper-deep-dives/embodied-ai/mapanything.md
           - VO-DP：纯视觉扩散策略: paper-deep-dives/embodied-ai/vodp.md
           - Depth Anything 3：3D 几何底座: paper-deep-dives/embodied-ai/depth-anything-3.md
           - GR-3：少样本长时程 VLA: paper-deep-dives/embodied-ai/gr3.md

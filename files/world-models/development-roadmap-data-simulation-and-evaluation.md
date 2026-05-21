@@ -106,7 +106,7 @@
 
 3D 路线的价值在于：很多机器人任务不是“识别物体叫什么”，而是“从哪里看、从哪里伸手、是否被挡住、会不会碰”。Depth Anything 3、MapAnything、VGGT 一类模型值得关注，正是因为它们能把相机、深度和场景几何拉回同一张账本。
 
-[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md) 从任意数量图像和可选 camera pose 中预测一致的 depth / ray，再恢复相机、点云和 3DGS。[MapAnything](https://arxiv.org/abs/2509.13414) 的目标是统一多种 3D 视觉任务：输入一张或多张图像，以及可选的内参、pose、depth 或局部重建，直接回归 metric 3D scene geometry 和 cameras。[VGGT](../paper-deep-dives/embodied-ai/vggt.md) 则把 camera parameters、point maps、depth maps、3D point tracks 放进一个 feed-forward Transformer 里，强调快速直接的几何推断。
+[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md) 从任意数量图像和可选 camera pose 中预测一致的 depth / ray，再恢复相机、点云和 3DGS。[MapAnything](../paper-deep-dives/embodied-ai/mapanything.md) 的目标是统一多种 3D 视觉任务：输入一张或多张图像，以及可选的内参、pose、depth 或局部重建，直接回归 metric 3D scene geometry 和 cameras。[VGGT](../paper-deep-dives/embodied-ai/vggt.md) 则把 camera parameters、point maps、depth maps、3D point tracks 放进一个 feed-forward Transformer 里，强调快速直接的几何推断。
 
 对机器人世界模型来说，这类 encoder 不一定直接输出动作，但它能提供空间账本：目标是否在视野里、焊缝是否被看全，目标距离和末端执行器移动量是否匹配，当前视角看不到的区域是否需要换视角，候选相机位姿或机械臂轨迹是否可执行，以及物体高度、姿态、接触关系是否进入任务判定。
 
@@ -281,7 +281,7 @@ RoboTwin 的评测规则很有价值，因为它提醒我们：很多 benchmark 
 
 ## 参考资料
 
-- [MapAnything: Universal Feed-Forward Metric 3D Reconstruction](https://arxiv.org/abs/2509.13414)：3D encoder 和统一几何建模路线。
+- [MapAnything: Universal Feed-Forward Metric 3D Reconstruction](../paper-deep-dives/embodied-ai/mapanything.md)：3D encoder 和统一几何建模路线。
 - [Depth Anything 3: Recovering the Visual Space from Any Views](https://arxiv.org/abs/2511.10647)：从任意视角恢复一致 depth、ray、camera 和 3D geometry；站内专题见 [Depth Anything 3 讲解](../paper-deep-dives/embodied-ai/depth-anything-3.md)。
 - [VGGT: Visual Geometry Grounded Transformer](../paper-deep-dives/embodied-ai/vggt.md)：feed-forward 3D 属性预测。
 - [π0.5: a VLA with Open-World Generalization](https://www.pi.website/blog/pi05)：异构数据协同训练、高层子任务和 flow matching 动作专家。

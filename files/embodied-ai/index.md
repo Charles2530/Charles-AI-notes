@@ -63,7 +63,7 @@
 | --- | --- | --- |
 | 主线必读 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[VLA 数据模型与评测路线](vla-data-model-and-evaluation-roadmap.md)、[一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 能把多相机、深度、pose、动作和 success checker 放进同一条 episode |
 | 工程查阅 | Isaac Sim/RoboTwin、Rerun、Sim2Real、规划控制与安全 | 做仿真数据、真机排障或部署安全时查 |
-| 论文扩展 | DA3、VGGT、SpatialVLA、VPP、π0.5、DreamZero | 看几何状态、动作接口和未来 latent 如何共同服务闭环 |
+| 论文扩展 | DA3、VGGT、MapAnything、SpatialVLA、VPP、π0.5、DreamZero | 看几何状态、动作接口和未来 latent 如何共同服务闭环 |
 | 基础补课 | 坐标系、深度、点云、控制与 RL | 卡在内外参、轨迹或 success checker 时补 |
 | 暂时可跳过 | 宏观趋势和产品式 demo | 没有任务 schema 和失败回放前先略读 |
 
@@ -111,7 +111,7 @@ RT-1 原论文图很适合先建立具身智能闭环直觉：语言指令和相
 
 | 层级 | 先问的问题 | 相关页面 / 论文 |
 | --- | --- | --- |
-| 感知与状态 | 机器人现在看见什么、物体在哪里、自己状态是什么 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[Depth Anything](../paper-deep-dives/embodied-ai/depth-anything.md)、[Depth Anything V2](../paper-deep-dives/embodied-ai/depth-anything-v2.md)、[VGGT](../paper-deep-dives/embodied-ai/vggt.md)、[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md)、[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) |
+| 感知与状态 | 机器人现在看见什么、物体在哪里、自己状态是什么 | [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)、[Depth Anything](../paper-deep-dives/embodied-ai/depth-anything.md)、[Depth Anything V2](../paper-deep-dives/embodied-ai/depth-anything-v2.md)、[VGGT](../paper-deep-dives/embodied-ai/vggt.md)、[MapAnything](../paper-deep-dives/embodied-ai/mapanything.md)、[Depth Anything 3](../paper-deep-dives/embodied-ai/depth-anything-3.md)、[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md) |
 | 语义与任务 | 高层目标要拆成哪些子任务，哪个对象当前最相关 | [π0.5](../paper-deep-dives/embodied-ai/pi05.md) |
 | 动作接口 | 动作是 token、末端位姿、关节角，还是一段 action chunk | [VLA 动作表示](../vla/action-representation-and-interfaces.md) |
 | 策略 / VLA | 给定观测和语言，下一段动作是什么 | [π0.5](../paper-deep-dives/embodied-ai/pi05.md)、[VLM/VLA 总览](../vlm/index.md) |

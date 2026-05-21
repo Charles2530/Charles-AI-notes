@@ -219,9 +219,9 @@
 
 <small>图源：`World Action Models are Zero-shot Policies`，Figure 2。原论文图意：DreamZero 同时生成未来视频和动作。本站读法：WAM 的优势是动作和未来视觉被迫对齐，风险也是错误视频计划会牵引错误动作。</small>
 
-## 15. 横向比较：DA3、VGGT、SpatialVLA、VPP
+## 15. 横向比较：DA3、VGGT、MapAnything、SpatialVLA、VPP
 
-这组方法都和具身状态有关，但层级不同：DA3 和 VGGT 更偏几何状态，SpatialVLA 把 3D 表征接入动作接口，VPP 用视频预测表征直接改善 policy。
+这组方法都和具身状态有关，但层级不同：DA3、VGGT 和 MapAnything 更偏几何状态，SpatialVLA 把 3D 表征接入动作接口，VPP 用视频预测表征直接改善 policy。
 
 ![Depth Anything 3 pipeline 原论文图](../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-2-pipeline.png){ width="860" }
 
@@ -231,6 +231,7 @@
 | --- | --- | --- | --- | --- |
 | [DA3](../paper-deep-dives/embodied-ai/depth-anything-3.md) | depth、ray、camera、点云/3DGS | 给 world model 和 VLA 提供多视角几何状态 | benchmark、ablation、demo、teacher 训练说明 | 相机/深度、episode schema、几何状态 |
 | [VGGT](../paper-deep-dives/embodied-ai/vggt.md) | camera、depth、point map、track | 给动态场景和多视角状态提供 feed-forward 3D 表征 | benchmark、runtime、ablation | 多相机状态、点云、轨迹回放 |
+| [MapAnything](../paper-deep-dives/embodied-ai/mapanything.md) | ray directions、ray depths、poses、metric scale | 把 calibration、poses、depth 等已有几何输入融合成 metric reconstruction | benchmark、input ablation、training recipe、speed/memory profiling | 机器人几何状态融合、metric map、depth completion |
 | [SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md) | Ego3D position encoding、adaptive action grids | 把 3D 空间直接接到动作 token | simulation + real robot success | VLA 动作接口、空间泛化 |
 | [VPP](../paper-deep-dives/embodied-ai/video-prediction-policy.md) | video prediction intermediate features | 用预测表征训练机器人 policy | CALVIN/MetaWorld/真实机器人 | 视觉 tokenizer、policy 表征、失败 replay |
 
