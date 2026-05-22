@@ -40,17 +40,81 @@ $$
 
 ## 时空建模的三条主线
 
+视频扩散里的“时空建模”可以先按三个问题来拆：模型是在像素空间还是 latent 空间工作，时间维是和空间维一起处理还是分开处理，条件信息能不能在整段视频里持续生效。下面三条主线不是互斥的历史阶段，而是经常叠在一起的设计选择：先用视频 VAE 压缩，再用 U-Net 或 DiT 在 latent 上做时空建模，最后用文本、首帧、轨迹或音频等条件控制生成。
+
+| 主线 | 核心想法 | 最适合解决 | 主要代价 |
+| --- | --- | --- | --- |
+| 全 3D U-Net / 时空卷积 | 把视频当成 \(T\times H\times W\) 的三维体，局部卷积同时看相邻帧和相邻像素 | 局部运动、纹理连续、短视频或低分辨率 base model | 显存随帧数膨胀，长程依赖仍不便宜 |
+| 分解式时空注意力 | 先在单帧内做空间建模，再沿时间建模运动，或二者交替 | 降低 attention 成本，复用图像模型权重，处理更长视频 | 强相机运动、遮挡和跨位置对应需要额外设计 |
+| Latent video diffusion | 先用视频 VAE/tokenizer 压缩，再在 video latent 上扩散 | 高分辨率、多秒视频、现代 Video DiT / Flow 系统 | 压缩器一旦丢掉运动细节，后端生成器很难补回来 |
+
 ### 3.1 全 3D U-Net / 时空卷积
 
-直接在时间和空间上同时卷积，建模最直接，但计算开销大。适合较短视频或低分辨率阶段。
+最直接的做法是把视频张量写成 \([B,C,T,H,W]\)，然后用 3D convolution 或带时间核的 residual block 去处理它。普通图像 U-Net 的卷积核只在 \(H,W\) 上滑动；视频 U-Net 的卷积核可以写成 \((k_t,k_h,k_w)\)，因此一个输出 token 同时接收相邻帧和相邻空间位置的信息。
+
+这样做的好处很直观：局部运动和局部纹理天然绑在一起。比如手臂挥动、头发飘动、火焰跳动、镜头小幅平移，这些现象都不是单帧里能完整判断的，必须看前后几帧。早期视频扩散论文如 [Video Diffusion Models](https://arxiv.org/abs/2204.03458) 就沿着这条路线，把图像扩散里的 U-Net 扩展成 space-time 结构；[Lumiere](https://arxiv.org/abs/2401.12945) 也强调用 Space-Time U-Net 一次性生成完整时长的视频，而不是先生成稀疏关键帧再补帧。
+
+![U-Net architecture](../assets/images/paper-figures/foundations/unet-figure-1-architecture.png){ width="760" }
+
+<small>图源：[U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597)，Figure 1。这里借经典 U-Net 图说明骨架：视频扩散中的 3D U-Net 可以理解为把每个二维 feature map 换成带时间轴的视频 feature volume。</small>
+
+!!! note "这张图怎么迁移到视频"
+    先看 U 形结构：左边下采样扩大感受野，右边上采样恢复分辨率，中间的 skip connection 把高分辨率细节送回解码端。视频版的区别是：feature 不再只是 \(H\times W\)，而是 \(T\times H\times W\)。如果下采样也压缩时间维，模型能更快看到长一点的运动；如果只压缩空间维，时间分辨率保留更好，但显存压力更大。
+
+这条线的短板也来自同一个地方。3D feature volume 比图像 feature map 大很多，activation、attention 和 skip connection 都会被 \(T\) 放大。并且卷积本质上偏局部，处理“人物从画面左边跑到右边”“镜头绕主体转半圈”这类长程对应时，常常还要配合 attention、金字塔尺度或后续 super-resolution 阶段。
 
 ### 3.2 分解式时空注意力
 
-先做空间注意力，再做时间注意力，或交替进行。这样能降低复杂度，也更容易沿用图像扩散的预训练权重。
+第二条主线是把“看清一帧”和“看懂跨帧变化”拆开。若直接对所有 video token 做 full self-attention，token 数是 \(N=T H W\)，复杂度接近 \(O(N^2)=O(T^2H^2W^2)\)，很快不可承受。分解式做法把它拆成两步：
+
+\[
+\text{spatial attention: } T\cdot O((HW)^2),
+\qquad
+\text{temporal attention: } HW\cdot O(T^2).
+\]
+
+直觉上，spatial attention 负责回答“这一帧里有什么、在哪里、彼此关系如何”；temporal attention 负责回答“同一个位置或相邻位置上的内容如何随时间变化”。很多视频模型会交替堆叠空间层和时间层，或者在已有图像 U-Net/DiT 里插入 temporal attention / motion module。这样既能复用图像模型学到的物体和构图能力，又能额外学习运动。
+
+![ST-transformer architecture 原论文图](../assets/images/localized-remote/paper-deep-dives/world-models/genie/st-transformer-architecture-原论文图.png){ width="880" }
+
+<small>图源：`Genie: Generative Interactive Environments`，arXiv HTML Figure 3。原论文图意：每个 spatiotemporal block 由 spatial attention、temporal attention 和 feed-forward layer 组成；这张图不是扩散专属，但很清楚地展示了“空间层 + 时间层”的分解式时空建模思想。</small>
+
+!!! note "这张图怎么读"
+    蓝色的 spatial layer 只在同一帧内部混合 token，重点是物体、边界、布局和局部关系；绿色的 temporal layer 沿时间混合对应 token，重点是运动方向、速度变化和前后状态延续。把它放回视频扩散里，可以理解为：denoiser 每一步不只是给单帧去噪，还要让跨帧特征对齐，避免同一个主体在相邻帧里突然换身份。
+
+这条线的关键取舍是“省计算”与“跨位置运动”之间的张力。若 temporal attention 只沿同一空间位置看时间，遇到大幅相机运动或主体快速移动时，同一个物体已经不在同一格子里了。实际系统常会配合相对位置编码、窗口移动、光流/轨迹条件、3D RoPE、cross-frame attention 或更强的全局层来补这个缺口。
 
 ### 3.3 Latent video diffusion
 
-先把视频编码到低维 latent 空间，再在 latent 上做扩散。这类似图像 latent diffusion，但视频场景下压缩器本身也需要保留运动和时序一致性。
+第三条主线是先别在像素上扩散，而是先把视频压到更短的 latent 序列。图像 latent diffusion 的核心是：
+
+\[
+x\rightarrow z,\qquad
+\text{diffusion on } z,\qquad
+z\rightarrow x.
+\]
+
+视频里同样可以写成：
+
+\[
+x_{1:T}\in \mathbb{R}^{T\times H\times W\times 3}
+\rightarrow
+z\in \mathbb{R}^{T'\times H'\times W'\times C_z}.
+\]
+
+如果时间压缩率是 \(r_t\)，空间压缩率是 \(r_h,r_w\)，那么 \(T'=T/r_t\)、\(H'=H/r_h\)、\(W'=W/r_w\)。这会显著降低后端 U-Net/DiT 的 token 数，使高分辨率、多秒视频变得可训练。现代 Wan、CogVideoX、HunyuanVideo 等路线基本都离不开视频 VAE/tokenizer。
+
+![Wan-VAE framework](../assets/images/paper-deep-dives/diffusion/wan/figure-3-vae.png){ width="920" }
+
+<small>图源：[Wan: Open and Advanced Large-Scale Video Generative Models](https://arxiv.org/abs/2503.20314)，Figure 4。原论文图意：Wan-VAE 用 3D causal 结构实现 `4 x 8 x 8` 时空压缩；橙色块表示时空 2x 压缩，绿色块表示空间 2x 压缩。</small>
+
+!!! note "这张图怎么读"
+    先看压缩方向：视频不是逐帧单独进一个图像 VAE，而是通过 3D causal block 同时压缩时间和空间。这样 latent 里保留了运动连续性，后面的 DiT 才有可能在较短序列上建模整段视频。再看第一帧：Wan-VAE 对第一帧只做空间压缩，这让模型兼容图像数据和 I2V 首帧条件，也避免一开始就把关键外观信息混进时间压缩里。
+
+latent 路线最容易被低估的是：VAE/tokenizer 不是一个无聊的前处理模块，而是视频生成质量的地基。如果压缩器重建单帧很清楚，但跨帧 latent 不稳定，后面的扩散主干会学到闪烁；如果时间压缩太狠，细小接触、口型、手指动作和物体身份可能已经在 latent 里丢了；如果压缩太轻，DiT 的序列又会长到训练不起。因此现代视频扩散论文里，VAE 的因果性、时空压缩率、重建损失、chunk cache 和解码速度都应当和主干架构一起看。
+
+!!! tip "读新论文时的快速判断"
+    先问它在 pixel 还是 latent 上扩散；再问主干是全时空 attention、分解式 attention、3D U-Net，还是几种混用；最后看条件如何注入到每个时间步。很多看似“新的视频模型”，本质差异就藏在这三个接口里：压缩器保留了什么，时空主干怎样交换信息，条件能否跨整段视频保持一致。
 
 ## 时序一致性为何比单帧质量更难
 
