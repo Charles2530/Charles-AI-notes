@@ -432,6 +432,11 @@ DeepSeek-V3 给训练项目的启发可以压成几条：
 
 更准确地说，DeepSeek-V3 的价值在于展示了一个大模型系统的完整工程形态：**模型结构决定可扩展性，训练系统决定能不能按成本跑完，后训练决定 base model 能不能变成可靠产品模型。**
 
+这一页最后回到三个验收点：方法上，DeepSeek-V3 的系统接口是 MLA 降 KV、DeepSeekMoE 降 active params、MTP 改训练信号、DualPipe/FP8 降训练成本。实验上，benchmark、needle、expert load 和 overlap 图分别对应能力、长上下文、路由均衡和系统吞吐。诊断上，报告最重要的消融不是单点分数，而是 MoE 路由、FP8 稳定和通信重叠能否同时成立。
+
+!!! info "本站判断"
+    DeepSeek-V3 的核心是 MoE 训练系统：方法要抓 MLA、DeepSeekMoE、MTP、FP8 和 DualPipe；实验看训练成本、benchmark、needle、expert load 与通信重叠。报告给的是系统路线，不是任何团队都能复刻的完整 recipe。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。

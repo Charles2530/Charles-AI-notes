@@ -655,6 +655,9 @@ regularizer: LPIPS regression to precomputed teacher outputs
 
 如果只记一个工程结论，就是：**一步扩散生成器要同时有分布级 realism 信号和 teacher-pair structure 信号。缺前者会不真实，缺后者会掉模式。**
 
+!!! info "本站判断"
+    DMD 的关键不是“一步很快”，而是 real score、fake score 与 regression anchor 的三角平衡。实验表明它能把 teacher 多步质量压进一步学生，但训练成本、CFG 固化和图像到视频/动作任务的外推都要单独验。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。

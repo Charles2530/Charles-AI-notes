@@ -362,6 +362,11 @@ LWM 最重要的启发是：世界模型不一定只能是 latent dynamics 或�
 4. masked sequence packing 和 loss weighting 是多模态长序列训练的必要条件；
 5. 没有 RingAttention，1M token exact attention 基本不可行。
 
+这一页最后回到三个验收点：方法上，LWM 的抓手是长视频/长文本上下文中的统一 token 建模，系统上依赖 RingAttention 一类长序列并行。实验上，长视频理解、检索和生成结果要按上下文长度分桶看。诊断上，长上下文记忆不等于 action-conditioned dynamics；世界模型项目还要补反事实动作和可控 rollout。
+
+!!! info "本站判断"
+    LWM 的重点是长上下文多模态建模：方法要抓 long video/text context、ring attention/sequence parallel 和统一 token 接口；实验看长视频理解、检索和生成。它提供长记忆基础设施，但 action-conditioned dynamics 和闭环控制还要另补。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

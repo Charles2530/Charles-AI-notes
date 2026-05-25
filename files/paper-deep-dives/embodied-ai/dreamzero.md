@@ -387,6 +387,11 @@ DreamZero 最值得关注的地方，是它把世界模型和 policy 的边界�
 
 如果 LingBot-World 回答的是“视频生成器如何变成世界模拟器”，DreamZero 回答的是“世界动作模型如何直接变成 policy”。
 
+这一页最后回到三个验收点：方法上，DreamZero 把视频和动作放进同一生成过程，decoupled noise 用来避免视觉噪声与动作噪声互相污染。实验上，seen task、zero-shot 和 cross-embodiment 图要一起读，分别对应拟合、泛化和迁移。诊断上，failure case 与 attention strategy 说明，生成式轨迹能补数据，但动作因果和真实闭环仍会暴露分布偏移。
+
+!!! info "本站判断"
+    DreamZero 应按“生成式世界模型帮助机器人数据扩展”读：方法重点是 joint video-action、decoupled noise 和后训练策略；实验要看 seen/zero-shot 任务、cross-embodiment 和失败案例。它证明合成轨迹有潜力，但闭环收益仍取决于动作对齐与真实数据回流。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。

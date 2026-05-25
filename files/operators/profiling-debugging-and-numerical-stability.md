@@ -36,6 +36,45 @@ AI 系统里的直觉经常误导人：
 
 只看系统级，知道哪段慢但不知道为什么；只看 kernel 级，知道哪个 kernel 慢但不知道是否被调度放大；只看微架构级，容易局部最优。有效工作流是在三层之间来回切换。
 
+## Nsight Systems：先看系统时间线
+
+`Nsight Systems` 更像“端到端时间线显微镜”，适合先回答这些问题：GPU 是否持续有活干，CPU 线程是否被 I/O、锁、Python 调度或同步调用挡住，CUDA API 和 GPU kernel 是否能对应起来，cuBLAS/cuDNN/NCCL 是否在预期阶段出现，以及 NVTX 标注出来的模型阶段是否真的互相重叠。
+
+它和 `Nsight Compute` 的分工很清楚：Nsight Systems 先定位**哪段时间**和**哪条链路**可疑；Nsight Compute 再解释某个 kernel 的 occupancy、warp stall、memory throughput、Tensor Core 利用率等微架构原因。一个实用顺序是：
+
+1. 用 Nsight Systems 看端到端 timeline、空洞、同步和通信裸露时间；
+2. 在 timeline 里选出真正影响 wall-clock 的 kernel 或阶段；
+3. 再用 Nsight Compute / microbenchmark 下钻，不要反过来先挑一个看起来慢的 kernel 优化。
+
+常用起步命令可以写成下面这样，具体 trace 项按环境和开销裁剪：
+
+```bash
+nsys profile --trace=cuda,cudnn,cublas,osrt,nvtx -o trace python train.py
+```
+
+<small>命令口径参考：[Nsight Systems User Guide](https://docs.nvidia.com/nsight-systems/UserGuide/index.html) 中 `nsys profile` 与 `--trace` 选项说明。User Guide 也说明 CUDA trace 会收集 CUDA API trace 和 CUDA workload trace，后者包括 GPU 上的 memory operation 与 kernel execution。</small>
+
+![Nsight Systems CPU/GPU correlation 博客截图](../assets/images/tools/nsight-systems/cpu-gpu-correlation.png){ width="820" }
+
+<small>图源：[Nsight Systems Exposes New GPU Optimization Opportunities](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，Figure 2。博客截图意：在 GPU kernel 事件上可以回溯到对应的 CPU-side CUDA API launch，从而把 GPU 端空洞和 host 端调度原因连起来。</small>
+
+!!! note "图解：从 GPU 事件追回 CPU 调度"
+    做算子优化时，不要只盯 GPU row。一个 kernel 后面的空洞，可能来自 CPU 线程没及时发起下一次 launch，也可能是框架 runtime、Python、数据准备或锁等待挡住了调度。Nsight Systems 的价值就在于把 GPU stream、CUDA API、CPU thread 和 NVTX range 放到同一条时间线上。
+
+![Nsight Systems synchronization calls 博客截图](../assets/images/tools/nsight-systems/synchronization-calls.png){ width="720" }
+
+<small>图源：[Nsight Systems Exposes New GPU Optimization Opportunities](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，Figure 3。博客截图意：CPU 端显式同步可能让原本可异步排队的 GPU 工作被切开，形成不必要等待。</small>
+
+!!! note "图解：误同步会伪装成 kernel 慢"
+    如果每个小算子后面都接 `cudaDeviceSynchronize`、`cudaStreamSynchronize`、阻塞式 D2H copy 或框架里的隐式 sync，timeline 会变成“跑一点、停一下”。这时先删同步、改事件依赖或重排 stream，往往比重写 kernel 更有效。
+
+![Nsight Systems NVTX timeline 博客截图](../assets/images/tools/nsight-systems/nvtx-timeline.png){ width="820" }
+
+<small>图源：[Nsight Systems Exposes New GPU Optimization Opportunities](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，Figure 6。博客截图意：NVTX range 可以把应用阶段标到 timeline 上，让 kernel、通信和 CPU 逻辑更容易归因。</small>
+
+!!! tip "实践习惯：给 trace 加语义"
+    对训练和推理系统，建议用 NVTX 标出 `dataloader`、`prefill`、`decode`、`attention`、`moe_dispatch`、`all_reduce`、`optimizer_step`、`graph_capture` 等阶段。没有 NVTX 的 trace 只能看到一堆 kernel 名；有 NVTX 后，才能把“哪个业务阶段慢”与“哪个 kernel / copy / collective 慢”对齐。
+
 ## Microbenchmark 要可信
 
 微基准很容易夸大收益。较稳妥的原则是：

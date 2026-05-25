@@ -25,6 +25,15 @@
 | `localized-remote/embodied-ai/cameras-depth-and-robot-vision/intel-realsense-d435-wikimedia.jpg` | Wikimedia Commons；用于展示 RGB-D / depth camera 外观 | 保留，页面图注写“网页图源” |
 | `localized-remote/embodied-ai/cameras-depth-and-robot-vision/chessboard-calibration-setup-wikimedia.png` | Wikimedia Commons；用于解释棋盘格标定目标 | 保留，页面图注写“网页图源” |
 
+## 工具与博客截图本地化记录
+
+| 本地文件 | 来源 / 用途 | 建议动作 |
+| --- | --- | --- |
+| `tools/nsight-systems/gpu-starvation.png` | NVIDIA Technical Blog《Nsight Systems Exposes New GPU Optimization Opportunities》Figure 1；用于解释 GPU starvation 与系统级 trace | 保留，页面图注写“博客截图” |
+| `tools/nsight-systems/cpu-gpu-correlation.png` | NVIDIA Technical Blog《Nsight Systems Exposes New GPU Optimization Opportunities》Figure 2；用于解释 GPU event 与 CPU-side CUDA API launch 关联 | 保留，页面图注写“博客截图” |
+| `tools/nsight-systems/synchronization-calls.png` | NVIDIA Technical Blog《Nsight Systems Exposes New GPU Optimization Opportunities》Figure 3；用于解释不必要同步调用 | 保留，页面图注写“博客截图” |
+| `tools/nsight-systems/nvtx-timeline.png` | NVIDIA Technical Blog《Nsight Systems Exposes New GPU Optimization Opportunities》Figure 6；用于解释 NVTX 标注如何给 timeline 加语义 | 保留，页面图注写“博客截图” |
+
 ## 未引用资产分级
 
 | 分级 | 含义 | 默认动作 |

@@ -277,6 +277,20 @@ Masked JEPA 不要求模型补出每个像素，而是预测被遮挡区域的 l
 
 世界模型长期难点是 temporal consistency 和 spatial fidelity 的取舍。Autoregressive 适合交互，但误差累积；global prediction 整体一致，但闭环动作注入弱。Latent vector 高效但几何弱；3D/4D representation 几何强但昂贵。
 
+## 综述型论文的证据边界
+
+这篇综述没有自己的新模型消融，因此不能按“去掉模块 A 分数下降”来读。更合适的读法是把它当作跨论文证据地图，检查每条路线缺的是哪类证据。
+
+| Route | 已有证据通常强在哪里 | 最常缺的证据 | 读者应追问 |
+| --- | --- | --- | --- |
+| RSSM / Dreamer-style | 控制 benchmark、sample efficiency、ablation | 高分辨率几何、真实机器人开放任务 | latent 里是否保留了任务关键空间变量 |
+| JEPA / representation world model | frozen representation、迁移任务 | 动作条件、reward、closed-loop planning | 表征是否能支持反事实动作预测 |
+| Video diffusion world model | 视觉质量、长视频 demo、用户偏好 | 动作敏感性、因果 rollout、物理 stress test | 固定历史换动作，未来是否真的分叉 |
+| BEV / occupancy world model | 驾驶规划、collision、occupancy forecast | 开放域泛化、罕见事件、sim2real | planner 使用后是否降低风险 |
+| 3DGS / renderable world model | novel view、几何一致性、digital twin | 动态接触、可扩展更新、任务收益 | 渲染一致是否真的转成控制收益 |
+
+因此，这篇综述最有价值的不是告诉你“哪条路线最好”，而是避免证据错配：视频指标不能替代 closed-loop success，occupancy 指标不能替代真实安全，representation probe 不能替代动作反事实。读者用它筛论文时，应该先标注每篇工作的证据类型，再决定能不能进入项目实验。
+
 ## 结论
 
 第一，世界模型不是单一路线。Dreamer、V-JEPA、Genie、LingBot-World、BEV occupancy model、3DGS simulator 都可以是 world model，但它们服务的接口不同。
@@ -290,6 +304,9 @@ Masked JEPA 不要求模型补出每个像素，而是预测被遮挡区域的 l
 最后，如果把世界模型放回具身智能主线，可以用一句话总结：
 
 > 世界模型的价值不是“想象未来”本身，而是把动作条件下的未来后果变成可被智能体用来规划、控制、恢复和自我改进的信号。
+
+!!! info "本站判断"
+    具身世界模型综述适合当证据索引：方法上看 General/Seq/Mask/Decision 等分类和数据流，结论要回到具体论文核验。它能帮定位路线缺口，但不能替代真实机器人闭环、长时漂移和安全评测。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

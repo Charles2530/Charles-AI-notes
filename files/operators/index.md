@@ -157,6 +157,19 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 !!! note "图解：算子优化先看数据怎么搬"
     左图的虚线框是朴素 attention 会显式生成的大矩阵，它很贵不是因为 softmax 公式复杂，而是因为中间结果要在 HBM 里来回读写。FlashAttention 把 K/V 和 Q 分块搬到片上 SRAM，在块内做 softmax 与累积，最后只写回输出。这个例子说明：很多 kernel 优化的核心不是少算一点 FLOPs，而是少搬很多数据。
 
+## 从算子到系统 Trace
+
+算子优化的第一张证据图，不一定来自单 kernel profiler。很多时候更应该先看 **Nsight Systems** 这类系统级 timeline：GPU 是否有空洞，CPU 是否按时喂数据，CUDA API、cuBLAS/cuDNN、NCCL、kernel launch、memory copy 和 NVTX 标注是否排在预期位置。
+
+如果系统 trace 里 GPU 时间线已经断断续续，或者某个新 kernel 前后夹着 layout transform、fallback、JIT 编译、跨卡同步和 host-side wait，那么单 kernel 再快也未必能带来端到端收益。反过来，Nsight Systems 只能告诉你“时间花在哪里、谁在等谁”；真正要解释某个 kernel 为什么慢，还要下钻到 Nsight Compute、roofline、SASS/PTX 和微基准。
+
+![Nsight Systems GPU starvation 博客截图](../assets/images/tools/nsight-systems/gpu-starvation.png){ width="760" }
+
+<small>图源：[Nsight Systems Exposes New GPU Optimization Opportunities](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，Figure 1。博客截图意：CUDA device row 上的空洞和稀疏 kernel 覆盖能快速暴露 GPU starvation，提示应回到 CPU 调度、数据准备或 launch 路径排查。</small>
+
+!!! note "图解：系统 trace 是算子收益的验收入口"
+    红框区域不是某个 kernel 的微架构问题，而是 GPU 没有持续拿到工作。对大模型训练和推理来说，这类空洞可能来自 dataloader、dynamic batching、编译器 fallback、同步调用、NCCL 等待或 shape 过散。先用 Nsight Systems 把端到端时间线看清，再决定是否值得为某个 kernel 下钻。
+
 !!! tip "基础知识入口"
     算子专题默认你知道 tensor shape、dtype、显存、带宽和 kernel 的基本含义。如果不熟，先看 [张量、Shape 与计算图](../foundations/tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md) 和 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。
 

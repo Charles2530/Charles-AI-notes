@@ -367,6 +367,11 @@ EAGLE 最值得带走的不是某个 speedup 数字，而是一个设计范式�
 
 把 EAGLE、EAGLE-2、EAGLE-3 连起来看，会看到一条很清楚的演化线：先找到 feature-level draft 这个低成本接口，再让 draft tree 按上下文动态分配预算，最后把 draft model 的训练分布改得更接近真正的多步推理。
 
+这一页最后回到三个验收点：方法上，EAGLE 的公式抓手是用 target second-to-top feature 预测下一 feature，再复用 frozen LM head 得到 draft token。实验上，speedup 图要和输入消融、tree attention 消融、batch size 一起读。诊断上，feature&shifted-token ablation 是关键证据，它证明 feature uncertainty 必须显式给出已采样 token。
+
+!!! info "本站判断"
+    EAGLE 的关键是 feature-level draft：方法要抓 shifted-token 缓解 feature uncertainty、tree attention 和 target verification；实验看 temperature、MT-bench、输入消融和 batch 效应。上线时按任务桶、acceptance、P95/P99 和 scheduler 重新验。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[推理](../../inference/index.md)。

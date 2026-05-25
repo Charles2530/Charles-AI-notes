@@ -393,6 +393,20 @@ Diffusion Forcing 很容易被误读成“一个视频生成模型”。更准�
 
 这也解释了它和 LingBot-World 一类视频世界模型的关系。LingBot-World 更像“把强视频生成底座工程化成可交互世界模拟器”；Diffusion Forcing 更像“从训练目标层面说明怎样让扩散模型拥有因果、变长和不确定性控制”。两者可以互补：大型视频模型提供画质和语义先验，DF 类 schedule 提供更自然的因果 rollout 训练信号。
 
+## 消融与诊断怎么读
+
+Diffusion Forcing 的关键实验不是“画质超过大视频模型”，而是验证独立噪声 token 这件事是否真的改变序列建模能力。读结果时可以按下面几个诊断看。
+
+| Diagnostic | 对应设置 | 支撑的结论 | 不能证明 |
+| --- | --- | --- | --- |
+| Long video rollout | DMLab / Minecraft 长序列预测 | 独立噪声水平和因果结构能缓解长 rollout 漂移 | 不能证明高分辨率开放域视频生成已解决 |
+| Planning | Maze2D token 设计为 \((a_t,o_{t+1})\) | 动作和后果同 token 化可支撑规划 | 不能替代真实机器人接触和安全评测 |
+| Robot control | 减少 sampling steps，使用 `pred_x0` | DF 是训练范式，可按控制任务调整参数化 | 不能说明所有任务都适合相同 schedule |
+| MCTG | 多未来样本 guidance | 当前动作可优化期望未来，而不是单一路径 | guidance 成本和样本数仍是推理瓶颈 |
+| Noise schedule | DMLab/Minecraft/Planning/Robot 配置不同 | 二维噪声日程是核心超参，需要按任务调 | 不能把某个 schedule 当通用 recipe |
+
+如果要复现实验，最应该盯的是三条曲线：长 rollout 是否稳定、规划成功率是否随 guidance 改善、采样步数降低后控制是否仍稳。只看单帧 FVD 或一段 demo，很容易把 DF 误读成普通视频扩散。
+
 ## 最值得复用的设计经验
 
 ### 1. 把噪声当成连续 mask
@@ -431,6 +445,9 @@ Diffusion Forcing 的关键贡献是把扩散模型从“一段序列共享一�
 5. 规划和模仿学习中的闭环记忆。
 
 从工程角度看，它最值得借鉴的不是某个 RNN 结构，而是一个训练原则：**不要把所有未来 token 都当成同等不确定，也不要把模型自己生成的历史当成完全可信。把不确定性做成每个 token 的噪声水平，训练和采样就能表达更真实的序列状态。**
+
+!!! info "本站判断"
+    Diffusion Forcing 要按 per-token noise schedule 读：方法把 mask、未来不确定性和自生成历史放进同一噪声接口，实验重点是长 rollout、规划/模仿学习和 schedule 消融。工程采用先验动作后果一致性和采样成本，再谈画质。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

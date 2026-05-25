@@ -356,6 +356,11 @@ Muon 的核心假设是：矩阵正交化能让权重沿更多方向学习。论
 3. 代码与模型入口：[MoonshotAI/Moonlight](https://github.com/MoonshotAI/Moonlight).
 4. 模型权重：[moonshotai/Moonlight-16B-A3B](https://huggingface.co/moonshotai/Moonlight-16B-A3B).
 
+这一页最后回到三个验收点：方法上，Muon 的核心是把矩阵更新方向做近似正交化，让优化步更像受控的谱范数更新；通常还要和 AdamW 分工使用。实验上，读 loss/scale 曲线时要看模型规模、token budget 和是否保持同等训练 recipe。诊断上，真正要验的是稳定性与超参迁移，不是单个 benchmark 赢一次。
+
+!!! info "本站判断"
+    Muon scalability 要按优化器证据读：方法重点是矩阵更新的正交化/归一化直觉和与 AdamW 的分工，实验看模型规模、loss 曲线和稳定性消融。采用时最需要补的是超参迁移、混合 optimizer 边界和下游任务质量。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。

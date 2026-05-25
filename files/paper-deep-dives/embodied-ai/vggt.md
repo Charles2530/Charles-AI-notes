@@ -386,6 +386,20 @@ VGGT 不只作为几何预测器，还能作为下游任务的 feature backbone�
 
 <small>图源：`VGGT`，Visualization of Rigid and Dynamic Point Tracking。原论文图意：上半部分展示 VGGT tracking module 在无序静态图像集合中输出 keypoint tracks；下半部分展示用 VGGT backbone 增强动态点跟踪器。</small>
 
+## 消融与诊断怎么读
+
+VGGT 的论文结果里，最像消融的是几个“同一任务换机制”的对照。它们回答的不是“模型是否更大”，而是“多任务几何、大 Transformer 和 Alternating-Attention 到底贡献在哪里”。
+
+| Diagnostic | 论文证据 | 结论 | 不能证明 |
+| --- | --- | --- | --- |
+| Attention variant | Table 8 中 Cross-Attention / Global Self-Attention / Alternating-Attention | 跨帧全局建模要和单帧结构整理交替，几何更稳 | 不能说明所有视觉任务都该用同样 attention |
+| Feed-forward vs with BA | Table 1 camera pose estimation | 一次前向已很强，BA 仍能继续提高精度 | feed-forward 不等于完全替代优化式 SLAM |
+| Point head vs Depth+Cam | Table 3 point map | over-complete heads 可互相校验，depth + camera 组合可能更准 | 多 head 输出天然一致性还要工程检查 |
+| Known camera vs unknown camera | Dense MVS Table 2 | VGGT 在无 GT camera 条件下接近部分有 camera 的方法 | 不能替代高精度标定和安全距离传感 |
+| Runtime / memory scaling | Table 7 | 跨帧 global attention 是主要成本，帧数增长会推高显存 | 不能保证移动端或实时机器人上直接可用 |
+
+这些诊断让 VGGT 更像一个几何底座，而不是单任务 depth 模型。工程上应把它当作 fast geometry proposal：先给 camera、depth、point map、track 和 uncertainty，再由 SLAM、BA、planner 或抓取模块决定哪些输出可信。
+
 ## 和 DA3、DUSt3R、MASt3R 的关系
 
 VGGT 很容易和 [Depth Anything 3](depth-anything-3.md) 放在一起读，但两者的哲学不同。
@@ -413,6 +427,9 @@ DUSt3R / MASt3R 则是 VGGT 的直接前置线。它们证明 point maps 是很�
 | 安全距离、碰撞制动 | 低 | 这类闭环仍需要可靠标定、实时传感器和安全冗余，不能只信 feed-forward 几何 |
 
 一句话总结：VGGT 把“看多张图恢复 3D”这件事从传统优化管线变成了大模型前向推理问题。对具身智能来说，它的价值不是替代控制器，而是把相机、深度、点和 track 变成一个更快、更统一的感知接口。
+
+!!! info "本站判断"
+    VGGT 要按通用几何 transformer 读：方法核心是从多视角图像直接预测相机、深度、点图和 track；实验看 DUSt3R 对比、动态 track 和跨数据泛化。对具身系统最有用的是几何状态初始化，闭环规划还要另接动作和不确定性。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

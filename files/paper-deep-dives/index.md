@@ -59,84 +59,8 @@
     **深入读法**：深读时按 Figure/Table/Setting 拆 claim，区分论文结果、系统吞吐、官方 demo 和站内推断。
     **实验/工程读法**：写专题时补图解读法、实验口径和不能外推的结论。
 
-!!! warning "核心失败模式"
-    | 失败模式 | 先查什么 |
-    | --- | --- |
-    | 摘要复述 | 必须回到 claim、figure/table、setting 和不能证明什么 |
-    | 复现状态缺失 | 前沿论文要写 Checked Date 和 Repro Status |
-    | 结果表误读 | benchmark 条件、closed-loop、真实机器人和系统吞吐要分开 |
-
-!!! info "最小验收指标"
-    | 要判断什么 | 最小指标 | 不能替代什么 |
-    | --- | --- | --- |
-    | 论文 claim 可核对 | 原文图表、实验 setting 和官方材料清楚 | 摘要复述 |
-    | 复现状态准确 | 论文、代码、demo 和独立复现口径分开写 | 模板化标签 |
-    | 图表读法扎实 | 输入输出、效率机制、主线意义、不能证明什么 | 只贴原图 |
-
-
-!!! failure "最佳反例"
-    论文专题最危险的反例，是把作者主张复述得很完整，却没有写本站判断：证据类型、成熟度、不能证明什么，以及下一步该怎么验。
-
-## 推荐写法
-
-每篇专题讲解尽量保持固定结构，方便不同主题之间横向比较。
-
-| 模块 | 需要回答的问题 |
-| --- | --- |
-| 论文信息 | 标题、链接、代码、关键词和适合读者 |
-| 论文位置 | 它在方向谱系里解决哪一段问题 |
-| 核心问题 | 旧方法为什么不够，论文要突破什么瓶颈 |
-| 方法结构 | 数据、模型、训练目标、推理路径如何组织 |
-| 实验结论 | 哪些结果真正支撑了论文主张 |
-| 局限风险 | 哪些结论不能过度外推 |
-| 项目启发 | 如果落到工程系统里，哪些设计最值得借鉴 |
-
-专题页不追求把论文所有细节逐字复述，而是优先解释“为什么这样设计”。如果某个公式、模块或实验无法改变对论文的理解，就不必展开太长。相反，数据构造、训练阶段、推理约束和评测口径这类容易影响工程判断的部分，应写得更具体。
-
-### 统一写作约束
-
-论文专题页继续按“问题、方法、训练/推理链路、关键实验、局限、项目启发”写。专题正文不再强制放独立的元信息块；来源、复现状态和不能外推的部分直接写进相关段落、图表说明或“本站判断”。
-
-新增或重写论文页时，只保留三条硬约束：
-
-1. 关键 claim 必须能接回原论文图表、实验 setting 或官方材料，不能只写摘要复述。
-2. 复杂图必须有“这张图怎么读”；结果表要在正文里说明 benchmark 条件、硬件/数据/closed-loop 口径和不能外推项。
-3. 项目启发只能吸收证据能支撑的部分；demo、benchmark、system throughput、closed-loop 和本站推断不能混写。
-
-### 本站判断收口
-
-每篇 deep dive 末尾建议用一个很短的“本站判断”收束，不需要重复摘要，只回答三件事：这项工作处在什么成熟度、最值得复用的机制是什么、还缺哪类证据才能进入工程采用。这样可以把论文专题从“读后感”变成可审计的路线判断。
-
-| 收口问题 | 最小写法 | 不要写成 |
-| --- | --- | --- |
-| 成熟度 | 经典已验证 / 工程常用 / 前沿待复现 / 官方展示 / 本站推断 | “很有潜力” |
-| 可复用机制 | 明确对应数据、训练、推理、显存、验证或部署哪项成本 | “效果很好” |
-| 下一步证据 | 需要补 ablation、closed-loop、system trace、质量回归或独立复现 | “值得关注” |
-
-## 论文图读法示例
-
-论文图要回答：模块做什么、支撑哪条 claim、不能证明什么。下面是三类读法。
-
-![V-JEPA training procedure 原论文图](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="920" }
-
-<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原论文图意：context encoder 只处理 masked video 中未遮挡 token；predictor 接收 context output 和 mask tokens，预测 target encoder 对完整视频产生的 masked token representations。</small>
-
-!!! note "图解：先分清两条 encoder 路径"
-    左侧蓝色 token 是可见上下文，经 context encoder 得到 \(N\times d\) 表示；predictor 把 context output 和红色 mask tokens 拼接，预测被遮挡位置的 representation。右侧 target encoder 看完整视频，但 loss 只作用在 masked target representations 上，并通过 stop-gradient 阻止 teacher 分支被 predictor 反向更新。这张图支撑的是 latent prediction，不是像素重建，也不能单独证明闭环规划能力。
-
-![DeepSeek-V3 architecture 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
-
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原论文图意：展示 MLA、DeepSeekMoE、shared/routed experts 与 Multi-Token Prediction 在整体架构中的位置。</small>
-
-!!! note "图解：架构图要按成本链路读"
-    先看 token 在主干里的路径，再看哪些模块改变显存、通信和训练目标。MLA 影响 KV cache 与长上下文成本，MoE 决定每个 token 激活哪些专家，MTP 是额外训练信号而不是推理时必须多吐 token。读技术报告时不要把“结构存在”直接等同于“端到端更快”，还要回到吞吐、负载均衡、FP8、并行策略和 serving 约束。
-
-![EAGLE-3 inference pipeline 原论文图](../assets/images/paper-deep-dives/inference/eagle-3/figure-5-inference-pipeline.png){ .atlas-figure-page width="560" }
-
-<small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 5。原论文图意：展示 EAGLE-3 在推理时用 draft model 生成候选 token tree，再由 target LLM 验证和接受部分 token 的 speculative decoding 流程。</small>
-
-!!! note "图解：推理 pipeline 要抓住草稿和验证"
-    这类图的核心不是“多了一个小模型”，而是把昂贵 target LLM 的逐 token 解码改成“先草拟一批候选，再一次验证一段”。draft model 决定候选质量和树形展开，target model 决定哪些 token 能被接受。它支撑的是吞吐/延迟优化 claim，不能证明模型回答质量提升；如果 acceptance rate 下降，额外 draft 成本可能抵消收益。
+!!! info "写作与验收规范"
+    新增或重写专题页时，先看 [论文专题写作与验收规范](writing-standard.md)。入口页只做导航，规范页负责方法深度、实验口径、图表读法、复现状态和本站判断收口。
 
 ## 当前专题
 
@@ -148,7 +72,7 @@
 ### 高效训练
 
 !!! note "这组文章怎么连起来读"
-    高效训练不是单一技巧，而是把同一笔训练预算花得更有效。建议按层级读：先看 Megatron-LM，理解 tensor model parallel、data parallel group、mixed precision 和 activation checkpointing 如何组成大模型训练底座；再看 ZeRO，理解 optimizer states、gradients、parameters 和 activations 的零冗余显存账；然后看 Muon 理解 optimizer 如何提升 token/FLOP efficiency；接着看 MagiAttention 理解超长上下文训练的 CP、mask 和通信瓶颈；再看 SLA / SLA2 理解视频 DiT 里如何用 sparse-linear decomposition 减少 attention 计算；最后看 Attn-QAT 理解 FP4 attention 为什么必须同时改 forward、backward 和 inference kernel。六篇合起来，对应“模型并行 -> 状态分片 -> 优化器 -> 分布式 attention -> 近似 attention -> 低比特 attention”这条工程链。
+    高效训练不是单一技巧，而是把同一笔训练预算花得更有效。建议按层级读：先看 Megatron-LM，理解 tensor model parallel、data parallel group、mixed precision 和 activation checkpointing 如何组成大模型训练底座；再看 ZeRO，理解 optimizer states、gradients、parameters 和 activations 的零冗余显存账；然后看 Muon 理解 optimizer 如何提升 token/FLOP efficiency；接着看 GPU Utilization，理解高利用率、MFU、SM efficiency 和 Tensor Core 利用率之间的指标口径；再看 MagiAttention 理解超长上下文训练的 CP、mask 和通信瓶颈；再看 SLA / SLA2 理解视频 DiT 里如何用 sparse-linear decomposition 减少 attention 计算；最后看 Attn-QAT 理解 FP4 attention 为什么必须同时改 forward、backward 和 inference kernel。七篇合起来，对应“模型并行 -> 状态分片 -> 优化器 -> 指标诊断 -> 分布式 attention -> 近似 attention -> 低比特 attention”这条工程链。
 
 <table data-paper-sort="asc">
   <thead>
@@ -177,6 +101,12 @@
       <td>高效训练</td>
       <td><a href="foundations/muon-is-scalable/">Muon：LLM 预训练优化器</a></td>
       <td>如何把 Muon 从矩阵正交化优化器扩展到 5.7T token LLM 预训练，并系统对比 AdamW 的更新几何、状态内存、分布式通信和 SFT 边界</td>
+    </tr>
+    <tr>
+      <td>2025-02</td>
+      <td>高效训练</td>
+      <td><a href="foundations/gpu-utilization-misleading/">GPU Utilization：为什么 100% 不等于训练跑满</a></td>
+      <td>如何区分 GPU utilization、MFU、SM efficiency、Tensor Core utilization、memory bandwidth 和 profiler timeline，并用 fused kernels 与合适并行度解决高利用率低效率训练</td>
     </tr>
     <tr>
       <td>2025-04</td>
@@ -599,87 +529,3 @@
     </tr>
   </tbody>
 </table>
-
-## 选题原则
-
-不是所有论文都适合写成专题讲解。更适合进入这个模块的论文，通常满足至少一个条件：
-
-1. 它代表一个方向从概念走向系统的关键节点；
-2. 它的数据、训练、推理和评测强耦合，只看摘要容易误读；
-3. 它能为后续项目提供可复用的设计模板；
-4. 它的局限同样有启发价值，能帮助判断某条路线目前还做不到什么；
-5. 它和站内多个主题有关，适合做跨页面连接。
-
-例如 `LingBot-World` 适合放在这里，不是因为它已经解决了所有世界模型问题，而是因为它把“视频生成模型如何继续训练成交互式世界模拟器”这条路线讲得比较完整，能同时连接世界模型、视频生成、动作条件建模和推理实时化。
-
-## 阅读建议
-
-读专题讲解时，建议先看“论文位置”和“训练路线”，再看实验与局限。很多论文的真正价值不在某个单点指标，而在它把数据、模型、训练目标和系统接口组织成一条可执行路径。
-
-如果读任意一篇专题页时发现自己卡在 token/latent/action、loss/reward/score、KV/runtime、benchmark/ablation 这些公共语言上，先回到 [基础知识](../foundations/index.md)。那里把常见卡点按主题拆开，适合当作读论文前的检查清单。
-
-如果只是想快速建立方向地图，先看对应主题总览页和 [参考文献总表](../references/index.md)。如果已经选定某篇论文准备精读、复现或用于项目设计，再看这里的专题讲解。
-
-## 使用方式
-
-更推荐把专题讲解当成“读论文后的结构化笔记”，而不是读论文前的替代品。先快速扫一遍论文摘要、图表和实验，再回来看专题页，会更容易判断哪些内容是作者的核心主张，哪些是本文对工程落地的二次归纳。
-
-如果要用专题页支持项目讨论，可以按下面顺序使用：
-
-1. 先看“论文位置”，确认它解决的问题是否和当前项目一致；
-2. 再看“方法结构”，确认数据、模型和系统假设是否能复用；
-3. 然后看“实验与局限”，确认论文证据能否支撑项目里的风险判断；
-4. 最后看“项目启发”，把可执行动作拆成数据、训练、评测和部署任务。
-
-这个顺序比直接抄论文方法更稳，因为很多论文的关键收益依赖特定数据、算力、评测口径或系统接口。专题讲解的目标就是把这些隐含条件提前暴露出来。
-
-## 论文效率贡献模板
-
-论文专题仍然保留各方向的重要内容，不只服务世界模型。但为了让读者能把论文放回主线，每篇深读页都建议显式回答“它到底节省了什么、代价是什么、能否迁移到世界模型高效训练”。
-
-| 模块 | 要回答的问题 |
-| --- | --- |
-| 效率目标 | 节省真实交互、视频 token、显存、通信、推理步数、评测成本，还是人工标注成本 |
-| 核心机制 | 改的是数据、目标函数、模型结构、attention mask、低精度、runtime 还是评测闭环 |
-| 证据 | 论文用 ablation、scaling、系统指标、闭环成功率还是 demo 支撑结论 |
-| 代价与反例 | 哪些场景不适用，是否增加复杂度、质量风险、数据污染或维护成本 |
-| 接到本站哪里 | 应回到哪个主题页补背景，避免孤立记论文名 |
-
-高效训练相关论文尤其要避免只写“更快、更省”。更有价值的写法是把省下来的成本项、收益成立的前提、以及不能外推的边界一起写清楚。
-
-## 维护约定
-
-新增专题页时尽量遵守三个约定：
-
-1. 标题使用“论文或系统名 + 一句话定位”，避免只写英文标题；
-2. 页面中保留原论文链接和代码链接，方便回查来源；
-3. 结尾必须写“局限、风险或不可外推结论”，避免把论文总结写成单向宣传。
-
-如果后续同一主题下论文变多，可以再增加主题索引页。例如世界模型下可以继续分成视频世界模型、RSSM/Dreamer、规划与反事实、数据引擎四组。当前先保持轻量结构，避免导航层级过深。
-
-另一个维护原则是避免重复正文主题页。专题页可以更细地讲一篇论文，但不要把主题页已经讲清的基础概念再完整复制一遍；需要背景时用链接回到对应主题页即可。这样能让专题页保持“单篇论文拆解”的定位，也能减少后续维护时同一概念在多个页面里不一致的问题。
-
-## 后续扩展
-
-后续可以继续按主题增加专题页，例如：
-
-1. 训练系统中的代表性工程论文；
-2. FP8、量化和低精度训练的关键论文；
-3. VLM/VLA 中真正改变数据或评测方式的论文；
-4. 推理系统中影响服务架构的论文；
-5. 世界模型、仿真和数据引擎方向的系统论文。
-
-新增专题时优先保持“少而深”。这个模块不是论文收藏夹，而是为那些值得反复回看、适合支撑工程判断的论文建立稳定讲解入口。
-下一站：见标杆页。
-
-## 深度标杆页
-
-标杆页要明确问题、方法、证据、效率贡献和适用边界；其它论文页后续向这些页补齐。
-
-| 标杆页 | 对齐标准 |
-| --- | --- |
-| [MagiAttention](foundations/magiattention.md) | 要能把长序列训练、mask、并行和系统收益讲成一条线 |
-| [LingBot-World：世界模拟器](world-models/lingbot-world.md) | 要明确世界模型训练配方、数据路径、rollout 与效率贡献 |
-| [DreamerV3：跨域通用世界模型](world-models/dreamerv3.md) | 要把 latent dynamics、imagined rollout 和样本效率讲清楚 |
-| [π0.5：开放世界 VLA](embodied-ai/pi05.md) | 要解释 VLA 数据混合、动作专家和开放世界泛化 |
-| [CausVid：流式自回归视频扩散](diffusion/causvid.md) | 要说明视频扩散如何被 causalize，并接到实时世界模型推理 |

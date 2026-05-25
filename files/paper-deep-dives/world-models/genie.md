@@ -562,6 +562,9 @@ unlabelled Internet videos
 
 如果你在做机器人、游戏或视频世界模型，而手头大量视频没有动作标签，Genie 是必须读的一篇。它提醒我们：动作不一定一开始就来自传感器或控制器，也可以先作为“解释相邻状态变化的离散潜变量”被学习出来。真正落到工程系统时，再把这套 latent action interface 接到真实动作、策略、规划器或交互 UI。
 
+!!! info "本站判断"
+    Genie 的贡献是从无动作互联网视频学可交互 latent action world model：方法要抓 video tokenizer、latent action model 和 dynamics model；实验看可控 rollout、probe、human/gameplay 现象。它证明 action-free videos 可产出交互接口，但物理精度和任务成功率仍未闭环。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

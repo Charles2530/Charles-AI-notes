@@ -397,6 +397,11 @@ SLA 最值得记住的不是“95% sparsity”这个数字，而是它给近似 
 4. SLA2 Figure 1 见论文 PDF：[arXiv:2602.12675](https://arxiv.org/abs/2602.12675).
 5. 官方代码：[thu-ml/SLA](https://github.com/thu-ml/SLA).
 
+这一页最后回到三个验收点：方法上，SLA 的主线是把 dense attention 分解成 sparse/linear/low-bit 可训练路径，用结构替换和 QAT 同时降成本。实验上，速度、显存和质量表必须一起看；单独的稀疏率没有意义。诊断上，消融要回答“是稀疏模式有效，还是低比特/训练补偿在兜底”。
+
+!!! info "本站判断"
+    SLA 要按 attention 结构替换读：方法核心是 sparse/linear 分支、低比特 attention 和训练适配；实验看速度、显存、质量与稀疏率消融。它说明 attention 可被系统性改轻，但长上下文质量和 kernel 生态决定能否真正落地。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。

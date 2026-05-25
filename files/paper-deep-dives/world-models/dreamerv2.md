@@ -467,6 +467,11 @@ DreamerV2 最值得记住的是三点：
 
 一句话总结：DreamerV2 证明了交互轨迹驱动的 latent dynamics 世界模型不仅能做连续控制，也能在 Atari 这种强基准上训练出竞争力 policy。它把 DreamerV1 的 latent imagination actor-critic 推进到离散状态、离散动作和强 model-free baseline 对抗的阶段，为 DreamerV3 的通用化 recipe 铺好了路。
 
+这一页最后回到三个验收点：方法上，DreamerV2 把 RSSM latent 离散化，并用 KL balancing 让 posterior 和 prior 都学到可 rollout 的状态。实验上，Atari performance 和 ablation 图要连读，看离散 latent、actor-critic 和数据效率各自贡献。诊断上，这篇证明世界模型能打 Atari，但 reward、done 和动作接口仍来自 RL 环境，不是开放视频生成。
+
+!!! info "本站判断"
+    DreamerV2 的方法重点是离散 RSSM、KL balancing 和 actor-critic 稳定化；实验看 Atari 人类归一化分数、数据效率和 ablation。它把 Dreamer 从连续控制推到 Atari，但仍是交互轨迹 RL，不是通用视频世界模拟器。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

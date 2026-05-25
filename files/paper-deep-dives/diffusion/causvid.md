@@ -469,6 +469,11 @@ strong bidirectional teacher
 
 这条路线很适合接在 Diffusion Forcing、视频世界模型和少步蒸馏之后读。它把“因果视频扩散”从概念推进到了一个可测延迟、可跑 benchmark、能支持 streaming UI 的系统形态。
 
+这一页最后回到三个验收点：方法上，把 CausVid 读成 causal student 在短窗口内滚动生成视频，teacher/fake score 负责把每个新片段拉回 teacher 分布。实验上，重点看 streaming latency、video quality 和长 rollout 的稳定性，而不是只看单段样片。诊断上，若去掉因果训练或 score 校正，最先坏的通常是运动连续性和时间一致性。
+
+!!! info "本站判断"
+    CausVid 的价值在流式因果视频生成：方法要抓 causal rollout、fake/real score 蒸馏和短窗口记忆，实验要看视频质量、首帧/后续帧延迟和长时漂移。它能支撑实时世界模拟方向，但不能自动证明闭环控制可靠。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。

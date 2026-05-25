@@ -325,6 +325,11 @@ Table 5 很宽，这里按原论文列名重绘，保留英文指标格式。
 
 Megatron-LM 的核心价值就在这里：它把“模型切得开”与“训练跑得稳、结果能变好”放在同一篇论文里。对今天的高效训练来说，这种账本意识仍然比某一个具体并行参数更重要。
 
+这一页最后回到三个验收点：方法上，Megatron-LM 的公式抓手是把 MLP 和 attention 的矩阵乘按 hidden dimension 切分，让每张卡只持有一部分权重和激活。实验上，FLOPs scaling、weak scaling 和 validation perplexity 要一起看，避免只追吞吐忽略质量。诊断上，hybrid MP+DP 图说明张量并行不是孤立技巧，而要和数据并行、通信算子和 batch 配方一起设计。
+
+!!! info "本站判断"
+    Megatron-LM 的长期价值是张量并行的工程范式：方法要抓 MLP/attention 切分、通信位置和混合并行；实验看 weak scaling、perplexity 与吞吐。它证明大模型训练要联合算子、并行和数值稳定设计，而不只是堆 GPU。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。

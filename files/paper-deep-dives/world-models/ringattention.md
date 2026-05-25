@@ -267,6 +267,20 @@ RingAttention 和 LWM 的关系可以压缩成一句话：**RingAttention 让 1M
 
 从工程项目角度看，二者不能分开理解。只读 LWM 会低估系统实现难度；只读 RingAttention 会看不出它为什么对世界模型有意义。
 
+## 消融与诊断怎么读
+
+RingAttention 的消融不是“去掉一个模块看分数降多少”，而是系统论文里更常见的资源诊断：同一个模型、同一类硬件下，长上下文瓶颈到底来自显存、通信还是模型不能利用远处 token。
+
+| Diagnostic | 论文证据 | 说明什么 | 不能说明什么 |
+| --- | --- | --- | --- |
+| Max context comparison | Table 3 中 vanilla / memory-efficient attention / BPT / RingAttention | RingAttention 的主要收益来自 sequence sharding，而不只是省 attention matrix | 不能证明长上下文任务质量一定更好 |
+| Minimal block size | Table 2 的 FLOPS、HBM、interconnect bandwidth | 通信能否被隐藏取决于 block size 和互联带宽 | 不能把 TPUv4/NVLink 结果直接外推到慢互联集群 |
+| MFU setting | Table 4 中更长 context 与 utilization 的权衡 | 更长上下文不是免费，attention 占比和通信调度会改变吞吐 | 不能只用 tokens/s 判断是否值得采用 |
+| In-context RL | ExoRL Table 5 | 更多轨迹上下文能改善 algorithm distillation 类设置 | 不能证明真实机器人长期记忆已经解决 |
+| Line retrieval | Figure 3 | 模型能在 512K 文本里找回远处信息 | 不能代表复杂多跳推理或动作因果利用能力 |
+
+工程上最重要的“消融结论”是：如果你的任务只是 32K 文本问答，RingAttention 的复杂度未必值得；如果你的任务是 1M token 视频、长交互轨迹或整本书级上下文，普通 memory-efficient attention 解决不了层输出和序列存储瓶颈，sequence-parallel exact attention 才开始变得有意义。
+
 ## 最值得复用的设计经验
 
 ### 1. Exact attention 和长上下文可以通过系统重排获得
@@ -307,6 +321,9 @@ world experience is long
   -> RingAttention makes sequence sharding practical
   -> LWM uses it to train million-token video-language models
 ```
+
+!!! info "本站判断"
+    RingAttention 要按长序列训练基础设施读：方法核心是把 attention block 沿设备环切分并重叠通信；实验看长上下文吞吐、显存和 scaling。它支撑长视频/长文本世界模型训练，但不直接改变模型语义或任务能力。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

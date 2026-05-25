@@ -66,6 +66,9 @@ ZeRO 的证据分两层：前半部分是内存和通信量的理论分析，后
 
 <small>图源：ZeRO Figure 1。原图比较 data parallel model states 的 per-device memory，并展示 ZeRO-DP 三阶段如何逐步分片 optimizer states、gradients 和 parameters。图中示例使用 \(\Psi=7.5B\)、\(N_d=64\)、mixed precision Adam \(K=12\)。</small>
 
+!!! note "这张图怎么读"
+    这张图要按“哪些状态还在每张卡上重复保存”来读。Stage 1 只切 optimizer states，Stage 2 再切 gradients，Stage 3 连 parameters 也切开；每一步减少的是 data parallel 里无意义的冗余，而不是改变模型数学定义。它支撑的是显存可行性和可扩展性，不直接证明模型质量更好。
+
 ## ZeRO-DP 三阶段
 
 ZeRO-DP 的三阶段不是互斥选项，而是累积打开：
@@ -157,6 +160,9 @@ ZeRO 不是简单地“把东西切了”，因为分片必然意味着训练时
 ![ZeRO throughput speedup 原论文图](../../assets/images/paper-deep-dives/foundations/zero/figure-2-throughput-speedup.png){ width="860" }
 
 <small>图源：ZeRO Figure 2。原图比较 ZeRO 与 SOTA baseline 在不同模型规模下的 training throughput 和 speedup。ZeRO 的 MP 始终限制在单节点内，而 baseline 在 40B 以上需要跨节点 MP，通信效率快速下降。</small>
+
+!!! note "Figure 2 怎么读"
+    这张吞吐图的重点不是“ZeRO 总是更快”，而是模型变大后 baseline 被迫跨节点做 model parallel，通信代价上升；ZeRO 通过状态分片让更多模型规模留在更高效的数据并行/节点内并行组合里。读数边界是硬件拓扑、batch size、activation checkpointing 和实现都会影响吞吐，不能把 speedup 直接照搬到任意集群。
 
 论文报告 ZeRO-100B 可在 400 张 V100 上高效运行最高 170B 参数模型；对 8B 到 100B 模型，平均达到约 15 PFLOPs，总体约为硬件峰值 30% 以上。100B 模型上 ZeRO 每 GPU 超过 38 TFLOPs，聚合超过 15 PFLOPs，相比 SOTA baseline 同规模训练有 10x 以上速度提升。
 
@@ -292,6 +298,9 @@ ZeRO 论文最后用 Turing-NLG 作为真实端到端训练例子。截至论文
 7. **用质量闭环**：最终仍要看 validation loss、perplexity 或目标任务指标，不能只看可运行模型规模。
 
 ZeRO 最值得学习的不是某一个具体配置名，而是它的账本方式：先问“哪些状态被重复存了”，再问“这些状态在训练步骤的哪个时间点真的需要”，最后用通信调度把显存和吞吐重新平衡。
+
+!!! info "本站判断"
+    ZeRO 的方法贡献是把 optimizer state、gradient 和 parameter 分片成可组合阶段；实验看可训练模型规模、吞吐和显存曲线。它解决的是数据并行内存冗余，不自动解决通信瓶颈、激活显存或不稳定训练。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

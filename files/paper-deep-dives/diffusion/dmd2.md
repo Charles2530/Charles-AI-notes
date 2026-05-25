@@ -517,6 +517,9 @@ DMD2 最值得记住的不是“DMD 加 GAN”，而是它把一步/少步扩散
 2. 官方项目页：[DMD2](https://tianweiy.github.io/dmd2/).
 3. 官方代码：[tianweiy/DMD2](https://github.com/tianweiy/DMD2).
 
+!!! info "本站判断"
+    DMD2 要读成 DMD 的稳定化版本：方法上缩短 teacher 依赖、改进 GAN-style 训练和 fake-score 更新；实验上看 SDXL/Imagenet 的少步质量、人评与消融。它适合做高质量少步生成底座，但不是无成本替代完整 diffusion。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。

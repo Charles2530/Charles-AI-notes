@@ -266,6 +266,11 @@ $$
 
 最后，V-JEPA 的实验主要证明“latent video prediction 能学到强视频表征”。把它迁移到机器人、自动驾驶或游戏世界模型时，还需要额外验证表示是否保留任务关键状态，例如接触、可操作物体、小目标、障碍物、风险事件和长期空间记忆。
 
+这一页最后回到三个验收点：方法上，V-JEPA 用可见视频块预测 masked latent target，EMA target encoder 和 stop-gradient 是防 collapse 的核心。实验上，masking ablation、frozen evaluation 和 pretraining distribution 表要一起读。诊断上，它证明 latent video prediction 能学强表征，但没有 action/reward，所以只是世界模型状态 encoder 候选。
+
+!!! info "本站判断"
+    V-JEPA 的核心是 latent video prediction：方法要抓 EMA target encoder、高 mask ratio 和 representation prediction；实验看 frozen evaluation、masking ablation 和 video pretraining distribution。它能学动态表征，但没有 action/reward，因此不是可规划世界模型。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

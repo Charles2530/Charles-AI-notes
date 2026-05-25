@@ -49,6 +49,9 @@ DreamerV3 代表另一条更经典的 model-based RL 路线：
 
 <small>Figure source: `Mastering Diverse Domains through World Models`, Figure 1. 原论文图注要点：该图汇总跨基准结果，强调 Dreamer 在固定超参数下超过多类专家算法和 PPO，并能在 Minecraft 稀疏奖励任务中从零学会获得钻石。</small>
 
+!!! note "这张图怎么读"
+    Figure 1 的重点是“固定超参数跨域”，不是某个单项分数。DreamerV3 同一套配置覆盖 DMC、Atari、DMLab、Crafter、Minecraft 等环境，说明论文主张的是鲁棒 world-model RL recipe，而不是为每个 benchmark 手调专家算法。它不能证明真实机器人或开放世界游戏同样稳定，因为那些还涉及感知噪声、安全和长时交互协议。
+
 ## 核心问题
 
 Dreamer 系列一直在回答一个问题：能否先学习一个可 rollout 的世界模型，再用这个模型内部的想象轨迹训练策略，从而减少真实环境采样。
@@ -82,6 +85,9 @@ DreamerV3 的主要贡献不是换一个更大的 backbone，而是把 world mod
 ![Actor critic learning](../../assets/images/paper-deep-dives/world-models/dreamerv3/x3.png){ width="920" }
 
 <small>Figure source: `Mastering Diverse Domains through World Models`, Figure 3(b). 原论文图注要点：actor 和 critic 在 world model 预测出的抽象表示轨迹上学习动作与价值，重建目标用于塑造 latent representation。</small>
+
+!!! note "训练流程图怎么读"
+    第一张图讲世界模型如何学环境：posterior 看真实观测，prior 在没有未来观测时按动作预测 latent；第二张图讲策略如何在 imagined rollout 上学动作和价值。DreamerV3 的关键是把真实交互压成 replay，再把 replay 变成大量 latent imagination 训练信号。图不能证明 imagination 永远可靠，长 horizon 仍要靠 value bootstrap、discount 和模型误差控制。
 
 !!! note "这两张 DreamerV3 图要一起读"
     第一张图负责 world model learning：模型从真实观测中学习 latent representation、recurrent dynamics、reward 和 continuation。第二张图负责 behavior learning：actor 和 critic 不直接在真实环境里反复试错，而是在 world model 的 imagined latent trajectories 上训练。
@@ -327,6 +333,9 @@ DreamerV3 的局限也很清楚。它需要环境交互轨迹和 reward/continua
 5. 如果真实交互昂贵，提高 replay ratio 和扩大 world model 规模可能比盲目增加环境采样更划算。
 
 一句话概括：DreamerV3 展示的是 `latent dynamics / model-based RL` 世界模型的成熟形态。它把世界模型从“预测未来的表示器”推进到“能支撑策略学习的内部模拟器”。
+
+!!! info "本站判断"
+    DreamerV3 要按跨域鲁棒化读：方法核心是 symlog、twohot、free bits、离散 latent 和固定超参；实验看 Atari、DMC、Minecraft 等多域表现。它给世界模型 RL 提供强 baseline，但开放具身任务仍要补感知、动作和安全证据。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

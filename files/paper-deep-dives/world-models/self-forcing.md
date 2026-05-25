@@ -382,6 +382,11 @@ autoregressive inference uses self-generated history
 
 对视频世界模型来说，这个思想很重要：如果未来的模拟器要在闭环里长期运行，就不能只在 ground-truth 上下文上训练。模型必须学会在自己的错误历史上继续生成，并把错误控制在不会快速崩坏的范围内。
 
+这一页最后回到三个验收点：方法上，Self-Forcing 的核心是让模型在训练中看到自己生成的历史，从而缩小 teacher-forcing 与 free-running 的分布差。实验上，读 rollout 图时重点看长时稳定、运动连贯和是否保留多样性。诊断上，它修的是训练-推理错配；如果数据本身没有动作因果或物理约束，self-forcing 也不会凭空补出来。
+
+!!! info "本站判断"
+    Self-Forcing 要按生成时分布偏移修正读：方法重点是让训练暴露模型自生成历史，实验看 rollout 质量、长时稳定和对比消融。它解决的是 teacher-forcing 到 free-running 的落差，但不能单独保证物理正确或动作可控。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

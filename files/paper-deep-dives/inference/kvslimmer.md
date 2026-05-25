@@ -472,6 +472,20 @@ k^*
 !!! note "这些效率图支撑什么判断"
     Figure 4/5/6 支撑的是系统层判断：KVSlimmer 不是只在 LongBench 分数上小幅超过 AsymKV，而是把 AsymKV 的反传合并开销拿掉后，在 decoder 时间和峰值显存上也更稳。尤其 Figure 6 说明 chunk size 变大时，AsymKV 的内存压力增长更快，KVSlimmer 更适合受限 GPU 上的长上下文服务。
 
+## 消融与诊断怎么读
+
+KVSlimmer 的实验要同时看质量和系统开销。它的优势不是“所有任务都更准”，而是在接近 AsymKV 甚至略优质量的同时，把反传式合并换成 forward-only 闭式合并。
+
+| Diagnostic | 论文证据 | 说明什么 | 不能说明什么 |
+| --- | --- | --- | --- |
+| LongBench Table 1 | 三个模型、多个任务族平均分 | KVSlimmer 在 2048 cache budget 下通常优于 AsymKV 平均分，Synthetic 收益明显 | 不能保证每个业务任务都不丢关键证据 |
+| LongBenchV2 Table 2 | 8192 cache size 极长上下文 | Overall/Long 最好，但 Hard/Medium 不总是最好 | 压缩策略仍会改变难题证据分布 |
+| Figure 4 runtime | 相对 AsymKV runtime ratio 约 0.72 | 去掉反传合并后端到端开销更低 | 不能说明所有 serving 框架都同等收益 |
+| Figure 5 decoder | decoder stage 时间下降 | decode 阶段是 KV 压缩收益的重要位置 | prefill、batching、scheduler 仍需单独测 |
+| Figure 6 memory | chunk size 越大，KVSlimmer 峰值显存优势越明显 | forward-only 合并更适合大 chunk / 显存紧张场景 | 非局部冗余和 layer/head 自适应仍未解决 |
+
+部署前最该补的是“lost-evidence”诊断：抽一批 RAG、代码定位、法律条款和工具 trace 请求，记录压缩后答案引用的关键 token 是否被合并掉。KVSlimmer 的平均分不错，但线上风险往往来自极少数关键 token。
+
 ## 工程上怎么用
 
 如果把 KVSlimmer 接进推理系统，建议按下面顺序判断，而不是一上来就全局开启：
@@ -511,6 +525,9 @@ KVSlimmer 这类方法的价值在于让这些请求能塞进更小显存或更�
 ## 本页结论
 
 KVSlimmer 最值得记住的不是“又省了 29% memory / 28% latency”，而是它把 KV merging 的数学解释补上了：**Q/K 的谱能量集中导致相邻同质，V 的谱能量分散保留异质；Key 合并应保留 Hessian off-diagonal coupling，但这个二阶信息可以被化简成 forward-only 的闭式权重。**这让它从经验压缩技巧变成一个更可解释、也更适合在线推理的 KV cache 合并方法。
+
+!!! info "本站判断"
+    KVSlimmer 要按 KV cache 结构压缩读：方法核心是 Q/K/V 谱分析、head alignment 和 asymmetric KV；实验看 runtime、decoder efficiency 与 peak memory。采用时要按模型、上下文长度、batch 和任务质量分桶验，不要只看平均显存。
 
 ## 参考
 

@@ -584,5 +584,8 @@ DeepSeek-R1 最值得学习的地方，是它把“推理能力”重新放回�
 
 但这条路线并不是所有任务的通用答案。它在数学、代码、STEM、逻辑等可验证任务上最强；一旦进入开放式写作、安全偏好或真实工具任务，reward 可靠性、环境成本和 reward hacking 会重新成为核心瓶颈。更准确地说，DeepSeek-R1 证明了：**当正确性可以自动验证时，强化学习可以把大模型从“模仿推理”推向“通过试错发现推理策略”。**
 
+!!! info "本站判断"
+    DeepSeek-R1 要按可验证推理训练闭环读：方法重点是 GRPO/RLVR、rule-based reward、cold-start SFT 和蒸馏；实验看 AIME/MATH/Code/知识 benchmark 与语言一致性消融。它最能迁移到有 verifier 的任务，开放式偏好和工具任务要另验。
+
 !!! tip "下一站"
     - 回到 [论文专题讲解](../index.md) 横向比较，或继续读 [Qwen3：Thinking 与蒸馏](qwen3.md)。

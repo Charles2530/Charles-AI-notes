@@ -328,6 +328,11 @@ DA2 最值得记住的一句话是：**单目深度 foundation model 的进步�
 3. [DepthAnything/Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)
 4. [DA-2K Benchmark](https://huggingface.co/datasets/depth-anything/DA-2K)
 
+这一页最后回到三个验收点：方法上，DA2 把重点从“更多无标注”推进到“更干净 teacher 与合成/真实数据配方”，用高质量伪标签降低 DA1 的噪声继承。实验上，读 zero-shot、metric depth 和可视化时，要分清相对深度泛化与绝对尺度能力。诊断上，synthetic-only failure、add-unlabeled 和 pseudo-label 图，说明数据质量比单纯数据量更关键。
+
+!!! info "本站判断"
+    Depth Anything V2 要读成 DA1 的数据质量升级：方法核心是合成数据、真实无标注数据和 teacher/student 细化，实验重点是相对深度、metric depth、跨域可视化和 pseudo-label 消融。它提高几何先验，不直接保证抓取距离或避障阈值。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。

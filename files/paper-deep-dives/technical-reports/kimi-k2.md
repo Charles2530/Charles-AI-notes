@@ -415,6 +415,9 @@ Kimi K2 给工程项目的启发主要有五条：
 
 一句话总结：**Kimi K2 的价值不是某个单点 benchmark，而是给出了一条 open agentic model 的完整工程路线：用 MuonClip 跑稳 1T MoE 预训练，用高 sparsity 提升 token efficiency，用合成工具数据和真实环境补齐 agent 行为，再用 verifiable rewards + self-critique reward + RL 系统基础设施把模型推向多步任务执行。**
 
+!!! info "本站判断"
+    Kimi-K2 要按 MoE、MuonClip、工具数据和 RL 系统协同读；复用前验工具成功率、稳定性和成本。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
@@ -427,8 +430,6 @@ Kimi K2 给工程项目的启发主要有五条：
 3. [Qwen3：Thinking 模式、36T 预训练与蒸馏](qwen3.md)：对照 thinking / non-thinking 和双模式后训练；
 4. [强化学习：Policy Gradient、PPO 与 GRPO](../../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)：补 RL 目标和 advantage 的基础；
 5. [训练：训练数据系统与吞吐优化](../../training/data-systems-and-optimization.md)：理解 synthetic data、数据质量和训练吞吐；
-6. [推理：RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：把 K2 的 agentic 能力放到应用系统里看。
-
 ## 参考资料
 
 1. [Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)

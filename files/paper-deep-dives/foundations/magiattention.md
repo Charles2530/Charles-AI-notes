@@ -342,6 +342,11 @@ MagiAttention 最值得记住的一点是：**超长上下文训练的瓶颈不�
 3. 代码仓库：[SandAI-org/MagiAttention](https://github.com/SandAI-org/MagiAttention).
 4. 相关模型：[SandAI-org/MAGI-1](https://github.com/SandAI-org/MAGI-1).
 
+这一页最后回到三个验收点：方法上，MagiAttention 把长上下文 attention 拆成 AttnSlice，再用 dispatch solver 解决负载和通信重叠。实验上，H100/B200 forward/backward 图要按硬件、mask pattern 和 sequence shape 分开读。诊断上，Ring Attention load-balance 与 group collectives 图说明，瓶颈常在调度和通信，不在 attention 公式本身。
+
+!!! info "本站判断"
+    MagiAttention 要按长上下文 attention 调度系统读：方法核心是 AttnSlice、mask pattern、dispatch solver 与通信重叠；实验看 H100/B200 forward/backward 和负载均衡。它的收益绑定硬件拓扑、序列形状和 kernel 实现，不能只看理论复杂度。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。

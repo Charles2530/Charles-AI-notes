@@ -1,295 +1,221 @@
-<div class="atlas-hero">
-  <div class="atlas-kicker">Charles AI notes</div>
-  <h1>世界模型高效训练技术知识库</h1>
-
-  <p class="atlas-lead">以世界模型的高效训练技术为主线，串起 VLM/VLA、具身智能、训练系统、推理、量化、扩散模型、强化学习和底层算子栈。这里不是只保留单一方向，而是把基础知识和关键旁支放到同一张工程地图里：哪些内容支撑状态表示，哪些内容降低训练成本，哪些内容决定 rollout 和闭环评测是否可用。</p>
-
-  <div class="atlas-chip-row">
-    <span class="atlas-chip">世界模型</span>
-    <span class="atlas-chip">高效训练</span>
-    <span class="atlas-chip">系统约束</span>
-    <span class="atlas-chip">闭环验证</span>
+<div class="atlas-hero atlas-dashboard-hero">
+  <div class="atlas-dashboard-hero__main">
+    <div class="atlas-kicker">Charles AI notes</div>
+    <h1>AI 系统与世界模型阅读仪表盘</h1>
+    <p class="atlas-lead">围绕世界模型高效训练，把 VLM/VLA、具身智能、训练、推理、量化、扩散、强化学习和算子栈放到同一张工程地图里。先选问题，再进入对应专题；长文负责细节，首页只负责帮你快速找到下一站。</p>
+  </div>
+  <div class="atlas-hero-actions" aria-label="常用入口">
+    <a href="world-models/efficient-training-roadmap/">主线速读</a>
+    <a href="training/">训练系统</a>
+    <a href="paper-deep-dives/">论文专题</a>
+    <a href="glossary/">术语表</a>
   </div>
 </div>
 
-!!! note "先选一个入口"
-    如果你是围绕主线阅读，先看 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。如果概念卡住，再回到 [基础知识](foundations/index.md) 和 [术语表](glossary/index.md)；工程卡住看训练、推理、量化或算子；论文卡住看 [论文专题讲解](paper-deep-dives/index.md)、[参考文献总表](references/index.md) 和 [Claim Ledger](references/claim-ledger.md)。主线会帮你决定旁支内容该读到什么深度。
-
-!!! tip "全站定位"
-    本站不是 AI 全栈百科，而是围绕**世界模型高效训练**组织支撑知识。每一章都要尽量回答：它降低了什么成本，证据强到什么程度，如何落地，什么时候会失效。
-
-## 三层阅读入口
-
-| 路径 | 适合谁 | 先读什么 |
-| --- | --- | --- |
-| 10 分钟版 | 想快速抓住主线和边界 | [世界模型路线图](world-models/index.md)、[高效训练路线图](world-models/efficient-training-roadmap.md)、[Claim Ledger](references/claim-ledger.md) |
-| 深读版 | 想理解关键技术路线 | [Masked / JEPA](world-models/masked-jepa-and-latent-prediction.md)、[RSSM/Dreamer](world-models/rssm-dreamer-and-planning.md)、[WM/WAM/VAM](world-models/wm-wam-vam-and-action-conditioned-modeling.md)、[评测失效](world-models/evaluation-and-failure-modes.md) |
-| 实验版 | 想写实验、复现或方案 | [端到端案例](world-models/action-conditioned-video-world-model-training-case.md)、[完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md)、[效率技术覆盖矩阵](world-models/efficiency-technique-coverage-matrix.md) |
-
-## 全站 9+ 阅读路径
-
-| 路径 | 先读 | 读完要能回答 |
-| --- | --- | --- |
-| 10 分钟抓主线 | [高效训练路线图](world-models/efficient-training-roadmap.md) → [全站效率矩阵](references/site-efficiency-coverage-matrix.md) → [本站判断原则](references/site-judgement-principles.md) → [Claim Ledger](references/claim-ledger.md) | 技术省哪类成本，证据强到哪里 |
-| 深读技术 | [Masked/JEPA](world-models/masked-jepa-and-latent-prediction.md) → [RSSM/Dreamer](world-models/rssm-dreamer-and-planning.md) → [训练](training/index.md) / [推理](inference/index.md) / [量化](quantization/index.md) / [算子](operators/index.md) | 模型、数据、系统和验证如何互相制约 |
-| 做实验 | [完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md) → [VLA 全链路案例](world-models/vla-world-model-full-chain-case.md) → [Rollout 服务案例](world-models/rollout-serving-quantization-kernel-case.md) | 怎样把数据、配置、系统账、闭环结果和失败回放写成证据链 |
-
-!!! tip "三种最短路径"
-    **如果只看一页**：读 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。**如果要做实验**：读 [完整实验报告样例](world-models/world-model-efficient-training-experiment-report.md)。**如果要查证据**：先读 [本站判断原则](references/site-judgement-principles.md) 和 [Claim Ledger](references/claim-ledger.md)，确认 claim 是论文结果、官方 demo、系统吞吐、toy fixture 还是站内推断。
-
-## 主线与支撑层
-
-本站的主线是“如何用更少真实交互、更少视频 token、更低显存/通信/rollout 成本，训练出对动作敏感、能长时推演、能改善决策的世界模型”。但高效训练不是孤立专题，它需要一组支撑层共同工作。
-
-| 层级 | 回答的问题 | 推荐入口 |
-| --- | --- | --- |
-| 主线枢纽 | 世界模型高效训练到底省什么成本，技术栈如何组织 | [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md) |
-| 状态与动作接口 | 视觉状态、视频 latent、动作 token、VLA 数据如何进入世界模型 | [VLM/VLA](vlm/index.md)、[VLA 专题](vla/index.md) |
-| 建模与数据闭环 | RSSM/Dreamer、WAM/VAM、反事实、near-miss 和失败回流如何工作 | [世界模型](world-models/index.md)、[世界模型数据引擎](world-models/data-engines-and-self-improvement.md) |
-| 训练系统支撑 | 长序列、低比特、分布式、checkpoint 和数据管线如何降低训练成本 | [训练](training/index.md)、[算子与编译器](operators/index.md) |
-| 推理与部署支撑 | KV cache、batch、量化、蒸馏和 SLO 如何决定 rollout 是否可用 | [推理](inference/index.md)、[量化](quantization/index.md) |
-| 必要背景 | 张量、Attention、概率、优化、强化学习、扩散模型等公共语言 | [基础知识](foundations/index.md)、[扩散模型](diffusion/index.md)、[强化学习](reinforcement-learning/index.md) |
-
-## 核心术语速查
-
-| 术语 | 本站里的使用边界 |
-| --- | --- |
-| World model | 面向决策的内部或外部世界预测器，必须说明状态、动作、rollout 和消费方 |
-| Latent dynamics | 在压缩状态 \(z_t\) 上预测未来，常用于 imagined rollout 和 planning |
-| Masked prediction | 遮挡输入的一部分并预测 token / latent，用来提高表征效率 |
-| JEPA | 在 joint embedding space 预测目标表征，不等同于像素重建 |
-| Action-conditioned rollout | 固定历史、改变动作时未来应合理分叉，是规划型世界模型的硬门槛 |
-| Claim Ledger | 全站证据账，区分论文结果、系统吞吐、闭环实验、官方 demo 和站内推断 |
-
-## 怎么使用这个知识库
-
-<div class="atlas-meta-grid">
-  <div>
-    <strong>10 分钟抓主线</strong>
-    <p>先读高效训练路线图，再用端到端案例落地，只回答一个问题：这项技术到底降低了数据、token、显存、通信、rollout 还是评测成本。</p>
-  </div>
-  <div>
-    <strong>1 小时补概念</strong>
-    <p>遇到硬词不要硬读，先跳到基础知识或术语表，把它放回表示、目标、执行、评测这几层。</p>
-  </div>
-  <div>
-    <strong>半天查工程问题</strong>
-    <p>带着具体问题进入训练、推理、量化或算子页面，优先看瓶颈、取舍、失败模式和检查清单。</p>
-  </div>
-  <div>
-    <strong>精读一篇论文</strong>
-    <p>先用专题页定位它解决的系统问题，再读论文讲解，最后回到主题页更新自己的判断框架。</p>
-  </div>
+<div class="atlas-dashboard-strip" aria-label="最短路径">
+  <a href="world-models/efficient-training-roadmap/">
+    <span>只读一页</span>
+    <strong>世界模型高效训练路线图</strong>
+  </a>
+  <a href="world-models/world-model-efficient-training-experiment-report/">
+    <span>要做实验</span>
+    <strong>完整实验报告样例</strong>
+  </a>
+  <a href="references/site-judgement-principles/">
+    <span>要查证据</span>
+    <strong>本站判断原则</strong>
+  </a>
+  <a href="references/claim-ledger/">
+    <span>要核结论</span>
+    <strong>Claim Ledger</strong>
+  </a>
 </div>
 
-!!! tip "读完首页先做一个选择"
-    如果你不知道从哪里开始，默认先走 [世界模型高效训练技术路线图](world-models/efficient-training-roadmap.md)。如果目标很明确，再选身份：想补基础，就走 [基础知识](foundations/index.md)；想做工程，就走 [训练](training/index.md)、[推理](inference/index.md)、[量化](quantization/index.md) 或 [算子](operators/index.md)；想理解机器人闭环，就走 [具身智能](embodied-ai/index.md)；想跟论文，就走 [论文专题讲解](paper-deep-dives/index.md)。
+## 读者入口
 
-## 读者路径
-
-<div class="section-grid">
-  <div>
-    <strong>查概念</strong>
-    <p>从张量、Transformer、概率生成、优化、数值和运行时建立公共语言，避免读论文时每个词都要重新补课。</p>
-  </div>
-  <div>
-    <strong>做工程</strong>
-    <p>围绕显存、吞吐、低精度、并行、服务稳定性和线上评测，把训练到部署的链路串起来。</p>
-  </div>
-  <div>
-    <strong>读论文</strong>
-    <p>先用专题页确定论文解决的问题，再看数据、模型、训练、实验和工程边界，不把摘要当理解。</p>
-  </div>
-  <div>
-    <strong>看闭环</strong>
-    <p>把 VLM/VLA、强化学习、世界模型和具身智能放进感知、规划、动作、反馈和失败恢复的同一条线上。</p>
-  </div>
+<div class="atlas-reader-paths">
+  <a class="atlas-reader-path atlas-reader-path--primary" href="world-models/efficient-training-roadmap/">
+    <span>主线速读</span>
+    <strong>先抓住成本、证据和闭环</strong>
+    <p>适合第一次进站，先看世界模型高效训练如何把数据、token、显存、通信、rollout 和评测串起来。</p>
+  </a>
+  <a class="atlas-reader-path" href="inference/">
+    <span>工程排障</span>
+    <strong>带着瓶颈进入系统专题</strong>
+    <p>慢、贵、不稳、显存不够、吞吐不够时，从训练、推理、量化和算子页面拆成本账。</p>
+  </a>
+  <a class="atlas-reader-path" href="paper-deep-dives/">
+    <span>论文精读</span>
+    <strong>把单篇论文接回工程判断</strong>
+    <p>先看论文解决的问题、方法结构、训练细节和边界，再回填到主题路线图。</p>
+  </a>
+  <a class="atlas-reader-path" href="foundations/">
+    <span>概念补课</span>
+    <strong>遇到硬词就回基础层</strong>
+    <p>张量、Transformer、概率、优化、数值和运行时是全站公共语言，不需要一次读完。</p>
+  </a>
 </div>
 
-!!! quote "本站核心 thesis"
-    世界模型效率不是单一训练技巧，而是表示、交互、系统与验证共同决定的闭环问题。全站所有专题最终都要回到同一组问题：省什么成本、牺牲什么、证据能证明什么、什么时候不能外推。
+## 专题矩阵
 
-!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
-    **10 分钟读法**：先读高效训练路线图、全站效率矩阵和本站判断原则，抓住“成本向量 + 证据等级 + 不能外推”三件事。
-    **深入读法**：沿世界模型、训练、推理、量化、算子、VLA/具身链路下钻，看每个专题如何服务表示、交互、系统或验证。
-    **实验/工程读法**：从实验报告样例或全链路案例出发，把数据、配置、系统账、指标和失败 replay 写成一条证据链。
-
-!!! warning "核心失败模式"
-    | 失败模式 | 先查什么 |
-    | --- | --- |
-    | 世界模型 compounding error | 多步 rollout 漂移时先查评测页、实验报告和 Claim Ledger |
-    | 证据混读 | 不要把 demo、benchmark、系统吞吐和 closed-loop 混成一种结论 |
-    | 路线失焦 | 所有旁支都要回到“省什么成本、证据是什么、何时失效” |
-
-!!! info "最小验收指标"
-    | 要证明什么 | 最小指标 | 不能替代什么 |
-    | --- | --- | --- |
-    | 全站主线可信 | 每个关键 claim 有 Evidence Type、Repro Status、Cannot Prove | 页面数量或引用数量 |
-    | 效率结论可比较 | 成本项、验收指标、失败边界同表出现 | 笼统“更快/更强” |
-    | 世界模型闭环成立 | action sensitivity、closed-loop gain、risk/latency/cost per success | open-loop demo |
-
-
-!!! failure "最佳反例"
-    全站最危险的反例，是某篇新系统论文同时报告 demo 很自然、吞吐很高、主表很亮眼，但没有说明证据类型、复现状态和不能外推项。这样的内容只能证明“值得看”，不能证明“值得采用”。
-
-## 主题入口
-
-<div class="atlas-card-grid">
-  <a class="atlas-card" href="world-models/efficient-training-roadmap/">
-    <strong>主线：世界模型高效训练</strong>
-    <p>从数据效率、视觉 token、动作条件、长序列训练、低精度、rollout 到闭环评测建立总地图。</p>
-  </a>
-  <a class="atlas-card" href="world-models/action-conditioned-video-world-model-training-case/">
-    <strong>端到端训练案例</strong>
-    <p>用一个动作条件视频世界模型案例串起数据、动作、训练、推理、量化和闭环评测。</p>
-  </a>
-  <a class="atlas-card" href="foundations/">
-    <strong>基础知识</strong>
-    <p>张量、Shape、Transformer、概率模型、优化、数值和运行时。</p>
-  </a>
-  <a class="atlas-card" href="training/">
-    <strong>训练</strong>
-    <p>预训练、SFT、对齐、数据管线、分布式训练、稳定性和实验治理。</p>
-  </a>
-  <a class="atlas-card" href="inference/">
-    <strong>推理</strong>
-    <p>服务系统、运行时、KV cache、解耦 prefill、容量规划和在线评测。</p>
-  </a>
-  <a class="atlas-card" href="operators/">
-    <strong>算子与编译器</strong>
-    <p>CUDA、Triton、CUTLASS、Attention Kernel、通信重叠和 profiling。</p>
-  </a>
-  <a class="atlas-card" href="quantization/">
-    <strong>量化</strong>
-    <p>PTQ、QAT、QLoRA、FP8、KV cache 量化、低精度 Kernel 与部署取舍。</p>
-  </a>
-  <a class="atlas-card" href="diffusion/">
-    <strong>扩散模型</strong>
-    <p>DDPM、Score SDE、采样器、少步蒸馏、Rectified Flow 和视频扩散。</p>
-  </a>
-  <a class="atlas-card" href="vlm/">
-    <strong>VLM/VLA</strong>
-    <p>图文对齐、视觉连接器、视频时序、动作 token、策略学习和闭环恢复。</p>
-  </a>
-  <a class="atlas-card" href="world-models/">
+<div class="atlas-topic-matrix">
+  <a class="atlas-topic-card atlas-topic-card--primary" href="world-models/">
+    <span>主线</span>
     <strong>世界模型</strong>
-    <p>RSSM、Dreamer、WAM/VAM、视频世界模型、反事实数据和风险规划。</p>
+    <p>状态、动作、latent rollout、RSSM/Dreamer、JEPA、WAM/VAM、视频世界模型和闭环评测。</p>
+    <small>先读：从零理解世界模型、高效训练路线图</small>
   </a>
-  <a class="atlas-card" href="embodied-ai/">
+  <a class="atlas-topic-card" href="vlm/">
+    <span>接口</span>
+    <strong>VLM/VLA</strong>
+    <p>视觉表征、连接器、视频记忆、动作 token、策略学习和世界模型接口。</p>
+    <small>适合：多模态到动作链路</small>
+  </a>
+  <a class="atlas-topic-card" href="embodied-ai/">
+    <span>闭环</span>
     <strong>具身智能</strong>
     <p>任务谱系、相机深度、仿真数据、规划控制、安全部署和现实失败模式。</p>
+    <small>适合：机器人/VLA 系统判断</small>
   </a>
-  <a class="atlas-card" href="reinforcement-learning/">
+  <a class="atlas-topic-card" href="training/">
+    <span>系统</span>
+    <strong>训练</strong>
+    <p>目标函数、数据管线、分布式训练、稳定性、checkpoint、实验治理和训练经济学。</p>
+    <small>适合：训练成本和质量回归</small>
+  </a>
+  <a class="atlas-topic-card" href="inference/">
+    <span>服务</span>
+    <strong>推理</strong>
+    <p>请求生命周期、prefill/decode、KV cache、batching、routing、SLO 和容量规划。</p>
+    <small>适合：线上延迟、吞吐和成本</small>
+  </a>
+  <a class="atlas-topic-card" href="quantization/">
+    <span>低比特</span>
+    <strong>量化</strong>
+    <p>PTQ、GPTQ、AWQ、SmoothQuant、QLoRA、QAT、FP8、KV cache 和部署取舍。</p>
+    <small>适合：显存、吞吐和精度边界</small>
+  </a>
+  <a class="atlas-topic-card" href="operators/">
+    <span>底层</span>
+    <strong>算子与编译器</strong>
+    <p>CUDA、Triton、CUTLASS、Attention/GEMM kernel、通信重叠和 profiling。</p>
+    <small>适合：性能瓶颈和硬件账</small>
+  </a>
+  <a class="atlas-topic-card" href="diffusion/">
+    <span>生成</span>
+    <strong>扩散模型</strong>
+    <p>DDPM、Score SDE、采样器、少步蒸馏、Rectified Flow、视频与多模态扩散。</p>
+    <small>适合：生成式模拟和视频模型</small>
+  </a>
+  <a class="atlas-topic-card" href="reinforcement-learning/">
+    <span>决策</span>
     <strong>强化学习</strong>
-    <p>MDP、Bellman、policy gradient、PPO/GRPO、RLVR 与 verl 训练流程。</p>
+    <p>MDP、Bellman、policy gradient、PPO/GRPO、RLVR 和 verl 训练流程。</p>
+    <small>适合：reward、policy 和闭环优化</small>
   </a>
-  <a class="atlas-card" href="paper-deep-dives/">
+  <a class="atlas-topic-card" href="foundations/">
+    <span>基础</span>
+    <strong>基础知识</strong>
+    <p>张量、shape、Transformer、概率、优化、生成、数值、显存和运行时。</p>
+    <small>适合：读论文前补公共语言</small>
+  </a>
+  <a class="atlas-topic-card" href="paper-deep-dives/">
+    <span>论文</span>
     <strong>论文专题讲解</strong>
-    <p>按方向拆解关键论文和技术报告，重点看方法结构、训练细节和边界。</p>
+    <p>按方向拆解关键论文和技术报告，重点看方法结构、实验口径和不能外推项。</p>
+    <small>适合：从论文变成工程判断</small>
   </a>
-  <a class="atlas-card" href="thinking-exploration/">
+  <a class="atlas-topic-card" href="thinking-exploration/">
+    <span>探索</span>
     <strong>思考探索</strong>
     <p>芯片平台、软件栈、产品约束、开源工具链和工程路线判断。</p>
+    <small>适合：具体平台和路线选择</small>
   </a>
 </div>
 
 ## 近期补强线索
 
-<div class="atlas-route-grid">
-  <div class="atlas-route">
+<div class="atlas-signal-grid">
+  <a class="atlas-signal-card" href="paper-deep-dives/embodied-ai/depth-anything-3/">
     <span>具身几何</span>
-    <strong><a href="paper-deep-dives/embodied-ai/depth-anything-3/">Depth Anything 3</a></strong>
-    <p>任意视角 depth / ray / camera / 3D geometry 如何成为具身系统的几何状态层。</p>
-    <small>接到 <a href="embodied-ai/cameras-depth-and-robot-vision/">相机、深度与机器人视觉</a>、<a href="world-models/development-roadmap-data-simulation-and-evaluation/">世界模型开发路线</a></small>
-  </div>
-  <div class="atlas-route">
+    <strong>Depth Anything 3</strong>
+    <p>把 depth、ray、camera 和 3D geometry 放进具身系统的几何状态层。</p>
+  </a>
+  <a class="atlas-signal-card" href="paper-deep-dives/foundations/magiattention/">
     <span>高效训练</span>
-    <strong><a href="paper-deep-dives/foundations/magiattention/">MagiAttention</a> / <a href="paper-deep-dives/foundations/attn-qat/">Attn-QAT</a></strong>
-    <p>超长上下文分布式 attention 和 4-bit attention 训练要一起看 kernel、通信和 backward。</p>
-    <small>接到 <a href="training/">训练</a>、<a href="operators/">算子与编译器</a></small>
-  </div>
-  <div class="atlas-route">
+    <strong>MagiAttention / Attn-QAT</strong>
+    <p>超长上下文分布式 attention 与低比特 attention 要同时看 kernel、通信和 backward。</p>
+  </a>
+  <a class="atlas-signal-card" href="paper-deep-dives/technical-reports/deepseek-v3/">
     <span>技术报告</span>
-    <strong><a href="paper-deep-dives/technical-reports/deepseek-v3/">DeepSeek-V3</a> / <a href="paper-deep-dives/technical-reports/kimi-k2/">Kimi K2</a></strong>
+    <strong>DeepSeek-V3 / Kimi K2</strong>
     <p>MoE、FP8、MuonClip、agentic data synthesis 和训练系统如何进入大模型报告。</p>
-    <small>接到 <a href="training/">训练</a>、<a href="inference/">推理</a></small>
-  </div>
-  <div class="atlas-route">
-    <span>多模态实时系统</span>
-    <strong><a href="paper-deep-dives/technical-reports/qwen35-omni/">Qwen3.5-Omni</a></strong>
+  </a>
+  <a class="atlas-signal-card" href="paper-deep-dives/technical-reports/qwen35-omni/">
+    <span>实时系统</span>
+    <strong>Qwen3.5-Omni</strong>
     <p>Thinker-Talker、流式语音、多模态 agent 和低延迟后训练如何组合。</p>
-    <small>接到 <a href="vlm/">VLM/VLA</a>、<a href="inference/">推理</a></small>
-  </div>
-  <div class="atlas-route">
+  </a>
+  <a class="atlas-signal-card" href="thinking-exploration/qualcomm-xr2-gen2/">
     <span>端侧部署</span>
-    <strong><a href="thinking-exploration/qualcomm-xr2-gen2/">XR2 Gen 2 / QCS8450</a></strong>
-    <p>端侧 AI 平台、QNN / LiteRT / ONNX Runtime 和 proxy profile 如何进入部署判断。</p>
-    <small>接到 <a href="quantization/">量化</a>、<a href="inference/">推理</a></small>
-  </div>
+    <strong>XR2 Gen 2 / QCS8450</strong>
+    <p>端侧 AI 平台、QNN、LiteRT、ONNX Runtime 和 proxy profile 如何进入部署判断。</p>
+  </a>
 </div>
 
 ## 按问题选入口
 
-<div class="atlas-route-list">
-  <a class="atlas-route atlas-route--compact" href="foundations/">
+<div class="atlas-question-grid">
+  <a href="foundations/">
     <span>概念卡住</span>
-    <strong>先读基础知识</strong>
-    <p>再接术语表，先把张量、Transformer、优化和运行时语言补齐。</p>
+    <strong>基础知识 + 术语表</strong>
+    <p>先补张量、Transformer、优化、概率和运行时，不要硬刷长文。</p>
   </a>
-  <a class="atlas-route atlas-route--compact" href="training/">
-    <span>想理解训练</span>
-    <strong>先读训练主线</strong>
-    <p>再接低比特训练、分布式训练、数据系统和实验治理。</p>
+  <a href="training/">
+    <span>训练不稳</span>
+    <strong>训练主线</strong>
+    <p>检查数据版本、目标函数、分布式状态、低精度路径、checkpoint 和评测回流。</p>
   </a>
-  <a class="atlas-route atlas-route--compact" href="inference/">
-    <span>服务慢贵不稳</span>
-    <strong>先读推理系统</strong>
-    <p>再接 serving、容量规划、KV cache、路由和在线评测。</p>
+  <a href="inference/">
+    <span>服务慢贵</span>
+    <strong>推理系统</strong>
+    <p>把 queue、prefill、decode、KV cache、batching、routing 和 SLO 分开看。</p>
   </a>
-  <a class="atlas-route atlas-route--compact" href="quantization/">
-    <span>显存吞吐不够</span>
-    <strong>先读量化路线图</strong>
-    <p>再接低精度 kernel、量化 runtime、评测和回退策略。</p>
+  <a href="quantization/">
+    <span>显存不够</span>
+    <strong>量化路线</strong>
+    <p>区分权重、激活、KV cache、kernel 和质量回归，不把低比特当单点开关。</p>
   </a>
-  <a class="atlas-route atlas-route--compact" href="world-models/">
-    <span>多模态到闭环</span>
-    <strong>先读世界模型</strong>
-    <p>再接 VLM/VLA、具身智能、WAM/VAM 和仿真数据引擎。</p>
+  <a href="world-models/">
+    <span>多模态闭环</span>
+    <strong>世界模型</strong>
+    <p>检查状态、动作、rollout、消费方和 closed-loop gain 是否真的连通。</p>
   </a>
-  <a class="atlas-route atlas-route--compact" href="embodied-ai/">
-    <span>机器人 / VLA</span>
-    <strong>先读具身智能</strong>
-    <p>再接 VLA 数据与策略、闭环恢复和世界模型开发路线。</p>
-  </a>
-  <a class="atlas-route atlas-route--compact" href="paper-deep-dives/">
-    <span>系统读论文</span>
-    <strong>先读论文专题讲解</strong>
-    <p>再接参考文献总表，用专题页定位方法、训练细节和边界。</p>
+  <a href="paper-deep-dives/">
+    <span>论文太多</span>
+    <strong>论文专题</strong>
+    <p>先看它省什么成本、证据强到哪里、哪些结论不能外推。</p>
   </a>
 </div>
 
-## 维护约定
+!!! quote "本站核心 thesis"
+    世界模型效率不是单一训练技巧，而是表示、交互、系统与验证共同决定的闭环问题。全站所有专题最终都要回到同一组问题：省什么成本、牺牲什么、证据能证明什么、什么时候不能外推。
 
-- 总览页负责讲地图、边界和路线；专题页负责讲机制、工程实现、评测口径和失效模式。
-- 论文专题优先解释“为什么这样设计”，训练阶段、数据构造、推理约束和实验口径要比普通摘要更具体。
-- 表格只保留能支撑判断的内容；长表放到可折叠区或引用总表里，正文优先讲结论。
-- 图片优先使用论文原图、官方图或明确来源的截图；信息量少、长宽比极端的图片用较小展示宽度。
-- 新增内容要同步接入导航、索引、术语表或参考文献，避免页面成为孤岛。
+??? note "维护约定和新增页面 Checklist"
+    总览页负责讲地图、边界和路线；专题页负责讲机制、工程实现、评测口径和失效模式。新增内容要同步接入导航、索引、术语表或参考文献，避免页面成为孤岛。
 
-### 新增或修改页面 Checklist
+    | 检查项 | 通过标准 |
+    | --- | --- |
+    | 接回主线 | 写清它服务世界模型高效训练的哪项成本 |
+    | 成本项 | 至少说明数据、token、显存、通信、rollout 或验证中的一项 |
+    | 证据来源 | 论文、日志、fixture、benchmark、ablation、system throughput 或 closed-loop 分开写 |
+    | 反例和边界 | 说明何时收益会消失，或何时会伤动作、风险、长时一致性 |
+    | 下一站 | 指向相邻主题页或论文专题 |
+    | 术语内链 | 首次出现的核心术语尽量能跳到基础页或术语表 |
+    | 图文合适 | 图片有图源、原图意和本站读法；表格保留原字段时注明表源 |
+    | 可搜索 | 中英文关键词、缩写和别名要在正文自然出现 |
 
-| 检查项 | 通过标准 |
-| --- | --- |
-| 是否接回主线 | 写清它服务世界模型高效训练的哪项成本 |
-| 是否有成本项 | 至少说明数据、token、显存、通信、rollout 或验证中的一项 |
-| 是否有证据来源 | 论文、日志、fixture、benchmark、ablation、system throughput 或 closed-loop 分开写 |
-| 是否有反例和边界 | 说明何时收益会消失，或何时会伤动作、风险、长时一致性 |
-| 是否有下一站 | 指向相邻主题页或论文专题 |
-| 是否有术语内链 | 首次出现的核心术语尽量能跳到基础页或术语表 |
-| 是否图文合适 | 图片有图源、原图意和本站读法；表格保留原字段时注明表源 |
-| 是否能被搜索到 | 中英文关键词、缩写和别名要在正文自然出现 |
-
-论文专题页再加三条门禁：是否区分论文证据、本站推断和工程外推；是否给出证据等级；是否说明可外推边界。关键主线页还要尽量提供一个可复算数字账、一个失败 replay 和一个验收指标。
+    论文专题页还要区分论文证据、本站推断和工程外推；关键主线页尽量提供可复算数字账、失败 replay 和验收指标。
 
 ## 本地运行
 

@@ -41,6 +41,9 @@ RT-1 证明了大规模真实机器人数据可以训练一个 Transformer polic
 
 <small>图源：`RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control`，Figure 1。原论文图意：RT-2 把 robot action 表示成另一种语言 token，与 Internet-scale VQA 和 robot action data 一起 co-fine-tune；部署时再把输出 token de-tokenize 成机器人动作，形成闭环控制。</small>
 
+!!! note "这张图怎么读"
+    左边是视觉语言知识来源，右边是机器人动作执行，中间的关键桥梁是把 action 离散成 token。RT-2 的主张不是 VLM 自然会控制机器人，而是 co-fine-tuning 让同一个 next-token objective 同时看网页图文和机器人轨迹。它能支持“web knowledge 可迁移到动作选择”，但不能证明未见物体动力学、接触和安全恢复已经解决。
+
 !!! note "这张图支撑的判断"
     RT-2 的关键判断是：VLM 的输出头不必只说自然语言，也可以说动作。真正发生迁移的不是“语言模型做高层规划，另一个 controller 执行”，而是同一个 VLM backbone 既在 web 图文任务上预测文本，也在机器人任务上预测动作 token。
 
@@ -202,6 +205,9 @@ RT-2 的实证重点是 `6k` 条机器人 evaluation trajectories。总体结果
 ![RT-2 generalization result 原图](../../assets/images/paper-deep-dives/embodied-ai/rt2/figure-4-generalization.png){ width="920" }
 
 <small>图源：RT-2，Figure 4。原论文图意：RT-2-PaLI-X-55B 与 RT-2-PaLM-E-12B 在 seen tasks 保持与 RT-1 接近的表现，但在 unseen objects、backgrounds、environments 与 unseen average 上明显优于 R3M、VC-1、RT-1 和 MOO。</small>
+
+!!! note "Figure 4 怎么读"
+    这张图的重点是 seen 和 unseen 的分叉：seen tasks 上 RT-2 没有牺牲原有机器人技能，unseen objects/backgrounds/environments 上差距才拉开。也就是说，web-scale VLM 知识主要帮泛化和语义迁移，而不是让机器人基础控制凭空变强。读数边界是评测仍在固定机器人平台和任务协议下，不能外推到开放家庭长任务。
 
 按附录 Table 4 重绘结果如下，表头保留英文：
 
@@ -404,6 +410,9 @@ RT-2 值得精读的点有三条：
 - [RT-2 project page](https://robotics-transformer2.github.io/)
 - [RT-1: Robotics Transformer for Real-World Control at Scale](https://arxiv.org/abs/2212.06817)
 - [PaLM-E: An Embodied Multimodal Language Model](https://arxiv.org/abs/2303.03378)
+
+!!! info "本站判断"
+    RT-2 要按 VLM 知识迁移到动作接口读：方法核心是把机器人动作 token 化进视觉语言模型，实验重点是 emergent skills、generalization 和 failure dynamics。它证明互联网语义能帮机器人泛化，但接触控制、空间精度和安全边界仍靠机器人数据。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

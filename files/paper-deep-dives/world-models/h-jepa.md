@@ -305,6 +305,11 @@ $$
 
 更稳妥的读法是：把这篇论文当成“表征型世界模型如何训练”的原则说明。它补充了 Dreamer 系列偏 RL recipe、V-JEPA 偏视频表征、LingBot 偏视频生成系统的部分，重点回答一个更底层的问题：**世界模型的 latent space 如何既可预测、又不坍缩、还能支持长时层级规划。**
 
+这一页最后回到三个验收点：方法上，H-JEPA 是 JEPA 的层级化设想：低层预测局部 latent，高层预测抽象状态，并用 energy/regularization 防 collapse。实验上，这里多数图是机制和架构证据，不能当作大规模 benchmark 结果。诊断上，读它的价值在于抽象层级和 planning 接口，而不是拿来声称某个机器人任务已被解决。
+
+!!! info "本站判断"
+    H-JEPA 要按 JEPA 的层级规划蓝图读：方法核心是 latent energy、collapse prevention、hierarchical abstraction 和 goal-conditioned prediction；实验/图表更多是概念证据。它启发世界模型结构设计，但不是已有大规模闭环控制结果。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

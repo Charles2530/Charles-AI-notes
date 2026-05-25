@@ -376,6 +376,11 @@ Attn-QAT 的贡献可以压缩成一句话：**它把 4-bit attention 的问题�
 
 这也是为什么它应该放在“高效训练”里。它表面上是量化论文，实际给出的经验更像训练系统原则：当一个算子已经被高度融合和数值优化后，低比特训练不能只在外面包一层 fake quantization。真正稳定的方案必须理解这个算子的内部计算图，并重新定义哪些中间量低精度、哪些中间量必须保持高精度，以及这些选择如何落到 kernel 和分布式训练里。
 
+这一页最后回到三个验收点：方法上，Attn-QAT 的方法点是让 fake-quant forward 与 FlashAttention-style backward 重算语义一致，而不是只给 QKV 套量化。实验上，视频质量、人评、training dynamics 和 kernel throughput 分别对应质量、主观偏好、稳定性和系统收益。诊断上，fake vs real quant 图很关键，它说明 QAT 的训练语义必须贴近最终 kernel。
+
+!!! info "本站判断"
+    Attn-QAT 的重点不是“4-bit attention”口号，而是 forward/backward/fake-quant/kernel 语义闭合。实验要看视频质量、人评、训练动态和 kernel throughput；采用时同时验非 attention 模块、显存峰值、数值稳定和任务质量回归。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。

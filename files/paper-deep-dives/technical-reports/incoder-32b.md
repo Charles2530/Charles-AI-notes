@@ -343,3 +343,8 @@ Figure 6 做了 SFT data scaling，从 83M tokens 扩到 250M tokens，观察工
 - [Triton 编程模型与自动调优](../../operators/triton-programming-model-and-autotuning.md)：对应 TritonBench、KernelBench 和 GPU kernel optimization。
 - [自定义算子开发与框架集成](../../operators/custom-op-development-and-framework-integration.md)：对应 CUDA/Triton kernel、PyTorch runtime compilation 和性能验证。
 - [RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：对应 agent trajectories、long-context 工程任务和工具调用记录。
+
+这一页最后回到三个验收点：方法上，InCoder-32B 要抓代码流数据和训练阶段划分，特别是 CUDA/grid 范围如何转成模型可学的上下文。实验上，工业 benchmark、错误分布、SFT scaling 和 midtrain loss 要一起看，才能判断能力来自数据还是后训练。诊断上，错误分布图比总分更有用，它告诉项目该补语法、API、库知识还是执行反馈。
+
+!!! info "本站判断"
+    InCoder-32B 要按代码模型训练与工业评测读：方法重点是代码流数据、CUDA/grid 范围、SFT scaling 和 midtrain loss；实验看工业 benchmark、错误分布和能力分层。落地时要补仓库级上下文、工具执行和安全审计。

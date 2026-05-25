@@ -498,7 +498,10 @@ on-policy flow map distillation
   -> correct student rollout errors with teacher-guided DMD
 ```
 
-从工程角度看，最值得带走的是这句话：**少步视频扩散的好学生，不应该只会少步；它应该能在测试时把额外计算预算转化成更好质量。**
+工程上最值得带走的是：**少步学生也要能把额外采样预算转化成更好质量。**
+
+!!! info "本站判断"
+    AnyFlow 要按任意步 flow-map 蒸馏读；实验同时验 NFE-质量曲线、吞吐、长视频一致性和下游任务。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
@@ -511,5 +514,3 @@ on-policy flow map distillation
 1. Gu et al. [AnyFlow: Any-Step Video Diffusion Model with On-Policy Flow Map Distillation](https://arxiv.org/abs/2605.13724). arXiv:2605.13724.
 2. 官方项目页：[AnyFlow](https://nvlabs.github.io/AnyFlow/).
 3. 官方代码：[NVlabs/AnyFlow](https://github.com/NVlabs/AnyFlow).
-4. 官方模型集合：[NVIDIA AnyFlow collection](https://huggingface.co/collections/nvidia/anyflow).
-5. Hugging Face paper page：[hf.co/papers/2605.13724](https://huggingface.co/papers/2605.13724).

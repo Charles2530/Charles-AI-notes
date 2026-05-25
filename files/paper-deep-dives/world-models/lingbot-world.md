@@ -345,6 +345,20 @@ Table 2 reports VBench quantitative comparisons against Yume-1.5 and HY-World 1.
 !!! note "图解：长时记忆图在看不可见对象是否还存在"
     这张图对应世界模型里很关键的一点：模型不能只生成下一段视频，还要在看不见目标的时间里维持隐藏状态。静态地标离开视野后仍应保持空间结构，桥梁一段时间不可见后距离关系仍应合理，车辆离开当前视野后也应继续沿物理上合理的轨迹运动。否则 agent 一转身，场景就被“重新生成”，规划器就无法依赖它做长期决策。
 
+### 诊断和消融读法
+
+LingBot-World 的结果更像系统诊断，而不是单一 benchmark 排名。读实验时建议把指标按能力层拆开：
+
+| Diagnostic | 对应证据 | 支撑的结论 | 不能证明 |
+| --- | --- | --- | --- |
+| VBench quantitative table | Table 2 的 imaging、dynamic degree、temporal flickering、overall consistency | 中程训练后视频质量和动态程度提升，尤其 `Dynamic Degree` 更突出 | 不能证明动作因果和真实控制收益 |
+| Long-horizon memory | Figure 12 的地标、桥梁、车辆不可见后恢复 | 模型出现一定空间/对象持久性 | 不能保证复杂拓扑、可交互物体和长任务状态都稳定 |
+| Real-time demo | LingBot-World-Fast 视频与 README demo | 因果化、KV cache、少步蒸馏能支撑交互形态 | 不能替代延迟分布、P95/P99 和用户动作分叉评测 |
+| Action-conditioned generation | 键盘/相机动作与 future video demo | 动作条件进入生成路径后能影响未来画面 | 不能证明机器人末端控制、接触力或工具使用可迁移 |
+| 3D reconstruction application | demo / pipeline 展示 | 生成世界可作为后续 3D/agent 接口 | 不能说明几何精度足以用于安全规划 |
+
+如果要把它当项目 baseline，最需要补的是反事实动作实验：固定同一历史，枚举左转、右转、前进、停止等动作，测未来分叉是否和动作一致；再把生成结果接给 agent，测任务成功率或碰撞率是否改善。没有这两步，LingBot-World 更稳的定位仍是交互式视频世界模拟器，而不是闭环控制世界模型。
+
 ## 主要贡献
 
 这篇论文的贡献可以概括为五点：
@@ -388,6 +402,9 @@ Table 2 reports VBench quantitative comparisons against Yume-1.5 and HY-World 1.
 LingBot-World 最值得放进世界模型专题，不是因为它单独解决了所有动力学问题，而是因为它把当前视频世界模型的训练路径讲得很完整：**视频基础模型提供世界外观和时序先验，交互数据提供动作后果，长序列训练提供记忆，因果化提供在线 rollout，少步蒸馏提供可交互速度。**
 
 这条路径也解释了为什么“视频模型”和“世界模型”会越来越接近，但不会完全等价。视频模型负责让未来看起来合理；世界模型必须让未来对动作、风险和规划有用。
+
+!!! info "本站判断"
+    LingBot-World 要按机器人视频世界模型系统读：方法重点是训练 pipeline、system pipeline、causal adaptation 和 memory；实验要看生成质量、动作条件、延迟和失败漂移。它比纯视频生成更接近具身闭环，但仍需任务成功率和安全回退。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

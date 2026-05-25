@@ -334,6 +334,11 @@ DA3 对机器人和 VLA 的价值，不是让模型“看图更清楚”这么�
 4. [DepthAnything3 API documentation](https://github.com/ByteDance-Seed/Depth-Anything-3/blob/main/docs/API.md)
 5. [DA3-Streaming README](https://github.com/ByteDance-Seed/Depth-Anything-3/tree/main/da3_streaming)
 
+这一页最后回到三个验收点：方法上，DA3 的关键接口是多视角输入到一致深度/几何输出，dual-DPT 和 teacher supervision 负责把单图先验改造成跨视角约束。实验上，重点看输入视角、teacher 监督和 SoH 可视化，而不是把它当普通单目深度升级。诊断上，跨视角一致性提升不等于 metric SLAM 完成；相机标定和动态物体仍是外部系统责任。
+
+!!! info "本站判断"
+    Depth Anything 3 的重点是从单图相对深度走向多视角一致几何：方法要抓双 DPT、teacher supervision 和跨视角约束，实验要看多视图深度、点云/重建与 teacher 消融。机器人采用时仍要处理相机标定、动态物体和尺度漂移。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。

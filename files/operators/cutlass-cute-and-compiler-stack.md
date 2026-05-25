@@ -100,6 +100,8 @@ CuTe 的价值不是“更高级”本身，而是让复杂 GEMM、attention 和
 
 Kernel 设计不能脱离上层系统。一个很快的 kernel 也可能因为图编译器无法稳定捕获调用路径、runtime dynamic batching 让 shape 过于分散、layout 转换成本抵消收益、kernel 无法与通信或 KV 管理重叠、低精度数值路径没有通过回归、fallback 行为不稳定，而无法带来端到端收益。
 
+这类问题要用 Nsight Systems 一类系统 trace 验收：确认图编译生成的 kernel 是否真的命中热路径，是否被前后的 cast、transpose、copy、fallback 和 host-side compile 开销抵消，CUDA Graph / runtime dispatch 是否减少了 launch 空洞，以及 kernel 与通信是否在同一条时间线上形成了真实重叠。
+
 这就是为什么 AI system 需要全栈视角：硬件、编译器、框架、kernel、runtime 和服务形态必须一起看。
 
 ## 一个选型案例：FP8 GEMM + bias + gelu

@@ -415,6 +415,9 @@ Fast-FoundationStereo 最适合记成一句工程原则：
 
 它对高效推理专题的补充价值在于跨出了 LLM decode：在实时机器人感知里，推理优化同样要同时考虑模型结构、训练蒸馏、数据质量、runtime 导出和 zero-shot 泛化。快不是目标本身，快且在真实场景里可靠才是目标。
 
+!!! info "本站判断"
+    Fast FoundationStereo 的价值在速度-精度折中：方法要抓 backbone distillation、refinement pruning、pseudo labels 和 blockwise search；实验看 speed-accuracy 曲线、runtime detail 与 refinement 消融。用于机器人要补传感噪声、低纹理和实时闭环测试。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[推理](../../inference/index.md)。

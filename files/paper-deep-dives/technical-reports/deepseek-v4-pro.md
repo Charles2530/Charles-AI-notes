@@ -382,6 +382,19 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 | QAT 要贴近真实 rollout | RL/OPD 采样阶段用 native FP4，可减少训练采样与线上部署的分布差 |
 | 长上下文 agent 是系统问题 | context retention、tool schema、sandbox、WAL、KV persistence 都会影响模型是否可用 |
 
+### 消融与诊断怎么读
+
+DeepSeek-V4 Pro 是技术报告，不是模块消融论文；读报告时要把系统对照、曲线和工程诊断分开。
+
+| Diagnostic | 报告证据 | 支撑什么 | 不能证明 |
+| --- | --- | --- | --- |
+| Base table | V3.2 / V4-Flash / V4-Pro | 架构、数据和训练提升效率 | 不能隔离单个模块贡献 |
+| MRCR / reasoning curves | Figure 9/10、Table 7 | 长上下文和 test-time compute 有收益曲线 | 不能把 Max mode 当默认最优 |
+| FP4 QAT / OPD | rollout 采样、full-vocab KL、TileLang kernel | 量化和蒸馏要贴近真实系统路径 | 不等于所有硬件都有同等收益 |
+| WAL / sandbox | KV persistence、trajectory replay | agent RL 基础设施必须容错 | 不能证明 agent 行为可靠 |
+
+项目借鉴时，优先复用可观测性：长上下文退化、reasoning tokens 效用、expert load、loss spike、KV 命中率和 rollout 恢复率。
+
 ### 局限与风险
 
 第一，DeepSeek-V4 的架构很复杂。CSA、HCA、SWA、mHC、MoE、MTP、Muon、FP4 QAT、异构 KV cache、on-disk cache 和 OPD infrastructure 都有耦合。报告自己也承认未来要进一步提炼架构，把真正必要的设计筛出来。
@@ -408,7 +421,9 @@ DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分
 
 DeepSeek-V4 的重点不是某个单点指标，而是展示了一条百万上下文大模型的完整路线：**用 CSA/HCA 和异构 KV cache 压低长上下文边际成本，用 mHC/Muon/稳定性补丁把 trillion-scale MoE 训练跑稳，用 specialist + OPD 把多领域后训练能力合并到一个统一模型里，再用 FP4 QAT、rollout service 和 sandbox 把模型放进真实 agent 系统。**
 
+!!! info "本站判断"
+    DeepSeek-V4-Pro 要按 CSA/HCA、KV layout、Muon、thinking 管理和服务效率一起读；采用前区分报告事实、本站推断和可复现线上指标。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
-    - 概念或符号卡住时，先查 [术语表](../../glossary/index.md)，再回到当前页。

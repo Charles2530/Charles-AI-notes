@@ -299,6 +299,11 @@ $$
 
 更稳妥的读法是：把这篇论文当作“为什么世界模型应该预测抽象表示，而不是只生成未来像素”的理论路线图。真正落到项目时，还需要结合 Dreamer 系列的交互轨迹训练、LingBot-World 这类视频生成系统，以及具体任务的数据、动作接口和评测设计。
 
+这一页最后回到三个验收点：方法上，JEPA 的核心是预测 representation space 中的缺失部分，刻意不重建像素细节。实验上，autonomous agent、non-contrastive training 和 H-JEPA 图要当方法论证据读。诊断上，它解释了为什么世界模型可以不生成所有未来画面，但动作、reward 和闭环评测必须由后续系统补齐。
+
+!!! info "本站判断"
+    JEPA 页要读成表征学习和世界模型的思想源头：方法上预测 latent 而非像素，避免生成所有细节；图表重点是 autonomous agent architecture、non-contrastive training 与规划接口。它是原则框架，工程采用需另接动作、reward 和评测。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

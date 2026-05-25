@@ -393,6 +393,11 @@ DPM-Solver++ 最值得记住的是：**guided diffusion 的少步采样不能只
 1. [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://arxiv.org/abs/2211.01095)
 2. [LuChengTHU/dpm-solver](https://github.com/LuChengTHU/dpm-solver)
 
+这一页最后回到三个验收点：方法上，DPM-Solver++ 的核心是把 diffusion 采样写成 probability-flow ODE 的高阶积分问题，guided sampling 时改用更稳的 data prediction 形式。实验上，读图时同时看 NFE、FID/视觉质量和 guidance scale；少步好看才是真收益。诊断上，收敛曲线和 guided instability 图说明，solver order 与噪声时间步设计会直接决定高 CFG 下是否崩。
+
+!!! info "本站判断"
+    DPM-Solver++ 的复用点在 ODE 求解器公式和 guided sampling 稳定性：实验要同时看步数、FID/视觉质量和 guidance 强度。它证明“同一 teacher 也能靠数值方法加速”，但超少步和高 CFG 仍会暴露离散误差。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。

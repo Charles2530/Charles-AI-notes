@@ -433,3 +433,8 @@ f(x,t)
     - 想看训练细节：读 [扩散训练与表示](../../diffusion/training.md) 和 [扩散训练配方与排障](../../diffusion/practical-training-recipes-and-failure-analysis.md)。
     - 想看采样加速：接 [DPM-Solver++](dpm-solver-plus-plus.md)。
     - 想看少步蒸馏：接 [DMD](dmd.md)、[DMD2](dmd2.md) 和 [Phased DMD](phased-dmd.md)。
+
+这一页最后回到三个验收点：方法上，主公式是 forward SDE 加噪、reverse-time SDE 用 score 去噪，probability-flow ODE 则给出确定性采样和 likelihood 路径。实验上，图像生成、补全、上色和可控生成共同证明 score 不是只服务一种任务。诊断上，predictor-corrector、SDE/ODE 路径和 architecture component 的对比，才是理解后续 solver 与蒸馏论文的入口。
+
+!!! info "本站判断"
+    Score SDE 是扩散统一理论页：方法要抓 forward SDE、reverse-time SDE、probability-flow ODE 和 predictor-corrector 采样；实验说明同一 score 框架能覆盖图像生成、补全和可控任务。后续论文多是在这套公式上换参数化、求解器或蒸馏目标。

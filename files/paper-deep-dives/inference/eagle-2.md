@@ -283,6 +283,11 @@ EAGLE-2 最值得记住的是：**推理时的候选结构也可以用模型自�
 
 如果把 EAGLE-2 接到线上推理系统，它不是一个孤立算法，而是一套 draft policy、tree attention、verification mask、runtime scheduler 和观测指标共同组成的工程路径。
 
+这一页最后回到三个验收点：方法上，EAGLE-2 不改 draft head，而是把候选树从固定形状改成按 confidence 动态扩展。实验上，static/dynamic tree、acceptance-by-position 和 calibration 图要一起看，分别对应预算分配、收益位置和置信可靠性。诊断上，如果 confidence 与 acceptance 脱钩，动态树会把 token 预算投到错误分支。
+
+!!! info "本站判断"
+    EAGLE-2 的核心是动态 draft tree，而不是重训更大 draft 模型。方法上用 confidence 分配候选预算，实验上看 static vs dynamic tree、acceptance 位置和 speedup；工程风险集中在 confidence calibration、tree mask 和调度开销。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[推理](../../inference/index.md)。

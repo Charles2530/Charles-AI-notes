@@ -297,6 +297,11 @@ EAGLE-3 最值得带走的不是某个具体速度数字，而是一个训练-�
 
 EAGLE-3 因此适合放在高效推理专题里：它把“投机解码”从一个推理 trick，推进到 draft model 训练分布、feature 接口和 serving runtime 共同设计的问题。
 
+这一页最后回到三个验收点：方法上，EAGLE-3 去掉 feature prediction constraint，改用 direct token prediction，并在训练时模拟多步测试分布。实验上，scaling law、training-time test 和 acceptance-rate 图说明收益来自 draft 模型表达力与分布对齐。诊断上，仍需 target verification 保证 lossless；更强 draft 不等于可以跳过验证。
+
+!!! info "本站判断"
+    EAGLE-3 要读成训练目标升级：方法核心是 direct token prediction、training-time test 和多步分布对齐；实验看 scaling law、speedup、acceptance 与训练时间消融。它提升 draft 可扩展性，但仍依赖标准 verification 保持输出分布。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[推理](../../inference/index.md)。

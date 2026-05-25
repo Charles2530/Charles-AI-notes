@@ -193,6 +193,8 @@ MoE 的通信问题往往比稠密模型更复杂，因为 token 要 dispatch �
 
 一个较有用的通信 profile 至少要回答：哪些 collective 最耗时，发生在哪些阶段，是否被计算覆盖，是 bandwidth-bound 还是 latency-bound，是否存在某一组 rank 明显更慢，以及是否与物理拓扑不匹配。
 
+这里尤其适合先看 Nsight Systems：把 NCCL collective、CUDA stream、CPU launch、NVTX 标注的 forward/backward/optimizer 阶段和 GPU 空洞放在同一条 timeline 上。只有通信区间真的落在计算 kernel 之下，才算 overlap；如果通信把关键路径顶出来，或者某个 rank 的 collective 明显拖尾，就要继续查 bucket、stream 依赖、拓扑分组和慢 rank。
+
 ### 14.1 常见误判
 
 只看“总通信时间”往往不够，因为很多通信已被 overlap 掩盖，真正影响 step time 的是裸露通信；少量关键路径通信，可能比大量被隐藏通信更值得优化。

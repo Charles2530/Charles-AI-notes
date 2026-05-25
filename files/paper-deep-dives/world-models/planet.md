@@ -328,6 +328,11 @@ PlaNet 的核心贡献可以概括为三点：
 
 一句话总结：PlaNet 是“世界模型用于控制”的经典原型。它把世界模型从视频预测器推进成一个可供规划器调用的 latent simulator，也为后续 DreamerV3 这类 imagined rollout policy learning 铺好了路线。
 
+这一页最后回到三个验收点：方法上，PlaNet 的核心是 RSSM posterior 用真实观测校正，prior 在 imagination 中 rollout，再用 CEM 在 latent space 规划动作。实验上，DMC 分数、latent overshooting 和 open-loop prediction 图要一起读。诊断上，它证明 latent planning 数据效率高，但在线 CEM 成本高，这正是 Dreamer 改成 actor 的原因。
+
+!!! info "本站判断"
+    PlaNet 的核心是从像素学 RSSM 并在 latent space 做 CEM planning：方法要抓 representation/transition/reward、latent overshooting 和 online planning；实验看 DMC 数据效率和 model comparison。它是 Dreamer 前身，优势是样本效率，代价是推理搜索成本。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

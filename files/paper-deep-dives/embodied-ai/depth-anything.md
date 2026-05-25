@@ -347,6 +347,11 @@ Depth Anything 系列可以按训练监督的演进来读：
 
 最稳的工程接法是：把 DA1/DA2/DA3 看作开放域视觉几何底座，再和 RGB-D、多视角、相机标定、SLAM、接触传感和控制器结合。它能显著降低“没有几何先验”的成本，但不能替代真实机器人闭环里的测量和安全约束。
 
+这一页最后回到三个验收点：方法上，DA1 的公式重点是 affine-invariant depth loss，保证跨数据集只学相对深度结构；无标注分支用 clean teacher label 监督强扰动 student。实验上，Table 1 的 1.5M labeled + 62M unlabeled 是主证据，不只是漂亮可视化。诊断上，最重要的消融是“直接混伪标签不够”，必须靠强扰动和 DINOv2 feature alignment 榨出增益。
+
+!!! info "本站判断"
+    Depth Anything 的核心证据是数据规模和自训练，而不是复杂架构：方法要抓 DINOv2+DPT、pseudo labels、强扰动和特征对齐；实验要看 zero-shot 数据集、无标注增量和失败表面。用于机器人时必须补 metric calibration 与闭环安全。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。

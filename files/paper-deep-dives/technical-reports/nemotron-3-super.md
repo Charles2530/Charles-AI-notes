@@ -498,7 +498,10 @@ Nemotron 3 Super 的核心不是“120B MoE 又多强”，而是一个完整工
 同时让训练和推理都落到 NVFP4 / FP8 / Blackwell / Hopper 的现实硬件路径上。
 ```
 
-真正值得学习的是组合拳：Mamba 解决长序列状态，LatentMoE 解决 expert bandwidth / communication，MTP 解决 speculative decoding，NVFP4 解决训练吞吐，异步多环境 RL 解决 agent 能力协同，PTQ 和 SSM cache recipe 解决部署落地。
+关键是组合拳：Mamba、LatentMoE、MTP、NVFP4、异步多环境 RL、PTQ 和 SSM cache recipe 共同服务训练与部署。
+
+!!! info "本站判断"
+    按 Mamba、LatentMoE、MTP、NVFP4、异步 RL 协同读；benchmark 绑定 NVIDIA 栈。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

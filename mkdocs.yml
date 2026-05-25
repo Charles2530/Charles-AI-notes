@@ -282,10 +282,12 @@ nav:
       - 读懂 Fast-FoundationStereo：从双目几何到高效推理: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
   - 论文专题讲解:
       - paper-deep-dives/index.md
+      - 写作与验收规范: paper-deep-dives/writing-standard.md
       - 高效训练:
           - Megatron-LM：Tensor Model Parallel: paper-deep-dives/foundations/megatron-lm.md
           - ZeRO：零冗余优化器: paper-deep-dives/foundations/zero.md
           - Muon：LLM 预训练优化器: paper-deep-dives/foundations/muon-is-scalable.md
+          - GPU Utilization：训练指标误导: paper-deep-dives/foundations/gpu-utilization-misleading.md
           - MagiAttention: paper-deep-dives/foundations/magiattention.md
           - SLA / SLA2: paper-deep-dives/foundations/sla-sparse-linear-attention.md
           - Attn-QAT：4-bit Attention: paper-deep-dives/foundations/attn-qat.md

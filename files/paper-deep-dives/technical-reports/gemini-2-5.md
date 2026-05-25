@@ -239,6 +239,21 @@ Gemini 2.5 报告覆盖大量 benchmark，包括通用文本、数学、科学�
 
 这类评测的解读要谨慎。Gemini 2.5 是闭源模型，很多对比来自作者报告的统一评测设置；不同厂商的工具权限、thinking 配置、搜索环境、temperature、上下文长度和系统 prompt 都可能影响结果。更稳的结论是：报告证据支持 Gemini 2.5 在 reasoning、coding、多模态、长上下文和 agentic 任务上整体升级，但不应该把所有数字直接外推到自己的线上系统。
 
+## 消融与诊断怎么读
+
+Gemini 2.5 报告没有公开可复现的模块消融，但它提供了几类系统诊断。读这些诊断时，不要把它们当成“某个隐藏超参带来多少提升”，而要看能力、成本和部署形态的关系。
+
+| Diagnostic | 报告证据 | 支撑的结论 | 不能证明 |
+| --- | --- | --- | --- |
+| Cost-quality Pareto | Figure 1 的 Pro / Flash / Flash-Lite family | 模型家族按质量、速度、成本分层，而不是只追最强单点 | internal quality aggregate 不能和外部模型直接横比 |
+| Interface table | Table 1 / 2 的 context、output、tool use、thinking | 2.5 把 dynamic thinking 和 tool use 放进产品接口 | 不公开底层参数和完整训练配方 |
+| Thinking budget | Flash budget 图和 dynamic thinking 描述 | test-time compute 可控地改善困难任务 | thinking token 增加不等于所有任务都划算 |
+| Video tokenization | 每帧 token 从 258 降到 66 | 长视频能力首先受模态压缩和 context budget 约束 | 不公开 tokenizer 全细节，难以复现 |
+| TPUv5p / Pathways | 多 pod、跨数据中心、SDC replay | 前沿训练默认需要容错、replay 和输入管线工程 | 不能直接迁移到普通 GPU 集群 |
+| Agentic browsing | Deep Research / tool-use evaluations | search、tool、execution feedback 已进入后训练 | agent benchmark 高度依赖权限和环境 |
+
+对工程项目最有用的是 thinking budget 和 family Pareto 两条诊断：一个请求是否该用 Pro、Flash，是否该开高 thinking，不应该由模型名决定，而应该由任务难度、延迟预算、token 成本和失败代价共同决定。
+
 ## 训练路线的可复用经验
 
 如果把 Gemini 2.5 当作工程参考，它最值得复用的不是某个隐藏参数，而是几条系统原则。
@@ -282,6 +297,9 @@ Gemini 2.5 报告很强，但也有明显边界。
 | Infra | 分布式训练、checkpoint、replay、故障恢复和数据输入 | 长 run 是否能在硬件故障下继续稳定推进 |
 
 Gemini 2.5 最值得学习的一句话是：前沿模型能力不是单一算法堆出来的，而是训练数据、teacher、post-training、推理预算、工具环境和大规模基础设施一起优化出来的。
+
+!!! info "本站判断"
+    Gemini 2.5 应按原生多模态和长上下文系统读：方法证据来自模型接口、思考模式、工具/多模态能力和安全评测；实验要看跨模态 benchmark、长上下文检索和成本。产品采用时还要补真实任务、延迟、隐私和失败案例。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

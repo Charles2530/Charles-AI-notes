@@ -432,6 +432,9 @@ Mixed precision 则承认一个更现实的问题：少量 outlier 或 salient w
 
 如果只能记一句话：**量化是系统工程，不是单个压缩算法。**
 
+!!! info "本站判断"
+    Low-bit LLM Survey 是量化地图，不是单一 recipe：方法上区分粒度、PTQ/QAT、旋转、outlier 和 KV cache；实验解读要看硬件带宽、传输层级和任务回归。落地时先定瓶颈，再选权重、激活或 KV 量化路径。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[推理](../../inference/index.md)。

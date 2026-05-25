@@ -474,8 +474,9 @@ flowchart LR
 
 对 VLA 和世界模型来说，MapAnything 的输出可以作为 state，而不是直接作为 action。比如抓取前先把多相机 RGB-D 转成统一 metric pointmap，再让 planner 判断可达性、遮挡和碰撞；或者在世界模型里把 `metric geometry state + candidate action` 作为预测条件，而不是只用 RGB latent。
 
-## 本站判断
-
 MapAnything 属于“前沿但很工程化的几何 foundation model”。它的成熟证据主要来自官方论文、开源代码/模型、跨数据集 benchmark、输入组合消融、训练配方和速度显存 profiling；它尚未证明真实机器人闭环收益。
 
 最值得复用的是三件事：**factored scene representation、geometric input probability augmentation、two-stage view curriculum**。如果做具身项目，可以先把它作为几何状态层 baseline，而不是把它包装成完整具身智能方案。下一步最需要的证据，是带 noisy sensor / SLAM drift 的真实机器人 episode、与 planner/VLA/world model 的闭环 ablation，以及动态场景和失败恢复数据。
+
+!!! info "本站判断"
+    MapAnything 的方法证据来自 factored scene representation、几何输入增强和 view curriculum；实验要看多视图重建、速度显存和辅助输入消融。把它接入机器人时先作为几何状态层验收，再接 planner/VLA，不要直接当动作策略。

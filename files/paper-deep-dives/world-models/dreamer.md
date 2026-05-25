@@ -495,6 +495,11 @@ Dreamer 最值得记住的是三点：
 
 一句话总结：Dreamer 是交互轨迹型世界模型路线从“会模拟、会规划”走向“会在模拟中训练策略”的关键论文。它把 RSSM latent world model 变成了一个可微的 imagination environment，并用 analytic value gradients 在里面学习长视野控制行为。
 
+这一页最后回到三个验收点：方法上，Dreamer 的关键公式是从 RSSM state rollout imagined trajectory，再通过 value bootstrap 训练 actor。实验上，DMC 总表、horizon 图和 representation objective 消融要一起读，分别回答数据效率、长视野和表征目标。诊断上，它最强证明是 latent imagination 可训练策略；最弱外推是把低维控制直接推广到开放视频世界。
+
+!!! info "本站判断"
+    Dreamer 的核心是把 RSSM latent dynamics 变成可微 imagination environment：方法要抓 world model、actor/value 和 horizon bootstrap；实验看 DMC 分数、representation objective 和 PlaNet/D4PG 对比。它证明数据效率，不证明开放世界视频模拟。
+
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。

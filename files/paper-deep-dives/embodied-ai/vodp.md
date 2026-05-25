@@ -53,6 +53,9 @@ A_t \in \mathbb{R}^{N \times J}
 
 <small>Figure source: `VO-DP`, Figure 2. 读这张图：VO-DP 由 VGGT Encoder、Semantic-Geometric Fuser、Spatial Compression 和 DDPM policy head 四部分组成；雪花表示冻结 VGGT，火焰表示训练模块。</small>
 
+!!! note "这张图怎么读"
+    这张架构图要按信息流读：RGB 先经冻结 VGGT 产生 geometry-aware tokens，语义分支再补对象和任务线索，Spatial Compression 把密集 token 压成 policy 可用的场景表征，最后由 DDPM head 去噪出动作。它支撑的是“预训练几何特征可以替代显式点云输入的一部分价值”，不能证明单目 RGB 已经足够做所有安全几何判断。
+
 ### 1. VGGT Encoder：从 RGB 中取语义与几何
 
 论文使用预训练 `VGGT` 作为视觉编码器。VGGT 原本是 feed-forward 3D 几何模型，可以从一张或少量图像预测 camera、point map、depth map 和 point tracks。VO-DP 不直接使用这些输出头，而是拿中间特征：
@@ -228,6 +231,9 @@ MLP 投影参数更多，但平均并没有胜出。论文最终采用 average p
 
 <small>Figure source: `VO-DP`, experiment setup. 读这张图：真实机器人、RealSense L515、可控扰动光源、不同颜色/尺寸物体与容器。</small>
 
+!!! note "真实实验图怎么读"
+    真实机器人图不是展示照片，而是实验条件：固定相机、桌面布局、物体尺寸、颜色和光照扰动都决定了成功率口径。VO-DP 的真实实验支持的是受控桌面操作和鲁棒性扰动下的闭环收益；它还不能替代更开放的多物体遮挡、透明/反光物体、相机移动和长时恢复评测。
+
 真实机器人平台使用 `Realman RM65-B`，末端是 `Inspire EG2-4C2` 夹爪，一个 `RealSense L515` 提供视觉观测。论文环境里传感器可获取 RGB 与点云，但 VO-DP 仍只使用 RGB；DP3 baseline 使用点云，并需要手工定义 operational region。
 
 四个真实任务：
@@ -331,6 +337,9 @@ VO-DP 的关键价值是把 3D foundation model 的中间表征接入 diffusion 
 2. [VO-DP project page](https://d-robotics-ai-lab.github.io/vodp/)
 3. [DRRM GitHub repository](https://github.com/D-Robotics-AI-Lab/DRRM)
 4. [Hugging Face paper page](https://huggingface.co/papers/2510.15530)
+
+!!! info "本站判断"
+    VODP 要按对象动态与策略分工读：方法重点是视频对象表示、重建和 policy 接口，实验看 RoboTwin、真实任务、布局/鲁棒性测试。它的贡献是把视觉动态显式化，边界是动态场景覆盖、动作因果性和真实安全评测。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。

@@ -418,6 +418,21 @@ GPT-4o System Card 对做多模态产品比对做模型复现更有参考价值�
 | Real-time voice products need streaming classifiers | Post-hoc moderation is too late for already played audio |
 | Agentic benchmark progress does not equal autonomy risk by itself | GPT-4o is stronger on coding and long-horizon tasks but still fails robust end-to-end ARA tasks |
 
+## 消融与诊断怎么读
+
+System Card 的“消融”主要不是模型模块消融，而是上线前安全诊断：同一能力在文本、TTS 转写、真实语音、视频、agentic tool use 和 mitigation 后产品形态里会表现不同。
+
+| Diagnostic | 报告证据 | 支撑的结论 | 不能证明 |
+| --- | --- | --- | --- |
+| TTS-converted evals | 文本评测转成语音输入 | 可规模化测试语音入口的能力回归 | 不能覆盖真实口音、噪声、打断和多说话人 |
+| Audio red teaming | Voice Mode 风险和 mitigations | 端到端语音输出需要单独安全评估 | 不能只靠 transcript moderation 覆盖所有风险 |
+| Preparedness / autonomy | ARA、METR、cyber/bio 等评估 | GPT-4o 能力更强但仍未通过高风险自治门槛 | agent 风险会随工具权限变化，需要持续重测 |
+| Health / science evals | 医学知识表和科学图像示例 | 多模态科学/健康能力有明显提升 | 不等于临床部署许可或可靠科研分析 |
+| Low-resource language evals | ARC、TruthfulQA、Uhura 多语表 | GPT-4o 缩小部分低资源语言差距 | 不能代表全球低资源语言、方言和语音公平性 |
+| Streaming classifiers | 实时语音安全路径 | 输出流需要边生成边拦截 | 不能证明所有新声音/音乐/身份风险都覆盖 |
+
+最重要的诊断结论是：omni model 的评估单位不再只是 prompt-response，而是完整交互链路。输入可能是语音、图像、视频，输出可能是带声音特征的实时音频；任何只看最终文字 transcript 的评估都会漏掉一部分风险。
+
 ## 局限
 
 这篇 System Card 也有明显边界：
@@ -433,6 +448,9 @@ GPT-4o System Card 对做多模态产品比对做模型复现更有参考价值�
 GPT-4o System Card 最值得记住的不是某个 benchmark，而是它把多模态模型上线前的工程问题说清楚了：**当模型开始直接听声音、说话、看图、看视频，并以接近人类反应时间对话时，安全评估必须从文本规则扩展到音频身份、输出声音、实时拦截、情感依赖、语音说服力和跨模态能力迁移。**
 
 如果说 GPT-4 技术报告证明了大语言模型的通用能力，GPT-4o System Card 则说明：omni model 的关键挑战不只是“更强”，而是“更像人类交互以后，系统边界要怎么重新设计”。
+
+!!! info "本站判断"
+    GPT-4o System Card 的价值在风险与能力边界：方法上看文本/视觉/音频统一接口和安全栈，实验上看 prepared framework、红队、voice safety 与多模态评测。它不是模型 recipe，而是部署治理和评测口径参考。
 
 !!! tip "下一站"
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
