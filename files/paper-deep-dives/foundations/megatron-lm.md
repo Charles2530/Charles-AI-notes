@@ -6,12 +6,24 @@ paper_topic: 高效训练
 
 # Megatron-LM：Tensor Model Parallel 的大模型训练栈
 
-!!! note "读法定位"
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“Megatron-LM：Tensor Model Parallel 的大模型训练栈”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [训练与基础系统](../../training/index.md)。
     **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
     **主线关系**：读完后把结论回填到「训练与基础系统」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
 
-!!! info "论文信息"
+    **info · 论文信息**
+
     - 论文：`Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism`
     - 链接：[arXiv:1909.08053](https://arxiv.org/abs/1909.08053)
     - 作者：Mohammad Shoeybi、Mostofa Patwary、Raul Puri、Patrick LeGresley、Jared Casper、Bryan Catanzaro
@@ -236,6 +248,10 @@ Megatron-LM 的训练细节很值得补，因为它展示了早期大模型训�
 
 ## GPT-2：训练规模和 Zero-shot 结果
 
+<!-- [补充] -->
+> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+
+
 下面表格重绘自原论文 Table 2，保留英文列名。
 
 | Parameter Count | Layers | Hidden Size | Attn Heads | Hidden Size per Head | Total GPUs | Time per Epoch (days) |
@@ -327,10 +343,13 @@ Megatron-LM 的核心价值就在这里：它把“模型切得开”与“训�
 
 这一页最后回到三个验收点：方法上，Megatron-LM 的公式抓手是把 MLP 和 attention 的矩阵乘按 hidden dimension 切分，让每张卡只持有一部分权重和激活。实验上，FLOPs scaling、weak scaling 和 validation perplexity 要一起看，避免只追吞吐忽略质量。诊断上，hybrid MP+DP 图说明张量并行不是孤立技巧，而要和数据并行、通信算子和 batch 配方一起设计。
 
-!!! info "本站判断"
+!!! note "合并提示"
+    **info · 本站判断**
+
     Megatron-LM 的长期价值是张量并行的工程范式：方法要抓 MLP/attention 切分、通信位置和混合并行；实验看 weak scaling、perplexity 与吞吐。它证明大模型训练要联合算子、并行和数值稳定设计，而不只是堆 GPU。
 
-!!! tip "下一站"
+    **tip · 下一站**
+
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。
     - 按导航顺序继续：[ZeRO：零冗余优化器](zero.md)。

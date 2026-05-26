@@ -2,12 +2,22 @@
 
 这页用仓库里的 `world-model-mini-chain` fixture 写成一份小型论文式实验报告。它的目标不是证明某个真实模型有效，而是给全站提供一个**证据链模板**：数据、训练配置、系统成本、闭环指标、失败归因和改进计划应该怎样放到同一页里。
 
-!!! note "读法定位"
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“世界模型高效训练完整实验报告样例”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先回答“世界模型高效训练完整实验报告样例”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先回 [世界模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
     **主线关系**：把表征预测、潜变量动力学、规划、rollout 服务和具身/视频应用连成“可模拟、可评估、可行动”的主线。
 
-!!! warning "证据等级"
+    **warning · 证据等级**
+
     本页是 `Toy Fixture`。它可以证明“实验报告应该如何组织”，不能证明任何真实世界模型、机器人策略或论文方法已经有效。
 
 ## 摘要
@@ -95,13 +105,16 @@ python3 files/assets/examples/world-model-mini-chain/eval_mini_chain.py
 
 <small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1 与 Figure 4。原图意：Figure 1 展示 masked visual representation learning 与 latent dynamics learning 的解耦；Figure 4 展示 Meta-world / RLBench 设置中的 success rate 学习曲线。</small>
 
-!!! note "这张图怎么读"
+!!! note "合并提示"
+    **note · 这张图怎么读**
+
     **输入输出**：MWM 先学 masked visual representation，再在 latent space 中训练 dynamics。<br>
     **效率机制**：把视觉表征学习和 dynamics 学习拆开，减少像素细节对控制学习的干扰。<br>
     **对本实验报告的意义**：报告应同时给 representation 成本账和 dynamics / control 指标。<br>
     **不能证明什么**：MWM 图不能证明本页 toy fixture 的视觉压缩一定保留接触、遮挡和小目标状态。
 
-!!! warning "读数边界"
+    **warning · 读数边界**
+
     Figure 4 是论文设置下的 Meta-world / RLBench visual control 结果，有 closed-loop control 曲线，但不是本页 toy fixture 的结果，也不是任意真实机器人部署结果。
 
 ![V-JEPA 2-AC planning](../assets/images/paper-deep-dives/world-models/v-jepa2/figure-action-conditioned-world-model.png){ width="920" }
@@ -110,13 +123,16 @@ python3 files/assets/examples/world-model-mini-chain/eval_mini_chain.py
 
 <small>图源：[V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning](https://arxiv.org/abs/2506.09985)，Figure 7 与 Table 3。原图意：Figure 7 展示用 V-JEPA 2-AC 做 model predictive control；Table 3 比较 V-JEPA 2-AC 与 Cosmos world model 在机器人操作任务中的规划性能与时间。</small>
 
-!!! note "这张图怎么读"
+!!! note "合并提示"
+    **note · 这张图怎么读**
+
     **输入输出**：输入当前观测、目标图像和候选动作；输出是在 representation space 中 rollout 后与目标表示的距离。<br>
     **效率机制**：用 latent / representation planning 评估候选动作，而不是为每个动作生成完整未来视频。<br>
     **对本实验报告的意义**：closed-loop planning 报告必须同时写成功率和每步规划时间。<br>
     **不能证明什么**：V-JEPA 2-AC 的论文表不能证明本页 toy fixture 已经有真实机器人闭环能力。
 
-!!! warning "读数边界"
+    **warning · 读数边界**
+
     Table 3 是论文中的 closed-loop robot manipulation planning 设置，使用目标图像、MPC/CEM 和单张 RTX 4090；它不是独立复现，也不是系统级长时部署报告。
 
 ## 评测

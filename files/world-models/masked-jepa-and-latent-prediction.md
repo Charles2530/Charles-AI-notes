@@ -2,6 +2,13 @@
 
 这页回答一个初学者很容易忽略的问题：**世界模型为什么不总是直接预测像素？**
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“Masked / JEPA 与潜变量预测”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“Masked / JEPA 与潜变量预测”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先回 [世界模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
@@ -63,13 +70,16 @@
 
 <small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 4。原图意：展示 MWM 与 DreamerV2 在 Meta-world aggregate、RLBench Reach Target 和 RLBench Push Button 上的 success rate 学习曲线。</small>
 
-!!! note "图解卡：MWM results"
+!!! note "合并提示"
+    **note · 图解卡：MWM results**
+
     **输入输出**：横轴是环境交互步数，纵轴是成功率；曲线比较同等真实交互下的学习速度。<br>
     **关键模块**：如果 MWM 曲线更快上升，说明 masked representation + latent dynamics 在这些视觉控制设置中提高样本效率。<br>
     **公式对应**：不是单纯看重建 loss，而是看 representation 是否改善 downstream control。<br>
     **容易误读**：这组结果不能外推为“所有 masked model 都能真实机器人闭环规划”。
 
-!!! warning "读数边界"
+    **warning · 读数边界**
+
     Figure 4 是论文设置下的 Meta-world / RLBench paper result。它支持“MWM 在这些视觉控制任务中改善样本效率”，但不能证明任意视频世界模型都应优先用 MWM，也不能替代 action sensitivity 和真实部署评测。
 
 ## V-JEPA：预测 latent，不画回像素

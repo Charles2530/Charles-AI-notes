@@ -6,12 +6,24 @@ paper_topic: 具身智能
 
 # VO-DP：纯视觉语义-几何自适应扩散策略
 
-!!! note "阅读位置"
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“VO-DP：纯视觉语义-几何自适应扩散策略”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+!!! note "合并提示"
+    **note · 阅读位置**
+
     这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [具身智能](../../embodied-ai/index.md)。
 
     **主线关系**：VO-DP 接在 [VGGT](vggt.md)、[Depth Anything 3](depth-anything-3.md) 和 Diffusion Policy 之后看最顺。它不是把 VLA 做大，而是问一个很工程的问题：如果真实机器人不想依赖点云、深度图和繁琐的点云裁剪，单视角 RGB 能不能靠 3D foundation model 的中间表征追上点云策略？
 
-!!! info "论文信息"
+    **info · 论文信息**
+
     - 论文：`VO-DP: Semantic-Geometric Adaptive Diffusion Policy for Vision-Only Robotic Manipulation`
     - arXiv：[2510.15530](https://arxiv.org/abs/2510.15530)，首版 2025-10-17，v4 2025-11-03
     - 项目页：[VO-DP](https://d-robotics-ai-lab.github.io/vodp/)
@@ -44,6 +56,17 @@ VO-DP 的问题定义很清楚：只输入单视角 RGB history 和机器人 pro
 O_t = \{ I_t \in \mathbb{R}^{T \times H \times W \times 3}, S_t \in \mathbb{R}^{T \times J} \}, \quad
 A_t \in \mathbb{R}^{N \times J}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(O_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(I_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(S_t\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+
 
 这里的关键不是完全不需要状态，论文仍使用 joint states \(S_t\)。它的“vision-only”主要指视觉端只用 RGB，不用 depth、RGB-D 或 point cloud。
 
@@ -79,6 +102,14 @@ VGGT 的几何特征通道是 \(2C\)，语义特征是 \(C\)。论文先用 `1D 
 \end{aligned}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(h^{}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(h^{sg}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+
+
 其中 \(\mathbf{g}\) 是几何 token，作为 query；\(\mathbf{s}\) 是语义 token，作为 key/value。直觉上，策略先用几何结构提出“我要看哪里、什么空间关系重要”，再从语义 token 里取物体和任务相关信息。
 
 ### 3. Spatial Compression：把 dense token 压成场景表征
@@ -89,11 +120,28 @@ VGGT 的几何特征通道是 \(2C\)，语义特征是 \(C\)。论文先用 `1D 
 \mathbf{h^{sg}_t} \in \mathbb{R}^{T \times C \times H_P \times W_P}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(h^{sg}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(C\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(H_P\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(W_P\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 然后通过三个 `kernel size 3, stride 2` 的 residual blocks 降采样，再用 adaptive 2D average pooling 压成空间特征。最后把空间特征通过 MLP 投影到低维，并和 joint states 拼接：
 
 \[
 \mathbf{h^{sc}_t} = [\mathrm{MLP}(\mathbf{h^{sp}_t}), \mathbf{S_t}]
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(h^{sc}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(h^{sp}\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 这一步的作用是把 “每个 patch 上的语义-几何信息” 变成 policy head 可消费的 compact scenario representation。
 
@@ -105,11 +153,33 @@ VO-DP 的动作头沿用 Diffusion Policy / DDPM 思路，学习条件分布 \(p
 A_t^{k-1}=\alpha(A_t^k-\gamma\epsilon_\theta(h_t^{sc},A_t^k,k)+\mathcal{N}(0,\sigma^2 I))
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(\gamma\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
+| \(\epsilon_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(\sigma\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(A_t^{k-1}\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(A_t^k\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+
+
 训练目标是标准 MSE noise prediction loss：
 
 \[
 \mathcal{L}(\theta)=\mathrm{MSE}(\epsilon^k,\epsilon_\theta(h_t^{sc},A_t^k,k))
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(\epsilon\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(\epsilon_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(k\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(h_t^{sc}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(A_t^k\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+
 
 所以 VO-DP 的“新东西”不在 diffusion objective，而在视觉条件：它把普通 RGB policy 的视觉 encoder 换成了语义-几何融合后的 VGGT 表征。
 
@@ -145,6 +215,10 @@ A_t^{k-1}=\alpha(A_t^k-\gamma\epsilon_\theta(h_t^{sc},A_t^k,k)+\mathcal{N}(0,\si
 注意 `VO-DP-1` 并不是小模型，而是单帧观测消融。仿真里它的平均成功率略高于 `T=3` 版本，所以真实机器人实验默认使用 `VO-DP-1`。
 
 ## 仿真实验：RoboTwin
+
+<!-- [补充] -->
+> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+
 
 ![RoboTwin reconstruction 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-3-robotwin-reconstruct.png){ width="920" }
 
@@ -338,10 +412,13 @@ VO-DP 的关键价值是把 3D foundation model 的中间表征接入 diffusion 
 3. [DRRM GitHub repository](https://github.com/D-Robotics-AI-Lab/DRRM)
 4. [Hugging Face paper page](https://huggingface.co/papers/2510.15530)
 
-!!! info "本站判断"
+!!! note "合并提示"
+    **info · 本站判断**
+
     VODP 要按对象动态与策略分工读：方法重点是视频对象表示、重建和 policy 接口，实验看 RoboTwin、真实任务、布局/鲁棒性测试。它的贡献是把视觉动态显式化，边界是动态场景覆盖、动作因果性和真实安全评测。
 
-!!! tip "下一站"
+    **tip · 下一站**
+
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。
     - 如果要补前置概念，先读 [VGGT：feed-forward 3D 几何](vggt.md) 和 [Depth Anything 3：任意视角的 3D 几何底座](depth-anything-3.md)。

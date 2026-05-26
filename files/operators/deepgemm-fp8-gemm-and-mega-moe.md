@@ -2,6 +2,13 @@
 
 `DeepGEMM` 值得单独讲，不是因为它只是一个更快的 GEMM 库，而是因为它把现代大模型算子工程中的几个关键趋势压缩到同一个样本里：细粒度 FP8 scaling、Hopper/Blackwell 硬件特化、运行时 JIT、MoE grouped GEMM、decode masked layout，以及从单个 GEMM 走向融合通信与计算的 Mega MoE 思路。
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“DeepGEMM：FP8 GEMM 与 Mega-MoE”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“DeepGEMM：FP8 GEMM 与 Mega-MoE”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
@@ -9,13 +16,19 @@
 
 这页定位为主线解读。源码阅读、API 名称和接入检查放到 [DeepGEMM 源码与接入](deepgemm-source-and-integration.md)。如果想先补底层背景，可先读 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 和 [MoE 路由与稀疏 Kernel](moe-routing-and-sparse-kernels.md)。
 
-!!! note "初学者先抓住"
+!!! note "合并提示"
+    **note · 初学者先抓住**
+
 
     DeepGEMM 的重点不是“又一个 GEMM 更快”，而是把 FP8 scale layout、JIT、Hopper/Blackwell 数据搬运、MoE grouped GEMM 和服务态热点 shape 放在同一个接口假设里优化。它是强特化系统组件，不是通用数学库替代品。
 
-!!! note "难点解释：为什么 scale layout 也是接口"
+    **note · 难点解释：为什么 scale layout 也是接口**
+
 
     FP8/FP4 低精度矩阵乘需要额外 scale 数据。scale 怎么分块、怎么对齐、怎么被 TMA 搬运，会直接影响性能和数值稳定性。因此 DeepGEMM 把 scale 排布写进 API 语义，而不是把它当成外部细节。
+
+<!-- [补充] -->
+> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 一、DeepGEMM 到底是什么
 

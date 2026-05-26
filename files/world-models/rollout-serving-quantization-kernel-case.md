@@ -2,12 +2,22 @@
 
 这页把世界模型 rollout 从“模型能预测未来”推进到“系统能以可接受成本服务规划器”。它串起视频/world-model rollout、KV cache、低比特、MagiAttention、KVSlimmer、CausVid、SLO 和失败回放，重点回答：**怎样证明系统成本下降没有把动作分叉、风险判断和闭环收益一起压坏。**
 
-!!! note "读法定位"
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“Rollout 服务、量化与 Kernel 全链路案例”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先回答“Rollout 服务、量化与 Kernel 全链路案例”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先回 [世界模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
     **主线关系**：把表征预测、潜变量动力学、规划、rollout 服务和具身/视频应用连成“可模拟、可评估、可行动”的主线。
 
-!!! warning "证据边界"
+    **warning · 证据边界**
+
     本页复用论文原图和站内 toy fixture 组织工程路线。系统吞吐、视频生成质量和 KV 压缩都不能直接证明世界模型更会规划；规划收益必须用 action sensitivity、closed-loop success、risk calibration 和 failure replay 单独验收。
 
 ## 10 分钟版
@@ -81,13 +91,16 @@
 
 <small>图源：[KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging](https://arxiv.org/abs/2603.00907)，Figure 1。原图意：AsymKV 依赖反向传播和近似 Hessian；KVSlimmer 用 forward-only 变量构造 Key 合并权重，避免 gradient 路径。</small>
 
-!!! note "这张图怎么读"
+!!! note "合并提示"
+    **note · 这张图怎么读**
+
     **输入输出**：输入是长上下文推理时积累的 K/V cache，输出是压缩后的 Key 与保留/处理后的 Value。  
     **效率机制**：利用 K/V 非对称性减少 cache memory 和 decoder latency，同时避免 backprop 额外开销。  
     **对主线意义**：world model rollout 可以考虑压远期 memory KV，但要保护动作分叉和风险关键帧。  
     **不能证明什么**：文本长上下文质量保持不能证明机器人动作候选排序和 risk recall 不变。
 
-!!! warning "读数边界"
+    **warning · 读数边界**
+
     KVSlimmer 的结果主要是长上下文文本任务和系统效率；用于世界模型时必须补 action sensitivity、top-k candidate agreement、risk ECE 和 failure replay。
 
 ## 链路四：流式视频不等于可规划世界模型
@@ -98,13 +111,16 @@ CausVid 提供了把高质量双向视频模型蒸馏成 causal streaming studen
 
 <small>图源：[From Slow Bidirectional to Fast Autoregressive Video Diffusion Models](https://arxiv.org/abs/2412.07772)，CausVid 机制图。原图意：将强 bidirectional video diffusion teacher 迁移/蒸馏为 causal autoregressive student，用少步生成和 KV cache 支持流式视频 rollout。</small>
 
-!!! note "这张图怎么读"
+!!! note "合并提示"
+    **note · 这张图怎么读**
+
     **输入输出**：输入是历史 chunk 和当前条件，输出是 causal student 逐 chunk 生成的未来视频。  
     **效率机制**：双向 teacher 保质量，causal student 保流式依赖，DMD 少步化降低首块延迟和持续 rollout 成本。  
     **对主线意义**：世界模型服务需要边生成边决策，不能每次等待完整视频离线生成。  
     **不能证明什么**：流式视频质量和 FPS 不能证明动作因果、规划收益或真实机器人闭环成功。
 
-!!! warning "读数边界"
+    **warning · 读数边界**
+
     CausVid 的强证据是视频生成质量、少步化和延迟；它不是动作条件控制论文。若接到 VLA，必须额外报告动作反事实、risk head、closed-loop success 和恢复失败样本。
 
 ## 上线验收表

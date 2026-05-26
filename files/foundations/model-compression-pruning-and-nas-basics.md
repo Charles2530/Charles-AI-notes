@@ -2,13 +2,31 @@
 
 模型压缩解决的是一个朴素但很硬的问题：强模型太慢、太大、太贵，能不能把它变成更适合部署的形态，同时尽量保住质量。
 
-!!! note "读法定位"
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“模型压缩、剪枝与 NAS 入门”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先回答“模型压缩、剪枝与 NAS”在「基础知识」里的位置：它把 teacher/student、参数量、MACs、latency 和部署 runtime 接起来。  
     **前置**：先知道张量 shape、feature、loss、梯度和基本推理成本。必要时先看 [模型蒸馏入门](model-distillation-basics.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) 和 [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。  
     **主线关系**：读高效推理论文时，本页帮你判断一个加速方法到底是在压参数、压乘加、改结构、改 runtime，还是只在离线指标上好看。
 
-!!! note "初学者先抓住"
+    **note · 初学者先抓住**
+
     模型更小不等于一定更快。真实 latency 取决于参数量、MACs、activation、显存带宽、kernel、算子融合、shape、batch 和 runtime。剪枝和 NAS 的目标不是让表格里某个数字变小，而是让真实热路径变便宜。
+
+<!-- [补充] -->
+```mermaid
+graph LR
+  A["输入或问题"] --> B["核心概念"]
+  B --> C["判断信号"]
+  C --> D["工程落点"]
+```
 
 ## 压缩方法地图
 
@@ -50,7 +68,7 @@ Fast-FoundationStereo 的有趣之处在于它没有只选一个方法：backbon
 h_{k-1} -> update block -> h_k
 ```
 
-如果上一轮输出的 hidden channels 被剪了，下一轮消费 \(h_{k-1}\) 的输入通道也必须同步调整。否则第 \(k\) 轮和第 \(k+1\) 轮的接口对不上。
+如果上一轮输出的 hidden channels 被剪了，下一轮消费 \(h_{k-1}\) 的输入通道也必须同步调整。这里 \(h_{k-1}\) 表示第 \(k-1\) 轮 refinement 留给下一轮的 hidden state；否则第 \(k\) 轮和第 \(k+1\) 轮的接口对不上。
 
 常见依赖约束包括：
 
@@ -73,6 +91,13 @@ Fast-FoundationStereo 的 refinement pruning 就属于这种情况：final dispa
 \[
 \Delta \mathcal{L}_i \approx \left| \frac{\partial \mathcal{L}}{\partial \theta_i} \theta_i \right|
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\Delta\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(\theta_i\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+
 
 读法是：如果参数本身大，且 loss 对它的梯度也大，删掉它可能更伤；如果这个乘积小，它可能不重要。
 
@@ -97,13 +122,6 @@ NAS（Neural Architecture Search）解决的是另一个问题：与其手工决
 
 假设 cost filtering 有 \(N\) 个 block。第 \(i\) 个 block 有多个候选 \(c\)。每个候选都测出两个数：
 
-| 符号 | 含义 |
-| --- | --- |
-| \(\Delta m_i^c\) | 候选 \(c\) 替换第 \(i\) 个 block 后的误差变化 |
-| \(\Delta t_i^c\) | 候选 \(c\) 替换第 \(i\) 个 block 后的 runtime 变化 |
-| \(e_i^c\) | 是否选择这个候选，通常是 one-hot 变量 |
-| \(\Delta \tau\) | 总 latency budget |
-
 搜索就可以写成一个组合优化问题：
 
 \[
@@ -113,6 +131,17 @@ NAS（Neural Architecture Search）解决的是另一个问题：与其手工决
 \quad
 \sum_{i,c} \Delta t_i^c e_i^c \leq \Delta \tau
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\Delta\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(\tau\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |
+| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(m_i^c\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(e_i^c\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 读作：在满足总耗时预算的前提下，选一组候选 blocks，让误差增加尽量小。
 

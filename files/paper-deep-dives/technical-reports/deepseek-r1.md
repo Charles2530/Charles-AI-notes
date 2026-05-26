@@ -6,22 +6,30 @@ paper_topic: 技术报告
 
 # DeepSeek-R1：RL 激发推理能力
 
+
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“DeepSeek-R1：RL 激发推理能力”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
 !!! note "读法定位"
     先按技术报告证据读：它证明 verifier + RL 能改变哪些推理行为，哪些训练成本和安全结论仍不能外推；背景回 [论文专题讲解](../index.md) 与 [Claim Ledger](../../references/claim-ledger.md)。
 
-!!! info "论文信息"
-    - 论文：`DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning`
-    - 模型：`DeepSeek-R1-Zero`、`DeepSeek-R1`、`DeepSeek-R1-Distill-*`
-    - 链接：[arXiv:2501.12948](https://arxiv.org/abs/2501.12948)
-    - 当前 arXiv 版本：`v2`，更新于 2026-01-04；初版提交于 2025-01-22
-    - 关键词：reasoning model、RLVR、GRPO、rule-based reward、long CoT、rejection sampling、SFT、distillation、reward hacking、test-time scaling
+    **论文信息**：`DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning`，arXiv:2501.12948，当前 `v2` 更新于 2026-01-04；关键词包括 RLVR、GRPO、rule-based reward、long CoT、rejection sampling、SFT、distillation、reward hacking 和 test-time scaling。
 
-这篇论文最重要的结论不是“DeepSeek-R1 分数很高”，而是：**只要任务有可靠 verifier，大模型可以通过大规模强化学习自己发现更长、更会反思、更会验证的推理行为，而不必先模仿人工写好的推理轨迹。**
+这篇论文的核心不是“R1 分数很高”，而是：**有可靠 verifier 时，大模型可以通过大规模 RL 自己发现更长、更会反思和验证的推理行为。**
 
-报告里有两条主线：`R1-Zero` 验证纯 RL 能否自然涌现推理行为，`R1` 则在此基础上加入 cold-start SFT、两阶段 RL、rejection sampling 和安全/有用性对齐。
+报告有两条主线：`R1-Zero` 验证纯 RL 能否涌现推理行为，`R1` 再加入 cold-start SFT、两阶段 RL、rejection sampling 和安全/有用性对齐。
 
 !!! warning "阅读边界"
-    这篇论文后来有 Nature 版本，但这里仍按论文/技术报告自述来读。训练成本、数据规模、RL 超参、benchmark 分数和安全结论都应理解为作者报告的系统结果，而不是第三方独立复现实验。
+    这里按论文/技术报告自述来读。训练成本、数据规模、RL 超参、benchmark 分数和安全结论都应理解为作者报告的系统结果，而不是第三方独立复现实验。
+
+<!-- [补充] -->
+> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 ## 论文位置
 
@@ -34,7 +42,7 @@ base model
   -> PPO or related RL algorithm
 ```
 
-这个流程适合指令跟随和偏好对齐，但复杂推理会受人工 reasoning trace 的风格和覆盖限制。R1-Zero 的核心问题是：不给人工推理轨迹，只给可验证题目和最终正确性奖励，模型能否自己学出反思、回溯和验证策略。这里的 `RLVR` reward 主要来自标准答案、编译器、测试用例或格式检查器，而不是人类偏好模型。
+这个流程适合指令跟随和偏好对齐，但复杂推理会受人工 reasoning trace 限制。R1-Zero 的核心问题是：不给人工推理轨迹，只给可验证题目和最终正确性奖励，模型能否自己学出反思、回溯和验证策略。这里的 `RLVR` reward 来自标准答案、编译器、测试用例或格式检查器，而不是人类偏好模型。
 
 ## 为什么强化学习是核心
 
@@ -44,24 +52,24 @@ base model
 | --- | --- | --- |
 | SFT | 模仿数据里的标准回答和推理写法 | 上限受数据质量、人工风格和标注覆盖限制 |
 | Preference RLHF | 更符合人类偏好、语气和安全要求 | reward model 容易偏好表面风格，难以精确评估长推理正确性 |
-| Rule-based RL / RLVR | 直接优化可验证任务的正确结果 | 需要可靠 verifier，开放式写作等任务很难直接套用 |
+| Rule-based RL / RLVR | 优化可验证任务的正确结果 | 需要可靠 verifier，开放式写作等任务很难直接套用 |
 
 对 LLM 来说，一个 RL 样本可以这样对应：
 
 | RL Term | DeepSeek-R1 里的对应 |
 | --- | --- |
 | state | prompt 加已经生成的 reasoning prefix |
-| action | 下一个 token，或者完整 response 里的 token 序列 |
-| trajectory | 从问题到 `<think>...</think><answer>...</answer>` 的完整输出 |
+| action | 下一个 token，或完整 response token 序列 |
+| trajectory | 从问题到最终答案的完整输出 |
 | reward | 最终答案正确性、代码测试、选择题匹配、格式和语言一致性 |
 | policy | 正在训练的 DeepSeek-V3-Base / R1 checkpoint |
 | reference policy | 用来约束 KL 的 reference model，训练中定期替换为最新 policy |
 
-这里最关键的是：reward 多数只在完整回答结束后出现。模型不会被逐步告诉“第 7 行推理对不对”，而是最后才知道答案是否正确。因此它必须通过采样探索出更容易拿高分的中间策略，比如检查、回溯、尝试替代解法和重新计算。
+这里最关键的是：reward 多数只在完整回答结束后出现。模型不会逐步知道“第 7 行推理对不对”，而是最后才知道答案是否正确。因此它必须通过采样探索更容易拿高分的中间策略，比如检查、回溯和重新计算。
 
 ## GRPO：不用 critic 的组内相对策略优化
 
-DeepSeek-R1 使用 `Group Relative Policy Optimization`，简称 GRPO。它的实用价值是：**不训练 value model / critic，而是对同一个问题采样一组回答，用组内奖励均值和标准差构造 advantage。**
+DeepSeek-R1 使用 `Group Relative Policy Optimization`，简称 GRPO。它的实用价值是：**不训练 value model / critic，而是对同一问题采样一组回答，用组内奖励均值和标准差构造 advantage。**
 
 ![GRPO 原图](../../assets/images/paper-deep-dives/technical-reports/deepseek-r1/figure-grpo.png){ width="920" }
 
@@ -70,7 +78,7 @@ DeepSeek-R1 使用 `Group Relative Policy Optimization`，简称 GRPO。它的�
 !!! note "这张图怎么读"
     PPO 通常需要 actor、reference、reward model 和 value model。value model 要预测某个前缀未来能拿多少 reward，这在长 CoT 任务里很难：模型前面写的内容可能后面被推翻，最终答案是否正确也常常只能在完整输出后判断。
 
-    GRPO 的做法更贴合可验证推理任务：同一道题一次采样多个答案，谁正确、谁格式更好、谁通过测试，就能在组内排出相对高低。这样不用额外训练一个和 policy 同规模的 critic，显存和算力压力更低，也少了 value target 估计错误带来的不稳定。
+    GRPO 更贴合可验证推理任务：同一道题一次采样多个答案，谁正确、谁格式更好、谁通过测试，就能在组内排出相对高低。这样不用额外训练同规模 critic，显存和算力压力更低，也少了 value target 估计错误带来的不稳定。
 
 论文里的 GRPO objective 写作：
 
@@ -91,6 +99,17 @@ $$
 \right].
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(\pi_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(\pi_{\theta_{old}\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(\epsilon\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(\beta\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(\pi_{ref}\) | 策略或概率分布 | 非负概率分布，总和为 1 |
+
+
 其中 advantage 由组内 reward 标准化得到：
 
 $$
@@ -98,24 +117,21 @@ A_i=\frac{r_i-\mathrm{mean}(\{r_1,\ldots,r_G\})}
 {\mathrm{std}(\{r_1,\ldots,r_G\})}.
 $$
 
-这几个符号可以直观理解成：
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(A_i\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(r_i\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(r_1\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(r_G\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 
-| Symbol | Meaning |
-| --- | --- |
-| \(q\) | 当前问题 |
-| \(o_i\) | 同一问题采样出的第 \(i\) 个回答 |
-| \(G\) | 每个问题采样的回答数量，R1 训练里常用 16 |
-| \(r_i\) | 第 \(i\) 个回答的 reward |
-| \(A_i\) | 这个回答相对同题其他回答好多少 |
-| \(\pi_{\theta_{old}}\) | 采样这批回答时的旧 policy |
-| \(\pi_{ref}\) | 用来限制策略漂移的 reference policy |
-| \(\epsilon\) | PPO/GRPO clip 范围 |
-| \(\beta\) | KL 约束强度 |
+
+这几个符号可以直观理解成：
 
 !!! note "为什么组内比较很适合数学和代码"
     数学题和代码题往往不是“每个中间步骤都可验证”，但最终答案或测试结果可以验证。对同一道题采样 16 个回答以后，正确答案天然比错误答案好；同样正确时，格式、语言一致性或执行结果也能进一步区分。GRPO 把这个相对信号直接变成 policy update，比训练一个 value model 去猜“这个前缀未来是否会成功”更直接。
 
-论文附录还比较了 PPO 和 GRPO。作者认为 PPO 如果仔细调 GAE 的 \(\lambda\) 也能接近 GRPO，但需要额外 hyperparameter tuning，而且 value model 训练本身会带来接近翻倍的计算和显存开销。
+论文附录还比较了 PPO 和 GRPO。作者认为 PPO 若仔细调 GAE 的 \(\lambda\) 也能接近 GRPO，但需要额外 tuning，且 value model 训练会带来接近翻倍的计算和显存开销。
 
 ## R1-Zero：从 base model 直接做纯 RL
 
@@ -136,6 +152,17 @@ R1-Zero 的 reward 由两部分构成：
 $$
 Reward_{rule}=Reward_{acc}+Reward_{format}.
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(a\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这行式子在说：规则奖励由正确性奖励 \(Reward_{acc}\) 和格式奖励 \(Reward_{format}\) 相加，前者看答案或代码测试是否通过，后者保证输出结构可解析。
 
 | Reward Type | How it is computed | Why it matters |
 | --- | --- | --- |
@@ -238,6 +265,18 @@ $$
 Reward_{language}=\frac{Num(Words_{target})}{Num(Words)}.
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(l\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(N\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+
+
+这行式子在说：目标语言词占比越高，语言混杂越少；\(Words_{target}\) 是目标语言词数，\(Words\) 是总词数。
+
 原论文配置如下：
 
 | Setup | Value |
@@ -270,15 +309,39 @@ $$
 Reward = Reward_{\text{reasoning}} + Reward_{\text{general}} + Reward_{\text{language}},
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+
+
+这行式子在说：第二阶段总奖励由推理正确性、通用偏好和语言一致性三类信号共同组成。
+
 其中：
 
 $$
 Reward_{\text{reasoning}}=Reward_{\text{rule}},
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+
+
+这里 \(Reward_{\text{reasoning}}\) 直接沿用 rule-based verifier，不再额外训练推理 reward model。
+
 $$
 Reward_{\text{general}}=Reward_{\text{reward\_model}}+Reward_{\text{format}}.
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+
+
+这行式子在说：通用奖励由 reward model 分数和格式奖励相加，分别约束偏好质量与输出结构。
 
 | Data type | Reward source | Training role |
 | --- | --- | --- |
@@ -418,7 +481,7 @@ SFT hyperparameters:
 | R1 training | same 64 * 8 H800 GPUs, about 80 hours |
 | SFT dataset creation | about 5K GPU hours |
 
-这个成本很值得单独看。R1 的结论不是“强化学习便宜”，而是“当 base model 足够强、verifier 足够可靠、系统吞吐足够高时，大规模 RL 可以比大规模人工 reasoning annotation 更可扩展”。
+这个成本说明：R1 的结论不是“强化学习便宜”，而是“当 base model 足够强、verifier 足够可靠、系统吞吐足够高时，大规模 RL 可能比人工 reasoning annotation 更可扩展”。
 
 ### 阶段效果：每个训练阶段改变了什么
 
@@ -557,7 +620,7 @@ DeepSeek-R1 和 InstructGPT 式 RLHF 都是后训练，但目标和奖励完全�
 
 ### 对项目的启发
 
-如果要把 DeepSeek-R1 的经验迁移到自己的训练项目，可以抽出几条实用原则：
+迁移到自己的训练项目时，优先抓这些原则：
 
 1. 先问任务有没有可靠 verifier。没有 verifier，不要盲目上大规模 RL。
 2. 对同一 prompt 多采样，才能让 GRPO/RLOO 一类方法得到有用相对信号。
@@ -582,10 +645,13 @@ DeepSeek-R1 最值得学习的地方，是它把“推理能力”重新放回�
   -> 涌现更长、更会反思和验证的推理行为
 ```
 
-但这条路线并不是所有任务的通用答案。它在数学、代码、STEM、逻辑等可验证任务上最强；一旦进入开放式写作、安全偏好或真实工具任务，reward 可靠性、环境成本和 reward hacking 会重新成为核心瓶颈。更准确地说，DeepSeek-R1 证明了：**当正确性可以自动验证时，强化学习可以把大模型从“模仿推理”推向“通过试错发现推理策略”。**
+但这条路线不是所有任务的通用答案。它在数学、代码、STEM、逻辑等可验证任务上最强；进入开放式写作、安全偏好或真实工具任务后，reward 可靠性、环境成本和 reward hacking 会重新成为核心瓶颈。更准确地说，DeepSeek-R1 证明了：**当正确性可以自动验证时，强化学习可以把大模型从“模仿推理”推向“通过试错发现推理策略”。**
 
-!!! info "本站判断"
+!!! note "合并提示"
+    **info · 本站判断**
+
     DeepSeek-R1 要按可验证推理训练闭环读：方法重点是 GRPO/RLVR、rule-based reward、cold-start SFT 和蒸馏；实验看 AIME/MATH/Code/知识 benchmark 与语言一致性消融。它最能迁移到有 verifier 的任务，开放式偏好和工具任务要另验。
 
-!!! tip "下一站"
+    **tip · 下一站**
+
     - 回到 [论文专题讲解](../index.md) 横向比较，或继续读 [Qwen3：Thinking 与蒸馏](qwen3.md)。

@@ -11,11 +11,14 @@ from pathlib import Path
 
 
 ROOT = Path("files/paper-deep-dives")
-MAX_CHARS = 25000
-NEAR_LONG_CHARS = 24000
+MAX_CHARS = 30000
+NEAR_LONG_CHARS = 28500
 SHORT_HINT_CHARS = 12000
 
-JUDGEMENT_RE = re.compile(r'^!!!\s+info\s+"本站判断"', re.MULTILINE)
+JUDGEMENT_RE = re.compile(
+    r'(^!!!\s+info\s+"本站判断"|^\s+\*\*info · 本站判断\*\*)',
+    re.MULTILINE,
+)
 SECOND_PASS_RE = re.compile(r'二轮补强：方法和实验抓手')
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\(")
 FIGURE_READING_RE = re.compile(
@@ -89,19 +92,21 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=ROOT, help="paper deep-dive root")
     args = parser.parse_args()
 
+    pages = iter_pages(args.root)
     findings: list[Finding] = []
-    for page in iter_pages(args.root):
+    for page in pages:
         findings.extend(audit_page(page, include_hints=args.include_hints))
 
     errors = [item for item in findings if item.severity == "error"]
     hints = [item for item in findings if item.severity == "hint"]
 
     if findings:
+        print(f"Scanned {len(pages)} paper deep-dive pages under {args.root}/")
         print("Paper deep-dive audit findings:")
         for item in findings:
             print(f"- [{item.severity}] {item.path}: {item.reason}")
     else:
-        print("Paper deep-dive audit passed.")
+        print(f"Paper deep-dive audit passed. Scanned {len(pages)} pages under {args.root}/")
 
     if hints and not errors:
         print(f"Hints only: {len(hints)}")

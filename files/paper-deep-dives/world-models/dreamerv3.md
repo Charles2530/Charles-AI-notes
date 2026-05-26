@@ -6,12 +6,24 @@ paper_topic: 世界模型
 
 # DreamerV3：跨域通用世界模型
 
-!!! note "读法定位"
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“DreamerV3：跨域通用世界模型”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
     **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
     **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
 
-!!! info "论文信息"
+    **info · 论文信息**
+
     - 论文：`Mastering Diverse Domains through World Models`
     - 系统：`DreamerV3`
     - 链接：[arXiv:2301.04104](https://arxiv.org/abs/2301.04104)
@@ -86,10 +98,13 @@ DreamerV3 的主要贡献不是换一个更大的 backbone，而是把 world mod
 
 <small>Figure source: `Mastering Diverse Domains through World Models`, Figure 3(b). 原论文图注要点：actor 和 critic 在 world model 预测出的抽象表示轨迹上学习动作与价值，重建目标用于塑造 latent representation。</small>
 
-!!! note "训练流程图怎么读"
+!!! note "合并提示"
+    **note · 训练流程图怎么读**
+
     第一张图讲世界模型如何学环境：posterior 看真实观测，prior 在没有未来观测时按动作预测 latent；第二张图讲策略如何在 imagined rollout 上学动作和价值。DreamerV3 的关键是把真实交互压成 replay，再把 replay 变成大量 latent imagination 训练信号。图不能证明 imagination 永远可靠，长 horizon 仍要靠 value bootstrap、discount 和模型误差控制。
 
-!!! note "这两张 DreamerV3 图要一起读"
+    **note · 这两张 DreamerV3 图要一起读**
+
     第一张图负责 world model learning：模型从真实观测中学习 latent representation、recurrent dynamics、reward 和 continuation。第二张图负责 behavior learning：actor 和 critic 不直接在真实环境里反复试错，而是在 world model 的 imagined latent trajectories 上训练。
 
     两张图之间的分工是 Dreamer 系列的核心。world model 要足够准，才能让 imagined rollout 有训练价值；actor/critic 又必须只通过 imagined trajectories 学策略，不能把 world model 当成可随意修改的捷径。DreamerV3 的贡献不是换一个单独模块，而是把这套 pipeline 做到跨 Atari、DM Control、Minecraft 等差异很大的任务仍能用同一组超参工作。
@@ -104,19 +119,62 @@ $$
 h_t = f_\phi(h_{t-1}, z_{t-1}, a_{t-1})
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(h_{t-1}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(z_{t-1}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(a_{t-1}\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+
+
+这行式子表示 recurrent dynamics：用上一时刻记忆 \(h_{t-1}\)、上一 latent \(z_{t-1}\) 和上一动作 \(a_{t-1}\)，更新当前确定性状态 \(h_t\)。\(f_\phi\) 是 RSSM 里的递归网络。
+
 $$
 z_t \sim q_\phi(z_t \mid h_t, x_t)
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(q\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
+
 $$
 \hat{z}_t \sim p_\phi(\hat{z}_t \mid h_t)
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\hat{z}_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 $$
 \hat{r}_t \sim p_\phi(\hat{r}_t \mid h_t, z_t), \quad
 \hat{c}_t \sim p_\phi(\hat{c}_t \mid h_t, z_t), \quad
 \hat{x}_t \sim p_\phi(\hat{x}_t \mid h_t, z_t)
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\hat{r}_t\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(\hat{c}_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(\hat{x}_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 这里的 \(x_t\) 是观测，\(a_t\) 是动作，\(r_t\) 是奖励，\(c_t\) 是 episode continuation flag。训练阶段 encoder 可以看到真实观测得到 posterior \(q_\phi(z_t \mid h_t, x_t)\)，但 imagined rollout 阶段没有未来观测，只能用 dynamics predictor \(p_\phi(z_t \mid h_t)\) 自己往前滚。
 
@@ -133,6 +191,19 @@ $$
 -\ln p_\phi(c_t \mid z_t,h_t)
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(r_t\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+
+
+这项表示 prediction loss：给定 latent \(z_t\) 和 recurrent state \(h_t\)，模型要同时解释观测 \(x_t\)、奖励 \(r_t\) 和 continuation \(c_t\)。负对数越小，说明这些预测分布给真实目标的概率越高。
+
 $$
 \mathcal{L}_{dyn}(\phi) =
 \max\left(1,
@@ -141,6 +212,19 @@ $$
 \| p_\phi(z_t \mid h_t)
 \right]\right)
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(q\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
+
+这项表示 dynamics loss：把 posterior \(q_\phi(z_t \mid h_t,x_t)\) 当作目标，让不看当前观测的 prior \(p_\phi(z_t \mid h_t)\) 学会预测它。这里 \(\operatorname{sg}\) 是 stop-gradient，避免这项反向推动 encoder。
 
 $$
 \mathcal{L}_{rep}(\phi) =
@@ -151,7 +235,18 @@ q_\phi(z_t \mid h_t,x_t)
 \right]\right)
 $$
 
-三项的分工很清楚：
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(q\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
+
+这项表示 representation loss：反过来约束 posterior 不要编码成 prior 完全追不上的任意细节。三项的分工很清楚：
 
 1. `prediction loss` 让 \(h_t,z_t\) 能重建观测、预测奖励和预测是否继续；
 2. `dynamics loss` 让 prior \(p_\phi(z_t \mid h_t)\) 学会预测 posterior 表示；
@@ -181,11 +276,23 @@ $$
 \operatorname{symlog}(x) = \operatorname{sign}(x)\ln(|x|+1)
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
+
 对应反变换为：
 
 $$
 \operatorname{symexp}(x) = \operatorname{sign}(x)(\exp(|x|)-1)
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
 
 具体用法是：
 
@@ -213,11 +320,28 @@ $$
 s_t, a_t \rightarrow s_{t+1}, r_{t+1}, c_{t+1}
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(s_t\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(a_t\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(s_{t+1}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(r_{t+1}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(c_{t+1}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 而不是只回答：
 
 $$
 x_t \rightarrow x_{t+1}
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(x_{t+1}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
 
 这也是 DreamerV3 和视频生成型世界模型的根本区别。
 
@@ -248,6 +372,17 @@ r_t + \gamma c_t ((1-\lambda)v_t + \lambda R^\lambda_{t+1}),
 \quad R^\lambda_T = v_T
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\lambda_t\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(\gamma\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
+| \(\lambda\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(\lambda_{t+1}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(\lambda_T\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+
+
 其中 \(\gamma = 0.997\)，prediction horizon \(T = 16\)。continue flag \(c_t\) 在这里很重要：如果模型预测 episode 已经终止，未来回报不应该继续无条件累加。
 
 actor 使用 Reinforce estimator，同一套形式覆盖离散动作和连续动作。为了让 entropy regularizer 可以跨域固定，DreamerV3 对 return scale 做归一化：用 batch 中 \(R^\lambda_t\) 的 95th percentile 和 5th percentile 差值估计范围，并用 EMA 平滑。
@@ -266,6 +401,10 @@ actor 使用 Reinforce estimator，同一套形式覆盖离散动作和连续动
 这说明 DreamerV3 的策略学习并不是“world model 预测未来帧，然后策略看未来帧”。它更像是把真实环境压缩成一个可微、可采样的 latent simulator，actor 和 critic 直接在这个内部模拟器上学习。
 
 ## 实验结论
+
+<!-- [补充] -->
+> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+
 
 DreamerV3 的实验结论主要支持三点。
 
@@ -310,11 +449,31 @@ $$
 s_t, a_t \rightarrow s_{t+1}, r_{t+1}, c_{t+1}
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(s_t\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(a_t\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(s_{t+1}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(r_{t+1}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(c_{t+1}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 DreamZero 学的是：
 
 $$
 o_{\le t}, q_t, c \rightarrow o_{t:t+H}, a_{t:t+H}
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(o_{t}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(q_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(o_{t:t+H}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(a_{t:t+H}\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+
 
 所以 DreamerV3 是 dynamics-first：先建模世界，再在 imagined latent dynamics 里训练 policy。DreamZero 是 WAM/policy 融合：模型联合预测未来视频和动作，并把 WAM 直接部署成 zero-shot policy。
 
@@ -334,10 +493,13 @@ DreamerV3 的局限也很清楚。它需要环境交互轨迹和 reward/continua
 
 一句话概括：DreamerV3 展示的是 `latent dynamics / model-based RL` 世界模型的成熟形态。它把世界模型从“预测未来的表示器”推进到“能支撑策略学习的内部模拟器”。
 
-!!! info "本站判断"
+!!! note "合并提示"
+    **info · 本站判断**
+
     DreamerV3 要按跨域鲁棒化读：方法核心是 symlog、twohot、free bits、离散 latent 和固定超参；实验看 Atari、DMC、Minecraft 等多域表现。它给世界模型 RL 提供强 baseline，但开放具身任务仍要补感知、动作和安全证据。
 
-!!! tip "下一站"
+    **tip · 下一站**
+
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
     - 按导航顺序继续：[H-JEPA：层级 JEPA 与潜变量 EBM](h-jepa.md)。

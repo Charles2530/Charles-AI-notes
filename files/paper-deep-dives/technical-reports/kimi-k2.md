@@ -6,12 +6,25 @@ paper_topic: 技术报告
 
 # Kimi K2：MuonClip、万亿 MoE 与 Agent 数据
 
-!!! note "读法定位"
+
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“Kimi K2：MuonClip、万亿 MoE 与 Agent 数据”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
     **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
     **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
 
-!!! info "报告信息"
+    **info · 报告信息**
+
     - 技术报告：`Kimi K2: Open Agentic Intelligence`
     - 模型：`Kimi-K2-Base`、`Kimi-K2-Instruct`
     - 链接：[arXiv:2507.20534](https://arxiv.org/abs/2507.20534)
@@ -122,6 +135,13 @@ $$
 \operatorname{softmax}\left(\frac{1}{\sqrt d}QK^\top\right).
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(Q\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 如果 \(W_q\) 或 \(W_k\) 的谱范数持续长大，\(QK^\top\) 的最大值会爆，softmax 进入极端饱和区，训练可能出现 loss spike 甚至 divergence。报告指出，logit soft-cap 是在 logits 已经算出来后截断；QK-Norm 又不适合 MLA，因为 MLA 的 Key matrices 在推理时不是完全 materialized。因此 K2 采用 QK-Clip：**在参数更新后，根据每个 attention head 的最大 logit 反向缩放 query/key projection weights。**
 
 论文中的 max logit 定义为：
@@ -132,6 +152,17 @@ S_{\max}^{h}=
 \max_{\mathbf X\in B}\max_{i,j}
 \mathbf Q_i^{h}\mathbf K_j^{h\top}.
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(S_{}^{h}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(X\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(j\) | 优化目标 | 实数标量，通常越大或越小由正文定义 |
+
 
 当某个 head 的 \(S_{\max}^{h}>\tau\) 时，用 \(\gamma_h=\min(1,\tau/S_{\max}^{h})\) 做 per-head 缩放。对 MLA，报告只裁剪 unshared head components：\(\mathbf q^C\)、\(\mathbf k^C\)、\(\mathbf q^R\)，不动 shared rotary \(\mathbf k^R\)，避免一个 head 的裁剪影响其他 heads。
 
@@ -297,6 +328,17 @@ r(x,y_i)-\bar r(x)
 \right],
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(\tau\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |
+| \(\pi_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(\pi_{\mathrm{old}\) | 策略或概率分布 | 非负概率分布，总和为 1 |
+| \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(E_{xD}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 其中 \(\bar r(x)\) 是同一问题采样回答的平均奖励，\(\tau\) 是稳定学习的正则项。直觉上，它仍然利用“同题多样本的相对奖励”来训练 policy，但形式不是 PPO clipping，而是把奖励优势和 policy log-ratio 正则放进平方目标里。
 
 RL 数据覆盖几类任务：
@@ -354,6 +396,10 @@ Agentic rollout 还有两个额外问题。第一，环境反馈可能很慢，�
     这意味着训练系统要同时管理 GPU 推理、环境服务、沙箱隔离、长 trajectory、失败恢复、权重更新和数据回流。K2 报告里的 checkpoint engine、partial rollout、Gym-like interface 都是在解决这个系统层问题。
 
 ## 评测结果
+
+<!-- [补充] -->
+> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+
 
 Kimi K2 的评测分为 Kimi-K2-Instruct 和 Kimi-K2-Base。Instruct 评测强调 non-thinking setting，并覆盖 coding、tool use、math/STEM、general、long-context、factuality 等任务。
 
@@ -415,10 +461,13 @@ Kimi K2 给工程项目的启发主要有五条：
 
 一句话总结：**Kimi K2 的价值不是某个单点 benchmark，而是给出了一条 open agentic model 的完整工程路线：用 MuonClip 跑稳 1T MoE 预训练，用高 sparsity 提升 token efficiency，用合成工具数据和真实环境补齐 agent 行为，再用 verifiable rewards + self-critique reward + RL 系统基础设施把模型推向多步任务执行。**
 
-!!! info "本站判断"
+!!! note "合并提示"
+    **info · 本站判断**
+
     Kimi-K2 要按 MoE、MuonClip、工具数据和 RL 系统协同读；复用前验工具成功率、稳定性和成本。
 
-!!! tip "下一站"
+    **tip · 下一站**
+
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
     - 按导航顺序继续：[Nemotron 3 Super：异步 RL](nemotron-3-super.md)。

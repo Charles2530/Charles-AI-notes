@@ -1,7 +1,7 @@
 MKDOCS ?= $(shell [ -x ./docs/bin/mkdocs ] && echo ./docs/bin/mkdocs || echo mkdocs)
 DEV_ADDR ?= 127.0.0.1:8000
 
-.PHONY: serve serve-fast serve-clean build quality quality-hints paper-quality image-quality clean-appledouble
+.PHONY: serve serve-fast serve-clean build quality quality-hints quality-pages paper-quality image-quality clean-appledouble
 
 serve: clean-appledouble
 	$(MKDOCS) serve --livereload --open --dev-addr=$(DEV_ADDR)
@@ -21,6 +21,10 @@ quality:
 
 quality-hints:
 	python scripts/content_quality_report.py --include-hints
+	python scripts/paper_deep_dive_audit.py --include-hints
+
+quality-pages:
+	python scripts/content_quality_report.py --include-hints --list-pages
 	python scripts/paper_deep_dive_audit.py --include-hints
 
 paper-quality:

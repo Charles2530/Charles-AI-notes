@@ -17,7 +17,7 @@ EXCLUDED_PARTS = {
 }
 
 MIN_CHARS = 2500
-MAX_CHARS = 25000
+MAX_CHARS = 30000
 MAX_H2 = 18
 MAX_H3 = 60
 
@@ -58,6 +58,12 @@ HTML_LINK_RE = re.compile(r"<a\s+[^>]*href=[\"']([^\"']+)[\"']", re.IGNORECASE)
 HTML_IMAGE_RE = re.compile(r"<img\s+[^>]*src=[\"']([^\"']+)[\"']", re.IGNORECASE)
 SOURCE_CAPTION_RE = re.compile(r"(图源|图片来源|表源|Source|source|原论文图|官方截图)")
 FENCED_CODE_RE = re.compile(r"(^|\n)```.*?(\n```|$)", re.DOTALL)
+INLINE_MATH_RE = re.compile(r"\\\(.+?\\\)")
+FORMULA_EXPLANATION_RE = re.compile(
+    r"(符号含义|公式片段|白话读法|读作什么|读作|这行式子在说|这两行式子在说|逐项读法|槽位|"
+    r"其中|这里|表示|含义|变量|参数|条件|优化对象|拆开读|"
+    r"定义为|写成|可以写成|估算|计算|满足|等于|约为|近似|是)"
+)
 
 
 @dataclass
@@ -167,6 +173,55 @@ def image_has_nearby_source(lines: list[str], line_index: int) -> bool:
     return bool(SOURCE_CAPTION_RE.search(window))
 
 
+def has_formula_explanation_nearby(lines: list[str], start: int, end: int) -> bool:
+    window_start = max(0, start - 4)
+    window_end = min(len(lines), end + 10)
+    window = "\n".join(lines[window_start:window_end])
+    return bool(FORMULA_EXPLANATION_RE.search(window))
+
+
+def iter_display_formula_blocks(lines: list[str]) -> list[tuple[int, int]]:
+    blocks: list[tuple[int, int]] = []
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        delimiter = ""
+        if stripped == r"\[":
+            delimiter = r"\]"
+        elif stripped == "$$":
+            delimiter = "$$"
+
+        if not delimiter:
+            index += 1
+            continue
+
+        start = index
+        index += 1
+        while index < len(lines) and lines[index].strip() != delimiter:
+            index += 1
+        end = index if index < len(lines) else len(lines) - 1
+        blocks.append((start, end))
+        index += 1
+
+    return blocks
+
+
+def inline_formula_context_hint_count(lines: list[str]) -> int:
+    missing_context = 0
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith("|"):
+            continue
+
+        inline_math_count = len(INLINE_MATH_RE.findall(line))
+        if inline_math_count < 3:
+            continue
+
+        if not has_formula_explanation_nearby(lines, index, index + 1):
+            missing_context += 1
+
+    return missing_context
+
+
 def iter_markdown_pages() -> list[Path]:
     pages: list[Path] = []
     for path in DOCS_ROOT.rglob("*.md"):
@@ -254,6 +309,19 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
         if unsourced_images:
             flags.append(f"hint:image-without-nearby-source:{len(unsourced_images)}")
 
+        searchable_lines = searchable_text.splitlines()
+        unexplained_display_formulae = [
+            (start, end)
+            for start, end in iter_display_formula_blocks(searchable_lines)
+            if not has_formula_explanation_nearby(searchable_lines, start, end)
+        ]
+        if unexplained_display_formulae:
+            flags.append(f"hint:formula-context:{len(unexplained_display_formulae)}")
+
+        inline_hint_count = inline_formula_context_hint_count(searchable_lines)
+        if inline_hint_count:
+            flags.append(f"hint:inline-formula-context:{inline_hint_count}")
+
     return PageReport(path=path, chars=len(text), h2=len(h2_lines), h3=len(h3_lines), flags=flags)
 
 
@@ -295,6 +363,11 @@ def main() -> int:
         action="store_true",
         help="also report lower-priority style hints such as missing local links",
     )
+    parser.add_argument(
+        "--list-pages",
+        action="store_true",
+        help="print every markdown page included in the scan",
+    )
     args = parser.parse_args()
 
     reports = [analyze(path, include_hints=args.include_hints) for path in iter_markdown_pages()]
@@ -308,6 +381,15 @@ def main() -> int:
         f"short<{MIN_CHARS} chars, long>{MAX_CHARS} chars, "
         f"h2>{MAX_H2}, h3>{MAX_H3}"
     )
+    if EXCLUDED_PARTS:
+        excluded = ", ".join(sorted(EXCLUDED_PARTS))
+        print(f"Excluded directories: {excluded}")
+
+    if args.list_pages:
+        print("\nScanned pages:")
+        for report in sorted(reports, key=lambda item: item.path.as_posix()):
+            rel = report.path.as_posix()
+            print(f"- {rel}: chars={report.chars}, h2={report.h2}, h3={report.h3}")
 
     if not flagged:
         print("No content quality warnings.")

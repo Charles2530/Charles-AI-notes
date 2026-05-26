@@ -2,12 +2,22 @@
 
 双目匹配（stereo matching）解决的是一个很具体的问题：给定同一时刻、已经校正的左右两张图，估计每个像素在左右图中的水平位移，也就是 disparity，再把 disparity 转成深度。
 
-!!! note "读法定位"
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“双目匹配与 Cost Volume 入门”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先回答“双目匹配与 cost volume”在「具身智能」里的位置：它把相机几何里的 baseline / disparity，接到深度网络里的 feature、cost volume、filtering 和 refinement。  
     **前置**：先看 [相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)，知道双目深度公式、内参、外参和标定。视觉网络不熟时回 [卷积与视觉特征](../foundations/convolution-and-feature-extraction.md)。  
     **主线关系**：读 [Fast-FoundationStereo](../paper-deep-dives/inference/fast-foundation-stereo.md) 时，本页负责解释 stereo matching pipeline、cost volume 和评测指标。
 
-!!! note "初学者先抓住"
+    **note · 初学者先抓住**
+
     双目匹配不是“直接预测一张深度图”这么简单。它先在左右图之间为每个像素搜索可能的匹配位移，把这些候选位移堆成 cost volume，再用网络判断哪一个 disparity 最可信。现代 stereo 网络的大部分计算，正是花在 cost volume 的构造、过滤和细化上。
 
 ## 一句话流程
@@ -34,18 +44,19 @@ left / right rectified images
 
 ## 符号卡
 
-| 符号 / 术语 | 含义 |
-| --- | --- |
-| \(I_L, I_R\) | 左图和右图 |
-| \((u,v)\) | 图像像素坐标，\(u\) 是横向位置，\(v\) 是纵向位置 |
-| \(d\) | disparity，左右图同一点的横向像素位移 |
-| \(D\) | 最大搜索 disparity，也就是候选位移范围 |
-| \(f\) | 相机焦距，通常来自内参 |
-| \(B\) | 左右相机 baseline |
-| \(z\) | 深度，常用 \(z = fB / d\) 近似理解 |
-| `rectification` | 把左右图校正到同一水平扫描线，方便只沿横向搜索 |
-| `cost volume` | 每个像素、每个 disparity 候选的匹配代价或匹配特征 |
-| `refinement` | 在初始 disparity 基础上迭代修正边界、遮挡和细节 |
+<!-- [补充] -->
+| 符号 / 术语 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(I_L, I_R\) | 左图和右图 | 图像张量 |
+| \((u,v)\) | 图像像素坐标，\(u\) 是横向位置，\(v\) 是纵向位置 | 图像宽高范围内的整数或亚像素坐标 |
+| \(d\) | disparity，左右图同一点的横向像素位移 | 非负像素位移 |
+| \(D\) | 最大搜索 disparity，也就是候选位移范围 | 正整数或预设搜索上界 |
+| \(f\) | 相机焦距，通常来自内参 | 正实数 |
+| \(B\) | 左右相机 baseline | 正实数，单位随标定数据 |
+| \(z\) | 深度，常用 \(z = fB / d\) 近似理解 | 正实数，\(d>0\) 时有效 |
+| `rectification` | 把左右图校正到同一水平扫描线，方便只沿横向搜索 | 几何预处理步骤 |
+| `cost volume` | 每个像素、每个 disparity 候选的匹配代价或匹配特征 | 张量，形状由分辨率和 \(D\) 决定 |
+| `refinement` | 在初始 disparity 基础上迭代修正边界、遮挡和细节 | 后处理或网络模块 |
 
 ## Rectified Stereo Pair 是什么
 
@@ -82,6 +93,13 @@ right:  candidate pixels at (u - d, v), d = 0 ... D
 z = \frac{fB}{d}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(z\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 它说明一个残酷事实：远处 \(d\) 很小，1 个像素的 disparity 误差会放大成很大的深度误差。所以 stereo benchmark 常常同时看近处边界、远处区域、遮挡区域和低纹理区域。
 
 ## Cost Volume 是什么
@@ -94,11 +112,27 @@ cost volume 可以理解为一张“像素到候选 disparity 的评分表”。
 \mathbf{V} \in \mathbb{R}^{C \times D \times H \times W}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(C\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 或在下采样后写成：
 
 \[
 \mathbf{V} \in \mathbb{R}^{C \times \frac{D}{s} \times \frac{H}{s} \times \frac{W}{s}}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(C\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+
 
 这里 \(C\) 是 cost volume 的通道数，\(D\) 是 disparity 候选数，\(H,W\) 是空间分辨率，\(s\) 是下采样倍率。
 

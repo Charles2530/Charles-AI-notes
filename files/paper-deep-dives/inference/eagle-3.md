@@ -6,12 +6,24 @@ paper_topic: 高效推理
 
 # EAGLE-3：Training-time Test 的投机推理加速
 
-!!! note "读法定位"
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“EAGLE-3：Training-time Test 的投机推理加速”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [推理](../../inference/index.md)。
     **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
     **主线关系**：读完后把结论回填到「推理」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
 
-!!! info "论文信息"
+    **info · 论文信息**
+
     - 论文：`EAGLE-3: Scaling up Inference Acceleration of Large Language Models via Training-Time Test`
     - 链接：[arXiv:2503.01840](https://arxiv.org/abs/2503.01840)
     - 代码：[GitHub: SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)
@@ -64,13 +76,16 @@ EAGLE-3 的改动有三件：
 
 <small>图源：`EAGLE-3`，Figure 1。原论文图意：在 LLaMA-Instruct 3.1 8B + MT-bench 上，EAGLE 随 draft 训练数据增加的收益有限，而 EAGLE-3 的 speedup 和 acceptance length 随数据规模继续提高。</small>
 
-!!! note "这张图怎么读"
+!!! note "合并提示"
+    **note · 这张图怎么读**
+
     **输入输出**：输入是训练时 test 特征、草稿模型和目标模型状态，输出是更贴近测试分布的 draft token。  
     **效率机制**：训练时模拟 test 行为，提升 draft acceptance，从而压低 decode 成本。  
     **对主线意义**：它把投机解码从纯 serving trick 拉回训练-推理一致性问题。  
     **不能证明什么**：acceptance 提升不能替代答案质量、长上下文稳定性或 agent 安全评测。
 
-!!! note "这张图怎么读"
+    **note · 这张图怎么读**
+
     横轴是相对 ShareGPT 的训练数据规模，纵轴分别看 speedup 和 average acceptance length。EAGLE-3 的关键不是“某个点更高”，而是斜率还在：draft model 训练数据增加后，线上可接受 token 数也继续增加。
 
 ## 方法主线：为什么叫 Training-time Test
@@ -165,6 +180,10 @@ EAGLE-3 继承 EAGLE-2 的动态 draft tree。Appendix 里给出的对照设置�
 工程含义是：EAGLE-3 不只是让每个 draft token 更准，还让更深的候选树变得值得验证。tree 更深时，verify 仍需 target model 高效并行处理，否则理论 acceptance 不能完全转成端到端吞吐。
 
 ## 实验设置：模型、任务和系统
+
+<!-- [补充] -->
+> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+
 
 论文覆盖了多个 target model 和任务：
 
@@ -299,10 +318,13 @@ EAGLE-3 因此适合放在高效推理专题里：它把“投机解码”从一
 
 这一页最后回到三个验收点：方法上，EAGLE-3 去掉 feature prediction constraint，改用 direct token prediction，并在训练时模拟多步测试分布。实验上，scaling law、training-time test 和 acceptance-rate 图说明收益来自 draft 模型表达力与分布对齐。诊断上，仍需 target verification 保证 lossless；更强 draft 不等于可以跳过验证。
 
-!!! info "本站判断"
+!!! note "合并提示"
+    **info · 本站判断**
+
     EAGLE-3 要读成训练目标升级：方法核心是 direct token prediction、training-time test 和多步分布对齐；实验看 scaling law、speedup、acceptance 与训练时间消融。它提升 draft 可扩展性，但仍依赖标准 verification 保持输出分布。
 
-!!! tip "下一站"
+    **tip · 下一站**
+
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[推理](../../inference/index.md)。
     - 按导航顺序继续：[Fast-FoundationStereo：实时双目匹配](fast-foundation-stereo.md)。

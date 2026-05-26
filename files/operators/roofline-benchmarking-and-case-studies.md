@@ -2,6 +2,13 @@
 
 做算子优化时，最常见的失败不是“技术不够强”，而是没有先判断瓶颈类型，benchmark 设计不可靠，看到局部提速就误以为端到端受益，或者没有把案例还原成通用方法。
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“Roofline 建模与性能案例”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“Roofline 建模与性能案例”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
@@ -11,11 +18,17 @@
 
 这页适合和 [GEMM 与 Attention Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) 一起读。前者提供热点算子的具体结构，后者解释 tile、program id 和 autotune 如何落到实现；Roofline 则负责先判断该往算力、带宽、layout 还是 launch 开销上用力。
 
-!!! note "初学者先抓住"
+!!! note "合并提示"
+    **note · 初学者先抓住**
+
     Roofline 的第一作用是判断瓶颈方向：到底该追算力，还是该减少数据搬运。没有这个判断，优化很容易用错力。
 
-!!! example "有趣例子：工厂产线"
+    **example · 有趣例子：工厂产线**
+
     如果工人已经很快但原料送不上来，继续培训工人没用；如果原料充足但机器算得慢，才该升级设备。Roofline 就是在判断 bottleneck 是算力还是带宽。
+
+<!-- [补充] -->
+> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## Roofline 的真正用途
 
@@ -30,6 +43,14 @@ $$
 \le
 \min(\text{Peak FLOPs}, \text{Bandwidth} \times \text{Arithmetic Intensity}).
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
+这行式子在说：实际性能不会超过两个上限中更小的那个。`Peak FLOPs` 是硬件计算峰值；`Bandwidth × Arithmetic Intensity` 是按数据搬运能力推出来的带宽上限；Arithmetic Intensity 表示每搬 1 byte 数据能做多少 FLOPs。
 
 ### 1.1 算术强度为什么重要
 
@@ -58,9 +79,27 @@ $$
 \approx0.54GFLOPs
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(Q\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这行式子在估算 \(QK^\top\) 的乘加主项：\(B\) 是 batch size，\(H\) 是 head 数，\(T\) 是历史 KV 长度，\(D\) 是 head dim；前面的 2 是常见 FLOPs 口径里一次乘加约等于 2 个 FLOPs。
+
 \[
 \text{FLOPs}_{PV}\approx0.54GFLOPs
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+
 
 所以总计算量约 \(1.07GFLOPs\)。而 KV 读取量约为：
 
@@ -68,6 +107,16 @@ $$
 \text{Bytes}_{KV}=2\times B\times H\times T\times D\times2
 \approx1.0GiB
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 其中前面的 2 表示 K 和 V，最后的 2 表示 BF16 每元素 2 bytes。Q、输出和少量 scale / metadata 相比 KV 读取很小，可以先忽略。
 
@@ -77,11 +126,27 @@ $$
 AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(A\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(b\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这里 \(AI\) 是 arithmetic intensity，分子是总计算量，分母是主要 HBM 读写量；它越低，越说明每搬一次数据只做很少计算。
+
 如果目标 GPU 的有效 HBM 带宽按 2.5TB/s 估算，那么 roofline 给出的带宽上限大约是：
 
 \[
 2.5TB/s\times1FLOP/byte\approx2.5TFLOP/s
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(b\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 这远低于现代 GPU 的峰值 Tensor Core 算力，说明这个 decode attention 更像 bandwidth-bound，而不是 compute-bound。优化方向应优先减少 KV 读取、改善 KV layout、分页连续性、向量化加载、cache 命中和 dequant 融合，而不是只盯着 matmul 峰值算力。
 
@@ -93,9 +158,23 @@ AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 \text{Measured bandwidth}=\frac{1.0GiB}{0.55ms}\approx1.95TB/s
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+
+
 \[
 \text{Achieved FLOPs}=\frac{1.07GFLOPs}{0.55ms}\approx1.95TFLOP/s
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+
+
+这两行式子分别把“搬了多少数据”和“做了多少计算”除以实测 latency。前者看是否接近 HBM 带宽，后者看是否接近计算峰值；两个指标一起看，才能判断瓶颈是不是和 roofline 预测一致。
 
 这两个数字都接近 bandwidth-bound roofline 的判断：不是 FLOPs 太少，而是每一步都要扫一大段 KV。此时如果换成 FP8 / INT8 KV，把 KV bytes 理论上减半到约 0.5GiB，理想 latency 是 0.275ms。但真实可能只降到 0.33ms，因为还要付 scale 读取、dequant、layout 对齐、page table 和 softmax 等开销。
 
@@ -122,11 +201,25 @@ AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 32\times(0.55-0.33)=7.04ms
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
+这行式子只计算 attention KV kernel 在 32 层里节省的时间：每层少 \(0.22ms\)，乘以 32 层得到总节省。
+
 端到端变为约 51ms，整体 speedup 是：
 
 \[
 \frac{58}{51}\approx1.14x
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 所以“单 kernel 1.67x”最后只变成“端到端 1.14x”并不矛盾。Amdahl 定律、其他算子、新的 dequant 开销、runtime 调度和 shape 分布都会吃掉部分收益。好的性能报告必须同时写 kernel 级收益和端到端收益，并解释差额去了哪里。
 
@@ -141,6 +234,14 @@ AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 \[
 L=8\times256=2048
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+
+
+这里 \(L\) 是每条候选序列的 token 长度：8 帧历史，每帧 256 个 latent token，所以一条序列共有 2048 个 token。
 
 模型 hidden size 为 1024，16 个 attention head，head dim 64，BF16。只看一个 Transformer block 的全注意力和投影，粗略计算：
 
@@ -161,6 +262,15 @@ L=8\times256=2048
 AI\approx\frac{550GFLOPs}{350MiB}\approx1500FLOPs/byte
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(A\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(b\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这行式子和前面的 decode attention 对照：分子是一个 block 的粗略计算量，分母是 FlashAttention 路径下的有效读写量。\(AI\) 高到约 1500 FLOPs/byte，说明瓶颈更可能转向计算、occupancy 或调度，而不是单纯 HBM 读取。
+
 这和上一节 decode attention 的 \(1FLOP/byte\) 完全不同。decode attention 扫 KV，常是 bandwidth-bound；这个视频 latent full-attention block 更接近 compute-bound 或调度/occupancy-bound。此时如果只做 FP8 latent cache，收益可能不如减少 token 数和 attention 结构本身。
 
 假设把视觉 tokenizer 和 memory selection 改掉，只保留 3 帧高分辨率接触窗口、3 帧中分辨率历史和低频布局 memory，把有效 token 从 2048 压到 768。attention 项按 \(L^2\) 缩放，projection 项按 \(L\) 缩放：
@@ -175,6 +285,14 @@ kernel 级 speedup 约为：
 \[
 \frac{4.1}{1.35}\approx3.0x
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
+这个比值是 kernel 级 speedup：只比较 video latent transformer block 自身的 latency，不包含 tokenizer、候选排序、memory 写回和其他头部开销。
 
 但端到端 rollout 未必有 3 倍。假设一次候选动作评估的总耗时是 38ms：
 

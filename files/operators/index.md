@@ -1,5 +1,14 @@
 # 算子与编译器路线图
 
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“算子与编译器路线图”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
 <div class="atlas-hero">
   <div class="atlas-kicker">Operators & Compilers</div>
   <p class="atlas-lead">这一专题把模型、框架、编译器、库、kernel 和 GPU 硬件连成一条完整链路，帮助你理解性能为什么会卡在 Attention、GEMM、KV、通信和布局变换上。</p>
@@ -11,33 +20,41 @@
   </div>
 </div>
 
-!!! note "读法定位"
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先回答“算子与编译器路线图”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先看本页路线，或回 [基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
     **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
 
-!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **tip · 10 分钟读法 | 深入读法 | 实验/工程读法**
+
     **10 分钟读法**：先用 roofline、memory hierarchy 和 shape bucket 定位瓶颈。
     **深入读法**：深读 kernel 时同时看 microbench、端到端 trace、数值误差和 fallback。
     **实验/工程读法**：工程上记录输入 shape、dtype、硬件、kernel 版本、occupancy、带宽和端到端收益。
 
-!!! warning "核心失败模式"
+    **warning · 核心失败模式**
+
     | 失败模式 | 先查什么 |
     | --- | --- |
     | microbench 外推 | kernel 快不等于端到端快 |
     | 数值稳定性 | 低精度、reduction 和 atomic 路径要看误差 |
     | 形状错配 | shape bucket、layout 和 fallback 决定真实收益 |
 
-!!! info "最小验收指标"
+    **info · 最小验收指标**
+
     | 要证明什么 | 最小指标 | 不能替代什么 |
     | --- | --- | --- |
     | kernel 真快 | microbench + end-to-end trace 都提升 | 单个 shape 峰值 |
     | 数值可靠 | 误差、溢出、reduction 顺序和随机性可控 | 吞吐 |
     | 可部署 | shape 覆盖、fallback、回归测试通过 | demo kernel |
 
+    **failure · 最佳反例**
 
-!!! failure "最佳反例"
     microbench 快很多，但端到端 trace 里被数据搬运、shape mismatch、fallback kernel 或数值误差吃掉收益。算子优化只有进入真实 workload 才算数。
+
+<!-- [补充] -->
+> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 专题定位
 
@@ -56,13 +73,17 @@
   </div>
 </div>
 
-!!! note "在全站主线里的位置"
+!!! note "合并提示"
+    **note · 在全站主线里的位置**
+
     算子与编译器专题是底层工程支撑。它不会直接解释“什么是世界模型”，但会决定视频世界模型、长上下文 VLA、实时 rollout 和大规模训练能不能跑得动。主线学习时不必先钻进所有 kernel；当你遇到显存、带宽、延迟、吞吐或数值稳定性问题，再回到这里定位瓶颈。
 
-!!! tip "证据与全站矩阵"
+    **tip · 证据与全站矩阵**
+
     前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。算子页里的 microbenchmark、roofline、kernel speedup 和端到端 trace 要分开写，不能把 kernel 变快直接外推成任务成功率提升。
 
-!!! tip "本专题的读法"
+    **tip · 本专题的读法**
+
     先看数据怎么搬，再看代码怎么写。算子优化的第一问题通常不是“用了什么黑科技”，而是这个计算在 HBM、L2、shared memory、register 和跨卡网络之间搬了什么，哪里被带宽、同步、布局或 launch 开销卡住。
 
 <div class="atlas-meta-grid">
@@ -167,10 +188,13 @@ FlashAttention 原论文图很适合作为算子专题的第一张“硬件视�
 
 <small>图源：[Nsight Systems Exposes New GPU Optimization Opportunities](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，Figure 1。博客截图意：CUDA device row 上的空洞和稀疏 kernel 覆盖能快速暴露 GPU starvation，提示应回到 CPU 调度、数据准备或 launch 路径排查。</small>
 
-!!! note "图解：系统 trace 是算子收益的验收入口"
+!!! note "合并提示"
+    **note · 图解：系统 trace 是算子收益的验收入口**
+
     红框区域不是某个 kernel 的微架构问题，而是 GPU 没有持续拿到工作。对大模型训练和推理来说，这类空洞可能来自 dataloader、dynamic batching、编译器 fallback、同步调用、NCCL 等待或 shape 过散。先用 Nsight Systems 把端到端时间线看清，再决定是否值得为某个 kernel 下钻。
 
-!!! tip "基础知识入口"
+    **tip · 基础知识入口**
+
     算子专题默认你知道 tensor shape、dtype、显存、带宽和 kernel 的基本含义。如果不熟，先看 [张量、Shape 与计算图](../foundations/tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md) 和 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)。
 
 ## 核心判断框架
@@ -235,6 +259,12 @@ $$
 \min(\text{Peak FLOPs}, \text{Bandwidth} \times \text{Arithmetic Intensity}).
 $$
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
 它并不是精确预测器，但非常适合做第一层判断：算术强度很低时，不要幻想纯靠 Tensor Core 获得巨大提升；算子已经逼近带宽上限时，应更多关注 fusion、layout 与访存合并；如果离 roofline 还很远，说明实现层面还有明显浪费。
 
 ### 从参考源可以借到什么视角
@@ -276,6 +306,8 @@ $$
 
 ## 快速代码示例
 
+<!-- [补充] -->
+下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
 ```python
 import torch  # 分配输出张量
 import triton  # 提供 Triton JIT 和 launch 配置

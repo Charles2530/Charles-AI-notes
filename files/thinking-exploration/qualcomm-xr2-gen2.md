@@ -3,6 +3,13 @@
 读法定位：端侧部署案例；区分公开平台事实、AI Hub proxy 口径和本站判断。回 [量化](../quantization/index.md) 或 [术语表](../glossary/index.md)。
 下一站：回 [思考探索](index.md)。
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“XR2 Gen 2：端侧 AI 与量化部署”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 先不谈指标，先想一个动作：你戴上 Meta Quest 3，打开彩色透视，低头看桌面，抬手点一个悬浮按钮。这个动作不到一秒，但头显要同时接收多路相机画面、估计头和手的位置、把真实世界和虚拟画面叠在一起、给左右眼渲染高分辨率画面、维持无线连接，还可能并发运行语音识别、场景理解或应用侧视觉模型。
 
 ![Meta Quest 3 headset and Touch Plus controllers on a wooden table](../assets/images/thinking-exploration/qualcomm-xr2-gen2/meta-quest-3-headset-controllers.png){ width="820" }
@@ -175,10 +182,13 @@ QIDK 更像本地开发和样例仓库，而不是 AI Hub 的替代品。它覆�
 | QNN DLC | 更贴近 Qualcomm AI Engine Direct，适合 NPU 优化 | 集成门槛更高，需要理解 QNN 工具链 |
 | QNN context binary / precompiled QNN ONNX | 面向特定 SoC 的 AOT 编译部署 | 设备特异性强，尤其要按前文 Proxy 口径看待 profile |
 
-!!! info "术语框：QNN / Qualcomm AI Engine Direct"
+!!! note "合并提示"
+    **info · 术语框：QNN / Qualcomm AI Engine Direct**
+
     `QNN` 是 Qualcomm 面向端侧 AI 加速器的底层运行时和图执行接口。常见资产里，`QNN DLC` 更偏硬件无关，适合后续 link / finalize；`QNN context binary` 面向特定 SoC，设备特异性更强，也更接近最终部署形态。
 
-!!! tip "术语框：LiteRT、ONNX Runtime 和 QNN EP"
+    **tip · 术语框：LiteRT、ONNX Runtime 和 QNN EP**
+
     `LiteRT` 适合 Android 移动端快速集成。`ONNX Runtime + QNN Execution Provider` 更适合跨平台项目，通过 QNN SDK / QAIRT 把 ONNX 图交给 Qualcomm CPU / GPU / HTP 后端执行。
 
 XR 场景通常更在意稳定延迟和热稳定，而不是一次性 benchmark 的最低值。因为头显里同时有渲染、sensor fusion、video see-through 和后台系统服务，模型推理不能抢走过多内存带宽或导致持续降频。

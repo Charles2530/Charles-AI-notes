@@ -2,6 +2,13 @@
 
 模型能不能真正部署，不只取决于算法，还取决于数值格式、显存、带宽、kernel 和 runtime 是否匹配。
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“数值、显存与运行时”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“数值、显存与运行时”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
@@ -11,13 +18,17 @@
 
 <small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原论文图意：比较不同规模 GPT 模型在 BF16 与 FP8 训练下的 loss/perplexity 曲线，展示 FP8 在合适 scaling 与训练配置下可以接近 BF16 收敛行为。</small>
 
-!!! note "图解：低精度不是只看能不能表示"
+!!! note "合并提示"
+    **note · 图解：低精度不是只看能不能表示**
+
     这张图的重点不是“FP8 一定安全”，而是说明低精度能否用于训练，要看 loss 曲线是否稳定跟随高精度基线。FP8 节省显存和带宽，但必须配合合适的 scaling、累加精度、kernel 和异常值处理。低精度格式能保存不等于能高效执行；模型文件变小也不等于线上更快。必须同时看数据在哪里、怎么搬、用什么 kernel 算。
 
-!!! note "初学者先抓住"
+    **note · 初学者先抓住**
+
     大模型系统里，“算得动”和“跑得快”不是一回事。真正速度常由 dtype、显存、带宽、kernel、runtime 和请求形态共同决定。看到“模型更小但没有更快”“FLOPs 低但延迟高”“量化后 P99 变差”时，不要只看参数量。
 
-!!! tip "遇到这些症状，回看本页"
+    **tip · 遇到这些症状，回看本页**
+
     KV INT8 省了显存但 token/s 没升，FP8 loss 曲线短期对齐但长跑漂移，或者某个 runtime 宣称支持低比特却在 trace 里频繁 dequant 回 FP16 时，回看本页。本页能帮你判断收益是否被带宽、workspace、kernel fallback、scale 读取或数值保护抵消。
 
 ## 最小字节账：先把数字换成显存
@@ -37,7 +48,18 @@
 B\times L\times D\times bytes
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(b\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 这不是完整显存，只是把 shape 换成 bytes 的第一步。训练还要加激活、梯度和 optimizer state；推理还要加 KV cache 和 workspace。
+
+符号含义：
 
 ## 数值格式：精度和范围的取舍
 
@@ -84,19 +106,50 @@ B\times L\times D\times bytes
 W\in\mathbb{R}^{d_{\text{in}}\times d_{\text{out}}}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(d_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 \[
 \text{Params}=d_{\text{in}}d_{\text{out}}\quad(\text{不含 bias})
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(d_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 \[
 \text{MACs per token}=d_{\text{in}}d_{\text{out}}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(d_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这三行式子在说：权重矩阵 \(W\) 把输入维度 \(d_{\text{in}}\) 映射到输出维度 \(d_{\text{out}}\)。不算 bias 时，参数量就是矩阵格子数；单个 token 通过这层时，每个权重通常参与一次乘加，所以主项 MACs 也是 \(d_{\text{in}}d_{\text{out}}\)。
 
 如果一次处理 \(B\) 个 batch、每个 batch 有 \(T\) 个 token，那么 Linear 主体 MACs 约为：
 
 \[
 B T d_{\text{in}}d_{\text{out}}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(d_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这里 \(B\) 是 batch size，\(T\) 是每条样本的 token 数；乘上 \(BT\) 后，就从“单 token 账”变成“整批输入账”。
 
 这也是为什么 `Params` 和 `MACs` 有时看起来很接近：对单个 token 来说，一个被用到的权重通常贡献一次乘加。但它们不是同一个概念。`Params` 是模型静态存了多少权重；`MACs` 是某个输入 shape、某个推理/训练阶段实际做了多少乘加。MoE、长上下文 attention、batch、prefill/decode 都会让两者分开。
 
@@ -155,11 +208,23 @@ flowchart LR
 7\times10^9\times2 \approx 14GB
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
 但如果服务长上下文，KV cache 可能同样大。以 32 层、hidden size 4096、batch 8、上下文 16k、BF16 KV 为例：
 
 \[
 2\times32\times8\times16384\times4096\times2 \approx 64GiB
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 这里前面的 2 表示 K 和 V。把这行拆开看会更直观：在单层里，单独一个 K cache 的大小是 \(B\times T\times d\times bytes = 8\times16,384\times4,096\times2\)，约 `1GiB`；再乘 V 就是 `2GiB / layer`；32 层合起来就是约 `64GiB`。这还只是 KV 本体，没有算 page metadata、碎片、runtime workspace、临时 buffer 和其它并发请求。
 
@@ -195,25 +260,6 @@ flowchart LR
 
 关键数字来自 DeepSeek-V3 技术报告和官方 [`config_671B.json`](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/configs/config_671B.json)：
 
-| 符号 | 含义 | DeepSeek-V3 值 |
-| --- | --- | ---: |
-| \(V\) | vocabulary size | 129,280 |
-| \(d\) | hidden dimension | 7,168 |
-| \(N\) | Transformer layers | 61 |
-| \(N_{\text{dense}}\) | 前置 dense FFN 层数 | 3 |
-| \(N_{\text{moe}}\) | MoE 层数 | 58 |
-| \(d_{\text{ff}}\) | dense MLP intermediate dim | 18,432 |
-| \(d_e\) | 单个 expert intermediate dim | 2,048 |
-| \(E\) | routed experts per MoE layer | 256 |
-| \(K\) | activated routed experts per token | 8 |
-| \(S\) | shared experts per MoE layer | 1 |
-| \(H\) | attention heads | 128 |
-| \(r_q\) | query compression rank | 1,536 |
-| \(r_{kv}\) | KV compression rank | 512 |
-| \(d_{\text{nope}}\) | non-RoPE Q/K head dim | 128 |
-| \(d_{\text{rope}}\) | RoPE Q/K head dim | 64 |
-| \(d_v\) | value head dim | 128 |
-
 ### 9.1 先算 embedding 和输出头
 
 输入 embedding 和输出 LM head 都是 \(V\times d\)：
@@ -222,11 +268,25 @@ flowchart LR
 Vd = 129{,}280\times7{,}168 = 926{,}679{,}040 \approx 0.927B
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(V\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
+
+
+这行式子在说：一个词表项对应一个 \(d\) 维向量，词表里共有 \(V\) 个项，所以 embedding 表或输出头各自有 \(Vd\) 个权重。
+
 如果输入 embedding 和输出头不共享权重，仅这两块合计约：
 
 \[
 2Vd \approx 1.853B
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 注意：embedding lookup 本身主要是查表读权重，不是大矩阵乘；输出 head 计算 logits 时才是 \(d\times V\) 的 MACs。
 
@@ -243,6 +303,19 @@ d r_q
 + Hd_vd
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(r_q\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(d_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(r_{kv}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+
+
+符号含义：\(P_{\text{MLA}}\) 是单层 MLA 的主要参数量；\(d\) 是 hidden dimension；\(r_q\) 和 \(r_{kv}\) 是 query/KV 压缩 rank；\(H\) 是 head 数；\(d_{\text{nope}}\)、\(d_{\text{rope}}\)、\(d_v\) 分别是 non-RoPE Q/K 维度、RoPE Q/K 维度和 value head 维度。每一项对应 MLA 里的一个主要投影矩阵。
+
 代入数字：
 
 \[
@@ -257,11 +330,23 @@ P_{\text{MLA}}
 \end{aligned}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+
+
 61 层 MLA 合计约：
 
 \[
 61\times187.1M\approx11.4B
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 ### 9.3 Dense MLP 和单个 expert
 
@@ -273,11 +358,23 @@ P_{\text{dense-MLP}}=3dd_{\text{ff}}
 \approx396.4M
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+
+
 前 3 层是 dense FFN，所以：
 
 \[
 3\times396.4M\approx1.19B
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 单个 expert 的宽度是 \(d_e=2048\)，所以单个 expert 参数是：
 
@@ -286,6 +383,12 @@ P_{\text{expert}}=3dd_e
 =3\times7168\times2048
 \approx44.0M
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+
 
 ### 9.4 MoE 层的 total params
 
@@ -296,16 +399,40 @@ P_{\text{MoE-total}}
 = E P_{\text{expert}} + S P_{\text{expert}} + Ed
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(E\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(S\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+
+
+这行式子在说：一层 MoE 的总参数包括 \(E\) 个 routed experts、\(S\) 个 shared experts，以及 router gate 的 \(Ed\) 权重。这里算的是“仓库里一共有多少专家参数”，不是单个 token 实际会激活多少。
+
 \[
 =256\times44.0M+1\times44.0M+256\times7168
 \approx11.32B
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 58 个 MoE 层合计：
 
 \[
 58\times11.32B\approx656.6B
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
+这行式子只是把“单个 MoE 层的总参数仓库”乘以 58 个 MoE 层，得到所有 MoE 层合计参数。
 
 把 embedding、输出头、MLA、前 3 层 dense MLP、58 层 MoE 加起来：
 
@@ -318,6 +445,12 @@ P_{\text{total}}
 \end{aligned}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+
+
 这就对上了 DeepSeek-V3 报告里的 `671B total params`。关键点是：大头来自所有 routed experts 的总仓库，而不是每个 token 都会跑完这 671B。
 
 ### 9.5 MoE 层的 activated params
@@ -329,12 +462,29 @@ P_{\text{MoE-active}}
 = K P_{\text{expert}} + S P_{\text{expert}} + Ed
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(S\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(E\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这行式子把 total params 换成 activated params：\(K\) 是每个 token 选中的 routed experts 数，\(S\) 是总会参与的 shared experts 数。router gate 仍然需要为专家打分，所以保留 \(Ed\) 这一项。
+
 \[
 =8\times44.0M+1\times44.0M+256\times7168
 \approx398.2M
 \]
 
-这个数很有意思：\(8+1=9\)，而 \(9\times2048=18432\)，正好接近 dense MLP 的 \(d_{\text{ff}}\)。所以单 token 的 FFN 乘加量接近一个 \(18,432\) 宽度的 dense SwiGLU MLP，但模型总容量因为 256 个 routed experts 被放大很多。
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
+这个数表示单 token 真正激活的 MoE 参数量：\(8+1=9\)，而 \(9\times2048=18432\)，正好接近 dense MLP 的 \(d_{\text{ff}}\)。所以单 token 的 FFN 乘加量接近一个 \(18,432\) 宽度的 dense SwiGLU MLP，但模型总容量因为 256 个 routed experts 被放大很多。
 
 把单 token 会用到的矩阵权重加起来：
 
@@ -347,11 +497,23 @@ P_{\text{active, MAC-producing}}
 \end{aligned}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+
+
 如果把输入 embedding 查表也放进“activated params”口径里，则约为：
 
 \[
 36.6B + 0.927B \approx 37.6B
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 这就是报告里 `37B activated params per token` 的来源直觉。它不是精确 latency，也不是每步只有 37B 次所有操作，而是说明稀疏 MoE 下每个 token 实际触达的权重规模远小于 `671B total params`。
 
@@ -363,11 +525,23 @@ P_{\text{active, MAC-producing}}
 \text{weight MACs/token}\approx36.6B\ \text{MACs}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
 如果换成常见 FLOPs 口径：
 
 \[
 36.6B\ \text{MACs}\times2\approx73.2B\ \text{FLOPs}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 但真实 LLM 推理还有 attention score/value 聚合。这个部分不随参数量固定，而随上下文长度变。用 MLA 的 absorb 实现做一个粗略估计，decode 一个新 token、历史长度为 \(T\) 时，每层 score/value 聚合主项可写成：
 
@@ -375,11 +549,28 @@ P_{\text{active, MAC-producing}}
 H T \left((r_{kv}+d_{\text{rope}})+r_{kv}\right)
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(r_{kv}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(d_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这行式子在粗算 decode 阶段单层 attention 的主项：\(H\) 个 head 都要看长度为 \(T\) 的历史；括号里前半部分对应 score 计算要读的压缩 KV 与 RoPE key，后半部分对应 value 聚合要读的压缩 value 信息。
+
 当 \(T=4096\)：
 
 \[
 128\times4096\times((512+64)+512)\approx0.57B\ \text{MACs/layer}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 61 层约：
 
@@ -387,17 +578,35 @@ H T \left((r_{kv}+d_{\text{rope}})+r_{kv}\right)
 61\times0.57B\approx34.8B\ \text{MACs}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
 所以在 4K 历史长度下，一个 decode token 的粗略矩阵乘账可以写成：
 
 \[
 36.6B\ \text{weight MACs}+34.8B\ \text{attention MACs}\approx71.4B\ \text{MACs}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
 如果是 prefill 一个 4K prompt，weight MACs 会乘上 4096：
 
 \[
 4096\times36.6B\approx150.0\ \text{TMACs}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 attention pairwise 部分按 causal triangle 粗算约：
 
@@ -406,11 +615,23 @@ attention pairwise 部分按 causal triangle 粗算约：
 \approx71.3\ \text{TMACs}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
 所以 4K prefill 的主项大约是：
 
 \[
 150.0\ \text{TMACs}+71.3\ \text{TMACs}\approx221.3\ \text{TMACs}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 !!! warning "不要把这当成线上延迟"
     这只是手算主项。真实服务还会受 FP8/BF16 kernel、MoE dispatch/combine、expert batch size、all-to-all、KV cache layout、logits 是否全量计算、batching、prefix cache、padding、采样和 runtime 调度影响。`Params` 帮你看存储和容量，`MACs` 帮你看乘加规模，最终线上速度仍要用 profiler 和端到端压测确认。

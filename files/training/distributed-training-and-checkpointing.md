@@ -2,6 +2,13 @@
 
 当模型规模走向几十亿、上百亿参数，训练问题很快不再只是“学习率怎么调”，而是“算力、显存、通信、数据顺序、存储和故障恢复能不能共同支撑一次长跑”。分布式训练决定训练能不能跑快，checkpoint 决定训练能不能跑完、跑坏后能不能继续、产物能不能被后训练和推理复用。
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“分布式训练与 Checkpoint”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“分布式训练与 Checkpoint”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
@@ -9,11 +16,17 @@
 
 这页建议和 [Megatron、DeepSpeed 与训练栈](megatron-lm-deepspeed-and-open-training-stacks.md)、[输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md)、[训练稳定性与故障排查](stability-numerics-and-failure-triage.md) 一起读。它们分别覆盖训练框架、数据吞吐和数值/系统异常，本页聚焦并行拓扑与恢复资产。
 
-!!! note "初学者先抓住"
+!!! note "合并提示"
+    **note · 初学者先抓住**
+
     分布式训练不是把模型随便切到多张卡上。你要同时管理显存、通信、pipeline bubble、数据顺序和 checkpoint 恢复语义。
 
-!!! example "有趣例子：多人接力搬家"
+    **example · 有趣例子：多人接力搬家**
+
     人多不一定快。如果楼道太窄、箱子交接混乱、有人中途离开还没人记录进度，整体反而慢。分布式训练也要设计分工、通信和恢复点。
+
+<!-- [补充] -->
+> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 一、为什么单卡思维会失效
 
@@ -24,6 +37,15 @@
 $$
 M_{\text{state}} \approx P \cdot b_p \cdot (1 + c_{\text{opt}}).
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(M_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(b_p\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(c_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 对 Adam/AdamW 来说，参数本身往往不是最大头，梯度、master weights、一阶动量、二阶动量和混合精度状态会一起放大内存压力。再叠加长上下文激活、MoE dispatch buffer 和通信 bucket，真实峰值通常高于纸面估算。
 
@@ -46,6 +68,14 @@ N_{\text{CP}}
 \times
 N_{\text{EP}}.
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(N_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
+这行式子表示：总 world size \(N_{\text{world}}\) 是数据并行、张量并行、流水线并行、上下文并行和专家并行这些维度的乘积。每个 \(N_{\text{DP}}\)、\(N_{\text{TP}}\)、\(N_{\text{PP}}\)、\(N_{\text{CP}}\)、\(N_{\text{EP}}\) 都是对应并行维度上的切分份数。
 
 这些维度分别解决不同瓶颈：
 
@@ -89,6 +119,13 @@ PP 按层切模型，微批次像流水线一样流过不同 stage。若 pipelin
 $$
 \text{utilization} \approx \frac{m}{m + K - 1}.
 $$
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(m\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+
 
 ![GPipe pipeline parallelism 原论文图](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png){ width="860" }
 
@@ -247,6 +284,8 @@ Checkpoint manifest 应像训练资产目录一样记录：每个 shard 属于�
 
 ### 最小恢复脚本形态
 
+<!-- [补充] -->
+下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
 ```python
 def load_training_state(path, model, optimizer, scheduler, dataloader_state):
     manifest = load_manifest(path)

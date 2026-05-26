@@ -6,12 +6,24 @@ paper_topic: 扩散模型
 
 # Wan2.1：开源视频生成系统路线
 
-!!! note "读法定位"
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“Wan2.1：开源视频生成系统路线”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [扩散模型](../../diffusion/index.md)。
     **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
     **主线关系**：读完后把结论回填到「扩散模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
 
-!!! info "论文信息"
+    **info · 论文信息**
+
     - 论文：`Wan: Open and Advanced Large-Scale Video Generative Models`
     - 链接：[arXiv:2503.20314](https://arxiv.org/abs/2503.20314)
     - 代码与模型：[Wan-Video/Wan2.1](https://github.com/Wan-Video/Wan2.1)
@@ -90,6 +102,15 @@ Wan 的核心问题不是“再做一个 text-to-video 模型”，而是回答�
 x \in \mathbb{R}^{(1+T/4)\times H/8\times W/8\times 16}.
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 ![Wan-VAE framework](../../assets/images/paper-deep-dives/diffusion/wan/figure-3-vae.png){ width="920" }
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 4。原论文图意：Wan-VAE 用 3D causal 结构实现 `4 x 8 x 8` 时空压缩；橙色块表示时空 2x 压缩，绿色块表示空间 2x 压缩。</small>
@@ -117,6 +138,15 @@ Wan 的生成主干由三部分组成：Wan-VAE、diffusion transformer 和 umT5
 L=(1+T/4)\times H/16\times W/16.
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 ![Wan DiT architecture](../../assets/images/paper-deep-dives/diffusion/wan/figure-4-dit.png){ width="920" }
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 5。原论文图意：Wan 架构由 Wan-VAE、Video DiT 和 umT5 text encoder 组成，DiT 通过 cross-attention 接入文本条件。</small>
@@ -134,11 +164,29 @@ Wan 使用 Flow Matching / Rectified Flow 风格目标。训练时先取真实�
 x_t=t x_1+(1-t)x_0.
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(x_1\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(x_0\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
+
 这条路径上的真实速度是：
 
 \[
 v_t=\frac{d x_t}{dt}=x_1-x_0.
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(v_t\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
+| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(x_1\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(x_0\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
 
 模型输出 \(u(x_t,c_{txt},t;\theta)\)，直接回归这条速度：
 
@@ -150,12 +198,26 @@ u(x_t,c_{txt},t;\theta)-v_t
 \right\|^2.
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(x_0\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(x_1\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(c_{txt}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(u\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 这里 \(c_{txt}\) 是长度为 512 token 的 umT5 文本 embedding。
 
-!!! note "Velocity 不是视频里物体的运动速度"
+!!! note "合并提示"
+    **note · Velocity 不是视频里物体的运动速度**
+
     这里的 velocity 是高维 latent 空间里的生成方向：当前 noisy video latent 应该沿哪个方向流向干净视频 latent。它不是 optical flow，也不是人物或相机在画面中的物理速度。对视频 DiT 来说，这种目标比“只预测噪声”更接近采样器实际要积分的 ODE 方向，因此和少步采样、蒸馏、缓存优化更容易衔接。
 
-!!! note "v-prediction 与 Flow Matching 的区别"
+    **note · v-prediction 与 Flow Matching 的区别**
+
     扩散模型里常说的 \(v\)-prediction 通常是换一个监督坐标：模型仍围绕给定噪声日程学习 denoising target。Flow Matching 更直接：先定义从噪声分布到数据分布的连续路径，再让网络拟合路径上的 vector field。Wan 采用的是后者的训练语言，因此推理可以看成从随机 video latent 出发，沿速度场积分到数据 latent，再由 VAE 解码成视频。
 
 ## 预训练与后训练：从图像语义到 720P 视频
@@ -182,6 +244,17 @@ Wan 的系统章节很有价值，因为它把视频 DiT 和 LLM 的成本差异
 \[
 L(\alpha b s h^2+\beta b s^2 h),
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+| \(\beta\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(b\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
+| \(h^2\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 其中 \(L\) 是层数，\(b\) 是 micro batch size，\(s\) 是 sequence length，\(h\) 是 hidden dimension。视频 \(s\) 很容易到几十万甚至百万，attention 的 \(s^2\) 项会逐渐压过线性层。论文说当 sequence length 到 1M 时，attention 可占端到端训练时间 95%。
 
@@ -225,6 +298,10 @@ Wan 的默认推理仍然是多步采样，论文说通常约 50 sampling steps�
 这里的 cache 不是简单“偷懒少算”。论文观察到两个相似性：同一 DiT block 的 attention output 在相邻采样步之间相似；CFG 后期 conditional 与 unconditional 输出也相似。因此可以选择部分 step 真正跑 attention 或 unconditional branch，其余 step 复用并做 residual compensation。视频模型每步都很贵，这类跨步复用的收益会比图像模型更明显。
 
 ## 评测：Wan-Bench 不只看 FVD/FID
+
+<!-- [补充] -->
+> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+
 
 Wan 认为 FVD/FID 和人类感知不够对齐，于是提出 Wan-Bench。它分成 dynamic quality、image quality、instruction following 三大维度，共 14 个细粒度指标。简单任务用传统 detector，复杂任务用 MLLM；最终分数用超过 5,000 组 pairwise human comparisons 学出来的偏好权重加权。
 
@@ -384,10 +461,13 @@ Wan 最值得复用的不是某个单点 trick，而是完整训练路线：
 
 如果要把 Wan 当作工程参考，最重要的问题不是“模型有多大”，而是：你的数据过滤、VAE、训练阶段、条件接口和推理预算是否和目标应用一致。视频生成系统的失败往往不是公式错，而是这些接口没有对齐。
 
-!!! info "本站判断"
+!!! note "合并提示"
+    **info · 本站判断**
+
     Wan 要按视频基础模型系统读：方法重点是 VAE/DiT、数据分阶段、I2V/V2A/编辑和 MoE/SNR 设计；实验要看视频质量、人评、效率和 scaling。它提供强工程参照，但 benchmark 和 demo 不能替代任务级可控性、安全性与一致性回归。
 
-!!! tip "下一站"
+    **tip · 下一站**
+
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。
     - 按导航顺序继续：[Phased DMD：分阶段少步蒸馏](phased-dmd.md)。

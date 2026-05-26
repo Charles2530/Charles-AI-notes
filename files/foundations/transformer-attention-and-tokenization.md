@@ -2,6 +2,13 @@
 
 Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核心结构。它的关键思想是：把输入变成 token，再用 attention 让 token 之间按相关性互相读取信息。
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“Transformer 输入与注意力”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“Transformer 输入与注意力”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
@@ -11,19 +18,25 @@ Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核�
 
 <small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原论文图意：Transformer 由 encoder 和 decoder 组成，核心模块包括 multi-head attention、feed-forward、residual connection、normalization、positional encoding 与输出 softmax。</small>
 
-!!! note "图解：Transformer 总结构先抓三条线"
+!!! note "合并提示"
+    **note · 图解：Transformer 总结构先抓三条线**
+
     第一次看这张图不要急着背每个框。第一条线是输入 token 先变成 embedding，并叠加 positional encoding，让模型知道顺序。第二条线是每层都交替做 attention 和 feed-forward：attention 负责跨 token 读信息，feed-forward 负责逐 token 变换表示。第三条线是 decoder 比 encoder 多了 masked self-attention 和 encoder-decoder attention，所以它既能按因果顺序生成下一个 token，也能读取 encoder 提供的源序列信息。
 
-!!! note "初学者先抓住"
+    **note · 初学者先抓住**
+
     Attention 的核心不是“模型很聪明”，而是每个 token 都能按相关性读取其他 token。Q/K/V 可以先理解成：我想找什么、别人暴露什么、真正读走什么。看到 LLM、VLM、DiT 或 agent 模型时，先分清 tokenization、embedding、self-attention、cross-attention 和输出 head 分别在哪一层。
 
-!!! tip "和数据页、解码页的边界"
+    **tip · 和数据页、解码页的边界**
+
     本页从 tokenizer / processor 之后开始讲 token 如何进入 Transformer。若你还不清楚样本、标签、schema、清洗、去重和数据版本，先看 [数据与数据集基础](data-and-dataset-basics.md)。若你关心 logits 出来以后怎么采样、temperature/top-p 怎么影响生成、KV cache 如何进入 decode 成本，继续看 [生成与解码基础](generation-and-decoding-basics.md)。
 
-!!! tip "为什么现在要学这个：世界模型的 token 成本"
+    **tip · 为什么现在要学这个：世界模型的 token 成本**
+
     世界模型不是只读一句文本，而是同时读多相机图像、视频历史、机器人状态、动作、语言指令和可能的未来 rollout。Attention 决定这些 token 如何互相读取，KV cache 决定长历史在推理时占多少显存，mask 决定哪些过去和未来能被看见。比如 `4` 路相机、`16` 帧、`224x224`、`14x14` patch 就已经有 `16,384` 个视觉 token；如果分辨率提高到 `448x448`，视觉 token 会到 `65,536`，直接超过 `32k` context。学 attention 不是为了背公式，而是为了能判断 token、context、KV、mask 和吞吐之间的取舍。
 
-!!! tip "遇到这些症状，回看本页"
+    **tip · 遇到这些症状，回看本页**
+
     视觉 token 一多吞吐就断崖下降、长上下文 decode 被 KV cache 卡住、动作 token 加进去后模型不再关注关键帧、或者不同动作的未来几乎一样时，先回到 tokenization、Q/K/V、self-attention 和 cross-attention 的分工。本页能帮你判断该压视觉 token、改连接器、换 GQA/MLA/KV 量化，还是检查 action token 是否真的进入了可被 attention 读取的位置。
 
 ## Tokenization：模型如何“切开”输入
@@ -44,18 +57,29 @@ Tokenization 的作用是把复杂输入变成一个序列：
 x = [x_1, x_2, \ldots, x_L]
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(x_1\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(x_2\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(x_L\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
+
 然后每个 token 被映射成 embedding：
 
 \[
 h_i = \text{Embedding}(x_i)
 \]
 
-| 符号 | 含义 |
-| --- | --- |
-| \(x_i\) | 第 \(i\) 个 token，可以是文本 token、图像 patch 或动作 token |
-| \(h_i\) | 第 \(i\) 个 token 的向量表示 |
-| \(L\) | 序列长度，token 总数 |
-| \(D\) | hidden dimension，每个 token 向量的长度 |
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(h_i\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(x_i\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+
+
+这里 \(x_i\) 表示第 \(i\) 个 token，\(h_i\) 表示它对应的向量表示。Embedding 层做的事就是把离散 token id 映射成模型可以连续计算的向量。
 
 ## Attention 的 Q/K/V 直觉
 
@@ -71,17 +95,18 @@ Attention 可以用“提问、匹配、读取”理解：
 \text{Attention}(Q,K,V)=\text{softmax}\left(\frac{QK^\top}{\sqrt{d}}\right)V
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(Q\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(V\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
+
+
 这表示每个 token 会根据相似度，从其他 token 里加权读取信息。
 
 !!! note "公式拆读：softmax 里面到底是什么"
     \(QK^\top\) 是“每个 query 和每个 key 的匹配分数”，shape 大致是 `[L, L]`；\(\sqrt d\) 用来缩放分数，避免维度大时点积过大；`softmax` 把分数变成权重；最后乘 \(V\)，表示按权重把 value 读回来。最简读法是：先匹配，再归一化，再读取。
-
-| 符号 | 读法 | 含义 |
-| --- | --- | --- |
-| \(Q\) | query | 当前位置想找什么信息 |
-| \(K\) | key | 每个位置提供什么可匹配线索 |
-| \(V\) | value | 真正被读走的内容 |
-| \(d\) | head dimension | 单个 attention head 的维度 |
 
 ![Scaled Dot-Product Attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-left.png){ width="280" }
 ![Multi-Head Attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-right.png){ width="360" }
@@ -136,11 +161,23 @@ Self-Attention 的核心矩阵是 \(L \times L\)，其中 \(L\) 是序列长度�
 16{,}384^2 \approx 268\text{M elements}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
 如果用 BF16 物化，只是一个 head 的 score 就约：
 
 \[
 268\text{M} \times 2 \text{ bytes} \approx 512\text{MiB}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 `16` 个 heads 就是约 `8GiB`，这还没算 softmax/dropout 中间结果、反向传播保存、QKV、MLP 激活和多层堆叠。FlashAttention 可以避免把完整 score matrix 落到 HBM，但它没有把 attention 的数学复杂度变成线性；如果 token 数从 `16k` 涨到 `65k`，\(L^2\) 仍然会把算力和调度压力推上去。
 

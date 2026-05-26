@@ -1,28 +1,41 @@
 # 世界模型高效训练技术路线图
 
-这页是全站的主线枢纽：**如何在有限真实交互、有限视频 token、有限 GPU-hour 和有限验证预算下，训练出对动作敏感、能长时 rollout、能改善决策的世界模型。**
+这页是全站主线枢纽：**如何在有限交互、视频 token、GPU-hour 和验证预算下，训练出对动作敏感、能长时 rollout、能改善决策的世界模型。**
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“世界模型高效训练技术路线图”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
 
 读法定位：按成本账读真实交互、token、显存、rollout、验证怎么省；回 [世界模型入口](index.md) 或 [术语表](../glossary/index.md)。
 下一站：见下方“主线必读 13 页”。
 
 它不是要替代基础知识、训练、推理、量化、算子、VLM/VLA 或具身智能章节。相反，这些章节都被放到同一条主线下：它们分别解决世界模型训练中的不同成本项。
 
-!!! tip "快速定位"
+!!! note "合并提示"
+    **tip · 快速定位**
+
     **一句话结论**：世界模型高效训练是一张成本账，不是一组论文名。
     **适合读者**：想判断 Dreamer/RSSM、Masked/JEPA、视频 rollout、低比特/KV 和数据引擎如何组合的人。
     **先看哪张表**：先看“初读版：先按瓶颈选路线”，再看“效率技术矩阵（工程审计版）”。
 
-!!! note "读法提醒"
+    **note · 读法提醒**
+
     主线是世界模型高效训练，但这不是说其它内容不重要。基础知识提供公共语言，训练/推理/量化/算子提供工程能力，VLM/VLA 和具身智能提供状态、动作、数据和闭环场景。读的时候先抓主线，再按需要回到支撑专题补工具。
 
 ## TL;DR
 
 世界模型高效训练不是单一技巧，而是同时压低**数据、token、显存、rollout、验证**五类成本。表征路线省像素和视频 token，Dreamer/RSSM 省真实试错，系统路线省长上下文与 KV 成本。任何效率 claim 都要同时写清：证据能证明什么、不能证明什么、失败时伤哪条决策链。
 
-!!! tip "术语速查"
+!!! note "合并提示"
+    **tip · 术语速查**
+
     `RSSM` 是带确定性记忆和随机 latent 的状态空间模型；`JEPA` 是预测 embedding 而非像素的自监督目标；`WAM/VAM` 分别指 world-action / video-action 建模路线；`MPC/CEM` 是在模型内搜索候选动作序列的方法；`DMD` 是少步扩散蒸馏的一类分布匹配方法；`GQA/KV` 决定长上下文 rollout 的 attention 缓存宽度、显存和带宽。
 
-!!! tip "全站地图"
+    **tip · 全站地图**
+
     如果要快速查“某类效率技术覆盖到哪里、原始证据是什么、还有什么缺口”，看 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md) 和 [世界模型效率矩阵](efficiency-technique-coverage-matrix.md)。如果要把数据、配置、系统账、评测和失败归因写成报告，看 [完整实验报告样例](world-model-efficient-training-experiment-report.md)；如果要看跨专题执行路线，看 [VLA 全链路案例](vla-world-model-full-chain-case.md) 和 [Rollout 服务案例](rollout-serving-quantization-kernel-case.md)。
 
 ## 评分门槛：什么样的世界模型博客能达到 9+
@@ -45,6 +58,17 @@
 \[
 p_\theta(z_{t+1:t+H}, x_{t+1:t+H}, r, d, u \mid z_{\le t}, a_{t:t+H-1}, c)
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(z_{t+1:t+H}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(x_{t+1:t+H}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 其中 \(z\) 是潜状态，\(x\) 是未来观测或视频，\(a\) 是动作，\(r\) 是奖励或任务进展，\(d\) 是终止/失败信号，\(u\) 是不确定性或风险。高效训练真正关心的不是公式本身，而是以下问题：
 
@@ -184,13 +208,16 @@ p_\theta(z_{t+1:t+H}, x_{t+1:t+H}, r, d, u \mid z_{\le t}, a_{t:t+H-1}, c)
 
 <small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1 与 Figure 4。原图意：Figure 1 展示 masked visual representation learning 与 latent dynamics learning 的解耦；Figure 4 展示 Meta-world aggregate 与 RLBench 任务上的 success rate 学习曲线。</small>
 
-!!! note "这张图怎么读"
+!!! note "合并提示"
+    **note · 这张图怎么读**
+
     **输入输出**：MWM 先把图像编码成 masked convolutional features，训练 autoencoder 和 reward prediction；再在 autoencoder latent space 中训练 dynamics。<br>
     **效率机制**：视觉表征不被 dynamics 端到端拖着学像素细节，dynamics 在更紧凑的 latent 上学习动作后果。<br>
     **对世界模型主线的意义**：它是“先压缩视觉，再学动作条件 dynamics”的清晰证据。<br>
     **不能证明什么**：它不能证明所有 masked 表征都能 closed-loop 控制，也不能替代动作反事实和风险校准。
 
-!!! warning "读数边界"
+    **warning · 读数边界**
+
     Figure 4 的 benchmark 条件是论文设置下的 Meta-world 和 RLBench visual control；有 closed-loop control 学习曲线，但不是任意真实机器人部署；报告的是样本效率和成功率，不是系统吞吐；不能直接外推到多相机长时任务。
 
 ![V-JEPA 2-AC planning](../assets/images/paper-deep-dives/world-models/v-jepa2/figure-action-conditioned-world-model.png){ width="920" }
@@ -199,13 +226,16 @@ p_\theta(z_{t+1:t+H}, x_{t+1:t+H}, r, d, u \mid z_{\le t}, a_{t:t+H-1}, c)
 
 <small>图源：[V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning](https://arxiv.org/abs/2506.09985)，Figure 7 与 Table 3。原图意：Figure 7 展示用 V-JEPA 2-AC 做 model predictive control；Table 3 比较 V-JEPA 2-AC 与 Cosmos world model 在机器人操作任务中的规划性能与时间。</small>
 
-!!! note "这张图怎么读"
+!!! note "合并提示"
+    **note · 这张图怎么读**
+
     **输入输出**：输入当前观测、目标图像和候选动作序列；模型在 representation space 中 rollout，并让未来表示接近目标表示。<br>
     **效率机制**：不生成完整未来视频，而是在 latent / representation space 中用 CEM 搜动作，减少每个候选动作的评估成本。<br>
     **对世界模型主线的意义**：这是 JEPA-style 表征接入 action-conditioned planning 的关键证据。<br>
     **不能证明什么**：它不证明跨机器人平台、长 horizon 风险规划或复杂语言目标都已解决。
 
-!!! warning "读数边界"
+    **warning · 读数边界**
+
     Table 3 是论文中的 closed-loop robot manipulation planning 设置，使用目标图像、MPC/CEM 和单张 RTX 4090；它报告了每步规划时间和若干 Lab 2 技能表现，不是系统级长时部署报告，也不是独立复现。
 
 ## 主线定位框模板
@@ -302,6 +332,16 @@ flowchart TD
 M_{\text{KV, layer}} = B \times L \times 2 \times H_{\text{kv}} \times d_h \times \text{bytes}.
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(M_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(H_{}\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(d_h\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 代入 \(B=16, L=32768, H_{\text{kv}}=8, d_h=128\)：
 
 | KV 设计 | 每层 KV | 32 层 KV | 和 FP16 GQA 比 |
@@ -316,6 +356,12 @@ M_{\text{KV, layer}} = B \times L \times 2 \times H_{\text{kv}} \times d_h \time
 \[
 16 \times 32 \times 32768^2 \times 2 \approx 1\ \text{TiB}.
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 这也是为什么 FlashAttention、context parallel、MagiAttention 这类方法不是“锦上添花”。没有它们，score 矩阵和 KV 生命周期会先把显存、带宽和通信打爆。
 

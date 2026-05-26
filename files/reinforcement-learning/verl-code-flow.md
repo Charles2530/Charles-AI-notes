@@ -2,15 +2,26 @@
 
 本页按用户更正后的仓库 [verl-project/verl](https://github.com/verl-project/verl) 展开。verl 是大模型强化学习后训练框架，论文背景是 [HybridFlow: A Flexible and Efficient RLHF Framework](https://arxiv.org/abs/2409.19256)。这里不复述安装命令，而是讲清代码流：配置如何进入 trainer，rollout/reward/critic/actor 如何组成一次 RL 更新。
 
-!!! note "读法定位"
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“verl 训练流程：从配置到 RL 更新”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先回答“verl 训练流程：从配置到 RL 更新”在「强化学习」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先懂概率、优化和基本训练曲线；PPO/GRPO 不必先记公式，先抓更新对象。 必要时先回 [强化学习入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
     **主线关系**：把状态、动作、奖励、策略优化和世界模型闭环连起来，看模型如何通过反馈改进决策。
 
-!!! note "初学者先抓住"
+    **note · 初学者先抓住**
+
     verl 的核心不是“实现了一个 PPO 公式”，而是把 RLHF/RLVR 的控制流和大模型训练/推理的分布式计算拆开。单进程 controller 负责算法步骤，远端 worker 负责 actor、rollout、critic、reference 和 reward 的大模型计算。
 
-!!! tip "先和前面知识点对上"
+    **tip · 先和前面知识点对上**
+
     如果你刚读完 MDP 和 PPO，可以把 `verl` 看成一条工程化流水线：`prompt` 是 state，`generate_sequences` 采样 action/trajectory，`reward_manager` 给 reward，`compute_advantage` 把 reward 变成 advantage，`_update_actor` 更新 policy。训练章节里的 FSDP/Megatron 负责让反向传播跑得动，推理章节里的 vLLM/SGLang 负责让 rollout 生成跑得快。
 
 ## 先把公式翻译成变量名
@@ -170,10 +181,13 @@ batch prompts
 | `advantages` | advantage | actor update 真正关心的相对好坏 |
 | `returns` | value target | critic update 要拟合的目标 |
 
-!!! note "难点解释：old_log_probs、ref_log_prob 和 rollout_log_probs"
+!!! note "合并提示"
+    **note · 难点解释：old_log_probs、ref_log_prob 和 rollout_log_probs**
+
     `old_log_probs` 是这批样本在更新前 actor 下的概率锚点，PPO 的 ratio 依赖它。`ref_log_prob` 来自 reference policy，用于 KL 约束，防止模型离 SFT/reference 太远。`rollout_log_probs` 可能来自生成 backend，本质上记录采样策略的概率；在异步或 off-policy 变体里，它和训练时重新计算的 old log prob 可能不同。
 
-!!! note "代码对照：reward 到 advantage 的三步"
+    **note · 代码对照：reward 到 advantage 的三步**
+
     `extract_reward(batch)` 得到 `reward_tensor`，训练循环把它放进 `batch.batch["token_level_scores"]`。如果启用 `algorithm.use_kl_in_reward`，`apply_kl_penalty(...)` 会把 reference KL 从 reward 中扣掉，生成 `token_level_rewards`；否则 `token_level_rewards = token_level_scores`。最后 `compute_advantage(...)` 根据 `algorithm.adv_estimator` 选择 GAE、GRPO、RLOO、ReMax 等函数，写入 `advantages` 和 `returns`。
 
 GRPO 的关键代码点是 `uid` 分组：`compute_grpo_outcome_advantage(...)` 会对同一 prompt 的多条 response 求组内均值和标准差。
@@ -230,10 +244,13 @@ data.image_key=images
 | `actor.use_kl_loss=True` | actor loss 里直接加 KL，防止 reward 诱导模型跑偏 |
 | `data.image_key=images` | VLM 数据里的图片列会进入 processor 和 `multi_modal_inputs` |
 
-!!! example "有趣例子：把一道数学题看成 RL"
+!!! note "合并提示"
+    **example · 有趣例子：把一道数学题看成 RL**
+
     prompt 是题目，response 是模型写出的解法，reward 是答案是否正确或格式是否通过，reference policy 是原来的 SFT 模型。GRPO 对同一道题采样多个解法：正确且格式好的解法 advantage 更高，错误或绕格式漏洞的解法 advantage 更低。`verl` 做的事情，就是把这些步骤批量化、分布式化，并让它能在 vLLM/SGLang 生成和 FSDP/Megatron 训练之间稳定切换。
 
-!!! example "有趣例子：把 VLA 抓取看成 verl dataflow"
+    **example · 有趣例子：把 VLA 抓取看成 verl dataflow**
+
     如果把 prompt 换成“当前图像 + 指令 + 机器人状态”，response 就是未来动作块。reward 可以由仿真成功率、碰撞检测、轨迹平滑度和最终位置误差组成。`rollout.n` 对同一状态采样多个动作块，GRPO 比较哪条更安全、更接近成功。真正工程化时还要把 VLA processor、动作 tokenizer、仿真/真实 reward 服务和安全过滤接入 worker。
 
 ## PPO 和 GRPO 在 verl 里的差别

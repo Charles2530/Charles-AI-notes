@@ -6,12 +6,24 @@ paper_topic: 高效推理
 
 # Fast-FoundationStereo：实时 Zero-Shot 双目匹配
 
-!!! note "读法定位"
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“Fast-FoundationStereo：实时 Zero-Shot 双目匹配”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [推理](../../inference/index.md)。
     **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
     **主线关系**：读完后把结论回填到「推理」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
 
-!!! tip "前置阅读路线"
+    **tip · 前置阅读路线**
+
     | 先补什么 | 站内页面 | 读到什么程度 |
     | --- | --- | --- |
     | 一篇串读 | [读懂 Fast-FoundationStereo：从双目几何到高效推理](../../thinking-exploration/fast-foundation-stereo-prerequisite-map.md) | 用一条知识路径把双目几何、cost volume、蒸馏、NAS/剪枝、伪标签和 runtime 串起来 |
@@ -20,7 +32,8 @@ paper_topic: 高效推理
     | 深度 foundation model 与伪标签 | [Depth Anything](../embodied-ai/depth-anything.md)、[Depth Anything V2](../embodied-ai/depth-anything-v2.md) | 知道 teacher-student、pseudo-label 和真实分布补齐为什么重要 |
     | 压缩与推理成本 | [模型蒸馏入门](../../foundations/model-distillation-basics.md)、[模型压缩、剪枝与 NAS 入门](../../foundations/model-compression-pruning-and-nas-basics.md)、[数值、显存与运行时](../../foundations/numerics-memory-and-runtime-basics.md) | 知道 distillation、structured pruning、blockwise NAS、MACs、latency 和 TensorRT 的区别 |
 
-!!! info "论文信息"
+    **info · 论文信息**
+
     - 论文：`Fast-FoundationStereo: Real-Time Zero-Shot Stereo Matching`
     - 链接：[arXiv:2512.11130](https://arxiv.org/abs/2512.11130)
     - 项目页：[Fast-FoundationStereo](https://nvlabs.github.io/Fast-FoundationStereo/)
@@ -79,13 +92,16 @@ FoundationStereo 的强泛化
 
 <small>图源：`Fast-FoundationStereo`，Figure 1。原论文图意：Fast-FoundationStereo 在 in-the-wild stereo images 上接近 MonSter 和 FoundationStereo 的 disparity 质量，同时运行速度接近实时方法。</small>
 
-!!! note "这张图怎么读"
+!!! note "合并提示"
+    **note · 这张图怎么读**
+
     **输入输出**：输入是双目图像和 foundation stereo backbone，输出是 disparity/depth 与裁剪后的 refinement 路径。  
     **效率机制**：用蒸馏、剪枝和迭代裁剪减少双目匹配的实时推理成本。  
     **对主线意义**：几何估计可以服务具身/世界模型状态层，但仍是感知模块。  
     **不能证明什么**：实时深度不能证明动作策略、接触动力学或闭环安全已经成立。
 
-!!! note "这张图怎么读"
+    **note · 这张图怎么读**
+
     横向看每一行，左侧是输入图像，后面是不同方法的 disparity map。论文想表达的不是“每个像素都赢过 teacher”，而是 Fast-FoundationStereo 能明显好于传统实时模型，并接近 FoundationStereo / MonSter 这类慢模型。
 
     对推理系统来说，这张图的价值在于提醒我们：实时化不能只看 latency。如果几何边界、透明区域和弱纹理区域全部坏掉，快也没有用。Fast-FoundationStereo 的目标是把 latency 拉下来，同时保住足够的 zero-shot 几何可靠性。
@@ -133,6 +149,13 @@ Fast-FoundationStereo 用一个 student backbone 替换这套双模块。训练�
 \sum_i \left\| P_i(f^{(i)}) - \bar f^{(i)} \right\|_2^2
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(P_i\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+| \(f^{(i)}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 其中 \(P_i\) 是必要时加入的 projection。
 
 ![Backbone 蒸馏原图](../../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-4-backbone-distillation.png){ width="820" }
@@ -159,6 +182,12 @@ Stereo matching 的核心不是只看左右图像特征，还要构造 cost volu
 \[
 \mathbf{V_C} \in \mathbb{R}^{C \times \frac{D}{4} \times \frac{H}{4} \times \frac{W}{4}},
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(C\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 其中 \(D\) 是 maximum disparity。FoundationStereo 使用双分支 cost filtering：一边是带 Axial-Planar Convolution 的 3D hourglass，一边是 Disparity Transformer，对 4D cost volume 做长程上下文推理。
 
@@ -199,6 +228,13 @@ Appendix 里给出的数量很关键：
 \left\| B_i(f_{i-1})-\bar{B}_i(f_{i-1}) \right\|_2^2
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(B_i\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(f_{i-1}\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 其中 \(f_{i-1}\) 来自前一个 teacher block 的输出。最后一个预测 initial disparity 的 block 额外用 smooth \(L_1\) 对 ground truth disparity 做监督。teacher 在整个 block distillation 过程中冻结。
 
 每个候选 block 训练完后，论文把它替换进完整 teacher model 的对应位置，在 validation dataset 上端到端跑一遍，记录：
@@ -217,6 +253,15 @@ Appendix 里给出的数量很关键：
 \quad
 \sum_{i=1}^{N} (\Delta \mathbf{t}_i)^\top \mathbf{e}_i \leq \Delta \tau.
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\Delta\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(\tau\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |
+| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(N\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+
 
 这里 \(\mathbf{e}_i\) 是 one-hot candidate selection，\(\Delta \tau\) 是相对 teacher 的 runtime budget。
 
@@ -260,6 +305,17 @@ FoundationStereo 的 refinement module 是迭代式 ConvGRU。它从 initial dis
 \sum_{i=1}^{L}
 \left\| x_i-\overline{x}_i \right\|_2^2
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\gamma\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
+| \(\lambda\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+| \(k\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+| \(d_k\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
+
 
 其中 \(\gamma=0.9\)，\(\lambda=0.1\)。第一项监督每轮 refine 后的 disparity，越靠后的 iteration 权重越高；第二项让 student refinement 的 latent features 贴近 teacher。
 
@@ -332,6 +388,10 @@ Pseudo-label ablation 说明这批数据不只帮助 Fast-FoundationStereo，也
 这张表里最重要的是“trainable part”和“frozen part”的分工。Fast-FoundationStereo 不是简单用一个小网络拟合最终 disparity，而是在不同阶段让 student 学 teacher 的中间能力：feature prior、cost filtering behavior、refinement latent dynamics，以及输出空间的 pseudo labels。
 
 ## 实验结果：速度、参数和成本账
+
+<!-- [补充] -->
+> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+
 
 Table 5 是最直接的效率账，下面保留论文英文格式。
 
@@ -415,10 +475,13 @@ Fast-FoundationStereo 最适合记成一句工程原则：
 
 它对高效推理专题的补充价值在于跨出了 LLM decode：在实时机器人感知里，推理优化同样要同时考虑模型结构、训练蒸馏、数据质量、runtime 导出和 zero-shot 泛化。快不是目标本身，快且在真实场景里可靠才是目标。
 
-!!! info "本站判断"
+!!! note "合并提示"
+    **info · 本站判断**
+
     Fast FoundationStereo 的价值在速度-精度折中：方法要抓 backbone distillation、refinement pruning、pseudo labels 和 blockwise search；实验看 speed-accuracy 曲线、runtime detail 与 refinement 消融。用于机器人要补传感噪声、低纹理和实时闭环测试。
 
-!!! tip "下一站"
+    **tip · 下一站**
+
     - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
     - 把本篇结论接回主题：[推理](../../inference/index.md)。
     - 按导航顺序继续：[KVSlimmer：非对称 KV 合并](kvslimmer.md)。

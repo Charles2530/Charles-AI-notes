@@ -2,6 +2,13 @@
 
 训练大模型时，显存压力往往不是权重单独造成的，而是权重、梯度、optimizer state 和中间激活一起造成的。自动微分让训练变简单，也带来了保存计算图和激活的显存成本。
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“自动微分与激活显存”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“自动微分与激活显存”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
@@ -11,26 +18,31 @@
 
 <small>图源：[Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1。原论文图意：把神经网络前向计算表示成有向计算图，反向传播时需要中间节点的值；若不保存全部中间值，就需要在 backward 前重新计算部分节点。</small>
 
-!!! note "图解：checkpointing 的核心是少存、多算"
+!!! note "合并提示"
+    **note · 图解：checkpointing 的核心是少存、多算**
+
     这张图把训练看成一张计算图：前向时每个节点产生中间激活，反向时梯度需要沿图反传并读取这些激活。全保存最省计算但占显存；activation checkpointing 只保存少数关键节点，反向时从最近 checkpoint 重新跑一段前向，换回缺失激活。训练显存不够时，不一定先换模型，可以先看 checkpointing、batch size、sequence length、ZeRO/FSDP、低精度和重算策略。
 
-!!! note "初学者先抓住"
+    **note · 初学者先抓住**
+
     推理只要算出答案，训练还要记住“答案是怎么来的”，这样 backward 才能算 gradient。显存压力很多时候不是权重本身，而是中间激活、梯度和 optimizer state 一起叠加。看到训练 OOM 时，先估计这几类状态谁是主因，再决定是 checkpointing、ZeRO/FSDP、offload 还是降 batch。
 
-!!! tip "遇到这些症状，回看本页"
+    **tip · 遇到这些症状，回看本页**
+
     同一模型推理能跑、训练一开就 OOM，activation checkpointing 后吞吐掉得过多，或者恢复训练后梯度和数据游标对不上时，回看本页。本页能帮你判断显存该从 activation、optimizer state、重算策略还是 checkpoint 恢复语义入手。
 
 ## 符号卡：自动微分里的几个词
 
-| 符号或词 | 含义 |
-| --- | --- |
-| forward | 从输入算到 loss 的过程 |
-| backward | 从 loss 把梯度传回参数的过程 |
-| activation | 前向中间结果，反向常要用 |
-| checkpoint | 被刻意保存下来的中间节点 |
-| recompute | 反向时重新计算丢掉的激活 |
-| \(\frac{\partial L}{\partial \theta}\) | loss 对参数的偏导数 |
-| optimizer state | AdamW 等优化器保存的动量、二阶矩等状态 |
+<!-- [补充] -->
+| 符号或词 | 含义 | 取值范围 |
+| --- | --- | --- |
+| forward | 从输入算到 loss 的过程 | 一次前向计算流程 |
+| backward | 从 loss 把梯度传回参数的过程 | 一次反向计算流程 |
+| activation | 前向中间结果，反向常要用 | 张量，形状由层和 batch 决定 |
+| checkpoint | 被刻意保存下来的中间节点 | 模型图中的选定激活或状态 |
+| recompute | 反向时重新计算丢掉的激活 | 计算策略 |
+| \(\frac{\partial L}{\partial \theta}\) | loss 对参数的偏导数 | 与 \(\theta\) 同形状的梯度张量 |
+| optimizer state | AdamW 等优化器保存的动量、二阶矩等状态 | 与参数规模相关的张量集合 |
 
 推理只需要 forward；训练需要 forward、保存或重算激活、backward 和 optimizer update。因此训练显存通常明显高于推理。
 
@@ -116,6 +128,12 @@ flowchart LR
 \[
 2\times4\times16\times1024\times1024\times2 \approx 256MB
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 如果模型有几十层，并且反向传播需要保存多种中间激活，显存会迅速超过权重本身。这也是为什么视频世界模型训练经常要组合使用 gradient checkpointing、短长 horizon 混合、视觉 token 压缩、activation offload 和序列并行。
 

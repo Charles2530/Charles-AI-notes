@@ -2,6 +2,13 @@
 
 模型推理已经不只是“加载权重然后调用 `generate()`”。真正决定线上成本和时延的，是一层专门的运行时系统：它管理 continuous batching、KV cache、prefix cache、paged attention、量化 kernel、图捕获、路由、分布式执行、多模型共存和 tracing。`vLLM`、`SGLang`、`TensorRT-LLM` 代表了几条不同取舍路线。
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“推理运行时：vLLM、SGLang、TensorRT-LLM”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“推理运行时：vLLM、SGLang、TensorRT-LLM”在「推理」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先知道 transformer 解码、GPU kernel、显存和吞吐/延迟的区别。 必要时先回 [推理入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
@@ -9,16 +16,23 @@
 
 这页和 [推理服务系统](serving-systems.md)、[GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md)、[可观测性与在线评测](observability-and-online-evaluation.md) 一起读。推理服务系统页讲资源治理，本页聚焦 runtime 选型。
 
-!!! tip "新手阅读顺序"
+!!! note "合并提示"
+    **tip · 新手阅读顺序**
+
     如果还不熟 `TTFT`、`TPOT`、`prefill`、`decode` 和 `KV cache`，先读 [推理服务系统](serving-systems.md) 与 [GPU Kernel、Batching 与显存](gpu-kernels-batching-and-memory-systems.md)。本页默认你已经知道一次请求的生命周期，然后再比较 `vLLM`、`SGLang` 和 `TensorRT-LLM` 这些工具如何承接调度、KV、kernel 和量化路径。
 
-!!! note "初学者先抓住"
+    **note · 初学者先抓住**
+
 
     推理 runtime 是模型和硬件之间的执行层：它决定请求怎么排队、KV 怎么分配、prefix 怎么复用、kernel 走哪条路径、异常 shape 怎么 fallback。选 runtime 时先看 workload，而不是先看榜单。
 
-!!! example "有趣例子：不同餐厅后厨"
+    **example · 有趣例子：不同餐厅后厨**
+
 
     快餐店、宴会厅和私人订制厨房都能做饭，但组织方式完全不同。`vLLM` 更像通用高并发后厨，`SGLang` 更适合多阶段编排，`TensorRT-LLM` 更适合菜单稳定、硬件固定、追求极致效率的场景。
+
+<!-- [补充] -->
+> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 一、Runtime 在推理栈里的位置
 
@@ -145,6 +159,8 @@ Agent 请求不是一次输入一次输出，而是生成、调工具、解析�
 
 `vLLM`、`SGLang`、`TensorRT-LLM` 的差异，真正值得比较的不是“谁绝对更强”，而是谁的默认假设、部署方式、可观测性和工作负载契合度更适合你的系统。
 
+<!-- [补充] -->
+下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
 ```python
 def choose_runtime(workload):
     if workload.shape_stable and workload.hardware_fixed and workload.needs_max_perf:

@@ -2,6 +2,13 @@
 
 这一组页面是本站后续专题的公共地基。它不要求你先学完整本数学教材，而是帮你把论文和工程文档里最常见的概念按顺序串起来：
 
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“AI 基础知识地图”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
+
 !!! note "读法定位"
     这页先回答“AI 基础知识地图”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先看本页路线，或查 [术语表](../glossary/index.md)。
@@ -15,6 +22,9 @@
 
 !!! note "先读哪几页"
     推荐顺序是：本页 -> [数据与数据集基础](data-and-dataset-basics.md) -> [符号与最小数学地图](symbols-and-minimal-math.md) -> [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) -> [Transformer 输入与注意力](transformer-attention-and-tokenization.md) -> [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md) -> [优化与训练入门](optimization-and-training-basics.md) -> [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)。读完这些，再按兴趣补生成解码、模型蒸馏、多模态、MoE、Mamba、显存和评测。
+
+<!-- [补充] -->
+> **一句话理解**：AI 基础知识地图 可以先当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背公式，先看清哪一步在改变信息、哪一步在改变成本。
 
 ## 一张图先建立全局感
 
@@ -77,6 +87,13 @@
 \[
 \theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(\eta\) | 公式中的变量或中间量 | 按上下文定义 |
+
 
 这里 \(\theta\) 是模型参数，\(\mathcal{L}\) 是 loss，\(\nabla_\theta \mathcal{L}\) 是梯度，\(\eta\) 是学习率。第一次看到这行公式时，只要把它读成“沿着让错误变小的方向更新参数”就够了。
 

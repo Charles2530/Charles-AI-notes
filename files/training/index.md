@@ -1,5 +1,14 @@
 # 大模型训练路线图
 
+
+
+
+<!-- [补充] -->
+| 读者 | 建议读法 | 工程落点 |
+| --- | --- | --- |
+| 初学者 | 先抓“大模型训练路线图”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
+| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+
 <div class="atlas-hero">
   <div class="atlas-kicker">Training Systems</div>
   <p class="atlas-lead">这一专题围绕大模型训练的完整生产线展开：先建立 batch、loss、梯度、优化器和训练阶段的基础直觉，再进入 Megatron-LM、DeepSpeed、输入管线、稳定性、checkpoint 与评测方法学。</p>
@@ -13,12 +22,15 @@
   </div>
 </div>
 
-!!! note "读法定位"
+!!! note "合并提示"
+    **note · 读法定位**
+
     这页先回答“大模型训练路线图”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
     **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先看本页路线，或回 [基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
     **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
 
-!!! tip "第一次读训练专题怎么走"
+    **tip · 第一次读训练专题怎么走**
+
     如果你还不熟 loss、梯度、optimizer、RLHF 或分布式训练，先按这条线走：
 
     1. [模型训练从零入门](beginner-model-training-primer.md)：按数据与 batch、预测、loss、梯度、optimizer、阶段、分布式和评测建立完整闭环。
@@ -26,33 +38,40 @@
     3. [预训练、微调与对齐](pretraining-finetuning-alignment.md)：理解预训练、SFT、偏好/RL 分别在塑造什么。
     4. [论文图解索引](page-by-page-visual-guide.md)：用 Chinchilla、InstructGPT、PPO、ZeRO、GPipe 等原论文图建立直觉。
 
-!!! tip "快速定位"
+    **tip · 快速定位**
+
     **一句话结论**：训练效率要同时看吞吐、显存、通信、可恢复性和质量回归。
     **适合读者**：研究入门读者、正在比较训练栈的人，以及需要把训练实验写成可信证据链的人。
     **先看哪张表**：初学者先看“第一次读训练专题怎么走”，工程读者再看“最小验收指标”和“阅读分层与小地图”。
 
-!!! tip "10 分钟读法 | 深入读法 | 实验/工程读法"
+    **tip · 10 分钟读法 | 深入读法 | 实验/工程读法**
+
     **10 分钟读法**：先把训练看成数据、loss、优化器、并行、checkpoint 和评测的生产线。
     **深入读法**：深读 Megatron/ZeRO/FP8/packing 时，把 MFU、显存、通信和收敛一起看。
     **实验/工程读法**：工程上必须保存 config、数据版本、checkpoint manifest、loss 曲线、指标和失败恢复记录。
 
-!!! warning "核心失败模式"
+    **warning · 核心失败模式**
+
     | 失败模式 | 先查什么 |
     | --- | --- |
     | 训练不可复现 | 数据版本、config、seed、checkpoint 和环境要成证据链 |
     | 吞吐压倒质量 | step time 下降不能证明任务能力变好 |
     | 长序列显存爆炸 | activation、optimizer state、communication 和 packing 一起算 |
 
-!!! info "最小验收指标"
+    **info · 最小验收指标**
+
     | 要证明什么 | 最小指标 | 不能替代什么 |
     | --- | --- | --- |
     | 训练更省 | MFU/step time、峰值显存、通信 trace、吞吐 | 单次速度截图 |
     | 训练可信 | 数据版本、seed、config、checkpoint 可恢复 | loss 曲线 |
     | 质量没退 | validation、downstream、ablation 和失败桶 | 系统吞吐 |
 
+    **failure · 最佳反例**
 
-!!! failure "最佳反例"
     MFU 或 step time 提升，但数据版本漂移、checkpoint 不可恢复、validation 退化。训练效率必须同时保住吞吐、可恢复性和质量链路。
+
+<!-- [补充] -->
+> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 专题定位
 
@@ -71,16 +90,21 @@
   </div>
 </div>
 
-!!! note "在全站主线里的位置"
+!!! note "合并提示"
+    **note · 在全站主线里的位置**
+
     训练专题是工程支撑，不是“从 VLM 到世界模型”的概念主线本身。只有当你需要解释一个世界模型、VLA 或多模态模型为什么训不稳、数据不够、显存不够、吞吐不够、checkpoint 不可恢复时，再从这里下钻。主线读者优先抓住数据、目标函数、分布式状态和评测回流四件事。
 
-!!! tip "证据与全站矩阵"
+    **tip · 证据与全站矩阵**
+
     前沿 claim 先查 [全站证据标准](../references/evidence-and-reproducibility-standard.md) 和 [全站效率矩阵](../references/site-efficiency-coverage-matrix.md)。训练页里的系统吞吐、benchmark、消融和本站推断要分开写，不能把 step time 下降直接外推成闭环任务变好。
 
-!!! tip "本专题的读法"
+    **tip · 本专题的读法**
+
     不要把训练页当成“术语表顺序背”。先把一次训练看成生产线：数据进来，目标函数定义学习信号，优化器和并行系统负责把信号转成参数更新，评测和 checkpoint 决定这次实验是否可信。读每个子页面时，都问它在这条生产线里解决哪一段问题。
 
-!!! note "从新加论文反推训练主线"
+    **note · 从新加论文反推训练主线**
+
     Megatron-LM 和 ZeRO 可以作为训练系统的两个锚点：Megatron-LM 解释为什么要把 Transformer 的 MLP、attention 和词表 loss 切成 tensor parallel，ZeRO 解释为什么普通 DP 会把 optimizer states、gradients、parameters 重复存到每张卡。读训练章节时，先把问题拆成三张账：**显存账**看参数、梯度、优化器状态、激活和 buffer；**通信账**看 TP all-reduce、DP reduce-scatter/all-gather、PP 点对点和 checkpoint I/O；**质量账**看数据去重、batch、LR schedule、validation loss 和 downstream 指标。这样再看 Megatron、DeepSpeed、FSDP、FP8 或 checkpoint，就不会只是在记工具名。
 
 <div class="atlas-meta-grid">
@@ -216,6 +240,15 @@
 \min_\theta \mathbb{E}_{(x,y)\sim \mathcal{D}}[\ell(f_\theta(x), y)]
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
+| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
+| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
+
+
 但在大模型时代，训练从来不只是目标函数。真正影响结果的是一整套系统：数据清洗、采样混合、优化器与学习率、batch 组织与 packing、分布式训练与容错、后训练与对齐，以及算子、kernel 与编译栈。
 
 也就是说，训练不是“把样本喂给模型”这么简单，而是把能力目标、数据生产线、优化过程和系统资源组织成一条长期运转的生产线。
@@ -281,11 +314,23 @@
 \text{Pretraining} \rightarrow \text{SFT} \rightarrow \text{Preference Alignment}
 \]
 
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
+
 **同时整条链路又依赖**：
 
 \[
 \text{Data} + \text{Optimization} + \text{Systems}
 \]
+
+<!-- [补充] -->
+| 符号 | 含义 | 取值范围 |
+| --- | --- | --- |
+| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+
 
 也就是说，训练不是一个阶段，而是一条生产线。
 
@@ -377,6 +422,8 @@ kernel、通信、Triton、CUDA、量化与编译栈，是“训练为什么能�
 
 ### 快速代码示例
 
+<!-- [补充] -->
+下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
 ```python
 import deepspeed  # 引入 DeepSpeed 训练引擎
 
