@@ -37,6 +37,17 @@
 
 ## 一、后训练为什么是数据引擎
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
+> **算法视角**：PPO / DPO 都是在候选回答之间定义偏好信号；PPO 通过策略更新和 KL 约束控制模型漂移，DPO 则把 chosen / rejected 对直接转成 pairwise loss。
+>
+> 延伸阅读：[12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| DPO pair loss | $O(BL)$ logprob 评估 | 需要 policy / reference 的中间结果 | $B$ 为样本对数，$L$ 为序列长度；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html) |
+| PPO rollout + update | 多次模型前向 / 反向 | 常同时保留 policy、reference、reward 路径 | 成本主要来自多模型调用、采样和 KL 监控。 |
+
 预训练更像建立通用表示底座，后训练更像持续雕刻行为边界。它依赖的不是一次性数据包，而是一条长期运行的闭环：收集线上/离线 prompt、上下文和失败日志，聚类高频问题和长尾异常，生成多个候选回答或工具轨迹，用 judge、规则和程序信号粗筛，对高价值样本人审，再导出到 SFT、DPO/RLAIF、reward model、judge 训练和回归集。新模型上线后，还要继续观察同类问题是否下降。
 
 可以抽象成：
@@ -47,8 +58,8 @@ $$
 \mathcal{D}_t \cup \mathcal{F}(\text{traffic}, \text{candidates}, \text{judge}, \text{human}, \text{online signals}).
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
@@ -87,8 +98,8 @@ $$
 J(x, y_a, y_b) \in \{a,b\}
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(J\) | 优化目标 | 实数标量，通常越大或越小由正文定义 |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |

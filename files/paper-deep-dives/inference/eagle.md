@@ -172,8 +172,8 @@ f_{i+1},
 \right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(f_{i+1}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -189,8 +189,8 @@ p_{i+2}
 \mathrm{Softmax}(\mathrm{LM\_Head}(f_{i+1}))
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(p_{i+2}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
 | \(f_{i+1}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -202,8 +202,8 @@ p_{i+2}
 \mathrm{Softmax}(\mathrm{LM\_Head}(\hat f_{i+1}))
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(p_{i+2}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
 | \(f_{i+1}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -215,8 +215,8 @@ L_{\mathrm{cls}}
 \mathrm{Cross\_Entropy}(p_{i+2},\hat p_{i+2})
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(p_{i+2}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
@@ -230,8 +230,8 @@ L=L_{\mathrm{reg}}+w_{\mathrm{cls}}L_{\mathrm{cls}},
 w_{\mathrm{cls}}=0.1
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -248,8 +248,8 @@ EAGLE 推理时会自回归使用自己预测的 feature，错误会累积。训
 \epsilon \sim \mathcal{U}(-0.1,0.1)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\epsilon\) | 公式中的变量或中间量 | 按上下文定义 |
 
@@ -330,6 +330,17 @@ EAGLE 理想上可以用 target LLM 自己生成的文本训练 draft head，但
 这张表说明两件事。第一，EAGLE 每轮 target forward 平均可以接受约 3.2-4.5 个 token。第二，\(0\text{-}\alpha\) 高于 \(1\text{-}\alpha\)，说明 feature error 确实伤害 draft；但从 \(1\text{-}\alpha\) 到 \(4\text{-}\alpha\) 下降不大，说明噪声增强和 shifted-token 让模型对误差累积有一定鲁棒性。
 
 ## MoE、量化编译和 Batch Size
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 EAGLE 在 Mixtral 8x7B 上只有 `1.50x` speedup。论文解释是 MoE speculative verification 不像 dense decoder 那样天然复用所有权重读取：vanilla 每个 token 只读少数专家，而一次验证多个 draft token 可能读更多专家，收益会变小。
 

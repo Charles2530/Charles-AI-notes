@@ -32,14 +32,24 @@
 
 ## 为什么长上下文首先打爆的是 I/O
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax》-->
+> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
+>
+> 延伸阅读：[15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/15_FlashAttention_Sim.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/15_FlashAttention_Sim.html) |
+
 标准 attention 的核心公式是：
 
 $$
 \text{softmax}\left(\frac{QK^\top}{\sqrt{d}}\right)V.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(V\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
 

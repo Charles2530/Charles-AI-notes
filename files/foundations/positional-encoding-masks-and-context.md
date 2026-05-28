@@ -29,6 +29,16 @@ Attention 本身只计算 token 之间的相关性。它并不知道第一个 to
 
 ## 符号卡：位置和可见性
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《03. RoPE Tutorial | 旋转位置编码 (RoPE)》-->
+> **算法视角**：RoPE 是在 Q/K 进入 attention 前做成对旋转，把绝对位置转成点积里的相对位置信号；长上下文扩展时，频率尺度、mask 和 kernel fusion 会一起决定可用边界。
+>
+> 延伸阅读：[03. RoPE Tutorial | 旋转位置编码 (RoPE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/03_RoPE_Tutorial.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《03. RoPE Tutorial | 旋转位置编码 (RoPE)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| RoPE 旋转 | $O(BLH_d)$ | $O(BLH_d)$ | 与 attention 主体相比通常较轻，但融合后可减少额外读写；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/03_RoPE_Tutorial.html) |
+
 <!-- [补充] -->
 | 符号或词 | 含义 | 取值范围 |
 | --- | --- | --- |
@@ -113,8 +123,8 @@ output = weights @ V
 \text{KV cache size} \propto \text{layers} \times L \times D
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(D\) | 公式中的变量或中间量 | 按上下文定义 |

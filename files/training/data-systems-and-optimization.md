@@ -46,8 +46,8 @@
 \text{Throughput} = \frac{N_{\text{eff}}}{T_{\text{step}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(N_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -60,6 +60,16 @@
 因此吞吐不是单纯运维指标，而是训练方法学的一部分。
 
 ## 数据链路
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
+> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
+>
+> 延伸阅读：[09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html) |
 
 一个完整训练数据系统通常从原始采集、解析清洗、去重过滤开始，经过质量打分、重采样、多源混合和分桶 packing，再进入 shard 分布式读取、在线监控与回流。每一层都会改变最终进入模型的 token 分布。
 
@@ -81,8 +91,8 @@ AdamW 仍是 Transformer 训练中最常见的默认选择，原因很现实：�
 \end{cases}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\eta_t\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(\eta_{\max}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -103,8 +113,8 @@ Warmup 不只是数学上更平滑，也能让混合精度、分布式梯度统�
 B_{\text{eff}} = B_{\text{micro}} \times N_{\text{accum}} \times N_{\text{data-parallel}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(B_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(N_{}\) | 公式中的变量或中间量 | 按上下文定义 |

@@ -39,8 +39,8 @@
 y=xW+b
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -53,8 +53,8 @@ y=xW+b
 x\in\mathbb{R}^{B\times L\times D},\quad W\in\mathbb{R}^{D\times D_{\text{out}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -72,8 +72,8 @@ x\in\mathbb{R}^{B\times L\times D},\quad W\in\mathbb{R}^{D\times D_{\text{out}}}
 y\in\mathbb{R}^{B\times L\times D_{\text{out}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -85,6 +85,17 @@ y\in\mathbb{R}^{B\times L\times D_{\text{out}}}
 
 ## 再分清 MatMul 和 GEMM
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
+> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
+>
+> 延伸阅读：[04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html) |
+| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
+
 `MatMul` 更像数学操作或框架算子名：给定两个张量，按最后两个维度做矩阵乘，可能带 batch 维、broadcast、transpose 或不同 backend lowering。
 
 `GEMM` 是 BLAS 语境里的 General Matrix-Matrix Multiplication，标准形式更接近：
@@ -93,8 +104,8 @@ y\in\mathbb{R}^{B\times L\times D_{\text{out}}}
 C \leftarrow \alpha A B + \beta C
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(\beta\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -125,8 +136,8 @@ C \leftarrow \alpha A B + \beta C
 y = xW + b
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -139,8 +150,8 @@ y = xW + b
 x \in \mathbb{R}^{B \times L \times D}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -154,8 +165,8 @@ x \in \mathbb{R}^{B \times L \times D}
 W \in \mathbb{R}^{D \times D_{\text{out}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(W\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(D\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -168,8 +179,8 @@ W \in \mathbb{R}^{D \times D_{\text{out}}}
 y \in \mathbb{R}^{B \times L \times D_{\text{out}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -205,8 +216,8 @@ Transformer 里的 MLP 常写成：
 \text{MLP}(x)=W_2 \sigma(W_1x)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\sigma\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -232,8 +243,8 @@ Transformer 里的 MLP 常写成：
 x \in \mathbb{R}^{B \times L \times D},\qquad W \in \mathbb{R}^{D \times D_{\text{out}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -251,8 +262,8 @@ x \in \mathbb{R}^{B \times L \times D},\qquad W \in \mathbb{R}^{D \times D_{\tex
 X_{\text{flat}} \in \mathbb{R}^{(B L) \times D}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(X_{}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -269,8 +280,8 @@ Y_{\text{flat}} = X_{\text{flat}} W + b,\qquad
 Y_{\text{flat}} \in \mathbb{R}^{(B L) \times D_{\text{out}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(Y_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(X_{}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -288,8 +299,8 @@ Y_{\text{flat}} \in \mathbb{R}^{(B L) \times D_{\text{out}}}
 y \in \mathbb{R}^{B \times L \times D_{\text{out}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |

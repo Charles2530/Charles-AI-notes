@@ -37,6 +37,16 @@
 
 ## 符号卡：axis 和 shape 怎么读
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作》-->
+> **算法视角**：张量 shape、stride、view / reshape 和 device placement 是后续 attention、GEMM、KV cache 与训练循环的共同底座；看似只是 API 差异，实际会影响是否发生拷贝和是否能走高效 kernel。
+>
+> 延伸阅读：[02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作](https://datawhalechina.github.io/llm-algo-leetcode/00_Prerequisites/02_PyTorch_Tensor_Fundamentals.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| view / reshape / permute | metadata 变换常为 $O(1)$；触发 contiguous copy 时为 $O(N)$ | 取决于是否复制底层 storage | 先确认 stride 与 contiguous，再判断性能问题；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/00_Prerequisites/02_PyTorch_Tensor_Fundamentals.html) |
+
 张量的每一维都叫一个 axis。读 shape 时不要只看数字，要读出“这一维代表什么”。
 
 | 写法 | 读法 | 含义 |
@@ -54,8 +64,8 @@
 x \in \mathbb{R}^{B \times L \times D}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -82,8 +92,8 @@ x \in \mathbb{R}^{B \times L \times D}
 x \in \mathbb{R}^{B \times C \times H \times W}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -98,8 +108,8 @@ x \in \mathbb{R}^{B \times C \times H \times W}
 x \in \mathbb{R}^{B \times L \times D}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -115,8 +125,8 @@ Shape 决定张量能不能进入某个模块。比如矩阵乘：
 (B, L, D) \times (D, D_{\text{out}}) \rightarrow (B, L, D_{\text{out}})
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -193,8 +203,8 @@ flowchart LR
 Patches = \frac{H}{p}\times\frac{W}{p}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
 | \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
@@ -208,8 +218,8 @@ Patches = \frac{H}{p}\times\frac{W}{p}
 L_{\text{vision}} = Cams \times Frames \times Patches
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(C\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -223,8 +233,8 @@ L_{\text{vision}} = Cams \times Frames \times Patches
 L_{\text{vision}} = 4\times16\times256 = 16,384
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 
@@ -235,8 +245,8 @@ L_{\text{vision}} = 4\times16\times256 = 16,384
 L_{\text{total}} = L_{\text{vision}} + L_{\text{text}} + L_{\text{prop}} + L_{\text{action}} + L_{\text{memory}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 

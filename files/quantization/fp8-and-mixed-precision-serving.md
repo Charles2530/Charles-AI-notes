@@ -22,6 +22,17 @@ FP8 是低精度路线里很重要的一类：它比 FP16/BF16 更省显存和�
 
 ## FP8 在解决什么问题
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
+> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
+>
+> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
+| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
+
 大模型推理和训练常被三类成本卡住：
 
 | 成本 | FP8 可能帮什么 |
@@ -47,8 +58,8 @@ FP8 常见两种格式：
 x\approx (-1)^{\mathrm{sign}}\times 2^{e}\times m
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(e\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -68,8 +79,8 @@ x\approx (-1)^{\mathrm{sign}}\times 2^{e}\times m
 x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x_{}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
@@ -79,8 +90,8 @@ x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
 \hat{x}=s\cdot x_{\mathrm{fp8}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\hat{x}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
@@ -147,8 +158,8 @@ x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
 \mathrm{Value}=\frac{\mathrm{quality\ kept}\times \mathrm{throughput\ gain}}{\mathrm{engineering\ complexity}+\mathrm{fallback\ risk}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 

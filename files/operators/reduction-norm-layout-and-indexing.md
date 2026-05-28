@@ -57,8 +57,8 @@ $$
 \frac{e^{x_i}}{\sum_j e^{x_j}},
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(e^{x_i}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -74,6 +74,16 @@ $$
 这不仅是数学技巧，更是 kernel 设计基础。
 
 ## LayerNorm / RMSNorm 的 kernel 画像
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)》-->
+> **算法视角**：RMSNorm、SwiGLU 和 softmax 这类模块更像按行做 reduce / elementwise 组合；它们的瓶颈常常不是 FLOPs，而是读写次数、融合机会和数值稳定边界。
+>
+> 延伸阅读：[01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/01_RMSNorm_Tutorial.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| RMSNorm / 激活融合 | $O(BLD)$ | $O(BLD)$ | $B,L,D$ 分别对应 batch、序列长度和 hidden size；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/01_RMSNorm_Tutorial.html) |
 
 Norm 类算子的核心不是“公式难”，而是每行要先算统计量、再应用归一化；数据通常是连续向量，很适合向量化加载，也很适合和 residual、scale、bias 融合。
 

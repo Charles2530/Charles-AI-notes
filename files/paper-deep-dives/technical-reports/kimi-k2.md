@@ -52,6 +52,17 @@ Kimi K2 这份报告的核心不是“又发布了一个大模型”，而是围
 
 ## 论文位置
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
+> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
+>
+> 延伸阅读：[06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html) |
+| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
+
 Kimi K2 可以放在 DeepSeek-V3、DeepSeek-R1、Qwen3 之后一起看：
 
 | Report | Core emphasis | Training / post-training signal |
@@ -135,8 +146,8 @@ $$
 \operatorname{softmax}\left(\frac{1}{\sqrt d}QK^\top\right).
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(d\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(Q\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -153,8 +164,8 @@ S_{\max}^{h}=
 \mathbf Q_i^{h}\mathbf K_j^{h\top}.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(S_{}^{h}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
 | \(d\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -328,8 +339,8 @@ r(x,y_i)-\bar r(x)
 \right],
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(\tau\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |

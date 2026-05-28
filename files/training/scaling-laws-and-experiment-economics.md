@@ -37,8 +37,8 @@ $$
 L(N,D) \approx A N^{-\alpha} + B D^{-\beta} + L_\infty.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(\beta\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -67,8 +67,8 @@ $$
 \mathbb{E}[\text{value}] = (1-p_f)G - K.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(p_f\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
 | \(G\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
@@ -97,8 +97,8 @@ $$
 D_{\text{eff}} = D (1-\rho_{\text{dup}})(1-\rho_{\text{noise}})
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\rho_{\text{dup}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 | \(\rho_{\text{noise}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
@@ -133,6 +133,16 @@ $$
 
 ## 推理成本要提前计入
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》-->
+> **算法视角**：FLOPs / 参数量估算不是为了得到一个漂亮数字，而是把模型结构、batch token、并行度和硬件吞吐放到同一张预算表里，先判断瓶颈会落在算力、显存还是通信。
+>
+> 延伸阅读：[02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/02_LLM_Params_and_FLOPs.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| Transformer 前向估算 | 约随参数量和 token 数线性增长 | 受参数、KV / activation 与临时 buffer 共同影响 | 训练通常还要乘上反向和优化器开销；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/02_LLM_Params_and_FLOPs.html) |
+
 若一个训练方案让离线指标提升 2%，但推理成本翻倍，业务上可能并不划算。可把总拥有成本近似写为
 
 $$
@@ -143,8 +153,8 @@ $$
 + \text{Maintenance Cost}.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 

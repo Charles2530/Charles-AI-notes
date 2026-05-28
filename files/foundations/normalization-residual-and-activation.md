@@ -48,6 +48,16 @@
 
 ## 归一化在解决什么
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)》-->
+> **算法视角**：RMSNorm、SwiGLU 和 softmax 这类模块更像按行做 reduce / elementwise 组合；它们的瓶颈常常不是 FLOPs，而是读写次数、融合机会和数值稳定边界。
+>
+> 延伸阅读：[01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/01_RMSNorm_Tutorial.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| RMSNorm / 激活融合 | $O(BLD)$ | $O(BLD)$ | $B,L,D$ 分别对应 batch、序列长度和 hidden size；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/01_RMSNorm_Tutorial.html) |
+
 神经网络每层输出的数值尺度可能不断漂移。尺度过大，梯度可能爆炸；尺度过小，梯度可能消失。
 
 归一化的作用是把中间表示拉回更稳定的范围。
@@ -68,8 +78,8 @@
 y = x + F(x)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -110,8 +120,8 @@ flowchart LR
 \left(I + \frac{\partial F(x)}{\partial x}\right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -130,8 +140,8 @@ flowchart LR
 y = F(x) + W_s x
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(F\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -181,8 +191,8 @@ GELU 论文还给出常用近似：
 0.5x\left(1+\tanh\left[\sqrt{2/\pi}(x+0.044715x^3)\right]\right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\pi\) | 策略或概率分布 | 非负概率分布，总和为 1 |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |

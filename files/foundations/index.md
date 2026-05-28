@@ -23,7 +23,7 @@
 !!! note "先读哪几页"
     推荐顺序是：本页 -> [数据与数据集基础](data-and-dataset-basics.md) -> [符号与最小数学地图](symbols-and-minimal-math.md) -> [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md) -> [Transformer 输入与注意力](transformer-attention-and-tokenization.md) -> [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md) -> [优化与训练入门](optimization-and-training-basics.md) -> [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)。读完这些，再按兴趣补生成解码、模型蒸馏、多模态、MoE、Mamba、显存和评测。
 
-<!-- [补充] -->
+<!-- [补充：初学者直觉] -->
 > **一句话理解**：AI 基础知识地图 可以先当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背公式，先看清哪一步在改变信息、哪一步在改变成本。
 
 ## 一张图先建立全局感
@@ -88,8 +88,8 @@
 \theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(\eta\) | 公式中的变量或中间量 | 按上下文定义 |

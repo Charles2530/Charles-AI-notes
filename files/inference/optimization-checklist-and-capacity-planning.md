@@ -37,14 +37,24 @@
 
 ## 请求画像先于资源估算
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》-->
+> **算法视角**：FLOPs / 参数量估算不是为了得到一个漂亮数字，而是把模型结构、batch token、并行度和硬件吞吐放到同一张预算表里，先判断瓶颈会落在算力、显存还是通信。
+>
+> 延伸阅读：[02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/02_LLM_Params_and_FLOPs.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| Transformer 前向估算 | 约随参数量和 token 数线性增长 | 受参数、KV / activation 与临时 buffer 共同影响 | 训练通常还要乘上反向和优化器开销；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/02_LLM_Params_and_FLOPs.html) |
+
 设请求到达率为 \(\lambda\)，平均服务时间为 \(S\)，负载强度可粗略写成：
 
 \[
 \rho=\lambda S
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\rho\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 | \(\lambda\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -61,8 +71,8 @@ T_{\text{prefill}}(L_{\text{in}})
 +T_{\text{network}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(S\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -86,8 +96,8 @@ T_{\text{queue}}
 +T_{\text{overhead}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 

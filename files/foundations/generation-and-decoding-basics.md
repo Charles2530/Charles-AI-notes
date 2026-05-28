@@ -39,8 +39,8 @@
 z_t \in \mathbb{R}^{|V|}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(V\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
@@ -54,8 +54,8 @@ softmax 把 logits 变成概率：
 p_i = \frac{\exp(z_i)}{\sum_j \exp(z_j)}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(p_i\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
 | \(z_j\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -67,8 +67,8 @@ Temperature 会改变分布尖锐程度：
 p_i^{(T)} = \frac{\exp(z_i/T)}{\sum_j \exp(z_j/T)}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(p_i^{(T)}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
 | \(z_j\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -84,6 +84,17 @@ p_i^{(T)} = \frac{\exp(z_i/T)}{\sum_j \exp(z_j/T)}
 Temperature 不会改变模型知道什么，只会改变从分布里取样的方式。
 
 ## 常见解码策略
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 | 策略 | 怎么选 token | 优点 | 风险 |
 | --- | --- | --- | --- |
@@ -114,8 +125,8 @@ prompt
 p_\theta(y\mid x)=\prod_{t=1}^{T}p_\theta(y_t\mid x,y_{<t})
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |

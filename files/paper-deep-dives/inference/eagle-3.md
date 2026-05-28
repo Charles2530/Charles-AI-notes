@@ -113,6 +113,17 @@ a2 + sampled token embedding -> draft step 3 -> draft output a3
 
 ## 推理流程：多层特征融合 + 单层 draft decoder
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
+
 EAGLE-3 推理时仍然依赖 target model 的一次前向。prefill 或上一轮 verification 完成后，target model 会给出下一 token，并暴露低层、中层、高层 feature，论文记作 \(l,m,h\)。EAGLE-3 把三层 feature 拼接成 \(3k\) 维，再通过全连接层压回 \(k\) 维融合 feature \(g\)。
 
 接着 draft model 使用一个单层 Transformer decoder。第 1 步 draft 的输入来自 \(g\) 和上一 token 的 embedding；后续未验证 token 没有 target feature，所以输入改成 draft model 上一步输出 \(a\) 和当前采样 token embedding。

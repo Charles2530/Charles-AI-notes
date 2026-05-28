@@ -49,6 +49,17 @@ request
 
 ## KV Cache：缓存里最特殊的一类
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
+
 KV cache 不是普通业务缓存，它是自回归 decode 的执行状态。大小仍可估算为：
 
 \[
@@ -57,8 +68,8 @@ M_{\text{KV}}
 2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(M_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -89,8 +100,8 @@ Prefix cache 复用的是请求开头相同的 token，例如系统 prompt、工
 h \cdot L_{\text{prefix}} \cdot N_{\text{req}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(h\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -118,8 +129,8 @@ m^\star
 \right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\lambda_1\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(\lambda_2\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -162,8 +173,8 @@ m^\star
 {C_{\text{draft}} + C_{\text{verify}} + C_{\text{overhead}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(A\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(C_{}\) | 公式中的变量或中间量 | 按上下文定义 |

@@ -65,6 +65,16 @@ loss.backward()
 
 ## 为什么训练比推理更占显存
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《21. Gradient Checkpointing | 极致显存优化：激活值重计算 (Gradient Checkpointing)》-->
+> **算法视角**：Autograd 和 gradient checkpointing 的核心取舍是“保存中间激活”还是“反向时重算”；它不改变模型函数，但会移动显存峰值和额外计算量。
+>
+> 延伸阅读：[21. Gradient Checkpointing | 极致显存优化：激活值重计算 (Gradient Checkpointing)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/21_Gradient_Checkpointing.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《21. Gradient Checkpointing | 极致显存优化：激活值重计算 (Gradient Checkpointing)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| activation checkpointing | 增加一次或多次局部前向重算 | 激活保存从按层全量下降为按 checkpoint 边界保存 | 适合显存成为硬约束、算力仍有余量的训练；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/21_Gradient_Checkpointing.html) |
+
 推理只需要前向输出，训练还需要保存反向传播所需状态。
 
 | 项目 | 推理 | 训练 |
@@ -129,8 +139,8 @@ flowchart LR
 2\times4\times16\times1024\times1024\times2 \approx 256MB
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 

@@ -79,6 +79,17 @@ InstructGPT 论文还给了标注界面的截图。它们很适合理解“偏�
 
 ## 偏好数据在塑造什么
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
+> **算法视角**：PPO / DPO 都是在候选回答之间定义偏好信号；PPO 通过策略更新和 KL 约束控制模型漂移，DPO 则把 chosen / rejected 对直接转成 pairwise loss。
+>
+> 延伸阅读：[12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| DPO pair loss | $O(BL)$ logprob 评估 | 需要 policy / reference 的中间结果 | $B$ 为样本对数，$L$ 为序列长度；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html) |
+| PPO rollout + update | 多次模型前向 / 反向 | 常同时保留 policy、reference、reward 路径 | 成本主要来自多模型调用、采样和 KL 监控。 |
+
 设输入为 \(x\)，两个候选回答为 \(y^+, y^-\)。  
 偏好数据告诉模型的不是世界真理，而是哪种风格更好、哪种风险更可接受、哪种答法更符合人类期望、哪些边界绝不能越过。
 
@@ -88,8 +99,8 @@ InstructGPT 论文还给了标注界面的截图。它们很适合理解“偏�
 \text{style} + \text{risk preference} + \text{helpfulness boundary},
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 
@@ -117,8 +128,8 @@ InstructGPT 论文还给了标注界面的截图。它们很适合理解“偏�
 \Big).
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\sigma\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
 | \(\beta\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -259,8 +270,8 @@ R(y|x)
  + \lambda_5 R_{\text{truthfulness}}.
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\lambda_1\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(\lambda_2\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |

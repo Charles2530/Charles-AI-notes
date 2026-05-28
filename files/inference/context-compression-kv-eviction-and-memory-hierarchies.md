@@ -44,8 +44,8 @@ M_{\text{KV}}
 2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(M_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -58,6 +58,17 @@ M_{\text{KV}}
 权重量化只能减少参数显存，不会自动减少 \(T\) 带来的 KV 增长。长上下文并发服务经常先卡在 KV，而不是权重。
 
 ## Paged KV：先解决“放在哪里”
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 vLLM 的 logical/physical block 图适合建立第一层直觉：请求逻辑上是一段连续上下文，但显存里可以拆成许多物理 block。
 
@@ -117,8 +128,8 @@ Agent 系统通常不能只靠自然语言摘要，因为很多记忆是程序�
 \sum_{i\in S}c_i\le B_{\text{mem}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(S\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
 | \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |

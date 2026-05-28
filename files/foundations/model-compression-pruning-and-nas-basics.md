@@ -20,7 +20,8 @@
 
     模型更小不等于一定更快。真实 latency 取决于参数量、MACs、activation、显存带宽、kernel、算子融合、shape、batch 和 runtime。剪枝和 NAS 的目标不是让表格里某个数字变小，而是让真实热路径变便宜。
 
-<!-- [补充] -->
+<!-- [待补图：建议在此插入模型压缩 / 剪枝 / NAS 的真实来源方法图，推荐来源：论文《Deep Compression》Figure 1、《Once-for-All》Figure 1，或 Fast-FoundationStereo 论文的结构搜索 / 剪枝相关原图] -->
+<!-- [建议删除：下面 Mermaid 图是旧自动补图，不满足本轮“图解只能引用论文或博客真实图片来源”的约束；保留原文并建议后续用上方真实来源图替换。] -->
 ```mermaid
 graph LR
   A["输入或问题"] --> B["核心概念"]
@@ -92,8 +93,8 @@ Fast-FoundationStereo 的 refinement pruning 就属于这种情况：final dispa
 \Delta \mathcal{L}_i \approx \left| \frac{\partial \mathcal{L}}{\partial \theta_i} \theta_i \right|
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\Delta\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(\theta_i\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
@@ -132,8 +133,8 @@ NAS（Neural Architecture Search）解决的是另一个问题：与其手工决
 \sum_{i,c} \Delta t_i^c e_i^c \leq \Delta \tau
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\Delta\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(\tau\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |

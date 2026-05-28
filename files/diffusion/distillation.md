@@ -51,8 +51,8 @@ DMD 原论文的核心图很适合说明“少步/一步生成”为什么不能
 x_T \rightarrow x_{t_1} \rightarrow x_{t_2} \rightarrow \cdots \rightarrow x_0.
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x_T\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(x_{t_1}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -68,8 +68,8 @@ x_T \rightarrow x_{t_1} \rightarrow x_{t_2} \rightarrow \cdots \rightarrow x_0.
 x_T \rightarrow x_{\tau_1} \rightarrow \cdots \rightarrow x_0,\qquad K \ll T.
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\tau_1\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |
 | \(x_T\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -165,8 +165,8 @@ until validation passes
 \text{student}(x_t, t) \approx \text{teacher}^{(2)}(x_t, t)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -190,8 +190,8 @@ until validation passes
 f_\theta(x_t, t) \approx f_\theta(x_s, s), \qquad \text{当 } x_t, x_s \text{ 属于同一数据轨迹}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(f\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -219,8 +219,8 @@ f_\theta(x_t, t) \approx f_\theta(x_s, s), \qquad \text{当 } x_t, x_s \text{ �
 D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(D\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(p_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
@@ -249,8 +249,8 @@ D\left(p_{\text{student}}(x), p_{\text{target}}(x)\right)
 \mathcal{L} = \mathcal{L}_{\text{dist-match}} + \lambda_{\text{gan}}\mathcal{L}_{\text{gan}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\lambda_{\text{gan}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 
@@ -302,8 +302,8 @@ distribution matching loss:   当前生成分布是否靠近 teacher / real 分�
 \mathcal{L}_{\text{total}} = \sum_{k=1}^{K} \left(\lambda_k \mathcal{L}_{\text{dm}}^{(k)} + \gamma_k \mathcal{L}_{\text{score}}^{(k)}\right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\lambda_k\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(\gamma_k\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
@@ -348,8 +348,8 @@ distribution matching loss:   当前生成分布是否靠近 teacher / real 分�
 \frac{dx}{dt} = v_\theta(x,t)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(d\) | 公式中的变量或中间量 | 按上下文定义 |

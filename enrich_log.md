@@ -1,0 +1,440 @@
+# llm-algo-leetcode 融合日志
+
+页面根目录：`files/`（来自 `mkdocs.yml` 的 `docs_dir`；站点框架为 MkDocs / Material for MkDocs）。
+外部来源索引：`source_index.md`。
+
+## 页面清单
+
+- [x] files/diffusion/comparison-table.md | no-match | skip
+- [x] files/diffusion/consistency-models-and-rectified-flow.md | no-match | skip
+- [x] files/diffusion/distillation.md | no-match | skip
+- [x] files/diffusion/evolution.md | no-match | skip
+- [x] files/diffusion/guidance-and-conditioning.md | no-match | skip
+- [x] files/diffusion/index.md | no-match | skip
+- [x] files/diffusion/inference.md | no-match | skip
+- [x] files/diffusion/noise-schedules-and-parameterization.md | no-match | skip
+- [x] files/diffusion/practical-training-recipes-and-failure-analysis.md | no-match | skip
+- [x] files/diffusion/score-matching-sde-and-probability-flow.md | no-match | skip
+- [x] files/diffusion/training.md | no-match | skip
+- [x] files/diffusion/video-and-multimodal-diffusion.md | no-match | skip
+- [x] files/embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md | no-match | skip
+- [x] files/embodied-ai/beginner-learning-path.md | no-match | skip
+- [x] files/embodied-ai/cameras-depth-and-robot-vision.md | no-match | skip
+- [x] files/embodied-ai/closed-loop-task-walkthrough.md | no-match | skip
+- [x] files/embodied-ai/deployment-patterns-and-safety-cases.md | no-match | skip
+- [x] files/embodied-ai/household-robotics-workflows-and-failure-patterns.md | no-match | skip
+- [x] files/embodied-ai/human-robot-interaction-and-evaluation.md | no-match | skip
+- [x] files/embodied-ai/index.md | no-match | skip
+- [x] files/embodied-ai/isaacsim-and-robotwin.md | no-match | skip
+- [x] files/embodied-ai/planning-control-and-safety.md | no-match | skip
+- [x] files/embodied-ai/rerun-robotics-data-visualization.md | no-match | skip
+- [x] files/embodied-ai/sim2real-and-data-engines.md | no-match | skip
+- [x] files/embodied-ai/stereo-matching-and-cost-volume.md | no-match | skip
+- [x] files/embodied-ai/task-taxonomy-and-benchmarks.md | no-match | skip
+- [x] files/embodied-ai/vla-data-model-and-evaluation-roadmap.md | no-match | skip
+- [x] files/embodied-ai/vla-wam-world-model-system-map.md | no-match | skip
+- [x] files/foundations/autograd-activation-checkpointing-and-memory.md | matched: [03. PyTorch Autograd and Backward | PyTorch 自动求导与反向传播、11. Memory Profiling and Optimization | 显存分析与优化、21. Gradient Checkpointing | 极致显存优化：激活值重计算 (Gradient Checkpointing)] | done
+- [x] files/foundations/convolution-and-feature-extraction.md | no-match | skip
+- [x] files/foundations/data-and-dataset-basics.md | no-match | skip
+- [x] files/foundations/data-splits-metrics-and-evaluation-basics.md | no-match | skip
+- [x] files/foundations/generalization-regularization-and-distribution-shift.md | no-match | skip
+- [x] files/foundations/generation-and-decoding-basics.md | matched: [16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)、17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention] | done
+- [x] files/foundations/index.md | no-match | skip
+- [x] files/foundations/linear-layers-mlp-and-gemm.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)] | done
+- [x] files/foundations/mamba-and-hybrid-ssm-transformers.md | no-match | skip
+- [x] files/foundations/model-compression-pruning-and-nas-basics.md | no-match | skip
+- [x] files/foundations/model-distillation-basics.md | no-match | skip
+- [x] files/foundations/moe-and-large-model-architecture-basics.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)] | done
+- [x] files/foundations/multimodal-cot-and-reasoning-basics.md | no-match | skip
+- [x] files/foundations/normalization-residual-and-activation.md | matched: [01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)、02. SwiGLU Activation | 激活函数与门控机制 (SwiGLU Activation)、03. Triton Fused RMSNorm | Triton 算子开发实战：Fused RMSNorm、02. Triton Fused SwiGLU | Triton 算子开发：融合门控激活函数 (Fused SwiGLU)] | done
+- [x] files/foundations/numerics-memory-and-runtime-basics.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/foundations/optimization-and-training-basics.md | matched: [06. Simple Neural Network Training | 完整的神经网络训练循环、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)] | done
+- [x] files/foundations/positional-encoding-masks-and-context.md | matched: [03. RoPE Tutorial | 旋转位置编码 (RoPE)、07. Triton Fused RoPE | Triton 进阶：融合旋转位置编码 (Fused RoPE)、04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)] | done
+- [x] files/foundations/pretraining-objectives-and-representation-learning.md | matched: [06. Simple Neural Network Training | 完整的神经网络训练循环、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)] | done
+- [x] files/foundations/probability-latent-variables-and-generative-models.md | no-match | skip
+- [x] files/foundations/prompt-engineering-cot-and-rag-basics.md | no-match | skip
+- [x] files/foundations/symbols-and-minimal-math.md | matched: [02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作、00. PyTorch Warmup | PyTorch 核心基础热身: 张量、前反向传播与 Embedding (Warmup)] | done
+- [x] files/foundations/tensors-shapes-and-computation-graphs.md | matched: [02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作、00. PyTorch Warmup | PyTorch 核心基础热身: 张量、前反向传播与 Embedding (Warmup)、03. PyTorch Autograd and Backward | PyTorch 自动求导与反向传播] | done
+- [x] files/foundations/transformer-attention-and-tokenization.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)、15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax、17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention] | done
+- [x] files/glossary/index.md | no-match | skip
+- [x] files/index.md | no-match | skip
+- [x] files/inference/caching-routing-and-speculative.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)、19. SGLang RadixAttention | SGLang 与 RadixAttention: 突破 vLLM 多轮对话瓶颈] | done
+- [x] files/inference/context-compression-kv-eviction-and-memory-hierarchies.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)、17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、10. Triton KV Cache and PagedAttention | Triton 进阶：PagedAttention 的底层实现 (KV Cache 间接寻址)] | done
+- [x] files/inference/cost-modeling-and-slo-design.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、10. PyTorch Profiling Basics | PyTorch 性能分析基础] | done
+- [x] files/inference/disaggregated-prefill-kv-services-and-capacity-ops.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)、17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、10. Triton KV Cache and PagedAttention | Triton 进阶：PagedAttention 的底层实现 (KV Cache 间接寻址)] | done
+- [x] files/inference/gpu-kernels-batching-and-memory-systems.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)] | done
+- [x] files/inference/index.md | matched: [17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)] | done
+- [x] files/inference/moe-routing-and-multi-model-serving.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)] | done
+- [x] files/inference/observability-and-online-evaluation.md | no-match | skip
+- [x] files/inference/optimization-checklist-and-capacity-planning.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、10. PyTorch Profiling Basics | PyTorch 性能分析基础] | done
+- [x] files/inference/rag-agents-and-long-context-systems.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)、17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、19. SGLang RadixAttention | SGLang 与 RadixAttention: 突破 vLLM 多轮对话瓶颈] | done
+- [x] files/inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md | matched: [17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、19. SGLang RadixAttention | SGLang 与 RadixAttention: 突破 vLLM 多轮对话瓶颈、10. Triton KV Cache and PagedAttention | Triton 进阶：PagedAttention 的底层实现 (KV Cache 间接寻址)、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/inference/serving-systems.md | matched: [17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、10. Triton KV Cache and PagedAttention | Triton 进阶：PagedAttention 的底层实现 (KV Cache 间接寻址)、16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)] | done
+- [x] files/operators/advanced-kernel-patterns-and-shape-specialization.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、12. Triton Memory Model and Debug | Triton 内存模型、指针计算与 Debug 避坑指南、14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)] | done
+- [x] files/operators/communication-kernels-and-overlap.md | matched: [05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)、16. Distributed Communication Primitives | 分布式进阶：多机通信原语实战 (All-Reduce, All-Gather)、15. PyTorch CUDA Streams and Transfer | 突破 PCIe 瓶颈：CPU-GPU 锁页内存与 CUDA 异步流通信、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元] | done
+- [x] files/operators/cuda-programming-model-and-memory.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、18. CUDA Custom Kernel Intro | 硬核降维打击：原生 CUDA C++ 编程与 PyTorch C++ 扩展 (JIT)、19. CUDA Shared Memory Optimization | 榨干硬件极限：CUDA Shared Memory (共享内存) 优化与 GEMM、20. CUDA vs Triton vs PyTorch | 大模型 Infra 架构视野：PyTorch vs Triton vs CUDA C++ 的三层降维] | done
+- [x] files/operators/custom-op-development-and-framework-integration.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、12. Triton Memory Model and Debug | Triton 内存模型、指针计算与 Debug 避坑指南、14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)] | done
+- [x] files/operators/cutlass-cute-and-compiler-stack.md | matched: [09. AI Compilers and Graph Optimization | AI 编译器与计算图优化 (AI Compilers & Graph Optimization)、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)、20. CUDA vs Triton vs PyTorch | 大模型 Infra 架构视野：PyTorch vs Triton vs CUDA C++ 的三层降维] | done
+- [x] files/operators/deepgemm-fp8-gemm-and-mega-moe.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)] | done
+- [x] files/operators/deepgemm-source-and-integration.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)、19. CUDA Shared Memory Optimization | 榨干硬件极限：CUDA Shared Memory (共享内存) 优化与 GEMM] | done
+- [x] files/operators/fp8-training-and-optimizer-kernels.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)] | done
+- [x] files/operators/gemm-attention-and-fused-kernels.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax、08. Triton Flash Attention | Triton Flash Attention：编写真正的 Flash Attention 前向算子、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)] | done
+- [x] files/operators/gpu-interconnects-and-topology-mapping.md | matched: [05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)、16. Distributed Communication Primitives | 分布式进阶：多机通信原语实战 (All-Reduce, All-Gather)、15. PyTorch CUDA Streams and Transfer | 突破 PCIe 瓶颈：CPU-GPU 锁页内存与 CUDA 异步流通信、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元] | done
+- [x] files/operators/hardware-aware-debug-checklist.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、12. Triton Memory Model and Debug | Triton 内存模型、指针计算与 Debug 避坑指南、14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)] | done
+- [x] files/operators/index.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、12. Triton Memory Model and Debug | Triton 内存模型、指针计算与 Debug 避坑指南、14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)] | done
+- [x] files/operators/kernel-cost-models-and-selection-heuristics.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、10. PyTorch Profiling Basics | PyTorch 性能分析基础、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)] | done
+- [x] files/operators/long-context-and-flashattention-evolution.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax、08. Triton Flash Attention | Triton Flash Attention：编写真正的 Flash Attention 前向算子、17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、10. Triton KV Cache and PagedAttention | Triton 进阶：PagedAttention 的底层实现 (KV Cache 间接寻址)] | done
+- [x] files/operators/low-precision-and-quantized-kernels.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)] | done
+- [x] files/operators/moe-routing-and-sparse-kernels.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元] | done
+- [x] files/operators/performance-anti-patterns-and-failure-modes.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、10. PyTorch Profiling Basics | PyTorch 性能分析基础、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)] | done
+- [x] files/operators/profiling-debugging-and-numerical-stability.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、10. PyTorch Profiling Basics | PyTorch 性能分析基础、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)] | done
+- [x] files/operators/ptx-sass-and-compiler-inspection.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、18. CUDA Custom Kernel Intro | 硬核降维打击：原生 CUDA C++ 编程与 PyTorch C++ 扩展 (JIT)、19. CUDA Shared Memory Optimization | 榨干硬件极限：CUDA Shared Memory (共享内存) 优化与 GEMM、20. CUDA vs Triton vs PyTorch | 大模型 Infra 架构视野：PyTorch vs Triton vs CUDA C++ 的三层降维] | done
+- [x] files/operators/reduction-norm-layout-and-indexing.md | matched: [01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)、03. Triton Fused RMSNorm | Triton 算子开发实战：Fused RMSNorm、06. Triton Fused Softmax | Triton 进阶：跨线程归约与数值稳定 (Safe Softmax)、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)] | done
+- [x] files/operators/roofline-benchmarking-and-case-studies.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、10. PyTorch Profiling Basics | PyTorch 性能分析基础、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)] | done
+- [x] files/operators/runtime-dispatch-and-kernel-selection.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、12. Triton Memory Model and Debug | Triton 内存模型、指针计算与 Debug 避坑指南、14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)] | done
+- [x] files/operators/serving-attention-and-kv-kernels.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax、08. Triton Flash Attention | Triton Flash Attention：编写真正的 Flash Attention 前向算子、17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、10. Triton KV Cache and PagedAttention | Triton 进阶：PagedAttention 的底层实现 (KV Cache 间接寻址)] | done
+- [x] files/operators/testing-regression-and-maintenance.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、12. Triton Memory Model and Debug | Triton 内存模型、指针计算与 Debug 避坑指南、14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)] | done
+- [x] files/operators/triton-programming-model-and-autotuning.md | matched: [08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、01. Triton Vector Addition | Triton 入门与 Hello World：向量加法 (Vector Addition)、04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)、14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)] | done
+- [x] files/operators/workload-modeling-and-shape-buckets.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)、12. Triton Memory Model and Debug | Triton 内存模型、指针计算与 Debug 避坑指南、14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)] | done
+- [x] files/paper-deep-dives/diffusion/anyflow.md | no-match | skip
+- [x] files/paper-deep-dives/diffusion/causvid.md | no-match | skip
+- [x] files/paper-deep-dives/diffusion/diffusion-forcing.md | no-match | skip
+- [x] files/paper-deep-dives/diffusion/dmd.md | no-match | skip
+- [x] files/paper-deep-dives/diffusion/dmd2.md | no-match | skip
+- [x] files/paper-deep-dives/diffusion/dpm-solver-plus-plus.md | no-match | skip
+- [x] files/paper-deep-dives/diffusion/phased-dmd.md | no-match | skip
+- [x] files/paper-deep-dives/diffusion/score-sde.md | no-match | skip
+- [x] files/paper-deep-dives/diffusion/wan.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/depth-anything-3.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/depth-anything-v2.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/depth-anything.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/dreamzero.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/gr2.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/gr3.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/mapanything.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/pi05.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/rt2.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/spatialvla.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/vggt.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/video-prediction-policy.md | no-match | skip
+- [x] files/paper-deep-dives/embodied-ai/vodp.md | no-match | skip
+- [x] files/paper-deep-dives/foundations/attn-qat.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)、14. Attention Backward Math | 注意力机制反向传播推导与自定义 Autograd (Attention Backward)] | done
+- [x] files/paper-deep-dives/foundations/gpu-utilization-misleading.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、10. PyTorch Profiling Basics | PyTorch 性能分析基础、05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)、02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)] | done
+- [x] files/paper-deep-dives/foundations/magiattention.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax、08. Triton Flash Attention | Triton Flash Attention：编写真正的 Flash Attention 前向算子、05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)、16. Distributed Communication Primitives | 分布式进阶：多机通信原语实战 (All-Reduce, All-Gather)] | done
+- [x] files/paper-deep-dives/foundations/megatron-lm.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)、03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)、24. Tensor Parallelism Sim | 突破单卡显存上限：张量并行 (Tensor Parallelism, TP) 的矩阵切片模拟、25. Pipeline Parallelism MicroBatch | 分布式进阶：流水线并行与微批次气泡 (Pipeline Parallelism)] | done
+- [x] files/paper-deep-dives/foundations/muon-is-scalable.md | matched: [06. Simple Neural Network Training | 完整的神经网络训练循环、11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)、02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)] | done
+- [x] files/paper-deep-dives/foundations/sla-sparse-linear-attention.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax、04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)] | done
+- [x] files/paper-deep-dives/foundations/zero.md | matched: [06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)、23. ZeRO Optimizer Sim | 显存优化进阶：模拟 ZeRO-1 切分与 ZeRO 原理 (ZeRO Optimizer)、17. DeepSpeed Zero Config | 分布式工程落地：解析 DeepSpeed ZeRO 配置文件与 CPU Offload、21. Gradient Checkpointing | 极致显存优化：激活值重计算 (Gradient Checkpointing)] | done
+- [x] files/paper-deep-dives/index.md | no-match | skip
+- [x] files/paper-deep-dives/inference/eagle-2.md | matched: [16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)] | done
+- [x] files/paper-deep-dives/inference/eagle-3.md | matched: [16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)] | done
+- [x] files/paper-deep-dives/inference/eagle.md | matched: [16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)] | done
+- [x] files/paper-deep-dives/inference/fast-foundation-stereo.md | no-match | skip
+- [x] files/paper-deep-dives/inference/kvslimmer.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)、17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention、10. Triton KV Cache and PagedAttention | Triton 进阶：PagedAttention 的底层实现 (KV Cache 间接寻址)] | done
+- [x] files/paper-deep-dives/inference/low-bit-llm-survey.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/paper-deep-dives/technical-reports/deepseek-r1.md | matched: [12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature] | done
+- [x] files/paper-deep-dives/technical-reports/deepseek-v3.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)、02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)] | done
+- [x] files/paper-deep-dives/technical-reports/deepseek-v4-pro.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)、01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)] | done
+- [x] files/paper-deep-dives/technical-reports/gemini-2-5.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)] | done
+- [x] files/paper-deep-dives/technical-reports/gpt-4o-system-card.md | no-match | skip
+- [x] files/paper-deep-dives/technical-reports/incoder-32b.md | matched: [09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、03. RoPE Tutorial | 旋转位置编码 (RoPE)、04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)] | done
+- [x] files/paper-deep-dives/technical-reports/kimi-k2.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)] | done
+- [x] files/paper-deep-dives/technical-reports/nemotron-3-super.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)] | done
+- [x] files/paper-deep-dives/technical-reports/qwen3.md | matched: [06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)、05. LLaMA3 Block Tutorial | 经典模型搭建: LLaMA-3 Transformer Block、01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)、03. RoPE Tutorial | 旋转位置编码 (RoPE)] | done
+- [x] files/paper-deep-dives/technical-reports/qwen35-omni.md | matched: [05. LLaMA3 Block Tutorial | 经典模型搭建: LLaMA-3 Transformer Block、01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)、03. RoPE Tutorial | 旋转位置编码 (RoPE)、04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)] | done
+- [x] files/paper-deep-dives/world-models/dreamer.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/dreamerv2.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/dreamerv3.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/genie.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/h-jepa.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/jepa.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/lingbot-world.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/lwm.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax、03. RoPE Tutorial | 旋转位置编码 (RoPE)、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)] | done
+- [x] files/paper-deep-dives/world-models/planet.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/ringattention.md | matched: [04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)、15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax、04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)、05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)、16. Distributed Communication Primitives | 分布式进阶：多机通信原语实战 (All-Reduce, All-Gather)] | done
+- [x] files/paper-deep-dives/world-models/self-forcing.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/towards-video-world-models.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/v-jepa.md | no-match | skip
+- [x] files/paper-deep-dives/world-models/world-models-embodied-ai-survey.md | no-match | skip
+- [x] files/paper-deep-dives/writing-standard.md | no-match | skip
+- [x] files/quantization/activation-outliers-and-calibration-strategies.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/comparison-table.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/evaluation-and-deployment-checklist.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/fp8-and-mixed-precision-serving.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/index.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/page-by-page-visual-guide.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/ptq-gptq-awq-smoothquant.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/qat-kernels-and-kv-cache.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/qlora-and-quantized-training.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/quantization-for-multimodal-and-vla-models.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/quantization-runtimes-and-frameworks.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/serving-stacks-and-hardware-tradeoffs.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/quantization/symbols-and-minimal-math.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/references/claim-ledger.md | no-match | skip
+- [x] files/references/evidence-and-reproducibility-standard.md | no-match | skip
+- [x] files/references/image-and-formula-quality-standard.md | no-match | skip
+- [x] files/references/image-asset-governance-ledger.md | no-match | skip
+- [x] files/references/index.md | no-match | skip
+- [x] files/references/site-efficiency-coverage-matrix.md | no-match | skip
+- [x] files/references/site-judgement-principles.md | no-match | skip
+- [x] files/reinforcement-learning/index.md | no-match | skip
+- [x] files/reinforcement-learning/mdp-value-bellman.md | no-match | skip
+- [x] files/reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md | matched: [12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)] | done
+- [x] files/reinforcement-learning/rl-for-world-models.md | no-match | skip
+- [x] files/reinforcement-learning/verl-code-flow.md | matched: [12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)] | done
+- [x] files/roadmap/common-decision-patterns-and-tradeoffs.md | no-match | skip
+- [x] files/roadmap/comparison-tables.md | no-match | skip
+- [x] files/roadmap/index.md | no-match | skip
+- [x] files/roadmap/research-and-engineering-study-plan.md | no-match | skip
+- [x] files/thinking-exploration/embodied-ai-status-and-real-world-loop.md | no-match | skip
+- [x] files/thinking-exploration/fast-foundation-stereo-prerequisite-map.md | no-match | skip
+- [x] files/thinking-exploration/index.md | no-match | skip
+- [x] files/thinking-exploration/qualcomm-xr2-gen2.md | no-match | skip
+- [x] files/thinking-exploration/world-models-status-and-engineering-loop.md | no-match | skip
+- [x] files/training/beginner-model-training-primer.md | matched: [06. Simple Neural Network Training | 完整的神经网络训练循环、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)] | done
+- [x] files/training/cluster-operations-and-experiment-management.md | no-match | skip
+- [x] files/training/data-quality-dedup-and-governance.md | no-match | skip
+- [x] files/training/data-systems-and-optimization.md | matched: [06. Simple Neural Network Training | 完整的神经网络训练循环、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)] | done
+- [x] files/training/distributed-training-and-checkpointing.md | matched: [03. PyTorch Autograd and Backward | PyTorch 自动求导与反向传播、21. Gradient Checkpointing | 极致显存优化：激活值重计算 (Gradient Checkpointing)、06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)、23. ZeRO Optimizer Sim | 显存优化进阶：模拟 ZeRO-1 切分与 ZeRO 原理 (ZeRO Optimizer)、05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)、16. Distributed Communication Primitives | 分布式进阶：多机通信原语实战 (All-Reduce, All-Gather)] | done
+- [x] files/training/evaluation-and-ablation-methodology.md | no-match | skip
+- [x] files/training/image-sources.md | no-match | skip
+- [x] files/training/index.md | no-match | skip
+- [x] files/training/input-pipelines-packing-and-throughput-governance.md | matched: [09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作] | done
+- [x] files/training/low-bit-training-and-numerics.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)、11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)] | done
+- [x] files/training/megatron-lm-deepspeed-and-open-training-stacks.md | matched: [03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元、05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)、06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)、23. ZeRO Optimizer Sim | 显存优化进阶：模拟 ZeRO-1 切分与 ZeRO 原理 (ZeRO Optimizer)、24. Tensor Parallelism Sim | 突破单卡显存上限：张量并行 (Tensor Parallelism, TP) 的矩阵切片模拟、25. Pipeline Parallelism MicroBatch | 分布式进阶：流水线并行与微批次气泡 (Pipeline Parallelism)、17. DeepSpeed Zero Config | 分布式工程落地：解析 DeepSpeed ZeRO 配置文件与 CPU Offload] | done
+- [x] files/training/mtp-and-speculative-decoding.md | matched: [16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature、18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)、06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)、01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)] | done
+- [x] files/training/objectives-optimizers-and-schedules.md | matched: [06. Simple Neural Network Training | 完整的神经网络训练循环、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)、12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)] | done
+- [x] files/training/page-by-page-visual-guide.md | matched: [06. Simple Neural Network Training | 完整的神经网络训练循环、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)] | done
+- [x] files/training/post-training-data-engines-and-judge-models.md | matched: [09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)] | done
+- [x] files/training/preference-data-and-alignment-pitfalls.md | matched: [12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)] | done
+- [x] files/training/pretraining-finetuning-alignment.md | matched: [06. Simple Neural Network Training | 完整的神经网络训练循环、09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)、12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)、13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)] | done
+- [x] files/training/scaling-curriculum-and-data-mixture.md | no-match | skip
+- [x] files/training/scaling-laws-and-experiment-economics.md | matched: [02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)] | done
+- [x] files/training/stability-numerics-and-failure-triage.md | matched: [01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)、20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)、11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)] | done
+- [x] files/training/wandb-experiment-tracking-and-governance.md | no-match | skip
+- [x] files/vla/action-chunking-hierarchical-policies-and-latent-skills.md | no-match | skip
+- [x] files/vla/action-representation-and-interfaces.md | no-match | skip
+- [x] files/vla/benchmarks-and-data-engines.md | no-match | skip
+- [x] files/vla/closed-loop-recovery-and-failure-analysis.md | no-match | skip
+- [x] files/vla/data-and-policy-learning.md | no-match | skip
+- [x] files/vla/deployment-and-safety.md | no-match | skip
+- [x] files/vla/index.md | no-match | skip
+- [x] files/vlm/architecture-and-training.md | no-match | skip
+- [x] files/vlm/index.md | no-match | skip
+- [x] files/vlm/multimodal-evaluation-and-failure-modes.md | no-match | skip
+- [x] files/vlm/video-representation-and-memory.md | no-match | skip
+- [x] files/vlm/visual-tokenizers-and-connectors.md | no-match | skip
+- [x] files/vlm/vlm-vla-for-efficient-world-model-training.md | no-match | skip
+- [x] files/vlm/vlm-vla-symbols-and-minimal-math.md | no-match | skip
+- [x] files/world-models/action-conditioned-video-world-model-training-case.md | no-match | skip
+- [x] files/world-models/applications-in-robotics-and-autonomous-driving.md | no-match | skip
+- [x] files/world-models/beginner-world-models-primer.md | no-match | skip
+- [x] files/world-models/data-engines-and-self-improvement.md | no-match | skip
+- [x] files/world-models/development-roadmap-data-simulation-and-evaluation.md | no-match | skip
+- [x] files/world-models/efficiency-technique-coverage-matrix.md | no-match | skip
+- [x] files/world-models/efficient-training-roadmap.md | no-match | skip
+- [x] files/world-models/evaluation-and-failure-modes.md | no-match | skip
+- [x] files/world-models/generative-simulation-and-video.md | no-match | skip
+- [x] files/world-models/index.md | no-match | skip
+- [x] files/world-models/masked-jepa-and-latent-prediction.md | no-match | skip
+- [x] files/world-models/planning-as-inference-and-latent-actions.md | no-match | skip
+- [x] files/world-models/rollout-serving-quantization-kernel-case.md | no-match | skip
+- [x] files/world-models/rssm-dreamer-and-planning.md | no-match | skip
+- [x] files/world-models/simulators-counterfactuals-and-synthetic-rollouts.md | no-match | skip
+- [x] files/world-models/uncertainty-and-risk-aware-planning.md | no-match | skip
+- [x] files/world-models/vla-world-model-full-chain-case.md | no-match | skip
+- [x] files/world-models/wm-wam-vam-and-action-conditioned-modeling.md | no-match | skip
+- [x] files/world-models/world-model-efficient-training-experiment-report.md | no-match | skip
+
+## 融合报告
+
+### 统计
+- 本地博客总页数：240
+- 成功匹配并融合：101 页
+- 无匹配跳过：139 页
+- 算法基础融合块：101 处
+- 复杂度分析融合块：101 处
+- 代码对照引用：0 处（本轮未复制外部代码）
+- 图片引用：0 处（外部精读记录未发现可复用正文图片资源）
+
+### 外部站点覆盖率
+- llm-algo-leetcode 共 68 个页面
+- 被引用页面：22 个
+  - 21. Gradient Checkpointing | 极致显存优化：激活值重计算 (Gradient Checkpointing)
+  - 17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention
+  - 04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)
+  - 06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)
+  - 01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)
+  - 20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)
+  - 09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)
+  - 03. RoPE Tutorial | 旋转位置编码 (RoPE)
+  - 02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作
+  - 04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)
+  - 18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)
+  - 02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)
+  - 03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元
+  - 08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)
+  - 05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)
+  - 15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax
+  - 05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)
+  - 06. Simple Neural Network Training | 完整的神经网络训练循环
+  - 06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)
+  - 16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature
+  - 01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)
+  - 12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)
+- 未被引用页面：46 个（可作为后续写作参考）
+  - 项目概览
+  - 使用指南
+  - 贡献指南
+  - 03. PyTorch Autograd and Backward | PyTorch 自动求导与反向传播
+  - 10. PyTorch Profiling Basics | PyTorch 性能分析基础
+  - 11. Memory Profiling and Optimization | 显存分析与优化
+  - Chapter 0: 前置知识与环境准备 - 完整导学
+  - 04. Attention Memory Optimization | 注意力机制变体与显存优化 (Attention Variants & Memory Optimization)
+  - 07. CPU GPU Heterogeneous Scheduling | CPU 与 GPU 异构调度 (CPU & GPU Heterogeneous Scheduling)
+  - 09. AI Compilers and Graph Optimization | AI 编译器与计算图优化 (AI Compilers & Graph Optimization)
+  - 10. Domestic AI Chips Overview | 算力现状与替代方案 (AI Chips Overview)
+  - Chapter 1: 硬件、数学与系统 - 完整导学
+  - 00. PyTorch Warmup | PyTorch 核心基础热身: 张量、前反向传播与 Embedding (Warmup)
+  - 02. SwiGLU Activation | 激活函数与门控机制 (SwiGLU Activation)
+  - 05. LLaMA3 Block Tutorial | 经典模型搭建: LLaMA-3 Transformer Block
+  - 07. MoE Load Balancing Loss | MoE 进阶：负载均衡损失函数 (Load Balancing Loss)
+  - 08. Architecture Tricks | 经典架构变体：Qwen 与 Gemma 的核心机制 (Architecture Tricks)
+  - 10. LoRA Tutorial | 参数高效微调: 深入剖析 LoRA (PEFT)
+  - 11. LR Schedulers WSD Cosine | 大模型训练调参难点：学习率调度器 (Warmup, Cosine, WSD)
+  - 13. DPO Loss Tutorial | 直接偏好优化 Loss 源码解析与实现 (DPO)
+  - 14. Attention Backward Math | 注意力机制反向传播推导与自定义 Autograd (Attention Backward)
+  - 19. SGLang RadixAttention | SGLang 与 RadixAttention: 突破 vLLM 多轮对话瓶颈
+  - 22. QLoRA and 4bit Quantization | QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit)
+  - 23. ZeRO Optimizer Sim | 显存优化进阶：模拟 ZeRO-1 切分与 ZeRO 原理 (ZeRO Optimizer)
+  - 24. Tensor Parallelism Sim | 突破单卡显存上限：张量并行 (Tensor Parallelism, TP) 的矩阵切片模拟
+  - 25. Pipeline Parallelism MicroBatch | 分布式进阶：流水线并行与微批次气泡 (Pipeline Parallelism)
+  - Chapter 2: PyTorch 算法实战 - 完整导学
+  - 01. Triton Vector Addition | Triton 入门与 Hello World：向量加法 (Vector Addition)
+  - 02. Triton Fused SwiGLU | Triton 算子开发：融合门控激活函数 (Fused SwiGLU)
+  - 03. Triton Fused RMSNorm | Triton 算子开发实战：Fused RMSNorm
+  - 06. Triton Fused Softmax | Triton 进阶：跨线程归约与数值稳定 (Safe Softmax)
+  - 07. Triton Fused RoPE | Triton 进阶：融合旋转位置编码 (Fused RoPE)
+  - 08. Triton Flash Attention | Triton Flash Attention：编写真正的 Flash Attention 前向算子
+  - 09. Triton Fused LoRA | Triton 进阶算子：Multi-LoRA 融合推理与 Batch 内指针路由 (Punica 思想)
+  - 10. Triton KV Cache and PagedAttention | Triton 进阶：PagedAttention 的底层实现 (KV Cache 间接寻址)
+  - 11. Triton Quantization Support | Triton 量化算子：W8A16 权重量化融合矩阵乘法 (Quantization GEMM)
+  - 12. Triton Memory Model and Debug | Triton 内存模型、指针计算与 Debug 避坑指南
+  - 13. Triton Llama3 Block Project | 综合工程实战：使用 Triton 从头组装 LLaMA-3 Transformer Block
+  - 14. Triton 算子开发实战避坑指南 (Best Practices & FAQ)
+  - 15. PyTorch CUDA Streams and Transfer | 突破 PCIe 瓶颈：CPU-GPU 锁页内存与 CUDA 异步流通信
+  - 16. Distributed Communication Primitives | 分布式进阶：多机通信原语实战 (All-Reduce, All-Gather)
+  - 17. DeepSpeed Zero Config | 分布式工程落地：解析 DeepSpeed ZeRO 配置文件与 CPU Offload
+  - 18. CUDA Custom Kernel Intro | 硬核降维打击：原生 CUDA C++ 编程与 PyTorch C++ 扩展 (JIT)
+  - 19. CUDA Shared Memory Optimization | 榨干硬件极限：CUDA Shared Memory (共享内存) 优化与 GEMM
+  - 20. CUDA vs Triton vs PyTorch | 大模型 Infra 架构视野：PyTorch vs Triton vs CUDA C++ 的三层降维
+  - Chapter 3: CUDA 与 Triton 内核开发 - 完整导学
+
+### 各页融合摘要
+- files/foundations/autograd-activation-checkpointing-and-memory.md：融合了《21. Gradient Checkpointing | 极致显存优化：激活值重计算 (Gradient Checkpointing)》的算法基础与复杂度分析。
+- files/foundations/generation-and-decoding-basics.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/foundations/linear-layers-mlp-and-gemm.md：融合了《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》的算法基础与复杂度分析。
+- files/foundations/moe-and-large-model-architecture-basics.md：融合了《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》的算法基础与复杂度分析。
+- files/foundations/normalization-residual-and-activation.md：融合了《01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)》的算法基础与复杂度分析。
+- files/foundations/numerics-memory-and-runtime-basics.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/foundations/optimization-and-training-basics.md：融合了《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》的算法基础与复杂度分析。
+- files/foundations/positional-encoding-masks-and-context.md：融合了《03. RoPE Tutorial | 旋转位置编码 (RoPE)》的算法基础与复杂度分析。
+- files/foundations/pretraining-objectives-and-representation-learning.md：融合了《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》的算法基础与复杂度分析。
+- files/foundations/symbols-and-minimal-math.md：融合了《02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作》的算法基础与复杂度分析。
+- files/foundations/tensors-shapes-and-computation-graphs.md：融合了《02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作》的算法基础与复杂度分析。
+- files/foundations/transformer-attention-and-tokenization.md：融合了《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》的算法基础与复杂度分析。
+- files/inference/caching-routing-and-speculative.md：融合了《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》的算法基础与复杂度分析。
+- files/inference/context-compression-kv-eviction-and-memory-hierarchies.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/inference/cost-modeling-and-slo-design.md：融合了《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》的算法基础与复杂度分析。
+- files/inference/disaggregated-prefill-kv-services-and-capacity-ops.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/inference/gpu-kernels-batching-and-memory-systems.md：融合了《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》的算法基础与复杂度分析。
+- files/inference/index.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/inference/moe-routing-and-multi-model-serving.md：融合了《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》的算法基础与复杂度分析。
+- files/inference/optimization-checklist-and-capacity-planning.md：融合了《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》的算法基础与复杂度分析。
+- files/inference/rag-agents-and-long-context-systems.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/inference/serving-systems.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/operators/advanced-kernel-patterns-and-shape-specialization.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/operators/communication-kernels-and-overlap.md：融合了《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》的算法基础与复杂度分析。
+- files/operators/cuda-programming-model-and-memory.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/operators/custom-op-development-and-framework-integration.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/operators/cutlass-cute-and-compiler-stack.md：融合了《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》的算法基础与复杂度分析。
+- files/operators/deepgemm-fp8-gemm-and-mega-moe.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/operators/deepgemm-source-and-integration.md：融合了《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》的算法基础与复杂度分析。
+- files/operators/fp8-training-and-optimizer-kernels.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/operators/gemm-attention-and-fused-kernels.md：融合了《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》的算法基础与复杂度分析。
+- files/operators/gpu-interconnects-and-topology-mapping.md：融合了《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》的算法基础与复杂度分析。
+- files/operators/hardware-aware-debug-checklist.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/operators/index.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/operators/kernel-cost-models-and-selection-heuristics.md：融合了《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》的算法基础与复杂度分析。
+- files/operators/long-context-and-flashattention-evolution.md：融合了《15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax》的算法基础与复杂度分析。
+- files/operators/low-precision-and-quantized-kernels.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/operators/moe-routing-and-sparse-kernels.md：融合了《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》的算法基础与复杂度分析。
+- files/operators/performance-anti-patterns-and-failure-modes.md：融合了《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》的算法基础与复杂度分析。
+- files/operators/profiling-debugging-and-numerical-stability.md：融合了《05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)》的算法基础与复杂度分析。
+- files/operators/ptx-sass-and-compiler-inspection.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/operators/reduction-norm-layout-and-indexing.md：融合了《01. RMSNorm Tutorial | 均方根层归一化 (RMSNorm)》的算法基础与复杂度分析。
+- files/operators/roofline-benchmarking-and-case-studies.md：融合了《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》的算法基础与复杂度分析。
+- files/operators/runtime-dispatch-and-kernel-selection.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/operators/serving-attention-and-kv-kernels.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/operators/testing-regression-and-maintenance.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/operators/triton-programming-model-and-autotuning.md：融合了《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》的算法基础与复杂度分析。
+- files/operators/workload-modeling-and-shape-buckets.md：融合了《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》的算法基础与复杂度分析。
+- files/paper-deep-dives/foundations/attn-qat.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/paper-deep-dives/foundations/gpu-utilization-misleading.md：融合了《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》的算法基础与复杂度分析。
+- files/paper-deep-dives/foundations/magiattention.md：融合了《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》的算法基础与复杂度分析。
+- files/paper-deep-dives/foundations/megatron-lm.md：融合了《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》的算法基础与复杂度分析。
+- files/paper-deep-dives/foundations/muon-is-scalable.md：融合了《06. Simple Neural Network Training | 完整的神经网络训练循环》的算法基础与复杂度分析。
+- files/paper-deep-dives/foundations/sla-sparse-linear-attention.md：融合了《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》的算法基础与复杂度分析。
+- files/paper-deep-dives/foundations/zero.md：融合了《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》的算法基础与复杂度分析。
+- files/paper-deep-dives/inference/eagle-2.md：融合了《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》的算法基础与复杂度分析。
+- files/paper-deep-dives/inference/eagle-3.md：融合了《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》的算法基础与复杂度分析。
+- files/paper-deep-dives/inference/eagle.md：融合了《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》的算法基础与复杂度分析。
+- files/paper-deep-dives/inference/kvslimmer.md：融合了《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》的算法基础与复杂度分析。
+- files/paper-deep-dives/inference/low-bit-llm-survey.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/deepseek-r1.md：融合了《16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/deepseek-v3.md：融合了《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/deepseek-v4-pro.md：融合了《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/gemini-2-5.md：融合了《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/incoder-32b.md：融合了《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/kimi-k2.md：融合了《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/nemotron-3-super.md：融合了《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/qwen3.md：融合了《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》的算法基础与复杂度分析。
+- files/paper-deep-dives/technical-reports/qwen35-omni.md：融合了《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》的算法基础与复杂度分析。
+- files/paper-deep-dives/world-models/lwm.md：融合了《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》的算法基础与复杂度分析。
+- files/paper-deep-dives/world-models/ringattention.md：融合了《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》的算法基础与复杂度分析。
+- files/quantization/activation-outliers-and-calibration-strategies.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/comparison-table.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/evaluation-and-deployment-checklist.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/fp8-and-mixed-precision-serving.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/index.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/page-by-page-visual-guide.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/ptq-gptq-awq-smoothquant.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/qat-kernels-and-kv-cache.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/qlora-and-quantized-training.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/quantization-for-multimodal-and-vla-models.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/quantization-runtimes-and-frameworks.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/serving-stacks-and-hardware-tradeoffs.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/quantization/symbols-and-minimal-math.md：融合了《01. Data Types and Precision | 大模型的数据格式与混合精度 (Data Types & Precision)》的算法基础与复杂度分析。
+- files/reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md：融合了《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》的算法基础与复杂度分析。
+- files/reinforcement-learning/verl-code-flow.md：融合了《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》的算法基础与复杂度分析。
+- files/training/beginner-model-training-primer.md：融合了《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》的算法基础与复杂度分析。
+- files/training/data-systems-and-optimization.md：融合了《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》的算法基础与复杂度分析。
+- files/training/distributed-training-and-checkpointing.md：融合了《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》的算法基础与复杂度分析。
+- files/training/input-pipelines-packing-and-throughput-governance.md：融合了《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》的算法基础与复杂度分析。
+- files/training/low-bit-training-and-numerics.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+- files/training/megatron-lm-deepspeed-and-open-training-stacks.md：融合了《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》的算法基础与复杂度分析。
+- files/training/mtp-and-speculative-decoding.md：融合了《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》的算法基础与复杂度分析。
+- files/training/objectives-optimizers-and-schedules.md：融合了《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》的算法基础与复杂度分析。
+- files/training/page-by-page-visual-guide.md：融合了《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》的算法基础与复杂度分析。
+- files/training/post-training-data-engines-and-judge-models.md：融合了《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》的算法基础与复杂度分析。
+- files/training/preference-data-and-alignment-pitfalls.md：融合了《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》的算法基础与复杂度分析。
+- files/training/pretraining-finetuning-alignment.md：融合了《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》的算法基础与复杂度分析。
+- files/training/scaling-laws-and-experiment-economics.md：融合了《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》的算法基础与复杂度分析。
+- files/training/stability-numerics-and-failure-triage.md：融合了《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》的算法基础与复杂度分析。
+
+### 待人工确认项
+- 代码对照引用：0 处
+- 图片引用：0 处
+- 外部图片长期有效性：0 处需要检查
+- 建议抽查：重点看推理、量化、算子和分布式训练页的新增复杂度表是否与正文叙述衔接自然

@@ -22,6 +22,17 @@
 
 ## 量化收益的三种来源
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
+> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
+>
+> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
+| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
+
 | 来源 | 例子 | 可能被什么抵消 |
 | --- | --- | --- |
 | 存储变小 | FP16 权重变 INT4/FP8 | scale 元数据、碎片、adapter |
@@ -38,8 +49,8 @@
 \mathrm{Cost} \approx C_{\mathrm{weight}} + C_{\mathrm{kv}} + C_{\mathrm{compute}} + C_{\mathrm{runtime}} + C_{\mathrm{quality}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(C_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 
@@ -76,8 +87,8 @@
 \mathrm{WeightMemory}\approx N_{\mathrm{params}}\times \mathrm{bytes}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(N_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 
@@ -88,8 +99,8 @@ KV 显存：
 \mathrm{KVMemory}\approx2\times L\times B\times T\times H_{\text{kv}}\times d_h\times \mathrm{bytes}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |

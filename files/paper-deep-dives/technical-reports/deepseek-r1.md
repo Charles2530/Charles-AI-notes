@@ -33,6 +33,17 @@ paper_topic: 技术报告
 
 ## 论文位置
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/16_Decoding_Strategies.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/16_Decoding_Strategies.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
+
 传统 LLM 后训练通常是：
 
 ```text
@@ -99,8 +110,8 @@ $$
 \right].
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(\pi_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
@@ -117,8 +128,8 @@ A_i=\frac{r_i-\mathrm{mean}(\{r_1,\ldots,r_G\})}
 {\mathrm{std}(\{r_1,\ldots,r_G\})}.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(A_i\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(r_i\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
@@ -153,8 +164,8 @@ $$
 Reward_{rule}=Reward_{acc}+Reward_{format}.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 | \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
@@ -265,8 +276,8 @@ $$
 Reward_{language}=\frac{Num(Words_{target})}{Num(Words)}.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 | \(l\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -309,8 +320,8 @@ $$
 Reward = Reward_{\text{reasoning}} + Reward_{\text{general}} + Reward_{\text{language}},
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 
@@ -323,8 +334,8 @@ $$
 Reward_{\text{reasoning}}=Reward_{\text{rule}},
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 
@@ -335,8 +346,8 @@ $$
 Reward_{\text{general}}=Reward_{\text{reward\_model}}+Reward_{\text{format}}.
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 

@@ -16,7 +16,7 @@
 
 这一页补的是“读架构表”的前置知识。它不是部署路由教程，而是帮你在技术报告里看懂稀疏专家模型到底怎样训练、怎样算账、怎样影响推理。
 
-<!-- [补充] -->
+<!-- [补充：初学者直觉] -->
 > **一句话理解**：MoE 与大模型架构表读法 可以先当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背公式，先看清哪一步在改变信息、哪一步在改变成本。
 
 ## 一句话先立住
@@ -40,6 +40,17 @@ flowchart LR
     MoE 通常替换的是 Transformer block 中的 FFN/MLP 子层，而不是 attention 本身。一个 token 不会经过所有专家，只会经过 router 选中的少数专家；这就是为什么 MoE 可以有很大的总参数量，但每个 token 的激活计算量相对小。
 
 ## 符号卡：MoE 公式怎么读
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
+> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
+>
+> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
+| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
 
 最小读法：router 先给 expert 打分，选 top-k 个 expert 处理当前 token，再把这些 expert 的输出按权重合回来。
 
@@ -78,8 +89,8 @@ MoE 层的计算可以写成：
 g = \operatorname{softmax}(W_r h)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(g\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
 | \(W_r\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -90,8 +101,8 @@ g = \operatorname{softmax}(W_r h)
 \operatorname{TopK}(g) = \{i_1, i_2, \dots, i_k\}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(g\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
 | \(i_1\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -103,8 +114,8 @@ g = \operatorname{softmax}(W_r h)
 y = \sum_{i \in \operatorname{TopK}(g)} \tilde g_i \cdot E_i(h)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -120,8 +131,8 @@ y = \sum_{i \in \operatorname{TopK}(g)} \tilde g_i \cdot E_i(h)
 y = E_{\text{shared}}(h) + \sum_{i \in \operatorname{TopK}(g)} \tilde g_i \cdot E_i(h)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(E_{}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -200,8 +211,8 @@ flowchart TB
 \mathcal{L}_{balance} \propto N \sum_i f_i p_i
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(b\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(N\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -284,8 +295,8 @@ MoE 技术报告里和训练最相关的不是“用了多少专家”本身，�
 \text{data mixture} \rightarrow \text{router distribution} \rightarrow \text{expert specialization} \rightarrow \text{load balance} \rightarrow \text{system throughput}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 

@@ -96,6 +96,17 @@ shape specialization 是有价值的，但如果没有 fallback，就会出现�
 
 ## 真实排查案例：低比特路径省显存，却拖慢首 token
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》-->
+> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
+>
+> 延伸阅读：[03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.html) |
+| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
+
 **输入症状**：把一个 13B 服务从 FP16 切到 W4A16 后，显存占用下降明显，但 TTFT 从 820ms 增到 1.25s，短问答用户感知变差。
 
 **关键指标**：权重显存下降约一半，batch 上限提高；但短请求 prefill latency 上升，dequant kernel 占比升高，小 batch 下 Tensor Core 利用率下降；长输出请求的 TPOT 反而略有改善。

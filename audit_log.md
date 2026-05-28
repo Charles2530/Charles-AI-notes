@@ -1,500 +1,507 @@
 # 博客页面审核日志
 
-页面根目录：`files/`（来自 `mkdocs.yml` 的 `docs_dir`）。
+页面根目录：`files/`（来自 `mkdocs.yml` 的 `docs_dir`，仓库框架识别为 MkDocs / Material for MkDocs）。
+排除规则：未纳入 `.git/`、`node_modules/`、`dist/`、`site/`、`files/assets/` 以及项目说明类 `README.md` / `CHANGELOG.md` / `LICENSE.md`。
 
 ## 页面清单
 
-- [x] files/diffusion/comparison-table.md — done
-- [x] files/diffusion/consistency-models-and-rectified-flow.md — done
-- [x] files/diffusion/distillation.md — done
-- [x] files/diffusion/evolution.md — done
-- [x] files/diffusion/guidance-and-conditioning.md — done
-- [x] files/diffusion/index.md — done
-- [x] files/diffusion/inference.md — done
-- [x] files/diffusion/noise-schedules-and-parameterization.md — done
-- [x] files/diffusion/practical-training-recipes-and-failure-analysis.md — done
-- [x] files/diffusion/score-matching-sde-and-probability-flow.md — done
-- [x] files/diffusion/training.md — done
-- [x] files/diffusion/video-and-multimodal-diffusion.md — done
-- [x] files/embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md — done
-- [x] files/embodied-ai/beginner-learning-path.md — done
-- [x] files/embodied-ai/cameras-depth-and-robot-vision.md — done
-- [x] files/embodied-ai/closed-loop-task-walkthrough.md — done
-- [x] files/embodied-ai/deployment-patterns-and-safety-cases.md — done
-- [x] files/embodied-ai/household-robotics-workflows-and-failure-patterns.md — done
-- [x] files/embodied-ai/human-robot-interaction-and-evaluation.md — done
-- [x] files/embodied-ai/index.md — done
-- [x] files/embodied-ai/isaacsim-and-robotwin.md — done
-- [x] files/embodied-ai/planning-control-and-safety.md — done
-- [x] files/embodied-ai/rerun-robotics-data-visualization.md — done
-- [x] files/embodied-ai/sim2real-and-data-engines.md — done
-- [x] files/embodied-ai/stereo-matching-and-cost-volume.md — done
-- [x] files/embodied-ai/task-taxonomy-and-benchmarks.md — done
-- [x] files/embodied-ai/vla-data-model-and-evaluation-roadmap.md — done
-- [x] files/embodied-ai/vla-wam-world-model-system-map.md — done
-- [x] files/foundations/autograd-activation-checkpointing-and-memory.md — done
-- [x] files/foundations/convolution-and-feature-extraction.md — done
-- [x] files/foundations/data-and-dataset-basics.md — done
-- [x] files/foundations/data-splits-metrics-and-evaluation-basics.md — done
-- [x] files/foundations/generalization-regularization-and-distribution-shift.md — done
-- [x] files/foundations/generation-and-decoding-basics.md — done
-- [x] files/foundations/index.md — done
-- [x] files/foundations/linear-layers-mlp-and-gemm.md — done
-- [x] files/foundations/mamba-and-hybrid-ssm-transformers.md — done
-- [x] files/foundations/model-compression-pruning-and-nas-basics.md — done
-- [x] files/foundations/model-distillation-basics.md — done
-- [x] files/foundations/moe-and-large-model-architecture-basics.md — done
-- [x] files/foundations/multimodal-cot-and-reasoning-basics.md — done
-- [x] files/foundations/normalization-residual-and-activation.md — done
-- [x] files/foundations/numerics-memory-and-runtime-basics.md — done
-- [x] files/foundations/optimization-and-training-basics.md — done
-- [x] files/foundations/positional-encoding-masks-and-context.md — done
-- [x] files/foundations/pretraining-objectives-and-representation-learning.md — done
-- [x] files/foundations/probability-latent-variables-and-generative-models.md — done
-- [x] files/foundations/prompt-engineering-cot-and-rag-basics.md — done
-- [x] files/foundations/symbols-and-minimal-math.md — done
-- [x] files/foundations/tensors-shapes-and-computation-graphs.md — done
-- [x] files/foundations/transformer-attention-and-tokenization.md — done
-- [x] files/glossary/index.md — done
-- [x] files/index.md — done
-- [x] files/inference/caching-routing-and-speculative.md — done
-- [x] files/inference/context-compression-kv-eviction-and-memory-hierarchies.md — done
-- [x] files/inference/cost-modeling-and-slo-design.md — done
-- [x] files/inference/disaggregated-prefill-kv-services-and-capacity-ops.md — done
-- [x] files/inference/gpu-kernels-batching-and-memory-systems.md — done
-- [x] files/inference/index.md — done
-- [x] files/inference/moe-routing-and-multi-model-serving.md — done
-- [x] files/inference/observability-and-online-evaluation.md — done
-- [x] files/inference/optimization-checklist-and-capacity-planning.md — done
-- [x] files/inference/rag-agents-and-long-context-systems.md — done
-- [x] files/inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md — done
-- [x] files/inference/serving-systems.md — done
-- [x] files/operators/advanced-kernel-patterns-and-shape-specialization.md — done
-- [x] files/operators/communication-kernels-and-overlap.md — done
-- [x] files/operators/cuda-programming-model-and-memory.md — done
-- [x] files/operators/custom-op-development-and-framework-integration.md — done
-- [x] files/operators/cutlass-cute-and-compiler-stack.md — done
-- [x] files/operators/deepgemm-fp8-gemm-and-mega-moe.md — done
-- [x] files/operators/deepgemm-source-and-integration.md — done
-- [x] files/operators/fp8-training-and-optimizer-kernels.md — done
-- [x] files/operators/gemm-attention-and-fused-kernels.md — done
-- [x] files/operators/gpu-interconnects-and-topology-mapping.md — done
-- [x] files/operators/hardware-aware-debug-checklist.md — done
-- [x] files/operators/index.md — done
-- [x] files/operators/kernel-cost-models-and-selection-heuristics.md — done
-- [x] files/operators/long-context-and-flashattention-evolution.md — done
-- [x] files/operators/low-precision-and-quantized-kernels.md — done
-- [x] files/operators/moe-routing-and-sparse-kernels.md — done
-- [x] files/operators/performance-anti-patterns-and-failure-modes.md — done
-- [x] files/operators/profiling-debugging-and-numerical-stability.md — done
-- [x] files/operators/ptx-sass-and-compiler-inspection.md — done
-- [x] files/operators/reduction-norm-layout-and-indexing.md — done
-- [x] files/operators/roofline-benchmarking-and-case-studies.md — done
-- [x] files/operators/runtime-dispatch-and-kernel-selection.md — done
-- [x] files/operators/serving-attention-and-kv-kernels.md — done
-- [x] files/operators/testing-regression-and-maintenance.md — done
-- [x] files/operators/triton-programming-model-and-autotuning.md — done
-- [x] files/operators/workload-modeling-and-shape-buckets.md — done
-- [x] files/paper-deep-dives/diffusion/anyflow.md — done
-- [x] files/paper-deep-dives/diffusion/causvid.md — done
-- [x] files/paper-deep-dives/diffusion/diffusion-forcing.md — done
-- [x] files/paper-deep-dives/diffusion/dmd.md — done
-- [x] files/paper-deep-dives/diffusion/dmd2.md — done
-- [x] files/paper-deep-dives/diffusion/dpm-solver-plus-plus.md — done
-- [x] files/paper-deep-dives/diffusion/phased-dmd.md — done
-- [x] files/paper-deep-dives/diffusion/score-sde.md — done
-- [x] files/paper-deep-dives/diffusion/wan.md — done
-- [x] files/paper-deep-dives/embodied-ai/depth-anything-3.md — done
-- [x] files/paper-deep-dives/embodied-ai/depth-anything-v2.md — done
-- [x] files/paper-deep-dives/embodied-ai/depth-anything.md — done
-- [x] files/paper-deep-dives/embodied-ai/dreamzero.md — done
-- [x] files/paper-deep-dives/embodied-ai/gr2.md — done
-- [x] files/paper-deep-dives/embodied-ai/gr3.md — done
-- [x] files/paper-deep-dives/embodied-ai/mapanything.md — done
-- [x] files/paper-deep-dives/embodied-ai/pi05.md — done
-- [x] files/paper-deep-dives/embodied-ai/rt2.md — done
-- [x] files/paper-deep-dives/embodied-ai/spatialvla.md — done
-- [x] files/paper-deep-dives/embodied-ai/vggt.md — done
-- [x] files/paper-deep-dives/embodied-ai/video-prediction-policy.md — done
-- [x] files/paper-deep-dives/embodied-ai/vodp.md — done
-- [x] files/paper-deep-dives/foundations/attn-qat.md — done
-- [x] files/paper-deep-dives/foundations/gpu-utilization-misleading.md — done
-- [x] files/paper-deep-dives/foundations/magiattention.md — done
-- [x] files/paper-deep-dives/foundations/megatron-lm.md — done
-- [x] files/paper-deep-dives/foundations/muon-is-scalable.md — done
-- [x] files/paper-deep-dives/foundations/sla-sparse-linear-attention.md — done
-- [x] files/paper-deep-dives/foundations/zero.md — done
-- [x] files/paper-deep-dives/index.md — done
-- [x] files/paper-deep-dives/inference/eagle-2.md — done
-- [x] files/paper-deep-dives/inference/eagle-3.md — done
-- [x] files/paper-deep-dives/inference/eagle.md — done
-- [x] files/paper-deep-dives/inference/fast-foundation-stereo.md — done
-- [x] files/paper-deep-dives/inference/kvslimmer.md — done
-- [x] files/paper-deep-dives/inference/low-bit-llm-survey.md — done
-- [x] files/paper-deep-dives/technical-reports/deepseek-r1.md — done
-- [x] files/paper-deep-dives/technical-reports/deepseek-v3.md — done
-- [x] files/paper-deep-dives/technical-reports/deepseek-v4-pro.md — done
-- [x] files/paper-deep-dives/technical-reports/gemini-2-5.md — done
-- [x] files/paper-deep-dives/technical-reports/gpt-4o-system-card.md — done
-- [x] files/paper-deep-dives/technical-reports/incoder-32b.md — done
-- [x] files/paper-deep-dives/technical-reports/kimi-k2.md — done
-- [x] files/paper-deep-dives/technical-reports/nemotron-3-super.md — done
-- [x] files/paper-deep-dives/technical-reports/qwen3.md — done
-- [x] files/paper-deep-dives/technical-reports/qwen35-omni.md — done
-- [x] files/paper-deep-dives/world-models/dreamer.md — done
-- [x] files/paper-deep-dives/world-models/dreamerv2.md — done
-- [x] files/paper-deep-dives/world-models/dreamerv3.md — done
-- [x] files/paper-deep-dives/world-models/genie.md — done
-- [x] files/paper-deep-dives/world-models/h-jepa.md — done
-- [x] files/paper-deep-dives/world-models/jepa.md — done
-- [x] files/paper-deep-dives/world-models/lingbot-world.md — done
-- [x] files/paper-deep-dives/world-models/lwm.md — done
-- [x] files/paper-deep-dives/world-models/planet.md — done
-- [x] files/paper-deep-dives/world-models/ringattention.md — done
-- [x] files/paper-deep-dives/world-models/self-forcing.md — done
-- [x] files/paper-deep-dives/world-models/towards-video-world-models.md — done
-- [x] files/paper-deep-dives/world-models/v-jepa.md — done
-- [x] files/paper-deep-dives/world-models/world-models-embodied-ai-survey.md — done
-- [x] files/paper-deep-dives/writing-standard.md — done
-- [x] files/quantization/activation-outliers-and-calibration-strategies.md — done
-- [x] files/quantization/comparison-table.md — done
-- [x] files/quantization/evaluation-and-deployment-checklist.md — done
-- [x] files/quantization/fp8-and-mixed-precision-serving.md — done
-- [x] files/quantization/index.md — done
-- [x] files/quantization/page-by-page-visual-guide.md — done
-- [x] files/quantization/ptq-gptq-awq-smoothquant.md — done
-- [x] files/quantization/qat-kernels-and-kv-cache.md — done
-- [x] files/quantization/qlora-and-quantized-training.md — done
-- [x] files/quantization/quantization-for-multimodal-and-vla-models.md — done
-- [x] files/quantization/quantization-runtimes-and-frameworks.md — done
-- [x] files/quantization/serving-stacks-and-hardware-tradeoffs.md — done
-- [x] files/quantization/symbols-and-minimal-math.md — done
-- [x] files/references/claim-ledger.md — done
-- [x] files/references/evidence-and-reproducibility-standard.md — done
-- [x] files/references/image-and-formula-quality-standard.md — done
-- [x] files/references/image-asset-governance-ledger.md — done
-- [x] files/references/index.md — done
-- [x] files/references/site-efficiency-coverage-matrix.md — done
-- [x] files/references/site-judgement-principles.md — done
-- [x] files/reinforcement-learning/index.md — done
-- [x] files/reinforcement-learning/mdp-value-bellman.md — done
-- [x] files/reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md — done
-- [x] files/reinforcement-learning/rl-for-world-models.md — done
-- [x] files/reinforcement-learning/verl-code-flow.md — done
-- [x] files/roadmap/common-decision-patterns-and-tradeoffs.md — done
-- [x] files/roadmap/comparison-tables.md — done
-- [x] files/roadmap/index.md — done
-- [x] files/roadmap/research-and-engineering-study-plan.md — done
-- [x] files/thinking-exploration/embodied-ai-status-and-real-world-loop.md — done
-- [x] files/thinking-exploration/fast-foundation-stereo-prerequisite-map.md — done
-- [x] files/thinking-exploration/index.md — done
-- [x] files/thinking-exploration/qualcomm-xr2-gen2.md — done
-- [x] files/thinking-exploration/world-models-status-and-engineering-loop.md — done
-- [x] files/training/beginner-model-training-primer.md — done
-- [x] files/training/cluster-operations-and-experiment-management.md — done
-- [x] files/training/data-quality-dedup-and-governance.md — done
-- [x] files/training/data-systems-and-optimization.md — done
-- [x] files/training/distributed-training-and-checkpointing.md — done
-- [x] files/training/evaluation-and-ablation-methodology.md — done
-- [x] files/training/image-sources.md — done
-- [x] files/training/index.md — done
-- [x] files/training/input-pipelines-packing-and-throughput-governance.md — done
-- [x] files/training/low-bit-training-and-numerics.md — done
-- [x] files/training/megatron-lm-deepspeed-and-open-training-stacks.md — done
-- [x] files/training/mtp-and-speculative-decoding.md — done
-- [x] files/training/objectives-optimizers-and-schedules.md — done
-- [x] files/training/page-by-page-visual-guide.md — done
-- [x] files/training/post-training-data-engines-and-judge-models.md — done
-- [x] files/training/preference-data-and-alignment-pitfalls.md — done
-- [x] files/training/pretraining-finetuning-alignment.md — done
-- [x] files/training/scaling-curriculum-and-data-mixture.md — done
-- [x] files/training/scaling-laws-and-experiment-economics.md — done
-- [x] files/training/stability-numerics-and-failure-triage.md — done
-- [x] files/training/wandb-experiment-tracking-and-governance.md — done
-- [x] files/vla/action-chunking-hierarchical-policies-and-latent-skills.md — done
-- [x] files/vla/action-representation-and-interfaces.md — done
-- [x] files/vla/benchmarks-and-data-engines.md — done
-- [x] files/vla/closed-loop-recovery-and-failure-analysis.md — done
-- [x] files/vla/data-and-policy-learning.md — done
-- [x] files/vla/deployment-and-safety.md — done
-- [x] files/vla/index.md — done
-- [x] files/vlm/architecture-and-training.md — done
-- [x] files/vlm/index.md — done
-- [x] files/vlm/multimodal-evaluation-and-failure-modes.md — done
-- [x] files/vlm/video-representation-and-memory.md — done
-- [x] files/vlm/visual-tokenizers-and-connectors.md — done
-- [x] files/vlm/vlm-vla-for-efficient-world-model-training.md — done
-- [x] files/vlm/vlm-vla-symbols-and-minimal-math.md — done
-- [x] files/world-models/action-conditioned-video-world-model-training-case.md — done
-- [x] files/world-models/applications-in-robotics-and-autonomous-driving.md — done
-- [x] files/world-models/beginner-world-models-primer.md — done
-- [x] files/world-models/data-engines-and-self-improvement.md — done
-- [x] files/world-models/development-roadmap-data-simulation-and-evaluation.md — done
-- [x] files/world-models/efficiency-technique-coverage-matrix.md — done
-- [x] files/world-models/efficient-training-roadmap.md — done
-- [x] files/world-models/evaluation-and-failure-modes.md — done
-- [x] files/world-models/generative-simulation-and-video.md — done
-- [x] files/world-models/index.md — done
-- [x] files/world-models/masked-jepa-and-latent-prediction.md — done
-- [x] files/world-models/planning-as-inference-and-latent-actions.md — done
-- [x] files/world-models/rollout-serving-quantization-kernel-case.md — done
-- [x] files/world-models/rssm-dreamer-and-planning.md — done
-- [x] files/world-models/simulators-counterfactuals-and-synthetic-rollouts.md — done
-- [x] files/world-models/uncertainty-and-risk-aware-planning.md — done
-- [x] files/world-models/vla-world-model-full-chain-case.md — done
-- [x] files/world-models/wm-wam-vam-and-action-conditioned-modeling.md — done
-- [x] files/world-models/world-model-efficient-training-experiment-report.md — done
+- [x] files/diffusion/comparison-table.md | [其他] | done
+- [x] files/diffusion/consistency-models-and-rectified-flow.md | [其他] | done
+- [x] files/diffusion/distillation.md | [其他] | done
+- [x] files/diffusion/evolution.md | [其他] | done
+- [x] files/diffusion/guidance-and-conditioning.md | [其他] | done
+- [x] files/diffusion/index.md | [其他] | done
+- [x] files/diffusion/inference.md | [工程实践] | done
+- [x] files/diffusion/noise-schedules-and-parameterization.md | [其他] | done
+- [x] files/diffusion/practical-training-recipes-and-failure-analysis.md | [工程实践] | done
+- [x] files/diffusion/score-matching-sde-and-probability-flow.md | [其他] | done
+- [x] files/diffusion/training.md | [工程实践] | done
+- [x] files/diffusion/video-and-multimodal-diffusion.md | [其他] | done
+- [x] files/embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md | [其他] | done
+- [x] files/embodied-ai/beginner-learning-path.md | [基础知识] | done
+- [x] files/embodied-ai/cameras-depth-and-robot-vision.md | [其他] | done
+- [x] files/embodied-ai/closed-loop-task-walkthrough.md | [其他] | done
+- [x] files/embodied-ai/deployment-patterns-and-safety-cases.md | [工程实践] | done
+- [x] files/embodied-ai/household-robotics-workflows-and-failure-patterns.md | [其他] | done
+- [x] files/embodied-ai/human-robot-interaction-and-evaluation.md | [其他] | done
+- [x] files/embodied-ai/index.md | [其他] | done
+- [x] files/embodied-ai/isaacsim-and-robotwin.md | [其他] | done
+- [x] files/embodied-ai/planning-control-and-safety.md | [其他] | done
+- [x] files/embodied-ai/rerun-robotics-data-visualization.md | [其他] | done
+- [x] files/embodied-ai/sim2real-and-data-engines.md | [其他] | done
+- [x] files/embodied-ai/stereo-matching-and-cost-volume.md | [其他] | done
+- [x] files/embodied-ai/task-taxonomy-and-benchmarks.md | [其他] | done
+- [x] files/embodied-ai/vla-data-model-and-evaluation-roadmap.md | [其他] | done
+- [x] files/embodied-ai/vla-wam-world-model-system-map.md | [其他] | done
+- [x] files/foundations/autograd-activation-checkpointing-and-memory.md | [基础知识] | done
+- [x] files/foundations/convolution-and-feature-extraction.md | [基础知识] | done
+- [x] files/foundations/data-and-dataset-basics.md | [基础知识] | done
+- [x] files/foundations/data-splits-metrics-and-evaluation-basics.md | [基础知识] | done
+- [x] files/foundations/generalization-regularization-and-distribution-shift.md | [基础知识] | done
+- [x] files/foundations/generation-and-decoding-basics.md | [基础知识] | done
+- [x] files/foundations/index.md | [基础知识] | done
+- [x] files/foundations/linear-layers-mlp-and-gemm.md | [基础知识] | done
+- [x] files/foundations/mamba-and-hybrid-ssm-transformers.md | [基础知识] | done
+- [x] files/foundations/model-compression-pruning-and-nas-basics.md | [基础知识] | done
+- [x] files/foundations/model-distillation-basics.md | [基础知识] | done
+- [x] files/foundations/moe-and-large-model-architecture-basics.md | [基础知识] | done
+- [x] files/foundations/multimodal-cot-and-reasoning-basics.md | [基础知识] | done
+- [x] files/foundations/normalization-residual-and-activation.md | [基础知识] | done
+- [x] files/foundations/numerics-memory-and-runtime-basics.md | [基础知识] | done
+- [x] files/foundations/optimization-and-training-basics.md | [基础知识] | done
+- [x] files/foundations/positional-encoding-masks-and-context.md | [基础知识] | done
+- [x] files/foundations/pretraining-objectives-and-representation-learning.md | [基础知识] | done
+- [x] files/foundations/probability-latent-variables-and-generative-models.md | [基础知识] | done
+- [x] files/foundations/prompt-engineering-cot-and-rag-basics.md | [基础知识] | done
+- [x] files/foundations/symbols-and-minimal-math.md | [基础知识] | done
+- [x] files/foundations/tensors-shapes-and-computation-graphs.md | [基础知识] | done
+- [x] files/foundations/transformer-attention-and-tokenization.md | [基础知识] | done
+- [x] files/glossary/index.md | [其他] | done
+- [x] files/index.md | [其他] | done
+- [x] files/inference/caching-routing-and-speculative.md | [工程实践] | done
+- [x] files/inference/context-compression-kv-eviction-and-memory-hierarchies.md | [工程实践] | done
+- [x] files/inference/cost-modeling-and-slo-design.md | [工程实践] | done
+- [x] files/inference/disaggregated-prefill-kv-services-and-capacity-ops.md | [工程实践] | done
+- [x] files/inference/gpu-kernels-batching-and-memory-systems.md | [工程实践] | done
+- [x] files/inference/index.md | [工程实践] | done
+- [x] files/inference/moe-routing-and-multi-model-serving.md | [工程实践] | done
+- [x] files/inference/observability-and-online-evaluation.md | [工程实践] | done
+- [x] files/inference/optimization-checklist-and-capacity-planning.md | [工程实践] | done
+- [x] files/inference/rag-agents-and-long-context-systems.md | [工程实践] | done
+- [x] files/inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md | [工程实践] | done
+- [x] files/inference/serving-systems.md | [工程实践] | done
+- [x] files/operators/advanced-kernel-patterns-and-shape-specialization.md | [工程实践] | done
+- [x] files/operators/communication-kernels-and-overlap.md | [工程实践] | done
+- [x] files/operators/cuda-programming-model-and-memory.md | [工程实践] | done
+- [x] files/operators/custom-op-development-and-framework-integration.md | [工程实践] | done
+- [x] files/operators/cutlass-cute-and-compiler-stack.md | [工程实践] | done
+- [x] files/operators/deepgemm-fp8-gemm-and-mega-moe.md | [工程实践] | done
+- [x] files/operators/deepgemm-source-and-integration.md | [工程实践] | done
+- [x] files/operators/fp8-training-and-optimizer-kernels.md | [工程实践] | done
+- [x] files/operators/gemm-attention-and-fused-kernels.md | [工程实践] | done
+- [x] files/operators/gpu-interconnects-and-topology-mapping.md | [工程实践] | done
+- [x] files/operators/hardware-aware-debug-checklist.md | [工程实践] | done
+- [x] files/operators/index.md | [工程实践] | done
+- [x] files/operators/kernel-cost-models-and-selection-heuristics.md | [工程实践] | done
+- [x] files/operators/long-context-and-flashattention-evolution.md | [工程实践] | done
+- [x] files/operators/low-precision-and-quantized-kernels.md | [工程实践] | done
+- [x] files/operators/moe-routing-and-sparse-kernels.md | [工程实践] | done
+- [x] files/operators/performance-anti-patterns-and-failure-modes.md | [工程实践] | done
+- [x] files/operators/profiling-debugging-and-numerical-stability.md | [工程实践] | done
+- [x] files/operators/ptx-sass-and-compiler-inspection.md | [工程实践] | done
+- [x] files/operators/reduction-norm-layout-and-indexing.md | [工程实践] | done
+- [x] files/operators/roofline-benchmarking-and-case-studies.md | [工程实践] | done
+- [x] files/operators/runtime-dispatch-and-kernel-selection.md | [工程实践] | done
+- [x] files/operators/serving-attention-and-kv-kernels.md | [工程实践] | done
+- [x] files/operators/testing-regression-and-maintenance.md | [工程实践] | done
+- [x] files/operators/triton-programming-model-and-autotuning.md | [工程实践] | done
+- [x] files/operators/workload-modeling-and-shape-buckets.md | [工程实践] | done
+- [x] files/paper-deep-dives/diffusion/anyflow.md | [论文解读] | done
+- [x] files/paper-deep-dives/diffusion/causvid.md | [论文解读] | done
+- [x] files/paper-deep-dives/diffusion/diffusion-forcing.md | [论文解读] | done
+- [x] files/paper-deep-dives/diffusion/dmd.md | [论文解读] | done
+- [x] files/paper-deep-dives/diffusion/dmd2.md | [论文解读] | done
+- [x] files/paper-deep-dives/diffusion/dpm-solver-plus-plus.md | [论文解读] | done
+- [x] files/paper-deep-dives/diffusion/phased-dmd.md | [论文解读] | done
+- [x] files/paper-deep-dives/diffusion/score-sde.md | [论文解读] | done
+- [x] files/paper-deep-dives/diffusion/wan.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/depth-anything-3.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/depth-anything-v2.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/depth-anything.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/dreamzero.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/gr2.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/gr3.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/mapanything.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/pi05.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/rt2.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/spatialvla.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/vggt.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/video-prediction-policy.md | [论文解读] | done
+- [x] files/paper-deep-dives/embodied-ai/vodp.md | [论文解读] | done
+- [x] files/paper-deep-dives/foundations/attn-qat.md | [论文解读] | done
+- [x] files/paper-deep-dives/foundations/gpu-utilization-misleading.md | [论文解读] | done
+- [x] files/paper-deep-dives/foundations/magiattention.md | [论文解读] | done
+- [x] files/paper-deep-dives/foundations/megatron-lm.md | [论文解读] | done
+- [x] files/paper-deep-dives/foundations/muon-is-scalable.md | [论文解读] | done
+- [x] files/paper-deep-dives/foundations/sla-sparse-linear-attention.md | [论文解读] | done
+- [x] files/paper-deep-dives/foundations/zero.md | [论文解读] | done
+- [x] files/paper-deep-dives/index.md | [论文解读] | done
+- [x] files/paper-deep-dives/inference/eagle-2.md | [论文解读] | done
+- [x] files/paper-deep-dives/inference/eagle-3.md | [论文解读] | done
+- [x] files/paper-deep-dives/inference/eagle.md | [论文解读] | done
+- [x] files/paper-deep-dives/inference/fast-foundation-stereo.md | [论文解读] | done
+- [x] files/paper-deep-dives/inference/kvslimmer.md | [论文解读] | done
+- [x] files/paper-deep-dives/inference/low-bit-llm-survey.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/deepseek-r1.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/deepseek-v3.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/deepseek-v4-pro.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/gemini-2-5.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/gpt-4o-system-card.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/incoder-32b.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/kimi-k2.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/nemotron-3-super.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/qwen3.md | [论文解读] | done
+- [x] files/paper-deep-dives/technical-reports/qwen35-omni.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/dreamer.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/dreamerv2.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/dreamerv3.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/genie.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/h-jepa.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/jepa.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/lingbot-world.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/lwm.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/planet.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/ringattention.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/self-forcing.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/towards-video-world-models.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/v-jepa.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/world-models-embodied-ai-survey.md | [论文解读] | done
+- [x] files/paper-deep-dives/writing-standard.md | [论文解读] | done
+- [x] files/quantization/activation-outliers-and-calibration-strategies.md | [其他] | done
+- [x] files/quantization/comparison-table.md | [其他] | done
+- [x] files/quantization/evaluation-and-deployment-checklist.md | [工程实践] | done
+- [x] files/quantization/fp8-and-mixed-precision-serving.md | [其他] | done
+- [x] files/quantization/index.md | [其他] | done
+- [x] files/quantization/page-by-page-visual-guide.md | [其他] | done
+- [x] files/quantization/ptq-gptq-awq-smoothquant.md | [其他] | done
+- [x] files/quantization/qat-kernels-and-kv-cache.md | [其他] | done
+- [x] files/quantization/qlora-and-quantized-training.md | [工程实践] | done
+- [x] files/quantization/quantization-for-multimodal-and-vla-models.md | [其他] | done
+- [x] files/quantization/quantization-runtimes-and-frameworks.md | [其他] | done
+- [x] files/quantization/serving-stacks-and-hardware-tradeoffs.md | [其他] | done
+- [x] files/quantization/symbols-and-minimal-math.md | [其他] | done
+- [x] files/references/claim-ledger.md | [其他] | done
+- [x] files/references/evidence-and-reproducibility-standard.md | [其他] | done
+- [x] files/references/image-and-formula-quality-standard.md | [其他] | done
+- [x] files/references/image-asset-governance-ledger.md | [其他] | done
+- [x] files/references/index.md | [其他] | done
+- [x] files/references/site-efficiency-coverage-matrix.md | [其他] | done
+- [x] files/references/site-judgement-principles.md | [其他] | done
+- [x] files/reinforcement-learning/index.md | [其他] | done
+- [x] files/reinforcement-learning/mdp-value-bellman.md | [其他] | done
+- [x] files/reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md | [其他] | done
+- [x] files/reinforcement-learning/rl-for-world-models.md | [其他] | done
+- [x] files/reinforcement-learning/verl-code-flow.md | [其他] | done
+- [x] files/roadmap/common-decision-patterns-and-tradeoffs.md | [其他] | done
+- [x] files/roadmap/comparison-tables.md | [其他] | done
+- [x] files/roadmap/index.md | [其他] | done
+- [x] files/roadmap/research-and-engineering-study-plan.md | [其他] | done
+- [x] files/thinking-exploration/embodied-ai-status-and-real-world-loop.md | [其他] | done
+- [x] files/thinking-exploration/fast-foundation-stereo-prerequisite-map.md | [基础知识] | done
+- [x] files/thinking-exploration/index.md | [其他] | done
+- [x] files/thinking-exploration/qualcomm-xr2-gen2.md | [其他] | done
+- [x] files/thinking-exploration/world-models-status-and-engineering-loop.md | [其他] | done
+- [x] files/training/beginner-model-training-primer.md | [基础知识] | done
+- [x] files/training/cluster-operations-and-experiment-management.md | [工程实践] | done
+- [x] files/training/data-quality-dedup-and-governance.md | [工程实践] | done
+- [x] files/training/data-systems-and-optimization.md | [工程实践] | done
+- [x] files/training/distributed-training-and-checkpointing.md | [工程实践] | done
+- [x] files/training/evaluation-and-ablation-methodology.md | [工程实践] | done
+- [x] files/training/image-sources.md | [工程实践] | done
+- [x] files/training/index.md | [工程实践] | done
+- [x] files/training/input-pipelines-packing-and-throughput-governance.md | [工程实践] | done
+- [x] files/training/low-bit-training-and-numerics.md | [工程实践] | done
+- [x] files/training/megatron-lm-deepspeed-and-open-training-stacks.md | [工程实践] | done
+- [x] files/training/mtp-and-speculative-decoding.md | [工程实践] | done
+- [x] files/training/objectives-optimizers-and-schedules.md | [工程实践] | done
+- [x] files/training/page-by-page-visual-guide.md | [工程实践] | done
+- [x] files/training/post-training-data-engines-and-judge-models.md | [工程实践] | done
+- [x] files/training/preference-data-and-alignment-pitfalls.md | [工程实践] | done
+- [x] files/training/pretraining-finetuning-alignment.md | [工程实践] | done
+- [x] files/training/scaling-curriculum-and-data-mixture.md | [工程实践] | done
+- [x] files/training/scaling-laws-and-experiment-economics.md | [工程实践] | done
+- [x] files/training/stability-numerics-and-failure-triage.md | [工程实践] | done
+- [x] files/training/wandb-experiment-tracking-and-governance.md | [工程实践] | done
+- [x] files/vla/action-chunking-hierarchical-policies-and-latent-skills.md | [其他] | done
+- [x] files/vla/action-representation-and-interfaces.md | [其他] | done
+- [x] files/vla/benchmarks-and-data-engines.md | [其他] | done
+- [x] files/vla/closed-loop-recovery-and-failure-analysis.md | [其他] | done
+- [x] files/vla/data-and-policy-learning.md | [其他] | done
+- [x] files/vla/deployment-and-safety.md | [工程实践] | done
+- [x] files/vla/index.md | [其他] | done
+- [x] files/vlm/architecture-and-training.md | [工程实践] | done
+- [x] files/vlm/index.md | [其他] | done
+- [x] files/vlm/multimodal-evaluation-and-failure-modes.md | [其他] | done
+- [x] files/vlm/video-representation-and-memory.md | [其他] | done
+- [x] files/vlm/visual-tokenizers-and-connectors.md | [其他] | done
+- [x] files/vlm/vlm-vla-for-efficient-world-model-training.md | [工程实践] | done
+- [x] files/vlm/vlm-vla-symbols-and-minimal-math.md | [其他] | done
+- [x] files/world-models/action-conditioned-video-world-model-training-case.md | [工程实践] | done
+- [x] files/world-models/applications-in-robotics-and-autonomous-driving.md | [其他] | done
+- [x] files/world-models/beginner-world-models-primer.md | [基础知识] | done
+- [x] files/world-models/data-engines-and-self-improvement.md | [其他] | done
+- [x] files/world-models/development-roadmap-data-simulation-and-evaluation.md | [其他] | done
+- [x] files/world-models/efficiency-technique-coverage-matrix.md | [其他] | done
+- [x] files/world-models/efficient-training-roadmap.md | [工程实践] | done
+- [x] files/world-models/evaluation-and-failure-modes.md | [其他] | done
+- [x] files/world-models/generative-simulation-and-video.md | [其他] | done
+- [x] files/world-models/index.md | [其他] | done
+- [x] files/world-models/masked-jepa-and-latent-prediction.md | [其他] | done
+- [x] files/world-models/planning-as-inference-and-latent-actions.md | [工程实践] | done
+- [x] files/world-models/rollout-serving-quantization-kernel-case.md | [其他] | done
+- [x] files/world-models/rssm-dreamer-and-planning.md | [其他] | done
+- [x] files/world-models/simulators-counterfactuals-and-synthetic-rollouts.md | [其他] | done
+- [x] files/world-models/uncertainty-and-risk-aware-planning.md | [其他] | done
+- [x] files/world-models/vla-world-model-full-chain-case.md | [其他] | done
+- [x] files/world-models/wm-wam-vam-and-action-conditioned-modeling.md | [其他] | done
+- [x] files/world-models/world-model-efficient-training-experiment-report.md | [工程实践] | done
 
 ## 审核报告
 
-- 修改页面总数：240
-- 页面文件总数：240
-- 页面清单来源：`files/**/*.md`。
-- 未做修改的页面列表：无
+- 总页数：240
+- 实际修改：172 页
+- 未修改：68 页（`files/embodied-ai/household-robotics-workflows-and-failure-patterns.md`、`files/embodied-ai/isaacsim-and-robotwin.md`、`files/embodied-ai/vla-data-model-and-evaluation-roadmap.md`、`files/foundations/data-splits-metrics-and-evaluation-basics.md`、`files/foundations/multimodal-cot-and-reasoning-basics.md`、`files/foundations/prompt-engineering-cot-and-rag-basics.md`、`files/glossary/index.md`、`files/index.md`、`files/inference/disaggregated-prefill-kv-services-and-capacity-ops.md`、`files/inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md`、`files/operators/advanced-kernel-patterns-and-shape-specialization.md`、`files/operators/cuda-programming-model-and-memory.md`、`files/operators/custom-op-development-and-framework-integration.md`、`files/operators/cutlass-cute-and-compiler-stack.md`、`files/operators/deepgemm-fp8-gemm-and-mega-moe.md`、`files/operators/deepgemm-source-and-integration.md`、`files/operators/fp8-training-and-optimizer-kernels.md`、`files/operators/gpu-interconnects-and-topology-mapping.md`、`files/operators/hardware-aware-debug-checklist.md`、`files/operators/performance-anti-patterns-and-failure-modes.md`、`files/operators/ptx-sass-and-compiler-inspection.md`、`files/operators/runtime-dispatch-and-kernel-selection.md`、`files/operators/serving-attention-and-kv-kernels.md`、`files/operators/testing-regression-and-maintenance.md`、`files/operators/triton-programming-model-and-autotuning.md`、`files/operators/workload-modeling-and-shape-buckets.md`、`files/paper-deep-dives/embodied-ai/depth-anything-v2.md`、`files/paper-deep-dives/foundations/megatron-lm.md`、`files/paper-deep-dives/foundations/zero.md`、`files/paper-deep-dives/index.md`、`files/paper-deep-dives/inference/eagle-3.md`、`files/paper-deep-dives/technical-reports/gemini-2-5.md`、`files/paper-deep-dives/technical-reports/gpt-4o-system-card.md`、`files/paper-deep-dives/technical-reports/incoder-32b.md`、`files/paper-deep-dives/technical-reports/nemotron-3-super.md`、`files/paper-deep-dives/technical-reports/qwen3.md`、`files/paper-deep-dives/technical-reports/qwen35-omni.md`、`files/paper-deep-dives/world-models/lwm.md`、`files/paper-deep-dives/writing-standard.md`、`files/quantization/evaluation-and-deployment-checklist.md`、`files/quantization/page-by-page-visual-guide.md`、`files/quantization/quantization-runtimes-and-frameworks.md`、`files/references/claim-ledger.md`、`files/references/evidence-and-reproducibility-standard.md`、`files/references/image-and-formula-quality-standard.md`、`files/references/image-asset-governance-ledger.md`、`files/references/index.md`、`files/references/site-efficiency-coverage-matrix.md`、`files/references/site-judgement-principles.md`、`files/reinforcement-learning/index.md`、`files/reinforcement-learning/verl-code-flow.md`、`files/roadmap/index.md`、`files/roadmap/research-and-engineering-study-plan.md`、`files/thinking-exploration/embodied-ai-status-and-real-world-loop.md`、`files/thinking-exploration/index.md`、`files/thinking-exploration/qualcomm-xr2-gen2.md`、`files/thinking-exploration/world-models-status-and-engineering-loop.md`、`files/training/image-sources.md`、`files/training/megatron-lm-deepspeed-and-open-training-stacks.md`、`files/training/page-by-page-visual-guide.md`、`files/training/stability-numerics-and-failure-triage.md`、`files/vlm/multimodal-evaluation-and-failure-modes.md`、`files/vlm/vlm-vla-for-efficient-world-model-training.md`、`files/world-models/efficiency-technique-coverage-matrix.md`、`files/world-models/masked-jepa-and-latent-prediction.md`、`files/world-models/rollout-serving-quantization-kernel-case.md`、`files/world-models/vla-world-model-full-chain-case.md`、`files/world-models/world-model-efficient-training-experiment-report.md`）
 
-### 每页主要改动摘要
+### 类型分布
+- 论文解读：61 页
+- 基础知识：27 页
+- 工程实践：71 页
+- 其他：81 页
 
-- `files/diffusion/comparison-table.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/diffusion/consistency-models-and-rectified-flow.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 17 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/diffusion/distillation.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/diffusion/evolution.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/diffusion/guidance-and-conditioning.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/diffusion/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/diffusion/inference.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/diffusion/noise-schedules-and-parameterization.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 22 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/diffusion/practical-training-recipes-and-failure-analysis.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/diffusion/score-matching-sde-and-probability-flow.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 9 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/diffusion/training.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 10 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/diffusion/video-and-multimodal-diffusion.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/embodied-ai/beginner-learning-path.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/embodied-ai/cameras-depth-and-robot-vision.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/embodied-ai/closed-loop-task-walkthrough.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/embodied-ai/deployment-patterns-and-safety-cases.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/embodied-ai/household-robotics-workflows-and-failure-patterns.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/embodied-ai/human-robot-interaction-and-evaluation.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/embodied-ai/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 4 组连续提示框。
-- `files/embodied-ai/isaacsim-and-robotwin.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/embodied-ai/planning-control-and-safety.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 11 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/embodied-ai/rerun-robotics-data-visualization.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/embodied-ai/sim2real-and-data-engines.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/embodied-ai/stereo-matching-and-cost-volume.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/embodied-ai/task-taxonomy-and-benchmarks.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/embodied-ai/vla-data-model-and-evaluation-roadmap.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/embodied-ai/vla-wam-world-model-system-map.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/foundations/autograd-activation-checkpointing-and-memory.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/convolution-and-feature-extraction.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/data-and-dataset-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/data-splits-metrics-and-evaluation-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/foundations/generalization-regularization-and-distribution-shift.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/generation-and-decoding-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/foundations/linear-layers-mlp-and-gemm.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 13 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/mamba-and-hybrid-ssm-transformers.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/model-compression-pruning-and-nas-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/model-distillation-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/moe-and-large-model-architecture-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/foundations/multimodal-cot-and-reasoning-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/foundations/normalization-residual-and-activation.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/numerics-memory-and-runtime-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 32 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/optimization-and-training-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/foundations/positional-encoding-masks-and-context.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/pretraining-objectives-and-representation-learning.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/probability-latent-variables-and-generative-models.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/prompt-engineering-cot-and-rag-basics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/foundations/symbols-and-minimal-math.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/tensors-shapes-and-computation-graphs.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/foundations/transformer-attention-and-tokenization.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/glossary/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/inference/caching-routing-and-speculative.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/context-compression-kv-eviction-and-memory-hierarchies.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/cost-modeling-and-slo-design.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/disaggregated-prefill-kv-services-and-capacity-ops.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/inference/gpu-kernels-batching-and-memory-systems.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/moe-routing-and-multi-model-serving.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/observability-and-online-evaluation.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/optimization-checklist-and-capacity-planning.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/rag-agents-and-long-context-systems.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/inference/serving-systems.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 9 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/advanced-kernel-patterns-and-shape-specialization.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/communication-kernels-and-overlap.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/cuda-programming-model-and-memory.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/custom-op-development-and-framework-integration.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/cutlass-cute-and-compiler-stack.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/deepgemm-fp8-gemm-and-mega-moe.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/deepgemm-source-and-integration.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/fp8-training-and-optimizer-kernels.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/gemm-attention-and-fused-kernels.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/gpu-interconnects-and-topology-mapping.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/hardware-aware-debug-checklist.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/operators/kernel-cost-models-and-selection-heuristics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/long-context-and-flashattention-evolution.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/low-precision-and-quantized-kernels.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/operators/moe-routing-and-sparse-kernels.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/performance-anti-patterns-and-failure-modes.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/profiling-debugging-and-numerical-stability.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/ptx-sass-and-compiler-inspection.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/reduction-norm-layout-and-indexing.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/roofline-benchmarking-and-case-studies.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 13 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/operators/runtime-dispatch-and-kernel-selection.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/serving-attention-and-kv-kernels.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/operators/testing-regression-and-maintenance.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/triton-programming-model-and-autotuning.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/operators/workload-modeling-and-shape-buckets.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/paper-deep-dives/diffusion/anyflow.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 12 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/diffusion/causvid.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/diffusion/diffusion-forcing.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/paper-deep-dives/diffusion/dmd.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 14 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/diffusion/dmd2.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/diffusion/dpm-solver-plus-plus.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 12 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/paper-deep-dives/diffusion/phased-dmd.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 13 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/diffusion/score-sde.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/diffusion/wan.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/depth-anything-3.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/depth-anything-v2.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/depth-anything.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 9 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/dreamzero.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/gr2.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/gr3.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/mapanything.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 9 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/pi05.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/rt2.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 10 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/spatialvla.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/vggt.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/video-prediction-policy.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/embodied-ai/vodp.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/foundations/attn-qat.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/foundations/gpu-utilization-misleading.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/foundations/magiattention.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/foundations/megatron-lm.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/paper-deep-dives/foundations/muon-is-scalable.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/foundations/sla-sparse-linear-attention.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/foundations/zero.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/paper-deep-dives/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/paper-deep-dives/inference/eagle-2.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/inference/eagle-3.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 3 组连续提示框。
-- `files/paper-deep-dives/inference/eagle.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/inference/fast-foundation-stereo.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/paper-deep-dives/inference/kvslimmer.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 33 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/inference/low-bit-llm-survey.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/technical-reports/deepseek-r1.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/paper-deep-dives/technical-reports/deepseek-v3.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/technical-reports/deepseek-v4-pro.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/technical-reports/gemini-2-5.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/paper-deep-dives/technical-reports/gpt-4o-system-card.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/paper-deep-dives/technical-reports/incoder-32b.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/paper-deep-dives/technical-reports/kimi-k2.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/technical-reports/nemotron-3-super.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/paper-deep-dives/technical-reports/qwen3.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/paper-deep-dives/technical-reports/qwen35-omni.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/dreamer.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 19 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/dreamerv2.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 15 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/dreamerv3.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 14 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/paper-deep-dives/world-models/genie.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/h-jepa.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 11 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/jepa.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 12 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/lingbot-world.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/lwm.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 3 组连续提示框。
-- `files/paper-deep-dives/world-models/planet.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 9 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/ringattention.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/paper-deep-dives/world-models/self-forcing.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/paper-deep-dives/world-models/towards-video-world-models.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/v-jepa.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/world-models/world-models-embodied-ai-survey.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/paper-deep-dives/writing-standard.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/quantization/activation-outliers-and-calibration-strategies.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 11 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/quantization/comparison-table.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/quantization/evaluation-and-deployment-checklist.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/quantization/fp8-and-mixed-precision-serving.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/quantization/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/quantization/page-by-page-visual-guide.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/quantization/ptq-gptq-awq-smoothquant.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 7 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/quantization/qat-kernels-and-kv-cache.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/quantization/qlora-and-quantized-training.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/quantization/quantization-for-multimodal-and-vla-models.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/quantization/quantization-runtimes-and-frameworks.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/quantization/serving-stacks-and-hardware-tradeoffs.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/quantization/symbols-and-minimal-math.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 18 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/references/claim-ledger.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/references/evidence-and-reproducibility-standard.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/references/image-and-formula-quality-standard.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/references/image-asset-governance-ledger.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/references/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/references/site-efficiency-coverage-matrix.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/references/site-judgement-principles.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/reinforcement-learning/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/reinforcement-learning/mdp-value-bellman.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 17 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 11 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 3 组连续提示框。
-- `files/reinforcement-learning/rl-for-world-models.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 4 组连续提示框。
-- `files/reinforcement-learning/verl-code-flow.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 3 组连续提示框。
-- `files/roadmap/common-decision-patterns-and-tradeoffs.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/roadmap/comparison-tables.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/roadmap/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/roadmap/research-and-engineering-study-plan.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/thinking-exploration/embodied-ai-status-and-real-world-loop.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/thinking-exploration/fast-foundation-stereo-prerequisite-map.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/thinking-exploration/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 3 组连续提示框。
-- `files/thinking-exploration/qualcomm-xr2-gen2.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/thinking-exploration/world-models-status-and-engineering-loop.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/training/beginner-model-training-primer.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 10 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/training/cluster-operations-and-experiment-management.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/data-quality-dedup-and-governance.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/data-systems-and-optimization.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/distributed-training-and-checkpointing.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/evaluation-and-ablation-methodology.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/image-sources.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/training/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/training/input-pipelines-packing-and-throughput-governance.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/low-bit-training-and-numerics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/megatron-lm-deepspeed-and-open-training-stacks.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/training/mtp-and-speculative-decoding.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/objectives-optimizers-and-schedules.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 11 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/page-by-page-visual-guide.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；复核提示框结构，未保留连续提示框。
-- `files/training/post-training-data-engines-and-judge-models.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/preference-data-and-alignment-pitfalls.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/pretraining-finetuning-alignment.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/scaling-curriculum-and-data-mixture.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/scaling-laws-and-experiment-economics.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/training/stability-numerics-and-failure-triage.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/training/wandb-experiment-tracking-and-governance.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vla/action-chunking-hierarchical-policies-and-latent-skills.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vla/action-representation-and-interfaces.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vla/benchmarks-and-data-engines.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vla/closed-loop-recovery-and-failure-analysis.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vla/data-and-policy-learning.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 20 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vla/deployment-and-safety.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vla/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vlm/architecture-and-training.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 9 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vlm/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 8 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vlm/multimodal-evaluation-and-failure-modes.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/vlm/video-representation-and-memory.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vlm/visual-tokenizers-and-connectors.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 5 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/vlm/vlm-vla-for-efficient-world-model-training.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/vlm/vlm-vla-symbols-and-minimal-math.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 9 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/world-models/action-conditioned-video-world-model-training-case.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/applications-in-robotics-and-autonomous-driving.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 11 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/beginner-world-models-primer.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/world-models/data-engines-and-self-improvement.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/development-roadmap-data-simulation-and-evaluation.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/efficiency-technique-coverage-matrix.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/world-models/efficient-training-roadmap.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 4 组连续提示框。
-- `files/world-models/evaluation-and-failure-modes.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 4 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/generative-simulation-and-video.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 2 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/index.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/masked-jepa-and-latent-prediction.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 1 组连续提示框。
-- `files/world-models/planning-as-inference-and-latent-actions.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 6 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 2 组连续提示框。
-- `files/world-models/rollout-serving-quantization-kernel-case.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 3 组连续提示框。
-- `files/world-models/rssm-dreamer-and-planning.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 11 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/simulators-counterfactuals-and-synthetic-rollouts.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 1 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/uncertainty-and-risk-aware-planning.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；合并 1 组连续提示框。
-- `files/world-models/vla-world-model-full-chain-case.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 2 组连续提示框。
-- `files/world-models/wm-wam-vam-and-action-conditioned-modeling.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；为 3 个展示公式补齐紧随其后的“符号 / 含义 / 取值范围”说明表；复核提示框结构，未保留连续提示框。
-- `files/world-models/world-model-efficient-training-experiment-report.md`：新增读者导航表，分别给初学者和工程师标出阅读抓手与工程落点；复核后未发现需要补充说明表的展示公式；合并 3 组连续提示框。
+### 各页改动摘要
+- `files/diffusion/comparison-table.md`：标准化 7 处公式符号表。
+- `files/diffusion/consistency-models-and-rectified-flow.md`：标准化 17 处公式符号表。
+- `files/diffusion/distillation.md`：标准化 8 处公式符号表。
+- `files/diffusion/evolution.md`：标准化 2 处公式符号表。
+- `files/diffusion/guidance-and-conditioning.md`：标准化 7 处公式符号表。
+- `files/diffusion/index.md`：标准化 3 处公式符号表。
+- `files/diffusion/inference.md`：标准化 8 处公式符号表。
+- `files/diffusion/noise-schedules-and-parameterization.md`：标准化 22 处公式符号表。
+- `files/diffusion/practical-training-recipes-and-failure-analysis.md`：标准化 8 处公式符号表。
+- `files/diffusion/score-matching-sde-and-probability-flow.md`：标准化 9 处公式符号表。
+- `files/diffusion/training.md`：标准化 10 处公式符号表。
+- `files/diffusion/video-and-multimodal-diffusion.md`：标准化 6 处公式符号表。
+- `files/embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md`：标准化 2 处公式符号表。
+- `files/embodied-ai/beginner-learning-path.md`：标准化 6 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/embodied-ai/cameras-depth-and-robot-vision.md`：标准化 7 处公式符号表。
+- `files/embodied-ai/closed-loop-task-walkthrough.md`：标准化 5 处公式符号表。
+- `files/embodied-ai/deployment-patterns-and-safety-cases.md`：标准化 4 处公式符号表。
+- `files/embodied-ai/household-robotics-workflows-and-failure-patterns.md`：复核通过，未发现本轮需补项。
+- `files/embodied-ai/human-robot-interaction-and-evaluation.md`：标准化 2 处公式符号表。
+- `files/embodied-ai/index.md`：标准化 3 处公式符号表。
+- `files/embodied-ai/isaacsim-and-robotwin.md`：复核通过，未发现本轮需补项。
+- `files/embodied-ai/planning-control-and-safety.md`：标准化 11 处公式符号表。
+- `files/embodied-ai/rerun-robotics-data-visualization.md`：标准化 3 处公式符号表。
+- `files/embodied-ai/sim2real-and-data-engines.md`：标准化 7 处公式符号表。
+- `files/embodied-ai/stereo-matching-and-cost-volume.md`：标准化 3 处公式符号表。
+- `files/embodied-ai/task-taxonomy-and-benchmarks.md`：标准化 3 处公式符号表。
+- `files/embodied-ai/vla-data-model-and-evaluation-roadmap.md`：复核通过，未发现本轮需补项。
+- `files/embodied-ai/vla-wam-world-model-system-map.md`：标准化 4 处公式符号表。
+- `files/foundations/autograd-activation-checkpointing-and-memory.md`：标准化 1 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/convolution-and-feature-extraction.md`：标准化 2 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/data-and-dataset-basics.md`：标准化 2 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/data-splits-metrics-and-evaluation-basics.md`：已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/generalization-regularization-and-distribution-shift.md`：标准化 3 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/generation-and-decoding-basics.md`：标准化 4 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/index.md`：标准化 1 处公式符号表，标准化 1 处初学者直觉标记。
+- `files/foundations/linear-layers-mlp-and-gemm.md`：标准化 13 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/mamba-and-hybrid-ssm-transformers.md`：标准化 3 处公式符号表，标准化 1 处初学者直觉标记。
+- `files/foundations/model-compression-pruning-and-nas-basics.md`：标准化 2 处公式符号表，已有读法定位/初学者缓冲，未重复添加，补充 1 处真实来源图待补占位，标注 1 处旧自动图建议删除。
+- `files/foundations/model-distillation-basics.md`：标准化 2 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/moe-and-large-model-architecture-basics.md`：标准化 6 处公式符号表，标准化 1 处初学者直觉标记。
+- `files/foundations/multimodal-cot-and-reasoning-basics.md`：已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/normalization-residual-and-activation.md`：标准化 4 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/numerics-memory-and-runtime-basics.md`：标准化 32 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/optimization-and-training-basics.md`：标准化 4 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/positional-encoding-masks-and-context.md`：标准化 1 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/pretraining-objectives-and-representation-learning.md`：标准化 5 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/probability-latent-variables-and-generative-models.md`：标准化 7 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/prompt-engineering-cot-and-rag-basics.md`：已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/symbols-and-minimal-math.md`：标准化 8 处公式符号表，已有读法定位/初学者缓冲，未重复添加，补充 1 处真实来源图待补占位，标注 1 处旧自动图建议删除。
+- `files/foundations/tensors-shapes-and-computation-graphs.md`：标准化 8 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/foundations/transformer-attention-and-tokenization.md`：标准化 5 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/glossary/index.md`：复核通过，未发现本轮需补项。
+- `files/index.md`：复核通过，未发现本轮需补项。
+- `files/inference/caching-routing-and-speculative.md`：标准化 4 处公式符号表。
+- `files/inference/context-compression-kv-eviction-and-memory-hierarchies.md`：标准化 2 处公式符号表。
+- `files/inference/cost-modeling-and-slo-design.md`：标准化 6 处公式符号表。
+- `files/inference/disaggregated-prefill-kv-services-and-capacity-ops.md`：复核通过，未发现本轮需补项。
+- `files/inference/gpu-kernels-batching-and-memory-systems.md`：标准化 5 处公式符号表。
+- `files/inference/index.md`：标准化 7 处公式符号表。
+- `files/inference/moe-routing-and-multi-model-serving.md`：标准化 5 处公式符号表。
+- `files/inference/observability-and-online-evaluation.md`：标准化 2 处公式符号表。
+- `files/inference/optimization-checklist-and-capacity-planning.md`：标准化 3 处公式符号表。
+- `files/inference/rag-agents-and-long-context-systems.md`：标准化 3 处公式符号表。
+- `files/inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md`：复核通过，未发现本轮需补项。
+- `files/inference/serving-systems.md`：标准化 9 处公式符号表。
+- `files/operators/advanced-kernel-patterns-and-shape-specialization.md`：复核通过，未发现本轮需补项。
+- `files/operators/communication-kernels-and-overlap.md`：标准化 2 处公式符号表。
+- `files/operators/cuda-programming-model-and-memory.md`：复核通过，未发现本轮需补项。
+- `files/operators/custom-op-development-and-framework-integration.md`：复核通过，未发现本轮需补项。
+- `files/operators/cutlass-cute-and-compiler-stack.md`：复核通过，未发现本轮需补项。
+- `files/operators/deepgemm-fp8-gemm-and-mega-moe.md`：复核通过，未发现本轮需补项。
+- `files/operators/deepgemm-source-and-integration.md`：复核通过，未发现本轮需补项。
+- `files/operators/fp8-training-and-optimizer-kernels.md`：复核通过，未发现本轮需补项。
+- `files/operators/gemm-attention-and-fused-kernels.md`：标准化 1 处公式符号表。
+- `files/operators/gpu-interconnects-and-topology-mapping.md`：复核通过，未发现本轮需补项。
+- `files/operators/hardware-aware-debug-checklist.md`：复核通过，未发现本轮需补项。
+- `files/operators/index.md`：标准化 1 处公式符号表。
+- `files/operators/kernel-cost-models-and-selection-heuristics.md`：标准化 1 处公式符号表。
+- `files/operators/long-context-and-flashattention-evolution.md`：标准化 1 处公式符号表。
+- `files/operators/low-precision-and-quantized-kernels.md`：标准化 1 处公式符号表。
+- `files/operators/moe-routing-and-sparse-kernels.md`：标准化 2 处公式符号表。
+- `files/operators/performance-anti-patterns-and-failure-modes.md`：复核通过，未发现本轮需补项。
+- `files/operators/profiling-debugging-and-numerical-stability.md`：标准化 1 处公式符号表。
+- `files/operators/ptx-sass-and-compiler-inspection.md`：复核通过，未发现本轮需补项。
+- `files/operators/reduction-norm-layout-and-indexing.md`：标准化 1 处公式符号表。
+- `files/operators/roofline-benchmarking-and-case-studies.md`：标准化 13 处公式符号表。
+- `files/operators/runtime-dispatch-and-kernel-selection.md`：复核通过，未发现本轮需补项。
+- `files/operators/serving-attention-and-kv-kernels.md`：复核通过，未发现本轮需补项。
+- `files/operators/testing-regression-and-maintenance.md`：复核通过，未发现本轮需补项。
+- `files/operators/triton-programming-model-and-autotuning.md`：复核通过，未发现本轮需补项。
+- `files/operators/workload-modeling-and-shape-buckets.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/diffusion/anyflow.md`：标准化 12 处公式符号表。
+- `files/paper-deep-dives/diffusion/causvid.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/diffusion/diffusion-forcing.md`：标准化 7 处公式符号表。
+- `files/paper-deep-dives/diffusion/dmd.md`：标准化 14 处公式符号表。
+- `files/paper-deep-dives/diffusion/dmd2.md`：标准化 8 处公式符号表。
+- `files/paper-deep-dives/diffusion/dpm-solver-plus-plus.md`：标准化 12 处公式符号表。
+- `files/paper-deep-dives/diffusion/phased-dmd.md`：标准化 13 处公式符号表。
+- `files/paper-deep-dives/diffusion/score-sde.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/diffusion/wan.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/depth-anything-3.md`：标准化 1 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/depth-anything-v2.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/embodied-ai/depth-anything.md`：标准化 9 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/dreamzero.md`：标准化 7 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/gr2.md`：标准化 4 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/gr3.md`：标准化 2 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/mapanything.md`：标准化 9 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/pi05.md`：标准化 3 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/rt2.md`：标准化 10 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/spatialvla.md`：标准化 5 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/vggt.md`：标准化 7 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/video-prediction-policy.md`：标准化 3 处公式符号表。
+- `files/paper-deep-dives/embodied-ai/vodp.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/foundations/attn-qat.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/foundations/gpu-utilization-misleading.md`：标准化 2 处公式符号表。
+- `files/paper-deep-dives/foundations/magiattention.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/foundations/megatron-lm.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/foundations/muon-is-scalable.md`：标准化 8 处公式符号表。
+- `files/paper-deep-dives/foundations/sla-sparse-linear-attention.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/foundations/zero.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/index.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/inference/eagle-2.md`：标准化 1 处公式符号表。
+- `files/paper-deep-dives/inference/eagle-3.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/inference/eagle.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/inference/fast-foundation-stereo.md`：标准化 5 处公式符号表。
+- `files/paper-deep-dives/inference/kvslimmer.md`：标准化 33 处公式符号表。
+- `files/paper-deep-dives/inference/low-bit-llm-survey.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/technical-reports/deepseek-r1.md`：标准化 7 处公式符号表。
+- `files/paper-deep-dives/technical-reports/deepseek-v3.md`：标准化 3 处公式符号表。
+- `files/paper-deep-dives/technical-reports/deepseek-v4-pro.md`：标准化 1 处公式符号表。
+- `files/paper-deep-dives/technical-reports/gemini-2-5.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/technical-reports/gpt-4o-system-card.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/technical-reports/incoder-32b.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/technical-reports/kimi-k2.md`：标准化 3 处公式符号表。
+- `files/paper-deep-dives/technical-reports/nemotron-3-super.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/technical-reports/qwen3.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/technical-reports/qwen35-omni.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/world-models/dreamer.md`：标准化 19 处公式符号表。
+- `files/paper-deep-dives/world-models/dreamerv2.md`：标准化 15 处公式符号表。
+- `files/paper-deep-dives/world-models/dreamerv3.md`：标准化 14 处公式符号表。
+- `files/paper-deep-dives/world-models/genie.md`：标准化 5 处公式符号表。
+- `files/paper-deep-dives/world-models/h-jepa.md`：标准化 11 处公式符号表。
+- `files/paper-deep-dives/world-models/jepa.md`：标准化 12 处公式符号表。
+- `files/paper-deep-dives/world-models/lingbot-world.md`：标准化 5 处公式符号表。
+- `files/paper-deep-dives/world-models/lwm.md`：复核通过，未发现本轮需补项。
+- `files/paper-deep-dives/world-models/planet.md`：标准化 9 处公式符号表。
+- `files/paper-deep-dives/world-models/ringattention.md`：标准化 2 处公式符号表。
+- `files/paper-deep-dives/world-models/self-forcing.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/world-models/towards-video-world-models.md`：标准化 2 处公式符号表。
+- `files/paper-deep-dives/world-models/v-jepa.md`：标准化 6 处公式符号表。
+- `files/paper-deep-dives/world-models/world-models-embodied-ai-survey.md`：标准化 1 处公式符号表。
+- `files/paper-deep-dives/writing-standard.md`：复核通过，未发现本轮需补项。
+- `files/quantization/activation-outliers-and-calibration-strategies.md`：标准化 11 处公式符号表。
+- `files/quantization/comparison-table.md`：标准化 6 处公式符号表。
+- `files/quantization/evaluation-and-deployment-checklist.md`：复核通过，未发现本轮需补项。
+- `files/quantization/fp8-and-mixed-precision-serving.md`：标准化 4 处公式符号表。
+- `files/quantization/index.md`：标准化 2 处公式符号表。
+- `files/quantization/page-by-page-visual-guide.md`：复核通过，未发现本轮需补项。
+- `files/quantization/ptq-gptq-awq-smoothquant.md`：标准化 7 处公式符号表。
+- `files/quantization/qat-kernels-and-kv-cache.md`：标准化 4 处公式符号表。
+- `files/quantization/qlora-and-quantized-training.md`：标准化 6 处公式符号表。
+- `files/quantization/quantization-for-multimodal-and-vla-models.md`：标准化 4 处公式符号表。
+- `files/quantization/quantization-runtimes-and-frameworks.md`：复核通过，未发现本轮需补项。
+- `files/quantization/serving-stacks-and-hardware-tradeoffs.md`：标准化 3 处公式符号表。
+- `files/quantization/symbols-and-minimal-math.md`：标准化 18 处公式符号表。
+- `files/references/claim-ledger.md`：复核通过，未发现本轮需补项。
+- `files/references/evidence-and-reproducibility-standard.md`：复核通过，未发现本轮需补项。
+- `files/references/image-and-formula-quality-standard.md`：复核通过，未发现本轮需补项。
+- `files/references/image-asset-governance-ledger.md`：复核通过，未发现本轮需补项。
+- `files/references/index.md`：复核通过，未发现本轮需补项。
+- `files/references/site-efficiency-coverage-matrix.md`：复核通过，未发现本轮需补项。
+- `files/references/site-judgement-principles.md`：复核通过，未发现本轮需补项。
+- `files/reinforcement-learning/index.md`：复核通过，未发现本轮需补项。
+- `files/reinforcement-learning/mdp-value-bellman.md`：标准化 17 处公式符号表。
+- `files/reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md`：标准化 11 处公式符号表。
+- `files/reinforcement-learning/rl-for-world-models.md`：标准化 8 处公式符号表。
+- `files/reinforcement-learning/verl-code-flow.md`：复核通过，未发现本轮需补项。
+- `files/roadmap/common-decision-patterns-and-tradeoffs.md`：标准化 1 处公式符号表。
+- `files/roadmap/comparison-tables.md`：标准化 1 处公式符号表。
+- `files/roadmap/index.md`：复核通过，未发现本轮需补项。
+- `files/roadmap/research-and-engineering-study-plan.md`：复核通过，未发现本轮需补项。
+- `files/thinking-exploration/embodied-ai-status-and-real-world-loop.md`：复核通过，未发现本轮需补项。
+- `files/thinking-exploration/fast-foundation-stereo-prerequisite-map.md`：标准化 2 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/thinking-exploration/index.md`：复核通过，未发现本轮需补项。
+- `files/thinking-exploration/qualcomm-xr2-gen2.md`：复核通过，未发现本轮需补项。
+- `files/thinking-exploration/world-models-status-and-engineering-loop.md`：复核通过，未发现本轮需补项。
+- `files/training/beginner-model-training-primer.md`：标准化 10 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/training/cluster-operations-and-experiment-management.md`：标准化 2 处公式符号表。
+- `files/training/data-quality-dedup-and-governance.md`：标准化 6 处公式符号表。
+- `files/training/data-systems-and-optimization.md`：标准化 3 处公式符号表。
+- `files/training/distributed-training-and-checkpointing.md`：标准化 3 处公式符号表。
+- `files/training/evaluation-and-ablation-methodology.md`：标准化 2 处公式符号表。
+- `files/training/image-sources.md`：复核通过，未发现本轮需补项。
+- `files/training/index.md`：标准化 3 处公式符号表。
+- `files/training/input-pipelines-packing-and-throughput-governance.md`：标准化 1 处公式符号表。
+- `files/training/low-bit-training-and-numerics.md`：标准化 2 处公式符号表。
+- `files/training/megatron-lm-deepspeed-and-open-training-stacks.md`：复核通过，未发现本轮需补项。
+- `files/training/mtp-and-speculative-decoding.md`：标准化 4 处公式符号表。
+- `files/training/objectives-optimizers-and-schedules.md`：标准化 11 处公式符号表。
+- `files/training/page-by-page-visual-guide.md`：复核通过，未发现本轮需补项。
+- `files/training/post-training-data-engines-and-judge-models.md`：标准化 2 处公式符号表。
+- `files/training/preference-data-and-alignment-pitfalls.md`：标准化 3 处公式符号表。
+- `files/training/pretraining-finetuning-alignment.md`：标准化 5 处公式符号表。
+- `files/training/scaling-curriculum-and-data-mixture.md`：标准化 4 处公式符号表。
+- `files/training/scaling-laws-and-experiment-economics.md`：标准化 4 处公式符号表。
+- `files/training/stability-numerics-and-failure-triage.md`：复核通过，未发现本轮需补项。
+- `files/training/wandb-experiment-tracking-and-governance.md`：标准化 1 处公式符号表。
+- `files/vla/action-chunking-hierarchical-policies-and-latent-skills.md`：标准化 5 处公式符号表。
+- `files/vla/action-representation-and-interfaces.md`：标准化 8 处公式符号表。
+- `files/vla/benchmarks-and-data-engines.md`：标准化 2 处公式符号表。
+- `files/vla/closed-loop-recovery-and-failure-analysis.md`：标准化 3 处公式符号表。
+- `files/vla/data-and-policy-learning.md`：标准化 20 处公式符号表。
+- `files/vla/deployment-and-safety.md`：标准化 6 处公式符号表。
+- `files/vla/index.md`：标准化 6 处公式符号表。
+- `files/vlm/architecture-and-training.md`：标准化 9 处公式符号表。
+- `files/vlm/index.md`：标准化 8 处公式符号表。
+- `files/vlm/multimodal-evaluation-and-failure-modes.md`：复核通过，未发现本轮需补项。
+- `files/vlm/video-representation-and-memory.md`：标准化 3 处公式符号表。
+- `files/vlm/visual-tokenizers-and-connectors.md`：标准化 5 处公式符号表。
+- `files/vlm/vlm-vla-for-efficient-world-model-training.md`：复核通过，未发现本轮需补项。
+- `files/vlm/vlm-vla-symbols-and-minimal-math.md`：标准化 9 处公式符号表。
+- `files/world-models/action-conditioned-video-world-model-training-case.md`：标准化 2 处公式符号表。
+- `files/world-models/applications-in-robotics-and-autonomous-driving.md`：标准化 11 处公式符号表。
+- `files/world-models/beginner-world-models-primer.md`：标准化 4 处公式符号表，已有读法定位/初学者缓冲，未重复添加。
+- `files/world-models/data-engines-and-self-improvement.md`：标准化 4 处公式符号表。
+- `files/world-models/development-roadmap-data-simulation-and-evaluation.md`：标准化 1 处公式符号表。
+- `files/world-models/efficiency-technique-coverage-matrix.md`：复核通过，未发现本轮需补项。
+- `files/world-models/efficient-training-roadmap.md`：标准化 3 处公式符号表。
+- `files/world-models/evaluation-and-failure-modes.md`：标准化 4 处公式符号表。
+- `files/world-models/generative-simulation-and-video.md`：标准化 2 处公式符号表。
+- `files/world-models/index.md`：标准化 1 处公式符号表。
+- `files/world-models/masked-jepa-and-latent-prediction.md`：复核通过，未发现本轮需补项。
+- `files/world-models/planning-as-inference-and-latent-actions.md`：标准化 6 处公式符号表。
+- `files/world-models/rollout-serving-quantization-kernel-case.md`：复核通过，未发现本轮需补项。
+- `files/world-models/rssm-dreamer-and-planning.md`：标准化 11 处公式符号表。
+- `files/world-models/simulators-counterfactuals-and-synthetic-rollouts.md`：标准化 1 处公式符号表。
+- `files/world-models/uncertainty-and-risk-aware-planning.md`：标准化 3 处公式符号表。
+- `files/world-models/vla-world-model-full-chain-case.md`：复核通过，未发现本轮需补项。
+- `files/world-models/wm-wam-vam-and-action-conditioned-modeling.md`：标准化 3 处公式符号表。
+- `files/world-models/world-model-efficient-training-experiment-report.md`：复核通过，未发现本轮需补项。
 
-### 未做修改的页面
-
-- 无
+### 高频问题
+- 公式后缺符号说明：172 页（已标准化为本轮符号表格式）
+- 缺初学者缓冲：0 页（3 页已有“一句话理解”并已标准化标记；其余基础知识页已有读法定位或初学者提示）
+- 需补图但暂无来源：2 处（需作者手动填入真实论文或官方博客图片）
+- 建议删除冗余提示框：2 处

@@ -42,6 +42,16 @@
 
 ## 先看标准训练循环
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
+> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
+>
+> 延伸阅读：[09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html) |
+
 训练可以先记成四步：
 
 ```text
@@ -57,8 +67,8 @@ optimizer.step()            # 用梯度更新参数
 \theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(\eta\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -74,8 +84,8 @@ Loss 是训练的方向盘。它定义模型输出和目标之间的差距：
 \mathcal{L} = \ell(f_\theta(x), y)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(f\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -119,8 +129,8 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 \theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(\eta\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -140,8 +150,8 @@ Loss 定义不清，训练再久也可能朝错误方向走。
 \frac{\partial h_k}{\partial h_{k-1}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(h_T\) | 公式中的变量或中间量 | 按上下文定义 |

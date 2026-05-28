@@ -30,6 +30,17 @@
 
 ## Profiling 先于优化
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)》-->
+> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
+>
+> 延伸阅读：[05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/05_Triton_Autotune_and_Profiling.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/05_Triton_Autotune_and_Profiling.html) |
+| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
+
 AI 系统里的直觉经常误导人：
 
 1. 以为 GEMM 是瓶颈，实际热点是 layout transform；
@@ -145,8 +156,8 @@ Softmax 通常写成：
 \frac{e^{x_i-m}}{\sum_j e^{x_j-m}},\quad m=\max_j x_j
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(e^{x_i-m}\) | 公式中的变量或中间量 | 按上下文定义 |

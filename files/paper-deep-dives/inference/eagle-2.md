@@ -37,6 +37,17 @@ EAGLE-2 的核心很漂亮：**不重新训练 draft model，只用 draft model 
 
 ## 它的效率贡献是什么
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
+
 | Dimension | EAGLE-2 |
 | --- | --- |
 | Saved cost | Autoregressive decode steps、target model forward calls per generated token、static draft tree 中低价值分支的 verification overhead |
@@ -131,8 +142,8 @@ V_i=\prod_{t_j \in \mathrm{Path}(\mathrm{root},t_i)}p_j
 \prod_{t_j \in \mathrm{Path}(\mathrm{root},t_i)}c_j
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(V_i\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
 | \(t_j\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |

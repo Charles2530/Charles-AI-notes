@@ -76,6 +76,17 @@ Megatron-LM 和 ZeRO 适合成对读。前者从 Transformer layer 内部出发�
 
 ## 一、训练系统栈到底在解决什么
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
+> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
+>
+> 延伸阅读：[06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html) |
+| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
+
 一个大模型训练栈至少要同时管理计算、显存、通信、数据和状态资产。计算层涉及 GEMM、Attention、MoE、activation recompute 和混合精度；显存层要容纳参数、梯度、优化器状态、激活和通信 buffer；通信层处理 DP、TP、PP、CP、EP、ZeRO / FSDP 的 collective；数据层负责输入吞吐、packing、随机顺序和断点恢复；状态资产则包括 checkpoint、配置、日志、指标、导出和后训练接口。
 
 可以把训练系统栈看成三层：

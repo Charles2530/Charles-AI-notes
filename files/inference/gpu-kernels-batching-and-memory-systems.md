@@ -29,6 +29,17 @@
 
 ## 从公式回到 GPU 时间线
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》-->
+> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
+>
+> 延伸阅读：[03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.html) |
+| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
+
 请求总时延仍然先拆成：
 
 \[
@@ -41,8 +52,8 @@ T_{\text{queue}}
 + T_{\text{network}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
@@ -87,8 +98,8 @@ T_{\text{weight-read}}
 + T_{\text{runtime-overhead}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(T_{}^{(i)}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -109,8 +120,8 @@ Continuous batching 的核心公式是：
 \mathcal{A}_t
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
@@ -136,8 +147,8 @@ M_{\text{KV}}
 2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(M_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -175,8 +186,8 @@ GPU 性能常用 roofline 直觉理解：
 )
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 

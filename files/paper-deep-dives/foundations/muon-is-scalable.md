@@ -67,8 +67,8 @@ AdamW 的核心更新可以写成：
 m_t=\beta_1m_{t-1}+(1-\beta_1)g_t
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\beta_1m\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(\beta_1\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -81,8 +81,8 @@ m_t=\beta_1m_{t-1}+(1-\beta_1)g_t
 v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\beta_2v\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(\beta_2\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -96,8 +96,8 @@ v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2
 -\eta_t\frac{\hat m_t}{\sqrt{\hat v_t}+\epsilon}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta_t\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(\eta_t\lambda\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -124,8 +124,8 @@ Muon 只考虑可以表示成矩阵的参数。对某个矩阵权重 \(W\)，它
 M_t=\mu M_{t-1}+G_t
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\mu\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(M_t\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -139,8 +139,8 @@ M_t=\mu M_{t-1}+G_t
 O_t=\operatorname{Orthogonalize}(M_t)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(O_t\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(M_t\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -152,8 +152,8 @@ O_t=\operatorname{Orthogonalize}(M_t)
 W_t=W_{t-1}-\eta_t O_t
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\eta_t\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(W_t\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -182,8 +182,8 @@ Muon 的直觉不是“更精细地调每个元素”，而是“别让一个矩
 W_t=(1-\eta_t\lambda)W_{t-1}-\eta_t O_t
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\eta_t\lambda\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(\eta_t\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -198,8 +198,8 @@ W_t=(1-\eta_t\lambda)W_{t-1}-\eta_t O_t
 \operatorname{RMS}(O_t)=\frac{1}{\sqrt{\max(A,B)}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(O_t\) | 公式中的变量或中间量 | 按上下文定义 |
 
@@ -275,6 +275,16 @@ Scaling law 用的是 Llama 架构 dense models，模型和训练规模如下：
 这里的关键设置是：Muon 没有重新单独调一套超参数，而是利用 update RMS matching 直接复用 AdamW 的最优超参数。论文由此得到 Figure 1(a) 的结论：在 compute-optimal setting 下，Muon 达到 AdamW 同等 loss 约需要 `0.519x` FLOPs。
 
 ## Moonlight 预训练细节
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. Simple Neural Network Training | 完整的神经网络训练循环》-->
+> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
+>
+> 延伸阅读：[06. Simple Neural Network Training | 完整的神经网络训练循环](https://datawhalechina.github.io/llm-algo-leetcode/00_Prerequisites/06_Simple_Neural_Network_Training.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. Simple Neural Network Training | 完整的神经网络训练循环》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/00_Prerequisites/06_Simple_Neural_Network_Training.html) |
 
 论文为了验证 Muon 的真实可扩展性，训练了 Moonlight：一个基于 DeepSeek-V3-Small 风格架构的 MoE LLM。正文给出的规模是 `2.24B activated / 15.29B total`，若计入 embedding 则约为 `3B activated / 16B total`。
 

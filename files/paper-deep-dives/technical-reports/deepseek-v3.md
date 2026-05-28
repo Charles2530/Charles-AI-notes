@@ -100,8 +100,8 @@ $$
 \mathbf{c}_{t}^{KV}=W^{DKV}\mathbf{h}_t
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 | \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -118,6 +118,17 @@ MLA 对 V3 有两个作用：
 这也是 DeepSeek 系列后续技术报告继续围绕 attention 和 cache 做文章的原因。MoE 解决“模型容量和激活计算”的矛盾，MLA 解决“长上下文和 KV cache”的矛盾。
 
 ## DeepSeekMoE：容量、路由与负载均衡
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
+> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
+>
+> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
+| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
 
 DeepSeekMoE 的 FFN 输出由 shared experts 与 routed experts 共同构成。shared experts 处理通用模式，routed experts 处理被 router 分配到的 token。V3 的具体规模是：
 
@@ -189,8 +200,8 @@ $$
 \mathcal{L}_{\text{MTP}}=\frac{\lambda}{D}\sum_{k=1}^{D}\mathcal{L}_{\text{MTP}}^k
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\lambda\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(D\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -380,8 +391,8 @@ $$
 A_i=\frac{r_i-\operatorname{mean}(\{r_1,\ldots,r_G\})}{\operatorname{std}(\{r_1,\ldots,r_G\})}
 $$
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(A_i\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(r_i\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |

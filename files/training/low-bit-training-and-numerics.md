@@ -46,6 +46,17 @@
 
 ## 硬证据模块：低比特训练要同时证明数值和世界模型行为
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
+> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
+>
+> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
+| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
+
 低比特训练页如果只报告 loss 曲线和吞吐，就仍然偏通用 LLM。世界模型低比特训练还要证明：动作分叉、未来 latent、risk head 和闭环收益没有被低精度训练过程破坏。
 
 | 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
@@ -95,8 +106,8 @@
 q = \mathrm{round}(x / s), \qquad \hat{x} = s q
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\hat{x}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(q\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -131,8 +142,8 @@ q = \mathrm{round}(x / s), \qquad \hat{x} = s q
 x_i \approx s_{\text{block}} \cdot q_i
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x_i\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(s_{}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |

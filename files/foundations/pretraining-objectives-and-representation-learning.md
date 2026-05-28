@@ -33,6 +33,16 @@
 
 ## 一张目标函数地图
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
+> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
+>
+> 延伸阅读：[09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html) |
+
 | 目标 | 输入 | 预测什么 | 常见用途 | 不直接保证 |
 | --- | --- | --- | --- | --- |
 | Next-token prediction | 前缀 token | 下一个 token | LLM、多模态 token 模型 | 事实正确、动作安全 |
@@ -52,8 +62,8 @@
 \mathcal{L}_{\text{NTP}}=-\sum_t \log p_\theta(x_t\mid x_{<t})
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
@@ -73,8 +83,8 @@ Masked modeling 把输入的一部分遮住，让模型从上下文预测缺失�
 \mathcal{L}_{\text{mask}}=\sum_{i\in M}\ell(\hat{x}_i, x_i)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\hat{x}_i\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -102,8 +112,8 @@ Masked modeling 把输入的一部分遮住，让模型从上下文预测缺失�
 {\exp(\operatorname{sim}(q,k^+)/\tau)+\sum_j \exp(\operatorname{sim}(q,k_j^-)/\tau)}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\tau\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |
 | \(q\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -121,8 +131,8 @@ Reconstruction 让模型从压缩表示还原输入：
 \mathcal{L}_{\text{rec}}=d(\hat{x},x)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\hat{x}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(d\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -148,8 +158,8 @@ Denoising / score matching 则把生成建模改写成“从噪声恢复数据�
 \mathcal{L}_{\text{BC}}=-\log \pi_\theta(a_t\mid o_{\le t}, l)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\pi_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(a_t\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |

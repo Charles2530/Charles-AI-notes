@@ -40,8 +40,8 @@
 - \sum_t \log p_\theta(x_{t+1}\mid x_{\le t})
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
@@ -61,8 +61,8 @@
 \Big)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\lambda_k\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
@@ -79,6 +79,17 @@
 因此两者的关系是：`MTP` 可以提供内建 draft 能力，但 speculative decoding 不一定需要 MTP；反过来，模型训练了 MTP，也不代表线上一定能提速。
 
 ## 从 NTP 到 MTP
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 MTP 的训练价值不只是“多预测几个 token”。它改变了 hidden state 必须承载的信息：模型不只要为 \(t+1\) 做准备，还要为更远的未来保留可解码结构。
 
@@ -114,8 +125,8 @@ Meta 的 `Better & Faster Large Language Models via Multi-token Prediction` 更�
 \frac{\mathbb{E}[A]}{C_{\text{draft}} + C_{\text{verify}} + C_{\text{overhead}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(A\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(C_{}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -128,8 +139,8 @@ Meta 的 `Better & Faster Large Language Models via Multi-token Prediction` 更�
 {C_{\text{draft}} + C_{\text{verify}} + C_{\text{overhead}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(A\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(C_{}\) | 公式中的变量或中间量 | 按上下文定义 |

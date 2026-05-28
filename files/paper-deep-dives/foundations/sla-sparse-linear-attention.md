@@ -37,6 +37,16 @@ paper_topic: 高效训练
 
 ## 论文位置
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
+> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
+>
+> 延伸阅读：[04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html) |
+
 标准 attention 是：
 
 \[
@@ -45,8 +55,8 @@ paper_topic: 高效训练
 \operatorname{softmax}\left(\frac{QK^\top}{\sqrt d}\right)V
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(Q\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -119,8 +129,8 @@ SLA 的输出可以理解成两部分：
 O = O^{s} + \operatorname{Proj}(O^{l})
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(O\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(O^{s}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -279,8 +289,8 @@ SLA2 的出发点不是推翻 SLA，而是把 SLA 里两个比较“工程经验
 P = P_1 + P_2,\quad P_1=P\odot M,\quad P_2=P\odot(1-M)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
 | \(P_1\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
@@ -309,8 +319,8 @@ SLA2 把输出写成：
 O = \alpha \odot O^s + (1-\alpha)\odot O^l
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(O\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -333,8 +343,8 @@ O = \alpha \odot O^s + (1-\alpha)\odot O^l
 O = O^s + \operatorname{Proj}(O^l)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(O\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(O^s\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -347,8 +357,8 @@ SLA2 是：
 O = \alpha \odot O^s + (1-\alpha)\odot O^l
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(O\) | 公式中的变量或中间量 | 按上下文定义 |

@@ -20,7 +20,8 @@
 
     看到公式先不要急着推导。按四步读：谁是输入，谁是输出，条件是什么，模型在优化什么。只要这四件事能说清，大多数公式都会从“看不懂的数学”变成“数据流的压缩写法”。
 
-<!-- [补充] -->
+<!-- [待补图：建议在此插入“张量 shape 从样本到模型接口”的真实来源图，推荐来源：论文《Attention Is All You Need》Figure 1 或官方教程中的 Transformer embedding / tensor shape 图] -->
+<!-- [建议删除：下面 Mermaid 图是旧自动补图，不满足本轮“图解只能引用论文或博客真实图片来源”的约束；保留原文并建议后续用上方真实来源图替换。] -->
 ```mermaid
 graph LR
   A["输入或问题"] --> B["核心概念"]
@@ -29,6 +30,16 @@ graph LR
 ```
 
 ## Shape 字母：先知道张量有多大
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作》-->
+> **算法视角**：张量 shape、stride、view / reshape 和 device placement 是后续 attention、GEMM、KV cache 与训练循环的共同底座；看似只是 API 差异，实际会影响是否发生拷贝和是否能走高效 kernel。
+>
+> 延伸阅读：[02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作](https://datawhalechina.github.io/llm-algo-leetcode/00_Prerequisites/02_PyTorch_Tensor_Fundamentals.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《02. PyTorch Tensor Fundamentals | PyTorch 张量基础操作》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| view / reshape / permute | metadata 变换常为 $O(1)$；触发 contiguous copy 时为 $O(N)$ | 取决于是否复制底层 storage | 先确认 stride 与 contiguous，再判断性能问题；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/00_Prerequisites/02_PyTorch_Tensor_Fundamentals.html) |
 
 Shape 是模型模块之间的接口契约。本站会尽量沿用下面的写法。
 
@@ -50,8 +61,8 @@ Shape 是模型模块之间的接口契约。本站会尽量沿用下面的写�
 x \in \mathbb{R}^{B \times L \times D}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -72,8 +83,8 @@ x \in \mathbb{R}^{B \times L \times D}
 y = xW + b
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -101,8 +112,8 @@ y = xW + b
 p_\theta(y \mid x)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
@@ -118,8 +129,8 @@ p_\theta(y \mid x)
 p_\theta(z_{t+1}\mid z_t,a_t)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
@@ -138,8 +149,8 @@ p_\theta(z_{t+1}\mid z_t,a_t)
 \theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(\eta\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -170,8 +181,8 @@ optimizer.step()
 =-\sum_{(o,l,a)\in\mathcal{D}}\log \pi_\theta(a\mid o,l)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\pi_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(o\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -189,8 +200,8 @@ optimizer.step()
 \pi_\theta(a_t\mid o_{\le t}, l)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\pi_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(a_t\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
@@ -215,8 +226,8 @@ Attention 最常见的成本提醒是：
 \text{score matrix size} \propto L^2
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L^2\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 

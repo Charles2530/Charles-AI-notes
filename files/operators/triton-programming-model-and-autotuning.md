@@ -30,6 +30,17 @@ Triton 在 AI 系统里越来越重要，不是因为它能完全替代 CUDA，�
 
 ## Triton 解决的问题
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
+> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
+>
+> 延伸阅读：[04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html) |
+| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
+
 在 Triton 之前，很多团队面临两难：完全依赖框架默认 kernel，难以做深度 fusion 和特定 shape 优化；凡事写 CUDA，开发门槛和维护成本又过高。
 
 Triton 正好落在中间：抽象层次足够高，矩阵与块运算比 CUDA 更自然；抽象层次又不至于完全失控，仍可显式决定 tile、block 和加载方式；同时它天然适合 autotuning、shape-specialized kernel，并与 PyTorch 生态集成顺滑，便于快速验证热点优化。

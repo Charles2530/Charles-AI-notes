@@ -134,8 +134,8 @@ MagiAttention 的 kernel 层叫 `FFA`，全称 Flex-Flash-Attention。它基于 
 \mathrm{AttnSlice} = (\mathrm{QRange}, \mathrm{KRange}, \mathrm{MaskType})
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 
@@ -174,8 +174,8 @@ MagiAttention 的 kernel 层叫 `FFA`，全称 Flex-Flash-Attention。它基于 
 n = \frac{seqlen}{chunk\_size}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(n\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 | \(c\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -187,8 +187,8 @@ n = \frac{seqlen}{chunk\_size}
 f^*=\arg\min_f \max_j \sum_{C_i \in B_j} \mathrm{Area}(C_i)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(f\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(C_i\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -201,8 +201,8 @@ f^*=\arg\min_f \max_j \sum_{C_i \in B_j} \mathrm{Area}(C_i)
 |B_j| = \frac{n}{cp\_size}, \qquad seqlen \bmod (cp\_size \times chunk\_size)=0
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(B_j\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(c\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -221,6 +221,17 @@ f^*=\arg\min_f \max_j \sum_{C_i \in B_j} \mathrm{Area}(C_i)
 这里有一个容易忽略的训练细节：为什么要强制每个 bucket 的 chunk 数一样？因为一个 Transformer block 不只有 attention。MLP、norm、residual、embedding、loss 等通常按 token 数计费。假如 dispatch 只追求 attention area 均衡，可能会让某些 rank token 数过多，非 attention 部分又失衡。MagiAttention 的约束是在大训练系统里更稳的选择。
 
 ## 通信与重叠
+
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
+> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
+>
+> 延伸阅读：[05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html) |
+| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
 
 Ring P2P 的问题不是“不能工作”，而是在异构 mask 下会传很多对目标 rank 没用的 KV。MagiAttention 官方博客举了两个直观例子：简单 causal mask 下会出现约 25% 的冗余通信；带最后 global block 的 varlen block-causal mask 下，冗余比例可以超过 33%。
 
@@ -291,8 +302,8 @@ MagiAttention 页面展示的是 attention 系统和 benchmark，不是完整 Ma
 \end{aligned}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(f\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
@@ -308,8 +319,8 @@ MagiAttention 页面展示的是 attention 系统和 benchmark，不是完整 Ma
 \mathrm{ElapsedTime}^{(wd)}=\max_{rank\in[0,cp\_size)}\mathrm{ElapsedTime}_{rank}^{(wd)}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(w\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |

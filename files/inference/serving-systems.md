@@ -69,8 +69,8 @@ T_{\text{queue}}
 + T_{\text{network}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(T_{\text{req}}\) | 请求总耗时 | end-to-end latency |
 | \(T_{\text{queue}}\) | 排队耗时 | queue time、admission wait |
@@ -89,8 +89,8 @@ T_{\text{queue}}
 + T_{\text{first-step}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
@@ -105,8 +105,8 @@ TPOT 则更接近稳定 decode 阶段每个输出 token 的间隔：
 \frac{T_{\text{decode}}}{L_{\text{out}}}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 | \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -119,6 +119,17 @@ TPOT 则更接近稳定 decode 阶段每个输出 token 的间隔：
 
 ## Prefill：首 token 前最容易被忽略的成本
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
+> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
+>
+> 延伸阅读：[17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html) |
+| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
+
 Prefill 做的是：把输入 token 一次性送进模型，计算每层 hidden states，同时为后续 decode 写好 KV cache。输入越长，prefill 越重。
 
 粗略地，可以把 prefill 成本写成：
@@ -129,8 +140,8 @@ T_{\text{prefill}}
 f(L_{\text{in}}, B_{\text{prefill}}, \text{attention kernel}, \text{cache hit})
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 | \(f\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -151,8 +162,8 @@ T_{\text{decode}}
 T_{\text{step}}^{(i)}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(T_{}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 | \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
@@ -181,8 +192,8 @@ M_{\text{KV}}
 2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(M_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -199,8 +210,8 @@ M_{\text{KV}}
 \approx 16\text{GiB}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 
@@ -219,8 +230,8 @@ M_{\text{KV}}
 \mathcal{A}_t
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
@@ -245,8 +256,8 @@ m^\star
 \right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\lambda_1\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(\lambda_2\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |

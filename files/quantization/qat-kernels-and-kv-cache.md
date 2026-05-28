@@ -28,8 +28,8 @@ QAT，quantization-aware training，会在训练时模拟量化误差。一个�
 \min_\theta\ \mathcal{L}(f_{\hat{\theta}}(x),y)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
 | \(f_{}\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -47,8 +47,8 @@ QAT，quantization-aware training，会在训练时模拟量化误差。一个�
 \hat{x}=s\left(\mathrm{round}\left(\frac{x}{s}\right)-z\right)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\hat{x}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 | \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
@@ -119,8 +119,8 @@ load packed low-bit weight
 \mathrm{KV\ Memory}\approx2\times L\times B\times T\times H_{\text{kv}}\times d_h\times \mathrm{bytes}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(B\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -140,6 +140,17 @@ load packed low-bit weight
 
 ## KV 量化的小账
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
+> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
+>
+> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
+| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
+
 假设：
 
 | 变量 | 值 |
@@ -156,8 +167,8 @@ load packed low-bit weight
 2\times32\times8\times16384\times4096\times2\approx64\mathrm{GiB}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 

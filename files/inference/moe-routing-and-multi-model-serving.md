@@ -31,14 +31,25 @@ MoE 和多模型服务看起来属于不同层级，但共同主题是：如何�
 
 ## 路由的本质
 
+<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
+> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
+>
+> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
+
+<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
+| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
+| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
+
 路由本质是资源分配：
 
 \[
 r(x)\rightarrow \text{resource subset}
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
 | \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
@@ -55,8 +66,8 @@ r(x)\rightarrow \text{resource subset}
 -\lambda_3\text{Quality}(m,x)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\lambda_1\text\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 | \(\lambda_2\text\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
@@ -75,8 +86,8 @@ r(x)\rightarrow \text{resource subset}
 \alpha=\mathrm{TopK}(\mathrm{softmax}(W_g h))
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(W_g\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -89,8 +100,8 @@ r(x)\rightarrow \text{resource subset}
 y=\sum_{e\in\mathcal{K}(h)}\alpha_e\mathrm{Expert}_e(h)
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(\alpha_e\mathrm\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
 | \(y\) | 公式中的变量或中间量 | 按上下文定义 |
@@ -110,8 +121,8 @@ MoE 的收益来自“总参数很多，但每个 token 只激活一部分”。
 C=\left\lceil \text{capacity factor}\cdot \frac{kN}{E}\right\rceil
 \]
 
-<!-- [补充] -->
-| 符号 | 含义 | 取值范围 |
+<!-- [补充：符号说明] -->
+| 符号 | 含义 | 取值范围 / 常见值 |
 | --- | --- | --- |
 | \(C\) | 公式中的变量或中间量 | 按上下文定义 |
 | \(E\) | 公式中的变量或中间量 | 按上下文定义 |
