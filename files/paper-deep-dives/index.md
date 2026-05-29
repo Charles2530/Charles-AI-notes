@@ -455,6 +455,12 @@
       <td><a href="world-models/lingbot-world/">LingBot-World：视频基础模型到世界模拟器</a></td>
       <td>视频基础模型如何继续训练成可交互的世界模型</td>
     </tr>
+    <tr>
+      <td>2026-05</td>
+      <td>世界模型</td>
+      <td><a href="world-models/lance/">Lance：多任务协同统一多模态建模</a></td>
+      <td>如何用 shared interleaved multimodal context、dual expert pathways、MaPE 和 PT/CT/SFT/RL 多阶段训练组织图像/视频理解、生成和编辑能力</td>
+    </tr>
   </tbody>
 </table>
 

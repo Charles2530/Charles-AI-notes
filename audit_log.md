@@ -148,6 +148,7 @@
 - [x] files/paper-deep-dives/world-models/genie.md | [论文解读] | done
 - [x] files/paper-deep-dives/world-models/h-jepa.md | [论文解读] | done
 - [x] files/paper-deep-dives/world-models/jepa.md | [论文解读] | done
+- [x] files/paper-deep-dives/world-models/lance.md | [论文解读] | done
 - [x] files/paper-deep-dives/world-models/lingbot-world.md | [论文解读] | done
 - [x] files/paper-deep-dives/world-models/lwm.md | [论文解读] | done
 - [x] files/paper-deep-dives/world-models/planet.md | [论文解读] | done
@@ -248,12 +249,12 @@
 
 ## 审核报告
 
-- 总页数：240
-- 实际修改：172 页
+- 总页数：241
+- 实际修改：173 页
 - 未修改：68 页（`files/embodied-ai/household-robotics-workflows-and-failure-patterns.md`、`files/embodied-ai/isaacsim-and-robotwin.md`、`files/embodied-ai/vla-data-model-and-evaluation-roadmap.md`、`files/foundations/data-splits-metrics-and-evaluation-basics.md`、`files/foundations/multimodal-cot-and-reasoning-basics.md`、`files/foundations/prompt-engineering-cot-and-rag-basics.md`、`files/glossary/index.md`、`files/index.md`、`files/inference/disaggregated-prefill-kv-services-and-capacity-ops.md`、`files/inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md`、`files/operators/advanced-kernel-patterns-and-shape-specialization.md`、`files/operators/cuda-programming-model-and-memory.md`、`files/operators/custom-op-development-and-framework-integration.md`、`files/operators/cutlass-cute-and-compiler-stack.md`、`files/operators/deepgemm-fp8-gemm-and-mega-moe.md`、`files/operators/deepgemm-source-and-integration.md`、`files/operators/fp8-training-and-optimizer-kernels.md`、`files/operators/gpu-interconnects-and-topology-mapping.md`、`files/operators/hardware-aware-debug-checklist.md`、`files/operators/performance-anti-patterns-and-failure-modes.md`、`files/operators/ptx-sass-and-compiler-inspection.md`、`files/operators/runtime-dispatch-and-kernel-selection.md`、`files/operators/serving-attention-and-kv-kernels.md`、`files/operators/testing-regression-and-maintenance.md`、`files/operators/triton-programming-model-and-autotuning.md`、`files/operators/workload-modeling-and-shape-buckets.md`、`files/paper-deep-dives/embodied-ai/depth-anything-v2.md`、`files/paper-deep-dives/foundations/megatron-lm.md`、`files/paper-deep-dives/foundations/zero.md`、`files/paper-deep-dives/index.md`、`files/paper-deep-dives/inference/eagle-3.md`、`files/paper-deep-dives/technical-reports/gemini-2-5.md`、`files/paper-deep-dives/technical-reports/gpt-4o-system-card.md`、`files/paper-deep-dives/technical-reports/incoder-32b.md`、`files/paper-deep-dives/technical-reports/nemotron-3-super.md`、`files/paper-deep-dives/technical-reports/qwen3.md`、`files/paper-deep-dives/technical-reports/qwen35-omni.md`、`files/paper-deep-dives/world-models/lwm.md`、`files/paper-deep-dives/writing-standard.md`、`files/quantization/evaluation-and-deployment-checklist.md`、`files/quantization/page-by-page-visual-guide.md`、`files/quantization/quantization-runtimes-and-frameworks.md`、`files/references/claim-ledger.md`、`files/references/evidence-and-reproducibility-standard.md`、`files/references/image-and-formula-quality-standard.md`、`files/references/image-asset-governance-ledger.md`、`files/references/index.md`、`files/references/site-efficiency-coverage-matrix.md`、`files/references/site-judgement-principles.md`、`files/reinforcement-learning/index.md`、`files/reinforcement-learning/verl-code-flow.md`、`files/roadmap/index.md`、`files/roadmap/research-and-engineering-study-plan.md`、`files/thinking-exploration/embodied-ai-status-and-real-world-loop.md`、`files/thinking-exploration/index.md`、`files/thinking-exploration/qualcomm-xr2-gen2.md`、`files/thinking-exploration/world-models-status-and-engineering-loop.md`、`files/training/image-sources.md`、`files/training/megatron-lm-deepspeed-and-open-training-stacks.md`、`files/training/page-by-page-visual-guide.md`、`files/training/stability-numerics-and-failure-triage.md`、`files/vlm/multimodal-evaluation-and-failure-modes.md`、`files/vlm/vlm-vla-for-efficient-world-model-training.md`、`files/world-models/efficiency-technique-coverage-matrix.md`、`files/world-models/masked-jepa-and-latent-prediction.md`、`files/world-models/rollout-serving-quantization-kernel-case.md`、`files/world-models/vla-world-model-full-chain-case.md`、`files/world-models/world-model-efficient-training-experiment-report.md`）
 
 ### 类型分布
-- 论文解读：61 页
+- 论文解读：62 页
 - 基础知识：27 页
 - 工程实践：71 页
 - 其他：81 页
@@ -402,6 +403,7 @@
 - `files/paper-deep-dives/world-models/genie.md`：标准化 5 处公式符号表。
 - `files/paper-deep-dives/world-models/h-jepa.md`：标准化 11 处公式符号表。
 - `files/paper-deep-dives/world-models/jepa.md`：标准化 12 处公式符号表。
+- `files/paper-deep-dives/world-models/lance.md`：补充 7 处公式符号表，补充 1 处一句话实验结论，复用论文原图作为真实来源图解。
 - `files/paper-deep-dives/world-models/lingbot-world.md`：标准化 5 处公式符号表。
 - `files/paper-deep-dives/world-models/lwm.md`：复核通过，未发现本轮需补项。
 - `files/paper-deep-dives/world-models/planet.md`：标准化 9 处公式符号表。
@@ -501,7 +503,15 @@
 - `files/world-models/world-model-efficient-training-experiment-report.md`：复核通过，未发现本轮需补项。
 
 ### 高频问题
-- 公式后缺符号说明：172 页（已标准化为本轮符号表格式）
+- 公式后缺符号说明：173 页（已标准化为本轮符号表格式）
 - 缺初学者缓冲：0 页（3 页已有“一句话理解”并已标准化标记；其余基础知识页已有读法定位或初学者提示）
 - 需补图但暂无来源：2 处（需作者手动填入真实论文或官方博客图片）
 - 建议删除冗余提示框：2 处
+
+## 追加审核报告（2026-05-29）
+
+- 总页数：241
+- 本轮修改：1 页
+- 累计修改：173 页
+- 各页摘要：`files/paper-deep-dives/world-models/lance.md` 补充 7 处公式符号表和 1 处一句话实验结论，页面已使用论文 Figure 1/6/7/13/14 原图，无新增待补图
+- 待补图数量：2 处

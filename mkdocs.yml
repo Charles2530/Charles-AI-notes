@@ -337,6 +337,7 @@ nav:
           - Video World Models：五个门槛: paper-deep-dives/world-models/towards-video-world-models.md
           - 具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
           - LingBot-World：世界模拟器: paper-deep-dives/world-models/lingbot-world.md
+          - Lance：统一多模态世界建模: paper-deep-dives/world-models/lance.md
       - 技术报告:
         - GPT-4o：Omni 安全评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
         - DeepSeek-V3：MoE 与 FP8: paper-deep-dives/technical-reports/deepseek-v3.md
