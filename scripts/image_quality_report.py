@@ -49,7 +49,8 @@ NOTE_RE = re.compile(
 )
 PROSE_NOTE_RE = re.compile(
     r"(原图在说什么|初学者怎么看|容易误读|本教程读法|这张图有两个读法|这张图分|读这张图|"
-    r"这张图支撑|这张图就是|图里的重点|图中几个数字|可以拆成三个结论)"
+    r"这张图支撑|这张图就是|图里的重点|图中几个数字|可以拆成三个结论|本站用它|"
+    r"本站用这张图|原图表达|原图展示|用它说明|用它解释)"
 )
 REMOTE_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 SVG_SIZE_RE = re.compile(
@@ -579,6 +580,39 @@ def analyze_refs(audit: Audit) -> None:
                 )
 
 
+def analyze_layout_patterns(audit: Audit) -> None:
+    for page in iter_markdown_pages():
+        lines = page.read_text(encoding="utf-8", errors="ignore").splitlines()
+        run: list[tuple[int, str]] = []
+
+        def flush_run() -> None:
+            if len(run) <= 1:
+                return
+            first_line = run[0][0]
+            audit.issues.append(
+                Issue(
+                    "medium",
+                    "multiple-images-one-paragraph",
+                    page.as_posix(),
+                    (
+                        f"{len(run)} consecutive standalone image lines render as one "
+                        "paragraph/image frame; insert blank lines or use an explicit figure grid"
+                    ),
+                    page=page,
+                    line=first_line,
+                )
+            )
+
+        for line_no, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if MARKDOWN_IMAGE_RE.fullmatch(stripped):
+                run.append((line_no, stripped))
+            else:
+                flush_run()
+                run = []
+        flush_run()
+
+
 def analyze_unreferenced_assets(audit: Audit) -> None:
     referenced = {ref.resolved for ref in audit.refs if ref.resolved is not None}
     for path in iter_image_assets():
@@ -775,6 +809,7 @@ def audit_site(args: argparse.Namespace) -> Audit:
         audit.metas[path] = load_image_meta(path)
 
     analyze_refs(audit)
+    analyze_layout_patterns(audit)
     analyze_unreferenced_assets(audit)
     if args.contact_sheet:
         audit.contact_sheet = draw_contact_sheet(

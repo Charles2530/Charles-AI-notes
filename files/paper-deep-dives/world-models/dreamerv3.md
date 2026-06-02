@@ -4,502 +4,209 @@ paper_title: Mastering Diverse Domains through World Models
 paper_topic: 世界模型
 ---
 
-# DreamerV3：跨域通用世界模型
+# DreamerV3：世界模型怎样在 latent 里训练策略
 
+DreamerV3 要回答的问题很窄，也很重要：如果真实环境交互很贵，能不能先学一个动作条件的 latent dynamics，再让策略在这个内部模型里反复“想象”未来，从而减少真实试错。
 
+它不是一个视频生成模型。它不会先生成一段漂亮未来画面，再让策略看画面行动。DreamerV3 的世界模型更像一个给 actor 和 critic 用的内部环境：输入当前 latent state 和动作，输出下一个 latent state、奖励和 episode 是否继续。只要这个内部环境对决策足够准，策略就可以在里面训练很多步，再回到真实环境收集新数据。
 
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“DreamerV3：跨域通用世界模型”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 论文：`Mastering Diverse Domains through World Models`
-    - 系统：`DreamerV3`
-    - 链接：[arXiv:2301.04104](https://arxiv.org/abs/2301.04104)
-    - 代码：[GitHub](https://github.com/danijar/dreamerv3)
-    - 关键词：RSSM、latent dynamics、model-based RL、imagined rollout、fixed hyperparameters、Minecraft Diamond
-
-这篇论文是理解“交互轨迹驱动的 latent dynamics 世界模型路线”的核心入口。它不从大规模视频生成出发，而是从 agent 与环境交互产生的 \((x_t, a_t, r_t, c_t)\) 轨迹中学习世界模型，再在模型内部 rollout 出抽象未来，用这些 imagined trajectories 训练 actor 和 critic。
-
-## 它的效率贡献是什么
-
-| 维度 | 贡献 |
-| --- | --- |
-| 节省的成本 | 用 latent imagined rollout 替代大量真实环境试错，核心节省真实交互和策略训练样本成本 |
-| 核心机制 | RSSM 学习动作条件 latent dynamics，actor/critic 在模型内部生成的 imagined trajectories 上训练 |
-| 对世界模型主线的意义 | DreamerV3 是“内部模拟服务决策”的标杆：它不追求像素级视频质量，而是追求对 reward、continuation 和 policy improvement 有用的 latent |
-| 主要风险 | imagined rollout 一旦模型偏差累积，policy 会利用模型漏洞；跨到开放视觉/机器人任务时还需要更强状态表示和失败回流 |
-| 应接到本站哪里 | [世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md)、[动作条件视频世界模型端到端训练案例](../../world-models/action-conditioned-video-world-model-training-case.md)、[RSSM、Dreamer 与规划](../../world-models/rssm-dreamer-and-planning.md) |
-
-## 论文位置
-
-DreamerV3 和 [LingBot-World](lingbot-world.md)、[DreamZero](../embodied-ai/dreamzero.md) 的位置不同。LingBot-World 代表“视频生成模型路线”：先学会生成未来画面，再加入动作、交互、长记忆和实时化。DreamZero 则把视频基础模型改造成 joint video-action prediction，让 WAM 直接输出机器人动作。
-
-DreamerV3 代表另一条更经典的 model-based RL 路线：
-
-```text
-环境交互轨迹
-  -> RSSM latent world model
-  -> imagined rollout
-  -> actor-critic policy learning
-```
-
-它的世界模型不追求生成高清视频，而是学习对决策有用的 latent state、reward 和 continuation。换句话说，DreamerV3 的重点不是“未来看起来像不像”，而是“如果我做这个动作，隐状态、奖励和终止概率会怎样变化”。
+论文的强主张是：同一套超参数，在 Atari、DMLab、连续控制、Crafter、Minecraft 等差异很大的任务上都能工作。这个“固定配置跨域”比单个 benchmark 分数更关键，因为它说明 DreamerV3 的贡献不只是调参，而是一套相对稳定的 model-based RL recipe。
 
 ![DreamerV3 benchmark summary](../../assets/images/paper-deep-dives/world-models/dreamerv3/x1.png){ width="920" }
 
-<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 1. 原论文图注要点：该图汇总跨基准结果，强调 Dreamer 在固定超参数下超过多类专家算法和 PPO，并能在 Minecraft 稀疏奖励任务中从零学会获得钻石。</small>
+<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 1。原图汇总 DreamerV3 在多个 domain 上的结果，重点不是某个单项分数，而是固定超参数覆盖视觉输入、低维输入、离散动作、连续动作、稀疏奖励和长期探索任务。本站读法：先看它是否真的跨域稳定，再看 Minecraft diamond 这种长时稀疏奖励是否说明 imagined rollout 对探索有帮助。</small>
 
-!!! note "这张图怎么读"
-    Figure 1 的重点是“固定超参数跨域”，不是某个单项分数。DreamerV3 同一套配置覆盖 DMC、Atari、DMLab、Crafter、Minecraft 等环境，说明论文主张的是鲁棒 world-model RL recipe，而不是为每个 benchmark 手调专家算法。它不能证明真实机器人或开放世界游戏同样稳定，因为那些还涉及感知噪声、安全和长时交互协议。
+## 训练循环
 
-## 核心问题
+DreamerV3 的训练可以拆成四步。
 
-Dreamer 系列一直在回答一个问题：能否先学习一个可 rollout 的世界模型，再用这个模型内部的想象轨迹训练策略，从而减少真实环境采样。
+第一步，agent 用当前 actor 和真实环境交互，把观测 \(x_t\)、动作 \(a_t\)、奖励 \(r_t\)、是否继续 \(c_t\) 写入 replay buffer。这里的 \(c_t\) 是 continuation flag，如果 episode 终止，它会阻止未来回报继续累加。
 
-DreamerV3 把问题进一步推到“跨域鲁棒性”：同一个算法、同一套超参数，是否能同时覆盖 Atari、ProcGen、DMLab、连续控制、视觉控制、BSuite、Crafter 和 Minecraft 这些差异很大的环境。
+第二步，从 replay buffer 采样短序列训练 world model。模型要把真实观测编码成 latent state，并学会在动作条件下预测未来 latent、奖励、continuation 和观测重建。
 
-这件事难在三个地方：
+第三步，从 replay 中某个 encoded state 出发，不再看未来真实观测，让 world model 用自己的 prior 往前 rollout。actor 在每个 imagined state 上采样动作，world model 预测下一个 state、奖励和 continuation。
 
-1. 观测尺度不同：有的是图像，有的是低维向量；
-2. 奖励尺度不同：有的是 dense reward，有的是极稀疏 reward；
-3. 环境复杂度不同：从 2D 游戏到随机生成的 3D Minecraft，状态和长期信用分配难度完全不同。
-
-DreamerV3 的主要贡献不是换一个更大的 backbone，而是把 world model、critic、actor 的目标函数都做成更鲁棒的形式，让固定超参数在不同域里都能工作。
-
-## 总体训练循环
-
-论文把 DreamerV3 拆成三个网络：
-
-| Component | Role |
-| --- | --- |
-| World Model | Encodes observations, predicts future latent representations, rewards, and continuation flags |
-| Critic | Estimates return distributions on imagined latent trajectories |
-| Actor | Chooses actions from latent model states to maximize imagined returns |
-
-训练时，agent 一边和环境交互，一边把经验写入 replay buffer。之后从 replay buffer 采样短序列，更新 world model；再从 world model 的 latent state 出发做 imagined rollout，更新 critic 和 actor。环境交互时不做在线树搜索，动作直接从 actor 采样。
+第四步，用这些 imagined trajectories 训练 critic 和 actor。critic 学 imagined return，actor 选择能让 imagined return 变大的动作。然后 agent 再回真实环境，用更新后的 actor 收集下一批数据。
 
 ![World model learning](../../assets/images/paper-deep-dives/world-models/dreamerv3/x2.png){ width="920" }
 
-<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 3(a). 原论文图注要点：该图展示 Dreamer 的训练流程，world model 将感知输入编码为离散表示，并在动作条件下由 recurrent state 预测未来表示。</small>
+<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 3(a)。原图展示 world model learning：观测被编码成离散 latent representation，recurrent dynamics 在动作条件下预测未来 latent。本站读法：图里的 reconstruction 不是为了生成好看的视频，而是为了防止 latent 丢掉对奖励、终止和未来状态有用的信息。</small>
 
 ![Actor critic learning](../../assets/images/paper-deep-dives/world-models/dreamerv3/x3.png){ width="920" }
 
-<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 3(b). 原论文图注要点：actor 和 critic 在 world model 预测出的抽象表示轨迹上学习动作与价值，重建目标用于塑造 latent representation。</small>
+<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 3(b)。原图展示 actor-critic learning：actor 和 critic 只在 world model 产生的 imagined latent trajectory 上更新。本站读法：策略学习的训练样本来自内部模型，因此 world model 的偏差会直接进入 policy gradient。</small>
 
-!!! note "合并提示"
-    **note · 训练流程图怎么读**
+## RSSM 真正在建模什么
 
-    第一张图讲世界模型如何学环境：posterior 看真实观测，prior 在没有未来观测时按动作预测 latent；第二张图讲策略如何在 imagined rollout 上学动作和价值。DreamerV3 的关键是把真实交互压成 replay，再把 replay 变成大量 latent imagination 训练信号。图不能证明 imagination 永远可靠，长 horizon 仍要靠 value bootstrap、discount 和模型误差控制。
+DreamerV3 使用 RSSM, Recurrent State-Space Model。它把状态拆成两部分：确定性记忆 \(h_t\) 和随机 latent \(z_t\)。确定性记忆负责压缩历史轨迹，随机 latent 负责表达当前观测里和未来相关、但不确定的部分。
 
-    **note · 这两张 DreamerV3 图要一起读**
-
-    第一张图负责 world model learning：模型从真实观测中学习 latent representation、recurrent dynamics、reward 和 continuation。第二张图负责 behavior learning：actor 和 critic 不直接在真实环境里反复试错，而是在 world model 的 imagined latent trajectories 上训练。
-
-    两张图之间的分工是 Dreamer 系列的核心。world model 要足够准，才能让 imagined rollout 有训练价值；actor/critic 又必须只通过 imagined trajectories 学策略，不能把 world model 当成可随意修改的捷径。DreamerV3 的贡献不是换一个单独模块，而是把这套 pipeline 做到跨 Atari、DM Control、Minecraft 等差异很大的任务仍能用同一组超参工作。
-
-## World Model 训练细节
-
-DreamerV3 的 world model 使用 `Recurrent State-Space Model`。RSSM 的核心是把状态拆成确定性 recurrent state \(h_t\) 和随机 latent representation \(z_t\)。前者负责记忆历史，后者负责表达当前观测中与未来相关的不确定信息。
-
-RSSM 的主要组件可以写成：
+递归状态先由上一时刻的信息更新：
 
 $$
 h_t = f_\phi(h_{t-1}, z_{t-1}, a_{t-1})
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(h_{t-1}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(z_{t-1}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(a_{t-1}\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+这里 \(h_t\) 是当前 recurrent state，\(h_{t-1}\) 和 \(z_{t-1}\) 来自上一时刻，\(a_{t-1}\) 是上一动作，\(f_\phi\) 是 world model 的 recurrent dynamics。直觉上，这一步在说：只要知道过去压缩记忆、上一 latent 和上一动作，就能先得到一个“当前应该处在什么状态”的预测性记忆。
 
-
-这行式子表示 recurrent dynamics：用上一时刻记忆 \(h_{t-1}\)、上一 latent \(z_{t-1}\) 和上一动作 \(a_{t-1}\)，更新当前确定性状态 \(h_t\)。\(f_\phi\) 是 RSSM 里的递归网络。
+然后模型有两条 latent 路径：
 
 $$
-z_t \sim q_\phi(z_t \mid h_t, x_t)
+z_t \sim q_\phi(z_t \mid h_t, x_t),
+\qquad
+\hat z_t \sim p_\phi(\hat z_t \mid h_t)
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(q\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+其中 \(q_\phi\) 是 posterior，它在训练时能看到真实观测 \(x_t\)，因此可以把当前画面里的关键信息编码进 \(z_t\)。\(p_\phi\) 是 prior，它看不到当前观测，只能根据 \(h_t\) 预测 latent。DreamerV3 的关键就在这里：训练时 posterior 能借助真实观测，想象时 prior 必须独自往前滚。
 
+给定 \(h_t,z_t\)，world model 还要预测观测、奖励和 continuation：
 
 $$
-\hat{z}_t \sim p_\phi(\hat{z}_t \mid h_t)
+\hat x_t \sim p_\phi(\hat x_t \mid h_t, z_t), \qquad
+\hat r_t \sim p_\phi(\hat r_t \mid h_t, z_t), \qquad
+\hat c_t \sim p_\phi(\hat c_t \mid h_t, z_t)
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{z}_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
+这三个 head 的作用不同。观测重建逼 latent 保留环境结构；奖励预测让 latent 对任务目标敏感；continuation 预测让模型知道 episode 是否已经结束。DreamerV3 的 state 因此不是纯视觉表示，而是一个服务决策的 compact state。
 
+## 为什么 KL 要拆成 dyn 和 rep
 
-$$
-\hat{r}_t \sim p_\phi(\hat{r}_t \mid h_t, z_t), \quad
-\hat{c}_t \sim p_\phi(\hat{c}_t \mid h_t, z_t), \quad
-\hat{x}_t \sim p_\phi(\hat{x}_t \mid h_t, z_t)
-$$
+如果只让 posterior 尽力重建观测，它可能编码大量 prior 预测不出来的细节；如果只让 prior 变得容易预测，latent 又可能太贫瘠，无法支撑奖励和策略学习。DreamerV3 用两个 KL 项把这件事拆开。
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{r}_t\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(\hat{c}_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\hat{x}_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-
-
-这里的 \(x_t\) 是观测，\(a_t\) 是动作，\(r_t\) 是奖励，\(c_t\) 是 episode continuation flag。训练阶段 encoder 可以看到真实观测得到 posterior \(q_\phi(z_t \mid h_t, x_t)\)，但 imagined rollout 阶段没有未来观测，只能用 dynamics predictor \(p_\phi(z_t \mid h_t)\) 自己往前滚。
-
-这正是 DreamerV3 的关键约束：posterior 表示必须包含足够信息来重建观测和预测奖励，但又不能变得太依赖真实观测，否则 rollout 时 prior 预测不出来。
-
-### 三个损失
-
-DreamerV3 的 world model loss 由三类项组成：
+prediction loss 先负责把信息放进 latent：
 
 $$
-\mathcal{L}_{pred}(\phi) =
--\ln p_\phi(x_t \mid z_t,h_t)
--\ln p_\phi(r_t \mid z_t,h_t)
--\ln p_\phi(c_t \mid z_t,h_t)
+\mathcal L_{\mathrm{pred}}
+=
+-\log p_\phi(x_t \mid h_t,z_t)
+-\log p_\phi(r_t \mid h_t,z_t)
+-\log p_\phi(c_t \mid h_t,z_t)
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(r_t\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+这项表示 prediction loss：给定 latent state，模型要解释真实观测、奖励和 continuation。负对数概率越小，说明这些预测分布越支持真实数据。
 
-
-这项表示 prediction loss：给定 latent \(z_t\) 和 recurrent state \(h_t\)，模型要同时解释观测 \(x_t\)、奖励 \(r_t\) 和 continuation \(c_t\)。负对数越小，说明这些预测分布给真实目标的概率越高。
+dynamics loss 让 prior 追上 posterior：
 
 $$
-\mathcal{L}_{dyn}(\phi) =
+\mathcal L_{\mathrm{dyn}}
+=
 \max\left(1,
-\operatorname{KL}\left[
-\operatorname{sg}(q_\phi(z_t \mid h_t,x_t))
-\| p_\phi(z_t \mid h_t)
+\mathrm{KL}\left[
+\mathrm{sg}(q_\phi(z_t \mid h_t,x_t))
+\;\|\;
+p_\phi(z_t \mid h_t)
 \right]\right)
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(q\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+其中 \(\mathrm{sg}\) 是 stop-gradient。它把 posterior 当成固定目标，让 prior 学会在不看当前观测的情况下预测 posterior。这里的重点是训练 dynamics，而不是让 encoder 为了迁就 prior 退化。
 
-
-这项表示 dynamics loss：把 posterior \(q_\phi(z_t \mid h_t,x_t)\) 当作目标，让不看当前观测的 prior \(p_\phi(z_t \mid h_t)\) 学会预测它。这里 \(\operatorname{sg}\) 是 stop-gradient，避免这项反向推动 encoder。
+representation loss 反过来约束 posterior 不要跑太远：
 
 $$
-\mathcal{L}_{rep}(\phi) =
+\mathcal L_{\mathrm{rep}}
+=
 \max\left(1,
-\operatorname{KL}\left[
+\mathrm{KL}\left[
 q_\phi(z_t \mid h_t,x_t)
-\| \operatorname{sg}(p_\phi(z_t \mid h_t))
+\;\|\;
+\mathrm{sg}(p_\phi(z_t \mid h_t))
 \right]\right)
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(q\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+这项把 prior 当成固定参照，让 posterior 不要编码成一个 prior 永远追不上的任意表示。两个 KL 方向看起来相似，但梯度方向不同：dyn 主要训练 prior，rep 主要约束 posterior。
 
+这里的 \(\max(1,\cdot)\) 是 free bits。它不是把 KL 压到越小越好，而是给 latent 留出至少约 1 nat 的信息容量。直觉上，如果 posterior 和 prior 已经足够接近，就不要继续把表示压扁；否则模型可能得到一个很好预测、但对任务没什么用的 latent。
 
-这项表示 representation loss：反过来约束 posterior 不要编码成 prior 完全追不上的任意细节。三项的分工很清楚：
+## symlog 为什么不是小技巧
 
-1. `prediction loss` 让 \(h_t,z_t\) 能重建观测、预测奖励和预测是否继续；
-2. `dynamics loss` 让 prior \(p_\phi(z_t \mid h_t)\) 学会预测 posterior 表示；
-3. `representation loss` 让 posterior 表示变得更可预测，避免 encoder 任意编码细节。
+DreamerV3 想在不同 domain 上使用同一套超参数，最大的麻烦之一是数值尺度。不同任务的观测范围、奖励大小、return 分布差异很大，直接回归会让大数值任务主导梯度。
 
-`sg` 是 stop-gradient。它让 dynamics loss 主要训练 prior，让 representation loss 主要约束 posterior。这个拆分比单个 KL 更好解释，也更容易控制梯度方向。
-
-### Free bits
-
-论文对 dynamics loss 和 representation loss 使用 `free bits`，把 KL 项下限裁到 `1 nat`。直觉是：如果 KL 已经足够小，就不要继续压缩 representation，否则模型可能学到一个太容易预测、但对任务和重建都不够有信息量的 latent。
-
-这对跨域固定超参数很关键。复杂 3D 环境里，观测包含大量和控制无关的细节，需要更强正则；而 Atari 这类任务里，单个像素或小物体可能决定动作，需要保留细节。DreamerV3 用 `free bits + small representation loss` 缓解了这个环境差异。
-
-### Uniform mix
-
-DreamerV3 的 encoder 和 dynamics predictor 使用 categorical distributions。为了避免分布变得过于确定、导致 KL spike，论文把分类分布参数化为 `1% uniform + 99% neural network output` 的混合形式。
-
-这相当于给离散 latent 的概率分布留出一个很小的熵下限。它不是为了增加探索，而是为了让 world model 的 KL 数值更平滑，避免变分模型训练中常见的尖峰。
-
-### Symlog 与 symexp twohot
-
-DreamerV3 还处理了一个经常被忽略的问题：不同环境的观测、奖励和回报量级可能差很多。如果直接用 MSE 或标准回归，极端数值会主导梯度，固定超参数很难跨域工作。
-
-论文使用 `symlog` 压缩大正数和大负数：
+论文使用 symlog 压缩正负大数：
 
 $$
-\operatorname{symlog}(x) = \operatorname{sign}(x)\ln(|x|+1)
+\mathrm{symlog}(x)=\mathrm{sign}(x)\log(|x|+1),
+\qquad
+\mathrm{symexp}(y)=\mathrm{sign}(y)(\exp(|y|)-1)
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+其中 symlog 把原始数值压到近似对数尺度，symexp 把压缩后的尺度还原。这个变换在 0 附近近似线性，在大数值区域近似对数，因此既保留小奖励的分辨率，也不让极端回报把训练冲垮。
 
+奖励和 critic return 还使用 symexp twohot loss。做法不是让网络直接输出一个标量，而是把目标值落到相邻两个 bins 上，用分类交叉熵训练分布。这样梯度主要来自“分布放错了哪里”，而不是目标数值本身有多大。对跨域 RL 来说，这类尺度处理往往决定算法能否脱离手调。
 
-对应反变换为：
+## imagined rollout 怎样训练 actor-critic
 
-$$
-\operatorname{symexp}(x) = \operatorname{sign}(x)(\exp(|x|)-1)
-$$
+World model 更新完后，DreamerV3 从 replay 里取一个 encoded state 作为起点，然后在 latent space 里 rollout。每一步 actor 根据当前 latent 采样动作，RSSM prior 预测下一个 latent，reward head 和 continuation head 给出 imagined reward 与是否继续。
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-
-
-具体用法是：
-
-| Target | Treatment |
-| --- | --- |
-| Vector observations | Use symlog for encoder inputs and decoder targets |
-| Rewards | Use symexp twohot loss |
-| Critic returns | Use symexp twohot loss |
-| Continue flag | Use logistic regression |
-
-`twohot` 的作用是把连续标量编码到相邻两个 bins 上，再用分类交叉熵训练。论文设置的 bins 是 `symexp([-20, ..., +20])`。这样梯度大小主要由分类误差决定，而不是由目标数值的绝对大小决定。
-
-### World model 训练到底学了什么
-
-从训练目标看，DreamerV3 的 world model 不是单纯的视频预测器。它同时学四类东西：
-
-1. 从观测到 latent state 的编码；
-2. 在动作条件下的 latent dynamics；
-3. reward 和 continuation 的 readout；
-4. 能约束 latent 表示的信息重建目标。
-
-这里最重要的是第二点和第三点。世界模型必须能回答：
+critic 的目标是 \(\lambda\)-return：
 
 $$
-s_t, a_t \rightarrow s_{t+1}, r_{t+1}, c_{t+1}
+R^\lambda_t
+=
+r_t
++ \gamma c_t
+\left((1-\lambda)v_t + \lambda R^\lambda_{t+1}\right),
+\qquad
+R^\lambda_T=v_T
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(s_t\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(a_t\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(s_{t+1}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(r_{t+1}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(c_{t+1}\) | 公式中的变量或中间量 | 按上下文定义 |
+其中 \(R^\lambda_t\) 是从 imagined step \(t\) 开始的 bootstrapped return，\(r_t\) 是 world model 预测的奖励，\(\gamma\) 是折扣因子，\(c_t\) 是 continuation，\(v_t\) 是 critic 对当前 latent 的价值估计，\(\lambda\) 控制更相信短期 bootstrap 还是更长 rollout。\(R^\lambda_T=v_T\) 表示 rollout 到 horizon 末尾后，用 critic value 收尾。
 
+这个公式的要点不是数学形式，而是 \(c_t\) 和 imagined dynamics。只要模型认为 episode 已经结束，后面的 return 就会被截断；只要 prior 在关键状态上预测错，critic 和 actor 就会在错误未来上被训练。DreamerV3 的效率来自“内部 rollout 多、真实交互少”，风险也来自同一个地方。
 
-而不是只回答：
+actor 用 imagined return 更新策略，并加入 entropy regularization。为了让 entropy scale 在不同任务上不需要重调，DreamerV3 用 batch 中 return 的高低分位差估计 return range，再用 EMA 平滑。这个设计和 symlog 的出发点一样：先把跨域尺度差异压住，再谈固定超参数。
 
-$$
-x_t \rightarrow x_{t+1}
-$$
+## 它学到的是决策状态，不是单纯视频预测
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(x_{t+1}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-
-
-这也是 DreamerV3 和视频生成型世界模型的根本区别。
+论文展示了 long-term video prediction，但这些图不能被误读成“DreamerV3 的核心目标是视频生成”。这些预测只是证明 latent 里确实保留了一部分环境结构。
 
 ![Long-term video predictions 1](../../assets/images/paper-deep-dives/world-models/dreamerv3/x4.png){ width="820" }
 
 ![Long-term video predictions 2](../../assets/images/paper-deep-dives/world-models/dreamerv3/x5.png){ width="820" }
 
-<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 4. 原论文图注要点：给定 5 张上下文图像和完整动作序列，模型在 DMLab 迷宫和四足机器人环境中预测未来 45 帧，用于展示 world model 对环境结构的建模。</small>
+<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 4。原图在给定 5 张上下文图像和动作序列后预测未来 45 帧。本站读法：它说明 world model 能保留迷宫结构、机器人姿态等可视动态，但 DreamerV3 训练策略时使用的是 latent trajectory、reward 和 continuation，不是把生成帧作为策略输入。</small>
 
-## Imagined Rollout 与策略学习
-
-World model 学好后，DreamerV3 并不是把它拿去生成视频给人看，而是在 latent space 里 rollout：
-
-```text
-从 replay trajectory 中编码一个起始 state
-  -> actor 在 state 上采样 action
-  -> RSSM prior 预测下一个 latent state
-  -> reward head 和 continue head 预测收益与终止
-  -> 重复 T=16 步
-  -> 用 imagined trajectory 更新 critic 和 actor
-```
-
-critic 学习 return distribution，而不是只回归一个标量 value。论文使用 \(\lambda\)-return：
-
-$$
-R^\lambda_t =
-r_t + \gamma c_t ((1-\lambda)v_t + \lambda R^\lambda_{t+1}),
-\quad R^\lambda_T = v_T
-$$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\lambda_t\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(\gamma\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-| \(\lambda\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(\lambda_{t+1}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(\lambda_T\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(R\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-
-
-其中 \(\gamma = 0.997\)，prediction horizon \(T = 16\)。continue flag \(c_t\) 在这里很重要：如果模型预测 episode 已经终止，未来回报不应该继续无条件累加。
-
-actor 使用 Reinforce estimator，同一套形式覆盖离散动作和连续动作。为了让 entropy regularizer 可以跨域固定，DreamerV3 对 return scale 做归一化：用 batch 中 \(R^\lambda_t\) 的 95th percentile 和 5th percentile 差值估计范围，并用 EMA 平滑。
-
-关键设置包括：
-
-| Quantity | Value |
-| --- | --- |
-| discount factor | 0.997 |
-| prediction horizon | 16 |
-| entropy scale | \(3 \times 10^{-4}\) |
-| return range estimator | EMA(Per(\(R^\lambda_t\), 95) - Per(\(R^\lambda_t\), 5), 0.99) |
-| imagined critic loss scale | 1 |
-| replay critic loss scale | 0.3 |
-
-这说明 DreamerV3 的策略学习并不是“world model 预测未来帧，然后策略看未来帧”。它更像是把真实环境压缩成一个可微、可采样的 latent simulator，actor 和 critic 直接在这个内部模拟器上学习。
-
-## 实验结论
-
-<!-- [补充] -->
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
-DreamerV3 的实验结论主要支持三点。
-
-第一，固定超参数可以跨很多环境工作。论文在 8 个 domain、超过 150 个任务上评估，覆盖视觉输入、低维输入、离散动作、连续动作、稠密奖励、稀疏奖励、2D、3D 和程序生成环境。
-
-第二，Minecraft Diamond 证明了 learned world model 对长时、稀疏奖励探索有实际价值。论文报告 DreamerV3 在不使用人类数据和 adaptive curricula 的情况下，从零学会获得 diamond；所有 Minecraft agents 在 100M environment steps 内发现 diamonds。
-
-![Minecraft Diamond discovery](../../assets/images/paper-deep-dives/world-models/dreamerv3/x6.png){ width="920" }
-
-<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 5. 原论文图注要点：该图统计 Minecraft Diamond 任务中训练出的 agent 发现关键物品的比例，突出 Dreamer 相比基线能可靠发现钻石。</small>
-
-第三，ablation 支持“world model 的无监督重建信号很关键”。论文对鲁棒化技巧和学习信号做消融，发现 KL objective、return normalization、symexp twohot regression 都有贡献；同时 DreamerV3 的性能很大程度依赖 world model 的 unsupervised reconstruction loss，而不是只靠 reward/value prediction gradients。
-
-![Ablations and scaling](../../assets/images/paper-deep-dives/world-models/dreamerv3/x7.png){ width="920" }
-
-<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 6. 原论文图注要点：该图展示 Dreamer 的鲁棒性消融和 scaling 结果，包括各个稳健化技巧、无监督重建损失、模型规模和 replay ratio 对性能的影响。</small>
-
-Figure 6 还显示了两个 scaling 结论：模型规模从 12M 增加到 400M 时，性能整体提升；更高 replay ratio 也能提高数据效率。这给 model-based RL 一个很重要的工程启发：如果环境交互贵，可以用更多模型更新和更大的 world model 换取更少真实采样。
-
-## 和视频世界模型的关系
-
-DreamerV3 和 LingBot-World 都可以叫 world model，但训练对象和使用方式不同。
-
-| 维度 | DreamerV3 | LingBot-World / 视频路线 |
-| --- | --- | --- |
-| 数据来源 | agent-environment interaction trajectories | large-scale video and video-action data |
-| 核心状态 | latent RSSM state \(s_t = (h_t,z_t)\) | video latent / frame sequence |
-| 训练目标 | reconstruction, dynamics KL, reward prediction, continuation prediction | video generation, video continuation, action-conditioned future video |
-| rollout 空间 | latent space | visual/video space |
-| 下游用途 | actor-critic learning and planning | visual simulation, interaction, data generation |
-| 主要风险 | model bias hurts policy learning | visual plausibility may not imply action-grounded dynamics |
-
-这也是为什么 DreamerV3 值得和视频世界模型分开讲。DreamerV3 的世界模型更像“决策内部引擎”；LingBot-World 更像“可视化世界模拟器”。前者直接服务 policy learning，后者更强调视觉真实感、长时一致性和交互体验。
-
-## 和 DreamZero 的关系
-
-DreamZero 和 DreamerV3 都关心动作后果，但接口不同。
-
-DreamerV3 学的是：
+如果用一句话区分 DreamerV3 和视频世界模型：DreamerV3 优先学习
 
 $$
 s_t, a_t \rightarrow s_{t+1}, r_{t+1}, c_{t+1}
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(s_t\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(a_t\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(s_{t+1}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(r_{t+1}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(c_{t+1}\) | 公式中的变量或中间量 | 按上下文定义 |
+这里 \(s_t=(h_t,z_t)\) 是 latent state。它关心动作后的状态、奖励和终止，而不只是画面 \(x_{t+1}\) 是否逼真。视频路线更常见的问题是 \(o_{\le t},a_{\le t}\rightarrow o_{t+1:t+H}\)，强调可视未来；DreamerV3 则强调可训练策略的内部动力学。
 
+## 实验证据怎么读
 
-DreamZero 学的是：
+DreamerV3 的实验主要支撑三件事。
 
-$$
-o_{\le t}, q_t, c \rightarrow o_{t:t+H}, a_{t:t+H}
-$$
+第一，固定超参数跨域有效。论文在 150 多个任务上比较，覆盖离散和连续控制、低维和视觉观测、稠密和稀疏奖励。读这组结果时，不要只看平均分，而要看它是否减少了每个 benchmark 单独调 recipe 的需要。
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(o_{t}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(q_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(o_{t:t+H}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(a_{t:t+H}\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
+第二，Minecraft diamond 说明 learned world model 可以支撑长时稀疏奖励探索。Minecraft 从零获得钻石需要一长串前置操作，随机探索很难撞到完整链条。DreamerV3 不使用人类数据和课程学习，仍能在论文设定下学到这一目标，说明 imagined rollout 和 reconstruction-shaped latent 对长期信用分配有帮助。
 
+![Minecraft Diamond discovery](../../assets/images/paper-deep-dives/world-models/dreamerv3/x6.png){ width="920" }
 
-所以 DreamerV3 是 dynamics-first：先建模世界，再在 imagined latent dynamics 里训练 policy。DreamZero 是 WAM/policy 融合：模型联合预测未来视频和动作，并把 WAM 直接部署成 zero-shot policy。
+<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 5。原图统计 Minecraft Diamond 任务中不同 agent 发现关键物品的比例。本站读法：不要把它理解成“DreamerV3 已解决开放世界游戏”，而应理解成在像素输入、稀疏奖励和长链条任务中，model-based RL 的样本效率确实有优势。</small>
 
-如果把两条路线放到机器人方向里看，DreamerV3 提供的是“怎么训练一个可规划的内部动力学模型”；DreamZero 提供的是“怎么把视频基础模型改造成能直接输出动作的闭环策略”。
+第三，ablation 支持这些稳健化设计不是装饰。KL objective、return normalization、symexp twohot regression、unsupervised reconstruction loss、模型规模和 replay ratio 都影响最终表现。尤其是 reconstruction loss：它说明即使最终目标是奖励最大化，world model 仍需要自监督信号来塑造有信息量的 state。
 
-## 局限与启发
+![Ablations and scaling](../../assets/images/paper-deep-dives/world-models/dreamerv3/x7.png){ width="920" }
 
-DreamerV3 的局限也很清楚。它需要环境交互轨迹和 reward/continuation 信号，因此不像大视频模型那样可以直接吃互联网视频。它的 rollout 发生在 latent space 中，可解释性和视觉真实感都弱于视频生成路线。并且一旦 world model 在关键状态上预测偏了，actor 会在错误的 imagined future 上被优化，形成 model bias。
+<small>Figure source: `Mastering Diverse Domains through World Models`, Figure 6。原图展示稳健化技巧、无监督重建损失、模型规模和 replay ratio 的消融与 scaling。本站读法：环境交互贵时，可以用更大的 world model 和更高 replay ratio 换数据效率，但代价是训练算力和 model bias 风险。</small>
 
-但它给世界模型训练留下了几个非常可复用的经验：
+## 边界与误解
 
-1. world model 不应该只预测 observation，还要预测 reward 和 continuation；
-2. posterior 和 prior 的训练目标要拆开，否则 latent 容易在“信息量”和“可预测性”之间失衡；
-3. 跨域训练时，数值尺度处理不是小技巧，而是算法能否固定超参数运行的前提；
-4. imagined rollout 的价值不在于生成漂亮画面，而在于提供可训练 policy 的内部环境；
-5. 如果真实交互昂贵，提高 replay ratio 和扩大 world model 规模可能比盲目增加环境采样更划算。
+DreamerV3 需要 agent-environment interaction trajectories，也需要 reward 和 continuation 信号。它不能像开放视频预训练那样直接吃互联网视频，然后自动变成可控世界模型。
 
-一句话概括：DreamerV3 展示的是 `latent dynamics / model-based RL` 世界模型的成熟形态。它把世界模型从“预测未来的表示器”推进到“能支撑策略学习的内部模拟器”。
+它的 rollout 发生在 latent space，优点是紧凑、可训练、直接服务 policy；缺点是可解释性弱，视觉真实感不是目标。如果要做机器人或开放世界模拟器，还需要更强的感知表示、动作接口、失败回流和安全约束。
 
-!!! note "合并提示"
-    **info · 本站判断**
+另一个常见误解是“world model 越准，policy 越好”。在 model-based RL 里，更危险的情况是局部很准、关键状态很错：actor 会专门找到模型漏洞并在 imagined future 里获得虚假高回报。DreamerV3 用短 horizon、replay 更新、reward/continue head 和稳健化目标缓解这个问题，但没有从根上消除 model bias。
 
-    DreamerV3 要按跨域鲁棒化读：方法核心是 symlog、twohot、free bits、离散 latent 和固定超参；实验看 Atari、DMC、Minecraft 等多域表现。它给世界模型 RL 提供强 baseline，但开放具身任务仍要补感知、动作和安全证据。
+## 和 DreamZero、视频世界模型的关系
 
-    **tip · 下一站**
+DreamerV3 是 dynamics-first：先学 \(s_t,a_t\rightarrow s_{t+1},r_{t+1},c_{t+1}\)，再用 imagined latent dynamics 训练策略。DreamZero 一类方法更接近 WAM/policy 融合：模型联合预测未来视频和动作，把 video-action model 直接部署成策略。
 
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
-    - 按导航顺序继续：[H-JEPA：层级 JEPA 与潜变量 EBM](h-jepa.md)。
+所以两条路线适合回答不同问题。DreamerV3 适合解释“怎样把世界模型变成内部训练环境”；视频世界模型适合解释“怎样生成可视、可交互、长时一致的未来场景”。前者对 RL 样本效率非常关键，后者对机器人数据生成、仿真和人类可检查性更关键。
+
+## 外部精读
+
+- [DreamerV3 paper: Mastering Diverse Domains through World Models](https://arxiv.org/abs/2301.04104)：主要读方法里的 RSSM、loss decomposition 和 actor-critic learning。
+- [DreamerV3 project page](https://danijar.com/project/dreamerv3/)：适合先看 benchmark、视频和高层结论，再回论文读细节。
+- [DreamerV3 GitHub](https://github.com/danijar/dreamerv3)：实现里能看到 replay、imagined rollout、loss 和配置如何落地。
+- [VITALab DreamerV3 reading note](https://vitalab.github.io/article/2023/01/19/DreamerV3.html)：适合用作第二视角，帮助把论文里的 Dreamer 系列背景补齐。

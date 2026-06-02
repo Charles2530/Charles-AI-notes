@@ -413,7 +413,9 @@ body {
 }
 
 .md-typeset p:has(> img) {
-  margin: 1.55rem 0;
+  width: fit-content;
+  max-width: 100%;
+  margin: 1.55rem auto;
   padding: 0.55rem;
   border: 1px solid rgba(18, 95, 99, 0.1);
   border-radius: 10px;
@@ -2320,7 +2322,7 @@ body.atlas-zoom-2 .md-typeset {
 }
 
 .md-typeset p:has(> img) {
-  margin: 1.25rem 0;
+  margin: 1.25rem auto;
   padding: 0.42rem;
 }
 

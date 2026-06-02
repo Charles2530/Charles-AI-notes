@@ -2,34 +2,10 @@
 
 生成模型训练时学的是概率分布，推理时要把这个分布一步步变成具体输出。解码就是从 logits 到 token、从 token 到长回答、从概率到系统成本的执行过程。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“生成与解码基础”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“生成与解码基础”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道 token、softmax、Transformer 和 KV cache 的基本读法。必要时先回 [Transformer 输入与注意力](transformer-attention-and-tokenization.md)、[数值、显存与运行时](numerics-memory-and-runtime-basics.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把 logits、temperature、top-k/top-p、beam、autoregressive generation、exposure bias 和 KV cache 串起来，给 LLM、推理系统、RLHF 和投机解码打底。
 
 ![Neural Text Degeneration Figure 5](../assets/images/paper-figures/foundations/neural-text-degeneration-figure-5.png){ width="920" }
 
 <small>图源：[The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)，Figure 5。原论文图意：展示不同上下文下 next-token probability distribution 可能是 flat 或 peaked，因此固定 top-k 在不同上下文里会截断过多或保留过多候选。</small>
-
-!!! note "合并提示"
-    **note · 图解：top-p 的直觉来自分布形状**
-
-    左侧 flat distribution 里，很多 token 都有中等概率；如果固定取很小的 top-k，可能砍掉合理候选。右侧 peaked distribution 里，概率集中在少数 token；如果固定取很大的 top-k，又会把长尾噪声放进采样。Nucleus sampling / top-p 的核心是按累计概率动态决定候选集合大小。
-
-    **note · 初学者先抓住**
-
-    模型每一步先输出 logits，再经 softmax 变成概率分布。解码策略决定从这个分布里选哪个 token。低温度和 greedy 更稳定但可能死板；高温度和采样更多样但更不稳定；KV cache 决定长上下文生成时历史怎么被复用。
-
-    **tip · 遇到这些症状，回看本页**
-
-    同一个 prompt 每次答案差很远、top-p 调大后格式崩、beam search 输出重复模板、长回答越写越偏、RL rollout 吞吐被 decode 卡住、KV cache 爆显存，先回看本页。本页帮你把“采样质量问题”和“推理系统问题”分开。
 
 ## 从 logits 到概率
 
@@ -38,12 +14,6 @@
 \[
 z_t \in \mathbb{R}^{|V|}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(z_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(V\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
 
 
 这里的 \(z_t\) 表示第 \(t\) 个生成位置上的 logits 向量，\(|V|\) 是词表大小，所以它在每个候选 token 上都有一个未归一化分数。
@@ -54,25 +24,12 @@ softmax 把 logits 变成概率：
 p_i = \frac{\exp(z_i)}{\sum_j \exp(z_j)}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(p_i\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(z_j\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-
 
 Temperature 会改变分布尖锐程度：
 
 \[
 p_i^{(T)} = \frac{\exp(z_i/T)}{\sum_j \exp(z_j/T)}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(p_i^{(T)}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(z_j\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
 
 | 参数 | 直觉 | 典型效果 |
@@ -124,16 +81,6 @@ prompt
 \[
 p_\theta(y\mid x)=\prod_{t=1}^{T}p_\theta(y_t\mid x,y_{<t})
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
 
 这里 \(x\) 是 prompt 或条件输入，\(y_t\) 是第 \(t\) 个生成 token，\(y_{<t}\) 是已经生成的前缀。这个乘积说明一个现实问题：早期 token 选错，后面的条件也会变，错误可能滚雪球。
@@ -189,8 +136,3 @@ inference: model-generated prefix -> predict next token
 ## 本页结论
 
 解码是生成模型从概率到输出的最后一公里。先分清 logits、softmax、temperature、top-k/top-p、beam、autoregressive prefix 和 KV cache，再讨论 prompt、RLHF、投机解码或 serving 性能，很多问题会清楚很多。
-
-!!! tip "下一站"
-    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[Prompt、CoT 与 RAG 入门](prompt-engineering-cot-and-rag-basics.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

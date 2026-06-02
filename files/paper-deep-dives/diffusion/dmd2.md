@@ -7,33 +7,6 @@ paper_topic: 扩散模型
 # DMD2：更稳的少步分布匹配蒸馏
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“DMD2：更稳的少步分布匹配蒸馏”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [扩散模型](../../diffusion/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「扩散模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 论文：`Improved Distribution Matching Distillation for Fast Image Synthesis`
-    - 方法：`DMD2`
-    - 链接：[arXiv:2405.14867](https://arxiv.org/abs/2405.14867)
-    - 版本：2024-05-23 首次提交，2024-05-24 更新到 v2
-    - 会议：NeurIPS 2024 Oral
-    - 项目页：[DMD2](https://tianweiy.github.io/dmd2/)
-    - 代码：[GitHub](https://github.com/tianweiy/DMD2)
-    - 关键词：distribution matching distillation、two time-scale update rule、fake diffusion critic、GAN loss、backward simulation、SDXL distillation
-
-
 DMD2 是 [DMD](dmd.md) 的直接续作。它不是简单把 DMD 多训一会儿，而是正面修补 DMD 在大规模文生图蒸馏中的三个痛点：**回归配对数据太贵、fake score 跟不上 generator、一步模型容量不足以吃下 SDXL 这种大模型的复杂分布**。
 
 一句话概括：DMD2 把 DMD 从“分布匹配 + paired regression regularizer”推进到“更纯的分布匹配 + fake critic 两时间尺度训练 + GAN 真实数据监督 + 多步 backward simulation”。
@@ -45,12 +18,6 @@ DMD 原论文已经证明：不必让学生逐步复刻 teacher 轨迹，也可�
 \[
 (z,y), \qquad y=\text{TeacherODE}(z).
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(z\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 这带来两个问题。第一，对 SDXL 这类大模型，预采样数据非常贵；论文估算为 SDXL 生成 1200 万个 LAION prompt 的 paired outputs 约需 700 A100-days。第二，regression loss 会把学生拉回 teacher 的 deterministic sampling path，削弱 DMD 原本的分布匹配优势。
@@ -111,11 +78,6 @@ DMD 的目标是让 generator 输出分布 \(p_{\text{fake}}\) 贴近 teacher / 
 \operatorname{KL}(p_{\text{fake},t}\|p_{\text{real},t}).
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(p_{,t}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-
 
 这个梯度可由两个 score 的差近似：
 
@@ -133,16 +95,6 @@ s_{\text{fake}}(F(G_\theta(z),t),t)
 \frac{dG_\theta(z)}{d\theta}
 \right].
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(s_{}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(F\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(G\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-| \(z\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
 
 这里 \(F\) 是 forward diffusion，即给 clean sample 加噪；\(s_{\text{real}}\) 来自冻结 teacher，\(s_{\text{fake}}\) 来自动态训练的 fake diffusion critic。
@@ -166,15 +118,6 @@ DMD2 认为原始 DMD 之所以还需要 regression loss，不是因为分布匹
 =
 \mathbb{E}_{(z,y)} d(G_\theta(z),y),
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(z\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(G\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
 
 
 其中 \(y\) 是 teacher 用 deterministic sampler 从同一个 noise \(z\) 生成的图像。它能稳定训练，也能保 mode coverage，但副作用很明显：
@@ -234,15 +177,6 @@ s_{\text{real}}(x_t,t)
 \frac{x_t-\alpha_t\mu_{\text{real}}(x_t,t)}{\sigma_t^2}.
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\alpha_t\mu\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(\sigma_t\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(s_{}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-
 
 如果 teacher score 本身有误差，这个误差会通过 DMD 梯度传给 generator。原始 DMD 只看 teacher，不直接看真实图像，因此很难纠正 teacher 的 score approximation error。
 
@@ -255,16 +189,6 @@ DMD2 引入 GAN loss，把真实图像放进训练：
 +
 \mathbb{E}_{z,t}[-\log D(F(G_\theta(z),t))].
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(p_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(F\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 实现上，GAN classifier 不是单独再训练一个大 discriminator，而是加在 fake diffusion denoiser 的 middle block / bottleneck 特征上。appendix 里给出的 classifier head 是一组 stride 2 的 \(4\times4\) convolutions、group normalization、SiLU，再下采样到 \(4\times4\)，最后用卷积池化和线性层输出分类。
@@ -294,15 +218,6 @@ DMD2 引入 GAN loss，把真实图像放进训练：
 \hat{x}_{t_i}=G_\theta(x_{t_i},t_i),
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{x}_{t_i}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(t_i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(G\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-| \(x_{t_i}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-
 
 这行式子在说：generator \(G_\theta\) 接收当前噪声状态 \(x_{t_i}\) 和时间步 \(t_i\)，输出当前步估计的干净样本 \(\hat{x}_{t_i}\)。
 
@@ -315,16 +230,6 @@ x_{t_{i+1}}
 \qquad
 \epsilon\sim\mathcal{N}(0,I).
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{x}_{t_i}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(\alpha_{t_{i+1}\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(\sigma_{t_{i+1}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(\epsilon\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x_{t_{i+1}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(t_{i+1}\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
 
 \(\epsilon\sim\mathcal{N}(0,I)\) 是标准高斯噪声采样，括号里的 \(0\) 是均值、\(I\) 是单位协方差；\(\sigma_{t_{i+1}}\) 决定这份噪声在下一噪声水平里占多大。
@@ -418,7 +323,6 @@ SD v1.5 用 10:1 的 fake critic update ratio，比 ImageNet 和 SDXL 更高。�
 
 ## 实验结果
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -610,14 +514,3 @@ DMD2 最值得记住的不是“DMD 加 GAN”，而是它把一步/少步扩散
 1. Yin et al. [Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867). arXiv:2405.14867.
 2. 官方项目页：[DMD2](https://tianweiy.github.io/dmd2/).
 3. 官方代码：[tianweiy/DMD2](https://github.com/tianweiy/DMD2).
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    DMD2 要读成 DMD 的稳定化版本：方法上缩短 teacher 依赖、改进 GAN-style 训练和 fake-score 更新；实验上看 SDXL/Imagenet 的少步质量、人评与消融。它适合做高质量少步生成底座，但不是无成本替代完整 diffusion。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[扩散模型](../../diffusion/index.md)。
-    - 按导航顺序继续：[Diffusion Forcing：序列扩散](diffusion-forcing.md)。

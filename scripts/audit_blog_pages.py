@@ -9,6 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = ROOT / "files"
 AUDIT_LOG = ROOT / "audit_log.md"
 
+# Legacy note:
+# This script is intentionally audit-only now. The previous version inserted
+# generic buffers, symbol tables, and comments automatically; that made pages
+# look complete while leaving the actual explanation shallow.
+
 FORMULA_OPEN_TO_CLOSE = {"$$": "$$", r"\[": r"\]"}
 FENCE_RE = re.compile(r"^\s*(```|~~~)\s*([A-Za-z0-9_-]+)?")
 H2_RE = re.compile(r"^##\s+(.+?)\s*$")
@@ -35,27 +40,27 @@ class PageSummary:
     def action_sentence(self) -> str:
         parts: list[str] = []
         if self.symbol_tables_added:
-            parts.append(f"补充了 {self.symbol_tables_added} 处符号表")
+            parts.append(f"发现 {self.symbol_tables_added} 处公式缺正文解释")
         if self.symbol_tables_standardized:
-            parts.append(f"标准化了 {self.symbol_tables_standardized} 处符号表标记或表头")
+            parts.append(f"发现 {self.symbol_tables_standardized} 处泛化符号表需要改写")
         if self.beginner_added:
-            parts.append("补充了 1 处初学者直觉")
+            parts.append("发现开头缺少具体问题或直觉例子")
         elif self.page_type == "基础知识" and self.beginner_existing:
-            parts.append("已有初学者缓冲，未重复添加")
+            parts.append("已有具体开场")
         if self.mermaid_added:
-            parts.append("补充了 1 处 Mermaid 流程图")
+            parts.append("发现适合用流程图解释的段落")
         if self.experiment_added:
-            parts.append("补充了 1 处实验结论")
+            parts.append("发现实验段缺少结论解释")
         elif self.page_type == "论文解读" and self.experiment_existing:
-            parts.append("已有实验结论，未重复添加")
+            parts.append("已有实验结论")
         if self.pitfall_added:
-            parts.append("补充了 1 处踩坑原因")
+            parts.append("发现工程段缺少故障机制解释")
         elif self.page_type == "工程实践" and self.pitfall_existing:
-            parts.append("已有踩坑原因，未重复添加")
+            parts.append("已有故障机制解释")
         if self.code_note_added:
-            parts.append("补充了 1 处关键代码行注释")
+            parts.append("发现代码块缺少阅读说明")
         if not parts:
-            return "复核通过，未发现需要补充项。"
+            return "复核通过，未发现明显脚手架问题。"
         return "，".join(parts) + "。"
 
 
@@ -123,9 +128,9 @@ def write_audit_log(
             [
                 "",
                 "### 高频问题",
-                f"- 公式后缺符号说明：{formula_missing_pages} 页",
-                f"- 缺初学者缓冲：{beginner_missing_pages} 页",
-                "- 建议删除冗余提示框：0 处",
+                f"- 公式缺正文解释线索：{formula_missing_pages} 页",
+                f"- 开头缺具体问题或直觉例子线索：{beginner_missing_pages} 页",
+                "- 建议：只做人工深改，不再用脚本自动塞提示框或泛化表格。",
             ]
         )
 
@@ -160,7 +165,7 @@ def normalize_symbol_table(lines: list[str], start: int, indent: str) -> tuple[l
     while idx < len(lines) and lines[idx].strip().startswith("|"):
         cells = table_cells(lines[idx])
         if len(cells) == 2:
-            output.append(f"{indent}| {cells[0]} | {cells[1]} | 按上下文定义 |")
+            output.append(f"{indent}| {cells[0]} | {cells[1]} | 需要在正文里说明 |")
             changed = True
         elif len(cells) >= 3:
             output.append(f"{indent}| {cells[0]} | {cells[1]} | {cells[2]} |")
@@ -287,7 +292,7 @@ def describe_symbol(symbol: str) -> tuple[str, str]:
     if "theta" in lower:
         return "模型或策略参数", "实值张量，形状由模型结构决定"
     if "tau" in lower:
-        return "时间步、温度或轨迹变量", "按上下文定义"
+        return "时间步、温度或轨迹变量", "需要由正文说明"
     if lower.startswith("l"):
         return "损失或目标函数", "实数标量，通常按 batch 聚合"
     if lower.startswith("j"):
@@ -308,7 +313,7 @@ def describe_symbol(symbol: str) -> tuple[str, str]:
         return "概率、预测量或转移分布", "概率分布或任务定义的张量"
     if lower.startswith("v"):
         return "value、速度场或向量量", "实数标量/向量，依上下文而定"
-    return "公式中的变量或中间量", "按上下文定义"
+    return "待解释变量", "需要由正文说明"
 
 
 def symbol_table_for_formula(formula: str, indent: str) -> list[str]:
@@ -319,7 +324,7 @@ def symbol_table_for_formula(formula: str, indent: str) -> list[str]:
     ]
     for symbol in symbols:
         if symbol == "公式整体":
-            rows.append(f"{indent}| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |")
+            rows.append(f"{indent}| 公式整体 | 本公式表达的变量关系 | 需要由正文说明 |")
             continue
         meaning, value_range = describe_symbol(symbol)
         rows.append(f"{indent}| \\({symbol}\\) | {meaning} | {value_range} |")
@@ -549,26 +554,65 @@ def add_code_note(text: str, summary: PageSummary) -> str:
     return text
 
 
+def count_formula_blocks(text: str) -> int:
+    lines = text.splitlines()
+    count = 0
+    idx = 0
+    in_fence = False
+    while idx < len(lines):
+        line = lines[idx]
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            idx += 1
+            continue
+        stripped = line.strip()
+        if in_fence or stripped not in FORMULA_OPEN_TO_CLOSE:
+            idx += 1
+            continue
+        close_marker = FORMULA_OPEN_TO_CLOSE[stripped]
+        end = idx + 1
+        while end < len(lines) and lines[end].strip() != close_marker:
+            end += 1
+        if end < len(lines):
+            count += 1
+            idx = end + 1
+        else:
+            idx += 1
+    return count
+
+
+def has_concrete_opening(text: str) -> bool:
+    prefix = "\n".join(text.splitlines()[:16])
+    return any(term in prefix for term in ("问题", "例子", "直觉", "先看", "为什么", "要解决"))
+
+
+def has_experiment_conclusion(text: str) -> bool:
+    return any(term in text for term in ("实验说明", "这个结果说明", "消融说明", "结论是", "证据链"))
+
+
+def has_engineering_mechanism(text: str) -> bool:
+    return any(term in text for term in ("触发条件", "失败机制", "瓶颈", "监控信号", "回滚", "边界"))
+
+
+def has_generic_symbol_table(text: str) -> bool:
+    return "需要由正文说明" in text or "待解释变量" in text
+
+
 def process_page(path: str) -> PageSummary:
     page_type = classify_page(path)
     summary = PageSummary(path=path, page_type=page_type)
     full_path = ROOT / path
-    original = full_path.read_text(encoding="utf-8")
-    text = original
+    text = full_path.read_text(encoding="utf-8")
 
-    text = add_or_standardize_formula_tables(text, summary)
-    if page_type == "基础知识":
-        text = add_beginner_buffer(text, summary)
-        text = add_foundation_mermaid(text, summary)
-    elif page_type == "论文解读":
-        text = add_paper_experiment_conclusion(text, summary)
-    elif page_type == "工程实践":
-        text = add_engineering_pitfall(text, summary)
-        text = add_code_note(text, summary)
-
-    if text != original:
-        full_path.write_text(text, encoding="utf-8")
-        summary.changed = True
+    summary.formula_blocks = count_formula_blocks(text)
+    if page_type == "基础知识" and not has_concrete_opening(text):
+        summary.beginner_added = True
+    if page_type == "论文解读" and not has_experiment_conclusion(text):
+        summary.experiment_added = True
+    if page_type == "工程实践" and not has_engineering_mechanism(text):
+        summary.pitfall_added = True
+    if has_generic_symbol_table(text):
+        summary.symbol_tables_standardized = 1
     return summary
 
 

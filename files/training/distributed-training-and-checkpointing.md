@@ -2,31 +2,10 @@
 
 当模型规模走向几十亿、上百亿参数，训练问题很快不再只是“学习率怎么调”，而是“算力、显存、通信、数据顺序、存储和故障恢复能不能共同支撑一次长跑”。分布式训练决定训练能不能跑快，checkpoint 决定训练能不能跑完、跑坏后能不能继续、产物能不能被后训练和推理复用。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“分布式训练与 Checkpoint”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“分布式训练与 Checkpoint”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
 
 这页建议和 [Megatron、DeepSpeed 与训练栈](megatron-lm-deepspeed-and-open-training-stacks.md)、[输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md)、[训练稳定性与故障排查](stability-numerics-and-failure-triage.md) 一起读。它们分别覆盖训练框架、数据吞吐和数值/系统异常，本页聚焦并行拓扑与恢复资产。
 
-!!! note "合并提示"
-    **note · 初学者先抓住**
-
-    分布式训练不是把模型随便切到多张卡上。你要同时管理显存、通信、pipeline bubble、数据顺序和 checkpoint 恢复语义。
-
-    **example · 有趣例子：多人接力搬家**
-
-    人多不一定快。如果楼道太窄、箱子交接混乱、有人中途离开还没人记录进度，整体反而慢。分布式训练也要设计分工、通信和恢复点。
-
-<!-- [补充] -->
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
+这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐。读这页时先把触发条件、监控信号和回滚边界拆开，再判断应该改并行拓扑、数据管线、数值策略还是 checkpoint 流程。
 
 ## 一、为什么单卡思维会失效
 
@@ -38,14 +17,6 @@ $$
 M_{\text{state}} \approx P \cdot b_p \cdot (1 + c_{\text{opt}}).
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(M_{}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(b_p\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(c_{}\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 对 Adam/AdamW 来说，参数本身往往不是最大头，梯度、master weights、一阶动量、二阶动量和混合精度状态会一起放大内存压力。再叠加长上下文激活、MoE dispatch buffer 和通信 bucket，真实峰值通常高于纸面估算。
 
@@ -53,16 +24,9 @@ $$
 
 ## 二、并行维度：从 DP 到 ND Parallelism
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
-> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
->
-> 延伸阅读：[06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)
+ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”。收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce、all-to-all 或 pipeline bubble。Datawhale 的 [VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html) 适合作为显存估算的补充读物。
 
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html) |
-| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
+如果用 \(\Psi\) 表示参数量、\(N_d\) 表示数据并行度，ZeRO 状态分片后，长期驻留在单卡上的被分片状态可以粗略降到 \(O(\Psi/N_d)\) 量级；计算量本身并没有消失，只是额外引入了参数 gather、梯度 reduce 和分片状态通信。分布式训练的核心取舍常常就是：显存省下来以后，瓶颈会不会转移到带宽、延迟和通信重叠能力上。
 
 现代大模型训练通常把 world size 拆成多个正交维度：
 
@@ -79,11 +43,6 @@ N_{\text{CP}}
 \times
 N_{\text{EP}}.
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(N_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 这行式子表示：总 world size \(N_{\text{world}}\) 是数据并行、张量并行、流水线并行、上下文并行和专家并行这些维度的乘积。每个 \(N_{\text{DP}}\)、\(N_{\text{TP}}\)、\(N_{\text{PP}}\)、\(N_{\text{CP}}\)、\(N_{\text{EP}}\) 都是对应并行维度上的切分份数。
@@ -110,8 +69,7 @@ ZeRO 论文里最值得记住的一笔账是 mixed precision Adam 的 \(16\Psi\)
 
 <small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原论文图意：比较普通数据并行和 ZeRO-DP 三个阶段的单设备模型状态显存；\(\Psi\) 表示参数量，\(K\) 表示优化器状态的显存倍数，\(N_d\) 表示数据并行度。</small>
 
-!!! note "图解：ZeRO 省的是重复模型状态"
-    图里的 `optimizer states`、`gradients`、`parameters` 是训练态显存的三大常驻部分。普通数据并行会在每张卡上完整复制这些状态；ZeRO Stage 1 先把优化器状态按 DP 组切开，Stage 2 再切梯度，Stage 3 连参数也按需分片。它不是减少数学计算量，而是把“每张卡都存一整份”的冗余改成“每张卡只长期保留一部分”，代价是训练过程中需要更多 gather、scatter 和 checkpoint 元数据。
+这张图的核心是“重复模型状态”。`optimizer states`、`gradients`、`parameters` 是训练态显存的三大常驻部分；普通数据并行会在每张卡上完整复制这些状态。ZeRO Stage 1 先把优化器状态按 DP 组切开，Stage 2 再切梯度，Stage 3 连参数也按需分片。它不是减少数学计算量，而是把“每张卡都存一整份”的冗余改成“每张卡只长期保留一部分”，代价是训练过程中需要更多 gather、scatter 和 checkpoint 元数据。
 
 两者的共同代价是状态管理、通信和 checkpoint 复杂度上升。显存不是免费省出来的，而是用更多 gather/scatter、元数据和恢复逻辑换来的。
 
@@ -131,19 +89,12 @@ $$
 \text{utilization} \approx \frac{m}{m + K - 1}.
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(m\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-
 
 ![GPipe pipeline parallelism 原论文图](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png){ width="860" }
 
 <small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。原论文图意：将一个 mini-batch 拆成多个 micro-batch，使不同 accelerator 能在同一时间处理不同 micro-batch 的不同模型分段，并在末尾同步应用梯度。</small>
 
-!!! note "图解：micro-batch 是为了填流水线空泡"
-    如果只有一个大 batch 顺序通过所有 stage，很多 GPU 会在等待前后 stage 时空转。GPipe 图中的 \(F_k\) 表示第 \(k\) 段前向，\(B_k\) 表示对应反向；micro-batch 让 stage 1 处理下一小批时，stage 2/3/4 同时处理前面小批的后续层。micro-batch 越多，流水线越容易被填满，但也会增加激活保存、调度和优化器语义的复杂度，所以它不是越大越好。
+这张图解释了 micro-batch 为什么存在。如果只有一个大 batch 顺序通过所有 stage，很多 GPU 会在等待前后 stage 时空转。GPipe 图中的 \(F_k\) 表示第 \(k\) 段前向，\(B_k\) 表示对应反向；micro-batch 让 stage 1 处理下一小批时，stage 2/3/4 同时处理前面小批的后续层。micro-batch 越多，流水线越容易被填满，但也会增加激活保存、调度和优化器语义的复杂度，所以它不是越大越好。
 
 micro-batch 太少会有大量 bubble，太多又会影响激活保留、优化行为和调度复杂度。`1F1B` 和 interleaved pipeline 的目的都是减少空泡，但会增加调试和恢复复杂度。
 
@@ -157,15 +108,13 @@ EP 主要服务 MoE。它让 token 只经过部分专家，解耦参数规模和
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 5。原论文图意：8 个 PP ranks、20 个 micro-batches 的 DualPipe scheduling 示例，两个方向的 micro-batches 对称推进，黑框表示互相 overlap 的计算和通信。</small>
 
-!!! note "这张图帮你补哪块基础"
-    Pipeline parallelism 像多段生产线。前几拍和后几拍必然有人空等，这就是 pipeline bubble。DualPipe 的思路是从 pipeline 两端同时推进 micro-batches，并把 forward/backward 中的通信和计算互相压在一起。图里真正重要的不是颜色本身，而是黑框代表的 overlap：同一段墙钟时间里，GPU 尽量同时做计算和通信。
+Pipeline parallelism 像多段生产线。前几拍和后几拍必然有人空等，这就是 pipeline bubble。DualPipe 的思路是从 pipeline 两端同时推进 micro-batches，并把 forward/backward 中的通信和计算互相压在一起。图里真正重要的不是颜色本身，而是黑框代表的 overlap：同一段墙钟时间里，GPU 尽量同时做计算和通信。
 
 ![Kimi K2 training infrastructure overlap](../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-7-training-infra.png){ width="920" }
 
 <small>图源：[Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)，Figure 7。原论文图意：展示不同 PP phases 中 computation、communication 和 offloading 的 overlap。</small>
 
-!!! note "为什么 Kimi K2 不直接照搬 DualPipe"
-    Kimi K2 是 1T 级 MoE，报告强调 DualPipe 会带来参数和梯度内存翻倍，对超大模型不一定划算。它选择在 interleaved 1F1B 中重叠 EP all-to-all、PP communication、weight-gradient computation 和 activation offload。这个例子提醒我们：训练系统不是“哪个 schedule 最先进就用哪个”，而是看模型规模、内存、通信拓扑和 checkpoint 目标能否一起闭合。
+Kimi K2 没有直接照搬 DualPipe。它是 1T 级 MoE，报告强调 DualPipe 会带来参数和梯度内存翻倍，对超大模型不一定划算；因此它选择在 interleaved 1F1B 中重叠 EP all-to-all、PP communication、weight-gradient computation 和 activation offload。这个例子提醒我们：训练系统不是“哪个 schedule 最先进就用哪个”，而是看模型规模、内存、通信拓扑和 checkpoint 目标能否一起闭合。
 
 读训练系统图时，可以按三层问：
 
@@ -295,7 +244,6 @@ Checkpoint manifest 应像训练资产目录一样记录：每个 shard 属于�
 
 ### 最小恢复脚本形态
 
-<!-- [补充] -->
 下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
 ```python
 def load_training_state(path, model, optimizer, scheduler, dataloader_state):
@@ -312,8 +260,3 @@ def load_training_state(path, model, optimizer, scheduler, dataloader_state):
 ```
 
 这段伪代码的重点不是 API，而是恢复顺序：先验证拓扑和 manifest，再恢复模型、优化器、调度器、随机状态和数据进度。只恢复权重不叫续训，只能叫从某个权重重新开始。
-
-!!! tip "下一站"
-    - 回到本专题入口：[训练](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[训练稳定性与故障排查](stability-numerics-and-failure-triage.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

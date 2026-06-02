@@ -2,31 +2,9 @@
 
 CUDA 之所以长期是 AI kernel 的主语言，不只是因为它能在 GPU 上写程序，而是因为它把并行执行模型、内存层次和同步机制暴露得足够直接。理解 CUDA 的关键不是背 API，而是看清三件事：线程如何被调度，数据如何在 register、shared memory、L2 和 HBM 之间移动，为什么很多优化本质上都是重新安排访存和并发。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“CUDA 编程模型与内存层次”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先回答“CUDA 编程模型与内存层次”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
-
-    **note · 初学者先抓住**
-
-    写 CUDA 的核心不是“让每个线程做点事”，而是让一群 thread/warp/block 协作处理一块数据，并尽量少从 HBM 来回搬。高性能 kernel 的很多技巧，本质上都在减少等待和重复搬运。
-
-    **example · 有趣例子：仓库分拣**
-
-    HBM 像远处大仓库，shared memory 像分拣台，register 像工人手里正拿着的零件。每次都跑去大仓库拿一个零件会很慢；聪明做法是先搬一筐到分拣台，再让一组工人快速组装。
 
 这页是算子专题的基础页，后续 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与 Autotuning](triton-programming-model-and-autotuning.md)、[CUTLASS / CuTe 与编译栈](cutlass-cute-and-compiler-stack.md) 都依赖这里的心智模型。
 
-<!-- [补充] -->
 > **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 最小心智模型
@@ -160,8 +138,3 @@ Warp-level primitive 是另一类高频工具，包括 `__shfl_*`、`__ballot_sy
 7. **看回归**：固定输入、固定 seed、固定 shape bucket 做性能与正确性测试。
 
 CUDA 优化的核心不是把代码写得更“底层”，而是让数据更少地绕远路。只要能减少 HBM 往返、提升片上重用、降低同步和 launch 开销，kernel 才有机会接近硬件上限。
-
-!!! tip "下一站"
-    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

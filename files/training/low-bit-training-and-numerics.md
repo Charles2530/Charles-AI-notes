@@ -2,17 +2,6 @@
 
 这一页讨论的是**训练里的低精度**，不是单纯的推理量化。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“低比特训练与数值格式”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“低比特训练与数值格式”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
 
 推理量化常问的是：模型已经训好了，能不能用更低比特部署。  
 低比特训练问的是：模型还在训练中，前向、反向、激活、梯度、优化器状态和通信能不能都用更低精度，同时不让训练发散。
@@ -23,25 +12,10 @@
 
 <small>图源：[QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)，Figure 1。原论文图意：QLoRA 把冻结底座量化存储，只训练 adapter，并用分页机制缓解训练时的显存峰值。</small>
 
-!!! note "合并提示"
-    **note · 图解：QLoRA 图先帮你拆开训练显存**
-
-    这张图不要只看“4bit”这个标签，而要看哪些东西还留在训练路径里。全量微调需要保存权重、梯度、优化器状态和激活；LoRA 把可训练参数缩小到 adapter；QLoRA 进一步把冻结底座量化存储，让 optimizer 主要服务少量 LoRA 参数。低比特训练后续还会扩展到 `FP8` / `FP4` 的前向、反向和通信路径，因此真正要决定的是哪些张量降精度、哪些 scale 策略可控、哪些 kernel 支持原生低精度、哪些层必须保高精，以及如何证明长训练不会在后期崩。
-
-    **example · 有趣例子：用细笔和粗笔记账**
-
-
-    推理量化像把账本复印得更省纸，偶尔字边缘模糊还能读；低比特训练像每天都用更粗的笔继续记账，写错的数字会进入下一天的余额。训练里的低精度误差会被参数更新继承，所以比部署后压缩更敏感。
-
-    **tip · 为什么现在要学这个：FP8、KV INT8 和世界模型效率**
-
-    世界模型的低比特问题不只在权重。长视频训练会被 activation cache 和通信 payload 卡住，长上下文 rollout 会被 KV cache 和 HBM 带宽卡住，闭环服务还会被低精度 kernel 是否成熟影响延迟。`FP8` 主要服务训练吞吐、激活和通信；`KV INT8` 更常服务长上下文推理显存和 decode 带宽。真正要比较的是“显存下降、token/s 上升、loss/成功率不掉、长时一致性不坏”这四件事是否同时成立。
-
 ![DeepSeek-V3 FP8 framework 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="920" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原论文图意：DeepSeek-V3 展示 FP8 训练框架中不同张量、缩放策略和高精度保护路径的组织方式，说明低精度训练是数值系统设计，而不是单纯把 dtype 改小。</small>
 
-<!-- [补充] -->
 > **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 硬证据模块：低比特训练要同时证明数值和世界模型行为
@@ -106,14 +80,6 @@
 q = \mathrm{round}(x / s), \qquad \hat{x} = s q
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{x}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(q\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-
 
 优点是硬件和 kernel 生态成熟。  
 问题是低 bit 下动态范围非常紧，遇到 activation outlier 时容易出现两种坏结果：scale 被极大值拖大，小值全部挤在少数桶里；或者直接截断极大值，破坏关键 token 或关键层。
@@ -141,13 +107,6 @@ q = \mathrm{round}(x / s), \qquad \hat{x} = s q
 \[
 x_i \approx s_{\text{block}} \cdot q_i
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x_i\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(s_{}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(q_i\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 其中 \(s_{\text{block}}\) 是块级缩放因子，\(q_i\) 是低比特浮点值。
@@ -354,7 +313,6 @@ Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变
 
 下面是一个简化后的伪代码，用来说明低比特训练里的基本动作。真实实现会更复杂，并且会使用 fused kernel。
 
-<!-- [补充] -->
 下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
 ```python
 def quantize_per_group(x, group_size, fp_format):
@@ -473,8 +431,3 @@ FP4 尤其如此：没有原生 kernel 支持，收益很容易被系统开销�
 建议按这条路线阅读：[数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md) → [训练稳定性与故障排查](stability-numerics-and-failure-triage.md) → [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) → [MTP 与投机解码](mtp-and-speculative-decoding.md) → [FP8 与混合精度推理](../quantization/fp8-and-mixed-precision-serving.md) → [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。
 
 量化专题更关注“如何压缩和部署”；这一页更关注“训练过程中如何不崩，并且真的换来训练效率”。
-
-!!! tip "下一站"
-    - 回到本专题入口：[训练](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[训练数据系统与吞吐优化](data-systems-and-optimization.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

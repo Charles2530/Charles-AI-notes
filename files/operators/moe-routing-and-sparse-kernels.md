@@ -3,32 +3,9 @@
 稀疏计算和 `MoE`（Mixture of Experts）常被看成“模型结构创新”，但一旦真正训练或部署，问题很快就会变成 kernel 与通信系统问题。原因很简单：  
 **稠密模型的热点大多是规则大矩阵，稀疏和 MoE 的热点则往往是 token 重排、路由、gather/scatter、all-to-all 和不均匀负载。**
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“MoE 路由与稀疏 Kernel”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“MoE 路由与稀疏 Kernel”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
 
 这使得稀疏系统的工程难点不在公式，而在如何把 token 送到正确专家、如何让热门专家不成为热点、如何让重排和通信不把省下来的 FLOPs 吃掉，以及如何让路由 kernel 和主计算 kernel 协同。
 
-!!! note "合并提示"
-    **note · 初学者先抓住**
-
-
-    MoE 的系统难点不在“专家层公式”，而在 token 怎么被路由、重排、通信、计算再合并。稀疏节省了部分 FLOPs，但引入了不规则访问、负载不均和 all-to-all。
-
-    **example · 有趣例子：分拣中心**
-
-
-    包裹送到正确仓库只是第一步。如果某个仓库爆满、传送带堵住、回收路径绕远，整体效率仍然很差。MoE 的 token dispatch 和 combine 也是这个问题。
-
-<!-- [补充] -->
 > **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 为什么稀疏 kernel 和稠密 kernel 不一样
@@ -77,24 +54,12 @@ flowchart LR
 \frac{8192\times2}{64}=256
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
-
 
 个 token。这个 `256` 是平均负载，不是每个 expert 实际收到的数量。工程上常用 capacity factor 给每个 expert 预留容量：
 
 \[
 capacity \approx \frac{B L \times topk}{N_{\text{expert}}}\times factor
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(N_{}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 所以 capacity 设为 `320` 相当于 factor 约 `1.25`，设为 `640` 相当于 factor `2.5`。但真实 router 可能不均匀：热门 expert 收 520 个 token，冷 expert 只收 80 个。若 capacity 是 320，热门 expert 会 drop 或 reroute；若 capacity 是 640，padding、空槽和小批量 GEMM shape 会浪费。这个超参同时影响模型质量、kernel shape 和 all-to-all 消息大小。
@@ -170,8 +135,3 @@ MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。
 ## 工程收束
 
 MoE 路由与稀疏 kernel 要同时看 top-k 路由、token dispatch、expert 负载、combine 路径和稀疏访存。只盯 expert matmul 会忽略重排成本，负载不均也会把尾延迟拉坏；上线前应把 dispatch / gather 一并 profile，监控 expert load，并为 router 建立回归。
-
-!!! tip "下一站"
-    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[自定义算子与框架集成](custom-op-development-and-framework-integration.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

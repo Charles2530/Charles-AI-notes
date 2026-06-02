@@ -7,29 +7,6 @@ paper_topic: 具身智能 / VLA
 # Video Prediction Policy：预测视觉表征训练机器人策略
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“Video Prediction Policy：预测视觉表征训练机器人策略”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [具身智能](../../embodied-ai/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「具身智能」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 论文：`Video Prediction Policy: A Generalist Robot Policy with Predictive Visual Representations`
-    - 链接：[arXiv:2412.14803](https://arxiv.org/abs/2412.14803)
-    - 代码：[roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)
-    - 关键词：predictive visual representations、text-guided video prediction、inverse dynamics、CALVIN、MetaWorld、real-world robots
-
-
 VPP 的核心观点很漂亮：很多视觉策略只编码当前图像，而视频扩散模型内部包含“未来会怎样”的预测表征。把这些 predictive visual representations 拿来当 policy 的视觉条件，可以让机器人从视频模型的动态先验中受益。
 
 ## 证据等级与外推边界
@@ -100,15 +77,6 @@ $$
 p_\theta(o_{t+1:t+H} \mid o_{\le t}, l)
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(o_{t+1:t+H}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(o_{t}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(l\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-
 
 在扩散模型里，它实际学习的是去噪目标。若 \(\mathbf{z}_0\) 是未来视频 latent，\(\mathbf{z}_\tau\) 是加噪后的 latent，模型学习预测噪声或速度：
 
@@ -123,15 +91,6 @@ $$
 \right]
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\tau\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |
-| \(\epsilon\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\epsilon_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(o_{t}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(l\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-
 
 这里最重要的是条件：模型不只是做通用视频生成，而是在操作视频和机器人数据上学习“给定任务语言和当前观测，未来该往哪个方向演化”。这就是 predictive visual representation 的来源。
 
@@ -142,14 +101,6 @@ $$
 $$
 \pi_\phi(a_{t:t+K}\mid o_{\le t}, l, \mathbf{h}_{\mathrm{pred}})
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\pi_\phi\) | 策略或概率分布 | 非负概率分布，总和为 1 |
-| \(a_{t:t+K}\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(o_{t}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(l\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 
 
 这可以看成 implicit inverse dynamics：TVP 内部表征暗示“未来视觉会怎样变”，policy 学“要让未来这样变，现在该怎么动”。注意它不是显式规划器，没有枚举候选动作并 rollout；它把未来预测压缩进视觉表征，再用动作模型直接解码。
@@ -197,7 +148,6 @@ VPP 的 TVP 训练数据包括：
 
 ## 实验结果
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -294,8 +244,3 @@ VPP 的表征依赖 TVP 的预测质量。若 TVP 在新场景里预测错误动
 1. [arXiv:2412.14803](https://arxiv.org/abs/2412.14803)
 2. [GitHub: roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)
 3. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2412.14803)
-
-!!! tip "下一站"
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。
-    - 按导航顺序继续：[SpatialVLA：3D 表征接入 VLA](spatialvla.md)。

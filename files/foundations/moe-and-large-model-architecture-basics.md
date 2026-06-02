@@ -2,22 +2,9 @@
 
 读 DeepSeek、Qwen、Kimi、Gemini、Nemotron 这类技术报告时，最容易被一张模型规模表带偏：`Total Params`、`Activated Params`、`Experts`、`Top-k`、`MLA/GQA`、`MTP`、`FP8/FP4` 全部挤在一起。真正要读懂它，不是背模型名字，而是先分清：**MoE 改的是容量和计算分配，MTP 改的是预测头，Mamba/SSM 改的是序列状态路径，低精度改的是数值和硬件执行。**
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“MoE 与大模型架构表读法”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“MoE 与大模型架构表读法”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
 
 这一页补的是“读架构表”的前置知识。它不是部署路由教程，而是帮你在技术报告里看懂稀疏专家模型到底怎样训练、怎样算账、怎样影响推理。
-
-<!-- [补充：初学者直觉] -->
-> **一句话理解**：MoE 与大模型架构表读法 可以先当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背公式，先看清哪一步在改变信息、哪一步在改变成本。
+可以先把这页当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背模型名，先看清哪一步在改变信息，哪一步在改变成本。
 
 ## 一句话先立住
 
@@ -36,21 +23,13 @@ flowchart LR
     C --> Y["Next hidden state"]
 ```
 
-!!! note "读图重点"
-    MoE 通常替换的是 Transformer block 中的 FFN/MLP 子层，而不是 attention 本身。一个 token 不会经过所有专家，只会经过 router 选中的少数专家；这就是为什么 MoE 可以有很大的总参数量，但每个 token 的激活计算量相对小。
+这张图的重点是位置和稀疏性。MoE 通常替换 Transformer block 中的 FFN/MLP 子层，而不是 attention 本身。一个 token 不会经过所有专家，只会经过 router 选中的少数专家；这就是为什么 MoE 可以有很大的总参数量，但每个 token 的激活计算量相对小。
 
-## 符号卡：MoE 公式怎么读
+## MoE 公式怎么读
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
->
-> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
+MoE router 可以看成每个 token 的 Top-K 选择问题。负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。更细的算法推导可以读 Datawhale 的 [MoE Router 入门](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)。
 
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
-| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
+从复杂度上看，router Top-K 通常要扫描 \(E\) 个 expert 分数，代价约为 \(O(E)\) 到 \(O(E\log K)\)，只保留 \(K\) 个 active expert 索引；expert 计算近似随 \(K\) 线性增长，但系统还要额外准备 token dispatch 和 combine buffer。也就是说，MoE 的难点不只在数学上的 top-k，还在稀疏调度、负载均衡和跨设备通信。
 
 最小读法：router 先给 expert 打分，选 top-k 个 expert 处理当前 token，再把这些 expert 的输出按权重合回来。
 
@@ -75,11 +54,7 @@ MoE 的一个常见误读是：看到 `671B`、`1T` 之类的总参数，就把�
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原论文图意：DeepSeek-V3 的 Transformer block 采用 MLA 和 DeepSeekMoE；MLA 用压缩 latent 降低 KV cache，DeepSeekMoE 由 shared experts 和 routed experts 共同组成。</small>
 
-!!! note "论文图解卡：DeepSeek-V3 的 MoE 应该先看哪里"
-    **先看哪里**：先看右侧 DeepSeekMoE 放大框，再回到左侧 Transformer block。  
-    **图中模块**：shared experts 是所有 token 都能走的公共能力；routed experts 是 router 按 token 选择的专家；MLA 是 attention/KV 路径的压缩，不是 MoE 本身。  
-    **对应公式**：\(y=E_{\text{shared}}(h)+\sum_{i\in\operatorname{TopK}(g)}\tilde g_iE_i(h)\)。  
-    **容易误读**：这张图里同时有 MLA 和 MoE。MLA 主要省 KV cache，MoE 主要改变 FFN 容量和激活计算，二者不是同一件事。
+这张图应先看右侧 DeepSeekMoE 放大框，再回到左侧 Transformer block。shared experts 是所有 token 都能走的公共能力；routed experts 是 router 按 token 选择的专家；MLA 是 attention/KV 路径的压缩，不是 MoE 本身。对应到公式，就是 \(y=E_{\text{shared}}(h)+\sum_{i\in\operatorname{TopK}(g)}\tilde g_iE_i(h)\)。最容易误读的是把 MLA 和 MoE 混成一件事：MLA 主要省 KV cache，MoE 主要改变 FFN 容量和激活计算。
 
 ## 一个 token 怎么走过 MoE
 
@@ -89,40 +64,15 @@ MoE 层的计算可以写成：
 g = \operatorname{softmax}(W_r h)
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(g\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-| \(W_r\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(h\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 \[
 \operatorname{TopK}(g) = \{i_1, i_2, \dots, i_k\}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(g\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-| \(i_1\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(i_2\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(i_k\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 \[
 y = \sum_{i \in \operatorname{TopK}(g)} \tilde g_i \cdot E_i(h)
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(g\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-| \(g_i\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-| \(E_i\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(h\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 其中 \(h\) 是 token 的 hidden state，\(W_r\) 是 router，\(E_i\) 是第 \(i\) 个 expert，\(\tilde g_i\) 是 top-k 后重新归一化的权重。很多现代 MoE 还会加入 shared expert：
@@ -130,16 +80,6 @@ y = \sum_{i \in \operatorname{TopK}(g)} \tilde g_i \cdot E_i(h)
 \[
 y = E_{\text{shared}}(h) + \sum_{i \in \operatorname{TopK}(g)} \tilde g_i \cdot E_i(h)
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(E_{}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(h\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(g\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-| \(g_i\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
 
 
 ```mermaid
@@ -177,8 +117,7 @@ sequenceDiagram
 | `Precision` | BF16、FP8、FP4、NVFP4 等数值和硬件路径 | 把存储格式等同于计算格式 |
 | `Parallelism` | TP、PP、DP、EP、CP 如何切分模型和序列 | 忽略 EP/all-to-all 对 MoE 吞吐的影响 |
 
-!!! tip "最小读法"
-    先问四个问题：总参数有多大？单 token 激活多少？每个 token 选几个专家？专家分布在几张卡上？这四个问题答出来后，再看 benchmark 和训练细节才不会飘。
+最短读法是先问四个问题：总参数有多大，单 token 激活多少，每个 token 选几个专家，专家分布在几张卡上。这四个问题答出来后，再看 benchmark 和训练细节才不会被一个规模数字带偏。
 
 ## Router 训练到底训练什么
 
@@ -210,14 +149,6 @@ flowchart TB
 \[
 \mathcal{L}_{balance} \propto N \sum_i f_i p_i
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(b\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(N\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(f_i\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(p_i\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
 
 
 这里的重点不是背公式，而是理解：**MoE 需要一套机制保证专家被充分使用，否则总参数再大也只是摆设。**
@@ -261,11 +192,7 @@ flowchart LR
 
 <small>图源：[Nemotron 3 Super Technical Report](../paper-deep-dives/technical-reports/nemotron-3-super.md)，Figure 3。原论文图意：LatentMoE 用 latent routing 组织专家选择，并把稀疏专家能力接入大模型主干。</small>
 
-!!! note "论文图解卡：为什么再看一张 Nemotron 图"
-    **先看哪里**：先找 router 或 latent routing 的位置，再看 token/hidden state 如何进入专家。  
-    **图中模块**：不同报告里的 MoE 画法不完全一样，但核心总是 token 表示、router、专家计算和 combine。  
-    **对应问题**：它帮助你读懂“专家怎么被选中”，而不是只看模型表里的专家数量。  
-    **容易误读**：不同模型的 MoE 细节会变化，不能把某一张图里的 routing 机制直接套到所有 MoE。
+再看 Nemotron 图，是为了提醒读者不要把某一个模型的 MoE 画法套到所有报告上。读这类图时先找 router 或 latent routing 的位置，再看 token/hidden state 如何进入专家；不同报告里的细节会变，但核心总是 token 表示、router、专家计算和 combine。它帮助你读懂“专家怎么被选中”，而不是只看模型表里的专家数量。
 
 | 名词 | 改的是哪一层 | 主要解决什么 | 不要误解成 |
 | --- | --- | --- | --- |
@@ -295,25 +222,8 @@ MoE 技术报告里和训练最相关的不是“用了多少专家”本身，�
 \text{data mixture} \rightarrow \text{router distribution} \rightarrow \text{expert specialization} \rightarrow \text{load balance} \rightarrow \text{system throughput}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 
-
-| 读训练部分时找什么 | 为什么会影响结论 |
-| --- | --- |
-| 数据 mixture 是否分阶段变化 | 不同语言、代码、数学、多模态 token 会改变 expert 专业化 |
-| Router 是否有 warmup 或特殊初始化 | 训练早期路由塌缩会让少数 expert 过载 |
-| Balance loss 或 bias 策略 | 影响主任务 loss 和系统负载之间的权衡 |
-| 是否使用 dropless routing | dropping token 会改变训练信号，也会影响长尾样本 |
-| Expert 并行是否和数据并行/张量并行组合 | 训练吞吐取决于通信和计算是否能重叠 |
-| 是否报告 loss spike、NaN、回滚策略 | 大规模 MoE 常见稳定性风险不在最终 benchmark 里 |
-| 是否配合 FP8/FP4 训练 | 低精度会放大 router logits、activation outlier 和 expert GEMM 的数值问题 |
-| 是否做 distillation 或 post-training | MoE 的 base 能力和后训练能力要分开看 |
-
-!!! warning "不要把训练细节读成装饰"
-    MoE 的训练 recipe 往往比架构名更关键。一个专家数更多的模型，如果 router 负载不稳、expert batch 太碎、低精度保护不足，真实训练效率可能反而更差。
+MoE 的训练 recipe 往往比架构名更关键。一个专家数更多的模型，如果 router 负载不稳、expert batch 太碎、低精度保护不足，真实训练效率可能反而更差。读报告时要把训练数据、router 分布、expert specialization、load balance 和系统吞吐连起来看。
 
 ## 系统读法：从专家到硬件
 
@@ -392,8 +302,3 @@ MoE 相关内容在本站分散在多个层次，这一页只补“读架构表�
 | 低精度训练和推理 | [数值、显存与运行时](numerics-memory-and-runtime-basics.md)、[量化路线图](../quantization/index.md) |
 
 读完这一页，再读技术报告时应该能做到：看到一张模型表，先把参数容量、激活计算、路由训练、通信成本和证据强度拆开，而不是被一个大模型规模数字带着走。
-
-!!! tip "下一站"
-    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

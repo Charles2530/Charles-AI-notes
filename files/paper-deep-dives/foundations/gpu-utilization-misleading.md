@@ -7,30 +7,6 @@ paper_topic: 高效训练
 # GPU Utilization：为什么 100% 不等于训练跑满
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“GPU Utilization：为什么 100% 不等于训练跑满”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“训练性能排障案例”读：它不是一篇算法论文，而是一篇把 GPU 指标、profiler 和 Transformer kernel 优化串起来的工程文章。背景概念先回 [论文专题讲解](../index.md)、[训练与基础系统](../../training/index.md) 和 [算子与编译器](../../operators/index.md)。
-    **前置**：最好先知道 CUDA kernel、SM、mixed precision、FlashAttention、FSDP / model parallelism 和 MFU 的基本含义。
-    **主线关系**：读完后把结论回填到「高效训练」路线里，判断一次训练慢到底是数据管线、kernel、显存带宽、通信，还是观测指标本身误导了你。
-
-    **info · 文章信息**
-
-    - 技术博客：`GPU Utilization is a Misleading Metric`
-    - 原文链接：[Trainy blog](https://www.trainy.ai/blog/gpu-utilization-misleading)
-    - 中文辅助：[掘金译文](https://juejin.cn/post/7411406818025537546)
-    - 作者：Roanak Baviskar
-    - 日期：2025-02-24
-    - 关键词：GPU utilization、MFU、SM efficiency、SM activity、PyTorch Profiler、kernel fusion、FlashAttention、FSDP、model parallelism、LLM training
-
 这篇文章最值得带回训练系统里的结论是：**GPU utilization 更像“GPU 没闲着”的指标，不是“GPU 算力被有效使用”的指标。**
 
 Trainy 的案例里，团队已经把 `nvidia-smi` 里常见的 GPU utilization 推到 100%，功耗也不低，但训练 workload 的 MFU 只有约 `20%`。继续 profile 后，他们发现 Softmax kernel 虽然让 GPU utilization 很高，但 SM efficiency 很低。经过 fused kernels 和合适的 model parallelism 调整后，训练时间达到 `4x` 加速，MFU 从约 `20%` 提到 `38%`。
@@ -38,7 +14,6 @@ Trainy 的案例里，团队已经把 `nvidia-smi` 里常见的 GPU utilization 
 !!! note "关于中文辅助材料"
     掘金文章可作为中文阅读辅助，但本站涉及最终数字时以 Trainy 原文为准：原文写的是 MFU 从 `20%` 提到 `38%`，不是 `58%`。这个差异正好提醒我们，性能优化文章一定要保留指标口径和原始来源。
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 ## 它的效率贡献是什么
@@ -160,11 +135,6 @@ $$
 {\mathrm{number\ of\ GPUs} \times \mathrm{peak\ FLOPs\ per\ GPU}}
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
-
 
 如果是图像、视频或世界模型训练，也可以把分子改成每 step 估算的训练 FLOPs 除以 step time：
 
@@ -173,11 +143,6 @@ $$
 \frac{\mathrm{estimated\ training\ FLOPs\ per\ step} / \mathrm{step\ time}}
 {\mathrm{cluster\ peak\ FLOPs}}
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 
 
 这个公式有三个容易踩坑的地方：
@@ -215,7 +180,7 @@ Transformer block 里 attention softmax 特别容易成为指标陷阱：
 
 原文最终把优化落到 Transformer block 内的 kernel fusion。
 
-![Kernel fusion 原图](../../assets/images/paper-deep-dives/foundations/gpu-utilization-misleading/figure-4-kernel-fusions.webp){ width="620" }
+![Kernel fusion 原图](../../assets/images/paper-deep-dives/foundations/gpu-utilization-misleading/figure-4-kernel-fusions.webp){ width="540" }
 
 <small>图源：[Trainy: GPU Utilization is a Misleading Metric](https://www.trainy.ai/blog/gpu-utilization-misleading)。原图说明：Transformer block 中可以通过 fused attention / fused MLP / fused dropout-layernorm-residual 等减少内存读写和 kernel launch 开销。</small>
 

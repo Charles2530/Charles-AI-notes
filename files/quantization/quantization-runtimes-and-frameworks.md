@@ -2,23 +2,6 @@
 
 量化 checkpoint 只有在 runtime 能把低比特格式、权重布局、KV cache、batching 和 kernel 路径接起来时，才会变成真实端到端收益。硬件和成本模型放在 [量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)，底层 kernel 细节放在 [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。本页聚焦中间这层：**低比特模型怎样被运行时可靠地加载、调度、执行、观测和回滚**。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“量化运行时与部署框架”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先回答“量化运行时与部署框架”在「量化」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：默认你已经知道 prefill、decode、KV cache、GEMM、continuous batching、TTFT、TPOT 和 P95/P99。必要时先回 [推理服务系统](../inference/serving-systems.md)、[GPU Kernel、Batching 与显存](../inference/gpu-kernels-batching-and-memory-systems.md) 或 [量化符号与最小数学地图](symbols-and-minimal-math.md)。
-    **主线关系**：把数值格式、误差来源、校准/训练方法、kernel 和服务部署连成一条效率链，而不是只比较 bit 数。
-
-    **tip · 工程假设**
-
-    这里的专业读者不是在问“vLLM 是什么”，而是在问：同一个 AWQ、GPTQ、FP8 或 KV quant 模型，为什么在一个 runtime 里能降 TPOT，在另一个 runtime 里只省文件大小；怎样证明低比特 kernel 真的命中；出了质量或尾延迟问题先查哪一层。
 
 ## Runtime 在量化链路里的职责边界
 
@@ -195,9 +178,3 @@ flowchart LR
 3. TensorRT-LLM Quantization：<https://nvidia.github.io/TensorRT-LLM/>
 4. ONNX Runtime Quantization：<https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html>
 5. *A Survey of Low-bit Large Language Models*：<https://arxiv.org/abs/2409.16694>
-
-!!! tip "下一站"
-    - 回到本专题入口：[量化](index.md)，确认这页在整条路线中的位置。
-    - 如果要继续做硬件和成本取舍，读 [量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)。
-    - 如果 profiler 显示 kernel 路径异常，读 [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。
-    - 如果要扩展到多模态和控制场景，继续读 [多模态与 VLA 模型量化](quantization-for-multimodal-and-vla-models.md)。

@@ -2,31 +2,7 @@
 
 真正高性能的 AI kernel，往往并不只靠一个技巧，而是若干模式叠加的结果：tiling、双缓冲、流水线、persistent kernel、epilogue fusion、threadblock swizzle、shape specialization、autotune。理解这些模式，能帮助你把很多看似不同的实现放到同一张设计图里。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“高级 Kernel 模式与形状特化”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
 
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先回答“高级 Kernel 模式与形状特化”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
-
-    **note · 初学者先抓住**
-
-
-    高级 kernel 模式的共同目标，是让数据在正确时间到达正确位置，并让计算单元尽量少等。Tiling 管复用，双缓冲管等待，fusion 管少搬中间结果，shape specialization 管高频形状的专门优化。
-
-    **example · 有趣例子：流水厨房**
-
-
-    好厨师不是等所有菜洗完才开火，而是一边切、一边炒、一边准备下一盘。高性能 kernel 也是把数据搬运、计算和写回组织成流水线。
-
-<!-- [补充] -->
 > **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 为什么“高级模式”不是炫技
@@ -160,8 +136,3 @@ flowchart LR
 ## 工程收束
 
 高级 kernel 模式要按 persistent、grouped、split-k、warp specialization 和 shape specialization 定位。最容易误判的是热 shape 优化伤害冷 shape、模板爆炸、过度依赖单机假设；上线前要限定 specialization 边界，记录适用 shape family，准备 generic fallback，并把代码生成和维护成本一起算。
-
-!!! tip "下一站"
-    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[Kernel 成本模型与选型](kernel-cost-models-and-selection-heuristics.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

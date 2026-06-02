@@ -2,19 +2,8 @@
 
 为什么一篇 stereo matching 论文会放进“高效推理”专题？因为这里的推理不是 LLM 的逐 token decode，而是机器人、AR、自动驾驶和工业视觉里的实时稠密深度感知。模型每慢几十毫秒，系统看到的世界就会滞后一截；模型每错一块边界，后面的避障、抓取或空间理解就可能跟着错。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“读懂 Fast-FoundationStereo：从双目几何到高效推理”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
 
 [Fast-FoundationStereo](../paper-deep-dives/inference/fast-foundation-stereo.md) 最值得读的地方，不只是“它比 FoundationStereo 快了十倍以上”，而是它把一个强但慢的 stereo foundation model 拆成三个热路径：feature backbone、cost filtering、disparity refinement，然后分别用蒸馏、分块 NAS 和结构化剪枝压成本。读这篇论文前，先把下面这张知识地图放进脑子里，会省很多绕路时间。
-
-!!! note "读法定位"
-    这页是读 [Fast-FoundationStereo](../paper-deep-dives/inference/fast-foundation-stereo.md) 前的知识地图，不是第二篇论文精读。  
-    **前置**：最好先知道图像、深度、模型推理和训练监督的大概意思；卡住时回 [术语表](../glossary/index.md)。  
-    **主线关系**：把双目几何、cost volume、视觉 backbone、蒸馏、剪枝/NAS、伪标签和 runtime 连接起来，让你能顺着论文的 Figure 3、Figure 6、Figure 10 读下去。
 
 ```mermaid
 flowchart TD
@@ -32,12 +21,6 @@ flowchart TD
 \[
 z = \frac{fB}{d}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(z\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 disparity 越大，通常说明物体越近；disparity 越小，通常说明物体越远。这个公式很短，但它解释了 stereo 为什么适合机器人和 AR：它不是只给一张“看起来有深度感”的图，而是在每个像素上给出可转成几何距离的信号。
@@ -63,14 +46,6 @@ disparity 越大，通常说明物体越近；disparity 越小，通常说明物
 \[
 \mathbf{V} \in \mathbb{R}^{C \times D \times H \times W}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(C\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 这里 \(H,W\) 是图像空间位置，\(D\) 是 disparity 候选数，\(C\) 是匹配特征通道。它贵就贵在多了一维 \(D\)：每个像素不只要算一次，还要沿许多候选位移反复比较。

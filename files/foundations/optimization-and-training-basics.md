@@ -1,214 +1,44 @@
 # 优化与训练入门
 
-训练是把数据、模型、目标函数和优化器组织成一个闭环。模型不是一次性“学会”，而是在大量 batch 上反复计算 loss、回传梯度、更新参数。
+训练不是“把模型多跑几轮”。训练是一条闭环：**数据给出样本，模型给出预测，loss 定义什么叫错，梯度告诉参数往哪改，optimizer 决定怎么迈步，评测判断这个方向是否真的有用。** 这篇只讲清这条闭环，后面的分布式训练、低比特训练、RLHF、扩散训练和世界模型训练都建立在它上面。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“优化与训练入门”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+## 为什么训练像在地形里走路
 
-
-!!! note "读法定位"
-    这页先回答“优化与训练入门”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+神经网络有大量参数。每一组参数都会对应一个 loss 值。把这些 loss 想成高度，就得到 loss landscape：训练就是在高维地形里找低处。
 
 ![Loss landscape visualization 原论文图](../assets/images/paper-figures/foundations/loss-landscape-figure-resnet56.png){ width="820" }
 
-<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)，loss landscape visualization。原论文图意：通过 filter normalization 等方法可视化网络周围的 loss surface，帮助比较不同结构或训练配置下优化地形的平滑程度。</small>
+<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)。原图表达：用 filter normalization 等方法可视化网络周围的 loss surface，比较不同结构或训练配置下地形是否平滑。本站读法：optimizer 不是瞬间跳到最优点，而是在这个地形里沿局部梯度一步步移动；结构、归一化、初始化、batch 和学习率都会改变这条路是否好走。</small>
 
-!!! note "合并提示"
-    **note · 图解：优化是在复杂地形里走路**
+这张图能解释很多训练现象：
 
-    这张图把 loss 想象成一片地形：训练不是一次跳到最低点，而是优化器沿着梯度在地形上移动。学习率太大可能越过谷底，太小会走得很慢；batch、归一化、残差、初始化和优化器都会改变这条路是否平滑。训练问题先分层：是能力不够、目标不对、优化没走稳，还是系统数值/恢复出了问题，不要把所有异常都归因于模型结构。
+| 现象 | 在地形里的直觉 | 工程症状 |
+| --- | --- | --- |
+| 学习率太大 | 一步跨过谷底，甚至跳出稳定区域 | loss spike、震荡、NaN |
+| 学习率太小 | 每步太短，卡在平台区 | loss 很慢，算力浪费 |
+| 梯度噪声大 | 每个 batch 指的方向都不太一样 | 曲线抖动、复现实验方差大 |
+| 目标函数错 | 地形低处不对应真实任务成功 | loss 降，线上/闭环指标不升 |
 
-    **note · 初学者先抓住**
+## 标准训练循环
 
-    训练循环可以先记成四步：算预测、算 loss、反传 gradient、更新参数。后面所有复杂训练系统，本质上都是在让这四步更稳定、更高效、更可信。看到训练曲线异常时，先区分 loss 设计、学习率、batch、梯度裁剪、数据分布和系统恢复问题。
-
-    **tip · 遇到这些症状，回看本页**
-
-    训练 loss 稳定下降但闭环成功率不涨、长视频 bucket 反复 loss spike、换 optimizer 后短跑更快但最终指标不稳，或者恢复 checkpoint 后曲线悄悄偏离基线时，先回到 loss、gradient、optimizer、scheduler 和评测闭环。本页能帮你判断这是优化路径问题、目标函数问题、数据分布问题，还是系统恢复破坏了训练状态。
-
-    **tip · 先分清目标和泛化**
-
-    本页讲怎么优化 loss；如果你还不清楚 next-token、masked modeling、contrastive learning、denoising 或 behavior cloning 分别在训练什么，先看 [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md)。如果 loss 下降但 validation、holdout 或线上桶不涨，继续看 [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)。
-
-    **tip · 主线定位：降低训练成本和错误优化成本**
-
-
-    优化基础在世界模型高效训练里负责判断“训练到底在朝哪里走”。它能降低无效训练成本：早识别 loss 代理目标和闭环指标错位、learning rate 或 batch 设计不合适、optimizer 让短跑好看但长跑不稳，以及系统恢复让曲线不可比较。
-
-## 先看标准训练循环
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
-> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
->
-> 延伸阅读：[09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html) |
-
-训练可以先记成四步：
+最小训练循环只有四步：
 
 ```text
-output = model(input)       # 算预测
-loss = loss_fn(output, y)   # 算错误
-loss.backward()             # 把错误变成梯度
-optimizer.step()            # 用梯度更新参数
+output = model(input)       # 前向：算预测
+loss = loss_fn(output, y)   # 目标：算错误
+loss.backward()             # 反向：把错误变成梯度
+optimizer.step()            # 更新：用梯度改参数
 ```
 
-对应公式是：
+对应的最小公式是：
 
 \[
-\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}
+\theta \leftarrow \theta-\eta\nabla_\theta\mathcal{L}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\eta\) | 公式中的变量或中间量 | 按上下文定义 |
+这里 \(\theta\) 是模型参数，\(\mathcal{L}\) 是 loss，\(\nabla_\theta\mathcal{L}\) 是 loss 对参数的梯度，\(\eta\) 是学习率。这行公式在说：沿着让 loss 下降的方向，小步更新参数。
 
-
-这行公式的直觉是：沿着让 loss 下降的方向，小步修改参数。
-
-## Loss：模型错在哪里
-
-Loss 是训练的方向盘。它定义模型输出和目标之间的差距：
-
-\[
-\mathcal{L} = \ell(f_\theta(x), y)
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
-
-
-不同任务有不同 loss：
-
-- 分类：交叉熵
-- 回归：MSE / L1
-- 语言模型：next-token cross entropy
-- 扩散模型：噪声、velocity 或 score 预测损失
-- 对齐：DPO、RLHF、reward model loss
-- 世界模型：观测/latent 重建、dynamics/KL、reward/continue/risk 预测损失
-- 具身智能 / VLA：行为克隆动作损失、动作 token 交叉熵、动作扩散去噪损失、RL policy/value loss
-
-Loss 定义不清，训练再久也可能朝错误方向走。
-
-后面读世界模型和具身智能时，可以先把常见 loss 放到这张速查表里。这一节属于进阶查阅，第一遍只要知道“不同任务会定义不同的错误”即可。
-
-| 场景 | 模型在学什么 | 常见 loss 形态 | 训练信号从哪里来 |
-| --- | --- | --- | --- |
-| 像素 / 视频世界模型 | 预测下一帧、未来视频或被 mask 的观测 | \(\mathcal{L}_{pix}=d(\hat{x},x)\)，或扩散去噪 \(\|\epsilon-\epsilon_\theta(x^\tau,c,\tau)\|^2\) | 视频帧、图像 patch、未来观测 |
-| Latent / JEPA 世界模型 | 预测 encoder latent，而不是逐像素生成 | \(\mathcal{L}_{lat}=d(\hat{z},z)\)，\(\mathcal{L}_{jepa}=d(p_\theta(f_{ctx}),\text{sg}(f_{tgt}))\) | frozen/target encoder 表征、masked latent |
-| RSSM / Dreamer | 学可 rollout 的 latent dynamics，并预测 reward/continue | 重建项 + reward loss + continue loss + \(\beta D_{KL}(q(z_t)\|p(z_t))\) | 真实交互轨迹：observation、action、reward、done |
-| WAM / 动作条件世界模型 | 给定历史和目标，同时建模未来动作与未来世界 | 未来观测/latent loss + 动作一致性 loss + reward/risk/done head | 机器人轨迹、候选动作、执行后观测 |
-| VLA 行为克隆 | 从视觉语言观测直接预测专家动作 | \(\mathcal{L}_{BC}=-\log \pi_\theta(a\mid o,l)\)，连续动作常退化成 MSE/L1 | 专家示范、遥操作、机器人数据集 |
-| 动作 token / 序列策略 | 把动作离散成 token，像语言一样预测下一步动作 | action-token cross entropy | 离散化动作序列、teacher forcing |
-| Diffusion Policy | 生成未来动作块，而不是回归单步均值 | \(\mathcal{L}_{act-diff}=\|\epsilon-\epsilon_\theta(A^\tau,o,l,\tau)\|^2\) | 未来动作 chunk、观测、语言目标 |
-| RL / 闭环微调 | 让策略更偏向高回报、低风险动作 | policy gradient / PPO loss + value loss + entropy 或 KL 正则 | 环境 reward、规则评测、reward model、成功/失败回放 |
-
-!!! note "解释框：这些 loss 到底在逼模型学什么"
-    世界模型的 loss 通常在问“世界会怎么变”：未来观测像不像、latent 能不能往前 rollout、reward/continue/risk 能不能被读出来。具身智能 / VLA 的 loss 通常在问“该怎么动”：动作是否像专家、动作块是否连贯、采样策略是否带来更高成功率。两者会在 WAM、Dreamer、VLA+WM 系统里合到一起：前者提供可预测的未来，后者把未来变成可执行动作。但最终不能只看训练 loss，必须看闭环 success、failure bucket、risk recall 和真实执行成本。
-
-## Backprop：把错误传回参数
-
-反向传播使用链式法则计算每个参数对 loss 的影响：
-
-\[
-\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\eta\) | 公式中的变量或中间量 | 按上下文定义 |
-
-
-这里 \(\eta\) 是学习率。学习率太大容易震荡或发散，太小则训练慢甚至停滞。
-
-## 梯度爆炸和梯度消失：错误传不回来或传过头
-
-反向传播会把后面层的误差信号一层层传回前面。深层网络或长序列模型里，这个过程会反复乘 Jacobian：
-
-\[
-\frac{\partial L}{\partial h_t}
-=
-\frac{\partial L}{\partial h_T}
-\prod_{k=t+1}^{T}
-\frac{\partial h_k}{\partial h_{k-1}}
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(h_T\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(k\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(h_{k-1}\) | 公式中的变量或中间量 | 按上下文定义 |
-
-
-如果这些乘积的尺度长期小于 1，梯度会越来越接近 0，这就是**梯度消失**；如果尺度长期大于 1，梯度会被放大到非常大，这就是**梯度爆炸**。RNN 因为沿时间反复使用同一类状态转移，最容易把这个问题暴露出来；很深的前馈网络、Post-Norm Transformer、低精度训练和长序列 world model 也会遇到类似现象。
-
-![Pascanu et al. Figure 6 exploding gradients](../assets/images/paper-figures/foundations/pascanu13-figure-6-exploding-gradients.png){ width="700" }
-
-<small>图源：[On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)，Figure 6。原论文图意：单隐藏单元 RNN 的 error surface 中存在高曲率墙；普通梯度下降可能因为梯度过大跳过稳定区域，虚线示意把梯度 norm 裁剪到阈值后更新会更可控。</small>
-
-训练曲线上通常会这样表现：
-
-| 现象 | 训练曲线长什么样 | 监控指标 | 常见例子 | 常见处理 |
-| --- | --- | --- | --- | --- |
-| 梯度消失 | train loss 很早进入平台期，下降极慢；长依赖任务学不到，但不一定 NaN | 前面层或早期时间步 grad norm 接近 0；activation 进入 sigmoid/tanh 饱和区 | vanilla RNN 记不住很早的 token；深层 sigmoid 网络前几层几乎不更新 | 残差/skip、LayerNorm/RMSNorm、LSTM/GRU 门控、ReLU/GELU、合适初始化、缩短反传长度 |
-| 梯度爆炸 | loss 突然尖刺、震荡或直接变 NaN/Inf；恢复 checkpoint 后也可能马上再次炸 | global grad norm 突增几个数量级；参数范数和 loss scale overflow 同步异常 | 长序列 RNN、学习率过大、warmup 太短、长视频 bucket 或异常 batch 触发 spike | gradient clipping、降低 LR、加 warmup、检查异常样本、提高敏感路径精度 |
-
-![Pascanu et al. Figure 7 gradient clipping success](../assets/images/paper-figures/foundations/pascanu13-figure-7-gradient-clipping-success.png){ width="920" }
-
-<small>图源：[On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)，Figure 7。原论文图意：在 temporal order 任务上，序列长度变长后，不同初始化和训练策略的成功率差异明显；带 clipping 和 regularization 的变体更能维持长序列训练成功率。</small>
-
-!!! note "合并提示"
-    **note · 例子：看曲线判断是哪类问题**
-
-    假设一个 RNN 或长视频世界模型在短序列 bucket 上 loss 正常下降，但切到长序列后 loss 先尖刺、随后 NaN，同时 global grad norm 从 `1e1` 跳到 `1e5`，这更像梯度爆炸，应先看 clipping、LR、warmup、异常样本和低精度 overflow。反过来，如果训练没有 NaN，loss 只是长期卡在高位，模型只会利用最近几步上下文，早期层或早期时间步 grad norm 长期接近 0，这更像梯度消失，应检查残差路径、归一化、激活饱和、初始化和是否需要 gated / attention / SSM 结构。
-
-    **warning · 不要只凭 loss 形状下结论**
-
-    loss spike 不一定都是梯度爆炸，也可能是坏数据、混合精度 scale、分布式恢复或评测 bucket 变化；loss 平台期也不一定都是梯度消失，可能是模型容量、标签噪声或目标函数不对。最稳的排查方式是把 `loss`、`global grad norm`、`per-layer grad norm`、`LR`、`overflow/NaN`、数据 bucket 和 checkpoint 恢复事件放在同一条时间线上看。
-
-## Optimizer：怎么走下一步
-
-常见 optimizer：
-
-| Optimizer | 特点 |
-| --- | --- |
-| SGD | 简单、稳定，但调参要求高 |
-| Adam | 自适应学习率，深度学习常用 |
-| AdamW | decoupled weight decay，LLM 训练常见 |
-| Muon | 对矩阵权重做 momentum orthogonalization，大规模预训练中用于提升 token / FLOP efficiency |
-
-现代大模型训练通常还会配合：
-
-- learning rate warmup：训练初期逐步升高学习率，避免参数还不稳定时被大步更新冲坏。
-- cosine decay：训练后期平滑降低学习率，让优化从快速探索转向细致收敛。
-- gradient clipping：限制梯度范数，减少 loss spike 或异常 batch 引发的发散。
-- mixed precision：用 FP16/BF16/FP8 等低精度加速计算，同时保留必要的高精度状态。
-- distributed optimizer：把参数、梯度或优化器状态分散到多卡，降低单卡显存压力。
-
-Muon 这类优化器说明了一个容易被忽略的点：优化器不只是“步子大不大”，还决定参数更新的几何。AdamW 是当前最稳的默认起点；Muon 更适合放在大规模预训练、矩阵权重占主导、基础设施能支持矩阵正交化的场景里看。更完整的论文解析和 AdamW 对比见 [Muon：LLM 预训练优化器](../paper-deep-dives/foundations/muon-is-scalable.md)。
-
-## 一个完整训练循环
+真实训练循环会多很多行：
 
 ```text
 for step, batch in enumerate(dataloader):
@@ -227,25 +57,106 @@ for step, batch in enumerate(dataloader):
         save_checkpoint()
 ```
 
-这段伪代码看起来简单，但真实训练里每一行都可能扩展成复杂系统：数据加载、混合精度、并行通信、checkpoint、评测和恢复语义。
+这些额外行不是装饰。gradient clipping 防止异常 batch 把参数冲坏；scheduler 控制不同阶段的步长；eval 防止训练 loss 欺骗你；checkpoint 保证恢复后曲线可比。
 
-如果你关心 `loss.backward()` 背后为什么要保存中间激活、为什么 activation checkpointing 能省显存，可以继续看 [自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)。
+## Loss 定义“模型错在哪里”
+
+Loss 是训练方向的定义。模型会忠实优化 loss，但 loss 不一定忠实代表你的真实目标。
+
+\[
+\mathcal{L}=\ell(f_\theta(x),y)
+\]
+
+这行公式里，\(f_\theta(x)\) 是模型预测，\(y\) 是目标，\(\ell\) 是衡量预测和目标差距的函数。不同任务的“错”完全不同：
+
+| 场景 | 模型在学什么 | 常见 loss | 真实验收 |
+| --- | --- | --- | --- |
+| 分类 | 类别概率 | cross entropy | accuracy、calibration、错误类别 |
+| 语言模型 | 下一个 token 分布 | next-token CE | perplexity、任务能力、长上下文稳定性 |
+| 扩散模型 | 去噪方向或 score | noise/velocity/score loss | FID、偏好评测、采样步数、条件控制 |
+| VLA 行为克隆 | 观测到动作 | action CE、MSE、diffusion action loss | closed-loop success、恢复能力 |
+| 世界模型 | 未来状态和任务信号 | reconstruction、latent prediction、reward/done loss | action sensitivity、rollout drift、规划收益 |
+| RLHF/GRPO | 高奖励轨迹更可能 | policy loss、KL、reward/value loss | pass rate、reward hacking、人工评估 |
+
+最常见的误判是：loss 下降就以为模型更好。比如 action-conditioned video world model 的平均 loss 下降，可能只是静态背景变得更像；真正影响抓取成功的接触、遮挡、反光 bucket 反而变差。Loss 只是代理目标，必须和分桶评测、闭环成功率、风险召回一起看。
+
+## Backprop：错误怎样传回参数
+
+反向传播用链式法则计算每个参数对 loss 的影响。对于深层模型，可以把它理解成：后面层的错误信号一层层往前传，告诉每个参数“你对这个错误贡献了多少”。
+
+深层网络或长序列模型里，这个过程会反复乘 Jacobian：
+
+\[
+\frac{\partial L}{\partial h_t}
+=
+\frac{\partial L}{\partial h_T}
+\prod_{k=t+1}^{T}
+\frac{\partial h_k}{\partial h_{k-1}}
+\]
+
+如果这些乘积长期小于 1，梯度会逐步变小，早期层几乎收不到有效信号，这就是梯度消失；如果长期大于 1，梯度会被放大，导致 loss spike、NaN 或参数被冲坏，这就是梯度爆炸。
+
+![Pascanu et al. Figure 6 exploding gradients](../assets/images/paper-figures/foundations/pascanu13-figure-6-exploding-gradients.png){ width="700" }
+
+<small>图源：[On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)，Figure 6。原图表达：单隐藏单元 RNN 的 error surface 中存在高曲率墙，普通梯度下降可能因为梯度过大跳过稳定区域。本站读法：gradient clipping 的作用不是“修正目标”，而是在异常大梯度出现时限制单步更新幅度。</small>
+
+![Pascanu et al. Figure 7 gradient clipping success](../assets/images/paper-figures/foundations/pascanu13-figure-7-gradient-clipping-success.png){ width="920" }
+
+<small>图源：[On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)，Figure 7。原图表达：在 temporal order 任务上，序列长度变长后，不同初始化和训练策略成功率差异明显。本站读法：长序列训练失败往往不是单个模块坏，而是梯度路径、初始化、学习率和裁剪共同决定。</small>
+
+排查时不要只看 loss：
+
+| 症状 | 更像什么 | 需要一起看 |
+| --- | --- | --- |
+| loss 突然尖刺、grad norm 暴涨、随后 NaN | 梯度爆炸或异常 batch | global/per-layer grad norm、LR、overflow、数据 bucket |
+| loss 长期平台、早期层 grad norm 接近 0 | 梯度消失或模型容量不足 | per-layer grad norm、activation 分布、初始化、结构 |
+| train loss 降，eval 不升 | 过拟合或目标错位 | validation bucket、数据泄漏、业务指标 |
+| 平均 loss 降，关键任务变差 | 长尾 bucket 被大桶淹没 | per-bucket loss、failure replay、risk recall |
+
+## Optimizer 决定怎么迈步
+
+梯度只告诉你局部方向，optimizer 决定实际怎么走。
+
+| Optimizer | 机制直觉 | 适合场景 | 风险 |
+| --- | --- | --- | --- |
+| SGD | 直接沿梯度走 | 简单模型、强正则、可解释 baseline | 调参敏感，收敛慢 |
+| SGD + Momentum | 保留历史方向，减少来回摆动 | 视觉模型、稳定大 batch | 动量过大可能冲过低谷 |
+| Adam | 对不同参数自适应步长 | Transformer、稀疏梯度、默认起点 | 泛化和权重衰减要小心 |
+| AdamW | 把 weight decay 从 Adam 更新中解耦 | LLM 和现代预训练常用 | 仍需调 LR、warmup、decay |
+| Muon | 对矩阵权重做动量正交化 | 大规模预训练实验路线 | 工程复杂，适用边界需实测 |
+
+AdamW 的重要性在于 decoupled weight decay：权重衰减不再和 Adam 的自适应归一化纠缠在一起。大模型训练里，AdamW 仍是稳健默认项；Muon 等新优化器值得作为实验假设，但不能只看短跑 loss，要看最终 eval、稳定性、吞吐和恢复语义。
+
+## Scheduler 和 warmup 保护训练早期
+
+大模型训练常见学习率过程是：
+
+```text
+warmup:   从 0 或很小的 LR 逐步升高
+plateau:  保持一段高 LR 快速学习
+decay:    后期逐步降低 LR 精修参数
+```
+
+Warmup 的作用是防止训练初期参数、激活和优化器状态还没稳定时被大步更新冲坏。Cosine decay 或 linear decay 则让训练从“快速探索”转向“细致收敛”。
+
+如果 warmup 太短，常见症状是前几百/几千 step 就出现 loss spike 或 overflow；如果 decay 太快，模型还没学够就进入低学习率；如果 peak LR 太低，训练稳定但浪费算力。
+
+## 混合精度：省算力，但要保护敏感路径
+
+混合精度用 BF16/FP16/FP8 等低精度加速计算和节省显存，但保留必要的高精度状态。它带来的不是“免费加速”：
+
+| 低精路径 | 省什么 | 可能伤什么 |
+| --- | --- | --- |
+| 权重低精 | 显存、带宽 | 小权重更新、量化误差 |
+| 激活低精 | 显存、通信 | attention score、norm、softmax 稳定性 |
+| optimizer state 分片/低精 | 单卡显存 | 恢复语义、更新精度 |
+| KV cache 低精 | 推理显存和带宽 | 长上下文一致性、候选排序 |
+
+低精训练和推理都要把质量回归同表报告。只说“显存降了”不够，要看 loss、eval、关键 bucket、NaN/overflow、long-context 和闭环指标有没有变。
 
 ## 为什么 loss 下降不等于模型可用
 
-Loss 是训练信号，但最终还要看任务指标。常见误判包括：
-
-1. 训练 loss 下降，但评测集不提升。
-2. 平均指标提升，但长尾任务下降。
-3. 格式更像人类回答，但事实性变差。
-4. 短上下文变好，长上下文变差。
-5. 离线 benchmark 提升，线上延迟或成本不可接受。
-
-因此训练系统必须绑定评测和回放，而不是只看 loss 曲线。
-
-### 7.1 真实场景：平均 loss 下降，关键桶变差
-
-假设一个 action-conditioned video world model 新 recipe 的训练 loss 从 `0.214` 降到 `0.198`，团队很容易认为它更好。但分桶后发现：
+假设一个世界模型新 recipe 的平均训练 loss 从 `0.214` 降到 `0.198`，但分桶后是：
 
 | Bucket | Token Share | Baseline Loss | New Loss | Closed-loop |
 | --- | ---: | ---: | ---: | ---: |
@@ -253,34 +164,49 @@ Loss 是训练信号，但最终还要看任务指标。常见误判包括：
 | moving object | `18%` | `0.246` | `0.241` | `+0.1%` |
 | contact / occlusion | `10%` | `0.310` | `0.337` | `-6.8%` |
 
-平均 loss 下降，是因为 `72%` 的 easy bucket 变好；真正影响机器人成败的 contact/occlusion bucket 变差。优化器没有“犯错”，它只是忠实优化了被数据占比加权后的目标。
+平均 loss 下降，是因为 easy bucket 占比大；真正影响机器人任务的 contact/occlusion bucket 变差。优化器没有“犯错”，它只是忠实优化了你给它的加权目标。
 
-排查链应是：
+正确排查链是：
 
 ```text
 症状：loss 更低，但闭环成功率或风险召回下降
 指标：per-bucket loss、grad norm contribution、数据曝光、closed-loop success、risk recall
 机制：平均目标被大桶主导，稀有高价值样本梯度不足
-修复：重加权、hard bucket oversampling、auxiliary risk loss、评测门槛按桶而非平均
-反例：过度重加权长尾会牺牲主分布稳定性，甚至让模型过拟合少量异常样本
-边界：当主分布任务已经是上线瓶颈时，平均 loss 仍有意义；当失败成本高度不均时，必须看加权业务指标
+修复：重加权、hard bucket oversampling、auxiliary risk loss、按桶设置评测门槛
+边界：过度重加权会牺牲主分布稳定性，甚至过拟合少量异常样本
 ```
+
+## 一个训练改动是否可信
+
+读训练日志或论文消融时，至少看这几类证据：
+
+| 证据 | 说明什么 | 不足 |
+| --- | --- | --- |
+| train loss | 代理目标是否被优化 | 不代表泛化和任务成功 |
+| eval loss / benchmark | 静态验证集是否提升 | 可能和真实任务错位 |
+| per-bucket metric | 哪类样本变好或变差 | 分桶设计可能漏掉关键失败 |
+| grad/activation stats | 优化是否稳定 | 不直接证明任务能力 |
+| throughput / MFU | 系统是否更高效 | 不证明质量 |
+| closed-loop success | 任务是否真的更好 | 成本高，受场景分布影响 |
+
+一个训练方法声称“更稳、更快、更好”时，最好把质量、稳定性和成本放到同一张表里。只报 loss，容易忽略任务；只报吞吐，容易忽略质量；只报 demo，容易忽略失败率。
 
 ## 和后续专题的关系
 
-- [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md)：理解不同 loss 到底在逼模型学什么。
-- [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)：判断 loss 下降后是否真的可用。
-- [大模型训练路线图](../training/index.md)：进入完整训练生产线。
-- [训练评测与消融设计](../training/evaluation-and-ablation-methodology.md)：判断训练改动是否可信。
+- [预训练目标与表示学习](pretraining-objectives-and-representation-learning.md)：不同 loss 到底在逼模型学什么。
+- [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)：为什么训练集下降不等于可泛化。
+- [训练生产线入门](../training/beginner-model-training-primer.md)：把本页闭环扩展成数据、训练、评测和发布流程。
 - [训练稳定性](../training/stability-numerics-and-failure-triage.md)：排查 loss spike、NaN、梯度异常。
-- [量化训练](../quantization/qlora-and-quantized-training.md)：理解低精度训练为什么更难。
-- [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)：理解为什么训练结论必须绑定分桶评测。
+- [低比特训练与数值](../training/low-bit-training-and-numerics.md)：混合精度、FP8 和数值保护。
+
+## 外部精读
+
+- [Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)：理解 loss landscape 和结构/归一化对优化地形的影响。
+- [On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)：梯度爆炸、梯度裁剪和长序列训练问题的经典论文。
+- [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101)：AdamW 的来源。
+- [A Recipe for Training Neural Networks](https://karpathy.github.io/2019/04/25/recipe/)：Karpathy 写的训练排查经典博客，适合学习工程化训练心法。
+- [Hugging Face Performance and Scalability docs](https://huggingface.co/docs/transformers/performance)：训练/推理性能、混合精度和显存优化的实用文档。
 
 ## 本页结论
 
-训练不是“跑一个 loss”而是一个闭环系统：loss 决定方向，梯度推动参数，optimizer 控制步伐，评测决定结论是否可信。
-
-!!! tip "下一站"
-    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。
+训练的核心不是“让 loss 变小”，而是让一个代理目标通过梯度和优化器稳定地改善真实任务。Loss 定义方向，gradient 传递错误，optimizer 控制步伐，scheduler 和数值策略保护训练过程，eval 和分桶指标防止你被平均 loss 欺骗。

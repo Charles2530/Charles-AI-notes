@@ -7,28 +7,6 @@ paper_topic: 世界模型
 # V-JEPA：视频潜变量预测表征
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“V-JEPA：视频潜变量预测表征”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 论文：`V-JEPA: Latent Video Prediction for Visual Representation Learning`
-    - 链接：[OpenReview](https://openreview.net/forum?id=WFYbBOEOtv)
-    - 会议：`ICLR 2024`
-    - 关键词：V-JEPA、latent video prediction、masked video modeling、representation learning、3D Multi-Block Masking、frozen evaluation
-
 这篇论文把 JEPA 从静态图像扩展到视频。它的核心不是生成未来视频，而是训练一个视频 encoder：给定被遮挡的视频上下文，在 learned latent space 中预测被遮挡时空区域的目标表示。
 
 放在世界模型谱系里，V-JEPA 更适合被看作“表征型世界模型”的基础模块：它学习视频中的时空结构、运动线索和对象动态，但还没有动作条件、奖励预测、规划接口，也不会像 LingBot-World 那样直接生成可交互视频画面。
@@ -66,11 +44,6 @@ $$
 \text{masked video} \rightarrow \text{predict missing latent representation}
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
-
 
 也就是只用视频本身做自监督，但预测目标不是 raw pixels，而是 target encoder 产生的 latent features。
 
@@ -104,16 +77,6 @@ $$
 = \frac{1}{M}\sum_{k \in \{i_1,\ldots,i_M\}}
 \lVert \hat{s}_k - s_k \rVert_1
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{s}_k\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(M\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(k\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(i_1\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(i_M\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(s_k\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
 
 
 其中 \(M\) 是 masked patches 数量，\(\hat{s}_k\) 是 predictor 输出，\(s_k\) 是 target encoder 对完整视频中第 \(k\) 个 token 的表示。注意这里不是像素级重建，而是 patch-level representation regression。
@@ -206,15 +169,6 @@ $$
 p(v_{t+1:t+H} \mid v_{\le t}, a_{t:t+H-1}, c)
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(v_{t+1:t+H}\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
-| \(v_{t}\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
-| \(a_{t:t+H-1}\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 V-JEPA 训练的是：
 
@@ -222,16 +176,6 @@ $$
 \hat{s}_{\text{masked}} =
 P_\phi(E_\theta(v_{\text{visible}}), m)
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{s}_{\text{masked}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(E\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(v_{}\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
 
 
 其中 \(s_{\text{masked}}\) 是 target encoder 对完整视频中 masked region 的 latent representation。
@@ -261,7 +205,6 @@ V-JEPA-style video pretraining
 
 ## 实验结论
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -308,26 +251,12 @@ $$
 s_t, a_t \rightarrow s_{t+1}, r_{t+1}
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(s_t\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(a_t\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(s_{t+1}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(r_{t+1}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-
 
 它回答的是：
 
 $$
 v_{\text{visible}} \rightarrow s_{\text{masked}}
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(v_{}\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
-| \(s_{}\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
 
 
 这两者差别很大。前者是 agent 可以拿来规划的 action-conditioned dynamics，后者是视频表征预训练。
@@ -337,14 +266,3 @@ $$
 最后，V-JEPA 的实验主要证明“latent video prediction 能学到强视频表征”。把它迁移到机器人、自动驾驶或游戏世界模型时，还需要额外验证表示是否保留任务关键状态，例如接触、可操作物体、小目标、障碍物、风险事件和长期空间记忆。
 
 这一页最后回到三个验收点：方法上，V-JEPA 用可见视频块预测 masked latent target，EMA target encoder 和 stop-gradient 是防 collapse 的核心。实验上，masking ablation、frozen evaluation 和 pretraining distribution 表要一起读。诊断上，它证明 latent video prediction 能学强表征，但没有 action/reward，所以只是世界模型状态 encoder 候选。
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    V-JEPA 的核心是 latent video prediction：方法要抓 EMA target encoder、高 mask ratio 和 representation prediction；实验看 frozen evaluation、masking ablation 和 video pretraining distribution。它能学动态表征，但没有 action/reward，因此不是可规划世界模型。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
-    - 按导航顺序继续：[Genie：无标注视频到可交互环境](genie.md)。

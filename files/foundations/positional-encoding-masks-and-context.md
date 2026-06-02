@@ -2,30 +2,10 @@
 
 Attention 本身只计算 token 之间的相关性。它并不知道第一个 token 在前、第二个 token 在后，也不知道哪些 token 不应该被看见。位置编码和 mask 就是为了解决这两个问题。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“位置编码与 Mask：顺序和可见性”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“位置编码与 Mask：顺序和可见性”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
 
 ![Transformer long-distance attention](../assets/images/paper-figures/foundations/attention-is-all-you-need-figure-3-long-distance-attention.png){ width="590" }
 
 <small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 3。原论文图意：Transformer encoder 的某些 self-attention heads 会关注长距离依赖，例如围绕 `making ... more difficult` 的依赖关系。</small>
-
-!!! note "合并提示"
-    **note · 初学者先抓住**
-
-    Transformer 本身像一袋 token。位置编码解决“谁在前谁在后”，mask 解决“谁能看谁”。看到长上下文、packing、VLM 多图输入或 agent 历史记忆时，先问三个问题：位置机制能不能表达顺序，mask 有没有限定正确可见性，padding 或未来 token 有没有泄漏。
-
-    **tip · 遇到这些症状，回看本页**
-
-    packed sequence 训练后验证集异常变好、长视频模型偷看未来帧、图像/动作 token 的时间顺序错乱，或者 attention mask 让某些 rank 负载极不均时，回看本页。本页能帮你判断问题是位置编码外推、causal/padding mask 泄漏、block mask 设计，还是长上下文可见性规则和系统调度不匹配。
 
 ## 符号卡：位置和可见性
 
@@ -39,7 +19,6 @@ Attention 本身只计算 token 之间的相关性。它并不知道第一个 to
 |------|-----------|-----------|------|
 | RoPE 旋转 | $O(BLH_d)$ | $O(BLH_d)$ | 与 attention 主体相比通常较轻，但融合后可减少额外读写；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/03_RoPE_Tutorial.html) |
 
-<!-- [补充] -->
 | 符号或词 | 含义 | 取值范围 |
 | --- | --- | --- |
 | \(i,j\) | token 位置编号 | \(0\le i,j<L\) |
@@ -123,12 +102,6 @@ output = weights @ V
 \text{KV cache size} \propto \text{layers} \times L \times D
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 所以长上下文系统往往不会只扩大窗口，而是同时引入上下文压缩、KV cache 量化、prefix cache、sliding window attention 和检索式外部记忆。它们解决的是同一个系统问题：哪些信息必须留在注意力里，哪些可以压缩、缓存或外部检索。
 
@@ -190,8 +163,3 @@ flowchart LR
 - [动作表示与控制接口](../vla/action-representation-and-interfaces.md)：理解动作 token、动作块和时序控制的接口。
 
 位置编码告诉模型“在哪里”，mask 告诉模型“能看谁”，上下文管理告诉系统“保留哪些信息”。三者共同决定 Transformer 是否能稳定处理长序列和多模态输入。
-
-!!! tip "下一站"
-    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[Norm、残差与激活函数](normalization-residual-and-activation.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

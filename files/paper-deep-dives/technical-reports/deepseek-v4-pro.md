@@ -7,30 +7,6 @@ paper_topic: 技术报告
 # DeepSeek-V4：百万上下文与 FP4 后训练
 
 
-
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“DeepSeek-V4：百万上下文与 FP4 后训练”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 报告信息**
-
-    - 技术报告：`DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence`
-    - 模型：`DeepSeek-V4-Pro`、`DeepSeek-V4-Flash`
-    - 报告 PDF：[DeepSeek_V4.pdf](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/main/DeepSeek_V4.pdf)
-    - 模型集合：[DeepSeek-V4 collection](https://huggingface.co/collections/deepseek-ai/deepseek-v4)
-    - 关键词：MoE、1M context、Compressed Sparse Attention、Heavily Compressed Attention、mHC、Muon、FP4 QAT、On-Policy Distillation、GRPO、agentic long-horizon tasks
-
 这篇技术报告的核心不是“又把模型做大了”，而是围绕一个更具体的问题展开：**当 reasoning、agent 和长文档任务都想吃更多上下文时，普通 attention 的 FLOPs 和 KV cache 会先把系统拖垮，模型必须在架构、训练和推理栈上同时改。**
 
 报告给出的答案可以压缩成四条线：
@@ -45,7 +21,6 @@ paper_topic: 技术报告
 !!! warning "阅读边界"
     这是一份模型技术报告，不是经过同行评审的论文。里面的闭源/开源模型对比、内部 benchmark、Codeforces 评分、agent harness 和生产系统细节都应按“报告自述结果”理解。它很适合学习大模型系统设计，但不应把每个数值当成独立复现实验结论。
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 ## 论文位置
@@ -151,13 +126,6 @@ Heavily Compressed Attention, 简称 HCA，使用更大的 compression rate \(m'
 $$
 x_{l+1}=x_l+F_l(x_l).
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x_{l+1}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(x_l\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(F_l\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 它的好处是让深层网络更容易训练，但在超深 MoE 中，单一路径的 residual 也可能让 outlier 或 routing 抖动沿层传播。Hyper-Connections 的思路是扩展 residual stream 的宽度，把状态从一个向量扩成多个 residual channels。DeepSeek-V4 使用的是 mHC，即把 residual mapping 约束到 doubly stochastic matrices 所在的 manifold。
@@ -455,13 +423,3 @@ DeepSeek-V4 Pro 是技术报告，不是模块消融论文；读报告时要把�
 ### 一句话总结
 
 DeepSeek-V4 的重点不是某个单点指标，而是展示了一条百万上下文大模型的完整路线：**用 CSA/HCA 和异构 KV cache 压低长上下文边际成本，用 mHC/Muon/稳定性补丁把 trillion-scale MoE 训练跑稳，用 specialist + OPD 把多领域后训练能力合并到一个统一模型里，再用 FP4 QAT、rollout service 和 sandbox 把模型放进真实 agent 系统。**
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    DeepSeek-V4-Pro 要按 CSA/HCA、KV layout、Muon、thinking 管理和服务效率一起读；采用前区分报告事实、本站推断和可复现线上指标。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。

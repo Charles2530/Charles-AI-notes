@@ -2,17 +2,6 @@
 
 这页把面向机器人任务的世界模型开发路线整理成一条更完整的教程线：从相机和几何数据开始，到 3D encoder、VLA / diffusion policy、仿真环境、success checker，再到一个能服务真实任务的世界模型闭环。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“世界模型开发路线”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“世界模型开发路线”在「世界模型」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道潜变量、时序预测、VLM/VLA 与训练效率；再看具体论文和工程案例。 必要时先回 [世界模型入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把表征预测、潜变量动力学、规划、rollout 服务和具身/视频应用连成“可模拟、可评估、可行动”的主线。
 
 它的重点不是再解释“世界模型是什么”，而是回答一个更实际的问题：
 
@@ -25,15 +14,6 @@
 ![Simulation approaches for video world models 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="960" }
 
 <small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 9。真实项目里的世界模型往往要在 data、reconstruction、simulation、policy/evaluation 之间循环，而不是孤立训练一个预测器。</small>
-
-!!! note "合并提示"
-    **note · 图解：把这张图当成项目路线图读**
-
-    左侧是数据和真实世界来源，中间是重建、生成和模拟方式，右侧才是策略、评测和交互使用。开发时不要从“选一个模型”开始，而要先问：数据字段是否稳定、相机/pose 是否可复算、仿真和 success checker 是否能给模型提供可验证的闭环。
-
-    **note · 先把这页和总览区分开**
-
-    [世界模型路线图](index.md) 讲方法谱系：RSSM、Dreamer、视频世界模型、WAM、数据引擎。本文更像项目路线图：数据字段怎么定，3D 重建 encoder 怎么接，仿真数据怎么生成，成功判定怎么写，最后怎样把模型测试闭环跑起来。
 
 ## 本页怎么读
 
@@ -263,16 +243,6 @@ RoboTwin 的评测规则很有价值，因为它提醒我们：很多 benchmark 
 \hat{v}_{i,t}, \hat{c}_{t}, \hat{r}_{t} = W_\theta(z_t, a_{t:t+H})
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{v}_{i,t}\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
-| \(\hat{c}_{t}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\hat{r}_{t}\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-
 
 其中 \(\hat{v}_{i,t}\) 表示第 \(i\) 个焊缝点在未来视角下是否可见，\(\hat{c}_{t}\) 表示碰撞或不可达风险，\(\hat{r}_{t}\) 表示轨迹质量或覆盖收益。
 
@@ -309,8 +279,3 @@ RoboTwin 的评测规则很有价值，因为它提醒我们：很多 benchmark 
 - [Isaac Sim 5.1 Container Installation](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html)：远程 headless / Docker 部署口径。
 - [RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/)：双臂任务、资产、轨迹和评测组织方式。
 - [Genie 3](https://deepmind.google/models/genie/) 和 [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)：世界模型走向可交互模拟和物理 AI 数据生成的代表产品路线。
-
-!!! tip "下一站"
-    - 回到本专题入口：[世界模型](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

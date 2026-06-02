@@ -2,32 +2,9 @@
 
 长上下文系统和 FlashAttention 的关系，不只是“长上下文需要更快 attention”这么简单。更准确地说，长上下文之所以会不断推动 attention 内核演化，是因为随着序列长度上升，attention 的瓶颈会从“算没算对”迅速转向“数据怎么搬、历史怎么存、解码时怎么读”。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“FlashAttention 与长上下文”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“FlashAttention 与长上下文”在「算子与编译器」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先理解张量 shape、显存层次和 GEMM；系统指标卡住时回推理或训练专题。 必要时先回 [算子与编译器入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把模型里的矩阵乘、attention、通信和低精度路径落到 GPU 时间线上，看瓶颈如何被 kernel 与编译栈改变。
 
 因此看 FlashAttention 的演化，最好把它放在一条更大的长上下文系统主线上看：朴素 attention 如何被 I/O 打爆，FlashAttention 如何通过重写数据流减少中间矩阵，长上下文 decode 又如何逼出 paged attention、flash decoding 和更多服务态特化。
 
-!!! note "合并提示"
-    **note · 初学者先抓住**
-
-
-    FlashAttention 的核心不是换公式，而是重写 attention 的数据流，避免把巨大 score matrix 来回写 HBM。长上下文越长，这种 I/O 节省越关键；到了在线 decode，KV 布局和分页管理又会成为新的主角。
-
-    **example · 有趣例子：边读边算**
-
-
-    朴素 attention 像先把所有草稿铺满桌子再整理；FlashAttention 像边读边归纳，只保留必要中间状态。桌子越小、资料越长，后者越重要。
-
-<!-- [补充] -->
 > **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 为什么长上下文首先打爆的是 I/O
@@ -47,11 +24,6 @@
 $$
 \text{softmax}\left(\frac{QK^\top}{\sqrt{d}}\right)V.
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(V\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
 
 
 当序列长度 \(L\) 增长时，大家第一反应往往是“计算量变大了”。这当然没错，但更致命的常常是 score 矩阵巨大、中间结果往返 HBM、softmax 需要归约，以及长序列下 cache 与带宽压力急剧上升。
@@ -154,8 +126,3 @@ FlashAttention 及其后续演化，之所以在长上下文时代如此关键�
 ## 工程收束
 
 FlashAttention 与长上下文要按 IO-aware attention、长序列 tile、paged KV、prefill/decode 分化来排查。最容易误判的是把 prefill 优化误用到 decode、只看理论复杂度、忽略 cache 生命周期；上线前要分开测 prefill 与 decode，对长序列建立专项基准，并按长度桶验收。
-
-!!! tip "下一站"
-    - 回到本专题入口：[算子与编译器](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[Reduction / Norm Kernel](reduction-norm-layout-and-indexing.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

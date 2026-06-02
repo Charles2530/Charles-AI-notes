@@ -7,32 +7,6 @@ paper_topic: 世界模型
 # LWM：百万 token 视频语言世界模型
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“LWM：百万 token 视频语言世界模型”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [世界模型](../../world-models/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「世界模型」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 论文：`World Model on Million-Length Video And Language With Blockwise RingAttention`
-    - 系统：`Large World Model (LWM)`
-    - 链接：[arXiv:2402.08268](https://arxiv.org/abs/2402.08268)
-    - 版本：2024-02-13 首次提交，2025-02-03 更新到 v4
-    - 项目页：[Large World Models](https://largeworldmodel.github.io/lwm/)
-    - 代码与模型：[GitHub](https://github.com/LargeWorldModel/LWM)、[Hugging Face](https://huggingface.co/LargeWorldModel)
-    - 关键词：长上下文、多模态自回归、视频语言模型、VQGAN、RingAttention、百万 token、any-to-any generation
-
-
 LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dreamer 那样训练一个能规划的 latent dynamics。它回答的是另一个世界模型问题：**如果把长视频、图像和文本都离散成 token，能不能训练一个 7B 自回归 Transformer 在 1M token 上下文里同时理解和生成这些序列？**
 
 这篇论文最值得放进世界模型专题，是因为它把“世界模型”推向了长上下文记忆和多模态序列建模方向：模型不只看几秒钟视频，而是可以在上万帧、一本书、一个小时视频里做检索、问答和生成。
@@ -64,18 +38,6 @@ LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dre
 ![LWM long video chat 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/lwm/lwm-long-video-chat-原图.png){ width="920" }
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 1。原图展示 LWM 在 1 小时 YouTube compilation、超过 500 个 clips 上回答细粒度问题，并与 GPT-4V、Gemini Pro Vision、Video-LLaVA 做定性对比。</small>
-
-!!! note "合并提示"
-    **note · 这张图怎么读**
-
-    **输入输出**：输入是文本、图像和长视频 token，输出是百万 token 上下文中的自回归预测。  
-    **效率机制**：把长视频记忆和统一 token 序列放进一个 Transformer，降低跨模态接口复杂度。  
-    **对主线意义**：它说明世界模型需要长时记忆，但仍偏视频语言建模。  
-    **不能证明什么**：长上下文问答不能证明动作条件动力学或闭环控制收益。
-
-    **note · 图解：长视频 QA 图重点看证据跨度**
-
-    这张图的关键不只是“答对问题”，而是问题依赖长视频中很靠后的局部片段。普通 VLM 只能采样少量帧，容易错过证据；LWM 的目标是让模型直接把长视频帧 token 放进同一个上下文窗口。读这种图时要问三件事：证据是否在长视频远端，模型是否真的看到了足够帧，回答是否依赖细节而不是常识猜测。
 
 ## 核心问题
 
@@ -299,7 +261,6 @@ RingAttention 的思想是把序列维度切到多个设备上。每个设备持
 
 ## 实验结论
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -392,17 +353,6 @@ LWM 最重要的启发是：世界模型不一定只能是 latent dynamics 或�
 5. 没有 RingAttention，1M token exact attention 基本不可行。
 
 这一页最后回到三个验收点：方法上，LWM 的抓手是长视频/长文本上下文中的统一 token 建模，系统上依赖 RingAttention 一类长序列并行。实验上，长视频理解、检索和生成结果要按上下文长度分桶看。诊断上，长上下文记忆不等于 action-conditioned dynamics；世界模型项目还要补反事实动作和可控 rollout。
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    LWM 的重点是长上下文多模态建模：方法要抓 long video/text context、ring attention/sequence parallel 和统一 token 接口；实验看长视频理解、检索和生成。它提供长记忆基础设施，但 action-conditioned dynamics 和闭环控制还要另补。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[世界模型](../../world-models/index.md)。
-    - 按导航顺序继续：[V-JEPA：视频潜变量预测表征](v-jepa.md)。
 
 ## 参考资料
 

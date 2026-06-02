@@ -7,30 +7,6 @@ paper_topic: 技术报告
 # GPT-4o System Card：Omni 安全与多模态评测
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“GPT-4o System Card：Omni 安全与多模态评测”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 报告信息**
-
-    - 系统卡：`GPT-4o System Card`
-    - 模型：`GPT-4o`
-    - 官方页面：[OpenAI GPT-4o System Card](https://openai.com/index/gpt-4o-system-card/)
-    - PDF：[OpenAI PDF](https://cdn.openai.com/gpt-4o-system-card.pdf)
-    - arXiv：[arXiv:2410.21276](https://arxiv.org/abs/2410.21276)
-    - 关键词：omni model、end-to-end multimodal training、speech-to-speech、red teaming、Preparedness Framework、voice safety、multimodal evaluation
-
 这篇不是传统意义上的 architecture technical report。它没有公开参数量、层数、训练 FLOPs、优化器、batch size 或详细数据配比。真正值得读的是另一条线：**GPT-4o 如何从文本模型安全评估，扩展到端到端语音、多模态输入输出和实时交互系统的部署评估**。
 
 报告最核心的技术信息可以压缩成三句话：
@@ -117,7 +93,6 @@ GPT-4o 的后训练不只是让文本回答更安全，还要约束模型“用�
 
 ## 评测方法：把文本 eval 改造成 speech-to-speech eval
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -464,14 +439,3 @@ System Card 的“消融”主要不是模型模块消融，而是上线前安�
 GPT-4o System Card 最值得记住的不是某个 benchmark，而是它把多模态模型上线前的工程问题说清楚了：**当模型开始直接听声音、说话、看图、看视频，并以接近人类反应时间对话时，安全评估必须从文本规则扩展到音频身份、输出声音、实时拦截、情感依赖、语音说服力和跨模态能力迁移。**
 
 如果说 GPT-4 技术报告证明了大语言模型的通用能力，GPT-4o System Card 则说明：omni model 的关键挑战不只是“更强”，而是“更像人类交互以后，系统边界要怎么重新设计”。
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    GPT-4o System Card 的价值在风险与能力边界：方法上看文本/视觉/音频统一接口和安全栈，实验上看 prepared framework、红队、voice safety 与多模态评测。它不是模型 recipe，而是部署治理和评测口径参考。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
-    - 按导航顺序继续：[DeepSeek-V3：MoE 与 FP8](deepseek-v3.md)。

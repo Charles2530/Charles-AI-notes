@@ -2,17 +2,6 @@
 
 这页是一份具身智能和 VLA 的扩展教程，重点放在三件事：常用 benchmark 和数据集到底在测什么，VLA / 视频预测策略 / 空间与深度 VLA 各自解决什么，以及怎样把“数据更多”升级成“数据 recipe 更好、评测更真实、闭环更稳”。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“VLA 数据、模型与评测路线”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“VLA 数据、模型与评测路线”在「具身智能」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道 VLA、世界模型、相机/深度和评测集的基本角色。 必要时先回 [具身智能入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把感知、数据、仿真、策略、控制、安全和真实闭环连起来，看机器人系统为什么不能只靠离线指标判断。
 
 ![Franka Emika robot arm](../assets/images/thinking-exploration/world-models-embodied-ai/franka-emika2.jpg){ width="880" }
 
@@ -21,19 +10,6 @@
 ![GR-3 data recipe 原论文图](../assets/images/paper-deep-dives/embodied-ai/gr3/figure-4-data.jpg){ width="960" }
 
 <small>图源：GR-3 Technical Report，Figure 4。具身智能的数据 recipe 不只是成功演示，还要组织机器人轨迹、人类轨迹、任务状态、无效指令和长任务数据，让 VLA 在 rollout 中知道何时继续、终止或拒绝。</small>
-
-!!! note "合并提示"
-    **note · 图解：这张图要按数据功能读**
-
-    不同数据块不是简单相加：机器人轨迹提供低层动作，人类/任务数据提供高层语义，invalid / terminate 状态训练模型何时拒绝或停止，长任务数据训练 task progress。读 VLA 数据 recipe 时，先问每类数据解决哪个失败模式，再决定是否值得采。
-
-    **note · 主线判断**
-
-    具身智能不是 VLA 的同义词。VLA 是把视觉和语言接到动作的策略接口；具身智能还包括传感器、标定、动作表示、控制器、仿真、数据采集、任务判定、失败恢复和安全边界。一个 VLA 论文能否落地，常常取决于这些“模型之外”的系统层。
-
-    **note · 页面边界**
-
-    本页是 VLA 论文、数据集和评测路线的总索引。它回答“看哪些 VLA 系统、数据 recipe 和 benchmark”，而不是展开相机标定、仿真资产、低层控制或安全案例；这些分别放在相机、仿真、闭环和部署相关页面。
 
 ## 本页怎么读
 
@@ -359,8 +335,3 @@ Flat / Instruction-Following Setting 很有用：同一个桌面清理任务，�
 - [GEN-0: Embodied Foundation Models That Scale with Physical Interaction](https://generalistai.com/blog/nov-04-2025-GEN-0)：大规模真实物理交互数据和具身模型 scaling 观察。
 - [Spirit-v1.5](https://github.com/Spirit-AI-Team/spirit-v1.5)：开放式、目标驱动、多样化机器人数据采集。
 - [Isaac Sim](https://developer.nvidia.com/isaac/sim)、[RoboTwin](https://robotwin-platform.github.io/doc/) 和 [ManiSkill](https://maniskill.readthedocs.io/en/latest/)：仿真、数据生成和评测工具链。
-
-!!! tip "下一站"
-    - 回到本专题入口：[具身智能](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

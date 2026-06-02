@@ -2,28 +2,8 @@
 
 Prompt Engineering 经常被误解成“找一句神奇咒语”。更准确地说，它是在设计模型的**输入契约**：告诉模型任务是什么、可用信息是什么、输出应长什么样、哪些事情不能做，以及什么时候需要借助外部证据或工具。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“Prompt、CoT 与 RAG 入门”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“Prompt、CoT 与 RAG 入门”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
 
 这页参考 [Prompt Engineering Guide](https://www.promptingguide.ai/zh) 中的基础概念、提示词要素、Zero-shot / Few-shot、CoT、Self-Consistency、Prompt Chaining、ReAct 和 RAG 等主题，重点补一条初学者可用的主线：**从单次 prompt，到分步推理，再到检索增强和工具系统**。
-
-!!! note "合并提示"
-    **note · 初学者先抓住**
-
-    Prompt Engineering 不是让模型“更听话”的装饰文字，而是把任务、证据、约束和输出格式组织进上下文窗口。CoT 解决复杂任务的中间推理，RAG 解决外部知识和证据更新，ReAct / Agent 则把推理和工具动作接起来。
-
-    **tip · 遇到这些症状，回看本页**
-
-    评测失败无法复现、模型引用了错误证据、工具调用结果被当成指令、输出 JSON 经常坏，或者世界模型数据引擎里 judge/标注 prompt 改一句分数就变时，回看本页。本页能帮你判断问题是输入契约不清、证据边界不稳、输出 schema 太松，还是缺少可回放的评测集。
 
 ## Prompt Engineering 到底在设计什么
 
@@ -319,8 +299,3 @@ Prompt Engineering 是入口，RAG 和工具系统是延伸。真正稳定的系
 - [Prompt Engineering Guide：Prompt Chaining](https://www.promptingguide.ai/zh/techniques/prompt_chaining)
 - [Prompt Engineering Guide：ReAct Prompting](https://www.promptingguide.ai/zh/techniques/react)
 - [Prompt Engineering Guide：Retrieval Augmented Generation](https://www.promptingguide.ai/zh/techniques/rag)
-
-!!! tip "下一站"
-    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[多模态推理入门](multimodal-cot-and-reasoning-basics.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

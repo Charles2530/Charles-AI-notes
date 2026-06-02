@@ -2,23 +2,6 @@
 
 这页说明本站如何判断一项技术是否真的服务**世界模型高效训练**。它不替代 [全站证据与复现状态标准](evidence-and-reproducibility-standard.md)、[Claim Ledger](claim-ledger.md) 或 [全站效率技术覆盖矩阵](site-efficiency-coverage-matrix.md)，而是把这些页面背后的判断口径写成更短的原则。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“本站判断原则”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先回答“本站判断原则”在「参考与证据标准」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道本站不是论文列表，而是带证据边界的工程知识库。 必要时先回 [参考与证据标准入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把全站的证据、复现、图片、公式和判断口径统一起来，帮助读者知道哪些结论能信到什么程度。
-
-    **note · 核心 thesis**
-
-    世界模型效率不是单一训练技巧，而是表示、交互、系统与验证共同决定的闭环问题。一个方法只有同时说清“省什么成本、牺牲什么、证据是什么、如何验收、不能外推什么”，才适合进入本站主线。
 
 ## 五条原则
 
@@ -29,6 +12,21 @@
 | 系统吞吐不等于任务质量 | throughput、latency、MFU、KV memory 是否和质量回归同表报告 | kernel 快就默认模型更强 |
 | Open-loop 指标不能替代 closed-loop utility | FVD、VBench、loss、静态 benchmark 是否有 action sensitivity、closed-loop success 或 failure replay 支撑 | 视频自然度直接外推为规划收益 |
 | 没有第三方证据时不写独立复现 | 是否只有论文、官方代码、官方 demo、toy fixture 或本站推断 | 把 official repo 当成 independent reproduction |
+
+## 知识讲解原则
+
+本站的文章首先要讲清知识，而不是维护目录。参考 [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)、[colah 的 LSTM 讲解](https://colah.github.io/posts/2015-08-Understanding-LSTMs/)、[Lil'Log](https://lilianweng.github.io/)、[Hugging Face 技术文档](https://huggingface.co/docs/transformers/main/quantization/concept_guide)、[BAIR Blog](https://bair.berkeley.edu/blog/2023/10/16/p3o/) 和 OneFlow/智源转载的 [全栈 Transformer 推理优化](https://hub.baai.ac.cn/view/33449)，本站后续写法按下面规则收敛。
+
+| 写法 | 要做到什么 | 避免什么 |
+| --- | --- | --- |
+| 先给核心困惑 | 用一句话说明读者为什么会卡住，例如“attention 为什么不是查表”“Bellman 为什么能把未来拆回来” | 开头先放导航、阅读建议或大段背景 |
+| 从具体例子进入 | 先用一个小场景固定变量，再抽象成公式和系统结构 | 先堆术语，再让读者自己找例子 |
+| 公式解释服务推理 | 解释每个公式解决的问题、输入输出、哪一步在近似、哪里会出错 | 自动符号表、泛泛写“变量由上下文决定” |
+| 图要进入论证 | 图注写清图源、原图表达什么、本站用它证明或区分什么 | 图只当插图，或把解释塞进一堆提示框 |
+| 讲边界和反例 | 每个关键方法写清何时失效、指标会怎样骗你、不能外推到哪里 | 只有优点，没有失败机制 |
+| 允许外部精读 | 正文需要处直接链接论文、官方博客、工程博客或高质量公众号转载 | 为了互链而互链 |
+
+好文章的共同点不是“更长”，而是每一段都回答一个小问题：为什么需要这个概念，它改变了什么判断，读者拿它能分清哪两个容易混淆的东西。
 
 ## 证据强度
 
@@ -91,7 +89,3 @@
 | [Claim Ledger](claim-ledger.md) | 维护世界模型高效训练主线的关键 claim 总账 | 不覆盖全站所有基础知识 |
 
 实际写页面时，顺序可以很简单：先用本页判断 claim 是否值得写，再用证据标准把来源和复现状态写清，最后把它接回效率矩阵或 Claim Ledger。这样能避免两种常见问题：一是把论文摘要改写成“很厉害”的短评；二是把系统工程收益、模型能力收益和闭环决策收益写成同一种证据。
-
-!!! tip "下一站"
-    - 回到本专题入口：[参考与证据标准](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[全站证据与复现状态标准](evidence-and-reproducibility-standard.md)。

@@ -41,6 +41,8 @@ SHORT_EXEMPT_PAGES = {
 }
 
 TEMPLATE_PATTERNS = [
+    "合并提示",
+    "读法定位",
     "如果要把 **",
     "什么算这页真正写扎实了",
     "读完这页后最好能明确回答",
@@ -64,6 +66,12 @@ FORMULA_EXPLANATION_RE = re.compile(
     r"其中|这里|表示|含义|变量|参数|条件|优化对象|拆开读|"
     r"定义为|写成|可以写成|估算|计算|满足|等于|约为|近似|是)"
 )
+GENERIC_SYMBOL_EXPLANATION_RE = re.compile(
+    r"公式中的变量或中间量|按上下文定义|return、组大小或缩放系数|value、速度场或向量量"
+)
+ADMONITION_RE = re.compile(r"^(!!!|\?\?\?)\s+", re.MULTILINE)
+MERGED_PROMPT_BOX_RE = re.compile(r"!!!\s+\w+\s+[\"']合并提示[\"']|合并提示")
+READING_POSITIONING_RE = re.compile(r"读法定位")
 
 
 @dataclass
@@ -236,6 +244,7 @@ def iter_markdown_pages() -> list[Path]:
 def analyze(path: Path, include_hints: bool = False) -> PageReport:
     text = path.read_text(encoding="utf-8", errors="ignore")
     searchable_text = strip_fenced_code(text)
+    rel = path.relative_to(DOCS_ROOT)
     lines = text.splitlines()
     h2_lines = [line for line in lines if line.startswith("## ")]
     h3_lines = [line for line in lines if line.startswith("### ")]
@@ -244,8 +253,12 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
     if path in FULLY_EXEMPT_PAGES:
         return PageReport(path=path, chars=len(text), h2=len(h2_lines), h3=len(h3_lines), flags=flags)
 
-    short_exempt = path in SHORT_EXEMPT_PAGES or any(
+    short_exempt = (
+        rel.name == "index.md"
+        or path in SHORT_EXEMPT_PAGES
+        or any(
         path.as_posix().startswith(prefix) for prefix in SHORT_EXEMPT_PREFIXES
+        )
     )
 
     if len(text) < MIN_CHARS and not short_exempt:
@@ -268,10 +281,16 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
     if repeated_templates:
         flags.append("repeated-summary")
 
-    if include_hints and path.name != "index.md" and len(text) > MIN_CHARS:
-        local_links = re.findall(r"\]\((?!https?://|#)([^)]+)\)", text)
-        if len(local_links) == 0:
-            flags.append("hint:no-local-cross-link")
+    if MERGED_PROMPT_BOX_RE.search(searchable_text):
+        flags.append("template:merged-prompt-box")
+
+    first_chunk = "\n".join(searchable_text.splitlines()[:80])
+    if READING_POSITIONING_RE.search(first_chunk):
+        flags.append("template:reading-positioning-start")
+
+    # A page does not need forced internal links. The current editorial
+    # standard favors standalone explanations plus a few genuinely valuable
+    # external sources when they help the reader more than site navigation.
 
     if include_hints and intentional_sequence and numbered_h2 >= 3:
         flags.append("info:intentional-numbered-sequence")
@@ -321,6 +340,15 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
         inline_hint_count = inline_formula_context_hint_count(searchable_lines)
         if inline_hint_count:
             flags.append(f"hint:inline-formula-context:{inline_hint_count}")
+
+        generic_symbol_count = len(GENERIC_SYMBOL_EXPLANATION_RE.findall(searchable_text))
+        if generic_symbol_count:
+            flags.append("hint:generic-symbol-explanation")
+
+        admonition_count = len(ADMONITION_RE.findall(searchable_text))
+        ordinary_article = page_type(path) == "topic"
+        if ordinary_article and admonition_count > 2:
+            flags.append(f"hint:too-many-admonitions:{admonition_count}")
 
     return PageReport(path=path, chars=len(text), h2=len(h2_lines), h3=len(h3_lines), flags=flags)
 

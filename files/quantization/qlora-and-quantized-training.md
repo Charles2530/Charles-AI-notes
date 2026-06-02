@@ -1,255 +1,132 @@
-# QLoRA 与量化训练
+# QLoRA：低显存微调，不是把模型“训练成 4bit”
 
-QLoRA 很容易被误解成“把模型训练成 4bit”。更准确地说，它是在低比特存储的冻结底座上，训练一小组 LoRA adapter，从而把微调显存大幅降下来。
+QLoRA 很容易被一句话误导：用 4bit 训练大模型。更准确的说法是：**冻结的底座模型用 4bit 存储，训练时只更新一小组 LoRA adapter；梯度穿过量化底座流向 adapter，但底座权重本身不做全量更新。**
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“QLoRA 与量化训练”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+这篇只回答一个问题：QLoRA 为什么能显著省显存，同时又和 PTQ、QAT、全量低比特训练不是一回事？
 
+## 先把显存账拆开
 
-!!! note "读法定位"
-    这页先回答“QLoRA 与量化训练”在「量化」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先懂张量、线性层和基本推理成本；遇到 FP8、KV Cache、outlier 时回前置页补概念。 必要时先回 [量化入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把数值格式、误差来源、校准/训练方法、kernel 和服务部署连成一条效率链，而不是只比较 bit 数。
+全量微调最贵的不是模型文件本身，而是训练状态。一个可训练参数通常还会带来梯度、optimizer state、激活保存和通信开销。LoRA 先把“可训练参数”缩小；QLoRA 再把“冻结底座的常驻存储”压低。
 
 ![QLoRA memory comparison](../assets/images/paper-figures/quantization/qlora-figure-1-memory.png){ width="760" }
 
-<small>图源：[QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)，Figure 1。原论文图意：对比普通 32-bit/16-bit 微调、LoRA 与 QLoRA 的显存组织；QLoRA 将冻结底座量化存储，只训练 adapter，并通过分页机制缓解显存峰值。</small>
+<small>图源：[QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)，Figure 1。原图表达：对比 32-bit/16-bit 全量微调、LoRA 与 QLoRA 的显存组织；QLoRA 将冻结底座量化存储，只训练 adapter，并用 paged optimizer 缓解峰值。本站读法：看哪些参数“会训练”，哪些只是“低比特常驻”。</small>
 
-!!! note "图解：先看哪些东西在训练"
-    全量微调要保存可训练权重、梯度、optimizer state 和激活；LoRA 冻结底座，只训练小 adapter；QLoRA 再把冻结底座用 4bit 存储。图里的关键不是“4bit”标签，而是 optimizer 主要服务少量 adapter，底座不再全量训练。
+这张图最关键的不是 4bit 标签，而是 optimizer 主要服务少量 adapter。底座模型仍参与前向和反向的计算图，但它是冻结的；训练压力最终落到 LoRA 矩阵上。
 
-## LoRA 先解决什么
+## LoRA 先解决“更新太大”的问题
 
-全量微调会更新整个权重 \(W\)。LoRA 改成只训练一个低秩增量：
+全量微调会直接更新某个权重矩阵 \(W\)。LoRA 假设下游任务需要的变化可以用低秩增量表示：
 
 \[
 W'=W+\Delta W
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\Delta\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
-
+其中：
 
 \[
 \Delta W=BA
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\Delta\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
+这里 \(A\in\mathbb{R}^{r\times d_{\text{in}}}\)，\(B\in\mathbb{R}^{d_{\text{out}}\times r}\)，\(r\) 是 rank。读这两行公式时，重点是 \(\Delta W\) 不再是完整大矩阵，而是两个小矩阵相乘得到的低秩更新。
 
+如果 \(d_{\text{in}}=d_{\text{out}}=4096\)，全量矩阵约有 \(4096^2\approx16.8M\) 个参数。若 \(r=16\)，LoRA 只有 \(4096\times16+16\times4096\approx0.13M\) 个参数。参数少了，梯度和 optimizer state 也跟着少，这就是 LoRA 的第一层节省。
 
-**读作什么**：不直接改大矩阵 \(W\)，只训练两个小矩阵 \(A,B\)，它们相乘得到一个低秩增量 \(\Delta W\)。
-
-**小账**：如果 \(d_{\text{in}}=d_{\text{out}}=4096\)，全量权重约 \(4096^2\approx16.8M\) 参数。若 \(r=16\)，LoRA 只需 \(4096\times16+16\times4096\approx0.13M\) 参数，少两个数量级。
-
-## QLoRA 比 LoRA 多做了什么
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
-
-QLoRA 把冻结底座量化存储：
-
-\[
-W_{\text{base}}\approx \hat{W}_{\text{4bit}}
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{W}_{\text{4bit}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W_{}\) | 公式中的变量或中间量 | 按上下文定义 |
-
-
-然后训练 LoRA adapter：
-
-\[
-W'=\hat{W}_{\text{4bit}}+BA
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\hat{W}_{\text{4bit}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
-
-
-**读作什么**：底座负责保留大模型已有能力，adapter 负责学习新任务。底座低比特存储省显存，adapter 高精训练保证适配能力。
-
-!!! warning "常见误解"
-    QLoRA 不等于所有前向和反向都用 4bit。很多实现会把 4bit 权重反量化到 BF16/FP16 参与计算。它主要省的是冻结底座的存储显存和 optimizer 服务对象。
-
-## QLoRA 的三个关键组件
-
-| 组件 | 作用 | 初学者理解 |
-| --- | --- | --- |
-| 4bit quantized base | 冻结底座低比特存储 | 大楼主体不重建，只压低常驻成本 |
-| LoRA adapter | 少量可训练参数 | 给大楼外挂小结构，适配新任务 |
-| paged optimizer | 缓解显存峰值 | 防止长序列或大 batch 时 optimizer 暴涨 |
-
-QLoRA 论文还常和 `NF4`、double quantization 相关：
-
-| 名称 | 含义 | 为什么有用 |
-| --- | --- | --- |
-| NF4 | 面向近似正态权重分布的 4bit 格式 | 比普通 INT4 更适合权重分布 |
-| double quantization | 再量化 scale 等元数据 | 进一步压缩量化元数据 |
-| paged optimizer | 使用分页机制管理 optimizer state | 缓解训练峰值显存 |
-
-## Rank、alpha 和 dropout 在控制什么
-
-LoRA 实际常写成：
+实际实现常写成：
 
 \[
 W'=W+\frac{\alpha}{r}BA
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
+\(\alpha/r\) 是缩放因子。rank \(r\) 决定 adapter 能表达多复杂的变化，\(\alpha\) 决定这份变化打到原模型上的强度。rank 太小会学不动复杂任务，rank 太大又会增加显存、过拟合和多 adapter 服务成本。
 
+## QLoRA 再解决“冻结底座太占显存”的问题
 
-**读作什么**：rank 决定 adapter 能表达多复杂的变化；alpha 决定这个变化打到原模型上的强度；dropout 用来降低过拟合。
-
-| 参数太小 | 参数太大 |
-| --- | --- |
-| rank 太小会学不动复杂任务 | rank 太大显存和过拟合风险增加 |
-| alpha 太小适配弱 | alpha 太大可能破坏底座能力 |
-| dropout 太低可能过拟合 | dropout 太高可能欠拟合 |
-
-## QLoRA 和部署量化不是一回事
-
-| 名称 | 目的 | 是否训练 | 典型问题 |
-| --- | --- | --- | --- |
-| PTQ/GPTQ/AWQ | 把已训练模型压低 bit 部署 | 否 | 质量掉点、kernel 是否支持 |
-| QLoRA | 在低显存下微调模型 | 是，只训练 adapter | 适配够不够、数据质量如何 |
-| QAT | 训练时模拟量化误差，让模型适应低比特 | 是 | 成本高、流程复杂 |
-| 全量低比特训练 | 从训练过程就用低精度数值系统 | 是 | 稳定性、scale、kernel、长跑发散 |
-
-**读作什么**：QLoRA 主要解决“我显存不够，但想微调”。部署量化主要解决“我模型训好了，想上线更省”。
-
-## 为什么量化底座后还能训练
-
-QLoRA 能工作，依赖几个假设：
-
-| 假设 | 含义 |
-| --- | --- |
-| 底座能力仍在 | 4bit 近似没有摧毁原模型主要能力 |
-| 任务变化可低秩表达 | 新任务不需要大幅重写全模型 |
-| adapter 容量足够 | rank 和 target modules 能覆盖任务所需变化 |
-| 计算精度受保护 | 关键计算路径不会完全被 4bit 噪声支配 |
-
-**直觉**：如果新任务只是行业问答、格式适配、风格调整，少量 adapter 往往够用；如果任务要求模型学会全新推理技能或跨模态结构，QLoRA 可能吃力。
-
-## target modules 为什么关键
-
-LoRA 通常不会插到所有层所有矩阵上，而是选择目标模块：
-
-| 模块 | 常见作用 | 是否常见 |
-| --- | --- | --- |
-| \(W_q,W_k,W_v,W_o\) | attention 投影 | 很常见 |
-| up/down/gate projection | MLP/SwiGLU 路径 | 常见 |
-| embedding/lm head | 词表相关能力 | 任务相关 |
-| projector/connector | 多模态对齐 | 多模态时重要 |
-| action/risk head | 控制和安全输出 | VLA 中要谨慎 |
-
-!!! tip "实用判断"
-    target modules 选得太少，adapter 可能学不动；选得太多，显存和过拟合风险上升。多模态或 VLA 任务还要重点考虑 projector、动作头和风险头是否该训练或保高精。
-
-## 什么时候 QLoRA 最合适
-
-| 场景 | 为什么适合 |
-| --- | --- |
-| 领域问答适配 | 底座已有语言能力，只需补领域风格和知识表达 |
-| 企业代码助手 | 适配内部 API、格式和偏好 |
-| 文档结构化抽取 | 学输出格式、字段约束和少量领域模式 |
-| 对话风格调整 | 不必全量重训 |
-| 单卡或低显存环境 | 底座量化存储显著省显存 |
-
-**不太适合**：
-
-| 场景 | 风险 |
-| --- | --- |
-| 任务需要改变基础能力边界 | adapter 容量可能不够 |
-| 域偏移非常大 | 底座特征不匹配 |
-| 数据质量差 | 小 adapter 更容易记住噪声 |
-| 量化底座已经明显掉点 | adapter 要先补量化损伤，再学任务 |
-| 严格实时/VLA 控制 | adapter 和量化误差可能影响动作稳定性 |
-
-## QLoRA 训练时要记录什么
-
-| 记录项 | 为什么重要 |
-| --- | --- |
-| base model 和量化配置 | NF4/INT4、group size、compute dtype 会影响结果 |
-| target modules | 决定 adapter 覆盖范围 |
-| rank/alpha/dropout | 决定容量和稳定性 |
-| sequence length 与 batch | 影响激活显存和峰值 |
-| optimizer 和 paged 设置 | 影响峰值显存和速度 |
-| baseline 对照 | 要知道掉点来自量化、adapter，还是数据 |
-| 合并/部署方式 | adapter 是否 merge，runtime 是否支持 |
-
-## 和 QAT 的区别
-
-QAT 的目标常写成：
+QLoRA 在 LoRA 之上做了一步：把冻结底座量化存储。
 
 \[
-\min_\theta \mathcal{L}(f_{\hat{\theta}}(x),y)
+W_{\text{base}}\approx \hat W_{\text{4bit}}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
+训练时的有效权重可以理解成：
+
+\[
+W'=\hat W_{\text{4bit}}+\frac{\alpha}{r}BA
+\]
+
+这里 \(\hat W_{\text{4bit}}\) 是量化后的冻结底座，\(A,B\) 是可训练 adapter。读这行式子时要分清两件事：底座低比特是为了省常驻显存；adapter 仍用较高精度训练，以学习任务变化。
+
+很多实现会在计算时把 4bit 权重反量化到 BF16/FP16 参与 matmul。也就是说，QLoRA 不等于所有运算都在 4bit 上完成。它主要省的是冻结底座的存储和全量 optimizer 状态，而不是保证每个 kernel 都是低比特训练 kernel。
+
+## NF4、double quantization、paged optimizer 各自解决什么
+
+QLoRA 论文的三个关键词常被混在一起，其实它们管不同的显存账。
+
+| 组件 | 解决的问题 | 直觉 |
 | --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(f_{}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
+| NF4 | 4bit 格式怎样更适合近似正态的权重分布 | 给常见权重值更多有效刻度 |
+| Double quantization | scale 等量化常数也占空间 | 再压缩量化元数据 |
+| Paged optimizer | 长序列或大 batch 会产生显存峰值 | 让 optimizer state 峰值更平滑 |
 
+NF4 的意义在于：权重分布通常不是均匀铺满整数范围，而是大量集中在 0 附近。普通 INT4 的格子未必最适合这种分布；NF4 用更适合正态权重的码本来减少表示损失。Double quantization 则提醒你，量化不只存低比特权重，还要存 scale/zero 等元数据；模型越大，元数据也值得压缩。
 
-**读作什么**：QAT 在训练时就把量化误差放进前向过程，让模型学会适应低比特。QLoRA 则主要是冻结低比特底座，只训练 adapter。
+## QLoRA、PTQ、QAT 的边界
 
-| 对比 | QLoRA | QAT |
+| 方法 | 主要目的 | 训练什么 | 典型风险 |
+| --- | --- | --- | --- |
+| PTQ / GPTQ / AWQ | 训练后压缩部署 | 通常不训练原模型 | 任务掉点、校准集不代表线上、kernel 不支持 |
+| QLoRA | 低显存微调 | 冻结量化底座，只训练 adapter | adapter 容量不足、量化底座已受损、数据质量差 |
+| QAT | 让模型训练时适应量化误差 | 训练全模型或部分模块 | 成本高、稳定性难、流程复杂 |
+| 全量低比特训练 | 从训练过程就使用低精度数值系统 | 大量参数和状态 | 数值范围、scale、梯度稳定、kernel 长跑可靠性 |
+
+QLoRA 解决的是“我显存不够，但想微调”。PTQ 解决的是“我模型训好了，想部署更省”。QAT 解决的是“我希望模型在训练中适应量化误差”。这三者可以组合，但不能互相替代。
+
+## 为什么量化底座后 adapter 仍能学
+
+QLoRA 能工作的前提有四个。
+
+| 前提 | 含义 |
+| --- | --- |
+| 量化没有摧毁底座能力 | 4bit 近似仍保留模型的大部分语义和推理能力 |
+| 下游变化可低秩表达 | 任务主要是风格、格式、领域知识表达或轻量对齐 |
+| adapter 插入位置覆盖关键路径 | attention、MLP、projector 或 head 选得合理 |
+| compute dtype 保护关键计算 | 训练计算不完全被 4bit 噪声支配 |
+
+如果任务只是企业术语、文档抽取、客服风格、代码 API 适配，QLoRA 往往够用。如果任务要求模型学会全新的跨模态结构、动作控制、复杂长程规划，adapter 可能不够，量化底座误差也可能被放大。
+
+## target modules 是真正的工程开关
+
+LoRA adapter 插在哪里，决定它能改哪些能力。
+
+| 目标模块 | 它影响什么 | 什么时候重要 |
 | --- | --- | --- |
-| 目标 | 低资源微调 | 让量化模型更稳 |
-| 训练对象 | LoRA adapter | 可能是全模型或部分模块 |
-| 成本 | 相对低 | 通常更高 |
-| 部署含义 | adapter + 量化底座 | 量化模型本身更适应低比特 |
+| `q_proj/k_proj/v_proj/o_proj` | attention 读写和信息混合 | 语言、代码、长上下文常见 |
+| `up_proj/down_proj/gate_proj` | MLP 变换和非线性特征 | 风格、领域表达、复杂任务常见 |
+| embedding / lm head | 词表和输出分布 | 新词、结构化输出、特殊 token |
+| multimodal projector | 视觉/音频到语言空间对齐 | VLM、OCR、图表理解 |
+| action / risk head | 动作分布和安全判断 | VLA、机器人、控制任务 |
 
-## 一个医疗问答例子
+target modules 选得太少，adapter 学不动；选得太多，显存、过拟合和服务端 adapter 管理成本上升。多模态和 VLA 场景尤其要小心：只给语言层打 LoRA，可能修不好视觉 connector 或动作头的问题。
 
-假设要把 7B 通用模型适配到医疗问答：
+## 一个训练决策例子
 
-1. 用 QLoRA 载入 4bit 底座，只训练 attention 和 MLP 的 LoRA。
-2. 保持 compute dtype 为 BF16，避免训练计算完全受 4bit 噪声限制。
-3. 校验通用问答、医疗术语、拒答安全、长病历摘要。
-4. 如果医疗长文档掉点，先检查 sequence length、target modules 和数据，而不是直接提高 rank。
-5. 部署时确认 runtime 能加载量化底座和 adapter，或明确是否 merge。
+假设要把 7B 通用模型适配到医疗文档问答。
+
+第一步不要直接拉高 rank，而是先确认 4bit 底座在医疗验证集上没有明显基础掉点。如果量化后原模型已经把术语、小数、长病历摘要搞坏，adapter 要先补量化损伤，再学新任务，训练会很吃力。
+
+第二步选择 target modules。普通问答可以先覆盖 attention 和 MLP；如果任务包含 OCR 表格或多模态病历，要检查 projector 和视觉相关层是否也需要 adapter 或更高精度。
+
+第三步记录并分桶评测：通用问答、医疗术语、拒答安全、长病历摘要、字段级抽取、药品剂量、小数点和跨页引用。QLoRA 训练 loss 下降，不代表高风险字段就安全。
+
+第四步明确部署形态。线上是加载 4bit base + adapter，还是 merge adapter 后再量化？runtime 是否支持对应量化格式、adapter 并发、KV cache 和 batch 合并？训练省显存，不自动等于部署省延迟。
+
+## 外部精读
+
+- [QLoRA 论文](https://arxiv.org/abs/2305.14314)：理解 NF4、double quantization 和 paged optimizer。
+- [LoRA 论文](https://arxiv.org/abs/2106.09685)：理解低秩适配为什么能减少可训练参数。
+- [Hugging Face Quantization Concepts](https://huggingface.co/docs/transformers/main/quantization/concept_guide)：部署量化概念和方法边界。
+- [bitsandbytes 文档](https://huggingface.co/docs/bitsandbytes/main/index)：QLoRA 常用实现路径和配置入口。
 
 ## 本页结论
 
-QLoRA 的价值在于让低资源微调变得可行：底座低比特存储，adapter 高效训练，optimizer 主要服务小参数集。它不是 PTQ 的替代品，也不是 QAT 的同义词。读 QLoRA 时，最重要的是分清：省的是微调显存，不一定自动得到端到端最快的低比特部署。
-
-!!! tip "下一站"
-    - 回到本专题入口：[量化](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。
+QLoRA 的核心不是“4bit 训练”，而是“4bit 冻结底座 + 高效 adapter 训练”。LoRA 先减少可训练更新的维度，QLoRA 再压低底座常驻显存，NF4/double quant/paged optimizer 分别处理权重格式、元数据和峰值显存。判断 QLoRA 是否适合一个任务，不要只看能否跑起来，而要看量化底座是否还可靠、adapter 是否覆盖关键模块、数据是否足够干净，以及部署 runtime 是否真的支持目标形态。

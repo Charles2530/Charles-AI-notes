@@ -7,30 +7,6 @@ paper_topic: 高效训练
 # SLA / SLA2：DiT 稀疏线性 Attention
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“SLA / SLA2：DiT 稀疏线性 Attention”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [训练与基础系统](../../training/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「训练与基础系统」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 主论文：`SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention`
-    - 后续改进：`SLA2: Sparse-Linear Attention with Learnable Routing and QAT`
-    - 链接：[arXiv:2509.24006](https://arxiv.org/abs/2509.24006) / [arXiv:2602.12675v1](https://arxiv.org/abs/2602.12675)
-    - 代码：[thu-ml/SLA](https://github.com/thu-ml/SLA)
-    - 团队：Tsinghua University、UC Berkeley
-    - 关键词：Diffusion Transformer、video generation、sparse attention、linear attention、learnable routing、QAT、low-bit attention、FlashAttention、GPU kernel、Wan2.1
-
 这两篇论文讨论的是视频 DiT 里一个很基础但很工程化的问题：**attention 既是长序列视频生成的瓶颈，又很难直接靠稀疏或线性化单独解决。** SLA 先把 attention 权重分成三类：少数关键块精确算，大量边缘块用 linear attention 补偿，极小块直接跳过。SLA2 则继续追问：这个三分法能不能不靠手工规则，低比特 attention 能不能和 sparse-linear attention 一起训练出来。
 
 因此这篇讲解把两篇合在一起看：SLA 是 sparse-linear attention 的第一版，证明“高秩少数精确算、低秩多数便宜补”这条路线可行；SLA2 是第二版，补上可学习路由、比例混合和 QAT，让它更接近可部署的高稀疏注意力方案。
@@ -54,14 +30,6 @@ paper_topic: 高效训练
 =
 \operatorname{softmax}\left(\frac{QK^\top}{\sqrt d}\right)V
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(Q\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(V\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
-| \(d\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 它的问题是 \(QK^\top\) 和 attention weight matrix 都是 \(N\times N\)，复杂度随序列长度平方增长。LLM 长上下文会遇到这个问题，视频 DiT 更明显，因为视频 latent token 同时包含时间和空间维度，序列长度经常达到 10K 到 100K。
@@ -129,13 +97,6 @@ SLA 的输出可以理解成两部分：
 O = O^{s} + \operatorname{Proj}(O^{l})
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(O\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O^{s}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O^{l}\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 其中 \(O^{s}\) 来自 sparse FlashAttention，处理 critical blocks；\(O^{l}\) 来自 linear attention，处理 marginal blocks；`Proj` 是一个可学习线性投影，用来减小 softmax attention 与 linear attention 的分布不匹配。
 
@@ -185,7 +146,6 @@ forward 的关键优化是：对 linear attention 路径预先计算每个 key/v
 
 ## SLA 实验结果
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -289,14 +249,6 @@ SLA2 的出发点不是推翻 SLA，而是把 SLA 里两个比较“工程经验
 P = P_1 + P_2,\quad P_1=P\odot M,\quad P_2=P\odot(1-M)
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(P_1\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(P_2\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(M\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 但是 sparse attention 会在 masked positions 内重新归一化。对每个 query row，若被 mask 选中的概率和为 \(\alpha\)，那么 sparse branch 实际得到的是近似 \(P_s=P_1/\alpha\)，而不是 \(P_1\)。这会带来一个 row-wise scaling mismatch。SLA 用 `Proj(O^l)` 试图补偿这个错配，但 linear 分支既要近似 \(P_2V\)，又要补 sparse 分支的 scale error，任务变得不干净。
 
@@ -319,14 +271,6 @@ SLA2 把输出写成：
 O = \alpha \odot O^s + (1-\alpha)\odot O^l
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(O\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O^s\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O^l\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 其中：
 
@@ -343,27 +287,12 @@ O = \alpha \odot O^s + (1-\alpha)\odot O^l
 O = O^s + \operatorname{Proj}(O^l)
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(O\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O^s\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O^l\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 SLA2 是：
 
 \[
 O = \alpha \odot O^s + (1-\alpha)\odot O^l
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\alpha\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(O\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O^s\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O^l\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 前者把错配交给一个 projection 去学，后者直接把 sparse branch 的 row-wise probability mass 放进公式里。对学习来说，SLA2 的目标更明确：\(\alpha O^s\) 对应被 sparse branch 负责的 \(P_1V\)，\((1-\alpha)O^l\) 对应 linear branch 负责的 \(P_2V\)。
@@ -476,14 +405,3 @@ SLA 最值得记住的不是“95% sparsity”这个数字，而是它给近似 
 5. 官方代码：[thu-ml/SLA](https://github.com/thu-ml/SLA).
 
 这一页最后回到三个验收点：方法上，SLA 的主线是把 dense attention 分解成 sparse/linear/low-bit 可训练路径，用结构替换和 QAT 同时降成本。实验上，速度、显存和质量表必须一起看；单独的稀疏率没有意义。诊断上，消融要回答“是稀疏模式有效，还是低比特/训练补偿在兜底”。
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    SLA 要按 attention 结构替换读：方法核心是 sparse/linear 分支、低比特 attention 和训练适配；实验看速度、显存、质量与稀疏率消融。它说明 attention 可被系统性改轻，但长上下文质量和 kernel 生态决定能否真正落地。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。
-    - 按导航顺序继续：[Attn-QAT：4-bit Attention](attn-qat.md)。

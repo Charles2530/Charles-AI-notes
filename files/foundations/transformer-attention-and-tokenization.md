@@ -1,142 +1,63 @@
 # Transformer 输入与注意力
 
-Transformer 是现代 LLM、VLM、DiT、世界模型和很多推理系统的核心结构。它的关键思想是：把输入变成 token，再用 attention 让 token 之间按相关性互相读取信息。
+Transformer 先把输入切成 token，再让每个 token 按相关性读取其他 token。理解这句话，比背完整架构图更重要：LLM 读文本、VLM 读图文、DiT 读图像 patch、世界模型读视频和动作，最终都要回到 token 如何互相交换信息。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“Transformer 输入与注意力”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+## 核心问题
+
+如果一句话有 100 个 token，或者一个机器人 episode 有几万枚视觉、语言、状态和动作 token，模型如何决定“当前 token 应该看谁”？Transformer 的答案是 attention：每个位置产生一个 query，去匹配所有 key，再按权重读取 value。
+
+这也是为什么 Transformer 又强又贵。它能把远距离依赖、跨模态对齐、动作条件和长上下文放在统一序列里；代价是 token 数一多，attention、KV cache、显存和延迟都会一起变成系统问题。
+
+## 先从 token 说起
+
+Token 是模型处理信息的最小计算单位。文本模型把字符串切成 subword token；视觉模型把图片切成 patch token；视频模型可能按时间和空间切成 tubelet；VLA 或世界模型还会加入动作、状态、语言指令和 latent token。
 
 
-!!! note "读法定位"
-    这页先回答“Transformer 输入与注意力”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
+tokenizer 或 processor 输出序列后，每个 token id 会被映射成向量：
+
+\[
+h_i = E(x_i)
+\]
+
+这里 \(x_i\) 是第 \(i\) 个 token，\(E\) 是 embedding 表，\(h_i\) 是模型真正计算的向量。向量本身还不知道顺序，所以 Transformer 需要 positional encoding 或 RoPE 这类位置机制告诉模型“谁在前、谁在后、相对距离是多少”。
 
 ![Transformer 原论文模型结构图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="500" .atlas-figure-tall }
 
-<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原论文图意：Transformer 由 encoder 和 decoder 组成，核心模块包括 multi-head attention、feed-forward、residual connection、normalization、positional encoding 与输出 softmax。</small>
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原图表达 Transformer encoder-decoder 的基本结构：embedding 加位置编码后进入多层 attention、feed-forward、残差和归一化模块。本站用这张图定位三个读法：token 进入模型，attention 跨 token 读信息，feed-forward 逐 token 变换表示。</small>
 
-!!! note "合并提示"
-    **note · 图解：Transformer 总结构先抓三条线**
+第一次看这张图，先别急着记所有箭头。左边 encoder 更像“把输入序列读懂并编码”；右边 decoder 更像“在已经生成的前缀上继续生成下一个 token”。Decoder 多了 masked self-attention，是为了防止当前位置偷看未来 token；encoder-decoder attention 则让 decoder 读取 encoder 的结果。
 
-    第一次看这张图不要急着背每个框。第一条线是输入 token 先变成 embedding，并叠加 positional encoding，让模型知道顺序。第二条线是每层都交替做 attention 和 feed-forward：attention 负责跨 token 读信息，feed-forward 负责逐 token 变换表示。第三条线是 decoder 比 encoder 多了 masked self-attention 和 encoder-decoder attention，所以它既能按因果顺序生成下一个 token，也能读取 encoder 提供的源序列信息。
+## Q/K/V 的最小直觉
 
-    **note · 初学者先抓住**
+Attention 可以按三个问题理解：
 
-    Attention 的核心不是“模型很聪明”，而是每个 token 都能按相关性读取其他 token。Q/K/V 可以先理解成：我想找什么、别人暴露什么、真正读走什么。看到 LLM、VLM、DiT 或 agent 模型时，先分清 tokenization、embedding、self-attention、cross-attention 和输出 head 分别在哪一层。
+| 符号 | 白话 | 在每个 token 上做什么 |
+| --- | --- | --- |
+| Query, \(Q\) | 我现在想找什么 | 当前位置发出的查询 |
+| Key, \(K\) | 我有什么可被匹配 | 其他位置暴露的索引 |
+| Value, \(V\) | 真正能被读走的内容 | 被加权汇总的信息 |
 
-    **tip · 和数据页、解码页的边界**
-
-    本页从 tokenizer / processor 之后开始讲 token 如何进入 Transformer。若你还不清楚样本、标签、schema、清洗、去重和数据版本，先看 [数据与数据集基础](data-and-dataset-basics.md)。若你关心 logits 出来以后怎么采样、temperature/top-p 怎么影响生成、KV cache 如何进入 decode 成本，继续看 [生成与解码基础](generation-and-decoding-basics.md)。
-
-    **tip · 为什么现在要学这个：世界模型的 token 成本**
-
-    世界模型不是只读一句文本，而是同时读多相机图像、视频历史、机器人状态、动作、语言指令和可能的未来 rollout。Attention 决定这些 token 如何互相读取，KV cache 决定长历史在推理时占多少显存，mask 决定哪些过去和未来能被看见。比如 `4` 路相机、`16` 帧、`224x224`、`14x14` patch 就已经有 `16,384` 个视觉 token；如果分辨率提高到 `448x448`，视觉 token 会到 `65,536`，直接超过 `32k` context。学 attention 不是为了背公式，而是为了能判断 token、context、KV、mask 和吞吐之间的取舍。
-
-    **tip · 遇到这些症状，回看本页**
-
-    视觉 token 一多吞吐就断崖下降、长上下文 decode 被 KV cache 卡住、动作 token 加进去后模型不再关注关键帧、或者不同动作的未来几乎一样时，先回到 tokenization、Q/K/V、self-attention 和 cross-attention 的分工。本页能帮你判断该压视觉 token、改连接器、换 GQA/MLA/KV 量化，还是检查 action token 是否真的进入了可被 attention 读取的位置。
-
-## Tokenization：模型如何“切开”输入
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
->
-> 延伸阅读：[04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html) |
-
-Token 是模型处理信息的基本单位。不同模态有不同 token：
-
-| 模态 | token 例子 |
-| --- | --- |
-| 文本 | subword token |
-| 图像 | patch token |
-| 视频 | tubelet token 或 frame token |
-| 机器人 | action token、state token |
-| 世界模型 | latent token、未来状态 token |
-
-Tokenization 的作用是把复杂输入变成一个序列：
+Scaled dot-product attention 写成：
 
 \[
-x = [x_1, x_2, \ldots, x_L]
+\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(x_1\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(x_2\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(x_L\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-
-
-然后每个 token 被映射成 embedding：
-
-\[
-h_i = \text{Embedding}(x_i)
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(h_i\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x_i\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-
-
-这里 \(x_i\) 表示第 \(i\) 个 token，\(h_i\) 表示它对应的向量表示。Embedding 层做的事就是把离散 token id 映射成模型可以连续计算的向量。
-
-## Attention 的 Q/K/V 直觉
-
-Attention 可以用“提问、匹配、读取”理解：
-
-- `Q`：Query，当前位置想问什么。
-- `K`：Key，每个位置暴露什么可匹配信息。
-- `V`：Value，真正被读取的内容。
-
-公式是：
-
-\[
-\text{Attention}(Q,K,V)=\text{softmax}\left(\frac{QK^\top}{\sqrt{d}}\right)V
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(Q\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(V\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
-
-
-这表示每个 token 会根据相似度，从其他 token 里加权读取信息。
-
-!!! note "公式拆读：softmax 里面到底是什么"
-    \(QK^\top\) 是“每个 query 和每个 key 的匹配分数”，shape 大致是 `[L, L]`；\(\sqrt d\) 用来缩放分数，避免维度大时点积过大；`softmax` 把分数变成权重；最后乘 \(V\)，表示按权重把 value 读回来。最简读法是：先匹配，再归一化，再读取。
+\(QK^\top\) 是 query 和 key 的匹配分数矩阵；\(\sqrt{d_k}\) 用来缩放点积，避免维度大时分数过尖；softmax 把分数变成权重；最后乘 \(V\)，表示按权重把 value 读回来。最短读法就是：**先匹配，再归一化，再读取**。
 
 ![Scaled Dot-Product Attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-left.png){ width="280" }
+
 ![Multi-Head Attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-right.png){ width="360" }
 
-<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 2。原论文图意：左图是 scaled dot-product attention 的 Q/K/V 计算流程，右图是 multi-head attention 将多组 attention 并行后拼接再投影。</small>
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 2。原图表达 scaled dot-product attention 和 multi-head attention 的组成。本站用它说明：单个 head 是一次“匹配和读取”，multi-head 是并行使用多套匹配规则后再合并。</small>
 
-!!! note "难点解释：为什么要 multi-head"
-    单个 attention head 只能在一套相似度空间里读取信息。Multi-head attention 等于让模型同时用多套“问题-匹配-读取”规则看同一段序列：有的 head 可能关注局部语法，有的关注长距离依赖，有的关注对齐关系。最后的线性投影再把这些视角合并起来。
+Multi-head attention 不是玄学增强，而是让模型同时从多个角度读同一段序列。有的 head 可以学局部语法，有的 head 可以学长距离引用，有的 head 可以学图文对齐。最后的线性层把这些视角合并成下一层表示。
 
-## Self-Attention 和 Cross-Attention
+## Self-attention 和 cross-attention
 
-### Self-Attention
+Self-attention 指 Q、K、V 都来自同一段序列。LLM 读上下文、ViT 读 patch、视频模型读一组时空 token，大多是 self-attention。
 
-Q、K、V 都来自同一个序列。例如 LLM 中每个 token 读取上下文中的其他 token。
-
-### Cross-Attention
-
-Q 来自主干序列，K/V 来自外部条件。例如扩散模型中，图像 latent 的 query 去读取文本 embedding 的 key/value，从而让图像生成受 prompt 控制。
-
-一个极简伪代码：
+Cross-attention 指 Q 来自当前主干序列，K/V 来自外部条件。扩散模型里，图像 latent 可以用 query 去读取文本 prompt 的 key/value；VLA 里，动作或状态 token 也可以读取视觉和语言 token。
 
 ```text
 # self-attention
@@ -152,139 +73,59 @@ V = text_embedding @ Wv
 y = softmax(Q @ K.T / sqrt(d)) @ V
 ```
 
-## 为什么 Attention 强也贵
+## 为什么 attention 一强就贵
 
-Self-Attention 的核心矩阵是 \(L \times L\)，其中 \(L\) 是序列长度。序列越长，attention 计算和显存压力越大。
+Self-attention 的核心 score matrix 是 \(L \times L\)，\(L\) 是序列长度。文本 4k token 时还容易理解；到了多相机视频、长上下文检索或世界模型 rollout，token 数会迅速膨胀。
 
-![FlashAttention IO-aware attention 原论文图](../assets/images/paper-figures/transformer/flashattention-figure-1-io-aware.png){ width="920" }
+举个机器人世界模型例子：4 路相机、16 帧、每帧 224x224，按 14x14 patch 切图，每帧每路是 256 个视觉 token，总数是：
 
-<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原论文图意：FlashAttention 用 tiling 避免把巨大的 \(N\times N\) attention matrix 写到 HBM，并把 attention 的多步 PyTorch 实现融合成更少的高效内核。</small>
+\[
+4 \times 16 \times 256 = 16{,}384
+\]
 
-!!! note "图解：这张图支撑的是 IO 成本判断"
-    Attention 贵不只是因为 FLOPs 多，还因为朴素实现会把 score、mask、softmax、dropout 等中间结果反复读写到 HBM。FlashAttention 图里的核心证据是：把 Q/K/V 分块搬进 SRAM 并融合计算，可以避免物化完整 \(N\times N\) 矩阵。这解释了为什么同样数学公式，kernel 和 memory layout 会让长上下文吞吐差一个量级。
-
-### 4.1 算一遍：视觉 token 一多，score matrix 先爆
-
-沿用前面的机器人世界模型例子：`4` 路相机、`16` 帧、`224x224`、`14x14` patch，共 `16,384` 个视觉 token。单个 attention head 的 score matrix 是：
+单个 attention head 的 score matrix 有：
 
 \[
 16{,}384^2 \approx 268\text{M elements}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+如果用 BF16 物化，单 head 只存 score 就约 512 MiB；16 个 heads 就接近 8 GiB，还没算 Q/K/V、MLP 激活、反向保存和多层堆叠。这就是为什么工程里要关心 patch size、视觉 resampler、local attention、GQA/MQA、KV cache 和 FlashAttention。
 
+![FlashAttention IO-aware attention 原论文图](../assets/images/paper-figures/transformer/flashattention-figure-1-io-aware.png){ width="920" }
 
-如果用 BF16 物化，只是一个 head 的 score 就约：
+<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原图表达朴素 attention 会把中间矩阵反复读写 HBM，而 FlashAttention 用 tiling 和 online softmax 避免物化完整 attention matrix。本站用它说明：同一个数学公式，在不同 kernel 和内存访问路径下会有完全不同的吞吐。</small>
 
-\[
-268\text{M} \times 2 \text{ bytes} \approx 512\text{MiB}
-\]
+FlashAttention 没有把 attention 的数学复杂度变成线性，它优化的是内存访问和中间结果物化。读长上下文或多模态模型时要分清两件事：token 太多带来的 \(L^2\) 计算仍在；朴素实现额外制造的 HBM 往返可以被更好的 kernel 大幅减少。
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
+## KV cache 为什么进入推理系统
 
+自回归模型一次生成一个 token。生成第 \(t\) 个 token 时，历史 token 的 K/V 已经算过，如果每步都重算完整上下文就很浪费。KV cache 把历史 K/V 存下来，新 token 只需要和缓存匹配。
 
-`16` 个 heads 就是约 `8GiB`，这还没算 softmax/dropout 中间结果、反向传播保存、QKV、MLP 激活和多层堆叠。FlashAttention 可以避免把完整 score matrix 落到 HBM，但它没有把 attention 的数学复杂度变成线性；如果 token 数从 `16k` 涨到 `65k`，\(L^2\) 仍然会把算力和调度压力推上去。
+这让 decode 快很多，但也带来显存账：每层、每个历史 token、每个 KV head 都要存 K/V。上下文越长、batch 越大、层数越多，KV cache 越容易成为服务瓶颈。GQA、MQA、MLA、KV quantization、paged attention、prefix cache，本质上都在回答“历史信息怎么存得下、读得快、还别明显掉质量”。
 
-所以真正的取舍链是：
+## 现代 Transformer 不只是一张课堂图
 
-```text
-症状：多相机长历史一接入，显存爆或 token/s 掉到不可用
-指标：visual tokens、attention FLOPs、HBM read/write、kernel time、KV cache、P95 latency
-机制：token 数同时放大 score matrix、KV cache 和跨模态对齐成本
-修法：增大 patch、视觉 resampler、分层 token、局部/稀疏 attention、FlashAttention、GQA/MLA
-反例：只换 FlashAttention 不压 token，训练也许能跑，但 rollout latency 仍可能不达标
-边界：需要毫米级接触判断时，盲目压视觉 token 会把动作条件成本转移成失败率
-```
-
-这解释了为什么长上下文推理会重点优化：
-
-- KV cache：缓存历史 token 的 key/value，避免解码每一步重复计算完整上下文。
-- FlashAttention：重排 attention 计算和显存访问，减少中间矩阵落显存的成本。
-- sliding window attention：只让 token 关注附近窗口，牺牲部分全局交互换取更低复杂度。
-- context compression：压缩或摘要长历史，把有限上下文留给最关键证据。
-- prefix cache：复用相同前缀的 KV 结果，适合模板化 prompt 或多请求共享上下文。
-
-如果你关心为什么长上下文还会涉及位置编码、causal mask、padding mask 和 KV cache，可以继续看 [位置编码与上下文 Mask](positional-encoding-masks-and-context.md)。
-
-## 进阶读法：技术报告里的 Transformer、KV cache、MLA 与 MoE
-
-读 DeepSeek-V3、Kimi K2、Qwen3 这类技术报告时，Transformer 已经不只是“Q/K/V + MLP”这张课堂图了。它更像一个系统接口：attention 决定长上下文怎么存，FFN 决定参数容量怎么用，router 决定 token 会被送到哪台机器上的哪个 expert。
+技术报告里的 Transformer 常常已经塞进了长上下文、MoE、低比特和通信设计。比如 DeepSeek-V3 的 block 里有 MLA 和 DeepSeekMoE。
 
 ![DeepSeek-V3 architecture](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原论文图意：DeepSeek-V3 的 Transformer block 采用 MLA 和 DeepSeekMoE；MLA 缓存压缩 latent 与 RoPE key，MoE 由 shared experts 和 routed experts 共同组成。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原图表达 DeepSeek-V3 block 使用 MLA 压缩 KV cache，并用 shared experts 与 routed experts 构成 MoE。本站用它说明：现代 Transformer 的创新常发生在 attention 的历史存储和 FFN 的稀疏激活上。</small>
 
-!!! note "这张图帮你补哪块基础"
-    左边仍是熟悉的 Transformer block：attention、FFN、RMSNorm、残差。真正需要补的是右边两个放大框。`MLA` 解决的是长上下文推理时 KV cache 太大的问题；`MoE` 解决的是“想要更多参数容量，但不想每个 token 都跑完整参数”的问题。也就是说，现代大模型架构的很多创新并不是换掉 Transformer，而是在 Transformer 的两个热区上做系统化改造。
+读这类图时，先问四个问题：历史 K/V 怎么存？每个 token 实际激活多少参数？router 是否会制造负载不均？通信是否吃掉了稀疏计算省下来的时间？这比只看 total params 更可靠。
 
-### 5.1 KV cache 不是小细节
+## 容易误解的地方
 
-自回归推理时，每生成一个新 token，模型都要读取历史 token 的 key/value。标准 MHA 会在每层、每个历史 token 上缓存完整 K/V，序列一长，显存就像滚雪球一样增长。很多长上下文模型不是算力先爆，而是 KV cache 先把显存吃满。
+| 误解 | 更准确的说法 |
+| --- | --- |
+| Attention 会“理解一切” | Attention 只是信息路由机制，理解来自数据、目标函数、结构和训练。 |
+| Multi-head 越多越好 | head 数会影响表达和 KV cache 成本，服务时还要看 GQA/MQA 等折中。 |
+| FlashAttention 解决了长上下文 | 它减少 IO 和中间矩阵成本，但 token 数膨胀仍会推高计算和调度压力。 |
+| Transformer 图学完就够了 | 工程里还要看 tokenizer、position、mask、KV cache、kernel、routing 和 batch。 |
 
-`MLA` 的直觉可以理解成“给历史笔记做压缩索引”。模型不再把每个 token 的完整 K/V 原样存下来，而是缓存更紧凑的 latent 表示和必要的位置信息，真正做 attention 时再展开需要的部分。这样做不会让长上下文免费，但会把服务时的内存曲线压低。
+## 外部精读
 
-### 5.2 MoE 的关键是 activated params
-
-MoE 最容易被误读成“参数越多，每个 token 计算越多”。实际上稀疏 MoE 的核心是：
-
-```text
-总参数很大
-  但每个 token 只激活少数 experts
-  所以单 token 计算更接近 activated params
-```
-
-例如 DeepSeek-V3 报告里的 `671B total params / 37B activated params`，Kimi K2 报告里的 `1.04T total params / 32.6B activated params`，都在强调同一件事：模型仓库很大，但每次只打开其中少数几个抽屉。读 MoE benchmark 时，应同时看 total params、activated params、active experts、shared experts 和路由策略，而不是只盯总参数。
-
-### 5.3 Router 也是系统设计
-
-MoE 里的 router 不只是一个数学函数。它会决定 token 被送到哪些 expert；如果 expert 分布在不同 GPU 或节点上，router 也间接决定了通信路径。某些 expert 过热，就会拖慢对应设备；负载均衡太强，又可能破坏 expert specialization。
-
-这就是为什么 DeepSeek-V3 会讲 auxiliary-loss-free load balancing，Kimi K2 会讲 sparsity scaling 和训练基础设施。MoE 的真实难点不是“把 MLP 复制很多份”，而是让模型容量、专家分工、通信成本和训练稳定性同时成立。
-
-| 技术报告常见词 | 它在基础层面对应什么 | 读的时候先问 |
-| --- | --- | --- |
-| KV cache / MLA / GQA | 历史 token 的 K/V 如何存和读 | 长上下文显存是否可控 |
-| total / activated params | 参数容量和单 token 计算的分离 | 每个 token 实际跑了多少参数 |
-| routed / shared experts | 通用能力与专家能力的分工 | router 是否稳定、专家是否过热 |
-| all-to-all | MoE token dispatch/gather 通信 | 通信是否吃掉训练吞吐 |
-
-所以，学 Transformer 不应停在“attention 会看上下文”。读技术报告时更有用的问题是：上下文怎么缓存，参数怎么稀疏激活，token 怎么路由，通信怎么隐藏，最后这些设计是否真的换来了更好的训练和服务效率。
-
-## Transformer Block 的基本结构
-
-一个常见 block 可以写成：
-
-```text
-function TransformerBlock(x):
-    x = x + Attention(Norm(x))
-    x = x + MLP(Norm(x))
-    return x
-```
-
-这里的残差连接和归一化非常关键。没有它们，深层 Transformer 很难稳定训练。
-
-## 和后续专题的关系
-
-- [数据与数据集基础](data-and-dataset-basics.md)：理解 token 之前的样本、标签和 processor 边界。
-- [生成与解码基础](generation-and-decoding-basics.md)：理解 logits、采样参数、自回归生成和 KV cache。
-- [扩散模型中的 DiT](../diffusion/training.md)：图像 patch token 进入 Transformer 去做去噪。
-- [VLM 架构与训练](../vlm/architecture-and-training.md)：图像 token 和文本 token 如何连接。
-- [推理系统](../inference/index.md)：KV cache 和 attention 决定长上下文成本。
-- [算子与编译器](../operators/index.md)：FlashAttention 和 GEMM 是 Transformer 性能核心。
-- [线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)：理解 QKV 投影、MLP 和矩阵乘热路径。
-- [Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md)：理解为什么一些新模型用 recurrent state 替代大量 attention，并保留少量 attention 做混合架构。
-
-## 本页结论
-
-Transformer 的核心不是“一个大模型名字”，而是一套 token 之间动态通信的机制。理解 token、embedding、Q/K/V、self-attention 和 cross-attention，就能读懂很多现代 AI 系统的共同骨架。
-
-!!! tip "下一站"
-    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[位置编码与 Mask：顺序和可见性](positional-encoding-masks-and-context.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)：最适合第一次建立 Transformer 图像直觉。
+- [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)：适合把公式和 PyTorch 实现对上。
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762)：原论文仍然值得看 Figure 1 和 Figure 2。
+- [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 attention 为什么也是内存系统问题。
+- [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：把 KV cache 接到真实 serving 系统。

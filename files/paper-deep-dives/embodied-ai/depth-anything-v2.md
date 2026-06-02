@@ -7,31 +7,6 @@ paper_topic: 具身智能
 # Depth Anything V2：单目深度的数据配方
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“Depth Anything V2：单目深度的数据配方”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [具身智能](../../embodied-ai/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「具身智能」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 论文：`Depth Anything V2`
-    - 系统：`Depth Anything V2 / DA2`
-    - 链接：[arXiv:2406.09414](https://arxiv.org/abs/2406.09414)
-    - 项目页：[depth-anything-v2.github.io](https://depth-anything-v2.github.io/)
-    - 代码与模型：[DepthAnything/Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)
-    - 关键词：monocular depth、DINOv2、DPT、synthetic data、pseudo label、teacher-student、metric depth、DA-2K
-
-
 Depth Anything V2 放在具身智能专题里，不是因为它直接输出机器人动作，而是因为它补了机器人闭环里最基础的视觉状态：**从普通 RGB 图像得到更细、更稳、更开放域的深度先验**。抓取、导航、避障、重建、VLA 状态编码和仿真数据质检，都需要这层几何信号。
 
 DA2 的核心贡献很朴素：它几乎没有靠新奇结构取胜，而是把单目深度训练的数据链路重新排了一遍：
@@ -267,7 +242,6 @@ DA2 的 ablation 很有意思。直觉上，学生训练似乎应该混合 synth
 
 ## 评测：为什么 DA-2K 很重要
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -345,14 +319,3 @@ DA2 最值得记住的一句话是：**单目深度 foundation model 的进步�
 4. [DA-2K Benchmark](https://huggingface.co/datasets/depth-anything/DA-2K)
 
 这一页最后回到三个验收点：方法上，DA2 把重点从“更多无标注”推进到“更干净 teacher 与合成/真实数据配方”，用高质量伪标签降低 DA1 的噪声继承。实验上，读 zero-shot、metric depth 和可视化时，要分清相对深度泛化与绝对尺度能力。诊断上，synthetic-only failure、add-unlabeled 和 pseudo-label 图，说明数据质量比单纯数据量更关键。
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    Depth Anything V2 要读成 DA1 的数据质量升级：方法核心是合成数据、真实无标注数据和 teacher/student 细化，实验重点是相对深度、metric depth、跨域可视化和 pseudo-label 消融。它提高几何先验，不直接保证抓取距离或避障阈值。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[具身智能](../../embodied-ai/index.md)。
-    - 按导航顺序继续：[VGGT：feed-forward 3D 几何](vggt.md)。

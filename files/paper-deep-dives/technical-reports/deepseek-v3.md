@@ -7,29 +7,6 @@ paper_topic: 技术报告
 # DeepSeek-V3：671B MoE、MLA 与 FP8 训练
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“DeepSeek-V3：671B MoE、MLA 与 FP8 训练”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 报告信息**
-
-    - 技术报告：`DeepSeek-V3 Technical Report`
-    - 模型：`DeepSeek-V3`
-    - 链接：[arXiv:2412.19437](https://arxiv.org/abs/2412.19437)
-    - 代码与模型：[DeepSeek-V3 GitHub](https://github.com/deepseek-ai/DeepSeek-V3)
-    - 关键词：MoE、MLA、DeepSeekMoE、auxiliary-loss-free load balancing、MTP、FP8 training、DualPipe、SFT、RL、GRPO、R1 distillation
-
 DeepSeek-V3 最值得拆开的地方不是单个 benchmark 分数，而是它把四件事做成了一个闭环：**用 MoE 扩大总参数，用 MLA 和路由设计压低每 token 成本，用 FP8 与 DualPipe 把训练系统跑稳，再用 SFT、RL 和 R1 蒸馏把 base model 转成可用的 chat model。**
 
 | Dimension | DeepSeek-V3 |
@@ -99,13 +76,6 @@ DeepSeek-V3 仍是 Transformer block 堆叠，但 attention 和 FFN 都做了工
 $$
 \mathbf{c}_{t}^{KV}=W^{DKV}\mathbf{h}_t
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(K\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(W^{DKV}\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 生成时主要缓存 \(\mathbf{c}_{t}^{KV}\) 和带 RoPE 位置信息的 \(\mathbf{k}_{t}^{R}\)，真正参与 attention 的 \(\mathbf{k}^{C}\)、\(\mathbf{v}^{C}\) 可以从 latent 上投影出来。直观上，它不是把历史 token 删掉，而是把每个 token 的 K/V 表示换成更紧凑的存储格式。
@@ -199,13 +169,6 @@ MTP 的训练目标是：
 $$
 \mathcal{L}_{\text{MTP}}=\frac{\lambda}{D}\sum_{k=1}^{D}\mathcal{L}_{\text{MTP}}^k
 $$
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\lambda\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(k\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
 
 V3 报告还做了消融，说明 MTP 在小 MoE 和大 MoE 上多数 benchmark 有提升。注意这类消融的关键是：推理时 MTP module 被丢弃，所以对比模型的 inference activated params 一样。
@@ -391,14 +354,6 @@ $$
 A_i=\frac{r_i-\operatorname{mean}(\{r_1,\ldots,r_G\})}{\operatorname{std}(\{r_1,\ldots,r_G\})}
 $$
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(A_i\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(r_i\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(r_1\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(r_G\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-
 
 直观上，GRPO 问的是：“同一道题的一组回答里，哪一个相对更好？”这比训练一个全局 value model 更省系统成本，尤其适合超大 MoE policy。V3 的 RL prompts 覆盖 coding、math、writing、role-playing 和 QA，所以它不是只做推理 RL，也包含通用偏好对齐。
 
@@ -437,7 +392,6 @@ V3 报告最受关注的一张表是训练成本。按作者假设的 H800 租�
 
 ## Evaluation：看能力，也看短板
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -485,14 +439,3 @@ DeepSeek-V3 给训练项目的启发可以压成几条：
 更准确地说，DeepSeek-V3 的价值在于展示了一个大模型系统的完整工程形态：**模型结构决定可扩展性，训练系统决定能不能按成本跑完，后训练决定 base model 能不能变成可靠产品模型。**
 
 这一页最后回到三个验收点：方法上，DeepSeek-V3 的系统接口是 MLA 降 KV、DeepSeekMoE 降 active params、MTP 改训练信号、DualPipe/FP8 降训练成本。实验上，benchmark、needle、expert load 和 overlap 图分别对应能力、长上下文、路由均衡和系统吞吐。诊断上，报告最重要的消融不是单点分数，而是 MoE 路由、FP8 稳定和通信重叠能否同时成立。
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    DeepSeek-V3 的核心是 MoE 训练系统：方法要抓 MLA、DeepSeekMoE、MTP、FP8 和 DualPipe；实验看训练成本、benchmark、needle、expert load 与通信重叠。报告给的是系统路线，不是任何团队都能复刻的完整 recipe。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[技术报告与证据台账](../../references/claim-ledger.md)。
-    - 按导航顺序继续：[DeepSeek-R1：RL 激发推理能力](deepseek-r1.md)。

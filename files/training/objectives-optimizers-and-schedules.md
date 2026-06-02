@@ -1,68 +1,12 @@
-# 目标函数、优化器与 LR 日程
+# 目标函数、优化器与学习率日程：训练轨迹由什么决定
 
-模型架构决定系统允许学什么，数据决定系统能看到什么，目标函数、优化器和学习率日程决定系统实际沿着怎样的路径学到什么。同一个模型、同一批数据，仅仅更换 loss 配方和 schedule，就可能得到截然不同的训练轨迹。
+同一个模型、同一批数据，只要换一个 loss 配方、优化器或学习率日程，训练轨迹就可能完全不同。目标函数定义“模型被什么惩罚”；优化器决定“梯度怎样变成参数更新”；学习率日程决定“每一步走多大、什么时候收力”。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“目标函数、优化器与 LR 日程”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
+这篇只回答一个问题：**为什么训练不是把 loss 写出来然后交给 AdamW 就结束？**
 
+## 目标函数定义学习压力
 
-!!! note "读法定位"
-    这页先回答“目标函数、优化器与 LR 日程”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
-
-这页给训练目标和优化配置一个统一入口。更系统的数据配方见 [Scaling、课程学习与数据配比](scaling-curriculum-and-data-mixture.md)，数值异常排查见 [训练稳定性与故障排查](stability-numerics-and-failure-triage.md)。
-
-!!! note "合并提示"
-    **note · 初学者先抓住**
-
-
-    训练配方可以先按“目标、步长、刹车”理解：loss 告诉模型什么叫错，optimizer 决定怎样改参数，learning rate schedule 决定每一步迈多大。三者必须一起看，单独换一个组件，往往会改变整条学习轨迹。
-
-    **example · 有趣例子：厨师调味**
-
-
-    模型像厨师，loss 像食客反馈，optimizer 像改菜谱的方法，learning rate 像每次加盐的量。反馈再准确，如果一次加半罐盐，菜也会报废；如果每次只加一粒盐，改进又会慢到不可接受。
-
-    **tip · 主线定位：降低训练成本和错误优化成本**
-
-
-    目标函数、优化器与 LR 日程在世界模型高效训练里负责回答：训练信号到底在奖励什么，哪些能力被大桶数据主导，哪些阶段切换会破坏稳定性。它降低训练成本和错误优化成本；如果 loss 与闭环目标错位，算力会被稳定地花在错误方向上。
-
-<!-- [补充] -->
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
-## 符号速查：先把公式读顺
-
-训练公式常显得吓人，通常不是因为数学很深，而是符号太多。先记住这张表：
-
-<!-- [补充] -->
-| 符号 | 常见含义 | 直觉 | 取值范围 |
-| --- | --- | --- | --- |
-| \(x\) | 输入 | prompt、图像、视频片段、状态、观测 | 数据空间中的样本 |
-| \(y\) | 目标输出 | 正确 token、参考回答、标签、动作、偏好答案 | 标签空间或目标序列 |
-| \(t\) | 序列位置或训练步 | 第几个 token，或第几步更新 | 非负整数索引 |
-| \(\theta\) | 当前模型参数 | 正在被训练的权重 | 实值张量集合 |
-| \(f_\theta(x)\) | 模型预测 | 当前模型看到输入后的输出 | 张量或概率分布，形状由任务决定 |
-| \(p_\theta(\cdot)\) | 模型给出的概率 | 某个 token、类别或动作有多可能 |
-| \(\mathcal{L}\)、\(\ell\) | loss | 错误有多大，训练压力来自哪里 |
-| \(\mathcal{J}(\theta)\) | 总目标 | 把多个 loss、正则和约束合起来后的训练目标 |
-| \(\nabla_\theta \mathcal{L}\) | 梯度 | 参数往哪个方向改能降低 loss |
-| \(\eta_t\) | 学习率 | 第 \(t\) 步迈多大 |
-| \(\lambda\) | loss 权重或正则权重 | 多个目标之间谁更响亮 |
-| \(\pi_\theta\) | policy / 策略模型 | RLHF/GRPO 中正在被训练的生成模型 |
-| \(r\) 或 \(r_\phi\) | reward | 完整回答、动作或轨迹得到的分数 |
-| \(\beta\) | KL 或偏好强度系数 | 偏好/RL 里的刹车或温度 |
-
-!!! note "读公式的固定顺序"
-    先找输入 \(x\) 和目标 \(y\)，再找模型预测 \(f_\theta(x)\) 或 \(p_\theta\)，然后看 loss 在比较什么，最后看 \(\lambda\)、\(\beta\)、KL、正则这些项在加什么约束。这样读公式，比一开始就追求推导完整得多。
-
-## 目标函数在定义学习压力
-
-大多数训练问题可以写成：
+大多数训练问题都可以写成：
 
 \[
 \min_\theta \mathcal{J}(\theta)
@@ -72,163 +16,45 @@
 + \lambda \Omega(\theta)
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\lambda\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(\Omega\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(p_{}\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
+这里 \(\theta\) 是模型参数，\((x,y)\) 是从训练数据分布采样的输入和目标，\(f_\theta(x)\) 是模型预测，\(\ell\) 是主损失，\(\Omega(\theta)\) 是正则或约束项，\(\lambda\) 控制约束强度。读这行公式时，重点不是每个符号叫什么，而是它在问：模型在哪些样本上犯错、错在哪里、哪些犯错方式更不能接受。
 
+目标函数不是客观真理，而是你给模型施加的训练压力。交叉熵让模型拟合下一个 token；扩散损失让模型学会去噪；偏好损失让模型相对参考模型偏向 chosen；RL 目标让模型先采样，再根据 reward 调整概率。不同目标对应不同学习信号，不能只比较 loss 数值。
 
-现代基础模型复杂在于：\(y\) 可能是下一个 token、噪声、偏好排序、奖励信号、图像 patch 或动作；\(\ell\) 可能由多个子目标组成；样本分布是多源、分阶段、随时间变化的。
+## 监督学习：答案在数据里
 
-| 公式片段 | 符号含义 | 取值范围与白话读法 |
-| --- | --- | --- |
-| \(\min_\theta\) | 寻找一组模型参数 | 让模型变成更少犯错的版本 |
-| \((x,y)\sim p_{\text{data}}\) | 从训练数据分布采样输入和目标 | batch 不是凭空来的，它代表你给模型看的世界 |
-| \(\ell(f_\theta(x),y)\) | 比较模型预测和目标 | 预测离目标越远，惩罚越大 |
-| \(\lambda\Omega(\theta)\) | 正则项或约束项 | 让模型不要用不希望的方式降低主 loss |
-
-不同目标本质上在回答不同问题：
-
-| 目标 | 问题 | 常见用途 |
-| --- | --- | --- |
-| 交叉熵 | 怎样拟合数据分布 | LLM、代码、多模态 token |
-| 扩散损失 | 怎样恢复被噪声破坏的信号 | 图像、视频、音频生成 |
-| 对比损失 | 怎样塑造表示空间几何 | 检索、对齐、表征学习 |
-| 偏好目标 | 怎样偏向更受欢迎的输出 | RLHF、DPO、对齐 |
-| 强化学习目标 | 怎样最大化长期回报 | agent、机器人、工具使用 |
-| 多任务目标 | 怎样同时保留多个能力 | VLM、VLA、世界模型 |
-
-所以“哪种 loss 更好”没有统一答案，必须看它给模型施加了什么学习压力。
-
-## 常见目标族：按学习信号从直接到间接读
-
-目标函数可以按“答案有多直接”来读。监督学习最直接，扩散和对比学习需要构造中间任务，偏好/RL 最间接，因为模型要先采样，再用人类偏好、reward model 或 verifier 判断结果。
-
-### 1. 监督学习：交叉熵和 SFT
-
-自回归语言模型最经典的目标是 next-token prediction：
+自回归语言模型的 next-token objective 是：
 
 \[
 \mathcal{L}_{\text{CE}}
 =
 -
 \sum_{t=1}^{T}
-\log p_\theta(x_t\mid x_{<t}).
+\log p_\theta(x_t\mid x_{<t})
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(x_{<t}\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+这里 \(x_t\) 是第 \(t\) 个 token，\(x_{<t}\) 是前缀。公式读法很直接：正确 token 概率越高，\(-\log p_\theta\) 越小；正确 token 概率越低，惩罚越大。
 
-
-**白话读法**：每个位置都让模型猜下一个 token。正确 token 概率越高，\(-\log p_\theta\) 越小；正确 token 概率越低，惩罚越大。
-
-SFT 仍然是交叉熵，只是输入变成 prompt，目标变成高质量回答：
+SFT 仍然是交叉熵，只是输入变成指令 \(x\)，目标变成示范回答 \(y\)：
 
 \[
 \mathcal{L}_{\text{SFT}}
 =
 -
 \sum_{t=1}^{T}
-\log p_\theta(y_t\mid x,y_{<t}).
+\log p_\theta(y_t\mid x,y_{<t})
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(T\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(y_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+SFT 教模型“在这个输入下模仿这份示范回答”。它适合学习格式、风格、工具调用模板和领域表达，但它不直接告诉模型哪个回答更受人类偏好，也不保证真实任务风险最低。
 
+## 偏好学习：答案变成相对比较
 
-这里 \(x\) 是用户指令或任务输入，\(y_t\) 是示范回答的第 \(t\) 个 token，\(y_{<t}\) 是示范回答前缀。它教模型“在这个输入下应该怎样回答”，但不保证回答一定最受偏好，也不保证真实任务风险最低。
-
-### 2. 生成建模：扩散损失
-
-扩散模型常用噪声、\(x_0\) 或 velocity 预测目标。以噪声预测为例：
-
-\[
-\mathcal{L}_{\text{diff}}
-=
-\mathbb{E}_{x_0,\epsilon,t}
-\left[
-\|\epsilon-\epsilon_\theta(x_t,t,c)\|_2^2
-\right].
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\epsilon\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\epsilon_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(x_0\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
-
-
-**白话读法**：把干净样本加噪，模型根据 \(x_t,t,c\) 猜噪声 \(\epsilon\)。猜得越接近，平方误差越小。不同参数化会影响梯度尺度、采样器兼容性和训练稳定性。
-
-### 3. 表征学习：InfoNCE 和对比目标
-
-图文对齐和样本匹配常用 InfoNCE：
-
-\[
-\mathcal{L}_{\text{InfoNCE}}
-=
--
-\log
-\frac{\exp(\mathrm{sim}(z,z^+)/\tau)}
-{\exp(\mathrm{sim}(z,z^+)/\tau)+\sum_i\exp(\mathrm{sim}(z,z_i^-)/\tau)}.
-\]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\tau\) | 轨迹或采样路径 | 由策略与环境/数据生成过程决定 |
-| \(z\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(z_i\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-
-
-**白话读法**：让正确配对在一堆候选里更相似，让错误配对相对更远。它优化的是表示空间几何，不是直接生成答案。
-
-### 4. 偏好学习：DPO 和人类排序
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
-> **算法视角**：PPO / DPO 都是在候选回答之间定义偏好信号；PPO 通过策略更新和 KL 约束控制模型漂移，DPO 则把 chosen / rejected 对直接转成 pairwise loss。
->
-> 延伸阅读：[12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| DPO pair loss | $O(BL)$ logprob 评估 | 需要 policy / reference 的中间结果 | $B$ 为样本对数，$L$ 为序列长度；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html) |
-| PPO rollout + update | 多次模型前向 / 反向 | 常同时保留 policy、reference、reward 路径 | 成本主要来自多模型调用、采样和 KL 监控。 |
-
-偏好学习会比较优选回答 \(y^+\) 和劣选回答 \(y^-\)。InstructGPT 的标注界面图能提醒你：很多 reward 信号不是天然分数，而是人类在同一个 prompt 下比较出来的。
+InstructGPT 的标注界面很适合提醒我们：很多对齐信号不是 token 级标准答案，而是同一个 prompt 下多个回答的相对排序。
 
 ![InstructGPT labeler ranking interface 原论文图](../assets/images/paper-figures/training/instructgpt-labeler-ranking.png){ width="860" }
 
-<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b)。原论文图意：标注者在同一个 prompt 下比较多个模型输出，并把它们从最好到最差排序。</small>
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b)。原图表达：标注者在同一个 prompt 下比较多个模型输出，并从最好到最差排序。本站读法：偏好数据描述的是“哪个回答更好”，不是“每个 token 应该是什么”。</small>
 
-!!! note "图解：这张图在回答什么"
-    偏好数据不是“每个 token 的标准答案”，而是“同一问题下哪个回答更好”。如果标注口径偏向长答案、保守答案或固定格式，后续 reward model、DPO 或 PPO 都会把这种偏好继续放大。
-
-DPO 的常见形式是：
+DPO 把 chosen / rejected pair 直接变成一个 closed-form preference objective。常见写法是：
 
 \[
 \mathcal{L}_{\text{DPO}}
@@ -245,101 +71,44 @@ DPO 的常见形式是：
 \log
 \frac{\pi_\theta(y^-\mid x)}
 {\pi_{\text{ref}}(y^-\mid x)}
-\right).
+\right)
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\sigma\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(\beta\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\pi_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\pi_{\text{ref}\) | 策略或概率分布 | 非负概率分布，总和为 1 |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
+这里 \(y^+\) 是更受偏好的回答，\(y^-\) 是较差回答，\(\pi_{\text{ref}}\) 是参考模型，\(\beta\) 控制偏好强度。读这行公式时抓住相对性：相对参考模型，提高 chosen 的概率，压低 rejected 的概率。DPO 不需要显式 reward model 和 PPO rollout，但仍然强依赖偏好数据质量、参考模型选择、长度偏置和学习率。
 
+## RL 目标：先采样，再评价
 
-**白话读法**：相对参考模型，提高优选回答的概率，压低劣选回答的概率。它不需要显式训练 reward model，但仍然非常依赖偏好数据质量、参考模型和学习率。
-
-### 5. 强化学习：先采样，再用 reward 判断
-
-强化学习目标比普通监督学习多一层间接性。监督学习里，目标答案 \(y\) 通常已经给定；强化学习里，模型先按当前策略采样动作或回答，再根据奖励判断这次采样是否值得加强。语言模型 RLHF 可以简化成：
+RLHF/RLVR 的目标更间接。模型先按当前策略采样回答，再由 reward model、规则、测试、verifier 或环境给分。一个简化目标是：
 
 \[
 \max_\theta\;
 \mathbb{E}_{y\sim \pi_\theta(\cdot\mid x)}
 \left[
-r_\phi(x,y)
+r(x,y)
 -
 \beta\,\mathrm{KL}(\pi_\theta\|\pi_{\text{ref}})
-\right].
+\right]
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\pi_\theta\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\phi\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(\beta\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\pi_\theta\\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\pi_{\text{ref}\) | 策略或概率分布 | 非负概率分布，总和为 1 |
-| \(y\) | 公式中的变量或中间量 | 按上下文定义 |
+这里 \(r(x,y)\) 是完整回答或轨迹的奖励，KL 项限制当前策略不要离参考模型太远。读这行公式时，重点是 reward 不是每个 token 的标准答案。PPO/GRPO 必须把“这个回答整体更好”转成 token 概率更新，所以才需要 old log prob、advantage、clip、KL 或 group baseline 这些稳定装置。
 
-
-**白话读法**：鼓励当前模型更常生成高奖励回答，同时用 KL 项限制它不要离参考模型太远。
-
-!!! note "初学者解释：RLHF 不是让 reward 直接替代 loss"
-    Reward model 给的是完整回答的偏好分数，不是每个 token 的标准答案。PPO 这类算法要把“这个回答整体更好”转成 token 级概率更新，因此需要 value、advantage、旧策略概率、clip 和 KL 这些稳定装置。缺少这些装置，模型很容易为了追高 reward 走偏，例如变长、套模板、过度拒答或牺牲事实性。
-
-## GRPO / RLVR：同一道题多采样，再做组内比较
-
-DeepSeek-R1、Qwen3 等技术报告里反复出现 `GRPO` 和 `RLVR`。这部分如果只理解成“又一种 PPO 变体”，会漏掉重点。它真正回答的是：当奖励来自数学答案、代码测试、选择题、格式检查这类 verifier 时，怎样把“最终是否成功”转成稳定的策略更新。
-
-![GRPO 原图](../assets/images/paper-deep-dives/technical-reports/deepseek-r1/figure-grpo.png){ width="920" }
-
-<small>图源：[DeepSeek-R1](https://arxiv.org/abs/2501.12948)，Supplementary Fig. 1。原论文图意：PPO 使用 value model 估计 advantage；GRPO 省去 value model，直接从同一问题的一组 sampled outputs 的 reward scores 中估计相对 advantage。</small>
-
-!!! note "这张图帮你补哪块基础"
-    PPO 里通常有 policy、reference、reward model 和 value model。value model 要猜“当前前缀未来大概能拿多少奖励”，这在长 CoT 里很难，因为中间推理可能被后面推翻。GRPO 换了一个更朴素的比较方式：同一道题一次采样多条回答，谁通过 verifier、谁格式正确、谁结果更好，就在这一组里相对更高。
-
-    这张图支撑的工程判断是：GRPO 省掉 value model，降低 critic 训练和显存成本；但它把成本转移到组内多采样、reward/verifier 吞吐和 rollout freshness 上。因此不能只问“要不要 critic”，还要算每个 prompt 的采样组大小、平均输出长度和 verifier 延迟。
-
-GRPO 的 advantage 通常来自同题组内标准化：
+GRPO 可以用同一 prompt 的多条采样回答构造组内优势：
 
 \[
 A_i=
 \frac{r_i-\mathrm{mean}(\{r_1,\ldots,r_G\})}
-{\mathrm{std}(\{r_1,\ldots,r_G\})}.
+{\mathrm{std}(\{r_1,\ldots,r_G\})+\epsilon}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(A_i\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(r_i\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(r_1\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(r_G\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
+这里 \(r_i\) 是同题第 \(i\) 个回答的奖励，\(G\) 是同题采样数量。公式读法是：不把难题和易题直接比较，而是在同一道题内部看哪个回答更好。这样可以省掉 value model，但会增加 rollout、verifier 和组内方差管理的成本。
 
+![GRPO 原图](../assets/images/paper-deep-dives/technical-reports/deepseek-r1/figure-grpo.png){ width="920" }
 
-直觉很像同一场考试里比较多份草稿：不是问“这份草稿绝对值多少分”，而是问“它比同题其他解法更好吗”。这样可以省掉 critic / value model，也减少一个大模型训练和显存负担。
+<small>图源：[DeepSeek-R1](https://arxiv.org/abs/2501.12948)，Supplementary Fig. 1。原图表达：PPO 使用 value model 估计 advantage，GRPO 直接从同一问题的一组 sampled outputs 的 reward scores 中估计相对 advantage。本站读法：GRPO 省掉 critic，但把压力转移到多采样、reward/verifier 吞吐和长度偏置控制。</small>
 
-`RLVR` 指的是 reinforcement learning with verifiable rewards。它最适合这类任务：
+## 多目标训练：loss 权重不等于梯度贡献
 
-| 任务 | Verifier 例子 | 为什么适合 RL |
-| --- | --- | --- |
-| 数学 | 最终答案匹配、符号化检查 | 中间步骤难标，但结果可验证 |
-| 代码 | 单元测试、编译器、执行结果 | 真实成功信号比偏好打分更可靠 |
-| 选择题 / STEM | 标准答案、格式检查 | reward 稳定，采样成本可控 |
-| 工具调用 | schema、返回码、任务完成信号 | 能评价完整轨迹是否闭环 |
-
-但它也有边界。开放写作、主观审美、复杂安全判断没有天然 verifier，这时仍要依赖 reward model、judge、人审或规则组合。即使有 verifier，也可能出现 reward hacking：模型学会迎合格式、利用测试漏洞、输出不可读但能过检查的答案。因此 GRPO / RLVR 应和 rejection sampling、格式约束、人工抽检、长度监控、通过率分桶和真实任务评测一起看。
-
-!!! example "有趣例子：一题多解的补习班"
-    老师不给每一步打分，只看最后答案是否正确。学生同一道题写 16 种解法，正确且清楚的解法下次更可能被采用，明显错的解法概率下降。GRPO 就是在把这种“同题多解、组内比较”的信号变成模型参数更新。
-
-## 多目标训练
-
-实际系统很少只优化一个损失。多模态、具身和世界模型常写成：
+多模态、世界模型和 VLA 很少只有一个 loss。常见形式是：
 
 \[
 \mathcal{L}
@@ -350,104 +119,46 @@ A_i=
 +\lambda_4\mathcal{L}_{\text{reg}}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\lambda_1\mathcal\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(\lambda_2\mathcal\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(\lambda_3\mathcal\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(\lambda_4\mathcal\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
+这里 \(\lambda_i\) 是各目标权重，但权重不是全部。一个 token 密集、尺度稳定的 video loss，即使权重只有 1.0，也可能贡献大部分梯度；一个稀疏但关键的 risk loss，即使很重要，也可能因为样本少、梯度弱而被淹没。
 
-
-真正难点不是写公式，而是：
-
-1. 权重如何设；
-2. 不同 loss scale 是否可比；
-3. 哪些目标早期强、后期弱；
-4. 不同数据源上的目标是否要分开归一化；
-5. 一个目标提升时，另一个目标是否退化。
-
-多目标训练常常要和 curriculum、分阶段训练、冻结/解冻策略一起设计。否则辅助目标很容易压制主目标，或者后训练目标把预训练能力冲掉。
-
-!!! note "常见误区：loss 降了就一定更好"
-
-    Loss 是训练压力的代理，不是最终能力本身。某个辅助 loss 下降，可能只是模型学会了更容易的中间任务；偏好 loss 改善，也可能伴随事实性、长上下文或格式稳定性退化。更稳的读法是：每次改 loss、权重或 schedule，都要同步看分桶评测、失败样本和关键能力回归。
-
-### 多目标训练的排查链：辅助 loss 把主目标压住了
-
-假设一个 VLA/world model 同时训练视频预测、动作重建和风险预测：
+例如 VLA/world model 同时训练视频预测、动作重建和风险预测：
 
 ```text
 L = 1.0 * video_loss + 0.2 * action_loss + 0.05 * risk_loss
 ```
 
-训练后 `video_loss` 从 `0.092` 降到 `0.078`，但真实抓取 success 从 `74%` 掉到 `66%`，risk recall 从 `69%` 掉到 `55%`。这时不能只看 loss 权重数字，因为不同 loss 的尺度和梯度范数不一定可比：
+如果 video loss 降了，真实抓取 success 和 risk recall 反而下降，根因可能不是模型“不会动作”，而是训练压力被视频预测占掉了。要看 per-loss grad norm、分桶指标、动作敏感性、风险召回和 closed-loop success。多目标训练的难点不是把公式写长，而是让每个目标的梯度贡献和任务价值匹配。
 
-| Signal | Loss Weight | Loss Change | Grad Norm Share | 任务后果 |
-| --- | ---: | ---: | ---: | --- |
-| video prediction | `1.0` | `-15%` | `82%` | 画面更像 |
-| action reconstruction | `0.2` | `-3%` | `13%` | 动作差异弱 |
-| risk prediction | `0.05` | `+9%` | `5%` | 风险漏报 |
+## 优化器决定怎样走
 
-这里的机制是：视频预测 token 多、loss 稳、梯度占比大，模型自然把容量花在让未来“看起来像”；动作和风险信号稀疏，虽然更接近闭环成败，却被主损失淹没。
-
-修复链应该按目标函数而不是按模块拍脑袋：
-
-```text
-症状：视频预测更好，动作执行和风险指标下降
-指标：per-loss grad norm、bucket loss、action sensitivity、risk recall、closed-loop success
-机制：多目标 loss 的数值权重不等于梯度贡献，也不等于任务价值
-修复：梯度归一化、分阶段训练、提高高价值桶采样、risk/action 辅助头延后冻结或单独 warmup
-反例：过度放大稀有风险 loss 会让模型保守，主分布动作变慢或拒绝执行
-边界：如果模型只做离线视频生成，video loss 可以主导；一旦接 planner，动作和风险目标必须有硬门槛
-```
-
-## 优化器的角色
-
-目标函数定义了地形，优化器决定怎么在地形上走。Loss landscape 图适合提醒读者：学习率、batch、归一化、残差和 optimizer 不是单个旋钮，而是在共同改变训练路径。
-
-![Loss landscape visualization 原论文图](../assets/images/paper-figures/foundations/loss-landscape-figure-resnet56.png){ width="820" }
-
-<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)，loss landscape visualization。原论文图意：通过二维切片可视化网络周围的 loss surface，帮助比较不同结构或训练配置下优化地形的平滑程度。</small>
-
-!!! note "图解：这张图在回答什么"
-    训练不是一次跳到最低点，而是在复杂地形里按梯度慢慢走。学习率太大可能越过稳定区域，太小会走得太慢；优化器的历史统计、weight decay、warmup 和 clipping 都是在塑造这条路径。
-
-一阶优化器可以抽象为：
+目标函数定义地形，优化器决定怎么在地形上移动。最抽象的一阶更新可以写成：
 
 \[
 \theta_{t+1}=\theta_t-\eta_t u_t
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
+这里 \(\eta_t\) 是第 \(t\) 步学习率，\(u_t\) 是由当前梯度和历史统计构成的更新方向。SGD 的 \(u_t\) 接近当前梯度，Momentum 会平滑历史方向，Adam/AdamW 会用一阶和二阶矩自适应缩放不同参数的步长。
+
+![Loss landscape visualization 原论文图](../assets/images/paper-figures/foundations/loss-landscape-figure-resnet56.png){ width="820" }
+
+<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)，loss landscape visualization。原图表达：通过二维切片可视化网络附近的 loss surface。本站读法：训练不是一步跳到最低点，而是在复杂地形里按梯度、历史统计和学习率慢慢走。</small>
+
+常见优化器可以按“更新方向怎么被修正”来读：
+
+| 优化器 | 更新方向的特点 | 什么时候常用 |
 | --- | --- | --- |
-| \(\theta_{t+1}\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\theta_t\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\eta_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(u_t\) | 公式中的变量或中间量 | 按上下文定义 |
+| SGD | 直接沿梯度走 | 小模型、视觉、可控实验 |
+| Momentum SGD | 用历史梯度平滑方向 | 视觉和表征训练仍常见 |
+| Adam | 用一阶/二阶矩自适应缩放 | Transformer 训练的基础选择 |
+| AdamW | 把 weight decay 从 Adam 梯度更新中解耦 | 大模型训练默认起点 |
+| Adafactor | 压缩二阶统计，省 optimizer state | 超大模型或显存受限 |
+| Muon | 对矩阵动量做正交化 | 新近大规模预训练路线，需要场景验证 |
 
+AdamW 流行不是因为它理论上永远最优，而是因为它稳定、经验丰富、和 Transformer 训练配方匹配。它的关键来自 [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101)：在 Adam 这类自适应方法里，把 L2 正则直接加到 loss 里，并不等价于经典 weight decay；AdamW 把 decay 从梯度更新中解耦，使正则行为更清晰。
 
-其中 \(u_t\) 是基于梯度和历史统计构成的更新方向，\(\eta_t\) 是学习率。
+## 学习率日程决定什么时候快走、什么时候收力
 
-| 优化器 | 特点 | 常见注意点 |
-| --- | --- | --- |
-| SGD | 简单、经典 | 大模型中通常不如自适应方法方便 |
-| Momentum SGD | 平滑更新方向 | 视觉和表征任务仍常见 |
-| Adam | 一阶/二阶矩自适应 | 状态内存高，超参经验成熟 |
-| AdamW | 解耦 weight decay | Transformer 默认选择 |
-| Muon | 对矩阵权重的动量做正交化 | 主要用于大规模预训练，通常与 AdamW/Adam 混合处理非矩阵参数 |
-| Adafactor | 节省优化器状态 | 行为和调参经验不同于 AdamW |
-| Lion 等变体 | 试图减少状态或改变更新几何 | 需要充分大规模证据 |
-
-工业大模型训练里，AdamW 仍常作为默认起点，不是因为它理论上永远最优，而是因为稳定、可预期、经验最丰富。
-
-Muon 代表另一类思路：把 Transformer 中的矩阵参数当作线性算子来更新，通过 Newton-Schulz 近似正交化 momentum，减少少数奇异方向主导训练的问题。它在 [Muon 专题讲解](../paper-deep-dives/foundations/muon-is-scalable.md) 中被系统验证到 5.7T token MoE 预训练，但在 SFT、后训练和已有 AdamW checkpoint 迁移上仍要单独验证。
-
-## 学习率日程
-
-学习率日程几乎和优化器同样重要。常见形式是 warmup + decay：
+学习率不是一个常数旋钮。常见日程是 warmup + decay：
 
 \[
 \eta_t =
@@ -457,61 +168,47 @@ Muon 代表另一类思路：把 Transformer 中的矩阵参数当作线性算�
 \end{cases}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
+这里 \(T_w\) 是 warmup 步数，\(\eta_{\max}\) 是峰值学习率，\(f(t)\) 是 decay 函数。读这行公式时，先看两个阶段：warmup 让训练从小步开始，避免早期梯度统计、混合精度、通信和 optimizer state 还没稳定时直接大步走；decay 让后期更新变小，减少在好解附近来回震荡。
+
+LR schedule 必须和 effective batch、数据阶段、loss 切换、gradient clipping、混合精度和 checkpoint resume 一起看。很多“模型突然不稳”不是 optimizer 坏了，而是数据切换点、loss 权重切换点和 LR 位置没对齐。
+
+## 稳定项不是越多越好
+
+常见稳定项包括 weight decay、gradient clipping、dropout、label smoothing、KL/reference constraint、auxiliary loss、activation/logit 约束。它们都在改变训练压力。
+
+| 稳定项 | 保护什么 | 过强时会怎样 |
 | --- | --- | --- |
-| \(\eta_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\eta_{\max}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(T_w\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
+| Weight decay | 减少权重无约束增长 | 欠拟合或能力下降 |
+| Gradient clipping | 防止异常梯度毁掉一步更新 | 掩盖真实数值异常，更新变钝 |
+| KL constraint | 防止后训练偏离底座太远 | reward 学不动，模型过度保守 |
+| Dropout / smoothing | 减少过拟合和过度自信 | 学习速度下降，细节能力弱 |
+| Auxiliary loss | 给中间能力提供信号 | 辅助目标压制主目标 |
 
+使用这些项时，不能只记录是否开启。要记录实际触发频率、loss scale、gradient norm、对主指标的影响，以及是否只在特定数据桶上造成退化。
 
-Warmup 的作用不只是平滑优化，它还能让混合精度、梯度统计、dataloader 和分布式通信进入稳定区间。Decay 可以是 cosine、linear、constant with decay 或多阶段 schedule。
+## 一次配置变更应该怎样验收
 
-学习率设计要和以下因素一起看：
+改目标函数、优化器或 LR 日程时，最低限度要回答：
 
-1. effective batch；
-2. 训练阶段和数据切换；
-3. loss 组成和权重；
-4. 梯度裁剪；
-5. 混合精度和 loss scaling；
-6. checkpoint 恢复后的 global step。
+| 问题 | 为什么重要 |
+| --- | --- |
+| 主 loss 和辅助 loss 的梯度贡献是多少 | loss 权重不等于训练压力 |
+| 学习率、warmup、decay 和 effective batch 是否匹配 | 决定早期稳定和后期收敛 |
+| optimizer/scheduler/scaler state 能否完整 checkpoint | resume 后曲线不应断裂 |
+| clipping、KL、weight decay 是否有实际监控 | 避免稳定项默默接管训练 |
+| 数据阶段和 loss 阶段是否对齐 | 防止切换点造成能力冲刷 |
+| 分桶评测是否同时看收益和退化 | 平均分会掩盖长尾能力损失 |
 
-很多“模型不稳定”其实是 schedule 和阶段切换不匹配。
+成熟训练系统会把 loss 配方、数据阶段、optimizer、scheduler、混合精度、checkpoint state 和评测分桶作为同一个配置资产管理，而不是把它们分散在不同脚本里。
 
-## 正则、裁剪与稳定项
+## 外部精读
 
-常见稳定手段包括：
+- [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)：理解 SFT、偏好排序、reward model 和 PPO 的数据链。
+- [Direct Preference Optimization](https://arxiv.org/abs/2305.18290)：理解 DPO 如何把偏好 pair 变成 closed-form objective。
+- [DeepSeek-R1](https://arxiv.org/abs/2501.12948)：理解 GRPO/RLVR 在长推理任务里的动机。
+- [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101)：理解 AdamW 为什么要解耦 weight decay。
+- [Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)：建立优化地形的直觉。
 
-1. weight decay；
-2. gradient clipping；
-3. dropout / stochastic depth；
-4. label smoothing；
-5. KL / reference constraint；
-6. auxiliary loss；
-7. norm、logit、activation 相关约束。
+## 本页结论
 
-这些手段都不是越多越好。它们会改变优化几何和能力分布。比如过强 KL 会限制偏好学习收益，过强 clipping 会掩盖真正的数值异常，过强 auxiliary loss 会让模型偏向容易优化的中间任务。
-
-使用这些项时要记录触发频率、实际 loss scale、对主指标的影响，以及是否在特定数据桶上造成退化。
-
-## 配置验收清单
-
-目标函数、优化器和日程上线前至少要回答：
-
-1. 主 loss 和辅助 loss 的权重如何确定；
-2. loss scale 是否随数据源或阶段变化；
-3. 学习率、warmup、decay 和 effective batch 是否匹配；
-4. optimizer state、scheduler state 和 scaler 是否能完整 checkpoint；
-5. gradient clipping、weight decay、KL 等稳定项是否有监控；
-6. 数据切换点、loss 切换点和 LR 切换点是否对齐；
-7. 是否按能力桶观察收益和退化；
-8. 恢复训练后曲线是否连续。
-
-训练目标不是静态公式，优化器也不是默认选项。它们共同定义训练轨迹。成熟训练系统会把 loss 配方、数据阶段、学习率、batch、数值稳定和 checkpoint 状态作为同一个配置资产管理。
-
-!!! tip "下一站"
-    - 回到本专题入口：[训练](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[MTP 与投机解码](mtp-and-speculative-decoding.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。
+训练配置不是一堆默认项。目标函数决定模型被什么信号推动，优化器决定梯度怎样变成更新方向，学习率日程决定这条路径什么时候大步探索、什么时候小步收敛。真正的训练调参不是问“哪个 loss/optimizer 最好”，而是问每个训练压力是否对准任务价值、是否被正确放大、是否被稳定项压住，以及是否在关键能力桶上带来真实收益。

@@ -2,38 +2,10 @@
 
 张量是深度学习里最基本的数据结构。模型看到的文本、图像、音频、动作轨迹，最终都会被组织成不同形状的张量，然后交给算子处理。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“张量、Shape 与计算图”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“张量、Shape 与计算图”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
 
 ![TensorFlow computation graph 原论文图](../assets/images/paper-figures/foundations/tensorflow-figure-2-simple-graph.svg){ .atlas-figure-compact width="340" }
 
 <small>图源：[TensorFlow: Large-Scale Machine Learning on Heterogeneous Distributed Systems](https://arxiv.org/abs/1603.04467)，Figure 2。原论文图意：一个简单计算图由输入、常量和算子节点组成，边表示张量在节点之间流动。</small>
-
-!!! note "合并提示"
-    **note · 图解：计算图先看节点和边**
-
-    图中的圆点/方块可以理解成算子或数据节点，箭头表示张量从一个节点流到下一个节点。很多模型问题不是公式错，而是 shape、dtype、device 或计算图接口错：例如上一层输出 `[B, L, D]`，下一层却以为输入是 `[B, D, L]`。读复杂模型前先把这条数据流画通，再看 attention、MLP、loss 或 backward，理解成本会低很多。
-
-    **note · 初学者先抓住**
-
-    读任何模型结构时，先不要急着看公式。先问三件事：输入张量是什么 shape，中间每一步 shape 怎么变，最后输出要交给谁。只要 shape 链条通了，大多数结构图都会突然变清楚；遇到报错时，也能先区分是 shape、dtype、device 还是计算图断开。
-
-    **tip · 为什么现在要学这个：shape 就是成本账入口**
-
-    世界模型里的很多“显存突然爆了”都能先写成 shape。多相机视频常从 `[B, camera, frame, patch, D]` 变成 `[B, L, D]`，其中 \(L = camera \times frame \times patch\)。一旦 `camera=4`、`frame=16`、`patch=256`，单样本视觉长度就是 `16,384`；再乘 batch、层数、KV heads 和 dtype，就变成真实显存账。计算图也同样重要：一个看似无害的 `permute + contiguous` 可能 materialize 大张量，一个没 checkpoint 的分支可能把长视频激活全留到 backward。
-
-    **tip · 遇到这些症状，回看本页**
-
-    `CUDA OOM` 只发生在多相机/长视频 bucket、同样 batch 下某个 resize 版本突然爆显存、profile 里出现异常大的 `contiguous` / `clone` / `view_as_real`，或者模型接口总在 `[B, L, D]` 和 `[B, D, L]` 之间错位时，先把每一步 shape、dtype、device 和是否 materialize 写出来。本页能帮你判断问题是在输入展开、patch/token 计数、计算图保存，还是张量布局转换。
 
 ## 符号卡：axis 和 shape 怎么读
 
@@ -64,14 +36,6 @@
 x \in \mathbb{R}^{B \times L \times D}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 这行公式不是在炫数学，而是在说：输入 \(x\) 是一个三维数字表；第 1 维是样本数，第 2 维是 token 数，第 3 维是每个 token 的向量长度。
 
@@ -92,29 +56,12 @@ x \in \mathbb{R}^{B \times L \times D}
 x \in \mathbb{R}^{B \times C \times H \times W}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(C\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(H\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 一批文本 token embedding 常写成：
 
 \[
 x \in \mathbb{R}^{B \times L \times D}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 ## Shape 是接口契约
@@ -124,14 +71,6 @@ Shape 决定张量能不能进入某个模块。比如矩阵乘：
 \[
 (B, L, D) \times (D, D_{\text{out}}) \rightarrow (B, L, D_{\text{out}})
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(D\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(D_{}\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 如果最后一维不是 \(D\)，矩阵乘就无法进行。很多训练报错其实都来自这里。
@@ -203,12 +142,6 @@ flowchart LR
 Patches = \frac{H}{p}\times\frac{W}{p}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(p\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-
 
 例如 `H=W=224`、`p=14`，就是 \(16\times16=256\) 个 patch。每个 patch 原本可以看成长度为 \(p\times p\times3\) 的小向量，经过线性投影或视觉 encoder 后变成 `D` 维 token，于是 shape 从 `[B, Cams, Frames, Patches, patch_dim]` 变成 `[B, Cams, Frames, Patches, D]`。
 
@@ -218,14 +151,6 @@ Patches = \frac{H}{p}\times\frac{W}{p}
 L_{\text{vision}} = Cams \times Frames \times Patches
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(C\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(F\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(P\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-
 
 假设 `Cams=4`、`Frames=16`、每帧 `Patches=256`，那么单样本视觉 token 数就是：
 
@@ -233,22 +158,12 @@ L_{\text{vision}} = Cams \times Frames \times Patches
 L_{\text{vision}} = 4\times16\times256 = 16,384
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-
 
 这还没有加语言、proprioception、action token 和 memory token。完整输入长度应该写成：
 
 \[
 L_{\text{total}} = L_{\text{vision}} + L_{\text{text}} + L_{\text{prop}} + L_{\text{action}} + L_{\text{memory}}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(L_{}\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
 
 
 语言 token 可能只有几十到几百个，proprioception 也可能很短；但 action token 如果按未来 horizon、关节维度或 action chunk 展开，memory token 如果保留长时历史，也会明显增加上下文。更重要的是，flatten 后必须保留位置信息：模型需要知道某个 token 来自哪个相机、哪一帧、图像哪个 patch。常见做法是加 spatial position、temporal position、camera/view embedding，或者在 attention mask 里显式限制哪些 token 能互相读取。
@@ -300,8 +215,3 @@ L_{\text{total}} = L_{\text{vision}} + L_{\text{text}} + L_{\text{prop}} + L_{\t
 ## 本页结论
 
 张量是数据，shape 是接口，计算图是训练链路。只要这三件事清楚，很多看起来很复杂的模型结构都会变成“张量经过一组模块变形和计算”的过程。
-
-!!! tip "下一站"
-    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

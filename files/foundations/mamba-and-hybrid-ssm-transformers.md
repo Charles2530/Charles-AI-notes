@@ -2,39 +2,11 @@
 
 Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它的目标不是把 token 之间两两做 attention，而是让序列沿时间方向维护一个紧凑状态，用线性复杂度处理长序列。混合 Mamba-Transformer 架构则更务实：保留一部分 attention 做精确检索和复杂 token 交互，把大量层换成 Mamba / SSM 来降低推理成本。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“Mamba 与混合 SSM 架构”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“Mamba 与混合 SSM 架构”在「基础知识」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先看本页要补哪一个最小概念；公式或术语卡住时回到术语表，不需要一次吃完整个数学体系。 必要时先回 [基础知识入口](index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把符号、张量、优化、评测和运行时这些前置打稳，后面的扩散、VLM/VLA、训练与系统页才不会断层。
 
 ![Mamba selective SSM overview](../assets/images/paper-figures/foundations/mamba-selective-ssm-overview.png){ width="920" }
 
 <small>图源：[Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)，Figure 1。原论文图意：Structured SSM 会把输入通道映射到更高维 latent state；Mamba 的 selection mechanism 加入输入相关动态，并用 hardware-aware algorithm 避免把巨大 expanded state 直接物化到 GPU HBM。</small>
 
-!!! note "合并提示"
-    **note · 论文图解卡：Mamba 图先看三件事**
-
-    **先看哪里**：先看左侧 Structured SSM，再看中间 selection mechanism，最后看右侧 hardware-aware scan。  
-    **图中模块**：SSM 用内部状态承接历史；selection 让状态更新依赖当前输入；hardware-aware algorithm 让训练和推理不把巨大 expanded state 全部写回显存。  
-    **对应公式**：先用 \(h_t=Ah_{t-1}+Bx_t\) 建直觉，再理解 Mamba 把它改成输入相关的 \(h_t=A_t h_{t-1}+B_t x_t\)。  
-    **容易误读**：Mamba 不是没有矩阵乘，也不是普通 RNN；它的重点是用内容选择和并行 scan 把 recurrent state 做到现代 GPU 友好。
-
-    **note · 先抓一句话**
-
-    Transformer 像“每次都翻完整上下文笔记”，Mamba 像“边读边更新一份工作记忆”。前者擅长精确内容寻址，后者擅长低成本长序列流式处理。现在流行的 Mamba-Transformer 不是二选一，而是让 attention 负责少量关键全局交互，让 Mamba 负责多数 token 的状态推进。
-
-    **tip · 遇到这些症状，回看本页**
-
-    长上下文 KV cache 成本压不住、流式视频/机器人历史需要长期状态但不需要每个 token 精确互查，或者混合架构质量下降但延迟很好时，回看本页。本页能帮你判断该用 attention 做内容寻址、用 SSM 承接历史状态，还是调整 hybrid 中 attention 层的位置和比例。
-
-<!-- [补充：初学者直觉] -->
 > **一句话理解**：Mamba 与混合 SSM 架构 可以先当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背公式，先看清哪一步在改变信息、哪一步在改变成本。
 
 ## 为什么需要 Mamba
@@ -58,16 +30,6 @@ Transformer 的 self-attention 很强，因为它能让任意两个 token 直接
 h_t = A h_{t-1} + B x_t,\quad y_t = C h_t
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(A\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(h_{t-1}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(B\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(y_t\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 这里：
 
@@ -78,16 +40,6 @@ h_t = A h_{t-1} + B x_t,\quad y_t = C h_t
 \[
 h_t = A_t h_{t-1} + B_t x_t,\quad y_t = C_t h_t
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(A_t\) | 动作、优势或系数 | 动作空间/实数标量，依上下文而定 |
-| \(h_{t-1}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(B_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(y_t\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 其中 \(A_t, B_t, C_t\) 会受当前输入影响。这样它就不只是固定动态系统，而是“内容感知”的动态记忆。
@@ -120,13 +72,6 @@ h_t = A_t h_{t-1} + B_t x_t,\quad y_t = C_t h_t
 \[
 h_t = \text{update}(h_{t-1}, x_t)
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(h_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(h_{t-1}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x_t\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
 
 
 那它是不是“换皮 RNN”？答案是：**推理形态像 RNN，但训练算法、状态参数化和硬件实现都更现代**。
@@ -263,8 +208,3 @@ Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列
 ## 本页结论
 
 Mamba 的价值不是简单替代 Transformer，而是把“长序列记忆”从巨大 KV cache 转成紧凑状态更新；Mamba-Transformer 的价值也不是堆新名词，而是在注意力质量和状态空间效率之间找工程折中。以后读大模型架构报告时，看到 `Mamba-heavy`、`hybrid`、`SSM`、`linear recurrent`，先问：哪些层负责精确检索，哪些层负责状态推进，推理时到底缓存了什么。
-
-!!! tip "下一站"
-    - 回到本专题入口：[基础知识](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[概率与潜变量模型](probability-latent-variables-and-generative-models.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

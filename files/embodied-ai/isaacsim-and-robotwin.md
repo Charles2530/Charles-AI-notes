@@ -2,17 +2,6 @@
 
 这一页解释 Isaac Sim 和 RoboTwin 在具身智能项目里分别负责什么。先给结论：
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“Isaac Sim 与 RoboTwin 仿真数据链”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-
-!!! note "读法定位"
-    这页先回答“Isaac Sim 与 RoboTwin 仿真数据链”在「具身智能」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道 VLA、世界模型、相机/深度和评测集的基本角色。 必要时先回 [具身智能入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把感知、数据、仿真、策略、控制、安全和真实闭环连起来，看机器人系统为什么不能只靠离线指标判断。
 
 ```text
 Isaac Sim 更像“高保真机器人世界”
@@ -283,8 +272,3 @@ read state
 | [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 一个具体任务如何从状态定义走到轨迹和判定 |
 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) | 仿真数据怎样走向真实系统，以及失败如何回流 |
 | [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) | 这些仿真数据如何服务 π0.5 式 VLA 和 DreamZero 式 WAM |
-
-!!! tip "下一站"
-    - 回到本专题入口：[具身智能](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[资产到轨迹：感知、抓取与数据管线](asset-perception-grasp-and-trajectory-pipeline.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

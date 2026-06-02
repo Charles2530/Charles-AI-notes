@@ -2,35 +2,7 @@
 
 Weights & Biases，常写作 W&B，不是训练框架本身，而是把训练过程里的**配置、指标、系统状态、数据版本、模型产物、报告和协作记录**组织起来的实验平台。官方站点把它称为 AI developer platform，并把 Experiments、Reports、Artifacts、Tables、Sweeps、Models Registry、Launch、Prompts 和 Monitoring 放在产品入口里。[W&B Experiments 文档](https://docs.wandb.ai/models/track)强调的是用少量代码记录 metrics、hyperparameters、system metrics 和 model artifacts；[Artifacts 文档](https://docs.wandb.ai/models/artifacts)则强调把数据和模型作为 run 的输入/输出进行版本追踪。
 
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“W&B：训练实验追踪与证据链治理”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
 
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先回答“W&B：训练实验追踪与证据链治理”在「训练」里的位置：它解决什么局部问题，依赖哪些前置，最后会影响哪类工程或研究判断。
-    **前置**：先知道 loss、optimizer、batch、checkpoint 和评测集的基本含义。 必要时先回 [训练入口](index.md)、[基础知识](../foundations/index.md) 或 [术语表](../glossary/index.md)。
-    **主线关系**：把目标函数、数据、分布式系统、评测回流和实验治理串起来，看一次训练为什么成功、为什么不稳、为什么贵。
-
-    **info · 工具入口**
-
-    - 官网：[wandb.ai/site](https://wandb.ai/site)
-    - 快速开始：[W&B Quickstart](https://docs.wandb.ai/models/quickstart)
-    - 实验追踪：[Experiments](https://docs.wandb.ai/models/track)
-    - 数据/模型版本：[Artifacts](https://docs.wandb.ai/models/artifacts)
-    - 超参搜索：[Sweeps](https://docs.wandb.ai/models/sweeps)
-    - 样本表格：[Tables](https://docs.wandb.ai/models/tables)
-    - 模型注册：[Registry](https://docs.wandb.ai/models/registry)
-
-    **tip · 主线定位：降低无效实验成本、复现成本和评测成本**
-
-    训练页里讨论的 loss、吞吐、数据配方、checkpoint 和评测，如果没有统一证据链，很容易变成散落的曲线截图。W&B 的价值是把一次训练定义成可比较、可复盘、可追溯的实验对象。
-
-<!-- [补充] -->
 > **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 先看它长什么样
@@ -45,7 +17,6 @@ W&B 最常见的第一印象是一张项目面板：左侧是 runs，右侧是�
 
 先安装并登录：
 
-<!-- [补充] -->
 下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
 ```bash
 pip install wandb
@@ -101,12 +72,6 @@ W&B 适合补的是“实验治理层”：它不替代 Megatron、DeepSpeed、P
 E =
 (\text{code},\text{config},\mathcal{D},\theta_0,\text{env},\text{metrics},\text{artifacts},\text{eval})
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta_0\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(E\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 其中：
@@ -248,8 +213,3 @@ W&B 在训练板块里的位置不是“可视化曲线工具”，而是实验�
 4. [W&B Sweeps](https://docs.wandb.ai/models/sweeps)
 5. [W&B Tables](https://docs.wandb.ai/models/tables)
 6. [W&B Registry](https://docs.wandb.ai/models/registry)
-
-!!! tip "下一站"
-    - 回到本专题入口：[训练](index.md)，确认这页在整条路线中的位置。
-    - 按导航顺序继续：[Scaling Law 与训练经济学](scaling-laws-and-experiment-economics.md)。
-    - 概念或符号卡住时，先查 [术语表](../glossary/index.md)，再回到当前页。

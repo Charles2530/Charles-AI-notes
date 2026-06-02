@@ -7,31 +7,6 @@ paper_topic: 高效训练
 # MagiAttention：超长上下文分布式 Attention
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“MagiAttention：超长上下文分布式 Attention”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [训练与基础系统](../../training/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「训练与基础系统」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 技术博客：`MagiAttention: A Distributed Attention Towards Linear Scalability for Ultra-Long Context, Heterogeneous Mask Training`
-    - 链接：[MagiAttention official blog](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html)
-    - Benchmark：[Long-Context Attention Benchmark](https://sandai-org.github.io/MagiAttention/docs/main/blog/cp_benchmark.html)
-    - 代码：[SandAI-org/MagiAttention](https://github.com/SandAI-org/MagiAttention)
-    - 相关模型：[Magi-1](https://github.com/SandAI-org/MAGI-1)
-    - 日期：2025-04-21
-    - 关键词：context parallelism、Flex-Flash-Attention、AttnSlice、heterogeneous masks、GroupCast、GroupReduce、multi-stage overlap、FlashAttention-3、FlashAttention-4、H100、B200
-
 MagiAttention 讨论的不是“attention 又快了一点”这种单点优化，而是一个训练系统问题：**当视频生成或长上下文模型要处理百万级 token、并且 mask 形状高度不规则时，context parallel attention 怎么继续保持可扩展？**
 
 它的答案是把分布式 attention 拆成四层一起设计：kernel 层要能表达异构 mask，dispatch 层要把计算量均匀分给 CP ranks，通信层要避免 Ring P2P 里的冗余 KV/dKV 传输，调度层还要把通信和计算尽量重叠起来。这个视角很适合放在“高效训练”里，因为它展示了一个大模型训练瓶颈如何从公式里的 \(O(N^2)\)，一路落到 mask 表达、数据 pack、rank 负载、NCCL buffer、kernel backend 和 overlap tuning。
@@ -134,11 +109,6 @@ MagiAttention 的 kernel 层叫 `FFA`，全称 Flex-Flash-Attention。它基于 
 \mathrm{AttnSlice} = (\mathrm{QRange}, \mathrm{KRange}, \mathrm{MaskType})
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
-
 
 其中 `QRange` 和 `KRange` 是连续 query/key 范围，`MaskType` 描述这个 2D 子块内部的规则。博客中当前列出的 mask types 包括 `FULL`、`CAUSAL`、`INV-CAUSAL` 和 `BI-CAUSAL`。
 
@@ -174,12 +144,6 @@ MagiAttention 的 kernel 层叫 `FFA`，全称 Flex-Flash-Attention。它基于 
 n = \frac{seqlen}{chunk\_size}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(n\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 每个 chunk \(C_i\) 有对应的有效 mask area，记作 \(\mathrm{Area}(C_i)\)。dispatch solver 要把 chunks 分到 `cp_size` 个 buckets 中，并约束每个 bucket 的 chunk 数相同：
 
@@ -187,26 +151,12 @@ n = \frac{seqlen}{chunk\_size}
 f^*=\arg\min_f \max_j \sum_{C_i \in B_j} \mathrm{Area}(C_i)
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(C_i\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(B_j\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 约束是：
 
 \[
 |B_j| = \frac{n}{cp\_size}, \qquad seqlen \bmod (cp\_size \times chunk\_size)=0
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(B_j\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
 
 
 这个优化问题本身是 NP-hard。MagiAttention 实际采用 greedy Min-Heap algorithm，时间复杂度约为 \(O(n\log n)\)：先估计每个 chunk 的 area，再不断把较重 chunk 分给当前负载较低的 bucket。
@@ -273,7 +223,6 @@ forward 里，本地 qkv 已经可用，所以初始 stage 可以先算，同时
 
 ## 训练和 Benchmark 设置
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -302,29 +251,12 @@ MagiAttention 页面展示的是 attention 系统和 benchmark，不是完整 Ma
 \end{aligned}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(s\) | 状态、序列长度或分数 | 状态空间/正整数/实数标量，依上下文而定 |
-| \(m\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(b\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(n\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(h\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 其中 full mask 的 area 是 \(seqlen^2\)，causal mask 的 area 是 \(\frac{seqlen(seqlen+1)}{2}\)。distributed 计时使用所有 ranks 中最慢的 elapsed time：
 
 \[
 \mathrm{ElapsedTime}^{(wd)}=\max_{rank\in[0,cp\_size)}\mathrm{ElapsedTime}_{rank}^{(wd)}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(w\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(r\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(c\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 这个定义很重要。分布式训练的步时由最慢 rank 决定，所以 load imbalance 不会被平均吞吐掩盖。
@@ -418,14 +350,3 @@ MagiAttention 最值得记住的一点是：**超长上下文训练的瓶颈不�
 4. 相关模型：[SandAI-org/MAGI-1](https://github.com/SandAI-org/MAGI-1).
 
 这一页最后回到三个验收点：方法上，MagiAttention 把长上下文 attention 拆成 AttnSlice，再用 dispatch solver 解决负载和通信重叠。实验上，H100/B200 forward/backward 图要按硬件、mask pattern 和 sequence shape 分开读。诊断上，Ring Attention load-balance 与 group collectives 图说明，瓶颈常在调度和通信，不在 attention 公式本身。
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    MagiAttention 要按长上下文 attention 调度系统读：方法核心是 AttnSlice、mask pattern、dispatch solver 与通信重叠；实验看 H100/B200 forward/backward 和负载均衡。它的收益绑定硬件拓扑、序列形状和 kernel 实现，不能只看理论复杂度。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。
-    - 按导航顺序继续：[SLA / SLA2](sla-sparse-linear-attention.md)。

@@ -7,31 +7,6 @@ paper_topic: 技术报告
 # InCoder-32B：工业代码基础模型与执行验证训练
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“InCoder-32B：工业代码基础模型与执行验证训练”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [技术报告与证据台账](../../references/claim-ledger.md)。
-    **前置**：最好先知道普通 code LLM 的预训练、FIM、SFT、工具执行验证和长上下文训练分别解决什么问题。
-    **主线关系**：读完后把结论回填到「技术报告与证据台账」路线里，判断它改变的是数据配方、训练 pipeline、执行环境、评测口径，还是仍停留在报告自述结果。
-
-    **info · 报告信息**
-
-    - 技术报告：`InCoder-32B: Code Foundation Model for Industrial Scenarios`
-    - 模型：`InCoder-32B` / `IndustrialCoder`
-    - 链接：[arXiv:2603.16790](https://arxiv.org/abs/2603.16790)
-    - PDF：[arXiv PDF](https://arxiv.org/pdf/2603.16790)
-    - 模型：[Hugging Face: Multilingual-Multimodal-NLP/IndustrialCoder](https://huggingface.co/Multilingual-Multimodal-NLP/IndustrialCoder)
-    - 代码：[GitHub: Industrial-Coder](https://github.com/CSJianYang/Industrial-Coder)
-    - 关键词：code foundation model、industrial code、Verilog / RTL、CUDA / Triton、embedded systems、CAD / 3D modeling、128K context、FIM、execution-grounded SFT
-
 InCoder-32B 这篇报告的核心不是“又一个 32B code model”，而是把 code LLM 的战场从常规 Python/JavaScript 题目，推到更贴近工程现场的工业代码：芯片设计、GPU kernel 优化、嵌入式系统、编译器/低层代码优化和 3D/CAD 建模。
 
 这类任务和普通代码补全的差异很硬：答案不只要语法正确，还要满足时序、资源、接口、硬件限制、编译链、仿真和性能约束。报告给出的路线可以概括成：
@@ -250,7 +225,6 @@ task seed spec
 
 ## 通用代码评测：先不能掉队
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 

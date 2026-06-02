@@ -7,31 +7,6 @@ paper_topic: 具身智能
 # MapAnything：统一前向 Metric 3D 重建骨干
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“MapAnything：统一前向 Metric 3D 重建骨干”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [具身智能](../../embodied-ai/index.md)。
-    **前置**：建议先读 [相机、深度与机器人视觉](../../embodied-ai/cameras-depth-and-robot-vision.md) 和 [VGGT](vggt.md)，知道 camera pose、depth、point map、ray、metric scale 分别是什么。
-    **主线关系**：MapAnything 不直接输出机器人动作，但它把多视图图像、相机、位姿、深度和局部重建统一成 metric 3D 状态，是 VLA、世界模型、SLAM、导航和抓取系统的感知状态层候选骨干。
-
-    **info · 论文信息**
-
-    - 论文：`MapAnything: Universal Feed-Forward Metric 3D Reconstruction`
-    - 链接：[arXiv:2509.13414](https://arxiv.org/abs/2509.13414)
-    - 项目页：[map-anything.github.io](https://map-anything.github.io/)
-    - 代码：[facebookresearch/map-anything](https://github.com/facebookresearch/map-anything)
-    - 模型：[facebook/map-anything](https://huggingface.co/facebook/map-anything)、[facebook/map-anything-apache](https://huggingface.co/facebook/map-anything-apache)
-    - Checked date：2026-05-21
-    - 关键词：feed-forward 3D reconstruction、metric scale、camera calibration、SfM、MVS、depth completion、DINOv2、Alternating-Attention、factored scene representation
-
 MapAnything 的核心价值，是把原本分散在 SfM、MVS、相机标定、深度估计、定位和补全里的几何问题，压到一个统一的前向模型里：**输入可以只有图像，也可以额外带 intrinsics、poses、depth 或 partial reconstruction；输出则是一套可合成 metric 3D reconstruction 的 factored geometry。**
 
 它和 [VGGT](vggt.md) 很接近，但问题更“工程化”：VGGT 已经证明 camera、depth、point map、track 可以一起前向预测；MapAnything 继续追问，如果真实系统已经有一部分几何输入，比如机器人相机内参、SLAM 位姿、稀疏深度、RGB-D 深度，模型能不能把这些信息吃进去，并在同一个 metric scale 里输出更稳的重建。
@@ -87,16 +62,6 @@ MapAnything 不把场景直接表示成一组耦合 pointmaps，而是输出：
 \{m, (R_i, \tilde D_i, \tilde P_i)_{i=1}^{N}\}
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(m\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(R_i\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(D_i\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(P_i\) | 概率、转移分布或预测量 | 概率分布或任务定义的张量 |
-| \(i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(N\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-
 
 其中：
 
@@ -113,13 +78,6 @@ MapAnything 不把场景直接表示成一组耦合 pointmaps，而是输出：
 \tilde L_i = R_i \cdot \tilde D_i
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(L_i\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(R_i\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-| \(D_i\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 这行式子在说：第 \(i\) 个视角的每条相机射线 \(R_i\) 乘上 up-to-scale 深度 \(\tilde D_i\)，得到局部坐标里的点 \(\tilde L_i\)。
 
@@ -127,24 +85,10 @@ MapAnything 不把场景直接表示成一组耦合 pointmaps，而是输出：
 \tilde X_i = O_i \cdot \tilde L_i + \tilde T_i
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(X_i\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(O_i\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(L_i\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(T_i\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-
 
 \[
 X_i^\text{metric} = m \cdot \tilde X_i
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(X_i\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(m\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 这里 \(O_i\) 由 quaternion \(Q_i\) 转成 rotation matrix。这个分解的好处有三层：
@@ -217,22 +161,10 @@ MapAnything 的训练目标很值得细读，因为它的“universal”不是�
 L_\text{rays}=\sum_i\|\hat R_i-R_i\|
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(R_i\) | 奖励、回报或时间索引相关量 | 实数标量或上下文定义的索引范围 |
-
 
 \[
 L_\text{rot}=\sum_i\min(\|\hat Q_i-Q_i\|,\|-\hat Q_i-Q_i\|)
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(L\) | 损失或目标函数 | 实数标量，训练时按 batch 聚合 |
-| \(Q_i\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 这里 \(L_\text{rays}\) 表示预测 ray direction \(\hat R_i\) 和真值 \(R_i\) 的误差和；\(L_\text{rot}\) 表示旋转 quaternion 的误差和。quaternion 有 \(Q\) 和 \(-Q\) 表达同一旋转的问题，所以 rotation loss 取二者较小值。
@@ -243,24 +175,12 @@ L_\text{rot}=\sum_i\min(\|\hat Q_i-Q_i\|,\|-\hat Q_i-Q_i\|)
 f_\log(x) = (x / \|x\|)\cdot \log(1+\|x\|)
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(f\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(x\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-
 
 并强调 ray depths、pointmaps 和 metric scale factor 都要在 log-space 里算 loss。为了避免 scale loss 的梯度污染 up-to-scale geometry，它使用：
 
 \[
 z^\text{metric}=m \cdot \text{sg}(\tilde z)
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(z\) | 样本、状态或 latent 变量 | 张量空间，形状由数据表示决定 |
-| \(m\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 其中 \(\text{sg}\) 表示 stop-gradient。
@@ -280,11 +200,6 @@ z^\text{metric}=m \cdot \text{sg}(\tilde z)
 +\mathcal{L}_\text{GM}
 +0.1\cdot \mathcal{L}_\text{mask}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| 公式整体 | 本公式表达的变量关系 | 按上下文定义 |
 
 
 训练细节里有几个很工程化的点：
@@ -384,7 +299,6 @@ Supplementary implementation details are redrawn below with the original English
 
 ## 实验：重建质量与输入组合
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 

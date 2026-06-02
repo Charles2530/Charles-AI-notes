@@ -7,29 +7,6 @@ paper_topic: 高效训练
 # Muon：LLM 预训练优化器
 
 
-
-
-<!-- [补充] -->
-| 读者 | 建议读法 | 工程落点 |
-| --- | --- | --- |
-| 初学者 | 先抓“Muon：LLM 预训练优化器”要解决的问题、关键术语和最小例子；公式只看变量方向。 | 能说清输入、输出和常见失败信号。 |
-| 工程师 | 直接对照结构、指标、成本和边界条件，必要时回到前置页补概念。 | 落到数据、算力、延迟、显存、评测和回滚检查。 |
-
-!!! note "合并提示"
-    **note · 读法定位**
-
-    这页先按“论文证据节点”读：先问它解决哪一个瓶颈，再看核心图表、实验 setting 和不能外推的边界。背景概念先回 [论文专题讲解](../index.md) 和 [训练与基础系统](../../training/index.md)。
-    **前置**：不必先读完所有相关论文，但要知道本篇的输入、训练/推理路径和评测口径分别对应什么。
-    **主线关系**：读完后把结论回填到「训练与基础系统」路线里，判断它改变的是机制、成本、数据配方、评测口径，还是仍停留在前沿假设。
-
-    **info · 论文信息**
-
-    - 论文：`Muon is Scalable for LLM Training`
-    - 团队：Kimi Team / Moonshot AI
-    - 链接：[arXiv:2502.16982](https://arxiv.org/abs/2502.16982)
-    - 代码与模型：[MoonshotAI/Moonlight](https://github.com/MoonshotAI/Moonlight) / [Moonlight-16B-A3B](https://huggingface.co/moonshotai/Moonlight-16B-A3B)
-    - 关键词：Muon、AdamW、matrix orthogonalization、Newton-Schulz、update RMS、distributed optimizer、Moonlight、MoE pre-training
-
 这篇论文讨论的不是一个普通训练小技巧，而是一个更基础的问题：**在大模型预训练里，AdamW 是否仍然是唯一足够稳、足够可扩展的默认优化器？** 论文的答案比较激进：如果只看大规模 LLM 预训练，经过 weight decay、update scale 和分布式实现改造后的 Muon 可以直接替代 AdamW，并在 compute-optimal training 下达到约 `2x` 的训练效率。
 
 但工程上不能把这句话读成“所有阶段都换成 Muon”。这篇论文真正有价值的部分在于，它把 Muon 从一个小模型优化器改造成能跑 5.7T token MoE 预训练的系统方案，并且清楚暴露了它和 AdamW 的边界：Muon 更适合矩阵权重的预训练更新，非矩阵参数、已有 AdamW checkpoint 的 SFT、以及很多短周期后训练任务，仍然要谨慎对待。
@@ -50,6 +27,7 @@ Muon 切入的是另一条路线。Transformer 里最重的参数大多是矩阵
 | Moonlight pre-training | 用 Muon 训练 3B activated / 16B total MoE 模型到 5.7T tokens，验证可扩展性 |
 
 ![Muon scaling law 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/muon-is-scalable/muon-scaling-law-原图.png){ width="360" }
+
 ![Moonlight Pareto frontier 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/muon-is-scalable/moonlight-pareto-frontier-原图.png){ width="430" }
 
 <small>图源：`Muon is Scalable for LLM Training`，Figure 1。左图展示 Muon 与 AdamW 的 scaling law 对比，论文结论是 Muon 在 compute-optimal 设置下达到相同 loss 约需 `0.519x` FLOPs；右图展示 Moonlight 在 MMLU 与训练 FLOPs 平面上的 Pareto 位置。</small>
@@ -67,44 +45,16 @@ AdamW 的核心更新可以写成：
 m_t=\beta_1m_{t-1}+(1-\beta_1)g_t
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\beta_1m\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\beta_1\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(m_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(g_t\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-
 
 \[
 v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\beta_2v\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\beta_2\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(v_t\) | value、速度场或向量量 | 实数标量/向量，依上下文而定 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
-| \(g_t^2\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
 
 
 \[
 \theta_t=(1-\eta_t\lambda)\theta_{t-1}
 -\eta_t\frac{\hat m_t}{\sqrt{\hat v_t}+\epsilon}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\theta_t\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\eta_t\lambda\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\theta_{t-1}\) | 模型或策略参数 | 实值张量，形状由模型结构决定 |
-| \(\eta_t\frac\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\epsilon\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(t\) | 时间步、索引或计数 | 整数索引或归一化时间区间，见正文 |
 
 
 这里 \(m_t\) 是一阶动量，\(v_t\) 是逐元素二阶矩，\(\lambda\) 是 decoupled weight decay。它的更新方向是 element-wise adaptive 的：某个参数元素最近梯度波动大，分母就大，实际步长就小。
@@ -124,14 +74,6 @@ Muon 只考虑可以表示成矩阵的参数。对某个矩阵权重 \(W\)，它
 M_t=\mu M_{t-1}+G_t
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\mu\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(M_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(M_{t-1}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(G_t\) | return、组大小或缩放系数 | 按任务定义；组大小通常为正整数 |
-
 
 然后不直接用 \(M_t\) 更新，而是对 \(M_t\) 做矩阵正交化：
 
@@ -139,26 +81,12 @@ M_t=\mu M_{t-1}+G_t
 O_t=\operatorname{Orthogonalize}(M_t)
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(O_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(M_t\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 最后更新：
 
 \[
 W_t=W_{t-1}-\eta_t O_t
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\eta_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W_{t-1}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O_t\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 论文采用 Newton-Schulz iteration 近似计算正交化结果。如果 \(M=U\Sigma V^\top\)，理想的正交化方向接近 \(UV^\top\)，也就是保留左右奇异向量，削弱奇异值大小差异带来的主方向垄断。
@@ -182,26 +110,12 @@ Muon 的直觉不是“更精细地调每个元素”，而是“别让一个矩
 W_t=(1-\eta_t\lambda)W_{t-1}-\eta_t O_t
 \]
 
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(\eta_t\lambda\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(\eta_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W_t\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(W_{t-1}\) | 公式中的变量或中间量 | 按上下文定义 |
-| \(O_t\) | 公式中的变量或中间量 | 按上下文定义 |
-
 
 第二，**不同形状矩阵的 Muon update RMS 不一致**。对形状为 \(A\times B\) 的满秩矩阵，理想正交化更新的理论 RMS 约为：
 
 \[
 \operatorname{RMS}(O_t)=\frac{1}{\sqrt{\max(A,B)}}
 \]
-
-<!-- [补充：符号说明] -->
-| 符号 | 含义 | 取值范围 / 常见值 |
-| --- | --- | --- |
-| \(O_t\) | 公式中的变量或中间量 | 按上下文定义 |
 
 
 如果直接用同一个 learning rate，宽矩阵和窄矩阵的实际更新尺度会差很多。论文的做法是按矩阵形状缩放 Muon update，使不同矩阵的 update RMS 更一致；然后再把 Muon 的 update RMS 匹配到 AdamW 常见的 `0.2` 到 `0.4` 范围。这样做的最大好处是：**Muon 可以直接复用 AdamW 已经调好的 learning rate 和 weight decay。**
@@ -254,7 +168,6 @@ DP reduce-scatter gradients
 
 ## Scaling law 实验
 
-<!-- [补充] -->
 > **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 
@@ -455,14 +368,3 @@ Muon 的核心假设是：矩阵正交化能让权重沿更多方向学习。论
 4. 模型权重：[moonshotai/Moonlight-16B-A3B](https://huggingface.co/moonshotai/Moonlight-16B-A3B).
 
 这一页最后回到三个验收点：方法上，Muon 的核心是把矩阵更新方向做近似正交化，让优化步更像受控的谱范数更新；通常还要和 AdamW 分工使用。实验上，读 loss/scale 曲线时要看模型规模、token budget 和是否保持同等训练 recipe。诊断上，真正要验的是稳定性与超参迁移，不是单个 benchmark 赢一次。
-
-!!! note "合并提示"
-    **info · 本站判断**
-
-    Muon scalability 要按优化器证据读：方法重点是矩阵更新的正交化/归一化直觉和与 AdamW 的分工，实验看模型规模、loss 曲线和稳定性消融。采用时最需要补的是超参迁移、混合 optimizer 边界和下游任务质量。
-
-    **tip · 下一站**
-
-    - 回到论文总入口：[论文专题讲解](../index.md)，用同一套 claim / 图表 / 边界口径横向比较。
-    - 把本篇结论接回主题：[训练与基础系统](../../training/index.md)。
-    - 按导航顺序继续：[MagiAttention](magiattention.md)。
