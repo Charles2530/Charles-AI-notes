@@ -6,10 +6,11 @@ paper_topic: 高效训练
 
 # Megatron-LM：Tensor Model Parallel 的大模型训练栈
 
-
 Megatron-LM 是很多后续大模型训练栈的起点之一。它讨论的问题非常朴素：当 Transformer 参数、激活和 Adam optimizer state 已经放不进单卡时，能不能不引入复杂 compiler，也不依赖 pipeline bubble，把一个 Transformer layer 内部的 GEMM 切到多张 GPU 上训练？
 
 它的答案就是后来被大家称作 **tensor parallelism** 的方案：在 MLP、attention 和词表 logits 上按张量维度切分，让每个 GPU 只持有一部分权重和计算，并把通信压缩到少数几个 `all-reduce`。论文用这个方法在 512 张 V100 上训练 8.3B GPT-2-like 模型和 3.9B BERT-like 模型，展示了模型并行和数据并行可以组合成可训练的大模型系统。
+
+先用一个最小例子抓住 TP 的本质。假设输入 hidden state 是 \(X\in\mathbb{R}^{B\times S\times H}\)，MLP 第一层权重是 \(A\in\mathbb{R}^{H\times 4H}\)。如果 TP size 是 2，把 \(A\) 按输出维切成 \(A_1,A_2\in\mathbb{R}^{H\times 2H}\)，两张 GPU 都拿到同一个 \(X\)，各自算 \(X A_1\) 和 \(X A_2\)。这一步没有 partial sum，所以可以在本地直接过 GeLU。第二层权重再按输入维切，让每张 GPU 吃自己的 GeLU shard，最后只在 MLP 输出处 all-reduce 一次。Megatron-LM 的核心就是把同步点放在 residual 需要完整 hidden state 的边界，而不是放在每个 GEMM 中间。
 
 ## 它的效率贡献是什么
 
@@ -41,11 +42,8 @@ Megatron-LM 是很多后续大模型训练栈的起点之一。它讨论的问�
 
 <small>图源：Megatron-LM Figure 1。原图展示 model parallel 与 model+data parallel 在 GPU 数增加时的应用级 FLOPS 扩展；论文报告 8.3B 模型在 512 V100 上达到 15.1 PFLOPs，并相对单 GPU strong baseline 保持约 76% scaling efficiency。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是 Transformer 层、张量并行 rank 和数据并行副本，输出是分片 GEMM 与同步路径。  
-    **效率机制**：把 MLP、attention 和 vocab projection 切到多卡，降低单卡计算/显存压力。  
-    **对主线意义**：它是训练系统成本账的底座，帮助解释世界模型长轨迹训练怎么扩展。  
-    **不能证明什么**：TP/DP 结构图不能证明任务质量、收敛稳定性或具体集群效率。
+**FLOPS 图支撑的是“系统能扩展”，不是单独证明模型更聪明。**
+输入是 Transformer 层、张量并行 rank 和数据并行副本，输出是分片 GEMM 与同步路径。图里的效率机制来自把 MLP、attention 和 vocab projection 切到多卡，降低单卡计算和显存压力；但它不能单独证明任务质量、收敛稳定性或任意集群上的效率。必须和后面的 validation perplexity、zero-shot 结果、数据清洗和训练稳定性一起读。
 
 这张图有两个读法：
 
@@ -56,12 +54,12 @@ Megatron-LM 是很多后续大模型训练栈的起点之一。它讨论的问�
 
 论文先把普通 Transformer layer 摆出来：self-attention 后接两层 MLP，外面有 dropout、residual connection 和 layer normalization。
 
-![Transformer architecture 原论文图](../../assets/images/paper-deep-dives/foundations/megatron-lm/figure-2-transformer-architecture.jpeg){ width="302" }
+![Transformer architecture 原论文图](../../assets/images/paper-deep-dives/foundations/megatron-lm/figure-2-transformer-architecture.jpeg){ width="420" .atlas-figure-tall }
 
 <small>图源：Megatron-LM Figure 2。原图展示 Transformer layer 中 attention、MLP、dropout、residual 与 layer normalization 的位置。Megatron-LM 的模型并行主要进入 attention 和 MLP 两个大 GEMM 区域。</small>
 
-!!! note "图解"
-    这张小结构图只需要抓两块：self-attention 和两层 MLP。Megatron-LM 的切分不会优先动 layer norm、dropout 或 residual，而是把最重的 GEMM 分片；图里的顺序帮助判断通信必须放在进入 residual 前还是可以推迟到局部 GEMM 后。
+**切分入口只抓大 GEMM。**
+这张小结构图只需要抓两块：self-attention 和两层 MLP。Megatron-LM 的切分不会优先动 layer norm、dropout 或 residual，而是把最重的 GEMM 分片；图里的顺序帮助判断通信必须放在进入 residual 前，还是可以推迟到局部 GEMM 后。
 
 这个结构决定了切分目标：尽量切大矩阵乘法，尽量不要在 nonlinear、dropout、residual 等地方产生额外同步。
 
@@ -80,8 +78,8 @@ Megatron-LM 选择反过来切：
 
 <small>图源：Megatron-LM Figure 3a。原图展示 MLP block 的 column-parallel first GEMM 与 row-parallel second GEMM。这样可以把两个 GEMM 串成局部计算，只在 MLP block 输出处同步。</small>
 
-!!! note "图解"
-    先看第一层权重按列切：每张 GPU 得到不同 hidden shard，并能独立过 GeLU。再看第二层权重按行切：各 GPU 吃自己的 shard，最后只在输出处 all-reduce。关键点是非线性 GeLU 前没有同步，否则切分收益会被通信吃掉。
+**非线性前不要制造同步点。**
+先看第一层权重按列切：每张 GPU 得到不同 hidden shard，并能独立过 GeLU。再看第二层权重按行切：各 GPU 吃自己的 shard，最后只在输出处 all-reduce。关键点是非线性 GeLU 前没有同步，否则切分收益会被通信吃掉。
 
 训练含义很关键：这不是随便切矩阵，而是在 nonlinear 的位置避开同步。现代 Megatron 里的 `ColumnParallelLinear` 和 `RowParallelLinear` 基本就是这个思路的工程化表达。
 
@@ -93,23 +91,12 @@ Multi-head attention 天然有 head 级并行。Megatron-LM 把 Q、K、V 的 GE
 
 <small>图源：Megatron-LM Figure 3b。原图展示 self-attention block 的 Q/K/V column-parallel 切分和 output linear row-parallel 切分。通信被推迟到 output projection 后，而不是 attention heads 之间。</small>
 
-!!! note "图解"
-    这张图按 head 读：Q/K/V projection 被切成多组 heads，每张 GPU 本地完成 attention score、softmax 和 value 聚合。只有 output projection 后才需要同步完整 hidden state；因此 TP size、head 数和 hidden size 的整除关系会直接影响负载均衡。
+**Attention 的天然切点是 head。**
+这张图按 head 读：Q/K/V projection 被切成多组 heads，每张 GPU 本地完成 attention score、softmax 和 value 聚合。只有 output projection 后才需要同步完整 hidden state；因此 TP size、head 数和 hidden size 的整除关系会直接影响负载均衡。
 
 这解释了 TP 和 attention head 数之间的关系：如果按 head 切，head 数、hidden size、每头维度和 TP size 的整除关系会直接影响 GEMM shape 和负载均衡。论文的 scaling study 里特意让 hidden size per attention head 保持固定，就是为了让不同规模下的 GEMM 更可比。
 
 ## f / g Operators：通信只放在必要位置
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
->
-> 延伸阅读：[05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html) |
-| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
 
 论文把两个通信算子记为 `f` 和 `g`：
 
@@ -122,8 +109,8 @@ Multi-head attention 天然有 head 级并行。Megatron-LM 把 Q、K、V 的 GE
 
 <small>图源：Megatron-LM Figure 4。原图展示单个 model-parallel Transformer layer 的通信位置：forward 和 backward 合计 4 次通信，覆盖 MLP 与 attention 两个 block。</small>
 
-!!! note "图解"
-    图中的 `f` 和 `g` 不是新算子，而是通信占位：`g` 在 forward 做 all-reduce，`f` 在 backward 做 all-reduce。读这张图要数同步点，Megatron-LM 的主张就是每层只在必要边界同步，局部 GEMM 和非线性尽量留在各 TP rank 内。
+**`f/g` 是同步边界，不是新神经网络层。**
+图中的 `f` 和 `g` 不是新算子，而是通信占位：`g` 在 forward 做 all-reduce，`f` 在 backward 做 all-reduce。读这张图要数同步点，Megatron-LM 的主张就是每层只在必要边界同步，局部 GEMM 和非线性尽量留在各 TP rank 内。
 
 这里的工程味很浓。论文强调不需要新 compiler，也不需要重写 PyTorch 图，只要在 PyTorch transformer implementation 中插入少量通信 primitive。代价是开发者必须清楚哪些张量是 sharded，哪些张量是 replicated，哪些地方进入 residual 前必须已经 all-reduce。
 
@@ -149,8 +136,8 @@ Megatron-LM 把 model parallel 和 data parallel 组合起来。直观地说，8
 
 <small>图源：Megatron-LM Figure 8。原图展示 8-way model parallel 与 64-way data parallel 的 GPU 分组。每个 model-parallel group 内做 TP all-reduce；不同 group 中相同位置的 GPU 组成 data-parallel group 做 gradient all-reduce。</small>
 
-!!! note "图解"
-    先横向看一个 model-parallel group：它共同持有一个模型实例的不同 shard。再纵向看 data-parallel group：不同模型副本中同位置的 shard 同步梯度。这个分组图解释了为什么总 GPU 数等于 TP size 乘 DP size，也解释了通信域不能混在一起。
+**TP group 和 DP group 是两张不同通信账本。**
+先横向看一个 model-parallel group：它共同持有一个模型实例的不同 shard。再纵向看 data-parallel group：不同模型副本中同位置的 shard 同步梯度。这个分组图解释了为什么总 GPU 数等于 TP size 乘 DP size，也解释了通信域不能混在一起。
 
 这张图适合直接拿来解释训练栈里的 group 概念：
 
@@ -227,15 +214,12 @@ Megatron-LM 的训练细节很值得补，因为它展示了早期大模型训�
 
 <small>图源：Megatron-LM Figure 5。原图展示 model parallel 和 model+data parallel 的 weak scaling efficiency。8.3B 模型在 8-way TP 下约 77% linear scaling，在 512 GPU 的 model+data parallel 下约 74% scaling。</small>
 
-!!! note "图解"
-    横轴看 GPU/模型规模增加，纵轴看相对线性扩展效率。model parallel 曲线回答“单个大模型实例切到更多 GPU 后效率如何”，model+data parallel 曲线回答“再复制多个实例后总体训练吞吐如何”。这张图证明的是系统扩展性，不直接证明模型质量。
+**Weak scaling 只能证明机器账，不够证明训练账。**
+横轴看 GPU/模型规模增加，纵轴看相对线性扩展效率。model parallel 曲线回答“单个大模型实例切到更多 GPU 后效率如何”，model+data parallel 曲线回答“再复制多个实例后总体训练吞吐如何”。这张图证明的是系统扩展性，不直接证明模型质量。
 
 注意这里的 baseline 很强：1.2B 模型单 V100 已经有 39 TFLOPs，约为 DGX-2H 单卡理论峰值的 30%。因此后面的 scaling efficiency 不是相对一个很弱的单卡实现，而是相对一个比较充分利用 GEMM 的实现。
 
 ## GPT-2：训练规模和 Zero-shot 结果
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 下面表格重绘自原论文 Table 2，保留英文列名。
 
@@ -251,8 +235,8 @@ Megatron-LM 的训练细节很值得补，因为它展示了早期大模型训�
 
 <small>图源：Megatron-LM Figure 6。原图展示 355M、2.5B、8.3B GPT-2-like 模型训练 300k iterations 时的 validation perplexity。模型越大，收敛更快且最终 perplexity 更低。</small>
 
-!!! note "图解"
-    横轴是训练迭代，纵轴是 validation perplexity，越低越好。三条曲线的核心信息是：在这套数据和训练配方下，更大的 GPT-2-like 模型不仅最终更低，也更早达到较好 perplexity。它不能外推成“任何任务只要加参数就好”，因为数据、优化器和并行系统都在共同作用。
+**质量曲线把系统扩展接回训练目标。**
+横轴是训练迭代，纵轴是 validation perplexity，越低越好。三条曲线的核心信息是：在这套数据和训练配方下，更大的 GPT-2-like 模型不仅最终更低，也更早达到较好 perplexity。它不能外推成“任何任务只要加参数就好”，因为数据、优化器和并行系统都在共同作用。
 
 下面表格重绘自原论文 Table 3，保留英文列名。
 
@@ -273,8 +257,8 @@ Megatron-LM 的训练细节很值得补，因为它展示了早期大模型训�
 
 <small>图源：Megatron-LM Figure 7。原图对比 original BERT architecture 与 rearranged architecture 的训练 loss。论文观察到后者能让 752M 级别 BERT 更稳定，并在更大 BERT-like 模型中继续使用。</small>
 
-!!! note "图解"
-    这张图看两种 residual/layer norm 顺序的 loss 曲线。原始 BERT 结构在更大规模下更容易不稳定，rearranged architecture 曲线更平滑；作者想说明扩展 encoder-only 模型时，稳定性不只是并行策略，还和 norm、residual 路径、初始化和优化器配方有关。
+**BERT 实验提醒：并行不是稳定性的全部。**
+这张图看两种 residual/layer norm 顺序的 loss 曲线。原始 BERT 结构在更大规模下更容易不稳定，rearranged architecture 曲线更平滑；作者想说明扩展 encoder-only 模型时，稳定性不只是并行策略，还和 norm、residual 路径、初始化和优化器配方有关。
 
 下面表格重绘自原论文 Table 4，保留英文列名。
 
@@ -326,4 +310,13 @@ Table 5 很宽，这里按原论文列名重绘，保留英文指标格式。
 
 Megatron-LM 的核心价值就在这里：它把“模型切得开”与“训练跑得稳、结果能变好”放在同一篇论文里。对今天的高效训练来说，这种账本意识仍然比某一个具体并行参数更重要。
 
-这一页最后回到三个验收点：方法上，Megatron-LM 的公式抓手是把 MLP 和 attention 的矩阵乘按 hidden dimension 切分，让每张卡只持有一部分权重和激活。实验上，FLOPs scaling、weak scaling 和 validation perplexity 要一起看，避免只追吞吐忽略质量。诊断上，hybrid MP+DP 图说明张量并行不是孤立技巧，而要和数据并行、通信算子和 batch 配方一起设计。
+## 阅读结论
+
+Megatron-LM 最该记住的是同步点设计。MLP 第一层按列切、第二层按行切，是为了让 GeLU 前不需要 all-reduce；attention 按 heads 切，是为了让每个 rank 本地完成 Q/K/V、softmax 和 value aggregation；vocab 并行和 fused cross entropy，是为了避免巨大 logits all-gather。实验上，FLOPS scaling、weak scaling、validation perplexity 和下游结果要一起看，避免把“机器跑得满”误读成“训练一定有效”。现代训练栈已经加入 ZeRO/FSDP、pipeline、sequence/context parallel、MoE 和 FP8/FP4，但这篇论文仍然是理解张量并行通信账本的最好入口之一。
+
+## 外部精读
+
+- [Megatron-LM](https://arxiv.org/abs/1909.08053)：原论文，重点读 Figure 3、Figure 4 和 hybrid MP+DP 分组。
+- [NVIDIA Megatron Core tensor parallel docs](https://docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html)：看现代 Megatron Core 如何把 TP 落成 `ColumnParallelLinear`、`RowParallelLinear`、parallel cross entropy 等模块。
+- [DeepSpeed Megatron-LM tutorial](https://www.deepspeed.ai/tutorials/megatron/)：理解 Megatron 与 DeepSpeed 训练栈如何组合，尤其是配置项、启动方式和 ZeRO 交叉点。
+- [ZeRO](https://arxiv.org/abs/1910.02054)：作为 TP 的互补路线，解释 optimizer state、gradient 和 parameter sharding 为什么会成为后续训练栈核心。

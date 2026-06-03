@@ -2,7 +2,6 @@
 
 这页用仓库里的 `world-model-mini-chain` fixture 写成一份小型论文式实验报告。它的目标不是证明某个真实模型有效，而是给全站提供一个**证据链模板**：数据、训练配置、系统成本、闭环指标、失败归因和改进计划应该怎样放到同一页里。
 
-
 ## 摘要
 
 任务是桌面机器人动作条件世界模型的最小评测：给定多相机历史、语言目标、本体状态和候选 action chunk，模型要预测不同动作下的未来风险和成功概率。当前 fixture 暴露两个关键问题：`top1_safe_success_agreement=2/4` 过低，说明候选动作排序会选错；`action_sensitivity_pass=3/4` 说明遮挡任务中动作分叉仍不稳。
@@ -76,23 +75,26 @@ python3 files/assets/examples/world-model-mini-chain/eval_mini_chain.py
 
 <small>图源：[DreamerV3: Mastering Diverse Domains through World Models](https://arxiv.org/abs/2301.04104)，Figure 3(a)/(b)。原图意：Figure 3(a) 展示 world model learning，Figure 3(b) 展示 actor-critic 在 imagined latent trajectories 上学习。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：world model 从真实经验中学习 latent、reward 和 continuation；actor/critic 在 imagined latent trajectories 上学习动作和价值。<br>
-    **效率机制**：策略更新大量发生在 latent imagination 中，从而减少真实环境试错。<br>
-    **对本实验报告的意义**：报告要分开写 world model 训练指标和 policy/planning 消费指标，不能只报视频预测。<br>
-    **不能证明什么**：这张图不能证明本页 toy fixture 有真实控制收益，也不能证明视频生成器可直接规划。
+**DreamerV3 图先区分模型学习和策略学习。**
+Figure 3(a) 的输入是真实环境经验，输出是 latent state、reward 和 continuation 的预测模型；Figure 3(b) 的输入则是 world model 想象出来的 latent rollout，输出是 actor/critic 的动作和值函数更新。这里的效率机制不是“视频预测更清楚”，而是策略学习可以大量发生在 latent imagination 中，减少真实环境交互成本。
+
+这对本实验报告有一个很硬的要求：报告必须分开写 world model 训练指标和 policy/planning 消费指标。只报 reconstruction、compression ratio 或 rollout loss，还不能说明模型能帮机器人选动作；必须继续报告候选动作排序、风险校准、closed-loop 成功率或至少 action-conditional counterfactual 评测。本页 toy fixture 只是在示范这种证据链，并没有证明真实控制收益。
 
 ![MWM framework](../assets/images/paper-deep-dives/world-models/masked-world-models/figure-1-mwm-framework.png){ width="920" }
 
 ![MWM visual control results](../assets/images/paper-deep-dives/world-models/masked-world-models/figure-4-mwm-results.png){ width="920" }
 
-<small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1 与 Figure 4。原图意：Figure 1 展示 masked visual representation learning 与 latent dynamics learning 的解耦；Figure 4 展示 Meta-world / RLBench 设置中的 success rate 学习曲线。</small>
+<small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1 与 Figure 4。原图表达：Figure 1 展示 masked visual representation learning 与 latent dynamics learning 的解耦；Figure 4 展示 Meta-world / RLBench 设置中的 success rate 学习曲线。本站读法：这组图提醒实验报告要同时写表征学习和控制收益，不能只报视频或重建指标。</small>
+
+MWM 这组图补上了另一个视角：世界模型报告不能把 representation learning 和 dynamics learning 混在一起。masked visual representation 解决“状态怎么压缩得有语义”，latent dynamics 解决“动作以后状态怎么变”，success rate 曲线才说明这些中间学习有没有被控制任务消费。真实报告里如果只看到预训练 loss 下降，却没有任务曲线或动作反事实，证据链就断在中间。
 
 ![V-JEPA 2-AC planning](../assets/images/paper-deep-dives/world-models/v-jepa2/figure-action-conditioned-world-model.png){ width="920" }
 
 ![V-JEPA 2 planning results](../assets/images/paper-deep-dives/world-models/v-jepa2/table-3-planning-results.png){ width="920" }
 
-<small>图源：[V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning](https://arxiv.org/abs/2506.09985)，Figure 7 与 Table 3。原图意：Figure 7 展示用 V-JEPA 2-AC 做 model predictive control；Table 3 比较 V-JEPA 2-AC 与 Cosmos world model 在机器人操作任务中的规划性能与时间。</small>
+<small>图源：[V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning](https://arxiv.org/abs/2506.09985)，Figure 7 与 Table 3。原图表达：Figure 7 展示用 V-JEPA 2-AC 做 model predictive control；Table 3 比较 V-JEPA 2-AC 与 Cosmos world model 在机器人操作任务中的规划性能与时间。本站读法：这组图用于区分“学到预测表征”和“能被规划器消费”，两者都要进实验报告。</small>
+
+V-JEPA 2-AC 的图和表适合用来提醒“规划接口”要写清楚。action-conditioned world model 不是只生成未来 latent，它还要能被 MPC 或候选动作搜索调用：输入候选 action sequence，预测未来表征或代价，再由规划器选动作。因此实验报告要写 planner 的候选数量、horizon、评分函数、耗时和失败模式；否则读者看不出提升来自世界模型本身、规划器预算，还是任务分布更简单。
 
 ## 评测
 
@@ -121,6 +123,15 @@ python3 files/assets/examples/world-model-mini-chain/eval_mini_chain.py
 | 排序不可靠 | 加 candidate ranking loss 或 pairwise preference eval | top1_safe_success_agreement 达到门禁 |
 | 证据仍是 toy fixture | 替换为真实 checkpoint、固定 seed、真实 rollout 日志 | 报告升级为 Paper Result 或 Closed-loop |
 
-## 结论
+## 阅读结论
 
 本页给的是实验报告形状，不是模型胜利宣言。一个合格的世界模型高效训练报告，必须同时报告：省了什么成本、预测是否动作敏感、闭环或候选排序是否变好、失败是否能回放、证据等级和复现状态是什么。
+
+最核心的知识点是：世界模型的“高效”必须穿过三层证据。第一层是表征和动态模型有没有学到可压缩、可预测的 latent；第二层是 action-conditioned rollout 是否真的改变候选动作排序；第三层是这些排序或规划是否带来 closed-loop 成功率、风险下降或更低真实交互成本。本页的 fixture 故意让 `top1_safe_success_agreement=2/4` 不合格，就是为了避免把完整报告格式误读成模型已经可用。
+
+## 外部精读
+
+- [DreamerV3](https://arxiv.org/abs/2301.04104)：重点看 world model learning 与 actor-critic learning 如何分工。
+- [Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)：重点看 masked representation、latent dynamics 和控制 success rate 的证据链。
+- [V-JEPA 2](https://arxiv.org/abs/2506.09985)：重点看 action-conditioned planning、MPC 接口和机器人任务表格。
+- [Meta V-JEPA 2 research page](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/)：适合核对官方对 understanding、prediction、planning 三阶段的解释。

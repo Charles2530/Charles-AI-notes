@@ -12,7 +12,11 @@ paper_topic: 世界模型
 
 这不是说动作数据不重要，而是说动作数据的角色更像 alignment：它把已经从通用视觉动态里学到的能力，对齐到“给定动作，预测未来状态”的接口上。
 
-![Beyond Language Modeling overview 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-1-study-overview.png){ width="760" }
+先把 NWM 想成一个很小的导航任务：模型看见前方走廊的几帧图像，然后文本里出现 `turn left` 或 `move forward`。如果它真的学到世界动态，同一段历史在不同动作下应该走向不同未来；如果它只是会生成“像视频的下一帧”，动作 token 变了，未来也可能几乎不变。论文最有价值的地方，就是把这种差别放进数据消融里：通用视频先让模型学会物体和视角如何变化，少量动作条件数据再告诉它“动作应该怎样控制变化”。
+
+这也是为什么本文适合按高质量技术博客的方式读：不要先背 Transfusion、RAE、MoE 这些名词，而是一直追问一个问题：统一多模态预训练里的哪种设计，真正让模型从静态理解走向动作条件未来预测？
+
+![Beyond Language Modeling overview 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-1-study-overview.png){ width="660" }
 
 <small>图源：`Beyond Language Modeling`, Figure 1。原图把研究空间分成 visual representations、data、world model、architecture 和 scaling behavior。本站读法：不要把它看成模型结构海报，而要看成实验路线图，论文逐一回答“用什么视觉 latent、喂什么数据、怎么形成动作条件未来预测、稀疏专家是否有必要”。</small>
 
@@ -67,7 +71,7 @@ $$
 
 ## 数据混合：每类数据承担不同功能
 
-![Beyond Language Modeling training data 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-2-training-data.png){ width="780" }
+![Beyond Language Modeling training data 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-2-training-data.png){ width="660" }
 
 <small>图源：`Beyond Language Modeling`, Figure 2。原图展示 text、videos、image-text pairs 和 action-conditioned video。本站读法：四类数据不是可互换原料，文本维持语言能力，raw video 学视觉动态，image-text pair 建立语义对齐，action-conditioned video 才把动作和未来状态绑定起来。</small>
 
@@ -91,7 +95,7 @@ $$
 
 论文采用 NWM 设置：给定几帧上下文和一个导航动作，预测未来视觉状态。动作不使用专门连续控制 embedding，而是直接写成文本 token，包括 WASD 风格动作和自由语言动作。
 
-![Navigation actions as text 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-11-navigation-actions.png){ width="780" }
+![Navigation actions as text 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-11-navigation-actions.png){ width="660" }
 
 <small>图源：`Beyond Language Modeling`, Figure 11。原图展示 NWM 序列由四个 context frames 和一个 navigation action 组成，动作直接编码为文本 token。本站读法：action-as-text 不是机器人控制的终点，而是一个低成本统一接口，用来检验文本条件能否控制未来视觉预测。</small>
 
@@ -99,11 +103,11 @@ $$
 
 论文最有启发的证据来自数据消融。只扩大域内 NWM 数据，不如加入通用视频预训练；固定总数据量时，域内 alignment 数据占比很小也能接近饱和。这说明模型在 general multimodal pretraining 中已经学到一部分可迁移动态，NWM 数据主要让它学会这个任务的格式和动作接口。
 
-![Video data improves world modeling 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-12-world-modeling-video-data.png){ width="920" }
+![Video data improves world modeling 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-12-world-modeling-video-data.png){ width="820" }
 
 <small>图源：`Beyond Language Modeling`, Figure 12。原图比较不同数据组合对 world modeling performance 的影响。本站读法：通用视频数据不是背景材料，它直接提高 action-conditioned future prediction，说明视觉动态预训练可以迁移到动作条件任务。</small>
 
-![Minimal alignment transfer 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-13-minimal-alignment.png){ width="920" }
+![Minimal alignment transfer 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-13-minimal-alignment.png){ width="820" }
 
 <small>图源：`Beyond Language Modeling`, Figure 13。原图显示域内数据占比很小时 world modeling transfer 已接近饱和。本站读法：这不是否定动作数据，而是把动作数据的角色改写为 alignment data：少量高质量动作条件样本可以把通用动态能力接到具体接口上。</small>
 
@@ -115,11 +119,11 @@ $$
 
 论文先验证 modality-specific FFN 有帮助，再进一步研究 MoE。MoE 的意义不是“参数更多所以更强”这么简单，而是在固定 active compute 下增加总容量，让不同 token 可以路由到不同专家。
 
-![MoE sparsity scaling 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-16-sparsity-scales.png){ width="920" }
+![MoE sparsity scaling 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-16-sparsity-scales.png){ width="820" }
 
 <small>图源：`Beyond Language Modeling`, Figure 16。原图显示在固定 active experts 条件下，增加总 expert 数能改善 language 和 vision 指标。本站读法：稀疏总容量给多模态模型更多空间，但 serving、通信和路由成本仍要单独评估。</small>
 
-![Expert specialization 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-18-expert-specialization.png){ width="920" }
+![Expert specialization 原图](../../assets/images/paper-deep-dives/world-models/beyond-language-modeling/figure-18-expert-specialization.png){ width="820" }
 
 <small>图源：`Beyond Language Modeling`, Figure 18。原图展示 expert specialization 自然出现，后层中 vision 与 multimodal experts 比例增加。本站读法：模型不是被人工规定“这个专家看图、那个专家看字”，而是在数据驱动下形成模态分工。</small>
 

@@ -6,7 +6,6 @@ paper_topic: 具身智能
 
 # MapAnything：统一前向 Metric 3D 重建骨干
 
-
 MapAnything 的核心价值，是把原本分散在 SfM、MVS、相机标定、深度估计、定位和补全里的几何问题，压到一个统一的前向模型里：**输入可以只有图像，也可以额外带 intrinsics、poses、depth 或 partial reconstruction；输出则是一套可合成 metric 3D reconstruction 的 factored geometry。**
 
 它和 [VGGT](vggt.md) 很接近，但问题更“工程化”：VGGT 已经证明 camera、depth、point map、track 可以一起前向预测；MapAnything 继续追问，如果真实系统已经有一部分几何输入，比如机器人相机内参、SLAM 位姿、稀疏深度、RGB-D 深度，模型能不能把这些信息吃进去，并在同一个 metric scale 里输出更稳的重建。
@@ -49,10 +48,10 @@ VGGT、DUSt3R、MASt3R 这类 feed-forward 方法把 pipeline 里的很多优化
 
 <small>图源：`MapAnything`，Figure 1。原论文图意：MapAnything 用同一个 feed-forward 模型支持多种 input configuration，并输出 metric-scale 3D reconstruction 与 cameras；图中列出 unconstrained SfM、calibrated SfM、posed SfM、MVS、RGB-D localization 和 depth completion 等任务。</small>
 
-!!! note "这张图怎么读"
-    左侧不是简单的任务展示，而是在强调输入组合的可变性：Images、Calibration、Poses、Depth 都可能存在或缺失。右侧的关键是 `Metric-Scale 3D Reconstruction + Cameras`，说明论文想解决的不是相对几何漂亮不漂亮，而是能否把局部估计放进统一 metric frame。
+**MapAnything 总图先看可选几何输入。**
+左侧不是简单的任务展示，而是在强调输入组合的可变性：Images、Calibration、Poses、Depth 都可能存在或缺失。右侧的关键是 `Metric-Scale 3D Reconstruction + Cameras`，说明论文想解决的不是相对几何漂亮不漂亮，而是能否把局部估计放进统一 metric frame。
 
-    对具身系统来说，这点很实用。真实机器人通常已经有相机内参，移动机器人可能有 SLAM pose，RGB-D 相机有深度但会有洞；一个能融合这些输入的几何 backbone，比只能从 RGB 重建的模型更容易进入 episode schema 和规划系统。
+对具身系统来说，这点很实用。真实机器人通常已经有相机内参，移动机器人可能有 SLAM pose，RGB-D 相机有深度但会有洞；一个能融合这些输入的几何 backbone，比只能从 RGB 重建的模型更容易进入 episode schema 和规划系统。
 
 ## 核心问题：为什么要 factored geometry
 
@@ -61,7 +60,6 @@ MapAnything 不把场景直接表示成一组耦合 pointmaps，而是输出：
 \[
 \{m, (R_i, \tilde D_i, \tilde P_i)_{i=1}^{N}\}
 \]
-
 
 其中：
 
@@ -78,18 +76,15 @@ MapAnything 不把场景直接表示成一组耦合 pointmaps，而是输出：
 \tilde L_i = R_i \cdot \tilde D_i
 \]
 
-
 这行式子在说：第 \(i\) 个视角的每条相机射线 \(R_i\) 乘上 up-to-scale 深度 \(\tilde D_i\)，得到局部坐标里的点 \(\tilde L_i\)。
 
 \[
 \tilde X_i = O_i \cdot \tilde L_i + \tilde T_i
 \]
 
-
 \[
 X_i^\text{metric} = m \cdot \tilde X_i
 \]
-
 
 这里 \(O_i\) 由 quaternion \(Q_i\) 转成 rotation matrix。这个分解的好处有三层：
 
@@ -103,10 +98,10 @@ X_i^\text{metric} = m \cdot \tilde X_i
 
 <small>图源：`MapAnything`，Figure 2。原论文图意：模型把 RGB 图像和可选几何输入编码到共同 latent space，加入 reference view embedding 与 scale token，通过 multi-view transformer 融合多视角信息，再由 DPT head、pose head 和 scale MLP 输出 factored metric 3D geometry。</small>
 
-!!! note "这张架构图怎么读"
-    上方每个 view 都有 `Visual Input` 和可选的 `Optional Geometric Inputs`。图像走 DINOv2，ray / depth 走浅层 convolutional encoder，pose rotation、normalized translation、pose scale、ray depth scale 走 MLP。所有特征先对齐到同一个 latent space，再相加，而不是把几何信号只作为 prompt。
+**这张架构图怎么读。**
+上方每个 view 都有 `Visual Input` 和可选的 `Optional Geometric Inputs`。图像走 DINOv2，ray / depth 走浅层 convolutional encoder，pose rotation、normalized translation、pose scale、ray depth scale 走 MLP。所有特征先对齐到同一个 latent space，再相加，而不是把几何信号只作为 prompt。
 
-    中间的 `Scale Token` 是 MapAnything 和普通 up-to-scale 重建的重要差异。局部几何和 pose 先在 up-to-scale 空间预测，scale token 再预测全局 metric scaling factor。这样既保留多视图相对几何，又能把结果拉回真实尺度。
+中间的 `Scale Token` 是 MapAnything 和普通 up-to-scale 重建的重要差异。局部几何和 pose 先在 up-to-scale 空间预测，scale token 再预测全局 metric scaling factor。这样既保留多视图相对几何，又能把结果拉回真实尺度。
 
 ### Encoder
 
@@ -161,11 +156,9 @@ MapAnything 的训练目标很值得细读，因为它的“universal”不是�
 L_\text{rays}=\sum_i\|\hat R_i-R_i\|
 \]
 
-
 \[
 L_\text{rot}=\sum_i\min(\|\hat Q_i-Q_i\|,\|-\hat Q_i-Q_i\|)
 \]
-
 
 这里 \(L_\text{rays}\) 表示预测 ray direction \(\hat R_i\) 和真值 \(R_i\) 的误差和；\(L_\text{rot}\) 表示旋转 quaternion 的误差和。quaternion 有 \(Q\) 和 \(-Q\) 表达同一旋转的问题，所以 rotation loss 取二者较小值。
 
@@ -175,13 +168,11 @@ L_\text{rot}=\sum_i\min(\|\hat Q_i-Q_i\|,\|-\hat Q_i-Q_i\|)
 f_\log(x) = (x / \|x\|)\cdot \log(1+\|x\|)
 \]
 
-
 并强调 ray depths、pointmaps 和 metric scale factor 都要在 log-space 里算 loss。为了避免 scale loss 的梯度污染 up-to-scale geometry，它使用：
 
 \[
 z^\text{metric}=m \cdot \text{sg}(\tilde z)
 \]
-
 
 其中 \(\text{sg}\) 表示 stop-gradient。
 
@@ -200,7 +191,6 @@ z^\text{metric}=m \cdot \text{sg}(\tilde z)
 +\mathcal{L}_\text{GM}
 +0.1\cdot \mathcal{L}_\text{mask}
 \]
-
 
 训练细节里有几个很工程化的点：
 
@@ -299,22 +289,19 @@ Supplementary implementation details are redrawn below with the original English
 
 ## 实验：重建质量与输入组合
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 ![MapAnything qualitative comparison 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-3-qualitative-vggt.png){ width="920" }
 
 <small>图源：`MapAnything`，Figure 3。原论文图意：只用 in-the-wild images 作为输入时，MapAnything 与 VGGT 的 qualitative comparison；论文说明 MapAnything 在大视差变化、季节变化、无纹理表面、水体和大场景上更稳。</small>
 
-!!! note "这张图怎么读"
-    这不是闭环机器人实验，而是几何重建鲁棒性样例。绿色箭头强调 MapAnything 在大场景和困难表面上的连续性，红色箭头指出 VGGT 的 disjoint 或几何断裂。它支撑的是 feed-forward metric reconstruction 的视觉质量证据，不能证明动作规划或动态交互能力。
+**Qualitative 图看几何连续性和断裂。**
+这不是闭环机器人实验，而是几何重建鲁棒性样例。绿色箭头强调 MapAnything 在大场景和困难表面上的连续性，红色箭头指出 VGGT 的 disjoint 或几何断裂。它支撑的是 feed-forward metric reconstruction 的视觉质量证据，不能证明动作规划或动态交互能力。
 
 ![MapAnything multi-view results 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-4-multiview-results.png){ width="920" }
 
 <small>图源：`MapAnything`，Figure 4。原论文图意：MapAnything 在 2 到 100 views 以及不同 input configurations 下做 dense multi-view reconstruction，对比 VGGT 和 Pow3R-BA；指标覆盖 pointmaps、pose、depth、ray directions 和 metric scale。</small>
 
-!!! note "Figure 4 的正确读法"
-    先看横轴：views 从 `2` 增到 `100`。再看线型：同一个 MapAnything 在 `Input: Imgs`、`Input: Imgs, Calibration & Poses`、`Input: Imgs, Calibration, Poses & Sparse Depth` 下表现不同。结论不是“图像输入就够了”，而是模型能在同一 forward interface 里吸收额外几何信号；真实机器人越能提供可靠几何先验，MapAnything 越像一个融合器。
+**Figure 4 的正确读法。**
+先看横轴：views 从 `2` 增到 `100`。再看线型：同一个 MapAnything 在 `Input: Imgs`、`Input: Imgs, Calibration & Poses`、`Input: Imgs, Calibration, Poses & Sparse Depth` 下表现不同。结论不是“图像输入就够了”，而是模型能在同一 forward interface 里吸收额外几何信号；真实机器人越能提供可靠几何先验，MapAnything 越像一个融合器。
 
 ### Two-View Dense Reconstruction
 
@@ -346,10 +333,10 @@ Table 2 is redrawn below with the original English fields.
 
 <small>图源：`MapAnything`，Figure S.5。原论文图意：辅助几何输入可以改善 MapAnything 的 feed-forward performance；包括用 calibration 和 metric poses 改善 alignment / metric scale，用 sparse metric point cloud 做 dense metric depth completion，以及输入 calibration 后改变物体中心场景的预测。</small>
 
-!!! note "这张补充图怎么读"
-    上半部分说明，只靠 100 张图像时模型仍可能出现重复结构；加入 camera calibration 和 poses 后，几何对齐明显改善。中间展示 metric scale：images-only 的尺度估计不够准，加入 calibration 和 metric poses 后接近 ground truth。下半部分说明 sparse depth / calibration 不是装饰输入，它们会实际改变 dense reconstruction。
+**这张补充图怎么读。**
+上半部分说明，只靠 100 张图像时模型仍可能出现重复结构；加入 camera calibration 和 poses 后，几何对齐明显改善。中间展示 metric scale：images-only 的尺度估计不够准，加入 calibration 和 metric poses 后接近 ground truth。下半部分说明 sparse depth / calibration 不是装饰输入，它们会实际改变 dense reconstruction。
 
-    对机器人来说，这张图很关键：如果相机标定和局部位姿已经在系统里存在，就不该在模型输入层丢掉。MapAnything 的价值之一，就是把这些传统几何模块的输出重新变成 foundation model 的条件。
+对机器人来说，这张图很关键：如果相机标定和局部位姿已经在系统里存在，就不该在模型输入层丢掉。MapAnything 的价值之一，就是把这些传统几何模块的输出重新变成 foundation model 的条件。
 
 ## 关键消融
 
@@ -407,10 +394,10 @@ Supplementary Table S.2 进一步显示：
 
 <small>图源：`MapAnything`，Figure S.1。原论文图意：在 H200-140GB GPU 上对比多视图 feed-forward reconstruction 模型的 inference speed 和 peak GPU memory；MapAnything 的 dense per-pixel regression 存在显存瓶颈，Mem Efficient 版本用 per-view decoding mini-batch loop 显著降低显存，速度损失很小。</small>
 
-!!! note "推理图怎么读"
-    左图看 view 数增加后 inference frequency 如何下降；右图看 peak GPU memory 如何上升。MapAnything 不是没有显存压力，瓶颈主要来自 dense per-pixel DPT decoding across views。论文的工程处理是把 per-view decoding 放进 mini-batched loop，降低显存峰值。
+**推理图怎么读。**
+左图看 view 数增加后 inference frequency 如何下降；右图看 peak GPU memory 如何上升。MapAnything 不是没有显存压力，瓶颈主要来自 dense per-pixel DPT decoding across views。论文的工程处理是把 per-view decoding 放进 mini-batched loop，降低显存峰值。
 
-    这对机器人部署有现实含义：如果只是少量相机或短窗口，feed-forward geometry 很有吸引力；如果要把 100+ views、长期 map、dense depth 和在线规划放在一起，必须设计 memory-efficient decoding、滑动窗口、关键帧筛选或 scene memory。
+这对机器人部署有现实含义：如果只是少量相机或短窗口，feed-forward geometry 很有吸引力；如果要把 100+ views、长期 map、dense depth 和在线规划放在一起，必须设计 memory-efficient decoding、滑动窗口、关键帧筛选或 scene memory。
 
 ## 它和 VGGT / Depth Anything 3 的关系
 
@@ -479,5 +466,5 @@ MapAnything 属于“前沿但很工程化的几何 foundation model”。它的
 
 最值得复用的是三件事：**factored scene representation、geometric input probability augmentation、two-stage view curriculum**。如果做具身项目，可以先把它作为几何状态层 baseline，而不是把它包装成完整具身智能方案。下一步最需要的证据，是带 noisy sensor / SLAM drift 的真实机器人 episode、与 planner/VLA/world model 的闭环 ablation，以及动态场景和失败恢复数据。
 
-!!! info "本站判断"
-    MapAnything 的方法证据来自 factored scene representation、几何输入增强和 view curriculum；实验要看多视图重建、速度显存和辅助输入消融。把它接入机器人时先作为几何状态层验收，再接 planner/VLA，不要直接当动作策略。
+**阅读结论。**
+MapAnything 的方法证据来自 factored scene representation、几何输入增强和 view curriculum；实验要看多视图重建、速度显存和辅助输入消融。把它接入机器人时先作为几何状态层验收，再接 planner/VLA，不要直接当动作策略。

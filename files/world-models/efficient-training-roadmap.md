@@ -169,6 +169,6 @@ flowchart TD
 - [Lil'Log: Diffusion Models for Video Generation](https://lilianweng.github.io/posts/2024-04-12-diffusion-video/)：学习如何把一个技术方向的任务难点、数据、结构和评测边界讲清。
 - [OneFlow/智源：全栈 Transformer 推理优化](https://hub.baai.ac.cn/view/33449)：学习如何把推理优化从硬件、MLSys、模型结构和解码算法放进同一张成本账。
 
-## 本页结论
+## 阅读结论
 
 世界模型高效训练的核心不是覆盖更多论文，而是把每个方法放回成本账：它省真实交互、视频 token、训练显存、rollout 延迟还是验证预算；它是否保留动作敏感性、reward/done/risk 和闭环收益；它的证据到底能支持什么，不能外推到哪里。

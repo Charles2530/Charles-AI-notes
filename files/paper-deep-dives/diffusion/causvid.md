@@ -6,7 +6,6 @@ paper_topic: 扩散模型
 
 # CausVid：流式自回归视频扩散
 
-
 这篇论文的核心价值在于给出了一条很清楚的工程路线：**不要从零训练一个自回归视频模型，而是把已有高质量双向视频 DiT 改造成因果学生模型，再用双向教师做非对称 DMD 蒸馏，把 50 步视频扩散压成 4 步流式生成器。**
 
 如果说 [Diffusion Forcing](diffusion-forcing.md) 重点回答“序列扩散应该怎样表达不同时间 token 的不确定性”，CausVid 更进一步回答：“怎样把这种因果序列扩散真正做成低延迟视频生成系统”。
@@ -54,8 +53,8 @@ CausVid 的目标不是单纯提高 VBench 分数，而是改变视频扩散的�
 
 <small>图源：`CausVid` 官方项目页，对应论文 Figure 1。原图对比传统 bidirectional diffusion 生成完整 128-frame 视频需要 219s，而 CausVid 通过 asymmetric distillation with DMD 得到 causal student，初始延迟 1.3s，随后约 9.4 FPS 流式生成。</small>
 
-!!! note "图解：CausVid teaser 要同时看因果性和延迟"
-    这张图的关键不是“更快”这个单点，而是两个约束同时成立。第一，模型必须 causal：生成当前 chunk 时不能依赖未来 chunk，否则无法流式交互。第二，模型必须 few-step：即使结构上已经 causal，如果每个 chunk 还要几十步扩散采样，也达不到交互帧率。CausVid 的路线是用双向 teacher 保留视频先验，用 causal student 和 KV cache 满足部署形态，再用 DMD 把采样步数压下来。
+**CausVid teaser 要同时看因果性和延迟。**
+这张图的关键不是“更快”这个单点，而是两个约束同时成立。第一，模型必须 causal：生成当前 chunk 时不能依赖未来 chunk，否则无法流式交互。第二，模型必须 few-step：即使结构上已经 causal，如果每个 chunk 还要几十步扩散采样，也达不到交互帧率。CausVid 的路线是用双向 teacher 保留视频先验，用 causal student 和 KV cache 满足部署形态，再用 DMD 把采样步数压下来。
 
 ## 核心问题
 
@@ -67,7 +66,6 @@ x_t = \alpha_t x_0 + \sigma_t \epsilon,
 \epsilon \sim \mathcal N(0,I).
 \]
 
-
 \(\epsilon\sim\mathcal N(0,I)\) 表示和视频 latent 同形状的标准高斯噪声；\(0\) 是均值，\(I\) 是单位协方差。公式里的 \(\alpha_t\) 控制保留多少原 latent，\(\sigma_t\) 控制噪声加多强。
 
 如果视频 latent 被组织成多个 chunk：
@@ -76,20 +74,17 @@ x_t = \alpha_t x_0 + \sigma_t \epsilon,
 x = (x^{(1)}, x^{(2)}, \dots, x^{(N)}),
 \]
 
-
 双向 DiT 的 self-attention 默认允许任意 chunk 互相看见。于是生成第 \(i\) 个 chunk 时，模型实际依赖：
 
 \[
 x^{(1)}, \dots, x^{(i)}, \dots, x^{(N)}.
 \]
 
-
 交互式视频生成需要的却是：
 
 \[
 p(x^{(i)} \mid x^{(<i)}, \text{text prompt}, \text{optional input stream}).
 \]
-
 
 也就是说，当前 chunk 不能依赖未来 chunk。CausVid 要解决的核心矛盾是：
 
@@ -114,10 +109,10 @@ pretrained bidirectional video DiT
 
 <small>图源：`CausVid` 官方项目页，对应论文 Figure 5。该图展示两阶段训练：先用 bidirectional teacher 的 ODE solution pairs 初始化 causal student，再用 bidirectional teacher 对 causal student 做 asymmetric DMD distillation。</small>
 
-!!! note "这张方法图怎么读"
-    图里的关键是“先初始化，再分布匹配”，而不是直接把双向模型改成 causal 后开训。第一阶段的 ODE initialization 用 bidirectional teacher 生成的轨迹点训练 causal student，让它先学会在 causal attention 约束下走一条合理的去噪路径。这个阶段更像把学生放到一个不会崩的初始区域。
+**这张方法图怎么读。**
+图里的关键是“先初始化，再分布匹配”，而不是直接把双向模型改成 causal 后开训。第一阶段的 ODE initialization 用 bidirectional teacher 生成的轨迹点训练 causal student，让它先学会在 causal attention 约束下走一条合理的去噪路径。这个阶段更像把学生放到一个不会崩的初始区域。
 
-    第二阶段才是 asymmetric DMD：student 是 causal 的，但 teacher score 来自 bidirectional teacher。这个不对称很重要，因为 causal teacher 自己会有未来信息缺失和误差累积问题，如果再拿它蒸馏 causal student，会把弱点传下去。CausVid 的图实际表达的是一个工程判断：**部署形态必须 causal，但监督信号可以继续利用 bidirectional teacher 的强视频先验**。
+第二阶段才是 asymmetric DMD：student 是 causal 的，但 teacher score 来自 bidirectional teacher。这个不对称很重要，因为 causal teacher 自己会有未来信息缺失和误差累积问题，如果再拿它蒸馏 causal student，会把弱点传下去。CausVid 的图实际表达的是一个工程判断：**部署形态必须 causal，但监督信号可以继续利用 bidirectional teacher 的强视频先验**。
 
 方法可以拆成四层。
 
@@ -144,7 +139,6 @@ M_{i,j} =
 0, & \text{otherwise}
 \end{cases}
 \]
-
 
 其中 \(i,j\) 是 frame 或 latent token 的时间索引，\(k\) 是 chunk size。
 
@@ -208,7 +202,6 @@ G_\phi(\{x_{t_i}^{(i)}\}_{i=1}^{N}, \{t_i\}_{i=1}^{N})
 \right\rVert_2^2
 \right].
 \]
-
 
 这一步不是最终目标，只是把 causal student 放到一个“会沿 teacher ODE 轨迹还原视频”的初始区域。后续 DMD 才负责分布级对齐。
 
@@ -274,9 +267,6 @@ KV cache 的意义和 LLM 类似：过去 chunk 已经计算过的 key/value 不
 
 ## 实验结果
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 ### Table 1: Evaluation of text-to-short-video generation
 
 论文用 VBench 评估 10 秒附近的短视频生成。表格保留英文格式。
@@ -339,10 +329,10 @@ KV cache 的意义和 LLM 类似：过去 chunk 已经计算过的 key/value 不
 
 <small>表源：`From Slow Bidirectional to Fast Autoregressive Video Diffusion Models`，Table 4。原论文表格要点：该表对 many-step causalization、ODE initialization 和 teacher 类型做消融；最终 `ODE Init. + Bidirectional Teacher + causal generator + 4 fwd pass` 的组合最好，说明初始化和非对称 teacher 都不可省。</small>
 
-!!! note "这张消融表怎么读"
-    这张表在回答一个很具体的问题：CausVid 的提升到底来自 causal architecture、ODE init，还是 DMD teacher？上半部分说明，只把 many-step bidirectional model 改成 causal 会掉质量，尤其 temporal quality 和 text alignment 都下降，说明 causal mask 本身不是免费午餐。
+**这张消融表怎么读。**
+这张表在回答一个很具体的问题：CausVid 的提升到底来自 causal architecture、ODE init，还是 DMD teacher？上半部分说明，只把 many-step bidirectional model 改成 causal 会掉质量，尤其 temporal quality 和 text alignment 都下降，说明 causal mask 本身不是免费午餐。
 
-    下半部分更关键。没有 ODE init 时，4-step causal student 还能跑，但质量不稳；只有 ODE init、没有 DMD teacher 时，frame quality 掉到 48.1，说明初始化不能替代分布匹配蒸馏；用 causal teacher 又不如 bidirectional teacher，说明强 teacher 的全局视频先验仍然必要。最终最佳组合是 causal student + ODE init + bidirectional teacher DMD。这个表支撑了论文的“asymmetric distillation”主张。
+下半部分更关键。没有 ODE init 时，4-step causal student 还能跑，但质量不稳；只有 ODE init、没有 DMD teacher 时，frame quality 掉到 48.1，说明初始化不能替代分布匹配蒸馏；用 causal teacher 又不如 bidirectional teacher，说明强 teacher 的全局视频先验仍然必要。最终最佳组合是 causal student + ODE init + bidirectional teacher DMD。这个表支撑了论文的“asymmetric distillation”主张。
 
 这张消融把论文主张支撑得很扎实：
 
@@ -359,8 +349,8 @@ KV cache 的意义和 LLM 类似：过去 chunk 已经计算过的 key/value 不
 
 <small>图源：`CausVid` 官方项目页。Radar plot 展示 CausVid 在 VBench 多项指标上的表现，项目页报告其 VBench 总分为 84.27。</small>
 
-!!! note "图解：preference 和 radar 图要分开读"
-    Preference 图回答“人在两两比较时更喜欢谁”，更接近真实观感和交互体验；radar 图回答“VBench 多个自动维度上哪里强、哪里弱”，更适合定位能力结构。CausVid 要证明的不是单项指标最高，而是 causal streaming 约束下仍接近 bidirectional teacher：人评接近 teacher 说明质量没有因流式化严重崩掉，radar 图则检查 temporal quality、frame quality、alignment 等维度是否均衡。
+**这两张 preference / radar 图怎么读。**
+Preference 图回答“人在两两比较时更喜欢谁”，更接近真实观感和交互体验；radar 图回答“VBench 多个自动维度上哪里强、哪里弱”，更适合定位能力结构。CausVid 要证明的不是单项指标最高，而是 causal streaming 约束下仍接近 bidirectional teacher：人评接近 teacher 说明质量没有因流式化严重崩掉，radar 图则检查 temporal quality、frame quality、alignment 等维度是否均衡。
 
 ### Table 5: Evaluation of streaming video-to-video translation
 
@@ -448,7 +438,7 @@ CausVid 可以生成 30 秒高质量视频，但极长视频仍会退化。论�
 5. **动作条件不足**：CausVid 支持动态 prompt 和 streaming V2V，但不是动作条件世界模型。
 6. **论文主训练数据不可完全复现**：主结果使用内部 400K single-shot videos；开源 repo 当前给出 Wan-based 工作中实现和 toy MixKit distillation 流程。
 
-## 读完应该记住什么
+## 阅读结论
 
 CausVid 的关键贡献是证明：**高质量视频扩散不一定只能双向、离线、慢速生成。** 通过 block-wise causal DiT、ODE initialization、bidirectional-teacher asymmetric DMD 和 KV cache，可以把强双向视频扩散模型转成 few-step 流式生成器。
 
@@ -464,9 +454,9 @@ strong bidirectional teacher
 
 这条路线很适合接在 Diffusion Forcing、视频世界模型和少步蒸馏之后读。它把“因果视频扩散”从概念推进到了一个可测延迟、可跑 benchmark、能支持 streaming UI 的系统形态。
 
-这一页最后回到三个验收点：方法上，把 CausVid 读成 causal student 在短窗口内滚动生成视频，teacher/fake score 负责把每个新片段拉回 teacher 分布。实验上，重点看 streaming latency、video quality 和长 rollout 的稳定性，而不是只看单段样片。诊断上，若去掉因果训练或 score 校正，最先坏的通常是运动连续性和时间一致性。
+CausVid 应读成 causal student 在短窗口内滚动生成视频，teacher/fake score 把每个新片段拉回 teacher 分布。实验重点是 streaming latency、video quality 和长 rollout 稳定性，而不是单段样片；若去掉因果训练或 score 校正，最先坏的通常是运动连续性和时间一致性。
 
-## 参考资料
+## 外部精读
 
 1. Yin et al. [From Slow Bidirectional to Fast Autoregressive Video Diffusion Models](https://arxiv.org/abs/2412.07772). arXiv:2412.07772.
 2. 官方项目页：[CausVid](https://causvid.github.io/).

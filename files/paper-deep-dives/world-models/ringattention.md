@@ -6,7 +6,6 @@ paper_topic: 世界模型
 
 # RingAttention：近无限上下文训练
 
-
 RingAttention 不是一个直接预测未来视频的世界模型，但它是 [LWM](lwm.md) 这类百万 token 视频语言世界模型的关键系统底座。它解决的是一个更底层的问题：**如果世界经验是长视频、长文本、动作轨迹和多轮交互，Transformer 怎样在不做稀疏近似的情况下看完整序列？**
 
 论文的答案是：把序列维度切到多个设备上，每个设备持有一个 query block，让 key/value blocks 沿设备环流动；同时用 blockwise attention 让通信被计算覆盖。
@@ -43,7 +42,6 @@ RingAttention 不是一个直接预测未来视频的世界模型，但它是 [L
 \operatorname{Attn}(Q,K,V)=\operatorname{softmax}\left(\frac{QK^\top}{\sqrt d}\right)V.
 \]
 
-
 难点不是只有 attention matrix 本身。FlashAttention 这类方法已经可以避免显式 materialize \(QK^\top\)。更深的问题是：每一层输出仍然要保留整段序列的 hidden states，下一层 attention 还要访问全部 token。
 
 如果序列长度是 \(n\)，hidden size 是 \(h\)，batch size 是 \(b\)，层输出的存储规模仍随 \(bnh\) 增长。对于百万级甚至千万级 token，单个设备根本放不下。
@@ -56,10 +54,10 @@ RingAttention 的关键观察是：blockwise attention 中，不同 key/value bl
 
 <small>图源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Figure 2。原图上半部分展示多个 host 形成环，query block 留在本设备，key/value block 沿环传递；下半部分展示 query outer loop 和 key/value inner loop 的 blockwise attention 与 feedforward 组织方式。</small>
 
-!!! note "这张方法图怎么读"
-    这张图的核心是“query 不动，KV 转圈”。每个设备只持有长序列的一段 query block，同时也计算本地的 key/value block。随后 key/value block 沿设备环传递；每个设备拿自己的 query 依次和所有传来的 key/value block 做 blockwise attention，并用稳定 softmax 累积结果。
+**这张方法图怎么读。**
+这张图的核心是“query 不动，KV 转圈”。每个设备只持有长序列的一段 query block，同时也计算本地的 key/value block。随后 key/value block 沿设备环传递；每个设备拿自己的 query 依次和所有传来的 key/value block 做 blockwise attention，并用稳定 softmax 累积结果。
 
-    这样做和 sparse attention 不同：RingAttention 没有丢掉远处 token，每个 query 最终仍然 attends to 全序列，所以是 exact attention。它改变的是数据放置和计算顺序，而不是模型定义。读这张图时要注意下半部分的 nested loop：外层固定 query block，内层轮转 key/value block；只要通信能被当前 block attention 的计算时间覆盖，长上下文就可以近似随设备数线性扩展。
+这样做和 sparse attention 不同：RingAttention 没有丢掉远处 token，每个 query 最终仍然 attends to 全序列，所以是 exact attention。它改变的是数据放置和计算顺序，而不是模型定义。读这张图时要注意下半部分的 nested loop：外层固定 query block，内层轮转 key/value block；只要通信能被当前 block attention 的计算时间覆盖，长上下文就可以近似随设备数线性扩展。
 
 方法可以拆成五步：
 
@@ -76,17 +74,6 @@ split long sequence across hosts
 
 ### 为什么通信可以被覆盖
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
->
-> 延伸阅读：[05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html) |
-| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
-
 每个 host 在计算当前 query block 和某个 key/value block 的 attention 时，同时把自己的 key/value block 发给下一个 host，并从上一个 host 接收新的 key/value block。
 
 只要：
@@ -94,7 +81,6 @@ split long sequence across hosts
 \[
 \text{block compute time} \ge \text{KV transfer time},
 \]
-
 
 通信就不会额外增加 wall-clock overhead。论文把这个条件化成 block size 与 FLOPS/bandwidth 的关系。直觉上，block 不能太小；太小时计算量不够，通信无法被隐藏。
 
@@ -168,9 +154,6 @@ RingAttention 要成立，不只是算法正确，还需要硬件上通信能被
 
 ## 最大上下文实验
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 ### Table 3: Max context size supported
 
 下面按论文 Table 3 的英文格式重绘。数值单位是 `x1e3 tokens`。
@@ -193,10 +176,10 @@ RingAttention 要成立，不只是算法正确，还需要硬件上通信能被
 
 <small>表源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Table 3。原论文表格要点：该表比较 vanilla、memory-efficient attention、BPT 和 RingAttention 在不同硬件/模型规模下支持的最大 context；RingAttention 的可用 context 随 sequence-parallel 设备数近似线性扩展。</small>
 
-!!! note "这张最大上下文表怎么读"
-    这张表比较的是“端到端训练能放下多长 context”，不是某个 attention kernel 单独能算多长。vanilla、memory-efficient attention 和 BPT 的瓶颈都不只在 \(QK^\top\) 矩阵，还包括每层 hidden states、FFN 激活和跨层存储。RingAttention 把 sequence dimension 切到多个设备上，因此长序列的 hidden states 也被分摊。
+**这张最大上下文表怎么读。**
+这张表比较的是“端到端训练能放下多长 context”，不是某个 attention kernel 单独能算多长。vanilla、memory-efficient attention 和 BPT 的瓶颈都不只在 \(QK^\top\) 矩阵，还包括每层 hidden states、FFN 激活和跨层存储。RingAttention 把 sequence dimension 切到多个设备上，因此长序列的 hidden states 也被分摊。
 
-    `Ours vs SOTA` 接近设备数，是这张表最重要的信号。例如 32 张 A100 上能从 128K 到 4096K，TPUv4-1024 上能到数百万 token。对长视频世界模型来说，这意味着模型可以把更长的视频、轨迹或文档当成同一个全局上下文训练，而不是依赖滑窗或检索近似。
+`Ours vs SOTA` 接近设备数，是这张表最重要的信号。例如 32 张 A100 上能从 128K 到 4096K，TPUv4-1024 上能到数百万 token。对长视频世界模型来说，这意味着模型可以把更长的视频、轨迹或文档当成同一个全局上下文训练，而不是依赖滑窗或检索近似。
 
 这张表是论文最核心的结果。RingAttention 的 context 增长近似等于 sequence-parallel 设备数。例如 32 张 A100 上，7B 模型从 prior SOTA 的 128K 到 4096K；TPUv4-1024 上，7B 模型达到 8192K。
 
@@ -244,8 +227,8 @@ RingAttention 还被用于长交互轨迹建模。论文在 ExoRL 上比较 BC�
 
 <small>图源：`Ring Attention with Blockwise Transformers for Near-Infinite Context`，Figure 3。原图展示 Ring Attention-13B-512K 在长上下文 line retrieval 上维持高准确率，而短上下文模型无法覆盖更长范围。</small>
 
-!!! note "图解：line retrieval 图验证的是长上下文可用性"
-    如果只是把 context window 标大，但模型无法在远处找回信息，长上下文就只是配置数字。Line retrieval 把目标行放在很长文本的不同位置，检查模型是否能从远距离取回答案。图里的 RingAttention-13B-512K 维持高准确率，说明长上下文训练确实让模型利用了更远 token。它并不等于复杂推理完全解决；后续 LWM 中也能看到 multi-needle 任务会随难度上升退化。
+**line retrieval 图验证的是长上下文可用性。**
+如果只是把 context window 标大，但模型无法在远处找回信息，长上下文就只是配置数字。Line retrieval 把目标行放在很长文本的不同位置，检查模型是否能从远距离取回答案。图里的 RingAttention-13B-512K 维持高准确率，说明长上下文训练确实让模型利用了更远 token。它并不等于复杂推理完全解决；后续 LWM 中也能看到 multi-needle 任务会随难度上升退化。
 
 ## 和 LWM 的关系
 
@@ -302,7 +285,7 @@ RingAttention 切的是序列维度；FSDP 切参数和优化器状态；TP 切�
 5. **实现复杂度高**：需要 blockwise attention、通信重叠、mesh sharding、checkpointing 和框架支持。
 6. **不直接产生世界模型能力**：它是训练基础设施，真正的世界建模仍取决于 LWM、视频模型或 agent 模型的目标函数和数据。
 
-## 读完应该记住什么
+## 阅读结论
 
 RingAttention 的核心贡献是把 Transformer 长上下文瓶颈从“单设备显存上限”改成“设备数和互联带宽共同决定的系统问题”。这让百万 token 的视频、语言和交互轨迹训练变得实际可行。
 
@@ -316,7 +299,7 @@ world experience is long
   -> LWM uses it to train million-token video-language models
 ```
 
-## 参考资料
+## 外部精读
 
 1. Liu et al. [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889). arXiv:2310.01889.
 2. 官方代码：[haoliuhl/ringattention](https://github.com/haoliuhl/ringattention).

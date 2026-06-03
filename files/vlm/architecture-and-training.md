@@ -1,186 +1,183 @@
-# VLM 架构：视觉表征、连接器与记忆
+# VLM 架构：视觉证据怎样进入语言模型
 
-VLM 的第一件事不是“让 LLM 看到图片”，而是把图片变成一串模型能处理的 token，再把这些 token 和语言对齐。若继续走向 VLA 和世界模型，这些 token 还要保留动作、接触、遮挡和时间变化。
+这篇文章只回答一个问题：图片、视频或多相机观测怎样变成语言模型能使用的证据，以及这条链为什么到了 VLA 和世界模型会变得更难。
 
+VLM 不是“给 LLM 加一张图”这么简单。真正的链路是：像素先被视觉 encoder 变成视觉特征，连接器把这些特征压成语言模型可消费的 token 或 memory，LLM 再用这些视觉证据生成文本、工具调用、动作 token 或中间推理。每一段都会丢掉一些信息；丢掉的如果只是纹理细节，问答可能没事；如果是位置、接触点、遮挡前状态或时间变化，机器人和世界模型就会出问题。
 
-## 从像素到视觉 token
+## 先分清 VLM 的三种任务
 
-先把图像写成一个数组：
+同一张桌面图片，三类问题需要的视觉证据不同：
 
-\[
-I \in \mathbb{R}^{H_{\text{img}} \times W_{\text{img}} \times C}
-\]
+| 任务 | 需要什么视觉证据 | 典型模型接口 |
+| --- | --- | --- |
+| 图文检索 / zero-shot 分类 | 物体类别、场景语义、文本描述相似度 | dual encoder，例如 CLIP |
+| 图像问答 / 多模态对话 | 可被语言解释的对象、关系、文字、细节 | vision encoder + connector + LLM |
+| VLA / 世界模型 | 可执行位置、接触、遮挡、动作后果、时间状态 | visual state + policy / dynamics |
 
+问“这是什么杯子”时，语义类别和外观足够重要；问“机械臂该从哪里抓”时，杯沿、把手、桌边、深度、夹爪距离和可达性才是关键。VLM 架构的难点不是有没有视觉输入，而是哪些证据能穿过 encoder 和 connector，真正到达后续模型。
 
-把图像切成 \(P\times P\) patch 后，patch 数量是：
+## 视觉 token 不是免费上下文
 
-\[
-N = \frac{H_{\text{img}}}{P}\cdot\frac{W_{\text{img}}}{P}
-\]
-
-
-**读作什么**：图像越大、patch 越小，视觉 token 越多。
-
-**红杯例子**：\(224\times224\) 图像用 \(16\times16\) patch，会得到 \(14\times14=196\) 个视觉 token。若是 4 路相机、16 帧历史，就会变成 \(4\times16\times196=12544\) 个视觉 token。
-
-**这个公式不说明什么**：token 多只表示输入更细，不代表模型一定保留了杯沿、夹爪接触点和遮挡前位置。
-
-每个 patch 会被展平并投影到隐藏维度：
+一张图像可以写成：
 
 \[
-e_i = W_p \cdot \text{flatten}(I_i) + p_i
+I\in\mathbb{R}^{H_{\text{img}}\times W_{\text{img}}\times C}
 \]
 
-
-视觉 encoder 再处理整个 token 序列：
+这里 \(H_{\text{img}}\) 和 \(W_{\text{img}}\) 是图像高宽，\(C\) 是通道数。若用 \(P\times P\) patch 切图，patch 数是：
 
 \[
-h_v = f_v(e_1, e_2, \dots, e_N)
+N=\frac{H_{\text{img}}}{P}\cdot\frac{W_{\text{img}}}{P}
 \]
 
+\(224\times224\) 图像配 \(16\times16\) patch 会得到 \(14\times14=196\) 个视觉 token。这个数字看起来不大，但视频和多相机会立刻放大：4 路相机、16 帧历史就是 \(4\times16\times196=12{,}544\) 个 patch token，还没算语言、动作、状态和 memory。
 
-**读作什么**：视觉 encoder 把一组 patch token 变成更高层的视觉特征 \(h_v\)。
+视觉 encoder 会把 patch token 变成视觉特征：
 
-## CLIP：建立静态图文语义空间
+\[
+h_v=f_v(e_1,\ldots,e_N)
+\]
 
-![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }
+这里 \(e_i\) 是第 \(i\) 个 patch embedding，\(f_v\) 是视觉 encoder，\(h_v\) 是视觉特征序列。读 VLM 架构时，先问两个问题：视觉 token 数是多少，视觉特征保留的是语义、局部几何、文字 OCR、时间变化，还是动作相关状态。Token 多只说明输入细，不保证任务关键证据还在。
 
-<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原论文图意：用图像编码器和文本编码器把图文对拉到同一表示空间，并把类别文本 prompt 当作 zero-shot 分类器。</small>
+## CLIP 建立静态图文语义空间
 
-!!! note "读图：CLIP 先看哪里"
-    **先看哪里**：左边一批图像和一批文本分别进入两个 encoder，中间比较所有图文对的相似度。  
-    **它证明什么**：图像和文本可以被放进同一个 embedding 空间，正确图文对更接近。  
-    **它不证明什么**：它不学习动作、接触、时间记忆和动作后果。  
-    **和红杯例子的关系**：CLIP 可以帮模型知道“red mug”和红杯图片相似，但不会告诉机械臂如何抓杯子。
+CLIP 是理解 VLM 的好入口，因为它把问题化成图像和文本的对齐。
 
-CLIP 常用余弦相似度比较图像向量 \(v\) 和文本向量 \(t\)：
+![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="860" }
+
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图表达图像 encoder 和文本 encoder 通过图文对比学习进入同一表示空间，并用文本 prompt 做 zero-shot 分类。本站使用这张图说明：CLIP 解决的是静态图文语义对齐，不等于动作、接触或时间后果建模。</small>
+
+CLIP 对图像向量 \(v\) 和文本向量 \(t\) 常用归一化相似度：
 
 \[
 s(v,t)=\frac{\langle v,t\rangle}{\|v\|\|t\|}
 \]
 
+这里 \(\langle v,t\rangle\) 是点积，分母把向量长度归一化，所以比较的是方向是否接近。训练时，一个 batch 里的正确图文对要被拉近，错误配对要被推远。这个目标非常适合建立开放词表语义：图片像不像“a red mug”、像不像“a dog”、像不像“a stop sign”。
 
-**读作什么**：两个向量方向越接近，相似度越高。
+但 CLIP 的边界也正由这个目标决定。它不要求模型知道杯口边缘是否适合抓取，不要求知道左推会把杯子推下桌，也不要求在遮挡后持续记住物体位置。CLIP 是强语义底座，不是完整视觉行动系统。
 
-**这个公式不说明什么**：相似度高只说明语义匹配，不说明空间位置、可达性和物理风险。
+## 连接器决定哪些视觉证据能进 LLM
 
-![CLIP 对比学习伪代码原图](../assets/images/paper-figures/contrastive-learning/clip-figure-3-pseudocode.png){ width="720" }
+对话型 VLM 需要把视觉特征接到语言模型。最直接的方法是 projector：把视觉特征映射到 LLM embedding 维度，再当作一段特殊 token 放进上下文。更强的方法会用 query、resampler 或 cross-attention 选择视觉证据。
 
-<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 3。原论文图意：展示 CLIP 图像编码器和文本编码器的批内相似度矩阵、对称 cross entropy 目标，以及 zero-shot classifier 的构造方式。</small>
-
-!!! note "读图：InfoNCE 在这里做什么"
-    **先看哪里**：相似度矩阵的对角线。一个 batch 里正确图文对在对角线上，其余位置是负样本。  
-    **它证明什么**：训练目标让正确图文对排名靠前，让错误配对靠后。  
-    **它不证明什么**：这个目标不要求模型生成回答，更不要求模型控制机器人。  
-    **和后续关系**：它提供静态语义坐标系，后面还要接连接器、视频状态和动作接口。
-
-## BLIP-2：连接器是视觉信息瓶颈
+BLIP-2 的 Q-Former 是典型连接器：冻结图像 encoder 和 LLM，中间训练少量 query token 去读视觉特征。
 
 ![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="920" }
 
-<small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。原论文图意：冻结图像编码器，用查询式连接模块抽取视觉信息，并分别服务 image-text contrastive learning、image-grounded text generation 和 image-text matching。</small>
+<small>图源：[BLIP-2](https://arxiv.org/abs/2301.12597)，Figure 2。原图表达 Q-Former 用 learnable query 从冻结视觉 encoder 输出中抽取信息，并服务 image-text contrastive learning、image-grounded generation 和 image-text matching。本站使用这张图说明：连接器是信息瓶颈，query 学到什么取决于训练目标。</small>
 
-!!! note "读图：Q-Former 先看哪里"
-    **先看哪里**：中间的 learnable query。它们像少量问题，主动从大量视觉 token 里读取信息。  
-    **它证明什么**：连接器可以把视觉信息压成较少 token，再交给语言模型。  
-    **它不证明什么**：为图文问答压缩出的信息，不必然保留抓取点、接触边界和动作后果。  
-    **和红杯例子的关系**：如果 query 只记住“这是红杯”，却丢掉杯沿位置和夹爪距离，VQA 可能没问题，VLA 会抓偏。
-
-常见连接器可以抽象成：
+可以把连接器抽象写成：
 
 \[
-c = g_\theta(h_v, q)
+c=g_\theta(h_v,q)
 \]
 
+这里 \(h_v\) 是视觉特征，\(q\) 是 learnable query、文本 token 或策略 token，\(g_\theta\) 是连接器，\(c\) 是交给语言模型的视觉 token。这个公式的关键不是 \(g_\theta\) 长什么样，而是它一定在做选择：有限数量的 \(c\) 不可能完整保留所有像素、局部几何和时间证据。
 
-**读作什么**：连接器从大量视觉特征里抽取后续模型最需要的信息。
+常见连接方式的取舍如下：
 
-**这个公式不说明什么**：它没有定义“最需要”到底是什么。VLM 需要回答问题，VLA 需要动作可执行，世界模型需要未来可预测，这三者的信息需求不同。
+| 连接方式 | 它怎么读视觉信息 | 适合什么 | 容易丢什么 |
+| --- | --- | --- | --- |
+| Linear / MLP projector | 把视觉 patch 映射到 LLM embedding | 简单 VLM、LLaVA 式指令微调 | 细粒度选择能力弱 |
+| Q-Former / resampler | 少量 query 主动抽取视觉证据 | 控制 token 数、冻结大模型对齐 | query 数不足会压掉局部证据 |
+| Cross-attention | LLM token 按需读视觉 memory | 多图、多轮、few-shot 图文任务 | 成本高，缓存和长视频更复杂 |
+| 统一多模态 token | 视觉、文本、动作放进同一序列 | 原生多模态/世界模型 | 上下文长度和训练成本高 |
 
-| 连接方式 | 初学者理解 | 常见风险 |
+评估连接器时，不能只看 VQA。要看它是否保留文字、位置、计数、相对关系、小物体、遮挡、接触和动作敏感信息。一个连接器可能让模型会说“红杯在桌上”，却已经丢掉“杯口离桌边只有 2 cm”。
+
+## Flamingo 和 LLaVA 代表两种常见接法
+
+Flamingo 的思路是把强视觉 encoder 和强语言模型桥接起来：Perceiver Resampler 把可变数量的图像/视频特征压成固定数量视觉 token，gated cross-attention 层让语言模型按需读取这些 token。这条路线强调 few-shot 和 interleaved image-text context，适合多图多轮提示。
+
+LLaVA 代表更简单、工程上影响很大的路线：用 CLIP 视觉 encoder，加一个 projector 接到 LLM，再用图文指令数据做 visual instruction tuning。它证明了简单连接器配合高质量指令数据，可以快速得到好用的对话 VLM。但这条路线也容易被误读：对话能力强不等于视觉状态适合机器人控制。
+
+两条路线的差别可以这样看：
+
+| 路线 | 主要强项 | 主要风险 |
 | --- | --- | --- |
-| 线性 projector | 把视觉特征映射到 LLM embedding 空间 | 简单但选择信息能力弱 |
-| Q-Former / resampler | 用少量查询主动抽取视觉证据 | 查询数量和训练目标决定瓶颈 |
-| Cross-attention | 文本或策略 token 按需读取视觉 memory | 成本更高，长视频更难 |
-| 统一 token 序列 | 图像、文本、动作都放进同一序列 | 训练和推理成本高 |
+| Flamingo-style cross-attention | LLM 可以在层内按需读取视觉 memory | 系统复杂、视觉 cache 和长视频成本高 |
+| LLaVA-style projector | 实现简单，指令微调效果直接 | 视觉证据一次性压入 token，动作/几何证据可能不足 |
 
-## 视频状态：从静态语义走向时间记忆
+Hugging Face 的 VLM 教程也把 VLM 拆成 vision encoder、modality projector 和 text decoder / LLM 三段。这个拆法很实用：debug 时可以分别问视觉 encoder 看到了什么，projector 丢了什么，LLM 是否在按训练格式消费这些视觉 token。
 
-静态 VLM 解决“这张图里有什么”。VLA 和世界模型还要知道“刚刚发生了什么”和“动作后会怎样”。
+## 训练目标决定模型学会哪种“看见”
 
-可以把状态编码写成：
+VLM 不是只靠架构，训练目标同样决定信息瓶颈。
+
+| 训练目标 | 模型学到什么 | 不保证什么 |
+| --- | --- | --- |
+| Contrastive alignment | 图像和文本语义相似度 | 细粒度定位、动作后果 |
+| Image-text generation | 根据图像生成描述或回答 | 闭环行动、物理预测 |
+| Image-text matching | 判断图文是否匹配 | 多步推理和可执行动作 |
+| Visual instruction tuning | 按指令对话、解释、OCR、问答 | 机器人坐标和控制稳定性 |
+| Video latent prediction | 对象持续性、运动和上下文 | 动作条件、reward、risk |
+
+所以看到“用了 CLIP / BLIP-2 / LLaVA / Flamingo”时，不要只背模型名。要看训练数据和 loss：是图文配对、caption、问答、OCR、定位、视频预测，还是机器人动作数据。训练目标没有要求模型保留的证据，部署时很可能就不存在。
+
+## 视频记忆把 VLM 推向状态建模
+
+静态 VLM 主要回答“这张图里有什么”。VLA 和世界模型还要回答“刚才发生了什么”和“动作后会怎样”。这需要状态：
 
 \[
-z_t = f_\theta(o_{\le t})
+z_t=f_\theta(o_{\le t})
 \]
 
+这里 \(o_{\le t}\) 是到当前为止的观测历史，\(z_t\) 是模型压出的当前状态。这个公式看起来简单，但关键是 \(z_t\) 是否真的保留对象持久性、运动、遮挡、接触和可操作关系。
 
-**读作什么**：模型把历史观测压成当前状态。
-
-**红杯例子**：红杯被机械臂拿起后短暂被夹爪遮挡，\(z_t\) 应该仍保留“红杯已在夹爪里”的状态。
-
-**这个公式不说明什么**：它没有保证 latent 真的记住了关键物体，也没有保证对不同动作敏感。
+V-JEPA 是理解视频状态的好例子：它不重建像素，而是在 latent space 里预测被 mask 的视频表示。
 
 ![V-JEPA training procedure](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="920" }
 
-<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](../paper-deep-dives/world-models/v-jepa.md)，Figure 3。原论文图意：context encoder 只处理 masked video 中未遮挡 token，predictor 用 context output 和 mask tokens 预测 target encoder 对完整视频产生的 masked token representations。</small>
+<small>图源：[V-JEPA](https://arxiv.org/abs/2404.08471)，Figure 3。原图表达 context encoder 只处理 masked video 的可见 token，predictor 用 context output 和 mask tokens 预测 target encoder 对完整视频产生的 masked token representations。本站使用这张图说明：视频 VLM/世界模型需要学习时空状态，不只是静态图文语义。</small>
 
-!!! note "读图：V-JEPA 为什么预测 latent"
-    **先看哪里**：context encoder 只看可见区域，predictor 预测被遮挡区域的 latent 表示。  
-    **它证明什么**：视频表征可以学习对象、运动和上下文，而不是逐像素复读纹理。  
-    **它不证明什么**：它缺少动作条件、奖励、风险和 planner 接口，所以还不是完整世界模型。  
-    **和红杯例子的关系**：它能帮助模型理解红杯在视频中如何持续存在，但还需要动作条件才能预测“抓快了会不会滑”。
+V-JEPA 的启发是：如果目标是运动理解和状态表示，不必把训练压力全放在像素重建上。预测 latent representation 可以让模型更关注对象、运动和上下文。但是它本身没有动作条件、奖励、风险和 planner 接口，因此更像世界模型的视觉状态 encoder 候选，不是完整 action-conditioned world model。
 
-## 从 VLM 到 VLA，再到世界模型
+## 从 VLM 到 VLA，缺的是动作接口和后果模型
 
-VLA 和世界模型常被两条式子区分：
+VLM 可以描述场景，VLA 要输出动作，世界模型还要预测动作后果。三者接口可以这样区分：
 
 \[
-\pi_\theta(a_t \mid z_t, l)
+\text{VLM:}\quad p_\theta(y\mid I,x)
 \]
-
 
 \[
-p_\theta(z_{t+1} \mid z_t, a_t, l)
+\text{VLA:}\quad \pi_\theta(a_t\mid z_t,l)
 \]
 
+\[
+\text{World model:}\quad p_\theta(z_{t+1}\mid z_t,a_t,l)
+\]
 
-| 公式 | 读作什么 | 红杯例子 |
-| --- | --- | --- |
-| \(\pi_\theta(a_t \mid z_t, l)\) | 策略根据状态和语言输出动作 | “现在夹爪向红杯移动” |
-| \(p_\theta(z_{t+1} \mid z_t, a_t, l)\) | dynamics 预测动作后的下一状态 | “这样抓会让杯子抬起或滑落” |
+第一行表示给定图像 \(I\) 和文本输入 \(x\)，生成回答 \(y\)。第二行表示策略根据视觉状态 \(z_t\) 和语言指令 \(l\) 输出动作 \(a_t\)。第三行表示世界模型预测执行动作后的下一状态。
 
-**关键差别**：VLA 主要回答“现在做什么”，世界模型回答“做了以后会怎样”。
+这里最容易误读的是把 VLM 能力直接外推成 VLA 能力。能说“杯子在桌边”不等于知道从侧面推会掉下桌；能描述“抽屉半开”不等于知道拉手的 3D 位置和力控方向。VLA 还需要动作表示、坐标系、限幅、控制频率、失败恢复和闭环评测。
 
-!!! example "红杯在桌边"
-    VLM 能说红杯在桌边。VLA 能输出接近红杯的动作。世界模型还要比较：从侧面推可能把杯子推下桌，从上方夹取更稳。只有第三种能力才进入动作后果建模。
+## 读 VLM 架构时先画四张账本
 
-## 架构选择图
+第一张是 token 账本：输入分辨率、patch size、帧数、相机数、resampler/query 数、最终进入 LLM 的视觉 token 数。没有这张账，就无法判断训练和推理成本。
 
-```mermaid
-flowchart TD
-    A["任务需求"] --> B{"只要静态语义？"}
-    B -- "是" --> C["CLIP / dual encoder"]
-    B -- "否" --> D{"需要语言生成？"}
-    D -- "是" --> E["视觉连接器 + LLM"]
-    D -- "否" --> F{"需要视频状态？"}
-    F -- "是" --> G["video encoder / latent memory"]
-    F -- "否" --> H["轻量视觉 encoder"]
-    G --> I{"需要动作后果？"}
-    I -- "是" --> J["action-conditioned world model"]
-    I -- "否" --> K["video understanding / retrieval"]
-```
+第二张是证据账本：模型需要保留语义、文字、空间位置、局部几何、时间状态、动作后果中的哪些证据。不同任务不能共用同一个“视觉好坏”指标。
 
-这张图可以当成选型入口。静态检索不必上复杂 VLA；语言生成需要 connector；视频理解需要 temporal state；只有当系统要比较动作后果时，才真正进入世界模型接口。
+第三张是接口账本：视觉 encoder 是否冻结，connector 是 projector、Q-Former、resampler 还是 cross-attention，LLM 是否全参训练，视觉 token 放在 prompt 哪个位置，mask 是否允许正确读取。
 
-## 检查点
+第四张是评测账本：VQA、OCR、caption、定位、视频问答、动作成功率、world model rollout、闭环任务分别证明什么。不要用 VQA 分数证明机器人控制能力，也不要用 demo 图证明状态表示可靠。
 
-读完这页后，应能回答：
+## 阅读结论
 
-| 问题 | 合格理解 |
-| --- | --- |
-| 图像 token 是什么 | patch 或视觉特征被投影成 Transformer 可消费的序列 |
-| CLIP 解决什么 | 静态图文语义对齐，不解决动作后果 |
-| Q-Former 解决什么 | 从大量视觉 token 中抽取少量语言可用证据 |
-| 视频 latent 为什么重要 | VLA 和世界模型需要时序状态，而不是单帧 caption |
-| VLA 和世界模型差在哪 | VLA 输出动作，世界模型预测动作后的状态变化 |
+VLM 架构的核心不是“图片接进 LLM”，而是视觉证据如何被选择、压缩和消费。CLIP 证明图文语义能对齐；BLIP-2 说明连接器是信息瓶颈；Flamingo 和 LLaVA 展示了 cross-attention 与 projector 两条常见路线；V-JEPA 提醒静态图文语义不够，视频状态还要学对象持续性和运动。
+
+如果目标只是图文检索，静态语义空间可能足够；如果目标是多模态对话，connector 和指令数据很关键；如果目标是 VLA 或世界模型，就必须继续检查几何、接触、遮挡、时间记忆、动作条件和闭环评测。VLM 的成败，常常发生在“视觉证据穿过瓶颈时丢了什么”。
+
+## 外部精读
+
+- [CLIP](https://arxiv.org/abs/2103.00020)：理解图文对比学习和 zero-shot 分类。
+- [The Illustrated CLIP](https://jalammar.github.io/illustrated-clip/)：用图建立 CLIP 的相似度矩阵和 prompt classifier 直觉。
+- [Hugging Face: Vision Language Models Explained](https://huggingface.co/blog/vlms)：用 vision encoder、projector、LLM 的三段结构理解 VLM。
+- [BLIP-2](https://arxiv.org/abs/2301.12597)：理解 Q-Former 为什么是连接器瓶颈。
+- [Flamingo](https://arxiv.org/abs/2204.14198)：理解 Perceiver Resampler 和 gated cross-attention。
+- [LLaVA](https://llava-vl.github.io/)：理解 projector + visual instruction tuning 的简单强路线。
+- [V-JEPA](https://arxiv.org/abs/2404.08471)：理解 latent video prediction 如何补静态 VLM 的时间状态短板。
+- [OpenBMB BLIP-2 论文速读](https://hub.baai.ac.cn/view/25807)：中文公众号式读法示例，适合对照本文的“问题、方法、消融、局限”结构复盘 BLIP-2。
+- [AI Insight 多模态统一架构综述](https://www.ai-insight.org/reports/custom_multimodal-unified-architecture-2026)：中文报告式梳理，适合查 ViT-Bridge-LLM 范式、InternVL/Qwen-VL 等后续路线。

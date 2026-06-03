@@ -6,7 +6,6 @@ paper_topic: 技术报告
 
 # InCoder-32B：工业代码基础模型与执行验证训练
 
-
 InCoder-32B 这篇报告的核心不是“又一个 32B code model”，而是把 code LLM 的战场从常规 Python/JavaScript 题目，推到更贴近工程现场的工业代码：芯片设计、GPU kernel 优化、嵌入式系统、编译器/低层代码优化和 3D/CAD 建模。
 
 这类任务和普通代码补全的差异很硬：答案不只要语法正确，还要满足时序、资源、接口、硬件限制、编译链、仿真和性能约束。报告给出的路线可以概括成：
@@ -32,20 +31,10 @@ InCoder-32B 这篇报告的核心不是“又一个 32B code model”，而是�
 | Evaluation | 14 general code benchmarks + 9 industrial benchmarks |
 | License | Apache-2.0 |
 
-!!! warning "阅读边界"
-    这是一份模型技术报告，工业 benchmark、对比模型、执行环境和训练细节都应按作者报告理解。它很适合学习“代码模型如何接入真实工具链验证”的工程路线，但不应把所有数值当成第三方独立复现实验结论。
+**阅读边界。**
+这是一份模型技术报告，工业 benchmark、对比模型、执行环境和训练细节都应按作者报告理解。它很适合学习“代码模型如何接入真实工具链验证”的工程路线，但不应把所有数值当成第三方独立复现实验结论。
 
 ## 论文位置
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
->
-> 延伸阅读：[04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html) |
 
 普通 code LLM 往往擅长 LeetCode、HumanEval、MBPP 或一般仓库级补全，但工业代码有几类额外困难：
 
@@ -63,8 +52,8 @@ InCoder-32B 这篇报告的核心不是“又一个 32B code model”，而是�
 
 <small>图源：`InCoder-32B: Code Foundation Model for Industrial Scenarios`，Figure 1。原论文图意：InCoder 把 general code intelligence 和 industrial code intelligence 放进同一张图，强调芯片设计、GPU 优化、3D modeling 和 code optimization 等工业任务需要专门训练和验证。</small>
 
-!!! note "Figure 1 怎么读"
-    图里的重点不是“模型会写很多语言”，而是“模型要懂工具链和约束”。比如 Verilog 生成需要能被综合/仿真，CUDA/Triton 生成需要能跑过 correctness 和 speedup，CAD 代码要产出合法几何体，嵌入式代码要能在目标 MCU 或模拟环境中运行。InCoder 的训练路线正是围绕这些可执行约束组织的。
+**Figure 1 怎么读。**
+图里的重点不是“模型会写很多语言”，而是“模型要懂工具链和约束”。比如 Verilog 生成需要能被综合/仿真，CUDA/Triton 生成需要能跑过 correctness 和 speedup，CAD 代码要产出合法几何体，嵌入式代码要能在目标 MCU 或模拟环境中运行。InCoder 的训练路线正是围绕这些可执行约束组织的。
 
 ## 一个小例子：CUDA grid 不是语法问题
 
@@ -91,8 +80,8 @@ InCoder 的训练主线叫 Code-Flow。它把训练拆成三个层次：先从�
 
 <small>图源：`InCoder-32B`，Figure 3。原论文图意：Code-Flow 包含 pre-train、mid-train 和 post-train 三段：pre-train 负责工业代码数据召回、增强、去重和训练策略；mid-train 通过 synthetic QA 与 curated data 把 context 从 8K 扩到 128K；post-train 用仿真驱动生成和 domain-balanced verified SFT pairs 对齐工业任务。</small>
 
-!!! note "Figure 3 怎么读"
-    左侧 pre-train 是“让模型见过工业代码并学会基本形式”；中间 mid-train 是“让模型能在长上下文里做工业推理和跨文件依赖处理”；右侧 post-train 是“让模型输出能被真实工具链检验的答案”。这三段缺一不可：只做预训练会缺少任务对齐，只做 SFT 会没有足够底座能力，只做长上下文扩展又不能保证答案能编译、仿真或跑得快。
+**Figure 3 怎么读。**
+左侧 pre-train 是“让模型见过工业代码并学会基本形式”；中间 mid-train 是“让模型能在长上下文里做工业推理和跨文件依赖处理”；右侧 post-train 是“让模型输出能被真实工具链检验的答案”。这三段缺一不可：只做预训练会缺少任务对齐，只做 SFT 会没有足够底座能力，只做长上下文扩展又不能保证答案能编译、仿真或跑得快。
 
 ## Stage 1：从零预训练与工业代码退火
 
@@ -145,8 +134,8 @@ Mid-training 解决的是另一个问题：工业任务常常需要跨文件、�
 
 <small>图源：`InCoder-32B`，Figure 7。原论文图意：mid-training 在 32K 和 128K context 两段上 loss 持续下降，128K 阶段通过长序列 warm-up 进入稳定收敛。</small>
 
-!!! note "为什么 128K 不是只改 RoPE 参数"
-    长上下文能力不只是把 positional encoding 拉长。模型还要见过足够多真正需要长上下文的信息结构：跨文件调用、模块接口、错误日志、工具反馈、长 testbench、kernel tuning 记录和历史 commit。InCoder 的 Stage 2.2 特意把 >32K 的样本比例从 10% 逐步升到 50%，并 replay 5-10% Stage 2.1 数据，目的就是避免模型一上来被超长样本打乱，同时保留较短上下文里的基础能力。
+**为什么 128K 不是只改 RoPE 参数。**
+长上下文能力不只是把 positional encoding 拉长。模型还要见过足够多真正需要长上下文的信息结构：跨文件调用、模块接口、错误日志、工具反馈、长 testbench、kernel tuning 记录和历史 commit。InCoder 的 Stage 2.2 特意把 >32K 的样本比例从 10% 逐步升到 50%，并 replay 5-10% Stage 2.1 数据，目的就是避免模型一上来被超长样本打乱，同时保留较短上下文里的基础能力。
 
 Synthetic industrial code QA 是 mid-training 的核心数据源之一。论文描述的生成链条是：
 
@@ -225,9 +214,6 @@ task seed spec
 
 ## 通用代码评测：先不能掉队
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 InCoder 的目标是工业代码，但它不能为了工业能力牺牲通用代码能力太多。报告在 14 个通用代码 benchmark 上评估，下面只摘 InCoder-32B 的关键行，保留原论文表头。
 
 | Model | Size | EvalPlus HumanEval | HumanEval+ | MBPP | MBPP+ | BigCodeBench Full | Hard | FullStackBench |
@@ -274,8 +260,8 @@ Figure 4 是论文最重要的结果图之一，横跨 9 个工业 benchmark：V
 
 <small>表源：`InCoder-32B`，Table 5 摘录。原论文表意：InCoder-32B 在 CAD、embedded C、assembly / code optimization、Triton 和 KernelBench 等任务上表现出更强工业适配性。</small>
 
-!!! note "工业 benchmark 不能只看平均分"
-    不同 benchmark 的得分含义差别很大。VeriRepair 是修复率，RealBench 同时看 synthesis 和 function pass，SuperCoder 同时看 accuracy 和 speedup，TritonBench 区分 generation call 和 execution，KernelBench 还按任务层级拆分。把这些数值简单平均会掩盖重要信息：有些任务是“能不能编译”，有些是“功能是否正确”，有些是“正确之后是否足够快”。
+**工业 benchmark 不能只看平均分。**
+不同 benchmark 的得分含义差别很大。VeriRepair 是修复率，RealBench 同时看 synthesis 和 function pass，SuperCoder 同时看 accuracy 和 speedup，TritonBench 区分 generation call 和 execution，KernelBench 还按任务层级拆分。把这些数值简单平均会掩盖重要信息：有些任务是“能不能编译”，有些是“功能是否正确”，有些是“正确之后是否足够快”。
 
 ## 错误分析：模型还卡在哪里
 
@@ -306,8 +292,8 @@ Figure 6 做了 SFT data scaling，从 83M tokens 扩到 250M tokens，观察工
 
 <small>图源：`InCoder-32B`，Figure 6。原论文图意：随着工业 SFT token 从 83M 增加到 250M，大多数 benchmark 指标提升；少数 RealBench/TritonBench 子指标在最大数据量处有轻微回落，但整体仍显示工业 SFT 数据扩展有效。</small>
 
-!!! note "Figure 6 怎么读"
-    这张图不是在说“盲目堆 SFT 一定更好”。更稳的读法是：在执行验证和数据过滤足够强的前提下，工业 SFT 数据规模仍然能推动能力上升。少数指标回落则说明混合比例、任务难度、格式分布和验证信号仍需要精调。工业 post-training 更像数据引擎问题，而不是一次性标注问题。
+**Figure 6 怎么读。**
+这张图不是在说“盲目堆 SFT 一定更好”。更稳的读法是：在执行验证和数据过滤足够强的前提下，工业 SFT 数据规模仍然能推动能力上升。少数指标回落则说明混合比例、任务难度、格式分布和验证信号仍需要精调。工业 post-training 更像数据引擎问题，而不是一次性标注问题。
 
 ## 这篇报告真正教会我们的东西
 
@@ -344,7 +330,5 @@ Figure 6 做了 SFT data scaling，从 83M tokens 扩到 250M tokens，观察工
 - [自定义算子开发与框架集成](../../operators/custom-op-development-and-framework-integration.md)：对应 CUDA/Triton kernel、PyTorch runtime compilation 和性能验证。
 - [RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：对应 agent trajectories、long-context 工程任务和工具调用记录。
 
-这一页最后回到三个验收点：方法上，InCoder-32B 要抓代码流数据和训练阶段划分，特别是 CUDA/grid 范围如何转成模型可学的上下文。实验上，工业 benchmark、错误分布、SFT scaling 和 midtrain loss 要一起看，才能判断能力来自数据还是后训练。诊断上，错误分布图比总分更有用，它告诉项目该补语法、API、库知识还是执行反馈。
-
-!!! info "本站判断"
-    InCoder-32B 要按代码模型训练与工业评测读：方法重点是代码流数据、CUDA/grid 范围、SFT scaling 和 midtrain loss；实验看工业 benchmark、错误分布和能力分层。落地时要补仓库级上下文、工具执行和安全审计。
+**阅读结论。**
+InCoder-32B 要按代码模型训练与工业评测读：方法重点是代码流数据、CUDA/grid 范围、SFT scaling 和 midtrain loss；实验看工业 benchmark、错误分布和能力分层。错误分布图比总分更有用，它告诉项目该补语法、API、库知识还是执行反馈；落地时还要补仓库级上下文、工具执行和安全审计。

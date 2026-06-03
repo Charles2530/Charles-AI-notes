@@ -6,12 +6,9 @@ paper_topic: 世界模型
 
 # H-JEPA：层级 JEPA 与潜变量 EBM
 
-
 这篇文章不是一篇“训练出某个 H-JEPA 模型并刷榜”的论文。它更像一篇把 LeCun 世界模型路线讲清楚的教学型论文：先解释为什么高维连续世界不适合只靠显式概率建模，再引入 `energy-based model`、`latent variable`、`JEPA` 和最终的 `H-JEPA`。
 
 放在世界模型专题里，它的价值是补上一个关键问题：**如果世界模型不直接生成未来像素，而是在表征空间里预测未来状态，训练时到底要约束什么，为什么会坍缩，以及为什么需要层级结构。**
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 ## 论文位置
 
@@ -21,11 +18,11 @@ paper_topic: 世界模型
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 1. 原论文图注要点：该图展示 LeCun 提出的 modular autonomous AI 结构，其中 world model 负责预测 actor 设想动作导致的未来世界状态，short-term memory 维护当前与预测状态，cost/critic 评估这些状态。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是 context/target 表征和层级 latent，输出是 joint embedding prediction 与能量式目标。  
-    **效率机制**：在 embedding 空间预测，减少像素重建冗余并鼓励抽象状态学习。  
-    **对主线意义**：它补强“世界模型可以预测表征而非像素”的理论路线。  
-    **不能证明什么**：JEPA 表征本身不证明有 action/reward/done 或可规划 rollout。
+**自主智能架构图先找 world model 的位置。**
+**输入输出**：输入是 context/target 表征和层级 latent，输出是 joint embedding prediction 与能量式目标。  
+**效率机制**：在 embedding 空间预测，减少像素重建冗余并鼓励抽象状态学习。  
+**对主线意义**：它补强“世界模型可以预测表征而非像素”的理论路线。  
+**不能证明什么**：JEPA 表征本身不证明有 action/reward/done 或可规划 rollout。
 
 这张图里最重要的是 `world model` 的位置。它不是直接回答“下一步动作是什么”的 policy，而是回答：
 
@@ -34,7 +31,6 @@ $$
 \rightarrow
 \text{possible future world states}
 $$
-
 
 然后 actor 可以通过 cost/critic 评估这些未来，选择更低 cost 的动作序列。这和 Dreamer 系列的 latent imagination 有相通处，但这篇文章的重点不是 RL 算法，而是解释世界模型的表示和训练目标应该如何设计。
 
@@ -46,7 +42,6 @@ $$
 p(y \mid x)
 $$
 
-
 但高维连续数据里，未来往往是多模态的。例如给定一段视频历史，未来可以有很多合理发展；给定同一个路口状态，其他车辆可能减速、直行或转向。如果强行预测一个像素级结果，模型会被迫解释大量不可预测细节。
 
 EBM 的思路是不直接要求模型给出规范化概率，而是学习一个能量函数：
@@ -55,22 +50,20 @@ $$
 F_w(x,y)
 $$
 
-
 兼容的 \((x,y)\) 应该有低能量，不兼容的 \((x,y)\) 应该有高能量。推理时寻找低能量的 \(y\)：
 
 $$
 \hat{y}=\arg\min_y F_w(x,y)
 $$
 
-
 ![Towards energy-based models](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-3-energy-based-models.png){ width="850" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 3. 原论文图注要点：作者用 EBM 替代显式概率预测，把问题转成寻找满足输入约束的低能量输出；图中还展示了一个学习到 \(x\) 与 \(y\) 依赖关系的能量景观。</small>
 
-!!! note "能量图应该怎么读"
-    EBM 图里的纵轴不是概率，而是“不兼容程度”。给定输入 \(x\)，合理的目标 \(y\) 应该落在低能量区域，不合理的 \(y\) 应该高能量。推理时可以通过搜索、优化或采样去找低能量的 \(y\)，不需要模型直接输出一个规范化概率分布。
+**能量图应该怎么读。**
+EBM 图里的纵轴不是概率，而是“不兼容程度”。给定输入 \(x\)，合理的目标 \(y\) 应该落在低能量区域，不合理的 \(y\) 应该高能量。推理时可以通过搜索、优化或采样去找低能量的 \(y\)，不需要模型直接输出一个规范化概率分布。
 
-    这对世界模型有两个好处：第一，它允许同一个当前状态对应多个低能量未来，而不是被迫预测一个平均未来；第二，能量可以定义在 representation space，让模型只关心对预测和规划有用的状态关系。读这张图时要避免把低能量理解成“训练样本 loss 低”这么简单；真正要学的是整个能量景观的形状。
+这对世界模型有两个好处：第一，它允许同一个当前状态对应多个低能量未来，而不是被迫预测一个平均未来；第二，能量可以定义在 representation space，让模型只关心对预测和规划有用的状态关系。读这张图时要避免把低能量理解成“训练样本 loss 低”这么简单；真正要学的是整个能量景观的形状。
 
 这里有一个容易误解的点：**energy function 是推理时用来找答案的函数，不等于训练时直接最小化的 loss。** 训练 EBM 的目标是塑造整个能量景观：让真实数据附近低能量，让不合理区域高能量。如果只把训练样本能量压低，而不约束其他区域，就会出现低能量区域无限扩张或能量坍缩。
 
@@ -82,8 +75,8 @@ $$
 
 <small>表源：`Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`，Table 1。原论文表格要点：表格列举了 prediction problems 中可能相关的 latent variables，例如姿态、光照、分割结构、句法结构和字符分割等。</small>
 
-!!! note "图解：这张表要按不可观测因素读"
-    表中每一行都在提醒同一件事：很多预测问题里，\(x\) 本身不足以唯一决定 \(y\)，中间还缺姿态、光照、结构、句法等隐变量。它支撑的是 latent variable EBM 的动机，而不是给出一个固定 latent taxonomy；真实世界模型里的 \(z\) 还要被容量约束，否则会变成偷带答案的通道。
+**这张表要按不可观测因素读。**
+表中每一行都在提醒同一件事：很多预测问题里，\(x\) 本身不足以唯一决定 \(y\)，中间还缺姿态、光照、结构、句法等隐变量。它支撑的是 latent variable EBM 的动机，而不是给出一个固定 latent taxonomy；真实世界模型里的 \(z\) 还要被容量约束，否则会变成偷带答案的通道。
 
 引入 \(z\) 后，模型可以先定义：
 
@@ -91,13 +84,11 @@ $$
 E_w(x,y,z)
 $$
 
-
 再通过对 \(z\) 做最小化或边缘化得到可用于推理的能量：
 
 $$
 F_w(x,y)=\min_z E_w(x,y,z)
 $$
-
 
 也可以用 free-energy 式的边缘化形式。直觉是：同一个 \(x\) 可能允许多个合理 \(y\)，而不同 \(z\) 对应不同解释路径。
 
@@ -105,10 +96,10 @@ $$
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 4. 原论文图注要点：latent variable EBM 在推理时额外对 latent variable 做 minimization 或 marginalization；右侧椭圆例子说明 latent variable 可以表示数据流形上的隐含角度。</small>
 
-!!! note "latent variable 在这里不是普通噪声"
-    图中的 \(z\) 表示输入 \(x\) 中没有显式给出的解释因素。比如当前视频看不到的物体状态、其他 agent 的意图、遮挡后的运动分支，都可能让未来 \(y\) 出现多种合理结果。latent variable EBM 不是直接说“给模型加随机噪声”，而是让推理过程可以为同一个 \(x,y\) 寻找一个合适的隐含解释。
+**latent variable 在这里不是普通噪声。**
+图中的 \(z\) 表示输入 \(x\) 中没有显式给出的解释因素。比如当前视频看不到的物体状态、其他 agent 的意图、遮挡后的运动分支，都可能让未来 \(y\) 出现多种合理结果。latent variable EBM 不是直接说“给模型加随机噪声”，而是让推理过程可以为同一个 \(x,y\) 寻找一个合适的隐含解释。
 
-    用 \(\min_z E(x,y,z)\) 看，就是只要存在某个 \(z\) 能解释 \(y\)，这个 \(y\) 就可以低能量；用 marginalization 看，则是把多个解释路径综合起来。对世界模型来说，这比单峰预测更自然，因为真实未来往往是多模态的。
+用 \(\min_z E(x,y,z)\) 看，就是只要存在某个 \(z\) 能解释 \(y\)，这个 \(y\) 就可以低能量；用 marginalization 看，则是把多个解释路径综合起来。对世界模型来说，这比单峰预测更自然，因为真实未来往往是多模态的。
 
 对世界模型来说，\(z\) 的作用可以理解成：
 
@@ -129,8 +120,8 @@ EBM 最大的训练风险是 `collapse`。在 joint embedding 结构中，如果
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 5. 原论文图注要点：标准 deterministic prediction 架构不容易发生这种表示坍缩，但 joint embedding architecture 如果只最小化表示距离，就可能让 encoder 忽略输入并输出无信息常数。</small>
 
-!!! note "图解：collapse 图看的是坏解"
-    左侧 deterministic prediction 仍要输出目标空间里的内容，常数输出很难骗过任务；右侧 joint embedding 如果只让两个 embedding 接近，两个 encoder 都输出常数也能把距离压低。图里的关键箭头是训练目标本身给了模型一条捷径，所以 JEPA/EBM 需要额外的方差、协方差、信息量或 latent capacity 约束。
+**collapse 图看的是坏解。**
+左侧 deterministic prediction 仍要输出目标空间里的内容，常数输出很难骗过任务；右侧 joint embedding 如果只让两个 embedding 接近，两个 encoder 都输出常数也能把距离压低。图里的关键箭头是训练目标本身给了模型一条捷径，所以 JEPA/EBM 需要额外的方差、协方差、信息量或 latent capacity 约束。
 
 这对世界模型尤其危险。一个坍缩的模型可能在训练 loss 上很好看，却无法回答任何反事实问题：
 
@@ -146,8 +137,8 @@ EBM 最大的训练风险是 `collapse`。在 joint embedding 结构中，如果
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 6. 原论文图注要点：proper training 要压低训练样本能量并防止 energy collapse；contrastive methods 通过负样本抬高训练集外能量，regularized methods 则限制低能量区域能占据的空间体积。</small>
 
-!!! note "图解：EBM training 看低能量区域的形状"
-    左侧目标是让训练样本附近低能量，但不能让低能量区域无限扩张。contrastive 路线靠负样本把不合理区域抬高，regularized 路线靠表示约束限制低能量区域体积。图想说明训练 EBM 不是只把正样本 loss 降低，而是塑造整个能量景观。
+**EBM training 看低能量区域的形状。**
+左侧目标是让训练样本附近低能量，但不能让低能量区域无限扩张。contrastive 路线靠负样本把不合理区域抬高，regularized 路线靠表示约束限制低能量区域体积。图想说明训练 EBM 不是只把正样本 loss 降低，而是塑造整个能量景观。
 
 论文区分两类训练方式：
 
@@ -166,13 +157,11 @@ $$
 s_x=\operatorname{Enc}_{w_1}(x), \qquad s_y=\operatorname{Enc}_{w_2}(y)
 $$
 
-
 predictor 再基于 \(s_x\) 和 latent variable \(z\) 预测目标表征：
 
 $$
 \bar{s}_y=\operatorname{Pred}_{w_3}(s_x,z)
 $$
-
 
 这里 \(\bar{s}_y\) 表示预测出来的目标表征，\(s_x\) 是输入表征，\(z\) 是潜变量，\(\operatorname{Pred}_{w_3}\) 是带参数 \(w_3\) 的 predictor。
 
@@ -182,13 +171,12 @@ $$
 F_{w_1,w_2,w_3}(x,y,z)=D(\bar{s}_y,s_y)
 $$
 
-
 ![JEPA architecture](../../assets/images/paper-deep-dives/world-models/h-jepa/figure-9-jepa.png){ width="620" }
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 9. 原论文图注要点：JEPA 使用两个 encoder 学习 \(x\) 与 \(y\) 的表征，predictor 借助 latent variable \(z\) 从 \(s_x\) 预测 \(s_y\)，能量由两种表征之间的距离定义。</small>
 
-!!! note "图解：JEPA 图先分清三条路径"
-    \(x\) 经过 context encoder 得到 \(s_x\)，\(y\) 经过 target encoder 得到 \(s_y\)，predictor 再用 \(s_x\) 和 latent \(z\) 预测 \(\bar{s}_y\)。训练比较的是 \(\bar{s}_y\) 与 \(s_y\)，不是重建 \(y\) 的像素。图想说明的是“预测表征”这条路线，不能直接证明这个表征已经能支持动作规划或奖励预测。
+**JEPA 图先分清三条路径。**
+\(x\) 经过 context encoder 得到 \(s_x\)，\(y\) 经过 target encoder 得到 \(s_y\)，predictor 再用 \(s_x\) 和 latent \(z\) 预测 \(\bar{s}_y\)。训练比较的是 \(\bar{s}_y\) 与 \(s_y\)，不是重建 \(y\) 的像素。图想说明的是“预测表征”这条路线，不能直接证明这个表征已经能支持动作规划或奖励预测。
 
 训练 JEPA 不能只最小化 \(D(\bar{s}_y,s_y)\)。论文给出的 regularized loss 思路包含三类约束：
 
@@ -200,8 +188,8 @@ $$
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 10. 原论文图注要点：JEPA 的训练除了 prediction error，还需要让 \(s_x\)、\(s_y\) 保留输入信息，并限制 latent variable \(z\) 的信息量；图中把这些正则项和预测误差一起放入训练目标。</small>
 
-!!! note "图解：regularized loss 同时踩三块刹车"
-    预测误差让 \(\bar{s}_y\) 贴近 \(s_y\)，表示正则防止 \(s_x\)、\(s_y\) 坍缩成常数，latent 正则限制 \(z\) 把答案全带进去。三者缺一都容易出问题：没有预测误差学不到未来关系，没有表示约束会 collapse，没有 latent 约束会把不确定性通道变成作弊通道。
+**regularized loss 同时踩三块刹车。**
+预测误差让 \(\bar{s}_y\) 贴近 \(s_y\)，表示正则防止 \(s_x\)、\(s_y\) 坍缩成常数，latent 正则限制 \(z\) 把答案全带进去。三者缺一都容易出问题：没有预测误差学不到未来关系，没有表示约束会 collapse，没有 latent 约束会把不确定性通道变成作弊通道。
 
 论文提到的一个具体方向是 VICReg 类正则：通过 variance、invariance、covariance 约束让表示既不坍缩，又减少冗余相关性。这里的重点不是某个固定公式，而是训练原则：**预测目标、表示保真和 latent 压缩必须同时存在。**
 
@@ -220,8 +208,8 @@ H-JEPA 的核心是把多个 JEPA 堆叠起来：
 
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 11. 原论文图注要点：H-JEPA 由堆叠的 JEPA 组成，低层 JEPA-1 基于更多细节做短期预测，高层 JEPA-2 基于更少细节做长期预测，从而支持 multiscale planning。</small>
 
-!!! note "图解：H-JEPA 图看时间尺度而不是层数炫技"
-    低层 JEPA 保留更多局部细节，适合短期预测；高层 JEPA 在 coarse-graining 后接收更抽象的状态，适合长时间尺度规划。箭头里的信息逐层变少但语义变粗，这正是它想解决的矛盾：不能用同一套细节密度同时服务接触级短期动态和任务级长期计划。
+**H-JEPA 图看时间尺度而不是层数炫技。**
+低层 JEPA 保留更多局部细节，适合短期预测；高层 JEPA 在 coarse-graining 后接收更抽象的状态，适合长时间尺度规划。箭头里的信息逐层变少但语义变粗，这正是它想解决的矛盾：不能用同一套细节密度同时服务接触级短期动态和任务级长期计划。
 
 从世界模型角度看，可以把 H-JEPA 写成多时间尺度预测：
 
@@ -231,13 +219,11 @@ $$
 f^{(1)}(s^{(1)}_t, a_t, z^{(1)})
 $$
 
-
 $$
 \hat{s}^{(2)}_{t+K}
 =
 f^{(2)}(s^{(2)}_t, a_{t:t+K-1}, z^{(2)})
 $$
-
 
 其中第 1 层更接近局部动态，第 2 层更接近抽象计划。原论文的图没有显式动作输入，但如果把它扩展成 action-conditioned world model，动作或动作序列应该进入 predictor，而不是只在最后接一个 policy head。
 
@@ -307,4 +293,4 @@ $$
 
 更稳妥的读法是：把这篇论文当成“表征型世界模型如何训练”的原则说明。它补充了 Dreamer 系列偏 RL recipe、V-JEPA 偏视频表征、LingBot 偏视频生成系统的部分，重点回答一个更底层的问题：**世界模型的 latent space 如何既可预测、又不坍缩、还能支持长时层级规划。**
 
-这一页最后回到三个验收点：方法上，H-JEPA 是 JEPA 的层级化设想：低层预测局部 latent，高层预测抽象状态，并用 energy/regularization 防 collapse。实验上，这里多数图是机制和架构证据，不能当作大规模 benchmark 结果。诊断上，读它的价值在于抽象层级和 planning 接口，而不是拿来声称某个机器人任务已被解决。
+读 H-JEPA 的价值在于抽象层级和 planning 接口：低层预测局部 latent，高层预测抽象状态，再用 energy/regularization 防 collapse。这里多数图是机制和架构证据，不是大规模 benchmark；不能拿来声称某个机器人任务已经被解决。

@@ -205,7 +205,7 @@ Lance 的项目页和论文报告了 GenEval、DPG-Bench、GEdit-Bench、VBench�
 - [Lance project page](https://lance-project.github.io/)：官方 demo、模型说明和实验表。
 - [项目 PDF](https://lance-project.github.io/assets/lance.pdf)：查看 Figure 6、MaPE、training schedule 和 ablation 细节。
 
-## 本页结论
+## 阅读结论
 
 Lance 最值得带走的不是某个 benchmark 分数，而是一个结构判断：统一多模态模型不必把理解和生成硬塞进同一种 token、同一条路径。语义 token、VAE latent、干净条件和带噪目标可以共处一个上下文；理解和生成可以共享上下文但走不同 expert；MaPE 这类角色感知位置编码能减少异构视觉 token 混淆。
 

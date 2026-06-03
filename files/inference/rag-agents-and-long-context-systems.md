@@ -2,19 +2,15 @@
 
 现代推理系统已经很少只是“给模型一个 prompt 然后生成答案”。很多真实系统更接近下面这种结构：
 
-
 \[
 \text{retrieval} \rightarrow \text{context assembly} \rightarrow \text{model} \rightarrow \text{tools/agents}
 \]
-
 
 如果只想先建立 RAG、Prompt Chaining、ReAct 和 CoT 的基础直觉，可以先回看 [Prompt、CoT 与 RAG 入门](../foundations/prompt-engineering-cot-and-rag-basics.md)。本页重点放在推理系统里的容量、状态、上下文装配和线上失效。
 
 这意味着推理系统必须同时处理检索、长上下文、工具调用和多轮状态：从外部文档、数据库或索引中找证据，把证据、历史和用户问题装进有限 token 预算，让模型在需要时调用搜索、数据库、OCR、浏览器或业务 API，并持续追踪已经查过什么、得到什么、下一步该做什么。
 
 而这四件事一旦组合起来，系统的核心问题就会从“单次推理质量”转向“信息如何被组织、更新、裁剪和追踪”。这也是为什么很多看似是模型问题的线上故障，最后会落到检索、上下文装配或状态管理上。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 为什么 RAG 不只是“加个检索器”
 
@@ -35,7 +31,6 @@ RAG 的核心不只是把文档拼进 prompt，而是决定查文档、表格、
 \[
 \mathcal{C}^\star = \text{Assemble}(d_1,\dots,d_k, q, B)
 \]
-
 
 其中 \(B\) 是上下文预算。这一步包括去重、排序、裁剪和模板包装：移除重复片段，把最关键、最新或最可信证据放在合适位置，删掉无关段落、表格行或历史消息，同时保留来源、时间、权限和引用格式。
 
@@ -69,7 +64,6 @@ RAG 的核心不只是把文档拼进 prompt，而是决定查文档、表格、
 a_t \sim \pi_\theta(a_t \mid c_t),\qquad c_{t+1}=U(c_t,a_t,o_t)
 \]
 
-
 其中 \(o_t\) 是工具返回结果。
 
 ### 4.1 Agent 为什么更像控制而不是聊天
@@ -93,17 +87,6 @@ a_t \sim \pi_\theta(a_t \mid c_t),\qquad c_{t+1}=U(c_t,a_t,o_t)
 ## 长上下文系统最常见的瓶颈
 
 ### Prefill 成本
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
->
-> 延伸阅读：[17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html) |
-| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 上下文越长，prefill 越贵。
 
@@ -159,10 +142,9 @@ Agent 在多步工具调用后，上下文容易越来越乱。
 
 分层优化往往比端到端黑箱调 prompt 更有效，也更便于定位问题。
 
-## 本页结论
+## 阅读结论
 
 RAG、Agent 和长上下文系统的结合，代表着推理系统已经从“单次生成”走向“受约束的信息编排与决策系统”。因此它们更像系统工程问题，而不是单纯模型推理问题。真正强的系统，不只是能读很多 token，而是知道何时检索、何时压缩、何时调用工具、何时停止继续扩张上下文。 
-
 
 ## 工程收束
 

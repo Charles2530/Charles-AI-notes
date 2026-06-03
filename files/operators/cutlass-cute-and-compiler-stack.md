@@ -2,10 +2,7 @@
 
 AI kernel 工程里常见误解是：既然已有 `torch.compile`、Triton、cuBLAS、TensorRT，为什么还要理解 `CUTLASS`、`CuTe`、模板库、DSL 和图编译器？真正原因是，AI 系统不是单一抽象层能解决的。不同工具分别负责图级融合、库级高性能基元、模板级可组合 kernel，以及更低层的 layout、MMA、流水线和访存控制。
 
-
 这页建立一张从模型图到 GPU 指令的中间栈地图。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 从模型图到硬件执行
 
@@ -42,12 +39,12 @@ flowchart TD
 
 这张图不是工具排名，而是选型路径：先看现成库，库不覆盖再看 Triton，若需要一整个高性能 kernel 家族再看 CUTLASS/CuTe，极端特化才下到 CUDA/PTX。抽象层越低，控制越强，维护成本也越高。
 
-![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="490" }
+![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="760" }
 
 <small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原论文图意：在矩阵乘 \(C=AB^T\) 上比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 相对 roofline model 的性能位置。</small>
 
-!!! note "图解：Triton 的价值在 tile 级表达和编译优化"
-    这张图不是说 Triton 永远比库更快，而是说明合适的 DSL 可以把自定义 kernel 拉近到成熟库的性能区间。对 AI kernel 来说，关键不是只把 Python 换成低层语言，而是让程序员直接表达 tile、block、memory access 和并行粒度，再由编译器做 layout、调度和代码生成。CUTLASS/CuTe 走的是模板化硬件构件路线，Triton 走的是块级张量 DSL 路线，二者都在解决“高层框架太粗、纯 CUDA 太重”的中间地带。
+**Triton 的价值在 tile 级表达和编译优化。**
+这张图不是说 Triton 永远比库更快，而是说明合适的 DSL 可以把自定义 kernel 拉近到成熟库的性能区间。对 AI kernel 来说，关键不是只把 Python 换成低层语言，而是让程序员直接表达 tile、block、memory access 和并行粒度，再由编译器做 layout、调度和代码生成。CUTLASS/CuTe 走的是模板化硬件构件路线，Triton 走的是块级张量 DSL 路线，二者都在解决“高层框架太粗、纯 CUDA 太重”的中间地带。
 
 ## 图编译器擅长什么
 
@@ -72,17 +69,6 @@ CuTe 可以看成 CUTLASS 中更强调 layout algebra 和 tensor / tile 组合�
 CuTe 的价值不是“更高级”本身，而是让复杂 GEMM、attention 和 Hopper/Blackwell 以后更复杂的 pipeline 能以更系统的方式表达和复用。
 
 ## Triton 与 CUTLASS 的分工
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 | 维度 | Triton | CUTLASS / CuTe |
 | --- | --- | --- |

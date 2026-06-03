@@ -6,7 +6,6 @@ paper_topic: 技术报告
 
 # Kimi K2：MuonClip、万亿 MoE 与 Agent 数据
 
-
 Kimi K2 这份报告的核心不是“又发布了一个大模型”，而是围绕一个更明确的目标展开：**怎样把开源模型做成强 agent，而不是只做一个静态聊天模型。**它把问题拆成两层：预训练阶段要在高质量 token 变稀缺的情况下提高 token efficiency；后训练阶段要把 base model 变成能使用工具、写代码、跑多步任务、在真实或模拟环境中学习的 agentic model。
 
 从技术路线看，Kimi K2 有三条主线：
@@ -21,23 +20,12 @@ Kimi K2 这份报告的核心不是“又发布了一个大模型”，而是围
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 1，来自 arXiv source 包 `figures/k2-bench-bar-chart.pdf` 转 PNG。原图展示 Kimi K2 在非 thinking 设置下的主要 benchmark 结果，突出 coding、tool use、math/STEM 与 general tasks。</small>
 
-!!! note "这张主结果图怎么读"
-    报告强调所有模型都在 non-thinking setting 下评测。也就是说，Kimi K2 的定位不是像 DeepSeek-R1 / Qwen3 thinking mode 那样主要靠长 CoT test-time scaling，而是希望在普通非长思考模式下具备很强的 agent、代码、工具和通用能力。
+**这张主结果图怎么读。**
+报告强调所有模型都在 non-thinking setting 下评测。也就是说，Kimi K2 的定位不是像 DeepSeek-R1 / Qwen3 thinking mode 那样主要靠长 CoT test-time scaling，而是希望在普通非长思考模式下具备很强的 agent、代码、工具和通用能力。
 
-    这会影响我们解读分数：SWE-bench、Tau2-Bench、ACEBench 这些任务更接近“模型是否能执行任务流程”，不是单纯知识问答。因此 Kimi K2 的亮点更偏 agentic capability，而不是只在数学榜单上卷。
+这会影响我们解读分数：SWE-bench、Tau2-Bench、ACEBench 这些任务更接近“模型是否能执行任务流程”，不是单纯知识问答。因此 Kimi K2 的亮点更偏 agentic capability，而不是只在数学榜单上卷。
 
 ## 论文位置
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
-> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
->
-> 延伸阅读：[06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html) |
-| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
 
 Kimi K2 可以放在 DeepSeek-V3、DeepSeek-R1、Qwen3 之后一起看：
 
@@ -86,10 +74,10 @@ Kimi K2 是一个 trillion-parameter MoE Transformer，报告中的关键规模�
 
 这张表里最值得注意的是两个相反方向：K2 的 total parameters 从 671B 增到 1.04T，但 activated params 从 37B 降到 32.6B。也就是说，它不是把每个 token 的计算都做得更重，而是通过更高 sparsity 扩大可用专家容量。
 
-!!! note "Ultra-sparse MoE 怎么理解"
-    MoE 的直觉是“每个 token 不必经过所有 FFN 专家”。Kimi K2 有 384 个 experts，每个 token 只激活 8 个，再加 1 个 shared expert。这样 total capacity 很大，但单 token 计算接近 32B activated params。
+**Ultra-sparse MoE 怎么理解。**
+MoE 的直觉是“每个 token 不必经过所有 FFN 专家”。Kimi K2 有 384 个 experts，每个 token 只激活 8 个，再加 1 个 shared expert。这样 total capacity 很大，但单 token 计算接近 32B activated params。
 
-    这种设计的代价是系统复杂度：routing、expert load balance、EP 通信、显存布局和训练稳定性都会更难。K2 报告选择更高 sparsity，本质是在“模型容量”和“系统复杂度”之间押注：如果基础设施能撑住，高 sparsity 能给同等 FLOPs 更低 loss。
+这种设计的代价是系统复杂度：routing、expert load balance、EP 通信、显存布局和训练稳定性都会更难。K2 报告选择更高 sparsity，本质是在“模型容量”和“系统复杂度”之间押注：如果基础设施能撑住，高 sparsity 能给同等 FLOPs 更低 loss。
 
 ## Sparsity Scaling Law
 
@@ -107,8 +95,8 @@ Kimi K2 的模型选择来自一组 sparsity scaling law 实验。报告把 spar
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 6，来自 arXiv source 包 `figures/doubleQheads.pdf` 转 PNG。原图比较 attention heads 等于 layers 与 doubled attention heads 的 scaling curves。</small>
 
-!!! note "图解：两张 scaling 图要一起读"
-    Figure 5 说明在固定 active experts 时提高 sparsity 能降低 validation loss；Figure 6 则说明翻倍 attention heads 的收益很小但长上下文成本会上升。两张图合在一起支撑 K2 的架构选择：容量优先放到 MoE experts，而不是把 attention 头数继续做大。
+**两张 scaling 图要一起读。**
+Figure 5 说明在固定 active experts 时提高 sparsity 能降低 validation loss；Figure 6 则说明翻倍 attention heads 的收益很小但长上下文成本会上升。两张图合在一起支撑 K2 的架构选择：容量优先放到 MoE experts，而不是把 attention 头数继续做大。
 
 这里的工程判断很清楚：agentic 应用常常需要长上下文，如果 attention head 数太多，推理成本会在长序列下放大。K2 宁愿把容量放到 MoE experts 上，而不是把 attention heads 翻倍。
 
@@ -122,7 +110,6 @@ $$
 \operatorname{softmax}\left(\frac{1}{\sqrt d}QK^\top\right).
 $$
 
-
 如果 \(W_q\) 或 \(W_k\) 的谱范数持续长大，\(QK^\top\) 的最大值会爆，softmax 进入极端饱和区，训练可能出现 loss spike 甚至 divergence。报告指出，logit soft-cap 是在 logits 已经算出来后截断；QK-Norm 又不适合 MLA，因为 MLA 的 Key matrices 在推理时不是完全 materialized。因此 K2 采用 QK-Clip：**在参数更新后，根据每个 attention head 的最大 logit 反向缩放 query/key projection weights。**
 
 论文中的 max logit 定义为：
@@ -134,13 +121,12 @@ S_{\max}^{h}=
 \mathbf Q_i^{h}\mathbf K_j^{h\top}.
 $$
 
-
 当某个 head 的 \(S_{\max}^{h}>\tau\) 时，用 \(\gamma_h=\min(1,\tau/S_{\max}^{h})\) 做 per-head 缩放。对 MLA，报告只裁剪 unshared head components：\(\mathbf q^C\)、\(\mathbf k^C\)、\(\mathbf q^R\)，不动 shared rotary \(\mathbf k^R\)，避免一个 head 的裁剪影响其他 heads。
 
-!!! note "MuonClip 的关键不是“把 logit 截断”"
-    QK-Clip 不改变当前 step 的 forward / backward 计算，也不是直接把 softmax 输入硬截断。它是在 optimizer step 之后，借助当前 batch 观测到的 max logit，缩放 \(W_q/W_k\) 的部分参数，阻止下一步继续放大。
+**MuonClip 的关键不是“把 logit 截断”。**
+QK-Clip 不改变当前 step 的 forward / backward 计算，也不是直接把 softmax 输入硬截断。它是在 optimizer step 之后，借助当前 batch 观测到的 max logit，缩放 \(W_q/W_k\) 的部分参数，阻止下一步继续放大。
 
-    这类设计很适合大规模训练：它不是频繁改 loss，也不是给每层都加额外 normalization，而是只在某些 head 超阈值时介入。报告附录还说 K2 中 QK-Clip 在前 70000 steps 有 12.7% heads 至少触发一次，之后所有 heads 都降到阈值以下，机制自然失活。
+这类设计很适合大规模训练：它不是频繁改 loss，也不是给每层都加额外 normalization，而是只在某些 head 超阈值时介入。报告附录还说 K2 中 QK-Clip 在前 70000 steps 有 12.7% heads 至少触发一次，之后所有 heads 都降到阈值以下，机制自然失活。
 
 ![Muon logits explosion vs MuonClip](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-2a-muon-logits-mid.png){ width="460" .atlas-figure-compact }
 
@@ -152,8 +138,8 @@ $$
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 3，来自 arXiv source 包 `figures/loss_vs_tokens_white.pdf` 转 PNG。原图展示 Kimi K2 per-step training loss curve，强调未 smoothing / 未 sub-sampling，整个训练过程无 spike。</small>
 
-!!! note "图解：logit 曲线和 loss 曲线要连起来读"
-    Figure 2 看的是 Muon 不受控时 attention logits 会爆、MuonClip 如何把 max logits 压回阈值；Figure 3 看的是这种控制有没有反映到长程训练稳定性上。它们共同支撑“MuonClip 是大规模训练稳定性补丁”，但不能单独证明 Muon 一定比 AdamW 在所有数据和模型规模上更好。
+**logit 曲线和 loss 曲线要连起来读。**
+Figure 2 看的是 Muon 不受控时 attention logits 会爆、MuonClip 如何把 max logits 压回阈值；Figure 3 看的是这种控制有没有反映到长程训练稳定性上。它们共同支撑“MuonClip 是大规模训练稳定性补丁”，但不能单独证明 Muon 一定比 AdamW 在所有数据和模型规模上更好。
 
 训练稳定性是这篇报告最值得认真看的部分之一。很多模型报告只给最终 benchmark，K2 把“为什么能用 Muon 训练 1T MoE 不炸”写得比较具体。它说明大模型训练的优化器选择不是简单换名字：Muon 的 token efficiency 需要 QK-Clip 这类稳定性补丁才能安全扩展到 trillion-scale MoE。
 
@@ -184,10 +170,10 @@ K2 的做法是对高质量知识与数学数据进行受控 rephrasing，而不
 
 <small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 4，来自 arXiv source 包 `figures/synthetic_data_rephrase.pdf` 转 PNG。原图展示 long input excerpts 的 auto-regressive chunk-wise rephrasing pipeline。</small>
 
-!!! note "rephrasing 和普通数据增强的差别"
-    K2 这里不是为了把文本改得“花哨”，而是为了在保持事实一致的前提下，让模型用不同表述、不同结构和不同视角重新吸收同一份高价值知识。它比重复 epoch 更不容易让模型只记住表面 token sequence。
+**rephrasing 和普通数据增强的差别。**
+K2 这里不是为了把文本改得“花哨”，而是为了在保持事实一致的前提下，让模型用不同表述、不同结构和不同视角重新吸收同一份高价值知识。它比重复 epoch 更不容易让模型只记住表面 token sequence。
 
-    风险也在报告里写得很清楚：synthetic rephrasing 可能带来事实漂移、幻觉、毒性和 domain generalization 问题，所以需要 fidelity verification 和按语料源控制 rephrasing 次数。K2 报告说每个 corpus 最多 rephrase 两次。
+风险也在报告里写得很清楚：synthetic rephrasing 可能带来事实漂移、幻觉、毒性和 domain generalization 问题，所以需要 fidelity verification 和按语料源控制 rephrasing 次数。K2 报告说每个 corpus 最多 rephrase 两次。
 
 ## 训练基础设施
 
@@ -211,10 +197,10 @@ Kimi K2 使用 NVIDIA H800 集群训练。每个节点有 8 张 GPU，通过 NVL
 
 K2 没有使用 DeepSeek-V3 的 DualPipe。报告给出的理由是 DualPipe 会让参数和梯度内存翻倍，为了补偿还要增加并行度；对超过 1T 参数的模型来说，额外成本过高。K2 选择在 interleaved 1F1B 里增加 warm-up micro-batches，用标准 pipeline schedule 尽量重叠 EP all-to-all 和计算，并把 weight-gradient computation 与 PP communication 解耦。
 
-!!! note "为什么训练基础设施值得放进论文讲解"
-    对 1T MoE，训练 recipe 不是“batch size + learning rate”就能复现。参数、梯度、optimizer、activation、专家通信、pipeline bubble、CPU offload 都会决定训练能不能跑。
+**为什么训练基础设施值得放进论文讲解。**
+对 1T MoE，训练 recipe 不是“batch size + learning rate”就能复现。参数、梯度、optimizer、activation、专家通信、pipeline bubble、CPU offload 都会决定训练能不能跑。
 
-    K2 的系统选择有一个很务实的目标：使用一套一致的 parallelism configuration，让小规模和大规模实验都能复用，从而提升 research efficiency。对大模型团队来说，实验迭代速度本身就是能力的一部分。
+K2 的系统选择有一个很务实的目标：使用一套一致的 parallelism configuration，让小规模和大规模实验都能复用，从而提升 research efficiency。对大模型团队来说，实验迭代速度本身就是能力的一部分。
 
 ## 训练 recipe
 
@@ -276,12 +262,12 @@ Kimi K2 把工具使用数据合成写得比较完整，因为 agentic 能力很
 
 ![Kimi K2 synthetic tools t-SNE](../../assets/images/paper-deep-dives/technical-reports/kimi-k2/figure-9b-tsne-synthetic-tools.png){ width="460" .atlas-figure-compact }
 
-<small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 9 左右子图，来自 arXiv source 包 `figures/tsne_tool_mcp.pdf` 与 `figures/tsne_tool_synthetic.pdf` 转 PNG。原图用 t-SNE 可视化 real-world MCP tools 与 synthetic tools 的 embedding 分布。</small>
+<small>图源：`Kimi K2: Open Agentic Intelligence`，Figure 9 左右子图，来自 arXiv source 包 `figures/tsne_tool_mcp.pdf` 与 `figures/tsne_tool_synthetic.pdf` 转 PNG。原图表达：用 t-SNE 可视化 real-world MCP tools 与 synthetic tools 的 embedding 分布。本站读法：这两张图只说明合成工具覆盖了多样语义簇，不说明每个工具调用环境都有真实执行 fidelity；后者还要看 sandbox、rubric 和 trajectory filtering。</small>
 
-!!! note "为什么 tool simulator 被称为 world model"
-    报告说 tool execution environment functionally equivalent to a world model。意思是：工具调用不是无状态 API 文本补全。环境要执行 tool call，返回反馈，并在下一轮保留和更新状态。
+**为什么 tool simulator 被称为 world model。**
+报告说 tool execution environment functionally equivalent to a world model。意思是：工具调用不是无状态 API 文本补全。环境要执行 tool call，返回反馈，并在下一轮保留和更新状态。
 
-    例如一个文件系统工具调用后，文件内容真的变了；一个交易系统模拟器执行订单后，账户状态要更新；代码沙箱运行测试后，错误日志会影响下一步。这和 RL 环境很像：agent action 改变 state，environment 返回 observation / reward / feedback。
+例如一个文件系统工具调用后，文件内容真的变了；一个交易系统模拟器执行订单后，账户状态要更新；代码沙箱运行测试后，错误日志会影响下一步。这和 RL 环境很像：agent action 改变 state，environment 返回 observation / reward / feedback。
 
 这套数据合成 pipeline 的关键是 rubric-based filtering。每个 task 都带有成功标准、预期工具使用模式和 evaluation checkpoints；LLM judge 按 rubric 过滤 trajectory。对 coding / software engineering 这类 fidelity 要求高的任务，K2 还使用真实执行 sandboxes，让代码真的跑测试，而不是只靠模拟反馈。
 
@@ -301,7 +287,6 @@ r(x,y_i)-\bar r(x)
 \right)^2
 \right],
 $$
-
 
 其中 \(\bar r(x)\) 是同一问题采样回答的平均奖励，\(\tau\) 是稳定学习的正则项。直觉上，它仍然利用“同题多样本的相对奖励”来训练 policy，但形式不是 PPO clipping，而是把奖励优势和 policy log-ratio 正则放进平方目标里。
 
@@ -324,10 +309,10 @@ K2 对 RL 做了三个实用补丁：
 | PTX Loss | 在 RL 目标中加入高质量样本的辅助 PTX loss，缓解遗忘和任务过拟合 |
 | Temperature Decay | 早期高温鼓励探索，后期降低温度提高稳定性和可靠性 |
 
-!!! note "Self-Critique Rubric Reward 是什么"
-    可验证任务可以用答案正确性、单元测试或规则检查做 reward；但开放问答、写作、帮助性、风格和安全很多时候没有硬 verifier。K2 的做法是让 K2 critic 按 rubrics 对 K2 actor 的多个输出做 pairwise comparison。
+**Self-Critique Rubric Reward 是什么。**
+可验证任务可以用答案正确性、单元测试或规则检查做 reward；但开放问答、写作、帮助性、风格和安全很多时候没有硬 verifier。K2 的做法是让 K2 critic 按 rubrics 对 K2 actor 的多个输出做 pairwise comparison。
 
-    这个 critic 不是完全凭空来。报告说它先在 SFT 阶段用开源和内部 preference datasets 初始化，再在 RL 过程中用可验证任务的 on-policy rollouts 继续校准。这样做的目标是把 RLVR 中学到的客观信号迁移到更主观的评价任务上。
+这个 critic 不是完全凭空来。报告说它先在 SFT 阶段用开源和内部 preference datasets 初始化，再在 RL 过程中用可验证任务的 on-policy rollouts 继续校准。这样做的目标是把 RLVR 中学到的客观信号迁移到更主观的评价任务上。
 
 这里和 DeepSeek-R1 的差异值得强调。DeepSeek-R1 更强调 rule-based reward 在数学/代码这类可验证任务上激发 reasoning；K2 则把 RL 做成一个更宽的 agent alignment 框架：有 verifiable rewards，也有 self-critic rewards；有数学和代码，也有 tool use、faithfulness、instruction following、安全和开放偏好。
 
@@ -354,15 +339,12 @@ training engine has updated parameters
 
 Agentic rollout 还有两个额外问题。第一，环境反馈可能很慢，例如 VM、code interpreter、外部服务调用会让 GPU 空等；K2 用 heavy environments dedicated services 和大量 concurrent rollouts 摊平等待时间。第二，trajectory 可能极长，某些任务会拖住整个 rollout；K2 使用 partial rollout，让长尾未完成任务暂停并在下一轮 RL iteration 恢复。
 
-!!! note "为什么 agentic RL 比普通 RLHF 更像系统工程"
-    普通 RLHF 的 rollout 往往只是“模型生成一段文本，reward model 打分”。Agentic RL 的 rollout 可能包含几十轮工具调用、代码执行、文件修改、环境状态更新和失败重试。
+**为什么 agentic RL 比普通 RLHF 更像系统工程。**
+普通 RLHF 的 rollout 往往只是“模型生成一段文本，reward model 打分”。Agentic RL 的 rollout 可能包含几十轮工具调用、代码执行、文件修改、环境状态更新和失败重试。
 
-    这意味着训练系统要同时管理 GPU 推理、环境服务、沙箱隔离、长 trajectory、失败恢复、权重更新和数据回流。K2 报告里的 checkpoint engine、partial rollout、Gym-like interface 都是在解决这个系统层问题。
+这意味着训练系统要同时管理 GPU 推理、环境服务、沙箱隔离、长 trajectory、失败恢复、权重更新和数据回流。K2 报告里的 checkpoint engine、partial rollout、Gym-like interface 都是在解决这个系统层问题。
 
 ## 评测结果
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 Kimi K2 的评测分为 Kimi-K2-Instruct 和 Kimi-K2-Base。Instruct 评测强调 non-thinking setting，并覆盖 coding、tool use、math/STEM、general、long-context、factuality 等任务。
 
@@ -431,7 +413,7 @@ Kimi K2 给工程项目的启发主要有五条：
 3. [Qwen3：Thinking 模式、36T 预训练与蒸馏](qwen3.md)：对照 thinking / non-thinking 和双模式后训练；
 4. [强化学习：Policy Gradient、PPO 与 GRPO](../../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)：补 RL 目标和 advantage 的基础；
 5. [训练：训练数据系统与吞吐优化](../../training/data-systems-and-optimization.md)：理解 synthetic data、数据质量和训练吞吐；
-## 参考资料
+## 外部精读
 
 1. [Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)
 2. [Kimi-K2-Instruct model checkpoint](https://huggingface.co/moonshotai/Kimi-K2-Instruct)

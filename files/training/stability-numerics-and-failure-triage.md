@@ -2,10 +2,7 @@
 
 大模型训练里最贵的失败，往往不是“效果差一点”，而是训练跑到中后期突然 `nan`、loss spike、恢复后曲线漂移、低精度路径悄悄失真，最后一整段 GPU 小时白白损失。稳定性排障的目标，是把这些高代价问题拆成可观测、可定位、可复现的流程。
 
-
 这页关注训练故障的 triage 顺序。低精度训练细节可继续看 [低比特训练与数值体系](low-bit-training-and-numerics.md)，平台侧恢复流程见 [集群运维与实验治理](cluster-operations-and-experiment-management.md)。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 先分类，再排障
 
@@ -48,17 +45,6 @@
 Loss spike 尤其要看时间点。若 spike 正好出现在 curriculum 切换、数据版本切换、恢复点、LR 变化点或新 shape bucket 出现时，优先排查这些外部事件，而不是直接调小学习率。
 
 ## BF16、FP16、FP8 的故障画像
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
 
 不同精度路径的故障画像并不相同，不能统一叫“低精度不稳定”。
 

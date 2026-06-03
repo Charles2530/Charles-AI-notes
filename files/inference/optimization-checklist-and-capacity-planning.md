@@ -2,29 +2,15 @@
 
 推理系统上线后，团队很快会遇到两个问题：现在还能撑多久，下一步该先优化哪里。这两个问题表面像“算资源”，本质是在做系统建模。大模型推理容量不是固定常数，而是请求分布、输入输出长度、模型结构、batch 策略、缓存命中、工具调用和 SLO 共同作用的结果。
 
-
 这页把推理优化从零散技巧整理成容量规划和瓶颈归因框架。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 请求画像先于资源估算
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》-->
-> **算法视角**：FLOPs / 参数量估算不是为了得到一个漂亮数字，而是把模型结构、batch token、并行度和硬件吞吐放到同一张预算表里，先判断瓶颈会落在算力、显存还是通信。
->
-> 延伸阅读：[02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/02_LLM_Params_and_FLOPs.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| Transformer 前向估算 | 约随参数量和 token 数线性增长 | 受参数、KV / activation 与临时 buffer 共同影响 | 训练通常还要乘上反向和优化器开销；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/02_LLM_Params_and_FLOPs.html) |
 
 设请求到达率为 \(\lambda\)，平均服务时间为 \(S\)，负载强度可粗略写成：
 
 \[
 \rho=\lambda S
 \]
-
 
 当 \(\rho\) 接近系统有效处理能力时，排队时间和尾延迟会快速恶化。LLM/VLM 系统中 \(S\) 不是常数，通常更接近：
 
@@ -35,7 +21,6 @@ T_{\text{prefill}}(L_{\text{in}})
 +T_{\text{tool}}
 +T_{\text{network}}
 \]
-
 
 因此容量规划必须先统计真实请求画像，包括输入长度和输出长度分布、长上下文和多模态占比、工具调用轮次和外部依赖耗时、模型路由分布、prefix / KV cache 命中率，以及峰值流量和多租户叠加。
 
@@ -53,7 +38,6 @@ T_{\text{queue}}
 +T_{\text{decode}}
 +T_{\text{overhead}}
 \]
-
 
 Prefill 一次性处理全部输入 token，长上下文时成本高；decode 每次只生成少量 token，但要重复很多轮，并持续访问 KV cache。Queue 则反映容量、调度和优先级是否健康。
 

@@ -2,14 +2,11 @@
 
 今天的大模型几乎都不是一次训练出来的。它们通常经历三层递进过程：预训练、监督微调和偏好对齐。三层做的事情不同，混成一个概念会让模型设计和问题诊断失真。
 
-
 一个简化记法是：
 
 1. **预训练**：决定模型“能不能”；
 2. **SFT**：决定模型“怎么做”；
 3. **对齐**：决定模型“倾向怎么选”和“边界在哪里”。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 三层训练的分工
 
@@ -29,8 +26,8 @@
 | SFT | \(\mathcal{L}_{\text{SFT}}=-\sum_t\log p_\theta(y_t\mid x,y_{<t})\) | \(x\) 是用户指令，\(y_t\) 是示范回答里的第 \(t\) 个 token | 人写或强模型生成的高质量示范 |
 | 偏好 / RLHF | \(\max_\theta \mathbb{E}_{y\sim\pi_\theta}[r_\phi(x,y)-\beta D_{\mathrm{KL}}(\pi_\theta,\pi_{\text{ref}})]\) | \(\pi_\theta\) 是当前模型，\(r_\phi\) 是 reward，\(\pi_{\text{ref}}\) 是参考模型，\(\beta\) 是刹车 | 人类排序、reward model、规则/verifier 或在线反馈 |
 
-!!! note "初学者解释：为什么这张表很重要"
-    预训练和 SFT 都常用交叉熵，但目标不同：预训练是在海量语料里预测下一个 token，SFT 是在指令条件下模仿示范回答。偏好/RLHF 更不一样：模型先自己采样回答，再由 reward 或 verifier 判断好坏。把这三类信号混在一起，就很容易把“能力不够”“格式不对”和“偏好边界不稳”误诊成同一个问题。
+**初学者解释：为什么这张表很重要。**
+预训练和 SFT 都常用交叉熵，但目标不同：预训练是在海量语料里预测下一个 token，SFT 是在指令条件下模仿示范回答。偏好/RLHF 更不一样：模型先自己采样回答，再由 reward 或 verifier 判断好坏。把这三类信号混在一起，就很容易把“能力不够”“格式不对”和“偏好边界不稳”误诊成同一个问题。
 
 把模型看作新员工：预训练像多年教育背景和阅读积累，SFT 像岗位培训，对齐像企业文化、服务规范和风险制度。
 
@@ -42,7 +39,6 @@
 \mathcal{L}_{\text{LM}} =
 -\sum_t \log p_\theta(x_t\mid x_{<t})
 \]
-
 
 这个目标迫使模型从海量文本、代码和多模态 token 中学习语法、常识、事实共现、代码模式、长程依赖和推理痕迹。它主要塑造能力边界。
 
@@ -59,7 +55,6 @@
 -\sum_t \log p_\theta(y_t\mid y_{<t},x)
 \]
 
-
 其中 \(x\) 是输入，\(y\) 是高质量目标回答。SFT 的作用通常不是重建整个世界知识，而是让模型学会按任务格式回答、遵循指令、组织输出和执行流程。
 
 从训练角度看，SFT 很像语言行为克隆。它高度依赖示范数据质量。如果示范数据模板僵硬、逻辑不严谨、过度冗长、拒答错误或风格不稳定，模型会一并学进去。
@@ -74,17 +69,6 @@ SFT 常见问题包括：
 
 ## 偏好对齐：选择倾向
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
-> **算法视角**：PPO / DPO 都是在候选回答之间定义偏好信号；PPO 通过策略更新和 KL 约束控制模型漂移，DPO 则把 chosen / rejected 对直接转成 pairwise loss。
->
-> 延伸阅读：[12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| DPO pair loss | $O(BL)$ logprob 评估 | 需要 policy / reference 的中间结果 | $B$ 为样本对数，$L$ 为序列长度；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html) |
-| PPO rollout + update | 多次模型前向 / 反向 | 常同时保留 policy、reference、reward 路径 | 成本主要来自多模型调用、采样和 KL 监控。 |
-
 即使经过 SFT，模型仍可能在多个合理答案之间选出不符合人类偏好的回答。偏好对齐引入成对或排序数据，例如优选 \(y^+\) 和劣选 \(y^-\)。
 
 InstructGPT 原论文的流程图很适合先建立全局直觉：对齐不是直接让人类给每个 token 标答案，而是先收集示范，再收集人类排序训练 reward model，最后用强化学习让策略朝高奖励回答移动。
@@ -93,8 +77,8 @@ InstructGPT 原论文的流程图很适合先建立全局直觉：对齐不是�
 
 <small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 2。原论文图意：展示 InstructGPT 的三步训练流程：收集 demonstration data 做 SFT，收集模型输出排序训练 reward model，再用 PPO 按 reward model 优化 policy。</small>
 
-!!! note "图解：RLHF 的三步不要混在一起"
-    Step 1 是监督学习：人写出理想回答，模型学习模仿。Step 2 是偏好建模：同一个 prompt 下采样多个回答，让标注者排序，再训练 reward model 预测人类更偏好哪个。Step 3 才是强化学习：当前模型作为 policy 生成回答，reward model 给回答打分，PPO 根据奖励更新 policy。也就是说，RLHF 不是“人类实时教模型每一步怎么写”，而是“先学一个奖励函数，再用这个奖励函数训练生成策略”。
+**RLHF 的三步不要混在一起。**
+Step 1 是监督学习：人写出理想回答，模型学习模仿。Step 2 是偏好建模：同一个 prompt 下采样多个回答，让标注者排序，再训练 reward model 预测人类更偏好哪个。Step 3 才是强化学习：当前模型作为 policy 生成回答，reward model 给回答打分，PPO 根据奖励更新 policy。也就是说，RLHF 不是“人类实时教模型每一步怎么写”，而是“先学一个奖励函数，再用这个奖励函数训练生成策略”。
 
 以 DPO 为例：
 
@@ -107,7 +91,6 @@ InstructGPT 原论文的流程图很适合先建立全局直觉：对齐不是�
 \beta \log \frac{\pi_\theta(y^-\mid x)}{\pi_{\text{ref}}(y^-\mid x)}
 \right)
 \]
-
 
 它推动策略相对参考模型提高优选回答概率，压低劣选回答概率。RLHF、DPO、RLAIF 等方法细节不同，但都在回答：模型已经会做很多事，怎样让它更符合人类或系统偏好。
 
@@ -135,7 +118,6 @@ InstructGPT 原论文的流程图很适合先建立全局直觉：对齐不是�
 =\prod_{t=1}^T \pi_\theta(y_t\mid x,y_{<t})
 \]
 
-
 RLHF 想最大化的是类似下面的目标：
 
 \[
@@ -147,11 +129,10 @@ r_\phi(x,y)
 \right].
 \]
 
-
 这里 \(r_\phi(x,y)\) 是 reward model 给完整回答的分数；KL 项是“别离参考模型太远”的刹车。没有 KL，模型可能学会钻 reward model 的空子，例如变得异常啰嗦、过度自信、固定模板化，甚至输出 reward model 偏爱的奇怪格式。
 
-!!! note "难点解释：为什么 RLHF 里要有 value / advantage"
-    完整回答结束后才知道奖励，但更新发生在许多 token 决策上。`value` 用来估计“生成到当前前缀时，未来大概能拿多少分”；`advantage` 用来估计“这次采样出来的结果比预期好多少”。如果 advantage 为正，PPO 会倾向提高这段生成路径的概率；如果 advantage 为负，就倾向压低。没有 advantage，训练信号会很吵，因为每个 token 都很难知道自己对最终奖励贡献了多少。
+**难点解释：为什么 RLHF 里要有 value / advantage。**
+完整回答结束后才知道奖励，但更新发生在许多 token 决策上。`value` 用来估计“生成到当前前缀时，未来大概能拿多少分”；`advantage` 用来估计“这次采样出来的结果比预期好多少”。如果 advantage 为正，PPO 会倾向提高这段生成路径的概率；如果 advantage 为负，就倾向压低。没有 advantage，训练信号会很吵，因为每个 token 都很难知道自己对最终奖励贡献了多少。
 
 PPO 原论文给出的算法框架可以帮助你把这件事从“抽象奖励”落到训练步骤上：
 
@@ -161,8 +142,8 @@ collect rollouts -> estimate advantages -> optimize clipped surrogate -> refresh
 
 <small>流程源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1。原论文算法要点：多个 actor 用旧策略收集固定长度轨迹，计算 advantage estimates，再用若干个 minibatch epoch 优化 surrogate objective，最后把旧策略更新为当前策略。</small>
 
-!!! note "图解：PPO 在 RLHF 里做的是小步更新"
-    原始 PPO 图里的 actor 在环境里跑 \(T\) 步；RLHF 里可以理解成模型对一批 prompts 采样回答。`Compute advantage estimates` 对应根据 reward model 分数、value 估计和 KL 惩罚计算训练信号；`Optimize surrogate` 对应用 minibatch 更新语言模型。PPO 名字里的 proximal 重点是“不要一步改太远”：模型要朝高奖励回答移动，但不能突然远离 SFT/reference 模型，否则容易牺牲事实性、格式稳定和基础能力。
+**PPO 在 RLHF 里做的是小步更新。**
+原始 PPO 图里的 actor 在环境里跑 \(T\) 步；RLHF 里可以理解成模型对一批 prompts 采样回答。`Compute advantage estimates` 对应根据 reward model 分数、value 估计和 KL 惩罚计算训练信号；`Optimize surrogate` 对应用 minibatch 更新语言模型。PPO 名字里的 proximal 重点是“不要一步改太远”：模型要朝高奖励回答移动，但不能突然远离 SFT/reference 模型，否则容易牺牲事实性、格式稳定和基础能力。
 
 PPO 的 clipped surrogate 图进一步解释了这个“别改太远”。
 
@@ -170,8 +151,8 @@ PPO 的 clipped surrogate 图进一步解释了这个“别改太远”。
 
 <small>图源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Figure 1。原论文图意：展示 clipped surrogate objective 中单个 timestep 项如何随概率比率 \(r\) 变化；当 advantage 为正或负时，clip 会限制策略概率变化带来的收益。</small>
 
-!!! note "图解：clip 是为了限制奖励驱动的过猛更新"
-    \(r_t(\theta)=\pi_\theta(a_t\mid s_t)/\pi_{\theta_{\text{old}}}(a_t\mid s_t)\) 表示新策略相对旧策略把同一动作概率改了多少。若 advantage 为正，模型想把这个动作概率调高；若 advantage 为负，模型想调低。clip 会在 \(1-\epsilon\) 到 \(1+\epsilon\) 附近限制收益，防止模型因为 reward model 的局部偏好一下子把概率推得太远。放到 RLHF 里，这就是为什么 PPO 训练既看 reward，也要看 KL、clip fraction、回答长度、事实性和拒答边界。
+**clip 是为了限制奖励驱动的过猛更新。**
+\(r_t(\theta)=\pi_\theta(a_t\mid s_t)/\pi_{\theta_{\text{old}}}(a_t\mid s_t)\) 表示新策略相对旧策略把同一动作概率改了多少。若 advantage 为正，模型想把这个动作概率调高；若 advantage 为负，模型想调低。clip 会在 \(1-\epsilon\) 到 \(1+\epsilon\) 附近限制收益，防止模型因为 reward model 的局部偏好一下子把概率推得太远。放到 RLHF 里，这就是为什么 PPO 训练既看 reward，也要看 KL、clip fraction、回答长度、事实性和拒答边界。
 
 ## 从 Qwen3 看现代后训练流水线
 
@@ -181,8 +162,8 @@ PPO 的 clipped surrogate 图进一步解释了这个“别改太远”。
 
 <small>图源：[Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)，Figure 1。原论文图意：Qwen3 系列的 post-training pipeline，旗舰模型经过 Long-CoT Cold Start、Reasoning RL、Thinking Mode Fusion、General RL；轻量模型通过 strong-to-weak distillation 继承大模型能力。</small>
 
-!!! note "这张图帮你补哪块基础"
-    这张图说明 SFT、RL 和 distillation 不是三种互相替代的训练菜谱，而是在流水线上承担不同工序。Cold start SFT 像先教模型“怎么把解题过程写成可读格式”；Reasoning RL 像让模型在可验证题目上反复试错，提高正确率；Thinking Mode Fusion 像把“认真写草稿”和“快速直接答”两种产品行为合进一个模型；General RL 再负责工具、格式、偏好、安全和通用交互。
+**这张图帮你补哪块基础。**
+这张图说明 SFT、RL 和 distillation 不是三种互相替代的训练菜谱，而是在流水线上承担不同工序。Cold start SFT 像先教模型“怎么把解题过程写成可读格式”；Reasoning RL 像让模型在可验证题目上反复试错，提高正确率；Thinking Mode Fusion 像把“认真写草稿”和“快速直接答”两种产品行为合进一个模型；General RL 再负责工具、格式、偏好、安全和通用交互。
 
 可以把这条线拆成四个更容易记的动作：
 
@@ -195,8 +176,8 @@ PPO 的 clipped surrogate 图进一步解释了这个“别改太远”。
 
 这也解释了为什么 DeepSeek-R1 和 Qwen3 都很重视 `verifiable rewards`。数学、代码、选择题、格式检查、单元测试这类任务，可以自动判断最终答案是否对；一旦 reward 足够可靠，RL 就能让模型在同一道题上采样多条路径，通过“哪条真的成功”来更新策略。
 
-!!! note "一个公众号式例子：考试和上班不是同一种训练"
-    Cold start SFT 像老师先给你几份优秀解题卷，告诉你步骤该怎么写。Reasoning RL 像刷题系统只看最终答案和代码测试是否通过，让你自己摸索更稳的解法。General RL 像入职后处理真实工单：不只要答案对，还要格式对、工具用对、风险边界对、用户能看懂。
+**一个公众号式例子：考试和上班不是同一种训练。**
+Cold start SFT 像老师先给你几份优秀解题卷，告诉你步骤该怎么写。Reasoning RL 像刷题系统只看最终答案和代码测试是否通过，让你自己摸索更稳的解法。General RL 像入职后处理真实工单：不只要答案对，还要格式对、工具用对、风险边界对、用户能看懂。
 
 轻量模型的 strong-to-weak distillation 也很关键。大模型完整跑一遍后训练很贵，小模型直接做 RL 又可能探索不动；用强模型产出数据和轨迹，再蒸馏到小模型，是把“旗舰模型的经验”压缩给边缘或低成本模型。这不是简单复制答案，而是在复制任务格式、推理风格、工具流程和偏好边界。
 

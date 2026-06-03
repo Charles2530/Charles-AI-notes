@@ -6,7 +6,6 @@ paper_topic: 世界模型
 
 # Towards Video World Models：视频世界模型五个门槛
 
-
 这篇文章很适合放在 LingBot-World 前面读。它不提出一个新模型，而是回答一个更基础的问题：**为什么 Sora、Veo 这类强视频生成模型还不能直接等价于 video world model，以及从视频生成走向世界模型需要补哪些训练和系统能力。**
 
 作者把 video world model 的核心要求概括成五个属性：`causal`、`interactive`、`persistent`、`real-time` 和 `physically accurate`。这五个词可以直接变成评估视频世界模型的 checklist。
@@ -23,11 +22,11 @@ paper_topic: 世界模型
 
 <small>Figure source: `Towards Video World Models`, Figure 1. 原文图注要点：图中对比 internal world model 和 external world model，前者像人脑内部对粗粒度未来的预测，后者则试图模拟现实世界的完整细节。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是视频世界模型方法谱系和能力门槛，输出是 taxonomy 与评估维度。  
-    **效率机制**：用门槛框架减少概念混淆，避免把视频生成直接当世界模型。  
-    **对主线意义**：它为全站判断“视频模型是否服务决策”提供检查表。  
-    **不能证明什么**：taxonomy 不能证明具体系统具备闭环控制收益。
+**Figure 1 先分清 internal 和 external world model。**
+**输入输出**：输入是视频世界模型方法谱系和能力门槛，输出是 taxonomy 与评估维度。  
+**效率机制**：用门槛框架减少概念混淆，避免把视频生成直接当世界模型。  
+**对主线意义**：它为全站判断“视频模型是否服务决策”提供检查表。  
+**不能证明什么**：taxonomy 不能证明具体系统具备闭环控制收益。
 
 这个区分很重要。前者不一定需要生成像素，甚至可以故意丢掉视觉细节；后者则必须尽可能真实地模拟未来画面、对象、运动和交互后果。文章讨论的重点是后者，也就是 video world model。
 
@@ -35,10 +34,10 @@ paper_topic: 世界模型
 
 <small>Figure source: `Towards Video World Models`, Figure 2. 原文图注要点：该图给出 world model 的 taxonomy，把内部理解型世界模型、外部模拟型世界模型以及 video world model、simulation platform、neural 3D/4D 等路线放在同一张图中。</small>
 
-!!! note "这张分类图怎么读"
-    这张图的价值是把“world model”这个容易泛化过度的词拆开。internal world model 更像 agent 内部的抽象预测器，重点是帮助 reasoning、planning 和 decision making；external world simulation model 则要生成可观察、可交互的外部世界，重点是视觉真实、动作后果和长期一致。
+**这张分类图怎么读。**
+这张图的价值是把“world model”这个容易泛化过度的词拆开。internal world model 更像 agent 内部的抽象预测器，重点是帮助 reasoning、planning 和 decision making；external world simulation model 则要生成可观察、可交互的外部世界，重点是视觉真实、动作后果和长期一致。
 
-    Video world model 位在后者里面，但又不同于传统 simulator。传统 simulator 依赖显式物理和手工资产，neural video world model 则依赖大规模视频生成先验，再补动作、因果和实时化。读这张图时要先判断项目目标：如果目标是机器人策略学习，可能不需要像素级真实；如果目标是交互世界模拟器，就必须同时满足 causal、interactive、persistent、real-time 和 physical accuracy。
+Video world model 位在后者里面，但又不同于传统 simulator。传统 simulator 依赖显式物理和手工资产，neural video world model 则依赖大规模视频生成先验，再补动作、因果和实时化。读这张图时要先判断项目目标：如果目标是机器人策略学习，可能不需要像素级真实；如果目标是交互世界模拟器，就必须同时满足 causal、interactive、persistent、real-time 和 physical accuracy。
 
 ## 核心判断
 
@@ -48,7 +47,6 @@ $$
 p(v_{1:T}\mid c),
 $$
 
-
 其中 \(c\) 可以是文本、图片、首帧或历史视频片段。这个目标能让模型生成视觉上合理的视频，但它不保证模型能被 agent 或用户动态控制。
 
 video world model 至少要学习：
@@ -56,7 +54,6 @@ video world model 至少要学习：
 $$
 p(v_{t+1:t+H}\mid v_{\le t}, a_{t:t+H-1}, c),
 $$
-
 
 其中 \(a\) 是动作、相机控制、键盘输入、机器人控制量或其他外部干预。也就是说，世界模型不只要回答“未来看起来像什么”，还要回答：
 
@@ -90,12 +87,12 @@ $$
 
 ![CausVid](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-3-causvid.jpg){ width="920" }
 
-<small>Figure source: `Towards Video World Models`, Figure 3. 原文图注要点：CausVid 将预训练的 bidirectional video diffusion model 改造成带 causal attention 的 few-step autoregressive video diffusion model。</small>
+<small>Figure source: `Towards Video World Models`, Figure 3. 原文图注要点：CausVid 将预训练的 bidirectional video diffusion model 改造成带 causal attention 的 few-step autoregressive video diffusion model。本站读法：这张图支撑 causal 门槛，也就是视频世界模型必须避免未来帧泄漏；它不证明 CausVid 本身已经具备动作交互和长期记忆。</small>
 
-!!! note "为什么 CausVid 被放在 causal 门槛下面"
-    这张图说明的是视频世界模型和普通视频生成模型的第一道分界：未来不能泄漏到过去。bidirectional video diffusion 可以一次性生成整段视频，画质高，但推理时当前帧可能隐式依赖未来帧；交互系统里未来动作还没发生，因此这种依赖会破坏闭环。
+**为什么 CausVid 被放在 causal 门槛下面。**
+这张图说明的是视频世界模型和普通视频生成模型的第一道分界：未来不能泄漏到过去。bidirectional video diffusion 可以一次性生成整段视频，画质高，但推理时当前帧可能隐式依赖未来帧；交互系统里未来动作还没发生，因此这种依赖会破坏闭环。
 
-    CausVid 的意义在于把高质量 bidirectional teacher 改造成 causal student，并用少步蒸馏保证实时性。它不是说所有 video world model 都必须用 CausVid，而是说明一条通用路线：先继承强视频扩散先验，再改成自回归/因果 rollout，最后用 few-step 生成和 KV cache 降低延迟。
+CausVid 的意义在于把高质量 bidirectional teacher 改造成 causal student，并用少步蒸馏保证实时性。它不是说所有 video world model 都必须用 CausVid，而是说明一条通用路线：先继承强视频扩散先验，再改成自回归/因果 rollout，最后用 few-step 生成和 KV cache 降低延迟。
 
 这里涉及三类训练路线：
 
@@ -148,7 +145,7 @@ interactive controllability 是 video world model 的分水岭。文章把它定
 
 ![State-Space Video World Model](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-5-state-space-video-world-model.png){ width="920" }
 
-<small>Figure source: `Towards Video World Models`, Figure 5. 原文图注要点：State-Space Video World Model 将 block-wise SSM scan 与 3D hidden states 结合，用于长期记忆，同时用 local attention 提升视觉细节。</small>
+<small>Figure source: `Towards Video World Models`, Figure 5. 原文图注要点：State-Space Video World Model 将 block-wise SSM scan 与 3D hidden states 结合，用于长期记忆，同时用 local attention 提升视觉细节。本站读法：先看 SSM 负责长程状态，再看 local attention 补局部视觉细节；它说明 persistence 需要固定延迟记忆机制，不是单纯把 context 拉长。</small>
 
 对训练世界模型来说，persistence 不能只看 FVD 或单段视频质量。更直接的评测应该包括：
 
@@ -212,6 +209,8 @@ PhyWorld 这类工作用简单 2D 物理数据评估视频模型的 generalizati
 
 <small>Figure source: `Towards Video World Models`, Figure 8. 原文图注要点：图中把 video world model 的层级画成双头金字塔，强调 real-time responsiveness 与 physical accuracy 之间存在 trade-off，不同应用会选择不同优先级。</small>
 
+**这张层级金字塔图怎么读。**
+
 这个判断很适合指导项目选型：
 
 | 项目目标 | 优先级 |
@@ -231,8 +230,8 @@ PhyWorld 这类工作用简单 2D 物理数据评估视频模型的 generalizati
 
 <small>图源：`Towards Video World Models`，Figure 9。表格要点：该表比较 Simulation Platform、Neural 3D/4D 和 Video World Model 在 Dynamic Physics、3D consistency、Photorealism、Speed 与 Generalizability 上的优劣。</small>
 
-!!! note "图解：三类模拟路线没有谁完全替代谁"
-    这个表的重点是权衡：video world model 在 photorealism 和 generalizability 上有优势，但 3D consistency 和 speed 仍弱；传统仿真平台物理强、可控性好，但泛化和 photorealism 受限；neural 3D/4D 渲染快、3D 一致性更好，但动态物理和开放世界泛化仍难。读这张表时不要把它当排行榜，而要先问任务更需要哪一列：训练机器人接触策略更需要物理，做开放世界视觉想象更需要泛化和真实感，做实时交互又会被速度卡住。
+**这张 simulation approaches 表怎么读。**
+这个表的重点是权衡：video world model 在 photorealism 和 generalizability 上有优势，但 3D consistency 和 speed 仍弱；传统仿真平台物理强、可控性好，但泛化和 photorealism 受限；neural 3D/4D 渲染快、3D 一致性更好，但动态物理和开放世界泛化仍难。读这张表时不要把它当排行榜，而要先问任务更需要哪一列：训练机器人接触策略更需要物理，做开放世界视觉想象更需要泛化和真实感，做实时交互又会被速度卡住。
 
 因此短期更现实的方向可能是 hybrid system：
 
@@ -282,9 +281,6 @@ WonderPlay 这类方向就是把物理仿真、3D Gaussian 表示和视频扩散
 第五，物理能力需要任务化评测。对机器人和自动驾驶来说，真正重要的是接触、碰撞、遮挡、风险和 OOD 事件，而不是平均视频质量。
 
 ## 诊断实验应该怎么设计
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 这篇文章不是实证论文，但它给出了很好的实验设计框架。要判断一个视频生成器是否接近 video world model，可以把五个门槛分别转成 stress test。
 

@@ -2,7 +2,6 @@
 
 很多 kernel 项目最难的阶段，不是把第一版做快，而是把它长期维持在“正确、快、可升级”的状态。一个高性能算子如果没有测试、性能回归和版本维护机制，最终很容易退化成：
 
-
 1. 只在作者机器上能跑；
 2. 一升级框架就坏；
 3. 新 GPU 一上来性能掉很多；
@@ -11,20 +10,7 @@
 
 因此算子工程真正成熟的标志，不只是 benchmark 高，而是维护体系完整。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 正确性测试至少要覆盖什么
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 一个较可靠的 kernel 测试通常要覆盖：
 
@@ -118,7 +104,7 @@ kernel 的回归矩阵不应只覆盖“当前最热的一组 shape”。模型�
 
 可以把 kernel 维护想成赛车保养。第一次跑出好成绩，只说明车那一场状态很好；真正难的是每次比赛前都能确认引擎、轮胎、底盘和传感器仍在正常区间，并在换赛道、换天气、换零件后还能稳定发挥。高性能算子也是一样，真正稀缺的不是偶然跑得快，而是持续跑得对、跑得稳。
 
-## 本页结论
+## 阅读结论
 
 Kernel 测试、回归与维护，是高性能算子真正进入生产系统的最后一道门槛。没有这层机制，再快的 kernel 也很难长期成为系统资产；有了它，算子优化才会从“个人技巧”变成“团队能力”和“可持续基础设施”。
 

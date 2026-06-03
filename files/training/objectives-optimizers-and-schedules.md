@@ -209,6 +209,6 @@ LR schedule 必须和 effective batch、数据阶段、loss 切换、gradient cl
 - [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101)：理解 AdamW 为什么要解耦 weight decay。
 - [Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)：建立优化地形的直觉。
 
-## 本页结论
+## 阅读结论
 
 训练配置不是一堆默认项。目标函数决定模型被什么信号推动，优化器决定梯度怎样变成更新方向，学习率日程决定这条路径什么时候大步探索、什么时候小步收敛。真正的训练调参不是问“哪个 loss/optimizer 最好”，而是问每个训练压力是否对准任务价值、是否被正确放大、是否被稳定项压住，以及是否在关键能力桶上带来真实收益。

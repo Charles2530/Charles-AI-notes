@@ -48,9 +48,11 @@ NOTE_RE = re.compile(
     r"[^\"'\n]*(图解|怎么读|读图|支撑什么判断|这张算法图|解释框|初学者先抓住|符号解释|公式解释|为什么|关键|差别|怎么看|工程点|重点)"
 )
 PROSE_NOTE_RE = re.compile(
-    r"(原图在说什么|初学者怎么看|容易误读|本教程读法|这张图有两个读法|这张图分|读这张图|"
+    r"(图解：|图解|怎么读|怎么看|原图在说什么|初学者怎么看|容易误读|本教程读法|这张图有两个读法|这张图分|读这张图|"
     r"这张图支撑|这张图就是|图里的重点|图中几个数字|可以拆成三个结论|本站用它|"
-    r"本站用这张图|原图表达|原图展示|用它说明|用它解释)"
+    r"本站用这张图|原图表达|原图展示|原图意图|原图比较|原图对比|原图概览|"
+    r"原论文图意|原论文图注|原报告图意|原报告图注|原 README 图意|README 图意|项目页图意|官方图意|博客截图意|"
+    r"本站读法|正文读法|这一页的读法|读法：|用它说明|用它解释)"
 )
 REMOTE_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 SVG_SIZE_RE = re.compile(
@@ -477,7 +479,7 @@ def analyze_refs(audit: Audit) -> None:
                     "medium",
                     "complex-without-note",
                     ref.resolved.as_posix(),
-                    "complex figure should have a nearby 图解/怎么读 explanation box",
+                    "complex figure should have a nearby prose explanation or caption reading guide",
                     page=ref.page,
                     line=ref.line,
                     image=ref.resolved,

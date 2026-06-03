@@ -1,129 +1,124 @@
 # GPU 互联与拓扑映射
 
-很多大模型系统瓶颈并不是某个 kernel 写得不够好，而是并行策略和物理拓扑映射错位了。你可以拥有很强的 GPU、很快的单卡 kernel、很成熟的并行框架，但如果：
+大模型系统的很多瓶颈不是单卡 kernel 慢，而是通信路径选错。你可以有很强的 GPU、很快的 GEMM、很成熟的并行框架，但如果张量并行跨了慢链路，MoE token all-to-all 穿过拥塞网络，或者 GPU 到 NIC 走了错误 NUMA 域，端到端吞吐仍然会塌。
 
+## 核心问题
 
-1. 高频通信被放到最慢链路上；
-2. TP 跨了不该跨的节点；
-3. MoE expert 分布和网络拓扑错位；
-4. prefill / decode 资源池和机器结构不匹配；
+并行训练和推理把一个模型拆到多张 GPU 上。拆开以后，计算省下来的时间必须和通信增加的时间比较：
 
-整体性能仍然会很差。  
-因此 GPU 互联和拓扑映射，应该被视为算子与系统之间的一层关键现实约束。
+\[
+T_{\text{step}} \approx T_{\text{compute}} + T_{\text{comm}} + T_{\text{sync}} + T_{\text{bubble}}
+\]
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
+其中 \(T_{\text{comm}}\) 可以先粗略读成：
 
-## 为什么拓扑会决定上限
+\[
+T_{\text{comm}} \approx \alpha + \frac{\text{bytes}}{\text{effective bandwidth}}
+\]
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
->
-> 延伸阅读：[05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html)
+\(\alpha\) 是延迟和调度开销，\(\text{bytes}\) 是要传的数据量，effective bandwidth 是真实可用带宽，不是宣传页里的峰值。拓扑映射就是在问：哪些通信最频繁、最细粒度、最在关键路径上，它们应该放到哪条链路上？
 
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html) |
-| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
+![GH100 GPU block diagram](../assets/images/paper-deep-dives/foundations/gpu-utilization-misleading/figure-1-gh100-sms.png){ width="860" }
 
-分布式系统的很多时间开销，本质上都要通过互联来传递：
+<small>图源：[NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)。原图表达 GH100 内部 SM、L2、HBM、NVLink、PCIe 和控制模块的组织。本站用它说明：GPU 不是孤立算力块，节点内高速互联、共享缓存、HBM 控制器和外部网络共同决定多 GPU 系统上限。</small>
 
-1. 梯度同步；
-2. 参数 gather；
-3. TP 中间张量归并；
-4. PP 激活传输；
-5. MoE token all-to-all；
-6. 某些推理路径中的跨卡同步。
+## 节点内和节点间不是一个量级
 
-如果这些流量的路径和拓扑不匹配，再好的算法也无法获得理想吞吐。
+通常节点内链路更快、更稳定，节点间链路更慢、更容易拥塞。节点内可能是 NVLink、NVSwitch 或 PCIe；节点间可能是 InfiniBand、RoCE 或以太网络。不同集群的差别非常大，不能只按 GPU 型号推断。
 
-## 节点内与节点间不是一回事
+| 链路层级 | 典型特点 | 更适合承载 |
+| --- | --- | --- |
+| GPU 内部 HBM / L2 | 带宽最高，但只服务本 GPU | 单卡 kernel、局部 KV、激活。 |
+| 节点内 NVLink / NVSwitch | 高带宽、低延迟、多 GPU 互联 | TP、频繁 all-reduce、跨卡推理分片。 |
+| 节点内 PCIe | 普遍但带宽/延迟不如 NVLink 域 | 较低频通信、Host/GPU 数据交换。 |
+| 节点间 IB / RoCE | 可扩展，但延迟和拥塞更敏感 | DP、PP 边界、跨节点 checkpoint 或粗粒度同步。 |
+| 跨机架网络 | 拓扑层级更多，抖动更明显 | 更外层 DP、异步数据/评测/存储流量。 |
 
-**一个最基本的判断是**：
+这就是为什么“8 卡一组”和“跨两个 4 卡节点”不能简单等价。即使总 GPU 数一样，通信图落到物理链路上以后，性能会完全不同。
 
-1. 节点内通常有更高带宽、更低延迟互联；
-2. 节点间通常更慢、更容易成为瓶颈。
+## TP 为什么通常贴节点内高速互联
 
-这意味着高频、细粒度通信更适合留在节点内，而粗粒度复制或较少同步的维度更适合跨节点扩展。
+张量并行把一个层内的矩阵或 attention head 分到多张 GPU 上。它的特点是通信频繁，而且位于 forward/backward 主路径。Megatron-LM 的 tensor model parallelism 里，线性层切分后需要在某些位置做 all-reduce 或 all-gather；这些同步如果跨慢链路，会直接拖慢每层。
 
-## 为什么 TP 往往优先留在节点内
+因此 TP 通常优先放在节点内 NVLink/NVSwitch 域。一个常见映射是：
 
-**张量并行的特点是**：
+```text
+同一节点内: TP group
+跨节点: DP group
+中间层级: PP group 或外层数据并行
+```
 
-1. 通信频繁；
-2. 位于前向 / 反向主路径；
-3. 粒度细；
-4. 对延迟敏感。
+这不是铁律，但背后的判断稳定：越频繁、越细粒度、越在关键路径上的通信，越应该放在更快、更低延迟的拓扑域里。
 
-因此它通常最适合映射到节点内高速互联域。  
-如果让 TP 跨了慢链路，收益会很容易被通信吃掉。
+## DP 为什么更容易向外扩展
 
-## DP 为什么更适合向外扩展
+数据并行让每个 rank 拥有模型副本或 ZeRO 分片，通信多发生在梯度、参数或 optimizer state 同步阶段。它的通信量也很大，但更容易 bucket、overlap，也更适合作为跨节点扩展的外层维度。
 
-数据并行虽然通信量也大，但：
+以 ring all-reduce 的粗略通信量看，每个 rank 需要发送和接收接近：
 
-1. 通信更粗粒度；
-2. 更容易通过 bucket 和 overlap 隐藏；
-3. 在很多系统里更适合横向扩展到更多节点。
+\[
+2 \cdot \frac{p-1}{p} \cdot \text{bytes}
+\]
 
-这也是为什么很多大模型训练会把：
+这里 \(p\) 是参与 rank 数。rank 越多，总网络压力越大；但如果通信能和 backward overlap，或者 ZeRO 把状态分片，实际感知开销会比裸公式更复杂。重点不是背这个系数，而是知道：DP 可以扩展，但网络和 overlap 能力会决定它能扩到哪里。
 
-1. TP 放在内层；
-2. PP 放在中层；
-3. DP 放在更外层。
+## PP 的问题是带宽，也是 bubble
 
-## 拓扑映射和 MoE 的关系
+流水线并行把模型层分成多个 stage。它传的是 stage 边界激活和梯度，不像 TP 那样每层都全局通信，但会引入 pipeline bubble。拓扑映射时要同时看两件事：stage 之间激活是不是走慢链路，micro-batch 数是否足够隐藏 bubble。
 
-MoE 里专家分布如果和互联结构不匹配，就会出现：
+如果 PP stage 跨节点，最好让相邻 stage 的通信路径稳定且带宽足够；如果某个 stage 本身算得慢，还会形成 straggler。拓扑映射和层切分需要一起看，不是先平均分层再祈祷通信没事。
 
-1. 热门 expert 跨慢链路集中；
-2. token all-to-all 被放大；
-3. 负载均衡和网络热点一起出现。
+## MoE 的 all-to-all 最容易制造网络热点
 
-因此 expert placement 本质上同时是：
+MoE 把 token 路由到不同 expert。训练和推理时，token 可能要从一个 GPU 发送到另一个 GPU 上的 expert，再把结果发回来。这个 all-to-all 很容易制造三类问题：
 
-1. 路由问题；
-2. 负载均衡问题；
-3. 拓扑映射问题。
+| 问题 | 结果 |
+| --- | --- |
+| 热门 expert 集中在某个拓扑域外 | 大量 token 跨慢链路。 |
+| 路由负载不均 | 某些 GPU 和链路过热，其他 GPU 空闲。 |
+| expert placement 不看网络 | 模型层面负载均衡了，系统层面仍拥塞。 |
 
-## 推理服务系统里为什么也要关心拓扑
+所以 MoE placement 不是单纯把 expert 平均放到 GPU 上。它同时是路由、负载均衡和拓扑映射问题。看 MoE benchmark 时，要问 token all-to-all 是否跨节点、是否跨机架、是否有 expert 热点，以及通信时间是否被 overlap 掩盖。
 
-在线推理虽然不像训练那样每步大规模同步，但仍然会受拓扑影响，例如：
+## 推理服务也会被拓扑影响
 
-1. 张量并行推理；
-2. 多 GPU KV cache 管理；
-3. 多模型共部署；
-4. prefill 和 decode 分池部署；
-5. MoE 推理与 expert placement。
+在线推理不像训练那样每步大规模反向通信，但拓扑仍然重要。TP 推理需要跨卡同步 logits 或中间张量；多 GPU KV cache 会涉及跨卡读写；MoE 推理有 expert dispatch；prefill/decode 分池时，不同池子的 GPU 和网络质量会影响 TTFT 和 P99。
 
-尤其在 tail latency 敏感场景中，跨节点慢链路会被放大得非常明显。
+服务里最容易误判的是只看平均 tokens/s。长 prompt 请求可能把 prefill 压到某组 GPU，短输出请求可能主要受 decode 和 KV 读取影响；如果调度器不知道拓扑，可能把延迟敏感请求放到跨慢链路的资源组上。
 
-### 6.1 最小拓扑排查口径
+更稳的做法是把拓扑标签进入调度和实验记录：
 
-排查拓扑问题时，先把物理图画出来：GPU 到 GPU 是 NVLink、NVSwitch 还是 PCIe，GPU 到 NIC 是否跨 NUMA，节点间是否经过同一层交换。随后用 NCCL / RCCL 基准分别测节点内、节点间、跨机架的带宽和延迟，再把 TP、PP、DP、MoE all-to-all 的进程组贴到这张图上。
+```text
+node_id, rack_id, gpu_id, nvlink_domain, nic_id, numa_domain, tp_group, pp_stage, dp_group
+```
 
-如果端到端变慢但单卡 kernel 没退化，优先看通信是否跨了错误拓扑域、某个节点是否链路降级、进程绑核是否跑到远端 NUMA、以及故障节点是否仍在承载高频通信。很多“kernel 变慢”的问题，最后其实是数据走错了路。
+这样当同一个模型在不同节点池表现不一致时，团队能先查物理映射，而不是误以为模型、kernel 或 batch 设置变了。
 
-服务场景还要注意资源池划分。prefill 通常更吃计算和长序列 attention，decode 更吃 KV 读取、批调度和尾延迟；如果两者混在同一组拓扑质量参差不齐的机器上，调度器可能把最敏感的请求放到最差链路上。拓扑信息最好进入调度标签，而不是只停留在部署文档里。
+## 怎么排查拓扑问题
 
-## 直觉例子
+排查顺序不要从改并行配置开始，而是先画图：
 
-拓扑映射就像城市道路规划。不是有很多车道就一定快，关键在于哪条路承载哪种车流。如果把最频繁的短途通勤全都导到跨城高速，再好的车也会堵；如果把重型货运和本地配送混在同一条窄路上，整个物流系统都会失衡。GPU 互联也是一样，系统真正快不快，很大程度上取决于数据流是否走在适合它的路径上。
+1. 画物理拓扑：GPU 到 GPU 是 NVLink、NVSwitch 还是 PCIe，GPU 到 NIC 是否跨 NUMA，节点间是否同机架。
+2. 跑分层通信基准：节点内、跨节点、跨机架分别测 all-reduce、all-to-all、point-to-point。
+3. 贴上进程组：把 TP、PP、DP、MoE expert group 映射到物理图上。
+4. 对照 trace：看通信时间、straggler、链路拥塞、CPU/NIC/GPU 等待。
+5. 做故障演练：降级节点、链路抖动、替换机型后重新验证映射。
 
-## 本页结论
+如果单卡 kernel 没退化，但端到端变慢，优先查通信是不是跨了错误拓扑域、NCCL 是否选了次优路径、某个 NIC 是否过热、进程绑核是否跑到远端 NUMA、机架网络是否拥塞。
 
-GPU 互联与拓扑映射不是部署细节，而是决定分布式训练与推理上限的基础条件。理解它，才能真正明白为什么同样的 `DP/TP/PP/MoE` 配置，在不同机器结构上会表现出完全不同的效率，也才能在系统设计阶段就避免很多后面无法靠“再写快一点的 kernel”弥补的问题。
+## 常见误解
 
-## 工程收束
+| 误解 | 更准确的说法 |
+| --- | --- |
+| GPU 数一样，性能就应该接近 | 拓扑不同，通信路径和拥塞完全不同。 |
+| TP/PP/DP 配置只和模型大小有关 | 配置必须贴合物理链路，尤其是 TP 和 MoE。 |
+| 理论带宽够就没问题 | effective bandwidth、延迟、拥塞、NCCL 路径和 overlap 都会改变结果。 |
+| 拓扑只是部署细节 | 它会直接改变训练成本、推理 P99 和并行策略上限。 |
 
-GPU 互联要把 NVLink / NVSwitch、PCIe、IB、机架层级和路由对称性一起看。最容易误判的是把通信问题当作算力问题、进程组映射不看物理拓扑、只看理论带宽；上线前应先画拓扑图，分层记录通信基准，让 TP / PP / DP 各自贴合最快链路，并支持故障节点降权。
+## 外部精读
 
-拓扑信息最好进入调度和实验记录，而不是只存在于集群文档。否则同一个并行配置在不同节点池里表现不一致时，团队很容易把问题误归因到模型、kernel 或 batch 设置。
-
-对大规模训练和高并发推理来说，拓扑漂移往往不是小噪声，而是能直接改变成本曲线的系统变量。
-
-因此拓扑基准应像模型评测一样周期性重跑，尤其在扩容、换机型和网络维护之后。
-
-否则旧拓扑假设会悄悄失效。
-
-调度也会随之变差。
+- [NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)：理解 H100/GH100 的 NVLink、HBM、L2 和 SM 组织。
+- [NVIDIA NCCL documentation](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/)：查 collective、拓扑检测、环境变量和调试方法。
+- [NCCL Tests](https://github.com/NVIDIA/nccl-tests)：节点内/节点间 all-reduce、all-to-all 和 point-to-point 基准入口。
+- [Megatron-LM paper](https://arxiv.org/abs/1909.08053)：理解 tensor model parallelism 为什么通信频繁。
+- [DeepSpeed ZeRO](https://arxiv.org/abs/1910.02054)：理解数据并行状态分片和通信/显存权衡。

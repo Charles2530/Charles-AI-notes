@@ -6,7 +6,6 @@ paper_topic: 技术报告
 
 # DeepSeek-V3：671B MoE、MLA 与 FP8 训练
 
-
 DeepSeek-V3 最值得拆开的地方不是单个 benchmark 分数，而是它把四件事做成了一个闭环：**用 MoE 扩大总参数，用 MLA 和路由设计压低每 token 成本，用 FP8 与 DualPipe 把训练系统跑稳，再用 SFT、RL 和 R1 蒸馏把 base model 转成可用的 chat model。**
 
 | Dimension | DeepSeek-V3 |
@@ -20,8 +19,8 @@ DeepSeek-V3 最值得拆开的地方不是单个 benchmark 分数，而是它把
 | Main Architecture | Multi-head Latent Attention, DeepSeekMoE |
 | Main Training Tricks | auxiliary-loss-free load balancing, MTP, FP8 mixed precision, DualPipe |
 
-!!! warning "阅读边界"
-    这是一份模型技术报告，里面的训练成本、稳定性、benchmark、数据处理和系统效率都应按作者自述来理解。它很适合学习大模型工程设计，但不能等同于第三方复现实验。
+**阅读边界。**
+这是一份模型技术报告，里面的训练成本、稳定性、benchmark、数据处理和系统效率都应按作者自述来理解。它很适合学习大模型工程设计，但不能等同于第三方复现实验。
 
 ## 论文位置
 
@@ -42,10 +41,10 @@ DeepSeek-V2 的 MLA + DeepSeekMoE
 
 <small>图源：`DeepSeek-V3 Technical Report`，Figure 1。原论文图意：比较 DeepSeek-V3 与开源、闭源模型在知识、代码、数学、中文和长上下文等 benchmark 上的表现。</small>
 
-!!! note "Figure 1 怎么读"
-    这张图是能力展示，不是机制解释。更重要的问题是：为什么一个 37B activated MoE 能在很多任务上接近更大 dense model？后面的架构、路由、训练系统和后训练才是答案。
+**Figure 1 怎么读。**
+这张图是能力展示，不是机制解释。更重要的问题是：为什么一个 37B activated MoE 能在很多任务上接近更大 dense model？后面的架构、路由、训练系统和后训练才是答案。
 
-    初学者不要只记“V3 分数高”，而要记住这个系统目标：在不让每 token 计算爆炸的前提下，把总参数、训练 token、数据质量和后训练闭环一起放大。
+初学者不要只记“V3 分数高”，而要记住这个系统目标：在不让每 token 计算爆炸的前提下，把总参数、训练 token、数据质量和后训练闭环一起放大。
 
 ## 总体架构
 
@@ -64,10 +63,10 @@ DeepSeek-V3 仍是 Transformer block 堆叠，但 attention 和 FFN 都做了工
 
 <small>图源：`DeepSeek-V3 Technical Report`，Figure 2。原论文图意：DeepSeek-V3 的基本架构由 Transformer blocks 组成，attention 采用 MLA，FFN 采用 DeepSeekMoE；MLA 只缓存压缩 latent 与 RoPE key，MoE 由 shared experts 和 routed experts 组成。</small>
 
-!!! note "这张架构图怎么读"
-    左边是普通 Transformer block 的大形状：attention、RMSNorm、FFN、residual。真正的变化在右边两个放大框。
+**这张架构图怎么读。**
+左边是普通 Transformer block 的大形状：attention、RMSNorm、FFN、residual。真正的变化在右边两个放大框。
 
-    下方 MLA 的重点是“推理时不缓存完整 K/V”。它把 key/value 先压到 latent，再在计算 attention 时展开。这样 KV cache 存储从每层每 token 的完整多头 K/V，变成压缩 latent 加少量 RoPE key。上方 DeepSeekMoE 的重点是“容量和计算分离”。shared experts 每个 token 都可用，routed experts 由 router 选 Top-K，模型总参数很大，但每 token 只走少数专家。
+下方 MLA 的重点是“推理时不缓存完整 K/V”。它把 key/value 先压到 latent，再在计算 attention 时展开。这样 KV cache 存储从每层每 token 的完整多头 K/V，变成压缩 latent 加少量 RoPE key。上方 DeepSeekMoE 的重点是“容量和计算分离”。shared experts 每个 token 都可用，routed experts 由 router 选 Top-K，模型总参数很大，但每 token 只走少数专家。
 
 ## MLA：为什么 KV cache 能降下来
 
@@ -76,7 +75,6 @@ DeepSeek-V3 仍是 Transformer block 堆叠，但 attention 和 FFN 都做了工
 $$
 \mathbf{c}_{t}^{KV}=W^{DKV}\mathbf{h}_t
 $$
-
 
 生成时主要缓存 \(\mathbf{c}_{t}^{KV}\) 和带 RoPE 位置信息的 \(\mathbf{k}_{t}^{R}\)，真正参与 attention 的 \(\mathbf{k}^{C}\)、\(\mathbf{v}^{C}\) 可以从 latent 上投影出来。直观上，它不是把历史 token 删掉，而是把每个 token 的 K/V 表示换成更紧凑的存储格式。
 
@@ -88,17 +86,6 @@ MLA 对 V3 有两个作用：
 这也是 DeepSeek 系列后续技术报告继续围绕 attention 和 cache 做文章的原因。MoE 解决“模型容量和激活计算”的矛盾，MLA 解决“长上下文和 KV cache”的矛盾。
 
 ## DeepSeekMoE：容量、路由与负载均衡
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
->
-> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
-| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
 
 DeepSeekMoE 的 FFN 输出由 shared experts 与 routed experts 共同构成。shared experts 处理通用模式，routed experts 处理被 router 分配到的 token。V3 的具体规模是：
 
@@ -146,10 +133,10 @@ V3 仍然保留了一个极小的 sequence-wise balance loss，目的是防止�
 
 <small>图源：`DeepSeek-V3 Technical Report`，Figure 7。原论文图意：比较 auxiliary-loss-free 与 auxiliary-loss-based 模型在 Pile test set 不同 domain 上的 expert load，前者表现出更强专家专门化。</small>
 
-!!! note "为什么 expert specialization 重要"
-    如果所有 expert 被辅助 loss 拉得过于平均，路由可能更像机械分摊计算，而不是让不同 expert 学到不同数据模式。V3 的目标是同时保住 batch 级负载均衡和专家分工。
+**为什么 expert specialization 重要。**
+如果所有 expert 被辅助 loss 拉得过于平均，路由可能更像机械分摊计算，而不是让不同 expert 学到不同数据模式。V3 的目标是同时保住 batch 级负载均衡和专家分工。
 
-    这里的 trade-off 很典型：系统希望每张卡负载平衡，模型希望 expert 可以自由专门化。auxiliary-loss-free bias 是把系统约束从 loss 里移出来，用路由层面的动态调节解决。
+这里的 trade-off 很典型：系统希望每张卡负载平衡，模型希望 expert 可以自由专门化。auxiliary-loss-free bias 是把系统约束从 loss 里移出来，用路由层面的动态调节解决。
 
 ## MTP：让模型多看一步未来
 
@@ -159,17 +146,16 @@ V3 仍然保留了一个极小的 sequence-wise balance loss，目的是防止�
 
 <small>图源：`DeepSeek-V3 Technical Report`，Figure 3。原论文图意：DeepSeek-V3 使用顺序式 MTP module，对每个位置保留完整 causal chain，并共享 embedding 与 output head。</small>
 
-!!! note "Figure 3 怎么读"
-    图里不是简单地给主干接多个平行分类头。V3 的 MTP module 是顺序式的：第 \(k\) 个深度会把上一深度的 hidden state 和未来 token embedding 拼接，再经过一个 Transformer block 得到当前深度的表示。
+**Figure 3 怎么读。**
+图里不是简单地给主干接多个平行分类头。V3 的 MTP module 是顺序式的：第 \(k\) 个深度会把上一深度的 hidden state 和未来 token embedding 拼接，再经过一个 Transformer block 得到当前深度的表示。
 
-    这个设计有两个目的。第一，训练时给每个位置更密集的未来监督，让表示不仅服务于下一个 token，也提前组织对后续 token 有用的信息。第二，推理时主模型可以直接丢弃 MTP module，不增加常规推理成本；也可以把 MTP module 当成 draft 结构，用于 speculative decoding。
+这个设计有两个目的。第一，训练时给每个位置更密集的未来监督，让表示不仅服务于下一个 token，也提前组织对后续 token 有用的信息。第二，推理时主模型可以直接丢弃 MTP module，不增加常规推理成本；也可以把 MTP module 当成 draft 结构，用于 speculative decoding。
 
 MTP 的训练目标是：
 
 $$
 \mathcal{L}_{\text{MTP}}=\frac{\lambda}{D}\sum_{k=1}^{D}\mathcal{L}_{\text{MTP}}^k
 $$
-
 
 V3 报告还做了消融，说明 MTP 在小 MoE 和大 MoE 上多数 benchmark 有提升。注意这类消融的关键是：推理时 MTP module 被丢弃，所以对比模型的 inference activated params 一样。
 
@@ -206,10 +192,10 @@ MoE 训练的系统瓶颈通常不在单个矩阵乘本身，而在 token 被路
 
 <small>图源：`DeepSeek-V3 Technical Report`，Figure 4。原论文图意：把 forward chunk 和 backward chunk 内部的 attention、all-to-all dispatch、MLP、all-to-all combine、PP communication 重排，使 all-to-all 和 PP 通信尽量被计算隐藏。</small>
 
-!!! note "通信为什么能被隐藏"
-    MoE 的一个 token 要先 dispatch 到 expert，再 combine 回来。V3 把 forward 和 backward 的计算块拆得更细，并让某些通信和相邻计算同时发生。这样通信仍然存在，但 wall-clock 上不再完全串行暴露。
+**通信为什么能被隐藏。**
+MoE 的一个 token 要先 dispatch 到 expert，再 combine 回来。V3 把 forward 和 backward 的计算块拆得更细，并让某些通信和相邻计算同时发生。这样通信仍然存在，但 wall-clock 上不再完全串行暴露。
 
-    这不是纯算法技巧，而是算法、kernel 和并行策略一起做的结果。报告还提到自定义 cross-node all-to-all kernels，按 IB 和 NVLink 的带宽差异组织数据流，并控制用于通信的 SM 数量。
+这不是纯算法技巧，而是算法、kernel 和并行策略一起做的结果。报告还提到自定义 cross-node all-to-all kernels，按 IB 和 NVLink 的带宽差异组织数据流，并控制用于通信的 SM 数量。
 
 DualPipe 是这套系统里的 pipeline scheduling 算法。它从 pipeline 两端同时喂 micro-batches，用双向 pipeline 减少 bubble，并把 forward/backward 中的通信与计算互相重叠。
 
@@ -261,10 +247,10 @@ FP8 的主要风险来自 outlier。一个 tensor 里只要有少数极大值，
 
 <small>图源：`DeepSeek-V3 Technical Report`，Figure 7。原论文图意：左侧展示 activation tile-wise 与 weight block-wise 细粒度量化；右侧展示每隔 \(N_C=128\) 个元素把 FP8 Tensor Core 中间结果提升到 CUDA Cores 做高精度累加。</small>
 
-!!! note "为什么 \(N_C=128\) 很关键"
-    H800 上 FP8 Tensor Core 累加精度有限。报告指出，如果只靠默认 FP8 GEMM 累加，大 K 维矩阵乘会出现明显误差。V3 的补丁是每隔 128 个乘加把部分结果提升到 CUDA Cores，用 FP32 寄存器继续累加。
+**为什么 \(N_C=128\) 很关键。**
+H800 上 FP8 Tensor Core 累加精度有限。报告指出，如果只靠默认 FP8 GEMM 累加，大 K 维矩阵乘会出现明显误差。V3 的补丁是每隔 128 个乘加把部分结果提升到 CUDA Cores，用 FP32 寄存器继续累加。
 
-    这相当于承认 FP8 的吞吐很有吸引力，但硬件默认累加还不够稳。V3 用更细粒度 scale 加更高精度累加，让低精度训练在 671B MoE 上可用。
+这相当于承认 FP8 的吞吐很有吸引力，但硬件默认累加还不够稳。V3 用更细粒度 scale 加更高精度累加，让低精度训练在 671B MoE 上可用。
 
 FP8 还被用于降低 MoE 通信成本。V3 会在 MoE up-projection 前把 activation 量化成 FP8 后再 dispatch，并对 MoE down-projection 前的 activation gradient 做类似处理；但 forward/backward combine 仍保留 BF16，以保护关键路径精度。
 
@@ -303,10 +289,10 @@ V3 的预训练语料为 14.8T tokens。相比 V2，报告强调增强数学与�
 
 <small>图源：`DeepSeek-V3 Technical Report`，Figure 8。原论文图意：DeepSeek-V3 在 Needle In A Haystack 测试中，在最高 128K 的上下文窗口内保持较好检索表现。</small>
 
-!!! note "长上下文扩展为什么要分阶段"
-    直接用 128K 从头训练成本很高，而且并不是所有语言能力都需要超长上下文来学习。V3 的做法是先用 4K 高效学习主体语言能力，再用少量 steps 做位置编码和长上下文适配。
+**长上下文扩展为什么要分阶段。**
+直接用 128K 从头训练成本很高，而且并不是所有语言能力都需要超长上下文来学习。V3 的做法是先用 4K 高效学习主体语言能力，再用少量 steps 做位置编码和长上下文适配。
 
-    YaRN 只应用在 MLA 中 decoupled shared key \(\mathbf{k}_t^R\) 上，这和 MLA 架构有关：位置信息主要由这部分 key 承载，因此长上下文扩展可以更集中地处理位置外推问题。
+YaRN 只应用在 MLA 中 decoupled shared key \(\mathbf{k}_t^R\) 上，这和 MLA 架构有关：位置信息主要由这部分 key 承载，因此长上下文扩展可以更集中地处理位置外推问题。
 
 ## 后训练：SFT、RL 与 R1 reasoning distillation
 
@@ -354,7 +340,6 @@ $$
 A_i=\frac{r_i-\operatorname{mean}(\{r_1,\ldots,r_G\})}{\operatorname{std}(\{r_1,\ldots,r_G\})}
 $$
 
-
 直观上，GRPO 问的是：“同一道题的一组回答里，哪一个相对更好？”这比训练一个全局 value model 更省系统成本，尤其适合超大 MoE policy。V3 的 RL prompts 覆盖 coding、math、writing、role-playing 和 QA，所以它不是只做推理 RL，也包含通用偏好对齐。
 
 和 DeepSeek-R1 相比，V3 后训练的目标更接近通用 chat model：
@@ -391,9 +376,6 @@ V3 报告最受关注的一张表是训练成本。按作者假设的 H800 租�
 报告还给出一个工程尺度感：预训练阶段每 1T tokens 约需 180K H800 GPU hours，在 2048 H800 集群上约 3.7 天。
 
 ## Evaluation：看能力，也看短板
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 V3-Base 的主要优势在代码、数学、多语和若干英文知识任务。下面只摘几个能体现报告结论的行，表头和指标保持英文：
 
@@ -438,4 +420,4 @@ DeepSeek-V3 给训练项目的启发可以压成几条：
 
 更准确地说，DeepSeek-V3 的价值在于展示了一个大模型系统的完整工程形态：**模型结构决定可扩展性，训练系统决定能不能按成本跑完，后训练决定 base model 能不能变成可靠产品模型。**
 
-这一页最后回到三个验收点：方法上，DeepSeek-V3 的系统接口是 MLA 降 KV、DeepSeekMoE 降 active params、MTP 改训练信号、DualPipe/FP8 降训练成本。实验上，benchmark、needle、expert load 和 overlap 图分别对应能力、长上下文、路由均衡和系统吞吐。诊断上，报告最重要的消融不是单点分数，而是 MoE 路由、FP8 稳定和通信重叠能否同时成立。
+DeepSeek-V3 的系统接口要按共设计读：MLA 降 KV，DeepSeekMoE 降 active params，MTP 改训练信号，DualPipe/FP8 降训练成本。benchmark、needle、expert load 和 overlap 图分别对应能力、长上下文、路由均衡和系统吞吐；最重要的不是单点分数，而是 MoE 路由、FP8 稳定和通信重叠能否同时成立。

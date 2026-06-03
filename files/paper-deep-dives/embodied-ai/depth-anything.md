@@ -1,357 +1,149 @@
 ---
-paper_date: 2024-01
-paper_title: "Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data"
-paper_topic: 具身智能
+title: Depth Anything：无标注图像怎样变成单目深度基础模型
 ---
 
-# Depth Anything：大规模无标注数据释放单目深度
+# Depth Anything：无标注图像怎样变成单目深度基础模型
 
+Depth Anything 的核心贡献很朴素，也很容易被讲浅：它没有靠复杂新结构取胜，而是把单目深度估计的瓶颈重新放回数据覆盖上。论文问的是：**如果真实深度标签很贵，能不能用大量无标注图像把深度模型训练成更强的视觉基础模型？**
 
-Depth Anything 放在具身智能专题里，是因为它补的是机器人闭环里最常被低估的一层：**从普通 RGB 图像得到开放域、 dense、可复用的相对深度先验**。它不直接输出动作，也不替代 RGB-D 或标定，但它能让 VLA、抓取、导航、重建、数据质检和仿真资产流程拥有更强的几何输入。
+答案不是“把 pseudo label 加进去就行”。普通 self-training 很可能只让 student 模仿 teacher 已经会的东西。Depth Anything 真正关键的是两步：让无标注图像经过强扰动，迫使 student 学到更鲁棒的视觉知识；再用 DINOv2 feature alignment 保住语义表征，避免深度训练把通用视觉能力洗掉。
 
-这篇论文的主张很清楚：单目深度基础模型的瓶颈不只在结构，而在数据覆盖。作者没有设计一个复杂新架构，而是把训练数据从 1.5M labeled images 扩到 62M unlabeled images，并用 teacher-student、自训练强扰动和 DINOv2 feature alignment 让这些无标注图像真正产生增益。
+## 一句话核心
 
-## 它的效率贡献是什么
+Depth Anything 训练的是一个相对深度函数：
 
-| 维度 | 贡献 |
-| --- | --- |
-| 节省的成本 | 不再依赖大规模人工深度标注、LiDAR、stereo matching 或 SfM；先用 1.5M labeled images 训练 teacher，再自动给 62M unlabeled images 生成 dense pseudo depth labels |
-| 核心机制 | DINOv2 encoder + DPT decoder、affine-invariant depth loss、teacher-student self-training、strong perturbation、CutMix、DINOv2 feature alignment |
-| 对具身主线的意义 | 给机器人视觉状态、VLA 视觉编码、几何规划、仿真资产检查和数据回流提供开放域单目深度底座 |
-| 主要风险 | 基础模型输出主要是相对深度，不天然给厘米级绝对距离；单目先验仍可能在新相机、罕见物体、反光透明表面和尺度错觉中失真 |
-| 应接到本站哪里 | [相机、深度与机器人视觉](../../embodied-ai/cameras-depth-and-robot-vision.md)、[Depth Anything V2](depth-anything-v2.md)、[Depth Anything 3](depth-anything-3.md) |
+\[
+\hat{d}=f_\theta(I)
+\]
 
-## 论文位置
-
-在 DA1 之前，MiDaS 已经证明了多数据集训练和 affine-invariant loss 能带来不错的 zero-shot relative depth。但 MiDaS 的数据覆盖有限，而且很多深度数据来自 stereo、LiDAR 或重建流程，采集和标注成本高，覆盖面也不够开放。
-
-Depth Anything 选择了另一条路线：
-
-```text
-1.5M labeled images
-  -> train a strong MDE teacher
-  -> pseudo-label 62M unlabeled images
-  -> retrain a student on labeled + pseudo-labeled data
-  -> add hard perturbations and semantic feature alignment
-```
-
-这里最重要的不是“无标注数据更多”，而是作者发现：**如果只是把 labeled 和 pseudo-labeled images 简单混起来，模型并不会明显变好**。原因是 teacher 和 student 架构、预训练权重接近，学生很容易只复制 teacher 已经会的东西。DA1 的关键补丁，是在学习无标注图像时给 student 更难的优化目标，让它从同一张图里学到额外不变性和语义结构。
+其中 \(I\) 是单张 RGB 图像，\(\hat{d}\) 是每个像素的相对深度。这里的“相对”很重要：基础模型默认不保证真实米制尺度；它输出的是跨场景更稳的深度排序和几何形状。后续如果需要 metric depth，需要在 NYUv2、KITTI 这类带尺度标签的数据上再 fine-tune。
 
 ![Depth Anything teaser 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything/figure-1-teaser.png){ width="920" }
 
-<small>图源：`Depth Anything`，Figure 1。原论文图意：Depth Anything 在 COCO、SA-1B hold-out 和作者自采图像等未见场景中展示深度泛化，覆盖低光、复杂多人场景、雾天城市和超远距离建筑。</small>
+<small>图源：`Depth Anything`，Figure 1。原图表达模型在未见场景中的泛化，包括低光、复杂多人、雾天城市和远距离建筑。本站读法：先看场景覆盖，而不是只看 benchmark 平均分。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是大规模无标注图像和少量深度监督，输出是单目深度预测。  
-    **效率机制**：用伪标签和数据规模提升几何感知的样本效率。  
-    **对主线意义**：深度可作为具身/world model 的几何状态层。  
-    **不能证明什么**：单目深度精度不能证明接触动力学、动作策略或闭环成功。
+## 为什么单目深度特别吃数据覆盖
 
-## 数据引擎
+单目深度没有双目几何的视差约束，也没有激光雷达的真实距离观测。模型必须从纹理、物体大小、透视、遮挡、地平线、语义类别等线索推断深度。这些线索高度依赖数据分布：室内、街景、森林、透明物体、低光、远景建筑都会给模型不同的捷径。
 
-论文把数据分成两层。
+这就是为什么 Depth Anything 没有把精力放在新 decoder 上。论文的判断是：如果训练数据只覆盖有限场景，再漂亮的结构也会学到有限先验；反过来，大规模、多源、便宜的无标注图像能显著扩展视觉分布。
 
-第一层是 labeled images，用于训练 teacher。它们来自 6 个公开数据集，总量约 1.5M。作者刻意没有使用 KITTI 和 NYUv2 训练集，因为后面要把它们作为 zero-shot evaluation。第二层是 unlabeled images，来自 8 个大规模公开数据源，总量约 62M。它们没有使用原始任务标签，只作为视觉分布覆盖来用。
+论文的数据可以分成两层：
 
-Table 1 is redrawn below with the original English fields.
+- labeled images：约 1.5M，提供高质量相对深度监督。
+- unlabeled images：约 62M，来自道路、地标、通用物体、场景、分割数据和互联网视觉分布。
 
-| Dataset | Indoor | Outdoor | Label | # Images |
-| --- | --- | --- | --- | --- |
-| **Labeled Datasets** |  |  |  |  |
-| BlendedMVS | ✓ | ✓ | Stereo | 115K |
-| DIML | ✓ | ✓ | Stereo | 927K |
-| HRWSI | ✓ | ✓ | Stereo | 20K |
-| IRS | ✓ |  | Stereo | 103K |
-| MegaDepth |  | ✓ | SfM | 128K |
-| TartanAir | ✓ | ✓ | Stereo | 306K |
-| **Unlabeled Datasets** |  |  |  |  |
-| BDD100K |  | ✓ | None | 8.2M |
-| Google Landmarks |  | ✓ | None | 4.1M |
-| ImageNet-21K | ✓ | ✓ | None | 13.1M |
-| LSUN | ✓ |  | None | 9.8M |
-| Objects365 | ✓ | ✓ | None | 1.7M |
-| Open Images V7 | ✓ | ✓ | None | 7.8M |
-| Places365 | ✓ | ✓ | None | 6.5M |
-| SA-1B | ✓ | ✓ | None | 11.1M |
+无标注数据提供广度，有标注数据提供深度任务锚点。Depth Anything 的方法难点，就是让这两类数据在一个训练目标里互相补充，而不是互相污染。
 
-<small>表源：`Depth Anything`，Table 1。原论文表格要点：DA1 使用 1.5M labeled images 和 62M unlabeled images 联合训练；unlabeled sources 覆盖道路、地标、通用物体、场景、分割图像和大规模互联网视觉分布。</small>
+## Teacher-student：无标注图像先要变成可学习目标
 
-这张表对具身智能的启发很直接：如果一个单目深度模型只见过室内 RGB-D 或固定自动驾驶相机，它很容易把“场景先验”误当成“几何能力”。DA1 用 62M 无标注图像补的不是更精确的深度标签，而是更宽的视觉分布。
+对无标注图像 \(I_u\)，teacher model 先生成 pseudo depth：
 
-## 训练总路线
+\[
+\tilde{d}_u = f_{\theta_T}(I_u)
+\]
 
-论文 Figure 2 是整套方法的核心图。
+其中 \(f_{\theta_T}\) 是 teacher，\(\tilde{d}_u\) 是 pseudo label。student 不是简单在原图上拟合它，而是在强扰动后的图像 \(\mathcal{S}(I_u)\) 上预测深度：
+
+\[
+\mathcal{L}_{u}
+=
+\ell_{depth}\left(
+f_{\theta_S}(\mathcal{S}(I_u)), \tilde{d}_u
+\right)
+\]
+
+这里 \(\mathcal{S}\) 表示强扰动，包括颜色变化、模糊、CutMix 等；\(f_{\theta_S}\) 是 student；\(\ell_{depth}\) 是相对深度损失。这个式子的关键是 teacher 看相对干净的图，student 看更难的图。student 要想拟合同一个深度目标，就必须学会忽略扰动，抓住更稳定的形状和语义线索。
 
 ![Depth Anything pipeline 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything/figure-2-pipeline.png){ width="920" }
 
-<small>图源：`Depth Anything`，Figure 2。原论文图意：solid line 表示 labeled image 流程，dotted line 表示 unlabeled image 流程；无标注图像经 teacher 产生 pseudo label，student 在强扰动图像上学习，同时通过 frozen DINOv2 encoder 做 semantic preservation。</small>
+<small>图源：`Depth Anything`，Figure 2。原图表达 labeled image 和 unlabeled image 两条训练流：无标注图像经 teacher 产生 pseudo label，student 在强扰动图像上学习，并通过 frozen DINOv2 做 semantic preservation。本站读法：把 strong perturbation 和 feature alignment 分开看，二者解决的是不同问题。</small>
 
-!!! note "这张图怎么读"
-    上半部分是 labeled image：真实或重建得到的 depth label 监督 teacher / student 的深度输出。下半部分是 unlabeled image：teacher 对 clean image 产生 pseudo label，student 看到的却是经过强颜色扰动或 CutMix 的图像。这个错位是关键，它逼 student 学习对颜色、局部拼接和图像扰动不敏感的深度表征。
+## 为什么普通 self-training 不够
 
-    图中粉色 `semantic preservation` 不是语义分割 head，而是把 student encoder 的特征向 frozen DINOv2 encoder 对齐。DA1 的判断是，离散 segmentation masks 会损失太多语义信息，不如直接保留 DINOv2 连续特征空间里的语义先验。
+如果 student 和 teacher 架构相近、初始化相近，直接用 pseudo label 训练很容易变成“复读 teacher”。student 学到的是 teacher 的输出分布，而不是无标注图像里额外的视觉知识。论文消融显示，单纯加入 pseudo-labeled images 并不稳定，只有加上 strong perturbations 后，才明显提升 zero-shot 深度泛化。
 
-## 模型结构
+可以用一个直觉理解：teacher 给的是“这张图大概哪里远哪里近”；强扰动让 student 面对颜色、纹理和局部拼接被破坏的图像。如果 student 还能恢复同样深度，就说明它不能只依赖浅层外观，而要学习物体边界、空间结构和语义一致性。
 
-DA1 的结构故意保持简单。
+这也是 Depth Anything 相比普通半监督深度更强的地方。它不是把 pseudo label 当廉价真值，而是把无标注图像变成一种视觉鲁棒性训练。
 
-| Component | Depth Anything choice | Why it matters |
-| --- | --- | --- |
-| Encoder | DINOv2 ViT-S / ViT-B / ViT-L | 借用大规模自监督视觉预训练的开放域语义和纹理先验 |
-| Decoder | DPT | 沿用 MiDaS / DPT 系列的 dense depth regression head |
-| Output | relative inverse depth / disparity-like map | 适合跨数据集训练和 zero-shot 相对深度，但不是绝对米制距离 |
-| Model scales | ViT-S 24.8M, ViT-B 97.5M, ViT-L 335.3M | 覆盖轻量部署、质量折中和高质量离线推理 |
+## 相对深度损失：尺度和偏移不能硬对齐
 
-训练前，真实 depth value 会先转成 disparity space：
+不同数据集、不同相机、不同场景的深度尺度不一致。单目相对深度训练通常使用 scale-and-shift invariant 的对齐方式：先把预测和标签在尺度、偏移上对齐，再比较形状误差。
+
+可以把对齐写成：
 
 \[
-d = 1 / t
+\alpha^\*, \beta^\*
+=
+\arg\min_{\alpha,\beta}
+\sum_{i}
+\left(
+\alpha \hat{d}_i + \beta - d_i
+\right)^2
 \]
 
+其中 \(\hat{d}_i\) 是第 \(i\) 个像素的预测深度，\(d_i\) 是标签或 pseudo label，\(\alpha^\*,\beta^\*\) 是最优尺度和偏移。这个公式说明模型训练时更关注深度形状和排序，而不是绝对米制距离；这也是为什么 Depth Anything 基础模型适合做 relative depth，metric depth 需要额外 fine-tuning。
 
-然后每张 depth map 单独归一化到 0 到 1。为了跨数据集训练，DA1 采用 affine-invariant mean absolute error，不要求不同数据源共享同一 scale 和 shift：
+## DINOv2 feature alignment：保住语义，不让深度任务变窄
+
+Depth Anything 使用 DINOv2 initialization。DINOv2 本身有很强的语义和形状表征，如果只用深度目标训练，模型可能逐渐丢失这些通用视觉能力。论文因此加入 feature alignment：让 student depth encoder 的中间特征不要偏离 frozen DINOv2 encoder 太远。
+
+简化目标可以写成：
 
 \[
-\mathcal{L}_l = \frac{1}{HW}\sum_{i=1}^{HW}\rho(d_i^*, d_i)
+\mathcal{L}_{feat}
+=
+\frac{1}{|\Omega|}
+\sum_{p \in \Omega}
+\max
+\left(
+0,\,
+\alpha - \cos(z_p, z'_p)
+\right)
 \]
 
+其中 \(z_p\) 表示 student depth model 在像素或 patch \(p\) 的特征，\(z'_p\) 表示 frozen DINOv2 的特征，\(\alpha\) 是 tolerance margin，\(\Omega\) 是参与计算的位置集合。这里的 margin 很关键：DINOv2 会把同一物体不同部位拉近，但深度模型必须区分物体内部的前后距离；所以论文不强迫所有特征完全一致，而是只在相似度太低时施加约束。
 
-其中 \(\rho(d_i^*, d_i)=|\hat d_i^*-\hat d_i|\)，而 \(\hat d\) 会用 median 和 mean absolute deviation 做平移与尺度归一：
+这一步把 Depth Anything 从“深度专用模型”推向“可迁移视觉 backbone”。论文后续在 metric depth、semantic segmentation 和 ControlNet 条件生成上都展示了这个价值。
 
-\[
-\hat d_i=\frac{d_i-t(d)}{s(d)}, \quad
-t(d)=\mathrm{median}(d), \quad
-s(d)=\frac{1}{HW}\sum_{i=1}^{HW}|d_i-t(d)|
-\]
+## 实验应该怎样读
 
-
-这也解释了 DA1 的使用边界：它很适合告诉机器人“哪里更近、哪里有边界、物体大致关系如何”，但如果任务要 3D 坐标、抓取距离或安全制动阈值，就要接相机标定、metric fine-tuning、多视角几何或真实 depth sensor。
-
-## 训练细节
-
-### 1. Teacher stage
-
-teacher 先只在 labeled images 上训练，目标是得到一个足够可靠的 MDE annotator。
-
-| Setting | Value |
-| --- | --- |
-| Architecture | DINOv2 encoder + DPT decoder |
-| Training data | 1.5M labeled images from 6 public datasets |
-| Epochs | 20 |
-| Labeled data sampling | simply combined together without re-sampling |
-| Encoder initialization | DINOv2 pre-trained weights |
-| Sky handling | use a pre-trained semantic segmentation model to detect `sky`, then set its disparity to 0 |
-
-`sky` 这个细节很实用。天空通常没有可靠深度，stereo / SfM / LiDAR 标签也容易缺失或噪声很大。DA1 把天空 disparity 设为 0，本质上是在告诉模型：天空应被看成最远背景，不要让数据噪声污染这类区域。
-
-### 2. Pseudo-labeling stage
-
-给定 teacher \(T\)，DA1 用一次前向推理为每张 unlabeled image 生成 pseudo depth：
-
-\[
-\hat{\mathcal{D}}^u = \{(u_i, T(u_i)) \mid u_i \in \mathcal{D}^u\}_{i=1}^{N}
-\]
-
-
-这个阶段的好处是成本极低：不需要双目匹配，不需要 SfM，不需要 LiDAR，也不需要人工深度标注。对 62M 级别的数据来说，这正是 DA1 相对传统深度数据构建方式的效率来源。
-
-但论文明确说，普通 self-training 不够。直接把 labeled 和 pseudo-labeled images 合并训练，提升很有限，甚至可能没有提升。原因是 teacher 和 student 使用相似 architecture 与 DINOv2 initialization，student 只是在学习 teacher 已经会的预测，额外视觉知识没有被充分挖出来。
-
-### 3. Student stage: strong perturbation
-
-DA1 的修正是：对 unlabeled images 的 student input 加强扰动，但 teacher pseudo label 来自 clean image。
-
-| Perturbation | Used on | Purpose |
-| --- | --- | --- |
-| color jittering | unlabeled student input | 逼模型不要依赖颜色捷径 |
-| Gaussian blurring | unlabeled student input | 让深度结构对低频/模糊变化更稳 |
-| CutMix | unlabeled student input, 50% probability | 用空间拼接制造更难的局部几何目标 |
-| clean image | teacher pseudo-labeling | 保持 pseudo labels 尽量可靠 |
-
-CutMix 在 DA1 里不是简单分类增强，而是要让无标注深度监督在两个图像区域内分别对齐 teacher：
-
-\[
-u_{ab}=u_a \odot M + u_b \odot (1-M)
-\]
-
-
-\[
-\mathcal{L}^M_u=\rho(S(u_{ab}) \odot M, T(u_a)\odot M)
-\]
-
-
-这项表示只在 mask \(M\) 覆盖的区域比较 student 对混合图 \(u_{ab}\) 的预测 \(S(u_{ab})\)，以及 teacher 在原图 \(u_a\) 上给出的 pseudo depth \(T(u_a)\)。\(\rho\) 是深度回归误差，\(\odot\) 是逐元素 mask。
-
-\[
-\mathcal{L}^{1-M}_u=\rho(S(u_{ab}) \odot (1-M), T(u_b)\odot (1-M))
-\]
-
-
-\[
-\mathcal{L}_u=\frac{\sum M}{HW}\mathcal{L}^M_u+
-\frac{\sum (1-M)}{HW}\mathcal{L}^{1-M}_u
-\]
-
-
-这里的关键不是“把图拼起来更花”，而是让 student 在更难的输入分布上追 clean teacher 的局部 depth structure。这样无标注数据才从“复制 teacher”变成“学习鲁棒表征”。
-
-### 4. Semantic feature alignment
-
-DA1 还尝试过一条看起来更直观的路：用 RAM + GroundingDINO + HQ-SAM 给 unlabeled images 生成 semantic segmentation labels，经过后处理得到约 4K 类，在 joint-training 阶段让模型同时输出 depth 和 segmentation。结果没有带来增益。
-
-作者的解释是，离散 segmentation masks 会把连续语义空间压扁。对一个已经很强的深度模型来说，这种粗粒度类别监督反而不够信息量。于是他们改用 frozen DINOv2 encoder 的连续特征作为辅助监督：
-
-\[
-\mathcal{L}_{feat}=1-\frac{1}{HW}\sum_{i=1}^{HW}\cos(f_i, f'_i)
-\]
-
-
-其中 \(f\) 来自 online student depth model，\(f'\) 来自 frozen DINOv2 encoder。DA1 没有额外加随机初始化 projector，因为初期 alignment loss 太大时会压过深度学习目标。
-
-更细的点是 tolerance margin \(\alpha\)。DINOv2 这类语义 encoder 会把同一物体不同部位的特征拉近，例如车头和车尾；但深度模型必须区分同一物体内部不同深度。DA1 因此只对 cosine similarity 低于 \(\alpha\) 的位置施加 feature loss，超过阈值就不再强行对齐。论文主设置为：
-
-| Setting | Value |
-| --- | --- |
-| Feature source | frozen DINOv2 encoder |
-| Online feature | student depth encoder feature |
-| Tolerance margin \(\alpha\) | 0.85 |
-| Overall loss | average of \(\mathcal{L}_l\), \(\mathcal{L}_u\), \(\mathcal{L}_{feat}\) |
-
-这个设计对机器人很有意义：深度边界不能和物体语义边界完全脱钩，但也不能被语义特征抹平。feature alignment 的 margin 正是在这两者之间留空间。
-
-### 5. Implementation details
-
-| Setting | Value |
-| --- | --- |
-| Input preprocessing | resize shorter side to 518, keep aspect ratio |
-| Training crop | 518 x 518 |
-| Inference | no crop, only make both sides multiples of 14 |
-| Evaluation | interpolate prediction to original resolution |
-| Zero-shot alignment | manually align scale and shift with ground truth, following MiDaS |
-| Student training | sweep across all unlabeled images for one time |
-| Batch ratio | labeled : unlabeled = 1 : 2 |
-| Optimizer | AdamW |
-| Encoder LR | 5e-6 |
-| Decoder LR | 10x encoder LR |
-| LR schedule | linear decay |
-| Labeled augmentation | horizontal flipping only |
-
-后续把 DA encoder fine-tune 到 metric depth 时，论文采用 ZoeDepth codebase，只替换 MiDaS encoder。NYUv2 training resolution 为 `392 x 518`，KITTI 为 `384 x 768`，encoder learning rate 设为随机初始化 decoder 的 `1/50`，batch size 16，训练 5 epochs。
-
-把 encoder fine-tune 到 semantic segmentation 时，论文采用 MMSegmentation 和 Mask2Former。ADE20K / Cityscapes resolution 都是 `896 x 896`，encoder LR 为 `3e-6`，decoder LR 为 10 倍，ADE20K 训练 160K iterations，Cityscapes 训练 80K iterations，batch size 16，不使用 COCO 或 Mapillary pre-training。
-
-## 关键结果
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
-Table 2 is redrawn below with the original English fields.
-
-| Method | Encoder | KITTI AbsRel | KITTI \(\delta_1\) | NYUv2 AbsRel | NYUv2 \(\delta_1\) | Sintel AbsRel | Sintel \(\delta_1\) | DDAD AbsRel | DDAD \(\delta_1\) | ETH3D AbsRel | ETH3D \(\delta_1\) | DIODE AbsRel | DIODE \(\delta_1\) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| MiDaS v3.1 | ViT-L | 0.127 | 0.850 | 0.048 | 0.980 | 0.587 | 0.699 | 0.251 | 0.766 | 0.139 | 0.867 | 0.075 | 0.942 |
-| **Depth Anything** | ViT-S | 0.080 | 0.936 | 0.053 | 0.972 | 0.464 | 0.739 | 0.247 | 0.768 | 0.127 | **0.885** | 0.076 | 0.939 |
-| **Depth Anything** | ViT-B | 0.080 | 0.939 | 0.046 | 0.979 | **0.432** | 0.756 | 0.232 | 0.786 | **0.126** | 0.884 | 0.069 | 0.946 |
-| **Depth Anything** | ViT-L | **0.076** | **0.947** | **0.043** | **0.981** | 0.458 | **0.760** | **0.230** | **0.789** | 0.127 | 0.882 | **0.066** | **0.952** |
-
-<small>表源：`Depth Anything`，Table 2。原论文表格要点：在 six unseen datasets 上，DA1 ViT-L 大幅超过 MiDaS v3.1；即使 ViT-S 参数量不到 MiDaS ViT-L 的 1/10，也在多个 unseen datasets 上超过 MiDaS。</small>
-
-两个结果特别值得记住。
-
-第一，DA1 没用 KITTI 和 NYUv2 的训练图像，但在这两个常用 benchmark 上仍强于 MiDaS。论文也提醒，MiDaS v3.1 对 KITTI 和 NYUv2 并不是严格 zero-shot，因为它使用了对应训练图像。
-
-第二，小模型已经很强。ViT-S 在 Sintel、DDAD、ETH3D 等 unseen sets 上能超过 MiDaS ViT-L，这说明数据 recipe 对资源受限场景很重要。机器人部署常常受延迟、显存和功耗限制，不能默认只上最大模型。
+Depth Anything 的 zero-shot 结果要按分布读，而不是只看平均排名。论文在 KITTI、NYUv2、Sintel、DDAD、ETH3D、DIODE 等未见数据集上评估，覆盖室内、室外、合成、自动驾驶和真实 3D 数据。这个评测组合能检查模型是否只记住某种相机或场景。
 
 ![Depth Anything zero-shot qualitative 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything/figure-3-zeroshot-vis.png){ width="860" }
 
-<small>图源：`Depth Anything`，Figure 3。原论文图意：DA1 在 KITTI、NYUv2、Sintel、DDAD、ETH3D 和 DIODE 等 unseen datasets 上展示定性结果，强调跨室内、室外、合成、自动驾驶和真实 3D 数据的鲁棒性。</small>
+<small>图源：`Depth Anything`，Figure 3。原图表达模型在多个 unseen datasets 上的定性结果。本站读法：观察边界、远景、透明/细长结构和室内外切换，而不是只看颜色图是否漂亮。</small>
 
-## Ablation: 为什么强扰动和 feature alignment 是关键
+消融结果可以拆成三个判断。
 
-Table 8 is redrawn below with the original English fields.
+第一，labeled data 是深度任务锚点，没有它，无标注图像很难直接变成可靠深度监督。第二，pseudo label 只有在 strong perturbation 下才更有价值，因为它把无标注数据变成鲁棒性任务。第三，feature alignment 主要应该加在 unlabeled data 上；对 labeled data 强加语义对齐，可能干扰高质量深度标签本身。
 
-| \(\mathcal{L}_l\) | \(\mathcal{L}_u\) | \(\mathcal{S}\) | \(\mathcal{L}_{feat}\) | KI | NY | SI | DD | ET | DI |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ✓ |  |  |  | 0.085 | 0.053 | 0.492 | 0.245 | 0.134 | 0.070 |
-| ✓ | ✓ |  |  | 0.085 | 0.054 | 0.481 | 0.242 | 0.138 | 0.073 |
-| ✓ | ✓ | ✓ |  | 0.081 | 0.048 | 0.469 | 0.235 | 0.134 | 0.068 |
-| ✓ | ✓ | ✓ | ✓ | **0.076** | **0.043** | **0.458** | **0.230** | **0.127** | **0.066** |
+## 和具身智能有什么关系
 
-<small>表源：`Depth Anything`，Table 8。原论文表格要点：只加入 pseudo-labeled unlabeled images 并不稳定提升；加入 strong perturbations \(\mathcal{S}\) 后明显改善；再叠加 feature alignment \(\mathcal{L}_{feat}\) 得到最佳 AbsRel。</small>
+机器人需要深度，但真实系统不总能依赖完美 RGB-D。深度相机可能受光照、透明物体、反射、距离范围和标定影响；单目深度虽然没有真实尺度，但覆盖广、成本低，能为感知和策略提供空间先验。
 
-这张表可以把 DA1 的训练逻辑讲透：
+Depth Anything 对具身系统的意义主要有三层：
 
-1. 只有 labeled loss 时，模型已经很强；
-2. 直接加 unlabeled pseudo labels，收益很小，NY、ET、DI 甚至变差；
-3. 对 unlabeled student input 加强扰动后，六个指标几乎全面变好；
-4. 再加 DINOv2 feature alignment，所有 unseen datasets 的 AbsRel 都达到最好。
-
-附录进一步说明了 margin 和 feature loss 应该放在哪里。
-
-Table 9 is redrawn below with the original English fields.
-
-| \(\alpha\) | KITTI | NYU | Sintel | DDAD | ETH3D | DIODE | **Mean** |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1.00 | 0.085 | 0.055 | 0.523 | 0.250 | 0.134 | 0.079 | 0.188 |
-| 0.85 | 0.080 | **0.053** | **0.464** | **0.247** | **0.127** | **0.076** | **0.175** |
-| 0.70 | **0.079** | 0.054 | 0.482 | 0.248 | 0.127 | 0.077 | 0.178 |
-
-<small>表源：`Depth Anything`，Table 9。原论文表格要点：\(\alpha=1.00\) 等于几乎强制更充分对齐 DINOv2 feature，反而会伤害深度；\(\alpha=0.85\) 在 mean AbsRel 上最好。</small>
-
-Table 10 is redrawn below with the original English fields.
-
-| U | L | KITTI | NYU | Sintel | DDAD | ETH3D | DIODE | **Mean** |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  | 0.083 | 0.055 | 0.478 | 0.249 | 0.133 | 0.080 | 0.180 |
-| ✓ |  | **0.080** | **0.053** | **0.464** | **0.247** | **0.127** | **0.076** | **0.175** |
-|  | ✓ | 0.084 | 0.054 | 0.472 | 0.252 | 0.133 | 0.081 | 0.179 |
-
-<small>表源：`Depth Anything`，Table 10。原论文表格要点：feature alignment 应该主要施加在 unlabeled data 上；对 labeled data 加这个辅助目标没有明显收益，可能干扰高质量深度标签的学习。</small>
-
-这个结论很细，但对复现很重要：\(\mathcal{L}_{feat}\) 不是通用地“越多越好”。它最适合补 pseudo labels 的噪声和信息不足，而不是压过 labeled depth supervision。
-
-## 下游迁移
-
-DA1 不只把深度图做得更好，也把 encoder 做成了一个更好的视觉初始化。
-
-在 metric depth 上，论文把 DA encoder 放进 ZoeDepth pipeline，只替换原来的 MiDaS encoder。结果是在 NYUv2、KITTI 以及 zero-shot metric generalization 上都更好。对具身系统来说，这很关键：基础 DA 输出相对深度，但 encoder 可以作为 metric depth fine-tuning 的强初始化。
-
-在 semantic segmentation 上，DA1 用 MMSegmentation + Mask2Former fine-tune 到 ADE20K 和 Cityscapes。结果显示，经过大规模 MDE 训练和 feature alignment 后的 encoder 仍保留很强语义能力，甚至能超过一些大规模 ImageNet-21K 预训练 encoder。这说明 DA1 并不是把 DINOv2 语义先验“洗掉”成纯几何模型，而是在语义和几何之间做了更有用的折中。
+- 作为 relative depth 估计器，帮助 VLA 或 diffusion policy 理解前后关系和可达空间。
+- 作为 metric depth fine-tuning 的强初始化，在少量米制标签上适配具体相机。
+- 作为视觉 backbone，把几何和语义表征交给后续策略、重建或生成模型。
 
 ![Depth Anything depth-conditioned synthesis 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything/figure-4-synthesis.png){ width="920" }
 
-<small>图源：`Depth Anything`，Figure 4。原论文图意：作者比较 DA1 与 MiDaS 的 depth prediction，并把深度图作为 ControlNet 条件生成新图像；更准确的深度图能提供更稳定的图像/视频编辑控制信号。</small>
+<small>图源：`Depth Anything`，Figure 4。原图表达 Depth Anything 预测的深度可以作为 ControlNet 条件，帮助生成更稳定的图像。本站读法：这说明更好的深度不仅服务机器人感知，也能成为生成模型的结构控制信号。</small>
 
-## 和 DA2、DA3 的关系
+## 边界与误解
 
-Depth Anything 系列可以按训练监督的演进来读：
+第一，Depth Anything 的基础输出不是绝对米制深度。把颜色图直接当距离用，会误导规划和控制。需要真实尺度时，应做 metric fine-tuning 或结合相机标定、双目、深度传感器。
 
-| Version | Core contribution | Limitation |
-| --- | --- | --- |
-| Depth Anything / DA1 | 用 62M unlabeled images、strong perturbation 和 DINOv2 feature alignment 建立开放域相对深度 foundation model | 细结构、透明/反光、复杂边界仍不够强；基础模型主要是相对深度 |
-| [Depth Anything V2 / DA2](depth-anything-v2.md) | 用 precise synthetic labels 训练最大 teacher，再把能力蒸馏到 pseudo-labeled real images，显著增强细节和效率 | 仍主要处理单图深度，不直接解决多视角一致性和相机几何 |
-| [Depth Anything 3 / DA3](depth-anything-3.md) | 把单目深度扩展到任意视角 geometry，输出 depth、ray、camera 和可融合 3D 表示 | 不直接解决动作、接触动力学、控制安全和机器人策略 |
+第二，它不解决所有几何问题。单目深度看不到遮挡后的物体，也不能从一张图恢复完整 3D 拓扑。对抓取、避障和接触控制来说，深度只是输入之一。
 
-一句话总结：DA1 证明“大规模无标注图像可以让单目深度变成 foundation model”；DA2 修正标签质量和细节瓶颈；DA3 把单图深度进一步推到多视角视觉空间恢复。
+第三，pseudo label 会继承 teacher 偏差。大规模无标注数据能扩展分布，但不自动保证透明物体、镜面、极端光照和罕见相机视角都正确。Depth Anything 的贡献在于显著提升泛化，不是消灭单目深度的不适定性。
 
-## 具身应用时怎么用
+## 外部精读
 
-在机器人系统里，DA1 更适合作为 perception prior，而不是最终测距器。
-
-| 用法 | 推荐程度 | 原因 |
-| --- | --- | --- |
-| VLA / policy 的视觉辅助特征 | 高 | 深度边界和物体布局能补 RGB 语义特征的几何盲点 |
-| 数据质检和仿真资产检查 | 高 | 可以快速发现深度不连续、遮挡异常、薄结构缺失等问题 |
-| 低成本导航和避障辅助 | 中 | 相对深度有帮助，但安全距离仍需 metric calibration 或其他传感器 |
-| 抓取位姿直接回归 | 中低 | 抓取需要绝对尺度、接触几何和夹爪约束，单目相对深度不能单独承担 |
-| 安全制动 / 人机协作距离 | 低 | 这类闭环必须用可靠测距、标定和冗余安全层 |
-
-最稳的工程接法是：把 DA1/DA2/DA3 看作开放域视觉几何底座，再和 RGB-D、多视角、相机标定、SLAM、接触传感和控制器结合。它能显著降低“没有几何先验”的成本，但不能替代真实机器人闭环里的测量和安全约束。
-
-这一页最后回到三个验收点：方法上，DA1 的公式重点是 affine-invariant depth loss，保证跨数据集只学相对深度结构；无标注分支用 clean teacher label 监督强扰动 student。实验上，Table 1 的 1.5M labeled + 62M unlabeled 是主证据，不只是漂亮可视化。诊断上，最重要的消融是“直接混伪标签不够”，必须靠强扰动和 DINOv2 feature alignment 榨出增益。
-
-## 参考资料
-
-1. [Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data](https://arxiv.org/abs/2401.10891)
-2. [Depth Anything project page](https://depth-anything.github.io/)
-3. [LiheYoung/Depth-Anything](https://github.com/LiheYoung/Depth-Anything)
+- [Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data](https://arxiv.org/abs/2401.10891)：论文原文，建议重点读 data engine、training strategy 和 ablation。
+- [Depth Anything project page](https://depth-anything.github.io/)：项目页适合直观看不同场景的 zero-shot 深度效果。
+- [LiheYoung/Depth-Anything](https://github.com/LiheYoung/Depth-Anything)：代码与模型发布页面。
+- [DINOv2: Learning Robust Visual Features without Supervision](https://arxiv.org/abs/2304.07193)：理解 feature alignment 为什么能保住语义表征。

@@ -6,8 +6,11 @@ paper_topic: 具身智能 / VLA
 
 # SpatialVLA：3D 空间表征接入 VLA
 
-
 SpatialVLA 适合放在具身智能专题里的原因很明确：它不是单纯把 VLM 做大，而是问 VLA 最根本的空间问题：**不同机器人相机安装不同、动作空间不同，模型怎样学到可迁移的 3D 空间动作知识？**
+
+先想一个最小场景：同一个杯子在腕部相机里占据画面中心，在第三人称相机里可能只在右下角；同样一句“把杯子推到盘子旁边”，对不同机器人也对应不同的末端位移、旋转和夹爪动作。RGB 像素位置不是 3D 位置，连续动作数值也不是跨机器人共享的语言。SpatialVLA 的核心就是把这两个不对齐的接口补上：输入侧告诉模型每个视觉 token 大概在相机坐标系里的 3D 位置，输出侧把连续动作改写成和数据分布对齐的空间 action tokens。
+
+所以这篇文章不是在讲“加一个深度图会更好”这么简单。它真正回答的是：VLA 何时需要显式几何，动作 token 为什么不能只按每一维均匀切桶，以及空间表示的收益要靠哪些真实/仿真闭环结果来证明。
 
 ## 论文位置
 
@@ -18,15 +21,15 @@ SpatialVLA 的方案是两边一起改：
 1. 输入侧加入 `Ego3D Position Encoding`；
 2. 输出侧用 `Adaptive Action Grids` 把连续动作离散成空间 action tokens。
 
-![SpatialVLA model](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-1-model.png){ width="590" }
+![SpatialVLA model](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-1-model.png){ width="490" .atlas-figure-compact }
 
 <small>Figure source: `SpatialVLA`, Figure 1. 原论文图意：SpatialVLA 在视觉语言模型上加入 Ego3D position encoding 和 adaptive action grids，把 3D 空间上下文和动作 token 接入 VLA。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是视觉语言观测、空间表征和动作网格，输出是 VLA 控制动作。  
-    **效率机制**：把 3D 空间先验显式接入动作预测，降低纯图像 token 学空间关系的负担。  
-    **对主线意义**：它连接 VLA 动作接口和具身几何状态。  
-    **不能证明什么**：空间表征收益不能证明跨机器人平台或长时安全任务通用。
+**SpatialVLA 总图先看输入几何和输出动作网格。**
+**输入输出**：输入是视觉语言观测、空间表征和动作网格，输出是 VLA 控制动作。  
+**效率机制**：把 3D 空间先验显式接入动作预测，降低纯图像 token 学空间关系的负担。  
+**对主线意义**：它连接 VLA 动作接口和具身几何状态。  
+**不能证明什么**：空间表征收益不能证明跨机器人平台或长时安全任务通用。
 
 ## Ego3D Position Encoding
 
@@ -52,7 +55,6 @@ $$
 = d(u,v) K^{-1}[u,v,1]^\top
 $$
 
-
 这里 \(\mathbf{x}_{u,v}^{\mathrm{ego}}\) 是相机自身坐标系中的 3D 点；\(K^{-1}[u,v,1]^\top\) 给出从相机中心穿过该像素的射线方向；\(d(u,v)\) 决定沿射线走多远。SpatialVLA 再把这个 3D 位置做 sinusoidal encoding，经 MLP 投到和视觉 token 同维度的 embedding，并与 SigLIP 视觉 token 相加：
 
 $$
@@ -61,17 +63,16 @@ $$
 + \mathrm{MLP}(\gamma(\mathbf{x}_{u,v}^{\mathrm{ego}}))
 $$
 
-
 这条公式的关键不是数学复杂，而是接口清楚：\(\mathbf{v}_{u,v}\) 负责 2D 语义，例如杯子、盘子、抽屉；\(\gamma(\mathbf{x}_{u,v}^{\mathrm{ego}})\) 负责相机坐标里的距离、方位和高度。模型不用猜“哪个像素更近、哪个物体在前方”，这些几何关系已经被写进 token。
 
-!!! note "为什么不用全局世界坐标"
-    跨机器人数据里，第三人称相机、腕部相机、外参标定和工作空间都不统一。若强行把所有观测拉到一个全局坐标系，标定误差和平台差异会先污染输入。Ego3D 的保守选择是只使用相机内参和单目深度，把空间关系表达在每个相机自己的坐标系里；它降低了跨 embodiment 对齐成本，但也意味着模型仍依赖深度估计质量和当前视角可见性。
+**为什么不用全局世界坐标。**
+跨机器人数据里，第三人称相机、腕部相机、外参标定和工作空间都不统一。若强行把所有观测拉到一个全局坐标系，标定误差和平台差异会先污染输入。Ego3D 的保守选择是只使用相机内参和单目深度，把空间关系表达在每个相机自己的坐标系里；它降低了跨 embodiment 对齐成本，但也意味着模型仍依赖深度估计质量和当前视角可见性。
 
 ## Adaptive Action Grids
 
 动作侧，SpatialVLA 不直接预测连续 \(\Delta x,\Delta y,\Delta z,\Delta R\)，而是根据数据集中动作分布，把 translation / rotation movement 离散成 adaptive spatial grids。
 
-![SpatialVLA adaptive action grids](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-2-action-grids.png){ width="760" }
+![SpatialVLA adaptive action grids](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-2-action-grids.png){ width="690" }
 
 <small>Figure source: `SpatialVLA`, Figure 2. 原论文图意：Adaptive action grids 先统计 translation 和 rotation action movement 的分布，再根据 Gaussian fitting 对每个动作变量划分等概率区间，形成空间动作 token。</small>
 
@@ -91,13 +92,11 @@ $$
 a_t = (a_t^{\mathrm{trans}}, a_t^{\mathrm{rot}}, a_t^{\mathrm{gripper}})
 $$
 
-
 设某个动作变量归一化后为 \(x\in[-1,1]\)，论文会在数据集上拟合高斯分布 \(p(x)\)，再把区间切成 \(M\) 个等概率桶：
 
 $$
 \int_{b_{i-1}}^{b_i} p(x)\,dx = \frac{1}{M}
 $$
-
 
 这和普通 uniform bins 的区别非常大：高频小动作附近会得到更细的分辨率，罕见大动作区域会更粗。对机器人控制来说，这很合理，因为真实策略的大量动作是小幅调整，少量动作才是大范围移动。如果把所有区间均匀切开，模型会浪费很多 token 容量在低频区域。
 
@@ -111,30 +110,26 @@ $$
 w_{ij}\mathbf{e}_i
 $$
 
-
 其中 \(\mathbf{e}'_j\) 是新网格第 \(j\) 个 token 的初始 embedding，\(\mathcal{N}(j)\) 是它在旧网格里的邻近 token，\(w_{ij}\) 由网格中心距离归一化得到。读法很简单：新机器人说“我的小幅向前动作长这样”，模型就把旧机器人上相近空间动作的知识搬过来，再用少量数据继续调。
 
 ## 训练数据和评测设置
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 论文先在约 `1.1M real-world robot dataset` 上预训练，数据混合由 OXE 和 RH20T 子集组成，并参考 OpenVLA 的 mixture weight 做修改。
 
-![SpatialVLA experiment setup](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-3-experiment-setup.png){ width="720" }
+![SpatialVLA experiment setup](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-3-experiment-setup.png){ width="690" .atlas-figure-compact }
 
 <small>Figure source: `SpatialVLA`, Figure 3. 原论文图意：评测覆盖 7 robot learning scenarios、24 real-robot tasks 和 3 simulation environments，关注 zero-shot control、new setup adaptation 和 spatial understanding。</small>
 
 论文附录还给出了 dataset mixture 可视化：
 
-![SpatialVLA dataset mixture](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-8-dataset-mixture.png){ width="740" }
+![SpatialVLA dataset mixture](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-8-dataset-mixture.png){ width="620" }
 
 <small>Figure source: `SpatialVLA`, Figure 8. 原论文图意：展示 SpatialVLA 训练数据混合的来源分布。</small>
 
 训练和部署条件也值得读细一点：SpatialVLA 使用 Paligemma2 系列 VLM 作为底座，在 `64 A100 GPUs` 上预训练约 `10 days`，batch size 为 `2048`。输入侧只条件于一个第三人称相机和一张当前图像来构造 Ego3D 表征；输出侧预测未来 action chunk，论文描述为 12 个 spatial action tokens，再执行 ensemble 后进入下一次预测。部署时，论文报告单张 `RTX 4090` 约 `8.5GB` 显存、约 `20Hz`，这使它更像实时控制策略，而不是离线规划器。
 
-!!! warning "实验口径"
-    `zero-shot` 在这里不是开放世界任意任务，而是预训练数据分布附近的机器人/任务设置上直接部署；`fine-tuning` 则是在 Fractal、BridgeData V2、LIBERO 或 Franka 目标数据上继续适配。读结果时要区分 SimplerEnv、真实 WidowX、LIBERO 仿真和真实 Franka，它们不是同一种 closed-loop 证据。
+**实验口径。**
+`zero-shot` 在这里不是开放世界任意任务，而是预训练数据分布附近的机器人/任务设置上直接部署；`fine-tuning` 则是在 Fractal、BridgeData V2、LIBERO 或 Franka 目标数据上继续适配。读结果时要区分 SimplerEnv、真实 WidowX、LIBERO 仿真和真实 Franka，它们不是同一种 closed-loop 证据。
 
 ## 实验结论
 
@@ -156,12 +151,12 @@ Table III from the paper can be redrawn as follows, keeping the original English
 
 <small>表源：`SpatialVLA`，Table III。原表含义：LIBERO Simulation Benchmark Results，汇报四个 task suites 的 success rate 和 rank，并对三次随机种子、500 trials 求均值。关键点是 SpatialVLA 的平均成功率最高，尤其在 LIBERO-Spatial 和 LIBERO-Long 上排名第一；这比单纯“加深度”更具体地说明 3D spatial encoding 对空间关系和长链任务都有帮助。</small>
 
-![SpatialVLA spatial understanding](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-6-spatial-understanding.png){ width="760" }
+![SpatialVLA spatial understanding](../../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-6-spatial-understanding.png){ width="690" }
 
 <small>Figure source: `SpatialVLA`, Figure 6. 原论文图意：展示 SpatialVLA 在空间提示和复杂空间布局任务上的评测，说明 Ego3D position encoding 对 spatial understanding 有帮助。</small>
 
-!!! note "这组空间实验怎么读"
-    Figure 6 不是普通成功率展示，而是在问模型是否真的利用了几何关系。Franka 任务要求理解 `closest to robot` 这类空间提示；WidowX 任务加入高度、位置和动态扰动；LIBERO-Spatial 则系统改变物体布局。SpatialVLA 在 Franka 空间提示任务达到约 `73%`，LIBERO-Spatial 达到 `88.2%`，而缺少深度/3D 输入的策略在复杂空间变化下更容易低于 `50%`。这支撑的是“3D 表征能改善空间布局泛化”，不是“所有机器人几何问题都解决”。
+**这组空间实验怎么读。**
+Figure 6 不是普通成功率展示，而是在问模型是否真的利用了几何关系。Franka 任务要求理解 `closest to robot` 这类空间提示；WidowX 任务加入高度、位置和动态扰动；LIBERO-Spatial 则系统改变物体布局。SpatialVLA 在 Franka 空间提示任务达到约 `73%`，LIBERO-Spatial 达到 `88.2%`，而缺少深度/3D 输入的策略在复杂空间变化下更容易低于 `50%`。这支撑的是“3D 表征能改善空间布局泛化”，不是“所有机器人几何问题都解决”。
 
 论文里几个关键结论：
 
@@ -200,11 +195,15 @@ Ego3D 和 adaptive action grids 分别处理前两层。它不是最终答案，
 
 SpatialVLA 仍然依赖深度估计质量。单目深度在透明、反光、低纹理或尺度异常物体上会偏；长时任务也不是它的主要强项。论文里 LIBERO-Long 表现仍受限，说明空间表示能补几何，但不能自动解决长时记忆和任务规划。
 
-!!! info "本站判断"
-    SpatialVLA 的复用点在显式空间动作接口：方法要抓空间网格、动作 token 和数据混合；实验要看 spatial understanding、真实任务设置和不同动作表示消融。它适合补 VLA 的几何短板，但不能替代深度传感、控制器和碰撞检查。
+**阅读结论。**
+SpatialVLA 的复用点在显式空间动作接口：方法要抓空间网格、动作 token 和数据混合；实验要看 spatial understanding、真实任务设置和不同动作表示消融。它适合补 VLA 的几何短板，但不能替代深度传感、控制器和碰撞检查。
 
-## 参考链接
+## 外部精读
 
-1. [arXiv:2501.15830](https://arxiv.org/abs/2501.15830)
-2. [SpatialVLA project page](https://spatialvla.github.io/)
-3. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2501.15830)
+1. [SpatialVLA arXiv](https://arxiv.org/abs/2501.15830)：读 Ego3D position encoding、adaptive action grids 和 LIBERO / real-robot ablation。
+2. [SpatialVLA project page](https://spatialvla.github.io/)：看任务视频和实验设置，尤其区分 zero-shot、fine-tuning、simulation 与真实机器人证据。
+3. [SpatialVLA GitHub](https://github.com/SpatialVLA/SpatialVLA)：确认代码、权重和动作网格实现接口。
+4. [OpenVLA](https://openvla.github.io/)：作为通用 VLA 底座对照，理解 SpatialVLA 为什么要补显式 3D 空间表征。
+5. [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)：理解跨机器人数据混合、动作标准化和 embodiment 差异为什么会让空间接口变重要。
+6. [ZoeDepth](https://arxiv.org/abs/2302.12288)：SpatialVLA 的 Ego3D 依赖单目深度估计，读它能理解深度误差会怎样进入 VLA 输入。
+7. [State of VLA Research at ICLR 2026](https://mbreuss.github.io/blog_post_iclr_26_vla.html) 与 [ICLR Blogposts: Spatial Awareness in VLMs](https://iclr-blogposts.github.io/2026/blog/2026/spatial-awareness/)：作为讲法参考，学习如何把 VLA、spatial awareness 和 benchmark 边界讲成问题链；具体实验 claim 仍回到对应论文。

@@ -4,6 +4,11 @@ VLA 训练跑通，只能说明模型在离线数据上学会了某种视觉到�
 **真正难的是部署**：  
 机器人要在真实硬件、实时闭环、存在人类和脆弱物体的环境里运行，任何一个环节慢一点、抖一点、错一点，都可能从“能演示”变成“不可上线”。
 
+## 核心问题
+
+VLA 部署与安全真正要回答的是：**模型输出动作之后，系统怎样保证这个动作来得及、物理上可执行、风险可控，并且失败时能停下来或恢复。**
+
+这不是把安全层放在模型后面裁剪一下就结束。真实部署至少有四条链路：延迟链路保证观测没有过期，控制链路保证动作平滑可执行，安全链路保证速度、距离、碰撞和人机共处约束优先于模型意图，恢复链路保证抓空、遮挡、接管和异常不会被继续放大。
 
 ## 延迟预算：动作正确还不够，得来得及
 
@@ -12,7 +17,6 @@ VLA 训练跑通，只能说明模型在离线数据上学会了某种视觉到�
 \[
 L_{\text{sense}} + L_{\text{model}} + L_{\text{post}} + L_{\text{act}} < \frac{1}{f}
 \]
-
 
 其中：
 
@@ -50,7 +54,6 @@ L_{\text{sense}} + L_{\text{model}} + L_{\text{post}} + L_{\text{act}} < \frac{1
 \text{P95}(L), \quad \text{P99}(L)
 \]
 
-
 而不只是平均延迟。
 
 ## 安全约束：动作不能裸奔进执行器
@@ -61,13 +64,14 @@ L_{\text{sense}} + L_{\text{model}} + L_{\text{post}} + L_{\text{act}} < \frac{1
 a_t^{\text{safe}} = \Pi_{\mathcal{C}}(a_t)
 \]
 
-
 其中 \(\Pi_{\mathcal{C}}\) 表示投影到安全集合。  
 安全集合 \(\mathcal{C}\) 常包含关节角限制、速度限制、加速度限制、工作空间边界、自碰撞约束和人机安全距离。它们分别负责避免结构越界、碰撞风险、突然启停、伸出允许区域、机械臂自干涉，以及有人靠近时自动保守或停机。
 
 直觉上，这层在说：
 
 “模型可以提建议，但执行器只接受物理上和安全上允许的动作。”
+
+这也是读 SayCan、RT-2、OpenVLA 或机器人 foundation model 报告时必须保留的边界：高层模型可以提升语义理解和技能选择，但执行安全仍需要显式约束、低层控制器、状态机、传感器冗余和接管机制。否则模型看起来更聪明，系统反而更难审计。
 
 ## 安全约束常见的数学形式
 
@@ -76,7 +80,6 @@ a_t^{\text{safe}} = \Pi_{\mathcal{C}}(a_t)
 \[
 u_{\min} \le u_t \le u_{\max}
 \]
-
 
 这行式子在说：执行器命令 \(u_t\) 必须落在下界 \(u_{\min}\) 和上界 \(u_{\max}\) 之间；超出范围的命令要被裁剪、投影或拒绝。
 
@@ -88,7 +91,6 @@ u_{\min} \le u_t \le u_{\max}
 d(x_t) \ge d_{\min}
 \]
 
-
 这里 \(d(x_t)\) 是当前状态 \(x_t\) 下机器人到障碍物或人体的距离，\(d_{\min}\) 是最小安全距离；小于这个阈值时，动作应被降速、重规划或停机。
 
 ### 5.3 速度与加速度约束
@@ -97,15 +99,14 @@ d(x_t) \ge d_{\min}
 \|v_t\| \le v_{\max}, \qquad \|a_t\| \le a_{\max}
 \]
 
-
 这些约束很“土”，但在部署中极有价值，因为它们可解释、可验证、可审计。
 
 ![SayCan grounding language with affordances](../assets/images/paper-figures/vla/saycan-intro.png){ width="920" }
 
 <small>图源：[Do As I Can, Not As I Say: Grounding Language in Robotic Affordances](https://arxiv.org/abs/2204.01691)，Figure 1。原论文图意：LLM 可能提出不接地气的建议；SayCan 用 value functions / affordances 约束语言模型，把高层语言规划落到机器人当前可执行的技能上。</small>
 
-!!! note "图解：安全不只是限幅，还要判断“能不能做”"
-    SayCan 这张图说明了 VLA 部署里的一个核心安全问题：语言模型可能给出听起来合理但机器人做不了、场景里不存在或当前不安全的动作。value function / affordance 的作用，是给每个候选技能加上“当前状态下可不可行”的分数。部署时，硬限幅负责防止动作越界；affordance 和任务状态机负责防止模型选择不合场景、不合能力或不合安全边界的动作。
+**安全不只是限幅，还要判断“能不能做”。**
+SayCan 这张图说明了 VLA 部署里的一个核心安全问题：语言模型可能给出听起来合理但机器人做不了、场景里不存在或当前不安全的动作。value function / affordance 的作用，是给每个候选技能加上“当前状态下可不可行”的分数。部署时，硬限幅负责防止动作越界；affordance 和任务状态机负责防止模型选择不合场景、不合能力或不合安全边界的动作。
 
 ## 家庭收纳机器人为什么特别暴露问题
 
@@ -181,25 +182,19 @@ d(x_t) \ge d_{\min}
 
 VLA 模型越大，不代表实时控制越好。机器人系统必须把端到端成功率和 tail latency 一起衡量；真实部署通常需要“VLA + 低层控制器 + 安全规则 + 状态机”的组合；若任务涉及脆弱物体或人机共融，显式安全机制应始终高于模型意图。
 
-## 本页结论
+## 外部精读
+
+- [SayCan](https://arxiv.org/abs/2204.01691)：看语言模型如何通过 affordance/value function 接地到当前可执行技能。
+- [DeepMind RT-2](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)：理解 VLM 知识接到动作 token 后，仍然需要机器人能力和动作接口约束。
+- [OpenVLA](https://openvla.github.io/)：适合对照看开源 VLA 模型如何进入真实机器人策略评测，而不是只看图文理解。
+- [Towards Safe Robot Foundation Models](https://openreview.net/forum?id=ObEzxIexlP)：看机器人 foundation model 安全风险、评测和部署边界。
+- [AsyncVLA](https://arxiv.org/abs/2602.04563)：适合思考 VLA 推理延迟和异步控制在实时系统里的权衡。
+
+## 阅读结论
 
 VLA 部署真正考验的，不是模型会不会输出动作，而是它能否在延迟受限、物理受限、安全受限的现实世界里稳定动作。  
 训练解决的是“学不学得会”，部署解决的是“来不来得及、会不会出事、出了事能不能恢复”。  
 这一层不补齐，VLA 就很难从实验视频走向长期上线。
-
-## 快速代码示例
-
-```python
-import torch  # 使用张量裁剪实现安全投影
-
-def safety_project(action, prev_action, low, high, max_delta):  # 定义部署侧动作安全投影
-    a = torch.clamp(action, low, high)  # 执行器硬约束
-    a = torch.clamp(a, prev_action - max_delta, prev_action + max_delta)  # 限制单步动作变化幅度
-    return a  # 返回经过边界和速率约束后的动作
-```
-
-这段代码给出部署侧常见的动作安全投影：先做物理边界裁剪，再做步进变化约束。它能显著降低“单步异常动作”带来的风险，通常与状态机和接管逻辑一起使用。
-
 
 ## 工程收束
 

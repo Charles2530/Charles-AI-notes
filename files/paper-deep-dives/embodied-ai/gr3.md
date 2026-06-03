@@ -6,7 +6,6 @@ paper_topic: 具身智能 / VLA
 
 # GR-3：少样本长时程 VLA
 
-
 GR-3 是一篇很适合放进具身智能专题的技术报告，因为它把 VLA 从“看图出动作”继续推向三个更真实的问题：严格语言跟随、少样本新物体适配，以及长时程/灵巧任务执行。
 
 它最值得记的一点是：**VLA 不只要输出 action chunk，还要知道任务是在进行、结束，还是根本无效。**
@@ -19,11 +18,11 @@ GR-3 接在 π0 / π0.5、GR-2 之后看最顺。GR-2 重点是视频知识迁�
 
 <small>Figure source: `GR-3 Technical Report`, Figure 1. 原论文图意：展示 GR-3 在新物体、新环境、抽象指令、长时程任务和灵巧衣物操作上的能力。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是少量机器人数据、视觉语言上下文和任务条件，输出是长时程操作策略。  
-    **效率机制**：通过数据配方和模型结构提高少样本真实机器人任务覆盖。  
-    **对主线意义**：它服务 VLA 的数据效率与开放任务泛化讨论。  
-    **不能证明什么**：少样本结果不能证明所有新 embodiment 或安全恢复都解决。
+**Teaser 图先看任务覆盖，不要当完整安全证明。**
+**输入输出**：输入是少量机器人数据、视觉语言上下文和任务条件，输出是长时程操作策略。  
+**效率机制**：通过数据配方和模型结构提高少样本真实机器人任务覆盖。  
+**对主线意义**：它服务 VLA 的数据效率与开放任务泛化讨论。  
+**不能证明什么**：少样本结果不能证明所有新 embodiment 或安全恢复都解决。
 
 ## 模型结构
 
@@ -54,7 +53,6 @@ $$
 \mathbf{u}_t = \mathbf{a} - \boldsymbol{\epsilon}
 $$
 
-
 $$
 \mathcal{L}_{\mathrm{FM}}
 = \mathbb{E}_{t,\boldsymbol{\epsilon},\mathbf{a}}
@@ -65,11 +63,10 @@ f_\theta(\mathbf{x}_t, t, c) - \mathbf{u}_t
 \right]
 $$
 
-
 这里 \(\boldsymbol{\epsilon}\) 是随机噪声动作，\(\mathbf{a}\) 是示范中的真实动作块，\(t\in[0,1]\) 是生成时间，\(c\) 是由 VLM 视觉语言上下文、机器人状态和 KV cache 组成的条件。训练目标不是直接预测动作值，而是预测“从当前 noisy action 往真实动作走的速度场”。推理时从噪声开始，沿这个速度场积分，得到连续 action chunk。
 
-!!! note "为什么这比离散 token 更适合 GR-3"
-    GR-3 要控制 ByteMini 的双手移动平台，动作空间连续、维度高，而且包含全身运动。离散 token 会让动作精度、token 数和解码延迟互相拉扯；flow matching 可以直接生成连续动作块，并保留多模态动作分布。Action DiT 再通过 VLM KV cache 接收任务语义，避免动作头只看到一个压扁的图文 embedding。
+**为什么这比离散 token 更适合 GR-3。**
+GR-3 要控制 ByteMini 的双手移动平台，动作空间连续、维度高，而且包含全身运动。离散 token 会让动作精度、token 数和解码延迟互相拉扯；flow matching 可以直接生成连续动作块，并保留多模态动作分布。Action DiT 再通过 VLM KV cache 接收任务语义，避免动作头只看到一个压扁的图文 embedding。
 
 ## 任务状态：in progress / terminate / invalid
 
@@ -140,13 +137,10 @@ GR-3 部署在 ByteMini 双手移动机器人上。
 
 论文强调全身顺应性控制和全身遥操作。策略 rollout 时，GR-3 用预测的 action chunk 控制 `19 DoF`，并加入 pure pursuit 和 trajectory optimization 以减少抖动、保持路径点和轨迹之间的平滑过渡。
 
-!!! note "这张机器人图怎么读"
-    ByteMini 不是论文背景里的展示硬件，而是 GR-3 结果的一部分。双臂、移动底盘、多相机和 wrist sphere joint 让任务空间远比单臂桌面抓取复杂。也正因为如此，GR-3 输出的 action chunk 不能直接等同于底层电机命令；pure pursuit、轨迹优化和全身控制器承担了平滑、可达性和安全约束。读实验时要把“VLA 能力”和“机器人控制栈能力”一起看。
+**这张机器人图怎么读。**
+ByteMini 不是论文背景里的展示硬件，而是 GR-3 结果的一部分。双臂、移动底盘、多相机和 wrist sphere joint 让任务空间远比单臂桌面抓取复杂。也正因为如此，GR-3 输出的 action chunk 不能直接等同于底层电机命令；pure pursuit、轨迹优化和全身控制器承担了平滑、可达性和安全约束。读实验时要把“VLA 能力”和“机器人控制栈能力”一起看。
 
 ## 实验：从抓取到长时程桌面清理
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 GR-3 的实验覆盖三类任务。
 
@@ -158,8 +152,8 @@ GR-3 的实验覆盖三类任务。
 
 <small>Figure source: `GR-3 Technical Report`, Figure 7. 原论文图意：展示 GR-3 在 basic、unseen environments、unseen objects 和 few-shot human trajectory settings 下的 pick-and-place 结果。</small>
 
-!!! note "Figure 7 怎么读"
-    这组实验的主线是“泛化从哪里来”。Basic / unseen environments 主要看机器人轨迹 imitation 和视觉语言 co-training 是否稳；unseen objects 则测试物体外观、形状和语言 grounding；few-shot human trajectories 专门测试 VR 人类轨迹是否能快速补新物体。最突出的结论不是某个单点数字，而是 GR-3 在只给每个未见物体少量人类轨迹时仍能明显提升，相当于把昂贵机器人遥操作的一部分换成更快的人类空间示范。
+**Figure 7 怎么读。**
+这组实验的主线是“泛化从哪里来”。Basic / unseen environments 主要看机器人轨迹 imitation 和视觉语言 co-training 是否稳；unseen objects 则测试物体外观、形状和语言 grounding；few-shot human trajectories 专门测试 VR 人类轨迹是否能快速补新物体。最突出的结论不是某个单点数字，而是 GR-3 在只给每个未见物体少量人类轨迹时仍能明显提升，相当于把昂贵机器人遥操作的一部分换成更快的人类空间示范。
 
 ### Long-horizon table bussing
 
@@ -169,8 +163,8 @@ GR-3 的实验覆盖三类任务。
 
 <small>Figure source: `GR-3 Technical Report`, Figure 8. 原论文图意：展示 table bussing 的任务设置、Flat / Instruction-Following / Invalid settings 和实验结果。</small>
 
-!!! note "Figure 8 怎么读"
-    Table bussing 不是单步 pick-and-place，而是长时程清理：机器人要在桌面上连续识别目标、选择顺序、移动双臂/底盘，并在任务完成或无效指令时停下来。`invalid` 试验尤其重要，因为成功标准不是“做对动作”，而是 `10 seconds` 内不乱动。这里 task status 的价值就很清楚：没有 terminate/invalid 监督，模型可能在完成后继续找东西抓，或者在指令不成立时执行相似训练动作。
+**Figure 8 怎么读。**
+Table bussing 不是单步 pick-and-place，而是长时程清理：机器人要在桌面上连续识别目标、选择顺序、移动双臂/底盘，并在任务完成或无效指令时停下来。`invalid` 试验尤其重要，因为成功标准不是“做对动作”，而是 `10 seconds` 内不乱动。这里 task status 的价值就很清楚：没有 terminate/invalid 监督，模型可能在完成后继续找东西抓，或者在指令不成立时执行相似训练动作。
 
 ### Dexterous cloth manipulation
 
@@ -180,8 +174,8 @@ GR-3 的实验覆盖三类任务。
 
 <small>Figure source: `GR-3 Technical Report`, Figure 10. 原论文图意：展示衣物操作任务的阶段拆解、成功/失败流向和不同设置下的结果。</small>
 
-!!! note "Figure 10 怎么读"
-    衣物任务的证据意义不在于证明 GR-3 已经掌握柔体物理，而在于它把 VLA 评测推到更难的接触分布。衣物会形变、遮挡、缠绕，成功往往依赖多阶段恢复。图中阶段拆解和失败流向比单个平均成功率更重要：它告诉读者模型在哪一步失手，是抓取、展开、挂衣架，还是移动到晾衣架。对工程复用来说，这类分阶段结果比“总成功率”更能指导数据补采。
+**Figure 10 怎么读。**
+衣物任务的证据意义不在于证明 GR-3 已经掌握柔体物理，而在于它把 VLA 评测推到更难的接触分布。衣物会形变、遮挡、缠绕，成功往往依赖多阶段恢复。图中阶段拆解和失败流向比单个平均成功率更重要：它告诉读者模型在哪一步失手，是抓取、展开、挂衣架，还是移动到晾衣架。对工程复用来说，这类分阶段结果比“总成功率”更能指导数据补采。
 
 ## 训练细节要点
 
@@ -220,10 +214,10 @@ GR-3 很强，但它也暴露了 VLA 走向真实机器人的成本：需要机�
 2. 人类轨迹可以作为新设置快速适配桥梁；
 3. VLA action chunk 必须接控制器和平滑优化，不能直接当电机命令。
 
-!!! info "本站判断"
-    GR-3 要按 vision-language-action 闭环系统读：方法重点是多模态输入、任务数据和动作头的分工，实验重点是 ByteMini、cloth/table bussing 与跨任务泛化。它的强项是真机操作证据，边界是数据分布、长时任务和跨 embodiment 可迁移性。
+**阅读结论。**
+GR-3 要按 vision-language-action 闭环系统读：方法重点是多模态输入、任务数据和动作头的分工，实验重点是 ByteMini、cloth/table bussing 与跨任务泛化。它的强项是真机操作证据，边界是数据分布、长时任务和跨 embodiment 可迁移性。
 
-## 参考链接
+## 外部精读
 
 1. [arXiv:2507.15493](https://arxiv.org/abs/2507.15493)
 2. [GR-3 project page](https://seed.bytedance.com/en/GR3)

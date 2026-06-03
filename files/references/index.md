@@ -3,12 +3,11 @@
 这一页不是简单罗列论文名，而是把全站内容按研究问题整理成可长期维护的索引。  
 阅读时建议先按主题找到入口，再回到对应章节做细读。
 
-
 参考文献页适合查源头，不适合当第一本教材顺序读。初学者先在专题页建立问题地图，再回来找必读论文；工程读者则优先核对系统实现、benchmark、代码和复现状态。
 
 | 读法 | 先做什么 | 关键入口 |
 | --- | --- | --- |
-| 10 分钟读法 | 先确认证据等级，再查具体论文 | [本站判断原则](site-judgement-principles.md)、[Claim Ledger](claim-ledger.md) |
+| 10 分钟读法 | 先确认证据等级，再查具体论文 | [证据判断原则](site-judgement-principles.md)、[Claim Ledger](claim-ledger.md) |
 | 深入读法 | 回到专题页核对 Figure/Table、setting 和结论边界 | [论文专题讲解](../paper-deep-dives/index.md)、[全站证据标准](evidence-and-reproducibility-standard.md) |
 | 实验/工程读法 | 只摘 claim、source、evidence、repro 和 cannot prove | [全站效率技术覆盖矩阵](site-efficiency-coverage-matrix.md)、[图片与公式质量标准](image-and-formula-quality-standard.md) |
 
@@ -25,7 +24,7 @@
 
 | 目标 | 用法 | 回到哪里 |
 | --- | --- | --- |
-| 建立主题主线 | 先看每节“必读起点”，只抓问题定义和方法转折 | 对应主题总览页 |
+| 建立主题主线 | 先看每节“必读起点”，只抓问题定义和方法转折 | 对应主题文章入口 |
 | 做方案设计 | 找“系统 / Benchmark / 开源实现”条目，核对工程约束 | 训练、推理、量化、算子和评测页面 |
 | 做论文笔记 | 从对应专题页确定精读论文，再在这里补相关工作 | [论文专题讲解](../paper-deep-dives/index.md) |
 | 做复现或调研 | 优先选有代码、数据、benchmark 或官方实现的条目 | [训练评测与消融设计](../training/evaluation-and-ablation-methodology.md) |
@@ -293,8 +292,8 @@
 5. [Autoregressive Adversarial Post-Training for Real-Time Interactive Video Generation](https://arxiv.org/abs/2506.09350)  
    `AAPT` 关注少步、实时、交互式视频生成的 post-training，是把视频生成模型推向交互世界模拟器的重要效率方向。
 
-!!! note "为什么世界模型文献要单独强调训练与评测"
-    世界模型的核心难点不只是“能不能生成未来帧”，而是生成的 latent 是否能支持下游规划、控制、反事实推理和泛化。重建 loss、next-frame prediction loss、FID 或视频视觉质量指标都只能回答一部分问题。更有价值的 benchmark 应该把下游任务泛化、rollout 误差累积、规划质量和交互控制成功率放到核心位置。
+**为什么世界模型文献要单独强调训练与评测。**
+世界模型的核心难点不只是“能不能生成未来帧”，而是生成的 latent 是否能支持下游规划、控制、反事实推理和泛化。重建 loss、next-frame prediction loss、FID 或视频视觉质量指标都只能回答一部分问题。更有价值的 benchmark 应该把下游任务泛化、rollout 误差累积、规划质量和交互控制成功率放到核心位置。
 
 ## 强化学习、后训练与世界模型
 
@@ -428,8 +427,8 @@
 9. [SageAttention3: Microscaling FP4 Attention for Inference and An Exploration of 8-Bit Training](https://arxiv.org/abs/2505.11594)\
    FP4 attention inference 和 8-bit attention training 的重要对照，适合理解 Q/K smoothing、FP4 tensor core、attention probability quantization 与 Attn-QAT 的差异。
 
-!!! note "低比特训练的核心阅读线"
-    如果你要研究 FP8/FP4 训练，不要只按 bit 数排序。更好的阅读顺序是：先看 `FP8 Formats` 和 `Microscaling` 理解数制，再看 `FP8-LM / COAT / Scaling FP8` 理解 activation 与 optimizer 状态，再看 `MXFP8 / MXFP4 / NVFP4 / Quartet` 理解 4-bit 训练为什么必须同时改数制、scale、rounding、kernel 和稳定性评测；如果目标是 low-bit attention，还要单独看 `SageAttention3` 和 `Attn-QAT`，因为 fused attention 的 backward 与 softmax 路径会引入普通 GEMM QAT 没有的约束。
+**低比特训练的核心阅读线。**
+如果你要研究 FP8/FP4 训练，不要只按 bit 数排序。更好的阅读顺序是：先看 `FP8 Formats` 和 `Microscaling` 理解数制，再看 `FP8-LM / COAT / Scaling FP8` 理解 activation 与 optimizer 状态，再看 `MXFP8 / MXFP4 / NVFP4 / Quartet` 理解 4-bit 训练为什么必须同时改数制、scale、rounding、kernel 和稳定性评测；如果目标是 low-bit attention，还要单独看 `SageAttention3` 和 `Attn-QAT`，因为 fused attention 的 backward 与 softmax 路径会引入普通 GEMM QAT 没有的约束。
 
 ### 6.5 量化运行时、ONNX 与可视化工具
 
@@ -500,8 +499,8 @@
 4. [TorchSpec](https://github.com/torchspec-project/TorchSpec)  
    PyTorch 原生 speculative decoding 训练框架，适合追踪工程实现。
 
-!!! note "MTP 与投机解码的阅读重点"
-    `MTP` 是训练目标或模型结构；`speculative decoding` 是推理算法。二者可以互相增强，但不能互相替代。阅读时要同时盯三类指标：主模型质量、多步预测接受率、端到端 latency / throughput。只看 future-token accuracy 或平均 speedup 都容易误判。
+**MTP 与投机解码的阅读重点。**
+`MTP` 是训练目标或模型结构；`speculative decoding` 是推理算法。二者可以互相增强，但不能互相替代。阅读时要同时盯三类指标：主模型质量、多步预测接受率、端到端 latency / throughput。只看 future-token accuracy 或平均 speedup 都容易误判。
 
 ## 训练系统、分布式与大规模训练
 

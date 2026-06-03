@@ -2,7 +2,6 @@
 
 模型蒸馏（Knowledge Distillation, KD）解决的是一个很实际的问题：已经有一个强但贵的 teacher model，能不能把它的行为、分布或中间表示压到更小、更快、更便宜的 student model 里。
 
-
 ## 1. 蒸馏解决什么
 
 蒸馏的常见目标可以分成三类：
@@ -19,8 +18,8 @@ FitNets 很适合作为第一张图：它说明蒸馏不只发生在最后输出
 
 <small>图源：[FitNets: Hints for Thin Deep Nets](https://arxiv.org/abs/1412.6550)，Figure 1。原论文图意：先用 teacher 的 hint layer 指导 student 的 guided layer，再用知识蒸馏目标训练完整 student network。</small>
 
-!!! note "图解：蒸馏可以教中间表示"
-    左图里 teacher 更宽，student 更薄更深；中图先让 student 的 guided layer 通过 regressor 对齐 teacher 的 hint layer；右图再让整个 student 进入知识蒸馏训练。它支持的判断是：蒸馏可以降低深薄模型的优化难度，不只是给最后分类头加 soft label。它不能直接证明所有小模型都会比 teacher 更好，因为收益依赖 student 容量、hint/guided layer 选择和任务分布。
+**蒸馏可以教中间表示。**
+左图里 teacher 更宽，student 更薄更深；中图先让 student 的 guided layer 通过 regressor 对齐 teacher 的 hint layer；右图再让整个 student 进入知识蒸馏训练。它支持的判断是：蒸馏可以降低深薄模型的优化难度，不只是给最后分类头加 soft label。它不能直接证明所有小模型都会比 teacher 更好，因为收益依赖 student 容量、hint/guided layer 选择和任务分布。
 
 ## 2. 经典 KD：soft target 和 temperature
 
@@ -47,7 +46,6 @@ teacher 给的 soft target 更细：
 p_i^{(T)}=\frac{\exp(z_i/T)}{\sum_j \exp(z_j/T)}
 \]
 
-
 这里 \(z_i\) 是第 \(i\) 类 logit，\(T\) 是 temperature，\(p_i^{(T)}\) 是升温后的类别概率。\(T=1\) 时就是普通 softmax；\(T>1\) 会让分布更软，让非最大类也保留更多相对信息。
 
 常见训练目标可以写成：
@@ -60,11 +58,10 @@ p_i^{(T)}=\frac{\exp(z_i/T)}{\sum_j \exp(z_j/T)}
 \alpha T^2 \operatorname{CE}(p_t^{(T)}, p_s^{(T)})
 \]
 
-
 这个式子有两股力：第一项让 student 仍然贴近真实标签 \(y\)；第二项让 student 在 temperature \(T\) 下贴近 teacher 分布 \(p_t^{(T)}\)。\(\alpha\) 控制 teacher 信号的权重，\(T^2\) 常用于补偿高 temperature 下梯度尺度变小的问题。
 
-!!! warning "常见误解：soft target 不是 teacher 永远正确"
-    soft target 传的是 teacher 的归纳偏好。如果 teacher 在某些人群、语言、视觉域或任务格式上有系统偏差，student 会一起继承。蒸馏前要先评估 teacher；蒸馏后还要用独立 gold eval 和失败分桶检查，而不是只看 student 和 teacher agreement。
+**常见误解：soft target 不是 teacher 永远正确。**
+soft target 传的是 teacher 的归纳偏好。如果 teacher 在某些人群、语言、视觉域或任务格式上有系统偏差，student 会一起继承。蒸馏前要先评估 teacher；蒸馏后还要用独立 gold eval 和失败分桶检查，而不是只看 student 和 teacher agreement。
 
 ## 3. 蒸馏什么：从 logits 到 attention、rationale 和生成轨迹
 
@@ -74,8 +71,8 @@ Transformer 蒸馏通常不满足于只学最后 logits。TinyBERT 的方法图�
 
 <small>图源：[TinyBERT: Distilling BERT for Natural Language Understanding](https://arxiv.org/abs/1909.10351)，Figure 2。原论文图意：Transformer-layer distillation 同时对齐 teacher 和 student 的 attention matrices 与 hidden states，分别形成 attention-based distillation loss 和 hidden-states distillation loss。</small>
 
-!!! note "图解：Transformer 蒸馏看的是层内行为"
-    这张图把 teacher layer 和 student layer 放在左右两侧。上方对齐 attention matrices，意思是让 student 学 teacher 如何在 token 之间分配注意力；中间对齐 hidden states，意思是让 student 学 teacher 在层内形成的表示。它能支持“蒸馏目标可以落在中间层”的判断，但不能说明 attention 完全等价于可解释推理，也不能保证任务外泛化一定保住。
+**Transformer 蒸馏看的是层内行为。**
+这张图把 teacher layer 和 student layer 放在左右两侧。上方对齐 attention matrices，意思是让 student 学 teacher 如何在 token 之间分配注意力；中间对齐 hidden states，意思是让 student 学 teacher 在层内形成的表示。它能支持“蒸馏目标可以落在中间层”的判断，但不能说明 attention 完全等价于可解释推理，也不能保证任务外泛化一定保住。
 
 MiniLM 又往前走了一步：它不强制逐层对齐所有 hidden states，而是让 student 深度模仿 teacher 最后一层 self-attention 的关系结构，包括 query-key attention distribution 和 value-value relation。
 
@@ -83,8 +80,8 @@ MiniLM 又往前走了一步：它不强制逐层对齐所有 hidden states，�
 
 <small>图源：[MiniLM: Deep Self-Attention Distillation for Task-Agnostic Compression of Pre-Trained Transformers](https://arxiv.org/abs/2002.10957)，Figure 1。原论文图意：student 通过 KL divergence 学 teacher 最后一层 self-attention 的 query-key attention distribution 和 value-relation transfer，从而深度模仿 self-attention 行为。</small>
 
-!!! note "图解：蒸馏关系，而不只是蒸馏向量"
-    图中 teacher 和 student 的层数可以不同，但都把最后一层 self-attention vectors 拆成 queries、keys、values。上支路对齐 query-key 关系，下支路对齐 value-value 关系。它支持的判断是：蒸馏可以对齐 token-token 关系结构，因此不一定要求 teacher/student 每一层形状完全一致。它不能证明 student 继承了 teacher 的全部知识；embedding、MLP、长尾任务和训练数据覆盖仍会限制上限。
+**蒸馏关系，而不只是蒸馏向量。**
+图中 teacher 和 student 的层数可以不同，但都把最后一层 self-attention vectors 拆成 queries、keys、values。上支路对齐 query-key 关系，下支路对齐 value-value 关系。它支持的判断是：蒸馏可以对齐 token-token 关系结构，因此不一定要求 teacher/student 每一层形状完全一致。它不能证明 student 继承了 teacher 的全部知识；embedding、MLP、长尾任务和训练数据覆盖仍会限制上限。
 
 可以把常见蒸馏信号放在一张表里：
 
@@ -102,8 +99,8 @@ MiniLM 又往前走了一步：它不强制逐层对齐所有 hidden states，�
 
 <small>图源：[One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)，Figure 2。原论文图意：一步生成器 \(G_\theta\) 从噪声生成 fake image；一条支路用预计算 noise-image pairs 做 regression loss，另一条支路通过 real / fake score 差异形成 distribution matching gradient。</small>
 
-!!! note "图解：少步蒸馏是在重写生成路径"
-    DMD 图里的 student generator 目标不是机械复刻 teacher 的每一个中间去噪状态，而是让少步或一步输出落到正确样本分布附近。regression branch 稳住单样本对应关系，distribution matching branch 约束整体分布方向。它能支持“少步生成不是删采样步”的判断；它不能单独证明文本对齐、细节锐度、多样性和长尾稳定性都保住，仍需要真实 sampler 回放和分桶评测。
+**少步蒸馏是在重写生成路径。**
+DMD 图里的 student generator 目标不是机械复刻 teacher 的每一个中间去噪状态，而是让少步或一步输出落到正确样本分布附近。regression branch 稳住单样本对应关系，distribution matching branch 约束整体分布方向。它能支持“少步生成不是删采样步”的判断；它不能单独证明文本对齐、细节锐度、多样性和长尾稳定性都保住，仍需要真实 sampler 回放和分桶评测。
 
 扩散少步蒸馏的更完整展开见 [一步生成、蒸馏与整流](../diffusion/distillation.md)。基础页只要抓住一个区别：分类 KD 多在压缩**模型行为**，扩散 KD 常在压缩**生成过程**。
 
@@ -124,8 +121,8 @@ LLM 时代经常蒸馏的不只是答案，还有 rationale。Distilling step-by
 
 <small>图源：[Distilling Step-by-Step! Outperforming Larger Language Models with Less Training Data and Smaller Model Sizes](https://arxiv.org/abs/2305.02301)，Figure 2。原论文图意：先用 CoT prompting 从 LLM 提取 rationales 和 labels，再用 task prefix 把小模型训练成既能预测 label、也能生成 rationale 的多任务模型。</small>
 
-!!! note "图解：rationale 蒸馏把答案背后的步骤也变成监督"
-    上半部分是 teacher LLM 给未标注样本补 rationale 和 label，下半部分是 smaller model 用 `[label]` 和 `[rationale]` 两种前缀学习不同输出。它支持的判断是：蒸馏可以提升数据效率，因为 rationale 给了比单个标签更密的任务信号。它不能直接证明 student 会真正“理解”推理过程；如果 teacher rationale 是事后编造或包含错误规则，student 也可能学到漂亮但脆弱的解释。
+**rationale 蒸馏把答案背后的步骤也变成监督。**
+上半部分是 teacher LLM 给未标注样本补 rationale 和 label，下半部分是 smaller model 用 `[label]` 和 `[rationale]` 两种前缀学习不同输出。它支持的判断是：蒸馏可以提升数据效率，因为 rationale 给了比单个标签更密的任务信号。它不能直接证明 student 会真正“理解”推理过程；如果 teacher rationale 是事后编造或包含错误规则，student 也可能学到漂亮但脆弱的解释。
 
 更复杂的训练策略包括：
 
@@ -150,15 +147,15 @@ LLM 时代经常蒸馏的不只是答案，还有 rationale。Distilling step-by
 | Latency / throughput / memory | 部署成本是否下降 | 质量是否保住 |
 | Regression replay | 老任务、边界样本是否退化 | 新任务泛化 |
 
-!!! warning "蒸馏的核心失败模式"
-    1. teacher 本身错，student 学得很像但也错。  
-    2. 平均分接近 teacher，但关键桶退化，比如长上下文、少数语言、复杂 prompt、工具调用或安全拒答。  
-    3. 离线蒸馏好看，线上分布漂移后失效。  
-    4. student 延迟下降，但为了补质量又加 rerank、fallback 或 verifier，端到端成本没有真的降。  
-    5. rationale 蒸馏让输出更像推理，但不代表推理过程可靠。
+**蒸馏的核心失败模式。**
+1. teacher 本身错，student 学得很像但也错。  
+2. 平均分接近 teacher，但关键桶退化，比如长上下文、少数语言、复杂 prompt、工具调用或安全拒答。  
+3. 离线蒸馏好看，线上分布漂移后失效。  
+4. student 延迟下降，但为了补质量又加 rerank、fallback 或 verifier，端到端成本没有真的降。  
+5. rationale 蒸馏让输出更像推理，但不代表推理过程可靠。
 
 一个实用判断是：如果目标是部署提速，必须报告端到端延迟、显存和吞吐；如果目标是能力迁移，必须报告独立评测、失败分桶和 teacher 错误继承；如果目标是生成少步化，必须报告真实步数下的质量、多样性、条件对齐和长尾样例。
 
-## 本页结论
+## 阅读结论
 
 模型蒸馏是一种把 teacher 里的可用信号转成 student 训练目标的方法。它可以压缩模型、迁移行为、提高数据效率，也可以把慢生成过程压成少步生成。但蒸馏不是免费午餐：teacher 质量、蒸馏信号、student 容量、数据覆盖和评测口径共同决定结果。读论文时先问四件事：蒸馏谁、蒸馏什么、用什么 loss、用什么独立证据证明 student 真的可替代。

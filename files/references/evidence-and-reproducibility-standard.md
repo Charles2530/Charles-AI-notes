@@ -2,7 +2,6 @@
 
 这页是全站统一证据规范。它不替代正文、论文专题或 [Claim Ledger](claim-ledger.md)，而是规定每个关键结论应该怎样写清楚：证据来自哪里、强到什么程度、能支持什么、不能外推到哪里。
 
-
 ## Evidence Snapshot 模板
 
 高风险页面、前沿论文页、技术报告页和系统效率页优先使用这个固定表头：
@@ -28,9 +27,10 @@ Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Ca
 推荐写法：
 
 ```markdown
-!!! info "事实版本"
-    | Checked Date | Official Source | Repro Status | Notes |
-    | --- | --- | --- | --- |
+**事实版本。**
+
+| Checked Date | Official Source | Repro Status | Notes |
+| --- | --- | --- | --- |
 | 2026-05-16 | arXiv / official PDF / official repo | Paper Only | 未见本站记录的第三方独立复现；按论文/官方材料保守引用。 |
 ```
 
@@ -83,25 +83,20 @@ Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Ca
 
 ## 图与表的解释规则
 
-复杂图必须紧跟解释框。只写“图源”不够，读者还需要知道这张图如何进入判断链。
+复杂图必须紧跟正文解释或图注读法。只写“图源”不够，读者还需要知道这张图如何进入判断链；新版正文不再要求使用提示框。
 
 推荐格式：
 
 ```markdown
-<small>图源：论文名，Figure X。原图意：...</small>
+<small>图源：论文名，Figure X。原图表达：...。本站读法：先看输入输出，再看效率机制，最后看它不能证明什么。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：...
-    **效率机制**：...
-    **对主线意义**：...
-    **不能证明什么**：...
+这张图在正文里的作用是说明 ...。它能支撑 ...，但不能单独证明 ...。
 ```
 
 结果表还要额外写 `读数边界`：
 
 ```markdown
-!!! warning "读数边界"
-    benchmark 条件、是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现。
+**读数边界。** 写清 benchmark 条件、是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现。
 ```
 
 ## 常见误写法

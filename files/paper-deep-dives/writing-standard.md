@@ -2,7 +2,6 @@
 
 这页只维护论文专题的写作标准。专题入口页负责导航；这里负责回答“怎样才算一篇 deep dive 写扎实了”。
 
-
 ## 推荐结构
 
 每篇专题讲解尽量保持固定结构，方便不同主题之间横向比较。
@@ -17,7 +16,7 @@
 | 消融诊断 | 哪个模块、数据、scale 或系统条件被拿掉后结果怎样变 |
 | 局限风险 | 哪些结论不能过度外推 |
 | 项目启发 | 如果落到工程系统里，哪些设计最值得借鉴 |
-| 本站判断 | 成熟度、可复用机制和下一步证据 |
+| 阅读结论 | 成熟度、可复用机制、不能外推项和下一步证据 |
 
 专题页不追求逐字复述论文，而是优先解释“为什么这样设计”。数据构造、训练阶段、推理约束和评测口径这类会改变工程判断的部分，应写得比普通摘要更具体。
 
@@ -26,15 +25,12 @@
 新增或重写论文页时必须满足三条底线。
 
 1. 关键 claim 必须能接回原论文图表、实验 setting 或官方材料，不能只写摘要复述。
-2. 复杂图必须有“这张图怎么读”；结果表要在正文里说明 benchmark 条件、硬件/数据/closed-loop 口径和不能外推项。
+2. 复杂图必须在正文里讲清“图源、原图表达什么、支撑哪条 claim、不能证明什么”；标题要围绕具体图意命名，避免保留模板化占位词。
 3. 项目启发只能吸收证据能支撑的部分；demo、benchmark、system throughput、closed-loop 和本站推断不能混写。
 
 最终页面不要保留“二轮补强：方法和实验抓手”这类临时补丁块。相关内容应融入方法、实验、诊断或局限段落。
 
 ## 方法和实验深度
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 为了避免专题页写成摘要库，方法部分和实验部分单独按下面标准验收。
 
@@ -49,40 +45,41 @@
 
 一个读完合格专题页的读者，应该能复述原论文约 90% 的重要信息：问题是什么、核心机制为什么这样设计、训练和推理怎么跑、实验在什么条件下成立、最强证据和最大短板在哪里。页面可以有趣，但有趣必须服务脉络，不能用轻快语气掩盖证据空缺。
 
-## 本站判断收口
+## 阅读结论收口
 
-每篇 deep dive 末尾用一个 `!!! info "本站判断"` 收束即可，不要同时保留 `## 本站判断` heading。这个收口不重复摘要，只回答三件事。
+每篇 deep dive 末尾用一个简短的“阅读结论”正文段落收束即可，不要再加提示框。这个收口不重复摘要，只回答四件事。
 
 | 收口问题 | 最小写法 | 不要写成 |
 | --- | --- | --- |
 | 成熟度 | 经典已验证 / 工程常用 / 前沿待复现 / 官方展示 / 本站推断 | “很有潜力” |
 | 可复用机制 | 明确对应数据、训练、推理、显存、验证或部署哪项成本 | “效果很好” |
+| 不可外推项 | 说明哪些 benchmark、硬件、数据或 closed-loop 条件没有覆盖 | “全面证明” |
 | 下一步证据 | 需要补 ablation、closed-loop、system trace、质量回归或独立复现 | “值得关注” |
 
 ## 图表读法
 
-论文图要回答：模块做什么、支撑哪条 claim、不能证明什么。图表不是装饰，而是 claim 的证据节点。
+论文图要回答：模块做什么、支撑哪条 claim、不能证明什么。图表不是装饰，而是 claim 的证据节点。图下可以写短 caption，真正的读法要进正文；如果一张图复杂，就用一个有信息量的小标题，例如“树形验证要先分清 draft 和 target”，而不是保留通用模板词。
 
 ![V-JEPA training procedure 原论文图](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="920" }
 
 <small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原论文图意：context encoder 只处理 masked video 中未遮挡 token；predictor 接收 context output 和 mask tokens，预测 target encoder 对完整视频产生的 masked token representations。</small>
 
-!!! note "图解：先分清两条 encoder 路径"
-    左侧蓝色 token 是可见上下文，经 context encoder 得到 \(N\times d\) 表示；predictor 把 context output 和红色 mask tokens 拼接，预测被遮挡位置的 representation。右侧 target encoder 看完整视频，但 loss 只作用在 masked target representations 上，并通过 stop-gradient 阻止 teacher 分支被 predictor 反向更新。这张图支撑的是 latent prediction，不是像素重建，也不能单独证明闭环规划能力。
+**先分清两条 encoder 路径。**
+左侧蓝色 token 是可见上下文，经 context encoder 得到 \(N\times d\) 表示；predictor 把 context output 和红色 mask tokens 拼接，预测被遮挡位置的 representation。右侧 target encoder 看完整视频，但 loss 只作用在 masked target representations 上，并通过 stop-gradient 阻止 teacher 分支被 predictor 反向更新。这张图支撑的是 latent prediction，不是像素重建，也不能单独证明闭环规划能力。
 
 ![DeepSeek-V3 architecture 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原论文图意：展示 MLA、DeepSeekMoE、shared/routed experts 与 Multi-Token Prediction 在整体架构中的位置。</small>
 
-!!! note "图解：架构图要按成本链路读"
-    先看 token 在主干里的路径，再看哪些模块改变显存、通信和训练目标。MLA 影响 KV cache 与长上下文成本，MoE 决定每个 token 激活哪些专家，MTP 是额外训练信号而不是推理时必须多吐 token。读技术报告时不要把“结构存在”直接等同于“端到端更快”，还要回到吞吐、负载均衡、FP8、并行策略和 serving 约束。
+**架构图要按成本链路读。**
+先看 token 在主干里的路径，再看哪些模块改变显存、通信和训练目标。MLA 影响 KV cache 与长上下文成本，MoE 决定每个 token 激活哪些专家，MTP 是额外训练信号而不是推理时必须多吐 token。读技术报告时不要把“结构存在”直接等同于“端到端更快”，还要回到吞吐、负载均衡、FP8、并行策略和 serving 约束。
 
 ![EAGLE-3 inference pipeline 原论文图](../assets/images/paper-deep-dives/inference/eagle-3/figure-5-inference-pipeline.png){ .atlas-figure-page width="560" }
 
 <small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 5。原论文图意：展示 EAGLE-3 在推理时用 draft model 生成候选 token tree，再由 target LLM 验证和接受部分 token 的 speculative decoding 流程。</small>
 
-!!! note "图解：推理 pipeline 要抓住草稿和验证"
-    这类图的核心不是“多了一个小模型”，而是把昂贵 target LLM 的逐 token 解码改成“先草拟一批候选，再一次验证一段”。draft model 决定候选质量和树形展开，target model 决定哪些 token 能被接受。它支撑的是吞吐/延迟优化 claim，不能证明模型回答质量提升；如果 acceptance rate 下降，额外 draft 成本可能抵消收益。
+**推理 pipeline 要抓住草稿和验证。**
+这类图的核心不是“多了一个小模型”，而是把昂贵 target LLM 的逐 token 解码改成“先草拟一批候选，再一次验证一段”。draft model 决定候选质量和树形展开，target model 决定哪些 token 能被接受。它支撑的是吞吐/延迟优化 claim，不能证明模型回答质量提升；如果 acceptance rate 下降，额外 draft 成本可能抵消收益。
 
 ## 复现和证据口径
 
@@ -96,11 +93,15 @@
 | Independent Reproduced | 有第三方复现实验或可运行复现记录 | 只因为 repo 能跑就标独立复现 |
 | Site Inference | 本站根据证据做的工程判断 | 作者结论 |
 
+## 外部精读
+
+论文专题可以直接链接高质量外部材料，不要求都转成站内互链。优先级通常是：原论文/技术报告、官方博客或项目页、官方代码、可复现 benchmark、权威技术博客。外部博客和微信公众号文章可以学习讲法、结构和例子，但关键事实、图表和数值仍要回到论文或官方材料核对。
+
 ## 选题和维护
 
 不是所有论文都适合写成专题。更适合进入这个模块的论文，通常满足至少一个条件：代表方向转折点；数据、训练、推理和评测强耦合；能为项目提供可复用模板；局限同样有启发价值；能连接站内多个主题。
 
-新增专题页时遵守三个维护约定：标题使用“论文或系统名 + 一句话定位”；保留原论文链接和代码链接；结尾必须写局限、风险或不可外推结论。
+新增专题页时遵守三个维护约定：标题使用“论文或系统名 + 一句话定位”；保留原论文链接和代码链接；结尾必须写阅读结论、局限、风险或不可外推结论。
 
 专题页不要重复主题总览页已经讲清的基础概念。需要背景时链接回对应主题页，这样能保持“单篇论文拆解”的定位，也能减少同一概念在多个页面里不一致。
 

@@ -6,7 +6,6 @@ paper_topic: 扩散模型
 
 # Wan2.1：开源视频生成系统路线
 
-
 Wan 这篇技术报告值得精读，不只是因为它把开源视频生成模型的效果往前推了一步，更因为它把**视频基础模型从数据、VAE、DiT、Flow Matching、分布式训练、后训练、评测和推理优化**完整摊开了。很多视频扩散论文只讲一个模块，Wan 更像一份系统设计说明：为什么要先训视频 VAE，为什么 DiT 要用 full spatio-temporal attention，为什么速度预测适合视频 latent，为什么 14B 视频模型必须把 Context Parallel、FSDP、offloading 和 cache 一起考虑。
 
 如果把 Wan2.1 看作开源视频 foundation model 的基线，Wan2.2 则是它后续工程演进的一次明显升级。用户补充说 Wan2.2 没有单独论文，这一点需要在阅读时区分清楚：**本页前半部分以 Wan2.1 论文为主，后半部分把 Wan2.2 官方 README 的介绍作为补充资料**，不把 README 内容说成论文结论。
@@ -15,11 +14,8 @@ Wan 这篇技术报告值得精读，不只是因为它把开源视频生成模�
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 1。原论文图意：Wan 与开源、闭源视频生成模型在 benchmark 和人工评测下的总体比较。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是视频 VAE、DiT/多模态条件和训练数据配方，输出是开源视频生成系统。  
-    **效率机制**：通过 VAE 压缩、模型结构和数据阶段控制视频生成成本。  
-    **对主线意义**：它提供视频底座证据，但要再接动作条件和 causal rollout 才靠近世界模型。  
-    **不能证明什么**：视频生成样例不能证明 planning utility、物理因果或机器人安全。
+**Figure 1 支撑的是视频底座能力，不是闭环世界模型能力。**
+输入是视频 VAE、DiT/多模态条件和训练数据配方，输出是开源视频生成系统。效率机制来自 VAE 压缩、模型结构和数据阶段控制视频生成成本；对本站主线来说，它提供强视频底座证据，但要再接动作条件、causal rollout 和闭环评测才靠近世界模型。视频生成样例不能单独证明 planning utility、物理因果或机器人安全。
 
 ![Wan generated examples](../../assets/images/paper-deep-dives/diffusion/wan/figure-2-examples.png){ width="720" .atlas-figure-tall }
 
@@ -52,12 +48,12 @@ Wan 的核心问题不是“再做一个 text-to-video 模型”，而是回答�
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 3。原论文图意：不同训练阶段的数据供给策略会动态调整 motion、quality 和 category 的比例。</small>
 
-!!! note "Figure 3 怎么读"
-    这张图不要按“一批数据从左到右过滤一次”来读，它更像一张训练数据调度图。左侧的 `Pool` 是原始候选池，先被拆成 `Image Data`、`Video Data` 和 `Textual Data`；后面的 `[I]`、`[V]`、`[T]` 分别表示 image、video、textual 数据流，`192P / 480P / 720P` 表示不同分辨率训练阶段。灰色带子是过滤或去重，绿色块是进入训练的部分，紫色块多和分辨率筛选相关。
+**Figure 3 怎么读。**
+这张图不要按“一批数据从左到右过滤一次”来读，它更像一张训练数据调度图。左侧的 `Pool` 是原始候选池，先被拆成 `Image Data`、`Video Data` 和 `Textual Data`；后面的 `[I]`、`[V]`、`[T]` 分别表示 image、video、textual 数据流，`192P / 480P / 720P` 表示不同分辨率训练阶段。灰色带子是过滤或去重，绿色块是进入训练的部分，紫色块多和分辨率筛选相关。
 
-    核心信息是：Wan 不是固定一个数据配比从头训到尾，而是在不同阶段重新决定“给模型看什么”。早期 `192P` 阶段更看重规模和覆盖面，用较低成本让模型先学基本语义、构图和粗时序；到 `480P / 720P` 阶段，数据会经过更强的 visual filter、motion filter 和 resolution filter，训练集中高画质、高分辨率、运动更有意义的视频比例会上升；到 SFT 阶段，数据进一步收窄，更多服务最终观感、复杂动作、文字生成和用户偏好。
+核心信息是：Wan 不是固定一个数据配比从头训到尾，而是在不同阶段重新决定“给模型看什么”。早期 `192P` 阶段更看重规模和覆盖面，用较低成本让模型先学基本语义、构图和粗时序；到 `480P / 720P` 阶段，数据会经过更强的 visual filter、motion filter 和 resolution filter，训练集中高画质、高分辨率、运动更有意义的视频比例会上升；到 SFT 阶段，数据进一步收窄，更多服务最终观感、复杂动作、文字生成和用户偏好。
 
-    图注里的 `motion / quality / category` 可以这样理解：`motion` 是视频运动分布的重采样，避免模型被静态、抖动或低质量运动视频带偏；`quality` 是画质、清晰度、压缩噪声、审美和分辨率门槛随阶段提高；`category` 是图像、视频、文字数据以及内容类别的比例控制，防止只追求高分样本而丢掉长尾场景、物体、风格和文字能力。换句话说，这张图想表达的不是“过滤越多越好”，而是**每个训练阶段都在重新平衡数据的运动、画质和类别覆盖**。
+图注里的 `motion / quality / category` 可以这样理解：`motion` 是视频运动分布的重采样，避免模型被静态、抖动或低质量运动视频带偏；`quality` 是画质、清晰度、压缩噪声、审美和分辨率门槛随阶段提高；`category` 是图像、视频、文字数据以及内容类别的比例控制，防止只追求高分样本而丢掉长尾场景、物体、风格和文字能力。换句话说，这张图想表达的不是“过滤越多越好”，而是**每个训练阶段都在重新平衡数据的运动、画质和类别覆盖**。
 
 最底层过滤先处理“明显不该进训练集”的样本：OCR/text coverage 过高、审美分低、NSFW、水印和 logo、黑边、过曝、生成图污染、模糊、时长和分辨率不达标。论文特别提到，少量生成图污染也会明显伤害模型表现，所以训练了 synthetic image detector 来过滤。这一步会去掉约 50% 初始数据。
 
@@ -67,8 +63,8 @@ Wan 的核心问题不是“再做一个 text-to-video 模型”，而是回答�
 
 第四层是视觉文字数据。Wan 一边合成数亿张含中文字符的纯底文字图，一边从真实图片和视频里用 OCR 抽取中英文文字，再用 Qwen2-VL 生成包含精确文字内容的自然描述。这个设计解释了论文为什么强调 Wan 能生成中英文视觉文本：它不是单靠大模型“涌现”，而是数据构造明确把 OCR、caption 和渲染样本接进了训练。
 
-!!! note "Dense caption 为什么重要"
-    用户 prompt 往往很短，但训练视频需要知道对象、动作、镜头、风格、颜色、空间关系和文字内容。Wan 训练了内部 caption model，把网页原始短描述扩成 dense captions。这个 caption model 使用 LLaVA-style 架构：ViT 提取图像和视频帧特征，MLP 投到 Qwen LLM；视频输入按 3 FPS 采样，最多 129 帧，并用 slow-fast encoding 降低视觉 token 成本。训练分三阶段：先冻结 ViT/LLM 只训 MLP，对齐视觉和语言空间；再全参训练；最后用小规模高质量数据端到端收口。
+**Dense caption 为什么重要。**
+用户 prompt 往往很短，但训练视频需要知道对象、动作、镜头、风格、颜色、空间关系和文字内容。Wan 训练了内部 caption model，把网页原始短描述扩成 dense captions。这个 caption model 使用 LLaVA-style 架构：ViT 提取图像和视频帧特征，MLP 投到 Qwen LLM；视频输入按 3 FPS 采样，最多 129 帧，并用 slow-fast encoding 降低视觉 token 成本。训练分三阶段：先冻结 ViT/LLM 只训 MLP，对齐视觉和语言空间；再全参训练；最后用小规模高质量数据端到端收口。
 
 ## Wan-VAE：视频模型的压缩器不是配角
 
@@ -77,7 +73,6 @@ Wan 的核心问题不是“再做一个 text-to-video 模型”，而是回答�
 \[
 x \in \mathbb{R}^{(1+T/4)\times H/8\times W/8\times 16}.
 \]
-
 
 ![Wan-VAE framework](../../assets/images/paper-deep-dives/diffusion/wan/figure-3-vae.png){ width="920" }
 
@@ -95,8 +90,8 @@ VAE 的训练也不是一步完成：
 
 训练损失由 L1 reconstruction、KL 和 LPIPS 组成，权重分别是 `3`、`3e-6` 和 `3`；最后阶段加入 3D discriminator 的 GAN loss。论文的一个实用结论是：Wan-VAE 在相同压缩率和 latent channel 下重建速度比 Hunyuan Video VAE 快 2.5x，这会直接影响后续 DiT 训练吞吐。
 
-!!! note "为什么 causal VAE 要配 feature cache"
-    causal convolution 不能看未来帧，所以长视频可以按 chunk 编码/解码。Wan-VAE 把视频切成和 latent 时间步对应的 chunk，每个 chunk 最多处理 4 帧，并缓存上一段 causal convolution 需要的历史 feature。这样既不会破坏时间因果性，又能避免一次性把整段长视频塞进显存。
+**为什么 causal VAE 要配 feature cache。**
+causal convolution 不能看未来帧，所以长视频可以按 chunk 编码/解码。Wan-VAE 把视频切成和 latent 时间步对应的 chunk，每个 chunk 最多处理 4 帧，并缓存上一段 causal convolution 需要的历史 feature。这样既不会破坏时间因果性，又能避免一次性把整段长视频塞进显存。
 
 ## Video DiT 与 Flow Matching
 
@@ -106,13 +101,12 @@ Wan 的生成主干由三部分组成：Wan-VAE、diffusion transformer 和 umT5
 L=(1+T/4)\times H/16\times W/16.
 \]
 
-
 ![Wan DiT architecture](../../assets/images/paper-deep-dives/diffusion/wan/figure-4-dit.png){ width="920" }
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 5。原论文图意：Wan 架构由 Wan-VAE、Video DiT 和 umT5 text encoder 组成，DiT 通过 cross-attention 接入文本条件。</small>
 
-!!! note "图解：Video DiT 图先看条件怎么进入主干"
-    左侧 latent video tokens 来自 Wan-VAE，文本条件来自 umT5，二者在 DiT block 中通过 self-attention 和 cross-attention 交互。图里的箭头重点说明条件注入路径，而不是证明某个单独模块带来全部性能；真正的效果还要和数据配方、VAE 压缩、训练阶段和采样设置一起看。
+**Video DiT 图先看条件怎么进入主干。**
+左侧 latent video tokens 来自 Wan-VAE，文本条件来自 umT5，二者在 DiT block 中通过 self-attention 和 cross-attention 交互。图里的箭头重点说明条件注入路径，而不是证明某个单独模块带来全部性能；真正的效果还要和数据配方、VAE 压缩、训练阶段和采样设置一起看。
 
 Transformer block 内部用 full spatio-temporal self-attention 建模时空关系，再通过 cross-attention 注入文本。时间步 embedding 经过一个共享 MLP 预测六组 modulation 参数；这个 MLP 在所有 blocks 间共享，但每个 block 学不同 bias。论文说这个设计减少约 25% 参数，并在同等规模下带来更好表现。这个点很像在问：参数应该花在每层 adaLN 上，还是花在更深的主干上？Wan 的消融支持后者。
 
@@ -124,13 +118,11 @@ Wan 使用 Flow Matching / Rectified Flow 风格目标。训练时先取真实�
 x_t=t x_1+(1-t)x_0.
 \]
 
-
 这条路径上的真实速度是：
 
 \[
 v_t=\frac{d x_t}{dt}=x_1-x_0.
 \]
-
 
 模型输出 \(u(x_t,c_{txt},t;\theta)\)，直接回归这条速度：
 
@@ -141,7 +133,6 @@ v_t=\frac{d x_t}{dt}=x_1-x_0.
 u(x_t,c_{txt},t;\theta)-v_t
 \right\|^2.
 \]
-
 
 这里 \(c_{txt}\) 是长度为 512 token 的 umT5 文本 embedding。
 
@@ -159,8 +150,8 @@ Wan 没有从一开始就直接训练 720P 长视频。论文指出直接高分�
 
 预训练配置上，Wan 使用 bf16 mixed precision、AdamW、weight decay `1e-3`、initial learning rate `1e-4`，并根据 FID 和 CLIP Score plateau 动态降低学习率。后训练保持同样模型结构和 optimizer 配置，从预训练 checkpoint 初始化，用高质量后训练视频数据在 480P 和 720P 上联合训练。
 
-!!! note "为什么图像数据还要一直混进视频训练"
-    视频数据负责运动和时序，图像数据负责高质量空间语义、构图、文字和细节覆盖。只训视频会受限于视频帧质量、压缩噪声和内容分布；只训图像又不会自然学到运动。Wan 的 staged image-video joint training，本质上是在用图像补空间分布，用视频补时间分布。
+**为什么图像数据还要一直混进视频训练。**
+视频数据负责运动和时序，图像数据负责高质量空间语义、构图、文字和细节覆盖。只训视频会受限于视频帧质量、压缩噪声和内容分布；只训图像又不会自然学到运动。Wan 的 staged image-video joint training，本质上是在用图像补空间分布，用视频补时间分布。
 
 ## 大规模训练系统：注意力才是主要瓶颈
 
@@ -170,7 +161,6 @@ Wan 的系统章节很有价值，因为它把视频 DiT 和 LLM 的成本差异
 L(\alpha b s h^2+\beta b s^2 h),
 \]
 
-
 其中 \(L\) 是层数，\(b\) 是 micro batch size，\(s\) 是 sequence length，\(h\) 是 hidden dimension。视频 \(s\) 很容易到几十万甚至百万，attention 的 \(s^2\) 项会逐渐压过线性层。论文说当 sequence length 到 1M 时，attention 可占端到端训练时间 95%。
 
 显存同样麻烦。DiT activation memory 可写成 \(\gamma Lbsh\)，而视频 DiT 的 \(\gamma\) 往往大于普通 LLM；14B DiT 在 1M tokens、micro batch size 1 的场景下，activation 可超过 8 TB。
@@ -179,7 +169,7 @@ L(\alpha b s h^2+\beta b s^2 h),
 
 为什么视频 DiT 的 \(\gamma\) 往往更大？一方面，视频 token 同时包含时间和空间维，sequence length \(s\) 已经很大；另一方面，full spatio-temporal attention、3D patch/reshape、cross-attention 和长序列并行会让训练时需要保留更多中间张量。普通 LLM 的 token 序列通常是一维文本，kernel 和并行实现也更成熟，很多 activation 可以更稳定地重算或融合；视频 DiT 的中间状态更重、更碎，所以即使公式都写成 \(Lbsh\) 量级，前面的 \(\gamma\) 也会把显存需求放大很多。
 
-![Wan DiT parallelism](../../assets/images/paper-deep-dives/diffusion/wan/figure-5-parallel.png){ width="640" }
+![Wan DiT parallelism](../../assets/images/paper-deep-dives/diffusion/wan/figure-5-parallel.png){ width="820" }
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 8。原论文图意：128 GPUs 下，内层用 Ulysses=8 与 Ring=2 组成 2D Context Parallelism，外层用 FSDP=32 和 DP=4。</small>
 
@@ -194,8 +184,8 @@ Wan 的并行策略是：
 
 2D Context Parallelism 把 Ring Attention 放在外层，Ulysses 放在内层。Ulysses 对跨机通信敏感，Ring Attention 对 block size 有要求，把两者组合起来可以更好地隐藏通信。论文给出的例子是 256K sequence、16 GPUs、2 machines：2D CP 把通信开销从 Ulysses 的 10% 以上降到 1% 以下。
 
-!!! note "activation offloading 为什么优先于 checkpointing"
-    长视频场景里 attention 计算很重，计算时间足够覆盖一部分 PCIe activation offload 时间。Wan 因此优先使用 activation offloading，把部分 activation 挪到 CPU 内存并和计算重叠；当 CPU 内存也吃紧时，再结合 gradient checkpointing，优先 checkpoint 那些 GPU memory / compute ratio 高的层。
+**activation offloading 为什么优先于 checkpointing。**
+长视频场景里 attention 计算很重，计算时间足够覆盖一部分 PCIe activation offload 时间。Wan 因此优先使用 activation offloading，把部分 activation 挪到 CPU 内存并和计算重叠；当 CPU 内存也吃紧时，再结合 gradient checkpointing，优先 checkpoint 那些 GPU memory / compute ratio 高的层。
 
 ## 推理优化：50 步视频采样怎么降延迟
 
@@ -213,9 +203,6 @@ Wan 的默认推理仍然是多步采样，论文说通常约 50 sampling steps�
 这里的 cache 不是简单“偷懒少算”。论文观察到两个相似性：同一 DiT block 的 attention output 在相邻采样步之间相似；CFG 后期 conditional 与 unconditional 输出也相似。因此可以选择部分 step 真正跑 attention 或 unconditional branch，其余 step 复用并做 residual compensation。视频模型每步都很贵，这类跨步复用的收益会比图像模型更明显。
 
 ## 评测：Wan-Bench 不只看 FVD/FID
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 Wan 认为 FVD/FID 和人类感知不够对齐，于是提出 Wan-Bench。它分成 dynamic quality、image quality、instruction following 三大维度，共 14 个细粒度指标。简单任务用传统 detector，复杂任务用 MLLM；最终分数用超过 5,000 组 pairwise human comparisons 学出来的偏好权重加权。
 
@@ -282,8 +269,8 @@ V2A 模块说明 Wan 不只把视频扩散当作视觉生成器。它用 DiT + F
 
 <small>图源：`Wan: Open and Advanced Large-Scale Video Generative Models`，Figure 23。原论文图意：V2A 模型同时处理视频 chunk 和文本描述，合成语义一致且时间对齐的音频。</small>
 
-!!! note "图解：三张应用框架图要看统一接口"
-    I2V 图看的是 mask 如何把首帧、续写和首尾帧任务统一成条件生成；editing 图看的是 context latent、mask 和 concept decoupling 怎样把局部编辑接回视频扩散主干；V2A 图看的是视频 chunk 与文本描述如何共同约束音频生成。这组图支撑的是 Wan 把视频生成主干扩到多任务接口，不等于所有任务都已经有同等强度的闭环评测。
+**三张应用框架图要看统一接口。**
+I2V 图看的是 mask 如何把首帧、续写和首尾帧任务统一成条件生成；editing 图看的是 context latent、mask 和 concept decoupling 怎样把局部编辑接回视频扩散主干；V2A 图看的是视频 chunk 与文本描述如何共同约束音频生成。这组图支撑的是 Wan 把视频生成主干扩到多任务接口，不等于所有任务都已经有同等强度的闭环评测。
 
 ## Wan2.2 README 补充：没有单独论文，但有官方路线说明
 
@@ -306,14 +293,14 @@ Wan2.2 最核心的新信息是 A14B 系列的两专家 MoE。README 说每个 e
 
 ![Wan2.2 MoE architecture](../../assets/images/paper-deep-dives/diffusion/wan/wan22-moe-arch.png){ width="920" }
 
-<small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/moe_arch.png`。原 README 图意：Wan2.2 把两个专家按 denoising 阶段接入视频扩散模型，每一步只激活对应专家。</small>
+<small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/moe_arch.png`。README 图意：Wan2.2 把两个专家按 denoising 阶段接入视频扩散模型，每一步只激活对应专家。本站读法：这不是 LLM 里按 token 路由的 MoE，而是按扩散时间/SNR 分工的专家切换。</small>
 
 ![Wan2.2 MoE SNR switch](../../assets/images/paper-deep-dives/diffusion/wan/wan22-moe-snr.png){ width="920" }
 
-<small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/moe_2.png`。原 README 图意：专家切换点由 SNR 决定，高噪声阶段激活 high-noise expert，低噪声阶段切换到 low-noise expert，并通过 validation loss 比较 MoE 组合效果。</small>
+<small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/moe_2.png`。README 图意：专家切换点由 SNR 决定，高噪声阶段激活 high-noise expert，低噪声阶段切换到 low-noise expert，并通过 validation loss 比较 MoE 组合效果。本站读法：重点看“噪声阶段决定专家职责”，不要把它读成简单堆参数。</small>
 
-!!! note "高噪声专家为什么负责 layout"
-    扩散/Flow 采样一开始离数据分布很远，latent 里还没有稳定对象、镜头和运动结构。这一段的错误会影响整段视频，比如主体位置、场景布局、运动方向和镜头路线。后期低噪声阶段结构已经基本成形，模型更多是在修边缘、纹理、局部闪烁和细节。因此 Wan2.2 按 SNR 切专家，比随机路由或 token-level router 更符合视频生成的时间结构。
+**高噪声专家为什么负责 layout。**
+扩散/Flow 采样一开始离数据分布很远，latent 里还没有稳定对象、镜头和运动结构。这一段的错误会影响整段视频，比如主体位置、场景布局、运动方向和镜头路线。后期低噪声阶段结构已经基本成形，模型更多是在修边缘、纹理、局部闪烁和细节。因此 Wan2.2 按 SNR 切专家，比随机路由或 token-level router 更符合视频生成的时间结构。
 
 ### Wan2.2 TI2V-5B：高压缩换 720P 可部署
 
@@ -321,7 +308,7 @@ Wan2.2 的另一个重点是 TI2V-5B。README 介绍它使用 high-compression W
 
 ![Wan2.2 high-compression VAE](../../assets/images/paper-deep-dives/diffusion/wan/wan22-vae.png){ width="920" }
 
-<small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/vae.png`。原 README 图意：Wan2.2-VAE 采用更高空间压缩，服务 TI2V-5B 的 720P 高效生成。</small>
+<small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/vae.png`。README 图意：Wan2.2-VAE 采用更高空间压缩，服务 TI2V-5B 的 720P 高效生成。本站读法：这张图要和部署要求一起看；高压缩降低 latent token 成本，但也会把细节保真压力转移到 VAE 与后续 DiT 上。</small>
 
 | Models | Download Links | Description |
 | --- | --- | --- |
@@ -335,10 +322,10 @@ Wan2.2 的另一个重点是 TI2V-5B。README 介绍它使用 high-compression W
 
 ![Wan2.2 performance comparison](../../assets/images/paper-deep-dives/diffusion/wan/wan22-performance.png){ width="920" }
 
-<small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/performance.png`。原 README 图意：Wan2.2 在 Wan-Bench 2.0 上与主流闭源商业模型对比。</small>
+<small>图源：`Wan-Video/Wan2.2` 官方 README，`assets/performance.png`。README 图意：Wan2.2 在 Wan-Bench 2.0 上与主流闭源商业模型对比。本站读法：这张图只能支撑官方 benchmark 口径下的相对位置，不能直接外推到所有创作工作流、长视频一致性或编辑任务。</small>
 
-!!! note "图解：performance 图只读 benchmark 口径"
-    横向比较要先看 Wan-Bench 2.0 的任务、评分器和模型设置，再看柱状差距。它能说明 Wan2.2 在该 benchmark 口径下的相对位置，但不能直接推出所有真实创作场景、编辑任务或长视频一致性都优于闭源模型。
+**performance 图只读 benchmark 口径。**
+横向比较要先看 Wan-Bench 2.0 的任务、评分器和模型设置，再看柱状差距。它能说明 Wan2.2 在该 benchmark 口径下的相对位置，但不能直接推出所有真实创作场景、编辑任务或长视频一致性都优于闭源模型。
 
 把 Wan2.1 和 Wan2.2 放在一起看，演进逻辑很清楚：Wan2.1 先证明开放视频 DiT 底座可行，公开了训练和系统方案；Wan2.2 再围绕**更大容量但不显著增加每步成本**和**更高压缩下的 720P 部署**继续推进。MoE 是模型容量方向，TI2V-5B 是部署方向。
 
@@ -361,7 +348,7 @@ Wan 的消融支持几个可复用判断：
 
 对后续研究来说，Wan 提供的是一个开放底座和系统配方，而不是终点。后续的 Wan2.2 MoE、[Phased DMD](phased-dmd.md) 少步蒸馏、[Self Forcing](../world-models/self-forcing.md) 因果 rollout、[LingBot-World](../world-models/lingbot-world.md) 交互世界模拟，都可以看成在这个底座上分别补容量、速度、因果性和动作条件。
 
-## 读完可以带走什么
+## 阅读结论
 
 Wan 最值得复用的不是某个单点 trick，而是完整训练路线：
 
@@ -374,3 +361,11 @@ Wan 最值得复用的不是某个单点 trick，而是完整训练路线：
 7. 用 human-aligned benchmark 把动态质量、画质和指令跟随拆开评估。
 
 如果要把 Wan 当作工程参考，最重要的问题不是“模型有多大”，而是：你的数据过滤、VAE、训练阶段、条件接口和推理预算是否和目标应用一致。视频生成系统的失败往往不是公式错，而是这些接口没有对齐。
+
+## 外部精读
+
+- [Wan 2.1 technical report](https://arxiv.org/abs/2503.20314)：原论文，重点读数据阶段、Wan-VAE、Video DiT、训练系统和 Wan-Bench。
+- [Wan-Video/Wan2.2 README](https://github.com/Wan-Video/Wan2.2)：Wan2.2 官方路线说明，适合核对 MoE、TI2V-5B、模型下载和部署要求；它不是 Wan2.2 独立论文。
+- [Wan2.1 Hugging Face model page](https://huggingface.co/Wan-AI)：查看模型权重、pipeline 和生态集成状态，能力 claim 仍回到技术报告。
+- [VBench](https://vchitect.github.io/VBench-project/)：理解视频生成 benchmark 的维度拆分，避免只看单个总分。
+- [Phased DMD project page](https://x-niper.github.io/projects/Phased-DMD/)：看 Wan 底座如何被后续少步蒸馏工作使用。

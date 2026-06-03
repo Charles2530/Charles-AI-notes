@@ -2,15 +2,14 @@
 
 世界模型最有吸引力的落地场景，正是那些真实试错昂贵、长时规划重要、环境部分可观测且安全约束严格的系统。机器人与自动驾驶同时满足这几个条件，因此它们也是世界模型从“研究概念”走向“工程工具”的主战场。
 
-
 不过，这两个领域虽然都适合世界模型，却并不相同。机器人更强调接触、操控、技能组合和低层闭环；自动驾驶更强调多主体交互、地图结构、交通规则和极低容错率。理解这种共性与差异，才能看清 `WM`、`WAM`、`VAM` 各自更适合落在哪些系统层。
 
 ![World model paradigms 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-1-world-model-paradigms.jpg){ width="860" }
 
 <small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 1。原论文图意：把 internal world model、external world simulation model 和 action-aware simulation 的关系放在同一张图里，说明世界模型既可以服务内部决策，也可以服务外部可视化仿真。</small>
 
-!!! note "图解：机器人和自动驾驶要先分清世界模型落在哪"
-    如果模型只在 agent 内部输出 latent、reward、risk，它更像决策模块的一部分；如果模型生成可观察未来视频或场景，它更像外部模拟器；如果动作会改变未来分支，它才真正接近可用于规划的 action-aware world model。机器人和自动驾驶常常需要三者组合，而不是押注单一路线。
+**机器人和自动驾驶要先分清世界模型落在哪。**
+如果模型只在 agent 内部输出 latent、reward、risk，它更像决策模块的一部分；如果模型生成可观察未来视频或场景，它更像外部模拟器；如果动作会改变未来分支，它才真正接近可用于规划的 action-aware world model。机器人和自动驾驶常常需要三者组合，而不是押注单一路线。
 
 ## 为什么机器人和自动驾驶特别需要世界模型
 
@@ -34,7 +33,6 @@ $$
 p_\theta(o_{t+1:t+H} \mid o_{\le t}, a_{t:t+H-1}, g).
 $$
 
-
 这里的关键不是预测“自然会发生什么”，而是预测“在我做出这串动作之后，世界会怎样演化”。
 
 **上线必须同时满足实时性和安全性。**
@@ -49,7 +47,6 @@ $$
 p_\theta(s_{t+1}, o_{t+1}, r_t, c_t \mid s_t, o_t, a_t, g),
 $$
 
-
 其中：
 
 \(o_t\) 可以是图像、点云、状态向量、地图切片、雷达或语言上下文；\(s_t\) 是 belief state 或 latent state；\(r_t\) 表示任务收益、成功度或进度；\(c_t\) 表示风险、约束违反或终止信号。
@@ -63,7 +60,6 @@ $$
 - \lambda \sum_{h=0}^{H-1} c_{t+h}
 \right].
 $$
-
 
 这说明世界模型在应用里往往不只是“预测器”。它同时像状态摘要器、长时前瞻器、风险评估器和候选动作评分器，也会在数据引擎里承担反事实生成的角色。
 
@@ -109,7 +105,6 @@ p_\theta(s_{t+1:t+H} \mid s_t, a_{t:t+H-1})
 p_\theta(o_{t+1:t+H} \mid o_{\le t}, a_{t:t+H-1}).
 $$
 
-
 它最适合承担 latent planning、候选动作 reranking、value / risk 辅助估计、imagined rollouts 和失败反事实分析。在机器人里，`WM` 常落在隐状态规划、技能切换和恢复策略分析上；在自动驾驶里，`WM` 常落在多主体未来预测、风险评分和候选轨迹筛选上。
 
 **`WAM`：更像“世界与动作联合生成器”。**
@@ -119,7 +114,6 @@ $$
 $$
 p_\theta(o_{t+1:t+H}, a_{t:t+H-1} \mid o_{\le t}, g).
 $$
-
 
 它更适合端到端动作序列生成、世界与动作共同 rollout、高层 goal-conditioned 行为生成，以及基于联合序列的 imitation 或 planning-as-generation。在机器人里，这类方法适合把视觉、语言、动作和未来结果统一到一个序列里；在自动驾驶里，则适合把 ego 规划与周边环境演化更紧耦合地共同建模。
 
@@ -137,8 +131,8 @@ $$
 
 <small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 11。原论文图意：展示 World-Action Model 在不同 robot embodiment 和任务设置中的迁移表现。</small>
 
-!!! note "图解：机器人应用最难的是跨 embodiment 和动作接口"
-    同一个“抓取/放置”语义，在不同机器人上会变成不同相机视角、不同关节维度、不同夹爪几何和不同控制频率。世界模型如果只学视频外观，很难跨机器人迁移；如果它同时对齐本体状态、动作表示和未来结果，才更接近可复用的机器人策略底座。
+**机器人应用最难的是跨 embodiment 和动作接口。**
+同一个“抓取/放置”语义，在不同机器人上会变成不同相机视角、不同关节维度、不同夹爪几何和不同控制频率。世界模型如果只学视频外观，很难跨机器人迁移；如果它同时对齐本体状态、动作表示和未来结果，才更接近可复用的机器人策略底座。
 
 **隐空间规划。**
 
@@ -152,13 +146,11 @@ $$
 \right],
 $$
 
-
 **其中状态转移由世界模型给出**：
 
 $$
 s_{t+h+1} \sim p_\theta(s_{t+h+1}\mid s_{t+h}, a_{t+h}).
 $$
-
 
 这种做法适合连续控制、样本效率要求高的任务，如抓取、推动、门把操作、装配对位、抽屉开合等。
 
@@ -212,7 +204,6 @@ $$
 p(s_{t+1:t+H}\mid s_t, a_t^{\text{ego}}, \mathcal{A}),
 $$
 
-
 其中自车动作 \(a_t^{\text{ego}}\) 会影响周围参与者的行为，这正是世界模型优于单纯轨迹预测器的地方。它不只是问“别人会怎么走”，而是问“在我采取这条动作方案时，别人会如何响应”。
 
 **规划前瞻与风险评估。**
@@ -229,7 +220,6 @@ $$
 + \lambda_2 \mathbb{P}(\text{collision}\mid \tau)
 + \lambda_3 \mathbb{P}(\text{rule-violation}\mid \tau),
 $$
-
 
 其中 \(\tau\) 为候选轨迹。世界模型提供的，正是交互项和风险项的前瞻估计。
 
@@ -276,7 +266,6 @@ $$
 - \lambda \cdot \text{Risk}(a_{t:t+H-1}).
 $$
 
-
 优点是接入现有系统更容易，世界模型错误不会直接变成控制命令，可以先在 shadow mode 验证增益；出问题时，也更容易定位是模型问题还是控制问题。
 
 **世界模型与策略联合训练。**
@@ -291,7 +280,6 @@ $$
 + \beta \mathcal{L}_{\text{value}}
 + \eta \mathcal{L}_{\text{risk}}.
 $$
-
 
 它的好处是模型更任务导向，world latent 更可能保留真正对决策有用的信息；坏处是训练更难稳定，错误也更容易耦合传播。
 

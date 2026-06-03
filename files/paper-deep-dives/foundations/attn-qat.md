@@ -6,23 +6,11 @@ paper_topic: 高效训练
 
 # Attn-QAT：4-bit Attention 量化感知训练
 
-
 这篇论文解决的是一个很窄但很关键的问题：**如果 Blackwell 这类硬件已经开始支持 FP4 tensor core，为什么 attention 还不能可靠地 4-bit 化？**
 
 论文的答案不是“再加一个 outlier trick”，而是把问题推进到训练和 kernel 的交界处：attention 是融合算子，FlashAttention backward 会重算中间量并使用一些默认的高精度恒等式。普通 QAT 只把 forward 做成 FP4，再沿用 BF16 backward，会破坏这些隐含假设，导致梯度不稳。Attn-QAT 的核心贡献，就是把 4-bit attention 的 forward、backward 重计算、softmax 梯度和推理 kernel 放到同一套精度约束里重新设计。
 
 ## 它的效率贡献是什么
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
 
 | 维度 | 贡献 |
 | --- | --- |
@@ -56,7 +44,6 @@ attention 更麻烦。标准 attention 包含两次矩阵乘和一次 softmax：
 \operatorname{Attn}(Q,K,V)=\operatorname{softmax}\left(\frac{QK^\top}{\sqrt d}\right)V
 \]
 
-
 第一步 \(QK^\top\) 会受到 \(Q,K\) outlier 影响，第二步 \(PV\) 又受 attention probability \(P\) 的分布影响。论文特别强调，FP4 只有很少的离散可表示值，动态范围也窄；在 attention 这种 heavy-tailed activation 明显的算子上，训练后校准很容易不够用。
 
 论文把现有路线分成三类：
@@ -73,8 +60,8 @@ attention 更麻烦。标准 attention 包含两次矩阵乘和一次 softmax：
 
 <small>图源：`Attn-QAT`，Figure 1。原论文图意：在 Wan 2.1 14B 上比较 BF16 attention、NVFP4 attention、SageAttention3 和 Attn-QAT 的视频生成样例；Attn-QAT 通过 QAT 恢复 FP4 attention 带来的质量损失。</small>
 
-!!! note "这张图怎么读"
-    它不是在比较整模型 FP4，而是把注意力部分替换成不同精度或不同 FP4 attention 方案，其他非 attention 组件仍保持高精度。这个设置很重要：论文要证明的是 attention 这个最难的算子可以 4-bit 化，而不是宣称已经完成端到端全 FP4 训练。
+**Figure 1 只比较 attention 精度路径。**
+它不是在比较整模型 FP4，而是把注意力部分替换成不同精度或不同 FP4 attention 方案，其他非 attention 组件仍保持高精度。这个设置很重要：论文要证明的是 attention 这个最难的算子可以 4-bit 化，而不是宣称已经完成端到端全 FP4 训练。
 
 ## 核心问题
 
@@ -84,7 +71,6 @@ attention 更麻烦。标准 attention 包含两次矩阵乘和一次 softmax：
 C=\operatorname{BF16MM}\left(\phi^{-1}(\phi(A)),\phi^{-1}(\phi(B))\right)
 \]
 
-
 其中 \(\phi\) 是 NVFP4 quantizer，\(\phi^{-1}(\phi(\cdot))\) 表示先量化再反量化。backward 时用 straight-through estimator 近似梯度。对普通 GEMM 来说，这个近似相对直接。
 
 attention 的 QAT 不直接成立，因为 FlashAttention 风格实现并不会保存完整 \(P\)。它为了把显存复杂度从 \(O(N^2)\) 降到 \(O(N)\)，会在 backward 里重算 attention score 和 probability，并使用 softmax backward 的恒等式：
@@ -93,20 +79,17 @@ attention 的 QAT 不直接成立，因为 FlashAttention 风格实现并不会�
 P_i^\top dP_i = dO_i^\top O_i
 \]
 
-
 这在高精度 attention 里没问题，因为 forward 中的 \(O_i\) 就是：
 
 \[
 O_i=\sum_j P_{ij}V_j
 \]
 
-
 但是 FP4 QAT forward 的输出实际是：
 
 \[
 O_i=\sum_j P^F_{ij}V^F_j
 \]
-
 
 这里 \(P^F,V^F\) 是 fake-quantized activation。也就是说，forward 输出 \(O\) 已经包含 FP4 误差；如果 backward 继续把它当成高精度 softmax identity 里的 \(O\)，梯度项就不再对应同一个数学对象。论文观察到，naive FP4 forward + BF16 FlashAttention backward 会导致 exploding gradients。
 
@@ -128,7 +111,6 @@ Attn-QAT 的两个修正非常关键：
 \[
 s_{ij}=\frac{\max(|X_{ij}|)}{6}
 \]
-
 
 训练时不直接执行真实 FP4 GEMM，而是用 fake quantization 模拟：
 
@@ -244,9 +226,6 @@ backward 的重点是保持两个一致性：
 
 ## Diffusion 结果
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 Wan 2.1 14B 的主结果如下，表头保留原英文格式。
 
 | Exp. | Wan 2.1 14B | Imaging Quality | Aesthetic Quality | Subject Consistency | Background Consistency | Temporal Flickering | Motion Smoothness | Dynamic Degree | Overall Quality |
@@ -295,8 +274,8 @@ Wan 2.1 1.3B 的消融更能说明方法设计。
 
 <small>图源：`Attn-QAT`，Figure 3。原论文图意：(a-b) 展示 Wan 2.1 1.3B 在不同 Attn-QAT 配置下的 gradient norm 和 loss；(c) 展示 Qwen3-14B 中 BF16 attention 与 Attn-QAT 的 SFT loss curves。</small>
 
-!!! note "训练曲线怎么读"
-    左侧最重要的是梯度范数。没有 high-precision \(O'\) 的配置会出现梯度爆炸和更高 loss；没有 backward \(P\) fake quantization 的配置最终 loss 可以接近，但梯度更抖。这说明 4-bit attention 的难点不是损失函数，而是 fused attention backward 的内部数值一致性。
+**训练曲线怎么读。**
+左侧最重要的是梯度范数。没有 high-precision \(O'\) 的配置会出现梯度爆炸和更高 loss；没有 backward \(P\) fake quantization 的配置最终 loss 可以接近，但梯度更抖。这说明 4-bit attention 的难点不是损失函数，而是 fused attention backward 的内部数值一致性。
 
 ## LLM 结果
 
@@ -380,10 +359,10 @@ SLA2 更像“把 attention 结构改轻”，Attn-QAT 更像“让原 attention
 4. **kernel 支持仍在演进**：论文当前实现主要围绕 RTX 5090 / SageAttention3 kernel，结论部分也提到未来要做 SM100 上的 native FP4 attention kernel。
 5. **评测覆盖还有限**：视频侧主要是 Wan 2.1 和 VBench，人类盲测为 99 prompts；语言侧是继续训练和 SFT 的代表性 benchmark，还不足以说明所有任务都无损。
 
-## 本页结论
+## 阅读结论
 
 Attn-QAT 的贡献可以压缩成一句话：**它把 4-bit attention 的问题从“怎么量化 forward”推进到“怎么让 forward、backward 重算、softmax 梯度和 inference kernel 在同一套低比特语义下闭合”。**
 
 这也是为什么它应该放在“高效训练”里。它表面上是量化论文，实际给出的经验更像训练系统原则：当一个算子已经被高度融合和数值优化后，低比特训练不能只在外面包一层 fake quantization。真正稳定的方案必须理解这个算子的内部计算图，并重新定义哪些中间量低精度、哪些中间量必须保持高精度，以及这些选择如何落到 kernel 和分布式训练里。
 
-这一页最后回到三个验收点：方法上，Attn-QAT 的方法点是让 fake-quant forward 与 FlashAttention-style backward 重算语义一致，而不是只给 QKV 套量化。实验上，视频质量、人评、training dynamics 和 kernel throughput 分别对应质量、主观偏好、稳定性和系统收益。诊断上，fake vs real quant 图很关键，它说明 QAT 的训练语义必须贴近最终 kernel。
+读 Attn-QAT 时要把三类证据分开：方法证据在 fake-quant forward 与 FlashAttention-style backward 重算语义是否一致；质量证据在视频样例、人评和 training dynamics；系统证据在 kernel throughput。fake vs real quant 图最关键，因为它说明 QAT 的训练语义必须贴近最终 kernel。

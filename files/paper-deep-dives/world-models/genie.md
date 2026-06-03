@@ -174,7 +174,7 @@ Genie 的边界要说清楚。
 - [Genie project page](https://sites.google.com/view/genie-2024/)：看交互 demo 和 qualitative examples。
 - [Genie 2 blog](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)：对比后来 3D foundation world model 的方向变化。
 
-## 本页结论
+## 阅读结论
 
 Genie 的核心贡献是把“没有动作标签的视频”变成“有 latent action 接口的可交互环境”。它的训练范式可以概括为：
 

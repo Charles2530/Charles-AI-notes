@@ -2,23 +2,9 @@
 
 当模型开始使用数据并行、张量并行、流水线并行、专家并行和上下文并行时，通信就不再是“附属开销”，而是训练与推理系统的主路径之一。很多大模型系统之所以吞吐上不去，不是因为 GPU 算得慢，而是因为 all-reduce 太频繁、all-gather 太重、reduce-scatter 时机不对、通信和计算没有重叠、拓扑映射不合理，或者某些 collective 让快 GPU 在等慢链路。
 
-
 因此理解通信算子，并不是通信工程师才需要的事，而是大模型系统工程的基础。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 通信问题为什么会在大模型时代爆发
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
->
-> 延伸阅读：[05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html) |
-| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
 
 单卡时代，性能大多由 kernel 决定；  
 多卡时代，性能开始由“算得快不快”和“同步得快不快”共同决定。
@@ -32,7 +18,6 @@ T_{\text{compute}}
 + T_{\text{comm}}
 - T_{\text{overlap}}.
 $$
-
 
 **这里真正关键的是** \(T_{\text{comm}}\) 有多大，以及能不能通过 \(T_{\text{overlap}}\) 把一部分藏起来。
 
@@ -82,7 +67,6 @@ tree 更适合某些低延迟聚合场景，但未必总能最大化持续带宽
 $$
 g = \frac{1}{N}\sum_{i=1}^{N} g_i.
 $$
-
 
 ### 4.1 为什么梯度同步会变成主瓶颈
 
@@ -220,7 +204,7 @@ MoE 的通信问题往往比稠密模型更复杂，因为 token 要 dispatch �
 
 如果把多卡训练想成多条装配线协同生产同一种产品，那么计算 kernel 像每个工位的加工速度，通信算子则像工位之间传递半成品和同步进度的物流系统。某个工位再快，如果半成品总卡在传送带上，整条产线吞吐仍然上不去。通信重叠的本质，就是让传送带在工位加工时同步运转，而不是每加工完一次就全线停下来等物流。
 
-## 本页结论
+## 阅读结论
 
 通信算子与计算重叠，是大模型系统性能的另一半。只优化 kernel、不优化 collective 与拓扑，很多训练和推理系统最终都会撞到通信天花板。真正成熟的分布式设计，不只是“用了 DP/TP/PP/ZeRO”，而是知道这些并行策略各自带来了哪些通信路径，又怎样通过 bucket、分组、拓扑映射与 overlap 把通信尽量藏起来。
 

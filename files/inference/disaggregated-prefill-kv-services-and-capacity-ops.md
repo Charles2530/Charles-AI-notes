@@ -2,21 +2,7 @@
 
 随着上下文越来越长、请求越来越异质、模型越来越多，把所有工作都塞进一套统一推理实例，不再总是合理。长文档问答、RAG、Agent 和多模型路由场景中，prefill 与 decode 的资源特征明显不同，KV cache 也越来越像独立资源层。解耦式 prefill、KV 服务化和更细粒度容量运维，正是在这个背景下出现。
 
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 为什么拆分 Prefill 和 Decode
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
->
-> 延伸阅读：[17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html) |
-| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 Prefill 和 decode 的资源画像不同：
 

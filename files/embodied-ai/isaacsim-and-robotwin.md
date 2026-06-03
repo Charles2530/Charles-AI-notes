@@ -2,7 +2,6 @@
 
 这一页解释 Isaac Sim 和 RoboTwin 在具身智能项目里分别负责什么。先给结论：
 
-
 ```text
 Isaac Sim 更像“高保真机器人世界”
 RoboTwin 更像“任务、资产、标注和专家数据的组织范式”
@@ -16,8 +15,8 @@ success checker 更像“自动判卷器”
 
 <small>图源：[RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/index.html)。这张官方 overview 图适合放在开头：它同时展示了双臂任务、物体库、domain randomization、sim2real、benchmark、开源数据和策略部署，正好对应本文后面讨论的“仿真不是一个画面，而是任务、资产、轨迹、判定和数据保存的系统”。</small>
 
-!!! note "图解：RoboTwin 图要看五个环节"
-    先看任务和资产从哪里来，再看 domain randomization 如何扩展场景，然后看 expert trajectory / policy training 如何生成数据，最后看 benchmark 和 sim2real 如何验收。Isaac Sim 提供物理和渲染能力，RoboTwin 风格 pipeline 提供任务、标注、判卷和数据组织方式。
+**这张 RoboTwin 图怎么读。**
+先看任务和资产从哪里来，再看 domain randomization 如何扩展场景，然后看 expert trajectory / policy training 如何生成数据，最后看 benchmark 和 sim2real 如何验收。Isaac Sim 提供物理和渲染能力，RoboTwin 风格 pipeline 提供任务、标注、判卷和数据组织方式。
 
 ## Isaac Sim 是什么
 

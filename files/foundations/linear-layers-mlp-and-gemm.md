@@ -1,223 +1,180 @@
-# 线性层到 GEMM
+# 线性层、MLP 与 GEMM：模型里的矩阵乘为什么这么重要
 
-如果把现代大模型拆到最底层，会发现大量计算都在做矩阵乘。但这里要先分清三层概念：`Linear` 是模型层，`MatMul` 是数学/框架里的矩阵乘操作，`GEMM` 是底层线性代数库和 GPU kernel 常用的 dense matrix-matrix multiplication 形式。它们相关，但不是同一个词。
+这篇文章只回答一个问题：为什么大模型系统优化经常绕不开 Linear、MLP 和 GEMM。
 
+最短答案是：Transformer 里大量参数、FLOPs、量化收益、张量并行切分和低精度 kernel，都集中在线性层。Linear 在模型语义上是“把每个 token 的表示投影到新通道空间”；在数学上是矩阵乘；在硬件上通常会落到 GEMM 或 fused GEMM。把这三层分清，后面读量化、推理 runtime、Megatron、CUTLASS、Triton 和 DeepGEMM 才不会混成一团。
 
-![Triton roofline comparison 原论文图](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="490" }
+## Linear 改的是每个 token 的通道表示
 
-<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原论文图意：在 \(C=AB^T\) 矩阵乘上比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 相对 roofline model 的性能位置。</small>
-
-## 先看线性层公式
-
-线性层最常见的公式是：
+最常见的线性层公式是：
 
 \[
 y=xW+b
 \]
 
-
-如果：
+如果输入是文本 hidden states：
 
 \[
-x\in\mathbb{R}^{B\times L\times D},\quad W\in\mathbb{R}^{D\times D_{\text{out}}}
+x\in\mathbb{R}^{B\times L\times D_{\text{in}}},
+\qquad
+W\in\mathbb{R}^{D_{\text{in}}\times D_{\text{out}}}
 \]
 
-
-这行式子在说：输入 \(x\) 有 batch 维 \(B\)、序列维 \(L\)、hidden 维 \(D\)；权重 \(W\) 把 \(D\) 维输入映射到 \(D_{\text{out}}\) 维输出。
-
-那么：
+那么输出是：
 
 \[
 y\in\mathbb{R}^{B\times L\times D_{\text{out}}}
 \]
 
+这里 \(B\) 是 batch size，\(L\) 是 token 数，\(D_{\text{in}}\) 是输入 hidden dimension，\(D_{\text{out}}\) 是输出 hidden dimension。Linear 不会自己让第 3 个 token 读取第 9 个 token；它只是对每个 token 的最后一维做同一套通道变换。Token 之间的信息混合主要来自 attention、convolution、SSM 或其他序列模块。
 
-读作：batch 和 token 数不变，每个 token 的向量从 \(D\) 维被投影到 \(D_{\text{out}}\) 维。
-
-## 再分清 MatMul 和 GEMM
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
-
-`MatMul` 更像数学操作或框架算子名：给定两个张量，按最后两个维度做矩阵乘，可能带 batch 维、broadcast、transpose 或不同 backend lowering。
-
-`GEMM` 是 BLAS 语境里的 General Matrix-Matrix Multiplication，标准形式更接近：
+PyTorch 的 `nn.Linear(in_features, out_features)` 在 API 里把权重存成 `[out_features, in_features]`，前向等价于：
 
 \[
-C \leftarrow \alpha A B + \beta C
+y=xW^\top+b
 \]
 
+这和教学里写 \(xW+b\) 不矛盾，只是内存布局和 API 约定不同。读代码、导出 ONNX、做 LoRA merge、写 quantized kernel 时，必须分清“论文公式里的权重方向”和“框架里实际存储的 weight layout”。
 
-其中 \(A\)、\(B\)、\(C\) 是二维 dense matrices，\(\alpha\)、\(\beta\) 是标量。深度学习里的 bias、activation、dequant、requant、residual 等，通常属于 GEMM kernel 的 **epilogue fusion** 或周边融合，不是 GEMM 这个数学定义本身。
+## MLP 是逐 token 的非线性通道变换
 
-二者关系可以这样记：
+Transformer block 里除了 attention，另一个大计算块就是 MLP / FFN。最朴素写法是：
 
-| 概念 | 所在层级 | 典型含义 |
+\[
+\operatorname{MLP}(x)=W_2\,\sigma(xW_1+b_1)+b_2
+\]
+
+其中 \(W_1\) 常把 \(D\) 升到 \(rD\)，\(r\) 常见为 4 或更高；\(\sigma\) 是 GELU、SiLU、SwiGLU 里的激活或门控；\(W_2\) 再把维度压回 \(D\)。这像一个临时工作台：先把每个 token 的通道展开，在更大的中间空间里做非线性筛选，再压回 residual stream。
+
+Transformer 的常见 Linear 可以这样定位：
+
+| 位置 | 改什么 | 常见 shape |
 | --- | --- | --- |
-| `Linear` | 模型层 | \(y=xW+b\)，把 hidden 表示投影到新维度 |
-| `MatMul` | 数学/API 层 | 两个矩阵或 batched tensors 相乘 |
-| `GEMM` | 库/kernel 层 | 高性能 dense 矩阵-矩阵乘，常见形式是 \(C \leftarrow \alpha AB+\beta C\) |
-| `BMM` / batched GEMM | 库/kernel 层 | 一批小矩阵乘，常见于 attention 的 QK/PV 路径 |
-| fused GEMM | 工程实现层 | GEMM 主计算后融合 bias、activation、scale、quant/dequant 等 epilogue |
+| Q/K/V projection | 为 attention 生成 query、key、value | \(D\rightarrow D_q,D_k,D_v\) |
+| Attention output projection | 合并多头输出 | \(D\rightarrow D\) |
+| MLP up / gate / value projection | 扩张并筛选通道 | \(D\rightarrow rD\) |
+| MLP down projection | 回到 residual stream | \(rD\rightarrow D\) |
+| LM head | hidden 到 vocab logits | \(D\rightarrow |Vocab|\) |
 
-因此，**不是所有 MatMul 都是 GEMM**：向量乘、稀疏乘法、带复杂 broadcast 的高维张量乘、attention 的 fused kernel、某些 tiny shape 的专用 kernel，都可能不走普通 GEMM 路径。反过来，很多 `Linear` 层虽然代码里写的是 `matmul`，运行时会被 reshape、pack、dispatch 到 GEMM 或 fused GEMM kernel。
+所以一个 Transformer block 的 FLOPs 大头通常不是一个神秘模块，而是一连串大矩阵乘。Attention 负责 token-token 信息读取，MLP 负责 token 内部通道变换；二者都严重依赖 Linear 的执行质量。
 
-## Linear 层在做什么
+## Linear 运行时会展平成 GEMM 的 M/N/K
 
-线性层最常见的形式是：
-
-\[
-y = xW + b
-\]
-
-
-如果输入是：
+底层 GEMM 常写成：
 
 \[
-x \in \mathbb{R}^{B \times L \times D}
+C\leftarrow \alpha AB+\beta C
 \]
 
-
-权重是：
+这里 \(A,B,C\) 是 dense matrices，\(\alpha,\beta\) 是标量。把 Linear 落到 GEMM 时，框架常把前面的 batch 和 token 维展平：
 
 \[
-W \in \mathbb{R}^{D \times D_{\text{out}}}
+X_{\text{flat}}\in\mathbb{R}^{M\times K},
+\qquad
+W\in\mathbb{R}^{K\times N},
+\qquad
+Y_{\text{flat}}\in\mathbb{R}^{M\times N}
 \]
 
-
-输出就是：
+对应关系是：
 
 \[
-y \in \mathbb{R}^{B \times L \times D_{\text{out}}}
+M=B\cdot L,\qquad K=D_{\text{in}},\qquad N=D_{\text{out}}
 \]
 
-
-直觉上，Linear 层是在问：当前每个 token 的 \(D\) 维表示，应该被重新组合成什么新的 \(D_{\text{out}}\) 维表示。
-
-!!! note "实现细节：权重矩阵方向可能和公式不同"
-    上面的公式用的是教学里常见的 \(xW+b\) 写法，所以 \(W\) 写成 \(D \times D_{\text{out}}\)。PyTorch 的 `nn.Linear(in_features, out_features)` 通常把权重存成 `[out_features, in_features]`，前向等价于 \(xW^\top+b\)。这只是存储布局和 API 约定不同，不改变 Linear、MatMul、GEMM 的层级关系。
-
-## 为什么 Transformer 到处都是 Linear
-
-一个 Transformer block 里常见的 Linear 包括：
-
-| 位置 | 作用 | 典型维度变化 |
-| --- | --- | --- |
-| Q 投影 | 生成 query | \(D \rightarrow D\) |
-| K 投影 | 生成 key | \(D \rightarrow D\) |
-| V 投影 | 生成 value | \(D \rightarrow D\) |
-| Attention 输出投影 | 合并多头结果 | \(D \rightarrow D\) |
-| MLP 升维 | 扩张中间表达 | \(D \rightarrow 4D\) 或更大 |
-| MLP 降维 | 压回 hidden size | \(4D \rightarrow D\) |
-
-所以当你听到“优化 Transformer 性能”时，很多时候其实是在优化这些 Linear 对应的 MatMul/GEMM 执行路径，而不是在改 Linear 的数学定义。
-
-## MLP 为什么通常先升维再降维
-
-Transformer 里的 MLP 常写成：
+这三个字母是读性能的入口。\(M\) 是这次同时处理多少 token 行，\(K\) 是输入通道宽度，\(N\) 是输出通道宽度。GEMM 的乘加量近似是：
 
 \[
-\text{MLP}(x)=W_2 \sigma(W_1x)
+\text{FLOPs}\approx 2MKN
 \]
 
+这里的 2 来自一次乘法和一次加法。这个估算不是端到端 latency，但能告诉你哪几个维度会线性放大计算。
 
-其中 \(W_1\) 把维度升高，激活函数 \(\sigma\) 引入非线性，\(W_2\) 再把维度压回去。
+Prefill 和 decode 的差异也在 \(M\)。Prefill 时 prompt 很长，\(M=B\cdot L\) 通常较大，GEMM 更容易跑满 Tensor Core。Decode 时每步只来新 token，\(M\) 可能很小，瓶颈会从“大吞吐矩阵乘”变成 small-M GEMM、launch overhead、KV cache 读取、dequant 和 runtime dispatch。许多“离线 benchmark 很快，线上 decode 不明显”的问题都出在这里。
 
-这像一个“临时扩展工作台”：
+## GEMM 快不快取决于数据流，不只取决于 FLOPs
 
-1. 先把表示展开到更大的中间空间；
-2. 在中间空间里做非线性组合；
-3. 再把结果压回模型主干维度。
+Triton 论文里的 roofline 图很适合作为第一张硬件直觉图。
 
-如果没有 MLP，Transformer 只有 attention 的信息混合能力，逐 token 的非线性变换会弱很多。
+![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="760" }
 
-## Linear 如何落到 GEMM
+<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原图比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 在矩阵乘 \(C=AB^\top\) 上相对 roofline model 的性能。本站使用这张图说明：GEMM 性能不仅取决于算术量，也取决于数据复用、访存和 kernel 实现能否接近硬件上限。</small>
 
-以一个 `Linear` 为例：
+Roofline 的横轴是 arithmetic intensity，也就是每搬运一单位数据能做多少计算；纵轴是性能。低 intensity 时，瓶颈常在带宽；高 intensity 时，瓶颈才更接近算力上限。GEMM 之所以适合加速器，是因为 tiling 可以让一小块 \(A\) 和 \(B\) 在 shared memory、cache 或 register 里反复复用，避免每个输出元素都从 HBM 重新读完整数据。
 
-\[
-x \in \mathbb{R}^{B \times L \times D},\qquad W \in \mathbb{R}^{D \times D_{\text{out}}}
-\]
+一个高性能 GEMM 大致会做四件事：
 
+| 阶段 | 它在优化什么 |
+| --- | --- |
+| Tiling | 把 \(M,N,K\) 切成适合 threadblock / warp / MMA 指令的块 |
+| Data movement | 把 \(A,B\) 分块搬进 shared memory、register 或 TMA pipeline |
+| Accumulation | 用 Tensor Core / MMA 在 accumulator 里累加 |
+| Epilogue | 写回 \(C\)，并可能融合 bias、activation、scale、dequant、requant、residual |
 
-这里 \(x\) 仍是三维输入张量，\(W\) 是二维权重矩阵；运行时通常不会直接把三维形状交给普通 GEMM，而会先展平。
+这就是为什么同一个数学矩阵乘，在 cuBLAS、cuBLASLt、CUTLASS、Triton、DeepGEMM 或 TensorRT 里会有不同实现。它们争的不是公式，而是 tile、layout、dtype、epilogue、调度和目标硬件。
 
-框架常把前两维合并：
+## Epilogue fusion 决定 Linear 后面会不会多搬一次数据
 
-\[
-X_{\text{flat}} \in \mathbb{R}^{(B L) \times D}
-\]
+深度学习里的 Linear 很少只有 \(C=AB\)。它后面常接 bias、GELU、SwiGLU、residual、dropout、quant/dequant 或 scale。若 GEMM 先把结果写回 HBM，再由另一个 kernel 读出来做激活，就会多一次读写和 launch。
 
-
-这行式子在说：把 \(B\) 个 batch 和每个 batch 的 \(L\) 个 token 合并成 \(BL\) 行，每一行仍是一个 \(D\) 维 token 表示。
-
-再执行：
-
-\[
-Y_{\text{flat}} = X_{\text{flat}} W + b,\qquad
-Y_{\text{flat}} \in \mathbb{R}^{(B L) \times D_{\text{out}}}
-\]
-
-
-这行式子就是二维 GEMM 视角下的 Linear：左边有 \(BL\) 行输入 token，右边权重把每行从 \(D\) 维投影到 \(D_{\text{out}}\) 维，bias \(b\) 再加到输出维度上。
-
-最后 reshape 回：
-
-\[
-y \in \mathbb{R}^{B \times L \times D_{\text{out}}}
-\]
-
-
-这个二维 dense matrix multiplication 很适合落到 GEMM。若 \(B L\) 很小，例如 decode 阶段每次只来少量 token，它仍然可能走 GEMM family，但性能画像会变成小 \(M\)、skinny GEMM、batched GEMM 或专用 kernel 问题。
-
-## GEMM 为什么是硬件热路径
-
-GPU、TPU、NPU 等加速器都非常擅长规则 dense 矩阵-矩阵乘。大模型性能优化里，很多问题最终会变成：
-
-1. 矩阵形状是否适合硬件 tile；
-2. 数据是否连续；
-3. dtype 是否命中 Tensor Core 或专用低精度路径；
-4. 是否能把小矩阵合并成更大的 batch GEMM；
-5. 量化后是否仍有对应 INT4/FP8/FP4 kernel。
-
-这也是为什么 [算子与编译器](../operators/index.md) 章节会反复讨论 GEMM、layout、tile 和 kernel。
-
-## 一个最小伪代码
+Fused epilogue 的价值是把这些轻量操作接在 GEMM 写回之前完成。例如：
 
 ```text
-function Linear(x, W, b):
-    # x: [B, L, D]
-    # W: [D, D_out]
-    # y: [B, L, D_out]
-    # API 层写作 matmul；runtime 可能 lower 到 GEMM/fused GEMM。
-    return matmul(x, W) + b
-
-function MLP(x):
-    h = Linear(x, W_up, b_up)      # D -> 4D
-    h = GELU(h)
-    y = Linear(h, W_down, b_down)  # 4D -> D
-    return y
+acc = matmul(x, W)
+out = quantize(gelu(acc + bias))
 ```
 
-## 和量化有什么关系
+如果拆成多个 kernel，`acc` 可能会被写回再读入；如果融合在 epilogue，accumulator 可以尽量留在 register 或更近的存储层里处理。CUTLASS 和 cuBLASLt 都把 epilogue 当成重要设计点，原因就在这里。
 
-权重量化最常压的就是 Linear 层权重，因为它们占参数量大头。常见形式包括：
+这也解释了量化为什么不一定提速。INT4 权重如果先解包/反量化成 FP16，再走普通 GEMM，文件小了，但 dequant 和布局转换可能吃掉收益。真正有用的低比特路径通常要把 unpack、scale 读取、dequant 和 matmul 尽量融合到同一个 kernel 或短路径里。
 
-- `W8A16`：权重 INT8，激活 FP16/BF16。
-- `W4A16`：权重 INT4，激活 FP16/BF16。
-- `W8A8`：权重和激活都 INT8。
-- `FP8 W8A8`：权重和激活走 FP8 或近似 FP8 路径。
+## Megatron 为什么按 Linear/GEMM 切并行
 
-如果量化格式没有高效 GEMM / batched GEMM / fused dequant MatMul kernel，模型文件虽然变小，推理可能并不会更快。这个问题会在 [量化路线图](../quantization/index.md) 和 [数值、显存与运行时](numerics-memory-and-runtime-basics.md) 里继续展开。
+大模型训练中，单卡放不下或算不动时，会把 Linear 的大矩阵切到多张卡上。Megatron-LM 的 MLP tensor parallel 图就是经典例子。
 
-## 本页结论
+![Megatron MLP tensor parallel](../assets/images/paper-deep-dives/foundations/megatron-lm/figure-3a-mlp-model-parallel.png){ width="820" }
 
-Linear 是表示投影，MLP 是逐 token 非线性变换，MatMul 是数学/API 操作，GEMM 是常见的底层 dense 矩阵-矩阵执行核心。理解这几层的边界，能帮助你把 Transformer、量化、算子优化和推理性能连成一条线。
+<small>图源：[Megatron-LM](https://arxiv.org/abs/1909.08053)，Figure 3a。原图表达 MLP 第一层按列切分 \(A=[A_1,A_2]\)，各 GPU 本地计算 \(XA_i\) 和 GeLU；第二层按行切分 \(B=\begin{bmatrix}B_1\\B_2\end{bmatrix}\)，最后通过通信合并输出。本站使用这张图说明：张量并行不是抽象切模型，而是在切 Linear/GEMM 的矩阵维度和通信位置。</small>
+
+第一层 \(Y=\operatorname{GeLU}(XA)\) 按 \(A\) 的输出列切分，每张 GPU 得到一部分中间通道，可以本地做 GeLU。第二层 \(Z=YB\) 按输入行或中间通道切分，各 GPU 计算部分输出贡献，最后做 all-reduce 合并。这个设计的关键是把通信放在少数必要位置，而不是每个小操作后同步。
+
+这张图也提醒你：MLP 里的 Linear 不只是“模型层”，还是分布式系统里的切分对象。hidden size、intermediate size、tensor parallel size、activation function 和通信拓扑都会影响训练吞吐。
+
+## 读 Linear 性能时先问六件事
+
+| 问题 | 为什么重要 |
+| --- | --- |
+| 当前是 prefill、decode、训练还是离线 batch？ | \(M\) 维和复用方式完全不同 |
+| \(M,N,K\) 分别是多少？ | 决定 GEMM shape、tile 和 Tensor Core 利用 |
+| weight layout 和 transpose 是否匹配 kernel？ | 转置、contiguous 和 layout transform 可能隐藏成本 |
+| dtype 是 BF16、FP8、INT8、INT4 还是 FP4？ | 决定是否命中硬件和低比特 kernel |
+| epilogue 是否融合 bias / activation / dequant / residual？ | 不融合会增加 HBM 读写和 kernel launch |
+| 端到端热点是否真在 GEMM？ | 小算子、KV cache、通信、dispatch 也可能主导 |
+
+不要只看单 kernel TFLOP/s。一个 GEMM microbenchmark 很漂亮，不代表线上服务就快；一个 Linear 参数量很大，也不代表它是当前 trace 的瓶颈。真正稳的做法是先在 trace 里定位热点，再把热点 GEMM 的 \(M,N,K\)、dtype、layout、epilogue 和调用阶段写清楚。
+
+## 常见误解
+
+| 误解 | 更准确的说法 |
+| --- | --- |
+| Linear 就是矩阵乘，所以都一样 | 模型语义、API MatMul 和 kernel GEMM 是三层不同抽象 |
+| FLOPs 少就一定快 | layout、dtype、tile、launch、epilogue 和 HBM 读写都会改变 latency |
+| Prefill 快说明 decode 也快 | Decode 常是 small-M GEMM + KV 读取 + dispatch 问题 |
+| 量化权重小就一定提速 | 没有 fused low-bit GEMM 时，dequant 可能吃掉收益 |
+| GEMM 是唯一瓶颈 | Norm、softmax、rope、gather/scatter、通信和 KV cache 都可能拖慢 |
+| Tensor parallel 只是把模型切开 | 它具体是在切 Linear/GEMM 的矩阵维度，并安排通信 |
+
+## 阅读结论
+
+Linear 是每个 token 的通道投影，MLP 是逐 token 的非线性通道变换，MatMul 是数学/API 操作，GEMM 是硬件执行里的 dense matrix multiply 家族。真正的系统问题发生在这些层之间：shape 怎么展平为 \(M,N,K\)，prefill 和 decode 的 \(M\) 怎么变，weight layout 是否匹配 kernel，epilogue 能否融合，低比特 scale 是否顺路读入，张量并行在哪里通信。
+
+以后读任何 Transformer、量化、推理 runtime 或训练并行论文时，看到 Linear 不要只划过去。把它翻译成一次具体 GEMM：\(M\) 是多少，\(N\) 是多少，\(K\) 是多少，dtype 是什么，后面融合了什么，在哪个阶段运行。很多性能和显存问题就会立刻变得可解释。
+
+## 外部精读
+
+- [PyTorch `nn.Linear`](https://docs.pytorch.org/docs/stable/generated/torch.nn.Linear.html)：确认真实 API、weight shape 和前向定义。
+- [NVIDIA cuBLAS documentation](https://docs.nvidia.com/cuda/cublas/index.html)：理解 BLAS/GEMM 在 NVIDIA GPU 上的库接口。
+- [NVIDIA CUTLASS GEMM API](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/gemm_api.html)：看 GEMM 如何拆成 threadblock、warp、MMA instruction 和 epilogue。
+- [CUTLASS 3.x blog](https://developer.nvidia.com/blog/cutlass-3-x-orthogonal-reusable-and-composable-abstractions-for-gemm-kernel-design/)：理解可组合 GEMM kernel 和 epilogue fusion。
+- [Triton paper](https://doi.org/10.1145/3315508.3329973)：理解 tiled neural network computation 和 roofline 视角。
+- [Megatron-LM](https://arxiv.org/abs/1909.08053)：理解张量并行如何切 Linear/GEMM 并控制通信位置。

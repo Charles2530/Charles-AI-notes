@@ -2,7 +2,6 @@
 
 Rerun 不是一个 VLA 模型，也不是仿真器。它更像具身智能系统里的**黑盒飞行记录仪 + 可视化回放器 + 可查询数据层**：把相机、深度、点云、机器人位姿、动作、文本、标量和模型输出放到同一条时间线上，让你能复盘“机器人到底在什么时候看到了什么、相信了什么、做了什么”。
 
-
 Rerun 官方把它定位为面向 Physical AI 的 unified data layer，用于理解和改进包含 2D、3D、文本、时间序列和 tensor 的复杂多模态过程。官方文档还特别强调它服务 robotics、spatial computing、embodied AI、computer vision、simulation 等传感器随时间变化的系统。[Rerun 文档](https://rerun.io/docs/overview/what-is-rerun)里也说得很清楚：它不是训练平台、不是部署工具、也不是机器人操作系统，而是帮助准备数据、理解系统和调试开发链路的工具。
 
 ## 先看它长什么样
@@ -11,7 +10,7 @@ Rerun 的基本体验是：代码或日志把多模态数据送进 Rerun，Viewe
 
 ![Rerun overview 官方效果图](../assets/images/tools/rerun/rerun-overview.png){ width="860" }
 
-<small>图源：[Rerun docs](https://rerun.io/docs/overview/what-is-rerun)。这张图说明 Rerun 的位置：SDK / data loader 把多模态 streams 送入 Viewer / Storage，用户既能配置 layout，也能查询结果。</small>
+<small>图源：[Rerun docs](https://rerun.io/docs/overview/what-is-rerun)。原图表达：SDK / data loader 把多模态 streams 送入 Viewer / Storage，用户既能配置 layout，也能查询结果。本站读法：把 Rerun 看成调试和数据治理层，而不是模型、仿真器或机器人中间件；它的价值在于把传感器、轨迹和模型输出放到同一条时间线上。</small>
 
 下面是官方 quickstart 里第一次把 3D points 送进 Viewer 后的效果。对具身智能来说，把这里的 `Points3D` 换成点云、机械臂末端轨迹、抓取候选或相机坐标系，排查思路是一样的。
 
@@ -91,7 +90,6 @@ Rerun 的价值就是把这些对象放进同一个 recording：按 entity path 
 r = (p,\; \tau,\; C)
 \]
 
-
 其中：
 
 - \(p\)：entity path，例如 `world/robot/gripper`、`world/camera/rgb`；
@@ -103,7 +101,6 @@ r = (p,\; \tau,\; C)
 \[
 o_t = \{I_t, D_t, q_t, f_t, a_{t-1}, \ell_t\}
 \]
-
 
 这里 \(I_t\) 是 RGB，\(D_t\) 是深度，\(q_t\) 是关节，本体力觉 \(f_t\)，上一动作 \(a_{t-1}\)，语言或事件日志 \(\ell_t\)。如果它们没有共同 timeline，就很难判断模型在第 \(t\) 步的动作到底基于哪一帧观测。
 
@@ -121,7 +118,6 @@ v d\\
 d
 \end{bmatrix}
 \]
-
 
 这里 \(K\) 是相机内参，\(T^{\text{base}}_{\text{camera}}\) 是相机到机器人 base 的外参。Rerun 不替你自动修正标定，但它让你把 `Pinhole`、`Transform3D`、depth、point cloud 和 robot frame 一起可视化。很多“模型抓不准”的问题，最后其实是坐标轴方向、外参版本或时间戳错了。
 

@@ -1,149 +1,157 @@
-# 数据划分与评测指标
+# 数据划分与评测指标：一个分数为什么不够
 
-模型训练不是只看 loss，模型能力也不是只看一个 benchmark 分数。要判断一个模型是否真的更好，必须把数据划分、指标选择、分桶评测和错误分析放在一起。
+评测不是给模型贴一个排行榜分数，而是建立一条证据链：这个模型在什么数据上、按什么指标、相对哪个基线、在哪些分桶里变好或变差、结果有多大不确定性、失败能不能复现、能不能支撑发布决策。
 
+这页只回答一个核心问题：**当论文或实验报告说“模型提升了 2 分”时，怎样判断这 2 分是真的、有用的、可泛化的，而不是数据污染、指标错配或平均分幻觉？**
+
+## 评测对象先要说清楚
+
+一个评测结论至少包含四个对象：
+
+\[
+(M, D, P, C)
+\]
+
+\(M\) 是模型或系统版本，\(D\) 是评测数据，\(P\) 是推理协议，\(C\) 是判分规则。很多争议来自其中某一项没固定：同一个模型换了 prompt、检索器、temperature、工具 schema、judge 或后处理，已经不是同一个被评测对象。
+
+因此，评测表里不应该只写模型名和分数。至少要能追到：模型 checkpoint、数据版本、prompt / system message、采样参数、检索索引版本、工具版本、judge 版本、后处理规则和随机种子。否则分数变化很难归因。
 
 ![Data Cards stakeholder typology 原论文图](../assets/images/paper-figures/foundations/data-cards-typology.png){ width="820" }
 
-<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。原论文图意：把 dataset 文档相关角色分为 producers、agents 和 users，并说明不同角色在数据创建、使用、评估和影响中的责任与问题。</small>
+<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。原图表达数据集文档要同时服务 producers、agents 和 users，不同角色关心的数据创建、使用、评估和影响不同。本站读法是：评测可信度不是从 metric 开始，而是从数据来源、使用边界和责任边界开始。</small>
 
-## 读法卡：评测先问四件事
+## Train、validation、test 不是三个名字
 
-| 问题 | 为什么重要 |
+训练集用于更新参数，验证集用于调参和选 checkpoint，测试集用于最终报告。它们的区别不是文件夹名，而是“是否允许根据结果继续改系统”。
+
+如果反复看 test 分数，再改数据、prompt、超参或模型，test 就变成了开发集。它仍然叫 test，但已经不能证明泛化。验证集也会被开发过程过拟合：每一次围绕同一批样本改 prompt、调阈值、调采样参数，都会把系统向这批样本贴近。
+
+更稳的结构是四层：
+
+| 集合 | 用途 | 读法 |
+| --- | --- | --- |
+| train | 更新参数或构造 few-shot / prompt 规则 | 不能证明泛化 |
+| validation / dev | 调超参、选 checkpoint、改 prompt | 可反复看，但要承认会过拟合 |
+| test | 阶段性报告和模型选择后的确认 | 不应参与开发循环 |
+| sealed holdout | 少看或不看，只在关键节点打开 | 检查长期开发是否污染评测 |
+
+真实项目里，完全不看 holdout 很难，但可以降低使用频率：只在发布前、重大 recipe 改动后、或公共 benchmark 可能被污染时使用。它的价值不是样本多，而是开发者还没有围绕它调过系统。
+
+## 污染往往不是完全重复
+
+数据污染最容易被低估。LLM 预训练数据来自网页、代码、论坛、书籍和合成数据，公开 benchmark 的题目、解析、翻译、改写和讨论很可能出现在训练语料里。机器人和视频数据也有近重复风险：同一条轨迹的相邻片段、同一场景的不同摄像机、同一任务的重录样本，如果跨 split 出现，评测会被抬高。
+
+污染检查不能只做 exact match。常见层级是：
+
+| 检查 | 能发现什么 | 漏掉什么 |
+| --- | --- | --- |
+| hash / exact match | 完全相同文件或文本 | 改写、翻译、截图、局部片段 |
+| n-gram overlap | 题目或答案大段重合 | 语义改写、模板变体 |
+| embedding nearest neighbor | 近义样本、同题改写 | 模型 embedding 的盲区 |
+| metadata / trajectory boundary | 同源网页、同一视频、同一机器人轨迹 | 没记录 metadata 时无法查 |
+
+现实目标不是宣称“零污染”，而是写清污染假设、检查方法和剩余风险。越是核心 benchmark，越应该维护 contamination watchlist，并用私有真实集降低对单一公开榜单的依赖。
+
+## 指标是在定义“什么叫好”
+
+指标不是中性统计。Accuracy 把每个样本等权；F1 更关注正类召回和精确率；pass@k 奖励多次采样中至少一次成功；BLEU/ROUGE 偏向表面重合；human eval 和 LLM judge 又会引入标注口径和 judge 偏差。
+
+分类任务里，precision、recall 和 F1 是：
+
+\[
+\text{Precision}=\frac{TP}{TP+FP},\qquad
+\text{Recall}=\frac{TP}{TP+FN}
+\]
+
+\[
+F_1=\frac{2\cdot \text{Precision}\cdot \text{Recall}}{\text{Precision}+\text{Recall}}
+\]
+
+如果任务是安全拒答，false negative 可能比 false positive 更贵；如果任务是客服自动化，错误拒答会伤体验；如果任务是代码生成，pass@1 和 pass@k 回答的是不同问题。指标一换，“更好”的含义就变了。
+
+代码评测常见 pass@k 可以理解为：一次生成不一定成功，多采样 \(k\) 次，只要有一个通过测试就算成功。它适合衡量“模型能不能在搜索空间里产生正确解”，但不等于单次交互体验好，因为线上用户通常不想等 \(k\) 份答案和测试。
+
+## 一个平均分可以掩盖关键退化
+
+假设候选模型平均分从 82.0 涨到 83.5，看起来提升 1.5。但分桶后可能是：
+
+| 桶 | 样本占比 | baseline | candidate | 变化 |
+| --- | ---: | ---: | ---: | ---: |
+| 普通问答 | 70% | 86.0 | 88.0 | +2.0 |
+| 长上下文 | 15% | 74.0 | 73.5 | -0.5 |
+| 工具调用 | 10% | 68.0 | 71.0 | +3.0 |
+| 高风险拒答 | 5% | 94.0 | 86.0 | -8.0 |
+
+加权平均仍然会涨，但如果高风险拒答是发布门槛，这个模型应该被拦下。平均分回答的是“总体样本上怎么样”，不是“最不能退化的地方有没有退化”。
+
+分桶不是附表，而是评测主结构。常见桶包括长度、语言、来源、任务类型、模态、难度、风险等级、业务价值、失败类型、是否检索、是否工具调用、是否多轮、是否含图表/OCR/小物体。VLA 和世界模型还要按 embodiment、场景、物体、动作类型、接触、遮挡、恢复动作和 horizon 分桶。
+
+## 分数有统计不确定性
+
+评测集有限，所以分数只是总体能力的估计。对于 accuracy，如果样本数是 \(n\)，观测准确率是 \(\hat p\)，一个粗略标准误差是：
+
+\[
+\operatorname{SE}(\hat p)\approx\sqrt{\frac{\hat p(1-\hat p)}{n}}
+\]
+
+如果 \(n=100\)、\(\hat p=0.80\)，标准误差约是 0.04；1-2 分变化很可能只是噪声。如果 \(n=10,000\)，同样准确率的标准误差约是 0.004，微小变化才更有解释空间。
+
+真实模型比较还要考虑 paired evaluation。两个模型在同一批样本上比较，比各自在不同样本上比较更可靠；看“哪些样本从错变对、哪些从对变错”，比只看两个平均分更能说明问题。人工评测和 LLM judge 还要看标注者一致性、judge 稳定性、位置偏差、长度偏差和复评样本。
+
+## LLM 评测多了协议层
+
+LLM 评测不是“输入题目，输出分数”这么简单。协议层会显著改变结果：
+
+| 协议项 | 为什么会影响分数 |
 | --- | --- |
-| 数据怎么分 | 防止把训练、调参和最终测试混在一起 |
-| 指标算什么 | 防止用错误指标证明错误结论 |
-| 是否分桶 | 防止平均分掩盖关键失败 |
-| 失败能否回放 | 防止只知道分数变化，不知道怎么修 |
+| prompt / system message | 同一题目换指令，模型行为可能完全不同 |
+| temperature / top-p / n samples | 决定单次答案、多样性和 pass@k |
+| max tokens / stop sequence | 影响长推理、代码和 JSON 是否完整 |
+| tool / RAG | 检索质量和工具 schema 可能比模型本身更关键 |
+| judge | 自动评分口径、偏差和格式解析会改变结论 |
 
-初学者可以先把评测理解成“证据链”，不是“排行榜”。一个模型是否更好，要看它在固定数据、关键分桶、失败样本和真实使用场景里是否都站得住。
+所以“模型 A 比模型 B 高 3 分”必须附带协议。若 A 用 RAG、B 不用；A 用 8 次采样取最好、B 用 greedy；A 的 judge prompt 更新过、B 用旧版本，这个对比就不再是单纯模型能力对比。
 
-## Train / Validation / Test
+## 评测要能驱动下一步行动
 
-最基本的数据划分是：
-
-| 数据集 | 用途 | 不能做什么 |
-| --- | --- | --- |
-| Train | 更新模型参数 | 不能用来证明泛化 |
-| Validation | 调超参和选 checkpoint | 不能反复过拟合 |
-| Test | 最终报告结果 | 不应参与调参 |
-
-如果用 test 集反复调参，test 集就会被污染，分数会越来越像“适配测试集”，而不是代表真实泛化。
-
-!!! note "常见误区：验证集可以无限次试到满意"
-    Validation set 本来用于调参，但反复围着同一批样本改 prompt、改数据、改超参，也会慢慢过拟合开发过程。更稳的做法是保留 holdout 或 shadow eval：平时少看它，只在关键节点检查改动是否真的泛化。
-
-## 指标必须匹配任务
-
-不同任务需要不同指标：
-
-| 任务 | 常见指标 | 注意点 |
-| --- | --- | --- |
-| 分类 | accuracy、F1 | 类别不均衡时 accuracy 可能误导 |
-| 检索 | Recall@K、nDCG、MRR | 要看召回池和排序阶段 |
-| 生成 | BLEU、ROUGE、human eval | 自动指标很容易漏掉事实性 |
-| VLM | OCR 准确率、定位、问答正确率 | 图表、文档、屏幕应分桶 |
-| 推理系统 | TTFT、TPOT、QPS、P99 | 平均延迟不代表线上体验 |
-
-指标不是越多越好，而是要能回答当前问题。
-
-## 为什么要分桶
-
-平均分会掩盖局部失败。比如一个 VLM 在普通图片问答上很强，但在发票、表格和小字体 OCR 上很弱。如果只看总分，问题可能完全被盖住。
-
-常见分桶方式：
-
-1. 按任务类型：问答、检索、代码、数学、OCR。
-2. 按输入长度：短文本、长文本、超长上下文。
-3. 按风险等级：普通样本、高价值样本、安全敏感样本。
-4. 按模态：文本、图像、视频、动作。
-5. 按失败类型：幻觉、格式错、召回漏、拒答错。
-
-## 错误分析比排行榜更重要
-
-如果一个模型分数下降，只知道“下降了 2 分”没有太大价值。更重要的是知道：
-
-1. 哪些样本错了；
-2. 错误集中在哪些桶；
-3. 是数据问题、模型问题、提示问题还是系统问题；
-4. 能不能通过回放稳定复现；
-5. 下一轮该补数据、改目标还是改系统。
-
-## 一个评测闭环伪代码
-
-```text
-for checkpoint in candidate_checkpoints:
-    results = evaluate(checkpoint, eval_sets)
-    report = bucketize(results)
-    failures = collect_failures(report)
-
-    if high_risk_bucket_regresses(failures):
-        reject(checkpoint)
-    else:
-        promote_to_shadow_test(checkpoint)
-
-analyze_failures()
-update_data_or_training_recipe()
-```
-
-这段伪代码强调：评测不只是打分，而是要能决定 checkpoint 是否进入下一阶段，并驱动数据和训练策略调整。
-
-## 和 benchmark 的关系
-
-公开 benchmark 很有用，但不能替代自己的任务评测。
-
-公开 benchmark 适合：
-
-- 横向比较模型大致能力；
-- 找到领域常用指标；
-- 复现论文和系统能力边界；
-- 发现明显短板。
-
-自建评测更适合：
-
-- 业务真实样本；
-- 高价值长尾；
-- 线上失败回放；
-- 特定格式和工具协议；
-- 安全与合规边界。
-
-## 评测闭环图
+一个可用评测闭环不是打分结束，而是把失败变成下一轮训练、数据、prompt 或系统改动。
 
 ```mermaid
 flowchart LR
-    A["候选模型 / checkpoint"] --> B["固定评测集"]
-    B --> C["分桶报告"]
-    C --> D{"是否有高风险退化？"}
-    D -- "是" --> E["拒绝发布并收集失败"]
-    D -- "否" --> F["shadow / 灰度"]
-    F --> G["线上回放与人工反馈"]
-    G --> H["更新数据、回归集和 judge"]
+    A["候选模型 / 系统版本"] --> B["固定评测协议"]
+    B --> C["总体分 + 分桶报告"]
+    C --> D["成对差异与置信区间"]
+    D --> E{"关键桶是否退化？"}
+    E -- "是" --> F["阻断发布，回放失败"]
+    E -- "否" --> G["shadow / canary"]
+    F --> H["补数据、改目标、改工具或改系统"]
+    G --> I["线上反馈与新失败"]
     H --> B
+    I --> B
 ```
 
-这张图强调评测不是一次性打分，而是发布门禁和数据回流系统。一个模型如果平均分提高，但高风险桶退化，就不应该直接上线；一个模型如果线上出现新失败，也不应该只写事故复盘，而要把样本进入回归集。
+这条闭环要求失败样本可回放。只知道“长上下文掉 2 分”还不够；要知道是检索召回漏、上下文被截断、引用格式错、模型没遵守工具协议，还是 judge 把等价答案判错。没有回放，评测只能制造焦虑，不能指导修复。
 
-## 一个分桶报告长什么样
+## 公开 benchmark 和自建评测分工不同
 
-| 桶 | 样本数 | baseline | candidate | 结论 |
-| --- | ---: | ---: | ---: | --- |
-| 普通问答 | 5,000 | 86.2 | 87.1 | 可接受提升 |
-| 长上下文 | 800 | 72.4 | 70.8 | 轻微退化，需看失败 |
-| 工具调用 | 600 | 64.0 | 68.5 | 明显提升 |
-| 高风险拒答 | 300 | 93.2 | 89.1 | 阻断发布 |
-| 已修复事故样本 | 120 | 96.0 | 94.5 | 需复查是否回归 |
+公开 benchmark 的价值是外部对齐：它让不同团队能在共同题集上比较模型，帮助发现明显短板，也方便复现论文。它的风险是被训练数据污染、被长期调参适配、和真实任务分布不一致。
 
-这样的报告比一个总分有用得多。它能直接告诉团队下一步：高风险拒答必须先修，长上下文需要看失败回放，工具调用可以保留收益。对于 VLM/VLA 和世界模型，同样要把 OCR、小物体、动作敏感性、risk calibration、失败恢复分桶，而不是只看总体 success rate。
+自建评测的价值是贴近真实任务：它可以覆盖业务样本、事故样本、长尾高价值场景、工具协议、安全边界和线上失败回放。它的风险是样本少、口径漂移、团队内部自我确认。因此自建评测也要版本化、保留 holdout，并记录每次样本加入的原因。
 
-## 和后续专题的关系
+HELM 的思路值得学习：不要只用一个分数，而是把 scenarios、metrics 和 harms 组合起来看。OpenAI Evals、EleutherAI lm-evaluation-harness、SuperCLUE、FlagEval 等框架或榜单也都体现了同一个方向：评测应该是可复现协议，不只是一次性表格。
 
-- [数据与数据集基础](data-and-dataset-basics.md)：评测可信度先依赖干净的数据边界和版本。
-- [泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)：解释 train-val gap、OOD 和上线分布偏移。
-- [训练评测与消融](../training/evaluation-and-ablation-methodology.md)：如何判断训练改动是否可信。
-- [推理在线评测](../inference/observability-and-online-evaluation.md)：如何把离线评测接到线上观测。
-- [强化学习总览](../reinforcement-learning/index.md)：reward、闭环评测和世界模型任务指标如何影响训练结论。
-- [量化评测与部署清单](../quantization/evaluation-and-deployment-checklist.md)：量化掉点如何验收。
+## 阅读结论
 
-## 本页结论
+评测的核心不是追一个总分，而是证明一个改动是否可靠、可归因、值得上线。数据划分回答“有没有被开发过程污染”；污染检查回答“模型是否已经见过近邻样本”；指标回答“什么叫好”；分桶回答“关键场景有没有退化”；置信区间和成对比较回答“差异是不是噪声”；失败回放回答“下一步该修什么”。
 
-评测的核心不是“拿一个分数”，而是建立可复现、可分桶、可回放、能驱动下一步行动的证据链。没有这条证据链，模型改动很难长期可信。
+当这些证据都能连起来，模型提升才不只是漂亮数字，而是可以支持训练决策、系统发布和长期维护的工程事实。
+
+## 外部精读
+
+- [Model Cards for Model Reporting](https://arxiv.org/abs/1810.03993)
+- [Data Cards](https://arxiv.org/abs/2204.01075)
+- [HELM: Holistic Evaluation of Language Models](https://arxiv.org/abs/2211.09110)
+- [OpenAI Evals](https://github.com/openai/evals)
+- [EleutherAI lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
+- [SuperCLUE](https://www.superclueai.com/)
+- [FlagEval](https://flageval.baai.ac.cn/)

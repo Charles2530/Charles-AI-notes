@@ -2,28 +2,13 @@
 
 MoE 和多模型服务看起来属于不同层级，但共同主题是：如何决定“哪一个模型 / 哪一部分参数该为当前请求工作”。MoE 在 token 级选择 expert，多模型服务在请求级选择模型、版本、精度路径或工具链。
 
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 路由的本质
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
->
-> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
-| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
 
 路由本质是资源分配：
 
 \[
 r(x)\rightarrow \text{resource subset}
 \]
-
 
 在 MoE 中，资源子集是 experts；在多模型服务中，资源子集是小模型、大模型、VLM、reranker、embedding、工具模型或高精度路径。
 
@@ -36,7 +21,6 @@ r(x)\rightarrow \text{resource subset}
 -\lambda_3\text{Quality}(m,x)
 \]
 
-
 难点在于 Quality 常无法事先精确知道，只能通过分类器、置信度、历史统计或规则代理估计。
 
 ## MoE 基本机制
@@ -47,13 +31,11 @@ r(x)\rightarrow \text{resource subset}
 \alpha=\mathrm{TopK}(\mathrm{softmax}(W_g h))
 \]
 
-
 输出为：
 
 \[
 y=\sum_{e\in\mathcal{K}(h)}\alpha_e\mathrm{Expert}_e(h)
 \]
-
 
 MoE 的收益来自“总参数很多，但每个 token 只激活一部分”。它也带来新问题：负载不均、专家塌缩、跨设备通信、capacity 限制和调试困难。
 
@@ -66,7 +48,6 @@ MoE 的收益来自“总参数很多，但每个 token 只激活一部分”。
 \[
 C=\left\lceil \text{capacity factor}\cdot \frac{kN}{E}\right\rceil
 \]
-
 
 若某 expert 超载，多余 token 可能被丢弃、重路由或延迟处理。这会影响训练稳定性、质量和推理吞吐。
 

@@ -6,7 +6,6 @@ paper_topic: 技术报告
 
 # Qwen3：Thinking 模式、36T 预训练与蒸馏
 
-
 Qwen3 这份报告的核心不是“又发布了一组模型”，而是把两个过去经常分开的产品形态合并到同一套模型里：**同一个 Qwen3 可以用 thinking mode 做长 CoT 推理，也可以用 non-thinking mode 做低延迟直接回答，并且允许用户用 thinking budget 控制推理 token 成本。**
 
 | Dimension | Qwen3 |
@@ -21,8 +20,8 @@ Qwen3 这份报告的核心不是“又发布了一组模型”，而是把两�
 | Main Post-training Goal | unified thinking and non-thinking behavior |
 | License | Apache 2.0 |
 
-!!! warning "阅读边界"
-    这是一份模型技术报告，训练数据、评测、消融和对比结果都应按作者报告理解。它很适合学习开源大模型训练和后训练 recipe，但不应把所有 benchmark 数值当作第三方独立复现结果。
+**阅读边界。**
+这是一份模型技术报告，训练数据、评测、消融和对比结果都应按作者报告理解。它很适合学习开源大模型训练和后训练 recipe，但不应把所有 benchmark 数值当作第三方独立复现结果。
 
 ## 论文位置
 
@@ -77,10 +76,10 @@ Qwen3 系列有 8 个模型。dense 模型覆盖边缘到 32B，MoE 模型覆盖
 
 MoE 模型和 dense 模型共享主体架构，但使用 128 个细粒度 experts，每 token 激活 8 个。和 Qwen2.5-MoE 不同，Qwen3-MoE 不使用 shared experts，并采用 global-batch load balancing loss 鼓励 expert specialization。
 
-!!! note "Qwen3-MoE 和 DeepSeekMoE 的差异"
-    两者都重视细粒度 experts，但路由和均衡策略不同。DeepSeek-V3 强调 auxiliary-loss-free load balancing，用动态 bias 控制负载；Qwen3 报告写的是 global-batch load balancing loss，并且明确 Qwen3-MoE 不设 shared experts。
+**Qwen3-MoE 和 DeepSeekMoE 的差异。**
+两者都重视细粒度 experts，但路由和均衡策略不同。DeepSeek-V3 强调 auxiliary-loss-free load balancing，用动态 bias 控制负载；Qwen3 报告写的是 global-batch load balancing loss，并且明确 Qwen3-MoE 不设 shared experts。
 
-    这说明 MoE 没有唯一标准答案。一个系统可以把 shared expert 当成通用能力锚点，也可以让所有 expert 都进入路由集合；可以把负载均衡放进 loss，也可以用路由 bias 外部调节。真正要看的是训练稳定性、专家专门化、通信成本和最终能力之间的折中。
+这说明 MoE 没有唯一标准答案。一个系统可以把 shared expert 当成通用能力锚点，也可以让所有 expert 都进入路由集合；可以把负载均衡放进 loss，也可以用路由 bias 外部调节。真正要看的是训练稳定性、专家专门化、通信成本和最终能力之间的折中。
 
 ## 预训练：36T tokens 和三阶段策略
 
@@ -121,26 +120,12 @@ Long Context Stage 的数据长度分布也有明确设计：
 | YaRN | length extrapolation |
 | Dual Chunk Attention (DCA) | achieve four-fold increase in sequence length capacity during inference |
 
-!!! note "为什么 S2 单独做 reasoning pre-training"
-    很多 reasoning 能力不只来自后训练 RL。Qwen3 在预训练阶段就单独设置 S2，把 STEM、代码、推理和合成数据比例拉高，再加速 learning rate decay。这是在 base model 层面提高“可被后训练激发的能力上限”。
+**为什么 S2 单独做 reasoning pre-training。**
+很多 reasoning 能力不只来自后训练 RL。Qwen3 在预训练阶段就单独设置 S2，把 STEM、代码、推理和合成数据比例拉高，再加速 learning rate decay。这是在 base model 层面提高“可被后训练激发的能力上限”。
 
-    如果 base model 没有足够的数学、代码和复杂推理先验，后面的 long-CoT SFT 和 RL 会更像补课；如果 base model 已经有足够好的表示，后训练更容易把能力组织成可控行为。
+如果 base model 没有足够的数学、代码和复杂推理先验，后面的 long-CoT SFT 和 RL 会更像补课；如果 base model 已经有足够好的表示，后训练更容易把能力组织成可控行为。
 
 ## Base Model 结果：旗舰 MoE 与小模型路线
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
->
-> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
-| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 Qwen3-235B-A22B-Base 用 235B total、22B activated 对比 Qwen2.5-72B、Qwen2.5-Plus、Llama-4-Maverick 和 DeepSeek-V3。报告主张它在大多数 base benchmarks 上领先，同时 activated params 低于 72B dense 和 DeepSeek-V3。
 
@@ -169,10 +154,10 @@ Qwen3 最重要的图是后训练 pipeline。
 
 <small>图源：`Qwen3 Technical Report`，Figure 1。原论文图意：Qwen3 系列的 post-training pipeline，旗舰模型经过 Long-CoT Cold Start、Reasoning RL、Thinking Mode Fusion、General RL；轻量模型通过 strong-to-weak distillation 继承大模型能力。</small>
 
-!!! note "这张 pipeline 图怎么读"
-    上半部分是旗舰模型训练：先做 long-CoT cold start，让模型学会基本长推理格式；再做 reasoning RL，把数学、代码等可验证推理能力拉起来；然后做 thinking mode fusion，把 non-thinking 能力合进同一模型；最后用 general RL 修指令跟随、格式、工具、RAG、偏好等通用能力。
+**这张 pipeline 图怎么读。**
+上半部分是旗舰模型训练：先做 long-CoT cold start，让模型学会基本长推理格式；再做 reasoning RL，把数学、代码等可验证推理能力拉起来；然后做 thinking mode fusion，把 non-thinking 能力合进同一模型；最后用 general RL 修指令跟随、格式、工具、RAG、偏好等通用能力。
 
-    下半部分是小模型训练：不是给每个小模型完整跑一遍四阶段流程，而是用强模型 teacher 做 off-policy 和 on-policy distillation。报告说这种方式能显著减少 GPU hours，并且比直接对小模型做 RL 更有效。
+下半部分是小模型训练：不是给每个小模型完整跑一遍四阶段流程，而是用强模型 teacher 做 off-policy 和 on-policy distillation。报告说这种方式能显著减少 GPU hours，并且比直接对小模型做 RL 更有效。
 
 四阶段可以这样拆：
 
@@ -221,10 +206,10 @@ Reasoning RL 使用 GRPO，训练数据是 3,995 个 query-verifier pairs。它�
 
 一个具体结果是：Qwen3-235B-A22B 的 AIME'24 从 70.1 提升到 85.1，总共 170 个 RL training steps。
 
-!!! note "为什么只有 3,995 个 query-verifier pairs 也能有效"
-    这里的单位不是普通 SFT 样本，而是 RL 环境里的 query-verifier pair。每个 query 可以采样多条 rollout，verifier 提供自动奖励。只要题目难度合适、可验证且覆盖子领域，单个 query 可以产生很多策略改进信号。
+**为什么只有 3,995 个 query-verifier pairs 也能有效。**
+这里的单位不是普通 SFT 样本，而是 RL 环境里的 query-verifier pair。每个 query 可以采样多条 rollout，verifier 提供自动奖励。只要题目难度合适、可验证且覆盖子领域，单个 query 可以产生很多策略改进信号。
 
-    这也解释了为什么报告强调 query 要 learnable 且 challenging。太简单的题奖励饱和，太难的题全错没有梯度；最有效的是模型能偶尔做对、但还不稳定的题。
+这也解释了为什么报告强调 query 要 learnable 且 challenging。太简单的题奖励饱和，太难的题全错没有梯度；最有效的是模型能偶尔做对、但还不稳定的题。
 
 ## Stage 3：Thinking Mode Fusion
 
@@ -256,10 +241,10 @@ Considering the limited time by the user, I have to give the solution based on t
 
 <small>图源：`Qwen3 Technical Report`，Figure 2。原论文图意：Qwen3-235B-A22B 在数学、代码和 STEM 相关 benchmark 上，随着 thinking budget 增加，性能平滑提升。</small>
 
-!!! note "Thinking budget 的工程意义"
-    过去 reasoning model 的推理成本常常不可控：模型可能想很久，也可能提前结束。Qwen3 的做法把“思考长度”暴露成一个接口变量，让应用可以按任务难度、延迟预算和成本预算选择推理深度。
+**Thinking budget 的工程意义。**
+过去 reasoning model 的推理成本常常不可控：模型可能想很久，也可能提前结束。Qwen3 的做法把“思考长度”暴露成一个接口变量，让应用可以按任务难度、延迟预算和成本预算选择推理深度。
 
-    但这不是免费午餐。budget 太小会截断推理，budget 太大又会拉高 latency 和 token 成本。更稳妥的产品形态通常是：简单任务默认 non-thinking；中等任务给较小 budget；数学、代码、复杂 agent 任务才给更高 budget。
+但这不是免费午餐。budget 太小会截断推理，budget 太大又会拉高 latency 和 token 成本。更稳妥的产品形态通常是：简单任务默认 non-thinking；中等任务给较小 budget；数学、代码、复杂 agent 任务才给更高 budget。
 
 ## Stage 4：General RL
 
@@ -315,10 +300,10 @@ Qwen3 的小模型不是简单用小模型自己走完整四阶段。报告专�
 
 <small>表源：`Qwen3 Technical Report`，Table 17。原论文表意：从同一 off-policy distilled 8B checkpoint 出发，on-policy distillation 在数学、代码和知识任务上优于直接 RL，并只用约十分之一 GPU hours；括号中为 pass@64。</small>
 
-!!! note "为什么 distillation 可能比小模型 RL 更划算"
-    小模型直接 RL 容易受探索空间限制：它能采样出的好轨迹少，reward 信号也更稀疏。强 teacher 的 logits 不只告诉 student 最终答案，还提供了每一步分布形状，相当于更密集的训练信号。
+**为什么 distillation 可能比小模型 RL 更划算。**
+小模型直接 RL 容易受探索空间限制：它能采样出的好轨迹少，reward 信号也更稀疏。强 teacher 的 logits 不只告诉 student 最终答案，还提供了每一步分布形状，相当于更密集的训练信号。
 
-    on-policy distillation 又比纯 off-policy 更贴近 student 自己会犯的错误。student 先生成自己的输出，再让 teacher 在这些轨迹上提供分布对齐目标，可以更直接修正 student 的真实行为分布。
+on-policy distillation 又比纯 off-policy 更贴近 student 自己会犯的错误。student 先生成自己的输出，再让 teacher 在这些轨迹上提供分布对齐目标，可以更直接修正 student 的真实行为分布。
 
 ## Thinking vs Non-Thinking 评测
 
@@ -394,4 +379,4 @@ Qwen3 的技术报告给工程项目的启发主要有五条：
 
 更准确地说，Qwen3 报告展示的是一个可部署模型家族的后训练范式：**用旗舰模型探索能力边界，用双模式训练统一产品接口，再用强到弱蒸馏把能力扩散到小模型。**
 
-这一页最后回到三个验收点：方法上，Qwen3 的关键接口是 thinking budget 和模式控制，把长推理能力变成可调成本，而不是永远开启。实验上，posttrain pipeline、budget 曲线、数学/代码/通用 benchmark 要连读。诊断上，最重要的边界是简单题过度思考和推理 token 成本；分数提升必须和延迟、价格一起看。
+Qwen3 的关键接口是 thinking budget 和模式控制：长推理能力变成可调成本，而不是永远开启。posttrain pipeline、budget 曲线、数学/代码/通用 benchmark 要连读；最重要边界是简单题过度思考和推理 token 成本，分数提升必须和延迟、价格一起验。

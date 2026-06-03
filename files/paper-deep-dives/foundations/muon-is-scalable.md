@@ -6,10 +6,13 @@ paper_topic: 高效训练
 
 # Muon：LLM 预训练优化器
 
-
 这篇论文讨论的不是一个普通训练小技巧，而是一个更基础的问题：**在大模型预训练里，AdamW 是否仍然是唯一足够稳、足够可扩展的默认优化器？** 论文的答案比较激进：如果只看大规模 LLM 预训练，经过 weight decay、update scale 和分布式实现改造后的 Muon 可以直接替代 AdamW，并在 compute-optimal training 下达到约 `2x` 的训练效率。
 
 但工程上不能把这句话读成“所有阶段都换成 Muon”。这篇论文真正有价值的部分在于，它把 Muon 从一个小模型优化器改造成能跑 5.7T token MoE 预训练的系统方案，并且清楚暴露了它和 AdamW 的边界：Muon 更适合矩阵权重的预训练更新，非矩阵参数、已有 AdamW checkpoint 的 SFT、以及很多短周期后训练任务，仍然要谨慎对待。
+
+先用一个直觉例子进入。Transformer 的 MLP 矩阵像一张巨大的方向表：某些奇异方向可能特别强，更新时反复沿这些方向走，模型就容易把容量集中到少数通道上。AdamW 给每个参数元素维护一套一阶/二阶矩账本，擅长处理局部梯度尺度；Muon 则先把整个矩阵的动量拿出来做近似正交化，让更新更像“沿一组更均衡的矩阵方向迈步”。所以它不是 AdamW 的小改名，而是在改变矩阵权重的更新几何。
+
+读这篇时最重要的不是记 Newton-Schulz 公式，而是追问三件事：正交化更新怎样保持长期训练稳定，怎样把更新尺度调到能复用 AdamW 学习率，分布式训练怎样在参数分片下仍然看到完整矩阵。
 
 ## 论文位置
 
@@ -26,16 +29,16 @@ Muon 切入的是另一条路线。Transformer 里最重的参数大多是矩阵
 | Distributed Muon | 让需要全矩阵正交化的 Muon 能和 ZeRO-1 / Megatron-LM 风格分布式训练结合 |
 | Moonlight pre-training | 用 Muon 训练 3B activated / 16B total MoE 模型到 5.7T tokens，验证可扩展性 |
 
-![Muon scaling law 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/muon-is-scalable/muon-scaling-law-原图.png){ width="360" }
+![Muon scaling law 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/muon-is-scalable/muon-scaling-law-原图.png){ width="430" .atlas-figure-compact }
 
-![Moonlight Pareto frontier 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/muon-is-scalable/moonlight-pareto-frontier-原图.png){ width="430" }
+![Moonlight Pareto frontier 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/muon-is-scalable/moonlight-pareto-frontier-原图.png){ width="490" .atlas-figure-compact }
 
 <small>图源：`Muon is Scalable for LLM Training`，Figure 1。左图展示 Muon 与 AdamW 的 scaling law 对比，论文结论是 Muon 在 compute-optimal 设置下达到相同 loss 约需 `0.519x` FLOPs；右图展示 Moonlight 在 MMLU 与训练 FLOPs 平面上的 Pareto 位置。</small>
 
-!!! note "这两张图怎么读"
-    左图不是单次跑分，而是 scaling law 拟合后的训练效率判断。论文先给 AdamW 做 grid search，建立较强 AdamW baseline，再让 Muon 复用 AdamW 的学习率与 weight decay。如果 Muon 只是在一个没调好的 AdamW baseline 上赢，结论意义会很弱；这篇论文真正想证明的是：在 compute-optimal 条件下，改造后的 Muon 仍能系统性降低达到同等 loss 所需的训练 FLOPs。
+**Scaling law 和 Pareto 图要分开读。**
+左图不是单次跑分，而是 scaling law 拟合后的训练效率判断。论文先给 AdamW 做 grid search，建立较强 AdamW baseline，再让 Muon 复用 AdamW 的学习率与 weight decay。如果 Muon 只是在一个没调好的 AdamW baseline 上赢，结论意义会很弱；这篇论文真正想证明的是：在 compute-optimal 条件下，改造后的 Muon 仍能系统性降低达到同等 loss 所需的训练 FLOPs。
 
-    右图是模型层面的验证：Moonlight 不是 dense 3B，而是 2.24B activated / 15.29B total 的 MoE，算上 embedding 约 3B activated / 16B total。它用 5.7T tokens 训练，目标是证明优化器收益能落到真实模型和真实训练预算上。
+右图是模型层面的验证：Moonlight 不是 dense 3B，而是 2.24B activated / 15.29B total 的 MoE，算上 embedding 约 3B activated / 16B total。它用 5.7T tokens 训练，目标是证明优化器收益能落到真实模型和真实训练预算上。
 
 ## 先复习 AdamW
 
@@ -45,17 +48,14 @@ AdamW 的核心更新可以写成：
 m_t=\beta_1m_{t-1}+(1-\beta_1)g_t
 \]
 
-
 \[
 v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2
 \]
-
 
 \[
 \theta_t=(1-\eta_t\lambda)\theta_{t-1}
 -\eta_t\frac{\hat m_t}{\sqrt{\hat v_t}+\epsilon}
 \]
-
 
 这里 \(m_t\) 是一阶动量，\(v_t\) 是逐元素二阶矩，\(\lambda\) 是 decoupled weight decay。它的更新方向是 element-wise adaptive 的：某个参数元素最近梯度波动大，分母就大，实际步长就小。
 
@@ -74,20 +74,17 @@ Muon 只考虑可以表示成矩阵的参数。对某个矩阵权重 \(W\)，它
 M_t=\mu M_{t-1}+G_t
 \]
 
-
 然后不直接用 \(M_t\) 更新，而是对 \(M_t\) 做矩阵正交化：
 
 \[
 O_t=\operatorname{Orthogonalize}(M_t)
 \]
 
-
 最后更新：
 
 \[
 W_t=W_{t-1}-\eta_t O_t
 \]
-
 
 论文采用 Newton-Schulz iteration 近似计算正交化结果。如果 \(M=U\Sigma V^\top\)，理想的正交化方向接近 \(UV^\top\)，也就是保留左右奇异向量，削弱奇异值大小差异带来的主方向垄断。
 
@@ -110,13 +107,11 @@ Muon 的直觉不是“更精细地调每个元素”，而是“别让一个矩
 W_t=(1-\eta_t\lambda)W_{t-1}-\eta_t O_t
 \]
 
-
 第二，**不同形状矩阵的 Muon update RMS 不一致**。对形状为 \(A\times B\) 的满秩矩阵，理想正交化更新的理论 RMS 约为：
 
 \[
 \operatorname{RMS}(O_t)=\frac{1}{\sqrt{\max(A,B)}}
 \]
-
 
 如果直接用同一个 learning rate，宽矩阵和窄矩阵的实际更新尺度会差很多。论文的做法是按矩阵形状缩放 Muon update，使不同矩阵的 update RMS 更一致；然后再把 Muon 的 update RMS 匹配到 AdamW 常见的 `0.2` 到 `0.4` 范围。这样做的最大好处是：**Muon 可以直接复用 AdamW 已经调好的 learning rate 和 weight decay。**
 
@@ -126,8 +121,8 @@ W_t=(1-\eta_t\lambda)W_{t-1}-\eta_t O_t
 
 <small>图源：`Muon is Scalable for LLM Training`，Figure 2。原图比较 AdamW、vanilla Muon 和带 weight decay 的 Muon，重点说明 vanilla Muon 早期收敛快但长训练收益会被权重尺度增长限制，加入 weight decay 后更适合 over-train regime。</small>
 
-!!! note "为什么 update RMS 是这篇论文的关键"
-    如果 Muon 需要重新为每类矩阵单独调学习率，它在大规模训练里的工程价值会大幅下降。论文把 update RMS 调到和 AdamW 接近，本质是在降低迁移成本：已有 AdamW 配方里的 global learning rate、weight decay 和 schedule 可以直接作为 Muon 起点。这个设计比“Muon 在某个固定小实验更低 loss”更重要，因为它决定了 Muon 能不能进入真实训练系统。
+**为什么 update RMS 是这篇论文的关键。**
+如果 Muon 需要重新为每类矩阵单独调学习率，它在大规模训练里的工程价值会大幅下降。论文把 update RMS 调到和 AdamW 接近，本质是在降低迁移成本：已有 AdamW 配方里的 global learning rate、weight decay 和 schedule 可以直接作为 Muon 起点。这个设计比“Muon 在某个固定小实验更低 loss”更重要，因为它决定了 Muon 能不能进入真实训练系统。
 
 论文对 update RMS 做了一个早期训练消融，原表英文列名保留如下：
 
@@ -168,9 +163,6 @@ DP reduce-scatter gradients
 
 ## Scaling law 实验
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 优化器论文最容易犯的错误是拿一个没调好的 AdamW baseline 当靶子。Moonshot 这篇论文专门强调：AdamW baseline 做了 grid search，并遵循 compute-optimal training 设置。
 
 Scaling law 用的是 Llama 架构 dense models，模型和训练规模如下：
@@ -188,16 +180,6 @@ Scaling law 用的是 Llama 架构 dense models，模型和训练规模如下：
 这里的关键设置是：Muon 没有重新单独调一套超参数，而是利用 update RMS matching 直接复用 AdamW 的最优超参数。论文由此得到 Figure 1(a) 的结论：在 compute-optimal setting 下，Muon 达到 AdamW 同等 loss 约需要 `0.519x` FLOPs。
 
 ## Moonlight 预训练细节
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. Simple Neural Network Training | 完整的神经网络训练循环》-->
-> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
->
-> 延伸阅读：[06. Simple Neural Network Training | 完整的神经网络训练循环](https://datawhalechina.github.io/llm-algo-leetcode/00_Prerequisites/06_Simple_Neural_Network_Training.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. Simple Neural Network Training | 完整的神经网络训练循环》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/00_Prerequisites/06_Simple_Neural_Network_Training.html) |
 
 论文为了验证 Muon 的真实可扩展性，训练了 Moonlight：一个基于 DeepSeek-V3-Small 风格架构的 MoE LLM。正文给出的规模是 `2.24B activated / 15.29B total`，若计入 embedding 则约为 `3B activated / 16B total`。
 
@@ -228,8 +210,8 @@ Scaling law 用的是 Llama 架构 dense models，模型和训练规模如下：
 
 这组细节说明论文没有只做小规模 proxy。它把 Muon 放进了完整大模型训练链路：8K context、MoE routing、aux-free load balancing、cooldown 高质量数据、以及大规模分布式优化。
 
-!!! note "为什么 cooldown 阶段很重要"
-    如果只看前 1.2T token，结论更像优化器加速实验；跑到 5.7T 并加入高质量 math/code/reasoning cooldown，才更接近真实 LLM 训练。Cooldown 会改变数据分布和学习率轨迹，因此能检验 Muon 在阶段切换、低学习率尾段和高质量数据上是否仍然稳定。
+**为什么 cooldown 阶段很重要。**
+如果只看前 1.2T token，结论更像优化器加速实验；跑到 5.7T 并加入高质量 math/code/reasoning cooldown，才更接近真实 LLM 训练。Cooldown 会改变数据分布和学习率轨迹，因此能检验 Muon 在阶段切换、低学习率尾段和高质量数据上是否仍然稳定。
 
 ## Moonlight 和 AdamW baseline 的结果
 
@@ -287,10 +269,10 @@ Muon 的核心假设是：矩阵正交化能让权重沿更多方向学习。论
 
 ![Muon SVD entropy 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/muon-is-scalable/muon-svd-entropy-原图.png){ width="760" }
 
-<small>图源：`Muon is Scalable for LLM Training`，Figure 4。原图把权重分成 AttnQO、AttnKV、Experts、SharedExperts、Router、Dense 六组，比较 AdamW 与 Muon 在训练迭代中的平均 SVD entropy。</small>
+<small>图源：`Muon is Scalable for LLM Training`，Figure 4。原图表达：把权重分成 AttnQO、AttnKV、Experts、SharedExperts、Router、Dense 六组，比较 AdamW 与 Muon 在训练迭代中的平均 SVD entropy。本站读法：这张图是机制证据，不是最终能力证据；它说明 Muon 改变了矩阵奇异谱分布，但能力提升仍要结合后面的 benchmark 和训练口径读。</small>
 
-!!! note "SVD entropy 能说明什么，不能说明什么"
-    SVD entropy 更高意味着奇异值分布更均衡，说明权重矩阵没有被少数奇异方向过度主导。这和 Muon 的设计动机一致。但它不是最终能力指标，也不能单独证明因果。它更适合作为机制证据：Muon 的确改变了矩阵权重的谱结构，而不是只靠学习率或 batch 差异赢。
+**SVD entropy 能说明什么，不能说明什么。**
+SVD entropy 更高意味着奇异值分布更均衡，说明权重矩阵没有被少数奇异方向过度主导。这和 Muon 的设计动机一致。但它不是最终能力指标，也不能单独证明因果。它更适合作为机制证据：Muon 的确改变了矩阵权重的谱结构，而不是只靠学习率或 batch 差异赢。
 
 ## SFT 阶段的结果要谨慎读
 
@@ -335,8 +317,8 @@ Muon 的核心假设是：矩阵正交化能让权重沿更多方向学习。论
 
 从今天的工程默认看，AdamW 仍然是最稳的起点。它适合绝大多数训练阶段，尤其是 SFT、DPO/RLHF/RLVR、adapter tuning、LoRA、embedding-heavy 任务和短周期实验。Muon 更像是一个面向大规模预训练的强候选：当训练预算足够大、矩阵权重占主要计算、基础设施能支持 full-matrix orthogonalization 时，它可能给出更高 token / FLOP efficiency。
 
-!!! warning "不要把 Muon 当成 AdamW 的无脑替换"
-    论文里的 Muon 是 hybrid optimizer：矩阵参数用 Muon，RMSNorm、LM head、embedding 等非矩阵参数仍由 Adam/AdamW 风格优化器处理。并且论文附录提到 Moonlight 训练中仍要监控 max attention logit，AdamW 在控制某些 attention logit 行为上更健康。Kimi K2 后续使用的 MuonClip，也可以理解为 Moonshot 在更大规模 MoE 上继续补 Muon 稳定性短板。
+**不要把 Muon 当成 AdamW 的无脑替换。**
+论文里的 Muon 是 hybrid optimizer：矩阵参数用 Muon，RMSNorm、LM head、embedding 等非矩阵参数仍由 Adam/AdamW 风格优化器处理。并且论文附录提到 Moonlight 训练中仍要监控 max attention logit，AdamW 在控制某些 attention logit 行为上更健康。Kimi K2 后续使用的 MuonClip，也可以理解为 Moonshot 在更大规模 MoE 上继续补 Muon 稳定性短板。
 
 ## 如果自己复现实验，优先盯哪些点
 
@@ -360,11 +342,14 @@ Muon 的核心假设是：矩阵正交化能让权重沿更多方向学习。论
 
 对高效训练学习来说，Muon 是一个很好的例子：优化器不是只改一行 `optimizer = ...`，它会牵动参数分组、学习率尺度、数值范围、通信拓扑、checkpoint 状态和后训练可迁移性。AdamW 仍然是大多数项目的默认起点；Muon 则提示我们，在矩阵权重占主导的大模型预训练中，优化器的几何假设本身仍然有很大改进空间。
 
-## 参考链接
+## 外部精读
 
-1. 论文：[Muon is Scalable for LLM Training](https://arxiv.org/abs/2502.16982).
-2. 论文 HTML 与原图：[ar5iv:2502.16982](https://ar5iv.labs.arxiv.org/html/2502.16982).
-3. 代码与模型入口：[MoonshotAI/Moonlight](https://github.com/MoonshotAI/Moonlight).
-4. 模型权重：[moonshotai/Moonlight-16B-A3B](https://huggingface.co/moonshotai/Moonlight-16B-A3B).
+1. 论文：[Muon is Scalable for LLM Training](https://arxiv.org/abs/2502.16982)：重点读 weight decay、update RMS matching、Distributed Muon、scaling law 和 SFT 边界。
+2. 论文 HTML 与原图：[ar5iv:2502.16982](https://ar5iv.labs.arxiv.org/html/2502.16982)：适合检索图表、表格和公式。
+3. 代码与模型入口：[MoonshotAI/Moonlight](https://github.com/MoonshotAI/Moonlight)：确认 Moonlight 架构、Muon 实现和模型发布。
+4. 模型权重：[moonshotai/Moonlight-16B-A3B](https://huggingface.co/moonshotai/Moonlight-16B-A3B)：查看模型卡和权重状态。
+5. [NVIDIA Megatron Bridge: Moonlight](https://docs.nvidia.com/nemo/megatron-bridge/0.2.0/models/llm/moonlight.html)：从分布式训练框架角度看 Moonlight / Muon 的工程接口。
 
-这一页最后回到三个验收点：方法上，Muon 的核心是把矩阵更新方向做近似正交化，让优化步更像受控的谱范数更新；通常还要和 AdamW 分工使用。实验上，读 loss/scale 曲线时要看模型规模、token budget 和是否保持同等训练 recipe。诊断上，真正要验的是稳定性与超参迁移，不是单个 benchmark 赢一次。
+## 阅读结论
+
+Muon 的核心是把矩阵更新方向做近似正交化，让优化步更像受控的谱范数更新；真实系统里通常还要和 AdamW 分工使用。读 loss / scale 曲线时要看模型规模、token budget、是否保持同等训练 recipe 和 AdamW baseline 是否充分调参。真正要验的是稳定性、update scale、分布式语义和超参迁移，不是单个 benchmark 赢一次。

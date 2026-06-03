@@ -6,12 +6,9 @@ paper_topic: 世界模型
 
 # JEPA：预测式表征学习路线
 
-
 这篇论文的价值不在某个实验指标，而在于给出了一条和“生成未来像素”不同的世界模型路线：**世界模型不一定要重建未来画面的每个细节，而可以预测未来的抽象表征。** 这就是 `Joint-Embedding Predictive Architecture`，也就是 JEPA。
 
 如果把 LingBot-World 看作“从视频生成模型发展出的视觉世界模拟器路线”，Dreamer 看作“从交互轨迹学习 latent dynamics 的 model-based RL 路线”，那么 JEPA 更像一条上层架构原则：用可预测、可规划、可组合的 latent representation 来承载世界动态。
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 ## 论文位置
 
@@ -21,11 +18,8 @@ paper_topic: 世界模型
 
 <small>Figure source: `A Path Towards Autonomous Machine Intelligence`, Figure 2. 原论文图注要点：该图把自主智能系统拆成 perception、world model、actor、cost/critic、short-term memory 和 configurator；其中 world model 根据 actor 设想的动作序列预测可能的未来世界状态，cost 模块给这些状态分配能量。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是 context 表征和 target 表征，输出是 joint embedding space 中的预测。  
-    **效率机制**：预测抽象 embedding 而非像素细节，减少无关重建负担。  
-    **对主线意义**：它解释 masked/JEPA 为什么适合作为世界模型前置状态层。  
-    **不能证明什么**：没有 action/reward/done 时，JEPA 不能直接等同于可规划世界模型。
+**系统图先看 agent 闭环。**
+这张图不是 JEPA 模块图，而是在说明论文设想的完整 agent：perception 把观测变成当前状态，actor 提出候选动作，world model 预测这些动作导致的未来状态，cost/critic 再评价未来好坏。JEPA 的 representation prediction 只是其中的世界模型训练原则；没有动作、cost、reward、done 和闭环评测时，它不能直接等同于可规划世界模型。
 
 这张图说明 JEPA 不是单独的自监督学习模块，而是服务于一个完整 agent 架构。论文里的世界模型承担的不是“把输入视频补全得漂亮”，而是：
 
@@ -34,7 +28,6 @@ $$
 \rightarrow
 \text{possible future states}
 $$
-
 
 然后 actor 可以通过搜索、优化或规划，选择让未来 cost 最低的动作序列。这一点和 Dreamer 的思想有相通之处：两者都重视 latent space 中的未来预测。但 Dreamer 给出了可训练的 RL 算法和大量实验，JEPA 这篇文章更偏向提出通用架构和训练原则。
 
@@ -46,7 +39,6 @@ $$
 p(x_{t+1:t+H} \mid x_{\le t}, a_{t:t+H-1})
 $$
 
-
 这在视频模型里很自然，因为训练目标可以是重建像素、预测 latent token 或扩散去噪。但真实世界有大量不可预测、也不影响决策的细节。例如一辆车到岔路口后，重要的是车的位置、速度、方向和路线选择，而不是路边树叶纹理的每个像素。
 
 JEPA 的核心判断是：如果世界模型被迫预测所有细节，它会把容量浪费在决策不需要的信息上。更合适的目标是预测未来的表示：
@@ -55,8 +47,9 @@ $$
 s_y = \operatorname{Enc}(y)
 $$
 
-
 而不是直接预测 \(y\)。只要 encoder 学到的 \(s_y\) 保留任务相关、可预测、可规划的信息，就可以故意丢弃纹理、噪声和其他不相关细节。
+
+直觉上，自动驾驶车在路口需要预测的是前车是否减速、行人是否进入斑马线、自己往左变道是否会产生冲突；它不需要预测远处树叶在未来 0.5 秒里每个像素怎么抖。像素生成模型会被迫解释这些细节，JEPA 则希望 encoder 把不可控的纹理噪声排除在状态表示外，把预测容量留给会影响行动选择的变量。这就是“预测抽象表示”比“重建未来画面”更像世界模型状态层的原因。
 
 ## JEPA 架构
 
@@ -66,13 +59,11 @@ $$
 s_x = \operatorname{Enc}_x(x), \qquad s_y = \operatorname{Enc}_y(y)
 $$
 
-
 predictor 再根据 \(s_x\) 和可能的 latent variable \(z\) 预测目标表示：
 
 $$
 \hat{s}_y = \operatorname{Pred}(s_x, z)
 $$
-
 
 模型的能量是预测误差：
 
@@ -80,22 +71,20 @@ $$
 E(x,y,z)=D(s_y,\hat{s}_y)
 $$
 
-
 如果存在多个可能未来，模型可以通过 \(z\) 表达多模态性。整体能量可以写成：
 
 $$
 F(x,y)=\min_z D(s_y,\operatorname{Pred}(s_x,z))
 $$
 
-
 ![JEPA architecture](../../assets/images/paper-deep-dives/world-models/jepa/figure-12-jepa.png){ width="760" }
 
 <small>Figure source: `A Path Towards Autonomous Machine Intelligence`, Figure 12. 原论文图注要点：JEPA 通过两个 encoding branches 得到 \(s_x\) 和 \(s_y\)，predictor 在 latent variable \(z\) 的帮助下预测 \(s_y\)，能量由目标表示和预测表示之间的误差给出；这种设计的关键优势是只在 representation space 中预测。</small>
 
-!!! note "JEPA 图里的关键转向"
-    这张图的重点是预测对象从“未来观测”变成了“未来表示”。输入 \(x\) 和目标 \(y\) 先分别编码成 \(s_x\) 和 \(s_y\)，predictor 只需要从 \(s_x\) 和 latent \(z\) 预测 \(s_y\)。模型不必重建像素、纹理或所有不可预测细节，只需要预测 encoder 认为重要的抽象状态。
+**JEPA 图里的关键转向。**
+这张图的重点是预测对象从“未来观测”变成了“未来表示”。输入 \(x\) 和目标 \(y\) 先分别编码成 \(s_x\) 和 \(s_y\)，predictor 只需要从 \(s_x\) 和 latent \(z\) 预测 \(s_y\)。模型不必重建像素、纹理或所有不可预测细节，只需要预测 encoder 认为重要的抽象状态。
 
-    这对世界模型很关键：如果未来有多个可能视频，像素级生成必须选择或采样一个具体未来；JEPA 可以把不可预测但无关的细节留在表示之外，把容量放在可预测、可规划、可行动的信息上。读这张图时要注意 latent \(z\) 的角色：它不是为了生成漂亮画面，而是为 representation prediction 中真正必要的不确定性提供自由度。
+这对世界模型很关键：如果未来有多个可能视频，像素级生成必须选择或采样一个具体未来；JEPA 可以把不可预测但无关的细节留在表示之外，把容量放在可预测、可规划、可行动的信息上。读这张图时要注意 latent \(z\) 的角色：它不是为了生成漂亮画面，而是为 representation prediction 中真正必要的不确定性提供自由度。
 
 这和生成式视频模型的区别非常重要：
 
@@ -123,10 +112,10 @@ JEPA 可以用 contrastive learning 训练，但论文更强调 non-contrastive 
 
 <small>Figure source: `A Path Towards Autonomous Machine Intelligence`, Figure 13. 原论文图注要点：非对比 JEPA 训练同时最大化 \(s_x\) 与 \(s_y\) 对输入的信息量、最小化 prediction error，并约束 latent variable \(z\) 的信息量；论文把 VICReg 和 Barlow Twins 视为这类非对比准则的例子。</small>
 
-!!! note "为什么不能只最小化预测误差"
-    如果训练目标只有 \(D(s_y,\hat{s}_y)\)，最简单的坏解是让 \(s_x\) 和 \(s_y\) 都变成常数，预测误差很低但表示没有信息。另一种坏解是让 latent \(z\) 携带所有目标细节，predictor 绕过 \(s_x\)，模型也没有学会从当前状态预测未来。
+**为什么不能只最小化预测误差。**
+如果训练目标只有 \(D(s_y,\hat{s}_y)\)，最简单的坏解是让 \(s_x\) 和 \(s_y\) 都变成常数，预测误差很低但表示没有信息。另一种坏解是让 latent \(z\) 携带所有目标细节，predictor 绕过 \(s_x\)，模型也没有学会从当前状态预测未来。
 
-    所以非对比 JEPA 的图里同时出现三类约束：表示要保留输入信息，预测误差要低，latent variable 的信息量要受限。这个三角平衡才是训练重点。读这张图时不要把它当成普通回归 loss，而要把它看成防 collapse 的 representation-learning recipe。
+所以非对比 JEPA 的图里同时出现三类约束：表示要保留输入信息，预测误差要低，latent variable 的信息量要受限。这个三角平衡才是训练重点。读这张图时不要把它当成普通回归 loss，而要把它看成防 collapse 的 representation-learning recipe。
 
 这四个约束共同解决两个 collapse 问题。
 
@@ -146,11 +135,9 @@ $$
 x = \text{past observation or current state}
 $$
 
-
 $$
 y = \text{future observation or future state}
 $$
-
 
 在动作条件世界模型中，predictor 还应接收动作或动作序列：
 
@@ -158,7 +145,6 @@ $$
 \hat{s}_{t+k}
 = \operatorname{Pred}(s_t, a_{t:t+k-1}, z)
 $$
-
 
 训练样本来自时间相邻或跨时间的观测对：
 
@@ -257,7 +243,6 @@ $$
 \text{future frames or video latent}
 $$
 
-
 JEPA 更关注：
 
 $$
@@ -265,7 +250,6 @@ $$
 \rightarrow
 \text{future representation}
 $$
-
 
 如果要把视频模型往 JEPA 方向改，可以考虑三层接口：
 
@@ -301,4 +285,15 @@ $$
 
 更稳妥的读法是：把这篇论文当作“为什么世界模型应该预测抽象表示，而不是只生成未来像素”的理论路线图。真正落到项目时，还需要结合 Dreamer 系列的交互轨迹训练、LingBot-World 这类视频生成系统，以及具体任务的数据、动作接口和评测设计。
 
-这一页最后回到三个验收点：方法上，JEPA 的核心是预测 representation space 中的缺失部分，刻意不重建像素细节。实验上，autonomous agent、non-contrastive training 和 H-JEPA 图要当方法论证据读。诊断上，它解释了为什么世界模型可以不生成所有未来画面，但动作、reward 和闭环评测必须由后续系统补齐。
+## 阅读结论
+
+JEPA 的核心贡献是把世界模型的预测目标从“未来像素”挪到“未来表示”。这个转向很重要：对规划来说，状态表示应该保留可行动、可预测、可评估的信息，而不是被迫重建所有视觉细节。H-JEPA 进一步提醒我们，短期控制、技能执行和长期任务需要不同层级的状态抽象。
+
+但这篇论文更像路线图，不是完整实证系统。它解释了为什么世界模型可以不生成所有未来画面，也解释了 non-contrastive representation prediction 为什么要防 collapse；真正落到机器人或 agent 训练时，还必须补动作条件、cost/reward、uncertainty、closed-loop evaluation 和具体优化 recipe。
+
+## 外部精读
+
+1. LeCun. [A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)：原文；重点读 agent 架构、JEPA、H-JEPA 和 planning 部分。
+2. [I-JEPA](https://arxiv.org/abs/2301.08243)：把 JEPA 落到图像自监督学习，适合看“预测表示而非像素”的实证化版本。
+3. [V-JEPA](https://arxiv.org/abs/2404.08471)：把 JEPA 扩展到视频表示，适合和视频世界模型路线对比。
+4. [Meta V-JEPA blog](https://ai.meta.com/blog/v-jepa-yann-lecun-ai-model-video-joint-embedding-predictive-architecture/)：官方解释；适合先建立直觉，再回论文核对实验边界。

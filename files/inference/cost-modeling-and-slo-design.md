@@ -2,20 +2,7 @@
 
 推理系统上线后，所有优化最后都会落到两个问题：这次请求到底花多少钱，用户体验底线有没有守住。成本模型回答“值不值”，SLO 回答“能不能接受”。没有这两者，tokens/s、显存节省和 benchmark 分数都很容易误导决策。
 
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 先把 SLO 当成约束
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》-->
-> **算法视角**：FLOPs / 参数量估算不是为了得到一个漂亮数字，而是把模型结构、batch token、并行度和硬件吞吐放到同一张预算表里，先判断瓶颈会落在算力、显存还是通信。
->
-> 延伸阅读：[02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/02_LLM_Params_and_FLOPs.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《02. LLM Params and FLOPs | 大模型参数量与算力推导 (LLM Params & FLOPs Math)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| Transformer 前向估算 | 约随参数量和 token 数线性增长 | 受参数、KV / activation 与临时 buffer 共同影响 | 训练通常还要乘上反向和优化器开销；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/02_LLM_Params_and_FLOPs.html) |
 
 SLO 是 Service Level Objective，即服务目标。它不是“越快越好”，而是明确什么体验必须守住。
 
@@ -45,7 +32,6 @@ C_{\text{queue}}
 + C_{\text{ops}}
 \]
 
-
 这个公式不是为了精确到小数点，而是让你知道成本来自哪里。短聊天、长文档、长输出、多工具 agent、多模态请求不能共用一个平均成本。
 
 ## 单位 token 成本为什么容易误导
@@ -57,7 +43,6 @@ C_{\text{queue}}
 =
 \frac{C_h}{3600\cdot \Theta}
 \]
-
 
 它适合做第一眼估算，但有三个问题：
 
@@ -85,7 +70,6 @@ M_{\text{KV}}
 2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
 \]
 
-
 这行式子在说：KV cache 显存随层数 \(L\)、并发 batch \(B\)、上下文长度 \(T\)、KV head 数、head 维度和每元素字节数线性增长；前面的 2 分别对应 K 和 V 两份缓存。
 
 如果显存被 KV 占满，系统要么降低并发，要么增加机器，要么做 KV 量化/压缩/eviction。任何一种都会影响成本或质量。
@@ -109,7 +93,6 @@ KV 数量级：
 2\times32\times4\times32768\times8\times128\times2
 \approx 16\text{GiB}
 \]
-
 
 这还只是 KV 本体，不包括权重、workspace、page metadata、碎片、speculative 分支、临时 buffer。若 context 变成 128k，KV 会约变 4 倍；若 batch 从 4 到 8，也再约变 2 倍。
 
@@ -136,13 +119,12 @@ KV 数量级：
 - \delta R
 \]
 
-
 这行式子表示：效用由质量 \(Q\) 提升，被成本 \(C\)、延迟 \(L\) 和风险 \(R\) 抵消。\(\alpha,\beta,\gamma,\delta\) 是业务权重，用来表达“质量、钱、速度、安全”谁更重要。
 
 不同业务的权重完全不同。客服闲聊可能更重成本和延迟；法律合同问答更重质量和风险；代码补全更重低延迟；批量离线生成更重吞吐和成本。
 
-!!! warning "常见误解"
-    低成本模型不一定更省钱。如果它错误率高，导致升级、重试、用户重复提问或人工介入，端到端 cost/success 可能更高。
+**常见误解。**
+低成本模型不一定更省钱。如果它错误率高，导致升级、重试、用户重复提问或人工介入，端到端 cost/success 可能更高。
 
 ## 分层 SLO
 
@@ -200,9 +182,8 @@ T_{\text{observe}}
 + T_{\text{control}}
 \]
 
-
 这时“推理更快”只有在降低 deadline miss、collision、takeover，或提高 success/cost 时才有意义。kernel speedup 不能自动证明闭环收益。
 
-## 本页结论
+## 阅读结论
 
 成本建模和 SLO 设计的核心，是把优化从“看起来更快”变成“在指定请求桶里，守住质量和尾延迟，并降低单位成功任务成本”。先拆 queue、prefill、KV、decode、tool 和 retry，再按短问答、长文档、长输出、agent、多模态分桶验收，推理系统才不会被平均值带偏。

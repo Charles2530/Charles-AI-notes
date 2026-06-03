@@ -65,6 +65,26 @@ JEPA loss 可以写成：
 
 这里 \(E_c\) 是 context encoder，\(E_t\) 是 target encoder，\(P_\theta\) 是 predictor，\(\mathrm{sg}\) 表示 stop-gradient。读这行公式时抓住两点：模型不是直接输出像素 \(x_M\)，而是输出目标区域的表示；target encoder 提供学习目标，但不被这条梯度直接拖着走。这样做的动机是把容量更多花在对象、运动和场景结构上，而不是逐点纹理。
 
+## JEPA 和 MAE 的关键差别
+
+JEPA 很容易被误读成“另一种 masked autoencoder”。两者确实都遮掉一部分输入，再让模型从可见上下文恢复被遮区域；但恢复对象不同，后果也不同。
+
+MAE 类目标通常要求 decoder 复原像素或低层视觉细节。它的好处是目标明确、训练稳定、可视化直接；代价是模型会被迫解释大量纹理、光照和背景噪声。JEPA 则把目标换成 target encoder 产生的 embedding，让 predictor 去预测语义和结构表示，而不是每个 RGB 值。这会减少生成低层细节的负担，让表征更偏向对象、关系和运动。
+
+可以把差别写成两行：
+
+\[
+\text{MAE: } \hat{x}_M = D_\theta(E(x_{\setminus M}), M)
+\]
+
+\[
+\text{JEPA: } \hat{z}_M = P_\theta(E_c(x_{\setminus M}), M),\qquad z_M=E_t(x)_M
+\]
+
+第一行问“被遮住的像素长什么样”；第二行问“被遮住区域在高层表示里应该是什么”。如果目标是生成清晰图像，像素重建很自然；如果目标是控制和规划，预测抽象表示更可能把容量留给物体状态、运动连续性和任务相关变量。
+
+但 JEPA 也不是免费午餐。它依赖 target encoder 的表示质量，如果 target representation 本身不包含接触、风险或动作敏感变量，predictor 再准也不会自动变成控制模型。这就是为什么 JEPA 常适合作为世界模型的表示底座，而不是直接替代 action-conditioned dynamics。
+
 ![V-JEPA 3D multi-block masking](../assets/images/paper-deep-dives/world-models/v-jepa/figure-2-3d-multi-block-masking.png){ width="860" }
 
 <small>图源：[V-JEPA: Revisiting Feature Prediction for Learning Visual Representations from Video](https://arxiv.org/abs/2404.08471)，Figure 2。原图表达：在视频时空体上采样多个 3D block mask。本站读法：mask 遮的是时间和空间上的结构块，迫使模型利用运动连续性和对象关系，而不是只补局部纹理。</small>
@@ -121,11 +141,12 @@ V-JEPA 2 的官方论文和 Meta 介绍强调了两阶段路线：先用大规�
 
 ## 外部精读
 
+- [I-JEPA](https://arxiv.org/abs/2301.08243)：理解 JEPA 思想在图像上的基础版本，以及为什么预测 embedding 而不是像素。
 - [Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)：看 masked representation 如何接 model-based RL。
 - [V-JEPA 论文](https://arxiv.org/abs/2404.08471)：看 latent video prediction 和 3D masking 设计。
 - [V-JEPA 2 官方研究页](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/)：看从视频理解到机器人 planning 的证据边界。
 - [Meta V-JEPA 2 介绍](https://ai.meta.com/vjepa/)：适合快速把握官方定位和系统图。
 
-## 本页结论
+## 阅读结论
 
 Masked / JEPA 路线的核心不是“把像素藏起来再补出来”，而是把预测目标从原始像素移到更抽象的 latent。这样能省容量、降低输出维度、让模型更多关注对象和运动结构。但如果目标是世界模型和控制，latent prediction 只是第一步；还必须接动作条件 dynamics、reward/risk/done、planner 和闭环评测。最容易误读的地方正是在这里：会预测表示，不等于已经会规划。

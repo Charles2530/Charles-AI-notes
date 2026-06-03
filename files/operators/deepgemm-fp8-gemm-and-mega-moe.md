@@ -2,10 +2,7 @@
 
 `DeepGEMM` 值得单独讲，不是因为它只是一个更快的 GEMM 库，而是因为它把现代大模型算子工程中的几个关键趋势压缩到同一个样本里：细粒度 FP8 scaling、Hopper/Blackwell 硬件特化、运行时 JIT、MoE grouped GEMM、decode masked layout，以及从单个 GEMM 走向融合通信与计算的 Mega MoE 思路。
 
-
 这页定位为主线解读。源码阅读、API 名称和接入检查放到 [DeepGEMM 源码与接入](deepgemm-source-and-integration.md)。如果想先补底层背景，可先读 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 和 [MoE 路由与稀疏 Kernel](moe-routing-and-sparse-kernels.md)。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 一、DeepGEMM 到底是什么
 
@@ -28,17 +25,6 @@
 传统 GEMM 库追求通用性：不同 dtype、layout、transpose、batch 形状、硬件和调用方式都要覆盖。`DeepGEMM` 更像把“通用性成本”换成“特定大模型热点路径的深优化”。
 
 ### 细粒度 FP8 Scaling
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
 
 FP8 训练和推理最难的部分之一是 scaling。scale factor 的粒度、布局、对齐和读取方式会直接影响性能和数值稳定性。`DeepGEMM` 把 scale layout 当成接口语义的一部分，例如要求某些 scale factor 以 TMA-friendly 的方式组织。这说明低精度 kernel 的性能不只来自 tensor core，还来自“scale 数据如何被搬运和消费”。
 

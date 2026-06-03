@@ -6,7 +6,6 @@ paper_topic: 高效推理
 
 # Fast-FoundationStereo：实时 Zero-Shot 双目匹配
 
-
 这篇论文解决的是一个很典型的高效推理矛盾：**强泛化的 stereo foundation model 太慢，实时 stereo 网络又常常依赖目标域微调，泛化不稳。**
 
 Fast-FoundationStereo 的路线不是从零设计一个小模型，而是从 FoundationStereo 出发，把它的三个主要瓶颈分别拆开处理：feature backbone 用蒸馏压缩，cost filtering 用分块 NAS 找低延迟结构，disparity refinement 用结构化剪枝压掉冗余，再用 1.4M in-the-wild stereo pseudo labels 补真实数据分布。
@@ -78,8 +77,8 @@ FoundationStereo 的强泛化
 
 <small>图源：`Fast-FoundationStereo`，Figure 3。原论文图意：FoundationStereo pipeline 包含 feature extraction、cost filtering 和 disparity refinement；论文分别用 hybrid prior distillation、cost filtering blockwise search、refinement pruning 三条路线加速。</small>
 
-!!! note "这张系统图在讲什么"
-    这张图的关键是“不要用同一种压缩方法打所有模块”。feature backbone 适合蒸馏，因为 teacher 的 multi-level features 可以直接当监督；cost filtering 适合搜索，因为模块结构空间大，直接剪小通道 cost volume 不划算；refinement 适合剪枝，因为 ConvGRU 重复迭代里存在结构冗余。
+**这张系统图在讲什么。**
+这张图的关键是“不要用同一种压缩方法打所有模块”。feature backbone 适合蒸馏，因为 teacher 的 multi-level features 可以直接当监督；cost filtering 适合搜索，因为模块结构空间大，直接剪小通道 cost volume 不划算；refinement 适合剪枝，因为 ConvGRU 重复迭代里存在结构冗余。
 
 ## 第一段：Backbone 蒸馏
 
@@ -101,15 +100,14 @@ Fast-FoundationStereo 用一个 student backbone 替换这套双模块。训练�
 \sum_i \left\| P_i(f^{(i)}) - \bar f^{(i)} \right\|_2^2
 \]
 
-
 其中 \(P_i\) 是必要时加入的 projection。
 
 ![Backbone 蒸馏原图](../../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-4-backbone-distillation.png){ width="820" }
 
 <small>图源：`Fast-FoundationStereo`，Figure 4。原论文图意：上半部分展示 student backbone 蒸馏后能捕捉类似 teacher 的高频边缘和相对深度；下半部分展示 distillation 对 translucent 场景更稳。</small>
 
-!!! note "为什么这里不用直接剪 teacher"
-    论文明确提到直接剪 teacher 有两个问题。第一，DepthAnything V2 的 ViT 本身仍然是瓶颈，剪外层很难摆脱双模块结构；第二，如果破坏 teacher 的大规模视觉先验，想恢复精度可能需要互联网级图像重新训练。蒸馏成单一 backbone 更像“继承能力后换执行形态”。
+**为什么这里不用直接剪 teacher。**
+论文明确提到直接剪 teacher 有两个问题。第一，DepthAnything V2 的 ViT 本身仍然是瓶颈，剪外层很难摆脱双模块结构；第二，如果破坏 teacher 的大规模视觉先验，想恢复精度可能需要互联网级图像重新训练。蒸馏成单一 backbone 更像“继承能力后换执行形态”。
 
 Table 3 给出了 backbone distillation 的消融，下面保留原论文英文表头。
 
@@ -128,7 +126,6 @@ Stereo matching 的核心不是只看左右图像特征，还要构造 cost volu
 \[
 \mathbf{V_C} \in \mathbb{R}^{C \times \frac{D}{4} \times \frac{H}{4} \times \frac{W}{4}},
 \]
-
 
 其中 \(D\) 是 maximum disparity。FoundationStereo 使用双分支 cost filtering：一边是带 Axial-Planar Convolution 的 3D hourglass，一边是 Disparity Transformer，对 4D cost volume 做长程上下文推理。
 
@@ -169,7 +166,6 @@ Appendix 里给出的数量很关键：
 \left\| B_i(f_{i-1})-\bar{B}_i(f_{i-1}) \right\|_2^2
 \]
 
-
 其中 \(f_{i-1}\) 来自前一个 teacher block 的输出。最后一个预测 initial disparity 的 block 额外用 smooth \(L_1\) 对 ground truth disparity 做监督。teacher 在整个 block distillation 过程中冻结。
 
 每个候选 block 训练完后，论文把它替换进完整 teacher model 的对应位置，在 validation dataset 上端到端跑一遍，记录：
@@ -189,15 +185,14 @@ Appendix 里给出的数量很关键：
 \sum_{i=1}^{N} (\Delta \mathbf{t}_i)^\top \mathbf{e}_i \leq \Delta \tau.
 \]
 
-
 这里 \(\mathbf{e}_i\) 是 one-hot candidate selection，\(\Delta \tau\) 是相对 teacher 的 runtime budget。
 
 ![Cost filtering blockwise search 原图](../../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-8-blockwise-search.png){ width="720" }
 
 <small>图源：`Fast-FoundationStereo`，Figure 8。原论文图意：在不同 latency budget \(\Delta \tau\) 下，searched candidate 稳定优于 random candidate，说明 blockwise proxy + ILP search 能找到更好的 cost filtering 结构。</small>
 
-!!! note "为什么这不是普通 NAS"
-    普通 NAS 要在完整网络里反复训练/评估候选结构，成本太高。这里的技巧是把 teacher block 当局部监督，把全局搜索转成“局部误差变化 + 局部耗时变化”的组合优化。它牺牲了一点全局精确性，但换来可并行、可承受的搜索成本。
+**为什么这不是普通 NAS。**
+普通 NAS 要在完整网络里反复训练/评估候选结构，成本太高。这里的技巧是把 teacher block 当局部监督，把全局搜索转成“局部误差变化 + 局部耗时变化”的组合优化。它牺牲了一点全局精确性，但换来可并行、可承受的搜索成本。
 
 ## 第三段：Refinement 结构化剪枝
 
@@ -233,15 +228,14 @@ FoundationStereo 的 refinement module 是迭代式 ConvGRU。它从 initial dis
 \left\| x_i-\overline{x}_i \right\|_2^2
 \]
 
-
 其中 \(\gamma=0.9\)，\(\lambda=0.1\)。第一项监督每轮 refine 后的 disparity，越靠后的 iteration 权重越高；第二项让 student refinement 的 latent features 贴近 teacher。
 
 ![Pruning ratio 原图](../../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-9-pruning-ratio.png){ width="680" }
 
 <small>图源：`Fast-FoundationStereo`，Figure 9。原论文图意：只剪不训会明显伤 BP-2，剪后 retrain 能恢复精度；更高 pruning ratio 带来更低 runtime，但也更容易伤容量。</small>
 
-!!! note "为什么 refinement 可以剪"
-    和 cost filtering 不同，refinement 模块的迭代更新有明显冗余。每次 refinement 都在相似结构里更新 disparity，通道冗余更容易被硬件友好的 structured pruning 转成真实加速。但这也有边界：Appendix 里 Figure 12 显示 pruning ratio 0.8 时，增加 refinement iterations 带来的精度收益变小，说明剪得太狠会限制迭代 refinement 的容量。
+**为什么 refinement 可以剪。**
+和 cost filtering 不同，refinement 模块的迭代更新有明显冗余。每次 refinement 都在相似结构里更新 disparity，通道冗余更容易被硬件友好的 structured pruning 转成真实加速。但这也有边界：Appendix 里 Figure 12 显示 pruning ratio 0.8 时，增加 refinement iterations 带来的精度收益变小，说明剪得太狠会限制迭代 refinement 的容量。
 
 ![Refinement iterations 原图](../../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-12-refinement-iterations.png){ width="640" }
 
@@ -276,8 +270,8 @@ Supplement 里还给了一个保留门槛：consistency mask 中 positive pixels
 
 <small>图源：`Fast-FoundationStereo`，Figure 15。原论文图意：展示 pseudo-labeling 的中间结果，右侧 check / cross 表示样本是否通过 consistency mask；pipeline 可以过滤字幕、马赛克和过难样本，也能修正 sky regions 上的错误预测。</small>
 
-!!! note "为什么用 normal consistency，而不是直接比 depth"
-    in-the-wild stereo 的 depth range 差异很大，直接比较 disparity 或 depth 容易被尺度、远近范围和 noisy prediction 影响。normal map 更偏局部几何方向，可以更稳地判断两个估计是否在局部表面结构上相互支持。对 student 来说，这一步就是数据质量门禁。
+**为什么用 normal consistency，而不是直接比 depth。**
+in-the-wild stereo 的 depth range 差异很大，直接比较 disparity 或 depth 容易被尺度、远近范围和 noisy prediction 影响。normal map 更偏局部几何方向，可以更稳地判断两个估计是否在局部表面结构上相互支持。对 student 来说，这一步就是数据质量门禁。
 
 Pseudo-label ablation 说明这批数据不只帮助 Fast-FoundationStereo，也能帮助其他实时方法。下面保留论文英文表头，括号内是 with pseudo-labeling。
 
@@ -306,9 +300,6 @@ Pseudo-label ablation 说明这批数据不只帮助 Fast-FoundationStereo，也
 
 ## 实验结果：速度、参数和成本账
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 Table 5 是最直接的效率账，下面保留论文英文格式。
 
 | Method | Runtime (ms) 3090 | Runtime (ms) 4090 | Runtime (ms) A100 | #Param (M) | MACs (G) |
@@ -332,8 +323,8 @@ Table 5 是最直接的效率账，下面保留论文英文格式。
 
 <small>图源：`Fast-FoundationStereo`，Figure 10。原论文图意：在 NVIDIA 3090 上，FoundationStereo 的 feature extraction、cost filtering 和 refinement 都比 Fast-FoundationStereo 更耗时，三段共同构成超过 10x 的总加速。</small>
 
-!!! note "为什么这个结果比单纯 FPS 更有用"
-    如果只知道最终 runtime 从 496ms 到 49ms，很难判断下一步还能优化哪里。runtime decomposition 让我们看到，论文的三段加速都真实进入了热路径。后续如果要继续做 TensorRT、量化或 kernel 优化，也应该分别看 feature、cost volume construction、ConvGRU refinement 的剩余占比。
+**为什么这个结果比单纯 FPS 更有用。**
+如果只知道最终 runtime 从 496ms 到 49ms，很难判断下一步还能优化哪里。runtime decomposition 让我们看到，论文的三段加速都真实进入了热路径。后续如果要继续做 TensorRT、量化或 kernel 优化，也应该分别看 feature、cost volume construction、ConvGRU refinement 的剩余占比。
 
 ## Zero-shot 结果怎么读
 

@@ -6,7 +6,6 @@ paper_topic: 世界模型
 
 # PlaNet：像素规划的潜变量动力学
 
-
 这篇论文是 Dreamer 系列之前非常关键的一步。它提出的问题很直接：如果只有像素观测，能否先学习一个 latent dynamics model，再完全在 latent space 里做在线规划，而不是训练 model-free policy。
 
 PlaNet 的答案是：
@@ -37,11 +36,11 @@ PlaNet 的历史位置可以这样理解：
 
 <small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 1. 原论文图注要点：该图展示六个像素控制任务，覆盖固定视角部分可观测、稀疏奖励、接触动力学、较大状态动作空间和平衡控制等挑战。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是像素观测、动作和 reward，输出是 RSSM belief/state 与 CEM 规划动作。  
-    **效率机制**：规划时只在 latent space rollout reward，避免为每个候选动作生成像素未来。  
-    **对主线意义**：它奠定了“从像素学 latent dynamics 再规划”的世界模型路线。  
-    **不能证明什么**：PlaNet benchmark 不能证明所有真实硬件或长时稀疏任务同样稳定。
+**PlaNet 任务图要看像素控制覆盖哪些难点。**
+**输入输出**：输入是像素观测、动作和 reward，输出是 RSSM belief/state 与 CEM 规划动作。  
+**效率机制**：规划时只在 latent space rollout reward，避免为每个候选动作生成像素未来。  
+**对主线意义**：它奠定了“从像素学 latent dynamics 再规划”的世界模型路线。  
+**不能证明什么**：PlaNet benchmark 不能证明所有真实硬件或长时稀疏任务同样稳定。
 
 ## 核心问题
 
@@ -60,13 +59,11 @@ $$
 h_t, s_t, a_t \rightarrow h_{t+1}, s_{t+1}, r_{t+1}
 $$
 
-
 而不是简单回答：
 
 $$
 o_t \rightarrow o_{t+1}
 $$
-
 
 这正是 PlaNet 和普通视频预测模型的根本区别。
 
@@ -105,10 +102,10 @@ PlaNet 使用 `Recurrent State-Space Model`。RSSM 把状态拆成两部分：
 
 <small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 2. 原论文图注要点：该图比较 RNN、SSM 和 RSSM。RNN 只有确定性路径，SSM 只有随机状态，RSSM 同时保留确定性记忆和随机状态，以更稳健地预测多个未来。</small>
 
-!!! note "这张结构对比图怎么读"
-    PlaNet 的关键不是“用了一个 latent model”，而是选择了 RSSM 这种同时包含确定性状态和随机状态的结构。RNN 只有确定性 hidden state，适合记历史，但不擅长表达同一个过去下可能有多个未来；SSM 有随机状态，但缺少强 recurrent memory，长时部分可观测任务容易丢上下文。
+**这张结构对比图怎么读。**
+PlaNet 的关键不是“用了一个 latent model”，而是选择了 RSSM 这种同时包含确定性状态和随机状态的结构。RNN 只有确定性 hidden state，适合记历史，但不擅长表达同一个过去下可能有多个未来；SSM 有随机状态，但缺少强 recurrent memory，长时部分可观测任务容易丢上下文。
 
-    RSSM 把两者拆开：\(h_t\) 负责累计历史和动作，\(s_t\) 负责当前不确定性。训练时 posterior \(q(s_t\mid h_t,o_t)\) 可以看真实观测修正 belief；规划时只能用 prior \(p(s_t\mid h_t)\) 往前 rollout。读这张图时要抓住这个分工：**记忆靠 deterministic path，不确定未来靠 stochastic latent**。
+RSSM 把两者拆开：\(h_t\) 负责累计历史和动作，\(s_t\) 负责当前不确定性。训练时 posterior \(q(s_t\mid h_t,o_t)\) 可以看真实观测修正 belief；规划时只能用 prior \(p(s_t\mid h_t)\) 往前 rollout。读这张图时要抓住这个分工：**记忆靠 deterministic path，不确定未来靠 stochastic latent**。
 
 RSSM 的 generative model 可以写成：
 
@@ -116,11 +113,9 @@ $$
 h_t = f(h_{t-1}, s_{t-1}, a_{t-1})
 $$
 
-
 $$
 s_t \sim p(s_t \mid h_t)
 $$
-
 
 这行式子表示：在给定 deterministic state \(h_t\) 后，从 prior dynamics \(p(s_t\mid h_t)\) 里采样当前 stochastic state \(s_t\)。这里 \(h_t\) 负责历史记忆，\(s_t\) 负责当前不确定性。
 
@@ -129,13 +124,11 @@ o_t \sim p(o_t \mid h_t, s_t), \quad
 r_t \sim p(r_t \mid h_t, s_t)
 $$
 
-
 训练时，模型还需要一个 encoder / inference model：
 
 $$
 q(s_t \mid h_t, o_t)
 $$
-
 
 直觉上，\(q\) 是看到真实图像后的 posterior belief；\(p\) 是没有未来图像时的 prior dynamics。训练阶段可以用真实图像修正 \(s_t\)，但 planning 阶段只能从当前 belief 出发，用 prior 自己往前滚。
 
@@ -161,7 +154,6 @@ $$
 +\mathrm{KL}\left(q(s_t \mid h_t,o_t)\,\|\,p(s_t \mid h_t)\right)
 $$
 
-
 这里的核心矛盾是：标准 KL 主要训练一步 prior。如果模型只在 \(t \rightarrow t+1\) 上准确，但 planning 需要连续 rollout 十几步，那么一小点误差会在 CEM 搜索里被放大。
 
 ### Latent Overshooting
@@ -172,10 +164,10 @@ $$
 
 <small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 3. 原论文图注要点：该图比较 standard variational bound、observation overshooting 和 latent overshooting。latent overshooting 不解码所有多步预测图像，而是在 latent space 里约束多步 prior 接近对应 posterior。</small>
 
-!!! note "为什么 overshooting 放在 latent space"
-    标准 ELBO 主要约束一步 prior 接近下一步 posterior，但 PlaNet 的规划要连续想象很多步。一小步模型误差在 CEM 规划中会被放大，所以作者加入 overshooting，让从更早时刻 rollout 多步得到的 prior 也接近后面时刻的 posterior。
+**为什么 overshooting 放在 latent space。**
+标准 ELBO 主要约束一步 prior 接近下一步 posterior，但 PlaNet 的规划要连续想象很多步。一小步模型误差在 CEM 规划中会被放大，所以作者加入 overshooting，让从更早时刻 rollout 多步得到的 prior 也接近后面时刻的 posterior。
 
-    直接在 observation space 做 overshooting 要解码每个多步预测图像，成本高，而且像素误差会把模型拉向视觉细节。latent overshooting 只约束 latent belief 的多步一致性，更贴近规划真正需要的 dynamics accuracy。读这张图时可以把它理解成：不是让模型多步“画得像”，而是让模型多步“状态信念滚得准”。
+直接在 observation space 做 overshooting 要解码每个多步预测图像，成本高，而且像素误差会把模型拉向视觉细节。latent overshooting 只约束 latent belief 的多步一致性，更贴近规划真正需要的 dynamics accuracy。读这张图时可以把它理解成：不是让模型多步“画得像”，而是让模型多步“状态信念滚得准”。
 
 标准目标只约束：
 
@@ -183,13 +175,11 @@ $$
 p(s_t \mid s_{t-1}, a_{t-1}) \approx q(s_t \mid o_{\le t}, a_{<t})
 $$
 
-
 latent overshooting 进一步约束多步 prior：
 
 $$
 p(s_t \mid s_{t-d}, a_{t-d:t-1}) \approx q(s_t \mid o_{\le t}, a_{<t})
 $$
-
 
 这里的 \(d\) 是 overshooting distance。它的意义是让模型从更早的 latent state 出发，经过多步 transition 后仍能落到真实 posterior 附近。
 
@@ -227,9 +217,6 @@ PlaNet 的 planning 使用 `Cross-Entropy Method`。流程如下：
 它也解释了 PlaNet 和视频世界模型的差别。视频世界模型通常重视未来画面质量；PlaNet 只把像素重建当成训练信号，推理时真正服务 planning 的是 latent dynamics 和 reward head。
 
 ## 实验结论
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 PlaNet 在 DeepMind Control Suite 的六个像素控制任务上评估。论文重点不是最终分数绝对最高，而是样本效率：PlaNet 使用 1,000 episodes，从 pixels 训练；A3C 和 D4PG 对照结果使用 100,000 episodes。
 
@@ -330,4 +317,4 @@ PlaNet 的核心贡献可以概括为三点：
 
 一句话总结：PlaNet 是“世界模型用于控制”的经典原型。它把世界模型从视频预测器推进成一个可供规划器调用的 latent simulator，也为后续 DreamerV3 这类 imagined rollout policy learning 铺好了路线。
 
-这一页最后回到三个验收点：方法上，PlaNet 的核心是 RSSM posterior 用真实观测校正，prior 在 imagination 中 rollout，再用 CEM 在 latent space 规划动作。实验上，DMC 分数、latent overshooting 和 open-loop prediction 图要一起读。诊断上，它证明 latent planning 数据效率高，但在线 CEM 成本高，这正是 Dreamer 改成 actor 的原因。
+PlaNet 的核心证据链是 RSSM posterior 用真实观测校正，prior 在 imagination 中 rollout，再用 CEM 在 latent space 规划动作。DMC 分数、latent overshooting 和 open-loop prediction 图要一起读：它证明 latent planning 有数据效率优势，也暴露在线 CEM 成本高，这正是 Dreamer 后来改成 actor 的原因。

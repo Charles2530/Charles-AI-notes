@@ -1,256 +1,114 @@
 # 扩散训练配方与排障
 
-扩散模型的论文叙事常聚焦于参数化、采样器和新架构，但真正把模型训稳，往往依赖一整套细碎却关键的工程配方：数据如何清洗、分辨率怎么安排、噪声日程怎么采、条件 dropout 何时打开、EMA 多大、classifier-free guidance 相关条件该如何混入、loss weighting 用哪一版、验证集看什么，以及一旦生成崩坏该如何定位。对实际训练者而言，失效分析的重要性并不低于新方法本身。
+扩散训练最容易被误解成一组技巧：数据清洗、cosine schedule、EMA、condition dropout、CFG sweep、几个固定 prompt。真实项目里，这些不是孤立开关，而是一条排障链。样本糊、主体错、prompt 不听、视频闪烁、动作扩散成功率下降，都要追问：失败发生在哪个噪声区间，条件信号有没有进入 denoiser，训练分布和采样链路是否一致，模型容量和表示空间是否够用。
 
+这页不做孤立开关罗列。它讲一个更实用的问题：**当扩散训练看起来正常、采样却不对时，怎样把失败归因到数据、噪声日程、参数化、条件接口、优化或部署预算。**
 
-## 扩散训练不是“把数据喂进去就行”
+## Loss 只是入口，不是诊断结论
 
-**训练目标表面很简单**：
+常见噪声预测目标可以写成：
 
-$$
-\mathcal{L}
+\[
+\mathcal L
 =
-\mathbb{E}_{x_0,\epsilon,t}
+\mathbb E_{x_0,\epsilon,t}
 \left[
 w(t)\|\epsilon-\epsilon_\theta(x_t,t,c)\|_2^2
-\right].
-$$
-
-
-但这个式子里每一项都藏着配方选择：$x_0$ 来自什么样的数据分布，$t$ 的采样分布是什么，$w(t)$ 是否重加权，条件 $c$ 如何注入、何时 dropout，$\epsilon_\theta$ 用什么架构和参数化，以及优化器与 EMA 如何设置。
-
-拆开读：
-
-| 位置 | 含义 |
-| --- | --- |
-| \(\mathbb{E}_{x_0,\epsilon,t}\) | 对干净样本、随机噪声和时间步做平均 |
-| \(w(t)\) | 时间步权重，决定不同噪声区间的 loss 贡献 |
-| \(\epsilon\) | 真实加入的噪声 |
-| \(\epsilon_\theta(x_t,t,c)\) | 模型在带噪样本、时间步和条件下预测的噪声 |
-| \(\|\cdot\|_2^2\) | 平方误差，预测噪声和真实噪声越接近越小 |
-
-**这使得扩散训练像烘焙一样**：原料大体相同，但温度、顺序和时间稍有变化，成品就可能完全不同。
-
-## 数据质量先于模型技巧
-
-扩散模型对数据脏噪特别敏感。图像里常见问题包括低分辨率、强压缩、重复样本、模板化素材、标题-图像不一致、水印、拼图、广告图和内容分布偏斜。若是文档、UI、工业图像或机器人视觉数据，还会多出 OCR 标注错误、版面区域丢失、相机标定变化、任务条件与动作轨迹对不齐等问题。
-
-很多训练崩坏看似是架构问题，实则是数据质量首先失守。
-
-## 分辨率 curriculum
-
-高分辨率训练昂贵且不稳，很多系统采用分阶段策略：先在较低分辨率上学语义与大构图，再提升到更高分辨率补纹理与细节，必要时用级联或 latent decoder 细化。
-
-这种 curriculum 让模型先学会“画什么”，再学会“画得细”。如果一开始就用极高分辨率和小 batch，往往算力花得很快，但收敛不一定好。
-
-## 噪声日程与时间采样
-
-即使固定了 beta schedule，不同时间步采样分布也会改变训练重点。直觉上，靠近高噪区的样本更强调全局语义与粗结构，低噪区更强调细节修复。若训练中过度采某一段时间，模型能力会失衡。
-
-很多系统会使用 importance sampling 或 log-SNR 相关重权，使不同噪声区的梯度贡献更均衡。若记信噪比为
-
-$$
-\mathrm{SNR}(t)=\frac{\alpha_t^2}{\sigma_t^2},
-$$
-
-
-则加权常围绕 $\mathrm{SNR}(t)$ 的函数设计。
-
-这里分子 \(\alpha_t^2\) 表示信号能量，分母 \(\sigma_t^2\) 表示噪声能量；SNR 越大，样本越接近干净图，SNR 越小，样本越接近纯噪声。
-
-## 条件 dropout 与 CFG 兼容性
-
-文本到图像里，classifier-free guidance 常需在训练时随机丢弃条件，让模型同时学条件和无条件分支。若 dropout 概率记为 $p_{\text{drop}}$，则训练数据中一部分样本使用空条件 $\varnothing$：
-
-$$
-c'=
-\begin{cases}
-\varnothing, & \text{with prob. } p_{\text{drop}}\\
-c, & \text{otherwise}
-\end{cases}
-$$
-
-
-$p_{\text{drop}}$ 太低，推理时 CFG 不稳定；太高，则条件对齐能力下降。这个比例是最典型的“论文里一句带过、训练里很影响结果”的配方项。
-
-这条分段式的上半行表示“以 \(p_{\text{drop}}\) 的概率把条件替换为空条件”，下半行表示“剩下的概率保留原条件 \(c\)”。所以 \(c'\) 才是模型实际看到的训练条件。
-
-## EMA 为何常常决定最终观感
-
-扩散训练常用 exponential moving average 保存一份平滑权重：
-
-$$
-\theta_{\text{ema}} \leftarrow m\theta_{\text{ema}} + (1-m)\theta.
-$$
-
-
-EMA 模型通常比最后一步权重更稳，特别在后期损失抖动时。很多视觉生成系统最终部署的并不是“当前训练权重”，而是 EMA 权重。若 EMA 衰减设得不合适，模型可能看起来一直在进步，但采样质量忽上忽下。
-
-等号右边有两部分：\(m\theta_{\text{ema}}\) 保留旧的平滑权重，\((1-m)\theta\) 混入当前训练权重。\(m\) 越接近 1，EMA 更新越慢、越平滑。
-
-## 优化器与 batch 设计
-
-AdamW + 混合精度是常见组合。关键不只在于学习率，还在于全局 batch 是否足够大、梯度累积是否引入统计偏差、gradient clipping 是否必要，以及是否存在异常 batch 导致 loss spike。
-
-扩散训练尤其容易在数据混杂、分辨率变化大、caption 质量参差时出现不稳定 batch。
-
-![DiT compute scaling and FID 原论文图](../assets/images/paper-figures/diffusion/dit-gflops-fid-compute.png){ width="920" }
-
-<small>图源：[Scalable Diffusion Models with Transformers](https://arxiv.org/abs/2212.09748)，Figures 8-9。原论文图意：DiT 用 forward pass GFLOPs 衡量模型计算量，展示更高 GFLOPs 与更低 FID 的强相关，以及更大训练计算预算下模型质量的变化。</small>
-
-!!! note "图解：扩散质量常常不是免费来的"
-    这张图支撑一个工程判断：在 latent diffusion / DiT 路线里，提高 token 数、深度或宽度通常会改善生成质量，但也会直接提高每次去噪 forward 的成本。对世界模型和机器人规划来说，这不是单纯训练指标问题，因为推理阶段还要乘以采样步数、候选 action 数和重规划频率。
-
-### 7.1 算一遍：视频世界模型扩散训练的成本账
-
-假设一个机器人视频世界模型输入 `4` 路相机、`16` 帧、每路 `256 x 256`，VAE 下采样 `8x` 后 latent 网格是 `32 x 32`。如果 DiT 直接按 latent patch `1 x 1` 建 token：
-
-\[
-4 \times 16 \times 32 \times 32 = 65{,}536 \text{ tokens}
+\right]
 \]
 
+这行式子看起来像普通 MSE，但里面每一项都对应一个工程选择。\(x_0\) 来自什么数据分布，决定模型会学到哪些外观和偏差；\(t\) 的采样分布决定训练更偏向高噪声语义还是低噪声细节；\(w(t)\) 决定不同 SNR 区间的梯度权重；条件 \(c\) 的质量和 dropout 决定推理时 CFG 有没有可靠的有条件/无条件差；\(\epsilon_\theta\) 的架构、参数化和优化器则决定这些监督信号能不能被稳定吸收。
 
-四个乘数分别是相机路数、帧数、latent 高度和 latent 宽度。也就是说，每个决策样本不是一张图，而是把所有相机和时间帧的 latent 网格都摊成 token。
+所以训练 loss 下降只能说明“在训练采到的噪声点上，某个回归目标变准”。它不能直接证明 prompt 对齐、少步采样、ControlNet、视频运动或机器人闭环成功率会变好。排障时要把平均 loss 拆到 SNR bucket、条件类型、采样器和真实任务指标里。
 
-如果 patch 改成 `2 x 2`，每帧每路变成 `16 x 16`，总 token 变为：
+## 数据和表示空间先决定上限
 
-\[
-4 \times 16 \times 16 \times 16 = 16{,}384 \text{ tokens}
-\]
+扩散模型对数据脏噪很敏感。图像数据里的低分辨率、压缩噪声、水印、拼图、模板图、重复样本和 caption 错配，会被模型当成真实分布的一部分。机器人或世界模型数据还会多出相机标定变化、动作标签延迟、轨迹截断、失败样本漏标、状态和图像不同步等问题。很多“模型不会画”“动作不敏感”的失败，第一根线索不是网络结构，而是数据和条件是否对齐。
 
+表示空间同样决定上限。Latent diffusion 通过 VAE 把高分辨率像素压到 latent，显著降低 U-Net / DiT 的 token 和空间成本；代价是 VAE 重建质量、压缩倍率和解码器能力会变成细节上限。视频 latent 更敏感，因为时间压缩、chunk 切分和因果性会影响身份、运动和遮挡能否被后端模型看见。
 
-这里后两个 `16` 来自 `2 x 2` patch 后的 latent 网格高宽；相比 `32 x 32`，空间 token 数从每帧每路 `1024` 降到 `256`。
+![DiT compute scaling and FID](../assets/images/paper-figures/diffusion/dit-gflops-fid-compute.png){ width="860" }
 
-注意力主干的显存和计算会随 token 数显著增长。即使 patch `2 x 2` 已经降了 `4x` token，只要采样还要 `50` 步，每个候选未来都要 `50` 次 forward。若在线规划一次比较 `8` 个候选 action sequence，就是：
+<small>图源：[Scalable Diffusion Models with Transformers](https://arxiv.org/abs/2212.09748)，Figures 8-9。原图用 forward pass GFLOPs 和训练计算量展示 DiT 模型规模与 FID 的关系。本站读法：扩散质量常常要用每步前向成本换；在视频和世界模型里，这个成本还会乘以帧数、候选动作数和去噪步数。</small>
 
-\[
-50 \times 8 = 400 \text{ forward passes / decision}
-\]
+如果一个视频世界模型一次要处理多相机、多帧 latent，单次前向已经很贵，再乘以 20 到 50 个去噪步和多个候选 action sequence，闭环延迟会迅速失控。这里的排障顺序不是先问“用不用更 fancy 的 sampler”，而是先算 token 数、单步前向、采样步数、候选数和重规划频率。在线控制场景里，低 NFE 不是锦上添花，而是任务可用性的前提。
 
+## SNR bucket 能把“糊”和“画错”分开
 
-`50` 是每个候选未来的去噪步数，`8` 是候选动作序列数量，乘积就是做一次决策需要调用世界模型的次数。
+噪声日程和时间采样决定模型在哪些难度上练习。高噪声区负责全局语义、主体和大结构；中噪声区负责形状、布局和对象关系；低噪声区负责边缘、纹理、文字和局部细节。
 
-若单次 forward 在目标 GPU 上是 `90ms`，一次决策要 `36s`，根本进不了闭环。蒸馏到 `4` 步后变成 `32` 次 forward，理想延迟约 `2.88s`；再配合候选预筛到 `2` 条，是 `720ms`，才接近低频 replan。一步模型是 `8 x 90ms = 720ms`，看起来更快，但把“多步修错”的能力压进一次映射，长尾风险通常要用更硬的评测补回来。
+如果样本“画得精致但主体错”，通常要查高噪声区：caption 是否太短，条件编码器是否弱，timestep sampling 是否过度偏低噪声，CFG 是否把错误方向放大。若样本构图对但细节糊、手部和文字差，通常要查低噪声区：VAE 是否压缩太强，loss weighting 是否让低噪声贡献太小，采样尾段步数是否不足，训练数据里此类细节是否稀缺。
 
-所以设计链条不是“扩散好不好”，而是：
+Improved DDPM 的 VLB timestep 分析和 Min-SNR weighting 都在提醒同一件事：不同噪声区间不是同一个任务。平均 loss 把它们揉成一条曲线，很容易遮住真正的问题。一个更有用的训练面板，应同时看 high / mid / low SNR loss、固定 seed 样例、真实 sampler 下的样例，以及 prompt / condition 分桶失败。
 
-```text
-症状：open-loop 视频像，但 planner 太慢或动作不敏感
-指标：tokens/clip、forward latency、denoising steps、candidate count、closed-loop success
-机制：总成本 ≈ token 成本 × 去噪步数 × 候选数 × 重规划频率
-取舍：增大 patch / 降帧 / 减相机 / latent 压缩 / 少步蒸馏 / 候选预筛
-反例：高风险任务里，一步蒸馏可能漏掉接触、碰撞和遮挡长尾
-边界：如果任务是低频离线数据生成，多步高质量可能值得；如果是在线控制，步数预算先于画面美感
-```
+## 条件接口决定 CFG 能不能工作
 
-## 验证集不要只看 FID
+文本、类别、边缘图、深度图、姿态、mask、参考图、首帧和动作历史都可以是条件，但它们不是同一种证据。文本主要提供语义和风格，结构条件提供空间约束，参考图提供身份或外观，动作条件提供反事实未来。训练时条件入口如果弱，推理时再提高 CFG scale，只是在放大一个不可靠方向。
 
-FID 重要，但不够。实际训练中还应观察 prompt fidelity、构图稳定性、细节完整性、人脸/手部/文字等敏感区域质量、长尾类别表现、多样性与模式坍缩迹象。
+Classifier-free guidance 还要求训练时模型见过“有条件”和“无条件”两种输入。若 condition dropout 太低，无条件分支弱，CFG 的基准方向不稳；若 dropout 太高，条件对齐能力会被削弱。caption 质量也一样：短 caption 可能让模型学到粗语义，却学不到对象关系、数量、材质和动作；过度模板化 caption 又会让模型对真实用户 prompt 反应迟钝。
 
-若是文档或控制类扩散，更要看结构与任务一致性，而非只看视觉美感。
+结构条件要额外检查作用范围。ControlNet 或 adapter 不是更长的 prompt，而是把空间证据送进中间层。排障时要单独看纯文本、结构控制、参考图、局部编辑和视频首帧桶。只看平均 prompt adherence，很容易把“文本能听懂”误判成“所有条件都稳”。
 
-### 8.1 训练曲线怎么读：v-prediction 与 distribution matching
+## EMA、优化和数值稳定性是在保住样本观感
 
-如果训练日志里同时有 `v-prediction loss` 和 `distribution matching loss`，不要把它们当成同一种东西看。前者通常是监督回归误差，后者通常是分布级、critic / score 参与的对齐信号；它们的下降速度、噪声形态和可解释性都不同。
-
-`v-prediction loss` 可以先按普通去噪回归看：
+扩散训练常用 EMA 权重部署，因为生成质量对后期权重抖动很敏感：
 
 \[
-\mathcal{L}_v
-=
-\mathbb{E}_{t,x_0,\epsilon}
-\left[
-\|v_\theta(x_t,t,c)-v_{\text{target}}\|^2
-\right].
+\theta_{\mathrm{ema}}\leftarrow m\theta_{\mathrm{ema}}+(1-m)\theta
 \]
 
+这行式子表示 EMA 权重保留大部分旧值，只混入一小部分当前训练权重。\(m\) 越接近 1，更新越慢、越平滑。EMA 不能让模型学会不存在的数据，但它能让采样观感从抖动的瞬时权重里稳定下来。
 
-这条曲线下降，通常说明模型越来越会在训练分布的噪声点上预测局部生成方向。它应该相对平滑，尤其在 batch 足够大、time sampling 稳定时。更有用的看法不是只看总 loss，而是拆成高噪声、中噪声、低噪声几个桶：高噪声桶下降慢，常对应全局结构、语义和运动还不稳；低噪声桶下降慢，常对应纹理、边缘、文字和局部细节修不好。
+优化器、batch 和混合精度也要按失败现象排查。坏 batch 会造成 loss spike；过高学习率会让低噪声细节抖；梯度裁剪缺失可能让少数高难样本主导更新；FP16 / BF16 数值问题可能表现为颜色、亮度或局部纹理异常。扩散训练的“稳定”不是 loss 没有 NaN，而是固定 prompt、固定 seed、固定 sampler 下的样例随训练逐渐变好，并且长尾桶没有被平均指标掩盖。
 
-但 `v-prediction loss` 低不等于生成一定好。它只说明“在训练采到的 \(x_t\) 上，局部速度回归更准”。如果推理时使用少步 solver、强 CFG，或者 student 自己滚出的中间状态偏离训练分布，验证样例仍可能崩。这时要看真实采样链路，而不是只庆祝回归 loss 下降。
+## 必须回放真实采样链路
 
-`distribution matching loss` 则更像在问：“当前 generator 产出的整体分布，是否越来越像 teacher / real distribution？”在 DMD / DMD2 里，它依赖 real score、fake score 或 discriminator 一类动态信号，所以曲线通常不会像 MSE 那样单调好看。
+训练点上的回归 loss 和推理时的采样轨迹不是同一件事。推理会引入 sampler、NFE、CFG scale、thresholding、ControlNet / adapter、VAE 解码、batching 和后处理。少步采样时，模型会访问更稀疏的噪声点；强 CFG 时，方向场会被拉陡；蒸馏学生还可能滚到 teacher 训练分布之外。
 
-![DMD2 brightness stability](../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-brightness.png){ width="820" }
+因此验证不应只保存训练 loss。更可靠的做法是固定一组 prompt / condition / seed，每隔固定训练间隔用真实部署采样器回放。图像模型看主体、构图、细节、文字、手部、颜色和多样性；视频模型看身份一致性、运动、首帧保真、长时漂移和延迟；动作扩散看碰撞、接触成功、恢复窗口和 closed-loop success。排障的基本单位应该是失败桶，而不是单张最好看的样例图。
 
-<small>图源：[Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)，Appendix Figure 7。原论文图意：去掉 regression loss 后，如果 fake critic 只做 1 次更新，ImageNet 生成样本的平均亮度会明显振荡；增加 fake critic 更新次数后更稳定。</small>
+## 分布匹配曲线要当动态系统看
 
-![DMD2 convergence](../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-convergence.png){ width="820" }
+少步和一步蒸馏会引入另一类训练信号。\(v\)-prediction loss 常是局部回归误差，distribution matching loss 则在问学生最终生成分布是否接近 teacher 或真实分布。后者通常依赖 fake critic、score estimator 或判别信号，曲线不一定像 MSE 那样单调平滑。
 
-<small>图源：[Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)，Appendix Figure 8。原论文图意：比较不同 fake critic update ratio 和原始 DMD 设置下的收敛表现。</small>
+![DMD2 brightness stability](../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-brightness.png){ width="760" }
 
-<small>本教程读法：这两张图正好说明 distribution matching 曲线背后有一个动态系统。generator 在动，fake critic 也在追；如果 critic 跟不上，分布梯度会带偏 generator，外在表现可能不是 loss 单调变坏，而是亮度、颜色、清晰度或 FID 周期性晃动。</small>
+<small>图源：[DMD2](https://arxiv.org/abs/2405.14867)，Appendix Figure 7。原图展示去掉 regression loss 后，不同 fake critic update ratio 对 ImageNet 生成样本平均亮度稳定性的影响。本站读法：distribution matching 背后是 generator 和 critic / score estimator 的动态追赶；critic 跟不上时，外观可能表现为亮度、颜色或清晰度振荡。</small>
 
-| 曲线现象 | 常见含义 | 下一步检查 |
-| --- | --- | --- |
-| \(L_v\) 稳定下降，样例也变好 | 局部速度场和采样器配合正常 | 继续看分桶 loss、验证 prompt 和少步采样 |
-| \(L_v\) 下降，但样例构图或 prompt 变差 | 训练点回归变准，但推理轨迹或条件使用不稳 | 回放真实 sampler，检查 CFG、time grid、条件 dropout |
-| distribution matching loss 大幅震荡 | fake critic / score estimator 可能跟不上 generator | 看 critic update ratio、学习率、EMA、生成统计量 |
-| distribution matching loss 下降，但多样性变差 | 可能出现 mode dropping 或过度追求高密度模式 | 看不同 seed、LPIPS / DINO 多样性、长尾 prompt |
-| 两个 loss 都下降，但验证不进步 | loss 对任务目标不敏感，或 train-inference mismatch | 固定 seed 做 K 步推理回放，按失败类型分桶 |
-| 两个 loss 同时突然 spike | 可能是坏 batch、学习率过高、数值溢出或 timestep 分布异常 | 查数据批次、梯度范数、混合精度、噪声时间采样 |
+![DMD2 convergence](../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-convergence.png){ width="760" }
 
-更实用的日志面板应至少同时放这些曲线：`v loss by timestep/SNR bucket`、`distribution matching loss`、`fake critic denoising loss`、`GAN/discriminator loss`、`sample FID or CLIP score`、固定 prompt 样例、多 seed 多样性，以及真实步数下的延迟和失败桶。单条 loss 曲线不够，因为扩散训练的成功发生在“局部方向准、分布不塌、采样链路稳”三件事同时成立时。
+<small>图源：[DMD2](https://arxiv.org/abs/2405.14867)，Appendix Figure 8。原图比较不同 fake critic update ratio 和原始 DMD 设置下的收敛表现。本站读法：少步蒸馏不能只看学生 loss；critic 更新、regression anchor、真实采样步数和样本多样性要一起看。</small>
 
-## 常见失效模式一：生成很糊
+如果 \(v\)-loss 下降但样例变差，问题可能在 sampler、CFG 或 train-inference mismatch；如果 distribution matching loss 下降但多样性变差，可能是学生向高密度安全模式坍缩；如果亮度或颜色周期性晃动，要看 fake critic 更新频率、学习率、EMA 和 generated batch 分布。少步训练最怕“曲线看起来有进展，真实样例变钝”。
 
-可能原因包括低噪区训练不足、分辨率提升过快、decoder 或 latent 压缩过强、学习率太高导致细节不稳定，以及数据本身低质占比过高。
+## 从现象反推原因
 
-一个实用排查方法是固定 prompt，分别看不同采样步数和不同噪声区起点生成结果，判断问题更像“全程没学会”还是“后段细化不足”。
+生成很糊时，先区分是全局没学会，还是低噪声细化不足。前者常伴随主体和语义也不稳；后者常表现为构图对但纹理软、边缘脏、文字坏。对应检查数据质量、VAE、低噪声 loss、采样尾段和分辨率 curriculum。
 
-## 常见失效模式二：构图混乱或主体丢失
+构图混乱或主体丢失时，优先看高噪声区、caption 和条件绑定。模型如果在高噪声阶段没有形成正确大结构，后面再多低噪声修补也只是把错误主体画精致。
 
-这常与高噪区建模和文本条件对齐相关。若模型对全局语义理解不稳，即使细节不错，也会出现“画得精致但画错了主角”的情况。原因可能是 caption 过短或噪声大、条件注入能力弱、噪声日程采样偏低噪，或 guidance 设置与训练不匹配。
+Prompt adherence 差时，不要只调 CFG。先看文本编码器、caption 质量、condition dropout、训练 prompt 分布和 negative prompt 是否误伤细节。CFG scale 越高，错误条件方向也越容易被放大。
 
-## 常见失效模式三：文字、手部、局部结构错误
+模式单一或风格一股味时，要查数据覆盖和训练权重。扩散比 GAN 更不容易经典坍缩，但在垂直商品图、固定 UI、单一艺术风格或 teacher 蒸馏场景里，学生仍可能只学到安全主模态。
 
-这是视觉生成中的顽固难题。原因往往不是“模型总体不会画”，而是数据中此类结构稀少、像素级细节要求高、局部一致性难以靠全局语义自动保证。
+视频闪烁、变脸或运动变慢时，要把失败切到时间桶。问题可能来自 video VAE、时空 attention、低噪声细节、少步跨度或 motion data 过滤。单帧 FID 或美观样例不能证明视频基础模型能稳定 rollout。
 
-针对这些问题，通常需要更专门的数据、局部控制条件或后处理模块，而不只是延长训练。
+动作扩散成功率下降时，平均 MSE 常常是误导。多峰动作分布里，MSE 会奖励平均轨迹，而平均轨迹可能正好碰撞或错过抓取。Diffusion Policy 这类路线的价值在于表达多峰 action distribution，但真实验收仍要看 closed-loop success、碰撞率、接触阶段和 receding-horizon 执行，而不是只看轨迹相似度。
 
-## 常见失效模式四：prompt adherence 差
+## 收束判断
 
-用户写“红色雨衣”，生成却经常变成黄色；写“两只猫”，结果总出一只。这说明条件信号没被充分绑定到生成过程。排查时要看文本编码器是否足够强、条件 dropout 是否过高、训练 caption 是否过于模板化，以及 CFG 推理范围是否超出训练支撑。
+扩散训练排障的核心不是记住更多技巧，而是让每个失败现象能回到一个机制：数据是否干净，表示空间是否保真，SNR 区间是否平衡，条件接口是否可靠，优化是否稳定，采样链路是否与训练匹配，任务指标是否真的覆盖长尾风险。
 
-## 常见失效模式五：模式坍缩或风格单一
+读训练日志时先问四件事：平均 loss 是否拆成 SNR bucket；固定样例是否用真实 sampler 回放；条件桶和长尾桶是否单独看；端到端延迟和闭环指标是否进入验收。做到这四件事，扩散训练就不再是靠经验调一堆旋钮，而是能一步步把错误定位到具体接口。
 
-虽然扩散比 GAN 更不易塌缩，但若数据分布狭窄、训练过度聚焦主模态，生成仍可能显得“都一个味”。这常发生在垂直领域数据集，如特定商品图、固定 UI 或单一艺术风格集上。
+## 外部精读
 
-## 例子：文档版面扩散
-
-如果训练的是文档页面生成或版面增强模型，最常见的失效不是“图片不好看”，而是字段位置错乱、表格线条断裂、小字体不可读和 OCR 语义不一致。
-
-此时训练配方应优先保证结构保真，而不是视觉风格多样性。
-
-## 例子：机器人动作扩散
-
-如果扩散用于动作轨迹生成，失效模式会变成轨迹平滑但不可执行、长时动作后段漂移、条件目标被部分满足但最终失败，以及多样性很好但稳定性差。
-
-因此验证集要看成功率、碰撞率和恢复能力，而不是只看轨迹相似度。
-
-### 15.1 真实排查：轨迹更平滑，成功率反而下降
-
-一个常见场景是：action diffusion 的验证 MSE 从 `0.084` 降到 `0.071`，动作 jerk 也下降，但真实机械臂成功率从 `78%` 掉到 `61%`。输入日志看起来像这样：
-
-```text
-bucket=reflective_cup  mse=0.068  jerk=0.31  success=52%  collision=18%
-bucket=matte_block     mse=0.073  jerk=0.29  success=84%  collision=3%
-bucket=occluded_grasp  mse=0.079  jerk=0.34  success=49%  recovery=11%
-```
-
-判断过程应从平均误差转向动作后果：反光杯和遮挡抓取都属于多模态动作分布，同一个目标可能有左夹、右夹、先推再夹等几种策略。MSE 会奖励“平均动作”，而平均动作可能正好碰到杯沿或错过抓取点。扩散模型看起来输出更平滑，是因为去噪过程把多峰轨迹压成了中间轨迹；这在离线曲线上好看，在闭环里却会失败。
-
-修复不应只是继续训练。更有效的链条是：按物体材质、遮挡、接触阶段和失败后恢复分桶；增加 action-conditioned counterfactual 检查，确认换动作时预测未来真的变化；在推理时只执行 action chunk 前半段并 receding-horizon 重规划；对高风险桶加入碰撞、接触成功和恢复窗口指标。反例也要写清：如果任务几乎是单峰、低自由度、低频执行，普通行为克隆或小型 transformer policy 可能比 action diffusion 更省。
-
-## 设计建议
-
-先把数据质量和条件对齐搞清，再谈 fancy sampler。训练监控至少同时看 loss、样例、prompt adherence 和长尾错误；EMA、条件 dropout、时间采样分布必须显式记录；失效分析应按“全局语义 / 局部细节 / 条件绑定 / 结构一致性”分桶。不同任务的“好生成”定义不同，验证指标要贴近任务，而不是照搬图像生成标准。
-
-## 本页结论
-
-扩散模型的训练成功，很少来自某个单一魔法技巧，而更常来自一套彼此匹配的配方：干净数据、合适噪声采样、稳定优化、正确条件注入、持续样例检查和有条理的失效分析。把这些工作做扎实，往往比再追一篇新方法更能决定最终质量。 
-
-
-## 工程收束
-
-扩散训练配方不是技巧清单，而是目标、数据制度、噪声采样、EMA、条件注入、验证集和部署约束的共同设计。更稳的验收应同时看基础生成、控制、系统和任务四层；落地时先做目标和数据判断，再定推理预算，再看控制接口，最后才决定是否引入更激进的新方法。
+- [DDPM](https://arxiv.org/abs/2006.11239)：理解噪声预测目标和反向链的训练基础。
+- [Improved DDPM](https://arxiv.org/abs/2102.09672)：理解 learned variance、cosine schedule 和 timestep 贡献差异。
+- [EDM](https://arxiv.org/abs/2206.00364)：理解噪声尺度、preconditioning、loss weighting 和 sampler 需要共同设计。
+- [Min-SNR Weighting](https://arxiv.org/abs/2303.09556)：理解按 SNR 调整训练权重来处理不同时间步冲突。
+- [Latent Diffusion Models](https://arxiv.org/abs/2112.10752)：理解为什么高分辨率生成常在 latent space 里训练，以及 VAE 会成为质量边界。
+- [DiT](https://arxiv.org/abs/2212.09748)：理解扩散 Transformer 的 compute / quality tradeoff。
+- [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)：理解 condition dropout 与 CFG 的训练基础。
+- [DMD2](https://arxiv.org/abs/2405.14867)：理解 distribution matching 蒸馏中的 fake critic、regression anchor 和训练稳定性。
+- [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解扩散用于动作策略时，评估目标如何从视觉质量转向 closed-loop control。

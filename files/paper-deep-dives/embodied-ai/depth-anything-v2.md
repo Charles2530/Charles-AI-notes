@@ -6,7 +6,6 @@ paper_topic: 具身智能
 
 # Depth Anything V2：单目深度的数据配方
 
-
 Depth Anything V2 放在具身智能专题里，不是因为它直接输出机器人动作，而是因为它补了机器人闭环里最基础的视觉状态：**从普通 RGB 图像得到更细、更稳、更开放域的深度先验**。抓取、导航、避障、重建、VLA 状态编码和仿真数据质检，都需要这层几何信号。
 
 DA2 的核心贡献很朴素：它几乎没有靠新奇结构取胜，而是把单目深度训练的数据链路重新排了一遍：
@@ -47,11 +46,11 @@ DA2 的目标是把这两边的优点合起来：
 
 <small>图源：`Depth Anything V2`，Figure 1。原论文图意：DA2 相比 DA1 有更细的结构和更强鲁棒性；相比 SD-based depth model，在效率、参数量和精度上更适合实际使用。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是真实/合成图像、伪标签和深度监督，输出是更稳的单目深度模型。  
-    **效率机制**：通过数据配方和伪标签质量控制改善深度泛化。  
-    **对主线意义**：它帮助世界模型获得更稳几何观测，但不负责动作后果。  
-    **不能证明什么**：深度 benchmark 不能替代机器人闭环和接触失败回放。
+**DA2 teaser 先读数据配方带来的深度细节。**
+**输入输出**：输入是真实/合成图像、伪标签和深度监督，输出是更稳的单目深度模型。  
+**效率机制**：通过数据配方和伪标签质量控制改善深度泛化。  
+**对主线意义**：它帮助世界模型获得更稳几何观测，但不负责动作后果。  
+**不能证明什么**：深度 benchmark 不能替代机器人闭环和接触失败回放。
 
 ## 为什么真实深度标签反而会伤模型
 
@@ -100,10 +99,10 @@ DA2 的 Figure 7 可以看成整篇论文的工程路线图。
 
 <small>图源：`Depth Anything V2`，Figure 7。原论文图意：先用 precise synthetic images 训练最大 teacher，再用 teacher 给 unlabeled real images 生成 pseudo labels，最后用 pseudo-labeled real images 训练 student models。</small>
 
-!!! note "这张图怎么读"
-    左侧 synthetic images 的优点是 `highly precise`，缺点是 `distribution shift` 和 `limited diversity`。中间 unlabeled real images 的作用是引入真实世界分布。右侧 pseudo-labeled real images 同时拥有真实图像分布和 teacher 生成的细粒度深度标签，所以更适合作为学生模型的最终训练数据。
+**训练 pipeline 要看 synthetic teacher 到 pseudo-real student。**
+左侧 synthetic images 的优点是 `highly precise`，缺点是 `distribution shift` 和 `limited diversity`。中间 unlabeled real images 的作用是引入真实世界分布。右侧 pseudo-labeled real images 同时拥有真实图像分布和 teacher 生成的细粒度深度标签，所以更适合作为学生模型的最终训练数据。
 
-    关键点是学生阶段不是把 synthetic 和 pseudo-real 简单混起来。论文的 ablation 显示，对 ViT-S / ViT-B 这类小模型，**只用 pseudo-labeled real images** 反而略好。这说明 teacher 已经把 synthetic 的干净几何知识转译到了真实图像上，学生再直接学习真实分布更有效。
+关键点是学生阶段不是把 synthetic 和 pseudo-real 简单混起来。论文的 ablation 显示，对 ViT-S / ViT-B 这类小模型，**只用 pseudo-labeled real images** 反而略好。这说明 teacher 已经把 synthetic 的干净几何知识转译到了真实图像上，学生再直接学习真实分布更有效。
 
 ## 训练数据
 
@@ -242,9 +241,6 @@ DA2 的 ablation 很有意思。直觉上，学生训练似乎应该混合 synth
 
 ## 评测：为什么 DA-2K 很重要
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 DA2 没有只盯传统 NYU-D、KITTI、Sintel、ETH3D、DIODE 这些 benchmark。论文认为这些测试集也存在 label noise、场景单一和分辨率偏低的问题，很难反映模型对透明、反光、薄结构、非真实图像、航拍、水下等开放场景的能力。
 
 因此作者构建了 DA-2K：1K images、2K relative depth pairs，覆盖 8 类场景。标注方式是稀疏成对比较：给一张图的两个点，判断哪个更近。候选点来自 SAM mask，分歧较大的模型预测会被拿出来给人工标注，标注还会交叉检查。
@@ -311,11 +307,11 @@ DA2 最值得记住的一句话是：**单目深度 foundation model 的进步�
 
 这对具身智能很有用。机器人系统最怕的不是模型不会在 benchmark 上报高分，而是感知状态在真实边界条件下不可信。DA2 提供的经验是：先用 synthetic 获取可控、精确、完整的几何标签，再用真实无标注数据扩展分布，最后把能力蒸馏进可部署模型。这个模式会反复出现在后续 VLA、世界模型、仿真数据引擎和几何底座里。
 
-## 参考链接
+读 DA2 时要分清三件事：zero-shot 相对深度说明跨域排序能力，metric depth 才涉及绝对尺度，可视化图只能作为定性证据。synthetic-only failure、add-unlabeled 和 pseudo-label 图共同说明，数据质量比单纯数据量更关键；DA2 的重点是用更干净 teacher 与合成/真实数据配方降低 DA1 的噪声继承。
+
+## 外部精读
 
 1. [arXiv:2406.09414](https://arxiv.org/abs/2406.09414)
 2. [Depth Anything V2 project page](https://depth-anything-v2.github.io/)
 3. [DepthAnything/Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)
 4. [DA-2K Benchmark](https://huggingface.co/datasets/depth-anything/DA-2K)
-
-这一页最后回到三个验收点：方法上，DA2 把重点从“更多无标注”推进到“更干净 teacher 与合成/真实数据配方”，用高质量伪标签降低 DA1 的噪声继承。实验上，读 zero-shot、metric depth 和可视化时，要分清相对深度泛化与绝对尺度能力。诊断上，synthetic-only failure、add-unlabeled 和 pseudo-label 图，说明数据质量比单纯数据量更关键。

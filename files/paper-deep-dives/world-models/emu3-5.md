@@ -12,6 +12,10 @@ paper_topic: 世界模型
 
 Emu3.5 是四篇里最直接把 unified multimodal model 称为 world model 的论文。它的关键判断是：如果模型在大规模长视频帧和 transcript 交错序列上做端到端 next-token prediction，它学到的就不只是图文映射，而是跨视觉和语言的下一状态预测。
 
+先用一个交互场景理解它的野心和边界。用户给模型一张房间图片，然后连续说“向前走”“向左看”“把桌上的杯子拿起来”。Emu3.5 试图生成接下来会看到的画面、文字说明、子任务步骤和关键状态图。它确实在做一种视觉语言 next-state generation：同一段历史换一个指令，后续画面和叙述应该变。但这还不是机器人闭环控制，因为它没有真实传感器反馈、碰撞检查、低层轨迹、夹爪力控和失败恢复。
+
+所以读 Emu3.5 要分清两层 claim：强 claim 是“长视频 + transcript + 世界任务 SFT 能让统一模型生成更长时序的世界状态”；弱证据边界是“生成关键帧和探索过程还不能证明真实物理执行成功”。
+
 ## 论文信息
 
 | 维度 | 贡献 |
@@ -46,14 +50,14 @@ Emu3.5 是四篇里最直接把 unified multimodal model 称为 world model 的�
 
 ## 方法结构
 
-![Emu3.5 architecture 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-3-architecture.png){ width="920" }
+![Emu3.5 architecture 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-3-architecture.png){ width="820" }
 
 <small>图源：`Emu3.5: Native Multimodal Models are World Learners`，Figure 3。原论文图意：Emu3.5 在大规模训练中用统一 next-token prediction；推理时通过 Discrete Diffusion Adaptation 加速单图视觉 token 生成。</small>
 
-!!! note "这张图怎么读"
-    左侧是训练逻辑：文本 token 和视觉 token 都进入 decoder-only Transformer，用标准 next-token prediction 学习下一状态。右侧是推理逻辑：文本仍然适合自回归，但图像 token 数量太大，逐 token 生成成本高，所以 DiDA 把视觉块改成 bidirectional parallel generation。
+**Emu3.5 架构图要分清训练目标和解码方式。**
+左侧是训练逻辑：文本 token 和视觉 token 都进入 decoder-only Transformer，用标准 next-token prediction 学习下一状态。右侧是推理逻辑：文本仍然适合自回归，但图像 token 数量太大，逐 token 生成成本高，所以 DiDA 把视觉块改成 bidirectional parallel generation。
 
-    对世界模型来说，这张图的核心是“训练目标统一，推理解码分工”。统一目标给模型一个共同状态空间；推理阶段再按模态特性优化成本。
+对世界模型来说，这张图的核心是“训练目标统一，推理解码分工”。统一目标给模型一个共同状态空间；推理阶段再按模态特性优化成本。
 
 ### 模型配置与视觉 token
 
@@ -77,14 +81,14 @@ Emu3.5 是四篇里最直接把 unified multimodal model 称为 world model 的�
 
 ## 训练细节
 
-![Emu3.5 training pipeline 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-4-training-pipeline.png){ width="920" }
+![Emu3.5 training pipeline 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-4-training-pipeline.png){ width="820" }
 
 <small>图源：`Emu3.5`，Figure 4。原论文图意：展示 Emu3.5 从大规模 pre-training，到 SFT、RL，再到 DiDA inference adaptation 的整体训练 pipeline。</small>
 
-!!! note "这张训练图怎么读"
-    先看 pre-training：模型在约 13T multimodal tokens 上学习视觉语言下一状态，其中核心来源是长视频帧和 transcript。再看 SFT：它把统一接口扩成 General Tasks、Any-to-Image、Visual Narrative、Visual Guidance、World Exploration 和 Embodied Manipulation。最后看 RL 与 DiDA：一个优化多任务生成/推理质量，一个优化推理速度。
+**这张训练图怎么读。**
+先看 pre-training：模型在约 13T multimodal tokens 上学习视觉语言下一状态，其中核心来源是长视频帧和 transcript。再看 SFT：它把统一接口扩成 General Tasks、Any-to-Image、Visual Narrative、Visual Guidance、World Exploration 和 Embodied Manipulation。最后看 RL 与 DiDA：一个优化多任务生成/推理质量，一个优化推理速度。
 
-    这张图支撑的是“world learner 的训练链路”，不是单个 benchmark 分数。
+这张图支撑的是“world learner 的训练链路”，不是单个 benchmark 分数。
 
 ### Pre-training：视频帧与 transcript 是主燃料
 
@@ -97,14 +101,14 @@ Emu3.5 的 pre-training 数据超过 13T multimodal tokens，分为四类：
 | Any-to-image data | 支撑多图输入、编辑和开放式 X2I |
 | Text-only data | 保持语言建模与推理能力 |
 
-![Emu3.5 video data statistics 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-5-video-data-stats.png){ width="920" }
+![Emu3.5 video data statistics 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-5-video-data-stats.png){ width="820" .atlas-figure-compact }
 
 <small>图源：`Emu3.5`，Figure 5。原论文图意：统计 video interleaved data 的时长分布、类别分布和关键帧抽取密度。</small>
 
-!!! note "这张数据图怎么读"
-    论文收集约 63M videos，平均时长约 6.5 minutes，总量约等于 790 years of continuous footage。预处理时先做 scene detection，再按场景取 middle frame 或按间隔采样 keyframes，同时用 Whisper-large-v2 抽取 transcript。
+**这张数据图怎么读。**
+论文收集约 63M videos，平均时长约 6.5 minutes，总量约等于 790 years of continuous footage。预处理时先做 scene detection，再按场景取 middle frame 或按间隔采样 keyframes，同时用 Whisper-large-v2 抽取 transcript。
 
-    这里的训练信号不是“视频 caption”，而是长时 visual frames 与 speech/text 的共同序列。它比孤立 image-text pair 更接近世界模型需要的状态流。
+这里的训练信号不是“视频 caption”，而是长时 visual frames 与 speech/text 的共同序列。它比孤立 image-text pair 更接近世界模型需要的状态流。
 
 ### SFT：把世界任务显式化
 
@@ -135,14 +139,14 @@ SFT 之后，Emu3.5 做 large-scale multi-task RL。论文展示 reward 从约 4
 
 ### DiDA：把视觉块从逐 token 改成并行预测
 
-![Discrete Diffusion Adaptation 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-9-dida.png){ width="860" }
+![Discrete Diffusion Adaptation 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-9-dida.png){ width="780" }
 
 <small>图源：`Emu3.5`，Figure 9。原论文图意：训练阶段用标准 next-token prediction；DiDA 阶段复制图像并随机 mask token，让模型学习双向并行预测，从而加速图像生成。</small>
 
-!!! note "这张图怎么读"
-    NTP 适合语言，因为句子天然有顺序；但图像 token 数量很大，逐 token 生成会很慢。DiDA 的核心是把同一张图复制成条件/目标形式，随机 mask 目标视觉 token，让模型在视觉块内部做 bidirectional parallel prediction。
+**DiDA 图要看视觉 token 如何并行化。**
+NTP 适合语言，因为句子天然有顺序；但图像 token 数量很大，逐 token 生成会很慢。DiDA 的核心是把同一张图复制成条件/目标形式，随机 mask 目标视觉 token，让模型在视觉块内部做 bidirectional parallel prediction。
 
-    论文声称 per-image inference 大约 20x 加速。对世界模型部署来说，这类加速很关键：交互式 world rollout 的瓶颈往往不是模型会不会生成，而是能不能足够低延迟地生成下一观察。
+论文声称 per-image inference 大约 20x 加速。对世界模型部署来说，这类加速很关键：交互式 world rollout 的瓶颈往往不是模型会不会生成，而是能不能足够低延迟地生成下一观察。
 
 ## 实验结论
 
@@ -150,19 +154,19 @@ SFT 之后，Emu3.5 做 large-scale multi-task RL。论文展示 reward 从约 4
 
 <small>图源：`Emu3.5`，Figure 18。原论文图意：展示 world exploration 结果；图中按钮表示 camera movement 或 viewpoint change instructions。</small>
 
-!!! note "这张图支撑什么"
-    这张图说明 Emu3.5 可以在用户给定世界或场景后，以 interleaved vision-language 输出方式做多步探索。它支撑的是 spatiotemporal consistency 和 controllable viewpoint change 的生成能力。
+**这张图支撑什么。**
+这张图说明 Emu3.5 可以在用户给定世界或场景后，以 interleaved vision-language 输出方式做多步探索。它支撑的是 spatiotemporal consistency 和 controllable viewpoint change 的生成能力。
 
-    它不能单独证明真实机器人导航，因为没有真实传感器闭环、地图误差、碰撞约束或执行反馈。
+它不能单独证明真实机器人导航，因为没有真实传感器闭环、地图误差、碰撞约束或执行反馈。
 
 ![Emu3.5 embodied manipulation 原图](../../assets/images/paper-deep-dives/world-models/emu3-5/figure-19-embodied-manipulation.png){ width="920" }
 
 <small>图源：`Emu3.5`，Figure 19。原论文图意：展示 embodied manipulation 结果，用 interleaved subtask instructions 和 keyframe states 表示长时程操作过程。</small>
 
-!!! note "这张图怎么读"
-    读这张图时不要把它当 action policy。它更像“任务分解 + 关键状态预测”：模型把长任务拆成若干语义子任务，并为每个子任务生成完成状态 keyframe。
+**Embodied manipulation 图看子任务和关键状态。**
+读这张图时不要把它当 action policy。它更像“任务分解 + 关键状态预测”：模型把长任务拆成若干语义子任务，并为每个子任务生成完成状态 keyframe。
 
-    对 VLA 项目来说，它可以作为 planner 或 world-state proposal 的候选模块；低层控制、轨迹跟踪、夹爪力控和失败恢复仍需要另外的系统。
+对 VLA 项目来说，它可以作为 planner 或 world-state proposal 的候选模块；低层控制、轨迹跟踪、夹爪力控和失败恢复仍需要另外的系统。
 
 ## 消融诊断
 
@@ -199,5 +203,13 @@ Emu3.5 的核心启发是：如果把长视频帧、transcript、instruction、r
 
 但从工程角度看，它还不是可以直接部署到机器人或交互环境的完整世界模型。它更适合作为高层世界状态生成器、可视化 planner、长时 narrative simulator 或 embodied task proposal 模块；真实闭环还需要 action-conditioned dynamics、低层控制和失败反馈。
 
-!!! info "本站判断"
-    Emu3.5 是统一多模态世界模型路线的重要样本。强证据在于 13T+ multimodal pretraining、long video interleaved data、SFT 世界任务和 DiDA 推理加速；弱证据在于 world exploration 与 embodied manipulation 仍主要是生成式视觉语言输出，尚未证明真实闭环控制收益。
+**阅读结论。**
+Emu3.5 是统一多模态世界模型路线的重要样本。强证据在于 13T+ multimodal pretraining、long video interleaved data、SFT 世界任务和 DiDA 推理加速；弱证据在于 world exploration 与 embodied manipulation 仍主要是生成式视觉语言输出，尚未证明真实闭环控制收益。
+
+## 外部精读
+
+1. [Emu3.5 arXiv](https://arxiv.org/abs/2510.26583)：读数据、SFT 世界任务、DiDA 和 world exploration / embodied manipulation 图表。
+2. [ar5iv HTML](https://ar5iv.labs.arxiv.org/html/2510.26583)：适合检索 Figure 3/4/5/9/18/19 和表格。
+3. [BAAI Emu3.5 GitHub](https://github.com/baaivision/Emu3.5)：确认模型、推理入口和代码发布状态。
+4. [BAAI/Emu3.5 on Hugging Face](https://huggingface.co/BAAI/Emu3.5)：查看模型卡、权重和使用说明；能力 claim 仍回到论文。
+5. [BAGEL](https://arxiv.org/abs/2505.14683) 与 [Beyond Language Modeling](https://arxiv.org/abs/2603.03276)：作为统一多模态世界模型路线对照，帮助区分 flow-based visual generation、native visual-token NTP 和 action-conditioned future prediction。

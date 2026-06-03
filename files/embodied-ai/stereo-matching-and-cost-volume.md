@@ -1,177 +1,166 @@
-# 双目匹配与 Cost Volume 入门
+# 双目匹配与 Cost Volume：从左右图到可用深度
 
-双目匹配（stereo matching）解决的是一个很具体的问题：给定同一时刻、已经校正的左右两张图，估计每个像素在左右图中的水平位移，也就是 disparity，再把 disparity 转成深度。
+这篇文章只回答一个问题：双目模型为什么不是“看一张图猜深度”，而是先在左右图之间做匹配，再把匹配证据组织成 cost volume。
 
+双目匹配输入是同一时刻的左右相机图像，输出通常是 dense disparity map。Disparity 是同一个 3D 点在左右图上的横向像素位移；知道相机焦距和 baseline 后，disparity 可以转成深度。它和单目深度最本质的差别是：双目有明确几何约束，模型不是纯粹从纹理和语义中猜距离，而是在两张图之间寻找对应关系。
 
-## 一句话流程
+## 双目先靠几何缩小搜索空间
 
-典型 stereo matching pipeline 可以写成：
-
-```text
-left / right rectified images
-  -> feature extraction
-  -> disparity search and cost volume
-  -> cost filtering / regularization
-  -> initial disparity
-  -> refinement and upsampling
-  -> dense disparity / depth
-```
-
-这条线里有两个世界同时存在：
-
-| 层次 | 关心什么 | Fast-FoundationStereo 对应位置 |
-| --- | --- | --- |
-| 相机几何 | 左右相机、baseline、rectification、disparity 到 depth | 输入假设和 zero-shot stereo 任务 |
-| 深度网络 | feature、cost volume、3D conv / Transformer、refinement | backbone、cost filtering、ConvGRU refinement |
-| 系统部署 | latency、MACs、TensorRT、真实场景泛化 | 实时 foundation stereo model |
-
-## 符号卡
-
-| 符号 / 术语 | 含义 | 取值范围 |
-| --- | --- | --- |
-| \(I_L, I_R\) | 左图和右图 | 图像张量 |
-| \((u,v)\) | 图像像素坐标，\(u\) 是横向位置，\(v\) 是纵向位置 | 图像宽高范围内的整数或亚像素坐标 |
-| \(d\) | disparity，左右图同一点的横向像素位移 | 非负像素位移 |
-| \(D\) | 最大搜索 disparity，也就是候选位移范围 | 正整数或预设搜索上界 |
-| \(f\) | 相机焦距，通常来自内参 | 正实数 |
-| \(B\) | 左右相机 baseline | 正实数，单位随标定数据 |
-| \(z\) | 深度，常用 \(z = fB / d\) 近似理解 | 正实数，\(d>0\) 时有效 |
-| `rectification` | 把左右图校正到同一水平扫描线，方便只沿横向搜索 | 几何预处理步骤 |
-| `cost volume` | 每个像素、每个 disparity 候选的匹配代价或匹配特征 | 张量，形状由分辨率和 \(D\) 决定 |
-| `refinement` | 在初始 disparity 基础上迭代修正边界、遮挡和细节 | 后处理或网络模块 |
-
-## Rectified Stereo Pair 是什么
-
-真实双目相机的左右镜头不可能天然完美平行，镜头也有畸变。标定和校正的目标，是把左右图变成 rectified stereo pair：同一个 3D 点在左右图中落在同一条水平扫描线上。
-
-校正前，匹配点可能沿任意 epipolar line 出现；校正后，匹配点通常只需要沿同一行横向搜索：
+两台相机看到同一个 3D 点 \(P\)。左图里它投影到 \(x\)，右图里投影到 \(x'\)。如果相机已经标定并校正，左右图上的对应点会落在同一条水平扫描线上，匹配问题就从二维搜索变成一维搜索：
 
 ```text
-left:   pixel at (u, v)
-right:  candidate pixels at (u - d, v), d = 0 ... D
+left pixel:  (u, v)
+right candidates: (u - d, v), d = 0 ... D
 ```
 
-这一步很关键，因为它把二维匹配问题压成一维搜索。没有 rectification，网络不仅要判断“像不像”，还要处理复杂的几何搜索空间；有了 rectification，cost volume 可以沿 disparity 维度组织。
+这里 \((u,v)\) 是图像坐标，\(d\) 是候选 disparity，\(D\) 是最大搜索范围。Rectification 的价值就在这里：它把“右图里哪里像这个点”限制到同一行。OpenCV 的 stereo 教程也用同样的几何直觉解释 depth map：先找左右图对应点，再由 disparity 推深度。
 
-!!! warning "输入假设不能忽略"
-    很多 stereo 模型默认输入已经 rectified / undistorted，左右图顺序也不能交换。如果相机标定漂移、左右不同步、畸变没处理好，模型输出坏掉不一定是网络能力问题，而是输入几何假设被破坏。
+![Stereo camera geometry](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/stereo-camera-model-wikimedia.jpg){ width="640" }
 
-## Disparity Search 怎么看
-
-对左图像素 \((u,v)\)，双目匹配会在右图同一行搜索 \((u-d,v)\)。如果某个 \(d\) 让左右局部特征最像，这个 \(d\) 就是该像素的 disparity 候选。
-
-直觉上：
-
-| 现象 | 几何含义 |
-| --- | --- |
-| disparity 大 | 物体通常更近 |
-| disparity 小 | 物体通常更远 |
-| disparity 接近 0 | 可能是远处、天空，或没有可靠匹配 |
-| disparity 不连续 | 可能是物体边界、遮挡或深度突变 |
+<small>图源：[Wikimedia Commons: Stereo-camera-model.jpg](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。原图表达双目相机的焦距、baseline、左右投影点和深度关系。本站使用这张图说明：双目深度不是神经网络凭空生成的，它有明确的三角测量前提。</small>
 
 深度公式常写成：
 
 \[
-z = \frac{fB}{d}
+z=\frac{fB}{d}
 \]
 
+这里 \(z\) 是深度，\(f\) 是焦距，\(B\) 是左右相机 baseline，\(d=x-x'\) 是 disparity。这个式子有两个后果。第一，物体越近，左右视差通常越大；物体越远，视差越小。第二，远处的 \(d\) 很小，1 个像素误差会被放大成很大的深度误差。所以双目系统对标定、同步、畸变校正和亚像素估计都很敏感。
 
-它说明一个残酷事实：远处 \(d\) 很小，1 个像素的 disparity 误差会放大成很大的深度误差。所以 stereo benchmark 常常同时看近处边界、远处区域、遮挡区域和低纹理区域。
+## Cost Volume 是“所有候选位移的证据表”
 
-## Cost Volume 是什么
+如果只看一个像素，模型不知道哪个 \(d\) 最可信。Cost volume 的做法是：对每个左图像素，沿右图同一行枚举多个 disparity 候选，把每个候选的匹配证据都存下来。
 
-cost volume 可以理解为一张“像素到候选 disparity 的评分表”。对每个左图位置 \((u,v)\)，模型比较左图特征 \(F_L(u,v)\) 和右图不同位移的特征 \(F_R(u-d,v)\)，得到每个 \(d\) 的匹配信息。
-
-常见形状可以粗写成：
+给左右图提取特征：
 
 \[
-\mathbf{V} \in \mathbb{R}^{C \times D \times H \times W}
+F_L, F_R \in \mathbb{R}^{C\times H\times W}
 \]
 
-
-或在下采样后写成：
+这里 \(C\) 是特征通道数，\(H,W\) 是特征图分辨率。对左图位置 \((u,v)\) 和候选位移 \(d\)，比较 \(F_L(u,v)\) 与 \(F_R(u-d,v)\)。如果使用 correlation，可以粗略写成：
 
 \[
-\mathbf{V} \in \mathbb{R}^{C \times \frac{D}{s} \times \frac{H}{s} \times \frac{W}{s}}
+V(d,u,v)=
+\langle F_L(u,v), F_R(u-d,v)\rangle
 \]
 
+这里 \(V(d,u,v)\) 是该像素在候选 disparity \(d\) 下的相似度，\(\langle\cdot,\cdot\rangle\) 是向量点积。分数越高，表示左右特征越像。很多网络不会只存一个相关分数，而是拼接左右特征或分组相关，因此 volume 可能带通道维：
 
-这里 \(C\) 是 cost volume 的通道数，\(D\) 是 disparity 候选数，\(H,W\) 是空间分辨率，\(s\) 是下采样倍率。
+\[
+V\in \mathbb{R}^{C_v\times D\times H\times W}
+\]
 
-cost volume 的构造方式有多种：
+这里 \(C_v\) 是 cost volume 通道数。关键是多出来的 \(D\) 维：图像特征是 \(H\times W\)，cost volume 变成 \(D\times H\times W\)。这解释了为什么 stereo 网络常常比普通语义分割更吃显存，尤其在高分辨率和大 disparity 范围下。
 
-| 构造方式 | 直觉 | 取舍 |
+常见构造方式可以这样理解：
+
+| 构造方式 | 它保留什么 | 代价 |
 | --- | --- | --- |
-| concatenation | 把左右特征拼起来，让后续网络学匹配 | 表达力强，计算较重 |
-| correlation | 直接算左右特征相似度 | 更轻，但信息更压缩 |
-| group-wise correlation | 分组算相似度 | 在表达力和成本之间折中 |
-| feature difference / absolute difference | 看左右特征差异 | 简单，常和其他方式组合 |
+| Concatenation | 左右特征都保留，让后续网络学习匹配 | 表达力强，volume 更重 |
+| Correlation | 直接给相似度分数 | 更轻，但压缩了信息 |
+| Group-wise correlation | 分组算相似度 | 在表达力和成本之间折中 |
+| Difference / absolute difference | 显式看左右特征差 | 简单，常与其他方式组合 |
 
-!!! note "为什么 cost volume 贵"
-    它多了一维 disparity。图像是 \(H \times W\)，cost volume 变成 \(D \times H \times W\)。如果还保留通道 \(C\)，后续 3D convolution 或 attention 的计算和显存都会明显上升。
+GC-Net 的历史意义在于把 rectified stereo 的几何结构放进深度网络：先构造 cost volume，再用 3D convolution 学上下文。PSMNet 继续强调多尺度上下文和 stacked hourglass 正则化。RAFT-Stereo 则把问题推向 recurrent update：不一次性回归完，而是反复查询 correlation / cost 信息并迭代更新 disparity。
 
-## Cost Filtering 在做什么
+## 原始匹配证据会在这些地方坏掉
 
-原始 cost volume 很嘈杂。纹理重复、弱纹理、反光、透明、遮挡和光照差异都会让局部匹配出错。cost filtering / cost regularization 的作用，是利用空间上下文和几何一致性修正这些局部错误。
+Cost volume 只是候选证据，不等于正确深度。双目最常见的失败区很具体：
 
-常见模块包括：
-
-| 模块 | 作用 |
+| 区域 | 为什么难 |
 | --- | --- |
-| 3D convolution | 在 disparity、height、width 三个维度上传播上下文 |
-| 3D hourglass | 下采样聚合大范围上下文，再上采样恢复分辨率 |
-| axial / planar convolution | 用更结构化的卷积扩大感受野，减少计算 |
-| Disparity Transformer | 沿 disparity 或空间维度建模长程关系 |
-| feature-guided volume excitation | 用左图 unary features 引导 cost volume 哪些区域更重要 |
+| 弱纹理墙面、天空、桌面 | 左右局部 patch 都差不多，没有稳定匹配 |
+| 重复纹理 | 多个候选位移都很像，容易选错周期 |
+| 反光、透明、玻璃 | 左右视角看到的反射内容不一致 |
+| 遮挡边界 | 左图看到的点，右图可能被前景挡住 |
+| 细线和薄结构 | 下采样后信息丢失，边界容易被抹平 |
+| 未校正或不同步输入 | 几何假设被破坏，网络再强也在错输入上工作 |
 
-Fast-FoundationStereo 里 cost filtering 是三大瓶颈之一。论文选择 blockwise NAS，是因为 cost volume 的通道本来就不大，直接剪枝未必能拿到明显硬件收益；替换成更合适的 block 反而更有效。
+这也是为什么传统 stereo 会有 matching cost、cost aggregation、disparity optimization、post-processing 一整套流程；深度学习版本只是把其中很多步骤变成可学习模块。OpenCV 的 StereoBM / StereoSGBM 参数也能看到这些老问题：纹理阈值、speckle filtering、候选 disparity 数、uniqueness ratio，本质上都在处理“不可靠匹配”。
 
-## Refinement 为什么还需要
+## Cost Filtering 在清理候选证据
 
-cost filtering 通常先给出一个 initial disparity，但这张图还可能有几个问题：
+Cost filtering / cost regularization 的任务是让一个像素的判断参考周围像素、相邻 disparity 和更大范围的几何上下文。它不是凭空生成深度，而是在问：某个候选 disparity 是否被邻域、边界和整体场景支持。
 
-| 问题 | 常见表现 |
+| 模块 | 直觉 |
 | --- | --- |
-| 边界被抹平 | 物体边缘的 disparity 过渡太宽 |
-| 遮挡区域不稳定 | 左图看到、右图看不到的位置匹配混乱 |
-| 细小结构丢失 | 线缆、把手、薄边缘不清楚 |
-| 上采样误差 | 低分辨率 disparity 放大后出现块状或错位 |
+| 3D convolution | 同时沿 \(D,H,W\) 三个维度传播证据 |
+| 3D hourglass | 先看大范围上下文，再回到细粒度候选 |
+| Spatial pyramid pooling | 把局部匹配放进多尺度场景上下文 |
+| Transformer / long-range reasoning | 让远处结构、重复纹理和大平面互相约束 |
+| Cascade / coarse-to-fine volume | 先粗略定位，再缩小候选范围做高分辨率修正 |
 
-refinement module 会把初始 disparity、图像特征和 hidden state 结合起来，迭代修正输出。很多现代 stereo 网络使用 ConvGRU 或类似 recurrent update block：每一轮都基于上一轮 disparity 做小步更新。
+GC-Net 和 PSMNet 代表的是“构造 4D cost volume，再用 3D 网络正则化”的路线。Cascade cost volume 一类方法提醒我们，完整高分辨率 volume 太贵，可以先在粗尺度估计，再逐级缩小搜索范围。FoundationStereo 则把 monocular foundation prior 和 long-range context reasoning 接进 stereo，解决的是另一个痛点：传统 stereo 网络在固定 benchmark 上很强，但跨真实场景 zero-shot 泛化不稳。
 
-这也解释了 Fast-FoundationStereo 为什么专门剪 refinement GRU。迭代模块会重复调用，哪怕单轮不算最大瓶颈，累积 latency 也很可观；但 recurrent hidden state 有通道依赖，所以不能随便乱剪。
+## Refinement 是把初始视差变成可用视差
 
-## Benchmark 和指标怎么读
+Cost filtering 通常会给出 initial disparity，但这个结果还可能边界糊、遮挡乱、细节丢失或上采样错位。Refinement module 会结合图像特征、当前 disparity 和 hidden state，反复做小步修正。
 
-Stereo 论文常见数据集：
+可以把 recurrent refinement 简化成：
 
-| Benchmark | 关注点 |
+\[
+d_{t+1}=d_t+\Delta d_t
+\]
+
+这里 \(d_t\) 是第 \(t\) 轮的 disparity，\(\Delta d_t\) 是 update block 预测的修正量。RAFT-Stereo、FoundationStereo 和 Fast-FoundationStereo 都可以从这个角度读：网络不是一次性输出最终答案，而是在 cost / correlation 证据上迭代对齐。
+
+Refinement 的价值集中在边界、遮挡和小结构上。它的代价也明显：如果 update block 要跑很多轮，latency 会累积；如果 hidden state 通道多，显存和计算也会增长。这就是 Fast-FoundationStereo 为什么把 refinement ConvGRU 当成单独热路径来剪枝，而不是只压 backbone。
+
+## FoundationStereo / Fast-FoundationStereo 怎么拆这条链
+
+现代 stereo foundation model 不是只把网络做大。FoundationStereo 强在三件事：用大规模合成数据和自筛选提高覆盖，用 monocular vision foundation prior 帮助跨域，用更强 cost filtering 和 refinement 提高匹配鲁棒性。Fast-FoundationStereo 则问另一个问题：这条链如何实时化。
+
+![Fast-FoundationStereo pipeline](../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-3-framework-padded.png){ width="920" }
+
+<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 3。原图表达 stereo pipeline 包含 feature backbone、cost filtering 和 disparity refinement，并分别用 distillation、blockwise NAS、structured pruning 加速。本站使用这张图说明：双目模型的核心链条不是一个黑箱，而是“左右图特征 -> cost volume -> cost filtering -> refinement”。</small>
+
+这张图应该从上到下读。最上面是通用 stereo pipeline：左右图进入 feature backbone，构造 cost volume，经过 cost filtering 得到初始 disparity，再 refinement 输出最终 disparity。下面三块对应三类瓶颈：backbone 负责提特征，cost filtering 在 volume 上推理，refinement 做迭代修正。Fast-FoundationStereo 的工程判断是：不同瓶颈冗余形态不同，所以 feature backbone 用蒸馏，cost filtering 用 blockwise NAS，refinement 用结构化剪枝。
+
+## Benchmark 看的是不同失败面
+
+Stereo 论文常同时报告 Middlebury、ETH3D、KITTI、Scene Flow 等数据集，因为它们不是同一种难度。
+
+| Benchmark | 主要检验什么 |
 | --- | --- |
-| Middlebury | 高分辨率、室内、细节和遮挡，常用于看精细 stereo 质量 |
-| ETH3D | 真实多视角 / 双目场景，纹理和几何更接近真实采集 |
-| KITTI 2012 / 2015 | 自动驾驶场景，路面、车辆、远距离和动态物体更多 |
+| Scene Flow | 大规模合成监督，适合训练和看平均 EPE |
+| KITTI 2012 / 2015 | 自动驾驶场景，远距离、车辆、道路、动态物体 |
+| Middlebury | 高分辨率室内物体，细节、遮挡、边界和小结构 |
+| ETH3D | 真实采集场景，纹理和几何更接近实际相机 |
+| In-the-wild stereo | 跨设备、跨场景、反光/透明/弱纹理，考验 zero-shot |
 
-常见指标：
+常见指标也要分开读：
 
-| 指标 | 含义 | 怎么读 |
+| 指标 | 含义 | 容易漏掉什么 |
 | --- | --- | --- |
-| EPE | End-Point Error，平均 disparity 误差 | 越低越好，但平均值可能掩盖局部坏点 |
-| BP-1 / BP-2 | bad pixel，误差超过 1 或 2 像素的比例 | 越低越好，阈值越小越严格 |
-| D1 | KITTI 常用 bad disparity 指标 | 越低越好，常用于自动驾驶 stereo |
+| EPE | 平均 disparity 误差 | 平均值可能掩盖局部坏点 |
+| Bad pixel / BP-1 / BP-2 | 误差超过 1 或 2 像素的比例 | 不同阈值严格度不同 |
+| D1 | KITTI 常用 outlier 指标 | 更贴近自动驾驶 benchmark 口径 |
+| Runtime / FPS | 推理速度 | 必须看硬件、分辨率、batch、runtime |
+| Memory | volume 和 refinement 显存 | 高分辨率部署常先卡内存 |
 
-读 zero-shot stereo 结果时，重点不是“哪个数据集最高”，而是模型有没有在未微调的真实场景中同时守住多类分布：室内、户外、远距离、弱纹理、反光/透明和遮挡。
+Middlebury v3 明确提供多个 disparity accuracy measures，包括不同阈值的 bad pixel、平均绝对误差、RMS 和误差分位数。这个设计很合理：stereo 不是只要平均误差低，还要看边界、遮挡和长尾区域坏到什么程度。对机器人来说，少数坏点如果落在抓取边缘、桌沿或透明物体上，后果会比平均指标暗示的更严重。
 
-## 和 Fast-FoundationStereo 怎么接
+## 读 stereo 论文时先画三张图
 
-读 Fast-FoundationStereo 时，可以把术语按这张表对应：
+第一张图是几何图：相机是否标定、左右图是否 rectified、baseline 和焦距是否已知、输出是 disparity 还是 depth。没有这张图，后面所有网络结构都缺输入假设。
 
-| 论文术语 | 本页对应概念 |
-| --- | --- |
-| feature backbone | 左右图特征提取器，为 cost volume 提供 \(F_L,F_R\) |
-| cost volume | 每个像素、每个 disparity 候选的匹配表示 |
-| cost filtering | 对 cost volume 做上下文推理，输出 initial disparity |
-| 3D hourglass / APC | cost filtering 的结构选择 |
-| Disparity Transformer | cost filtering 里的长程 disparity 推理模块 |
-| refinement ConvGRU | 迭代修正 initial disparity 的 recurrent module |
-| pseudo-label stereo pairs | 用 teacher 给真实双目图生成 dense disparity 监督 |
-| BP-1 / BP-2 / D1 | 判断 zero-shot stereo 质量的坏点比例指标 |
+第二张图是 cost volume 图：特征分辨率是多少，最大 \(D\) 多大，volume 是 concat 还是 correlation，后续用 3D conv、hourglass、cascade 还是 Transformer 处理。它决定显存、速度和模型能看到多少候选证据。
+
+第三张图是错误图：低纹理、重复纹理、遮挡、反光、透明、远距离和细小结构分别怎么处理。只看 leaderboard 排名，很容易错过模型在真实闭环里的失败点。
+
+## 阅读结论
+
+双目匹配的核心不是“深度估计网络”，而是“几何约束下的对应点搜索”。Rectification 把搜索压到同一行，disparity 给出可三角测量的深度，cost volume 保存所有候选位移的证据，cost filtering 用上下文清理证据，refinement 把初始视差修成可用结果。
+
+读 FoundationStereo、Fast-FoundationStereo、RAFT-Stereo、PSMNet 或任何 stereo 模型时，先问：输入几何假设是什么，cost volume 怎么构造，哪里最耗显存和 latency，哪些失败区域被评测覆盖，输出 disparity 最后如何进入机器人、AR 或自动驾驶的控制链。
+
+## 外部精读
+
+- [OpenCV: Depth Map from Stereo Images](https://docs.opencv.org/4.x/dd/d53/tutorial_py_depthmap.html)：用最小代码和公式理解 disparity 到 depth。
+- [LearnOpenCV: Introduction to Epipolar Geometry and Stereo Vision](https://learnopencv.com/introduction-to-epipolar-geometry-and-stereo-vision/)：适合补 epipolar geometry、对应点和深度直觉。
+- [GC-Net](https://arxiv.org/abs/1703.04309)：理解 cost volume 加 3D convolution 的深度 stereo 路线。
+- [PSMNet](https://arxiv.org/abs/1803.08669)：理解 spatial pyramid pooling、3D hourglass 和 cost volume regularization。
+- [RAFT-Stereo](https://arxiv.org/abs/2109.07547)：理解 recurrent update 和 multilevel correlation / cost 证据。
+- [FoundationStereo](https://arxiv.org/abs/2501.09898)：理解 zero-shot stereo 为什么需要大规模数据、单目先验和长程 cost filtering。
+- [Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)：理解一个强 stereo foundation model 如何被拆成实时系统。
+- [Middlebury Stereo Evaluation v3](https://vision.middlebury.edu/stereo/eval3/MiddEval3-newFeatures.html)：理解 bad pixel、平均误差和分位数指标。

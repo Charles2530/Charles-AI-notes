@@ -1,379 +1,180 @@
 # 噪声日程与参数化
 
-上一页讲了扩散训练如何构造带噪样本：
+扩散训练看起来只是“给图加噪，再让模型预测噪声”。真正影响模型性格的，是两件更细的事：噪声日程决定训练样本会落在哪些难度区间，参数化决定模型用什么坐标回答这个去噪问题。它们会直接影响采样器、CFG、少步生成、视频一致性和世界模型里的动作敏感性。
 
+可以把这页当成训练和推理之间的桥。训练页讲模型怎样学会局部方向；Score/SDE 页讲这些方向怎样变成概率流；Inference 页讲采样器怎样有限步积分。噪声日程与参数化负责回答：这些方向在不同噪声区间到底有多难学，模型输出的坐标又是否适合采样器使用。
 
-\[
-x_t=\sqrt{\bar{\alpha}_t}x_0+\sqrt{1-\bar{\alpha}_t}\epsilon
-\]
+## 噪声日程本质上是难度曲线
 
-
-这条式子把带噪样本拆成两部分：\(\sqrt{\bar{\alpha}_t}x_0\) 是保留下来的干净信号，\(\sqrt{1-\bar{\alpha}_t}\epsilon\) 是混入的噪声。
-
-这页继续问两个更细的问题：
-
-1. **噪声日程**：不同时间步到底加多少噪声？
-2. **参数化**：模型到底预测噪声、干净图、score，还是 velocity？
-
-这两个问题看似是训练细节，其实会直接影响采样质量、少步生成、guidance 稳定性和视频一致性。
-
-## 先看图：不同时间步的学习压力不同
-
-![Improved DDPM VLB terms 原论文图](../assets/images/paper-figures/diffusion/improved-ddpm-figure-2-vlb-terms.png){ width="660" }
-
-<small>图源：[Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672)，Figure 2。</small>
-
-<small>原论文图意：该图分析 CIFAR-10 训练中 variational lower bound 各 timestep 项的贡献，显示不同 diffusion step 的损失权重和学习压力差异很大。</small>
-
-<small>本教程读法：不要把所有时间步想成一样难。低噪声区间更像补边缘和纹理，中噪声区间更像恢复结构，高噪声区间更像从几乎看不见的信号里猜语义。噪声日程和 loss weighting 会决定模型把精力花在哪里。</small>
-
-## 噪声日程决定什么
-
-离散扩散里，单步前向过程是：
+DDPM 的前向加噪可以写成：
 
 \[
-q(x_t \mid x_{t-1})
-=
-\mathcal{N}\left(x_t;\sqrt{1-\beta_t}x_{t-1},\beta_t I\right)
-\]
-
-
-这行式子在说：第 \(t\) 步把上一时刻图像 \(x_{t-1}\) 缩小一点，再加入强度为 \(\beta_t\) 的高斯噪声。
-
-把 \(\mathcal{N}\) 拆开读会更清楚：
-
-| 位置 | 在这条公式里 | 含义 |
-| --- | --- | --- |
-| 第 1 个位置 \(x_t\) | 当前带噪样本 | 这个分布要生成或评估的变量 |
-| 第 2 个位置 \(\sqrt{1-\beta_t}x_{t-1}\) | 均值 | 保留下来的上一时刻信号 |
-| 第 3 个位置 \(\beta_t I\) | 协方差 | 噪声强度；\(I\) 表示各维独立同方差 |
-
-符号含义：
-
-一整串 \(\beta_1,\beta_2,\ldots,\beta_T\) 就叫噪声日程。它决定图像从清晰到纯噪声的速度。
-
-通常还会定义：
-
-\[
-\alpha_t=1-\beta_t,
+x_t=\sqrt{\bar\alpha_t}x_0+\sqrt{1-\bar\alpha_t}\epsilon,
 \qquad
-\bar{\alpha}_t=\prod_{s=1}^{t}\alpha_s
+\epsilon\sim\mathcal N(0,I)
 \]
 
+这行式子把当前带噪样本 \(x_t\) 拆成两部分：\(\sqrt{\bar\alpha_t}x_0\) 是还保留下来的干净信号，\(\sqrt{1-\bar\alpha_t}\epsilon\) 是混进去的高斯噪声。\(\bar\alpha_t\) 越接近 1，样本越清楚；越接近 0，样本越像纯噪声。
 
-这行式子在说：\(\alpha_t\) 是单步保留信号比例，\(\bar{\alpha}_t\) 是从第 1 步到第 \(t\) 步累计保留的信号比例。
-
-符号含义：
-
-## SNR：比 \(\beta_t\) 更贴近学习难度
-
-闭式加噪是：
+离散 DDPM 里通常先定义每一步加多少噪声：
 
 \[
-x_t
+q(x_t\mid x_{t-1})
 =
-\sqrt{\bar{\alpha}_t}x_0
-+
-\sqrt{1-\bar{\alpha}_t}\epsilon
+\mathcal N\left(x_t;\sqrt{1-\beta_t}x_{t-1},\beta_t I\right)
 \]
 
-
-这行式子在说：\(\bar{\alpha}_t\) 控制原图信号还剩多少，\(1-\bar{\alpha}_t\) 控制噪声占多少。
-
-如果上下文写着 \(\epsilon\sim\mathcal{N}(0,I)\)，这里的 \(0\) 是噪声均值，\(I\) 是单位协方差；也就是每个维度独立采样标准高斯噪声。和 \(\mathcal{N}(x;\mu,\Sigma)\) 相比，它省略了“在哪个变量上取值”的第 1 个位置，因为这是在说“\(\epsilon\) 从这个分布里采样”。
-
-于是可以定义信噪比：
+这里 \(\beta_t\) 是第 \(t\) 步加入的噪声方差。它不是一个孤立超参，而是一整条序列 \(\beta_1,\beta_2,\ldots,\beta_T\)。把每一步保留信号的比例记作 \(\alpha_t=1-\beta_t\)，从第 1 步累积到第 \(t\) 步的保留比例就是：
 
 \[
-\text{SNR}_t
-=
-\frac{\bar{\alpha}_t}{1-\bar{\alpha}_t}
+\bar\alpha_t=\prod_{s=1}^{t}\alpha_s
 \]
 
+这条曲线决定图像从清晰变成噪声的速度。若前面掉得太快，模型很早就面对几乎无结构的样本；若后面太密，训练和采样会把大量预算花在相近的低噪声状态上。所谓 noise schedule，不只是“时间步怎么编号”，而是在分配模型练习哪些难度。
 
-这行式子在说：SNR 衡量当前时间步里“原图信号”相对“噪声”的强弱。
+## SNR 比时间步更接近训练压力
 
-符号含义：
-
-直觉上：
-
-- SNR 高：图像还很清楚，模型主要学局部细节修复。
-- SNR 中等：图像结构还在，模型学语义和形状。
-- SNR 低：几乎都是噪声，模型要靠分布先验猜大结构。
-
-所以线性 \(\beta_t\) 不等于线性学习难度。真正影响训练体验的，是整个 SNR 曲线怎么变化。
-
-## 常见噪声日程
-
-### 3.1 线性 \(\beta_t\)
-
-最直接的做法是让 \(\beta_t\) 从小到大线性增加。
-
-优点：简单、好复现、适合入门理解。
-
-缺点：线性增加噪声强度，不代表信息难度线性变化；某些 SNR 区间可能过密，另一些区间可能过稀。
-
-### 3.2 Cosine 日程
-
-Improved DDPM 推动了 cosine schedule 的常用化。它更直接地控制 \(\bar{\alpha}_t\) 的衰减，让信号保留过程更平滑。
-
-直觉上，cosine 日程不会过早把图像彻底打成噪声，因此中间噪声区间更容易得到稳定训练信号。它常被当作比线性日程更稳的默认选择。
-
-### 3.3 连续噪声尺度 \(\sigma\)
-
-EDM 等连续时间框架更常直接用噪声标准差 \(\sigma\) 描述状态：
+只看 \(\beta_t\) 容易误判难度，因为加噪强度线性变化，不代表信号可见度线性变化。更有用的量是信噪比：
 
 \[
-x = x_0 + \sigma \epsilon
+\mathrm{SNR}_t=\frac{\bar\alpha_t}{1-\bar\alpha_t}
 \]
 
+它直接比较当前样本里干净信号和噪声的相对强弱。高 SNR 时，图像还清楚，模型更像在修边缘、颜色和局部纹理；中等 SNR 时，主体结构还隐约可见，模型要恢复形状、布局和语义关系；低 SNR 时，局部证据很弱，模型更多依赖数据分布和条件信号猜大结构。
 
-这行式子在说：当前样本是干净图加上标准差为 \(\sigma\) 的噪声。这里不再强调离散编号 \(t\)，而是直接用噪声大小 \(\sigma\) 表示“现在有多吵”。
+![Improved DDPM VLB terms](../assets/images/paper-figures/diffusion/improved-ddpm-figure-2-vlb-terms.png){ width="720" }
 
-符号含义：
+<small>图源：[Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672)，Figure 2。原图分析 CIFAR-10 训练中 variational lower bound 各 timestep 项的贡献。本站读法：不同时间步对训练目标的压力差异很大；schedule、loss weighting 和 timestep sampling 会决定模型容量花在低噪声细节、中噪声结构还是高噪声语义上。</small>
 
-这种写法更容易和 ODE / SDE 采样器连接，因为采样器可以直接沿着连续噪声尺度安排步长。
+Improved DDPM 推动 cosine schedule 的原因也在这里。它不是为了让曲线看起来漂亮，而是让信号衰减更平滑，避免某些 SNR 区间被过早或过晚挤压。现代训练还会继续调 loss weighting 或 timestep sampling，例如 Min-SNR weighting 这类方法，就是在处理不同噪声水平之间的优化冲突。
 
-## 参数化：模型到底输出什么
+## 连续噪声尺度让采样器更容易接上
 
-同一个带噪状态 \(x_t\)，模型可以学习不同目标。它们表达的信息可以互相转换，但训练难度和采样稳定性不完全一样。
-
-### 4.1 预测噪声 \(\epsilon\)
+离散时间 \(t\) 适合讲 DDPM 的前向链，但工程采样常更关心“现在噪声标准差是多少”。EDM 一类写法直接使用连续噪声尺度：
 
 \[
-\hat{\epsilon}=\epsilon_\theta(x_t,t)
+x=x_0+\sigma\epsilon
 \]
 
+\(\sigma\) 就是噪声标准差。小 \(\sigma\) 表示样本接近数据，模型主要修细节；大 \(\sigma\) 表示样本接近高斯噪声，模型主要确定全局结构。这样写的好处是，采样器可以直接在 \(\sigma\) 轴上安排步长，而不是被训练时的离散编号绑死。
 
-这行式子在说：模型输入带噪图 \(x_t\) 和时间步 \(t\)，输出它认为被加入的噪声。
+这也解释了为什么训练 schedule 和 sampling schedule 不能混着说。训练时你决定模型在哪些噪声水平见过数据；推理时你决定从高噪声到低噪声经过哪些点。两者如果错配，模型可能在采样时被带到训练覆盖不足的区域。`Common Diffusion Noise Schedules and Sample Steps are Flawed` 讨论的 zero terminal SNR，就是这个错配的典型例子：如果训练日程末端没有真正走到纯噪声，采样却从纯噪声开始，训练和推理的起点语义就不一致。
 
-优点：训练目标最直接，因为训练时真实噪声 \(\epsilon\) 是我们自己采样出来的。
+## 参数化是在换坐标系
 
-代价：在不同 SNR 区间，噪声预测的尺度和误差影响不完全均衡，少步采样或强 guidance 时需要和采样器一起调。
+给定同一个 \(x_t\)，模型可以预测噪声 \(\epsilon\)、干净样本 \(x_0\)、score 或 velocity。它们常常能互相换算，但训练效果并不等价，因为损失尺度、梯度分布和少步误差会不同。
 
-### 4.2 预测干净图 \(x_0\)
+最经典的是 \(\epsilon\)-prediction：
 
 \[
-\hat{x}_0=x_{0,\theta}(x_t,t)
+\hat\epsilon=\epsilon_\theta(x_t,t,c)
 \]
 
+训练时真实噪声 \(\epsilon\) 是我们自己采样的，所以监督信号直接、稳定。它的局限是，不同 SNR 区间里噪声预测误差对最终样本的影响并不均衡；强 guidance 或少步采样会把这些误差放大。
 
-这行式子在说：模型直接从带噪图里猜原始干净图。
-
-优点：直觉清楚，采样器可以直接拿 \(\hat{x}_0\) 计算更新。
-
-代价：高噪声时 \(x_t\) 几乎看不出原图，直接预测 \(x_0\) 更容易承受尺度和不确定性压力。
-
-### 4.3 预测 score
+\(x_0\)-prediction 直接让模型猜干净样本：
 
 \[
-s_\theta(x_t,t)
-\approx
-\nabla_{x_t}\log p_t(x_t)
+\hat x_0=x_{\theta}(x_t,t,c)
 \]
 
+它对采样器很友好，因为很多更新规则都需要 \(\hat x_0\)。但在高噪声区，\(x_t\) 几乎看不出原图，直接预测 \(x_0\) 会承受更大的不确定性。它不是“更直观所以一定更好”，而是把难度换到了另一个坐标里。
 
-这行式子在说：模型估计当前噪声分布 \(p_t\) 的对数密度梯度，也就是“往哪里走，概率密度会上升最快”。
-
-符号含义：
-
-score 不是“分数”，而是一个方向向量。它把扩散和 SDE / ODE 理论连起来。
-
-在常见噪声预测参数化下，可以粗略理解为：
+score prediction 则估计当前噪声分布的概率坡度：
 
 \[
-s_\theta(x_t,t)
-\propto
--\frac{1}{\sigma_t}\epsilon_\theta(x_t,t)
+s_\theta(x_t,t)\approx\nabla_{x_t}\log p_t(x_t)
 \]
 
+score 告诉采样器往哪里走，当前样本的概率密度会上升。常见 DDPM 噪声预测可以按噪声尺度转换成 score，负号表示“预测噪声方向”和“去数据高概率区域方向”相反。这部分更详细地接到 [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md)。
 
-这行式子在说：预测噪声和预测 score 不是两件完全无关的事；噪声方向的反方向，经过时间相关缩放后，就是朝数据高概率区域移动的方向。
+## velocity 为什么常被拿出来讲
 
-### 4.4 预测 velocity \(v\)
-
-常见的混合路径写成：
-
-\[
-x_t=\alpha_t x_0+\sigma_t\epsilon
-\]
-
-
-这行式子在说：\(x_t\) 是干净图和噪声按两个权重混合出来的状态。
-
-这里的 \(\alpha_t\) 和 \(\sigma_t\) 通常就是上一节闭式加噪里的两个系数：
+很多现代模型使用 \(v\)-prediction。先把带噪状态写成：
 
 \[
-\alpha_t=\sqrt{\bar{\alpha}_t},
+x_t=\alpha_t x_0+\sigma_t\epsilon,
 \qquad
-\sigma_t=\sqrt{1-\bar{\alpha}_t}
-\]
-
-
-所以它们满足：
-
-\[
 \alpha_t^2+\sigma_t^2=1
 \]
 
-
-这意味着 \((\alpha_t,\sigma_t)\) 可以看成一个单位圆上的坐标：低噪声时 \(\alpha_t\approx 1,\sigma_t\approx 0\)，\(x_t\) 更接近 \(x_0\)；高噪声时 \(\alpha_t\approx 0,\sigma_t\approx 1\)，\(x_t\) 更接近 \(\epsilon\)。
-
-velocity 通常定义为：
+这里 \(\alpha_t\) 和 \(\sigma_t\) 可以看成单位圆上的两个坐标：低噪声时 \(\alpha_t\) 大、\(\sigma_t\) 小；高噪声时反过来。velocity 定义为：
 
 \[
 v=\alpha_t\epsilon-\sigma_t x_0
 \]
 
-
-这个定义不是凭空来的。可以把混合路径写成一个角度参数 \(\phi_t\)：
-
-\[
-\alpha_t=\cos\phi_t,\qquad \sigma_t=\sin\phi_t
-\]
-
-
-于是：
+这不是多发明一个神秘目标，而是把 \((x_0,\epsilon)\) 旋转成 \((x_t,v)\)。如果把 \(\alpha_t=\cos\phi_t,\sigma_t=\sin\phi_t\)，那么：
 
 \[
 x_t=\cos\phi_t\,x_0+\sin\phi_t\,\epsilon
 \]
 
-
-如果沿着这条“从干净图转向噪声”的路径移动，对 \(\phi_t\) 求导：
+沿着角度 \(\phi_t\) 求导，就得到：
 
 \[
-\frac{\partial x_t}{\partial \phi_t}
+\frac{\partial x_t}{\partial\phi_t}
 =
 -\sin\phi_t\,x_0+\cos\phi_t\,\epsilon
 =
-\alpha_t\epsilon-\sigma_t x_0
-\]
-
-
-右边正好就是 \(v\)。所以 \(v\) 可以理解成这条混合路径上的“切向方向”：\(x_t\) 告诉你当前混到哪里了，\(v\) 告诉你沿噪声日程继续移动时，干净信号和噪声信号怎样互相替换。
-
-也可以把它看成一次坐标旋转：
-
-\[
-\begin{bmatrix}
-x_t\\
 v
-\end{bmatrix}
-=
-\begin{bmatrix}
-\alpha_t & \sigma_t\\
--\sigma_t & \alpha_t
-\end{bmatrix}
-\begin{bmatrix}
-x_0\\
-\epsilon
-\end{bmatrix}
 \]
 
-
-第一行就是前面的混合公式；第二行就是 velocity 定义。因为 \(\alpha_t^2+\sigma_t^2=1\)，这个矩阵是旋转矩阵，不会丢信息，只是把 \((x_0,\epsilon)\) 换成了 \((x_t,v)\) 这套坐标。
-
-如果模型预测 \(\hat{v}\)，常可以换回：
+所以 \(v\) 可以理解成混合路径上的切向方向：\(x_t\) 表示当前混到了哪里，\(v\) 表示沿噪声路径继续移动时，干净信号和噪声怎样交换。模型预测 \(\hat v\) 后，可以换回：
 
 \[
-\hat{x}_0=\alpha_t x_t-\sigma_t\hat{v}
+\hat x_0=\alpha_t x_t-\sigma_t\hat v,
+\qquad
+\hat\epsilon=\sigma_t x_t+\alpha_t\hat v
 \]
 
+低噪声时，\(v\) 更接近噪声预测；高噪声时，\(v\) 更接近负的数据预测。它在不同 SNR 区间之间平滑切换，所以 Progressive Distillation、Imagen 系列实践、Stable Diffusion 后续配置和很多视频 / flow 风格模型都会关注 \(v\)-prediction。要注意：它不是保证质量的单独按钮，仍然要和 loss weighting、noise schedule、sampler 和 guidance 一起看。
+
+## 采样器最终要拿到可更新的方向
+
+不管模型输出 \(\hat\epsilon\)、\(\hat x_0\)、score 还是 \(\hat v\)，采样时都要落到同一个执行问题：给定当前 \(x_t\)，怎样得到更低噪声水平的 \(x_{t'}\)。
+
+以确定性 DDIM 直觉为例：
 
 \[
-\hat{\epsilon}=\sigma_t x_t+\alpha_t\hat{v}
+x_{t'}=\alpha_{t'}\hat x_0+\sigma_{t'}\hat\epsilon,\qquad t'<t
 \]
 
+这行式子不是把模型输出直接当最终图，而是把模型估计出的数据部分和噪声部分，按下一个噪声水平重新组合。若 \(t'\) 离 \(t\) 很近，就是细步修正；若 \(t'\) 跳得很远，就是少步采样，模型坐标和 sampler 误差都会被放大。
 
-这两行可以直接从上面的旋转矩阵反解出来。旋转矩阵的逆等于转置，所以：
+这就是“等价又不等价”的地方。数学上，很多预测目标可以互相换算；优化上，它们改变了每个噪声区间的损失尺度；推理上，它们又会影响 solver 在少 NFE、强 CFG、ControlNet 或视频长时生成里的稳定性。参数化不是符号偏好，而是训练几何和采样几何的连接件。
 
-\[
-\begin{bmatrix}
-x_0\\
-\epsilon
-\end{bmatrix}
-=
-\begin{bmatrix}
-\alpha_t & -\sigma_t\\
-\sigma_t & \alpha_t
-\end{bmatrix}
-\begin{bmatrix}
-x_t\\
-v
-\end{bmatrix}
-\]
+## 日程、参数化和采样器不能分开调
 
+![EDM sampler design space](../assets/images/paper-figures/diffusion/edm-figure-2-sampler-design-space.png){ width="920" }
 
-展开第一行得到 \(x_0=\alpha_t x_t-\sigma_t v\)，展开第二行得到 \(\epsilon=\sigma_t x_t+\alpha_t v\)。把真实 \(v\) 换成模型预测的 \(\hat{v}\)，就得到 \(\hat{x}_0\) 和 \(\hat{\epsilon}\)。
+<small>图源：[Elucidating the Design Space of Diffusion-Based Generative Models](https://arxiv.org/abs/2206.00364)，Figure 2。原图在多个预训练模型上比较确定性采样设计，横轴是 NFE，纵轴是 FID。本站读法：采样质量不是由模型权重或 sampler 名字单独决定；噪声尺度、preconditioning、时间离散、solver 和 NFE 共同决定少步表现。</small>
 
-这也是为什么 \(v\)-prediction 常被说成一种更稳定的参数化：低噪声时 \(\alpha_t\approx 1,\sigma_t\approx 0\)，\(v\approx\epsilon\)，目标更像噪声预测；高噪声时 \(\alpha_t\approx 0,\sigma_t\approx 1\)，\(v\approx -x_0\)，目标更像数据预测。它在不同 SNR 区间之间平滑切换，而不是只固定预测 \(\epsilon\) 或只固定预测 \(x_0\)。
+EDM 的价值是把“训练目标”和“采样技巧”重新放回同一个设计空间。噪声尺度决定模型见过哪些状态，preconditioning 决定不同 \(\sigma\) 下输入输出如何缩放，loss weighting 决定哪些噪声区间主导训练，sampler 决定推理时怎样走过这些区间。任何一项单独拿出来，都很容易过度简化。
 
-### 4.5 预测值怎样真正作用到去噪过程
+真实训练和调参时，至少要一起记录这些信息：训练 noise schedule、timestep 或 \(\sigma\) 采样分布、loss weighting、prediction type、是否 v-prediction、采样 schedule、solver、NFE、CFG scale、thresholding、分辨率和条件类型。少一个，复现实验时就可能把“模型更好”误判成“日程或采样器设置更顺手”。
 
-不管模型预测的是 \(\hat{\epsilon}\)、\(\hat{x}_0\)、score，还是 \(\hat{v}\)，采样时都要落到同一个问题：给定当前状态 \(x_t\)，怎样得到更低噪声的下一个状态 \(x_{t'}\)。
+## 怎么读不同场景里的日程选择
 
-最常见的执行链条是：
+图像生成里，高噪声区负责大结构和语义，低噪声区负责纹理、边缘和文字。若模型常常“画得精细但主体错”，要检查高噪声区训练、caption/condition、timestep sampling 和 guidance；若构图对但细节脏，要检查低噪声区、VAE、loss weighting 和采样尾段。
 
-```text
-model output
-  -> convert to x0_hat / eps_hat / score-like direction
-  -> sampler applies noise schedule and step rule
-  -> next lower-noise sample x_{t'}
-```
+视频生成里，噪声日程还会影响运动。高噪声区太弱，主体和镜头路线可能从一开始就不稳；低噪声区不够，纹理和身份会闪烁；少步采样跨度过大，运动可能变慢或断裂。Wan2.2 这类高低噪声专家路线，背后也在利用不同噪声区间承担不同职责这一事实。
 
-例如确定性 DDIM 可以粗略写成：
+动作扩散和世界模型里，日程选择还关系到多峰动作和反事实未来。过度强调平均 MSE 可能把多个可行动作平均成不可执行轨迹；高噪声区如果没有学到动作条件对未来的影响，采样再稳定也只是生成“看起来合理但不听动作”的 rollout。
 
-\[
-x_{t'}
-=
-\alpha_{t'}\hat{x}_0
-+
-\sigma_{t'}\hat{\epsilon},
-\qquad t' < t
-\]
+## 收束判断
 
+噪声日程控制训练题目的难度分布，参数化控制模型回答题目的坐标，采样器控制这些回答怎样变成实际轨迹。三者合在一起，才决定扩散模型在少步、强条件、视频和世界模型场景里是否稳定。
 
-这里的关键不是“把噪声直接从图上擦掉一次”，而是：模型先告诉采样器当前样本里哪些部分像数据、哪些部分像噪声；采样器再按照下一个噪声水平 \(t'\) 重新组合这两部分。\(t'\) 如果离 \(t\) 很近，就是小步去噪；如果跳得很远，就是少步采样，对模型预测和 solver 都更苛刻。
+读论文或复现实验时，先问四件事：训练覆盖了哪些 SNR 区间；模型预测的是 \(\epsilon\)、\(x_0\)、score 还是 \(v\)；loss weighting 是否让某些噪声区间过强或过弱；推理 schedule 是否和训练 schedule 匹配。问清这四件事，noise schedule 就不再是配置文件里一串数字，而是模型学习难度和推理稳定性的核心接口。
 
-如果模型直接预测 \(\hat{x}_0\)，采样器已经拿到了“数据端估计”；如果模型预测 \(\hat{\epsilon}\)，就先用反解公式得到 \(\hat{x}_0\)；如果模型预测 \(\hat{v}\)，就先用上面的坐标变换得到 \(\hat{x}_0\) 和 \(\hat{\epsilon}\)。所以 \(v\)-prediction 发挥作用的方式通常不是多了一个神秘步骤，而是给采样器一个更稳定的坐标，再由采样器把它兑现成每一步移动。
+## 外部精读
 
-## 为什么“等价”又“不等价”
-
-从信息表达看，只要知道 \(x_t\)、时间步和其中一种预测目标，很多情况下可以解析换算到其他目标。
-
-但训练不是只看信息能否换算，还要看：
-
-- 损失在不同时间步的尺度是否均衡；
-- 高噪声和低噪声区间谁主导梯度；
-- guidance 放大后是否容易过冲；
-- 少步采样时误差是否累积；
-- 模型输出坐标是否适合采样器。
-
-所以 \(\epsilon\)-prediction、\(x_0\)-prediction、score prediction 和 \(v\)-prediction 像是用不同坐标系描述同一个去噪问题。坐标系不同，优化几何也不同。
-
-## 日程、参数化、采样器要一起看
-
-![EDM sampler design space 原论文图](../assets/images/paper-figures/diffusion/edm-figure-2-sampler-design-space.png){ width="920" }
-
-<small>图源：[Elucidating the Design Space of Diffusion-Based Generative Models](https://arxiv.org/abs/2206.00364)，Figure 2。</small>
-
-<small>原论文图意：在多个预训练模型上比较确定性采样设计，横轴是 NFE，纵轴是 FID；Heun、噪声日程 \(\sigma(t)\)、scaling \(s(t)\) 等改动都会影响少步质量。</small>
-
-<small>本教程读法：这张图说明，采样质量不是只由模型权重决定。噪声日程、参数化、时间离散方式和 solver 共同决定少步采样表现。NFE 是模型前向调用次数，越少通常越快，但数值误差更难控制。</small>
-
-一句话：**噪声日程决定训练样本落在哪些噪声区间，参数化决定模型用什么坐标理解这些样本，采样器决定推理时如何兑现这些学习成果。**
-
-## 和下一页的关系
-
-这一页解释了噪声水平和预测坐标。下一页 [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md) 会把“预测噪声”进一步解释成“学习概率分布的梯度方向”，并说明为什么扩散采样可以被看成 SDE / ODE 的数值求解。
-
-!!! tip "进阶理解"
-    在视频扩散和世界模型里，噪声日程还会影响运动是否连续、身份是否漂移、动作条件是否敏感。基础图像扩散先把 SNR 和参数化理解清楚，后面看高低噪声 expert、Flow Matching 或 Phased DMD 会轻松很多。
-
-## 本页结论
-
-噪声日程控制“训练题目有多难、难题分布在哪里”；参数化控制“模型用哪个坐标系回答题目”。它们不是孤立技巧，而是扩散训练和采样之间最重要的连接层。
-
-*[SNR]: Signal-to-Noise Ratio，信噪比。
-*[NFE]: Number of Function Evaluations，模型前向调用次数。
+- [DDPM](https://arxiv.org/abs/2006.11239)：理解前向加噪、\(\bar\alpha_t\)、噪声预测和反向链。
+- [Improved DDPM](https://arxiv.org/abs/2102.09672)：理解 cosine schedule、learned variance、VLB 分项和训练/采样改进。
+- [Progressive Distillation](https://arxiv.org/abs/2202.00512)：理解少步采样压力下的新参数化和 progressive distillation。
+- [EDM](https://arxiv.org/abs/2206.00364)：理解噪声尺度、preconditioning、loss weighting、sampler 和 NFE 的整体设计空间。
+- [Min-SNR Weighting](https://arxiv.org/abs/2303.09556)：理解按 SNR 调整 loss weighting 来缓解不同时间步优化冲突。
+- [Common Diffusion Noise Schedules and Sample Steps are Flawed](https://arxiv.org/abs/2305.08891)：理解 zero terminal SNR、v-prediction 和 sampler 起点错配问题。
+- [Diffusers Scheduler Overview](https://huggingface.co/docs/diffusers/en/api/schedulers/overview)：核对工程库里的 scheduler / prediction type / timestep spacing 语义。
+- [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion)：用代码和公式把 forward process、schedule、loss 和采样过程对上。

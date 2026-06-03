@@ -7,8 +7,12 @@
 - [扩散训练与表示](training.md)
 - [噪声日程与参数化](noise-schedules-and-parameterization.md)
 - [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md)
+- [条件控制与 Guidance](guidance-and-conditioning.md)
 - [采样与推理加速](inference.md)
+- [扩散方法怎么选](comparison-table.md)
 - [一步生成、蒸馏与整流](distillation.md)
+- [一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)
+- [视频与多模态扩散](video-and-multimodal-diffusion.md)
 
 ## 新的阅读方式
 

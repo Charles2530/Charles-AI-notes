@@ -127,6 +127,6 @@ target modules 选得太少，adapter 学不动；选得太多，显存、过拟
 - [Hugging Face Quantization Concepts](https://huggingface.co/docs/transformers/main/quantization/concept_guide)：部署量化概念和方法边界。
 - [bitsandbytes 文档](https://huggingface.co/docs/bitsandbytes/main/index)：QLoRA 常用实现路径和配置入口。
 
-## 本页结论
+## 阅读结论
 
 QLoRA 的核心不是“4bit 训练”，而是“4bit 冻结底座 + 高效 adapter 训练”。LoRA 先减少可训练更新的维度，QLoRA 再压低底座常驻显存，NF4/double quant/paged optimizer 分别处理权重格式、元数据和峰值显存。判断 QLoRA 是否适合一个任务，不要只看能否跑起来，而要看量化底座是否还可靠、adapter 是否覆盖关键模块、数据是否足够干净，以及部署 runtime 是否真的支持目标形态。

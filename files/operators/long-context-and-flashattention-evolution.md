@@ -1,128 +1,134 @@
-# FlashAttention 与长上下文
+# FlashAttention 与长上下文：先分清三张账
 
-长上下文系统和 FlashAttention 的关系，不只是“长上下文需要更快 attention”这么简单。更准确地说，长上下文之所以会不断推动 attention 内核演化，是因为随着序列长度上升，attention 的瓶颈会从“算没算对”迅速转向“数据怎么搬、历史怎么存、解码时怎么读”。
+FlashAttention 经常被讲成“新的 attention 机制”，但它没有改变 dense attention 的数学定义，也没有把二次配对计算变成线性。它真正改变的是数据路径：不要把完整的 \(QK^\top\) 分数矩阵和 softmax 概率矩阵写进 HBM，再读出来乘 \(V\)；而是在片上分块完成打分、归一化和输出累积。
 
+长上下文系统至少有三张账。第一张是 attention kernel 的 I/O 账，FlashAttention 主要处理这里。第二张是 decode 阶段的 KV cache 账，PagedAttention、KV quantization、prefix cache 和 batching 主要处理这里。第三张是更长上下文训练或推理的并行账，RingAttention、Ulysses 和 context parallel 主要处理这里。把这三张账分开，才能知道一个方法到底省了什么。
 
-因此看 FlashAttention 的演化，最好把它放在一条更大的长上下文系统主线上看：朴素 attention 如何被 I/O 打爆，FlashAttention 如何通过重写数据流减少中间矩阵，长上下文 decode 又如何逼出 paged attention、flash decoding 和更多服务态特化。
+## 标准 attention 的问题不只在 FLOPs
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
+单个 attention head 通常写成：
 
-## 为什么长上下文首先打爆的是 I/O
+\[
+O=\operatorname{softmax}\left(\frac{QK^\top + M}{\sqrt{d_h}}\right)V
+\]
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax》-->
-> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
->
-> 延伸阅读：[15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/15_FlashAttention_Sim.html)
+这行式子里，\(Q\) 是当前 query，\(K,V\) 是可见历史或同段序列，\(M\) 是 causal mask、padding mask 或其他 bias，\(d_h\) 是单个 head 的维度。数学上它很短，但朴素实现会显式生成两张 \(L_q\times L_k\) 的中间矩阵：score 和 probability。
 
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《15. FlashAttention Sim | 深入理解 FlashAttention：分块计算与 Online Softmax》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/15_FlashAttention_Sim.html) |
+训练或 prefill 里常见 \(L_q=L_k=L\)。如果 \(L=16{,}384\)，单 head 的 score 元素数就是 \(L^2=268{,}435{,}456\)。只用 BF16 存一份 score 就约 512 MiB；多 head、多层、softmax 输出、dropout、反向保存状态和 workspace 叠起来，瓶颈很快从“算不算得动”变成“中间矩阵能不能别反复进出 HBM”。
 
-标准 attention 的核心公式是：
+![FlashAttention IO-aware tiling](../assets/images/paper-figures/operators/flashattention-io-aware-tiling.png){ width="920" }
 
-$$
-\text{softmax}\left(\frac{QK^\top}{\sqrt{d}}\right)V.
-$$
+<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)。原图展示 HBM 与片上 SRAM 的带宽/容量差异，以及 Q/K/V 如何按块进入片上内存。这里用它说明：FlashAttention 的对象不是 attention 公式，而是 attention 的数据流。</small>
 
+## FlashAttention 的关键是 online softmax
 
-当序列长度 \(L\) 增长时，大家第一反应往往是“计算量变大了”。这当然没错，但更致命的常常是 score 矩阵巨大、中间结果往返 HBM、softmax 需要归约，以及长序列下 cache 与带宽压力急剧上升。
+如果不把完整 score 矩阵写到 HBM，softmax 会变难。普通 softmax 要知道整行最大值和指数和：
 
-也就是说，长上下文 attention 常常不是单纯 FLOPs 问题，而是 I/O 问题。
+\[
+\operatorname{softmax}(s)_j=
+\frac{\exp(s_j-m)}{\sum_t \exp(s_t-m)},\qquad
+m=\max_t s_t
+\]
 
-## FlashAttention 真正改变了什么
+FlashAttention 每次只读取一块 \(K,V\)，因此要一边扫 block，一边维护每个 query 行的统计量。它维护三个状态：目前见过的最大值 \(m\)，以这个最大值为基准的指数和 \(l\)，以及还没有除以 \(l\) 的输出累积 \(o\)。
 
-FlashAttention 的关键贡献，不是换了一个新的 attention 公式，而是通过分块、在线 softmax、避免显式 materialize score matrix，并尽可能在片上存储内完成局部计算来重写数据流。
+当新的一块 \(K_j,V_j\) 进入片上内存，产生当前分数块 \(S_j\)。新的最大值是：
 
-### 2.1 为什么这对长上下文特别关键
+\[
+m'=\max(m,\max(S_j))
+\]
 
-因为序列越长，完整 score 矩阵越不可能高效存和搬。  
-FlashAttention 的思路让 attention 更接近“边读边算边归一化”的流式过程，而不是“先把所有中间量写出来再处理”。
+旧的指数和要按新最大值重新缩放：
 
-## 从训练 attention 到服务 attention
+\[
+l'=e^{m-m'}l+\sum_t e^{S_{j,t}-m'}
+\]
 
-FlashAttention 最先显著改善的是长序列训练、大 batch prefill 和大块矩阵式 attention。但服务态特别是 decode 场景很快暴露出新的问题：每步只新增少量 token，主要成本是读历史 K/V，KV cache 需要长时间驻留，请求长度分布也高度动态。
+输出累积也用同样的缩放接上新块贡献：
 
-这意味着“训练里有效的 attention kernel”不能原封不动拿来服务。
+\[
+o'=e^{m-m'}o+\sum_t e^{S_{j,t}-m'}V_{j,t}
+\]
 
-## FlashAttention 之后为什么还会出现 Flash Decoding
+扫完整个 \(K,V\) 后，输出就是 \(O=o/l\)。这几行式子的意思很朴素：不必先把整行 probability 存下来，只要在分块过程中正确更新最大值、归一化项和输出累积，最终结果仍等价于完整 softmax attention。FlashAttention 是 exact dense attention 的 IO-aware 实现，不是丢 token，也不是近似 softmax。
 
-因为 decode 的并行轴和 prefill 不一样。  
-Prefill 可以在 token 维大量并行，decode 则是短 query、长 key/value、重历史缓存和小步工作量的组合。这推动内核设计从完整 attention block 吞吐，转向长历史读取、短 query 并行和服务态 tail latency。
+反向传播也利用同一个思路。它保存较小的行级统计，backward 时重算需要的分块分数，用更多计算换更少激活常驻和 HBM 往返。
 
-## 长上下文服务为什么把问题推向 KV 系统
+## 它省的是中间矩阵 I/O，不是所有长上下文成本
 
-当上下文从几千走到几万甚至更长时，问题不再只是 attention 算得快不快，还包括 KV cache 放不放得下、KV page 如何管理、prefix 能不能共享、decode 时长历史是否拖垮带宽，以及长请求和短请求如何共存。因此长上下文 attention 的后半段演化，实际上是在向 paged attention、prefix cache、sliding window 和 context compression 这些系统方向延伸。
+FlashAttention 减少 score/probability matrix 的 materialization，也减少 HBM 读写，但 dense attention 仍要覆盖所有 query-key 配对。对于完整 dense prefill，计算量仍随 \(L_qL_kd_h\) 增长。
 
-## 为什么长上下文系统经常要分 prefill 和 decode 两条路径
+| 技术问题 | FlashAttention 解决了什么 | 还没有解决什么 |
+| --- | --- | --- |
+| score/probability 是否完整落 HBM | 尽量不落，片上分块更新 softmax 和输出 | Q/K/V、输出和部分状态仍要读写 |
+| attention 是否仍 exact | 原始设定下是 exact dense attention | 任意 mask、dropout、低精度和 backend 仍要验证 |
+| 长上下文是否线性化 | 没有，dense attention 配对计算仍在 | 超长上下文总算力仍会增长 |
+| 服务是否自动变快 | prefill attention 热路径更可能受益 | decode、KV cache、scheduler、tail latency 另算 |
 
-因为它们的热点完全不同。
+因此读 benchmark 时要把条件写全：训练还是推理，prefill 还是 decode，GPU 架构、dtype、head dimension、mask、dropout、序列长度和 backend 是什么。FlashAttention 的收益真实存在，但不是一个可脱离 workload 的固定倍数。
 
-### 6.1 Prefill
+## FlashAttention-2 和 3 是 GPU 工作分配继续演化
 
-更像大矩阵吞吐问题，重点是 FlashAttention、长序列 tile、Tensor Core 利用和减少中间写回。
+第一代 FlashAttention 先把 HBM 中间写回砍掉。砍掉之后，下一层瓶颈就会变成 GPU 内部工作分配：非 matmul FLOPs、warp 同步、shared memory 读写、block 间并行和 Tensor Core 喂数。
 
-### 6.2 Decode
+FlashAttention-2 的重点，是让更多时间落在 Tensor Core 友好的 matmul 上，并把同一个 attention head 更好地切给多个 thread block，避免 batch/head 数不足时 SM 吃不满。FlashAttention-3 进一步面向 Hopper，把 WGMMA、TMA、异步流水和低精度路径纳入 attention kernel 设计。
 
-更像缓存和内存访问问题，重点是 KV cache 布局、paged attention、小步 kernel、launch 开销和 tail latency。
+![FlashAttention speedup](../assets/images/paper-figures/operators/flashattention-speedup.jpg){ width="760" }
 
-同一个系统如果不显式区分这两条路径，优化很容易互相牵制。
+<small>图源：[FlashAttention](https://arxiv.org/abs/2205.14135) 实验图。原图对比不同设置下 FlashAttention 相对普通 attention 实现的速度变化；关键读法是：速度曲线来自具体 GPU、shape、mask、dropout 和实现路径，不能外推成所有 attention 的固定加速倍数。</small>
 
-## Prefill / Decode 分流图
+这条演化线说明：FlashAttention 不是一个静态技巧，而是一个随 GPU memory hierarchy、Tensor Core 指令、编译栈和低精度路径一起变化的 kernel family。
 
-```mermaid
-flowchart LR
-    A["请求进入"] --> B{"已有共享前缀？"}
-    B -- "是" --> C["prefix cache hit"]
-    B -- "否" --> D["prefill"]
-    D --> E["FlashAttention / 长序列 tile"]
-    C --> F["decode"]
-    E --> F
-    F --> G["paged KV read"]
-    G --> H["flash decoding / small query kernel"]
-    H --> I["输出 token"]
-    I --> F
+## Prefill 和 decode 是两类问题
+
+LLM 服务里，prefill 和 decode 的 attention 形态不同。
+
+```text
+prefill: 长 prompt 一次进入，L_q 和 L_k 都大
+decode: 每步只来一个或少量新 token，反复读取历史 KV
 ```
 
-这张图说明长上下文服务不是单个 attention kernel。prefill 处理长输入，decode 反复读取历史 KV，prefix cache 尝试跳过重复 prefill。FlashAttention 主要解决 prefill 或大块 attention 的 I/O；paged attention 和 flash decoding 主要服务 decode。
+Prefill 更接近训练里的大块 dense attention，FlashAttention 的分块计算和 online softmax 很关键。Decode 则常见 \(L_q=1\)，但 \(L_k\) 等于历史上下文长度；每生成一个 token，都要读取越来越长的 KV cache。此时瓶颈更像“短 query 扫长历史”的显存带宽、page locality 和调度问题。
 
-### 7.1 一个成本对比
+KV cache 的容量账可以粗略写成：
 
-| 阶段 | 高频成本 | 常见优化 | 误用风险 |
-| --- | --- | --- | --- |
-| Prefill | 长序列 \(L^2\) attention、输入编码 | FlashAttention、chunked prefill、prefix cache | 只测 prefill 却推断 decode |
-| Decode | 每步读历史 KV、page lookup、launch | paged KV、KV quant、flash decoding | 只看 tokens/s 不看 P99 |
-| Prefix reuse | 重复上下文计算 | prefix cache、prompt canonicalization | 缓存命中率低时收益很小 |
-| 长尾请求 | KV 水位和调度 | 长短请求分池、上下文压缩 | 长请求拖累短请求 |
+\[
+M_{\text{KV}} = B\cdot T\cdot 2\cdot N_{\text{layer}}\cdot N_{\text{kv-head}}\cdot d_h\cdot b
+\]
 
-## Prefix Reuse 为什么会和长上下文 attention 绑定
+这里 \(B\) 是并发请求数，\(T\) 是缓存 token 数，2 表示 K 和 V，\(N_{\text{layer}}\) 是层数，\(N_{\text{kv-head}}\) 是 KV head 数，\(d_h\) 是 head 维度，\(b\) 是每个元素字节数。MQA/GQA 减少 \(N_{\text{kv-head}}\)，KV quantization 减少 \(b\)，PagedAttention 处理的是 KV cache 的页式分配、碎片和共享，prefix cache 处理的是重复前缀复用。
 
-长上下文最痛的一部分往往是重复 prefill。  
-如果很多请求共享同样长前缀，一遍遍重新做 prefill 就非常浪费，FlashAttention 再快也挡不住重复工作，prefix cache 因此变得非常重要。这说明长上下文系统的优化不只是 attention kernel，还包括能否避免重复计算、高效复用历史并安全共享页面。
+所以 Flash-Decoding、PagedAttention、chunked prefill、continuous batching、prefix cache、sliding window 和 KV quantization 不是同一种优化。它们分别落在 prefill 吞吐、decode 带宽、cache 分配、请求调度和上下文裁剪的不同位置。
 
-## Sliding Window 与 Chunked Attention 是什么角色
+## 更长上下文会走向并行和评测问题
 
-当完整长历史代价太高时，一些系统会只关注最近窗口、分块保留历史，或对历史做摘要和压缩。这类方法未必总是由 kernel 驱动，但会直接改变 kernel 设计，因为访问范围、KV cache 压力、page 访问模式和长距离依赖都会随之变化。
+当上下文从 32k 到 128k，再到百万级 token，单个 attention kernel 已经不够。长上下文系统至少还要处理五件事：位置编码能否外推；mask 或稀疏结构是否改变可见关系；KV cache 是否能承受长历史和动态请求；sequence dimension 是否需要跨设备切分；评测是否证明模型真的使用了长上下文。
 
-所以长上下文内核优化，最终常常和模型架构与上下文策略共同演化。
+RingAttention 代表的是第三张账：把序列块分到多张卡上，让 K/V block 沿设备环传递，以 blockwise attention 完成超长序列计算。
 
-## FlashAttention 的系统启发
+![RingAttention method](../assets/images/localized-remote/paper-deep-dives/world-models/ringattention/ringattention-method-原图.png){ width="760" }
 
-它留下的最重要启发并不是某个特定实现，而是一个更一般的原则：
+<small>图源：[Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889)。原图表达序列分块分布在多个设备上，并让 K/V block 沿设备环传递。这里用它说明：当上下文继续变长，问题会从单 kernel 的片上复用扩展到跨设备通信和 sequence parallel。</small>
 
-**attention 优化要先看数据流，再看数学表达。**
+长上下文能力也不能只看最大 context length。真正有用的证据包括 retrieval、multi-hop reasoning、代码仓库理解、长视频/多图输入、工具调用、抗干扰、TTFT、TPOT、P95/P99、吞吐和成本。上下文能塞进去，不等于模型会稳定使用。
 
-这条原则后来几乎扩展到了所有长上下文系统中，包括 KV cache 页面化、decode 特化、prefix reuse、量化 KV、context compression 和 paged serving。
+## 三种“快”不能混用
 
-## 直觉例子
+FlashAttention 的快，主要是 attention kernel 在给定 shape 上更少写 HBM、更好利用片上内存和 Tensor Core。PagedAttention 的快，主要是 serving runtime 在动态请求中更好管理 KV cache、碎片和 batching。RingAttention 的长，主要是把 sequence dimension 拆到多卡，突破单卡容量和序列长度限制。
 
-可以把长上下文 attention 看成处理一条越来越长的流水账。最早的做法像每次都把整本账本摊开重新核算；FlashAttention 像改成按页分批核算且不把所有中间草稿反复抄到总账本；而服务态的 paged attention 和 prefix cache，则更像把旧账页按档案盒管理，只把当前需要的部分拿出来核对。系统演化的方向，从来不是“把公式改得更复杂”，而是“让账本管理方式更适合真实工作流”。
+它们可以叠加，但不能互相替代。一个线上 LLM 可以用 FlashAttention 做 prefill，用 PagedAttention 管 KV cache，用 prefix cache 复用系统提示词；一个超长上下文训练任务则可能还需要 sequence parallel、activation checkpointing、重算和通信重叠。把这些都叫“长上下文优化”，就看不清真实瓶颈。
 
-## 本页结论
+## 最后的判断
 
-FlashAttention 及其后续演化，之所以在长上下文时代如此关键，是因为它揭示了一个核心事实：长上下文 attention 的真正主战场在 I/O 与内存系统，而不是孤立的矩阵公式。  
-从 FlashAttention 到 flash decoding、paged attention、prefix cache，再到更广义的长上下文系统设计，这条线展示的其实是一场从“算 attention”到“管理长期上下文”的系统迁移。
+FlashAttention 把 attention 从“显式矩阵流水线”改成“分块流式归一化”。它解决的是 dense attention 的中间矩阵 I/O 账。长上下文系统还要继续解决 decode KV cache、runtime 调度、跨设备 sequence parallel 和长上下文评测。读任何新方法时，先问它改的是 kernel、cache、runtime、并行，还是评测证据。
 
-## 工程收束
+## 外部精读
 
-FlashAttention 与长上下文要按 IO-aware attention、长序列 tile、paged KV、prefill/decode 分化来排查。最容易误判的是把 prefill 优化误用到 decode、只看理论复杂度、忽略 cache 生命周期；上线前要分开测 prefill 与 decode，对长序列建立专项基准，并按长度桶验收。
+- [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 IO-aware tiling、online softmax、exact attention 和 backward 重算。
+- [FlashAttention-2](https://arxiv.org/abs/2307.08691)：理解为什么减少 HBM 往返后，GPU 内部工作分配会成为下一层瓶颈。
+- [FlashAttention-3](https://arxiv.org/abs/2407.08608)：理解 Hopper、WGMMA、TMA、异步流水和低精度路径如何继续改变 attention kernel。
+- [Flash-Decoding for long-context inference](https://pytorch.org/blog/flash-decoding/)：理解 decode 阶段为什么是短 query、长 KV 的另一类问题。
+- [vLLM / PagedAttention](https://vllm.ai/blog/vllm)：理解 KV cache page/block、碎片、sharing 和 continuous batching。
+- [PagedAttention paper](https://arxiv.org/abs/2309.06180)：从论文证据看 high-throughput LLM serving 的内存管理。
+- [Ring Attention](https://arxiv.org/abs/2310.01889)：理解 sequence blocks、ring pass K/V 和 blockwise attention。
+- [DeepSpeed Ulysses](https://arxiv.org/abs/2309.14509)：理解 long-sequence training 中的 sequence parallel 与 all-to-all 通信。

@@ -2,10 +2,9 @@
 
 具身智能现在最迷人的地方，也是最容易误判的地方，是 demo 看起来越来越像“机器人真的懂了”。但系统化梳理后的提醒很清楚：真正的问题不只是模型会不会看图出动作，而是它有没有任务状态、会不会拒绝无效指令、能不能从失败中恢复，数据是不是太干净，评测是不是只看了最终状态。
 
-
 ![Hydraulic toy robot gripper](../assets/images/thinking-exploration/world-models-embodied-ai/hydraulic-gripper.jpg){ width="820" }
 
-<small>图源：[Wikimedia Commons: Hydraulic toy robot arm gripper.jpg](https://commons.wikimedia.org/wiki/File:Hydraulic_toy_robot_arm_gripper.jpg)。即使是简单夹爪，也能暴露具身智能的核心难点：动作不是文本输出，而是接触、力、姿态、误差和恢复的连续闭环。</small>
+<small>图源：[Wikimedia Commons: Hydraulic toy robot arm gripper.jpg](https://commons.wikimedia.org/wiki/File:Hydraulic_toy_robot_arm_gripper.jpg)。本站读法：即使是简单夹爪，也能暴露具身智能的核心难点；动作不是文本输出，而是接触、力、姿态、误差和恢复的连续闭环。</small>
 
 ## VLA 的第一阶段已经过去
 
@@ -125,7 +124,7 @@ GEN-0 的 7B 阈值观察未必能直接泛化到所有团队，但它提醒我�
 
 这条思考方向是对的：不要把具身智能写成论文名清单，而要关注数据、任务状态、动作接口、控制器、评测和回流。机器人不会因为模型会说话就变可靠；它会因为每一次失败都被系统吸收，下一次少犯一点错，而逐步变可靠。
 
-## 参考资料
+## 外部精读
 
 - [π0.5: a VLA with Open-World Generalization](https://www.pi.website/blog/pi05)。
 - [DROID Dataset](https://droid-dataset.github.io/)。

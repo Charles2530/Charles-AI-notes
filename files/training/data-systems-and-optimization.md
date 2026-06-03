@@ -2,10 +2,7 @@
 
 很多人把训练问题理解成“调优化器”。这只对了一小部分。在大模型训练里，优化器当然重要，但真正决定结果的往往是整套训练系统：数据如何清洗和混合，batch 如何组织，序列如何 packing，学习率如何调度，dataloader 能否持续喂满 GPU，checkpoint 与容错是否可靠。
 
-
 这页把“优化”和“数据系统”放在一起看，因为现实里它们几乎总是耦合的。更细的数据配方讨论见 [Scaling、课程学习与数据配比](scaling-curriculum-and-data-mixture.md)，运维侧见 [集群运维与实验治理](cluster-operations-and-experiment-management.md)。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 有效 Token 是核心资源
 
@@ -15,7 +12,6 @@
 \text{Throughput} = \frac{N_{\text{eff}}}{T_{\text{step}}}
 \]
 
-
 这里的 \(N_{\text{eff}}\) 不是名义 batch token，而是扣掉 padding、无效样本、mask 区域、坏样本之后真正参与学习的 token。训练系统真正优化的资源单位，往往不是“步数”，而是有效 token。
 
 低吞吐会直接压缩研究空间：实验次数更少、训练时长被迫缩短、消融规模变小，数据配比和阶段切换也更难充分探索；一旦失败，重跑成本会迅速变成研究瓶颈。
@@ -23,16 +19,6 @@
 因此吞吐不是单纯运维指标，而是训练方法学的一部分。
 
 ## 数据链路
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
-> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
->
-> 延伸阅读：[09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html) |
 
 一个完整训练数据系统通常从原始采集、解析清洗、去重过滤开始，经过质量打分、重采样、多源混合和分桶 packing，再进入 shard 分布式读取、在线监控与回流。每一层都会改变最终进入模型的 token 分布。
 
@@ -54,7 +40,6 @@ AdamW 仍是 Transformer 训练中最常见的默认选择，原因很现实：�
 \end{cases}
 \]
 
-
 Warmup 不只是数学上更平滑，也能让混合精度、分布式梯度统计、dataloader 和异步管线进入稳定区间。很多早期发散看起来像“优化器问题”，实际是过大的初始学习率叠加数据和系统抖动。
 
 评估优化配置时，至少要把 loss spike、grad norm、参数范数、学习率变化点、batch 调整、数据源曝光、吞吐和系统异常时间线放在一起看。单独看 loss，很容易把数据抖动或系统 stall 误判成优化器问题。
@@ -66,7 +51,6 @@ Warmup 不只是数学上更平滑，也能让混合精度、分布式梯度统�
 \[
 B_{\text{eff}} = B_{\text{micro}} \times N_{\text{accum}} \times N_{\text{data-parallel}}
 \]
-
 
 但在长文本、代码、多模态和长视频场景里，只看样本数 batch 不够。更重要的是 tokens per update、packed token utilization、mask 比例和不同长度桶的曝光。
 

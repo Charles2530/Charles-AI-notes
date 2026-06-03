@@ -6,22 +6,11 @@ paper_topic: 世界模型
 
 # LWM：百万 token 视频语言世界模型
 
-
 LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dreamer 那样训练一个能规划的 latent dynamics。它回答的是另一个世界模型问题：**如果把长视频、图像和文本都离散成 token，能不能训练一个 7B 自回归 Transformer 在 1M token 上下文里同时理解和生成这些序列？**
 
 这篇论文最值得放进世界模型专题，是因为它把“世界模型”推向了长上下文记忆和多模态序列建模方向：模型不只看几秒钟视频，而是可以在上万帧、一本书、一个小时视频里做检索、问答和生成。
 
 ## 论文位置
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
->
-> 延伸阅读：[04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html) |
 
 在世界模型谱系里，LWM 和 [DreamerV3](dreamerv3.md)、[LingBot-World](lingbot-world.md) 的位置不同。
 
@@ -82,8 +71,8 @@ text tokens + image tokens + video frame tokens
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 4。原图展示 LWM 是一个 autoregressive Transformer：视频帧经 VQGAN 转为 image tokens，文本经 BPE tokenizer 转为 text tokens，然后拼接进同一个 Transformer 预测下一个 token。</small>
 
-!!! note "图解：LWM 结构图的关键是统一 token 序列"
-    LWM 没有走“视觉编码器输出 embedding，再接 LLM”的常见路线，而是把文本、图像和视频都离散成 token，拼成同一个自回归序列。这样 text-to-image、video QA、image caption 和长文本任务都变成 next-token prediction 的不同格式。代价是 token 数暴涨：视频帧经过 VQGAN 后每帧有大量 image tokens，长视频很快到百万 token，所以 LWM 必须和 RingAttention 这类 exact long-context 训练方法绑定起来读。
+**LWM 结构图的关键是统一 token 序列。**
+LWM 没有走“视觉编码器输出 embedding，再接 LLM”的常见路线，而是把文本、图像和视频都离散成 token，拼成同一个自回归序列。这样 text-to-image、video QA、image caption 和长文本任务都变成 next-token prediction 的不同格式。代价是 token 数暴涨：视频帧经过 VQGAN 后每帧有大量 image tokens，长视频很快到百万 token，所以 LWM 必须和 RingAttention 这类 exact long-context 训练方法绑定起来读。
 
 LWM 从 LLaMA-2 7B 初始化，保留 decoder-only Transformer 形态。视觉侧使用 aMUSEd 的 VQGAN tokenizer，把图像或视频帧转成离散 token。
 
@@ -131,10 +120,10 @@ Stage II: Long-context vision-language model
 
 <small>图源：`Large World Model` 官方 GitHub/项目页，对应论文 Figure 3。原图展示 Stage 1 从 Books3 做 32K 到 1M context extension；Stage 2 混合图像、短视频、长视频和文本数据，总计约 495B text-vision tokens 与 33B text tokens。</small>
 
-!!! note "这张训练阶段图怎么读"
-    LWM 的训练图不是简单说“最后训练到 1M context”，而是在展示一种成本可控的 progressive curriculum。Stage I 先只做文本长上下文，把 LLaMA-2 7B 从 32K 逐步扩到 1M；Stage II 再把视觉 token 加进同一个自回归序列，从短图文、短视频开始，最后才进入 128K 和 1M 的长视频问答。
+**这张训练阶段图怎么读。**
+LWM 的训练图不是简单说“最后训练到 1M context”，而是在展示一种成本可控的 progressive curriculum。Stage I 先只做文本长上下文，把 LLaMA-2 7B 从 32K 逐步扩到 1M；Stage II 再把视觉 token 加进同一个自回归序列，从短图文、短视频开始，最后才进入 128K 和 1M 的长视频问答。
 
-    这个顺序很重要。每帧视频有 256 个离散视觉 token，长视频很快会变成百万 token 级别；如果一开始就用 1M 视频训练，单步成本太高，视觉语义也还没对齐。LWM 的做法是先在短上下文阶段大量学习视觉-文本对齐，再用少量长上下文阶段学习远程检索和长视频记忆。读这张图时要注意 token 预算分布：真正的大头在 1K/8K，1M 阶段更多是能力延展。
+这个顺序很重要。每帧视频有 256 个离散视觉 token，长视频很快会变成百万 token 级别；如果一开始就用 1M 视频训练，单步成本太高，视觉语义也还没对齐。LWM 的做法是先在短上下文阶段大量学习视觉-文本对齐，再用少量长上下文阶段学习远程检索和长视频记忆。读这张图时要注意 token 预算分布：真正的大头在 1K/8K，1M 阶段更多是能力延展。
 
 这个图最重要的是“progressive context extension”。直接在 1M token 上训练每一步都很贵，论文估算 7B 模型在 1M 序列上每个 gradient step 约 7 分钟。LWM 因此先学短上下文，再逐步拉长。
 
@@ -200,10 +189,10 @@ Stage II 从 LWM-Text-1M 初始化，再加入视觉 token。训练不是一次�
 
 <small>表源：`World Model on Million-Length Video And Language With Blockwise RingAttention`，Table 13。原论文表格要点：该表列出 LWM / LWM-Chat 的视觉语言训练阶段；大部分 token 和 step 集中在 `1K`、`8K` 短上下文视觉对齐，`128K` 和 `1M` 阶段主要用于教模型处理长视频上下文。</small>
 
-!!! note "为什么 1M 阶段只有很少 steps"
-    这张表里最反直觉的是：上下文越长，训练 token 和 step 反而越少。原因不是作者不重视 1M，而是 1M 序列的每个 step 太贵；如果把视觉语义、图文对齐、短视频动态都放到 1M 阶段从零学，成本会不可承受。
+**为什么 1M 阶段只有很少 steps。**
+这张表里最反直觉的是：上下文越长，训练 token 和 step 反而越少。原因不是作者不重视 1M，而是 1M 序列的每个 step 太贵；如果把视觉语义、图文对齐、短视频动态都放到 1M 阶段从零学，成本会不可承受。
 
-    因此 LWM 的 recipe 是分工式的：`1K` 主要学图像-文本和基本视觉 token 语言；`8K` 学短视频；`32K/128K` 学视频 QA 和较长上下文；`1M` 只做少量长视频上下文适配。这个表告诉我们，长上下文训练不一定意味着大部分算力都花在最长序列上，更常见的做法是短上下文密集学习、长上下文少量校准。
+因此 LWM 的 recipe 是分工式的：`1K` 主要学图像-文本和基本视觉 token 语言；`8K` 学短视频；`32K/128K` 学视频 QA 和较长上下文；`1M` 只做少量长视频上下文适配。这个表告诉我们，长上下文训练不一定意味着大部分算力都花在最长序列上，更常见的做法是短上下文密集学习、长上下文少量校准。
 
 这张表说明 LWM 的视觉训练主体算力集中在短上下文视觉对齐阶段：1K 和 8K 分别训练 363B、107B tokens；真正到 1M 阶段只有 0.4B tokens、50 steps。原因很现实：1M 训练用于教模型“能处理极长视频上下文”，不是从零学视觉语义。
 
@@ -260,9 +249,6 @@ RingAttention 的思想是把序列维度切到多个设备上。每个设备持
 论文报告 LWM 使用 TPUv4-1024，batch size 8M tokens，并在各训练阶段保持较好的 MFU。推理 1M 序列时至少需要 v4-128，并使用 32 tensor parallelism 和 4 sequence parallelism。
 
 ## 实验结论
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 ### 长视频理解
 
@@ -340,7 +326,7 @@ LWM 和 LingBot-World 都可以被叫作 world model，但目标完全不同。
 5. **训练和推理成本极高**：TPUv4-1024 训练、v4-128 级别推理说明这不是轻量路线。
 6. **生成质量不是视频扩散级别**：自回归离散视觉 token 可以生成视频，但视觉保真和运动质量不是这篇论文的强项。
 
-## 读完应该记住什么
+## 阅读结论
 
 LWM 最重要的启发是：世界模型不一定只能是 latent dynamics 或视频扩散模拟器。另一条路线是把世界经验压成极长的多模态 token 序列，让一个自回归 Transformer 同时学习书本、图像、短视频、长视频和对话。
 
@@ -352,9 +338,9 @@ LWM 最重要的启发是：世界模型不一定只能是 latent dynamics 或�
 4. masked sequence packing 和 loss weighting 是多模态长序列训练的必要条件；
 5. 没有 RingAttention，1M token exact attention 基本不可行。
 
-这一页最后回到三个验收点：方法上，LWM 的抓手是长视频/长文本上下文中的统一 token 建模，系统上依赖 RingAttention 一类长序列并行。实验上，长视频理解、检索和生成结果要按上下文长度分桶看。诊断上，长上下文记忆不等于 action-conditioned dynamics；世界模型项目还要补反事实动作和可控 rollout。
+LWM 的核心抓手是长视频/长文本上下文中的统一 token 建模，系统上依赖 RingAttention 一类长序列并行。读实验时要按上下文长度分桶看理解、检索和生成结果；长上下文记忆仍不等于 action-conditioned dynamics，世界模型项目还要补反事实动作和可控 rollout。
 
-## 参考资料
+## 外部精读
 
 1. Liu et al. [World Model on Million-Length Video And Language With Blockwise RingAttention](https://arxiv.org/abs/2402.08268). arXiv:2402.08268.
 2. 官方项目页：[Large World Models](https://largeworldmodel.github.io/lwm/).

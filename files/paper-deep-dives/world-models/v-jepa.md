@@ -6,7 +6,6 @@ paper_topic: 世界模型
 
 # V-JEPA：视频潜变量预测表征
 
-
 这篇论文把 JEPA 从静态图像扩展到视频。它的核心不是生成未来视频，而是训练一个视频 encoder：给定被遮挡的视频上下文，在 learned latent space 中预测被遮挡时空区域的目标表示。
 
 放在世界模型谱系里，V-JEPA 更适合被看作“表征型世界模型”的基础模块：它学习视频中的时空结构、运动线索和对象动态，但还没有动作条件、奖励预测、规划接口，也不会像 LingBot-World 那样直接生成可交互视频画面。
@@ -44,7 +43,6 @@ $$
 \text{masked video} \rightarrow \text{predict missing latent representation}
 $$
 
-
 也就是只用视频本身做自监督，但预测目标不是 raw pixels，而是 target encoder 产生的 latent features。
 
 这对世界模型有意义，因为世界模型真正需要的是可预测的状态表示，而不是每一帧的完整 RGB 细节。如果一个模型能从上下文预测被遮挡时空区域的抽象表示，它至少学到了某些关于对象、运动和场景连续性的动态规律。
@@ -65,10 +63,10 @@ target encoder 不直接反向传播，而是 context encoder 的 exponential mo
 
 <small>Figure source: `V-JEPA: Latent Video Prediction for Visual Representation Learning`, Figure 3. 原论文图注要点：V-JEPA 将视频 clip 展平成 token sequence；context encoder 只处理 masked sequence，predictor 接收 context output 和 learnable mask tokens，target encoder 处理完整 unmasked token sequence，最后用 \(L_1\) loss 回归对应 masked tokens 的 target encoder output。</small>
 
-!!! note "这张训练图怎么读"
-    V-JEPA 的图里最重要的是：模型预测的不是像素，而是 target encoder 的 latent representation。context encoder 只看未遮挡 token，target encoder 看完整视频，但 target encoder 通过 EMA 更新且 stop-gradient，不直接被当前 loss 反传。这避免了像素重建把容量浪费在纹理细节上，也避免了两个 encoder 一起塌缩成无意义常数。
+**这张训练图怎么读。**
+V-JEPA 的图里最重要的是：模型预测的不是像素，而是 target encoder 的 latent representation。context encoder 只看未遮挡 token，target encoder 看完整视频，但 target encoder 通过 EMA 更新且 stop-gradient，不直接被当前 loss 反传。这避免了像素重建把容量浪费在纹理细节上，也避免了两个 encoder 一起塌缩成无意义常数。
 
-    predictor 的任务是用少量 context tokens 和 mask tokens 预测被遮挡区域的表示。也就是说，V-JEPA 逼模型学习“什么内容在 latent space 中可预测”，而不是学习如何补每个像素。这就是它和视频 MAE / diffusion-style reconstruction 的关键差别：它更偏向表征型世界模型，而不是生成型视频模型。
+predictor 的任务是用少量 context tokens 和 mask tokens 预测被遮挡区域的表示。也就是说，V-JEPA 逼模型学习“什么内容在 latent space 中可预测”，而不是学习如何补每个像素。这就是它和视频 MAE / diffusion-style reconstruction 的关键差别：它更偏向表征型世界模型，而不是生成型视频模型。
 
 训练损失可以写成：
 
@@ -77,7 +75,6 @@ $$
 = \frac{1}{M}\sum_{k \in \{i_1,\ldots,i_M\}}
 \lVert \hat{s}_k - s_k \rVert_1
 $$
-
 
 其中 \(M\) 是 masked patches 数量，\(\hat{s}_k\) 是 predictor 输出，\(s_k\) 是 target encoder 对完整视频中第 \(k\) 个 token 的表示。注意这里不是像素级重建，而是 patch-level representation regression。
 
@@ -114,10 +111,10 @@ V-JEPA 使用两种 mask：
 
 <small>Figure source: `V-JEPA: Latent Video Prediction for Visual Representation Learning`, Figure 2. 原论文图注要点：V-JEPA 在预训练中使用 short-range masks 和 long-range masks 两种 3D Multi-Block masking 策略，促使模型捕捉视频中的不同类型特征。</small>
 
-!!! note "为什么 mask 设计这么重要"
-    视频里相邻帧和相邻 patch 冗余很强。如果 mask 太随机、太小，模型可以靠局部插值猜答案，学不到动作、对象状态和长程依赖。V-JEPA 用 short-range 和 long-range 两类 3D block masks，是为了同时制造局部缺失和大范围缺失：前者考验局部运动和细节一致性，后者迫使模型理解更全局的场景和对象关系。
+**为什么 mask 设计这么重要。**
+视频里相邻帧和相邻 patch 冗余很强。如果 mask 太随机、太小，模型可以靠局部插值猜答案，学不到动作、对象状态和长程依赖。V-JEPA 用 short-range 和 long-range 两类 3D block masks，是为了同时制造局部缺失和大范围缺失：前者考验局部运动和细节一致性，后者迫使模型理解更全局的场景和对象关系。
 
-    这里的 `3D` 也很关键。mask 沿时间和空间一起作用，被遮住的是时空块，而不是单帧图像 patch。这样 predictor 必须利用视频上下文推断被遮挡区域在一段时间内的表示，更接近 motion-aware representation learning。
+这里的 `3D` 也很关键。mask 沿时间和空间一起作用，被遮住的是时空块，而不是单帧图像 patch。这样 predictor 必须利用视频上下文推断被遮挡区域在一段时间内的表示，更接近 motion-aware representation learning。
 
 这种 mask 比普通 MAE 式随机遮挡更接近世界模型训练里的“局部不可见未来”。模型不能简单从临近像素复制答案，而要从上下文推断被遮挡区域可能对应的对象状态、运动趋势和场景关系。
 
@@ -134,7 +131,7 @@ V-JEPA 使用两种 mask：
 
 ![V-JEPA pretraining hyperparameters](../../assets/images/paper-deep-dives/world-models/v-jepa/table-5-pretraining-hyperparameters.png){ width="560" .atlas-figure-tall }
 
-<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 5。原论文表格要点：该表列出 V-JEPA 预训练的 data、masking、optimization、architecture 和 hardware 超参数，包括 `VideoMix2M`、`90000` iterations、EMA momentum 从 `0.998` 到 `1.0`、predictor depth `12`、predictor embedding dim `384`、`bfloat16` 和 `A100 80G`。</small>
+<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 5。原论文表格要点：该表列出 V-JEPA 预训练的 data、masking、optimization、architecture 和 hardware 超参数，包括 `VideoMix2M`、`90000` iterations、EMA momentum 从 `0.998` 到 `1.0`、predictor depth `12`、predictor embedding dim `384`、`bfloat16` 和 `A100 80G`。本站读法：这张表主要用于复现口径和训练预算判断，不要把它当成方法贡献图。</small>
 
 几个训练细节值得单独记：
 
@@ -169,14 +166,12 @@ $$
 p(v_{t+1:t+H} \mid v_{\le t}, a_{t:t+H-1}, c)
 $$
 
-
 V-JEPA 训练的是：
 
 $$
 \hat{s}_{\text{masked}} =
 P_\phi(E_\theta(v_{\text{visible}}), m)
 $$
-
 
 其中 \(s_{\text{masked}}\) 是 target encoder 对完整视频中 masked region 的 latent representation。
 
@@ -205,16 +200,13 @@ V-JEPA-style video pretraining
 
 ## 实验结论
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 论文采用 frozen evaluation：预训练 encoder 冻结，只训练轻量 probe。这样做是为了评估表征本身，而不是让全模型通过下游 fine-tuning 适配某个任务。
 
 在视频任务上，V-JEPA 的核心结论是：视频 latent prediction 对 motion understanding 很有帮助，尤其在 Something-Something-v2 这类动作依赖时序和物体运动关系的任务上，比只用静态图像预训练的 DINOv2、OpenCLIP 更强。
 
 ![Frozen evaluation on video datasets](../../assets/images/paper-deep-dives/world-models/v-jepa/table-1-video-frozen-eval.png){ width="920" }
 
-<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 1。原论文表格要点：该表比较 image/video/text 预训练方法在 K400、SSv2 和 AVA 上的 frozen attentive probe 结果；V-JEPA 在 video-pretrained baselines 中整体表现最好，特别是在 SSv2 上体现出视频预训练对 motion understanding 的优势。</small>
+<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 1。原论文表格要点：该表比较 image/video/text 预训练方法在 K400、SSv2 和 AVA 上的 frozen attentive probe 结果；V-JEPA 在 video-pretrained baselines 中整体表现最好，特别是在 SSv2 上体现出视频预训练对 motion understanding 的优势。本站读法：重点看 SSv2，而不是只看 K400；SSv2 更依赖物体交互和时序，因此更能检验 latent video prediction 是否学到动态表征。</small>
 
 几个关键数字：
 
@@ -227,7 +219,7 @@ V-JEPA-style video pretraining
 
 ![Ablating pretraining distribution](../../assets/images/paper-deep-dives/world-models/v-jepa/table-4-pretraining-distribution.png){ width="900" }
 
-<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 4。原论文表格要点：左侧比较 image vs. video pretraining；右侧在固定计算预算下扩大 video pretraining dataset，V-JEPA 在 SSv2 和 IN1K 上随数据规模增加而持续提升。</small>
+<small>表源：`V-JEPA: Latent Video Prediction for Visual Representation Learning`，Table 4。原论文表格要点：左侧比较 image vs. video pretraining；右侧在固定计算预算下扩大 video pretraining dataset，V-JEPA 在 SSv2 和 IN1K 上随数据规模增加而持续提升。本站读法：这张表支撑“视频表征需要视频数据分布”，但不能直接外推成任意互联网视频都会提升世界模型能力。</small>
 
 这个结论对世界模型训练很重要：如果目标是学习动态世界表示，视频数据分布不能只追求数量，还要覆盖足够多的运动、对象交互和场景变化。
 
@@ -251,13 +243,11 @@ $$
 s_t, a_t \rightarrow s_{t+1}, r_{t+1}
 $$
 
-
 它回答的是：
 
 $$
 v_{\text{visible}} \rightarrow s_{\text{masked}}
 $$
-
 
 这两者差别很大。前者是 agent 可以拿来规划的 action-conditioned dynamics，后者是视频表征预训练。
 
@@ -265,4 +255,4 @@ $$
 
 最后，V-JEPA 的实验主要证明“latent video prediction 能学到强视频表征”。把它迁移到机器人、自动驾驶或游戏世界模型时，还需要额外验证表示是否保留任务关键状态，例如接触、可操作物体、小目标、障碍物、风险事件和长期空间记忆。
 
-这一页最后回到三个验收点：方法上，V-JEPA 用可见视频块预测 masked latent target，EMA target encoder 和 stop-gradient 是防 collapse 的核心。实验上，masking ablation、frozen evaluation 和 pretraining distribution 表要一起读。诊断上，它证明 latent video prediction 能学强表征，但没有 action/reward，所以只是世界模型状态 encoder 候选。
+V-JEPA 的关键证据是 latent video prediction 能学到强视频表征：可见块预测 masked target，EMA target encoder 和 stop-gradient 防 collapse，masking ablation、frozen evaluation 和 pretraining distribution 表要连读。它没有 action/reward，因此更适合作为世界模型状态 encoder 候选，不是完整 action-conditioned simulator。

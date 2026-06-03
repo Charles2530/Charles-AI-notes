@@ -2,7 +2,6 @@
 
 量化在 LLM 上已相对成熟，但到了 VLM、视频模型、VLA 和具身系统，问题会明显复杂化。原因不只是模型更大，而是输入分布更杂、模块更多、对细粒度结构和时序稳定性的要求更高。一个在文本问答上还能接受的量化误差，到了文档理解、UI grounding 或机器人动作生成中，可能就会被放大成明显错误。因此，多模态与 VLA 模型量化需要比“压参数”更细的思路。
 
-
 ## 为什么多模态模型更敏感
 
 多模态系统通常由视觉编码器、文本编码器或 LLM 主干、跨模态投影层、OCR / grounding / 分类头等结构模块，以及动作头或控制头组成。
@@ -22,7 +21,6 @@
 $$
 h_v' = W_p h_v.
 $$
-
 
 这个投影层若量化误差较大，可能直接损坏模态对齐，表现为图像信息进入 LLM 后被弱化、OCR 细节和版面关系丢失、grounding 位置偏差增大。
 
@@ -46,28 +44,15 @@ $$
 \hat{a}_t = f_\theta(o_t, l, h_t),
 $$
 
-
 若量化后参数变为 $\tilde{\theta}$，误差可能在闭环中累积：
 
 $$
 \delta a_t = f_{\tilde{\theta}}(o_t,l,h_t) - f_\theta(o_t,l,h_t).
 $$
 
-
 短期看 $\delta a_t$ 很小，但经过动力学滚动后，可能导致状态显著偏离。
 
 ## 时序一致性比单步精度更重要
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
 
 对视频 VLM 和 VLA 而言，量化评估不能只看单帧或单步，而要检查多帧特征是否稳定、长序列动作是否漂移、恢复策略是否仍有效、低比特是否增加抖动和不确定性。
 
@@ -113,7 +98,6 @@ BF16 存储一条历史 latent 约为：
 \[
 64\times256\times1024\times2 \approx 33.6MB
 \]
-
 
 这行可以先拆成 token 数：`64` 帧乘每帧 `256` 个 latent token，等于 `16,384` 个历史 token；每个 token 是 `1024` 维 BF16，所以是 \(16,384\times1024\times2\) bytes。它只是在算一条起点历史的 latent cache，不含后续 Transformer 的 KV cache、decoder 临时激活、候选动作分支和 dataloader 预取。
 
@@ -185,7 +169,7 @@ BF16 存储一条历史 latent 约为：
 
 多模态量化必须使用专项校准集，不可只靠通用文本或图像数据。更稳的流程是先做模块级敏感度分析，找到必须高精保留的层；对 VLA 加入长时闭环评测，而不是只看离线动作误差；把跨模态投影、grounding、结构头和动作头列为重点保护对象。若系统面向高风险业务，宁可保守混合精度，也不要盲目追最小比特。
 
-## 本页结论
+## 阅读结论
 
 多模态与 VLA 模型量化的难点，不是参数更多，而是误差会穿过模态对齐、结构理解和控制闭环，被放大成真实任务失败。只有把量化看成一个跨模块、跨时序、跨任务的系统设计问题，才能在节省资源的同时维持真正可用的能力。
 

@@ -2,14 +2,11 @@
 
 训练里的 attention kernel 和在线服务里的 attention kernel，看起来在算同一个公式，实际上往往面对完全不同的系统条件。训练时更像规则的大矩阵运算；服务时尤其是 decode 阶段，更像一个在动态批处理、KV 页面管理、长短请求混杂和 tail latency 约束下运作的内存系统。
 
-
 因此“服务态 attention”最好被单独拿出来看。它的核心问题不只是 attention 算得快不快，而是 KV cache 如何布局、page table 如何组织、prefill 和 decode 是否走同一类 kernel、MQA/GQA 对读写模式有什么影响，以及 prefix reuse 和 paged attention 如何互相作用。
 
-!!! note "初学者先抓住"
+**初学者先抓住。**
 
-    服务态 attention 的重点是动态内存系统。Prefill 像大块规则计算，decode 像每步读取不断变化的 KV 历史；KV page、prefix cache、MQA/GQA 和连续批处理会一起决定尾延迟。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
+服务态 attention 的重点是动态内存系统。Prefill 像大块规则计算，decode 像每步读取不断变化的 KV 历史；KV page、prefix cache、MQA/GQA 和连续批处理会一起决定尾延迟。
 
 ## 为什么服务态 attention 要单独讲
 
@@ -18,17 +15,6 @@
 在这种条件下，即使 attention 的数学公式完全一样，最优 kernel 设计也会显著不同。
 
 ## Prefill Attention 与 Decode Attention 的差异
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
->
-> 延伸阅读：[17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html) |
-| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 | 阶段 | 计算形态 | 主要瓶颈 | kernel 重点 |
 | --- | --- | --- | --- |
@@ -145,12 +131,11 @@ Decode 每步只生成极少数 token，因此很多操作开始呈现“太小�
 
 服务态 attention 可以想成图书馆里的阅览和存档系统。Prefill 像一次性把整本书扫描入库，decode 像读者不断来借阅之前存下的章节。PagedAttention 就像把书分成标准档案盒管理，prefix cache 像把热门前几章提前复印好共享。真正的难点，不只是扫描速度，而是如何让不同读者以最低冲突成本访问同一批资料，同时不把档案室塞爆。
 
-## 本页结论
+## 阅读结论
 
 服务态 attention 与 KV kernel 的关键，不在于把 attention 数学公式算出来，而在于把长时历史、页面管理、动态批处理和内存局部性组织成一条稳定高效的数据路径。也正因为如此，它已经不只是 kernel 问题，而是 attention kernel、KV cache、prefix 复用、调度和模型结构共同构成的系统问题。
 
 理解这一点，才能真正看懂为什么现代 LLM serving 框架会把 `FlashAttention`、`PagedAttention`、`KV paging`、`prefix cache` 和 `continuous batching` 放在同一张系统图里。
-
 
 ## 工程排查
 

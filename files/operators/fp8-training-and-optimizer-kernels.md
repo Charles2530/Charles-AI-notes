@@ -2,23 +2,9 @@
 
 低精度话题里，`FP8` 和优化器 kernel 值得单独拿出来讲，因为它们主要影响的是训练主路径，而不是单纯的推理压缩。权重量化更多关注部署态显存和带宽；而 `FP8` 训练与 fused optimizer kernel 关心的是：在大规模训练中，如何把前向、反向、梯度、主权重、优化器状态和数值缩放组织成一套既快又稳的执行路径。
 
-
 这页建议和 [低比特训练与数值格式](../training/low-bit-training-and-numerics.md)、[分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 一起读。训练页解释数值格式和稳定性边界，分布式页解释状态切分与恢复，本页则关注这些约束落到 kernel、scale metadata 和 optimizer step 时会怎样影响吞吐。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 为什么 FP8 训练和推理量化不是一回事
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
 
 推理量化更多是在“压缩已有模型”；  
 FP8 训练则是在“用更低精度直接完成学习过程”。  
@@ -111,7 +97,7 @@ AdamW 更新一个参数通常至少要读写：参数、梯度、一阶动量�
 
 如果把训练看成一条长期运转的工厂流水线，那么 FP8 训练不只是把原材料改成更轻的包装，而是要求整个仓储、计量、称重和装配流程都能适应更轻、更敏感的零件。优化器 kernel 则像最后的总装和校准工位，如果这一步仍然非常笨重，前面节省下来的吞吐也会被吃掉。
 
-## 本页结论
+## 阅读结论
 
 FP8 与优化器 kernel 的主题，核心不是“更低精度”，而是“训练主路径是否能以更低精度仍然稳定运行”。这要求 kernel、scale、优化器状态、mixed precision 策略和分布式训练框架一起工作。  
 因此它是训练系统能力的一部分，而不只是单个算子技巧。

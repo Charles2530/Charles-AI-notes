@@ -6,7 +6,6 @@ paper_topic: 扩散模型
 
 # AnyFlow：任意步视频扩散蒸馏
 
-
 这篇论文的核心价值是把视频扩散蒸馏从“固定少数采样步好用”推进到“**同一个蒸馏模型可以随测试时采样步数变多而继续变好**”。它要解决的不是单纯 4-step 视频生成，而是 consistency distillation 的一个结构性问题：很多 consistency / endpoint mapping 学出来的学生在 4 steps 很强，但测试时给 8、16、32 steps 反而退化。
 
 AnyFlow 的答案是：不要只学 \(z_t \to z_0\)，而是学任意时间区间的 **flow map transition**：
@@ -15,7 +14,6 @@ AnyFlow 的答案是：不要只学 \(z_t \to z_0\)，而是学任意时间区�
 \mathbf f_\theta:(\mathbf z_t,t,r)\mapsto \mathbf z_r,
 \qquad 1\ge t\ge r\ge 0.
 \]
-
 
 这样学生模型既能跨大步做快速预览，也能跨小步做细致 refinement；再用 on-policy flow map distillation 修正学生自己 rollout 时的误差。
 
@@ -51,7 +49,6 @@ Consistency distillation 的问题是，它常把目标改写成 endpoint projec
 \mathbf z_t \to \mathbf z_0.
 \]
 
-
 这对 2-step / 4-step 很有效，因为每一步都像在做一次强投影。但当测试时采样步数变多，模型会反复执行“投到 \(z_0\)，再 re-noise 到中间状态”的路径，采样轨迹可能偏离原来的 PF-ODE。结果就是：更多 steps 没有带来更好结果，甚至让视频质量下降。
 
 AnyFlow 把目标改成两时间点之间的 transition：
@@ -59,7 +56,6 @@ AnyFlow 把目标改成两时间点之间的 transition：
 \[
 \mathbf z_t \to \mathbf z_r.
 \]
-
 
 这表达两种行为：
 
@@ -72,10 +68,10 @@ AnyFlow 把目标改成两时间点之间的 transition：
 
 <small>图源：`AnyFlow`，Figure 1(a)。原论文图意：AnyFlow 在 causal 和 bidirectional 设置下随 sample steps 增加保持或提升 VBench score；Self-Forcing / rCM 等 consistency-based 方法在更多 steps 下会下降；teacher model 则体现原始 flow-matching 采样的 test-time scaling。</small>
 
-!!! note "这张图怎么读"
-    左图比较 causal AnyFlow 与 Self-Forcing：Self-Forcing 从 4 steps 后开始下降，而 AnyFlow 继续上升。中图比较 bidirectional AnyFlow 与 rCM：rCM 随 steps 增加明显退化。右图比较 AnyFlow 与原始 teacher：AnyFlow 在少步区间大幅补强，同时仍保留“多给 steps 会更好”的趋势。
+**Test-time scaling 图看额外步数是否仍有收益。**
+左图比较 causal AnyFlow 与 Self-Forcing：Self-Forcing 从 4 steps 后开始下降，而 AnyFlow 继续上升。中图比较 bidirectional AnyFlow 与 rCM：rCM 随 steps 增加明显退化。右图比较 AnyFlow 与原始 teacher：AnyFlow 在少步区间大幅补强，同时仍保留“多给 steps 会更好”的趋势。
 
-    这张图支撑的不是“AnyFlow 永远最高”，而是一个更具体的 claim：**蒸馏后的学生仍能使用额外测试时计算预算**。这对生产系统很重要，因为用户常需要 4-step 快速预览和 16/32-step 最终渲染共用同一个模型。
+这张图支撑的不是“AnyFlow 永远最高”，而是一个更具体的 claim：**蒸馏后的学生仍能使用额外测试时计算预算**。这对生产系统很重要，因为用户常需要 4-step 快速预览和 16/32-step 最终渲染共用同一个模型。
 
 ## Flow Map 是什么
 
@@ -85,13 +81,11 @@ AnyFlow 把目标改成两时间点之间的 transition：
 \frac{d\mathbf z_t}{dt}=\mathbf v(\mathbf z_t,t).
 \]
 
-
 精确 flow map \(\Phi_{r\leftarrow t}\) 表示把状态从 \(t\) 传送到 \(r\)：
 
 \[
 \Phi_{r\leftarrow t}(\mathbf z_t)=\mathbf z_r.
 \]
-
 
 它有两个自然性质：
 
@@ -106,7 +100,6 @@ AnyFlow 用神经网络近似这个 flow map：
 \mathbf f_\theta(\mathbf z_t,t,r)\approx \mathbf z_r.
 \]
 
-
 和普通 denoiser 或 consistency model 的区别在于，模型输入里同时有 \(t\) 和 \(r\)。所以它不是只回答“从当前噪声去到干净样本”，而是回答“从当前时间去到任意更低噪声时间”。这就是 any-step 的根。
 
 ## 蒸馏范式对比
@@ -115,10 +108,10 @@ AnyFlow 用神经网络近似这个 flow map：
 
 <small>图源：`AnyFlow`，Figure 2。原论文图意：上半部分展示 consistency distillation 学 endpoint consistency mapping，并在 backward simulation 中需要 re-noise state；下半部分展示 flow map distillation 学 \(z_t\to z_r\) transition，并用 shortcut transition 分解 Euler sampling trajectory。</small>
 
-!!! note "这张图怎么读"
-    蓝色 consistency 路线的核心是 endpoint：每次都往 \(z_0\) 投影，再通过 re-noise 回到中间状态。这让少步效果强，但多步时轨迹不再像原始 ODE refinement。
+**蒸馏范式图要分清 endpoint 和 transition。**
+蓝色 consistency 路线的核心是 endpoint：每次都往 \(z_0\) 投影，再通过 re-noise 回到中间状态。这让少步效果强，但多步时轨迹不再像原始 ODE refinement。
 
-    红色 flow map 路线的核心是 transition：forward training 学 \(z_t\to z_r\)，backward simulation 也沿 Euler trajectory 做区间分解。它不是每一步都假装已经到终点，而是让学生保留“从一个噪声水平过渡到另一个噪声水平”的局部能力。
+红色 flow map 路线的核心是 transition：forward training 学 \(z_t\to z_r\)，backward simulation 也沿 Euler trajectory 做区间分解。它不是每一步都假装已经到终点，而是让学生保留“从一个噪声水平过渡到另一个噪声水平”的局部能力。
 
 论文 Table 1 把几类视频扩散蒸馏方法放在同一个坐标里。这里保留英文表头和原术语：
 
@@ -139,10 +132,10 @@ AnyFlow 用神经网络近似这个 flow map：
 
 <small>图源：`AnyFlow`，Figure 3。原论文图意：AnyFlow 由 forward flow map training 和 on-policy flow map distillation 两阶段组成；student 使用 LoRA 训练，teacher 参数冻结；on-policy 阶段通过 flow map backward simulation 得到学生 rollout，再用 teacher real score 与 fake score 的差做 distribution matching。</small>
 
-!!! note "这张 pipeline 图怎么读"
-    左侧说明系统对象：红色是学生模型，灰色是 teacher，雪花表示固定参数，红色 LoRA 标记表示只训练低秩适配参数。右上是 Stage 1：用合成数据做 forward flow map training。右下是 Stage 2：学生自己 rollout 到 \(\hat z_0\)，再 re-noise 到 \(z_{t'}\)，用 teacher / fake score difference 做 DMD-style on-policy distillation。
+**这张 pipeline 图怎么读。**
+左侧说明系统对象：红色是学生模型，灰色是 teacher，雪花表示固定参数，红色 LoRA 标记表示只训练低秩适配参数。右上是 Stage 1：用合成数据做 forward flow map training。右下是 Stage 2：学生自己 rollout 到 \(\hat z_0\)，再 re-noise 到 \(z_{t'}\)，用 teacher / fake score difference 做 DMD-style on-policy distillation。
 
-    这张图最重要的信息是“LoRA 后训练 + frozen teacher + on-policy rollout”三者同时存在。AnyFlow 不是从零训练视频模型，也不是只做 supervised teacher trajectory fitting；它先让学生学会 flow map，再让学生在自己的测试时状态分布上被 teacher 纠偏。
+这张图最重要的信息是“LoRA 后训练 + frozen teacher + on-policy rollout”三者同时存在。AnyFlow 不是从零训练视频模型，也不是只做 supervised teacher trajectory fitting；它先让学生学会 flow map，再让学生在自己的测试时状态分布上被 teacher 纠偏。
 
 可以把整条方法压成：
 
@@ -164,7 +157,6 @@ AnyFlow 采用 MeanFlow 风格的 flow map 训练。模型不是直接预测 \(\
 \mathbf z_t-(t-r)\mathbf u_\theta(\mathbf z_t,r,t).
 \]
 
-
 训练目标是：
 
 \[
@@ -180,7 +172,6 @@ AnyFlow 采用 MeanFlow 风格的 flow map 训练。模型不是直接预测 \(\
 \right],
 \]
 
-
 其中 \(\operatorname{sg}\) 是 stop-gradient。论文重点不在重新发明 MeanFlow，而是在视频扩散后训练里补了几个很实际的 recipe。
 
 ### Interpolated Timestep Conditioning
@@ -192,7 +183,6 @@ AnyFlow 改用插值形式：
 \[
 g\cdot\operatorname{emb}(t)+(1-g)\cdot\operatorname{emb}'(r),
 \]
-
 
 其中 \(\operatorname{emb}'\) 从预训练的 \(\operatorname{emb}\) 初始化，论文实验固定 \(g=0.25\)。这个设计有两个作用：
 
@@ -235,7 +225,6 @@ w_{t,r} =
 \end{cases}
 \]
 
-
 这一步是为了避免远距离 transition 的梯度把预训练好的局部速度场冲坏。
 
 ### Guidance-Fused Training
@@ -251,7 +240,6 @@ AnyFlow 把 CFG 融进训练，使测试时可以省掉 conditional / unconditio
 (1-g)\operatorname{sg}(\mathbf u_{\varnothing})
 \right),
 \]
-
 
 其中 \(\mathbf u_c\) 是条件预测，\(\mathbf u_{\varnothing}\) 是空条件预测。注意这里的 \(g\) 是 CFG scale，不要和前面 timestep embedding interpolation 里的 \(g=0.25\) 混淆。
 
@@ -272,10 +260,10 @@ Stage 1 学到的是一个能做任意区间 transition 的学生，但它仍可
 
 <small>图源：`AnyFlow`，Figure 4。原论文图意：consistency backward simulation 需要沿 consistency trajectory 做 re-noise，且常用 truncated gradient 控制成本；flow map backward simulation 把 Euler sampling trajectory 拆成 shortcut segments，用 learned flow map 高效模拟不同 step budgets。</small>
 
-!!! note "Flow map backward simulation 怎么读"
-    假设目标测试预算是 \(N\) steps。AnyFlow 先在采样轨迹上选中一个中间 timestep \(t\)，再令 \(r=t-T/N\)。完整 \(T\to0\) rollout 被拆成三段：\(T\to t\)、\(t\to r\)、\(r\to0\)。第一段和最后一段用 flow map shortcut 跳过，中间 \(t\to r\) 是目标 transition。
+**Flow map backward simulation 怎么读。**
+假设目标测试预算是 \(N\) steps。AnyFlow 先在采样轨迹上选中一个中间 timestep \(t\)，再令 \(r=t-T/N\)。完整 \(T\to0\) rollout 被拆成三段：\(T\to t\)、\(t\to r\)、\(r\to0\)。第一段和最后一段用 flow map shortcut 跳过，中间 \(t\to r\) 是目标 transition。
 
-    这个设计让训练可以模拟不同 \(N\) 的测试轨迹，但计算成本不随 \(N\) 线性增长。它也解释了为什么 Table 训练成本里 4-step flow map simulation 比 consistency 略贵，但 16-step 时明显更便宜。
+这个设计让训练可以模拟不同 \(N\) 的测试轨迹，但计算成本不随 \(N\) 线性增长。它也解释了为什么 Table 训练成本里 4-step flow map simulation 比 consistency 略贵，但 16-step 时明显更便宜。
 
 DMD 部分仍然沿用 real / fake score 差分：
 
@@ -293,7 +281,6 @@ s_{\text{fake}}(\mathbf z_t,t)
 \frac{\partial\mathbf f_\theta(\mathbf z)}{\partial\theta}
 \right].
 \]
-
 
 其中 \(s_{\text{real}}\) 来自强 teacher，\(s_{\text{fake}}\) 学当前学生生成分布。这个目标的意义是：不是让学生逐点复刻 teacher 的采样路径，而是把学生 rollout 分布推回 teacher / data 的高密度区域。
 
@@ -367,9 +354,6 @@ AnyFlow 同时支持 bidirectional video diffusion 和 causal video diffusion。
 
 ## 实验结果
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 T2V 使用 VBench，报告 Quality、Semantic 和 Total。I2V 使用 VBench-I2V，报告 Quality、I2V 和 Total。论文为了公平比较，对 Wan2.1 base、Self-Forcing、rCM 以及若干 community 14B causal models 使用官方 VBench augmented prompts 重新评测；表中 \(\dagger\) 表示 re-evaluate under the same setting。
 
 这点要注意：AnyFlow 对关键近邻模型做了统一协议重评测，但 VBench 仍是自动评测，不能替代用户偏好、真实工作流或世界模型闭环能力。
@@ -439,8 +423,8 @@ AnyFlow 还强调一个和很多蒸馏模型不同的性质：它保留了细粒
 
 <small>图源：`AnyFlow`，Figure 6。原论文图意：AnyFlow-FAR-Wan2.1-1.3B 在机器人和驾驶等 specialized domains 上继续训练后，identity preservation 和 trajectory accuracy 都有改善。</small>
 
-!!! note "下游训练图怎么读"
-    这部分证据目前更像官方 qualitative demonstration，而不是完整 benchmark。它支撑的结论是：AnyFlow 的 flow map 形式没有把模型变成只能固定采样的死学生，仍可做领域继续训练。它不能单独证明下游小数据训练一定稳定，也不能证明机器人或自动驾驶闭环收益。
+**下游训练图怎么读。**
+这部分证据目前更像官方 qualitative demonstration，而不是完整 benchmark。它支撑的结论是：AnyFlow 的 flow map 形式没有把模型变成只能固定采样的死学生，仍可做领域继续训练。它不能单独证明下游小数据训练一定稳定，也不能证明机器人或自动驾驶闭环收益。
 
 对工程而言，这个性质很有吸引力：如果少步模型仍能继续训练，品牌、机器人、驾驶等特殊域就不必每次都重新蒸馏。
 
@@ -488,7 +472,7 @@ Stage 2 不是在 teacher-forced 状态上训练，而是让学生自己 rollout
 6. **Any-step 不等于任意长上下文**：采样步数弹性不等于视频时长、记忆窗口或物理状态长期一致性都解决。
 7. **4-step 成本收益和 16/32-step 成本收益不同**：训练成本表显示 flow map backward simulation 在 4 steps 下略贵，真正优势在更高 step simulation。
 
-## 读完应该记住什么
+## 阅读结论
 
 AnyFlow 的关键贡献是把视频扩散蒸馏目标从 endpoint consistency 改成 flow map transition，让蒸馏学生不再被固定 NFE 锁死。它通过两阶段训练实现这一点：
 
@@ -501,7 +485,7 @@ on-policy flow map distillation
 
 工程上最值得带走的是：**少步学生也要能把额外采样预算转化成更好质量。**
 
-## 参考资料
+## 外部精读
 
 1. Gu et al. [AnyFlow: Any-Step Video Diffusion Model with On-Policy Flow Map Distillation](https://arxiv.org/abs/2605.13724). arXiv:2605.13724.
 2. 官方项目页：[AnyFlow](https://nvlabs.github.io/AnyFlow/).

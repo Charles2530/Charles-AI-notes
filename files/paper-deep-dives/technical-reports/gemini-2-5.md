@@ -6,7 +6,6 @@ paper_topic: 技术报告
 
 # Gemini 2.5：动态 Thinking 与长上下文 Agent
 
-
 Gemini 2.5 这份报告的核心不是单个 benchmark 第一，而是展示 Google 如何把 **原生多模态 MoE 架构、跨数据中心 TPU 训练基础设施、teacher distillation、长上下文、工具使用和 RL 驱动的 dynamic thinking** 组合成一条完整的前沿闭源模型路线。
 
 | Dimension | Gemini 2.5 |
@@ -20,21 +19,10 @@ Gemini 2.5 这份报告的核心不是单个 benchmark 第一，而是展示 Goo
 | Knowledge Cutoff | January 2025 |
 | Training Stack | TPUv5p, Pathways, JAX/PAX, multi-pod synchronous training |
 
-!!! warning "阅读边界"
-    这是闭源模型技术报告。报告披露了系统设计、训练阶段、基础设施和大量评测，但没有公开参数规模、精确数据配比、完整优化器超参和权重。因此它适合学习大模型系统路线和训练组织方式，不适合当作可完全复现的 recipe。
+**阅读边界。**
+这是闭源模型技术报告。报告披露了系统设计、训练阶段、基础设施和大量评测，但没有公开参数规模、精确数据配比、完整优化器超参和权重。因此它适合学习大模型系统路线和训练组织方式，不适合当作可完全复现的 recipe。
 
 ## 论文位置
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
->
-> 延伸阅读：[05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《05. Communication Topologies | 通信拓扑与分布式基石 (Communication & Distributed Topology)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/05_Communication_Topologies.html) |
-| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
 
 Gemini 2.5 可以放在 Gemini 1.5 / 2.0 之后看。Gemini 1.5 的代表特征是长上下文和多模态输入，Gemini 2.0 强调更强的 agentic / tool-use 能力，Gemini 2.5 则把“模型会不会思考、思考多久、何时使用工具、如何处理长视频和长上下文”推到更中心的位置。
 
@@ -56,8 +44,8 @@ Gemini 2.0 native multimodal sparse MoE
 
 <small>图源：`Gemini 2.5` technical report，Figure 1，ar5iv 从 arXiv source 渲染的原图。原图展示 Gemini 2.X 不同模型在 cost / price 与 internal quality aggregate 之间的 Pareto 关系，强调 2.5 Pro、2.5 Flash 和 2.5 Flash-Lite 覆盖不同成本和质量点。</small>
 
-!!! note "这张 Pareto 图怎么读"
-    这张图的重点不是某个公开 benchmark，而是模型家族设计。Pro 是高质量端，Flash 是质量、速度和成本折中，Flash-Lite 是低成本高吞吐端。技术报告把 2.5 做成系列，而不是只发布一个最强模型，说明训练和后训练目标已经被产品形态反向约束：同一代能力要同时服务深度推理、低延迟对话、工具调用和大规模在线请求。
+**这张 Pareto 图怎么读。**
+这张图的重点不是某个公开 benchmark，而是模型家族设计。Pro 是高质量端，Flash 是质量、速度和成本折中，Flash-Lite 是低成本高吞吐端。技术报告把 2.5 做成系列，而不是只发布一个最强模型，说明训练和后训练目标已经被产品形态反向约束：同一代能力要同时服务深度推理、低延迟对话、工具调用和大规模在线请求。
 
 ## 模型家族与接口
 
@@ -107,8 +95,8 @@ Gemini 2.0 native multimodal sparse MoE
 | Data processing | filtering, deduplication, quality and safety filters | 训练收益依赖数据治理，而不只是 token 数 |
 | Knowledge cutoff | January 2025 | 对事实问答、搜索工具和 benchmark 解读都很重要 |
 
-!!! note "训练细节里最关键的不是参数量"
-    Gemini 2.5 没有披露参数规模，但报告反复强调数据质量、蒸馏、后训练和基础设施。这说明闭源前沿模型的技术壁垒已经不只是“模型有多大”，而是 teacher 模型、数据筛选、后训练环境、自动评测、RL 稳定性和跨数据中心训练系统一起构成的能力栈。
+**训练细节里最关键的不是参数量。**
+Gemini 2.5 没有披露参数规模，但报告反复强调数据质量、蒸馏、后训练和基础设施。这说明闭源前沿模型的技术壁垒已经不只是“模型有多大”，而是 teacher 模型、数据筛选、后训练环境、自动评测、RL 稳定性和跨数据中心训练系统一起构成的能力栈。
 
 ## 训练基础设施：TPUv5p、Pathways 与跨数据中心训练
 
@@ -134,8 +122,8 @@ Gemini 2.5 的基础设施部分值得仔细看，因为它解释了大模型训
 
 第三是 SDC 检测。SDC 指 silent data corruption，也就是硬件或系统没有显式报错，但计算结果已经错了。报告采用 split-phase SDC detection：疑似异常 step 会 replay，确认错误后再回滚或修复。报告披露约 0.25% 的 steps 进入 replay，其中约 6% 被确认为真实 corruption；早期实验里 TPU 计算利用率约 93.4%，额外 replay / rollback 计算约 4.5%，downtime 约 0.6%。
 
-!!! note "为什么 SDC 细节很重要"
-    在小模型训练里，偶发数值错误常常被当成随机波动；在跨数万芯片的大模型训练里，静默错误会变成确定会遇到的系统问题。Gemini 2.5 把 replay、rollback 和 slice-level recovery 写进报告，说明前沿模型训练已经默认要为硬件错误、网络抖动和数据输入故障设计控制面。
+**为什么 SDC 细节很重要。**
+在小模型训练里，偶发数值错误常常被当成随机波动；在跨数万芯片的大模型训练里，静默错误会变成确定会遇到的系统问题。Gemini 2.5 把 replay、rollback 和 slice-level recovery 写进报告，说明前沿模型训练已经默认要为硬件错误、网络抖动和数据输入故障设计控制面。
 
 ## 后训练：SFT、Reward Model 与 RL
 
@@ -184,8 +172,8 @@ Gemini 2.5 的关键变化是 `dynamic thinking`。它不是给所有请求固�
 
 <small>原图位置：`Gemini 2.5` technical report 中 thinking budget 相关图，见 [DeepMind PDF mirror](https://storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6)。该图展示 Gemini 2.5 Flash 在不同 thinking budget 下的 benchmark 表现变化，用来说明 test-time compute 与任务质量之间的可控权衡。</small>
 
-!!! note "不要把 dynamic thinking 等同于可见 CoT"
-    报告讨论的是模型内部推理和训练方式，不等于产品必须暴露完整 chain-of-thought。对工程系统来说，更有用的抽象是 test-time compute allocation：简单请求少想或不想，复杂数学、代码、搜索和长上下文任务多分配推理预算。
+**不要把 dynamic thinking 等同于可见 CoT。**
+报告讨论的是模型内部推理和训练方式，不等于产品必须暴露完整 chain-of-thought。对工程系统来说，更有用的抽象是 test-time compute allocation：简单请求少想或不想，复杂数学、代码、搜索和长上下文任务多分配推理预算。
 
 Dynamic thinking 的工程意义在于，它把“推理质量”和“服务成本”拉到同一个控制面。固定长思考会让简单任务变慢变贵；完全不思考又会损害复杂任务。动态预算让模型族可以在 Pro / Flash / Flash-Lite 之间覆盖不同 SLA。
 
@@ -219,15 +207,12 @@ Gemini 2.5 的多模态不是只做图文问答。报告把视觉、视频、音
 
 视频部分的一个具体细节很有价值：报告说 Gemini 2.5 的视频 tokenizer 比前代更高效，每帧视觉 token 数从上一代的 258 降到 66。以 1M context 计算，这让可处理视频时长从约 1 小时提高到约 3 小时。这个提升不是“模型更聪明”这么简单，而是 tokenization、上下文预算和视频采样策略一起带来的。
 
-!!! note "长视频能力首先是 token budget 问题"
-    1M context 听起来很大，但视频会迅速吃掉 token。每帧 258 个 token 和 66 个 token 的差别，会直接决定模型能看几十分钟还是几小时。对视频/世界模型系统来说，视觉 tokenizer、帧率、压缩特征和上下文调度往往和 Transformer 本体同样重要。
+**长视频能力首先是 token budget 问题。**
+1M context 听起来很大，但视频会迅速吃掉 token。每帧 258 个 token 和 66 个 token 的差别，会直接决定模型能看几十分钟还是几小时。对视频/世界模型系统来说，视觉 tokenizer、帧率、压缩特征和上下文调度往往和 Transformer 本体同样重要。
 
 音频部分也体现了类似思路。报告提到使用 non-semantic representations 处理不需要转写成文本的任务，并使用 causal representations 支撑实时原生音频理解。这说明 Gemini 2.5 不只是把语音先转 ASR 文本再喂给 LLM，而是在模型侧保留更多音频特征和实时约束。
 
 ## Benchmark 结果怎么看
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 Gemini 2.5 报告覆盖大量 benchmark，包括通用文本、数学、科学、代码、软件工程、长上下文、多模态、视频、音频和 agentic browsing。读这些结果时，最好按能力族看，而不是记单个分数。
 

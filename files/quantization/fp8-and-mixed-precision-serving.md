@@ -1,173 +1,81 @@
-# FP8 与混合精度推理
+# FP8 与混合精度推理：它不是一个 dtype 开关
 
-FP8 是低精度路线里很重要的一类：它比 FP16/BF16 更省显存和带宽，又比 INT4/INT8 更保留浮点的动态范围直觉。很多生产系统会把 FP8 放进混合精度方案，而不是全模型统一压到最低 bit。
+FP8 在服务里的价值，不是把全模型粗暴改成 8 bit，而是把最吃带宽、最适合 Tensor Core 的大块矩阵计算放到低精度路径上，同时把归一化、softmax、残差、输出头、KV cache、坐标或动作头这些敏感位置留在更高精度或更谨慎的量化策略里。
 
+所以判断 FP8 值不值得上，先别问“能不能压到 8 bit”。更该问四件事：热路径是不是 GEMM 或 HBM 带宽瓶颈；硬件和 runtime 是否真的命中 FP8 kernel；scale、amax、累加和 fallback 是否可观测；质量回归是否覆盖长上下文、多模态、工具调用或动作安全这类高风险桶。
 
-## FP8 在解决什么问题
+## 先问瓶颈在哪
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
+FP8 省的是每个元素的字节数，也可能提高 GEMM 吞吐。但服务系统不一定因此端到端变快。prefill 往往更像大矩阵吞吐问题，FP8 projection 和 MLP 更容易兑现收益；decode 可能卡在 KV cache 读写、调度、batch 形状、采样和网络输出上，只有权重 GEMM 变快不一定能明显降低 TPOT。
 
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
+这也是为什么 FP8 评估要分开看 TTFT、TPOT、throughput、P95/P99、显存峰值和 kernel trace。若 trace 里大量 fallback 到 BF16，或者低精度 kernel 只覆盖冷路径，理论压缩就不会变成线上收益。
 
-大模型推理和训练常被三类成本卡住：
+| 系统位置 | FP8 更可能有效 | 需要小心的原因 |
+| --- | --- | --- |
+| Linear / MLP / attention projection | 大块 GEMM 和激活搬运成本高 | shape 不合适或 kernel 不支持时可能 fallback |
+| KV cache | 长上下文显存压力大 | scale 校准、注意力质量和 backend 支持会限制收益 |
+| LayerNorm / RMSNorm | 通常不作为第一批 FP8 目标 | 统计量敏感，误差会跨层传播 |
+| Softmax / attention score | 通常保 BF16/FP16 | 指数和归一化会放大量化误差 |
+| lm head / projector / action head | 先保守 | 输出分布、坐标、工具参数或动作边界更容易出事故 |
 
-| 成本 | FP8 可能帮什么 |
-| --- | --- |
-| 权重显存 | 每个元素从 2 bytes 降到 1 byte |
-| 激活/中间张量 | 减少 HBM 读写和缓存压力 |
-| GEMM 吞吐 | 新 GPU 上可走 FP8 tensor core |
+## E4M3 和 E5M2 是范围与格点的取舍
 
-但 FP8 的收益不是自动的。它需要硬件、kernel、scale 策略、累加精度和敏感层保护一起成立。
+FP8 常见格式是 E4M3 和 E5M2。E 是 exponent，决定动态范围；M 是 mantissa，决定同一数量级里能分多细。E4M3 的有效数字更细，范围更窄，常用于前向权重和激活；E5M2 范围更大、格点更粗，常用于动态范围更大的张量。
 
-## E4M3 和 E5M2 怎么读
+![FP8 training loss curves](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="630" }
 
-FP8 常见两种格式：
+<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原图用多类模型训练曲线说明 FP8 路线可以接近高精度基线。这里用它说明：格式定义本身不能证明可用，必须回到任务曲线和质量回归。</small>
 
-| 格式 | 拆法 | 直觉 | 常见用途 |
-| --- | --- | --- | --- |
-| E4M3 | 4 个 exponent bit，3 个 mantissa bit | 精度相对好，范围较小 | 前向权重、激活 |
-| E5M2 | 5 个 exponent bit，2 个 mantissa bit | 范围更大，精度更粗 | 梯度、反向或范围更大的张量 |
-
-一个浮点数可以粗略理解成：
+把一个张量 cast 到 FP8 前，通常要先用 scale 把数值映射到可表示范围：
 
 \[
-x\approx (-1)^{\mathrm{sign}}\times 2^{e}\times m
-\]
-
-
-**读作什么**：exponent 管“能表示多大或多小”，mantissa 管“表示得多细”。E5M2 范围更宽，E4M3 细节更多。
-
-!!! warning "常见误解"
-    同样是 8bit，FP8 和 INT8 误差形态不同。INT8 依赖 scale 把真实数映射到均匀整数格子；FP8 用指数覆盖动态范围，但每个数量级里的精度有限。
-
-## FP8 也需要 scale
-
-深度学习里的 FP8 通常不会直接裸用，而是配合 scale：
-
-\[
-x_{\mathrm{fp8}}=\mathrm{FP8Cast}\left(\frac{x}{s}\right)
-\]
-
-
-\[
+x_{\mathrm{fp8}}=\operatorname{FP8Cast}\left(\frac{x}{s}\right),\qquad
 \hat{x}=s\cdot x_{\mathrm{fp8}}
 \]
 
+这行式子说的是：真实张量 \(x\) 先除以 scale \(s\)，再落到 FP8 格点；反量化时再乘回 \(s\)。如果 \(s\) 太小，大值会溢出；如果 \(s\) 太大，大多数普通值会挤到很粗的格点上。FP8 的难点，很多时候不是 E4M3 还是 E5M2，而是 scale 何时更新、按什么粒度更新、是否被 outlier 拖坏。
 
-**读作什么**：scale 让张量整体落到 FP8 舒适区间。scale 选太小会 overflow，选太大会损失细节。
+## scale 是控制面
 
-| scale 策略 | 含义 | 代价 |
-| --- | --- | --- |
-| per-tensor | 整个张量一个 scale | 简单但怕局部 outlier |
-| per-channel/per-block | 每通道或每块一个 scale | 更稳但元数据和 kernel 更复杂 |
-| delayed scaling | 用历史 amax 更新 scale | 稳定但可能滞后 |
-| dynamic scaling | 当前 batch 即时统计 | 灵活但有在线开销 |
+生产级 FP8 通常有一套 scale 控制面。per-tensor scale 简单，元数据少，但容易被少数尖峰值影响；per-channel 或 per-head scale 更细，质量更稳，但 kernel 和元数据布局更复杂；per-block scale 能折中稳定性和开销，但 block size 必须和矩阵布局、Tensor Core tile、通信和 cache 对齐。
 
-## 为什么 FP8 常比 INT4 更容易进生产
+Transformer Engine 的 delayed scaling 思路，是用历史 amax 统计来更新 scale。它避免每个 batch 都剧烈改变 scale，但分布突变时可能滞后。vLLM 的 FP8 KV cache 文档也把校准路径单独拎出来：默认 scale、warmup 估计和数据集校准会带来不同质量风险；KV cache 量化还受 attention backend 和 per-head scale 支持影响。
 
-| 维度 | FP8 | INT4/W4A16 |
-| --- | --- | --- |
-| 动态范围 | 浮点指数更自然 | 强依赖 scale 和 group |
-| 压缩率 | 约 FP16 的 1/2 | 权重可约 1/4 |
-| kernel 生态 | 新 GPU 上路径更标准 | 依赖具体格式和实现 |
-| 质量风险 | 通常更温和 | 低 bit 更激进 |
-| 适用对象 | 权重、激活、训练中间态 | 多用于 weight-only 或特定 kernel |
+因此上线 FP8 时，scale 本身要进监控：amax 分布、overflow / underflow、scale 更新频率、fallback 次数、每层误差、长上下文注意力退化，都应该能被追踪。没有这些信号，FP8 问题会表现成“模型偶尔变笨”，很难定位。
 
-**读作什么**：FP8 不一定压得最狠，但它常常是质量、硬件和维护成本之间更稳的折中。
+## 混合精度才是生产形态
 
-## 混合精度不是妥协，而是资源分配
+成熟系统不会只改一个 dtype。DeepSeek-V3 的 FP8 mixed precision framework 就把核心 GEMM、scale、累加、通信和高精度保护放在一套系统里看。
 
-成熟系统不会把所有东西都降到同一精度。常见混合方式：
+![DeepSeek-V3 FP8 mixed precision framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="920" }
 
-| 模块 | 常见精度策略 | 原因 |
-| --- | --- | --- |
-| 大部分 Linear/GEMM | FP8、INT8 或 W4A16 | 算力和带宽收益最大 |
-| LayerNorm/RMSNorm | FP16/BF16 | 归一化对小数值变化敏感 |
-| Softmax | FP16/BF16 或更高保护 | 指数和概率归一化敏感 |
-| residual add | FP16/BF16 | 误差会跨层累积 |
-| embedding/lm head | 任务相关，常保守 | 词表和输出分布敏感 |
-| KV cache | FP16/BF16/FP8/INT8 按场景 | 长上下文显存大，但质量风险要验 |
-| 多模态 projector/action head | 常保高精 | 对齐、坐标、动作更敏感 |
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达大模型训练中的 FP8 mixed precision framework。这里用它说明：FP8 是低精度计算、高精度保护、scale 与通信策略的组合，不是单一开关。</small>
 
-![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="740" }
+低精度乘法也不等于低精度累加。很多 FP8 GEMM 会用更高精度或分块累加，再把结果按需要 cast 回低精度。累加精度不够、block scale 不合适或 outlier 没处理好，都会把局部误差放大到整层输出。
 
-<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 6。原论文图意：Transformer block 中，部分矩阵乘可以走 INT8 路径，LayerNorm、Softmax、残差加法等敏感或不适合低精度的算子仍保留 FP16。</small>
+![DeepSeek-V3 FP8 accumulation](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-7-fp8-accumulation.png){ width="860" }
 
-!!! note "图解：这也是 FP8/混合精度的核心思路"
-    虽然这张图来自 SmoothQuant 的 INT8 路线，但它表达的系统原则同样适用于 FP8：低精度优先放在收益最大的矩阵乘路径，数值敏感或不划算的路径保高精。
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 7。原图表达 FP8 quantization、scale、accumulation 和高精度处理的关系。这里用它说明：FP8 工程难点在于计算路径和 scale 路径一起设计。</small>
 
-## FP8 服务要看哪些收益
+推理服务可以借这个思路做拆分：主干大矩阵先尝试 FP8；norm、softmax、残差和输出敏感层保 BF16；KV cache 单独评估；多模态 projector、OCR 坐标、工具参数、动作头和 risk head 先放在高精度保护区。这样得到的是可回退的 mixed-precision recipe，而不是不可解释的全局 dtype 改动。
 
-| 指标 | 为什么重要 |
-| --- | --- |
-| peak memory | 权重和激活是否真的省显存 |
-| TTFT | prefill 和调度是否受益 |
-| TPOT | decode 每 token 是否变快 |
-| throughput | batch 后单位时间 tokens 是否增加 |
-| P95/P99 | 低精度路径是否引入长尾 |
-| kernel trace | 是否命中 FP8 GEMM 或 fallback |
-| quality buckets | 代码、数学、长上下文、多模态是否掉点 |
+## FP8、INT8 和 INT4 不该按 bit 数排序
 
-一个更实用的判断式：
+FP8 像“小浮点”，动态范围天然比整数格点友好；INT8/INT4 更依赖 scale、zero point、group size、outlier 处理和校准数据。INT4 的压缩率更激进，但 kernel、解量化、group metadata 和质量回归也更敏感。FP8 常见优势是新硬件上更容易获得稳定低精度 GEMM 路径，质量回归通常比极低 bit 温和。
 
-\[
-\mathrm{Value}=\frac{\mathrm{quality\ kept}\times \mathrm{throughput\ gain}}{\mathrm{engineering\ complexity}+\mathrm{fallback\ risk}}
-\]
+真正的选择标准是瓶颈。若瓶颈是权重常驻显存，W4A16 可能更有吸引力；若瓶颈是 prefill 的大块 GEMM 和激活带宽，FP8 W&A 更值得试；若瓶颈是长上下文 KV cache，KV 量化要单独校准；若瓶颈是 decode 调度或小 batch 形状，换 dtype 可能不是第一优先级。
 
+## 验收要按服务和任务分桶
 
-**读作什么**：FP8 是否值得，不是只看快了多少，还要看质量和维护成本。
+FP8 验收不能只看 perplexity 或一个 GSM8K 分数。文本 LLM 至少要看数学、代码、长上下文、工具调用、结构化输出和拒答边界。VLM 要额外看 OCR、表格、坐标定位、细粒度视觉问答和跨模态 projector。VLA 或世界模型要看动作抖动、near-miss、risk head、短 horizon 纠错和 closed-loop success。
 
-## 哪些层优先尝试 FP8
+系统侧要同时记录：峰值显存、常驻显存、TTFT、TPOT、吞吐、P95/P99、fallback 率、kernel 命中率、scale 统计、编译开销、calibration 数据版本和回滚策略。一个实用判断是：如果 FP8 只让离线 benchmark 好看，但线上 P99 变长、质量桶掉点或观测不到 scale 状态，它还没有真正上线。
 
-| 优先级 | 模块 | 原因 |
-| --- | --- | --- |
-| 高 | 大型 Linear、MLP、attention projection | GEMM 密集，硬件收益明显 |
-| 中 | attention 中间路径、部分 expert | 需要看实现和任务质量 |
-| 低 | LayerNorm、Softmax、残差、采样逻辑 | 数值敏感或收益小 |
-| 保守 | 多模态 projector、动作头、安全头 | 局部误差可能放大成任务失败 |
+## 外部精读
 
-**实用做法**：先让大块 GEMM 进 FP8，再用混合精度保护掉点层，而不是一开始追求全模型 FP8。
-
-## 三个部署场景
-
-### 场景 A：70B 文本模型服务
-
-目标是降低显存和提高吞吐。可以先评估 FP8 权重/激活路径，保留 LayerNorm、Softmax 和输出相关路径高精。验收时看长上下文、代码、数学和工具调用。
-
-### 场景 B：企业文档 VLM
-
-FP8 可以用于 LLM 主体和部分视觉 MLP，但 projector、OCR 相关层和表格结构头要保守。验收不能只看问答，要看金额、小数点、字段定位和跨页关联。
-
-### 场景 C：VLA 或世界模型
-
-低精度优先放在高吞吐的中间 backbone；动作头、risk head、控制接口和短 horizon 纠错路径优先保高精。验收看闭环成功率、动作抖动、near-miss recall 和长时 latent drift。
-
-## FP8 的短板
-
-| 短板 | 说明 |
-| --- | --- |
-| 不如 INT4 压缩激进 | 主要是 8bit，压缩率较温和 |
-| 依赖新硬件和 kernel | 没有原生路径时收益有限 |
-| scale 管理复杂 | outlier、amax、delayed scaling 会影响稳定 |
-| 不适合所有算子 | 归一化、softmax、残差常要保高精 |
-| 仍需专项回归 | 平均 benchmark 不足以证明生产稳定 |
-
-## 落地顺序
-
-1. 固定 BF16/FP16 baseline，记录质量、显存、TTFT、TPOT、吞吐。
-2. 确认目标硬件和 runtime 是否支持 FP8 GEMM、FP8 KV 或相关格式。
-3. 先把大块 Linear/GEMM 迁到 FP8，保留敏感算子高精。
-4. 记录 scale 策略、amax、overflow/fallback 和 kernel trace。
-5. 对任务桶做回归，尤其是长上下文、代码、数学、多模态细节和安全/动作模块。
-6. 如果掉点集中在少数层，优先混合精度保护，而不是整体放弃 FP8。
-
-## 本页结论
-
-FP8 的价值不是最低 bit，而是把显存、带宽、硬件吞吐和质量稳定性放进同一个折中点。它适合和混合精度一起理解：大块矩阵乘低精，敏感路径保高精，最终用端到端指标和任务桶决定是否上线。
+- [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 E4M3/E5M2、scale 和训练曲线证据。
+- [NVIDIA Transformer Engine FP8 delayed scaling](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/fp8_delayed_scaling/fp8_delayed_scaling.html)：核对 amax history、delayed scaling 和 FP8 recipe。
+- [NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)：理解 FP8 Tensor Core 的硬件背景。
+- [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)：看大规模模型里 FP8 mixed precision、scale 和累加路径如何系统化组织。
+- [vLLM Quantized KV Cache](https://docs.vllm.ai/en/latest/features/quantization/quantized_kvcache/)：理解 FP8 KV cache、scale 校准和 backend 支持边界。
+- [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：把 FP8 放到权重、激活、KV cache 和 runtime support 的量化生态里理解。

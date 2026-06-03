@@ -6,15 +6,14 @@ paper_topic: 技术报告
 
 # Nemotron 3 Super：Mamba-MoE 与异步多环境 RL
 
-
 Nemotron 3 Super 要抓三条主线：Hybrid Mamba-Attention + LatentMoE 降低长上下文和 MoE 带宽成本，shared-weight MTP 缓解草稿头 train-test mismatch，异步多环境 GRPO 强化数学、代码、工具、终端和长上下文能力。本文聚焦 `Super 120B-A12B`。
 
 ![Nemotron 3 Super benchmark and throughput](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-1-benchmark-throughput.png){ width="920" }
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 1。原图比较 Nemotron 3 Super、GPT-OSS-120B 和 Qwen3.5-122B 在 IFBench、HMMT、SWE-Bench、HLE、Terminal Bench、Tau Bench、RULER 1M 与 8k/64k 生成吞吐上的表现。</small>
 
-!!! note "Figure 1 怎么读"
-    这张图不是说 Super 每项都最高，而是说它在接近 GPT-OSS-120B / Qwen3.5-122B 的能力区间里，把长上下文和长输出吞吐做得更高。报告口径下，在 `8k` 输入、`64k` 输出设置中，Super 相比 GPT-OSS-120B 和 Qwen3.5-122B 分别达到最高 `2.2x` 和 `7.5x` 吞吐提升。
+**Figure 1 怎么读。**
+这张图不是说 Super 每项都最高，而是说它在接近 GPT-OSS-120B / Qwen3.5-122B 的能力区间里，把长上下文和长输出吞吐做得更高。报告口径下，在 `8k` 输入、`64k` 输出设置中，Super 相比 GPT-OSS-120B 和 Qwen3.5-122B 分别达到最高 `2.2x` 和 `7.5x` 吞吐提升。
 
 ## 论文位置
 
@@ -41,8 +40,8 @@ Nemotron 3 Super 是 88 层 hybrid Mamba-Attention MoE。它沿用 Nemotron 3 Na
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 2。原图展示 Nemotron 3 Super 的 Mamba-2、Attention 和 Latent MoE 周期性交错层 pattern。</small>
 
-!!! note "图解：layer pattern 看 Mamba 和 attention 的分工"
-    图里大多数层是 Mamba-2 + LatentMoE，少量 attention 层作为全局交互锚点。读法不是数颜色块，而是问长上下文状态由谁维护、全局 token 交互由谁补足、MoE 稀疏计算插在哪些层。它支撑的是 hybrid 架构的成本分工，不是单独证明 Mamba 或 attention 任一方可以替代全部模块。
+**layer pattern 看 Mamba 和 attention 的分工。**
+图里大多数层是 Mamba-2 + LatentMoE，少量 attention 层作为全局交互锚点。读法不是数颜色块，而是问长上下文状态由谁维护、全局 token 交互由谁补足、MoE 稀疏计算插在哪些层。它支撑的是 hybrid 架构的成本分工，不是单独证明 Mamba 或 attention 任一方可以替代全部模块。
 
 报告 Table 1 的架构配置如下，保留英文原格式：
 
@@ -68,25 +67,14 @@ Nemotron 3 Super 是 88 层 hybrid Mamba-Attention MoE。它沿用 Nemotron 3 Na
 
 ## LatentMoE
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
->
-> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
-| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
-
 普通 MoE 的 expert 计算在 hidden dimension `d` 上完成。LatentMoE 先把 token 从 `d` 投影到更小的 latent dimension `l`，再在 latent space 里路由和执行 expert 计算，最后投影回 `d`。
 
 ![Standard MoE vs LatentMoE](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-3-latent-moe.png){ width="860" }
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 3。原图比较 standard MoE 与 LatentMoE；LatentMoE 在 latent dimension 内做 expert routing / computation，以降低 routed parameter loads 和 all-to-all traffic。</small>
 
-!!! note "图解：LatentMoE 图看压缩发生在哪里"
-    Standard MoE 在 hidden dimension \(d\) 上路由和执行 expert；LatentMoE 先降到 latent dimension \(l\)，在更小空间里路由、通信和计算，再升回 \(d\)。箭头想说明的是带宽和 all-to-all payload 被压小，而不是说 expert 数量越多永远越好；质量仍取决于路由、负载均衡和训练稳定性。
+**LatentMoE 图看压缩发生在哪里。**
+Standard MoE 在 hidden dimension \(d\) 上路由和执行 expert；LatentMoE 先降到 latent dimension \(l\)，在更小空间里路由、通信和计算，再升回 \(d\)。箭头想说明的是带宽和 all-to-all payload 被压小，而不是说 expert 数量越多永远越好；质量仍取决于路由、负载均衡和训练稳定性。
 
 可以把它写成：
 
@@ -111,10 +99,10 @@ LatentMoE:
 
 在 Super 中，`d=4096`、MoE latent size `1024`，即 4:1 压缩。这让模型可以有 `512` 个 experts、每 token 激活 `22` 个 routed experts，同时保持约 12B active 的推理预算。
 
-!!! note "LatentMoE 和 MLA 不是一回事"
-    DeepSeek 系列的 MLA 压的是 attention KV 表示，主要目标是 KV cache 和 attention memory。LatentMoE 压的是 MoE expert 路由和计算维度，主要目标是 expert weight bandwidth 和 all-to-all communication。
+**LatentMoE 和 MLA 不是一回事。**
+DeepSeek 系列的 MLA 压的是 attention KV 表示，主要目标是 KV cache 和 attention memory。LatentMoE 压的是 MoE expert 路由和计算维度，主要目标是 expert weight bandwidth 和 all-to-all communication。
 
-    两者都用了 latent 表示，但它们改的是不同系统瓶颈。Nemotron 3 Super 的 attention 侧靠 Mamba-heavy 混合架构和少量 GQA attention anchor；MoE 侧靠 LatentMoE。
+两者都用了 latent 表示，但它们改的是不同系统瓶颈。Nemotron 3 Super 的 attention 侧靠 Mamba-heavy 混合架构和少量 GQA attention anchor；MoE 侧靠 LatentMoE。
 
 ## MTP：共享参数的递归草稿头
 
@@ -176,8 +164,8 @@ Nemotron 3 Super 是报告声称的 Nemotron 3 系列中首个使用 NVFP4 预�
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 7。原图比较 Nemotron 3 Nano 的 BF16 与 NVFP4 recipe 下 zero-valued weight gradient elements 的增长。</small>
 
-!!! note "图解：zero gradient 图不要只看越低越好"
-    横向比较的是 BF16 和 NVFP4 recipe 下的零梯度比例，重点是 NVFP4 更容易让小梯度 underflow 成真零。它提醒低精度训练要看通道、层和任务指标的联动；零梯度上升是风险信号，但报告后续也说明 MXFP8 healing 未带来持续下游收益。
+**zero gradient 图不要只看越低越好。**
+横向比较的是 BF16 和 NVFP4 recipe 下的零梯度比例，重点是 NVFP4 更容易让小梯度 underflow 成真零。它提醒低精度训练要看通道、层和任务指标的联动；零梯度上升是风险信号，但报告后续也说明 MXFP8 healing 未带来持续下游收益。
 
 工程结论：
 
@@ -199,8 +187,8 @@ Nemotron 3 Super 预训练总量是 `25T` text tokens，分两阶段：
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 10。原图展示 Phase 1 与 Phase 2 的 pre-training data mixture。</small>
 
-!!! note "图解：data mixture 图看阶段目标"
-    Phase 1 更像覆盖面和多样性建设，Phase 2 更像高质量与 benchmark 相关能力强化。读这张图时要把比例和 token 阶段放在一起看，不能只说某个数据源占比高；真正影响模型性格的是数据类型、质量筛选、去污染和后续 SFT/RL 如何接上。
+**data mixture 图看阶段目标。**
+Phase 1 更像覆盖面和多样性建设，Phase 2 更像高质量与 benchmark 相关能力强化。读这张图时要把比例和 token 阶段放在一起看，不能只说某个数据源占比高；真正影响模型性格的是数据类型、质量筛选、去污染和后续 SFT/RL 如何接上。
 
 报告新增或强调的 synthetic data 可以概括为：
 
@@ -233,8 +221,8 @@ WSD stable phase 中，单个 checkpoint 的 benchmark 可能噪声较大；报�
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 11。原图比较 trained checkpoints 与 best offline checkpoint merge 在 25T pretraining 中的 12 benchmark average accuracy。</small>
 
-!!! note "图解：checkpoint merge 图看 readout 成本"
-    曲线比较的是直接训练 checkpoint 与近邻 checkpoint merge 的评测表现。它支撑的不是“merge 一定提高最终模型”，而是 stable LR 阶段可以用 merge 更便宜地读出质量趋势，减少为了等单个 checkpoint 波动消失而继续烧 token 的成本。
+**checkpoint merge 图看 readout 成本。**
+曲线比较的是直接训练 checkpoint 与近邻 checkpoint merge 的评测表现。它支撑的不是“merge 一定提高最终模型”，而是 stable LR 阶段可以用 merge 更便宜地读出质量趋势，减少为了等单个 checkpoint 波动消失而继续烧 token 的成本。
 
 经验是：stable LR phase 中，best merge 比对应 trained checkpoint 平均高 `2-4` 分；最后 5T LR decay 后，实际 decay checkpoint 逐渐追平。最终 base model checkpoint 是 `500B` merge；报告估计该流程可节省约 `4T` tokens 的 readout 成本，约占总 pretraining FLOP 预算的 `16%`。
 
@@ -257,9 +245,6 @@ WSD stable phase 中，单个 checkpoint 的 benchmark 可能噪声较大；报�
 这解释了为什么 RULER 1M 能成为主打指标：模型不是只靠位置外推，而是在 1M context 上做 continuous pretraining，并用 1M/4K 交替训练缓解数学 benchmark 的轻微回退。
 
 ## Base Model 结果
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 报告 Table 4 对 Base model 和 Ling-flash-base-2.0、GLM-4.5-Air-Base 做比较。下面摘录关键行，保留英文列名：
 
@@ -327,8 +312,8 @@ Stage 1 让长输出样本获得更高权重，适合吸收 reasoning、代码�
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 13。原图展示 Agentic Command Line Interface Dataset Construction & Training Pipeline。</small>
 
-!!! note "图解：agentic CLI 图按数据闭环读"
-    左侧是 seed、任务和工具环境，中间是多步 trajectory 生成与筛选，右侧才进入训练 blend。它想说明 agent 能力不是普通问答样本顺手学出来的，而是需要任务、环境反馈、工具 schema、失败恢复和过滤规则一起构造；图本身不能证明真实 IDE 或终端环境里的可靠性已经足够。
+**agentic CLI 图按数据闭环读。**
+左侧是 seed、任务和工具环境，中间是多步 trajectory 生成与筛选，右侧才进入训练 blend。它想说明 agent 能力不是普通问答样本顺手学出来的，而是需要任务、环境反馈、工具 schema、失败恢复和过滤规则一起构造；图本身不能证明真实 IDE 或终端环境里的可靠性已经足够。
 
 关键数据构造可以合并成下面几类：
 
@@ -348,8 +333,8 @@ SFT blend 的整体比例如下：
 
 <small>图源：`Nemotron 3 Super Technical Report`，Figure 16。原图展示 Nemotron 3 Super 的 SFT data blend：Agent、Reasoning、Chat、Long Context、Misc。</small>
 
-!!! note "图解：SFT blend 图看能力预算"
-    Agent、Reasoning、Chat、Long Context 和 Misc 的占比表示后训练样本预算分配。Agent 占比最高说明 Super 把工具和 CLI 能力放在核心训练目标里，但这个饼图不能单独说明数据质量、轨迹难度或奖励模型可靠性，仍要结合后续 RL 和 benchmark。
+**SFT blend 图看能力预算。**
+Agent、Reasoning、Chat、Long Context 和 Misc 的占比表示后训练样本预算分配。Agent 占比最高说明 Super 把工具和 CLI 能力放在核心训练目标里，但这个饼图不能单独说明数据质量、轨迹难度或奖励模型可靠性，仍要结合后续 RL 和 benchmark。
 
 | SFT Blend | Share |
 | --- | ---: |
@@ -490,7 +475,7 @@ Mamba 的 SSM cache 默认 FP32。报告尝试把 SSM cache 存成 FP16，以减
 
 几个边界要记住：benchmark 绑定 Nemo Evaluator / harness / prompt / judge；吞吐结论绑定 B200/B300、vLLM/TRT-LLM 和具体 TP 设置；SWE-Bench 仍落后 Qwen3.5-122B；LatentMoE 与异步 RL 都依赖并行策略、kernel、runtime 和训练平台，复现门槛很高。
 
-## 本页结论
+## 阅读结论
 
 Nemotron 3 Super 的核心不是“120B MoE 又多强”，而是一个完整工程命题：
 

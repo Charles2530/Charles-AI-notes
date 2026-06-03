@@ -2,19 +2,7 @@
 
 量化 checkpoint 只有在 runtime 能把低比特格式、权重布局、KV cache、batching 和 kernel 路径接起来时，才会变成真实端到端收益。硬件和成本模型放在 [量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)，底层 kernel 细节放在 [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。本页聚焦中间这层：**低比特模型怎样被运行时可靠地加载、调度、执行、观测和回滚**。
 
-
 ## Runtime 在量化链路里的职责边界
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
 
 量化上线不是一个单点开关，而是一条跨工具、格式、runtime 和 kernel 的链路：
 
@@ -171,7 +159,7 @@ flowchart LR
 
 这类结论同时说明 runtime、硬件、请求桶、kernel 证据、质量边界和回滚范围，比单独报告 bit 数可靠得多。
 
-## 参考资料
+## 外部精读
 
 1. vLLM Quantization：<https://docs.vllm.ai/en/latest/features/quantization/index.html>
 2. SGLang Quantization：<https://docs.sglang.io/docs/advanced_features/quantization>

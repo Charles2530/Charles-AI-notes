@@ -6,7 +6,6 @@ paper_topic: 扩散模型
 
 # Diffusion Forcing：next-token 与全序列扩散
 
-
 这篇论文的核心不是再发明一个采样器，而是改了扩散模型处理序列的训练方式：**每个 token 都可以有自己的噪声水平**。这样一个因果序列模型既能像 next-token 模型一样逐步向前生成，又能像 full-sequence diffusion 一样对整段未来做 guidance。
 
 如果只用一句话概括：
@@ -31,7 +30,7 @@ Diffusion Forcing 把两个轴交叉起来，让每个时间 token 拥有独立�
 
 ![Diffusion Forcing capabilities 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/diffusion-forcing-capabilities-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 1。该图用 Guidance、Tree Search、Compositionality、Causal Uncertainty 和 Flexible Horizon 对比 Teacher Forcing、Full-Seq. Diffusion 与 Diffusion Forcing。</small>
+<small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 1。原图表达：用 Guidance、Tree Search、Compositionality、Causal Uncertainty 和 Flexible Horizon 对比 Teacher Forcing、Full-Seq. Diffusion 与 Diffusion Forcing。本站读法：这张图先看能力列，再回到训练目标；DF 的卖点不是某个单独任务分数，而是“独立噪声水平”让同一个因果序列模型拥有整段 guidance 和 flexible horizon。</small>
 
 ## 核心问题
 
@@ -41,7 +40,6 @@ Diffusion Forcing 把两个轴交叉起来，让每个时间 token 拥有独立�
 x_{1:T}^0 = (x_1^0, x_2^0, \dots, x_T^0),
 \]
 
-
 其中上标 \(0\) 表示干净 token。token 可以是视频帧、状态、动作、奖励、时间序列向量，或者它们的组合。
 
 普通 full-sequence diffusion 往往给整段序列同一个噪声水平 \(k\)：
@@ -49,7 +47,6 @@ x_{1:T}^0 = (x_1^0, x_2^0, \dots, x_T^0),
 \[
 x_{1:T}^{k} = \sqrt{\bar\alpha_k}x_{1:T}^0 + \sqrt{1-\bar\alpha_k}\epsilon.
 \]
-
 
 这等价于“整段一起模糊，再整段一起还原”。它适合固定长度视频或轨迹，但不自然支持“前面已经确定、后面还不确定”的在线生成。
 
@@ -62,7 +59,6 @@ x_t^{k_t}
 \qquad
 k_t \sim \text{Uniform}(\{0,\dots,K\}).
 \]
-
 
 于是同一条序列里可以同时出现：
 
@@ -91,8 +87,8 @@ sample sequence x_1:T
 
 <small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 2。原图展示 noise as masking、Diffusion Forcing、Teacher Forcing 和 Full-Seq. Diffusion 的训练与采样差异。</small>
 
-!!! note "图解：Diffusion Forcing 方法图里的两个轴"
-    图里有两个轴：横轴是时间，决定 token 之间的因果关系；纵轴是噪声，决定每个 token 当前还有多少信息。Teacher forcing 基本只沿时间轴工作：过去是真值，预测下一个 token。Full-sequence diffusion 基本只沿噪声轴工作：整段序列共享一个噪声水平。Diffusion Forcing 则允许二维网格上每个位置有自己的噪声水平，训练模型学会从任意“部分确定、部分不确定”的序列中恢复干净 token。
+**Diffusion Forcing 方法图里的两个轴。**
+图里有两个轴：横轴是时间，决定 token 之间的因果关系；纵轴是噪声，决定每个 token 当前还有多少信息。Teacher forcing 基本只沿时间轴工作：过去是真值，预测下一个 token。Full-sequence diffusion 基本只沿噪声轴工作：整段序列共享一个噪声水平。Diffusion Forcing 则允许二维网格上每个位置有自己的噪声水平，训练模型学会从任意“部分确定、部分不确定”的序列中恢复干净 token。
 
 ## 训练目标
 
@@ -102,11 +98,9 @@ sample sequence x_1:T
 z_t = f_\theta(z_{t-1}, x_t^{k_t}, k_t),
 \]
 
-
 \[
 \hat\epsilon_t = \epsilon_\theta(z_t, x_t^{k_t}, k_t).
 \]
-
 
 训练损失仍然是标准扩散里的 noise prediction MSE，只是噪声水平从全序列共享改成逐 token 独立：
 
@@ -119,7 +113,6 @@ z_t = f_\theta(z_{t-1}, x_t^{k_t}, k_t),
 \epsilon_t - \epsilon_\theta(z_t, x_t^{k_t}, k_t)
 \right\rVert_2^2.
 \]
-
 
 这点很重要：DF 没有抛弃扩散模型的基本训练范式。它仍然是加噪、预测噪声、MSE 训练。真正变化的是 **训练 batch 里同一条序列的每个 token 噪声水平不同**，并且模型结构保持因果。
 
@@ -153,10 +146,10 @@ step 5:     0    0    0    0    0
 
 ![Diffusion Forcing usage 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/diffusion-forcing-usage-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页。该图概览稳定自回归 rollout、带因果不确定性的去噪、整段轨迹 guidance 和 corrupted observation conditioning 等用法。</small>
+<small>图源：`Diffusion Forcing` 官方项目页。原图表达：同一个 DF 模型可以通过不同噪声日程支持稳定自回归 rollout、因果不确定性、整段轨迹 guidance 和 corrupted observation conditioning。本站读法：把每个小图都当成“采样日程改法”，而不是四个新模型。</small>
 
-!!! note "图解：usage 图展示的是同一个训练目标的多种采样方式"
-    这张图不是在列四个互不相关的应用，而是在说明同一个模型可以通过噪声日程变化服务不同任务。历史 token 可以保持低噪声来稳定 autoregressive rollout；远期未来可以保持高噪声来表达 causal uncertainty；目标或 reward 可以对整段未来施加 guidance；被污染的 observation 可以被当作带噪条件继续去噪。关键是 DF 把“时间上因果”和“噪声上可控”同时保留下来，所以采样阶段可以按任务重排噪声水平。
+**usage 图展示的是同一个训练目标的多种采样方式。**
+这张图不是在列四个互不相关的应用，而是在说明同一个模型可以通过噪声日程变化服务不同任务。历史 token 可以保持低噪声来稳定 autoregressive rollout；远期未来可以保持高噪声来表达 causal uncertainty；目标或 reward 可以对整段未来施加 guidance；被污染的 observation 可以被当作带噪条件继续去噪。关键是 DF 把“时间上因果”和“噪声上可控”同时保留下来，所以采样阶段可以按任务重排噪声水平。
 
 这个采样自由度带来四个能力：
 
@@ -181,16 +174,16 @@ DF 的稳定性来自一个很细但很关键的设计：在自回归 rollout �
 
 实验结论是：DF 在训练 horizon 外仍能保持更稳定的视频结构，而 teacher forcing 和 causal full-sequence diffusion 更容易出现漂移或帧间跳变。
 
-![DMLab video prediction 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/dmlab-video-prediction-原图.png){ width="610" }
+![DMLab video prediction 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/dmlab-video-prediction-原图.png){ width="760" }
 
 <small>图源：`Diffusion Forcing` 官方项目页。DMLab 结果展示 DF 的视频预测样例，红框是 conditioning frames。</small>
 
 ![Minecraft video prediction 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/minecraft-video-prediction-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页。Minecraft 结果展示 DF 在 128x128 Minecraft 视频上的自回归预测样例。</small>
+<small>图源：`Diffusion Forcing` 官方项目页。原图表达：DF 在 128x128 Minecraft 视频上的自回归预测样例。本站读法：沿时间检查视角、地形块和物体身份是否保持连续；它支撑长 rollout 稳定性，不支撑高分辨率真实视频生成能力。</small>
 
-!!! note "图解：视频预测图主要看长 rollout 是否漂移"
-    红框是 conditioning frames，后面的帧是模型自回归预测。读这类结果时不要只看第一两帧是否清晰，而要沿时间往后看：场景布局是否突然跳变，物体身份是否变形，视角运动是否连续，纹理是否逐渐糊成平均样子。DF 想解决的是 teacher forcing 长 rollout 的误差积累，所以 DMLab 和 Minecraft 图的重点是训练 horizon 外还能不能保持结构，而不是单帧视觉质量是否最锐。
+**视频预测图主要看长 rollout 是否漂移。**
+红框是 conditioning frames，后面的帧是模型自回归预测。读这类结果时不要只看第一两帧是否清晰，而要沿时间往后看：场景布局是否突然跳变，物体身份是否变形，视角运动是否连续，纹理是否逐渐糊成平均样子。DF 想解决的是 teacher forcing 长 rollout 的误差积累，所以 DMLab 和 Minecraft 图的重点是训练 horizon 外还能不能保持结构，而不是单帧视觉质量是否最锐。
 
 ## 扩散规划：为什么 MCTG 有用
 
@@ -199,7 +192,6 @@ DF 的稳定性来自一个很细但很关键的设计：在自回归 rollout �
 \[
 x_t = (a_t, o_{t+1}).
 \]
-
 
 这样做的好处是：模型不只是生成一个未来状态序列，还生成“动作会导致什么观测”的因果结构。每执行一步动作，环境返回新观测，模型就可以用这个观测更新 latent state，再重新规划下一段。
 
@@ -248,10 +240,10 @@ current token denoising
 
 ![Robot imitation learning 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/robot-imitation-learning-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 4。图中展示有记忆依赖的水果交换任务、生成视频预测和双相机观测。</small>
+<small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 4。原图表达：有记忆依赖的水果交换任务、生成视频预测和双相机观测。本站读法：先看任务为什么需要记住初始状态，再看 DF 如何把动作和未来观测绑在同一序列里；这张图支撑的是部分可观测控制，不是开放世界机器人泛化。</small>
 
-!!! note "图解：机器人图里的难点是记忆依赖"
-    这张图不要只看成机器人演示截图。水果交换任务要求模型记住初始摆放和中间操作历史，因为当前画面可能不足以判断下一步该移动哪个水果。DF 的优势在于它可以把过去观测作为较干净条件，把未来动作和观测作为带噪候选来生成；双相机输入提供不同视角，动作 token 则把视频预测和控制决策绑在一起。也就是说，这里测试的是“能不能在部分可观测、长时依赖任务里保持因果状态”，不是普通单步视觉分类。
+**机器人图里的难点是记忆依赖。**
+这张图不要只看成机器人演示截图。水果交换任务要求模型记住初始摆放和中间操作历史，因为当前画面可能不足以判断下一步该移动哪个水果。DF 的优势在于它可以把过去观测作为较干净条件，把未来动作和观测作为带噪候选来生成；双相机输入提供不同视角，动作 token 则把视频预测和控制决策绑在一起。也就是说，这里测试的是“能不能在部分可观测、长时依赖任务里保持因果状态”，不是普通单步视觉分类。
 
 论文和附录给出的训练设置要点：
 
@@ -371,9 +363,6 @@ Diffusion Forcing 很容易被误读成“一个视频生成模型”。更准�
 
 ## 消融与诊断怎么读
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 Diffusion Forcing 的关键实验不是“画质超过大视频模型”，而是验证独立噪声 token 这件事是否真的改变序列建模能力。读结果时可以按下面几个诊断看。
 
 | Diagnostic | 对应设置 | 支撑的结论 | 不能证明 |
@@ -413,7 +402,7 @@ MCTG 的价值在于把未来当分布而不是单条轨迹。当前动作应该
 5. **guidance 成本可能高**：MCTG 需要多未来样本，规划效果和计算预算之间有明显 tradeoff。
 6. **训练数据仍决定边界**：如果数据里没有动作分叉、长时依赖或异常观测，DF 的训练目标也不能凭空补出这些能力。
 
-## 读完应该记住什么
+## 阅读结论
 
 Diffusion Forcing 的关键贡献是把扩散模型从“一段序列共享一个噪声水平”推广到“每个 token 拥有独立噪声水平”。这个简单变化让同一个因果模型同时具备：
 
@@ -425,9 +414,10 @@ Diffusion Forcing 的关键贡献是把扩散模型从“一段序列共享一�
 
 从工程角度看，它最值得借鉴的不是某个 RNN 结构，而是一个训练原则：**不要把所有未来 token 都当成同等不确定，也不要把模型自己生成的历史当成完全可信。把不确定性做成每个 token 的噪声水平，训练和采样就能表达更真实的序列状态。**
 
-## 参考资料
+## 外部精读
 
-1. Chen et al. [Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion](https://arxiv.org/abs/2407.01392). arXiv:2407.01392.
-2. 官方项目页：[Diffusion Forcing](https://www.boyuan.space/diffusion-forcing/).
-3. 官方代码：[buoyancy99/diffusion-forcing](https://github.com/buoyancy99/diffusion-forcing).
-4. 论文 HTML 版本：[ar5iv:2407.01392](https://ar5iv.labs.arxiv.org/html/2407.01392).
+- [Diffusion Forcing](https://arxiv.org/abs/2407.01392)：原论文，重点读独立 token 噪声、CDF、MCTG 和机器人实验。
+- [Diffusion Forcing project page](https://www.boyuan.space/diffusion-forcing/)：官方项目页，适合先用图建立“时间轴 × 噪声轴”的直觉。
+- [buoyancy99/diffusion-forcing](https://github.com/buoyancy99/diffusion-forcing)：官方代码，注意论文复现需要看 `paper` 分支说明。
+- [Diffuser](https://arxiv.org/abs/2205.09991)：把扩散模型用于规划的早期代表，适合和 DF 的动作-后果一致性对比。
+- [Decision Diffuser](https://arxiv.org/abs/2211.15657)：从 offline RL 角度理解 diffusion planner 的条件生成和 guidance。

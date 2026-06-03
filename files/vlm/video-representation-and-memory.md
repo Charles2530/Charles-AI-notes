@@ -2,6 +2,11 @@
 
 VLM 从图片开始，世界模型却必须处理时间。对 VLA 和世界模型来说，视频不是很多张图片的拼接，而是状态如何随动作、接触、遮挡和环境变化而演化。
 
+## 核心问题
+
+视频表征和长时记忆要回答的是：**哪些短时视觉变化应该被压成当前状态，哪些长期事件必须写进记忆，才能让模型在遮挡、接触和长任务里不丢关键变量。**
+
+静态 VLM 可以把一张图说清楚；VLA 和世界模型还要知道杯子刚才有没有被抓住、是否被放到遮挡区、哪个动作造成了状态变化、下一步是否需要恢复。视频表征如果只会做短 clip 理解，不会把关键事件写进可持续状态，就很难支撑闭环控制。
 
 ## 视频表征的四个目标
 
@@ -18,10 +23,7 @@ VLM 从图片开始，世界模型却必须处理时间。对 VLA 和世界模�
 z_t = f_\theta(o_{t-K:t})
 \]
 
-
-**读作什么**：把最近一段观测压成当前状态。
-
-**这个公式不说明什么**：只看最近窗口可能不够。长任务里，早期发生的关键事件需要写入 memory，否则模型会忘记被遮挡物体和任务阶段。
+这行式子把最近 \(K\) 步观测压成当前状态 \(z_t\)。它适合描述短时窗口，但也暴露了问题：长任务里，早期发生的关键事件可能已经不在 \(o_{t-K:t}\) 里。如果不写入 memory，模型会忘记被遮挡物体、已完成阶段和失败原因。
 
 ## 常见路线
 
@@ -39,11 +41,7 @@ z_t = f_\theta(o_{t-K:t})
 
 <small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原论文图意：context encoder 只处理 masked video 中可见 token，predictor 结合 context output 和 mask tokens 去预测 target encoder 对完整视频产生的 masked token representations。</small>
 
-!!! note "读图：V-JEPA 支撑的是状态学习，不是像素复读"
-    **先看哪里**：context encoder 只看未遮挡 token，predictor 去预测被 mask 的时空区域 latent。  
-    **它证明什么**：视频模型可以学习对象、运动和上下文结构，而不是把容量全花在像素纹理上。  
-    **它不证明什么**：它不带动作条件、reward、risk 和 planner 接口，所以还不是完整世界模型。  
-    **和红杯例子的关系**：它能帮助状态理解“红杯在一段视频中持续存在”，但还不能单独回答“快速移动会不会滑落”。
+这张图先看 context encoder：它只处理未遮挡 token；predictor 再去预测被 mask 的时空区域 latent。V-JEPA 支撑的是状态学习，而不是像素复读：模型可以学习对象、运动和上下文结构，不必把容量全花在纹理上。但它不带动作条件、reward、risk 和 planner 接口，所以还不是完整世界模型。它能帮助状态理解“红杯在一段视频中持续存在”，但还不能单独回答“快速移动会不会滑落”。
 
 V-JEPA 这类 latent prediction 可以粗略写成：
 
@@ -51,10 +49,7 @@ V-JEPA 这类 latent prediction 可以粗略写成：
 \hat z_{\text{mask}} = h_\theta(z_{\text{context}}, m)
 \]
 
-
-**读作什么**：根据可见上下文，预测被遮挡时空区域的表示。
-
-**这个公式不说明什么**：它预测的是 latent，不是动作条件未来。要进入 VLA/world model，还要加入 \(a_t\)、reward、risk 和闭环验证。
+这里 \(z_{\text{context}}\) 是可见上下文的表示，\(m\) 是 mask 位置或 mask token，\(\hat z_{\text{mask}}\) 是模型预测的被遮挡区域表示。它预测的是 latent，不是动作条件未来。要进入 VLA 或 world model，还要加入 \(a_t\)、reward、risk 和闭环验证。
 
 ### 3. 记忆层级
 
@@ -126,10 +121,7 @@ memory_event:
 m_t = u_\theta(m_{t-1}, z_t, a_{t-1}, e_t)
 \]
 
-
-**读作什么**：新记忆由旧记忆、当前状态、刚才动作和发生的事件共同更新。
-
-**红杯例子**：如果执行 `place_chunk_04` 后红杯被箱子遮挡，memory 应写入“红杯最后在托盘后方，当前不可见，但已移动过”。
+这行式子把记忆更新写成四个输入：旧记忆 \(m_{t-1}\)、当前状态 \(z_t\)、刚才动作 \(a_{t-1}\)、发生的事件 \(e_t\)。如果执行 `place_chunk_04` 后红杯被箱子遮挡，memory 应写入“红杯最后在托盘后方，当前不可见，但已移动过”。关键不是把视频写成摘要作文，而是让后续策略和评测脚本能读到可验证状态。
 
 ## 硬证据模块：记忆页要证明“长时状态没有漂”
 
@@ -167,3 +159,11 @@ m_t = u_\theta(m_{t-1}, z_t, a_{t-1}, e_t)
 | 反例 | 如果任务只是短视频问答或短片段摘要，当前窗口可能足够；只有当系统要做长时 VLA 或世界模型 rollout 时，长期状态才变成核心成本 |
 
 如果一个视频表征只在静态识别上好，却不能支撑动作敏感预测，它更适合 VLM，不适合作为世界模型的核心状态。
+
+## 外部精读
+
+- [V-JEPA](https://arxiv.org/abs/2404.08471)：理解 latent video prediction 如何学习对象、运动和上下文结构。
+- [VideoMAE](https://arxiv.org/abs/2203.12602)：对照看 masked video autoencoding 与 JEPA-style latent prediction 的差别。
+- [MemGPT](https://arxiv.org/abs/2310.08560)：虽然不是视觉模型，但适合理解工作记忆、长期记忆和上下文管理的系统思想。
+- [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)：看跨机器人数据中多相机、动作、任务阶段和轨迹历史为什么很难统一。
+- [DROID](https://droid-dataset.github.io/)：真实机器人长轨迹数据的代表，适合思考哪些事件应该写入 memory。

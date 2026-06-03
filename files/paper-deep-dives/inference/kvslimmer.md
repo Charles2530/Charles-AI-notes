@@ -6,7 +6,6 @@ paper_topic: 高效推理
 
 # KVSlimmer：非对称 KV 合并的数学与工程
 
-
 这篇论文解决的是长上下文推理里很具体、也很痛的瓶颈：**KV cache 太大，但不能随便删 token，也不能把 Key 和 Value 当成同一种东西合并。**
 
 KVSlimmer 的核心判断是：相邻 token 的 `Key` 往往更同质，适合合并；`Value` 更异质，直接合并容易丢信息。它进一步把这个经验现象用谱分布解释清楚，再把 Key 合并的二阶 Hessian 推导成一个只依赖 forward-pass 变量的闭式解。这样它比 AsymKV 少了反向传播开销，同时保留了 off-diagonal Key-Key coupling。
@@ -54,8 +53,8 @@ KVSlimmer 属于第三类。它不是重新训练长上下文模型，也不是�
 
 <small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 1。原论文图意：AsymKV 依赖反向传播和近似 Hessian；KVSlimmer 使用 forward-only 变量构造 exact Hessian 相关合并权重，避免 gradient 路径。</small>
 
-!!! note "这张图支撑什么判断"
-    图里的核心不是“又一种 KV 压缩框架”，而是 merge 计算路径发生了变化：AsymKV 为了估计 Hessian 走 backprop，KVSlimmer 把二阶信息化简成 forward variables 上的范数和线性组合。对在线推理来说，这意味着 KV 压缩本身不应成为新的长上下文瓶颈。
+**这张图支撑什么判断。**
+图里的核心不是“又一种 KV 压缩框架”，而是 merge 计算路径发生了变化：AsymKV 为了估计 Hessian 走 backprop，KVSlimmer 把二阶信息化简成 forward variables 上的范数和线性组合。对在线推理来说，这意味着 KV 压缩本身不应成为新的长上下文瓶颈。
 
 ## 数学主线一：为什么 Key 更能合并，Value 不能简单合并
 
@@ -67,7 +66,6 @@ KVSlimmer 属于第三类。它不是重新训练长上下文模型，也不是�
 y_t = x_t W,\qquad y_{t+1}=x_{t+1}W.
 \]
 
-
 相邻输出的点积可以写成：
 
 \[
@@ -75,20 +73,17 @@ y_t y_{t+1}^{\top}
 = x_t W W^{\top} x_{t+1}^{\top}.
 \]
 
-
 令
 
 \[
 M = W W^{\top} = U\Lambda U^{\top},
 \]
 
-
 其中 \(\Lambda\) 是特征值对角阵。把输入投到 \(U\) 的谱模态上：
 
 \[
 p_{t,i}=x_t u_i.
 \]
-
 
 那么点积可以展开为：
 
@@ -97,7 +92,6 @@ x_t M x_{t+1}^{\top}
 =
 \sum_i \lambda_i p_{t,i}p_{t+1,i}.
 \]
-
 
 相邻输出的 cosine similarity 进一步可以写成每个谱模态贡献的和：
 
@@ -111,7 +105,6 @@ x_t M x_{t+1}^{\top}
 \sum_i c_i.
 \]
 
-
 这一步的含义很关键：
 
 - 如果 \(W\) 的谱能量很集中，少数大 \(\lambda_i\) 主导输出，相邻 token 会被投到类似的低维主方向上，输出更同质；
@@ -123,8 +116,8 @@ x_t M x_{t+1}^{\top}
 
 <small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 2。原论文图意：左列展示 Q/K/V 相邻 token cosine similarity，中列展示 \(W_Q,W_K,W_V\) 特征值分布，右列展示谱模态贡献系数 \(c_i\)。</small>
 
-!!! note "这张图支撑什么判断"
-    左列说明 Q/K 的相邻相似度通常高于 V；中列和右列给出原因：Q/K 投影的谱能量更集中，少数模态主导相似度；V 的谱更分散，保留更多异质信息。因此，“Key 可以更激进地合并，Value 不能照搬同一合并策略”不是单纯经验规则，而是和投影矩阵的谱结构有关。
+**这张图支撑什么判断。**
+左列说明 Q/K 的相邻相似度通常高于 V；中列和右列给出原因：Q/K 投影的谱能量更集中，少数模态主导相似度；V 的谱更分散，保留更多异质信息。因此，“Key 可以更激进地合并，Value 不能照搬同一合并策略”不是单纯经验规则，而是和投影矩阵的谱结构有关。
 
 ## 数学主线二：Key 合并为什么要看 Hessian
 
@@ -134,20 +127,17 @@ x_t M x_{t+1}^{\top}
 K=[k_1,\ldots,k_n],
 \]
 
-
 目标是把相邻两个 Key \((k_m,k_{m+1})\) 合成一个 \(k^*\)，并尽量让 loss 变化最小：
 
 \[
 k^*=\arg\min_k L(k,k).
 \]
 
-
 如果只做平均：
 
 \[
 k^*=\frac{k_m+k_{m+1}}{2},
 \]
-
 
 就默认两个 Key 对 loss 的影响一样大。但 attention 里不同 Key 的影响取决于 query、attention weight、Value residual 和下游 loss，所以更合理的是用二阶近似衡量“改动这个 Key 会让 loss 变多少”。
 
@@ -156,7 +146,6 @@ k^*=\frac{k_m+k_{m+1}}{2},
 \[
 \Delta_m=k-k_m,\qquad \Delta_{m+1}=k-k_{m+1}.
 \]
-
 
 只看这两个 Key 的二阶项，loss 变化可以近似成：
 
@@ -178,7 +167,6 @@ h_{m+1,m} & h_{m+1,m+1}
 \end{bmatrix}.
 \]
 
-
 如果把每个 Hessian block 的有效标量写成 \(g_{11},g_{12},g_{22}\)，那么目标等价于最小化：
 
 \[
@@ -187,7 +175,6 @@ g_{11}\|k-k_m\|^2
 +g_{22}\|k-k_{m+1}\|^2.
 \]
 
-
 对 \(k\) 求导并令导数为 0：
 
 \[
@@ -195,7 +182,6 @@ g_{11}\|k-k_m\|^2
 +(g_{12}+g_{22})(k-k_{m+1})
 =0.
 \]
-
 
 这行式子在说：合并后的 Key \(k\) 应该让二阶近似目标的一阶导数为 0。\(g_{11}\)、\(g_{22}\) 是两个 Key 自身的敏感度，\(g_{12}\) 是相邻 Key 之间的耦合敏感度。
 
@@ -207,7 +193,6 @@ k^*
 \frac{(g_{11}+g_{12})k_m+(g_{12}+g_{22})k_{m+1}}
 {g_{11}+2g_{12}+g_{22}}.
 \]
-
 
 所以 \(g_{12}\) 不是可有可无的小修正。它同时进入分子和分母，决定两个相邻 Key 的 coupling 会把合并结果推向哪一边。
 
@@ -225,7 +210,6 @@ e_i=\frac{qk_i^\top}{\sqrt{d_k}},
 o=\sum_t \alpha_t v_t.
 \]
 
-
 这三项分别是 attention logit、softmax 权重和输出：\(q\) 是 query，\(k_i\) 和 \(v_i\) 是第 \(i\) 个 key/value，\(d_k\) 是 key 维度，\(\alpha_i\) 表示第 \(i\) 个位置被关注的权重。
 
 令 loss 对 attention 输出的梯度为：
@@ -233,7 +217,6 @@ o=\sum_t \alpha_t v_t.
 \[
 E=\frac{\partial L}{\partial o}.
 \]
-
 
 这里 \(E\) 是下游 loss \(L\) 对 attention 输出 \(o\) 的梯度，表示输出往哪个方向变化会更影响 loss。
 
@@ -245,7 +228,6 @@ E=\frac{\partial L}{\partial o}.
 \frac{1}{\sqrt{d_k}}\alpha_i(v_i-o)q^\top.
 \]
 
-
 这行式子在说：改变 key \(k_i\) 对输出 \(o\) 的影响，由 query \(q\)、attention 权重 \(\alpha_i\)、以及该位置 value \(v_i\) 相对总输出 \(o\) 的残差共同决定。
 
 所以：
@@ -256,7 +238,6 @@ g_i=\nabla_{k_i}L
 \frac{1}{\sqrt{d_k}}\alpha_i
 \left[E^\top(v_i-o)\right]q.
 \]
-
 
 这条式子很有解释力：
 
@@ -271,13 +252,11 @@ g_i=\nabla_{k_i}L
 h_{ij}=\frac{\partial g_i}{\partial k_j^\top}.
 \]
 
-
 论文把
 
 \[
 s_i=\alpha_i(v_i-o)
 \]
-
 
 这里 \(s_i\) 把 softmax 权重和 value 残差合成一个局部敏感向量，后面 Hessian block 的差异主要来自它对 logit \(e_j\) 的导数。
 
@@ -292,7 +271,6 @@ E^\top\frac{\partial s_i}{\partial e_j}
 \right]qq^\top.
 \]
 
-
 这说明每个 Hessian block 都是 \(qq^\top\) 这个 rank-one 矩阵乘一个标量敏感度。真正的区别藏在 \(\partial s_i/\partial e_j\)。
 
 对 diagonal case：
@@ -303,7 +281,6 @@ E^\top\frac{\partial s_i}{\partial e_j}
 \alpha_i(1-2\alpha_i)(v_i-o).
 \]
 
-
 对 off-diagonal case：
 
 \[
@@ -312,7 +289,6 @@ E^\top\frac{\partial s_i}{\partial e_j}
 -\alpha_i\alpha_j(v_i+v_j-2o),
 \qquad i\ne j.
 \]
-
 
 这就是 KVSlimmer 说的 exact Hessian coupling：相邻两个 Key 的二阶影响不只是各自的 self-sensitivity，还包括 softmax 归一化带来的交叉项。忽略 \(h_{m,m+1}\)，就会漏掉“改一个 Key 会通过 softmax 影响另一个 Key”的耦合。
 
@@ -324,23 +300,19 @@ E^\top\frac{\partial s_i}{\partial e_j}
 c_{11}=\alpha_m(1-2\alpha_m)(v_m-o),
 \]
 
-
 \[
 c_{22}=\alpha_{m+1}(1-2\alpha_{m+1})(v_{m+1}-o),
 \]
 
-
 \[
 c_{12}=-\alpha_m\alpha_{m+1}(v_m+v_{m+1}-2o).
 \]
-
 
 对应的 Hessian 标量敏感度是：
 
 \[
 g_{ij}=E^\top c_{ij}.
 \]
-
 
 如果直接用这个式子，仍需要 \(E=\partial L/\partial o\)，也就是仍要反向传播。KVSlimmer 的关键化简在这里。
 
@@ -352,7 +324,6 @@ g_{ij}
 \|E\|_2\|c_{ij}\|_2\cos(E,c_{ij}).
 \]
 
-
 论文经验和附录分析给出一个关系：
 
 \[
@@ -363,20 +334,18 @@ g_{ij}
 -\cos(E,c_{12}).
 \]
 
-
 ![Head alignment relationships 原论文图](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-3-head-alignment.png){ width="760" }
 
 <small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 3。原论文图意：在 Llama-3.1-8B-Instruct 的 Layer 2 上展示 \(\cos(E,c_{11})\)、\(\cos(E,c_{12})\)、\(\cos(E,c_{22})\) 的 head-level 线性关系。</small>
 
-!!! note "这张图支撑什么判断"
-    图中三组关系接近线性，且 \(c_{12}\) 与 diagonal 项呈相反符号关系。这正是 KVSlimmer 能把 \(E\) 消掉的实验证据：如果角度关系稳定，合并权重只需要看 \(\|c_{11}\|_2,\|c_{12}\|_2,\|c_{22}\|_2\)，不必真的反传求 \(E\)。
+**这张图支撑什么判断。**
+图中三组关系接近线性，且 \(c_{12}\) 与 diagonal 项呈相反符号关系。这正是 KVSlimmer 能把 \(E\) 消掉的实验证据：如果角度关系稳定，合并权重只需要看 \(\|c_{11}\|_2,\|c_{12}\|_2,\|c_{22}\|_2\)，不必真的反传求 \(E\)。
 
 原始二阶合并可以写成：
 
 \[
 k^* = w_m k_m + w_{m+1}k_{m+1},
 \]
-
 
 其中：
 
@@ -385,7 +354,6 @@ w_m=\frac{g_{11}+g_{12}}{g_{11}+2g_{12}+g_{22}},
 \qquad
 w_{m+1}=\frac{g_{12}+g_{22}}{g_{11}+2g_{12}+g_{22}}.
 \]
-
 
 利用上面的角度关系，\(\|E\|_2\) 和共同角度项被消去，得到 forward-only 形式：
 
@@ -402,7 +370,6 @@ k^*
 \right].
 \]
 
-
 这条式子是全文最重要的工程结果。它说明：
 
 1. 合并 Key 仍然保留了 Hessian 的 self 和 coupling 信息；
@@ -412,17 +379,6 @@ k^*
 
 ## 算一遍：KV cache 为什么值得压
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
->
-> 延伸阅读：[17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html) |
-| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
-
 以 Llama-3.1-8B 这类 GQA 模型做一个粗略估算：假设 `32` 层、`8` 个 KV heads、head dim `128`、BF16。每个 token 的 KV cache 大约是：
 
 \[
@@ -430,7 +386,6 @@ k^*
 =131{,}072\text{ bytes}
 \approx128\text{KiB}.
 \]
-
 
 于是单个请求只看 KV cache：
 
@@ -445,9 +400,6 @@ k^*
 但压缩不是免费午餐。若合并策略丢掉了长文档中的关键 evidence token，LongBench 平均分可能还行，RAG 或 agent 的具体任务会失败。因此 KV 压缩必须同时看 memory、latency 和任务质量。
 
 ## 实验设置
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 论文没有重新训练模型，而是在已有指令模型上做推理时 KV 压缩评测。
 
@@ -516,8 +468,8 @@ k^*
 
 <small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 6。原论文图意：不同 chunk size 下，KVSlimmer 的峰值 GPU memory 明显低于 AsymKV；chunk size 越大差距越明显。</small>
 
-!!! note "这些效率图支撑什么判断"
-    Figure 4/5/6 支撑的是系统层判断：KVSlimmer 不是只在 LongBench 分数上小幅超过 AsymKV，而是把 AsymKV 的反传合并开销拿掉后，在 decoder 时间和峰值显存上也更稳。尤其 Figure 6 说明 chunk size 变大时，AsymKV 的内存压力增长更快，KVSlimmer 更适合受限 GPU 上的长上下文服务。
+**这些效率图支撑什么判断。**
+Figure 4/5/6 支撑的是系统层判断：KVSlimmer 不是只在 LongBench 分数上小幅超过 AsymKV，而是把 AsymKV 的反传合并开销拿掉后，在 decoder 时间和峰值显存上也更稳。尤其 Figure 6 说明 chunk size 变大时，AsymKV 的内存压力增长更快，KVSlimmer 更适合受限 GPU 上的长上下文服务。
 
 ## 消融与诊断怎么读
 
@@ -569,12 +521,12 @@ KVSlimmer 这类方法的价值在于让这些请求能塞进更小显存或更�
 
 第四，KVSlimmer 是推理时压缩方法，不会让模型本身学会更好地使用压缩记忆。如果希望模型原生适应压缩 KV，还需要训练时注入类似扰动或做 compression-aware finetuning。
 
-## 本页结论
+## 阅读结论
 
 KVSlimmer 最值得记住的不是“又省了 29% memory / 28% latency”，而是它把 KV merging 的数学解释补上了：**Q/K 的谱能量集中导致相邻同质，V 的谱能量分散保留异质；Key 合并应保留 Hessian off-diagonal coupling，但这个二阶信息可以被化简成 forward-only 的闭式权重。**这让它从经验压缩技巧变成一个更可解释、也更适合在线推理的 KV cache 合并方法。
 
-!!! info "本站判断"
-    KVSlimmer 要按 KV cache 结构压缩读：方法核心是 Q/K/V 谱分析、head alignment 和 asymmetric KV；实验看 runtime、decoder efficiency 与 peak memory。采用时要按模型、上下文长度、batch 和任务质量分桶验，不要只看平均显存。
+**阅读结论。**
+KVSlimmer 要按 KV cache 结构压缩读：方法核心是 Q/K/V 谱分析、head alignment 和 asymmetric KV；实验看 runtime、decoder efficiency 与 peak memory。采用时要按模型、上下文长度、batch 和任务质量分桶验，不要只看平均显存。
 
 ## 参考
 

@@ -1,301 +1,224 @@
-# Prompt、CoT 与 RAG 入门
+# Prompt、CoT 与 RAG：把模型输入做成可验证的信息流
 
-Prompt Engineering 经常被误解成“找一句神奇咒语”。更准确地说，它是在设计模型的**输入契约**：告诉模型任务是什么、可用信息是什么、输出应长什么样、哪些事情不能做，以及什么时候需要借助外部证据或工具。
+这篇文章只回答一个问题：怎样把“让模型回答”改造成一条可控、可复核、能接外部证据和工具的信息流。
 
+Prompt engineering 不是找一句神奇提示词。它是在设计模型这次推理能看见什么、必须遵守什么、哪些文本只是数据、哪些结果要被外部验证。CoT 给复杂任务一个中间工作区；RAG 把外部证据接进上下文；ReAct 和工具调用把模型从单次生成推向多步状态机。它们不是孤立技巧，而是同一条执行链的不同控制点。
 
-这页参考 [Prompt Engineering Guide](https://www.promptingguide.ai/zh) 中的基础概念、提示词要素、Zero-shot / Few-shot、CoT、Self-Consistency、Prompt Chaining、ReAct 和 RAG 等主题，重点补一条初学者可用的主线：**从单次 prompt，到分步推理，再到检索增强和工具系统**。
+## Prompt 是上下文组装，不是咒语
 
-## Prompt Engineering 到底在设计什么
-
-一个大语言模型在推理时只能看到上下文窗口里的内容。Prompt Engineering 设计的就是这个窗口里的信息结构：
+模型一次回答时只能读到上下文窗口里的 token。Prompt 的本质是把不同来源的信息按权限和目的装进这个窗口：
 
 ```text
 system / developer instruction
   -> task instruction
-  -> background context
-  -> examples
+  -> trusted context
   -> user input
-  -> retrieved evidence / tool results
+  -> examples
+  -> retrieved evidence
+  -> tool results
   -> output constraints
   -> model response
 ```
 
-可以把 prompt 看成一次临时配置。它不会改变模型参数，但会改变模型当前回答时的目标、风格、可见证据和输出边界。
+可以把上下文写成：
 
-| 要素 | 作用 | 常见问题 |
+\[
+C =
+\operatorname{concat}(I_{\text{system}}, I_{\text{task}}, X_{\text{user}}, E_{\text{evidence}}, T_{\text{tool}}, O_{\text{format}})
+\]
+
+这里 \(C\) 是模型实际看到的上下文，\(I_{\text{system}}\) 是高优先级指令，\(I_{\text{task}}\) 是当前任务说明，\(X_{\text{user}}\) 是用户输入，\(E_{\text{evidence}}\) 是检索证据，\(T_{\text{tool}}\) 是工具结果，\(O_{\text{format}}\) 是输出格式约束。公式想表达的是：prompt 不是一句话，而是一组有来源、权限和边界的信息。
+
+一个好 prompt 至少要说清四件事：
+
+| 问题 | 要写清什么 | 如果没写清会怎样 |
 | --- | --- | --- |
-| Instruction | 明确任务和优先级 | 任务太泛，模型只能猜 |
-| Context | 提供背景、术语、业务规则 | 背景太长或混入无关信息 |
-| Input data | 用户问题、文档片段、表格、代码 | 数据边界不清，模型把指令和资料混在一起 |
-| Examples | 用少量样例定义格式和判断标准 | 样例和真实任务分布不一致 |
-| Constraints | 约束长度、语气、证据、禁止行为 | 约束互相冲突或无法执行 |
-| Output format | 指定 JSON、表格、步骤、字段 | 格式要求不够严格，难以后处理 |
-| Tools / Evidence | 给出可调用工具或检索证据 | 工具结果未被验证，引用不可靠 |
+| 任务是什么 | 输入、目标、判断标准 | 模型按默认任务猜 |
+| 信息从哪里来 | 可信上下文、用户数据、检索证据、工具结果 | 模型把资料里的恶意文字当指令 |
+| 输出给谁用 | 人读、程序解析、后续工具、审计记录 | 格式不稳定，难以复现和回放 |
+| 失败时怎么办 | 证据不足、工具失败、冲突证据、低置信度 | 模型补常识、硬编答案或过度自信 |
 
-一个好的 prompt 通常不是最长的，而是边界最清楚的：模型知道该做什么、用什么做、做到什么程度、以什么格式交付。
+这也是为什么分隔符有用。它不是形式主义，而是在告诉模型和后处理系统：某一段是 evidence，不是新指令；某一段是 user input，不是系统规则；某一段必须被引用或校验。
 
-## 基础提示模式
+## Zero-shot、few-shot 和 schema 分别在约束什么
 
-### 2.1 Zero-shot：直接描述任务
+Zero-shot 只给任务说明，适合模型已经熟悉、边界简单的任务。Few-shot 用少量样例定义判断边界，适合分类、抽取、格式转换和业务规则。Schema 或 grammar 则把输出变成程序可检查的结构。
 
-Zero-shot 是不给示例，只用任务说明让模型回答。适合模型已经熟悉的通用任务，例如摘要、翻译、简单分类、格式转换。
+| 方法 | 约束对象 | 适合场景 | 主要风险 |
+| --- | --- | --- | --- |
+| zero-shot | 任务目标 | 通用摘要、翻译、简单问答 | 模型按默认风格和隐含标准执行 |
+| few-shot | 判断边界和输出格式 | 分类、抽取、风格迁移、专有格式 | 样例覆盖不够会把边界带偏 |
+| schema / JSON | 输出结构 | 工具参数、后续程序消费、审计 | 格式合法不等于事实正确 |
+| decoder settings | 从概率分布里怎么取 token | 稳定抽取、多样写作、多候选搜索 | 低温度不能修复证据错误 |
+| external validator | 输出是否满足任务约束 | 代码、数学、引用、工具参数 | validator 覆盖不到的错误仍会漏 |
 
-```text
-请把下面这段文字总结成 3 条要点，每条不超过 30 个字。
+所以“prompt 写得好”不等于“任务可靠”。稳定系统通常会把 prompt、解码参数、schema、后处理校验和评测集放在一起设计。比如 JSON 输出要靠 schema 校验；事实问答要靠证据引用和引用校验；代码任务要靠测试；高风险判断要靠规则或人工复核。
 
-文本：
-...
-```
+## CoT 是工作区，不是事实证明
 
-优点是简单、成本低；缺点是遇到专有格式、隐含判断标准或业务规则时，模型容易按自己的默认理解执行。
+Chain-of-Thought 的价值是给复杂任务留出中间状态：列条件、分解子问题、计算、比较候选、检查矛盾。它在数学、代码、规划、多约束判断里常有帮助，因为这些任务很难一步从问题跳到答案。
 
-### 2.2 Few-shot：用样例定义任务边界
+但 CoT 不是事实证明。模型写出一段推理，只说明它生成了一段看起来像推理的文本；如果证据错、检索错、题意错，长 CoT 可能只是把错误包装得更顺。
 
-Few-shot 在 prompt 中提供少量输入输出样例，让模型模仿格式和判断逻辑。它适合分类、抽取、改写、结构化输出和不容易用一句话讲清的任务。
+更安全的工程读法是：
 
-```text
-你要判断用户反馈的类别，只能输出 bug、feature_request 或 complaint。
-
-示例 1：
-输入：导出 PDF 时页面空白
-输出：bug
-
-示例 2：
-输入：能不能增加深色模式
-输出：feature_request
-
-现在判断：
-输入：点击保存后一直转圈
-输出：
-```
-
-Few-shot 的关键不是堆很多样例，而是选能覆盖边界情况的样例。样例越接近真实任务，提示越稳定。
-
-### 2.3 分隔符：把指令和数据切开
-
-当 prompt 里同时有指令、文档和用户输入时，应使用明确分隔符，避免模型把资料里的文字当成新指令。
-
-```text
-请只根据 <evidence> 中的信息回答问题。如果证据不足，回答“证据不足”。
-
-<evidence>
-...
-</evidence>
-
-<question>
-...
-</question>
-```
-
-这在 RAG、代码分析、文档问答和用户生成内容场景里尤其重要。外部文档可能包含“忽略上面的指令”这类 prompt injection 文本，系统必须把它视为数据，而不是指令。
-
-### 2.4 输出格式：让回答可被程序消费
-
-如果结果要进入后续系统，不应只写“请简洁回答”，而要给出字段、类型和失败时的输出。
-
-```json
-{
-  "label": "bug | feature_request | complaint",
-  "confidence": 0.0,
-  "evidence": "引用用户原文中的关键短语"
-}
-```
-
-结构化输出的好处是可解析、可评测、可回放；代价是 prompt 要更严格，并且需要在外部做 schema 校验。
-
-## 解码参数也是输入契约的一部分
-
-Prompt 决定模型看什么，解码参数决定模型怎么从概率分布里选择输出。这里先记住最常用的几个入口；logits、softmax、temperature、top-k/top-p、beam search、自回归生成和 KV cache 的完整解释见 [生成与解码基础](generation-and-decoding-basics.md)。
-
-| 参数 | 直觉 | 适合场景 |
+| 场景 | 是否需要显式推理 | 更可靠的外部信号 |
 | --- | --- | --- |
-| Temperature | 越高越随机，越低越稳定 | 分类、抽取、RAG 通常偏低；创意写作可偏高 |
-| Top-p / Top-k | 限制可采样 token 的候选集合 | 和 temperature 一起控制多样性 |
-| Max tokens | 限制输出长度 | 防止长回答拖慢系统或挤占预算 |
-| Stop sequences | 遇到指定片段停止 | 对固定格式、多样本生成有用 |
-| Seed | 固定随机性，便于复现 | 测试、回归和对比实验 |
+| 简单事实问答 | 通常不需要长 CoT | 检索来源、时间戳、引用校验 |
+| 数学题 | 常需要中间步骤 | 计算器、符号检查、最终答案验证 |
+| 代码任务 | 需要计划和调试 | 单元测试、编译、lint、运行结果 |
+| 多约束决策 | 需要比较条件 | 规则表、评分器、人工复核 |
+| 高风险建议 | 只能辅助 | 政策、专家、工具、审计日志 |
 
-不要把所有问题都交给 prompt 文字解决。需要稳定分类时，低温度、严格 schema 和外部校验往往比继续加一句“请认真”更有效；需要探索多条候选时，采样多样性、token 成本和 verifier 要一起设计。
+Self-Consistency 和 verifier sampling 把 CoT 从“写一条推理”变成“搜索多条候选，再筛选”：
 
-## CoT：让模型有中间工作区
+\[
+y^{(1)},\ldots,y^{(n)}\sim p_\theta(y\mid x)
+\]
 
-CoT（Chain-of-Thought）可以理解成让模型在复杂任务里先形成中间推理，再给出答案。它常用于数学、代码、规划、逻辑比较和多约束决策。
+\[
+y^\*=\arg\max_y V(x,y)
+\]
 
-```text
-请先分析约束，再给出最终答案。
-最终答案必须放在“结论：”后面。
-```
+这里 \(V(x,y)\) 是验证器，可以是测试、规则、检索证据匹配、reward model 或人审。这个公式说明 test-time compute 的本质：多花 token 和延迟，换取更多候选，再用更贴近任务的信号选结果。它适合高价值、可验证任务，不适合每个在线请求默认无限采样。
 
-CoT 有用的原因不是“多写字就更聪明”，而是复杂任务往往需要中间状态：列条件、分解子问题、检查矛盾、做计算、再合成结论。
+## Prompt chaining 把大任务拆成可调试步骤
 
-| 场景 | 是否适合 CoT | 原因 |
-| --- | --- | --- |
-| 简单事实问答 | 不一定 | 直接回答更快，减少幻觉空间 |
-| 数学与代码 | 适合 | 需要中间计算和错误检查 |
-| 多约束方案选择 | 适合 | 需要比较条件和权衡 |
-| RAG 问答 | 适合简短推理 | 应以证据为主，避免编造长推理 |
-| 高风险决策 | 只作为辅助 | 还需要工具、规则、人工或程序校验 |
-
-!!! warning "不要把 CoT 当成事实证明"
-    模型写出推理过程，不代表推理真实可靠。工程上更常暴露“简洁理由、证据来源、关键检查点”，而不是把完整内部草稿原样展示给用户。
-
-## Self-Consistency：多想几条路再投票
-
-Self-Consistency 的直觉是：对同一个复杂问题采样多条推理路径，再根据最终答案投票或筛选。它适合答案可验证、路径可能多样的任务。
+一个 prompt 同时要求“读文档、检索事实、判断风险、生成报告、输出 JSON、引用来源”，失败时很难定位。Prompt chaining 的做法是把任务拆成几个可检查状态：
 
 ```text
-问题 -> 采样多个解法 -> 比较最终答案 -> 选择一致性最高或可验证的答案
+Step 1: 抽取候选事实
+Step 2: 去重、合并、标出冲突
+Step 3: 按规则判断风险
+Step 4: 生成结构化输出
+Step 5: 校验引用和 schema
 ```
 
-它的优势是能降低单条推理路径偶然出错的概率；代价是 token 成本和延迟会成倍增加。因此它更适合数学、代码、离线评测和高价值任务，不适合每个在线请求默认开启。
+拆链的意义不是让流程更复杂，而是让每一步有输入、输出和验收标准。某一步失败时，可以重试这一段，而不是重跑整条链。RAG、代码分析、合同审查、数据清洗、工具 agent 都适合这种做法。
 
-## Prompt Chaining：把复杂任务拆成多步
+| 单次大 prompt 的失败 | 拆链后怎么定位 |
+| --- | --- |
+| 最终答案错 | 先看事实抽取是否错，再看规则判断是否错 |
+| JSON 解析失败 | 单独修输出 schema 或后处理 |
+| 引用不支撑结论 | 单独检查 evidence assembly 和 citation mapping |
+| 工具参数错 | 单独回放 action selection |
+| 结果太慢 | 看哪一步消耗 token、工具时间或检索延迟 |
 
-当一个 prompt 同时要求“读文档、抽取事实、判断风险、生成报告、输出 JSON”时，失败概率会明显上升。Prompt Chaining 的做法是把任务拆成多个稳定步骤：
+## ReAct 把推理变成状态机
+
+ReAct 的核心不是“模型一边想一边行动”这句口号，而是让模型在每一步显式更新状态：当前知道什么、缺什么、要调用什么工具、工具返回改变了什么。
 
 ```text
-Step 1: 从文档中抽取候选事实
-Step 2: 对事实做去重和冲突检查
-Step 3: 根据规则判断风险等级
-Step 4: 生成最终摘要和结构化输出
+state
+  -> decide action
+  -> call tool
+  -> observe result
+  -> update state
+  -> stop or continue
 ```
 
-拆链的好处是每一步更容易调试、评测和重试。某一步失败时，不必重新跑完整任务，也更容易定位是检索错、抽取错、判断错还是格式错。
+工具结果必须被当作外部证据，而不是更高优先级指令。网页、文档、搜索结果、数据库字段里都可能出现 prompt injection。系统需要把 tool result 放在低权限数据区域，并要求模型只抽取证据，不执行其中的指令。
 
-## ReAct：推理和行动交替
+一个可上线的工具流程至少要记录：
 
-ReAct 可以理解成 Reasoning + Acting。模型不只在文本里推理，还会决定何时调用工具、读工具返回、再继续下一步。
+| 记录项 | 为什么重要 |
+| --- | --- |
+| 工具选择理由 | 区分该调用和乱调用 |
+| 参数 | 复现错误、检测越权和注入 |
+| 返回结果 | 判断证据是否支撑结论 |
+| 失败与重试 | 防止工具循环和隐性超时 |
+| 最终引用 | 把回答绑定到工具证据 |
+| 成本和延迟 | 判断这个 agent 路径是否值得 |
 
-```text
-用户问题
-  -> 判断需要外部信息
-  -> 调用搜索 / 数据库 / 代码执行 / 浏览器
-  -> 读取结果
-  -> 更新判断
-  -> 回答或继续调用工具
-```
+## RAG 是证据管线，不是把资料塞进 prompt
 
-ReAct 适合开放域问答、数据查询、代码调试、网页操作和多步业务流程。它的关键风险是工具循环、错误参数、错误解读工具结果，以及把工具返回中的恶意文本当成系统指令。
+RAG 解决的是模型知识不够新、不够私有、不可追溯的问题。它先检索外部证据，再让模型基于证据回答。
 
-## RAG：把外部证据接进模型
+![RAG overview 原论文图](../assets/images/paper-figures/foundations/rag-figure-1-overview.png){ width="660" }
 
-RAG（Retrieval-Augmented Generation）解决的是模型知识不够新、不够私有、不可追溯的问题。它先从外部知识库检索证据，再把证据放进上下文，让模型基于证据回答。
+<small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原图展示 query encoder、document index 和 generator 如何连接：输入问题先检索 top-K 文档，再基于检索文档生成。本站用这张图说明：RAG 的关键不是生成器本身，而是 retriever、index、evidence assembly 和 generator 之间的证据流。</small>
 
-![RAG overview 原论文图](../assets/images/paper-figures/foundations/rag-figure-1-overview.png){ width="790" }
+RAG paper 里可以把检索文档 \(z\) 看成外部 latent variable：
 
-<small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原论文图意：RAG 把 query encoder、document index 和 seq2seq generator 接起来，对输入问题先检索 top-K 文档，再让生成器基于不同文档生成并边缘化预测。</small>
+\[
+p(y\mid x)
+=
+\sum_{z\in \operatorname{TopK}(x)}
+p_\eta(z\mid x)\;
+p_\theta(y\mid x,z)
+\]
 
-!!! note "论文图解卡：RAG 图不要只看生成器"
-    **先看哪里**：从左侧 query 进入 query encoder，看它如何到 document index 里检索，再看右侧 generator 如何用检索文档生成答案。  
-    **图中模块**：retriever 是外部记忆入口，document index 是非参数知识库，generator 是参数模型。  
-    **对应公式**：可以把 retrieved document \(z\) 当成 latent variable，模型在 top-K 文档上综合生成概率。  
-    **容易误读**：RAG 不是“把资料全部塞进 prompt”。关键是检索、排序、上下文装配和引用边界是否可靠。
+这里 \(x\) 是问题，\(z\) 是检索到的文档，\(p_\eta(z\mid x)\) 是 retriever 给文档的相关性权重，\(p_\theta(y\mid x,z)\) 是 generator 基于问题和文档生成答案的概率。公式的工程含义很直接：如果 retriever 没找回关键文档，generator 后面再聪明也没有证据；如果找到太多噪声文档，generator 会被干扰。
 
-一个标准 RAG 流程是：
+一个实际 RAG 系统通常包含：
 
 ```text
 文档采集
-  -> 清洗与切块
-  -> embedding / 关键词索引
-  -> 用户问题改写
-  -> 检索候选片段
+  -> 清洗、去重、权限和版本
+  -> chunking
+  -> embedding / keyword / hybrid index
+  -> query rewrite
+  -> retrieval
   -> rerank
-  -> 上下文装配
-  -> 生成带引用答案
-  -> 反馈与评测回流
+  -> context assembly
+  -> grounded generation
+  -> citation check
+  -> eval / feedback
 ```
 
-### 8.1 RAG 每一步在解决什么
+每一步都可能是瓶颈：
 
-| 环节 | 作用 | 常见坑 |
+| 环节 | 它解决什么 | 典型失败 |
 | --- | --- | --- |
-| 文档清洗 | 去掉页眉、导航、重复噪声 | 噪声进入索引，污染回答 |
-| Chunking | 把长文档切成可检索片段 | 切太碎丢上下文，切太大召回不准 |
-| Embedding | 把文本变成向量，支持语义检索 | 术语、数字、代码和表格可能召回差 |
-| Hybrid Search | 结合关键词和向量检索 | 只用一种检索容易漏召回 |
-| Rerank | 对候选证据重新排序 | reranker 慢或和任务不匹配 |
-| Context Assembly | 在 token 预算内组织证据 | 关键证据被截断或被无关证据淹没 |
-| Citation | 把答案绑定到来源 | 引用看似存在，但不支撑结论 |
+| 文档清洗 | 去掉导航、页眉、重复噪声 | 噪声被检索回来，污染回答 |
+| Chunking | 让证据片段可检索 | 切太碎丢上下文，切太大召回不准 |
+| Hybrid search | 同时覆盖语义和关键词 | 只靠 embedding 容易漏数字、代码、专名 |
+| Rerank | 把真正有用证据排前面 | reranker 和任务不匹配或太慢 |
+| Context assembly | 在 token 预算内放证据 | 关键证据被截断，或被无关证据淹没 |
+| Grounded generation | 基于证据生成答案 | 模型补常识或忽略冲突证据 |
+| Citation check | 验证引用支撑结论 | 引用编号存在，但句子不支持 claim |
 
-RAG 的核心不是“多塞资料”，而是让正确证据在正确位置被模型使用。
+RAG 的质量不能只看最终回答。要分开测 retrieval recall、rerank precision、answer correctness、citation faithfulness、latency、cost 和权限安全。否则“模型答错了”这个现象无法归因：可能是文档库没有答案，可能是 chunk 切错，可能是 retriever 漏召回，可能是 generator 没用证据。
 
-### 8.2 RAG、长上下文和微调的区别
+## 长上下文、RAG 和微调不是替代关系
 
-| 方法 | 解决什么 | 不适合什么 |
+这三种方法经常被混在一起，但它们解决的问题不同。
+
+| 方法 | 更适合解决 | 不适合解决 |
 | --- | --- | --- |
-| RAG | 外部知识、新知识、私有知识、可引用证据 | 需要模型内化稳定技能的场景 |
-| 长上下文 | 一次性读大量材料，减少检索漏召回 | 材料巨大且低密度时成本高 |
-| Fine-tuning | 固化风格、格式、领域行为和工具习惯 | 频繁更新事实知识 |
+| 长上下文 | 一次性读完整材料，避免检索漏召回 | 材料巨大、低密度、权限复杂或频繁更新 |
+| RAG | 私有知识、新知识、可引用证据、权限隔离 | 稳定行为、固定格式和深层技能 |
+| 微调 / SFT | 固化风格、格式、工具习惯、领域行为 | 高频变化事实和需要引用的知识 |
+| 工具调用 | 查询数据库、跑代码、执行操作、实时状态 | 没有工具可验证的主观判断 |
 
-如果知识经常变、需要引用来源，优先 RAG；如果行为格式不稳定，考虑 SFT 或规则后处理；如果只是偶尔读取一份长文档，长上下文可能比搭 RAG 更简单。
+一个常见组合是：微调让模型学会使用某种工作流；RAG 给它最新证据；长上下文处理当前任务材料；工具调用做实时查询或验证；schema 和评测保证输出能被系统消费。
 
-## RAG Prompt 怎么写
+## 可靠系统要有回归集
 
-RAG 的 prompt 应强调证据边界、无法回答时的行为，以及引用要求。
+Prompt 改动最容易靠感觉评估。更好的做法是给每类任务建小型回归集：
 
-```text
-你是一个问答助手。请只根据 <evidence> 中的材料回答。
-
-要求：
-1. 如果证据不足，回答“证据不足”，不要补充常识猜测。
-2. 每个关键结论后给出引用编号。
-3. 如果证据之间冲突，先说明冲突，再给出保守结论。
-
-<evidence>
-[1] ...
-[2] ...
-</evidence>
-
-<question>
-...
-</question>
-```
-
-这类 prompt 仍然不能单独保证可靠性。系统还需要检索评测、引用校验、版本控制和人工抽检。
-
-## 常见失败模式
-
-| 失败模式 | 表现 | 改进方向 |
-| --- | --- | --- |
-| 指令含糊 | 输出风格和字段每次不同 | 明确任务、格式、成功标准 |
-| 样例误导 | 模型模仿了错误边界 | 选覆盖边界的 few-shot 样例 |
-| 过度 CoT | 答案变长但错误更多 | 简化推理，只保留关键步骤和校验 |
-| 检索漏召回 | 证据库里有答案但没找出来 | 优化 chunk、query rewrite、hybrid search |
-| 证据污染 | 无关片段误导模型 | rerank、去重、证据过滤 |
-| 引用幻觉 | 引用编号存在但不支撑结论 | 引用到句级证据，做自动校验 |
-| Prompt injection | 文档里的恶意文本改变模型行为 | 分隔指令和数据，降低外部文本权限 |
-| 无评测闭环 | 改 prompt 靠感觉 | 建立测试集、回归集和线上失败回放 |
-
-## 一个实用选择表
-
-| 你遇到的问题 | 优先尝试 |
+| Bucket | 要覆盖什么 |
 | --- | --- |
-| 模型不知道输出格式 | 加 schema、few-shot、外部校验 |
-| 模型回答太发散 | 降低 temperature，收紧任务和字段 |
-| 模型不会按业务规则判断 | 增加规则上下文和边界样例 |
-| 任务需要多步推理 | CoT、Prompt Chaining、可验证中间结果 |
-| 答案依赖私有或最新知识 | RAG |
-| 需要查资料、跑代码或调系统 | ReAct / Agent + 工具权限控制 |
-| 改动后不知道有没有变好 | 建立固定评测集和回归测试 |
+| 格式 | JSON、表格、字段缺失、非法值 |
+| 证据 | 证据充分、证据不足、证据冲突、引用不支撑 |
+| 推理 | 多步计算、边界条件、反例 |
+| 工具 | 正常返回、失败返回、权限不足、注入文本 |
+| RAG | 漏召回、噪声召回、旧版本文档、重复文档 |
+| 成本 | 长 prompt、长工具日志、多候选采样、timeout |
 
-## 和后续专题的接口
+没有回归集，prompt engineering 就会退回手感调参。每次改 prompt、换模型、改检索、换 reranker、调 temperature 或改工具 schema，都应该能跑同一批案例，看到正确率、引用质量、格式成功率、延迟和成本如何变化。
 
-| 基础概念 | 后续会在哪里出现 | 读法 |
-| --- | --- | --- |
-| Prompt Engineering | 推理服务、Agent、VLM、产品系统 | 看输入契约和输出约束是否清楚 |
-| CoT / Thinking | 多模态推理、数学代码、RL 后训练 | 看中间推理是否可验证、是否受预算控制 |
-| Prompt Chaining | 文档处理、代码分析、复杂工作流 | 看任务是否被拆成可调试步骤 |
-| ReAct | Agent、工具调用、具身智能闭环 | 看每步动作、观察和状态更新是否可靠 |
-| RAG | 企业知识库、长上下文系统、在线问答 | 看证据召回、排序、装配和引用是否可靠 |
+## 阅读结论
 
-Prompt Engineering 是入口，RAG 和工具系统是延伸。真正稳定的系统不会只依赖一句 prompt，而会把提示词、检索、工具、格式校验、评测和失败回流一起设计。
+Prompt 是输入契约，CoT 是工作区，prompt chaining 是可调试流程，ReAct 是带工具的状态机，RAG 是证据管线。它们的共同目标不是让回答看起来更复杂，而是让模型能在明确边界、可信证据、可验证中间状态和可回放日志里工作。真正稳定的系统不会只靠一句 prompt，而会把上下文组装、检索、工具、schema、验证、评测和失败回流一起设计。
 
-## 参考来源
+## 外部精读
 
-- [Prompt Engineering Guide 中文首页](https://www.promptingguide.ai/zh)
-- [Prompt Engineering Guide：提示工程基础](https://www.promptingguide.ai/zh/introduction/basics)
-- [Prompt Engineering Guide：Chain-of-Thought Prompting](https://www.promptingguide.ai/zh/techniques/cot)
-- [Prompt Engineering Guide：Self-Consistency](https://www.promptingguide.ai/zh/techniques/consistency)
-- [Prompt Engineering Guide：Prompt Chaining](https://www.promptingguide.ai/zh/techniques/prompt_chaining)
-- [Prompt Engineering Guide：ReAct Prompting](https://www.promptingguide.ai/zh/techniques/react)
-- [Prompt Engineering Guide：Retrieval Augmented Generation](https://www.promptingguide.ai/zh/techniques/rag)
+- [Prompt Engineering Guide 中文版](https://www.promptingguide.ai/zh)：系统学习 zero-shot、few-shot、CoT、ReAct、RAG 等基本概念。
+- [OpenAI Prompt Engineering Guide](https://platform.openai.com/docs/guides/prompt-engineering)：看官方如何组织清晰指令、参考文本、复杂任务拆分和外部工具。
+- [Anthropic Prompt Engineering Overview](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)：理解清晰直接、示例、CoT 和长上下文提示的工程边界。
+- [Chain-of-Thought Prompting](https://arxiv.org/abs/2201.11903)：理解中间推理样例为什么能改善复杂任务。
+- [Self-Consistency](https://arxiv.org/abs/2203.11171)：理解多条推理路径采样和聚合。
+- [ReAct](https://arxiv.org/abs/2210.03629)：理解 reasoning 和 acting 如何交替。
+- [Retrieval-Augmented Generation](https://arxiv.org/abs/2005.11401)：理解 RAG 的 retriever、document latent variable 和 generator。
+- [Lilian Weng: LLM Powered Autonomous Agents](https://lilianweng.github.io/posts/2023-06-23-agent/)：高质量博客，适合把 planning、tool use、memory 和 agent 失败模式连起来读。

@@ -6,8 +6,9 @@ paper_topic: 具身智能 / VLA
 
 # Video Prediction Policy：预测视觉表征训练机器人策略
 
-
 VPP 的核心观点很漂亮：很多视觉策略只编码当前图像，而视频扩散模型内部包含“未来会怎样”的预测表征。把这些 predictive visual representations 拿来当 policy 的视觉条件，可以让机器人从视频模型的动态先验中受益。
+
+举个桌面操作例子。只看当前图像时，policy 能知道“杯子、海绵、机械臂在哪里”，但不一定知道下一步接触后会发生什么：海绵会不会碰到杯沿，杯子会不会被推歪，手爪继续下压会不会卡住。视频预测模型在训练中被迫学习“当前画面往后如何演化”，它的中间表征会更关注物体即将移动、接触和状态变化的区域。VPP 的想法不是让机器人每次都生成一段漂亮未来视频，而是把这种未来感抽成低延迟 latent，再让 inverse dynamics policy 从 latent 里解码动作。
 
 ## 证据等级与外推边界
 
@@ -43,11 +44,8 @@ GR-2 是“视频预训练 + 机器人轨迹微调”；DreamZero 是“joint vi
 
 <small>Figure source: `Video Prediction Policy`, Figure 1. 原论文图意：视频 diffusion model 内部表征同时包含当前信息和未来预测信息；VPP 基于这些表征在多个 benchmark 上提升机器人策略表现。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是 text-guided video prediction 的中间表征和机器人观测，输出是 policy 动作。  
-    **效率机制**：复用预测表征而非完整生成视频，降低把动态先验接入策略的成本。  
-    **对主线意义**：它说明“未来 latent”可以直接服务 VLA policy。  
-    **不能证明什么**：预测表征提升不能证明显式世界模型或反事实动作规划已成立。
+**总览图先看表示流向。**
+左侧视频预测模型不是部署时的画面生成器，而是 future-aware encoder：它从历史观测和语言中抽取中间预测表征。右侧 policy 不直接问“未来视频长什么样”，而是问“这个未来表征暗示我现在该怎么动”。这张图支撑的是“预测 latent 能服务策略”，还不能证明显式世界模型、反事实动作规划或长期恢复能力已经成立。
 
 ## 两阶段训练
 
@@ -77,7 +75,6 @@ $$
 p_\theta(o_{t+1:t+H} \mid o_{\le t}, l)
 $$
 
-
 在扩散模型里，它实际学习的是去噪目标。若 \(\mathbf{z}_0\) 是未来视频 latent，\(\mathbf{z}_\tau\) 是加噪后的 latent，模型学习预测噪声或速度：
 
 $$
@@ -91,7 +88,6 @@ $$
 \right]
 $$
 
-
 这里最重要的是条件：模型不只是做通用视频生成，而是在操作视频和机器人数据上学习“给定任务语言和当前观测，未来该往哪个方向演化”。这就是 predictive visual representation 的来源。
 
 ### Stage 2：Inverse Dynamics Policy
@@ -101,7 +97,6 @@ $$
 $$
 \pi_\phi(a_{t:t+K}\mid o_{\le t}, l, \mathbf{h}_{\mathrm{pred}})
 $$
-
 
 这可以看成 implicit inverse dynamics：TVP 内部表征暗示“未来视觉会怎样变”，policy 学“要让未来这样变，现在该怎么动”。注意它不是显式规划器，没有枚举候选动作并 rollout；它把未来预测压缩进视觉表征，再用动作模型直接解码。
 
@@ -115,8 +110,8 @@ $$
 
 这个选择非常具身：机器人 policy 不需要每次生成好看的未来视频，它需要低延迟、对动作有用的表示。中间表征比完整视频便宜，也比普通静态视觉 encoder 更有动态信息。
 
-!!! note "Figure 5 怎么读"
-    这张图要反着读：one-step prediction 画面模糊，正是它的工程价值。若策略每个控制周期都要完整 denoise 出高清视频，延迟会压垮 closed-loop 控制；VPP 只取 single forward step 的内部表示，让纹理不完整但运动方向、物体接触趋势和目标变化已经进入 latent。它支撑的是“预测表征可用”，不是“单步图像可当真实模拟器”。
+**Figure 5 怎么读。**
+这张图要反着读：one-step prediction 画面模糊，正是它的工程价值。若策略每个控制周期都要完整 denoise 出高清视频，延迟会压垮 closed-loop 控制；VPP 只取 single forward step 的内部表示，让纹理不完整但运动方向、物体接触趋势和目标变化已经进入 latent。它支撑的是“预测表征可用”，不是“单步图像可当真实模拟器”。
 
 ## 数据与训练细节
 
@@ -148,9 +143,6 @@ VPP 的 TVP 训练数据包括：
 
 ## 实验结果
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 VPP 在 CALVIN 和 MetaWorld 上验证了 predictive visual representations 的价值。
 
 | Benchmark | Setup | Main claim |
@@ -179,8 +171,8 @@ Table 1 from the paper can be redrawn as follows, keeping the original English f
 
 <small>表源：`Video Prediction Policy`，Table 1。原表含义：CALVIN ABC→D zero-shot long-horizon evaluation，`1` 到 `5` 表示连续完成第 1 到第 5 个任务的比例，`Avg. Len` 是平均完成链长。最值得注意的是，VPP 不用 depth / point cloud，仍把平均链长从 3D Diffuser Actor 的 `3.35` 推到 `4.29`；只用 `10%ABC` 标注数据时也达到 `3.25`。</small>
 
-!!! note "Table 1 怎么读"
-    CALVIN 不是单任务成功率，而是连续 5 个语言任务的链式完成。`1` 到 `5` 的数字越往右越难，因为前一步失败会阻断后续任务。VPP 最突出的不是第一个任务 `0.957`，而是第 5 个任务仍有 `0.750`，说明预测表征对状态保持和长链执行有帮助。`10%ABC` 设置更关键：只用十分之一标注数据时，VPP 的 `Avg. Len=3.25` 接近强 3D baseline 的完整数据表现，说明动态先验确实缓解了机器人标注稀缺。
+**Table 1 怎么读。**
+CALVIN 不是单任务成功率，而是连续 5 个语言任务的链式完成。`1` 到 `5` 的数字越往右越难，因为前一步失败会阻断后续任务。VPP 最突出的不是第一个任务 `0.957`，而是第 5 个任务仍有 `0.750`，说明预测表征对状态保持和长链执行有帮助。`10%ABC` 设置更关键：只用十分之一标注数据时，VPP 的 `Avg. Len=3.25` 接近强 3D baseline 的完整数据表现，说明动态先验确实缓解了机器人标注稀缺。
 
 ![VPP real robots](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-7-real-robot.png){ width="760" }
 
@@ -194,8 +186,8 @@ Table 1 from the paper can be redrawn as follows, keeping the original English f
 
 <small>Figure source: `Video Prediction Policy`, Figure 12. 原论文图意：绿色是真实未来，红色是预测未来，蓝色是 predictive representations 的可视化；即便细节不精确，运动趋势已经出现。</small>
 
-!!! note "Figure 12 怎么读"
-    这张图是 VPP 的机制诊断。绿色真实未来、红色预测未来和蓝色表征可视化不是为了证明图像生成很漂亮，而是说明中间 representation 已经朝未来物体运动、手部接触或目标状态变化聚焦。如果蓝色区域只响应当前静态纹理，它就和普通视觉 encoder 没太大区别；如果它开始响应即将发生变化的区域，才说明 TVP 给 policy 提供了未来感。
+**Figure 12 怎么读。**
+这张图是 VPP 的机制诊断。绿色真实未来、红色预测未来和蓝色表征可视化不是为了证明图像生成很漂亮，而是说明中间 representation 已经朝未来物体运动、手部接触或目标状态变化聚焦。如果蓝色区域只响应当前静态纹理，它就和普通视觉 encoder 没太大区别；如果它开始响应即将发生变化的区域，才说明 TVP 给 policy 提供了未来感。
 
 ### Ablation：预测表征到底贡献在哪里
 
@@ -236,11 +228,15 @@ VPP 的独特位置在于：它不要求每次部署都生成高质量未来视�
 
 VPP 的表征依赖 TVP 的预测质量。若 TVP 在新场景里预测错误动态，policy 也会被误导。另外，它的真实机器人数据仍以可控平台和任务集合为主，开放家庭长时任务、无效指令拒绝、跨房间记忆等问题还需要其他机制。
 
-!!! info "本站判断"
-    VPP 的方法证据是用视频预测表征服务策略，而不是把未来帧当最终产品；实验要看 one-step prediction、real robot 和 predictive representation 消融。它支持“动态预测能改进控制表征”，但长期接触、恢复和多任务泛化仍需真机闭环。
+## 阅读结论
 
-## 参考链接
+VPP 最值得记住的是“未来视频不一定要生成出来，未来信息可以先变成策略表征”。它把视频扩散模型当作带动态先验的视觉编码器，只取 single forward step 的中间表征，再用 inverse dynamics policy 解码动作。这样做把视频世界模型的一个昂贵能力压缩成控制侧能用的 latent。
 
-1. [arXiv:2412.14803](https://arxiv.org/abs/2412.14803)
-2. [GitHub: roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)
-3. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2412.14803)
+因此，VPP 支持的结论是：动态预测能改进机器人策略的状态表示，尤其在长链任务和标注数据较少时有帮助。它不等于完整 action-conditioned world model，也没有证明开放环境里的反事实规划已经解决；真正部署还要看同一状态下不同动作是否能导致可区分的未来表征，以及真机闭环中错误能否被恢复。
+
+## 外部精读
+
+1. [Video Prediction Policy](https://arxiv.org/abs/2412.14803)：原论文；重点读 Section 3 的 TVP 表征提取和 inverse dynamics policy。
+2. [VPP project page](https://video-prediction-policy.github.io/)：看真实机器人视频、可视化和论文图的上下文。
+3. [GitHub: roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)：核对代码、模型入口和实验复现说明。
+4. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2412.14803)：适合逐图阅读，尤其 Figure 5 与 Figure 12。

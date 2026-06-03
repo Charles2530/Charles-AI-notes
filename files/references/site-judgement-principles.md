@@ -1,7 +1,6 @@
-# 本站判断原则
+# 证据判断原则
 
 这页说明本站如何判断一项技术是否真的服务**世界模型高效训练**。它不替代 [全站证据与复现状态标准](evidence-and-reproducibility-standard.md)、[Claim Ledger](claim-ledger.md) 或 [全站效率技术覆盖矩阵](site-efficiency-coverage-matrix.md)，而是把这些页面背后的判断口径写成更短的原则。
-
 
 ## 五条原则
 
@@ -15,7 +14,7 @@
 
 ## 知识讲解原则
 
-本站的文章首先要讲清知识，而不是维护目录。参考 [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)、[colah 的 LSTM 讲解](https://colah.github.io/posts/2015-08-Understanding-LSTMs/)、[Lil'Log](https://lilianweng.github.io/)、[Hugging Face 技术文档](https://huggingface.co/docs/transformers/main/quantization/concept_guide)、[BAIR Blog](https://bair.berkeley.edu/blog/2023/10/16/p3o/) 和 OneFlow/智源转载的 [全栈 Transformer 推理优化](https://hub.baai.ac.cn/view/33449)，本站后续写法按下面规则收敛。
+本站的文章首先要讲清知识，而不是维护目录。参考 [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)、[colah 的 LSTM 讲解](https://colah.github.io/posts/2015-08-Understanding-LSTMs/)、[Lil'Log](https://lilianweng.github.io/)、[Hugging Face 技术文档](https://huggingface.co/docs/transformers/main/quantization/concept_guide)、[BAIR Blog](https://bair.berkeley.edu/blog/2023/10/16/p3o/) 和 OneFlow/智源转载的 [全栈 Transformer 推理优化](https://hub.baai.ac.cn/view/33449)，本站后续写法按下面规则收敛。具体外部材料维护在 [外部精读来源台账](external-reading-ledger.md)，用于记录“学到的讲法”和“可支撑的证据边界”。
 
 | 写法 | 要做到什么 | 避免什么 |
 | --- | --- | --- |
@@ -27,6 +26,31 @@
 | 允许外部精读 | 正文需要处直接链接论文、官方博客、工程博客或高质量公众号转载 | 为了互链而互链 |
 
 好文章的共同点不是“更长”，而是每一段都回答一个小问题：为什么需要这个概念，它改变了什么判断，读者拿它能分清哪两个容易混淆的东西。
+
+## 外部讲法怎么落到本站
+
+广泛参考高质量博客、中文长文和公众号，不是把它们改写成本站二手摘要，而是学习它们如何让复杂知识变得可进入。每篇深改文章在动笔前先问：这类材料用了什么读者视角？它解决的是困惑、公式、系统瓶颈、图像读法，还是路线判断？
+
+| 外部材料类型 | 可学习的讲法 | 本站落地方式 |
+| --- | --- | --- |
+| 经典技术博客 | 用一个具体例子贯穿全文，先讲机制再放公式 | 每篇文章开头必须有一个能带入的最小场景，后面的公式和图都回到这个场景解释 |
+| 可视化博客 | 图按读者视线顺序讲，先看输入输出，再看中间机制 | 每张关键图都写“原图表达什么”和“本站怎么读”，图解进入正文，不塞提示框 |
+| 工程长文 | 从瓶颈出发，例如显存、通信、KV cache、kernel launch、decode latency | 系统文章先说明瓶颈在哪里，再解释方法为什么省这个成本项 |
+| 中文技术媒体 / 公众号 | 用行业问题、路线冲突和读者痛点把新论文放到语境里 | 可以学习开篇和结构，但性能数字、图和实验结论必须回到原论文/官方来源 |
+| 官方博客 / 项目页 | 用 demo、架构图和实验表说明能力形态 | 用作事实入口，但要补“不能证明什么”，特别是 demo 与闭环能力的区别 |
+| 学术综述 / Blogpost | 把多个方法放在同一个问题轴上比较 | 只在确有帮助时加入路线对比，避免把单篇文章写回大清单 |
+
+因此，真正的改稿顺序是：先学外部讲法，找出读者最可能卡住的一句话；再读原始论文确认机制和证据；最后把本站段落改成“困惑 -> 例子 -> 机制 -> 公式/图 -> 反例和边界”。如果一个段落只能留下名词、符号表或导航链接，它就还没有讲清楚。
+
+## 外部材料学习流程
+
+每次深改核心文章时，先不要急着改段落，而要先完成三步。
+
+1. 读原始来源：论文、官方博客、技术报告、官方项目页或官方文档，确认事实、图源、实验边界和发布日期。
+2. 读高质量讲解：技术博客、工程长文、中文转载或公众号文章，学习它们如何安排例子、图解顺序、反例和读者卡点。
+3. 回写本站：把外部材料消化成正文里的核心问题、公式解释、图读法和边界说明；文末只保留真正值得继续读的 2-5 个来源。
+
+中文技术文章和公众号材料可以帮助建立中文读者直觉，但默认不作为强证据。涉及模型性能、系统吞吐、机器人成功率或安全结论时，必须回到论文、官方报告、项目页、代码仓库或可复算实验。
 
 ## 证据强度
 

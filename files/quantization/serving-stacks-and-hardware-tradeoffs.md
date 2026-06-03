@@ -2,19 +2,13 @@
 
 这一页讲量化放到服务系统里以后，怎样按硬件、延迟、吞吐、成本和质量目标做取舍。具体 runtime 兼容性放在 [量化运行时与部署框架](quantization-runtimes-and-frameworks.md)。
 
+## 核心问题
+
+量化服务选型真正要回答的是：**低比特带来的节省，是否能在你的硬件、runtime、请求分布和质量门槛下兑现成更低成本或更高容量。**
+
+这句话里每个词都重要。硬件决定 FP8/INT8/INT4 kernel 是否成熟，runtime 决定 dequant、packing、batch 和 KV 管理是否命中高效路径，请求分布决定权重还是 KV 更贵，质量门槛决定哪些层和哪些请求必须保高精度。单独看“4bit”或“模型文件大小”没有意义。
 
 ## 量化收益的三种来源
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
 
 | 来源 | 例子 | 可能被什么抵消 |
 | --- | --- | --- |
@@ -22,7 +16,7 @@
 | 带宽下降 | decode 读权重或 KV 更少 | dequant、unpack、非连续访存 |
 | 计算更快 | FP8/INT8 tensor core | kernel 不支持、shape 不匹配、fallback |
 
-**读作什么**：一个方案可以显存省很多，但速度不变；也可以速度提升，但质量掉点不可接受。上线必须同表看。
+一个方案可以显存省很多，但速度不变；也可以速度提升，但质量掉点不可接受。上线必须把显存、延迟、吞吐和质量同表看。
 
 ## 一个简化成本模型
 
@@ -32,8 +26,7 @@
 \mathrm{Cost} \approx C_{\mathrm{weight}} + C_{\mathrm{kv}} + C_{\mathrm{compute}} + C_{\mathrm{runtime}} + C_{\mathrm{quality}}
 \]
 
-
-**读作什么**：量化如果只降低 \(C_{\mathrm{weight}}\)，但 \(C_{\mathrm{kv}}\) 或 \(C_{\mathrm{quality}}\) 上升，整体未必划算。
+这行式子把系统成本拆成五项：权重常驻成本、KV cache 动态成本、计算成本、runtime 额外开销和质量退化成本。量化如果只降低 \(C_{\mathrm{weight}}\)，但 \(C_{\mathrm{kv}}\) 或 \(C_{\mathrm{quality}}\) 上升，整体未必划算。
 
 ## 不同硬件的量化直觉
 
@@ -44,8 +37,7 @@
 | CPU/边缘设备 | 带宽和指令集差异大 | GGUF/INT8/INT4 格式要贴设备 |
 | 多卡服务 | 通信、并行和 KV 分布也重要 | 量化要和 tensor/pipeline parallel 配合 |
 
-!!! warning "不要只按 GPU 型号拍脑袋"
-    同一张卡上，不同 runtime、driver、batch shape、context length 和量化格式，结果可能差很多。硬件选择必须结合真实请求压测。
+**不要只按 GPU 型号拍脑袋。** 同一张卡上，不同 runtime、driver、batch shape、context length 和量化格式，结果可能差很多。硬件选择必须结合真实请求压测。
 
 ## 服务目标不同，量化选择不同
 
@@ -65,6 +57,7 @@
 \mathrm{WeightMemory}\approx N_{\mathrm{params}}\times \mathrm{bytes}
 \]
 
+其中 \(N_{\mathrm{params}}\) 表示模型参数量，\(\mathrm{bytes}\) 表示每个参数的存储字节数。权重量化主要降低这一项，所以它对“模型能不能装进显存”特别直接。
 
 KV 显存：
 
@@ -72,8 +65,7 @@ KV 显存：
 \mathrm{KVMemory}\approx2\times L\times B\times T\times H_{\text{kv}}\times d_h\times \mathrm{bytes}
 \]
 
-
-**读作什么**：权重量化主要影响模型常驻成本；KV 量化主要影响长上下文和并发。两者要分别评估。
+权重量化主要影响模型常驻成本；KV 量化主要影响长上下文和并发。两者要分别评估。很多线上系统在权重已经 W4A16 后，真正限制并发的会变成 KV cache、prefix cache 命中率和 decode 带宽。
 
 ## 低延迟和高吞吐的冲突
 
@@ -162,6 +154,14 @@ KV 显存：
 4. 短请求和长请求分开测，平均吞吐不能代表 P99。
 5. 把质量掉点和回退成本写进总拥有成本。
 
-## 本页结论
+## 阅读结论
 
 量化服务选型不是“哪个 bit 最低”，而是“在你的硬件、runtime、请求分布和质量门槛下，哪种精度分配最划算”。权重、KV、kernel 和业务质量要放在一张表里算，才不会把压缩率误当成系统收益。
+
+## 外部精读
+
+- [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：先把 scheme、granularity 和 technique 分开。
+- [TensorRT-LLM documentation](https://nvidia.github.io/TensorRT-LLM/)：理解 NVIDIA serving 栈里的 FP8/INT8/INT4、kernel 和 engine 构建。
+- [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：理解权重量化之外，KV cache 管理为什么仍会限制并发。
+- [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 FP8 作为硬件友好混合精度格式的动机。
+- [A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)：把低比特方法、系统传输和 KV cache 量化放在同一张图谱里。

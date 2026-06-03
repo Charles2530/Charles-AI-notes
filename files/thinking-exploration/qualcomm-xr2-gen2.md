@@ -1,19 +1,18 @@
 # XR2 Gen 2：端侧 AI 与量化部署
 
-
 先不谈指标，先想一个动作：你戴上 Meta Quest 3，打开彩色透视，低头看桌面，抬手点一个悬浮按钮。这个动作不到一秒，但头显要同时接收多路相机画面、估计头和手的位置、把真实世界和虚拟画面叠在一起、给左右眼渲染高分辨率画面、维持无线连接，还可能并发运行语音识别、场景理解或应用侧视觉模型。
 
 ![Meta Quest 3 headset and Touch Plus controllers on a wooden table](../assets/images/thinking-exploration/qualcomm-xr2-gen2/meta-quest-3-headset-controllers.png){ width="820" }
 
-<small>图源：用户提供图片。Meta Quest 3 使用 Snapdragon XR2 Gen 2，图中可见头显前侧传感器窗口和 Touch Plus 控制器；它对应本文讨论的一体式 MR / VR 头显场景。</small>
+<small>图源：用户提供图片。原图表达：Meta Quest 3 使用 Snapdragon XR2 Gen 2，图中可见头显前侧传感器窗口和 Touch Plus 控制器。本站读法：把它当成一体式 MR / VR 头显的系统边界，后文所有 AI 推理都要和相机、显示、追踪、无线和散热共享预算。</small>
 
 这就是 XR2 Gen 2 的真实工作现场：**它不是一次性跑分机器，而是持续运行的感知-渲染-交互闭环。**所以讨论 Qualcomm XR 平台时，只问“AI TOPS 有多少”并不够；更关键的是模型如何进入软件栈，并在真实头显里稳定、低延迟、低功耗地跑。
 
-!!! tip "读完应建立的 4 个判断"
-    - **先看场景**：XR2 Gen 2 是面向 standalone MR / VR 头显的空间计算平台，AI 推理必须和显示、相机、追踪、无线、内存、散热一起算账。
-    - **先锁口径**：QCS8450 / XR2 Gen 2 Proxy 是 AI Hub 里的替代目标，适合早筛模型兼容性和 runtime，不等于最终产品 KPI。
-    - **先看代际**：QCS8450 Proxy 在 AI Hub Models 元数据里是 HTP v69，接近 SM8450 / Snapdragon 8 Gen 1 的后端口径，不能直接套用 v73+ 的量化经验。
-    - **先分 runtime**：量化通常能压缩模型大小，但不保证更快；同一 `w8a8` 模型在 TFLite、QNN DLC、ONNX Runtime QNN EP 上可能走完全不同的执行路径。
+**读完应建立的 4 个判断。**
+- **先看场景**：XR2 Gen 2 是面向 standalone MR / VR 头显的空间计算平台，AI 推理必须和显示、相机、追踪、无线、内存、散热一起算账。
+- **先锁口径**：QCS8450 / XR2 Gen 2 Proxy 是 AI Hub 里的替代目标，适合早筛模型兼容性和 runtime，不等于最终产品 KPI。
+- **先看代际**：QCS8450 Proxy 在 AI Hub Models 元数据里是 HTP v69，接近 SM8450 / Snapdragon 8 Gen 1 的后端口径，不能直接套用 v73+ 的量化经验。
+- **先分 runtime**：量化通常能压缩模型大小，但不保证更快；同一 `w8a8` 模型在 TFLite、QNN DLC、ONNX Runtime QNN EP 上可能走完全不同的执行路径。
 
 本文回答三件事：第一，XR2 Gen 2 / QCS8450 到底是什么；第二，一个模型从 PyTorch / ONNX 怎么走到头显上；第三，为什么量化部署不能只看 `INT8` 这个标签。
 
@@ -92,16 +91,16 @@ Qualcomm 的[官方发布稿](https://www.qualcomm.com/news/releases/2023/09/qua
 
 ![Snapdragon XR2 Gen 2 Product Brief page 1](../assets/images/thinking-exploration/qualcomm-xr2-gen2/xr2-gen2-product-brief-page-1.png){ width="720" .atlas-figure-page }
 
-<small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 1。该页给出平台定位：next-generation MR and VR、on-device AI、3K-by-3K display、2.5x GPU、8x AI、10 concurrent cameras、12ms video see-through latency、Wi-Fi 7 / Wi-Fi 6E 等。</small>
+<small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 1。原图表达：平台定位包括 next-generation MR and VR、on-device AI、3K-by-3K display、2.5x GPU、8x AI、10 concurrent cameras、12ms video see-through latency、Wi-Fi 7 / Wi-Fi 6E 等。本站读法：先看多链路并发，不要只看 AI 倍数；XR SoC 的瓶颈常在相机、显示、内存和热预算之间互相挤压。</small>
 
-!!! info "这张图真正想表达什么"
-    这页 Product Brief 不是在说“XR2 Gen 2 只有 AI 很强”，而是在讲一颗头显 SoC 必须同时处理几条链路。`3K-by-3K display` 和 `2.5x GPU` 指向双眼高分辨率渲染；`10 concurrent cameras` 和 `12ms video see-through latency` 指向 MR 透视、追踪和空间定位；`Wi-Fi 7 / Wi-Fi 6E` 服务 PC 串流、多人同步和高带宽内容。`8x AI` 可以当作方向性信号带过，真正做模型时仍要回到 runtime、layer placement、内存和持续功耗。
+**这张图真正想表达什么。**
+这页 Product Brief 不是在说“XR2 Gen 2 只有 AI 很强”，而是在讲一颗头显 SoC 必须同时处理几条链路。`3K-by-3K display` 和 `2.5x GPU` 指向双眼高分辨率渲染；`10 concurrent cameras` 和 `12ms video see-through latency` 指向 MR 透视、追踪和空间定位；`Wi-Fi 7 / Wi-Fi 6E` 服务 PC 串流、多人同步和高带宽内容。`8x AI` 可以当作方向性信号带过，真正做模型时仍要回到 runtime、layer placement、内存和持续功耗。
 
 下面这张完整规格页最值得看的是显示和相机：10 路并发相机、2x IFE 视频透视、8x IFE-Lite 感知、每眼 3.1K x 3.1K @ 90 FPS、time-warp 2.8K x 3K @ 90 FPS。它说明 XR2 Gen 2 是多传感器低延迟闭环平台，不是单纯“AI 加速器”。
 
 ![Snapdragon XR2 Gen 2 specifications and features](../assets/images/thinking-exploration/qualcomm-xr2-gen2/xr2-gen2-product-brief-page-2.png){ width="720" .atlas-figure-page }
 
-<small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 2。完整官方字段保留在原图里；正文只提炼模型部署最相关的部分。</small>
+<small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 2。原图表达：完整规格覆盖显示、相机、ISP、GPU、连接、AI 和内存等模块。本站读法：正文只提炼模型部署最相关的部分，尤其是并发相机、低延迟透视和每眼显示分辨率如何挤占端侧 AI 预算。</small>
 
 | Hardware block | Role in an XR product | Practical question |
 | --- | --- | --- |
@@ -112,8 +111,8 @@ Qualcomm 的[官方发布稿](https://www.qualcomm.com/news/releases/2023/09/qua
 | FastConnect 7800 | PC-to-HMD、多人同步、Wi-Fi 7 / Wi-Fi 6E 连接 | 无线链路是否影响云串流、多人互动和边缘协同 |
 | LP-DDR5 / LLC | 多路视频、AI tensor、渲染资源和系统服务共享内存 | 峰值内存和带宽是否成为模型部署瓶颈 |
 
-!!! note "术语框：Hexagon / HTP / NPU"
-    Qualcomm 文档里经常同时出现 `Hexagon`、`HTP` 和 `NPU`。可以粗略理解为：`Hexagon` 是 Qualcomm SoC 内承载 DSP / AI 计算的一组处理器与加速单元名称，`HTP` 更偏 Hexagon Tensor Processor 这类张量加速后端，`NPU` 则常作为 AI Hub profile 里“神经网络加速路径”的计算单元口径。工程上不要把 `NPU` 想成一块独立显卡，而应看模型的哪些 layer 最终被 runtime 放到了 Qualcomm 的 AI 加速后端上。
+**术语框：Hexagon / HTP / NPU。**
+Qualcomm 文档里经常同时出现 `Hexagon`、`HTP` 和 `NPU`。可以粗略理解为：`Hexagon` 是 Qualcomm SoC 内承载 DSP / AI 计算的一组处理器与加速单元名称，`HTP` 更偏 Hexagon Tensor Processor 这类张量加速后端，`NPU` 则常作为 AI Hub profile 里“神经网络加速路径”的计算单元口径。工程上不要把 `NPU` 想成一块独立显卡，而应看模型的哪些 layer 最终被 runtime 放到了 Qualcomm 的 AI 加速后端上。
 
 公开资料里没有 Qualcomm 给出的裸 SoC 价格，也没有芯片级 TDP。Meta [Quest 3 launch article](https://about.fb.com/news/2023/09/meet-meta-quest-3-mixed-reality-headset/) 中，Quest 3 发布时 128GB 版本 starting at `$499.99`，512GB 版本为 `$649.99`；这个价格只能说明 XR2 Gen 2 覆盖的是几百美元级消费头显，不代表裸片价格。Product Brief 未公开芯片 TDP，也不应写成“XR2 Gen 2 = x W”。
 
@@ -125,7 +124,7 @@ Qualcomm 的[官方发布稿](https://www.qualcomm.com/news/releases/2023/09/qua
 
 ![AI Hub Workbench how it works](../assets/images/thinking-exploration/qualcomm-xr2-gen2/ai-hub-how-it-works.png){ width="920" }
 
-<small>图源：Qualcomm AI Hub Workbench `How-It-Works.png`，展示 upload -> optimize -> validate -> deploy 的 device-in-the-loop 流程。</small>
+<small>图源：Qualcomm AI Hub Workbench `How-It-Works.png`。原图表达：upload -> optimize -> validate -> deploy 的 device-in-the-loop 流程。本站读法：这张图说明端侧 AI 不是“导出一个 ONNX 就结束”，模型要经过编译、量化、设备侧 profile 和部署资产生成。</small>
 
 | Layer | Qualcomm software | Main function |
 | --- | --- | --- |
@@ -191,13 +190,13 @@ VIT 页面和开源仓库给出的技术信息主要来自 Qualcomm AI Hub 的 [
 
 AI Hub Workbench 的 [Quantization 文档](https://workbench.aihub.qualcomm.com/docs/hub/quantize_examples.html) 给出的 PTQ 路径可以简化为：先 trace / export，再 compile 到 optimized ONNX，收集代表性 calibration data，提交 quantize job，拿到 QDQ / fake quantization 风格的 quantized ONNX，最后重新 compile 到 TFLite、QNN 或 ONNX 并 profile。文档中的量化支持口径是：TFLite 支持 int8 weights / int8 activations；QNN 和 ONNX 支持 int8 weights / int8 或 int16 activations；mixed precision 当前表格中标为 Not supported，long-term 目标才包括更多 mixed precision 和 int4 / int8 / int16 组合。
 
-!!! note "术语框：AIMET、PTQ 和 QDQ"
-    `AIMET` 是 Qualcomm 的模型效率工具，常用于量化、压缩和量化精度分析。`PTQ` 是 post-training quantization。`QDQ` 是 ONNX 常见量化表达，用 `QuantizeLinear / DequantizeLinear` 标出量化边界；AI Hub quantize job 输出的 quantized ONNX 属于这种 fake quantization / QDQ 风格资产。
+**术语框：AIMET、PTQ 和 QDQ。**
+`AIMET` 是 Qualcomm 的模型效率工具，常用于量化、压缩和量化精度分析。`PTQ` 是 post-training quantization。`QDQ` 是 ONNX 常见量化表达，用 `QuantizeLinear / DequantizeLinear` 标出量化边界；AI Hub quantize job 输出的 quantized ONNX 属于这种 fake quantization / QDQ 风格资产。
 
 顺序上有一个容易忽略的细节：**要先把图变成接近部署形态的 ONNX，再做校准和量化。**部署图会经历算子融合、常量折叠、shape 固化、layout 调整和 runtime 适配；如果直接在原始训练图上插 Q/DQ，后续编译可能改变图结构，让校准假设和真实执行路径错位。校准数据也要贴近线上输入，随机样本最多用于快速估计 latency，不适合判断 accuracy。
 
-!!! warning "QCS8450 上的 w8a16 口径"
-    要区分“模型库声明支持某种 precision”和“某个目标 SoC / runtime path 真正适合用它”。ViT 配置里列出 `w8a16`，但 QCS8450 Proxy / SM8450 在 AI Hub Models 设备元数据里是 HTP v69；本文按实验口径处理为：QCS8450 上优先比较 `float` 和 `w8a8`，不要把 v73+ 路径直接套回 XR2 Gen 2。
+**QCS8450 上的 w8a16 口径。**
+要区分“模型库声明支持某种 precision”和“某个目标 SoC / runtime path 真正适合用它”。ViT 配置里列出 `w8a16`，但 QCS8450 Proxy / SM8450 在 AI Hub Models 设备元数据里是 HTP v69；本文按实验口径处理为：QCS8450 上优先比较 `float` 和 `w8a8`，不要把 v73+ 路径直接套回 XR2 Gen 2。
 
 开源仓库中的 VIT [`perf.yaml`](https://github.com/qualcomm/ai-hub-models/blob/main/src/qai_hub_models/models/vit/perf.yaml) 给出 QCS8450 Proxy 上的部分 profile 数字：
 
@@ -225,8 +224,8 @@ AI Hub Workbench 的 [Quantization 文档](https://workbench.aihub.qualcomm.com/
 
 激活函数也值得查。ViT MLP 常见 `Linear -> GELU -> Linear`，ONNX 里 `GELU` 可能展开成 `Erf / Tanh / Add / Mul / Div` 子图。若业务精度允许，可在训练或微调阶段尝试 ReLU / ReLU-like 激活，再导出 ONNX 对比 profile。AI Hub Models 的 AIMET 默认配置中，[v69](https://github.com/qualcomm/ai-hub-models/blob/main/src/qai_hub_models/utils/aimet/default_per_tensor_config_v69.json) / [v73](https://github.com/qualcomm/ai-hub-models/blob/main/src/qai_hub_models/utils/aimet/default_per_tensor_config_v73.json) per-tensor config 都把 `["Gemm", "Relu"]` 放在 `supergroups` 中，但没有等价的 `Gemm + Gelu` supergroup。这个配置不是完整 QNN 编译规则，却足以提醒我们：`Gemm -> Relu` 更接近后端常见融合模式。
 
-!!! tip "用 Netron 看什么"
-    打开导出的 ONNX，先看是否有 `MatMul/Gemm -> Erf/Tanh/Mul/Add` 这类 GELU 展开链路，再看 Q/DQ 是否切在 MatMul、LayerNorm、Softmax 前后。真正上线前要用 accuracy 对照确认替换激活不会伤害下游任务，再用 layer timing 确认加速来自激活和融合。
+**用 Netron 看什么。**
+打开导出的 ONNX，先看是否有 `MatMul/Gemm -> Erf/Tanh/Mul/Add` 这类 GELU 展开链路，再看 Q/DQ 是否切在 MatMul、LayerNorm、Softmax 前后。真正上线前要用 accuracy 对照确认替换激活不会伤害下游任务，再用 layer timing 确认加速来自激活和融合。
 
 **工程判断：**量化不是孤立算法步骤，而是部署链路中的系统折中；对 XR 来说，精度、延迟、内存、热稳定和用户体验是一组联动指标。
 
@@ -247,7 +246,7 @@ AI Hub Workbench 的 [Quantization 文档](https://workbench.aihub.qualcomm.com/
 
 **工程判断：**XR2 Gen 2 是 XR 产品平台，不是单纯 AI 加速芯片；QCS8450 / XR2 Gen 2 Proxy 是很有用的开发入口，但真正的难点是把模型放进 XR 整机的持续并发预算里。
 
-## 参考资料
+## 外部精读
 
 1. [Qualcomm AI Hub Workbench Documentation](https://workbench.aihub.qualcomm.com/docs/)
 2. [Qualcomm AI Hub](https://aihub.qualcomm.com/)

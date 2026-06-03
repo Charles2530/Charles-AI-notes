@@ -6,10 +6,9 @@ paper_topic: 具身智能
 
 # Depth Anything 3：任意视角的 3D 几何底座
 
-
 Depth Anything 3 放在具身智能专题里，是因为它补的是机器人闭环最基础的一层：**从 RGB、多视角或视频恢复稳定的 3D 几何状态**。VLA 可以输出动作，世界模型可以预测未来，但真正执行抓取、导航、避障和视角规划时，系统仍然要知道物体在哪里、相机在哪里、深度是否一致、点云能不能融合。
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+可以先想一个机器人数据管线里的小场景：你有一段厨房操作视频，腕部相机看见杯子边缘，第三人称相机看见桌面和机械臂，另一个视角看见杯子后面的遮挡。如果每一帧只是一张 RGB 图，VLA 只能在像素上猜“杯子离夹爪多远”；如果能把这些视角恢复成一致的 depth、ray、camera pose 和 point cloud，后续抓取候选、可达性检查和失败回放才有可计算的空间状态。DA3 的核心价值就在这里：它不是替代策略模型，而是把普通视觉输入变成几何接口。
 
 ## 论文位置
 
@@ -27,11 +26,11 @@ DA3 的主线可以概括成一句话：把 Depth Anything 系列的单目深度
 
 <small>图源：`Depth Anything 3`，Figure 1。原论文图意：DA3 接收任意数量图像和可选相机位姿，输出一致的 depth maps 与 ray maps，并进一步融合为点云、相机和 3D Gaussian 表示。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是任意视角图像，输出是 depth、ray、camera 和 3D geometry。  
-    **效率机制**：把多视角几何恢复做成统一前向感知底座，减少手写几何管线成本。  
-    **对主线意义**：它服务世界模型的 geometry/state interface，而不是替代 dynamics。  
-    **不能证明什么**：几何重建不能证明动作因果、接触建模或真实机器人策略安全。
+**DA3 teaser 先看 depth、ray、camera 三个输出接口。**
+**输入输出**：输入是任意视角图像，输出是 depth、ray、camera 和 3D geometry。  
+**效率机制**：把多视角几何恢复做成统一前向感知底座，减少手写几何管线成本。  
+**对主线意义**：它服务世界模型的 geometry/state interface，而不是替代 dynamics。  
+**不能证明什么**：几何重建不能证明动作因果、接触建模或真实机器人策略安全。
 
 ## 核心表示：Depth + Ray
 
@@ -43,7 +42,6 @@ $$
 X_i(u,v) = o_i + D_i(u,v) d_i(u,v).
 $$
 
-
 这比直接预测 point map 或相机矩阵有几个好处。第一，depth 保留了 Depth Anything 系列擅长的局部结构和边界细节。第二，ray map 能隐式表达相机位姿和投影几何，不需要模型直接回归一个必须满足旋转矩阵约束的 pose。第三，depth 与 ray 分开后，给定外部相机位姿时也容易做 pose-conditioned depth，让多视角深度更一致。
 
 论文还说明，ray direction 不做单位归一化，方向向量的尺度会保留投影几何信息。需要显式相机参数时，可以从 ray map 里用 DLT 和 RQ decomposition 恢复相机；工程上则额外提供轻量 camera head，方便直接输出 intrinsics / extrinsics。
@@ -52,12 +50,12 @@ $$
 
 DA3 的建模思路很克制。它没有堆两个专用 Transformer，也没有把 camera、depth、point、track 都变成独立复杂任务，而是用一个 vanilla DINOv2 ViT 作为主干。
 
-![Depth Anything 3 pipeline 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-2-pipeline.png){ width="920" }
+![Depth Anything 3 pipeline 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-2-pipeline.png){ width="860" }
 
 <small>图源：`Depth Anything 3`，Figure 2。原论文图意：DA3 使用单个 DINOv2 主干，通过 input-adaptive cross-view self-attention 做跨视角推理，再用 Dual-DPT head 输出 depth 与 ray。</small>
 
-!!! note "图解：pipeline 要按三段读"
-    第一段是 image tokens 进入 DINOv2 主干，提供单视角视觉先验；第二段是 cross-view attention 和 camera token，把不同视角放到同一个几何上下文里；第三段是 Dual-DPT head，同时输出 depth 和 ray。图里的重点不是“多了一个 head”，而是 DA3 把多视角一致性放进 backbone 推理过程，再把结果落到可融合的几何接口。
+**Pipeline 要按三段读。**
+第一段是 image tokens 进入 DINOv2 主干，提供单视角视觉先验；第二段是 cross-view attention 和 camera token，把不同视角放到同一个几何上下文里；第三段是 Dual-DPT head，同时输出 depth 和 ray。图里的重点不是“多了一个 head”，而是 DA3 把多视角一致性放进 backbone 推理过程，再把结果落到可融合的几何接口。
 
 架构里有三个容易混淆的点：
 
@@ -65,12 +63,12 @@ DA3 的建模思路很克制。它没有堆两个专用 Transformer，也没有�
 2. **Camera token**：如果有相机参数，就把 FOV、quaternion、translation 编码成每个视角的 camera token；如果没有，就用可学习 token。camera token 会参与所有 attention，而不是只在输出端做后处理。
 3. **Dual-DPT head**：depth 和 ray 共用 DPT reassembly 的一部分，再分成两个分支输出。这样比完全独立 head 更轻，也比单一混合输出更容易分别约束深度细节和相机几何。
 
-![Dual-DPT head 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-dual-dpt.png){ width="420" .atlas-figure-compact }
+![Dual-DPT head 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-dual-dpt.png){ width="400" .atlas-figure-compact }
 
 <small>图源：`Depth Anything 3`，Dual-DPT architecture figure。图本身信息密度较低，这里缩小显示，重点看 shared reassembly 与 depth/ray 两个分支的关系。</small>
 
-!!! note "图解：Dual-DPT 看 shared 和 split"
-    上半部分的 shared reassembly 负责把 ViT token 还原成多尺度 spatial features；下半部分再拆成 depth branch 和 ray branch。读这张图时不要把 ray 当成相机参数表，它更像每个像素对应的空间射线表示，和 depth 相乘后才能落成 3D 点。
+**Dual-DPT 看 shared 和 split。**
+上半部分的 shared reassembly 负责把 ViT token 还原成多尺度 spatial features；下半部分再拆成 depth branch 和 ray branch。读这张图时不要把 ray 当成相机参数表，它更像每个像素对应的空间射线表示，和 depth 相乘后才能落成 3D 点。
 
 ## 为什么说它不是 VGGT-style
 
@@ -111,8 +109,8 @@ DA3 训练时会遇到一个现实问题：多视角真实数据需要 pose 泛�
 
 <small>图源：`Depth Anything 3`，teacher supervision visualization figure。原论文图意：真实深度可能稀疏或噪声明显，teacher 提供更连续的相对深度，再通过 robust alignment 变成可用于 DA3 的监督。</small>
 
-!!! note "图解：teacher 不是替代真实深度"
-    这张图要从监督质量读：真实 metric depth 提供尺度和几何锚点，但会有空洞、噪声或边界问题；teacher depth 更连续，负责补充可学习的相对结构。DA3 的做法是先对齐 teacher 与真实深度，再把二者组合成训练信号，所以它证明的是监督清洗和对齐的重要性，不是说伪标签天然比传感器真值可靠。
+**Teacher 不是替代真实深度。**
+这张图要从监督质量读：真实 metric depth 提供尺度和几何锚点，但会有空洞、噪声或边界问题；teacher depth 更连续，负责补充可学习的相对结构。DA3 的做法是先对齐 teacher 与真实深度，再把二者组合成训练信号，所以它证明的是监督清洗和对齐的重要性，不是说伪标签天然比传感器真值可靠。
 
 DA3 主模型的 loss 由 depth、ray、point、optional camera、gradient 等部分组成，整体以 L1 类损失为主。训练细节里最值得记的是这些数字：
 
@@ -131,37 +129,37 @@ DA3 主模型的 loss 由 depth、ray、point、optional camera、gradient 等�
 
 这个 recipe 对具身系统很有启发：多视角几何模型不能只靠“相机参数很准、深度很干净”的理想数据。真正可泛化的训练需要把 synthetic clean geometry、real noisy geometry、teacher pseudo-label、pose conditioning 混起来。
 
-??? info "Training datasets table from the paper"
+**Training datasets table from the paper。**
 
-    | Usage | Dataset | #Scenes | Data Type |
-    | --- | --- | --- | --- |
-    | Pose-geometry benchmark | HiRoom (ours) | 29 | Synthetic |
-    | Pose-geometry benchmark | ETH3D | 11 | LiDAR |
-    | Pose-geometry benchmark | DTU | 22 | LiDAR |
-    | Pose-geometry benchmark | 7Scenes | 7 | LiDAR |
-    | Pose-geometry benchmark | ScanNet++ | 20 | LiDAR |
-    | Pose-geometry Training | AriaDigitalTwin | 237 | Synthetic |
-    | Pose-geometry Training | AriaSyntheticENV | 99950 | Synthetic |
-    | Pose-geometry Training | ArkitScenes | 4388 | LiDAR |
-    | Pose-geometry Training | BlendedMVS | 503 | 3D Recon |
-    | Pose-geometry Training | Co3dv2 | 30616 | Colmap |
-    | Pose-geometry Training | DL3DV | 6379 | Colmap |
-    | Pose-geometry Training | HyperSim | 344 | Synthetic |
-    | Pose-geometry Training | MapFree | 921 | Colmap |
-    | Pose-geometry Training | MegaDepth | 268 | Colmap |
-    | Pose-geometry Training | MegaSynth | 6049 | Synthetic |
-    | Pose-geometry Training | MvsSynth | 121 | Synthetic |
-    | Pose-geometry Training | Objaverse | 505557 | Synthetic |
-    | Pose-geometry Training | Omniobject | 5885 | Synthetic |
-    | Pose-geometry Training | OmniWorld | 1039 | Synthetic |
-    | Pose-geometry Training | PointOdyssey | 44 | Synthetic |
-    | Pose-geometry Training | ReplicaVMAP | 17 | Synthetic |
-    | Pose-geometry Training | ScanNet++ | 230 | LiDAR |
-    | Pose-geometry Training | ScenenetRGBD | 16866 | Synthetic |
-    | Pose-geometry Training | TartanAir | 355 | Synthetic |
-    | Pose-geometry Training | Trellis | 557408 | Synthetic |
-    | Pose-geometry Training | vKitti2 | 50 | Synthetic |
-    | Pose-geometry Training | WildRGBD | 23050 | LiDAR |
+| Usage | Dataset | #Scenes | Data Type |
+| --- | --- | --- | --- |
+| Pose-geometry benchmark | HiRoom (ours) | 29 | Synthetic |
+| Pose-geometry benchmark | ETH3D | 11 | LiDAR |
+| Pose-geometry benchmark | DTU | 22 | LiDAR |
+| Pose-geometry benchmark | 7Scenes | 7 | LiDAR |
+| Pose-geometry benchmark | ScanNet++ | 20 | LiDAR |
+| Pose-geometry Training | AriaDigitalTwin | 237 | Synthetic |
+| Pose-geometry Training | AriaSyntheticENV | 99950 | Synthetic |
+| Pose-geometry Training | ArkitScenes | 4388 | LiDAR |
+| Pose-geometry Training | BlendedMVS | 503 | 3D Recon |
+| Pose-geometry Training | Co3dv2 | 30616 | Colmap |
+| Pose-geometry Training | DL3DV | 6379 | Colmap |
+| Pose-geometry Training | HyperSim | 344 | Synthetic |
+| Pose-geometry Training | MapFree | 921 | Colmap |
+| Pose-geometry Training | MegaDepth | 268 | Colmap |
+| Pose-geometry Training | MegaSynth | 6049 | Synthetic |
+| Pose-geometry Training | MvsSynth | 121 | Synthetic |
+| Pose-geometry Training | Objaverse | 505557 | Synthetic |
+| Pose-geometry Training | Omniobject | 5885 | Synthetic |
+| Pose-geometry Training | OmniWorld | 1039 | Synthetic |
+| Pose-geometry Training | PointOdyssey | 44 | Synthetic |
+| Pose-geometry Training | ReplicaVMAP | 17 | Synthetic |
+| Pose-geometry Training | ScanNet++ | 230 | LiDAR |
+| Pose-geometry Training | ScenenetRGBD | 16866 | Synthetic |
+| Pose-geometry Training | TartanAir | 355 | Synthetic |
+| Pose-geometry Training | Trellis | 557408 | Synthetic |
+| Pose-geometry Training | vKitti2 | 50 | Synthetic |
+| Pose-geometry Training | WildRGBD | 23050 | LiDAR |
 
 ## 模型规模、速度与选择
 
@@ -252,8 +250,8 @@ torch.Size([2, 3, 196, 336])
 
 <small>图源：输入图来自 DA3 的 GitHub 示例图片；右侧深度图是用上面命令在本地运行 DA3 后生成的 `depth_vis` 输出。暖色区域通常表示相对更近，冷色区域通常表示相对更远，重点是看同一建筑轮廓在两个 view 中是否保持一致。</small>
 
-!!! note "图解：depth_vis 看一致性，不看绝对米制"
-    两张可视化要横向比较同一建筑、栏杆和地面边界在不同视角下是否保持近远关系一致。颜色是相对深度提示，不是直接的物理距离标尺；真正接机器人几何管线时，还要回到 `results.npz` 里的 depth、confidence、intrinsics 和 extrinsics 做数值检查。
+**这两张 depth_vis 怎么读。**
+两张可视化要横向比较同一建筑、栏杆和地面边界在不同视角下是否保持近远关系一致。颜色是相对深度提示，不是直接的物理距离标尺；真正接机器人几何管线时，还要回到 `results.npz` 里的 depth、confidence、intrinsics 和 extrinsics 做数值检查。
 
 `results.npz` 里这次包含四类数组：
 
@@ -273,16 +271,16 @@ torch.Size([2, 3, 196, 336])
 | `extrinsics` | `float32` | `-0.2169 / 1.0000 / 0.2439` | 这是两个 `3x4` 的 `world-to-camera` 矩阵；统计值只能检查是否有限、是否量级异常，真正调试要看矩阵本身 |
 | `intrinsics` | `float32` | `0.0000 / 420.9074 / 113.4363` | 内参对应处理后分辨率；第一张图里能看到 \(c_x=168\)、\(c_y=98\)，正好接近 `336x196` 的图像中心 |
 
-??? note "`results.npz` inspect 摘要"
+**`results.npz` inspect 摘要。**
 
-    ```text
-    keys (4): ['depth', 'conf', 'extrinsics', 'intrinsics']
+```text
+keys (4): ['depth', 'conf', 'extrinsics', 'intrinsics']
 
-    depth:      shape (2, 196, 336), dtype float32, min 0.5287, max 3.5556, mean 1.4738
-    conf:       shape (2, 196, 336), dtype float32, min 1.0000, max 2.8500, mean 1.4005
-    extrinsics: shape (2, 3, 4),     dtype float32, min -0.2169, max 1.0000, mean 0.2439
-    intrinsics: shape (2, 3, 3),     dtype float32, min 0.0000, max 420.9074, mean 113.4363
-    ```
+depth:      shape (2, 196, 336), dtype float32, min 0.5287, max 3.5556, mean 1.4738
+conf:       shape (2, 196, 336), dtype float32, min 1.0000, max 2.8500, mean 1.4005
+extrinsics: shape (2, 3, 4),     dtype float32, min -0.2169, max 1.0000, mean 0.2439
+intrinsics: shape (2, 3, 3),     dtype float32, min 0.0000, max 420.9074, mean 113.4363
+```
 
 这段日志对博客是有用的，因为它把“模型输出了什么”从概念变成了可复现的数组契约。读者照着这四个字段，就能知道后处理代码该读取哪些 key、按什么形状遍历、哪些值能做点云、哪些值只能做质量筛选。
 
@@ -299,8 +297,8 @@ num max points: 1000000
 
 `Detected input type: IMAGES` 说明 `da3 auto` 判断输入是图片目录。`--auto-cleanup` 会让旧的 `workspace/demo_soh` 输出被清掉后重新生成。`conf_thresh_percentile: 40.0` 表示导出 `scene.glb` 时会按置信度过滤低质量点；`num max points: 1000000` 表示最多保留 100 万个点。这次只有 `2 * 196 * 336 = 131712` 个像素点，所以上限不是瓶颈。
 
-!!! warning "目录输入不是无关图片批处理"
-    这里最重要的输入理解是：目录输入不是“批量处理两张无关图片”，而是“把多张图片当作同一场景的多视角输入”。如果两张图是同一物体或同一场景的不同视角，`scene.glb` 才有几何意义；如果是完全无关的两张图，建议分开跑，每张图一个输出目录。
+**目录输入不是无关图片批处理。**
+这里最重要的输入理解是：目录输入不是“批量处理两张无关图片”，而是“把多张图片当作同一场景的多视角输入”。如果两张图是同一物体或同一场景的不同视角，`scene.glb` 才有几何意义；如果是完全无关的两张图，建议分开跑，每张图一个输出目录。
 
 放到具身智能里看，这个 demo 是一个很小但很实用的桥：它把普通 RGB 多视角图像转成 `depth + confidence + camera pose + point cloud`。这些结果可以继续接到点云融合、可见性检查、抓取候选生成、世界模型数据质检，或者仿真资产构建流程里。
 
@@ -316,12 +314,17 @@ DA3 对机器人和 VLA 的价值，不是让模型“看图更清楚”这么�
 
 也要注意边界。DA3 不直接输出机器人动作，也不解决接触动力学、力控、安全策略和长时记忆。它更像具身系统里的几何传感与重建层：给 VLA、WAM、planner 和仿真器提供更可靠的空间状态。
 
-## 参考链接
+## 外部精读
 
-1. [arXiv:2511.10647](https://arxiv.org/abs/2511.10647)
-2. [Depth Anything 3 project page](https://depth-anything-3.github.io/)
-3. [ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/depth-anything-3)
-4. [DepthAnything3 API documentation](https://github.com/ByteDance-Seed/Depth-Anything-3/blob/main/docs/API.md)
-5. [DA3-Streaming README](https://github.com/ByteDance-Seed/Depth-Anything-3/tree/main/da3_streaming)
+1. [Depth Anything 3 technical report](https://arxiv.org/abs/2511.10647)：读 depth + ray、teacher supervision、model analysis 和数据表；具体数字以当前版本为准。
+2. [Depth Anything 3 project page](https://depth-anything-3.github.io/)：看任意视角 demo、ICLR 2026 paper 入口和模型系列说明。
+3. [ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/Depth-Anything-3)：确认 CLI、Python API、model zoo、streaming 和 3DGS 导出路径。
+4. [DepthAnything3 API documentation](https://github.com/ByteDance-Seed/Depth-Anything-3/blob/main/docs/API.md)：写工程教程时优先核对输入格式、输出字段和 pose-conditioned depth 参数。
+5. [DA3-Streaming README](https://github.com/ByteDance-Seed/Depth-Anything-3/tree/main/da3_streaming)：理解长视频 chunk、相机轨迹和点云融合的工程入口。
+6. [Hugging Face: DA3-LARGE](https://huggingface.co/depth-anything/DA3-LARGE)：查看模型卡、权重入口和部署依赖。
+7. [Depth Anything V2](https://arxiv.org/abs/2406.09414)：理解 DA3 teacher 为什么强调 synthetic clean geometry 与相对深度细节。
+8. [VGGT](https://arxiv.org/abs/2503.11651)：对比 feed-forward 3D geometry 的另一条路线，帮助分清 DA3 为什么选择 depth + ray。
 
-这一页最后回到三个验收点：方法上，DA3 的关键接口是多视角输入到一致深度/几何输出，dual-DPT 和 teacher supervision 负责把单图先验改造成跨视角约束。实验上，重点看输入视角、teacher 监督和 SoH 可视化，而不是把它当普通单目深度升级。诊断上，跨视角一致性提升不等于 metric SLAM 完成；相机标定和动态物体仍是外部系统责任。
+## 阅读结论
+
+DA3 的关键接口是“多视角 RGB 输入 -> 一致 depth / ray / camera / point cloud 输出”。Dual-DPT 和 teacher supervision 负责把单图深度先验改造成跨视角几何约束；SoH demo 则把这个接口落到可复现数组和导出文件上。读这篇时不要把它当普通单目深度升级，也不要把跨视角一致性直接等同于 metric SLAM 完成：相机标定、动态物体、尺度对齐和机器人安全距离仍要由外部系统验收。

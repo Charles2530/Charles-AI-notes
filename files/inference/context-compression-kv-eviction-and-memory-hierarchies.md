@@ -2,9 +2,6 @@
 
 长上下文系统的难点，不是把窗口从 `4k` 扩到 `128k` 后就结束了。窗口越长，prefill 越贵，KV cache 越大，历史噪声越多，模型越可能把旧信息、无关信息和关键约束混在一起。真正可靠的长上下文系统，本质上是一套记忆管理系统。
 
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 长上下文为什么贵
 
 长上下文会同时放大两类成本：
@@ -22,21 +19,9 @@ M_{\text{KV}}
 2 \cdot L \cdot B \cdot T \cdot H_{\text{kv}} \cdot D_{\text{head}} \cdot b
 \]
 
-
 权重量化只能减少参数显存，不会自动减少 \(T\) 带来的 KV 增长。长上下文并发服务经常先卡在 KV，而不是权重。
 
 ## Paged KV：先解决“放在哪里”
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
->
-> 延伸阅读：[17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html) |
-| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 vLLM 的 logical/physical block 图适合建立第一层直觉：请求逻辑上是一段连续上下文，但显存里可以拆成许多物理 block。
 
@@ -44,8 +29,8 @@ vLLM 的 logical/physical block 图适合建立第一层直觉：请求逻辑上
 
 <small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 5。原论文图意：vLLM 用 block table 把 logical KV blocks 翻译到 physical KV blocks，使请求的 KV cache 不必连续存放。</small>
 
-!!! note "这张图怎么看"
-    左边的 logical block 保持 token 顺序，右边的 physical block 表示实际显存位置。block table 是翻译表。这样长短请求可以更灵活地加入、退出、复用和回收，但也引入 page size、碎片、局部性和 metadata 管理问题。
+**这张图怎么看。**
+左边的 logical block 保持 token 顺序，右边的 physical block 表示实际显存位置。block table 是翻译表。这样长短请求可以更灵活地加入、退出、复用和回收，但也引入 page size、碎片、局部性和 metadata 管理问题。
 
 Paged KV 解决的是内存布局，不直接解决“哪些记忆应该保留”。后者需要压缩、淘汰和分层记忆。
 
@@ -96,7 +81,6 @@ Agent 系统通常不能只靠自然语言摘要，因为很多记忆是程序�
 \sum_{i\in S}c_i\le B_{\text{mem}}
 \]
 
-
 常见策略：
 
 | 策略 | 直觉 | 失败模式 |
@@ -130,22 +114,22 @@ KVSlimmer 这类工作提醒我们：长上下文优化不能只报告“KV 少�
 
 <small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 1。原论文图意：AsymKV 依赖反向传播和近似 Hessian；KVSlimmer 使用 forward-only 变量构造 exact Hessian 相关合并权重，避免 gradient 路径。</small>
 
-!!! note "这张图怎么看"
-    左右对比的是两种 KV 合并路径。重点不是公式细节，而是工程含义：如果压缩过程需要反向传播，在线长上下文服务很难承受；forward-only 路径更像能放进推理热路径的候选。
+**这张图怎么看。**
+左右对比的是两种 KV 合并路径。重点不是公式细节，而是工程含义：如果压缩过程需要反向传播，在线长上下文服务很难承受；forward-only 路径更像能放进推理热路径的候选。
 
 ![Relative runtime 原论文图](../assets/images/paper-deep-dives/inference/kvslimmer/figure-4-runtime-relative.png){ width="760" }
 
 <small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 4。原论文图意：KVSlimmer 相对 AsymKV 的 runtime ratio，均值约 0.72。</small>
 
-!!! note "这张图怎么看"
-    纵轴是相对运行时间，低于 1 表示更快。它说明压缩方法不能只看最终任务分数，还要看压缩本身的 runtime overhead。若压缩省下的 KV 不足以抵消压缩开销，线上 TPOT 可能不会改善。
+**这张图怎么看。**
+纵轴是相对运行时间，低于 1 表示更快。它说明压缩方法不能只看最终任务分数，还要看压缩本身的 runtime overhead。若压缩省下的 KV 不足以抵消压缩开销，线上 TPOT 可能不会改善。
 
 ![Peak GPU memory 原论文图](../assets/images/paper-deep-dives/inference/kvslimmer/figure-6-peak-gpu-memory.png){ width="620" }
 
 <small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 6。原论文图意：不同 chunk size 下，KVSlimmer 的峰值 GPU memory 明显低于 AsymKV；chunk size 越大差距越明显。</small>
 
-!!! note "这张图怎么看"
-    这张图对应容量问题：chunk 越大，KV 合并过程越容易放大峰值显存。长上下文服务不仅要看稳态 KV，还要看压缩、合并、验证过程中的峰值 memory。
+**这张图怎么看。**
+这张图对应容量问题：chunk 越大，KV 合并过程越容易放大峰值显存。长上下文服务不仅要看稳态 KV，还要看压缩、合并、验证过程中的峰值 memory。
 
 ## 长上下文质量风险
 
@@ -179,6 +163,6 @@ KVSlimmer 这类工作提醒我们：长上下文优化不能只报告“KV 少�
 
 **修复**：把目标、权限、文件路径、工具状态拆成结构化 memory；KV eviction 按决策相关性而不是纯时间淘汰；回归集加入旧事实更正、约束保持和工具状态一致性。
 
-## 本页结论
+## 阅读结论
 
 长上下文优化的目标不是“能塞更多 token”，而是在固定显存和延迟预算下，保留对当前任务真正有用的信息。KV、prompt、摘要、结构化状态、检索库和冷日志要分层协作；任何压缩或淘汰策略，都必须用系统指标和任务质量一起验收。

@@ -6,23 +6,11 @@ paper_topic: 高效推理
 
 # EAGLE-2：用动态 Draft Tree 加速投机解码
 
-
 EAGLE-2 的核心很漂亮：**不重新训练 draft model，只用 draft model 自己的 confidence score 动态调整 draft tree 的形状。** 它抓住了 EAGLE 里一个被低估的事实：draft token 的接受率不仅和它在树里的位置有关，也和当前上下文有关。
 
 如果 EAGLE 是“用 feature-level draft 提高草稿质量”，EAGLE-2 就是“把固定草稿树改成按上下文自适应的草稿树”。它仍然使用原 LLM 做验证，不微调原模型，也不放宽接受条件，因此在标准 speculative sampling 规则下保持 lossless acceleration。
 
 ## 它的效率贡献是什么
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
-> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
->
-> 延伸阅读：[18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html) |
-| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 | Dimension | EAGLE-2 |
 | --- | --- |
@@ -56,18 +44,15 @@ EAGLE-2 认为这个假设太粗。比如问题是 `10+2=`，下一个 token 很
 
 <small>图源：`EAGLE-2`，Figure 1。原论文图意：temperature=1 时，EAGLE-2 在 MT-bench 上相对多种 speculative sampling 方法取得更高 speedup；论文只比较保持输出分布不变的 speculative sampling 方法。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是上下文特征、候选草稿树和置信度信号，输出是动态 draft tree 与被接受 token。  
-    **效率机制**：动态树把计算集中到更可能被接受的位置，减少低收益 draft 分支。  
-    **对主线意义**：它适合说明推理成本里的“平均吞吐”和“acceptance 分布”要一起看。  
-    **不能证明什么**：动态 draft tree 不能证明模型知识、推理能力或闭环任务质量提升。
+**Figure 1 先看 speedup 来自哪里。**
+输入是上下文特征、候选草稿树和置信度信号，输出是动态 draft tree 与被接受 token。效率机制不是让 target model 变小，而是把 draft compute 集中到更可能被 target 接受的位置，减少低收益分支。它适合说明推理成本里的“平均吞吐”和“acceptance 分布”要一起看；但动态 draft tree 不能证明模型知识、推理能力或闭环任务质量提升。
 
 ![EAGLE-2 speedup temperature 0 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-2-speedup-temp0.png){ width="690" }
 
 <small>图源：`EAGLE-2`，Figure 2。原论文图意：temperature=0 时，EAGLE-2 在 MT-bench 上同样优于 EAGLE 等方法；部分模型缺少合适 draft model 时标为 N/A。</small>
 
-!!! note "这两张图怎么读"
-    图里的重点不是每个柱子的绝对值，而是 EAGLE-2 在非贪心和贪心设置下都能保留优势。它不靠放宽接受条件换速度，而是让同样数量或相近数量的 draft token 更集中在高接受概率路径上。
+**Temperature 0/1 要一起看。**
+图里的重点不是每个柱子的绝对值，而是 EAGLE-2 在非贪心和贪心设置下都能保留优势。它不靠放宽接受条件换速度，而是让同样数量或相近数量的 draft token 更集中在高接受概率路径上。
 
 ## 背景：EAGLE 的 Feature-level Draft
 
@@ -80,6 +65,8 @@ EAGLE 不像普通 speculative sampling 那样用小 LLM 直接预测 token chai
 <small>图源：`EAGLE-2`，Figure 3。原论文图意：EAGLE 在 drafting stage 做 feature-level autoregression，在 verification stage 使用 tree-structured draft；图中 \(e_i\) 表示 token embedding，\(f_i\) 表示 LM head 前的 feature vector。</small>
 
 EAGLE-2 没有改变这个 draft model，也没有改变 target model verification。它只问一个更系统的问题：**既然 EAGLE 已经能给每个 draft token 一个概率，为什么还要用固定树形状？**
+
+换成服务系统语言，EAGLE-2 在做的是 token 预算分配。一次 verification 能验证的候选数量有限，draft tree 越宽，候选覆盖越多但每条路径越浅；tree 越深，某条高置信路径可能一次接受更多 token，但低置信分支会浪费。动态树把这个固定超参改成按上下文调整的策略：容易的上下文走深一点，困难的上下文保留更多分支。
 
 ## 观察一：Acceptance Rate 不是只由位置决定
 
@@ -101,8 +88,8 @@ EAGLE、Medusa 这类 static draft tree 隐含一个假设：树里某个位置�
 
 <small>图源：`EAGLE-2`，Figure 6。原论文图意：Vicuna 7B 上，draft confidence score 分桶后的平均 acceptance rate 接近红色 \(y=x\) 参考线；低于 0.05 的 confidence 对应约 0.04 的接受率，高于 0.95 的 confidence 对应约 0.98 的接受率。</small>
 
-!!! note "图解：校准图看红线附近"
-    横轴是 draft model 自己给出的 confidence，纵轴是真实被 target 接受的比例。点越贴近红色 \(y=x\)，说明 confidence 越能当作 acceptance rate 的便宜代理。EAGLE-2 后面的动态树算法就建立在这个代理足够可靠的前提上。
+**校准图看红线附近。**
+横轴是 draft model 自己给出的 confidence，纵轴是真实被 target 接受的比例。点越贴近红色 \(y=x\)，说明 confidence 越能当作 acceptance rate 的便宜代理。EAGLE-2 后面的动态树算法就建立在这个代理足够可靠的前提上。
 
 这就是 EAGLE-2 可行的原因：不用 target model 先验验证，也不用训练额外 policy model，直接用 draft model 已经输出的概率来估计接受概率。
 
@@ -117,7 +104,6 @@ V_i=\prod_{t_j \in \mathrm{Path}(\mathrm{root},t_i)}p_j
 \approx
 \prod_{t_j \in \mathrm{Path}(\mathrm{root},t_i)}c_j
 \]
-
 
 其中 \(p_j\) 是真实 acceptance rate，\(c_j\) 是 draft model confidence score。因为真实 \(p_j\) 昂贵，所以 EAGLE-2 用 \(c_j\) 的路径乘积近似全局接受概率。
 
@@ -137,8 +123,8 @@ V_i=\prod_{t_j \in \mathrm{Path}(\mathrm{root},t_i)}p_j
 
 <small>图源：`EAGLE-2`，Figure 7。原论文图意：边上的数字是 draft model confidence，方块中的括号数字是节点 value；expansion phase 选择当前层 value 最高的节点扩展，rerank phase 从所有节点里选 top nodes，最后根据树结构构造 attention mask。</small>
 
-!!! tip "这里最容易漏掉的工程点"
-    Dynamic tree 不是只改变候选 token 排序，还会改变 target verification 的 attention mask。flatten 后的一维序列里，不同分支 token 不能互相看见，只能看见祖先节点。否则验证阶段就不再等价于原始自回归分布。
+**这里最容易漏掉的工程点。**
+Dynamic tree 不是只改变候选 token 排序，还会改变 target verification 的 attention mask。flatten 后的一维序列里，不同分支 token 不能互相看见，只能看见祖先节点。否则验证阶段就不再等价于原始自回归分布。
 
 ## 训练相关细节：EAGLE-2 本身不额外训练，但很依赖 Draft Model
 
@@ -174,9 +160,6 @@ Appendix A 还给了具体实现设置：
 | EAGLE-2 | Total draft tokens: `60` for 7B/8B, `50` for 13B, `48` for 70B; draft tree depth `6`; select `10` nodes during expansion |
 
 ## 实验设置：模型、任务和指标
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 论文实验覆盖三组模型和六类任务：
 
@@ -286,4 +269,14 @@ EAGLE-2 最值得记住的是：**推理时的候选结构也可以用模型自�
 
 如果把 EAGLE-2 接到线上推理系统，它不是一个孤立算法，而是一套 draft policy、tree attention、verification mask、runtime scheduler 和观测指标共同组成的工程路径。
 
-这一页最后回到三个验收点：方法上，EAGLE-2 不改 draft head，而是把候选树从固定形状改成按 confidence 动态扩展。实验上，static/dynamic tree、acceptance-by-position 和 calibration 图要一起看，分别对应预算分配、收益位置和置信可靠性。诊断上，如果 confidence 与 acceptance 脱钩，动态树会把 token 预算投到错误分支。
+## 阅读结论
+
+EAGLE-2 的核心知识点是：投机解码的速度不只取决于 draft model 有多快，还取决于候选树把 token 预算投到哪里。固定树假设“同一位置的接受率差不多”，但论文用诊断图说明 acceptance 受上下文影响很大；动态树用 draft confidence 近似 acceptance rate，再用路径 value 和 reranking 选择更值得验证的节点。落地时最该验收三件事：confidence 是否校准，tree attention mask 是否严格只让节点看祖先，\(\tau\)、真实 speedup、P95/P99 和任务桶质量是否一起改善。
+
+## 外部精读
+
+- [EAGLE-2](https://arxiv.org/abs/2406.16858)：原论文，重点读 acceptance-by-position、confidence calibration、dynamic tree 和消融。
+- [Hugging Face paper page: EAGLE-2](https://huggingface.co/papers/2406.16858)：适合快速核对论文摘要、社区讨论和相关资源。
+- [EAGLE](https://arxiv.org/abs/2401.15077)：理解 feature-level draft 的前置设计。
+- [SpecInfer](https://arxiv.org/abs/2305.09781)：理解 tree verification 为什么能并行验证多个候选。
+- [vLLM speculative decoding blog](https://vllm.ai/blog/spec-decode)：学习如何按 QPS、acceptance rate 和 workload 报告真实 serving 收益。

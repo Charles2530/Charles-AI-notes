@@ -2,10 +2,7 @@
 
 很多算子优化失败，并不是因为工程师不够努力，而是因为掉进了一些反复出现的性能反模式。它们的共同特点是：单看局部实现似乎合理，放到真实系统里却会不断放大损失，并且往往伴随“理论上应该更快，实际上却不快”的现象。
 
-
 把这些反模式单独列出来很有价值，因为它能帮助你少走很多弯路。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 反模式一：只看 FLOPs，不看数据流
 
@@ -57,7 +54,7 @@ shape specialization 是有价值的，但如果没有 fallback，就会出现�
 
 这些反模式就像赛车改装中的典型误区：只换更大马力的引擎却不管传动和轮胎，只在理想赛道测试却忽略真实天气，只追求极端轻量化却不考虑长期可靠性。算子优化也是一样，真正的工程能力不是“做出最极端的一次加速”，而是避开这些高频反模式，稳定地把收益带到真实系统里。
 
-## 本页结论
+## 阅读结论
 
 性能反模式之所以值得专门总结，是因为它们往往比“正向技巧”更能帮助团队建立判断力。知道哪些思路看起来对、实际常错，往往比多背几个优化技巧更重要。高性能系统最终拼的，不只是会做什么优化，更是知道什么优化不该做、什么时候该停下来回到 profile 和 workload 本身。
 
@@ -72,17 +69,6 @@ shape specialization 是有价值的，但如果没有 fallback，就会出现�
 它也能让 code review 从“感觉会不会快”变成“哪些代价已经被显式记录”。
 
 ## 真实排查案例：低比特路径省显存，却拖慢首 token
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 **输入症状**：把一个 13B 服务从 FP16 切到 W4A16 后，显存占用下降明显，但 TTFT 从 820ms 增到 1.25s，短问答用户感知变差。
 

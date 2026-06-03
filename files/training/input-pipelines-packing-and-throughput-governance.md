@@ -2,10 +2,7 @@
 
 很多训练团队把精力放在模型、优化器、并行和混合精度上，最后却发现 GPU 利用率仍然不高。原因常常在输入管线：数据切片太碎、tokenizer 太慢、packing 太差、shuffle buffer 不合理、长样本让 padding 放大、恢复训练后数据游标错位。输入系统不是后台搬运工，而是训练统计分布、吞吐和可复现性的共同塑形者。
 
-
 这页建议和 [训练数据系统与吞吐优化](data-systems-and-optimization.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) 一起读。数据系统页讲治理链路，本页聚焦训练消费路径和吞吐治理。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 一、输入系统的真实职责
 
@@ -22,7 +19,6 @@
 $$
 \eta = \frac{\sum_i l_i}{B \cdot L}.
 $$
-
 
 当 $\eta$ 很低时，系统虽然“看起来 batch 很大”，但 GPU 实际上在算大量 padding。
 
@@ -59,16 +55,6 @@ flowchart LR
 如果把两个问答样本 pack 到同一序列，却忘了阻断它们之间的 attention，第二个样本可能看到第一个样本的答案。离线 loss 会变好，真实泛化会变差。这类事故很隐蔽，必须用 toy batch 可视化 attention mask 和 label mask。
 
 ## 三、Streaming、Tokenizer 与数据格式
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
-> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
->
-> 延伸阅读：[09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html) |
 
 超大数据集通常不能简单“全量落本地再随机读”，因此会涉及 streaming、对象存储、本地缓存和离线预处理。
 

@@ -2,10 +2,7 @@
 
 当训练规模足够大之后，很多失败已经不再是“模型没学会”，而是“系统没组织好”。节点临时故障、对象存储抖动、sampler 状态丢失、实验配置漂移、checkpoint 写爆带宽、多个团队抢同一批 GPU，这些问题最后都会反映到训练效率、复现能力和研究迭代速度上。
 
-
 这页关注训练系统里经常被低估的一层：如何把昂贵训练作业组织成可启动、可恢复、可复盘、可持续优化的工程流程。它和 [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[输入流水线与吞吐治理](input-pipelines-packing-and-throughput-governance.md) 应该一起读。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 训练集群是一条生产线
 
@@ -111,8 +108,8 @@ Checkpoint 路径最好与训练数据路径分开治理。checkpoint 高峰写�
 
 <small>图源：[Kimi K2: Open Agentic Intelligence](https://arxiv.org/abs/2507.20534)，Figure 10。原论文图意：co-located distributed checkpoint engine 在 training engine 与 inference engine 之间管理参数状态，避免通过普通网络文件系统重新切分和广播超大模型参数。</small>
 
-!!! note "图解：checkpoint 是训练系统的一等组件"
-    Kimi K2 的图不是在讲“多保存几个文件”，而是在说明大规模 RL / agentic 训练里，参数更新、推理引擎、训练引擎和环境服务会形成循环。checkpoint engine 如果只被当成落盘脚本，权重同步、恢复一致性和 rollout freshness 都会成为隐形瓶颈。
+**checkpoint 是训练系统的一等组件。**
+Kimi K2 的图不是在讲“多保存几个文件”，而是在说明大规模 RL / agentic 训练里，参数更新、推理引擎、训练引擎和环境服务会形成循环。checkpoint engine 如果只被当成落盘脚本，权重同步、恢复一致性和 rollout freshness 都会成为隐形瓶颈。
 
 ### 算一遍：checkpoint 频率不是越高越好
 
@@ -122,13 +119,11 @@ Checkpoint 路径最好与训练数据路径分开治理。checkpoint 高峰写�
 \frac{75}{1200+75}=5.9\%
 \]
 
-
 如果改成每 `2000` step 存一次，占比降到：
 
 \[
 \frac{75}{4800+75}=1.5\%
 \]
-
 
 但故障恢复成本会上升。若集群平均每 `10h` 遇到一次会导致作业重启的故障，`500` step 间隔最多丢 `20min`，期望丢 `10min`；`2000` step 间隔最多丢 `80min`，期望丢 `40min`。因此真实目标是最小化：
 

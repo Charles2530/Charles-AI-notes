@@ -6,13 +6,16 @@ paper_topic: 扩散模型
 
 # Phased DMD：分阶段少步蒸馏
 
-
 这篇论文的核心价值是把 DMD 类少步蒸馏从“把整个反向过程一次性压到少数步”改成“沿 SNR 子区间逐段训练专家”。它要解决的不是普通采样器加速，而是一个更具体的问题：**DMD2 这类带随机梯度截断的少步蒸馏虽然省显存、稳定，但会把一部分训练迭代退化成近似一跳生成，进而损失图像多样性和视频运动强度。**
 
 Phased DMD 的答案是两件事：
 
 1. 用 **progressive distribution matching** 把生成过程拆成多个 SNR phase，每个 phase 只训练一个 expert；
 2. 用 **score matching within subintervals** 修正中间 phase 的 fake score 训练目标，因为这些 phase 看不到干净样本 \(x_0\)。
+
+可以先用一个视频例子抓住问题。假设 teacher 用 40 步生成一个跑酷镜头：前几步决定人从哪里起跳、镜头往哪里跟、身体大致怎样移动；后几步才修衣服纹理、背景边缘和光照。如果少步蒸馏训练时反复把一次迭代压成“从噪声直接到最终画面”的 one-step 任务，模型为了稳定会倾向学一个保守平均动作：人还在动，但速度慢、镜头弱、不同 seed 的构图也更像。Phased DMD 的核心直觉就是：少步不等于没有阶段，低 SNR 阶段仍然要负责运动和大结构，高 SNR 阶段再补细节。
+
+所以这篇文章的数学推导不是为符号而符号。它要保证第 \(k\) 个 phase 在中间状态 \(x_s\) 上训练 fake score 时，目标仍然对应正确的子区间分布；否则分 phase 只是一种经验切法，generator 收到的 score difference 会偏。
 
 ## 论文位置
 
@@ -34,11 +37,11 @@ DMD / DMD2 的吸引力在于，它不要求学生模型逐步模仿 teacher 的
 
 <small>图源：`Phased DMD`，Figure 1。原论文图意：对比 vanilla few-step DMD、DMD2/SGTS、4-phase Phased DMD 和结合 SGTS 的 2-phase Phased DMD。红色表示记录梯度的 generator step，蓝色表示不记录梯度的 forward step。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是少步 denoising 链、SNR phase 和红/蓝两类训练 step，输出是每个 phase/expert 该承担的分布匹配子问题。  
-    **效率机制**：把深计算图拆成分段训练，尽量保留 few-step 容量，同时控制显存和 SGTS 退化。  
-    **对主线意义**：它服务的是 rollout/视频生成成本，而不是动作条件 dynamics 本身；可作为世界模型外部模拟器的系统加速证据。  
-    **不能证明什么**：自动视频指标和少步采样速度不能证明 planning utility、真实闭环收益或跨 teacher 复现。
+**Phased DMD 图先分清红色梯度步和蓝色前向步。**
+**输入输出**：输入是少步 denoising 链、SNR phase 和红/蓝两类训练 step，输出是每个 phase/expert 该承担的分布匹配子问题。  
+**效率机制**：把深计算图拆成分段训练，尽量保留 few-step 容量，同时控制显存和 SGTS 退化。  
+**对主线意义**：它服务的是 rollout/视频生成成本，而不是动作条件 dynamics 本身；可作为世界模型外部模拟器的系统加速证据。  
+**不能证明什么**：自动视频指标和少步采样速度不能证明 planning utility、真实闭环收益或跨 teacher 复现。
 
 这张图可以按四种训练图来读：
 
@@ -60,7 +63,6 @@ x_0 = G_\phi(z),
 \qquad z \sim \mathcal N(0,I).
 \]
 
-
 \(z\sim\mathcal N(0,I)\) 表示生成器的输入噪声来自标准高斯：括号里的 \(0\) 是均值，\(I\) 是单位协方差；\(G_\phi\) 再把这个噪声映射成样本 \(x_0\)。
 
 然后把 \(x_0\) 加噪到 \(x_t\)：
@@ -68,7 +70,6 @@ x_0 = G_\phi(z),
 \[
 x_t = \alpha_t x_0 + \sigma_t \epsilon.
 \]
-
 
 DMD 用两个 score estimator：
 
@@ -93,7 +94,6 @@ T_{\hat\theta}(x_t,t)-F_\theta(x_t,t)
 \right].
 \]
 
-
 直觉上，teacher score 告诉样本该往真实数据分布哪里走，fake score 则校正当前生成分布自己的密度梯度。两者的差异给生成器一个“从 fake 分布移向 real 分布”的方向。
 
 DMD 能成立有两个关键前提：
@@ -111,7 +111,6 @@ few-step DMD 假设一个 \(N\)-step scheduler：
 t_0=1 > t_1 > \cdots > t_N=0.
 \]
 
-
 生成过程是：
 
 \[
@@ -122,7 +121,6 @@ x_{t_{i+1}}
 G_\phi(x_{t_i},t_i),x_{t_i},t_i,t_{i+1}
 \right).
 \]
-
 
 如果训练时让梯度穿过全部 \(N\) 个步骤，显存和图深度都会随 \(N\) 增长。SGTS 的做法是随机采样一个停止 index \(j\)，只跑到 \(t_j\)，并且只对最后一步记录梯度。
 
@@ -144,7 +142,6 @@ x_{t_k}
 =
 \operatorname{pipeline}_k(z).
 \]
-
 
 这里的 \(x_{t_k}\) 不是干净样本 \(x_0\)，而是反向生成过程中的一个中间状态。第 \(k\) 个 expert \(G_{\phi_k}\) 只需要把分布从 \(p(x_{t_{k-1}})\) 推向 \(p(x_{t_k})\)。
 
@@ -168,7 +165,6 @@ x_{t_k}
 x_t = \alpha_t x_0 + \sigma_t \epsilon
 \]
 
-
 直接构造训练目标。但在 Phased DMD 的中间 phase，模型只拿到 \(x_s\)，其中 \(s=t_k>0\)。这时不能假装 \(x_s\) 就是 \(x_0\)，否则 fake score 会有偏。
 
 论文从 Markov Gaussian diffusion 出发：
@@ -178,7 +174,6 @@ p(x_t \mid x_s)
 =
 \mathcal N(\alpha_{t|s}x_s,\sigma_{t|s}^2I),
 \]
-
 
 这里省略了显式变量槽位，等价于 \(\mathcal N(x_t;\alpha_{t|s}x_s,\sigma_{t|s}^2I)\)：第 1 个位置 \(x_t\) 是目标带噪状态，第 2 个位置 \(\alpha_{t|s}x_s\) 是均值，第 3 个位置 \(\sigma_{t|s}^2I\) 是协方差。
 
@@ -192,7 +187,6 @@ p(x_t \mid x_s)
 \sigma_t^2-\alpha_{t|s}^2\sigma_s^2.
 \]
 
-
 于是中间样本继续加噪写成：
 
 \[
@@ -200,7 +194,6 @@ x_t
 =
 \alpha_{t|s}x_s+\sigma_{t|s}\epsilon.
 \]
-
 
 对于 flow velocity prediction，子区间 fake score model 应该优化：
 
@@ -217,7 +210,6 @@ x_t
 \right)
 \right\rVert^2.
 \]
-
 
 这个目标的意义是：虽然训练时没有 \(x_0\)，但 \(F_{\theta_k}\) 仍然可以在子区间 \((s,1]\) 上给出和完整 score matching 一致的无偏估计。
 
@@ -239,7 +231,6 @@ x_t
 \right\rVert^2.
 \]
 
-
 其中 clamp 范围是 \([0,10]\)，用来避免靠近子区间边界时权重爆掉。
 
 论文还给出 x-prediction 版本，适用于 EDM / SID / TDM / Self-Forcing 一类 sample prediction 设置：
@@ -256,7 +247,6 @@ x_t
 \right)
 \right\rVert^2.
 \]
-
 
 这部分是 Phased DMD 和“经验性切区间训练”的边界。它不是简单把 timestep 切开再照旧训，而是明确改了 fake score 的目标，保证 DMD 的 A2 假设仍然成立。
 
@@ -277,8 +267,8 @@ x_t
 
 <small>图源：`Phased DMD`，Figure 2。原论文图意：在一维四点分布上比较完整区间训练、正确子区间训练和错误子区间目标。正确子区间目标能复现完整区间采样轨迹，错误目标会产生偏移。</small>
 
-!!! note "图解：toy flow 图在验证子区间目标是否无偏"
-    这个 toy 实验很小，但它支撑了论文的核心理论点。左图是完整区间目标，等价于不拆 phase；中图说明只训练正确子区间时，采样轨迹仍能复现完整区间方向；右图说明如果中间 phase 直接用 \(\epsilon - x_s\) 之类的 naive target，fake score 会偏，DMD 更新方向就不再可靠。正确的子区间目标能让模型在 \((s,1]\) 里学到和完整 score matching 一致的轨迹。
+**Toy flow 图在验证子区间目标是否无偏。**
+这个 toy 实验很小，但它支撑了论文的核心理论点。左图是完整区间目标，等价于不拆 phase；中图说明只训练正确子区间时，采样轨迹仍能复现完整区间方向；右图说明如果中间 phase 直接用 \(\epsilon - x_s\) 之类的 naive target，fake score 会偏，DMD 更新方向就不再可靠。正确的子区间目标能让模型在 \((s,1]\) 里学到和完整 score matching 一致的轨迹。
 
 ## 训练设置
 
@@ -351,8 +341,8 @@ x_t
 
 <small>图源：`Phased DMD`，supplementary Figure 7。原论文图意：训练 phase 的 re-noising timestep 区间由采样 steps 和 timestep shift 决定。Wan 系列使用 shift 5，Qwen-Image 使用 shift 3。</small>
 
-!!! note "图解：timestep interval 图要和 SNR 分工一起看"
-    图里的 interval 不是随便切采样步，而是在规定每个 phase 训练时从哪些噪声强度重新加噪。高噪声 / 低 SNR 区间更负责全局结构、运动和大尺度布局，低噪声 / 高 SNR 区间更负责纹理、边缘和局部细节。timestep shift 会改变这些区间实际落点，所以 Wan 和 Qwen-Image 需要不同设置；这也是 Phased DMD 不能只说“训练几个 expert”而不说明 re-noising schedule 的原因。
+**Timestep interval 图要和 SNR 分工一起看。**
+图里的 interval 不是随便切采样步，而是在规定每个 phase 训练时从哪些噪声强度重新加噪。高噪声 / 低 SNR 区间更负责全局结构、运动和大尺度布局，低噪声 / 高 SNR 区间更负责纹理、边缘和局部细节。timestep shift 会改变这些区间实际落点，所以 Wan 和 Qwen-Image 需要不同设置；这也是 Phased DMD 不能只说“训练几个 expert”而不说明 re-noising schedule 的原因。
 
 对于 Wan2.2，第一阶段只使用 high-noise model，也就是 low-SNR expert。这里的命名容易混淆：**high-noise model 对应低 SNR 区间**，主要负责结构和动态。论文在第一阶段还限制 re-noising timestep：
 
@@ -397,8 +387,8 @@ x_t
 
 <small>图源：`Phased DMD`，Figure 3 右侧。原论文图意：对比 base、DMD2 和 Phased DMD 在 camera-following prompt 下的镜头控制。DMD2 更容易收成近景，Phased DMD 更接近 base model 的镜头运动。</small>
 
-!!! note "图解：视频对比图重点看 motion collapse"
-    左侧 parkour 样例看的是动作幅度：DMD2 容易把少步模型压成更保守的运动，Phased DMD 则让低 SNR phase 继续承担大尺度动态。右侧 camera-following 样例看的是镜头控制：如果模型为了稳定而收成近景，说明它牺牲了原 teacher 的运动和视角变化。Phased DMD 这些图想证明的是“少步蒸馏不只损失画质，也会损失运动分布”，而分 phase 训练能缓解这种退化。
+**视频对比图重点看 motion collapse。**
+左侧 parkour 样例看的是动作幅度：DMD2 容易把少步模型压成更保守的运动，Phased DMD 则让低 SNR phase 继续承担大尺度动态。右侧 camera-following 样例看的是镜头控制：如果模型为了稳定而收成近景，说明它牺牲了原 teacher 的运动和视角变化。Phased DMD 这些图想证明的是“少步蒸馏不只损失画质，也会损失运动分布”，而分 phase 训练能缓解这种退化。
 
 ### Table 2: Quantitative comparison of video generation performance
 
@@ -451,8 +441,8 @@ x_t
 
 <small>图源：`Phased DMD`，Figure 5。原论文图意：Qwen-Image 经 Phased DMD 蒸馏后的生成样例，展示文字渲染和复杂视觉生成能力仍被保留。</small>
 
-!!! note "图解：Qwen-Image 样例图主要看复杂能力是否被蒸馏掉"
-    文生图蒸馏很容易先保住简单主体，却丢掉文字渲染、复杂布局、多对象关系和细粒度风格。Qwen-Image 这组样例的读法是：少步 Phased DMD 不只要快，还要保留 teacher 在文字和复杂视觉生成上的能力。
+**Qwen-Image 样例图主要看复杂能力是否被蒸馏掉。**
+文生图蒸馏很容易先保住简单主体，却丢掉文字渲染、复杂布局、多对象关系和细粒度风格。Qwen-Image 这组样例的读法是：少步 Phased DMD 不只要快，还要保留 teacher 在文字和复杂视觉生成上的能力。
 
 ## MoE 为什么在这里重要
 
@@ -478,8 +468,8 @@ x_t
 
 <small>图源：`Phased DMD`，supplementary Figure 10。原论文图意：只用低 SNR / high-noise expert 时，视频已经具有全局结构和动态；再加高 SNR / low-noise expert 后，局部纹理和视觉细节被进一步补齐。</small>
 
-!!! note "图解：低 SNR 和高 SNR expert 各补什么"
-    左图只用 low-SNR / high-noise expert 时，视频已经有全局结构和主要动态，说明运动和粗布局是在高噪声阶段先确定的；右图加上 high-SNR / low-noise expert 后，局部纹理、边缘和视觉细节被补齐。这解释了为什么 Phased DMD 对视频运动尤其有效：视频里的动态不是最后几步细节补出来的，而是低 SNR 阶段先决定的。如果 SGTS 把训练反复压成一跳，低 SNR expert 的动态建模能力会被削弱，最终表现为 motion intensity 下降。
+**低 SNR 和高 SNR expert 各补什么。**
+左图只用 low-SNR / high-noise expert 时，视频已经有全局结构和主要动态，说明运动和粗布局是在高噪声阶段先确定的；右图加上 high-SNR / low-noise expert 后，局部纹理、边缘和视觉细节被补齐。这解释了为什么 Phased DMD 对视频运动尤其有效：视频里的动态不是最后几步细节补出来的，而是低 SNR 阶段先决定的。如果 SGTS 把训练反复压成一跳，低 SNR expert 的动态建模能力会被削弱，最终表现为 motion intensity 下降。
 
 ## 子区间选择：Reverse Nested Intervals
 
@@ -505,8 +495,8 @@ x_t
 
 <small>图源：`Phased DMD`，supplementary Figure 8。原论文图意：Disjoint Intervals 容易出现不自然色调和脸部结构退化；Reverse Nested Intervals 生成更正常。</small>
 
-!!! note "图解：Reverse Nested Intervals 为什么更稳"
-    Disjoint Intervals 让每个 phase 只看自己的不重叠区间，问题是训练初期 generator 分布和真实分布差距很大，高 SNR / 低噪声区间里 fake 样本很容易落在 teacher score 不可靠的位置。Reverse Nested Intervals 让每个 phase 都覆盖到高噪声端，低 SNR / 高噪声会把 fake 和 real 分布都模糊掉，重叠更大，teacher score 更可靠。图里的脸部结构和色调差异，就是 score 可靠性差异在视觉上的表现。
+**Reverse Nested Intervals 为什么更稳。**
+Disjoint Intervals 让每个 phase 只看自己的不重叠区间，问题是训练初期 generator 分布和真实分布差距很大，高 SNR / 低噪声区间里 fake 样本很容易落在 teacher score 不可靠的位置。Reverse Nested Intervals 让每个 phase 都覆盖到高噪声端，低 SNR / 高噪声会把 fake 和 real 分布都模糊掉，重叠更大，teacher score 更可靠。图里的脸部结构和色调差异，就是 score 可靠性差异在视觉上的表现。
 
 这个观察也解释了固定 timestep 的消融：
 
@@ -523,8 +513,8 @@ x_t
 
 <small>图源：`Phased DMD`，supplementary Figure 9。原论文图意：在 Wan2.1 T2I 的 vanilla DMD 消融中，只在低噪声 timestep `t=0.357` 注入噪声会训练失败；高噪声 timestep `t=0.882` 可以得到正常结果。</small>
 
-!!! note "图解：固定 timestep 消融说明高噪声更像安全训练区"
-    理论上任意 \(0<t<1\) 的 noised KL 都能反映 clean KL，但实践上 teacher score 的可靠性和 fake / real 分布重叠程度不同。低噪声 `t=0.357` 时，fake 样本还保留很多 generator 自己的错误细节，teacher score 容易给出不稳定方向；高噪声 `t=0.882` 时，样本被充分扰动，real/fake 分布更重叠，训练更稳。这个消融解释了为什么 DMD 类训练经常不能只按理论随便采 timestep。
+**固定 timestep 消融说明高噪声更像安全训练区。**
+理论上任意 \(0<t<1\) 的 noised KL 都能反映 clean KL，但实践上 teacher score 的可靠性和 fake / real 分布重叠程度不同。低噪声 `t=0.357` 时，fake 样本还保留很多 generator 自己的错误细节，teacher score 容易给出不稳定方向；高噪声 `t=0.882` 时，样本被充分扰动，real/fake 分布更重叠，训练更稳。这个消融解释了为什么 DMD 类训练经常不能只按理论随便采 timestep。
 
 ## 4-step 4-phase 的补充结果
 
@@ -588,7 +578,7 @@ Phased DMD 不是 CausVid 的替代。CausVid 更关心视频生成系统如何�
 5. **需要强 teacher 和大算力**：论文主验证在 20B / 28B 级 teacher 上完成，64 GPU 训练配置说明它不是低成本微调技巧。
 6. **不是动作条件世界模型**：它改善视频动态和镜头控制，但本身不解决动作-后果对齐、闭环规划或交互世界模型评测。
 
-## 读完应该记住什么
+## 阅读结论
 
 Phased DMD 的关键贡献是把 few-step DMD 里的“少步”重新解释成 **SNR phase 的专家分工**，而不是简单把多步扩散压成一个统一网络。它解决了 DMD2 / SGTS 的一个核心副作用：训练过程可能退化到 one-step 行为，导致图像多样性下降、视频运动变慢。
 
@@ -605,9 +595,11 @@ strong image/video diffusion teacher
 
 如果你在做大模型扩散蒸馏，这篇论文提醒你：**few-step distillation 的难点不是只把采样步数压下来，而是在压步数时保住模型容量、结构多样性和低 SNR 动态建模能力。**
 
-## 参考资料
+## 外部精读
 
-1. Fan et al. [Phased DMD: Few-step Distribution Matching Distillation via Score Matching within Subintervals](https://arxiv.org/abs/2510.27684). arXiv:2510.27684.
-2. 官方项目页：[Phased DMD](https://x-niper.github.io/projects/Phased-DMD/).
-3. 官方代码与模型：[ModelTC/Wan2.2-Lightning](https://github.com/ModelTC/Wan2.2-Lightning).
-4. 论文 HTML 版本：[ar5iv:2510.27684](https://ar5iv.labs.arxiv.org/html/2510.27684).
+1. Fan et al. [Phased DMD](https://arxiv.org/abs/2510.27684)：原论文；读 Section 3 的子区间 score matching 推导和 supplementary ablation，并以 arXiv 最新版本为准。
+2. 官方项目页：[Phased DMD](https://x-niper.github.io/projects/Phased-DMD/)：看 4-step / 4 NFE 视频对比、220 个固定 seed 样例和 motion metrics 的展示方式。
+3. 官方代码与模型：[ModelTC/LightX2V-Wan2.2-Lightning](https://github.com/ModelTC/LightX2V-Wan2.2-Lightning)：确认模型、权重和工程入口，避免只读论文图。
+4. Yin et al. [Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)：先理解 DMD 为什么用 real score 和 fake score 的差异更新 generator。
+5. Yin et al. [DMD2](https://arxiv.org/abs/2405.14867)：理解 SGTS、fake score 训练和大模型 few-step DMD 的稳定性问题。
+6. Song et al. [Consistency Models](https://arxiv.org/abs/2303.01469)：作为少步生成的另一条路线，对比“轨迹一致性”和“分布匹配”的不同。

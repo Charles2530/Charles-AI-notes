@@ -1,10 +1,15 @@
-# MoE 与大模型架构表读法
+# MoE 与大模型架构：总参数、激活参数和路由成本
 
 读 DeepSeek、Qwen、Kimi、Gemini、Nemotron 这类技术报告时，最容易被一张模型规模表带偏：`Total Params`、`Activated Params`、`Experts`、`Top-k`、`MLA/GQA`、`MTP`、`FP8/FP4` 全部挤在一起。真正要读懂它，不是背模型名字，而是先分清：**MoE 改的是容量和计算分配，MTP 改的是预测头，Mamba/SSM 改的是序列状态路径，低精度改的是数值和硬件执行。**
 
-
 这一页补的是“读架构表”的前置知识。它不是部署路由教程，而是帮你在技术报告里看懂稀疏专家模型到底怎样训练、怎样算账、怎样影响推理。
 可以先把这页当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背模型名，先看清哪一步在改变信息，哪一步在改变成本。
+
+## 核心问题
+
+MoE 最容易被误读成“参数很多，所以能力强；激活参数少，所以推理便宜”。这两个判断都不够。真正要看的是：**总参数给了多少容量，router 每个 token 激活了多少专家，训练时专家有没有被均衡使用，推理时 token dispatch 和 all-to-all 有没有把节省的计算吃掉。**
+
+因此读 MoE 不要从模型名字开始，而要从一条 token 的路径开始：hidden state 进入 router，router 选出少数 expert，系统把 token 发到对应 expert，expert MLP 算完再合回来。这个路径既是模型结构，也是训练稳定性和硬件成本的来源。
 
 ## 一句话先立住
 
@@ -64,23 +69,19 @@ MoE 层的计算可以写成：
 g = \operatorname{softmax}(W_r h)
 \]
 
-
 \[
 \operatorname{TopK}(g) = \{i_1, i_2, \dots, i_k\}
 \]
 
-
 \[
 y = \sum_{i \in \operatorname{TopK}(g)} \tilde g_i \cdot E_i(h)
 \]
-
 
 其中 \(h\) 是 token 的 hidden state，\(W_r\) 是 router，\(E_i\) 是第 \(i\) 个 expert，\(\tilde g_i\) 是 top-k 后重新归一化的权重。很多现代 MoE 还会加入 shared expert：
 
 \[
 y = E_{\text{shared}}(h) + \sum_{i \in \operatorname{TopK}(g)} \tilde g_i \cdot E_i(h)
 \]
-
 
 ```mermaid
 sequenceDiagram
@@ -149,7 +150,6 @@ flowchart TB
 \[
 \mathcal{L}_{balance} \propto N \sum_i f_i p_i
 \]
-
 
 这里的重点不是背公式，而是理解：**MoE 需要一套机制保证专家被充分使用，否则总参数再大也只是摆设。**
 
@@ -222,7 +222,6 @@ MoE 技术报告里和训练最相关的不是“用了多少专家”本身，�
 \text{data mixture} \rightarrow \text{router distribution} \rightarrow \text{expert specialization} \rightarrow \text{load balance} \rightarrow \text{system throughput}
 \]
 
-
 MoE 的训练 recipe 往往比架构名更关键。一个专家数更多的模型，如果 router 负载不稳、expert batch 太碎、低精度保护不足，真实训练效率可能反而更差。读报告时要把训练数据、router 分布、expert specialization、load balance 和系统吞吐连起来看。
 
 ## 系统读法：从专家到硬件
@@ -257,9 +256,9 @@ flowchart LR
 - benchmark 的 batch size、context length、hardware topology 是否公开；
 - 训练吞吐和推理吞吐是否混在一个结论里。
 
-## 技术报告里的最短检查清单
+## 技术报告应该怎样拆
 
-读一篇大模型技术报告时，可以按下面顺序扫。
+读一篇大模型技术报告时，先按下面顺序把 claim 拆开。这样做不是为了机械打勾，而是避免把“模型规模、训练 recipe、系统吞吐、后训练效果”混成一个结论。
 
 1. 结构表：是 dense、MoE、hybrid MoE，还是 Mamba-MoE？MoE 出现在多少层？
 2. 参数表：`Total Params` 和 `Activated Params` 分别是多少？top-k 是多少？
@@ -288,17 +287,12 @@ flowchart LR
 | Shared expert 是可有可无的细节 | shared expert 会影响通用知识和 routed expert 专业化 |
 | MoE Serving 路由和模型内 MoE router 是一回事 | 前者是请求/模型级调度，后者是 token/expert 级模型结构 |
 
-## 和已有专题的接口
+## 外部精读
 
-MoE 相关内容在本站分散在多个层次，这一页只补“读架构表”的入口：
-
-| 想继续读 | 去哪里 |
-| --- | --- |
-| 模型内 MoE 架构、参数表、训练细节 | 当前页 |
-| 服务系统里的请求路由、多模型调度、SLO | [MoE 路由与多模型服务](../inference/moe-routing-and-multi-model-serving.md) |
-| expert routing 的 kernel、dispatch、sparse GEMM | [MoE 路由与稀疏 Kernel](../operators/moe-routing-and-sparse-kernels.md) |
-| MTP 和投机解码 | [MTP 与投机解码](../training/mtp-and-speculative-decoding.md) |
-| Mamba/SSM 和混合架构 | [Mamba 与混合 SSM 架构](mamba-and-hybrid-ssm-transformers.md) |
-| 低精度训练和推理 | [数值、显存与运行时](numerics-memory-and-runtime-basics.md)、[量化路线图](../quantization/index.md) |
+- [The Sparsely-Gated Mixture-of-Experts Layer](https://arxiv.org/abs/1701.06538)：MoE router、top-k、capacity 和 load balancing 的早期经典来源。
+- [GShard](https://arxiv.org/abs/2006.16668)：把稀疏专家、自动并行和大规模训练放到系统语境里。
+- [Switch Transformer](https://arxiv.org/abs/2101.03961)：top-1 routing、capacity factor 和负载均衡的入门读物。
+- [Hugging Face: Mixture of Experts Explained](https://huggingface.co/blog/moe)：适合用图和直觉理解 expert、router、capacity 和推理代价。
+- [DeepSpeed MoE Tutorial](https://www.deepspeed.ai/tutorials/mixture-of-experts/)：从系统角度理解 expert parallelism、通信和训练配置。
 
 读完这一页，再读技术报告时应该能做到：看到一张模型表，先把参数容量、激活计算、路由训练、通信成本和证据强度拆开，而不是被一个大模型规模数字带着走。

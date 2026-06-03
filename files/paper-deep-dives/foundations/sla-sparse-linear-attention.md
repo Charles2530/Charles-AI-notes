@@ -6,22 +6,13 @@ paper_topic: 高效训练
 
 # SLA / SLA2：DiT 稀疏线性 Attention
 
-
 这两篇论文讨论的是视频 DiT 里一个很基础但很工程化的问题：**attention 既是长序列视频生成的瓶颈，又很难直接靠稀疏或线性化单独解决。** SLA 先把 attention 权重分成三类：少数关键块精确算，大量边缘块用 linear attention 补偿，极小块直接跳过。SLA2 则继续追问：这个三分法能不能不靠手工规则，低比特 attention 能不能和 sparse-linear attention 一起训练出来。
 
 因此这篇讲解把两篇合在一起看：SLA 是 sparse-linear attention 的第一版，证明“高秩少数精确算、低秩多数便宜补”这条路线可行；SLA2 是第二版，补上可学习路由、比例混合和 QAT，让它更接近可部署的高稀疏注意力方案。
 
+先用一个视频 DiT 场景理解它为什么不是普通稀疏。假设一个 5 秒视频 latent 有上万 token：同一只手、桌面、杯子和背景在不同帧里互相影响。少数 query-key block 真的很关键，例如手接近杯子的区域，要精确看；很多远处背景 block 权重很小，可以跳过；但还有一大批“中等但数量很多”的 block，单个不重要，合起来却维持了时序一致和背景结构。SLA 的核心就是给这三类 block 分配三种计算，而不是用一种稀疏规则粗暴处理整张 attention matrix。
+
 ## 论文位置
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
->
-> 延伸阅读：[04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html) |
 
 标准 attention 是：
 
@@ -30,7 +21,6 @@ paper_topic: 高效训练
 =
 \operatorname{softmax}\left(\frac{QK^\top}{\sqrt d}\right)V
 \]
-
 
 它的问题是 \(QK^\top\) 和 attention weight matrix 都是 \(N\times N\)，复杂度随序列长度平方增长。LLM 长上下文会遇到这个问题，视频 DiT 更明显，因为视频 latent token 同时包含时间和空间维度，序列长度经常达到 10K 到 100K。
 
@@ -60,8 +50,8 @@ SLA 的判断是：这两类路线各自失败，是因为它们都试图用一�
 
 <small>图源：`SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention`，Figure 1。原论文图意：左图展示 Wan2.1 attention weights 的分布，约 8.1% 为 critical，约 46.5% 为 marginal，约 45.4% 为 negligible；右图说明只跳过最小 45% 权重误差很小，但只保留最大约 8% 会导致输出误差显著增大。</small>
 
-!!! note "这张图怎么读"
-    绿色 negligible 权重可以跳过；红色 critical 权重要精确算；黄色 marginal 权重是难点。它们不够大到值得 full attention，但直接丢掉又会带来明显误差。SLA 的关键不是“更激进地稀疏”，而是承认中间权重需要一种便宜但可训练的补偿。
+**Attention 分布图先区分 critical、marginal、negligible。**
+绿色 negligible 权重可以跳过；红色 critical 权重要精确算；黄色 marginal 权重是难点。它们不够大到值得 full attention，但直接丢掉又会带来明显误差。SLA 的关键不是“更激进地稀疏”，而是承认中间权重需要一种便宜但可训练的补偿。
 
 论文进一步用 stable rank 观察 attention matrix。完整 attention 和 top weights 部分仍然高秩，而去掉 top 8% 后，剩余 bottom 92% 的 stable rank 很低。
 
@@ -69,8 +59,8 @@ SLA 的判断是：这两类路线各自失败，是因为它们都试图用一�
 
 <small>图源：`SLA`，Figure 3。原论文图意：Wan2.1 attention weights 可分成 top-8% 高秩部分和 bottom-92% 低秩部分；前者适合 sparse attention，后者适合 low-rank / linear attention。</small>
 
-!!! note "图解"
-    这张图不要只看 top-8% 的稀疏性，而要看 stable rank。红色高权重部分仍然高秩，所以需要 sparse exact attention；剩下的大量低权重部分更低秩，才适合 linear attention 补偿。SLA 的核心假设就是“不同权重区间对应不同结构”。
+**这张 rank 图支撑什么。**
+这张图不要只看 top-8% 的稀疏性，而要看 stable rank。红色高权重部分仍然高秩，所以需要 sparse exact attention；剩下的大量低权重部分更低秩，才适合 linear attention 补偿。SLA 的核心假设就是“不同权重区间对应不同结构”。
 
 这就是 SLA 名字里的 “Sparse-Linear”：不是把 sparse attention 和 linear attention 机械相加，而是让它们分别处理 attention matrix 的不同结构。
 
@@ -88,8 +78,8 @@ SLA 先按 query/key block 估计一个压缩 attention weight matrix。论文�
 
 <small>图源：`SLA`，Figure 4。原论文图意：左侧展示 SLA 的 high-level idea：先预测压缩 attention weights，再把 block 分成 critical / marginal / negligible；右侧展示 forward algorithm：critical blocks 用 Sparse FlashAttention，marginal blocks 用 Linear Attention，negligible blocks skip。</small>
 
-!!! note "图解"
-    左半边读分类，右半边读执行。critical block 走精确 sparse FlashAttention，marginal block 走 linear branch，negligible block 直接跳过；颜色表示 block 的计算路径。作者想证明的不是“稀疏越高越好”，而是三类 block 必须承担不同角色。
+**SLA overview 图要按三类 block 的执行路径读。**
+左半边读分类，右半边读执行。critical block 走精确 sparse FlashAttention，marginal block 走 linear branch，negligible block 直接跳过；颜色表示 block 的计算路径。作者想证明的不是“稀疏越高越好”，而是三类 block 必须承担不同角色。
 
 SLA 的输出可以理解成两部分：
 
@@ -97,11 +87,10 @@ SLA 的输出可以理解成两部分：
 O = O^{s} + \operatorname{Proj}(O^{l})
 \]
 
-
 其中 \(O^{s}\) 来自 sparse FlashAttention，处理 critical blocks；\(O^{l}\) 来自 linear attention，处理 marginal blocks；`Proj` 是一个可学习线性投影，用来减小 softmax attention 与 linear attention 的分布不匹配。
 
-!!! note "linear attention 在 SLA 里不是直接替代 softmax"
-    论文特别强调，SLA 里的 linear attention 更像 trainable compensation，而不是对 marginal softmax attention 的精确近似。完整 softmax attention 的高秩结构很难被 linear attention 表达，所以 SLA 把高秩 critical 部分交给 sparse exact attention，只让 linear attention 负责低秩剩余结构，并通过 fine-tuning 让模型适配。
+**linear attention 在 SLA 里不是直接替代 softmax。**
+论文特别强调，SLA 里的 linear attention 更像 trainable compensation，而不是对 marginal softmax attention 的精确近似。完整 softmax attention 的高秩结构很难被 linear attention 表达，所以 SLA 把高秩 critical 部分交给 sparse exact attention，只让 linear attention 负责低秩剩余结构，并通过 fine-tuning 让模型适配。
 
 ### 为什么需要微调
 
@@ -146,9 +135,6 @@ forward 的关键优化是：对 linear attention 路径预先计算每个 key/v
 
 ## SLA 实验结果
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 ### 实验设置和指标
 
 视频实验主线使用 Wan2.1-1.3B。评测不只看速度，也看生成质量。
@@ -179,12 +165,12 @@ forward 的关键优化是：对 linear attention 路径预先计算每个 key/v
 
 从表里看，SLA 的重点不是单个质量指标超过 full attention，而是它在 `2.74T` FLOPs 下保持了接近 full attention 的 VA/VT/IQ/OC/AQ/SC，而其他稀疏方法在更高 FLOPs 或更低 sparsity 下质量明显下降。
 
-![SLA qualitative comparison 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla-qualitative-comparison-原图.png){ width="820" }
+![SLA qualitative comparison 原图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla-qualitative-comparison-原图.png){ width="820" .atlas-figure-compact }
 
 <small>图源：`SLA`，Figure 2。原论文图意：在 Wan2.1 上对比 Full Attention、Linear Only、Sparse Only 和 SLA，SLA 在 95% sparsity 下保持接近 full attention 的视频质量；Linear Only 和 Sparse Only 出现明显质量退化。</small>
 
-!!! note "图解"
-    按列比较方法，按行比较同一 prompt 的生成质量。Linear Only 便宜但容易丢细节和一致性，Sparse Only 保留大权重但漏掉大量中间贡献，SLA 通过 sparse exact 加 linear compensation 接近 full attention。它是视觉证据，不替代表格指标。
+**质量对比图先看失败类型。**
+按列比较方法，按行比较同一 prompt 的生成质量。Linear Only 便宜但容易丢细节和一致性，Sparse Only 保留大权重但漏掉大量中间贡献，SLA 通过 sparse exact 加 linear compensation 接近 full attention。它是视觉证据，不替代表格指标。
 
 ### 效率：attention 变得接近不再是瓶颈
 
@@ -194,8 +180,8 @@ forward 的关键优化是：对 linear attention 路径预先计算每个 key/v
 
 <small>图源：`SLA`，Figure 6。原论文图意：SLA 在 forward attention kernel 上相对 FlashAttention2 达到 13.7x speedup；端到端视频生成中 attention latency 从 97s 降到 11s，整体 E2E speedup 为 2.2x。</small>
 
-!!! note "图解"
-    左侧看 attention kernel 自身，右侧看端到端生成。attention 从主要瓶颈变成较小部分后，VAE、MLP、采样循环和其他算子会显得更突出，所以 13.7x kernel speedup 只转化为约 2.2x E2E speedup。这是部署时最容易误读的地方。
+**效率图要分 kernel 和端到端。**
+左侧看 attention kernel 自身，右侧看端到端生成。attention 从主要瓶颈变成较小部分后，VAE、MLP、采样循环和其他算子会显得更突出，所以 13.7x kernel speedup 只转化为约 2.2x E2E speedup。这是部署时最容易误读的地方。
 
 这张图说明一个系统事实：即使 attention kernel 加速很多，端到端不一定等比例加速，因为视频生成里还有 VAE、MLP、norm、sampling loop、数据搬运等其他部分。SLA 把 attention 从 97s 降到 11s 后，剩下的 62s “Others” 成为主要时间，整体速度提升约 2.2x。也就是说，SLA 的成功会把瓶颈推向 attention 之外的模块。
 
@@ -249,19 +235,18 @@ SLA2 的出发点不是推翻 SLA，而是把 SLA 里两个比较“工程经验
 P = P_1 + P_2,\quad P_1=P\odot M,\quad P_2=P\odot(1-M)
 \]
 
-
 但是 sparse attention 会在 masked positions 内重新归一化。对每个 query row，若被 mask 选中的概率和为 \(\alpha\)，那么 sparse branch 实际得到的是近似 \(P_s=P_1/\alpha\)，而不是 \(P_1\)。这会带来一个 row-wise scaling mismatch。SLA 用 `Proj(O^l)` 试图补偿这个错配，但 linear 分支既要近似 \(P_2V\)，又要补 sparse 分支的 scale error，任务变得不干净。
 
 第二，SLA 用 attention-weight magnitude 的启发式 top-k 路由决定哪些 block 进 sparse branch、哪些交给 linear branch。这个规则直观但不一定最优，因为“权重大”不完全等于“必须精确算”，“权重中等”也不一定就是 linear branch 最容易拟合的低秩部分。
 
 SLA2 的总体 pipeline 如下：
 
-![SLA2 attention pipeline 原论文图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla2-attention-pipeline-原论文图.png){ width="390" }
+![SLA2 attention pipeline 原论文图](../../assets/images/localized-remote/paper-deep-dives/foundations/sla-sparse-linear-attention/sla2-attention-pipeline-原论文图.png){ width="520" .atlas-figure-compact }
 
 <small>图源：[SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675)，Figure 1。原论文图意：SLA2 用 learnable router \(R(Q,K)\) 产生 sparse mask，再用 learnable ratio \(\alpha\) 混合 sparse attention output 和 linear attention output；sparse 分支还可以通过 QAT 引入 low-bit attention。</small>
 
-!!! note "图解"
-    这张小图按三步读：router \(R(Q,K)\) 先决定哪些 block 进入 sparse 分支，\(\alpha\) 再决定 sparse output 和 linear output 的混合比例，QAT 则让 sparse 分支在低比特 forward 下训练适配。它补的是 SLA 的两个缺口：路由可学习、分支比例显式可学。
+**SLA2 图重点看两个可学习量。**
+这张小图按三步读：router \(R(Q,K)\) 先决定哪些 block 进入 sparse 分支，\(\alpha\) 再决定 sparse output 和 linear output 的混合比例，QAT 则让 sparse 分支在低比特 forward 下训练适配。它补的是 SLA 的两个缺口：路由可学习、分支比例显式可学。
 
 ### SLA2 的公式：从 `Proj` 补偿改成比例混合
 
@@ -270,7 +255,6 @@ SLA2 把输出写成：
 \[
 O = \alpha \odot O^s + (1-\alpha)\odot O^l
 \]
-
 
 其中：
 
@@ -287,13 +271,11 @@ O = \alpha \odot O^s + (1-\alpha)\odot O^l
 O = O^s + \operatorname{Proj}(O^l)
 \]
 
-
 SLA2 是：
 
 \[
 O = \alpha \odot O^s + (1-\alpha)\odot O^l
 \]
-
 
 前者把错配交给一个 projection 去学，后者直接把 sparse branch 的 row-wise probability mass 放进公式里。对学习来说，SLA2 的目标更明确：\(\alpha O^s\) 对应被 sparse branch 负责的 \(P_1V\)，\((1-\alpha)O^l\) 对应 linear branch 负责的 \(P_2V\)。
 
@@ -396,7 +378,7 @@ SLA 最值得记住的不是“95% sparsity”这个数字，而是它给近似 
 
 对高效训练学习来说，这条线把四个常被分开讨论的主题接了起来：attention 数学结构、稀疏/低秩近似、可学习路由、GPU kernel / low-bit 部署效率。读完这篇后，看任何 attention 加速论文都应该追问五个问题：它省的是理论 FLOPs 还是 wall-clock？质量是否在同等 sparsity 下比较？路由是手工规则还是可训练目标？是否需要微调或 QAT？端到端瓶颈是否真的还在 attention？
 
-## 参考链接
+## 外部精读
 
 1. 论文：[SLA: Beyond Sparsity in Diffusion Transformers via Fine-Tunable Sparse-Linear Attention](https://arxiv.org/abs/2509.24006).
 2. 后续论文：[SLA2: Sparse-Linear Attention with Learnable Routing and QAT](https://arxiv.org/abs/2602.12675).
@@ -404,4 +386,6 @@ SLA 最值得记住的不是“95% sparsity”这个数字，而是它给近似 
 4. SLA2 Figure 1 见论文 PDF：[arXiv:2602.12675](https://arxiv.org/abs/2602.12675).
 5. 官方代码：[thu-ml/SLA](https://github.com/thu-ml/SLA).
 
-这一页最后回到三个验收点：方法上，SLA 的主线是把 dense attention 分解成 sparse/linear/low-bit 可训练路径，用结构替换和 QAT 同时降成本。实验上，速度、显存和质量表必须一起看；单独的稀疏率没有意义。诊断上，消融要回答“是稀疏模式有效，还是低比特/训练补偿在兜底”。
+## 阅读结论
+
+SLA 的主线是把 dense attention 分解成 sparse / linear / skip 三条路径，用短微调让模型适配近似计算；SLA2 则把路由、分支比例和低比特 sparse attention 都放进训练路径。读这类论文时，速度、显存、质量表和消融必须一起看；单独的稀疏率没有意义。真正要问的是：质量来自稀疏模式本身，还是来自 linear 补偿、微调和 QAT 在兜底。

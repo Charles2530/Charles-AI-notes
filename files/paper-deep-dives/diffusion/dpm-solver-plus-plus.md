@@ -6,7 +6,6 @@ paper_topic: 扩散模型
 
 # DPM-Solver++：为 Guidance 场景设计的扩散 ODE 求解器
 
-
 DPM-Solver++ 解决的是扩散模型推理里很实用的问题：**已经有一个训练好的扩散模型，不想再蒸馏或重训，只想在 classifier guidance / classifier-free guidance 下把采样步数从上百步压到 15 到 20 步，还不要因为 guidance scale 大而炸图。**
 
 它不是 DPM-Solver 的简单改名，而是针对 guided sampling 改了三件事：
@@ -54,7 +53,6 @@ q_{t0}(x_t\mid x_0)
 \mathcal N(x_t;\alpha_t x_0,\sigma_t^2 I),
 \]
 
-
 这里 \(\mathcal N(x_t;\alpha_t x_0,\sigma_t^2I)\) 的三个位置分别是：被采样/评估的带噪样本 \(x_t\)，均值 \(\alpha_t x_0\)，协方差 \(\sigma_t^2I\)。
 
 也就是：
@@ -62,7 +60,6 @@ q_{t0}(x_t\mid x_0)
 \[
 x_t=\alpha_t x_0+\sigma_t\epsilon,\qquad \epsilon\sim\mathcal N(0,I).
 \]
-
 
 \(\epsilon\sim\mathcal N(0,I)\) 是标准高斯噪声采样，\(0\) 是均值，\(I\) 是单位协方差；\(\sigma_t\) 再把这份标准噪声缩放到当前噪声水平。
 
@@ -72,13 +69,11 @@ x_t=\alpha_t x_0+\sigma_t\epsilon,\qquad \epsilon\sim\mathcal N(0,I).
 \lambda_t=\log(\alpha_t/\sigma_t).
 \]
 
-
 扩散模型常见的 noise prediction 模型是：
 
 \[
 \epsilon_\theta(x_t,t)\approx \epsilon.
 \]
-
 
 同一个模型也能换成 data prediction：
 
@@ -87,7 +82,6 @@ x_\theta(x_t,t)
 :=
 \frac{x_t-\sigma_t\epsilon_\theta(x_t,t)}{\alpha_t}.
 \]
-
 
 这条式子很关键：它说明 `noise prediction` 和 `data prediction` 表达的是同一个去噪信息，但求解器看到的变量不同。DPM-Solver++ 的核心转向就是：**不要再围绕 \(\epsilon_\theta\) 的 ODE 设计高阶积分，而是围绕 \(x_\theta\) 的 ODE 设计。**
 
@@ -102,7 +96,6 @@ classifier guidance 写成：
 -s\sigma_t\nabla_{x_t}\log p_\phi(c\mid x_t,t),
 \]
 
-
 classifier-free guidance 写成：
 
 \[
@@ -111,7 +104,6 @@ classifier-free guidance 写成：
 s\epsilon_\theta(x_t,t,c)
 +(1-s)\epsilon_\theta(x_t,t,\varnothing).
 \]
-
 
 当 guidance scale \(s\) 变大时，两个问题会一起出现：
 
@@ -135,7 +127,6 @@ x_t
 e^{-\lambda}\hat\epsilon_\theta(\hat x_\lambda,\lambda)d\lambda.
 \]
 
-
 这个式子把线性项 \(\frac{\alpha_t}{\alpha_s}x_s\) 精确算掉，剩下只需要近似一个关于 \(\epsilon_\theta\) 的指数加权积分。
 
 DPM-Solver++ 换成 data prediction 形式，得到另一条等价但不同的 exact solution：
@@ -148,7 +139,6 @@ x_t
 \int_{\lambda_s}^{\lambda_t}
 e^{\lambda}\hat x_\theta(\hat x_\lambda,\lambda)d\lambda.
 \]
-
 
 注意这两个式子虽然描述同一个 diffusion ODE，但作为数值求解器的起点不同：
 
@@ -167,7 +157,6 @@ e^{\lambda}\hat x_\theta(\hat x_\lambda,\lambda)d\lambda.
 h_i=\lambda_{t_i}-\lambda_{t_{i-1}}.
 \]
 
-
 这行式子在说：\(h_i\) 是第 \(i\) 个 solver step 在 log-SNR 坐标 \(\lambda\) 上的步长，而不是原始时间 \(t\) 上的简单差值。
 
 对 \(x_\theta\) 在 \(\lambda_{t_{i-1}}\) 附近做 \((k-1)\) 阶 Taylor 展开：
@@ -179,7 +168,6 @@ h_i=\lambda_{t_i}-\lambda_{t_{i-1}}.
 x_\theta^{(n)}(\lambda_{t_{i-1}})
 \frac{(\lambda-\lambda_{t_{i-1}})^n}{n!}.
 \]
-
 
 这行式子在说：在一个小步内，用 \(x_\theta\) 及其对 \(\lambda\) 的低阶导数近似整个积分区间里的模型输出；\(k\) 越高，使用的历史模型评估点越多。
 
@@ -198,7 +186,6 @@ e^\lambda
 +O(h_i^{k+1}).
 \]
 
-
 右侧的积分可以解析计算；难点变成估计 \(x_\theta\) 对 \(\lambda\) 的导数。论文主要使用二阶版本 \(k=2\)，因为更高阶在大 guidance scale 下更容易不稳。
 
 一阶特例就是 DDIM。二阶可以有两种做法：
@@ -210,8 +197,8 @@ e^\lambda
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Algorithm 1/2。原论文图意：DPM-Solver++(2S) 使用 singlestep 中间点；DPM-Solver++(2M) 使用 multistep buffer 复用历史 \(x_\theta\) 预测。</small>
 
-!!! note "这张算法图支撑什么判断"
-    2M 的优势不是“阶数更高”，而是在固定 NFE 下能走更多外层时间步。二阶 singlestep 每个大步需要额外中间模型调用；multistep 则复用历史函数值，所以有效步长更小，少步采样时通常更稳。
+**这张算法图支撑什么判断。**
+2M 的优势不是“阶数更高”，而是在固定 NFE 下能走更多外层时间步。二阶 singlestep 每个大步需要额外中间模型调用；multistep 则复用历史函数值，所以有效步长更小，少步采样时通常更稳。
 
 ## 和其它 exponential integrator solver 的关系
 
@@ -243,9 +230,6 @@ e^\lambda
 
 ## 实验设置
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 论文的训练相关结论很简单：**DPM-Solver++ 不训练模型。**它用已有 pretrained diffusion model 做采样器评测。
 
 | Item | Setting |
@@ -269,8 +253,8 @@ Figure 3 的三个子图分别对应本文三步改造：从 \(\epsilon_\theta\)
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 3。原论文图意：在 ImageNet 256×256、guidance scale 8.0 下，比较 DPM-Solver++ 的参数化、singlestep/multistep 和 thresholding 消融。</small>
 
-!!! note "这张图支撑什么判断"
-    左图说明换成 \(x_\theta\) 参数化后，二阶 solver 不再像原 DPM-Solver 那样在大 guidance 下崩坏；中图说明 multistep 在少 NFE 下更快接近低 FID；右图说明 thresholding 对大 guidance 的有界图像数据很关键。DPM-Solver++ 的稳定性来自三者组合，而不是单个 trick。
+**这张图支撑什么判断。**
+左图说明换成 \(x_\theta\) 参数化后，二阶 solver 不再像原 DPM-Solver 那样在大 guidance 下崩坏；中图说明 multistep 在少 NFE 下更快接近低 FID；右图说明 thresholding 对大 guidance 的有界图像数据很关键。DPM-Solver++ 的稳定性来自三者组合，而不是单个 trick。
 
 Figure 4 展示更完整的步数和 guidance scale 变化。
 
@@ -278,8 +262,8 @@ Figure 4 展示更完整的步数和 guidance scale 变化。
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 4。原论文图意：在 pixel-space DPM 和 latent-space DPM 中比较不同 sampler 随 NFE 变化的 FID/MSE。</small>
 
-!!! note "这张收敛图怎么读"
-    横轴是 NFE，也就是 denoiser 前向次数；纵轴是 FID 或 MSE，越低越好。先比较同一个 NFE 下不同颜色曲线的位置，再看曲线随 NFE 增加是否平稳下降。Figure 4 支撑的结论是 DPM-Solver++ 在 15 到 25 NFE 附近能接近更多步 DDIM 的质量，尤其在 latent-space DPM 里 multistep 版本更省前向调用；它不能证明任意 prompt、任意 CFG scale 都可以无损降到极低步数。
+**这张收敛图怎么读。**
+横轴是 NFE，也就是 denoiser 前向次数；纵轴是 FID 或 MSE，越低越好。先比较同一个 NFE 下不同颜色曲线的位置，再看曲线随 NFE 增加是否平稳下降。Figure 4 支撑的结论是 DPM-Solver++ 在 15 到 25 NFE 附近能接近更多步 DDIM 的质量，尤其在 latent-space DPM 里 multistep 版本更省前向调用；它不能证明任意 prompt、任意 CFG scale 都可以无损降到极低步数。
 
 ## 表格结果：保留原英文格式看关键数字
 
@@ -335,8 +319,8 @@ latent-space Stable Diffusion 里，论文用 MSE 到 1000-step DDIM 参考结�
 
 <small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 7。原论文图意：DeepFloyd-IF 的 pixel-space guided sampling 示例，比较 DPM-Solver++、DDPM、SDE-DPM-Solver++ 等不同 solver。</small>
 
-!!! note "这组样例图怎么读"
-    样例图不是单纯看哪张更好看，而是看同一个 prompt / guidance 条件下，少步 solver 是否保持主体结构、文字或物体边界。Figure 5/6 是对 ImageNet 与 Stable Diffusion 的定性补充；Figure 2/7 展示 DeepFloyd-IF 随 NFE 增加的视觉收敛。它们支撑“少步采样更稳”的直观证据，但真正比较仍要回到 Table 3/4 的 NFE、FID/MSE 和 guidance 设置。
+**这组样例图怎么读。**
+样例图不是单纯看哪张更好看，而是看同一个 prompt / guidance 条件下，少步 solver 是否保持主体结构、文字或物体边界。Figure 5/6 是对 ImageNet 与 Stable Diffusion 的定性补充；Figure 2/7 展示 DeepFloyd-IF 随 NFE 增加的视觉收敛。它们支撑“少步采样更稳”的直观证据，但真正比较仍要回到 Table 3/4 的 NFE、FID/MSE 和 guidance 设置。
 
 ## 工程上怎么用
 
@@ -382,13 +366,13 @@ DPM-Solver++ 不降低训练成本，它降低的是**推理成本、评测成�
 
 第四，FID/MSE/样例图不能覆盖所有生成任务。产品里还要看 prompt 分桶、人审偏好、文字渲染、失败率和 tail latency。
 
-## 本页结论
+## 阅读结论
 
 DPM-Solver++ 最值得记住的是：**guided diffusion 的少步采样不能只追求高阶；大 guidance scale 会放大方向场和导数，使原本高阶的 \(\epsilon_\theta\) solver 不稳。DPM-Solver++ 改用 \(x_\theta\) 的 exact solution、结合 thresholding 和 multistep 更新，在无需训练的前提下把 guided sampling 推到约 15 到 20 NFE。**
 
-## 参考
+## 外部精读
 
 1. [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://arxiv.org/abs/2211.01095)
 2. [LuChengTHU/dpm-solver](https://github.com/LuChengTHU/dpm-solver)
 
-这一页最后回到三个验收点：方法上，DPM-Solver++ 的核心是把 diffusion 采样写成 probability-flow ODE 的高阶积分问题，guided sampling 时改用更稳的 data prediction 形式。实验上，读图时同时看 NFE、FID/视觉质量和 guidance scale；少步好看才是真收益。诊断上，收敛曲线和 guided instability 图说明，solver order 与噪声时间步设计会直接决定高 CFG 下是否崩。
+DPM-Solver++ 的读法要同时看数学接口和采样条件：它把 diffusion 采样写成 probability-flow ODE 的高阶积分问题，但 guided sampling 时改用更稳的 data prediction 形式。实验图不能只看 FID，还要把 NFE、视觉质量和 guidance scale 放在一起；少步好看才是真收益，收敛曲线和 guided instability 图也说明 solver order 与噪声时间步设计会直接决定高 CFG 下是否崩。

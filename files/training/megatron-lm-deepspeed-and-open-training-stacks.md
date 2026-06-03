@@ -1,180 +1,202 @@
-# Megatron、DeepSpeed 与训练栈
+# Megatron、DeepSpeed 与 FSDP：训练栈不是框架排行榜
 
+大模型训练栈最容易被讲成“Megatron、DeepSpeed、FSDP 谁更好”。这个问法本身就偏了。它们首先解决的是不同账本：Megatron-style parallelism 主要切 Transformer 层内计算和并行拓扑；ZeRO/FSDP 主要切数据并行里重复保存的训练状态；DeepSpeed 更像运行时和内存优化平台；checkpoint、导出和实验治理负责让训练资产能继续被后训练、评测和推理复用。
 
-### Evidence Snapshot
+这篇只回答一个问题：当一个模型单机放不下或跑不满时，应该怎样判断要切计算、切状态、切层、切序列、切专家，还是先修数据和 checkpoint。
 
-| Claim | Direct Source | Figure/Table/Setting | Evidence Type | Repro Status | Can Support | Cannot Prove |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Megatron、DeepSpeed 与训练栈` 的核心结果在论文设置下成立 | 原论文 / 官方材料 | 主实验、架构图或 benchmark setting | Paper Result | Paper Only | 支撑本页对该方法机制、任务设置和局部收益的介绍 | 不证明跨数据分布、跨硬件、真实部署或第三方独立复现成立 |
-| 本页把方法接回世界模型/效率主线 | 本站综合判断 | 成本账、失败边界与相邻专题链接 | Site Inference | Site Inference | 支撑阅读路线、实验设计和工程优先级假设 | 不能替代原论文 claim，也不能证明 closed-loop 或生产收益 |
+## 先把训练栈拆成四张账
 
-!!! warning "读数边界"
-    本页若引用结果表，只能按论文 benchmark、数据集、硬件和评测协议解释；需额外确认是否 closed-loop、是否真实机器人、是否系统吞吐、是否独立复现，不能把单项分数直接外推为规划收益或部署安全。
+一次训练 step 里，不同瓶颈来自不同对象。
 
-![Megatron hybrid parallelism](../assets/images/paper-deep-dives/foundations/megatron-lm/figure-8-hybrid-mp-dp.png){ width="780" }
+| 账本 | 里面有什么 | 常见工具 |
+| --- | --- | --- |
+| 计算账 | MLP/attention/vocab projection 的 GEMM 和 attention | Megatron TP、FlashAttention、Transformer Engine、CUTLASS/Triton |
+| 状态账 | parameters、gradients、optimizer states、master weights | ZeRO、FSDP、distributed optimizer、offload |
+| 激活账 | forward saved tensors、长序列 attention、micro-batch activations | activation checkpointing、sequence/context parallel、pipeline schedule |
+| 资产账 | checkpoint、RNG、data progress、topology、config、export format | sharded checkpoint、manifest、portable weights、实验平台 |
 
-<small>图源：`Megatron-LM`，Figure 8。原论文图意：把 tensor model parallel 与 data parallel 组合，说明单层计算切分和数据并行副本可以叠加。</small>
+看到 OOM 或吞吐低时，先问是哪张账爆了。优化器状态爆掉，ZeRO/FSDP 比张量并行更直接；单层矩阵太宽，Megatron TP 更直接；层数太深，PP 和 micro-batch 调度更直接；长上下文激活爆掉，CP/SP、FlashAttention 和 activation checkpointing 更直接；数据喂不满，换训练框架不会解决根因。
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是 Transformer 层、GPU rank 和数据 batch，输出是 tensor-parallel 组内计算与 data-parallel 组间同步的训练拓扑。  
-    **效率机制**：TP 降低单层矩阵和词表投影的单卡压力，DP 保持数据吞吐，两者共同决定显存和通信账。  
-    **对主线意义**：世界模型长轨迹训练遇到显存/通信瓶颈时，要先把并行拓扑和状态分片讲清楚。  
-    **不能证明什么**：这张系统结构图不能证明任意模型质量提升，也不能替代端到端吞吐、恢复和收敛评测。
+这也是 Megatron 和 ZeRO 适合成对读的原因。Megatron-LM 问的是“一个 Transformer layer 怎么被多卡共同计算”；ZeRO 问的是“为什么数据并行 ranks 不该每张卡都长期保存同一份 optimizer states、gradients 和 parameters”。现代训练栈通常不是二选一，而是把这些账叠起来。
 
+## Megatron 切的是 Transformer 层里的计算
 
-开放训练系统栈要解决的问题不是“选一个最流行框架”，而是在给定模型规模、硬件拓扑、数据吞吐、显存预算、容错要求和团队能力后，组织出一条可长期维护的训练路径。Megatron-LM、Megatron Core、DeepSpeed、ZeRO、FSDP、Accelerate、Ray、Torch Distributed 等组件各自覆盖不同层面，真正难的是组合边界和状态语义。
+Megatron-LM 的 tensor parallelism 不只是“把参数平均切开”。它的关键是选择同步点，让非线性和 attention 尽量在本地完成，只在必要位置通信。
 
-本页和 [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) 分工如下：那一页讲并行拓扑、通信、checkpoint 和恢复资产；本页讲训练系统栈的定位、选型和工程组织，避免把所有并行细节再展开一遍。
+以 MLP 为例，普通 Transformer MLP 可以写成：
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
+\[
+H=\operatorname{GeLU}(XW_1),\qquad Y=HW_2
+\]
 
-## 先用两篇论文建立底座
+其中 \(X\) 是输入 token hidden states，\(W_1\) 是升维矩阵，\(W_2\) 是降维矩阵。Megatron 的做法是：第一层按列切 \(W_1\)，第二层按行切 \(W_2\)。
 
-Megatron-LM 和 ZeRO 适合成对读。前者从 Transformer layer 内部出发，问的是“单层 MLP、attention、词表 logits 太大时，怎么把 GEMM 切到多张 GPU 上”；后者从数据并行状态出发，问的是“每张卡都完整复制 optimizer states、gradients、parameters，显存为什么会被浪费掉”。
+\[
+W_1=[W_{1}^{(1)},W_{1}^{(2)},\ldots,W_{1}^{(p)}]
+\]
 
-| 论文 | 先解决哪张账 | 核心动作 | 对训练栈选型的启发 |
+每个 tensor-parallel rank 只算自己那片 hidden expansion：
+
+\[
+H^{(r)}=\operatorname{GeLU}(XW_{1}^{(r)})
+\]
+
+GeLU 可以本地做，因为每个 rank 拿到的是完整输入 \(X\) 和自己负责的中间通道。第二层按行切以后，每个 rank 生成一部分输出贡献：
+
+\[
+Y^{(r)}=H^{(r)}W_{2}^{(r)},\qquad Y=\sum_{r=1}^{p}Y^{(r)}
+\]
+
+最后这个求和需要 all-reduce。这就是 Megatron TP 的核心直觉：不要在 GeLU 之前或每个小操作之后都同步，而是把通信压到结构上必要的位置。
+
+![Megatron MLP tensor parallelism](../assets/images/paper-deep-dives/foundations/megatron-lm/figure-3a-mlp-model-parallel.png){ width="860" }
+
+<small>图源：[Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism](https://arxiv.org/abs/1909.08053)，Figure 3a。原图表达 MLP 中第一层 column parallel、第二层 row parallel，以及 GeLU 本地执行、输出处 all-reduce 的通信位置。本站用它说明：张量并行不是抽象地“切模型”，而是在 Transformer 层内精心选择矩阵切分和同步点。</small>
+
+Attention 也类似。多头 attention 天然可以按 heads 切分：不同 rank 负责不同 heads 的 Q/K/V projection 和 attention，最后在 output projection 之后同步。词表投影和 cross entropy 也可以走 vocab parallel，避免把巨大 logits 全量 gather 到每张卡。
+
+Megatron 的价值因此不只是一个论文技巧，而是一套“Transformer 构件 + 并行线性层 + 并行 attention + pipeline/context/expert parallel + 通信重叠”的训练骨架。NVIDIA Megatron Core 文档把这些构件模块化，说明它已经从研究代码变成更接近训练基础设施的组件库。
+
+## TP、PP、DP、CP、EP 分别切不同维度
+
+大规模训练常把 world size 写成多个并行维度的乘积：
+
+\[
+N_{\text{world}}
+=
+N_{\text{DP}}
+\times
+N_{\text{TP}}
+\times
+N_{\text{PP}}
+\times
+N_{\text{CP}}
+\times
+N_{\text{EP}}
+\]
+
+这里 \(N_{\text{DP}}\) 是数据并行副本数，\(N_{\text{TP}}\) 是张量并行切分数，\(N_{\text{PP}}\) 是流水线 stage 数，\(N_{\text{CP}}\) 是上下文并行切分数，\(N_{\text{EP}}\) 是专家并行切分数。这个式子不是为了凑符号，而是提醒你：每个维度都对应不同通信模式。
+
+| 维度 | 切了什么 | 主要通信 | 常见放置 |
 | --- | --- | --- | --- |
-| [Megatron-LM](../paper-deep-dives/foundations/megatron-lm.md) | 单层计算和参数太大 | MLP 用 column-parallel + row-parallel GEMM，attention 按 heads 切 Q/K/V，词表 loss 避免大 logits all-gather | 当 hidden size、attention heads 或 vocab projection 太大时，优先考虑 TP，并把高频通信放在节点内高速互联 |
-| [ZeRO](../paper-deep-dives/foundations/zero.md) | DP 重复模型状态太贵 | 在 DP ranks 间分片 optimizer states、gradients、parameters，并处理 activation、buffer 和 fragmentation | 当优化器状态、梯度和参数副本占满显存时，优先考虑 ZeRO/FSDP，而不是盲目加 TP/PP |
+| DP | 数据 batch 副本 | gradient all-reduce / reduce-scatter | 最外层扩展 |
+| TP | 单层矩阵、attention heads、vocab | 层内 all-reduce/all-gather | 节点内 NVLink 域优先 |
+| PP | Transformer layers | stage 间 activation/grad 传输 | 可跨节点，但要控 bubble |
+| CP/SP | 序列或上下文维度 | attention 相关通信 | 长上下文训练 |
+| EP | MoE experts | token dispatch/combine all-to-all | 依赖专家放置和负载均衡 |
 
-这两个问题经常同时出现，但层级不同。Megatron-LM 让一个模型实例能被多卡共同计算；ZeRO 让多个 data-parallel 副本不再重复保存整份训练状态。现代训练栈里的 `TP + PP + DP + ZeRO/FSDP`，本质上就是把这两张账叠起来。
+高频通信越多，越应该放在更近的拓扑域内。TP 通常最怕跨节点；EP 的 all-to-all 会被专家放置和 token 分布影响；PP 的难点是 bubble 和 micro-batch；CP 的难点是长上下文 attention kernel、序列切分和通信重叠是否能一起成立。
 
-一个实用心法是：**先拆显存，再拆通信，再拆代码所有权**。显存里要分清 parameters、gradients、optimizer states、activations、temporary buffers 和 fragmentation；通信里要分清 TP layer 内 all-reduce、DP reduce-scatter/all-gather、PP 点对点、CP attention 通信和 checkpoint I/O；代码所有权里要分清模型构件、运行时、数据进度和导出格式分别由谁负责。
+Megatron 2021 的大规模训练论文重点就在这里：tensor、pipeline、data parallelism 可以组合，但朴素组合会因为跨节点通信和设备等待而扩展不佳。训练栈的工程价值，不是“开更多并行开关”，而是让 rank mapping、通信域、micro-batch、checkpoint 和恢复语义彼此一致。
 
-## 一、训练系统栈到底在解决什么
+## ZeRO 和 FSDP 切的是数据并行的训练状态
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
-> **算法视角**：ZeRO、张量并行、流水线并行和通信 overlap 都是在切分“状态、矩阵或 micro-batch”；收益来自显存和计算分摊，代价会转成 all-gather、reduce-scatter、all-reduce 或 pipeline bubble。
->
-> 延伸阅读：[06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)
+普通 data parallel 每张卡都有完整模型副本，反向后同步梯度。它简单，但会重复保存 parameters、gradients 和 optimizer states。对 mixed precision Adam，ZeRO 论文给出一笔经典账：
 
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. VRAM Calculation and ZeRO | 显存计算与 ZeRO 优化 (VRAM Calculation & ZeRO)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| ZeRO 状态分片 | 计算量基本不变 | 被分片状态约 $O(\Psi/N_d)$ | $\Psi$ 为参数量，$N_d$ 为 data-parallel degree；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html) |
-| 分布式通信 | 取决于消息大小与拓扑 | 通信 buffer 需额外预算 | 显存省下后，瓶颈常转移到带宽、延迟和 overlap 能力。 |
+\[
+M_{\text{Adam state}}\approx
+2\Psi_{\text{fp16 param}}
++2\Psi_{\text{fp16 grad}}
++4\Psi_{\text{fp32 master}}
++4\Psi_{\text{momentum}}
++4\Psi_{\text{variance}}
+=16\Psi
+\]
 
-一个大模型训练栈至少要同时管理计算、显存、通信、数据和状态资产。计算层涉及 GEMM、Attention、MoE、activation recompute 和混合精度；显存层要容纳参数、梯度、优化器状态、激活和通信 buffer；通信层处理 DP、TP、PP、CP、EP、ZeRO / FSDP 的 collective；数据层负责输入吞吐、packing、随机顺序和断点恢复；状态资产则包括 checkpoint、配置、日志、指标、导出和后训练接口。
+这里 \(\Psi\) 表示参数量对应的字节基准。一个 1.5B 参数模型的 fp16 权重约 3GB，但训练态模型状态至少约 24GB，还没算 activation、通信 buffer、临时 workspace 和 fragmentation。
 
-可以把训练系统栈看成三层：
+ZeRO/FSDP 的核心就是减少 DP ranks 间的重复常驻状态。
 
-| 层级 | 代表组件 | 主要职责 |
+![ZeRO memory optimization stages](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
+
+<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原图比较普通数据并行和 ZeRO-DP 三个阶段的单设备模型状态显存。本站用它说明：ZeRO Stage 1 切 optimizer states，Stage 2 继续切 gradients，Stage 3 连 parameters 也按需分片；省的是 data-parallel 副本中的长期冗余。</small>
+
+三阶段可以这样读：
+
+| 方法 | 长期不再完整复制什么 | 新增代价 |
 | --- | --- | --- |
-| 模型并行层 | Megatron-LM、Megatron Core | Transformer 构件、TP/PP/CP/EP、通信重叠、MoE |
-| 运行时内存层 | DeepSpeed、ZeRO、FSDP | 状态分片、offload、pipeline runtime、state dict |
-| 编排与资产层 | Torch Distributed、Ray、Slurm/K8s、实验平台 | 作业调度、日志指标、数据状态、checkpoint 生命周期 |
+| ZeRO-1 | optimizer states | optimizer partition 和更新后的参数同步 |
+| ZeRO-2 | optimizer states + gradients | reduce-scatter、梯度分片管理 |
+| ZeRO-3 / full sharding | optimizer states + gradients + parameters | forward/backward 按需 all-gather 参数、reshard、复杂 checkpoint |
 
-选型时先问“主约束是什么”，再问“哪个工具合适”。如果主约束是超大 hidden size，TP 和 Megatron 的价值更高；如果主约束是优化器状态放不下，ZeRO/FSDP 更关键；如果主约束是数据喂不满，再换训练框架也不会解决根因。
+FSDP 与 ZeRO-3 的思想接近：按 module 或参数组分片，计算前 all-gather 需要的参数，计算后 reshard。差异主要在工程生态。DeepSpeed/ZeRO 更像配置化训练运行时，offload、ZeRO stage、pipeline engine 和异步 I/O 配套成熟；FSDP 更贴近 PyTorch 原生 distributed stack，state dict、module wrapping、编译生态和自定义模型集成更自然。
 
-## 二、Megatron 路线：并行拓扑和 GPU 亲和
+所以不要把 DeepSpeed 和 FSDP 简化成“谁更省显存”。真正要比较的是：wrap 粒度谁来管，通信重叠谁来管，state dict 怎么导出，checkpoint 能否跨 topology 恢复，低精度 scale 和 optimizer state 如何保存，团队愿不愿意依赖特定 runtime。
 
-Megatron-LM 的影响力来自两个方面：一是把大规模 Transformer 的 TP/PP/DP 等并行方法工程化，二是长期围绕 NVIDIA GPU、通信重叠和大模型训练吞吐优化。Megatron Core 则把其中更底层的 Transformer 构件和并行原语拆成可组合模块。
+## DeepSpeed 的位置：运行时和内存平台
 
-### 它适合什么
+DeepSpeed 经常和 Megatron 一起出现，因为它们不在同一层。Megatron 更像模型并行和 Transformer 训练构件；DeepSpeed 更像训练 runtime，负责 ZeRO、offload、pipeline、I/O、配置和运行时能力。
 
-Megatron 路线更适合超大稠密 Transformer 或 MoE，尤其是需要 TP、PP、CP、EP 混合并行、追求高 MFU 和硬件利用率，并且团队能处理 rank mapping、process group、通信重叠和 kernel 亲和的场景。
+`Megatron + DeepSpeed` 的组合常见于这种场景：Megatron 负责 TP/PP/模型构件，DeepSpeed 负责 ZeRO 分片、offload 或训练引擎。它不是简单“两个框架叠 buff”，而是把模型并行和状态分片接到同一训练生命周期里。
 
-它不一定适合小团队快速训中小模型。Megatron 的收益通常来自更强的系统设计能力；如果数据管线、实验管理和恢复流程还不稳定，过早引入复杂并行反而会降低迭代速度。
+这个组合也会让复杂度上升。参数生命周期、optimizer ownership、checkpoint shard 格式、rank mapping、pipeline schedule、ZeRO stage、activation checkpointing、FP8/AMP 状态都要统一。训练能跑一个 step，并不等于 checkpoint 能恢复，也不等于产物能导出到 SFT 或推理。
 
-### Megatron Core 的意义
+## 组合训练栈时先按瓶颈选工具
 
-Megatron Core 的价值不只是“把脚本库模块化”。更重要的是，它把 Transformer block、并行线性层、sequence/context parallel、MoE、通信 overlap、混合精度和 checkpoint 这些构件变成更可复用的积木。对组织而言，这意味着训练栈可以从“复制一套脚本”逐步走向“维护一套可组合训练基础设施”。
+更稳的选型顺序是按瓶颈，而不是按框架名。
 
-从 Megatron-LM 原论文看，TP 的关键不是“任意切矩阵”，而是避开会强制同步的位置：MLP 第一层按列切，让 GeLU 可以本地做；第二层按行切，只在 block 输出处 all-reduce。Attention 则利用 head 级并行，把 Q/K/V projection 切到不同 ranks，再在 output projection 后同步。这个设计把单个 Transformer layer 的通信压缩到少数几个 `all-reduce`，也解释了为什么 TP size、attention heads、hidden size 和 vocab padding 会直接影响吞吐。
+| 症状 | 更可能优先处理 |
+| --- | --- |
+| optimizer state 和梯度副本放不下 | ZeRO/FSDP、低精度 optimizer、offload |
+| 单层 hidden size、attention heads、vocab projection 太大 | Megatron TP、vocab parallel、parallel cross entropy |
+| 模型层数太深，单卡或单节点放不下 | PP、stage 切分、micro-batch、1F1B/interleaved schedule |
+| 序列长度太长，activation 或 attention 爆显存 | CP/SP、activation checkpointing、FlashAttention 变体 |
+| MoE all-to-all 和专家负载成为主瓶颈 | EP、专家放置、capacity factor、dispatch/combine kernel |
+| 数据加载、packing 或 tokenizer 喂不满 | 数据系统、prefetch、packing、shuffle/resume |
+| 故障恢复和导出经常出问题 | checkpoint manifest、state dict 策略、portable weights |
 
-## 三、DeepSpeed、ZeRO 与 FSDP：状态分片和运行时组织
+一个可维护训练栈通常有清晰边界：
 
-DeepSpeed 的代表能力是 ZeRO、offload、pipeline engine 和训练运行时配置。ZeRO 的核心是把 DP 中重复保存的优化器状态、梯度和参数逐步分片，从而降低单卡显存压力。
-
-FSDP 的思想相近，但更贴近 PyTorch 原生生态，强调按 module 包装、按需 gather 和原生 state dict 集成。二者不是简单 API 风格差异，而是系统气质不同：
-
-| 维度 | DeepSpeed / ZeRO | FSDP |
-| --- | --- | --- |
-| 生态定位 | 训练运行时平台，配置化能力强 | PyTorch 原生分布式能力 |
-| 优势 | ZeRO/offload 成熟，工程配套多 | 原生集成好，定制模型更自然 |
-| 主要风险 | 运行时黑盒感更强，配置组合复杂 | wrap、state dict、通信策略要自己管细 |
-| 适合场景 | 状态显存是主瓶颈，需要快速组合能力 | 更重视原生生态、代码可控和框架一致性 |
-
-ZeRO 论文给了一个非常有用的估算：mixed precision Adam 训练 \(\Psi\) 个参数时，fp16 parameters、fp16 gradients、fp32 master parameters、Adam momentum 和 Adam variance 合起来大约是 \(16\Psi\) bytes。也就是说，1.5B 参数的 fp16 权重看似只有 3GB，训练态模型状态却至少约 24GB，还没算 activation 和 buffer。ZeRO Stage 1/2/3 分别切 optimizer states、gradients、parameters，真正省的是“每个 DP rank 都长期保存一整份”的冗余。
-
-### Offload 的边界
-
-Offload 能把参数、梯度或优化器状态放到 CPU/NVMe，降低 GPU 显存压力，但它不是银弹。它适合“显存是硬瓶颈且吞吐要求可接受”的场景；如果 PCIe、CPU 内存或 NVMe 成为瓶颈，训练会从 GPU-bound 变成 I/O-bound。
-
-判断 offload 是否值得，应同时看 GPU 显存是否真的无法通过 checkpointing、分片或 batch 调整解决，offload 后 step time 增长是否可接受，恢复和 checkpoint 是否更复杂，以及训练目标只是跑通实验还是长期高效预训练。
-
-## 四、混合并行、长上下文、MoE 与低精度训练
-
-训练系统栈的复杂度往往来自多种需求叠加，而不是单一技术本身。
-
-### 混合并行
-
-现实系统常组合 TP、PP、DP、ZeRO/FSDP、CP、EP。常见直觉是：高频通信放在高速拓扑域，粗粒度复制放在外层，状态分片放在 DP 组内。但这只是起点，真实配置还要看模型层宽、层数、序列长度、micro-batch、网络拓扑和 checkpoint 策略。
-
-Process group 设计就是训练系统的网络骨架。并行维度越多，rank mapping、通信组、状态分片和恢复 manifest 越需要统一设计。否则训练能跑起来，但一旦出错很难定位。
-
-### 长上下文训练
-
-长上下文会把训练栈推向新的耦合点：attention 激活和通信压力上升，CP / SP 与 attention kernel 强绑定，activation checkpointing 代价被放大，数据 packing 和恢复一致性更难，评测与采样成本也更高。
-
-因此长上下文不是“把 max length 调大”，而是数据、kernel、并行、checkpoint 和评测共同变化。
-
-### MoE
-
-MoE 会让训练栈从并行工程升级成路由工程。除了专家并行，还要管理 token dispatch、负载均衡、容量因子、drop 策略、专家热点、all-to-all 和 checkpoint 分片。很多 MoE 训练栈难复制，不是因为专家层公式复杂，而是因为路由、通信、数据和恢复全都耦合。
-
-### FP8 与低精度
-
-低精度训练不只是某个 kernel 的 dtype 变化。FP8/MXFP/NVFP/HiFloat 会影响 scaling、activation 保存、optimizer states、通信、checkpoint 和数值稳定性。相关内容放在 [低比特训练与数值格式](low-bit-training-and-numerics.md)；训练栈层面要关注的是：低精度状态如何保存、恢复、导出，以及是否与后训练和推理数制一致。
-
-## 五、不同规模下的策略差异
-
-训练栈选型强烈依赖规模。
-
-| 规模区间 | 优先目标 | 常见策略 |
-| --- | --- | --- |
-| 8-32 卡 | 简单、可复现、快速迭代 | FSDP/ZeRO、少量 TP，先保证数据和 checkpoint 稳 |
-| 64-256 卡 | 拓扑和状态管理开始成为主问题 | 混合 DP/TP/PP，系统化通信重叠和 sharded checkpoint |
-| 512 卡以上 | 组织能力和工程治理成为核心 | 明确 owner、故障演练、自动化验收、资产兼容 |
-| 多模态/长上下文/MoE | 所有瓶颈同时放大 | CP/EP、专用数据管线、专用 checkpoint 和评测闭环 |
-
-小规模最重要的是不要过度复杂化。能用简单栈稳定复现，就不要为了“看起来先进”提前引入过多并行维度。大规模则相反，很多问题必须提前工程化，否则一次故障或一次不可恢复 checkpoint 就会消耗大量预算。
-
-### 选型框架
-
-可以按主约束选择：参数和优化器状态放不下时，先看 ZeRO / FSDP、activation checkpointing 和低精度 optimizer；单层太大时，看 TP 和 Megatron-style parallel layers；模型层数太深时，看 PP、stage 切分和 micro-batch；序列太长时，看 CP / SP、长上下文 attention kernel 和 packing；MoE 通信重时，看 EP、专家放置、dispatch / combine 和 all-to-all；数据喂不满时，先修数据系统，不要先换训练框架；恢复成本高时，优先 checkpoint manifest、异步保存和短跑恢复验证。
-
-## 六、资产兼容：开放训练栈最容易被低估的部分
-
-开放训练栈真正缺的往往不是功能，而是资产兼容。训练产物要能流向继续预训练、SFT、偏好优化、评测、推理转换、量化和归档。只在当前脚本里能恢复，不等于资产可复用。
-
-### 状态语义
-
-一个训练状态通常包括模型权重、optimizer states、scheduler 和 loss scaler、RNG / sampler / packing / consumed tokens、并行拓扑、分片策略、数据版本、代码版本、tokenizer、配置、特征开关和低精度 scaling 信息。
-
-当 ZeRO、FSDP、TP、PP、CP、EP 组合后，状态语义会变得复杂。checkpoint 到底是训练态、推理态、portable 态还是中间态，必须明确标注。否则后训练和推理团队拿到产物后，会花大量时间猜“这些 shard 到底怎么拼”。
-
-### 训练栈接口
-
-一个成熟训练栈应提供稳定接口：能从训练 checkpoint 导出 full weights，能让 full weights 进入 SFT 或评测，能从训练态恢复并继续消耗正确数据，能记录 low precision scale、tokenizer 和数据版本，能支持关键指标与 trace 对齐，也能对失败 checkpoint 做不可用标记，避免误用。
-
-这部分看起来不如并行算法“高级”，但长期维护价值更高。
-
-## 七、验收清单
-
-训练系统栈的真正验收标准不是“能跑一个 step”，而是能跑快、能跑稳、能恢复、能复用、能维护：吞吐、MFU、数据输入和通信重叠要达到目标；loss、grad norm、NaN、OOM、NCCL 和 I/O 失败要能定位；checkpoint 要能保存、校验、恢复和迁移，数据进度要连续；产物要能进入 SFT、评测、推理、量化和归档；配置、owner、版本、指标和实验记录也要清楚。
-
-最小代码接口可以长这样：
-
-下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
-```python
-def build_training_stack(cfg):
-    model = build_model(cfg.model)
-    model = apply_parallelism(model, cfg.parallelism)
-    optimizer = build_optimizer(model, cfg.optimizer)
-    runtime = build_runtime(model, optimizer, cfg.runtime)
-    checkpointer = build_checkpointer(cfg.checkpoint, cfg.parallelism)
-    return runtime, checkpointer
+```text
+model definition
+-> parallel layers / model parallel groups
+-> optimizer and sharded state runtime
+-> data progress and sampler state
+-> checkpoint manifest and export path
+-> evaluation / SFT / inference conversion
 ```
 
-这段伪代码的重点是分层：模型构建、并行包装、优化器、运行时和 checkpoint 不应混成一团。只有边界清楚，后续替换 Megatron、DeepSpeed、FSDP、低精度策略或 checkpoint 后端时，系统才不会整体失控。
+如果这些边界混在一个脚本里，短期能跑，长期会很难换框架、改并行度、做后训练、迁移 checkpoint 或排查故障。
+
+## Checkpoint 是训练栈的一等接口
+
+训练栈的成熟度很大程度体现在 checkpoint。大规模训练 checkpoint 不是一个权重文件，而是一组可恢复资产：模型参数、optimizer states、scheduler、loss scaler、RNG、sampler/packing 进度、consumed tokens、parallel topology、shard manifest、tokenizer、数据版本、代码版本和关键配置。
+
+不同训练栈对 checkpoint 的语义不同：
+
+| 形态 | 用途 | 风险 |
+| --- | --- | --- |
+| sharded training checkpoint | 续训和故障恢复 | 依赖 topology、manifest 和分片映射 |
+| full / portable weights | SFT、评测、推理、量化 | 导出慢，可能丢 optimizer/data/RNG 状态 |
+| async checkpoint | 降低主链暂停 | 一致性边界、后台失败、半成品提交 |
+| state dict API | 框架内保存/加载 | full/sharded/local state dict 语义必须明确 |
+
+FSDP 文档里反复出现 state dict 类型，Megatron Core 也有 distributed checkpointing，这些不是琐碎 API，而是训练资产的边界。一个 checkpoint 若只能在当前 world size、当前代码、当前 runtime 里恢复，却无法导出 full weights 或记录数据进度，就不该被当成完整训练资产。
+
+## 不同团队规模下的取舍
+
+8-32 卡训练，中小模型或实验迭代优先简单稳定。FSDP/ZeRO 加少量 TP 往往足够；更重要的是数据顺序、checkpoint、评测和日志可复现。
+
+64-256 卡时，拓扑开始支配吞吐。TP 是否跨节点、PP stage 是否均衡、micro-batch 是否填满 pipeline、ZeRO/FSDP 是否和 checkpoint 语义兼容，会比单个 optimizer 配置更重要。
+
+512 卡以上，训练栈已经是组织工程。需要明确 owner、故障演练、自动化恢复、通信 trace、资产导出和版本治理。此时“框架选择”只是其中一小部分，真正难的是让模型、数据、runtime、checkpoint 和评测长期一致。
+
+多模态、长上下文和 MoE 会进一步放大复杂度。图像/视频 token 增多会推高 activation 和 attention 成本；长上下文会把 CP/SP、kernel、checkpoint 和数据 packing 绑在一起；MoE 会把专家路由和 all-to-all 变成训练栈核心。
+
+## 阅读结论
+
+Megatron、DeepSpeed、FSDP 不应被读成同一张排行榜。Megatron 解决 Transformer layer 内部如何跨 GPU 计算；ZeRO/FSDP 解决 data-parallel 副本中训练状态如何不重复常驻；DeepSpeed 提供运行时和内存优化平台；checkpoint 和导出接口决定训练资产能否进入后训练、评测、推理和量化。
+
+如果只记住一句话：训练栈选型是成本账分解，不是框架名比较。先定位瓶颈属于计算、状态、激活、通信、数据还是资产，再决定用 TP、PP、ZeRO/FSDP、CP/SP、EP、offload、checkpointing 或数据系统治理。
+
+## 外部精读
+
+- [Megatron-LM](https://arxiv.org/abs/1909.08053)：理解 tensor parallelism 如何切 MLP、attention heads 和 vocab projection。
+- [Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM](https://arxiv.org/abs/2104.04473)：理解 tensor、pipeline、data parallelism 如何组合到大规模集群。
+- [ZeRO](https://arxiv.org/abs/1910.02054)：理解 optimizer states、gradients、parameters 在 data parallel 中为什么重复占显存。
+- [DeepSpeed Megatron tutorial](https://www.deepspeed.ai/tutorials/megatron/)：看 Megatron 与 ZeRO 如何在工程训练栈里组合。
+- [DeepSpeed ZeRO documentation](https://deepspeed.readthedocs.io/en/latest/zero3.html)：查 ZeRO-3、offload、参数 gather 和运行时 API。
+- [Megatron Core documentation](https://docs.nvidia.com/megatron-core/developer-guide/latest/index.html)：查现代 Megatron Core 的 TP/PP/DP/EP/CP、distributed optimizer、MoE 和 checkpoint 模块。
+- [Megatron Core tensor parallel API](https://docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html)：把 column/row parallel、vocab parallel 和 parallel cross entropy 对应到现代接口。
+- [PyTorch FSDP documentation](https://docs.pytorch.org/docs/stable/fsdp.html)：理解 PyTorch 原生 full sharding、state dict 和参数生命周期。
+- [Datawhale：VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)：中文显存账入口，适合配合原论文手算参数、梯度和优化器状态。

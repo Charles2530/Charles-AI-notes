@@ -6,10 +6,7 @@ paper_topic: 扩散模型
 
 # Score SDE：把扩散模型写成连续时间生成过程
 
-
 这篇论文最重要的贡献不是又提出一个单独的采样器，而是给扩散模型补了一套连续时间语言：**先用一个固定的前向 SDE 把数据扩散成先验噪声，再用依赖 score 的反向 SDE 把噪声逆回数据；同时存在一条 probability flow ODE，它和反向 SDE 共享边缘分布，并让 likelihood、latent encoding 和高效 ODE 采样变得可操作。**
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
 
 ## 它的效率贡献是什么
 
@@ -47,13 +44,11 @@ paper_topic: 扩散模型
 dx = f(x,t)dt + g(t)dw,
 \]
 
-
 其中 \(f(x,t)\) 是 drift，\(g(t)\) 是 diffusion coefficient，\(w\) 是 Wiener process。只要知道每个时刻边缘分布 \(p_t(x)\) 的 score：
 
 \[
 \nabla_x \log p_t(x),
 \]
-
 
 就可以写出反向 SDE：
 
@@ -64,18 +59,17 @@ f(x,t)-g(t)^2\nabla_x\log p_t(x)
 \right]dt + g(t)d\bar w.
 \]
 
-
 注意这里的 \(dt\) 是从 \(T\) 到 \(0\) 的反向时间步。也就是说，训练模型的任务变成了：**学一个时间条件 score 网络 \(s_\theta(x,t)\)，让它近似每个噪声时刻的 \(\nabla_x\log p_t(x)\)。**
 
 ![Score SDE reverse process 原图](../../assets/images/paper-deep-dives/diffusion/score-sde/figure-1-reverse-sde.png){ width="720" }
 
 <small>图源：`Score-Based Generative Modeling through Stochastic Differential Equations`，Figure 1。原论文图意：前向 SDE 把数据逐渐扩散为噪声；只要知道中间分布的 score，反向 SDE 就能从噪声生成数据。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是数据分布与固定的加噪 SDE，输出是一个可从 prior 噪声反向生成数据的 SDE。  
-    **效率机制**：它不是直接省掉训练，而是把采样问题变成可选择数值求解器的问题。  
-    **对主线意义**：后续少步 solver、ODE sampler、distillation 和 flow matching 都是在这个连续时间视角里讨论“路径怎么走得更快”。  
-    **不能证明什么**：一条漂亮的反向 SDE 不等于具体模型已低延迟、低 NFE 或可部署。
+**Reverse SDE 图先看 score 如何把噪声带回数据。**
+**输入输出**：输入是数据分布与固定的加噪 SDE，输出是一个可从 prior 噪声反向生成数据的 SDE。  
+**效率机制**：它不是直接省掉训练，而是把采样问题变成可选择数值求解器的问题。  
+**对主线意义**：后续少步 solver、ODE sampler、distillation 和 flow matching 都是在这个连续时间视角里讨论“路径怎么走得更快”。  
+**不能证明什么**：一条漂亮的反向 SDE 不等于具体模型已低延迟、低 NFE 或可部署。
 
 ## 总体框架
 
@@ -106,7 +100,6 @@ f(x,t)-\frac{1}{2}g(t)^2\nabla_x\log p_t(x)
 \right]dt.
 \]
 
-
 和反向 SDE 相比，区别是 score 项前面的系数从 \(1\) 变成 \(\frac{1}{2}\)，并且没有随机 Wiener 项。
 
 ## 训练目标
@@ -129,7 +122,6 @@ s_\theta(x(t),t)
 \right]
 \right\}.
 \]
-
 
 这条式子的读法是：
 
@@ -195,8 +187,8 @@ probability flow ODE 的价值有两层。第一，它把扩散模型和 neural 
 
 <small>图源：`Score-Based Generative Modeling through SDEs`，Figure 3。原论文图意：ODE solver 的 evaluation points 可随数值精度变化；较少 NFE 仍可保持视觉质量；确定性 latent-to-image 映射支持 interpolation。</small>
 
-!!! note "这张图怎么读"
-    左图说明 ODE solver 会自动把函数评估集中到需要更高精度的时间段；中图显示从 NFE 548 降到 86 视觉质量仍接近，NFE 14 则明显退化；右图展示 deterministic encoding/decoding 支持 latent interpolation。它支撑的是“ODE 视角带来效率和表示能力”，不是“14 NFE 已经足够所有任务”。
+**Probability Flow ODE 图看 NFE、质量和确定性编码。**
+左图说明 ODE solver 会自动把函数评估集中到需要更高精度的时间段；中图显示从 NFE 548 降到 86 视觉质量仍接近，NFE 14 则明显退化；右图展示 deterministic encoding/decoding 支持 latent interpolation。它支撑的是“ODE 视角带来效率和表示能力”，不是“14 NFE 已经足够所有任务”。
 
 论文 Table 2 报告了 probability flow ODE 用于 likelihood 和 ODE sampling 的结果。下面保留原英文表头。
 
@@ -276,8 +268,8 @@ probability flow ODE 的价值有两层。第一，它把扩散模型和 neural 
 
 <small>图源：`Score-Based Generative Modeling through SDEs`，Figure 10。原论文图意：在 VE perturbations 下，不同 architecture components 对 CIFAR-10 和 CelebA FID 的影响。</small>
 
-!!! note "这张训练 ablation 图怎么读"
-    图里多数橙色配置比蓝色配置 FID 更低，说明这些组件不是装饰项：FIR、skip rescale、BigGAN block、更多 residual blocks 都能影响 score model 的质量。这里的结论更像训练配方筛选，而不是新的理论定理。
+**这张训练 ablation 图怎么读。**
+图里多数橙色配置比蓝色配置 FID 更低，说明这些组件不是装饰项：FIR、skip rescale、BigGAN block、更多 residual blocks 都能影响 score model 的质量。这里的结论更像训练配方筛选，而不是新的理论定理。
 
 最终命名可以这样记：
 
@@ -367,7 +359,6 @@ f(x,t)
 +g(t)d\bar w.
 \]
 
-
 这和后来的 guidance 思想非常接近：基础 score \(\nabla_x\log p_t(x)\) 负责生成自然图像，条件梯度 \(\nabla_x\log p_t(y\mid x)\) 负责把样本推向满足条件的区域。
 
 ![Controllable generation 原图](../../assets/images/paper-deep-dives/diffusion/score-sde/figure-4-controllable-generation.png){ width="920" }
@@ -423,15 +414,12 @@ f(x,t)
 5. class-conditional generation 需要额外训练 time-dependent classifier；inpainting/colorization 虽可用 unconditional score model，但仍依赖任务结构和 projection / approximation 设计。
 6. 这篇论文主要是图像生成和逆问题证据，不能直接推出视频、3D、机器人世界模型中的时序一致性、动作因果或闭环收益。
 
-## 读完接哪里
+## 相关主线
 
-!!! success "下一步"
-    - 想补数学主线：读 [Score Matching 到 SDE](../../diffusion/score-matching-sde-and-probability-flow.md)。
-    - 想看训练细节：读 [扩散训练与表示](../../diffusion/training.md) 和 [扩散训练配方与排障](../../diffusion/practical-training-recipes-and-failure-analysis.md)。
-    - 想看采样加速：接 [DPM-Solver++](dpm-solver-plus-plus.md)。
-    - 想看少步蒸馏：接 [DMD](dmd.md)、[DMD2](dmd2.md) 和 [Phased DMD](phased-dmd.md)。
+- 想补数学主线：读 [Score Matching 到 SDE](../../diffusion/score-matching-sde-and-probability-flow.md)。
+- 想看训练细节：读 [扩散训练与表示](../../diffusion/training.md) 和 [扩散训练配方与排障](../../diffusion/practical-training-recipes-and-failure-analysis.md)。
+- 想看采样加速：接 [DPM-Solver++](dpm-solver-plus-plus.md)。
+- 想看少步蒸馏：接 [DMD](dmd.md)、[DMD2](dmd2.md) 和 [Phased DMD](phased-dmd.md)。
 
-这一页最后回到三个验收点：方法上，主公式是 forward SDE 加噪、reverse-time SDE 用 score 去噪，probability-flow ODE 则给出确定性采样和 likelihood 路径。实验上，图像生成、补全、上色和可控生成共同证明 score 不是只服务一种任务。诊断上，predictor-corrector、SDE/ODE 路径和 architecture component 的对比，才是理解后续 solver 与蒸馏论文的入口。
-
-!!! info "本站判断"
-    Score SDE 是扩散统一理论页：方法要抓 forward SDE、reverse-time SDE、probability-flow ODE 和 predictor-corrector 采样；实验说明同一 score 框架能覆盖图像生成、补全和可控任务。后续论文多是在这套公式上换参数化、求解器或蒸馏目标。
+**阅读结论。**
+Score SDE 是扩散统一理论页：方法要抓 forward SDE、reverse-time SDE、probability-flow ODE 和 predictor-corrector 采样；实验说明同一 score 框架能覆盖图像生成、补全和可控任务。后续论文多是在这套公式上换参数化、求解器或蒸馏目标。

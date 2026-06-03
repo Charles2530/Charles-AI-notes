@@ -255,6 +255,6 @@ reward 主要奖励未来帧像不像
 - [BAIR: Rethinking the Role of PPO in RLHF](https://bair.berkeley.edu/blog/2023/10/16/p3o/)：把 PPO 和偏好比较之间的张力讲得很清楚。
 - [DeepSeek-R1](https://arxiv.org/abs/2501.12948)：GRPO、可验证奖励、reward hacking 和 RL infrastructure 的代表性技术报告。
 
-## 本页结论
+## 阅读结论
 
 Policy Gradient 的核心是对采样概率求导，而不是对离散采样结果求导。Baseline/critic 把绝对分数变成相对好坏，PPO 用概率比和 KL 约束一次更新的幅度，GRPO 用同题多样本比较省掉 critic。所有这些方法最后都受 reward 质量、rollout 成本和评测闭环约束。

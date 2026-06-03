@@ -184,6 +184,6 @@ EAGLE 最有工程价值的一句话是：**draft model 不必是完整语言模
 - [Fast Inference from Transformers via Speculative Decoding](https://arxiv.org/abs/2211.17192)：理解 draft-verify 为什么可以保持目标模型分布。
 - [SpecInfer](https://arxiv.org/abs/2305.09781)：理解 token tree verification 的另一条系统路线。
 
-## 本页结论
+## 阅读结论
 
 EAGLE 的核心不是某个 speedup 数字，而是一个接口判断：target LLM 的 hidden feature 可以成为低成本 draft 的工作空间。Feature-level draft 比 token-level draft 更贴近 target 内部轨迹，但必须用 shifted-token 解决离散采样分支带来的 feature uncertainty；tree attention 能提高一次 verify 的候选覆盖；batch、MoE、draft overhead 和 acceptance 分桶决定收益能不能落到线上。把这些点看清，EAGLE 就不再是一张加速表，而是一种设计推理服务 draft path 的方法。

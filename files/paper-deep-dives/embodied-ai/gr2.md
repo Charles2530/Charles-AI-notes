@@ -1,217 +1,148 @@
 ---
-paper_date: 2024-10
-paper_title: "GR-2: A Generative Video-Language-Action Model with Web-Scale Knowledge for Robot Manipulation"
-paper_topic: 具身智能 / VLA
+title: GR-2：Web 视频知识怎样迁移到机器人操作
 ---
 
-# GR-2：Web 视频知识迁移到机器人
+# GR-2：Web 视频知识怎样迁移到机器人操作
 
+GR-2 这篇论文的核心问题是：**机器人数据很贵，但公开视频里有大量人和物体互动的动态知识，这些视频能不能帮助机器人学操作？**
 
-GR-2 的核心价值在于把“互联网视频里的动态先验”正式放进机器人策略训练：先在大规模人类活动视频上学习未来视频预测，再用少量真实机器人轨迹微调，让模型同时预测未来视频和机器人动作轨迹。
+它的答案不是把公开视频直接当机器人 demonstration。公开视频没有机器人动作标签，也没有末端位姿，更没有夹爪状态。GR-2 的路线是：先用大规模视频预训练学“接下来会发生什么”，再用机器人轨迹微调，让模型同时预测未来视频和动作轨迹。视频预训练学世界动态，机器人微调把动态知识接到可执行动作上。
 
-如果说 RT-1 证明 Transformer policy 可以吃真实机器人轨迹，GR-2 更像下一步：**没有动作标注的普通视频，也能通过未来预测给机器人提供世界动态知识。**
+可以想一个“拧开瓶盖再放下”的任务。公开视频里有大量人手旋转瓶盖、瓶身保持、盖子分离的视觉变化；这些视频没有机器人夹爪的 \(\Delta x,\Delta y,\Delta z\) 标签，但它们告诉模型“旋转前后物体状态会怎样变”。机器人数据再告诉模型：如果要让真实机械臂制造这种变化，末端应该怎样靠近、夹住、旋转和松开。GR-2 的迁移不在于把人手动作直接复制给机器人，而在于把公开视频里的未来状态变化，重新绑定到机器人动作轨迹上。
 
-## 论文位置
+## 一句话核心
 
-传统 VLA 直接学：
+GR-2 学的是一个 video-language-action 序列模型：
 
 \[
-\pi(a_{t:t+k}\mid o_{t-h:t}, s_{t-h:t}, l)
+p_\theta(v_{t+1:t+H}, a_{t:t+K} \mid v_{\le t}, s_{\le t}, l)
 \]
 
-
-GR-2 多走一步：让模型先通过视频预训练学“接下来会发生什么”，再在机器人数据上把未来视频和动作轨迹绑起来。论文 Figure 1 很好地展示了这条线。
+其中 \(v_{\le t}\) 是当前和历史视频 token，\(s_{\le t}\) 是机器人状态，\(l\) 是语言指令，\(v_{t+1:t+H}\) 是未来视频，\(a_{t:t+K}\) 是未来动作轨迹。这里最重要的是双输出：未来视频让模型保持动态想象，动作轨迹让它能落到机器人控制。
 
 ![GR-2 overview](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-1-overview.png){ width="720" }
 
-<small>Figure source: `GR-2`, Figure 1. 原论文图意：GR-2 先在大规模视频数据上预训练，学习未来视频预测，再通过真实机器人轨迹微调，输出机器人动作轨迹并部署到真实机器人操作。</small>
+<small>图源：`GR-2`，Figure 1。原图表达 GR-2 先做 web-scale video generative pre-training，再在机器人数据上同时学习视频生成和动作预测。本站读法：不要把未来视频看成可视化附件，它是把公开视频知识迁移到机器人操作的桥。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是 web 视频、语言、机器人状态和真实轨迹，输出是未来视频与机器人动作轨迹。  
-    **效率机制**：用大规模无动作视频学习动态先验，再用机器人数据对齐动作。  
-    **对主线意义**：它说明普通视频可作为具身世界动态的预训练来源。  
-    **不能证明什么**：视频预训练收益不能证明跨平台机器人和长时家庭任务都可靠。
+## 为什么公开视频能帮机器人
 
-这篇论文最适合放在具身智能专题里，因为它回答的是一个非常实际的问题：机器人数据很贵，能不能让无动作标注的视频数据也参与学习？
+机器人操作有两类知识。第一类是语义知识：杯子、抽屉、瓶盖、按钮是什么。第二类是动态知识：物体被推会怎样移动，瓶盖旋开前后外观怎样变化，倒水时容器和液体关系怎样变化。公开视频虽然没有机器人动作标签，但包含大量动态知识。
 
-## 模型结构
-
-GR-2 是一个 GPT-style visual manipulation policy，输入语言指令、历史环境观测和机器人状态，输出未来动作轨迹。
-
-| Component | GR-2 choice | Why it matters |
-| --- | --- | --- |
-| Model size | 230M parameters, 95M trainable | 模型不大，重点在训练配方和数据迁移 |
-| Language encoder | frozen text encoder | 保持语言表征稳定 |
-| Visual encoder | frozen VQGAN encoder | 把视频帧压成离散/latent 表示 |
-| Robot state encoder | learnable linear layer | 编码 EEF position / angle 和 gripper state |
-| Pre-training head | VQGAN decoder for future video frames | 让模型从普通视频中学动态先验 |
-| Fine-tuning head | conditional VAE for future video and action | 把视频预测和动作轨迹预测对齐 |
+VLA 如果只在机器人数据上训练，很容易受限于任务数量、物体数量和环境数量。GR-2 先在约 38M video clips、超过 50B tokens 的公开视频数据上做 generative pre-training，让模型学会预测未来视频 token。这个阶段没有机器人动作，但它建立了“人类操作和物体变化”的视觉动态先验。
 
 ![GR-2 data and model](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-2-pretraining-data.png){ width="720" }
 
-<small>Figure source: `GR-2`, Figure 2. 原论文图意：展示 GR-2 使用的大规模视频预训练数据分布，以及从 web-scale 视频到机器人操作数据的训练路线。</small>
+<small>图源：`GR-2`，Figure 2。原图表达大规模视频预训练数据和从 web video 到机器人数据的训练路线。本站读法：先看预训练学的是 future video prediction，再看机器人微调怎样把这个能力接到 action prediction。</small>
 
-### 输入输出接口
+## 视频 token：为什么不用直接预测像素
 
-GR-2 可以写成一个条件生成模型。给定语言 \(l\)、历史图像观测 \(o_{\le t}\)、机器人状态 \(s_{\le t}\)，模型同时预测未来视频 token 和未来动作轨迹：
+GR-2 使用 VQGAN 把图像压成离散 visual tokens。这样 GPT-style transformer 可以像处理文本 token 一样处理视频 token。未来视频预测目标可以写成：
 
-$$
-p_\theta(v_{t+1:t+H}, a_{t:t+K}
-\mid o_{\le t}, s_{\le t}, l)
-$$
+\[
+\mathcal{L}_{video}
+=
+-\sum_{\tau=t+1}^{t+H}
+\log p_\theta(z_\tau \mid z_{\le t}, l)
+\]
 
+其中 \(z_\tau\) 是第 \(\tau\) 帧的离散视觉 token，\(z_{\le t}\) 是历史视觉 token，\(l\) 是语言条件。这个目标让模型学习“给定当前画面和指令，未来画面 token 应该如何变化”。它不需要动作标签，所以可以利用公开视频。
 
-这里 \(v_{t+1:t+H}\) 是未来视觉轨迹，\(a_{t:t+K}\) 是一段 Cartesian action trajectory，而不是单步电机命令。论文把这个接口做成 GPT-style sequence modeling：语言 token、图像 latent token、状态 token 和动作/视频目标被组织到同一个自回归序列里。它的直觉很像“先想象画面会怎么变，再让动作轨迹追随这个画面变化”。
+这一步的价值不是生成好看的视频，而是让 transformer 内部表征包含动作后果、物体状态变化和场景动态。机器人微调阶段会把这些表征重新绑定到机器人动作上。
 
-!!! note "为什么未来视频不是装饰"
-    如果只监督动作，模型从机器人数据里学到的是“当前图像到控制量”的映射；如果同时预测未来视频，模型必须解释动作会怎样改变场景。GR-2 的未来视频头不只是为了可视化，它给共享 trunk 提供了密集的动态监督，让无动作标注的 web video 也能参与预训练。
+## 机器人微调：未来视频和动作一起学
 
-## 训练路线
+机器人数据有多视角图像、语言指令、状态序列和动作轨迹。GR-2 在这个阶段同时预测未来视频和动作：
 
-论文的训练可以分成三段：
+\[
+\mathcal{L}
+=
+\mathcal{L}_{video}
++
+\lambda_a \mathcal{L}_{action}
+\]
 
-```text
-web-scale video pre-training
-  -> robot trajectory fine-tuning
-  -> real-robot rollout with WBC
-```
+其中 \(\mathcal{L}_{video}\) 继续约束未来画面，\(\mathcal{L}_{action}\) 约束未来动作轨迹，\(\lambda_a\) 控制动作损失权重。这里要读懂的是：视频目标没有在微调时被丢掉。模型一边保持对未来状态的想象，一边学习怎样输出控制轨迹。
 
-### 1. Web-scale video pre-training
+动作不是单步命令，而是一段 Cartesian action trajectory。可以写成：
 
-GR-2 使用约 `38M video clips` 和 `50B tokens` 做预训练。通用视频数据覆盖家庭、户外、工作场所、休闲等日常活动；常见数据源包括 HowTo100M、Ego4D、Something-Something V2、EPIC-KITCHENS、Kinetics-700。
+\[
+a_{t:t+K}
+=
+(\Delta x, \Delta y, \Delta z, \Delta r, g)_{t:t+K}
+\]
 
-训练目标是：给定文本描述和当前视频帧，预测后续视频帧。这一步没有机器人动作，但能让模型获得大量动态知识：物体如何移动、手如何操作物体、容器如何开合、液体/工具/桌面场景如何变化。
+其中 \(\Delta x,\Delta y,\Delta z\) 表示末端位移，\(\Delta r\) 表示姿态变化，\(g\) 表示夹爪状态。轨迹输出比单步动作更平滑，也更容易交给低层控制器执行。
 
-从损失角度看，预训练主要优化未来视频 token 的似然：
+## 为什么 future video 不是装饰
 
-$$
-\mathcal{L}_{\mathrm{video}}
-= -\sum_{\tau=t+1}^{t+H}
-\log p_\theta(v_\tau \mid v_{\le \tau-1}, l)
-$$
+很多论文会把中间可视化当成解释工具，但 GR-2 的 future video 是训练目标的一部分。它至少提供三种作用。
 
-
-注意 \(v_\tau\) 不是原始 RGB，而是 frozen VQGAN encoder 产生的视觉 token。这样做的好处是把像素空间的高频细节压掉，让模型主要在 token 序列上学习可预测的动态。代价是：预训练学到的是观察到的视觉变化，不天然知道“哪个动作导致了这个变化”。动作因果关系仍要靠机器人轨迹微调补齐。
-
-### 2. Robot trajectory fine-tuning
-
-机器人微调阶段同时学习 future video generation 和 action prediction。论文强调一个经验：预测动作轨迹比预测单步动作更好，轨迹更平滑，也更容易由控制器实时执行。
-
-机器人数据包括：
-
-| Dataset / setting | Scale | Role |
-| --- | ---: | --- |
-| Tabletop manipulation | 105 tasks, about 40K trajectories | 8 skills: picking, placing, uncapping, capping, opening, closing, pressing, pouring |
-| Data-scarce setting | about 1/8 data, roughly 5K trajectories | 测少样本机器人数据下的视频预训练是否有帮助 |
-| End-to-end bin picking | about 94K pick-and-place trajectories, 55 training objects | 测 clutter、unseen objects 和连续 picking |
-| CALVIN ABC-D | 20K+ demonstrations, 34 tasks | 测语言条件长任务序列 |
+第一，它让模型在动作前想象任务进展。比如“把杯子放进篮子”不是一个瞬时动作，而是一段物体位置、夹爪状态和遮挡关系变化。第二，它让 web video pretraining 的知识在 robot fine-tuning 中继续被使用，而不是被动作回归目标覆盖。第三，它提供了一个额外正则：如果动作预测和未来视频不一致，模型需要在训练中调整内部表示。
 
 ![GR-2 tabletop tasks](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-4-tasks.png){ width="760" }
 
-<small>Figure source: `GR-2`, Figure 4. 原论文图意：展示 105 个桌面任务和 8 类操作技能，说明 GR-2 的真实机器人训练覆盖了多个操作原语。</small>
+<small>图源：`GR-2`，Figure 4。原图表达 105 个桌面任务和 8 类操作技能。本站读法：这张图不是任务炫耀，而是说明机器人微调阶段覆盖了多个操作原语，方便把公开视频动态迁移到真实动作。</small>
 
-机器人微调时，损失可以理解为两条监督相加：
+## 数据增强：让机器人数据更像开放世界
 
-$$
-\mathcal{L}
-= \mathcal{L}_{\mathrm{future\ video}}
-+ \lambda \mathcal{L}_{\mathrm{action}}
-$$
+GR-2 还使用物体替换和背景替换增强。论文用分割和生成模型把新对象或新背景插入机器人轨迹视频，尽量保持机器人运动和任务结构。这一步的作用是补机器人数据的视觉多样性。
 
+这和 web video pretraining 的关系很清楚：预训练给大范围动态先验，数据增强让机器人微调不要只记住固定桌面、固定物体和固定背景。两者一起降低了 policy 对实验室视觉分布的依赖。
 
-其中 \(\mathcal{L}_{\mathrm{action}}\) 监督未来一段末端执行器轨迹和夹爪状态，\(\lambda\) 控制动作监督相对视频监督的权重。这个分工很关键：future video 让 trunk 保持动态预测能力，action loss 把“画面变化”对齐到机器人可执行控制。若只保留视频预测，模型可以会想象但不会控制；若只保留动作预测，又失去 web video 预训练带来的动态先验。
+## 执行：VLA 输出还要经过控制器
 
-!!! note "trajectory prediction 为什么比单步动作稳"
-    单步动作容易变成局部纠偏：每一帧只看下一瞬间怎么动，长期轨迹可能抖。GR-2 预测的是未来一段 Cartesian 轨迹，控制器再做平滑和约束投影。对桌面操作来说，这等于让模型输出“接下来一小段运动意图”，而不是把每个 20ms 的低层控制都交给大模型。
+GR-2 输出的不是电机级命令。真实机器人执行时，动作轨迹会被低层控制器处理，并考虑碰撞、可操作性、关节限制和安全约束。这个细节很重要，因为很多 VLA 文章容易让人误以为 transformer 直接控制电机。
 
-### 3. Data augmentation
+更准确的系统图是：GR-2 预测一段末端轨迹，低层控制器把轨迹投影到机器人可执行动作，真实传感器再反馈下一步观测。高层模型负责语义和动态，低层控制器负责物理执行。
 
-为了缓解机器人数据稀缺，论文使用物体替换和背景替换增强：扩散模型在指定区域插入新对象，SAM 提取背景区域，再用视频生成模型在保持机器人运动的同时生成增强视频。
+## 实验应该怎样读
 
-这一步很有工程启发：如果模型要泛化到未见背景、未见环境和未见物体，数据增强必须尽量保持动作与机器人运动一致，不能只做静态图像扰动。
+GR-2 的真实机器人评测可以分成三组。
 
-增强数据的读法要保守：它能扩展视觉外观分布，但不能凭空生成可靠的新接触动力学。如果替换出的物体形状、质量、抓取点和真实控制动作不匹配，动作监督会变噪。因此 GR-2 的增强更适合支撑“背景、外观、物体类别”泛化，而不是证明新技能已经被合成出来。
-
-## 真实机器人系统
-
-GR-2 使用 `7-DoF Kinova Gen3 + Robotiq 2F-85 gripper`。观测来自两个相机：
-
-| Camera | Role |
-| --- | --- |
-| Static head camera | 提供工作空间全局视角 |
-| Wrist camera | 提供夹爪与环境交互的近距离视角 |
-
-模型预测 Cartesian space 轨迹。生成轨迹先经过优化提高平滑度和连续性，再由 WBC 把 Cartesian 轨迹转成低层 joint actions，并以约 `200Hz` 在真实机器人上执行。
-
-这个细节说明：VLA 输出不是电机命令。论文里的控制系统把碰撞约束和可操作性放进优化框架，真正执行的是控制器投影后的低层动作。
-
-## 实验结果
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
-GR-2 的实验覆盖多任务学习、bin picking 和 CALVIN。
+第一组是多任务桌面操作。论文报告 GR-2 在 100 多个任务上有很高平均成功率，并在 simple、distractor、unseen backgrounds、unseen environments 和 unseen manipulation 等设置下比较。读这组结果时要看难度梯度：背景和环境泛化主要考察视觉鲁棒性，unseen manipulation 才更接近新技能组合。
 
 ![GR-2 multitask results](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-6-multitask-results.png){ width="920" }
 
-<small>Figure source: `GR-2`, Figure 6. 原论文图意：展示多任务真实机器人评测，比较 Simple、Distractor、Unseen Backgrounds、Unseen Environments 和 Unseen Manipulation 等设置下的成功率。</small>
+<small>图源：`GR-2`，Figure 6。原图表达多任务真实机器人评测。本站读法：重点看 unseen manipulation 与其他条件的差距，这能暴露模型是否真的学会新操作组合。</small>
 
-论文的核心结论不是“某个任务分数更高”，而是三件事：
-
-1. web-scale video pre-training 可以迁移到真实机器人操作；
-2. 在机器人数据稀缺时，视频预训练带来的收益更明显；
-3. 轨迹预测比单步 action prediction 更适合平滑执行和实时控制。
-
-!!! note "Figure 6 怎么读"
-    这组真实机器人结果把泛化难度拆成五层：`Simple` 是训练分布附近任务；`Distractor` 检查多物体干扰；`Unseen Backgrounds` 和 `Unseen Environments` 检查视觉域迁移；`Unseen Manipulation` 才是真正难的未见物体/未见技能组合。GR-2 在前四类更强，说明 web video 和数据增强主要帮视觉与动态泛化；`Unseen Manipulation` 仍明显更难，论文也把失败归因到新形状物体抓取失败和指令中未见物体选择错误。
+第二组是 bin picking。这个设置更接近工业：源篮、目标篮、seen / unseen objects、cluttered settings。论文报告 GR-2 相比 GR-1 有明显提升，并且在 unseen 和 cluttered 条件下保持较强表现。这里 web video 和数据增强的作用更明显，因为随机物体和复杂堆叠更依赖视觉动态与物体先验。
 
 ![GR-2 bin picking setup](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-7-bin-picking-setup.png){ width="760" }
 
-<small>Figure source: `GR-2`, Figure 7. 原论文图意：展示 end-to-end bin picking 的源篮、目标篮、seen / unseen objects 和 cluttered settings。</small>
+<small>图源：`GR-2`，Figure 7。原图表达 bin picking 的源篮、目标篮、seen / unseen objects 和 cluttered setting。本站读法：这组实验比固定桌面任务更能检查物体泛化和视觉拥挤场景。</small>
 
-bin picking 是这篇论文里最接近工业场景的一组实验。设置中有源篮和目标篮，指令固定为把右篮任意物体搬到左篮；训练数据约 `94K` 条 pick-and-place 轨迹、`55` 个训练物体。评测时共有 `122` 个物体，其中 `67` 个训练未见；还把初始物体数量从 `5-9` 提高到 `12-17` 构成 cluttered setting。论文报告 GR-2 平均成功率从 GR-1 的 `33.3%` 提升到 `79.0%`，并且 unseen / cluttered 条件和 seen 条件差距较小。
-
-!!! warning "读数边界"
-    bin picking 的强证据是 closed-loop 真实机器人搬运，尤其覆盖透明、反光、柔性等视觉困难物体；但任务指令很简单，目标篮固定，不能外推成长时任务规划或复杂语言理解。它证明的是“动态视频预训练 + 轨迹策略”能改善物体搬运泛化，而不是完整家庭机器人能力。
-
-在 CALVIN 上，GR-2 需要在 ABC-D split 中连续执行 5 个语言任务。这类评测比单步抓取更接近长时程具身系统。
+第三组是 CALVIN 长链任务。每个 episode 要连续执行多条语言指令，指标会统计完成第 1 到第 5 个任务的比例。GR-2 在 5-task success 和 average length 上高于 GR-1，说明 future video + action trajectory 的序列建模对长链任务有帮助。
 
 ![GR-2 CALVIN results](../../assets/images/paper-deep-dives/embodied-ai/gr2/figure-10-calvin-results.png){ width="920" }
 
-<small>Figure source: `GR-2`, Figure 10. 原论文图意：展示 CALVIN ABC-D 上完成 1 到 5 个连续任务的成功率和 average length。</small>
+<small>图源：`GR-2`，Figure 10。原图表达 CALVIN ABC-D 上 1 到 5 个连续任务的成功率。本站读法：长链任务最容易暴露误差累积，不能只看第一个子任务成功率。</small>
 
-CALVIN 的意义在于长链语言条件控制。评测使用 ABCD-D split，约 `20K+` demonstrations、`34` 个任务，每个 episode 要连续执行 5 条语言指令，并在 `1000` 条 instruction chains 上统计完成第 1 到第 5 个任务的比例。论文报告 GR-2 相比 GR-1 把 1-task success 从 `94.9%` 提到 `98.6%`，5-task success 从 `73.1%` 提到 `85.9%`，average length 从 `4.21` 提到 `4.64`。
+## 和 DreamZero 的区别
 
-这说明视频预测预训练不只提升单步抓取，也能改善连续任务里的状态保持。但 CALVIN 仍是仿真 benchmark，且环境和任务库固定；它不能替代真实厨房/家庭长时任务，也不能证明模型有失败恢复和无效指令拒绝能力。
+GR-2 和 DreamZero 都把未来视频放进机器人 policy，但侧重点不同。GR-2 是 GPT-style video-language-action model，先用 web video 做生成式预训练，再用机器人数据把未来视频和动作轨迹一起学出来。DreamZero 则更强调 WAM：基于视频扩散 backbone，联合预测未来视频和动作，并通过系统优化做到实时闭环。
 
-### Scaling 与视频生成诊断
+可以粗略理解为：GR-2 证明 web-scale video pretraining 能帮助机器人 manipulation；DreamZero 进一步追问视频世界模型本身能否成为 zero-shot policy。
 
-论文还做了 model size scaling：GR-2-S、GR-2-B、GR-2-L、GR-2-XL 的 trainable parameters 分别约为 `30M`、`95M`、`312M`、`719M`。随着模型变大，视频生成 validation loss 下降，真实机器人子集评测成功率也上升。
+## 边界与误解
 
-这组实验的价值在于把“视频预测质量”和“动作成功率”拉到同一条曲线上。它支持的结论是：更强的视频动态模型可以转成更好的策略表征。它不支持的结论是：只要无限扩模型就能解决机器人泛化；未见操作和长时恢复仍需要任务数据、控制器、状态估计和安全机制。
+第一，公开视频不是机器人 demonstration。GR-2 从中学的是视觉动态和物体交互先验，不是可直接执行的动作标签。
 
-## 训练细节要点
+第二，future video 不是因果规划器。它帮助模型保持动态一致性，但并不显式搜索动作空间，也不保证安全约束。真实系统仍需要控制器和安全逻辑。
 
-| Detail | GR-2 choice | Why it matters |
-| --- | --- | --- |
-| Pre-training scale | 38M video clips, 50B tokens | 让模型从无动作标注视频中学习动态先验 |
-| Robot data scarcity | 5K trajectories for 100+ tasks in scarce setting | 检验小样本机器人迁移 |
-| Full tabletop data | 40K trajectories, 105 tasks | 覆盖 8 类技能和多任务泛化 |
-| Bin picking data | 94K trajectories, 55 objects | 验证 clutter 和 unseen object generalization |
-| Action output | Cartesian trajectory, not single action | 平滑、可优化、易接 WBC |
-| Low-level execution | WBC at 200Hz | 把高层轨迹投影到可执行 joint actions |
-| Cameras | static head + wrist camera | 兼顾全局语义和局部接触 |
+第三，105 个任务和 CALVIN 结果说明泛化能力强，但不能直接推出开放世界家务全覆盖。未见物体、透明/反光物体、柔性物体、双手协调和长时程任务分解仍是明显边界。
 
-## 局限
+第四，模型变大带来提升，但也带来部署成本。GR-2 的 scaling 结果说明参数规模对视频生成 loss 和真实任务成功率有帮助，但机器人系统还要考虑控制频率、延迟和硬件可用性。
 
-GR-2 还不是今天意义上的大 VLA。它的模型规模较小，任务主要集中在桌面操作和 bin picking，开放家庭长任务、无效指令拒绝、跨 embodiment scaling、动作块 flow matching 等问题还没有完全展开。
+## 阅读结论
 
-但它在具身智能论文谱系里很重要，因为它清楚地证明了一点：**视频预测不是只为了生成好看的未来，它可以作为机器人策略的动态知识来源。**
+GR-2 最值得记住的是：web video pretraining 提供的是“物体互动会怎样演化”的动态先验，robot fine-tuning 提供的是“机器人怎样执行这种演化”的动作接口。未来视频不是展示用附件，而是训练目标的一部分；它让模型在动作预测时仍然保留对任务进展、物体状态和遮挡变化的想象。
 
-!!! info "本站判断"
-    GR-2 的关键证据链是 web-scale future video pretraining 到机器人轨迹微调再到 WBC 执行。方法上视频预测提供动态先验，实验上 CALVIN、桌面和 bin picking 说明迁移收益；真正落地还要补开放长任务、失败恢复和安全控制。
+所以 GR-2 是 VLA 路线里的一个关键证据：公开视频能帮助机器人操作，但帮助方式不是把公开视频当 demonstration，而是先学未来视觉，再用机器人轨迹把未来视觉和可执行动作对齐。它的边界也在这里：没有足够机器人动作数据、控制器和安全门禁时，视频动态先验不会自动变成可靠闭环控制。
 
-## 参考链接
+## 外部精读
 
-1. [arXiv:2410.06158](https://arxiv.org/abs/2410.06158)
-2. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2410.06158)
+- [GR-2: A Generative Video-Language-Action Model with Web-Scale Knowledge for Robot Manipulation](https://arxiv.org/abs/2410.06158)：论文原文，重点读 pretraining、robot fine-tuning 和真实机器人实验。
+- [GR-2 project page](https://gr2-manipulation.github.io/)：项目页适合看任务视频和模型输出。
+- [ar5iv HTML version](https://ar5iv.labs.arxiv.org/html/2410.06158)：在线阅读图表更方便。
+- [CALVIN benchmark](https://github.com/mees/calvin)：理解长链语言条件机器人操作评测。
+- [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：作为动作生成路线对照，帮助区分 trajectory prediction 和 diffusion action generation。

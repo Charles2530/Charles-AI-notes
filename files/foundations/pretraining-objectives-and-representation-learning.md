@@ -1,134 +1,143 @@
-# 预训练目标与表示学习
+# 预训练目标与表示学习：模型到底被要求学什么
 
-预训练目标回答的是：在没有最终任务标签或只有弱标签时，模型到底被要求学什么。理解这些目标，读 LLM、VLM、扩散、世界模型和 VLA 时就不会把所有 loss 都混成“让模型变好”。
+预训练目标不是训练脚本里的一行 loss。它在规定模型看见什么、预测什么、哪些差异要保留、哪些差异可以忽略。LLM 的 next-token、BERT/MAE 的 masked modeling、CLIP 的对比学习、扩散的 denoising、V-JEPA 的 latent prediction、VLA 的 behavior cloning，表面都是“让模型学表示”，实际学到的接口很不一样。
 
+这页只回答一个核心问题：**读到一个预训练目标时，怎样判断它让模型学到了什么表示，又没有学到什么能力？**
 
-![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }
+## 目标函数是在写信息接口
 
-<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原论文图意：CLIP 先用大量 image-text pairs 做对比预训练，再把文本类别转成 prompts，通过图文 embedding 相似度完成 zero-shot prediction。</small>
+一个预训练样本可以抽象成：
 
-## 一张目标函数地图
+\[
+x \rightarrow h_\theta(x) \rightarrow \hat{y}
+\]
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
-> **算法视角**：训练循环可以拆成 batch 构造、前向、loss mask、反向和 optimizer step；SFT / 训练循环章节特别提醒，哪些 token 参与 loss 往往和模型结构一样影响结果。
->
-> 延伸阅读：[09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html)
+\(x\) 是模型看到的输入，\(h_\theta(x)\) 是中间表示，\(\hat y\) 是模型被要求预测的目标。loss 会把某些信息压进 \(h_\theta(x)\)，也会允许模型丢掉另一些信息。表示学习的核心不是“向量越强越好”，而是这个向量对目标 \(y\) 是否足够，对无关扰动是否稳定。
 
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《09. SFT Training Loop | 监督微调训练框架: 数据构造与 Loss Masking (SFT Training Loop)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 单步训练 | 约为前向的 2 到 3 倍 | 参数、梯度、优化器状态、激活共同占用显存 | 实际成本还取决于 batch token、mask、checkpoint 和并行策略；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/09_SFT_Training_Loop.html) |
+所以读目标函数时先问三件事。第一，目标 \(y\) 是什么：下一个 token、mask 区域、匹配关系、原始像素、噪声、未来 latent，还是专家动作？第二，模型能偷懒吗：是否可以靠局部纹理、数据偏差、语言先验或静态背景拿低 loss？第三，下游任务需要的变量是否在目标里出现：动作、reward、风险、时间一致性、工具执行、事实证据有没有进入训练信号？
 
-| 目标 | 输入 | 预测什么 | 常见用途 | 不直接保证 |
-| --- | --- | --- | --- | --- |
-| Next-token prediction | 前缀 token | 下一个 token | LLM、多模态 token 模型 | 事实正确、动作安全 |
-| Masked modeling | 被遮挡的输入 | mask 处 token 或 latent | BERT、MAE、V-JEPA | 自回归生成能力 |
-| Contrastive learning | 正负样本对 | 匹配关系 / embedding 相似度 | CLIP、检索、对齐 | 生成细节或因果动态 |
-| Reconstruction | 压缩表示 | 原始输入或局部内容 | Autoencoder、VAE、视觉 tokenizer | 表示一定可规划 |
-| Denoising / score | 带噪样本 | 噪声、score 或干净样本 | 扩散、score models | 少步生成或实时控制 |
-| Behavior cloning | 观测和任务 | 专家动作 | VLA、机器人策略 | 失败恢复和探索 |
+## Next-token：预测续写，不等于验证事实
 
-目标函数不是越多越好。关键是它是否和最终使用接口一致：要生成文本，就需要生成目标；要做检索，就需要表示对齐；要做决策，就需要动作、reward、风险或闭环反馈。
-
-## Next-token prediction
-
-自回归语言模型最经典的目标是：
+自回归语言模型的基础目标是最大化序列似然：
 
 \[
 \mathcal{L}_{\text{NTP}}=-\sum_t \log p_\theta(x_t\mid x_{<t})
 \]
 
+它要求模型根据历史前缀预测下一个 token。这个目标极其可扩展，因为文本、代码、图像 token、视频 token、动作 token 都可以排成序列。模型为了降低 loss，会学语法、知识、风格、代码模式、推理痕迹和很多隐含结构。
 
-它让模型在给定历史前缀时预测下一个 token。这个目标简单、可扩展、能吃海量文本，也能把图像 token、视频 token 或动作 token 统一成序列建模。
+但 next-token 的训练信号只告诉模型“数据里下一个 token 常是什么”。它不直接验证事实是否真实、代码是否运行、工具调用是否成功、动作是否安全。后训练、RAG、verifier、RL、结构化解码和评测系统，本质上是在补 next-token 没有显式定义的外部约束。
 
-但 next-token 只告诉模型“在数据里下一个 token 常是什么”。它不自动知道回答是否真实、动作是否安全、工具调用是否真的成功。后训练、RAG、verifier、RL 和评测系统都是在补这些接口。
+一个常见误解是：next-token 太简单，所以只能学表面统计。更准确的说法是：简单目标可以在巨大数据和模型容量下诱导丰富能力，但这些能力的边界取决于数据分布和评测接口。模型会学会“像训练语料里的正确答案”，不自动拥有“对现实世界负责”的机制。
 
-## Masked modeling 和 latent prediction
+## Masked modeling：补空缺时学上下文结构
 
-Masked modeling 把输入的一部分遮住，让模型从上下文预测缺失部分：
+Masked modeling 把输入的一部分遮住，让模型预测被遮住的内容：
 
 \[
-\mathcal{L}_{\text{mask}}=\sum_{i\in M}\ell(\hat{x}_i, x_i)
+\mathcal{L}_{\text{mask}}=\sum_{i\in M}\ell(\hat{x}_i,x_i)
 \]
 
+BERT 预测被 mask 的文本 token；MAE 把图像切成 patch，只编码少量可见 patch，再重建被遮住的像素；V-JEPA 则预测 target encoder 产生的 latent，而不是复原像素。
 
-如果预测的是像素或 token，模型会更重视可重建细节；如果预测的是 target encoder 的 latent，模型更可能学抽象结构。
+这三者差别很关键。预测 token 会学语义和语言上下文；预测像素会保留低层视觉细节；预测 latent 会鼓励模型忽略一些纹理噪声，保留更抽象的时空结构。目标看起来都叫 mask，表示学到的东西却不同。
 
 ![V-JEPA training procedure](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="760" }
 
-<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原论文图意：context encoder 只处理 masked video 中可见 token，predictor 结合 context output 和 mask tokens 去预测 target encoder 对完整视频产生的 masked token representations。</small>
+<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原图表达 context encoder 只处理未遮挡视频 token，predictor 结合 context output 和 mask tokens 去预测 target encoder 的 masked token representations。本站读法是看预测目标：V-JEPA 不是让模型画回像素，而是让模型在 latent 空间补全缺失时空结构，因此它更像表征预训练，不是完整动作世界模型。</small>
 
-!!! note "图解：V-JEPA 预测 latent，不是复原像素"
-    图中 context encoder 只看未遮挡视频块，predictor 去预测 target encoder 给出的被遮挡区域表示。这个目标减少了逐像素重建的冗余，更关注运动和语义结构。它能支撑视频表示学习，但原始 V-JEPA 不直接包含 action、reward、done 或 closed-loop policy。
+Masked 目标的边界也在这里。它能学上下文和结构，但不保证自回归生成能力；能学视频表征，但如果没有 action、reward、done 或 closed-loop 反馈，就不能直接说明模型会规划。
 
-## Contrastive learning
+## Contrastive learning：正负样本定义了不变性
 
-对比学习把正样本拉近，把负样本推远。InfoNCE 常见写法是：
+对比学习的核心是：把正样本拉近，把负样本推远。InfoNCE 常见写法是：
 
 \[
 \mathcal{L}_{\text{InfoNCE}}
 =-\log
 \frac{\exp(\operatorname{sim}(q,k^+)/\tau)}
-{\exp(\operatorname{sim}(q,k^+)/\tau)+\sum_j \exp(\operatorname{sim}(q,k_j^-)/\tau)}
+{\exp(\operatorname{sim}(q,k^+)/\tau)+\sum_j\exp(\operatorname{sim}(q,k_j^-)/\tau)}
 \]
 
+这里 \(q\) 是 query 表示，\(k^+\) 是正样本，\(k_j^-\) 是负样本，\(\tau\) 是 temperature。这个公式真正重要的不是分母长什么样，而是正负样本怎么定义。
 
-这里 \(q\) 是 query 表示，\(k^+\) 是匹配的正样本，\(k_j^-\) 是负样本，\(\tau\) 是 temperature。这个目标让 embedding 空间具备检索和对齐能力，但它的质量依赖负样本、数据覆盖和语义粒度。
+在 SimCLR 里，同一张图的两种增强视图是正样本，所以表示会对 crop、color jitter、blur 等增强保持稳定。在 CLIP 里，图像和配套文本是正样本，所以模型学的是图文语义对齐，而不是像素重建或动作后果。
 
-## Reconstruction、denoising 和 score
+![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }
 
-Reconstruction 让模型从压缩表示还原输入：
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图表达 CLIP 用大量 image-text pairs 做对比预训练，再把类别写成文本 prompts，通过图文 embedding 相似度完成 zero-shot prediction。本站读法是：CLIP 的表示适合语义检索和开放类别识别，但图文相似度高不等于会预测物体被推动后的状态。</small>
+
+对比学习的能力来自“哪些变化被视作同一个对象”。如果增强策略把小物体、文字、空间位置或接触点当成可忽略扰动，表示就可能在机器人、OCR、图表理解里丢掉关键细节。正样本和负样本不是采样小事，而是在写模型的不变性。
+
+## Reconstruction：重建细节，不等于保留任务状态
+
+Reconstruction 目标让模型从压缩表示还原输入：
 
 \[
-\mathcal{L}_{\text{rec}}=d(\hat{x},x)
+\mathcal{L}_{\text{rec}}=d(g_\theta(h_\phi(x)),x)
 \]
 
+Autoencoder、VAE、视觉 tokenizer、视频 VAE 都会用这类目标。它的优势是直观：如果表示能还原输入，说明它保留了大量信息。它的风险也直观：输入里有很多下游不需要的细节，模型可能把容量花在纹理、背景、压缩伪影和静态外观上。
 
-它适合训练 autoencoder、VAE、视觉 tokenizer 或视频压缩模块。风险是模型可能保留了重建细节，却没有保留决策相关状态。
+对于生成模型，重建目标常常服务于“把高维像素压到可建模 latent”。Latent diffusion 的 VAE 就是先把图像压到 latent，再在 latent 上训练扩散模型。对于世界模型和 VLA，问题更尖锐：一个 latent 能重建画面，不代表它保留了接触力、可抓取性、风险、动作后果或可规划状态。
 
-Denoising / score matching 则把生成建模改写成“从噪声恢复数据”：
+因此读 reconstruction 论文时要分清：它是在训练压缩器、视觉 tokenizer、生成 decoder，还是在训练 planner 可用的状态表示。重建好只是第一层证据。
+
+## Denoising：学分布方向，而不是一次性输出答案
+
+扩散模型把干净样本逐步加噪，再训练模型从带噪状态恢复：
 
 ![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
 
-<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原论文图意：前向过程 \(q(x_t\mid x_{t-1})\) 逐步加噪，反向生成过程 \(p_\theta(x_{t-1}\mid x_t)\) 逐步去噪，从噪声链条恢复数据样本。</small>
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达前向过程 \(q(x_t\mid x_{t-1})\) 逐步加噪，反向过程 \(p_\theta(x_{t-1}\mid x_t)\) 逐步去噪。本站读法是：denoising 目标不是让模型一步输出最终样本，而是在不同噪声水平学习回到数据分布的方向。</small>
 
-!!! note "图解：去噪目标学的是分布方向"
-    DDPM 图里的 \(q\) 负责把真实数据逐步加噪，\(p_\theta\) 负责学习反向去噪。训练时常让模型预测噪声、velocity 或 score；采样时则沿着学到的方向从噪声走回数据。这和 next-token 不同：它不是一次选下一个 token，而是在连续或离散噪声层级中反复更新样本。
+常见训练目标是预测噪声、干净样本、velocity 或 score 的等价形式。它和 next-token 不同：next-token 每步选择离散 token，denoising 则在噪声层级上反复更新样本。这个目标很适合图像、视频、动作轨迹等多峰输出，因为它不必把多个合理结果平均成一个均值。
 
-## Behavior cloning
+边界也清楚。训练好 denoising 不等于少步采样一定稳定；图像质量高不等于条件控制强；视频生成连贯不等于能闭环规划。采样器、guidance、distillation、条件编码和评测都会改变最终系统行为。
 
-行为克隆把策略学习写成监督学习：给定观测和任务，让模型模仿专家动作。
+## Behavior cloning：模仿专家，不等于会恢复
+
+行为克隆把策略学习写成监督学习：
 
 \[
-\mathcal{L}_{\text{BC}}=-\log \pi_\theta(a_t\mid o_{\le t}, l)
+\mathcal{L}_{\text{BC}}=-\log \pi_\theta(a_t\mid o_{\le t},l)
 \]
 
+\(o_{\le t}\) 是历史观测，\(l\) 是语言或任务条件，\(a_t\) 是专家动作。连续动作也可以用 L1/MSE 或 action diffusion 目标；离散动作可以像 token 一样做 cross entropy。
 
-这里 \(o_{\le t}\) 是历史观测，\(l\) 是语言或任务条件，\(a_t\) 是专家动作。连续动作也常用 MSE/L1 或 action diffusion 目标。
+BC 的优点是稳定、可扩展、能直接吃示范数据。RT-1、RT-2、Open X-Embodiment 和很多 VLA 都依赖这种思想：把机器人行为变成大规模监督学习问题。
 
-BC 的优点是稳定、简单、能利用示范数据；缺点是它主要学数据里出现过的动作。部署时一旦偏离专家轨迹，模型可能不知道怎么恢复。这也是为什么 VLA 和世界模型后面会接数据引擎、闭环评测、offline RL、PPO/GRPO 或 MPC。
+但 BC 学的是“专家分布上的动作”。一旦部署时进入专家数据少见的状态，模型可能不知道怎么回来，这就是 covariate shift。它也不直接学习探索、长期 credit assignment、失败恢复或安全约束。要让 VLA 真正可用，通常还需要数据回流、闭环评测、risk head、世界模型、MPC、offline RL 或在线微调。
 
-## 怎么判断目标和任务是否匹配
+## 目标函数要和最终接口对齐
 
-| 最终目标 | 预训练目标是否够用 | 还需要什么 |
+不同目标对应不同接口：
+
+| 目标 | 最擅长提供什么 | 最容易漏掉什么 |
 | --- | --- | --- |
-| 写作、问答、代码 | next-token 是核心底座 | RAG、SFT、RL、verifier |
-| 图文检索 | contrastive 很合适 | hard negative、领域数据 |
-| 图像/视频生成 | denoising 或 autoregressive token | 采样器、条件控制、评测 |
-| 世界模型 | latent prediction / dynamics | action、reward、risk、rollout eval |
-| VLA 控制 | BC 是基础入口 | 失败恢复、闭环、动作安全层 |
+| next-token | 续写、代码、语言知识、序列统一接口 | 事实验证、工具执行、动作安全 |
+| masked modeling | 上下文补全、局部到全局结构 | 自回归生成、因果动作后果 |
+| contrastive | 检索、语义对齐、开放类别识别 | 细粒度几何、生成细节、动力学 |
+| reconstruction | 压缩、tokenizer、decoder、保真细节 | 抽象任务状态、风险和可规划性 |
+| denoising | 多峰生成、图像/视频/动作分布 | 少步稳定、条件忠实、闭环控制 |
+| behavior cloning | 模仿专家动作、快速策略学习 | 分布外恢复、探索、长期规划 |
 
-!!! warning "常见误区：预训练指标好就等于下游可用"
-    预训练目标只覆盖它定义过的信号。CLIP 相似度高不代表能控制机器人；V-JEPA 表征好不代表能预测动作后果；BC loss 低不代表偏离轨迹后会恢复；扩散 FID 好也不代表条件执行和安全边界都可靠。
+这张表不是让人选一个“最好目标”，而是提醒：目标函数是在定义模型最先学会的接口。现代系统常常把多个阶段串起来：next-token 打底，SFT 对齐指令，RAG 补外部事实，RL 或 verifier 改善任务收益；VLM 用 contrastive 或 captioning 对齐图文，再接 LLM；VLA 用 web-scale VLM 先学语义，再用机器人数据把语义接到动作。
 
-## 和后续专题的关系
+## 阅读结论
 
-- [优化与训练入门](optimization-and-training-basics.md)：loss、gradient 和训练循环的共同机制。
-- [概率与潜变量模型](probability-latent-variables-and-generative-models.md)：生成分布、latent 和采样的基础。
-- [VLM 架构与训练](../vlm/architecture-and-training.md)：CLIP、BLIP-2、V-JEPA 等目标如何进入 VLM。
-- [扩散模型路线图](../diffusion/index.md)：denoising 和 score matching 的完整展开。
-- [VLA 数据与策略学习](../vla/data-and-policy-learning.md)：behavior cloning、动作 token 和策略学习。
+预训练目标决定模型被奖励去保留什么信息。Next-token 奖励可续写性，masked modeling 奖励上下文补全，contrastive 奖励正样本不变性，reconstruction 奖励可还原性，denoising 奖励分布方向，behavior cloning 奖励专家动作匹配。
 
-## 本页结论
+读论文时不要只问“loss 降了吗”，要问目标是否包含下游需要的变量。CLIP 学到图文语义，不等于学到动作后果；V-JEPA 学到视频 latent，不等于直接能闭环控制；BC 学到专家动作，不等于能从偏离状态恢复；扩散学到生成分布，不等于少步实时控制。把目标和接口对齐，才知道一个预训练方法该期待什么、不该期待什么。
 
-预训练目标决定模型最先学会的接口：续写、补全、对齐、重建、去噪或模仿动作。读论文时先问“它的 loss 让模型预测什么”，再问“这个预测目标是否足够支撑最终任务”。
+## 外部精读
+
+- [BERT](https://arxiv.org/abs/1810.04805)
+- [MAE](https://arxiv.org/abs/2111.06377)
+- [SimCLR](https://arxiv.org/abs/2002.05709)
+- [CLIP](https://arxiv.org/abs/2103.00020)
+- [The Illustrated CLIP](https://jalammar.github.io/illustrated-clip/)
+- [V-JEPA](https://arxiv.org/abs/2404.08471)
+- [DDPM](https://arxiv.org/abs/2006.11239)
+- [RT-1](https://robotics-transformer1.github.io/)
+- [Decision Transformer](https://arxiv.org/abs/2106.01345)

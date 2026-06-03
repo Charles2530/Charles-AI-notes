@@ -1,63 +1,139 @@
-# RT-2：把视觉语言模型接到机器人动作
+# RT-2：把 web-scale VLM 变成会输出动作的 VLA
 
-Checked date: 2026-06-02  
-Repro status: 论文级理解；本站未复现实验，只引用原论文图、DeepMind 博客和公开结果。
+Checked date: 2026-06-03  
+Repro status: 论文级理解；本站未复现实验，只引用原论文图、DeepMind 官方博客、项目页和公开论文结果。
 
-RT-2 的核心不是“机器人也用了大模型”这么简单。它把机器人动作离散化成 token，让 VLM 可以像生成文本一样生成动作，从而把 web-scale 视觉语言知识迁移到真实机器人控制。
+RT-2 的核心不是“机器人也用了大模型”，而是一个更具体的问题：互联网图文数据里有大量视觉语义知识，机器人数据却少、贵、分布窄；能不能把 VLM 已经学到的物体、关系、类别和常识，通过一个动作接口迁移到真实机器人控制？
 
-## 论文解决的问题
+论文给出的接口是 vision-language-action model：输入仍然是图像和语言指令，输出不再只是文本，而是一串代表机器人动作的 token。RT-2 最值得读懂的地方就在这里：**它不是让语言模型直接“理解物理”，而是把动作离散化成模型可以生成的符号，再用真实机器人数据把这些符号绑定到控制后果上。**
 
-机器人数据少、贵、分布窄，而互联网图文数据巨大。RT-2 想回答：能不能用 VLM 学到的语义知识，帮助机器人完成没有大量机器人示范的新任务？
+## 论文真正解决的问题
 
-它的关键接口是 action tokenization：把连续机器人动作转成离散 token，并混入模型的文本输出空间。
+RT-1 已经证明 Transformer 可以在大量真实机器人示范上学习多任务策略，但它主要从机器人数据里学。RT-2 往前走了一步：从 PaLI-X、PaLM-E 这类预训练 VLM 出发，把原来的 web vision-language 能力保留下来，再加入机器人 trajectory 数据，让同一个模型既能回答视觉语言任务，也能输出机器人动作。
 
-## 方法结构
+这个目标听起来像“多加一种输出”，实际有三个难点。第一，动作是连续控制量，语言模型只能生成 token，需要把位姿、旋转、夹爪和终止信号转成离散序列。第二，机器人控制要求每一步都输出有效动作，不能像聊天一样生成任意词。第三，模型如果只在机器人数据上微调，很容易忘掉 web 预训练学到的语义概念，所以训练 recipe 必须同时保留 web data 和 robot data。
+
+## 从主图看 RT-2 的桥在哪里
 
 ![RT-2 overall 原论文图](../../assets/images/paper-deep-dives/embodied-ai/rt2/figure-1-overview.png){ width="920" }
 
-<small>图源：[RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control](https://arxiv.org/abs/2307.15818)，Figure 1。原图表达 web-scale VLM 数据和机器人 trajectory 数据共同训练，模型最终输出 action token。本站用它说明：RT-2 的桥梁是把动作变成可由 VLM 解码的 token，而不是只在视觉端加机器人图片。</small>
+<small>图源：[RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control](https://arxiv.org/abs/2307.15818)，Figure 1。原图表达 web-scale vision-language data 和 robot trajectory data 共同训练，模型最终输出 action token。本站读法是先看右侧输出：RT-2 的关键桥梁不是多模态输入，而是把动作放进 VLM 的 token 生成接口。</small>
 
-读这张图时，先看数据混合：一边是 web-scale vision-language data，一边是 robot trajectory data。再看输出：不是自然语言答案，而是机器人动作。RT-2 的创新点就在这两端被同一个模型接口连接。
+这张图的读法要从“输出”开始。普通 VLM 输出 caption、答案或推理文本；RT-2 输出动作。于是训练样本可以写成类似 VQA 的格式：
 
-## 动作 token 的意义和代价
+```text
+Q: what action should the robot take to [task instruction]?
+A: terminate dx dy dz drx dry drz gripper
+```
 
-动作 token 让 VLM 可以复用语言建模框架，但它也把控制问题变成离散化问题。连续动作的精度、频率、坐标系、夹爪开合和执行延迟，都要被编码进 token 设计和 controller。
+这里的 `A` 看起来是一串文本，但每个位置都对应机器人执行空间里的量。这个设计让 RT-2 可以沿用 next-token prediction 框架，同时把机器人动作接到同一个 decoder 上。
 
-这意味着 RT-2 的成功不能被理解为“文本模型直接控制机器人”。更准确地说，是视觉语言表示、机器人数据、动作离散化和低层控制器共同组成了控制系统。
+## 动作 tokenization：把连续控制量压进 256 个 bin
 
-一个容易忽略的细节是，动作 token 进入语言模型以后，训练目标看起来像 next-token prediction，但物理后果并不像文本那样可撤销。文本 token 生成错了可以继续解释或改写，机器人动作生成错了可能已经碰到桌沿、推倒物体或让任务状态不可逆。因此 RT-2 的动作 token 设计必须和安全限幅、低层控制器、episode reset、人工干预和失败标注一起看。
+RT-2 沿用 RT-1 的动作离散化思想。一个动作包含 6-DoF 末端执行器位移、夹爪伸展和一个 episode termination 命令。除 termination 以外的连续维度被均匀离散成 256 个 bin。可以把单步动作写成：
 
-这也是为什么读 RT-2 时不能只看“模型规模”和“VLM 底座”。更关键的问题是：动作被离散成多少 bin，控制频率是多少，训练数据里的动作来自什么机器人，部署时相机和坐标系是否一致，模型输出动作后是否还有 controller 做平滑、限幅和碰撞保护。
+\[
+a_t =
+\big[
+c_t,\Delta x_t,\Delta y_t,\Delta z_t,
+\Delta r^x_t,\Delta r^y_t,\Delta r^z_t,g_t
+\big]
+\]
 
-## 实验结果怎么读
+其中 \(c_t\) 是终止命令，\(g_t\) 是夹爪相关控制量，其余是位姿增量。连续维度会先映射到整数 bin：
+
+\[
+b^d_t =
+\left\lfloor
+255 \cdot
+\frac{\mathrm{clip}(a^d_t,l_d,u_d)-l_d}{u_d-l_d}
+\right\rceil
+\]
+
+然后把这些 bin 写成模型可以生成的 token 序列。论文里 PaLI-X 恰好有整数 token，可以直接把 bin 关联到对应整数；PaLM-E 没有这种方便表示，就覆盖 256 个低频 token 作为动作词表。这个细节很重要，因为它说明 action token 不是自然语言里的“动作描述”，而是机器人控制接口里的离散数值。
+
+动作 tokenization 带来两个收益：训练接口统一，VLM 可以像预测文本一样预测动作；输出空间受控，部署时可以约束模型只生成合法动作 token。但它也带来代价：动作精度受 bin 数和动作范围影响，控制频率受大模型推理延迟影响，坐标系和低层 controller 仍然决定真实执行效果。
+
+## Co-fine-tuning：为什么不能只拿机器人数据微调
+
+RT-2 的训练不是简单地把 VLM 拿来在 robot dataset 上继续训。论文强调 co-fine-tuning：训练 batch 里同时保留原始 web vision-language data 和机器人动作数据。一个简化的目标可以写成：
+
+\[
+\mathcal{L}
+=
+\mathbb{E}_{(I,x,a)\sim D_{\text{robot}}}
+\left[-\sum_j \log p_\theta(y_j \mid I,x,y_{<j})\right]
++
+\lambda\,
+\mathbb{E}_{(I,x,t)\sim D_{\text{web}}}
+\left[\mathcal{L}_{\text{VLM}}\right]
+\]
+
+第一项让模型学会在机器人图像和任务指令下输出动作 token；第二项继续维护 web-scale VLM 的视觉语言能力。这里的关键不是公式形式，而是训练信号的分工：robot data 绑定动作后果，web data 保住语义概念。论文的 ablation 也说明，co-fine-tuning 在泛化上优于只用 robot data 微调，而从零训练大模型表现很差。
+
+这解释了为什么 RT-2 能做一些机器人数据里没直接出现过的语义任务。它迁移的主要是“看懂物体、类别、关系、标志、人脸或简单推理”的能力，而不是凭空学会新的运动技能。机器人没有示范过擦桌子、折毛巾、复杂工具使用，web pretraining 不会自动变成稳定 motor skill。
+
+## 输出约束和实时控制：系统问题不能被模型名盖住
+
+在普通 VLM 里，输出一个罕见词或多写一句解释通常不是灾难；在机器人控制里，一个非法动作 token 或延迟过大的动作都可能破坏任务状态。RT-2 因此在机器人动作任务上约束输出词表，只允许采样合法 action tokens。
+
+另一个现实问题是推理频率。RT-2 使用的模型可以达到 55B 参数量级，论文通过多 TPU 云服务支持真实机器人闭环控制；55B PaLI-X 版本约 1-3 Hz，较小的 5B 版本约 5 Hz。这个频率提醒我们：RT-2 的动作不是高频电机控制，它更像低频视觉语言策略，再由机器人低层控制器执行和稳定化。
+
+所以 RT-2 的系统边界必须写清楚：VLA 输出动作 token，不等于它替代了安全限幅、坐标变换、控制器、碰撞保护、reset 机制和人工接管。
+
+## 泛化实验：seen 分数不是论文主张的全部
 
 ![RT-2 generalization 原论文图](../../assets/images/paper-deep-dives/embodied-ai/rt2/figure-4-generalization.png){ width="860" }
 
-<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 4。原图展示 RT-2 在 seen、unseen 和 web knowledge 相关任务上的泛化表现。本站用它说明：RT-2 的主张是 web knowledge transfer，而不是单纯提升已见任务成功率。</small>
+<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 4。原图比较 RT-2 和 baselines 在 seen tasks、unseen objects、unseen backgrounds、unseen environments 上的表现。本站读法是把 seen 和 unseen 分开：seen tasks 主要检验机器人技能学习，unseen categories 才更接近 web knowledge transfer 的核心 claim。</small>
 
-这张图要看任务类别。若只在 seen tasks 上提升，说明机器人数据训练更好；若在需要语义知识的 unseen tasks 上提升，才更接近论文核心 claim。读 RT-2 时应把“机器人技能泛化”和“web knowledge 泛化”分开。
+论文在真实机器人上做了大约 6000 条 evaluation trajectories。seen tasks 延续 RT-1 的任务集合，超过 200 个任务；unseen evaluations 关注新物体、新背景和新环境，超过 280 个任务。图 4 和附录表格显示，RT-2 在 seen tasks 上和 RT-1 接近，但在 unseen average 上明显更强：RT-2-PaLI-X-55B 和 RT-2-PaLM-E-12B 的 unseen average 都约为 62，而 RT-1 约为 32、MOO 约为 35。
+
+这个结果的含义不是“模型更大所以什么都会”，而是：web-scale VLM 的语义和视觉概念，在动作 token 接口和机器人示范绑定之后，能帮助机器人把已学过的操作技能部署到更多未见条件里。技能本身仍然来自 robot data；泛化能力则来自 web data 与 robot data 的组合。
+
+## Emergent eval：迁移的是语义，不是新动作物理
 
 ![RT-2 emergent examples](../../assets/images/paper-deep-dives/embodied-ai/rt2/figure-2-emergent-examples.png){ width="860" }
 
-<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 2。原图展示模型利用语义知识执行新指令的例子。本站用它提醒：这些例子适合建立直觉，但仍要回到系统性评测和失败分析。</small>
+<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 2。原图展示 RT-2 处理语义理解、关系判断和人类识别相关指令的例子。本站读法是把这些例子当作“语义迁移”证据，而不是当作所有运动能力都泛化的证据。</small>
 
-## RT-2 的工程启发
+RT-2 把 emergent capabilities 分成三类：symbol understanding、reasoning、human recognition。比如“把苹果移动到同色杯子旁边”需要视觉关系和颜色匹配；“move X near the sum of two plus one”需要简单数学；“把可乐罐移给戴眼镜的人”需要人类属性识别。附录表格里，RT-2-PaLI-X-55B 的 emergent average 约 60，RT-1 约 17，VC-1 约 11。
 
-| 启发 | 工程含义 |
-| --- | --- |
-| 大规模图文知识能帮机器人 | 但必须通过动作接口和真实执行验证。 |
-| 动作 token 是关键桥梁 | 需要清楚离散化、频率、坐标系和 controller。 |
-| 数据混合决定迁移能力 | web data 和 robot data 的比例、格式和目标都重要。 |
-| 泛化要分桶看 | seen、unseen、semantic reasoning、physical skill 不能混成一个分数。 |
+这里必须保持克制。emergent 不是说机器人自动学会新运动，而是说 VLM 的语义概念能影响动作选择。论文自己也写得很清楚：transfer 不应被期待为产生新的 robotic motions，而更可能迁移 semantic and visual concepts。
 
-## 边界
+![RT-2 emergent ablation 原论文图](../../assets/images/paper-deep-dives/embodied-ai/rt2/figure-6-emergent-ablation.png){ width="860" }
 
-RT-2 仍然依赖真实机器人数据和固定控制接口。它没有解决所有低层控制、接触稳定、长时任务规划和安全恢复问题。动作 token 也不天然适合所有机器人和所有精细控制任务。
+<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 6。原图左侧比较 emergent skill eval，右侧做模型大小和训练策略 ablation。本站读法是看两个因果线索：更大模型带来更强泛化，co-fine-tuning 比只用机器人数据微调更能保留 web 概念。</small>
+
+图 6 右侧的 ablation 很适合判断“到底是哪里有用”。5B 从零训练在 unseen average 上很低；5B 只微调和 5B co-fine-tuning 有改进；55B co-fine-tuning 最强。这说明 RT-2 的收益来自三件事叠加：预训练 VLM、动作接口、机器人和 web 数据共训练。只拿其中一个词做口号，都会漏掉机制。
+
+## Chain-of-thought：计划文本能帮语义分解，但不是完整规划器
+
+![RT-2 chain-of-thought rollouts](../../assets/images/paper-deep-dives/embodied-ai/rt2/figure-7-cot-rollouts.png){ width="860" }
+
+<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 7。原图展示 RT-2-PaLM-E 在 chain-of-thought prompting 下先生成中间计划，再输出动作相关行为。本站读法是把它看成 VLM 语义分解能力接入动作接口，而不是把它等同于有搜索、有约束、有失败恢复的 classical planner。</small>
+
+CoT 对 RT-2 的意义在于让模型先把指令拆成语义步骤，再落到动作选择。例如“我困了，拿一个能帮我的饮料”可以先推到能量饮料，再执行拿取。这个能力很有启发，但它仍然受限于单步/短程动作接口、训练数据覆盖和环境可观测性。复杂长时任务仍需要显式状态、记忆、检查点、失败恢复和安全约束。
+
+## 失败图比成功图更应该认真读
+
+![RT-2 failure dynamics](../../assets/images/paper-deep-dives/embodied-ai/rt2/figure-9-failure-dynamics.png){ width="860" }
+
+<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 9。原图展示模型在未见物体 dynamics 上失败的真实案例。本站读法是把失败归因到动作后果和物理交互：模型可能知道物体是什么，也会选择合理目标，但不一定掌握这个物体如何被推、滚、抓或稳定放置。</small>
+
+论文列出的失败边界包括：按具体部件抓取物体，比如抓把手；机器人数据里没有的新动作类型，比如用毛巾擦拭或工具使用；精细灵巧动作，比如折毛巾；需要多层间接推理的长链任务。这些边界和 RT-2 的主张并不矛盾，反而说明它真正迁移的是视觉语义，而物理技能仍需要真实机器人数据和控制接口来学习。
+
+## 阅读结论
+
+RT-2 的知识含量集中在三个接口。第一，action tokenization 把连续动作变成 VLM 可以生成的离散 token，但也引入精度、频率和控制边界。第二，co-fine-tuning 同时保留 web data 和 robot data，让模型既不忘语义，也能把语义落到动作。第三，评测必须拆成 seen、unseen 和 emergent：seen 检验已有机器人技能，unseen 检验视觉语义迁移，emergent 更偏概念和简单推理，不代表新运动技能凭空出现。
+
+看后续 VLA 论文时，可以沿着 RT-2 这条线追问：动作到底输出在哪一层？连续控制量如何离散或 chunk？web data 和 robot data 怎样混合？模型输出后是否有低层控制器和安全约束？评测有没有把语义泛化、物理技能泛化和长时任务泛化分开？
 
 ## 外部精读
 
-- [DeepMind RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)
 - [RT-2 paper](https://arxiv.org/abs/2307.15818)
+- [RT-2 project page](https://robotics-transformer2.github.io/)
+- [Google DeepMind RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)
 - [RT-1 paper](https://arxiv.org/abs/2212.06817)
-- [Open X-Embodiment](https://arxiv.org/abs/2310.08864)
-- [Octo](https://arxiv.org/abs/2405.12213)
+- [PaLM-E paper](https://arxiv.org/abs/2303.03378)
+- [Open X-Embodiment / RT-X project page](https://robotics-transformer-x.github.io/)

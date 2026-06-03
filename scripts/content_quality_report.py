@@ -30,6 +30,8 @@ NUMBERED_SEQUENCE_PAGES = {
     Path("files/training/page-by-page-visual-guide.md"),
 }
 
+LEGACY_ENTRY_MARKER = "保留给旧链接和搜索结果使用；它不再作为"
+
 SHORT_EXEMPT_PREFIXES = (
     "files/foundations/",
     "files/paper-guides/",
@@ -72,6 +74,9 @@ GENERIC_SYMBOL_EXPLANATION_RE = re.compile(
 ADMONITION_RE = re.compile(r"^(!!!|\?\?\?)\s+", re.MULTILINE)
 MERGED_PROMPT_BOX_RE = re.compile(r"!!!\s+\w+\s+[\"']合并提示[\"']|合并提示")
 READING_POSITIONING_RE = re.compile(r"读法定位")
+AUTO_GENERATED_HINT_RE = re.compile(
+    r"> \*\*(踩坑原因|算法视角)\*\*|<!-- \[融合：(算法基础|复杂度分析)\]"
+)
 
 
 @dataclass
@@ -256,6 +261,7 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
     short_exempt = (
         rel.name == "index.md"
         or path in SHORT_EXEMPT_PAGES
+        or LEGACY_ENTRY_MARKER in text
         or any(
         path.as_posix().startswith(prefix) for prefix in SHORT_EXEMPT_PREFIXES
         )
@@ -283,6 +289,9 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
 
     if MERGED_PROMPT_BOX_RE.search(searchable_text):
         flags.append("template:merged-prompt-box")
+
+    if AUTO_GENERATED_HINT_RE.search(searchable_text):
+        flags.append("template:auto-generated-hint-block")
 
     first_chunk = "\n".join(searchable_text.splitlines()[:80])
     if READING_POSITIONING_RE.search(first_chunk):

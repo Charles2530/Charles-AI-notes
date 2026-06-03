@@ -2,7 +2,6 @@
 
 世界模型与规划有一条重要线索：规划不一定只能写成显式搜索或值函数优化，也可以写成推断问题。与此同时，复杂动作空间直接规划太难，很多系统会把动作片段压缩成潜在动作或技能代码，再在更紧凑的空间里做推理。
 
-
 这页连接三件事：为什么奖励最大化可以改写成后验推断，为什么潜在动作适合高维控制，以及这条路线如何和 `WM / WAM / VAM` 接起来。
 
 ## 规划为什么可以写成推断
@@ -13,20 +12,17 @@
 \max_\pi \mathbb{E}_{\pi}\left[\sum_{t=1}^{T} r(s_t,a_t)\right]
 \]
 
-
 `Planning as Inference` 会引入“最优性变量” \(\mathcal{O}_t\)，把高奖励轨迹视作更高后验概率的轨迹：
 
 \[
 p(a_{1:T},s_{1:T}\mid \mathcal{O}_{1:T}=1)
 \]
 
-
 一个常见构造是：
 
 \[
 p(\mathcal{O}_t=1\mid s_t,a_t)\propto \exp(r(s_t,a_t))
 \]
-
 
 于是轨迹后验可写成：
 
@@ -36,15 +32,14 @@ p(\tau\mid \mathcal{O}_{1:T}=1)
 p(\tau)\prod_{t=1}^{T}\exp(r(s_t,a_t))
 \]
 
-
 取对数后，奖励项推动轨迹更优，轨迹先验 \(p(\tau)\) 起到正则化作用。这也是为什么 planning as inference 常和 behavior prior、KL-regularized control、maximum-entropy RL 放在一起讨论。
 
 ![Uncertain planning with latent variables](../assets/images/paper-deep-dives/world-models/jepa/figure-17-uncertain-planning.png){ width="860" }
 
 <small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 17。原论文图意：在不确定环境中，latent variables 表达不能从先验观测推出的预测信息；规划时可以采样多条 latent trajectory，并通过均值、方差或风险敏感目标选择动作序列。</small>
 
-!!! note "难点解释：为什么规划要保留多种未来"
-    如果世界模型只给一个平均未来，planner 会误以为环境是确定的；但真实场景里可能有遮挡目标、未观测意图或随机干扰。latent variable 让模型保留多条可能轨迹，规划器就能比较“平均收益高但风险大”和“收益略低但更稳”的选择。这也是 planning as inference 比单纯最大化一条 reward 轨迹更自然的地方。
+**难点解释：为什么规划要保留多种未来。**
+如果世界模型只给一个平均未来，planner 会误以为环境是确定的；但真实场景里可能有遮挡目标、未观测意图或随机干扰。latent variable 让模型保留多条可能轨迹，规划器就能比较“平均收益高但风险大”和“收益略低但更稳”的选择。这也是 planning as inference 比单纯最大化一条 reward 轨迹更自然的地方。
 
 ## 这个视角对世界模型有什么用
 
@@ -63,7 +58,6 @@ p(o_t\mid s_t),\qquad
 p(r_t\mid s_t,a_t)
 \]
 
-
 在此基础上引入最优性变量，规划就可以变成隐状态轨迹上的后验推断。经典 `WM` 更强调“给定动作后世界怎么变”，planning as inference 进一步问：“在这些世界演化规律之上，什么动作后验最像成功轨迹？”
 
 这个视角的价值是，它天然容纳不确定性、行为先验、约束和部分可观测状态，不必把规划、状态估计和动作先验拆成完全独立的问题。
@@ -77,7 +71,6 @@ p(r_t\mid s_t,a_t)
 \[
 z_{1:K} \rightarrow a_{1:T}
 \]
-
 
 这样 planner 不必在每个细粒度控制量上搜索，而是在“接近把手”“抓取并提起”“重新观察”“调用工具并检查结果”这类更高层动作单元上推理。
 

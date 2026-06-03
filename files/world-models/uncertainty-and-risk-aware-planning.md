@@ -2,7 +2,6 @@
 
 世界模型如果只输出一个“最可能的未来”，在高风险决策里往往不够。机器人、自动驾驶和复杂 agent 系统真正关心的不只是平均回报最大，而是在不确定未来里哪些动作更安全，哪些动作期望高但尾部风险不可接受。
 
-
 不确定性建模与风险敏感规划，是把世界模型从平均预测器提升为安全决策工具的关键。
 
 ## 硬证据模块：风险页要优先证明“不漏报危险”
@@ -27,7 +26,6 @@ mini-chain 中 `wm_mini_003` 就是风险页的反例：`fast_grasp` 被模型�
 \max_\pi \mathbb{E}\left[\sum_t \gamma^t r_t\right]
 \]
 
-
 策略可能偏向高收益但高风险动作。自动驾驶里激进并线大多数情况下节省时间，但少数情况下可能造成严重事故；机器人快速抓取平均更快，但偶尔会撞翻易碎物体。
 
 研究问题常是“平均表现能不能更好”，部署问题常是“最坏那几次会不会出事”。世界模型一旦用于规划，这个差别必须显式建模。
@@ -51,7 +49,6 @@ mini-chain 中 `wm_mini_003` 就是风险页的反例：`fast_grasp` 被模型�
 p(s_{t+1:t+H}\mid s_t,a_{t:t+H-1})
 \]
 
-
 而不是只估计均值。可通过粒子采样、隐变量采样、多头模型、diffusion rollout 或 ensemble 得到多条未来。
 
 单一均值未来会误导规划。例如：
@@ -65,8 +62,8 @@ p(s_{t+1:t+H}\mid s_t,a_{t:t+H-1})
 
 <small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 17。原论文图意：用 latent variables 表达不可直接从当前观测确定的未来分支，规划时保留多条可能 trajectory，而不是压成单一未来。</small>
 
-!!! note "图解：风险规划要保留未来分叉"
-    图里的 latent variable 可以理解成“现在还看不见但会影响未来的因素”。如果直接取平均，危险分支可能被抹平；如果保留多个 latent trajectory，planner 才能比较平均收益、尾部风险和信息获取动作。对机器人和驾驶来说，真正有价值的不是最漂亮的未来，而是能把危险分支提前显出来。
+**风险规划要保留未来分叉。**
+图里的 latent variable 可以理解成“现在还看不见但会影响未来的因素”。如果直接取平均，危险分支可能被抹平；如果保留多个 latent trajectory，planner 才能比较平均收益、尾部风险和信息获取动作。对机器人和驾驶来说，真正有价值的不是最漂亮的未来，而是能把危险分支提前显出来。
 
 ## Ensemble 与不确定性分解
 
@@ -79,7 +76,6 @@ p(s_{t+1:t+H}\mid s_t,a_{t:t+H-1})
 +
 \mathrm{Var}_{M}\left(\mathbb{E}[Y\mid M]\right)
 \]
-
 
 第一项更接近 aleatoric uncertainty，第二项更接近 epistemic uncertainty。实际系统未必严格分离，但这个式子提醒我们：预测发散不一定是环境随机，也可能是模型之间意见不一致。
 

@@ -2,10 +2,7 @@
 
 `MTP`（Multi-Token Prediction）和 `speculative decoding` 经常一起出现，但它们不是同一件事。`MTP` 首先是训练目标或模型结构设计，让模型在一个位置上学习多个未来 token；投机解码首先是推理加速算法，用便宜路径草拟，再用目标模型并行验证；`Self-speculative decoding` 才是二者交汇的系统形态，草稿路径来自模型自身的中间层、辅助头或 MTP 模块。
 
-
 这页放在训练专题里，是因为一旦决定训练 `MTP`，改变的不只是 serving 策略，还包括 loss、checkpoint 结构、评测口径和未来推理接口。推理侧实现细节可继续看 [缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 概念拆分
 
@@ -16,7 +13,6 @@
 =
 - \sum_t \log p_\theta(x_{t+1}\mid x_{\le t})
 \]
-
 
 `MTP` 的核心变化是让同一个位置同时监督多个未来 token：
 
@@ -30,7 +26,6 @@
 \Big)
 \]
 
-
 其中 \(K\) 是预测深度，\(p_\theta^{(k)}\) 是第 \(k\) 个未来位置的预测头或预测模块，\(\lambda_k\) 是损失权重。
 
 投机解码回答的是另一个问题：如何减少逐 token 串行解码的主模型调用次数。它通常先用便宜路径 draft 出若干候选 token，再让目标模型一次性并行 verify，最后 accept 与目标模型一致的最长前缀，错误位置由目标模型修正。
@@ -38,17 +33,6 @@
 因此两者的关系是：`MTP` 可以提供内建 draft 能力，但 speculative decoding 不一定需要 MTP；反过来，模型训练了 MTP，也不代表线上一定能提速。
 
 ## 从 NTP 到 MTP
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
-> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
->
-> 延伸阅读：[18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《18. Speculative Decoding | 投机解码：打破推理的访存瓶颈 (Speculative Decoding)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html) |
-| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 MTP 的训练价值不只是“多预测几个 token”。它改变了 hidden state 必须承载的信息：模型不只要为 \(t+1\) 做准备，还要为更远的未来保留可解码结构。
 
@@ -84,14 +68,12 @@ Meta 的 `Better & Faster Large Language Models via Multi-token Prediction` 更�
 \frac{\mathbb{E}[A]}{C_{\text{draft}} + C_{\text{verify}} + C_{\text{overhead}}}
 \]
 
-
 \[
 \text{Speedup}
 \approx
 \frac{\mathbb{E}[A] \cdot C_{\text{decode}}}
 {C_{\text{draft}} + C_{\text{verify}} + C_{\text{overhead}}}
 \]
-
 
 其中 \(\mathbb{E}[A]\) 是每轮平均接受 token 数，\(C_{\text{draft}}\) 是草稿路径开销，\(C_{\text{verify}}\) 是目标模型验证开销，\(C_{\text{overhead}}\) 包括 KV 管理、调度、fallback 和 batch 组织成本。
 

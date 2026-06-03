@@ -2,23 +2,9 @@
 
 基础预训练结束后，真正决定模型“像不像产品”的，往往是后训练：指令跟随、偏好对齐、工具使用、拒答边界、风格控制和领域适配。后训练的核心竞争力越来越不是单个算法名词，而是能否持续找到高价值样本、生成有效候选、用 judge 扩大评价吞吐、再把结果稳定回流到 SFT、偏好训练、reward model 和回归集。
 
-
 这页建议和 [偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md)、[可观测性与在线评测](../inference/observability-and-online-evaluation.md) 一起读。它们分别覆盖偏好数据风险、实验方法学和线上回流。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 一、后训练为什么是数据引擎
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
-> **算法视角**：PPO / DPO 都是在候选回答之间定义偏好信号；PPO 通过策略更新和 KL 约束控制模型漂移，DPO 则把 chosen / rejected 对直接转成 pairwise loss。
->
-> 延伸阅读：[12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《12. RLHF PPO Memory | RLHF 对齐：PPO 算法的核心 Loss 与显存流转 (RLHF PPO)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| DPO pair loss | $O(BL)$ logprob 评估 | 需要 policy / reference 的中间结果 | $B$ 为样本对数，$L$ 为序列长度；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/12_RLHF_PPO_Memory.html) |
-| PPO rollout + update | 多次模型前向 / 反向 | 常同时保留 policy、reference、reward 路径 | 成本主要来自多模型调用、采样和 KL 监控。 |
 
 预训练更像建立通用表示底座，后训练更像持续雕刻行为边界。它依赖的不是一次性数据包，而是一条长期运行的闭环：收集线上/离线 prompt、上下文和失败日志，聚类高频问题和长尾异常，生成多个候选回答或工具轨迹，用 judge、规则和程序信号粗筛，对高价值样本人审，再导出到 SFT、DPO/RLAIF、reward model、judge 训练和回归集。新模型上线后，还要继续观察同类问题是否下降。
 
@@ -29,7 +15,6 @@ $$
 =
 \mathcal{D}_t \cup \mathcal{F}(\text{traffic}, \text{candidates}, \text{judge}, \text{human}, \text{online signals}).
 $$
-
 
 这里的关键是“持续”。如果没有稳定的数据生产线，后训练就会变成几次孤立对齐实验。
 
@@ -64,7 +49,6 @@ Judge 的作用是把部分昂贵人审转成可规模化评价。给定输入 $
 $$
 J(x, y_a, y_b) \in \{a,b\}
 $$
-
 
 也可以输出多维分数 $s(x,y)$。但 judge 本质上是偏好近似器，不是世界真理。
 

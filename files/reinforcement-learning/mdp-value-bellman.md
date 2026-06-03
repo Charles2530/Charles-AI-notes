@@ -4,6 +4,8 @@
 
 如果这三件事没有讲清楚，后面的 PPO、GRPO、Dreamer、Offline RL 和世界模型都会变成一串名词。反过来，只要你能读懂 Bellman 在做什么，就能看出大多数 RL 方法到底是在学 policy、学 value、学 transition，还是在用世界模型替代真实环境试错。
 
+先用一个很小的“未来账本”例子进入。机器人面前有两条路：左边路近，但地上有水，可能打滑；右边路远，但更稳。当前 reward 可能会偏向左边，因为它离目标更近；value 会把后面的风险也算进去：如果打滑会导致任务失败，左边当前看起来赚，长期反而亏。Bellman 方程做的事，就是把“下一步拿到什么”和“下一步之后还剩多少机会”合成一笔账，再把这笔账反推回当前状态和动作。
+
 ## MDP 在描述什么
 
 MDP，全称 Markov Decision Process，通常写成：
@@ -112,6 +114,15 @@ R(s,a)+\gamma V^\pi(s')
 3. 当前状态的价值等于当前奖励 \(R(s,a)\)，加上下一状态价值 \(V^\pi(s')\) 的折扣。
 
 Bellman 的厉害之处在于它把一个长远问题变成局部递归。你不用等到整局结束才知道当前状态有没有价值，可以用“下一步奖励 + 下一状态价值估计”来更新当前价值。这就是 bootstrap。
+
+回到上面的两条路例子，Bellman 不是只问“左边现在离目标近不近”，而是问：
+
+```text
+左边价值 = 左边这一步的奖励 + 折扣 * 打滑或成功后的状态价值
+右边价值 = 右边这一步的奖励 + 折扣 * 稳定前进后的状态价值
+```
+
+如果环境模型或历史经验告诉你左边打滑概率高，那么左边的下一状态价值会下降。这样当前动作选择就不会被眼前一步奖励骗走。世界模型、critic、risk head 和 planner 都在用不同方式估这笔未来账。
 
 Q-value 的 Bellman 形式是：
 
@@ -254,6 +265,6 @@ Offline RL 最难的是分布外动作。模型可能会选择数据里几乎没
 - [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)：DQN、experience replay、target network 和 value 曲线的原始来源。
 - [Offline RL Tutorial, Review, and Perspectives](https://arxiv.org/abs/2005.01643)：理解 offline RL、分布外动作和保守约束的好入口。
 
-## 本页结论
+## 阅读结论
 
 MDP 定义决策问题，policy 定义怎么行动，reward 评价当前反馈，value 把未来机会压成数字，Bellman 方程把长期未来拆成可递归学习的局部目标。世界模型并没有绕开这些概念，它只是把真实 transition 换成可学习的 \(\hat P_\theta\)，让 agent 能在执行前估算动作后果。

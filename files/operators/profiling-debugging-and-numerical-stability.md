@@ -2,23 +2,9 @@
 
 很多 kernel 优化最后不是败在“不会写更快代码”，而是败在三件事上：没有正确测量，优化方向从一开始就错了；没有可靠验证，性能上去了但结果悄悄错了；没有处理数值稳定性，速度和精度之间出现不可接受的偏差。
 
-
 成熟算子工程不是“会写 kernel”，而是建立从热点识别、性能定位、正确性验证到数值验收的完整闭环。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## Profiling 先于优化
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/05_Triton_Autotune_and_Profiling.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《05. Triton Autotune and Profiling | Triton 性能调优与基准测试 (Autotune & Profiling)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/05_Triton_Autotune_and_Profiling.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 AI 系统里的直觉经常误导人：
 
@@ -62,22 +48,22 @@ nsys profile --trace=cuda,cudnn,cublas,osrt,nvtx -o trace python train.py
 
 <small>图源：[Nsight Systems Exposes New GPU Optimization Opportunities](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，Figure 2。博客截图意：在 GPU kernel 事件上可以回溯到对应的 CPU-side CUDA API launch，从而把 GPU 端空洞和 host 端调度原因连起来。</small>
 
-!!! note "图解：从 GPU 事件追回 CPU 调度"
-    做算子优化时，不要只盯 GPU row。一个 kernel 后面的空洞，可能来自 CPU 线程没及时发起下一次 launch，也可能是框架 runtime、Python、数据准备或锁等待挡住了调度。Nsight Systems 的价值就在于把 GPU stream、CUDA API、CPU thread 和 NVTX range 放到同一条时间线上。
+**从 GPU 事件追回 CPU 调度。**
+做算子优化时，不要只盯 GPU row。一个 kernel 后面的空洞，可能来自 CPU 线程没及时发起下一次 launch，也可能是框架 runtime、Python、数据准备或锁等待挡住了调度。Nsight Systems 的价值就在于把 GPU stream、CUDA API、CPU thread 和 NVTX range 放到同一条时间线上。
 
 ![Nsight Systems synchronization calls 博客截图](../assets/images/tools/nsight-systems/synchronization-calls.png){ width="720" }
 
 <small>图源：[Nsight Systems Exposes New GPU Optimization Opportunities](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，Figure 3。博客截图意：CPU 端显式同步可能让原本可异步排队的 GPU 工作被切开，形成不必要等待。</small>
 
-!!! note "图解：误同步会伪装成 kernel 慢"
-    如果每个小算子后面都接 `cudaDeviceSynchronize`、`cudaStreamSynchronize`、阻塞式 D2H copy 或框架里的隐式 sync，timeline 会变成“跑一点、停一下”。这时先删同步、改事件依赖或重排 stream，往往比重写 kernel 更有效。
+**误同步会伪装成 kernel 慢。**
+如果每个小算子后面都接 `cudaDeviceSynchronize`、`cudaStreamSynchronize`、阻塞式 D2H copy 或框架里的隐式 sync，timeline 会变成“跑一点、停一下”。这时先删同步、改事件依赖或重排 stream，往往比重写 kernel 更有效。
 
 ![Nsight Systems NVTX timeline 博客截图](../assets/images/tools/nsight-systems/nvtx-timeline.png){ width="820" }
 
 <small>图源：[Nsight Systems Exposes New GPU Optimization Opportunities](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，Figure 6。博客截图意：NVTX range 可以把应用阶段标到 timeline 上，让 kernel、通信和 CPU 逻辑更容易归因。</small>
 
-!!! tip "实践习惯：给 trace 加语义"
-    对训练和推理系统，建议用 NVTX 标出 `dataloader`、`prefill`、`decode`、`attention`、`moe_dispatch`、`all_reduce`、`optimizer_step`、`graph_capture` 等阶段。没有 NVTX 的 trace 只能看到一堆 kernel 名；有 NVTX 后，才能把“哪个业务阶段慢”与“哪个 kernel / copy / collective 慢”对齐。
+**实践习惯：给 trace 加语义。**
+对训练和推理系统，建议用 NVTX 标出 `dataloader`、`prefill`、`decode`、`attention`、`moe_dispatch`、`all_reduce`、`optimizer_step`、`graph_capture` 等阶段。没有 NVTX 的 trace 只能看到一堆 kernel 名；有 NVTX 后，才能把“哪个业务阶段慢”与“哪个 kernel / copy / collective 慢”对齐。
 
 ## Microbenchmark 要可信
 
@@ -133,7 +119,6 @@ Softmax 通常写成：
 \mathrm{softmax}(x)_i =
 \frac{e^{x_i-m}}{\sum_j e^{x_j-m}},\quad m=\max_j x_j
 \]
-
 
 减去最大值是为了避免指数爆炸。FlashAttention 这类分块实现还要维护在线最大值与归一化项，既减少 I/O，又保持数值精确。LayerNorm、RMSNorm、variance 计算则需要关注 Welford、FP32 accumulation 或其他稳定统计方法。
 

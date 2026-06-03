@@ -1,39 +1,84 @@
 # 论文精读旧入口
 
-这个页面保留给旧链接和搜索结果使用；它不再作为必读总览页。现在站点优先让读者直接进入一篇能独立讲清楚问题的文章。
+这个页面只保留给旧链接和搜索结果使用，不再作为必读总览页。真正的阅读入口在顶部导航的“论文精读”分组里；那里已经按领域直接列出全部论文页。
 
-## 推荐直接进入
+## 基础与训练
 
-- [ZeRO：零冗余优化器](foundations/zero.md)
-- [Dreamer：想象中训练控制](world-models/dreamer.md)
-- [RT-2：VLM 到机器人动作](embodied-ai/rt2.md)
+- [ZeRO：为什么数据并行会浪费这么多显存](foundations/zero.md)
 - [Megatron-LM：Tensor Model Parallel](foundations/megatron-lm.md)
-- [EAGLE-3：投机推理加速](inference/eagle-3.md)
+- [MagiAttention：超长上下文分布式 Attention](foundations/magiattention.md)
+- [Attn-QAT：4-bit Attention 量化感知训练](foundations/attn-qat.md)
+- [Muon：LLM 预训练优化器](foundations/muon-is-scalable.md)
+- [SLA / SLA2：DiT 稀疏线性 Attention](foundations/sla-sparse-linear-attention.md)
+- [GPU Utilization：为什么 100% 不等于训练跑满](foundations/gpu-utilization-misleading.md)
 
-## 统一多模态世界模型专题
+## 推理系统
 
-这组页面按 LingBot-World 的证据写法读：每篇都保留关键原论文图，英文表格尽量按原格式重绘，并把训练数据、token、loss、阶段、推理成本和评测边界写清楚。Lance 已有独立专题页，本轮不重复新增，只作为同主题参照。
+- [EAGLE：为什么 draft 不一定要是小模型](inference/eagle.md)
+- [EAGLE-2：动态 Draft Tree](inference/eagle-2.md)
+- [EAGLE-3：训练时见过自己犯错](inference/eagle-3.md)
+- [KVSlimmer：非对称 KV 合并](inference/kvslimmer.md)
+- [Low-bit LLM Survey：低比特大模型系统](inference/low-bit-llm-survey.md)
+- [Fast-FoundationStereo：实时 Zero-Shot 双目匹配](inference/fast-foundation-stereo.md)
 
-| 页面 | 一句话定位 | 重点看 |
-| --- | --- | --- |
-| [BAGEL](world-models/bagel.md) | 大规模交错多模态预训练里的 MoT 底座与世界建模涌现 | MoT、双视觉编码、video/web interleaved data、generalized causal attention |
-| [Emu3.5](world-models/emu3-5.md) | 用视觉语言 next-state prediction 做原生多模态世界学习器 | 13T+ pretraining、video frames + transcripts、SFT 世界任务、DiDA |
-| [Beyond Language Modeling](world-models/beyond-language-modeling.md) | 从零控制实验验证统一多模态预训练的表示、数据、MoE 和 scaling 规律 | RAE、Transfusion、action-conditioned video、MoE specialization、vision data hunger |
-| [Lance](world-models/lance.md) | 已有标杆页，用 shared interleaved context 和 dual expert pathways 统一图像/视频理解、生成和编辑 | MaPE、PT/CT/SFT/RL、LM head + flow head、cross-task data synergy |
+## 扩散生成
 
-## 候选延伸阅读
+- [Score SDE：连续时间生成过程](diffusion/score-sde.md)
+- [DPM-Solver++：Guidance 场景 ODE 求解器](diffusion/dpm-solver-plus-plus.md)
+- [DMD：一步扩散蒸馏](diffusion/dmd.md)
+- [DMD2：更稳的少步分布匹配蒸馏](diffusion/dmd2.md)
+- [Phased DMD：分阶段少步蒸馏](diffusion/phased-dmd.md)
+- [AnyFlow：任意步视频扩散蒸馏](diffusion/anyflow.md)
+- [CausVid：流式自回归视频扩散](diffusion/causvid.md)
+- [Diffusion Forcing：next-token 与全序列扩散](diffusion/diffusion-forcing.md)
+- [Wan2.1：开源视频生成系统路线](diffusion/wan.md)
 
-| 论文 | 适合补到哪里 | 暂不展开原因 |
-| --- | --- | --- |
-| InternVL-U | 统一理解、推理、生成和编辑的轻量 UMM | 与 Lance/BAGEL 主题重合，先作为效率对照 |
-| UniVideo | 视频理解、生成和编辑统一框架 | 很适合后续视频专题，但本轮优先写世界模型底座 |
-| Uni-ViGU | 以 video generator 为基础反向统一理解 | 可接 LingBot-World 和 video generator 路线 |
-| Omni-Video | MLLM 产生连续 visual clues，再接 diffusion decoder | 属于 adapter / decoder 路线，和 BAGEL 的 bottleneck-free 路线对照 |
-| Janus-Pro | 解耦视觉编码的统一理解与生成模型 | 图像域经典 baseline，本轮作为前置背景 |
-| Transfusion | text NTP + image diffusion 的统一训练 recipe | Beyond Language Modeling 已把它作为实验底座展开 |
+## 世界模型
 
-## 新的阅读方式
+- [PlaNet：像素规划的潜变量动力学](world-models/planet.md)
+- [Dreamer：想象轨迹中训练控制策略](world-models/dreamer.md)
+- [DreamerV2：离散世界模型玩 Atari](world-models/dreamerv2.md)
+- [DreamerV3：latent 里训练策略](world-models/dreamerv3.md)
+- [JEPA：预测式表征学习路线](world-models/jepa.md)
+- [H-JEPA：层级 JEPA 与潜变量 EBM](world-models/h-jepa.md)
+- [V-JEPA：视频潜变量预测表征](world-models/v-jepa.md)
+- [Genie：无动作标签学可交互环境](world-models/genie.md)
+- [LWM：百万 token 视频语言世界模型](world-models/lwm.md)
+- [RingAttention：近无限上下文训练](world-models/ringattention.md)
+- [Self Forcing：对齐视频训练与推理](world-models/self-forcing.md)
+- [Towards Video World Models：视频世界模型门槛](world-models/towards-video-world-models.md)
+- [World Models Survey：具身世界模型综述](world-models/world-models-embodied-ai-survey.md)
+- [LingBot-World：视频基础模型到世界模拟器](world-models/lingbot-world.md)
+- [Lance：统一多模态世界建模启发](world-models/lance.md)
+- [BAGEL：交错多模态预训练](world-models/bagel.md)
+- [Emu3.5：原生多模态世界学习器](world-models/emu3-5.md)
+- [Beyond Language Modeling：多模态预训练与世界模型](world-models/beyond-language-modeling.md)
 
-如果你是第一次来，不需要按目录从头读。请选择一个具体问题：想理解概念，就读基础文章；想排查工程瓶颈，就读训练、推理、量化或算子文章；想看论文，就直接读论文精读页。
+## 具身智能
 
-本站后续会继续把长总览拆成专一文章，并在正文里加入外部高质量博客、论文和官方技术文档链接。
+- [RT-2：视觉语言模型接到机器人动作](embodied-ai/rt2.md)
+- [GR-2：Web 视频知识迁移到机器人](embodied-ai/gr2.md)
+- [GR-3：少样本长时程 VLA](embodied-ai/gr3.md)
+- [π0.5：开放世界 VLA](embodied-ai/pi05.md)
+- [SpatialVLA：3D 空间表征接入 VLA](embodied-ai/spatialvla.md)
+- [Video Prediction Policy：预测视觉表征训练策略](embodied-ai/video-prediction-policy.md)
+- [DreamZero：WAM 零样本策略](embodied-ai/dreamzero.md)
+- [VO-DP：语义-几何自适应扩散策略](embodied-ai/vodp.md)
+- [VGGT：前向恢复相机、深度、点云与轨迹](embodied-ai/vggt.md)
+- [Depth Anything：无标注数据释放单目深度](embodied-ai/depth-anything.md)
+- [Depth Anything V2：单目深度数据配方](embodied-ai/depth-anything-v2.md)
+- [Depth Anything 3：任意视角 3D 几何底座](embodied-ai/depth-anything-3.md)
+- [MapAnything：统一前向 Metric 3D 重建骨干](embodied-ai/mapanything.md)
+
+## 技术报告
+
+- [DeepSeek-V3：671B MoE、MLA 与 FP8](technical-reports/deepseek-v3.md)
+- [DeepSeek-R1：RL 激发推理能力](technical-reports/deepseek-r1.md)
+- [DeepSeek-V4：百万上下文与 FP4 后训练](technical-reports/deepseek-v4-pro.md)
+- [Qwen3：Thinking 模式、预训练与蒸馏](technical-reports/qwen3.md)
+- [Qwen3.5-Omni：Thinker-Talker 与全模态 Agent](technical-reports/qwen35-omni.md)
+- [Kimi K2：MuonClip、万亿 MoE 与 Agent 数据](technical-reports/kimi-k2.md)
+- [Gemini 2.5：动态 Thinking 与长上下文 Agent](technical-reports/gemini-2-5.md)
+- [GPT-4o System Card：Omni 安全与多模态评测](technical-reports/gpt-4o-system-card.md)
+- [InCoder-32B：工业代码模型与执行验证训练](technical-reports/incoder-32b.md)
+- [Nemotron 3 Super：Mamba-MoE 与异步 RL](technical-reports/nemotron-3-super.md)

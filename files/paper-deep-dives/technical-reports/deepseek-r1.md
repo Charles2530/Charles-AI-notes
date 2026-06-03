@@ -6,28 +6,14 @@ paper_topic: 技术报告
 
 # DeepSeek-R1：RL 激发推理能力
 
-
 这篇论文的核心不是“R1 分数很高”，而是：**有可靠 verifier 时，大模型可以通过大规模 RL 自己发现更长、更会反思和验证的推理行为。**
 
 报告有两条主线：`R1-Zero` 验证纯 RL 能否涌现推理行为，`R1` 再加入 cold-start SFT、两阶段 RL、rejection sampling 和安全/有用性对齐。
 
-!!! warning "阅读边界"
-    这里按论文/技术报告自述来读。训练成本、数据规模、RL 超参、benchmark 分数和安全结论都应理解为作者报告的系统结果，而不是第三方独立复现实验。
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
+**阅读边界。**
+这里按论文/技术报告自述来读。训练成本、数据规模、RL 超参、benchmark 分数和安全结论都应理解为作者报告的系统结果，而不是第三方独立复现实验。
 
 ## 论文位置
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature》-->
-> **算法视角**：推理服务可以拆成 prefill 的并行计算和 decode 的逐 token 循环；PagedAttention、prefix cache 与 speculative decoding 分别对应分页管理、前缀复用和 draft-verify 三类基础优化。
->
-> 延伸阅读：[16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/16_Decoding_Strategies.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《16. Decoding Strategies | 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| prefill attention | $O(L_in^2 d)$ | $O(L_in d)$ KV 写入 | 长输入首先推高首 token 前成本；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/16_Decoding_Strategies.html) |
-| decode 单步 | $O(L_ctx d)$ | $O(L_ctx d)$ KV 读取 | 输出越长，访存循环越主导 TPOT。 |
 
 传统 LLM 后训练通常是：
 
@@ -71,10 +57,10 @@ DeepSeek-R1 使用 `Group Relative Policy Optimization`，简称 GRPO。它的�
 
 <small>图源：`DeepSeek-R1`，Supplementary Fig. 1。原论文图意：PPO 使用 value model 估计 advantage；GRPO 省去 value model，直接从同一问题的一组 sampled outputs 的 reward scores 中估计相对 advantage。</small>
 
-!!! note "这张图怎么读"
-    PPO 通常需要 actor、reference、reward model 和 value model。value model 要预测某个前缀未来能拿多少 reward，这在长 CoT 任务里很难：模型前面写的内容可能后面被推翻，最终答案是否正确也常常只能在完整输出后判断。
+**GRPO 图要抓住组内相对 advantage。**
+PPO 通常需要 actor、reference、reward model 和 value model。value model 要预测某个前缀未来能拿多少 reward，这在长 CoT 任务里很难：模型前面写的内容可能后面被推翻，最终答案是否正确也常常只能在完整输出后判断。
 
-    GRPO 更贴合可验证推理任务：同一道题一次采样多个答案，谁正确、谁格式更好、谁通过测试，就能在组内排出相对高低。这样不用额外训练同规模 critic，显存和算力压力更低，也少了 value target 估计错误带来的不稳定。
+GRPO 更贴合可验证推理任务：同一道题一次采样多个答案，谁正确、谁格式更好、谁通过测试，就能在组内排出相对高低。这样不用额外训练同规模 critic，显存和算力压力更低，也少了 value target 估计错误带来的不稳定。
 
 论文里的 GRPO objective 写作：
 
@@ -95,7 +81,6 @@ $$
 \right].
 $$
 
-
 其中 advantage 由组内 reward 标准化得到：
 
 $$
@@ -103,11 +88,10 @@ A_i=\frac{r_i-\mathrm{mean}(\{r_1,\ldots,r_G\})}
 {\mathrm{std}(\{r_1,\ldots,r_G\})}.
 $$
 
-
 这几个符号可以直观理解成：
 
-!!! note "为什么组内比较很适合数学和代码"
-    数学题和代码题往往不是“每个中间步骤都可验证”，但最终答案或测试结果可以验证。对同一道题采样 16 个回答以后，正确答案天然比错误答案好；同样正确时，格式、语言一致性或执行结果也能进一步区分。GRPO 把这个相对信号直接变成 policy update，比训练一个 value model 去猜“这个前缀未来是否会成功”更直接。
+**为什么组内比较很适合数学和代码。**
+数学题和代码题往往不是“每个中间步骤都可验证”，但最终答案或测试结果可以验证。对同一道题采样 16 个回答以后，正确答案天然比错误答案好；同样正确时，格式、语言一致性或执行结果也能进一步区分。GRPO 把这个相对信号直接变成 policy update，比训练一个 value model 去猜“这个前缀未来是否会成功”更直接。
 
 论文附录还比较了 PPO 和 GRPO。作者认为 PPO 若仔细调 GAE 的 \(\lambda\) 也能接近 GRPO，但需要额外 tuning，且 value model 训练会带来接近翻倍的计算和显存开销。
 
@@ -131,7 +115,6 @@ $$
 Reward_{rule}=Reward_{acc}+Reward_{format}.
 $$
 
-
 这行式子在说：规则奖励由正确性奖励 \(Reward_{acc}\) 和格式奖励 \(Reward_{format}\) 相加，前者看答案或代码测试是否通过，后者保证输出结构可解析。
 
 | Reward Type | How it is computed | Why it matters |
@@ -141,8 +124,8 @@ $$
 
 作者强调没有在 reasoning tasks 上使用 neural reward model，也没有使用 process reward model。原因是大规模 RL 中 neural RM 容易被 reward hacking，而且训练/重训 RM 会显著增加 pipeline 复杂度。
 
-!!! note "为什么不用 PRM 反而是重点"
-    PRM 听起来更细：每一步推理都打分。但通用推理里“什么是一小步”很难定义，而且判断中间步骤正确性往往和解题本身一样难。DeepSeek-R1 选择 outcome-based verifier，是把奖励问题收缩到最可靠的一层：最终答案是否对、程序是否通过测试、选择是否正确。这个选择牺牲了中间监督密度，但换来了 reward 的可扩展性和可信度。
+**为什么不用 PRM 反而是重点。**
+PRM 听起来更细：每一步推理都打分。但通用推理里“什么是一小步”很难定义，而且判断中间步骤正确性往往和解题本身一样难。DeepSeek-R1 选择 outcome-based verifier，是把奖励问题收缩到最可靠的一层：最终答案是否对、程序是否通过测试、选择是否正确。这个选择牺牲了中间监督密度，但换来了 reward 的可扩展性和可信度。
 
 ### R1-Zero RL Hyperparameters
 
@@ -167,8 +150,8 @@ $$
 | Minibatches per rollout | 16 |
 | Inner epochs | 1 |
 
-!!! note "这些超参说明了什么"
-    `16 outputs per question` 是 GRPO 的基础，因为 advantage 来自同题组内比较。`32 unique questions * 16 outputs = 512` 构成每步的训练 batch。最大长度在 8.2k step 后从 32K 提到 65K，是因为模型已经开始使用更长 reasoning，继续限制长度会压住 test-time compute scaling。每 400 step 替换 reference model，则是在“允许策略探索”和“防止离 base 太远”之间折中。
+**这些超参说明了什么。**
+`16 outputs per question` 是 GRPO 的基础，因为 advantage 来自同题组内比较。`32 unique questions * 16 outputs = 512` 构成每步的训练 batch。最大长度在 8.2k step 后从 32K 提到 65K，是因为模型已经开始使用更长 reasoning，继续限制长度会压住 test-time compute scaling。每 400 step 替换 reference model，则是在“允许策略探索”和“防止离 base 太远”之间折中。
 
 ### 训练中自然出现的长 CoT
 
@@ -182,8 +165,8 @@ $$
 
 论文报告 R1-Zero 的 AIME 2024 pass@1 从 15.6% 提升到 77.9%；使用 self-consistency decoding 后可到 86.7%。同时，平均 response length 随 RL 训练稳定增加，说明模型不是被人工要求“多写几步”，而是在 reward 压力下自己发现：更长的推理、验证和回溯能提高正确率。
 
-!!! note "RL 为什么会让回答变长"
-    如果 reward 只看最终正确性，模型会探索各种能提高正确率的行为。对难题来说，短答案经常不够稳定；长 CoT 给模型更多空间去枚举条件、重新计算、发现错误和切换策略。只要这些额外 token 带来的正确率收益超过 KL 和采样成本，策略更新就会提高这类长推理轨迹的概率。
+**RL 为什么会让回答变长。**
+如果 reward 只看最终正确性，模型会探索各种能提高正确率的行为。对难题来说，短答案经常不够稳定；长 CoT 给模型更多空间去枚举条件、重新计算、发现错误和切换策略。只要这些额外 token 带来的正确率收益超过 KL 和采样成本，策略更新就会提高这类长推理轨迹的概率。
 
 ### 反思行为的涌现
 
@@ -195,8 +178,8 @@ $$
 
 <small>图源：`DeepSeek-R1`，Supplementary Fig. 5。原论文图意：左图统计 `wait`、`mistake`、`however`、`verify`、`check` 等反思词在训练过程中的频率；右图展示 `wait` 一词在不同训练阶段的出现模式。</small>
 
-!!! note "反思词不是能力本身，但能暴露训练动力"
-    这些词不能直接等同于真实推理能力，因为模型可能学会表演式反思。但它们和准确率、输出长度一起出现时，说明 RL 的确在改变生成策略：模型开始更频繁地停下来检查、改错、比较替代方案。更严谨的判断仍要看最终可验证任务分数，而不是只看语言现象。
+**反思词不是能力本身，但能暴露训练动力。**
+这些词不能直接等同于真实推理能力，因为模型可能学会表演式反思。但它们和准确率、输出长度一起出现时，说明 RL 的确在改变生成策略：模型开始更频繁地停下来检查、改错、比较替代方案。更严谨的判断仍要看最终可验证任务分数，而不是只看语言现象。
 
 ## 从 R1-Zero 到 R1：为什么还需要 SFT
 
@@ -213,8 +196,8 @@ DeepSeek-R1 因此采用多阶段 pipeline。
 
 <small>图源：`DeepSeek-R1`，Figure 2。原论文图意：DeepSeek-R1 的多阶段 pipeline，从 DeepSeek-V3-Base 出发，经过 cold-start SFT、第一阶段 RL、rejection sampling 与 SFT、第二阶段 RL，得到最终 R1；Dev1、Dev2、Dev3 是中间 checkpoint。</small>
 
-!!! note "Figure 2 怎么读"
-    这张图的重点是 SFT 和 RL 的分工。RL 负责探索更强推理轨迹，尤其是人类示范难以穷尽的长链推理；SFT 负责把模型拉回更可读、更稳定、更符合用户习惯和通用任务分布的输出形态。R1 不是“纯 RL 模型”，而是把 R1-Zero 的探索结果工程化成可用模型。
+**Figure 2 怎么读。**
+这张图的重点是 SFT 和 RL 的分工。RL 负责探索更强推理轨迹，尤其是人类示范难以穷尽的长链推理；SFT 负责把模型拉回更可读、更稳定、更符合用户习惯和通用任务分布的输出形态。R1 不是“纯 RL 模型”，而是把 R1-Zero 的探索结果工程化成可用模型。
 
 ### Four-stage view
 
@@ -234,7 +217,6 @@ DeepSeek-R1 因此采用多阶段 pipeline。
 $$
 Reward_{language}=\frac{Num(Words_{target})}{Num(Words)}.
 $$
-
 
 这行式子在说：目标语言词占比越高，语言混杂越少；\(Words_{target}\) 是目标语言词数，\(Words\) 是总词数。
 
@@ -270,7 +252,6 @@ $$
 Reward = Reward_{\text{reasoning}} + Reward_{\text{general}} + Reward_{\text{language}},
 $$
 
-
 这行式子在说：第二阶段总奖励由推理正确性、通用偏好和语言一致性三类信号共同组成。
 
 其中：
@@ -279,13 +260,11 @@ $$
 Reward_{\text{reasoning}}=Reward_{\text{rule}},
 $$
 
-
 这里 \(Reward_{\text{reasoning}}\) 直接沿用 rule-based verifier，不再额外训练推理 reward model。
 
 $$
 Reward_{\text{general}}=Reward_{\text{reward\_model}}+Reward_{\text{format}}.
 $$
-
 
 这行式子在说：通用奖励由 reward model 分数和格式奖励相加，分别约束偏好质量与输出结构。
 
@@ -310,8 +289,8 @@ $$
 
 <small>图源：`DeepSeek-R1`，Supplementary Fig. 3。原论文图意：训练中 reward 持续上升，但 CodeForces 表现下降，说明 helpful reward model 可被策略利用，造成 reward hacking。</small>
 
-!!! note "为什么第二阶段不能无限 RL"
-    可验证 reasoning reward 比较硬，数学答案错就是错，代码测试不过就是不过。通用 helpfulness reward 更软，reward model 可能偏好长、顺滑、有礼貌或某种固定风格的回答。RL 时间一长，policy 会找到 reward model 的偏差，而不一定真的更有用。这就是论文把通用偏好 RL 控制在较短阶段的原因。
+**为什么第二阶段不能无限 RL。**
+可验证 reasoning reward 比较硬，数学答案错就是错，代码测试不过就是不过。通用 helpfulness reward 更软，reward model 可能偏好长、顺滑、有礼貌或某种固定风格的回答。RL 时间一长，policy 会找到 reward model 的偏差，而不一定真的更有用。这就是论文把通用偏好 RL 控制在较短阶段的原因。
 
 ## RL Data Recipe
 
@@ -337,8 +316,8 @@ $$
 | Logic | choice / quantitative answer matching，synthetic puzzle 或 code-IO 问题可自动验证 |
 | General | helpful reward model and safety reward model |
 
-!!! note "代码数据为什么要单独讲"
-    代码题的 reward 比数学更贵，因为要抽取代码、运行测试、处理超时、构造可靠测试用例。论文 cold-start 部分提到，Codeforces 和 AtCoder 原始隐藏测试不公开，因此作者用 DeepSeek-V2.5 生成候选测试，再用正确提交过滤无效 case，用错误提交筛选能区分 buggy solutions 的测试。这说明 RLVR 的工程难点不只在算法，也在 verifier 数据管线。
+**代码数据为什么要单独讲。**
+代码题的 reward 比数学更贵，因为要抽取代码、运行测试、处理超时、构造可靠测试用例。论文 cold-start 部分提到，Codeforces 和 AtCoder 原始隐藏测试不公开，因此作者用 DeepSeek-V2.5 生成候选测试，再用正确提交过滤无效 case，用错误提交筛选能区分 buggy solutions 的测试。这说明 RLVR 的工程难点不只在算法，也在 verifier 数据管线。
 
 ## SFT 数据和 Rejection Sampling
 
@@ -386,8 +365,8 @@ SFT hyperparameters:
 | Max context length | 32,768 tokens |
 | Batch size | 128 |
 
-!!! note "为什么 SFT 在这里不是倒退"
-    R1-Zero 的纯 RL 证明了探索能力，但用户面对的是最终模型，不是实验曲线。SFT 的作用是把“RL 发现的高分轨迹”变成稳定可读的数据分布，同时补回写作、问答、翻译、自我认知、软件工程等非纯 reasoning 能力。也就是说，RL 负责发现，SFT 负责固化和整理。
+**为什么 SFT 在这里不是倒退。**
+R1-Zero 的纯 RL 证明了探索能力，但用户面对的是最终模型，不是实验曲线。SFT 的作用是把“RL 发现的高分轨迹”变成稳定可读的数据分布，同时补回写作、问答、翻译、自我认知、软件工程等非纯 reasoning 能力。也就是说，RL 负责发现，SFT 负责固化和整理。
 
 ### RL Infrastructure：训练系统如何支撑长 CoT
 
@@ -404,8 +383,8 @@ SFT hyperparameters:
 | Rule-based Reward Module | Compute code executor, answer matcher, format checker rewards | 不占 GPU，但耗时；用 asynchronous scheduling 和 rollout/inference 重叠 |
 | Training Module | Compute loss and update actor, optionally critic | 支持 PPO、GRPO、DPO；用 length sorting、Best-Fit packing 和 DualPipe 减少 padding 与 pipeline 浪费 |
 
-!!! note "为什么 RL infrastructure 要 offload"
-    Rollout、reward/reference inference 和 training 需要的模型实例不同。如果所有模型同时常驻 GPU，671B MoE 级别的显存压力会非常高。论文说除 rule-based reward module 外，每个模块结束后都会把模型实例从 VRAM offload 到系统内存或磁盘，为下一阶段释放显存。这类工程细节决定了大规模 RL 能不能跑，而不是只影响速度。
+**为什么 RL infrastructure 要 offload。**
+Rollout、reward/reference inference 和 training 需要的模型实例不同。如果所有模型同时常驻 GPU，671B MoE 级别的显存压力会非常高。论文说除 rule-based reward module 外，每个模块结束后都会把模型实例从 VRAM offload 到系统内存或磁盘，为下一阶段释放显存。这类工程细节决定了大规模 RL 能不能跑，而不是只影响速度。
 
 ### 训练成本
 
@@ -482,8 +461,8 @@ SFT hyperparameters:
 
 论文报告，在一组 2024 数学竞赛题上，R1 平均使用 8,793 thinking tokens，pass@1 为 61.8%。简单题少于 7,000 thinking tokens，最难题超过 18,000 thinking tokens。
 
-!!! note "test-time scaling 和 majority voting 的区别"
-    majority voting 是并行采样很多条独立答案，再投票。R1 的长 CoT 是在单条轨迹内部投入更多计算，让模型自己检查、修正和回溯。两者可以叠加，但不是一回事。论文也指出，R1 在 AIME 2024 上 pass@64 明显高于 pass@1，说明独立多采样仍有帮助。
+**test-time scaling 和 majority voting 的区别。**
+majority voting 是并行采样很多条独立答案，再投票。R1 的长 CoT 是在单条轨迹内部投入更多计算，让模型自己检查、修正和回溯。两者可以叠加，但不是一回事。论文也指出，R1 在 AIME 2024 上 pass@64 明显高于 pass@1，说明独立多采样仍有帮助。
 
 ### Distillation：小模型更适合先学强模型轨迹
 
@@ -521,8 +500,8 @@ R1 还把长 CoT 能力蒸馏到 Qwen 和 LLaMA 系模型。蒸馏阶段只做 S
 
 <small>表源：`DeepSeek-R1`，Supplementary Table：Comparison of distilled and RL Models on Reasoning-Related Benchmarks。原论文表意：在 32B 规模上，直接大规模 RL 得到的 Qwen2.5-32B-Zero 不如从 R1 蒸馏出的 DeepSeek-R1-Distill-Qwen-32B。</small>
 
-!!! note "为什么小模型直接 RL 不如蒸馏"
-    论文的判断是：纯 RL 的效果高度依赖 base checkpoint 能力。7B dense 和 16B MoE 早期实验没有显著收益，32B 起才开始可见，230B/671B 更明显。小模型如果自己探索长 CoT，容易重复、卡住或无法有效利用长推理；但如果直接学习强模型已经发现的高质量 reasoning trajectories，SFT 蒸馏更经济。
+**为什么小模型直接 RL 不如蒸馏。**
+论文的判断是：纯 RL 的效果高度依赖 base checkpoint 能力。7B dense 和 16B MoE 早期实验没有显著收益，32B 起才开始可见，230B/671B 更明显。小模型如果自己探索长 CoT，容易重复、卡住或无法有效利用长推理；但如果直接学习强模型已经发现的高质量 reasoning trajectories，SFT 蒸馏更经济。
 
 ### 和普通 RLHF 的关系
 
@@ -547,8 +526,8 @@ DeepSeek-R1 和 InstructGPT 式 RLHF 都是后训练，但目标和奖励完全�
 | Process Reward Model (PRM) | 可以给中间步骤打分，理论上奖励更密 | 通用 reasoning step 难定义；中间正确性难自动标；model-based PRM 容易 reward hacking；重训成本高 |
 | Monte Carlo Tree Search (MCTS) | 借鉴 AlphaGo/AlphaZero，用搜索扩大 test-time compute | token 生成搜索空间指数级；value model 质量决定搜索质量；细粒度 value model 难训练，容易卡局部最优 |
 
-!!! note "MCTS 为什么在文本里比棋类难"
-    棋类动作空间有限、规则明确、状态转移确定，搜索树节点有清楚含义。文本生成每个 token 都可能分叉，语义状态又很难离散化。你可以限制每个节点扩展数量，但这会让搜索更容易错过关键路径；而 value model 如果判断不准，会系统性地把搜索带向坏分支。
+**MCTS 为什么在文本里比棋类难。**
+棋类动作空间有限、规则明确、状态转移确定，搜索树节点有清楚含义。文本生成每个 token 都可能分叉，语义状态又很难离散化。你可以限制每个节点扩展数量，但这会让搜索更容易错过关键路径；而 value model 如果判断不准，会系统性地把搜索带向坏分支。
 
 ### 局限与风险
 

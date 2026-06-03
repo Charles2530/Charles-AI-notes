@@ -2,25 +2,11 @@
 
 做算子优化时，最常见的失败不是“技术不够强”，而是没有先判断瓶颈类型，benchmark 设计不可靠，看到局部提速就误以为端到端受益，或者没有把案例还原成通用方法。
 
-
 因此这一页专门把 roofline、benchmark 设计和几个典型案例放在一起，帮助你把“性能感觉”变成“性能判断”。
 
 这页适合和 [GEMM 与 Attention Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) 一起读。前者提供热点算子的具体结构，后者解释 tile、program id 和 autotune 如何落到实现；Roofline 则负责先判断该往算力、带宽、layout 还是 launch 开销上用力。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## Roofline 的真正用途
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《03. GPU Architecture and Memory | GPU 物理架构、内存层级与核心硬件单元》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 Roofline 不是为了精确预测每个 kernel 的最终性能，而是为了先问一个更关键的问题：
 
@@ -33,7 +19,6 @@ $$
 \le
 \min(\text{Peak FLOPs}, \text{Bandwidth} \times \text{Arithmetic Intensity}).
 $$
-
 
 这行式子在说：实际性能不会超过两个上限中更小的那个。`Peak FLOPs` 是硬件计算峰值；`Bandwidth × Arithmetic Intensity` 是按数据搬运能力推出来的带宽上限；Arithmetic Intensity 表示每搬 1 byte 数据能做多少 FLOPs。
 
@@ -64,13 +49,11 @@ $$
 \approx0.54GFLOPs
 \]
 
-
 这行式子在估算 \(QK^\top\) 的乘加主项：\(B\) 是 batch size，\(H\) 是 head 数，\(T\) 是历史 KV 长度，\(D\) 是 head dim；前面的 2 是常见 FLOPs 口径里一次乘加约等于 2 个 FLOPs。
 
 \[
 \text{FLOPs}_{PV}\approx0.54GFLOPs
 \]
-
 
 所以总计算量约 \(1.07GFLOPs\)。而 KV 读取量约为：
 
@@ -78,7 +61,6 @@ $$
 \text{Bytes}_{KV}=2\times B\times H\times T\times D\times2
 \approx1.0GiB
 \]
-
 
 其中前面的 2 表示 K 和 V，最后的 2 表示 BF16 每元素 2 bytes。Q、输出和少量 scale / metadata 相比 KV 读取很小，可以先忽略。
 
@@ -88,7 +70,6 @@ $$
 AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 \]
 
-
 这里 \(AI\) 是 arithmetic intensity，分子是总计算量，分母是主要 HBM 读写量；它越低，越说明每搬一次数据只做很少计算。
 
 如果目标 GPU 的有效 HBM 带宽按 2.5TB/s 估算，那么 roofline 给出的带宽上限大约是：
@@ -96,7 +77,6 @@ AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 \[
 2.5TB/s\times1FLOP/byte\approx2.5TFLOP/s
 \]
-
 
 这远低于现代 GPU 的峰值 Tensor Core 算力，说明这个 decode attention 更像 bandwidth-bound，而不是 compute-bound。优化方向应优先减少 KV 读取、改善 KV layout、分页连续性、向量化加载、cache 命中和 dequant 融合，而不是只盯着 matmul 峰值算力。
 
@@ -108,11 +88,9 @@ AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 \text{Measured bandwidth}=\frac{1.0GiB}{0.55ms}\approx1.95TB/s
 \]
 
-
 \[
 \text{Achieved FLOPs}=\frac{1.07GFLOPs}{0.55ms}\approx1.95TFLOP/s
 \]
-
 
 这两行式子分别把“搬了多少数据”和“做了多少计算”除以实测 latency。前者看是否接近 HBM 带宽，后者看是否接近计算峰值；两个指标一起看，才能判断瓶颈是不是和 roofline 预测一致。
 
@@ -141,7 +119,6 @@ AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 32\times(0.55-0.33)=7.04ms
 \]
 
-
 这行式子只计算 attention KV kernel 在 32 层里节省的时间：每层少 \(0.22ms\)，乘以 32 层得到总节省。
 
 端到端变为约 51ms，整体 speedup 是：
@@ -149,7 +126,6 @@ AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 \[
 \frac{58}{51}\approx1.14x
 \]
-
 
 所以“单 kernel 1.67x”最后只变成“端到端 1.14x”并不矛盾。Amdahl 定律、其他算子、新的 dequant 开销、runtime 调度和 shape 分布都会吃掉部分收益。好的性能报告必须同时写 kernel 级收益和端到端收益，并解释差额去了哪里。
 
@@ -164,7 +140,6 @@ AI=\frac{1.07GFLOPs}{1.0GiB}\approx1FLOP/byte
 \[
 L=8\times256=2048
 \]
-
 
 这里 \(L\) 是每条候选序列的 token 长度：8 帧历史，每帧 256 个 latent token，所以一条序列共有 2048 个 token。
 
@@ -187,7 +162,6 @@ L=8\times256=2048
 AI\approx\frac{550GFLOPs}{350MiB}\approx1500FLOPs/byte
 \]
 
-
 这行式子和前面的 decode attention 对照：分子是一个 block 的粗略计算量，分母是 FlashAttention 路径下的有效读写量。\(AI\) 高到约 1500 FLOPs/byte，说明瓶颈更可能转向计算、occupancy 或调度，而不是单纯 HBM 读取。
 
 这和上一节 decode attention 的 \(1FLOP/byte\) 完全不同。decode attention 扫 KV，常是 bandwidth-bound；这个视频 latent full-attention block 更接近 compute-bound 或调度/occupancy-bound。此时如果只做 FP8 latent cache，收益可能不如减少 token 数和 attention 结构本身。
@@ -204,7 +178,6 @@ kernel 级 speedup 约为：
 \[
 \frac{4.1}{1.35}\approx3.0x
 \]
-
 
 这个比值是 kernel 级 speedup：只比较 video latent transformer block 自身的 latency，不包含 tokenizer、候选排序、memory 写回和其他头部开销。
 
@@ -282,7 +255,7 @@ Attention 常常是混合型案例：数学公式看起来计算很多，但真�
 
 Roofline 像是在看一台机器究竟是马力不够，还是输送带太慢；benchmark 像是在不同工况下测这台机器；案例拆解则是在弄清楚某次改造到底是换了更强的引擎，还是把物流路径改顺了。只有把这三件事放在一起，性能优化才会从“感觉更快”变成“知道为什么更快”。
 
-## 本页结论
+## 阅读结论
 
 Roofline 建模与性能案例的核心意义，在于把性能优化从“经验活”变成“结构化分析”。只要你能先判断瓶颈类型，再设计可信 benchmark，再把案例抽象成可复用模式，就会比单纯堆技巧更接近真正成熟的算子工程。
 

@@ -63,6 +63,7 @@ nav:
   - 基础概念:
       - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
       - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
+      - 读懂公式的最小数学: foundations/symbols-and-minimal-math.md
       - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
       - 优化与训练入门: foundations/optimization-and-training-basics.md
       - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
@@ -70,6 +71,7 @@ nav:
       - 生成与解码基础: foundations/generation-and-decoding-basics.md
       - 位置编码与 Mask: foundations/positional-encoding-masks-and-context.md
       - MoE 与大模型架构: foundations/moe-and-large-model-architecture-basics.md
+      - 模型压缩、剪枝与 NAS: foundations/model-compression-pruning-and-nas-basics.md
   - 训练与推理系统:
       - 模型训练从零入门: training/beginner-model-training-primer.md
       - 目标函数、优化器与 LR 日程: training/objectives-optimizers-and-schedules.md
@@ -96,6 +98,7 @@ nav:
       - VLA 数据与策略学习: vla/data-and-policy-learning.md
       - VLM 架构：视觉表征、连接器与记忆: vlm/architecture-and-training.md
       - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
+      - 双目匹配与 Cost Volume: embodied-ai/stereo-matching-and-cost-volume.md
       - Sim2Real 与具身数据引擎: embodied-ai/sim2real-and-data-engines.md
   - 扩散与生成模型:
       - 扩散训练与表示: diffusion/training.md
@@ -103,27 +106,133 @@ nav:
       - Score Matching 到 SDE: diffusion/score-matching-sde-and-probability-flow.md
       - 条件控制与 Guidance: diffusion/guidance-and-conditioning.md
       - 采样与推理加速: diffusion/inference.md
+      - 扩散路线选择与方法对照: diffusion/comparison-table.md
       - 一步生成、蒸馏与整流: diffusion/distillation.md
       - 一致性模型与 Rectified Flow: diffusion/consistency-models-and-rectified-flow.md
       - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
   - 论文精读:
-      - ZeRO：零冗余优化器: paper-deep-dives/foundations/zero.md
-      - Dreamer：想象中训练控制: paper-deep-dives/world-models/dreamer.md
-      - RT-2：VLM 到机器人动作: paper-deep-dives/embodied-ai/rt2.md
-      - Megatron-LM：Tensor Model Parallel: paper-deep-dives/foundations/megatron-lm.md
-      - EAGLE-3：投机推理加速: paper-deep-dives/inference/eagle-3.md
-      - Low-bit LLM Survey: paper-deep-dives/inference/low-bit-llm-survey.md
-      - Score SDE：连续时间扩散框架: paper-deep-dives/diffusion/score-sde.md
-      - DMD：一步扩散蒸馏: paper-deep-dives/diffusion/dmd.md
-      - Genie：无标注视频到可交互环境: paper-deep-dives/world-models/genie.md
-      - V-JEPA：视频潜变量预测表征: paper-deep-dives/world-models/v-jepa.md
-      - DeepSeek-V3：MoE 与 FP8: paper-deep-dives/technical-reports/deepseek-v3.md
-      - Qwen3：Thinking 与蒸馏: paper-deep-dives/technical-reports/qwen3.md
-      - GPT-4o：Omni 安全评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
+      - 基础与训练:
+          - ZeRO：为什么数据并行会浪费这么多显存: paper-deep-dives/foundations/zero.md
+          - Megatron-LM：Tensor Model Parallel: paper-deep-dives/foundations/megatron-lm.md
+          - MagiAttention：超长上下文分布式 Attention: paper-deep-dives/foundations/magiattention.md
+          - RingAttention：近无限上下文训练: paper-deep-dives/world-models/ringattention.md
+          - Attn-QAT：4-bit Attention 量化感知训练: paper-deep-dives/foundations/attn-qat.md
+          - Muon：LLM 预训练优化器: paper-deep-dives/foundations/muon-is-scalable.md
+          - SLA / SLA2：DiT 稀疏线性 Attention: paper-deep-dives/foundations/sla-sparse-linear-attention.md
+          - GPU Utilization：为什么 100% 不等于训练跑满: paper-deep-dives/foundations/gpu-utilization-misleading.md
+      - 推理系统:
+          - vLLM / PagedAttention：KV cache 分页管理: paper-deep-dives/inference/vllm-pagedattention.md
+          - EAGLE：为什么 draft 不一定要是小模型: paper-deep-dives/inference/eagle.md
+          - EAGLE-2：动态 Draft Tree: paper-deep-dives/inference/eagle-2.md
+          - EAGLE-3：训练时见过自己犯错: paper-deep-dives/inference/eagle-3.md
+          - KVSlimmer：非对称 KV 合并: paper-deep-dives/inference/kvslimmer.md
+          - Low-bit LLM Survey：低比特大模型系统: paper-deep-dives/inference/low-bit-llm-survey.md
+          - Fast-FoundationStereo：实时 Zero-Shot 双目匹配: paper-deep-dives/inference/fast-foundation-stereo.md
+      - 扩散生成:
+          - Score SDE：连续时间生成过程: paper-deep-dives/diffusion/score-sde.md
+          - DPM-Solver++：Guidance 场景 ODE 求解器: paper-deep-dives/diffusion/dpm-solver-plus-plus.md
+          - DMD：一步扩散蒸馏: paper-deep-dives/diffusion/dmd.md
+          - DMD2：更稳的少步分布匹配蒸馏: paper-deep-dives/diffusion/dmd2.md
+          - Phased DMD：分阶段少步蒸馏: paper-deep-dives/diffusion/phased-dmd.md
+          - AnyFlow：任意步视频扩散蒸馏: paper-deep-dives/diffusion/anyflow.md
+          - CausVid：流式自回归视频扩散: paper-deep-dives/diffusion/causvid.md
+          - Diffusion Forcing：next-token 与全序列扩散: paper-deep-dives/diffusion/diffusion-forcing.md
+          - Wan2.1：开源视频生成系统路线: paper-deep-dives/diffusion/wan.md
+      - 世界模型:
+          - PlaNet：像素规划的潜变量动力学: paper-deep-dives/world-models/planet.md
+          - Dreamer：想象轨迹中训练控制策略: paper-deep-dives/world-models/dreamer.md
+          - DreamerV2：离散世界模型玩 Atari: paper-deep-dives/world-models/dreamerv2.md
+          - DreamerV3：latent 里训练策略: paper-deep-dives/world-models/dreamerv3.md
+          - JEPA：预测式表征学习路线: paper-deep-dives/world-models/jepa.md
+          - H-JEPA：层级 JEPA 与潜变量 EBM: paper-deep-dives/world-models/h-jepa.md
+          - V-JEPA：视频潜变量预测表征: paper-deep-dives/world-models/v-jepa.md
+          - Genie：无动作标签学可交互环境: paper-deep-dives/world-models/genie.md
+          - LWM：百万 token 视频语言世界模型: paper-deep-dives/world-models/lwm.md
+          - Self Forcing：对齐视频训练与推理: paper-deep-dives/world-models/self-forcing.md
+          - Towards Video World Models：视频世界模型门槛: paper-deep-dives/world-models/towards-video-world-models.md
+          - World Models Survey：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
+          - LingBot-World：视频基础模型到世界模拟器: paper-deep-dives/world-models/lingbot-world.md
+          - Lance：统一多模态世界建模启发: paper-deep-dives/world-models/lance.md
+          - BAGEL：交错多模态预训练: paper-deep-dives/world-models/bagel.md
+          - Emu3.5：原生多模态世界学习器: paper-deep-dives/world-models/emu3-5.md
+          - Beyond Language Modeling：多模态预训练与世界模型: paper-deep-dives/world-models/beyond-language-modeling.md
+      - 具身智能:
+          - RT-2：视觉语言模型接到机器人动作: paper-deep-dives/embodied-ai/rt2.md
+          - GR-2：Web 视频知识迁移到机器人: paper-deep-dives/embodied-ai/gr2.md
+          - GR-3：少样本长时程 VLA: paper-deep-dives/embodied-ai/gr3.md
+          - π0.5：开放世界 VLA: paper-deep-dives/embodied-ai/pi05.md
+          - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
+          - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
+          - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md
+          - VO-DP：语义-几何自适应扩散策略: paper-deep-dives/embodied-ai/vodp.md
+          - VGGT：前向恢复相机、深度、点云与轨迹: paper-deep-dives/embodied-ai/vggt.md
+          - Depth Anything：无标注数据释放单目深度: paper-deep-dives/embodied-ai/depth-anything.md
+          - Depth Anything V2：单目深度数据配方: paper-deep-dives/embodied-ai/depth-anything-v2.md
+          - Depth Anything 3：任意视角 3D 几何底座: paper-deep-dives/embodied-ai/depth-anything-3.md
+          - MapAnything：统一前向 Metric 3D 重建骨干: paper-deep-dives/embodied-ai/mapanything.md
+      - 技术报告:
+          - DeepSeek-V3：671B MoE、MLA 与 FP8: paper-deep-dives/technical-reports/deepseek-v3.md
+          - DeepSeek-R1：RL 激发推理能力: paper-deep-dives/technical-reports/deepseek-r1.md
+          - DeepSeek-V4：百万上下文与 FP4 后训练: paper-deep-dives/technical-reports/deepseek-v4-pro.md
+          - Qwen3：Thinking 模式、预训练与蒸馏: paper-deep-dives/technical-reports/qwen3.md
+          - Qwen3.5-Omni：Thinker-Talker 与全模态 Agent: paper-deep-dives/technical-reports/qwen35-omni.md
+          - Kimi K2：MuonClip、万亿 MoE 与 Agent 数据: paper-deep-dives/technical-reports/kimi-k2.md
+          - Gemini 2.5：动态 Thinking 与长上下文 Agent: paper-deep-dives/technical-reports/gemini-2-5.md
+          - GPT-4o System Card：Omni 安全与多模态评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
+          - InCoder-32B：工业代码模型与执行验证训练: paper-deep-dives/technical-reports/incoder-32b.md
+          - Nemotron 3 Super：Mamba-MoE 与异步 RL: paper-deep-dives/technical-reports/nemotron-3-super.md
+      - 论文专题写作规范: paper-deep-dives/writing-standard.md
   - 术语与来源:
       - 术语表: glossary/index.md
+      - 外部精读来源台账: references/external-reading-ledger.md
+      - 评测与证据链来源台账: references/evaluation-source-ledger.md
+      - 预训练与表示学习来源台账: references/pretraining-representation-source-ledger.md
+      - 归一化、残差与激活来源台账: references/norm-residual-activation-source-ledger.md
+      - 自动微分与激活显存来源台账: references/autograd-checkpointing-source-ledger.md
+      - 卷积与视觉特征来源台账: references/convolution-visual-feature-source-ledger.md
+      - 优化与训练基础来源台账: references/optimization-training-source-ledger.md
+      - Megatron、DeepSpeed 与训练栈来源台账: references/training-stack-source-ledger.md
+      - 分布式训练与 Checkpoint 来源台账: references/distributed-training-checkpoint-source-ledger.md
+      - 低比特训练与数值格式来源台账: references/low-bit-training-numerics-source-ledger.md
+      - FP8 与混合精度推理来源台账: references/fp8-mixed-precision-serving-source-ledger.md
+      - 数值显存与运行时来源台账: references/numerics-memory-runtime-source-ledger.md
+      - 张量、Shape 与计算图来源台账: references/tensor-shape-computation-graph-source-ledger.md
+      - 读懂公式的最小数学来源台账: references/minimal-math-formula-reading-source-ledger.md
+      - 线性层、MLP 与 GEMM 来源台账: references/linear-mlp-gemm-source-ledger.md
+      - CUDA 编程模型与内存层次来源台账: references/cuda-programming-memory-source-ledger.md
+      - Reduction、Norm 与 Layout 来源台账: references/reduction-norm-layout-source-ledger.md
+      - 泛化、正则化与分布偏移来源台账: references/generalization-regularization-shift-source-ledger.md
+      - 多模态推理来源台账: references/multimodal-reasoning-source-ledger.md
+      - VLM 架构来源台账: references/vlm-architecture-source-ledger.md
+      - 视觉 Tokenizer 与连接器来源台账: references/visual-tokenizer-connector-source-ledger.md
+      - RSSM、Dreamer 与规划来源台账: references/rssm-dreamer-planning-source-ledger.md
+      - WM / WAM / VAM 动作条件来源台账: references/wm-wam-vam-action-conditioned-source-ledger.md
+      - 推理服务系统来源台账: references/inference-serving-systems-source-ledger.md
+      - 推理运行时来源台账: references/serving-runtimes-source-ledger.md
+      - KV、缓存与投机解码来源台账: references/caching-routing-speculative-source-ledger.md
+      - FlashAttention 与长上下文来源台账: references/flashattention-long-context-source-ledger.md
+      - Triton 编程模型来源台账: references/triton-programming-source-ledger.md
+      - 噪声日程与参数化来源台账: references/diffusion-noise-schedules-source-ledger.md
+      - 扩散训练配方与排障来源台账: references/diffusion-training-recipes-source-ledger.md
+      - Score Matching 到 SDE 来源台账: references/score-sde-source-ledger.md
+      - 条件控制与 Guidance 来源台账: references/guidance-conditioning-source-ledger.md
+      - 扩散采样与推理加速来源台账: references/diffusion-inference-source-ledger.md
+      - 扩散路线选择来源台账: references/diffusion-method-comparison-source-ledger.md
+      - 一步生成与蒸馏来源台账: references/diffusion-distillation-source-ledger.md
+      - 一致性与 Rectified Flow 来源台账: references/consistency-rectified-flow-source-ledger.md
+      - 视频与多模态扩散来源台账: references/video-multimodal-diffusion-source-ledger.md
+      - 具身智能从零路线来源台账: references/embodied-ai-beginner-source-ledger.md
+      - VLA 动作接口来源台账: references/vla-action-interface-source-ledger.md
+      - VLA 数据与策略学习来源台账: references/vla-data-policy-learning-source-ledger.md
+      - Sim2Real 与数据引擎来源台账: references/sim2real-data-engine-source-ledger.md
+      - 数据与数据集基础来源台账: references/data-dataset-source-ledger.md
+      - Prompt、CoT 与 RAG 来源台账: references/prompt-cot-rag-source-ledger.md
+      - 生成与解码来源台账: references/generation-decoding-source-ledger.md
+      - 位置编码与 Mask 来源台账: references/positional-mask-context-source-ledger.md
+      - 模型压缩、剪枝与 NAS 来源台账: references/model-compression-pruning-nas-source-ledger.md
+      - 双目匹配与 Cost Volume 来源台账: references/stereo-cost-volume-source-ledger.md
       - 全站证据与复现状态标准: references/evidence-and-reproducibility-standard.md
       - 图片与公式质量标准: references/image-and-formula-quality-standard.md
       - 图片资产治理台账: references/image-asset-governance-ledger.md
-      - 本站判断原则: references/site-judgement-principles.md
+      - 证据判断原则: references/site-judgement-principles.md
       - Claim Ledger: references/claim-ledger.md

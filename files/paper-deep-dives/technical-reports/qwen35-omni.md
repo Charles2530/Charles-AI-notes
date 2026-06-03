@@ -6,7 +6,6 @@ paper_topic: 技术报告
 
 # Qwen3.5-Omni：Thinker-Talker 与全模态 Agent
 
-
 Qwen3.5-Omni 这份报告的核心不是“把文本、图像、音频、视频都接进模型”这么简单，而是把全模态模型推进到一个更产品化的问题：**模型能否在 256K 上下文内听、看、读、说，并且以低延迟流式交互、调用工具、处理音视频任务，甚至从音视频指令直接生成代码。**
 
 如果把它放在 Qwen3 / Kimi K2 / DeepSeek-V4 这些技术报告旁边看，它的主线很清楚：Qwen3 解决 thinking / non-thinking 和模型家族；Kimi K2 解决 agentic text model；DeepSeek-V4 解决百万上下文效率；Qwen3.5-Omni 则把重点放在 **native omni agent**：输入可以是文本、图像、视频、音频、音视频流，输出可以是文本或流式语音，任务还可以包含 WebSearch、FunctionCall 和 audio-visual tool use。
@@ -23,22 +22,12 @@ Qwen3.5-Omni 这份报告的核心不是“把文本、图像、音频、视频�
 
 <small>图源：`Qwen3.5-Omni Technical Report`，Figure 1，来自 arXiv source 包 `figures/image.png`。原图展示 Qwen3.5-Omni 统一处理 text、audio、image、video，并生成 text 或 real-time speech response，支持 voice dialogue、video dialogue、audio-visual tool use 等任务。</small>
 
-!!! note "这张总览图怎么读"
-    图里最重要的是“输入和输出都是多模态”。很多 VLM 只解决 image/video 到 text；很多 speech model 只解决 ASR 或 TTS；Qwen3.5-Omni 想做的是 end-to-end interaction：用户用语音、图像、视频或音视频流提问，模型既能用文本回答，也能直接用语音流式回答，还能调用工具。
+**总览图先看全模态输入输出是否都进入同一交互系统。**
+图里最重要的是“输入和输出都是多模态”。很多 VLM 只解决 image/video 到 text；很多 speech model 只解决 ASR 或 TTS；Qwen3.5-Omni 想做的是 end-to-end interaction：用户用语音、图像、视频或音视频流提问，模型既能用文本回答，也能直接用语音流式回答，还能调用工具。
 
-    这也是为什么报告反复强调 real-time、streaming、first-packet latency 和 tool use。全模态模型如果不能及时返回第一段语音，用户体验会明显退化；如果不能稳定调用工具，它就仍然只是感知模型，而不是 omni agent。
+这也是为什么报告反复强调 real-time、streaming、first-packet latency 和 tool use。全模态模型如果不能及时返回第一段语音，用户体验会明显退化；如果不能稳定调用工具，它就仍然只是感知模型，而不是 omni agent。
 
 ## 论文位置
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
->
-> 延伸阅读：[04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html) |
 
 Qwen3.5-Omni 继承 Qwen2.5-Omni / Qwen3-Omni 的 Thinker-Talker 思路，同时吸收 Qwen3.5 在文本、视觉、tokenizer、Hybrid MoE 和长上下文上的能力。报告中明确写到，它相对 Qwen3-Omni 有五个关键升级：
 
@@ -71,10 +60,10 @@ Qwen3.5-Omni 继续采用 Thinker-Talker 架构。Thinker 负责多模态理解�
 | MTP | residual codebook prediction | 每个 decoding step 输出当前 frame 的 residual codebooks |
 | Code2Wav | waveform renderer | causal ConvNet，增量合成 waveform，支持 frame-by-frame streaming |
 
-!!! note "Thinker-Talker 为什么不是简单 ASR + LLM + TTS"
-    如果把语音系统拆成 ASR、LLM、TTS 三段，工程上容易做，但会丢失很多信息：语气、情绪、背景音、说话人、节奏、打断意图、音视频同步线索。Thinker-Talker 的好处是保留更丰富的中间表示，让 Talker 能根据多模态上下文调节 prosody、loudness、emotion 和 speaker style。
+**Thinker-Talker 为什么不是简单 ASR + LLM + TTS。**
+如果把语音系统拆成 ASR、LLM、TTS 三段，工程上容易做，但会丢失很多信息：语气、情绪、背景音、说话人、节奏、打断意图、音视频同步线索。Thinker-Talker 的好处是保留更丰富的中间表示，让 Talker 能根据多模态上下文调节 prosody、loudness、emotion 和 speaker style。
 
-    代价是训练和推理都更复杂。Talker 不是一个独立 TTS 小模型，它要和 Thinker 的文本输出、多模态表示、历史对话和语音 token 对齐。
+代价是训练和推理都更复杂。Talker 不是一个独立 TTS 小模型，它要和 Thinker 的文本输出、多模态表示、历史对话和语音 token 对齐。
 
 ## AuT：音频编码器
 
@@ -112,8 +101,8 @@ Qwen3.5-Omni 的 Thinker 把 text、audio、image、video 输入转成统一表�
 
 Qwen3-Omni 使用 TMRoPE 提供 temporal awareness，但 Qwen3.5-Omni 认为直接把 temporal position IDs 绑定到 absolute time 会在长视频和音视频输入中产生过大、过稀疏的位置 ID，削弱 long-range temporal modeling，也提高多帧率训练数据构造成本。因此它在每个 video 或 audio-video temporal patch 前插入显式 timestamp 文本，让模型更自然地学习 timecode。
 
-!!! note "为什么 timestamp 文本有用"
-    对长音视频来说，“第 243 秒出现了什么”比“这是第 1518 个 temporal position ID”更接近语言模型已经擅长处理的符号结构。显式时间戳会稍微增加上下文长度，但它让模型能用文本式 timecode 学习跨模态对齐，尤其适合生成 script-level caption、自动分段和带时间戳的音视频描述。
+**为什么 timestamp 文本有用。**
+对长音视频来说，“第 243 秒出现了什么”比“这是第 1518 个 temporal position ID”更接近语言模型已经擅长处理的符号结构。显式时间戳会稍微增加上下文长度，但它让模型能用文本式 timecode 学习跨模态对齐，尤其适合生成 script-level caption、自动分段和带时间戳的音视频描述。
 
 ## Talker 与 ARIA
 
@@ -123,10 +112,10 @@ Talker 直接操作 Qwen3.5-Omni-Audio-Tokenizer 产生的 RVQ tokens。它用 M
 
 ARIA, Adaptive Rate Interleave Alignment，就是为了解决这个速率不匹配问题。报告把它定义为：在任意生成 prefix 上，累计 speech-to-text token ratio 不能超过对应 item-level global ratio。也就是说，ARIA 不依赖 MFA-derived alignment，也不使用固定 interleaving rate，而是让文本和语音 token 在单一 stream 中按自适应速率单调交织。
 
-!!! note "ARIA 的直觉"
-    文本 token 和语音 token 像两条速度不同的履带。英文、中文、数字、缩写、多语混合时，两条履带速度并不固定。如果强行每 N 个语音 token 配一个文本 token，就容易在某些语言或数字表达上错位。
+**ARIA 的直觉。**
+文本 token 和语音 token 像两条速度不同的履带。英文、中文、数字、缩写、多语混合时，两条履带速度并不固定。如果强行每 N 个语音 token 配一个文本 token，就容易在某些语言或数字表达上错位。
 
-    ARIA 的做法是给全局比例设一个单调约束：语音可以跟着文本往前走，但不能在任意 prefix 上跑得过快。这样既支持流式播放，也降低 text-speech alignment 崩掉的概率。
+ARIA 的做法是给全局比例设一个单调约束：语音可以跟着文本往前走，但不能在任意 prefix 上跑得过快。这样既支持流式播放，也降低 text-speech alignment 崩掉的概率。
 
 ## 流式与延迟
 
@@ -164,10 +153,10 @@ ARIA, Adaptive Rate Interleave Alignment，就是为了解决这个速率不匹�
 
 <small>表源：`Qwen3.5-Omni Technical Report`，Table 2。原论文说明：A/V 表示 audio/video input；整体延迟不是简单逐行相加，而是 ARIA 统一 interleaved stream 下的端到端 critical path。</small>
 
-!!! note "这些延迟指标怎么读"
-    `TTFT` 是 Thinker 的第一 token 时间，`TTFC` 是 Talker 第一段音频 chunk 时间，`TPOP` 是稳定解码阶段每个输出 token 的时间，`RTF` 是生成音频相对真实播放时长的比例。RTF 小于 1 才有流式实时播放余量。
+**这些延迟指标怎么读。**
+`TTFT` 是 Thinker 的第一 token 时间，`TTFC` 是 Talker 第一段音频 chunk 时间，`TPOP` 是稳定解码阶段每个输出 token 的时间，`RTF` 是生成音频相对真实播放时长的比例。RTF 小于 1 才有流式实时播放余量。
 
-    对语音产品来说，first-packet latency 往往比总推理吞吐更敏感。用户先听到第一段声音，后续只要生成速度快于播放速度，就能维持自然流式体验。
+对语音产品来说，first-packet latency 往往比总推理吞吐更敏感。用户先听到第一段声音，后续只要生成速度快于播放速度，就能维持自然流式体验。
 
 ## 预训练数据与阶段
 
@@ -207,10 +196,10 @@ Thinker 的 post-training 是三阶段，目标是保持各模态能力不退化
 
 <small>表源：`Qwen3.5-Omni Technical Report`，Post-training section。表格为按原文阶段信息重绘。</small>
 
-!!! note "为什么 OPD 用 text response 教 audio response"
-    报告指出 audio query 下的 response quality 和 text query 之间仍有差距，尤其是 speech dialogue。这里的 OPD 很像跨模态行为对齐：同一个语义 query，如果文本输入能得到更流畅、更完整的回答，就把这个回答作为 audio-conditioned query 的训练目标。
+**为什么 OPD 用 text response 教 audio response。**
+报告指出 audio query 下的 response quality 和 text query 之间仍有差距，尤其是 speech dialogue。这里的 OPD 很像跨模态行为对齐：同一个语义 query，如果文本输入能得到更流畅、更完整的回答，就把这个回答作为 audio-conditioned query 的训练目标。
 
-    这不是普通 ASR 后再回答。它训练的是模型在音频条件下直接学会接近文本条件下的高质量行为，从而减少“听懂了但回答质量变差”的模态差距。
+这不是普通 ASR 后再回答。它训练的是模型在音频条件下直接学会接近文本条件下的高质量行为，从而减少“听懂了但回答质量变差”的模态差距。
 
 ## 后训练：Talker
 
@@ -228,9 +217,6 @@ Talker 的训练是四阶段：
 Talker 训练里有两个重点。第一，它不是只做“文本到语音”的单调映射，而是用 multimodal context 做 speech generation，让语音能跟随对话历史、视觉/音频上下文和情绪。第二，它把 speaker fine-tuning 放在最后，说明 speaker identity、自然度和可控性更像产品化 polish，不应在基础语音能力还不稳时过早注入。
 
 ## X to Text 评测
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 Qwen3.5-Omni 的评测分成 `X -> Text` 和 `X -> Speech`。`X -> Text` 覆盖 text、audio、vision、audio-visual video。
 
@@ -329,10 +315,10 @@ Qwen3.5-Omni 最值得学习的不是某一个 benchmark，而是几组工程取
 | Omni 模型容易损失文本能力 | Qwen3.5 初始化、specialist distillation、OPD、interaction-aligned RL |
 | 长交互容易语言切换/人设漂移/指令退化 | multi-turn interaction trajectories + reward signals |
 
-!!! note "为什么 Audio-Visual Vibe Coding 值得注意"
-    报告把 Audio-Visual Vibe Coding 描述为一种 emergent capability：模型能直接基于音视频指令生成可执行代码。它不是单纯听写用户说的话，而是把视觉界面、音频说明、任务意图和代码生成连接起来。
+**为什么 Audio-Visual Vibe Coding 值得注意。**
+报告把 Audio-Visual Vibe Coding 描述为一种 emergent capability：模型能直接基于音视频指令生成可执行代码。它不是单纯听写用户说的话，而是把视觉界面、音频说明、任务意图和代码生成连接起来。
 
-    这类能力说明 omni agent 的边界正在从“看图回答”走向“看/听一个动态场景，然后执行工程任务”。但报告没有给出足够细的可复现训练/评测细节，所以更适合把它看作方向信号，而不是已经完全标准化的 benchmark 结论。
+这类能力说明 omni agent 的边界正在从“看图回答”走向“看/听一个动态场景，然后执行工程任务”。但报告没有给出足够细的可复现训练/评测细节，所以更适合把它看作方向信号，而不是已经完全标准化的 benchmark 结论。
 
 ## 局限和阅读边界
 
@@ -354,11 +340,13 @@ Qwen3.5-Omni 给工程项目的启发主要有五条：
 4. **后训练要分 Thinker 和 Talker。** Thinker 侧重跨模态回答质量和交互对齐；Talker 侧重语音自然度、偏好对齐、speaker fidelity 和长期上下文语音输出。
 5. **Omni agent 的评测要覆盖行为。** 只看识别准确率不够，还要看 tool use、audio-visual QA、caption、voice cloning、first-packet latency、RTF 和多轮交互稳定性。
 
-一句话总结：**Qwen3.5-Omni 展示的是一条全模态 agent 模型路线：用 Thinker 统一理解文本/视觉/音频/音视频，用 Talker 生成低延迟流式语音，用 ARIA 解决文本-语音速率对齐，用三阶段预训练和分模块后训练把长上下文、语音自然度、跨模态回答质量和交互稳定性组合到一个系统里。**
+## 阅读结论
 
-这一页最后回到三个验收点：方法上，Qwen3.5-Omni 的方法抓手是全模态统一接口和 AUT，把文本、视觉、音频、视频放进 agent 可调用的同一系统。实验上，overview、architecture 和 AUT 图要和多模态 benchmark 一起读，分别看能力覆盖、结构分工和实时性。诊断上，全模态强不等于工作流成功；真实应用要验延迟、打断、工具链和跨模态误触发。
+Qwen3.5-Omni 展示的是一条全模态 agent 模型路线：用 Thinker 统一理解文本、视觉、音频和音视频，用 Talker 生成低延迟流式语音，用 ARIA 解决文本与语音 token 速率对齐，再用分阶段预训练和分模块后训练把长上下文、语音自然度、跨模态回答质量和交互稳定性组合到一个系统里。
 
-## 延伸阅读
+读这篇报告时要把三类证据分开：overview 图说明能力覆盖，architecture 和 AUT 图说明结构分工，多模态 benchmark 说明报告设置下的任务表现。全模态强不等于工作流成功；真实应用还要验 first-packet latency、打断恢复、工具链、跨模态误触发和长上下文退化。
+
+## 站内延伸
 
 1. [Qwen3：Thinking 模式、36T 预训练与蒸馏](qwen3.md)：理解 Qwen 系列的文本模型和后训练基础；
 2. [Kimi K2：MuonClip、万亿 MoE 与 Agent 数据](kimi-k2.md)：对照 agentic data synthesis 和 RL 基础设施；
@@ -366,7 +354,7 @@ Qwen3.5-Omni 给工程项目的启发主要有五条：
 4. [推理：RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：把 omni agent 放到工具和应用系统里看；
 5. [训练：训练数据系统与吞吐优化](../../training/data-systems-and-optimization.md)：理解多模态数据、质量过滤和训练阶段设计。
 
-## 参考资料
+## 外部精读
 
 1. [Qwen3.5-Omni Technical Report](https://arxiv.org/abs/2604.15804)
 2. [Alibaba Cloud Model Studio: Qwen Omni](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)

@@ -100,6 +100,8 @@ Dreamer 的效率来自“真实世界步数”被换成“latent rollout 步数
 
 rollout 越长，actor 越可能学会利用模型漏洞。所以实践里常配合短 horizon、value bootstrap、不确定性惩罚、真实 replay 校准和闭环评测。
 
+这就是 model exploitation。比如真实机器人推杯子时，杯子碰到桌沿会卡住；但世界模型没有学好接触边界，想象里杯子可以穿过桌沿继续前进。actor 在 imagined rollout 里会发现“猛推”得到高 reward，于是学出真实环境里会失败的动作。RL 给了世界模型很高的样本效率，也把模型错误变成了可被策略主动利用的漏洞。
+
 ## 为什么 open-loop 好看不等于能规划
 
 世界模型有两种完全不同的评价方式：
@@ -211,6 +213,6 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 - [Decision Transformer](https://arxiv.org/abs/2106.01345)：把 RL 轨迹组织成序列建模问题。
 - [RLVR-World](https://arxiv.org/abs/2505.13934)：用可验证 reward 训练世界模型预测本身。
 
-## 本页结论
+## 阅读结论
 
 强化学习让世界模型从“预测器”变成“决策工具”：transition 预测动作后果，reward/value 衡量未来好坏，policy 或 planner 选择动作。真正的难点不在于生成未来，而在于预测必须 action-sensitive、reward 必须任务相关、rollout horizon 必须受控，最后还要用 closed-loop 证明它真的改善决策。

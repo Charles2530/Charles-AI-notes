@@ -1,133 +1,211 @@
-# Triton 编程模型与自动调优
+# Triton 编程模型与自动调优：从 program instance 到可上线 kernel
 
-Triton 在 AI 系统里越来越重要，不是因为它能完全替代 CUDA，而是因为它提供了一种适合张量 kernel 的中层抽象：比手写 CUDA 更接近矩阵块和张量块思维，又比纯图编译的黑盒代码生成更可控。
+Triton 不是“Python 版 CUDA”。它真正提供的是一个适合深度学习张量算子的中间层：你不用写每个 thread 的细节，但仍然要明确一个 program instance 负责哪块输出、怎样算地址、怎样处理边界、怎样累加、怎样选择 tile，以及编译和 autotune 什么时候发生。
 
+这篇只回答一个问题：读到一个 Triton kernel 时，怎样从 `program_id`、`tl.arange`、`tl.load`、`tl.store`、`tl.dot` 和 `@triton.autotune` 看出它在 GPU 上到底做了什么。
 
-典型分工是：最关键、最极致的内核仍可能用 CUDA 或模板库；大量中高频、自定义、融合型算子优先尝试 Triton；上层编译器如 Inductor 也会把一部分 kernel 降到 Triton。
+## 先判断 Triton 站在哪一层
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
+一个 AI 系统从模型代码到 GPU 执行，大致有四层：
 
-## Triton 解决的问题
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
-
-在 Triton 之前，很多团队面临两难：完全依赖框架默认 kernel，难以做深度 fusion 和特定 shape 优化；凡事写 CUDA，开发门槛和维护成本又过高。
-
-Triton 正好落在中间：抽象层次足够高，矩阵与块运算比 CUDA 更自然；抽象层次又不至于完全失控，仍可显式决定 tile、block 和加载方式；同时它天然适合 autotuning、shape-specialized kernel，并与 PyTorch 生态集成顺滑，便于快速验证热点优化。
-
-它更适合“中等复杂度但高频”的算子：norm、softmax、elementwise fusion、专用 matmul、部分 attention、quant/dequant 和 MoE 周边搬运。
-
-## 编程心智模型
-
-Triton kernel 通常不是从 thread 级别出发，而是从 block / tile 级别出发。你更常思考一个 program instance 负责哪一块输出，这块输出需要加载哪几块输入，offsets 如何构造，边界是否需要 mask，块内数据如何复用。
-
-`tl.program_id(axis=...)` 用来取得当前 program instance 的块索引，再计算输入输出偏移。`tl.load` 和 `tl.store` 负责加载与写回，mask 用于处理 shape 不是 tile 整数倍时的边界。
-
-这不是“Python 封装版 CUDA”。Triton 有自己的张量化中间表示和代码生成路径，更像一个面向张量块 kernel 的 DSL、codegen 和 autotune 环境。
-
-## 一个 Triton kernel 的思维图
-
-```mermaid
-flowchart TD
-    A["输出张量"] --> B["切成 BLOCK_M x BLOCK_N"]
-    B --> C["program_id 选择当前块"]
-    C --> D["构造 offsets"]
-    D --> E["tl.load + mask"]
-    E --> F["块内计算 / reduce / matmul"]
-    F --> G["tl.store + mask"]
-    H["autotune configs"] --> B
-    I["shape bucket"] --> H
+```text
+PyTorch / JAX model
+-> graph capture / compiler
+-> library call or generated kernel
+-> GPU hardware
 ```
 
-这个图比 thread-level CUDA 更接近 Triton 的思维方式：一个 program instance 负责一个张量块，offset 和 mask 决定读写边界，autotune 选择块大小和流水参数。写 Triton 时，如果你无法说清“这个 program instance 负责哪块输出”，代码通常就已经偏了。
+Triton 通常位于“generated kernel / custom kernel”这一层。它适合表达规则张量块上的数据流：一个输出 tile 怎么对应输入 tile，中间值能不能留在寄存器或 SRAM 近似路径里，多个 elementwise / reduction / matmul epilogue 能不能合到一次读写里。
 
-### 一个最小伪代码骨架
+所以 Triton 的第一性问题不是“我会不会写 GPU kernel”，而是：
 
-下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
+| 问题 | 说明 |
+| --- | --- |
+| 输出能不能切成规则 block | 每个 program instance 必须知道自己负责哪片输出。 |
+| 输入地址能不能由 block id 和 stride 算出来 | Triton 擅长规则或半规则 gather，不擅长完全散乱控制流。 |
+| 中间结果能不能在 block 内完成 | 融合收益来自少写 HBM，不是来自语法更短。 |
+| 高频 shape 是否足够集中 | 否则 JIT、autotune、cache 和 fallback 会把收益吃掉。 |
+
+如果热点还没 profile 清楚、shape 分布很散、现成库已经够快，或者需要复杂跨 block 同步，Triton 未必是第一选择。
+
+## program instance 不是 thread
+
+CUDA 初学者通常从 thread/block/grid 开始。Triton 更适合从 program instance 开始：一个 program instance 处理一块向量、一行 softmax、一个矩阵乘输出 tile，或一组 token 的重排。
+
+最小例子是向量加法：
+
 ```python
 @triton.jit
-def kernel(x, y, n: tl.constexpr, BLOCK: tl.constexpr):
+def add_kernel(x, y, out, n: tl.constexpr, BLOCK: tl.constexpr):
     pid = tl.program_id(0)
-    offs = pid * BLOCK + tl.arange(0, BLOCK)
-    mask = offs < n
-    v = tl.load(x + offs, mask=mask, other=0.0)
-    out = v * 2.0
-    tl.store(y + offs, out, mask=mask)
+    offsets = pid * BLOCK + tl.arange(0, BLOCK)
+    mask = offsets < n
+
+    xv = tl.load(x + offsets, mask=mask, other=0.0)
+    yv = tl.load(y + offsets, mask=mask, other=0.0)
+    tl.store(out + offsets, xv + yv, mask=mask)
 ```
 
-真正复杂的 kernel 只是把这个骨架扩展成二维 tile、分块归约、矩阵乘、shared-memory-like reuse 和 fused epilogue。mask、offset、BLOCK 和 program_id 仍然是基本骨架。
+这段代码里，`pid` 是当前 program instance 在一维 grid 里的编号。`tl.arange(0, BLOCK)` 不是 Python 循环，而是生成一个 block 内的向量索引。`offsets` 把“第几块”转成“全局张量里的哪些元素”。`mask` 处理最后一块不足 `BLOCK` 的边界，避免越界 load/store。
 
-## 适合的 Kernel 类型
+用一行公式读地址就是：
 
-| 类型 | 为什么适合 Triton |
+\[
+\text{offset}_r = \text{pid}\cdot B + r,\qquad r\in[0,B)
+\]
+
+这里 \(B\) 表示 `BLOCK`，\(r\) 表示 block 内第几个 lane 对应的元素位置。Triton 编译器会把这些向量表达降到底层并行执行；写 kernel 的人需要保证 offsets、mask 和 dtype 路径是对的。
+
+## stride 决定你读的是哪种张量
+
+真实模型里的张量经常不是简单 contiguous 一维数组。二维矩阵里，位置 \((i,j)\) 的地址通常写成：
+
+\[
+\text{addr}(i,j)=\text{base}+i\cdot s_i+j\cdot s_j
+\]
+
+其中 \(s_i\) 和 \(s_j\) 是 stride。把 stride 显式传入 kernel，是为了让同一段 Triton 代码能处理不同 layout，而不是偷偷假设输入连续。
+
+例如处理一个 \(M\times N\) 的输出 tile，可以先构造两组索引：
+
+```python
+offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
+ptrs = base + offs_m[:, None] * stride_m + offs_n[None, :] * stride_n
+```
+
+这里 `offs_m[:, None]` 和 `offs_n[None, :]` 通过广播生成一个二维地址矩阵。读 Triton kernel 时，最重要的不是某个 API 名字，而是看这张地址矩阵是否对应了正确 layout：行主序、列主序、batch stride、head stride、group stride、packed layout 都会在这里显形。
+
+很多 kernel bug 都不是计算公式错，而是 stride、mask 或边界条件错：看起来只在某些 batch size、head 数、hidden size、非 contiguous 输入或最后一个 tile 上出错。
+
+## matmul tile：一个 program instance 负责一块 \(C\)
+
+矩阵乘是 Triton 最好的入门主线。设：
+
+\[
+C=A B,\qquad A\in\mathbb{R}^{M\times K},\quad B\in\mathbb{R}^{K\times N},\quad C\in\mathbb{R}^{M\times N}
+\]
+
+一个 Triton program instance 通常负责 \(C\) 的一个 \(\text{BLOCK}_M\times\text{BLOCK}_N\) tile。它在 \(K\) 维上分块前进：每次读一块 \(A_{M\times K_b}\) 和一块 \(B_{K_b\times N}\)，用 `tl.dot` 累加到 accumulator，最后写回 \(C\) 的 tile。
+
+![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="760" }
+
+<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原图比较 Triton、cuBLAS、AutoTVM、Tensor Comprehensions 和 PlaidML 在矩阵乘 roofline 图上的位置。本站用它说明：Triton 的价值不是替代所有库，而是在“框架太粗、手写 CUDA 太重”的中间地带，让人直接表达 tile 和数据流。</small>
+
+matmul kernel 的骨架可以这样读：
+
+```text
+pid -> 映射到 (pid_m, pid_n)
+    -> 得到 C 的一个输出 tile
+    -> for k in 0..K step BLOCK_K:
+           load A[offs_m, offs_k]
+           load B[offs_k, offs_n]
+           acc += dot(A_tile, B_tile)
+    -> optional epilogue: bias / activation / scale / cast
+    -> store C[offs_m, offs_n]
+```
+
+这里的核心不是 `tl.dot` 这一个调用，而是三张账：
+
+| 账 | 为什么影响性能 |
 | --- | --- |
-| Matmul / Batched Matmul | tile 参数清晰，容易做 shape-specialization 和 autotune |
-| Softmax / Reduce | 按行或按块归约，逻辑清楚，便于融合 |
-| LayerNorm / RMSNorm | 高频、带宽受限、很适合向量化和融合 |
-| Elementwise fusion | bias、activation、residual、dropout、scale 可合并 |
-| Quant / Dequant | scale 访问和类型转换可与周边算子融合 |
-| Attention 原型 | Q/K/V 分块、mask、online softmax 便于快速验证 |
-| MoE 周边 | token permutation、padding、grouping 可做专用优化 |
+| tile 复用 | \(A\) 和 \(B\) 的 tile 是否被足够多输出元素复用。 |
+| 边界浪费 | \(M,N,K\) 不是 block 整数倍时，mask 会带来无效 lane。 |
+| epilogue 融合 | bias、activation、dequant、requant 能否在 accumulator 写回前完成。 |
 
-Triton 的优势是开发速度和可控性。对于非常复杂的跨块协作、极致 Tensor Core pipeline、新硬件特性或高度手调的生产 attention，CUDA/CUTLASS 仍可能更合适。
+`BLOCK_M`、`BLOCK_N`、`BLOCK_K` 太小，数据复用不足、launch 和边界开销偏大；太大，register pressure、SRAM 使用和 occupancy 压力会上升。高性能 kernel 的核心是把 tile、dtype、layout、accumulator、epilogue 和目标 GPU 放在一起调。
 
-## Matmul、Softmax 与 Attention
+## group ordering 是为了 L2 locality
 
-Triton matmul 常见 meta-parameters 包括 `BLOCK_M`、`BLOCK_N`、`BLOCK_K`、`num_warps`、`num_stages`。它们分别控制输出块大小、K 维推进、warp 协作数量和流水深度。
+官方 matmul 教程会把 program id 映射到 \((pid_m,pid_n)\)，有时还会用 group ordering。这个设计的目的不是让代码更绕，而是改善 L2 cache locality。
 
-Softmax 是理解 Triton 的好入口。典型实现会读取一行或子块，计算局部最大值，做 `exp(x - m)`，求和归一化并写回。长行 softmax 可以分块维护 online max/sum，这也是理解 FlashAttention 的基础。
+如果 grid 简单按行列顺序遍历，邻近 program 可能反复加载不同的 \(A\) 或 \(B\) tile，缓存复用不稳定。group ordering 会让一组 program 先覆盖相邻的 \(M\) tile 和 \(N\) tile，使某些 \(A\) 或 \(B\) block 更可能在 L2 中被复用。
 
-Attention 适合用 Triton 原型化，因为它具备明确块结构、大量可融合操作和明显 I/O 优化空间。但 Triton attention 不自动等于生产最优。生产实现还要看 head dim、序列长度、causal/sliding window/paged KV、backward、目标 GPU 和 runtime 调度。
+读这类代码时可以问：当前映射让连续 program 共享哪一边的数据，\(A\) 复用多一些还是 \(B\) 复用多一些，是否符合真实 shape。这个问题比“pid 公式长得是否优雅”重要得多。
 
-## 自动调优
+## autotune 搜的是 meta-parameters，不是算法真理
 
-不同 GPU、shape、dtype 下最优 tile 参数不同。Triton 的实用性很大程度来自 autotune。
+Triton 的 `@triton.autotune` 会在一组 `triton.Config` 里选择配置。常见候选包括：
 
-常见搜索维度包括 `BLOCK_M/N/K`、`num_warps`、`num_stages`、向量化宽度、layout 或 swizzle 开关，以及是否使用某些融合路径。
+| 参数 | 影响 |
+| --- | --- |
+| `BLOCK_M/N/K` | tile 大小、复用、边界浪费和 accumulator 大小。 |
+| `num_warps` | 一个 program instance 内的 warp 数，影响并行度和资源占用。 |
+| `num_stages` | pipeline 深度，影响预取、寄存器和 shared memory 压力。 |
+| group size / swizzle | program 遍历顺序和 L2 locality。 |
+| accumulator dtype | 数值稳定、吞吐和写回转换。 |
 
-Autotune 不能替代理解。如果访存模式本身不合理，autotune 只是在一堆差配置里找相对不差的。更合理的顺序是：先根据数据流设计候选，再用 autotune 搜索，最后配合 profiling 解释为什么某个配置更好。
+`key` 决定什么时候重新选择配置。例如 key 里包含 `M,N,K`，就表示不同矩阵形状可能用不同配置；若 key 只包含部分维度，低频变化就可能复用同一配置。
 
-也要避免 autotune 空间过大。搜索成本、编译缓存、冷启动和 shape 变化都会影响真实收益。
+正确理解 autotune 要记住两点。第一，它只能在候选配置里选，不会替你发明更好的数据流。第二，它搜索的目标通常是某个 microbenchmark 的热态时间，未必等于端到端训练 step、服务 TTFT 或 P99。
 
-## 与 PyTorch 和编译器的关系
+更稳的流程是：
 
-Triton 在 PyTorch 生态里常见于三种路径：手写 `@triton.jit` 自定义 kernel，作为 `torch.compile` / Inductor 的后端生成目标，或被高层库封装成特定算子的加速实现。
+```text
+profile 证明热点
+-> 画出 block 数据流
+-> 写 correctness-first baseline
+-> 按真实 shape 做 bucket
+-> 给每个 bucket 少量候选
+-> autotune / 固化配置
+-> 端到端回归
+```
 
-这带来一个工程现实：同一个算子可能同时存在框架默认实现、Inductor 生成实现、Triton 手写实现和 CUDA 库实现。上线前要明确哪条路径实际被调用，shape 变化时是否会重新编译，cache miss 和 warmup 成本是否可接受，fallback 路径是否数值一致，graph rewrite 是否破坏预期融合。
+如果候选空间过大，autotune 本身会变成成本；如果候选空间过窄，它只能在差配置里选一个不太差的。
 
-只看单次 microbenchmark 很容易误判。要把编译、缓存、动态 shape 和端到端调度算进去。
+## JIT、cache 和 fallback 是线上问题
 
-## 选型边界
+手写 Triton kernel、PyTorch Inductor 生成的 Triton kernel、高层库内部封装的 Triton kernel，都会面对 JIT 编译和缓存问题。离线 benchmark 往往只测热态 kernel latency，真实服务还要看：
 
-当框架默认 kernel 明显慢、算子热点稳定且形状集中、需要融合多个小算子或快速验证一种数据流设计，而 CUDA 手写成本过高、库又覆盖不到时，适合优先用 Triton。反过来，如果热点还没 profile 清楚、shape 过于发散、编译和 autotune 成本过高、需要极端手调的 Tensor Core pipeline、涉及复杂跨 block 协作，或已有成熟库足够快且维护成本更低，就不适合优先上 Triton。
+| 指标 | 为什么要单独记录 |
+| --- | --- |
+| compile time | 新 shape 首次命中时可能拉高 TTFT 或 P99。 |
+| autotune time | 搜索候选配置可能比一次 kernel 执行贵很多。 |
+| compile cache hit rate | 动态 shape 太散会反复 miss。 |
+| fallback frequency | 不支持某些 shape/dtype/layout 时是否退回慢路径。 |
+| graph capture stability | `torch.compile` 是否稳定捕获到同一条 kernel 路径。 |
 
-Triton 最有价值的位置，是把“值得优化但不值得手写 CUDA”的大片中间地带覆盖起来。
+上线时常见做法是：离线预热高频 shape，限制在线 autotune，把候选配置固化到少数 bucket，低频 shape 走保守路径，并把 compile/autotune/fallback 时间计入端到端指标。否则“kernel 热态快 20%”可能变成“线上 P99 更差”。
 
-## 验收清单
+## Triton 擅长和不擅长什么
 
-写 Triton kernel 后，不要只看一个形状的速度。验收要覆盖正确性、数值稳定、性能分桶、编译成本、端到端收益、回退机制和维护成本：多 dtype、多 shape、边界 mask、随机 seed 要和 baseline 对齐；softmax、reduce、低精度累计和溢出边界要稳定；主流 shape、长尾 shape、batch 变化和动态 shape 要分桶看；首次编译、cache 命中和 autotune 时间也要计入真实收益。
+Triton 擅长中等复杂度、规则数据流、需要融合的小到中型热点：
 
-Triton 的核心价值不是让所有人绕过 CUDA，而是让更多工程师能以可控成本写出足够好的张量 kernel，并把 shape-specialization、fusion 和 autotuning 纳入日常优化流程。
+| 类型 | 典型收益 |
+| --- | --- |
+| elementwise fusion | 多个操作合成一次 load/store，少走 HBM。 |
+| LayerNorm / RMSNorm | 行内归约清楚，可融合 residual、scale、cast。 |
+| softmax / reduce | block 内归约和数值稳定统计容易表达。 |
+| custom matmul epilogue | bias、activation、dequant、requant 可在写回前融合。 |
+| MoE 周边算子 | token permutation、padding、grouping 可针对固定路径特化。 |
 
-## 真实排查案例：Autotune 搜索出了线上冷启动抖动
+它不擅长所有问题。极致 GEMM、复杂跨 block 同步、最新硬件特性、很不规则的稀疏访问、要求跨 GPU 通信重叠的 kernel family，往往需要 cuBLASLt、CUTLASS/CuTe、CUDA、PTX/SASS 或框架 runtime 配合。
 
-**输入症状**：Triton attention 原型在离线测试中快 12%，上线灰度后首批请求 TTFT 偶发超过 10s，之后恢复正常。
+所以 Triton 的好用，不等于所有热点都该用 Triton。它最适合在“现成库不覆盖、手写 CUDA 过重、数据流可 block 化、收益能端到端验证”的位置发力。
 
-**关键指标**：热态 kernel latency 符合预期；冷态请求出现编译和 autotune 峰值；编译缓存 miss 集中在少数长上下文 bucket；业务 P99 被首次命中拖高。
+## 验证一个 Triton kernel
 
-**Nsight / trace 观察**：Nsight Systems 里 GPU 空闲但 CPU 侧 JIT 编译占用明显；首次遇到新 shape 时没有马上进入 GPU kernel，而是在编译、加载和候选配置测试上耗时。
+一个 Triton kernel 不能只用“比 PyTorch 快”验收。更完整的验证至少包括五类。
 
-**判断**：问题不是 Triton kernel 热态性能，而是 autotune 和编译缓存进入了在线关键路径。离线 benchmark 漏掉了 cold start 成本。
+| 验证 | 看什么 |
+| --- | --- |
+| 正确性 | contiguous / non-contiguous、边界 tile、不同 dtype、不同 batch/head/hidden size。 |
+| 数值 | accumulator dtype、rounding、溢出、NaN/Inf、与 reference 的误差桶。 |
+| 性能 | cold start、warmup 后 latency、带宽、Tensor Core 利用、shape bucket 命中率。 |
+| 端到端 | 训练 step time、serving TTFT/TPOT/P99、CPU launch、graph capture、fallback。 |
+| 可维护 | 配置数量、硬件兼容、版本升级回归、错误日志和保守回退路径。 |
 
-**修复**：固定高频 bucket 的 autotune 结果并做启动预热；限制线上动态 shape 的搜索空间；低频 shape 走保守通用实现；在指标里分开记录 compile time、autotune time 和 kernel time。
+读一个已有 Triton kernel 时，按下面顺序拆会更稳：先找 `program_id` 到输出 tile 的映射，再看 offsets 和 stride 是否正确，然后看 mask 边界，再看 load/store 的 dtype 和 accumulator，接着看 `tl.dot` 或 reduction 的循环，最后看 autotune key、候选配置和调用侧 shape bucket。
 
-**反例**：如果服务是离线批处理，冷启动成本可摊到很长任务里，动态 autotune 可能是可接受的。在线交互服务则必须把首次编译视为用户延迟的一部分。
+如果只记住一句话：Triton 的核心不是把 CUDA 写成 Python，而是把张量 kernel 的 block 数据流暴露出来，让程序员控制 tile 和地址，让编译器生成底层并行代码；自动调优只能优化候选配置，不能替代数据流设计和端到端验证。
+
+## 外部精读
+
+- [Triton 官方 Vector Addition tutorial](https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html)：最小 `program_id`、`tl.arange`、mask、load/store 心智模型。
+- [Triton 官方 Matrix Multiplication tutorial](https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html)：理解 `BLOCK_M/N/K`、`tl.dot`、group ordering 和 autotune。
+- [Triton `autotune` API](https://triton-lang.org/main/python-api/generated/triton.autotune.html)：查 `configs`、`key`、`reset_to_zero`、`restore_value` 等参数语义。
+- [Triton paper](https://doi.org/10.1145/3315508.3329973)：理解 Triton 作为 tiled neural network computation DSL 的原始定位。
+- [Introducing Triton](https://openai.com/index/triton/)：OpenAI 技术博客，适合把 Triton 放进自定义神经网络 kernel 的生产力/性能折中里看。
+- [PyTorch `torch.compile` documentation](https://docs.pytorch.org/docs/stable/torch.compiler.html)：理解 Inductor、编译缓存、graph capture 和生成 kernel 的上层路径。
+- [CUDA C++ Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/)：补 coalescing、occupancy、profiling、memory throughput 等 GPU 优化背景。
+- [Datawhale：Triton 编程语言入门](https://datawhalechina.github.io/awesome-triton/)：中文入口，适合学习教程式讲法；强 claim 和 API 细节仍回官方文档核对。

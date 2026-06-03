@@ -2,9 +2,14 @@
 
 这一页把量化主线里的代表方法放在同一页，不只是为了记住名字，而是为了回答三个工程里最常见的问题：误差主要出现在权重、激活、KV cache，还是量化 kernel 和调度兼容性上；某种方法“更准”到底是因为二阶补偿、通道保护、平滑激活，还是训练时已经让模型适应了量化噪声；真实线上收益到底来自显存下降、吞吐增加、单卡可部署，还是仅仅减少了模型文件大小。
 
-
 量化最容易被误解成“把 16 位变成 4 位”，但真正难点在于：  
 不同方法保护的对象不同，误差迁移的路径也不同。
+
+## 核心问题
+
+量化方法对照真正要回答的是：**同样是低比特，GPTQ、AWQ、SmoothQuant、QAT、QLoRA、KV 量化到底在保护哪一种误差，代价又落在校准、训练、kernel、显存还是质量回归上。**
+
+所以这页不按论文发布时间排序，而按误差控制对象来读。GPTQ 关心权重量化误差对输出的二阶影响，AWQ 关心被激活放大的关键通道，SmoothQuant 关心 activation outlier，QAT 让模型在训练时适应低比特误差，QLoRA 关心量化底座上的微调预算，KV cache 量化关心长上下文在线显存。
 
 ## 方法总表
 
@@ -22,17 +27,6 @@
 
 ## 用一个公式理解量化误差来自哪里
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
-
 对实数张量 \(x\) 做线性量化时，常写成：
 
 \[
@@ -40,10 +34,9 @@ q = \mathrm{clip}\left(\left\lfloor \frac{x}{s} \right\rceil + z \right), \qquad
 \hat{x} = s (q - z),
 \]
 
-
 其中 \(s\) 是 scale，\(z\) 是 zero-point，\(q\) 是低比特整数表示，\(\hat{x}\) 是反量化后的近似值。
 
-**读作什么**：先把 \(x\) 按 scale 映射到整数格子，再在计算时还原成 \(\hat{x}\)。量化方法真正要控制的是 \(x\) 和 \(\hat{x}\) 的差异如何影响模型输出。
+这两行先把 \(x\) 按 scale 映射到整数格子，再在计算时还原成 \(\hat{x}\)。量化方法真正要控制的是 \(x\) 和 \(\hat{x}\) 的差异如何影响模型输出。
 
 如果定义误差为 \(e = x - \hat{x}\)，主要会遇到截断误差、饱和误差和传播误差：bit 数太低会让表示不够细，极值被 clip 会造成饱和，某层误差还可能被后续层继续放大。不同量化方法，本质上是在不同位置控制这三种误差。
 
@@ -67,11 +60,10 @@ q = \mathrm{clip}\left(\left\lfloor \frac{x}{s} \right\rceil + z \right), \qquad
 \frac{1}{2}(w-\hat{w})^\top H (w-\hat{w}),
 \]
 
-
 其中 \(H\) 是 Hessian 或其近似。  
 这就解释了为什么 GPTQ 常被理解为“带二阶补偿”的 PTQ。
 
-**读作什么**：同样大小的权重误差，如果落在 \(H\) 表示的高敏感方向上，会造成更大的 loss 增量。GPTQ 的补偿思想就是尽量避开这些伤害大的方向。
+同样大小的权重误差，如果落在 \(H\) 表示的高敏感方向上，会造成更大的 loss 增量。GPTQ 的补偿思想就是尽量避开这些伤害大的方向。
 
 ### 3.3 AWQ：保护真正被激活放大的通道
 
@@ -91,11 +83,10 @@ SmoothQuant 通过对权重和激活做重参数化，把激活峰值平滑掉�
 W x = (W D^{-1})(D x),
 \]
 
-
 其中 \(D\) 是按通道设置的缩放矩阵。  
 它的目的就是让 \(Dx\) 变得更平滑，从而让激活量化更容易。
 
-**读作什么**：线性层输出保持等价，但 activation 的尖峰被迁移到更容易离线处理的权重侧。
+线性层输出保持等价，但 activation 的尖峰被迁移到更容易离线处理的权重侧。
 
 ### 3.5 QAT：保护整个前向传播链
 
@@ -175,13 +166,13 @@ QLoRA 不是传统意义上只为部署而生的量化。它更像在问：如�
 h_{l+1} = f_l(h_l; W_l),
 \]
 
+其中 \(h_l\) 表示进入第 \(l\) 层的 hidden state，\(W_l\) 表示这一层的权重，\(f_l\) 表示该层的线性、归一化和非线性等组合计算。
 
 量化后变成
 
 \[
 \hat{h}_{l+1} = f_l(\hat{h}_l; \hat{W}_l).
 \]
-
 
 这两行式子在说：原模型用 \(h_l\) 和 \(W_l\) 得到下一层 hidden state；量化路径则用已经带误差的 \(\hat{h}_l\) 和量化权重 \(\hat{W}_l\)，所以误差会沿层继续传播。
 
@@ -196,8 +187,7 @@ h_{l+1} = f_l(h_l; W_l),
 \|\delta h_l\|.
 \]
 
-
-**读作什么**：前面某层的小误差，经过后续层可能被放大。因此“某层权重量化误差小”不等于“最终输出误差小”。
+前面某层的小误差，经过后续层可能被放大。因此“某层权重量化误差小”不等于“最终输出误差小”。
 
 这解释了为什么同样 4bit 下某些层很安全、某些层很危险；如果不做分层敏感性分析，方案很容易看起来“平均误差不大”，结果真实输出明显变差。
 
@@ -209,15 +199,15 @@ h_{l+1} = f_l(h_l; W_l),
 
 如果你在做实际项目，先确认瓶颈是在权重、激活还是 KV cache。若主要是模型装不下，优先试 `AWQ` / `GPTQ` 这类成熟 W-only；若主要是长上下文显存，尽快把 `KV cache quant` 纳入评估；若要线上稳定且可长期维护，优先考虑 `FP8` 或稳妥的 `INT8` 路线；若必须在量化状态上继续适配任务，再引入 `QLoRA` 或轻量 QAT。
 
-## 本页结论
+## 阅读结论
 
 量化方法对照时，最关键的不是“哪篇论文更新”，而是先分清它保护的是哪种误差、牺牲的是哪种成本、适配的是离线研究、单卡部署还是生产系统。只有把误差来源、系统瓶颈和训练预算一起放进去看，量化选型才不会停留在“4bit 看起来更省”这种表面层。
 
-## 推荐跳转
+## 外部精读
 
-- 看全局总览：[量化路线图](index.md)
-- 看 PTQ 主线：[PTQ、GPTQ、AWQ 与 SmoothQuant](ptq-gptq-awq-smoothquant.md)
-- 看量化训练：[QLoRA 与量化训练](qlora-and-quantized-training.md)
-- 看部署核查：[评估与部署检查清单](evaluation-and-deployment-checklist.md)
-- 看混合精度：[FP8 与混合精度推理](fp8-and-mixed-precision-serving.md)
-- 看运行框架：[量化运行时与框架](quantization-runtimes-and-frameworks.md)
+- [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：适合先把 scheme、granularity 和 technique 分开。
+- [GPTQ](https://arxiv.org/abs/2210.17323)：理解二阶补偿和逐层权重量化。
+- [AWQ](https://arxiv.org/abs/2306.00978)：理解激活感知的通道保护。
+- [SmoothQuant](https://arxiv.org/abs/2211.10438)：理解 W8A8 量化里的 activation outlier 迁移。
+- [QLoRA](https://arxiv.org/abs/2305.14314)：理解 4bit 底座微调和 NF4/double quantization。
+- [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 FP8 为什么更像硬件友好的混合精度路线，而不是传统整数 PTQ。

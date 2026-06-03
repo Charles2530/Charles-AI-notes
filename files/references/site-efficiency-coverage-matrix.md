@@ -2,7 +2,6 @@
 
 这页是全站地图，回答一个问题：**每个专题到底服务哪类效率，证据入口在哪里，还有什么不能证明。** 它不替代各专题正文，也不替代 [证据与复现状态标准](evidence-and-reproducibility-standard.md)。
 
-
 ## 覆盖矩阵
 
 | 专题 | 数据效率 | 训练效率 | 推理效率 | 显存效率 | 验证效率 | 部署效率 | 证据入口 | 当前缺口 |
@@ -54,8 +53,8 @@ flowchart TD
     G1 --> I
 ```
 
-!!! tip "方法选择树怎么用"
-    这棵树只负责把瓶颈导向专题和案例，不替代论文证据。进入具体页面后仍要回到 `Evidence Snapshot`：确认 claim 是 `Paper Result`、`Ablation`、`System Throughput`、`Closed-loop`、`Official Demo`、`Toy Fixture` 还是 `Site Inference`。
+**方法选择树怎么用。**
+这棵树只负责把瓶颈导向专题和案例，不替代论文证据。进入具体页面后仍要回到 `Evidence Snapshot`：确认 claim 是 `Paper Result`、`Ablation`、`System Throughput`、`Closed-loop`、`Official Demo`、`Toy Fixture` 还是 `Site Inference`。
 
 ## 从瓶颈到技术选择
 

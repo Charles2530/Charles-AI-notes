@@ -2,10 +2,7 @@
 
 现代 AI kernel 的性能，大多围绕数据如何穿过 GEMM、Attention、Norm、Quantization 和 Memory Movement 这一串热点算子被决定。GEMM 是计算主引擎，Attention 是序列模型的结构性热点，融合 kernel 则试图减少中间读写和 launch 开销，让系统更接近硬件上限。
 
-
 这页不重复数学推导，而是解释这些算子为什么重要、共享哪些优化模式，以及训练和推理系统为什么一再围绕它们重构。
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
 
 ## 热点算子地图
 
@@ -30,16 +27,6 @@ Tile 的作用是提升数据重用。tile 太小，重用不足、launch 和边
 
 ## Attention 是 I/O 主战场
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-> **算法视角**：这里可以把 attention / KV 相关讨论还原成“query 扫描 key/value 并加权读取”的问题；MHA、GQA、MQA 的差别最终会落到 KV head 数、cache 体积和每步 decode 的访存压力上。
->
-> 延伸阅读：[04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《04. Attention MHA GQA | 注意力机制与键值缓存 (MHA / GQA / MQA)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| $QK^\top$ 打分与读取 | $O(L_q L_k d_h)$ | 显式分数为 $O(L_q L_k)$；KV cache 为 $O(L_k d_h)$ | FlashAttention 不改变数学复杂度，但用分块和 online softmax 降低 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/04_Attention_MHA_GQA.html) |
-
 Attention 的核心公式是：
 
 \[
@@ -47,7 +34,6 @@ Attention 的核心公式是：
 =
 \text{softmax}\left(\frac{QK^\top}{\sqrt{d}}\right)V
 \]
-
 
 朴素实现的最大问题不是 FLOPs，而是把完整 score 矩阵 materialize 到 HBM，再读回来做 softmax 和后续乘法。这会产生巨大的中间张量和带宽压力。
 
@@ -57,8 +43,8 @@ FlashAttention 的核心思想是：不改变数学结果，重写数据流。�
 
 <small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原论文图意：左侧展示 FlashAttention 如何按块把 Q/K/V 放入 SRAM，避免 materialize 完整 attention matrix；右侧展示在 GPT-2 attention 上相对 PyTorch 实现的加速效果。</small>
 
-!!! note "图解：FlashAttention 为什么是 exact attention"
-    这张图容易被误读成“近似 attention”。实际上 FlashAttention 没有改 \(QK^\top\)、softmax 和 \(AV\) 的数学结果，它改的是计算顺序和内存层级：每次只处理一块 K/V 和一块 Q，用在线 softmax 保持数值正确，再把累积输出写回。它快的原因是减少 HBM 中间读写，而不是牺牲 attention 质量。
+**FlashAttention 为什么是 exact attention。**
+这张图容易被误读成“近似 attention”。实际上 FlashAttention 没有改 \(QK^\top\)、softmax 和 \(AV\) 的数学结果，它改的是计算顺序和内存层级：每次只处理一块 K/V 和一块 Q，用在线 softmax 保持数值正确，再把累积输出写回。它快的原因是减少 HBM 中间读写，而不是牺牲 attention 质量。
 
 Attention 在不同 serving 阶段的画像也不同：
 

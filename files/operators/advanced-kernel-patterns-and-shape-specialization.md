@@ -2,9 +2,6 @@
 
 真正高性能的 AI kernel，往往并不只靠一个技巧，而是若干模式叠加的结果：tiling、双缓冲、流水线、persistent kernel、epilogue fusion、threadblock swizzle、shape specialization、autotune。理解这些模式，能帮助你把很多看似不同的实现放到同一张设计图里。
 
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 为什么“高级模式”不是炫技
 
 当算子真正接近硬件上限时，性能差异往往不再来自“会不会做矩阵乘”，而来自数据是否在正确时间到达正确层级内存、计算和访存是否能流水化、不同 shape 是否走了最适合的路径，以及 kernel 是否减少了长期驻留和调度开销。
@@ -31,17 +28,6 @@
 代价是 shared memory 需求更高、寄存器使用可能增加、同步点更复杂，调试难度也会上升。
 
 ## Persistent Kernel
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 persistent kernel 的核心思路是：  
 让少量常驻线程块长期处理一系列工作，而不是不断 launch 新 kernel。
@@ -128,7 +114,7 @@ flowchart LR
 
 高级 kernel 模式就像把普通工厂升级成柔性自动化产线。Tiling 相当于把原材料按工位大小切好，double buffering 像前一道工序还在加工时下一批料已经在旁边待命，persistent kernel 像固定班组持续接单而不是每单重新招工，shape specialization 则像给高频规格产品配专用模具。真正的高吞吐并不是某个环节特别神，而是这些组织方式叠加起来，让整条产线更加贴近真实订单分布。
 
-## 本页结论
+## 阅读结论
 
 高级 kernel 模式的核心，不是追求“更复杂”，而是让计算、访存、调度和形状分布更好地匹配。理解 tiling 之后，再理解双缓冲、persistent kernel、shape specialization 和 dispatch，你会发现很多高性能实现其实共享一套非常一致的思想：  
 **让热点 shape 走最适合的路径，让数据总是在被需要之前就处于最合适的位置。**

@@ -3,9 +3,6 @@
 很多 kernel 调优到了后期，真正需要看的已经不只是源码，而是编译之后到底生成了什么。因为同一段高层代码，可能在不同编译器、不同版本、不同 GPU 上生成完全不同的底层结果。  
 这也是为什么成熟的算子工程师，最终都会形成一个习惯：**必要时看 PTX，看 SASS，看寄存器和指令路径，而不是只相信源码意图。**
 
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 为什么要看编译结果
 
 因为源码层面你以为发生的事，未必真的发生了。例如：
@@ -82,17 +79,6 @@ flowchart TD
 
 ## 为什么这件事对 Triton 和 CUDA 都有意义
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
-
 虽然 Triton 抽象更高，但最终也会生成底层代码。  
 因此在调优后期，无论是手写 CUDA 还是 Triton kernel，都可能需要做同样的检查：
 
@@ -116,7 +102,7 @@ PTX / SASS 检查最容易走偏的地方，是把所有可疑指令都当成瓶
 
 可以把 PTX / SASS 检查看成工厂验收时拆开机器外壳看内部传动。设计图纸当然重要，但真正决定机器怎么跑的，是里面最后装出来的齿轮、传动轴和控制逻辑。源码是设计图，编译结果才是实际装配好的机器。高性能调优到后期，很多问题只能通过“拆开机器看内部”才能确认。
 
-## 本页结论
+## 阅读结论
 
 PTX / SASS 与编译检查，是高性能算子工程里靠近终局的一步。它不需要每次都做，但在关键热点和疑难性能问题上非常有价值。只要你建立了这个意识，就会更容易把“高层代码意图”和“底层真实执行”真正接起来，而不是停留在源码层面的想当然。
 

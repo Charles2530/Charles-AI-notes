@@ -6,7 +6,6 @@ paper_topic: 世界模型
 
 # Embodied World Model Survey：具身世界模型综述
 
-
 这篇论文不是一个新模型，而是一张世界模型文献地图。它最有价值的地方，是把近几年非常混乱的 world model 工作压到三个问题上：**模型和决策耦合得多紧、未来是一步步 rollout 还是整体预测、世界状态到底用向量、token、网格还是可渲染 3D 表示。**
 
 如果你想快速判断一篇新论文的位置，这篇综述比单篇 Dreamer、V-JEPA、LingBot-World 更适合做入口。它不会教你复现某个模型，但会帮你判断：这篇工作证明的是视觉生成能力、状态预测能力、规划收益，还是闭环控制能力。
@@ -29,8 +28,8 @@ paper_topic: 世界模型
 2. 它怎样建模时间；
 3. 它怎样表示空间世界状态。
 
-!!! note "初学者先抓住"
-    世界模型不是“模型知道很多世界知识”。在具身智能里，世界模型更具体：它要把历史观测、动作和隐藏状态组织起来，预测未来状态、未来观测、奖励、风险或终止信号。一个 VLM 能说出“桌上有杯子”不等于它有世界模型；它还要能回答“如果夹爪从右侧推杯子，杯子会不会倒、会不会掉到桌下、任务会不会失败”。
+**初学者先抓住。**
+世界模型不是“模型知道很多世界知识”。在具身智能里，世界模型更具体：它要把历史观测、动作和隐藏状态组织起来，预测未来状态、未来观测、奖励、风险或终止信号。一个 VLM 能说出“桌上有杯子”不等于它有世界模型；它还要能回答“如果夹爪从右侧推杯子，杯子会不会倒、会不会掉到桌下、任务会不会失败”。
 
 ## 总框架
 
@@ -40,11 +39,11 @@ paper_topic: 世界模型
 
 <small>图源：`A Comprehensive Survey on World Models for Embodied AI`，Figure 1 子图。原论文图意：world model 作为 internal simulator，把历史观测转化为可用于 imagination、planning 和控制的内部世界状态。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是综述 taxonomy、任务类型和方法家族，输出是具身世界模型路线图。  
-    **效率机制**：用分类框架降低阅读和方案选型成本，而非直接降低训练成本。  
-    **对主线意义**：它帮助把 RSSM、视频模拟、几何状态和 VLA 接到同一张地图。  
-    **不能证明什么**：综述图不能证明任何单一方法在真实闭环中有效。
+**综述总图用于定位方法，不是证明方法有效。**
+**输入输出**：输入是综述 taxonomy、任务类型和方法家族，输出是具身世界模型路线图。  
+**效率机制**：用分类框架降低阅读和方案选型成本，而非直接降低训练成本。  
+**对主线意义**：它帮助把 RSSM、视频模拟、几何状态和 VLA 接到同一张地图。  
+**不能证明什么**：综述图不能证明任何单一方法在真实闭环中有效。
 
 论文把世界模型能力拆成三根柱子：
 
@@ -70,7 +69,6 @@ $$
 \end{array}
 $$
 
-
 这三个式子可以这样读：
 
 | Component | 它在做什么 | 训练/推理意义 |
@@ -79,8 +77,8 @@ $$
 | Filtered Posterior | 看到真实观测后，修正当前 latent state | 训练时把视觉、LiDAR、状态传感器注入 latent |
 | Reconstruction | 从 latent state 重建或预测观测 | 让 latent 不变成无意义变量，而是解释真实数据 |
 
-!!! note "prior 和 posterior 为什么要分开"
-    训练时我们有真实观测 \(o_t\)，所以 posterior \(q_\phi\) 可以看见当前画面并校正 latent；但规划未来时，未来观测还不存在，模型只能用 prior \(p_\theta\) 按动作往前滚。世界模型训练的核心就是让两者对齐：posterior 学会从真实数据读状态，prior 学会在没有真实未来帧时也能预测状态。
+**prior 和 posterior 为什么要分开。**
+训练时我们有真实观测 \(o_t\)，所以 posterior \(q_\phi\) 可以看见当前画面并校正 latent；但规划未来时，未来观测还不存在，模型只能用 prior \(p_\theta\) 按动作往前滚。世界模型训练的核心就是让两者对齐：posterior 学会从真实数据读状态，prior 学会在没有真实未来帧时也能预测状态。
 
 论文的 ELBO 视角可以压缩成 reconstruction-regularization paradigm：
 
@@ -191,9 +189,6 @@ Masked JEPA 不要求模型补出每个像素，而是预测被遮挡区域的 l
 
 ## 数据、评测与性能证据
 
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
-
 原论文把数据资源分成四类：Simulation Platforms、Interactive Benchmarks、Offline Datasets、Real-world Robot Platforms。比记住名字更重要的是看每个数据源提供什么监督信号。
 
 | Data source type | 代表 | 提供什么信号 | 更适合训练什么 |
@@ -213,8 +208,8 @@ Masked JEPA 不要求模型补出每个像素，而是预测被遮挡区域的 l
 | State-level Understanding | mIoU、mAP、ADE/FDE/L2、Chamfer Distance | 语义、occupancy、轨迹或几何是否预测准 | 仍可能和最终控制收益脱节 |
 | Task Performance | Success Rate、Reward/Return、Sample Efficiency、Collision Rate | 模型是否改善任务完成、数据效率或安全性 | 评测协议差异大，跨论文比较要谨慎 |
 
-!!! note "为什么 FVD 高不等于世界模型强"
-    FVD 只说明生成视频在特征分布上像真实视频。它不能告诉你固定同一历史、换一个动作时未来是否合理分叉，也不能告诉你 planner 用这些未来预测后是否更安全。世界模型最终要用任务层指标收口：任务成功率、碰撞率、return、sample efficiency、long-horizon consistency。像素指标只是第一层体检。
+**为什么 FVD 高不等于世界模型强。**
+FVD 只说明生成视频在特征分布上像真实视频。它不能告诉你固定同一历史、换一个动作时未来是否合理分叉，也不能告诉你 planner 用这些未来预测后是否更安全。世界模型最终要用任务层指标收口：任务成功率、碰撞率、return、sample efficiency、long-horizon consistency。像素指标只是第一层体检。
 
 原论文的性能表支持几个方向性结论：
 
@@ -239,8 +234,8 @@ Masked JEPA 不要求模型补出每个像素，而是预测被遮挡区域的 l
 | Occupancy / BEV world model | BEV、voxel、ego trajectory、map、LiDAR/camera | future occupancy / BEV forecasting | 远 horizon 衰减和 geometry consistency |
 | 3DGS / NeRF world model | multi-view images、camera pose、3D primitives、actions | renderable scene reconstruction and update | 动态对象、接触和大规模场景更新 |
 
-!!! note "训练路线怎么选"
-    如果目标是机器人控制，先问是否需要高清未来画面。很多时候不需要，latent dynamics 或 token policy 就够。若目标是自动驾驶规划，BEV/occupancy 可能比 RGB 视频更有用。若目标是交互式模拟器或数据生成，视频/3D 可渲染路线才更重要。训练目标必须服务最终接口，不能因为视频模型好看就默认它适合所有世界模型任务。
+**训练路线怎么选。**
+如果目标是机器人控制，先问是否需要高清未来画面。很多时候不需要，latent dynamics 或 token policy 就够。若目标是自动驾驶规划，BEV/occupancy 可能比 RGB 视频更有用。若目标是交互式模拟器或数据生成，视频/3D 可渲染路线才更重要。训练目标必须服务最终接口，不能因为视频模型好看就默认它适合所有世界模型任务。
 
 ## 和站内其他论文的连接
 

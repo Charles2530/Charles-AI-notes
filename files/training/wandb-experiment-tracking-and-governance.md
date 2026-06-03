@@ -2,9 +2,6 @@
 
 Weights & Biases，常写作 W&B，不是训练框架本身，而是把训练过程里的**配置、指标、系统状态、数据版本、模型产物、报告和协作记录**组织起来的实验平台。官方站点把它称为 AI developer platform，并把 Experiments、Reports、Artifacts、Tables、Sweeps、Models Registry、Launch、Prompts 和 Monitoring 放在产品入口里。[W&B Experiments 文档](https://docs.wandb.ai/models/track)强调的是用少量代码记录 metrics、hyperparameters、system metrics 和 model artifacts；[Artifacts 文档](https://docs.wandb.ai/models/artifacts)则强调把数据和模型作为 run 的输入/输出进行版本追踪。
 
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 先看它长什么样
 
 W&B 最常见的第一印象是一张项目面板：左侧是 runs，右侧是随 step 变化的 loss、accuracy 或吞吐曲线。真正有用的是这些曲线不是孤立图片，而是绑定了 config、代码版本、artifact、系统指标和评测结果。
@@ -72,7 +69,6 @@ W&B 适合补的是“实验治理层”：它不替代 Megatron、DeepSpeed、P
 E =
 (\text{code},\text{config},\mathcal{D},\theta_0,\text{env},\text{metrics},\text{artifacts},\text{eval})
 \]
-
 
 其中：
 
@@ -201,7 +197,7 @@ W&B 和 Rerun 可以互补，但不要混用职责：
 4. 训练成本高到一次误判就会浪费明显 GPU-hour；
 5. 模型、数据和评测结果需要长期复盘。
 
-## 本页结论
+## 阅读结论
 
 W&B 在训练板块里的位置不是“可视化曲线工具”，而是实验证据链：它把 run、config、metrics、artifacts、tables、sweeps 和 registry 连接起来，让训练结论能被复现、比较、审计和协作复盘。对世界模型、VLA 和多模态训练来说，这往往比单条曲线更重要。
 

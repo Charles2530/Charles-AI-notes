@@ -1,433 +1,189 @@
-# 低比特训练与数值格式
+# 低比特训练与数值格式：误差会被写回参数
 
-这一页讨论的是**训练里的低精度**，不是单纯的推理量化。
+低比特训练不是“把模型训完以后再量化”。推理量化通常只影响一次前向输出；训练里的低精度会进入 loss、反向传播、梯度规约和 optimizer update，最后写回参数。下一步训练看到的已经不是原模型，而是被低精度误差改过的模型。
 
+所以这篇只回答一个问题：**为什么 FP8、MXFP8、FP4 这类低比特格式能省显存和算力，却不能被当成全局 dtype 开关？**
 
-推理量化常问的是：模型已经训好了，能不能用更低比特部署。  
-低比特训练问的是：模型还在训练中，前向、反向、激活、梯度、优化器状态和通信能不能都用更低精度，同时不让训练发散。
+结论先放在前面：低比特训练真正要设计的是一个混合精度系统。它至少包含格式、scale、累加精度、敏感路径保护、kernel 支持、checkpoint 状态和长跑监控。少掉任何一项，短实验看起来可训，长训练也可能被 outlier、rounding bias 或 scale 失配拖垮。
 
-这两件事看起来都叫“量化”，但风险完全不同。
+## 训练里有三条数值路径
 
-![QLoRA memory comparison](../assets/images/paper-figures/quantization/qlora-figure-1-memory.png){ width="720" }
+一轮训练不是只有 `W @ X`。低精度会同时进入三条路径。
 
-<small>图源：[QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)，Figure 1。原论文图意：QLoRA 把冻结底座量化存储，只训练 adapter，并用分页机制缓解训练时的显存峰值。</small>
+| 路径 | 低精度对象 | 它省什么 | 它最容易伤到什么 |
+| --- | --- | --- | --- |
+| 前向路径 | 权重、激活、attention/MLP GEMM | HBM 读写、Tensor Core 吞吐、激活缓存 | logits、loss、残差流里的异常值 |
+| 反向路径 | activation cache、梯度、反向 GEMM | 训练峰值显存、通信流量 | 梯度方向、loss spike、NaN/Inf |
+| 优化器路径 | 梯度 bucket、一阶/二阶动量、master weight | 常驻显存、ZeRO/FSDP shard 体积 | Adam 更新尺度、恢复一致性 |
+
+这三条路径的风险不一样。权重和激活进入前向，出错会改变这一 batch 的 loss；梯度和 optimizer state 进入更新，出错会改变以后所有 step 的参数轨迹。低比特训练比推理量化更难，就难在这个误差闭环。
+
+AdamW 的显存账可以帮助定位问题。只看参数本身时，BF16 参数大约是 \(2\Psi\) bytes；但训练还可能保存 BF16 梯度、FP32 master weight、FP32 一阶动量和 FP32 二阶动量，混合精度 Adam 的模型状态常被粗略估成 \(16\Psi\) bytes 量级。这里 \(\Psi\) 表示参数个数，不包括激活、通信 buffer 和 workspace。低比特训练如果只把 GEMM 输入换成 FP8，而 optimizer state 还保留高精度，显存收益就会被常驻状态吃掉一大块。
+
+## FP8 为什么先成为训练入口
+
+整数低比特常写成：
+
+\[
+q=\mathrm{round}(x/s), \qquad \hat{x}=s q
+\]
+
+这个式子里，\(x\) 是原始浮点张量，\(s\) 是 scale，\(q\) 是整数或低比特表示，\(\hat{x}\) 是反量化后参与计算的近似值。INT8/INT4 的优点是规则简单、kernel 成熟；缺点是动态范围主要靠 \(s\) 扛。一个 tensor 里如果大多数值在 \([-2,2]\)，但偶尔有一个 1000，scale 为了容纳 1000 会让普通值挤在很少的桶里；如果截断 1000，又可能破坏关键 token 或关键层。
+
+FP8 仍然是浮点数。一个浮点数可粗略写成：
+
+\[
+x=(-1)^{s_{\mathrm{sign}}}\times 2^{e}\times m
+\]
+
+其中 \(s_{\mathrm{sign}}\) 表示正负号，\(e\) 是指数，决定动态范围，\(m\) 是尾数，决定相邻可表示值之间有多细。FP8 只有 8 bit，所以必须在指数和尾数之间取舍。常见的两种格式是：
+
+| 格式 | 直觉 | 训练里常见位置 |
+| --- | --- | --- |
+| E4M3 | 指数少一点，尾数多一点，表示更细 | 权重、激活、前向 GEMM |
+| E5M2 | 指数多一点，尾数少一点，范围更宽 | 梯度、反向中范围更大的张量 |
+
+这不是死规则。DeepSeek-V3 的 FP8 框架就大量使用 E4M3，再靠细粒度 scale 和高精度累加保护训练稳定性。关键点是：FP8 比 INT4 更适合作为训练入口，不是因为 8 bit 天然安全，而是它保留指数位，能更自然地处理训练张量的动态范围。
+
+![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="700" }
+
+<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原图比较 BF16 与 FP8 路线在 GPT/BERT 类模型上的 loss 或 perplexity 曲线。读这张图时不要只看“FP8 也能训”，要看它背后的条件：格式选择、scale 策略、累加精度和敏感算子保护共同成立，曲线才会贴近 BF16。</small>
+
+这张图的价值是建立一个底线：FP8 不是只能做推理压缩，它确实可以进入训练。但它也提醒我们，能否稳定训练要看完整曲线，而不是看格式名字。迁移到新模型、新激活函数或更长 token budget 时，仍要重新监控 loss spike、梯度范数、activation percentile、scale 饱和率和 NaN/Inf。
+
+## scale 是 FP8 训练的控制面
+
+FP8 的元素本身很小，真正决定误差形态的是 scale。一次 FP8 cast 可以理解成：
+
+\[
+x_{\mathrm{fp8}}=\mathrm{FP8Cast}(x/s), \qquad \hat{x}=s\cdot x_{\mathrm{fp8}}
+\]
+
+这里 \(s\) 把原始张量 \(x\) 映射到 FP8 可表示范围内，\(x_{\mathrm{fp8}}\) 是存进 FP8 的值，\(\hat{x}\) 是计算时恢复出来的近似值。scale 太小会 overflow 或截断大值；scale 太大会让大量普通值落到过粗的表示点上。训练过程中张量分布不断变化，scale 也必须跟着变化。
+
+NVIDIA Transformer Engine 的 delayed scaling recipe 就体现了这个思路：运行时记录历史 amax，再用历史最大值估计下一段时间的 scale。这里 amax 是一段张量里观测到的最大绝对值。这样做比每次都重新精确统计更便宜，也比固定 scale 更能适应训练漂移，但它也引入了一个风险：如果 outlier 突然出现，历史 scale 可能来不及反应；如果历史窗口被少数极端值支配，普通值会长期被压粗。
+
+scale 粒度也很重要。
+
+| scale 粒度 | 优点 | 代价 |
+| --- | --- | --- |
+| per-tensor | 元数据少，kernel 简单 | 容易被一个 outlier 拖住 |
+| per-token / per-channel | 更贴合局部分布 | scale 更多，layout 和 kernel 更复杂 |
+| per-block / MX | 兼顾局部适配和硬件实现 | block size、scale 类型、累加方式都要协同设计 |
+
+所以低比特训练的第一性问题不是“选 FP8 还是 BF16”，而是“每条张量路径用什么 scale 粒度，scale 如何更新，scale 状态如何保存，异常时如何回退”。
+
+## 训练误差会闭环放大
+
+推理量化常常可以用一次 calibration 估计误差，因为模型权重不再变化。训练不同。低精度误差会改变梯度，梯度会改变参数，参数又会改变下一步激活分布。这个闭环可以写成：
+
+```text
+参数分布 -> 激活分布 -> scale/rounding -> 梯度 -> optimizer update -> 新参数分布
+```
+
+这里最危险的是后期 outlier。早期几千 step 稳定，只说明短跑没有炸；长 token 训练里，激活函数、残差流和 optimizer 状态可能慢慢把某些异常值放大。[Scaling FP8 Training to Trillion-Token LLMs](https://arxiv.org/abs/2409.12517) 把 FP8 训练推到更长 token 规模后，指出 SwiGLU outlier amplification 会带来稳定性问题。这类结论比“loss 曲线前 10k step 重合”更重要，因为真实预训练的风险往往出现在中后段。
+
+激活是低比特训练的主战场。权重、梯度和 optimizer state 可以被 ZeRO/FSDP 分片，但 activation cache 依赖 micro-batch、sequence length、层数和是否重计算，常常直接压在单卡峰值显存上。更要命的是，反向传播需要读取前向保存的激活；如果保存时压得太粗，梯度方向会被污染。
+
+这也是 COAT 这类工作关注 optimizer states 和 activation 的原因。只把 linear GEMM 改成 FP8，不能覆盖训练显存的大头，也不能解释最常见的反向不稳定。
+
+## FP8 mixed precision 不是全模型 dtype 开关
 
 ![DeepSeek-V3 FP8 framework 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="920" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原论文图意：DeepSeek-V3 展示 FP8 训练框架中不同张量、缩放策略和高精度保护路径的组织方式，说明低精度训练是数值系统设计，而不是单纯把 dtype 改小。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图展示 DeepSeek-V3 的 FP8 mixed precision training framework：GEMM 相关路径进入 FP8，部分状态、累加、embedding、MoE dispatch/combination 和 optimizer 相关路径仍保留更高精度或特殊处理。本站读法是：FP8 训练是一张张量路径图，不是一次 dtype 替换。</small>
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
+这张图最该看的不是颜色，而是边界。一个训练系统会把 `Fprop`、`Dgrad`、`Wgrad`、activation cache、通信、optimizer update 拆成不同路径。某些矩阵乘可以用 FP8 输入，某些中间量必须高精度累加，某些模块要保留 BF16/FP32，某些通信张量还要考虑量化和反量化开销。
 
-## 硬证据模块：低比特训练要同时证明数值和世界模型行为
+三条边界尤其关键：
 
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-> **算法视角**：量化可以看成在权重或激活旁边维护 scale / zero-point，把高精度矩阵乘改写成“低比特存储 + 反量化或融合计算”的数据布局问题。
->
-> 延伸阅读：[20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html)
+| 边界 | 为什么不能粗暴 FP8 |
+| --- | --- |
+| loss / normalization / softmax | 小概率、归一化统计和 logits 差值对舍入误差敏感 |
+| optimizer update | 一阶/二阶动量积累很多 step，误差不是一次性的 |
+| distributed communication | 低精度通信能省带宽，但 scale metadata、dequant 和 overlap 会影响端到端速度 |
 
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| 逐元素量化 / 反量化 | $O(N)$ | $O(N)$ 或按 block 存 scale | 关键收益通常来自带宽和存储减少，而不是渐进复杂度下降；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html) |
-| 量化 GEMM | $O(MNK)$ | 权重侧约按 bit-width 缩放 | 反量化若能融合进 matmul epilogue，才更容易转成端到端收益。 |
+DeepSeek-V3 的系统意义在这里：它把 FP8 放进大规模 MoE 预训练，而不是单独展示一个量化算子。读这类报告时，要同时看格式、scale、累加、并行、通信和 checkpoint，而不是摘一句“使用 FP8 训练”。
 
-低比特训练页如果只报告 loss 曲线和吞吐，就仍然偏通用 LLM。世界模型低比特训练还要证明：动作分叉、未来 latent、risk head 和闭环收益没有被低精度训练过程破坏。
+## 累加精度决定能不能长跑
 
-| 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
-| --- | --- | --- | --- |
-| 本页解决哪项成本 | 激活/通信/optimizer state 显存和 step time 对比 | FP8 省显存但 scale 开销抵消收益 | peak memory、step time、throughput |
-| 训练数值稳定 | loss spike、amax、scale、overflow 事件随 step 记录 | 中后期 outlier 让训练突然发散 | loss spike count、overflow rate |
-| Action sensitivity | 低比特 checkpoint 和 BF16 checkpoint 的反事实动作对比 | 低精训练后动作条件被模型忽略 | action sensitivity、event divergence |
-| Risk calibration | hard-negative risk head 校准曲线 | risk head 学成低置信，漏报近失误 | ECE、near-miss recall、false negative |
-| 证据等级 | ablation、系统吞吐、闭环小桶要分开 | 只给 perplexity 或 VBench | benchmark + ablation + task replay |
+![DeepSeek-V3 FP8 accumulation 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-7-fp8-accumulation.png){ width="880" }
 
-一个合格结论应写成：`FP8 activation 训练让 peak memory 下降 28%、step time 下降 11%；与 BF16 checkpoint 相比，hard replay 的 action ranking agreement 为 98.7%，near-miss recall 下降 0.3pp，长时 latent drift 无显著增加。` 如果没有后半部分，低比特训练还不能证明适合世界模型。
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 7。原图展示细粒度量化、tile/group scale 与提高累加精度的设计。读这张图时重点看两件事：FP8 元素只负责输入表示，GEMM 的部分和最终累加仍要用更安全的精度；scale 粒度越细，越需要和 kernel layout 配合。</small>
 
-## 为什么这属于训练重点内容
-
-训练时，模型每一步都会经过前向计算、loss 计算、反向传播、梯度规约、优化器更新，以及 checkpoint 保存与恢复。每一步都可能被低精度影响。
-如果只是推理量化，错误通常只影响一次输出；如果是训练低精度，错误会通过参数更新写回模型，后续每一步都会继续继承它。
-
-所以低比特训练的核心不是“省显存”，而是：
-
-**在更低精度里保持可收敛、可扩展、可复现的训练动力学。**
-
-## 训练里到底哪些东西可以降精度
-
-低比特训练至少涉及六类对象：
-
-| 对象 | 是否容易降精度 | 主要风险 |
-| --- | --- | --- |
-| 权重 `W` | 相对容易 | 表示误差影响前向输出 |
-| 激活 `A` | 很难 | 分布随输入、层数和序列长度变化，outlier 明显 |
-| 激活缓存 | 很有价值 | 反向要用，压低后可能破坏梯度 |
-| 梯度 `dW` | 中等偏难 | 累积误差会改变更新方向 |
-| 优化器一阶动量 | 中等 | 影响更新平滑性 |
-| 优化器二阶动量 | 更难 | 数值范围和小量变化很敏感 |
-
-这里最容易被低估的是**激活**。  
-权重、梯度和优化器状态很多时候可以通过 ZeRO/FSDP 分片到多卡上，但激活强依赖当前 micro-batch、sequence length 和模型层数，通常直接压在单卡显存上。长上下文训练里，激活经常比权重更早成为瓶颈。
-
-## 数制不是名字问题，而是表示预算问题
-
-低精度训练里常见的格式可以粗略分成四类。
-
-**INT：规则简单，但动态范围压力大。**
-
-`INT8 / INT4` 用整数加 scale 表示浮点张量：
+矩阵乘不是两个低精度数相乘就结束。一个输出元素来自很多乘积的求和：
 
 \[
-q = \mathrm{round}(x / s), \qquad \hat{x} = s q
+y_{ij}=\sum_k a_{ik}w_{kj}
 \]
 
+这个式子里，\(a_{ik}\) 是第 \(i\) 个输入向量的第 \(k\) 个元素，\(w_{kj}\) 是权重矩阵第 \(k,j\) 个元素，\(y_{ij}\) 是输出。即使 \(a\) 和 \(w\) 用 FP8 存储，求和过程也不能随便用 FP8 累加，因为很多小误差会在 \(k\) 维上聚起来。实际系统通常会让输入低精度、乘法走低精度 Tensor Core 路径，同时把 accumulator、部分归约或关键输出保在 BF16/FP32 语义附近。
 
-优点是硬件和 kernel 生态成熟。  
-问题是低 bit 下动态范围非常紧，遇到 activation outlier 时容易出现两种坏结果：scale 被极大值拖大，小值全部挤在少数桶里；或者直接截断极大值，破坏关键 token 或关键层。
+这就是为什么论文常同时报告 “FP8 GEMM” 和 “increased precision accumulation”。前者省带宽和提高吞吐，后者防止长维度求和把误差滚大。对于长上下文、宽 MLP、MoE expert 或大 batch，累加维度越长，累加精度越不能被忽略。
 
-所以 INT 路线常用于推理权重量化；训练里如果要做得很激进，通常需要更细粒度 scale、旋转、裁剪或 QAT 配合。
+## activation、梯度和 optimizer state 要分开处理
 
-**FP8：训练中最实用的低精度入口。**
+低比特训练最容易写糊的一点，是把所有张量都叫“量化对象”。实际上它们的统计性质完全不同。
 
-`FP8` 保留指数位和尾数位，因此比 INT 更自然地处理动态范围。常见格式是：
+**activation** 随输入、层、token 位置和训练阶段变化。attention、SwiGLU、MoE gate、residual stream 都可能制造 outlier。activation cache 还要在反向中复用，所以压缩 activation 不是只看前向误差，而是要看反向梯度是否还对。
 
-| 格式 | 直觉 | 常见用途 |
-| --- | --- | --- |
-| `E4M3` | 指数较少、尾数较多，精度更好 | 权重、激活 |
-| `E5M2` | 指数更多、范围更大，精度更粗 | 梯度、反向中范围更大的张量 |
+**梯度** 的范围和稀疏结构跟 loss、batch、clip、parallel reduction 相关。梯度低精度化如果引入系统性 bias，optimizer 会沿错误方向更新。梯度通信低精度还要看 all-reduce 前后的 scale 是否一致，不能只看单卡局部误差。
 
-一个实用理解是：  
-前向传播更关心表示细节，所以常偏向 `E4M3`；反向传播和梯度可能范围更宽，所以有些路线会用 `E5M2`。但这不是铁律，后续 `MXFP8` 论文也验证了某些配置下梯度用 `E4M3` 仍可能更优。
-
-**MXFP：块共享 scale 的微缩放格式。**
-
-`MXFP8 / MXFP4` 的核心是：一小块元素共享一个 scale，每个元素再用低比特浮点表示。
-
-可以理解成：
+**optimizer state** 是长历史变量。Adam 的 \(m_t\) 和 \(v_t\) 分别累积一阶与二阶统计：
 
 \[
-x_i \approx s_{\text{block}} \cdot q_i
+m_t=\beta_1m_{t-1}+(1-\beta_1)g_t,\qquad
+v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2
 \]
 
+这里 \(g_t\) 是当前 step 的梯度，\(m_t\) 是动量，\(v_t\) 是平方梯度的滑动平均，\(\beta_1,\beta_2\) 控制历史保留比例。optimizer state 的低精度误差会跨很多 step 积累，所以它和 activation 的压缩策略不能混为一谈。
 
-其中 \(s_{\text{block}}\) 是块级缩放因子，\(q_i\) 是低比特浮点值。
+FP8-LM 把梯度和 optimizer state 纳入低精度训练框架，COAT 则明确把 optimizer states 和 activation 作为显存主目标。这两类工作共同说明：低比特训练的收益来自整条训练状态链，而不是某一个 GEMM kernel。
 
-这样做比 per-tensor scale 更能适配局部分布，比 per-element scale 更省元数据，也更接近新硬件对低精度 tensor core 的原生支持方式。
+## MXFP 与 FP4：更低 bit 依赖更细 scale
 
-代价是 scale 管理和 kernel 实现更复杂。
+当 bit 数继续降到 FP4，元素本身能表达的点太少，scale 就从辅助变量变成核心机制。Microscaling 的思路是让一小块元素共享 scale：
 
-**NVFP、HiFloat 与厂商格式。**
+\[
+x_i \approx s_{\mathrm{block}}\cdot q_i
+\]
 
-`NVFP4`、`HiFloat8 / HIFP8` 这类格式体现了一个趋势：  
-低比特训练不只是在算法层面改 quantizer，也会向硬件和数制本身延伸。
+这个式子里，\(q_i\) 是 block 内第 \(i\) 个低比特元素，\(s_{\mathrm{block}}\) 是这一小块共享的缩放因子。相比 per-tensor scale，per-block scale 更能贴合局部分布；相比 per-element scale，它又不至于产生过多元数据。OCP MX 规范把这类 block-scaled format 标准化，论文里的 MXFP8、MXFP4、MXINT8 都在这个方向上展开。
 
-例如 `NVFP4` 相比普通 `MXFP4`，会通过更小微块、更精确 scale 和分层缩放改善 FP4 的有效表达范围。  
-`HiFloat8` 则通过不同的指数和尾数安排，试图在同样 8 bit 内获得更适合深度学习张量的动态范围。
+FP4 的困难也在这里。元素只有 4 bit，最大值附近、零附近和中间区间的可表示点都非常稀疏。单纯把 BF16 张量 cast 成 FP4 几乎没有训练稳定性的希望，必须配合 block scale、Hadamard rotation 或其他 outlier 平滑、高精度保护层、随机舍入、无偏梯度估计和原生 kernel。
 
-## 低比特训练的核心矛盾
+因此 FP4 训练不是“FP8 再小一半”。它更像数制、scale、optimizer、kernel 和硬件共同设计。没有硬件低精度 Tensor Core、没有 fused dequant/accumulation、没有 scale metadata 的 layout 支持，理论上的 4 bit 存储很容易被 cast、metadata 和额外 kernel 开销抵消。
 
-低比特训练要同时优化三件事：**表示误差**决定低精度表示是否足够接近原张量，**更新误差**决定反向传播和优化器是否仍然给出正确方向，**系统收益**决定 kernel、通信和显存是否真的变快变省。
+## 实验要证明三件事
 
-只满足第一点不够。  
-很多方法离线 MSE 很低，但训练一长就崩；也有方法数值还行，但 scale 计算和 cast 开销太大，端到端没有收益。
+一篇低比特训练论文或项目报告，如果只给 loss 曲线和吞吐，证据是不够的。至少要证明三件事。
 
-可以把低比特训练看成下面这个闭环：
+| 要证明的事 | 应该看什么 | 为什么 |
+| --- | --- | --- |
+| 训练动力学没坏 | loss spike、梯度范数、NaN/Inf、seed/LR 鲁棒性 | 低精度误差会写回参数，不能只看平均 loss |
+| 数值控制面有效 | amax、scale 饱和率、activation percentile、overflow/underflow | scale 失配通常先出现在统计量里，后出现在 loss 里 |
+| 系统收益兑现 | peak memory、step time、kernel profile、通信/计算 overlap | 低 bit 可能省某项显存，却增加 scale、cast、metadata 和同步开销 |
 
-```text
-张量分布 -> scale/rounding -> 低精度 kernel -> 梯度更新 -> 参数分布改变 -> 下一步张量分布
-```
+checkpoint 也要进入实验设计。低比特训练恢复时，不能只保存 model weights 和 optimizer states；还要保存低精度 recipe、scale 或 amax history、loss scaler、RNG、数据游标、并行拓扑和分片 manifest。否则恢复后的下一步可能使用不同 scale 或不同数据顺序，表面上 load 成功，训练轨迹已经变了。
 
-推理量化通常只走一次前半段；训练低精度会不断循环，所以后期 outlier、rounding bias 和 loss spike 更危险。
+对于世界模型、VLA 或机器人策略，指标还要再往下游走一步。低精度 checkpoint 和 BF16 checkpoint 应比较 action ranking、event divergence、near-miss recall、closed-loop return，而不是只比较语言 perplexity。低比特训练最终省的是训练成本，但不能买来动作条件、风险估计或长时 latent 的退化。
 
-## 为什么 activation 是主战场
+## 阅读结论
 
-训练显存里，激活会随 batch size、sequence length 和层数一起增长，反向传播又必须读取它，并且很难像 optimizer state 那样简单分片掉。
+低比特训练可以按四句话记：
 
-这也是为什么 `COAT`、`MOSS`、`Scaling FP8 Training to Trillion-Token LLMs` 等论文都特别关注 activation。
+1. FP8 能进入训练，是因为它保留指数位，并配合 scale、累加和混合精度保护。
+2. scale 是控制面，不是注脚；scale 粒度、更新方式和 checkpoint 状态决定训练能不能复现。
+3. activation、梯度和 optimizer state 的风险不同，不能用一个“量化误差”统一带过。
+4. FP4/MXFP4 的收益更依赖硬件和 kernel，共同设计比单个量化公式更重要。
 
-**一个直观例子。**
+如果只想继续读工程实现，优先看 Transformer Engine FP8 delayed scaling、DeepSeek-V3 的 FP8 framework、COAT 和 Scaling FP8 Training。想把这篇和相邻内容连起来，可以读 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[FP8 与混合精度推理](../quantization/fp8-and-mixed-precision-serving.md) 和 [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。
 
-假设某层激活大多数值在 \([-2, 2]\)，但偶尔出现一个 1000。  
-如果 per-tensor scale 为了容纳 1000，那么大量普通值会被压进很少的量化桶里。  
-如果直接裁剪 1000，又可能破坏某些关键 token 的路径。
+## 外部精读
 
-所以常见解决思路包括 per-token 或 per-group scale、SmoothQuant 这类难度迁移、Hadamard rotation 分散 outlier、保留敏感层高精度，以及对 SwiGLU、LayerNorm、Attention 等结构做专项处理。
-
-## FP8 训练路线：从可用到长稳
-
-**FP8 Formats：先定义可用格式。**
-
-[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433) 给出了 `E4M3 / E5M2` 的基础设定。  
-它的意义不是“发明 8-bit”，而是证明深度学习训练和推理可以围绕一组更适配 tensor core 的 FP8 格式组织起来。
-
-工程上，你可以把这篇看成 FP8 训练的数制起点。
-
-**FP8-LM：把梯度和优化器状态也纳入低精度。**
-
-[FP8-LM: Training FP8 Large Language Models](https://arxiv.org/abs/2310.18313) 的重点是：不要只让 GEMM 用 FP8，还要考虑梯度和 Adam 状态。
-
-它提醒我们，训练内存不是只有权重。Adam/AdamW 至少涉及参数、梯度、一阶动量、二阶动量，有时还有 master weight。
-
-如果只有矩阵乘降精度，优化器状态仍然高精度，低比特训练的显存收益会被严重限制。
-
-**COAT：optimizer states 和 activation 才是大头。**
-
-[COAT](https://arxiv.org/abs/2410.19313) 重点压缩 optimizer states 和 activation。  
-它的工程意义在于明确指出：很多训练路线只把 linear GEMM 做低精度，但真正消耗显存和引发不稳定的部分不止 linear。
-
-尤其是 activation，因为它和 batch、序列长度直接绑定，往往决定你能不能开更长上下文。
-
-**Scaling FP8 to Trillion Tokens：短跑稳定不等于长跑稳定。**
-
-[Scaling FP8 Training to Trillion-Token LLMs](https://arxiv.org/abs/2409.12517) 的核心价值是把 FP8 训练拉到长 token 规模，暴露出短实验看不到的不稳定。
-
-其中一个关键问题是 `SwiGLU` 的 outlier 放大。  
-训练到一定阶段后，某些激活异常值可能逐渐变大，在延迟缩放或低精度路径下触发 loss spike 甚至发散。
-
-这给训练实验一个很重要的提醒：
-
-**低精度方案不能只跑几千 step 就宣布稳定。**
-
-**μnit Scaling：减少动态缩放复杂度。**
-
-[μnit Scaling](https://arxiv.org/abs/2502.05967) 关注更简单、可扩展的 FP8 训练参数化。  
-它的方向是通过结构和初始化上的约束，减少对动态 scale 的依赖。
-
-这类工作很重要，因为动态缩放虽然灵活，但会带来运行时统计开销、kernel 融合困难、恢复和复现实验复杂，并且对 outlier 更敏感。
-
-**MXFP8 与 MOSS：把 scale 做得更细，同时别让开销吃掉收益。**
-
-[Microscaling Data Formats for Deep Learning](https://arxiv.org/abs/2310.10537) 和 [Recipes for Pre-training LLMs with MXFP8](https://arxiv.org/abs/2506.08027) 说明：微缩放格式可以让低精度更贴近局部张量分布。
-
-但 scale 越细，系统问题越明显。  
-`MOSS` 这类工作关注的就是：per-group 量化虽好，但 dequant、scale 计算和内维缩放可能引入很大开销。低精度训练最终必须和 kernel 设计一起看。
-
-## FP4 训练路线：更低 bit，更强系统耦合
-
-`FP4` 的诱惑很直接：相比 BF16，理论存储更小，tensor core 路径也可能更快。  
-但 FP4 的表示预算极小，训练稳定性比 FP8 更难。
-
-**MXFP4：用微缩放减轻 4-bit 表达压力。**
-
-[Training LLMs with MXFP4](https://arxiv.org/abs/2502.20586) 说明，FP4 训练通常必须结合微缩放和 outlier 处理。  
-只把 BF16 张量粗暴转成 FP4，几乎不可能稳定。
-
-一个常见组合是低比特元素、块级 scale、随机 Hadamard 变换、混合精度保护层，以及随机舍入或无偏梯度估计。
-
-**Quartet：低比特训练不能脱离硬件 kernel。**
-
-[Quartet](https://arxiv.org/abs/2505.14669) 的价值在于把 FP4 算法和 Blackwell 原生 FP4 kernel 绑定起来看。  
-它不是单纯比较量化误差，而是把训练速度、梯度估计、scaling law 和 GPU 实现放在一起。
-
-这类工作说明一个现实结论：
-
-**FP4 训练不是纯算法课题，它天然是数制、优化器、kernel 和硬件的共同设计。**
-
-**NVFP4：更小微块和更精确 scale。**
-
-[Pretraining Large Language Models with NVFP4](https://arxiv.org/abs/2509.25149) 关注 `NVFP4` 在长 token 预训练里的可行性。  
-相比普通 MXFP4，NVFP4 会使用更小的微块和更精确的 FP8 scale，目标是减少 4-bit 表达带来的有效精度浪费。
-
-直观理解是：  
-FP4 的元素本身太粗，所以必须让 scale 更聪明、更细、更贴合局部分布。
-
-**Four Over Six：scale 到最大值不一定最好。**
-
-[Four Over Six](https://arxiv.org/abs/2512.02010) 提醒一个很反直觉的问题：  
-把块最大值缩放到 FP4 最大可表示值，不一定让整体误差最小。
-
-因为 FP4 的可表示点非常稀疏，最大值附近可能有很大的空洞。  
-有时把块缩到 4 而不是 6，反而能让大部分值落在更合适的表示区间。
-
-这说明低比特训练里的 scale 不是简单的：
-
-```text
-scale = max_abs / qmax
-```
-
-而是一个要和格式离散点分布共同优化的问题。
-
-## FlashAttention 与低精度训练稳定性
-
-低精度训练不只影响 linear。  
-Attention，尤其是 FlashAttention 这类高度融合 kernel，也可能改变数值误差形态。
-
-典型风险包括 softmax 概率接近 1 时的舍入偏置、\(O = PV\) 中低精度累加误差、反向传播里 rowsum / 归约 / 低秩结构误差累积，以及 BF16/FP8 混合路径下某些误差不再随机抵消。
-
-这类问题说明：  
-训练低精度不能只测 `Linear` 层误差。Attention kernel、归一化、残差流和激活函数都要纳入排查。
-
-![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="630" }
-
-<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原论文图意：比较不同规模 GPT 模型在 BF16 与 FP8 训练下的 loss/perplexity 曲线，展示 FP8 在合适 scaling 与训练配置下可以接近 BF16 收敛行为。</small>
-
-!!! note "图解：低精度稳定性要看曲线而不是只看格式"
-    FP8 能不能用于训练，不是由“8 bit 看起来够不够”直接决定，而是由 scale 策略、累加精度、outlier 处理、kernel 实现和训练配置共同决定。图中 FP8 与 BF16 曲线接近，说明低精度路径可以稳定，但这是一组经过设计的数值系统结果；迁移到新模型时仍要重新检查 loss spike、梯度范数、activation percentile、scale 饱和率和 NaN/Inf。
-
-## MTP、投机解码和量化训练为什么会碰到一起
-
-你前面提到的 `QSpec` 很值得单独放在训练系统视角里看。  
-它不是传统意义上的“把模型压小”，而是把不同精度路径用于不同推理角色：低精度路径负责 draft，高精度路径负责 verify，两者共享权重或部分状态以减少额外显存。
-
-这给训练和推理联动带来一个启发：
-
-**低精度不一定只服务最终输出，也可以服务中间草稿、候选树、提前退出和自投机路径。**
-
-如果未来做 `MTP + quantization`，核心问题会变成：低精度 draft 是否足够快，是否和高精度 target 分布足够一致，低精度 KV cache 是否会污染后续验证，接受率下降能否被单步速度提升抵消，以及能否按任务难度动态决定 draft token 数。
-
-这就是为什么 `MTP`、`Speculative Decoding`、`QSpec`、`FP8/FP4` 最终都会回到同一个系统问题：  
-**用更便宜的计算产生足够可信的中间结果，再用更贵的路径兜底。**
-
-## 一个低比特训练实验应该怎么设计
-
-不要一上来就全模型 FP8 或 FP4。更稳的推进顺序是先建立 BF16 baseline，并固定数据版本、token 预算和评测桶；再只打开主干 GEMM 的 FP8，确认 loss 和吞吐；随后压 activation cache，看显存收益和反向误差；再尝试梯度、optimizer states 或通信低精度；最后才推进 FP4 / NVFP4 这类更激进路线。每一步都要保留可回退配置和逐层数值对照。
-
-**训练指标不能只看 loss。**
-
-至少要同时看：
-
-| 指标 | 为什么重要 |
-| --- | --- |
-| loss 曲线 | 发现明显发散和 loss spike |
-| 梯度范数 | 发现更新方向异常 |
-| activation max / percentile | 发现 outlier 是否放大 |
-| scale 饱和率 | 发现 scale 是否被极端值拖住 |
-| NaN / Inf 计数 | 发现数值路径崩坏 |
-| throughput | 判断低精度是否真的提速 |
-| 显存峰值 | 判断是否释放 batch / sequence 空间 |
-| 下游 benchmark | 判断 loss 相近是否真的能力相近 |
-
-**低比特训练 dashboard 应该长什么样。**
-
-![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
-
-<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原论文图意：比较普通数据并行和 ZeRO-DP 三个阶段的单设备模型状态显存；\(\Psi\) 表示参数量，\(K\) 表示优化器状态的显存倍数，\(N_d\) 表示数据并行度。</small>
-
-!!! note "图解：低比特 dashboard 要拆开显存来源"
-    ZeRO 图虽然讲的是状态分片，但它对低比特训练 dashboard 很有启发：不要只看总显存，要拆成参数、梯度、优化器状态、激活、通信 buffer 和 KV/临时 workspace。低精度可能明显减少某一项，却让 scale、metadata、重计算或通信开销增加。监控面板必须能解释“省下的是哪块显存、增加的是哪块开销”，否则很容易把短期能跑误判成长期可训。
-
-一个实用 dashboard 至少要把 loss、learning rate、gradient norm、activation percentile / max / scale、每类 kernel 的耗时和占比、显存峰值、activation checkpoint 开关、通信/计算/overlap 比例，以及 evaluation benchmark 分桶结果放在一起。
-
-如果只看 loss，你会很晚才发现问题；如果只看吞吐，你会高估低精度收益。
-
-## 伪代码：低精度 Linear 的核心形态
-
-下面是一个简化后的伪代码，用来说明低比特训练里的基本动作。真实实现会更复杂，并且会使用 fused kernel。
-
-下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
-```python
-def quantize_per_group(x, group_size, fp_format):
-    groups = x.reshape(-1, group_size)
-    scale = choose_scale(groups, fp_format)
-    q = round_to_format(groups / scale, fp_format)
-    return q, scale
-
-
-def low_precision_linear(x, w, group_size=128):
-    x_q, x_scale = quantize_per_group(x, group_size, fp_format="fp8_e4m3")
-    w_q, w_scale = quantize_per_group(w, group_size, fp_format="fp8_e4m3")
-
-    # 真实系统中这里应走 tensor core / fused kernel，而不是先反量化成高精度。
-    y = matmul_dequant(x_q, w_q, x_scale, w_scale, accum_dtype="bf16")
-    return y
-```
-
-这段代码背后的关键不是 `round`，而是 scale 如何选、group size 如何定、accumulator 用什么精度、反向传播如何处理量化误差，以及是否能被 kernel 高效执行。
-
-## 伪代码：训练时的低精度保护策略
-
-```python
-for step, batch in enumerate(loader):
-    with low_precision_region(dtype="fp8", allow_modules=["attention", "mlp"]):
-        logits = model(batch["input_ids"])
-
-    # loss、norm、部分 logits 相关操作保高精度。
-    loss = cross_entropy(logits.float(), batch["labels"])
-
-    loss.backward()
-
-    if has_nan_or_inf(model):
-        rollback_to_last_safe_checkpoint()
-        disable_low_precision_for_sensitive_modules()
-        continue
-
-    clip_grad_norm_(model.parameters(), max_norm)
-    optimizer.step()
-    optimizer.zero_grad()
-```
-
-这个伪代码表达的是低比特训练的基本态度：  
-低精度应该是可控区域，而不是全局赌博。敏感模块、异常恢复和自动降级必须提前设计。
-
-## 论文路线图：按问题而不是年份读
-
-**数制和格式。**
-
-| 论文 / 文档 | 重点 |
-| --- | --- |
-| [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433) | `E4M3 / E5M2` 基础 |
-| [Microscaling Data Formats for Deep Learning](https://arxiv.org/abs/2310.10537) | `MXFP / MXINT` 微缩放 |
-| [Ascend HiFloat8 Format for Deep Learning](https://arxiv.org/abs/2409.16626) | `HiFloat8` 数制设计 |
-| [OCP MX v1.0 Spec](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) | MX 格式标准 |
-
-**FP8 训练稳定性。**
-
-| 论文 | 重点 |
-| --- | --- |
-| [FP8-LM](https://arxiv.org/abs/2310.18313) | 梯度和优化器状态低精度 |
-| [COAT](https://arxiv.org/abs/2410.19313) | activation 和 optimizer state 压缩 |
-| [Scaling FP8 Training to Trillion-Token LLMs](https://arxiv.org/abs/2409.12517) | 长 token 训练稳定性与 SwiGLU outlier |
-| [To FP8 and Back Again](https://arxiv.org/abs/2405.18710) | 低精度训练稳定性评估 |
-| [μnit Scaling](https://arxiv.org/abs/2502.05967) | 简化 FP8 scaling 和参数化 |
-| [Recipes for Pre-training LLMs with MXFP8](https://arxiv.org/abs/2506.08027) | MXFP8 预训练配方 |
-
-**FP4 / NVFP4 训练。**
-
-| 论文 | 重点 |
-| --- | --- |
-| [Optimizing Large Language Model Training Using FP4 Quantization](https://arxiv.org/abs/2501.17116) | FP4 训练优化和可微量化估计 |
-| [Training LLMs with MXFP4](https://arxiv.org/abs/2502.20586) | MXFP4、RHT 和 outlier 处理 |
-| [Quartet](https://arxiv.org/abs/2505.14669) | 原生 FP4 kernel 与训练 |
-| [Pretraining LLMs with NVFP4](https://arxiv.org/abs/2509.25149) | NVFP4 长 token 预训练 |
-| [Four Over Six](https://arxiv.org/abs/2512.02010) | NVFP4 adaptive block scaling |
-| [Quartet II](https://arxiv.org/abs/2601.22813) | NVFP4 无偏梯度估计 |
-
-**量化和投机解码交叉。**
-
-| 论文 / 项目 | 重点 |
-| --- | --- |
-| [QSpec](https://arxiv.org/abs/2410.11305) | 低精度 draft + 高精度 verify |
-| [EAGLE](https://arxiv.org/abs/2401.15077) | feature-level speculative draft |
-| [EAGLE-3](https://arxiv.org/abs/2503.01840) | training-time test 与多层特征融合 |
-| [TorchSpec](https://github.com/torchspec-project/TorchSpec) | speculative decoding 训练框架 |
-
-## 常见误区
-
-**把低比特训练当作推理量化的自然延伸。**
-
-推理量化的误差不写回参数；训练误差会写回参数。  
-所以训练低精度必须看长期稳定性，而不是只看单批输出误差。
-
-**只看平均 loss，不看尾部和后期。**
-
-很多低精度问题不会一开始就炸。  
-它可能在 outlier 慢慢放大、scale 慢慢失配、梯度误差慢慢累积之后突然出现。
-
-**只谈数制，不谈 kernel。**
-
-如果低精度路径频繁 cast 回 BF16，或者 scale 计算开销很大，理论速度不会变成端到端速度。  
-FP4 尤其如此：没有原生 kernel 支持，收益很容易被系统开销吃掉。
-
-**忽略恢复语义。**
-
-低精度训练更容易出现偶发 NaN、loss spike 和不可重复问题。  
-因此 checkpoint 必须保存足够信息，包括 scale 状态、混合精度配置、随机数状态、optimizer 状态和数据游标。
-
-## 最小落地清单
-
-如果要做一个低比特训练项目，至少先准备 BF16 baseline、每层 activation percentile 统计、梯度范数与 NaN/Inf/loss spike 告警、逐层数值对照脚本、kernel profile、高精度保护层列表、自动回退策略、长跑验证计划、下游 benchmark 分桶，以及 checkpoint 恢复一致性测试。
-
-## 和相邻章节怎么连起来
-
-建议按这条路线阅读：[数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md) → [训练稳定性与故障排查](stability-numerics-and-failure-triage.md) → [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) → [MTP 与投机解码](mtp-and-speculative-decoding.md) → [FP8 与混合精度推理](../quantization/fp8-and-mixed-precision-serving.md) → [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。
-
-量化专题更关注“如何压缩和部署”；这一页更关注“训练过程中如何不崩，并且真的换来训练效率”。
+- [NVIDIA Transformer Engine: FP8 Delayed Scaling](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/fp8_delayed_scaling/fp8_delayed_scaling.html)：理解 amax history、recipe 和 FP8 runtime 状态。
+- [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 E4M3/E5M2 为什么服务训练和推理。
+- [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)：看大规模模型如何把 FP8、MoE、通信和累加精度放到同一个系统里。
+- [Scaling FP8 Training to Trillion-Token LLMs](https://arxiv.org/abs/2409.12517)：看短跑稳定和长跑稳定为什么不是一回事。
+- [Microscaling Data Formats for Deep Learning](https://arxiv.org/abs/2310.10537)：理解 MXFP/MXINT 这类 block scale 格式的动机。
+- [NVIDIA 中文技术博客：FP8 在大模型训练中的应用、挑战及实践](https://developer.nvidia.cn/blog/fp8-llm-app-challenges/)：适合作为中文工程讲法入口，再回到论文和官方文档核对细节。

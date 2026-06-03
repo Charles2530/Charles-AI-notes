@@ -3,8 +3,11 @@
 很多高性能系统并不是靠“一个万能 kernel”获胜，而是靠一整套运行时 dispatch 机制：根据 shape、dtype、layout、设备类型、batch 形态和任务阶段，为当前请求挑选最合适的 kernel 路径。  
 也就是说，真正的性能系统不仅要有好 kernel，还要有**挑 kernel 的能力**。
 
+## 核心问题
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
+Runtime dispatch 真正要回答的是：**当同一个模型在不同 shape、dtype、layout、硬件和请求阶段上运行时，系统怎样稳定地命中正确 kernel，并在不满足条件时可解释地回退。**
+
+这不是几行 `if-else`。成熟 dispatch 要同时管理可行性、性能、风险、编译缓存、fallback 和线上可观测性。读 TensorRT-LLM、Triton、CUTLASS、TorchInductor 或 vLLM 这类系统时，别只看“有没有快 kernel”，还要看快路径到底在什么输入条件下被选中，以及线上真实命中率是多少。
 
 ## 为什么运行时选择很重要
 
@@ -38,8 +41,8 @@
 
 真正稳定的 dispatch，很少一开始就追求“最复杂的最优规则”，而是先把这条链条做清楚，再逐步把高价值分支特化出来。
 
-!!! note "常见误区：dispatch 只是几行 if-else"
-    简单 demo 里 dispatch 看起来像条件分支，但生产系统里的 dispatch 更像一份运行时合约：哪些输入能走快路径，哪些必须回退，哪些 shape 值得编译缓存，哪些异常要记录。没有命中率、回退原因和尾部 shape 统计，规则越复杂反而越难维护。
+**常见误区：dispatch 只是几行 if-else。**
+简单 demo 里 dispatch 看起来像条件分支，但生产系统里的 dispatch 更像一份运行时合约：哪些输入能走快路径，哪些必须回退，哪些 shape 值得编译缓存，哪些异常要记录。没有命中率、回退原因和尾部 shape 统计，规则越复杂反而越难维护。
 
 ## Shape Family 的思维
 
@@ -90,42 +93,25 @@
 
 运行时 dispatch 就像智能交通系统的分流策略。道路网络再好，如果所有车都被导向同一条路，照样会堵；反过来，即使你有几条性能很强的专用通道，如果调度系统不会根据车流类型和道路情况分流，也发挥不出优势。Kernel 系统也是一样：真正的高性能，不只是有快路，还要有会分流的交通指挥。
 
-## 本页结论
+## 阅读结论
 
 运行时 dispatch 与 kernel 选择，是连接“多套实现”和“真实工作负载”的最后一层系统能力。没有它，再好的 shape-specialized kernel 也只是零散武器；有了它，系统才能根据真实请求分布把不同实现组织成一套稳定、高效、可演进的执行体系。
 
 从更高一层看，dispatch 解决的其实不是“怎么挑一个 kernel”这么小的问题，而是**怎么让底层实现真正服从上层负载分布**。训练和推理系统最终都会遇到这一层约束：请求不是静止的，硬件不是统一的，shape 不是固定的，缓存也不是无限的。谁能把这几件事一起组织好，谁的算子系统才真正算成熟。
 
-## 快速代码示例
-
-下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
-```python
-def select_gemm_kernel(m, n, k, dtype):  # 根据 shape 和 dtype 选择 GEMM 实现
-    if dtype == "fp8" and n % 128 == 0 and k % 128 == 0:  # 优先匹配 FP8 Tensor Core 对齐路径
-        return "gemm_fp8_tc_128"  # 返回 FP8 特化 kernel
-    if m <= 128 and n <= 128:  # 小矩阵走更适合的 tile 策略
-        return "gemm_small_tile"  # 返回小矩阵 kernel
-    return "gemm_default"  # 其它情况回退到通用实现
-```
-
-这段代码是一个最小 dispatch 规则示例：先匹配高收益特化路径，再匹配小矩阵场景，最后回退到通用实现。核心思想是让“规则可解释、可观测、可回退”，避免上线后出现黑盒命中问题。
-
 ## 工程收束
 
 Runtime dispatch 要让 shape、dtype、layout、cache 状态和运行时队列都可观测。dispatch 规则过多无法解释、热路径命中不到最佳 kernel、回退路径无人监控，都会让性能问题难以复盘；上线前应统计命中率，保留异常 shape 黑名单，并在灰度时观察路径分布。
 
+## 外部精读
+
+- [Triton](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)：理解高性能 kernel 为什么要和 shape、tile、autotune 一起设计。
+- [PyTorch 2.x / TorchInductor docs](https://docs.pytorch.org/docs/stable/torch.compiler.html)：看编译缓存、graph specialization 和动态 shape 如何进入 runtime。
+- [CUTLASS GEMM API](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/gemm_api.html)：理解 GEMM kernel 选择如何依赖 tile、layout、dtype 和硬件层级。
+- [TensorRT-LLM documentation](https://nvidia.github.io/TensorRT-LLM/)：看生产推理中 engine、plugin、quantization 和 kernel 路径如何组合。
+- [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：对照理解 serving runtime 中 dispatch、KV cache 和请求生命周期为什么必须一起看。
+
 ## 真实排查案例：热路径没有命中最快 kernel
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 **输入症状**：上线一个 FP8 GEMM 特化后，离线 benchmark 预期提速 20%，线上吞吐只提升 3%，而且不同租户差异很大。
 

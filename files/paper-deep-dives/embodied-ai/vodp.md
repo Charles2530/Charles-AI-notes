@@ -1,337 +1,137 @@
 ---
-paper_date: 2025-10
-paper_title: "VO-DP: Semantic-Geometric Adaptive Diffusion Policy for Vision-Only Robotic Manipulation"
-paper_topic: 具身智能
+title: VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
 ---
 
-# VO-DP：纯视觉语义-几何自适应扩散策略
+# VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
 
+VO-DP 这篇论文要回答一个很工程的问题：**机器人 manipulation policy 一定要用点云或 RGB-D 才能学到几何吗？**
 
-## 一句话读懂
+论文的答案是：不一定。如果 RGB 图像经过足够强的预训练视觉基础模型，policy 可以从中间特征里拿到语义和几何线索，再用扩散策略生成动作。VO-DP 的“Vision-Only”不是说机器人完全没有状态，也不是说几何不重要；它指的是视觉输入只用单视角 RGB，不依赖 depth、RGB-D 或 point cloud。
 
-VO-DP 的核心主张是：**单视角 RGB 并不一定只能学到 2D 外观；如果把 VGGT 里 DINOv2 的语义 token 和 Alternating-Attention 的几何 token 取出来融合，再接 DDPM policy head，纯视觉策略可以在仿真上逼近点云 DP3，在真实机器人上显著超过 DP3。**
+## 一句话核心
 
-这篇论文最值得读的不是“又一个 diffusion policy”，而是它把三个通常分开的东西接起来了：
+VO-DP 把 policy 写成：
 
-1. `VGGT` 负责把单张或少量 RGB 图像变成带 3D 先验的中间表征。
-2. `Semantic-Geometric Fuser` 负责让任务自适应选择语义与几何信息。
-3. `DDPM policy head` 负责生成 action chunk，让输出仍保持 Diffusion Policy 的多模态动作建模能力。
+\[
+a_{t:t+H}
+\sim
+p_\theta(a \mid I_{t-T+1:t}, S_{t-T+1:t}, l)
+\]
+
+其中 \(I_{t-T+1:t}\) 是历史 RGB 图像，\(S_{t-T+1:t}\) 是机器人关节或本体状态，\(l\) 是任务条件，\(a_{t:t+H}\) 是未来动作序列。这里要读清楚：它不是纯图像到动作的黑箱；它仍然使用机器人状态，只是视觉几何不再来自显式点云。
 
 ![VO-DP overview 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-1-overview.png){ width="920" }
 
-<small>Figure source: `VO-DP`, overview figure. 读这张图：上半部分对比点云方法与 VO-DP；下半部分汇总仿真、真实机器人和数据规模扩展结果。</small>
+<small>图源：`VO-DP`，Figure 1。原图表达单视角 RGB policy 通过预训练视觉模型获得语义和几何特征，并在仿真与真实机器人中对比 DP、DP3。本站读法：重点看 RGB-only 的部署链路更短，但并没有取消几何，只是把几何藏进特征里。</small>
 
-## 它解决什么问题
+## 为什么点云强，但不总是好部署
 
-机器人 manipulation 里，DP3 这类点云策略很强，因为 point cloud 直接提供 3D 几何。但点云在真实部署里有几个麻烦：深度传感器贵，标定和裁剪依赖人工区域，真实点云有噪声和缺失，视角改变后 preprocessing 很容易变脆。
+点云 policy 的优势很直观：3D 坐标让机器人更容易理解物体位置、桌面高度和抓取空间。DP3 这类方法在仿真中很强，因为仿真点云干净、标定准确、遮挡可控。
 
-传统视觉 DP 则相反：硬件简单，只要 RGB，但纯 2D CNN/ViT 表征经常缺少稳定几何，遇到空间关系、遮挡、双臂协调和物体尺寸变化时不够稳。
+真实机器人里问题会变复杂。深度相机受光照、反射、透明物体、视角和有效距离影响；点云裁剪需要手工 operational region；相机外参和机器人坐标系标定也会引入误差。很多系统最后不是 policy 学不好，而是 perception preprocessing 太脆。
 
-VO-DP 的问题定义很清楚：只输入单视角 RGB history 和机器人 proprioception，输出未来 `N` 步动作块：
+VO-DP 的动机就在这里：能否少依赖显式点云，把 RGB 图像交给已经学过 3D 几何的视觉基础模型，让 policy 从中间表征里吸收几何？
 
-\[
-O_t = \{ I_t \in \mathbb{R}^{T \times H \times W \times 3}, S_t \in \mathbb{R}^{T \times J} \}, \quad
-A_t \in \mathbb{R}^{N \times J}
-\]
+## 视觉编码器：不是直接用 VGGT 输出，而是取中间特征
 
+VO-DP 使用 VGGT 作为视觉 backbone。VGGT 原本能从图像预测 camera、depth、point map 和 tracks，但 VO-DP 不把这些输出直接喂给 policy。论文取的是中间特征：
 
-这里的关键不是完全不需要状态，论文仍使用 joint states \(S_t\)。它的“vision-only”主要指视觉端只用 RGB，不用 depth、RGB-D 或 point cloud。
-
-## 方法结构
+- DINOv2 / visual tokens 提供语义线索，例如物体类别、边界和可抓区域。
+- VGGT alternating attention blocks 提供几何线索，例如跨 token 的空间关系和局部 3D structure。
 
 ![VO-DP architecture 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-2-framework.png){ width="920" }
 
-<small>Figure source: `VO-DP`, Figure 2. 读这张图：VO-DP 由 VGGT Encoder、Semantic-Geometric Fuser、Spatial Compression 和 DDPM policy head 四部分组成；雪花表示冻结 VGGT，火焰表示训练模块。</small>
+<small>图源：`VO-DP`，Figure 2。原图表达 VGGT 特征提取、语义-几何融合、CNN 压缩和 diffusion policy head。本站读法：把 VGGT 看成 RGB 到语义-几何特征的转换器，而不是把它当成显式深度传感器。</small>
 
-!!! note "这张图怎么读"
-    这张架构图要按信息流读：RGB 先经冻结 VGGT 产生 geometry-aware tokens，语义分支再补对象和任务线索，Spatial Compression 把密集 token 压成 policy 可用的场景表征，最后由 DDPM head 去噪出动作。它支撑的是“预训练几何特征可以替代显式点云输入的一部分价值”，不能证明单目 RGB 已经足够做所有安全几何判断。
+这一步很重要。显式 depth / point cloud 一旦错了，错误会以几何输入的形式进入 policy；中间特征虽然不如点云可解释，但可能更鲁棒，尤其是在真实世界深度噪声较强时。
 
-### 1. VGGT Encoder：从 RGB 中取语义与几何
+## 融合：语义告诉你抓什么，几何告诉你怎么靠近
 
-论文使用预训练 `VGGT` 作为视觉编码器。VGGT 原本是 feed-forward 3D 几何模型，可以从一张或少量图像预测 camera、point map、depth map 和 point tracks。VO-DP 不直接使用这些输出头，而是拿中间特征：
-
-| Feature | Source in VGGT | Shape | Meaning in VO-DP |
-|---|---|---:|---|
-| semantic-aware tokens | DINOv2 patchified image tokens | \(T \times P \times C\) | object identity, appearance, local semantics |
-| geometry-aware tokens | 24th Alternating-Attention block output | \(T \times P \times 2C\) | implicit 3D spatial structure and cross-frame geometry |
-
-这个选择很重要：VO-DP 不把 RGB 先显式重建成点云再喂给 DP3，而是把 VGGT 学到的隐式几何表征拿来训练 policy。这样保留了低成本 RGB 输入，又绕开了真实点云裁剪、噪声和视角依赖。
-
-### 2. Semantic-Geometric Fuser：让几何 token 去读语义 token
-
-VGGT 的几何特征通道是 \(2C\)，语义特征是 \(C\)。论文先用 `1D average pooling` 把几何通道压回 \(C\)，然后用 residual cross-attention 融合：
+VO-DP 先把几何特征通道压到和语义特征同一维度，再用 residual cross-attention 做融合。简化写法是：
 
 \[
-\begin{aligned}
-\mathbf{h^\prime} &= \mathrm{AvgPool}(\mathbf{g}) \\
-\mathbf{h^{\prime\prime}} &= \mathbf{h^\prime} + \mathrm{CrossAttn}(\mathbf{h^\prime}\mathbf{W_Q}, \mathbf{s}\mathbf{W_K}, \mathbf{s}\mathbf{W_V}) \\
-\mathbf{h^{sg}_t[i]} &= \mathbf{h^{\prime\prime}} + \mathrm{FFN}(\mathbf{h^{\prime\prime}})
-\end{aligned}
+F_g = \mathrm{Pool}(Z_g), \quad
+F_s = Z_s
 \]
-
-
-其中 \(\mathbf{g}\) 是几何 token，作为 query；\(\mathbf{s}\) 是语义 token，作为 key/value。直觉上，策略先用几何结构提出“我要看哪里、什么空间关系重要”，再从语义 token 里取物体和任务相关信息。
-
-### 3. Spatial Compression：把 dense token 压成场景表征
-
-融合后的 token 被 reshape 回 patch grid：
 
 \[
-\mathbf{h^{sg}_t} \in \mathbb{R}^{T \times C \times H_P \times W_P}
+F
+=
+F_s
++
+\mathrm{CrossAttn}(Q=F_s, K=F_g, V=F_g)
 \]
 
+其中 \(Z_g\) 表示来自 VGGT 几何分支的中间特征，\(Z_s\) 表示语义特征，\(F_g,F_s\) 是对齐后的几何和语义表示。第二行表示语义 token 主动去查询几何 token：先知道“我要操作哪个语义区域”，再从几何特征里拿到空间关系。
 
-然后通过三个 `kernel size 3, stride 2` 的 residual blocks 降采样，再用 adaptive 2D average pooling 压成空间特征。最后把空间特征通过 MLP 投影到低维，并和 joint states 拼接：
+融合后的特征经过 CNN spatial compression，变成 diffusion policy 的条件。这个 CNN 压缩不是小细节：动作模型不需要完整高分辨率特征图，它需要一个足够紧凑、稳定、可与机器人状态拼接的控制条件。
+
+## 动作头：为什么用扩散策略
+
+VO-DP 采用 DDPM 风格的 action diffusion head。policy 不直接回归一个动作，而是从噪声动作序列逐步去噪：
 
 \[
-\mathbf{h^{sc}_t} = [\mathrm{MLP}(\mathbf{h^{sp}_t}), \mathbf{S_t}]
+\epsilon_\theta
+=
+\epsilon_\theta(a_k, k, F, S)
 \]
 
+其中 \(a_k\) 是第 \(k\) 个噪声等级下的动作序列，\(F\) 是融合后的视觉特征，\(S\) 是机器人状态，\(\epsilon_\theta\) 是模型预测的噪声。训练时模型学习从带噪动作恢复真实动作，推理时从随机噪声迭代生成未来动作 chunk。
 
-这一步的作用是把 “每个 patch 上的语义-几何信息” 变成 policy head 可消费的 compact scenario representation。
+扩散策略适合 manipulation 的原因是动作分布可能多峰。同一个任务可以从左边绕，也可以从右边绕；可以先调整夹爪角度，也可以先靠近物体。直接均值回归容易生成“平均但不可执行”的动作，扩散模型更适合保留多种可行动作模式。
 
-### 4. DDPM Policy Head：条件动作去噪
+## 仿真结果：VO-DP 不是压倒点云，而是接近点云
 
-VO-DP 的动作头沿用 Diffusion Policy / DDPM 思路，学习条件分布 \(p(A_t | O_t)\)。给定 noisy action \(A_t^k\)、去噪步 \(k\) 和场景表征 \(h_t^{sc}\)，网络预测动作噪声：
-
-\[
-A_t^{k-1}=\alpha(A_t^k-\gamma\epsilon_\theta(h_t^{sc},A_t^k,k)+\mathcal{N}(0,\sigma^2 I))
-\]
-
-
-训练目标是标准 MSE noise prediction loss：
-
-\[
-\mathcal{L}(\theta)=\mathrm{MSE}(\epsilon^k,\epsilon_\theta(h_t^{sc},A_t^k,k))
-\]
-
-
-所以 VO-DP 的“新东西”不在 diffusion objective，而在视觉条件：它把普通 RGB policy 的视觉 encoder 换成了语义-几何融合后的 VGGT 表征。
-
-## 训练细节
-
-!!! important "模型训练配置要点"
-    论文的训练细节比较完整，尤其值得注意三点：动作长度 `N=8`；标准 VO-DP 用 history length `T=3`，消融版 `VO-DP-1` 用 `T=1`；所有模型训练 `300 epochs`，在 `8 NVIDIA A100 GPUs` 上使用 `bfloat16`。
-
-| Hyperparam. | Value | Hyperparam. | Value |
-|---|---:|---|---:|
-| batch size | 128 | adam beta1 | 0.95 |
-| mixed_precision | bf16 | adam beta2 | 0.99 |
-| learning rate | 1e-4 | adam_weight_decay | 1e-6 |
-| lr scheduler | cosine | adam_epsilon | 1e-8 |
-| lr_warmup_ratio | 0.05 | ema: inv_gamma | 1.0 |
-|  |  | ema: power | 0.75 |
-
-<small>Table source: `VO-DP`, Training Hyperparameter Settings. 这里保留原论文英文列名与参数名。</small>
-
-训练数据与评测口径：
-
-| Setting | Details |
-|---|---|
-| action trajectory length | \(N=8\) |
-| observation history | \(T=3\) for VO-DP, \(T=1\) for VO-DP-1 |
-| epochs | 300 |
-| precision / hardware | bfloat16, 8 NVIDIA A100 GPUs |
-| simulation train data | 100 valid scenes per task, initialized from seed 0 |
-| simulation test data | 100 valid scenes per task, initialized from seed 10000, each repeated 3 times |
-| real-world data | 200 demonstrations per task via Realman teleoperation device |
-| library | DRRM, built on Accelerate; supports multi-machine/multi-GPU, mixed precision, DP / DP3 / VO-DP and RoboTwin |
-
-注意 `VO-DP-1` 并不是小模型，而是单帧观测消融。仿真里它的平均成功率略高于 `T=3` 版本，所以真实机器人实验默认使用 `VO-DP-1`。
-
-## 仿真实验：RoboTwin
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
+RoboTwin 仿真里，VO-DP 平均成功率接近 DP3，并明显高于普通 RGB Diffusion Policy。这个结论要谨慎读：仿真点云很干净，所以 DP3 的几何输入有天然优势；VO-DP 能接近它，说明 RGB 预训练几何特征确实有用。
 
 ![RoboTwin reconstruction 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-3-robotwin-reconstruct.png){ width="920" }
 
-<small>Figure source: `VO-DP`, Figure 3. 读这张图：RoboTwin 的 14 个双臂任务；左侧是 top-view RGB，右侧是 VGGT 重建的 point cloud，用来展示单视角 RGB 中确实包含可恢复的空间结构。</small>
+<small>图源：`VO-DP`，Figure 3。原图表达 RoboTwin 场景重建和仿真任务。本站读法：这组结果主要证明 RGB-only 特征能逼近点云 policy，而不是证明点云没有价值。</small>
 
-仿真在 `RoboTwin` benchmark 上做，底层是 `SAPIEN`，包含 14 个双臂 manipulation 任务。平台是 Cobot Magic，一对 6-DoF 机械臂加夹爪，动作维度 \(J=14\)。RoboTwin 原始输入提供 RGB-D 和 point cloud，分辨率为 \(240 \times 320\)，但 VO-DP 只使用单视角 RGB。
+论文的消融也支持这个解释。只用语义特征，policy 缺少空间结构；只用几何特征，policy 对目标和语义条件的理解不足；两者融合才稳定。average pooling 比 MLP projection 更稳，说明在低数据 imitation learning 中，额外参数并不一定带来更强策略，反而可能让模型更容易贴合训练分布。
 
-成功率的判断同时看目标位姿约束和执行过程是否 collision-free。这个口径比“抓起来一下”更严格，尤其对双臂协同和堆叠任务更重要。
+## 真实结果：为什么 RGB-only 反而可能赢
 
-### RoboTwin Benchmark Results
-
-| Method | Block Hammer Beat | Block Handover | Bottle Adjust | Container Place | Empty Cup Place |
-|---|---:|---:|---:|---:|---:|
-| DP | 0.7±0.9 | 77.7±4.5 | 39.3±0.5 | 14.0±6.9 | 69.3±2.5 |
-| DP3 | 79.3±1.2 | **97.7±1.2** | **85.3±0.5** | **83.7±1.7** | **88.7±1.7** |
-| VO-DP | **85.0±1.4** | 89.7±0.5 | 63.3±1.2 | 43.0±3.7 | 82.0±2.2 |
-| VO-DP-1 | 78.7±5.2 | **94.7±0.5** | 69.3±2.5 | 31.3±2.6 | 77.3±1.7 |
-
-| Method | Pick Apple Messy | Put Apple Cabinet | Dual Bottles Pick (Easy) | Dual Bottle Pick (Hard) | Diverse Bottles Pick |
-|---|---:|---:|---:|---:|---:|
-| DP | 31.0±0.8 | 63.6±1.9 | 73.7±1.2 | 63.3±0.5 | 7.3±1.2 |
-| DP3 | 18.7±2.9 | 84.7±0.5 | 83.3±0.5 | 64.0±0.8 | **60.7±0.5** |
-| VO-DP | **80.0±0.8** | **94.3±2.3** | **88.3±0.9** | **67.3±3.3** | 32.3±3.3 |
-| VO-DP-1 | **81.7±0.9** | **98.0±0.8** | **86.3±0.5** | 60.3±1.2 | 31.3±1.7 |
-
-| Method | Shoe Place | Dual Shoes Place | Tool Adjust | Blocks Stack (Easy) | AVG. (↑) |
-|---|---:|---:|---:|---:|---:|
-| DP | 19.3±1.2 | 4.7±0.5 | 20.0±2.9 | 3.7±1.2 | 34.8 |
-| DP3 | **56.3±1.7** | 13.7±1.7 | **58.3±0.5** | 22.0±2.2 | **64.0** |
-| VO-DP | 43.0±0.8 | **17.0±0.8** | **58.3±3.9** | **52.3±2.5** | **63.9** |
-| VO-DP-1 | 52.0±0.8 | **19.3±0.9** | 55.3±2.6 | **69.3±2.5** | **64.6** |
-
-<small>Table source: `VO-DP`, RoboTwin Benchmark Results. DP is vision-only Diffusion Policy; DP3 is point-cloud 3D Diffusion Policy; VO-DP uses \(T=3\); VO-DP-1 uses \(T=1\)。</small>
-
-这个表的读法：
-
-- 对传统视觉 DP：VO-DP 的提升非常大，平均从 `34.8` 到 `63.9 / 64.6`。最典型的是 `Block Hammer Beat`，DP 只有 `0.7±0.9`，VO-DP 到 `85.0±1.4`。
-- 对点云 DP3：VO-DP 平均几乎持平，`63.9` vs `64.0`；VO-DP-1 还略高，`64.6`。这说明 VGGT 中间表征确实能补上不少几何信息。
-- 但 VO-DP 不总赢 DP3。`Diverse Bottles Pick`、`Bottle Adjust`、`Container Place` 这类更依赖精细几何和结构化点云的任务，DP3 仍明显更强。
-
-## 消融实验
-
-### Ablation study on different modality features
-
-| Module | PAM | BHB | DBPE |
-|---|---:|---:|---:|
-| w/o geo. | 44.3±0.9 | 59.3±0.5 | **95.3±0.9** |
-| w/o sem. | 38.7±1.7 | 60.7±4.9 | 81.3±0.5 |
-| VO-DP | **80.0±0.8** | **85.0±1.4** | **88.3±0.9** |
-
-| Module | PAC | BSE | AVG. (↑) |
-|---|---:|---:|---:|
-| w/o geo. | **98.0±0.8** | **58.7±0.9** | 71.12 |
-| w/o sem. | 93.7±2.0 | 45.3±2.5 | 63.9 |
-| VO-DP | **94.3±2.3** | **52.3±2.5** | **80.0** |
-
-<small>Table source: `VO-DP`, Ablation study on different modality features. PAM、BHB、DBPE、PAC、BSE 分别对应五个 RoboTwin 任务缩写。</small>
-
-这组消融很关键。只保留语义或只保留几何都能做一些任务，但平均都不如融合。`w/o sem.` 在 `PAM` 上掉得很明显，说明杂乱苹果场景里目标识别和语义区分很重要；`w/o geo.` 在不少空间/接触任务上也掉，说明只靠 DINOv2 语义 token 仍不足。
-
-### Ablation on different strategy for geometry token downsampling
-
-| Strategy | PAM | BHB | DBPE |
-|---|---:|---:|---:|
-| mlp | **82.0±1.6** | 66.3±1.7 | 88.7±1.2 |
-| pool | 80.0±0.8 | **85.0±1.4** | **88.3±0.9** |
-
-| Strategy | PAC | BSE | AVG. (↑) |
-|---|---:|---:|---:|
-| mlp | **99.3±0.9** | **62.3±3.3** | 79.7 |
-| pool | 94.3±2.3 | 52.3±2.5 | **80.0** |
-
-<small>Table source: `VO-DP`, Ablation on different strategy for geometry token downsampling.</small>
-
-MLP 投影参数更多，但平均并没有胜出。论文最终采用 average pooling，理由很工程：它更简单，也更稳。对这种低数据 imitation learning，额外参数不一定等于更强表达，反而可能让 policy 更依赖训练分布。
-
-## 真实机器人实验
+真实机器人实验更有意思。论文使用 Realman RM65-B 和 Inspire EG2-4C2 夹爪，视觉观测来自 RealSense L515。传感器可以获得 RGB 与点云，但 VO-DP 只用 RGB；DP3 baseline 使用点云，并需要手工定义 operational region。
 
 ![Real-world tasks 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-4-realworld-tasks.png){ width="920" }
 
-<small>Figure source: `VO-DP`, real-world task visualization. 读这张图：四个真实任务分别是 Pick&Place Small Cube、Pick&Place Big Cube、Stack Cubes 和 Cover Cubes。</small>
+<small>图源：`VO-DP`，Figure 4。原图表达真实机器人任务，包括桌面操作、物体移动和夹爪交互。本站读法：看任务是否需要精细空间关系，而不是只看成功率平均值。</small>
 
 ![Real-world setup 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-5-realworld-setup.png){ width="780" }
 
-<small>Figure source: `VO-DP`, experiment setup. 读这张图：真实机器人、RealSense L515、可控扰动光源、不同颜色/尺寸物体与容器。</small>
+<small>图源：`VO-DP`，Figure 5。原图表达真实机器人平台和传感器设置。本站读法：注意 RGB-only policy 的实际优势来自部署链路少，不需要点云裁剪和复杂几何预处理。</small>
 
-!!! note "真实实验图怎么读"
-    真实机器人图不是展示照片，而是实验条件：固定相机、桌面布局、物体尺寸、颜色和光照扰动都决定了成功率口径。VO-DP 的真实实验支持的是受控桌面操作和鲁棒性扰动下的闭环收益；它还不能替代更开放的多物体遮挡、透明/反光物体、相机移动和长时恢复评测。
+论文报告真实任务中 VO-DP 明显高于 DP 和 DP3。一个合理解释是：真实点云比仿真点云脆弱，标定误差、深度噪声和 preprocessing 会让 DP3 掉分；而 VO-DP 依赖的是预训练 RGB 特征，虽然几何不显式，但对视觉域变化更鲁棒。
 
-真实机器人平台使用 `Realman RM65-B`，末端是 `Inspire EG2-4C2` 夹爪，一个 `RealSense L515` 提供视觉观测。论文环境里传感器可获取 RGB 与点云，但 VO-DP 仍只使用 RGB；DP3 baseline 使用点云，并需要手工定义 operational region。
+这不是说 RGB 一定强于点云，而是说“点云是强信息”不等于“点云 pipeline 一定强”。真实系统里，信息质量、标定成本、预处理稳定性和 policy 训练都会一起决定效果。
 
-四个真实任务：
+## 鲁棒性：它在测什么
 
-| Task | Description |
-|---|---|
-| Pick&Place Small Cube (PPSC) | grasp a 3 cm cube and place it at the center of the plate |
-| Pick&Place Big Cube (PPBC) | grasp a 5 cm cube and place it at the center of the plate |
-| Cover Cuboid (CC) | pick up a cup from the plate and cover a 3cm×3cm×6cm cuboid |
-| Stack Cubes (SC) | stack a blue 3 cm cube on top of an orange 3 cm cube |
-
-![Desktop layout 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-6-layout.png){ width="680" }
-
-<small>Figure source: `VO-DP`, desktop layout. 读这张图：盘子在左，物体放置区在右；右侧区域按约 3 cm 网格划分，用于均匀覆盖训练和测试位置。</small>
-
-数据采集每个任务 `200 demonstrations`，用 Realman 机器人自带遥操作设备采集。操作区域被均匀划成网格，训练和测试都按相同空间分布覆盖。这个细节很重要：真实机器人结果不是只测几个固定点，而是覆盖了平面位置变化。
-
-### Real-world Performance
-
-| Method | PPSC | PPBC | CC | SC | AVG. (↑) |
-|---|---:|---:|---:|---:|---:|
-| DP | 23.3 | 16.7 | 3.3 | 1.7 | 11.2±9.1 |
-| DP3 | 73.3 | 68.3 | 75.0 | 53.3 | 67.5±8.5 |
-| VO-DP-1 | **96.7** | **91.7** | **93.3** | **70.0** | **87.9±10.5** |
-
-<small>Table source: `VO-DP`, Real-world Performance. 真实实验默认使用 VO-DP-1。</small>
-
-真实机器人结果比仿真更有意思：VO-DP-1 平均 `87.9`，明显高于 DP3 的 `67.5`。论文解释是，仿真中点云接近完美，真实世界里的深度噪声、标定误差、视角依赖和点云 preprocessing 会让 DP3 掉得更厉害；而 VO-DP 使用的是预训练 RGB 表征，部署链路更短。
-
-## 鲁棒性测试
+VO-DP 的鲁棒性实验覆盖颜色、大小、背景、光照等变化。读这组实验时要区分两件事：视觉 backbone 的泛化和 policy 的控制泛化。颜色或背景变化更考验语义表征；物体大小和布局变化更考验几何与动作分布。
 
 ![Robustness environments 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-7-environment.png){ width="820" }
 
-<small>Figure source: `VO-DP`, robustness environment figure. 读这张图：通过不同颜色桌面纸张和不同随机光照条件测试背景与光照鲁棒性。</small>
+<small>图源：`VO-DP`，Figure 7。原图表达鲁棒性评测环境变化。本站读法：这些变化主要测试视觉域迁移和局部几何泛化，还不是开放世界长时程任务。</small>
 
 ![Robustness tests 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vodp/figure-8-robustness-tests.png){ width="920" }
 
-<small>Figure source: `VO-DP`, robustness test visualization. 读这张图：展示外观、背景、尺寸和光照四类 zero-shot robustness test 的执行序列。</small>
+<small>图源：`VO-DP`，Figure 8。原图表达不同条件下的真实任务鲁棒性。本站读法：如果 RGB-only policy 在光照和背景变化下更稳，说明预训练视觉特征降低了传感器链路脆弱性。</small>
 
-鲁棒性测试都基于 `Pick&Place Small Cube`，训练分布是 3 cm 橙色方块、正常桌面、正常光照。测试时改变尺寸、颜色、背景或光照。
+## 边界与误解
 
-### Size Robustness
+第一，VO-DP 不是大规模语言条件 VLA。它主要是 imitation learning policy，任务范围、语言开放性和长时程组合能力都不能直接外推到 RT-2 或 π0.5 那类模型。
 
-| 3.0 cm | 2.5 cm | 5.0 cm | AVG. |
-|---:|---:|---:|---:|
-| 85.0 | 60.0 | 50.0 | **65.0±14.7** |
+第二，Vision-Only 不等于完全不用几何。它只是不用显式 depth / point cloud 输入；几何信息来自 VGGT 中间特征。更准确地说，VO-DP 是“RGB-only observation with pretrained semantic-geometric representation”。
 
-### Appearance Robustness
+第三，它没有证明点云路线过时。仿真里 DP3 仍然很强；在真实世界里，点云 pipeline 的部署成本和噪声让 VO-DP 更有优势。未来更稳的 RGB-D、事件相机、触觉或多视角系统仍可能超过单视角 RGB。
 
-| orange | blue | green | yellow | AVG. |
-|---:|---:|---:|---:|---:|
-| 85.0 | 50.0 | 40.0 | 90.0 | **66.3±21.6** |
+第四，扩散动作头并不能自动解决安全和控制。VO-DP 输出的是动作 chunk，真实机器人仍需要低层控制器、限位、安全检查和环境约束。
 
-### Illumination Robustness
+## 外部精读
 
-| Normal | Light Switch | Blinking | AVG. |
-|---:|---:|---:|---:|
-| 85.0 | 80.0 | 85.0 | **83.3±2.4** |
-
-### Background Robustness
-
-| desktop surface | lightgray | pink | blue | AVG. |
-|---:|---:|---:|---:|---:|
-| 85.0 | 90.0 | 80.0 | 95.0 | **87.5±5.6** |
-
-<small>Tables source: `VO-DP`, robustness tables. 表头保留原论文英文格式，颜色色块在 Markdown 中用文字表示。</small>
-
-最强的是背景和光照鲁棒性：背景变化平均 `87.5`，光照变化平均 `83.3`，几乎不掉。尺寸和外观则更脆，尤其蓝色/绿色方块和 5 cm 方块会明显下降。这说明 VO-DP 的视觉表征确实比普通 DP 更稳，但还不是完全开放集对象策略；它仍然会受训练对象分布影响。
-
-## 和 DP、DP3、VGGT 的关系
-
-| Method | Visual input | Geometry source | Policy head | Main trade-off |
-|---|---|---|---|---|
-| DP | RGB | learned implicitly from task data | DDPM action head | cheapest input, but weak spatial prior |
-| DP3 | point cloud | explicit 3D sensor input | 3D diffusion policy | strong in simulation, but real-world point cloud preprocessing is brittle |
-| VO-DP | single-view RGB | implicit geometry from VGGT AA features | DDPM action head | lower hardware cost than DP3, stronger geometry than DP |
-
-可以把 VO-DP 看成 “DP 的视觉前端升级版”，也可以看成 “DP3 的低硬件成本替代路线”。它真正证明的不是“RGB 一定比点云强”，而是：**如果 RGB encoder 本身已经被大规模 3D reconstruction 任务预训练过，它的中间 token 可以成为机器人 policy 的几何条件。**
-
-这也给 [VGGT](vggt.md) 一个很好的下游解释：VGGT 不只适合做离线三维重建，它的 AA features 可以作为 policy perception backbone，给动作生成模型提供隐式空间状态。
-
-## 局限与工程风险
-
-第一，VO-DP 仍然是 imitation learning policy，不是大规模语言条件 VLA。论文任务没有强调开放语言指令、长时程任务分解或新任务组合。
-
-第二，虽然叫 vision-only，它仍依赖机器人 proprioceptive states。实际部署中，关节状态、控制频率、末端标定和相机安装仍要稳定。
-
-第三，纯 RGB 的优势不是无条件成立。仿真里 `Diverse Bottles Pick`、`Container Place` 等任务 DP3 更强，说明显式点云在某些精细几何任务上仍有价值。
-
-第四，真实机器人任务规模还比较小：4 个基础空间任务、每任务 200 demos，鲁棒性测试也围绕 PPSC 展开。它证明了强方向，但还不能直接外推到杂物抓取、透明物体、柔性物体或移动操作。
-
-## 读完记住什么
-
-VO-DP 的关键价值是把 3D foundation model 的中间表征接入 diffusion policy，让单视角 RGB 策略得到可用的几何先验。仿真平均成功率上，它从视觉 DP 的 `34.8` 提升到 `63.9 / 64.6`，接近 DP3 的 `64.0`；真实机器人上，它用 VO-DP-1 达到 `87.9±10.5`，明显高于 DP3 的 `67.5±8.5`。
-
-如果要把这篇放进具身智能路线图里，它回答的是一个很具体的问题：**机器人策略不一定非要等完美点云；RGB + 3D 预训练表征 + diffusion action head，已经能成为一条现实可部署的中间路线。**
-
-## 参考资料
-
-1. [VO-DP arXiv paper](https://arxiv.org/abs/2510.15530)
-2. [VO-DP project page](https://d-robotics-ai-lab.github.io/vodp/)
-3. [DRRM GitHub repository](https://github.com/D-Robotics-AI-Lab/DRRM)
-4. [Hugging Face paper page](https://huggingface.co/papers/2510.15530)
+- [VO-DP: Semantic-Geometric Adaptive Diffusion Policy for Vision-Only Robotic Manipulation](https://arxiv.org/abs/2510.15530)：论文原文，重点读 feature fusion、simulation / real-world 对比和 ablation。
+- [VO-DP project page](https://d-robotics-ai-lab.github.io/vodp/)：项目页适合看真实机器人视频和任务设置。
+- [DRRM GitHub repository](https://github.com/D-Robotics-AI-Lab/DRRM)：论文配套训练库，适合核对 policy 训练接口。
+- [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解为什么动作生成可以用扩散模型。
+- [VGGT project page](https://vgg-t.github.io/)：理解 VO-DP 借用的语义-几何视觉特征来自哪里。

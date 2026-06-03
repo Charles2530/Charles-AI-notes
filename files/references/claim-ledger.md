@@ -2,7 +2,6 @@
 
 这页是全站证据账，用来记录“某个说法到底由什么证据支撑、是否可复现、不能外推到哪里”。它不替代正文，也不替代论文精读；它的作用是防止把论文实验、官方 demo、系统吞吐、闭环结果和本站工程推断混成同一种可信度。
 
-
 证据类型固定使用：`Paper Result`、`Ablation`、`System Throughput`、`Closed-loop`、`Official Demo`、`Toy Fixture`、`Site Inference`。
 
 复现状态固定使用：`Independent Reproduced`、`Author Code / Official Repo`、`Paper Only`、`Official Demo`、`Site Inference`、`Toy Fixture`。没有第三方复现证据时，不写成 `Independent Reproduced`。

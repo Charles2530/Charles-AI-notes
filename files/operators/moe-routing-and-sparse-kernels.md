@@ -3,23 +3,9 @@
 稀疏计算和 `MoE`（Mixture of Experts）常被看成“模型结构创新”，但一旦真正训练或部署，问题很快就会变成 kernel 与通信系统问题。原因很简单：  
 **稠密模型的热点大多是规则大矩阵，稀疏和 MoE 的热点则往往是 token 重排、路由、gather/scatter、all-to-all 和不均匀负载。**
 
-
 这使得稀疏系统的工程难点不在公式，而在如何把 token 送到正确专家、如何让热门专家不成为热点、如何让重排和通信不把省下来的 FLOPs 吃掉，以及如何让路由 kernel 和主计算 kernel 协同。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 为什么稀疏 kernel 和稠密 kernel 不一样
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-> **算法视角**：MoE router 可以看成每个 token 的 Top-K 选择问题；负载均衡 loss 则是在主任务 loss 之外约束 expert 使用分布，避免少数 expert 过热、其他 expert 闲置。
->
-> 延伸阅读：[06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《06. MoE Router | 混合专家架构: 稀疏路由与负载均衡 (MoE)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| router Top-K | $O(E)$ 到 $O(E\log K)$ | $O(K)$ active expert 索引 | $E$ 为 expert 数，$K$ 为激活 expert 数；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/06_MoE_Router.html) |
-| expert 计算 | 近似随 $K$ 线性增长 | 需要 token dispatch / combine buffer | MoE 的工程难点常在稀疏调度、负载均衡和通信。 |
 
 稠密 kernel 往往假设数据布局规则、工作量均匀，并且可以用大块 GEMM 吃满硬件。稀疏 / MoE 场景则相反：token 分布不均，某些 expert 很热、某些很闲，计算前要先 route 和重排，工作负载还会随每批输入变化。
 
@@ -54,13 +40,11 @@ flowchart LR
 \frac{8192\times2}{64}=256
 \]
 
-
 个 token。这个 `256` 是平均负载，不是每个 expert 实际收到的数量。工程上常用 capacity factor 给每个 expert 预留容量：
 
 \[
 capacity \approx \frac{B L \times topk}{N_{\text{expert}}}\times factor
 \]
-
 
 所以 capacity 设为 `320` 相当于 factor 约 `1.25`，设为 `640` 相当于 factor `2.5`。但真实 router 可能不均匀：热门 expert 收 520 个 token，冷 expert 只收 80 个。若 capacity 是 320，热门 expert 会 drop 或 reroute；若 capacity 是 640，padding、空槽和小批量 GEMM shape 会浪费。这个超参同时影响模型质量、kernel shape 和 all-to-all 消息大小。
 
@@ -127,7 +111,7 @@ MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。
 
 如果稠密模型像每个零件都要走同一条大装配线，那么 MoE 更像每个零件会被动态分发到不同的专业工位。好处是主装配线不用让所有工位同时开工，但坏处是零件分拣、转运和工位排队本身会变成新的瓶颈。MoE 系统真正难的地方，不在工位上的加工，而在整个分拣与物流系统是否高效。
 
-## 本页结论
+## 阅读结论
 
 稀疏、MoE 与路由 kernel 的核心，不是“把矩阵变稀疏”这么简单，而是如何在保持模型容量优势的同时，控制 token 重排、all-to-all、负载不均和小批次 expert 计算带来的系统开销。  
 如果没有这层 kernel 与通信视角，MoE 很容易停留在“理论参数效率很高”的纸面优势，而无法转化成真实训练和推理服务系统里的可观收益。

@@ -2,21 +2,7 @@
 
 当一个 kernel 或训练/推理路径性能异常时，最容易犯的错误是只在软件层找原因。实际上很多问题只有带着硬件感知去排查，才能快速定位。
 
-
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 先问是不是带宽问题
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 如果：
 
@@ -98,7 +84,7 @@ flowchart TD
 
 **修复**：按 kernel hit rate 分桶统计；先保留敏感头高精，主干 matmul 确认 FP8 命中；对长上下文桶评估 KV cache 量化；把 dequant/requant 次数计入性能报告。
 
-## 本页结论
+## 阅读结论
 
 **硬件感知排查的核心是**：不要把所有问题都解释成算法或框架问题。很多性能瓶颈最终都要回到带宽、寄存器、拓扑和 workload 分布这些更底层也更真实的约束上。只要先从这些约束出发，定位通常会快很多。
 

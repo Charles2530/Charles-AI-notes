@@ -121,6 +121,6 @@ EAGLE-3 的 speedup 不是免费午餐。draft model 训练、feature export、t
 - [EAGLE 原论文](eagle.md)：理解 feature-level draft 和 shifted-token 的起点。
 - [缓存、路由与投机解码](../../inference/caching-routing-and-speculative.md)：把 EAGLE-3 放回服务系统的请求生命周期里看。
 
-## 本页结论
+## 阅读结论
 
 EAGLE-3 的核心不是“更强的草稿模型”，而是“draft 训练分布要像线上推理分布”。它放弃 feature regression 约束，直接服务 token acceptance；用多层 target feature 给 draft 更完整的条件；用 training-time test 让 draft model 在训练时就处理自己的递归输出。理解这三点后，EAGLE-3 的 speedup 表才有意义：收益来自 accepted tokens 增多，但能否落地还取决于请求桶、batch size、runtime 集成和 verification overhead。

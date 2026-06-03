@@ -2,23 +2,9 @@
 
 很多人第一次写自定义 kernel 时，会把注意力放在“这个 kernel 跑得够不够快”。但在真实工程里，性能只是其中一部分。一个自定义算子想真正进入训练或推理系统，还必须解决框架调用、autograd、图编译、profiler、shape / dtype / device dispatch、fallback、测试和版本演进。
 
-
 因此“自定义算子开发”其实更像一条完整集成链，而不是孤立的 kernel 编写。
 
-> **踩坑原因**：这类工程问题通常不是单点公式错，而是 shape、资源预算、并发路径和观测指标之间有一个假设没对齐；先把触发条件、监控信号和回滚边界拆开查。
-
 ## 为什么很多高性能 kernel 最终没被用起来
-
-<!-- [融合：算法基础] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-> **算法视角**：算子优化先要还原成 GEMM、reduce 或 elementwise 的块级数据流；Triton/CUDA 章节里的 tile、mask、program id 和 autotune，都是在控制同一数学操作的访存复用和并行粒度。
->
-> 延伸阅读：[08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html)
-
-<!-- [融合：复杂度分析] 来源：llm-algo-leetcode《08. Programming Models CUDA Triton | 编程模型演进 (Programming Models: CUDA & Triton)》-->
-| 操作 | 时间复杂度 | 空间复杂度 | 说明 |
-|------|-----------|-----------|------|
-| GEMM $C=A B$ | $O(MNK)$ | $O(MK+KN+MN)$ | tile 的意义是提高 SRAM / register 复用，减少 HBM 往返；参考：[对应章节](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/08_Programming_Models_CUDA_Triton.html) |
-| reduce / norm / softmax | $O(N)$ | $O(N)$ 或一行工作集 | 这类算子常是 bandwidth-bound，融合可以减少读写次数。 |
 
 常见原因不是它不够快，而是集成太难、只支持少量 shape、autograd 路径缺失、无法进入 graph compile、fallback 和错误处理太弱，或部署、打包和兼容成本太高。
 
@@ -112,7 +98,7 @@ CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和
 
 自定义算子就像为工厂定制一台专用设备。设备本身可能很快，但如果它接不上现有流水线、维护手册不全、只能处理一种规格的零件、坏了又没有备用流程，那么它的工程价值就会大打折扣。真正有价值的 custom op，不只是“局部最快”，而是能顺滑进入整条生产线。
 
-## 本页结论
+## 阅读结论
 
 自定义算子开发的关键，不只是 kernel 写得快，而是把性能、集成、autograd、图编译、测试、fallback 和版本演进放在同一张设计图里。只有这样，一个自定义 kernel 才会从 demo 变成真正可维护、可部署、可复用的系统组件。
 

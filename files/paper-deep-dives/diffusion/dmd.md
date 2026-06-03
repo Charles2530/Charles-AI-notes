@@ -6,13 +6,16 @@ paper_topic: 扩散模型
 
 # DMD：一步扩散蒸馏
 
-
 这篇论文是后来 DMD2、CausVid、Phased DMD 一系列少步扩散蒸馏方法的基础。它的核心思想很直接：**不要强迫学生模型逐步复刻 teacher 的采样轨迹，而是让学生的一步输出分布看起来像 teacher 的多步输出分布。**
 
 论文把这个目标落成两个损失：
 
 1. **Distribution Matching Loss**：用 real score 和 fake score 的差异近似 reverse KL 梯度，把生成器输出往真实扩散分布推；
 2. **Regression Loss**：预先生成一批 noise-image pairs，用 LPIPS 让一步生成器保持 teacher 输出的大尺度结构，防止 mode collapse / mode dropping。
+
+先用一个例子固定直觉。假设同一个 prompt 是“一只红色椅子放在木地板上”，teacher 用 50 步慢慢把噪声变成图像；一步学生只有一次前向机会。如果只要求学生复刻 teacher 对每个 seed 的最终图，它容易学成模糊平均；如果只要求图片“看起来真实”，它又可能把很多 seed 都映射到同一种红椅子。DMD 的聪明处在于把这两个问题拆开：distribution matching 负责让整批学生样本落进真实/teacher 分布，regression loss 负责让每个 seed 还保有自己的大结构锚点。
+
+因此，DMD 不是“一个神奇的一步采样器”，而是一套训练系统：冻结的 real score 告诉学生哪里像真实图，在线训练的 fake score 告诉学生当前自己已经挤在哪些模式里，paired regression 则防止多样性被 reverse KL 吃掉。
 
 ## 论文位置
 
@@ -32,11 +35,11 @@ DMD 的关键转向是：它不再问“同一个 noise 经过 teacher 50 步会
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 2。原论文图意：一步生成器 \(G_\theta\) 从随机噪声生成 fake image；一条支路用预计算 noise-image pairs 做 regression loss，另一条支路把 fake image 加噪后分别送入 real score diffusion model 和 fake score diffusion model，用两者差异形成 distribution matching gradient。</small>
 
-!!! note "这张图怎么读"
-    **输入输出**：输入是随机噪声、teacher 样本和 fake image 加噪版，输出是一步图像与 real/fake score 差分。  
-    **效率机制**：把多步 teacher 采样压成一步学生，并用 regression loss 保住大尺度语义。  
-    **对主线意义**：说明分布匹配蒸馏可降预览/rollout 成本，但质量和任务评测要分开。  
-    **不能证明什么**：图像指标不能证明动作条件世界模型、闭环收益或真实机器人安全。
+**DMD 总图要看 real/fake score 差分。**
+**输入输出**：输入是随机噪声、teacher 样本和 fake image 加噪版，输出是一步图像与 real/fake score 差分。  
+**效率机制**：把多步 teacher 采样压成一步学生，并用 regression loss 保住大尺度语义。  
+**对主线意义**：说明分布匹配蒸馏可降预览/rollout 成本，但质量和任务评测要分开。  
+**不能证明什么**：图像指标不能证明动作条件世界模型、闭环收益或真实机器人安全。
 
 DMD 的训练图可以拆成四个对象：
 
@@ -67,7 +70,6 @@ regression loss:
 z \rightarrow y=\operatorname{ODE}(\mu_{\text{base}},z).
 \]
 
-
 这个映射非常难学。teacher 的多步采样轨迹在高维空间里很复杂，学生一步网络要同时学到全局构图、局部纹理、语义对齐和随机性，很容易输出模糊或结构不稳定的图像。
 
 DMD 的判断是：轨迹回归可以做 regularizer，但不能作为唯一目标。真正决定视觉质量的是分布级约束：学生输出应该落在 teacher / real data 的高密度区域，而不是只和单个 teacher sample 做点对点拟合。
@@ -81,7 +83,6 @@ x = G_\theta(z),
 \qquad z\sim \mathcal N(0,I).
 \]
 
-
 \(z\sim\mathcal N(0,I)\) 读作：起点噪声 \(z\) 从均值为 0、协方差为 \(I\) 的标准高斯中采样；\(G_\theta\) 负责把这份噪声一次映射成图像样本 \(x\)。
 
 DMD 想最小化 fake distribution 到 real distribution 的 reverse KL：
@@ -94,7 +95,6 @@ D_{KL}(p_{\text{fake}}\|p_{\text{real}})
 \log \frac{p_{\text{fake}}(x)}{p_{\text{real}}(x)}
 \right].
 \]
-
 
 对 \(\theta\) 求梯度时，会出现两个 score：
 
@@ -111,7 +111,6 @@ s_{\text{real}}(x)-s_{\text{fake}}(x)
 \right].
 \]
 
-
 其中：
 
 \[
@@ -119,7 +118,6 @@ s_{\text{real}}(x)=\nabla_x\log p_{\text{real}}(x),
 \qquad
 s_{\text{fake}}(x)=\nabla_x\log p_{\text{fake}}(x).
 \]
-
 
 直觉上：
 
@@ -143,17 +141,16 @@ q_t(x_t\mid x)
 \mathcal N(\alpha_t x,\sigma_t^2I).
 \]
 
-
 这里的高斯可按 \(\mathcal N(x_t;\alpha_t x,\sigma_t^2I)\) 来读：\(x_t\) 是加噪后的样本，\(\alpha_t x\) 是均值，\(\sigma_t^2I\) 是协方差，表示以当前样本为中心按噪声尺度 \(\sigma_t\) 扩散开。
 
 加噪后，real 和 fake 的分布会在 ambient space 里有更大重叠，score matching 才稳定。
 
-![DMD diffusion score intuition](../../assets/images/paper-deep-dives/diffusion/dmd/intuition_figure.png){ width="630" }
+![DMD diffusion score intuition](../../assets/images/paper-deep-dives/diffusion/dmd/intuition_figure.png){ width="630" .atlas-figure-compact }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 4。原论文图意：未加噪时 real / fake distributions 可能不重叠；经过 diffusion perturbation 后，distribution matching objective 在空间中更好定义。</small>
 
-!!! note "图解：为什么要先把样本加噪再匹配"
-    左侧直觉是 real distribution 和 fake distribution 在原始图像空间里可能几乎不重叠，这时直接比较梯度很容易得到不稳定或没意义的方向。加上 diffusion perturbation 后，两个分布被高斯噪声“抹宽”，在同一个 ambient space 里产生更大重叠，score difference 才能提供连续的移动方向。DMD 不是在原图上硬判真假，而是在不同噪声强度下比较 real score 和 fake score，让 generator 逐步靠近 teacher / data 分布。
+**为什么要先把样本加噪再匹配。**
+左侧直觉是 real distribution 和 fake distribution 在原始图像空间里可能几乎不重叠，这时直接比较梯度很容易得到不稳定或没意义的方向。加上 diffusion perturbation 后，两个分布被高斯噪声“抹宽”，在同一个 ambient space 里产生更大重叠，score difference 才能提供连续的移动方向。DMD 不是在原图上硬判真假，而是在不同噪声强度下比较 real score 和 fake score，让 generator 逐步靠近 teacher / data 分布。
 
 real score 由冻结 teacher diffusion model 给出：
 
@@ -164,7 +161,6 @@ s_{\text{real}}(x_t,t)
 \frac{x_t-\alpha_t\mu_{\text{base}}(x_t,t)}{\sigma_t^2}.
 \]
 
-
 fake score 由动态训练的 fake diffusion model 给出：
 
 \[
@@ -173,7 +169,6 @@ s_{\text{fake}}(x_t,t)
 -
 \frac{x_t-\alpha_t\mu_{\text{fake}}^\phi(x_t,t)}{\sigma_t^2}.
 \]
-
 
 生成器的 distribution matching 梯度近似为：
 
@@ -189,7 +184,6 @@ s_{\text{fake}}(x_t,t)-s_{\text{real}}(x_t,t)
 \frac{dG}{d\theta}
 \right].
 \]
-
 
 注意符号：实现里通常把这个方向写成一个可反传的 surrogate loss；核心仍然是 fake score 和 real score 的差。
 
@@ -208,28 +202,26 @@ fake distribution 会随着 \(G_\theta\) 更新不断变化。因此 \(\mu_{\tex
 \qquad x=G_\theta(z).
 \]
 
-
 这里的 clean target 不是真实数据，而是当前 generator 的 fake image。也就是说，\(\mu_{\text{fake}}\) 学的是“当前 fake distribution 被加噪后的 score”。这点后来在 DMD2、CausVid、Phased DMD 中都保留下来，只是训练对象从图像扩展到视频、因果学生或 SNR 子区间。
 
 ## Regression Loss 的作用
 
 DMD 不能只靠 distribution matching。论文用二维 toy 分布说明了原因。
 
-![DMD objective comparison](../../assets/images/paper-deep-dives/diffusion/dmd/matching_sim_figure.png){ width="630" }
+![DMD objective comparison](../../assets/images/paper-deep-dives/diffusion/dmd/matching_sim_figure.png){ width="630" .atlas-figure-compact }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 3。原论文图意：只最大化 real score 会让 fake samples 塌到最近模式；有 distribution matching 但无 regression loss 时覆盖更好但仍会漏掉模式；完整目标加上 regression loss 后能恢复两个目标模式。</small>
 
-!!! note "为什么这张 toy 图很关键"
-    这张图不是为了证明二维 toy 分布本身，而是在解释 DMD 为什么还需要 regression loss。只用 real score 时，generator 会被拉向最近的高密度区域，结果很容易把多个 noise 都映射到同一个 mode。加入 fake score 后，目标变成 real/fake score difference，样本不再只是往最近真实 mode 冲，也会受到当前 fake 分布密度梯度的校正，因此 mode coverage 变好。
+**为什么这张 toy 图很关键。**
+这张图不是为了证明二维 toy 分布本身，而是在解释 DMD 为什么还需要 regression loss。只用 real score 时，generator 会被拉向最近的高密度区域，结果很容易把多个 noise 都映射到同一个 mode。加入 fake score 后，目标变成 real/fake score difference，样本不再只是往最近真实 mode 冲，也会受到当前 fake 分布密度梯度的校正，因此 mode coverage 变好。
 
-    但 reverse KL 仍然有 mode-seeking 倾向：它宁愿覆盖少数高质量 mode，也不一定主动覆盖所有 mode。regression loss 的作用是给每个 noise 一个 teacher anchor，让不同 noise 保持不同的输出结构。读这张图时可以记成三层约束：real score 提供真实方向，fake score 提供分布校正，paired regression 提供多样性锚点。
+但 reverse KL 仍然有 mode-seeking 倾向：它宁愿覆盖少数高质量 mode，也不一定主动覆盖所有 mode。regression loss 的作用是给每个 noise 一个 teacher anchor，让不同 noise 保持不同的输出结构。读这张图时可以记成三层约束：real score 提供真实方向，fake score 提供分布校正，paired regression 提供多样性锚点。
 
 reverse KL 天然有 mode-seeking 倾向。即使 real/fake score 差分能改善纯 real score 的塌缩，它仍可能只覆盖一部分模式。DMD 因此预计算一批 teacher samples：
 
 \[
 \mathcal D=\{(z,y)\},
 \]
-
 
 其中 \(y\) 是 teacher diffusion model 用 deterministic ODE solver 从同一个 noise \(z\) 采样得到的图像。然后训练：
 
@@ -239,7 +231,6 @@ reverse KL 天然有 mode-seeking 倾向。即使 real/fake score 差分能改�
 \mathbb E_{(z,y)\sim\mathcal D}
 \ell(G_\theta(z),y).
 \]
-
 
 论文默认 \(\ell\) 使用 LPIPS，最终生成器目标是：
 
@@ -252,7 +243,6 @@ D_{KL}
 \qquad
 \lambda_{\text{reg}}=0.25
 \]
-
 
 除特别说明外使用 \(\lambda_{\text{reg}}=0.25\)。这个 loss 有两个作用：
 
@@ -343,7 +333,6 @@ w_t
 \frac{\sigma_t^2}{\alpha_t}
 \frac{CS}{\lVert\mu_{\text{base}}(x_t,t)-x\rVert_1},
 \]
-
 
 其中 \(C\) 是通道数，\(S\) 是空间位置数。它的目的不是改变优化目标，而是让不同噪声水平下的梯度幅度更稳定。
 
@@ -462,10 +451,10 @@ w_t
 
 <small>表源：`One-step Diffusion with Distribution Matching Distillation`，Appendix Table 5。原论文表格要点：`Max DM Step` 是 distribution matching loss 注入噪声的最大 timestep；`Small` 表示 Tiny VAE decoder，`Large` 表示 SDv1.5 标准 VAE decoder；`DM BS` 和 `Reg. BS` 分别表示 distribution matching 和 regression loss batch size。</small>
 
-!!! note "这张训练日志表怎么读"
-    这张表不是普通 leaderboard，而是一次真实训练过程中逐步改 recipe 的记录。重点看三个变量：`Reg. Weight`、`Max DM Step` 和 VAE decoder。前半段把 regression weight 从 0.1 提高到 1，FID 快速下降，说明早期如果没有足够强的 teacher-path anchor，一步 generator 很难稳定学到语义结构。
+**这张训练日志表怎么读。**
+这张表不是普通 leaderboard，而是一次真实训练过程中逐步改 recipe 的记录。重点看三个变量：`Reg. Weight`、`Max DM Step` 和 VAE decoder。前半段把 regression weight 从 0.1 提高到 1，FID 快速下降，说明早期如果没有足够强的 teacher-path anchor，一步 generator 很难稳定学到语义结构。
 
-    后半段把 `Max DM Step` 从 980 降到 500，再把 Tiny VAE decoder 换成标准 VAE decoder，说明 distribution matching 的噪声范围和解码器质量都会影响最终 FID。最后又逐步降低 regression weight 到 0.25，说明训练后期要释放分布匹配信号，让模型不被 deterministic teacher path 绑得太死。这张表实际给出了一条工程策略：**先用回归稳结构，再用分布匹配提质量**。
+后半段把 `Max DM Step` 从 980 降到 500，再把 Tiny VAE decoder 换成标准 VAE decoder，说明 distribution matching 的噪声范围和解码器质量都会影响最终 FID。最后又逐步降低 regression weight 到 0.25，说明训练后期要释放分布匹配信号，让模型不被 deterministic teacher path 绑得太死。这张表实际给出了一条工程策略：**先用回归稳结构，再用分布匹配提质量**。
 
 这张训练日志有几个工程信号：
 
@@ -475,9 +464,6 @@ w_t
 4. 后期把 `Reg. Weight` 降回 0.25，FID 最好到 14.93，说明先强约束结构、后释放 distribution matching 是有用训练策略。
 
 ## 实验结果
-
-> **这个实验说明了什么**：这一节主要检查论文主张是否在作者设定的数据、模型和评测口径下成立；阅读时要把指标提升、消融贡献和未覆盖场景分开看。
-
 
 ### ImageNet-64
 
@@ -525,16 +511,16 @@ w_t
 2. 没有 regression，CIFAR FID 退化到 5.58，且容易 mode collapse；
 3. 权重设计不是装饰项，它直接影响跨 timestep 梯度稳定性。
 
-![DMD ablation ImageNet](../../assets/images/paper-deep-dives/diffusion/dmd/imagenet_pdf_crop.png){ width="630" }
+![DMD ablation ImageNet](../../assets/images/paper-deep-dives/diffusion/dmd/imagenet_pdf_crop.png){ width="630" .atlas-figure-compact }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 5 上半部分。原论文图意：左侧为 DMD，右侧为去掉 distribution matching objective 的 baseline；后者 realism 和结构完整性明显较差。</small>
 
-![DMD ablation CIFAR](../../assets/images/paper-deep-dives/diffusion/dmd/cifar10_pdf_crop.png){ width="630" }
+![DMD ablation CIFAR](../../assets/images/paper-deep-dives/diffusion/dmd/cifar10_pdf_crop.png){ width="630" .atlas-figure-compact }
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 5 下半部分。原论文图意：左侧为 DMD，右侧为去掉 regression loss 的 baseline；后者出现 mode collapse / diversity loss，例如大量灰色汽车。</small>
 
-!!! note "图解：两组消融图分别暴露不同失败"
-    ImageNet 图主要说明 distribution matching 不能删：没有它，样本会失去真实感和结构完整性，说明单纯回归 teacher pairs 不足以学好整体分布。CIFAR 图主要说明 regression loss 不能删：没有 paired anchor，generator 容易把多个 noise 映射到相似结果，表现为 mode collapse 或 diversity loss。把两张图合起来看，DMD 的核心不是某一个 loss 单独强，而是 distribution matching 管真实分布，regression 管 noise-to-image 的结构对应。
+**两组消融图分别暴露不同失败。**
+ImageNet 图主要说明 distribution matching 不能删：没有它，样本会失去真实感和结构完整性，说明单纯回归 teacher pairs 不足以学好整体分布。CIFAR 图主要说明 regression loss 不能删：没有 paired anchor，generator 容易把多个 noise 映射到相似结果，表现为 mode collapse 或 diversity loss。把两张图合起来看，DMD 的核心不是某一个 loss 单独强，而是 distribution matching 管真实分布，regression 管 noise-to-image 的结构对应。
 
 ### MS COCO-30K, guidance scale 3
 
@@ -586,8 +572,8 @@ w_t
 
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 6。原论文图意：对比 DMD、InstaFlow、LCM、DPM++ 和 Stable Diffusion 在相同 prompt 下的图像质量与延迟；DMD 一步 90ms，质量接近 50-step SD。</small>
 
-!!! note "图解：质量对比图不要只看速度"
-    这张图把 latency 和视觉质量放在同一处比较。DMD 的卖点不是“比所有方法都快”，而是在一步 90ms 的预算里尽量保住多步 Stable Diffusion 的语义结构、主体完整性和局部细节。读这种 qualitative comparison 时要同时看三点：同一 prompt 下是否遵循文本，复杂结构是否完整，失败样本是否集中在某类 prompt 上。单张好图不能证明上线可用，但它能帮你定位少步蒸馏最常牺牲的质量维度。
+**质量对比图不要只看速度。**
+这张图把 latency 和视觉质量放在同一处比较。DMD 的卖点不是“比所有方法都快”，而是在一步 90ms 的预算里尽量保住多步 Stable Diffusion 的语义结构、主体完整性和局部细节。读这种 qualitative comparison 时要同时看三点：同一 prompt 下是否遵循文本，复杂结构是否完整，失败样本是否集中在某类 prompt 上。单张好图不能证明上线可用，但它能帮你定位少步蒸馏最常牺牲的质量维度。
 
 ## CIFAR-10 补充结果
 
@@ -645,7 +631,7 @@ DMD 可以把 guidance scale 3 或 8 蒸馏进 generator，使推理无需额外
 5. **regression pairs 预计算成本高**：LAION 6+ 高 guidance 实验生成了 12M pairs，本身就是一笔很大的 teacher sampling 成本。
 6. **主要验证图像，不是视频**：DMD 原论文不解决视频长时一致、动作动态和 causal rollout，这些问题后来才在 CausVid / Phased DMD 等工作里展开。
 
-## 读完应该记住什么
+## 阅读结论
 
 DMD 的关键贡献是把扩散蒸馏从“学生复刻 teacher 轨迹”推进到“学生匹配 teacher 分布”。它用两个 diffusion score estimator 近似 reverse KL 梯度：
 
@@ -658,8 +644,11 @@ regularizer: LPIPS regression to precomputed teacher outputs
 
 如果只记一个工程结论，就是：**一步扩散生成器要同时有分布级 realism 信号和 teacher-pair structure 信号。缺前者会不真实，缺后者会掉模式。**
 
-## 参考资料
+## 外部精读
 
-1. Yin et al. [One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828). arXiv:2311.18828.
-2. 官方项目页：[DMD](https://tianweiy.github.io/dmd/).
-3. 论文 HTML 版本：[ar5iv:2311.18828](https://ar5iv.labs.arxiv.org/html/2311.18828).
+1. Yin et al. [One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)：原论文；重点读 Figure 2/3、Table 2 和 Appendix 训练日志。
+2. 官方项目页：[DMD](https://tianweiy.github.io/dmd/)：先看方法图和样例，再回论文确认 score difference 与 regression loss 的角色。
+3. 论文 HTML 版本：[ar5iv:2311.18828](https://ar5iv.labs.arxiv.org/html/2311.18828)：适合检索公式和附录表格。
+4. Yin et al. [DMD2](https://arxiv.org/abs/2405.14867)：理解 DMD 后续为什么要处理 fake critic 跟踪、GAN branch 和 backward simulation。
+5. [Phased DMD](https://arxiv.org/abs/2510.27684)：看 DMD 框架怎样扩展到 few-step、视频和 SNR 子区间。
+6. Song et al. [Consistency Models](https://arxiv.org/abs/2303.01469)：作为少步生成的另一条路线，对比 trajectory consistency 和 distribution matching 的差别。
