@@ -35,6 +35,10 @@
 | [机器之心](https://www.jiqizhixin.com/) | 中文技术媒体 / 公众号生态 | 先交代问题背景和论文意义，再用主图、方法拆解和实验结果把读者带进原文。 | 用作中文读法参考；性能数字和图必须回到论文或官方项目页。 |
 | [量子位](https://www.qbitai.com/) | 中文技术媒体 / 公众号生态 | 用产业问题、读者痛点和路线对比开篇，适合学习“为什么这个问题值得看”。 | 行业判断不能直接写成技术证据；访谈类内容只标为路线观点。 |
 | [智源社区](https://hub.baai.ac.cn/) | 中文社区 / 编译转载 | 把海外工程长文、报告和论文整理成中文结构，尤其适合系统工程和推理优化文章。 | 转载或编译内容要追到原文；中文页只保留为二次阅读入口。 |
+| [量子位 / 智源：世界模型真正的考场在机器人执行里](https://hub.baai.ac.cn/view/54116) | 中文技术媒体 / 公众号转载 | 学习如何从“视频榜单和机器人执行错位”切入，把评测对象拉回任务成功率、闭环频率和数据基建。 | 行业材料；具体模型数字和 claim 需追原论文、官方项目页或原始发布。 |
+| [PaperWeekly](https://zhuanlan.zhihu.com/paperweekly) | 中文论文解读 / 公众号生态 | 学习论文速读如何把贡献、方法图和实验表拆成读者能跟上的顺序。 | 图、表、数字和结论必须回到论文或官方项目页。 |
+| [Datawhale 教程矩阵](https://github.com/datawhalechina/so-large-lm) | 中文开源教程 | 学习把概念、公式、代码和学习路径放在同一套材料里的组织方式。 | 只作为中文讲法和学习路径参考；具体 API 和实验 claim 回官方/论文。 |
+| [Datawhale Every-Embodied](https://github.com/datawhalechina/every-embodied) | 中文开源教程 / 公众号生态 | 学习具身智能文章如何从硬件、仿真、数据采集、策略学习、复现和部署串成可执行学习路线。 | 只作为讲法和学习路径参考；VLA 成功率、数据规模和模型细节回论文、项目页或官方仓库。 |
 | [OneFlow Official CSDN](https://blog.csdn.net/OneFlow_Official) | 中文工程博客 | 以 kernel、分布式、推理阶段、checkpoint 等工程问题为线索展开，不把系统文章写成概念词典。 | 工程细节若涉及版本或实现，优先回到官方文档、论文或仓库。 |
 | [Moritz Reuss: State of VLA Research at ICLR 2026](https://mbreuss.github.io/blog_post_iclr_26_vla.html) | 研究者博客 | 学习 VLA 定义争议、benchmark 读法和趋势分类。 | 个人分析；不替代论文结果。 |
 | [ICLR Blogposts: Spatial Awareness in VLMs](https://iclr-blogposts.github.io/2026/blog/2026/spatial-awareness/) | 学术博客 | 学习空间理解问题如何从位置编码、attention 和训练目标展开。 | 具体 claim 回到引用论文。 |
@@ -202,6 +206,7 @@
 | [VGGT](https://arxiv.org/abs/2503.11651) | 论文 | feed-forward 3D geometry 的统一接口；适合和 DA3 的 depth + ray 设计做对照。 | VGGT、Depth Anything 3 |
 | [Video Prediction Policy](https://arxiv.org/abs/2412.14803) | 论文 | 未来预测不必完整生成视频；single-step 中间表征可以作为 robot policy 的动态状态。 | VPP、预测视觉表征 |
 | [VPP project page](https://video-prediction-policy.github.io/) | 项目页 | 用真实机器人视频、one-step prediction 和 predictive representation 可视化核对方法 claim。 | VPP、具身策略 |
+| [World Action Models are Zero-shot Policies](https://arxiv.org/abs/2602.15922) | 论文 | 用 joint video-action prediction、闭环真实观测刷新和系统加速理解 WAM 与 VLA 的差异。 | DreamZero、WAM |
 | [DreamZero project page](https://dreamzero0.github.io/) | 项目页 | 用 zero-shot、post-training、cross-embodiment demo 核对 WAM 不是只做离线视频预测，而是接入闭环动作输出。 | DreamZero、WAM |
 | [量子位：VLA 和世界模型路线访谈](https://www.qbitai.com/2026/05/424584.html) | 中文行业访谈 | 学习中文表达里的产业问题意识：空间感知、物理数据和路线融合。事实 claim 仍需回到原论文/官方报告。 | 具身路线、数据引擎 |
 | [智源社区：具身与世界模型专题峰会观点集锦](https://hub.baai.ac.cn/view/41216) | 中文会议观点整理 | 学习中文长文如何把产业痛点、研究问题和真实机器人数据约束放在同一篇里；技术证据仍回到论文。 | 具身智能路线、世界模型边界 |
@@ -227,8 +232,13 @@
 | [Meta: V-JEPA 2 launch](https://about.fb.com/news/2025/06/our-new-model-helps-ai-think-before-it-acts/) | 官方博客 | 用“understanding, prediction, planning”讲清世界模型能力形态，同时回到论文确认实验边界。 | V-JEPA 2-AC、世界模型 |
 | [Meta V-JEPA 2 research page](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/) | 官方研究页 | 两阶段：action-free 预训练，再接 action-conditioned planning。 | V-JEPA 2-AC |
 | [V-JEPA 2](https://arxiv.org/abs/2506.09985) | 论文 | 用 action-conditioned world model 和 MPC 表格区分“预测表征”与“规划器可消费”。 | V-JEPA 2-AC、世界模型实验报告 |
+| [World-in-World](https://arxiv.org/abs/2510.18135) | 论文 / Benchmark | 学习如何把世界模型评测从视觉质量拉到 closed-loop task success 和 standardized action API。 | 世界模型评测、闭环 utility |
+| [WorldArena](https://arxiv.org/abs/2602.08971) | 论文 / Benchmark | 把 video perception quality、functional utility 和 human evaluation 组合起来看 embodied world model。 | 世界模型评测、功能用途 |
+| [WorldArena 2.0](https://arxiv.org/abs/2605.17912) | 论文 / Benchmark | 截至 2026-06-03 的新评测扩展：vision-only -> visuotactile、offline -> interactive RL environment、simulator-only -> simulated and real-world platforms。 | 世界模型评测、跨平台验收 |
+| [WoW-World-Eval](https://arxiv.org/abs/2601.04137) | 论文 / Benchmark | 用感知、规划、预测、泛化、执行和 IDM Turing Test 组织具身世界模型评测。 | 世界模型评测、失败模式 |
 | [Genie](https://arxiv.org/abs/2402.15391) | 论文/项目 | 无动作标签学习可交互环境，说明视频先验和 action interface 的缺口。 | Genie、世界模型 |
 | [Genie 2](https://deepmind.google/blog/genie-2-a-large-scale-foundation-world-model/) | 官方博客 | 官方世界模型能力形态，适合讨论 demo 与闭环证据边界。 | 世界模型、交互模拟器 |
+| [Genie 3](https://deepmind.google/models/genie/) | 官方模型页 | 记录 2026 年交互式世界模型入口；用于能力形态和官方定位，不直接外推到机器人闭环控制。 | 世界模型、交互模拟器 |
 | [Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html) | 研究者长文 | 用 state-space video world model、taxonomy 和 simulation approaches 帮读者区分视频生成、状态空间模型和可交互模拟器。 | 世界模型入门、视频世界模型 |
 | [Self Forcing](https://arxiv.org/abs/2506.08009) | 论文 | 训练时使用模型自己的自回归 rollout 和 KV cache，直接修 teacher forcing/free-running 分布错配。 | Self Forcing、长视频 rollout |
 | [Self Forcing project page](https://self-forcing.github.io/) | 项目页 | 看 rolling KV cache、长视频定性对比和速度/质量结果如何支撑 train-test alignment。 | Self Forcing、视频世界模型 |

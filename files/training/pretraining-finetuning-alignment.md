@@ -1,86 +1,94 @@
-# 预训练、微调与对齐
+# 预训练、微调与对齐：把能力、行为和偏好分开看
 
-今天的大模型几乎都不是一次训练出来的。它们通常经历三层递进过程：预训练、监督微调和偏好对齐。三层做的事情不同，混成一个概念会让模型设计和问题诊断失真。
+大模型不是一次训练成“产品模型”的。预训练、监督微调和偏好对齐都在更新同一组参数，但它们给模型的监督信号完全不同：预训练让模型从海量 token 里学会世界和语言的统计结构，SFT 把能力接到可执行的任务格式上，偏好/RL 再让模型在多个可行回答之间学会选择。
 
-一个简化记法是：
+把这三层混成一个词，会直接影响诊断。模型不会做数学，通常不是多加几轮拒答数据能补出来；模型会做但输出格式乱，也不一定需要重做预训练；模型啰嗦、自信过头或拒答边界怪，往往是偏好数据、reference 约束和评测口径的问题。
 
-1. **预训练**：决定模型“能不能”；
-2. **SFT**：决定模型“怎么做”；
-3. **对齐**：决定模型“倾向怎么选”和“边界在哪里”。
+更稳的读法是：**预训练回答“能不能”，SFT 回答“怎么做”，偏好对齐回答“更倾向选哪种做法”。**
 
-## 三层训练的分工
+## 三个阶段解决三种问题
 
-| 阶段 | 核心目标 | 主要塑造 |
-| --- | --- | --- |
-| 预训练 | 从大规模数据中学习通用分布 | 知识、语言、代码、表示和能力边界 |
-| SFT | 学习高质量示范行为 | 指令遵循、格式、任务流程 |
-| 偏好对齐 | 在多个可行答案中偏向更好答案 | 风格、风险偏好、拒答边界、简洁度 |
-
-## 三阶段训练公式对照
-
-如果把三阶段都写成公式，它们的差别主要在“目标 \(y\) 从哪里来”和“loss 在比较什么”：
-
-| 阶段 | 典型公式 | 符号怎么读 | 训练信号 |
+| 阶段 | 模型看到什么 | 训练信号来自哪里 | 主要塑造什么 |
 | --- | --- | --- | --- |
-| 预训练 | \(\mathcal{L}_{\text{LM}}=-\sum_t\log p_\theta(x_t\mid x_{<t})\) | \(x_t\) 是真实下一个 token，\(x_{<t}\) 是前文，\(\theta\) 是模型参数 | 海量文本、代码或多模态 token 自带的下一个 token |
-| SFT | \(\mathcal{L}_{\text{SFT}}=-\sum_t\log p_\theta(y_t\mid x,y_{<t})\) | \(x\) 是用户指令，\(y_t\) 是示范回答里的第 \(t\) 个 token | 人写或强模型生成的高质量示范 |
-| 偏好 / RLHF | \(\max_\theta \mathbb{E}_{y\sim\pi_\theta}[r_\phi(x,y)-\beta D_{\mathrm{KL}}(\pi_\theta,\pi_{\text{ref}})]\) | \(\pi_\theta\) 是当前模型，\(r_\phi\) 是 reward，\(\pi_{\text{ref}}\) 是参考模型，\(\beta\) 是刹车 | 人类排序、reward model、规则/verifier 或在线反馈 |
+| 预训练 | 海量文本、代码、多模态 token | 数据本身的下一个 token、masked token 或其他自监督目标 | 知识、语言、代码、表示、能力边界 |
+| SFT | 指令和高质量示范回答 | 人写、专家写或强模型生成的 demonstration | 指令遵循、格式、任务流程、工具调用习惯 |
+| 偏好 / RLHF | 同一 prompt 下多个候选回答 | 人类排序、AI feedback、reward model、verifier 或规则 | 风格、风险偏好、简洁度、拒答边界、可验证任务成功率 |
 
-**初学者解释：为什么这张表很重要。**
-预训练和 SFT 都常用交叉熵，但目标不同：预训练是在海量语料里预测下一个 token，SFT 是在指令条件下模仿示范回答。偏好/RLHF 更不一样：模型先自己采样回答，再由 reward 或 verifier 判断好坏。把这三类信号混在一起，就很容易把“能力不够”“格式不对”和“偏好边界不稳”误诊成同一个问题。
+这张表的重点不是阶段名字，而是监督信号。预训练通常从原始数据里构造目标，SFT 用示范回答告诉模型“应该怎么写”，偏好训练则比较多个回答“哪个更好”。三者都可能用交叉熵或 policy gradient 这类优化工具，但它们在回答不同的问题。
 
-把模型看作新员工：预训练像多年教育背景和阅读积累，SFT 像岗位培训，对齐像企业文化、服务规范和风险制度。
+## 公式里真正变的是监督对象
 
-## 预训练：能力边界
-
-语言模型最常见的预训练目标是 next-token prediction：
+语言模型预训练常见目标是 next-token prediction：
 
 \[
-\mathcal{L}_{\text{LM}} =
--\sum_t \log p_\theta(x_t\mid x_{<t})
+\mathcal{L}_{\text{LM}}=-\sum_t \log p_\theta(x_t\mid x_{<t})
 \]
 
-这个目标迫使模型从海量文本、代码和多模态 token 中学习语法、常识、事实共现、代码模式、长程依赖和推理痕迹。它主要塑造能力边界。
+\(x_t\) 是真实下一个 token，\(x_{<t}\) 是前文，\(\theta\) 是模型参数。这个目标让模型在海量语料上学习“在这种上下文里，下一个 token 更可能是什么”。
 
-但预训练损失低不代表下游一定强，因为它优化的是平均 token 预测，而真实任务可能关心严格格式、长链推理、工具使用、安全边界和交互体验。预训练打底，但不直接定义产品行为。
-
-若模型缺少数学推导、代码修复或长上下文建模能力，后续对齐通常很难凭空补出来。能力短板更可能来自预训练数据、规模、目标或训练阶段设计。
-
-## SFT：行为克隆
-
-监督微调通常仍是条件交叉熵：
+SFT 也常写成交叉熵，但条件和目标变了：
 
 \[
-\mathcal{L}_{\text{SFT}} =
--\sum_t \log p_\theta(y_t\mid y_{<t},x)
+\mathcal{L}_{\text{SFT}}=-\sum_t \log p_\theta(y_t\mid x,y_{<t})
 \]
 
-其中 \(x\) 是输入，\(y\) 是高质量目标回答。SFT 的作用通常不是重建整个世界知识，而是让模型学会按任务格式回答、遵循指令、组织输出和执行流程。
+\(x\) 是用户指令或任务输入，\(y_t\) 是示范回答里的第 \(t\) 个 token。它不是重新教模型全部世界知识，而是把底座能力拉到人希望看到的交互格式里。
 
-从训练角度看，SFT 很像语言行为克隆。它高度依赖示范数据质量。如果示范数据模板僵硬、逻辑不严谨、过度冗长、拒答错误或风格不稳定，模型会一并学进去。
+偏好对齐更进一步。以 RLHF 的抽象目标为例：
 
-SFT 常见问题包括：
+\[
+\max_\theta\;
+\mathbb{E}_{y\sim\pi_\theta(\cdot\mid x)}
+\left[
+r_\phi(x,y)-\beta\,D_{\mathrm{KL}}(\pi_\theta(\cdot\mid x)\|\pi_{\mathrm{ref}}(\cdot\mid x))
+\right]
+\]
 
-1. 模板化严重，回答像流水线；
-2. 训练数据覆盖窄，出分布任务行为不稳；
-3. 长答案学会了格式，但事实和推理没跟上；
-4. 私域流程学得好，但通用能力被冲淡；
-5. 与预训练底座能力不匹配，出现过拟合式“听话”。
+\(\pi_\theta\) 是当前策略模型，\(r_\phi\) 是 reward model 或 verifier 给回答的分数，\(\pi_{\mathrm{ref}}\) 是参考模型，\(\beta\) 是不要偏离太远的约束强度。这里监督对象已经不是“标准答案 token”，而是“生成出来的回答是否更符合偏好或任务成功标准”。
 
-## 偏好对齐：选择倾向
+所以读训练报告时，不要只问“用了什么 loss”。更该问：正样本是谁给的，负样本怎么来的，偏好标签是否一致，reward 是否可验证，reference 约束有没有保护住底座能力。
 
-即使经过 SFT，模型仍可能在多个合理答案之间选出不符合人类偏好的回答。偏好对齐引入成对或排序数据，例如优选 \(y^+\) 和劣选 \(y^-\)。
+## 预训练塑造能力边界
 
-InstructGPT 原论文的流程图很适合先建立全局直觉：对齐不是直接让人类给每个 token 标答案，而是先收集示范，再收集人类排序训练 reward model，最后用强化学习让策略朝高奖励回答移动。
+预训练像给模型建立一套压缩后的世界和语言索引。GPT-3 这类语言模型用大规模 next-token 目标展示了一个事实：简单预测目标在足够数据、容量和计算下，可以诱导出广泛的语言、代码、翻译、问答和少样本能力。
+
+但预训练 loss 低，不等于产品任务一定好。它优化的是平均 token 预测，而真实任务可能关心严格格式、长链推理、工具执行、安全边界、检索使用和交互体验。预训练打底，但不直接定义模型该如何服务某类用户。
+
+能力短板也很难靠最后一层对齐凭空补出来。如果底座模型缺少数学推导、代码修复、长上下文跟踪或某个领域的基本知识，SFT 和 RLHF 更可能只是把它包装得更像会，而不是稳定地产生正确能力。
+
+## SFT 是行为克隆，不是魔法增强
+
+SFT 的直觉很朴素：给模型看“好回答长什么样”。这一步通常负责指令遵循、输出格式、分步流程、工具调用模板、多轮对话习惯和领域工作流。
+
+它的风险也来自这里。示范数据模板僵硬，模型会学得僵硬；示范数据逻辑不严谨，模型会学会漂亮但脆弱的推理外壳；示范数据覆盖窄，模型在分布外任务上会把相似格式硬套过去。LIMA 和 FLAN 这类工作都提醒我们：指令数据的质量、覆盖和组织方式，常常比“多堆一点 SFT 样本”更关键。
+
+可以把 SFT 看成语言模型里的行为克隆。它能让底座模型进入目标任务接口，但不保证已经具备闭环恢复、真实偏好理解或安全判断。SFT 后的模型如果“会答，但不稳定”，下一层才轮到偏好数据、verifier、RL 或更细的评测体系出场。
+
+## RLHF 是先学偏好，再约束策略更新
+
+InstructGPT 的流程图仍然是理解 RLHF 的好入口。它没有让人类逐 token 教模型，而是把“人喜欢什么回答”变成一个可训练的 reward model，再用强化学习优化 policy。
 
 ![InstructGPT RLHF pipeline 原论文图](../assets/images/paper-figures/training/instructgpt-rlhf-pipeline.png){ width="920" }
 
-<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 2。原论文图意：展示 InstructGPT 的三步训练流程：收集 demonstration data 做 SFT，收集模型输出排序训练 reward model，再用 PPO 按 reward model 优化 policy。</small>
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 2。本站复用已有论文图，未使用 image2 生成新图。原图展示三步流程：收集 demonstration data 做 SFT，收集模型输出排序训练 reward model，再用 PPO 按 reward model 优化 policy。</small>
 
-**RLHF 的三步不要混在一起。**
-Step 1 是监督学习：人写出理想回答，模型学习模仿。Step 2 是偏好建模：同一个 prompt 下采样多个回答，让标注者排序，再训练 reward model 预测人类更偏好哪个。Step 3 才是强化学习：当前模型作为 policy 生成回答，reward model 给回答打分，PPO 根据奖励更新 policy。也就是说，RLHF 不是“人类实时教模型每一步怎么写”，而是“先学一个奖励函数，再用这个奖励函数训练生成策略”。
+这三步最好分开看：
 
-以 DPO 为例：
+| 步骤 | 训练对象 | 信号 | 常见失败 |
+| --- | --- | --- | --- |
+| SFT | policy model | 高质量示范回答 | 模板化、覆盖窄、示范质量不稳 |
+| Reward modeling | reward model | 同一 prompt 下候选回答排序 | 标注者偏置、候选分布窄、reward hacking |
+| PPO / RL | policy model | reward、KL、value/advantage | 过度优化 reward、能力退化、长度和风格漂移 |
+
+强化学习词表翻译到语言模型里也不复杂：prompt 加已生成前缀是 state，下一个 token 是 action，完整回答是一条 trajectory，reward model 或 verifier 给最终回答打分，reference policy 用来限制模型不要离 SFT 模型太远。
+
+PPO 的作用是小步更新。它既让模型朝高 reward 回答移动，又通过 old policy、clip 和 KL 约束防止模型突然跑偏。放到 RLHF 里，核心含义是 reward 不能没有约束地推动模型大幅改写自身分布；否则模型可能学会 reward model 偏爱的表面格式，却牺牲事实性、能力保持和真实有用性。
+
+RLHF 的难点从来不只是 PPO。更难的是 reward 是否真的代表目标行为，偏好数据是否覆盖长尾任务，KL 是否保护住基础能力，以及线上评测能否发现“reward 上升但用户体验下降”的情况。
+
+## DPO 等方法减少流程，但不减少数据责任
+
+DPO 把偏好优化写成更直接的 closed-form objective，不需要显式训练 reward model 再跑 PPO。常见写法是：
 
 \[
 \mathcal{L}_{\text{DPO}}
@@ -92,135 +100,75 @@ Step 1 是监督学习：人写出理想回答，模型学习模仿。Step 2 是
 \right)
 \]
 
-它推动策略相对参考模型提高优选回答概率，压低劣选回答概率。RLHF、DPO、RLAIF 等方法细节不同，但都在回答：模型已经会做很多事，怎样让它更符合人类或系统偏好。
+\(y^+\) 是优选回答，\(y^-\) 是劣选回答，\(\pi_{\text{ref}}\) 是参考模型。直觉是：相对参考模型，提高优选回答概率，压低劣选回答概率。
 
-对齐特别敏感，因为它依赖偏好标签质量、参考模型、KL/reference constraint、学习率和样本分布。很多体验问题，例如啰嗦、拒答边界奇怪、自信但不确定，往往更像 SFT/对齐问题，而不是预训练问题。
+DPO、IPO、ORPO、RLAIF 和 Constitutional AI 的流程各不相同，但它们绕不开同一组数据问题：偏好维度是否拆清楚，候选回答是否有足够差异，标注指南是否一致，模型是否只学会迎合某种表面风格，安全拒答和真实有用性有没有被分开评估。
 
-## 没有强化学习基础时怎么理解 RLHF
+这也是为什么“对齐效果不好”不能只怪算法。很多时候，坏掉的是偏好数据设计、候选生成、judge 校准、风险分桶或线上反馈回流。
 
-强化学习最小直觉是：一个 `policy` 在环境里做 `action`，环境给 `reward`，训练目标是让未来奖励更高。把这个翻译到语言模型里：
+## 现代后训练是一条生产线
 
-| 强化学习词 | 普通 RL 例子 | RLHF 里的对应物 |
-| --- | --- | --- |
-| `state` | 游戏画面、机器人当前状态 | prompt 加上已经生成的前缀 |
-| `action` | 往左走、夹爪闭合 | 生成下一个 token |
-| `policy` \(\pi_\theta\) | 看到状态后选择动作的模型 | 当前语言模型 |
-| `trajectory` | 一串状态和动作 | 从 prompt 到完整回答的 token 序列 |
-| `reward` | 得分、成功、碰撞惩罚 | reward model 对完整回答的分数 |
-| `reference policy` | 更新前的稳定策略 | SFT 模型或旧策略，用来限制别跑太远 |
-| `value` | 估计当前状态未来能拿多少分 | 估计当前前缀最终会得到多少奖励 |
-| `advantage` | 这个动作比预期好多少 | 这个 token/回答相对 value 估计是否更好 |
-
-语言模型的特殊之处在于，reward 通常不是每个 token 都有一个明确分数，而是完整回答结束后才由 reward model 评分。设 prompt 为 \(x\)，回答为 \(y=(y_1,\ldots,y_T)\)，策略概率是：
-
-\[
-\pi_\theta(y\mid x)
-=\prod_{t=1}^T \pi_\theta(y_t\mid x,y_{<t})
-\]
-
-RLHF 想最大化的是类似下面的目标：
-
-\[
-\max_\theta\;
-\mathbb{E}_{y\sim \pi_\theta(\cdot\mid x)}
-\left[
-r_\phi(x,y)
-- \beta\,\mathrm{KL}(\pi_\theta(\cdot\mid x)\|\pi_{\text{ref}}(\cdot\mid x))
-\right].
-\]
-
-这里 \(r_\phi(x,y)\) 是 reward model 给完整回答的分数；KL 项是“别离参考模型太远”的刹车。没有 KL，模型可能学会钻 reward model 的空子，例如变得异常啰嗦、过度自信、固定模板化，甚至输出 reward model 偏爱的奇怪格式。
-
-**难点解释：为什么 RLHF 里要有 value / advantage。**
-完整回答结束后才知道奖励，但更新发生在许多 token 决策上。`value` 用来估计“生成到当前前缀时，未来大概能拿多少分”；`advantage` 用来估计“这次采样出来的结果比预期好多少”。如果 advantage 为正，PPO 会倾向提高这段生成路径的概率；如果 advantage 为负，就倾向压低。没有 advantage，训练信号会很吵，因为每个 token 都很难知道自己对最终奖励贡献了多少。
-
-PPO 原论文给出的算法框架可以帮助你把这件事从“抽象奖励”落到训练步骤上：
-
-```text
-collect rollouts -> estimate advantages -> optimize clipped surrogate -> refresh old policy
-```
-
-<small>流程源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Algorithm 1。原论文算法要点：多个 actor 用旧策略收集固定长度轨迹，计算 advantage estimates，再用若干个 minibatch epoch 优化 surrogate objective，最后把旧策略更新为当前策略。</small>
-
-**PPO 在 RLHF 里做的是小步更新。**
-原始 PPO 图里的 actor 在环境里跑 \(T\) 步；RLHF 里可以理解成模型对一批 prompts 采样回答。`Compute advantage estimates` 对应根据 reward model 分数、value 估计和 KL 惩罚计算训练信号；`Optimize surrogate` 对应用 minibatch 更新语言模型。PPO 名字里的 proximal 重点是“不要一步改太远”：模型要朝高奖励回答移动，但不能突然远离 SFT/reference 模型，否则容易牺牲事实性、格式稳定和基础能力。
-
-PPO 的 clipped surrogate 图进一步解释了这个“别改太远”。
-
-![PPO clipped surrogate objective 原论文图](../assets/images/paper-figures/training/ppo-clipped-surrogate.png){ width="760" }
-
-<small>图源：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Figure 1。原论文图意：展示 clipped surrogate objective 中单个 timestep 项如何随概率比率 \(r\) 变化；当 advantage 为正或负时，clip 会限制策略概率变化带来的收益。</small>
-
-**clip 是为了限制奖励驱动的过猛更新。**
-\(r_t(\theta)=\pi_\theta(a_t\mid s_t)/\pi_{\theta_{\text{old}}}(a_t\mid s_t)\) 表示新策略相对旧策略把同一动作概率改了多少。若 advantage 为正，模型想把这个动作概率调高；若 advantage 为负，模型想调低。clip 会在 \(1-\epsilon\) 到 \(1+\epsilon\) 附近限制收益，防止模型因为 reward model 的局部偏好一下子把概率推得太远。放到 RLHF 里，这就是为什么 PPO 训练既看 reward，也要看 KL、clip fraction、回答长度、事实性和拒答边界。
-
-## 从 Qwen3 看现代后训练流水线
-
-如果只用“预训练、SFT、对齐”三段来概括今天的模型训练，会有点太粗。技术报告里的后训练已经更像一条生产线：先让模型会按格式推理，再用可验证奖励把推理拉强，再把 thinking / non-thinking、工具、RAG、格式、安全和偏好合回同一个产品模型里。
+只用“预训练、SFT、对齐”三段概括今天的模型训练，已经有点太粗。Qwen3、DeepSeek-R1、SmolLM3 这类训练报告更像是在描述一条后训练生产线：先用 cold start 数据稳定格式，再用可验证奖励增强推理，再通过蒸馏、偏好、工具、RAG、安全和多模式回答把能力合回产品模型。
 
 ![Qwen3 post-training pipeline](../assets/images/paper-deep-dives/technical-reports/qwen3/figure-1-posttrain-pipeline.png){ width="920" }
 
-<small>图源：[Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)，Figure 1。原论文图意：Qwen3 系列的 post-training pipeline，旗舰模型经过 Long-CoT Cold Start、Reasoning RL、Thinking Mode Fusion、General RL；轻量模型通过 strong-to-weak distillation 继承大模型能力。</small>
+<small>图源：[Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)，Figure 1。本站复用已有论文图，未使用 image2 生成新图。原图展示 Qwen3 post-training pipeline：旗舰模型经过 Long-CoT Cold Start、Reasoning RL、Thinking Mode Fusion、General RL；轻量模型通过 strong-to-weak distillation 继承大模型能力。</small>
 
-**这张图帮你补哪块基础。**
-这张图说明 SFT、RL 和 distillation 不是三种互相替代的训练菜谱，而是在流水线上承担不同工序。Cold start SFT 像先教模型“怎么把解题过程写成可读格式”；Reasoning RL 像让模型在可验证题目上反复试错，提高正确率；Thinking Mode Fusion 像把“认真写草稿”和“快速直接答”两种产品行为合进一个模型；General RL 再负责工具、格式、偏好、安全和通用交互。
+这张图的价值，是把“后训练”从单个算法名词拉回生产流程。
 
-可以把这条线拆成四个更容易记的动作：
-
-| Stage | 更通俗的理解 | 为什么不是可有可无 |
+| 工序 | 通俗理解 | 验收重点 |
 | --- | --- | --- |
-| Long-CoT Cold Start | 先给模型几份清楚的解题范文 | 没有基础格式，RL 采样容易又乱又难筛 |
-| Reasoning RL | 在有 verifier 的题上自己试错 | 让模型探索人类示范没覆盖的长推理路径 |
-| Thinking Mode Fusion | 把长思考和短回答合到同一模型 | 产品里不是所有问题都值得长 CoT |
-| General RL | 修工具、格式、偏好和安全边界 | 会推理不等于好用，agent 任务还要会执行流程 |
+| Cold start SFT | 先给模型清楚的解题范式和交互范式 | 格式稳定、推理轨迹可读、采样不过度混乱 |
+| Reasoning RL / RLVR | 在数学、代码、格式检查等可验证任务上试错 | verifier 可靠性、pass rate、泛化到未见题型 |
+| Thinking mode fusion | 把长思考和短回答合到同一模型 | 何时深想、何时直接答、成本与体验 |
+| General RL / preference | 修工具、风格、安全、拒答和真实任务偏好 | 分桶胜率、风险边界、事实性退化 |
+| Distillation | 把强模型的行为和轨迹压给小模型 | 小模型是否继承流程，而不只是背答案 |
 
-这也解释了为什么 DeepSeek-R1 和 Qwen3 都很重视 `verifiable rewards`。数学、代码、选择题、格式检查、单元测试这类任务，可以自动判断最终答案是否对；一旦 reward 足够可靠，RL 就能让模型在同一道题上采样多条路径，通过“哪条真的成功”来更新策略。
+DeepSeek-R1 的 GRPO/RLVR 路线也说明了类似趋势：当 reward 足够可验证，RL 可以不只做“更像助手”，还可以推动模型探索更强的推理策略。但这类收益依赖任务是否能被可靠验证；一旦 reward 来自含糊偏好或不稳 judge，训练仍会回到 reward hacking 和分布漂移问题。
 
-**一个公众号式例子：考试和上班不是同一种训练。**
-Cold start SFT 像老师先给你几份优秀解题卷，告诉你步骤该怎么写。Reasoning RL 像刷题系统只看最终答案和代码测试是否通过，让你自己摸索更稳的解法。General RL 像入职后处理真实工单：不只要答案对，还要格式对、工具用对、风险边界对、用户能看懂。
+## 问题归因先看哪一层坏了
 
-轻量模型的 strong-to-weak distillation 也很关键。大模型完整跑一遍后训练很贵，小模型直接做 RL 又可能探索不动；用强模型产出数据和轨迹，再蒸馏到小模型，是把“旗舰模型的经验”压缩给边缘或低成本模型。这不是简单复制答案，而是在复制任务格式、推理风格、工具流程和偏好边界。
+| 线上症状 | 更可能的问题层 | 优先检查 |
+| --- | --- | --- |
+| 基础知识、数学、代码能力弱 | 预训练 / 继续训练 | 数据覆盖、token budget、训练稳定性、污染与能力评测 |
+| 不会按格式输出、不会跟流程 | SFT | demonstration 质量、任务覆盖、模板多样性 |
+| 会做但风格差、啰嗦、自信过头 | 偏好 / reward | 偏好维度、长度偏置、reference 约束、judge 校准 |
+| 拒答边界怪，安全过松或过紧 | 安全对齐 / 策略 | 风险分类、拒答数据、允许帮助的替代路径 |
+| 工具调用流程不稳 | SFT + RL + 工具评测 | 调用轨迹、错误恢复、schema 检查、真实执行反馈 |
+| 长上下文丢信息 | 预训练 + 推理系统 | 长上下文数据、位置编码、packing、KV/cache 策略 |
+| 私域知识不足 | 数据或检索接口 | 继续训练、RAG 覆盖、权限、引用和更新机制 |
 
-## 问题归因
+这个表不是为了替团队省掉排查，而是为了避免“所有问题都在最后一层对齐里打补丁”。成熟的训练系统应该保留跨阶段追踪表：底座来源、数据版本、SFT 配方、偏好数据版本、reference model、RL 超参、评测版本、已知退化项和回滚条件。
 
-诊断模型问题时，可以按下面表格初步归因：
+## 一次训练路线怎样验收
 
-| 症状 | 更可能的问题层 |
-| --- | --- |
-| 基础知识、数学、代码能力弱 | 预训练数据、规模、目标或训练预算 |
-| 不会按格式输出、不会跟指令 | SFT 数据和任务覆盖 |
-| 会做但风格差、啰嗦或拒答怪 | 偏好数据和对齐目标 |
-| 工具调用流程不稳 | SFT 流程数据 + 对齐反馈 |
-| 私域知识不足 | 预训练/继续训练/检索数据覆盖 |
-| 长上下文丢信息 | 预训练长上下文、packing、位置编码和推理系统 |
-| 安全边界不稳 | 对齐、策略、评测和拒答数据 |
+每个阶段都要有自己的验收指标，跨阶段还要有能力保持检查。
 
-不要指望对齐补所有能力短板，也不要把所有产品体验问题都归咎于底座不够强。
+| 阶段 | 不够的证据 | 更有用的证据 |
+| --- | --- | --- |
+| 预训练 | 只看平均 loss | 按领域/语言/长度/代码/数学分桶的 loss 和下游能力曲线 |
+| SFT | 只看训练集 loss | 指令遵循、格式稳定、长尾任务、人工抽检、模板污染检查 |
+| 偏好/RL | 只看 reward 上升 | held-out 人审、分桶胜率、KL、长度、事实性、安全边界和退化集 |
+| 后训练流水线 | 只看最终榜单 | 每个阶段的 anchor eval、数据版本、失败样本回流和恢复一致性 |
 
-## 数据与阶段切换
+评测最好不要只是一张榜单。公共 benchmark 用来对齐外部口径，内部任务集覆盖真实产品目标，长尾失败集记录高价值事故，线上回流挑战集来自真实用户问题，不可触碰 holdout 防止长期调参污染。对齐越靠近产品，越需要按风险等级、用户群、语言、任务类型和回答长度分桶看结果。
 
-三层训练的关键不是机械串联，而是阶段切换时保持能力和行为的平衡。
+## 最后判断
 
-需要重点控制：
+预训练、SFT 和偏好对齐可以按四句话记：
 
-1. 预训练到 SFT 时，示范数据是否覆盖目标任务；
-2. SFT 是否过度改变底座输出分布；
-3. 对齐是否把模型推得过远，造成能力或事实性退化；
-4. reference model、KL 约束和学习率是否匹配；
-5. 每阶段是否保留 anchor eval，防止遗忘；
-6. 数据是否存在评测污染、模板污染和偏好偏置。
+1. 预训练塑造能力边界；底座不会的东西，后训练很难凭空造出来。
+2. SFT 塑造行为格式；示范数据的质量和覆盖决定模型像不像“会做这类任务”。
+3. 偏好/RL 塑造选择倾向；reward、reference 和评测分桶决定模型是否真的更有用。
+4. 现代后训练是一条数据生产线；算法只是最后一层，样本发现、judge 校准、可验证奖励、蒸馏和回归治理同样关键。
 
-很多后训练事故不是单个算法错，而是阶段切换没有定义清楚验收边界。
+继续往下读，可以接 [目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md)、[偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) 和 [后训练数据引擎与 Judge 模型](post-training-data-engines-and-judge-models.md)。
 
-## 评测清单
+## 外部精读
 
-每个阶段应有不同验收重点：
-
-1. **预训练**：perplexity、通用能力、代码/数学/长上下文、多语言、数据污染；
-2. **SFT**：指令遵循、格式稳定性、任务覆盖、私域流程、拒绝无关任务的能力；
-3. **对齐**：偏好胜率、安全边界、简洁度、拒答准确性、事实性退化；
-4. **跨阶段**：能力保持、风格漂移、长尾任务、线上 A/B、成本和延迟。
-
-预训练、微调和对齐不是独立孤岛。真正成熟的训练管线，会把能力边界、行为格式、偏好选择和风险边界作为连续系统来管理，而不是把每个阶段当作单独刷榜步骤。
-
-实践中还应保留跨阶段追踪表：每个模型版本都记录底座来源、SFT 数据版本、偏好数据版本、reference model、关键超参和已知退化项。这样线上问题回溯时，团队才能判断应回到哪一层修，而不是反复在最后一层对齐上打补丁。
+- [InstructGPT](https://arxiv.org/abs/2203.02155)：理解 demonstration、reward model 和 PPO 三步 RLHF。
+- [PPO](https://arxiv.org/abs/1707.06347)：理解 clipped surrogate 为什么是“小步更新”。
+- [DPO](https://arxiv.org/abs/2305.18290)：理解不用显式 reward model 的偏好优化入口。
+- [LIMA](https://arxiv.org/abs/2305.11206) 与 [FLAN](https://arxiv.org/abs/2210.11416)：理解指令数据质量、覆盖和行为格式的重要性。
+- [DeepSeek-R1](https://arxiv.org/abs/2501.12948) 与 [Qwen3](https://arxiv.org/abs/2505.09388)：理解现代后训练如何把 cold start、RLVR、distillation 和 general RL 串成流水线。
+- [Hugging Face RLHF blog](https://huggingface.co/blog/rlhf)：适合作为英文直觉入口；事实和实验 claim 仍回到论文与技术报告核对。

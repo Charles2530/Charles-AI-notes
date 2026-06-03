@@ -48,7 +48,7 @@ Softmax 公式很短：
 \frac{\exp(x_i)}{\sum_j \exp(x_j)}
 \]
 
-高性能实现不能直接照公式先 `exp` 再求和。为了避免指数溢出，通常先做 max reduction：
+这个式子表示：第 \(i\) 个位置的输出，是它自己的指数分数除以整行所有指数分数之和。高性能实现不能直接照公式先 `exp` 再求和。为了避免指数溢出，通常先做 max reduction：
 
 \[
 m=\max_j x_j
@@ -73,7 +73,7 @@ LayerNorm 对一行 hidden state 做均值和方差统计：
 \sigma^2=\frac{1}{D}\sum_i (x_i-\mu)^2
 \]
 
-然后输出：
+这里的 \(\mu\) 表示这一行 hidden state 的均值，\(\sigma^2\) 表示这一行内部的方差，二者都要先通过行内 reduction 得到。然后输出：
 
 \[
 y_i=\gamma_i\frac{x_i-\mu}{\sqrt{\sigma^2+\epsilon}}+\beta_i

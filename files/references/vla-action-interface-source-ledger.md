@@ -12,7 +12,7 @@
 
 第四类来源是现代 action tokenizer 和空间动作接口。FAST 用于讨论高频连续动作如何被压成更短离散 token；SpatialVLA、π0.5、OpenVLA 和站内深读材料用于提醒：动作 token 不是终点，还要处理 3D 空间、动作专家、部署安全和低层控制。
 
-中文和博客材料主要学习讲法：先把 policy/controller 中间的接口讲清，再讲 RT-1/RT-2、ACT、Diffusion Policy 等不同路线。事实判断以论文、官方博客和项目页为准。
+中文和博客材料主要学习讲法：先把 policy/controller 中间的接口讲清，再讲 RT-1/RT-2、ACT、Diffusion Policy 等不同路线。事实判断以论文、官方博客和项目页为准。用户要求广泛参考高质量博客和公众号时，本页把智源、量子位、机器之心、Datawhale 等材料用于中文读者入口和结构参考，不把它们当作动作接口的强证据。
 
 ## 写作边界
 
@@ -23,6 +23,16 @@
 正文不把 diffusion policy 当成“扩散模型更高级”。它的价值在于表达多峰连续动作分布和 receding horizon 控制；是否适合取决于任务、延迟和控制接口。
 
 正文不把跨机器人数据混合说成直接堆轨迹。不同机器人必须对齐观测、动作坐标、单位、时间戳和 gripper semantics，否则泛化会被接口噪声吞掉。
+
+## 图片使用
+
+本页遵守用户约束：不使用 image2，不生成新图。只复用仓库已有论文图，并修正旧版正文中 RT-2 图片路径不匹配的问题：原先使用的是结果柱状图，现改为 RT-2 Figure 1 overview。
+
+| 图片 | 本地路径 | 来源 | 用途 |
+| --- | --- | --- | --- |
+| RT-2 overview | `../assets/images/paper-deep-dives/embodied-ai/rt2/figure-1-overview.png` | [RT-2](https://arxiv.org/abs/2307.15818) Figure 1 | 说明 VQA / VLM 训练、robot action tokens 和闭环机器人控制如何连成 VLA。 |
+| ACT algorithm | `../assets/images/paper-figures/vla/aloha-act-algorithm-2x.png` | [ALOHA / ACT](https://arxiv.org/abs/2304.13705) Figure 2 | 说明 action chunk 与 temporal ensembling 是短时控制接口。 |
+| Diffusion Policy input-output | `../assets/images/paper-figures/vla/diffusion-policy-input-output-padded.jpg` | [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/) | 说明动作序列可以作为条件生成分布，并接到 receding horizon control。 |
 
 ## 来源
 
@@ -38,3 +48,8 @@
 | [FAST](https://arxiv.org/abs/2501.09747) | 论文 | 支撑高频连续动作压缩成离散 token 的现代 VLA action tokenizer。 | action tokenizer |
 | [SpatialVLA](https://arxiv.org/abs/2501.15830) | 论文 | 补充 3D 空间表征、adaptive action grids 和动作坐标接口。 | 空间动作 |
 | [OpenVLA](https://openvla.github.io/) | 项目页 / 论文 | 作为开源 VLA 底座对照，提醒动作接口和评测闭环不能只看模型大小。 | VLA 底座 |
+| [外部精读来源台账](external-reading-ledger.md) | 站内台账 | 记录智源、量子位、机器之心、Datawhale 等中文讲法参考，以及 RT-1/RT-2/ACT/FAST 等一手来源入口。 | 讲法参考 |
+
+## 后续维护
+
+新增 VLA 或机器人策略论文时，先标清动作接口属于哪一层：高层技能、末端位姿、关节命令、action chunk、连续动作分布还是 action tokenizer。若来源只展示 demo 或成功率，缺少坐标系、单位、频率、controller 和失败回放，正文只能把它作为能力形态参考，不能写成可部署证据。

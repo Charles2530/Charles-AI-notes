@@ -1,18 +1,18 @@
 # 低比特训练与数值格式来源台账
 
-这份台账服务于 [低比特训练与数值格式](../training/low-bit-training-and-numerics.md)。正文的写作目标不是罗列“FP8、MXFP8、FP4、NVFP4 都有哪些论文”，而是解释低比特训练的核心机制：低精度误差会进入反向传播和 optimizer update，最后写回参数；因此训练低精度必须同时设计格式、scale、累加精度、敏感路径保护、kernel、checkpoint 和长跑监控。
+这份台账服务于 [低比特训练与数值格式](../training/low-bit-training-and-numerics.md)。正文的核心问题是：低精度误差会进入反向传播和 optimizer update，最后写回参数；因此低比特训练必须被写成一套训练状态系统，而不是一个 dtype 开关。
 
 ## 使用方式
 
-第一类来源是数值格式与 scale。FP8 Formats、NVIDIA Transformer Engine FP8 delayed scaling、Microscaling/OCP MX 规范提供 E4M3/E5M2、amax history、per-tensor/per-block scale 和 MX format 的事实基础。正文使用它们时，要把公式讲成“张量如何被 scale 映射到低精度可表示范围”，不要把格式名写成结论。
+第一类来源是数值格式与 scale。FP8 Formats、NVIDIA Transformer Engine FP8 delayed scaling、Microscaling 和 OCP MX 规范提供 E4M3/E5M2、amax history、per-tensor/per-block scale 和 MX format 的事实基础。正文使用它们时，要把公式讲成“张量如何被 scale 映射到低精度可表示范围”，不要把格式名写成结论。
 
-第二类来源是长跑 FP8 训练。FP8-LM、COAT、Scaling FP8 Training、To FP8 and Back Again、μnit Scaling、DeepSeek-V3 和 MXFP8 recipes 支撑本站讨论 activation、optimizer state、SwiGLU outlier、scale recipe、累加精度和大规模训练稳定性。正文要特别强调：短跑 loss 重合不等于长 token 预训练稳定。
+第二类来源是长跑 FP8 训练。FP8-LM、COAT、Scaling FP8 Training、To FP8 and Back Again、DeepSeek-V3 和 MXFP8 recipes 支撑本站讨论 activation、optimizer state、SwiGLU outlier、scale recipe、累加精度和大规模训练稳定性。正文要特别强调：短跑 loss 重合不等于长 token 预训练稳定。
 
 第三类来源是 FP4/MXFP/NVFP 前沿。MXFP4、Quartet、NVFP4、Four Over Six、Quartet II 等工作适合放在“更低 bit 需要更强系统耦合”下。本站不要把它们写成已经普适替代 FP8/BF16 的成熟方案；更准确的讲法是：FP4 训练需要 block scale、outlier 处理、无偏或随机梯度估计、累加精度保护和硬件 kernel 共同成立。
 
 第四类来源是系统与 checkpoint。DeepSeek-V3、Transformer Engine、ZeRO/FSDP 和 PyTorch/NVIDIA 文档帮助本站解释：低比特训练不是孤立 quantizer，而是一张训练状态图。scale/amax history、loss scaler、optimizer state、RNG、数据游标和并行拓扑都可能影响恢复后的训练轨迹。
 
-第五类来源是中文讲法与长文风格。NVIDIA 中文技术博客、Datawhale、OneFlow、机器之心、智源社区和微信公众号长文适合学习中文技术文章的节奏：先建立成本账和失败案例，再讲机制，最后给实验读法。事实、公式、版本语义和性能 claim 仍以论文、官方文档或代码仓库为准。
+第五类来源是中文讲法。NVIDIA 中文技术博客、Datawhale、OneFlow、机器之心、智源社区以及高质量微信公众号长文，适合学习中文技术文章的组织方式：先建立成本账和失败案例，再讲机制，最后给实验读法。事实、公式、版本语义和性能 claim 仍以论文、官方文档或代码仓库为准；微信文章链接稳定性较弱，不作为本站链接校验对象。
 
 ## 写作边界
 
@@ -25,6 +25,16 @@
 不要把 scale 写成固定的 `max_abs / qmax`。这个公式只能解释最简单的整数量化；FP8/MXFP/FP4 训练里，scale 粒度、延迟更新、block size、格式离散点和 accumulator dtype 都会改变误差形态。
 
 不要把 FP4 与 FP8 的关系写成“再少 4 bit”。FP4 元素太粗，系统收益高度依赖原生 kernel、fused dequant、scale metadata layout 和高精度保护路径。没有这些条件，理论存储节省不一定转化为端到端训练收益。
+
+## 图片使用
+
+本页没有使用 image2，也没有生成新图片；正文只复用了仓库里已经存在的论文图，并在图注中保留图源和读图方法。
+
+| 正文图片 | 本地路径 | 原始来源 | 本站用途 |
+| --- | --- | --- | --- |
+| FP8 training loss curves | `../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png` | [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433) Figure 1 | 说明 FP8 可以进入训练，但必须和格式、scale、累加、敏感算子保护一起看。 |
+| DeepSeek-V3 FP8 framework | `../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png` | [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437) Figure 6 | 说明 FP8 mixed precision 是路径图，不是全局 dtype。 |
+| DeepSeek-V3 FP8 accumulation | `../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-7-fp8-accumulation.png` | [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437) Figure 7 | 说明输入低精度和累加高精度必须同时讨论。 |
 
 ## 来源
 

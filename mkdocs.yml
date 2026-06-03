@@ -190,10 +190,13 @@ nav:
       - 归一化、残差与激活来源台账: references/norm-residual-activation-source-ledger.md
       - 自动微分与激活显存来源台账: references/autograd-checkpointing-source-ledger.md
       - 卷积与视觉特征来源台账: references/convolution-visual-feature-source-ledger.md
+      - 模型训练从零入门来源台账: references/beginner-model-training-source-ledger.md
+      - 预训练、微调与对齐来源台账: references/pretraining-finetuning-alignment-source-ledger.md
       - 优化与训练基础来源台账: references/optimization-training-source-ledger.md
       - Megatron、DeepSpeed 与训练栈来源台账: references/training-stack-source-ledger.md
       - 分布式训练与 Checkpoint 来源台账: references/distributed-training-checkpoint-source-ledger.md
       - 低比特训练与数值格式来源台账: references/low-bit-training-numerics-source-ledger.md
+      - PTQ、GPTQ、AWQ 与 SmoothQuant 来源台账: references/ptq-gptq-awq-smoothquant-source-ledger.md
       - FP8 与混合精度推理来源台账: references/fp8-mixed-precision-serving-source-ledger.md
       - 数值显存与运行时来源台账: references/numerics-memory-runtime-source-ledger.md
       - 张量、Shape 与计算图来源台账: references/tensor-shape-computation-graph-source-ledger.md
@@ -205,8 +208,11 @@ nav:
       - 多模态推理来源台账: references/multimodal-reasoning-source-ledger.md
       - VLM 架构来源台账: references/vlm-architecture-source-ledger.md
       - 视觉 Tokenizer 与连接器来源台账: references/visual-tokenizer-connector-source-ledger.md
+      - 世界模型入门来源台账: references/world-models-beginner-source-ledger.md
       - RSSM、Dreamer 与规划来源台账: references/rssm-dreamer-planning-source-ledger.md
+      - Masked / JEPA 与潜变量预测来源台账: references/masked-jepa-latent-source-ledger.md
       - WM / WAM / VAM 动作条件来源台账: references/wm-wam-vam-action-conditioned-source-ledger.md
+      - 世界模型评测与失效模式来源台账: references/world-model-evaluation-source-ledger.md
       - 推理服务系统来源台账: references/inference-serving-systems-source-ledger.md
       - 推理运行时来源台账: references/serving-runtimes-source-ledger.md
       - KV、缓存与投机解码来源台账: references/caching-routing-speculative-source-ledger.md

@@ -12,7 +12,7 @@
 
 第四类来源是 VLA/action interface。RT-1、RT-2、Open X-Embodiment、ACT、Diffusion Policy、OpenVLA 和动作接口来源台账用于提醒：policy 输出动作不等于理解动作后果。VLA 可以直接输出动作，WM/WAM/VAM 则必须额外说明动作后果、风险、延迟和恢复。
 
-第五类来源是中文讲法与技术长文。Datawhale、机器之心、智源社区、量子位和微信公众号长文适合学习如何把世界模型、VLA、机器人策略和视频生成写成“接口 -> 机制 -> 证据 -> 边界”的结构。事实、图源、性能 claim 和论文版本仍以论文、官方博客、项目页和代码仓库为准。
+第五类来源是中文讲法与技术长文。Datawhale、机器之心、智源社区、量子位、PaperWeekly 和微信公众号长文适合学习如何把世界模型、VLA、机器人策略和视频生成写成“接口 -> 机制 -> 证据 -> 边界”的结构。事实、图源、性能 claim 和论文版本仍以论文、官方博客、项目页和代码仓库为准。
 
 ## 写作边界
 
@@ -26,26 +26,41 @@
 
 不要把 action-free foundation model 直接称为 robot planner。V-JEPA、Genie 这类模型可以提供强视频/动态先验，但规划真实动作必须补上 action-conditioned dynamics、goal cost、controller、safety filter 和环境反馈。
 
+## 图片使用
+
+本页没有使用 image2，也没有生成新图片；正文只复用了仓库里已经存在的论文图，并在图注中保留图源和读图方法。Dreamer Figure 3 与 V-JEPA 2 Figure 7 原图自带长 caption，主题页正文没有复用，避免打断阅读。
+
+| 正文图片 | 本地路径 | 原始来源 | 本站用途 |
+| --- | --- | --- | --- |
+| DreamZero joint video-action architecture | `../assets/images/paper-deep-dives/world-models/dreamzero/figure-4-architecture.png` | [World Action Models are Zero-shot Policies](https://arxiv.org/abs/2602.15922) Figure 4 | 说明训练侧联合去噪未来视频和动作，推理侧用真实观测刷新闭环。 |
+| Video Prediction Policy overview | `../assets/images/paper-deep-dives/embodied-ai/vpp/figure-1-overview.png` | [Video Prediction Policy](https://arxiv.org/abs/2412.14803) Figure 1 | 说明视频预测中间表征如何作为机器人 policy 的动态状态。 |
+
 ## 来源
 
 | 来源 | 类型 | 本站使用方式 | 关联问题 |
 | --- | --- | --- | --- |
 | [World Models](https://worldmodels.github.io/) | 项目页 / 博客式论文 | 建立 latent model、dream environment 和 controller 的早期直觉。 | WM 直觉 |
 | [PlaNet](https://planetrl.github.io/) | 项目页 / 论文 | 支撑 planning from pixels、RSSM 和 CEM planning 的接口讲法。 | action-conditioned planning |
-| [Dream to Control](https://arxiv.org/abs/1912.01603) | 论文 / 图源 | 使用组件图解释 world model、actor、critic 和 imagined rollout 的关系。 | Dreamer |
+| [Dream to Control](https://arxiv.org/abs/1912.01603) | 论文 | 支撑 world model、actor、critic 和 imagined rollout 的关系。 | Dreamer |
 | [DreamerV3](https://arxiv.org/abs/2301.04104) | 论文 | 支撑 fixed hyperparameters、symlog/two-hot/free bits 和跨域 model-based RL。 | WM 基线 |
 | [Google Research: Introducing Dreamer](https://research.google/blog/introducing-dreamer-scalable-reinforcement-learning-using-world-models/) | 官方博客 | 借鉴“learning the world model / learning behaviors from imagined futures”的解释顺序。 | 博客讲法 |
 | [Genie](https://sites.google.com/view/genie-2024/) | 项目页 / 论文 | 支撑从视频生成可交互环境、latent action model 和 action-controllable generation 的讨论。 | foundation world model |
 | [Genie 2 DeepMind blog](https://deepmind.google/blog/genie-2-a-large-scale-foundation-world-model/) | 官方博客 | 支撑 action-controllable playable world、foundation world model 和交互边界。 | action-controllable WM |
+| [Genie 3](https://deepmind.google/models/genie/) | 官方模型页 | 记录 2026 年 Google DeepMind 对可交互世界模型的最新入口；只作能力形态和官方定位参考。 | 交互世界模型 |
 | [V-JEPA 2 research page](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/) | 官方研究页 / 图源 | 支撑 action-free 预训练到 V-JEPA 2-AC latent planning 的两阶段讲法。 | latent planning |
 | [V-JEPA 2 paper](https://arxiv.org/abs/2506.09985) | 论文 | 支撑 candidate action sequence、goal representation 和 model predictive control 的细节。 | V-JEPA 2-AC |
-| [DreamZero / World Action Models](https://dreamzero0.github.io/) | 项目页 / 图源 | 支撑未来视频和未来动作 joint generation、closed-loop control 和 real robot evidence。 | WAM |
+| [DreamZero / World Action Models](https://dreamzero0.github.io/) | 项目页 / 图源 | 支撑未来视频和未来动作 joint generation、closed-loop control、7Hz real-time claim 和 real robot evidence。 | WAM |
 | [World Action Models are Zero-shot Policies](https://arxiv.org/abs/2602.15922) | 论文 | 支撑 WAM 作为 zero-shot policy 和 video-action joint modeling 的核心 claim。 | WAM |
 | [Video Prediction Policy](https://video-prediction-policy.github.io/) | 项目页 / 图源 | 支撑 predictive visual representation 如何接机器人动作。 | VAM |
 | [Video Prediction Policy paper](https://arxiv.org/abs/2412.14803) | 论文 | 支撑 text-conditioned video prediction、representation aggregation 和 robot policy 证据。 | VAM |
 | [RT-2 DeepMind blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/) | 官方博客 | 对比 VLA 直接输出动作与世界模型预测动作后果的差异。 | VLA 对照 |
 | [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/) | 项目页 / 论文 | 支撑跨机器人动作口径、动作空间和数据混合的接口问题。 | action data |
 | [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/) | 项目页 / 论文 | 补充连续动作分布、receding horizon 和多峰动作建模。 | policy 对照 |
+| [全站外部阅读台账](external-reading-ledger.md) | 站内台账 | 记录高质量博客、中文公众号和技术媒体的讲法学习边界。 | 写作方法 |
+| [机器之心](https://www.jiqizhixin.com/) | 中文技术媒体 / 公众号生态 | 学习“背景 -> 方法 -> 实验 -> 局限”的中文论文讲解节奏，不作为强事实唯一来源。 | 中文讲法 |
+| [量子位](https://www.qbitai.com/) | 中文技术媒体 / 公众号生态 | 学习从产业问题和路线对比切入的写法，事实回原论文或官方材料核对。 | 中文讲法 |
+| [智源社区](https://hub.baai.ac.cn/) | 中文社区 / 编译转载 | 学习技术长文和编译材料如何组织中文背景，转载内容追到原文。 | 中文讲法 |
+| [PaperWeekly](https://zhuanlan.zhihu.com/paperweekly) | 中文论文解读 / 公众号生态 | 学习论文速读如何把贡献、方法图和实验表拆成读者能跟上的顺序。 | 中文讲法 |
 
 ## 后续写作提醒
 

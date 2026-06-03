@@ -12,7 +12,7 @@
 
 第四类来源是真实机器人和边界。DayDreamer 用于说明 Dreamer 能进入真实硬件在线学习，但仍受任务、动作接口、安全和硬件约束影响；MuZero 用于对比不重建图像、只学 reward/value/policy 相关 latent dynamics 的另一条路线。
 
-中文和博客材料主要学习讲法：先把“普通视频预测”和“用于控制的 world model”区分清楚，再沿着 state、dynamics、loss、planner / actor、evidence 逐层解释。事实判断以论文、项目页、官方博客和可复查材料为准。
+中文和博客材料主要学习讲法：先把“普通视频预测”和“用于控制的 world model”区分清楚，再沿着 state、dynamics、loss、planner / actor、evidence 逐层解释。事实判断以论文、项目页、官方博客和可复查材料为准；链接不稳定或事实链不够一手的中文资料不进入来源表。
 
 ## 写作边界
 
@@ -25,6 +25,16 @@
 正文不把 DreamerV3 的 benchmark 成绩外推成通用机器人能力。DreamerV3 证明固定配置跨多个 RL domain 的稳定性；真实机器人还需要动作接口、安全、恢复、数据回流和硬件约束。
 
 正文不把视频世界模型和 Dreamer-style control world model 混用。Open-loop 视频预测能说明可视未来质量，不能直接证明 policy learning；control return 能证明任务回报，也不能直接证明可视模拟器质量。
+
+## 图片使用
+
+本页没有使用 image2，也没有生成新图片；正文只复用了仓库里已经存在的论文图，并在图注中保留图源和读图方法。
+
+| 正文图片 | 本地路径 | 原始来源 | 本站用途 |
+| --- | --- | --- | --- |
+| PlaNet latent dynamics | `../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png` | [PlaNet](https://arxiv.org/abs/1811.04551) Figure 2 | 说明 RNN、SSM、RSSM 的状态结构差异。 |
+| Dreamer horizon ablation | `../assets/images/paper-deep-dives/world-models/dreamer/figure-4-horizon.png` | [Dreamer](https://arxiv.org/abs/1912.01603) Figure 4 | 说明 imagined horizon 是收益和模型误差的折中。 |
+| DreamerV3 world model learning | `../assets/images/paper-deep-dives/world-models/dreamerv3/x2.png` | [DreamerV3](https://arxiv.org/abs/2301.04104) Figure 3(a) | 说明 DreamerV3 的稳定化技巧仍服务可决策 latent state。 |
 
 ## 来源
 
@@ -43,4 +53,3 @@
 | [DayDreamer paper](https://arxiv.org/abs/2206.14176) | 论文 | 支撑 4 类真实机器人、在线学习、无仿真器的实验描述。 | 机器人 |
 | [MuZero](https://arxiv.org/abs/1911.08265) | 论文 | 对比只学习 reward/value/policy 相关 dynamics、不重建图像的路线。 | 边界对比 |
 | [VITALab DreamerV3 note](https://vitalab.github.io/article/2023/01/19/DreamerV3.html) | 技术博客 | 借鉴 RSSM、symlog、free bits、two-hot 的二次讲解方式。 | 博客讲法 |
-| [Open Source Robotics: DayDreamer 中文页](https://robotics.growbotics.ai/zh/research/papers/daydreamer-world-models-robot-learning) | 中文资料页 | 只用于中文读者的入口提示，不作为核心事实证据。 | 中文讲法 |

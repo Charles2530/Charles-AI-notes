@@ -12,7 +12,9 @@
 
 第四类来源是 GPU 优化背景。CUDA Best Practices、Nsight 和 CUTLASS/CuTe 资料用于建立共通判断：coalescing、occupancy、memory throughput、tile 复用、epilogue fusion、Tensor Core 路径和 shape bucket。正文只把这些作为 Triton 读法背景，不展开成完整 CUDA 教程。
 
-第五类来源是中文教程。Datawhale Triton 教程和中文社区资料适合学习教学顺序：先用 vector add 建立 offsets/mask，再进 matmul tile 和 autotune。事实、API 语义、性能 claim 和图片来源仍以官方文档、论文和稳定技术博客为准。
+第五类来源是中文教程和社区长文。中文社区资料适合学习教学顺序：先用 vector add 建立 offsets/mask，再进 matmul tile 和 autotune。事实、API 语义、性能 claim 和图片来源仍以官方文档、论文和稳定技术博客为准；不稳定或已失效的中文链接不进入本站可点击来源表。
+
+第六类来源是高质量博客和微信公众号式长文。它们适合学习讲解节奏：先用一个线上慢路径或 shape bucket 问题建立动机，再拆 `program_id`、地址矩阵、tile 和 autotune，最后回到端到端验证。事实、API 语义、版本变化和性能 claim 仍以官方文档、论文、官方博客或可复现实验为准。
 
 ## 写作边界
 
@@ -24,6 +26,14 @@
 
 正文不把 stride 和 mask 当作语法细节。Triton kernel 的正确性经常毁在非 contiguous layout、最后一个 tile、batch/head stride、dtype cast 和边界 mask 上。讲法要让读者优先看地址矩阵，而不是只看算子公式。
 
+## 图片使用
+
+本页没有使用 image2，也没有生成新图片；正文只复用了仓库里已经存在的论文图，并在图注中保留图源和读图方法。
+
+| 正文图片 | 本地路径 | 原始来源 | 本站用途 |
+| --- | --- | --- | --- |
+| Triton roofline comparison | `../assets/images/paper-figures/operators/triton-roofline-comparison.png` | [Triton paper](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf) Figure 1 | 说明 Triton 处在高层框架和手写 CUDA 之间的 tile 级表达位置。 |
+
 ## 来源
 
 | 来源 | 类型 | 本站使用方式 | 关联主题 |
@@ -31,10 +41,9 @@
 | [Triton Vector Addition tutorial](https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html) | 官方教程 | 支撑 `program_id`、offset、mask、load/store 的最小示例。 | 编程模型 |
 | [Triton Matrix Multiplication tutorial](https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html) | 官方教程 | 支撑 matmul tile、`tl.dot`、group ordering、autotune 和 L2 locality。 | matmul |
 | [Triton `autotune` API](https://triton-lang.org/main/python-api/generated/triton.autotune.html) | 官方 API | 支撑 `configs`、`key`、reset/restore 和候选配置搜索语义。 | autotune |
-| [Triton paper](https://doi.org/10.1145/3315508.3329973) | 论文 / 图源 | 使用 roofline comparison 图说明 tiled neural network DSL 的定位。 | 图源 |
-| [Introducing Triton](https://openai.com/index/triton/) | 技术博客 | 支撑 Triton 作为自定义 neural network kernel 中间层的工程动机。 | 写作讲法 |
+| [Triton paper](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf) | 论文 / 图源 | 使用 roofline comparison 图说明 tiled neural network DSL 的定位。 | 图源 |
+| [Triton GitHub repository](https://github.com/triton-lang/triton) | 官方仓库 | 查看项目、示例和当前实现生态。 | 项目入口 |
 | [PyTorch `torch.compile` docs](https://docs.pytorch.org/docs/stable/torch.compiler.html) | 官方文档 | 支撑 Inductor、graph capture、编译缓存和生成 kernel 的上层路径。 | compiler |
 | [CUDA C++ Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/) | 官方文档 | 支撑 coalescing、occupancy、memory throughput、profiling 背景。 | GPU 基础 |
 | [Nsight Compute Roofline](https://docs.nvidia.com/nsight-compute/2023.3/NsightCompute/index.html) | 官方文档 | 支撑不要只看 FLOPs，要用 bandwidth/roofline 判断 kernel 瓶颈。 | 性能分析 |
 | [CUTLASS documentation](https://github.com/NVIDIA/cutlass) | 官方仓库/文档 | 作为 Triton 之外的模板化 GEMM/attention kernel family 对照。 | kernel stack |
-| [Datawhale awesome-triton](https://datawhalechina.github.io/awesome-triton/) | 中文教程 | 借鉴中文教程式讲法，事实和 API 细节回官方文档核对。 | 中文讲法 |

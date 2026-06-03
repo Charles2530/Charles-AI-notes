@@ -12,7 +12,7 @@
 
 第四类来源是跨机器人和通用策略。RT-X/Open X-Embodiment、Octo、OpenVLA、π0/π0.5、DROID 和 BridgeData 用于支撑“规模化数据不是把轨迹倒进模型”。写这类工作时，重点检查观测、动作、任务、结果和部署语义是否对齐，而不是只看数据量、模型参数量或 demo 数量。
 
-第五类来源是中文技术长文和公众号/行业报告。Datawhale、智源、量子位、机器之心等材料适合学习中文讲法：先给一个机器人任务失败案例，再沿数据、动作接口、训练目标和闭环评测拆开。强 claim、成功率、数据规模和安全结论仍必须回到论文、官方项目页、代码仓库或可复查报告。
+第五类来源是中文技术长文和公众号/行业报告。Datawhale Every-Embodied、智源、量子位、机器之心等材料适合学习中文讲法：先给一个机器人任务失败案例，再沿数据、动作接口、训练目标和闭环评测拆开。强 claim、成功率、数据规模和安全结论仍必须回到论文、官方项目页、代码仓库或可复查报告。
 
 ## 写作边界
 
@@ -26,11 +26,21 @@
 
 不要把跨机器人数据混合写成“越多越好”。如果同一个 action 维度在不同 embodiment 中含义不同，模型学到的是接口噪声。RT-X、Octo、OpenVLA、π0.5 等工作都应按数据口径、动作口径、评测桶和部署约束来读。
 
+## 图片使用
+
+本页没有使用 image2 生成图片；图片都来自已有论文、项目页或站内已归档资产。图注必须说明原图想证明什么，以及本站正文借它解释什么机制，不能用图去暗示论文没有证明的泛化能力。
+
+| 图片 | 文件 | 原始来源 | 正文用途 | 使用边界 |
+| --- | --- | --- | --- | --- |
+| Open X-Embodiment 数据总览 | `../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png` | [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/) | 解释跨机构、跨机器人、跨任务数据混合为什么首先是观测、动作和任务标签对齐问题。 | 不能仅凭这张图推断通用策略一定能跨机器人部署。 |
+| ACT 方法图 | `../assets/images/paper-figures/vla/aloha-act-algorithm-2x.png` | [Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705) | 解释 action chunk、CVAE/Transformer 输入和 temporal ensembling 如何服务短时连续控制。 | 不把 ACT 图写成所有精细操作的唯一方案；部署仍依赖硬件、示范质量和闭环频率。 |
+| Diffusion Policy 输入输出图 | `../assets/images/paper-figures/vla/diffusion-policy-input-output-padded.jpg` | [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/) | 解释把未来动作序列当作条件生成对象，适合多峰连续动作。 | 不把扩散策略写成普遍优于 BC/ACT；推理延迟和控制器配合仍是关键边界。 |
+
 ## 来源
 
 | 来源 | 类型 | 本站使用方式 | 关联问题 |
 | --- | --- | --- | --- |
-| [DAgger](https://www.cs.cmu.edu/~sross1/publications/Ross-AIStats11-NoRegret.pdf) | 论文 | 支撑 covariate shift、数据聚合和专家纠正为什么能缓解滚雪球误差。 | 分布偏移 |
+| [DAgger](https://arxiv.org/abs/1011.0686) | 论文 | 支撑 covariate shift、数据聚合和专家纠正为什么能缓解滚雪球误差。 | 分布偏移 |
 | [Offline Reinforcement Learning Tutorial](https://arxiv.org/abs/2005.01643) | 综述/教程 | 支撑离线 RL 中分布外动作和 Q-value 虚高的风险。 | 离线 RL |
 | [RT-1](https://robotics-transformer1.github.io/) | 项目页/论文 | 支撑多任务机器人示范、动作 token 和真实机器人 Transformer policy。 | 行为克隆规模化 |
 | [RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/) | 官方博客 | 支撑 web-scale VLM 知识如何通过动作 token 接到机器人。 | VLA 语义迁移 |
@@ -45,7 +55,8 @@
 | [DROID](https://droid-dataset.github.io/) | 项目页/论文 | 支撑真实机器人数据采集、跨场景、多任务和长轨迹数据引擎。 | 数据覆盖 |
 | [BridgeData](https://rail-berkeley.github.io/bridgedata/) | 项目页/论文 | 支撑多环境、多任务机器人数据与离线策略学习。 | 数据集 |
 | [FAST action tokenizer](https://arxiv.org/abs/2501.09747) | 论文 | 支撑高频连续动作压缩成更短离散 token 序列。 | action tokenizer |
-| [Datawhale 大模型算法教程](https://datawhalechina.github.io/llm-algo-leetcode/) | 中文教程 | 学习把复杂训练目标拆成公式、变量和具体场景的中文写法。 | 中文讲法 |
+| [Datawhale Every-Embodied](https://github.com/datawhalechina/every-embodied) | 中文开源教程/公众号生态 | 学习把硬件、仿真、数据采集、VLA 复现和部署路线组织成新手能跟上的学习路径。 | 中文讲法 |
+| [外部精读来源台账](external-reading-ledger.md) | 本站台账 | 汇总机器之心、量子位、智源、PaperWeekly、Datawhale 等中文技术材料的讲法边界。 | 中文讲法 |
 
 ## 后续写作提醒
 
