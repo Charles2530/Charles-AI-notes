@@ -213,6 +213,6 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 - [Decision Transformer](https://arxiv.org/abs/2106.01345)：把 RL 轨迹组织成序列建模问题。
 - [RLVR-World](https://arxiv.org/abs/2505.13934)：用可验证 reward 训练世界模型预测本身。
 
-## 阅读结论
+## 读完以后怎么判断
 
 强化学习让世界模型从“预测器”变成“决策工具”：transition 预测动作后果，reward/value 衡量未来好坏，policy 或 planner 选择动作。真正的难点不在于生成未来，而在于预测必须 action-sensitive、reward 必须任务相关、rollout horizon 必须受控，最后还要用 closed-loop 证明它真的改善决策。

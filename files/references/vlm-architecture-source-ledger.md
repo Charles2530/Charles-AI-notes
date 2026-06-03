@@ -32,6 +32,16 @@
 
 正文不把视频状态等同于完整世界模型。V-JEPA-style latent prediction 能学习时空表征，但如果没有动作条件、reward/risk、规划接口和闭环任务，只能作为状态 encoder 候选。
 
+## 图片使用
+
+本页没有使用 image2 生成图片。图片均来自论文或站内已归档资产；图注必须说明原图机制和本站读法，不能把图外推成动作、规划或部署能力。
+
+| 图片 | 文件 | 原始来源 | 正文用途 | 使用边界 |
+| --- | --- | --- | --- | --- |
+| CLIP 预训练与 zero-shot | `../assets/images/paper-figures/contrastive-learning/clip-figure-1.png` | [CLIP](https://arxiv.org/abs/2103.00020) Figure 1 | 说明图文对比学习怎样建立静态语义空间。 | 不证明动作、接触、遮挡记忆或未来后果建模。 |
+| BLIP-2 Q-Former | `../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg` | [BLIP-2](https://arxiv.org/abs/2301.12597) Figure 2 | 说明 Q-Former / query connector 是信息瓶颈。 | 不证明 query token 一定保留 VLA 所需局部几何。 |
+| V-JEPA 训练流程 | `../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png` | [V-JEPA](https://arxiv.org/abs/2404.08471) Figure 3 | 说明视频 latent prediction 和时空状态学习。 | 不把 action-free latent prediction 写成完整 action-conditioned world model。 |
+
 ## 来源
 
 | 来源 | 类型 | 本站使用方式 | 关联主题 |

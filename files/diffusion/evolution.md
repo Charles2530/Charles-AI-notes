@@ -4,7 +4,7 @@
 
 ## 统一记号
 
-本文统一使用：
+后文统一使用这组记号：
 
 \[
 x_t=\alpha_t x_0+\sigma_t\epsilon,\qquad \epsilon\sim\mathcal{N}(0,I)

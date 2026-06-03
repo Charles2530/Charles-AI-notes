@@ -188,7 +188,7 @@ Layers\times L\times d_{\text{kv}}\times bytes
 | backend mask 格式不匹配 | 换 attention backend 后结果变 | 检查 backend 需要 2D、4D 还是 BlockMask |
 | 图像/动作时间错位 | VLA 策略慢半拍或抖动 | 核对 frame index、action timestamp、position id |
 
-## 阅读结论
+## 读完以后怎么判断
 
 位置编码回答“这个 token 在哪里”，mask 回答“这个 token 能看谁”。二者一起定义 attention 的语义边界。文本里，它们决定顺序和未来可见性；packed training 里，它们决定不同样本是否泄漏；长上下文里，它们和 KV cache、sliding window、prefix cache 共同决定历史如何被使用；多模态和机器人里，它们还要表达空间、时间、相机、动作和 episode 边界。
 

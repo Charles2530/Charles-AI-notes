@@ -265,6 +265,6 @@ Offline RL 最难的是分布外动作。模型可能会选择数据里几乎没
 - [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)：DQN、experience replay、target network 和 value 曲线的原始来源。
 - [Offline RL Tutorial, Review, and Perspectives](https://arxiv.org/abs/2005.01643)：理解 offline RL、分布外动作和保守约束的好入口。
 
-## 阅读结论
+## 读完以后怎么判断
 
 MDP 定义决策问题，policy 定义怎么行动，reward 评价当前反馈，value 把未来机会压成数字，Bellman 方程把长期未来拆成可递归学习的局部目标。世界模型并没有绕开这些概念，它只是把真实 transition 换成可学习的 \(\hat P_\theta\)，让 agent 能在执行前估算动作后果。

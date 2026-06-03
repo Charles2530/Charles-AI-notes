@@ -106,7 +106,7 @@ node_id, rack_id, gpu_id, nvlink_domain, nic_id, numa_domain, tp_group, pp_stage
 
 如果单卡 kernel 没退化，但端到端变慢，优先查通信是不是跨了错误拓扑域、NCCL 是否选了次优路径、某个 NIC 是否过热、进程绑核是否跑到远端 NUMA、机架网络是否拥塞。
 
-## 常见误解
+## 容易误读的地方
 
 | 误解 | 更准确的说法 |
 | --- | --- |

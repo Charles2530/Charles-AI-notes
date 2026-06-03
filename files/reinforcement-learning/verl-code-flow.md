@@ -178,6 +178,6 @@ python -m verl.trainer.main_ppo \
 - [HybridFlow 论文](https://arxiv.org/abs/2409.19256)：理解为什么 RLHF 框架要把 dataflow 和 resource mapping 拆开。
 - [Hugging Face RLHF with PPO implementation details](https://huggingface.co/blog/the_n_implementation_details_of_rlhf_with_ppo)：理解 PPO/RLHF 中那些容易被忽略的工程细节。
 
-## 阅读结论
+## 读完以后怎么判断
 
 读 `verl` 的关键不是记住每个 worker 名字，而是把一次 RL 更新拆成三件事：生成 response，评价 response，把评价变成 policy gradient。PPO 需要 old log prob 和 critic，是为了控制旧样本上的更新幅度和降低方差；GRPO 用 `uid` 做组内比较，是为了不用 critic 也能构造相对 advantage；HybridFlow/3D-HybridEngine 解决的是 actor 在训练形态和推理形态之间来回切换的系统成本。把这条链看清，源码入口、配置字段和日志指标才会连成一个整体。

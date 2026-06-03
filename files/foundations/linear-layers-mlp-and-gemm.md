@@ -153,7 +153,7 @@ out = quantize(gelu(acc + bias))
 
 不要只看单 kernel TFLOP/s。一个 GEMM microbenchmark 很漂亮，不代表线上服务就快；一个 Linear 参数量很大，也不代表它是当前 trace 的瓶颈。真正稳的做法是先在 trace 里定位热点，再把热点 GEMM 的 \(M,N,K\)、dtype、layout、epilogue 和调用阶段写清楚。
 
-## 常见误解
+## 容易误读的地方
 
 | 误解 | 更准确的说法 |
 | --- | --- |
@@ -164,7 +164,7 @@ out = quantize(gelu(acc + bias))
 | GEMM 是唯一瓶颈 | Norm、softmax、rope、gather/scatter、通信和 KV cache 都可能拖慢 |
 | Tensor parallel 只是把模型切开 | 它具体是在切 Linear/GEMM 的矩阵维度，并安排通信 |
 
-## 阅读结论
+## 读完以后怎么判断
 
 Linear 是每个 token 的通道投影，MLP 是逐 token 的非线性通道变换，MatMul 是数学/API 操作，GEMM 是硬件执行里的 dense matrix multiply 家族。真正的系统问题发生在这些层之间：shape 怎么展平为 \(M,N,K\)，prefill 和 decode 的 \(M\) 怎么变，weight layout 是否匹配 kernel，epilogue 能否融合，低比特 scale 是否顺路读入，张量并行在哪里通信。
 

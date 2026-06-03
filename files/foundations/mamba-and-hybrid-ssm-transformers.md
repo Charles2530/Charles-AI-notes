@@ -171,7 +171,7 @@ Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列
 
 混合架构不是把两种 block 随便拼起来。它更像系统设计：质量、吞吐、显存、上下文长度、训练稳定性和服务 runtime 需要一起调。
 
-## 常见误解
+## 容易误读的地方
 
 | 误解 | 更准确的说法 |
 | --- | --- |
@@ -201,6 +201,6 @@ Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列
 - [Mamba-3: Improved Sequence Modeling using State Space Principles](https://arxiv.org/abs/2603.15569)：2026 年的新一代 SSM 改进，关注 state tracking 与推理效率。
 - [state-spaces/mamba](https://github.com/state-spaces/mamba)：Mamba 官方实现入口。
 
-## 阅读结论
+## 读完以后怎么判断
 
 Mamba 的价值不是简单替代 Transformer，而是把“长序列记忆”从巨大 KV cache 转成紧凑状态更新；Mamba-Transformer 的价值也不是堆新名词，而是在注意力质量和状态空间效率之间找工程折中。以后读大模型架构报告时，看到 `Mamba-heavy`、`hybrid`、`SSM`、`linear recurrent`，先问：哪些层负责精确检索，哪些层负责状态推进，推理时到底缓存了什么。

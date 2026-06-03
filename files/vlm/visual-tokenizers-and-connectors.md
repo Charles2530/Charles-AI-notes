@@ -166,14 +166,15 @@ p_\theta(s_{t+1}\mid s_t,a_t,l)
 
 第五，失败证据有没有公开：小物体、遮挡、文字、坐标、接触、动作分叉、长视频记忆分别有没有 ablation？
 
-## 阅读结论
-
 视觉 tokenizer 决定原始视觉证据怎样被切开，connector 决定哪些证据能穿过瓶颈进入 LLM、policy 或 world model。ViT 说明视觉 token 从 patch 来，Perceiver / TokenLearner 说明少量 latent 可以主动抽取信息，BLIP-2 说明 Q-Former 是连接器瓶颈，Flamingo 和 LLaVA 展示了 cross-attention 与 projector 两条常见路线。
 
 真正要记住的是：**token 少只是成本收益，证据没丢才是能力收益。** 对 VQA 来说，语义类别和文字可能足够；对 VLA 和世界模型来说，局部几何、接触、遮挡记忆、动作敏感性和多相机一致性才是关键。连接器一旦把这些压掉，后面的模型再大也只是基于不完整证据做推理。
 
+继续读相邻内容时，可以接 [VLM 架构：视觉证据怎样进入语言模型](architecture-and-training.md)、[VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md)、[VLA 数据与策略学习](../vla/data-and-policy-learning.md) 和 [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
+
 ## 外部精读
 
+- [本页来源台账](../references/visual-tokenizer-connector-source-ledger.md)：记录视觉 tokenizer、connector、图片使用和中文讲法边界。
 - [Vision Transformer](https://arxiv.org/abs/2010.11929)：理解图片怎样从 patch 变成 token 序列。
 - [Perceiver](https://arxiv.org/abs/2103.03206)：理解用少量 latent array 读取高维输入的通用思想。
 - [TokenLearner](https://arxiv.org/abs/2106.11297)：理解图像/视频里学习少量 informative tokens 的路线。

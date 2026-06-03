@@ -124,7 +124,7 @@ BC 的优点是稳定、可扩展、能直接吃示范数据。RT-1、RT-2、Ope
 
 这张表不是让人选一个“最好目标”，而是提醒：目标函数是在定义模型最先学会的接口。现代系统常常把多个阶段串起来：next-token 打底，SFT 对齐指令，RAG 补外部事实，RL 或 verifier 改善任务收益；VLM 用 contrastive 或 captioning 对齐图文，再接 LLM；VLA 用 web-scale VLM 先学语义，再用机器人数据把语义接到动作。
 
-## 阅读结论
+## 读完以后怎么判断
 
 预训练目标决定模型被奖励去保留什么信息。Next-token 奖励可续写性，masked modeling 奖励上下文补全，contrastive 奖励正样本不变性，reconstruction 奖励可还原性，denoising 奖励分布方向，behavior cloning 奖励专家动作匹配。
 

@@ -24,6 +24,14 @@
 
 正文不把 token compression ratio 当作唯一收益。压缩必须同时报告 step time、显存、局部证据、动作分叉和 closed-loop 任务结果。
 
+## 图片使用
+
+本页没有使用 image2 生成图片。正文只使用已有 BLIP-2 Q-Former 图，作为 connector 信息瓶颈的机制图。
+
+| 图片 | 文件 | 原始来源 | 正文用途 | 使用边界 |
+| --- | --- | --- | --- | --- |
+| BLIP-2 Q-Former objectives | `../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg` | [BLIP-2](https://arxiv.org/abs/2301.12597) Figure 2 | 说明 query token 怎样从冻结视觉特征中抽取证据，训练目标决定保留什么。 | 不把 VQA / caption 能力外推成动作、接触或世界模型能力。 |
+
 ## 来源
 
 | 来源 | 类型 | 本站使用方式 | 关联主题 |

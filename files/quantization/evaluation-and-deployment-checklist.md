@@ -112,7 +112,7 @@ flowchart LR
 | rollout KV | counterfactual ranking、长时一致性 | KV 误差会改变规划排序 |
 | runtime | kernel hit rate、dequant 次数、fallback | 文件小不代表端到端快 |
 
-## 阅读结论
+## 读完以后怎么判断
 
 量化是否成功，不能只由“离线平均精度下降多少”决定。真正的标准应是：
 

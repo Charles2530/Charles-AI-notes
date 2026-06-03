@@ -192,7 +192,7 @@ Runtime 负责把请求组织成硬件能吃的形状。prefill 通常 batch 大
 
 不要只报平均吞吐。真实服务里，长 prompt、长输出、多轮工具调用、低 cache hit、低投机接受率、动态 batch、视觉输入和不规则 shape 都会制造尾延迟。系统报告如果只展示一个漂亮的 tokens/s，很难证明线上会更好。
 
-## 阅读结论
+## 读完以后怎么判断
 
 数值格式决定每个值怎样表示，显存决定哪些状态能常驻，带宽决定数据搬运是否成瓶颈，kernel 决定低精度和融合能否兑现，runtime 决定请求、batch、KV cache 和 shape 是否被组织好。读 FP8、量化、FlashAttention、vLLM、TensorRT-LLM 或 DeepSeek-V3 这类材料时，不要先背技术名词，先问：它省的是哪张账，代价转移到哪里，质量和 P99 是否一起验证。
 

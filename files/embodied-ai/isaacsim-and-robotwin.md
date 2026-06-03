@@ -1,6 +1,6 @@
 # Isaac Sim 与 RoboTwin 仿真数据链
 
-这一页解释 Isaac Sim 和 RoboTwin 在具身智能项目里分别负责什么。先给结论：
+做具身智能数据引擎时，Isaac Sim、RoboTwin、planner 和 success checker 经常被放在同一个句子里讨论，但它们其实处在不同层级。先把分工摆清楚，后面才不会把“仿真平台”“任务组织”和“轨迹生成”混成一个工具。
 
 ```text
 Isaac Sim 更像“高保真机器人世界”
@@ -74,7 +74,7 @@ RoboTwin 可以理解为一套面向机器人操作任务的 benchmark / pipelin
 | 相机图像怎么来 | 渲染 RGB、Depth、Segmentation | 决定哪些相机视角进入训练/评测 |
 | 成功怎么判 | 提供状态查询和仿真结果 | 写具体 success checker |
 
-一句话：Isaac Sim 是“仿真世界和传感器”，RoboTwin 是“任务和数据集组织方式”。
+更准确地说，Isaac Sim 是“仿真世界和传感器”，RoboTwin 是“任务和数据集组织方式”。
 
 ## cuRobo / STOMP 在哪里
 

@@ -114,7 +114,7 @@ flowchart LR
 
 高级 kernel 模式就像把普通工厂升级成柔性自动化产线。Tiling 相当于把原材料按工位大小切好，double buffering 像前一道工序还在加工时下一批料已经在旁边待命，persistent kernel 像固定班组持续接单而不是每单重新招工，shape specialization 则像给高频规格产品配专用模具。真正的高吞吐并不是某个环节特别神，而是这些组织方式叠加起来，让整条产线更加贴近真实订单分布。
 
-## 阅读结论
+## 读完以后怎么判断
 
 高级 kernel 模式的核心，不是追求“更复杂”，而是让计算、访存、调度和形状分布更好地匹配。理解 tiling 之后，再理解双缓冲、persistent kernel、shape specialization 和 dispatch，你会发现很多高性能实现其实共享一套非常一致的思想：  
 **让热点 shape 走最适合的路径，让数据总是在被需要之前就处于最合适的位置。**

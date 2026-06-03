@@ -150,7 +150,7 @@ CFG 是一个典型例子。理论上同一步需要条件和无条件两种预�
 
 当 15 到 30 NFE 仍然太慢时，下一步通常不是继续硬调 sampler，而是进入 [一步生成、蒸馏与整流](distillation.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md) 这类训练端路线。采样器是在已有方向场上走得更聪明；蒸馏、consistency 和 flow 路线则是在训练端重新分配少步生成的责任。
 
-## 阅读结论
+## 读完以后怎么判断
 
 扩散推理可以被压成一句话：模型学方向，采样器积分方向。DDPM 用很多随机小步走原始反向链；DDIM 改路径、允许跳步；Euler 和 Heun 展示一阶/二阶数值积分直觉；DPM-Solver / DPM-Solver++ 利用扩散 ODE 和 guidance 场景的结构减少少步误差；EDM 提醒我们把噪声尺度、预条件、步长、随机性和 solver 放在同一个设计空间里调。
 

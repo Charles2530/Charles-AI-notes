@@ -123,7 +123,7 @@ V-JEPA 2-AC 的图和表适合用来提醒“规划接口”要写清楚。actio
 | 排序不可靠 | 加 candidate ranking loss 或 pairwise preference eval | top1_safe_success_agreement 达到门禁 |
 | 证据仍是 toy fixture | 替换为真实 checkpoint、固定 seed、真实 rollout 日志 | 报告升级为 Paper Result 或 Closed-loop |
 
-## 阅读结论
+## 读完以后怎么判断
 
 本页给的是实验报告形状，不是模型胜利宣言。一个合格的世界模型高效训练报告，必须同时报告：省了什么成本、预测是否动作敏感、闭环或候选排序是否变好、失败是否能回放、证据等级和复现状态是什么。
 

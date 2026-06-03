@@ -206,7 +206,7 @@ actions:       [B, Horizon, ActionDim]
 
 这几行比单纯打印 `torch.Size([...])` 更有用，因为它说明了每个数字在模型里扮演什么角色。
 
-## 阅读结论
+## 读完以后怎么判断
 
 张量是 storage 加 metadata，shape 是模块接口，axis semantics 是接口含义，stride/layout 是性能和复制风险，计算图是 forward 与 backward 的依赖记录。读模型时先把这些账写清楚，很多看起来像训练技巧、显存技巧或多模态建模技巧的问题，都会还原成“哪些轴被合并了、哪些值被保存了、哪些 layout 被 kernel 读了”。
 

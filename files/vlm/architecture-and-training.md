@@ -164,14 +164,15 @@ VLM 可以描述场景，VLA 要输出动作，世界模型还要预测动作后
 
 第四张是评测账本：VQA、OCR、caption、定位、视频问答、动作成功率、world model rollout、闭环任务分别证明什么。不要用 VQA 分数证明机器人控制能力，也不要用 demo 图证明状态表示可靠。
 
-## 阅读结论
-
 VLM 架构的核心不是“图片接进 LLM”，而是视觉证据如何被选择、压缩和消费。CLIP 证明图文语义能对齐；BLIP-2 说明连接器是信息瓶颈；Flamingo 和 LLaVA 展示了 cross-attention 与 projector 两条常见路线；V-JEPA 提醒静态图文语义不够，视频状态还要学对象持续性和运动。
 
 如果目标只是图文检索，静态语义空间可能足够；如果目标是多模态对话，connector 和指令数据很关键；如果目标是 VLA 或世界模型，就必须继续检查几何、接触、遮挡、时间记忆、动作条件和闭环评测。VLM 的成败，常常发生在“视觉证据穿过瓶颈时丢了什么”。
 
+继续读相邻内容时，可以接 [视觉 Tokenizer 与连接器](visual-tokenizers-and-connectors.md)、[VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md)、[VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md) 和 [Masked / JEPA 与潜变量预测](../world-models/masked-jepa-and-latent-prediction.md)。
+
 ## 外部精读
 
+- [本页来源台账](../references/vlm-architecture-source-ledger.md)：记录 VLM 架构、图片使用和中文讲法边界。
 - [CLIP](https://arxiv.org/abs/2103.00020)：理解图文对比学习和 zero-shot 分类。
 - [The Illustrated CLIP](https://jalammar.github.io/illustrated-clip/)：用图建立 CLIP 的相似度矩阵和 prompt classifier 直觉。
 - [Hugging Face: Vision Language Models Explained](https://huggingface.co/blog/vlms)：用 vision encoder、projector、LLM 的三段结构理解 VLM。

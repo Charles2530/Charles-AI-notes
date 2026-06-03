@@ -4,7 +4,7 @@
 
 这篇只回答一个问题：**当采样器不再有几十次纠错机会时，少步模型怎样仍然保住分布、细节、多样性和条件控制？**
 
-先给结论：少步生成不是删采样步，而是把线上推理成本转移到离线训练里。Progressive Distillation 压缩教师轨迹，Consistency / LCM 学同一轨迹终点一致，DMD / DMD2 直接匹配最终分布，Rectified Flow / Rectified Diffusion 重新设计生成路径。它们都在换取更少 NFE，但付出的训练成本和失败模式完全不同。
+少步生成的关键不是删掉采样循环，而是把线上推理成本转移到离线训练里。Progressive Distillation 压缩教师轨迹，Consistency / LCM 学同一轨迹终点一致，DMD / DMD2 直接匹配最终分布，Rectified Flow / Rectified Diffusion 重新设计生成路径。它们都在换取更少 NFE，但付出的训练成本和失败模式完全不同。
 
 ## 少步学生少了什么
 
@@ -162,7 +162,7 @@ Rectified Flow 的经典目标强调让噪声分布到数据分布的运输路�
 
 如果目标是视频、世界模型或机器人 rollout，不能只看画面质量。少步学生要证明运动强度、动作条件、长时状态和 risk/event 相关变量没有被压掉。
 
-## 阅读结论
+## 读完以后怎么判断
 
 一步生成、蒸馏与整流可以按四句话记：
 

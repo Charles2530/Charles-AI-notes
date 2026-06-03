@@ -159,7 +159,7 @@ flowchart LR
 | KV 量化是否划算 | 长上下文显存、TPOT、任务一致性 |
 | 是否有回退路径 | 敏感层保高精、KV dtype 可切换、全精 checkpoint |
 
-## 阅读结论
+## 读完以后怎么判断
 
 QAT、kernel 和 KV cache 是量化落地的三块拼图。QAT 让模型适应误差，kernel 把低比特转成真实速度，KV cache 解决长上下文动态显存。只有三者和任务质量一起过关，量化才算从论文数字变成可用系统。
 

@@ -11,7 +11,7 @@ MoE 最容易被误读成“参数很多，所以能力强；激活参数少，�
 
 因此读 MoE 不要从模型名字开始，而要从一条 token 的路径开始：hidden state 进入 router，router 选出少数 expert，系统把 token 发到对应 expert，expert MLP 算完再合回来。这个路径既是模型结构，也是训练稳定性和硬件成本的来源。
 
-## 一句话先立住
+## 先把核心问题立住
 
 MoE（Mixture of Experts）的核心是：**把 Transformer block 里的 dense MLP 换成多个 expert MLP，再用 router 为每个 token 只选择少数几个 expert。**
 

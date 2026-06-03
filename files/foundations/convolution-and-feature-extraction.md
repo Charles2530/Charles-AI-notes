@@ -144,7 +144,7 @@ flowchart TD
 
 所以卷积没有因为 ViT 流行而变成历史。即使主干用 Transformer，前端 patch embedding、局部窗口 attention、多尺度 feature pyramid、depthwise convolution、U-Net decoder 和 3D cost volume 里仍然在使用卷积思想：让局部结构先被稳定编码，再把它交给更全局的模块。
 
-## 常见误解
+## 容易误读的地方
 
 卷积不是只能识别边缘。浅层常学边缘和纹理，但深层卷积特征可以服务对象、布局、分割、深度、生成和控制。
 
@@ -154,7 +154,7 @@ stride 不是纯加速开关。它确实省 token 和显存，但会改变定位
 
 U-Net 的 skip connection 不只是“防止梯度消失”。在 dense prediction 里，它更关键的作用是把高分辨率定位信息带回解码端。
 
-## 阅读结论
+## 读完以后怎么判断
 
 卷积把图像先验写进网络：局部窗口负责看邻域，权重共享负责在全图复用检测器，channel 负责组织多种视觉响应，stride/padding/dilation 决定空间信息还剩多少，多层堆叠和多尺度结构把局部特征变成对象与场景表示。读扩散、VLA、深度估计或视觉 tokenizer 时，真正要抓住的不是“卷积过时了吗”，而是这套局部到全局、语义到定位的特征账有没有被模型结构保住。
 

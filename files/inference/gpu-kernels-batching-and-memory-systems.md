@@ -173,7 +173,7 @@ vLLM 的 Triton attention backend 文章很适合把这个排查顺序落到 ker
 
 **修复**：按输入长度和 SLO 分队列；短请求设置更小 max wait；长文档进入吞吐池；灰度指标同时看 tokens/s、TTFT、TPOT 和 P99。
 
-## 阅读结论
+## 读完以后怎么判断
 
 GPU 推理优化不是微基准游戏。真正要改善线上体验，需要同时看请求分桶、queue、prefill、decode、KV 生命周期、kernel 热点和 SLO。一个优化只有在真实请求桶里同时改善成本、延迟和质量，才算真的有效。
 

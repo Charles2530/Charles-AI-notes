@@ -184,6 +184,6 @@ T_{\text{observe}}
 
 这时“推理更快”只有在降低 deadline miss、collision、takeover，或提高 success/cost 时才有意义。kernel speedup 不能自动证明闭环收益。
 
-## 阅读结论
+## 读完以后怎么判断
 
 成本建模和 SLO 设计的核心，是把优化从“看起来更快”变成“在指定请求桶里，守住质量和尾延迟，并降低单位成功任务成本”。先拆 queue、prefill、KV、decode、tool 和 retry，再按短问答、长文档、长输出、agent、多模态分桶验收，推理系统才不会被平均值带偏。

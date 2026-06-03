@@ -14,7 +14,7 @@
 - **先看代际**：QCS8450 Proxy 在 AI Hub Models 元数据里是 HTP v69，接近 SM8450 / Snapdragon 8 Gen 1 的后端口径，不能直接套用 v73+ 的量化经验。
 - **先分 runtime**：量化通常能压缩模型大小，但不保证更快；同一 `w8a8` 模型在 TFLite、QNN DLC、ONNX Runtime QNN EP 上可能走完全不同的执行路径。
 
-本文回答三件事：第一，XR2 Gen 2 / QCS8450 到底是什么；第二，一个模型从 PyTorch / ONNX 怎么走到头显上；第三，为什么量化部署不能只看 `INT8` 这个标签。
+因此这篇文章沿三条线往下拆：XR2 Gen 2 / QCS8450 到底是什么；一个模型从 PyTorch / ONNX 怎么走到头显上；为什么量化部署不能只看 `INT8` 这个标签。
 
 ## 从一个动作看整机闭环
 

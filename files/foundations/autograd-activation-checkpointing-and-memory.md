@@ -131,7 +131,7 @@ model checkpoint 是训练资产，通常包含权重、optimizer state、schedu
 
 如果开了 checkpointing 后吞吐明显下降，要看重算区域是否太大、attention kernel 是否已经省掉很多中间状态、RNG preserve 是否带来额外开销，以及 pipeline/communication overlap 是否被重算打乱。
 
-## 阅读结论
+## 读完以后怎么判断
 
 自动微分的显存成本来自 backward rule 对 forward 中间量的依赖。activation checkpointing 的本质不是魔法压缩，而是把“保存中间量”换成“反向时重算中间量”。它适合解决 activation 爆炸，尤其是长上下文、视频、多模态和极深网络；但参数、梯度、optimizer state、通信 buffer、训练恢复资产仍要靠 ZeRO/FSDP、低精度、offload、kernel 和 checkpoint 治理一起处理。
 

@@ -195,7 +195,7 @@ PagedAttention、prefix cache、KV 量化、KV eviction、disaggregated prefill 
 
 最常见的误区有四个。第一，把 temperature 当成事实性开关；事实性主要来自模型能力、上下文证据和验证。第二，用 beam search 做开放聊天，以为高 logprob 就等于好回答。第三，结构化输出只靠 prompt，而不是 grammar/schema 和外部校验。第四，只调采样参数，不看 prefill、decode、KV cache 和用户侧延迟。
 
-## 阅读结论
+## 读完以后怎么判断
 
 解码是把概率分布变成输出的执行层。Logits 定义候选分数；mask 和 penalty 改候选集合；temperature 和 top-k/top-p 改采样分布；greedy、beam 和 sampling 对应不同任务；结构化解码用 grammar/schema 保证格式；verifier sampling 把生成变成搜索；speculative decoding 主要服务速度；prefill、decode 和 KV cache 决定这套策略能否在线上跑得动。
 
