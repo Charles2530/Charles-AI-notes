@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # CausVid：流式自回归视频扩散
 
-!!! info "本站判断"
-    这页把《CausVid：流式自回归视频扩散》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** From Slow Bidirectional to Fast Autoregressive Video Diffusion Models。<br>
+    **作者：** Tianwei Yin、Qiang Zhang、Richard Zhang、William T. Freeman、Fredo Durand、Eli Shechtman、Xun Huang。<br>
+    **机构：** MIT 2、Adobe。<br>
+    **时间 / 主题：** 2024-12；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2412.07772](https://arxiv.org/abs/2412.07772)；官方材料：[causvid.github.io/](https://causvid.github.io/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/tianweiy/CausVid](https://github.com/tianweiy/CausVid)；项目页：[causvid.github.io/](https://causvid.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2412.07772)；[GitHub API / repo](https://github.com/tianweiy/CausVid)；[官方 / 项目材料](https://causvid.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的核心价值在于给出了一条很清楚的工程路线：**不要从零训练一个自回归视频模型，而是把已有高质量双向视频 DiT 改造成因果学生模型，再用双向教师做非对称 DMD 蒸馏，把 50 步视频扩散压成 4 步流式生成器。**
 

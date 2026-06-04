@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # Genie：没有动作标签，怎样学出可交互环境
 
-!!! info "本站判断"
-    这页把《Genie：没有动作标签，怎样学出可交互环境》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Genie: Generative Interactive Environments。<br>
+    **作者：** Jake Bruce、Michael Dennis、Ashley Edwards、Jack Parker-Holder、Yuge Shi、Edward Hughes、Matthew Lai、Aditi Mavalankar、Richie Steigerwald、Chris Apps 等（共 25 人）。<br>
+    **机构：** Google DeepMind、University of British Columbia。<br>
+    **时间 / 主题：** 2024-02；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2402.15391](https://arxiv.org/abs/2402.15391)；官方材料：[deepmind.google/research/publications/60474/](https://deepmind.google/research/publications/60474/)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[deepmind.google/research/publications/60474/](https://deepmind.google/research/publications/60474/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2402.15391)；[官方 / 项目材料](https://deepmind.google/research/publications/60474/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“Genie”背后的核心机制、适用边界和下一步阅读路径。
 

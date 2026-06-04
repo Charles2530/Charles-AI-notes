@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # DMD：一步扩散蒸馏
 
-!!! info "本站判断"
-    这页把《DMD：一步扩散蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** One-step Diffusion with Distribution Matching Distillation。<br>
+    **作者：** Tianwei Yin、Michaël Gharbi、Richard Zhang、Eli Shechtman、Fredo Durand、William T. Freeman、Taesung Park。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2023-11；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2311.18828](https://arxiv.org/abs/2311.18828)；官方材料：[tianweiy.github.io/dmd/](https://tianweiy.github.io/dmd/)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[tianweiy.github.io/dmd/](https://tianweiy.github.io/dmd/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2311.18828)；[官方 / 项目材料](https://tianweiy.github.io/dmd/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文是后来 DMD2、CausVid、Phased DMD 一系列少步扩散蒸馏方法的基础。它的核心思想很直接：**不要强迫学生模型逐步复刻 teacher 的采样轨迹，而是让学生的一步输出分布看起来像 teacher 的多步输出分布。**
 

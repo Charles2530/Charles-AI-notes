@@ -1,12 +1,13 @@
 # vLLM / PagedAttention：为什么 KV cache 需要分页管理
 
-!!! info "本站判断"
-    这页把《vLLM / PagedAttention：为什么 KV cache 需要分页管理》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
-
-Checked date: 2026-06-03
-Repro status: 论文级理解；本站未复现实验，只引用原论文图、vLLM 官方博客和公开论文结果。
+!!! info "论文信息"
+    **论文题名：** Efficient Memory Management for Large Language Model Serving with PagedAttention。<br>
+    **作者：** Woosuk Kwon、Zhuohan Li、Siyuan Zhuang、Ying Sheng、Lianmin Zheng、Cody Hao Yu、Joseph E. Gonzalez、Hao Zhang、Ion Stoica。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2023-09；高效推理。<br>
+    **arXiv / 官方报告：** arXiv：[2309.06180](https://arxiv.org/abs/2309.06180)；官方材料：[vllm.ai/blog/2023-06-20-vllm](https://vllm.ai/blog/2023-06-20-vllm)。<br>
+    **GitHub / 项目：** GitHub：[github.com/vllm-project/vllm](https://github.com/vllm-project/vllm)；项目页：[vllm.ai/blog/2023-06-20-vllm](https://vllm.ai/blog/2023-06-20-vllm)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2309.06180)；[GitHub API / repo](https://github.com/vllm-project/vllm)；[官方 / 项目材料](https://vllm.ai/blog/2023-06-20-vllm)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 vLLM 的核心贡献不是“写了一个更快的推理库”，而是抓住了 LLM serving 里最容易被低估的瓶颈：**decode 阶段的 KV cache 既大、又动态、还随请求长度不断增长**。如果每个请求都按最大长度预留一整段连续 KV 显存，短请求浪费，长尾请求碎片化，请求结束后还会留下难以利用的空洞。PagedAttention 的作用，是把每条 sequence 逻辑上连续的 KV cache 拆成固定大小 block，再用 block table 映射到不连续的物理显存。
 
@@ -79,7 +80,7 @@ PagedAttention 给 continuous batching 提供了可操作的内存模型：每�
 
 PagedAttention 解决的是 KV cache 分配、碎片和共享问题，不是所有推理瓶颈。长上下文仍然需要读大量 KV，attention 的内存带宽压力不会因为分页而消失。长 prompt 短输出的 workload 主要受 prefill 影响；短 prompt 长输出更容易受 decode、KV bandwidth 和调度影响。模型权重本身、跨 GPU 通信、采样逻辑、tokenizer、网络队列和 P99 延迟，也都可能成为瓶颈。
 
-所以读 vLLM benchmark 时不能只看一个 tokens/s。要看 prompt/output 长度分布、并发数、是否启用 prefix cache、是否使用 beam/parallel sampling、block size、模型结构是否有 GQA/MQA、服务是否受 prefill 还是 decode 支配。PagedAttention 在高并发、变长请求、长输出、多候选共享 prompt 的场景里最能体现价值。
+**读数边界。** 所以读 vLLM benchmark 时不能只看一个 tokens/s，也不能把系统吞吐提升误读成单个 attention kernel 的加速。要看 prompt/output 长度分布、并发数、是否启用 prefix cache、是否使用 beam/parallel sampling、block size、模型结构是否有 GQA/MQA、服务是否受 prefill 还是 decode 支配；PagedAttention 在高并发、变长请求、长输出、多候选共享 prompt 的场景里最能体现价值。
 
 ## 阅读结论
 

@@ -6,10 +6,14 @@ paper_topic: 技术报告
 
 # DeepSeek-V4：百万上下文与 FP4 后训练
 
-!!! info "本站判断"
-    这页把《DeepSeek-V4：百万上下文与 FP4 后训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence。<br>
+    **作者：** DeepSeek-AI。<br>
+    **机构：** DeepSeek-AI。<br>
+    **时间 / 主题：** 2026-05；技术报告。<br>
+    **arXiv / 官方报告：** arXiv：未找到专门条目。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接。<br>
+    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇技术报告的核心不是“又把模型做大了”，而是围绕一个更具体的问题展开：**当 reasoning、agent 和长文档任务都想吃更多上下文时，普通 attention 的 FLOPs 和 KV cache 会先把系统拖垮，模型必须在架构、训练和推理栈上同时改。**
 

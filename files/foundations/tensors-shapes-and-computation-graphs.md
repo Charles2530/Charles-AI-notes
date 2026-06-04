@@ -117,7 +117,7 @@ y = x_t.reshape:    [B, D*L], may copy
 
 计算图记录的是“哪些张量由哪些算子产生”。Forward 负责算出输出和 loss；backward 不是重新猜梯度，而是沿计算图用链式法则把 loss 对每个中间量的影响传回去。
 
-以矩阵乘为例，先把 `[B, L, D_in]` 展平成 `N = B \times L` 个 token：
+以矩阵乘为例，先把 `[B, L, D_in]` 展平成 \(N = B \times L\) 个 token：
 
 \[
 Y = XW,\quad

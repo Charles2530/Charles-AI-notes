@@ -6,10 +6,14 @@ paper_topic: 具身智能 / VLA
 
 # GR-3：少样本长时程 VLA
 
-!!! info "本站判断"
-    这页把《GR-3：少样本长时程 VLA》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** GR-3 Technical Report。<br>
+    **作者：** Chilam Cheang、Sijin Chen、Zhongren Cui、Yingdong Hu、Liqun Huang、Tao Kong、Hang Li、Yifeng Li、Yuxiao Liu、Xiao Ma 等（共 21 人）。<br>
+    **机构：** ByteDance Seed。<br>
+    **时间 / 主题：** 2025-07；具身智能 / VLA。<br>
+    **arXiv / 官方报告：** arXiv：[2507.15493](https://arxiv.org/abs/2507.15493)；官方材料：[seed.bytedance.com/en/GR3](https://seed.bytedance.com/en/GR3)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[seed.bytedance.com/en/GR3](https://seed.bytedance.com/en/GR3)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2507.15493)；[官方 / 项目材料](https://seed.bytedance.com/en/GR3)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“GR-3”背后的核心机制、适用边界和下一步阅读路径。
 

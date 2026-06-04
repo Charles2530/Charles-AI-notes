@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # Emu3.5：原生多模态模型如何变成世界学习器
 
-!!! info "本站判断"
-    这页把《Emu3.5：原生多模态模型如何变成世界学习器》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Emu3.5: Native Multimodal Models are World Learners。<br>
+    **作者：** Yufeng Cui、Honghao Chen、Haoge Deng、Xu Huang、Xinghang Li、Jirong Liu、Yang Liu、Zhuoyan Luo、Jinsheng Wang、Wenxuan Wang 等（共 23 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2025-10；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2510.26583](https://arxiv.org/abs/2510.26583)；官方材料：[huggingface.co/BAAI/Emu3.5](https://huggingface.co/BAAI/Emu3.5)。<br>
+    **GitHub / 项目：** GitHub：[github.com/baaivision/Emu3.5](https://github.com/baaivision/Emu3.5)；项目页：[huggingface.co/BAAI/Emu3.5](https://huggingface.co/BAAI/Emu3.5)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.26583)；[GitHub API / repo](https://github.com/baaivision/Emu3.5)；[官方 / 项目材料](https://huggingface.co/BAAI/Emu3.5)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 | Checked Date | Repro Status | 本页证据口径 |
 | --- | --- | --- |
@@ -21,7 +25,7 @@ Emu3.5 是四篇里最直接把 unified multimodal model 称为 world model 的�
 
 所以读 Emu3.5 要分清两层 claim：强 claim 是“长视频 + transcript + 世界任务 SFT 能让统一模型生成更长时序的世界状态”；弱证据边界是“生成关键帧和探索过程还不能证明真实物理执行成功”。
 
-## 论文信息
+## 贡献速览
 
 | 维度 | 贡献 |
 | --- | --- |

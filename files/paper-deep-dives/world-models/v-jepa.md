@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # V-JEPA：视频潜变量预测表征
 
-!!! info "本站判断"
-    这页把《V-JEPA：视频潜变量预测表征》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Revisiting Feature Prediction for Learning Visual Representations from Video。<br>
+    **作者：** Adrien Bardes、Quentin Garrido、Jean Ponce、Xinlei Chen、Michael Rabbat、Yann LeCun、Mahmoud Assran、Nicolas Ballas。<br>
+    **机构：** Meta AI。<br>
+    **时间 / 主题：** 2024-02；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2404.08471](https://arxiv.org/abs/2404.08471)；官方材料：[ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/facebookresearch/jepa](https://github.com/facebookresearch/jepa)；项目页：[ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2404.08471)；[GitHub API / repo](https://github.com/facebookresearch/jepa)；[官方 / 项目材料](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文把 JEPA 从静态图像扩展到视频。它的核心不是生成未来视频，而是训练一个视频 encoder：给定被遮挡的视频上下文，在 learned latent space 中预测被遮挡时空区域的目标表示。
 

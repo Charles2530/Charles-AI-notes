@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # JEPA：预测式表征学习路线
 
-!!! info "本站判断"
-    这页把《JEPA：预测式表征学习路线》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** A Path Towards Autonomous Machine Intelligence。<br>
+    **作者：** Yann LeCun。<br>
+    **机构：** Meta AI。<br>
+    **时间 / 主题：** 2022-06；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：未找到专门条目；官方材料：[openreview.net/forum?id=BZ5a1r-kVsf](https://openreview.net/forum?id=BZ5a1r-kVsf)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[openreview.net/forum?id=BZ5a1r-kVsf](https://openreview.net/forum?id=BZ5a1r-kVsf)。<br>
+    **元数据来源与核验口径：** 来源：[官方 / 项目材料](https://openreview.net/forum?id=BZ5a1r-kVsf)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的价值不在某个实验指标，而在于给出了一条和“生成未来像素”不同的世界模型路线：**世界模型不一定要重建未来画面的每个细节，而可以预测未来的抽象表征。** 这就是 `Joint-Embedding Predictive Architecture`，也就是 JEPA。
 

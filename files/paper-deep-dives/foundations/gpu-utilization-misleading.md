@@ -6,10 +6,14 @@ paper_topic: 高效训练
 
 # GPU Utilization：为什么 100% 不等于训练跑满
 
-!!! info "本站判断"
-    这页把《GPU Utilization：为什么 100% 不等于训练跑满》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** GPU Utilization is a Misleading Metric。<br>
+    **作者：** Trainy。<br>
+    **机构：** Trainy。<br>
+    **时间 / 主题：** 2025-02；高效训练。<br>
+    **arXiv / 官方报告：** arXiv：未找到专门条目；官方材料：[www.trainy.ai/blog/gpu-utilization-misleading](https://www.trainy.ai/blog/gpu-utilization-misleading)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[www.trainy.ai/blog/gpu-utilization-misleading](https://www.trainy.ai/blog/gpu-utilization-misleading)。<br>
+    **元数据来源与核验口径：** 来源：[官方 / 项目材料](https://www.trainy.ai/blog/gpu-utilization-misleading)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇文章最值得带回训练系统里的结论是：**GPU utilization 更像“GPU 没闲着”的指标，不是“GPU 算力被有效使用”的指标。**
 

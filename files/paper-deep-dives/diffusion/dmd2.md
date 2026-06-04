@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # DMD2：更稳的少步分布匹配蒸馏
 
-!!! info "本站判断"
-    这页把《DMD2：更稳的少步分布匹配蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Improved Distribution Matching Distillation for Fast Image Synthesis。<br>
+    **作者：** Tianwei Yin、Michaël Gharbi、Taesung Park、Richard Zhang、Eli Shechtman、Fredo Durand、William T. Freeman。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2024-05；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2405.14867](https://arxiv.org/abs/2405.14867)；官方材料：[tianweiy.github.io/dmd2/](https://tianweiy.github.io/dmd2/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/tianweiy/DMD2](https://github.com/tianweiy/DMD2)；项目页：[tianweiy.github.io/dmd2/](https://tianweiy.github.io/dmd2/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2405.14867)；[GitHub API / repo](https://github.com/tianweiy/DMD2)；[官方 / 项目材料](https://tianweiy.github.io/dmd2/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 DMD2 是 [DMD](dmd.md) 的直接续作。它不是简单把 DMD 多训一会儿，而是正面修补 DMD 在大规模文生图蒸馏中的三个痛点：**回归配对数据太贵、fake score 跟不上 generator、一步模型容量不足以吃下 SDXL 这种大模型的复杂分布**。
 

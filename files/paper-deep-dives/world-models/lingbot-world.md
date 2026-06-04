@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # LingBot-World：视频基础模型到世界模拟器
 
-!!! info "本站判断"
-    这页把《LingBot-World：视频基础模型到世界模拟器》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Advancing Open-source World Models。<br>
+    **作者：** Robbyant Team、Zelin Gao、Qiuyu Wang、Yanhong Zeng、Jiapeng Zhu、Ka Leong Cheng、Yixuan Li、Hanlin Wang、Yinghao Xu、Shuailei Ma 等（共 24 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2026-01；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2601.20540](https://arxiv.org/abs/2601.20540)。<br>
+    **GitHub / 项目：** GitHub：[github.com/robbyant/lingbot-world](https://github.com/robbyant/lingbot-world)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2601.20540)；[GitHub API / repo](https://github.com/robbyant/lingbot-world)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的核心价值不是提出一个全新的世界模型定义，而是给出了一条很现实的工程路线：**先继承视频生成模型的视觉和时序先验，再通过交互数据、动作条件训练、因果化和蒸馏，把视频生成器改造成可实时交互的世界模拟器。**
 

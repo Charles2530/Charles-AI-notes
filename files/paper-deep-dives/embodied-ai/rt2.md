@@ -1,14 +1,15 @@
 # RT-2：把 web-scale VLM 变成会输出动作的 VLA
 
-!!! info "本站判断"
-    这页把《RT-2：把 web-scale VLM 变成会输出动作的 VLA》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control。<br>
+    **作者：** Anthony Brohan、Noah Brown、Justice Carbajal、Yevgen Chebotar、Xi Chen、Krzysztof Choromanski、Tianli Ding、Danny Driess、Avinava Dubey、Chelsea Finn 等（共 54 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2023-07；具身智能。<br>
+    **arXiv / 官方报告：** arXiv：[2307.15818](https://arxiv.org/abs/2307.15818)；官方材料：[robotics-transformer2.github.io/](https://robotics-transformer2.github.io/)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[robotics-transformer2.github.io/](https://robotics-transformer2.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2307.15818)；[官方 / 项目材料](https://robotics-transformer2.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“RT-2”背后的核心机制、适用边界和下一步阅读路径。
-
-Checked date: 2026-06-03
-Repro status: 论文级理解；本站未复现实验，只引用原论文图、DeepMind 官方博客、项目页和公开论文结果。
 
 RT-2 的核心不是“机器人也用了大模型”，而是一个更具体的问题：互联网图文数据里有大量视觉语义知识，机器人数据却少、贵、分布窄；能不能把 VLM 已经学到的物体、关系、类别和常识，通过一个动作接口迁移到真实机器人控制？
 

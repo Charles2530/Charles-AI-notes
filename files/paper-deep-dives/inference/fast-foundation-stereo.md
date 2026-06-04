@@ -6,10 +6,14 @@ paper_topic: 高效推理
 
 # Fast-FoundationStereo：实时 Zero-Shot 双目匹配
 
-!!! info "本站判断"
-    这页把《Fast-FoundationStereo：实时 Zero-Shot 双目匹配》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Fast-FoundationStereo: Real-Time Zero-Shot Stereo Matching。<br>
+    **作者：** Bowen Wen、Shaurya Dewan、Stan Birchfield。<br>
+    **机构：** NVIDIA。<br>
+    **时间 / 主题：** 2025-12；高效推理。<br>
+    **arXiv / 官方报告：** arXiv：[2512.11130](https://arxiv.org/abs/2512.11130)；官方材料：[nvlabs.github.io/Fast-FoundationStereo/](https://nvlabs.github.io/Fast-FoundationStereo/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/NVlabs/Fast-FoundationStereo](https://github.com/NVlabs/Fast-FoundationStereo)；项目页：[nvlabs.github.io/Fast-FoundationStereo/](https://nvlabs.github.io/Fast-FoundationStereo/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2512.11130)；[GitHub API / repo](https://github.com/NVlabs/Fast-FoundationStereo)；[官方 / 项目材料](https://nvlabs.github.io/Fast-FoundationStereo/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文解决的是一个很典型的高效推理矛盾：**强泛化的 stereo foundation model 太慢，实时 stereo 网络又常常依赖目标域微调，泛化不稳。**
 

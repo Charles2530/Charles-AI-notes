@@ -6,10 +6,14 @@ paper_topic: 高效训练
 
 # Muon：LLM 预训练优化器
 
-!!! info "本站判断"
-    这页把《Muon：LLM 预训练优化器》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Muon is Scalable for LLM Training。<br>
+    **作者：** Jingyuan Liu、Jianlin Su、Xingcheng Yao、Zhejun Jiang、Guokun Lai、Yulun Du、Yidao Qin、Weixin Xu、Enzhe Lu、Junjie Yan 等（共 28 人）。<br>
+    **机构：** Moonshot AI 2 UCLA。<br>
+    **时间 / 主题：** 2025-02；高效训练。<br>
+    **arXiv / 官方报告：** arXiv：[2502.16982](https://arxiv.org/abs/2502.16982)；官方材料：[huggingface.co/moonshotai/Moonlight-16B-A3B](https://huggingface.co/moonshotai/Moonlight-16B-A3B)。<br>
+    **GitHub / 项目：** GitHub：[github.com/MoonshotAI/Moonlight](https://github.com/MoonshotAI/Moonlight)；项目页：[huggingface.co/moonshotai/Moonlight-16B-A3B](https://huggingface.co/moonshotai/Moonlight-16B-A3B)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2502.16982)；[GitHub API / repo](https://github.com/MoonshotAI/Moonlight)；[官方 / 项目材料](https://huggingface.co/moonshotai/Moonlight-16B-A3B)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文讨论的不是一个普通训练小技巧，而是一个更基础的问题：**在大模型预训练里，AdamW 是否仍然是唯一足够稳、足够可扩展的默认优化器？** 论文的答案比较激进：如果只看大规模 LLM 预训练，经过 weight decay、update scale 和分布式实现改造后的 Muon 可以直接替代 AdamW，并在 compute-optimal training 下达到约 `2x` 的训练效率。
 

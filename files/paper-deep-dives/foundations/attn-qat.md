@@ -6,10 +6,14 @@ paper_topic: 高效训练
 
 # Attn-QAT：4-bit Attention 量化感知训练
 
-!!! info "本站判断"
-    这页把《Attn-QAT：4-bit Attention 量化感知训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Attn-QAT: 4-Bit Attention With Quantization-Aware Training。<br>
+    **作者：** Peiyuan Zhang、Matthew Noto、Wenxuan Tan、Chengquan Jiang、Will Lin、Wei Zhou、Hao Zhang。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2026-02；高效训练。<br>
+    **arXiv / 官方报告：** arXiv：[2603.00040](https://arxiv.org/abs/2603.00040)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.00040)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文解决的是一个很窄但很关键的问题：**如果 Blackwell 这类硬件已经开始支持 FP4 tensor core，为什么 attention 还不能可靠地 4-bit 化？**
 

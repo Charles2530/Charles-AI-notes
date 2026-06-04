@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # Self Forcing：对齐自回归视频训练与推理
 
-!!! info "本站判断"
-    这页把《Self Forcing：对齐自回归视频训练与推理》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion。<br>
+    **作者：** Xun Huang、Zhengqi Li、Guande He、Mingyuan Zhou、Eli Shechtman。<br>
+    **机构：** Adobe Research 2 The University of Texas at Austin。<br>
+    **时间 / 主题：** 2025-06；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2506.08009](https://arxiv.org/abs/2506.08009)；官方材料：[self-forcing.github.io/](https://self-forcing.github.io/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/guandeh17/Self-Forcing](https://github.com/guandeh17/Self-Forcing)；项目页：[self-forcing.github.io/](https://self-forcing.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2506.08009)；[GitHub API / repo](https://github.com/guandeh17/Self-Forcing)；[官方 / 项目材料](https://self-forcing.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的核心问题非常直接：**自回归视频扩散模型训练时看的是 ground-truth 上下文，推理时却只能看自己生成的上下文。** 这种 train-test mismatch 会导致 exposure bias，误差沿时间累积，视频越往后越容易过饱和、过锐化、闪烁或漂移。
 

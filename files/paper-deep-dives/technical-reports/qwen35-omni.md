@@ -6,12 +6,16 @@ paper_topic: 技术报告
 
 # Qwen3.5-Omni：Thinker-Talker 与全模态 Agent
 
+!!! info "论文信息"
+    **论文题名：** Qwen3.5-Omni Technical Report。<br>
+    **作者：** Qwen Team。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2026-04；技术报告。<br>
+    **arXiv / 官方报告：** arXiv：[2604.15804](https://arxiv.org/abs/2604.15804)；官方材料：[www.alibabacloud.com/help/en/model-studio/qwen-omni](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[www.alibabacloud.com/help/en/model-studio/qwen-omni](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2604.15804)；[官方 / 项目材料](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+
 > **这篇回答的问题。** 如何理解“Qwen3.5-Omni：Thinker-Talker 与全模态 Agent”背后的全模态架构、证据边界和下一步阅读路径。
-
-!!! info "本站判断"
-    这页把《Qwen3.5-Omni：Thinker-Talker 与全模态 Agent》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
 
 Qwen3.5-Omni 这份报告的核心不是“把文本、图像、音频、视频都接进模型”这么简单，而是把全模态模型推进到一个更产品化的问题：**模型能否在 256K 上下文内听、看、读、说，并且以低延迟流式交互、调用工具、处理音视频任务，甚至从音视频指令直接生成代码。**
 

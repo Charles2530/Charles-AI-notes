@@ -6,10 +6,14 @@ paper_topic: 技术报告
 
 # DeepSeek-V3：671B MoE、MLA 与 FP8 训练
 
-!!! info "本站判断"
-    这页把《DeepSeek-V3：671B MoE、MLA 与 FP8 训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** DeepSeek-V3 Technical Report。<br>
+    **作者：** DeepSeek-AI、Aixin Liu、Bei Feng、Bing Xue、Bingxuan Wang、Bochao Wu、Chengda Lu、Chenggang Zhao、Chengqi Deng、Chenyu Zhang 等（共 200 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2024-12；技术报告。<br>
+    **arXiv / 官方报告：** arXiv：[2412.19437](https://arxiv.org/abs/2412.19437)。<br>
+    **GitHub / 项目：** GitHub：[github.com/deepseek-ai/DeepSeek-V3](https://github.com/deepseek-ai/DeepSeek-V3)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2412.19437)；[GitHub API / repo](https://github.com/deepseek-ai/DeepSeek-V3)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“DeepSeek-V3”背后的核心机制、适用边界和下一步阅读路径。
 

@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # Embodied World Model Survey：具身世界模型综述
 
-!!! info "本站判断"
-    这页把《Embodied World Model Survey：具身世界模型综述》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** A Comprehensive Survey on World Models for Embodied AI。<br>
+    **作者：** Xinqing Li、Xin He、Le Zhang、Min Wu、Xiaoli Li、Yun Liu。<br>
+    **机构：** This work was supported in part by the National Natural Science Foundation of China (No. 62576176) and in part by the Fundamental Research Funds for the Central Universities (Nankai University, No. 070-63253235).。<br>
+    **时间 / 主题：** 2025-10；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2510.16732](https://arxiv.org/abs/2510.16732)。<br>
+    **GitHub / 项目：** GitHub：[github.com/Li-Zn-H/AwesomeWorldModels](https://github.com/Li-Zn-H/AwesomeWorldModels)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.16732)；[GitHub API / repo](https://github.com/Li-Zn-H/AwesomeWorldModels)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文不是一个新模型，而是一张世界模型文献地图。它最有价值的地方，是把近几年非常混乱的 world model 工作压到三个问题上：**模型和决策耦合得多紧、未来是一步步 rollout 还是整体预测、世界状态到底用向量、token、网格还是可渲染 3D 表示。**
 

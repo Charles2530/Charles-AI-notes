@@ -6,10 +6,14 @@ paper_topic: 技术报告
 
 # Qwen3：Thinking 模式、36T 预训练与蒸馏
 
-!!! info "本站判断"
-    这页把《Qwen3：Thinking 模式、36T 预训练与蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Qwen3 Technical Report。<br>
+    **作者：** An Yang、Anfeng Li、Baosong Yang、Beichen Zhang、Binyuan Hui、Bo Zheng、Bowen Yu、Chang Gao、Chengen Huang、Chenxu Lv 等（共 60 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2025-05；技术报告。<br>
+    **arXiv / 官方报告：** arXiv：[2505.09388](https://arxiv.org/abs/2505.09388)。<br>
+    **GitHub / 项目：** GitHub：[github.com/QwenLM/Qwen3](https://github.com/QwenLM/Qwen3)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2505.09388)；[GitHub API / repo](https://github.com/QwenLM/Qwen3)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“Qwen3”背后的核心机制、适用边界和下一步阅读路径。
 

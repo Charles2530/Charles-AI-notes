@@ -1,12 +1,13 @@
 # ZeRO：数据并行真正浪费的是训练状态副本
 
-!!! info "本站判断"
-    这页把《ZeRO：数据并行真正浪费的是训练状态副本》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
-
-Checked date: 2026-06-03
-Repro status: 论文级理解；本站未复现实验，只引用原论文图、Microsoft Research 论文页和 DeepSpeed 官方文档。
+!!! info "论文信息"
+    **论文题名：** ZeRO: Memory Optimizations Toward Training Trillion Parameter Models。<br>
+    **作者：** Samyam Rajbhandari、Jeff Rasley、Olatunji Ruwase、Yuxiong He。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2019-10；高效训练。<br>
+    **arXiv / 官方报告：** arXiv：[1910.02054](https://arxiv.org/abs/1910.02054)；官方材料：[www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1910.02054)；[官方 / 项目材料](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 ZeRO 要解决的问题不是“模型太大”这么笼统，而是更精确的一笔显存账：普通 data parallel 让每张 GPU 都保存完整 parameters、gradients 和 optimizer states。GPU 数量增加后，计算吞吐和全局 batch 可以变大，但单卡上那份训练状态没有变小。于是训练大模型时，你经常不是被 fp16 权重本身卡住，而是被 Adam 状态、梯度、master weights、激活和临时 buffer 一起挤爆。
 
@@ -102,7 +103,7 @@ ZeRO 的实验不是为了证明某个 NLP benchmark 准确率更高，而是证
 
 <small>图源：[ZeRO](https://arxiv.org/abs/1910.02054)，Figure 7。原图展示最大显存分配变化。本站读法是把显存降低和上面的模型规模图连起来：只报省显存不够，还要说明省下的空间是否换来了更大模型、更大 batch 或更稳的训练。</small>
 
-读这些图时要小心外推。ZeRO 论文时代的模型、硬件、优化器和通信栈与今天不同；但它提出的状态分片账本仍然是现代 DeepSpeed、FSDP 和大模型训练栈的核心语言。
+**读数边界。** ZeRO 的 throughput speedup 和 scaling efficiency 不能脱离当时的 V100/DGX-2H 集群、batch size、通信拓扑和模型并行组合来外推。它证明的是“减少状态冗余可以把显存转成更大模型或更好吞吐”，不是证明任意 ZeRO stage 在任意网络、任意序列长度下都会更快；但它提出的状态分片账本仍然是现代 DeepSpeed、FSDP 和大模型训练栈的核心语言。
 
 ## ZeRO、FSDP、TP/PP 不是同一层工具
 

@@ -1,12 +1,13 @@
 # Dreamer：在 latent imagination 里训练 actor-critic
 
-!!! info "本站判断"
-    这页把《Dreamer：在 latent imagination 里训练 actor-critic》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
-
-Checked date: 2026-06-03
-Repro status: 论文级理解；本站未复现实验，只引用原论文图、项目页和公开论文结果。
+!!! info "论文信息"
+    **论文题名：** Dream to Control: Learning Behaviors by Latent Imagination。<br>
+    **作者：** Danijar Hafner、Timothy Lillicrap、Jimmy Ba、Mohammad Norouzi。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2019-12；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[1912.01603](https://arxiv.org/abs/1912.01603)；官方材料：[danijar.com/project/dreamer/](https://danijar.com/project/dreamer/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/danijar/dreamer](https://github.com/danijar/dreamer)；项目页：[danijar.com/project/dreamer/](https://danijar.com/project/dreamer/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1912.01603)；[GitHub API / repo](https://github.com/danijar/dreamer)；[官方 / 项目材料](https://danijar.com/project/dreamer/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Dreamer 要回答的问题不是“能不能生成未来视频”，而是：如果真实环境交互很贵，能不能先从少量真实 episode 学一个 latent world model，再让策略在这个模型想象出的轨迹里学习控制？这篇论文的关键贡献是把四件事接成一条闭环训练链：从像素历史得到 belief state，在 latent space 预测未来，用 reward/value 估计 imagined return，再把这个 return 变成 actor 的更新信号。
 

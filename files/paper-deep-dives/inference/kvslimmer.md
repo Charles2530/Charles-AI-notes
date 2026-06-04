@@ -6,10 +6,14 @@ paper_topic: 高效推理
 
 # KVSlimmer：非对称 KV 合并的数学与工程
 
-!!! info "本站判断"
-    这页把《KVSlimmer：非对称 KV 合并的数学与工程》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging。<br>
+    **作者：** Lianjun Liu、Hongli An、Weiqi Yan、Xin Du、Shengchuan Zhang、Huazhong Liu、Yunshan Zhong。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2026-03；高效推理。<br>
+    **arXiv / 官方报告：** arXiv：[2603.00907](https://arxiv.org/abs/2603.00907)。<br>
+    **GitHub / 项目：** GitHub：[github.com/lianjunl13-sudo/KVSlimmer](https://github.com/lianjunl13-sudo/KVSlimmer)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.00907)；[GitHub API / repo](https://github.com/lianjunl13-sudo/KVSlimmer)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文解决的是长上下文推理里很具体、也很痛的瓶颈：**KV cache 太大，但不能随便删 token，也不能把 Key 和 Value 当成同一种东西合并。**
 

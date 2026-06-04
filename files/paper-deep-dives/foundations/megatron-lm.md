@@ -6,10 +6,14 @@ paper_topic: 高效训练
 
 # Megatron-LM：Tensor Model Parallel 的大模型训练栈
 
-!!! info "本站判断"
-    这页把《Megatron-LM：Tensor Model Parallel 的大模型训练栈》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism。<br>
+    **作者：** Mohammad Shoeybi、Mostofa Patwary、Raul Puri、Patrick LeGresley、Jared Casper、Bryan Catanzaro。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2019-09；高效训练。<br>
+    **arXiv / 官方报告：** arXiv：[1909.08053](https://arxiv.org/abs/1909.08053)；官方材料：[docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html](https://docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html)。<br>
+    **GitHub / 项目：** GitHub：[github.com/NVIDIA/Megatron-LM](https://github.com/NVIDIA/Megatron-LM)；项目页：[docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html](https://docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1909.08053)；[GitHub API / repo](https://github.com/NVIDIA/Megatron-LM)；[官方 / 项目材料](https://docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Megatron-LM 是很多后续大模型训练栈的起点之一。它讨论的问题非常朴素：当 Transformer 参数、激活和 Adam optimizer state 已经放不进单卡时，能不能不引入复杂 compiler，也不依赖 pipeline bubble，把一个 Transformer layer 内部的 GEMM 切到多张 GPU 上训练？
 

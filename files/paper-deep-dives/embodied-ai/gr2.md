@@ -4,10 +4,14 @@ title: GR-2：Web 视频知识怎样迁移到机器人操作
 
 # GR-2：Web 视频知识怎样迁移到机器人操作
 
-!!! info "本站判断"
-    这页把《GR-2：Web 视频知识怎样迁移到机器人操作》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** GR-2: A Generative Video-Language-Action Model with Web-Scale Knowledge for Robot Manipulation。<br>
+    **作者：** Chi-Lam Cheang、Guangzeng Chen、Ya Jing、Tao Kong、Hang Li、Yifeng Li、Yuxiao Liu、Hongtao Wu、Jiafeng Xu、Yichu Yang 等（共 12 人）。<br>
+    **机构：** ByteDance Research。<br>
+    **时间 / 主题：** 2024-10；具身智能。<br>
+    **arXiv / 官方报告：** arXiv：[2410.06158](https://arxiv.org/abs/2410.06158)；官方材料：[gr2-manipulation.github.io/](https://gr2-manipulation.github.io/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/mees/calvin](https://github.com/mees/calvin)；项目页：[gr2-manipulation.github.io/](https://gr2-manipulation.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2410.06158)；[GitHub API / repo](https://github.com/mees/calvin)；[官方 / 项目材料](https://gr2-manipulation.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 GR-2 这篇论文的核心问题是：**机器人数据很贵，但公开视频里有大量人和物体互动的动态知识，这些视频能不能帮助机器人学操作？**
 

@@ -6,10 +6,14 @@ paper_topic: 具身智能 / VLA
 
 # SpatialVLA：3D 空间表征接入 VLA
 
-!!! info "本站判断"
-    这页把《SpatialVLA：3D 空间表征接入 VLA》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** SpatialVLA: Exploring Spatial Representations for Visual-Language-Action Model。<br>
+    **作者：** Delin Qu、Haoming Song、Qizhi Chen、Yuanqi Yao、Xinyi Ye、Yan Ding、Zhigang Wang、JiaYuan Gu、Bin Zhao、Dong Wang 等（共 11 人）。<br>
+    **机构：** Shanghai AI Laboratory,、Fudan University,、Shanghai Jiao Tong University,、Zhejiang University,。<br>
+    **时间 / 主题：** 2025-01；具身智能 / VLA。<br>
+    **arXiv / 官方报告：** arXiv：[2501.15830](https://arxiv.org/abs/2501.15830)；官方材料：[spatialvla.github.io/](https://spatialvla.github.io/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/SpatialVLA/SpatialVLA](https://github.com/SpatialVLA/SpatialVLA)；项目页：[spatialvla.github.io/](https://spatialvla.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2501.15830)；[GitHub API / repo](https://github.com/SpatialVLA/SpatialVLA)；[官方 / 项目材料](https://spatialvla.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 SpatialVLA 适合放在具身智能专题里的原因很明确：它不是单纯把 VLM 做大，而是问 VLA 最根本的空间问题：**不同机器人相机安装不同、动作空间不同，模型怎样学到可迁移的 3D 空间动作知识？**
 

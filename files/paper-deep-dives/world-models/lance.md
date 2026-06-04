@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # Lance：统一多模态模型，为什么对世界模型有启发
 
-!!! info "本站判断"
-    这页把《Lance：统一多模态模型，为什么对世界模型有启发》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Lance: Unified Multimodal Modeling by Multi-Task Synergy。<br>
+    **作者：** Fengyi Fu、Mengqi Huang、Shaojin Wu、Yunsheng Jiang、Yufei Huo、Hao Li、Yinghang Song、Fei Ding、Jianzhu Guo、Qian He 等（共 13 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2026-05；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2605.18678](https://arxiv.org/abs/2605.18678)；官方材料：[lance-project.github.io/](https://lance-project.github.io/)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[lance-project.github.io/](https://lance-project.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.18678)；[官方 / 项目材料](https://lance-project.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Lance 不是 Dreamer 那类 model-based RL 世界模型，也不是 LingBot-World 那类动作条件交互模拟器。它值得放进世界模型专题，是因为它回答了另一个底层问题：**如果一个模型既要理解图像/视频，又要生成和编辑图像/视频，语义 token、视觉 latent、干净条件和带噪目标应该怎样放进同一个上下文？**
 

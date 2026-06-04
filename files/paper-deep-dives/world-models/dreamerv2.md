@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # DreamerV2：离散世界模型玩 Atari
 
-!!! info "本站判断"
-    这页把《DreamerV2：离散世界模型玩 Atari》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Mastering Atari with Discrete World Models。<br>
+    **作者：** Danijar Hafner、Timothy Lillicrap、Mohammad Norouzi、Jimmy Ba。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2020-10；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2010.02193](https://arxiv.org/abs/2010.02193)。<br>
+    **GitHub / 项目：** GitHub：[github.com/danijar/dreamerv2](https://github.com/danijar/dreamerv2)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2010.02193)；[GitHub API / repo](https://github.com/danijar/dreamerv2)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 DreamerV2 是 [Dreamer](dreamer.md) 到 [DreamerV3](dreamerv3.md) 之间的关键版本。DreamerV1 已经证明了可以在 RSSM 的 latent imagination 中训练 actor-critic，但主要成功集中在连续控制。DreamerV2 把这条路线推进到 Atari 这种更成熟、更竞争激烈的离散动作视觉基准上。
 

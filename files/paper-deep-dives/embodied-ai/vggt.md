@@ -4,10 +4,14 @@ title: VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹
 
 # VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹
 
-!!! info "本站判断"
-    这页把《VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** VGGT: Visual Geometry Grounded Transformer。<br>
+    **作者：** Jianyuan Wang、Minghao Chen、Nikita Karaev、Andrea Vedaldi、Christian Rupprecht、David Novotny。<br>
+    **机构：** Visual Geometry Group, University of Oxford、Meta AI。<br>
+    **时间 / 主题：** 2025-03；具身智能。<br>
+    **arXiv / 官方报告：** arXiv：[2503.11651](https://arxiv.org/abs/2503.11651)；官方材料：[vgg-t.github.io/](https://vgg-t.github.io/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/facebookresearch/vggt](https://github.com/facebookresearch/vggt)；项目页：[vgg-t.github.io/](https://vgg-t.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.11651)；[GitHub API / repo](https://github.com/facebookresearch/vggt)；[官方 / 项目材料](https://vgg-t.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 VGGT 最值得读的地方，不是它又预测了一个 depth map，而是它把传统视觉几何里一整条复杂管线改成了一个多任务 Transformer 的前向推理问题。
 

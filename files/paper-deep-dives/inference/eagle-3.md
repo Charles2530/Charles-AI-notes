@@ -6,10 +6,14 @@ paper_topic: 高效推理
 
 # EAGLE-3：为什么 draft model 要在训练时“见过自己犯错”
 
-!!! info "本站判断"
-    这页把《EAGLE-3：为什么 draft model 要在训练时“见过自己犯错”》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** EAGLE-3: Scaling up Inference Acceleration of Large Language Models via Training-Time Test。<br>
+    **作者：** Yuhui Li、Fangyun Wei、Chao Zhang、Hongyang Zhang。<br>
+    **机构：** Peking University、Microsoft Research、University of Waterloo、Vector Institute。<br>
+    **时间 / 主题：** 2025-03；高效推理。<br>
+    **arXiv / 官方报告：** arXiv：[2503.01840](https://arxiv.org/abs/2503.01840)。<br>
+    **GitHub / 项目：** GitHub：[github.com/SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.01840)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 EAGLE-3 继续解决投机解码里的同一个问题：怎么让便宜 draft path 猜出 target LLM 更可能接受的未来 token。它和 EAGLE 的关键差别不是“又换了一个小模型”，而是指出：**draft model 训练时如果只看真实前缀，推理时却要吃自己上一轮生成的前缀，多步 draft 就会分布偏移。**
 

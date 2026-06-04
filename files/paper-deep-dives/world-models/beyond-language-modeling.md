@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # Beyond Language Modeling：多模态预训练怎样长出世界模型能力
 
-!!! info "本站判断"
-    这页把《Beyond Language Modeling：多模态预训练怎样长出世界模型能力》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Beyond Language Modeling: An Exploration of Multimodal Pretraining。<br>
+    **作者：** Shengbang Tong、David Fan、John Nguyen、Ellis Brown、Gaoyue Zhou、Shengyi Qian、Boyang Zheng、Théophane Vallaeys、Junlin Han、Rob Fergus 等（共 21 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2026-03；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2603.03276](https://arxiv.org/abs/2603.03276)；官方材料：[beyond-llms.github.io/](https://beyond-llms.github.io/)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[beyond-llms.github.io/](https://beyond-llms.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.03276)；[官方 / 项目材料](https://beyond-llms.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的价值不是发布一个最强模型，而是做控制实验：如果从零训练统一多模态模型，视觉表示、数据混合、动作条件、MoE 和 scaling 分别影响什么。
 

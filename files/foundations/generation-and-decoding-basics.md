@@ -57,7 +57,7 @@ raw logits
 p_{t,i}^{(\tau)}
 =
 \frac{\exp(z_{t,i}/\tau)}
-\sum_j \exp(z_{t,j}/\tau)}
+{\sum_j \exp(z_{t,j}/\tau)}
 \]
 
 这里 \(\tau\) 是温度。 \(\tau<1\) 会放大 logit 差异，让高分 token 更集中；\(\tau>1\) 会压平分布，让更多 token 有机会被采到；工程里 `temperature=0` 通常表示直接 argmax。Temperature 改的是“如何从已有候选里选”，不是模型能力、事实性或检索质量。

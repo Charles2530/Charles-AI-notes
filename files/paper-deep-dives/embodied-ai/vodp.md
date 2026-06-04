@@ -4,10 +4,14 @@ title: VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
 
 # VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
 
-!!! info "本站判断"
-    这页把《VO-DP：RGB-only 扩散策略怎样借用语义和几何特征》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** VO-DP: Semantic-Geometric Adaptive Diffusion Policy for Vision-Only Robotic Manipulation。<br>
+    **作者：** Zehao Ni、Yonghao He、Lingfeng Qian、Jilei Mao、Fa Fu、Wei Sui、Hu Su、Junran Peng、Zhipeng Wang、Bin He。<br>
+    **机构：** National Key Laboratory of Autonomous Intelligent Unmanned Systems、University of Science and Technology Beijing、State Key Laboratory of Multimodal Artificial Intelligence System (MAIS)、Institute of Automation of Chinese Academy of Sciences。<br>
+    **时间 / 主题：** 2025-10；具身智能。<br>
+    **arXiv / 官方报告：** arXiv：[2510.15530](https://arxiv.org/abs/2510.15530)；官方材料：[d-robotics-ai-lab.github.io/vodp/](https://d-robotics-ai-lab.github.io/vodp/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/D-Robotics-AI-Lab/DRRM](https://github.com/D-Robotics-AI-Lab/DRRM)；项目页：[d-robotics-ai-lab.github.io/vodp/](https://d-robotics-ai-lab.github.io/vodp/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.15530)；[GitHub API / repo](https://github.com/D-Robotics-AI-Lab/DRRM)；[官方 / 项目材料](https://d-robotics-ai-lab.github.io/vodp/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 VO-DP 这篇论文要回答一个很工程的问题：**机器人 manipulation policy 一定要用点云或 RGB-D 才能学到几何吗？**
 

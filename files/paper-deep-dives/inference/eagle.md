@@ -6,10 +6,14 @@ paper_topic: 高效推理
 
 # EAGLE：为什么 draft 不一定要是一个小模型
 
-!!! info "本站判断"
-    这页把《EAGLE：为什么 draft 不一定要是一个小模型》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** EAGLE: Speculative Sampling Requires Rethinking Feature Uncertainty。<br>
+    **作者：** Yuhui Li、Fangyun Wei、Chao Zhang、Hongyang Zhang。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2024-01；高效推理。<br>
+    **arXiv / 官方报告：** arXiv：[2401.15077](https://arxiv.org/abs/2401.15077)。<br>
+    **GitHub / 项目：** GitHub：[github.com/SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2401.15077)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 投机解码的基本想法很简单：让一个便宜 draft model 先猜几个 token，再让昂贵 target LLM 并行验证；猜对越多，target LLM 逐 token decode 的次数越少。EAGLE 的问题是：**draft model 一定要是另一个小语言模型吗？**
 

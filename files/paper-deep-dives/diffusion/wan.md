@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # Wan2.1：开源视频生成系统路线
 
-!!! info "本站判断"
-    这页把《Wan2.1：开源视频生成系统路线》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Wan: Open and Advanced Large-Scale Video Generative Models。<br>
+    **作者：** Team Wan、Ang Wang、Baole Ai、Bin Wen、Chaojie Mao、Chen-Wei Xie、Di Chen、Feiwu Yu、Haiming Zhao、Jianxiao Yang 等（共 62 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2025-03；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2503.20314](https://arxiv.org/abs/2503.20314)；官方材料：[huggingface.co/Wan-AI](https://huggingface.co/Wan-AI)。<br>
+    **GitHub / 项目：** GitHub：[github.com/Wan-Video/Wan2.2](https://github.com/Wan-Video/Wan2.2)；项目页：[huggingface.co/Wan-AI](https://huggingface.co/Wan-AI)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.20314)；[GitHub API / repo](https://github.com/Wan-Video/Wan2.2)；[官方 / 项目材料](https://huggingface.co/Wan-AI)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Wan 这篇技术报告值得精读，不只是因为它把开源视频生成模型的效果往前推了一步，更因为它把**视频基础模型从数据、VAE、DiT、Flow Matching、分布式训练、后训练、评测和推理优化**完整摊开了。很多视频扩散论文只讲一个模块，Wan 更像一份系统设计说明：为什么要先训视频 VAE，为什么 DiT 要用 full spatio-temporal attention，为什么速度预测适合视频 latent，为什么 14B 视频模型必须把 Context Parallel、FSDP、offloading 和 cache 一起考虑。
 

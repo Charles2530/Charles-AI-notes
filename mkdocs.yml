@@ -134,6 +134,15 @@ nav:
       - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
       - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
       - 读懂 Fast-FoundationStereo: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
+  - 知识 QA:
+      - 基础与 Transformer: knowledge-qa/foundations-and-transformer.md
+      - 训练与对齐: knowledge-qa/training-and-alignment.md
+      - 推理服务与量化: knowledge-qa/inference-serving-and-quantization.md
+      - 算子与性能: knowledge-qa/operators-and-performance.md
+      - RAG、Agent 与评估: knowledge-qa/rag-agent-and-evaluation.md
+      - 多模态与生成模型: knowledge-qa/multimodal-generative-and-embodied.md
+      - 世界模型: knowledge-qa/world-models.md
+      - 具身智能与 VLA: knowledge-qa/embodied-ai-and-vla.md
   - 论文精读:
       - 基础与训练:
           - ZeRO：为什么数据并行会浪费这么多显存: paper-deep-dives/foundations/zero.md
@@ -209,6 +218,7 @@ nav:
   - 术语与来源:
       - 术语表: glossary/index.md
       - 外部精读来源台账: references/external-reading-ledger.md
+      - 知识 QA 来源台账: references/knowledge-qa-source-ledger.md
       - 评测与证据链来源台账: references/evaluation-source-ledger.md
       - 预训练与表示学习来源台账: references/pretraining-representation-source-ledger.md
       - 归一化、残差与激活来源台账: references/norm-residual-activation-source-ledger.md

@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # Phased DMD：分阶段少步蒸馏
 
-!!! info "本站判断"
-    这页把《Phased DMD：分阶段少步蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Phased DMD: Few-step Distribution Matching Distillation via Score Matching within Subintervals。<br>
+    **作者：** Xiangyu Fan、Zesong Qiu、Zhuguanyu Wu、Fanzhou Wang、Zhiqian Lin、Tianxiang Ren、Dahua Lin、Ruihao Gong、Lei Yang。<br>
+    **机构：** SenseTime Research, 2 Beihang University。<br>
+    **时间 / 主题：** 2025-10；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2510.27684](https://arxiv.org/abs/2510.27684)；官方材料：[x-niper.github.io/projects/Phased-DMD/](https://x-niper.github.io/projects/Phased-DMD/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/ModelTC/LightX2V-Wan2.2-Lightning](https://github.com/ModelTC/LightX2V-Wan2.2-Lightning)；项目页：[x-niper.github.io/projects/Phased-DMD/](https://x-niper.github.io/projects/Phased-DMD/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.27684)；[GitHub API / repo](https://github.com/ModelTC/LightX2V-Wan2.2-Lightning)；[官方 / 项目材料](https://x-niper.github.io/projects/Phased-DMD/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的核心价值是把 DMD 类少步蒸馏从“把整个反向过程一次性压到少数步”改成“沿 SNR 子区间逐段训练专家”。它要解决的不是普通采样器加速，而是一个更具体的问题：**DMD2 这类带随机梯度截断的少步蒸馏虽然省显存、稳定，但会把一部分训练迭代退化成近似一跳生成，进而损失图像多样性和视频运动强度。**
 

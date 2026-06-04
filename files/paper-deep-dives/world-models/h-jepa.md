@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # H-JEPA：层级 JEPA 与潜变量 EBM
 
-!!! info "本站判断"
-    这页把《H-JEPA：层级 JEPA 与潜变量 EBM》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence。<br>
+    **作者：** Anna Dawid、Yann LeCun。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2023-06；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2306.02572](https://arxiv.org/abs/2306.02572)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2306.02572)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇文章不是一篇“训练出某个 H-JEPA 模型并刷榜”的论文。它更像一篇把 LeCun 世界模型路线讲清楚的教学型论文：先解释为什么高维连续世界不适合只靠显式概率建模，再引入 `energy-based model`、`latent variable`、`JEPA` 和最终的 `H-JEPA`。
 

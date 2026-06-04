@@ -6,10 +6,14 @@ paper_topic: 高效推理
 
 # EAGLE-2：用动态 Draft Tree 加速投机解码
 
-!!! info "本站判断"
-    这页把《EAGLE-2：用动态 Draft Tree 加速投机解码》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees。<br>
+    **作者：** Yuhui Li、Fangyun Wei、Chao Zhang、Hongyang Zhang。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2024-06；高效推理。<br>
+    **arXiv / 官方报告：** arXiv：[2406.16858](https://arxiv.org/abs/2406.16858)；官方材料：[huggingface.co/papers/2406.16858](https://huggingface.co/papers/2406.16858)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接；项目页：[huggingface.co/papers/2406.16858](https://huggingface.co/papers/2406.16858)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2406.16858)；[官方 / 项目材料](https://huggingface.co/papers/2406.16858)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 EAGLE-2 的核心很漂亮：**不重新训练 draft model，只用 draft model 自己的 confidence score 动态调整 draft tree 的形状。** 它抓住了 EAGLE 里一个被低估的事实：draft token 的接受率不仅和它在树里的位置有关，也和当前上下文有关。
 

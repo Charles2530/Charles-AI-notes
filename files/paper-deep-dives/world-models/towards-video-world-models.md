@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # Towards Video World Models：视频世界模型五个门槛
 
-!!! info "本站判断"
-    这页把《Towards Video World Models：视频世界模型五个门槛》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Towards Video World Models。<br>
+    **作者：** 未在公开元数据中稳定解析；见论文原文或官方发布页。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2025-07；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：未找到专门条目。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接。<br>
+    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇文章很适合放在 LingBot-World 前面读。它不提出一个新模型，而是回答一个更基础的问题：**为什么 Sora、Veo 这类强视频生成模型还不能直接等价于 video world model，以及从视频生成走向世界模型需要补哪些训练和系统能力。**
 

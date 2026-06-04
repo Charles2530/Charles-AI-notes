@@ -6,10 +6,14 @@ paper_topic: 技术报告
 
 # DeepSeek-R1：RL 激发推理能力
 
-!!! info "本站判断"
-    这页把《DeepSeek-R1：RL 激发推理能力》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning。<br>
+    **作者：** DeepSeek-AI、Daya Guo、Dejian Yang、Haowei Zhang、Junxiao Song、Peiyi Wang、Qihao Zhu、Runxin Xu、Ruoyu Zhang、Shirong Ma 等（共 200 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2025-01；技术报告。<br>
+    **arXiv / 官方报告：** arXiv：[2501.12948](https://arxiv.org/abs/2501.12948)。<br>
+    **GitHub / 项目：** GitHub：[github.com/deepseek-ai/DeepSeek-R1](https://github.com/deepseek-ai/DeepSeek-R1)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2501.12948)；[GitHub API / repo](https://github.com/deepseek-ai/DeepSeek-R1)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的核心不是“R1 分数很高”，而是：**有可靠 verifier 时，大模型可以通过大规模 RL 自己发现更长、更会反思和验证的推理行为。**
 

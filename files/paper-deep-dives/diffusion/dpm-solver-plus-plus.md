@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # DPM-Solver++：为 Guidance 场景设计的扩散 ODE 求解器
 
-!!! info "本站判断"
-    这页把《DPM-Solver++：为 Guidance 场景设计的扩散 ODE 求解器》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models。<br>
+    **作者：** Cheng Lu、Yuhao Zhou、Fan Bao、Jianfei Chen、Chongxuan Li、Jun Zhu。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2022-11；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2211.01095](https://arxiv.org/abs/2211.01095)。<br>
+    **GitHub / 项目：** GitHub：[github.com/LuChengTHU/dpm-solver](https://github.com/LuChengTHU/dpm-solver)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2211.01095)；[GitHub API / repo](https://github.com/LuChengTHU/dpm-solver)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 DPM-Solver++ 解决的是扩散模型推理里很实用的问题：**已经有一个训练好的扩散模型，不想再蒸馏或重训，只想在 classifier guidance / classifier-free guidance 下把采样步数从上百步压到 15 到 20 步，还不要因为 guidance scale 大而炸图。**
 

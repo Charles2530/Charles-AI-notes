@@ -6,10 +6,14 @@ paper_topic: 技术报告
 
 # Kimi K2：MuonClip、万亿 MoE 与 Agent 数据
 
-!!! info "本站判断"
-    这页把《Kimi K2：MuonClip、万亿 MoE 与 Agent 数据》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Kimi K2: Open Agentic Intelligence。<br>
+    **作者：** Kimi Team、Yifan Bai、Yiping Bao、Y. Charles、Cheng Chen、Guanduo Chen、Haiting Chen、Huarong Chen、Jiahao Chen、Ningxin Chen 等（共 200 人）。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2025-07；技术报告。<br>
+    **arXiv / 官方报告：** arXiv：[2507.20534](https://arxiv.org/abs/2507.20534)；官方材料：[huggingface.co/moonshotai/Kimi-K2-Instruct](https://huggingface.co/moonshotai/Kimi-K2-Instruct)。<br>
+    **GitHub / 项目：** GitHub：[github.com/MoonshotAI/checkpoint-engine](https://github.com/MoonshotAI/checkpoint-engine)；项目页：[huggingface.co/moonshotai/Kimi-K2-Instruct](https://huggingface.co/moonshotai/Kimi-K2-Instruct)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2507.20534)；[GitHub API / repo](https://github.com/MoonshotAI/checkpoint-engine)；[官方 / 项目材料](https://huggingface.co/moonshotai/Kimi-K2-Instruct)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Kimi K2 这份报告的核心不是“又发布了一个大模型”，而是围绕一个更明确的目标展开：**怎样把开源模型做成强 agent，而不是只做一个静态聊天模型。**它把问题拆成两层：预训练阶段要在高质量 token 变稀缺的情况下提高 token efficiency；后训练阶段要把 base model 变成能使用工具、写代码、跑多步任务、在真实或模拟环境中学习的 agentic model。
 

@@ -6,10 +6,14 @@ paper_topic: 高效训练
 
 # SLA / SLA2：DiT 稀疏线性 Attention
 
-!!! info "本站判断"
-    这页把《SLA / SLA2：DiT 稀疏线性 Attention》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** SLA2: Sparse-Linear Attention with Learnable Routing and QAT。<br>
+    **作者：** Jintao Zhang、Haoxu Wang、Kai Jiang、Kaiwen Zheng、Youhe Jiang、Ion Stoica、Jianfei Chen、Jun Zhu、Joseph E. Gonzalez。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2026-02；高效训练。<br>
+    **arXiv / 官方报告：** arXiv：[2602.12675](https://arxiv.org/abs/2602.12675)。<br>
+    **GitHub / 项目：** GitHub：[github.com/thu-ml/SLA](https://github.com/thu-ml/SLA)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2602.12675)；[GitHub API / repo](https://github.com/thu-ml/SLA)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这两篇论文讨论的是视频 DiT 里一个很基础但很工程化的问题：**attention 既是长序列视频生成的瓶颈，又很难直接靠稀疏或线性化单独解决。** SLA 先把 attention 权重分成三类：少数关键块精确算，大量边缘块用 linear attention 补偿，极小块直接跳过。SLA2 则继续追问：这个三分法能不能不靠手工规则，低比特 attention 能不能和 sparse-linear attention 一起训练出来。
 

@@ -6,10 +6,14 @@ paper_topic: 具身智能
 
 # MapAnything：统一前向 Metric 3D 重建骨干
 
-!!! info "本站判断"
-    这页把《MapAnything：统一前向 Metric 3D 重建骨干》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** MapAnything: Universal Feed-Forward Metric 3D Reconstruction。<br>
+    **作者：** Nikhil Keetha、Norman Müller、Johannes Schönberger、Lorenzo Porzi、Yuchen Zhang、Tobias Fischer、Arno Knapitsch、Duncan Zauss、Ethan Weber、Nelson Antunes 等（共 17 人）。<br>
+    **机构：** Meta Reality Labs、Carnegie Mellon University。<br>
+    **时间 / 主题：** 2025-09；具身智能。<br>
+    **arXiv / 官方报告：** arXiv：[2509.13414](https://arxiv.org/abs/2509.13414)；官方材料：[map-anything.github.io/](https://map-anything.github.io/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/facebookresearch/map-anything](https://github.com/facebookresearch/map-anything)；项目页：[map-anything.github.io/](https://map-anything.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2509.13414)；[GitHub API / repo](https://github.com/facebookresearch/map-anything)；[官方 / 项目材料](https://map-anything.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 MapAnything 的核心价值，是把原本分散在 SfM、MVS、相机标定、深度估计、定位和补全里的几何问题，压到一个统一的前向模型里：**输入可以只有图像，也可以额外带 intrinsics、poses、depth 或 partial reconstruction；输出则是一套可合成 metric 3D reconstruction 的 factored geometry。**
 
@@ -200,7 +204,7 @@ z^\text{metric}=m \cdot \text{sg}(\tilde z)
 训练细节里有几个很工程化的点：
 
 1. global pointmap loss 权重设为 `10`，mask loss 权重设为 `0.1`；
-2. regression losses 使用 adaptive robust loss，参数 `c = 0.05`、`\alpha = 0.5`；
+2. regression losses 使用 adaptive robust loss，参数 `c = 0.05`、\(\alpha = 0.5\)；
 3. 每个 pixel loss 里 top `5%` 被剔除，用于降低训练数据噪声和异常值影响；
 4. normal loss 和 multi-scale gradient matching loss 只用于 synthetic datasets，因为真实数据的几何可能粗糙或有噪声；
 5. mask 用 binary cross entropy，预测 non-ambiguous classes for depth。

@@ -15,10 +15,11 @@ MAX_CHARS = 30000
 NEAR_LONG_CHARS = 28500
 SHORT_HINT_CHARS = 12000
 
-JUDGEMENT_RE = re.compile(
-    r'(^!!!\s+info\s+"本站判断"|^\s+\*\*info · 本站判断\*\*)',
+SITE_JUDGEMENT_RE = re.compile(
+    r'(^!!!\s+info\s+"本站判断"|^\s+\*\*info · 本站判断\*\*|本站判断)',
     re.MULTILINE,
 )
+PAPER_INFO_RE = re.compile(r'^!!!\s+info\s+"论文信息"', re.MULTILINE)
 SECOND_PASS_RE = re.compile(r'二轮补强：方法和实验抓手')
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\(")
 FIGURE_READING_RE = re.compile(
@@ -51,12 +52,12 @@ def audit_page(path: Path, include_hints: bool) -> list[Finding]:
     findings: list[Finding] = []
     rel = path.relative_to(Path.cwd()) if path.is_absolute() else path
 
-    judgements = JUDGEMENT_RE.findall(text)
-    if len(judgements) != 1:
-        findings.append(Finding(rel, "error", f"expected exactly one 本站判断 admonition, found {len(judgements)}"))
+    paper_info = PAPER_INFO_RE.findall(text)
+    if len(paper_info) != 1:
+        findings.append(Finding(rel, "error", f"expected exactly one 论文信息 admonition, found {len(paper_info)}"))
 
-    if "\n## 本站判断" in text:
-        findings.append(Finding(rel, "error", "remove duplicate ## 本站判断 heading; use only the admonition"))
+    if SITE_JUDGEMENT_RE.search(text):
+        findings.append(Finding(rel, "error", "remove 本站判断 wording from paper deep-dive pages"))
 
     if SECOND_PASS_RE.search(text):
         findings.append(Finding(rel, "error", "visible second-pass helper block remains"))

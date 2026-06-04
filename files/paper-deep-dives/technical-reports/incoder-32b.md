@@ -6,10 +6,14 @@ paper_topic: 技术报告
 
 # InCoder-32B：工业代码基础模型与执行验证训练
 
-!!! info "本站判断"
-    这页把《InCoder-32B：工业代码基础模型与执行验证训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** InCoder-32B: Code Foundation Model for Industrial Scenarios。<br>
+    **作者：** Jian Yang、Wei Zhang、Jiajun Wu、Junhang Cheng、Shawn Guo、Haowen Wang、Weicheng Gu、Yaxin Du、Joseph Li、Fanglin Xu 等（共 28 人）。<br>
+    **机构：** Beihang University、IQuest Research、Shanghai Jiao Tong University、University of Manchester。<br>
+    **时间 / 主题：** 2026-03；技术报告。<br>
+    **arXiv / 官方报告：** arXiv：[2603.16790](https://arxiv.org/abs/2603.16790)。<br>
+    **GitHub / 项目：** GitHub：[github.com/CSJianYang/Industrial-Coder](https://github.com/CSJianYang/Industrial-Coder)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.16790)；[GitHub API / repo](https://github.com/CSJianYang/Industrial-Coder)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 InCoder-32B 这篇报告的核心不是“又一个 32B code model”，而是把 code LLM 的战场从常规 Python/JavaScript 题目，推到更贴近工程现场的工业代码：芯片设计、GPU kernel 优化、嵌入式系统、编译器/低层代码优化和 3D/CAD 建模。
 

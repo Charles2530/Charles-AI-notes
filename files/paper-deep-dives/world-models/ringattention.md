@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # RingAttention：近无限上下文训练
 
-!!! info "本站判断"
-    这页把《RingAttention：近无限上下文训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Ring Attention with Blockwise Transformers for Near-Infinite Context。<br>
+    **作者：** Hao Liu、Matei Zaharia、Pieter Abbeel。<br>
+    **机构：** UC Berkeley。<br>
+    **时间 / 主题：** 2023-10；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2310.01889](https://arxiv.org/abs/2310.01889)；官方材料：[largeworldmodel.github.io/lwm/](https://largeworldmodel.github.io/lwm/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/haoliuhl/ringattention](https://github.com/haoliuhl/ringattention)；项目页：[largeworldmodel.github.io/lwm/](https://largeworldmodel.github.io/lwm/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2310.01889)；[GitHub API / repo](https://github.com/haoliuhl/ringattention)；[官方 / 项目材料](https://largeworldmodel.github.io/lwm/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“RingAttention”背后的核心机制、适用边界和下一步阅读路径。
 

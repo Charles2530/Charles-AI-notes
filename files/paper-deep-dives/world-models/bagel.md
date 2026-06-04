@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # BAGEL：交错多模态预训练中的世界建模涌现
 
-!!! info "本站判断"
-    这页把《BAGEL：交错多模态预训练中的世界建模涌现》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Emerging Properties in Unified Multimodal Pretraining。<br>
+    **作者：** Chaorui Deng、Deyao Zhu、Kunchang Li、Chenhui Gou、Feng Li、Zeyu Wang、Shu Zhong、Weihao Yu、Xiaonan Nie、Ziang Song 等（共 12 人）。<br>
+    **机构：** ByteDance Seed,、Shenzhen Institutes of Advanced Technology,、Monash University、Hong Kong University of Science and Technology,。<br>
+    **时间 / 主题：** 2025-05；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2505.14683](https://arxiv.org/abs/2505.14683)；官方材料：[bagel-ai.org/](https://bagel-ai.org/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/ByteDance-Seed/Bagel](https://github.com/ByteDance-Seed/Bagel)；项目页：[bagel-ai.org/](https://bagel-ai.org/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2505.14683)；[GitHub API / repo](https://github.com/ByteDance-Seed/Bagel)；[官方 / 项目材料](https://bagel-ai.org/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 | Checked Date | Repro Status | 本页证据口径 |
 | --- | --- | --- |
@@ -21,7 +25,7 @@ BAGEL 的价值不只是“一个能看图又能画图的模型”。它更像�
 
 这就是本文的主线：BAGEL 不是在证明“它已经是闭环世界模型”，而是在证明统一多模态预训练可能给未来帧、视角变化和图像编辑提供更完整的状态接口。读它时要同时看两件事：架构怎样减少理解-生成瓶颈，证据又在哪些地方还停留在 demo 或定性结果。
 
-## 论文信息
+## 贡献速览
 
 | 维度 | 贡献 |
 | --- | --- |

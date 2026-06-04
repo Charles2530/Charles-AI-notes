@@ -4,10 +4,14 @@ title: Depth Anything：无标注图像怎样变成单目深度基础模型
 
 # Depth Anything：无标注图像怎样变成单目深度基础模型
 
-!!! info "本站判断"
-    这页把《Depth Anything：无标注图像怎样变成单目深度基础模型》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data。<br>
+    **作者：** Lihe Yang、Bingyi Kang、Zilong Huang、Xiaogang Xu、Jiashi Feng、Hengshuang Zhao。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2024-01；具身智能。<br>
+    **arXiv / 官方报告：** arXiv：[2401.10891](https://arxiv.org/abs/2401.10891)；官方材料：[depth-anything.github.io/](https://depth-anything.github.io/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/LiheYoung/Depth-Anything](https://github.com/LiheYoung/Depth-Anything)；项目页：[depth-anything.github.io/](https://depth-anything.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2401.10891)；[GitHub API / repo](https://github.com/LiheYoung/Depth-Anything)；[官方 / 项目材料](https://depth-anything.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Depth Anything 的核心贡献很朴素，也很容易被讲浅：它没有靠复杂新结构取胜，而是把单目深度估计的瓶颈重新放回数据覆盖上。论文问的是：**如果真实深度标签很贵，能不能用大量无标注图像把深度模型训练成更强的视觉基础模型？**
 

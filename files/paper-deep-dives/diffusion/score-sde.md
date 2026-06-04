@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # Score SDE：把扩散模型写成连续时间生成过程
 
-!!! info "本站判断"
-    这页把《Score SDE：把扩散模型写成连续时间生成过程》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Score-Based Generative Modeling through Stochastic Differential Equations。<br>
+    **作者：** Yang Song、Jascha Sohl-Dickstein、Diederik P. Kingma、Abhishek Kumar、Stefano Ermon、Ben Poole。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2020-11；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2011.13456](https://arxiv.org/abs/2011.13456)。<br>
+    **GitHub / 项目：** GitHub：[github.com/yang-song/score_sde](https://github.com/yang-song/score_sde)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2011.13456)；[GitHub API / repo](https://github.com/yang-song/score_sde)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文最重要的贡献不是又提出一个单独的采样器，而是给扩散模型补了一套连续时间语言：**先用一个固定的前向 SDE 把数据扩散成先验噪声，再用依赖 score 的反向 SDE 把噪声逆回数据；同时存在一条 probability flow ODE，它和反向 SDE 共享边缘分布，并让 likelihood、latent encoding 和高效 ODE 采样变得可操作。**
 

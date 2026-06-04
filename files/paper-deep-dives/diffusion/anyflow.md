@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # AnyFlow：任意步视频扩散蒸馏
 
-!!! info "本站判断"
-    这页把《AnyFlow：任意步视频扩散蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** AnyFlow: Any-Step Video Diffusion Model with On-Policy Flow Map Distillation。<br>
+    **作者：** Yuchao Gu、Guian Fang、Yuxin Jiang、Weijia Mao、Song Han、Han Cai、Mike Zheng Shou。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2026-05；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2605.13724](https://arxiv.org/abs/2605.13724)；官方材料：[nvlabs.github.io/AnyFlow/](https://nvlabs.github.io/AnyFlow/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/NVlabs/AnyFlow](https://github.com/NVlabs/AnyFlow)；项目页：[nvlabs.github.io/AnyFlow/](https://nvlabs.github.io/AnyFlow/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.13724)；[GitHub API / repo](https://github.com/NVlabs/AnyFlow)；[官方 / 项目材料](https://nvlabs.github.io/AnyFlow/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的核心价值是把视频扩散蒸馏从“固定少数采样步好用”推进到“**同一个蒸馏模型可以随测试时采样步数变多而继续变好**”。它要解决的不是单纯 4-step 视频生成，而是 consistency distillation 的一个结构性问题：很多 consistency / endpoint mapping 学出来的学生在 4 steps 很强，但测试时给 8、16、32 steps 反而退化。
 

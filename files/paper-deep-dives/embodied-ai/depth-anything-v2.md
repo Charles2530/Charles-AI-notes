@@ -6,10 +6,14 @@ paper_topic: 具身智能
 
 # Depth Anything V2：单目深度的数据配方
 
-!!! info "本站判断"
-    这页把《Depth Anything V2：单目深度的数据配方》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Depth Anything V2。<br>
+    **作者：** Lihe Yang、Bingyi Kang、Zilong Huang、Zhen Zhao、Xiaogang Xu、Jiashi Feng、Hengshuang Zhao。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2024-06；具身智能。<br>
+    **arXiv / 官方报告：** arXiv：[2406.09414](https://arxiv.org/abs/2406.09414)；官方材料：[depth-anything-v2.github.io/](https://depth-anything-v2.github.io/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/DepthAnything/Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)；项目页：[depth-anything-v2.github.io/](https://depth-anything-v2.github.io/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2406.09414)；[GitHub API / repo](https://github.com/DepthAnything/Depth-Anything-V2)；[官方 / 项目材料](https://depth-anything-v2.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Depth Anything V2 放在具身智能专题里，不是因为它直接输出机器人动作，而是因为它补了机器人闭环里最基础的视觉状态：**从普通 RGB 图像得到更细、更稳、更开放域的深度先验**。抓取、导航、避障、重建、VLA 状态编码和仿真数据质检，都需要这层几何信号。
 

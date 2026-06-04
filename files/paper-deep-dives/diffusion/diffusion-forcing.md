@@ -6,10 +6,14 @@ paper_topic: 扩散模型
 
 # Diffusion Forcing：next-token 与全序列扩散
 
-!!! info "本站判断"
-    这页把《Diffusion Forcing：next-token 与全序列扩散》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion。<br>
+    **作者：** Boyuan Chen、Diego Marti Monso、Yilun Du、Max Simchowitz、Russ Tedrake、Vincent Sitzmann。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2024-07；扩散模型。<br>
+    **arXiv / 官方报告：** arXiv：[2407.01392](https://arxiv.org/abs/2407.01392)；官方材料：[www.boyuan.space/diffusion-forcing/](https://www.boyuan.space/diffusion-forcing/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/buoyancy99/diffusion-forcing](https://github.com/buoyancy99/diffusion-forcing)；项目页：[www.boyuan.space/diffusion-forcing/](https://www.boyuan.space/diffusion-forcing/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2407.01392)；[GitHub API / repo](https://github.com/buoyancy99/diffusion-forcing)；[官方 / 项目材料](https://www.boyuan.space/diffusion-forcing/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的核心不是再发明一个采样器，而是改了扩散模型处理序列的训练方式：**每个 token 都可以有自己的噪声水平**。这样一个因果序列模型既能像 next-token 模型一样逐步向前生成，又能像 full-sequence diffusion 一样对整段未来做 guidance。
 

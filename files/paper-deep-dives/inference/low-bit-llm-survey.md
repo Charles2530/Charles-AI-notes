@@ -6,10 +6,14 @@ paper_topic: 高效推理
 
 # Low-bit LLM Survey：低比特大模型从格式到推理系统
 
-!!! info "本站判断"
-    这页把《Low-bit LLM Survey：低比特大模型从格式到推理系统》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** A Survey of Low-bit Large Language Models: Basics, Systems, and Algorithms。<br>
+    **作者：** Ruihao Gong、Yifu Ding、Zining Wang、Chengtao Lv、Xingyu Zheng、Jinyang Du、Haotong Qin、Jinyang Guo、Michele Magno、Xianglong Liu。<br>
+    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **时间 / 主题：** 2024-09；高效推理。<br>
+    **arXiv / 官方报告：** arXiv：[2409.16694](https://arxiv.org/abs/2409.16694)。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2409.16694)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇综述的价值不是提出一个新算法，而是把低比特 LLM 拆成了三层：**基础格式、系统实现、训练与推理算法**。读它时不要只问“INT4 / FP8 哪个更好”，而要问一个更工程的问题：量化到底省的是权重、激活、KV cache、带宽、通信，还是训练 optimizer state？
 

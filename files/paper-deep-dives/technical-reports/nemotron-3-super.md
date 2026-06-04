@@ -6,10 +6,14 @@ paper_topic: 技术报告
 
 # Nemotron 3 Super：Mamba-MoE 与异步多环境 RL
 
-!!! info "本站判断"
-    这页把《Nemotron 3 Super：Mamba-MoE 与异步多环境 RL》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** Nemotron 3 Super: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Model for Agentic Reasoning。<br>
+    **作者：** NVIDIA。<br>
+    **机构：** NVIDIA。<br>
+    **时间 / 主题：** 2026-04；技术报告。<br>
+    **arXiv / 官方报告：** arXiv：未找到专门条目。<br>
+    **GitHub / 项目：** GitHub：未找到官方链接。<br>
+    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Nemotron 3 Super 要抓三条主线：Hybrid Mamba-Attention + LatentMoE 降低长上下文和 MoE 带宽成本，shared-weight MTP 缓解草稿头 train-test mismatch，异步多环境 GRPO 强化数学、代码、工具、终端和长上下文能力。本文聚焦 `Super 120B-A12B`。
 

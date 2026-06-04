@@ -6,10 +6,14 @@ paper_topic: 高效训练
 
 # MagiAttention：超长上下文分布式 Attention
 
-!!! info "本站判断"
-    这页把《MagiAttention：超长上下文分布式 Attention》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** MagiAttention: A Distributed Attention Towards Linear Scalability for Ultra-Long Context, Heterogeneous Mask Training。<br>
+    **作者：** SandAI。<br>
+    **机构：** SandAI。<br>
+    **时间 / 主题：** 2025-04；高效训练。<br>
+    **arXiv / 官方报告：** arXiv：未找到专门条目；官方材料：[sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html)。<br>
+    **GitHub / 项目：** GitHub：[github.com/SandAI-org/MagiAttention](https://github.com/SandAI-org/MagiAttention)；项目页：[sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html)。<br>
+    **元数据来源与核验口径：** 来源：[GitHub API / repo](https://github.com/SandAI-org/MagiAttention)；[官方 / 项目材料](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 MagiAttention 讨论的不是“attention 又快了一点”这种单点优化，而是一个训练系统问题：**当视频生成或长上下文模型要处理百万级 token、并且 mask 形状高度不规则时，context parallel attention 怎么继续保持可扩展？**
 

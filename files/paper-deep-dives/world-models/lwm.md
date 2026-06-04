@@ -6,10 +6,14 @@ paper_topic: 世界模型
 
 # LWM：百万 token 视频语言世界模型
 
-!!! info "本站判断"
-    这页把《LWM：百万 token 视频语言世界模型》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
-
-    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+!!! info "论文信息"
+    **论文题名：** World Model on Million-Length Video And Language With Blockwise RingAttention。<br>
+    **作者：** Hao Liu、Wilson Yan、Matei Zaharia、Pieter Abbeel。<br>
+    **机构：** UC Berkeley、Code and models of Large World Model (LWM) are available at largeworldmodel.github.io/lwm/ .。<br>
+    **时间 / 主题：** 2024-02；世界模型。<br>
+    **arXiv / 官方报告：** arXiv：[2402.08268](https://arxiv.org/abs/2402.08268)；官方材料：[largeworldmodel.github.io/lwm/](https://largeworldmodel.github.io/lwm/)。<br>
+    **GitHub / 项目：** GitHub：[github.com/LargeWorldModel/LWM](https://github.com/LargeWorldModel/LWM)；项目页：[largeworldmodel.github.io/lwm/](https://largeworldmodel.github.io/lwm/)。<br>
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2402.08268)；[GitHub API / repo](https://github.com/LargeWorldModel/LWM)；[官方 / 项目材料](https://largeworldmodel.github.io/lwm/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dreamer 那样训练一个能规划的 latent dynamics。它回答的是另一个世界模型问题：**如果把长视频、图像和文本都离散成 token，能不能训练一个 7B 自回归 Transformer 在 1M token 上下文里同时理解和生成这些序列？**
 
