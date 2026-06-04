@@ -6,6 +6,11 @@ paper_topic: 具身智能 / VLA
 
 # Video Prediction Policy：预测视觉表征训练机器人策略
 
+!!! info "本站判断"
+    这页把《Video Prediction Policy：预测视觉表征训练机器人策略》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 VPP 的核心观点很漂亮：很多视觉策略只编码当前图像，而视频扩散模型内部包含“未来会怎样”的预测表征。把这些 predictive visual representations 拿来当 policy 的视觉条件，可以让机器人从视频模型的动态先验中受益。
 
 举个桌面操作例子。只看当前图像时，policy 能知道“杯子、海绵、机械臂在哪里”，但不一定知道下一步接触后会发生什么：海绵会不会碰到杯沿，杯子会不会被推歪，手爪继续下压会不会卡住。视频预测模型在训练中被迫学习“当前画面往后如何演化”，它的中间表征会更关注物体即将移动、接触和状态变化的区域。VPP 的想法不是让机器人每次都生成一段漂亮未来视频，而是把这种未来感抽成低延迟 latent，再让 inverse dynamics policy 从 latent 里解码动作。
@@ -240,3 +245,12 @@ VPP 最值得记住的是“未来视频不一定要生成出来，未来信息�
 2. [VPP project page](https://video-prediction-policy.github.io/)：看真实机器人视频、可视化和论文图的上下文。
 3. [GitHub: roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)：核对代码、模型入口和实验复现说明。
 4. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2412.14803)：适合逐图阅读，尤其 Figure 5 与 Figure 12。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Video+Prediction+Policy%3A+A+Generalist+Robot+Policy+with+Predictive+Visual+Representations&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Video+Prediction+Policy%3A+A+Generalist+Robot+Policy+with+Predictive+Visual+Representations)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Video+Prediction+Policy%3A+A+Generalist+Robot+Policy+with+Predictive+Visual+Representations)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

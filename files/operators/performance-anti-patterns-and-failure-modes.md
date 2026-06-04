@@ -1,5 +1,7 @@
 # 性能反模式与失败案例
 
+> **这篇回答的问题。** 如何理解“性能反模式与失败案例”背后的核心机制、适用边界和下一步阅读路径。
+
 很多算子优化失败，并不是因为工程师不够努力，而是因为掉进了一些反复出现的性能反模式。它们的共同特点是：单看局部实现似乎合理，放到真实系统里却会不断放大损失，并且往往伴随“理论上应该更快，实际上却不快”的现象。
 
 把这些反模式单独列出来很有价值，因为它能帮助你少走很多弯路。
@@ -145,3 +147,12 @@ shape specialization 是有价值的，但如果没有 fallback，就会出现�
 **修复**：对高风险层保留 BF16 或使用更细粒度 scale；给 activation scale 加滞后和上限监控；对长视频 bucket 单独做 loss/amax dashboard；在 attention output、SwiGLU、final norm 等敏感位置加入高精度保护；保留 BF16 shadow batch 做周期性对照。
 
 **反例**：如果 loss spike 同时伴随数据 loader 重试、坏样本集中或 learning rate schedule 变化，不能先把锅甩给 FP8。数值排查要把数据、优化器、scale 和 kernel 版本一起对齐。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

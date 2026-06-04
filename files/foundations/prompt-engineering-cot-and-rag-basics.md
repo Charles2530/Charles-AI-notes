@@ -222,3 +222,12 @@ Prompt 是输入契约，CoT 是工作区，prompt chaining 是可调试流程�
 - [ReAct](https://arxiv.org/abs/2210.03629)：理解 reasoning 和 acting 如何交替。
 - [Retrieval-Augmented Generation](https://arxiv.org/abs/2005.11401)：理解 RAG 的 retriever、document latent variable 和 generator。
 - [Lilian Weng: LLM Powered Autonomous Agents](https://lilianweng.github.io/posts/2023-06-23-agent/)：高质量博客，适合把 planning、tool use、memory 和 agent 失败模式连起来读。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

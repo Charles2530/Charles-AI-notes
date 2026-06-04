@@ -206,3 +206,12 @@ Runtime 负责把请求组织成硬件能吃的形状。prefill 通常 batch 大
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：理解 KV cache block 管理、continuous batching 和 serving 内存浪费。
 - [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)：理解 KV reuse、offload、eviction 和生产 runtime。
 - [General Compute: Quantization for Inference](https://www.generalcompute.com/blog/quantization-for-inference-gptq-awq-smoothquant-fp8)：用工程视角区分 GPTQ、AWQ、SmoothQuant 和 FP8 的适用瓶颈。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

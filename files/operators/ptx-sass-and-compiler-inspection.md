@@ -1,7 +1,11 @@
 # PTX / SASS 与编译检查
 
-很多 kernel 调优到了后期，真正需要看的已经不只是源码，而是编译之后到底生成了什么。因为同一段高层代码，可能在不同编译器、不同版本、不同 GPU 上生成完全不同的底层结果。  
+很多 kernel 调优到了后期，真正需要看的已经不只是源码，而是编译之后到底生成了什么。因为同一段高层代码，可能在不同编译器、不同版本、不同 GPU 上生成完全不同的底层结果。
 这也是为什么成熟的算子工程师，最终都会形成一个习惯：**必要时看 PTX，看 SASS，看寄存器和指令路径，而不是只相信源码意图。**
+
+![Nsight Systems synchronization calls](../assets/images/tools/nsight-systems/synchronization-calls.png){ width="820" }
+
+<small>图源：[NVIDIA Nsight Systems 文档](https://docs.nvidia.com/nsight-systems/)。原图表达同步调用和 kernel 时间线如何暴露源码意图之外的执行路径；本站读法是提醒编译检查要和 profile 结合：PTX/SASS 说明生成了什么，timeline 说明它何时真正阻塞。它不能替代逐条 SASS 审查。</small>
 
 ## 为什么要看编译结果
 
@@ -36,7 +40,7 @@
 4. 怀疑编译器没有做你预期的优化；
 5. 需要确认寄存器、spill 或指令序列问题。
 
-如果只是早期原型期，没必要一开始就钻太深；  
+如果只是早期原型期，没必要一开始就钻太深；
 但到了高性能调优后期，这一步往往非常值钱。
 
 ## 你在编译结果里通常想确认什么
@@ -79,7 +83,7 @@ flowchart TD
 
 ## 为什么这件事对 Triton 和 CUDA 都有意义
 
-虽然 Triton 抽象更高，但最终也会生成底层代码。  
+虽然 Triton 抽象更高，但最终也会生成底层代码。
 因此在调优后期，无论是手写 CUDA 还是 Triton kernel，都可能需要做同样的检查：
 
 1. 编译器是否按预期理解了你的 tile；
@@ -117,3 +121,12 @@ PTX / SASS 检查要把 IR 结构、向量化、寄存器、访存指令和 Tens
 当性能退化出现时，这些记录能把排查范围从整套栈缩小到具体编译路径。
 
 这就是 inspection 的实际价值。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

@@ -1,9 +1,13 @@
 # MoE 路由与稀疏 Kernel
 
-稀疏计算和 `MoE`（Mixture of Experts）常被看成“模型结构创新”，但一旦真正训练或部署，问题很快就会变成 kernel 与通信系统问题。原因很简单：  
+稀疏计算和 `MoE`（Mixture of Experts）常被看成“模型结构创新”，但一旦真正训练或部署，问题很快就会变成 kernel 与通信系统问题。原因很简单：
 **稠密模型的热点大多是规则大矩阵，稀疏和 MoE 的热点则往往是 token 重排、路由、gather/scatter、all-to-all 和不均匀负载。**
 
 这使得稀疏系统的工程难点不在公式，而在如何把 token 送到正确专家、如何让热门专家不成为热点、如何让重排和通信不把省下来的 FLOPs 吃掉，以及如何让路由 kernel 和主计算 kernel 协同。
+
+![DeepSeek-V3 expert load balance](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-9-expert-load.png){ width="760" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)。原图表达 expert load 的均衡状态；本站读法是把 sparse kernel 性能先放回 token-to-expert 分布、grouped GEMM 和 all-to-all 账本。它不能证明路由天然均衡，也不能替代线上 expert 热点监控。</small>
 
 ## 为什么稀疏 kernel 和稠密 kernel 不一样
 
@@ -50,7 +54,7 @@ capacity \approx \frac{B L \times topk}{N_{\text{expert}}}\times factor
 
 ## Token Permutation 为什么是主痛点
 
-Router 选完 expert 后，token 往往需要按 expert 分组重排。  
+Router 选完 expert 后，token 往往需要按 expert 分组重排。
 这一步本质上是一个复杂的索引、scatter、gather 问题。
 
 ### 3.1 为什么它会很慢
@@ -61,14 +65,14 @@ Router 选完 expert 后，token 往往需要按 expert 分组重排。
 
 ## Capacity Factor 与 kernel 的关系
 
-MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。  
+MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。
 这看似是训练稳定性超参，但实际上也影响 kernel 路径：容量越宽松，负载可能更不均；容量越严格，drop token 风险更高；expert batch 大小分布又会直接决定后续 GEMM 形状。
 
 因此它不是纯模型超参，也是系统超参。
 
 ## All-to-All 是什么，为什么难
 
-在多卡 expert 并行里，不同 token 可能要被发往不同 GPU 上的 expert。  
+在多卡 expert 并行里，不同 token 可能要被发往不同 GPU 上的 expert。
 这通常意味着 all-to-all 风格的通信：每个 rank 都向多个 rank 发 token，也从多个 rank 收 token。它比 all-reduce 更复杂，因为消息大小不均、负载可能严重偏斜、与 token permutation 耦合很深，也更难重叠。
 
 ## 稀疏系统为什么容易出现“理论省 FLOPs，实际不快”
@@ -113,9 +117,18 @@ MoE 里常用 capacity factor 控制每个 expert 最多接收多少 token。
 
 ## 读完以后怎么判断
 
-稀疏、MoE 与路由 kernel 的核心，不是“把矩阵变稀疏”这么简单，而是如何在保持模型容量优势的同时，控制 token 重排、all-to-all、负载不均和小批次 expert 计算带来的系统开销。  
+稀疏、MoE 与路由 kernel 的核心，不是“把矩阵变稀疏”这么简单，而是如何在保持模型容量优势的同时，控制 token 重排、all-to-all、负载不均和小批次 expert 计算带来的系统开销。
 如果没有这层 kernel 与通信视角，MoE 很容易停留在“理论参数效率很高”的纸面优势，而无法转化成真实训练和推理服务系统里的可观收益。
 
 ## 工程收束
 
 MoE 路由与稀疏 kernel 要同时看 top-k 路由、token dispatch、expert 负载、combine 路径和稀疏访存。只盯 expert matmul 会忽略重排成本，负载不均也会把尾延迟拉坏；上线前应把 dispatch / gather 一并 profile，监控 expert load，并为 router 建立回归。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

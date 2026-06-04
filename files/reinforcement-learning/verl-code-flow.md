@@ -181,3 +181,12 @@ python -m verl.trainer.main_ppo \
 ## 读完以后怎么判断
 
 读 `verl` 的关键不是记住每个 worker 名字，而是把一次 RL 更新拆成三件事：生成 response，评价 response，把评价变成 policy gradient。PPO 需要 old log prob 和 critic，是为了控制旧样本上的更新幅度和降低方差；GRPO 用 `uid` 做组内比较，是为了不用 critic 也能构造相对 advantage；HybridFlow/3D-HybridEngine 解决的是 actor 在训练形态和推理形态之间来回切换的系统成本。把这条链看清，源码入口、配置字段和日志指标才会连成一个整体。
+
+## 相关阅读与下一步
+
+- 外部材料：[Spinning Up：Policy Optimization](https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html)。
+- 外部材料：[PPO 论文](https://arxiv.org/abs/1707.06347)。
+- 外部材料：[Soft Actor-Critic 论文](https://arxiv.org/abs/1801.01290)。
+- 站内下一步：[强化学习专题](index.md)。
+- 站内下一步：[MDP、价值函数与 Bellman](mdp-value-bellman.md)。
+- 站内下一步：[世界模型中的强化学习](rl-for-world-models.md)。

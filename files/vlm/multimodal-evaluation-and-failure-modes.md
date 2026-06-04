@@ -1,6 +1,12 @@
 # 多模态评测与失败模式
 
+> **这篇回答的问题。** 如何理解“多模态评测与失败模式”背后的核心机制、适用边界和下一步阅读路径。
+
 VLM/VLA 的评测不能只看一个总分。静态图文问答、视频理解、动作执行、闭环恢复和世界模型预测，其实对应完全不同的失败方式。一个系统可能看图说得很好，却在坐标、时序、动作和安全上不可靠。
+
+![ChartQA pipeline](../assets/images/paper-figures/vlm/chartqa-pipeline.png)
+
+<small>图源：[ChartQA](https://arxiv.org/abs/2203.10244)。原图表达图表问答需要把视觉元素、文本、数值和推理问题连接起来；本站读法是用它提醒读者：多模态评测不能只看“是否能描述图片”，还要看 OCR、结构、数值、定位和推理分别在哪里失败。它不能代表视频、VLA 或闭环机器人能力，只覆盖静态图表理解的一类评测逻辑。</small>
 
 ## 评测层级
 
@@ -123,3 +129,12 @@ flowchart LR
 | Recovery | 失败后恢复率不得下降 | 闭环系统最关键能力 |
 
 下一步可接 [VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md)，把评测结果转成训练样本、反事实数据和 rollout 验收。
+
+## 相关阅读与下一步
+
+- 外部材料：[CLIP 论文](https://arxiv.org/abs/2103.00020)。
+- 外部材料：[LLaVA 论文](https://arxiv.org/abs/2304.08485)。
+- 外部材料：[Flamingo 论文](https://arxiv.org/abs/2204.14198)。
+- 站内下一步：[VLM 专题](index.md)。
+- 站内下一步：[视觉 Tokenizer 与连接器](visual-tokenizers-and-connectors.md)。
+- 站内下一步：[多模态评测与失败模式](multimodal-evaluation-and-failure-modes.md)。

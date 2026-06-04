@@ -127,3 +127,12 @@ LLM / VLM / VLA planner
 - [cuRobo](https://curobo.org/)：理解运动规划、IK、碰撞检查和轨迹优化在机器人栈里的位置。
 - [π0.5](https://www.pi.website/blog/pi05)：理解现代 VLA 的动作 chunk 为什么仍需要控制层。
 - [DreamZero](https://arxiv.org/abs/2602.15922)：理解 WAM 输出动作后为什么仍需要真实观测刷新和安全过滤。
+
+## 相关阅读与下一步
+
+- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
+- 站内下一步：[具身智能专题](index.md)。
+- 站内下一步：[具身智能从零路线](beginner-learning-path.md)。
+- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。

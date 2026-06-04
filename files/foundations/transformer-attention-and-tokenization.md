@@ -166,16 +166,16 @@ FlashAttention 的关键不是把 attention 数学上变成线性，而是把原
 
 ## 容易误读的地方
 
-**误解一：attention 权重就是解释。**  
+**误解一：attention 权重就是解释。**
 Attention 权重只是某一层、某个 head 的信息路由。最终表示还会经过残差、归一化、FFN 和后续层改写。它可以提供线索，但不能直接等同于“模型为什么这么想”。
 
-**误解二：tokenizer 只是预处理。**  
+**误解二：tokenizer 只是预处理。**
 Tokenizer 决定 \(L\)，而 \(L\) 同时进入 attention 计算、上下文窗口、KV cache 和 serving 调度。多语言、代码、长视频、机器人动作频率，都会通过 token 数改变系统成本。
 
-**误解三：FlashAttention 解决了长上下文。**  
+**误解三：FlashAttention 解决了长上下文。**
 FlashAttention 解决的是中间矩阵物化和内存 IO，不能取消长序列本身的计算。长上下文还需要位置外推、cache 管理、batch 调度、稀疏或分块机制。
 
-**误解四：多模态只是把图像 token 接到 LLM。**  
+**误解四：多模态只是把图像 token 接到 LLM。**
 关键问题是视觉信息在哪里被压缩、语言 token 如何读取视觉证据、动作或状态如何进入序列、mask 是否符合因果关系、输出 token 能否被真实系统执行。
 
 ## 读完以后怎么判断
@@ -193,3 +193,12 @@ Transformer 的核心不是“某个模型架构名”，而是一种把世界�
 - [OpenAI tiktoken](https://github.com/openai/tiktoken)：理解现代 byte-pair tokenizer 的工程接口，也可配合 token 计数工具看真实上下文成本。
 - [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 attention 为什么是内存系统问题，而不只是一个矩阵公式。
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：把 KV cache、分页管理和动态 serving batch 放到真实推理系统里看。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

@@ -366,3 +366,12 @@ imagined rollouts 很有价值，但不能无限制直接拿来训练闭环策�
 但无论哪条路线，真正决定能否落地的都不是论文里的生成质量，而是它能否在实时预算、安全壳、数据闭环和线上评测中稳定创造价值。很多团队最后会用很朴素的标准判断它是否值得保留：是否降低了高价值失败，是否提升恢复能力，是否让数据采集更聚焦，是否让风险预警更早更准，以及是否没有把系统复杂度推到不可维护。
 
 在机器人与自动驾驶里，世界模型从来不是唯一模块。它必须和感知、规划、控制、规则、安全壳、人工接管和数据飞轮一起证明自己的价值。若它只提升离线分数，却没有让预测更早暴露风险、规划更少走进死胡同、恢复更快找到可行动作、数据回流更聚焦，就很难抵消系统复杂度。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

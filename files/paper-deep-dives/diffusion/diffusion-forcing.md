@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # Diffusion Forcing：next-token 与全序列扩散
 
+!!! info "本站判断"
+    这页把《Diffusion Forcing：next-token 与全序列扩散》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文的核心不是再发明一个采样器，而是改了扩散模型处理序列的训练方式：**每个 token 都可以有自己的噪声水平**。这样一个因果序列模型既能像 next-token 模型一样逐步向前生成，又能像 full-sequence diffusion 一样对整段未来做 guidance。
 
 如果只用一句话概括：

@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # Score SDE：把扩散模型写成连续时间生成过程
 
+!!! info "本站判断"
+    这页把《Score SDE：把扩散模型写成连续时间生成过程》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文最重要的贡献不是又提出一个单独的采样器，而是给扩散模型补了一套连续时间语言：**先用一个固定的前向 SDE 把数据扩散成先验噪声，再用依赖 score 的反向 SDE 把噪声逆回数据；同时存在一条 probability flow ODE，它和反向 SDE 共享边缘分布，并让 likelihood、latent encoding 和高效 ODE 采样变得可操作。**
 
 ## 它的效率贡献是什么
@@ -66,9 +71,9 @@ f(x,t)-g(t)^2\nabla_x\log p_t(x)
 <small>图源：`Score-Based Generative Modeling through Stochastic Differential Equations`，Figure 1。原论文图意：前向 SDE 把数据逐渐扩散为噪声；只要知道中间分布的 score，反向 SDE 就能从噪声生成数据。</small>
 
 **Reverse SDE 图先看 score 如何把噪声带回数据。**
-**输入输出**：输入是数据分布与固定的加噪 SDE，输出是一个可从 prior 噪声反向生成数据的 SDE。  
-**效率机制**：它不是直接省掉训练，而是把采样问题变成可选择数值求解器的问题。  
-**对主线意义**：后续少步 solver、ODE sampler、distillation 和 flow matching 都是在这个连续时间视角里讨论“路径怎么走得更快”。  
+**输入输出**：输入是数据分布与固定的加噪 SDE，输出是一个可从 prior 噪声反向生成数据的 SDE。
+**效率机制**：它不是直接省掉训练，而是把采样问题变成可选择数值求解器的问题。
+**对主线意义**：后续少步 solver、ODE sampler、distillation 和 flow matching 都是在这个连续时间视角里讨论“路径怎么走得更快”。
 **不能证明什么**：一条漂亮的反向 SDE 不等于具体模型已低延迟、低 NFE 或可部署。
 
 ## 总体框架
@@ -423,3 +428,12 @@ f(x,t)
 
 **阅读结论。**
 Score SDE 是扩散统一理论页：方法要抓 forward SDE、reverse-time SDE、probability-flow ODE 和 predictor-corrector 采样；实验说明同一 score 框架能覆盖图像生成、补全和可控任务。后续论文多是在这套公式上换参数化、求解器或蒸馏目标。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Score-Based+Generative+Modeling+through+Stochastic+Differential+Equations&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Score-Based+Generative+Modeling+through+Stochastic+Differential+Equations)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Score-Based+Generative+Modeling+through+Stochastic+Differential+Equations)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

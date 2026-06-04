@@ -51,7 +51,7 @@ Masked Autoencoder 的直觉很干净：把图像 patch 遮掉大部分，只让
 
 MWM 的关键词是 decoupling。视觉 encoder 如果一边为像素重建服务，一边被 dynamics 反复拉扯，容易在“画得像”和“对控制有用”之间互相干扰。先学表示，再学 dynamics，相当于把世界模型拆成两个问题：状态怎么表示，状态怎么随动作变化。
 
-这也给后面的 JEPA 一个阅读入口：masked / latent prediction 的价值不在于替代 dynamics，而在于给 dynamics 提供一个更便宜、更稳、更接近状态的输入空间。
+这也给后面的 JEPA 一个阅读线索：masked / latent prediction 的价值不在于替代 dynamics，而在于给 dynamics 提供一个更便宜、更稳、更接近状态的输入空间。
 
 ## JEPA：预测目标表示，而不是目标像素
 
@@ -171,3 +171,12 @@ Masked / JEPA 的价值不是“把像素藏起来再补出来”，而是把预
 - [V-JEPA 2 官方研究页](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/)：看从视频理解到机器人 planning 的证据边界。
 - [V-JEPA 2.1](https://arxiv.org/abs/2603.14482)：看 2026 年 dense video self-supervised features 的进展。
 - [Latent Video Prediction Learns Better World Models](https://arxiv.org/abs/2605.15618)：看 latent-prediction 视频模型在鲁棒性维度上的系统评测。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

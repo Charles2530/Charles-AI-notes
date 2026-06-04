@@ -141,3 +141,12 @@ BC 的优点是稳定、可扩展、能直接吃示范数据。RT-1、RT-2、Ope
 - [DDPM](https://arxiv.org/abs/2006.11239)
 - [RT-1](https://robotics-transformer1.github.io/)
 - [Decision Transformer](https://arxiv.org/abs/2106.01345)
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

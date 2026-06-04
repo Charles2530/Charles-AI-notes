@@ -8,6 +8,10 @@
 
 这句话里每个词都重要。硬件决定 FP8/INT8/INT4 kernel 是否成熟，runtime 决定 dequant、packing、batch 和 KV 管理是否命中高效路径，请求分布决定权重还是 KV 更贵，质量门槛决定哪些层和哪些请求必须保高精度。单独看“4bit”或“模型文件大小”没有意义。
 
+![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png)
+
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)。原图表达不同算子和张量在低精度部署中的精度映射；本站读法是：服务栈选型不是只选“几 bit”，而是要确认硬件 kernel、runtime fallback、activation scale 和质量门槛是否同时成立。它不能直接证明某张 GPU 上的线上 P99 收益，实际仍需按请求分布压测。</small>
+
 ## 量化收益的三种来源
 
 | 来源 | 例子 | 可能被什么抵消 |
@@ -165,3 +169,12 @@ KV 显存：
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：理解权重量化之外，KV cache 管理为什么仍会限制并发。
 - [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 FP8 作为硬件友好混合精度格式的动机。
 - [A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)：把低比特方法、系统传输和 KV cache 量化放在同一张图谱里。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

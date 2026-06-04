@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # BAGEL：交错多模态预训练中的世界建模涌现
 
+!!! info "本站判断"
+    这页把《BAGEL：交错多模态预训练中的世界建模涌现》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 | Checked Date | Repro Status | 本页证据口径 |
 | --- | --- | --- |
 | 2026-06-02 | Author code / checkpoints reported | 以 arXiv HTML、项目页与论文图表为主；future frame prediction、3D manipulation、world navigation 按论文 qualitative/demo evidence 解读。 |

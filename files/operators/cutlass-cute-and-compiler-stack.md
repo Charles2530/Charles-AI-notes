@@ -120,3 +120,12 @@ Kernel 设计不能脱离上层系统。一个很快的 kernel 也可能因为�
 | 主要收益来自小算子融合吗 | 先看图编译或 Triton |
 | 需要维护多个 GEMM/attention 变体吗 | 再看 CUTLASS / CuTe |
 | 必须确认底层指令路径吗 | 下钻 PTX / SASS |
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

@@ -4,6 +4,10 @@
 
 因此这一页给出一个更像 checklist 的结构，帮助把量化从论文实验推进到真实部署。
 
+![SmoothQuant main idea](../assets/images/paper-figures/quantization/smoothquant-figure-5-main-idea.png)
+
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)。原图表达 activation outlier 可以通过等价缩放迁移到权重侧，让 W8A8 更可行；本站读法是：量化验收必须确认误差补偿、校准数据、runtime kernel 和业务分桶同时成立。它不能证明所有任务都适合 W8A8，也不能替代真实线上 P95/P99 与质量回归。</small>
+
 可以把量化上线前的判断拆成三层：`数值门禁` 看模型还能不能稳定工作，`系统门禁` 看显存、吞吐、延迟是否真的改善，`业务门禁` 看高价值任务有没有不可接受退化。
 
 ## 先明确量化目标
@@ -125,3 +129,12 @@ flowchart LR
 这页可以作为发布前的最后一页门禁：若某个量化方案无法说明收益来自哪里、风险落在哪些桶、回退如何触发，就不应该直接进入主线流量。
 
 量化发布结论也应进入版本记录，方便后续模型、runtime 或硬件升级时复查当初的收益边界。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

@@ -4,10 +4,14 @@
 
 这页建议和 [低比特训练与数值格式](../training/low-bit-training-and-numerics.md)、[分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 一起读。训练页解释数值格式和稳定性边界，分布式页解释状态切分与恢复，本页则关注这些约束落到 kernel、scale metadata 和 optimizer step 时会怎样影响吞吐。
 
+![DeepSeek-V3 FP8 mixed precision framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="860" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达 FP8 路径中哪些张量走低精、哪些路径保留高精和 scale；本站读法是说明 FP8 训练不是一个 dtype 开关，而是 kernel、scale metadata、累加和 checkpoint 状态的组合。它不能证明任意 FP8 recipe 都稳定。</small>
+
 ## 为什么 FP8 训练和推理量化不是一回事
 
-推理量化更多是在“压缩已有模型”；  
-FP8 训练则是在“用更低精度直接完成学习过程”。  
+推理量化更多是在“压缩已有模型”；
+FP8 训练则是在“用更低精度直接完成学习过程”。
 这意味着它要同时面对前向数值范围、反向梯度范围、累加精度、scale 更新和 optimizer state 的保存格式。
 
 也就是说，FP8 训练不是只换一个 dtype，而是整条训练 pipeline 的重构。
@@ -64,12 +68,12 @@ Fused optimizer kernel 的核心，是把原本分散的多步 elementwise 操�
 
 ### 5.1 为什么这比看起来更重要
 
-因为这些步骤本质上都是内存带宽敏感的 elementwise 操作。  
+因为这些步骤本质上都是内存带宽敏感的 elementwise 操作。
 如果拆成多个 kernel，同一组参数和状态会被反复读写，launch 次数也会增加，大模型下总时间会很可观。
 
 ## FP8 与优化器之间的精度分层
 
-**一个很现实的问题是**：  
+**一个很现实的问题是**：
 即使前向和反向更多地走 FP8，优化器状态也未必适合全面降到同样精度。
 
 常见原因是 moment 累积对精度敏感，长时间训练误差会积累，不同参数组的动态范围差异也很大。
@@ -99,7 +103,7 @@ AdamW 更新一个参数通常至少要读写：参数、梯度、一阶动量�
 
 ## 读完以后怎么判断
 
-FP8 与优化器 kernel 的主题，核心不是“更低精度”，而是“训练主路径是否能以更低精度仍然稳定运行”。这要求 kernel、scale、优化器状态、mixed precision 策略和分布式训练框架一起工作。  
+FP8 与优化器 kernel 的主题，核心不是“更低精度”，而是“训练主路径是否能以更低精度仍然稳定运行”。这要求 kernel、scale、优化器状态、mixed precision 策略和分布式训练框架一起工作。
 因此它是训练系统能力的一部分，而不只是单个算子技巧。
 
 ## 发布前最小门禁
@@ -115,3 +119,12 @@ FP8 与优化器 kernel 的主题，核心不是“更低精度”，而是“�
 ## 工程收束
 
 FP8 训练与优化器 kernel 要围绕 scale 管理、累加精度、统计同步、优化器状态和回退路径来验收。只看显存下降会漏掉 scale 漂移、训练/推理 FP8 路径不一致等问题；上线前应按层验证 FP8 可承受度，保留 BF16 回退，监控 scale 分布，并做长跑数值回归。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

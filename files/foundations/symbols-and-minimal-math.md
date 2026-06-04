@@ -205,3 +205,12 @@ B\cdot L\cdot D\cdot bytes
 - [The Matrix Calculus You Need For Deep Learning](https://explained.ai/matrix-calculus/)：系统补矩阵微积分，不建议一开始死背，适合遇到梯度公式时查。
 - [PyTorch Autograd Mechanics](https://docs.pytorch.org/docs/stable/notes/autograd.html)：理解 saved tensors、动态计算图和 backward 细节。
 - [NumPy Broadcasting](https://numpy.org/doc/stable/user/basics.broadcasting.html)：理解 shape 自动扩展为什么经常让错误静默发生。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

@@ -1,5 +1,7 @@
 # 扩散训练配方与排障
 
+> **这篇回答的问题。** 如何理解“扩散训练配方与排障”背后的核心机制、适用边界和下一步阅读路径。
+
 扩散训练最容易被误解成一组技巧：数据清洗、cosine schedule、EMA、condition dropout、CFG sweep、几个固定 prompt。真实项目里，这些不是孤立开关，而是一条排障链。样本糊、主体错、prompt 不听、视频闪烁、动作扩散成功率下降，都要追问：失败发生在哪个噪声区间，条件信号有没有进入 denoiser，训练分布和采样链路是否一致，模型容量和表示空间是否够用。
 
 这页不做孤立开关罗列。它讲一个更实用的问题：**当扩散训练看起来正常、采样却不对时，怎样把失败归因到数据、噪声日程、参数化、条件接口、优化或部署预算。**
@@ -112,3 +114,12 @@ Prompt adherence 差时，不要只调 CFG。先看文本编码器、caption 质
 - [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)：理解 condition dropout 与 CFG 的训练基础。
 - [DMD2](https://arxiv.org/abs/2405.14867)：理解 distribution matching 蒸馏中的 fake critic、regression anchor 和训练稳定性。
 - [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解扩散用于动作策略时，评估目标如何从视觉质量转向 closed-loop control。
+
+## 相关阅读与下一步
+
+- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+- 站内下一步：[扩散模型专题](index.md)。
+- 站内下一步：[扩散方法对比表](comparison-table.md)。
+- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。

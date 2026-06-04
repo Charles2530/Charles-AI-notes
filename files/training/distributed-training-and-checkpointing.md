@@ -192,3 +192,12 @@ PyTorch Distributed Checkpoint 的核心能力之一是多 rank 并行保存/加
 - [PyTorch FSDP documentation](https://docs.pytorch.org/docs/stable/fsdp.html)：补 full sharding、state dict 和参数生命周期语义。
 - [DeepSpeed ZeRO documentation](https://deepspeed.readthedocs.io/en/latest/zero3.html)：查 ZeRO-3、offload、参数 gather 和分片状态保存边界。
 - [Datawhale：VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)：中文显存账入口，用于配合原论文手算参数、梯度和优化器状态。
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

@@ -2,6 +2,10 @@
 
 真正高性能的 AI kernel，往往并不只靠一个技巧，而是若干模式叠加的结果：tiling、双缓冲、流水线、persistent kernel、epilogue fusion、threadblock swizzle、shape specialization、autotune。理解这些模式，能帮助你把很多看似不同的实现放到同一张设计图里。
 
+![FlashAttention IO-aware tiling](../assets/images/paper-figures/operators/flashattention-io-aware-tiling.png){ width="820" }
+
+<small>图源：[FlashAttention](https://arxiv.org/abs/2205.14135)。原图表达通过 tiling 避免 materialize 巨大 attention 矩阵、减少 HBM 往返；本站读法是把 tiling、流水、fusion 和 shape specialization 看成同一类“让数据在正确层级复用”的设计。它不能证明所有高级 kernel 都应照搬 FlashAttention 的 tile 结构。</small>
+
 ## 为什么“高级模式”不是炫技
 
 当算子真正接近硬件上限时，性能差异往往不再来自“会不会做矩阵乘”，而来自数据是否在正确时间到达正确层级内存、计算和访存是否能流水化、不同 shape 是否走了最适合的路径，以及 kernel 是否减少了长期驻留和调度开销。
@@ -20,7 +24,7 @@
 
 ### 3.1 为什么这很重要
 
-因为很多 kernel 的瓶颈在“搬下一块数据时大家都在等”。  
+因为很多 kernel 的瓶颈在“搬下一块数据时大家都在等”。
 双缓冲本质上是在减少这种等待。
 
 ### 3.2 代价是什么
@@ -29,7 +33,7 @@
 
 ## Persistent Kernel
 
-persistent kernel 的核心思路是：  
+persistent kernel 的核心思路是：
 让少量常驻线程块长期处理一系列工作，而不是不断 launch 新 kernel。
 
 ### 4.1 为什么它越来越重要
@@ -38,30 +42,30 @@ persistent kernel 的核心思路是：
 
 ## Threadblock Swizzle 与调度布局
 
-有些高性能实现会改变 threadblock 处理 tile 的顺序，而不是简单按行列自然遍历。  
+有些高性能实现会改变 threadblock 处理 tile 的顺序，而不是简单按行列自然遍历。
 这样做通常是为了改善 L2 重用、减少 cache 冲突、让邻近 block 访问更有局部性，并平衡不同维度上的工作量。
 
 这类技巧从表面看像“遍历顺序的小变化”，但对大矩阵和长序列 kernel 可能有明显影响。
 
 ## Epilogue Fusion 与 Tail 处理
 
-很多高性能 kernel 的关键，不在主计算，而在最后的写回阶段。  
+很多高性能 kernel 的关键，不在主计算，而在最后的写回阶段。
 如果能在 epilogue 阶段顺手完成 bias、scale、activation、clamp、quantize，就能减少额外 kernel 与中间张量。
 
 ### 6.1 为什么 tail 处理常被低估
 
-所谓 tail，指那些不整齐 shape 的边界区域。  
+所谓 tail，指那些不整齐 shape 的边界区域。
 很多 kernel 在主块上很快，但在尾块上会因为 mask、对齐不足、访存碎裂和向量化失效而明显退化。
 shape specialization 很大一部分就是在处理这些现实 shape。
 
 ## Shape Specialization
 
-不是所有 shape 都值得走同一套 kernel。  
+不是所有 shape 都值得走同一套 kernel。
 实际系统里，常常会针对常见 hidden size、head dim、sequence bucket 和 batch family 做专门优化路径。
 
 ### 7.1 为什么这很有价值
 
-因为生产系统中的 shape 往往不是无限连续，而是聚集在一小批热点附近。  
+因为生产系统中的 shape 往往不是无限连续，而是聚集在一小批热点附近。
 只要把这些高频热点吃下来，就能显著提升整体收益。
 
 ### 7.2 它的代价是什么
@@ -116,9 +120,18 @@ flowchart LR
 
 ## 读完以后怎么判断
 
-高级 kernel 模式的核心，不是追求“更复杂”，而是让计算、访存、调度和形状分布更好地匹配。理解 tiling 之后，再理解双缓冲、persistent kernel、shape specialization 和 dispatch，你会发现很多高性能实现其实共享一套非常一致的思想：  
+高级 kernel 模式的核心，不是追求“更复杂”，而是让计算、访存、调度和形状分布更好地匹配。理解 tiling 之后，再理解双缓冲、persistent kernel、shape specialization 和 dispatch，你会发现很多高性能实现其实共享一套非常一致的思想：
 **让热点 shape 走最适合的路径，让数据总是在被需要之前就处于最合适的位置。**
 
 ## 工程收束
 
 高级 kernel 模式要按 persistent、grouped、split-k、warp specialization 和 shape specialization 定位。最容易误判的是热 shape 优化伤害冷 shape、模板爆炸、过度依赖单机假设；上线前要限定 specialization 边界，记录适用 shape family，准备 generic fallback，并把代码生成和维护成本一起算。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

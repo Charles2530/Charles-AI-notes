@@ -61,6 +61,10 @@ C=\left\lceil \text{capacity factor}\cdot \frac{kN}{E}\right\rceil
 
 MoE 的理论 FLOPs 省下来了，不代表线上一定更快。通信和负载不均可能吃掉收益。
 
+![DeepSeek-V3 expert load balance](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-9-expert-load.png){ width="760" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)。原图表达 MoE expert load 在训练中的均衡状态；本站读法是把路由看成质量、成本、延迟和负载之间的动态分配问题。它不能推出任意 MoE 或多模型路由都会自然均衡，线上仍要按 expert、设备和请求桶观测热点。</small>
+
 ## 多模型服务是系统级 MoE
 
 在线系统常同时运行：
@@ -127,3 +131,12 @@ MoE 的理论 FLOPs 省下来了，不代表线上一定更快。通信和负载
 MoE 路由与多模型服务的共同原则是：路由必须同时服务质量、成本和稳定性。只追省算力，会把难题送错地方；只追质量，会让最大模型被所有请求占满。
 
 上线后还应保留路由回放集：固定一批真实请求，记录旧路由、新路由、质量判断、成本和延迟。每次调整 gate、阈值、模型版本或 reranker，都先在回放集上验证负载分布是否被意外改写。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

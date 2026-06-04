@@ -271,3 +271,12 @@ Pre-Norm 不是永远优于 Post-Norm。它通常更适合深层稳定训练，�
 - [Naoki Shibuya: SwiGLU](https://naokishibuya.github.io/blog/2023-04-30-swiglu-2020/index.html)：适合看 GLU 变体如何从 FFN 公式展开。
 - [Datawhale LLM-Algo-LeetCode: RMSNorm](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/01_RMSNorm_Tutorial.html) 与 [SwiGLU](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/02_SwiGLU_Activation.html)：适合看中文工程讲法、PyTorch 实现和混合精度陷阱。
 - [LLM.int8()](https://arxiv.org/abs/2208.07339) 与 [SmoothQuant](https://arxiv.org/abs/2211.10438)：理解 activation outlier 为什么会影响低比特部署。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

@@ -130,3 +130,12 @@ Imagined data 最危险的地方，不是它“不真实”，而是它可能在
 这也是合成数据治理的底线。
 
 世界模型合成数据的价值不在数量，而在能否稳定补齐真实系统最稀缺、最昂贵、最接近能力边界的数据。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

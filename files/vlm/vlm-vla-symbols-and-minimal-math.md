@@ -8,6 +8,10 @@ VLM/VLA 里的公式不应该被当成符号表背诵。它们大多在回答三
 
 读公式时先问四个问题：输入是什么，输出是什么，时间下标 \(t\) 表示哪一刻，模型是在回答“理解”“行动”还是“预测后果”。只要这四件事清楚，公式就不再是装饰。
 
+![RT-2 vision-language-action overview](../assets/images/paper-deep-dives/embodied-ai/rt2/figure-1-overview.png)
+
+<small>图源：[RT-2 project page](https://robotics-transformer2.github.io/) / [论文](https://arxiv.org/abs/2307.15818)。原图表达视觉语言模型如何把网络知识和机器人动作 token 接起来；本站读法是把公式里的 \(x_v\)、\(x_t\)、\(o_t\)、\(a_t\) 对应到真实系统接口。它不能证明 VLA 一定能闭环完成任务，只说明“看图回答”和“输出动作”之间多了动作接口和环境反馈。</small>
+
 ## 三类最常见公式
 
 ### VLM：看图回答问题
@@ -121,3 +125,12 @@ N = \frac{H_{\text{img}}}{P}\cdot\frac{W_{\text{img}}}{P}
 4. 训练目标优化的指标，能不能代表闭环成功和安全？
 
 如果这四句答不清，先不要急着比较模型强弱。VLM/VLA 最常见的阅读陷阱，就是把“静态理解分数”“离线动作误差”和“真实闭环成功率”混在一起。
+
+## 相关阅读与下一步
+
+- 外部材料：[CLIP 论文](https://arxiv.org/abs/2103.00020)。
+- 外部材料：[LLaVA 论文](https://arxiv.org/abs/2304.08485)。
+- 外部材料：[Flamingo 论文](https://arxiv.org/abs/2204.14198)。
+- 站内下一步：[VLM 专题](index.md)。
+- 站内下一步：[视觉 Tokenizer 与连接器](visual-tokenizers-and-connectors.md)。
+- 站内下一步：[多模态评测与失败模式](multimodal-evaluation-and-failure-modes.md)。

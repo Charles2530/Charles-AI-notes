@@ -136,3 +136,12 @@ Planning as inference 与潜在动作可以接到三类世界模型上：
 7. 与原始动作搜索、行为克隆和经典 MPC 的对比。
 
 Planning as inference 的价值不在于把控制问题换个数学名字，而在于把奖励、先验、约束、不确定性和动作表示放进同一个概率框架。潜在动作则让这个框架在高维真实动作空间里更可计算。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

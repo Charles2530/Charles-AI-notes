@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Self Forcing：对齐自回归视频训练与推理
 
+!!! info "本站判断"
+    这页把《Self Forcing：对齐自回归视频训练与推理》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文的核心问题非常直接：**自回归视频扩散模型训练时看的是 ground-truth 上下文，推理时却只能看自己生成的上下文。** 这种 train-test mismatch 会导致 exposure bias，误差沿时间累积，视频越往后越容易过饱和、过锐化、闪烁或漂移。
 
 Self Forcing 的答案是：训练时就执行和推理一样的自回归 rollout，用模型自己生成的历史帧作为上下文，再用视频级 distribution matching loss 对完整生成序列做监督。

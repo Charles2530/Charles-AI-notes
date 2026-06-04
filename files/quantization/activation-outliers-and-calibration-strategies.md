@@ -146,3 +146,12 @@ SmoothQuant 不是万能的。它更适合 W8A8 这类希望 activation 也低�
 ## 读完以后怎么判断
 
 activation outlier 的要害不是“有几个异常值”，而是“谁决定 scale”。低比特量化把连续数轴切成有限格子，outlier 会把格子拉粗，让主体区域失去分辨率。理解这一点后，SmoothQuant、LLM.int8、KV cache quant、混合精度和校准集选择就不是一堆孤立技巧，而是在解决同一个问题：把有限的数值表示能力分给真正影响任务质量的地方。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

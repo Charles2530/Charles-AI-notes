@@ -168,3 +168,12 @@ U-Net 的 skip connection 不只是“防止梯度消失”。在 dense predicti
 - [Feature Pyramid Networks](https://arxiv.org/abs/1612.03144)：理解多尺度特征如何服务检测和定位。
 - [CNN Explainer](https://poloclub.github.io/cnn-explainer/)：适合用交互方式看卷积、ReLU、pooling 和分类路径。
 - [动手学深度学习：卷积神经网络](https://zh.d2l.ai/chapter_convolutional-neural-networks/index.html)：中文入门材料，适合把公式、张量 shape 和代码对上。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

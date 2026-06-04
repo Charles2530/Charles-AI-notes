@@ -82,3 +82,12 @@ SayCan 的启发是，语言模型给出的“该做什么”必须被 affordanc
 - [Diffusion Policy](https://arxiv.org/abs/2303.04137)：理解用扩散模型表示动作轨迹分布。
 - [SayCan](https://arxiv.org/abs/2204.01691)：理解语言规划为什么要被 affordance 约束。
 - [RoboTwin](https://arxiv.org/abs/2409.02920)：理解仿真 benchmark 和双臂任务评测。
+
+## 相关阅读与下一步
+
+- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
+- 站内下一步：[具身智能专题](index.md)。
+- 站内下一步：[具身智能从零路线](beginner-learning-path.md)。
+- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。

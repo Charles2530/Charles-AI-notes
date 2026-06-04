@@ -167,3 +167,12 @@ m_t = u_\theta(m_{t-1}, z_t, a_{t-1}, e_t)
 - [MemGPT](https://arxiv.org/abs/2310.08560)：虽然不是视觉模型，但适合理解工作记忆、长期记忆和上下文管理的系统思想。
 - [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)：看跨机器人数据中多相机、动作、任务阶段和轨迹历史为什么很难统一。
 - [DROID](https://droid-dataset.github.io/)：真实机器人长轨迹数据的代表，适合思考哪些事件应该写入 memory。
+
+## 相关阅读与下一步
+
+- 外部材料：[CLIP 论文](https://arxiv.org/abs/2103.00020)。
+- 外部材料：[LLaVA 论文](https://arxiv.org/abs/2304.08485)。
+- 外部材料：[Flamingo 论文](https://arxiv.org/abs/2204.14198)。
+- 站内下一步：[VLM 专题](index.md)。
+- 站内下一步：[视觉 Tokenizer 与连接器](visual-tokenizers-and-connectors.md)。
+- 站内下一步：[多模态评测与失败模式](multimodal-evaluation-and-failure-modes.md)。

@@ -4,6 +4,10 @@
 
 更实用的问法是：你能不能重训；想省的是在线网络评估次数、离线训练成本、显存，还是调参时间；最不能接受的是纹理变糊、条件控制变弱、多样性下降，还是端到端延迟不达标。方法名只有放进这些约束里，才会变成工程判断。
 
+![DDIM accelerated generation](../assets/images/paper-figures/diffusion/ddim-figure-2-accelerated-generation.png)
+
+<small>图源：[DDIM](https://arxiv.org/abs/2010.02502)。原图表达同一个训练好的扩散模型可以用更稀疏的反向路径加速采样；本站读法是把“换采样器”和“重训/蒸馏学生”先分开，避免把所有少步方法混成一类。它不能证明任意模型都能极少步高质量生成，只说明不重训路线的第一层收益来自采样路径。</small>
+
 ## 先定边界
 
 如果不能重训，选择范围基本落在采样路径和数值求解器：DDIM、Euler、Heun、DPM-Solver、DPM-Solver++。它们不让模型获得新的生成能力，只是在同一个去噪网络上换一条更适合离散积分的路。
@@ -79,3 +83,12 @@ Rectified Flow 和 Rectified Diffusion 的核心不是简单宣称“直线最�
 - [Progressive Distillation](https://arxiv.org/abs/2202.00512)、[Consistency Models](https://arxiv.org/abs/2303.01469) 与 [Latent Consistency Models](https://arxiv.org/abs/2310.04378)：理解少步学生如何替代长轨迹教师。
 - [DMD](https://arxiv.org/abs/2311.18828)、[DMD2](https://arxiv.org/abs/2405.14867) 与 [Phased DMD](https://arxiv.org/abs/2510.27684)：理解一步/少步分布匹配路线的训练难点。
 - [Flow Matching](https://arxiv.org/abs/2210.02747)、[Rectified Flow](https://arxiv.org/abs/2209.03003) 与 [Rectified Diffusion](https://arxiv.org/abs/2410.07303)：理解路径和速度场重写为什么会影响少步采样。
+
+## 相关阅读与下一步
+
+- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+- 站内下一步：[扩散模型专题](index.md)。
+- 站内下一步：[扩散方法对比表](comparison-table.md)。
+- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。

@@ -102,3 +102,12 @@ CUDA 入门最该记住的不是 API 名，而是数据路径。先画出 HBM、
 - [Nsight Systems User Guide](https://docs.nvidia.com/nsight-systems/UserGuide/index.html)：理解系统级 timeline、CUDA trace、NVTX 和 CPU/GPU 关联。
 - [Nsight Compute Documentation](https://docs.nvidia.com/nsight-compute/NsightCompute/index.html)：理解单 kernel 指标、roofline、memory 和 scheduler 计数器。
 - [CUTLASS GEMM API documentation](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/gemm_api.html)：理解 GEMM tile、threadblock、warp、MMA 和 epilogue 的组织方式。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

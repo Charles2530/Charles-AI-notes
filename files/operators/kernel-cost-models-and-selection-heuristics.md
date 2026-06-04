@@ -1,11 +1,17 @@
 # Kernel 成本模型与选型
 
+> **这篇回答的问题。** 如何理解“Kernel 成本模型与选型”背后的核心机制、适用边界和下一步阅读路径。
+
 很多性能决策如果没有成本模型，就会变成“凭经验猜”。虽然完整精确建模很难，但在工程上仍然需要一个够用的启发式成本模型，帮助判断：
 
 1. 该优先做 fusion，还是优先做 layout 优化；
 2. 该写 Triton，还是直接调用现成库；
 3. 某个 shape 值不值得特化；
 4. 某条路径更可能受带宽、launch 还是通信主导。
+
+![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="820" }
+
+<small>图源：[Triton MAPL 2019 paper](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)。原图表达实现结果相对 roofline 上限的位置；本站读法是把 kernel 选型先拆成 compute、memory 和 overhead 三张账。它不能替代真实 workload profile。</small>
 
 ## 一个够用的粗模型
 
@@ -107,3 +113,12 @@ Kernel 选型要按 shape family、算术强度、访存模式、launch 开销�
 **修复**：把 dispatch 改成按 bucket 选择：高频对齐 shape 走 fused path，长尾 shape 走原始实现；把 layout 转换计入 benchmark；新增 “端到端 step time + bucket 覆盖率 + fallback 率” 验收项。
 
 **反例**：如果多个小算子之间确实反复写回大中间张量，且 fused path 没有提高 register pressure、覆盖率又超过 80%，那 fusion 很可能是正确方向。不能因为一次融合失败就否定 fusion，本质是成本项漏算。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

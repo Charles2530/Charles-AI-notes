@@ -1,5 +1,7 @@
 # 噪声日程与参数化
 
+> **这篇回答的问题。** 如何理解“噪声日程与参数化”背后的核心机制、适用边界和下一步阅读路径。
+
 扩散训练看起来只是“给图加噪，再让模型预测噪声”。真正影响模型性格的，是两件更细的事：噪声日程决定训练样本会落在哪些难度区间，参数化决定模型用什么坐标回答这个去噪问题。它们会直接影响采样器、CFG、少步生成、视频一致性和世界模型里的动作敏感性。
 
 可以把这页当成训练和推理之间的桥。训练页讲模型怎样学会局部方向；Score/SDE 页讲这些方向怎样变成概率流；Inference 页讲采样器怎样有限步积分。噪声日程与参数化负责回答：这些方向在不同噪声区间到底有多难学，模型输出的坐标又是否适合采样器使用。
@@ -178,3 +180,12 @@ EDM 的价值是把“训练目标”和“采样技巧”重新放回同一个�
 - [Common Diffusion Noise Schedules and Sample Steps are Flawed](https://arxiv.org/abs/2305.08891)：理解 zero terminal SNR、v-prediction 和 sampler 起点错配问题。
 - [Diffusers Scheduler Overview](https://huggingface.co/docs/diffusers/en/api/schedulers/overview)：核对工程库里的 scheduler / prediction type / timestep spacing 语义。
 - [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion)：用代码和公式把 forward process、schedule、loss 和采样过程对上。
+
+## 相关阅读与下一步
+
+- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+- 站内下一步：[扩散模型专题](index.md)。
+- 站内下一步：[扩散方法对比表](comparison-table.md)。
+- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。

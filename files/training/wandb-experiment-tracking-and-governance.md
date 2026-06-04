@@ -1,5 +1,7 @@
 # W&B：训练实验追踪与证据链治理
 
+> **这篇回答的问题。** 如何理解“W&B”背后的核心机制、适用边界和下一步阅读路径。
+
 Weights & Biases，常写作 W&B，不是训练框架本身，而是把训练过程里的**配置、指标、系统状态、数据版本、模型产物、报告和协作记录**组织起来的实验平台。官方站点把它称为 AI developer platform，并把 Experiments、Reports、Artifacts、Tables、Sweeps、Models Registry、Launch、Prompts 和 Monitoring 放在产品入口里。[W&B Experiments 文档](https://docs.wandb.ai/models/track)强调的是用少量代码记录 metrics、hyperparameters、system metrics 和 model artifacts；[Artifacts 文档](https://docs.wandb.ai/models/artifacts)则强调把数据和模型作为 run 的输入/输出进行版本追踪。
 
 ## 先看它长什么样
@@ -209,3 +211,12 @@ W&B 在训练板块里的位置不是“可视化曲线工具”，而是实验�
 4. [W&B Sweeps](https://docs.wandb.ai/models/sweeps)
 5. [W&B Tables](https://docs.wandb.ai/models/tables)
 6. [W&B Registry](https://docs.wandb.ai/models/registry)
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

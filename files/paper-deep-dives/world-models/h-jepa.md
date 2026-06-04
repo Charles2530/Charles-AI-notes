@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # H-JEPA：层级 JEPA 与潜变量 EBM
 
+!!! info "本站判断"
+    这页把《H-JEPA：层级 JEPA 与潜变量 EBM》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇文章不是一篇“训练出某个 H-JEPA 模型并刷榜”的论文。它更像一篇把 LeCun 世界模型路线讲清楚的教学型论文：先解释为什么高维连续世界不适合只靠显式概率建模，再引入 `energy-based model`、`latent variable`、`JEPA` 和最终的 `H-JEPA`。
 
 放在世界模型专题里，它的价值是补上一个关键问题：**如果世界模型不直接生成未来像素，而是在表征空间里预测未来状态，训练时到底要约束什么，为什么会坍缩，以及为什么需要层级结构。**
@@ -19,9 +24,9 @@ paper_topic: 世界模型
 <small>Figure source: `Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence`, Figure 1. 原论文图注要点：该图展示 LeCun 提出的 modular autonomous AI 结构，其中 world model 负责预测 actor 设想动作导致的未来世界状态，short-term memory 维护当前与预测状态，cost/critic 评估这些状态。</small>
 
 **自主智能架构图先找 world model 的位置。**
-**输入输出**：输入是 context/target 表征和层级 latent，输出是 joint embedding prediction 与能量式目标。  
-**效率机制**：在 embedding 空间预测，减少像素重建冗余并鼓励抽象状态学习。  
-**对主线意义**：它补强“世界模型可以预测表征而非像素”的理论路线。  
+**输入输出**：输入是 context/target 表征和层级 latent，输出是 joint embedding prediction 与能量式目标。
+**效率机制**：在 embedding 空间预测，减少像素重建冗余并鼓励抽象状态学习。
+**对主线意义**：它补强“世界模型可以预测表征而非像素”的理论路线。
 **不能证明什么**：JEPA 表征本身不证明有 action/reward/done 或可规划 rollout。
 
 这张图里最重要的是 `world model` 的位置。它不是直接回答“下一步动作是什么”的 policy，而是回答：
@@ -294,3 +299,12 @@ $$
 更稳妥的读法是：把这篇论文当成“表征型世界模型如何训练”的原则说明。它补充了 Dreamer 系列偏 RL recipe、V-JEPA 偏视频表征、LingBot 偏视频生成系统的部分，重点回答一个更底层的问题：**世界模型的 latent space 如何既可预测、又不坍缩、还能支持长时层级规划。**
 
 读 H-JEPA 的价值在于抽象层级和 planning 接口：低层预测局部 latent，高层预测抽象状态，再用 energy/regularization 防 collapse。这里多数图是机制和架构证据，不是大规模 benchmark；不能拿来声称某个机器人任务已经被解决。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Introduction+to+Latent+Variable+Energy-Based+Models%3A+A+Path+Towards+Autonomous+Machine+Intelligence&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Introduction+to+Latent+Variable+Energy-Based+Models%3A+A+Path+Towards+Autonomous+Machine+Intelligence)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Introduction+to+Latent+Variable+Energy-Based+Models%3A+A+Path+Towards+Autonomous+Machine+Intelligence)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

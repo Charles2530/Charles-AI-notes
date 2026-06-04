@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # DMD：一步扩散蒸馏
 
+!!! info "本站判断"
+    这页把《DMD：一步扩散蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文是后来 DMD2、CausVid、Phased DMD 一系列少步扩散蒸馏方法的基础。它的核心思想很直接：**不要强迫学生模型逐步复刻 teacher 的采样轨迹，而是让学生的一步输出分布看起来像 teacher 的多步输出分布。**
 
 论文把这个目标落成两个损失：
@@ -36,9 +41,9 @@ DMD 的关键转向是：它不再问“同一个 noise 经过 teacher 50 步会
 <small>图源：`One-step Diffusion with Distribution Matching Distillation`，Figure 2。原论文图意：一步生成器 \(G_\theta\) 从随机噪声生成 fake image；一条支路用预计算 noise-image pairs 做 regression loss，另一条支路把 fake image 加噪后分别送入 real score diffusion model 和 fake score diffusion model，用两者差异形成 distribution matching gradient。</small>
 
 **DMD 总图要看 real/fake score 差分。**
-**输入输出**：输入是随机噪声、teacher 样本和 fake image 加噪版，输出是一步图像与 real/fake score 差分。  
-**效率机制**：把多步 teacher 采样压成一步学生，并用 regression loss 保住大尺度语义。  
-**对主线意义**：说明分布匹配蒸馏可降预览/rollout 成本，但质量和任务评测要分开。  
+**输入输出**：输入是随机噪声、teacher 样本和 fake image 加噪版，输出是一步图像与 real/fake score 差分。
+**效率机制**：把多步 teacher 采样压成一步学生，并用 regression loss 保住大尺度语义。
+**对主线意义**：说明分布匹配蒸馏可降预览/rollout 成本，但质量和任务评测要分开。
 **不能证明什么**：图像指标不能证明动作条件世界模型、闭环收益或真实机器人安全。
 
 DMD 的训练图可以拆成四个对象：
@@ -652,3 +657,12 @@ regularizer: LPIPS regression to precomputed teacher outputs
 4. Yin et al. [DMD2](https://arxiv.org/abs/2405.14867)：理解 DMD 后续为什么要处理 fake critic 跟踪、GAN branch 和 backward simulation。
 5. [Phased DMD](https://arxiv.org/abs/2510.27684)：看 DMD 框架怎样扩展到 few-step、视频和 SNR 子区间。
 6. Song et al. [Consistency Models](https://arxiv.org/abs/2303.01469)：作为少步生成的另一条路线，对比 trajectory consistency 和 distribution matching 的差别。
+
+### 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=One-step+Diffusion+with+Distribution+Matching+Distillation&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=One-step+Diffusion+with+Distribution+Matching+Distillation)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=One-step+Diffusion+with+Distribution+Matching+Distillation)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

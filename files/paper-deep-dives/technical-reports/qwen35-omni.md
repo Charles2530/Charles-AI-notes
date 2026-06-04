@@ -6,6 +6,13 @@ paper_topic: 技术报告
 
 # Qwen3.5-Omni：Thinker-Talker 与全模态 Agent
 
+> **这篇回答的问题。** 如何理解“Qwen3.5-Omni：Thinker-Talker 与全模态 Agent”背后的全模态架构、证据边界和下一步阅读路径。
+
+!!! info "本站判断"
+    这页把《Qwen3.5-Omni：Thinker-Talker 与全模态 Agent》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 Qwen3.5-Omni 这份报告的核心不是“把文本、图像、音频、视频都接进模型”这么简单，而是把全模态模型推进到一个更产品化的问题：**模型能否在 256K 上下文内听、看、读、说，并且以低延迟流式交互、调用工具、处理音视频任务，甚至从音视频指令直接生成代码。**
 
 如果把它放在 Qwen3 / Kimi K2 / DeepSeek-V4 这些技术报告旁边看，它的主线很清楚：Qwen3 解决 thinking / non-thinking 和模型家族；Kimi K2 解决 agentic text model；DeepSeek-V4 解决百万上下文效率；Qwen3.5-Omni 则把重点放在 **native omni agent**：输入可以是文本、图像、视频、音频、音视频流，输出可以是文本或流式语音，任务还可以包含 WebSearch、FunctionCall 和 audio-visual tool use。

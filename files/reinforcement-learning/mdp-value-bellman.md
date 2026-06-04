@@ -1,5 +1,7 @@
 # MDP、价值函数与 Bellman
 
+> **这篇回答的问题。** 如何理解“MDP、价值函数与 Bellman”背后的核心机制、适用边界和下一步阅读路径。
+
 强化学习最核心的问题不是“用哪个算法”，而是：**一个 agent 现在做出的动作，会怎样改变未来，以及怎样把未来的好坏反推回当前动作。** MDP 给出决策问题的语言，value function 给出未来收益的度量，Bellman 方程给出递归学习未来的方法。
 
 如果这三件事没有讲清楚，后面的 PPO、GRPO、Dreamer、Offline RL 和世界模型都会变成一串名词。反过来，只要你能读懂 Bellman 在做什么，就能看出大多数 RL 方法到底是在学 policy、学 value、学 transition，还是在用世界模型替代真实环境试错。
@@ -268,3 +270,12 @@ Offline RL 最难的是分布外动作。模型可能会选择数据里几乎没
 ## 读完以后怎么判断
 
 MDP 定义决策问题，policy 定义怎么行动，reward 评价当前反馈，value 把未来机会压成数字，Bellman 方程把长期未来拆成可递归学习的局部目标。世界模型并没有绕开这些概念，它只是把真实 transition 换成可学习的 \(\hat P_\theta\)，让 agent 能在执行前估算动作后果。
+
+## 相关阅读与下一步
+
+- 外部材料：[Spinning Up：Policy Optimization](https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html)。
+- 外部材料：[PPO 论文](https://arxiv.org/abs/1707.06347)。
+- 外部材料：[Soft Actor-Critic 论文](https://arxiv.org/abs/1801.01290)。
+- 站内下一步：[强化学习专题](index.md)。
+- 站内下一步：[MDP、价值函数与 Bellman](mdp-value-bellman.md)。
+- 站内下一步：[世界模型中的强化学习](rl-for-world-models.md)。

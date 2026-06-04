@@ -4,6 +4,11 @@ title: VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹
 
 # VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹
 
+!!! info "本站判断"
+    这页把《VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 VGGT 最值得读的地方，不是它又预测了一个 depth map，而是它把传统视觉几何里一整条复杂管线改成了一个多任务 Transformer 的前向推理问题。
 
 传统 SfM / MVS 通常要经历特征匹配、几何验证、相机位姿优化、三角化、bundle adjustment、稠密重建等步骤。VGGT 的问题设定更激进：给一张、几张或上百张图，模型直接输出 camera parameters、depth maps、point maps 和 point tracks。它不声称几何约束消失了，而是把几何约束吸收到大规模监督和网络结构里。
@@ -144,3 +149,12 @@ VGGT 的结果主要回答四个问题。
 - [VGGT project page](https://vgg-t.github.io/)：项目页有可视化 demo，适合直观看 feed-forward 3D reconstruction 的效果。
 - [facebookresearch/vggt](https://github.com/facebookresearch/vggt)：代码和模型发布页面，适合核对输入输出接口。
 - [DUSt3R project](https://dust3r.europe.naverlabs.com/)：作为对照，帮助理解 VGGT 和 pairwise 3D reconstruction 路线的差异。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=vggt&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=vggt)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=vggt)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

@@ -79,3 +79,12 @@ FP8 验收不能只看 perplexity 或一个 GSM8K 分数。文本 LLM 至少要�
 - [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)：看大规模模型里 FP8 mixed precision、scale 和累加路径如何系统化组织。
 - [vLLM Quantized KV Cache](https://docs.vllm.ai/en/latest/features/quantization/quantized_kvcache/)：理解 FP8 KV cache、scale 校准和 backend 支持边界。
 - [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：把 FP8 放到权重、激活、KV cache 和 runtime support 的量化生态里理解。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

@@ -183,3 +183,12 @@ GPU 推理优化不是微基准游戏。真正要改善线上体验，需要同�
 - [CUTLASS GEMM API docs](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/gemm_api.html)：学习 GEMM 从 threadblock、warp 到 instruction 的层级。
 - [NVIDIA CUTLASS 3.x blog](https://developer.nvidia.com/blog/cutlass-3-x-orthogonal-reusable-and-composable-abstractions-for-gemm-kernel-design/)：学习如何用可组合抽象解释 kernel，而不是只列 API。
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：学习 KV cache 为什么是推理系统容量瓶颈。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

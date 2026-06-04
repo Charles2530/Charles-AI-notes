@@ -8,6 +8,10 @@
 
 读公式时先问：这个符号是权重、激活还是 KV cache；scale 是一整层共用还是每组共用；误差是在单个数上看，还是在矩阵乘输出上看。Hugging Face 的量化概念文档把量化拆成 scheme、granularity、technique，这个拆法很好：scheme 决定整数格子怎么摆，granularity 决定一个 scale 管多大，technique 决定误差由谁来吸收。
 
+![Low-bit LLM quantization granularity](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-2-granularity.png)
+
+<small>图源：[A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)。原图表达 per-tensor、per-channel、per-group 等量化粒度会改变 scale 覆盖范围；本站读法是把公式里的 \(s\)、\(z\)、group size 和误差预算对应到具体张量布局。它不能替代某个 runtime 的 kernel 文档，只提供读量化数学时的结构地图。</small>
+
 ## 核心问题
 
 量化的核心问题不是“把 BF16 改成 INT4”，而是：**低比特格子不可避免会制造误差，模型和系统怎样让这些误差不要破坏最终输出。**
@@ -210,3 +214,12 @@ KV cache 随层数、并发、上下文长度、KV head 数和 dtype 线性增�
 - [AWQ](https://arxiv.org/abs/2306.00978)：看激活敏感通道为什么要被保护。
 - [SmoothQuant](https://arxiv.org/abs/2211.10438)：看 activation outlier 如何迁移到权重侧。
 - [QLoRA](https://arxiv.org/abs/2305.14314)：看 4bit 底座和 LoRA adapter 如何服务低资源微调。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

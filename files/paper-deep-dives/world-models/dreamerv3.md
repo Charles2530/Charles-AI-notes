@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # DreamerV3：世界模型怎样在 latent 里训练策略
 
+!!! info "本站判断"
+    这页把《DreamerV3：世界模型怎样在 latent 里训练策略》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 DreamerV3 要回答的问题很窄，也很重要：如果真实环境交互很贵，能不能先学一个动作条件的 latent dynamics，再让策略在这个内部模型里反复“想象”未来，从而减少真实试错。
 
 它不是一个视频生成模型。它不会先生成一段漂亮未来画面，再让策略看画面行动。DreamerV3 的世界模型更像一个给 actor 和 critic 用的内部环境：输入当前 latent state 和动作，输出下一个 latent state、奖励和 episode 是否继续。只要这个内部环境对决策足够准，策略就可以在里面训练很多步，再回到真实环境收集新数据。
@@ -210,3 +215,12 @@ DreamerV3 是 dynamics-first：先学 \(s_t,a_t\rightarrow s_{t+1},r_{t+1},c_{t+
 - [DreamerV3 project page](https://danijar.com/project/dreamerv3/)：适合先看 benchmark、视频和高层结论，再回论文读细节。
 - [DreamerV3 GitHub](https://github.com/danijar/dreamerv3)：实现里能看到 replay、imagined rollout、loss 和配置如何落地。
 - [VITALab DreamerV3 reading note](https://vitalab.github.io/article/2023/01/19/DreamerV3.html)：适合用作第二视角，帮助把论文里的 Dreamer 系列背景补齐。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Mastering+Diverse+Domains+through+World+Models&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Mastering+Diverse+Domains+through+World+Models)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Mastering+Diverse+Domains+through+World+Models)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

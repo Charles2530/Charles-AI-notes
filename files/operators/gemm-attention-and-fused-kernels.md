@@ -109,3 +109,12 @@ Softmax、LayerNorm、RMSNorm、Reduce、RoPE、activation 单次看起来小，
 排查 GEMM、Attention 和融合 kernel 时，建议先用 trace 定位热点，而不是凭直觉；再区分瓶颈来自 Tensor Core 利用不足、HBM 带宽、L2、同步、launch 还是调度；随后看 shape 分布和长尾 bucket，检查是否有本可避免的中间张量 materialize 和额外读写，确认低精度是否真的走到硬件加速路径；最后做数值回归和端到端对比，因为单 kernel 变快不等于训练或推理真的变快。
 
 GEMM、Attention 和融合 kernel 的共同原则是：不只优化公式，更要优化数据流。现代 AI 系统的很多性能跃迁，来自把原本在 HBM 中反复读写的中间状态，改成在片上存储和寄存器里连续完成。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

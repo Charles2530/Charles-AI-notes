@@ -1,5 +1,7 @@
 # VLA 动作表示与控制接口：模型输出怎样变成机器人动作
 
+> **这篇回答的问题。** 如何理解“VLA 动作表示与控制接口”背后的核心机制、适用边界和下一步阅读路径。
+
 VLA 最容易被讲成“把语言、图像和动作都 token 化”。这句话只讲到训练格式，没有讲到执行。真正要追的是：模型输出的东西，怎样变成机器人在某个坐标系、某个频率、某个安全边界内执行的动作。
 
 机器人动作不是文本答案。它可能是末端位姿增量、关节角、速度、夹爪开合、未来一段轨迹、离散 action token，或者高层技能名。动作接口一旦不清楚，模型看起来会“懂任务”，真实控制时却会抖、慢、撞、抓不稳。
@@ -192,3 +194,12 @@ FAST 用 frequency-space action sequence tokenization 压缩高频连续动作�
 - [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解连续动作分布、receding horizon 和视觉条件策略。
 - [Octo](https://octo-models.github.io/)：看通用机器人策略如何支持不同观测、动作空间和 diffusion decoding。
 - [FAST action tokenizer](https://arxiv.org/abs/2501.09747)：看现代 VLA 如何把高频连续动作压成更高效的离散 token。
+
+## 相关阅读与下一步
+
+- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- 外部材料：[ACT 论文](https://arxiv.org/abs/2304.13705)。
+- 站内下一步：[VLA 专题](index.md)。
+- 站内下一步：[VLA 数据与策略学习](data-and-policy-learning.md)。
+- 站内下一步：[VLA 闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md)。

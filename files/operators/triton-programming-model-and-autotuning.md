@@ -192,3 +192,12 @@ profile 证明热点
 - [Triton GitHub repository](https://github.com/triton-lang/triton)：查看项目、示例和当前实现生态。
 - [PyTorch `torch.compile` documentation](https://docs.pytorch.org/docs/stable/torch.compiler.html)：理解 Inductor、编译缓存、graph capture 和生成 kernel 的上层路径。
 - [CUDA C++ Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/)：补 coalescing、occupancy、profiling、memory throughput 等 GPU 优化背景。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

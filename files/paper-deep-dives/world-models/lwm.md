@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # LWM：百万 token 视频语言世界模型
 
+!!! info "本站判断"
+    这页把《LWM：百万 token 视频语言世界模型》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dreamer 那样训练一个能规划的 latent dynamics。它回答的是另一个世界模型问题：**如果把长视频、图像和文本都离散成 token，能不能训练一个 7B 自回归 Transformer 在 1M token 上下文里同时理解和生成这些序列？**
 
 这篇论文最值得放进世界模型专题，是因为它把“世界模型”推向了长上下文记忆和多模态序列建模方向：模型不只看几秒钟视频，而是可以在上万帧、一本书、一个小时视频里做检索、问答和生成。

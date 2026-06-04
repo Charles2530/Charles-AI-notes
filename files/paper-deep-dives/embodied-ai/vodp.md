@@ -4,6 +4,11 @@ title: VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
 
 # VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
 
+!!! info "本站判断"
+    这页把《VO-DP：RGB-only 扩散策略怎样借用语义和几何特征》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 VO-DP 这篇论文要回答一个很工程的问题：**机器人 manipulation policy 一定要用点云或 RGB-D 才能学到几何吗？**
 
 论文的答案是：不一定。如果 RGB 图像经过足够强的预训练视觉基础模型，policy 可以从中间特征里拿到语义和几何线索，再用扩散策略生成动作。VO-DP 的“Vision-Only”不是说机器人完全没有状态，也不是说几何不重要；它指的是视觉输入只用单视角 RGB，不依赖 depth、RGB-D 或 point cloud。
@@ -135,3 +140,12 @@ VO-DP 的鲁棒性实验覆盖颜色、大小、背景、光照等变化。读�
 - [DRRM GitHub repository](https://github.com/D-Robotics-AI-Lab/DRRM)：论文配套训练库，适合核对 policy 训练接口。
 - [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解为什么动作生成可以用扩散模型。
 - [VGGT project page](https://vgg-t.github.io/)：理解 VO-DP 借用的语义-几何视觉特征来自哪里。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=vodp&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=vodp)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=vodp)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

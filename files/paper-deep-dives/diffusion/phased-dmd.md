@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # Phased DMD：分阶段少步蒸馏
 
+!!! info "本站判断"
+    这页把《Phased DMD：分阶段少步蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文的核心价值是把 DMD 类少步蒸馏从“把整个反向过程一次性压到少数步”改成“沿 SNR 子区间逐段训练专家”。它要解决的不是普通采样器加速，而是一个更具体的问题：**DMD2 这类带随机梯度截断的少步蒸馏虽然省显存、稳定，但会把一部分训练迭代退化成近似一跳生成，进而损失图像多样性和视频运动强度。**
 
 Phased DMD 的答案是两件事：
@@ -38,9 +43,9 @@ DMD / DMD2 的吸引力在于，它不要求学生模型逐步模仿 teacher 的
 <small>图源：`Phased DMD`，Figure 1。原论文图意：对比 vanilla few-step DMD、DMD2/SGTS、4-phase Phased DMD 和结合 SGTS 的 2-phase Phased DMD。红色表示记录梯度的 generator step，蓝色表示不记录梯度的 forward step。</small>
 
 **Phased DMD 图先分清红色梯度步和蓝色前向步。**
-**输入输出**：输入是少步 denoising 链、SNR phase 和红/蓝两类训练 step，输出是每个 phase/expert 该承担的分布匹配子问题。  
-**效率机制**：把深计算图拆成分段训练，尽量保留 few-step 容量，同时控制显存和 SGTS 退化。  
-**对主线意义**：它服务的是 rollout/视频生成成本，而不是动作条件 dynamics 本身；可作为世界模型外部模拟器的系统加速证据。  
+**输入输出**：输入是少步 denoising 链、SNR phase 和红/蓝两类训练 step，输出是每个 phase/expert 该承担的分布匹配子问题。
+**效率机制**：把深计算图拆成分段训练，尽量保留 few-step 容量，同时控制显存和 SGTS 退化。
+**对主线意义**：它服务的是 rollout/视频生成成本，而不是动作条件 dynamics 本身；可作为世界模型外部模拟器的系统加速证据。
 **不能证明什么**：自动视频指标和少步采样速度不能证明 planning utility、真实闭环收益或跨 teacher 复现。
 
 这张图可以按四种训练图来读：
@@ -603,3 +608,12 @@ strong image/video diffusion teacher
 4. Yin et al. [Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)：先理解 DMD 为什么用 real score 和 fake score 的差异更新 generator。
 5. Yin et al. [DMD2](https://arxiv.org/abs/2405.14867)：理解 SGTS、fake score 训练和大模型 few-step DMD 的稳定性问题。
 6. Song et al. [Consistency Models](https://arxiv.org/abs/2303.01469)：作为少步生成的另一条路线，对比“轨迹一致性”和“分布匹配”的不同。
+
+### 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Phased+DMD%3A+Few-step+Distribution+Matching+Distillation+via+Score+Matching+within+Subintervals&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Phased+DMD%3A+Few-step+Distribution+Matching+Distillation+via+Score+Matching+within+Subintervals)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Phased+DMD%3A+Few-step+Distribution+Matching+Distillation+via+Score+Matching+within+Subintervals)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

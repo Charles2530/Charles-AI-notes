@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Beyond Language Modeling：多模态预训练怎样长出世界模型能力
 
+!!! info "本站判断"
+    这页把《Beyond Language Modeling：多模态预训练怎样长出世界模型能力》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文的价值不是发布一个最强模型，而是做控制实验：如果从零训练统一多模态模型，视觉表示、数据混合、动作条件、MoE 和 scaling 分别影响什么。
 
 它最值得放进世界模型专题，是因为它把一个常被含糊带过的问题拆开了：世界建模能力到底来自大量 action-conditioned data，还是也能从一般视频和图文预训练里迁移出来。论文在 Navigation World Model (NWM) 设置里发现，通用视频预训练比单纯扩大域内 NWM 数据更关键，少量域内 action-conditioned 数据主要负责教会模型任务格式。
@@ -158,3 +163,12 @@ MoE 结果说明稀疏专家有潜力，但工程成本很实在：训练负载�
 - [Transfusion: Predict the Next Token and Diffuse Images with One Multi-Modal Model](https://arxiv.org/abs/2408.11039)：理解本文“文本 next-token + 视觉 diffusion”统一目标的前置论文。
 - [Navigation World Models](https://arxiv.org/abs/2412.03572)：理解 NWM 任务为什么适合检验 action-conditioned future prediction。
 - [Diffusion Transformers with Representation Autoencoders](https://arxiv.org/abs/2510.11690)：补充 RAE 为什么可能成为 DiT/视觉生成的新默认表示。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Beyond+Language+Modeling%3A+An+Exploration+of+Multimodal+Pretraining&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Beyond+Language+Modeling%3A+An+Exploration+of+Multimodal+Pretraining)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Beyond+Language+Modeling%3A+An+Exploration+of+Multimodal+Pretraining)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

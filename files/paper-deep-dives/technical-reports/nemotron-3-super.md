@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # Nemotron 3 Super：Mamba-MoE 与异步多环境 RL
 
+!!! info "本站判断"
+    这页把《Nemotron 3 Super：Mamba-MoE 与异步多环境 RL》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 Nemotron 3 Super 要抓三条主线：Hybrid Mamba-Attention + LatentMoE 降低长上下文和 MoE 带宽成本，shared-weight MTP 缓解草稿头 train-test mismatch，异步多环境 GRPO 强化数学、代码、工具、终端和长上下文能力。本文聚焦 `Super 120B-A12B`。
 
 ![Nemotron 3 Super benchmark and throughput](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-1-benchmark-throughput.png){ width="920" }
@@ -486,3 +491,12 @@ Nemotron 3 Super 的核心不是“120B MoE 又多强”，而是一个完整工
 ```
 
 关键是组合拳：Mamba、LatentMoE、MTP、NVFP4、异步多环境 RL、PTQ 和 SSM cache recipe 共同服务训练与部署。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Nemotron+3+Super%3A+Open%2C+Efficient+Mixture-of-Experts+Hybrid+Mamba-Transformer+Model+for+Agentic+Reasoning&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Nemotron+3+Super%3A+Open%2C+Efficient+Mixture-of-Experts+Hybrid+Mamba-Transformer+Model+for+Agentic+Reasoning)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Nemotron+3+Super%3A+Open%2C+Efficient+Mixture-of-Experts+Hybrid+Mamba-Transformer+Model+for+Agentic+Reasoning)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

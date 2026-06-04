@@ -97,3 +97,12 @@ $$
 - [Genie 3](https://deepmind.google/models/genie/)：适合看实时、可交互世界模型的前沿展示。
 - [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)：适合看 physical AI 数据生成和世界基础模型平台。
 - [Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)：适合作为视频世界模型路线综述的外部参考。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

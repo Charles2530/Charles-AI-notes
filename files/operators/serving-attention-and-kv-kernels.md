@@ -8,6 +8,10 @@
 
 服务态 attention 的重点是动态内存系统。Prefill 像大块规则计算，decode 像每步读取不断变化的 KV 历史；KV page、prefix cache、MQA/GQA 和连续批处理会一起决定尾延迟。
 
+![PagedAttention KV mapping](../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="820" }
+
+<small>图源：[PagedAttention paper](https://arxiv.org/abs/2309.06180)。原图表达 logical KV blocks 到 physical KV blocks 的映射；本站读法是说明服务态 attention 的核心难点是动态 KV 内存、page lookup 和连续批处理，不只是 attention 数学。它不能证明 page size 或 block size 的唯一最佳值。</small>
+
 ## 为什么服务态 attention 要单独讲
 
 **最直接的原因是**：服务里的瓶颈画像和训练不同。请求长度动态变化、每步 decode 工作量很小、KV cache 生命周期不同步、连续批处理会不断改变活跃序列集合，多租户或多 LoRA 还会让 shape 更碎。
@@ -29,8 +33,8 @@
 
 ## FlashAttention 在服务里还重要吗
 
-重要，但形式会变化。  
-FlashAttention 的核心思想是减少中间 score 矩阵的 materialization 和 HBM 往返，这在服务里依然成立。  
+重要，但形式会变化。
+FlashAttention 的核心思想是减少中间 score 矩阵的 materialization 和 HBM 往返，这在服务里依然成立。
 但服务态 attention 通常还要额外面对 paged KV、prefix cache、多请求长度不一致和 decode 的极小步长。
 
 ### 3.1 FlashAttention 的服务价值
@@ -62,7 +66,7 @@ PagedAttention 的核心并不是“新的数学公式”，而是把 KV cache �
 
 ### 6.1 Prefix cache 为什么能显著改变 TTFT
 
-因为共享前缀若已被编码，就不必再次进行完整 prefill。  
+因为共享前缀若已被编码，就不必再次进行完整 prefill。
 这相当于把服务的一部分 attention 计算提前做掉并缓存起来。
 
 ### 6.2 Prefix cache 为什么又很难完全做好
@@ -95,12 +99,12 @@ PagedAttention 的核心并不是“新的数学公式”，而是把 KV cache �
 
 ## Decode 下的 kernel 颗粒度问题
 
-Decode 每步只生成极少数 token，因此很多操作开始呈现“太小而不够密”的特征。  
+Decode 每步只生成极少数 token，因此很多操作开始呈现“太小而不够密”的特征。
 **这时常见的问题是**单步 kernel 太多、每个 kernel 工作量太小、launch 开销占比高，以及连续批处理下 shape constantly changing。
 
 ### 9.1 为什么小 kernel 融合在 decode 下格外重要
 
-因为 decode 每步本来就没有多少计算可摊薄。  
+因为 decode 每步本来就没有多少计算可摊薄。
 **只要把** rope、norm、bias、logits 后处理这类小操作融合起来，就可能显著改善单步延迟。
 
 ## PagedAttention 的常见失效模式
@@ -163,3 +167,12 @@ Decode 每步只生成极少数 token，因此很多操作开始呈现“太小�
 ### 收束口径
 
 这类优化要同时看 kernel 与 runtime：prefill 吞吐、decode TPOT、P95/P99、page locality、碎片率、prefix 命中率都要进入同一张报告。只有这样，`FlashAttention`、`PagedAttention`、KV paging、prefix cache 和 continuous batching 才不会变成一堆孤立术语，而会成为可以一起调优的服务路径。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

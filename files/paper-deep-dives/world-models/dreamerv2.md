@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # DreamerV2：离散世界模型玩 Atari
 
+!!! info "本站判断"
+    这页把《DreamerV2：离散世界模型玩 Atari》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 DreamerV2 是 [Dreamer](dreamer.md) 到 [DreamerV3](dreamerv3.md) 之间的关键版本。DreamerV1 已经证明了可以在 RSSM 的 latent imagination 中训练 actor-critic，但主要成功集中在连续控制。DreamerV2 把这条路线推进到 Atari 这种更成熟、更竞争激烈的离散动作视觉基准上。
 
 这篇论文最重要的结论是：**一个单独训练的 world model，如果 latent dynamics 足够准确，也可以支撑 Atari 级别的 policy learning，而不只是服务连续控制或小规模视觉任务。**
@@ -36,9 +41,9 @@ image x_t, action a_t, reward r_t, discount gamma_t
 <small>Figure source: `Mastering Atari with Discrete World Models`, Figure 1. 原论文图注要点：DreamerV2 在 55 个 sticky-action Atari games 的 gamer-normalized median score 上达到 human-level，并超过 Rainbow 和 IQN 等 single-GPU model-free baselines。</small>
 
 **Atari 结果图先看 world model 是否支撑 policy learning。**
-**输入输出**：输入是 Atari 像素、动作和 reward，输出是离散 latent dynamics 与 imagined actor-critic。  
-**效率机制**：离散 latent 和 world model actor-critic 提升像素控制样本效率。  
-**对主线意义**：它说明 latent dynamics 可以从控制 benchmark 扩展到更复杂离散状态。  
+**输入输出**：输入是 Atari 像素、动作和 reward，输出是离散 latent dynamics 与 imagined actor-critic。
+**效率机制**：离散 latent 和 world model actor-critic 提升像素控制样本效率。
+**对主线意义**：它说明 latent dynamics 可以从控制 benchmark 扩展到更复杂离散状态。
 **不能证明什么**：Atari 结果不能外推为真实机器人、开放视频或 VLA 安全性。
 
 ## 核心问题
@@ -475,3 +480,12 @@ DreamerV2 最值得记住的是三点：
 一句话总结：DreamerV2 证明了交互轨迹驱动的 latent dynamics 世界模型不仅能做连续控制，也能在 Atari 这种强基准上训练出竞争力 policy。它把 DreamerV1 的 latent imagination actor-critic 推进到离散状态、离散动作和强 model-free baseline 对抗的阶段，为 DreamerV3 的通用化 recipe 铺好了路。
 
 落地读 DreamerV2 时要把三层证据分开：categorical latent 和 KL balancing 是方法抓手，Atari performance 与 ablation 说明它能支撑 policy learning，但 reward、done 和动作接口仍来自 RL 环境。这篇证明的是 latent dynamics 可以进入强离散控制基准，不是开放视频生成或真实机器人泛化。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Mastering+Atari+with+Discrete+World+Models&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Mastering+Atari+with+Discrete+World+Models)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Mastering+Atari+with+Discrete+World+Models)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

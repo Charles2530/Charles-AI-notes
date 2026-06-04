@@ -6,6 +6,11 @@ paper_topic: 高效推理
 
 # EAGLE：为什么 draft 不一定要是一个小模型
 
+!!! info "本站判断"
+    这页把《EAGLE：为什么 draft 不一定要是一个小模型》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 投机解码的基本想法很简单：让一个便宜 draft model 先猜几个 token，再让昂贵 target LLM 并行验证；猜对越多，target LLM 逐 token decode 的次数越少。EAGLE 的问题是：**draft model 一定要是另一个小语言模型吗？**
 
 它的答案是否定的。EAGLE 用 target LLM 已经算出来的高层 feature 做草稿：预测下一步 feature，再复用 target LLM 的 LM head 得到候选 token。这样 draft head 贴着 target 模型内部接口训练，不需要重新预训练一个完整小 LLM。
@@ -187,3 +192,12 @@ EAGLE 最有工程价值的一句话是：**draft model 不必是完整语言模
 ## 阅读结论
 
 EAGLE 的核心不是某个 speedup 数字，而是一个接口判断：target LLM 的 hidden feature 可以成为低成本 draft 的工作空间。Feature-level draft 比 token-level draft 更贴近 target 内部轨迹，但必须用 shifted-token 解决离散采样分支带来的 feature uncertainty；tree attention 能提高一次 verify 的候选覆盖；batch、MoE、draft overhead 和 acceptance 分桶决定收益能不能落到线上。把这些点看清，EAGLE 就不再是一张加速表，而是一种设计推理服务 draft path 的方法。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=EAGLE%3A+Speculative+Sampling+Requires+Rethinking+Feature+Uncertainty&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=EAGLE%3A+Speculative+Sampling+Requires+Rethinking+Feature+Uncertainty)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=EAGLE%3A+Speculative+Sampling+Requires+Rethinking+Feature+Uncertainty)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

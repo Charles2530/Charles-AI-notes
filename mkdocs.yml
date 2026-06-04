@@ -61,7 +61,6 @@ extra_css:
 nav:
   - 首页: index.md
   - 基础概念:
-      - 基础概念阅读入口: foundations/index.md
       - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
       - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
       - 读懂公式的最小数学: foundations/symbols-and-minimal-math.md
@@ -74,56 +73,52 @@ nav:
       - MoE 与大模型架构: foundations/moe-and-large-model-architecture-basics.md
       - 模型压缩、剪枝与 NAS: foundations/model-compression-pruning-and-nas-basics.md
   - 训练与推理系统:
-      - 训练系统阅读入口: training/index.md
-      - 训练图解阅读顺序: training/page-by-page-visual-guide.md
-      - 模型训练从零入门: training/beginner-model-training-primer.md
-      - 目标函数、优化器与 LR 日程: training/objectives-optimizers-and-schedules.md
-      - 预训练、微调与对齐: training/pretraining-finetuning-alignment.md
-      - 分布式训练与 Checkpoint: training/distributed-training-and-checkpointing.md
-      - Megatron / DeepSpeed: training/megatron-lm-deepspeed-and-open-training-stacks.md
-      - 低比特训练与数值格式: training/low-bit-training-and-numerics.md
-      - 推理系统阅读入口: inference/index.md
-      - 推理运行时: inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md
-      - 推理服务系统: inference/serving-systems.md
-      - KV、缓存与投机解码: inference/caching-routing-and-speculative.md
-      - 量化阅读入口: quantization/index.md
-      - 量化图解阅读顺序: quantization/page-by-page-visual-guide.md
-      - 量化方法：PTQ / GPTQ / AWQ / SmoothQuant: quantization/ptq-gptq-awq-smoothquant.md
-      - FP8 与混合精度推理: quantization/fp8-and-mixed-precision-serving.md
-      - 算子与编译器阅读入口: operators/index.md
-      - CUDA 编程模型与内存层次: operators/cuda-programming-model-and-memory.md
-      - FlashAttention 与长上下文: operators/long-context-and-flashattention-evolution.md
-      - Triton 编程模型与自动调优: operators/triton-programming-model-and-autotuning.md
+      - 训练系统:
+          - 模型训练从零入门: training/beginner-model-training-primer.md
+          - 目标函数、优化器与 LR 日程: training/objectives-optimizers-and-schedules.md
+          - 预训练、微调与对齐: training/pretraining-finetuning-alignment.md
+          - 分布式训练与 Checkpoint: training/distributed-training-and-checkpointing.md
+          - Megatron / DeepSpeed: training/megatron-lm-deepspeed-and-open-training-stacks.md
+          - 低比特训练与数值格式: training/low-bit-training-and-numerics.md
+      - 推理系统:
+          - 推理运行时: inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md
+          - 推理服务系统: inference/serving-systems.md
+          - KV、缓存与投机解码: inference/caching-routing-and-speculative.md
+      - 量化:
+          - 量化方法：PTQ / GPTQ / AWQ / SmoothQuant: quantization/ptq-gptq-awq-smoothquant.md
+          - FP8 与混合精度推理: quantization/fp8-and-mixed-precision-serving.md
+      - 算子与编译器:
+          - CUDA 编程模型与内存层次: operators/cuda-programming-model-and-memory.md
+          - FlashAttention 与长上下文: operators/long-context-and-flashattention-evolution.md
+          - Triton 编程模型与自动调优: operators/triton-programming-model-and-autotuning.md
   - 强化学习:
-      - 强化学习阅读入口: reinforcement-learning/index.md
       - MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md
       - Policy Gradient、Actor-Critic、PPO 与 GRPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md
       - 世界模型中的强化学习: reinforcement-learning/rl-for-world-models.md
       - verl 训练流程: reinforcement-learning/verl-code-flow.md
   - 世界模型与具身智能:
-      - 世界模型阅读入口: world-models/index.md
-      - 从零理解世界模型: world-models/beginner-world-models-primer.md
-      - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
-      - Masked / JEPA 与潜变量预测: world-models/masked-jepa-and-latent-prediction.md
-      - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
-      - 世界模型评测与失效模式: world-models/evaluation-and-failure-modes.md
-      - 具身智能阅读入口: embodied-ai/index.md
-      - 具身智能从零路线: embodied-ai/beginner-learning-path.md
-      - VLA 阅读入口: vla/index.md
-      - VLA 动作表示与控制接口: vla/action-representation-and-interfaces.md
-      - VLA 数据与策略学习: vla/data-and-policy-learning.md
-      - VLA 动作分块、层级策略与潜在技能: vla/action-chunking-hierarchical-policies-and-latent-skills.md
-      - VLA 评测与数据引擎: vla/benchmarks-and-data-engines.md
-      - VLA 闭环恢复与失败分析: vla/closed-loop-recovery-and-failure-analysis.md
-      - VLA 部署与安全: vla/deployment-and-safety.md
-      - VLM 阅读入口: vlm/index.md
-      - VLM 架构：视觉表征、连接器与记忆: vlm/architecture-and-training.md
-      - 视觉 Tokenizer 与连接器: vlm/visual-tokenizers-and-connectors.md
-      - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
-      - 双目匹配与 Cost Volume: embodied-ai/stereo-matching-and-cost-volume.md
-      - Sim2Real 与具身数据引擎: embodied-ai/sim2real-and-data-engines.md
+      - 世界模型:
+          - 从零理解世界模型: world-models/beginner-world-models-primer.md
+          - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
+          - Masked / JEPA 与潜变量预测: world-models/masked-jepa-and-latent-prediction.md
+          - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
+          - 世界模型评测与失效模式: world-models/evaluation-and-failure-modes.md
+      - 具身智能:
+          - 具身智能从零路线: embodied-ai/beginner-learning-path.md
+          - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
+          - 双目匹配与 Cost Volume: embodied-ai/stereo-matching-and-cost-volume.md
+          - Sim2Real 与具身数据引擎: embodied-ai/sim2real-and-data-engines.md
+      - VLA:
+          - VLA 动作表示与控制接口: vla/action-representation-and-interfaces.md
+          - VLA 数据与策略学习: vla/data-and-policy-learning.md
+          - VLA 动作分块、层级策略与潜在技能: vla/action-chunking-hierarchical-policies-and-latent-skills.md
+          - VLA 评测与数据引擎: vla/benchmarks-and-data-engines.md
+          - VLA 闭环恢复与失败分析: vla/closed-loop-recovery-and-failure-analysis.md
+          - VLA 部署与安全: vla/deployment-and-safety.md
+      - VLM:
+          - VLM 架构：视觉表征、连接器与记忆: vlm/architecture-and-training.md
+          - 视觉 Tokenizer 与连接器: vlm/visual-tokenizers-and-connectors.md
   - 扩散与生成模型:
-      - 扩散模型阅读入口: diffusion/index.md
       - 扩散模型发展脉络: diffusion/evolution.md
       - 扩散训练与表示: diffusion/training.md
       - 噪声日程与参数化: diffusion/noise-schedules-and-parameterization.md
@@ -135,13 +130,11 @@ nav:
       - 一致性模型与 Rectified Flow: diffusion/consistency-models-and-rectified-flow.md
       - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
   - 思考探索:
-      - 思考探索入口: thinking-exploration/index.md
       - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
       - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
       - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
       - 读懂 Fast-FoundationStereo: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
   - 论文精读:
-      - 论文精读入口: paper-deep-dives/index.md
       - 基础与训练:
           - ZeRO：为什么数据并行会浪费这么多显存: paper-deep-dives/foundations/zero.md
           - Megatron-LM：Tensor Model Parallel: paper-deep-dives/foundations/megatron-lm.md

@@ -219,3 +219,12 @@ actions:       [B, Horizon, ActionDim]
 - [PyTorch Autograd Mechanics](https://docs.pytorch.org/docs/stable/notes/autograd.html)：理解动态计算图、saved tensors 和 backward。
 - [TensorFlow systems paper](https://arxiv.org/abs/1603.04467)：理解 dataflow graph 如何把张量、算子和设备执行连接起来。
 - [动手学深度学习：数据操作](https://zh.d2l.ai/chapter_preliminaries/ndarray.html)：中文讲法很清楚，适合补 shape、广播和基本张量操作直觉。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

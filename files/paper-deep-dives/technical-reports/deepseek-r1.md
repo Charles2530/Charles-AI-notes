@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # DeepSeek-R1：RL 激发推理能力
 
+!!! info "本站判断"
+    这页把《DeepSeek-R1：RL 激发推理能力》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文的核心不是“R1 分数很高”，而是：**有可靠 verifier 时，大模型可以通过大规模 RL 自己发现更长、更会反思和验证的推理行为。**
 
 报告有两条主线：`R1-Zero` 验证纯 RL 能否涌现推理行为，`R1` 再加入 cold-start SFT、两阶段 RL、rejection sampling 和安全/有用性对齐。
@@ -571,3 +576,12 @@ DeepSeek-R1 最值得学习的地方，是它把“推理能力”重新放回�
 ```
 
 但这条路线不是所有任务的通用答案。它在数学、代码、STEM、逻辑等可验证任务上最强；进入开放式写作、安全偏好或真实工具任务后，reward 可靠性、环境成本和 reward hacking 会重新成为核心瓶颈。更准确地说，DeepSeek-R1 证明了：**当正确性可以自动验证时，强化学习可以把大模型从“模仿推理”推向“通过试错发现推理策略”。**
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=DeepSeek-R1%3A+Incentivizing+Reasoning+Capability+in+LLMs+via+Reinforcement+Learning&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=DeepSeek-R1%3A+Incentivizing+Reasoning+Capability+in+LLMs+via+Reinforcement+Learning)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=DeepSeek-R1%3A+Incentivizing+Reasoning+Capability+in+LLMs+via+Reinforcement+Learning)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

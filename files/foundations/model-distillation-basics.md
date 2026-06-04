@@ -148,10 +148,10 @@ LLM 时代经常蒸馏的不只是答案，还有 rationale。Distilling step-by
 | Regression replay | 老任务、边界样本是否退化 | 新任务泛化 |
 
 **蒸馏的核心失败模式。**
-1. teacher 本身错，student 学得很像但也错。  
-2. 平均分接近 teacher，但关键桶退化，比如长上下文、少数语言、复杂 prompt、工具调用或安全拒答。  
-3. 离线蒸馏好看，线上分布漂移后失效。  
-4. student 延迟下降，但为了补质量又加 rerank、fallback 或 verifier，端到端成本没有真的降。  
+1. teacher 本身错，student 学得很像但也错。
+2. 平均分接近 teacher，但关键桶退化，比如长上下文、少数语言、复杂 prompt、工具调用或安全拒答。
+3. 离线蒸馏好看，线上分布漂移后失效。
+4. student 延迟下降，但为了补质量又加 rerank、fallback 或 verifier，端到端成本没有真的降。
 5. rationale 蒸馏让输出更像推理，但不代表推理过程可靠。
 
 一个实用判断是：如果目标是部署提速，必须报告端到端延迟、显存和吞吐；如果目标是能力迁移，必须报告独立评测、失败分桶和 teacher 错误继承；如果目标是生成少步化，必须报告真实步数下的质量、多样性、条件对齐和长尾样例。
@@ -159,3 +159,12 @@ LLM 时代经常蒸馏的不只是答案，还有 rationale。Distilling step-by
 ## 读完以后怎么判断
 
 模型蒸馏是一种把 teacher 里的可用信号转成 student 训练目标的方法。它可以压缩模型、迁移行为、提高数据效率，也可以把慢生成过程压成少步生成。但蒸馏不是免费午餐：teacher 质量、蒸馏信号、student 容量、数据覆盖和评测口径共同决定结果。读论文时先问四件事：蒸馏谁、蒸馏什么、用什么 loss、用什么独立证据证明 student 真的可替代。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

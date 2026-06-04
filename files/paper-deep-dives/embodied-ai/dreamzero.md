@@ -4,6 +4,11 @@ title: DreamZero：世界动作模型为什么可以做零样本策略
 
 # DreamZero：世界动作模型为什么可以做零样本策略
 
+!!! info "本站判断"
+    这页把《DreamZero：世界动作模型为什么可以做零样本策略》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 DreamZero 这篇论文要回答一个比“视频生成模型能不能预测未来”更尖锐的问题：**如果模型一边预测未来画面，一边预测产生这些画面的机器人动作，它能不能直接变成闭环机器人 policy？**
 
 这就是论文所谓的 World Action Model，简称 WAM。普通 VLA 学的是“当前图像和语言 -> 动作”；WAM 学的是“当前世界状态和语言 -> 未来世界怎样变化，以及机器人要做哪段动作”。两者都输出动作，但学习信号完全不同。VLA 容易把动作当成标签回归；WAM 被迫解释动作的后果，因此更接近“我知道这样动会把世界推到哪里”。
@@ -171,3 +176,12 @@ DreamZero 最重要的知识点是“动作和未来画面要共同去噪”。�
 - [Diffusion Forcing](https://arxiv.org/abs/2407.01392)：作为序列扩散训练范式对照，理解 per-token uncertainty 和 causal rollout 为什么重要。
 - [DROID dataset](https://droid-dataset.github.io/)：理解 DreamZero 为什么强调异质机器人数据。
 - [π0.5: a Vision-Language-Action Model with Open-World Generalization](https://www.physicalintelligence.company/blog/pi05)：作为 VLA 路线对照，帮助区分 semantic generalization 和 world-action modeling。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=dreamzero&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=dreamzero)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=dreamzero)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

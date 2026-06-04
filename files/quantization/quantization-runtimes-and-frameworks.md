@@ -18,6 +18,10 @@ flowchart LR
     H --> I["任务桶质量与回滚策略"]
 ```
 
+![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="720" }
+
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 6。原图表达激活/权重不同张量在 INT8 路径中的精度与缩放处理；本站读法是把量化 runtime 的责任看成“格式、scale、layout、kernel dispatch 和回滚”的整条链路。它不能证明 SmoothQuant 是所有部署场景的最佳方法。</small>
+
 这条链路里，runtime 不是“加载权重的包”，而是模型和硬件之间的执行层。它至少负责：
 
 | 职责 | 具体要承接什么 | 量化相关风险 |

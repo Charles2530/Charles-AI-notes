@@ -13,6 +13,10 @@ Prefill 和 decode 的资源画像不同：
 
 当长文档请求和短聊天请求共用一套实例时，长 prefill 会占住 GPU，短对话 decode 被牵连，TTFT 和 TPOT 一起恶化。解耦的核心目标不是“更快一点”，而是避免长短请求互相拖垮，并让 prefill、decode 和 KV 分别按自身瓶颈扩容。
 
+![PagedAttention KV block mapping](../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="820" }
+
+<small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)。原图展示 logical KV blocks 到 physical KV blocks 的映射；本站读法是：当 prefill、decode 和 KV 被拆开后，KV 不再只是模型内部状态，而是要被命名、转移、复用和回收的系统资源。这张图不能证明解耦 prefill 一定有收益，收益仍取决于长短请求分布和 KV 转移成本。</small>
+
 ## 基本架构
 
 一个常见抽象是：
@@ -117,3 +121,12 @@ Prefill 产生的状态要交给 decode 层，系统就不只是 GPU 算力问�
 **修复**：把长上下文请求按 session 粘到固定 decode pool；限制跨节点 KV 转移，优先同节点共享；KV metadata 做批量同步；按请求桶记录 `prefill_saved_ms - kv_transfer_ms - decode_extra_ms` 的净收益。
 
 **反例**：如果 prefill 占比极高、prefix 复用稳定、KV 转移在同节点内完成，解耦通常会明显改善 TTFT。反过来，短请求和低复用请求不该默认进入复杂解耦路径。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

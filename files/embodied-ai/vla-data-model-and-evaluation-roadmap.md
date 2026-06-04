@@ -102,3 +102,12 @@ VLA 报告至少要同时写四张账。数据账说明 episode、camera、actio
 - [DROID](https://arxiv.org/abs/2403.12945)：理解 in-the-wild 真实机器人数据的采集规模和多样性。
 - [RoboTwin 2.0 docs](https://robotwin-platform.github.io/doc/)：理解双臂任务、数字孪生资产和 success checker。
 - [LIBERO](https://arxiv.org/abs/2306.03310)：理解 lifelong robot learning 和任务组合评测。
+
+## 相关阅读与下一步
+
+- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
+- 站内下一步：[具身智能专题](index.md)。
+- 站内下一步：[具身智能从零路线](beginner-learning-path.md)。
+- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。

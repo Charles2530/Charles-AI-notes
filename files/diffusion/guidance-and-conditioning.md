@@ -122,3 +122,12 @@ s\left[
 - [T2I-Adapter](https://arxiv.org/abs/2302.08453) 与 [IP-Adapter](https://arxiv.org/abs/2308.06721)：分别理解轻量结构控制和参考图条件接口。
 - [DPM-Solver++](https://arxiv.org/abs/2211.01095)：理解 guided diffusion 下少步 ODE solver 为什么需要专门处理稳定性。
 - [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)：补 DDPM、score、classifier guidance 和 CFG 的连续直觉。
+
+## 相关阅读与下一步
+
+- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+- 站内下一步：[扩散模型专题](index.md)。
+- 站内下一步：[扩散方法对比表](comparison-table.md)。
+- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。

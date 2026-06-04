@@ -6,6 +6,13 @@ paper_topic: 世界模型
 
 # Genie：没有动作标签，怎样学出可交互环境
 
+!!! info "本站判断"
+    这页把《Genie：没有动作标签，怎样学出可交互环境》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
+> **这篇回答的问题。** 如何理解“Genie”背后的核心机制、适用边界和下一步阅读路径。
+
 Genie 最值得读的地方不是画质，而是问题设定：**只有互联网视频，没有动作标签，模型却要学出可以逐帧控制的环境。** 这让它和普通视频生成模型、Dreamer 式世界模型都不一样。
 
 普通视频模型通常学：
@@ -186,3 +193,12 @@ unlabelled videos
 ```
 
 如果你在做游戏、机器人或视频世界模型，而手里有大量无动作视频，Genie 是必须读的一篇。它提醒我们：动作不一定一开始就来自真实控制器，也可以先作为解释相邻状态变化的离散潜变量被学出来；真正部署时，再把这套潜在动作接口接到真实动作、策略、规划器或交互 UI。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Genie%3A+Generative+Interactive+Environments&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Genie%3A+Generative+Interactive+Environments)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Genie%3A+Generative+Interactive+Environments)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

@@ -198,3 +198,12 @@ Middlebury v3 明确提供多种 disparity accuracy measures，包括 bad pixel�
 - [Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)：理解一个强 stereo foundation model 如何被拆成实时系统。
 - [Middlebury Stereo Evaluation v3](https://vision.middlebury.edu/stereo/eval3/MiddEval3-newFeatures.html)：理解 bad pixel、平均误差和分位数指标。
 - [KITTI Stereo Evaluation](https://www.cvlibs.net/datasets/kitti/eval_scene_flow.php?benchmark=stereo)：理解自动驾驶场景里的 stereo benchmark 口径。
+
+## 相关阅读与下一步
+
+- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
+- 站内下一步：[具身智能专题](index.md)。
+- 站内下一步：[具身智能从零路线](beginner-learning-path.md)。
+- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。

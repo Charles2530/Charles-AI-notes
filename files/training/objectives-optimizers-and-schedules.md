@@ -236,3 +236,12 @@ LR schedule 必须和 effective batch、数据阶段、loss 切换、gradient cl
 - [PyTorch AdamW](https://pytorch.org/docs/stable/generated/torch.optim.AdamW.html)：核对 AdamW 当前工程 API 和参数语义。
 - [Hugging Face optimization schedules](https://huggingface.co/docs/transformers/main_classes/optimizer_schedules)：核对 warmup、linear、cosine、Adafactor 和 schedule API。
 - [Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)：建立优化地形的直觉。
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

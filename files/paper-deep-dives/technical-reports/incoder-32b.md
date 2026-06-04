@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # InCoder-32B：工业代码基础模型与执行验证训练
 
+!!! info "本站判断"
+    这页把《InCoder-32B：工业代码基础模型与执行验证训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 InCoder-32B 这篇报告的核心不是“又一个 32B code model”，而是把 code LLM 的战场从常规 Python/JavaScript 题目，推到更贴近工程现场的工业代码：芯片设计、GPU kernel 优化、嵌入式系统、编译器/低层代码优化和 3D/CAD 建模。
 
 这类任务和普通代码补全的差异很硬：答案不只要语法正确，还要满足时序、资源、接口、硬件限制、编译链、仿真和性能约束。报告给出的路线可以概括成：
@@ -332,3 +337,12 @@ Figure 6 做了 SFT data scaling，从 83M tokens 扩到 250M tokens，观察工
 
 **阅读结论。**
 InCoder-32B 要按代码模型训练与工业评测读：方法重点是代码流数据、CUDA/grid 范围、SFT scaling 和 midtrain loss；实验看工业 benchmark、错误分布和能力分层。错误分布图比总分更有用，它告诉项目该补语法、API、库知识还是执行反馈；落地时还要补仓库级上下文、工具执行和安全审计。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=InCoder-32B%3A+Code+Foundation+Model+for+Industrial+Scenarios&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=InCoder-32B%3A+Code+Foundation+Model+for+Industrial+Scenarios)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=InCoder-32B%3A+Code+Foundation+Model+for+Industrial+Scenarios)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

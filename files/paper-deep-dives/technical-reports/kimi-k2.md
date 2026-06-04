@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # Kimi K2：MuonClip、万亿 MoE 与 Agent 数据
 
+!!! info "本站判断"
+    这页把《Kimi K2：MuonClip、万亿 MoE 与 Agent 数据》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 Kimi K2 这份报告的核心不是“又发布了一个大模型”，而是围绕一个更明确的目标展开：**怎样把开源模型做成强 agent，而不是只做一个静态聊天模型。**它把问题拆成两层：预训练阶段要在高质量 token 变稀缺的情况下提高 token efficiency；后训练阶段要把 base model 变成能使用工具、写代码、跑多步任务、在真实或模拟环境中学习的 agentic model。
 
 从技术路线看，Kimi K2 有三条主线：

@@ -6,6 +6,11 @@ paper_topic: 高效训练
 
 # Attn-QAT：4-bit Attention 量化感知训练
 
+!!! info "本站判断"
+    这页把《Attn-QAT：4-bit Attention 量化感知训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文解决的是一个很窄但很关键的问题：**如果 Blackwell 这类硬件已经开始支持 FP4 tensor core，为什么 attention 还不能可靠地 4-bit 化？**
 
 论文的答案不是“再加一个 outlier trick”，而是把问题推进到训练和 kernel 的交界处：attention 是融合算子，FlashAttention backward 会重算中间量并使用一些默认的高精度恒等式。普通 QAT 只把 forward 做成 FP4，再沿用 BF16 backward，会破坏这些隐含假设，导致梯度不稳。Attn-QAT 的核心贡献，就是把 4-bit attention 的 forward、backward 重计算、softmax 梯度和推理 kernel 放到同一套精度约束里重新设计。
@@ -366,3 +371,12 @@ Attn-QAT 的贡献可以压缩成一句话：**它把 4-bit attention 的问题�
 这也是为什么它应该放在“高效训练”里。它表面上是量化论文，实际给出的经验更像训练系统原则：当一个算子已经被高度融合和数值优化后，低比特训练不能只在外面包一层 fake quantization。真正稳定的方案必须理解这个算子的内部计算图，并重新定义哪些中间量低精度、哪些中间量必须保持高精度，以及这些选择如何落到 kernel 和分布式训练里。
 
 读 Attn-QAT 时要把三类证据分开：方法证据在 fake-quant forward 与 FlashAttention-style backward 重算语义是否一致；质量证据在视频样例、人评和 training dynamics；系统证据在 kernel throughput。fake vs real quant 图最关键，因为它说明 QAT 的训练语义必须贴近最终 kernel。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Attn-QAT%3A+4-Bit+Attention+With+Quantization-Aware+Training&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Attn-QAT%3A+4-Bit+Attention+With+Quantization-Aware+Training)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Attn-QAT%3A+4-Bit+Attention+With+Quantization-Aware+Training)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

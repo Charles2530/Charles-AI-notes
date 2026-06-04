@@ -6,6 +6,11 @@ paper_topic: 高效推理
 
 # Fast-FoundationStereo：实时 Zero-Shot 双目匹配
 
+!!! info "本站判断"
+    这页把《Fast-FoundationStereo：实时 Zero-Shot 双目匹配》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文解决的是一个很典型的高效推理矛盾：**强泛化的 stereo foundation model 太慢，实时 stereo 网络又常常依赖目标域微调，泛化不稳。**
 
 Fast-FoundationStereo 的路线不是从零设计一个小模型，而是从 FoundationStereo 出发，把它的三个主要瓶颈分别拆开处理：feature backbone 用蒸馏压缩，cost filtering 用分块 NAS 找低延迟结构，disparity refinement 用结构化剪枝压掉冗余，再用 1.4M in-the-wild stereo pseudo labels 补真实数据分布。
@@ -381,3 +386,12 @@ Fast-FoundationStereo 最适合记成一句工程原则：
 **把强 foundation model 变成实时模型时，先拆开热路径，再让每个瓶颈用适合自己的训练信号和结构约束降成本。**
 
 它对高效推理专题的补充价值在于跨出了 LLM decode：在实时机器人感知里，推理优化同样要同时考虑模型结构、训练蒸馏、数据质量、runtime 导出和 zero-shot 泛化。快不是目标本身，快且在真实场景里可靠才是目标。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Fast-FoundationStereo%3A+Real-Time+Zero-Shot+Stereo+Matching&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Fast-FoundationStereo%3A+Real-Time+Zero-Shot+Stereo+Matching)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Fast-FoundationStereo%3A+Real-Time+Zero-Shot+Stereo+Matching)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

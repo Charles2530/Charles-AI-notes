@@ -6,6 +6,11 @@ paper_topic: 具身智能
 
 # MapAnything：统一前向 Metric 3D 重建骨干
 
+!!! info "本站判断"
+    这页把《MapAnything：统一前向 Metric 3D 重建骨干》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 MapAnything 的核心价值，是把原本分散在 SfM、MVS、相机标定、深度估计、定位和补全里的几何问题，压到一个统一的前向模型里：**输入可以只有图像，也可以额外带 intrinsics、poses、depth 或 partial reconstruction；输出则是一套可合成 metric 3D reconstruction 的 factored geometry。**
 
 它和 [VGGT](vggt.md) 很接近，但问题更“工程化”：VGGT 已经证明 camera、depth、point map、track 可以一起前向预测；MapAnything 继续追问，如果真实系统已经有一部分几何输入，比如机器人相机内参、SLAM 位姿、稀疏深度、RGB-D 深度，模型能不能把这些信息吃进去，并在同一个 metric scale 里输出更稳的重建。
@@ -468,3 +473,12 @@ MapAnything 属于“前沿但很工程化的几何 foundation model”。它的
 
 **阅读结论。**
 MapAnything 的方法证据来自 factored scene representation、几何输入增强和 view curriculum；实验要看多视图重建、速度显存和辅助输入消融。把它接入机器人时先作为几何状态层验收，再接 planner/VLA，不要直接当动作策略。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=MapAnything%3A+Universal+Feed-Forward+Metric+3D+Reconstruction&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=MapAnything%3A+Universal+Feed-Forward+Metric+3D+Reconstruction)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=MapAnything%3A+Universal+Feed-Forward+Metric+3D+Reconstruction)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

@@ -1,5 +1,7 @@
 # 模型训练从零入门：把数据、目标和更新压力对齐
 
+> **这篇回答的问题。** 如何理解“模型训练从零入门”背后的核心机制、适用边界和下一步阅读路径。
+
 训练不是“把数据喂给模型，然后等 loss 下降”。更准确地说，训练是在控制三件事：模型看见什么数据，用什么目标判断对错，用多大的更新压力修改参数。只要这三件事没有对齐，loss 曲线再顺，也可能只是模型学会了错误捷径。
 
 可以先把训练看成一条生产线：
@@ -206,3 +208,12 @@ Karpathy 的训练 recipe 仍然值得读，是因为它强调先让一个小模
 - [ZeRO](https://arxiv.org/abs/1910.02054)：理解大模型训练显存账。
 - [GPipe](https://arxiv.org/abs/1811.06965)：理解流水线并行为什么需要 micro-batch。
 - [Datawhale: VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)：中文显存估算补充读物，适合把参数、梯度、优化器状态拆成手算账。
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

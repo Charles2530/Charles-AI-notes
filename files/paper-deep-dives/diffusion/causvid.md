@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # CausVid：流式自回归视频扩散
 
+!!! info "本站判断"
+    这页把《CausVid：流式自回归视频扩散》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文的核心价值在于给出了一条很清楚的工程路线：**不要从零训练一个自回归视频模型，而是把已有高质量双向视频 DiT 改造成因果学生模型，再用双向教师做非对称 DMD 蒸馏，把 50 步视频扩散压成 4 步流式生成器。**
 
 如果说 [Diffusion Forcing](diffusion-forcing.md) 重点回答“序列扩散应该怎样表达不同时间 token 的不确定性”，CausVid 更进一步回答：“怎样把这种因果序列扩散真正做成低延迟视频生成系统”。

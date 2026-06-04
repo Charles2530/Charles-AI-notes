@@ -193,3 +193,12 @@ Karpathy 的训练 recipe 很值得学习的不是某个固定超参，而是过
 - [Adam](https://arxiv.org/abs/1412.6980) 与 [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101)：理解 Adam 到 AdamW 的动机。
 - [PyTorch AdamW](https://pytorch.org/docs/stable/generated/torch.optim.AdamW.html) 与 [Hugging Face optimization schedules](https://huggingface.co/docs/transformers/main_classes/optimizer_schedules)：核对 optimizer 与 warmup/cosine/linear schedule 的工程语义。
 - [Google Deep Learning Tuning Playbook](https://developers.google.com/machine-learning/guides/deep-learning-tuning-playbook)：系统学习如何把调参问题拆成目标、搜索空间、训练长度和证据链。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

@@ -6,6 +6,11 @@ paper_topic: 高效训练
 
 # GPU Utilization：为什么 100% 不等于训练跑满
 
+!!! info "本站判断"
+    这页把《GPU Utilization：为什么 100% 不等于训练跑满》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇文章最值得带回训练系统里的结论是：**GPU utilization 更像“GPU 没闲着”的指标，不是“GPU 算力被有效使用”的指标。**
 
 Trainy 的案例里，团队已经把 `nvidia-smi` 里常见的 GPU utilization 推到 100%，功耗也不低，但训练 workload 的 MFU 只有约 `20%`。继续 profile 后，他们发现 Softmax kernel 虽然让 GPU utilization 很高，但 SM efficiency 很低。经过 fused kernels 和合适的 model parallelism 调整后，训练时间达到 `4x` 加速，MFU 从约 `20%` 提到 `38%`。

@@ -148,3 +148,12 @@ flowchart LR
 6. 风险阈值触发的回退是否可解释、可复现、可运营。
 
 风险敏感世界模型的目标不是永远保守，而是在收益、风险、信息获取和回退之间做可控取舍。它真正的价值体现在少数关键分叉：平均未来看起来都还不错，但尾部风险决定系统能不能部署。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

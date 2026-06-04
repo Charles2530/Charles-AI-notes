@@ -122,3 +122,12 @@ node_id, rack_id, gpu_id, nvlink_domain, nic_id, numa_domain, tp_group, pp_stage
 - [NCCL Tests](https://github.com/NVIDIA/nccl-tests)：节点内/节点间 all-reduce、all-to-all 和 point-to-point 基准入口。
 - [Megatron-LM paper](https://arxiv.org/abs/1909.08053)：理解 tensor model parallelism 为什么通信频繁。
 - [DeepSpeed ZeRO](https://arxiv.org/abs/1910.02054)：理解数据并行状态分片和通信/显存权衡。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

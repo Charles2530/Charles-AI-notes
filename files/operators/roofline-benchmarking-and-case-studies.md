@@ -6,6 +6,10 @@
 
 这页适合和 [GEMM 与 Attention Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) 一起读。前者提供热点算子的具体结构，后者解释 tile、program id 和 autotune 如何落到实现；Roofline 则负责先判断该往算力、带宽、layout 还是 launch 开销上用力。
 
+![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="820" }
+
+<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)。原图表达不同实现相对 roofline 的位置；本站读法是把 microbenchmark 结果先放到“算力上限 vs 带宽上限”的坐标里，再判断优化方向。它不能证明某个 kernel 在端到端服务里必然更快。</small>
+
 ## Roofline 的真正用途
 
 Roofline 不是为了精确预测每个 kernel 的最终性能，而是为了先问一个更关键的问题：
@@ -24,7 +28,7 @@ $$
 
 ### 1.1 算术强度为什么重要
 
-如果一个算子做了很多计算却只搬很少数据，它更可能接近算力上限；  
+如果一个算子做了很多计算却只搬很少数据，它更可能接近算力上限；
 如果一个算子大量搬数据但每字节只做很少计算，它更可能受带宽限制。
 
 这能帮你决定该优先想 tile 和 Tensor Core，还是优先想 fusion、layout、向量化与减少写回。
@@ -224,7 +228,7 @@ Roofline 报告的最低格式是 shape、FLOPs、bytes、arithmetic intensity�
 
 面对 GEMM 案例时，建议先看 \(M/N/K\) 多大、shape 是否规则、是否是高频服务热点、是否已经走 Tensor Core，以及 epilogue 是否可融合。
 
-如果是规则大矩阵，roofline 往往提示它更偏 compute-heavy；  
+如果是规则大矩阵，roofline 往往提示它更偏 compute-heavy；
 如果是小而碎的 GEMM，真正的问题可能反而是 launch 和 shape。
 
 ## 一个 Softmax / Norm 案例怎么看
@@ -262,3 +266,12 @@ Roofline 建模与性能案例的核心意义，在于把性能优化从“经�
 ## 工程收束
 
 Roofline 不是展示图，而是把 FLOPs、带宽、算术强度、steady state 和真实 workload 对齐的排查工具。最容易出错的是字节数估错、只跑理想 shape、忽略服务态请求；上线前应同时做理论估算和实测，用 case study 解释偏差，并保留基准脚本。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

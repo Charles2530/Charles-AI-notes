@@ -155,3 +155,12 @@ HELM 的思路值得学习：不要只用一个分数，而是把 scenarios、me
 - [EleutherAI lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
 - [SuperCLUE](https://www.superclueai.com/)
 - [FlagEval](https://flageval.baai.ac.cn/)
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

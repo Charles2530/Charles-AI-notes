@@ -132,3 +132,12 @@ FlashAttention 把 attention 从“显式矩阵流水线”改成“分块流式
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)：从论文证据看 high-throughput LLM serving 的内存管理。
 - [Ring Attention](https://arxiv.org/abs/2310.01889)：理解 sequence blocks、ring pass K/V 和 blockwise attention。
 - [DeepSpeed Ulysses](https://arxiv.org/abs/2309.14509)：理解 long-sequence training 中的 sequence parallel 与 all-to-all 通信。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

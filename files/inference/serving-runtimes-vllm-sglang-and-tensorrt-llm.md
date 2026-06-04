@@ -130,3 +130,12 @@ TensorRT-LLM 的适用场景通常更明确：NVIDIA 生产部署、固定硬件
 - [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)：理解 block pool、reuse、eviction、offload、retention policy、GQA/MQA 和 cache salting。
 - [Hugging Face Text Generation Inference](https://huggingface.co/docs/text-generation-inference/index)：对照另一个成熟 serving 栈，也注意官方文档对维护状态和下游 runtime 的说明。
 - [Orca](https://www.usenix.org/conference/osdi22/presentation/yu)：理解 iteration-level scheduling 为什么是大模型 serving 的系统背景。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

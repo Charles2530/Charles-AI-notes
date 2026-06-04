@@ -166,3 +166,12 @@ KVSlimmer 这类工作提醒我们：长上下文优化不能只报告“KV 少�
 ## 读完以后怎么判断
 
 长上下文优化的目标不是“能塞更多 token”，而是在固定显存和延迟预算下，保留对当前任务真正有用的信息。KV、prompt、摘要、结构化状态、检索库和冷日志要分层协作；任何压缩或淘汰策略，都必须用系统指标和任务质量一起验收。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

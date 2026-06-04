@@ -2,12 +2,16 @@
 
 低精度计算和量化，表面上看是在“减少位宽、节省显存”，但真正落到系统里时，本质上是内核与数据布局问题。很多团队第一次做量化时都会踩到同一个坑：权重文件变小了，理论带宽需求下降了，但端到端吞吐并没有变好，甚至变差。原因往往不是量化方法本身，而是 kernel 路径没有真正适配低精度数据格式。
 
-这一页讨论的重点，不是量化算法本身，而是：  
+这一页讨论的重点，不是量化算法本身，而是：
 **当你已经决定使用 BF16、FP8、INT8、INT4 或权重量化之后，kernel 层到底发生了什么变化，为什么有些格式容易提速，有些则只是在节省存储。**
 
 **初学者先抓住。**
 
 低精度 kernel 的难点不只是位宽小，而是数据要打包、解包、读取 scale、反量化、累加、再写回。只有这些步骤和 Tensor Core、寄存器、缓存、layout 配合好，低精度才会真正变快；如果运行时频繁 dequant、layout 转换或走 fallback，节省的权重带宽会被额外开销抵消。
+
+![Low-bit LLM quantization granularity](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-2-granularity.png){ width="820" }
+
+<small>图源：[A Survey of Quantization Methods for Efficient Neural Network Inference](https://arxiv.org/abs/2103.13630) 与站内低比特综述图整理。原图表达不同量化粒度会改变 scale、group 和张量布局；本站读法是把 group size、scale 读取和 dequant fusion 放回 kernel 路径。它不能证明某个粒度一定最快，因为 runtime、tile shape 和硬件支持会改变结论。</small>
 
 ## 低精度不是单一概念
 
@@ -153,9 +157,9 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 
 ### 11.1 KV 量化为什么格外敏感
 
-因为它直接影响 attention 读取路径，而且 decode 场景非常高频。  
-若量化误差大，模型质量会明显下降；  
-若 dequant 太重，又会抵消空间收益。  
+因为它直接影响 attention 读取路径，而且 decode 场景非常高频。
+若量化误差大，模型质量会明显下降；
+若 dequant 太重，又会抵消空间收益。
 所以 KV 量化在工程上往往比权重量化更挑剔。
 
 ## 低精度 kernel 的常见热点症状
@@ -164,12 +168,12 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 
 ### 12.1 一个很典型的误判
 
-“模型权重从 16 bit 变成 4 bit，所以理论上应该快 4 倍。”  
+“模型权重从 16 bit 变成 4 bit，所以理论上应该快 4 倍。”
 这在系统里几乎从不成立，因为不是所有时间都花在搬权重，还要访问激活、scale、KV，dequant 和布局处理也要花时间，某些阶段本来就不是 weight-bound。
 
 ## 数值稳定性与累加精度
 
-低精度 kernel 一个核心设计问题是：  
+低精度 kernel 一个核心设计问题是：
 **输入可以低精度，累加是否也低精度？**
 
 **很多高性能实现会采用**低精度输入、更高精度累加，再按需要写回较低精度输出。
@@ -218,3 +222,12 @@ kernel 实现复杂，对 layout、tile、Tensor Core 路径要求更高，autot
 ### 收束口径
 
 真正让低精度 kernel 站得住，不是一次 benchmark 跑得漂亮，而是它能否进入长期维护循环。建议把每次改动绑定四类材料：代表性 probe、端到端案例、已知黑名单 shape / 路径、驱动与编译器升级前后的对照记录。这样量化就不只是“文件更小”，而是能被复验、回退和持续演进的平台能力。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

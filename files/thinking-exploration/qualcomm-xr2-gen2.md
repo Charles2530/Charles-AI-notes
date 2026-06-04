@@ -264,3 +264,12 @@ AI Hub Workbench 的 [Quantization 文档](https://workbench.aihub.qualcomm.com/
 14. [Netron](https://netron.app/)
 15. [Qualcomm launch release: Snapdragon XR2 Gen 2 and AR1 Gen 1](https://www.qualcomm.com/news/releases/2023/09/qualcomm-launches-its-next-generation-xr-and-ar-platforms--enabl)
 16. [Meta Quest 3 launch article](https://about.fb.com/news/2023/09/meet-meta-quest-3-mixed-reality-headset/)
+
+## 相关阅读与下一步
+
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 外部材料：[NVIDIA TensorRT-LLM 文档](https://nvidia.github.io/TensorRT-LLM/)。
+- 站内下一步：[思考探索专题](index.md)。
+- 站内下一步：[世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md)。
+- 站内下一步：[具身智能现状：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md)。

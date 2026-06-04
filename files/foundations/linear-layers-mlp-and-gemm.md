@@ -178,3 +178,12 @@ Linear 是每个 token 的通道投影，MLP 是逐 token 的非线性通道变�
 - [CUTLASS 3.x blog](https://developer.nvidia.com/blog/cutlass-3-x-orthogonal-reusable-and-composable-abstractions-for-gemm-kernel-design/)：理解可组合 GEMM kernel 和 epilogue fusion。
 - [Triton paper](https://doi.org/10.1145/3315508.3329973)：理解 tiled neural network computation 和 roofline 视角。
 - [Megatron-LM](https://arxiv.org/abs/1909.08053)：理解张量并行如何切 Linear/GEMM 并控制通信位置。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

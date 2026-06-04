@@ -1,6 +1,11 @@
 # vLLM / PagedAttention：为什么 KV cache 需要分页管理
 
-Checked date: 2026-06-03  
+!!! info "本站判断"
+    这页把《vLLM / PagedAttention：为什么 KV cache 需要分页管理》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
+Checked date: 2026-06-03
 Repro status: 论文级理解；本站未复现实验，只引用原论文图、vLLM 官方博客和公开论文结果。
 
 vLLM 的核心贡献不是“写了一个更快的推理库”，而是抓住了 LLM serving 里最容易被低估的瓶颈：**decode 阶段的 KV cache 既大、又动态、还随请求长度不断增长**。如果每个请求都按最大长度预留一整段连续 KV 显存，短请求浪费，长尾请求碎片化，请求结束后还会留下难以利用的空洞。PagedAttention 的作用，是把每条 sequence 逻辑上连续的 KV cache 拆成固定大小 block，再用 block table 映射到不连续的物理显存。
@@ -89,3 +94,12 @@ vLLM/PagedAttention 这篇论文的核心知识有三层。第一，KV cache 是
 - [vLLM documentation](https://docs.vllm.ai/en/latest/)
 - [vLLM GitHub](https://github.com/vllm-project/vllm)
 - [智源社区：伯克利开源 LLM 推理与服务库 vLLM](https://hub.baai.ac.cn/view/27505)
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=vllm+pagedattention&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=vllm+pagedattention)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=vllm+pagedattention)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

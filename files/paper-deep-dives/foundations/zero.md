@@ -1,6 +1,11 @@
 # ZeRO：数据并行真正浪费的是训练状态副本
 
-Checked date: 2026-06-03  
+!!! info "本站判断"
+    这页把《ZeRO：数据并行真正浪费的是训练状态副本》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
+Checked date: 2026-06-03
 Repro status: 论文级理解；本站未复现实验，只引用原论文图、Microsoft Research 论文页和 DeepSpeed 官方文档。
 
 ZeRO 要解决的问题不是“模型太大”这么笼统，而是更精确的一笔显存账：普通 data parallel 让每张 GPU 都保存完整 parameters、gradients 和 optimizer states。GPU 数量增加后，计算吞吐和全局 batch 可以变大，但单卡上那份训练状态没有变小。于是训练大模型时，你经常不是被 fp16 权重本身卡住，而是被 Adam 状态、梯度、master weights、激活和临时 buffer 一起挤爆。
@@ -129,3 +134,12 @@ ZeRO 最值得带走的是一套显存账本，而不是一个配置名。普通
 - [DeepSpeed ZeRO documentation](https://deepspeed.readthedocs.io/en/latest/zero3.html)
 - [PyTorch FSDP documentation](https://docs.pytorch.org/docs/stable/fsdp.html)
 - [Datawhale: VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=zero&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=zero)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=zero)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

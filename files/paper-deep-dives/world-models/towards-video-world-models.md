@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Towards Video World Models：视频世界模型五个门槛
 
+!!! info "本站判断"
+    这页把《Towards Video World Models：视频世界模型五个门槛》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇文章很适合放在 LingBot-World 前面读。它不提出一个新模型，而是回答一个更基础的问题：**为什么 Sora、Veo 这类强视频生成模型还不能直接等价于 video world model，以及从视频生成走向世界模型需要补哪些训练和系统能力。**
 
 作者把 video world model 的核心要求概括成五个属性：`causal`、`interactive`、`persistent`、`real-time` 和 `physically accurate`。这五个词可以直接变成评估视频世界模型的 checklist。
@@ -23,9 +28,9 @@ paper_topic: 世界模型
 <small>Figure source: `Towards Video World Models`, Figure 1. 原文图注要点：图中对比 internal world model 和 external world model，前者像人脑内部对粗粒度未来的预测，后者则试图模拟现实世界的完整细节。</small>
 
 **Figure 1 先分清 internal 和 external world model。**
-**输入输出**：输入是视频世界模型方法谱系和能力门槛，输出是 taxonomy 与评估维度。  
-**效率机制**：用门槛框架减少概念混淆，避免把视频生成直接当世界模型。  
-**对主线意义**：它为全站判断“视频模型是否服务决策”提供检查表。  
+**输入输出**：输入是视频世界模型方法谱系和能力门槛，输出是 taxonomy 与评估维度。
+**效率机制**：用门槛框架减少概念混淆，避免把视频生成直接当世界模型。
+**对主线意义**：它为全站判断“视频模型是否服务决策”提供检查表。
 **不能证明什么**：taxonomy 不能证明具体系统具备闭环控制收益。
 
 这个区分很重要。前者不一定需要生成像素，甚至可以故意丢掉视觉细节；后者则必须尽可能真实地模拟未来画面、对象、运动和交互后果。文章讨论的重点是后者，也就是 video world model。
@@ -307,3 +312,12 @@ WonderPlay 这类方向就是把物理仿真、3D Gaussian 表示和视频扩散
 5. 对人类交互娱乐来说，低延迟可能比严格物理更重要，不能用同一套指标评价所有应用。
 
 最实用的读法是：把这篇文章当作视频世界模型的“需求规格说明”。如果一个视频模型要从生成器升级成世界模拟器，至少要逐项回答：是否因果、是否可控、是否持久、是否低延迟、是否物理可信。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Towards+Video+World+Models&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Towards+Video+World+Models)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Towards+Video+World+Models)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

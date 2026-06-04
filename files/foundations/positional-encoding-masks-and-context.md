@@ -205,3 +205,12 @@ Layers\times L\times d_{\text{kv}}\times bytes
 - [YaRN](https://arxiv.org/abs/2309.00071)：理解 RoPE context extension 为什么需要频率/位置缩放和少量继续训练。
 - [Hugging Face Attention Interface](https://huggingface.co/docs/transformers/attention_interface)：理解不同 attention backend 对 causal、padding、packing、sliding-window mask 的接口要求。
 - [MagiAttention](https://arxiv.org/abs/2502.13138)：看复杂 mask、长上下文和分布式 attention 如何绑在一起。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

@@ -258,3 +258,12 @@ reward 主要奖励未来帧像不像
 ## 读完以后怎么判断
 
 Policy Gradient 的核心是对采样概率求导，而不是对离散采样结果求导。Baseline/critic 把绝对分数变成相对好坏，PPO 用概率比和 KL 约束一次更新的幅度，GRPO 用同题多样本比较省掉 critic。所有这些方法最后都受 reward 质量、rollout 成本和评测闭环约束。
+
+## 相关阅读与下一步
+
+- 外部材料：[Spinning Up：Policy Optimization](https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html)。
+- 外部材料：[PPO 论文](https://arxiv.org/abs/1707.06347)。
+- 外部材料：[Soft Actor-Critic 论文](https://arxiv.org/abs/1801.01290)。
+- 站内下一步：[强化学习专题](index.md)。
+- 站内下一步：[MDP、价值函数与 Bellman](mdp-value-bellman.md)。
+- 站内下一步：[世界模型中的强化学习](rl-for-world-models.md)。

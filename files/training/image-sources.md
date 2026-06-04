@@ -1,41 +1,41 @@
 # 训练图片来源与授权
 
-本页记录 `files/assets/images/training/` 中图片的来源链接。  
+本页记录 `files/assets/images/training/` 中图片的来源链接。
 这些图片均来自 Wikimedia Commons，具体授权条款以各文件页面为准。
 
 训练专题曾经有一批概括图；现在不再在网页中使用。训练页里的方法图统一改为论文原图、论文项目图或明确来源的公共图。
 
 ## 文件清单
 
-1. `gradient-descent.svg`  
+1. `gradient-descent.svg`
    来源：https://commons.wikimedia.org/wiki/File:Gradient_descent.svg
-2. `neural-network.svg`  
+2. `neural-network.svg`
    来源：https://commons.wikimedia.org/wiki/File:Neural_network.svg
-3. `precision-recall.svg`  
+3. `precision-recall.svg`
    来源：https://commons.wikimedia.org/wiki/File:Precisionrecall.svg
-4. `amdahls-law.svg`  
+4. `amdahls-law.svg`
    来源：https://commons.wikimedia.org/wiki/File:AmdahlsLaw.svg
-5. `boxplot-vs-pdf.svg`  
+5. `boxplot-vs-pdf.svg`
    来源：https://commons.wikimedia.org/wiki/File:Boxplot_vs_PDF.svg
-6. `mapreduce.svg`  
+6. `mapreduce.svg`
    来源：https://commons.wikimedia.org/wiki/File:MapReduce.svg
-7. `pid-loop.svg`  
+7. `pid-loop.svg`
    来源：https://commons.wikimedia.org/wiki/File:PID_en.svg
-8. `normal-distribution.svg`  
+8. `normal-distribution.svg`
    来源：https://commons.wikimedia.org/wiki/File:Normal_distribution_pdf.svg
-9. `histogram-example.svg`  
+9. `histogram-example.svg`
    来源：https://commons.wikimedia.org/wiki/File:Histogram_example.svg
-10. `pareto-chart.svg`  
+10. `pareto-chart.svg`
     来源：https://commons.wikimedia.org/wiki/File:Diagrama_pareto.svg
-11. `p-control-chart.svg`  
+11. `p-control-chart.svg`
     来源：https://commons.wikimedia.org/wiki/File:P_control_chart.svg
-12. `gantt-diagram.svg`  
+12. `gantt-diagram.svg`
     来源：https://commons.wikimedia.org/wiki/File:Gantt_diagramm.svg
-13. `roc-curve.svg`  
+13. `roc-curve.svg`
     来源：https://commons.wikimedia.org/wiki/File:Roc_curve.svg
-14. `variance-bias.svg`  
+14. `variance-bias.svg`
     来源：https://commons.wikimedia.org/wiki/File:Variance-bias.svg
-15. `confusion-matrix.png`  
+15. `confusion-matrix.png`
     来源：https://commons.wikimedia.org/wiki/File:Confusion_Matrix.png
 
 ## 训练专题论文原图
@@ -127,3 +127,12 @@ flowchart TD
 | 是否有更权威来源 | 优先论文、官方文档或公共授权图 |
 
 如果未来改用自绘 SVG 或脚本生成图，也建议把生成脚本或数据来源记录在这里。这样图不仅能看，也能维护。
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

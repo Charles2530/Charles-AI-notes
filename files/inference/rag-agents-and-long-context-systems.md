@@ -12,6 +12,10 @@
 
 而这四件事一旦组合起来，系统的核心问题就会从“单次推理质量”转向“信息如何被组织、更新、裁剪和追踪”。这也是为什么很多看似是模型问题的线上故障，最后会落到检索、上下文装配或状态管理上。
 
+![RAG overview](../assets/images/paper-figures/foundations/rag-figure-1-overview.png){ width="760" }
+
+<small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原图表达 retriever 把文档作为 latent evidence 提供给 generator；本站读法是把 RAG 放进线上系统后继续追问 evidence 如何排序、裁剪、引用、缓存和回放。它不能证明“加检索器就会减少幻觉”，因为检索质量、上下文装配和引用校验都会改变结果。</small>
+
 ## 为什么 RAG 不只是“加个检索器”
 
 RAG 的核心不只是把文档拼进 prompt，而是决定查文档、表格、数据库、网页还是历史记录，决定放多少证据进上下文，决定关键证据是否出现在模型更容易使用的位置，并避免无关信息塞爆上下文后误导模型。
@@ -144,8 +148,17 @@ Agent 在多步工具调用后，上下文容易越来越乱。
 
 ## 读完以后怎么判断
 
-RAG、Agent 和长上下文系统的结合，代表着推理系统已经从“单次生成”走向“受约束的信息编排与决策系统”。因此它们更像系统工程问题，而不是单纯模型推理问题。真正强的系统，不只是能读很多 token，而是知道何时检索、何时压缩、何时调用工具、何时停止继续扩张上下文。 
+RAG、Agent 和长上下文系统的结合，代表着推理系统已经从“单次生成”走向“受约束的信息编排与决策系统”。因此它们更像系统工程问题，而不是单纯模型推理问题。真正强的系统，不只是能读很多 token，而是知道何时检索、何时压缩、何时调用工具、何时停止继续扩张上下文。
 
 ## 工程收束
 
 RAG、Agent 和长上下文系统要把检索质量、上下文压缩、工具链时延、长文档 prefill 和会话级反馈分开看。生产验收要区分检索失败与推理失败，记录每轮工具收益，让长上下文走专门通路，并维护 session 回放；oncall 面板也应直接看到 route、cache、queue 和 fallback 状态。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

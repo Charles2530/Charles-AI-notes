@@ -4,6 +4,10 @@
 
 这页建议和 [训练数据系统与吞吐优化](data-systems-and-optimization.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) 一起读。数据系统页讲治理链路，本页聚焦训练消费路径和吞吐治理。
 
+![GPipe pipeline parallelism](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png)
+
+<small>图源：[GPipe](https://arxiv.org/abs/1811.06965)。原图表达把 mini-batch 切成 micro-batch 后，pipeline 如何减少设备空泡；本站读法是：输入管线、packing 和 bucketing 也在服务同一个目标，即让每个训练 step 有稳定、可预测、可填满的工作量。它不能证明某个数据格式一定更快，只说明吞吐问题必须同时看数据、batch 形状和并行调度。</small>
+
 ## 一、输入系统的真实职责
 
 训练输入系统至少要正确读取、解析和解码数据，保持足够高且稳定的吞吐，维持 mixture、curriculum 和采样策略的统计正确性，支持 deterministic resume，并为不同长度、模态和任务构造有效 batch。
@@ -120,3 +124,12 @@ Deterministic resume 的验收应看恢复前后采样分布、长度桶、数�
 验收至少包括功能正确性、吞吐稳定性、恢复一致性、混合正确性、观测完备性和方法学记录：mask、segment、label、模态边界和 position 要正确，长跑 step time 不能周期性抖动，checkpoint 恢复后采样分布和 pack 行为要一致，数据源权重、长度桶和任务比例要符合设计，故障要能定位到数据源、worker、shard、tokenizer 或 packer，消融中也要报告有效 token、padding、packing 和数据曝光口径。
 
 最终判断是：输入系统不是把数据喂进模型这么简单，而是把样本统计契约、吞吐契约、恢复契约和监控契约统一起来。只要进入多源混合、长上下文、多模态和对象存储流式训练阶段，这一层就会直接决定训练平台上限。
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

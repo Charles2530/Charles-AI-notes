@@ -130,3 +130,12 @@ target modules 选得太少，adapter 学不动；选得太多，显存、过拟
 ## 读完以后怎么判断
 
 QLoRA 的核心不是“4bit 训练”，而是“4bit 冻结底座 + 高效 adapter 训练”。LoRA 先减少可训练更新的维度，QLoRA 再压低底座常驻显存，NF4/double quant/paged optimizer 分别处理权重格式、元数据和峰值显存。判断 QLoRA 是否适合一个任务，不要只看能否跑起来，而要看量化底座是否还可靠、adapter 是否覆盖关键模块、数据是否足够干净，以及部署 runtime 是否真的支持目标形态。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

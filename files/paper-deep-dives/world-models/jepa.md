@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # JEPA：预测式表征学习路线
 
+!!! info "本站判断"
+    这页把《JEPA：预测式表征学习路线》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文的价值不在某个实验指标，而在于给出了一条和“生成未来像素”不同的世界模型路线：**世界模型不一定要重建未来画面的每个细节，而可以预测未来的抽象表征。** 这就是 `Joint-Embedding Predictive Architecture`，也就是 JEPA。
 
 如果把 LingBot-World 看作“从视频生成模型发展出的视觉世界模拟器路线”，Dreamer 看作“从交互轨迹学习 latent dynamics 的 model-based RL 路线”，那么 JEPA 更像一条上层架构原则：用可预测、可规划、可组合的 latent representation 来承载世界动态。
@@ -297,3 +302,12 @@ JEPA 的核心贡献是把世界模型的预测目标从“未来像素”挪到
 2. [I-JEPA](https://arxiv.org/abs/2301.08243)：把 JEPA 落到图像自监督学习，适合看“预测表示而非像素”的实证化版本。
 3. [V-JEPA](https://arxiv.org/abs/2404.08471)：把 JEPA 扩展到视频表示，适合和视频世界模型路线对比。
 4. [Meta V-JEPA blog](https://ai.meta.com/blog/v-jepa-yann-lecun-ai-model-video-joint-embedding-predictive-architecture/)：官方解释；适合先建立直觉，再回论文核对实验边界。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=A+Path+Towards+Autonomous+Machine+Intelligence&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=A+Path+Towards+Autonomous+Machine+Intelligence)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=A+Path+Towards+Autonomous+Machine+Intelligence)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

@@ -1,5 +1,7 @@
 # PTQ、GPTQ、AWQ 与 SmoothQuant：先找瓶颈，再分误差预算
 
+> **这篇回答的问题。** 如何理解“PTQ、GPTQ、AWQ 与 SmoothQuant”背后的核心机制、适用边界和下一步阅读路径。
+
 量化不是把 `float16` 文件改成 `int4` 文件。它真正做的是：用更少的离散格子近似原来的连续数值，同时让模型质量、服务延迟和长尾任务尽量不坏。文件变小只说明存储少了；上线成功还要证明低比特 kernel 命中、请求分布匹配、质量分桶没有退化。
 
 所以这页不按“INT8、INT4、FP8 谁更高级”排序，而按一个更实用的问题来讲：**量化到底在保护哪类误差，省下的成本又落在权重、activation、KV cache 还是 runtime kernel 上？**
@@ -179,3 +181,12 @@ PTQ 不是“训练后随手压一下”，而是用校准数据估计真实张�
 - [SmoothQuant](https://arxiv.org/abs/2211.10438)：理解 activation outlier migration。
 - [LLM.int8()](https://arxiv.org/abs/2208.07339)：理解大模型 activation outlier 与 mixed-precision decomposition 的早期重要工作。
 - [PaddleNLP 大模型量化教程](https://paddlenlp.readthedocs.io/en/stable/llm/quantization.html)：中文官方文档，适合看 GPTQ、AWQ 等工具链参数如何落地。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

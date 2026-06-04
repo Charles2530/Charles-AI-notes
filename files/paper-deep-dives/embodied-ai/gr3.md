@@ -6,6 +6,13 @@ paper_topic: 具身智能 / VLA
 
 # GR-3：少样本长时程 VLA
 
+!!! info "本站判断"
+    这页把《GR-3：少样本长时程 VLA》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
+> **这篇回答的问题。** 如何理解“GR-3”背后的核心机制、适用边界和下一步阅读路径。
+
 GR-3 是一篇很适合放进具身智能专题的技术报告，因为它把 VLA 从“看图出动作”继续推向三个更真实的问题：严格语言跟随、少样本新物体适配，以及长时程/灵巧任务执行。
 
 它最值得记的一点是：**VLA 不只要输出 action chunk，还要知道任务是在进行、结束，还是根本无效。**
@@ -19,9 +26,9 @@ GR-3 接在 π0 / π0.5、GR-2 之后看最顺。GR-2 重点是视频知识迁�
 <small>Figure source: `GR-3 Technical Report`, Figure 1. 原论文图意：展示 GR-3 在新物体、新环境、抽象指令、长时程任务和灵巧衣物操作上的能力。</small>
 
 **Teaser 图先看任务覆盖，不要当完整安全证明。**
-**输入输出**：输入是少量机器人数据、视觉语言上下文和任务条件，输出是长时程操作策略。  
-**效率机制**：通过数据配方和模型结构提高少样本真实机器人任务覆盖。  
-**对主线意义**：它服务 VLA 的数据效率与开放任务泛化讨论。  
+**输入输出**：输入是少量机器人数据、视觉语言上下文和任务条件，输出是长时程操作策略。
+**效率机制**：通过数据配方和模型结构提高少样本真实机器人任务覆盖。
+**对主线意义**：它服务 VLA 的数据效率与开放任务泛化讨论。
 **不能证明什么**：少样本结果不能证明所有新 embodiment 或安全恢复都解决。
 
 ## 模型结构
@@ -222,3 +229,12 @@ GR-3 要按 vision-language-action 闭环系统读：方法重点是多模态输
 1. [arXiv:2507.15493](https://arxiv.org/abs/2507.15493)
 2. [GR-3 project page](https://seed.bytedance.com/en/GR3)
 3. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2507.15493)
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=GR-3+Technical+Report&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=GR-3+Technical+Report)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=GR-3+Technical+Report)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

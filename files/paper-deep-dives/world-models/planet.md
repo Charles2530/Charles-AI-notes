@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # PlaNet：像素规划的潜变量动力学
 
+!!! info "本站判断"
+    这页把《PlaNet：像素规划的潜变量动力学》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文是 Dreamer 系列之前非常关键的一步。它提出的问题很直接：如果只有像素观测，能否先学习一个 latent dynamics model，再完全在 latent space 里做在线规划，而不是训练 model-free policy。
 
 PlaNet 的答案是：
@@ -37,9 +42,9 @@ PlaNet 的历史位置可以这样理解：
 <small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 1. 原论文图注要点：该图展示六个像素控制任务，覆盖固定视角部分可观测、稀疏奖励、接触动力学、较大状态动作空间和平衡控制等挑战。</small>
 
 **PlaNet 任务图要看像素控制覆盖哪些难点。**
-**输入输出**：输入是像素观测、动作和 reward，输出是 RSSM belief/state 与 CEM 规划动作。  
-**效率机制**：规划时只在 latent space rollout reward，避免为每个候选动作生成像素未来。  
-**对主线意义**：它奠定了“从像素学 latent dynamics 再规划”的世界模型路线。  
+**输入输出**：输入是像素观测、动作和 reward，输出是 RSSM belief/state 与 CEM 规划动作。
+**效率机制**：规划时只在 latent space rollout reward，避免为每个候选动作生成像素未来。
+**对主线意义**：它奠定了“从像素学 latent dynamics 再规划”的世界模型路线。
 **不能证明什么**：PlaNet benchmark 不能证明所有真实硬件或长时稀疏任务同样稳定。
 
 ## 核心问题
@@ -318,3 +323,12 @@ PlaNet 的核心贡献可以概括为三点：
 一句话总结：PlaNet 是“世界模型用于控制”的经典原型。它把世界模型从视频预测器推进成一个可供规划器调用的 latent simulator，也为后续 DreamerV3 这类 imagined rollout policy learning 铺好了路线。
 
 PlaNet 的核心证据链是 RSSM posterior 用真实观测校正，prior 在 imagination 中 rollout，再用 CEM 在 latent space 规划动作。DMC 分数、latent overshooting 和 open-loop prediction 图要一起读：它证明 latent planning 有数据效率优势，也暴露在线 CEM 成本高，这正是 Dreamer 后来改成 actor 的原因。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Learning+Latent+Dynamics+for+Planning+from+Pixels&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Learning+Latent+Dynamics+for+Planning+from+Pixels)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Learning+Latent+Dynamics+for+Planning+from+Pixels)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

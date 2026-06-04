@@ -1,7 +1,11 @@
 # Runtime Dispatch 与 Kernel 选择
 
-很多高性能系统并不是靠“一个万能 kernel”获胜，而是靠一整套运行时 dispatch 机制：根据 shape、dtype、layout、设备类型、batch 形态和任务阶段，为当前请求挑选最合适的 kernel 路径。  
+很多高性能系统并不是靠“一个万能 kernel”获胜，而是靠一整套运行时 dispatch 机制：根据 shape、dtype、layout、设备类型、batch 形态和任务阶段，为当前请求挑选最合适的 kernel 路径。
 也就是说，真正的性能系统不仅要有好 kernel，还要有**挑 kernel 的能力**。
+
+![vLLM runtime components](../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
+
+<small>图源：[vLLM 官方博客](https://vllm.ai/blog/2023-06-20-vllm)。原图表达 runtime 不只是模型 forward，还包含 scheduler、KV manager、allocator 和 worker；本站读法是把 kernel selection 放回 runtime dispatch：同一个算子在不同请求桶、cache 状态和 batch 形态下可能走不同路径。它不能证明 vLLM 的 dispatch 策略适用于所有框架。</small>
 
 ## 核心问题
 
@@ -48,7 +52,7 @@ Runtime dispatch 真正要回答的是：**当同一个模型在不同 shape、d
 
 成熟系统常会把工作负载划分成若干 shape family，例如小 batch decode、长 prompt prefill、常见 hidden size / head dim、量化与非量化分支。
 
-然后为每类 family 挑选对应 kernel。  
+然后为每类 family 挑选对应 kernel。
 这比试图用一个 kernel 打天下更现实。
 
 所谓 shape family，核心不是把每个 shape 单独编号，而是找出**性能行为相近的一组输入**。例如某些 attention kernel 对 `head_dim=128` 和 `head_dim=160` 的反应完全不同，那它们就不应被看成同一类；某些 decode 负载虽然 sequence length 不同，但都受限于小 batch 和 KV 访存，那它们可以共用一类规则。
@@ -124,3 +128,12 @@ Runtime dispatch 要让 shape、dtype、layout、cache 状态和运行时队列�
 **修复**：把 dispatch 日志提升为一等指标，记录命中路径、跳过原因和 fallback 代价；为 LoRA 热路径补 layout normalization，或增加一个支持该 stride 的特化版本；灰度时按租户看命中率。
 
 **反例**：如果命中率很高但收益仍低，问题才更可能在 kernel 本身、内存带宽或上游排队。dispatch 排查的第一问永远是“我以为跑的路径，线上真的跑了吗”。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

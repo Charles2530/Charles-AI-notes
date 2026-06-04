@@ -170,3 +170,12 @@ WILDS 这类 benchmark 的价值不在于又多了一个总分，而在于它把
 - [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101)：理解 AdamW 为什么把 weight decay 从梯度项里拆出来。
 - [When Does Label Smoothing Help?](https://arxiv.org/abs/1906.02629)：理解 label smoothing 对过度自信、表示和蒸馏的影响边界。
 - [动手学深度学习：模型选择、欠拟合和过拟合](https://zh.d2l.ai/chapter_multilayer-perceptrons/underfit-overfit.html)：中文讲法清楚，适合补训练/验证曲线直觉。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

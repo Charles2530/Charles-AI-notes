@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Embodied World Model Survey：具身世界模型综述
 
+!!! info "本站判断"
+    这页把《Embodied World Model Survey：具身世界模型综述》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文不是一个新模型，而是一张世界模型文献地图。它最有价值的地方，是把近几年非常混乱的 world model 工作压到三个问题上：**模型和决策耦合得多紧、未来是一步步 rollout 还是整体预测、世界状态到底用向量、token、网格还是可渲染 3D 表示。**
 
 如果你想快速判断一篇新论文的位置，这篇综述比单篇 Dreamer、V-JEPA、LingBot-World 更适合做入口。它不会教你复现某个模型，但会帮你判断：这篇工作证明的是视觉生成能力、状态预测能力、规划收益，还是闭环控制能力。
@@ -40,9 +45,9 @@ paper_topic: 世界模型
 <small>图源：`A Comprehensive Survey on World Models for Embodied AI`，Figure 1 子图。原论文图意：world model 作为 internal simulator，把历史观测转化为可用于 imagination、planning 和控制的内部世界状态。</small>
 
 **综述总图用于定位方法，不是证明方法有效。**
-**输入输出**：输入是综述 taxonomy、任务类型和方法家族，输出是具身世界模型路线图。  
-**效率机制**：用分类框架降低阅读和方案选型成本，而非直接降低训练成本。  
-**对主线意义**：它帮助把 RSSM、视频模拟、几何状态和 VLA 接到同一张地图。  
+**输入输出**：输入是综述 taxonomy、任务类型和方法家族，输出是具身世界模型路线图。
+**效率机制**：用分类框架降低阅读和方案选型成本，而非直接降低训练成本。
+**对主线意义**：它帮助把 RSSM、视频模拟、几何状态和 VLA 接到同一张地图。
 **不能证明什么**：综述图不能证明任何单一方法在真实闭环中有效。
 
 论文把世界模型能力拆成三根柱子：
@@ -291,3 +296,12 @@ FVD 只说明生成视频在特征分布上像真实视频。它不能告诉你�
 最后，如果把世界模型放回具身智能主线，可以用一句话总结：
 
 > 世界模型的价值不是“想象未来”本身，而是把动作条件下的未来后果变成可被智能体用来规划、控制、恢复和自我改进的信号。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=A+Comprehensive+Survey+on+World+Models+for+Embodied+AI&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=A+Comprehensive+Survey+on+World+Models+for+Embodied+AI)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=A+Comprehensive+Survey+on+World+Models+for+Embodied+AI)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

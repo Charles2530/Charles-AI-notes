@@ -6,6 +6,11 @@ paper_topic: 技术报告
 
 # GPT-4o System Card：Omni 安全与多模态评测
 
+!!! info "本站判断"
+    这页把《GPT-4o System Card：Omni 安全与多模态评测》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇不是传统意义上的 architecture technical report。它没有公开参数量、层数、训练 FLOPs、优化器、batch size 或详细数据配比。真正值得读的是另一条线：**GPT-4o 如何从文本模型安全评估，扩展到端到端语音、多模态输入输出和实时交互系统的部署评估**。
 
 报告最核心的技术信息可以压缩成三句话：
@@ -441,3 +446,12 @@ GPT-4o System Card 最值得记住的不是某个 benchmark，而是它把多模
 1. [OpenAI: GPT-4o System Card](https://openai.com/index/gpt-4o-system-card/)：官方系统卡入口；重点读 Preparedness、voice generation、speaker identification 和 red teaming。
 2. [GPT-4 System Card](https://openai.com/research/gpt-4-system-card)：对比文本模型安全评估和 GPT-4o 的语音/多模态扩展。
 3. [GPT-4V System Card](https://openai.com/index/gpt-4v-system-card/)：对比视觉输入安全、隐私和 grounded visual reasoning。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=GPT-4o+System+Card&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=GPT-4o+System+Card)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=GPT-4o+System+Card)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

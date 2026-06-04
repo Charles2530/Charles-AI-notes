@@ -6,6 +6,11 @@ paper_topic: 高效训练
 
 # SLA / SLA2：DiT 稀疏线性 Attention
 
+!!! info "本站判断"
+    这页把《SLA / SLA2：DiT 稀疏线性 Attention》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这两篇论文讨论的是视频 DiT 里一个很基础但很工程化的问题：**attention 既是长序列视频生成的瓶颈，又很难直接靠稀疏或线性化单独解决。** SLA 先把 attention 权重分成三类：少数关键块精确算，大量边缘块用 linear attention 补偿，极小块直接跳过。SLA2 则继续追问：这个三分法能不能不靠手工规则，低比特 attention 能不能和 sparse-linear attention 一起训练出来。
 
 因此这篇讲解把两篇合在一起看：SLA 是 sparse-linear attention 的第一版，证明“高秩少数精确算、低秩多数便宜补”这条路线可行；SLA2 是第二版，补上可学习路由、比例混合和 QAT，让它更接近可部署的高稀疏注意力方案。
@@ -389,3 +394,12 @@ SLA 最值得记住的不是“95% sparsity”这个数字，而是它给近似 
 ## 阅读结论
 
 SLA 的主线是把 dense attention 分解成 sparse / linear / skip 三条路径，用短微调让模型适配近似计算；SLA2 则把路由、分支比例和低比特 sparse attention 都放进训练路径。读这类论文时，速度、显存、质量表和消融必须一起看；单独的稀疏率没有意义。真正要问的是：质量来自稀疏模式本身，还是来自 linear 补偿、微调和 QAT 在兜底。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=SLA+%2F+SLA2%3A+Sparse-Linear+Attention+for+Diffusion+Transformers&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=SLA+%2F+SLA2%3A+Sparse-Linear+Attention+for+Diffusion+Transformers)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=SLA+%2F+SLA2%3A+Sparse-Linear+Attention+for+Diffusion+Transformers)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

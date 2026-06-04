@@ -2,6 +2,10 @@
 
 推理系统上线后，所有优化最后都会落到两个问题：这次请求到底花多少钱，用户体验底线有没有守住。成本模型回答“值不值”，SLO 回答“能不能接受”。没有这两者，tokens/s、显存节省和 benchmark 分数都很容易误导决策。
 
+![vLLM serving system overview](../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
+
+<small>图源：[vLLM 官方博客：Easy, Fast, and Cheap LLM Serving with PagedAttention](https://vllm.ai/blog/2023-06-20-vllm)。原图表达 scheduler、KV cache manager、allocator 和 GPU worker 的关系；本站读法是把成本拆到 queue、prefill、decode、KV 与调度层，而不是只算单 token 价格。它不能证明 vLLM 在所有 workload 下成本最低。</small>
+
 ## 先把 SLO 当成约束
 
 SLO 是 Service Level Objective，即服务目标。它不是“越快越好”，而是明确什么体验必须守住。
@@ -187,3 +191,12 @@ T_{\text{observe}}
 ## 读完以后怎么判断
 
 成本建模和 SLO 设计的核心，是把优化从“看起来更快”变成“在指定请求桶里，守住质量和尾延迟，并降低单位成功任务成本”。先拆 queue、prefill、KV、decode、tool 和 retry，再按短问答、长文档、长输出、agent、多模态分桶验收，推理系统才不会被平均值带偏。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

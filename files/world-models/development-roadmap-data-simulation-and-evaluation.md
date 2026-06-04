@@ -94,3 +94,12 @@ episode schema
 - [V-JEPA 2 world model blog](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)：理解视频表征、物理推理和规划基准如何连接。
 - [RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/)：适合学习任务、资产、轨迹和 success checker 的组织方式。
 - [Isaac Sim container installation](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html)：适合看 headless 仿真和远程部署的工程口径。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

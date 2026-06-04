@@ -170,3 +170,12 @@ QAT、kernel 和 KV cache 是量化落地的三块拼图。QAT 让模型适应�
 - [QLoRA](https://arxiv.org/abs/2305.14314)：理解低比特底座训练和内存节省。
 - [TensorRT-LLM documentation](https://nvidia.github.io/TensorRT-LLM/)：看低比特 kernel、FP8/INT8/INT4 和 serving engine 如何落到 NVIDIA 部署栈。
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：对照理解 KV cache 管理和 KV 量化为什么是两类问题。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

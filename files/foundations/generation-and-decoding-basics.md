@@ -210,3 +210,12 @@ PagedAttention、prefix cache、KV 量化、KV eviction、disaggregated prefill 
 - [Fast Inference from Transformers via Speculative Decoding](https://arxiv.org/abs/2211.17192)：理解 draft/verify 如何保持 target distribution 并降低延迟。
 - [vLLM speculative decoding blog](https://vllm.ai/blog/spec-decode)：学习 acceptance rate、QPS 和 workload 如何决定投机解码收益。
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)：理解 KV cache 分页管理为什么是 serving 成本核心。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

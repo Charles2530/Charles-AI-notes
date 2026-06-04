@@ -4,6 +4,10 @@
 
 这页建议和 [推理服务系统](serving-systems.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md)、[RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md) 一起读。前者解释推理链路和容量约束，本页关注上线后如何持续判断系统是否真的变好。
 
+![W&B experiment dashboard](../assets/images/tools/wandb/wandb-quickstart-runs.png){ width="820" }
+
+<small>图源：[Weights & Biases 官方文档](https://docs.wandb.ai/)。原图表达实验运行、指标和版本记录如何被组织到 dashboard；本站读法是：线上可观测性也要把请求、模型版本、路由、质量、成本和回放样本接到同一条证据链。它不能替代生产 trace，也不能单独证明模型质量变好。</small>
+
 ## 一、为什么离线 benchmark 不够
 
 离线测试集固定、干净、可复现，真实流量却会不断变化。用户问题分布、上下文长度、附件类型、工具可用性、检索索引、业务目标和安全边界都会随时间漂移。一个模型在离线集上更高分，不等价于线上效用更高。
@@ -184,3 +188,12 @@ Trace 和 replay 往往包含完整上下文，必须把隐私治理放进主流
 一套线上观测体系至少应让团队快速回答：能否看到问题，能否定位受影响用户、任务桶和路径，能否回放并验证，能否决定回滚、限流、扩容、切 fallback 或继续放量，能否把样本回流到下一轮训练、评测或系统修复，以及能否保持指标口径稳定、关键桶长期可追、发布变更可回看。
 
 如果这些问题还答不快，说明系统只是有 dashboard，还没有形成可运营的线上评测能力。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

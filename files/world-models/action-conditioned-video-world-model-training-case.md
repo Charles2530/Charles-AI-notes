@@ -1,5 +1,7 @@
 # 动作条件视频世界模型端到端训练案例
 
+> **这篇回答的问题。** 如何理解“动作条件视频世界模型端到端训练案例”背后的核心机制、适用边界和下一步阅读路径。
+
 这页用一个具体案例把全站主线串起来：**训练一个面向机器人桌面操作的动作条件视频世界模型**。目标不是追求最完整的工业方案，而是给读者一条可复盘的技术链路：从数据、视觉状态、动作接口，到训练系统、rollout 推理、量化和闭环评测。
 
 ## 任务设定
@@ -280,3 +282,12 @@ T_{\text{observe}}
 | 合成 rollout 直接回流 | 容易形成模型自我强化的数据污染 |
 
 一个好用的动作条件视频世界模型，不是“生成最漂亮的未来”，而是用可承受成本预测出足够影响决策的未来差异。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

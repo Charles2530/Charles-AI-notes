@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # DMD2：更稳的少步分布匹配蒸馏
 
+!!! info "本站判断"
+    这页把《DMD2：更稳的少步分布匹配蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 DMD2 是 [DMD](dmd.md) 的直接续作。它不是简单把 DMD 多训一会儿，而是正面修补 DMD 在大规模文生图蒸馏中的三个痛点：**回归配对数据太贵、fake score 跟不上 generator、一步模型容量不足以吃下 SDXL 这种大模型的复杂分布**。
 
 一句话概括：DMD2 把 DMD 从“分布匹配 + paired regression regularizer”推进到“更纯的分布匹配 + fake critic 两时间尺度训练 + GAN 真实数据监督 + 多步 backward simulation”。
@@ -510,3 +515,12 @@ DMD2 最值得记住的不是“DMD 加 GAN”，而是它把一步/少步扩散
 4. Yin et al. [Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)：先理解 DMD 的 real/fake score difference，DMD2 的问题意识才清楚。
 5. Luo et al. [Latent Consistency Models](https://arxiv.org/abs/2310.04378)：对比少步生成的另一条路线，帮助区分 consistency distillation 和 distribution matching。
 6. Song et al. [Consistency Models](https://arxiv.org/abs/2303.01469)：理解“一条 PF-ODE 轨迹上不同点映射一致”与 DMD2 的差别。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Improved+Distribution+Matching+Distillation+for+Fast+Image+Synthesis&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Improved+Distribution+Matching+Distillation+for+Fast+Image+Synthesis)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Improved+Distribution+Matching+Distillation+for+Fast+Image+Synthesis)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

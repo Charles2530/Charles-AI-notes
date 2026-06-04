@@ -1,6 +1,13 @@
 # RT-2：把 web-scale VLM 变成会输出动作的 VLA
 
-Checked date: 2026-06-03  
+!!! info "本站判断"
+    这页把《RT-2：把 web-scale VLM 变成会输出动作的 VLA》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
+> **这篇回答的问题。** 如何理解“RT-2”背后的核心机制、适用边界和下一步阅读路径。
+
+Checked date: 2026-06-03
 Repro status: 论文级理解；本站未复现实验，只引用原论文图、DeepMind 官方博客、项目页和公开论文结果。
 
 RT-2 的核心不是“机器人也用了大模型”，而是一个更具体的问题：互联网图文数据里有大量视觉语义知识，机器人数据却少、贵、分布窄；能不能把 VLM 已经学到的物体、关系、类别和常识，通过一个动作接口迁移到真实机器人控制？
@@ -137,3 +144,12 @@ RT-2 的知识含量集中在三个接口。第一，action tokenization 把连�
 - [RT-1 paper](https://arxiv.org/abs/2212.06817)
 - [PaLM-E paper](https://arxiv.org/abs/2303.03378)
 - [Open X-Embodiment / RT-X project page](https://robotics-transformer-x.github.io/)
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=rt2&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=rt2)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=rt2)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

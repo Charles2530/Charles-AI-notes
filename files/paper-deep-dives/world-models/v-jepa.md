@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # V-JEPA：视频潜变量预测表征
 
+!!! info "本站判断"
+    这页把《V-JEPA：视频潜变量预测表征》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文把 JEPA 从静态图像扩展到视频。它的核心不是生成未来视频，而是训练一个视频 encoder：给定被遮挡的视频上下文，在 learned latent space 中预测被遮挡时空区域的目标表示。
 
 放在世界模型谱系里，V-JEPA 更适合被看作“表征型世界模型”的基础模块：它学习视频中的时空结构、运动线索和对象动态，但还没有动作条件、奖励预测、规划接口，也不会像 LingBot-World 那样直接生成可交互视频画面。
@@ -256,3 +261,12 @@ $$
 最后，V-JEPA 的实验主要证明“latent video prediction 能学到强视频表征”。把它迁移到机器人、自动驾驶或游戏世界模型时，还需要额外验证表示是否保留任务关键状态，例如接触、可操作物体、小目标、障碍物、风险事件和长期空间记忆。
 
 V-JEPA 的关键证据是 latent video prediction 能学到强视频表征：可见块预测 masked target，EMA target encoder 和 stop-gradient 防 collapse，masking ablation、frozen evaluation 和 pretraining distribution 表要连读。它没有 action/reward，因此更适合作为世界模型状态 encoder 候选，不是完整 action-conditioned simulator。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=V-JEPA%3A+Latent+Video+Prediction+for+Visual+Representation+Learning&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=V-JEPA%3A+Latent+Video+Prediction+for+Visual+Representation+Learning)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=V-JEPA%3A+Latent+Video+Prediction+for+Visual+Representation+Learning)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

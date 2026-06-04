@@ -4,6 +4,10 @@
 
 这页把“优化”和“数据系统”放在一起看，因为现实里它们几乎总是耦合的。更细的数据配方讨论见 [Scaling、课程学习与数据配比](scaling-curriculum-and-data-mixture.md)，运维侧见 [集群运维与实验治理](cluster-operations-and-experiment-management.md)。
 
+![Chinchilla tokens vs parameters](../assets/images/paper-figures/training/chinchilla-tokens-vs-params.png){ width="760" }
+
+<small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)。原图表达在固定计算预算下参数量和训练 token 数需要共同选择；本站读法是把数据系统视为训练优化的一部分：有效 token、采样、packing 和吞吐都会改变实际学习预算。它不能证明某个数据配方最优。</small>
+
 ## 有效 Token 是核心资源
 
 设单步训练耗时为 \(T_{\text{step}}\)，有效 token 数为 \(N_{\text{eff}}\)，训练吞吐可以写成：
@@ -134,3 +138,12 @@ Checkpoint 路径也要和数据读取路径分开规划。异步写入、热/�
 | 系统联动 | 异常是否与节点、网络、kernel 或通信时间线重合 |
 
 训练系统的核心目标，是把高质量 token 以稳定、可复现、可解释的方式送进优化过程。只有数据链路、batch 组织、优化日程和容错机制一起成立，训练曲线才值得被拿来做方法结论。
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

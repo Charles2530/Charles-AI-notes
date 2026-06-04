@@ -144,3 +144,12 @@ $$
 ## 工程收束
 
 人机协作的评测要把“人”放回系统里：任务完成只是底线，用户是否能理解机器人状态、能否及时接管、交互节奏是否可接受、失败后是否还能建立信任，都会决定部署质量。HRI 的数据回流也应记录用户反馈和接管上下文，而不只是成功或失败标签。
+
+## 相关阅读与下一步
+
+- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
+- 站内下一步：[具身智能专题](index.md)。
+- 站内下一步：[具身智能从零路线](beginner-learning-path.md)。
+- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。

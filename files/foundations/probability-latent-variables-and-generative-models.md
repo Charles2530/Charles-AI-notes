@@ -187,3 +187,12 @@ VAE 用 ELBO 把不可算的边际似然变成可优化下界；扩散用受控�
 - [Score-Based Generative Modeling through SDEs](https://arxiv.org/abs/2011.13456)
 - [TensorFlow Core 中文教程：卷积变分自编码器](https://www.tensorflow.org/tutorials/generative/cvae?hl=zh-CN)
 - [Pyro 中文教程：变分自编码器](https://pyro.org.cn/examples/vae.html)
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

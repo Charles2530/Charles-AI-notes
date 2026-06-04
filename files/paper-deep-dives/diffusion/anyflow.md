@@ -6,6 +6,11 @@ paper_topic: 扩散模型
 
 # AnyFlow：任意步视频扩散蒸馏
 
+!!! info "本站判断"
+    这页把《AnyFlow：任意步视频扩散蒸馏》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文的核心价值是把视频扩散蒸馏从“固定少数采样步好用”推进到“**同一个蒸馏模型可以随测试时采样步数变多而继续变好**”。它要解决的不是单纯 4-step 视频生成，而是 consistency distillation 的一个结构性问题：很多 consistency / endpoint mapping 学出来的学生在 4 steps 很强，但测试时给 8、16、32 steps 反而退化。
 
 AnyFlow 的答案是：不要只学 \(z_t \to z_0\)，而是学任意时间区间的 **flow map transition**：

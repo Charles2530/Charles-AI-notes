@@ -192,3 +192,12 @@ Datasheets for Datasets 和 Data Cards 的共同思想是：数据集应该像�
 - [FineWeb](https://huggingface.co/spaces/HuggingFaceFW/blogpost-fineweb-v1)：看网页语料处理、去重和质量过滤的工程化讲法。
 - [DataComp](https://arxiv.org/abs/2304.14108)：理解数据过滤策略本身也可以成为 benchmark。
 - [Open X-Embodiment](https://arxiv.org/abs/2310.08864)：理解机器人数据里的 embodiment、轨迹、动作接口和跨数据集异质性。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

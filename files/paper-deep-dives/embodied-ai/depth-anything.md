@@ -4,6 +4,11 @@ title: Depth Anything：无标注图像怎样变成单目深度基础模型
 
 # Depth Anything：无标注图像怎样变成单目深度基础模型
 
+!!! info "本站判断"
+    这页把《Depth Anything：无标注图像怎样变成单目深度基础模型》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 Depth Anything 的核心贡献很朴素，也很容易被讲浅：它没有靠复杂新结构取胜，而是把单目深度估计的瓶颈重新放回数据覆盖上。论文问的是：**如果真实深度标签很贵，能不能用大量无标注图像把深度模型训练成更强的视觉基础模型？**
 
 答案不是“把 pseudo label 加进去就行”。普通 self-training 很可能只让 student 模仿 teacher 已经会的东西。Depth Anything 真正关键的是两步：让无标注图像经过强扰动，迫使 student 学到更鲁棒的视觉知识；再用 DINOv2 feature alignment 保住语义表征，避免深度训练把通用视觉能力洗掉。
@@ -147,3 +152,12 @@ Depth Anything 对具身系统的意义主要有三层：
 - [Depth Anything project page](https://depth-anything.github.io/)：项目页适合直观看不同场景的 zero-shot 深度效果。
 - [LiheYoung/Depth-Anything](https://github.com/LiheYoung/Depth-Anything)：代码与模型发布页面。
 - [DINOv2: Learning Robust Visual Features without Supervision](https://arxiv.org/abs/2304.07193)：理解 feature alignment 为什么能保住语义表征。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=depth+anything&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=depth+anything)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=depth+anything)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

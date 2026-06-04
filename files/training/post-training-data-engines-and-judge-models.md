@@ -4,6 +4,10 @@
 
 这页建议和 [偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md)、[可观测性与在线评测](../inference/observability-and-online-evaluation.md) 一起读。它们分别覆盖偏好数据风险、实验方法学和线上回流。
 
+![InstructGPT RLHF pipeline](../assets/images/paper-figures/training/instructgpt-rlhf-pipeline.png){ width="860" }
+
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)。原图表达 SFT、reward model 和 PPO 的后训练流水线；本站读法是把现代后训练扩展成持续数据引擎：候选生成、judge、人审、回归集和线上回流。它不能证明 RLHF 是唯一后训练路线。</small>
+
 ## 一、后训练为什么是数据引擎
 
 预训练更像建立通用表示底座，后训练更像持续雕刻行为边界。它依赖的不是一次性数据包，而是一条长期运行的闭环：收集线上/离线 prompt、上下文和失败日志，聚类高频问题和长尾异常，生成多个候选回答或工具轨迹，用 judge、规则和程序信号粗筛，对高价值样本人审，再导出到 SFT、DPO/RLAIF、reward model、judge 训练和回归集。新模型上线后，还要继续观察同类问题是否下降。
@@ -128,3 +132,12 @@ repeat_question:   18.0% -> 21.6%
 一个后训练数据引擎是否成熟，可以看七件事：是否明确定义高价值样本，candidate 生成是否提供真实分歧，judge 是否多维、校准并有 holdout，人审是否集中在高 ROI 样本，SFT、偏好、RM/Judge、回归集导出是否分清，线上信号是否能在可控周期内回流，新版本上线后是否能归因“哪类错误真的下降”。
 
 后训练飞轮常见失效不是算法不够新，而是采样没对准高价值问题、judge 偏差没校准、人审花在平均样本、训练导出没有针对性、回归集缺失。最终判断很直接：谁能更稳定地把真实失败样本变成下一轮有效监督信号，谁就更可能在后训练阶段形成持续优势。
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

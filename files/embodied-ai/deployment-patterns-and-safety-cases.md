@@ -169,3 +169,12 @@ $$
 ## 工程收束
 
 具身部署的关键不是把自治程度一次拉满，而是先把 ODD、接管条件、审计记录和回退动作写清楚。安全案例要能回答“为什么这个系统在这个边界内可以运行”，也要能回答“边界被突破时系统如何停下来或交给人”。
+
+## 相关阅读与下一步
+
+- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
+- 站内下一步：[具身智能专题](index.md)。
+- 站内下一步：[具身智能从零路线](beginner-learning-path.md)。
+- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。

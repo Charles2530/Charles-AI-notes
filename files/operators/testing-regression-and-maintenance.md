@@ -1,5 +1,7 @@
 # Kernel 测试、回归与维护
 
+> **这篇回答的问题。** 一个自定义 kernel 怎样从“跑得快的实验代码”变成能长期维护、可回归、可升级的工程资产。
+
 很多 kernel 项目最难的阶段，不是把第一版做快，而是把它长期维持在“正确、快、可升级”的状态。一个高性能算子如果没有测试、性能回归和版本维护机制，最终很容易退化成：
 
 1. 只在作者机器上能跑；
@@ -9,6 +11,10 @@
 5. 没人敢继续改。
 
 因此算子工程真正成熟的标志，不只是 benchmark 高，而是维护体系完整。
+
+![Nsight NVTX timeline](../assets/images/tools/nsight-systems/nvtx-timeline.png)
+
+<small>图源：[NVIDIA Nsight Systems / NVTX 文档](https://docs.nvidia.com/nsight-systems/)。原图表达用 NVTX 区间把 CPU 调用、kernel 和时间线关联起来；本站读法是：kernel 回归不能只看单测 pass，还要把正确性、性能、shape bucket 和线上 trace 串成闭环。它不能证明某个 kernel 正确，只提供定位性能回归和冷路径变热的观察入口。</small>
 
 ## 正确性测试至少要覆盖什么
 
@@ -25,7 +31,7 @@
 
 ## 性能回归为什么必须自动化
 
-性能是 kernel 的核心价值，但它又很脆弱。  
+性能是 kernel 的核心价值，但它又很脆弱。
 一个看似无害的改动，可能因为：
 
 1. 多了一个 layout transform；
@@ -33,7 +39,7 @@
 3. 失去某个融合机会；
 4. 编译器版本变化；
 
-而让性能悄悄下降。  
+而让性能悄悄下降。
 因此性能基准最好进入持续回归，而不是只在发布前临时测一次。
 
 ## 版本维护最容易忽视什么
@@ -50,8 +56,8 @@
 
 ## 为什么需要性能与正确性的双重门禁
 
-只看正确性，你可能保住了结果，却把吞吐悄悄丢掉；  
-只看性能，你又可能在某些 shape 上输出错误结果。  
+只看正确性，你可能保住了结果，却把吞吐悄悄丢掉；
+只看性能，你又可能在某些 shape 上输出错误结果。
 **真正成熟的流程应该同时有**：
 
 1. 正确性基线；
@@ -125,3 +131,12 @@ Kernel 维护要同时看正确性、性能、数值边界、兼容性和可维�
 也更不折腾值班的人。
 
 这很实际。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

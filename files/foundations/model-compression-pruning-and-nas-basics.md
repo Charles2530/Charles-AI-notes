@@ -1,5 +1,7 @@
 # 模型压缩、剪枝与 NAS：先问省的是哪张账
 
+> **这篇回答的问题。** 如何理解“模型压缩、剪枝与 NAS”背后的核心机制、适用边界和下一步阅读路径。
+
 很多模型压缩项目的第一版都会遇到一个尴尬结果：参数量少了，模型文件小了，论文表里的 MACs 也降了，但线上请求并没有明显变快，P99 甚至更差。原因通常不是“压缩没用”，而是压缩方法改的是一张账，真实系统卡的是另一张账。
 
 这页按高质量技术博客常用的讲法展开：先固定一个具体困惑，再把方法放回数据流和硬件路径里看。模型压缩不是“把模型变小”的同义词，而是在质量、成本和可部署结构之间重新设计模型。
@@ -194,3 +196,12 @@ Fast-FoundationStereo 的 cost filtering 阶段直接结构剪枝收益有限，
 - [PyTorch Pruning Tutorial](https://docs.pytorch.org/tutorials/intermediate/pruning_tutorial.html)：看工程上 mask、parameter reparameterization 和 pruning API 如何落地。
 - [PyTorch Semi-Structured Sparsity](https://pytorch.org/blog/accelerating-neural-network-training/)：对照 2:4 sparse training 的工程边界。
 - [Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)：看蒸馏、blockwise NAS、结构化剪枝如何在同一个实时感知系统里配合。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

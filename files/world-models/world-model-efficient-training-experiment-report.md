@@ -1,5 +1,7 @@
 # 世界模型高效训练完整实验报告样例
 
+> **这篇回答的问题。** 如何理解“世界模型高效训练完整实验报告样例”背后的核心机制、适用边界和下一步阅读路径。
+
 这页用仓库里的 `world-model-mini-chain` fixture 写成一份小型论文式实验报告。它的目标不是证明某个真实模型有效，而是给全站提供一个**证据链模板**：数据、训练配置、系统成本、闭环指标、失败归因和改进计划应该怎样放到同一页里。
 
 ## 摘要
@@ -135,3 +137,12 @@ V-JEPA 2-AC 的图和表适合用来提醒“规划接口”要写清楚。actio
 - [Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)：重点看 masked representation、latent dynamics 和控制 success rate 的证据链。
 - [V-JEPA 2](https://arxiv.org/abs/2506.09985)：重点看 action-conditioned planning、MPC 接口和机器人任务表格。
 - [Meta V-JEPA 2 research page](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/)：适合核对官方对 understanding、prediction、planning 三阶段的解释。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

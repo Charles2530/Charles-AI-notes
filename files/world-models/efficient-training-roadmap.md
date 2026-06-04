@@ -172,3 +172,12 @@ flowchart TD
 ## 读完以后怎么判断
 
 世界模型高效训练的核心不是覆盖更多论文，而是把每个方法放回成本账：它省真实交互、视频 token、训练显存、rollout 延迟还是验证预算；它是否保留动作敏感性、reward/done/risk 和闭环收益；它的证据到底能支持什么，不能外推到哪里。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

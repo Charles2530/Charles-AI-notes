@@ -6,6 +6,11 @@ paper_topic: 具身智能 / VLA
 
 # SpatialVLA：3D 空间表征接入 VLA
 
+!!! info "本站判断"
+    这页把《SpatialVLA：3D 空间表征接入 VLA》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 SpatialVLA 适合放在具身智能专题里的原因很明确：它不是单纯把 VLM 做大，而是问 VLA 最根本的空间问题：**不同机器人相机安装不同、动作空间不同，模型怎样学到可迁移的 3D 空间动作知识？**
 
 先想一个最小场景：同一个杯子在腕部相机里占据画面中心，在第三人称相机里可能只在右下角；同样一句“把杯子推到盘子旁边”，对不同机器人也对应不同的末端位移、旋转和夹爪动作。RGB 像素位置不是 3D 位置，连续动作数值也不是跨机器人共享的语言。SpatialVLA 的核心就是把这两个不对齐的接口补上：输入侧告诉模型每个视觉 token 大概在相机坐标系里的 3D 位置，输出侧把连续动作改写成和数据分布对齐的空间 action tokens。
@@ -26,9 +31,9 @@ SpatialVLA 的方案是两边一起改：
 <small>Figure source: `SpatialVLA`, Figure 1. 原论文图意：SpatialVLA 在视觉语言模型上加入 Ego3D position encoding 和 adaptive action grids，把 3D 空间上下文和动作 token 接入 VLA。</small>
 
 **SpatialVLA 总图先看输入几何和输出动作网格。**
-**输入输出**：输入是视觉语言观测、空间表征和动作网格，输出是 VLA 控制动作。  
-**效率机制**：把 3D 空间先验显式接入动作预测，降低纯图像 token 学空间关系的负担。  
-**对主线意义**：它连接 VLA 动作接口和具身几何状态。  
+**输入输出**：输入是视觉语言观测、空间表征和动作网格，输出是 VLA 控制动作。
+**效率机制**：把 3D 空间先验显式接入动作预测，降低纯图像 token 学空间关系的负担。
+**对主线意义**：它连接 VLA 动作接口和具身几何状态。
 **不能证明什么**：空间表征收益不能证明跨机器人平台或长时安全任务通用。
 
 ## Ego3D Position Encoding
@@ -207,3 +212,12 @@ SpatialVLA 的复用点在显式空间动作接口：方法要抓空间网格、
 5. [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)：理解跨机器人数据混合、动作标准化和 embodiment 差异为什么会让空间接口变重要。
 6. [ZoeDepth](https://arxiv.org/abs/2302.12288)：SpatialVLA 的 Ego3D 依赖单目深度估计，读它能理解深度误差会怎样进入 VLA 输入。
 7. [State of VLA Research at ICLR 2026](https://mbreuss.github.io/blog_post_iclr_26_vla.html) 与 [ICLR Blogposts: Spatial Awareness in VLMs](https://iclr-blogposts.github.io/2026/blog/2026/spatial-awareness/)：作为讲法参考，学习如何把 VLA、spatial awareness 和 benchmark 边界讲成问题链；具体实验 claim 仍回到对应论文。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=SpatialVLA%3A+Exploring+Spatial+Representations+for+Visual-Language-Action+Models&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=SpatialVLA%3A+Exploring+Spatial+Representations+for+Visual-Language-Action+Models)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=SpatialVLA%3A+Exploring+Spatial+Representations+for+Visual-Language-Action+Models)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

@@ -2,6 +2,10 @@
 
 量化在 LLM 上已相对成熟，但到了 VLM、视频模型、VLA 和具身系统，问题会明显复杂化。原因不只是模型更大，而是输入分布更杂、模块更多、对细粒度结构和时序稳定性的要求更高。一个在文本问答上还能接受的量化误差，到了文档理解、UI grounding 或机器人动作生成中，可能就会被放大成明显错误。因此，多模态与 VLA 模型量化需要比“压参数”更细的思路。
 
+![RT-2 vision-language-action overview](../assets/images/paper-deep-dives/embodied-ai/rt2/figure-1-overview.png)
+
+<small>图源：[RT-2 project page](https://robotics-transformer2.github.io/) / [论文](https://arxiv.org/abs/2307.15818)。原图表达 VLA 把视觉、语言和动作放进同一个模型接口；本站读法是：量化不能只按 Transformer 主干统一处理，还要分开看视觉 encoder、跨模态 projector、动作头和安全/风险头。它不能证明 RT-2 的具体层对量化最敏感，只提供多模态量化分层排查的结构参照。</small>
+
 ## 为什么多模态模型更敏感
 
 多模态系统通常由视觉编码器、文本编码器或 LLM 主干、跨模态投影层、OCR / grounding / 分类头等结构模块，以及动作头或控制头组成。
@@ -176,3 +180,12 @@ BF16 存储一条历史 latent 约为：
 ## 工程收束
 
 多模态与 VLA 量化要拆开看视觉编码器、跨模态对齐、动作头、缓存布局和控制风险。最容易踩坑的是只量化语言头、模态间尺度失配、闭环控制误差被静态指标掩盖；验收时应拆分编码器 / 融合层 / 动作头，离线和闭环同时评测，并保留关键模态的高精路径。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

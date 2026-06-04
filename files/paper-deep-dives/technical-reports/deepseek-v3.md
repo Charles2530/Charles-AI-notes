@@ -6,6 +6,13 @@ paper_topic: 技术报告
 
 # DeepSeek-V3：671B MoE、MLA 与 FP8 训练
 
+!!! info "本站判断"
+    这页把《DeepSeek-V3：671B MoE、MLA 与 FP8 训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
+> **这篇回答的问题。** 如何理解“DeepSeek-V3”背后的核心机制、适用边界和下一步阅读路径。
+
 DeepSeek-V3 最值得拆开的地方不是单个 benchmark 分数，而是它把四件事做成了一个闭环：**用 MoE 扩大总参数，用 MLA 和路由设计压低每 token 成本，用 FP8 与 DualPipe 把训练系统跑稳，再用 SFT、RL 和 R1 蒸馏把 base model 转成可用的 chat model。**
 
 | Dimension | DeepSeek-V3 |
@@ -421,3 +428,12 @@ DeepSeek-V3 给训练项目的启发可以压成几条：
 更准确地说，DeepSeek-V3 的价值在于展示了一个大模型系统的完整工程形态：**模型结构决定可扩展性，训练系统决定能不能按成本跑完，后训练决定 base model 能不能变成可靠产品模型。**
 
 DeepSeek-V3 的系统接口要按共设计读：MLA 降 KV，DeepSeekMoE 降 active params，MTP 改训练信号，DualPipe/FP8 降训练成本。benchmark、needle、expert load 和 overlap 图分别对应能力、长上下文、路由均衡和系统吞吐；最重要的不是单点分数，而是 MoE 路由、FP8 稳定和通信重叠能否同时成立。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=DeepSeek-V3+Technical+Report&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=DeepSeek-V3+Technical+Report)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=DeepSeek-V3+Technical+Report)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

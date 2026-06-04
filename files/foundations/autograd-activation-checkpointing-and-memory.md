@@ -144,3 +144,12 @@ model checkpoint 是训练资产，通常包含权重、optimizer state、schedu
 - [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 attention saved tensors 和 IO-aware kernel 为什么会改变显存压力。
 - [Hugging Face Transformers performance guide](https://huggingface.co/docs/transformers/perf_train_gpu_one)：适合看 gradient checkpointing、mixed precision 和 batch 调整的实践入口。
 - [OneFlow 官方博客](https://blog.csdn.net/OneFlow_Official)：中文工程文章常用“显存账 + 并行策略 + kernel 细节”来组织讲解，可学习其问题驱动写法。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

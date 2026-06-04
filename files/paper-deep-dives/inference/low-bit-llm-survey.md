@@ -6,6 +6,11 @@ paper_topic: 高效推理
 
 # Low-bit LLM Survey：低比特大模型从格式到推理系统
 
+!!! info "本站判断"
+    这页把《Low-bit LLM Survey：低比特大模型从格式到推理系统》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇综述的价值不是提出一个新算法，而是把低比特 LLM 拆成了三层：**基础格式、系统实现、训练与推理算法**。读它时不要只问“INT4 / FP8 哪个更好”，而要问一个更工程的问题：量化到底省的是权重、激活、KV cache、带宽、通信，还是训练 optimizer state？
 
 ## 它的效率贡献是什么
@@ -420,3 +425,12 @@ Mixed precision 则承认一个更现实的问题：少量 outlier 或 salient w
 低比特 LLM 的核心不是“把模型压到几 bit”，而是把数值格式、量化粒度、校准方式、低比特 kernel、KV cache、训练稳定性和质量回归放进同一条工程链里。一个量化方案是否高效，取决于它省掉的内存和带宽是否大于它引入的 scale、packing、Q/DQ、kernel 分支和质量回退成本。
 
 如果只能记一句话：**量化是系统工程，不是单个压缩算法。**
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=A+Survey+of+Low-bit+Large+Language+Models%3A+Basics%2C+Systems%2C+and+Algorithms&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=A+Survey+of+Low-bit+Large+Language+Models%3A+Basics%2C+Systems%2C+and+Algorithms)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=A+Survey+of+Low-bit+Large+Language+Models%3A+Basics%2C+Systems%2C+and+Algorithms)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

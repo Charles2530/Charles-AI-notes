@@ -139,16 +139,16 @@ low-noise texture / artifact failures
 
 ## 容易误读的地方
 
-**误解一：扩散模型就是不断去噪。**  
+**误解一：扩散模型就是不断去噪。**
 去噪只是表层动作。真正决定效果的是前向噪声过程、预测目标、noise schedule、条件接口、采样器和表示空间。
 
-**误解二：预测噪声是唯一正确目标。**  
+**误解二：预测噪声是唯一正确目标。**
 \(\epsilon\)、\(x_0\)、score、velocity 都是描述同一去噪问题的不同坐标。它们会影响训练权重、采样稳定性和少步蒸馏。
 
-**误解三：少步采样只是少跑几步。**  
+**误解三：少步采样只是少跑几步。**
 步数少意味着每一步跨越更大的分布距离。没有合适 solver、distillation 或路径重构，少步会牺牲质量和稳定性。
 
-**误解四：视频扩散自然就是世界模型。**  
+**误解四：视频扩散自然就是世界模型。**
 没有动作条件、状态接口和闭环评测时，视频扩散更像生成器。世界模型还要证明未来预测能支持决策。
 
 ## 读完以后怎么判断
@@ -167,3 +167,12 @@ low-noise texture / artifact failures
 - [EDM](https://arxiv.org/abs/2206.00364)：把噪声尺度、preconditioning、sampler 和 NFE 放进同一个设计空间。
 - [Latent Diffusion Models](https://arxiv.org/abs/2112.10752)：理解为什么现代高分辨率生成常在 latent space 里训练。
 - [DiT](https://arxiv.org/abs/2212.09748)：理解扩散目标如何和 Transformer denoiser 结合。
+
+## 相关阅读与下一步
+
+- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+- 站内下一步：[扩散模型专题](index.md)。
+- 站内下一步：[扩散方法对比表](comparison-table.md)。
+- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。

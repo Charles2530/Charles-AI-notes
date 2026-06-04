@@ -6,6 +6,11 @@ paper_topic: 高效推理
 
 # KVSlimmer：非对称 KV 合并的数学与工程
 
+!!! info "本站判断"
+    这页把《KVSlimmer：非对称 KV 合并的数学与工程》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文解决的是长上下文推理里很具体、也很痛的瓶颈：**KV cache 太大，但不能随便删 token，也不能把 Key 和 Value 当成同一种东西合并。**
 
 KVSlimmer 的核心判断是：相邻 token 的 `Key` 往往更同质，适合合并；`Value` 更异质，直接合并容易丢信息。它进一步把这个经验现象用谱分布解释清楚，再把 Key 合并的二阶 Hessian 推导成一个只依赖 forward-pass 变量的闭式解。这样它比 AsymKV 少了反向传播开销，同时保留了 off-diagonal Key-Key coupling。

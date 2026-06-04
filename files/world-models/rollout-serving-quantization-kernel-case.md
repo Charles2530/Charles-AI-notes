@@ -1,5 +1,7 @@
 # Rollout 服务、量化与 Kernel：省成本不能省掉动作因果
 
+> **这篇回答的问题。** 如何理解“Rollout 服务、量化与 Kernel”背后的核心机制、适用边界和下一步阅读路径。
+
 世界模型进入系统后，问题会从“模型能不能预测未来”变成“能不能在规划器等待窗口内，以可接受成本预测多条候选未来”。这时量化、KV cache、少步视频生成、长上下文 attention 和 kernel 调度都会进入同一条链。
 
 这页只回答一个问题：怎样降低 rollout 成本，同时证明动作分叉、风险判断和闭环收益没有被压坏。
@@ -76,3 +78,12 @@ CausVid 这类工作提供了把高质量双向视频模型蒸馏成 causal stre
 - [KVSlimmer](https://arxiv.org/abs/2603.00907)：理解非对称 KV 合并为什么不能把 Key/Value 粗暴等同处理。
 - [MagiAttention docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html)：理解长上下文异构 mask 和通信重叠的系统问题。
 - [CausVid](https://arxiv.org/abs/2412.07772)：理解视频模型因果化和少步流式 rollout 的意义。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

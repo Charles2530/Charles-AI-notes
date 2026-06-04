@@ -4,6 +4,11 @@ title: GR-2：Web 视频知识怎样迁移到机器人操作
 
 # GR-2：Web 视频知识怎样迁移到机器人操作
 
+!!! info "本站判断"
+    这页把《GR-2：Web 视频知识怎样迁移到机器人操作》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 GR-2 这篇论文的核心问题是：**机器人数据很贵，但公开视频里有大量人和物体互动的动态知识，这些视频能不能帮助机器人学操作？**
 
 它的答案不是把公开视频直接当机器人 demonstration。公开视频没有机器人动作标签，也没有末端位姿，更没有夹爪状态。GR-2 的路线是：先用大规模视频预训练学“接下来会发生什么”，再用机器人轨迹微调，让模型同时预测未来视频和动作轨迹。视频预训练学世界动态，机器人微调把动态知识接到可执行动作上。
@@ -146,3 +151,12 @@ GR-2 最值得记住的是：web video pretraining 提供的是“物体互动�
 - [ar5iv HTML version](https://ar5iv.labs.arxiv.org/html/2410.06158)：在线阅读图表更方便。
 - [CALVIN benchmark](https://github.com/mees/calvin)：理解长链语言条件机器人操作评测。
 - [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：作为动作生成路线对照，帮助区分 trajectory prediction 和 diffusion action generation。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=gr2&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=gr2)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=gr2)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

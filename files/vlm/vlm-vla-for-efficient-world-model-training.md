@@ -45,6 +45,10 @@ VLM/VLA 与世界模型的接口不能只写“提供状态和动作”。每个
 
 VLM/VLA 的意义，是把这些成本拆开治理，而不是让世界模型从原始像素和杂乱日志里硬学全部内容。
 
+![RT-2 VLA overview](../assets/images/paper-figures/vla/rt2-overall-wide.png){ width="900" }
+
+<small>图源：[RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control](https://arxiv.org/abs/2307.15818)。原图表达视觉、语言和动作如何接到同一 VLA 训练/执行框架；本站读法是把 VLA 当成世界模型训练的状态、动作和验证接口。它不能证明 VLA 已经具备可靠世界模型能力，因为闭环预测、失败回放和风险校准仍要单独验证。</small>
+
 ## 一条推荐训练链路
 
 ```mermaid
@@ -225,3 +229,12 @@ multi_camera_frame:
 5. [VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md)
 
 这些页面共同回答一个问题：如何用更少真实交互、更少视频 token、更短训练链路，得到更可用于决策的世界模型。
+
+## 相关阅读与下一步
+
+- 外部材料：[CLIP 论文](https://arxiv.org/abs/2103.00020)。
+- 外部材料：[LLaVA 论文](https://arxiv.org/abs/2304.08485)。
+- 外部材料：[Flamingo 论文](https://arxiv.org/abs/2204.14198)。
+- 站内下一步：[VLM 专题](index.md)。
+- 站内下一步：[视觉 Tokenizer 与连接器](visual-tokenizers-and-connectors.md)。
+- 站内下一步：[多模态评测与失败模式](multimodal-evaluation-and-failure-modes.md)。

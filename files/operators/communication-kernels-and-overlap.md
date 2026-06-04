@@ -4,9 +4,13 @@
 
 因此理解通信算子，并不是通信工程师才需要的事，而是大模型系统工程的基础。
 
+![DeepSeek-V3 DualPipe schedule](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-5-dualpipe.png){ width="900" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 5。原图表达 DualPipe 如何把双向 pipeline micro-batches 与通信/计算重叠起来；本站读法是说明通信优化的核心不是“少一次 collective”这么简单，而是把通信放到关键路径之外。它不能证明 DualPipe 适合所有并行度和拓扑。</small>
+
 ## 通信问题为什么会在大模型时代爆发
 
-单卡时代，性能大多由 kernel 决定；  
+单卡时代，性能大多由 kernel 决定；
 多卡时代，性能开始由“算得快不快”和“同步得快不快”共同决定。
 
 可以粗略把一次分布式 step 写成：
@@ -61,7 +65,7 @@ tree 更适合某些低延迟聚合场景，但未必总能最大化持续带宽
 
 ## 数据并行里的通信主线
 
-在普通 DP 中，最典型的通信是梯度 all-reduce。  
+在普通 DP 中，最典型的通信是梯度 all-reduce。
 若每个 rank 梯度张量为 \(g_i\)，则最终每个 rank 都需要：
 
 $$
@@ -74,7 +78,7 @@ $$
 
 ### 4.2 Bucket 化为什么重要
 
-bucket 化的目的，是让梯度一边反传、一边开始通信，而不是等所有梯度都算完再一次性同步。  
+bucket 化的目的，是让梯度一边反传、一边开始通信，而不是等所有梯度都算完再一次性同步。
 这样才能把一部分通信时间藏进计算时间里。
 
 ## 张量并行里的通信主线
@@ -83,17 +87,17 @@ TP 的核心代价是层内通信，常发生在列并行 / 行并行线性层�
 
 ### 5.1 为什么 TP 更依赖低延迟高速互联
 
-因为它的通信频率高、粒度细，而且位于前向 / 反向主路径上。  
+因为它的通信频率高、粒度细，而且位于前向 / 反向主路径上。
 跨节点 TP 往往比节点内 TP 更痛苦，除非拓扑和实现都特别强。
 
 ## 流水线并行里的通信主线
 
-PP 主要依赖 stage 间点对点传输。  
+PP 主要依赖 stage 间点对点传输。
 每个 micro-batch 在相邻 stage 之间传递激活和梯度。
 
 ### 6.1 PP 的通信为什么不像 DP 那样“全局”
 
-它更像局部相邻传输，而不是全局 collective。  
+它更像局部相邻传输，而不是全局 collective。
 但这并不代表它简单，因为：
 
 1. 它和 micro-batch 调度强相关；
@@ -132,7 +136,7 @@ PP 主要依赖 stage 间点对点传输。
 
 ### 8.1 为什么拆开后更容易重叠
 
-因为你不一定要等“所有人都拿到完整结果”才能继续下一步。  
+因为你不一定要等“所有人都拿到完整结果”才能继续下一步。
 在某些设计里，只要先得到本 rank 负责的那片结果，就能继续局部工作。
 
 ## 通信重叠为什么是核心能力
@@ -169,7 +173,7 @@ MoE 的通信问题往往比稠密模型更复杂，因为 token 要 dispatch �
 
 ### 13.1 为什么 decode 阶段通信更刺眼
 
-因为 decode 本来单步计算就不大，一旦跨卡同步存在，通信占比会非常高。  
+因为 decode 本来单步计算就不大，一旦跨卡同步存在，通信占比会非常高。
 这也是为什么很多在线系统会极其谨慎地使用跨节点 TP。
 
 ## 通信 profiling 该怎么看
@@ -197,7 +201,7 @@ MoE 的通信问题往往比稠密模型更复杂，因为 token 要 dispatch �
 
 **因为它涉及**多进程、多节点、多维并行、异步时序、拓扑映射，而且 profile 与复现难度都更高。
 
-一个 kernel 慢，你通常能在单卡上反复微基准；  
+一个 kernel 慢，你通常能在单卡上反复微基准；
 一个通信问题慢，往往要在特定 world size、特定拓扑和特定 workload 下才显现。
 
 ## 直觉例子
@@ -209,3 +213,12 @@ MoE 的通信问题往往比稠密模型更复杂，因为 token 要 dispatch �
 通信算子与计算重叠，是大模型系统性能的另一半。只优化 kernel、不优化 collective 与拓扑，很多训练和推理系统最终都会撞到通信天花板。真正成熟的分布式设计，不只是“用了 DP/TP/PP/ZeRO”，而是知道这些并行策略各自带来了哪些通信路径，又怎样通过 bucket、分组、拓扑映射与 overlap 把通信尽量藏起来。
 
 一旦建立这套视角，你看待 `Megatron`、`DeepSpeed`、`FSDP`、MoE、长上下文和多节点推理时，就不会只看到名词，而会看到一张清晰的通信图和关键路径图。
+
+### 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

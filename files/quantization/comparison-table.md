@@ -2,8 +2,12 @@
 
 这一页把量化主线里的代表方法放在同一页，不只是为了记住名字，而是为了回答三个工程里最常见的问题：误差主要出现在权重、激活、KV cache，还是量化 kernel 和调度兼容性上；某种方法“更准”到底是因为二阶补偿、通道保护、平滑激活，还是训练时已经让模型适应了量化噪声；真实线上收益到底来自显存下降、吞吐增加、单卡可部署，还是仅仅减少了模型文件大小。
 
-量化最容易被误解成“把 16 位变成 4 位”，但真正难点在于：  
+量化最容易被误解成“把 16 位变成 4 位”，但真正难点在于：
 不同方法保护的对象不同，误差迁移的路径也不同。
+
+![SmoothQuant main idea](../assets/images/paper-figures/quantization/smoothquant-figure-5-main-idea.png){ width="820" }
+
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 5。原图表达把激活中的 outlier 难度迁移到权重侧，使 W8A8 更容易部署；本站读法是把量化方法对照表里的 PTQ/GPTQ/AWQ/SmoothQuant/FP8 分到不同瓶颈。它不能证明 SmoothQuant 比所有方法更好，只解释一类激活 outlier 处理思路。</small>
 
 ## 核心问题
 
@@ -48,8 +52,8 @@ q = \mathrm{clip}\left(\left\lfloor \frac{x}{s} \right\rceil + z \right), \qquad
 
 ### 3.2 GPTQ：保护 Hessian 敏感方向
 
-**GPTQ 的经典直觉是**：  
-不是所有权重误差都一样危险。  
+**GPTQ 的经典直觉是**：
+不是所有权重误差都一样危险。
 如果某些方向对应更高曲率，那么在这些方向上引入同样大小的误差，会带来更大的 loss 增量。
 
 **其近似目标可以写成**：
@@ -60,42 +64,42 @@ q = \mathrm{clip}\left(\left\lfloor \frac{x}{s} \right\rceil + z \right), \qquad
 \frac{1}{2}(w-\hat{w})^\top H (w-\hat{w}),
 \]
 
-其中 \(H\) 是 Hessian 或其近似。  
+其中 \(H\) 是 Hessian 或其近似。
 这就解释了为什么 GPTQ 常被理解为“带二阶补偿”的 PTQ。
 
 同样大小的权重误差，如果落在 \(H\) 表示的高敏感方向上，会造成更大的 loss 增量。GPTQ 的补偿思想就是尽量避开这些伤害大的方向。
 
 ### 3.3 AWQ：保护真正被激活放大的通道
 
-**AWQ 的核心思想很工程化**：  
-有些权重通道本身看起来不大，但一旦与高振幅激活相乘，就会对输出影响极大。  
+**AWQ 的核心思想很工程化**：
+有些权重通道本身看起来不大，但一旦与高振幅激活相乘，就会对输出影响极大。
 因此 AWQ 不只是看权重，而是看“权重和激活共同决定的敏感性”。
 
 这特别适合大语言模型，因为许多层的关键通道一旦被压坏，就会造成明显的语义或推理退化。
 
 ### 3.4 SmoothQuant：把激活尖峰搬到权重端
 
-激活 outlier 是 INT8 激活量化的一大障碍。  
-SmoothQuant 通过对权重和激活做重参数化，把激活峰值平滑掉。  
+激活 outlier 是 INT8 激活量化的一大障碍。
+SmoothQuant 通过对权重和激活做重参数化，把激活峰值平滑掉。
 **直觉上可以写成**：
 
 \[
 W x = (W D^{-1})(D x),
 \]
 
-其中 \(D\) 是按通道设置的缩放矩阵。  
+其中 \(D\) 是按通道设置的缩放矩阵。
 它的目的就是让 \(Dx\) 变得更平滑，从而让激活量化更容易。
 
 线性层输出保持等价，但 activation 的尖峰被迁移到更容易离线处理的权重侧。
 
 ### 3.5 QAT：保护整个前向传播链
 
-**QAT 的直觉最直接**：  
-既然推理时一定会出现量化误差，那训练时就把这种误差显式注入，让模型自己学会适应。  
+**QAT 的直觉最直接**：
+既然推理时一定会出现量化误差，那训练时就把这种误差显式注入，让模型自己学会适应。
 这相当于把量化噪声视作训练分布的一部分。
 
-优点是稳。  
-缺点是贵。  
+优点是稳。
+缺点是贵。
 尤其在超大模型上，QAT 不是一句“再训一下”就能轻松完成的。
 
 ### 3.6 QLoRA：保护微调资源预算
@@ -123,7 +127,7 @@ QLoRA 不是传统意义上只为部署而生的量化。它更像在问：如�
 
 ### 场景 B：你要把模型放进生产服务，长上下文请求非常多
 
-这时权重量化之外，`KV cache quantization` 可能更关键。  
+这时权重量化之外，`KV cache quantization` 可能更关键。
 因为即使权重已经压到 4bit，在线显存仍可能被 cache 吃掉。
 
 ### 场景 C：你做的是企业级高精度问答系统，不允许明显掉点
@@ -151,7 +155,7 @@ QLoRA 不是传统意义上只为部署而生的量化。它更像在问：如�
 
 ### 误判 2：离线 benchmark 没掉分，线上就稳
 
-不对。  
+不对。
 如果校准集主要是短文本，而线上全是长推理、多轮工具调用、RAG 片段拼接，分布差异会迅速放大问题。
 
 ### 误判 3：所有层都该同样低比特
@@ -176,7 +180,7 @@ h_{l+1} = f_l(h_l; W_l),
 
 这两行式子在说：原模型用 \(h_l\) 和 \(W_l\) 得到下一层 hidden state；量化路径则用已经带误差的 \(\hat{h}_l\) 和量化权重 \(\hat{W}_l\)，所以误差会沿层继续传播。
 
-则某层误差不只由 \(\|W_l - \hat{W}_l\|\) 决定，还会受后续层 Jacobian 放大。  
+则某层误差不只由 \(\|W_l - \hat{W}_l\|\) 决定，还会受后续层 Jacobian 放大。
 **粗略地说**：
 
 \[
@@ -211,3 +215,12 @@ h_{l+1} = f_l(h_l; W_l),
 - [SmoothQuant](https://arxiv.org/abs/2211.10438)：理解 W8A8 量化里的 activation outlier 迁移。
 - [QLoRA](https://arxiv.org/abs/2305.14314)：理解 4bit 底座微调和 NF4/double quantization。
 - [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 FP8 为什么更像硬件友好的混合精度路线，而不是传统整数 PTQ。
+
+## 相关阅读与下一步
+
+- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- 站内下一步：[量化专题](index.md)。
+- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
+- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。

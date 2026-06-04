@@ -4,6 +4,10 @@
 
 因此“自定义算子开发”其实更像一条完整集成链，而不是孤立的 kernel 编写。
 
+![Nsight Systems NVTX timeline](../assets/images/tools/nsight-systems/nvtx-timeline.png){ width="820" }
+
+<small>图源：[NVIDIA Nsight Systems / NVTX 文档](https://docs.nvidia.com/nsight-systems/)。原图表达用 NVTX 标记把 kernel、CPU 调用和时间线串起来；本站读法是：自定义 op 是否真的进了热路径，需要 profiler、dispatch、fallback 和端到端 trace 一起验证。它不能证明某个 custom op 正确或更快，只说明验证入口应该在哪里。</small>
+
 ## 为什么很多高性能 kernel 最终没被用起来
 
 常见原因不是它不够快，而是集成太难、只支持少量 shape、autograd 路径缺失、无法进入 graph compile、fallback 和错误处理太弱，或部署、打包和兼容成本太高。
@@ -77,7 +81,7 @@ CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和
 
 ## 版本演进与兼容
 
-自定义算子不是“一次写完永远不动”的资产。  
+自定义算子不是“一次写完永远不动”的资产。
 它会持续受新 GPU 架构、新 PyTorch 版本、编译器后端变化、shape 分布变化和模型结构变化影响。因此一个工程上成熟的 custom op，必须有版本管理、持续 benchmark、fallback 和清晰的适用边界。
 
 ## 接口契约模板
@@ -121,3 +125,12 @@ CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和
 **修复**：补充 custom op 的 meta function、decomposition / lowering 规则和 stride 检查；CI 覆盖 eager、compile、FP16/BF16、contiguous/non-contiguous；fallback 必须打日志并计入性能回归。
 
 **反例**：如果目标系统永远只跑 eager 离线脚本，compile 集成可以延后；但只要进入生产训练或推理图，custom op 就必须以“完整框架路径”验收，而不是只验单函数。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

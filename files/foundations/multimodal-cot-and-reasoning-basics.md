@@ -180,3 +180,12 @@ y^\*=\arg\max_y V(x,y)
 - [Chain-of-Thought Prompting](https://arxiv.org/abs/2201.11903)：理解中间推理样例为什么能改善复杂任务。
 - [ReAct](https://arxiv.org/abs/2210.03629)：理解推理和工具行动如何交替。
 - [MMMU](https://arxiv.org/abs/2311.16502)：理解多学科多模态推理评测为什么要覆盖证据定位与知识推理。
+
+## 相关阅读与下一步
+
+- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
+- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

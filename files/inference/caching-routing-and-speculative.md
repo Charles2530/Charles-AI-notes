@@ -1,5 +1,7 @@
 # KV、缓存与投机解码：把贵模型用在值得的位置
 
+> **这篇回答的问题。** 如何理解“KV、缓存与投机解码”背后的核心机制、适用边界和下一步阅读路径。
+
 缓存、路由和投机解码看起来是三类技术：缓存复用历史计算，路由选择请求路径，投机解码让便宜 draft 先猜、昂贵 target 再验证。但它们在服务系统里回答的是同一个问题：有限的 GPU 时间、KV 显存和强模型调用次数，应该花在哪些 token 和哪些请求上。
 
 所以这页不按功能名分散介绍，而按一次请求的生命周期看：
@@ -148,3 +150,12 @@ EAGLE 系列把投机解码的重点从“找一个更小的 draft LLM”推进�
 - [vLLM speculative decoding blog](https://vllm.ai/blog/spec-decode)：学习按 draft、acceptance、QPS 和 workload 组织工程评测。
 - [EAGLE](https://arxiv.org/abs/2401.15077)、[EAGLE-2](https://arxiv.org/abs/2406.16858) 与 [EAGLE-3](https://arxiv.org/abs/2503.01840)：理解 feature-level draft、dynamic draft tree 和 training-time test。
 - [RouteLLM](https://arxiv.org/abs/2406.18665)：理解模型路由如何在成本和质量之间做请求级选择。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

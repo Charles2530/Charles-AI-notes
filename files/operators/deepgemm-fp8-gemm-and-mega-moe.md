@@ -4,6 +4,10 @@
 
 这页定位为主线解读。源码阅读、API 名称和接入检查放到 [DeepGEMM 源码与接入](deepgemm-source-and-integration.md)。如果想先补底层背景，可先读 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 和 [MoE 路由与稀疏 Kernel](moe-routing-and-sparse-kernels.md)。
 
+![DeepSeek-V3 FP8 framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="860" }
+
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达 FP8 mixed precision 训练框架中的高精保留、scale 和累加路径；本站读法是把 DeepGEMM / FP8 GEMM 看成“低精度格式、scale layout、硬件搬运和 kernel 形状”共同设计的问题。它不能证明 DeepGEMM 在所有 GEMM 上优于通用库。</small>
+
 ## 一、DeepGEMM 到底是什么
 
 按照工程定位，`DeepGEMM` 是一组面向大模型热点工作负载的高性能 tensor core kernel 库。它覆盖 `FP8 / FP4 / BF16 GEMM`、MoE grouped GEMM、服务态注意力相关 kernel 和 Mega MoE 等路径，并采用运行时 JIT，而不是安装时预编译所有 kernel。
@@ -130,3 +134,12 @@ tokens
 3. **从 kernel 走向系统热路径**：MoE serving 的瓶颈不只在 GEMM，还在 dispatch、layout、JIT、通信、combine 和 runtime 调度之间的边界。
 
 如果只记一句话：`DeepGEMM` 展示的是现代大模型算子优化的新边界，已经从“写快一个矩阵乘”扩展到“围绕低精度、MoE、JIT、硬件和服务运行时共同设计热路径”。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。

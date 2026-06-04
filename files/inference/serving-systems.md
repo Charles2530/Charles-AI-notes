@@ -193,3 +193,12 @@ Speculative decoding 又是另一张账。它让 draft model 先猜多个 token�
 - [NVIDIA Inference Optimization blog](https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/)：补充 batching、quantization、KV cache 和 speculative decoding 的工程视角。
 - [智源转载：全栈 Transformer 推理优化](https://hub.baai.ac.cn/view/33449)：学习中文长文如何按模型、算子、显存、调度和工程分层讲推理优化。
 - [中国信通院：大模型推理优化关键技术与应用实践研究报告（2026）](https://www.caict.ac.cn/kxyj/qwfb/ztbg/202604/P020260415615308750699.pdf)：看产业报告如何组织模型压缩、PD 分离、KV 多级存储和服务调度。
+
+## 相关阅读与下一步
+
+- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
+- 站内下一步：[推理系统专题](index.md)。
+- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
+- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。

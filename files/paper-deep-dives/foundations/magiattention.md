@@ -6,6 +6,11 @@ paper_topic: 高效训练
 
 # MagiAttention：超长上下文分布式 Attention
 
+!!! info "本站判断"
+    这页把《MagiAttention：超长上下文分布式 Attention》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 MagiAttention 讨论的不是“attention 又快了一点”这种单点优化，而是一个训练系统问题：**当视频生成或长上下文模型要处理百万级 token、并且 mask 形状高度不规则时，context parallel attention 怎么继续保持可扩展？**
 
 它的答案是把分布式 attention 拆成四层一起设计：kernel 层要能表达异构 mask，dispatch 层要把计算量均匀分给 CP ranks，通信层要避免 Ring P2P 里的冗余 KV/dKV 传输，调度层还要把通信和计算尽量重叠起来。这个视角很适合放在“高效训练”里，因为它展示了一个大模型训练瓶颈如何从公式里的 \(O(N^2)\)，一路落到 mask 表达、数据 pack、rank 负载、NCCL buffer、kernel backend 和 overlap tuning。

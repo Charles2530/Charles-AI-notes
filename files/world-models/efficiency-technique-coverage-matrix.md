@@ -1,6 +1,12 @@
 # 世界模型高效训练效率技术覆盖矩阵
 
+> **这篇回答的问题。** 如何理解“世界模型高效训练效率技术覆盖矩阵”背后的核心机制、适用边界和下一步阅读路径。
+
 这页是全站地图，不替代各专题正文。它只回答一个问题：**当你说某项技术让世界模型训练更高效时，它到底省哪类成本，证据在哪里，还不能证明什么。**
+
+![Video world model taxonomy](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-2-world-model-taxonomy.jpg)
+
+<small>图源：`Towards Video World Models` Figure 2（可从[论文标题 arXiv 检索](https://arxiv.org/search/?query=Towards+Video+World+Models&searchtype=title)核对）。原图表达 internal world model、external world model、video world model、simulation platform 和 neural 3D/4D 的位置关系；本站读法是：效率技术必须先落到“表示、训练系统、推理、验证”中的某个成本层。它不能证明某项技术已经具备闭环控制收益，只提供分类坐标。</small>
 
 ## 数据效率
 

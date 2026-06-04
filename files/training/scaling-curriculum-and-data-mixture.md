@@ -1,5 +1,7 @@
 # Scaling、课程学习与数据配比
 
+> **这篇回答的问题。** 如何理解“Scaling、课程学习与数据配比”背后的核心机制、适用边界和下一步阅读路径。
+
 很多训练讨论在谈模型结构，但真正决定大模型成长曲线的，往往是 `Scaling`、课程学习和数据混合。它们共同决定有限计算预算会被分给哪些样本、哪些阶段、哪些能力。
 
 这页关注训练配方层的决策，和 [训练数据系统与吞吐优化](data-systems-and-optimization.md)、[数据质量、去重与治理](data-quality-dedup-and-governance.md)、[评测与消融方法](evaluation-and-ablation-methodology.md) 应该一起看。

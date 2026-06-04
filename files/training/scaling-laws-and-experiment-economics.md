@@ -114,8 +114,17 @@ $$
 
 ## 读完以后怎么判断
 
-Scaling law 给出的是“资源与效果的大致地形图”，实验经济学决定的是“你要如何在这张地形图上行军”。对现代大模型团队而言，研究不再只是提出更好的方法，也包括更聪明地配置算力、数据、人力和时间。真正成熟的团队，往往不是做了最多实验，而是用最合理的实验组合学到了最多东西。 
+Scaling law 给出的是“资源与效果的大致地形图”，实验经济学决定的是“你要如何在这张地形图上行军”。对现代大模型团队而言，研究不再只是提出更好的方法，也包括更聪明地配置算力、数据、人力和时间。真正成熟的团队，往往不是做了最多实验，而是用最合理的实验组合学到了最多东西。
 
 ## 工程收束
 
 Scaling law 要和实验经济学一起读：token 预算、模型规模、数据质量、长上下文成本和实验复用率都应进入同一张账本。做大实验前先明确能力目标、GPU 小时、token 预算、吞吐下降和恢复复杂度，再设置阶段预算门槛、短跑一致性测试、失败案例和回滚条件。
+
+## 相关阅读与下一步
+
+- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
+- 站内下一步：[训练系统专题](index.md)。
+- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
+- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。

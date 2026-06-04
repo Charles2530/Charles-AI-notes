@@ -6,6 +6,11 @@ paper_topic: 具身智能
 
 # Depth Anything 3：任意视角的 3D 几何底座
 
+!!! info "本站判断"
+    这页把《Depth Anything 3：任意视角的 3D 几何底座》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 Depth Anything 3 放在具身智能专题里，是因为它补的是机器人闭环最基础的一层：**从 RGB、多视角或视频恢复稳定的 3D 几何状态**。VLA 可以输出动作，世界模型可以预测未来，但真正执行抓取、导航、避障和视角规划时，系统仍然要知道物体在哪里、相机在哪里、深度是否一致、点云能不能融合。
 
 可以先想一个机器人数据管线里的小场景：你有一段厨房操作视频，腕部相机看见杯子边缘，第三人称相机看见桌面和机械臂，另一个视角看见杯子后面的遮挡。如果每一帧只是一张 RGB 图，VLA 只能在像素上猜“杯子离夹爪多远”；如果能把这些视角恢复成一致的 depth、ray、camera pose 和 point cloud，后续抓取候选、可达性检查和失败回放才有可计算的空间状态。DA3 的核心价值就在这里：它不是替代策略模型，而是把普通视觉输入变成几何接口。
@@ -27,9 +32,9 @@ DA3 的主线可以概括成一句话：把 Depth Anything 系列的单目深度
 <small>图源：`Depth Anything 3`，Figure 1。原论文图意：DA3 接收任意数量图像和可选相机位姿，输出一致的 depth maps 与 ray maps，并进一步融合为点云、相机和 3D Gaussian 表示。</small>
 
 **DA3 teaser 先看 depth、ray、camera 三个输出接口。**
-**输入输出**：输入是任意视角图像，输出是 depth、ray、camera 和 3D geometry。  
-**效率机制**：把多视角几何恢复做成统一前向感知底座，减少手写几何管线成本。  
-**对主线意义**：它服务世界模型的 geometry/state interface，而不是替代 dynamics。  
+**输入输出**：输入是任意视角图像，输出是 depth、ray、camera 和 3D geometry。
+**效率机制**：把多视角几何恢复做成统一前向感知底座，减少手写几何管线成本。
+**对主线意义**：它服务世界模型的 geometry/state interface，而不是替代 dynamics。
 **不能证明什么**：几何重建不能证明动作因果、接触建模或真实机器人策略安全。
 
 ## 核心表示：Depth + Ray

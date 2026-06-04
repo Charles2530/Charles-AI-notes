@@ -6,6 +6,13 @@ paper_topic: 世界模型
 
 # RingAttention：近无限上下文训练
 
+!!! info "本站判断"
+    这页把《RingAttention：近无限上下文训练》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
+> **这篇回答的问题。** 如何理解“RingAttention”背后的核心机制、适用边界和下一步阅读路径。
+
 RingAttention 不是一个直接预测未来视频的世界模型，但它是 [LWM](lwm.md) 这类百万 token 视频语言世界模型的关键系统底座。它解决的是一个更底层的问题：**如果世界经验是长视频、长文本、动作轨迹和多轮交互，Transformer 怎样在不做稀疏近似的情况下看完整序列？**
 
 论文的答案是：把序列维度切到多个设备上，每个设备持有一个 query block，让 key/value blocks 沿设备环流动；同时用 blockwise attention 让通信被计算覆盖。
@@ -305,3 +312,12 @@ world experience is long
 2. 官方代码：[haoliuhl/ringattention](https://github.com/haoliuhl/ringattention).
 3. 论文 HTML 版本：[ar5iv:2310.01889](https://ar5iv.labs.arxiv.org/html/2310.01889).
 4. LWM 项目页：[Large World Models](https://largeworldmodel.github.io/lwm/).
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Ring+Attention+with+Blockwise+Transformers+for+Near-Infinite+Context&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Ring+Attention+with+Blockwise+Transformers+for+Near-Infinite+Context)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Ring+Attention+with+Blockwise+Transformers+for+Near-Infinite+Context)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

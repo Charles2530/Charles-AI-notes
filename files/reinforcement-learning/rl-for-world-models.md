@@ -216,3 +216,12 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 ## 读完以后怎么判断
 
 强化学习让世界模型从“预测器”变成“决策工具”：transition 预测动作后果，reward/value 衡量未来好坏，policy 或 planner 选择动作。真正的难点不在于生成未来，而在于预测必须 action-sensitive、reward 必须任务相关、rollout horizon 必须受控，最后还要用 closed-loop 证明它真的改善决策。
+
+## 相关阅读与下一步
+
+- 外部材料：[Spinning Up：Policy Optimization](https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html)。
+- 外部材料：[PPO 论文](https://arxiv.org/abs/1707.06347)。
+- 外部材料：[Soft Actor-Critic 论文](https://arxiv.org/abs/1801.01290)。
+- 站内下一步：[强化学习专题](index.md)。
+- 站内下一步：[MDP、价值函数与 Bellman](mdp-value-bellman.md)。
+- 站内下一步：[世界模型中的强化学习](rl-for-world-models.md)。

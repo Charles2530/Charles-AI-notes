@@ -219,3 +219,12 @@ Score matching 到 SDE 这条线的核心知识不是记公式，而是抓住一
 - [DDIM](https://arxiv.org/abs/2010.02502)：理解确定性采样、跳步和 probability-flow 直觉。
 - [DPM-Solver++](https://arxiv.org/abs/2211.01095)：看高阶 ODE solver 如何服务少步 guided diffusion。
 - [科学空间：得分匹配 = 条件得分匹配](https://spaces.ac.cn/archives/9509)：中文长文，适合补“为什么 DDPM 常见目标更准确地说是条件得分匹配”。
+
+## 相关阅读与下一步
+
+- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+- 站内下一步：[扩散模型专题](index.md)。
+- 站内下一步：[扩散方法对比表](comparison-table.md)。
+- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。

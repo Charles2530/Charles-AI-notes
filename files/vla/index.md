@@ -1,4 +1,4 @@
-# VLA 阅读入口：把视觉、语言和动作接成闭环
+# VLA 专题：把视觉、语言和动作接成闭环
 
 VLA 的核心不是“多模态模型再加一个动作头”。真正困难的是把视觉证据、语言目标、动作表示、低层控制、数据回收和安全接管放进同一个闭环。一个模型如果只会说出任务意图，却不能稳定输出可执行动作；或者离线评测很高，却不能在真实环境里恢复错误，都还不能算可靠的 VLA 系统。
 
@@ -19,7 +19,7 @@ VLA 的核心不是“多模态模型再加一个动作头”。真正困难的�
 | 跨机器人数据、benchmark 和数据引擎如何组织 | [VLA 评测与数据引擎](benchmarks-and-data-engines.md) |
 | 模型失败后如何检测、恢复和人工接管 | [闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md) |
 | 真实部署时安全边界、权限和回滚如何设计 | [VLA 部署与安全](deployment-and-safety.md) |
-| 和具身系统、世界模型如何衔接 | [具身智能阅读入口](../embodied-ai/index.md)、[世界模型阅读入口](../world-models/index.md) |
+| 和具身系统、世界模型如何衔接 | [具身智能专题](../embodied-ai/index.md)、[世界模型专题](../world-models/index.md) |
 
 ## 读 VLA 时抓什么
 

@@ -81,3 +81,12 @@ history observation
 - [Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)：理解表征学习和 latent dynamics 为什么可以解耦。
 - [V-JEPA 2](https://arxiv.org/abs/2506.09985)：理解 JEPA 表征如何接 action-conditioned planning。
 - [DreamerV3](https://arxiv.org/abs/2301.04104)：理解 imagined rollout 如何服务策略学习。
+
+## 相关阅读与下一步
+
+- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
+- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- 站内下一步：[世界模型专题](index.md)。
+- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
+- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。

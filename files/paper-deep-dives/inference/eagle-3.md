@@ -6,6 +6,11 @@ paper_topic: 高效推理
 
 # EAGLE-3：为什么 draft model 要在训练时“见过自己犯错”
 
+!!! info "本站判断"
+    这页把《EAGLE-3：为什么 draft model 要在训练时“见过自己犯错”》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 EAGLE-3 继续解决投机解码里的同一个问题：怎么让便宜 draft path 猜出 target LLM 更可能接受的未来 token。它和 EAGLE 的关键差别不是“又换了一个小模型”，而是指出：**draft model 训练时如果只看真实前缀，推理时却要吃自己上一轮生成的前缀，多步 draft 就会分布偏移。**
 
 EAGLE-3 的回答是 training-time test：在训练阶段就模拟测试时的递归 draft，让 draft model 见过自己生成的中间状态。这样它往后猜第 2、第 3、第 4 个 token 时，不会因为输入分布突然变成“自己造出来的前缀”而崩。

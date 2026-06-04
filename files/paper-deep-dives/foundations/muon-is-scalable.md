@@ -6,6 +6,11 @@ paper_topic: 高效训练
 
 # Muon：LLM 预训练优化器
 
+!!! info "本站判断"
+    这页把《Muon：LLM 预训练优化器》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 这篇论文讨论的不是一个普通训练小技巧，而是一个更基础的问题：**在大模型预训练里，AdamW 是否仍然是唯一足够稳、足够可扩展的默认优化器？** 论文的答案比较激进：如果只看大规模 LLM 预训练，经过 weight decay、update scale 和分布式实现改造后的 Muon 可以直接替代 AdamW，并在 compute-optimal training 下达到约 `2x` 的训练效率。
 
 但工程上不能把这句话读成“所有阶段都换成 Muon”。这篇论文真正有价值的部分在于，它把 Muon 从一个小模型优化器改造成能跑 5.7T token MoE 预训练的系统方案，并且清楚暴露了它和 AdamW 的边界：Muon 更适合矩阵权重的预训练更新，非矩阵参数、已有 AdamW checkpoint 的 SFT、以及很多短周期后训练任务，仍然要谨慎对待。
@@ -353,3 +358,12 @@ SVD entropy 更高意味着奇异值分布更均衡，说明权重矩阵没有�
 ## 阅读结论
 
 Muon 的核心是把矩阵更新方向做近似正交化，让优化步更像受控的谱范数更新；真实系统里通常还要和 AdamW 分工使用。读 loss / scale 曲线时要看模型规模、token budget、是否保持同等训练 recipe 和 AdamW baseline 是否充分调参。真正要验的是稳定性、update scale、分布式语义和超参迁移，不是单个 benchmark 赢一次。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Muon+is+Scalable+for+LLM+Training&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Muon+is+Scalable+for+LLM+Training)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Muon+is+Scalable+for+LLM+Training)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

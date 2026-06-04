@@ -6,6 +6,11 @@ paper_topic: 世界模型
 
 # Lance：统一多模态模型，为什么对世界模型有启发
 
+!!! info "本站判断"
+    这页把《Lance：统一多模态模型，为什么对世界模型有启发》当作机制和证据案例来读：先看它真正改变了哪个接口，再看实验、消融、scaling 或失败边界是否支撑这个 claim。
+
+    Checked Date: 2026-06-04；Repro Status: Paper / official materials reviewed, independent reproduction not claimed.
+
 Lance 不是 Dreamer 那类 model-based RL 世界模型，也不是 LingBot-World 那类动作条件交互模拟器。它值得放进世界模型专题，是因为它回答了另一个底层问题：**如果一个模型既要理解图像/视频，又要生成和编辑图像/视频，语义 token、视觉 latent、干净条件和带噪目标应该怎样放进同一个上下文？**
 
 世界模型最终也会遇到类似问题。planner 需要抽象语义状态，simulator 需要细节和运动，解释模块需要语言，生成模块需要连续视觉 latent。Lance 提供的是“统一多模态状态层”的结构样板，而不是完整可交互环境。
@@ -210,3 +215,12 @@ Lance 的项目页和论文报告了 GenEval、DPG-Bench、GEdit-Bench、VBench�
 Lance 最值得带走的不是某个 benchmark 分数，而是一个结构判断：统一多模态模型不必把理解和生成硬塞进同一种 token、同一条路径。语义 token、VAE latent、干净条件和带噪目标可以共处一个上下文；理解和生成可以共享上下文但走不同 expert；MaPE 这类角色感知位置编码能减少异构视觉 token 混淆。
 
 对世界模型来说，Lance 是底座结构，不是终点。真正的交互世界模型还要接动作条件、因果 rollout、长期记忆、reward/risk 和闭环评测。把这个边界看清，Lance 才会从“又一个统一多模态模型”变成一篇有用的世界模型结构参考。
+
+## 相关阅读与下一步
+
+- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Lance%3A+Unified+Multimodal+Modeling+by+Multi-Task+Synergy&searchtype=title)。
+- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Lance%3A+Unified+Multimodal+Modeling+by+Multi-Task+Synergy)。
+- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Lance%3A+Unified+Multimodal+Modeling+by+Multi-Task+Synergy)。
+- 站内下一步：[论文精读专题](../index.md)。
+- 站内下一步：[论文专题写作规范](../writing-standard.md)。
+- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

@@ -4,6 +4,10 @@
 
 这页先不从“有哪些 kernel”开始，而是从一条数据流开始：一个 token 的 hidden state 进入 Transformer block 后，除了 GEMM 和 attention，还要不断经历“读一整行、算统计量、改 layout、按索引重排、再写回”。如果这些步骤被拆成许多小 kernel，GPU trace 里就会出现密密麻麻的短条，每条都不大，却让端到端 latency 下不来。
 
+![Nsight Systems CPU/GPU correlation](../assets/images/tools/nsight-systems/cpu-gpu-correlation.png){ width="820" }
+
+<small>图源：[NVIDIA Nsight Systems 文档](https://docs.nvidia.com/nsight-systems/)。原图表达短 kernel、CPU 调度和 GPU 时间线的关联；本站读法是说明 reduction、norm、layout 和 indexing 这类小算子往往以“很多短条”拖慢端到端路径。它不能证明具体哪个小算子是瓶颈，仍需按 trace 下钻。</small>
+
 ## 先跟着一行 hidden state 走一遍
 
 假设有一行 hidden state：
@@ -176,3 +180,12 @@ Reduction、norm、layout transform 和 indexing kernel 的共同主题是：它
 - [FlashAttention](https://arxiv.org/abs/2205.14135)：理解在线 softmax 和 I/O-aware attention 如何把 reduction 统计量放进分块数据流。
 - [Layer Normalization](https://arxiv.org/abs/1607.06450) 与 [RMSNorm](https://arxiv.org/abs/1910.07467)：理解归一化公式、训练稳定性与 RMSNorm 的设计动机。
 - [智源/OneFlow：全栈 Transformer 推理优化](https://hub.baai.ac.cn/view/33449)：学习中文工程长文如何从硬件、算子、显存、KV cache 和调度分层讲解；具体事实仍回论文和官方文档核对。
+
+## 相关阅读与下一步
+
+- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
+- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- 站内下一步：[算子与编译器专题](index.md)。
+- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
+- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
