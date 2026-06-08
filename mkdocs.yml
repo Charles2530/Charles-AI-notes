@@ -184,6 +184,7 @@ nav:
           - Self Forcing：对齐视频训练与推理: paper-deep-dives/world-models/self-forcing.md
           - Towards Video World Models：视频世界模型门槛: paper-deep-dives/world-models/towards-video-world-models.md
           - World Models Survey：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
+          - World Model for Robot Learning：机器人学习综述: paper-deep-dives/world-models/world-model-for-robot-learning-survey.md
           - LingBot-World：视频基础模型到世界模拟器: paper-deep-dives/world-models/lingbot-world.md
           - Lance：统一多模态世界建模启发: paper-deep-dives/world-models/lance.md
           - BAGEL：交错多模态预训练: paper-deep-dives/world-models/bagel.md

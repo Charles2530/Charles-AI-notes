@@ -10,6 +10,7 @@ from typing import Any
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(?P<body>.*?)\n---\s*\n", re.DOTALL)
 PAPER_DATE_RE = re.compile(r"^paper_date:\s*['\"]?(?P<date>\d{4}(?:-\d{2})?)['\"]?\s*$", re.MULTILINE)
+INFO_BLOCK_DATE_RE = re.compile(r"\*\*时间\s*/\s*主题：\*\*\s*(?P<date>\d{4}(?:-\d{2})?)", re.MULTILINE)
 H1_RE = re.compile(r"^#\s+(?P<title>.+?)\s*$", re.MULTILINE)
 
 
@@ -31,10 +32,10 @@ def _paper_date_from_file(path: str) -> tuple[int, int]:
         return (9999, 99)
 
     front = FRONT_MATTER_RE.match(text)
-    if not front:
-        return (9999, 99)
+    match = PAPER_DATE_RE.search(front.group("body")) if front else None
+    if not match:
+        match = INFO_BLOCK_DATE_RE.search(text)
 
-    match = PAPER_DATE_RE.search(front.group("body"))
     if not match:
         return (9999, 99)
 
