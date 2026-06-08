@@ -1,3 +1,7 @@
+---
+paper_date: 2019-12
+---
+
 # Dreamer：在 latent imagination 里训练 actor-critic
 
 !!! info "论文信息"

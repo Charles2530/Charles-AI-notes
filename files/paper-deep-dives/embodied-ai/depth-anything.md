@@ -1,5 +1,6 @@
 ---
 title: Depth Anything：无标注图像怎样变成单目深度基础模型
+paper_date: 2024-01
 ---
 
 # Depth Anything：无标注图像怎样变成单目深度基础模型

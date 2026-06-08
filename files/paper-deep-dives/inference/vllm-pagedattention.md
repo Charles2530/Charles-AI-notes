@@ -1,3 +1,7 @@
+---
+paper_date: 2023-09
+---
+
 # vLLM / PagedAttention：为什么 KV cache 需要分页管理
 
 !!! info "论文信息"

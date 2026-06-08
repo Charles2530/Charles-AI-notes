@@ -1,5 +1,6 @@
 ---
 title: DreamZero：世界动作模型为什么可以做零样本策略
+paper_date: 2026-02
 ---
 
 # DreamZero：世界动作模型为什么可以做零样本策略

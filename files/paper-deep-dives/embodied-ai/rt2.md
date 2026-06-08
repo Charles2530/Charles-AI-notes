@@ -1,3 +1,7 @@
+---
+paper_date: 2023-07
+---
+
 # RT-2：把 web-scale VLM 变成会输出动作的 VLA
 
 !!! info "论文信息"

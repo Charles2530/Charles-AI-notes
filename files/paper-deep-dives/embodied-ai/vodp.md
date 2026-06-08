@@ -1,5 +1,6 @@
 ---
 title: VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
+paper_date: 2025-10
 ---
 
 # VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
