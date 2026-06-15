@@ -1,5 +1,7 @@
 ---
 paper_date: 2019-10
+paper_title: "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models"
+paper_topic: 高效训练
 ---
 
 # ZeRO：数据并行真正浪费的是训练状态副本
@@ -11,7 +13,7 @@ paper_date: 2019-10
     **时间 / 主题：** 2019-10；高效训练。<br>
     **arXiv / 官方报告：** arXiv：[1910.02054](https://arxiv.org/abs/1910.02054)；官方材料：[www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1910.02054)；[官方 / 项目材料](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1910.02054)；[官方 / 项目材料](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 ZeRO 要解决的问题不是“模型太大”这么笼统，而是更精确的一笔显存账：普通 data parallel 让每张 GPU 都保存完整 parameters、gradients 和 optimizer states。GPU 数量增加后，计算吞吐和全局 batch 可以变大，但单卡上那份训练状态没有变小。于是训练大模型时，你经常不是被 fp16 权重本身卡住，而是被 Adam 状态、梯度、master weights、激活和临时 buffer 一起挤爆。
 
@@ -124,6 +126,61 @@ Megatron-style tensor parallelism 主要切单层计算：比如把 MLP GEMM、a
 | CPU/NVMe 总内存够但 GPU 不够 | ZeRO-Offload / ZeRO-Infinity，但要付带宽和延迟成本 |
 
 FSDP 和 ZeRO-3 思想相近，都是 full sharding、按需 gather、用完释放，但生态气质不同：DeepSpeed 更像训练 runtime 和配置化系统，FSDP 更贴近 PyTorch 原生 module wrapping 与 state dict 生态。选择哪一个，不应只看“谁更省显存”，还要看模型改造、checkpoint、导出、调试和团队维护成本。
+
+## Stage 选择要从显存账本倒推
+
+ZeRO 的三阶段经常被误读成“数字越大越先进”。更稳的做法是先拆 OOM 来源，再选最小够用的 stage。
+
+| 场景 | 优先考虑 | 原因 |
+| --- | --- | --- |
+| Adam states 占大头，参数和激活还放得下 | ZeRO-1 | 优化器状态最大，改动相对轻 |
+| 梯度也占明显空间，通信拓扑支持 reduce-scatter | ZeRO-2 | optimizer + gradient shard 能进一步降低常驻显存 |
+| 参数副本本身放不下，或需要更大模型 | ZeRO-3 / FSDP full shard | 参数按需 all-gather，容量收益最大 |
+| 激活随 sequence length 爆炸 | checkpointing / sequence parallel / FlashAttention | ZeRO-DP 不直接解决 activation 主导的 OOM |
+| GPU 总显存不足但 CPU/NVMe 空间足 | offload / ZeRO-Infinity | 用带宽和延迟换容量，训练吞吐要重新测 |
+
+这个表的实用点是避免过度上 Stage 3。Stage 3 能省最多显存，但它把参数生命周期交给 runtime，容易让通信、checkpoint、debug 和导出复杂度上升。如果 ZeRO-1 已经让 batch 和模型装下，并且吞吐更稳，就没有必要为了“配置更高级”而上 Stage 3。
+
+## Checkpoint 和恢复是系统级证据
+
+论文强调的是训练容量和吞吐，但在真实工程里，ZeRO 是否可用还取决于 checkpoint。普通 data parallel 保存一份完整参数和优化器状态；ZeRO sharding 后，参数、梯度和 optimizer states 分布在不同 ranks。保存时要决定：是保存分片 state，还是 gather 成完整 state dict；恢复时要决定：world size 变化能否重分片，optimizer states 能否对齐。
+
+这会影响三个流程。
+
+第一，故障恢复。大规模训练必然会遇到节点失败，如果 checkpoint 只在某些 rank 上不完整保存，恢复流程必须知道每个 shard 的来源和版本。第二，后训练和评测。SFT、RLHF、量化或推理导出通常需要完整权重，ZeRO-3/FSDP 训练产物要能可靠转换。第三，实验复现。切分策略、通信 bucket、offload、mixed precision 和 optimizer states 都会影响恢复后是否继续同一条训练曲线。
+
+因此，ZeRO 页面的工程验收不应只写“显存降了”。还要补四项：能否从 checkpoint 恢复同一 world size；能否恢复到不同 world size；能否导出完整权重给推理；恢复后 loss 是否连续。缺其中一项，训练跑通也不等于系统可维护。
+
+## Offload 不是免费扩显存
+
+ZeRO-Offload 和后续 ZeRO-Infinity 很容易让人兴奋：把 optimizer states、parameters 或 activations 放到 CPU/NVMe，看起来 GPU 显存立刻变大。但 offload 的本质是把容量瓶颈转成带宽和延迟瓶颈。每次 forward/backward 需要的参数和 optimizer update 需要的数据，都要在 PCIe、NVLink、CPU memory 或 NVMe 之间移动。
+
+适合 offload 的情况通常是：模型太大，不 offload 根本不能跑；训练吞吐不是第一优先级；或者有足够好的 overlap，让数据搬运被计算遮住。不适合的情况是：模型本来能放下，只是想追求更高吞吐；网络或 PCIe 已经是瓶颈；step time 对延迟敏感；checkpoint 和恢复流程还没打通。
+
+读 ZeRO 系列时可以把这当成一个统一原则：显存优化从来不是单目标优化。每省下一份常驻状态，都可能增加通信、重计算、调度或 I/O。系统论文的好处是把这笔账显式化，而不是让训练 OOM 变成玄学。
+
+## 一个训练显存排查模板
+
+把 ZeRO 用好，最好先写一张显存账，而不是先改配置。一个最小排查模板可以这样列：
+
+| 项 | 估算方法 | 可能动作 |
+| --- | --- | --- |
+| Parameters | 参数量 × dtype bytes | 模型切分、ZeRO-3、FSDP |
+| Gradients | 参数量 × grad dtype bytes | ZeRO-2、gradient accumulation 调整 |
+| Optimizer states | Adam 约 8-12 bytes / param，取决于 master weight | ZeRO-1、optimizer offload |
+| Activations | batch × sequence × layers × hidden 相关 | activation checkpointing、sequence parallel |
+| Temporary buffers | attention/GEMM/通信 workspace | kernel、bucket、allocator 调整 |
+| Fragmentation | reserved 和 allocated 差距 | defragmentation、固定 buffer、重启进程验证 |
+
+这个模板能解释一个常见现象：同样是 OOM，短序列大模型和长序列中模型的解法完全不同。前者可能被 optimizer states 和 parameter replica 卡住，ZeRO-1/2/3 很直接；后者可能被 activation 和 attention workspace 卡住，单纯上 ZeRO stage 只能缓一部分。
+
+因此，ZeRO 的工程使用顺序应是：先用 profiler 或框架日志区分 allocated、reserved、optimizer、activation；再选最低复杂度的 stage；最后用吞吐和 checkpoint 恢复确认没有把问题转移到通信或 I/O。这个顺序比“直接复制别人 DeepSpeed config”更可靠。
+
+## 为什么 ZeRO 仍然是现代训练栈的基础语言
+
+今天很多团队直接使用 FSDP、DeepSpeed ZeRO、Megatron-DeepSpeed 或自研分布式训练框架，不一定手写 ZeRO 论文里的实现。但论文提出的“训练状态冗余”语言仍然是沟通基础：参数、梯度、优化器状态、激活、临时 buffer 到底谁被复制，谁被分片，谁被重算，谁被 offload。
+
+这种语言能帮助团队避免把不同技术混在一起。Tensor parallel 解决单层计算切分，pipeline parallel 解决层切分，sequence parallel 解决序列维度激活和通信，ZeRO/FSDP 解决 data parallel 副本冗余。真正的大模型训练通常是这些工具叠加，调参时必须知道每一层工具在动哪一份内存和哪一段通信。
 
 ## 阅读结论
 

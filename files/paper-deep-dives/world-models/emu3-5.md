@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2025-10；世界模型。<br>
     **arXiv / 官方报告：** arXiv：[2510.26583](https://arxiv.org/abs/2510.26583)；官方材料：[huggingface.co/BAAI/Emu3.5](https://huggingface.co/BAAI/Emu3.5)。<br>
     **GitHub / 项目：** GitHub：[github.com/baaivision/Emu3.5](https://github.com/baaivision/Emu3.5)；项目页：[huggingface.co/BAAI/Emu3.5](https://huggingface.co/BAAI/Emu3.5)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.26583)；[GitHub API / repo](https://github.com/baaivision/Emu3.5)；[官方 / 项目材料](https://huggingface.co/BAAI/Emu3.5)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.26583)；[GitHub API / repo](https://github.com/baaivision/Emu3.5)；[官方 / 项目材料](https://huggingface.co/BAAI/Emu3.5)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 | Checked Date | Repro Status | 本页证据口径 |
 | --- | --- | --- |
@@ -212,7 +212,6 @@ Emu3.5 的核心启发是：如果把长视频帧、transcript、instruction、r
 
 但从工程角度看，它还不是可以直接部署到机器人或交互环境的完整世界模型。它更适合作为高层世界状态生成器、可视化 planner、长时 narrative simulator 或 embodied task proposal 模块；真实闭环还需要 action-conditioned dynamics、低层控制和失败反馈。
 
-**阅读结论。**
 Emu3.5 是统一多模态世界模型路线的重要样本。强证据在于 13T+ multimodal pretraining、long video interleaved data、SFT 世界任务和 DiDA 推理加速；弱证据在于 world exploration 与 embodied manipulation 仍主要是生成式视觉语言输出，尚未证明真实闭环控制收益。
 
 ## 外部精读

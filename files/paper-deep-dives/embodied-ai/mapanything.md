@@ -13,7 +13,7 @@ paper_topic: 具身智能
     **时间 / 主题：** 2025-09；具身智能。<br>
     **arXiv / 官方报告：** arXiv：[2509.13414](https://arxiv.org/abs/2509.13414)；官方材料：[map-anything.github.io/](https://map-anything.github.io/)。<br>
     **GitHub / 项目：** GitHub：[github.com/facebookresearch/map-anything](https://github.com/facebookresearch/map-anything)；项目页：[map-anything.github.io/](https://map-anything.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2509.13414)；[GitHub API / repo](https://github.com/facebookresearch/map-anything)；[官方 / 项目材料](https://map-anything.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2509.13414)；[GitHub API / repo](https://github.com/facebookresearch/map-anything)；[官方 / 项目材料](https://map-anything.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 MapAnything 的核心价值，是把原本分散在 SfM、MVS、相机标定、深度估计、定位和补全里的几何问题，压到一个统一的前向模型里：**输入可以只有图像，也可以额外带 intrinsics、poses、depth 或 partial reconstruction；输出则是一套可合成 metric 3D reconstruction 的 factored geometry。**
 
@@ -92,7 +92,7 @@ MapAnything 不把场景直接表示成一组耦合 pointmaps，而是输出：
 \]
 
 \[
-X_i^\text{metric} = m \cdot \tilde X_i
+X_i^{\text{metric}} = m \cdot \tilde X_i
 \]
 
 这里 \(O_i\) 由 quaternion \(Q_i\) 转成 rotation matrix。这个分解的好处有三层：
@@ -162,25 +162,25 @@ MapAnything 的训练目标很值得细读，因为它的“universal”不是�
 对于不依赖 scene scale 的量，直接监督：
 
 \[
-L_\text{rays}=\sum_i\|\hat R_i-R_i\|
+L_{\text{rays}}=\sum_i\|\hat R_i-R_i\|
 \]
 
 \[
-L_\text{rot}=\sum_i\min(\|\hat Q_i-Q_i\|,\|-\hat Q_i-Q_i\|)
+L_{\text{rot}}=\sum_i\min(\|\hat Q_i-Q_i\|,\|-\hat Q_i-Q_i\|)
 \]
 
-这里 \(L_\text{rays}\) 表示预测 ray direction \(\hat R_i\) 和真值 \(R_i\) 的误差和；\(L_\text{rot}\) 表示旋转 quaternion 的误差和。quaternion 有 \(Q\) 和 \(-Q\) 表达同一旋转的问题，所以 rotation loss 取二者较小值。
+这里 \(L_{\text{rays}}\) 表示预测 ray direction \(\hat R_i\) 和真值 \(R_i\) 的误差和；\(L_{\text{rot}}\) 表示旋转 quaternion 的误差和。quaternion 有 \(Q\) 和 \(-Q\) 表达同一旋转的问题，所以 rotation loss 取二者较小值。
 
 对于 ray depths、pose translations、local pointmaps、world-frame pointmaps，论文沿用 DUSt3R 风格的 scale-invariant normalization，并把 log-space loss 作为关键设计。论文定义：
 
 \[
-f_\log(x) = (x / \|x\|)\cdot \log(1+\|x\|)
+f_{\log}(x) = (x / \|x\|)\cdot \log(1+\|x\|)
 \]
 
 并强调 ray depths、pointmaps 和 metric scale factor 都要在 log-space 里算 loss。为了避免 scale loss 的梯度污染 up-to-scale geometry，它使用：
 
 \[
-z^\text{metric}=m \cdot \text{sg}(\tilde z)
+z^{\text{metric}}=m \cdot \text{sg}(\tilde z)
 \]
 
 其中 \(\text{sg}\) 表示 stop-gradient。
@@ -189,16 +189,16 @@ z^\text{metric}=m \cdot \text{sg}(\tilde z)
 
 \[
 \mathcal{L}
-=10\cdot \mathcal{L}_\text{pointmap}
-+\mathcal{L}_\text{rays}
-+\mathcal{L}_\text{rot}
-+\mathcal{L}_\text{translation}
-+\mathcal{L}_\text{depth}
-+\mathcal{L}_\text{lpm}
-+\mathcal{L}_\text{scale}
-+\mathcal{L}_\text{normal}
-+\mathcal{L}_\text{GM}
-+0.1\cdot \mathcal{L}_\text{mask}
+=10\cdot \mathcal{L}_{\text{pointmap}}
++\mathcal{L}_{\text{rays}}
++\mathcal{L}_{\text{rot}}
++\mathcal{L}_{\text{translation}}
++\mathcal{L}_{\text{depth}}
++\mathcal{L}_{\text{lpm}}
++\mathcal{L}_{\text{scale}}
++\mathcal{L}_{\text{normal}}
++\mathcal{L}_{\text{GM}}
++0.1\cdot \mathcal{L}_{\text{mask}}
 \]
 
 训练细节里有几个很工程化的点：
@@ -475,7 +475,8 @@ MapAnything 属于“前沿但很工程化的几何 foundation model”。它的
 
 最值得复用的是三件事：**factored scene representation、geometric input probability augmentation、two-stage view curriculum**。如果做具身项目，可以先把它作为几何状态层 baseline，而不是把它包装成完整具身智能方案。下一步最需要的证据，是带 noisy sensor / SLAM drift 的真实机器人 episode、与 planner/VLA/world model 的闭环 ablation，以及动态场景和失败恢复数据。
 
-**阅读结论。**
+## 阅读结论
+
 MapAnything 的方法证据来自 factored scene representation、几何输入增强和 view curriculum；实验要看多视图重建、速度显存和辅助输入消融。把它接入机器人时先作为几何状态层验收，再接 planner/VLA，不要直接当动作策略。
 
 ## 相关阅读与下一步

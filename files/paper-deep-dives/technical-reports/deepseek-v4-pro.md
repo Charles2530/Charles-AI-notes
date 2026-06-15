@@ -13,7 +13,7 @@ paper_topic: 技术报告
     **时间 / 主题：** 2026-05；技术报告。<br>
     **arXiv / 官方报告：** arXiv：未找到专门条目。<br>
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
-    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇技术报告的核心不是“又把模型做大了”，而是围绕一个更具体的问题展开：**当 reasoning、agent 和长文档任务都想吃更多上下文时，普通 attention 的 FLOPs 和 KV cache 会先把系统拖垮，模型必须在架构、训练和推理栈上同时改。**
 
@@ -414,7 +414,7 @@ DeepSeek-V4 Pro 是技术报告，不是模块消融论文；读报告时要把�
 6. [推理：上下文压缩与 KV 内存管理](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)：把 DeepSeek-V4 的异构 KV cache 和 on-disk KV 放到推理系统里看；
 7. [强化学习：verl 代码流程](../../reinforcement-learning/verl-code-flow.md)：对照 rollout、reward、advantage、policy update 和 OPD/RL 基础设施。
 
-### 一句话总结
+## 阅读结论
 
 DeepSeek-V4 的重点不是某个单点指标，而是展示了一条百万上下文大模型的完整路线：**用 CSA/HCA 和异构 KV cache 压低长上下文边际成本，用 mHC/Muon/稳定性补丁把 trillion-scale MoE 训练跑稳，用 specialist + OPD 把多领域后训练能力合并到一个统一模型里，再用 FP4 QAT、rollout service 和 sandbox 把模型放进真实 agent 系统。**
 

@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2026-05；世界模型。<br>
     **arXiv / 官方报告：** arXiv：[2605.18678](https://arxiv.org/abs/2605.18678)；官方材料：[lance-project.github.io/](https://lance-project.github.io/)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[lance-project.github.io/](https://lance-project.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.18678)；[官方 / 项目材料](https://lance-project.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.18678)；[官方 / 项目材料](https://lance-project.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Lance 不是 Dreamer 那类 model-based RL 世界模型，也不是 LingBot-World 那类动作条件交互模拟器。它值得放进世界模型专题，是因为它回答了另一个底层问题：**如果一个模型既要理解图像/视频，又要生成和编辑图像/视频，语义 token、视觉 latent、干净条件和带噪目标应该怎样放进同一个上下文？**
 
@@ -207,6 +207,15 @@ Lance 的项目页和论文报告了 GenEval、DPG-Bench、GEdit-Bench、VBench�
 第三，训练初始化表述要谨慎。摘要强调 unified model 和 staged multi-task training，项目页说是 research artifact；论文实现细节又使用 Qwen2.5-VL 3B 初始化理解相关组件、Wan2.2 3D causal VAE 作为生成 encoder。读它时不要理解成“完全随机从零训练所有模块”，也不要理解成“只是简单微调现成 VLM”。核心贡献在统一上下文、双路径和多任务 recipe。
 
 第四，官方项目页也提醒 released checkpoint 不是 polished product model，输出质量会随 prompt、分辨率、时长、motion complexity 和 editing scenario 波动。
+
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| 理解和生成可以统一在多任务上下文中 | framework 图、统一上下文设计 | 不等于所有模态共享同一条计算路径最优 |
+| 双 expert 缓解理解/生成冲突 | dual expert 结构和任务表现 | 不是动作条件世界模型证据 |
+| MaPE 帮助区分 token 角色 | MaPE ablation、token scaling | 不能证明长期 memory 或 planning |
+| 多任务协同提升统一能力 | benchmark、ablation、项目 demo | 官方也提示 checkpoint 不是 polished product |
 
 ## 外部精读
 

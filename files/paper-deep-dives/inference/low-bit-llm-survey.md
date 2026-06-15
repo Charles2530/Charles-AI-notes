@@ -13,7 +13,7 @@ paper_topic: 高效推理
     **时间 / 主题：** 2024-09；高效推理。<br>
     **arXiv / 官方报告：** arXiv：[2409.16694](https://arxiv.org/abs/2409.16694)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2409.16694)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2409.16694)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇综述的价值不是提出一个新算法，而是把低比特 LLM 拆成了三层：**基础格式、系统实现、训练与推理算法**。读它时不要只问“INT4 / FP8 哪个更好”，而要问一个更工程的问题：量化到底省的是权重、激活、KV cache、带宽、通信，还是训练 optimizer state？
 
@@ -424,7 +424,7 @@ Mixed precision 则承认一个更现实的问题：少量 outlier 或 salient w
 
 第三，KV cache 是后续重点。论文未来方向也提到，长上下文下 KV cache 会成为主要内存瓶颈，语义引导的 KV cache 压缩和混合 bit 分配会越来越重要。这一点可以和 [KVSlimmer](kvslimmer.md) 一起读：前者给低比特量化全景，后者深入一个具体 KV 压缩机制。
 
-## 最值得带走的结论
+## 阅读结论
 
 低比特 LLM 的核心不是“把模型压到几 bit”，而是把数值格式、量化粒度、校准方式、低比特 kernel、KV cache、训练稳定性和质量回归放进同一条工程链里。一个量化方案是否高效，取决于它省掉的内存和带宽是否大于它引入的 scale、packing、Q/DQ、kernel 分支和质量回退成本。
 

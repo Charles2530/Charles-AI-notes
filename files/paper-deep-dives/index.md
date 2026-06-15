@@ -24,6 +24,7 @@
 
 ## 推理系统
 
+- [vLLM / PagedAttention：KV cache 分页管理](inference/vllm-pagedattention.md)
 - [EAGLE：为什么 draft 不一定要是小模型](inference/eagle.md)
 - [EAGLE-2：动态 Draft Tree](inference/eagle-2.md)
 - [EAGLE-3：训练时见过自己犯错](inference/eagle-3.md)
@@ -58,7 +59,9 @@
 - [Self Forcing：对齐视频训练与推理](world-models/self-forcing.md)
 - [Towards Video World Models：视频世界模型门槛](world-models/towards-video-world-models.md)
 - [World Models Survey：具身世界模型综述](world-models/world-models-embodied-ai-survey.md)
+- [World Model for Robot Learning：机器人学习综述](world-models/world-model-for-robot-learning-survey.md)
 - [LingBot-World：视频基础模型到世界模拟器](world-models/lingbot-world.md)
+- [kai0：资源受限下的高可靠机器人操作](world-models/kai0.md)
 - [Lance：统一多模态世界建模启发](world-models/lance.md)
 - [BAGEL：交错多模态预训练](world-models/bagel.md)
 - [Emu3.5：原生多模态世界学习器](world-models/emu3-5.md)

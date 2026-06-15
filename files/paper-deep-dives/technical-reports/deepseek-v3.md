@@ -13,7 +13,7 @@ paper_topic: 技术报告
     **时间 / 主题：** 2024-12；技术报告。<br>
     **arXiv / 官方报告：** arXiv：[2412.19437](https://arxiv.org/abs/2412.19437)。<br>
     **GitHub / 项目：** GitHub：[github.com/deepseek-ai/DeepSeek-V3](https://github.com/deepseek-ai/DeepSeek-V3)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2412.19437)；[GitHub API / repo](https://github.com/deepseek-ai/DeepSeek-V3)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2412.19437)；[GitHub API / repo](https://github.com/deepseek-ai/DeepSeek-V3)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“DeepSeek-V3”背后的核心机制、适用边界和下一步阅读路径。
 
@@ -431,7 +431,11 @@ DeepSeek-V3 给训练项目的启发可以压成几条：
 
 更准确地说，DeepSeek-V3 的价值在于展示了一个大模型系统的完整工程形态：**模型结构决定可扩展性，训练系统决定能不能按成本跑完，后训练决定 base model 能不能变成可靠产品模型。**
 
+## 阅读结论
+
 DeepSeek-V3 的系统接口要按共设计读：MLA 降 KV，DeepSeekMoE 降 active params，MTP 改训练信号，DualPipe/FP8 降训练成本。benchmark、needle、expert load 和 overlap 图分别对应能力、长上下文、路由均衡和系统吞吐；最重要的不是单点分数，而是 MoE 路由、FP8 稳定和通信重叠能否同时成立。
+
+它的成熟度属于大规模工程报告：能力和系统证据很完整，但很多训练配方、数据细节和硬件实现仍不可独立复现。可复用机制是 MLA/MoE/FP8/DualPipe/MTP 的协同思路；不可外推项是任意单个 trick 都不保证在别的集群、模型规模或后训练数据上复现同样成本优势。
 
 ## 相关阅读与下一步
 

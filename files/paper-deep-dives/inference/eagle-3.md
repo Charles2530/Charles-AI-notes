@@ -13,7 +13,7 @@ paper_topic: 高效推理
     **时间 / 主题：** 2025-03；高效推理。<br>
     **arXiv / 官方报告：** arXiv：[2503.01840](https://arxiv.org/abs/2503.01840)。<br>
     **GitHub / 项目：** GitHub：[github.com/SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.01840)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.01840)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 EAGLE-3 继续解决投机解码里的同一个问题：怎么让便宜 draft path 猜出 target LLM 更可能接受的未来 token。它和 EAGLE 的关键差别不是“又换了一个小模型”，而是指出：**draft model 训练时如果只看真实前缀，推理时却要吃自己上一轮生成的前缀，多步 draft 就会分布偏移。**
 
@@ -122,6 +122,88 @@ EAGLE-3 的 speedup 不是免费午餐。draft model 训练、feature export、t
 | EAGLE-3 | draft 训练分布不像测试时多步输入 | direct token prediction + training-time test + fused features |
 
 把三篇连起来看，主线很清楚：先找到 target feature 这个低成本接口，再把候选树按上下文动态分配，最后让 draft model 在训练时见过推理时的递归输入。
+
+## 训练和推理接口要逐项对齐
+
+EAGLE-3 最容易被讲成“训练时也做一次测试”，但工程上要拆成三个接口。第一个接口是 target feature export：target LLM 的低层、中层、高层 hidden states 必须在一次 forward 中稳定取出，并且和 LM head、position、attention mask 对齐。第二个接口是 draft recursion：draft model 第一轮吃 target fused feature，后续轮次吃自己的中间表示和采样 token。第三个接口是 target verification：候选树必须被构造成 target model 可以一次验证的 token/mask/KV 形状。
+
+这三个接口任何一个错位，都会让论文里的 acceptance length 变成线上 bug。例如 fused feature 的层号和训练不一致，draft 会看到分布外输入；tree mask 如果让候选分支互相泄漏，就会破坏 speculative decoding 的分布保持；verification 阶段如果没有正确处理被拒绝 token 后的 KV cache，下一步 decode 会带着错误上下文继续跑。
+
+可以把 EAGLE-3 的上线检查写成一条状态机：
+
+```text
+prefill target LLM
+  -> collect multi-layer features
+  -> draft recursive candidates
+  -> build tree attention mask
+  -> target verifies all candidate paths
+  -> accept prefix / reject branch
+  -> commit only accepted KV and tokens
+```
+
+这个状态机解释了为什么论文同时报告 algorithm speedup 和 runtime integration。方法本身只让 draft 更准；真正落地还需要 scheduler 知道候选树占多少 token，KV manager 知道哪些 token 可以提交，sampling module 知道拒绝后从 target distribution 继续。
+
+## 证据链：不是一张速度图就够了
+
+EAGLE-3 的论文证据可以按“机制、规模、系统”三层读。
+
+| 证据节点 | 支撑的 claim | 不能证明什么 |
+| --- | --- | --- |
+| Figure 1 scaling law | direct token prediction 和 training-time test 能把更多数据转成 speedup / acceptance length | 不证明任意领域流量都能同样随数据扩展 |
+| Figure 3 training-time test | 训练过程显式模拟多步 draft recursion | 不证明 draft 输出质量本身优于 target |
+| Table 2 ablation | remove feature constraint 和 fused features 都贡献增益 | 不证明多层 feature 的最优层组合已经穷尽 |
+| Figure 7 acceptance by recursion step | 接受率随 draft 深度更稳定 | 不证明无限深 tree 都值得扩展 |
+| SGLang / vLLM runtime 表 | 方法能嵌入真实 serving runtime | 不证明所有 batch size、所有硬件和所有 prompt 分布下都更快 |
+
+这个分层很重要。投机解码的质量保持来自 target verification，不来自 draft model “更聪明”。因此 EAGLE-3 的核心指标不是 perplexity 或回答分，而是 accepted tokens、verification overhead、end-to-end throughput / latency。读 speedup 时还要确认 baseline 是否包含同等 runtime 优化、是否启用 tree attention、是否相同 sampling temperature、是否同样 batch size。
+
+## 部署时最容易踩的坑
+
+第一类坑是 request mix。EAGLE-3 对低温、长输出、模式稳定的请求更友好；对短输出、工具调用、强随机采样和频繁 stop 的请求，draft 成本可能没有足够 token 可以摊销。线上不应只开全局开关，而应该按 route、temperature、max output、历史 acceptance rate 做 gating。
+
+第二类坑是 memory accounting。draft tree 会增加一次 verification 的 token 数，target KV cache 也会临时承载候选路径。即使最终只提交 accepted prefix，中间 verification 的显存和 kernel 时间仍是真实成本。长上下文服务里，PagedAttention、prefix cache、speculative tree 和 batch scheduler 会互相影响。
+
+第三类坑是训练域。论文使用公开对话和 benchmark 说明 scaling 趋势，但企业流量可能包含代码补全、结构化 JSON、检索引用、工具轨迹、数学证明和多语言文本。EAGLE-3 的 training-time test 解决 exposure bias，不自动解决 domain mismatch。更稳的做法是对目标流量采样，按任务桶统计 acceptance，再决定是否补训 draft。
+
+第四类坑是验证口径。只看单请求 latency 会低估 batch serving 的资源竞争；只看吞吐会掩盖 P95/P99 延迟；只看 accepted length 会忽略 tree construction 和 draft overhead。最终验收至少要同时看：target forward 次数、accepted tokens per verify、draft token cost、GPU memory peak、batch occupancy、P50/P95/P99 latency 和输出一致性。
+
+## 最小复现实验应该怎么设计
+
+复现 EAGLE-3 不必一开始就接完整线上 runtime。更稳的是先做三层小实验。
+
+第一层是离线 acceptance 实验。固定 target model、prompt 集合、temperature 和 max tokens，比较原始 EAGLE-2、去 feature constraint、加入 fused features、加入 training-time test 后的 average acceptance length。这个实验不追求最高 tokens/s，只验证机制是否按论文方向工作。
+
+第二层是单请求端到端 latency。把 draft、tree construction、target verification 和 sampling 都放进同一条推理路径，统计每个模块耗时。这里要防止“只测 target 少跑几步”而漏掉 draft overhead。若 acceptance length 提高但端到端 latency 不降，说明 bottleneck 已转移到实现。
+
+第三层是 batch serving。用真实或合成的请求长度分布测试 batch size 1、8、32、64 等不同并发。记录 throughput、P95 latency、peak KV memory 和 acceptance rate。EAGLE-3 的论文结论可以作为预期方向，但最终上线阈值应来自本地 workload。
+
+| 实验层级 | 必看指标 | 失败信号 |
+| --- | --- | --- |
+| 离线 acceptance | accepted length、acceptance by depth | training-time test 后深层接受率仍快速下滑 |
+| 单请求 latency | draft time、verify time、total token/s | draft overhead 超过 target step 节省 |
+| Batch serving | throughput、P95/P99、peak memory | 高并发下 tree verification 挤占 KV 或 scheduler |
+
+这样设计的好处是能快速定位失败原因：机制没起作用、实现太慢、还是 workload 不适合。它也符合 EAGLE-3 的证据结构：先证明 draft 更会猜，再证明 runtime 真能获益。
+
+## 和其他推理优化的组合边界
+
+EAGLE-3 属于 decode-side acceleration，主要减少 target LLM 逐 token 前进的次数。它和 quantization、KV cache 压缩、PagedAttention、continuous batching 不是同一层优化。
+
+| 优化 | 作用层 | 和 EAGLE-3 的关系 |
+| --- | --- | --- |
+| Weight / activation quantization | 降低每次 forward 的算力和带宽 | target 和 draft 都可能受益，但量化误差会影响 acceptance，需要复测 |
+| KV cache paging / prefix cache | 管理长上下文和多请求 KV | draft tree 会增加临时候选 token，必须和 KV manager 协同 |
+| Continuous batching | 提高 GPU 批处理利用率 | 大 batch 下 target 已接近饱和，EAGLE-3 的边际收益可能下降 |
+| Disaggregated prefill | 分离 prompt 和 decode 资源 | EAGLE-3 主要作用在 decode，prefill-heavy 流量收益有限 |
+| Routing / model cascade | 按请求选不同模型或路径 | 可以只给适合请求开启 EAGLE-3，避免全局 overhead |
+
+这个表帮助避免一个常见误解：EAGLE-3 不会自动解决所有推理成本。它最擅长的是“target 每次 decode 很贵，而 draft 能连续猜中多个 token”的区间。若系统已经被 prefill、网络队列、工具调用或 CPU sampling 卡住，EAGLE-3 的接受率再高也不一定改善用户感知延迟。
+
+从项目取舍看，EAGLE-3 更像“decode path 的二级发动机”，不是新的 target model。它的评估要和容量规划放在一起：多一个 draft 模型意味着更多权重、更多调度路径和更多监控指标；少跑 target decode step 则意味着更低的高价模型调用成本。最终是否值得上线，取决于这两边的账能否在真实流量上闭合。
+
+一个合格的 EAGLE-3 实验报告最好不要只贴 speedup。它应该写清 target model、draft model、训练数据量、temperature、tree size、prompt/output 长度分布、runtime、batch size 和硬件；还要报告拒绝后的回退逻辑是否保持 target 分布。这样读者才能判断提升来自方法机制、实现优化，还是 benchmark 条件本身。
+
+如果这些条件没有列清，EAGLE-3 的结论只能作为方向参考，不能直接变成容量规划假设；真正的部署决策还要用本地请求回放验证。尤其是 agent 流量和代码流量，常常混合短回答、工具调用、长 JSON、重试和 stop sequence；它们的 acceptance pattern 可能和 MT-bench 完全不同，所以最好单独分桶统计，而不是把所有请求揉成一个平均 speedup。
 
 ## 外部精读
 

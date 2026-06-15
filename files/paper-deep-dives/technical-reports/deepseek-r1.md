@@ -13,7 +13,7 @@ paper_topic: 技术报告
     **时间 / 主题：** 2025-01；技术报告。<br>
     **arXiv / 官方报告：** arXiv：[2501.12948](https://arxiv.org/abs/2501.12948)。<br>
     **GitHub / 项目：** GitHub：[github.com/deepseek-ai/DeepSeek-R1](https://github.com/deepseek-ai/DeepSeek-R1)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2501.12948)；[GitHub API / repo](https://github.com/deepseek-ai/DeepSeek-R1)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2501.12948)；[GitHub API / repo](https://github.com/deepseek-ai/DeepSeek-R1)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的核心不是“R1 分数很高”，而是：**有可靠 verifier 时，大模型可以通过大规模 RL 自己发现更长、更会反思和验证的推理行为。**
 
@@ -565,7 +565,7 @@ DeepSeek-R1 和 InstructGPT 式 RLHF 都是后训练，但目标和奖励完全�
 7. 对小模型，优先考虑从强模型蒸馏长 CoT；直接纯 RL 探索可能成本高且收益不稳。
 8. 评估时要把 pass@1、consensus、多采样、token 数和延迟一起看，不能只看最高分。
 
-### 阅读结论
+## 阅读结论
 
 DeepSeek-R1 最值得学习的地方，是它把“推理能力”重新放回一个可训练的闭环里：
 

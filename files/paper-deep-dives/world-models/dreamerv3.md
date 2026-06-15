@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2023-01；世界模型。<br>
     **arXiv / 官方报告：** arXiv：[2301.04104](https://arxiv.org/abs/2301.04104)；官方材料：[danijar.com/project/dreamerv3/](https://danijar.com/project/dreamerv3/)。<br>
     **GitHub / 项目：** GitHub：[github.com/danijar/dreamerv3](https://github.com/danijar/dreamerv3)；项目页：[danijar.com/project/dreamerv3/](https://danijar.com/project/dreamerv3/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2301.04104)；[GitHub API / repo](https://github.com/danijar/dreamerv3)；[官方 / 项目材料](https://danijar.com/project/dreamerv3/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2301.04104)；[GitHub API / repo](https://github.com/danijar/dreamerv3)；[官方 / 项目材料](https://danijar.com/project/dreamerv3/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 DreamerV3 要回答的问题很窄，也很重要：如果真实环境交互很贵，能不能先学一个动作条件的 latent dynamics，再让策略在这个内部模型里反复“想象”未来，从而减少真实试错。
 
@@ -212,6 +212,12 @@ DreamerV3 需要 agent-environment interaction trajectories，也需要 reward �
 DreamerV3 是 dynamics-first：先学 \(s_t,a_t\rightarrow s_{t+1},r_{t+1},c_{t+1}\)，再用 imagined latent dynamics 训练策略。DreamZero 一类方法更接近 WAM/policy 融合：模型联合预测未来视频和动作，把 video-action model 直接部署成策略。
 
 所以两条路线适合回答不同问题。DreamerV3 适合解释“怎样把世界模型变成内部训练环境”；视频世界模型适合解释“怎样生成可视、可交互、长时一致的未来场景”。前者对 RL 样本效率非常关键，后者对机器人数据生成、仿真和人类可检查性更关键。
+
+## 阅读结论
+
+DreamerV3 的主要内容是把 Dreamer 系列整理成跨域更稳的 world-model RL recipe：RSSM 建模 latent dynamics，KL balance、symlog/symexp、two-hot regression、return normalization 和 reconstruction loss 稳定训练，actor/value 在 imagined rollout 里学习策略。实验要连读跨 benchmark 结果、Minecraft Diamond、ablation 和 scaling，而不是只看某个任务分数。
+
+它的可复用机制是“决策状态优先”的 latent world model：目标不是生成漂亮视频，而是让 state 能预测 reward、continue 并支撑 actor-critic。不可外推项是它仍需要交互轨迹和 reward，不是互联网视频预训练模型；迁移到机器人还要补动作接口、真实延迟、安全约束和 model bias 监控。
 
 ## 外部精读
 

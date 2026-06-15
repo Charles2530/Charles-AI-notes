@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2026-03；世界模型。<br>
     **arXiv / 官方报告：** arXiv：[2603.03276](https://arxiv.org/abs/2603.03276)；官方材料：[beyond-llms.github.io/](https://beyond-llms.github.io/)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[beyond-llms.github.io/](https://beyond-llms.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.03276)；[官方 / 项目材料](https://beyond-llms.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.03276)；[官方 / 项目材料](https://beyond-llms.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文的价值不是发布一个最强模型，而是做控制实验：如果从零训练统一多模态模型，视觉表示、数据混合、动作条件、MoE 和 scaling 分别影响什么。
 
@@ -159,6 +159,12 @@ NWM 的未来帧预测也不能等同于完整物理世界模型。它主要检�
 RAE 的结论依赖 decoder、数据和评测。语义 latent 对统一理解生成很有吸引力，但在高频纹理、精确几何和低延迟控制中是否足够，还需要按任务复测。
 
 MoE 结果说明稀疏专家有潜力，但工程成本很实在：训练负载均衡、跨卡通信、路由稳定性、推理批处理和专家缓存都会影响实际部署。论文证明的是方向，不是把系统问题自动解决。
+
+## 阅读结论
+
+Beyond Language Modeling 的主要内容是用控制实验拆开统一多模态预训练的五个变量：视觉表示、数据混合、world modeling task、MoE 架构和 scaling behavior。它的核心启发不是某个模型最强，而是说明通用视频、图文对齐和少量动作条件数据分别承担不同功能；NWM 这类任务可以检查模型是否真的根据动作预测不同未来。
+
+可复用机制是“文本 next-token + 视觉流匹配 + RAE 视觉 latent + 数据混合 + MoE 专家分化”的统一训练思路。不可外推项是 action-as-text 和导航式动作不能直接替代机器人连续控制；NWM 的视觉未来预测也不能等同于接触、力控和闭环机器人世界模型。
 
 ## 外部精读
 

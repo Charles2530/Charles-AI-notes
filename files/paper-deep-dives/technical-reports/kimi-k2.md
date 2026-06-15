@@ -13,7 +13,7 @@ paper_topic: 技术报告
     **时间 / 主题：** 2025-07；技术报告。<br>
     **arXiv / 官方报告：** arXiv：[2507.20534](https://arxiv.org/abs/2507.20534)；官方材料：[huggingface.co/moonshotai/Kimi-K2-Instruct](https://huggingface.co/moonshotai/Kimi-K2-Instruct)。<br>
     **GitHub / 项目：** GitHub：[github.com/MoonshotAI/checkpoint-engine](https://github.com/MoonshotAI/checkpoint-engine)；项目页：[huggingface.co/moonshotai/Kimi-K2-Instruct](https://huggingface.co/moonshotai/Kimi-K2-Instruct)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2507.20534)；[GitHub API / repo](https://github.com/MoonshotAI/checkpoint-engine)；[官方 / 项目材料](https://huggingface.co/moonshotai/Kimi-K2-Instruct)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2507.20534)；[GitHub API / repo](https://github.com/MoonshotAI/checkpoint-engine)；[官方 / 项目材料](https://huggingface.co/moonshotai/Kimi-K2-Instruct)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Kimi K2 这份报告的核心不是“又发布了一个大模型”，而是围绕一个更明确的目标展开：**怎样把开源模型做成强 agent，而不是只做一个静态聊天模型。**它把问题拆成两层：预训练阶段要在高质量 token 变稀缺的情况下提高 token efficiency；后训练阶段要把 base model 变成能使用工具、写代码、跑多步任务、在真实或模拟环境中学习的 agentic model。
 
@@ -413,7 +413,11 @@ Kimi K2 给工程项目的启发主要有五条：
 4. **agentic RL 首先是环境工程。** 没有稳定的 sandbox、tool simulator、concurrent rollout、partial rollout 和权重同步系统，RL 算法本身很难规模化。
 5. **self-critique reward 可以扩展 RL，但要保留偏差意识。** 它适合补足无 verifier 的开放任务，但 critic 的 rubrics 会塑造模型风格和价值取向，不能当作无偏人类偏好。
 
-一句话总结：**Kimi K2 的价值不是某个单点 benchmark，而是给出了一条 open agentic model 的完整工程路线：用 MuonClip 跑稳 1T MoE 预训练，用高 sparsity 提升 token efficiency，用合成工具数据和真实环境补齐 agent 行为，再用 verifiable rewards + self-critique reward + RL 系统基础设施把模型推向多步任务执行。**
+## 阅读结论
+
+Kimi K2 的价值不是某个单点 benchmark，而是给出了一条 open agentic model 的完整工程路线：用 MuonClip 跑稳 1T MoE 预训练，用高 sparsity 提升 token efficiency，用合成工具数据和真实环境补齐 agent 行为，再用 verifiable rewards + self-critique reward + RL 系统基础设施把模型推向多步任务执行。
+
+它的可复用机制在 agent 数据和 RL 基础设施：tool-use synthesis、trajectory generation、sandbox rollout、partial rollout、checkpoint engine 和 self-critique reward。不可外推项是内部 harness、agentic setting 和 self-critique rubric 可能影响风格与评测；落地时要把 verifier、真实环境成本、失败回放和人工审计补上。
 
 ## 延伸阅读
 

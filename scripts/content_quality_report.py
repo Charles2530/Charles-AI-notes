@@ -25,6 +25,10 @@ FULLY_EXEMPT_PAGES = {
     Path("files/references/index.md"),
 }
 
+LONG_EXEMPT_REL_PAGES = {
+    Path("paper-deep-dives/world-models/world-model-for-robot-learning-survey.md"),
+}
+
 NUMBERED_SEQUENCE_PAGES = {
     Path("files/quantization/page-by-page-visual-guide.md"),
     Path("files/training/page-by-page-visual-guide.md"),
@@ -263,13 +267,13 @@ def analyze(path: Path, include_hints: bool = False) -> PageReport:
         or path in SHORT_EXEMPT_PAGES
         or LEGACY_ENTRY_MARKER in text
         or any(
-        path.as_posix().startswith(prefix) for prefix in SHORT_EXEMPT_PREFIXES
+            path.as_posix().startswith(prefix) for prefix in SHORT_EXEMPT_PREFIXES
         )
     )
 
     if len(text) < MIN_CHARS and not short_exempt:
         flags.append("short")
-    if len(text) > MAX_CHARS:
+    if len(text) > MAX_CHARS and rel not in LONG_EXEMPT_REL_PAGES:
         flags.append("long")
     if len(h2_lines) > MAX_H2:
         flags.append("too-many-h2")

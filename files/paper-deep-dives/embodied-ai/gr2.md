@@ -1,6 +1,8 @@
 ---
 title: GR-2：Web 视频知识怎样迁移到机器人操作
 paper_date: 2024-10
+paper_title: "GR-2: A Generative Video-Language-Action Model with Web-Scale Knowledge for Robot Manipulation"
+paper_topic: 具身智能 / VLA
 ---
 
 # GR-2：Web 视频知识怎样迁移到机器人操作
@@ -12,7 +14,7 @@ paper_date: 2024-10
     **时间 / 主题：** 2024-10；具身智能。<br>
     **arXiv / 官方报告：** arXiv：[2410.06158](https://arxiv.org/abs/2410.06158)；官方材料：[gr2-manipulation.github.io/](https://gr2-manipulation.github.io/)。<br>
     **GitHub / 项目：** GitHub：[github.com/mees/calvin](https://github.com/mees/calvin)；项目页：[gr2-manipulation.github.io/](https://gr2-manipulation.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2410.06158)；[GitHub API / repo](https://github.com/mees/calvin)；[官方 / 项目材料](https://gr2-manipulation.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2410.06158)；[GitHub API / repo](https://github.com/mees/calvin)；[官方 / 项目材料](https://gr2-manipulation.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 GR-2 这篇论文的核心问题是：**机器人数据很贵，但公开视频里有大量人和物体互动的动态知识，这些视频能不能帮助机器人学操作？**
 
@@ -142,6 +144,16 @@ GR-2 和 DreamZero 都把未来视频放进机器人 policy，但侧重点不同
 第三，105 个任务和 CALVIN 结果说明泛化能力强，但不能直接推出开放世界家务全覆盖。未见物体、透明/反光物体、柔性物体、双手协调和长时程任务分解仍是明显边界。
 
 第四，模型变大带来提升，但也带来部署成本。GR-2 的 scaling 结果说明参数规模对视频生成 loss 和真实任务成功率有帮助，但机器人系统还要考虑控制频率、延迟和硬件可用性。
+
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| web video pretraining 能提供操作动态先验 | 38M clips / 50B tokens、future video prediction | 视频不是机器人 demonstration，没有动作标签 |
+| 机器人微调要同时保留视频和动作目标 | video-language-action 训练链路、future video + action loss | future video 不是显式 planner，只是训练约束 |
+| 真实机器人任务体现物体泛化 | 105 tasks、bin picking、CALVIN / real results | 不能外推到开放世界所有家务和灵巧操作 |
+| 数据增强降低实验室分布依赖 | 背景、物体、任务变化实验 | 不替代真实失败恢复数据 |
+| 模型 scale 有帮助但有成本 | scaling 结果和部署系统 | 控制频率、延迟和安全仍要单独验收 |
 
 ## 阅读结论
 

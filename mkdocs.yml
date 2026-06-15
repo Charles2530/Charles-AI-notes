@@ -188,6 +188,7 @@ nav:
           - World Models Survey：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
           - World Model for Robot Learning：机器人学习综述: paper-deep-dives/world-models/world-model-for-robot-learning-survey.md
           - LingBot-World：视频基础模型到世界模拟器: paper-deep-dives/world-models/lingbot-world.md
+          - kai0：资源受限下的高可靠机器人操作: paper-deep-dives/world-models/kai0.md
           - Lance：统一多模态世界建模启发: paper-deep-dives/world-models/lance.md
           - BAGEL：交错多模态预训练: paper-deep-dives/world-models/bagel.md
           - Emu3.5：原生多模态世界学习器: paper-deep-dives/world-models/emu3-5.md

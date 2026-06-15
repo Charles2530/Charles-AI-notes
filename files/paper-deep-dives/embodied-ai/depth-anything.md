@@ -1,6 +1,8 @@
 ---
 title: Depth Anything：无标注图像怎样变成单目深度基础模型
 paper_date: 2024-01
+paper_title: "Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data"
+paper_topic: 具身智能
 ---
 
 # Depth Anything：无标注图像怎样变成单目深度基础模型
@@ -12,7 +14,7 @@ paper_date: 2024-01
     **时间 / 主题：** 2024-01；具身智能。<br>
     **arXiv / 官方报告：** arXiv：[2401.10891](https://arxiv.org/abs/2401.10891)；官方材料：[depth-anything.github.io/](https://depth-anything.github.io/)。<br>
     **GitHub / 项目：** GitHub：[github.com/LiheYoung/Depth-Anything](https://github.com/LiheYoung/Depth-Anything)；项目页：[depth-anything.github.io/](https://depth-anything.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2401.10891)；[GitHub API / repo](https://github.com/LiheYoung/Depth-Anything)；[官方 / 项目材料](https://depth-anything.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2401.10891)；[GitHub API / repo](https://github.com/LiheYoung/Depth-Anything)；[官方 / 项目材料](https://depth-anything.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Depth Anything 的核心贡献很朴素，也很容易被讲浅：它没有靠复杂新结构取胜，而是把单目深度估计的瓶颈重新放回数据覆盖上。论文问的是：**如果真实深度标签很贵，能不能用大量无标注图像把深度模型训练成更强的视觉基础模型？**
 
@@ -150,6 +152,21 @@ Depth Anything 对具身系统的意义主要有三层：
 第二，它不解决所有几何问题。单目深度看不到遮挡后的物体，也不能从一张图恢复完整 3D 拓扑。对抓取、避障和接触控制来说，深度只是输入之一。
 
 第三，pseudo label 会继承 teacher 偏差。大规模无标注数据能扩展分布，但不自动保证透明物体、镜面、极端光照和罕见相机视角都正确。Depth Anything 的贡献在于显著提升泛化，不是消灭单目深度的不适定性。
+
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| 大规模无标注图像能提升单目深度泛化 | zero-shot benchmark、Figure 3 定性结果、unlabeled data 消融 | 不能推出所有无标注图像都有价值；teacher 偏差和场景覆盖仍关键 |
+| strong perturbation 是 pseudo-label 学习的关键 | self-training / perturbation ablation | 说明鲁棒训练有效，不代表 pseudo label 本身无噪声 |
+| DINOv2 feature alignment 保留语义表征 | feature alignment 相关消融和下游表现 | 保留语义不等于获得米制尺度或完整 3D |
+| 深度可作为生成/感知结构条件 | depth-conditioned synthesis 图和项目 demo | 结构条件有效不等于机器人闭环控制有效 |
+
+## 阅读结论
+
+Depth Anything 的主要内容要按数据配方读：labeled depth data 提供几何锚点，teacher pseudo labels 把大规模无标注图像转成可训练目标，strong perturbation 让 student 不只是复读 teacher，DINOv2 feature alignment 则避免深度训练损坏通用语义表征。实验上，zero-shot benchmark、定性深度图和消融共同支撑“无标注数据释放泛化”的主张。
+
+它适合被复用为单目相对深度基础模型、metric depth fine-tuning 初始化或机器人视觉的空间先验；不能直接当米制距离、完整 3D 重建或闭环控制证据。下一步如果接到具身系统，需要补相机标定、尺度恢复、遮挡/透明物体失败分析，以及策略使用深度后是否提升任务成功率的闭环评测。
 
 ## 外部精读
 

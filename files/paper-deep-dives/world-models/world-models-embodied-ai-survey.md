@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2025-10；世界模型。<br>
     **arXiv / 官方报告：** arXiv：[2510.16732](https://arxiv.org/abs/2510.16732)。<br>
     **GitHub / 项目：** GitHub：[github.com/Li-Zn-H/AwesomeWorldModels](https://github.com/Li-Zn-H/AwesomeWorldModels)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.16732)；[GitHub API / repo](https://github.com/Li-Zn-H/AwesomeWorldModels)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.16732)；[GitHub API / repo](https://github.com/Li-Zn-H/AwesomeWorldModels)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文不是一个新模型，而是一张世界模型文献地图。它最有价值的地方，是把近几年非常混乱的 world model 工作压到三个问题上：**模型和决策耦合得多紧、未来是一步步 rollout 还是整体预测、世界状态到底用向量、token、网格还是可渲染 3D 表示。**
 
@@ -287,7 +287,7 @@ FVD 只说明生成视频在特征分布上像真实视频。它不能告诉你�
 
 因此，这篇综述最有价值的不是告诉你“哪条路线最好”，而是避免证据错配：视频指标不能替代 closed-loop success，occupancy 指标不能替代真实安全，representation probe 不能替代动作反事实。读者用它筛论文时，应该先标注每篇工作的证据类型，再决定能不能进入项目实验。
 
-## 结论
+## 阅读结论
 
 第一，世界模型不是单一路线。Dreamer、V-JEPA、Genie、LingBot-World、BEV occupancy model、3DGS simulator 都可以是 world model，但它们服务的接口不同。
 

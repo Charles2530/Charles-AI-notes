@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2024-02；世界模型。<br>
     **arXiv / 官方报告：** arXiv：[2404.08471](https://arxiv.org/abs/2404.08471)；官方材料：[ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)。<br>
     **GitHub / 项目：** GitHub：[github.com/facebookresearch/jepa](https://github.com/facebookresearch/jepa)；项目页：[ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2404.08471)；[GitHub API / repo](https://github.com/facebookresearch/jepa)；[官方 / 项目材料](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2404.08471)；[GitHub API / repo](https://github.com/facebookresearch/jepa)；[官方 / 项目材料](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文把 JEPA 从静态图像扩展到视频。它的核心不是生成未来视频，而是训练一个视频 encoder：给定被遮挡的视频上下文，在 learned latent space 中预测被遮挡时空区域的目标表示。
 
@@ -264,7 +264,11 @@ $$
 
 最后，V-JEPA 的实验主要证明“latent video prediction 能学到强视频表征”。把它迁移到机器人、自动驾驶或游戏世界模型时，还需要额外验证表示是否保留任务关键状态，例如接触、可操作物体、小目标、障碍物、风险事件和长期空间记忆。
 
+## 阅读结论
+
 V-JEPA 的关键证据是 latent video prediction 能学到强视频表征：可见块预测 masked target，EMA target encoder 和 stop-gradient 防 collapse，masking ablation、frozen evaluation 和 pretraining distribution 表要连读。它没有 action/reward，因此更适合作为世界模型状态 encoder 候选，不是完整 action-conditioned simulator。
+
+可复用机制是“预测 representation 而不是像素”：高 masking ratio 逼迫时空理解，teacher encoder 提供稳定 target，frozen evaluation 检查迁移性。不可外推项是它不生成未来视频、不做 planning、不处理动作反事实；接到机器人或自动驾驶时，还要验证接触、小物体、风险事件和长时记忆是否保留。
 
 ## 相关阅读与下一步
 

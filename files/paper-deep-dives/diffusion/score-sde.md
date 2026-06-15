@@ -13,7 +13,7 @@ paper_topic: 扩散模型
     **时间 / 主题：** 2020-11；扩散模型。<br>
     **arXiv / 官方报告：** arXiv：[2011.13456](https://arxiv.org/abs/2011.13456)。<br>
     **GitHub / 项目：** GitHub：[github.com/yang-song/score_sde](https://github.com/yang-song/score_sde)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2011.13456)；[GitHub API / repo](https://github.com/yang-song/score_sde)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2011.13456)；[GitHub API / repo](https://github.com/yang-song/score_sde)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇论文最重要的贡献不是又提出一个单独的采样器，而是给扩散模型补了一套连续时间语言：**先用一个固定的前向 SDE 把数据扩散成先验噪声，再用依赖 score 的反向 SDE 把噪声逆回数据；同时存在一条 probability flow ODE，它和反向 SDE 共享边缘分布，并让 likelihood、latent encoding 和高效 ODE 采样变得可操作。**
 
@@ -430,7 +430,8 @@ f(x,t)
 - 想看采样加速：接 [DPM-Solver++](dpm-solver-plus-plus.md)。
 - 想看少步蒸馏：接 [DMD](dmd.md)、[DMD2](dmd2.md) 和 [Phased DMD](phased-dmd.md)。
 
-**阅读结论。**
+## 阅读结论
+
 Score SDE 是扩散统一理论页：方法要抓 forward SDE、reverse-time SDE、probability-flow ODE 和 predictor-corrector 采样；实验说明同一 score 框架能覆盖图像生成、补全和可控任务。后续论文多是在这套公式上换参数化、求解器或蒸馏目标。
 
 ## 相关阅读与下一步

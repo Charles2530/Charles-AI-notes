@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2024-02；世界模型。<br>
     **arXiv / 官方报告：** arXiv：[2402.15391](https://arxiv.org/abs/2402.15391)；官方材料：[deepmind.google/research/publications/60474/](https://deepmind.google/research/publications/60474/)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[deepmind.google/research/publications/60474/](https://deepmind.google/research/publications/60474/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2402.15391)；[官方 / 项目材料](https://deepmind.google/research/publications/60474/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2402.15391)；[官方 / 项目材料](https://deepmind.google/research/publications/60474/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“Genie”背后的核心机制、适用边界和下一步阅读路径。
 
@@ -177,6 +177,15 @@ Genie 的边界要说清楚。
 第三，latent action 不是 grounded real action。平台游戏里可以人工解释成左、右、跳；复杂机器人、多关节控制和自动驾驶里，latent-to-real mapping 会更难。
 
 第四，评测仍偏短期和 open-loop。FVD、\(\Delta_t\mathrm{PSNR}\)、定性图和 CoinRun proof of concept 很有价值，但距离“用世界模型提升真实策略收益”还有明显距离。
+
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| 无动作标签视频可以学出 latent action | latent action model、robotics latent actions 图 | latent action 不是真实机器人控制量 |
+| action-conditioned dynamics 支持交互 | ST-transformer、interactive demo、CoinRun proof | 主要是短期像素/游戏交互证据 |
+| 数据质量决定可控性 | 数据过滤、视频 tokenization、定性样例 | 视频分布偏差会直接影响 learned environment |
+| 世界模型可做 imitation from observation | 从公开视频学可交互环境 | 还没证明真实策略收益或长时规划 |
 
 ## 外部精读
 

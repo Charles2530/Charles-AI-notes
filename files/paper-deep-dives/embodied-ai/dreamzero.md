@@ -1,6 +1,8 @@
 ---
 title: DreamZero：世界动作模型为什么可以做零样本策略
 paper_date: 2026-02
+paper_title: "World Action Models are Zero-shot Policies"
+paper_topic: 具身智能 / VLA
 ---
 
 # DreamZero：世界动作模型为什么可以做零样本策略
@@ -12,7 +14,7 @@ paper_date: 2026-02
     **时间 / 主题：** 2026-02；具身智能。<br>
     **arXiv / 官方报告：** arXiv：[2602.15922](https://arxiv.org/abs/2602.15922)；官方材料：[dreamzero0.github.io/](https://dreamzero0.github.io/)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[dreamzero0.github.io/](https://dreamzero0.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2602.15922)；[官方 / 项目材料](https://dreamzero0.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2602.15922)；[官方 / 项目材料](https://dreamzero0.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 DreamZero 这篇论文要回答一个比“视频生成模型能不能预测未来”更尖锐的问题：**如果模型一边预测未来画面，一边预测产生这些画面的机器人动作，它能不能直接变成闭环机器人 policy？**
 
@@ -168,6 +170,16 @@ DreamZero 的强主张很吸引人，但边界也要写清楚。
 <small>图源：`World Action Models are Zero-shot Policies`，Figure 16。原图表达 generated video 与 executed action 的失败配对。本站读法：当未来视频计划错了，动作也会沿着错误计划执行，这正是 WAM 比普通 VLA 更强也更危险的地方。</small>
 
 所以更准确的结论是：DreamZero 证明了“视频世界模型 + 动作联合建模 + 闭环真实观测回写”可以成为一条可工作的机器人 policy 路线；它还没有证明一个 WAM 可以替代所有 VLA、规划器和低层控制器。
+
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| WAM 联合预测未来视频和动作 | Figure 1/2/4、video-action diffusion objective | 视频-动作一致不等于安全可执行 |
+| 预训练视频模型可作为机器人动态底座 | Wan2.1 backbone、机器人状态/action 模块 | 动作接口仍依赖真实机器人数据对齐 |
+| 自回归 + KV refresh 支持闭环 | attention strategy、真实观测刷新 | 实时性高度依赖系统优化和硬件 |
+| DreamZero-Flash 降低推理成本 | decoupled noise schedule、flash 版本实验 | 少步化可能影响预测质量，需要任务评测 |
+| zero-shot / cross-embodiment 有启发 | seen / zero-shot / cross-embodiment 图表 | 不等于未见硬件或开放世界任务都可靠 |
 
 ## 阅读结论
 

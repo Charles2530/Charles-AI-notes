@@ -13,7 +13,7 @@ paper_topic: 具身智能 / VLA
     **时间 / 主题：** 2025-01；具身智能 / VLA。<br>
     **arXiv / 官方报告：** arXiv：[2501.15830](https://arxiv.org/abs/2501.15830)；官方材料：[spatialvla.github.io/](https://spatialvla.github.io/)。<br>
     **GitHub / 项目：** GitHub：[github.com/SpatialVLA/SpatialVLA](https://github.com/SpatialVLA/SpatialVLA)；项目页：[spatialvla.github.io/](https://spatialvla.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2501.15830)；[GitHub API / repo](https://github.com/SpatialVLA/SpatialVLA)；[官方 / 项目材料](https://spatialvla.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2501.15830)；[GitHub API / repo](https://github.com/SpatialVLA/SpatialVLA)；[官方 / 项目材料](https://spatialvla.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 SpatialVLA 适合放在具身智能专题里的原因很明确：它不是单纯把 VLM 做大，而是问 VLA 最根本的空间问题：**不同机器人相机安装不同、动作空间不同，模型怎样学到可迁移的 3D 空间动作知识？**
 
@@ -204,7 +204,8 @@ Ego3D 和 adaptive action grids 分别处理前两层。它不是最终答案，
 
 SpatialVLA 仍然依赖深度估计质量。单目深度在透明、反光、低纹理或尺度异常物体上会偏；长时任务也不是它的主要强项。论文里 LIBERO-Long 表现仍受限，说明空间表示能补几何，但不能自动解决长时记忆和任务规划。
 
-**阅读结论。**
+## 阅读结论
+
 SpatialVLA 的复用点在显式空间动作接口：方法要抓空间网格、动作 token 和数据混合；实验要看 spatial understanding、真实任务设置和不同动作表示消融。它适合补 VLA 的几何短板，但不能替代深度传感、控制器和碰撞检查。
 
 ## 外部精读

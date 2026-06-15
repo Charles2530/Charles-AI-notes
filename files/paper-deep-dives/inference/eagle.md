@@ -13,7 +13,7 @@ paper_topic: 高效推理
     **时间 / 主题：** 2024-01；高效推理。<br>
     **arXiv / 官方报告：** arXiv：[2401.15077](https://arxiv.org/abs/2401.15077)。<br>
     **GitHub / 项目：** GitHub：[github.com/SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2401.15077)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2401.15077)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 投机解码的基本想法很简单：让一个便宜 draft model 先猜几个 token，再让昂贵 target LLM 并行验证；猜对越多，target LLM 逐 token decode 的次数越少。EAGLE 的问题是：**draft model 一定要是另一个小语言模型吗？**
 
@@ -185,6 +185,53 @@ EAGLE 最有工程价值的一句话是：**draft model 不必是完整语言模
 | tree attention mask 是否正确 | 分支之间不能泄漏上下文 |
 | 训练数据是否覆盖目标流量 | ShareGPT 成本低，但专业域、代码、工具流量可能需要重训 |
 | 是否按请求桶看 acceptance | 长输出、低温、模板化任务更适合；高温、agent、短输出可能收益差 |
+
+## 证据链和验收口径
+
+EAGLE 的实验需要按 speculative decoding 的工作流读，而不是按普通模型能力榜读。target model 的输出分布由验证算法保证，因此方法证据主要落在“减少多少 target decode step”和“额外 draft 成本是否值得”。
+
+| 证据节点 | 论文想证明 | 工程验收要补什么 |
+| --- | --- | --- |
+| Figure 1/2 speedup | feature-level draft 在 MT-bench 上降低延迟 | 同硬件、同 runtime、同 sampling 配置的端到端延迟 |
+| Figure 3 feature uncertainty | 只预测 feature 会遇到离散采样分支歧义 | 检查 shifted-token、position id 和 sampled token 是否严格对齐 |
+| Figure 4 输入消融 | feature + shifted-token 是更强 draft 条件 | 按业务流量复测 acceptance，而不是只看公开对话 |
+| Figure 7 tree attention | tree draft 提高 average acceptance length | 验证 tree mask、KV 提交和 batch scheduler 是否正确 |
+| Mixtral 结果 | MoE target 的收益更复杂 | 对 MoE route、expert 并发和 kernel shape 做单独 profiling |
+
+这里还有一个常见误读：EAGLE 的 draft head 小，不等于服务一定省钱。训练和推理阶段都要额外保存 target feature、运行 draft head、构造候选树、再让 target 验证更多 token。只有当 accepted prefix 足够长，target 少跑的逐 token step 才能覆盖这些开销。
+
+因此一套可复用验收标准应该包含四个数字：平均接受长度、draft tokens / target verify tokens、端到端 tokens/s、P95 latency。再加两个安全检查：输出分布是否和 target sampling 一致，拒绝分支是否不会污染后续 KV。没有这两个检查，speedup 数字越好越危险。
+
+## 为什么它仍然是系列的起点
+
+EAGLE 后来的改进很多，但原论文有一个不可替代的位置：它把 draft model 从“另一个小 LLM”改成“target 内部状态的轻量预测器”。这个接口变化带来两点长期影响。
+
+第一，draft 训练可以更贴近目标模型。小 LLM draft 学的是外部 token distribution，和 target 的内部计算未必一致；EAGLE 让 draft head 直接追随 target feature，再经 frozen LM head 映射回 token distribution。第二，draft 的成本边界更清楚。它不用完整 transformer stack 重算上下文，而是利用 target 上一步已经产生的 feature，适合被塞进 serving runtime 的 decode 循环。
+
+这也解释了为什么 EAGLE-2 和 EAGLE-3 都没有推翻 EAGLE。EAGLE-2 改的是候选预算分配，EAGLE-3 改的是训练分布和目标约束；它们仍然在回答 EAGLE 打开的同一个问题：怎样从 target 已有计算中榨出一个便宜但高接受率的 draft path。
+
+## 最小复现路径
+
+如果要把 EAGLE 的机制复现到一个新 target LLM 上，最小路径可以分成四步。
+
+1. 固定 target model，导出同一层 hidden feature 和 LM head 输出，确认 feature、token、position id 在训练样本中严格对齐。
+2. 用一小批真实对话或业务 prompt 训练 draft head，只做 feature + shifted-token 输入，不先引入复杂 tree。
+3. 在线下 prompt 集上统计 single-chain acceptance length，确认 feature-level draft 比简单 token draft 更准。
+4. 再接 tree attention 和 target verification，测端到端 latency。
+
+这个顺序很重要。tree attention 能增加候选覆盖，但如果基础 feature draft 不准，树只会放大无效候选；runtime integration 能提高吞吐，但如果 shifted-token 对齐错了，输出分布会先被破坏。EAGLE 的核心 bug 面通常不是“模型不够大”，而是接口错位：取错层、错位一个 token、mask 泄漏、拒绝分支 KV 没清干净。
+
+因此，工程复现时可以先设置一个很朴素的门槛：在固定公开 prompt 集上，draft head 的 average acceptance length 明显超过 1，且目标模型验证后的输出和无投机采样一致。只有通过这个门槛，后续 tree 和 batch 优化才值得做。
+
+## 和传统小模型 draft 的差异
+
+传统 speculative decoding 通常训练或选择一个小语言模型作为 draft。它的优点是接口清晰：小模型看到 token 前缀，直接生成候选 token。缺点也明显：小模型和 target 的分布差距会限制 acceptance，且小模型本身也要完整跑 transformer forward。
+
+EAGLE 的差异在于 draft 不再从零理解上下文。target 已经在上一轮 forward 中把上下文压进 hidden feature，EAGLE 的 draft head 只需要沿着这个 feature 轨迹往前预测。这让 draft 更像 target 内部计算的延伸，而不是外部模型的猜测。
+
+这个差异解释了它的适用边界。若 target feature 很稳定、LM head 可复用、请求模式接近训练分布，EAGLE 很有优势；若 target 是高度定制架构、feature 导出困难、或 serving runtime 无法承受额外 feature/KV 管理，传统小模型 draft 或其他投机方案可能更容易上线。
+
+所以 EAGLE 的工程价值不是替代所有 speculative decoding，而是提供一个新的设计维度：draft 可以贴着 target 内部状态生长。
 
 ## 外部精读
 

@@ -13,7 +13,7 @@ paper_topic: 具身智能 / VLA
     **时间 / 主题：** 2025-07；具身智能 / VLA。<br>
     **arXiv / 官方报告：** arXiv：[2507.15493](https://arxiv.org/abs/2507.15493)；官方材料：[seed.bytedance.com/en/GR3](https://seed.bytedance.com/en/GR3)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[seed.bytedance.com/en/GR3](https://seed.bytedance.com/en/GR3)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2507.15493)；[官方 / 项目材料](https://seed.bytedance.com/en/GR3)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2507.15493)；[官方 / 项目材料](https://seed.bytedance.com/en/GR3)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“GR-3”背后的核心机制、适用边界和下一步阅读路径。
 
@@ -215,6 +215,15 @@ GR-3 技术报告没有像一些学术论文那样把每个模块都做成完整
 
 最值得警惕的是最后一行：GR-3 是系统论文。它的强结果来自模型、数据、人类轨迹、真实机器人硬件和控制栈共同作用。把它简化成“4B VLA + flow matching 就够了”，会误读这篇报告。
 
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| 少样本人类轨迹能辅助新物体适配 | unseen object few-shot、VR trajectory adaptation | 不能完全替代机器人接触数据 |
+| 任务状态输出很重要 | in progress / terminate / invalid 设计和 table bussing | 不是完整安全系统，只是策略接口的一部分 |
+| ByteMini 系统支撑长时任务 | 真实机器人、pure pursuit、trajectory optimization | 不能把成功全部归因给 VLA 模型 |
+| 多任务数据覆盖影响泛化 | pick-place、table bussing、cloth 数据 | 数据规模和硬件设置仍限制外推 |
+
 ## 局限与启发
 
 GR-3 很强，但它也暴露了 VLA 走向真实机器人的成本：需要机器人数据、VL co-training、人类轨迹适配、全身控制器、任务状态标签和大量真实评测。模型本身只是系统的一层。
@@ -225,7 +234,8 @@ GR-3 很强，但它也暴露了 VLA 走向真实机器人的成本：需要机�
 2. 人类轨迹可以作为新设置快速适配桥梁；
 3. VLA action chunk 必须接控制器和平滑优化，不能直接当电机命令。
 
-**阅读结论。**
+## 阅读结论
+
 GR-3 要按 vision-language-action 闭环系统读：方法重点是多模态输入、任务数据和动作头的分工，实验重点是 ByteMini、cloth/table bussing 与跨任务泛化。它的强项是真机操作证据，边界是数据分布、长时任务和跨 embodiment 可迁移性。
 
 ## 外部精读

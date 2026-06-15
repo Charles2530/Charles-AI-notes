@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2025-07；世界模型。<br>
     **arXiv / 官方报告：** arXiv：未找到专门条目。<br>
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
-    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇文章很适合放在 LingBot-World 前面读。它不提出一个新模型，而是回答一个更基础的问题：**为什么 Sora、Veo 这类强视频生成模型还不能直接等价于 video world model，以及从视频生成走向世界模型需要补哪些训练和系统能力。**
 
@@ -315,7 +315,11 @@ WonderPlay 这类方向就是把物理仿真、3D Gaussian 表示和视频扩散
 4. 对机器人训练来说，视觉真实仍可能不足以解决 sim-to-real，物理和接触建模更关键；
 5. 对人类交互娱乐来说，低延迟可能比严格物理更重要，不能用同一套指标评价所有应用。
 
+## 阅读结论
+
 最实用的读法是：把这篇文章当作视频世界模型的“需求规格说明”。如果一个视频模型要从生成器升级成世界模拟器，至少要逐项回答：是否因果、是否可控、是否持久、是否低延迟、是否物理可信。
+
+它的可复用机制是把视频生成评测改成任务化 stress test：固定历史换动作、长 rollout 回到旧对象、实时响应、物理接触和罕见事件。不可外推项是这不是统一 benchmark，也没有证明某个模型同时满足五个门槛；它更适合作为后续 CausVid、LingBot-World、DreamZero 等工作的阅读框架。
 
 ## 相关阅读与下一步
 

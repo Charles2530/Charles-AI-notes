@@ -1,6 +1,8 @@
 ---
 title: VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹
 paper_date: 2025-03
+paper_title: "VGGT: Visual Geometry Grounded Transformer"
+paper_topic: 具身智能
 ---
 
 # VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹
@@ -12,7 +14,7 @@ paper_date: 2025-03
     **时间 / 主题：** 2025-03；具身智能。<br>
     **arXiv / 官方报告：** arXiv：[2503.11651](https://arxiv.org/abs/2503.11651)；官方材料：[vgg-t.github.io/](https://vgg-t.github.io/)。<br>
     **GitHub / 项目：** GitHub：[github.com/facebookresearch/vggt](https://github.com/facebookresearch/vggt)；项目页：[vgg-t.github.io/](https://vgg-t.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.11651)；[GitHub API / repo](https://github.com/facebookresearch/vggt)；[官方 / 项目材料](https://vgg-t.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.11651)；[GitHub API / repo](https://github.com/facebookresearch/vggt)；[官方 / 项目材料](https://vgg-t.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 VGGT 最值得读的地方，不是它又预测了一个 depth map，而是它把传统视觉几何里一整条复杂管线改成了一个多任务 Transformer 的前向推理问题。
 
@@ -147,6 +149,21 @@ VGGT 的结果主要回答四个问题。
 第二个误解是把它当成 3D 世界模型。VGGT 预测几何状态，但不预测未来，不建模动作，不处理物理接触。它可以成为世界模型或机器人 policy 的感知层，却不是完整的动态模型。
 
 第三个边界是数据分布。VGGT 的泛化来自大规模多源 3D 数据和多任务监督；如果遇到训练分布外的透明物体、镜面、高动态场景或严重遮挡，它仍可能给出看似合理但错误的几何。
+
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| 一次前向可以恢复多类几何状态 | Figure 1/2、camera/depth/pointmap/track 多头输出 | 不等于所有场景都无需 BA 或 SLAM |
+| 交替注意力能处理多帧几何关系 | 架构图和多视图任务表现 | global attention 成本随帧数增长，长序列仍要看显存 |
+| 多任务监督让几何头互相补强 | pose、depth、point map、tracking benchmark | 不能证明任意下游机器人任务都会提升 |
+| feed-forward geometry 有速度优势 | runtime / memory 表和项目 demo | 输入分辨率、帧数和后处理设置会改变收益 |
+
+## 阅读结论
+
+VGGT 的主要内容是把相机、深度、点云和 tracks 这条传统几何管线压进一个 feed-forward Transformer。方法要抓 alternating frame/global attention、多任务几何头和统一 3D 输出；实验要看 camera pose、dense MVS、point tracking、runtime/memory 和是否需要 BA 后处理。它的可复用机制是“强几何先验 + 一次前向状态估计”，不是动作策略。
+
+落到具身智能时，VGGT 更适合作为几何感知层：给 VLA、diffusion policy、planner 或 world model 提供相机/深度/点云/tracking 状态。它不能证明机器人闭环成功率，也不能替代 SLAM、bundle adjustment、安全碰撞检查或接触动力学模型；这些都需要在具体机器人任务里再验。
 
 ## 外部精读
 

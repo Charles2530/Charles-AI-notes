@@ -13,7 +13,7 @@ paper_topic: 技术报告
     **时间 / 主题：** 2025-05；技术报告。<br>
     **arXiv / 官方报告：** arXiv：[2505.09388](https://arxiv.org/abs/2505.09388)。<br>
     **GitHub / 项目：** GitHub：[github.com/QwenLM/Qwen3](https://github.com/QwenLM/Qwen3)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2505.09388)；[GitHub API / repo](https://github.com/QwenLM/Qwen3)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2505.09388)；[GitHub API / repo](https://github.com/QwenLM/Qwen3)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“Qwen3”背后的核心机制、适用边界和下一步阅读路径。
 
@@ -390,7 +390,11 @@ Qwen3 的技术报告给工程项目的启发主要有五条：
 
 更准确地说，Qwen3 报告展示的是一个可部署模型家族的后训练范式：**用旗舰模型探索能力边界，用双模式训练统一产品接口，再用强到弱蒸馏把能力扩散到小模型。**
 
+## 阅读结论
+
 Qwen3 的关键接口是 thinking budget 和模式控制：长推理能力变成可调成本，而不是永远开启。posttrain pipeline、budget 曲线、数学/代码/通用 benchmark 要连读；最重要边界是简单题过度思考和推理 token 成本，分数提升必须和延迟、价格一起验。
+
+它的成熟度是开源模型家族技术报告：模型、权重和部分生态可用，但完整训练数据和后训练细节不能完全复现。可复用机制是 thinking / non-thinking 双模式、强到弱蒸馏和多语长上下文数据工程；不可外推项是 thinking mode 并不适合所有检索、抽取和低延迟任务。
 
 ## 相关阅读与下一步
 

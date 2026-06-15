@@ -38,7 +38,7 @@ DreamZero 论文的核心证据也在这里。原文强调，它基于预训练�
 
 PPT 里对 FastWAM 的总结很重要：训练时视频预测监督比推理时的视频预测先验更重要；为 action prediction 加入未来帧 video tokens，并没有显著增加成功率；推理时不预测视频 tokens，则能显著减少计算开销。
 
-![Fast-WAM paradigms](../assets/images/thinking-exploration/wam-3dv-world-models/fastwam-paradigms.png){ width="880" }
+![Fast-WAM paradigms](../assets/images/thinking-exploration/wam-3dv-world-models/fastwam-paradigms.png)
 
 <small>图源：[Fast-WAM: Do World Action Models Need Test-time Future Imagination?](https://arxiv.org/abs/2603.16666)，Figure 1，本站从论文 PDF 截取。原图对比三种 WAM 范式：联合去噪未来视频与动作、先生成未来视频再预测动作、以及 Fast-WAM 在推理时跳过未来视频分支。本站读法：这张图把“世界建模监督”和“测试时显式想象”拆开了。</small>
 
@@ -79,7 +79,7 @@ PointWorld 是 PPT 里最能代表“3D world model”野心的一篇。原论�
 
 <small>图源：[PointWorld: Scaling 3D World Models for In-The-Wild Robotic Manipulation](https://arxiv.org/abs/2601.03782)，Figure 1，本站从论文 PDF 截取。原图展示 PointWorld 用静态点云和机器人 3D 点流预测全场景 3D 点流。本站读法：这不是“给 VLA 加深度图”，而是把动作本身也改写成三维空间里的运动。</small>
 
-![PointWorld architecture](../assets/images/thinking-exploration/wam-3dv-world-models/pointworld-architecture.png){ width="600" }
+![PointWorld architecture](../assets/images/thinking-exploration/wam-3dv-world-models/pointworld-architecture.png){ .atlas-figure-compact }
 
 <small>图源：PointWorld 论文 Figure 2，本站从论文 PDF 截取。原图表达：RGB-D 观测、URDF、关节动作先被转换成 scene points 与 robot flows 的混合点云，再由 DINOv3 与 Point Transformer V3 处理并预测 full-scene point flow。本站读法：动作接口从“某个机器人专属关节空间”转向“末端和机器人表面在 3D 中怎样运动”。</small>
 
@@ -102,7 +102,7 @@ PointWorld 是 PPT 里最能代表“3D world model”野心的一篇。原论�
 
 PointWorld 讨论的是机器人动作条件下的 3D 点流；D4RT 则从视频 4D 重建角度给了另一个启发：动态世界不应该被拆成一堆互相打补丁的任务。
 
-![D4RT overview](../assets/images/thinking-exploration/wam-3dv-world-models/d4rt-overview.png){ width="680" }
+![D4RT overview](../assets/images/thinking-exploration/wam-3dv-world-models/d4rt-overview.png){ .atlas-figure-compact }
 
 <small>图源：[Efficiently Reconstructing Dynamic Scenes One D4RT at a Time](https://arxiv.org/abs/2512.08924)，Figure 1，本站从论文 PDF 截取。原图展示 D4RT 用统一接口输出点云、点轨迹和相机参数。本站读法：D4RT 的意义不只是 4D 重建效果，而是把深度、点轨迹、相机和动态场景放进同一套查询接口。</small>
 

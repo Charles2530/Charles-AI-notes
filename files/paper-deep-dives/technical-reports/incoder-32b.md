@@ -13,7 +13,7 @@ paper_topic: 技术报告
     **时间 / 主题：** 2026-03；技术报告。<br>
     **arXiv / 官方报告：** arXiv：[2603.16790](https://arxiv.org/abs/2603.16790)。<br>
     **GitHub / 项目：** GitHub：[github.com/CSJianYang/Industrial-Coder](https://github.com/CSJianYang/Industrial-Coder)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.16790)；[GitHub API / repo](https://github.com/CSJianYang/Industrial-Coder)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.16790)；[GitHub API / repo](https://github.com/CSJianYang/Industrial-Coder)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 InCoder-32B 这篇报告的核心不是“又一个 32B code model”，而是把 code LLM 的战场从常规 Python/JavaScript 题目，推到更贴近工程现场的工业代码：芯片设计、GPU kernel 优化、嵌入式系统、编译器/低层代码优化和 3D/CAD 建模。
 
@@ -339,7 +339,8 @@ Figure 6 做了 SFT data scaling，从 83M tokens 扩到 250M tokens，观察工
 - [自定义算子开发与框架集成](../../operators/custom-op-development-and-framework-integration.md)：对应 CUDA/Triton kernel、PyTorch runtime compilation 和性能验证。
 - [RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：对应 agent trajectories、long-context 工程任务和工具调用记录。
 
-**阅读结论。**
+## 阅读结论
+
 InCoder-32B 要按代码模型训练与工业评测读：方法重点是代码流数据、CUDA/grid 范围、SFT scaling 和 midtrain loss；实验看工业 benchmark、错误分布和能力分层。错误分布图比总分更有用，它告诉项目该补语法、API、库知识还是执行反馈；落地时还要补仓库级上下文、工具执行和安全审计。
 
 ## 相关阅读与下一步

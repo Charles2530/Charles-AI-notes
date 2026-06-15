@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2026-04；世界模型、机器人学习、VLA、视频世界模型、learned simulator。<br>
     **arXiv / 官方报告：** arXiv：[2605.00080](https://arxiv.org/abs/2605.00080)；PDF：[arxiv.org/pdf/2605.00080](https://arxiv.org/pdf/2605.00080)。<br>
     **GitHub / 项目：** GitHub：[NTUMARS/Awesome-World-Model-for-Robotics-Policy](https://github.com/NTUMARS/Awesome-World-Model-for-Robotics-Policy)；项目页：[ntumars.github.io/wm-robot-survey](https://ntumars.github.io/wm-robot-survey/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.00080)、论文 PDF、官方 GitHub / 项目页；Checked Date：2026-06-14；Repro Status：Survey / official resource list reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.00080)、论文 PDF、官方 GitHub / 项目页；Checked Date：2026-06-15；Repro Status：Survey / official resource list reviewed, independent reproduction not claimed。
 
 这篇综述要解决的不是“再列一批世界模型论文”，而是给机器人学习里的世界模型划清三种用途：**放进 policy、变成 simulator、作为 video world model 提供可控未来**。读它最重要的收获，是以后看到一篇新工作时，能先问清楚：它到底在帮助动作生成、帮助模拟训练，还是只是在生成更像真的未来视频。
 
@@ -211,6 +211,8 @@ p(a_{t+1:t+k}\mid o_t,l)
 =
 \int p(o_{t+1:t+k},a_{t+1:t+k}\mid o_t,l)\,d o
 $$
+
+其中 \(o\) 表示被边缘化的未来观测序列；这行式子不是说 policy 不需要世界状态，而是说它把未来状态当作隐变量积分掉，只输出动作条件分布。
 
 它回答“当前看到这些、任务要求这些，下一段应该怎么动”。普通 VLA、Diffusion Policy 和 flow-based policy 都可以落在这个接口上，不要求显式生成未来画面。
 

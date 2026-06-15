@@ -13,7 +13,7 @@ paper_topic: 世界模型
     **时间 / 主题：** 2023-06；世界模型。<br>
     **arXiv / 官方报告：** arXiv：[2306.02572](https://arxiv.org/abs/2306.02572)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2306.02572)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2306.02572)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 这篇文章不是一篇“训练出某个 H-JEPA 模型并刷榜”的论文。它更像一篇把 LeCun 世界模型路线讲清楚的教学型论文：先解释为什么高维连续世界不适合只靠显式概率建模，再引入 `energy-based model`、`latent variable`、`JEPA` 和最终的 `H-JEPA`。
 
@@ -302,7 +302,11 @@ $$
 
 更稳妥的读法是：把这篇论文当成“表征型世界模型如何训练”的原则说明。它补充了 Dreamer 系列偏 RL recipe、V-JEPA 偏视频表征、LingBot 偏视频生成系统的部分，重点回答一个更底层的问题：**世界模型的 latent space 如何既可预测、又不坍缩、还能支持长时层级规划。**
 
+## 阅读结论
+
 读 H-JEPA 的价值在于抽象层级和 planning 接口：低层预测局部 latent，高层预测抽象状态，再用 energy/regularization 防 collapse。这里多数图是机制和架构证据，不是大规模 benchmark；不能拿来声称某个机器人任务已经被解决。
+
+它的可复用机制是 representation-space prediction 的训练原则：anti-collapse、latent capacity、层级抽象和能量函数。不可外推项是原文没有给出 action-conditioned predictor 的完整工程 recipe，也没有真实控制 benchmark；更适合作为理解 JEPA/H-JEPA 思想的理论入口。
 
 ## 相关阅读与下一步
 

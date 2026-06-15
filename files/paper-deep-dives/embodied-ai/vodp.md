@@ -1,6 +1,8 @@
 ---
 title: VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
 paper_date: 2025-10
+paper_title: "VO-DP: Semantic-Geometric Adaptive Diffusion Policy for Vision-Only Robotic Manipulation"
+paper_topic: 具身智能
 ---
 
 # VO-DP：RGB-only 扩散策略怎样借用语义和几何特征
@@ -12,7 +14,7 @@ paper_date: 2025-10
     **时间 / 主题：** 2025-10；具身智能。<br>
     **arXiv / 官方报告：** arXiv：[2510.15530](https://arxiv.org/abs/2510.15530)；官方材料：[d-robotics-ai-lab.github.io/vodp/](https://d-robotics-ai-lab.github.io/vodp/)。<br>
     **GitHub / 项目：** GitHub：[github.com/D-Robotics-AI-Lab/DRRM](https://github.com/D-Robotics-AI-Lab/DRRM)；项目页：[d-robotics-ai-lab.github.io/vodp/](https://d-robotics-ai-lab.github.io/vodp/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.15530)；[GitHub API / repo](https://github.com/D-Robotics-AI-Lab/DRRM)；[官方 / 项目材料](https://d-robotics-ai-lab.github.io/vodp/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.15530)；[GitHub API / repo](https://github.com/D-Robotics-AI-Lab/DRRM)；[官方 / 项目材料](https://d-robotics-ai-lab.github.io/vodp/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 VO-DP 这篇论文要回答一个很工程的问题：**机器人 manipulation policy 一定要用点云或 RGB-D 才能学到几何吗？**
 
@@ -137,6 +139,21 @@ VO-DP 的鲁棒性实验覆盖颜色、大小、背景、光照等变化。读�
 第三，它没有证明点云路线过时。仿真里 DP3 仍然很强；在真实世界里，点云 pipeline 的部署成本和噪声让 VO-DP 更有优势。未来更稳的 RGB-D、事件相机、触觉或多视角系统仍可能超过单视角 RGB。
 
 第四，扩散动作头并不能自动解决安全和控制。VO-DP 输出的是动作 chunk，真实机器人仍需要低层控制器、限位、安全检查和环境约束。
+
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| RGB-only policy 可以借用预训练几何特征 | framework 图、VGGT feature fusion、仿真/真实对比 | 不是不用几何，而是不用显式点云输入 |
+| 语义和几何特征融合优于单一路径 | feature ablation、pooling/projection 对比 | 结论依赖当前低数据 imitation setting |
+| 真实点云 pipeline 可能比仿真更脆弱 | Realman / RealSense 真实实验、DP3 对比 | 不证明点云路线整体落后，只说明部署链路会影响结果 |
+| 鲁棒性来自视觉 backbone 和 policy 联合 | 颜色、大小、背景、光照变化实验 | 仍不是开放世界长时任务或语言泛化证据 |
+
+## 阅读结论
+
+VO-DP 的主要内容是证明 RGB-only policy 仍可以借助预训练语义-几何特征获得接近点云策略的空间能力。方法上要抓 VGGT 中间特征、语义/几何融合、average pooling 与 diffusion action head；实验上要分开读仿真、真实机器人、鲁棒性和消融。它的重点不是“几何不重要”，而是“几何可以通过更稳的 RGB feature interface 进入策略”。
+
+可复用机制是部署链路更短：不依赖深度相机、点云裁剪和 operational region 手工设定，适合传感器噪声或标定成本高的场景。不可外推项也很清楚：它不是开放词汇 VLA，不覆盖长时任务规划，也没有证明 RGB 永远优于 RGB-D/point cloud；真实系统仍要保留低层控制、安全限位和失败恢复。
 
 ## 外部精读
 

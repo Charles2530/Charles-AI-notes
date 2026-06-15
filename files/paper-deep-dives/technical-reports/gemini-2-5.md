@@ -13,7 +13,7 @@ paper_topic: 技术报告
     **时间 / 主题：** 2025-07；技术报告。<br>
     **arXiv / 官方报告：** arXiv：未找到专门条目；官方材料：[storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6](https://storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6](https://storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6)。<br>
-    **元数据来源与核验口径：** 来源：[官方 / 项目材料](https://storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[官方 / 项目材料](https://storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 Gemini 2.5 这份报告的核心不是单个 benchmark 第一，而是展示 Google 如何把 **原生多模态 MoE 架构、跨数据中心 TPU 训练基础设施、teacher distillation、长上下文、工具使用和 RL 驱动的 dynamic thinking** 组合成一条完整的前沿闭源模型路线。
 
@@ -294,6 +294,12 @@ Gemini 2.5 报告很强，但也有明显边界。
 | Infra | 分布式训练、checkpoint、replay、故障恢复和数据输入 | 长 run 是否能在硬件故障下继续稳定推进 |
 
 Gemini 2.5 最值得学习的一句话是：前沿模型能力不是单一算法堆出来的，而是训练数据、teacher、post-training、推理预算、工具环境和大规模基础设施一起优化出来的。
+
+## 阅读结论
+
+Gemini 2.5 这份报告要按闭源前沿系统路线读，而不是按可复现 recipe 读。主要内容包括 native multimodal sparse MoE、teacher distillation、dynamic thinking、long context、tool / agent post-training 和多模态安全评测；证据来自官方 benchmark、内部 aggregate、系统卡和产品级能力展示。
+
+它的可复用机制是“推理预算可控 + 工具环境 + 后训练数据引擎”的系统设计；不能外推的是具体参数规模、数据配比、训练超参和内部 benchmark 排名。对工程项目来说，下一步证据不是复刻 Gemini，而是建立自己的 reward/eval harness、thinking budget 路由、工具调用日志和长上下文任务回放。
 
 ## 延伸阅读
 

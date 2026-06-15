@@ -18,7 +18,7 @@
 
 \[
 \mathcal{L}=-\log\frac{\exp(\operatorname{sim}(I,T^+)/\tau)}
-\sum_j \exp(\operatorname{sim}(I,T_j)/\tau)}
+{\sum_j \exp(\operatorname{sim}(I,T_j)/\tau)}
 \]
 
 它学到的是开放词汇语义对齐和图文检索表示。  

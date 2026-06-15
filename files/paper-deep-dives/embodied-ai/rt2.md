@@ -1,5 +1,7 @@
 ---
 paper_date: 2023-07
+paper_title: "RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control"
+paper_topic: 具身智能 / VLA
 ---
 
 # RT-2：把 web-scale VLM 变成会输出动作的 VLA
@@ -11,7 +13,7 @@ paper_date: 2023-07
     **时间 / 主题：** 2023-07；具身智能。<br>
     **arXiv / 官方报告：** arXiv：[2307.15818](https://arxiv.org/abs/2307.15818)；官方材料：[robotics-transformer2.github.io/](https://robotics-transformer2.github.io/)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[robotics-transformer2.github.io/](https://robotics-transformer2.github.io/)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2307.15818)；[官方 / 项目材料](https://robotics-transformer2.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2307.15818)；[官方 / 项目材料](https://robotics-transformer2.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
 > **这篇回答的问题。** 如何理解“RT-2”背后的核心机制、适用边界和下一步阅读路径。
 
@@ -134,6 +136,16 @@ CoT 对 RT-2 的意义在于让模型先把指令拆成语义步骤，再落到�
 <small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 9。原图展示模型在未见物体 dynamics 上失败的真实案例。本站读法是把失败归因到动作后果和物理交互：模型可能知道物体是什么，也会选择合理目标，但不一定掌握这个物体如何被推、滚、抓或稳定放置。</small>
 
 论文列出的失败边界包括：按具体部件抓取物体，比如抓把手；机器人数据里没有的新动作类型，比如用毛巾擦拭或工具使用；精细灵巧动作，比如折毛巾；需要多层间接推理的长链任务。这些边界和 RT-2 的主张并不矛盾，反而说明它真正迁移的是视觉语义，而物理技能仍需要真实机器人数据和控制接口来学习。
+
+## 证据链快照
+
+| 论文主张 | 主要证据 | 读数边界 |
+| --- | --- | --- |
+| web-scale VLM 知识能迁移到机器人动作 | seen / unseen / emergent eval，Figure 4 | 迁移主要是语义和概念，不是新物理技能自动出现 |
+| action tokenization 可接入 VLM decoder | Figure 1、动作 bin 设计、valid action vocabulary | 量化精度、控制频率和低层控制器仍是部署边界 |
+| co-fine-tuning 防止语义遗忘 | web data + robot data 混训 recipe | 数据混合比例和任务覆盖未必适合所有机器人 |
+| CoT 可辅助语义分解 | Figure 7 chain-of-thought 示例 | 不是带搜索、约束和失败恢复的完整 planner |
+| 失败案例暴露 dynamics 边界 | Figure 9 failure dynamics | 说明真实接触和物体动力学仍需机器人数据 |
 
 ## 阅读结论
 
