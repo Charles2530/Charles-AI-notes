@@ -132,6 +132,7 @@ nav:
   - 思考探索:
       - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
       - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
+      - WAM 与 3D 视觉：世界模型从视频想象走向物理闭环: thinking-exploration/wam-3dv-world-models.md
       - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
       - 读懂 Fast-FoundationStereo: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
   - 知识 QA:
