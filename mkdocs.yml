@@ -132,6 +132,7 @@ nav:
       - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
   - 思考探索:
       - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
+      - 世界模型 Infra：从模型谱系到物理 AI 工程栈: thinking-exploration/world-model-infrastructure.md
       - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
       - WAM 与 3D 视觉：世界模型从视频想象走向物理闭环: thinking-exploration/wam-3dv-world-models.md
       - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
@@ -188,7 +189,6 @@ nav:
           - World Models Survey：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
           - World Model for Robot Learning：机器人学习综述: paper-deep-dives/world-models/world-model-for-robot-learning-survey.md
           - LingBot-World：视频基础模型到世界模拟器: paper-deep-dives/world-models/lingbot-world.md
-          - kai0：资源受限下的高可靠机器人操作: paper-deep-dives/world-models/kai0.md
           - Lance：统一多模态世界建模启发: paper-deep-dives/world-models/lance.md
           - BAGEL：交错多模态预训练: paper-deep-dives/world-models/bagel.md
           - Emu3.5：原生多模态世界学习器: paper-deep-dives/world-models/emu3-5.md
@@ -198,11 +198,13 @@ nav:
           - GR-2：Web 视频知识迁移到机器人: paper-deep-dives/embodied-ai/gr2.md
           - GR-3：少样本长时程 VLA: paper-deep-dives/embodied-ai/gr3.md
           - π0.5：开放世界 VLA: paper-deep-dives/embodied-ai/pi05.md
+          - kai0：资源受限下的高可靠机器人操作: paper-deep-dives/embodied-ai/kai0.md
           - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
           - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
           - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md
           - VO-DP：语义-几何自适应扩散策略: paper-deep-dives/embodied-ai/vodp.md
           - VGGT：前向恢复相机、深度、点云与轨迹: paper-deep-dives/embodied-ai/vggt.md
+          - D4RT：动态场景的 4D 重建与跟踪: paper-deep-dives/embodied-ai/d4rt.md
           - Depth Anything：无标注数据释放单目深度: paper-deep-dives/embodied-ai/depth-anything.md
           - Depth Anything V2：单目深度数据配方: paper-deep-dives/embodied-ai/depth-anything-v2.md
           - Depth Anything 3：任意视角 3D 几何底座: paper-deep-dives/embodied-ai/depth-anything-3.md

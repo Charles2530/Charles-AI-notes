@@ -9,6 +9,7 @@
 | 你正在想的问题 | 建议先读 |
 | --- | --- |
 | 端侧 AI、XR 芯片和量化部署有什么关系 | [XR2 Gen 2：端侧 AI 与量化部署](qualcomm-xr2-gen2.md) |
+| 世界模型如何从模型论文变成可复用工程栈 | [世界模型 Infra：从模型谱系到物理 AI 工程栈](world-model-infrastructure.md) |
 | 世界模型从视频模拟走向工程闭环卡在哪里 | [世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md) |
 | WAM 为什么会和 3D 视觉合流 | [WAM 与 3D 视觉：世界模型从视频想象走向物理闭环](wam-3dv-world-models.md) |
 | 具身智能为什么总绕不开 VLA、数据工厂和真实闭环 | [具身智能现状：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md) |
