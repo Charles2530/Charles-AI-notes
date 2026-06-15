@@ -12,6 +12,7 @@
 | 一个厨房、桌面或移动操作任务如何跑通闭环 | [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) |
 | 任务类型和 benchmark 为什么会影响模型结论 | [任务分类与评测基准](task-taxonomy-and-benchmarks.md) |
 | 家庭机器人项目常见工作流和失败模式是什么 | [家庭机器人工作流与失败模式](household-robotics-workflows-and-failure-patterns.md) |
+| 机器人数据里的 `observation.state` 和 `action` 到底是什么 | [机器人 State / Action 数据](state-action-robot-datasets.md) |
 
 ## 从感知和数据进入
 

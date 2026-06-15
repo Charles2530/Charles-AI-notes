@@ -105,6 +105,7 @@ nav:
           - 世界模型评测与失效模式: world-models/evaluation-and-failure-modes.md
       - 具身智能:
           - 具身智能从零路线: embodied-ai/beginner-learning-path.md
+          - 机器人 State / Action 数据: embodied-ai/state-action-robot-datasets.md
           - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
           - 双目匹配与 Cost Volume: embodied-ai/stereo-matching-and-cost-volume.md
           - Sim2Real 与具身数据引擎: embodied-ai/sim2real-and-data-engines.md
@@ -249,6 +250,7 @@ nav:
       - Masked / JEPA 与潜变量预测来源台账: references/masked-jepa-latent-source-ledger.md
       - WM / WAM / VAM 动作条件来源台账: references/wm-wam-vam-action-conditioned-source-ledger.md
       - 世界模型评测与失效模式来源台账: references/world-model-evaluation-source-ledger.md
+      - 机器人 State / Action 来源台账: references/robot-state-action-source-ledger.md
       - 推理服务系统来源台账: references/inference-serving-systems-source-ledger.md
       - 推理运行时来源台账: references/serving-runtimes-source-ledger.md
       - KV、缓存与投机解码来源台账: references/caching-routing-speculative-source-ledger.md
