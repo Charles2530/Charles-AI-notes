@@ -201,6 +201,7 @@ nav:
           - kai0：资源受限下的高可靠机器人操作: paper-deep-dives/embodied-ai/kai0.md
           - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
           - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
+          - Fast-WAM：训练时学世界，推理时不生成未来: paper-deep-dives/embodied-ai/fast-wam.md
           - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md
           - VO-DP：语义-几何自适应扩散策略: paper-deep-dives/embodied-ai/vodp.md
           - VGGT：前向恢复相机、深度、点云与轨迹: paper-deep-dives/embodied-ai/vggt.md

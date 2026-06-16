@@ -75,6 +75,7 @@
 - [kai0：资源受限下的高可靠机器人操作](embodied-ai/kai0.md)
 - [SpatialVLA：3D 空间表征接入 VLA](embodied-ai/spatialvla.md)
 - [Video Prediction Policy：预测视觉表征训练策略](embodied-ai/video-prediction-policy.md)
+- [Fast-WAM：训练时学世界，推理时不生成未来](embodied-ai/fast-wam.md)
 - [DreamZero：WAM 零样本策略](embodied-ai/dreamzero.md)
 - [VO-DP：语义-几何自适应扩散策略](embodied-ai/vodp.md)
 - [VGGT：前向恢复相机、深度、点云与轨迹](embodied-ai/vggt.md)
