@@ -79,6 +79,7 @@
 - [DreamZero：WAM 零样本策略](embodied-ai/dreamzero.md)
 - [VO-DP：语义-几何自适应扩散策略](embodied-ai/vodp.md)
 - [VGGT：前向恢复相机、深度、点云与轨迹](embodied-ai/vggt.md)
+- [VGGT-Ω：几何重建怎样变成具身空间表征](embodied-ai/vggt-omega.md)
 - [D4RT：动态场景的 4D 重建与跟踪](embodied-ai/d4rt.md)
 - [Depth Anything：无标注数据释放单目深度](embodied-ai/depth-anything.md)
 - [Depth Anything V2：单目深度数据配方](embodied-ai/depth-anything-v2.md)

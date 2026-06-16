@@ -177,6 +177,7 @@ VGGT 的主要内容是把相机、深度、点云和 tracks 这条传统几何�
 - 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=vggt&searchtype=title)。
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=vggt)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=vggt)。
+- 站内下一步：[VGGT-Ω：几何重建怎样变成具身空间表征](vggt-omega.md)。
 - 站内下一步：[论文精读专题](../index.md)。
 - 站内下一步：[论文专题写作规范](../writing-standard.md)。
 - 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。
