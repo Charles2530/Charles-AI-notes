@@ -132,6 +132,7 @@ nav:
       - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
   - 思考探索:
       - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
+      - 自动驾驶世界模型：从渲染、仿真到规划闭环: thinking-exploration/autonomous-driving-world-models.md
       - 世界模型 Infra：从模型谱系到物理 AI 工程栈: thinking-exploration/world-model-infrastructure.md
       - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
       - WAM 与 3D 视觉：世界模型从视频想象走向物理闭环: thinking-exploration/wam-3dv-world-models.md
@@ -202,6 +203,7 @@ nav:
           - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
           - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
           - Fast-WAM：训练时学世界，推理时不生成未来: paper-deep-dives/embodied-ai/fast-wam.md
+          - Motus：统一 latent action 世界模型: paper-deep-dives/embodied-ai/motus.md
           - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md
           - VO-DP：语义-几何自适应扩散策略: paper-deep-dives/embodied-ai/vodp.md
           - VGGT：前向恢复相机、深度、点云与轨迹: paper-deep-dives/embodied-ai/vggt.md

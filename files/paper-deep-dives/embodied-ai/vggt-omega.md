@@ -13,11 +13,21 @@ paper_topic: 具身智能 / 3D 几何表征
     **时间 / 主题：** 2026-05；具身智能 / feed-forward 3D reconstruction / VLA spatial representation。<br>
     **arXiv / 官方报告：** arXiv：[2605.15195](https://arxiv.org/abs/2605.15195)；官方材料：[vggt-omega.github.io](https://vggt-omega.github.io/)。<br>
     **GitHub / 项目：** GitHub：[facebookresearch/vggt-omega](https://github.com/facebookresearch/vggt-omega)；Demo / Model：[Hugging Face demo](https://huggingface.co/spaces/facebook/vggt-omega-demo)、[model page](https://huggingface.co/facebook/VGGT-Omega-1B-512)。<br>
-    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.15195)、[项目页](https://vggt-omega.github.io/)、[官方 GitHub](https://github.com/facebookresearch/vggt-omega)；Checked Date：2026-06-16；Repro Status：Paper / official materials / official code reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.15195)、[项目页](https://vggt-omega.github.io/)、[官方 GitHub](https://github.com/facebookresearch/vggt-omega)；Checked Date：2026-06-20；Repro Status：Paper / official materials / official code reviewed, independent reproduction not claimed。
 
 VGGT-Ω 适合接在 [VGGT](vggt.md)、[Depth Anything 3](depth-anything-3.md) 和 [MapAnything](mapanything.md) 后面读。它不是把原 VGGT 简单做大，而是回答一个更有工程味的问题：**如果 feed-forward reconstruction 要继续 scale，模型、数据、loss 和 attention 都要怎么改，才能把几何重建变成可复用的空间表征？**
 
 原 VGGT 的核心是一次前向输出 camera、depth、point map 和 tracks。VGGT-Ω 做了一个看似保守、实则关键的减法：部署输出只保留 camera 和 depth，point map / matching 不再作为昂贵 dense head 直接预测，而是变成训练时的监督信号。再加上 scene registers 和 register attention，模型把跨帧几何信息压到少量全局 token 里。这件事对具身智能有直接意义：机器人策略不一定要吃完整点云，但需要一个稳定、可迁移、可接到 VLA 的空间状态接口。
+
+## 讲解入口：从 SfM 管线到空间表征
+
+讲 VGGT-Ω 时，最好先把它放在传统三维重建和通用空间表征之间，而不是只把它看成 VGGT 的大模型版本。
+
+传统 SfM，也就是 Structure from Motion，目标是从多张二维图像里同时恢复相机运动和三维结构。一个典型流程是：图像输入、特征提取、特征匹配、相对位姿估计、三角化生成 3D 点，再通过 bundle adjustment 联合优化相机参数和三维点位置。MVS 通常接在 SfM 之后，用估计好的相机进一步恢复稠密点云。这个路线的强项是几何约束明确、误差可解释；弱项是流程长、场景级优化贵，并且动态物体、弱纹理、重复纹理和模糊视频都会让匹配与优化变脆。
+
+Feed-forward reconstruction 的变化是把这条优化 pipeline 压进一次网络前向推理：输入一张、少量或大量视角，模型直接预测相机、深度、点云或轨迹等几何属性。VGGT 证明了这条路线可以在多个 3D 任务上接近甚至竞争传统优化方法；VGGT-Ω 进一步问的是：如果要把这种模型扩大到更多数据、更长视频和动态场景，架构、监督和数据标注要怎样改才不会先被显存和标注噪声卡住。
+
+这也是 geometry-aware features 的意义。普通视觉特征更关心物体类别、纹理、边缘和语义；几何感知特征还隐含相机视角、深度、尺度、遮挡、跨视角对应和 3D 运动关系。因此 VGGT-Ω 的重建目标不只是为了输出一张更准的深度图，而是在训练一个可迁移的空间表征：它可以给 VLA、机器人策略、world model 或新视角合成提供比纯 2D 图像 token 更稳定的空间先验。
 
 ## 它的效率贡献是什么
 
@@ -59,6 +69,8 @@ VGGT-Ω 学的是：
 
 其中 \(I_i\) 是第 \(i\) 张输入图像，\(D_i\) 是深度图，\(\mathbf g_i=(\mathbf q_i,\mathbf t_i,\mathbf f_i)\) 包含 rotation quaternion、translation 和 field of view。它假设 principal point 在图像中心。
 
+这里的 depth 不是“多预测一个通道”这么简单。RGB 图像只给颜色和纹理，深度图 \(D(u,v)\) 给出像素到相机的距离；在已知相机内参 \(K\) 和外参的情况下，每个像素都可以反投影成三维点。多帧 depth 再按相机位姿融合，就能形成点云或更完整的场景几何。对机器人来说，这个接口直接对应“目标离机械臂多远、桌面在哪里、是否可能碰撞”这类控制前需要的空间状态。
+
 和 VGGT 的区别是：VGGT-Ω 不直接输出 point maps 和 tracking features，但仍然用 point loss 与 matching loss 训练 backbone。也就是说，它把“输出接口”做薄，把“训练监督”保留厚。
 
 ![VGGT-Ω architecture 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vggt-omega/figure-2-architecture.png){ width="920" }
@@ -75,6 +87,8 @@ VGGT-Ω 学的是：
 原 VGGT 的 alternating attention 在 frame-wise attention 和 global attention 之间切换。global attention 让不同帧的 image tokens 互相看见，是多视角几何形成的地方，但成本随所有帧 token 总数近似二次增长。
 
 VGGT-Ω 的观察是：global attention map 往往很稀疏，跨帧交换不一定需要所有 image tokens 两两通信。因此它引入 registers，也叫 scene tokens：
+
+这里容易混淆的一点是：VGGT 已经有按帧附加的 register tokens，Ω 的新意不是“第一次加 registers”，而是进一步改变一部分 attention 层里的跨帧通信方式。每帧的 patch tokens 仍然负责局部图像内容，camera token 负责相机参数预测，scene registers 则像一组可学习的全局槽位，负责吸收和压缩场景级信息。Register attention 把一部分原本所有帧所有 patch token 互相通信的路径，改成主要通过这些 registers 交换信息。
 
 ```text
 image tokens + camera token + 16 scene tokens
@@ -167,6 +181,8 @@ VGGT-Ω 的 supervised data 由公开数据、内部合成/真实数据和新的
 公开数据覆盖 Aria series、Bedlam、BEHAVIOR-1K、Co3Dv2、uCo3D、DL3DV、Dynamic Replica、EDEN、EFM3D、HOT3D、Habitat、Hypersim、Mapfree、Mapillary Metropolis、Megadepth、MegaSynth、Replica、ScanNet series、TartanAirV2、Taskonomy、Virtual KITTI、Waymo、WildRGBD 等。作者明确排除了 VGGT 使用过的 Kubric 和 PointOdyssey，因为它们的 fake background geometry 会产生无效 depth。
 
 总量上，监督数据约 3M sequences，每个 sequence 含 10 到 20,000 张图像。额外的视频数据来自约 40M Internet-style videos。论文不是把这些视频全塞进去，而是用非常保守的过滤和标注流程：
+
+动态视频难点在于，错误匹配不只是来自纹理或模糊，还来自场景本身在动。人、车、手臂和其他运动物体会破坏“同一个 3D 点在多帧中只由相机运动解释”的假设。VGGT-Ω 的数据 pipeline 因此先用 VLM 过滤明显不适合重建的视频，再用 Grounding DINO 之类的检测器给人和车等区域生成动态 mask，让后续 SIFT、SuperPoint/SuperGlue、ALIKED/LightGlue、VGGSfM Tracker、VGGT 初始化和 COLMAP bundle adjustment 尽量在静态或可验证区域上工作。最终进入训练的不是原始 40M videos，而是通过多层几何一致性和质量分类筛出的高质量静态 / 动态序列。
 
 ```text
 40M videos
