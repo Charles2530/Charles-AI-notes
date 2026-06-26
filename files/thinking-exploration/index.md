@@ -13,6 +13,7 @@
 | 世界模型如何从模型论文变成可复用工程栈 | [世界模型 Infra：从模型谱系到物理 AI 工程栈](world-model-infrastructure.md) |
 | 世界模型从视频模拟走向工程闭环卡在哪里 | [世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md) |
 | WAM 为什么会和 3D 视觉合流 | [WAM 与 3D 视觉：世界模型从视频想象走向物理闭环](wam-3dv-world-models.md) |
+| World Model 的能力边界如何推出机器人数据飞轮 | [世界模型驱动的机器人数据飞轮：能持续生产经验的系统，才是真正的基础设施](robot-data-flywheel-world-models.md) |
 | 具身智能为什么总绕不开 VLA、数据工厂和真实闭环 | [具身智能现状：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md) |
 | 读 Fast-FoundationStereo 前要补哪些视觉和推理基础 | [读懂 Fast-FoundationStereo](fast-foundation-stereo-prerequisite-map.md) |
 

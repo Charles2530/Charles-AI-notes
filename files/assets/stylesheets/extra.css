@@ -530,6 +530,64 @@ body {
   font-size: 0.82em;
 }
 
+.atlas-evidence-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(18rem, 0.72fr);
+  gap: 1rem;
+  align-items: start;
+  margin: 1.35rem 0 1.6rem;
+}
+
+.atlas-evidence-copy {
+  min-width: 0;
+}
+
+.atlas-evidence-copy > p:first-child {
+  margin-top: 0;
+}
+
+.atlas-evidence-copy pre {
+  margin: 1rem 0;
+}
+
+.atlas-evidence-stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.atlas-evidence-card {
+  margin: 0;
+  padding: 0.48rem;
+  border: 1px solid rgba(18, 95, 99, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--atlas-shadow-soft);
+}
+
+.atlas-evidence-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 7px;
+}
+
+.atlas-evidence-card figcaption {
+  margin: 0.45rem 0.1rem 0;
+  color: var(--atlas-muted);
+  font-size: 0.68rem;
+  line-height: 1.58;
+}
+
+@media screen and (max-width: 54rem) {
+  .atlas-evidence-split {
+    grid-template-columns: 1fr;
+  }
+
+  .atlas-evidence-stack {
+    grid-template-columns: 1fr;
+  }
+}
+
 .md-typeset .arithmatex {
   max-width: 100%;
 }

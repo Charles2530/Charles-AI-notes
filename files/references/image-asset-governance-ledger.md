@@ -28,6 +28,11 @@
 | `tools/nsight-systems/cpu-gpu-correlation.png` | NVIDIA Technical Blog《Nsight Systems Exposes New GPU Optimization Opportunities》Figure 2；用于解释 GPU event 与 CPU-side CUDA API launch 关联 | 保留，页面图注写“博客截图” |
 | `tools/nsight-systems/synchronization-calls.png` | NVIDIA Technical Blog《Nsight Systems Exposes New GPU Optimization Opportunities》Figure 3；用于解释不必要同步调用 | 保留，页面图注写“博客截图” |
 | `tools/nsight-systems/nvtx-timeline.png` | NVIDIA Technical Blog《Nsight Systems Exposes New GPU Optimization Opportunities》Figure 6；用于解释 NVTX 标注如何给 timeline 加语义 | 保留，页面图注写“博客截图” |
+| `thinking-exploration/robot-data-flywheel-world-models/wangxingxing-21jingji-evidence.jpg` | 21 财经《宇树科技王兴兴：机器人数据关注度有点太高了，最大问题在模型》局部截图；用于核验产业观点段落 | 保留，页面图注写“报道截图” |
+| `thinking-exploration/robot-data-flywheel-world-models/wangxingxing-36kr-evidence.jpg` | 36 氪《聊模型的王兴兴》局部截图；用于交叉佐证产业观点段落 | 保留，页面图注写“报道截图” |
+| `thinking-exploration/robot-data-flywheel-world-models/four-data-loops-mutual-calibration.png` | 本站自绘总结图；用于解释机器人数据飞轮的四条回路如何互相校正 | 保留，页面图注写“本站自绘” |
+| `thinking-exploration/robot-data-flywheel-world-models/deployment-return-flywheel.png` | 本站自绘总结图；用于解释部署失败邻域如何回流成训练资产和验证资产 | 保留，页面图注写“本站自绘” |
+| `thinking-exploration/robot-data-flywheel-world-models/deployment-distribution-alignment.png` | 本站自绘总结图；用于解释 \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 三类分布对齐 | 保留，页面图注写“本站自绘” |
 
 ## 未引用资产分级
 

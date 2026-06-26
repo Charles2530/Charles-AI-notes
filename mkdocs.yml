@@ -136,6 +136,7 @@ nav:
       - 世界模型 Infra：从模型谱系到物理 AI 工程栈: thinking-exploration/world-model-infrastructure.md
       - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
       - WAM 与 3D 视觉：世界模型从视频想象走向物理闭环: thinking-exploration/wam-3dv-world-models.md
+      - 世界模型驱动的机器人数据飞轮：能持续生产经验的系统，才是真正的基础设施: thinking-exploration/robot-data-flywheel-world-models.md
       - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
       - 读懂 Fast-FoundationStereo: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
   - 知识 QA:
