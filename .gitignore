@@ -8,5 +8,6 @@ conda-env/
 site/
 __pycache__/
 *.pyc
+tmp/
 .mkdocs-serve.log
 .mkdocs-serve-*.log
