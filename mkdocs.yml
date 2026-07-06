@@ -178,6 +178,7 @@ nav:
           - Wan2.1：开源视频生成系统路线: paper-deep-dives/diffusion/wan.md
       - 世界模型:
           - PlaNet：像素规划的潜变量动力学: paper-deep-dives/world-models/planet.md
+          - MuZero：只预测对规划有用的世界模型: paper-deep-dives/world-models/muzero.md
           - Dreamer：想象轨迹中训练控制策略: paper-deep-dives/world-models/dreamer.md
           - DreamerV2：离散世界模型玩 Atari: paper-deep-dives/world-models/dreamerv2.md
           - DreamerV3：latent 里训练策略: paper-deep-dives/world-models/dreamerv3.md
@@ -201,6 +202,7 @@ nav:
           - GR-3：少样本长时程 VLA: paper-deep-dives/embodied-ai/gr3.md
           - π0.5：开放世界 VLA: paper-deep-dives/embodied-ai/pi05.md
           - kai0：资源受限下的高可靠机器人操作: paper-deep-dives/embodied-ai/kai0.md
+          - Qwen-RobotManip：先对齐再扩规模的机器人操作基础模型: paper-deep-dives/embodied-ai/qwen-robotmanip.md
           - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
           - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
           - Fast-WAM：训练时学世界，推理时不生成未来: paper-deep-dives/embodied-ai/fast-wam.md
@@ -220,6 +222,7 @@ nav:
           - DeepSeek-V4：百万上下文与 FP4 后训练: paper-deep-dives/technical-reports/deepseek-v4-pro.md
           - Qwen3：Thinking 模式、预训练与蒸馏: paper-deep-dives/technical-reports/qwen3.md
           - Qwen3.5-Omni：Thinker-Talker 与全模态 Agent: paper-deep-dives/technical-reports/qwen35-omni.md
+          - Cosmos 3：面向 Physical AI 的全模态世界模型平台: paper-deep-dives/technical-reports/cosmos3.md
           - Kimi K2：MuonClip、万亿 MoE 与 Agent 数据: paper-deep-dives/technical-reports/kimi-k2.md
           - Gemini 2.5：动态 Thinking 与长上下文 Agent: paper-deep-dives/technical-reports/gemini-2-5.md
           - GPT-4o System Card：Omni 安全与多模态评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md

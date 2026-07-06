@@ -47,6 +47,7 @@
 ## 世界模型
 
 - [PlaNet：像素规划的潜变量动力学](world-models/planet.md)
+- [MuZero：只预测对规划有用的世界模型](world-models/muzero.md)
 - [Dreamer：想象轨迹中训练控制策略](world-models/dreamer.md)
 - [DreamerV2：离散世界模型玩 Atari](world-models/dreamerv2.md)
 - [DreamerV3：latent 里训练策略](world-models/dreamerv3.md)
@@ -73,6 +74,7 @@
 - [GR-3：少样本长时程 VLA](embodied-ai/gr3.md)
 - [π0.5：开放世界 VLA](embodied-ai/pi05.md)
 - [kai0：资源受限下的高可靠机器人操作](embodied-ai/kai0.md)
+- [Qwen-RobotManip：先对齐再扩规模的机器人操作基础模型](embodied-ai/qwen-robotmanip.md)
 - [SpatialVLA：3D 空间表征接入 VLA](embodied-ai/spatialvla.md)
 - [Video Prediction Policy：预测视觉表征训练策略](embodied-ai/video-prediction-policy.md)
 - [Fast-WAM：训练时学世界，推理时不生成未来](embodied-ai/fast-wam.md)
@@ -94,6 +96,7 @@
 - [DeepSeek-V4：百万上下文与 FP4 后训练](technical-reports/deepseek-v4-pro.md)
 - [Qwen3：Thinking 模式、预训练与蒸馏](technical-reports/qwen3.md)
 - [Qwen3.5-Omni：Thinker-Talker 与全模态 Agent](technical-reports/qwen35-omni.md)
+- [Cosmos 3：面向 Physical AI 的全模态世界模型平台](technical-reports/cosmos3.md)
 - [Kimi K2：MuonClip、万亿 MoE 与 Agent 数据](technical-reports/kimi-k2.md)
 - [Gemini 2.5：动态 Thinking 与长上下文 Agent](technical-reports/gemini-2-5.md)
 - [GPT-4o System Card：Omni 安全与多模态评测](technical-reports/gpt-4o-system-card.md)
