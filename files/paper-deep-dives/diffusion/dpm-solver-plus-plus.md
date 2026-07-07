@@ -15,13 +15,35 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/LuChengTHU/dpm-solver](https://github.com/LuChengTHU/dpm-solver)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2211.01095)；[GitHub API / repo](https://github.com/LuChengTHU/dpm-solver)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-DPM-Solver++ 解决的是扩散模型推理里很实用的问题：**已经有一个训练好的扩散模型，不想再蒸馏或重训，只想在 classifier guidance / classifier-free guidance 下把采样步数从上百步压到 15 到 20 步，还不要因为 guidance scale 大而炸图。**
+## 原论文故事线
 
-它不是 DPM-Solver 的简单改名，而是针对 guided sampling 改了三件事：
+### 研究背景
 
-1. 从 `noise prediction` 视角转到 `data prediction` 视角求解扩散 ODE；
-2. 用 thresholding 把预测的 \(x_0\) 拉回训练数据范围，缓解大 guidance scale 导致的 train-test mismatch；
-3. 用 multistep 形式复用历史函数值，在相同 NFE 下缩小有效步长，提升少步稳定性。
+原论文属于 diffusion sampler / ODE solver 路线：模型已经训练好，不想重新蒸馏，只希望少走采样步数。DPM-Solver 已经把扩散采样写成半线性 ODE 并用 exponential integrator 加速；但真实应用里常用 classifier guidance 或 classifier-free guidance，guidance scale 一大，采样轨迹变得更硬、更容易越界，原来在 unconditional 或弱 guidance 下好用的 solver 不一定稳。
+
+### 问题（Challenge）
+
+DPM-Solver++ 要解决的问题是 guided sampling 的少步稳定性：如何在 15 到 20 NFE 左右生成高质量样本，同时不重训模型。挑战在于 guidance 会放大 score / noise prediction 的方向，使高阶求解器在大步长下更容易产生过饱和、越界或细节崩坏；而扩散模型训练时看到的是有限数据范围，采样时 \(x_0\) 预测一旦超出范围，误差会被后续步骤放大。这个问题有直接价值，因为 text-to-image 和 class-conditional generation 常常依赖 guidance，而 NFE 直接决定推理延迟。
+
+### Finding
+
+论文的 finding 是：guided diffusion 的少步采样不能只追求更高阶，还要换一个更适合 guidance 的参数化视角。相比沿噪声预测 \(\epsilon_\theta\) 的 exact solution 走，使用 data prediction \(x_\theta\) 写 ODE 解，可以让 guided sampling 的数值行为更稳定；再配合 dynamic thresholding 和 multistep 更新，少步采样才不容易被大 guidance scale 推出训练数据范围。这里的洞察是，采样器失败不只是步长太大，而是参数化、guidance 和数据范围三者不匹配。
+
+### 方法
+
+方法分三层。第一，把 diffusion ODE 的解析积分形式改写到 data prediction 模型 \(x_\theta(x_t,t)\) 上，得到 DPM-Solver++ 的一阶、二阶、三阶更新。第二，在 guided sampling 中加入 thresholding，把预测的 \(x_0\) 限制回合理数据范围，缓解 train-test mismatch。第三，使用 single-step 与 multistep 变体；multistep 复用历史模型评估，在相同 NFE 下获得更高有效精度。它不改变训练数据、不改模型参数，输入是 pretrained diffusion model 与采样 schedule，输出是更少步的 guided samples。
+
+### 结论
+
+实验覆盖 class-conditional ImageNet、Stable Diffusion、DeepFloyd 等 guided generation 设置。结果显示 DPM-Solver++ 在约 15 到 20 NFE 时能获得比 DDIM、DPM-Solver 等 baseline 更稳定的 FID / 视觉质量，尤其在较大 guidance scale 下优势更明显。消融说明 data prediction、thresholding 和 multistep 更新需要一起看：只提高 solver 阶数不足以保证 guided sampling 稳定。边界是它仍受模型质量、schedule、guidance scale 与阈值选择影响，不能像蒸馏模型那样把 NFE 压到一步还保持同等质量。
+
+### 关键术语
+
+- **NFE（Number of Function Evaluations，函数评估次数）**：采样过程中调用 denoiser / score model 的次数，近似对应推理成本
+- **Guided Sampling（引导采样）**：用 classifier guidance 或 classifier-free guidance 增强条件一致性的扩散采样
+- **Data Prediction（数据预测参数化）**：模型直接预测干净样本 \(x_0\)，而不是只预测噪声
+- **Dynamic Thresholding（动态阈值截断）**：把预测样本裁回合理数据范围，减少大 guidance scale 下的越界
+- **Multistep Solver（多步求解器）**：复用历史模型输出进行当前更新，以较少 NFE 获得更稳积分
 
 ## 它的效率贡献是什么
 

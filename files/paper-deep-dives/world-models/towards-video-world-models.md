@@ -8,12 +8,59 @@ paper_topic: 世界模型
 
 !!! info "论文信息"
     **论文题名：** Towards Video World Models。<br>
-    **作者：** 未在公开元数据中稳定解析；见论文原文或官方发布页。<br>
-    **机构：** 未在公开元数据中稳定解析；以 arXiv/PDF 或官方页 affiliation block 为准。<br>
+    **作者：** Xun Huang。<br>
+    **机构：** 作者个人技术博客；原文未给出机构署名。<br>
     **时间 / 主题：** 2025-07；世界模型。<br>
-    **arXiv / 官方报告：** arXiv：未找到专门条目。<br>
+    **arXiv / 官方报告：** arXiv：未找到专门条目；官方原文：[xunhuang.me/blogs/world_model.html](https://www.xunhuang.me/blogs/world_model.html)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
-    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[官方原文](https://www.xunhuang.me/blogs/world_model.html)；Checked Date：2026-07-07；Repro Status：Blog / official materials reviewed, independent reproduction not claimed。
+
+## 原文故事线
+
+### 研究背景
+
+这篇文章讨论的是 video generation 和 world model 之间的边界。近几年 Sora、Veo 等视频生成系统已经能生成高保真、动态合理的视频，但“能生成视频”不等于“能作为世界模型”。传统 world model 可以指 agent 内部用于 planning 和 decision making 的抽象预测器，也可以指面向机器人、游戏和交互媒体的外部世界模拟器。本文关注第二类：用视频模型搭建高保真、可交互的外部世界模拟。
+
+作者先把 internal world understanding model 和 external world simulation model 区分开。前者不一定需要像素级细节，目标是帮助智能体理解和决策；后者必须生成足够真实、连续、可干预的外部世界。Video world model 属于后者，它继承视频生成模型的视觉能力，但还要补上交互系统必须具备的因果、动作、记忆、低延迟和物理约束。
+
+### 问题（Challenge）
+
+文章要回答的问题是：**为什么当前强视频生成模型还不能直接称为 true video world model，以及从视频生成走向世界模型还缺什么能力。** 这个问题有挑战性，是因为普通视频模型优化的是“给定条件生成一段合理视频”，而世界模型要支持用户或 agent 在运行过程中不断输入动作，让未来随动作分叉。
+
+普通视频生成可以一次性学习 \(p(v_{1:T}\mid c)\)，其中 \(c\) 是文本、图片、首帧或历史片段。交互式世界模型至少要学习 \(p(v_{t+1:t+H}\mid v_{\le t}, a_{t:t+H-1}, c)\)，其中 \(a\) 是运行时注入的动作。这里的价值在于：如果这个问题解决了，视频模型就不只是内容生成工具，而可以变成机器人训练环境、游戏世界、自动驾驶仿真器和沉浸式交互媒体的基础设施。
+
+### Finding
+
+作者的 finding 是：**video world model 的本质不是“更长、更清晰的视频生成”，而是一个必须同时满足 causal、interactive、persistent、real-time 和 physically accurate 五个属性的外部世界模拟器。** 这个观点把问题从单一模型尺度或画质竞赛，翻转成一组系统约束：只要缺少其中的基础约束，视频再真实也很难进入闭环交互。
+
+这个 finding 的因果关系很清楚。没有 causal，模型可能在生成当前帧时利用未来信息，运行时就无法让新动作真正改变未来；没有 interactive，模型只是 observer-mode simulator；没有 persistence，长时间游走后场景和对象会漂移；没有 real-time，系统不能服务游戏、VR 或机器人闭环；没有 physical accuracy，生成结果看似合理但不能承担训练和仿真的后果。因此，五个属性不是装饰性的评价词，而是把“视频生成”改造成“世界模拟”的必要条件。
+
+### 方法
+
+本文不是提出一个新模型，而是提出一个路线图和 taxonomy。作者先定义 world model 的两种范式：internal world understanding model 面向抽象预测和决策，external world simulation model 面向高保真外部模拟。随后聚焦 video world model，逐一分析五个能力门槛以及对应研究路线。
+
+在 causal 方面，文章指出许多 diffusion transformer 依赖非因果的双向注意力，一次性生成固定帧块，这会让未来信息影响过去。可行路线是把 diffusion 的画质和 autoregressive 的时间因果性结合起来，例如 Diffusion Forcing、CausVid 和 MAGI-1。CausVid 的例子说明，可以从预训练 bidirectional video diffusion model 出发，适配成 causal attention 的 few-step autoregressive video diffusion model。
+
+在 interactive 方面，模型要把动作视为让未来分叉的变量，而不是浅层提示词。动作可以是游戏控制、机器人关节或末端执行器命令、自动驾驶控制量、导航视角变化等。核心训练瓶颈是 frame-action alignment：游戏和仿真数据可以直接记录动作，互联网视频则需要 Genie 这类 latent action learning 路线。
+
+在 persistence、real-time 和 physical accuracy 方面，文章分别梳理了长记忆压缩、3D/4D 条件、state-space memory、few-step distilled diffusion、KV cache、training-time rollout、物理目标函数和物理 stress test 等方向。整体方法不是给出单一架构，而是把 video world model 拆成一组必须共同满足的训练和系统要求。
+
+### 结论
+
+因为这篇文章是技术博客和研究路线图，不是带统一实验设置的新模型论文，所以它没有报告一个自有 benchmark 的 SOTA 数字。它的“实验性结论”主要来自对已有工作的归纳：CausVid、Self-Forcing 等说明因果自回归视频扩散可以兼顾质量和低延迟；Genie / Genie-2 说明无动作标签视频中可以学习 latent action 并形成可交互环境；state-space video world model 等方向说明长时记忆不能只依赖无限上下文；PhyWorld、VideoJAM、Ctrl-Crash、PISA 等工作说明物理一致性需要专门评估和训练信号。
+
+作者最终给出的判断是：causality 和 interactivity 是硬约束，persistence 是从短 demo 走向可用系统的连续谱约束，real-time responsiveness 与 physical accuracy 之间存在应用相关的取舍。娱乐和交互媒体可能优先低延迟和视觉欺骗性，机器人学习和自动驾驶仿真则更重视物理准确性和可泛化后果。换句话说，video world model 的研究路线不能只问“视频像不像”，还要问“能不能被动作驱动、长期保持一致、低延迟响应，并在任务相关物理上可靠”。
+
+### 关键术语
+
+- **Video World Model（视频世界模型）**：用视频生成方式模拟外部世界，并能支持动作条件预测和交互式 rollout 的世界模型。
+- **Internal World Understanding Model（内部世界理解模型）**：面向 agent reasoning、planning 和 decision making 的抽象预测模型，不一定生成像素级细节。
+- **External World Simulation Model（外部世界模拟模型）**：面向机器人训练、游戏、仿真和沉浸式体验的高保真外部环境模拟器。
+- **Causality（因果性）**：在本文语境中指时间单向性，即过去决定未来、未来不能泄漏到过去；这是运行时交互的前提。
+- **Interactive Controllability（交互可控性）**：用户或 agent 能在生成过程中注入动作，并让未来按不同动作产生一致分叉的能力。
+- **Persistence（长期一致性）**：模型在长时间生成中保持场景布局、对象身份和历史状态不漂移的能力。
+- **Real-Time Responsiveness（实时响应性）**：模型不仅有足够吞吐量，还要让动作到画面变化的延迟足够低。
+- **Physical Accuracy（物理准确性）**：生成结果不仅视觉逼真，还要在碰撞、接触、质量、速度、遮挡和罕见事件等任务相关物理上可靠。
 
 这篇文章很适合放在 LingBot-World 前面读。它不提出一个新模型，而是回答一个更基础的问题：**为什么 Sora、Veo 这类强视频生成模型还不能直接等价于 video world model，以及从视频生成走向世界模型需要补哪些训练和系统能力。**
 

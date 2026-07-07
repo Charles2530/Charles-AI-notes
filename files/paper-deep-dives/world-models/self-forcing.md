@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/guandeh17/Self-Forcing](https://github.com/guandeh17/Self-Forcing)；项目页：[self-forcing.github.io/](https://self-forcing.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2506.08009)；[GitHub API / repo](https://github.com/guandeh17/Self-Forcing)；[官方 / 项目材料](https://self-forcing.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Self Forcing 属于 autoregressive video diffusion 训练方法。视频扩散模型画质强，但常用 bidirectional denoising 一次性生成整段视频，不适合实时交互；自回归视频模型可以一帧或一块一块生成，更适合直播、游戏和世界模拟器，但会遇到 exposure bias：训练时看真实历史，推理时只能看自己生成的历史。
+
+这个背景和世界模型直接相关。交互世界模型必须长期 rollout，并在每一步接收用户或 agent 的新输入。如果模型只在干净 ground-truth context 上训练，部署时小错误会沿时间积累，导致漂移、闪烁、过锐化、过饱和或语义断裂。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何让自回归视频扩散模型在训练时就面对推理时的自生成上下文，从而减少长时 rollout 的 train-test mismatch？** 难点在于，真正 unroll 自回归扩散很贵；如果对完整 rollout 反向传播，显存会爆；如果只做 frame-wise denoising，又无法惩罚整段视频分布的漂移。此外，实时场景还要求 KV cache、低延迟和足够吞吐。
+
+这个问题有价值，因为世界模拟器不是只生成一个短 clip，而是要边看边生成、边交互边更新。训练分布和推理分布不对齐，会直接限制可交互性。
+
+### Finding
+
+作者的 finding 是：**解决 AR 视频扩散的长期漂移，关键不是给 ground-truth context 加噪声，而是在训练中执行和推理一致的 self-rollout，并用视频级 distribution matching 约束整段生成序列。** 这个洞见把训练对象从“下一帧在真实历史下是否去噪正确”转为“模型自己滚出来的视频分布是否像真实视频”。
+
+这个 finding 解释了 Self Forcing 和 Diffusion Forcing 的差别。Diffusion Forcing 让不同帧处在不同噪声水平，缓解一部分上下文不确定性，但上下文仍不是模型真实生成分布；Self Forcing 直接用当前模型生成的历史帧作为下一步条件，让模型学习从自己的错误中恢复。
+
+### 方法
+
+Self Forcing 以 few-step autoregressive diffusion model 为基础，每个条件分布 \(p(x_i|x_{<i})\) 由少步扩散近似。训练时，模型按推理流程自回归 rollout：生成第 \(i\) 帧或 chunk 时，条件是前面自己生成的 \(\hat{x}_{<i}\)，并使用 KV cache 模拟真实推理。为控制显存，论文采用 gradient truncation，不对完整历史无限反传。
+
+损失方面，除了扩散模型自身的去噪/蒸馏目标，Self Forcing 对完整生成视频施加 holistic distribution matching loss。论文讨论了 DMD、SiD、GAN-style objectives 等视频级匹配方式。长视频推理使用 rolling KV cache 和 sliding-window 机制，支持无限长度 extrapolation，同时避免双向模型每步重算完整上下文。
+
+### 结论
+
+实验显示，Self Forcing 可以把预训练视频扩散模型转成实时自回归视频生成器，在单 H100 GPU 上报告约 17 FPS 和亚秒级延迟，同时质量可与更慢的非因果或双向扩散模型竞争。消融表明，self-rollout、视频级 distribution matching、few-step diffusion、gradient truncation 和 rolling KV cache 都服务于同一个目标：对齐训练和推理的生成分布。
+
+边界是：论文仍是视频生成/外推评估，不直接评估动作条件反事实或真实机器人控制。对世界模型来说，它提供的是长期自回归视频模拟器的训练策略，尤其适合解决交互 rollout 中由模型自身历史造成的误差积累。
+
+### 关键术语
+
+- **Teacher Forcing（教师强制）**：训练时用真实历史作为条件，推理时却用模型生成历史，容易产生分布错位。
+- **Exposure Bias（暴露偏差）**：模型训练时没有暴露于自身错误，推理时错误逐步累积的问题。
+- **Self-rollout（自生成展开）**：训练时让模型按推理方式逐步生成历史，再用这些历史继续生成后续帧。
+- **Distribution Matching Loss（分布匹配损失）**：直接让完整生成视频分布接近真实视频分布的目标。
+- **Few-step Diffusion（少步扩散）**：用很少 denoising steps 近似扩散生成，以满足实时生成需求。
+- **Rolling KV Cache（滚动键值缓存）**：长视频自回归生成时保留近期历史缓存、滑动更新上下文的机制。
+
 这篇论文的核心问题非常直接：**自回归视频扩散模型训练时看的是 ground-truth 上下文，推理时却只能看自己生成的上下文。** 这种 train-test mismatch 会导致 exposure bias，误差沿时间累积，视频越往后越容易过饱和、过锐化、闪烁或漂移。
 
 Self Forcing 的答案是：训练时就执行和推理一样的自回归 rollout，用模型自己生成的历史帧作为上下文，再用视频级 distribution matching loss 对完整生成序列做监督。

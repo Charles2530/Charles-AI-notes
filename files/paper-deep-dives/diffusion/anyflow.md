@@ -15,16 +15,34 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/NVlabs/AnyFlow](https://github.com/NVlabs/AnyFlow)；项目页：[nvlabs.github.io/AnyFlow/](https://nvlabs.github.io/AnyFlow/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.13724)；[GitHub API / repo](https://github.com/NVlabs/AnyFlow)；[官方 / 项目材料](https://nvlabs.github.io/AnyFlow/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文的核心价值是把视频扩散蒸馏从“固定少数采样步好用”推进到“**同一个蒸馏模型可以随测试时采样步数变多而继续变好**”。它要解决的不是单纯 4-step 视频生成，而是 consistency distillation 的一个结构性问题：很多 consistency / endpoint mapping 学出来的学生在 4 steps 很强，但测试时给 8、16、32 steps 反而退化。
+## 原论文故事线
 
-AnyFlow 的答案是：不要只学 \(z_t \to z_0\)，而是学任意时间区间的 **flow map transition**：
+### 研究背景
 
-\[
-\mathbf f_\theta:(\mathbf z_t,t,r)\mapsto \mathbf z_r,
-\qquad 1\ge t\ge r\ge 0.
-\]
+原论文把 AnyFlow 放在视频扩散加速的谱系里读：Wan、FAR 这类视频 diffusion / flow-matching teacher 质量高，但一次生成要走很多 denoising 或 flow integration 步；consistency distillation、rectified consistency model、Self-Forcing 等方法能把步数压到很少，却常把学生训练成固定 NFE 的 endpoint projector。这个领域关心的不是单张图的少步采样，而是视频生成系统里“预览要快、最终稿要能继续变好”的同一模型接口。
 
-这样学生模型既能跨大步做快速预览，也能跨小步做细致 refinement；再用 on-policy flow map distillation 修正学生自己 rollout 时的误差。
+### 问题（Challenge）
+
+论文要解决的核心问题是 any-step video generation：同一个蒸馏后的视频模型，在 4 步时要快，在 8、16、32 步时也应该能把额外计算转成更高质量。难点在于，许多少步蒸馏目标只教模型从 \(z_t\) 直接跳到 \(z_0\)。这种 endpoint 目标适合固定少步推理，但测试时如果把轨迹拆得更细，学生反复执行的不是 teacher 的局部 flow，而是一串不匹配的端点投影，质量可能随步数增加反而下降。这个问题有工程价值，因为生产视频系统常需要快速预览和高质量 refinement 共用一个模型。
+
+### Finding
+
+AnyFlow 的关键发现是：少步学生不应该只学习“到终点”，而应该学习任意两个时间点之间的 flow map。也就是说，把学生函数写成 \(\mathbf f_\theta(\mathbf z_t,t,r)\mapsto \mathbf z_r\)，让它既能跨大时间间隔做 shortcut，也能跨小时间间隔做局部 ODE refinement。这个 finding 改变了蒸馏问题的视角：固定步数退化并不是模型容量天然不足，而是训练目标没有保留 teacher 轨迹的局部可组合性。只要学生学到可组合的区间转移，测试时增加步数就不再是重复 endpoint projection，而是更细地沿 flow 前进。
+
+### 方法
+
+方法分两阶段。第一阶段是 forward flow map training：从 teacher 轨迹或 flow matching 过程里采样 \((t,r)\)，训练学生从 \(\mathbf z_t\) 预测 \(\mathbf z_r\)；论文还加入 interpolated timestep conditioning、time sampler、loss reweighting 和 guidance-fused training，让模型在不同区间长度和 guidance 条件下都能稳定。第二阶段是 on-policy flow map distillation：不只在 teacher 状态上训练，而是在学生自己的 rollout 轨迹上做 backward simulation，再用 DMD 风格的 teacher-guided 分布匹配纠正误差。论文分别把它接到 bidirectional Wan2.1 和 causal FAR 视频模型，说明这个目标不是某个单一 backbone 的 trick。
+
+### 结论
+
+实验围绕一个主张展开：AnyFlow 的质量不会被固定 NFE 锁死。论文在 T2V、I2V、causal video generation、downstream continued training 等设置里比较了不同采样步数下的 VBench / VBench-I2V 和定性结果；关键趋势是 AnyFlow 在少步区间已经快于 teacher，同时增加步数时仍能提升或保持质量，而 endpoint/consistency 类 baseline 更容易出现 step scaling 退化。消融则用来说明 time sampler、loss reweighting、guidance-fused training 和 on-policy distillation 不是装饰项，它们分别处理区间覆盖、训练权重、条件生成和学生自 rollout 误差。
+
+### 关键术语
+
+- **Flow Map（流映射）**：从一个噪声时间点的 latent state 直接映射到另一个更低噪声时间点的函数，强调区间转移而不是终点投影
+- **Any-Step Sampling（任意步采样）**：同一模型在不同 NFE 下都可用，且额外步数应能带来 refinement
+- **On-Policy Distillation（在策略蒸馏）**：在学生自己生成的中间状态上训练，而不是只在 teacher 轨迹状态上训练
+- **Backward Simulation（反向模拟）**：沿学生当前采样路径展开中间状态，用于暴露并修正推理时会出现的误差
 
 ## 它的效率贡献是什么
 

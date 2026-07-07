@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2306.02572)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+H-JEPA 这篇文章是 LeCun 世界模型路线的理论/教学型展开。它的背景是：如果智能系统要像人和动物一样从观察中学习世界、在行动前想象结果、并在多个时间尺度上规划，单纯的监督学习、强化学习或像素级生成模型都不够。高维连续世界有大量不可预测细节，显式概率建模和像素重建会把容量浪费在与决策无关的信息上。
+
+论文因此引入 energy-based model、latent variable 和 joint embedding predictive architecture。它不是在刷 benchmark，而是在解释一种世界模型训练原则：在表征空间预测未来或缺失部分，用能量衡量兼容性，用 latent variables 表达不确定性，用层级结构支持长时规划。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何训练一个既能处理不确定性、又不被像素细节拖累、还能服务层级规划的世界模型？** 挑战有三点。第一，高维输入下未来往往多模态，模型不能只输出平均结果。第二，如果 latent variable 容量不受限，它会把目标信息偷带过去，造成能量坍缩。第三，短期低层预测和长期高层规划需要不同抽象粒度，单层表示很难同时满足。
+
+这个问题有价值，因为世界模型最终要服务行动，而行动需要预测“对目标有用的未来状态”，不是重建所有不可控细节。H-JEPA 试图给出一个从 self-supervised representation learning 到 planning 的中间理论桥梁。
+
+### Finding
+
+作者的 finding 是：**世界模型应当在 joint embedding space 中预测可规划的抽象状态，并用 energy + latent variables 表达兼容性和多种可能未来，而不是直接生成高维观测。** 这个洞见把“预测未来”从像素空间转移到表示空间，也把 uncertainty 从单一分布预测转移到 latent variable inference。
+
+这个 finding 能解决挑战：表示空间可以丢掉无关细节，减少生成负担；energy function 可以给多个合理未来低能量，而不是强迫模型选一个平均未来；latent variable 可以表示姿态、光照、遮挡、他人意图等 \(x\) 中不可见但影响 \(y\) 的因素；层级 JEPA 则让低层处理短期局部变化，高层处理长期抽象计划。
+
+### 方法
+
+论文先介绍 EBM：模型学习能量函数 \(F(x,y)\)，兼容的输入输出对能量低，不兼容的能量高；推理时寻找低能量 \(y\)。再加入 latent variable \(z\)，用 \(E(x,y,z)\) 表达同一 \(x,y\) 关系中的隐藏解释因素，并通过对 \(z\) 最小化或边缘化得到有效能量。训练时关键不是只降低真实样本能量，而是塑造能量景观，避免所有输出都低能量。
+
+JEPA 部分把输入 \(x\) 和目标 \(y\) 编码成 embeddings，predictor 根据 \(x\) 的表示和 latent variable 预测 \(y\) 的表示，用表示距离作为能量。H-JEPA 进一步把这种预测结构做成层级：不同层级的 representations 对应不同抽象粒度和时间尺度，低层捕捉局部感知，高层支持更长 horizon 的 planning。论文把它放进 perception-world model-actor-cost-critic 的自主智能架构中。
+
+### 结论
+
+这篇文章没有给出一个训练完成的 H-JEPA benchmark，而是给出概念推导和设计约束。它的结论是：为 autonomous machine intelligence 构造世界模型时，EBM、latent variables、JEPA 和 hierarchy 可以共同处理三个问题：高维连续预测中的不确定性、生成式模型的信息冗余、以及长时规划需要的抽象层级。
+
+需要额外说明的是，H-JEPA 作为论文中的方向并不等于已有可部署 agent。它还缺少具体可复现训练 recipe、动作/reward/done 闭环实验和大规模规划评估。它对世界模型专题的价值是定义了另一种“预测表征而非像素”的范式，并提醒我们世界模型的状态空间应当围绕可预测、可规划、可压缩的信息组织。
+
+### 关键术语
+
+- **Energy-Based Model, EBM（能量模型）**：用能量函数表示输入输出是否兼容，低能量表示合理，高能量表示不合理。
+- **Latent Variable（潜变量）**：表示输入中未直接观察到、但影响输出预测的隐藏因素，如姿态、光照、意图或多种未来选择。
+- **Joint-Embedding Predictive Architecture, JEPA（联合嵌入预测架构）**：在表示空间预测目标 embedding，而不是直接重建原始观测。
+- **Hierarchical JEPA, H-JEPA（层级 JEPA）**：在多个抽象层级和时间尺度上做 JEPA 式预测的世界模型设想。
+- **Energy Collapse（能量坍缩）**：模型把所有输出都赋予低能量，导致能量函数失去区分能力的问题。
+- **Perception-Planning-Action Cycle（感知-规划-行动循环）**：感知估计当前状态，世界模型预测未来，actor 搜索动作，cost/critic 评估未来的闭环结构。
+
 这篇文章不是一篇“训练出某个 H-JEPA 模型并刷榜”的论文。它更像一篇把 LeCun 世界模型路线讲清楚的教学型论文：先解释为什么高维连续世界不适合只靠显式概率建模，再引入 `energy-based model`、`latent variable`、`JEPA` 和最终的 `H-JEPA`。
 
 放在世界模型专题里，它的价值是补上一个关键问题：**如果世界模型不直接生成未来像素，而是在表征空间里预测未来状态，训练时到底要约束什么，为什么会坍缩，以及为什么需要层级结构。**

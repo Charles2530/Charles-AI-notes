@@ -15,9 +15,37 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/Wan-Video/Wan2.2](https://github.com/Wan-Video/Wan2.2)；项目页：[huggingface.co/Wan-AI](https://huggingface.co/Wan-AI)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.20314)；[GitHub API / repo](https://github.com/Wan-Video/Wan2.2)；[官方 / 项目材料](https://huggingface.co/Wan-AI)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-Wan 这篇技术报告值得精读，不只是因为它把开源视频生成模型的效果往前推了一步，更因为它把**视频基础模型从数据、VAE、DiT、Flow Matching、分布式训练、后训练、评测和推理优化**完整摊开了。很多视频扩散论文只讲一个模块，Wan 更像一份系统设计说明：为什么要先训视频 VAE，为什么 DiT 要用 full spatio-temporal attention，为什么速度预测适合视频 latent，为什么 14B 视频模型必须把 Context Parallel、FSDP、offloading 和 cache 一起考虑。
+## 原论文故事线
 
-如果把 Wan2.1 看作开源视频 foundation model 的基线，Wan2.2 则是它后续工程演进的一次明显升级。用户补充说 Wan2.2 没有单独论文，这一点需要在阅读时区分清楚：**本页前半部分以 Wan2.1 论文为主，后半部分把 Wan2.2 官方 README 的介绍作为补充资料**，不把 README 内容说成论文结论。
+### 研究背景
+
+原论文是一份大规模开源视频生成系统报告。视频生成相比图像生成多了时间一致性、镜头运动、长序列注意力、视频压缩和多条件接口等问题；同时，闭源模型已经展示出高质量 T2V / I2V 能力，开源社区缺少一套从数据到训练系统再到评测的完整基线。Wan 的背景不是单个模块创新，而是把视频 foundation model 的全链路做成可复用系统。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何训练一个开放、强能力、可扩展的视频生成底座。挑战很分散但彼此耦合：视频数据要过滤质量、运动和文本；VAE 要压缩长视频 latent 又不能破坏时序细节；DiT 要在空间和时间上建模长 token 序列；Flow Matching 要稳定训练速度场；14B 级模型需要 Context Parallelism、FSDP、offloading 等系统策略；评测还不能只看 FVD/FID，而要覆盖动态质量、画质、文字、指令跟随和人类偏好。这个问题的价值在于，后续 CausVid、AnyFlow、Phased DMD 等少步蒸馏都需要强视频 teacher。
+
+### Finding
+
+Wan 的 finding 是：视频模型能力不是单靠更大 DiT 得到的，而是数据、视频 VAE、全时空注意力、flow matching 目标、分阶段训练和推理优化共同对齐的结果。这个观点把“视频生成差”从单点模型问题翻转成系统接口问题：如果 VAE 压缩不稳，DiT 再大也学不到细运动；如果数据 caption 和过滤不对，指令跟随会弱；如果训练并行和显存策略不对，14B 模型无法实际训练；如果评测只看单一指标，就会掩盖运动和文本能力的失败。
+
+### 方法
+
+方法链路从数据开始：构造大规模图像/视频数据，使用质量、运动、文本等过滤和 dense captioning；训练 Wan-VAE 把视频压到 latent space；在 latent video 上训练 full spatio-temporal Video DiT，用 Flow Matching / velocity prediction 学习从噪声到视频 latent 的速度场；再用图像预训练、视频预训练、后训练和多任务扩展支撑 T2V、I2V、编辑、视频到音频等接口。系统层面，论文报告 2D Context Parallelism、FSDP、offloading、checkpoint、cache、FP8 / 8-bit attention 等训练和推理优化。
+
+### 结论
+
+实验围绕开源视频底座能力展开。论文用 Wan-Bench、人类评测和公开 benchmark 对比开源/闭源模型，展示 Wan 在 T2V、I2V、视觉文字、大幅运动和视频编辑等方向的总体表现；消融和系统分析说明 VAE、数据阶段、模型规模、训练配方、并行策略与推理优化都影响最终质量和可用性。需要注意的是，本页如果讨论 Wan2.2，只能把它当官方 README / release 路线补充，不应写成 Wan2.1 论文实验结论。
+
+### 关键术语
+
+- **Video VAE（视频变分自编码器）**：把视频压缩成 latent token 的编码器/解码器，决定生成模型的压缩率和时序保真上限
+- **Video DiT（视频 Diffusion Transformer）**：在视频 latent token 上做空间-时间联合建模的 Transformer
+- **Flow Matching（流匹配）**：训练模型预测从噪声到数据的连续速度场，而不是离散去噪残差
+- **Context Parallelism（上下文并行）**：把长视频 token 序列沿上下文维度切分到多设备，以支撑大规模训练
+- **Wan-Bench（Wan 评测集）**：论文用于覆盖视频质量、动态、文本和指令跟随等维度的评测设计
+
+如果把 Wan2.1 看作开源视频 foundation model 的基线，Wan2.2 则是它后续工程演进的一次明显升级。用户补充说 Wan2.2 没有单独论文，这一点需要在阅读时区分清楚：**本页后半部分把 Wan2.2 官方 README 的介绍作为补充资料**，不把 README 内容说成 Wan2.1 论文结论。
 
 ![Wan comparison results](../../assets/images/paper-deep-dives/diffusion/wan/figure-1-results.png){ width="920" }
 

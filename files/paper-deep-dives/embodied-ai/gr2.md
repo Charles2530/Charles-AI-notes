@@ -16,6 +16,47 @@ paper_topic: 具身智能 / VLA
     **GitHub / 项目：** GitHub：[github.com/mees/calvin](https://github.com/mees/calvin)；项目页：[gr2-manipulation.github.io/](https://gr2-manipulation.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2410.06158)；[GitHub API / repo](https://github.com/mees/calvin)；[官方 / 项目材料](https://gr2-manipulation.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+GR-2 处在机器人 manipulation、视频生成预训练和 VLA 模型的交汇处。通用机器人策略需要大量任务、物体和环境覆盖，但真实机器人数据采集成本高、速度慢、规模受限。与此同时，公开视频里有大量人和物体互动的动态过程：打开、拿起、放入、推拉、旋转、整理。这些视频没有机器人动作标签，却包含了世界如何变化的视觉知识。
+
+已有 foundation model 范式说明，大模型先在大规模通用数据上预训练，再在下游任务上微调，可以获得更强泛化。GR-2 把这个范式搬到机器人操作：先用 Internet videos 训练一个会预测未来视频的 generative model，再用机器人轨迹把这种动态先验绑定到 action prediction。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何利用 web-scale video knowledge 改善真实机器人多任务操作和未见场景泛化。** 难点在于公开视频和机器人数据之间有结构性缺口：公开视频没有机器人末端动作、关节状态和夹爪控制；机器人数据通常是多视角、带状态和动作的低频轨迹；人类手部操作与机械臂动作空间并不一致。
+
+这个问题的价值在于突破机器人数据瓶颈。如果视频预训练只学到语义外观，帮助有限；如果它能学到物体状态变化和操作动态，再通过少量机器人数据对齐动作，那么 generalist manipulation agent 就能更快扩展到新任务和新环境。
+
+### Finding
+
+作者的 finding 是：**公开视频中的未来视频预测可以为机器人策略提供世界动态先验；机器人微调阶段只要同时保留 video generation 和 action prediction，就能把这种动态先验转成可执行操作。** 这个洞见把 web video 从“没有动作标签所以不能用于控制”的数据，翻转成“虽然没有动作，但有未来状态变化”的预训练资源。
+
+这个 finding 能解决挑战，是因为机器人动作学习真正需要的不是复制人手动作，而是理解“某种操作会让物体状态如何改变”。GR-2 先通过大规模 video token prediction 学会这类变化，再在机器人轨迹中学习产生这些变化的动作。视频输出在微调阶段不是附属可视化，而是让模型继续保持动态想象的约束。
+
+### 方法
+
+GR-2 使用 generative video-language-action model。预训练阶段，模型在约 38M video clips、超过 50B tokens 的公开视频上学习未来视频生成。数据包含 HowTo100M、Ego4D、Something-Something V2、EPIC-KITCHENS、Kinetics-700 等，并经过 hand filtering、recaptioning 等处理以更贴近操作动态。图像通过 VQGAN 压成离散 visual tokens，Transformer 像语言建模一样预测未来视频 token。
+
+机器人微调阶段，GR-2 输入 tokenized language instruction、多视角图像序列、机器人状态等，输出未来视频 token 和未来 action trajectory。训练目标同时包含 video prediction loss 和 action prediction loss。多视角机器人数据与单视角 web video 的差异通过模型输入设计处理，使 GR-2 可以从单视角公开视频迁移到真实机器人多视角操作。
+
+### 结论
+
+实验显示 GR-2 在 100 多个真实机器人 manipulation 任务上达到 97.7% 平均成功率，并在 unseen backgrounds、unseen environments、unseen objects 和 unseen manipulation 等设置中表现出较强泛化。论文还展示了 bin-picking over 100 objects 的端到端能力，并观察到模型生成的视频与同时预测的动作之间存在强相关，支持“未来视频约束动作”的设定。
+
+消融和 scaling 结果表明，web-scale video pretraining、模型规模和联合 video-action fine-tuning 都对性能有贡献。边界是 GR-2 仍以 imitation learning 为主，对失败恢复、长时闭环鲁棒性和复杂接触物理仍有限；公开视频动态知识需要机器人轨迹对齐后才能变成可执行动作，不能直接把人类视频当作机器人控制标签。
+
+### 关键术语
+
+- **Generative Video-Language-Action Model（生成式视频-语言-动作模型）**：同时建模语言条件、未来视频和机器人动作的策略模型。
+- **Web-Scale Video Pretraining（网页规模视频预训练）**：在大规模公开视频上学习未来视频预测，以获得世界动态先验。
+- **Visual Tokens（视觉离散 token）**：由 VQGAN 将图像压缩得到的离散表示，便于 Transformer 预测。
+- **Robot Trajectory Fine-Tuning（机器人轨迹微调）**：用带动作和状态的机器人数据把视频动态先验对齐到动作输出。
+- **Action Trajectory（动作轨迹）**：未来一段连续机器人控制量，而不是单步动作。
+- **Unseen Manipulation（未见操作泛化）**：测试中出现训练机器人数据未覆盖的新操作或任务组合。
+
 GR-2 这篇论文的核心问题是：**机器人数据很贵，但公开视频里有大量人和物体互动的动态知识，这些视频能不能帮助机器人学操作？**
 
 它的答案不是把公开视频直接当机器人 demonstration。公开视频没有机器人动作标签，也没有末端位姿，更没有夹爪状态。GR-2 的路线是：先用大规模视频预训练学“接下来会发生什么”，再用机器人轨迹微调，让模型同时预测未来视频和动作轨迹。视频预训练学世界动态，机器人微调把动态知识接到可执行动作上。

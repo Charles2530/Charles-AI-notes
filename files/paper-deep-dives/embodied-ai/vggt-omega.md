@@ -15,6 +15,47 @@ paper_topic: 具身智能 / 3D 几何表征
     **GitHub / 项目：** GitHub：[facebookresearch/vggt-omega](https://github.com/facebookresearch/vggt-omega)；Demo / Model：[Hugging Face demo](https://huggingface.co/spaces/facebook/vggt-omega-demo)、[model page](https://huggingface.co/facebook/VGGT-Omega-1B-512)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.15195)、[项目页](https://vggt-omega.github.io/)、[官方 GitHub](https://github.com/facebookresearch/vggt-omega)；Checked Date：2026-06-20；Repro Status：Paper / official materials / official code reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+VGGT-Ω 接在 VGGT 和 feed-forward reconstruction 路线之后。VGGT 已经证明，多视角图像可以通过一次前向预测 camera、depth、point map 和 tracks，并在一些场景中接近传统 SfM/MVS。与此同时，这类模型学到的 tokens 开始被用于其他任务，说明 reconstruction 可能是学习 spatial understanding 的 proxy task。
+
+但 3D computer vision 中，scale 的作用还没有像语言模型和 VLM 那样被系统验证。原 VGGT 的多 dense heads、高分辨率卷积层和全局 attention 成本高，难以扩到更大模型、更多监督数据和海量无标注视频。VGGT-Ω 的背景问题是：如果几何重建要成为 foundation-style spatial representation，训练配方必须能 scale。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何让 feed-forward reconstruction 在模型规模、数据规模、静态/动态场景和下游空间表征上继续扩展。** 难点包括显存成本、监督数据质量、动态场景标注、无标注视频利用，以及如何把重建模型的内部表示给 VLA 或语言对齐使用。
+
+这个问题有价值，因为机器人和世界模型需要的不只是一次重建结果，还需要可复用的 geometry-aware features。若重建训练能稳定随数据和参数改善，并产生可迁移 scene tokens，它就可以成为具身智能的空间预训练任务。
+
+### Finding
+
+作者的 finding 是：**3D reconstruction model 的质量会随模型和数据规模可预测地提升；为了让这种 scaling 发生，需要把昂贵 dense multi-head 训练改成更轻的 single dense head + multi-task supervision，并用 scene registers 聚合跨帧几何信息。** 这个洞见把“几何重建只是传统优化任务”翻转成“可扩展空间表示学习任务”。
+
+这个 finding 能解决挑战，是因为它同时处理了 scale 的两个瓶颈。单 dense prediction head 和移除高分辨率卷积层降低显存，使模型能吃更多监督数据；scene registers 和 register attention 把跨帧信息交换压缩到少量全局 token，降低全局 attention 成本，并自然形成可给 VLA 使用的 compact scene representation。
+
+### 方法
+
+VGGT-Ω 简化了 VGGT 架构：部署输出主要保留 camera 和 depth，point map / matching 等不再作为昂贵 dense heads 直接输出，而是作为训练时多任务监督。模型使用 DINOv3 初始化，加入 camera token 和 16 个 scene registers；部分 global attention 被 register attention 替换，让 inter-frame information exchange 主要通过 registers 发生。Depth head 采用 MLP + pixel shuffle，降低高分辨率卷积成本。
+
+训练数据包括 supervised 和 self-supervised 两部分：论文使用 15 倍于 prior work 的监督数据，并从大规模无标注视频中筛选高质量自监督/伪标注数据；还引入支持动态场景的数据 annotation pipeline。训练过程包含约 160K supervised、50K self-supervised、30K supervised 的三阶段配方，并在 3M supervised sequences 与 40M videos 中构造训练信号。
+
+### 结论
+
+实验首先展示 scaling：模型从 0.2B 到 10B、数据从 2K 到 2M sequences 时，3D point error 稳定下降。重建结果上，VGGT-Ω 在静态和动态场景多个 benchmark 上取得强表现，例如 Sintel camera estimation accuracy 相比此前最佳提升 77%。效率上，训练时仅使用约原 VGGT 30% GPU memory，使更大模型和更多数据成为可能。
+
+更重要的结论是 representation reuse：论文显示 learned scene registers 可以改善 VLA，并支持与语言对齐。例如冻结 VGGT-Ω scene tokens 接入 OpenVLA-OFT 后，LIBERO 平均成功率从 97.1 提到 98.5。边界是，这不代表模型会直接输出机器人动作或解决接触动力学；它说明 reconstruction token 可以作为空间理解特征服务下游策略。
+
+### 关键术语
+
+- **Feed-Forward Reconstruction（前向重建）**：一次神经网络前向直接输出相机和几何结果的重建范式。
+- **Scene Registers（场景寄存器 token）**：用于聚合全局场景信息的少量 learnable tokens，可作为 compact spatial representation。
+- **Register Attention（寄存器注意力）**：限制跨帧信息主要通过 registers 交换的 attention 机制，以降低全局成本。
+- **Geometry-Aware Features（几何感知特征）**：包含深度、视角、遮挡、跨视角对应等空间信息的视觉特征。
+- **Proxy Task（代理任务）**：用重建等任务作为训练目标，学习可迁移到其他任务的表征。
+- **Self-Supervised Reconstruction（自监督重建）**：从无标注视频中构造几何训练信号，而不完全依赖人工或传统管线标签。
+
 VGGT-Ω 适合接在 [VGGT](vggt.md)、[Depth Anything 3](depth-anything-3.md) 和 [MapAnything](mapanything.md) 后面读。它不是把原 VGGT 简单做大，而是回答一个更有工程味的问题：**如果 feed-forward reconstruction 要继续 scale，模型、数据、loss 和 attention 都要怎么改，才能把几何重建变成可复用的空间表征？**
 
 原 VGGT 的核心是一次前向输出 camera、depth、point map 和 tracks。VGGT-Ω 做了一个看似保守、实则关键的减法：部署输出只保留 camera 和 depth，point map / matching 不再作为昂贵 dense head 直接预测，而是变成训练时的监督信号。再加上 scene registers 和 register attention，模型把跨帧几何信息压到少量全局 token 里。这件事对具身智能有直接意义：机器人策略不一定要吃完整点云，但需要一个稳定、可迁移、可接到 VLA 的空间状态接口。

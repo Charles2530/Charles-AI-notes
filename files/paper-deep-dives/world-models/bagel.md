@@ -19,6 +19,47 @@ paper_topic: 世界模型
 | --- | --- | --- |
 | 2026-06-02 | Author code / checkpoints reported | 以 arXiv HTML、项目页与论文图表为主；future frame prediction、3D manipulation、world navigation 按论文 qualitative/demo evidence 解读。 |
 
+## 原论文故事线
+
+### 研究背景
+
+BAGEL 属于统一多模态预训练路线。这个领域想解决的是：语言理解、视觉理解、图像生成、视频生成、图像编辑和交错上下文推理，能不能由一个统一模型承载，而不是由 VLM、diffusion generator、captioner、editor 等多个系统通过短接口拼接。传统路线常把视觉理解和视觉生成分开：VLM 负责读图和推理，外部 diffusion model 负责生成图像，中间只传少量 condition token 或 prompt。这样工程上可行，但会压缩上下文里的空间关系、前后文、编辑意图和视频动态。
+
+BAGEL 的论文把这个问题放到 world modeling 语境里看。世界模型不只是会生成一张图，而是要在同一上下文里处理文本、图像、视频帧、网页交错内容和未来视觉状态。论文因此关注 interleaved multimodal pretraining：模型训练时看到的不是孤立 image-text pair，而是混合文本、图像、视频、网页和多轮编辑/生成任务的序列。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何让理解和生成共享足够完整的多模态状态，使模型能从交错数据里学到图像编辑、未来帧预测、3D manipulation 和导航式视觉变化，而不是只做单轮 caption 或 text-to-image？** 这个问题难在两个冲突。第一，语言是离散 token prediction，视觉生成更适合连续 latent 上的 diffusion / flow objective，二者目标不同。第二，理解需要语义抽象，生成需要低层像素细节，如果把两者完全合并，训练会互相干扰；如果完全分开，又会产生信息瓶颈。
+
+这个问题的价值在于，未来的多模态模型要处理长上下文、跨图像编辑、视频变化和空间视角变化。只靠一个 VLM 读图再调用外部生成器，很难保证生成器拿到完整世界状态。
+
+### Finding
+
+作者的 finding 是：**理解和生成不应该只在系统边界处交换压缩条件，而应该在同一个 decoder-only backbone 的每一层通过 shared multimodal self-attention 交换状态，同时用不同专家和不同目标函数分担能力冲突。** 这个洞见把“多模态统一”从接口拼接转成了“共享上下文、分工专家”的训练问题。
+
+这个 finding 解释了 BAGEL 为什么同时使用 text tokens、ViT semantic tokens、clean/noised VAE latents 和 Mixture-of-Transformer-Experts。文本和视觉生成目标可以不同，但上下文必须共享；理解专家和生成专家可以分工，但不能让生成端只看到一个短 prompt。这样，视频帧间变化、网页图文关系、编辑意图和推理轨迹就能在同一注意力上下文中形成更完整的状态。
+
+### 方法
+
+BAGEL 使用 decoder-only backbone 和 Mixture-of-Transformer-Experts。输入序列可以交错包含文本 token、语义视觉 token、干净 VAE latent 和带噪 VAE latent。文本侧用 autoregressive cross-entropy 预测下一个 token；视觉生成侧用 Rectified Flow，在连续 VAE latent 空间里预测从噪声到目标视觉 latent 的 velocity。视觉侧还使用双编码路径：ViT token 更偏语义理解，VAE latent 更偏生成和像素细节。
+
+训练数据覆盖 language、image-text、video-text、web interleaved、video interleaved 和 reasoning-augmented multimodal data。论文特别构造 video interleaved data：从视频中抽取帧，并生成描述相邻帧变化的 temporally grounded captions，用来提供运动、视角、动作和空间连续性信号。训练时使用 generalized causal attention，确保生成当前图像或视频片段时不能偷看未来目标，同时允许已经生成的 clean visual tokens 进入后续上下文。
+
+### 结论
+
+实验结论分两层。常规多模态能力上，BAGEL 在理解、生成和图像编辑任务中展示了统一模型的竞争力，说明 CE 和 flow objective 可以在一个 backbone 中共存。世界模型相关能力上，论文展示了 future frame prediction、world navigation、rotation、3D manipulation 等定性结果；这些结果说明 interleaved video/web data 和共享上下文可以让模型学到一定的视觉动态和空间变化。
+
+但论文证据边界也很清楚：这些 world modeling 能力主要是生成式和定性展示，不等于真实闭环控制中的动作因果模型。BAGEL 的贡献更准确地说，是证明统一多模态预训练可以提供更完整的状态接口，让未来帧、编辑和导航变化成为同一上下文里的生成问题。
+
+### 关键术语
+
+- **Interleaved Multimodal Pretraining（交错多模态预训练）**：把文本、图像、视频帧、网页内容和任务指令放进同一序列训练，使模型学习跨模态上下文关系。
+- **Mixture-of-Transformer-Experts（Transformer 专家混合）**：在同一 backbone 内为理解和生成分配不同专家路径，减少目标函数冲突。
+- **Rectified Flow（校正流）**：在连续视觉 latent 中学习从噪声走向目标图像的 velocity，用于高质量图像/视频生成。
+- **VAE Latent（VAE 潜变量）**：适合重建和生成的连续视觉表示，保留低层视觉细节。
+- **ViT Token（视觉 Transformer 语义 Token）**：偏语义理解的视觉表示，用来帮助模型理解对象、关系和场景内容。
+- **Generalized Causal Attention（广义因果注意力）**：针对交错图文/视频序列设计的 mask，区分已生成条件、当前生成目标和未来不可见内容。
+
 BAGEL 的价值不只是“一个能看图又能画图的模型”。它更像一篇统一多模态预训练的路线论文：用一个 decoder-only backbone 承载文本、ViT 语义 token、VAE latent 和 interleaved multimodal sequence，再观察当数据规模、交错格式和训练阶段扩大后，模型是否出现更复杂的图像编辑、未来帧预测、3D 操作和世界导航能力。
 
 先用一个小例子理解它的问题。假设上下文里有一段网页文字、两张产品图、一小段视频帧，以及一句“把桌上的杯子转到右侧视角并预测下一步画面”。传统做法往往先让 VLM 读懂内容，再把少量条件 token 交给外部 diffusion model 画图。这里的风险是：VLM 知道的空间关系、前后文和编辑意图被压进很短的接口，生成器只能拿到一个摘要。BAGEL 想验证另一种路线：如果文本 token、语义视觉 token 和连续视觉 latent 在同一个 self-attention 里逐层交换信息，理解和生成之间的信息瓶颈会不会变小。

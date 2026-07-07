@@ -15,11 +15,35 @@ paper_topic: 高效训练
     **GitHub / 项目：** GitHub：[github.com/NVIDIA/Megatron-LM](https://github.com/NVIDIA/Megatron-LM)；项目页：[docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html](https://docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1909.08053)；[GitHub API / repo](https://github.com/NVIDIA/Megatron-LM)；[官方 / 项目材料](https://docs.nvidia.com/megatron-core/developer-guide/latest/api-guide/tensor_parallel.html)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-Megatron-LM 是很多后续大模型训练栈的起点之一。它讨论的问题非常朴素：当 Transformer 参数、激活和 Adam optimizer state 已经放不进单卡时，能不能不引入复杂 compiler，也不依赖 pipeline bubble，把一个 Transformer layer 内部的 GEMM 切到多张 GPU 上训练？
+## 原论文故事线
 
-它的答案就是后来被大家称作 **tensor parallelism** 的方案：在 MLP、attention 和词表 logits 上按张量维度切分，让每个 GPU 只持有一部分权重和计算，并把通信压缩到少数几个 `all-reduce`。论文用这个方法在 512 张 V100 上训练 8.3B GPT-2-like 模型和 3.9B BERT-like 模型，展示了模型并行和数据并行可以组合成可训练的大模型系统。
+### 研究背景
 
-先用一个最小例子抓住 TP 的本质。假设输入 hidden state 是 \(X\in\mathbb{R}^{B\times S\times H}\)，MLP 第一层权重是 \(A\in\mathbb{R}^{H\times 4H}\)。如果 TP size 是 2，把 \(A\) 按输出维切成 \(A_1,A_2\in\mathbb{R}^{H\times 2H}\)，两张 GPU 都拿到同一个 \(X\)，各自算 \(X A_1\) 和 \(X A_2\)。这一步没有 partial sum，所以可以在本地直接过 GeLU。第二层权重再按输入维切，让每张 GPU 吃自己的 GeLU shard，最后只在 MLP 输出处 all-reduce 一次。Megatron-LM 的核心就是把同步点放在 residual 需要完整 hidden state 的边界，而不是放在每个 GEMM 中间。
+Megatron-LM 原论文处在 Transformer 参数规模快速增长的时期。数据并行可以复制模型、切 batch，但每张 GPU 仍要放完整参数、梯度和 optimizer states；单卡显存和单卡算力限制了 GPT / BERT 类模型继续放大。已有模型并行方案要么通信频繁，要么需要复杂 pipeline。论文要在 Transformer 层内部找到一种简单、可组合、通信较少的切分方式。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何在多 GPU 上训练单卡放不下的 multi-billion parameter Transformer，同时保持高吞吐。挑战在于 Transformer 的 MLP、attention、vocabulary logits 都是大 GEMM，切错维度会在每个算子之间产生 all-gather / all-reduce；通信过多会吞掉并行收益。这个问题有价值，因为它直接决定 GPT-2-like、BERT-like 模型能否从十亿参数推进到数十亿参数训练。
+
+### Finding
+
+Megatron-LM 的 finding 是：Transformer layer 的 GEMM 可以按“先 column-parallel、再 row-parallel”的方式切，让非线性函数留在本地，只在 residual 需要完整 hidden state 的边界同步。这个 insight 把模型并行从“任意切矩阵”变成结构化张量并行：MLP 的第一层按输出维切，GeLU 本地执行，第二层按输入维切并在输出处 all-reduce；attention 按 heads 切 Q/K/V，也能在 head 内本地计算。这样通信点少而规则，可与数据并行组合。
+
+### 方法
+
+方法在 Transformer 关键模块上定义 tensor model parallelism。MLP 使用 column-parallel linear + row-parallel linear；self-attention 将 heads 分到不同 GPU，最后 output projection 再做必要通信；词表 logits 和 cross entropy 也做并行化，避免巨大 vocabulary all-gather。训练系统把 tensor parallel 与 data parallel 组合，并处理随机数、layer norm、dropout、optimizer 和通信实现。输入是大 Transformer 配置和 GPU mesh，输出是按张量维度分片训练的 GPT / BERT 模型。
+
+### 结论
+
+论文在 512 张 V100 上训练 8.3B GPT-2-like 和 3.9B BERT-like 模型，报告模型并行与数据并行组合下的 scaling、吞吐和验证困惑度 / 下游表现。结果说明，结构化 tensor parallel 可以在较少通信点下训练单卡放不下的模型，并保持较高硬件利用。边界是它主要解决层内参数和计算切分，后续更大模型还需要 pipeline parallel、ZeRO / FSDP、activation checkpoint、序列并行等机制一起配合。
+
+### 关键术语
+
+- **Tensor Parallelism（张量并行）**：把单个层的权重和计算按张量维度切到多 GPU
+- **Column Parallel Linear（列并行线性层）**：按输出维切分权重矩阵，各 GPU 产生不同输出 shard
+- **Row Parallel Linear（行并行线性层）**：按输入维切分权重矩阵，各 GPU 计算 partial sum 后规约
+- **All-Reduce（全规约）**：把多 GPU 上的 partial result 求和并同步给所有参与者
+- **Vocabulary Parallelism（词表并行）**：把输出词表 logits 分片计算，降低大词表输出层通信
 
 ## 它的效率贡献是什么
 

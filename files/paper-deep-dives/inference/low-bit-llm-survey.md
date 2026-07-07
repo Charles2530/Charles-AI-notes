@@ -15,7 +15,35 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2409.16694)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇综述的价值不是提出一个新算法，而是把低比特 LLM 拆成了三层：**基础格式、系统实现、训练与推理算法**。读它时不要只问“INT4 / FP8 哪个更好”，而要问一个更工程的问题：量化到底省的是权重、激活、KV cache、带宽、通信，还是训练 optimizer state？
+## 原论文故事线
+
+### 研究背景
+
+原论文是一篇低比特大语言模型综述。LLM 的训练和推理成本主要受显存容量、内存带宽、通信、矩阵乘法 kernel 和 KV cache 影响；低比特方法用 INT8、INT4、FP8、NF4 等格式降低表示成本。但这个领域很容易被简化成“把权重压到几 bit”，忽略硬件指令、scale 粒度、activation outlier、dequant 路径和 runtime 是否真正支持。
+
+### 问题（Challenge）
+
+综述要解决的问题是给 low-bit LLM 建立一张从格式到系统再到算法的地图。挑战在于低比特不是单一技术：权重量化、激活量化、KV cache 量化、低比特训练、PTQ、QAT、PEFT、kernel packing、混合精度和硬件后端都互相影响。一个方法论文报告困惑度不掉，不代表部署时更快；一个 checkpoint 变小，也不代表解码阶段 memory bandwidth 或 Q/DQ 开销下降。
+
+### Finding
+
+这篇综述的核心观点是：低比特 LLM 的成败取决于“数值格式、算法误差修正、系统实现、硬件执行”四层是否对齐。它把世界从“bit 越低越好”翻转为“低比特收益必须落到具体瓶颈”：权重省显存，activation 影响吞吐，KV cache 影响长上下文并发，optimizer state 影响训练，kernel 和 packing 决定理论压缩能否兑现成 wall-clock speedup。
+
+### 方法
+
+作为 survey，论文先梳理低比特数值格式与量化粒度，再按系统对象拆分：weight-only quantization、weight-activation quantization、KV cache quantization、FP8 / INT8 training、QLoRA / 量化微调、推理 kernel 和 serving 框架。它总结代表性方法如何处理 outlier、scale / zero-point、group-wise quantization、calibration、rounding、dequant fusion 和 hardware-aware deployment，并把算法指标与系统成本放在同一张分类表里。
+
+### 结论
+
+论文的结论不是给出唯一最佳量化方案，而是给出判断框架。PTQ 方法适合快速压缩权重，但低 bit 下更依赖校准和 outlier 处理；QAT 更稳但训练成本更高；FP8 更适合训练和高端硬件支持场景；INT4 / weight-only 在 decode memory-bound 场景收益明显，但 prefill 或小 batch 下收益取决于 kernel；KV cache quantization 对长上下文并发关键。额外补充是：量化误差、硬件支持和服务流量形态必须一起评估，不能只看平均 benchmark。
+
+### 关键术语
+
+- **PTQ（Post-Training Quantization，训练后量化）**：不重新完整训练模型，利用校准或小规模优化压缩已有权重
+- **QAT（Quantization-Aware Training，量化感知训练）**：训练阶段模拟低比特误差，使模型适应目标量化格式
+- **Weight-only Quantization（仅权重量化）**：只压缩模型权重，activation 通常保持较高精度
+- **KV Cache Quantization（KV 缓存量化）**：压缩自回归推理中保存的 key/value，以降低长上下文显存和带宽
+- **Dequantization（反量化）**：低比特值参与计算前转换回较高精度的过程，可能成为隐藏开销
 
 ## 它的效率贡献是什么
 

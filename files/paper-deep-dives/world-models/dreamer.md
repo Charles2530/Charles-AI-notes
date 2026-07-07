@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/danijar/dreamer](https://github.com/danijar/dreamer)；项目页：[danijar.com/project/dreamer/](https://danijar.com/project/dreamer/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1912.01603)；[GitHub API / repo](https://github.com/danijar/dreamer)；[官方 / 项目材料](https://danijar.com/project/dreamer/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Dreamer 接在 PlaNet 之后，属于 model-based reinforcement learning from pixels。这个领域的目标是：真实环境交互很贵时，能不能先从少量像素轨迹里学一个 world model，再在模型内部训练或规划，从而减少真实试错。PlaNet 已经证明可以从图像学 RSSM latent dynamics，然后用 CEM 在 latent space 在线规划动作。
+
+Dreamer 改变的是控制接口。它不希望每个环境步都重新搜索动作序列，而是把在 world model 里“想象未来”的结果转化成 actor-critic 的训练信号。这样，策略执行时只需前向 actor，训练时则可以在 latent imagination 里生成大量虚拟 rollout。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何让策略从 learned latent dynamics 中直接学习行为，而不是每次决策都依赖昂贵的在线规划？** 这个问题难在，world model 的 rollout 不是环境真值。如果 actor 在想象轨迹里学习，它可能利用模型错误；如果只用真实环境训练，又失去 model-based RL 的样本效率。另一个困难是像素观测本身是部分可观测的，模型必须把历史、动作和当前观测压成可预测、可控制的 latent state。
+
+这个问题的价值在于，它把 model-based RL 从“学模型后做在线搜索”推进到“学模型后训练可部署策略”。这对真实控制任务更重要，因为执行时不能每一步都花大量计算做 CEM。
+
+### Finding
+
+作者的 finding 是：**世界模型最有价值的地方不是生成逼真的未来视频，而是提供一个可微的 latent imagination 空间，让 actor 和 critic 在其中优化长期回报。** 这个洞见把世界模型从“环境模拟器”重新定位为“策略学习的内部训练场”。
+
+这个 finding 解释了 Dreamer 的结构：posterior 负责用真实观测校正当前 state，prior 负责在没有新观测时向未来 rollout；reward、value 和 continuation head 让 imagined state 直接服务回报估计；actor 的梯度可以通过 imagined trajectories 更新，而不需要把未来图像解码出来再学习。
+
+### 方法
+
+Dreamer 使用 Recurrent State-Space Model。输入是真实交互轨迹中的 observation、action、reward 和 continuation；encoder 把像素观测映射到 latent，RSSM 维护 deterministic hidden state 和 stochastic state。训练 world model 时，posterior 可以看到当前观测，prior 只能根据历史和动作预测 latent；loss 包括观测重建、reward prediction、discount/continuation prediction 和 KL regularization。
+
+行为学习时，Dreamer 从 replay 中的 posterior state 出发，不再读取未来真实图像。actor 根据 latent state 采样动作，RSSM prior 产生下一 latent state，reward head 给出 imagined reward，value head 估计后续回报。critic 用 lambda-return 学 value，actor 则最大化 imagined return。训练循环是在真实环境收集数据、更新 world model、在 latent imagination 中更新 actor-critic，然后再回真实环境采样。
+
+### 结论
+
+实验显示，Dreamer 在多个基于像素的连续控制任务上比纯 model-free 方法更省样本，并且相比 PlaNet 的在线 CEM planning，摊销成 actor 后执行更快。论文还通过组件实验说明，RSSM 的 posterior/prior 分工、reward/value heads 和 imagination horizon 对最终控制性能都很关键。
+
+需要注意的是，Dreamer 的证据来自模拟连续控制，不能直接等同于开放世界视频生成或真实机器人部署。它的结论更具体：只要 latent dynamics 对奖励和可控未来足够准确，策略可以在想象出的 latent trajectories 中学习，而不必在像素空间预测每一个未来画面。
+
+### 关键术语
+
+- **Latent Imagination（潜空间想象）**：从真实编码状态出发，用 world model 的 prior 生成未来 latent rollout，供 actor-critic 学习。
+- **Recurrent State-Space Model, RSSM（循环状态空间模型）**：结合 deterministic hidden state 和 stochastic latent state 的时序模型，用于处理部分可观测像素环境。
+- **Posterior（后验状态）**：训练时看到当前观测后得到的 latent state，负责校正真实当前状态。
+- **Prior（先验状态）**：不看未来观测、仅根据历史和动作预测的 latent state，是想象 rollout 的核心。
+- **Lambda-return（λ 回报）**：把多步 imagined rewards 和 value bootstrap 结合起来训练 critic 的回报估计。
+- **Actor-Critic（演员-评论家）**：actor 选动作，critic 估计 value；Dreamer 在 world model 想象轨迹中训练二者。
+
 Dreamer 要回答的问题不是“能不能生成未来视频”，而是：如果真实环境交互很贵，能不能先从少量真实 episode 学一个 latent world model，再让策略在这个模型想象出的轨迹里学习控制？这篇论文的关键贡献是把四件事接成一条闭环训练链：从像素历史得到 belief state，在 latent space 预测未来，用 reward/value 估计 imagined return，再把这个 return 变成 actor 的更新信号。
 
 把 Dreamer 读成一句话就是：**posterior 用真实观测校正现在，prior 在没有新观测时想象未来，actor/value 不在像素上学，而在 imagined latent rollout 上学。**

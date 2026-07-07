@@ -19,6 +19,47 @@ paper_topic: 世界模型
 | --- | --- | --- |
 | 2026-06-02 | Author code / model release reported | 以 arXiv HTML、官方仓库与论文图表为主；world exploration、long-horizon generation、embodied manipulation 按生成式 next-state evidence 解读。 |
 
+## 原论文故事线
+
+### 研究背景
+
+Emu3.5 属于 native multimodal autoregressive model 路线。这个方向的核心想法是把文本、图像和视频都离散成 token，用同一个 decoder-only Transformer 做 next-token prediction，而不是为理解、图像生成、视频生成和编辑分别搭不同系统。Emu3 先提出“next-token prediction is all you need”的原生多模态路线，Emu3.5 进一步把它扩展到更长视频、世界探索和具身操控式关键帧生成。
+
+从世界模型角度看，论文关心的不只是图像质量，而是“下一状态预测”：给定一段视觉-语言历史、探索指令或子任务描述，模型能否生成后续视觉状态、文字观察和关键步骤。它把长视频帧、transcript、instruction、subtask、keyframe 等都放进 interleaved vision-language sequence，让模型在统一 token 空间里学习世界状态如何继续发展。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**原生多模态 next-token model 能否从大规模交错视觉语言数据中学出可泛化的 world-modeling 能力，并且在视觉输出上保持可用推理效率？** 挑战有两类。能力上，模型要同时覆盖 any-to-image、image editing、long-horizon generation、world exploration 和 embodied manipulation，任务格式差异很大。效率上，图像 token 数量巨大，逐 token 自回归生成一张高分辨率图像会很慢。
+
+这个问题有价值，因为如果同一模型能用统一目标处理理解、生成和状态预测，就可能成为具身 agent、交互式世界生成和多模态规划的基础模型；但如果推理太慢或只会静态生成，它就很难进入交互场景。
+
+### Finding
+
+作者的 finding 是：**把视觉和语言都视为可预测的离散状态序列时，world modeling 可以从 next-token prediction 中自然扩展出来；但视觉 token 的生成方式需要按模态改造，不能在推理阶段完全沿用文本式逐 token 解码。** 这个洞见把“统一训练目标”和“分模态推理机制”分开了。
+
+这个 finding 解释了 Emu3.5 的两条主线。训练时，统一 next-token prediction 让模型把文本、图像、视频帧和交错任务放进同一状态空间；后训练再用 world exploration、visual guidance、embodied manipulation 等任务把“预测下一视觉状态”显式化。推理时，Discrete Diffusion Adaptation 让视觉 token 从顺序生成转为并行式离散扩散，从而缓解 native AR 模型在图像生成上的速度瓶颈。
+
+### 方法
+
+Emu3.5 使用约 34B 参数的 decoder-only Transformer，文本和视觉分别有大规模词表，视觉 tokenizer 把图像离散为 visual tokens。预训练使用超过 10T 级别的多模态 token，覆盖文本、图像、视频、interleaved image-text 和长视频帧；后训练包含 large-scale SFT、多任务 RL，以及面向世界任务的数据构造。World Exploration 数据把视觉帧、文字观察和探索指令交错组织；Embodied Manipulation 数据把机器人轨迹划分为子任务和关键帧，让模型预测后续关键状态。
+
+DiDA 是推理效率的关键。它在预训练自回归模型上加入离散扩散适配：图像 token 序列先以 noisy copy 形式出现，noisy visual tokens 在同一图像内部可以双向交互，同时仍保持对前文 clean tokens 的因果依赖。这样文本生成仍保持 AR，视觉块可以并行去噪生成。论文还训练 image decoder 和 video decoder，将离散视觉 token 还原成高质量图像或连续视频。
+
+### 结论
+
+实验上，Emu3.5 在 any-to-image、text-to-image、复杂 interleaved tasks、world exploration 和 embodied manipulation 等任务上报告了强结果；论文还显示 DiDA 在保持视觉质量相近的情况下可带来显著推理加速，报告中给出最高约 20x 的 per-image 加速。world exploration 评估强调模型能按指令生成连续视角变化并保持场景一致；embodied manipulation 评估强调能按子任务生成关键状态过程。
+
+需要注意的是，这些 world-modeling 证据主要是生成式 next-state / keyframe evidence，不等同于真实机器人闭环控制。模型能生成“看起来合理的下一状态”，但不代表它具备传感器闭环、碰撞检测、低层轨迹控制或失败恢复。论文的结论更准确地说是：原生多模态 next-token model 可以成为视觉语言世界状态预测的强底座，并通过 DiDA 解决一部分交互效率问题。
+
+### 关键术语
+
+- **Native Multimodal Model（原生多模态模型）**：从训练目标上统一处理文本、图像、视频等 token 的模型，而不是外接单独视觉生成器。
+- **Next-Token Prediction, NTP（下一 Token 预测）**：给定前文 token 预测下一个 token；Emu3.5 把视觉 token 也纳入这个目标。
+- **World Exploration（世界探索）**：给定初始视觉状态和探索指令，连续生成后续视觉帧和文字观察的任务。
+- **Embodied Manipulation（具身操控生成）**：用子任务和关键帧表示操控过程，让模型预测动作过程中的关键视觉状态。
+- **Discrete Diffusion Adaptation, DiDA（离散扩散适配）**：把图像 token 生成从逐 token 自回归改成视觉块并行去噪的推理加速方法。
+- **Visual Tokenizer（视觉分词器）**：把图像或视频帧压缩成离散 token，再由 decoder 还原成视觉输出。
+
 Emu3.5 是四篇里最直接把 unified multimodal model 称为 world model 的论文。它的关键判断是：如果模型在大规模长视频帧和 transcript 交错序列上做端到端 next-token prediction，它学到的就不只是图文映射，而是跨视觉和语言的下一状态预测。
 
 先用一个交互场景理解它的野心和边界。用户给模型一张房间图片，然后连续说“向前走”“向左看”“把桌上的杯子拿起来”。Emu3.5 试图生成接下来会看到的画面、文字说明、子任务步骤和关键状态图。它确实在做一种视觉语言 next-state generation：同一段历史换一个指令，后续画面和叙述应该变。但这还不是机器人闭环控制，因为它没有真实传感器反馈、碰撞检查、低层轨迹、夹爪力控和失败恢复。

@@ -15,9 +15,35 @@ paper_topic: 技术报告 / Physical AI / 世界模型
     **GitHub / 项目：** GitHub：[github.com/NVIDIA/cosmos](https://github.com/NVIDIA/cosmos)；Cosmos-Framework：[github.com/NVIDIA/cosmos-framework](https://github.com/NVIDIA/cosmos-framework)；Hugging Face collection：[huggingface.co/collections/nvidia/cosmos3](https://huggingface.co/collections/nvidia/cosmos3)。<br>
     **元数据来源与核验口径：** 来源：官方 PDF、项目页和论文首页资源清单；Checked Date：2026-07-06；Repro Status：Paper / official code / model cards / synthetic datasets reviewed, independent reproduction not claimed。
 
-Cosmos 3 的核心不是“又一个视频生成模型”，而是 NVIDIA 把 Physical AI 所需的几类能力放进同一个技术报告里：**理解、图像/视频/音频生成、forward dynamics、inverse dynamics、robot policy 和 synthetic data generation。**
+## 原报告故事线
 
-它最值得读的地方有两个。第一，模型结构上用 Mixture-of-Transformers 把自回归理解路径和扩散生成路径拆成双塔，但又让 diffusion tokens 通过共享 attention 看到 AR context。第二，训练上不是一次混合训练完事，而是 Reasoner 先做多模态理解，Generator 再从 Reasoner 初始化，并经历 image/video/audio pre-training、action/transfer mid-training、T2I/I2V/policy post-training。
+### 研究背景
+
+Cosmos 3 技术报告面向 Physical AI：机器人、自动驾驶、具身智能和仿真系统都需要理解现实世界、预测未来、生成合成数据并把视觉世界接到动作。过去这些能力常由 VLM、视频生成器、world model、policy model 和合成数据工具分开承担。Cosmos 3 试图把多模态理解、图像/视频/音频生成、forward / inverse dynamics、robot policy 和 synthetic data generation 放进一个平台化路线。
+
+### 问题（Challenge）
+
+报告要解决的问题是：如何构建一个 omnimodal world model 平台，使 Physical AI 的感知、模拟和动作数据生成共享底座。挑战在于理解路径和生成路径目标不同：自回归模型擅长语言/多模态推理，扩散模型擅长高保真图像视频；机器人动作和物理动态又需要时序一致、因果和可控接口。这个问题有价值，因为 Physical AI 的稀缺数据、危险场景和长尾事件很难只靠真实采集覆盖。
+
+### Finding
+
+Cosmos 3 的 finding 是：Physical AI 不应把“理解模型”和“生成模型”割裂，而应让 Reasoner 和 Generator 共享上下文并分工。Mixture-of-Transformers 让自回归理解路径和扩散生成路径各自保持适合的计算形态，同时通过共享 attention / context 让 diffusion tokens 看到 AR context。这个 insight 把世界模型平台从单一视频生成器翻转为“可理解、可生成、可动作条件化、可合成数据”的统一训练设施。
+
+### 方法
+
+方法分为 Reasoner 和 Generator。Reasoner 做多模态理解、长上下文和任务推理；Generator 从 Reasoner 初始化，并进行 image / video / audio pre-training、action / transfer mid-training、T2I / I2V / policy post-training。报告还包含 synthetic data generation pipeline，用仿真和生成模型产生 Physical AI 训练数据；模型接口覆盖文本、图像、视频、音频、动作、forward dynamics、inverse dynamics 和 robot policy。输出既可以是多模态回答，也可以是视频/音频生成、未来预测或策略相关结果。
+
+### 结论
+
+报告展示 Cosmos 3 在多模态理解、图像/视频/音频生成、forward / inverse dynamics、机器人 policy、合成数据等任务上的官方评测和样例。关键结论是：统一平台能把生成式世界模拟和 Physical AI 数据引擎连接起来，尤其适合补足危险、稀有或难标注场景。边界是这类官方报告的 demo、benchmark 和模型卡不等同独立复现；真实机器人闭环安全、sim-to-real 和合成数据偏差仍要单独验证。
+
+### 关键术语
+
+- **Physical AI（物理 AI）**：面向真实物理世界感知、模拟、规划和控制的 AI 系统
+- **Omnimodal World Model（全模态世界模型）**：统一处理文本、图像、视频、音频和动作/动态的世界建模系统
+- **Mixture-of-Transformers（Transformer 混合架构）**：用不同 Transformer 路径处理理解和生成任务，并共享上下文
+- **Forward Dynamics（正向动力学）**：给定当前状态和动作预测未来状态
+- **Synthetic Data Generation（合成数据生成）**：用仿真或生成模型构造训练数据，覆盖真实采集困难场景
 
 ## 它的贡献位置
 

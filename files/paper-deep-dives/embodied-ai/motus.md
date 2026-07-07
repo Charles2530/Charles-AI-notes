@@ -15,6 +15,47 @@ paper_topic: 具身智能 / Latent Action World Model
     **GitHub / 模型：** GitHub：[thu-ml/Motus](https://github.com/thu-ml/Motus)；HF 组织：[motus-robotics](https://huggingface.co/motus-robotics)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2512.13030)、[项目页](https://motus-robotics.github.io/motus)、[GitHub](https://github.com/thu-ml/Motus)、[HF paper API](https://huggingface.co/api/papers/2512.13030)；Checked Date：2026-06-17；Repro Status：Paper / official code and checkpoints reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Motus 的背景是 embodied agent 的能力被拆成了多个孤立模型：VLA 负责看图和语言出动作，world model 负责给定动作预测未来，inverse dynamics model 负责从观测轨迹反推动作，video generation model 负责想象未来视频。真实具身智能需要这些能力在同一个系统里协同，但现有方法往往是级联或分别训练，导致数据不能共享、误差会跨模块累积，也难以利用大规模异构视频和机器人数据。
+
+另一个背景是 action data 的稀缺和不统一。互联网视频、第一视角视频和合成视频包含大量运动信息，但没有机器人动作标签；不同机器人动作空间也不同。Motus 试图用 latent action 作为中间桥梁：不直接要求所有数据都有真实控制量，而是先从视觉运动中学习可共享的“delta action”先验，再把它迁移到真实机器人动作。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何构建一个统一模型，同时支持 VLA、world model、inverse dynamics、video generation 和 video-action joint prediction，并能从大规模异构数据中预训练动作能力。** 难点在于，这五种任务的条件变量和生成变量不同：有时动作已知要生成视频，有时视频已知要生成动作，有时两者都要生成。
+
+更难的是动作预训练。语言和视觉可以在 web data 上大规模预训练，动作专家却通常只能看机器人数据。若没有可共享动作表示，模型很难从 unlabeled video 中学习“如何动”的先验；若简单级联 VGM 和 IDM，又不能形成真正统一的生成框架。
+
+### Finding
+
+作者的 finding 是：**VLA、WM、IDM、VGM 和 video-action joint prediction 可以被看成同一组视频/动作变量在不同噪声状态和条件化方式下的生成问题；而 optical flow 可以作为像素级 delta action，给动作专家提供跨数据源的 latent action 预训练信号。** 这个洞见把五个任务从孤立模块翻转成统一调度问题。
+
+这个 finding 能解决挑战，是因为 UniDiffuser-style scheduler 可以通过给视频和动作设置不同 timestep / noise level 来切换模式：视频干净、动作加噪就是 IDM；动作干净、视频加噪就是 WM；二者都加噪就是 joint prediction。Optical flow 则让没有真实动作标签的视频也能提供运动监督，使 action expert 不再只能依赖小规模机器人轨迹。
+
+### 方法
+
+Motus 使用 Mixture-of-Transformer（MoT）架构整合三个专家：Video Generation Expert、Action Expert 和 Understanding Expert。Video branch 继承预训练视频生成模型，Understanding branch 接入 VLM 视觉语言理解，Action Expert 负责真实动作或 latent action 的生成。三者通过 Tri-model Joint Attention 交换信息，但保留各自的 Transformer/FFN/normalization 结构。
+
+训练上，Motus 使用 UniDiffuser-style scheduler，为视频侧 \(\tau_v\) 和动作侧 \(\tau_a\) 分配不同 rectified flow timestep，从而统一五种 inference mode。动作预训练阶段，论文用 DPFlow / optical flow 和 DC-AE 学 latent action，把未标注视频里的像素运动压成可迁移的动作先验。整体训练 recipe 分三阶段，并组织六层数据金字塔：从 web data、egocentric video、synthetic data，到 task-agnostic robot data、multi-robot data 和 target-robot demonstrations，逐步提高动作相关性。
+
+### 结论
+
+实验显示 Motus 在仿真和真实机器人任务上优于多个强基线。论文报告在 simulation 中相对 X-VLA 提升约 15%，相对 π0.5 提升约 45%；在真实场景中提升约 11-48%。RoboTwin 等实验和 ablation 表明，三阶段训练、latent action pretraining 和统一模式调度都对性能有贡献。模型还展示了 VLA、WM、IDM、VGM 和 video-action joint prediction 的多模式推理能力。
+
+边界是，optical flow 捕捉的是视觉运动，不等同于真实控制因果和接触力；统一模型是否适合所有 embodiment、高频力控和长 horizon 任务仍需独立验证。Motus 的结论是“用 latent action 和调度器统一多种具身生成任务有明显收益”，不是“一个模型已经完全解决所有机器人世界模型功能”。
+
+### 关键术语
+
+- **Latent Action（潜在动作）**：从视觉运动中学习到的中间动作表示，可在无真实动作标签视频和机器人动作之间搭桥。
+- **World Model, WM（世界模型）**：给定当前观测和动作，预测未来观测的模型。
+- **Inverse Dynamics Model, IDM（逆动力学模型）**：给定观测轨迹，反推产生该变化的动作。
+- **Mixture-of-Transformer, MoT（Transformer 混合架构）**：让理解、视频生成和动作专家通过联合注意力交互的结构。
+- **UniDiffuser-Style Scheduler（UniDiffuser 式调度器）**：通过不同模态的噪声/timestep 设置切换条件生成模式。
+- **Optical Flow（光流）**：像素在相邻帧间的运动场，本文用作 pixel-level delta action 预训练信号。
+
 Motus 的核心不是“再做一个 VLA”，而是提出一个统一生成框架：同一个模型既能像 VLA 一样从观测和语言出动作，也能像世界模型一样给定动作预测未来观测，还能做 inverse dynamics、video generation，以及 video-action joint prediction。
 
 这篇论文最值得精读的地方在训练配方。它试图回答一个很实际的问题：机器人 action label 稀缺、跨机器人动作空间不统一、互联网视频又没有真实控制量，动作专家怎样像 VLM / VGM 一样获得大规模预训练？Motus 的答案是把 optical flow 当成像素级 delta action，先学 latent action，再用三阶段训练和六层数据金字塔把 web / egocentric / synthetic / task-agnostic / multi-robot / target-robot 数据接起来。

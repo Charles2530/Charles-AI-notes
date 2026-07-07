@@ -1,0 +1,1413 @@
+
+
+===== PAGE 1 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Peiyuan Zhang * 1 Matthew Noto * 2 Wenxuan Tan * 3
+Chengquan Jiang 4 Will Lin 1 Wei Zhou 5 Hao Zhang 1
+Abstract
+Achieving reliable 4-bit attention is a prerequi-
+site for end-to-end FP4 computation on emerg-
+ing FP4-capable GPUs, yet attention remains the
+main obstacle due to FP4’s tiny dynamic range
+and attention’s heavy-tailed activations. This pa-
+per presents the first systematic study of 4-bit
+quantization-aware training (QAT) for attention.
+We find “drop-in” QAT – naively combining an
+FP4 forward pass with high-precision Flash Atten-
+tion (FA)-style backward pass – leads to training
+instability. We identify two key principles for sta-
+ble FP4 attention: (1) matching low-precision
+recomputation of attention scores in the back-
+ward pass and (2) resolving implicit precision
+assumptions in FA’s gradient calculation. Based
+on these insights, we propose Attn-QAT and im-
+plement fused Triton kernels for training plus FP4
+inference kernels. Across diffusion and language
+models, Attn-QAT recovers the quality drop from
+FP4 attention without explicit outlier-mitigation
+heuristics used in prior FP4 attention, and deliv-
+ers up to a 1.5x speedup on an RTX 5090. Video
+demos can be found here.
+1. Introduction
+As model sizes and deployment scales continue to grow,
+quantization has emerged as a key technique for reduc-
+ing memory footprint and improving inference throughput.
+While 8-bit inference has been widely adopted in produc-
+tion systems (Liu et al., 2024a; Xiao et al., 2023; Kwon
+et al., 2023; Zhang et al., 2024b), the introduction of native
+FP4 tensor core support in NVIDIA’s Blackwell architecture
+creates new opportunities for 4-bit quantization (Abecas-
+sis et al., 2025), offering up to a 2x increase in arithmetic
+intensity together with lower memory traffic. However,
+despite recent progress in attention quantization, state-of-
+*Equal contribution
+1UC San Diego 2Stanford University
+3University of Wisconsin-Madison
+4Independent Researcher
+5Georgia Institute of Technology. Correspondence to: Hao Zhang
+<haozhang@ucsd.edu>.
+Preprint. March 10, 2026.
+Figure 1. Both NVFP4 attention and SageAttention3 suffer from
+a significant quality drop on Wan 2.1 14B. Our proposed method,
+Attn-QAT, recovers the quality drop by using quantization-aware
+training. Note that temporal inconsistency is hard to visualize in
+sampled frames. We attach video samples in Appendix A without
+cherry-picking to better showcase the superior quality of Attn-
+QAT.
+the-art methods such as the SageAttention series (Zhang
+et al., 2024b;a; 2025) still suffer from significant quality
+degradation when pushed to 4-bit attention.
+We trace this degradation to two intrinsic challenges in FP4
+attention quantization. First, FP4 provides an extremely
+coarse value set and narrow dynamic range (only 15 distinct
+values), leaving little room for post-training calibration to
+preserve attention dynamics. Second, compared to linear
+layers, attention exhibits heavier-tailed activation distribu-
+tions and more outliers, making it substantially more sen-
+sitive to numerical precision. Even with SageAttention’s
+mitigation techniques—such as Q/K smoothing and two-
+level quantization—the resulting precision is still insuffi-
+cient to reliably recover quality. This motivates a different
+approach: quantization-aware training (QAT) (Jacob et al.,
+2018), where model weights are updated to compensate for
+the errors introduced by 4-bit execution.
+QAT typically simulates low-precision execution (e.g., FP4)
+in the forward pass, while compute graidents in higher
+precision to update model weights. While this paradigm
+has been well explored for linear layers, to our knowledge
+1
+arXiv:2603.00040v2  [cs.LG]  6 Mar 2026
+
+
+
+===== PAGE 2 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+no prior work has successfully applied QAT to attention.
+Modern attention implementations, such as FlashAttention
+(FA) (Dao et al., 2022), are realized as heavily fused op-
+erators whose backward pass relies on recomputation and
+precision-sensitive algebraic identities. Consequently, we
+find that naively switching the forward pass to FP4 while
+reusing FA’s BF16 backward pass kernels produce exploding
+gradients, indicating that stable attention QAT requires care-
+ful precision coordination between the forward and back-
+ward recomputation intermediates.
+In this paper, we present the first systematic study of
+quantization-aware training for the attention operation.
+Through detailed analysis, we identify two key requirements
+for stable Attn-QAT. First, the recomputation of the atten-
+tion score matrix P during the backward pass must use the
+same low precision as the forward pass, ensuring consis-
+tency with the intermediate activations. Second, FlashAtten-
+tion relies on the identity P⊤
+i dPi = dO⊤
+i Oi, to maintain
+linear memory complexity for the backward pass, which
+only holds when the forward and backward passes share
+the same precision. When the forward pass is executed in
+FP4 and the backward pass in BF16, this assumption breaks.
+To resolve this, we compute the attention output O in both
+low and high precision during the forward pass, storing the
+high-precision output solely for gradient computation.
+We implement both forward and backward pass Triton ker-
+nels for Attn-QAT training, and improve SageAttention3
+CUDA kernels for inference. Experiments on both diffusion
+models and large language models shows Attn-QAT recov-
+ers the quality loss introduced by FP4 attention without
+relying on any outlier suppression mechanisms proposed
+in various versions of SageAttention. By eliminating these
+additional operations, we can achieve 1.1x-1.5x speedup
+over SageAttention3 on an RTX 5090. In summary, we
+make the following contributions:
+• We conduct the first systematic study of quantization-
+aware training for attention, identify the key inconsis-
+tencies that arise in the attention backward pass, and
+propose a principled solution.
+• We implement efficient custom FP4 attention kernels
+for both QAT training and inference.
+• We demonstrate that Attn-QAT fully recovers model
+quality without any outlier mitigation techniques, de-
+livering significant speedups on an RTX 5090.
+2. Methods
+This section provides the technical background and then
+details of our approach. We first review NVFP4 microscal-
+ing format and the training-free SageAttention3 method,
+which leverages native FP4 matrix multiplication with addi-
+tional heuristics for accuracy recovery. We then introduce
+quantization-aware training for attention and describe how
+Attn-QAT adapts QAT to FlashAttention-style fused oper-
+ators. Finally, we detail the backward-pass modifications
+required for stable training and summarize our kernel-level
+implementation.
+2.1. NVFP4 and SageAttention3
+Microscaling FP4 (MXFP4) (Rouhani et al., 2023) is a
+block floating-point quantization scheme in which a tensor
+is partitioned into small fixed-size blocks (32). Elements
+within each block are stored in FP4 format and share a E8M0
+scale factor. NVIDIA’s NVFP4 adopts this microscaling
+principle with a smaller block size (16) and E4M3 scaling
+factors for more fine-grained scaling. Following Zhang et al.
+(2025), we adopt NVFP4 for all FP4 operations in this paper.
+Given a tensor X ∈RN×d, NVFP4 quantization applies
+block-wise symmetric quantization through a microscaling
+operator ϕ. The tensor is partitioned into blocks Xij ∈
+R1×16, where each block shares a single scale factor sij.
+The quantization process is defined as
+ϕ(X) :
+sij = max(|Xij|)
+6
+,
+ˆXij =
+Xij
+sij
+
+(1)
+where ⌈·⌋denotes rounding to the nearest FP4-representable
+value. Dequantization recovers the high-precision format
+via
+ϕ−1( ˆX, s) :
+X′
+ij = sij · ˆXij.
+(2)
+Blackwell GPUs provide native support for NVFP4 matrix
+multiplication via a dedicated hardware primitive:
+C = FP4MM(A, ˆsA, B, ˆsB)
+(3)
+SageAttention3 (Zhang et al., 2025) is a training-free
+NVFP4 attention method that builds on the native FP4 ma-
+trix multiplication primitive in Eq. (3), and introduces addi-
+tional heuristics to mitigate the accuracy degradation caused
+by aggressive 4-bit quantization. To reduce the impact of
+outliers when computing QK⊤, it applies smoothing to both
+queries and keys by subtracting block-wise means along the
+token dimension. Given a query block Qi and a key block
+Kj, smoothing is defined as
+γ(Qi) = Qi −¯qi,
+γ(Kj) = Kj −¯k.
+(4)
+where ¯qi = mean(Qi) and ¯k = mean(K) are broadcasted
+to all tokens in the block. With this decomposition, the
+2
+
+
+
+===== PAGE 3 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Algorithm 1 Attn-QAT Forward (Inference)
+1: Require Q∈RNq×d, K, V∈RNk×d, tile sizes Bq, Bk
+2: Require NVFP4 quantizer ϕ(·) returning ( ˆX,ˆsX)
+3: Partition Q into tiles {Qi}
+Tq
+i=1 of size Bq × d; partition K, V
+into tiles {Kj, Vj}Tk
+j=1 of size Bk × d
+4: ( ˆQ,ˆsQ), ( ˆK,ˆsK), ( ˆV,ˆsV) ←ϕ(Q), ϕ(K), ϕ(V)
+5: for i = 1 to Tq do
+6:
+mi ←−∞, li ←0, Oi ←0
+7:
+for j = 1 to Tk do
+8:
+S←FP4MM( ˆQi,ˆsQ, ˆKj,ˆsK)/
+√
+d
+9:
+mnew ←max(mi, rowmax(S))
+10:
+α←exp(mi −mnew), ˜P←exp(S −mnew)
+11:
+li ←α ⊙li + rowsum(˜P),
+mi ←mnew
+12:
+(ˆ˜P,ˆs ˜P) ←ϕ(˜P)
+13:
+Oi ←diag(α)Oi + FP4MM(ˆ˜P,ˆs ˜P, ˆVj,ˆsV)
+14:
+end for
+15:
+Oi ←diag(li)−1Oi, Li ←m + log(li)
+16: end for
+17: Return O, L
+attention score can be written as
+Sij = (¯qi + γ(Qi))(¯k + γ(Kj))⊤
+= γ(Qi)γ(Kj)⊤+ ∆Sij + b.
+(5)
+where ∆Sij = ¯qiγ(Kj)⊤and b = ¯qi¯k⊤+ γ(Qi)¯k⊤.
+In addition, because the softmax output P takes values in
+[0, 1], it does not sufficiently utilize the range of NVFP4.
+SageAttention3 first rescales each row of P to between
+[0, 448 × 6] (where 6 is the maximum value of FP4e2m1
+and 448 is the maximum value of the FP8e4m3 scale fac-
+tor), and then applies standard FP4 quantization, enabling
+more effective use of NVFP4 precision during attention
+computation.
+2.2. Quantization Aware Training
+Note that Eq. (3) is equivalent to:
+C = BF16MM(ϕ−1(ϕ(A)), ϕ−1(ϕ(B)))
+(6)
+Quantization-aware training (QAT) builds upon Eq. (6) and
+refers to the operation ϕ−1(ϕ(·)) as fake quantization. Con-
+ceptually, this corresponds to a standard high-precision for-
+ward pass in which fake quantization is applied to the inputs
+of every matrix multiplication, thereby emulating Eq. (3)
+during training. During the backward pass, QAT relies on
+the straight-through estimator (STE) to approximate gra-
+dients with respect to the quantized inputs. Specifically,
+the backward pass still operates in high-precision with the
+Algorithm 2 Attn-QAT Forward (Training)
+1: Require Q∈RNq×d, K, V∈RNk×d, tile sizes Bq, Bk
+2: QF
+←
+ϕ−1(ϕ(Q)),
+KF
+←
+ϕ−1(ϕ(K)),
+VF
+←
+ϕ−1(ϕ(V)) {fake quantization}
+3: Partition QF into tiles {QF
+i }
+Tq
+i=1 of size Bq × d; partition
+KF , VF into tiles {KF
+j , VF
+j }Tk
+j=1 of size Bk × d
+4: for i = 1 to Tq do
+5:
+mi ←−∞, li ←0, Oi ←0, O′
+i ←0
+6:
+for j = 1 to Tk do
+7:
+S←QF
+i (KF
+j )⊤/
+√
+d
+8:
+mnew ←max(mi, rowmax(S))
+9:
+α←exp(mi −mnew), ˜P←exp(S −mnew)
+10:
+˜PF ←ϕ−1(ϕ(˜P)) {fake quantization}
+11:
+li ←α ⊙li + rowsum(˜P),
+mi ←mnew
+12:
+Oi ←diag(α)Oi + ˜PF VF
+j
+13:
+O′
+i ←diag(α)O′
+i + ˜PVF
+j {high-precision output for
+backward}
+14:
+end for
+15:
+Oi ←diag(l)−1Oi,
+O′
+i ←diag(l)−1O′
+i,
+Li ←m +
+log(li)
+16: end for
+17: Return O, L, O′
+gradients computed as:
+dA ≈d
+ ϕ−1(ϕ(A))
+
+= BF16MM
+ dC, ϕ−1(ϕ(B))⊤
+,
+dB ≈d
+ ϕ−1(ϕ(B))
+
+= BF16MM
+ ϕ−1(ϕ(A))⊤, dC
+
+.
+(7)
+In short, QAT only modifies a normal BF16 training loop
+by applying fake quantization to the inputs of matrix mul-
+tiplication operations, while everything else, including the
+forward and backward precision, are kept the same. By
+explicitly optimizing the model under NVFP4 constraints,
+QAT updates the weights to compensate for the accuracy
+loss induced by low-bit quantization.
+2.3. Attn-QAT
+Attn-QAT adopts the most simple NVFP4 attention imple-
+mentation, as illustrated in Algorithms 1 and 2. Rather
+than incorporating the outlier-mitigation heuristics proposed
+in Zhang et al. (2025), we rely on quantization-aware
+training to recover the quality loss. However, applying
+quantization-aware training to attention is non-trivial, as
+FlashAttention’s tightly fused operator design limits fine-
+grained customization. In standard attention, there are two
+matrix multiplications: the score computation S = QK⊤
+and the value aggregation O = PV. Under QAT, these
+operations correspond to applying fake quantization to Q
+and K in the former case, and to P and V in the latter, as
+specified in Eq. (6) and Eq. (7). However, FlashAttention
+computes attention by tiling the input and recomputing ac-
+3
+
+
+
+===== PAGE 4 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Algorithm 3 Attn-QAT backward
+1: Require QF ∈RNq×d, KF , VF ∈RNk×d, dO ∈RNq×d,
+L∈RNq, O′ ∈RNq×d, tile sizes Bq, Bk
+2: Ensure dQ, dK, dV
+3: D ←rowsum(dO ⊙O′) {uses high-prec O′}
+4: Partition into tiles: {QF
+i , dOi, Li, Di}
+Tq
+i=1 with Bq rows,
+{KF
+j , VF
+j }Tk
+j=1 with Bk rows
+5: Initialize dQ ←0, dK ←0, dV ←0
+6: for j = 1 to Tk do
+7:
+dKj ←0, dVj ←0
+8:
+for i = 1 to Tq do
+9:
+S ←QF
+i (KF
+j )⊤/
+√
+d
+10:
+P ←exp(S −Li)
+11:
+PF ←ϕ−1(ϕ(P)) {recompute in same low precision
+as FWD}
+12:
+dVj += (PF )⊤dOi
+13:
+dP ←dOi(VF
+j )⊤
+14:
+dS ←P ⊙(dP −Di)/
+√
+d
+15:
+dQi += dS KF
+j
+16:
+dKj += dS⊤QF
+i
+17:
+end for
+18:
+Write dKj, dVj into the corresponding tiles of dK, dV
+in global memory for all j
+19: end for
+20: Write dQi into the corresponding tile of dQ in global mem-
+ory for all i
+21: Return dQ, dK, dV
+tivations in the backward pass, leading to two subtle but
+critical mismatches with standard QAT.
+Matching the precision of P in the forward and back-
+ward passes.
+In FlashAttention, the full attention prob-
+abilities P are not materialized nor saved in the forward
+pass. Instead, they are recomputed in the backward pass
+from the stored log-sum-exp vector L. Under QAT, this
+recomputation must exactly match the numerical precision
+of the forward pass. To address this, Attn-QAT explicitly
+fake-quantizes the recomputed P in the backward pass
+(line 6 of Alg. 3), ensuring that gradients are computed with
+respect to the same low-precision activations used in the
+forward pass.
+High-precision O for the backward pass.
+A second
+subtlety arises from the softmax backward computation
+in FlashAttention.
+Given a row-wise softmax Pi
+=
+softmax(Si), its Jacobian satisfies
+dSi =
+ diag(Pi) −PiP⊤
+i
+
+dPi
+= Pi ⊙dPi −(P⊤
+i dPi) Pi.
+(8)
+Note that, like in standard attention implementations, the
+softmax operates in FP32 precision to avoid numerical in-
+stability (even in FP4 attention), so we use the high preci-
+sion FP32 activation P instead of PF to compute the dSi
+term. The scalar term P⊤
+i dPi requires access to the full
+row of attention probabilities, which results in quadratic
+memory complexity in the sequence length. To achieve
+linear memory complexity in the backward pass, we follow
+FlashAttention and exploit the identity
+P⊤
+i dPi =
+X
+j
+Pij dO⊤
+i VF
+j
+= dO⊤
+i
+X
+j
+PijVF
+j
+= dO⊤
+i O′
+i.
+(9)
+The first equality replies on dPi = dO⊤
+i VF
+j , which is easy
+to derive by plugging in Eq. (7). The last equality relies on
+Oi = P
+j PijVF
+j . However, the output tile Oi is computed
+during the forward pass as
+Oi =
+X
+j
+PF
+ijVF
+j ,
+meaning that the identity in Eq. (9) no longer holds if Oi
+is used directly. Thus, to preserve the correctness of the
+backward computation, we must additionally calculate a
+high-precision output tile
+O′
+i =
+X
+j
+PijVF
+j
+during the forward pass, with the full high-precision ma-
+trix O′ being used exclusively to compute the scalar term
+dO⊤
+i O′
+i = P⊤
+i dPi in the backward pass.
+2.4. Implementation
+We implement our training kernels by extending the Tri-
+ton reference attention kernel (Tillet et al., 2019) and in-
+serting fake quantization at the appropriate locations, as
+specified in Algorithm 2 and Algorithm 3. For quanti-
+zation and dequantization between high-precision formats
+and NVFP4, we leverage inline PTX on Blackwell GPUs
+using the new cvt.rn.satfinite.e2m1x2.f32
+and cvt.rn.f16x2.e2m1x2 instructions.
+On non-
+Blackwell GPUs, we instead implement NVFP4 emulation
+via explicit bitwise operations. This design allows our train-
+ing kernels to run on any NVIDIA GPU supported by Triton,
+while still exploiting native NVFP4 instructions when avail-
+able.
+To fully realize the performance benefits of FP4 attention
+during inference, we use custom CUDA kernels rather than
+Triton. Our inference kernel is adapted from SageAtten-
+tion3’s CUDA implementation with minor modifications.
+We use this CUDA kernel during inference for diffusion
+models. For language model evaluation, we modify the Tri-
+ton paged-attention implementation in vLLM (Kwon et al.,
+2023) to support NVFP4 fake quantization.
+4
+
+
+
+===== PAGE 5 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Table 1. VBench evaluation on Wan 2.1 14B. Experiments 1–3 are training-free inference baselines, while Experiment 4 applies Attn-QAT
+and requires additional training.
+Exp.
+Wan 2.1 14B
+Imaging
+Quality
+Aesthetic
+Quality
+Subject
+Consistency
+Background
+Consistency
+Temporal
+Flickering
+Motion
+Smoothness
+Dynamic
+Degree
+Overall
+Quality
+1
+BF16
+0.6869
+0.6692
+0.9572
+0.9635
+0.9759
+0.9878
+0.5193
+0.8335
+2
+FP4
+0.6324
+0.6271
+0.9412
+0.9548
+0.9783
+0.9855
+0.2983
+0.7968
+3
+SageAttention3
+0.6604
+0.6510
+0.9517
+0.9584
+0.9758
+0.9862
+0.4751
+0.8203
+4
+Attn-QAT
+0.6745
+0.6712
+0.9685
+0.9716
+0.9828
+0.9902
+0.3646
+0.8279
+3. Experiments
+3.1. Setup
+Models and Baselines.
+We apply Attn-QAT to both video
+diffusion models and large language models. For diffu-
+sion models, we evaluate on Wan-2.1 (Wang et al., 2025a)
+at two scales: 1.3B and 14B. For language modeling, we
+evaluate on Qwen-3 14B (Yang et al., 2025) and Llama-
+3.1 70B (Grattafiori et al., 2024). We compare Attn-QAT
+against the following attention variants: (i) BF16 attention,
+(ii) NVFP4 attention without training, (iii) SageAttention3,
+which incorporates advanced outlier mitigation techniques
+for FP4 attention. We exclude SageAttention3 from all LLM
+experiments because its open-source kernel implementation
+exhibits significant numerical errors in causal attention, re-
+sulting in degraded accuracy. Note that all non-attention
+components remain in high precision.
+Training and Evaluation Details.
+For diffusion models,
+we generate synthetic latents using Wan-2.1-14B to perform
+Attn-QAT. For our experiments on Wan-2.1-1.3B, we use a
+dataset of 81K examples with 480P resolution. For exper-
+iments on Wan-2.1-14B, we use 13K examples with 720P
+resolution. We evaluate all subcategories of video quality in
+VBench (Huang et al., 2024), using Qwen2.5-3B-Instruct
+for prompt augmentation, following the guide specified in
+the VBench GitHub repository. Additionally, we conduct
+blind human evaluation on 99 randomly selected prompts
+from VBench.
+For language models, we apply Attn-QAT as a continued
+training procedure on base models using the C4 dataset (Raf-
+fel et al., 2020), and evaluate whether Attn-QAT can recover
+the quality degradation introduced by FP4. We report results
+on WikiText (Merity et al., 2016), HellaSwag (Zellers et al.,
+2019), PIQA (Bisk et al., 2020), WinoGrande (Sakaguchi
+et al., 2021), and ARC-C (Clark et al., 2018) using lm-eval-
+harness (Gao et al., 2024). We further perform supervised
+fine-tuning on Dolci-instruct (Olmo et al., 2025) with both
+BF16 attention and Attn-QAT to verify that Attn-QAT has
+the same fine-tuning quality as BF16 attention. We then eval-
+uate the fine-tuned model on a more challenging benchmark
+suite including MMLU-Redux (Gema et al., 2025), GPQA-
+Diamond (Rein et al., 2024), MATH-500 (Hendrycks et al.,
+Figure 2. Win–Tie–Lose blind human evaluation on 99 randomly
+sampled VBench prompts for Wan 2.1 14B. Attn-QAT matches
+BF16 attention in perceived visual quality.
+2021), GSM8K (Cobbe et al., 2021), and IFEval (Zhou et al.,
+2023), using EvalScope (Team, 2024) and vLLM (Kwon
+et al., 2023). Full training configurations and hyperparame-
+ters are provided in the appendix.
+3.2. Diffusion Experiments
+Main results.
+Table 1 reports results on Wan 2.1 14B and
+Table 2 shows results on Wan 2.1 1.3B. Replacing BF16
+attention with FP4 attention without training results in a
+substantial drop across VBench metrics, as shown by the
+comparison between Exp. 1 and 2. While SageAttention3
+partially mitigates this degradation, it still underperforms
+the BF16 baseline, indicating that post-training quantization
+alone is insufficient for FP4 attention. In contrast, Attn-QAT
+recovers the quality loss caused by FP4 attention, matches
+BF16 performance across metrics, and outperforms SageAt-
+tention3. These results demonstrate that quantization-aware
+training alone is sufficient to compensate for FP4 attention
+errors, without requiring the additional outlier-mitigation
+heuristics used in SageAttention3. In Figure 2, we report
+additional human evaluation on 99 prompts sampled from
+VBench, where raters find Attn-QAT outputs comparable
+to the BF16 baseline. Qualitative comparisons are provided
+in Appendix A, with MP4 files included in the submission
+attachments.
+Outlier mitigation is unnecessary with Attn-QAT.
+SageAttention3 differs from Attn-QAT in the forward pass
+in two key aspects: (i) it applies QK smoothing to increase
+the precision in calculating S, and (ii) it adopts a two-level
+quantization scheme for the attention probability matrix
+P. To isolate the effect of these design choices in train-
+5
+
+
+
+===== PAGE 6 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Table 2. VBench evaluation on Wan 2.1 1.3B. Experiments 1–3 are training-free inference baselines, while Experiment 3-8 applies
+Attn-QAT and requires additional training. Attn-QAT recovers the quality loss introduced by FP4 attention without explicit outlier
+mitigation techniques.
+Exp. Wan 2.1 1.3B
+Imaging
+Quality
+Aesthetic
+Quality
+Subject
+Consistency
+Background
+Consistency
+Temporal
+Flickering
+Motion
+Smoothness
+Dynamic
+Degree
+Overall
+Quality
+1
+BF16
+0.6728
+0.6657
+0.9647
+0.9646
+0.9832
+0.9897
+0.3923
+0.8267
+2
+FP4
+0.5592
+0.6109
+0.9601
+0.9605
+0.9854
+0.9892
+0.1160
+0.7785
+3
+SageAttention3
+0.5507
+0.6163
+0.9583
+0.9582
+0.9836
+0.9886
+0.2099
+0.7834
+4
+Attn-QAT
+0.6775
+0.6764
+0.9709
+0.9706
+0.9839
+0.9902
+0.3039
+0.8252
+5
++ SmoothK
+0.6738
+0.6699
+0.9664
+0.9676
+0.9811
+0.9887
+0.3425
+0.8232
+6
++ Two-level quant P
+0.6801
+0.6782
+0.9749
+0.9749
+0.9867
+0.9918
+0.2541
+0.8257
+7
+– High prec. O in BWD
+0.5660
+0.4373
+0.8709
+0.9384
+0.9761
+0.9827
+0.0331
+0.7185
+8
+– Fake quantization of P in BWD
+0.6837
+0.6798
+0.9727
+0.9729
+0.9851
+0.9912
+0.2652
+0.8254
+Figure 3. Training dynamics for diffusion and language models. (a–b) Gradient norm and loss during Wan 2.1 1.3B finetuning under
+different Attn-QAT configurations. (c) Finetuning loss curves of Qwen3-14B comparing BF16 attention and Attn-QAT.
+ing, we explicitly incorporate K smoothing 1 and two-level
+P quantization into Attn-QAT and evaluate their impact
+in Exp. 4–6 of Table 2. Across all evaluated metrics, we
+observe that introducing either K smoothing or two-level
+quantization yields only marginal changes compared to the
+vanilla Attn-QAT baseline. In particular, none of these
+heuristics consistently improves performance across all eval-
+uation dimensions, and qualitative inspection of the gener-
+ated videos reveals no noticeable differences. This suggests
+that Attn-QAT already learns to recover from quantization
+error during training, rendering additional mitigation strate-
+gies largely redundant.
+Correct backward design is essential for stable training.
+We ablate the two central design choices that enable sta-
+ble Attn-QAT training. First, removing the high-precision
+output O′ and instead using the low-precision O in the
+backward pass leads to severe training instability. As shown
+in plots (a) and (b) of Figure 3, this modification causes
+exploding gradients and substantially higher training loss.
+Consistently, Exp. 7 in Table 2 exhibits a significant drop
+in VBench scores. Second, omitting fake quantization of
+P during backward recomputation results in a similar final
+VBench score (Exp. 4 vs. Exp. 8) and comparable training
+1We skip ablating QAT with smoothing Q because it leads to
+complicated gradient computation.
+loss (Figure 3, plot (b)). However, as shown in plot (a) of
+Figure 3, this setting produces significantly noisier gradient
+norms, indicating reduced training stability. These results
+suggest that fake quantization of P, while not strictly re-
+quired for convergence in our setup, plays an important role
+in stabilizing training dynamics. Finally, a naive baseline
+that performs an FP4 forward pass while reusing FlashAt-
+tention’s BF16 backward kernel consistently results in ex-
+ploding gradients; we therefore omit it from Table 2.
+3.3. LLM Experiments
+Continued training.
+In Table 4, we start from the base
+Qwen3-14B and Llama 3.1-70B models and continue train-
+ing them on the C4 dataset to evaluate whether Attn-QAT
+can recover the quality loss introduced by 4-bit attention.
+Consistent with our diffusion results, applying NVFP4 at-
+tention without training leads to clear performance degrada-
+tion across all benchmarks compared to BF16 attention. In
+contrast, Attn-QAT recovers most of this loss. For Qwen3-
+14B, Attn-QAT restores performance to near-BF16 levels
+and even improves WinoGrande and ARC-c accuracy. For
+Llama 3.1-70B, Attn-QAT partially recovers the degrada-
+tion but does not fully match BF16 performance. We at-
+tribute this gap primarily to limited training budget and
+lack of hyperparameter tuning for 70B due to hardware con-
+straints(Appendix B.2), suggesting that longer training may
+6
+
+
+
+===== PAGE 7 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Table 3. LLM Finetuning Results
+Exp
+Model
+Precision
+MMLU-Redux
+IFeval
+GPQA-Diamond
+MATH-500
+GSM8K
+1
+Qwen3-14B
+BF16
+0.8316
+0.7107
+0.4495
+0.8060
+0.9295
+2
+FP4 w. Attn-QAT
+0.8392
+0.7306
+0.4394
+0.7840
+0.9098
+3
+Llama3.1-70B
+BF16
+0.7928
+0.8637
+0.4091
+0.5300
+0.8840
+4
+FP4 w. Attn-QAT
+0.7823
+0.8532
+0.3838
+0.5120
+0.8673
+Table 4. Benchmark results for LLM continued training.
+Exp.
+Model
+Precision
+MMLU
+WinoGrande
+ARC-c
+HellaSwag
+PIQA
+WikiText↓
+1
+Qwen3-14B
+BF16
+0.8044
+0.7403
+0.5922
+0.8140
+0.8215
+0.5700
+2
+FP4
+0.7965
+0.7214
+0.5734
+0.8050
+0.8052
+0.5763
+3
+Attn-QAT
+0.7984
+0.7585
+0.6084
+0.8034
+0.8188
+0.5778
+4
+Llama 3.1-70B
+BF16
+0.7881
+0.8161
+0.6135
+0.8575
+0.8422
+0.2838
+5
+FP4
+0.7577
+0.7656
+0.6015
+0.8463
+0.8308
+0.3275
+6
+Attn-QAT
+0.7773
+0.7940
+0.6153
+0.8557
+0.8351
+0.3076
+further close the gap.
+Supervised fine-tuning.
+To evaluate whether Attn-QAT
+can be applied directly during supervised fine-tuning (SFT),
+without requiring a separate quantization-aware training
+stage, we fine-tune the base models of Qwen3-14B and
+Llama 3.1-70B on Dolci-Instruct using either Attn-QAT or
+standard BF16 attention. Figure 3 (c) reports the training
+loss, while Table 3 summarizes downstream benchmark
+performance. Although Attn-QAT incurs a slightly higher
+training loss than BF16, it achieves nearly identical bench-
+mark performance for Qwen3-14B across all evaluated tasks.
+For Llama 3.1-70B, FP4 Attn-QAT remains close to BF16
+with a small gap. These results indicate that Attn-QAT can
+be applied as a drop-in replacement for BF16 attention dur-
+ing SFT, simplifying the training pipeline by removing the
+need for a dedicated QAT stage prior to SFT.
+3.4. Kernel Benchmarks
+Quantization-aware training can potentially introduce a
+train–test mismatch, since FP4 behavior is emulated via fake
+quantization in BF16 during training (fake quant), while in-
+ference uses a real FP4-quantized GEMM (real quant). To
+verify that this mismatch does not occur in practice, we per-
+form inference on identical prompts using both the forward
+pass of our Triton training kernel and the CUDA inference
+kernel. As shown in Figure 4, the two implementations
+produce nearly identical outputs.
+We benchmark the throughput of our CUDA kernel on an
+RTX 5090 in Figure 5, comparing against FlashAttention2
+and SageAttention3. By eliminating the additional Smooth-
+QK and two-level quantization of P, Attn-QAT achieves
+Figure 4. The Triton forward pass (fake quantization with BF16
+GEMM and FP4 emulation) and the CUDA forward pass (real FP4
+quantization and FP4 GEMM) produce visually indistinguishable
+videos, indicating close numerical agreement between the two
+implementations.
+approximately 1.1x-1.5x higher throughput than SageAtten-
+tion3. We attribute this speedup primarily to the reduced
+preprocessing overhead for Q and K2.
+4. Related Work
+Post-Training Quantization.
+Post-training quantization
+(PTQ) applies quantization to model weights and/or acti-
+vations after a model has been fully trained. While PTQ
+2Our evaluation setup slightly differs from SageAttention3 in
+that we include the latency of input preprocessing (smoothing and
+quantization).
+7
+
+
+
+===== PAGE 8 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Figure 5. Kernel throughput on RTX 5090. We compare attention
+kernel performance with head dimensions 128 (top) and 64 (bot-
+tom), using a batch size of 16 and 16 attention heads. All results
+report end-to-end throughput.
+may involve a lightweight calibration step to estimate the
+quantization statistics, it does not update model parameters.
+Early work on PTQ primarily focused on convolutional and
+linear layers (Wang et al., 2019; Nagel et al., 2019; Xiao
+et al., 2023; Lin et al., 2024), with recent efforts extend-
+ing these techniques to attention operators, most notably
+in the SageAttention series (Zhang et al., 2024b;a; 2025).
+A central challenge in PTQ is the presence of activation
+and weight outliers, which can induce large quantization er-
+rors under low-bit representations. As a result, most recent
+PTQ methods emphasize outlier suppression. SmoothQuant
+addresses activation outliers by migrating quantization dif-
+ficulty from activations to weights through a reparameter-
+ization (Xiao et al., 2023). SageAttention (Zhang et al.,
+2025) introduces attention-specific techniques, including
+Q/K smoothing and two-level quantization of the attention
+probabilities. These methods achieve near-lossless perfor-
+mance at 8-bit precision; however, empirical evidence shows
+that their accuracy degrades under more aggressive 4-bit
+settings, particularly for attention quantization.
+Quantization-Aware Training.
+Quantization-aware train-
+ing (QAT) introduces a lightweight training phase after
+full-precision training and before deployment. QAT in-
+corporates quantization effects during training by simulat-
+ing low-precision arithmetic in the forward pass while us-
+ing higher-precision gradients for optimization, typically
+via straight-through estimators (Bengio et al., 2013; Yin
+et al., 2019). QAT has been successfully applied to con-
+volutional and fully connected layers, enabling robust de-
+ployment under low-bit constraints (Gong et al., 2019; Ja-
+cob et al., 2018; Gong et al., 2019; Liu et al., 2024b). To
+our knowledge, prior work has not systematically studied
+quantization-aware training for the attention operation itself.
+In particular, attention kernels such as FlashAttention (Dao
+et al., 2022) tightly fuse matrix multiplication, softmax,
+and recomputation-based backward passes, making naive
+integration of QAT complicated.
+Native Low-Bit Training.
+Native low-bit training differs
+fundamentally from QAT by executing low-precision ma-
+trix multiplication in both the forward and backward passes.
+By performing all major computations in low precision,
+native low-bit training can improve not only inference ef-
+ficiency but also training throughput, and is therefore typi-
+cally used to train models from scratch (Peng et al., 2023;
+Fishman et al., 2024; Hern´andez-Cano et al., 2025). For
+example, DeepSeek-V3 demonstrates the feasibility of train-
+ing a frontier-scale model using naive 8-bit linear layers (Liu
+et al., 2024a), and recent work has begun to explore native
+4-bit training for linear operators (Abecassis et al., 2025;
+Wang et al., 2024; 2025b; Chmiel et al., 2025). Progress on
+native low-bit training for attention remains limited. To our
+knowledge, SageAttention3 (Zhang et al., 2025) is the first
+work that explores native 8-bit training for attention, and
+there are no prior studies investigating native 4-bit training
+for attention mechanisms.
+5. Conclusion & Future Work
+We introduce Attn-QAT, the first systematic study of 4-bit
+quantization-aware training for attention. We show that
+naively applying QAT to FP4 attention fails due to preci-
+sion mismatches in the backward pass, and identify two
+requirements for stability: low-precision recomputation of
+attention probabilities and a high-precision auxiliary output
+for correct softmax gradients. With these improvements,
+Attn-QAT enables stable training of FP4 attention. Experi-
+ments on diffusion models and large language models show
+that Attn-QAT recovers BF16-level quality without any out-
+lier mitigation heuristics, demonstrating that QAT alone is
+sufficient for reliable 4-bit attention.
+Our current Attn-QAT implementation is built on SageAtten-
+tion3 and is limited to RTX 5090s. An important next step
+is to develop native FP4 attention kernels for SM100 GPUs
+(e.g., B200 and B300), which we are actively developing
+based on the state-of-the-art FlashAttention 4 (Dao et al.,
+2025) CuTe-DSL kernel. The FA4 kernel supports block-
+sparse attention and paged attention, which are crucial for
+large-scale LLM and diffusion model serving. Finally, we
+expect to integrate 4-bit KV caches into a mainstream serv-
+ing library to enable full low-precision decoding and further
+reduce memory overhead during inference. All kernels will
+be open-sourced for the benefit of the community.
+8
+
+
+
+===== PAGE 9 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Impact Statement
+Our work targets efficient serving of foundation mod-
+els by developing low-bit attention kernels that substan-
+tially increase throughput without sacrificing output quality.
+By lowering the computational cost, our approach makes
+high-quality text/video generation more accessible to re-
+searchers and practitioners with constrained hardware re-
+sources, thereby broadening the applicability of generative
+AI in domains such as creative production and education.
+Although increased generation speed may raise concerns
+about potential misuse, existing safeguards—including con-
+tent detection and watermarking techniques—provide prac-
+tical mechanisms for risk mitigation. Overall, the gains
+in efficiency and accessibility offered by our method out-
+weigh these concerns, representing a meaningful step to-
+wards more low-carbon serving systems.
+References
+Abecassis, F., Agrusa, A., Ahn, D., Alben, J., Alborghetti,
+S., Andersch, M., Arayandi, S., Bjorlin, A., Blakeman,
+A., Briones, E., et al. Pretraining large language models
+with nvfp4. arXiv preprint arXiv:2509.25149, 2025.
+Bengio, Y., L´eonard, N., and Courville, A. Estimating or
+propagating gradients through stochastic neurons for con-
+ditional computation. arXiv preprint arXiv:1308.3432,
+2013.
+Bisk, Y., Zellers, R., Gao, J., Choi, Y., et al. Piqa: Reasoning
+about physical commonsense in natural language. In Pro-
+ceedings of the AAAI conference on artificial intelligence,
+volume 34, pp. 7432–7439, 2020.
+Chmiel, B., Fishman, M., Banner, R., and Soudry, D. Fp4 all
+the way: Fully quantized training of llms. arXiv preprint
+arXiv:2505.19115, 2025.
+Clark, P., Cowhey, I., Etzioni, O., Khot, T., Sabharwal, A.,
+Schoenick, C., and Tafjord, O. Think you have solved
+question answering? try arc, the ai2 reasoning challenge.
+arXiv preprint arXiv:1803.05457, 2018.
+Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H.,
+Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano,
+R., et al. Training verifiers to solve math word problems.
+arXiv preprint arXiv:2110.14168, 2021.
+Dao, T., Fu, D. Y., Ermon, S., Rudra, A., and R´e, C. Flashat-
+tention: Fast and memory-efficient exact attention with io-
+awareness, 2022. URL https://arxiv.org/abs/
+2205.14135.
+Dao, T., Shah, J., Zadouri, T., Hoehnerbach, M., and
+Thakkar, V.
+Flashattention-4 forward kernel for
+sm100.
+https://github.com/Dao-AILab/
+flash-attention/blob/main/flash_attn/
+cute/flash_fwd_sm100.py, 2025. Source code
+file.
+Fishman, M., Chmiel, B., Banner, R., and Soudry, D. Scal-
+ing fp8 training to trillion-token llms. arXiv preprint
+arXiv:2409.12517, 2024.
+Gao, L., Tow, J., Abbasi, B., Biderman, S., Black, S., DiPofi,
+A., Foster, C., Golding, L., Hsu, J., Le Noac’h, A., Li,
+H., McDonell, K., Muennighoff, N., Ociepa, C., Phang,
+J., Reynolds, L., Schoelkopf, H., Skowron, A., Sutawika,
+L., Tang, E., Thite, A., Wang, B., Wang, K., and Zou, A.
+The language model evaluation harness, 07 2024. URL
+https://zenodo.org/records/12608602.
+Gema, A. P., Leang, J. O. J., Hong, G., Devoto, A., Mancino,
+A. C. M., Saxena, R., He, X., Zhao, Y., Du, X., Madani,
+M. R. G., et al. Are we done with mmlu? In Proceedings
+of the 2025 Conference of the Nations of the Americas
+Chapter of the Association for Computational Linguistics:
+Human Language Technologies (Volume 1: Long Papers),
+pp. 5069–5096, 2025.
+Gong, R., Liu, X., Jiang, S., Li, T., Hu, P., Lin, J., Yu, F., and
+Yan, J. Differentiable soft quantization: Bridging full-
+precision and low-bit neural networks. In Proceedings
+of the IEEE/CVF international conference on computer
+vision, pp. 4852–4861, 2019.
+Grattafiori, A., Dubey, A., Jauhri, A., Pandey, A., Kadian,
+A., Al-Dahle, A., Letman, A., Mathur, A., Schelten, A.,
+Vaughan, A., et al. The llama 3 herd of models. arXiv
+preprint arXiv:2407.21783, 2024.
+Hendrycks, D., Burns, C., Kadavath, S., Arora, A., Basart,
+S., Tang, E., Song, D., and Steinhardt, J. Measuring math-
+ematical problem solving with the math dataset. arXiv
+preprint arXiv:2103.03874, 2021.
+Hern´andez-Cano, A., Garbaya, D., Schlag, I., and Jaggi,
+M. Towards fully fp8 gemm llm training at scale. arXiv
+preprint arXiv:2505.20524, 2025.
+Huang, Z., He, Y., Yu, J., Zhang, F., Si, C., Jiang, Y., Zhang,
+Y., Wu, T., Jin, Q., Chanpaisit, N., et al. Vbench: Compre-
+hensive benchmark suite for video generative models. In
+Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, pp. 21807–21818, 2024.
+Jacob, B., Kligys, S., Chen, B., Zhu, M., Tang, M., Howard,
+A., Adam, H., and Kalenichenko, D.
+Quantization
+and training of neural networks for efficient integer-
+arithmetic-only inference. In Proceedings of the IEEE
+conference on computer vision and pattern recognition,
+pp. 2704–2713, 2018.
+9
+
+
+
+===== PAGE 10 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Kwon, W., Li, Z., Zhuang, S., Sheng, Y., Zheng, L., Yu,
+C. H., Gonzalez, J., Zhang, H., and Stoica, I. Efficient
+memory management for large language model serving
+with pagedattention. In Proceedings of the 29th sym-
+posium on operating systems principles, pp. 611–626,
+2023.
+Langley, P. Crafting papers on machine learning. In Langley,
+P. (ed.), Proceedings of the 17th International Conference
+on Machine Learning (ICML 2000), pp. 1207–1216, Stan-
+ford, CA, 2000. Morgan Kaufmann.
+Lin, J., Tang, J., Tang, H., Yang, S., Chen, W.-M., Wang,
+W.-C., Xiao, G., Dang, X., Gan, C., and Han, S. Awq:
+Activation-aware weight quantization for on-device llm
+compression and acceleration. Proceedings of machine
+learning and systems, 6:87–100, 2024.
+Liu, A., Feng, B., Xue, B., Wang, B., Wu, B., Lu, C., Zhao,
+C., Deng, C., Zhang, C., Ruan, C., et al. Deepseek-
+v3 technical report. arXiv preprint arXiv:2412.19437,
+2024a.
+Liu, Z., Oguz, B., Zhao, C., Chang, E., Stock, P., Mehdad,
+Y., Shi, Y., Krishnamoorthi, R., and Chandra, V. Llm-qat:
+Data-free quantization aware training for large language
+models. In Findings of the Association for Computational
+Linguistics: ACL 2024, pp. 467–484, 2024b.
+Merity, S., Xiong, C., Bradbury, J., and Socher, R.
+Pointer sentinel mixture models.
+arXiv preprint
+arXiv:1609.07843, 2016.
+Nagel, M., Baalen, M. v., Blankevoort, T., and Welling,
+M. Data-free quantization through weight equalization
+and bias correction. In Proceedings of the IEEE/CVF
+international conference on computer vision, pp. 1325–
+1334, 2019.
+Olmo, T., Ettinger, A., Bertsch, A., Kuehl, B., Graham, D.,
+Heineman, D., Groeneveld, D., Brahman, F., Timbers, F.,
+Ivison, H., Morrison, J., Poznanski, J., Lo, K., Soldaini,
+L., Jordan, M., Chen, M., Noukhovitch, M., Lambert, N.,
+Walsh, P., Dasigi, P., Berry, R., Malik, S., Shah, S., Geng,
+S., Arora, S., Gupta, S., Anderson, T., Xiao, T., Murray,
+T., Romero, T., Graf, V., Asai, A., Bhagia, A., Wettig,
+A., Liu, A., Rangapur, A., Anastasiades, C., Huang, C.,
+Schwenk, D., Trivedi, H., Magnusson, I., Lochner, J., Liu,
+J., Miranda, L. J. V., Sap, M., Morgan, M., Schmitz, M.,
+Guerquin, M., Wilson, M., Huff, R., Bras, R. L., Xin, R.,
+Shao, R., Skjonsberg, S., Shen, S. Z., Li, S. S., Wilde,
+T., Pyatkin, V., Merrill, W., Chang, Y., Gu, Y., Zeng, Z.,
+Sabharwal, A., Zettlemoyer, L., Koh, P. W., Farhadi, A.,
+Smith, N. A., and Hajishirzi, H. Olmo 3, 2025. URL
+https://arxiv.org/abs/2512.13961.
+Peng, H., Wu, K., Wei, Y., Zhao, G., Yang, Y., Liu, Z.,
+Xiong, Y., Yang, Z., Ni, B., Hu, J., et al.
+Fp8-lm:
+Training fp8 large language models.
+arXiv preprint
+arXiv:2310.18313, 2023.
+Raffel, C., Shazeer, N., Roberts, A., Lee, K., Narang, S.,
+Matena, M., Zhou, Y., Li, W., and Liu, P. J. Exploring
+the limits of transfer learning with a unified text-to-text
+transformer. Journal of machine learning research, 21
+(140):1–67, 2020.
+Rein, D., Hou, B. L., Stickland, A. C., Petty, J., Pang, R. Y.,
+Dirani, J., Michael, J., and Bowman, S. R. Gpqa: A
+graduate-level google-proof q&a benchmark. In First
+Conference on Language Modeling, 2024.
+Rouhani, B. D., Garegrat, N., Savell, T., More, A., Han,
+K.-N., Zhao, R., Hall, M., Klar, J., Chung, E., Yu, Y.,
+Schulte, M., Wittig, R., Bratt, I., Stephens, N., Milanovic,
+J., Brothers, J., Dubey, P., Cornea, M., Heinecke, A.,
+Rodriguez, A., Langhammer, M., Deng, S., Naumov, M.,
+Micikeviˇcius, P., Siu, M., and Verrilli, C. Ocp microscal-
+ing formats (mx) specification, version 1.0.
+https:
+//www.opencompute.org/documents/
+ocp-microscaling-formats-mx-v1-0-spec-final-pdf,
+September 2023. Open Compute Project Specification.
+Sakaguchi, K., Bras, R. L., Bhagavatula, C., and Choi, Y.
+Winogrande: An adversarial winograd schema challenge
+at scale. Communications of the ACM, 64(9):99–106,
+2021.
+Team, M.
+EvalScope:
+Evaluation framework for
+large models, 2024. URL https://github.com/
+modelscope/evalscope.
+Tillet, P., Kung, H.-T., and Cox, D. Triton: an intermediate
+language and compiler for tiled neural network computa-
+tions. In Proceedings of the 3rd ACM SIGPLAN Interna-
+tional Workshop on Machine Learning and Programming
+Languages, pp. 10–19, 2019.
+Wang, A., Ai, B., Wen, B., Mao, C., Xie, C.-W., Chen, D.,
+Yu, F., Zhao, H., Yang, J., Zeng, J., et al. Wan: Open
+and advanced large-scale video generative models. arXiv
+preprint arXiv:2503.20314, 2025a.
+Wang, H., Ma, S., and Wei, F. Bitnet a4. 8: 4-bit activations
+for 1-bit llms. arXiv preprint arXiv:2411.04965, 2024.
+Wang, K., Liu, Z., Lin, Y., Lin, J., and Han, S.
+Haq:
+Hardware-aware automated quantization with mixed pre-
+cision. In Proceedings of the IEEE/CVF conference on
+computer vision and pattern recognition, pp. 8612–8620,
+2019.
+10
+
+
+
+===== PAGE 11 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Wang, R., Gong, Y., Liu, X., Zhao, G., Yang, Z., Guo,
+B., Zha, Z., and Cheng, P. Optimizing large language
+model training using fp4 quantization. arXiv preprint
+arXiv:2501.17116, 2025b.
+Xiao, G., Lin, J., Seznec, M., Wu, H., Demouth, J., and Han,
+S. Smoothquant: Accurate and efficient post-training
+quantization for large language models.
+In Interna-
+tional conference on machine learning, pp. 38087–38099.
+PMLR, 2023.
+Yang, A., Li, A., Yang, B., Zhang, B., Hui, B., Zheng, B.,
+Yu, B., Gao, C., Huang, C., Lv, C., et al. Qwen3 technical
+report. arXiv preprint arXiv:2505.09388, 2025.
+Yin, P., Lyu, J., Zhang, S., Osher, S., Qi, Y., and Xin,
+J.
+Understanding straight-through estimator in train-
+ing activation quantized neural nets.
+arXiv preprint
+arXiv:1903.05662, 2019.
+Zellers, R., Holtzman, A., Bisk, Y., Farhadi, A., and Choi,
+Y. Hellaswag: Can a machine really finish your sentence?
+arXiv preprint arXiv:1905.07830, 2019.
+Zhang, J., Huang, H., Zhang, P., Wei, J., Zhu, J., and Chen,
+J. Sageattention2: Efficient attention with thorough out-
+lier smoothing and per-thread int4 quantization. arXiv
+preprint arXiv:2411.10958, 2024a.
+Zhang, J., Wei, J., Huang, H., Zhang, P., Zhu, J., and Chen, J.
+Sageattention: Accurate 8-bit attention for plug-and-play
+inference acceleration. arXiv preprint arXiv:2410.02367,
+2024b.
+Zhang, J., Wei, J., Zhang, P., Xu, X., Huang, H., Wang,
+H., Jiang, K., Zhu, J., and Chen, J. Sageattention3: Mi-
+croscaling fp4 attention for inference and an exploration
+of 8-bit training. arXiv preprint arXiv:2505.11594, 2025.
+Zhou, J., Lu, T., Mishra, S., Brahma, S., Basu, S.,
+Luan, Y., Zhou, D., and Hou, L. Instruction-following
+evaluation for large language models. arXiv preprint
+arXiv:2311.07911, 2023.
+11
+
+
+
+===== PAGE 12 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Figure 6. In a futuristic world where teleportation technology has become a reality, a bustling cityscape filled with towering skyscrapers
+and advanced architecture stands in the background. Amidst this backdrop, a group of diverse individuals, each with unique appearances
+and expressions, gather around a central chamber equipped with shimmering teleportation devices. The scene captures various stages
+of teleportation – from individuals floating mid-air before vanishing, to others appearing instantly in their destinations. The lighting
+is dramatic, with neon lights flickering and casting shadows across the faces of the teleportees. The camera moves between subjects,
+capturing moments of awe and excitement as they teleport, emphasizing the rapidity and efficiency of the new technology. The futuristic
+cityscape provides a vivid contrast to the serene yet chaotic scene within the teleportation chamber. Cinematic and high-tech visual style,
+focusing on the emotional impact of teleportation on the characters. Medium shot and wide shots showcasing the teleportation process.
+A. More Qualitative Results
+We provide additional qualitative comparisons in Figure 6, Figure 7, and Figure 8, and include more demos here without
+cherry-picking. The results show that Attn-QAT produces substantially higher-quality videos than SageAttention3 and
+achieves visual quality comparable to BF16 attention.
+B. Detailed Training Setup
+B.1. Diffusion Experiments
+All major training jobs for Wan-2.1-1.3B were conducted on a GB200 NVL72 and used 16 B200s. We use bf16 mixed-
+precision training with a global batch size of 16, 16 data-parallel groups for efficient batch processing, the AdamW optimizer
+(β1 = 0.9, β2 = 0.999) with a learning rate of 1 × 10−6, weight decay factor of 0.01, and the standard rectified flow
+matching loss as our objective. We trained these models for 4000 steps (which took roughly 12.5 hours) but noticed that the
+quality of our generated validation videos was better at around 3000 steps, so we opted to use the 3000 step checkpoint for
+inference. Because Attn-QAT requires keeping around extra buffers for the fake quantized Q, K, V, and high precision O
+tensors, we needed to use full gradient checkpointing to avoid running into OOM errors.
+We trained Wan-2.1-14B on 64 H200s (8 nodes of 8 H200s in the shared cluster we used). The mixed-precision policy,
+optimizer, weight decay factor, and loss are the same as for the 1.3B model experiments except we now use HSDP (Hybrid
+Sharded Data Parallel) with a replication dimension of 8 (across nodes) and a sharding dimension of 8 (within a node).
+Initially we wanted to try and use a global batch size of 64 but to avoid OOM errors, we needed to also use Ulysses with 2
+12
+
+
+
+===== PAGE 13 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Figure 7. Downtown street scene captured in a vibrant sunset, bustling with activity. A diverse crowd of people walk down the cobblestone
+streets, carrying bags and umbrellas. Cars honk and taxis weave through the narrow alleys. Street vendors set up their stalls, offering
+snacks and drinks. A group of friends laugh and chat as they take pictures together. The backdrop is a picturesque downtown skyline,
+with towering skyscrapers and modern architecture reflecting the golden hues of the setting sun. People are seen walking with various
+expressions, some looking at their phones, others lost in thought. The scene captures the energy and excitement of a lively downtown area.
+City lights start to flicker as the sun sets lower in the sky. The entire scene is filled with natural motion, with people moving about, vehicles
+driving, and the sun slowly descending. Downtown night-time atmosphere with warm lighting and soft shadows. Medium shot of the
+bustling street, full-body shots of people interacting, and low-angle shots of the skyline.
+sequence parallel groups to reduce the memory required to store activations. Thus, we ended up using a global batch size of
+32. We finetuned the 14B model for 400 training steps which took 1 day.
+For our preliminary experiments of finetuning Wan-2.1-1.3B using SageAttention3 with a naive BF16 backwards pass, we
+used 4 RTX 5090s with 16 gradient accumulation steps, utilizing both Ulysses sequence parallelism and data parallelism
+across the machines. This resulted in OOM errors at around step 200 during the first validation stage. Note that all of the
+other hyperparameters are the same as the rest of our Wan-2.1-1.3B training jobs as explained above.
+B.2. LLM Experiments
+Due to resource constraints, we did not perform any hyperparameter tuning for LLM experiments, and the largest run takes
+almost 6 hours on 4 B200 GPUs.
+Continued training.
+To study whether Attn-QAT can recover the quality degradation introduced by FP4 attention, we
+perform continued training on base language models using the C4 dataset (Raffel et al., 2020). We conduct experiments on
+Qwen3-8B and Llama 3.1-70B, using the English subset of C4 and training on a 10% shard of the dataset.
+All continued training experiments are run on 4 NVIDIA B200 GPUs with bf16 mixed-precision. For Qwen3-8B, we
+use a maximum sequence length of 8192, a per-device batch size of 4, and train for up to 2000 optimization steps. For
+Llama 3.1-70B, due to higher memory requirements, we use a per-device batch size of 1 with gradient accumulation of 2 and
+train for 4000 steps. We adopt the AdamW optimizer with a learning rate of 5 × 10−6 and enable activation checkpointing
+for all runs; for the 70B model, we additionally shard the token embedding and output layers to reduce memory usage.
+13
+
+
+
+===== PAGE 14 =====
+Attn-QAT: 4-Bit Attention With Quantization-Aware Training
+Figure 8. CG animation digital art, two adorable pandas sitting side-by-side on a bamboo forest backdrop. The pandas have expressive
+faces, one looking thoughtful with a raised eyebrow, the other with a curious look. They are both wearing traditional panda costumes
+with bright red sashes tied around their waists. Each panda holds a small notebook in front of them, depicting an academic paper. The
+background features lush bamboo forests and misty mountain peaks. The pandas are engaged in animated conversation, occasionally
+pointing at their notes. Soft lighting casts a warm glow over the scene. Detailed digital artwork with realistic textures. Low-angle view,
+medium shot side-by-side seating.
+We compare BF16 attention, naive FP4 attention without training, and FP4 attention trained with Attn-QAT under identical
+optimization settings. Model quality is evaluated using lm-eval-harness (Gao et al., 2024) on WikiText (Merity et al., 2016),
+HellaSwag (Zellers et al., 2019), PIQA (Bisk et al., 2020), WinoGrande (Sakaguchi et al., 2021), and ARC-C (Clark et al.,
+2018).
+Supervised fine-tuning.
+To evaluate whether Attn-QAT can be used as a drop-in replacement for BF16 attention
+during supervised fine-tuning (SFT), we fine-tune Qwen3-14B and Llama 3.1-70B base models on the Dolci-Instruct-SFT
+dataset (Olmo et al., 2025). All SFT experiments are conducted on 4 NVIDIA B200 GPUs using bf16 mixed-precision
+training.
+For Qwen3-14B, we use a maximum sequence length of 8192, a per-device batch size of 8 with gradient accumulation of 4,
+resulting in a global batch size of 128 tokens per step. For Llama 3.1-70B, due to higher memory requirements, we use a
+sequence length of 4096, a per-device batch size of 2, and the same gradient accumulation factor of 4. Both models are
+trained for a single epoch with a maximum of 2000 optimization steps. We adopt the AdamW optimizer with a learning rate
+of 5 × 10−6 and enable activation checkpointing for all experiments; activation offloading is additionally enabled for the
+70B model to avoid out-of-memory errors.
+14

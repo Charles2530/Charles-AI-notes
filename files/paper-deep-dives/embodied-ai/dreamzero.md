@@ -16,6 +16,47 @@ paper_topic: 具身智能 / VLA
     **GitHub / 项目：** GitHub：[dreamzero0/dreamzero](https://github.com/dreamzero0/dreamzero)；项目页：[dreamzero0.github.io/](https://dreamzero0.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2602.15922)；[官方 / 项目材料](https://dreamzero0.github.io/)；[官方 GitHub](https://github.com/dreamzero0/dreamzero)；Checked Date：2026-06-16；Repro Status：Paper / official materials / official GitHub reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+DreamZero 属于 World Action Model（WAM）路线，背景是 VLA 模型在语义泛化和物理动作泛化之间的落差。VLA 借助 VLM 预训练可以理解物体、语言和场景，能把“把可乐放到某个位置”这类语义指令接到已学动作上；但面对未见过的物理技能，例如解开绳结、使用新工具或在新环境中执行复杂接触运动，它往往缺少“动作怎样改变世界”的动态知识。
+
+视频生成模型提供了另一种先验：它们不是只识别当前画面，而是学习世界随时间如何变化。WAM 的核心想法是把 future video prediction 和 action prediction 放在同一个模型里，让策略不仅输出动作，还要解释动作对应的未来视觉后果。DreamZero 就是在这个背景下提出的 14B robot foundation model：用预训练视频扩散 backbone 继承世界物理动态，再通过机器人数据把动态先验接到动作控制上。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何让机器人策略在未见任务、未见环境和新 embodiment 上泛化，而不依赖每个任务的大量重复示教。** 难点在于，机器人数据昂贵且窄，VLA 的语言/视觉先验不能直接给出精确空间运动、接触动力学和电机控制。只拟合动作标签容易学到训练分布内模板，一旦任务需要新 motion，就会失效。
+
+另一个挑战是实时闭环。WAM 如果基于大型视频扩散模型，一边生成未来视频一边输出动作，计算成本很高。真实机器人控制不能只追求想象质量，还要在低延迟下稳定执行。DreamZero 因此同时要证明 WAM 的泛化价值和系统可部署性。
+
+### Finding
+
+作者的 finding 是：**视频可以作为世界演化的 dense representation；当模型联合预测未来视频和动作时，它学到的不是单纯动作标签映射，而是“动作-后果”对齐的物理动态先验。** 这个洞见把策略学习从“看当前状态出动作”翻转成“预测世界如何变化，并让动作与这种变化一致”。
+
+这个 finding 能解决泛化挑战，是因为未见任务的关键往往不是新物体名字，而是新动作后果。公开视频、人类视频或其他机器人的 video-only demonstration 虽然没有目标机器人的动作标签，但包含了物体和场景变化。WAM 可以先学这些视觉未来，再通过少量当前机器人数据学习 implicit inverse dynamics，把视觉未来映射到自己的动作空间。
+
+### 方法
+
+DreamZero 建在预训练 video diffusion backbone 上，模型同时预测 future video latent 和 action chunk。输入包括历史视觉观测、机器人 proprioception 和语言指令；输出包括未来视频和连续动作。论文把这种模型称为 World Action Model，而不是普通 Video Action Model，因为视频只是当前使用的世界建模目标，未来也可扩展到触觉、力反馈或 latent dynamics。
+
+训练上，DreamZero 系统探索 heterogeneous robot data、diverse non-repetitive data 和 cross-embodiment transfer。它使用自回归视频扩散架构做 long-horizon world-action modeling，并通过模型和系统优化让 14B 模型能以 7Hz 做实时闭环控制。对于跨 embodiment，论文引入 video-only demonstrations：其他机器人或人类视频不提供当前机器人的动作，但通过联合建模和少量 play data，模型可以把视觉动态迁移到新 embodiment。
+
+### 结论
+
+实验显示 DreamZero 相比 state-of-the-art VLAs，在真实机器人新任务和新环境泛化上获得超过 2 倍的平均 task progress 提升。系统优化使 14B autoregressive video diffusion model 可以在 7Hz 下闭环控制。跨 embodiment 实验中，使用其他机器人或人类的 video-only demonstrations，在仅 10-20 分钟数据下使 unseen task performance 相对提升超过 42%；新 embodiment 适配中，仅 30 分钟 play data 即可迁移，并保持 zero-shot generalization。
+
+论文也给出边界：DreamZero 当前更像 System 1 短时策略，visual memory 大约 6 秒，长时复杂执行仍可能需要 System 2 planner 或更长上下文 WAM；高精度装配、插钥匙等亚厘米任务仍继承行为克隆的局限；高自由度 embodiment 需要更多 play data 来学习 implicit inverse dynamics。结论不是“视频模型直接解决机器人”，而是“联合世界预测和动作预测能显著提高物理泛化”。
+
+### 关键术语
+
+- **World Action Model, WAM（世界动作模型）**：联合预测未来世界状态和动作的机器人策略模型。
+- **Vision-Language-Action, VLA（视觉语言动作模型）**：以视觉和语言为条件输出机器人动作的模型。
+- **Future World State（未来世界状态）**：模型预测的未来视频或其他世界表征，用来刻画动作后果。
+- **Implicit Inverse Dynamics Model（隐式逆动力学模型）**：从期望视觉变化中隐式推断本体动作的能力。
+- **Cross-Embodiment Transfer（跨具身迁移）**：把来自其他机器人或人类视频的动态知识迁移到当前机器人。
+- **Play Data（自由探索数据）**：机器人在新 embodiment 上采集的少量非任务化交互数据，用于适配动作空间。
+
 DreamZero 这篇论文要回答一个比“视频生成模型能不能预测未来”更尖锐的问题：**如果模型一边预测未来画面，一边预测产生这些画面的机器人动作，它能不能直接变成闭环机器人 policy？**
 
 这就是论文所谓的 World Action Model，简称 WAM。普通 VLA 学的是“当前图像和语言 -> 动作”；WAM 学的是“当前世界状态和语言 -> 未来世界怎样变化，以及机器人要做哪段动作”。两者都输出动作，但学习信号完全不同。VLA 容易把动作当成标签回归；WAM 被迫解释动作的后果，因此更接近“我知道这样动会把世界推到哪里”。

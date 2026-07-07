@@ -15,6 +15,47 @@ paper_topic: 世界模型 / Planning / Model-Based RL
     **GitHub / 项目：** 论文未在 arXiv 元数据中给出官方 GitHub；arXiv ancillary files 包含 pseudocode 和评测 JSON。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1911.08265)、官方 PDF、arXiv ancillary `pseudocode.py`；Checked Date：2026-07-06；Repro Status：Paper / pseudocode / ancillary data reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+MuZero 继承 AlphaZero 的搜索式强化学习背景，但移除了一个关键前提：已知游戏规则或完美模拟器。AlphaZero 在棋类游戏里很强，是因为 MCTS 可以调用真实规则展开未来；但在 Atari、机器人或其他真实环境中，agent 通常没有这样一个模拟器。传统 model-based RL 试图学习环境动力学，但常把大量容量花在预测像素或真实状态细节上，规划效果未必好。
+
+MuZero 把问题重新放回 planning：如果模型的唯一用途是给搜索树提供未来回报信息，那么它是否需要预测真实 observation？论文的回答是否定的。模型只要预测 reward、policy 和 value，就能服务 MCTS。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**能否在不知道环境规则的情况下，学习一个足以支持 MCTS 的模型，并同时在棋类和 Atari 上达到强性能？** 难点在于，搜索需要展开 hypothetical future；如果模型误差累积，MCTS 会被误导。另一方面，如果要求模型重建完整真实状态或像素，任务又太难，且很多细节与规划无关。
+
+这个问题的价值在于，它直接连接真实世界决策：很多环境没有可调用规则模拟器，但仍需要 planning。MuZero 想保留 AlphaZero 的搜索优势，同时让模型从交互数据中学习。
+
+### Finding
+
+作者的 finding 是：**用于规划的世界模型不必等价于真实环境模型；它只需要在搜索树中保持 value-equivalent，即能预测对决策有用的 reward、policy 和 value。** 这个洞见把世界模型从“复原世界”翻转为“服务规划的抽象状态机”。
+
+这个 finding 能解决挑战，因为它大幅减少了模型必须学习的信息。hidden state 不需要可解释、不需要重建图像、不需要对应真实棋盘或 Atari RAM；只要在真实动作序列上 unroll 后能对齐 reward、MCTS policy target 和 n-step return，搜索就可以利用它。模型容量因此集中在决策相关变量上。
+
+### 方法
+
+MuZero 模型由三个函数组成。representation function \(h\) 把历史 observations 编码成 root hidden state；dynamics function \(g\) 接收 hidden state 和假设 action，输出 immediate reward 和下一 hidden state；prediction function \(f\) 从 hidden state 输出 policy prior 和 value。MCTS 在这些 hidden states 上展开搜索，selection 使用 policy prior 和 value，expansion 调用 learned dynamics，backup 使用 predicted rewards 和 values。
+
+训练时，从 replay buffer 采样真实轨迹。模型先用 \(h\) 编码真实历史，再沿真实动作序列用 \(g\) unroll 多步，并在每一步用 \(f\) 预测 policy 和 value。loss 对齐三类 target：真实 observed reward、由搜索 visit counts 得到的 policy target、以及 board games 的最终 outcome 或 Atari 的 n-step return。行动时，agent 对当前 observation 运行 MCTS，并按搜索 visit counts 选择动作。
+
+### 结论
+
+实验显示，MuZero 在 chess、shogi、Go 中达到或匹配 AlphaZero 的超人类表现，同时在 57 个 Atari games 上超过当时强 model-free 方法的平均和中位人类归一化分数。论文还通过 Go 和 Ms. Pacman 的分析展示，增加搜索模拟数能提升或稳定性能，说明 learned model 不是只作为普通 policy network 使用，而确实支撑了 planning。
+
+MuZero 的结论边界也很重要：它不是一个可解释环境模拟器，也不输出可视化未来；它证明的是 value-equivalent model 足以支持 MCTS。对世界模型专题来说，MuZero 提醒我们：世界模型可以按用途定义。如果用途是规划，预测决策相关量可能比预测所有像素更有效。
+
+### 关键术语
+
+- **Value-equivalent Model（价值等价模型）**：不要求复原真实环境状态，只要求在规划中产生等价的 reward、policy 和 value 信息。
+- **Representation Function, h（表征函数）**：把历史观测编码成搜索根节点 hidden state。
+- **Dynamics Function, g（动力学函数）**：在 hidden state 和假设动作上展开下一 hidden state，并预测即时奖励。
+- **Prediction Function, f（预测函数）**：从 hidden state 输出 policy prior 和 value，指导 MCTS。
+- **Monte Carlo Tree Search, MCTS（蒙特卡洛树搜索）**：通过模拟多条未来路径、累积访问次数和价值估计来选择动作的搜索算法。
+- **Visit Count Policy（访问次数策略）**：MCTS 后根据每个动作被访问次数形成的训练或行动策略目标。
+
 MuZero 的核心不是“学一个能重建环境的模型”，而是更锋利的一句话：**世界模型只需要预测规划直接需要的量：reward、policy、value。** 它不要求 hidden state 能重建像素，也不要求 hidden state 对齐真实环境状态；只要这个内部状态能支撑 MCTS 产生更好的 policy/value target，它就可以成为用于 planning 的模型。
 
 这让 MuZero 和 PlaNet/Dreamer 路线形成鲜明对照。PlaNet/Dreamer 用 observation reconstruction、reward、discount 和 latent dynamics 学一个可 rollout 的状态空间；MuZero 则把模型直接训练成搜索树里的抽象状态转移器。它更像“把 AlphaZero 的真实规则模拟器替换成 learned dynamics model”，再把搜索结果反过来训练模型。

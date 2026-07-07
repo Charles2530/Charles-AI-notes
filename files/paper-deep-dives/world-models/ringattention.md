@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/haoliuhl/ringattention](https://github.com/haoliuhl/ringattention)；项目页：[largeworldmodel.github.io/lwm/](https://largeworldmodel.github.io/lwm/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2310.01889)；[GitHub API / repo](https://github.com/haoliuhl/ringattention)；[官方 / 项目材料](https://largeworldmodel.github.io/lwm/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+RingAttention 是 LWM 等长上下文世界模型的系统基础。世界模型常要处理长视频、长文本、代码、动作轨迹和交互历史，这些序列可能达到百万甚至千万 token。标准 Transformer 的 self-attention 虽然表达力强，但显存随序列长度增长很快；FlashAttention 等方法减少了 attention matrix 的显式存储，Blockwise Parallel Transformer 也降低了 attention/FFN 激活，但单设备仍要承受长序列层输出和 KV 访问压力。
+
+这篇论文的背景不是提出新的语义模型，而是回答一个底层问题：能否在不做 sparse/sliding approximation 的情况下，把 exact attention 扩展到多设备、超长序列。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何让 Transformer 的上下文长度随设备数近似线性扩展，同时不丢掉全局 attention、也不引入额外通信开销？** 挑战在于，序列切到多个设备后，每个 query block 仍需要看所有 key/value blocks；如果简单 all-gather KV，会造成高通信和高内存；如果把远处 token 剪掉，则不再是 exact attention。
+
+这个问题有价值，因为长视频和长交互历史中的信息可能分布在任意位置。世界模型如果只能看局部窗口，可能错过早期事件、目标变化或长程依赖。RingAttention 试图让模型保留全局交互能力。
+
+### Finding
+
+作者的 finding 是：**blockwise attention 的 key/value block 处理顺序可以重排，只要正确维护 softmax 统计；因此可以让 KV blocks 沿设备环流动，并把通信隐藏在当前 block attention 计算之中。** 这个洞见把长上下文瓶颈从“每个设备都存全序列”翻转为“每个设备固定 query block，KV 逐块经过”。
+
+这个 finding 能解决挑战，因为每个 query 最终仍与所有 KV blocks 计算 attention，模型定义不变；但任一时刻设备只需要本地 query block、当前 KV block 和少量累积统计。若 block 足够大，attention/FFN 计算时间可以覆盖 KV 传输时间，从而实现近似零额外通信 overhead。
+
+### 方法
+
+RingAttention 将长序列按 sequence dimension 切成多个 blocks，分配到多个 hosts。每个 host 持有一个 query block，并计算本地 Q/K/V。然后 K/V blocks 沿 ring topology 传递；每个 host 在收到一个 KV block 时，用本地 query block 与该 KV block 做 blockwise attention，并用稳定 softmax 累积输出。与此同时，host 把当前 KV block 发给下一个 host，接收上一个 host 的 KV block。
+
+该方法兼容 memory-efficient attention 和 blockwise feedforward。算法上，它不改变 Transformer 层的数学定义，只改变数据放置和计算顺序。论文还分析了 block size、FLOPS、interconnect bandwidth 的关系，指出当每个设备序列长度达到一定规模时，通信可以被 blockwise computation 覆盖。
+
+### 结论
+
+实验显示，RingAttention 在语言建模和强化学习序列任务中可以支持百万级甚至更长 context，并让上下文长度随设备数扩展。论文报告在 32 A100 GPU 上支持 7B model 超过 1M tokens context，在更大 TPU 配置上可扩展到数千万 token；同时 MFU 和 throughput 没有因长上下文训练而不可接受地下降。强化学习实验也显示长 trial-and-error history 可以带来性能收益。
+
+需要注意的是，RingAttention 本身不是世界模型算法，它不提供动作建模、奖励预测或视频生成能力。它的贡献是系统层：让模型能够以 exact attention 读取更长的世界经验，为 LWM 这类长视频/长文本模型提供基础设施。
+
+### 关键术语
+
+- **RingAttention（环形注意力）**：让 key/value blocks 在设备环上流动、本地 query block 累积 exact attention 的长上下文计算方法。
+- **Blockwise Attention（分块注意力）**：按 query/key/value block 逐块计算 attention，并维护 softmax 统计，避免一次性物化完整矩阵。
+- **Sequence Parallelism（序列并行）**：沿序列维度把 token 分配到多个设备，减少单设备内存压力。
+- **Exact Attention（精确注意力）**：不剪枝、不滑窗、不近似，每个 query 最终可以 attend to 全部 key/value。
+- **Communication-Compute Overlap（通信计算重叠）**：在计算当前 block attention 的同时传输下一批 KV block，隐藏通信延迟。
+- **Model FLOPS Utilization, MFU（模型 FLOPS 利用率）**：衡量训练实际计算效率的指标；论文用它验证超长上下文下效率仍可接受。
+
 > **这篇回答的问题。** 如何理解“RingAttention”背后的核心机制、适用边界和下一步阅读路径。
 
 RingAttention 不是一个直接预测未来视频的世界模型，但它是 [LWM](lwm.md) 这类百万 token 视频语言世界模型的关键系统底座。它解决的是一个更底层的问题：**如果世界经验是长视频、长文本、动作轨迹和多轮交互，Transformer 怎样在不做稀疏近似的情况下看完整序列？**

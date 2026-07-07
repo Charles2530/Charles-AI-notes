@@ -15,9 +15,35 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/tianweiy/DMD2](https://github.com/tianweiy/DMD2)；项目页：[tianweiy.github.io/dmd2/](https://tianweiy.github.io/dmd2/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2405.14867)；[GitHub API / repo](https://github.com/tianweiy/DMD2)；[官方 / 项目材料](https://tianweiy.github.io/dmd2/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-DMD2 是 [DMD](dmd.md) 的直接续作。它不是简单把 DMD 多训一会儿，而是正面修补 DMD 在大规模文生图蒸馏中的三个痛点：**回归配对数据太贵、fake score 跟不上 generator、一步模型容量不足以吃下 SDXL 这种大模型的复杂分布**。
+## 原论文故事线
 
-一句话概括：DMD2 把 DMD 从“分布匹配 + paired regression regularizer”推进到“更纯的分布匹配 + fake critic 两时间尺度训练 + GAN 真实数据监督 + 多步 backward simulation”。
+### 研究背景
+
+原论文把 DMD2 写成 DMD 的工程化续作。DMD 已经说明，少步扩散蒸馏可以不依赖逐轨迹回归，而用 real/fake score difference 做分布匹配；但在 ImageNet、Stable Diffusion、SDXL 这类大模型上，原始 DMD 的 paired regression 数据成本很高，fake score model 也容易落后于快速变化的 generator。另一方面，真实数据监督和多步 generator 又是高质量文生图少步采样必须面对的实际问题。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何把 DMD 从一步 proof-of-concept 推到更稳、更大规模的少步 image synthesis。挑战有三层。第一，预先生成大量 teacher pairs 成本巨大，而且会把学生绑在 teacher deterministic path 上；第二，DMD 梯度依赖 fake critic 准确估计当前 generator distribution，critic 如果追不上，generator 会收到错误方向；第三，4-step / few-step generator 的中间状态来自自己，而不是 teacher 干净轨迹，训练时必须模拟这种推理分布。这个问题的价值在于，少步 SD / SDXL 是实际部署可感知的延迟收益。
+
+### Finding
+
+DMD2 的 finding 是：DMD 的关键不是 paired regression，而是一个足够可靠的 distribution matching critic。只要让 fake critic 以更合适的时间尺度追踪 generator，并用真实数据 adversarial signal 补上 teacher score 的偏差，就可以去掉昂贵的 paired regression。进一步说，多步学生不是简单重复一步学生；它必须在训练中见到自己上一步生成的中间状态，所以 backward simulation 是 few-step 蒸馏成立的必要条件。
+
+### 方法
+
+方法从四个方向改造 DMD。第一，移除 regression loss，降低 teacher pair 依赖。第二，引入 TTUR，让 fake critic 更新频率和强度高于 generator，避免 score estimator 滞后。第三，加入 GAN loss，把真实图像数据作为额外监督，让模型不只依赖 teacher score。第四，对多步 generator 使用 backward simulation：从噪声沿学生当前 few-step 轨迹展开中间状态，再在这些状态上训练，使训练分布靠近推理分布。论文分别在 ImageNet-64、SD v1.5、SDXL 上给出训练配置和结果。
+
+### 结论
+
+实验表明，DMD2 在 ImageNet-64、COCO 文本生成、SD v1.5 和 SDXL 少步采样上，比原始 DMD 和多种少步 baseline 更稳，尤其能把 4-step SDXL 推到可用质量。消融显示 TTUR 对 fake critic 稳定性关键，GAN loss 能提升真实数据对齐，多步 backward simulation 对 4-step 结果重要。人类偏好评测进一步说明指标提升不只是 FID 数字变化，而对应更可接受的视觉质量。边界是系统更复杂，训练仍然昂贵，并不等同于免成本的一步采样器。
+
+### 关键术语
+
+- **TTUR（Two-Time-Scale Update Rule，双时间尺度更新）**：让 critic 与 generator 使用不同更新节奏，使 fake score 更快跟上生成分布
+- **Fake Critic（伪分布 critic）**：DMD2 中估计当前 generator distribution score 的模型
+- **GAN Loss（生成对抗损失）**：用真实数据判别信号补充 diffusion score 监督，提高样本真实感
+- **Backward Simulation（反向模拟）**：用当前学生模型展开 few-step 中间状态，让训练分布接近推理分布
+- **Few-step Generator（少步生成器）**：用 2、4 等少量 denoising / generation step 完成扩散采样的学生模型
 
 ## 论文位置
 

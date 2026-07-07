@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/LargeWorldModel/LWM](https://github.com/LargeWorldModel/LWM)；项目页：[largeworldmodel.github.io/lwm/](https://largeworldmodel.github.io/lwm/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2402.08268)；[GitHub API / repo](https://github.com/LargeWorldModel/LWM)；[官方 / 项目材料](https://largeworldmodel.github.io/lwm/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+LWM 属于长上下文多模态自回归模型路线。传统 VLM 处理长视频时常要强下采样，只取少数帧送入模型；这样会丢掉细粒度事件和长程依赖。与此同时，世界模型如果要理解长视频、书本、动作轨迹或交互历史，就需要能处理百万级 token 的上下文。RingAttention 等系统方法为 exact long-context Transformer 提供了基础。
+
+LWM 的思路是把文本、图像和视频都离散成 tokens，拼接到同一个 autoregressive Transformer 中训练。它不是 Dreamer 式 reward-conditioned control model，也不是纯视频 diffusion simulator，而是“长上下文 token 序列世界模型”：通过 1M token context 同时支持长文检索、长视频理解、图像/视频生成和任意模态到任意模态的转换。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何训练一个 7B 级模型，使它能在 1M token 上下文中同时处理长文本和长视频，并保留短上下文能力与多模态生成能力？** 难点包括：百万上下文训练的内存和通信成本；视频帧 token 数暴涨；视觉和文本数据混合会造成 loss 和能力干扰；sequence packing 如果不做 mask，会让不同样本之间互相泄露。
+
+这个问题有价值，因为很多真实世界经验都是长序列。小时级视频、长文档和长交互轨迹不能被压缩成几帧或几段摘要后仍保留全部细节。LWM 试图证明把长序列直接纳入模型上下文是可行路线。
+
+### Finding
+
+作者的 finding 是：**世界模型的一个关键瓶颈不是缺少更复杂的多模态接口，而是上下文长度；当文本、图像和视频统一为 token 序列并用 exact long-context attention 训练时，长视频理解和多模态生成可以落到同一个 next-token prediction 框架里。** 这个洞见把“视频理解”从采样少量帧的表示问题，转成“能否直接读取足够长世界历史”的序列建模问题。
+
+这个 finding 解释了 LWM 的设计。VQGAN 把每帧视频转成固定数量离散 token，BPE 处理文本，特殊 token 标出视觉边界；RingAttention 让模型能训练 1M context；progressive context extension 避免一次性拉长上下文导致训练不稳；masked sequence packing 保证 packed 样本之间不互相泄露。统一 token-in/token-out 让 text-to-image、video QA、image caption 和 text-to-video 都成为同一模型的不同序列格式。
+
+### 方法
+
+LWM 基于 LLaMA-2 7B，使用两阶段训练。Stage I 先训练 LWM-Text，把上下文从 4K 逐步扩展到 32K、128K、256K、512K、1M，并构造长文本、Books3 chunk、合成问答和 retrieval 数据。Stage II 在 1M text model 基础上加入视觉语言训练，使用 aMUSEd VQGAN 将图像或视频帧 token 化；每帧 256 个 visual tokens，并用 `<vision>`、`</vision>`、`<eof>`、`<eov>` 等标记边界。
+
+数据包括 text-image、text-video、image/video chat、长文本和视频理解数据。训练中使用 progressive sequence length、masked sequence packing、loss balancing 和一定比例文本混合，以保持语言能力。长上下文系统底座使用 Blockwise RingAttention，推理也实现了支持百万级序列的 RingAttention decoding。
+
+### 结论
+
+实验上，LWM-Text 在 needle retrieval 和长文本任务中展示了 1M context 能力；LWM / LWM-Chat 在长视频问答中能处理比常见 VLM 更多的帧，并在论文定性例子中回答 1 小时 YouTube compilation 的细节问题。模型还能做 text-to-image、text-to-video、image/video caption 和 video QA，说明统一 token 序列具有 any-to-any 形式优势。
+
+论文也明确有局限：短视频 benchmark 不一定 SOTA，frame-by-frame tokenization 让视频 token 成本很高，7B 模型规模也限制了上限。LWM 的结论不是“百万上下文解决世界模型”，而是证明 exact long-context autoregressive multimodal model 可以直接把长视频和长文档放进同一训练框架。
+
+### 关键术语
+
+- **Large World Model, LWM（大世界模型）**：LWM 论文中的 1M context 文本/视频语言自回归模型家族。
+- **Million-token Context（百万 Token 上下文）**：模型一次可处理约 1M tokens 的上下文，用于长文档和长视频。
+- **VQGAN Tokenization（VQGAN 离散化）**：把图像或视频帧编码成离散 visual tokens，使视觉也可进入 next-token prediction。
+- **Masked Sequence Packing（带掩码序列打包）**：把多个样本打包进长序列训练，同时通过 mask 防止样本间注意力泄露。
+- **Progressive Context Extension（渐进式上下文扩展）**：从较短上下文逐步训练到更长上下文，降低长上下文训练不稳定性。
+- **Any-to-Any Autoregression（任意模态到任意模态自回归）**：文本、图像、视频都作为 token 输入输出，用同一模型完成理解和生成。
+
 LWM 的核心价值不是把视频扩散模型做得更好看，也不是像 Dreamer 那样训练一个能规划的 latent dynamics。它回答的是另一个世界模型问题：**如果把长视频、图像和文本都离散成 token，能不能训练一个 7B 自回归 Transformer 在 1M token 上下文里同时理解和生成这些序列？**
 
 这篇论文最值得放进世界模型专题，是因为它把“世界模型”推向了长上下文记忆和多模态序列建模方向：模型不只看几秒钟视频，而是可以在上万帧、一本书、一个小时视频里做检索、问答和生成。

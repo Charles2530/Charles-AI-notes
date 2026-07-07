@@ -15,9 +15,35 @@ paper_topic: 高效训练
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1910.02054)；[官方 / 项目材料](https://www.microsoft.com/en-us/research/publication/zero-memory-optimizations-toward-training-trillion-parameter-models/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-ZeRO 要解决的问题不是“模型太大”这么笼统，而是更精确的一笔显存账：普通 data parallel 让每张 GPU 都保存完整 parameters、gradients 和 optimizer states。GPU 数量增加后，计算吞吐和全局 batch 可以变大，但单卡上那份训练状态没有变小。于是训练大模型时，你经常不是被 fp16 权重本身卡住，而是被 Adam 状态、梯度、master weights、激活和临时 buffer 一起挤爆。
+## 原论文故事线
 
-ZeRO 的核心思想很朴素：**既然 data-parallel ranks 训练的是同一个模型，就不应该让每张卡长期保存同一份训练状态；把 optimizer states、gradients、parameters 分阶段切到不同 ranks，需要时再通信取回。**
+### 研究背景
+
+ZeRO 原论文针对的是数据并行训练大模型的显存冗余。普通 data parallel 中，每张 GPU 都保存完整 parameters、gradients 和 optimizer states；GPU 数量增加后，batch 和计算并行度可以变大，但单卡训练状态没有变小。混合精度 Adam 还会引入 fp32 master weights、一阶矩、二阶矩等额外状态，使真正卡住训练的往往不是 fp16 参数本身，而是模型状态副本。
+
+### 问题（Challenge）
+
+ZeRO 要解决的问题是：如何在不牺牲数据并行易用性和计算效率的前提下，消除每张卡重复保存完整训练状态的浪费。挑战在于 optimizer states、gradients、parameters 都在不同训练阶段被访问；如果简单切分，会在 forward、backward、optimizer step 中引入大量通信，可能让显存省下来但吞吐崩掉。这个问题有价值，因为训练 trillion-parameter 级模型的第一道门槛就是单卡是否能容纳必要状态。
+
+### Finding
+
+ZeRO 的 finding 是：data-parallel ranks 逻辑上共享同一个模型，因此训练状态不需要在每张卡长期完整复制；可以按训练阶段分片，并只在需要时通信恢复局部计算所需状态。这个 insight 把数据并行从“复制模型、只切数据”翻转成“数据仍并行，但模型状态也在 DP 组内分片”。关键是分三阶段逐步切 optimizer states、gradients、parameters，让通信成本可控。
+
+### 方法
+
+ZeRO-DP 分三阶段。Stage 1 分片 optimizer states，每张卡只保存一部分 Adam 状态；Stage 2 继续分片 gradients，backward 后只保留归属 rank 的梯度；Stage 3 连 parameters 也分片，forward / backward 需要某层参数时临时 all-gather，用完释放。论文还提出 ZeRO-R 处理 residual memory，包括 activation、temporary buffers 和 memory fragmentation。输入是标准数据并行训练任务，输出是同样语义下更低单卡显存占用的训练系统。
+
+### 结论
+
+论文通过显存公式、最大可训练模型规模、吞吐和 scaling 实验说明 ZeRO 可以把 DP 的 model-state memory 从每卡完整复制降到近似按 DP degree 分摊，使数百亿到万亿参数训练变得可行。实验展示 ZeRO 在吞吐、最大模型规模和显存峰值上优于普通 DP，并能与模型并行组合。边界是 ZeRO 主要优化模型状态显存，激活、通信 buffer、网络带宽和 checkpoint 策略仍需要单独设计；Stage 3 的通信也必须和计算重叠或控制粒度。
+
+### 关键术语
+
+- **Data Parallelism（数据并行）**：每张 GPU 持有模型副本，处理不同 batch shard 后同步梯度
+- **Optimizer States（优化器状态）**：Adam 等优化器保存的一阶矩、二阶矩、master weights 等训练状态
+- **ZeRO-DP（ZeRO 数据并行）**：在数据并行组内分片 optimizer states、gradients 和 parameters
+- **All-Gather（全收集）**：把各 rank 分片参数收集成当前计算需要的完整张量
+- **Residual States（残余状态）**：activation、temporary buffer、memory fragmentation 等非模型状态显存
 
 ## 先拆显存：model states 和 residual states
 

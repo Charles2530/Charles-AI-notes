@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/Li-Zn-H/AwesomeWorldModels](https://github.com/Li-Zn-H/AwesomeWorldModels)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.16732)；[GitHub API / repo](https://github.com/Li-Zn-H/AwesomeWorldModels)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+这篇综述面向 embodied AI 的 world models。具身智能中的 agent 不只要识别当前画面，还要在部分可观测环境中维护内部状态、预测动作后果、规划未来、处理空间结构和时间演化。传统强化学习、VLA、视频生成和几何表示各自解决一部分问题，但“world model”这个词在不同论文中含义不一。
+
+综述的背景是把这些路线放在统一坐标系中：世界模型可以是 latent dynamics，可以是可渲染 3D state，可以是视频模拟器，也可以是参与决策的 internal simulator。关键不是模型是否“知道世界知识”，而是它是否把历史观测和动作组织成可预测的未来状态。
+
+### 问题（Challenge）
+
+综述要解决的问题是：**如何系统分类 embodied AI 中的世界模型，并区分它们在决策耦合、时间建模和空间表示上的差异？** 难点在于，这些模型跨越 RL、robotics、video generation、3D scene representation、navigation 和 manipulation；有些直接训练 policy，有些只学 representation，有些生成视觉未来，有些维护 latent belief。
+
+这个问题有价值，因为一个新模型是否适合具身任务，取决于它在这三条轴上的位置：它和决策是否紧耦合，未来是递推 rollout 还是一次性预测，世界状态是向量、token、occupancy、scene graph 还是 3D representation。
+
+### Finding
+
+综述的 finding 是：**具身世界模型可以用三条主轴理解：decision coupling、temporal evolution、spatial representation；这三者共同决定模型是否能从“预测未来”转化为“帮助行动”。** 这个洞见把零散文献整理成可操作分类。
+
+这个 finding 能解决阅读混乱：Dreamer 类模型强在 latent temporal rollout 和 policy coupling；JEPA/V-JEPA 强在 representation prediction，但缺动作闭环；LWM/RingAttention 强在长上下文记忆；LingBot/视频世界模型强在视觉未来模拟；几何/3D 方法强在空间结构和可渲染状态。不同路线不是互相替代，而是覆盖不同轴。
+
+### 方法
+
+综述先用 POMDP 形式化世界模型：agent 只能看到 observation \(o_t\)，执行 action \(a_t\)，需要维护 latent state \(z_t\)。Dynamics prior \(p_\theta(z_t|z_{t-1},a_{t-1})\) 用于未来 rollout；filtered posterior \(q_\phi(z_t|z_{t-1},a_{t-1},o_t)\) 用真实观测校正状态；reconstruction 或 prediction head 让 latent 解释观测或任务信号。
+
+随后论文按 taxonomy 展开：按决策耦合程度区分 model-free-like implicit world model、planning-oriented model、policy-integrated model；按时间建模区分一步预测、多步 rollout、hierarchical temporal abstraction 和 long-horizon memory；按空间表示区分 latent vector、token grid、occupancy / BEV、scene graph、NeRF / Gaussian / 3D representation 等。它还整理数据集、benchmark、评估指标和未来挑战。
+
+### 结论
+
+综述结论是：embodied world models 正在从小型 latent dynamics 走向 foundation-scale、video-based、geometry-aware 和 policy-integrated 系统，但闭环效用、长时稳定性、动作可控性、物理一致性和安全性仍是主要瓶颈。单独的视频生成质量、重建误差或 representation benchmark 都不足以证明具身智能收益。
+
+对本站来说，这篇综述适合作为路线地图：遇到新论文时先问它属于哪条轴，输入输出是什么，预测如何被 policy/planner 使用，评估是否包含真实或模拟闭环。
+
+### 关键术语
+
+- **Embodied AI（具身智能）**：在物理或模拟环境中通过感知和行动完成任务的智能系统。
+- **Internal Simulator（内部模拟器）**：在 latent 或显式空间中模拟未来状态，供规划和控制使用的模型。
+- **Decision Coupling（决策耦合）**：世界模型与 policy/planner 连接的紧密程度。
+- **Temporal Evolution（时间演化）**：模型如何表示状态随时间和动作变化，包括一步、多步、层级和长上下文。
+- **Spatial Representation（空间表示）**：世界状态的空间编码方式，如 latent、grid、BEV、scene graph、NeRF 或 3D Gaussian。
+- **POMDP（部分可观测马尔可夫决策过程）**：agent 无法直接观察完整状态，只能用历史观测和动作推断 latent state 的决策模型。
+
 这篇论文不是一个新模型，而是一张世界模型文献地图。它最有价值的地方，是把近几年非常混乱的 world model 工作压到三个问题上：**模型和决策耦合得多紧、未来是一步步 rollout 还是整体预测、世界状态到底用向量、token、网格还是可渲染 3D 表示。**
 
 如果你想快速判断一篇新论文的位置，这篇综述比单篇 Dreamer、V-JEPA、LingBot-World 更适合做入口。它不会教你复现某个模型，但会帮你判断：这篇工作证明的是视觉生成能力、状态预测能力、规划收益，还是闭环控制能力。

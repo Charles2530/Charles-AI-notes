@@ -11,11 +11,52 @@ paper_topic: 技术报告
     **作者：** NVIDIA。<br>
     **机构：** NVIDIA。<br>
     **时间 / 主题：** 2026-04；技术报告。<br>
-    **arXiv / 官方报告：** arXiv：未找到专门条目。<br>
+    **arXiv / 官方报告：** arXiv：[2604.12374](https://arxiv.org/abs/2604.12374)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
-    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2604.12374) / 官方发布页；Checked Date：2026-07-07；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-Nemotron 3 Super 要抓三条主线：Hybrid Mamba-Attention + LatentMoE 降低长上下文和 MoE 带宽成本，shared-weight MTP 缓解草稿头 train-test mismatch，异步多环境 GRPO 强化数学、代码、工具、终端和长上下文能力。本文聚焦 `Super 120B-A12B`。
+## 原论文故事线
+
+### 研究背景
+
+Nemotron 3 Super 属于 open-weight 大模型技术报告，但它的核心不是“再堆一个更大的 Transformer MoE”。它站在几条已有路线的交叉点上：MoE 用稀疏激活扩大参数容量，Mamba / state space model 用固定大小状态降低长序列生成成本，attention anchor 保留全局 token 交互，MTP 用未来 token 预测支撑 speculative decoding，RL post-training 则把模型能力推向工具调用、终端操作、代码修复和长上下文任务。
+
+这些方向各自解决一部分问题。MoE 能增加容量，但 routed expert weights 和 all-to-all communication 会成为服务瓶颈；Mamba 的线性时间生成更适合长输出，但纯 recurrent state 难以替代全部 attention；MTP 可以加速解码，但独立 draft heads 容易出现 train-test mismatch；agentic RL 能提升真实工具任务，但 rollout 成本高、任务分布差异大。Nemotron 3 Super 的报告试图把这些系统问题放在同一个模型里解决。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**怎样训练和部署一个 120B total、约 12B active 的开放模型，让它在 agentic reasoning 上接近同级强模型，同时在长上下文和长输出场景有更高吞吐？** 这个问题难在两个层面。模型结构层面，长上下文生成受 KV cache、attention 计算、expert 权重读取和分布式 MoE 通信共同限制，不能只优化单一模块。训练层面，agentic tasks 需要数学、代码、工具、终端、搜索和长上下文混合训练，如果只在一个环境上做 RL，很容易在其他能力上回退。
+
+这个问题的价值很直接：agent 模型的真实成本不只来自预训练 FLOPs，也来自推理时长输出、并发 serving、工具任务 rollout 和多环境后训练。如果一个模型只有 benchmark 精度而没有吞吐和部署效率，就很难在 agent 场景中规模化使用。
+
+### Finding
+
+作者的 finding 是：**agentic reasoning 的效率问题不是单点 bottleneck，而是“序列状态、稀疏专家、draft decoding、低精度训练和多环境 RL”之间的系统耦合；把计算移到更便宜的表示空间，并让训练目标服务于推理路径，才能同时拿到能力和吞吐。** 这个洞见把问题从“Transformer MoE 是否足够大”改成“每个 token 的状态、通信、专家读取和后训练 rollout 是否匹配 agent 工作负载”。
+
+这个 finding 解释了报告里的主要设计。Mamba-heavy hybrid 架构让多数层用固定大小 state 处理长序列，少量 attention 层作为 global anchors 保留全局交互；LatentMoE 不是在 hidden dimension 上做专家计算，而是先投影到 latent dimension，再路由和计算，从而降低 expert bandwidth 和 all-to-all payload；shared-weight MTP 让同一个预测头在多个 offset 上训练，减少递归 draft 时的分布偏移；异步多环境 GRPO 则把数学、代码、搜索、终端和长上下文 rollout 解耦，让训练吞吐和任务覆盖同时成立。
+
+### 方法
+
+模型方面，Nemotron 3 Super 120B-A12B Base 是 88 层 hybrid Mamba-Attention MoE，总参数约 120B，每次 forward 激活约 12B。多数层由 Mamba-2 和 LatentMoE 构成，少量 attention 层作为全局锚点；attention 使用 GQA，32 个 query heads、2 个 KV heads。LatentMoE 将 token 从 hidden dimension 投影到较小 latent dimension，在 latent space 中进行 routing 和 expert computation，再投影回原 hidden space；报告配置中总 experts 为 512，每 token 激活 22 个 experts。
+
+训练方面，预训练总量为 25T text tokens，分为 20T 多样性覆盖阶段和 5T 高质量/benchmark 强化阶段，使用 Warmup-Stable-Decay 学习率日程。报告强调这是 Nemotron 3 系列中首个使用 NVFP4 预训练的 Super 模型，但并非所有层都用 FP4：最终部分网络、latent projections、MTP layers、QKV/attention projections 和 embedding 等模块保留 BF16 或更高精度，Mamba output projection 使用 MXFP8 以缓解 underflow。
+
+后训练方面，模型先通过 SFT 扩大 agentic harness、数学、代码、工具和长上下文数据覆盖，再用异步 GRPO 做多环境 RL。异步设置把训练和推理解耦，多个环境并行产生 rollout；PivotRL 用于长时程 agentic capabilities，覆盖 programming、search、terminal、tool use 和长上下文等域。MTP 方面，模型使用 shared-weight 多 token prediction，使同一预测头在训练时覆盖多个未来 offset，推理时可递归生成 draft token 来提高 speculative decoding 的 acceptance length。
+
+### 结论
+
+实验结论主要有五类。第一，在 Figure 1 的报告口径下，Nemotron 3 Super 在 IFBench、HMMT、SWE-Bench、HLE、Terminal Bench、Tau Bench、RULER 1M 等能力评估上与 GPT-OSS-120B、Qwen3.5-122B 处于相近区间，同时在 8k input / 64k output 设置中达到最高 2.2x 和 7.5x 的吞吐提升。第二，LatentMoE 的目标不是单纯减少参数，而是在相似 active compute 下扩大 total experts 和 top-k active experts，同时减少 routed expert computation 与通信 payload。第三，shared-weight MTP 在 SPEED-Bench 和 throughput frontier 上提高 average acceptance length，并让 draft depth 增加时吞吐-延迟前沿向外移动。
+
+第四，NVFP4 预训练实验显示低精度会带来更多 zero-valued gradients，尤其在 routed expert 的低范数通道上；但报告中的 MXFP8 healing 虽改善 loss trajectory，却没有带来持续下游 accuracy 收益，所以最终仍按 NVFP4 recipe 完成 25T token horizon。第五，后训练评估显示扩大 agentic SFT 数据和多环境 RL 后，模型在软件工程、终端使用、工具使用、长上下文和通用推理任务上明显强于 Nemotron 3 Nano，并在同级开放模型中保持竞争力。报告的结论不是某个模块单独有效，而是这些模块组合后形成了面向 agentic serving 的能力-吞吐折中。
+
+### 关键术语
+
+- **Hybrid Mamba-Attention（混合 Mamba-Attention 架构）**：用 Mamba-2 层承担大部分长序列状态更新，用少量 attention 层补充全局 token 交互，目标是在长上下文生成中降低 KV cache 和 attention 成本。
+- **LatentMoE（潜空间混合专家）**：先把 hidden state 投影到较小 latent space，再做 expert routing 和 expert computation，以降低 expert 权重读取和 all-to-all communication。
+- **Multi-Token Prediction, MTP（多 Token 预测）**：让模型预测多个未来 token 的训练/推理机制；Nemotron 3 Super 使用 shared-weight MTP，减少递归 draft decoding 的 train-test mismatch。
+- **NVFP4（NVIDIA FP4 低精度格式）**：用于加速预训练和推理的 4-bit 浮点格式；报告采用混合精度 recipe，关键模块保留 BF16 或 MXFP8。
+- **Asynchronous GRPO（异步 GRPO）**：把训练和推理 rollout 解耦的强化学习设置，用于在多个任务环境中提升 agentic 能力并降低同步等待成本。
+- **Agentic Reasoning（智能体式推理）**：需要模型在工具、代码、终端、搜索、长上下文等环境中多步决策和执行的能力，不只是在静态问答 benchmark 上给出答案。
 
 ![Nemotron 3 Super benchmark and throughput](../../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-1-benchmark-throughput.png){ width="920" }
 

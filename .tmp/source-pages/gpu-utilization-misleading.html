@@ -1,0 +1,254 @@
+<!DOCTYPE html><!-- Last Published: Tue Feb 17 2026 22:33:52 GMT+0000 (Coordinated Universal Time) --><html data-wf-domain="www.trainy.ai" data-wf-page="67b8b25f57b51fe04dfa3feb" data-wf-site="674afcec6748393670f59db0" lang="en" data-wf-collection="67b8b25f57b51fe04dfa3fc0" data-wf-item-slug="gpu-utilization-misleading"><head><meta charset="utf-8"/><link href="https://cdn.prod.website-files.com" rel="preconnect" crossorigin="anonymous"/><title>Trainy</title><meta content="width=device-width, initial-scale=1" name="viewport"/><link href="https://cdn.prod.website-files.com/674afcec6748393670f59db0/css/dev-trainy.webflow.shared.fae58d2a5.css" rel="stylesheet" type="text/css" integrity="sha384-+uWNKlWMl+KeGkQV/5ctAziifkQAmndK3MbnIdHurTn47PqXgOZo2DkzUltqfwRw" crossorigin="anonymous"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link href="https://fonts.gstatic.com" rel="preconnect" crossorigin="anonymous"/><script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js" type="text/javascript"></script><script type="text/javascript">WebFont.load({  google: {    families: ["Geist:300,400,500,600,700","Inter:300,400,500,600,700"]  }});</script><script type="text/javascript">!function(o,c){var n=c.documentElement,t=" w-mod-";n.className+=t+"js",("ontouchstart"in o||o.DocumentTouch&&c instanceof DocumentTouch)&&(n.className+=t+"touch")}(window,document);</script><link href="https://cdn.prod.website-files.com/674afcec6748393670f59db0/674c89b82bf485a1c8096b9e_favicon.png" rel="shortcut icon" type="image/x-icon"/><link href="https://cdn.prod.website-files.com/674afcec6748393670f59db0/67d080ebc7261c7db978948f_webclip.png" rel="apple-touch-icon"/><!-- Keep this css code to improve the font quality-->
+<style>
+  * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -o-font-smoothing: antialiased;
+  -webkit-appearance:none;
+}
+</style>
+
+<script type="text/javascript">
+var _iub = _iub || [];
+_iub.csConfiguration = {"siteId":3864376,"cookiePolicyId":67976400,"lang":"en","storage":{"useSiteId":true}};
+</script>
+<script async type="text/javascript" src="https://cs.iubenda.com/autoblocking/3864376.js"></script>
+<script async type="text/javascript" src="//cdn.iubenda.com/cs/gpp/stub.js"></script>
+<script async type="text/javascript" src="//cdn.iubenda.com/cs/iubenda_cs.js" charset="UTF-8" async></script>
+
+<script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init('phc_4UgX80BfVNmYRZ2o3dJLyRMGkv1CxBozPAcPnD29uP4', {
+        api_host: 'https://us.i.posthog.com',
+        person_profiles: 'identified_only', // or 'always' to create profiles for anonymous users as well
+    })
+
+</script><style>
+  .w-richtext a {
+    color: #ffffff !important;
+    text-decoration: underline !important;
+  }
+  .w-richtext a:hover {
+    color: #8ab4f8 !important;
+  }
+</style></head><body><div class="page-wrapper"><div class="global-styles w-embed"><style>
+
+/* Ensure all elements inherit the color from its parent */
+body * {
+    color: inherit;
+}
+
+a,
+.w-input,
+.w-select,
+.w-tab-link,
+.w-nav-link,
+.w-slider-arrow-left,
+.w-slider-arrow-right,
+.w-dropdown-btn,
+.w-dropdown-toggle,
+.w-dropdown-link {
+  color: inherit;
+  text-decoration: inherit;
+  font-size: inherit;
+}
+
+/* Focus state style for keyboard navigation for the focusable elements */
+*[tabindex]:focus-visible,
+  input[type="file"]:focus-visible {
+   outline: 0.125rem solid #4d65ff;
+   outline-offset: 0.125rem;
+}
+
+/* Get rid of top margin on first element in any rich text element */
+.w-richtext > :not(div):first-child, .w-richtext > div:first-child > :first-child {
+  margin-top: 0 !important;
+}
+
+/* Get rid of bottom margin on last element in any rich text element */
+.w-richtext>:last-child, .w-richtext ol li:last-child, .w-richtext ul li:last-child {
+	margin-bottom: 0 !important;
+}
+
+/* Prevent all click and hover interaction with an element */
+.pointer-events-off {
+	pointer-events: none;
+}
+
+/* Enables all click and hover interaction with an element */
+.pointer-events-on {
+  pointer-events: auto;
+}
+
+/* Create a class of .div-square which maintains a 1:1 dimension of a div */
+.div-square::after {
+	content: "";
+	display: block;
+	padding-bottom: 100%;
+}
+
+/* Make sure containers never lose their center alignment */
+.container-medium,.container-small, .container-large {
+	margin-right: auto !important;
+  margin-left: auto !important;
+}
+
+
+/* Apply "..." after 3 lines of text */
+.text-style-3lines {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+}
+
+/* Apply "..." after 2 lines of text */
+.text-style-2lines {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}
+
+/* Adds inline flex display */
+.display-inlineflex {
+  display: inline-flex;
+}
+
+/* These classes are never overwritten */
+.hide {
+  display: none !important;
+}
+
+@media screen and (max-width: 991px) {
+    .hide, .hide-tablet {
+        display: none !important;
+    }
+}
+  @media screen and (max-width: 767px) {
+    .hide-mobile-landscape{
+      display: none !important;
+    }
+}
+  @media screen and (max-width: 479px) {
+    .hide-mobile{
+      display: none !important;
+    }
+}
+ 
+.margin-0 {
+  margin: 0rem !important;
+}
+  
+.padding-0 {
+  padding: 0rem !important;
+}
+
+.spacing-clean {
+padding: 0rem !important;
+margin: 0rem !important;
+}
+
+.margin-top {
+  margin-right: 0rem !important;
+  margin-bottom: 0rem !important;
+  margin-left: 0rem !important;
+}
+
+.padding-top {
+  padding-right: 0rem !important;
+  padding-bottom: 0rem !important;
+  padding-left: 0rem !important;
+}
+  
+.margin-right {
+  margin-top: 0rem !important;
+  margin-bottom: 0rem !important;
+  margin-left: 0rem !important;
+}
+
+.padding-right {
+  padding-top: 0rem !important;
+  padding-bottom: 0rem !important;
+  padding-left: 0rem !important;
+}
+
+.margin-bottom {
+  margin-top: 0rem !important;
+  margin-right: 0rem !important;
+  margin-left: 0rem !important;
+}
+
+.padding-bottom {
+  padding-top: 0rem !important;
+  padding-right: 0rem !important;
+  padding-left: 0rem !important;
+}
+
+.margin-left {
+  margin-top: 0rem !important;
+  margin-right: 0rem !important;
+  margin-bottom: 0rem !important;
+}
+  
+.padding-left {
+  padding-top: 0rem !important;
+  padding-right: 0rem !important;
+  padding-bottom: 0rem !important;
+}
+  
+.margin-horizontal {
+  margin-top: 0rem !important;
+  margin-bottom: 0rem !important;
+}
+
+.padding-horizontal {
+  padding-top: 0rem !important;
+  padding-bottom: 0rem !important;
+}
+
+.margin-vertical {
+  margin-right: 0rem !important;
+  margin-left: 0rem !important;
+}
+  
+.padding-vertical {
+  padding-right: 0rem !important;
+  padding-left: 0rem !important;
+}
+
+/* Apply "..." at 100% width */
+.truncate-width { 
+		width: 100%; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+}
+/* Removes native scrollbar */
+.no-scrollbar {
+    -ms-overflow-style: none;
+    overflow: -moz-scrollbars-none; 
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+</style></div><main class="main-wrapper"><div data-animation="default" class="navbar1_component w-nav" data-easing2="ease" fs-scrolldisable-element="smart-nav" data-easing="ease" data-collapse="medium" data-w-id="7d89ba2e-c7e0-79b0-574f-f7723866086b" role="banner" data-duration="400"><div class="navbar1_container"><a href="/" class="navbar1_logo-link w-nav-brand"><img loading="eager" src="https://cdn.prod.website-files.com/674afcec6748393670f59db0/674c7f8f7aee9f6c7dcc89c2_trainy-logo.svg" alt="" class="navbar1_logo"/></a><nav role="navigation" class="navbar1_menu is-page-height-tablet w-nav-menu"><div class="navbar1_menu-links"><a href="/on-demand" class="navbar-link">On-Demand</a><a href="/reserved" class="navbar-link">Reserved</a><a href="https://pluto.trainy.ai/" class="navbar-link">Pluto</a><a href="/pricing" class="navbar-link">Pricing</a></div><div class="navbar1_menu-buttons"><a href="https://docs.trainy.ai/overview" target="_blank" class="button is-secondary is-small w-button">Docs</a><a href="/blog" class="button is-secondary is-small w-button">Blog</a><a href="/book-a-demo" class="button is-small w-button">Book a demo</a></div></nav><div class="navbar1_menu-button w-nav-button"><div class="menu-icon1"><div class="menu-icon1_line-top"></div><div class="menu-icon1_line-middle"><div class="menu-icon1_line-middle-inner"></div></div><div class="menu-icon1_line-bottom"></div></div></div></div></div><header class="section_header1 blog"><div class="padding-global"><div class="container-large"><div class="padding-section-large blog"><div class="blog-header_component"><div class="blog-header_wrapper"><a href="/blog" class="text-back_blog-wrapper w-inline-block"><div class="code-embed w-embed"><svg width="currentWidth" height="currentHeight" viewBox="0 0 14 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M13.2496 6.00068C13.2496 6.19959 13.1706 6.39035 13.0299 6.53101C12.8893 6.67166 12.6985 6.75068 12.4996 6.75068H3.31211L6.53211 9.97005C6.67301 10.1109 6.75217 10.302 6.75217 10.5013C6.75217 10.7006 6.67301 10.8917 6.53211 11.0326C6.39122 11.1734 6.20012 11.2526 6.00086 11.2526C5.80161 11.2526 5.61051 11.1734 5.46961 11.0326L0.969615 6.53255C0.899695 6.46287 0.844217 6.38008 0.806363 6.28891C0.768509 6.19775 0.749023 6.10001 0.749023 6.0013C0.749023 5.90259 0.768509 5.80485 0.806363 5.71369C0.844217 5.62252 0.899695 5.53973 0.969615 5.47005L5.46961 0.970051C5.53938 0.900286 5.6222 0.844946 5.71335 0.807189C5.80451 0.769433 5.9022 0.75 6.00086 0.75C6.09953 0.75 6.19722 0.769433 6.28838 0.807189C6.37953 0.844946 6.46235 0.900286 6.53211 0.970051C6.60188 1.03982 6.65722 1.12264 6.69498 1.21379C6.73273 1.30494 6.75217 1.40264 6.75217 1.5013C6.75217 1.59996 6.73273 1.69766 6.69498 1.78881C6.65722 1.87996 6.60188 1.96279 6.53211 2.03255L3.31211 5.25068H12.4996C12.6985 5.25068 12.8893 5.32969 13.0299 5.47035C13.1706 5.611 13.2496 5.80176 13.2496 6.00068Z" fill="currentColor"></path>
+</svg></div><div>Blog</div></a><h1 class="heading-style-h1">GPU Utilization is a Misleading Metric</h1><div class="blog-post_date-author_wrapper"><div class="blog-authors_wrapper"><div class="blog-date_text post">February 24, 2025</div><div class="blog-author_img-wrapper"><img src="https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a1389b13e035309307ef_headshot_roanak_circle_crop%20copy.png" loading="lazy" alt="" sizes="100vw" srcset="https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a1389b13e035309307ef_headshot_roanak_circle_crop%20copy-p-500.png 500w, https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a1389b13e035309307ef_headshot_roanak_circle_crop%20copy-p-800.png 800w, https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a1389b13e035309307ef_headshot_roanak_circle_crop%20copy-p-1080.png 1080w, https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a1389b13e035309307ef_headshot_roanak_circle_crop%20copy-p-1600.png 1600w, https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a1389b13e035309307ef_headshot_roanak_circle_crop%20copy-p-2000.png 2000w, https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a1389b13e035309307ef_headshot_roanak_circle_crop%20copy.png 2379w" class="blog-author_img"/></div><div class="text-size-small">Roanak Baviskar</div></div></div><div class="blog-post_summary"><p class="text-size-medium text-color-secondary">The most common metric ML teams use to understand GPU usage is GPU Utilization, commonly accessed by running nvidia-smi from your terminal. Many integrated observability tools track GPU Utilization as their main performance metric as well. Somewhat to our surprise, it turns out that this is not always the best metric for understanding your GPU performance. In fact, you can get 100% GPU utilization by just reading/writing to memory while doing 0 computations! This article is about how we found that out, and what else we learned along the way.</p></div></div><div class="blog-post_body-wrapper"><div class="rich-text-block w-richtext"><p>At <a target="_blank" href="https://trainy.ai/"><strong>Trainy</strong></a>, we work on infrastructure for managing GPU clusters, so we spend a lot of time thinking about this stuff. Last year we were working with a foundation model company to scale out and improve the efficiency of their LLM training. We went through the basic steps that are mentioned in practically every guide about performance tuning for Pytorch — namely:</p><ul role="list"><li>Saturate the GPU by changing dataloader defaults (num_workers, batch_size, pin_memory, prefetch factor, etc.)</li><li>Maximize tensor core usage by using mixed precision (fp16, bf16)</li><li>Use a fused optimizer from apex/deepspeed (e.g. FusedAdam, FusedAdamW, etc.)</li><li>Use instances/networking designed for training (H100SXM, A100SXM). Also, use newer instances when possible H100 &gt; A100 &gt; V100</li></ul><p>These simple changes got us to 100% GPU utilization and significant power draw, which is great! To check whether more could be done, we calculated the MFUs of the training workload.</p><p>‍</p><blockquote><strong>A quick refresher: MFUs, or Model FLOPS (Floating point Operations Per Second) utilization, is one of the best metrics to understand GPU performance, as introduced in </strong><a target="_blank" href="https://arxiv.org/pdf/2204.02311"><strong>Google’s PaLM paper</strong></a><strong>. It is &quot;the ratio of the observed throughput (tokens-per-second) relative to the theoretical maximum throughput of a system operating at peak FLOPs.” In simpler terms, it tells you how many floating point operations per second your workload computes compared to your GPU’s maximum capabilities. Its only real drawback is that MFU can be somewhat difficult to calculate compared to a metric like GPU utilization, since it is parameter and framework-dependent.</strong></blockquote><p>‍</p><p>Unfortunately, the model training was only hitting ~20% MFUs. For reference, most LLM trainings today hit around <a target="_blank" href="https://github.com/mosaicml/llm-foundry/tree/main/scripts/train/benchmarking"><strong>35% - 45% MFUs</strong></a>. So the question became: How could we only be using 20% of the theoretical max of our GPU’s computational power, while also sitting at 100% GPU utilization?</p><p>‍</p><p>To answer this, we need a better understanding of what GPU utilization is actually tracking.</p><p>‍</p><p>‍</p><h4>What is GPU Utilization, really?</h4><p>‍</p><p>GPU utilization is loosely defined on <a target="_blank" href="https://developer.nvidia.com/management-library-nvml"><strong>the Nvidia docs</strong></a> as &quot;Current utilization rates are reported for both the compute resources of the GPU and the memory interface.” This is wonderfully vague.</p><p>‍</p><p>A better definition can (surprisingly) be found on <a target="_blank" href="https://docs.datadoghq.com/integrations/nvml/#metrics"><strong>Datadog’s NVML docs</strong></a>, &quot;Percent of time over the past sample period during which one or more kernels was executing on the GPU.” To determine why this is misleading, we need a quick primer on how GPUs work. </p><p>‍</p><p>A GPU has <a target="_blank" href="https://cvw.cac.cornell.edu/gpu-architecture/gpu-characteristics/kernel_sm"><strong>cores and multiprocessing managers</strong></a>. With Nvidia GPUs these multiprocessing managers are referred to as streaming multiprocessors (SMs), and on AMD hardware these are referred to as compute units (CU). Below is an illustration of the GH100 GPU, with 144 SMs.</p><p>‍</p><figure class="w-richtext-align-center w-richtext-figure-type-image"><a target="_blank" href="https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/" class="w-inline-block"><div><img loading="lazy" alt="" src="https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d49fbca8744e9431bb6d53_SMs%20144.png"/></div></a><figcaption>Illustration of H100 GPU, with 144 SMs</figcaption></figure><p>These multiprocessing managers can be thought of as foremen for a group of workers, in this case, cores. When you launch a CUDA kernel, the work is executed on CUDA cores by one or more SMs. As you can see below, a single SM on the GH100 chip has many CUDA cores.</p><figure class="w-richtext-align-center w-richtext-figure-type-image"><a target="_blank" href="https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/" class="w-inline-block"><div><img loading="lazy" alt="" src="https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a009ff773f00ece0cb8e_H100%20SM.png"/></div></a><figcaption>A single SM on an H100, with many CUDA cores</figcaption></figure><p>This means the metric, GPU Utilization, is only measuring whether a kernel is executing at a given time. It has no indication of whether your kernel is using all cores available, or parallelizing the workload to the GPU’s maximum capability.<strong> In the most extreme case, you can get 100% GPU utilization by just reading/writing to memory while doing 0 FLOPS. </strong></p><p>‍</p><p>Now we’d like to clarify: this is only misleading to someone without a background in systems (like many ML engineers). As mentioned <a target="_blank" href="https://arthurchiao.art/blog/understanding-gpu-performance/#24-the-use-methodology"><strong>here</strong></a>, the definition of GPU utilization does make some sense under the <a target="_blank" href="https://www.brendangregg.com/usemethod.html"><strong>&quot;USE” methodology</strong></a>.</p><p>‍</p><p>But back to the problem at hand, this definition certainly explains the gap in GPU utilization % vs MFU % that we were seeing! There was certainly more performance left on the table, we just had to find it.</p><p>‍</p><p>‍</p><h4>Digging Deeper</h4><p>‍</p><p>The next step to search for more performance was certainly to profile the model’s training loop. We took a look at the training loop in Pytorch Profiler to get a better idea.</p><p>‍</p><p>As you can see below, the Softmax kernel was registering high GPU utilization, but low for a metric called SM efficiency. Now this was already sounding the alarm for us because naive softmax is a notorious bottleneck for LLMs, with many <a target="_blank" href="https://triton-lang.org/main/getting-started/tutorials/02-fused-softmax.html#motivations"><strong>kernel fusions</strong></a> such as <a target="_blank" href="https://github.com/Dao-AILab/flash-attention"><strong>FlashAttention</strong></a> coming out to address its memory-bound nature. Given this information, the SM efficiency statistic could be pointing out inefficiencies in our model’s execution.</p><figure class="w-richtext-align-center w-richtext-figure-type-image"><a target="_blank" href="https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html" class="w-inline-block"><div><img loading="lazy" alt="" src="https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a060439d45486ca4d53a_Profiler%20Tool.webp"/></div></a><figcaption>Pytorch Profiler shows us low SM Efficiency during Softmax Kernel</figcaption></figure><p>‍</p><h4>But What does SM Efficiency represent?</h4><p>‍</p><p>SM efficiency (also known as SM activity) is a metric on Nvidia GPUs describing what % of SMs are active in a given time interval. As we previously mentioned, SMs can be thought of as foremen for a group of CUDA cores. An <a target="_blank" href="https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/"><strong>Nvidia H100 GPU</strong></a>, for example, has 132 SMs, with 128 cores per SM, giving us a total of 16,896 cores. By measuring SM efficiency, we can determine whether our CUDA kernels are using our streaming multiprocessors. If we have a CUDA kernel that continuously runs for 10 seconds but only uses 1 SM, on an H100, this would register 100% utilization, but the SM efficiency would be 1 / 132 = 0.7%.</p><p>‍</p><p>Great, this is exactly what we were looking for! We can monitor SM efficiency layer by layer to determine what the low-hanging fruits are in terms of potential gain from optimization.</p><p>‍</p><p>‍</p><h4>Making Optimizations</h4><p>‍</p><p>Now that we can easily identify which kernels aren’t running hot on the GPU, we can work on optimizing these layers. Since this is a transformer stack, most gains are going to be made by fusing the layers in the transformer block definition. The figure below summarizes what we optimized.</p><figure class="w-richtext-align-center w-richtext-figure-type-image"><div><img loading="lazy" alt="" src="https://cdn.prod.website-files.com/67b8b23e21fa515d233aed2a/67d4a0d4bc9876a5ce82355c_Fused%20Image.webp"/></div><figcaption>Kernel Fusions within Transformer Block</figcaption></figure><p>By fusing, we mean instead of using a PyTorch native definition of a set of layers, we replace it with a GPU kernel, implemented in either CUDA or Triton, that combines all the layers into one kernel. The speedup results from less time per kernel reading/writing to GPU memory than time spent doing math in the case of certain layers (e.g. <a target="_blank" href="https://triton-lang.org/main/getting-started/tutorials/02-fused-softmax.html"><strong>Softmax</strong></a>). <a target="_blank" href="https://github.com/Dao-AILab/flash-attention"><strong>Flash Attention</strong></a> is an example of such a fused kernel. The other kernels that needed to be fused are the <a target="_blank" href="https://github.com/Dao-AILab/flash-attention/blob/9a11f440d3a34f618b4ba814c825b109c6d7e8f5/flash_attn/ops/fused_dense.py#L531"><strong>MLP</strong></a> and <a target="_blank" href="https://github.com/Dao-AILab/flash-attention/blob/9a11f440d3a34f618b4ba814c825b109c6d7e8f5/flash_attn/ops/fused_dense.py#L531"><strong>dropout layer norm residual add</strong></a> operations.</p><p>‍</p><p>Did we write these kernels ourselves? Nope. Most of these are already implemented in libraries like Flash Attention have implementations of layers as <strong><code>nn.Modules</code></strong> so that you don’t have to worry about implementing a <strong><code>torch.autograd.function</code></strong> from scratch using the kernels. In addition, these implementations are often already hardware optimized so they use less memory in addition to just being faster.</p><p>‍</p><p>The biggest challenge is identifying where in your code you need to swap the appropriate layers. While <strong><code>torch.compile</code></strong> attempts to do this automagically, as of the time of writing this post, <strong><code>torch.compile</code></strong> <a target="_blank" href="https://dev-discuss.pytorch.org/t/torch-compile-fsdp-dec-8th/1718"><strong>doesn’t play nicely with newer distributed strategies like FSDP</strong></a> and doesn’t provide a lot of promised speedups in practice due to graph breaks. Hopefully, in the future, torch compilers can just do this for us, but for now, we are stuck manually adding fused implementations.</p><p>‍</p><p>For results, we achieved a 4x speedup in training time and 38% MFU for this customer, from the original MFU of 20%. Most of the optimizations we made came from these fused kernels, as well as finding the right “level” of model parallelism given their model size and the 3.2 Tbps Infiniband that was available.</p><p>‍</p><p>‍</p><h4>Conclusion</h4><p>‍</p><p>We’d highly recommend most AI teams to track SM Efficiency on their GPU cluster as well as GPU Utilization. It gives a much more representative picture of how much performance you’re squeezing out of your GPUs, while GPU utilization can be a measure of whether or not the machine is idle. Of course, calculating MFUs would be great as well, but it isn’t really a metric you can monitor all the time and layer-by-layer. Meanwhile, <a target="_blank" href="https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html#profiling-metrics"><strong>Nvidia DCGM</strong></a> (Data Center GPU Manager) ships SM activity by default.</p><p>‍</p><p>There are also more fine-grained metrics, such as SM occupancy (or Achieved Occupancy in Pytorch Profiler), that tell us how much work is being done by each SM. However, understanding these metrics is less straightforward than trying to get SM Efficiency as high as possible. If you’re interested in learning more, I’d recommend taking a look at the <a target="_blank" href="https://pytorch.org/blog/pytorch-profiler-1.9-released/#gpu-metric-on-timeline"><strong>Pytorch Profiler blog</strong></a>, <a target="_blank" href="https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html#profiling-metrics"><strong>DCGM docs</strong></a>, <a target="_blank" href="https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html"><strong>Nsight’s kernel profiling guide</strong></a>, and <a target="_blank" href="https://docs.nvidia.com/gameworks/content/developertools/desktop/analysis/report/cudaexperiments/kernellevel/achievedoccupancy.htm"><strong>Nsight docs</strong></a>.</p><p>‍</p><p>Thanks for giving this a read, and good luck squeezing every bit of performance out of your GPUs!</p></div></div></div></div></div></div><div class="home-header_gradient-background"><img src="https://cdn.prod.website-files.com/674afcec6748393670f59db0/674c86c8d3dd1eefa2b88ff9_bg-header.jpg" loading="lazy" alt="" class="home-header_gradient"/></div></header><div class="section-faq"><div class="padding-global"><div class="container-large"><div class="padding-section-large"><div class="home-faq_component-copy"><div class="divider-line"></div><div class="faq-demo_wrapper"><div class="pricing-demo_content"><div class="heading-style-h4 text-weight-normal">Ready to scale your AI training? <span class="text-span-secondary">Get enterprise-grade GPU infrastructure up and running in </span><span class="text-span-yellow">20 minutes.</span></div></div><div id="w-node-b32faa6d-f977-fbd7-3038-56245ce42376-4dfa3feb" class="pricing-demo_content rightside"><a href="#" class="button w-button">Book a demo</a><a href="/cdn-cgi/l/email-protection#89fafcf9f9e6fbfdc9fdfbe8e0e7f0a7e8e0b6fafcebe3eceafdb4c8fae2acbbb9e8e7acbbb9ccf1f9ecfbfd" class="button is-secondary is-small w-button">Ask an Expert</a></div></div></div></div></div></div></div><div class="footer"><div class="padding-global"><div class="container-large"><div class="padding-section-footer"><div class="footer-component"><div class="footer-content"><div class="footer-content_left"><a href="/" class="w-inline-block"><img src="https://cdn.prod.website-files.com/674afcec6748393670f59db0/674c89b82bf485a1c8096b9e_favicon.png" loading="lazy" alt=""/></a><div class="text-size-medium text20">Trainy</div><div class="text-wrapper-left"><div class="text-size-small text-color-secondary">2261 Market Street #5039</div><div class="text-size-small text-color-secondary">San Francisco, CA 94114</div></div></div><div id="w-node-a038aa07-231e-551a-8e42-26b9b00e9ade-b00e9acf" class="footer-content_right"><div class="text-wrapper-right"><div class="text-size-regular">Product</div><a href="/on-demand" class="footer-link_wrapper w-inline-block"><div class="text-size-small">On-Demand</div></a><a href="/reserved" class="footer-link_wrapper w-inline-block"><div class="text-size-small">Reserved</div></a><a href="/pricing" class="footer-link_wrapper w-inline-block"><div class="text-size-small">Pricing</div></a></div><div class="text-wrapper-right"><div class="text-size-regular">Resources</div><a href="/blog" class="footer-link_wrapper w-inline-block"><div class="text-size-small">Blog</div></a><a href="https://trainy.mintlify.app" target="_blank" class="footer-link_wrapper w-inline-block"><div class="text-size-small">Documentation</div></a><a href="/cdn-cgi/l/email-protection#5724363b3224172325363e392e79363e682422353d3234236a14383923363423" class="footer-link_wrapper w-inline-block"><div class="text-size-small">Contact</div></a><a href="https://www.iubenda.com/privacy-policy/67976400" target="_blank" class="footer-link_wrapper w-inline-block"><div class="text-size-small">Privacy Policy</div></a><a href="https://www.iubenda.com/privacy-policy/67976400/cookie-policy" target="_blank" class="footer-link_wrapper w-inline-block"><div class="text-size-small">Cookie Policy</div></a><a href="https://www.iubenda.com/terms-and-conditions/67976400" target="_blank" class="footer-link_wrapper w-inline-block"><div class="text-size-small">Terms of service</div></a></div><div class="text-wrapper-right"><div class="text-size-regular">Social</div><a href="https://github.com/Trainy-ai" target="_blank" class="footer-link_wrapper w-inline-block"><div class="icon-1x1-xxsmall w-embed"><svg width="1.25rem" height="1.25rem" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_1_4813)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M7.97616 0.16333C3.56555 0.16333 0 3.75517 0 8.19876C0 11.7508 2.28457 14.7575 5.45388 15.8216C5.85012 15.9016 5.99527 15.6487 5.99527 15.436C5.99527 15.2497 5.9822 14.6112 5.9822 13.9459C3.76343 14.4249 3.30139 12.988 3.30139 12.988C2.94482 12.0567 2.41649 11.8174 2.41649 11.8174C1.69029 11.3251 2.46939 11.3251 2.46939 11.3251C3.27494 11.3784 3.69763 12.1499 3.69763 12.1499C4.41061 13.3738 5.55951 13.028 6.02171 12.8151C6.08767 12.2962 6.2991 11.937 6.52359 11.7375C4.75396 11.5512 2.89208 10.8595 2.89208 7.77296C2.89208 6.89492 3.20882 6.17655 3.71069 5.61786C3.63151 5.41835 3.35412 4.59337 3.79004 3.48921C3.79004 3.48921 4.46351 3.27631 5.98204 4.31402C6.63218 4.13813 7.30265 4.04865 7.97616 4.0479C8.64963 4.0479 9.33616 4.14113 9.97012 4.31402C11.4888 3.27631 12.1623 3.48921 12.1623 3.48921C12.5982 4.59337 12.3207 5.41835 12.2415 5.61786C12.7566 6.17655 13.0602 6.89492 13.0602 7.77296C13.0602 10.8595 11.1984 11.5379 9.41551 11.7375C9.70612 11.9903 9.9569 12.4691 9.9569 13.2275C9.9569 14.305 9.94384 15.1699 9.94384 15.4358C9.94384 15.6487 10.0891 15.9016 10.4852 15.8218C13.6545 14.7573 15.9391 11.7508 15.9391 8.19876C15.9522 3.75517 12.3736 0.16333 7.97616 0.16333Z" fill="currentColor"></path>
+</g>
+<defs>
+<clipPath id="clip0_1_4813">
+<rect width="16" height="15.6735" fill="currentColor" transform="translate(0 0.16333)"></rect>
+</clipPath>
+</defs>
+</svg></div><div class="text-size-small">Features</div></a><a href="https://www.linkedin.com/company/trainy-ai/about/" target="_blank" class="footer-link_wrapper w-inline-block"><div class="icon-1x1-xxsmall w-embed"><svg width="1.25rem" height="1.25rem" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M12.1198 0.280029H1.87979C0.996585 0.280029 0.279785 0.996829 0.279785 1.88003V12.12C0.279785 13.0032 0.996585 13.72 1.87979 13.72H12.1198C13.003 13.72 13.7198 13.0032 13.7198 12.12V1.88003C13.7198 0.996829 13.003 0.280029 12.1198 0.280029ZM4.43979 5.40003V11.48H2.51979V5.40003H4.43979ZM2.51979 3.63043C2.51979 3.18243 2.90379 2.84003 3.47978 2.84003C4.05578 2.84003 4.41739 3.18243 4.43979 3.63043C4.43979 4.07843 4.08139 4.44003 3.47978 4.44003C2.90379 4.44003 2.51979 4.07843 2.51979 3.63043ZM11.4798 11.48H9.55978C9.55978 11.48 9.55978 8.51683 9.55978 8.28003C9.55978 7.64003 9.23979 7.00003 8.43979 6.98723H8.41418C7.63978 6.98723 7.31979 7.64643 7.31979 8.28003C7.31979 8.57123 7.31979 11.48 7.31979 11.48H5.39979V5.40003H7.31979V6.21923C7.31979 6.21923 7.93738 5.40003 9.17898 5.40003C10.4494 5.40003 11.4798 6.27363 11.4798 8.04323V11.48Z" fill="currentColor"></path>
+</svg></div><div class="text-size-small">LinkedIn</div></a><a href="https://twitter.com/TrainyAI" target="_blank" class="footer-link_wrapper w-inline-block"><div class="icon-1x1-xxsmall w-embed"><svg width="1.25rem" height="1.25rem" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2.51979 0.280029C1.28267 0.280029 0.279785 1.28291 0.279785 2.52003V11.48C0.279785 12.7171 1.28267 13.72 2.51979 13.72H11.4798C12.7169 13.72 13.7198 12.7171 13.7198 11.48V2.52003C13.7198 1.28291 12.7169 0.280029 11.4798 0.280029H2.51979ZM3.18729 3.16003H5.72728L7.53103 5.72315L9.71978 3.16003H10.5198L7.89228 6.23628L11.1323 10.84H8.59291L6.49978 7.86628L3.95978 10.84H3.15979L6.13854 7.35315L3.18729 3.16003ZM4.41228 3.80003L8.92666 10.2H9.90728L5.39291 3.80003H4.41228Z" fill="currentColor"></path>
+</svg></div><div class="text-size-small">Twitter / X</div></a><a href="https://discord.gg/HQUBJSVgAP" target="_blank" class="footer-link_wrapper w-inline-block"><div class="icon-1x1-xxsmall w-embed"><svg width="1.25rem" height="1.25rem" viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M13.5351 1.72795C13.3188 1.40123 13.0126 1.15131 12.6494 1.00603C11.8609 0.689865 11.1828 0.478665 10.5761 0.359625C10.1505 0.276425 9.72904 0.485705 9.52648 0.879945L9.47592 0.978505C9.02664 0.928905 8.54952 0.912265 8.00616 0.926025C7.44904 0.912585 6.97032 0.928905 6.5204 0.978505L6.47016 0.879945C6.2676 0.485705 5.84552 0.276745 5.42088 0.359945C4.81416 0.478665 4.13576 0.689866 3.3476 1.00635C2.98472 1.15163 2.67848 1.40123 2.46184 1.72827C0.951121 4.01019 0.359121 6.47163 0.652241 9.25371C0.662481 9.35131 0.716881 9.43867 0.799761 9.49083C1.962 10.2236 2.96776 10.7254 3.96488 11.0703C4.38184 11.2159 4.84424 11.0531 5.09032 10.6771L5.52904 10.0047C5.1796 9.87291 4.83848 9.71675 4.51144 9.53019C4.35816 9.44283 4.30472 9.2473 4.39208 9.09402C4.47944 8.94011 4.67496 8.88603 4.82856 8.97467C5.80168 9.52955 6.90184 9.82298 8.01 9.82298C9.11816 9.82298 10.2183 9.52955 11.1914 8.97467C11.3447 8.88603 11.5402 8.94011 11.6279 9.09402C11.7153 9.2473 11.6618 9.44283 11.5086 9.53019C11.1706 9.72315 10.8174 9.88379 10.4554 10.0179L10.907 10.6905C11.0929 10.9673 11.3998 11.1247 11.7159 11.1247C11.819 11.1247 11.923 11.1078 12.0241 11.0732C13.0241 10.7279 14.0318 10.2255 15.1966 9.49115C15.2794 9.43899 15.3338 9.35131 15.3441 9.25403C15.6378 6.47163 15.0458 4.00987 13.5351 1.72795ZM5.95432 7.27451C5.338 7.27451 4.8308 6.62523 4.8308 5.83611C4.8308 5.04699 5.338 4.39771 5.95432 4.39771C6.57064 4.39771 7.07784 5.04699 7.07784 5.83611C7.07784 6.62523 6.57064 7.27451 5.95432 7.27451ZM10.1121 7.26619C9.50152 7.26619 8.99912 6.61307 8.99912 5.81915C8.99912 5.02523 9.50152 4.37211 10.1121 4.37211C10.7226 4.37211 11.225 5.02523 11.225 5.81915C11.225 6.61307 10.7226 7.26619 10.1121 7.26619Z" fill="currentColor"></path>
+</svg></div><div class="text-size-small">Discord</div></a></div></div></div></div></div></div></div></div></main></div><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://d3e54v103j8qbb.cloudfront.net/js/jquery-3.5.1.min.dc5e7f18c8.js?site=674afcec6748393670f59db0" type="text/javascript" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script><script src="https://cdn.prod.website-files.com/674afcec6748393670f59db0/js/webflow.schunk.36b8fb49256177c8.js" type="text/javascript" integrity="sha384-4abIlA5/v7XaW1HMXKBgnUuhnjBYJ/Z9C1OSg4OhmVw9O3QeHJ/qJqFBERCDPv7G" crossorigin="anonymous"></script><script src="https://cdn.prod.website-files.com/674afcec6748393670f59db0/js/webflow.schunk.26230a422d17d954.js" type="text/javascript" integrity="sha384-/hq9gfOsetfTtbapDCqWX9dK6oqG9g0se1Z3/bXzCezJho3T0LNkEc4Z/wkOtWXX" crossorigin="anonymous"></script><script src="https://cdn.prod.website-files.com/674afcec6748393670f59db0/js/webflow.2f6b05ef.1ce2c005a2eb63d3.js" type="text/javascript" integrity="sha384-U8PmgcsGY/CrBL/zQ/FHmaHDvZ4p0s9bYETnXipZ24SRswNw4zjWcd/FaXLJo/ug" crossorigin="anonymous"></script></body></html>

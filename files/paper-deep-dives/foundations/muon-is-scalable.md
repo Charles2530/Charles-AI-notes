@@ -15,13 +15,35 @@ paper_topic: 高效训练
     **GitHub / 项目：** GitHub：[github.com/MoonshotAI/Moonlight](https://github.com/MoonshotAI/Moonlight)；项目页：[huggingface.co/moonshotai/Moonlight-16B-A3B](https://huggingface.co/moonshotai/Moonlight-16B-A3B)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2502.16982)；[GitHub API / repo](https://github.com/MoonshotAI/Moonlight)；[官方 / 项目材料](https://huggingface.co/moonshotai/Moonlight-16B-A3B)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文讨论的不是一个普通训练小技巧，而是一个更基础的问题：**在大模型预训练里，AdamW 是否仍然是唯一足够稳、足够可扩展的默认优化器？** 论文的答案比较激进：如果只看大规模 LLM 预训练，经过 weight decay、update scale 和分布式实现改造后的 Muon 可以直接替代 AdamW，并在 compute-optimal training 下达到约 `2x` 的训练效率。
+## 原论文故事线
 
-但工程上不能把这句话读成“所有阶段都换成 Muon”。这篇论文真正有价值的部分在于，它把 Muon 从一个小模型优化器改造成能跑 5.7T token MoE 预训练的系统方案，并且清楚暴露了它和 AdamW 的边界：Muon 更适合矩阵权重的预训练更新，非矩阵参数、已有 AdamW checkpoint 的 SFT、以及很多短周期后训练任务，仍然要谨慎对待。
+### 研究背景
 
-先用一个直觉例子进入。Transformer 的 MLP 矩阵像一张巨大的方向表：某些奇异方向可能特别强，更新时反复沿这些方向走，模型就容易把容量集中到少数通道上。AdamW 给每个参数元素维护一套一阶/二阶矩账本，擅长处理局部梯度尺度；Muon 则先把整个矩阵的动量拿出来做近似正交化，让更新更像“沿一组更均衡的矩阵方向迈步”。所以它不是 AdamW 的小改名，而是在改变矩阵权重的更新几何。
+原论文讨论 LLM 预训练优化器。AdamW 是事实默认选择，因为它稳定、经验丰富、适配各种参数形状；但 Transformer 的主要参数其实是大矩阵，AdamW 按元素自适应更新，未必最适合矩阵权重的整体几何。Muon 早期在较小模型上表现出潜力，但要进入 LLM 预训练，必须解决 weight decay、更新尺度、分布式分片、非矩阵参数和长期稳定性。
 
-读这篇时最重要的不是记 Newton-Schulz 公式，而是追问三件事：正交化更新怎样保持长期训练稳定，怎样把更新尺度调到能复用 AdamW 学习率，分布式训练怎样在参数分片下仍然看到完整矩阵。
+### 问题（Challenge）
+
+论文要解决的问题是：Muon 是否能扩展到大规模 LLM 预训练，并在 compute-optimal training 下替代 AdamW。挑战在于 LLM 训练长、token 多、分布式复杂；一个优化器只在小模型或短跑有效没有意义。Muon 的矩阵正交化还要求看到完整矩阵或合理近似，和 ZeRO / tensor parallel / expert parallel 等分片系统存在工程冲突。这个问题有价值，因为优化器若能提高样本效率或计算效率，相当于直接减少预训练成本。
+
+### Finding
+
+论文的 finding 是：LLM 中占主导的矩阵权重可以用“正交化的动量更新”来获得更均衡的谱方向，而不是完全依赖 AdamW 的逐元素二阶矩。作者把 Muon 从优化器技巧翻转成一种矩阵更新几何：先积累动量，再通过 Newton-Schulz 等近似正交化，让更新不被少数奇异方向主导。只要解决更新尺度、weight decay 和分布式实现，Muon 可以在大规模预训练中保持稳定并提升效率。
+
+### 方法
+
+方法对不同参数分工处理。矩阵权重使用 Muon：对动量矩阵做近似正交化并按合适尺度更新；embedding、normalization、bias 等非矩阵或敏感参数继续用 AdamW / 类 AdamW 处理。论文引入 decoupled weight decay、update scale 调整、学习率策略和分布式实现，使 Muon 能接入大规模 MoE / dense LLM 训练。实验中还发布或分析 Moonlight-16B-A3B 等模型，验证长 token 预训练可行性。
+
+### 结论
+
+实验比较 Muon 与 AdamW 在不同模型规模、数据量和训练预算下的 loss / downstream 表现，报告 Muon 在 compute-optimal training 中可达到约 2x 训练效率的趋势，并能支撑 5.7T token 级别 MoE 预训练。消融关注 weight decay、update scale、Newton-Schulz 迭代和参数分组。边界是 Muon 更适合从头预训练的矩阵权重；SFT、RLHF、已有 AdamW checkpoint 续训、非矩阵参数和短周期任务仍需保守验证。
+
+### 关键术语
+
+- **Muon（矩阵正交化优化器）**：对矩阵动量做近似正交化后更新权重的优化器路线
+- **Newton-Schulz Iteration（Newton-Schulz 迭代）**：用于近似矩阵正交化 / 逆平方根的迭代算法
+- **AdamW（解耦权重衰减 Adam）**：LLM 训练常用的逐元素自适应优化器
+- **Update Scale（更新尺度）**：控制优化器更新幅度与参数尺度匹配的系数
+- **Compute-optimal Training（计算最优训练）**：在给定计算预算下平衡模型规模和数据量以获得最佳 loss 的训练设定
 
 ## 论文位置
 

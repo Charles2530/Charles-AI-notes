@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/robbyant/lingbot-world](https://github.com/robbyant/lingbot-world)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2601.20540)；[GitHub API / repo](https://github.com/robbyant/lingbot-world)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+LingBot-World 属于“视频生成模型到交互世界模拟器”的路线。近年的视频基础模型已经学到很强的视觉纹理、时序连续性和场景动态，但普通视频生成只需要产生合理未来，不需要同一历史下对不同动作产生可控分叉。世界模型则要求 action-conditioned generation：给定当前画面和动作，未来必须按动作改变，并且能持续 rollout。
+
+论文的工程背景很现实：从零训练世界模型成本高，而公开视频模型已经包含大量视觉和时序先验。LingBot-World 试图复用视频基础模型，再通过交互数据、动作条件适配、因果化、KV cache 和少步蒸馏，把离线视频生成器改造成实时可交互世界模拟器。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何把一个开放域视频生成模型改造成能实时响应用户动作、支持长 horizon 交互的 world simulator？** 挑战不只是加一个 action token。第一，动作信号必须进入生成主干，影响未来帧而不是只影响 caption。第二，模型要因果化，不能用未来帧或双向注意力。第三，交互应用要求低延迟和 KV cache；扩散模型多步采样太慢。第四，长时 rollout 容易漂移，少步蒸馏又可能损伤一致性。
+
+这个问题有价值，因为世界模型如果要给游戏、导航、机器人或交互内容服务，必须同时满足“画面像真”“动作可控”“能长时运行”“能实时响应”。
+
+### Finding
+
+作者的 finding 是：**视频模型成为世界模型不是单点改造，而是数据、动作接口、因果注意力和 runtime 的联合改造；只有让动作接近动力学生成路径，并让生成过程支持因果缓存和少步采样，视频先验才能变成交互模拟能力。** 这个洞见把问题从“视频模型是否懂世界”翻转成“视频模型如何被重新约束为 action-conditioned simulator”。
+
+这个 finding 解释了 LingBot-World 的工程顺序：先继承视频底座的视觉/时序能力，再补可交互数据和动作标注，让同一状态在不同动作下分叉；然后用 causal rollout、KV cache 和少步 distilled simulator 降低延迟；最后通过 demo 和评估检查长时一致性、动作遵循和实时性。
+
+### 方法
+
+论文的系统由数据引擎、视频基础模型适配、动作条件模块、长序列训练、因果化和加速蒸馏组成。动作表示包括用户控制、相机运动或其他交互信号，并通过 action embedding / adapter / AdaLN 等方式进入生成模型。长 horizon 训练让模型看到更长的场景演化和回访；因果 attention 和 KV cache 让模型在推理时逐步生成，不必每次重算完整历史。
+
+为了实时交互，LingBot-World 进一步做 few-step distillation，把多步视频扩散采样压成更少步数，同时保留可接受视觉质量。开源实现和 demo 展示了用户输入后模型实时渲染未来视频的流程。论文还把系统与 Matrix-Game、Yume、HY-World、Mirage、Genie 等交互世界模型按 domain、horizon、dynamic degree、resolution、real-time、open-source 对比。
+
+### 结论
+
+论文的结论是：开放视频基础模型可以作为 world simulator 的有效起点，经过动作条件、因果化和加速后，可以形成开源、实时、通用域的交互世界模型原型。它的证据包括系统设计、横向定位、训练 pipeline、可视化、交互 demo 和开源资源。
+
+但证据边界也很重要。论文主要证明开放域交互模拟器路线和工程可行性，不等于证明真实机器人闭环策略收益。动作因果性仍需反事实评测：同一历史换动作，未来是否严格按动作分叉；少步蒸馏后的长时漂移也需要单独验证。对本站主线，最值得吸收的是“视频底座 -> 动作条件 -> 因果 rollout -> 少步化”的系统路线。
+
+### 关键术语
+
+- **Video Foundation Model（视频基础模型）**：在大规模视频数据上训练的生成模型，提供视觉质量和时序先验。
+- **Action-conditioned Generation（动作条件生成）**：未来帧不仅依赖历史和文本，还依赖用户或 agent 的动作输入。
+- **Causal Rollout（因果展开）**：推理时只能使用过去和当前信息逐步生成未来，不能访问未来帧。
+- **KV Cache（键值缓存）**：缓存历史 attention 的 key/value，减少长时自回归生成的重复计算。
+- **Few-step Distillation（少步蒸馏）**：把多步扩散采样压缩成少数步，以降低交互延迟。
+- **Counterfactual Branching（反事实分叉）**：同一历史下输入不同动作，模型生成可区分且动作一致的未来，是检验世界模型可控性的关键。
+
 这篇论文的核心价值不是提出一个全新的世界模型定义，而是给出了一条很现实的工程路线：**先继承视频生成模型的视觉和时序先验，再通过交互数据、动作条件训练、因果化和蒸馏，把视频生成器改造成可实时交互的世界模拟器。**
 
 先用一个第一人称导航场景来区分“视频生成器”和“世界模型”。如果历史画面里前方有一个岔路口，用户按左转时，未来应该进入左侧走廊；按右转时，未来应该进入右侧房间；按停下时，场景应该基本保持，只发生轻微视角或动态变化。普通视频模型只需要生成一个看起来合理的未来，它可能靠训练集中最常见的走法继续向前。世界模型必须在同一历史下对不同动作产生可验证的分叉。LingBot-World 的工程路线，就是围绕这个分叉能力补数据、动作接口、因果 rollout 和实时采样。

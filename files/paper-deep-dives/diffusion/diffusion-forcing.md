@@ -15,15 +15,34 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/buoyancy99/diffusion-forcing](https://github.com/buoyancy99/diffusion-forcing)；项目页：[www.boyuan.space/diffusion-forcing/](https://www.boyuan.space/diffusion-forcing/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2407.01392)；[GitHub API / repo](https://github.com/buoyancy99/diffusion-forcing)；[官方 / 项目材料](https://www.boyuan.space/diffusion-forcing/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文的核心不是再发明一个采样器，而是改了扩散模型处理序列的训练方式：**每个 token 都可以有自己的噪声水平**。这样一个因果序列模型既能像 next-token 模型一样逐步向前生成，又能像 full-sequence diffusion 一样对整段未来做 guidance。
+## 原论文故事线
 
-如果只用一句话概括：
+### 研究背景
 
-```text
-Teacher Forcing 沿时间轴遮住未来；
-Full-Sequence Diffusion 沿噪声轴同时去噪整段序列；
-Diffusion Forcing 把两个轴交叉起来，让每个时间 token 拥有独立噪声水平。
-```
+原论文从两类序列建模传统出发：next-token / teacher forcing 擅长因果生成和变长 rollout，但每一步只预测下一个 token，很难对整段未来施加约束；full-sequence diffusion 擅长连续信号生成和全局 guidance，但通常假设固定 horizon，且不天然适合在线反馈。视频预测、规划和机器人 imitation learning 都处在两者之间：前面一部分历史已经确定，未来一部分仍不确定，而且不同未来 token 的不确定性并不相同。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何让一个序列模型同时拥有 next-token 的因果滚动能力和 diffusion 的整段优化能力。挑战在于传统 diffusion 通常给整段样本同一个噪声水平，这等价于“整段一起模糊、整段一起还原”；而在线序列生成需要表达“过去干净、近期部分确定、远未来接近纯噪声”的混合状态。这个问题有价值，因为规划任务需要对未来轨迹加约束，长视频需要 flexible horizon，机器人策略需要在闭环历史上继续生成。
+
+### Finding
+
+Diffusion Forcing 的 finding 是：噪声水平可以被看作连续版 mask，而且这个 mask 应该作用在每个时间 token 上，而不是作用在整段序列上。这个视角把 teacher forcing 和 diffusion 放到同一个坐标系里：teacher forcing 是沿时间轴遮未来，full-sequence diffusion 是沿噪声轴去噪整段样本，Diffusion Forcing 则允许每个 token 拥有独立噪声水平 \(k_t\)。一旦模型见过这种混合噪声序列，它就能在推理时自然处理已知历史、部分未来和远期不确定性。
+
+### 方法
+
+训练时，论文对序列 \(x_{1:T}\) 中每个 token 独立采样噪声水平 \(k_t\)，得到 \(x_t^{k_t}\)，再用因果序列模型读取这些带噪 token，并通过 diffusion head 预测噪声或干净 token。采样时，二维噪声日程同时沿时间和噪声两个轴移动：历史 token 保持低噪或干净，未来 token 从高噪逐渐去噪。论文还把这个框架接到 guidance、Monte Carlo Tree Guidance、视频预测、planning 和 robot imitation learning，让同一个目标覆盖条件生成、树搜索和控制数据。
+
+### 结论
+
+实验不是只证明一个 benchmark 分数，而是证明“per-token noise”这个表示能带来多种能力。规划实验显示，Diffusion Forcing 可以用 sequence-level guidance 和 tree search 处理目标约束；视频预测实验展示它在长 rollout 和 flexible horizon 上比普通序列模型更稳；机器人 imitation learning 实验说明同一训练原则可以迁移到动作序列。消融和诊断的重点是：独立噪声水平、因果结构和采样日程共同决定效果，少了其中任何一个，模型就会退回普通 teacher forcing 或普通 full-sequence diffusion 的局限。
+
+### 关键术语
+
+- **Per-token Noise Level（逐 token 噪声水平）**：序列中每个时间位置拥有独立扩散步数，用来表达不同程度的不确定性
+- **Noise as Partial Masking（噪声作为连续遮罩）**：把扩散噪声解释为从干净到未知的连续 mask，而不是单纯图像扰动
+- **Flexible Horizon（可变生成长度）**：模型能在不同未来长度上继续 rollout，不被固定 clip 长度锁死
+- **Monte Carlo Tree Guidance（蒙特卡洛树引导）**：在扩散采样中用树搜索评估多条未来分支，引导生成满足规划目标
 
 ## 论文位置
 

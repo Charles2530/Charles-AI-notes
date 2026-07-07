@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[NTUMARS/Awesome-World-Model-for-Robotics-Policy](https://github.com/NTUMARS/Awesome-World-Model-for-Robotics-Policy)；项目页：[ntumars.github.io/wm-robot-survey](https://ntumars.github.io/wm-robot-survey/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.00080)、论文 PDF、官方 GitHub / 项目页；Checked Date：2026-06-15；Repro Status：Survey / official resource list reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+这篇综述聚焦 robot learning 中的 world models。机器人学习正在从解析式控制和单任务策略，转向 VLA、行为克隆、扩散策略和大规模多任务策略；但纯反应式策略仍有长时规划、错误累积、数据效率和安全评估问题。世界模型可以在动作执行前预测未来状态、奖励、终止、风险或关键帧，从而辅助策略生成、训练和评估。
+
+综述的背景不是把所有“会生成视频”的模型都叫世界模型，而是区分它们在机器人系统里的功能：有的 world model 融入 policy，有的作为 simulator 生成 imagined rollouts，有的作为 video world model 提供 action-conditioned future，有的只做 representation 或 data augmentation。
+
+### 问题（Challenge）
+
+综述要解决的问题是：**机器人学习里的世界模型到底有哪些角色，如何判断一篇工作是在帮助动作决策、模拟训练，还是只是在生成未来视频？** 这个问题难在术语混乱。VLA、视频生成、latent dynamics、learned simulator、diffusion policy、action-conditioned prediction 都可能自称 world model，但证据强度差异很大。
+
+这个问题有价值，因为机器人领域关心最终动作效果。一个模型未来画面漂亮，如果没有改变 policy、planner、reward estimation 或 closed-loop success，就不能直接说明它是 actionable world model。
+
+### Finding
+
+综述的核心 finding 是：**机器人世界模型的价值不在未来画面是否逼真，而在预测是否被决策链路消费并改变动作选择、训练样本或评估结论。** 这个洞见把阅读标准从“生成质量”转成“decision utility”。
+
+这个 finding 解释了论文的 taxonomy。World model for policy 关注预测如何进入策略结构；world model as simulator 关注 imagined rollout 如何训练或评估 policy；robotic video generation 关注 action-conditioned future 是否能成为可控模拟信号；datasets/benchmarks 关注是否包含 transition、动作和闭环效用指标。最终判断都回到一个问题：预测有没有服务机器人决策。
+
+### 方法
+
+综述按功能把机器人世界模型分成几类。第一类是 world model for policy：预测模块可能与 policy 解耦、共享 backbone、通过 expert fusion 融合，或作为 latent internalization 隐式存在。第二类是 world model as simulator：模型在 imagined environment 中生成未来状态、奖励或视频，用于 policy training、candidate action evaluation 或 safety checking。第三类是 robotic video generation：从 task-conditioned、action-conditioned、structure-aware 到 foundation-scale video world model，逐步接近机器人可用的未来预测。
+
+论文还整理数据集、benchmark、评估指标和开放问题。它强调 POMDP 视角：真实 state 不可完全观测，world model 需要维护 latent state，使用 posterior 从真实观测校正当前状态，用 prior 按动作 rollout 未来。评估方面，不能只看 FVD/LPIPS 等视觉指标，还要看 rollout consistency、action controllability、planning success、policy improvement 和 real/sim transfer。
+
+### 结论
+
+综述的结论是：机器人 world model 已经从小规模 latent dynamics 扩展到 VLA 内部模块、learned simulator 和大规模视频世界模型，但仍缺少统一评估。未来关键方向包括 action-conditioned long-horizon prediction、真实机器人闭环验证、可控视频生成、3D/geometry-aware state、uncertainty estimation、安全评估和与基础 VLA 的深度融合。
+
+需要注意的是，综述本身不提供新模型实验；它的价值是阅读和选型框架。对本站专题来说，最重要的 takeaway 是：评价机器人世界模型时要追问最后一环，预测是否真的让动作更好，而不只是让未来看起来更像视频。
+
+### 关键术语
+
+- **World Model for Policy（策略内世界模型）**：直接或间接参与动作生成的预测模块。
+- **World Model as Simulator（作为模拟器的世界模型）**：生成 imagined rollouts，用于训练、评估或筛选动作。
+- **Robotic Video Generation（机器人视频生成）**：面向机器人任务的未来视觉预测，通常需要动作、任务和结构条件。
+- **Action-conditioned Prediction（动作条件预测）**：未来状态显式依赖动作输入，是机器人世界模型可用于决策的关键。
+- **Decision Utility（决策效用）**：预测对动作选择、策略训练或安全评估的实际帮助。
+- **Closed-loop Evaluation（闭环评估）**：让模型进入真实或模拟控制循环，用任务成功率等指标验证效用。
+
 这篇综述要解决的不是“再列一批世界模型论文”，而是给机器人学习里的世界模型划清三种用途：**放进 policy、变成 simulator、作为 video world model 提供可控未来**。读它最重要的收获，是以后看到一篇新工作时，能先问清楚：它到底在帮助动作生成、帮助模拟训练，还是只是在生成更像真的未来视频。
 
 一句话概括：**机器人世界模型的价值不在于未来画面是否漂亮，而在于预测是否能改变动作选择。**

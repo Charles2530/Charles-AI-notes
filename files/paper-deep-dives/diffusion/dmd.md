@@ -15,16 +15,35 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[tianweiy.github.io/dmd/](https://tianweiy.github.io/dmd/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2311.18828)；[官方 / 项目材料](https://tianweiy.github.io/dmd/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文是后来 DMD2、CausVid、Phased DMD 一系列少步扩散蒸馏方法的基础。它的核心思想很直接：**不要强迫学生模型逐步复刻 teacher 的采样轨迹，而是让学生的一步输出分布看起来像 teacher 的多步输出分布。**
+## 原论文故事线
 
-论文把这个目标落成两个损失：
+### 研究背景
 
-1. **Distribution Matching Loss**：用 real score 和 fake score 的差异近似 reverse KL 梯度，把生成器输出往真实扩散分布推；
-2. **Regression Loss**：预先生成一批 noise-image pairs，用 LPIPS 让一步生成器保持 teacher 输出的大尺度结构，防止 mode collapse / mode dropping。
+原论文讨论的是扩散模型加速里最尖锐的一类目标：把几十步甚至上百步采样压到一步生成。已有 fast sampler 不改模型，只改数值积分，步数太少时质量会掉；progressive distillation、consistency distillation 等路线让学生模仿 teacher 的采样轨迹或端点，能加速但训练成本高，并且点对点回归很难覆盖复杂图像分布。DMD 的核心思想站在这个背景下提出：一步生成器是否必须复刻 teacher 的每条轨迹，还是只要输出分布匹配 teacher / real data 分布即可。
 
-先用一个例子固定直觉。假设同一个 prompt 是“一只红色椅子放在木地板上”，teacher 用 50 步慢慢把噪声变成图像；一步学生只有一次前向机会。如果只要求学生复刻 teacher 对每个 seed 的最终图，它容易学成模糊平均；如果只要求图片“看起来真实”，它又可能把很多 seed 都映射到同一种红椅子。DMD 的聪明处在于把这两个问题拆开：distribution matching 负责让整批学生样本落进真实/teacher 分布，regression loss 负责让每个 seed 还保有自己的大结构锚点。
+### 问题（Challenge）
 
-因此，DMD 不是“一个神奇的一步采样器”，而是一套训练系统：冻结的 real score 告诉学生哪里像真实图，在线训练的 fake score 告诉学生当前自己已经挤在哪些模式里，paired regression 则防止多样性被 reverse KL 吃掉。
+论文要解决的问题是 one-step diffusion synthesis：给定随机噪声，一次前向就生成高质量图像。挑战在于，一步学生没有多步去噪的修正过程；如果只做 teacher-output regression，它容易学到模糊平均或记住 deterministic path；如果只做分布级真实约束，又可能 mode collapse，把不同噪声映射到相似图像。这个问题的价值很直接：一步模型把 diffusion 的交互延迟、批量生成成本和下游 preview 成本降到接近 GAN 的量级。
+
+### Finding
+
+DMD 的 finding 是：扩散 teacher 不仅能当采样器，也能当分布梯度的估计器。作者把 fake distribution 到 real distribution 的 reverse KL 梯度写成 real score 和 fake score 的差，并用两个 diffusion model 近似这个差：冻结的 pretrained diffusion model 提供 real score，动态训练的 fake diffusion model 跟踪当前 generator distribution。这样，学生不必逐步模仿 teacher trajectory，而是在 score difference 指出的方向上移动整批输出分布。Regression loss 不是核心贡献，而是为了给每个 seed 保留大尺度结构、防止分布匹配训练掉模式。
+
+### 方法
+
+方法包含三个对象：一步生成器 \(G_\theta(z)\)、冻结 real score model、在线 fake score model。训练时先让 \(G_\theta\) 从噪声生成图像，再把 fake image 加噪到时间 \(t\)，分别送入 real/fake diffusion score model；两者 score 差给出 distribution matching gradient。与此同时，论文预先用 teacher 生成 noise-image pairs，用 LPIPS regression 让学生对同一噪声保留 teacher 的结构映射。文本到图像场景还需要处理 classifier-free guidance，论文把 guidance 纳入蒸馏目标，使一步学生学到带条件引导的输出分布。
+
+### 结论
+
+实验覆盖 CIFAR-10、ImageNet-64、LAION-Aesthetic / text-to-image 和 COCO 文本生成评测。主结果说明 DMD 可以在一步采样下接近或超过当时多步扩散蒸馏 baseline 的 FID / CLIP 等指标，并在定性图像上保留较好细节。消融说明 distribution matching 与 regression loss 分工不同：前者提升真实感和分布匹配，后者稳定结构与多样性；fake score 的动态训练也直接影响收敛。论文最重要的实验结论不是“所有一步模型都足够好”，而是证明 score-difference distribution matching 可以成为少步扩散蒸馏的新训练目标。
+
+### 关键术语
+
+- **Distribution Matching Distillation（分布匹配蒸馏）**：让学生输出分布匹配 teacher / real distribution，而不是逐轨迹复刻 teacher 采样过程
+- **Real Score（真实分布分数）**：由冻结 pretrained diffusion model 估计的 \(\nabla_x \log p_{\text{real}}(x)\)
+- **Fake Score（生成分布分数）**：由在线训练的 diffusion model 估计的当前 generator distribution score
+- **Reverse KL（反向 KL 散度）**：DMD 推导中用来把 fake distribution 推向 real distribution 的分布距离
+- **LPIPS Regression（感知回归损失）**：对预生成 teacher pair 做感知距离约束，稳定大尺度结构并缓解掉模式
 
 ## 论文位置
 

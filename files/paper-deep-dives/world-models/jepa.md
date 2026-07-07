@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[openreview.net/forum?id=BZ5a1r-kVsf](https://openreview.net/forum?id=BZ5a1r-kVsf)。<br>
     **元数据来源与核验口径：** 来源：[官方 / 项目材料](https://openreview.net/forum?id=BZ5a1r-kVsf)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Yann LeCun 的这篇 position paper 讨论的是 autonomous machine intelligence：机器怎样像人和动物一样通过观察学习世界、少量交互学新任务、并在行动前进行推理和规划。它反对把智能完全建立在外部监督、海量强化学习试错或生成式 token 模型上，因为现实世界交互昂贵且危险，而语言只是对世界的有损压缩。
+
+论文提出一个模块化 agent 架构：perception 估计世界状态，world model 预测未来，cost/critic 评估状态好坏，actor 提出动作序列，configurator 根据任务调度模块。JEPA 是其中 world model 的训练原则：预测未来或缺失部分的抽象表示，而不是生成所有像素细节。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何构造一种能从观察中学习、能处理不确定性、能支持规划的世界模型表示？** 难点在于，真实世界有大量不可预测细节，像素级生成会浪费容量；逻辑符号推理又很难和梯度学习结合；长期行动需要层级抽象，单一 flat representation 难以规划复杂动作序列。
+
+这个问题的价值在于，它把世界模型从“预测下一帧”提升到“构成常识和规划的内部状态”。如果模型能通过观察学到抽象可预测表示，agent 就能减少真实世界试错，在内部模拟行动后果。
+
+### Finding
+
+作者的 finding 是：**智能系统需要的世界模型不是重建世界的生成器，而是一个可配置的预测引擎：它在抽象表示空间中预测行动后果，并通过 cost/energy 来选择行动。** 这个洞见把重点从“数据分布建模”转向“行动前的可预测状态和可优化目标”。
+
+这个 finding 解释了为什么论文推 JEPA 而不是纯生成式模型。生成每个像素要求模型解释不可控噪声；JEPA 通过 encoder 把目标 \(y\) 映射到表示 \(s_y\)，predictor 只需预测这个表示。只要表示保留对行动和规划重要的信息，世界模型就可以故意忽略纹理噪声和无关细节。latent variables 和 energy-based inference 则用于处理多种可能未来。
+
+### 方法
+
+论文提出的系统包含 perception、world model、cost、actor、short-term memory、configurator 等模块。Mode-1 类似快速反应，actor 直接从当前状态产生动作；Mode-2 则是规划模式，actor 提出动作序列，world model 预测未来状态序列，cost/critic 计算总能量，actor 通过搜索或优化寻找低能量动作序列，并执行第一个动作。
+
+JEPA 结构中，\(x\) 和 \(y\) 分别进入 encoder 得到表示，predictor 根据 \(x\) 的表示和可选 latent variable 预测 \(y\) 的表示，能量由预测表示和目标表示的距离定义。Hierarchical JEPA 进一步把表示和预测组织成多层级，以支持不同时间尺度的规划。论文还强调 intrinsic cost、短期记忆和 configurator 对自主 agent 的作用。
+
+### 结论
+
+作为 position paper，论文没有提供标准 benchmark 实验，而是给出一个架构主张和研究路线。它的核心结论是：未来 autonomous AI 应该大量通过 self-supervised observation 学世界模型，通过 energy/cost 驱动 planning，通过层级表示处理长期抽象行动，而不是主要依赖外部奖励试错或像素级生成。
+
+这篇文章的证据边界必须明确：JEPA 在这里是路线和架构原则，不是一个已经在机器人或开放世界任务上验证的完整算法。它对专题的价值是提供世界模型的另一种定义：世界模型应当预测与行动相关的抽象状态，并服务 planning，而不仅是生成未来观测。
+
+### 关键术语
+
+- **Autonomous Machine Intelligence（自主机器智能）**：能通过观察学习世界、形成目标、推理规划并少量交互适应任务的智能系统设想。
+- **Joint-Embedding Predictive Architecture, JEPA（联合嵌入预测架构）**：在表示空间预测目标，而不是直接重建原始输入的预测架构。
+- **World Model Engine（世界模型引擎）**：可根据任务配置来预测未来状态的模块，是论文中规划和推理的核心。
+- **Mode-1 / Mode-2（模式一 / 模式二）**：Mode-1 是快速反应式行动，Mode-2 是通过 world model 和 cost 做规划推理。
+- **Intrinsic Cost（内在代价）**：由系统内部状态如危险、能量、好奇心等定义的代价，用来驱动探索和行为选择。
+- **Configurator（配置器）**：根据任务、上下文和目标调度感知、世界模型、cost 和 actor 的模块。
+
 这篇论文的价值不在某个实验指标，而在于给出了一条和“生成未来像素”不同的世界模型路线：**世界模型不一定要重建未来画面的每个细节，而可以预测未来的抽象表征。** 这就是 `Joint-Embedding Predictive Architecture`，也就是 JEPA。
 
 如果把 LingBot-World 看作“从视频生成模型发展出的视觉世界模拟器路线”，Dreamer 看作“从交互轨迹学习 latent dynamics 的 model-based RL 路线”，那么 JEPA 更像一条上层架构原则：用可预测、可规划、可组合的 latent representation 来承载世界动态。

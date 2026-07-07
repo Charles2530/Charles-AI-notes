@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[deepmind.google/research/publications/60474/](https://deepmind.google/research/publications/60474/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2402.15391)；[官方 / 项目材料](https://deepmind.google/research/publications/60474/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Genie 处在视频生成模型和世界模型的交叉点上。普通视频模型可以根据文本、图像或过去帧生成合理未来，但通常只做到 video-level control；传统 world model 可以根据动作预测未来，但训练往往需要 action labels。互联网上有海量游戏视频、机器人视频和第一视角视频，却大多没有逐帧动作标注。Genie 的问题正是：能不能从无标签视频里学出可交互环境。
+
+论文把这种模型称为 generative interactive environment。它不是只生成一段固定视频，而是要让用户或 agent 每一步选择一个 latent action，然后模型生成对应下一帧。这样，一个草图、照片或文本生成的初始场景可以被“走进去”交互。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**没有真实动作标签时，如何从 Internet videos 中学出 frame-level controllability？** 难点在于视频里只观察到状态变化，不知道导致变化的动作。如果模型只学 \(p(x_{t+1}\mid x_{\le t})\)，它会续写最可能未来，却不能被控制；如果动作 latent 太自由，它可能只是把未来帧信息偷塞进 action code，不能形成可探索的动作空间。
+
+这个问题的价值很大：真实世界和游戏世界的视频数据远多于带动作标签的交互数据。如果 latent action 可以从视频变化中无监督发现，就能把大量公开视频转化为可交互世界模型训练信号。
+
+### Finding
+
+作者的 finding 是：**动作可以先作为解释相邻帧变化的离散潜变量被发现出来；只要这个 latent action bottleneck 足够受限，模型就会把可控变化压缩成类似手柄输入的 action codes。** 这个洞见把“没有动作标签”从硬性缺口变成了表示学习问题。
+
+这个 finding 解释了 Genie 的 Latent Action Model。LAM encoder 可以看到过去帧和下一帧，推断发生了什么变化；但 decoder 只能通过离散 action code 和历史帧重建下一帧。这个瓶颈迫使 action code 表示可复用的变化因素。随后 dynamics model 用历史 video tokens 和 latent actions 预测未来 tokens，就可以在推理时让人选择 action code 来控制环境。
+
+### 方法
+
+Genie 有三个主要组件。第一是 video tokenizer，用带 spatiotemporal Transformer 的 VQ-VAE 将视频压成离散 video tokens，保留空间和时间结构。第二是 Latent Action Model，从相邻帧变化中推断离散 latent action；主实验中使用较小 action codebook，以获得可探索控制。第三是 autoregressive dynamics model，输入历史 video tokens 和 latent actions，预测下一帧 video tokens，再由 tokenizer decoder 还原成图像帧。
+
+训练数据主要是公开 Internet gameplay videos。论文构建了大规模游戏视频数据，按 clip 训练 tokenizer、LAM 和 dynamics model。推理时，模型可以从文本、合成图像、照片或草图等 prompt 得到初始帧，再反复接受 latent action 输入，逐帧生成可玩的环境。论文还探索把学到的 latent action 用于 unseen videos 的行为模仿，说明 latent action space 可作为低层控制接口。
+
+### 结论
+
+实验显示，Genie 可以从无动作标签视频中生成可控、可交互的 2D 游戏式环境，并且模型规模扩大后视频 fidelity 和 controllability 变好。论文通过 FVD、动作影响度、tokenizer/dynamics 消融和定性例子评估模型；ST-tokenizer 相比仅空间 tokenizer 更能保留时序动态，latent actions 对未来帧有可测影响。它还展示从草图、照片和生成图像初始化环境并交互的结果。
+
+边界也要说清楚：Genie 的动作是 latent action，不等同于真实游戏引擎或机器人控制命令；生成环境仍可能漂移，也没有真实物理约束或 reward。论文的贡献是证明“无标签视频 -> latent actions -> controllable world model”这条路线可行，而不是证明已解决开放世界真实交互。
+
+### 关键术语
+
+- **Generative Interactive Environment（生成式交互环境）**：可以根据用户逐步输入生成下一状态的环境模型，不只是一次性生成视频。
+- **Latent Action Model, LAM（潜在动作模型）**：从相邻帧变化中无监督推断离散动作 code 的模块。
+- **Video Tokenizer（视频分词器）**：把连续视频帧压缩成离散 tokens，作为 dynamics model 的状态空间。
+- **Spatiotemporal Transformer（时空 Transformer）**：同时建模空间 token 和时间 token 的 Transformer，用于视频 tokenizer 和 dynamics。
+- **Controllability（可控性）**：用户改变 action code 时，未来生成帧能产生稳定且可解释变化的能力。
+- **Foundation World Model（基础世界模型）**：论文对 11B Genie 的定位，指可从多种 prompt 生成并交互的通用环境模型底座。
+
 > **这篇回答的问题。** 如何理解“Genie”背后的核心机制、适用边界和下一步阅读路径。
 
 Genie 最值得读的地方不是画质，而是问题设定：**只有互联网视频，没有动作标签，模型却要学出可以逐帧控制的环境。** 这让它和普通视频生成模型、Dreamer 式世界模型都不一样。

@@ -11,11 +11,39 @@ paper_topic: 技术报告
     **作者：** DeepSeek-AI。<br>
     **机构：** DeepSeek-AI。<br>
     **时间 / 主题：** 2026-05；技术报告。<br>
-    **arXiv / 官方报告：** arXiv：未找到专门条目。<br>
+    **arXiv / 官方报告：** arXiv：[2606.19348](https://arxiv.org/abs/2606.19348)。<br>
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
-    **元数据来源与核验口径：** 来源：官方发布页；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
+    **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2606.19348)；Checked Date：2026-07-07；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇技术报告的核心不是“又把模型做大了”，而是围绕一个更具体的问题展开：**当 reasoning、agent 和长文档任务都想吃更多上下文时，普通 attention 的 FLOPs 和 KV cache 会先把系统拖垮，模型必须在架构、训练和推理栈上同时改。**
+## 原论文故事线
+
+### 研究背景
+
+DeepSeek-V4 报告延续 DeepSeek-V3 的 MoE、MLA 和高效训练路线，但把重点推到 million-token context intelligence。长上下文模型用于文档、代码库、agent 记忆和复杂推理时，普通 attention 的 FLOPs、KV cache 和训练稳定性会迅速成为瓶颈；只扩大 context window 而不改架构和训练，通常会在成本和质量上双输。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何让大模型在百万 token 上下文中保持推理、检索、agent 和长文档能力，同时控制训练和推理成本。挑战包括长上下文 attention 复杂度、KV cache 布局、MoE routing 稳定性、FP4/低精后训练、长上下文 curriculum、reasoning effort 管理和 serving 内存。这个问题有价值，因为长上下文不是“能塞进去”就够，还要能在长距离检索、多轮推理和 agent 状态中有效使用。
+
+### Finding
+
+DeepSeek-V4 的 finding 是：百万上下文能力需要同时改 attention 层级、KV 表示、训练 curriculum 和推理 effort，而不是只扩 positional encoding。报告把 CSA/HCA、mHC、FP4 后训练和 long-context curriculum 组合起来，说明长上下文效率是架构-训练-服务共同问题。这个 insight 把“更长窗口”翻转为“更高效的上下文智能”：模型必须选择性保留、压缩和调用长程信息。
+
+### 方法
+
+报告继续使用 DeepSeekMoE、MLA / MTP 等基础，加入面向长上下文的混合注意力和 KV cache 设计；训练上使用长上下文 curriculum、dense-to-sparse attention 过渡、Muon optimizer、稳定性补丁和后训练阶段；推理上关注 reasoning effort、KV cache layout、FP4 quantization / post-training 和长上下文服务成本。输入是百万 token 级文档、代码或 agent 历史，输出是长上下文问答、推理、代码和 agent 任务结果。
+
+### 结论
+
+报告用 MRCR、RULER / long-context、reasoning、代码、agent 等 benchmark 说明 DeepSeek-V4 在百万上下文和效率上相对前代提升；图表展示 reasoning effort 与成本、KV cache 布局、CSA/HCA 和 FP4 后训练的作用。边界是报告为官方自述，完整训练配方和系统环境不可完全复现；百万上下文 benchmark 也不能直接证明真实 agent 长期记忆可靠，需要任务级评测。
+
+### 关键术语
+
+- **Million-token Context（百万 token 上下文）**：模型可输入并利用百万级 token 序列的能力
+- **CSA / HCA（压缩/层级注意力）**：面向长上下文降低注意力和 KV 成本的注意力设计
+- **MTP（Multi-Token Prediction，多 token 预测）**：训练时预测多个未来 token 的辅助目标
+- **FP4 Post-training（FP4 后训练）**：将模型适配到 4-bit 浮点推理/训练路径的后训练流程
+- **Reasoning Effort（推理努力度）**：控制模型在推理时使用多少思考 token 和计算预算的机制
 
 报告给出的答案可以压缩成四条线：
 

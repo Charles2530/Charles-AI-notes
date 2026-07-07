@@ -15,9 +15,34 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/tianweiy/CausVid](https://github.com/tianweiy/CausVid)；项目页：[causvid.github.io/](https://causvid.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2412.07772)；[GitHub API / repo](https://github.com/tianweiy/CausVid)；[官方 / 项目材料](https://causvid.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文的核心价值在于给出了一条很清楚的工程路线：**不要从零训练一个自回归视频模型，而是把已有高质量双向视频 DiT 改造成因果学生模型，再用双向教师做非对称 DMD 蒸馏，把 50 步视频扩散压成 4 步流式生成器。**
+## 原论文故事线
 
-如果说 [Diffusion Forcing](diffusion-forcing.md) 重点回答“序列扩散应该怎样表达不同时间 token 的不确定性”，CausVid 更进一步回答：“怎样把这种因果序列扩散真正做成低延迟视频生成系统”。
+### 研究背景
+
+原论文讨论的是视频扩散从离线生成走向流式生成时遇到的系统矛盾。双向 video DiT 可以同时看整段视频 token，因此画面一致性和运动质量较强；但它必须等完整 clip 生成完，不能边生成边输出，也无法自然复用过去 chunk 的 KV cache。自回归视频模型具备流式接口，却往往缺少强双向 teacher 的全局视频先验。CausVid 就站在这两条路线中间：保留强双向模型的质量，把部署形态改成 causal autoregressive。
+
+### 问题（Challenge）
+
+论文要解决的问题是：怎样把一个慢速、双向、离线的视频扩散模型，变成少步、因果、可缓存的流式视频生成器。挑战不只是换一个 causal mask。第一，causal student 不能看未来 chunk，天然比 bidirectional teacher 少信息；第二，如果每个 chunk 仍要 50 步采样，因果结构也换不来低延迟；第三，自回归长视频会积累误差和 chunk discontinuity；第四，从零训练 causal 视频扩散成本很高。这个问题的价值在于，交互式视频、世界模型 rollout 和在线编辑都需要首帧/首块延迟，而不是只看最终 clip 的 FVD。
+
+### Finding
+
+CausVid 的 finding 是：训练时的最强监督不必和部署时的因果结构一致。换句话说，可以让 bidirectional teacher 作为质量源，让 causal student 作为推理接口，再用 asymmetric DMD 把 teacher 分布迁移给 student。这个观点把“因果模型质量差”重新解释为训练路径问题：如果 student 从 teacher 的 ODE 初始化起步，并持续用 teacher score / fake score 分布匹配纠偏，它不需要从零摸索视频分布，也不需要推理时依赖未来 chunk。
+
+### 方法
+
+方法由四个部件组成。第一，构造 block-wise causal DiT，让当前 chunk 只能看历史 chunk 和自身，从结构上满足流式生成。第二，用 ODE initialization 从双向 teacher 初始化 causal student，降低一开始的分布差距。第三，用 asymmetric DMD 做少步蒸馏：teacher 可以是强双向模型，student 是 causal 模型，训练目标用分布匹配而不是逐帧回归。第四，推理时保留 rolling KV cache，让长视频自回归 rollout 不必反复重算历史。论文把这个系统压到 few-step（文中重点报告 4-step）生成，并报告首块延迟和后续 FPS。
+
+### 结论
+
+实验按三个层级验证。视频质量层面，论文在短视频、长视频、streaming video-to-video 和 image-to-video 上比较 CausVid 与相关 baseline，说明 causal student 在少步下仍能保留较强生成质量。系统层面，延迟和吞吐表证明 4-step causal student 加 KV cache 才真正把结构因果性转成流式速度。诊断层面，消融检查 ODE initialization、asymmetric DMD、student 初始化和 streaming 设置，说明性能来自 teacher 质量、蒸馏目标和缓存推理的组合，而不是单一 mask 改动。
+
+### 关键术语
+
+- **Bidirectional Video Diffusion（双向视频扩散）**：生成某个时间块时可以注意到整段视频，质量强但不适合流式输出
+- **Causal Student（因果学生模型）**：推理时只依赖历史和当前块的视频模型，满足在线生成约束
+- **Asymmetric DMD（非对称分布匹配蒸馏）**：teacher 和 student 结构不同，仍用 score 差分把 teacher 分布迁移给 student
+- **KV Cache（键值缓存）**：缓存历史 attention 的 key/value，减少自回归长视频重复计算
 
 ## 它的效率贡献是什么
 

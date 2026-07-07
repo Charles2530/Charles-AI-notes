@@ -15,12 +15,35 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：[github.com/deepseek-ai/DeepSeek-R1](https://github.com/deepseek-ai/DeepSeek-R1)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2501.12948)；[GitHub API / repo](https://github.com/deepseek-ai/DeepSeek-R1)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文的核心不是“R1 分数很高”，而是：**有可靠 verifier 时，大模型可以通过大规模 RL 自己发现更长、更会反思和验证的推理行为。**
+## 原论文故事线
 
-报告有两条主线：`R1-Zero` 验证纯 RL 能否涌现推理行为，`R1` 再加入 cold-start SFT、两阶段 RL、rejection sampling 和安全/有用性对齐。
+### 研究背景
 
-**阅读边界。**
-这里按论文/技术报告自述来读。训练成本、数据规模、RL 超参、benchmark 分数和安全结论都应理解为作者报告的系统结果，而不是第三方独立复现实验。
+DeepSeek-R1 报告处在 reasoning model 从监督微调走向强化学习的阶段。过去提升推理能力常依赖人工 CoT 数据、蒸馏强模型或大量标注推理轨迹；与此同时，数学、代码等任务已经有可验证答案，可以提供比偏好打分更硬的奖励信号。报告把 DeepSeek-R1-Zero 和 DeepSeek-R1 放在一起，分别回答“纯 RL 能不能激发推理”和“产品级 reasoning model 还需要哪些训练阶段”。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何让 LLM 产生长链推理、反思和自我验证能力，而不是只模仿人工写好的 CoT。挑战在于纯 RL 可能出现可读性差、语言混杂、格式不稳等问题；只靠 SFT 又容易把模型限制在示范轨迹里，缺少探索。这个问题有价值，因为如果可靠 verifier 能直接驱动推理行为，reasoning 能力就可以从“标注推理过程”转向“用结果奖励探索有效策略”。
+
+### Finding
+
+报告的 finding 是：在可验证任务上，RL 不只是微调答案偏好，而能激发模型自发形成更长、更会检查和反思的推理模式。R1-Zero 说明没有冷启动 CoT 监督时，GRPO 也能让模型出现推理长度增长和自我验证行为；R1 则说明纯 RL 的能力还需要 cold-start SFT、rejection sampling 和安全/有用性对齐，才能变成可读、稳定、可用的模型。
+
+### 方法
+
+R1-Zero 从 base model 出发，用 GRPO 在规则可验证任务上强化，无需 critic model。R1 则加入多阶段流程：先用少量 cold-start 数据让输出可读并具备基础推理格式；第一阶段 RL 强化 reasoning；再用 rejection sampling 收集高质量推理数据和非推理 SFT 数据；最后进行第二阶段 RL，同时优化 helpfulness、harmlessness 和 reasoning。报告还蒸馏 R1 推理能力到较小 dense 模型。
+
+### 结论
+
+实验报告 R1-Zero 在数学/代码推理上出现能力跃升，但可读性和语言一致性不足；R1 在 AIME、MATH、Codeforces、GPQA、MMLU 等 benchmark 上接近或达到当时强 reasoning model 水平；蒸馏实验显示小模型从 R1 轨迹中获得明显推理提升。需要保留边界：训练成本、数据细节和安全评估主要是作者报告，不能等同第三方复现；RL 的有效性也依赖可验证奖励和任务分布。
+
+### 关键术语
+
+- **GRPO（Group Relative Policy Optimization，组相对策略优化）**：DeepSeek-R1 使用的无 critic 强化学习算法，通过组内相对奖励更新策略
+- **Cold-start SFT（冷启动监督微调）**：在 RL 前用少量高质量数据建立可读格式和基础推理行为
+- **Verifier（验证器）**：根据答案正确性或规则给奖励的评估器
+- **Rejection Sampling（拒绝采样）**：从模型生成中筛选高质量样本作为后续训练数据
+- **Distillation（蒸馏）**：用强 reasoning model 生成的数据训练较小模型继承推理能力
 
 ## 论文位置
 

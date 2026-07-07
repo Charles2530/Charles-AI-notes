@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/danijar/dreamerv3](https://github.com/danijar/dreamerv3)；项目页：[danijar.com/project/dreamerv3/](https://danijar.com/project/dreamerv3/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2301.04104)；[GitHub API / repo](https://github.com/danijar/dreamerv3)；[官方 / 项目材料](https://danijar.com/project/dreamerv3/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+DreamerV3 继续 DreamerV1/V2 的 latent world model RL 路线，但目标从“在某类任务上有效”变成“用同一套超参数跨差异很大的任务工作”。强化学习长期有一个问题：算法常在单个 benchmark 上强，但换到不同观测、动作、奖励尺度或探索难度时，需要大量手工调参。DreamerV3 想证明 model-based RL 可以形成更通用的 recipe。
+
+它覆盖的任务类型很杂：Atari、DMLab、连续控制、Crafter、Minecraft 等，包含像素输入、低维输入、离散动作、连续动作、稀疏奖励、长时探索和不同奖励尺度。论文因此不只是比较分数，而是在检验世界模型训练、value 标定、reward 变换和 actor-critic 更新是否足够稳定。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何让一个 latent world model agent 在无需按任务重调大量超参数的情况下，跨视觉控制、游戏、探索和长期规划任务学习？** 挑战来自三个方面。第一，reward/value 尺度在不同环境中差异很大，critic 和 actor 容易因为尺度不稳而崩。第二，world model 的 posterior 必须保留足够信息，prior 又必须能在 imagination 中可靠 rollout。第三，稀疏奖励和长期探索任务需要 agent 在模型偏差存在时仍能学到有效行为。
+
+这个问题的价值在于，如果 world model RL 只能靠任务级调参，它就很难成为通用 agent 的训练范式。DreamerV3 试图把算法工程上的稳定性本身变成贡献。
+
+### Finding
+
+作者的 finding 是：**跨域稳定性来自一整套尺度鲁棒的 world-model actor-critic recipe，而不只是更大的模型或更长 rollout。** 这个洞见把 DreamerV3 的贡献从“又一个 RSSM agent”转成“让 latent imagination 在不同 reward、动作和观测分布下保持可训练”。
+
+这个 finding 解释了 symlog、two-hot value、free bits、KL 分解、return normalization 等设计的组合意义。它们分别处理不同的不稳定源：数值尺度、value 分布、posterior 信息量、prior 可预测性和 actor 更新幅度。只有这些环节一起稳定，想象轨迹才能成为跨域训练数据，而不是某个任务上的模型漏洞。
+
+### 方法
+
+DreamerV3 仍使用 RSSM world model。输入是真实环境中的 observation、action、reward 和 continuation；模型把 observation 编码成 discrete latent representation，并用 recurrent dynamics 在动作条件下预测未来 latent。world model 训练目标包括 observation prediction、reward prediction、continuation prediction，以及分成 dynamics loss 和 representation loss 的 KL 项。
+
+行为学习在 imagination 中完成。模型从 replay 编码状态出发，用 actor 采样动作，用 prior rollout 未来 latent，用 reward/continuation/value 估计 lambda-return。critic 学 imagined return，actor 学最大化 critic 估计。为了跨域稳定，DreamerV3 使用 symlog 处理大范围 reward/value，two-hot representation 表示 value 分布，return normalization 控制 actor 更新尺度，并尽量保持固定超参数。
+
+### 结论
+
+实验显示，DreamerV3 用同一套超参数在多个 domain 上取得强结果，覆盖 Atari、DMLab、连续控制、Crafter 和 Minecraft 等任务。论文最有代表性的结论不是单项最高分，而是固定 recipe 能在奖励稀疏、长期探索和视觉输入任务中都保持训练。Minecraft diamond 结果尤其说明，latent world model imagination 可以帮助长时任务中的行为学习。
+
+同时，论文也没有证明 world model 偏差被彻底解决。DreamerV3 的成功依赖模拟环境和大量环境交互，world model 仍可能在更开放的真实环境中出现分布外错误。它的贡献边界是：给出一套足够稳定的 model-based RL recipe，使 latent imagination 从连续控制/Atari 扩展到更广泛任务。
+
+### 关键术语
+
+- **Symlog（对称对数变换）**：对正负大数都压缩尺度的变换，用来稳定 reward 和 value 学习。
+- **Two-hot Encoding（双热编码）**：把连续 value 表示成相邻两个离散 bin 的分布，提高 value 学习稳定性。
+- **Free Bits（自由比特）**：给 KL 项设置最小信息预算，避免 latent 被过度压缩。
+- **Dynamics Loss（动力学损失）**：推动 prior 追上 posterior，使想象 rollout 更可靠。
+- **Representation Loss（表示损失）**：约束 posterior 表示，让它既有信息又能被 prior 学到。
+- **Fixed Hyperparameters（固定超参数）**：同一套训练配置跨多个任务使用，是 DreamerV3 的主要稳定性主张。
+
 DreamerV3 要回答的问题很窄，也很重要：如果真实环境交互很贵，能不能先学一个动作条件的 latent dynamics，再让策略在这个内部模型里反复“想象”未来，从而减少真实试错。
 
 它不是一个视频生成模型。它不会先生成一段漂亮未来画面，再让策略看画面行动。DreamerV3 的世界模型更像一个给 actor 和 critic 用的内部环境：输入当前 latent state 和动作，输出下一个 latent state、奖励和 episode 是否继续。只要这个内部环境对决策足够准，策略就可以在里面训练很多步，再回到真实环境收集新数据。

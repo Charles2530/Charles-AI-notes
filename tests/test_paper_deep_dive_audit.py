@@ -19,6 +19,32 @@ paper_topic: 世界模型
     **时间 / 主题：** 2026-01；世界模型。<br>
     **元数据来源与核验口径：** Checked Date：2026-06-15；Repro Status：Paper reviewed。
 
+## 原论文故事线
+
+### 研究背景
+
+{title} 的研究背景。
+
+### 问题（Challenge）
+
+{title} 的挑战。
+
+### Finding
+
+{title} 的关键发现。
+
+### 方法
+
+{title} 的方法。
+
+### 结论
+
+{title} 的实验结论。
+
+### 关键术语
+
+- **Term（术语）**：解释。
+
 ## 方法
 
 {body}
@@ -86,3 +112,14 @@ class PaperDeepDiveAuditTests(TestCase):
             findings = audit_page(page, include_hints=False, root=root)
 
             self.assertTrue(any("missing frontmatter fields: paper_topic" in finding.reason for finding in findings))
+
+    def test_missing_story_section_is_reported(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "world-models" / "missing-story-section.md"
+            page.parent.mkdir(parents=True)
+            page.write_text(_valid_page("Missing Story Section").replace("### Finding\n\nMissing Story Section 的关键发现。\n\n", ""), encoding="utf-8")
+
+            findings = audit_page(page, include_hints=False, root=root)
+
+            self.assertTrue(any("missing required story sections: ### Finding" in finding.reason for finding in findings))

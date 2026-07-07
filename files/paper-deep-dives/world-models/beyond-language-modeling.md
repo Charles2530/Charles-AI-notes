@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[beyond-llms.github.io/](https://beyond-llms.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.03276)；[官方 / 项目材料](https://beyond-llms.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+这篇论文属于 native multimodal pretraining 的控制实验。过去很多 VLM 是先训练语言模型，再接视觉编码器或生成模块；这样能快速得到能力，但很难回答一个基础问题：多模态能力到底来自语言模型本身、视觉适配器、视觉数据，还是统一训练目标？世界模型方向还多一个问题：动作条件未来预测是不是必须依赖大量专门采集的 action-conditioned data。
+
+论文从零训练统一多模态模型，把 text、video、image-text pairs 和 action-conditioned video 放到同一个训练系统里。文本仍用 next-token prediction，视觉用 flow matching，动作可以直接写成文本 token。这样做的意义是把变量拆开：视觉表示、数据混合、MoE、scaling 和 world modeling 分别怎么影响语言、视觉和规划能力。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**统一多模态预训练是否会自然产生 world modeling 能力，以及这种能力主要来自通用视频预训练还是专门的动作条件数据？** 这个问题有挑战性，因为语言、图像、视频和动作任务的分布差异很大。image-text caption 的文本风格可能伤害普通 language modeling；video tokens 又可能占用大量训练预算；action-conditioned data 稀缺，如果模型只能靠这类数据学世界动态，路线就很难扩展。
+
+这个问题的价值在于，它影响世界模型的数据策略。如果大量 raw video 已经能提供物体运动、视角变化和场景连续性的基础能力，那么少量动作条件数据可以更像 alignment 接口，而不是唯一知识来源。
+
+### Finding
+
+作者的 finding 是：**world modeling 能力主要从一般多模态预训练中出现，尤其是通用视频数据；动作条件数据的关键作用是把已有视觉动态能力对齐到“给定动作预测未来状态”的接口。** 这个洞见把动作数据从“全部世界知识来源”重新定位为“控制接口监督”。
+
+这个 finding 能解释论文的 Navigation World Model 结果。模型如果只在有限导航数据上学，容易过拟合域内格式；如果先通过 raw video 学到物体、视角和空间连续性，再用少量 action-conditioned samples 告诉模型动作怎样控制未来帧，模型就能把通用动态迁移到导航预测。动作被写成普通文本 token 也说明，模型不一定需要专门 action adapter 才能形成控制条件。
+
+### 方法
+
+论文训练一个统一 autoregressive model。文本序列用标准 cross-entropy；图像或视频帧先编码成视觉 latent，再用 image-wise flow matching 训练模型预测从噪声到干净视觉 latent 的 velocity。训练 batch 混合 text-only、video-only、paired image-text 和 action-conditioned data；默认 joint objective 使用 language loss 和 flow loss 的加权组合。
+
+视觉表示方面，论文比较 VAE、semantic encoder、raw pixels 和 Representation Autoencoder。数据方面，它比较 text-only、Text + Video、Text + Image/Text、Text + Image/Text + Action 等不同 mixture。world modeling 方面，模型在 Navigation World Model 设置中输入若干 context frames 和 action，再生成未来 frame；动作既可以是结构化数值文本，也可以是 WASD 风格或自由自然语言。
+
+### 结论
+
+实验给出几条关键结论。第一，视觉数据不必然伤害语言建模；Text + Video 在一些设置下与 text-only 相容，语言退化更多来自 image-text caption 的文本分布差异。第二，image-text data 对 VQA 和视觉理解/生成很重要，但 raw video 对 world modeling 特别关键。第三，在 NWM 消融里，加入通用 video data 往往比只增加域内 navigation data 更有帮助，说明一般多模态预训练能迁移到动作条件预测。
+
+第四，动作作为文本 token 的设置能完成 navigation action conditioning，论文还展示了用自由自然语言动作做零样本 rollout 的例子。需要补充的是，论文主要评估视觉未来预测和规划距离指标，不等同于真实机器人闭环控制；它证明的是“通用多模态预训练可以成为世界模型底座”，而不是“无需真实交互数据”。
+
+### 关键术语
+
+- **Native Multimodal Pretraining（原生多模态预训练）**：从训练初期就同时处理文本、图像、视频和动作，而不是先训练纯语言模型再外挂视觉模块。
+- **Flow Matching（流匹配）**：在连续视觉 latent 上学习从噪声到真实样本的方向场，用于视觉生成。
+- **Representation Autoencoder, RAE（表示自编码器）**：用语义视觉 encoder 加 decoder，把理解友好的表示也用于生成。
+- **Navigation World Model, NWM（导航世界模型）**：给定历史视觉状态和导航动作，预测未来视觉状态的任务设置。
+- **Action As Text（动作文本化）**：把动作参数直接写成普通文本 token，使模型用语言接口表示控制条件。
+- **Data Mixture（数据混合）**：训练中不同来源数据的比例和组合；本文把它作为决定语言、视觉和世界建模能力的核心变量。
+
 这篇论文的价值不是发布一个最强模型，而是做控制实验：如果从零训练统一多模态模型，视觉表示、数据混合、动作条件、MoE 和 scaling 分别影响什么。
 
 它最值得放进世界模型专题，是因为它把一个常被含糊带过的问题拆开了：世界建模能力到底来自大量 action-conditioned data，还是也能从一般视频和图文预训练里迁移出来。论文在 Navigation World Model (NWM) 设置里发现，通用视频预训练比单纯扩大域内 NWM 数据更关键，少量域内 action-conditioned 数据主要负责教会模型任务格式。

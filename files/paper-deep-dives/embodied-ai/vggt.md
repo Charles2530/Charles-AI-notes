@@ -16,6 +16,47 @@ paper_topic: 具身智能
     **GitHub / 项目：** GitHub：[github.com/facebookresearch/vggt](https://github.com/facebookresearch/vggt)；项目页：[vgg-t.github.io/](https://vgg-t.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.11651)；[GitHub API / repo](https://github.com/facebookresearch/vggt)；[官方 / 项目材料](https://vgg-t.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+VGGT 的背景是传统视觉几何管线与现代 Transformer 表示学习的交汇。经典 SfM/MVS 通过特征匹配、相对位姿估计、三角化、bundle adjustment 和稠密重建恢复相机与三维结构，几何约束清晰，但流程长、优化重，对弱纹理、重复纹理、动态物体和少视角输入敏感。近年 DUSt3R/MASt3R 等方法开始用 feed-forward 网络直接预测几何。
+
+具身智能需要这种能力：机器人策略、VLA 和世界模型都需要知道相机在哪里、物体多远、点如何跨帧对应。单独的单目深度模型或 tracking 模型只能解决一部分问题。VGGT 试图把 camera、depth、point map 和 point track 放进一个统一 Transformer 前向推理里，形成完整的 visual geometry state。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**能否用一个统一前向模型，从一张到上百张图像直接预测相机参数、深度图、3D point maps 和 point tracks。** 难点在于这些输出互相依赖：相机位姿影响 3D 点，3D 点和跨视角对应又反过来约束相机。传统方法靠优化循环处理这种耦合，神经网络若只做单任务，很容易失去联合几何一致性。
+
+这个问题的价值在于，把复杂重建 pipeline 变成可微、可批量、可作为下游空间表征的前向模型。对机器人来说，一次前向得到几何状态，比在每个 episode 中运行脆弱的多阶段优化更容易接入策略和数据管线。
+
+### Finding
+
+作者的 finding 是：**相机、深度、点图和跟踪不必作为独立几何模块顺序求解；它们可以由同一个 Transformer 在共享多视角表示中联合预测，传统几何约束被吸收到多任务监督和 alternating attention 结构中。** 这个洞见把 SfM/MVS 的迭代优化问题翻转成统一表示学习问题。
+
+这个 finding 能解决挑战，是因为多任务输出互相提供约束：camera head 让模型建立视角关系，depth/point map head 提供稠密几何，track head 强化跨帧对应。Alternating attention 则在全局跨视角信息和单帧局部细节之间切换，让模型既能对齐多个视角，又保留深度边界和纹理细节。
+
+### 方法
+
+VGGT 输入 \(N\) 张图像，经 DINO 风格视觉 backbone patchify 成 tokens，并加入 camera tokens。Transformer 主体使用 alternating attention：global attention 负责跨图像建立几何关系，frame attention 负责每张图内部的局部视觉更新。模型输出包括 camera parameters、depth maps、point maps 和 tracks。
+
+训练使用大规模多任务几何监督，将相机、深度、3D 点和跟踪作为联合学习目标。推理时，VGGT 不依赖传统 bundle adjustment 作为必需后处理，而是在一次前向中给出可直接用于重建、定位、深度估计和跟踪的几何结果。不同输入数量下，模型都使用同一套前向接口。
+
+### 结论
+
+实验显示 VGGT 在 camera estimation、depth estimation、point map prediction、3D reconstruction 和 tracking 等多个 visual geometry 任务上达到强结果，并能在单张、少量和多张图像输入下运行。论文展示它可以替代传统几何 pipeline 的多个环节，同时保留输出的联合一致性。其下游价值也体现在后续工作中，例如 VO-DP 直接使用 VGGT 中间特征作为机器人策略的语义-几何输入。
+
+边界是，VGGT 本身不学习动作、物理接触或策略控制；它的几何输出仍可能受动态场景、遮挡、反光、少纹理和极端相机运动影响。对具身智能来说，它提供的是空间状态和几何先验，而不是完整世界模型或安全控制器。
+
+### 关键术语
+
+- **Visual Geometry Grounded Transformer, VGGT（视觉几何扎根 Transformer）**：联合预测相机、深度、点图和轨迹的前向几何模型。
+- **Structure-from-Motion, SfM（运动恢复结构）**：从多张图像恢复相机运动和稀疏三维结构的经典方法。
+- **Multi-View Stereo, MVS（多视角立体）**：在已知或估计相机下恢复稠密表面几何的任务。
+- **Point Map（点图）**：为每个像素预测对应 3D 点位置的稠密几何输出。
+- **Point Track（点轨迹）**：同一物理点在不同图像或时间中的对应轨迹。
+- **Alternating Attention（交替注意力）**：在跨视角全局注意力和帧内局部注意力之间交替更新的 Transformer 结构。
+
 VGGT 最值得读的地方，不是它又预测了一个 depth map，而是它把传统视觉几何里一整条复杂管线改成了一个多任务 Transformer 的前向推理问题。
 
 传统 SfM / MVS 通常要经历特征匹配、几何验证、相机位姿优化、三角化、bundle adjustment、稠密重建等步骤。VGGT 的问题设定更激进：给一张、几张或上百张图，模型直接输出 camera parameters、depth maps、point maps 和 point tracks。它不声称几何约束消失了，而是把几何约束吸收到大规模监督和网络结构里。

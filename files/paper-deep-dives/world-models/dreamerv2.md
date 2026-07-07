@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/danijar/dreamerv2](https://github.com/danijar/dreamerv2)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2010.02193)；[GitHub API / repo](https://github.com/danijar/dreamerv2)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+DreamerV2 是 Dreamer 路线从连续控制走向 Atari 的关键版本。DreamerV1 已经证明 RSSM latent imagination 可以训练 actor-critic，但 Atari 这样的离散动作、像素输入、长时信用分配基准长期由 model-free 方法占优。此前许多 model-based 方法要么预测像素未来但规划效果弱，要么在复杂视觉环境中不如 Rainbow、IQN 等强基线。
+
+Atari 对世界模型很苛刻：环境状态变化常是离散事件，如得分、死亡、房间切换、物体消失；奖励稀疏且尺度变化大；如果 learned model 在 imagination 中有偏差，actor 会利用模型漏洞。DreamerV2 因此关注 latent representation 和 KL 训练方式，而不是只扩大模型。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**一个单独训练的 latent world model 能否支撑 Atari 级别的策略学习，并达到人类水平或强 model-free baseline 的水平？** 难点在于 Atari 的未来不是平滑连续变化，Gaussian stochastic latent 容易把离散事件平均掉；同时，prior 必须在没有未来图像的情况下准确 rollout，posterior 又不能把 prior 学不会的图像细节全塞进 latent。
+
+这个问题的价值是给 world model RL 一次更强的基准检验。连续控制成功可能被解释为低维动力学相对平滑；如果 Atari 也能成功，就说明 latent imagination 不是小任务技巧，而能扩展到更复杂的视觉决策。
+
+### Finding
+
+作者的 finding 是：**对 Atari 这类离散视觉环境，世界模型需要离散化的 stochastic latent 和更有方向性的 KL 训练，让 prior 学到可 rollout 的事件状态，而不是只让 posterior 重建当前画面。** 这个洞见把 DreamerV1 的核心保留住，但改变了 latent 的表达形式和正则方式。
+
+这个 finding 解释了 DreamerV2 的 categorical latent 与 KL balancing。多个 categorical variables 比 Gaussian latent 更适合表达物体出现/消失、游戏模式切换、生命数变化等离散因素；KL balancing 则让 posterior 保留任务相关信息，同时给 prior 足够学习压力，使 imagination 阶段不至于脱离真实动力学。
+
+### 方法
+
+DreamerV2 仍使用 RSSM，但把 stochastic state 从 Gaussian 改成多个 categorical variables，并用 straight-through gradient 训练。world model 接收 Atari 图像、动作、reward 和 discount，训练目标包括图像重建、reward prediction、discount prediction，以及 prior/posterior 之间的 KL 项。KL balancing 控制梯度更多更新 prior 还是 posterior，避免表示只对重建有用、却不适合未来 rollout。
+
+行为学习仍在 latent imagination 中进行。从 replay 的 posterior states 出发，actor 产生离散动作，RSSM prior rollout 未来 latent，reward 和 value head 估计 imagined return。与连续控制不同，Atari 的 actor 更新更多依赖 REINFORCE-style gradient 和 entropy regularization，而不是主要通过 dynamics path 反向传播。
+
+### 结论
+
+实验显示，DreamerV2 在 55 个 sticky-action Atari games 的 gamer-normalized median score 上达到 human-level，并超过 Rainbow 和 IQN 等 single-GPU model-free baselines。论文的消融表明，categorical latent、KL balancing、actor gradient 选择和 reward/value 建模都会影响结果；这说明成功不是简单把 DreamerV1 跑到 Atari 上。
+
+这篇论文的结论是：world model 不必重建完美像素未来，也可以支撑强 Atari 策略；关键是 latent dynamics 是否捕捉对 reward、value 和 action choice 有用的离散事件。它仍然在模拟游戏环境中验证，不能直接推出真实机器人或开放世界交互的安全性。
+
+### 关键术语
+
+- **Categorical Latent（类别型潜变量）**：用多个离散类别变量表示 stochastic state，更适合 Atari 这类离散事件环境。
+- **KL Balancing（KL 平衡）**：调整 KL 项对 prior 和 posterior 的训练压力，避免模型只学会重建而不会 rollout。
+- **Straight-through Gradient（直通梯度）**：前向使用离散采样，反向近似传递梯度的训练技巧。
+- **Sticky-action Atari（粘滞动作 Atari）**：动作有概率延续上一动作的 Atari 评估设置，用来提高随机性和防止过拟合。
+- **Imagination Rollout（想象轨迹）**：world model 在 latent space 内根据 actor 动作预测未来状态和奖励的序列。
+- **Gamer-normalized Score（玩家归一化得分）**：用人类玩家和随机策略分数归一化 Atari 表现的指标。
+
 DreamerV2 是 [Dreamer](dreamer.md) 到 [DreamerV3](dreamerv3.md) 之间的关键版本。DreamerV1 已经证明了可以在 RSSM 的 latent imagination 中训练 actor-critic，但主要成功集中在连续控制。DreamerV2 把这条路线推进到 Atari 这种更成熟、更竞争激烈的离散动作视觉基准上。
 
 这篇论文最重要的结论是：**一个单独训练的 world model，如果 latent dynamics 足够准确，也可以支撑 Atari 级别的 policy learning，而不只是服务连续控制或小规模视觉任务。**

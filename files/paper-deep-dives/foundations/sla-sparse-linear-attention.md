@@ -15,11 +15,35 @@ paper_topic: 高效训练
     **GitHub / 项目：** GitHub：[github.com/thu-ml/SLA](https://github.com/thu-ml/SLA)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2602.12675)；[GitHub API / repo](https://github.com/thu-ml/SLA)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这两篇论文讨论的是视频 DiT 里一个很基础但很工程化的问题：**attention 既是长序列视频生成的瓶颈，又很难直接靠稀疏或线性化单独解决。** SLA 先把 attention 权重分成三类：少数关键块精确算，大量边缘块用 linear attention 补偿，极小块直接跳过。SLA2 则继续追问：这个三分法能不能不靠手工规则，低比特 attention 能不能和 sparse-linear attention 一起训练出来。
+## 原论文故事线
 
-因此这篇讲解把两篇合在一起看：SLA 是 sparse-linear attention 的第一版，证明“高秩少数精确算、低秩多数便宜补”这条路线可行；SLA2 是第二版，补上可学习路由、比例混合和 QAT，让它更接近可部署的高稀疏注意力方案。
+### 研究背景
 
-先用一个视频 DiT 场景理解它为什么不是普通稀疏。假设一个 5 秒视频 latent 有上万 token：同一只手、桌面、杯子和背景在不同帧里互相影响。少数 query-key block 真的很关键，例如手接近杯子的区域，要精确看；很多远处背景 block 权重很小，可以跳过；但还有一大批“中等但数量很多”的 block，单个不重要，合起来却维持了时序一致和背景结构。SLA 的核心就是给这三类 block 分配三种计算，而不是用一种稀疏规则粗暴处理整张 attention matrix。
+原论文讨论 Diffusion Transformer，尤其是图像/视频 DiT 中 attention 成本随 token 数增长的问题。完整 attention 能保留全局依赖，但长视频 latent、高清图像 patch 和多帧条件会让 attention 成本成为训练与推理瓶颈；纯稀疏 attention 容易漏掉全局弱信号，纯 linear attention 又可能损伤关键局部匹配。SLA / SLA2 试图在 exact、linear 和 skip 三者之间找到混合路线。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何在 DiT 中减少 attention 计算，同时不破坏生成质量。挑战在于 attention matrix 的信息不是均匀分布的：少数 block 权重大、结构复杂，需要精确计算；大量 block 权重小但合起来维持背景和时序一致性，完全跳过会掉质量；还有一些 block 贡献极小，可以直接忽略。这个问题有价值，因为视频 DiT 的可训练长度、分辨率和帧数都受 attention 成本限制。
+
+### Finding
+
+SLA 的 finding 是：attention 的不同 block 可以按重要性和秩结构分流处理，而不是用一种近似覆盖整张矩阵。少数关键 block 保留 exact attention，中等贡献 block 用 linear attention 近似，大量极小贡献 block 跳过。SLA2 进一步把这个 insight 推进为可学习路由：哪些 block exact、哪些 linear、哪些 skip 不应完全靠手工阈值，而应由路由与 QAT 共同适配模型和硬件。
+
+### 方法
+
+SLA 先把 attention matrix 分块，根据统计或规则把 block 分为 exact / linear / skip 三类：exact block 正常计算 softmax attention，linear block 用核化或线性形式近似补偿，skip block 不算。SLA2 在此基础上加入 learnable routing、ratio mixing 和 quantization-aware training，使路由比例、稀疏模式和低比特执行可以一起训练。输入是 DiT 的 Q/K/V 和 block 划分，输出是 sparse-linear 混合 attention 结果；训练时需要保证路由、近似误差和生成 loss 同时稳定。
+
+### 结论
+
+实验在 DiT 图像/视频生成设置中比较 full attention、稀疏 attention、linear attention、SLA / SLA2 的速度和生成质量。结果显示，单纯稀疏或单纯线性都容易在质量上付出较大代价，而 sparse-linear 混合能在较高加速比下保持更接近 full attention 的 FID / 视觉质量；SLA2 的可学习路由和 QAT 进一步提升部署友好性。边界是收益依赖 attention block 结构、分辨率、token 排布和 kernel 实现，不是所有 Transformer 任务都可直接套用同一比例。
+
+### 关键术语
+
+- **DiT（Diffusion Transformer，扩散 Transformer）**：用 Transformer 作为扩散模型 denoiser 的生成架构
+- **Sparse Attention（稀疏注意力）**：只计算部分 query-key 连接以降低成本
+- **Linear Attention（线性注意力）**：用核化或低秩形式把 attention 复杂度近似降到线性
+- **Learnable Routing（可学习路由）**：模型学习决定哪些 attention block 走 exact、linear 或 skip 路径
+- **Sparse-Linear Attention（稀疏线性注意力）**：把精确稀疏块、线性近似块和跳过块混合的 attention 方案
 
 ## 论文位置
 

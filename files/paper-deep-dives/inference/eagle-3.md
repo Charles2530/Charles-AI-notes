@@ -15,9 +15,35 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：[github.com/SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.01840)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-EAGLE-3 继续解决投机解码里的同一个问题：怎么让便宜 draft path 猜出 target LLM 更可能接受的未来 token。它和 EAGLE 的关键差别不是“又换了一个小模型”，而是指出：**draft model 训练时如果只看真实前缀，推理时却要吃自己上一轮生成的前缀，多步 draft 就会分布偏移。**
+## 原论文故事线
 
-EAGLE-3 的回答是 training-time test：在训练阶段就模拟测试时的递归 draft，让 draft model 见过自己生成的中间状态。这样它往后猜第 2、第 3、第 4 个 token 时，不会因为输入分布突然变成“自己造出来的前缀”而崩。
+### 研究背景
+
+原论文延续 EAGLE 系列的投机解码路线。EAGLE 证明 draft 不一定要是独立小 LLM，可以利用 target LLM 的 feature 预测候选 token；EAGLE-2 又把静态树改成动态树。但当 draft model 要连续递归生成多步候选时，一个更深的问题出现了：训练时它通常看真实 token 前缀，推理时却会把自己前一步生成的 token / feature 再喂给自己。
+
+### 问题（Challenge）
+
+EAGLE-3 要解决的是多步 draft 的 train-test mismatch。挑战在于 speculative decoding 的收益来自连续接受多个 token；如果 draft 第一步还不错，但第二步、第三步开始吃到自己生成的上下文，误差会沿 draft path 放大，acceptance length 很难随训练数据规模继续提升。这个问题有价值，因为 target model 越大，能多接受一个 token 的推理收益越高；draft 的稳定递归能力直接决定大模型部署加速上限。
+
+### Finding
+
+EAGLE-3 的 finding 是：draft model 应该在训练阶段经历测试阶段会遇到的递归生成过程，也就是 training-time test。作者把 exposure bias 从文本生成质量问题转写成推理加速问题：draft 不是要写出最终答案，而是要生成 target 最可能接受的候选；如果训练时从未见过自己的中间错误，它无法学会在这些状态上继续给出可接受候选。让训练过程模拟测试递归，就能把更多训练数据转化为更长 acceptance。
+
+### 方法
+
+方法包括三处变化。第一，EAGLE-3 放弃原 EAGLE 的 feature regression constraint，改为直接预测 token，使 draft 目标更贴近 acceptance。第二，引入 training-time test：训练时递归生成 draft steps，让后续 step 的输入包含 draft 自己产生的中间状态。第三，融合 target LLM 的低层、中层、高层 feature，而不是只依赖 single high-level feature。推理时仍由 target LLM 对 draft tree 做标准验证，因此输出分布保持不变。
+
+### 结论
+
+论文用 scaling、MT-bench 等任务和多模型设置展示：EAGLE-3 的 speedup 与 acceptance length 能随训练数据规模继续增长，而原 EAGLE 更早饱和。消融表明，去掉 feature constraint、引入 multi-layer feature fusion、使用 training-time test 都能提高 acceptance；递归步数下的接受率曲线说明 draft 在多步生成中更稳。边界是它仍依赖 target feature 可访问、draft/target 工程集成和验证 kernel 效率。
+
+### 关键术语
+
+- **Training-Time Test（训练时测试）**：训练阶段模拟推理时的递归 draft 过程，让模型见到自生成状态
+- **Exposure Bias（暴露偏差）**：训练输入分布与推理输入分布不一致，导致多步生成误差累积
+- **Acceptance Length（接受长度）**：target LLM 一次验证中连续接受的 draft token 数
+- **Feature Regression Constraint（特征回归约束）**：要求 draft 输出逼近 target hidden feature 的训练限制
+- **Multi-layer Feature Fusion（多层特征融合）**：融合 target LLM 不同层表征作为 draft 输入
 
 ## 从 EAGLE 到 EAGLE-3：放弃 feature regression 约束
 

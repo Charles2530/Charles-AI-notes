@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[lance-project.github.io/](https://lance-project.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.18678)；[官方 / 项目材料](https://lance-project.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Lance 属于 native unified multimodal modeling。这个方向想把图像/视频理解、图像/视频生成、编辑和交错多模态任务放进同一模型，而不是把 VLM 和 diffusion/video generator 通过 adapter 拼起来。已有统一模型常遇到一个冲突：理解任务需要语义抽象和文本推理，生成任务需要连续视觉 latent、空间细节和去噪目标；如果强行共用一条路径，能力会互相干扰。
+
+从世界模型角度看，Lance 不直接做动作条件控制，但它回答了统一状态表示问题。世界模型最终也需要同时保留语义状态、视觉细节、历史上下文和未来生成目标。Lance 的贡献在于把 text tokens、ViT semantic tokens、clean VAE latents 和 noisy VAE latents 组织到同一个 interleaved context 中，并用不同能力路径处理理解与生成。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何在一个轻量统一模型中同时做好图像/视频理解、生成和编辑，并让这些任务互相增益而不是互相竞争？** 挑战在于，不同任务的 token 角色不同：有些 token 是条件，有些是目标；有些视觉表示服务语义理解，有些服务像素生成；文本 next-token loss 和视觉 flow matching 的优化性质也不同。
+
+这个问题有价值，因为多模态 agent 和世界模型需要统一上下文。如果理解模块和生成模块只能通过短 prompt 交换信息，很多空间关系、编辑约束和时序状态会在接口处丢失。
+
+### Finding
+
+作者的 finding 是：**统一多模态模型的关键不是把所有任务压进同一条完全共享路径，而是让不同任务在共享 interleaved context 中通信，同时用 decoupled capability pathways 保留专门能力。** 这个洞见把“统一”从单一路径变成“共享状态 + 专家分工”。
+
+这个 finding 解释了 Lance 的 multi-task synergy。理解数据不是生成任务的干扰项，而能给视觉合成提供语义 grounding；多任务生成数据也不只提升生成，还能改善视频理解，因为模型在统一上下文里学习了更丰富的视觉状态转换和条件关系。MaPE 和 generalized 3D causal attention 进一步告诉模型每个 token 的模态、位置和角色，避免条件与目标混淆。
+
+### 方法
+
+Lance 使用 shared interleaved multimodal context。文本被包成 text blocks，视觉被包成 visual blocks；视觉中同时包含 ViT semantic tokens、clean VAE latents 和 noisy VAE latents。理解路径 LLM_UND 主要处理文本和语义视觉 token，用 next-token prediction 输出语言；生成路径 LLM_GEN 处理 VAE latent 和共享上下文，用 flow matching / velocity prediction 生成视觉 latent。
+
+模型还引入 MaPE（modality-aware positional encoding）和 generalized 3D causal attention，使文本、图像、视频、干净条件和带噪目标在同一序列中保持正确依赖。训练数据覆盖 X2T、X2I、X2V、image/video editing、understanding 和 multi-task generation；论文用 generation-only、understanding data、multi-task data 不同比例做消融。
+
+### 结论
+
+实验显示，Lance 在 image generation、video generation、multimodal editing 和 video understanding benchmark 上取得强结果，并且只用约 3B activated parameters 和有限训练预算。消融中，适当加入 understanding data 能同时改善图像和视频生成；multi-task generation data 不只提升生成，也改善视频理解；移除 MaPE 会使生成、编辑和理解表现下降，尤其影响需要联合条件和目标的编辑任务。
+
+论文结论是：统一模型的能力来自任务协同，而不是简单任务堆叠。对世界模型专题来说，Lance 提供的是统一多模态状态层的设计样板；它还没有动作、奖励、闭环 rollout 或真实环境评估，不能直接等同于交互世界模型。
+
+### 关键术语
+
+- **Unified Multimodal Modeling（统一多模态建模）**：用一个模型处理理解、生成、编辑等多模态任务，而不是多个系统串联。
+- **Interleaved Context（交错上下文）**：文本、图像、视频、条件和目标 token 按任务结构交错放入同一序列。
+- **ViT Semantic Tokens（ViT 语义 Token）**：用于视觉理解的高层语义表示。
+- **VAE Latents（VAE 潜变量）**：用于视觉生成的连续 latent，clean latents 做条件，noisy latents 做生成目标。
+- **MaPE（模态感知位置编码）**：编码 token 的模态、位置和角色，帮助模型区分条件/目标/文本/视觉。
+- **Multi-task Synergy（多任务协同）**：不同任务数据在统一上下文中互相增强，而不是简单互相竞争。
+
 Lance 不是 Dreamer 那类 model-based RL 世界模型，也不是 LingBot-World 那类动作条件交互模拟器。它值得放进世界模型专题，是因为它回答了另一个底层问题：**如果一个模型既要理解图像/视频，又要生成和编辑图像/视频，语义 token、视觉 latent、干净条件和带噪目标应该怎样放进同一个上下文？**
 
 世界模型最终也会遇到类似问题。planner 需要抽象语义状态，simulator 需要细节和运动，解释模块需要语言，生成模块需要连续视觉 latent。Lance 提供的是“统一多模态状态层”的结构样板，而不是完整可交互环境。

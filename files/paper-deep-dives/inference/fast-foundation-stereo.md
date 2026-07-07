@@ -15,11 +15,35 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：[github.com/NVlabs/Fast-FoundationStereo](https://github.com/NVlabs/Fast-FoundationStereo)；项目页：[nvlabs.github.io/Fast-FoundationStereo/](https://nvlabs.github.io/Fast-FoundationStereo/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2512.11130)；[GitHub API / repo](https://github.com/NVlabs/Fast-FoundationStereo)；[官方 / 项目材料](https://nvlabs.github.io/Fast-FoundationStereo/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文解决的是一个很典型的高效推理矛盾：**强泛化的 stereo foundation model 太慢，实时 stereo 网络又常常依赖目标域微调，泛化不稳。**
+## 原论文故事线
 
-Fast-FoundationStereo 的路线不是从零设计一个小模型，而是从 FoundationStereo 出发，把它的三个主要瓶颈分别拆开处理：feature backbone 用蒸馏压缩，cost filtering 用分块 NAS 找低延迟结构，disparity refinement 用结构化剪枝压掉冗余，再用 1.4M in-the-wild stereo pseudo labels 补真实数据分布。
+### 研究背景
 
-一句话概括：**它把一个慢但泛化强的双目基础模型，拆成可训练、可搜索、可剪枝的实时感知模型。**
+原论文位于 stereo matching 和 foundation perception 的交叉处。FoundationStereo 这类模型用大规模数据和强架构获得 zero-shot 泛化，适合机器人、AR、自动驾驶等未知场景；但它推理慢，难以达到实时。传统实时 stereo 网络速度快，却常依赖特定数据集训练，在新场景、真实世界纹理和长尾材质上泛化不足。
+
+### 问题（Challenge）
+
+Fast-FoundationStereo 要解决的问题是实时 zero-shot stereo matching：既保留 FoundationStereo 的跨域深度估计能力，又把延迟压到实时感知可用范围。挑战在于 stereo pipeline 的成本分散在 feature extraction、cost volume / cost filtering、iterative disparity refinement 等多个环节；只压缩一个 backbone 不够，容易把瓶颈转移到后续模块。这个问题有价值，因为双目深度是机器人和空间感知的低层状态接口，延迟和泛化任何一端失败都会影响下游规划。
+
+### Finding
+
+论文的 finding 是：FoundationStereo 的实时化不应从零训练一个小网络，而应把慢 teacher 的泛化能力拆解到各个瓶颈模块里分别继承。也就是说，速度问题不是“模型太大”这一件事，而是 feature、cost filtering、refinement 三段各有冗余；如果每段用适合自己的压缩方式，学生就能在保留 teacher zero-shot 行为的同时获得数量级加速。
+
+### 方法
+
+方法是 divide-and-conquer acceleration。第一，用 teacher-student distillation 压缩 feature backbone，让学生特征贴近 FoundationStereo。第二，对 cost filtering 模块做 blockwise NAS / distillation，在候选结构中搜索低延迟且保精度的模块。第三，对 disparity refinement / GRU 类迭代模块做结构化剪枝和再训练，减少冗余迭代成本。数据上，论文使用 synthetic / labeled stereo 数据与大规模 in-the-wild stereo pseudo labels，让学生既学 teacher 表征，又接触更真实的场景分布；部署上还讨论 TensorRT 加速路径。
+
+### 结论
+
+实验比较 Fast-FoundationStereo 与 FoundationStereo、实时 stereo baseline 和 zero-shot 设置下的跨数据集表现。核心结果是：模型相对 FoundationStereo 获得超过 10x 的速度提升，同时保持接近的 zero-shot 精度；消融显示 backbone distillation、cost filtering 搜索、refinement pruning 和 pseudo-label 数据分别贡献不同部分。论文也指出它继承 teacher 局限，例如透明、反光、非 Lambertian 表面仍然困难，伪标签质量也会成为系统边界。
+
+### 关键术语
+
+- **Stereo Matching（双目匹配）**：根据左右相机图像估计 disparity / depth 的视觉任务
+- **Zero-shot Stereo（零样本双目）**：不针对目标域微调，直接在新场景上推理
+- **Cost Volume（代价体）**：为不同 disparity 候选构造的匹配代价张量
+- **Teacher-Student Distillation（师生蒸馏）**：用强 teacher 的输出或中间特征监督轻量 student
+- **Structured Pruning（结构化剪枝）**：按通道、模块或迭代单元删除冗余结构，便于真实硬件加速
 
 ## 它的效率贡献是什么
 

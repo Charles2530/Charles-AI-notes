@@ -15,6 +15,47 @@ paper_topic: 具身智能
     **GitHub / 项目：** GitHub：[github.com/facebookresearch/map-anything](https://github.com/facebookresearch/map-anything)；项目页：[map-anything.github.io/](https://map-anything.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2509.13414)；[GitHub API / repo](https://github.com/facebookresearch/map-anything)；[官方 / 项目材料](https://map-anything.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+MapAnything 位于 image-based 3D reconstruction 和 feed-forward visual geometry 的交叉点。传统 3D 重建把问题拆成 feature matching、pose estimation、camera calibration、bundle adjustment、multi-view stereo、depth completion 等多个模块；每个模块都有专门假设和优化过程。近年的 DUSt3R、MASt3R、VGGT 等模型说明，很多几何任务可以由前向神经网络统一预测。
+
+但真实机器人、AR 和扫描系统的输入不是固定的：有时只有 RGB 图，有时知道内参，有时有 SLAM pose，有时有 RGB-D 深度或 partial reconstruction。已有 feed-forward 方法常只处理某一种输入配置，或者输出 up-to-scale pointmap，需要额外后处理恢复 metric scale。MapAnything 的背景就是：如果要做通用几何 backbone，模型必须能吃进可选几何先验，并直接输出 metric 3D reconstruction。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何用单个 feed-forward 模型，在任意图像数量和可选几何输入下，直接恢复 metric-scale 3D geometry 和 camera。** 这个问题难在两个方向。输入端，intrinsics、poses、depth、partial reconstruction 可能存在也可能缺失，而且不同视角可用信息不一致；输出端，模型既要支持 uncalibrated SfM、calibrated MVS、camera localization、metric depth completion 等多任务，又要保持统一 metric frame。
+
+这个问题的价值在于减少几何系统的工程碎片化。对具身系统来说，机器人常常已有一部分几何信号，如果模型不能利用这些信号，就浪费了传感器和 SLAM 结果；如果每个输入组合都训练 specialist model，维护成本又很高。MapAnything 试图把这些输入输出组合统一成同一个表示学习问题。
+
+### Finding
+
+作者的 finding 是：**通用 3D 重建的关键不是为每个任务加一个 head，而是把多视角几何分解成 depth maps、local raymaps、camera poses 和 global metric scale factor 这组 factored representation。** 这个洞见把耦合的 pointmap / camera / scale 问题拆成可组合的几何因子。
+
+这个 finding 能解决挑战，是因为同一组 factored geometry 既能表达输入先验，也能表达输出目标。已知相机内参可以转成 ray direction，已知 pose 可以进入相机因子，已知 depth 或 partial reconstruction 可以作为几何输入；模型输出同样的 depth、ray、pose 和 scale 后，就能组合成全局 metric reconstruction。于是不同任务不再需要不同模型，只是“哪些因子已知、哪些因子要预测”的差别。
+
+### 方法
+
+MapAnything 是 transformer-based feed-forward model。输入是一组 \(N\) 张图像，以及可选的 intrinsics、poses、depth maps 或 partial reconstructions。模型使用 flexible input scheme 把这些几何信号标准化成统一 token / factor 表示，再输出 depth maps、local raymaps、camera poses 和 metric scale factor。metric scale factor 用来把局部重建升级到全局 metric frame。
+
+训练上，论文标准化了多数据集监督，聚合 13 个数据集，使用 covisibility-based multi-view sampling 保证输入视角属于同一可见连通组件；用 geometric input probability augmentation 让模型在训练时看到各种输入缺失/存在组合；用 log-space losses 和 two-stage view curriculum 提升 metric depth 与多视角稳定性。推理时，MapAnything 可以单次前向覆盖 uncalibrated SfM、calibrated SfM、MVS、camera localization、monocular depth 和 depth completion 等任务。
+
+### 结论
+
+实验显示，MapAnything 在 dense multi-view reconstruction、two-view reconstruction、single-view / multi-view metric estimation、camera localization 和 depth completion 等任务上，整体达到或超过 specialist feed-forward baselines。论文特别强调：只用图像输入时，MapAnything 已能与 VGGT 等强基线竞争；如果提供额外几何输入，重建性能还能进一步提升。消融支持 factored representation、flexible input augmentation 和统一训练的作用。
+
+边界是 MapAnything 仍然是静态或近静态几何重建 backbone，不解决动作、接触动力学、动态 scene flow 和控制安全；超大场景 memory、几何输入噪声和动态物体仍是未来方向。它对具身智能的贡献是提供统一 metric geometry interface，而不是替代机器人策略或世界动力学模型。
+
+### 关键术语
+
+- **Feed-Forward 3D Reconstruction（前向三维重建）**：不依赖迭代优化或重建 pipeline，单次模型前向直接预测几何结果。
+- **Metric 3D Reconstruction（米制三维重建）**：输出带真实尺度的 3D 几何，而不是只在相似变换下正确。
+- **Factored Representation（分解式表示）**：把场景几何拆成 depth、ray、pose、scale 等因子，而不是一个耦合输出。
+- **Raymap（射线图）**：每个像素对应的局部相机射线方向表示。
+- **Structure-from-Motion, SfM（运动恢复结构）**：从多视角图像估计相机运动和三维结构的经典任务。
+- **Depth Completion（深度补全）**：利用图像和稀疏/部分深度输入恢复稠密深度。
+
 MapAnything 的核心价值，是把原本分散在 SfM、MVS、相机标定、深度估计、定位和补全里的几何问题，压到一个统一的前向模型里：**输入可以只有图像，也可以额外带 intrinsics、poses、depth 或 partial reconstruction；输出则是一套可合成 metric 3D reconstruction 的 factored geometry。**
 
 它和 [VGGT](vggt.md) 很接近，但问题更“工程化”：VGGT 已经证明 camera、depth、point map、track 可以一起前向预测；MapAnything 继续追问，如果真实系统已经有一部分几何输入，比如机器人相机内参、SLAM 位姿、稀疏深度、RGB-D 深度，模型能不能把这些信息吃进去，并在同一个 metric scale 里输出更稳的重建。

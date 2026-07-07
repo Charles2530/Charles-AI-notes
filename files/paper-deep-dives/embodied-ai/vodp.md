@@ -16,6 +16,48 @@ paper_topic: 具身智能
     **GitHub / 项目：** GitHub：[github.com/D-Robotics-AI-Lab/DRRM](https://github.com/D-Robotics-AI-Lab/DRRM)；项目页：[d-robotics-ai-lab.github.io/vodp/](https://d-robotics-ai-lab.github.io/vodp/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.15530)；[GitHub API / repo](https://github.com/D-Robotics-AI-Lab/DRRM)；[官方 / 项目材料](https://d-robotics-ai-lab.github.io/vodp/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+VO-DP 属于 visuomotor diffusion policy 和机器人视觉表示学习。扩散策略在 imitation learning 中很常见，很多强方法依赖点云或 RGB-D 输入，因为显式 3D 坐标能帮助策略理解物体位置、桌面高度和抓取空间。DP3 等点云方法在仿真中表现很强，也推动了 3D observation policy 的发展。
+
+但真实部署中，深度相机、点云预处理、相机标定和 operational region 裁剪都会增加成本和脆弱性。单视角 RGB 便宜、易部署，但以往 vision-only policy 表示能力不足，难以追上点云方法。VO-DP 的背景问题是：能否借助预训练视觉基础模型，从 RGB 中提取语义和几何中间特征，让 vision-only diffusion policy 接近甚至超过 point-cloud policy。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**在只使用单视角 RGB 的情况下，如何为机器人 diffusion policy 提供足够强的语义-几何场景表示。** 这个问题有挑战性，是因为 RGB 没有显式深度，policy 必须隐式推断 3D 结构；而点云虽然几何明确，但在真实世界可能受传感器噪声、反光/透明物体和标定误差影响。
+
+这个问题的价值在于降低真实机器人部署成本。如果 RGB-only policy 能达到点云 policy 的效果，就可以减少昂贵 depth sensor、点云清洗和多传感器标定，使机器人策略更易扩展到不同硬件。
+
+### Finding
+
+作者的 finding 是：**vision-only 不等于放弃几何；预训练 3D reconstruction / visual foundation model 的中间层同时含有语义和几何线索，把它们自适应融合后可以为 RGB-only diffusion policy 提供接近点云的条件表示。** 这个洞见把“点云才有几何”的直觉翻转成“几何也可以以 latent feature 形式存在于 RGB foundation model 中”。
+
+这个 finding 能解决挑战，是因为 VGGT 的 DINOv2 相关特征提供物体语义、边界和可操作区域，alternating attention blocks 则含有空间关系和几何结构。VO-DP 不直接使用 VGGT 输出的深度或点云，而是取中间特征，经 cross-attention 和 CNN compression 融合成 policy condition，避免显式点云误差直接进入控制。
+
+### 方法
+
+VO-DP 输入历史单视角 RGB 图像、机器人状态和任务条件，输出未来动作序列。视觉 backbone 使用 VGGT：从 DINOv2/visual tokens 提取 semantics-aware features，从 alternating attention blocks 提取 geometry-aware features。随后使用 cross-attention 将语义特征注入几何特征，并用 CNN 做空间压缩，形成 diffusion policy head 的条件输入。
+
+动作模型沿用 diffusion policy 思路，在 imitation learning 框架下生成 action sequence。论文还开源 DRRM（D-Robotics Robotic Manipulation）训练库，支持 DP、DP3、VO-DP、RoboTwin simulator、多机多卡和混合精度训练。整体设计重点是单视角 RGB，不依赖 depth、RGB-D 或 point cloud 作为视觉输入。
+
+### 结论
+
+实验显示 VO-DP 显著超过 vision-only baseline DP，并与 point cloud-based DP3 呈现不同趋势。在 RoboTwin 仿真任务中，VO-DP 平均成功率 64.6%，与 DP3 的 64.0% 基本相当，远高于 DP 的 34.8%；在真实任务中，VO-DP 达到 87.9%，超过 DP3 的 67.5% 和 DP 的 11.2%。鲁棒性测试还显示它在 cube appearance、cube size、background color 和 illumination 等变化下保持稳定。
+
+边界是，VO-DP 目前主要验证单视角 RGB manipulation，未来仍需扩展到多视角、更复杂动态任务和更广泛真实场景。它证明的是“RGB foundation features 可以承载有用几何”，不是证明所有显式深度/点云都不再需要。
+
+### 关键术语
+
+- **Vision-Only Policy（纯视觉策略）**：视觉输入只使用 RGB 图像，不依赖 depth、RGB-D 或 point cloud。
+- **Diffusion Policy（扩散策略）**：用扩散生成过程建模未来动作序列的 imitation learning 方法。
+- **Semantic Features（语义特征）**：表示物体类别、边界、任务相关区域等高层视觉信息的特征。
+- **Geometric Features（几何特征）**：表示空间关系、深度结构和局部 3D 线索的特征。
+- **Cross-Attention Fusion（交叉注意力融合）**：用 attention 在语义和几何特征之间自适应交换信息。
+- **Point Cloud Policy（点云策略）**：以显式 3D 点云作为视觉观察输入的机器人策略。
+- **DRRM（D-Robotics Robotic Manipulation）**：论文开源的机器人 manipulation 训练库。
+
 VO-DP 这篇论文要回答一个很工程的问题：**机器人 manipulation policy 一定要用点云或 RGB-D 才能学到几何吗？**
 
 论文的答案是：不一定。如果 RGB 图像经过足够强的预训练视觉基础模型，policy 可以从中间特征里拿到语义和几何线索，再用扩散策略生成动作。VO-DP 的“Vision-Only”不是说机器人完全没有状态，也不是说几何不重要；它指的是视觉输入只用单视角 RGB，不依赖 depth、RGB-D 或 point cloud。

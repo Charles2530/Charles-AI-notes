@@ -16,6 +16,47 @@ paper_topic: 具身智能
     **GitHub / 项目：** GitHub：[github.com/LiheYoung/Depth-Anything](https://github.com/LiheYoung/Depth-Anything)；项目页：[depth-anything.github.io/](https://depth-anything.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2401.10891)；[GitHub API / repo](https://github.com/LiheYoung/Depth-Anything)；[官方 / 项目材料](https://depth-anything.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Depth Anything 的背景是 monocular depth estimation 基础模型化。单目深度是机器人、自动驾驶、AR/VR 和 3D 内容生成里的基础视觉能力，但真实深度标签很贵：传感器、双目匹配和 SfM 都有成本和场景限制。MiDaS 这类模型已经通过混合多数据集训练获得一定 zero-shot 能力，但数据覆盖仍然有限，遇到低光、远距离、雾天、复杂多人和开放域照片时容易失效。
+
+视觉基础模型的经验告诉我们，泛化很大程度来自数据覆盖。问题是，深度任务不像分类或语言那样容易收集千万级标签。Depth Anything 因此把视角转向更便宜的单目无标注图像：这些图片到处都有、场景足够多，但没有真实深度。论文的核心背景就是，如何把无标注图像变成对深度模型真正有用的训练信号。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何利用约 62M 无标注图像，训练一个能处理 any images under any circumstances 的鲁棒单目深度模型。** 难点在于，teacher 生成的 pseudo depth 只是已有模型的预测。如果 student 只是拟合 pseudo labels，很可能学成 teacher 的复制品，并不会从无标注图像中获得额外视觉知识。
+
+另一个挑战是深度训练可能破坏预训练视觉 encoder 的语义能力。DINOv2 等 encoder 包含丰富语义先验，而深度回归如果只盯着像素级几何损失，可能让表示过度任务化，削弱开放域泛化。因此论文需要同时解决两个问题：让无标注数据真的增加鲁棒性，同时保住预训练模型的通用视觉知识。
+
+### Finding
+
+作者的 finding 是：**无标注图像的价值不在于 pseudo label 本身，而在于把 pseudo label 和强扰动组合起来，迫使 student 在更难的输入上恢复同一深度，从而学习 teacher 输出之外的鲁棒视觉线索。** 这个洞见把 self-training 从“廉价复制标签”变成“用海量图像制造挑战性优化目标”。
+
+这个 finding 能解决挑战，是因为 teacher 在相对干净的图像上给出深度目标，而 student 面对颜色、模糊、CutMix 等强扰动后仍要预测同样的深度。要做到这一点，student 不能只依赖浅层纹理，而要学习更稳定的形状、语义、遮挡和空间布局。同时，论文用 frozen DINOv2 feature alignment 约束 student 表示继承语义先验，避免深度训练把通用视觉能力洗掉。
+
+### 方法
+
+Depth Anything 使用 DINOv2 encoder 和 DPT 风格 decoder，输出单张 RGB 图像的相对深度。训练数据分成 labeled images 和 unlabeled images：约 1.5M 带深度监督图像提供任务锚点，约 62M 无标注图像提供开放域覆盖。对无标注图像，teacher 先生成 pseudo depth；student 接收强扰动后的图像，并拟合同一 pseudo depth。
+
+训练目标包含有标注数据的深度损失、无标注数据的 pseudo-label depth loss，以及辅助语义保持损失。深度损失采用相对深度常用的 scale-and-shift invariant 对齐，避免不同数据集尺度不一致造成冲突。语义保持部分让 student 特征与 frozen DINOv2 特征对齐，使模型在学习深度时仍保留来自大规模自监督预训练的语义能力。论文还展示了把预训练 encoder 微调到 NYUv2、KITTI metric depth，以及 depth-conditioned ControlNet 的下游应用。
+
+### 结论
+
+实验显示 Depth Anything 在六个公开 zero-shot depth 数据集和随机采集照片上表现出强泛化能力，相比 MiDaS 等基线更稳；在 NYUv2 和 KITTI 上做 metric depth fine-tuning 后，也刷新了对应设置下的结果。论文还显示，更好的深度基础模型能改善 depth-conditioned ControlNet 的生成控制质量，并能迁移到语义分割等任务。
+
+消融结论更关键：单纯加入 pseudo-labeled images 不够稳定，强扰动是让无标注数据产生额外收益的核心；DINOv2 feature alignment 能保住语义先验；数据规模扩大能降低泛化误差。边界是 Depth Anything 默认输出相对深度，不保证绝对尺度；它改善的是视觉几何感知，不直接解决动作控制、物理接触或闭环安全。
+
+### 关键术语
+
+- **Monocular Depth Estimation, MDE（单目深度估计）**：从一张 RGB 图预测场景深度的任务。
+- **Unlabeled Images（无标注图像）**：没有深度真值但覆盖大量真实视觉分布的图像数据。
+- **Pseudo Depth（伪深度）**：teacher model 为无标注图像预测出的深度监督信号。
+- **Strong Perturbation（强扰动）**：对输入图像施加颜色、模糊、CutMix 等增强，使 student 学到更鲁棒表示。
+- **Feature Alignment（特征对齐）**：让 student 的中间特征靠近 frozen DINOv2 特征，以保留语义先验。
+- **Relative Depth（相对深度）**：只强调远近关系和几何形状，不直接给出真实米制距离。
+
 Depth Anything 的核心贡献很朴素，也很容易被讲浅：它没有靠复杂新结构取胜，而是把单目深度估计的瓶颈重新放回数据覆盖上。论文问的是：**如果真实深度标签很贵，能不能用大量无标注图像把深度模型训练成更强的视觉基础模型？**
 
 答案不是“把 pseudo label 加进去就行”。普通 self-training 很可能只让 student 模仿 teacher 已经会的东西。Depth Anything 真正关键的是两步：让无标注图像经过强扰动，迫使 student 学到更鲁棒的视觉知识；再用 DINOv2 feature alignment 保住语义表征，避免深度训练把通用视觉能力洗掉。

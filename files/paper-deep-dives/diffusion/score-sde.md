@@ -15,7 +15,35 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/yang-song/score_sde](https://github.com/yang-song/score_sde)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2011.13456)；[GitHub API / repo](https://github.com/yang-song/score_sde)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文最重要的贡献不是又提出一个单独的采样器，而是给扩散模型补了一套连续时间语言：**先用一个固定的前向 SDE 把数据扩散成先验噪声，再用依赖 score 的反向 SDE 把噪声逆回数据；同时存在一条 probability flow ODE，它和反向 SDE 共享边缘分布，并让 likelihood、latent encoding 和高效 ODE 采样变得可操作。**
+## 原论文故事线
+
+### 研究背景
+
+原论文处在 score-based generative modeling 和 DDPM 快速汇合的时期。早期 score matching 方法通过多噪声尺度学习 \(\nabla_x \log p_t(x)\)，再用 Langevin dynamics 采样；DDPM 则用离散 Markov chain 加噪/去噪，训练 denoising network。两条路线看起来公式不同、采样器不同、评估方式也不同。Score SDE 的目标是给它们一个连续时间统一表述，让模型、采样、likelihood 和 inverse problem 都能放进同一套语言。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何把离散噪声层级、DDPM 马尔可夫链和 score-based sampling 统一成一个可分析、可设计、可扩展的生成框架。挑战在于生成过程既要能随机采样，又要能确定性求 likelihood；既要支持 VE / VP 等不同扰动路径，又要训练同一个 time-dependent score network；还要解释为什么 predictor-corrector、ODE solver、controllable generation 可以共存。这个问题的价值在于，它为后续几乎所有扩散采样器、噪声日程、probability flow ODE 和少步蒸馏提供了共同坐标系。
+
+### Finding
+
+Score SDE 的 finding 是：扩散生成可以被看作一对时间反向的随机微分方程。前向 SDE 把数据逐渐扰动到简单先验；只要学到每个时间点的 score，Anderson 的 reverse-time SDE 就能把噪声反向还原成数据。更关键的是，作者发现还存在一条 probability flow ODE，它和反向 SDE 共享同样的边缘分布。这个发现把“随机采样”和“确定性流”连起来：同一个 score model 既能走 SDE 采样，也能走 ODE 求 likelihood 和 latent encoding。
+
+### 方法
+
+方法先定义前向 SDE \(d\mathbf x=\mathbf f(\mathbf x,t)dt+g(t)d\mathbf w\)，再训练 time-dependent score network \(s_\theta(\mathbf x,t)\) 估计 \(\nabla_{\mathbf x}\log p_t(\mathbf x)\)。论文给出 VE、VP、sub-VP 三类 SDE，分别连接 NCSN、DDPM 和 likelihood-oriented 设计。采样时可用 predictor-corrector：predictor 沿反向 SDE 数值积分，corrector 用 Langevin MCMC 修正局部 score 误差；也可用 probability flow ODE 进行确定性采样和 likelihood 计算。架构上，论文提出 NCSN++ / DDPM++ 配方，配合连续时间 embedding、EMA 和更深网络。
+
+### 结论
+
+实验在 CIFAR-10、CelebA-HQ、LSUN、FFHQ 等图像生成任务上验证统一框架。结果显示 VE / VP / sub-VP 与不同 sampler 搭配能获得当时很强的 FID、IS 和 bits/dim；predictor-corrector 在样本质量上有效，probability flow ODE 则提供 likelihood 与 interpolation / encoding 能力。论文还展示 inpainting、colorization、class-conditional generation 等 controllable generation，说明修改反向过程即可处理部分 inverse problems。边界是这套理论不自动减少采样成本，具体效果仍依赖 SDE 选择、网络结构、NFE 和 corrector 设置。
+
+### 关键术语
+
+- **SDE（Stochastic Differential Equation，随机微分方程）**：描述连续时间随机扩散过程的方程
+- **Score Function（分数函数）**：\(\nabla_x \log p_t(x)\)，指向当前噪声分布密度上升最快的方向
+- **Reverse-time SDE（反向时间 SDE）**：利用 score 把噪声过程反向运行，从先验生成数据
+- **Probability Flow ODE（概率流 ODE）**：与反向 SDE 共享边缘分布的确定性常微分方程，可用于 likelihood 和编码
+- **Predictor-Corrector Sampler（预测-校正采样器）**：数值积分一步，再用 MCMC/ Langevin 校正局部误差的采样框架
 
 ## 它的效率贡献是什么
 

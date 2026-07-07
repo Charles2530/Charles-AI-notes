@@ -15,6 +15,48 @@ paper_topic: 具身智能 / VLA
     **GitHub / 项目：** GitHub：[QwenLM/Qwen-RobotManip](https://github.com/QwenLM/Qwen-RobotManip)。<br>
     **元数据来源与核验口径：** 来源：[arXiv API / v2](https://export.arxiv.org/api/query?id_list=2606.17846)、[arXiv source](https://arxiv.org/e-print/2606.17846)、[GitHub](https://github.com/QwenLM/Qwen-RobotManip)；Checked Date：2026-07-06；Repro Status：Paper / official source and repo reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Qwen-RobotManip 属于机器人操作基础模型的 scaling recipe。语言模型可以把不同文本数据自然放进同一个 token space，但机器人数据不一样：不同机器人有不同自由度、相机视角、末端坐标系、动作频率、夹爪/灵巧手接口和遥操作协议。把这些数据直接拼起来，模型看到的“同一个物理动作”可能在数值上完全不同，甚至互相冲突。
+
+已有 VLA 工作证明跨数据训练有用，但标准 in-distribution benchmark 容易高估能力，因为模型可能记住目标 benchmark 的模式，而没有真正学到可迁移结构。Qwen-RobotManip 的背景判断是：如果想让开源机器人数据、第一视角人类视频和合成 human-to-robot 数据形成规模收益，必须先做 representation、motion 和 behavior alignment。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何让跨 embodiment、跨数据源的机器人操作数据真正随着规模增长而提升 OOD 泛化。** 难点在于多源数据不仅格式不同，物理语义也不对齐。单臂、双臂、灵巧手、移动底盘等 embodiment 的 state/action 维度不同；同一个末端移动，在世界坐标、相机坐标或机器人局部坐标下数值不同；episode 中的历史行为还会影响当前机器人状态和动作选择。
+
+这个问题的价值在于，机器人 foundation model 的核心不是 IID benchmark 排名，而是用户在自己硬件、自己工作区、少量示教下能否迁移。如果对齐没做好，更多数据会带来负迁移；如果对齐做好，数据规模才可能转化为开放任务、场景、指令和跨机器人能力。
+
+### Finding
+
+作者的 finding 是：**alignment 是 scale 的前提；只有先让跨机器人 state/action、末端运动和 episode 行为上下文处在可共享表示中，扩大数据才会释放泛化能力。** 这个洞见把“多收集数据就能扩模型”的直觉翻转成“先统一物理接口，再扩数据规模”。
+
+这个 finding 能解决挑战，是因为它把多源冲突拆成三层。Canonical state/action representation 让不同 embodiment 投到统一模板；camera-frame EEF delta pose 让相似末端运动在数值上更接近；behavior alignment / in-context adaptation 让模型利用历史 observation-action context 判断当前 embodiment 和任务阶段。这样，模型看到的不是混乱的动作表，而是可以共享的操作结构。
+
+### 方法
+
+Qwen-RobotManip 使用 Qwen-VL backbone 加 flow-matching DiT action head。VLM 编码多视角图像、语言指令、structured embodiment prompt、历史 observation-action context 和 proprioceptive state；Action Expert 是连续动作生成器，通过 alternating cross-attention 读取视觉与语言 hidden states，并用少量 Euler steps 生成 action chunk。state/action 采用统一 80 维 canonical representation。
+
+数据上，论文构建约 38,100 小时 heterogeneous manipulation data，包含开源 robot data、egocentric human videos 和 human-to-robot synthetic data，覆盖 15 个平台。对齐包括 representation alignment、motion alignment 和 behavior alignment。训练时还混入 vision-language co-training，避免动作微调导致 VLA-to-VA degradation。部署上，论文使用 real-time chunking 和远端推理，让当前动作执行与下一 chunk 生成并行。
+
+### 结论
+
+实验把 OOD generalization 作为主评测，包括 LIBERO-Plus、RoboTwin-C2R、RoboTwin-IF、RoboTwin-XE、RoboChallenge 以及 AgileX ALOHA、Franka、UR、ARX 等真实机器人验证。论文报告 Qwen-RobotManip 在多个 OOD 设置中显著超过 π0.5 等 prior models，并在 RoboChallenge 中获得 20% relative improvement。消融表明，对齐、VL co-training、in-context adaptation 和数据规模共同决定泛化表现。
+
+边界是，人类到机器人合成数据会受到 retargeting 和 inpainting artifact 影响；OOD 评测仍有大量仿真成分；固定 action chunk 和推理延迟限制了高反应频率任务。论文的结论不是“scale alone solves manipulation”，而是“alignment-then-scale 才能让机器人多源数据变成 foundation model 的泛化能力”。
+
+### 关键术语
+
+- **Alignment Unlocks Scale（对齐释放规模效应）**：先统一机器人数据的表示和物理语义，再扩大数据规模。
+- **Canonical State/Action Representation（规范状态/动作表示）**：把不同 embodiment 的状态和动作映射到共享模板。
+- **Motion Alignment（运动对齐）**：让相似物理末端运动在数值表示上接近，例如使用 camera-frame delta pose。
+- **Behavior Alignment（行为对齐）**：利用系统提示和历史 context 对齐不同机器人、任务阶段和执行风格。
+- **In-Context Policy Adaptation（上下文策略适配）**：通过 episode 历史观测和动作隐式识别 embodiment 与当前任务状态。
+- **Human-to-Robot Synthesis（人到机器人合成）**：把人类视频中的操作转成机器人可用训练样本的数据生成流程。
+- **VLA-to-VA Degradation（VLA 退化为 VA）**：动作微调后模型语言/视觉理解能力下降，只剩视觉到动作映射的现象。
+
 Qwen-RobotManip 最值得抓住的一句话不是“Qwen 也做 VLA”，而是论文标题里的 **alignment unlocks scale**。作者的判断是：机器人操作数据不像文本那样天然共享同一个 token space。不同机器人有不同自由度、相机位姿、末端坐标系、动作频率和遥操作协议；如果这些数据没有先被对齐，继续扩大数据规模只会让模型同时学习多套互相冲突的坐标约定。
 
 所以这篇技术报告的主线是：先把 state/action 表示、末端运动坐标和 episode 内行为上下文对齐，再用开源机器人数据、第一视角人类视频和 human-to-robot 合成数据把规模推到约 `38,100` 小时。它不是世界模型意义上的未来视频模拟器，但它回答了具身智能里另一个同样核心的问题：**怎样让一个 VLA policy 真正从跨 embodiment 数据规模中受益，而不是只在同分布 benchmark 上记住模式。**

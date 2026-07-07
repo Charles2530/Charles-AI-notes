@@ -15,6 +15,47 @@ paper_topic: 具身智能 / VLA
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[robotics-transformer2.github.io/](https://robotics-transformer2.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2307.15818)；[官方 / 项目材料](https://robotics-transformer2.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+RT-2 的背景是 web-scale VLM 和机器人数据之间的不对称。VLM 在互联网图文数据上学到了物体类别、关系、常识和视觉语言推理，但它们通常输出文本；机器人策略能输出动作，却受限于昂贵且狭窄的机器人示教数据。RT-1 已经证明 Transformer 可以从真实机器人轨迹中学习多任务操作，但主要知识来源仍然是机器人数据本身。
+
+机器人如果要在开放环境中工作，需要把 web knowledge 用到控制里：识别未见物体、理解图标/数字/属性、根据语言做简单推理。传统模块化系统会让 VLM 做高层规划，再交给低层 skill library，但这种拆分要求现成技能库，也容易在模块之间累积错误。RT-2 的背景问题就是：能不能把 VLM 直接 co-fine-tune 成能输出低层动作的模型。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何把 Internet-scale vision-language pretraining 直接接入 end-to-end robotic control。** 难点在于，VLM 的输出空间是自然语言 token，而机器人控制是连续动作；模型既要保留 web 数据学到的语义推理，又要在真实机器人上每一步输出合法可执行动作。
+
+这个问题的价值非常直接：如果可行，机器人就不必完全依赖机器人数据学习每个语义概念，而可以继承 VLM 的开放词汇视觉理解和常识推理。挑战也很硬：把动作变成 token 后，精度、合法性、实时推理和坐标/控制接口都必须处理好。
+
+### Finding
+
+作者的 finding 是：**机器人动作可以被表达成 VLM 可以生成的文本 token；一旦动作和自然语言回答处在同一个 token 生成接口里，web-scale VLM 就可以通过 co-fine-tuning 变成 Vision-Language-Action model。** 这个洞见把“VLM 只能做高层语义”的定位翻转成“VLM decoder 本身也可以生成低层控制符号”。
+
+这个 finding 能解决挑战，是因为它统一了训练格式。视觉问答样本仍然输出文本，机器人轨迹样本则把动作离散化后写成 token 序列；模型通过同一个 next-token prediction objective 学两类数据。Web 数据保留语义和推理能力，机器人数据把特定动作 token 绑定到真实控制后果。部署时再约束输出词表，只允许合法 action tokens，减少无效输出。
+
+### 方法
+
+RT-2 从 PaLI-X 和 PaLM-E 等预训练 VLM 出发，构建 RT-2-PaLI-X 和 RT-2-PaLM-E。动作沿用 RT-1 的离散化方式：单步动作包含 6-DoF 末端位姿增量、夹爪控制和 episode termination 等维度；连续维度被均匀离散到 256 个 bins，再映射成模型词表中的 token。训练样本以问答形式组织，例如“机器人应该执行什么动作”，答案是一串 action tokens。
+
+训练采用 co-fine-tuning：同一模型同时看 robot trajectory data 和 Internet-scale vision-language tasks，如 VQA、captioning 等。为了让机器人控制可执行，推理时对 robot-action task 使用 output constraint，只采样合法动作 token。实时部署方面，论文设计远端推理协议，让最高 55B 参数的模型也能用于闭环机器人控制。
+
+### 结论
+
+论文通过约 6k robotic evaluation trials 评估 RT-2。结果显示，RT-2 不仅能保持强机器人策略表现，还显著提升对 novel objects、novel scenes 和未在机器人数据中出现过的 instructions 的泛化。它能执行“放到某个数字/图标上”“拿最小/最大物体”“拿离另一个物体最近的物体”等语义指令；加入 chain-of-thought 后，还能完成简单多阶段语义推理，例如选择可当锤子的物体。
+
+边界同样清楚：RT-2 从 web 预训练继承的是语义和视觉概念，不会凭空获得机器人数据中没有的新物理技能；物理动作仍受 robot trajectory distribution 限制。大模型实时推理成本高，动作离散化也限制精度。RT-2 的历史贡献是确立了 VLA 接口：让 VLM 通过动作 token 直接参与低层控制。
+
+### 关键术语
+
+- **Vision-Language-Action, VLA（视觉语言动作模型）**：输入视觉和语言，输出机器人动作的模型类别。
+- **Action Tokenization（动作分词）**：把连续机器人动作离散化并映射成模型可生成的 token。
+- **Co-Fine-Tuning（共同微调）**：同时用机器人轨迹数据和 web 视觉语言任务微调同一个模型。
+- **Output Constraint（输出约束）**：机器人动作任务推理时限制模型只能输出合法动作 token。
+- **Web Knowledge Transfer（网页知识迁移）**：把 VLM 在互联网数据中学到的语义概念迁移到机器人控制。
+- **Chain-of-Thought, CoT（思维链）**：让模型先生成中间推理文本，再输出动作，用于多阶段语义推理。
+
 > **这篇回答的问题。** 如何理解“RT-2”背后的核心机制、适用边界和下一步阅读路径。
 
 RT-2 的核心不是“机器人也用了大模型”，而是一个更具体的问题：互联网图文数据里有大量视觉语义知识，机器人数据却少、贵、分布窄；能不能把 VLM 已经学到的物体、关系、类别和常识，通过一个动作接口迁移到真实机器人控制？

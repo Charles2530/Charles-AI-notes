@@ -15,6 +15,47 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/facebookresearch/jepa](https://github.com/facebookresearch/jepa)；项目页：[ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2404.08471)；[GitHub API / repo](https://github.com/facebookresearch/jepa)；[官方 / 项目材料](https://ai.meta.com/research/publications/revisiting-feature-prediction-for-learning-visual-representations-from-video/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+V-JEPA 把 JEPA 的“预测表征而非像素”原则扩展到视频自监督学习。视频表示学习常见两条路：一条是 masked video modeling，遮住 patch 后重建像素或低层 token；另一条是对比学习或弱监督，借助 captions、音频、增强或负样本学习表示。这些方法有效，但像素重建容易把容量花在纹理细节上，对比学习又依赖负样本或增强设计。
+
+世界模型需要的是可预测、可迁移、包含运动和外观信息的 latent state。V-JEPA 关心的不是生成未来视频，而是训练一个 frozen video backbone，使其表示能同时支撑 motion-based tasks 和 appearance-based tasks。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**仅靠视频中的 feature prediction，能否学到强视频表征，并避免像素重建和对比学习的局限？** 挑战在于，如果预测目标太低层，模型会记纹理；如果目标太抽象或训练不稳定，表示可能坍缩；如果 mask 太简单，任务不足以迫使模型学习时空结构。
+
+这个问题的价值在于，世界模型的状态层不一定来自生成模型。一个好的视频 encoder 可以成为后续规划、控制、预测和多模态系统的基础状态表示。
+
+### Finding
+
+作者的 finding 是：**视频中的 missing region 不必用像素重建来监督；在 target encoder 的 latent feature space 中预测被遮挡时空区域，能迫使模型学习更语义化、更时序相关的表示，并减少对低层细节的浪费。** 这个洞见把 masked video modeling 从 reconstruction task 改成 representation prediction task。
+
+这个 finding 解释了 V-JEPA 的 context encoder、target encoder 和 predictor 设计。target encoder 处理完整视频并通过 EMA 更新，提供稳定目标；context encoder 只看未遮挡区域；predictor 用 context tokens 和 mask tokens 预测 masked regions 的 target features。由于目标是 latent representation 而非 raw pixels，模型更关注对象、动作、场景和运动规律。
+
+### 方法
+
+V-JEPA 使用 video ViT backbone。训练时，一个视频 clip 被切成 spatio-temporal patches，随机采样多种 3D masks。context encoder 只处理未遮挡 tokens；target encoder 处理完整 unmasked video，产生目标表示，但通过 stop-gradient 和 EMA 更新，不直接被当前 loss 反传；predictor 接收 context output 和带位置的 learnable mask tokens，预测被遮挡 patch 的 target representation。
+
+损失通常使用 \(L_1\) regression between predicted features and target features。论文训练了一组 ViT-L/16、ViT-H/16 等模型，数据来自公开视频集合，约 2 million videos。mask 策略包括 short-range 和 long-range multi-block masks，高遮挡率让预测任务足够难，同时 multi-mask 让同一视频提供互补训练信号。
+
+### 结论
+
+实验显示，V-JEPA 在 frozen evaluation 中能同时支撑图像任务和视频任务，尤其在 motion-heavy tasks 如 Something-Something V2 上相比 image-only SSL 模型有明显优势；与像素重建类视频模型相比，feature prediction 在多个下游任务上更强或更高效。消融显示，目标空间、predictor、EMA target encoder 和 3D multi-block masking 都影响结果。
+
+论文边界也很清楚：V-JEPA 不是 action-conditioned world model，没有 reward、done、planner 或可交互 rollout。它证明的是 feature prediction 可以学习有用视频表征，为后续世界模型提供状态编码器；不证明模型能独立模拟行动后果。
+
+### 关键术语
+
+- **Feature Prediction（特征预测）**：预测目标 encoder 的 latent features，而不是重建像素。
+- **Context Encoder（上下文编码器）**：只处理未遮挡视频 tokens 的 encoder。
+- **Target Encoder（目标编码器）**：处理完整视频并提供预测目标的 encoder，通常用 EMA 更新。
+- **3D Multi-block Masking（三维多块遮挡）**：在空间和时间维度上遮住多个连续块，构造困难的视频预测任务。
+- **Frozen Evaluation（冻结评估）**：预训练 backbone 不更新，只训练轻量 probe 来评估表示质量。
+- **Representation Collapse（表示坍缩）**：encoder 输出无区分常量表示，导致预测任务失去意义的问题。
+
 这篇论文把 JEPA 从静态图像扩展到视频。它的核心不是生成未来视频，而是训练一个视频 encoder：给定被遮挡的视频上下文，在 learned latent space 中预测被遮挡时空区域的目标表示。
 
 放在世界模型谱系里，V-JEPA 更适合被看作“表征型世界模型”的基础模块：它学习视频中的时空结构、运动线索和对象动态，但还没有动作条件、奖励预测、规划接口，也不会像 LingBot-World 那样直接生成可交互视频画面。

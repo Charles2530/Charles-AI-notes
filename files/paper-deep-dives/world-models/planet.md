@@ -15,7 +15,56 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/danijar/planet](https://github.com/danijar/planet)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1811.04551)；[GitHub API / repo](https://github.com/danijar/planet)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+PlaNet 是 Dreamer 系列之前的关键世界模型论文。经典控制常常假设 dynamics 已知，planner 可以直接在真实动力学或 simulator 里搜索动作；但很多真实任务没有这个条件，例如从像素玩游戏、机器人在复杂环境里操作物体，agent 只看到图像、动作和奖励，不知道真实环境状态，也没有可用的动力学公式。PlaNet 问的就是：能不能先从交互数据学一个 world model，再在这个学出来的模型里 planning。
+
+传统 model-based RL 如果直接在像素空间预测未来，计算很重，而且多步误差会迅速累积；model-free RL 可以避免模型误差，但真实交互样本效率很低。PlaNet 的切入点是保留 planning 的好处，同时把要学的对象从完整图像未来改成低维 latent dynamics。
+
+PlaNet 的研究背景可以概括为一个折中：让世界模型学习一个 latent dynamics，而不是完整像素模拟器；规划时在 latent space 中搜索动作序列，而不是为每个候选动作生成未来图像。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**能否从像素轨迹学习一个足够好的 latent dynamics model，使 agent 直接在 latent space 中规划并完成连续控制任务？** 挑战有四个。第一，像素观测是部分可观测的，单帧图像不能表示速度、接触和隐藏状态。第二，规划需要多步预测，一步重建好不代表多步 rollout 好。第三，planner 会搜索高回报动作，因此容易利用模型错误。第四，如果每个候选未来都解码成像素，CEM planning 的计算成本会很高。
+
+这里还有一个典型的 train-test mismatch。训练时模型常被 posterior 和真实观测不断校正，错误只需要跨一步；规划时却要从当前 belief 出发，连续用 prior 想象未来十几步。一步误差在训练 loss 里可能不显眼，但在 CEM 的多步搜索里会被累计、放大，甚至变成 planner 主动利用的模型漏洞。
+
+这个问题的价值在于，它把世界模型从“视频预测是否好看”转成“latent state 是否足以支持控制”。对于后续机器人和 agent 训练，这个转变很重要。
+
+### Finding
+
+作者的 finding 是：**对控制而言，模型不需要在规划时生成未来图像；只要 latent state 同时保留历史记忆和随机不确定性，并能预测 reward，就可以在 latent space 中完成有效规划。** 这个洞见把像素复杂性和动作搜索复杂性分开了。
+
+这个 finding 解释了 RSSM 的设计。deterministic recurrent path 记住历史，stochastic latent path 表达当前观测和不确定性；observation model 训练 latent 不丢视觉信息，reward model 让 latent 对任务有用；CEM 只 rollout latent 和 reward，不再把每个候选动作序列解码成图像。
+
+### 方法
+
+PlaNet 的输入是真实环境收集的 image observation、action 和 reward 序列。模型使用 Recurrent State-Space Model：encoder 把图像编码到 latent，recurrent hidden state 根据上一 latent 和动作更新，posterior 在训练时结合当前观测，prior 用于没有未来观测的 rollout。训练目标包括 observation reconstruction、reward prediction 和 KL regularization；论文还提出 latent overshooting，用多步 latent consistency 改善长期预测。
+
+控制时，PlaNet 没有单独 policy network。每一步先用当前观测更新 belief/state，再用 Cross-Entropy Method 在 latent space 采样并优化多条候选动作序列；模型预测每条序列的未来 latent 和 reward，选择回报最高序列的第一个动作执行，然后下一个环境步重新规划。
+
+### 结论
+
+实验在六个基于图像的连续控制任务上验证 PlaNet。论文报告 PlaNet 能在远少于 model-free 方法的 episode 数下达到相近或更好表现，并在若干任务上相比 D4PG 有明显样本效率优势。消融显示，RSSM 优于纯 deterministic 或纯 stochastic dynamics，说明历史记忆和随机 latent 的组合对像素控制有价值。
+
+需要补充的是，PlaNet 的规划仍依赖在线 CEM，每一步执行成本较高；这也正是 Dreamer 后续把规划摊销进 actor 的原因。PlaNet 的贡献边界是：它证明了“像素 -> latent dynamics -> latent planning”可行，而不是解决所有真实环境中的模型误差和长期探索。
+
+### 关键术语
+
+- **PlaNet（Planning Network）**：从像素学习 latent dynamics，并用 CEM 在 latent space 规划动作的 model-based RL agent。
+- **Recurrent State-Space Model, RSSM（循环状态空间模型）**：结合 deterministic memory 和 stochastic latent 的时序模型，处理部分可观测环境。
+- **Latent Overshooting（潜变量超前预测）**：训练模型在 latent space 中对多步未来保持一致，缓解只做一步预测导致的 rollout 误差。
+- **Cross-Entropy Method, CEM（交叉熵方法）**：通过反复采样、筛选高回报候选并重拟合分布来优化动作序列的规划算法。
+- **Model Predictive Control, MPC（模型预测控制）**：每一步重新规划一段未来动作，但只执行第一个动作。
+- **Reward Model（奖励模型）**：从 latent state 预测奖励，使规划可以不解码像素而直接评估动作序列。
+
 这篇论文是 Dreamer 系列之前非常关键的一步。它提出的问题很直接：如果只有像素观测，能否先学习一个 latent dynamics model，再完全在 latent space 里做在线规划，而不是训练 model-free policy。
+
+这件事的吸引力不只是“有模型”。model-based planning 通常更省数据，因为每条交互轨迹可以同时训练 observation、reward 和 transition，而不只是在已采样状态上更新策略或价值函数；它也不必完全依赖 Bellman backup 把远期奖励一层层往前传。任务很长、reward 很稀疏时，这个差异会变得很重要：model-free 方法需要反复交互才能把奖励信号传播到早期动作，而 PlaNet 试图让 learned dynamics 直接给 planner 一个可搜索的未来。
+
+另一个好处是 test-time compute。学好 world model 后，不一定每次都重新训练 policy；决策时可以投入更多计算，采样和评估更多候选动作序列，尝试换来更好的当前动作。PlaNet 后面的限制也来自这里：在线搜索很灵活，但每一步都要付计算成本。
 
 PlaNet 的答案是：
 
@@ -104,6 +153,8 @@ PlaNet 使用 `Recurrent State-Space Model`。RSSM 把状态拆成两部分：
 | --- | --- |
 | deterministic state \(h_t\) | 通过 RNN 记住历史，承载长时记忆 |
 | stochastic state \(s_t\) | 表达当前不确定性，支持多未来预测 |
+
+也可以把 latent state 直观理解成两层：deterministic component 是一条确定性隐藏状态轨迹，负责把过去观测和动作压成记忆；stochastic component 是每一步的随机 latent variable，负责表达同一段历史下仍然不确定的当前状态和未来分支。PlaNet 论文强调二者都重要，不是为了架构复杂，而是因为像素控制同时需要记忆和不确定性。
 
 论文对比了三种 latent dynamics 设计。
 
@@ -212,6 +263,8 @@ PlaNet 的 planning 使用 `Cross-Entropy Method`。流程如下：
   -> 执行当前步 mean action
 ```
 
+CEM 可以理解成一种“采样、筛选、更新”的黑盒优化方法。它不需要对 action 求梯度，只需要 world model 能给一串动作打分。PlaNet 在模型内部尝试很多未来动作序列，保留预测回报最高的一小批 elite sequences，再用这些 elite sequences 重新拟合下一轮采样分布。多轮之后，planner 取当前步的 mean action 执行；真正进入环境的只有第一个动作，下一步拿到新观测后再重新规划。
+
 论文使用的典型 planner 设置是：
 
 | Hyperparameter | Value | Meaning |
@@ -222,6 +275,8 @@ PlaNet 的 planning 使用 `Cross-Entropy Method`。流程如下：
 | \(K\) | 100 | elite sequences used for refitting |
 
 最重要的工程点是：candidate action sequences 的评估完全在 latent space 里完成。模型不需要为每条候选序列生成未来图像，只需要预测 latent state 和 reward。这就是 PlaNet 能在每个环境 step 在线规划的原因。
+
+因此 PlaNet 没有直接训练一个 policy 来输出动作，而是把 policy 的角色交给在线 MPC：模型负责预测未来，CEM 负责搜索动作，环境只看到搜索结果的第一个动作。这个接口很干净，也暴露了代价：模型越不准，搜索越容易被误导；动作维度或 horizon 越大，CEM 需要的候选序列就越多。
 
 它也解释了 PlaNet 和视频世界模型的差别。视频世界模型通常重视未来画面质量；PlaNet 只把像素重建当成训练信号，推理时真正服务 planning 的是 latent dynamics 和 reward head。
 
@@ -246,6 +301,8 @@ Table 1 reports comparison of PlaNet to model-free algorithms and true-simulator
 <small>表源：`Learning Latent Dynamics for Planning from Pixels`，Table 1。原论文表格要点：该表比较 PlaNet、model-free baselines 和真实 simulator CEM 在 DeepMind Control Suite 六个任务上的分数；重点是 PlaNet 用 `1,000` episodes 从 pixels 学习，就能接近或超过若干使用 `100,000` episodes 的 model-free 结果。</small>
 
 这张表支持两个判断。第一，PlaNet 在 1,000 episodes 下接近或超过强 model-free baseline 的部分结果，尤其 Cheetah Run 上 PlaNet 高于 D4PG。第二，真实 simulator 上的 CEM 上界说明，planner 本身在这些任务中可行，关键瓶颈是 learned dynamics 是否足够准确。
+
+这里的数据效率要按机制读，而不是只看最终分数。PlaNet 从每段 episode 中同时学视觉状态、transition 和 reward，planning 又能把当前模型用于主动收集后续数据；model-free baseline 则主要依赖环境回报通过价值或策略更新逐步传播。论文没有证明所有稀疏奖励任务都能被 learned model 解决，但它说明在这组六个像素控制任务上，latent dynamics + online planning 可以用少得多的环境交互达到有竞争力的表现。
 
 ![Agent designs](../../assets/images/paper-deep-dives/world-models/planet/figure-5-agent-designs.png){ width="920" }
 
@@ -313,6 +370,7 @@ PlaNet 的局限也很清楚。
 3. **依赖 reward signal**：PlaNet 需要 reward head 服务规划，不像纯视频模型那样可以只用互联网视频预训练。
 4. **模型误差会被 planner 利用**：如果 learned dynamics 有系统性漏洞，CEM 会主动搜索这些漏洞。
 5. **实验环境仍偏模拟控制**：DeepMind Control Suite 是重要基准，但还不是开放真实世界交互。
+6. **train-test mismatch 没有完全消失**：latent overshooting 缓解多步 prior rollout 的训练压力，但不能保证部署时所有长 horizon 想象都可靠。
 
 这些限制解释了为什么后续 Dreamer 系列会转向 actor-critic imagination：它保留 PlaNet 的 latent world model，但避免每一步都做昂贵的 CEM 搜索。
 

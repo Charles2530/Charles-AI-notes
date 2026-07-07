@@ -15,9 +15,35 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：[github.com/QwenLM/Qwen3](https://github.com/QwenLM/Qwen3)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2505.09388)；[GitHub API / repo](https://github.com/QwenLM/Qwen3)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-> **这篇回答的问题。** 如何理解“Qwen3”背后的核心机制、适用边界和下一步阅读路径。
+## 原论文故事线
 
-Qwen3 这份报告的核心不是“又发布了一组模型”，而是把两个过去经常分开的产品形态合并到同一套模型里：**同一个 Qwen3 可以用 thinking mode 做长 CoT 推理，也可以用 non-thinking mode 做低延迟直接回答，并且允许用户用 thinking budget 控制推理 token 成本。**
+### 研究背景
+
+Qwen3 技术报告处在 reasoning model 和通用 chat model 合流的阶段。推理模型通过长 CoT、RL 和蒸馏提升数学/代码能力，但推理 token 成本高、延迟长；普通 instruction model 响应快，但复杂推理能力弱。Qwen3 的背景是：用户不总需要长推理，但在难题上又希望模型能主动展开思考。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何让同一模型同时支持 thinking 和 non-thinking 两种工作模式，并允许控制推理预算。挑战在于两种模式的目标冲突：thinking mode 需要长链推理、探索和自检；non-thinking mode 需要短回答、低延迟和稳定格式。如果分成两套模型，部署和用户体验复杂；如果强行混训，模型可能不知道什么时候该思考、什么时候该直接答。
+
+### Finding
+
+Qwen3 的 finding 是：推理能力可以被做成可控模式，而不是固定模型属性。通过训练数据、后训练和 thinking budget 设计，同一个模型可以在需要时展开长推理，在简单任务上直接回答。这个 insight 把 reasoning 从“总是生成长 CoT”翻转为“按任务和预算调度 test-time compute”，使能力和成本之间出现连续可控的接口。
+
+### 方法
+
+报告发布 6 个 dense 模型和 2 个 MoE 模型，覆盖 0.6B 到 235B。训练分为大规模预训练、长上下文/多语言/代码/数学数据混合、SFT、RL、蒸馏和 thinking / non-thinking 模式对齐。thinking mode 通过特殊模式和预算控制推理 token；non-thinking mode 训练模型直接给出答案。蒸馏用于把强模型的 reasoning 能力迁移到小模型，后训练则平衡 helpfulness、reasoning、tool use 和指令跟随。
+
+### 结论
+
+报告在数学、代码、知识、多语言、指令跟随和 agent / tool use benchmark 上比较 Qwen3 家族。结果显示，thinking mode 在复杂推理上带来明显收益，non-thinking mode 保持较低延迟；thinking budget 图说明更多 test-time tokens 通常提升复杂任务表现，但收益有边际。边界是官方 benchmark 不能覆盖所有真实应用，预算控制需要用户或系统调度策略，长 CoT 也可能带来成本和安全风险。
+
+### 关键术语
+
+- **Thinking Mode（思考模式）**：允许模型生成较长中间推理以解决复杂问题的模式
+- **Non-thinking Mode（非思考模式）**：直接回答、控制延迟和 token 成本的模式
+- **Thinking Budget（思考预算）**：限制或调节推理 token 数的机制
+- **MoE（Mixture of Experts，混合专家）**：每个 token 只激活部分专家以控制计算成本的模型结构
+- **Reasoning Distillation（推理蒸馏）**：用强模型推理轨迹训练较小模型继承推理能力
 
 | Dimension | Qwen3 |
 | --- | --- |

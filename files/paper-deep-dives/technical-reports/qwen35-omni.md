@@ -15,11 +15,35 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[www.alibabacloud.com/help/en/model-studio/qwen-omni](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2604.15804)；[官方 / 项目材料](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-> **这篇回答的问题。** 如何理解“Qwen3.5-Omni：Thinker-Talker 与全模态 Agent”背后的全模态架构、证据边界和下一步阅读路径。
+## 原论文故事线
 
-Qwen3.5-Omni 这份报告的核心不是“把文本、图像、音频、视频都接进模型”这么简单，而是把全模态模型推进到一个更产品化的问题：**模型能否在 256K 上下文内听、看、读、说，并且以低延迟流式交互、调用工具、处理音视频任务，甚至从音视频指令直接生成代码。**
+### 研究背景
 
-如果把它放在 Qwen3 / Kimi K2 / DeepSeek-V4 这些技术报告旁边看，它的主线很清楚：Qwen3 解决 thinking / non-thinking 和模型家族；Kimi K2 解决 agentic text model；DeepSeek-V4 解决百万上下文效率；Qwen3.5-Omni 则把重点放在 **native omni agent**：输入可以是文本、图像、视频、音频、音视频流，输出可以是文本或流式语音，任务还可以包含 WebSearch、FunctionCall 和 audio-visual tool use。
+Qwen3.5-Omni 报告处在 omni model 从多模态理解走向实时交互的阶段。很多 VLM 只处理图像/视频输入并输出文本；语音系统常是 ASR-LLM-TTS 级联；agent 模型又主要在文本和工具调用上训练。Qwen3.5-Omni 试图把文本、图像、视频、音频输入和文本/语音输出放进同一套 agentic 模型接口里。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何构建一个能听、看、读、说、调用工具并处理长上下文的 native omni agent。挑战在于不同模态的时间尺度和 token 结构差异很大：视频和音频是长时序，文本是离散 token，语音输出要求低延迟流式生成，工具调用又需要结构化决策。这个问题有价值，因为真实助手和具身系统面对的是连续多模态输入，而不是孤立图片或文本问题。
+
+### Finding
+
+报告的 finding 是：全模态模型不能只靠把模态 encoder 接到 LLM，而需要把“思考”和“说话/流式输出”分成协同模块。Thinker 负责多模态理解、推理、工具选择和文本决策；Talker 负责低延迟语音生成与流式交互。这个 insight 把 omni agent 从级联系统翻转为端到端协同系统：同一个上下文里既能整合音视频证据，又能决定何时搜索、调用函数或直接语音回应。
+
+### 方法
+
+模型采用 Thinker-Talker 架构。输入侧支持文本、图像、视频、音频和音视频流，通过各模态 tokenizer / encoder 转入统一上下文；Thinker 在长上下文中做理解、reasoning、tool use 和 function calling；Talker 负责把模型输出转为自然语音并支持低延迟流式。训练包括多模态预训练、SFT、语音/音视频任务、工具调用数据、长上下文训练和对齐。输出可以是文本、语音或工具调用结果。
+
+### 结论
+
+报告在文本、视觉、音频、视频、语音对话、音视频理解、工具使用和代码生成等 benchmark 上展示 Qwen3.5-Omni 的能力，并强调 256K 上下文和低延迟流式交互。结果说明，Thinker-Talker 能把全模态理解和实时输出放在同一系统里；但边界是官方评测不能完全代表真实实时助手，音频安全、工具可靠性、长视频记忆和跨模态幻觉仍需单独验收。
+
+### 关键术语
+
+- **Omni Model（全模态模型）**：统一处理文本、图像、音频、视频等输入/输出的模型
+- **Thinker-Talker（思考器-说话器）**：将多模态推理与语音生成分工协作的架构
+- **Streaming Speech（流式语音）**：边生成边输出语音，降低交互延迟
+- **Function Calling（函数调用）**：模型输出结构化工具调用请求以完成外部操作
+- **Audio-Visual Tool Use（音视频工具使用）**：基于音频/视频内容决定调用搜索、识别、代码或其他工具的能力
 
 | 线索 | Qwen3.5-Omni 的做法 | 读者应该抓住的点 |
 | --- | --- | --- |

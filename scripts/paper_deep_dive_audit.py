@@ -17,6 +17,14 @@ LONGFORM_EXEMPT_PAGES = {
     Path("world-models/world-model-for-robot-learning-survey.md"),
 }
 REQUIRED_FRONTMATTER_FIELDS = ("paper_date", "paper_title", "paper_topic")
+REQUIRED_STORY_SECTIONS = (
+    "### 研究背景",
+    "### 问题（Challenge）",
+    "### Finding",
+    "### 方法",
+    "### 结论",
+    "### 关键术语",
+)
 
 SITE_JUDGEMENT_RE = re.compile(
     r'(^!!!\s+info\s+"本站判断"|^\s+\*\*info · 本站判断\*\*|本站判断)',
@@ -89,6 +97,14 @@ def _missing_frontmatter_fields(text: str) -> list[str]:
     ]
 
 
+def _missing_story_sections(text: str) -> list[str]:
+    return [
+        section
+        for section in REQUIRED_STORY_SECTIONS
+        if not re.search(rf"^{re.escape(section)}\s*$", text, re.MULTILINE)
+    ]
+
+
 def audit_index_coverage(root: Path) -> list[Finding]:
     pages = {_relative_to_root(path, root) for path in iter_pages(root)}
     links = _index_links(root)
@@ -114,6 +130,11 @@ def audit_page(path: Path, include_hints: bool, root: Path = ROOT) -> list[Findi
     paper_info = PAPER_INFO_RE.findall(text)
     if len(paper_info) != 1:
         findings.append(Finding(rel, "error", f"expected exactly one 论文信息 admonition, found {len(paper_info)}"))
+
+    missing_story_sections = _missing_story_sections(text)
+    if missing_story_sections:
+        missing = ", ".join(missing_story_sections)
+        findings.append(Finding(rel, "error", f"missing required story sections: {missing}"))
 
     if SITE_JUDGEMENT_RE.search(text):
         findings.append(Finding(rel, "error", "remove 本站判断 wording from paper deep-dive pages"))

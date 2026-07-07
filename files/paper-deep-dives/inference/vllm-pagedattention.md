@@ -15,9 +15,35 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：[github.com/vllm-project/vllm](https://github.com/vllm-project/vllm)；项目页：[vllm.ai/blog/2023-06-20-vllm](https://vllm.ai/blog/2023-06-20-vllm)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2309.06180)；[GitHub API / repo](https://github.com/vllm-project/vllm)；[官方 / 项目材料](https://vllm.ai/blog/2023-06-20-vllm)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-vLLM 的核心贡献不是“写了一个更快的推理库”，而是抓住了 LLM serving 里最容易被低估的瓶颈：**decode 阶段的 KV cache 既大、又动态、还随请求长度不断增长**。如果每个请求都按最大长度预留一整段连续 KV 显存，短请求浪费，长尾请求碎片化，请求结束后还会留下难以利用的空洞。PagedAttention 的作用，是把每条 sequence 逻辑上连续的 KV cache 拆成固定大小 block，再用 block table 映射到不连续的物理显存。
+## 原论文故事线
 
-一句话读懂这篇论文：**vLLM 把 KV cache 从“每个请求一条连续大数组”改成“逻辑连续、物理分页、按需分配、可共享的 block table”。**
+### 研究背景
+
+原论文面对的是 LLM serving 的实际瓶颈。训练时大家关心参数和 FLOPs，在线服务时 decode 阶段常被 KV cache 限制：每个请求的 prompt 和输出长度不同，请求动态到达和结束，batch 形状不断变化。传统系统把每条 sequence 的 KV cache 放在连续显存里，类似给每个请求分配一条大数组；这会造成预留浪费、内部碎片和外部碎片。
+
+### 问题（Challenge）
+
+vLLM / PagedAttention 要解决的问题是：如何管理动态增长的 KV cache，让 GPU 显存尽可能用于有效 token，而不是被预留和碎片浪费掉。挑战在于 attention 逻辑上需要按 sequence 顺序读历史 KV，但物理显存如果强制连续，就无法高效复用小块空间；并且 parallel sampling、beam search、共享 prompt 等场景还会让多个序列共享前缀 KV，传统连续分配难以表达这种共享。
+
+### Finding
+
+论文的 finding 是：KV cache 管理可以借鉴操作系统虚拟内存。sequence 的 KV 在逻辑上连续即可，物理上不必连续；只要用 block table 把逻辑 token block 映射到物理 block，就能按需分配、释放和共享 KV。这个 insight 把 LLM serving 的瓶颈从“模型算得不够快”翻转成“内存管理粒度不对”。分页后，碎片浪费被限制在 block 级别，prompt 共享也能用 copy-on-write 方式表达。
+
+### 方法
+
+PagedAttention 把每条 sequence 的 KV cache 拆成固定大小 blocks。系统维护 block table，记录逻辑 block 到物理 block 的映射；attention kernel 在计算时通过 block table 读取可能不连续的物理 KV。vLLM 在此基础上实现 continuous batching、按需 block allocation、block sharing、copy-on-write 等 serving 机制。输入是动态请求队列和每步新增 token，输出是更高并发下的 target model decode；模型权重不变，改变的是 runtime 内存组织和调度。
+
+### 结论
+
+论文实验比较 vLLM 与 FasterTransformer、Orca 等 serving baseline，在 ShareGPT 等请求分布和不同 parallel sampling / beam search 设置下报告吞吐。核心结果是 PagedAttention 显著降低 KV cache 浪费，使系统能容纳更大 batch，从而提升吞吐；共享前缀场景下 block sharing 进一步减少内存复制。需要注意的是，PagedAttention 提升的是 serving capacity 和 memory utilization，不改变单 token 模型质量；收益大小取决于请求长度分布、block size、kernel 实现和调度策略。
+
+### 关键术语
+
+- **PagedAttention（分页注意力）**：把 KV cache 按固定 block 分页存放，并通过 block table 在 attention 中寻址
+- **Block Table（块表）**：逻辑 KV block 到物理显存 block 的映射表
+- **Internal Fragmentation（内部碎片）**：已分配 block 中未使用空间造成的浪费
+- **Continuous Batching（连续批处理）**：服务过程中动态加入和移除请求，而不是等待一个 batch 全部结束
+- **Copy-on-Write（写时复制）**：共享前缀 KV，只有分支继续生成不同 token 时才复制对应 block
 
 ## 先算清 KV cache 为什么会压垮并发
 

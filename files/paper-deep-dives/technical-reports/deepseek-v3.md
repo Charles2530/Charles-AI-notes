@@ -15,9 +15,35 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：[github.com/deepseek-ai/DeepSeek-V3](https://github.com/deepseek-ai/DeepSeek-V3)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2412.19437)；[GitHub API / repo](https://github.com/deepseek-ai/DeepSeek-V3)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-> **这篇回答的问题。** 如何理解“DeepSeek-V3”背后的核心机制、适用边界和下一步阅读路径。
+## 原论文故事线
 
-DeepSeek-V3 最值得拆开的地方不是单个 benchmark 分数，而是它把四件事做成了一个闭环：**用 MoE 扩大总参数，用 MLA 和路由设计压低每 token 成本，用 FP8 与 DualPipe 把训练系统跑稳，再用 SFT、RL 和 R1 蒸馏把 base model 转成可用的 chat model。**
+### 研究背景
+
+DeepSeek-V3 技术报告处在 MoE 大模型和高效训练系统融合的阶段。dense 模型继续放大会推高每 token 计算成本；MoE 可以扩大总参数但只激活部分专家；长上下文又要求降低 KV cache；FP8 训练和并行流水线则决定大模型能否以可接受成本训练。报告试图说明，一个 671B 总参数、37B activated 的 MoE 模型如何从架构到系统再到后训练闭环落地。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何在控制每 token 计算成本的同时训练和部署超大 MoE LLM。挑战包括 expert routing 的负载均衡、MoE 通信开销、长上下文 KV cache、FP8 数值稳定、pipeline bubble、跨节点通信和后训练能力转化。这个问题有价值，因为模型总参数扩大只有在激活成本、训练稳定性和 serving 成本可控时才有意义。
+
+### Finding
+
+DeepSeek-V3 的 finding 是：大 MoE 的效率不是单靠 sparse experts，而是 architecture、routing、attention compression、FP8 和 pipeline overlap 的共同设计。MLA 把长上下文 KV 成本降下来，DeepSeekMoE 提供更细粒度专家和共享专家，auxiliary-loss-free routing 降低负载均衡对能力的干扰，DualPipe 把通信和计算重叠。这个组合把“671B 参数”从不可承受的 dense 成本翻转成每 token 激活 37B 的可训练系统。
+
+### 方法
+
+模型结构包含 Multi-head Latent Attention、DeepSeekMoE、shared / routed experts 和 Multi-Token Prediction。训练上使用大规模预训练语料、FP8 mixed precision、DualPipe 并行、跨节点通信优化和稳定性策略；后训练包括 SFT、RL 和从 DeepSeek-R1 蒸馏 reasoning 能力。输入是文本 token 与长上下文序列，输出是 base / chat 模型；训练框架同时管理 MoE routing、expert parallel、pipeline parallel、tensor parallel 和 FP8 数值。
+
+### 结论
+
+报告展示 DeepSeek-V3 在知识、数学、代码、长上下文和中文/英文 benchmark 上与强闭源/开源模型比较，说明其在激活参数较低的情况下取得较强能力；系统实验报告 FP8 训练、DualPipe overlap、MTP 和 MLA 对训练/推理效率的作用。需要额外注意：benchmark 和成本数据来自官方报告，完整训练 recipe 与硬件环境并非独立复现；MoE serving 的真实收益还取决于 batch、路由分布和专家并行实现。
+
+### 关键术语
+
+- **MoE（Mixture of Experts，混合专家）**：每个 token 只激活部分专家网络，以较低激活成本扩大总参数
+- **MLA（Multi-head Latent Attention，多头潜变量注意力）**：通过低维 latent 压缩 KV 表示，降低长上下文 KV cache
+- **Auxiliary-loss-free Routing（无辅助损失路由）**：不用传统负载均衡辅助损失也维持专家负载的路由设计
+- **FP8 Training（FP8 训练）**：使用 8-bit 浮点格式降低训练带宽和显存，并保持稳定
+- **DualPipe（双向流水并行）**：通过调度重叠 pipeline 阶段的计算和通信，减少 bubble
 
 | Dimension | DeepSeek-V3 |
 | --- | --- |

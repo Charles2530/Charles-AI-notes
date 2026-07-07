@@ -15,6 +15,47 @@ paper_topic: 具身智能 / VLA
     **GitHub / 项目：** GitHub：[github.com/SpatialVLA/SpatialVLA](https://github.com/SpatialVLA/SpatialVLA)；项目页：[spatialvla.github.io/](https://spatialvla.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2501.15830)；[GitHub API / repo](https://github.com/SpatialVLA/SpatialVLA)；[官方 / 项目材料](https://spatialvla.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+SpatialVLA 讨论的是 VLA 模型里的 3D 空间理解问题。很多 VLA 把 2D 图像 token、语言 token 和动作 token 接起来，依靠大规模机器人数据学习从视觉到动作的映射。但机器人操作发生在 3D 物理世界中：物体深度、相机视角、末端位移、抓取方向和空间关系都不是 2D 像素坐标能直接表达的。
+
+跨机器人泛化进一步放大了这个问题。不同机器人相机位置、内参、外参和动作空间都不同，同一物体在图像中的位置不能直接对应同一 3D 位置，同一连续动作数值也不一定代表同一空间运动。SpatialVLA 的背景就是：要让 VLA 成为 generalist robot policy，必须显式处理输入侧 3D 空间和输出侧空间动作表示。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何为 VLA 注入可泛化、可迁移的 3D spatial representations。** 难点有两层。输入侧，模型要从 RGB 观测中知道每个视觉 token 对应的 3D 位置，但又不能依赖所有机器人都共享统一世界坐标。输出侧，连续动作如果按每维均匀分桶，可能不符合真实动作分布，也会产生过多 action tokens，降低推理速度。
+
+这个问题有价值，是因为空间理解是机器人 manipulation 的底座。没有 3D 位置，模型很难准确处理遮挡、距离、抓取和放置；没有可迁移动作 token，不同机器人数据难以共享。SpatialVLA 要证明显式空间输入和自适应动作网格能同时提升泛化和适配效率。
+
+### Finding
+
+作者的 finding 是：**VLA 的空间能力需要在观测和动作两端同时显式化：用 egocentric 3D position encoding 表示视觉 token 的空间位置，用 adaptive action grids 表示机器人空间运动。** 这个洞见把“只让 VLM 从 2D 图像里隐式学空间”翻转成“给模型一个机器人可用的 3D 接口”。
+
+这个 finding 能解决挑战，是因为 egocentric camera frame 避免了跨机器人全局坐标不一致的问题，仍能告诉模型像素在相机坐标中的深度和方向；adaptive action grids 则根据动作分布自适应离散化，让常见空间动作得到更合适 token 表示，并能在新机器人 setup 上通过 re-discretization 适配。
+
+### 方法
+
+SpatialVLA 基于 VLM backbone，输入多视角或单视角图像和语言指令，输出未来动作序列。Ego3D Position Encoding 使用深度估计和相机内参把每个像素反投影到 egocentric camera coordinate system，再通过 sinusoidal encoding 和 MLP 投到视觉 token 维度，与 2D visual features 相加。这样视觉 token 同时包含语义和 3D 位置。
+
+动作侧使用 Adaptive Action Grids。模型根据机器人动作数据分布构建自适应离散网格，把 translation、rotation、gripper 等动作编码成空间 action tokens。训练包括 pre-training 和 post-training：先在 1.1M real-world robot episodes 上预训练 generalist manipulation policy，再通过 action grids re-discretization 适配新仿真或真实机器人 setup。
+
+### 结论
+
+实验覆盖 24 个真实机器人任务和 3 个仿真环境，包括 zero-shot in-distribution robot control、新机器人 setup fine-tuning、需要空间理解的任务、视角/纹理/光照变化、unseen objects 和空间布局变化。论文报告 SpatialVLA 在多个设置中超过 OpenVLA、TraceVLA、RT-2-X、OCTO、Diffusion Policy 等基线，并且由于 spatial action tokens 更少，推理速度显著提升。
+
+消融支持 Ego3D Position Encoding 和 Adaptive Action Grids 的贡献：前者提升 3D scene spatial understanding，后者改善跨机器人动作迁移和 post-training 效率。边界是，空间表征收益仍依赖深度估计、相机内参和动作分布拟合；它没有证明长时安全恢复、强接触力控或所有 embodiment 都已解决。
+
+### 关键术语
+
+- **Ego3D Position Encoding（自我中心三维位置编码）**：在相机坐标系中为每个视觉 token 加入 3D 位置表示。
+- **Adaptive Action Grids（自适应动作网格）**：根据动作分布自适应离散化连续机器人动作的 tokenization 方法。
+- **Egocentric Coordinate System（自我中心坐标系）**：以当前相机或机器人自身为参考的坐标系，避免跨平台全局坐标不一致。
+- **Cross-Embodiment Control（跨具身控制）**：同一模型迁移到不同机器人形态、相机设置或动作空间。
+- **Post-Training（后训练）**：在预训练模型基础上针对新机器人或新任务进行适配。
+- **Spatial Action Tokens（空间动作 token）**：表示空间位移和姿态变化的离散动作 token。
+
 SpatialVLA 适合放在具身智能专题里的原因很明确：它不是单纯把 VLM 做大，而是问 VLA 最根本的空间问题：**不同机器人相机安装不同、动作空间不同，模型怎样学到可迁移的 3D 空间动作知识？**
 
 先想一个最小场景：同一个杯子在腕部相机里占据画面中心，在第三人称相机里可能只在右下角；同样一句“把杯子推到盘子旁边”，对不同机器人也对应不同的末端位移、旋转和夹爪动作。RGB 像素位置不是 3D 位置，连续动作数值也不是跨机器人共享的语言。SpatialVLA 的核心就是把这两个不对齐的接口补上：输入侧告诉模型每个视觉 token 大概在相机坐标系里的 3D 位置，输出侧把连续动作改写成和数据分布对齐的空间 action tokens。

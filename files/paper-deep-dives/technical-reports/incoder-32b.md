@@ -15,14 +15,35 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：[github.com/CSJianYang/Industrial-Coder](https://github.com/CSJianYang/Industrial-Coder)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.16790)；[GitHub API / repo](https://github.com/CSJianYang/Industrial-Coder)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-InCoder-32B 这篇报告的核心不是“又一个 32B code model”，而是把 code LLM 的战场从常规 Python/JavaScript 题目，推到更贴近工程现场的工业代码：芯片设计、GPU kernel 优化、嵌入式系统、编译器/低层代码优化和 3D/CAD 建模。
+## 原论文故事线
 
-这类任务和普通代码补全的差异很硬：答案不只要语法正确，还要满足时序、资源、接口、硬件限制、编译链、仿真和性能约束。报告给出的路线可以概括成：
+### 研究背景
 
-```text
-工业代码召回、清洗、增强和去重
-  + 15T token 从零预训练和工业代码退火
-  + 8K -> 32K -> 128K 长上下文 mid-training
+InCoder-32B 报告关注 industrial code foundation model。通用代码模型在 Python、JavaScript、算法题上进步很快，但工业场景包含 Verilog、CUDA kernel、嵌入式、编译器优化、CAD / 3D 建模等任务，代码正确性不仅是语法和单元测试，还涉及硬件约束、性能、仿真、接口规范和长上下文工程文件。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何训练一个面向工业代码场景的 32B 基础模型。挑战在于工业代码数据稀缺、噪声高、许可证和重复问题复杂；评测不能只用普通 HumanEval；长工程上下文可能超过常规 8K；很多任务需要执行、编译或仿真验证，静态文本 loss 不足以代表真实可用性。这个问题有价值，因为工业代码模型若能处理硬件、系统和性能约束，才接近真实研发流程。
+
+### Finding
+
+报告的 finding 是：工业代码能力不能只靠扩大通用代码数据，而要把“领域数据构造 + 长上下文 + 执行验证”作为训练主线。也就是说，模型不是先学完通用代码再自然泛化到芯片和 CUDA；必须在数据召回、清洗、增强、退火和后训练中显式纳入工业约束，并用编译/执行反馈筛掉看似合理但不可运行的答案。
+
+### 方法
+
+方法包括工业代码数据引擎、从零预训练、长上下文 mid-training 和执行验证训练。报告构建多来源工业代码语料，进行去重、过滤和增强；使用约 15T token 级别训练，并加入工业代码退火；上下文长度从 8K 扩展到 32K / 128K；后训练阶段结合指令数据、代码任务数据和执行/编译反馈。模型输入是自然语言需求、代码上下文或工程文件，输出是补全、修复、生成或优化代码。
+
+### 结论
+
+实验覆盖通用代码 benchmark、工业代码任务、长上下文代码理解、硬件/系统相关任务和执行验证设置。报告显示 InCoder-32B 在多个工业方向上相对通用 code model 有更好表现，执行验证训练能减少不可运行代码，长上下文训练提升跨文件和长工程理解。边界是工业代码 benchmark 仍难完全覆盖真实项目，官方结果不等同独立复现，且性能优化类任务需要硬件/编译环境一致才能严格比较。
+
+### 关键术语
+
+- **Industrial Code（工业代码）**：面向芯片、系统、嵌入式、编译器、CAD 等工程场景的代码
+- **Execution Verification（执行验证）**：通过运行、编译、仿真或测试来判断代码答案是否满足约束
+- **Annealing（退火训练）**：预训练后期提高高质量/领域数据比例以强化特定能力
+- **Long-context Mid-training（长上下文中期训练）**：在预训练后扩展上下文长度并适配长序列任务
+- **Code Foundation Model（代码基础模型）**：面向多语言、多任务代码生成、理解和修复的基础模型
   + 仿真/编译/测试/性能验证驱动的 2.5M SFT
   -> 一个面向工业场景的 32B dense code foundation model
 ```

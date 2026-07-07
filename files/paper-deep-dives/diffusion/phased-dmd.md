@@ -15,16 +15,35 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/ModelTC/LightX2V-Wan2.2-Lightning](https://github.com/ModelTC/LightX2V-Wan2.2-Lightning)；项目页：[x-niper.github.io/projects/Phased-DMD/](https://x-niper.github.io/projects/Phased-DMD/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2510.27684)；[GitHub API / repo](https://github.com/ModelTC/LightX2V-Wan2.2-Lightning)；[官方 / 项目材料](https://x-niper.github.io/projects/Phased-DMD/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-这篇论文的核心价值是把 DMD 类少步蒸馏从“把整个反向过程一次性压到少数步”改成“沿 SNR 子区间逐段训练专家”。它要解决的不是普通采样器加速，而是一个更具体的问题：**DMD2 这类带随机梯度截断的少步蒸馏虽然省显存、稳定，但会把一部分训练迭代退化成近似一跳生成，进而损失图像多样性和视频运动强度。**
+## 原论文故事线
 
-Phased DMD 的答案是两件事：
+### 研究背景
 
-1. 用 **progressive distribution matching** 把生成过程拆成多个 SNR phase，每个 phase 只训练一个 expert；
-2. 用 **score matching within subintervals** 修正中间 phase 的 fake score 训练目标，因为这些 phase 看不到干净样本 \(x_0\)。
+原论文接在 DMD、DMD2 和大规模视频/图像扩散蒸馏之后。DMD 类方法用 real/fake score difference 做分布匹配，避免逐轨迹回归；DMD2 又用随机梯度截断等手段把大模型 few-step 训练做得更稳。但扩散反向过程本身不是均质的：低 SNR 阶段更像决定全局结构和运动，高 SNR 阶段更像补纹理与细节。把整个过程压进同一个少步专家，容易让训练退化成近似 one-step 行为。
 
-可以先用一个视频例子抓住问题。假设 teacher 用 40 步生成一个跑酷镜头：前几步决定人从哪里起跳、镜头往哪里跟、身体大致怎样移动；后几步才修衣服纹理、背景边缘和光照。如果少步蒸馏训练时反复把一次迭代压成“从噪声直接到最终画面”的 one-step 任务，模型为了稳定会倾向学一个保守平均动作：人还在动，但速度慢、镜头弱、不同 seed 的构图也更像。Phased DMD 的核心直觉就是：少步不等于没有阶段，低 SNR 阶段仍然要负责运动和大结构，高 SNR 阶段再补细节。
+### 问题（Challenge）
 
-所以这篇文章的数学推导不是为符号而符号。它要保证第 \(k\) 个 phase 在中间状态 \(x_s\) 上训练 fake score 时，目标仍然对应正确的子区间分布；否则分 phase 只是一种经验切法，generator 收到的 score difference 会偏。
+论文要解决的问题是 few-step DMD 的阶段退化：如何在节省显存和训练成本的同时，保留不同噪声阶段各自承担的生成职能。挑战在于 SGTS / 截断训练虽然降低计算图深度，但会让一部分迭代只对最后一步回传梯度，模型学到的可能是“从某个噪声状态直接跳终点”的保守映射；在图像上表现为多样性下降，在视频上表现为运动变慢、动态弱。这个问题有价值，因为 Wan、Qwen-Image 这类强 teacher 的少步蒸馏不能只看画质，还要保留 seed diversity 和 motion strength。
+
+### Finding
+
+Phased DMD 的 finding 是：few-step 不是把扩散过程抹平成一个统一任务，而是把 SNR 轴切成多个 phase，让不同 expert 分别学习正确的子区间转移。这个观点把“少步蒸馏为什么窄化”解释成目标错配：中间 phase 的 fake score 如果仍按完整 \(x_t \to x_0\) 分布训练，就不是它实际要走的子区间分布。只有在每个 subinterval 内做 score matching，generator 得到的 score difference 才对应本阶段该解决的问题。
+
+### 方法
+
+方法包含 progressive distribution matching 和 subinterval score matching。论文先把反向生成过程按 SNR 划分成多个 phase，每个 phase 配一个 expert / LoRA 权重，训练时逐段推进；对第 \(k\) 个 phase，输入不是纯噪声到干净图像的完整路径，而是前一阶段生成的中间状态与当前子区间边界。fake score model 也在对应 subinterval 内训练，避免拿全局 fake distribution 替代局部阶段分布。实验里还讨论 reverse nested intervals、MoE phase 组织和 4-step / 4-phase 设置。
+
+### 结论
+
+实验分成图像和视频两类。视频生成结果关注 VBench、motion metrics 和定性对比，说明 Phased DMD 相比 DMD2 / SGTS 风格 few-step 蒸馏能保留更强运动和更好动态质量；图像实验关注质量与多样性，说明 phase expert 可以减轻 one-step 退化带来的 seed collapse。消融围绕子区间选择、phase 数、MoE / expert 结构、是否使用正确 subinterval score matching 展开，结论是阶段划分本身不够，必须让每个阶段的 score 目标与实际转移区间一致。
+
+### 关键术语
+
+- **SNR Phase（信噪比阶段）**：按噪声强弱划分的生成阶段，不同阶段承担全局结构、运动或细节等不同职责
+- **Progressive Distribution Matching（渐进式分布匹配）**：逐阶段训练 generator，使每个阶段匹配对应子区间的目标分布
+- **Subinterval Score Matching（子区间分数匹配）**：在当前时间区间内训练 fake score，而不是用完整反向过程的 score 代替
+- **SGTS（Stochastic Gradient Truncation Strategy，随机梯度截断策略）**：随机截断少步反向模拟的梯度路径，用于降低显存和稳定训练
+- **Phase Expert（阶段专家）**：专门负责某个 SNR 子区间的参数或 LoRA 分支
 
 ## 论文位置
 

@@ -15,9 +15,35 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：[github.com/SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2401.15077)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-投机解码的基本想法很简单：让一个便宜 draft model 先猜几个 token，再让昂贵 target LLM 并行验证；猜对越多，target LLM 逐 token decode 的次数越少。EAGLE 的问题是：**draft model 一定要是另一个小语言模型吗？**
+## 原论文故事线
 
-它的答案是否定的。EAGLE 用 target LLM 已经算出来的高层 feature 做草稿：预测下一步 feature，再复用 target LLM 的 LM head 得到候选 token。这样 draft head 贴着 target 模型内部接口训练，不需要重新预训练一个完整小 LLM。
+### 研究背景
+
+原论文讨论的是大语言模型服务中的 speculative sampling。传统方案用一个小 draft LLM 先生成多个候选 token，再让大 target LLM 并行验证；如果候选被接受，就减少 target 的逐 token 调用。但 draft LLM 有两难：太弱则接受率低，太强则自身计算成本抵消收益。EAGLE 把注意力从“找一个小模型”转向 target LLM 内部已经算出来的 feature。
+
+### 问题（Challenge）
+
+EAGLE 要解决的问题是：如何构造低成本但高接受率的 draft。挑战在于 token 本身存在离散不确定性，直接预测下一个 token 很难；但 target LLM 的高层 feature 已包含丰富上下文信息，如果能在 feature space 做 draft，可能更贴近 target 的决策边界。这个问题有价值，因为 speculative decoding 必须同时优化两个量：draft 成本低，target 接受长度高。
+
+### Finding
+
+EAGLE 的 finding 是：对投机解码来说，预测下一步 feature 可能比训练一个完整小 LLM 更合适。作者把 draft 从独立语言模型改写成 feature-level autoregression：利用 target LLM 当前 second-to-top-layer feature，预测下一 token 的 feature，再接 target LM head 产生候选 token。这个 insight 解决了小模型 draft 与 target 分布不一致的问题：draft 贴着 target 内部表征工作，不必重新学习完整语言模型。
+
+### 方法
+
+EAGLE 增加一个轻量 autoregression head。输入是 target LLM 已经计算出的高层 feature 和采样 token embedding；输出是下一步 feature，再通过 target model 的 LM head 转为 token 概率。训练阶段用 target LLM 的真实 feature 作为监督，学习 feature transition。推理阶段，EAGLE 可以生成 draft token tree，target LLM 再并行验证候选；验证规则仍按 speculative sampling 的接受-拒绝机制执行，保证输出分布不变。
+
+### 结论
+
+论文在 LLaMA / Vicuna 等模型和多种问答、对话任务上比较 EAGLE 与小模型 draft、Medusa、SpecInfer 等方法，报告 speedup、acceptance length 和额外开销。结果表明，feature-level draft 能在较低额外计算下获得更高接受率；消融说明使用 target feature、draft tree 和 verification 设计共同贡献速度收益。边界是 EAGLE 需要访问 target hidden states，并且原版 feature regression 也会限制后续 scaling，这正是 EAGLE-3 继续处理的问题。
+
+### 关键术语
+
+- **Speculative Sampling（投机采样）**：draft 提议、target 验证的无损解码加速框架
+- **Draft Model（草稿模型）**：提出候选 token 的低成本模块
+- **Feature-level Draft（特征级草稿）**：在 target hidden feature 空间预测未来候选，而不是训练独立小 LLM
+- **LM Head（语言模型输出头）**：把 hidden feature 映射到 token logits 的线性/输出层
+- **Tree Verification（树形验证）**：target LLM 一次并行验证多个分支候选 token
 
 ## 普通 speculative sampling 的瓶颈
 

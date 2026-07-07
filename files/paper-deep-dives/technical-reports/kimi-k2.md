@@ -15,7 +15,35 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：[github.com/MoonshotAI/checkpoint-engine](https://github.com/MoonshotAI/checkpoint-engine)；项目页：[huggingface.co/moonshotai/Kimi-K2-Instruct](https://huggingface.co/moonshotai/Kimi-K2-Instruct)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2507.20534)；[GitHub API / repo](https://github.com/MoonshotAI/checkpoint-engine)；[官方 / 项目材料](https://huggingface.co/moonshotai/Kimi-K2-Instruct)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-Kimi K2 这份报告的核心不是“又发布了一个大模型”，而是围绕一个更明确的目标展开：**怎样把开源模型做成强 agent，而不是只做一个静态聊天模型。**它把问题拆成两层：预训练阶段要在高质量 token 变稀缺的情况下提高 token efficiency；后训练阶段要把 base model 变成能使用工具、写代码、跑多步任务、在真实或模拟环境中学习的 agentic model。
+## 原论文故事线
+
+### 研究背景
+
+Kimi K2 报告讨论的是 open agentic intelligence。文本 LLM 评测已经从静态问答转向工具使用、代码执行、多步任务、浏览和环境交互；同时，高质量预训练 token 越来越稀缺，单纯堆更多数据的边际收益下降。Kimi K2 试图把大规模 MoE base model、Muon 系优化器和 agentic post-training 放到同一个系统里。
+
+### 问题（Challenge）
+
+论文要解决的问题是：如何把开源模型训练成强 agent，而不仅是聊天模型。挑战分两层：预训练阶段要用可控激活成本训练 1T 级总参数 MoE，并避免 attention logits、optimizer update 和 routing 不稳定；后训练阶段要构造能覆盖工具、代码、多轮任务和环境反馈的数据与 RL 流程。这个问题有价值，因为 agent 能力依赖长期任务执行和反馈闭环，不能只靠静态指令微调。
+
+### Finding
+
+Kimi K2 的 finding 是：agentic model 的能力来自预训练 token efficiency 和后训练交互数据的共同设计。报告把 MuonClip 用作稳定高效预训练的核心，把 agent 数据和 RL 用作把 base model 转成行动模型的核心。这个 insight 把“模型更大”翻转为“每个 token 更有效、每个后训练样本更接近真实 agent 行为”：大 MoE 提供容量，MuonClip 让容量训练稳定，工具/代码/环境数据让模型学会多步行动。
+
+### 方法
+
+模型是 1.04T total parameters、约 32B activated parameters 的 MoE，包含 MLA、384 experts 等设计。预训练使用约 15.5T tokens，并用 MuonClip 稳定优化：在 Muon 基础上加入 weight decay、RMS matching、QK-Clip 等机制控制更新和 attention logits。后训练包含指令数据、代码和工具使用数据、agentic task 数据，以及 RL / 环境反馈训练，让模型在工具调用、代码执行和多步任务中学习。输出是 Kimi K2 base / instruct / agentic model。
+
+### 结论
+
+报告在通用知识、数学、代码、工具使用、agent benchmark 和开放模型对比上展示 Kimi K2 的能力，并强调其在 agentic coding / tool use 上的表现。消融和系统讨论指向 MuonClip 对稳定预训练的重要性，以及 agent 数据对多步任务的贡献。边界是官方报告未完全公开所有数据和训练细节；agent benchmark 和真实产品任务之间仍有差距，环境反馈质量会显著影响泛化。
+
+### 关键术语
+
+- **Agentic Intelligence（智能体能力）**：使用工具、执行代码、规划多步任务并根据反馈调整的能力
+- **MuonClip（MuonClip 优化器）**：在 Muon 基础上加入 clipping / matching 机制以稳定大模型预训练
+- **QK-Clip（QK 裁剪）**：控制 attention query-key logits 爆炸的稳定化手段
+- **Activated Parameters（激活参数）**：MoE 每个 token 实际参与计算的参数量
+- **Environment Feedback（环境反馈）**：来自执行器、工具、仿真环境或真实任务结果的训练信号
 
 从技术路线看，Kimi K2 有三条主线：
 

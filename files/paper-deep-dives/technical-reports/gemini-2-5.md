@@ -15,7 +15,35 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6](https://storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6)。<br>
     **元数据来源与核验口径：** 来源：[官方 / 项目材料](https://storage.googleapis.com/deepmind-media/gemini/gemini_v2_5_report.pdf#page=6)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-Gemini 2.5 这份报告的核心不是单个 benchmark 第一，而是展示 Google 如何把 **原生多模态 MoE 架构、跨数据中心 TPU 训练基础设施、teacher distillation、长上下文、工具使用和 RL 驱动的 dynamic thinking** 组合成一条完整的前沿闭源模型路线。
+## 原报告故事线
+
+### 研究背景
+
+Gemini 2.5 技术报告展示的是闭源前沿模型路线：原生多模态、稀疏 MoE、长上下文、工具使用、代码、数学和 agentic capabilities 被放到同一模型家族中。相比单纯文本 LLM，Gemini 需要处理图像、音频、视频、文档、代码和搜索/工具反馈；相比普通 chat model，Gemini 2.5 强调 dynamic thinking 和 test-time compute 控制。
+
+### 问题（Challenge）
+
+报告要解决的问题是：如何让同一模型家族在复杂推理、多模态理解、长上下文和 agent 工具使用之间保持统一能力。挑战在于不同任务需要不同计算预算：简单查询不应总是长思考，数学/代码/agent 任务又需要更多中间推理；长上下文需要稳定检索和引用；多模态和工具使用还要求奖励模型、执行器和后训练数据共同覆盖。这个问题有价值，因为产品模型必须在质量、延迟和成本之间可控切换。
+
+### Finding
+
+Gemini 2.5 的 finding 是：thinking 应该成为可调的 test-time compute，而不是固定输出风格。报告把 dynamic thinking、RL、工具使用和长上下文放进同一后训练框架：模型学会判断何时需要更多推理、何时需要 search / tool、如何整合证据。这个 insight 把 reasoning 从“总是输出长链”翻转为“按任务动态分配计算和外部工具”。
+
+### 方法
+
+模型家族包含 Gemini 2.5 Pro、Flash、Flash-Lite，采用 native multimodal sparse MoE Transformer，支持 1M context 和较长输出。训练包括大规模多模态预训练、teacher distillation、SFT、RL、tool use / browsing / coding / factuality 后训练，以及 dynamic thinking budget 控制。输入可为文本、图像、音频、视频和长文档，输出为文本或工具调用；系统还包含搜索、引用、代码执行等外部能力。
+
+### 结论
+
+报告在 reasoning、math、code、multimodal、long context、agentic browsing 和工具使用 benchmark 上展示 Gemini 2.5 家族表现；thinking budget 图说明 Flash 等模型能用更多 test-time compute 换取更高任务质量；长上下文和工具评测说明模型被训练去检索、整合和引用证据。边界是闭源报告未公开完整训练数据和架构细节，benchmark 结果是官方口径，真实业务效果取决于工具链、检索质量和成本策略。
+
+### 关键术语
+
+- **Dynamic Thinking（动态思考）**：模型根据任务难度动态使用推理 token 和计算预算
+- **Sparse MoE Transformer（稀疏 MoE Transformer）**：每个 token 激活部分专家的多模态 Transformer
+- **Teacher Distillation（教师蒸馏）**：用更强模型或教师信号训练更小/更快模型
+- **Tool Use（工具使用）**：模型调用搜索、代码执行、浏览等外部工具完成任务
+- **Long Context（长上下文）**：在超长输入中检索、整合和引用相关信息的能力
 
 | Dimension | Gemini 2.5 |
 | --- | --- |

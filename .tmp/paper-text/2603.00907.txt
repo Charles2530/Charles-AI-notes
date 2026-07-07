@@ -1,0 +1,2047 @@
+
+
+===== PAGE 1 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric
+KV Merging
+Lianjun Liu 1 Hongli An 2 Weiqi Yan 3 Xin Du 4 Shengchuan Zhang 3 Huazhong Liu 4 Yunshan Zhong 4 *
+Abstract
+The growing computational and memory de-
+mands of the Key-Value (KV) cache signifi-
+cantly limit the ability of Large Language Mod-
+els (LLMs). While KV merging has emerged
+as a promising solution, existing methods that
+rely on empirical observations of KV asymme-
+try and gradient-based Hessian approximations
+lack a theoretical foundation and incur subop-
+timal compression and inference overhead. To
+bridge these gaps, we establish a theoretical frame-
+work that characterizes this asymmetry through
+the spectral energy distribution of projection
+weights, demonstrating that concentrated spectra
+in Query/Key weights induce feature homogene-
+ity, whereas dispersed spectra in Value weights
+preserve heterogeneity. Then, we introduce KVS-
+limmer, an efficient algorithm that captures ex-
+act Hessian information through a mathemati-
+cally exact formulation, and derives a closed-
+form solution utilizing only forward-pass vari-
+ables, resulting in a gradient-free approach that
+is both memory- and time-efficient. Extensive
+experiments across various models and bench-
+marks demonstrate that KVSlimmer consistently
+outperforms SOTA methods. For instance, on
+Llama3.1-8B-Instruct, it improves the LongBench
+average score by 0.92 while reducing memory
+costs and latency by 29% and 28%, respec-
+tively.Code is available at https://github.
+com/lianjunl13-sudo/KVSlimmer.
+1School of Information and Communication Engineering,
+Hainan University, Haikou, China 2School of Cyberspace Secu-
+rity, Hainan University, Haikou, China 3MAC Lab, Department of
+Artificial Intelligence, School of Informatics, Xiamen University,
+Xiamen, China 4School of Computer Science and Technology,
+Hainan University, Haikou, China. Correspondence to: Yunshan
+Zhong <yszhong01@gmail.com>.
+Preprint. March 10, 2026.
+Figure 1. Comparison between AsymKV and KVSlimmer for KV
+cache merging.
+1. Introduction
+Large Language Models (LLMs) are increasingly tasked
+with processing long contexts for applications such as multi-
+step tool usage, retrieval-augmented generation based on
+multi-document corpora, chain-of-thought style reasoning,
+coding agents, and so on (Wang et al., 2024a; Liu et al.,
+2025c; Huang et al., 2024; Liu et al., 2025a). However,
+as the context length extends, the quadratic computational
+growth of the attention mechanism and the linear expan-
+sion of the Key-Value (KV) cache storage (Dao et al., 2022;
+Keles et al., 2022) create a severe memory bottleneck, hin-
+dering the practical deployment of LLMs for ultra-long
+sequences.
+To mitigate this, KV cache compression has emerged as a
+pivotal solution. Existing approaches primarily fall into two
+categories: eviction and merging. Eviction methods (Zhang
+et al., 2023; Liu et al., 2023a; Ge et al., 2024; Xiao et al.,
+2024b) prune tokens deemed less important, but risk dis-
+carding information critical for future predictions. Merging
+methods (Zhang et al., 2024; Liu et al., 2024a; Wang et al.,
+2025b; Wan et al., 2025), which combine multiple tokens
+into condensed representations, offer a more information-
+preserving alternative.
+1
+arXiv:2603.00907v2  [cs.CL]  8 Mar 2026
+
+
+
+===== PAGE 2 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+While conventional KV merging methods often apply identi-
+cal operations to Keys and Values, the recent AsymKV (Cui
+& Xu, 2025) empirically revealed a critical asymmetry: ad-
+jacent Keys exhibit high homogeneity, whereas adjacent
+Values remain markedly heterogeneous. Building on this
+insight, AsymKV employs an approximate Hessian that re-
+lies on gradient backpropagation for adjacent Keys merging.
+Nevertheless, it leaves several critical avenues for further
+investigation: (1) the lack of a theoretical explanation for
+this asymmetry, (2) an incomplete second-order Hessian ap-
+proximation that neglects off-diagonal Key couplings, and
+(3) a practical dependence on backpropagation, incurring
+inference overhead.
+To bridge these gaps, we first establish a unified spec-
+tral analysis framework to uncover the origins of QKV
+(dis)similarity. Our analysis demonstrates that the homo-
+geneity is fundamentally dictated by the spectral energy
+distribution of the projection weight, where the concen-
+trated spectral energy in Q/K projections induces homo-
+geneity, whereas the dispersed energy in V projections
+induces heterogeneity. Then, we propose KVSlimmer a
+theoretically grounded and computationally efficient frame-
+work for asymmetric KV cache merging. As shown in
+Fig. 1, KVSlimmer derives the exact Hessian to explicitly
+capture the off-diagonal coupling between adjacent Keys
+and, more importantly, eliminates the need for backpropa-
+gation by deriving a closed-form solution that relies solely
+on forward-pass variables. This results in a gradient-free,
+memory- and time-efficient merging algorithm that is both
+mathematically precise and practically lightweight. Among
+them, Fig. 1 illustrates the differences between KVSlim-
+mer and AsymKV. Extensive experiments across multiple
+models and benchmarks demonstrate that KVSlimmer con-
+sistently outperforms existing SOTA methods. For instance,
+when applying KVSlimmer on Llama3.1-8B-Instruct with
+a chunk size of 512, it improves the LongBench average
+score by 0.92 while still reducing memory costs and latency
+by 29% and 28%, respectively.
+2. Related Work
+2.1. Long-context Segmentation and Sliding
+As a popular KV compression paradigm, long-context seg-
+mentation methods partition the context into multiple seg-
+ments and retain long-range information dependencies by
+cross-segment recurrence (Dai et al., 2019) or by explicit
+memory (Rae et al., 2020). RMT (Bulatov et al., 2022)
+strengthens cross-chunk integration by adopting memory
+tokens to deliver long-range information. Another paradigm
+is long-context sliding (Zaheer et al., 2020; Ainslie et al.,
+2020), which controls KV overhead by adopting local-
+window attention or sparse attention within each chunk.
+Longformer (Beltagy et al., 2020) combines sliding-window
+attention with a small set of global tokens, forming an ef-
+ficient baseline for long-document modeling. Recent stud-
+ies (Zhu et al., 2024; Wu et al., 2025) improve the practi-
+cality and stability of segmentation and sliding at inference
+time. StreamingLLM (Xiao et al., 2024b) stabilizes sliding-
+window inference via a fixed set of initial KV tokens, known
+as attention sinks. DCA (An et al., 2024) decomposes at-
+tention into intra-block and inter-block modules to achieve
+training-free long-context extension. InfLLM (Xiao et al.,
+2024a) extrapolates to long contexts by leveraging efficient
+context memory and retrieval mechanisms. In addition,
+CoCA (Zhu et al., 2024) improves boundary behaviors in
+long-context extrapolation by addressing the coupling be-
+tween positional encoding and attention. TokenSelect (Wu
+et al., 2025) selectively involves a few critical KV in atten-
+tion calculation to reduce inference cost.
+2.2. KV cache eviction.
+KV eviction methods reduce the computational load and
+memory footprint during the decoding process initially (Gu
+et al., 2025b; Kim et al., 2025; Chitty-Venkata et al., 2025;
+Wang et al., 2025a; Liu et al., 2023b). Subsequently, the
+focus has gradually shifted towards importance-based KV
+eviction strategies. H2O (Zhang et al., 2023) identifies and
+prioritizes the KV with high contribution evaluated by accu-
+mulated attention scores. Subsequently, Scissorhands (Liu
+et al., 2023b) further introduces the “importance persistence”
+assumption, retaining KV tokens in a probabilistic manner
+under a fixed cache budget. Another series of methods
+moves the eviction decision forward to the prefill phase.
+For example, SnapKV (Li et al., 2024) and FastGen (Ge
+et al., 2023) estimate the long-term contribution of prompt
+tokens through observation windows and attention head
+differences, respectively. To maximize the utilization effi-
+ciency under limited budgets, PyramidKV (Cai et al., 2025)
+and HeadKV (Fu et al., 2025) introduce layer- and head-
+level budget allocation strategies. However, as KV eviction
+methods rely on historical importance estimates to perma-
+nently discard tokens, they fail to account for the temporal
+dynamic nature of token importance, where tokens histor-
+ically deemed insignificant can become pivotal for future
+predictions (Gu et al., 2025a; Feng et al., 2025a;b).
+2.3. KV Cache Merging.
+KV merging methods aggregate multiple historical KV to-
+kens into fewer representations, reducing the KV overhead
+while still retaining more contextual information for future
+predictions (Ła´ncucki et al., 2025; Brandon et al., 2024;
+Yuan et al., 2025; Li et al., 2025b; Wang et al., 2024b).
+CaM (Zhang et al., 2024) aggregates KV tokens by em-
+ploying the ratio of attention scores as merging weights,
+ensuring that historical importance is preserved within the
+compressed representation. DMC (Nawrot et al., 2024)
+2
+
+
+
+===== PAGE 3 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+learns to decide during generation whether to write new
+entries to the cache or merge them with existing cache en-
+tries, adaptively controlling compression intensity across
+different layers and heads. For long-context understanding
+evaluation, KVMerger (Wang et al., 2025b) models the iden-
+tification of merge token sets as a constrained clustering
+problem and employs a kernel-weighted merging strategy.
+D2O (Wan et al., 2025) dynamically optimizes KV cache
+size at both the layer- and token-level. Most existing KV
+merging methods assume they are functionally equivalent
+and apply a unified merging strategy to both of them (Li
+et al., 2025a; Tian et al., 2025; Chang et al., 2025; Liu et al.,
+2025b). But the recent AsymKV (Cui & Xu, 2025), going
+beyond a unified strategy, empirically uncovers a structural
+asymmetry within the adjacent KV cache, where Keys ex-
+hibit high homogeneity while Values remain heterogeneous.
+Based on this finding, AsymKV mathematically proposes a
+Hessian-based merging strategy that fuses redundant Keys
+and lossless cardinality normalization for Values merging.
+3. Root of KV Asymmetry
+3.1. Preliminary
+In this subsection, we briefly review AsymKV (Cui & Xu,
+2025), a recent KV merging method that serves as a start-
+ing point for our KVSlimmer. AsymKV is motivated by
+the empirical observation that adjacent Keys typically ex-
+hibit high homogeneity, while adjacent Values are markedly
+heterogeneous. Consequently, it proposes a Hessian-based
+non-uniform merging strategy specifically for adjacent Keys.
+Given a sequence of Keys K = [k1, . . . , kn], AsymKV
+aims to merge adjacent (km, km+1) into a single Key k∗.
+To determine the optimal k∗, it minimizes the following
+loss:
+k∗= arg min
+k L(k, k),
+(1)
+where L(k, k) denotes the loss when the (km, km+1) is
+replaced by (k, k). To solve this optimization problem, a
+second-order Taylor expansion is applied at the original
+points (km, km+1). Let ha,b ∈Rd×d be the Hessian matrix
+between (ka, kb). By using a modified Newton approach
+that maintains numerical stability, the solution for the opti-
+mal k∗is derived:
+k∗= (hm,m + 2hm,m+1 + hm+1,m+1)−1
+h
+hm,mkm + hm,m+1(km + km+1)
++ hm+1,m+1km+1
+i
+.
+(2)
+In practice, the off-diagonal Hessian block hm,m+1 is ig-
+nored, and the diagonal elements are approximated using
+the Fisher Information Matrix (i.e., hii ≈(∇iL)2). Under
+these simplifications, the optimal Key is constructed as a
+weighted aggregation:
+k∗≈(hm,m+hm+1,m+1)−1(hm,mkm+hm+1,m+1km+1).
+(3)
+For a merged adjacent pair (m, m+1), the Value is com-
+bined by simple addition:
+v∗= vm + vm+1.
+(4)
+To optimize throughput, a chunk-based compression is im-
+plemented. Upon reaching the budget, AsymKV merges
+chunk size adjacent pairs in parallel per new gener-
+ated chunk, restoring the sequence length from budget
++ chunk size back to the budget in a single step.
+While current methods have made significant strides, they
+leave three key challenges unaddressed: (1) the theoretical
+explanation of KV asymmetry remains underexplored; (2)
+existing Hessian approximations overlook the off-diagonal
+couplings between Keys; and (3) a practical reliance on
+backpropagation persists, leading to non-negligible infer-
+ence overhead. In this paper, we aim to address these chal-
+lenges.
+3.2. Theoretical Analysis of QKV Homogeneity and
+Heterogeneity
+In this subsection, we establish a unified framework for
+QKV (dis)similarity by linking the spectral energy distri-
+bution of their projection weight matrices to their func-
+tional outcomes. Specifically, we show that projections that
+concentrate spectral energy induce adjacent homogeneity,
+whereas those with dispersed energy preserve heterogeneity.
+Let X = {xt}T
+t=1 denote the hidden-state sequence. For a
+specific attention head, the linear projection for the Query,
+Key, or Value can be generically represented as yt = xtW,
+where y ∈{Q, K, V}, W ∈{WQ, WK, WV}. Then,
+the cosine similarity between adjacent projected tokens
+(xt, xt+1) is defined as:
+cos(yt, yt+1) = (xtW)(xt+1W)⊤
+∥xtW∥2∥xt+1W∥2
+.
+(5)
+By defining the induced metric M ≜WW⊤, we can repa-
+rameterize Eq. 5 within the input space:
+cos(yt, yt+1) =
+xtMx⊤
+t+1
+p
+xtMx⊤
+t
+q
+xt+1Mx⊤
+t+1
+.
+(6)
+To elucidate the influence of the projection’s spectral prop-
+erties, we apply Singular Value Decomposition (SVD)
+to the weight matrix W
+=
+UΣV⊤, where Σ
+=
+diag(σ1, . . . , σd). The induced metric M thus admits the
+spectral decomposition M = UΣ2U⊤= Pd
+i=1 λiuiu⊤
+i ,
+with λi = σ2
+i .
+3
+
+
+
+===== PAGE 4 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+5
+5
+5
+20
+20
+20
+Figure 2. Layer-wise QKV similarity and spectral analysis. Left column: Mean adjacent-token cosine similarity for Query (Q), Key (K),
+and Value (V), averaged over attention heads. Middle column: Eigenvalue distributions of the projection matrices WQ, WK, and WV ,
+sorted in descending order. Right column: Mode-wise contribution coefficients ci (Eq. 8), plotted according to the eigenvalue index. The
+first two rows show results from Llama-3.1-8B-Instruct, while the last two rows show results from Mistral-7B-Instruct-v0.3.
+By projecting the input xt onto the modal coordinates
+spanned by the left singular vectors, denoted as pt,i ≜
+xtui, the bilinear form can be expanded as xtMx⊤
+t+1 =
+Pd
+i=1 λipt,ipt+1,i. Consequently, the cosine similarity ad-
+mits an exact decomposition into the contributions of indi-
+vidual spectral modes:
+cos(yt, yt+1) =
+Pd
+i=1 λipt,ipt+1,i
+qPd
+i=1 λip2
+t,i
+qPd
+i=1 λip2
+t+1,i
+.
+(7)
+Furthermore, we define the relative contribution of the i-th
+spectral mode as:
+ci(yt, yt+1) ≜
+λipt,ipt+1,i
+qPd
+j=1 λjp2
+t,j
+qPd
+j=1 λjp2
+t+1,j
+,
+(8)
+which simplifies the similarity to a cumulative summation:
+cos(yt, yt+1) = Pd
+i=1 ci(yt, yt+1).
+Since the spectral modes are ordered by decreasing eigen-
+values λi, this formulation directly reveals that adjacent sim-
+ilarity is predominantly shaped by high-energy components,
+provided that the weight matrix exhibits a sharp spectral
+decay. As illustrated in Fig. 21, we empirically observe that
+WQ and WK projection weights possess a highly concen-
+trated energy spectrum, inducing homogeneity by forcing
+1More illustrations across different models are provided in
+Appendix. A.
+adjacent embeddings into a shared subspace, while WV
+projection possesses a relatively dispersed energy spectrum,
+resulting the heterogeneity.
+This theoretical insight reveals an intriguing phenomenon
+within the attention mechanism. The Query and Key pro-
+jections are inherently geared toward alignment. Their con-
+centrated spectra effectively filter out high-frequency noise
+and project tokens into a shared semantic subspace, thereby
+inducing the stable similarity necessary for robust matching.
+In contrast, the Value projection is primarily responsible for
+information transmission. Its dispersed spectrum preserves
+the intrinsic heterogeneity, ensuring that the aggregated con-
+text remains expressive and information-rich rather than
+collapsing into a homogenized representation.
+4. KVSlimmer
+4.1. Exact Hessian Derivation for Key-Key Coupling
+In this subsection, we formulate and derive the exact Hes-
+sian, explicitly capturing both the diagonal and off-diagonal
+coupling between adjacent keys, which prior art has over-
+looked.
+Let q be the Query, ki, vi be the Key and Value of the i-th
+token, respectively. The attention logit ei, score αi, and
+4
+
+
+
+===== PAGE 5 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+output o are defined as:
+ei = q k⊤
+i
+√dk
+, αi =
+exp ei
+Pn
+t=1 exp et
+, o =
+n
+X
+t=1
+αtvt,
+(9)
+where n is the sequence length. We denote the loss by L
+and let E = ∂L/∂o be the gradient of the loss with respect
+to the attention output.
+We first derive the gradient gi = ∇kiL. The Jacobian of
+the softmax is ∂αj/∂ei = αj(δji −αi). Since ei depends
+only on ki, we have:
+∂ei
+∂ki
+=
+q
+√dk
+,
+∂em
+∂ki
+= 0 for m ̸= i.
+(10)
+Using the chain rule, the gradient of the output with respect
+to a key vector is:
+∂o
+∂ki
+=
+n
+X
+j=1
+vj
+∂αj
+∂ki
+=
+1
+√dk
+αi(vi −o)q⊤.
+(11)
+Therefore, the loss gradient with respect to ki is:
+gi = ∇kiL = ∂L
+∂o
+∂o
+∂ki
+=
+1
+√dk
+αi
+
+E⊤(vi −o)
+
+q. (12)
+We now compute the Hessian block hij = ∂gi/∂k⊤
+j , which
+captures the second-order interaction between the i-th and j-
+th Keys. Define si = αi(vi−o), so that gi =
+1
+√dk (E⊤si)q,
+then:
+hij =
+1
+√dk
+q∂[E⊤si]
+∂k⊤
+j
+.
+(13)
+Since ej = q⊤kj/√dk, we have ∂ej/∂k⊤
+j
+= q⊤/√dk.
+Applying the chain rule:
+∂si
+∂k⊤
+j
+= ∂si
+∂ej
+∂ej
+∂k⊤
+j
+=
+1
+√dk
+∂si
+∂ej
+q⊤.
+(14)
+Substituting into Eq. 13 and using the linearity of E⊤, we
+obtain:
+hij = 1
+dk
+
+E⊤∂si
+∂ej
+
+qq⊤.
+(15)
+Thus, each Hessian block hij is a rank-one matrix qq⊤
+scaled by a scalar coefficient. To compute ∂si/∂ej, expand
+si = αivi −αio:
+∂si
+∂ej
+= ∂αi
+∂ej
+vi −∂αi
+∂ej
+o −αi
+∂o
+∂ej
+.
+(16)
+From the definition of o and the softmax Jacobian, we have:
+∂o
+∂ej
+=
+n
+X
+t=1
+vt
+∂αt
+∂ej
+= αj(vj −o).
+(17)
+0.2
+0.0
+0.2
+mean cos(E, c11)
+0.2
+0.1
+0.0
+0.1
+0.2
+0.3
+mean cos(E, c12)
+Layer2 cos11 vs cos12
+y = -1.193x - 0.001
+R² = 0.9973
+(a) cos(E, c11) vs.
+cos(E, c12)
+0.2
+0.0
+0.2
+mean cos(E, c11)
+0.2
+0.1
+0.0
+0.1
+0.2
+0.3
+mean cos(E, c22)
+Layer2 cos11 vs cos22
+y = 1.034x - 0.000
+R² = 0.9944
+(b) cos(E, c11) vs.
+cos(E, c22)
+0.2
+0.0
+0.2
+mean cos(E, c12)
+0.2
+0.1
+0.0
+0.1
+0.2
+0.3
+mean cos(E, c22)
+Layer2 cos12 vs cos22
+y = -0.866x - 0.001
+R² = 0.9946
+(c) cos(E, c12) vs.
+cos(E, c22)
+Figure 3. Head-level mean alignment relationships at Layer 2 of
+Llama-3.1-8B-Instruct on 2WikiMQA. Each point corresponds to
+one attention head, positioned by its global mean cosine alignment.
+Combining these results yields two distinct cases:
+(1) Diagonal case (j = i), which captures the self-sensitivity
+of the i-th Key:
+∂si
+∂ei
+= αi(1 −2αi)(vi −o).
+(18)
+(2) Off-diagonal case (j ̸= i), which captures the coupling
+information between i-th and j-th Keys:
+∂si
+∂ej
+= −αiαj(vi + vj −2o).
+(19)
+Thus, for any two adjacent Keys (km, km+1) targeted for
+merging, the precise Hessians are recovered as:
+hmm = 1
+dk
+
+E⊤αm(1 −2αm)(vm −o)
+
+qq⊤,
+(20)
+hm+1,m+1 = 1
+dk
+
+E⊤αm+1(1 −2αm+1)(vm+1 −o)
+
+qq⊤,
+(21)
+hm,m+1 = −1
+dk
+
+E⊤αmαm+1(vm + vm+1 −2o)
+
+qq⊤,
+(22)
+with hm+1,m = hm,m+1.
+4.2. Computation simplification
+The exact Hessian blocks derived in Eqs. 20-22 enable
+precise computation of the optimal merged key in Eq. 2.
+However, this requires the loss gradient E = ∂L/∂o, ne-
+cessitating expensive backpropagation. In this subsection,
+we eliminate gradient dependence, yielding a memory- and
+compute-efficient solution that preserves Hessian informa-
+tion precisely.
+We begin by defining three vectors computed solely from
+the forward-pass:
+c11 = αm(1 −2αm)(vm −o),
+(23)
+c22 = αm+1(1 −2αm+1)(vm+1 −o),
+(24)
+c12 = −αmαm+1(vm + vm+1 −2o),
+(25)
+5
+
+
+
+===== PAGE 6 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+where cij ∈Rdv. The Hessian blocks hij share a unified,
+rank-one form governed by scalar sensitivity gij ≜E⊤cij:
+hij = 1
+dk
+gij qq⊤,
+ij ∈{11, 12, 22}.
+(26)
+Substituting Eq. 26 into Eq. 2 yields the linear system
+Mk∗= N, where
+M ≜h11+2h12+h22 = 1
+dk
+γ qq⊤, γ ≜g11+2g12+g22,
+(27)
+N ≜h11km+h12(km+km+1)+h22km+1 = 1
+dk
+qq⊤b,
+(28)
+with b ≜(g11 + g12)km + (g12 + g22)km+1. Since qq⊤
+is rank-one, a particular solution in span{q} is obtained via
+the Moore–Penrose pseudoinverse:
+k∗= M+N =
+
+1
+dk γ qq⊤+
+1
+dk qq⊤b
+
+= 1
+γ (qq⊤)+(qq⊤) b = 1
+γ Pq b,
+(29)
+where Pq ≜(qq⊤)+(qq⊤) denotes the orthogonal projec-
+tion onto span{q}.
+Crucially, the solution k∗=
+1
+γ Pqb is confined to the
+one-dimensional subspace span{q}. Therefore, we can
+equivalently express it within the original key space
+span{km, km+1}, which cancels the common factor qq⊤
+and yields a pure weight form:
+k∗= wm km + wm+1 km+1,
+(30)
+where wm =
+g11+g12
+g11+2g12+g22 , wm+1 =
+g12+g22
+g11+2g12+g22 . Eq. 30
+indicates that the optimal merging weights are determined
+solely by the relative magnitudes of the scalar sensitivity
+gij. The gij = E⊤cij still depend on the gradient E. Thus,
+we factor them into norm and angular components:
+gij = E⊤cij = ∥E∥2 ∥cij∥2 cos(E, cij), ij ∈{11, 12, 22}.
+(31)
+In regions where adjacent Keys are homogeneous, our em-
+pirical analysis in Fig. 3 reveals a consistent relation:
+cos(E, c11) ≈cos(E, c22) ≈−cos(E, c12).
+(32)
+In Appendix. B and C, we provide more illustrations and a
+theoretical analysis for this relation, respectively. Plugging
+this relation into Eq. 30, the common factors cancel exactly
+and result in:
+k∗=
+
+∥c11∥2 −2∥c12∥2 + ∥c22∥2
+−1
+h
+(∥c11∥2 −∥c12∥2)km + (∥c22∥2 −∥c12∥2)km+1
+i
+.
+(33)
+Eq. 33 provides three key advantages: (1) it eliminates back-
+propagation and uses only forward-pass variables (αi, vi,
+o); (2) it retains essential second-order Key–Key coupling
+interactions; (3) it involves only norm computations and
+linear combinations, adding negligible overhead.
+5. Experiments
+5.1. Experimental Setup
+Baselines.
+We compare KVSlimmer against sev-
+eral categories of approaches:
+context segmentation:
+StreamingLLM (Xiao et al., 2024b) and LongCache (Liu
+et al., 2024b), prompt compression: LLMLingua-2.0 (Pan
+et al., 2024), KV cache compression: H2O (Zhang et al.,
+2023), KV cache merge: CaM (Zhang et al., 2024) and
+AsymKV (Cui & Xu, 2025).
+Base Models. To demonstrate the generality of KVSlim-
+mer, we conduct evaluations across a diverse set of model
+architectures, including Llama3.1-8B-Instruct (Dubey et al.,
+2024), Mistral-7B-Instruct-v0.3 (Jiang et al., 2023) and
+Qwen2-1.5B-Instruct (Yang et al., 2024).
+Implementation Details. Unless otherwise specified, we
+set the compression context budget to 2048 tokens and the
+compression granularity chunk size to 512. All baseline
+methods are evaluated under identical configurations to en-
+sure fair comparison. For H2O, we follow the original setup
+by allocating a recent-token budget of 2048 and a heavy-
+token budget of 512. Following Attention Sink (Xiao et al.,
+2024b), the initial 32 tokens are always preserved. All ex-
+periments are conducted on one NVIDIA A100 GPU with
+80GB of memory.
+5.2. Long Context Performance Evaluation
+We evaluate KVSlimmer’s effectiveness on LongBench (Bai
+et al., 2024), a comprehensive long-context benchmark, con-
+taining 16 English tasks from a wide range of categories.
+Results. As summarized in Table 1, KVSlimmer achieves
+the SOTA performance on LongBench, demonstrating con-
+sistent advantages across various model architectures and
+task categories.
+Specifically, on Llama3.1-8B-Instruct,
+KVSlimmer reaches an average score of 44.04, surpass-
+ing the previous SOTA, AsymKV, by a margin of 0.92.
+Notably, the gains are particularly pronounced in long-
+context–sensitive tasks. For instance, it yields improve-
+ments of 0.82, 0.68, and 5.13 on Single-Doc, Multi-Doc,
+and Synthetic tasks, respectively. Similarly, on Mistral-7B-
+Instruct-v0.3, KVSlimmer obtains the highest average score
+of 41.28, outperforming AsymKV by 0.40 and setting new
+benchmarks in Few-shot, Code, and Synthetic categories.
+Even on the more compact Qwen2-1.5B-Instruct model,
+KVSlimmer maintains its lead with an average score of
+6
+
+
+
+===== PAGE 7 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+Table 1. Performance on LongBench. KVSlimmer outperforms its baselines on most settings.
+Single-Doc
+Multi-Doc
+Sum
+Few-shot
+Synthetic
+Code
+Avg.
+Llama3.1-8B-Instruct
+Full Context
+43.73
+44.49
+29.12
+69.36
+53.56
+50.95
+48.07
+StreamingLLM
+28.15
+27.19
+25.15
+63.17
+16.33
+52.15
+35.50
+LongCache
+28.98
+27.84
+25.35
+64.73
+19.68
+51.61
+36.46
+H2O
+33.30
+34.43
+26.60
+66.23
+14.75
+52.65
+38.53
+LLMLingua-2
+32.02
+32.24
+24.99
+27.87
+17.67
+50.07
+30.43
+CaM
+32.14
+32.63
+24.91
+63.09
+16.77
+52.13
+37.26
+AsymKV
+39.42
+38.93
+27.30
+65.66
+39.39
+48.57
+43.12
+KVSlimmer
+40.24
+39.61
+27.19
+65.00
+44.52
+49.73
+44.04
+Mistral-7B-Instruct-v0.3
+Full Context
+38.74
+38.29
+29.04
+70.70
+51.00
+53.05
+46.15
+StreamingLLM
+24.80
+22.14
+25.18
+66.49
+15.14
+52.10
+34.39
+LongCache
+26.05
+22.31
+25.44
+66.21
+14.93
+51.03
+34.50
+H2O
+29.66
+28.22
+26.32
+67.78
+14.83
+51.63
+36.80
+LLMLingua-2
+28.12
+28.62
+25.75
+45.85
+16.00
+46.50
+31.88
+CaM
+26.15
+29.06
+26.81
+66.16
+20.96
+51.40
+36.83
+AsymKV
+33.71
+32.81
+27.04
+67.21
+34.56
+51.33
+40.88
+KVSlimmer
+33.42
+32.62
+26.83
+67.86
+36.78
+52.34
+41.28
+Qwen2-1.5B-Instruct
+Full Context
+30.03
+28.68
+26.16
+66.68
+5.50
+41.49
+34.29
+StreamingLLM
+21.62
+19.70
+21.95
+61.68
+3.50
+41.38
+29.04
+LongCache
+22.22
+27.31
+16.28
+56.65
+5.25
+41.21
+28.76
+H2O
+26.50
+29.22
+13.77
+51.92
+4.25
+39.02
+28.17
+LLMLingua-2
+21.83
+20.94
+15.67
+57.31
+4.00
+38.91
+27.07
+CaM
+24.76
+19.46
+16.38
+58.19
+3.75
+36.39
+27.29
+AsymKV
+26.14
+27.70
+23.33
+62.99
+4.75
+40.89
+31.98
+KVSlimmer
+26.54
+29.54
+23.90
+61.54
+5.50
+41.84
+32.45
+32.45. This underscores its capability to effectively pre-
+serve critical information during KV merging, even when
+constrained by limited model capacity.
+Extreme Long-Context Compression. We evaluate KVS-
+limmer on LongBenchV2 (Bai et al., 2025), which com-
+prises contexts ranging from 8K to 2M tokens across six
+task categories. The results, obtained using Llama3.1-8B-
+Instruct with a cache size of 8192, are reported in Table 2.
+Notably, KVSlimmer outperforms SOTA methods across
+Easy, Short, and Long categories, resulting in the best over-
+all performance. These results demonstrate KVSlimmer’s
+robustness and effectiveness in handling extremely long
+contexts under constrained cache budgets.
+5.3. Runtime/Memory Efficiency
+Fig. 4 illustrates the relative runtime of KVSlimmer com-
+pared with AsymKV across LongBench datasets. While
+KVSlimmer performs similarly to AsymKV on shorter tasks
+(e.g., GovReport and MultiNews), it demonstrates a sub-
+2WikiMultihopQA
+GovReport
+HotpotQA
+LCC
+MultiFieldQA-en
+MultiNews
+MusiQue
+NarrativeQA
+PassageCount
+PassageRetrieval-en
+QMSum
+Qasper
+RepoBench-P
+SAMSum
+TREC
+TriviaQA
+Dataset
+0.50
+0.55
+0.60
+0.65
+0.70
+0.75
+0.80
+0.85
+0.90
+0.95
+1.00
+1.05
+Runtime Ratio
+0.64
+0.91
+0.56
+0.85
+0.65
+0.99
+0.62
+0.62
+0.62
+0.62
+0.75
+0.70
+0.72
+0.80
+0.76
+0.67
+Runtime Ratio
+Mean (0.72)
+Figure 4. Relative runtime of KVSlimmer compared to AsymKV
+across LongBench datasets.
+7
+
+
+
+===== PAGE 8 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+Table 2. Performance on LongBenchV2.
+Model
+Overall
+Easy
+Hard
+Short
+Medium
+Long
+Full Context
+30.02
+30.73
+29.58
+35.00
+27.91
+25.93
+StreamingLLM
+27.04
+27.60
+26.69
+32.78
+23.26
+25.00
+LongCache
+28.43
+28.13
+28.62
+32.78
+25.58
+26.85
+H2O
+28.23
+28.12
+28.29
+31.67
+26.98
+25.00
+CaM
+28.23
+28.64
+27.97
+31.67
+26.98
+25.00
+AsymKV
+30.02
+30.23
+29.90
+32.78
+27.44
+28.85
+KVSlimmer
+30.22
+32.81
+28.62
+36.11
+25.12
+30.56
+~27%
+~27%
+AsymKV
+KVSlimmer
+~27%
+AsymKV
+KVSlimmer
+Figure 5. Inference efficiency of decoder stage.
+128
+256
+512
+1024
+1536
+Chunk Size
+0
+10
+20
+30
+40
+50
+60
+70
+80
+Memory Usage (GB)
+20.2
+23.9
+32.9
+57.5
+OOM
+17.4
+19.1
+23.4
+35.2
+51.4
+Asymkv
+KVSlimmer
+Figure 6. Peak GPU memory of KVSlimmer and AsymKV across
+different chunk sizes.
+stantial advantage in time efficiency as sequence length
+increases. For instance, KVSlimmer achieves a 44% re-
+duction in runtime on long-context HotpotQA, and a 38%
+reduction on MusiQue, NarrativeQA, PassageCount, and
+PassageRetrieval-en. Overall, KVSlimmer consistently re-
+duces inference latency by an average of 28%, highlighting
+its superior computational efficiency. Fig. 5 compares the
+runtime of generating long-context sequences. As can be
+seen, thanks to the minimal KV cache operations, KVSlim-
+mer reduces the time overhead much more significantly than
+AsymKV, and even yields comparable latency to context-
+segmentation approaches (e.g., StreamingLLM and Long-
+Cache). These results demonstrate that KVSlimmer strikes
+a better balance between efficiency and effectiveness.
+Fig. 6 compares the peak GPU memory usage of KVSlim-
+mer and AsymKV across various chunk sizes, averaged
+over all 16 LongBench tasks. While memory consumption
+for both methods scales with chunk size, KVSlimmer con-
+sistently maintains a significantly lower memory footprint.
+Notably, this efficiency gap widens as the chunk size grows.
+KVSlimmer achieves memory reductions of 29% and 39%
+at chunk sizes of 512 and 1024, respectively. These results
+demonstrate that KVSlimmer effectively mitigates memory
+pressure induced by large chunks, enabling more aggressive
+chunking strategies and more stable long-context inference
+within constrained GPU memory budgets.
+5.4. Compression Rate Analysis
+To systematically compare the context compression capa-
+bilities of KVSlimmer and AsymKV, we analyze their per-
+formance across various compression ratios on the Long-
+Bench HotpotQA (Yang et al., 2018) task. We define the
+compression ratio as the number of retained tokens relative
+to the original sequence length. As illustrated in Fig. 7,
+KVSlimmer consistently achieves slightly superior perfor-
+mance compared to AsymKV on average. More importantly,
+KVSlimmer incurs significantly lower computational and
+memory overhead. For instance, at a 10% compression ratio,
+it reduces latency and memory usage by ∼20% and ∼27%,
+respectively.
+8
+
+
+
+===== PAGE 9 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+2
+10
+20
+Compression Ratio (%)
+10
+20
+30
+40
+Score
+AsymKV
+CaM
+LongCache
+H2O
+StreamingLLM
+LLMLingua-2
+KVSlimmer
+(a) Mistral-7B.
+2
+10
+20
+Compression Ratio (%)
+0
+10
+20
+30
+40
+50
+Score
+( )
+AsymKV
+CaM
+LongCache
+H2O
+StreamingLLM
+LLMLingua-2
+KVSlimmer
+(b) LLaMA-3.1-8B.
+Figure 7. Results on different compression ratios.
+6. Discussion
+Despite its theoretical and empirical advantages, KVSlim-
+mer has several limitations that invite future exploration.
+First, our spectral analysis and merging strategy primarily
+focus on local token sequences. Exploring non-local or
+global merging could potentially yield even higher compres-
+sion ratios by capturing long-range dependencies. Second,
+although KVSlimmer is gradient-free and time-efficient,
+the current implementation employs a uniform compres-
+sion ratio across all layers. Developing adaptive compres-
+sion strategies that dynamically adjust the merging intensity
+based on the specific importance of each layer represents a
+promising direction for future research.
+7. Conclusion
+In this paper, we introduced KVSlimmer, a theoretically
+grounded and computationally efficient framework for asym-
+metric KV cache compression. By establishing a unified
+spectral analysis framework, we first unraveled the theoret-
+ical origins of QKV asymmetry in LLMs, demonstrating
+how the spectral energy distribution of projection weights
+dictates homogeneity and heterogeneity. Then, we introduce
+KVSlimmer, which derives a mathematically exact Hessian
+formulation that captures the off-diagonal coupling between
+adjacent Keys and achieves a gradient-free, closed-form so-
+lution that relies solely on forward-pass variables, reducing
+the memory and time overhead by a large margin. Exten-
+sive experiments on various LLMs and benchmarks validate
+that KVSlimmer significantly reduces memory and latency
+while maintaining, or even enhancing, model performance
+on long-context tasks.
+Impact Statement
+This paper presents work whose goal is to advance the field
+of Machine Learning. There are many potential societal
+consequences of our work, none of which we feel must be
+specifically highlighted here.
+References
+Ainslie, J., Onta˜n´on, S., Alberti, C., Cvicek, V., Fisher, Z.,
+Pham, P., Ravula, A., Sanghai, S., Wang, Q., and Yang, L.
+ETC: Encoding long and structured inputs in transformers.
+In Webber, B., Cohn, T., He, Y., and Liu, Y. (eds.), Pro-
+ceedings of the 2020 Conference on Empirical Methods
+in Natural Language Processing (EMNLP), pp. 268–284,
+Online, November 2020. Association for Computational
+Linguistics. doi: 10.18653/v1/2020.emnlp-main.19.
+An, C., Huang, F., Zhang, J., Gong, S., Qiu, X., Zhou, C.,
+and Kong, L. Training-free long-context scaling of large
+language models. CoRR, abs/2402.17463, 2024.
+Bai, Y., Lv, X., Zhang, J., Lyu, H., Tang, J., Huang, Z., Du,
+Z., Liu, X., Zeng, A., Hou, L., Dong, Y., Tang, J., and Li,
+J. LongBench: A bilingual, multitask benchmark for long
+context understanding. In Proceedings of the 62nd Annual
+Meeting of the Association for Computational Linguis-
+tics (Volume 1: Long Papers), pp. 3119–3137, Bangkok,
+Thailand, August 2024. Association for Computational
+Linguistics. doi: 10.18653/v1/2024.acl-long.172.
+Bai, Y., Tu, S., Zhang, J., Peng, H., Wang, X., Lv, X.,
+Cao, S., Xu, J., Hou, L., Dong, Y., et al. Longbench v2:
+Towards deeper understanding and reasoning on realis-
+tic long-context multitasks. In Proceedings of the 63rd
+Annual Meeting of the Association for Computational
+Linguistics (Volume 1: Long Papers), pp. 3639–3664,
+2025.
+Beltagy, I., Peters, M. E., and Cohan, A.
+Longformer:
+The long-document transformer. CoRR, abs/2004.05150,
+2020.
+Brandon, W., Mishra, M., Nrusimha, A., Panda, R., and
+Ragan-Kelley, J. Reducing transformer key-value cache
+size with cross-layer attention. In The Thirty-eighth An-
+nual Conference on Neural Information Processing Sys-
+tems, 2024.
+Bulatov, A., Kuratov, Y., and Burtsev, M. S. Recurrent mem-
+ory transformer. In Proceedings of the 36th International
+Conference on Neural Information Processing Systems,
+NIPS ’22, Red Hook, NY, USA, 2022. Curran Associates
+Inc. ISBN 9781713871088.
+Cai, Z., Zhang, Y., Gao, B., Liu, Y., Li, Y., Liu, T., Lu, K.,
+Xiong, W., Dong, Y., Hu, J., and Xiao, W. PyramidKV:
+Dynamic KV cache compression based on pyramidal in-
+formation funneling. In Second Conference on Language
+Modeling, 2025.
+Chang, C.-C., Lin, C.-Y., Akhauri, Y., Lin, W.-C., Wu, K.-
+C., Ceze, L., and Abdelfattah, M. S. xkv: Cross-layer svd
+for kv-cache compression, 2025.
+Chitty-Venkata, K. T., Ye, J., Sun, X.-H., Kougkas, A.,
+Emani, M., Vishwanath, V., and Nicolae, B. Pagedevic-
+tion: Structured block-wise kv cache pruning for efficient
+large language model inference, 2025.
+9
+
+
+
+===== PAGE 10 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+Cui, W. and Xu, M. Homogeneous keys, heterogeneous
+values: Exploiting local KV cache asymmetry for long-
+context LLMs. In The Thirty-ninth Annual Conference
+on Neural Information Processing Systems, 2025.
+Dai, Z., Yang, Z., Yang, Y., Carbonell, J., Le, Q., and
+Salakhutdinov, R. Transformer-XL: Attentive language
+models beyond a fixed-length context. In Korhonen, A.,
+Traum, D., and M`arquez, L. (eds.), Proceedings of the
+57th Annual Meeting of the Association for Computa-
+tional Linguistics, pp. 2978–2988, Florence, Italy, July
+2019. Association for Computational Linguistics. doi:
+10.18653/v1/P19-1285.
+Dao, T., Fu, D., Ermon, S., Rudra, A., and R´e, C. Flashat-
+tention: Fast and memory-efficient exact attention with
+io-awareness. In Koyejo, S., Mohamed, S., Agarwal, A.,
+Belgrave, D., Cho, K., and Oh, A. (eds.), Advances in
+Neural Information Processing Systems, volume 35, pp.
+16344–16359. Curran Associates, Inc., 2022.
+Dubey, A., Jauhri, A., Pandey, A., Kadian, A., Al-Dahle,
+A., Letman, A., Mathur, A., Schelten, A., Yang, A., Fan,
+A., et al. The llama 3 herd of models. arXiv preprint
+arXiv:2407.21783, 2024.
+Feng, S., Liu, Y., Li, H., Chen, X., Shen, S., Du, K., Gu,
+Z., Zhang, R., Huang, Y., Cheng, Y., Yao, J., Zhang, Q.,
+Ananthanarayanan, G., and Jiang, J. Evicpress: Joint kv-
+cache compression and eviction for efficient llm serving,
+2025a.
+Feng, Y., Guo, H., Lv, J., Zhou, S. K., and Xie, X. Taming
+the fragility of kv cache eviction in llm inference, 2025b.
+Fu, Y., Cai, Z., Asi, A., Xiong, W., Dong, Y., and Xiao,
+W. Not all heads matter: A head-level KV cache com-
+pression method with integrated retrieval and reasoning.
+In The Thirteenth International Conference on Learning
+Representations, 2025.
+Ge, S., Zhang, Y., Liu, L., Zhang, M., Han, J., and Gao, J.
+Model tells you what to discard: Adaptive KV cache com-
+pression for LLMs. In Workshop on Advancing Neural
+Network Training: Computational Efficiency, Scalabil-
+ity, and Resource Optimization (WANT@NeurIPS 2023),
+2023.
+Ge, S., Zhang, Y., Liu, L., Zhang, M., Han, J., and Gao,
+J. Model tells you what to discard: Adaptive KV cache
+compression for LLMs. In The Twelfth International
+Conference on Learning Representations, 2024.
+Gu, Y., Jiang, Z., Jin, J., Guo, K., Zhang, Z., and Xu,
+X. Ahakv: Adaptive holistic attention-driven kv cache
+eviction for efficient inference of large language models,
+2025a.
+Gu, Y., Liang, X., Zhao, J., and Diao, E. Obcache: Opti-
+mal brain kv cache pruning for efficient long-context llm
+inference, 2025b.
+Huang, Y., Xu, J., Lai, J., Jiang, Z., Chen, T., Li, Z., Yao,
+Y., Ma, X., Yang, L., Chen, H., Li, S., and Zhao, P. Ad-
+vancing transformer architecture in long-context large
+language models: A comprehensive survey, 2024. URL
+https://arxiv.org/abs/2311.12351.
+Jiang, A. Q., Sablayrolles, A., Mensch, A., Bamford, C.,
+Chaplot, D. S., de las Casas, D., Bressand, F., Lengyel,
+G., Lample, G., Saulnier, L., Lavaud, L. R., Lachaux, M.-
+A., Stock, P., Scao, T. L., Lavril, T., Wang, T., Lacroix,
+T., and Sayed, W. E. Mistral 7b, 2023.
+Keles, F. D., Wijewardena, P. M., and Hegde, C.
+On
+the computational complexity of self-attention. CoRR,
+abs/2209.04881, 2022.
+Kim, M., Kundu, A., Kim, H.-B., Dixit, R., and Cho, M.
+Epicache: Episodic kv cache management for long con-
+versational question answering, 2025.
+Ła´ncucki, A., Staniszewski, K., Nawrot, P., and Ponti, E.
+Inference-time hyper-scaling with KV cache compres-
+sion. In The Thirty-ninth Annual Conference on Neural
+Information Processing Systems, 2025.
+Li, K., Xiong, Y., Jiang, Z., Zhou, Y., Wang, Z., Lv, C.,
+and Zhang, S. Flowmm: Cross-modal information flow
+guided kv cache merging for efficient multimodal context
+inference, 2025a.
+Li, Y., Huang, Y., Yang, B., Venkitesh, B., Locatelli, A., Ye,
+H., Cai, T., Lewis, P., and Chen, D. Snapkv: Llm knows
+what you are looking for before generation. In Advances
+in Neural Information Processing Systems 37, NIPS ’24,
+Red Hook, NY, USA, 2024. Curran Associates Inc. ISBN
+9798331314385.
+Li, Y., Li, Y., Meng, Y., Ma, X., Geng, Z., Xia, S., and
+Wang, Z. Ems: Adaptive evict-then-merge strategy for
+head-wise kv cache compression based on global-local
+importance, 2025b.
+Liu, A., Liu, J., Pan, Z., He, Y., Haffari, G., and Zhuang, B.
+Minicache: KV cache compression in depth dimension
+for large language models. In The Thirty-eighth Annual
+Conference on Neural Information Processing Systems,
+2024a.
+Liu, X., Guo, Q., Song, Y., Liu, Z., Lv, K., Yan, H., Li, L.,
+Liu, Q., and Qiu, X. Farewell to length extrapolation, a
+training-free infinite context with finite attention scope.
+arXiv preprint arXiv:2407.15176, 2024b.
+10
+
+
+
+===== PAGE 11 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+Liu, X., Li, R., Huang, M., Liu, Z., Song, Y., Guo, Q.,
+He, S., Wang, Q., Li, L., Liu, Q., He, Z., Zhou, Y.,
+Huang, X., and Qiu, X. Thus spake long-context large
+language model, 2025a. URL https://arxiv.org/
+abs/2502.17129.
+Liu, X., Wang, X., Liu, P., and Tang, G. Zsmerge: Zero-shot
+kv cache compression for memory-efficient long-context
+llms, 2025b.
+Liu, Y., Yu, J., Xu, Y., Li, Z., and Zhu, Q. A survey on
+transformer context extension: Approaches and eval-
+uation, 2025c.
+URL https://arxiv.org/abs/
+2503.13299.
+Liu, Z., Desai, A., Liao, F., Wang, W., Xie, V., Xu, Z.,
+Kyrillidis, A., and Shrivastava, A. Scissorhands: Exploit-
+ing the persistence of importance hypothesis for llm kv
+cache compression at test time. In Oh, A., Naumann,
+T., Globerson, A., Saenko, K., Hardt, M., and Levine, S.
+(eds.), Advances in Neural Information Processing Sys-
+tems, volume 36, pp. 52342–52364. Curran Associates,
+Inc., 2023a.
+Liu, Z., Desai, A., Liao, F., Wang, W., Xie, V., Xu, Z.,
+Kyrillidis, A., and Shrivastava, A. Scissorhands: Exploit-
+ing the persistence of importance hypothesis for LLM
+KV cache compression at test time. In Thirty-seventh
+Conference on Neural Information Processing Systems,
+2023b.
+Nawrot, P., Ła´ncucki, A., Chochowski, M., Tarjan, D., and
+Ponti, E. M. Dynamic memory compression: retrofitting
+llms for accelerated inference. In Proceedings of the
+41st International Conference on Machine Learning,
+ICML’24. JMLR.org, 2024.
+Pan, Z., Wu, Q., Jiang, H., Xia, M., Luo, X., Zhang, J.,
+Lin, Q., Ruhle, V., Yang, Y., Lin, C.-Y., Zhao, H. V., Qiu,
+L., and Zhang, D. LLMLingua-2: Data distillation for
+efficient and faithful task-agnostic prompt compression.
+In Ku, L.-W., Martins, A., and Srikumar, V. (eds.), Find-
+ings of the Association for Computational Linguistics
+ACL 2024, pp. 963–981, Bangkok, Thailand and virtual
+meeting, August 2024. Association for Computational
+Linguistics.
+Rae, J. W., Potapenko, A., Jayakumar, S. M., Hillier, C.,
+and Lillicrap, T. P. Compressive transformers for long-
+range sequence modelling. In International Conference
+on Learning Representations, 2020.
+Tian, Y., Wang, Z., Peng, Y., Yuan, A., Wang, Z., Yi, B., Liu,
+X., Cui, Y., and Yang, T. Keepkv: Achieving periodic
+lossless kv cache compression for efficient llm inference,
+2025.
+Wan, Z., Wu, X., Zhang, Y., Xin, Y., Tao, C., Zhu, Z.,
+Wang, X., Luo, S., Xiong, J., Wang, L., and Zhang, M.
+D2O : Dynamic discriminative operations for efficient
+long-context inference of large language models. In The
+Thirteenth International Conference on Learning Repre-
+sentations, 2025.
+Wang, X., Salmani, M., Omidi, P., Ren, X., Rezagholizadeh,
+M., and Eshaghi, A. Beyond the limits: a survey of
+techniques to extend the context length in large language
+models. In Proceedings of the Thirty-Third International
+Joint Conference on Artificial Intelligence, IJCAI ’24,
+2024a. ISBN 978-1-956792-04-1. doi: 10.24963/ijcai.
+2024/917.
+Wang, Y., Ji, S., Liu, Y., Xu, Y., Xu, Y., Zhu, Q., and Che,
+W. Lookahead q-cache: Achieving more consistent kv
+cache eviction via pseudo query, 2025a.
+Wang, Z., Jin, B., Yu, Z., and Zhang, M. Model tells you
+where to merge: Adaptive kv cache merging for llms on
+long-context tasks, 2024b.
+Wang, Z., Jin, B., Chang, Y., Yu, Z., and Zhang, M. Model
+tells you where to merge: Adaptive KV cache merging
+for LLMs on long-context tasks, 2025b.
+Wu, W., Pan, Z., Fu, K., Wang, C., Chen, L., Bai, Y.,
+Wang, T., Wang, Z., and Xiong, H. TokenSelect: Ef-
+ficient long-context inference and length extrapolation
+for LLMs via dynamic token-level KV cache selection.
+In Christodoulopoulos, C., Chakraborty, T., Rose, C., and
+Peng, V. (eds.), Proceedings of the 2025 Conference on
+Empirical Methods in Natural Language Processing, pp.
+21264–21281, Suzhou, China, November 2025. Associa-
+tion for Computational Linguistics. ISBN 979-8-89176-
+332-6. doi: 10.18653/v1/2025.emnlp-main.1079.
+Xiao, C., Zhang, P., Han, X., Xiao, G., Lin, Y., Zhang, Z.,
+Liu, Z., and Sun, M. Infllm: training-free long-context
+extrapolation for llms with an efficient context memory.
+In Advances in Neural Information Processing Systems
+37, NIPS ’24, Red Hook, NY, USA, 2024a. Curran Asso-
+ciates Inc. ISBN 9798331314385.
+Xiao, G., Tian, Y., Chen, B., Han, S., and Lewis, M. Ef-
+ficient streaming language models with attention sinks.
+In The Twelfth International Conference on Learning
+Representations, 2024b.
+Yang, A., Yang, B., Hui, B., Zheng, B., Yu, B., Zhou, C.,
+Li, C., Li, C., Liu, D., Huang, F., Dong, G., Wei, H., Lin,
+H., Tang, J., Wang, J., Yang, J., Tu, J., Zhang, J., Ma, J.,
+Yang, J., Xu, J., Zhou, J., Bai, J., He, J., Lin, J., Dang,
+K., Lu, K., Chen, K., Yang, K., Li, M., Xue, M., Ni, N.,
+Zhang, P., Wang, P., Peng, R., Men, R., Gao, R., Lin, R.,
+Wang, S., Bai, S., Tan, S., Zhu, T., Li, T., Liu, T., Ge, W.,
+11
+
+
+
+===== PAGE 12 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+Deng, X., Zhou, X., Ren, X., Zhang, X., Wei, X., Ren,
+X., Liu, X., Fan, Y., Yao, Y., Zhang, Y., Wan, Y., Chu, Y.,
+Liu, Y., Cui, Z., Zhang, Z., Guo, Z., and Fan, Z. Qwen2
+technical report, 2024.
+Yang, Z., Qi, P., Zhang, S., Bengio, Y., Cohen, W., Salakhut-
+dinov, R., and Manning, C. D. Hotpotqa: A dataset for
+diverse, explainable multi-hop question answering. In
+Proceedings of the 2018 Conference on Empirical Meth-
+ods in Natural Language Processing, pp. 2369–2380,
+2018.
+Yuan, J., He, Z., Bai, H., Leng, J., and Jiang, B. Weightedkv:
+Attention scores weighted key-value cache merging for
+large language models, 2025.
+Zaheer, M., Guruganesh, G., Dubey, K. A., Ainslie, J., Al-
+berti, C., Onta˜n´on, S., Pham, P., Ravula, A., Wang, Q.,
+Yang, L., and Ahmed, A. Big bird: Transformers for
+longer sequences. In NeurIPS, 2020.
+Zhang, Y., Du, Y., Luo, G., Zhong, Y., Zhang, Z., Liu, S.,
+and Ji, R. Cam: Cache merging for memory-efficient
+LLMs inference. In Forty-first International Conference
+on Machine Learning, 2024.
+Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R.,
+Song, Z., Tian, Y., R´e, C., Barrett, C., Wang, Z. A., and
+Chen, B. H2o: Heavy-hitter oracle for efficient generative
+inference of large language models. In Oh, A., Naumann,
+T., Globerson, A., Saenko, K., Hardt, M., and Levine, S.
+(eds.), Advances in Neural Information Processing Sys-
+tems, volume 36, pp. 34661–34710. Curran Associates,
+Inc., 2023.
+Zhu, S., Ye, J., Jiang, W., Xue, S., Zhang, Q., Wu, Y., and
+Li, J. CoCA: Fusing position embedding with collinear
+constrained attention in transformers for long context win-
+dow extending. In Ku, L.-W., Martins, A., and Srikumar,
+V. (eds.), Proceedings of the 62nd Annual Meeting of
+the Association for Computational Linguistics (Volume
+1: Long Papers), pp. 4247–4262, Bangkok, Thailand,
+August 2024. Association for Computational Linguistics.
+doi: 10.18653/v1/2024.acl-long.233.
+12
+
+
+
+===== PAGE 13 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+Layer 7 (Mean over heads)
+Layer 15 (Mean over heads)
+Layer 21 (Mean over heads)
+Layer 26 (Mean over heads)
+Layer 7 (Mean over heads)
+Layer 15 (Mean over heads)
+Layer 21 (Mean over heads)
+Layer 26 (Mean over heads)
+Layer 7 (Mean over heads)
+Layer 15 (Mean over heads)
+Layer 21 (Mean over heads)
+Layer 26 (Mean over heads)
+Layer 7 (Mean over heads)
+Layer 15 (Mean over heads)
+Layer 21 (Mean over heads)
+Layer 26 (Mean over heads)
+Layer 7 (Mean over heads)
+Layer 15 (Mean over heads)
+Layer 21 (Mean over heads)
+Layer 26 (Mean over heads)
+Layer 7 (Mean over heads)
+Layer 15 (Mean over heads)
+Layer 21 (Mean over heads)
+Layer 26 (Mean over heads)
+Figure 8. Layer-wise QKV similarity and spectral analysis for Llama-3.1-8B-Instruct. Left column: Mean adjacent-token cosine similarity
+for Query (Q), Key (K), and Value (V), averaged over attention heads. Middle column: Eigenvalue distributions of the projection matrices
+WQ, WK, and WV , sorted in descending order. Right column: Mode-wise contribution coefficients ci (Eq. 8), plotted according to the
+eigenvalue index.
+A. More Illustrations of Layer-wise QKV Similarity and Spectral Analysis
+In Fig. 8 and Fig. 9, we provide more layer-wise QKV similarity and spectral analysis across different models.
+B. Head-Level Alignment Illustrations
+In Fig. 10, Fig. 11, Fig. 12, Fig. 13, Fig. 14, we provide more head-level alignment illustrations.
+C. Theoretical Analysis of Eq. 32
+For a fixed attention head and a query position q, the head output is
+o =
+X
+i
+αivi,
+αi = softmax(zi),
+zi =
+1
+√dk q⊤ki.
+(34)
+Define the gradient of the loss with respect to the head output as
+E ≜∂L
+∂o .
+(35)
+During training, the model is optimized by minimizing the empirical risk
+min
+θ
+1
+N
+N
+X
+n=1
+L(n)(θ).
+(36)
+Importantly, E is not generated in response to any particular local residual vi −o. Rather, it is the head-level first-order
+descent signal induced by empirical risk minimization. Concretely, E is determined by the downstream network and the final
+13
+
+
+
+===== PAGE 14 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+Layer 3 (Mean over heads)
+Layer 16 (Mean over heads)
+Layer 27 (Mean over heads)
+Layer 31 (Mean over heads)
+Layer 3 (Mean over heads)
+Layer 16 (Mean over heads)
+Layer 27 (Mean over heads)
+Layer 31 (Mean over heads)
+Layer 3 (Mean over heads)
+Layer 16 (Mean over heads)
+Layer 27 (Mean over heads)
+Layer 31 (Mean over heads)
+Layer 3 (Mean over heads)
+Layer 16 (Mean over heads)
+Layer 27 (Mean over heads)
+Layer 31 (Mean over heads)
+Layer 3 (Mean over heads)
+Layer 16 (Mean over heads)
+Layer 27 (Mean over heads)
+Layer 31 (Mean over heads)
+Layer 3 (Mean over heads)
+Layer 16 (Mean over heads)
+Layer 27 (Mean over heads)
+Layer 31 (Mean over heads)
+Figure 9. Layer-wise QKV similarity and spectral analysis for Mistral-7B-Instruct-v0.3. Left column: Mean adjacent-token cosine
+similarity for Query (Q), Key (K), and Value (V), averaged over attention heads. Middle column: Eigenvalue distributions of the projection
+matrices WQ, WK, and WV , sorted in descending order. Right column: Mode-wise contribution coefficients ci (Eq. 8), plotted
+according to the eigenvalue index.
+0.15
+0.10
+0.05
+0.00
+0.05
+0.10
+mean cos(E, c11)
+0.15
+0.10
+0.05
+0.00
+0.05
+0.10
+mean cos(E, c12)
+y = -1.149x - 0.001
+R² = 0.9584
+Layer 5: cos11 vs cos12
+(a) cos(E, c11) vs. cos(E, c12)
+0.04
+0.00
+0.04
+0.08
+0.12
+mean cos(E, c11)
+0.04
+0.00
+0.04
+0.08
+0.12
+mean cos(E, c22)
+y = 0.975x + 0.002
+R² = 0.9090
+Layer 5: cos11 vs cos22
+(b) cos(E, c11) vs. cos(E, c22)
+0.12
+0.06
+0.00
+0.06
+0.12
+mean cos(E, c12)
+0.12
+0.06
+0.00
+0.06
+0.12
+mean cos(E, c22)
+y = -0.859x + 0.000
+R² = 0.9710
+Layer 5: cos12 vs cos22
+(c) cos(E, c12) vs. cos(E, c22)
+Figure 10. Head-level mean alignment relationships at Layer 5 of Llama-3.1-8B-Instruct on 2WikiMQA. Each point corresponds to one
+attention head, positioned by its global mean cosine alignment.
+14
+
+
+
+===== PAGE 15 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c11)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c12)
+y = -1.163x + 0.001
+R² = 0.9634
+Layer 22: cos11 vs cos12
+(a) cos(E, c11) vs. cos(E, c12)
+0.09
+0.06
+0.03
+0.00
+0.03
+0.06
+mean cos(E, c11)
+0.09
+0.06
+0.03
+0.00
+0.03
+0.06
+mean cos(E, c22)
+y = 0.979x - 0.002
+R² = 0.9294
+Layer 22: cos11 vs cos22
+(b) cos(E, c11) vs. cos(E, c22)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c12)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c22)
+y = -0.847x - 0.001
+R² = 0.9781
+Layer 22: cos12 vs cos22
+(c) cos(E, c12) vs. cos(E, c22)
+Figure 11. Head-level mean alignment relationships at Layer 22 of Llama-3.1-8B-Instruct on 2WikiMQA. Each point corresponds to one
+attention head, positioned by its global mean cosine alignment.
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c11)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c12)
+y = -1.108x + 0.001
+R² = 0.9866
+Layer 9: cos11 vs cos12
+(a) cos(E, c11) vs. cos(E, c12)
+0.06
+0.03
+0.00
+0.03
+0.06
+0.09
+mean cos(E, c11)
+0.06
+0.03
+0.00
+0.03
+0.06
+0.09
+mean cos(E, c22)
+y = 0.989x - 0.001
+R² = 0.9682
+Layer 9: cos11 vs cos22
+(b) cos(E, c11) vs. cos(E, c22)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c12)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c22)
+y = -0.893x - 0.001
+R² = 0.9823
+Layer 9: cos12 vs cos22
+(c) cos(E, c12) vs. cos(E, c22)
+Figure 12. Head-level mean alignment relationships at Layer 9 of Mistral-7B-Instruct-v0.3 on 2WikiMQA. Each point corresponds to one
+attention head, positioned by its global mean cosine alignment.
+0.06
+0.03
+0.00
+0.03
+0.06
+0.09
+mean cos(E, c11)
+0.06
+0.03
+0.00
+0.03
+0.06
+0.09
+mean cos(E, c12)
+y = -1.160x + 0.002
+R² = 0.9770
+Layer 15: cos11 vs cos12
+(a) cos(E, c11) vs. cos(E, c12)
+0.075
+0.050
+0.025 0.000
+0.025
+mean cos(E, c11)
+0.075
+0.050
+0.025
+0.000
+0.025
+mean cos(E, c22)
+y = 1.009x - 0.003
+R² = 0.9472
+Layer 15: cos11 vs cos22
+(b) cos(E, c11) vs. cos(E, c22)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c12)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c22)
+y = -0.875x - 0.001
+R² = 0.9821
+Layer 15: cos12 vs cos22
+(c) cos(E, c12) vs. cos(E, c22)
+Figure 13. Head-level mean alignment relationships at Layer 15 of Mistral-7B-Instruct-v0.3 on 2WikiMQA. Each point corresponds to
+one attention head, positioned by its global mean cosine alignment.
+15
+
+
+
+===== PAGE 16 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c11)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c12)
+y = -1.091x - 0.001
+R² = 0.9727
+Layer 20: cos11 vs cos12
+(a) cos(E, c11) vs. cos(E, c12)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c11)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c22)
+y = 0.917x + 0.000
+R² = 0.9519
+Layer 20: cos11 vs cos22
+(b) cos(E, c11) vs. cos(E, c22)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c12)
+0.08
+0.04
+0.00
+0.04
+0.08
+mean cos(E, c22)
+y = -0.842x - 0.000
+R² = 0.9812
+Layer 20: cos12 vs cos22
+(c) cos(E, c12) vs. cos(E, c22)
+Figure 14. Head-level mean alignment relationships at Layer 20 of Mistral-7B-Instruct-v0.3 on 2WikiMQA. Each point corresponds to
+one attention head, positioned by its global mean cosine alignment.
+objective through backpropagation; in a statistical sense, it aggregates gradient information across many training samples,
+positions, and contexts, instead of reflecting an instantaneous reaction to a single token or a single value residual.
+Head-external vs. head-internal decomposition of key gradients.
+By the chain rule, the gradient with respect to a key
+ki is
+∂L
+∂ki
+=
+∂L
+∂o
+|{z}
+head-external E⊤
+∂o
+∂αi
+∂αi
+∂zi
+∂zi
+∂ki
+|
+{z
+}
+head-internal
+=
+E⊤
+|{z}
+head-external
+
+vi −
+X
+j
+αjvj
+|
+{z
+}
+head-internal residual (vi−o)
+
+αi(1 −αi)
+|
+{z
+}
+head-internal
+1
+√dk
+q
+| {z }
+head-internal common direction
+= αi(1 −αi)
+√dk
+
+E⊤(vi −o)
+|
+{z
+}
+head-external×head-internal: scalar projection
+
+q
+|{z}
+head-internal common direction
+.
+(37)
+Eq. 37 provides a clear decomposition between head-external and head-internal factors. Here E is the head-external gradient
+propagated from downstream modules and the final loss; it specifies the first-order descent direction of the head output o
+under the global training objective, and does not correspond one-to-one to any specific local residual. In contrast, (vi −o)
+is the head-internal residual induced by the current context of this head, and different positions only modulate the update
+through the scalar projection si = E⊤(vi −o).
+More importantly, Eq. 37 shows that within the same head, the gradients of all keys ki are always colinear with q; positional
+differences appear only in the magnitude αi(1 −αi) si. Near convergence, as the overall gradient magnitude decreases,
+these local modulation terms become mild: not only is the scale |si| suppressed, but the angular variation between E and the
+heterogeneous residuals (vi −o) also becomes more stable. This aligns with our motivation that (vi −o) exhibits intrinsic
+heterogeneity, while E acts as a shared, approximately unbiased descent direction that does not favor any specific token
+residual. Equivalently, E tends to induce an approximately consistent projection relationship onto the residual subspace
+across contexts.
+(i) cos(E, c11) ≈cos(E, c22).
+Consider the empirical risk objective in Eq. 36. Around a converged solution, the
+backpropagated signal E primarily reflects the head output’s first-order descent direction under the global objective, rather
+than amplifying a particular local position. From Eq. 37, within a head, all key updates share the same head-external factor
+E and the common direction q, while positional differences enter only through si = E⊤(vi −o). As the overall gradient
+magnitude shrinks near convergence, the variation of these projections across neighboring positions is simultaneously
+16
+
+
+
+===== PAGE 17 =====
+KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging
+reduced, so the angular relation (i.e., the angle with E) becomes comparable. Thus, while sm and sm+1 need not be exactly
+equal, their directional behavior is similar in the sense of cosine alignment.
+Next we examine the directional properties of the second-order coefficients. By definition,
+c11 = αm(1 −2αm)(vm −o),
+c22 = αm+1(1 −2αm+1)(vm+1 −o),
+(38)
+so c11 and c22 are exactly parallel to their corresponding local residuals vm −o and vm+1 −o, differing only by scalar
+factors. In our merging strategy, we only merge adjacent keys with small accumulated attention mass, where typically
+αi < 1
+2, hence αi(1 −2αi) > 0. This factor is strictly positive and therefore preserves direction, merely rescaling the
+magnitude. Combining this with the near-convergence stability that E responds with similar angular behavior across
+different residuals, we obtain
+cos(E, c11) = cos(E, vm −o),
+cos(E, c22) = cos(E, vm+1 −o),
+(39)
+and consequently,
+cos(E, c11) ≈cos(E, c22).
+(40)
+Sign relation with the off-diagonal softmax Hessian.
+The softmax Hessian has a fixed sign structure: off-diagonal
+entries are always negative,
+∂2αi
+∂zj ∂zk
+=
+(
+αi(1 −2αi),
+i = j = k,
+−αiαj,
+i ̸= j,
+(41)
+so the adjacent coupling term in the value space can be written as
+c12 = −αmαm+1
+
+(vm −o) + (vm+1 −o)
+
+.
+(42)
+Let rm ≜vm −o and rm+1 ≜vm+1 −o. Then
+c11 = amrm,
+c22 = am+1rm+1,
+c12 = −b(rm + rm+1),
+(43)
+which shows that c12 is a (negative) linear combination of the two residual directions and lies in the same local residual
+subspace in value space. Putting the above together yields
+cos(E, c11) ≈cos(E, c22) ≈−cos(E, c12).
+(44)
+This is also consistent with our empirical observations.
+17

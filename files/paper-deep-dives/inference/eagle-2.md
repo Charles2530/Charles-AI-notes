@@ -15,9 +15,35 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[huggingface.co/papers/2406.16858](https://huggingface.co/papers/2406.16858)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2406.16858)；[官方 / 项目材料](https://huggingface.co/papers/2406.16858)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-EAGLE-2 的核心很漂亮：**不重新训练 draft model，只用 draft model 自己的 confidence score 动态调整 draft tree 的形状。** 它抓住了 EAGLE 里一个被低估的事实：draft token 的接受率不仅和它在树里的位置有关，也和当前上下文有关。
+## 原论文故事线
 
-如果 EAGLE 是“用 feature-level draft 提高草稿质量”，EAGLE-2 就是“把固定草稿树改成按上下文自适应的草稿树”。它仍然使用原 LLM 做验证，不微调原模型，也不放宽接受条件，因此在标准 speculative sampling 规则下保持 lossless acceleration。
+### 研究背景
+
+原论文接在 speculative decoding 和 EAGLE 之后。投机解码的基本框架是：便宜 draft model 先生成候选 token，昂贵 target LLM 一次并行验证；EAGLE 把 draft 从独立小模型改成基于 target feature 的草稿生成，提升了候选质量。但原版 EAGLE 仍使用静态 draft tree：不管输入问题简单还是复杂、draft confidence 高还是低，都展开类似形状的候选树。
+
+### 问题（Challenge）
+
+EAGLE-2 要解决的问题是静态 draft tree 的浪费：如何在不重新训练 draft model、不改变 target LLM、不破坏 lossless verification 的前提下，让候选树按当前上下文自适应。挑战在于 target 验证成本与 draft tree 节点数相关，树太小会错过可接受 token，树太大会验证大量低价值分支；而每个上下文的 token 可预测性不同，固定树无法同时适配简单续写和高不确定推理。
+
+### Finding
+
+EAGLE-2 的 finding 是：draft model 的 confidence score 可以作为 acceptance probability 的近似信号，用来动态分配树预算。这个 insight 把问题从“训练一个更强 draft model”翻转成“把已有 draft 的概率信息用在树构造上”。如果一个节点路径上的候选都高置信，就应该继续扩展；如果某条分支低置信，继续占用 target verification slot 的收益很低。这样可以在同样验证预算下提高平均接受长度。
+
+### 方法
+
+方法不新增模型训练。推理时，EAGLE-2 先用 draft model 生成候选节点，并用路径价值 \(V_i\) 汇总节点置信度；然后执行 expansion 和 reranking，从所有候选中选出更值得 target 验证的节点；最后把动态树 flatten 成 target model 可并行验证的形式。输入是当前上下文、EAGLE draft model 输出及其 confidence，输出是上下文相关的 draft tree。接受规则仍由 target LLM 决定，因此满足标准 speculative sampling 的无损加速条件。
+
+### 结论
+
+论文实验比较 EAGLE、SpecInfer 等投机解码方法，在多模型和多任务设置下报告 speedup、acceptance length 与 tree 相关指标。结果说明动态树能提高高价值候选比例，减少静态树中低接受概率节点的验证浪费；消融验证 confidence-based expansion、reranking 和 tree size 设计对速度收益有贡献。需要保留边界：收益依赖 draft confidence 校准、tree attention 实现、batch 调度以及目标任务和 draft 训练分布的匹配程度。
+
+### 关键术语
+
+- **Speculative Decoding（投机解码）**：先由便宜模型提出候选 token，再由目标模型并行验证以减少逐 token 解码次数
+- **Draft Tree（草稿树）**：一次验证前由 draft model 展开的候选 token 树
+- **Acceptance Probability（接受概率）**：候选 token 被 target LLM 验证通过的概率
+- **Dynamic Draft Tree（动态草稿树）**：根据当前上下文和 draft confidence 自适应调整形状的候选树
+- **Lossless Acceleration（无损加速）**：保持 target LLM 原始采样分布不变，只减少推理成本
 
 ## 它的效率贡献是什么
 

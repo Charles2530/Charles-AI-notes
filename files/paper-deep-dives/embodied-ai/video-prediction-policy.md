@@ -15,6 +15,47 @@ paper_topic: 具身智能 / VLA
     **GitHub / 项目：** GitHub：[github.com/roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)；项目页：[video-prediction-policy.github.io/](https://video-prediction-policy.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2412.14803)；[GitHub API / repo](https://github.com/roboterax/video-prediction-policy)；[官方 / 项目材料](https://video-prediction-policy.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
+## 原论文故事线
+
+### 研究背景
+
+Video Prediction Policy（VPP）讨论的是机器人策略视觉表征的问题。许多 generalist robot policies 使用单图重建、对比学习或静态图像 encoder 作为视觉输入，这些表示能捕捉当前场景语义和空间布局，但不显式表示“接下来会发生什么”。机器人操作却天然依赖未来动态：物体会被推开、夹爪会接触、遮挡会改变、任务状态会演化。
+
+视频扩散模型和文本引导视频预测模型在训练中必须预测未来帧，因此内部 latent 不只包含当前图像信息，也包含未来视觉变化的表征。VPP 的背景判断是：这些 predictive visual representations 可能比静态视觉特征更适合动作学习，因为它们把物理动态和未来状态提前压进了表示。
+
+### 问题（Challenge）
+
+论文要解决的问题是：**如何利用视频预测模型内部的未来表征来训练 generalist robot policy。** 难点在于，直接在部署时生成完整未来视频成本高，也未必需要；而只拿普通视觉 encoder，又缺少动态先验。模型需要一种中间路线：从视频模型中抽取未来感 latent，再让动作模型利用它。
+
+这个问题的价值在于连接 world model 和 policy。如果中间 predictive representation 足够有用，机器人不必每步显式 rollout 清晰视频，也能获得视频模型学到的物理动态知识。这对高效世界模型训练和机器人控制都很关键。
+
+### Finding
+
+作者的 finding 是：**视频预测模型的中间表示显式包含当前帧和预测未来帧的信息；策略可以把这些 predictive visual representations 当作条件，隐式学习 inverse dynamics。** 这个洞见把视频模型从“生成未来画面”的工具翻转成“提供未来感视觉状态”的表征模型。
+
+这个 finding 能解决挑战，是因为动作学习需要知道“为了让未来变成这样，现在该怎么动”。VPP 不要求部署时生成完整高质量视频，而是取视频扩散模型内部的 future representations，再训练 diffusion action model / inverse dynamics policy 根据这些表征输出动作。这样，未来动态先验以 latent 形式进入策略。
+
+### 方法
+
+VPP 采用两阶段流程。第一阶段训练 Text-guided Video Prediction（TVP）模型：以预训练视频 foundation model 为基础，在机器人数据、互联网人类 manipulation 视频和目标 benchmark 数据上微调，使模型能根据当前观测和语言预测未来。第二阶段训练 inverse dynamics policy：从 TVP 中抽取中间 predictive visual representations，条件化一个 diffusion action model 来生成机器人动作。
+
+输入包括当前/历史图像和语言指令；TVP 内部表示具有 \((T,H,W)\) 结构，包含当前 step 和未来 step 的 latent。策略不直接以像素未来视频为输入，而是使用这些 latent 表征。论文还分析不同视频模型层的表示效果、视频预训练和互联网 manipulation data 的贡献。
+
+### 结论
+
+实验覆盖 CALVIN ABC-D generalization benchmark、MetaWorld 50-task multi-task setting 和真实机器人 dexterous manipulation。论文报告 VPP 在 CALVIN ABC-D 上相比此前 SOTA 获得 18.6% relative improvement，在复杂真实灵巧手任务上成功率提升 31.6%。MetaWorld 中，VPP 的平均成功率达到 0.682，高于 RT-1、Diffusion Policy、Susie 和 GR-1 等基线。
+
+消融显示，video pretraining、internet manipulation data 和 predictive representations 都对策略表现有贡献。边界是，VPP 主要证明“预测 latent 有助于动作学习”，没有证明完整 action-conditioned world model 已经解决；同一历史下改变动作的反事实未来、长时恢复和真实安全仍需额外评估。
+
+### 关键术语
+
+- **Predictive Visual Representations（预测视觉表征）**：视频预测模型内部同时编码当前和未来视觉信息的 latent。
+- **Text-Guided Video Prediction, TVP（文本引导视频预测）**：根据当前观测和语言预测未来视频的模型。
+- **Inverse Dynamics Policy（逆动力学策略）**：根据当前/未来表征推断应执行动作的策略。
+- **Video Diffusion Model, VDM（视频扩散模型）**：通过扩散/去噪过程生成或预测视频的模型。
+- **Diffusion Action Model（扩散动作模型）**：用扩散生成方式输出连续机器人动作序列。
+- **CALVIN ABC-D（CALVIN 泛化基准）**：训练环境 A/B/C 到未见环境 D 的长序列机器人任务评测。
+
 VPP 的核心观点很漂亮：很多视觉策略只编码当前图像，而视频扩散模型内部包含“未来会怎样”的预测表征。把这些 predictive visual representations 拿来当 policy 的视觉条件，可以让机器人从视频模型的动态先验中受益。
 
 举个桌面操作例子。只看当前图像时，policy 能知道“杯子、海绵、机械臂在哪里”，但不一定知道下一步接触后会发生什么：海绵会不会碰到杯沿，杯子会不会被推歪，手爪继续下压会不会卡住。视频预测模型在训练中被迫学习“当前画面往后如何演化”，它的中间表征会更关注物体即将移动、接触和状态变化的区域。VPP 的想法不是让机器人每次都生成一段漂亮未来视频，而是把这种未来感抽成低延迟 latent，再让 inverse dynamics policy 从 latent 里解码动作。
