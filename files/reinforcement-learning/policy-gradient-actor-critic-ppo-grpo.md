@@ -182,6 +182,24 @@ A_i=
 
 <small>图源：[DeepSeek-R1](https://arxiv.org/abs/2501.12948)，Supplementary Figure 1。原图表达：PPO 用 value model 辅助 advantage 估计；GRPO 省去 value model，用同一问题的一组 sampled outputs 的 reward scores 做相对 advantage。本站读法：GRPO 把“critic 成本”换成“多样本 rollout 成本”。</small>
 
+## 视觉生成里的 GRPO：先把采样器变成可信策略
+
+在 LLM 里，\(\log \pi_\theta(a_t\mid s_t)\) 通常来自每个 token 的 softmax 概率。扩散和 Flow Matching 生成器不一样：它们的“动作”不是一个离散 token，而是一整条从噪声到样本的去噪轨迹。若标准 Flow Matching 推理是确定性 ODE，策略梯度就缺少两个东西：同一 prompt 下的探索样本，以及每个采样转移对应的 log probability。
+
+Flow-GRPO、Dance-GRPO 这类视觉生成 RL 方法的做法，是把确定性 Flow-ODE 改造成带随机性的采样过程，再把每一步 latent 转移当成策略的一部分。这样同一 prompt 可以采出一组图像或视频候选，reward model 负责打分，GRPO 再做组内 advantage。
+
+但这也暴露了一个和文本 RL 不同的坑：随机性本身会改变被 reward model 看到的样本分布。[Coefficients-Preserving Sampling](https://arxiv.org/abs/2509.05952) 指出，Flow-SDE 若不保持 scheduler 规定的样本系数和总噪声水平，会在中间 latent 里混入过量噪声，最终样本出现噪声伪影。此时 reward ranking 可能先被画面噪声污染，再被 GRPO 放大。
+
+CPS 的思路是让随机采样仍然服从原来的噪声日程。它给每一步构造一个均值 \(\mu_\theta(x_t,t)\) 和受控噪声项，训练时的 logprob 可以简化成类似高斯转移的平方距离：
+
+\[
+\log p_\theta(x_{t-\Delta t}\mid x_t)
+\propto
+-\|x_{t-\Delta t}-\mu_\theta(x_t,t)\|_2^2
+\]
+
+常数项在 PPO/GRPO 的概率比里会抵消，关键是均值和噪声尺度要对应同一个采样定义。换句话说，视觉生成里的 GRPO 不只是“多采几张图再按 reward 排序”；它还要求采样器给出的探索分布、old logprob、KL 项和 reward 输入质量彼此一致。
+
 ## DeepSeek-R1：可验证奖励为什么能改变推理行为
 
 DeepSeek-R1-Zero 的启发不只是“用了 GRPO”，而是：当 reward 足够可验证，策略可以从结果反馈中学出更长的推理、检查和回溯行为。
@@ -254,10 +272,11 @@ reward 主要奖励未来帧像不像
 - [Hugging Face: The N Implementation Details of RLHF with PPO](https://huggingface.co/blog/the_n_implementation_details_of_rlhf_with_ppo)：非常适合看 RLHF 工程细节、reward/value/logprob 的真实坑。
 - [BAIR: Rethinking the Role of PPO in RLHF](https://bair.berkeley.edu/blog/2023/10/16/p3o/)：把 PPO 和偏好比较之间的张力讲得很清楚。
 - [DeepSeek-R1](https://arxiv.org/abs/2501.12948)：GRPO、可验证奖励、reward hacking 和 RL infrastructure 的代表性技术报告。
+- [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952)：看 Flow Matching 视觉生成器怎样把随机采样、logprob 和 reward 优化接到 GRPO。
 
 ## 读完以后怎么判断
 
-Policy Gradient 的核心是对采样概率求导，而不是对离散采样结果求导。Baseline/critic 把绝对分数变成相对好坏，PPO 用概率比和 KL 约束一次更新的幅度，GRPO 用同题多样本比较省掉 critic。所有这些方法最后都受 reward 质量、rollout 成本和评测闭环约束。
+Policy Gradient 的核心是对采样概率求导，而不是对离散采样结果求导。Baseline/critic 把绝对分数变成相对好坏，PPO 用概率比和 KL 约束一次更新的幅度，GRPO 用同题多样本比较省掉 critic。所有这些方法最后都受 reward 质量、rollout 成本、logprob 定义和评测闭环约束。
 
 ## 相关阅读与下一步
 

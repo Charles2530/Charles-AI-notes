@@ -14,7 +14,9 @@
 
 第五类来源是多模态和控制连接。Diffusion Policy、RT-X / Open X-Embodiment、DreamZero、LingBot-World 等工作用于解释扩散思想如何迁移到动作轨迹、机器人策略和世界模拟器。正文只把它们作为边界连接，具体机制放到 VLA 和世界模型专题。
 
-第六类来源是讲法参考。Lil'Log、The Illustrated Stable Diffusion、Hugging Face Diffusers / Stable Diffusion blog、Oxen 的 flow transformer 长文，以及机器之心、PaperWeekly、量子位等中文长文适合学习如何把“系统接口 + 失败模式 + 评测边界”讲清楚。事实、实验结果和版本语义仍以论文、技术报告、官方文档和代码仓库为准。
+第六类来源是视频 / 图像生成的 RL 对齐。Flow-GRPO、Dance-GRPO 和 Coefficients-Preserving Sampling 用于说明：当 Flow Matching 生成器接入 GRPO 时，随机性、logprob、scheduler 噪声水平和 reward model 输入质量必须一起看。正文只把 CPS 作为 Flow/RL 采样接口提醒；其原论文实验主要在图像生成基线上完成，不能直接外推为视频后训练结论。
+
+第七类来源是讲法参考。Lil'Log、The Illustrated Stable Diffusion、Hugging Face Diffusers / Stable Diffusion blog、Oxen 的 flow transformer 长文，以及机器之心、PaperWeekly、量子位、知乎长文等中文材料适合学习如何把“系统接口 + 失败模式 + 评测边界”讲清楚。事实、实验结果和版本语义仍以论文、技术报告、官方文档和代码仓库为准。
 
 ## 写作边界
 
@@ -42,6 +44,8 @@
 | [Wan technical report](https://arxiv.org/abs/2503.20314) | 技术报告 / 图源 | 使用 Wan-VAE 和 Wan DiT 图解释现代视频系统接口。 | 视频基础模型 |
 | [Wan2.1 GitHub](https://github.com/Wan-Video/Wan2.1) | 官方仓库 | 核对模型、任务接口、推理和开源生态入口。 | 工程入口 |
 | [Wan2.2 GitHub](https://github.com/Wan-Video/Wan2.2) | 官方仓库 | 核对 MoE、高低噪声专家、TI2V-5B、Animate 和 S2V 等后续路线。 | 版本边界 |
+| [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952) | 论文 | 支撑 Flow Matching 接入 GRPO 时，SDE 随机性、scheduler 噪声水平、logprob 和 reward 可靠性的边界。 | Flow-RL |
+| [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330) | 中文长文 / 讲法参考 | 学习如何把 Flow-SDE 噪声错配、CPS 和 RL reward 污染讲清楚；事实和实验以 arXiv 论文为准。 | 中文讲法 |
 | [CogVideoX](https://arxiv.org/abs/2408.06072) | 论文 | 作为开放视频 DiT / T2V-I2V 系统的对照来源。 | 视频 DiT |
 | [HunyuanVideo](https://arxiv.org/abs/2412.03603) | 技术报告 | 支撑大规模开源视频生成系统的对照。 | 开源视频 |
 | [Movie Gen](https://ai.meta.com/research/movie-gen/) | 官方研究页 | 支撑视频、音频和编辑能力统一到生成系统的例子。 | 多模态生成 |

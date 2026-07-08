@@ -60,6 +60,26 @@ extra_css:
   - assets/stylesheets/extra.css
 nav:
   - 首页: index.md
+  - 前置数学知识:
+      - 前置数学知识: prerequisite-math/index.md
+      - 线性代数与几何直觉: prerequisite-math/linear-algebra-and-geometry.md
+      - 谱分解、二阶近似与低秩结构: prerequisite-math/spectral-second-order-and-low-rank.md
+      - 序列、位置编码与注意力掩码: prerequisite-math/sequence-position-and-masking.md
+      - 离散选择、Top-k 与稀疏路由: prerequisite-math/discrete-selection-topk-and-routing.md
+      - 微积分与牛顿-莱布尼茨公式: prerequisite-math/calculus-and-newton-leibniz.md
+      - 概率论、分布与期望: prerequisite-math/probability-distributions-and-expectation.md
+      - 采样、估计与校准: prerequisite-math/sampling-estimation-and-calibration.md
+      - 潜变量、似然与生成模型目标: prerequisite-math/latent-likelihood-and-generative-objectives.md
+      - 随机过程与马尔可夫性: prerequisite-math/stochastic-processes-and-markov.md
+      - 信息论、熵与分布距离: prerequisite-math/information-theory-and-divergence.md
+      - 优化、梯度与约束: prerequisite-math/optimization-and-gradient-methods.md
+      - 价值函数、策略梯度与强化学习目标: prerequisite-math/value-policy-and-rl-objectives.md
+      - 动态系统、控制与状态空间: prerequisite-math/dynamic-systems-and-control.md
+      - 卷积、频域与多尺度表示: prerequisite-math/convolution-frequency-and-multiscale.md
+      - 因果、反事实与分布偏移: prerequisite-math/causality-counterfactual-and-distribution-shift.md
+      - 几何、视觉与三维空间: prerequisite-math/geometry-vision-and-3d.md
+      - 缩放律、幂律与实验曲线: prerequisite-math/scaling-laws-and-experimental-curves.md
+      - 数值计算、复杂度与估算: prerequisite-math/numerics-complexity-and-estimation.md
   - 基础概念:
       - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
       - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
@@ -224,6 +244,7 @@ nav:
           - Qwen3.5-Omni：Thinker-Talker 与全模态 Agent: paper-deep-dives/technical-reports/qwen35-omni.md
           - Cosmos 3：面向 Physical AI 的全模态世界模型平台: paper-deep-dives/technical-reports/cosmos3.md
           - Kimi K2：MuonClip、万亿 MoE 与 Agent 数据: paper-deep-dives/technical-reports/kimi-k2.md
+          - LongCat-Video：长视频生成、GRPO 与高效推理: paper-deep-dives/technical-reports/longcat-video.md
           - Gemini 2.5：动态 Thinking 与长上下文 Agent: paper-deep-dives/technical-reports/gemini-2-5.md
           - GPT-4o System Card：Omni 安全与多模态评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
           - InCoder-32B：工业代码模型与执行验证训练: paper-deep-dives/technical-reports/incoder-32b.md

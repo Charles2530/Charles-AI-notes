@@ -17,10 +17,12 @@
 | 场景 | 建议先读 |
 | --- | --- |
 | 在 latent imagination 里训练策略 | [世界模型中的强化学习](rl-for-world-models.md) |
+| 理解视频生成里的 RLHF / GRPO | [Policy Gradient、Actor-Critic、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)、[世界模型中的强化学习](rl-for-world-models.md) |
+| 区分视频生成器、视频世界先验和可交互世界模型 | [世界模型中的强化学习](rl-for-world-models.md)、[生成式仿真与视频世界模型](../world-models/generative-simulation-and-video.md) |
 | 用 verl 理解 RLHF/GRPO 的训练数据流 | [verl 训练流程](verl-code-flow.md) |
 | 把 RL 和训练章节接起来 | [偏好数据与对齐陷阱](../training/preference-data-and-alignment-pitfalls.md) |
 | 把 RL 和世界模型接起来 | [RSSM、Dreamer 与规划](../world-models/rssm-dreamer-and-planning.md) |
 
 ## 阅读时的判断题
 
-每个 RL 方法都可以用四个问题检查：奖励是不是稳定且可被策略利用；探索成本是不是可承受；value 或 reward model 的误差会不会被策略放大；离线数据、在线 rollout 和评测环境之间有没有分布偏移。能回答这些问题，比记住一个算法缩写更可靠。
+每个 RL 方法都可以用六个问题检查：奖励是不是稳定且可被策略利用；探索成本是不是可承受；policy 的 logprob 是否定义清楚；value、reward model 或 verifier 的误差会不会被策略放大；离线数据、在线 rollout 和评测环境之间有没有分布偏移；最终指标是 open-loop 生成质量，还是 closed-loop 任务收益。能回答这些问题，比记住一个算法缩写更可靠。

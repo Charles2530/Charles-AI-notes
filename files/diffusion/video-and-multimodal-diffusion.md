@@ -113,6 +113,28 @@ z_{t+\Delta t}=z_t+\Delta t\,v_\theta(z_t,t,c)
 
 这也是为什么视频少步蒸馏不能只看“4 steps 还能出视频”。要特别看 motion bucket：主体是否真的在动，镜头是否按 prompt 运动，动作幅度有没有被压小，长视频是否越滚越保守。
 
+## Flow-RL：随机性也要服从采样器
+
+把视频生成接到 RL 时，还会多出一个容易被忽略的接口：**采样器本身是不是一个可信的随机策略**。Flow Matching / Rectified Flow 的标准推理通常是确定性 ODE；同一个 prompt、同一个初始噪声和同一组条件下，轨迹基本固定。在线 RL 或 GRPO 要做组内比较，就需要为同一 prompt 采出多个候选，因此 Flow-GRPO、Dance-GRPO 这类方法会把确定性 ODE 改成带随机项的 SDE。
+
+知乎长文《系数保持采样：Flow Matching 随机性注入的正确打开方式》和对应论文 [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952) 的核心提醒是：随机性不是“多加一点高斯噪声”就完事。若 SDE 注入的新噪声和 scheduler 期望的总噪声水平不匹配，模型会在每个时间步看到过噪的 latent，最后样本可能带明显噪声伪影。RL 的 reward model 又是基于这些样本打分的，于是优势估计会被污染：reward 曲线可能在优化“噪声下的评分偏差”，而不是优化真实生成质量。
+
+该文把问题写成系数是否保持。一个采样步要同时满足两件事：样本项的系数按 scheduler 分配；所有独立噪声项合成后的总噪声水平也按 scheduler 分配。它给 Flow Matching 的一个 DDIM 风格写法是：
+
+\[
+x_{t-\Delta t}
+=
+(1-(t-\Delta t))\hat{x}_0
++
+(t-\Delta t)\cos\left(\frac{\eta\pi}{2}\right)\hat{x}_1
++
+(t-\Delta t)\sin\left(\frac{\eta\pi}{2}\right)\epsilon
+\]
+
+其中 \(\eta\in[0,1]\) 控制随机性强度。直觉上，CPS 不是取消探索，而是把探索放回 scheduler 允许的噪声预算里：既能给 GRPO 生成多样候选，又不把训练样本推到过噪分布。
+
+对视频生成来说，这个结论要保守使用：论文实验主要在图像生成基线上验证 Flow-CPS，对视频模型不是直接证明。但它给视频 Flow/RL 一个很实用的检查项：少步视频本来就对噪声日程、solver 和 train-test gap 敏感，如果再用不保系数的 SDE 做在线奖励优化，噪声伪影、运动退化和 reward 排名错误会一起放大。因此评测 Flow-RL 视频后训练时，不能只看最终 reward，还要同时看无随机推理样本、带随机训练样本、reward model 输入质量和人评分桶是否一致。
+
 ## Sora、Wan 和视频世界模型的边界
 
 OpenAI 的 Sora 把视频生成称为 world simulators，这个说法有启发，但不能直接等同于可闭环控制的世界模型。视频生成模型可以学到丰富的物理、相机和场景先验；但如果没有动作条件、因果 rollout、状态记忆、风险事件评测和闭环决策接口，它仍然主要是 open-loop 生成器。
@@ -182,5 +204,6 @@ VBench 这类 benchmark 有价值，因为它把视频质量拆成多个维度�
 - [Lumiere](https://arxiv.org/abs/2401.12945)：理解一次性生成完整时长视频和 Space-Time U-Net 的取舍。
 - [Sora technical report](https://openai.com/index/video-generation-models-as-world-simulators/)：把视频生成和世界模拟器关系放在一起读，但要保守区分 open-loop 和 closed-loop。
 - [Wan technical report](https://arxiv.org/abs/2503.20314)：看现代开源视频基础模型如何组织 VAE、Video DiT、Flow Matching、多任务和系统训练。
+- [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952)：理解 Flow Matching 接入 GRPO 时，随机性、scheduler 噪声水平和 reward 可靠性为什么必须一起看。
 - [VBench](https://arxiv.org/abs/2311.17982)：理解视频生成评测为什么必须拆 temporal quality、motion、alignment 等维度。
 - [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解扩散思想怎样迁移到动作序列生成。

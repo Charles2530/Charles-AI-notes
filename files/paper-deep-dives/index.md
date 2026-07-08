@@ -98,6 +98,7 @@
 - [Qwen3.5-Omni：Thinker-Talker 与全模态 Agent](technical-reports/qwen35-omni.md)
 - [Cosmos 3：面向 Physical AI 的全模态世界模型平台](technical-reports/cosmos3.md)
 - [Kimi K2：MuonClip、万亿 MoE 与 Agent 数据](technical-reports/kimi-k2.md)
+- [LongCat-Video：长视频生成、GRPO 与高效推理](technical-reports/longcat-video.md)
 - [Gemini 2.5：动态 Thinking 与长上下文 Agent](technical-reports/gemini-2-5.md)
 - [GPT-4o System Card：Omni 安全与多模态评测](technical-reports/gpt-4o-system-card.md)
 - [InCoder-32B：工业代码模型与执行验证训练](technical-reports/incoder-32b.md)

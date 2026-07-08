@@ -10,6 +10,7 @@
 
 | 你想弄清的问题 | 直接读这篇 |
 | --- | --- |
+| 后面所有模型文章需要哪些数学底座 | [前置数学知识](prerequisite-math/index.md) |
 | Transformer 到底如何把 token 互相“读”起来 | [Transformer 输入与注意力](foundations/transformer-attention-and-tokenization.md) |
 | 一次大模型训练为什么不是“把数据喂进去” | [模型训练从零入门](training/beginner-model-training-primer.md) |
 | vLLM、SGLang、TensorRT-LLM 在服务里分别解决什么 | [推理运行时](inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md) |

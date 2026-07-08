@@ -2,7 +2,7 @@
 
 世界模型不是“会生成未来画面”就够了。对决策系统来说，世界模型真正要回答的是：**如果我在当前状态做这个动作，未来会发生什么，这个未来是否值得执行。** 强化学习提供了三件工具：用 MDP/Bellman 表达长期后果，用 value/reward 判断候选未来，用 policy 或 planner 把高价值未来变成动作。
 
-所以这篇不把 PlaNet、Dreamer、Decision Transformer、RLVR-World 当论文名堆起来，而是沿一条主线讲：从真实 transition 到 learned transition，再到 imagined rollout 和闭环策略优化。
+所以这篇不把 PlaNet、Dreamer、Decision Transformer、DDPO、Flow-GRPO、RLVR-World 和 Genie 当论文名堆起来，而是沿一条主线讲：从真实 transition 到 learned transition，再到 imagined rollout、视频生成后训练和闭环策略优化。
 
 ## 世界模型补的是 transition
 
@@ -34,6 +34,19 @@ P(s_{t+1}\mid s_t,a_t)
 | reward \(\hat r_t\) | 给 imagined rollout 提供即时反馈 | reward 与真实任务错位 |
 | done/failure \(\hat d_t\) | 判断任务结束、碰撞或不可恢复 | 失败边界过晚或过早触发 |
 | uncertainty/risk \(\hat u_t\) | 惩罚模型不确定区域，减少 exploitation | 不确定性未校准，策略过保守或过冒险 |
+
+## RL 到底介入世界模型的哪一层
+
+同样叫“world model + RL”，实际可能在优化四种不同对象：
+
+| RL 介入点 | 被优化的对象 | 典型代表 | 要看的证据 |
+| --- | --- | --- | --- |
+| 用世界模型训练 policy | actor / planner | Dreamer、PlaNet、MuZero-style planning | closed-loop return、success rate、样本效率 |
+| 用 RL 优化生成器 | 视频或图像生成 policy | DDPO、Flow-GRPO、DanceGRPO、视频 RLHF | reward、人评、视频质量、reward hacking |
+| 用 RL 优化世界模型本身 | transition predictor | RLVR-World | decoded prediction metric、action sensitivity、下游 planner 收益 |
+| 用生成世界训练 agent | agent 在可交互环境中探索 | Genie 2/3 这类 playable world | 动作是否改变环境、环境是否可重复评测、reward 是否可定义 |
+
+这四层不能互相替代。视频生成 RLHF 可能让样本更符合审美和 prompt，却不保证动作因果；Dreamer 可以提升控制回报，却不一定生成高清未来视频；RLVR-World 能把 world model 的预测向可验证指标拉近，但它也需要 reward 覆盖真正重要的状态变量。
 
 ## PlaNet：先学 latent dynamics，再在线规划
 
@@ -126,6 +139,36 @@ rollout 越长，actor 越可能学会利用模型漏洞。所以实践里常配
 
 所以世界模型论文至少要区分：是否有动作输入、是否预测 reward/done/risk、是否做 closed-loop eval、是否检查 model exploitation。
 
+## 视频生成里的 RL：把去噪轨迹当成策略
+
+视频生成里的 RL 不是让模型在真实环境中试错，而是把一次生成过程看成一条 trajectory。DDPO 的关键观点是：扩散模型从噪声逐步去噪到样本，这个过程可以被写成多步决策问题；最终视频或图像拿到 reward 后，用 policy gradient 提高高分去噪轨迹的概率。
+
+一个简化的 MDP 写法是：
+
+| RL 对象 | 扩散 / Flow 里的对应物 | 解释 |
+| --- | --- | --- |
+| state | \((x_t,t,c)\) | 当前 noisy latent、噪声时间和文本/图像/视频条件 |
+| action | \(x_{t-\Delta t}\)、噪声项或 velocity 更新 | 采样器在当前步选择的下一 latent |
+| policy | denoiser / velocity model + sampler | 给出下一步分布或确定性更新 |
+| trajectory | 从噪声到视频的整条采样路径 | 不是机器人轨迹，而是生成轨迹 |
+| reward | aesthetic、alignment、motion、OCR、verifier、人类偏好 | 通常在最终样本上打分，信用分配很粗 |
+
+这解释了为什么视觉生成里的 PPO/GRPO 比文本更别扭。LLM 的 token softmax 天然给出 \(\log \pi(a_t\mid s_t)\)；扩散和 Flow Matching 的推理往往由采样器定义，尤其 Flow Matching 常用确定性 ODE。如果要做在线 RL，就必须先让采样器能产生多样候选，并且给每一步 transition 一个可计算的 logprob。
+
+Flow-GRPO 的做法是把 Flow-ODE 转成带随机性的 SDE，用同一 prompt 下多样本 reward 做 GRPO。DanceGRPO 进一步把扩散和 rectified flow 统一到一个视觉生成 RL 框架，覆盖文本生成图像、文本生成视频和图生视频任务。它们共同说明一件事：**视频生成 RL 的 policy 不只是模型权重，还包括噪声初始化、采样方程、KL 约束和 reward model 输入质量。**
+
+LongCat-Video 这类长视频系统把 multi-reward GRPO 放进 post-training：视觉质量、运动质量、文本对齐等 reward 一起参与优化。这对视频基础模型很重要，因为只优化单一审美 reward 容易牺牲运动、身份一致性或 prompt 细节。但它仍然是生成器偏好优化，不自动等于可交互世界模型。若没有动作条件、反事实动作分叉、risk/done 预测和 closed-loop agent 评测，就只能说“朝 world model 方向靠近”，不能说已经具备规划能力。
+
+视频生成 RL 还特别容易出现三类错位：
+
+| 错位 | 表现 | 为什么会被 RL 放大 |
+| --- | --- | --- |
+| reward 只看单帧美感 | 视频更精致但动作变慢、事件变少 | policy 会偏向容易拿高分的静态未来 |
+| reward 不懂物理 | 接触、碰撞、因果状态变化仍然错 | 高 reward 样本可能只是视觉上合理 |
+| 随机采样破坏分布 | SDE 注入噪声导致伪影或 ranking 偏差 | advantage 会追逐 reward model 的输入噪声偏差 |
+
+Coefficients-Preserving Sampling 的提醒很实用：给 Flow Matching 注入随机性时，不能随便加噪声；采样过程仍要保持 scheduler 规定的样本系数和总噪声水平，否则 reward model 看到的是过噪 latent 解码出来的伪影。对视频 RLHF 来说，这个问题会和长时一致性、运动幅度、少步采样误差叠加，所以评测不能只看训练 reward 曲线。
+
 ## Decision Transformer：把轨迹当序列建模
 
 并不是所有 RL 都必须显式做 Bellman backup。Decision Transformer 把 return-to-go、state、action 交替组织成序列，让 Transformer 在目标回报条件下预测动作。
@@ -156,7 +199,17 @@ rollout 越长，actor 越可能学会利用模型漏洞。所以实践里常配
 
 这里的关键仍然是 reward 是否真对应任务。如果 reward 只奖励像素相似，模型可能学会输出平均化未来；如果 reward 包含结构化状态、动作敏感性、风险和闭环成功，才更可能服务规划。
 
-## 世界模型中的 RL 有五种增量
+把它和视频生成 RLHF 对照，会更清楚：
+
+| 路线 | reward 打在哪里 | 优化目标 | 最容易越界的说法 |
+| --- | --- | --- | --- |
+| 视频生成 RLHF / GRPO | 最终视频样本或片段 | 人类偏好、清晰度、运动、文本对齐 | “视频更好看，所以能规划” |
+| RLVR-World | decoded transition prediction | 状态预测、网页状态、机器人轨迹等可验证指标 | “预测指标更好，所以真实闭环一定更好” |
+| Dreamer-style RL | imagined rollout 的 reward/value | policy 在环境里的长期回报 | “能控制，所以视频模拟一定真实” |
+
+RLVR-World 的价值在于把 world model 的训练目标从 MLE 这类 surrogate objective 往任务指标挪了一步。它尤其适合有 verifier 的世界模型：文本游戏状态能被规则检查，网页状态能被 DOM/任务指标检查，机器人轨迹可以用结构化状态或视觉 token 指标检查。但如果 verifier 没覆盖长尾风险，RL 仍然会优化它能看见的局部指标。
+
+## 世界模型中的 RL 有六种增量
 
 | 增量 | 它带来什么 | 主要风险 |
 | --- | --- | --- |
@@ -165,6 +218,28 @@ rollout 越长，actor 越可能学会利用模型漏洞。所以实践里常配
 | 想象训练 | 用 latent rollout 减少真实试错 | model exploitation |
 | 反事实规划 | 比较“如果换动作会怎样” | action sensitivity 不足 |
 | 任务指标对齐 | 用可验证 reward 直接优化预测质量 | reward 只覆盖局部指标 |
+| 生成器偏好对齐 | 让视频/图像样本更符合人类或模型偏好 | 画质提升掩盖因果、风险或动作失败 |
+
+## 交互式视频世界模型怎样承接 RL
+
+Sora 的技术报告把视频生成称为通向物理世界模拟器的路径：大规模视频模型能表现出一定长程一致性、对象持久性和简单交互模拟；报告同时明确列出物理交互、物体状态变化和长视频一致性的限制。这个边界很关键：Sora 式模型可以提供强视觉先验，但缺少稳定的动作接口和 reward/done/risk 头时，还不是能直接训练 agent 的 RL 环境。
+
+Genie 2/3 把边界往交互式世界推进了一步：环境能响应键盘或鼠标动作，agent 可以在生成世界中获得下一观察。这样的系统更接近 RL 环境，但仍要补三件事才适合严肃训练：同一动作在同一状态下是否可复现，任务 reward 是否可定义和自动计算，模型错误会不会被 agent 系统性利用。
+
+V-JEPA 2-AC 代表另一条更轻的路线：先用大规模视频做 action-free 表征预训练，再用少量机器人轨迹把 latent dynamics 接到动作条件规划。这里 RL 不一定表现为 PPO/GRPO，而是表现为 planner 在 latent future 中比较候选动作。它提醒我们：视频预训练提供动态先验，真正用于行动时还要接上动作数据、goal cost、短 horizon 重规划和真实观测刷新。
+
+可以用下面的栈判断一个视频世界模型是否真的能服务 RL：
+
+```text
+视频生成能力
+  -> 长时一致性和对象持久性
+  -> 动作条件和反事实分叉
+  -> reward / value / risk / done 可读出
+  -> agent 能闭环行动并重新观测
+  -> 真实环境或高保真基准证明任务收益
+```
+
+栈越往下，证据越接近决策。只到第一、二层，主要还是视频生成或世界先验；到第三、四层，才开始变成可交互 world model；第五层才是 RL 系统真正关心的收益。
 
 ## 和 VLA 的连接
 
@@ -193,14 +268,16 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 
 <small>图源：[Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems](https://arxiv.org/abs/2005.01643)，Figure 7。原图表达：大规模机器人抓取数据收集与离线/在线训练设置。本站读法：真实机器人数据昂贵，所以世界模型和 offline RL 都必须认真处理数据覆盖与分布外动作。</small>
 
-## 读论文时问这七个问题
+## 读论文时问这九个问题
 
 | 问题 | 看哪里 |
 | --- | --- |
 | 模型预测的是 pixel、latent、state，还是 reward/done/risk | 模型结构图、loss、输出头 |
 | 动作是否真的进入 transition | action-conditioned ablation、counterfactual action |
+| 生成模型的 policy / logprob 是否定义清楚 | sampler、ODE/SDE、old logprob、KL、GRPO objective |
 | imagined rollout 多长 | horizon ablation、value bootstrap、error accumulation |
 | 是否有 closed-loop eval | 机器人/控制任务 success、cost per success |
+| 视频指标是否被误当成世界模型证据 | FVD/VBench、人评、action sensitivity、planner ablation |
 | 是否检查 model exploitation | failure replay、uncertainty penalty、真实回放校准 |
 | reward 是否和任务一致 | reward definition、verifier、分桶指标 |
 | 系统成本是否可接受 | rollout latency、candidate 数、GPU-hour、batch/KV 复用 |
@@ -210,12 +287,21 @@ p_\theta(o_{t+1:t+H},r,d\mid o_{\le t},a_{t:t+H-1},l)
 - [World Models](https://worldmodels.github.io/)：Ha & Schmidhuber 的原始项目页，用很直观的方式说明用内部模型做控制。
 - [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)：PlaNet，理解 latent dynamics + online planning。
 - [Dream to Control](https://arxiv.org/abs/1912.01603)：Dreamer，理解 latent imagination 训练 actor-critic。
+- [DreamerV3](https://arxiv.org/abs/2301.04104)：理解 world model + actor-critic 如何在多个控制域中用同一配置稳定训练。
 - [Decision Transformer](https://arxiv.org/abs/2106.01345)：把 RL 轨迹组织成序列建模问题。
+- [Training Diffusion Models with Reinforcement Learning](https://arxiv.org/abs/2305.13301)：DDPO，把扩散去噪过程写成多步决策问题。
+- [Flow-GRPO](https://arxiv.org/abs/2505.05470)：把确定性 Flow Matching 采样改造成适合在线 RL 的随机采样过程。
+- [DanceGRPO](https://arxiv.org/abs/2505.07818)：统一扩散和 rectified flow 的视觉生成 GRPO，并覆盖视频任务。
+- [LongCat-Video Technical Report](https://arxiv.org/abs/2510.22200)：看长视频生成系统如何使用 multi-reward GRPO，但也要保守理解其 world model claim。
+- [Coefficients-Preserving Sampling](https://arxiv.org/abs/2509.05952)：理解 Flow-RL 中随机性、scheduler、logprob 和 reward 可靠性的关系。
 - [RLVR-World](https://arxiv.org/abs/2505.13934)：用可验证 reward 训练世界模型预测本身。
+- [Sora technical report](https://openai.com/index/video-generation-models-as-world-simulators/)：看视频生成与世界模拟器的联系和限制。
+- [Genie 2](https://deepmind.google/blog/genie-2-a-large-scale-foundation-world-model/) 与 [Genie 3](https://deepmind.google/blog/genie-3-a-new-frontier-for-world-models/)：理解 action-controllable / real-time interactive world model 的官方边界。
+- [V-JEPA 2](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/)：理解 action-free 视频预训练如何接到 action-conditioned latent planning。
 
 ## 读完以后怎么判断
 
-强化学习让世界模型从“预测器”变成“决策工具”：transition 预测动作后果，reward/value 衡量未来好坏，policy 或 planner 选择动作。真正的难点不在于生成未来，而在于预测必须 action-sensitive、reward 必须任务相关、rollout horizon 必须受控，最后还要用 closed-loop 证明它真的改善决策。
+强化学习让世界模型从“预测器”变成“决策工具”，也让视频生成器可以直接朝偏好指标优化：transition 预测动作后果，reward/value 衡量未来好坏，policy 或 planner 选择动作，生成器则把采样轨迹变成可优化 policy。真正的难点不在于生成未来，而在于预测必须 action-sensitive、reward 必须任务相关、logprob 和采样器必须定义清楚、rollout horizon 必须受控，最后还要用 closed-loop 证明它真的改善决策。
 
 ## 相关阅读与下一步
 
