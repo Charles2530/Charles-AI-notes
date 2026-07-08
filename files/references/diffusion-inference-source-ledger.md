@@ -14,6 +14,8 @@
 
 第五类来源是讲法参考。Lil'Log 用一条线连接 DDPM、score、SDE、sampling 和 guidance；正文借鉴它的递进顺序，但公式、图源和边界以论文与官方文档为准。
 
+第六类来源是随机性与系数保持。DDIM 论文支撑确定/随机采样公式；中文“零推导”随机性文章用几何图解释新噪声项 \(\sigma_t z\) 为什么要替换旧预测噪声的一部分，而不是叠加到总噪声之外；CPS 论文支撑“采样时数据系数和总噪声水平必须与 scheduler 对齐”的正式边界，尤其用于解释 Flow Matching 中直接改 SDE 注入随机性可能带来的噪声伪影。
+
 图像使用三张：DDPM Figure 14 用来讲多步逐渐成形，DDIM Figure 2 用来讲跳过时间子序列，DPM-Solver++ Figure 1 用来讲 high guidance 下少步 solver 的稳定性差异。算法截图不放入基础页，避免把读者拖进实现细节。
 
 ## 写作边界
@@ -40,6 +42,9 @@
 | [EDM](https://arxiv.org/abs/2206.00364) | 论文 | 支撑噪声尺度、preconditioning、solver、stochasticity 和 NFE 的设计空间。 | 采样设计 |
 | [Diffusers schedulers overview](https://huggingface.co/docs/diffusers/en/api/schedulers/overview) | 官方文档 | 核对 scheduler / sampler 在工程库中的接口和命名边界。 | 工程接口 |
 | [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/) | 技术博客 | 借鉴从 DDPM 到 score / SDE / guidance / sampling 的递进讲法。 | 讲法参考 |
+| [零推导理解 Diffusion 和 Flow Matching（二）：随机性](https://zhuanlan.zhihu.com/p/1947597090311090928) | 中文技术博客 | 用 DDIM 完整公式和几何图说明随机项替换旧噪声份额、保持下一步总噪声幅度。 | 随机采样 |
+| [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330) | 中文技术博客 | 作为 Flow Matching 随机性注入与系数保持问题的中文阅读入口。 | Flow 随机性 |
+| [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952) | 论文 | 正式支撑系数保持采样定义、Flow-SDE 随机性伪影和 CPS 方案。 | 系数保持 / RL 采样 |
 
 ## 后续写作提醒
 

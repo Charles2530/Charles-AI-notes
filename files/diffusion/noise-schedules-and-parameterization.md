@@ -34,6 +34,20 @@ q(x_t\mid x_{t-1})
 
 这条曲线决定图像从清晰变成噪声的速度。若前面掉得太快，模型很早就面对几乎无结构的样本；若后面太密，训练和采样会把大量预算花在相近的低噪声状态上。所谓 noise schedule，不只是“时间步怎么编号”，而是在分配模型练习哪些难度。
 
+## 系数不是符号装饰
+
+很多扩散、DDIM 和 Flow Matching 的直观推导，都可以先压成同一种混合形状：
+
+\[
+x_t=a_t x_{\mathrm{data}}+b_t\epsilon
+\]
+
+\(a_t\) 是数据系数，\(b_t\) 是噪声系数。DDPM 常见写法里，\(a_t=\sqrt{\bar\alpha_t}\)，\(b_t=\sqrt{1-\bar\alpha_t}\)；VP 设定下还会要求两者的平方和保持为 1。这个约束不是为了公式好看，而是为了让每个时间步的样本方差和目标噪声水平可控：时间表说当前应该保留多少信号、注入多少噪声，训练样本和采样更新就必须尊重这个配比。
+
+所以读 schedule 时不要只盯 \(\beta_t\) 或 \(\sigma_t\) 的数值。更重要的是问：当前 \(x_t\) 里数据成分和噪声成分各占多少；模型输出能否被稳定换回 \(\hat x_0\)、\(\hat\epsilon\) 或速度；采样器走到下一步时，是否仍然落在 scheduler 规定的系数组合上。少步采样、随机采样和 Flow Matching 的随机性注入，最后都会回到这个“系数有没有守住”的问题。
+
+这里有一个很好用的几何图：在高维空间里，随机采样的噪声向量通常近似和数据向量正交。于是 \(x_t=a_t x_0+b_t\epsilon\) 可以先画成两根正交轴上的点，\(a_t^2+b_t^2=1\) 就对应单位圆上的圆弧。这个图不是严格证明，但它能解释为什么 DDPM / DDIM 经常像“沿圆弧移动”：时间步改变的不是样本维度，而是数据轴和噪声轴的混合比例。
+
 ## SNR 比时间步更接近训练压力
 
 只看 \(\beta_t\) 容易误判难度，因为加噪强度线性变化，不代表信号可见度线性变化。更有用的量是信噪比：
@@ -146,6 +160,14 @@ x_{t'}=\alpha_{t'}\hat x_0+\sigma_{t'}\hat\epsilon,\qquad t'<t
 
 这就是“等价又不等价”的地方。数学上，很多预测目标可以互相换算；优化上，它们改变了每个噪声区间的损失尺度；推理上，它们又会影响 solver 在少 NFE、强 CFG、ControlNet 或视频长时生成里的稳定性。参数化不是符号偏好，而是训练几何和采样几何的连接件。
 
+## 随机性也要保持系数
+
+DDPM 的反向链天然有随机项，DDIM 可以把随机项设为 0 形成确定性轨迹，也可以保留受控随机性。这里最容易误读的是：随机性不是在每一步随便再加一份噪声。若下一步的 schedule 要求样本处在 \(a_{t'}\hat x_0+b_{t'}\epsilon'\) 这个噪声水平，那么所有噪声项合起来的标准差必须匹配 \(b_{t'}\)，数据系数也必须匹配 \(a_{t'}\)。
+
+DDIM 完整公式正是在做这件事：新加入一份 \(\sigma_t z\) 后，原来沿用的预测噪声项就要减掉相应方差，形式上会出现 \(\sqrt{1-\bar\alpha_{t'}-\sigma_t^2}\) 这类系数。因为两个独立高斯噪声相加时，方差相加；要保持下一步总噪声幅度不变，就必须按平方差扣掉旧噪声的份额。直观地说，随机采样是在“减少一点旧噪声，增加一点新噪声”，而不是把噪声总量越堆越高。
+
+这个视角对 Flow Matching 尤其有用。Flow ODE 默认是确定性的；为了在线 RL、偏好优化或多样性探索，常有人把它改成 SDE 来注入随机性。但如果注入方式破坏了 scheduler 指定的数据系数或总噪声水平，就可能在图像里留下额外噪声，也会污染后续 reward 或 preference 信号。系数保持采样的提醒是：随机性可以加，但它必须服务于目标噪声水平，而不是改变目标噪声水平。
+
 ## 日程、参数化和采样器不能分开调
 
 ![EDM sampler design space](../assets/images/paper-figures/diffusion/edm-figure-2-sampler-design-space.png){ width="920" }
@@ -172,6 +194,9 @@ EDM 的价值是把“训练目标”和“采样技巧”重新放回同一个�
 
 ## 外部精读
 
+- [科学空间：生成扩散模型漫谈（一）：DDPM = 拆楼 + 建楼](https://kexue.fm/archives/9119)：用 \(\alpha_t,\beta_t\) 的系数关系建立前向加噪和闭式采样直觉。
+- [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330)：作为 Flow Matching 随机性和系数保持的中文阅读入口。
+- [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952)：正式定义系数保持采样，并分析 Flow Matching 中随机性注入的噪声问题。
 - [DDPM](https://arxiv.org/abs/2006.11239)：理解前向加噪、\(\bar\alpha_t\)、噪声预测和反向链。
 - [Improved DDPM](https://arxiv.org/abs/2102.09672)：理解 cosine schedule、learned variance、VLB 分项和训练/采样改进。
 - [Progressive Distillation](https://arxiv.org/abs/2202.00512)：理解少步采样压力下的新参数化和 progressive distillation。

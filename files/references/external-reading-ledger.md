@@ -154,10 +154,15 @@
 | --- | --- | --- | --- |
 | [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/) | 技术博客 | 把 DDPM、score、guidance、少步蒸馏连成一条推理链。 | 扩散训练、噪声日程、蒸馏 |
 | [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion) | 技术博客/代码讲解 | 公式、PyTorch 代码和采样过程互相对照。 | 扩散训练、采样 |
+| [科学空间：生成扩散模型漫谈（一）：DDPM = 拆楼 + 建楼](https://kexue.fm/archives/9119) | 中文技术博客 | 用“拆楼 / 建楼”、\(\alpha_t^2+\beta_t^2=1\)、高斯噪声合并和低方差噪声预测解释 DDPM。 | 扩散训练、噪声日程 |
+| [零推导理解 Diffusion 和 Flow Matching](https://zhuanlan.zhihu.com/p/11228697012) | 中文技术博客 | 用正交轴、圆弧和直线插值建立 DDPM、DDIM、Flow Matching 的几何直觉。 | 扩散训练、Flow Matching |
+| [零推导理解 Diffusion 和 Flow Matching（二）：随机性](https://zhuanlan.zhihu.com/p/1947597090311090928) | 中文技术博客 | 用 DDIM 完整公式说明随机项要替换旧噪声份额，并保持下一步总噪声幅度。 | 扩散采样、随机性 |
+| [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330) | 中文技术博客 | 作为 Flow Matching 随机性注入与系数保持问题的中文阅读入口；正式定义以 CPS 论文为准。 | Flow Matching、采样 |
 | [DDPM](https://arxiv.org/abs/2006.11239) | 论文 | 前向加噪、反向去噪、\(\epsilon\)-prediction 和 progressive generation 的基础来源。 | 扩散训练、采样 |
 | [Improved DDPM](https://arxiv.org/abs/2102.09672) | 论文 | cosine schedule、learned variance、VLB 分项和训练/采样改进。 | 噪声日程、扩散训练 |
 | [Score-Based Generative Modeling through SDEs](https://arxiv.org/abs/2011.13456) | 论文 | 把噪声预测、score field、reverse SDE 和 probability flow ODE 统一起来。 | Score SDE、采样、训练直觉 |
 | [EDM](https://arxiv.org/abs/2206.00364) | 论文 | 噪声尺度、preconditioning、solver 和 NFE 是同一个设计空间。 | 噪声日程、采样器 |
+| [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952) | 论文 | 正式定义 coefficient-preserving sampling，并说明 Flow Matching 随机性注入若破坏数据/噪声系数会产生噪声伪影。 | Flow Matching、采样随机性 |
 | [Latent Diffusion Models](https://arxiv.org/abs/2112.10752) | 论文 | 在 VAE latent 上训练扩散模型，说明表示空间和算力成本必须一起看。 | Latent diffusion、扩散训练 |
 | [DiT](https://arxiv.org/abs/2212.09748) | 论文 | Transformer denoiser 如何接入扩散目标，适合解释“扩散目标”和“token 建模架构”的分工。 | DiT、扩散训练 |
 | [Video Diffusion Models](https://arxiv.org/abs/2204.03458) | 论文 | 把图像扩散扩展到 space-time U-Net 的基础路线。 | 视频扩散 |

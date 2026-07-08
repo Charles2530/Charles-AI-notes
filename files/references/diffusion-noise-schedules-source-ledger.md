@@ -14,6 +14,8 @@
 
 第五类来源是讲法参考。The Annotated Diffusion Model 和 Lil'Log 用代码或递进解释帮助校准中文讲法；事实、图源和边界仍以论文和官方文档为准。
 
+第六类来源是中文直觉与随机性边界。科学空间的 DDPM 漫谈用于帮助解释前向加噪里数据系数和噪声系数为什么要一起看，尤其是 \(\alpha_t^2+\beta_t^2=1\) 如何让多步高斯噪声合并为闭式采样；“零推导理解 Diffusion 和 Flow Matching”系列用于提供圆弧 / 直线的统一路径直觉；CPS 论文用于正式支撑“随机性注入必须保持 scheduler 指定的数据系数和总噪声水平”。
+
 图像使用 Improved DDPM Figure 2 和 EDM Figure 2。前者用来讲不同 timestep 的训练压力，后者用来讲采样设计空间。图注必须提醒读者：这些图不能单独证明某个 schedule 或 sampler 普遍最优。
 
 ## 写作边界
@@ -41,6 +43,10 @@
 | [Diffusers Scheduler Overview](https://huggingface.co/docs/diffusers/en/api/schedulers/overview) | 官方文档 | 核对 scheduler、prediction type 和 timestep spacing 在工程实现中的语义。 | 工程接口 |
 | [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion) | 技术博客 / 代码讲解 | 借鉴 forward process、schedule、loss 和采样代码如何对齐的解释顺序。 | 讲法参考 |
 | [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/) | 技术博客 | 借鉴从 DDPM 到 score / SDE / sampling 的递进讲法。 | 讲法参考 |
+| [科学空间：生成扩散模型漫谈（一）：DDPM = 拆楼 + 建楼](https://kexue.fm/archives/9119) | 中文技术博客 | 借鉴“拆楼 / 建楼”、系数平方和、高斯噪声合并和低方差噪声预测的解释方式；正文事实仍以 DDPM 为准。 | 讲法参考 / 系数 |
+| [零推导理解 Diffusion 和 Flow Matching](https://zhuanlan.zhihu.com/p/11228697012) | 中文技术博客 | 用正交轴和圆弧 / 直线建立 Diffusion 与 Flow Matching 的统一路径直觉。 | 讲法参考 |
+| [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330) | 中文技术博客 | 作为 Flow Matching 随机性注入与系数保持问题的中文阅读入口。 | 随机性 / Flow |
+| [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952) | 论文 | 正式支撑系数保持采样、总噪声水平和 Flow-SDE 随机性伪影的讨论。 | 随机性 / 系数保持 |
 
 ## 后续写作提醒
 

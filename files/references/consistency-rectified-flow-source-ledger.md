@@ -14,6 +14,8 @@
 
 第五类来源是讲法参考。Lil'Log、The Illustrated Stable Diffusion、Hugging Face Diffusers / Stable Diffusion blog、Oxen 的 Rectified Flow Transformer 长文，以及机器之心、PaperWeekly 等中文长文适合学习解释节奏：先讲读者困惑，再用一个公式或图抓住机制，最后讲边界。事实和实验结论仍以论文、官方文档、项目页和代码仓库为准。
 
+第六类来源是 Diffusion / Flow Matching 的统一直觉和随机性边界。中文“零推导”系列用于引导读者先把两类方法看成数据-噪声路径上的不同坐标和不同动力学接口：DDPM / DDIM 常用圆弧图建立系数直觉，Flow Matching 常用直线图建立速度场直觉；CPS 论文用于正式支撑 Flow Matching 随机性注入时必须保持数据系数和总噪声水平。
+
 ## 写作边界
 
 不要把 Consistency / LCM 写成“更快的采样器”。它们通常需要新的训练或蒸馏目标，核心对象是跨噪声层级一致的终点映射。
@@ -44,6 +46,10 @@
 | [The Illustrated Stable Diffusion](https://jalammar.github.io/illustrated-stable-diffusion/) | 可视化技术博客 | 借鉴图文解释 pipeline 的节奏。 | 图文讲法 |
 | [Hugging Face Stable Diffusion blog](https://huggingface.co/blog/stable_diffusion) | 技术博客 / 代码讲解 | 借鉴从组件、scheduler、latent space 到推理代码的解释顺序。 | 工程讲法 |
 | [Oxen: How Flux and Rectified Flow Transformers Work](https://www.oxen.ai/blog/arxiv-dive-how-flux-and-rectified-flow-transformers-work/) | 技术博客 | 借鉴把 SD3 / Flux 类 rectified-flow transformer 讲给工程读者的方式。 | 现代长文 |
+| [零推导理解 Diffusion 和 Flow Matching](https://zhuanlan.zhihu.com/p/11228697012) | 中文技术博客 | 用圆弧 / 直线图建立 Diffusion / Flow Matching 统一几何直觉。 | 讲法参考 |
+| [零推导理解 Diffusion 和 Flow Matching（二）：随机性](https://zhuanlan.zhihu.com/p/1947597090311090928) | 中文技术博客 | 作为 DDIM 随机项、总噪声幅度和 Flow Matching 随机推广的直觉来源。 | 随机性 |
+| [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330) | 中文技术博客 | 作为 Flow Matching 随机性注入与系数保持问题的中文阅读入口。 | Flow 随机性 |
+| [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952) | 论文 | 正式支撑系数保持采样、Flow-SDE 随机性伪影和 CPS 的边界。 | 系数保持 |
 
 ## 后续写作提醒
 

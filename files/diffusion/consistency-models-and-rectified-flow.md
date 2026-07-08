@@ -108,6 +108,20 @@ x_{t+\Delta t}=x_t+\Delta t\,v_\theta(x_t,t,c)
 
 \(\Delta t\) 是步长。路径越平滑、速度场越稳定、时间网格越合适，少数几步积分就越可能接近正确终点。
 
+## Diffusion 和 Flow 可以先用同一张图理解
+
+很多初学困惑来自术语不同：DDPM 讲加噪去噪，DDIM 讲非马尔可夫采样，Score SDE 讲反向 SDE，Flow Matching 讲速度场。第一遍可以先把它们都看成在数据和噪声之间选一条路径：
+
+\[
+x_t=a_t x_{\mathrm{data}}+b_t\epsilon
+\]
+
+Diffusion 路线通常从“这个带噪点里噪声是多少、score 往哪里指、下一步怎样少一点噪声”来组织训练和采样；Flow Matching 路线通常从“这个中间点沿路径的速度是多少”来组织训练和采样。前者的模型输出常常还要被采样器换算成 \(\hat x_0\)、\(\hat\epsilon\) 或 score，再按 DDIM / Solver 规则更新；后者的 \(v_\theta\) 更直接就是 ODE 的右边。
+
+这个统一视角有两个好处。第一，它解释了为什么 \(v\)-prediction、Flow velocity、DDIM 公式看起来会相似：它们都在同一条数据-噪声混合路径附近换坐标。第二，它也防止把它们混成一回事：Diffusion 的 \(v\)-prediction 是输出参数化，Flow Matching 的 velocity 是生成动力学本身。相似的是几何直觉，不同的是训练目标和采样接口。
+
+用更图像化的话说：DDPM / DDIM 常被画成从数据轴到噪声轴的圆弧，因为它们显式控制数据系数和噪声系数的平方和；Flow Matching 常被画成一条直线，因为最简单的概率路径就是线性插值。圆弧和直线都只是帮助读者抓住路径几何，真正决定方法差异的是模型训练时回归什么：噪声、score、终点，还是速度场。
+
 ## Rectified Flow：让路径更适合粗步走
 
 Rectified Flow 从线性连接噪声和数据出发，进一步关心“生成轨迹能不能变直、变好积分”。它的 reflow 思路可以理解为：先训练一个 flow，让它从噪声生成样本；再把模型实际生成的起点-终点配对拿来重新训练，使后续路径更接近直线。
@@ -140,6 +154,10 @@ x \leftarrow x + \Delta t\,v_\theta(x,t,c)
 | Flow Matching velocity | 生成 ODE 的速度向量 | 直接作为积分方向 |
 
 这个区别很重要。否则读 SD3、Wan、Flux、视频 DiT 或机器人 diffusion policy 时，很容易把“视频里物体的运动速度”和“latent 空间里的生成速度场”混成一件事。Flow velocity 描述的是样本在高维 latent 里如何从噪声流向数据，不是画面中人物跑得多快。
+
+随机性也要按这个接口区分。扩散采样里的随机项通常和既定噪声日程一起设计；Flow Matching 默认的 ODE 轨迹是确定性的，若为了 RL 或多样性把它改成随机过程，就要额外检查是否仍保持目标时间步的数据系数和总噪声水平。否则看似只是“多探索”，实际可能是在采样轨迹里注入多余噪声。
+
+把随机性推广到 Flow Matching 时，可以沿用 DDIM 的直觉：如果在噪声端新加一份随机方向，就要从旧的预测噪声方向里扣掉相应方差，让总噪声半径仍等于目标时间步需要的值。这样做的目的不是让 Flow Matching “变回扩散”，而是让随机采样仍然沿着规定路径附近走，不把探索误写成额外噪声。
 
 ## 两条路线到底怎么选
 
@@ -174,5 +192,9 @@ Flow / Rectified 路线最怕“路径好看但任务不保真”：速度场损
 - [Latent Consistency Models](https://arxiv.org/abs/2310.04378)：看一致性蒸馏如何进入 latent diffusion 和 Stable Diffusion 生态。
 - [Rectified Flow](https://arxiv.org/abs/2209.03003)：理解 reflow 和路径整流怎样服务少步生成。
 - [Flow Matching](https://arxiv.org/abs/2210.02747)：理解“先定义概率路径，再学习速度场”的生成框架。
+- [零推导理解 Diffusion 和 Flow Matching](https://zhuanlan.zhihu.com/p/11228697012)：适合先建立 Diffusion / Flow Matching 的统一几何直觉。
+- [零推导理解 Diffusion 和 Flow Matching（二）：随机性](https://zhuanlan.zhihu.com/p/1947597090311090928)：适合补 DDIM 随机项和确定性轨迹之间的直觉。
+- [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330)：适合继续看 Flow Matching 随机性注入的系数保持问题。
+- [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952)：正式分析 Flow-SDE 随机性可能带来的噪声伪影，并提出 CPS。
 - [Scaling Rectified Flow Transformers](https://arxiv.org/abs/2403.03206)：看 SD3 路线如何把 rectified flow 和多模态 DiT 接到高分辨率文生图。
 - [Meta Flow Matching Guide and Code](https://ai.meta.com/research/publications/flow-matching-guide-and-code/)：适合从工程角度复习 Flow Matching 的统一写法和代码入口。

@@ -63,6 +63,14 @@ x_{t'}
 
 DDIM 让“少步采样”变成现实，但它没有消除误差。时间点越稀疏，每一步跨度越大，模型对 \(\hat x_0\) 或 \(\hat\epsilon\) 的小误差越容易累积成结构漂移、细节变软或 prompt 丢失。
 
+## DDIM 的随机性不是随手加噪
+
+DDIM 公式里那项 \(\sigma_t z\) 很容易被读成“想要多样性就加点噪声”。更准确的说法是：随机项必须和剩余噪声项一起，组成下一时间步 schedule 要求的总噪声水平。若 \(x_{t'}\) 应该由 \(\sqrt{\bar\alpha_{t'}}\hat x_0\) 和某个总标准差的噪声组成，那么新增随机噪声和沿用的预测噪声不能让总噪声超标。
+
+如果用几何图理解，确定性 DDIM 是沿着数据-噪声圆弧往低噪声处走；随机 DDIM 则是在噪声子空间里“换一部分方向”。新噪声 \(z\) 在高维空间里通常近似和旧预测噪声正交，所以两者的幅度不能线性相加，而要按方差相加。为了让下一步仍落在 \(t'\) 对应的总噪声半径上，加入 \(\sigma_t z\) 的同时，旧噪声项前面的系数必须变小。
+
+这也是系数保持采样的核心直觉。采样器不仅要决定“往哪里走”，还要守住下一步的数据系数和噪声系数。DDPM 的随机反向链、DDIM 的确定/随机形式、Flow Matching 里人为注入的随机性，都可以用这条标准检查：数据部分是否按 scheduler 分配，噪声部分的总方差是否按 scheduler 分配。少步采样时 \(\Delta t\) 变大，这个约束更重要，因为高阶近似和连续 SDE 推导里的小步假设更容易失效。
+
 ## ODE 视角：sampler 是数值积分器
 
 Score SDE 和 probability flow ODE 给了更统一的解释。确定性采样可以看成沿着一条由模型给出的连续方向场积分：
@@ -160,6 +168,8 @@ CFG 是一个典型例子。理论上同一步需要条件和无条件两种预�
 
 - [DDPM](https://arxiv.org/abs/2006.11239)：理解原始随机反向链、噪声预测和 progressive generation。
 - [DDIM](https://arxiv.org/abs/2010.02502)：理解不重训模型也能改变采样路径、跳步和确定性采样。
+- [零推导理解 Diffusion 和 Flow Matching（二）：随机性](https://zhuanlan.zhihu.com/p/1947597090311090928)：适合补 DDIM 随机项和确定性轨迹之间的直观关系。
+- [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952)：理解随机性注入为什么必须保持数据/噪声系数。
 - [Score SDE](https://arxiv.org/abs/2011.13456)：理解反向 SDE、probability flow ODE 和数值求解器统一视角。
 - [DPM-Solver](https://arxiv.org/abs/2206.00927)：理解专门利用 diffusion ODE 结构的少步 solver。
 - [DPM-Solver++](https://arxiv.org/abs/2211.01095)：理解 strong guidance 下为什么需要更稳的 data prediction solver。
