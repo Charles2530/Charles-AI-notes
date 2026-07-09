@@ -36,6 +36,7 @@
 
 - [Score SDE：连续时间生成过程](diffusion/score-sde.md)
 - [DPM-Solver++：Guidance 场景 ODE 求解器](diffusion/dpm-solver-plus-plus.md)
+- [CPS：Flow-RL 的系数保持采样](diffusion/cps.md)
 - [DMD：一步扩散蒸馏](diffusion/dmd.md)
 - [DMD2：更稳的少步分布匹配蒸馏](diffusion/dmd2.md)
 - [Phased DMD：分阶段少步蒸馏](diffusion/phased-dmd.md)

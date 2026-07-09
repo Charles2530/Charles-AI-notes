@@ -16,7 +16,7 @@
 
 第六类来源是中文直觉与随机性边界。科学空间的 DDPM 漫谈用于帮助解释前向加噪里数据系数和噪声系数为什么要一起看，尤其是 \(\alpha_t^2+\beta_t^2=1\) 如何让多步高斯噪声合并为闭式采样；“零推导理解 Diffusion 和 Flow Matching”系列用于提供圆弧 / 直线的统一路径直觉；CPS 论文用于正式支撑“随机性注入必须保持 scheduler 指定的数据系数和总噪声水平”。
 
-图像使用 Improved DDPM Figure 2 和 EDM Figure 2。前者用来讲不同 timestep 的训练压力，后者用来讲采样设计空间。图注必须提醒读者：这些图不能单独证明某个 schedule 或 sampler 普遍最优。
+图像使用三类：本站自绘的 DDPM 数据/噪声系数几何图、Improved DDPM Figure 2 和 EDM Figure 2。自绘图用来讲 \(x_t\) 如何由数据方向和噪声方向组合；Improved DDPM 图用来讲不同 timestep 的训练压力；EDM 图用来讲采样设计空间。图注必须提醒读者：这些图不能单独证明某个 schedule 或 sampler 普遍最优。
 
 ## 写作边界
 

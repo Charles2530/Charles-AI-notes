@@ -16,7 +16,7 @@
 
 第六类来源是随机性与系数保持。DDIM 论文支撑确定/随机采样公式；中文“零推导”随机性文章用几何图解释新噪声项 \(\sigma_t z\) 为什么要替换旧预测噪声的一部分，而不是叠加到总噪声之外；CPS 论文支撑“采样时数据系数和总噪声水平必须与 scheduler 对齐”的正式边界，尤其用于解释 Flow Matching 中直接改 SDE 注入随机性可能带来的噪声伪影。
 
-图像使用三张：DDPM Figure 14 用来讲多步逐渐成形，DDIM Figure 2 用来讲跳过时间子序列，DPM-Solver++ Figure 1 用来讲 high guidance 下少步 solver 的稳定性差异。算法截图不放入基础页，避免把读者拖进实现细节。
+图像使用四类：DDPM Figure 14 用来讲多步逐渐成形，DDIM Figure 2 用来讲跳过时间子序列，本站自绘 DDIM 确定性一步更新图用来讲 \(\hat x_0\) 估计和系数重组，DPM-Solver++ Figure 1 用来讲 high guidance 下少步 solver 的稳定性差异。算法截图不放入基础页，避免把读者拖进实现细节。
 
 ## 写作边界
 

@@ -48,6 +48,10 @@ x_t=a_t x_{\mathrm{data}}+b_t\epsilon
 
 这里有一个很好用的几何图：在高维空间里，随机采样的噪声向量通常近似和数据向量正交。于是 \(x_t=a_t x_0+b_t\epsilon\) 可以先画成两根正交轴上的点，\(a_t^2+b_t^2=1\) 就对应单位圆上的圆弧。这个图不是严格证明，但它能解释为什么 DDPM / DDIM 经常像“沿圆弧移动”：时间步改变的不是样本维度，而是数据轴和噪声轴的混合比例。
 
+![DDPM 数据和噪声系数几何示意图](../assets/images/paper-figures/diffusion/ddpm-orthogonal-coefficients.svg){ width="760" }
+
+<small>图源：本站自绘，参考 DDPM / DDIM 的系数几何读法。读图时把纵轴看成数据方向 \(x_0\)，横轴看成随机噪声方向 \(\epsilon\)。\(x_t\) 位于圆弧上，表示它由 \(\sqrt{\bar\alpha_t}x_0\) 和 \(\sqrt{1-\bar\alpha_t}\epsilon\) 两部分组成。图只用于建立直觉，不表示真实图像空间只有二维。</small>
+
 ## SNR 比时间步更接近训练压力
 
 只看 \(\beta_t\) 容易误判难度，因为加噪强度线性变化，不代表信号可见度线性变化。更有用的量是信噪比：
