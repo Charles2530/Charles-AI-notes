@@ -2,28 +2,28 @@
 
 这个专题不是把数学课本搬进来，而是给本站后面的 AI 文章补一套“能读懂公式和名词”的前置语言。
 
-后面的博客会反复出现这些词：向量空间、矩阵乘法、雅可比、牛顿-莱布尼茨公式、概率密度、期望、条件概率、贝叶斯、马尔可夫、随机过程、熵、KL、梯度下降、拉格朗日乘子、Bellman、ODE、SDE、SVD、Hessian、Monte Carlo、校准、位置编码、attention mask、top-k、router、负载均衡、潜变量、先验、后验、ELBO、score、flow matching、价值函数、优势函数、卷积、频域、SNR、因果、分布偏移、相机内外参、深度、位姿、缩放律、数值稳定性、复杂度。它们如果只作为符号出现，读者很容易看完公式却不知道公式在说什么；这个专题的目标，是把这些词先讲成可以使用的工具。
+后面的博客会反复出现这些词：向量空间、矩阵乘法、雅可比、牛顿-莱布尼茨公式、半线性 ODE、指数积分器、概率密度、期望、条件概率、贝叶斯、马尔可夫、随机过程、熵、KL、梯度下降、拉格朗日乘子、Bellman、λ-return、ODE、SDE、SVD、Hessian、Newton-Schulz、Monte Carlo、校准、位置编码、attention mask、top-k、beam search、MCTS、router、负载均衡、潜变量、先验、后验、ELBO、score、flow matching、价值函数、优势函数、卷积、频域、卷积定理、SNR、因果、分布偏移、相机内外参、深度、四元数、对极几何、位姿、缩放律、数值稳定性、复杂度。它们如果只作为符号出现，读者很容易看完公式却不知道公式在说什么；这个专题的目标，是把这些词先讲成可以使用的工具。
 
 ## 建议阅读顺序
 
 | 你后面会遇到的问题 | 先读哪一篇 |
 | --- | --- |
 | embedding、attention、GEMM、低秩近似到底在什么空间里发生 | [线性代数与几何直觉](linear-algebra-and-geometry.md) |
-| SVD、谱能量、Hessian、Taylor 近似为什么会出现在优化、压缩和 KV 合并论文里 | [谱分解、二阶近似与低秩结构](spectral-second-order-and-low-rank.md) |
-| token 序列、RoPE、causal mask、temperature 和 KV cache 怎样读 | [序列、位置编码与注意力掩码](sequence-position-and-masking.md) |
-| top-k、router、gating、expert load 和稀疏选择怎样读 | [离散选择、Top-k 与稀疏路由](discrete-selection-topk-and-routing.md) |
-| 梯度、积分、牛顿-莱布尼茨公式、ODE/SDE 为什么总在训练和扩散里出现 | [微积分与牛顿-莱布尼茨公式](calculus-and-newton-leibniz.md) |
+| SVD、谱能量、Hessian、Taylor 近似、Newton-Schulz 为什么会出现在优化、压缩和 KV 合并论文里 | [谱分解、二阶近似与低秩结构](spectral-second-order-and-low-rank.md) |
+| 梯度、积分、牛顿-莱布尼茨公式、ODE/SDE、指数积分器为什么总在训练和扩散里出现 | [微积分与牛顿-莱布尼茨公式](calculus-and-newton-leibniz.md) |
 | 概率、条件概率、期望、方差、似然、贝叶斯这些词怎么连起来 | [概率论、分布与期望](probability-distributions-and-expectation.md) |
-| Monte Carlo、置信区间、acceptance rate、校准和 ECE 怎样读 | [采样、估计与校准](sampling-estimation-and-calibration.md) |
-| latent、prior、posterior、ELBO、score 和 flow matching 怎样支撑生成模型 | [潜变量、似然与生成模型目标](latent-likelihood-and-generative-objectives.md) |
-| 马尔可夫、转移概率、trajectory、MDP 为什么支撑 RL 和世界模型 | [随机过程与马尔可夫性](stochastic-processes-and-markov.md) |
+| Monte Carlo、偏差-方差、置信区间、分层估计、校准和 ECE 怎样读 | [采样、估计与校准](sampling-estimation-and-calibration.md) |
 | 熵、交叉熵、KL、互信息为什么能写进 loss | [信息论、熵与分布距离](information-theory-and-divergence.md) |
+| token 序列、RoPE、causal mask、temperature 和 KV cache 怎样读 | [序列、位置编码与注意力掩码](sequence-position-and-masking.md) |
+| 马尔可夫、转移概率、trajectory、MDP 为什么支撑 RL 和世界模型 | [随机过程与马尔可夫性](stochastic-processes-and-markov.md) |
 | loss 怎么变成参数更新，为什么优化器不是简单减梯度 | [优化、梯度与约束](optimization-and-gradient-methods.md) |
-| return、value、advantage、PPO、GRPO 和 KL penalty 怎样支撑后训练 | [价值函数、策略梯度与强化学习目标](value-policy-and-rl-objectives.md) |
+| top-k、beam search、MCTS、router、gating、expert load 和稀疏选择怎样读 | [离散选择、Top-k 与稀疏路由](discrete-selection-topk-and-routing.md) |
+| latent、prior、posterior、ELBO、score 和 flow matching 怎样支撑生成模型 | [潜变量、似然与生成模型目标](latent-likelihood-and-generative-objectives.md) |
+| return、value、λ-return、advantage、PPO、GRPO 和 KL penalty 怎样支撑后训练 | [价值函数、策略梯度与强化学习目标](value-policy-and-rl-objectives.md) |
 | 状态空间、相图、稳定性、控制和规划怎么连接到机器人 | [动态系统、控制与状态空间](dynamic-systems-and-control.md) |
-| convolution、kernel、DCT、频率、SNR 和多尺度为什么常一起出现 | [卷积、频域与多尺度表示](convolution-frequency-and-multiscale.md) |
+| convolution、kernel、卷积定理、DCT、频率、SNR 和多尺度为什么常一起出现 | [卷积、频域与多尺度表示](convolution-frequency-and-multiscale.md) |
+| 相机内参、外参、深度、四元数、对极几何、位姿和点云怎样支撑 3D / 具身论文 | [几何、视觉与三维空间](geometry-vision-and-3d.md) |
 | causal、counterfactual、OOD、train-test mismatch 和 benchmark 泛化怎样读 | [因果、反事实与分布偏移](causality-counterfactual-and-distribution-shift.md) |
-| 相机内参、外参、深度、视差、位姿和点云怎样支撑 3D / 具身论文 | [几何、视觉与三维空间](geometry-vision-and-3d.md) |
 | scaling law、log-log 曲线、Pareto frontier 和 ablation 应该怎么读 | [缩放律、幂律与实验曲线](scaling-laws-and-experimental-curves.md) |
 | FLOPs、Big-O、浮点误差、数值稳定性如何影响系统实现 | [数值计算、复杂度与估算](numerics-complexity-and-estimation.md) |
 

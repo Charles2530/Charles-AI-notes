@@ -139,6 +139,31 @@ f(3)-f(1)
 | robot control | 状态随控制输入连续演化 |
 | optimizer dynamics | 把参数更新看成连续时间运动的近似 |
 
+## 半线性 ODE 和指数积分器：把可解部分先解掉
+
+有些 ODE 不是完全黑盒的：
+
+\[
+\frac{dx}{dt}=a(t)x+r(x,t)
+\]
+
+这里 \(a(t)x\) 是线性部分，\(r(x,t)\) 是剩下的非线性或模型预测部分。它常被称为半线性结构。DPM-Solver / DPM-Solver++ 的关键直觉之一，就是扩散概率流 ODE 里有一部分结构可以解析处理，不必把整个方程都交给通用 ODE solver。
+
+如果把 \(a\) 先看成常数，一个步长 \(h\) 内可以写出类似：
+
+\[
+x(t+h)
+=
+e^{ah}x(t)
++
+\int_t^{t+h}
+e^{a(t+h-s)}r(x(s),s)\,ds
+\]
+
+指数项 \(e^{ah}\) 精确处理线性部分，积分里的 \(r\) 再用数值近似。指数积分器的好处是：当线性部分主导变化时，它比普通 Euler 更新更懂这条 ODE 的结构。
+
+读 DPM-Solver 这类论文时，可以先问：它把扩散 ODE 拆成了哪部分可解析、哪部分需要模型近似；高阶 solver 的收益来自更准地近似积分，而不只是“步数更少”。
+
 ## SDE：变化率里加上随机扰动
 
 随机微分方程常写成：
@@ -158,14 +183,16 @@ dx=f(x,t)\,dt+g(t)\,dW_t
 | 导数就是斜率公式 | 在模型里，导数是局部敏感度和更新方向 |
 | 积分只是在算面积 | 在概率、动力学和扩散里，积分是在累积密度、速度或变化 |
 | 牛顿-莱布尼茨公式离 AI 很远 | 连续时间生成、ODE/SDE solver 和控制都在用“局部变化积分成整体轨迹” |
+| 所有 ODE solver 都只是小步 Euler | 半线性 ODE 可以用指数积分器把可解结构先用上 |
 | 反向传播是深度学习专属魔法 | 它主要是链式法则在计算图上的系统实现 |
 
 ## 读完以后怎么判断
 
-看到导数，问“谁对谁敏感”；看到积分，问“沿什么区间累积了什么”；看到 ODE/SDE，问“状态怎样随时间推进，随机性从哪里进入”。这三问足够支撑后面的训练、扩散、控制和世界模型文章。
+看到导数，问“谁对谁敏感”；看到积分，问“沿什么区间累积了什么”；看到 ODE/SDE，问“状态怎样随时间推进，随机性从哪里进入”；看到 solver，问“有没有可解析结构被单独利用”。这几问足够支撑后面的训练、扩散、控制和世界模型文章。
 
 ## 相关阅读与下一步
 
 - 站内下一步：[优化与训练入门](../foundations/optimization-and-training-basics.md)。
 - 站内下一步：[Score Matching 到 SDE](../diffusion/score-matching-sde-and-probability-flow.md)。
+- 论文精读：[DPM-Solver++](../paper-deep-dives/diffusion/dpm-solver-plus-plus.md)。
 - 外部材料：[colah: Calculus on Computational Graphs](https://colah.github.io/posts/2015-08-Backprop/)。

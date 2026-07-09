@@ -1,6 +1,6 @@
 # 离散选择、Top-k 与稀疏路由
 
-这篇回答一个问题：argmax、top-k、router、gating、expert load、entropy 和 load balancing 为什么会出现在 MoE、大模型解码、检索、候选排序和稀疏注意力论文里。
+这篇回答一个问题：argmax、top-k、beam search、MCTS、router、gating、expert load、entropy 和 load balancing 为什么会出现在 MoE、大模型解码、检索、候选排序和稀疏注意力论文里。
 
 很多模型不是对所有候选都平均用力，而是在一组候选中选少数几个：选下一个 token、选 top-k expert、选检索文档、选候选轨迹、选需要扩展的 draft tree 节点。数学上，这些问题都可以先看成“打分、选择、归一化、再分配预算”。
 
@@ -31,6 +31,49 @@ S_k=\operatorname{TopK}(s_1,\ldots,s_n)
 \]
 
 语言解码里的 top-k、MoE router 里的 top-k experts、候选动作排序里的 top-k plans，都是这类操作。它们的共同代价是：被排除的候选不再参与后续计算，因此早期 score 错误会变成不可恢复的剪枝。
+
+## Beam search：保留多条前缀，而不是只走一条
+
+贪心解码每一步只取当前最高分 token：
+
+\[
+y_t=\arg\max_y \log p(y\mid y_{<t},x)
+\]
+
+beam search 会保留 \(B\) 条候选前缀，并按累计 log probability 排序：
+
+\[
+\operatorname{score}(y_{1:t})
+=
+\sum_{i=1}^{t}\log p(y_i\mid y_{<i},x)
+\]
+
+它不是随机采样，而是一种有限宽度搜索。\(B\) 越大，搜索空间覆盖越广，但计算越贵，也更可能偏向高似然但乏味或过短的序列。读 EAGLE 的 draft tree、传统 seq2seq 解码或候选轨迹搜索时，beam 都可以先理解成“预算有限的多分支前缀保留”。
+
+## MCTS：边搜索边更新树上的价值
+
+Monte Carlo Tree Search 不只是 top-k 排序。它通常循环四步：
+
+1. **Selection**：从根节点沿着当前最有希望的分支往下走。
+2. **Expansion**：展开新的候选动作或 token。
+3. **Evaluation / Simulation**：用 value model、rollout 或 reward 估计叶子好坏。
+4. **Backup**：把叶子价值回传，更新路径上的访问次数和价值估计。
+
+一个 PUCT 风格的常见选择规则会在 exploitation 和 exploration 之间折中：
+
+\[
+a^*
+=
+\arg\max_a
+\left[
+Q(s,a)
++
+c\,P(s,a)
+\frac{\sqrt{N(s)}}{1+N(s,a)}
+\right]
+\]
+
+这里 \(Q(s,a)\) 是当前价值估计，\(P(s,a)\) 是先验概率，\(N\) 是访问次数，\(c\) 控制探索强度。MuZero 用树搜索把 learned dynamics、policy prior 和 value 接起来；EAGLE-2 的 draft tree 虽然不是完整 MCTS，但也在做“哪些分支值得扩展”的预算分配。
 
 ## Softmax gating：把分数变成权重
 
@@ -112,13 +155,15 @@ H(p)
 | 误读 | 更稳的理解 |
 | --- | --- |
 | top-k 就是简单排序 | top-k 是不可逆剪枝，score 误差会直接影响后续计算 |
+| beam search 就等于更聪明的采样 | beam 是确定性搜索，常偏向高似然路径，不等于多样性 |
+| MCTS 只是暴力枚举 | 它用访问次数、先验和价值估计决定搜索预算 |
 | router 概率就是专家质量 | router 概率只是当前上下文下的分配权重，不等于专家全局能力 |
 | MoE 激活参数少就一定快 | 稀疏计算还要付 token dispatch、通信和负载均衡成本 |
 | 熵越低越好 | 低熵可提高确定性，也可能导致探索不足或专家塌缩 |
 
 ## 读完以后怎么判断
 
-看到 top-k、router、gating、expert load 或 entropy，先问：score 来自哪里，选择是硬的还是软的，被剪掉的候选是否还能恢复，负载是否均衡，稀疏选择省下的计算有没有被系统成本吃掉。这个问题链会支撑 DeepSeek-V3、Kimi-K2、Nemotron、Gemini、EAGLE-2、稀疏注意力和候选轨迹排序论文。
+看到 top-k、beam、MCTS、router、gating、expert load 或 entropy，先问：score 来自哪里，选择是硬的还是软的，被剪掉的候选是否还能恢复，树搜索怎样分配探索预算，负载是否均衡，稀疏选择省下的计算有没有被系统成本吃掉。这个问题链会支撑 DeepSeek-V3、Kimi-K2、Nemotron、Gemini、EAGLE-2、MuZero、稀疏注意力和候选轨迹排序论文。
 
 ## 相关阅读与下一步
 
@@ -126,3 +171,4 @@ H(p)
 - 站内下一步：[生成与解码基础](../foundations/generation-and-decoding-basics.md)。
 - 论文精读：[DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md)。
 - 论文精读：[EAGLE-2](../paper-deep-dives/inference/eagle-2.md)。
+- 论文精读：[MuZero](../paper-deep-dives/world-models/muzero.md)。

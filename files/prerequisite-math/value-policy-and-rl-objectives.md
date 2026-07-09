@@ -65,6 +65,32 @@ r_t+\gamma V(s_{t+1})-V(s_t)
 
 \(\delta_t\) 可以理解为预测误差：当前 value 预测得太低还是太高。actor-critic、Dreamer、PPO 和很多机器人后训练方法都在某种形式上使用这个误差信号。
 
+## 多步回报和 λ-return：在一阶 TD 与整条轨迹之间折中
+
+一步 TD 只看 \(r_t+\gamma V(s_{t+1})\)，Monte Carlo return 则尽量看完整条未来轨迹。很多世界模型和 actor-critic 方法会用 \(n\)-step return 折中：
+
+\[
+G_t^{(n)}
+=
+\sum_{k=0}^{n-1}\gamma^k r_{t+k}
++
+\gamma^n V(s_{t+n})
+\]
+
+它看前 \(n\) 步真实或想象奖励，再用第 \(n\) 步的 value 估计剩余未来。
+
+\(\lambda\)-return 把不同长度的 \(n\)-step return 加权混合：
+
+\[
+G_t^\lambda
+=
+(1-\lambda)
+\sum_{n=1}^{\infty}
+\lambda^{n-1}G_t^{(n)}
+\]
+
+\(\lambda\) 越小，越接近短视但低方差的一步 TD；\(\lambda\) 越接近 1，越接近长视但高方差的 Monte Carlo。Dreamer、DreamerV2/V3 和很多 imagined rollout 训练都喜欢这类目标，因为 world model 里的长 rollout 会积累模型误差，完全只看一步又太短视。
+
 ## Advantage：这个动作比平均水平好多少
 
 优势函数写成：
@@ -149,6 +175,8 @@ A_i
 
 这里 \(\pi_{\text{ref}}\) 是参考模型，\(\beta\) 控制约束强度。直觉是：reward 鼓励模型朝高分回答走，KL 约束防止它为了分数偏离原有语言分布太远。
 
+KL 的定义和不对称性在 [信息论、熵与分布距离](information-theory-and-divergence.md) 里已经讲过；这里更关心它在策略优化里的角色：作为行为边界，而不是单独的评测指标。
+
 这也是为什么读 RL 论文不能只看 reward 曲线。reward 上升但 KL 暴涨，可能意味着模型在利用 reward 漏洞；KL 很稳但 reward 不动，可能说明约束太强。
 
 ## 常见误读
@@ -157,6 +185,7 @@ A_i
 | --- | --- |
 | reward 高就代表策略好 | reward 可能有漏洞，必须看真实任务和分布外行为 |
 | value 是最终答案 | value 是对未来回报的估计，误差会影响 planning 和策略更新 |
+| \(\lambda\)-return 越长越好 | 长回报偏差小但方差和模型误差更大，需要折中 |
 | advantage 只是 reward 的别名 | advantage 是相对当前状态基线的好坏 |
 | PPO/GRPO 只是训练技巧 | 它们决定策略每次能被推多远，也决定稳定性边界 |
 

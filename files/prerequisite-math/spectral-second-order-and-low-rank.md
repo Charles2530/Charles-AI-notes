@@ -52,6 +52,22 @@ p_i=\frac{\sigma_i^2}{\sum_j\sigma_j^2}
 
 KVSlimmer、低秩适配、剪枝和量化论文经常会问类似问题：Key、Value、权重矩阵或 activation 的信息，是不是集中在少数方向？如果是，压缩更可能安全；如果不是，粗暴压缩会丢掉细节。
 
+## Newton-Schulz 迭代：用矩阵乘逼近正交化
+
+Muon 这类优化器论文里会出现 Newton-Schulz iteration。它常用于近似矩阵的 polar factor 或 inverse square root，让一个矩阵更接近“列方向正交”的形状。
+
+一个常见的 Newton-Schulz 风格更新可以写成：
+
+\[
+X_{k+1}
+=
+\frac{1}{2}X_k(3I-X_k^\top X_k)
+\]
+
+在合适归一化和谱条件下，如果 \(X_k^\top X_k\) 接近 \(I\)，这个迭代会把它进一步推向 \(I\)。直觉上，它不是在求某个标量最小值，而是在用一串矩阵乘法修正方向之间的相关性。
+
+真正实现里，论文可能使用不同阶数、多项式系数或归一化策略。读 Muon 时不必先背每个系数，先抓住一点：Newton-Schulz 是一种便宜的矩阵正交化近似，适合放进 GPU 友好的优化器步骤里。
+
 ## Taylor 展开：用局部近似看扰动影响
 
 一元函数在 \(x\) 附近的二阶 Taylor 展开是：
@@ -113,7 +129,7 @@ F
 
 | 论文主题 | 用到的通用数学 |
 | --- | --- |
-| Muon / 优化器 | 矩阵谱、正交化、奇异值分布 |
+| Muon / 优化器 | 矩阵谱、Newton-Schulz 正交化、奇异值分布 |
 | KVSlimmer / KV 压缩 | 谱同质性、Hessian 二阶误差 |
 | LoRA / 低秩适配 | 用少数谱方向表达参数更新 |
 | 剪枝 / NAS | Taylor 近似估计删除某结构的 loss 变化 |
