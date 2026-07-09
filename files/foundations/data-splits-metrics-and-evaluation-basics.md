@@ -162,5 +162,7 @@ HELM 的思路值得学习：不要只用一个分数，而是把 scenarios、me
 - 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
 - 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
 - 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[数据与数据集基础](data-and-dataset-basics.md)。
+- 站内下一步：[泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)。
 - 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
 - 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

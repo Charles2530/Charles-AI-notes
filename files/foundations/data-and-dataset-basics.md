@@ -73,7 +73,7 @@ raw source
 
 ## Split 和泄漏决定评测有没有意义
 
-最常见的数据幻觉是：模型在评测集上表现很好，但它其实在训练中见过相同或近似内容。
+最常见的数据幻觉是：模型在评测集上表现很好，但它其实在训练中见过相同或近似内容。这个页面只把 split 当作数据契约的一部分：数据报告至少要说明 train、validation、test 怎样切开，以及这个切法防住了哪类泄漏。
 
 理想情况下，训练集和测试集的相关内容重叠应尽量低：
 
@@ -81,20 +81,7 @@ raw source
 \operatorname{NearDuplicate}(D_{\text{train}},D_{\text{test}})\approx 0
 \]
 
-这里 NearDuplicate 不只是完全相同字符串。它包括同一道题的改写、网页镜像、PDF 转写、代码仓库 fork、同一视频切片、同一机器人轨迹的相邻片段、同一患者或同一设备的重复记录。只做 exact match 去重，通常挡不住这些污染。
-
-不同任务应该用不同 split：
-
-| Split 方式 | 适合场景 | 能防什么 |
-| --- | --- | --- |
-| 随机切分 | 独立同分布、样本互不关联的基础任务 | 基础过拟合 |
-| 按实体切分 | 用户、患者、商品、机器人、场景 | 同一实体泄漏 |
-| 按时间切分 | 新闻、网页、产品规则、线上日志 | 未来信息泄漏和时间漂移 |
-| 按来源切分 | 网站、题库、数据供应商、相机设备 | 来源模板泄漏 |
-| 按轨迹切分 | 视频、机器人、驾驶、RL | 相邻片段泄漏 |
-| 隐藏 holdout | 长期模型迭代 | 团队反复调参把 test 调穿 |
-
-读 benchmark 时，要特别警惕“随机切分 + 高相似样本”。如果同一网页的不同段落、同一题库的变体或同一机器人轨迹的相邻窗口同时进 train/test，模型看起来像泛化，实际是在复述邻近样本。
+这里 NearDuplicate 不只是完全相同字符串，还包括题目改写、网页镜像、代码仓库 fork、同一视频切片、同一机器人轨迹的相邻片段、同一患者或同一设备的重复记录。只做 exact match 去重，通常挡不住这些污染。不同任务该用随机、实体、时间、来源还是轨迹切分，属于评测协议问题，继续读 [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。
 
 ## 清洗、去重和过滤会改变数据分布
 
@@ -200,4 +187,5 @@ Datasheets for Datasets 和 Data Cards 的共同思想是：数据集应该像�
 - 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
 - 站内下一步：[基础概念专题](index.md)。
 - 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。
 - 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

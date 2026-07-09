@@ -4,6 +4,8 @@
 
 相关性告诉我们“两个变量一起变”；因果性要回答“如果我主动改变其中一个，另一个会不会跟着变”。机器学习模型很容易学到相关性，但机器人、工具使用和世界模型最终要处理动作、干预和部署分布，所以只会相关性往往不够。
 
+这篇偏数学读法：它解释 causal、intervention、counterfactual 和 OOD 这些词在问什么。若要把这些概念落到训练曲线、正则化、split、分桶评测和部署风险上，继续读基础概念里的 [泛化、正则化与分布偏移](../foundations/generalization-regularization-and-distribution-shift.md)。
+
 ## 相关性：一起变不等于互相导致
 
 相关性可以用协方差或相关系数表达。皮尔逊相关系数是：
@@ -113,6 +115,7 @@ benchmark 是有限样本和有限任务集合。读论文分数时，要问：
 ## 相关阅读与下一步
 
 - 站内下一步：[数据与数据集基础](../foundations/data-and-dataset-basics.md)。
+- 站内下一步：[泛化、正则化与分布偏移](../foundations/generalization-regularization-and-distribution-shift.md)。
 - 站内下一步：[世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
 - 论文精读：[kai0](../paper-deep-dives/embodied-ai/kai0.md)。
 - 论文精读：[World Model for Robot Learning Survey](../paper-deep-dives/world-models/world-model-for-robot-learning-survey.md)。

@@ -31,4 +31,17 @@
 | 扩散与世界模型 | [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)、[预训练目标与表征学习](pretraining-objectives-and-representation-learning.md) |
 | 多模态与 Agent | [多模态 CoT 与推理基础](multimodal-cot-and-reasoning-basics.md)、[Prompt、CoT 与 RAG 基础](prompt-engineering-cot-and-rag-basics.md) |
 
+## 如果从下游专题倒回来读
+
+| 下游方向 | 先补的基础 | 再接的专题入口 |
+| --- | --- | --- |
+| 分布式训练 / Megatron / DeepSpeed | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[线性层、MLP 与 GEMM](linear-layers-mlp-and-gemm.md)、[Autograd、激活检查点与显存](autograd-activation-checkpointing-and-memory.md) | [分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md) |
+| 低比特训练与量化 | [数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)、[Normalization、Residual 与 Activation](normalization-residual-and-activation.md)、[模型压缩、剪枝与 NAS](model-compression-pruning-and-nas-basics.md) | [低比特训练与数值格式](../training/low-bit-training-and-numerics.md)、[FP8 与混合精度推理](../quantization/fp8-and-mixed-precision-serving.md) |
+| 推理服务 / KV cache / 投机解码 | [Transformer 输入与注意力](transformer-attention-and-tokenization.md)、[位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)、[生成与解码基础](generation-and-decoding-basics.md) | [推理运行时](../inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[KV、缓存与投机解码](../inference/caching-routing-and-speculative.md) |
+| 扩散、一致性模型与蒸馏 | [概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)、[模型蒸馏入门](model-distillation-basics.md)、[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md) | [一步生成、蒸馏与整流](../diffusion/distillation.md) |
+| 世界模型 / JEPA / Dreamer | [预训练目标与表征学习](pretraining-objectives-and-representation-learning.md)、[概率、潜变量与生成模型](probability-latent-variables-and-generative-models.md)、[泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md) | [世界模型专题](../world-models/index.md) |
+| VLM / Omni / 多模态报告 | [卷积与视觉特征提取](convolution-and-feature-extraction.md)、[多模态 CoT 与推理基础](multimodal-cot-and-reasoning-basics.md)、[Prompt、CoT 与 RAG 基础](prompt-engineering-cot-and-rag-basics.md) | [视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md) |
+| VLA / 具身智能 | [张量、Shape 与计算图](tensors-shapes-and-computation-graphs.md)、[卷积与视觉特征提取](convolution-and-feature-extraction.md)、[数据与数据集基础](data-and-dataset-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) | [VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)、[具身智能从零路线](../embodied-ai/beginner-learning-path.md) |
+| RAG / Agent / Judge | [Prompt、CoT 与 RAG 基础](prompt-engineering-cot-and-rag-basics.md)、[生成与解码基础](generation-and-decoding-basics.md)、[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md) | [RAG、Agent 与评估](../knowledge-qa/rag-agent-and-evaluation.md) |
+
 读基础篇最有用的方式，是每读完一节就问：这个概念在后面的系统里控制了什么代价、什么能力、什么失败模式。能回答这个问题，名词就不再只是名词。

@@ -81,17 +81,34 @@ nav:
       - 缩放律、幂律与实验曲线: prerequisite-math/scaling-laws-and-experimental-curves.md
       - 数值计算、复杂度与估算: prerequisite-math/numerics-complexity-and-estimation.md
   - 基础概念:
-      - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
-      - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
-      - 读懂公式的最小数学: foundations/symbols-and-minimal-math.md
-      - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
-      - 优化与训练入门: foundations/optimization-and-training-basics.md
-      - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
-      - 数据与数据集基础: foundations/data-and-dataset-basics.md
-      - 生成与解码基础: foundations/generation-and-decoding-basics.md
-      - 位置编码与 Mask: foundations/positional-encoding-masks-and-context.md
-      - MoE 与大模型架构: foundations/moe-and-large-model-architecture-basics.md
-      - 模型压缩、剪枝与 NAS: foundations/model-compression-pruning-and-nas-basics.md
+      - 基础概念专题: foundations/index.md
+      - 计算与张量:
+          - 读懂公式的最小数学: foundations/symbols-and-minimal-math.md
+          - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
+          - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
+          - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
+          - 数值、显存与运行时: foundations/numerics-memory-and-runtime-basics.md
+      - 模型结构:
+          - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
+          - 位置编码与 Mask: foundations/positional-encoding-masks-and-context.md
+          - 归一化、残差与激活: foundations/normalization-residual-and-activation.md
+          - 卷积与视觉特征: foundations/convolution-and-feature-extraction.md
+          - MoE 与大模型架构: foundations/moe-and-large-model-architecture-basics.md
+          - Mamba 与混合 SSM 架构: foundations/mamba-and-hybrid-ssm-transformers.md
+      - 训练目标与数据:
+          - 优化与训练入门: foundations/optimization-and-training-basics.md
+          - 预训练目标与表征学习: foundations/pretraining-objectives-and-representation-learning.md
+          - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
+          - 模型蒸馏入门: foundations/model-distillation-basics.md
+          - 数据与数据集基础: foundations/data-and-dataset-basics.md
+          - 数据划分与评测指标: foundations/data-splits-metrics-and-evaluation-basics.md
+          - 泛化、正则化与分布偏移: foundations/generalization-regularization-and-distribution-shift.md
+      - 生成、多模态与检索:
+          - 生成与解码基础: foundations/generation-and-decoding-basics.md
+          - 多模态推理基础: foundations/multimodal-cot-and-reasoning-basics.md
+          - Prompt、CoT 与 RAG: foundations/prompt-engineering-cot-and-rag-basics.md
+      - 压缩与架构搜索:
+          - 模型压缩、剪枝与 NAS: foundations/model-compression-pruning-and-nas-basics.md
   - 训练与推理系统:
       - 训练系统:
           - 模型训练从零入门: training/beginner-model-training-primer.md

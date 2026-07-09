@@ -4,6 +4,8 @@
 
 优化回答的是“参数能不能把当前训练目标降下来”；泛化回答的是“这个规律能不能离开训练样本继续成立”；分布偏移回答的是“训练时看见的世界和真正使用时的世界是不是同一个世界”。这三件事连在一起，才决定模型是否可用。
 
+如果你关心 causal、intervention、counterfactual 和 OOD 这些判断语言，可以先读前置数学里的 [因果、反事实与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)。本文重点放在训练 loss、正则化、数据切分、分桶评测和部署风险如何连成一个可检查的工程问题。
+
 ![Deep Double Descent Figure 1](../assets/images/paper-figures/foundations/deep-double-descent-figure-1.png){ width="920" }
 
 <small>图源：[Deep Double Descent: Where Bigger Models and More Data Hurt](https://arxiv.org/abs/1912.02292)，Figure 1。原图展示模型宽度、训练 epoch 与 test error 的 double descent 现象。本站用这张图说明：现代深度学习里的泛化不能只靠“模型越大越过拟合”这种旧直觉判断，必须看曲线、数据、正则化和分布证据。</small>
@@ -177,5 +179,6 @@ WILDS 这类 benchmark 的价值不在于又多了一个总分，而在于它把
 - 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
 - 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
 - 站内下一步：[基础概念专题](index.md)。
+- 站内下一步：[因果、反事实与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)。
 - 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
 - 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

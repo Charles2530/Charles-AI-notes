@@ -98,6 +98,8 @@ concat-token attention:
 
 这三种接口没有绝对高下。读论文时更应该问：信息在哪里被压缩？哪个模块承担跨模态对齐？mask 是否允许未来泄漏？长视觉或长视频 token 是否会把 serving 成本推爆？
 
+如果这个问题具体落到 VLM/VLA，下一步要看视觉 token 是怎样被切块、压缩和交给 LLM、policy 或 world model 的；对应专题页是 [视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md)。
+
 ## Causal mask 把训练和生成连起来
 
 自回归语言模型的训练目标通常是预测下一个 token：
@@ -200,5 +202,5 @@ Transformer 的核心不是“某个模型架构名”，而是一种把世界�
 - 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
 - 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
 - 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md)。
 - 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。

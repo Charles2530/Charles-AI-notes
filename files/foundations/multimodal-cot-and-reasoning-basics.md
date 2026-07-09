@@ -26,6 +26,8 @@ s(v,t)=\frac{v^\top t}{\lVert v\rVert\lVert t\rVert}
 
 现代 VLM 通常不是直接把所有像素交给 LLM，而是先用视觉 encoder 得到特征，再通过 connector 变成语言模型可读的 token 或 hidden states。连接器可以是线性 projector、Q-Former、Perceiver Resampler、cross-attention adapter，也可以是更复杂的多模态融合模块。
 
+这里先把 connector 当作“证据瓶颈”理解；如果要系统比较 projector、Q-Former、resampler、visual token compression 和 VLA/世界模型里的动作敏感表示，继续读 [视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md)。
+
 ![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="820" }
 
 <small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。原图展示冻结视觉 encoder，通过 Q-Former 的 query tokens 从视觉特征中抽取信息，并分别服务图文对比、图文匹配和 image-grounded generation。本站用这张图说明：connector 是信息瓶颈，它决定 LLM 最终能读到哪些视觉证据。</small>
@@ -188,4 +190,5 @@ y^\*=\arg\max_y V(x,y)
 - 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
 - 站内下一步：[基础概念专题](index.md)。
 - 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
+- 站内下一步：[视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md)。
 - 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
