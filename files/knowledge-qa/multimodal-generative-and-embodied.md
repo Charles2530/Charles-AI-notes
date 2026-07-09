@@ -34,6 +34,26 @@
 **易错点 / 边界。** 不要把视觉 encoder 的 ImageNet 或 CLIP 分数直接等同于 VLM 最终能力；连接方式和指令数据同样关键。  
 **继续读。** [视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md) / [BLIP-2](https://arxiv.org/abs/2301.12597)
 
+### Q：Projector、Q-Former 和 resampler 的差别是什么？
+
+**面试回答。** Projector 通常是线性层或 MLP，把视觉特征直接映射到 LLM hidden size；Q-Former 用一组 learnable query 通过 cross-attention 从视觉特征中抽取少量证据；resampler 更泛化，目标是把大量视觉 token 压成固定或更小数量的 tokens。三者都在解决同一个问题：视觉信息太多，LLM 不能无成本全读。
+
+**追问展开。** Projector 简单便宜，但压缩和选择能力有限；Q-Former / Perceiver resampler 可以主动查询视觉证据，更适合控制 token 数和跨模态对齐。回答时要把 connector 说成“证据选择和压缩层”，不是普通维度变换。  
+**易错点 / 边界。** 更强 connector 不一定带来更强 VLM；如果视觉 encoder、训练数据和指令任务不匹配，connector 也只能压缩错误证据。  
+**继续读。** [视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md) / [多模态推理基础](../foundations/multimodal-cot-and-reasoning-basics.md)
+
+### Q：为什么多模态模型需要控制视觉 token 数？
+
+**面试回答。** 图像和视频 token 密度远高于文本。如果把所有 patch、帧和相机视角都原样放进上下文，attention、KV cache、显存和延迟会迅速爆炸。视觉 token 控制本质上是在质量和成本之间做预算分配。
+
+\[
+L_{\text{vision}}=\text{frames}\times\text{patches per frame}\times\text{views}
+\]
+
+**追问展开。** 常见做法包括降采样、patch merging、resampler、局部 attention、关键帧选择、动态 token pruning 和多尺度表示。面试时可以补一句：省 token 不能只看平均 VQA，必须看 OCR、小目标、空间关系和长视频记忆是否受损。  
+**易错点 / 边界。** token 越少不一定越好；压缩可能优先丢掉细节，而这些细节正是机器人、OCR、图表和医学影像任务需要的。  
+**继续读。** [多模态 CoT 与推理基础](../foundations/multimodal-cot-and-reasoning-basics.md) / [数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)
+
 ### Q：VLM 的空间理解为什么难？
 
 **面试回答。** 文本 token 序列没有天然 2D/3D 几何结构，普通视觉 encoder 也未必保留相机内参、深度、尺度、遮挡和物体关系。空间理解需要模型知道“在哪里”“多远”“相对于谁”，这比识别“是什么”更难。
@@ -66,6 +86,14 @@
 **易错点 / 边界。** 解释流畅不代表视觉证据正确；多模态 hallucination 常常来自模型语言先验压过图像证据。  
 **继续读。** [多模态 CoT 与推理基础](../foundations/multimodal-cot-and-reasoning-basics.md) / [多模态推理来源台账](../references/multimodal-reasoning-source-ledger.md)
 
+### Q：OCR、图表理解和 grounding 为什么常常比普通 VQA 难？
+
+**面试回答。** 普通 VQA 很多问题可以靠图像整体语义和语言先验回答；OCR、图表和 grounding 需要精确读取局部证据、坐标关系和细粒度对象。它们要求模型保留高分辨率细节，并把答案绑定到图像区域或文本位置。
+
+**追问展开。** OCR 受分辨率、字体、旋转和压缩影响；图表理解还要解析坐标轴、图例和数值；grounding 要把语言短语对应到具体 box、mask 或点。回答时要强调“看懂大意”和“定位证据”是两种能力。  
+**易错点 / 边界。** 多模态模型解释得像真的，不代表它真的读到了字或定位到了目标；最好用可视化引用、区域标注或可执行工具验证。  
+**继续读。** [多模态评估与失败模式](../vlm/multimodal-evaluation-and-failure-modes.md) / [VLM 架构：视觉表征、连接器与记忆](../vlm/architecture-and-training.md)
+
 ## 扩散与生成模型
 
 ### Q：扩散模型为什么要加噪再去噪？
@@ -81,6 +109,14 @@ q(x_t|x_0)=\mathcal{N}(\sqrt{\bar{\alpha}_t}x_0,(1-\bar{\alpha}_t)I)
 **易错点 / 边界。** 去噪能力不等于理解物理因果；图像/视频自然不代表可以做规划。  
 **继续读。** [扩散训练与表示](../diffusion/training.md) / [DDPM](https://arxiv.org/abs/2006.11239)
 
+### Q：Latent Diffusion 为什么要在 latent space 里生成？
+
+**面试回答。** Latent Diffusion 先用 VAE 或 tokenizer 把高分辨率图像压到 latent，再在 latent 上做扩散采样，最后解码回像素。这样可以大幅降低空间分辨率和计算成本，让 U-Net 或 DiT 在更小的张量上建模。
+
+**追问展开。** 它省的是采样过程中的 FLOPs、显存和带宽，但代价是生成质量受 VAE 压缩上限影响。细小文字、纹理、几何边界和视频时序都可能被 latent 表示限制。  
+**易错点 / 边界。** 在 latent 里生成不代表模型学到了语义 latent；很多 latent 仍是空间网格，只是比像素更紧凑。  
+**继续读。** [扩散训练与表示](../diffusion/training.md) / [视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md)
+
 ### Q：DDPM、Score SDE 和 Flow Matching 的关系怎么理解？
 
 **面试回答。** 它们都在学习从简单分布到数据分布的生成路径，只是数学表述不同。DDPM 是离散时间加噪/去噪，Score SDE 用连续随机微分方程描述噪声过程，Flow Matching 学习把噪声样本沿确定性向量场搬到数据样本。
@@ -88,6 +124,14 @@ q(x_t|x_0)=\mathcal{N}(\sqrt{\bar{\alpha}_t}x_0,(1-\bar{\alpha}_t)I)
 **追问展开。** 可以把问题统一成“学一个方向场”：score 指向高密度方向，velocity/flow 指向从源分布到目标分布的路径。采样器则是在这个场上数值积分。  
 **易错点 / 边界。** 不要只背方法名。真正影响工程的是参数化、噪声日程、solver、训练稳定和采样步数。  
 **继续读。** [Score Matching 到 SDE](../diffusion/score-matching-sde-and-probability-flow.md) / [一致性模型与 Rectified Flow](../diffusion/consistency-models-and-rectified-flow.md)
+
+### Q：Consistency Model、Rectified Flow 和普通 diffusion 的核心区别是什么？
+
+**面试回答。** 普通 diffusion 通常依赖多步去噪；Consistency Model 试图让模型在不同噪声点上直接映射到一致的干净样本或同一轨迹端点；Rectified Flow 则把生成看成从噪声到数据的连续直线路径或速度场学习。它们都想减少采样步数，但约束方式不同。
+
+**追问展开。** 可以这样区分：diffusion 学多噪声水平的去噪方向，consistency 强调同一轨迹不同时间的一致输出，rectified flow 强调速度场和路径拉直。工程上要看 NFE、训练稳定、样本质量和是否需要蒸馏。  
+**易错点 / 边界。** 少步或一步生成不是免费午餐；步数少了，模型每一步承担的分布搬运更大，失败可能表现为细节丢失、结构漂移或时序不稳。  
+**继续读。** [一致性模型与 Rectified Flow](../diffusion/consistency-models-and-rectified-flow.md) / [一步生成、蒸馏与整流](../diffusion/distillation.md)
 
 ### Q：Classifier-free guidance 为什么会提升条件一致性？
 
@@ -111,6 +155,14 @@ s(\epsilon_{\text{cond}}-\epsilon_{\text{uncond}})
 **易错点 / 边界。** 少步指标好不等于所有场景好；视频生成还要看时序一致性，世界模型还要看动作敏感和闭环收益。  
 **继续读。** [一步生成、蒸馏与整流](../diffusion/distillation.md) / [DMD：一步扩散蒸馏](../paper-deep-dives/diffusion/dmd.md)
 
+### Q：扩散蒸馏里的 teacher/student 到底对齐什么？
+
+**面试回答。** 扩散蒸馏通常让少步 student 对齐多步 teacher 的生成行为。对齐对象可能是最终样本、噪声预测、score / velocity、分布统计、判别器反馈或 teacher 轨迹中的中间状态。不同方法的关键差别就在“让 student 学什么信号”。
+
+**追问展开。** Progressive distillation 更像逐步缩短采样链；consistency / LCM 强调跨时间一致；DMD 类方法用 distribution matching 或判别信号让 student 少步接近 teacher 分布。回答时不要只说“压缩步数”，要说清监督信号来自哪里。  
+**易错点 / 边界。** Student 在 benchmark 上接近 teacher，不代表所有 prompt、视频长度、motion 和安全场景都无损；蒸馏常会牺牲多样性或长尾细节。  
+**继续读。** [一步生成、蒸馏与整流](../diffusion/distillation.md) / [DMD2：更稳的少步分布匹配蒸馏](../paper-deep-dives/diffusion/dmd2.md)
+
 ### Q：视频生成和图像生成最大的新增困难是什么？
 
 **面试回答。** 视频比图像多了时间维度。模型不仅要生成单帧质量，还要保持物体身份、运动连续性、相机轨迹、遮挡关系和长程一致性。一个视频看起来好，意味着空间质量和时间质量都要过关。
@@ -118,6 +170,14 @@ s(\epsilon_{\text{cond}}-\epsilon_{\text{uncond}})
 **追问展开。** 训练上会引入 3D attention、temporal modules、video DiT、latent video tokenizer 或分层生成；评测上要看 temporal consistency、motion quality 和 failure cases。  
 **易错点 / 边界。** 视频自然度不是世界模型能力。没有动作输入和闭环验证时，它仍只是 open-loop 生成。  
 **继续读。** [视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md) / [扩散训练配方与失败分析](../diffusion/practical-training-recipes-and-failure-analysis.md)
+
+### Q：视频扩散为什么特别关心时序一致性和 motion prior？
+
+**面试回答。** 图像生成只要单帧合理，视频生成还要让相邻帧和长时间跨度都合理。同一个物体不能突然变形、消失或身份漂移，运动速度、相机轨迹和遮挡也要符合物理直觉。Motion prior 是模型对“合理运动模式”的先验。
+
+**追问展开。** 时序一致性可以来自 3D/temporal attention、光流或轨迹约束、视频 tokenizer、分层生成、前一帧条件和专门的视频数据。面试时要强调：视频生成失败常不是单帧画质差，而是时间上不守恒。  
+**易错点 / 边界。** 视频连贯不等于可交互世界模型；没有动作条件和反事实验证时，模型可能只是生成自然视频先验。  
+**继续读。** [视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md) / [CausVid：流式自回归视频扩散](../paper-deep-dives/diffusion/causvid.md)
 
 ### Q：DiT 和 U-Net 扩散骨干有什么取舍？
 

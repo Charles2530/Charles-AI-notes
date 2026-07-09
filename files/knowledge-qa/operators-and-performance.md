@@ -160,6 +160,14 @@ e^{m_{\text{block}}-m_{\text{new}}}l_{\text{block}}
 **易错点 / 边界。** Overlap 依赖 bucket size、拓扑、stream、调度顺序和内存余量；配置不当可能更慢或更占显存。  
 **继续读。** [通信 kernels 与 overlap](../operators/communication-kernels-and-overlap.md) / [分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md)
 
+### Q：Context parallel / RingAttention 这类长上下文并行解决什么？
+
+**面试回答。** 长上下文训练时，单卡保存完整序列的 attention 激活和 KV 会爆显存。Context parallel 把序列维度切到多张 GPU 上，让每张卡只持有部分上下文；RingAttention 这类方法再通过环形通信让不同分片的 Q/K/V 逐段交互，避免单卡物化完整 attention。
+
+**追问展开。** 它解决的是长序列的显存和通信组织问题，不是把 attention 数学复杂度变成免费。收益取决于序列长度、GPU 拓扑、通信带宽、overlap 和 kernel 实现。  
+**易错点 / 边界。** 能训练更长上下文不代表模型一定会有效利用长上下文；还要看数据、位置编码、评测和推理 KV 成本。  
+**继续读。** [FlashAttention 与长上下文](../operators/long-context-and-flashattention-evolution.md) / [RingAttention：近无限上下文训练](../paper-deep-dives/world-models/ringattention.md)
+
 ### Q：Shape bucket 对推理服务有什么用？
 
 **面试回答。** 真实请求长度多变，完全动态 shape 会让 kernel 选择、CUDA Graph、内存规划和 autotune 变复杂。Shape bucket 把相近长度归入有限集合，用少量 padding 换取更稳定的 kernel 和更低调度开销。

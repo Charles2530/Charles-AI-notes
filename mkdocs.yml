@@ -177,6 +177,7 @@ nav:
       - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
       - 读懂 Fast-FoundationStereo: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
   - 知识 QA:
+      - 知识 QA: knowledge-qa/index.md
       - 基础与 Transformer: knowledge-qa/foundations-and-transformer.md
       - 训练与对齐: knowledge-qa/training-and-alignment.md
       - 推理服务与量化: knowledge-qa/inference-serving-and-quantization.md

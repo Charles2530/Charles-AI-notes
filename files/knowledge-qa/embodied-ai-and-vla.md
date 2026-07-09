@@ -146,6 +146,14 @@
 **易错点 / 边界。** 不要把端到端当成排斥控制理论；真实机器人通常需要低层控制器、安全约束和状态估计。  
 **继续读。** [规划、控制与安全](../embodied-ai/planning-control-and-safety.md) / [VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)
 
+### Q：VLA 论文里的 pose、quaternion、6D rotation 和 waypoint 应该怎么读？
+
+**面试回答。** Pose 通常指位置加姿态；quaternion、axis-angle、Euler angle、6D rotation 都是在表示三维旋转；waypoint 是中间目标点或短期动作目标。读 VLA 论文时要先问：模型预测的是末端执行器位姿、关节状态、相机位姿、物体姿态，还是一段未来轨迹。
+
+**追问展开。** Quaternion 紧凑且避免万向节锁，但要归一化，并且 \(q\) 和 \(-q\) 表示同一旋转；6D rotation 更适合神经网络连续回归，但需要转换成合法旋转矩阵；waypoint 更接近控制接口，通常还要经过 IK、轨迹跟踪和安全过滤。  
+**易错点 / 边界。** “预测 pose”不是完整动作接口。还要说明坐标系、控制频率、限幅、夹爪状态、controller 和失败恢复。  
+**继续读。** [几何、视觉与三维空间](../prerequisite-math/geometry-vision-and-3d.md) / [VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)
+
 ## 评测、闭环恢复与部署
 
 ### Q：机器人闭环评测应该看什么？

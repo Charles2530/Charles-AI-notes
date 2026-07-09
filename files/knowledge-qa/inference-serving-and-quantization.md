@@ -187,3 +187,11 @@ x_q=\operatorname{round}\left(\frac{x}{s}\right),\quad \hat{x}=s x_q
 **追问展开。** 面试里可以用一句话收束：系统优化只有在“不降低关键质量和安全”的前提下才算收益。Microbenchmark、kernel speedup、平均吞吐都是中间证据。  
 **易错点 / 边界。** 如果更快导致幻觉、格式错误、安全拒答异常或尾延迟恶化，就不能说整体更好。  
 **继续读。** [成本建模与 SLO 设计](../inference/cost-modeling-and-slo-design.md) / [证据判断原则](../references/site-judgement-principles.md)
+
+### Q：为什么推理优化不能只看 tokens/s，还要看成本模型和 SLO？
+
+**面试回答。** tokens/s 只说明单位时间产出 token 的速度，不说明用户是否等得起、一次成功回答多少钱、尾延迟是否稳定、质量是否下降。生产推理通常要同时满足 SLO，例如 TTFT、TPOT、P95/P99 latency、错误率和成本预算。
+
+**追问展开。** 成本模型会把 GPU 小时、模型大小、输入/输出长度、KV cache、batching、缓存命中、fallback 和多模型路由都纳入。一个优化如果提升平均吞吐，却让 P99 变差或让长文档任务质量下降，业务上可能是负收益。  
+**易错点 / 边界。** Microbenchmark 的 speedup 不能直接外推到线上；真实流量有长度分布、多租户、RAG 拼接、工具等待和突发峰值。  
+**继续读。** [成本建模与 SLO 设计](../inference/cost-modeling-and-slo-design.md) / [推理优化清单与容量规划](../inference/optimization-checklist-and-capacity-planning.md)

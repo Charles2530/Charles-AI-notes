@@ -164,6 +164,14 @@ W' = W + \Delta W,\quad \Delta W = BA,\quad \operatorname{rank}(\Delta W)\le r
 **易错点 / 边界。** 只看 reward 曲线上升非常危险；必须同时看真实任务指标、失败样本和安全行为。  
 **继续读。** [偏好数据与对齐陷阱](../training/preference-data-and-alignment-pitfalls.md) / [观测与在线评估](../inference/observability-and-online-evaluation.md)
 
+### Q：后训练数据飞轮为什么需要 judge model？它有什么风险？
+
+**面试回答。** 后训练数据飞轮会持续收集线上失败、生成候选回答、筛选高价值样本，再导出到 SFT、DPO、reward model 或回归集。Judge model 的作用是用较低成本给候选打分、分类失败、发现难例和辅助人审，把数据筛选从纯人工扩展成半自动流程。
+
+**追问展开。** 一个稳妥说法是：judge 不是最终真理，而是数据路由器。它可以先粗筛、聚类、排序，再让规则、程序验证或人工复核关键样本。好的数据飞轮要记录 judge 版本、评分维度、误判样本和线上回归。  
+**易错点 / 边界。** judge 一旦偏，飞轮会放大偏差：错误样本被当成高质量，DPO/RM 学到错误偏好，离线分数变好但线上体验变差。高风险任务不能让 judge 完全替代人工和真实指标。  
+**继续读。** [后训练数据引擎与 Judge 模型](../training/post-training-data-engines-and-judge-models.md) / [RAG、Agent 与评估 QA](rag-agent-and-evaluation.md)
+
 ## 分布式训练与实验治理
 
 ### Q：数据并行、张量并行和流水线并行分别切什么？

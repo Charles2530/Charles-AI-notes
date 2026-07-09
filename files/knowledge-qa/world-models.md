@@ -184,6 +184,14 @@ p_\theta(\tau_{t+1:t+H}\mid s_t,a_{t:t+H})
 **易错点 / 边界。** 平均预测很准不代表风险可控；长尾碰撞、遮挡和接触失败常在平均指标里被淹没。  
 **继续读。** [不确定性与风险感知规划](../world-models/uncertainty-and-risk-aware-planning.md) / [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)
 
+### Q：世界模型为什么不能只靠 synthetic data 闭环自举？
+
+**面试回答。** Synthetic data 可以覆盖危险、稀有或采集昂贵的场景，但如果完全用模型自己生成的数据继续训练，错误会被反复放大。世界模型的 synthetic data 必须和真实数据、仿真器、规则验证、人工审核或真实闭环评测连接，否则容易形成“看起来越来越好，真实越来越偏”的自举回路。
+
+**追问展开。** 稳妥的数据飞轮通常会区分真实回放、仿真数据、生成数据和模型想象轨迹，并给每类数据单独记录来源、过滤规则、置信度和验证集。Synthetic data 更适合补长尾和做候选，不应该替代真实部署分布。  
+**易错点 / 边界。** 生成视频自然、覆盖场景多，不代表物理、因果和动作后果正确；合成数据收益必须通过真实或高保真闭环验证。  
+**继续读。** [Sim2Real 与具身数据引擎](../embodied-ai/sim2real-and-data-engines.md) / [Cosmos 3：面向 Physical AI 的全模态世界模型平台](../paper-deep-dives/technical-reports/cosmos3.md)
+
 ### Q：世界模型如何和推理系统、KV cache、量化这些工程问题连接？
 
 **面试回答。** 大规模视频/多模态世界模型推理成本很高，长 rollout 会消耗大量 KV cache、显存和采样步数。系统优化可以降低 rollout latency、并发成本和部署门槛，例如 KV 压缩、少步扩散蒸馏、量化、batching 和缓存。
