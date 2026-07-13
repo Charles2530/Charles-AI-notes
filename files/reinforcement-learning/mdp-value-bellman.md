@@ -121,7 +121,7 @@ Q^\pi(s,a)=\sum_{s'}P(s'\mid s,a)
 \left[R(s,a,s')+\gamma\sum_{a'}\pi(a'\mid s')Q^\pi(s',a')\right]
 \]
 
-其中当前动作已经固定，下一状态的后续动作才由 \(\pi\) 加权。
+其中当前动作已经固定，下一状态的后续动作才由 \(\pi\) 加权。若 successor \(s'\) 是 terminal，则 continuation 项定义为 \(\sum_{a'}\pi(a'\mid s')Q^\pi(s',a')=0\)；进入该 terminal 的条件期望 reward \(R(s,a,s')\) 仍保留。
 
 ### Bellman optimality：比较动作
 
@@ -155,10 +155,14 @@ H_{\mathrm{eff}}\approx\frac{1}{1-\gamma}
 Bellman optimality 可以给 Q-learning 构造 terminal-masked TD target：
 
 \[
-y_t=r_t+\gamma(1-d_t)\max_{a'}Q_{\mathrm{target}}(s_{t+1},a')
+y_t=r_t+\gamma(1-d_t)\max_{a'}Q(s_{t+1},a')
 \]
 
-其中 \(d_t=1\) 只表示真正 terminal，此时 target 就是 \(r_t\)。DQN 的 target network 与 replay buffer 是函数逼近和采样稳定机制，不属于 MDP 定义，本页不展开；原始方法见 [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)，独立课程页出现前从 [完整学习路线](index.md#完整学习路线) 继续。
+其中 \(d_t=1\) 只表示真正 terminal，此时 target 就是 \(r_t\)。这里的 \(Q\) 是当前 action-value estimate，这才是通用 tabular Q-learning target。
+
+使用函数逼近时，DQN 可以把 bootstrap network 换成一段时间内冻结的 frozen target network；这是额外的函数逼近稳定机制，完整做法见 [2015 Nature DQN](https://doi.org/10.1038/nature14236)。
+
+replay buffer 也是 deep DQN 的工程机制，不是 tabular Q-learning 定义的一部分；早期 DQN 与 experience replay 见 2013 预印本 [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)。独立课程页出现前从 [完整学习路线](index.md#完整学习路线) 继续。
 
 数据来源还决定 value 估计的边界：
 

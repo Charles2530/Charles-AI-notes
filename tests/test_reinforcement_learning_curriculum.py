@@ -257,6 +257,8 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "V^\\pi(s_{\\mathrm{terminal}})=0",
             "transition 的随机性",
             "条件期望 reward",
+            "若 successor \\(s'\\) 是 terminal",
+            "\\sum_{a'}\\pi(a'\\mid s')Q^\\pi(s',a')=0",
         ):
             self.assertIn(term, expectation)
 
@@ -272,9 +274,12 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "## 训练数据流", maxsplit=1
         )[0]
         for term in (
-            "y_t=r_t+\\gamma(1-d_t)\\max_{a'}Q_{\\mathrm{target}}(s_{t+1},a')",
+            "y_t=r_t+\\gamma(1-d_t)\\max_{a'}Q(s_{t+1},a')",
             "真正 terminal",
-            "target network",
+            "当前 action-value estimate",
+            "tabular Q-learning",
+            "frozen target network",
+            "函数逼近稳定机制",
             "replay buffer",
             "online RL",
             "off-policy RL",
@@ -284,12 +289,31 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "value 外推",
         ):
             self.assertIn(term, bridge)
+        self.assertNotIn("Q_{\\mathrm{target}}", bridge)
         for target in (
             "https://arxiv.org/abs/1312.5602",
+            "https://doi.org/10.1038/nature14236",
             "https://arxiv.org/abs/2005.01643",
             "index.md#完整学习路线",
         ):
             self.assertIn(f"]({target})", bridge)
+
+        early_dqn = next(
+            paragraph
+            for paragraph in bridge.split("\n\n")
+            if "https://arxiv.org/abs/1312.5602" in paragraph
+        )
+        self.assertIn("早期 DQN", early_dqn)
+        self.assertIn("experience replay", early_dqn)
+        self.assertNotIn("frozen target network", early_dqn)
+
+        nature_dqn = next(
+            paragraph
+            for paragraph in bridge.split("\n\n")
+            if "https://doi.org/10.1038/nature14236" in paragraph
+        )
+        self.assertIn("2015 Nature DQN", nature_dqn)
+        self.assertIn("frozen target network", nature_dqn)
 
     def test_dynamic_programming_monte_carlo_td_page_contract(self):
         page = RL_ROOT / "dynamic-programming-monte-carlo-td.md"
