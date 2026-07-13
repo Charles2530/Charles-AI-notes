@@ -1158,13 +1158,30 @@ class DeepRLCLITests(TestCase):
         completed = run_example_cli(
             "deep_rl_smoke.py", "sac", "--seed", "7", "--steps", "256"
         )
-        metrics = dict(re.findall(r"\b([a-z_]+)=([^\s]+)", completed.stdout))
+        summary = re.fullmatch(r"SAC summary: env=([^\s]+) (.+)\n", completed.stdout)
+        self.assertIsNotNone(summary)
+        string_metrics = {"env": summary.group(1)}
+        numeric_metrics = dict(re.findall(r"\b([a-z_]+)=([^\s]+)", summary.group(2)))
+        metrics = {**string_metrics, **numeric_metrics}
+        required_keys = {
+            "env",
+            "interaction_count",
+            "reward_per_interaction",
+            "completed_episode_count",
+            "completed_episode_return_mean",
+            "current_partial_episode_return",
+            "updates",
+            "critic_loss",
+            "actor_loss",
+            "alpha",
+            "actor_parameter_delta",
+            "critic_parameter_delta",
+        }
 
-        self.assertTrue(completed.stdout.startswith("SAC summary:"))
-        self.assertEqual(metrics["env"], "Pendulum-v1")
-        self.assertEqual(int(metrics["updates"]), 193)
-        self.assertGreater(float(metrics["actor_parameter_delta"]), 0.0)
-        self.assertGreater(float(metrics["critic_parameter_delta"]), 0.0)
-        for key, value in metrics.items():
-            if key != "env" and value != "unavailable":
-                self.assertTrue(math.isfinite(float(value)))
+        self.assertTrue(required_keys.issubset(metrics))
+        self.assertEqual(string_metrics["env"], "Pendulum-v1")
+        for key in required_keys - {"env"}:
+            self.assertTrue(math.isfinite(float(numeric_metrics[key])))
+        self.assertEqual(int(numeric_metrics["updates"]), 193)
+        self.assertGreater(float(numeric_metrics["actor_parameter_delta"]), 0.0)
+        self.assertGreater(float(numeric_metrics["critic_parameter_delta"]), 0.0)

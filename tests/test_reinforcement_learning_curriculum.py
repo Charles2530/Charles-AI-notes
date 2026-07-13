@@ -1232,7 +1232,7 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         expected_fields = {
             "prompt batch": ("prompts", "attention_mask"),
             "rollout": ("responses", "response_mask", "rollout_log_probs"),
-            "reward": ("reward",),
+            "reward": ("`token_level_scores`", "`token_level_rewards`"),
             "policy fields": ("rollout_log_probs", "old_log_probs", "ref_log_prob", "values"),
             "advantage": ("advantage", "returns"),
             "critic update": ("critic minibatch", "optimizer"),
@@ -1243,6 +1243,9 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             joined = " ".join(flow_rows[row])
             for field in fields:
                 self.assertIn(field, joined)
+        reward_flow = " ".join(flow_rows["reward"])
+        self.assertIn("sequence-level reward", reward_flow)
+        self.assertNotIn("`reward`", reward_flow)
         for source in (
             "https://github.com/verl-project/verl/blob/"
             "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/experimental/agent_loop/"
@@ -1276,7 +1279,13 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         for unsupported_field in ("`action_mask`", "`pi_theta`"):
             self.assertNotIn(unsupported_field, text)
         flow_text = " ".join(" ".join(row) for row in flow_rows.values())
-        for unsupported_field in ("policy_version_id", "rollout_version_id", "action_mask", "pi_theta"):
+        for unsupported_field in (
+            "policy_version_id",
+            "rollout_version_id",
+            "action_mask",
+            "pi_theta",
+            "reward_tensor",
+        ):
             self.assertNotIn(unsupported_field, flow_text)
         self.assertIn("application-level audit metadata", text)
         self.assertIn("不是 pinned VERL 的内置 keys", text)

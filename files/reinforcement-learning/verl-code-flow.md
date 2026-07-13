@@ -124,7 +124,7 @@ python -m verl.trainer.main_ppo \
 | --- | --- | --- | --- |
 | prompt batch | tokenized prompt、sample id | `prompts`、`attention_mask` | tokenizer 与 padding side 固定 |
 | rollout | `prompts`、`attention_mask`、`global_steps` metadata、sampling metadata | `responses`、`response_mask`、可选 `rollout_log_probs` | 概念上的 action-token mask 在该 pinned 流程具体映射为 `response_mask` |
-| reward | `responses`、有效 token mask、verifier/reward 配置 | token-level reward 或 sequence-level `reward` 及分量 | 分数必须回到同一 sample/token |
+| reward | `responses`、有效 token mask、verifier/reward 配置、sequence-level reward 概念输入或聚合 | `token_level_scores`，再经 KL/no-KL 路径形成 `token_level_rewards` | sequence-level reward 不是 pinned batch key；分数必须回到同一 sample/token |
 | policy fields | `responses`、rollout behavior、模式配置、reference/critic snapshot | `rollout_log_probs`、`old_log_probs`、`ref_log_prob`、PPO 可选 `values` | old 按 bypass/recompute 产生；reference 只作 KL anchor |
 | advantage | reward、`values`、终止语义、`response_mask` | driver-side `advantages`、`returns` | driver 执行；PPO/GAE 与 group estimator 不能混用边界 |
 | critic update | 完整 batch、`values`、`returns`、masks | critic minibatch -> backward -> optimizer、critic metrics | critic worker 所有；无 critic 路线跳过 |
