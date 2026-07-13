@@ -33,6 +33,25 @@ class ReinforcementLearningExampleTests(TestCase):
         np.testing.assert_allclose(values, [0.0, 3.0])
         np.testing.assert_array_equal(counts, [0, 2])
 
+    def test_sample_average_rejects_invalid_inputs_without_mutation(self):
+        bandit = load_module("bandit")
+        cases = [
+            (np.array([1.0, 2.0]), np.array([0, -1]), 0),
+            (np.array([1.0, 2.0]), np.array([0.0, 0.5]), 0),
+            (np.array([[1.0], [2.0]]), np.array([0, 0]), 0),
+            (np.array([1.0, 2.0]), np.array([0, 0, 0]), 0),
+            (np.array([1.0, 2.0]), np.array([0, 0]), 2),
+        ]
+
+        for values, counts, arm in cases:
+            with self.subTest(values_shape=values.shape, counts=counts, arm=arm):
+                values_before = values.copy()
+                counts_before = counts.copy()
+                with self.assertRaises(ValueError):
+                    bandit.update_sample_average(values, counts, arm, reward=3.0)
+                np.testing.assert_array_equal(values, values_before)
+                np.testing.assert_array_equal(counts, counts_before)
+
     def test_epsilon_greedy_uses_first_argmax_without_exploration(self):
         bandit = load_module("bandit")
         rng = np.random.default_rng(7)
@@ -56,6 +75,15 @@ class ReinforcementLearningExampleTests(TestCase):
         self.assertEqual(second, 2)
         self.assertIn(scored, range(3))
 
+    def test_ucb_rejects_negative_and_fractional_counts(self):
+        bandit = load_module("bandit")
+        values = np.array([0.5, 1.0])
+
+        for counts in (np.array([1, -1]), np.array([1.0, 0.5])):
+            with self.subTest(counts=counts):
+                with self.assertRaises(ValueError):
+                    bandit.ucb_action(values, counts, step=3)
+
     def test_same_seed_reproduces_bandit_summary(self):
         bandit = load_module("bandit")
 
@@ -65,6 +93,18 @@ class ReinforcementLearningExampleTests(TestCase):
         self.assertEqual(first, second)
         for method in first.values():
             self.assertTrue(all(np.isfinite(value) for value in method.values()))
+
+    def test_seeded_task_and_policy_rngs_are_independent_and_reproducible(self):
+        bandit = load_module("bandit")
+
+        first_task_rng, first_policy_rng = bandit._make_rngs(seed=11)
+        second_task_rng, second_policy_rng = bandit._make_rngs(seed=11)
+        first_task_draws = first_task_rng.random(4)
+        first_policy_draws = first_policy_rng.random(4)
+
+        np.testing.assert_array_equal(first_task_draws, second_task_rng.random(4))
+        np.testing.assert_array_equal(first_policy_draws, second_policy_rng.random(4))
+        self.assertFalse(np.array_equal(first_task_draws, first_policy_draws))
 
     def test_terminal_transition_does_not_bootstrap(self):
         gridworld = load_module("gridworld")

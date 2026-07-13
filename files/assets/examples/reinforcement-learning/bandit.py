@@ -5,7 +5,42 @@ import argparse
 import numpy as np
 
 
+def _make_rngs(seed):
+    """Return independent, reproducible RNGs for the task and policy."""
+    task_seed, policy_seed = np.random.SeedSequence(seed).spawn(2)
+    return np.random.default_rng(task_seed), np.random.default_rng(policy_seed)
+
+
+def _validate_values_and_counts(values, counts):
+    values_array = np.asarray(values)
+    counts_array = np.asarray(counts)
+    if (
+        values_array.ndim != 1
+        or counts_array.ndim != 1
+        or values_array.shape != counts_array.shape
+    ):
+        raise ValueError("values and counts must be matching one-dimensional arrays")
+    if values_array.size == 0:
+        raise ValueError("values and counts must not be empty")
+    if not (
+        np.issubdtype(counts_array.dtype, np.integer)
+        or np.issubdtype(counts_array.dtype, np.floating)
+    ):
+        raise ValueError("counts must contain nonnegative integers")
+    if (
+        not np.all(np.isfinite(counts_array))
+        or np.any(counts_array < 0)
+        or np.any(counts_array != np.floor(counts_array))
+    ):
+        raise ValueError("counts must contain nonnegative integers")
+    return values_array, counts_array
+
+
 def update_sample_average(values, counts, arm, reward):
+    values_array, _ = _validate_values_and_counts(values, counts)
+    if not isinstance(arm, (int, np.integer)) or not 0 <= arm < values_array.size:
+        raise ValueError("arm must index values and counts")
+
     counts[arm] += 1
     values[arm] += (reward - values[arm]) / counts[arm]
 
@@ -29,12 +64,7 @@ def ucb_action(values, counts, step):
     The first untried arm is returned before scores are computed, avoiding
     division by zero and log(0).
     """
-    values = np.asarray(values)
-    counts = np.asarray(counts)
-    if values.ndim != 1 or counts.ndim != 1 or values.shape != counts.shape:
-        raise ValueError("values and counts must be matching one-dimensional arrays")
-    if values.size == 0:
-        raise ValueError("values and counts must not be empty")
+    values, counts = _validate_values_and_counts(values, counts)
     if step <= 0:
         raise ValueError("step must use the one-based convention and be positive")
 
@@ -76,8 +106,7 @@ def run_experiment(seed, steps, epsilon):
     if not 0.0 <= epsilon <= 1.0:
         raise ValueError("epsilon must be in [0, 1]")
 
-    environment_rng = np.random.default_rng(seed)
-    action_rng = np.random.default_rng(seed)
+    environment_rng, action_rng = _make_rngs(seed)
     true_means = environment_rng.normal(0.0, 1.0, size=10)
     noise = environment_rng.normal(0.0, 1.0, size=(steps, true_means.size))
 
