@@ -1126,18 +1126,26 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         self.assertEqual(
             list(worker_rows),
             [
-                "driver / controller",
-                "actor / rollout",
-                "critic（可选）",
-                "reward",
-                "reference",
-                "trainer",
+                "RayPPOTrainer driver / controller",
+                "actor / rollout worker",
+                "critic worker（可选）",
+                "reward role",
+                "reference role",
             ],
         )
-        self.assertIn("placement", " ".join(worker_rows["driver / controller"]))
-        self.assertIn("communication", " ".join(worker_rows["driver / controller"]))
-        self.assertIn("不更新", " ".join(worker_rows["reference"]))
-        self.assertIn("PPO", " ".join(worker_rows["critic（可选）"]))
+        driver = " ".join(worker_rows["RayPPOTrainer driver / controller"])
+        actor = " ".join(worker_rows["actor / rollout worker"])
+        critic = " ".join(worker_rows["critic worker（可选）"])
+        self.assertIn("RPC", driver)
+        self.assertIn("driver-side `compute_advantage`", driver)
+        for term in ("logprob", "actor minibatch", "backward", "optimizer"):
+            self.assertIn(term, actor)
+        for term in ("values", "critic minibatch", "backward", "optimizer"):
+            self.assertIn(term, critic)
+        self.assertIn("不更新", " ".join(worker_rows["reference role"]))
+        self.assertTrue(
+            all("trainer" not in row.lower() for row in worker_rows if not row.startswith("RayPPOTrainer"))
+        )
 
         flow = self.h2_section(text, "训练数据流")
         flow_header, flow_rows = self.first_markdown_table(flow)
@@ -1148,21 +1156,21 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
                 "prompt batch",
                 "rollout",
                 "reward",
-                "PPO estimates",
+                "policy fields",
                 "advantage",
-                "minibatch",
-                "optimizer",
+                "critic update",
+                "actor update",
                 "weight sync",
             ],
         )
         expected_fields = {
             "prompt batch": ("prompt", "input_ids", "attention_mask"),
-            "rollout": ("response", "action_mask"),
+            "rollout": ("response", "action_mask", "rollout_log_probs"),
             "reward": ("reward",),
-            "PPO estimates": ("old_logp", "reference_logp", "value"),
+            "policy fields": ("rollout_log_probs", "old_log_probs", "ref_log_prob", "values"),
             "advantage": ("advantage", "returns"),
-            "minibatch": ("minibatch",),
-            "optimizer": ("optimizer",),
+            "critic update": ("critic minibatch", "optimizer"),
+            "actor update": ("actor minibatch", "optimizer", "pi_theta"),
             "weight sync": ("weight sync",),
         }
         for row, fields in expected_fields.items():
@@ -1186,10 +1194,6 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "reproducibility metadata",
         ):
             self.assertIn(term, text)
-        old_reference = core.split("### Old policy 不等于 reference policy", maxsplit=1)[1]
-        self.assertIn("PPO ratio", old_reference)
-        self.assertIn("KL", old_reference)
-        self.assertIn("不是同一个角色", old_reference)
         failures = self.h2_section(text, "常见失败")
         for term in (
             "stale logp",
@@ -1212,6 +1216,83 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             self.assertIn(f"]({source})", text)
         self.assertIn("](practice-and-algorithm-selection.md)", self.h2_section(text, "下一步"))
         self.assert_local_links_resolve(page)
+
+    def test_verl_pinned_snapshot_separates_policy_roles_and_old_logprob_modes(self):
+        text = (RL_ROOT / "verl-code-flow.md").read_text(encoding="utf-8")
+        core = self.h2_section(text, "核心机制")
+        self.assertIn("### 四种 policy 角色与字段", core)
+        self.assertIn("### Bypass 与 decoupled 两种 old logprob 模式", core)
+        policies = core.split("### 四种 policy 角色与字段", maxsplit=1)[1].split(
+            "### Bypass 与 decoupled 两种 old logprob 模式", maxsplit=1
+        )[0]
+        policy_header, policy_rows = self.first_markdown_table(policies)
+        self.assertEqual(policy_header, ["策略角色", "字段", "快照语义", "用途"])
+        self.assertEqual(
+            list(policy_rows),
+            [
+                "rollout policy",
+                "proximal old policy",
+                "current train policy",
+                "reference policy",
+            ],
+        )
+        self.assertIn("rollout_log_probs", policy_rows["rollout policy"][0])
+        self.assertIn("sampling behavior/version", " ".join(policy_rows["rollout policy"]))
+        self.assertIn("old_log_probs", policy_rows["proximal old policy"][0])
+        self.assertIn("PPO ratio anchor", " ".join(policy_rows["proximal old policy"]))
+        self.assertIn("pi_theta", policy_rows["current train policy"][0])
+        self.assertIn("当前 minibatch update", " ".join(policy_rows["current train policy"]))
+        self.assertIn("ref_log_prob", policy_rows["reference policy"][0])
+        self.assertIn("KL anchor", " ".join(policy_rows["reference policy"]))
+        self.assertIn("不是 old policy", " ".join(policy_rows["reference policy"]))
+
+        modes = core.split("### Bypass 与 decoupled 两种 old logprob 模式", maxsplit=1)[
+            1
+        ].split("### Worker 角色与边界", maxsplit=1)[0]
+        mode_header, mode_rows = self.first_markdown_table(modes)
+        self.assertEqual(mode_header, ["模式", "old_log_probs 来源", "策略关系", "修正边界"])
+        self.assertEqual(list(mode_rows), ["bypass", "decoupled / recompute"])
+        bypass = " ".join(mode_rows["bypass"])
+        for term in ("old_log_probs = rollout_log_probs", "pi_rollout = pi_old", "两策略"):
+            self.assertIn(term, bypass)
+        decoupled = " ".join(mode_rows["decoupled / recompute"])
+        for term in (
+            "actor worker 重新计算",
+            "pi_rollout、pi_old、pi_theta 可以不同",
+            "rollout correction / importance sampling",
+            "按配置",
+            "不能修复任意 staleness",
+        ):
+            self.assertIn(term, decoupled)
+        pinned_policy_source = (
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L1533-L1536"
+        )
+        self.assertIn(f"]({pinned_policy_source})", modes)
+        for stale_claim in (
+            "old policy 是采集当前 rollout 的策略快照",
+            "`old_logp` 必须对应实际生成该 response 的版本",
+            "old 来自 rollout",
+            "重新计算的 logp 不能替代采样时 `old_logp`",
+        ):
+            self.assertNotIn(stale_claim, text)
+
+    def test_verl_pinned_snapshot_assigns_driver_actor_and_critic_ownership(self):
+        text = (RL_ROOT / "verl-code-flow.md").read_text(encoding="utf-8")
+        core = self.h2_section(text, "核心机制")
+        workers = core.split("### Worker 角色与边界", maxsplit=1)[1]
+        for source in (
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L1332-L1359",
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L1368-L1373",
+        ):
+            self.assertIn(f"]({source})", workers)
+        self.assertNotIn("| trainer |", workers)
+        self.assertIn("概念流程阶段，不是独立 VERL process role", core)
 
     def test_capstone_has_exact_algorithm_decision_table(self):
         page = RL_ROOT / "practice-and-algorithm-selection.md"
