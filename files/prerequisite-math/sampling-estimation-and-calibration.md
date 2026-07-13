@@ -25,6 +25,47 @@
 
 后续例子：世界模型评测里，如果用 learned world model 做 Monte Carlo rollout 来估计某个 policy 的 value，就必须问两件事：采了多少条轨迹，模型误差会不会随 rollout 长度累积。
 
+## Monte Carlo 估计为什么会抖
+
+设 \(X_1,\dots,X_N\) 是独立同分布的样本，每个样本的均值为 \(\mu\)、方差为有限的 \(\sigma^2\)。样本均值及其方差为：
+
+\[
+\hat\mu_N=\frac{1}{N}\sum_{i=1}^N X_i,
+\qquad
+\operatorname{Var}(\hat\mu_N)=\frac{\sigma^2}{N}
+\]
+
+第一项用 \(N\) 个样本近似总体均值，第二项说明换一批样本时这个估计会怎样波动。增加 \(N\) 会降低方差，但不会让有限样本的结果完全不抖；单个样本方差 \(\sigma^2\) 越大，同样预算下的均值估计越不稳定。
+
+在强化学习里，\(X_i\) 可以是一条轨迹的 return。同一策略也可能因动作采样、环境转移、初始状态和稀有事件得到很不一样的 return，因此 Monte Carlo policy gradient 容易有高方差。如果样本彼此相关，上面的 \(\sigma^2/N\) 不能原样套用，有效信息通常少于同样数量的独立样本。
+
+## Baseline 为什么能降方差
+
+Policy gradient 常把 return \(G_t\) 换成 \(G_t-b(s_t)\)。只要给定状态后 baseline 不依赖当前采样动作，常见做法是只依赖状态，它贡献的期望梯度就是 0：
+
+\[
+\mathbb E_{A\sim\pi_\theta(\cdot\mid s)}
+\left[b(s)\nabla_\theta\log\pi_\theta(A\mid s)\right]
+=b(s)\nabla_\theta\sum_a\pi_\theta(a\mid s)
+=0.
+\]
+
+所以减去这样的 baseline 不改变期望 policy gradient，却能先扣掉“这个状态本来通常就能得到的回报”。当 \(b(s)\) 能较好预测该状态下的平均 return 时，剩下的量更接近动作相对平均水平的好坏，样本间波动往往更小。baseline 选得差不保证降方差，但它与当前采样动作独立这一条件保证了上述无偏性质；critic 估计的 state value 是常见选择。算法里的具体用法见 [Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)。
+
+## 重要性采样：数据来自另一个分布时怎样改权重
+
+目标分布是 \(p\)，样本却来自 \(q\) 时，可以用概率比改写期望：
+
+\[
+\mathbb E_p[f(X)]
+=
+\mathbb E_q\left[\frac{p(X)}{q(X)}f(X)\right].
+\]
+
+这里 \(p(X)/q(X)\) 是重要性权重：\(q\) 很少采到、但 \(p\) 认为重要的样本会获得更大权重。这个等式要求在所有 \(p(x)f(x)\) 会贡献期望的地方都有 \(q(x)>0\)；如果行为分布从不覆盖目标分布的重要区域，事后加权无法补回根本没见过的样本。
+
+即使支持集条件满足，权重也可能非常不均匀。少数巨大权重会支配总和，大量近零权重样本几乎不提供信息，于是名义上有很多样本，实际有效样本信息却集中在极少数样本上，估计方差可能很高。强化学习里旧策略采到的数据与当前策略不一致时就会遇到这个问题；PPO 的概率比和更新约束可在 [Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md) 中继续阅读。
+
 ## 估计器：你用什么规则从样本得到数字
 
 估计器是一个从样本到数字的规则。比如样本均值：

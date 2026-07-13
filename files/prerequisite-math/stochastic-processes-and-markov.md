@@ -45,6 +45,20 @@ P(X_{t+1}\mid X_t)
 
 等号成立的前提是：\(X_t\) 已经把对未来有用的历史信息压进来了。比如棋盘游戏的完整棋盘状态通常接近马尔可夫；但机器人只有一张 RGB 图时，遮挡背后的物体没有被状态表示出来，就很难满足马尔可夫性。
 
+## State 是对有用历史的压缩
+
+在决策问题里，可以把到当前为止的历史记作 \(H_t\)。一个充分的状态 \(S_t\) 应让未来在给定当前状态和动作后，与更早历史条件独立：
+
+\[
+P(S_{t+1},R_t\mid S_t,A_t,H_t)
+=
+P(S_{t+1},R_t\mid S_t,A_t).
+\]
+
+这行式子不是说历史从未发生过，而是说历史里所有会影响下一状态和奖励的信息，都已经压进 \(S_t\)。因此，Markov property 是“给定充分状态后的条件独立”，不是“系统没有记忆”。状态可以是物理世界的完整描述，也可以是从观测历史构造的统计量；单帧 observation 只有在它确实保留了预测未来所需的信息时，才可直接当作 state。
+
+例如仓库机器人当前相机画面看不到货架后的叉车，但过去几帧记录了叉车的行进方向。丢掉历史的单帧图像不是充分状态；把位置、速度和遮挡信息汇总后的表示才更接近 state。state、observation 与交互数据流的边界见 [Agent、环境与训练闭环](../reinforcement-learning/rl-agent-environment-loop.md)。
+
 ![Markov chain](../assets/images/prerequisite-math/markov-chain.svg){ width="520" }
 
 <small>图源：[Wikimedia Commons: Markovkate 01](https://commons.wikimedia.org/wiki/File:Markovkate_01.svg)。原图展示状态之间按概率转移的马尔可夫链。本站用它说明：马尔可夫过程的核心是状态和转移概率，下一步由当前状态分布决定。</small>
@@ -116,6 +130,20 @@ J(\theta)=\mathbb{E}_{\tau\sim\pi_\theta}[R(\tau)]
 在这篇里，MDP 只需要先看成“状态、动作、转移、奖励、折扣”放在一起的框架。Bellman 方程是这个框架上的核心递推：当前价值可以拆成眼前奖励和未来价值。完整的 value、Q、TD error、advantage、PPO 和 GRPO，会在 [价值函数、策略梯度与强化学习目标](value-policy-and-rl-objectives.md) 里展开。
 
 如果 \(\gamma=0\)，系统只看眼前奖励；如果 \(\gamma\) 接近 1，系统会更重视长期后果。后面读 RLHF、PPO 或 VLA 闭环恢复时，很多差异都来自“奖励什么时候出现”和“未来价值怎么估”。
+
+## 从 MDP 到 POMDP
+
+MDP 假设 agent 可以基于 Markov state 决策；POMDP，也就是部分可观测马尔可夫决策过程，则区分环境内部的潜在状态和 agent 收到的观测。潜在状态仍按 Markov dynamics 演化：
+
+\[
+S_{t+1}\sim P(\cdot\mid S_t,A_t),
+\qquad
+O_t\sim O(\cdot\mid S_t).
+\]
+
+第一项描述动作作用下的状态转移，第二项描述潜在状态怎样生成当前观测。agent 只看到 \(O_t\)，看不到完整的 \(S_t\)；遮挡、传感器噪声或缺失变量会让同一个观测对应多个可能状态。
+
+一种严格的状态表示是 belief state：\(b_t(s)=P(S_t=s\mid H_t)\)，即根据观测和动作历史维护“当前可能处于哪些潜在状态”的分布。工程系统也常用有限历史窗口、recurrent hidden state 或 latent world model 来近似这份摘要：历史窗口直接保留最近证据，循环状态学习压缩长期信息，latent world model 则学习能预测动作后果的内部状态。它们都试图恢复对未来有用的信息，但并不自动保证得到真正充分的 Markov state。交互中的 POMDP 例子见 [Agent、环境与训练闭环](../reinforcement-learning/rl-agent-environment-loop.md)，latent state 的实现脉络见 [RSSM、Dreamer 与规划](../world-models/rssm-dreamer-and-planning.md)。
 
 ## 为什么马尔可夫性在 AI 里常常是近似
 

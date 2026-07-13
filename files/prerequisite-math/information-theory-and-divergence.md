@@ -20,6 +20,18 @@ H(p)=-\sum_i p_i\log p_i
 
 生成模型里，熵会影响多样性；强化学习里，entropy bonus 可以鼓励探索；分类模型里，过低熵有时表示自信，也可能表示过度自信。
 
+## Policy entropy：探索分布还剩多少选择
+
+在状态 \(s\) 下，离散动作策略的熵是：
+
+\[
+H(\pi(\cdot\mid s))=-\sum_a \pi(a\mid s)\log\pi(a\mid s)
+\]
+
+求和遍历当前状态下所有动作，\(\pi(a\mid s)\) 同时决定动作出现的概率和它的“惊讶程度”。概率集中在少数动作上时，policy entropy 低，策略几乎只剩固定选择；概率分散在多个动作上时，entropy 高，采样仍可能探索不同路径。
+
+Entropy bonus 常用于阻止策略过早坍缩，但高熵本身不是任务目标：完全均匀地随机行动也可能回报很差。它表达的是探索分布还保留多少选择，必须与 reward、约束和采样成本一起权衡。具体策略更新见 [Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)。
+
 ## 交叉熵：用一个分布编码另一个分布的代价
 
 交叉熵写成：
@@ -70,6 +82,27 @@ r^{\text{task}}
 \]
 
 这里 \(r^{\text{task}}\) 鼓励模型完成任务，\(\pi_\theta\) 是当前策略，\(\pi_{\mathrm{ref}}\) 是参考模型，\(\beta\) 控制“不要偏离参考模型太远”的力度。这个公式不是在说 KL 越小越好，而是在平衡新能力和底座行为稳定性。
+
+## KL 用在哪个方向必须写清楚
+
+固定状态 \(s\) 时，当前策略到参考策略这一方向的 KL 是：
+
+\[
+D_{\mathrm{KL}}(\pi_\theta\|\pi_{\mathrm{ref}})
+=
+\mathbb E_{a\sim\pi_\theta}
+[\log\pi_\theta(a\mid s)-\log\pi_{\mathrm{ref}}(a\mid s)].
+\]
+
+这里的期望明确由当前策略 \(a\sim\pi_\theta(\cdot\mid s)\) 采样：当前策略经常选择的动作对这个 KL 贡献更大。反过来的 \(D_{\mathrm{KL}}(\pi_{\mathrm{ref}}\|\pi_\theta)\) 是另一个量，它按参考策略采样和加权；交换两个分布不能当作等价改写。
+
+在自回归策略里，状态 \(s_t\) 是 prompt 加已生成前缀，动作 \(a_t\) 是下一个 token。若整条序列由 \(\pi_\theta\) 采样，那么沿序列累加 token log-ratio，再对这些序列取平均，可以构成相应序列级 KL 的 Monte Carlo 估计。单个 token 上的
+
+\[
+\log\pi_\theta(a_t\mid s_t)-\log\pi_{\mathrm{ref}}(a_t\mid s_t)
+\]
+
+只是由 \(a_t\sim\pi_\theta(\cdot\mid s_t)\) 得到的一个逐点 log-ratio 样本，不是完整 KL；它甚至可以为负，而完整 KL 的期望非负。如果 token 或前缀来自其他采样分布，就必须把那个分布写出来，并处理分布不匹配，不能继续把样本平均默认解释成上述方向的 KL。PPO/RLHF 中的具体约束见 [Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)，对齐训练背景见 [预训练、微调与对齐](../training/pretraining-finetuning-alignment.md)。
 
 ## 通信模型：信息要经过有噪声的通道
 
