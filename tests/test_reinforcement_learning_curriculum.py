@@ -105,6 +105,8 @@ class ReinforcementLearningCurriculumTests(TestCase):
 environment -> reward_t + observation_{t+1} + terminated/truncated
 trajectory batch -> return / advantage / target -> loss -> policy update"""
         self.assertIn(flow, text)
+        self.assertIn("POMDP", text)
+        self.assertIn("部分可观测马尔可夫决策过程", text)
         targets = re.findall(r"\]\(([^)]+\.md)\)", text)
         self.assertGreaterEqual(len(targets), 2)
         for target in targets:

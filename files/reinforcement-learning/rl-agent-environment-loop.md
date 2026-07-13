@@ -47,7 +47,7 @@
 
 ### Observation 不等于 state
 
-货架会遮住迎面驶来的叉车。环境的完整 state 包含叉车位置，但单帧相机 observation 看不到它；agent 需要用历史帧、记忆模块或 belief state 推断风险。这就是部分可观测：不是环境没有状态，而是策略只能获得状态的一部分投影。
+货架会遮住迎面驶来的叉车。环境的完整 state 包含叉车位置，但单帧相机 observation 看不到它。这种设定称为**部分可观测马尔可夫决策过程（POMDP）**：环境内部仍有潜在的 Markov state，agent 每步只收到这个 state 的部分 observation，因此需要用历史帧、记忆模块或 belief state 推断当前状态与风险。
 
 ### Reward 不等于完整目标
 
