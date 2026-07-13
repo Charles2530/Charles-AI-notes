@@ -12,11 +12,12 @@
 
 ## 最小任务
 
-CartPole-v1 的 observation 是 4 维连续向量，action 只有向左、向右两个离散选项。DQN 用小型 MLP 输出两个 \(Q(s,a)\)，再用 epsilon-greedy 选择动作。
+先运行表格版本，确认 terminal-masked Q-learning update；再运行深度版本。CartPole-v1 的 observation 是 4 维连续向量，action 只有向左、向右两个离散选项。DQN 用小型 MLP 输出两个 \(Q(s,a)\)，再用 epsilon-greedy 选择动作。
 
-隔离环境安装完成后，从仓库根目录运行 [`deep_rl_smoke.py`](../assets/examples/reinforcement-learning/deep_rl_smoke.py)：
+隔离环境安装完成后，从仓库根目录运行 [`gridworld.py`](../assets/examples/reinforcement-learning/gridworld.py) 与 [`deep_rl_smoke.py`](../assets/examples/reinforcement-learning/deep_rl_smoke.py)：
 
 ```bash
+python files/assets/examples/reinforcement-learning/gridworld.py --seed 7
 python files/assets/examples/reinforcement-learning/deep_rl_smoke.py dqn --seed 7 --steps 256
 ```
 
@@ -52,6 +53,8 @@ y_t=r_t+\gamma(1-d_t)\max_{a'}Q_{\bar\theta}(s_{t+1},a')
 ### Replay、探索与损失
 
 replay buffer 保存 `(state, action, reward, next_state, terminated)`，随机 minibatch 打散相邻样本并让旧数据被重复利用。这使 DQN 具备明显的 off-policy 数据复用能力，但旧数据过多也会和当前访问分布脱节。
+
+smoke 实现的探索日程是 `epsilon=max(0.1, 1-step/steps)`：在 `step=0` 时从 `epsilon=1.0` 开始，分母 `steps` 就是命令行请求的 `--steps` interaction horizon；之后每步线性减小 \(1/\text{steps}\)，直到被 floor 0.1 截住。以 `--steps 256` 为例，第一个使用 floor 的索引是 `step=231`，因为 `step` 取 `0` 到 `255`，而不是额外训练 256 步后才开始衰减。
 
 epsilon-greedy 在训练时给随机动作概率 \(\epsilon\)；评估时应单独关闭或固定很小的探索，否则评测把策略质量和探索噪声混在一起。Huber loss 在 TD error 小时近似平方误差、大时近似绝对误差，比纯 MSE 更不容易被少量巨大 target 支配。
 

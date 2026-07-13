@@ -12,7 +12,9 @@ DQN 能对有限 action 取 \(\max_a Q(s,a)\)，但电机力矩是连续值，�
 
 ## 最小任务
 
-Pendulum-v1 的 observation 有 3 维，action 是区间 `[-2, 2]` 内的单个连续力矩。SAC actor 先输出 normalized action \((-1,1)\)，再映射到环境区间；replay buffer 收集 256 个 transition 后执行有限次更新。
+Pendulum-v1 的 observation 有 3 维，action 是区间 `[-2, 2]` 内的单个连续力矩。SAC actor 先输出 normalized action \((-1,1)\)，再映射到环境区间。`--steps 256` 表示总 interaction 数，不是先收集 256 条数据再开始训练。
+
+replay warm-up 的 batch size 是 64 条 transition。每次 interaction 先写入 replay；仅当 buffer 长度 `<64` 时跳过优化，所以第 64 条 transition 写入后立即执行首个更新，此后每条新 transition 都执行一次。当前 inclusive condition 下，更新数是 \(256-64+1=193\)，也就是 193 次 optimizer update。
 
 运行 [`deep_rl_smoke.py`](../assets/examples/reinforcement-learning/deep_rl_smoke.py)：
 

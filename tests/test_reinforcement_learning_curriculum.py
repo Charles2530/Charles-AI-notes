@@ -431,6 +431,14 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
 
     def test_q_learning_and_dqn_core_contract(self):
         text = (RL_ROOT / "q-learning-and-dqn.md").read_text(encoding="utf-8")
+        minimum_task = text.split("## 最小任务", maxsplit=1)[1].split(
+            "## 核心机制", maxsplit=1
+        )[0]
+        for command in (
+            "python files/assets/examples/reinforcement-learning/gridworld.py --seed 7",
+            "python files/assets/examples/reinforcement-learning/deep_rl_smoke.py dqn --seed 7 --steps 256",
+        ):
+            self.assertIn(command, minimum_task)
         core = text.split("## 核心机制", maxsplit=1)[1].split(
             "## 训练数据流", maxsplit=1
         )[0]
@@ -447,6 +455,14 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "terminated",
         ):
             self.assertIn(term, core)
+        for schedule_fact in (
+            "epsilon=max(0.1, 1-step/steps)",
+            "`step=0`",
+            "epsilon=1.0",
+            "`--steps`",
+            "floor 0.1",
+        ):
+            self.assertIn(schedule_fact, core)
         self.assertIn(
             "deep_rl_smoke.py dqn --seed 7 --steps 256", text
         )
@@ -519,6 +535,17 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         text = (RL_ROOT / "continuous-control-and-sac.md").read_text(
             encoding="utf-8"
         )
+        minimum_task = text.split("## 最小任务", maxsplit=1)[1].split(
+            "## 核心机制", maxsplit=1
+        )[0]
+        for interaction_fact in (
+            "总 interaction 数",
+            "64 条 transition",
+            "第 64 条 transition 写入后",
+            "256-64+1=193",
+            "193 次 optimizer update",
+        ):
+            self.assertIn(interaction_fact, minimum_task)
         core = text.split("## 核心机制", maxsplit=1)[1].split(
             "## 训练数据流", maxsplit=1
         )[0]
