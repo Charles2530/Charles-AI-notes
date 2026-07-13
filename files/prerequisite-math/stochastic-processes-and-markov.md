@@ -47,7 +47,13 @@ P(X_{t+1}\mid X_t)
 
 ## State 是对有用历史的压缩
 
-在决策问题里，可以把到当前为止的历史记作 \(H_t\)。一个充分的状态 \(S_t\) 应让未来在给定当前状态和动作后，与更早历史条件独立：
+在决策问题里，把选择当前动作 \(A_t\) 之前可见的历史明确记作：
+
+\[
+H_t=(O_0,A_0,R_0,\dots,A_{t-1},R_{t-1},O_t).
+\]
+
+它包含当前观测 \(O_t\)，但不包含尚未选择的 \(A_t\)。一个充分的状态 \(S_t\) 应让未来在给定当前状态和动作后，与这段更早历史条件独立：
 
 \[
 P(S_{t+1},R_t\mid S_t,A_t,H_t)
@@ -141,7 +147,13 @@ S_{t+1}\sim P(\cdot\mid S_t,A_t),
 O_t\sim O(\cdot\mid S_t).
 \]
 
-第一项描述动作作用下的状态转移，第二项描述潜在状态怎样生成当前观测。agent 只看到 \(O_t\)，看不到完整的 \(S_t\)；遮挡、传感器噪声或缺失变量会让同一个观测对应多个可能状态。
+第一项描述动作作用下的状态转移，第二项是一个简化的、与动作无关的 observation model，描述潜在状态怎样生成当前观测。若观测还依赖刚执行的动作，更一般的索引约定是：
+
+\[
+O_{t+1}\sim Z(\cdot\mid S_{t+1},A_t).
+\]
+
+agent 只看到观测，看不到完整的潜在状态；遮挡、传感器噪声或缺失变量会让同一个观测对应多个可能状态。
 
 一种严格的状态表示是 belief state：\(b_t(s)=P(S_t=s\mid H_t)\)，即根据观测和动作历史维护“当前可能处于哪些潜在状态”的分布。工程系统也常用有限历史窗口、recurrent hidden state 或 latent world model 来近似这份摘要：历史窗口直接保留最近证据，循环状态学习压缩长期信息，latent world model 则学习能预测动作后果的内部状态。它们都试图恢复对未来有用的信息，但并不自动保证得到真正充分的 Markov state。交互中的 POMDP 例子见 [Agent、环境与训练闭环](../reinforcement-learning/rl-agent-environment-loop.md)，latent state 的实现脉络见 [RSSM、Dreamer 与规划](../world-models/rssm-dreamer-and-planning.md)。
 

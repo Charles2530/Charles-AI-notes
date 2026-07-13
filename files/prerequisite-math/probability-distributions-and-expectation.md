@@ -93,7 +93,7 @@ P(a\le X\le b)=\int_a^b p(x)\,dx
 强化学习里的状态价值正是条件期望：
 
 \[
-V^\pi(s)=\mathbb E[G_t\mid S_t=s].
+V^\pi(s)=\mathbb E_\pi[G_t\mid S_t=s].
 \]
 
 给定当前状态 \(S_t=s\) 后，这个期望对策略后续采样的动作、环境的随机转移以及由此产生的未来奖励取平均。这里先把 \(V^\pi(s)\) 读成“当前状态下的平均未来回报”即可；递推关系留到 [MDP、价值函数与 Bellman](../reinforcement-learning/mdp-value-bellman.md) 再展开。

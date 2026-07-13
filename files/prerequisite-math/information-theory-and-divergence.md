@@ -96,7 +96,9 @@ D_{\mathrm{KL}}(\pi_\theta\|\pi_{\mathrm{ref}})
 
 这里的期望明确由当前策略 \(a\sim\pi_\theta(\cdot\mid s)\) 采样：当前策略经常选择的动作对这个 KL 贡献更大。反过来的 \(D_{\mathrm{KL}}(\pi_{\mathrm{ref}}\|\pi_\theta)\) 是另一个量，它按参考策略采样和加权；交换两个分布不能当作等价改写。
 
-在自回归策略里，状态 \(s_t\) 是 prompt 加已生成前缀，动作 \(a_t\) 是下一个 token。若整条序列由 \(\pi_\theta\) 采样，那么沿序列累加 token log-ratio，再对这些序列取平均，可以构成相应序列级 KL 的 Monte Carlo 估计。单个 token 上的
+这个方向的 KL 要有限，还要求当前策略相对于参考策略绝对连续：凡是 \(\pi_\theta(a\mid s)>0\) 的动作，都必须有 \(\pi_{\mathrm{ref}}(a\mid s)>0\)。如果参考策略在某个当前策略会采到的动作上概率为 0，forward KL 就是无穷大。token mask、词表约束或截断规则都可能改变支持集，因此比较前必须确认两边使用同一有效动作集合，或者明确支持集如何处理。
+
+在自回归策略里，状态 \(s_t\) 是 prompt 加已生成前缀，动作 \(a_t\) 是下一个 token。给定同一个 prompt，完整 response 由 \(\pi_\theta\) 采样；若还要对多个 prompt 平均，当前策略和参考策略的比较必须使用同一个 prompt 分布，否则结果还混入了 prompt distribution shift。沿当前策略采样的序列累加 token log-ratio，再对这些序列取平均，可以构成相应序列级 KL 的 Monte Carlo 估计。单个 token 上的
 
 \[
 \log\pi_\theta(a_t\mid s_t)-\log\pi_{\mathrm{ref}}(a_t\mid s_t)
