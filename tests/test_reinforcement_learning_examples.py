@@ -63,6 +63,59 @@ class ReinforcementLearningExampleTests(TestCase):
         np.testing.assert_array_equal(result[0], np.zeros(2))
         np.testing.assert_allclose(result[1], [-0.99999999, 0.99999999])
 
+    def test_group_advantages_handles_constant_near_float_limit_without_warning(self):
+        objectives = load_module("policy_objectives")
+        rewards = np.array([1e308, 1e308])
+        snapshot = rewards.copy()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = objectives.group_advantages(rewards)
+
+        np.testing.assert_array_equal(result, np.zeros(2))
+        self.assertTrue(np.all(np.isfinite(result)))
+        np.testing.assert_array_equal(rewards, snapshot)
+
+    def test_group_advantages_normalizes_nonconstant_near_float_limit_groups(self):
+        objectives = load_module("policy_objectives")
+        adjacent = np.nextafter(1e308, np.inf)
+        cases = (
+            np.array([-1e308, 1e308]),
+            np.array([1e308, adjacent]),
+        )
+
+        self.assertGreater(adjacent - 1e308, 1e-8)
+        for rewards in cases:
+            with self.subTest(rewards=rewards), warnings.catch_warnings():
+                warnings.simplefilter("error")
+                result = objectives.group_advantages(rewards)
+
+                self.assertTrue(np.all(np.isfinite(result)))
+                np.testing.assert_allclose(result.sum(), 0.0, atol=1e-12)
+                np.testing.assert_allclose(result.std(ddof=0), 1.0, atol=1e-7)
+
+    def test_group_advantages_normalizes_mixed_near_limit_batch_per_group(self):
+        objectives = load_module("policy_objectives")
+        adjacent = np.nextafter(1e308, np.inf)
+        rewards = np.array(
+            [
+                [1e308, 1e308],
+                [-1e308, 1e308],
+                [1e308, adjacent],
+            ]
+        )
+        snapshot = rewards.copy()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = objectives.group_advantages(rewards)
+
+        self.assertTrue(np.all(np.isfinite(result)))
+        np.testing.assert_array_equal(result[0], np.zeros(2))
+        np.testing.assert_allclose(result[1:].sum(axis=-1), 0.0, atol=1e-12)
+        np.testing.assert_allclose(result[1:].std(axis=-1, ddof=0), 1.0, atol=1e-7)
+        np.testing.assert_array_equal(rewards, snapshot)
+
     def test_group_advantages_rejects_invalid_inputs(self):
         objectives = load_module("policy_objectives")
         cases = [

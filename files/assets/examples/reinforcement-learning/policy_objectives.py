@@ -55,12 +55,31 @@ def group_advantages(rewards, epsilon: float = 1e-8) -> np.ndarray:
     if reward_array.shape[-1] < 2:
         raise ValueError("each group must contain at least two candidates")
 
-    centered = reward_array - reward_array.mean(axis=-1, keepdims=True)
-    scale = reward_array.std(axis=-1, keepdims=True)
+    group_scale = np.max(np.abs(reward_array), axis=-1, keepdims=True)
+    scaled_rewards = np.zeros_like(reward_array)
+    np.divide(
+        reward_array,
+        group_scale,
+        out=scaled_rewards,
+        where=group_scale > 0.0,
+    )
+    centered = scaled_rewards - scaled_rewards.mean(axis=-1, keepdims=True)
+    scaled_std = scaled_rewards.std(axis=-1, keepdims=True)
+    scaled_epsilon = np.full_like(group_scale, np.inf)
+    with np.errstate(over="ignore", under="ignore"):
+        np.divide(
+            epsilon_value,
+            group_scale,
+            out=scaled_epsilon,
+            where=group_scale > 0.0,
+        )
+
     advantages = np.zeros_like(centered)
-    stable_groups = np.broadcast_to(scale > epsilon_value, centered.shape)
-    denominator = np.broadcast_to(scale + epsilon_value, centered.shape)
+    stable_groups = np.broadcast_to(scaled_std > scaled_epsilon, centered.shape)
+    denominator = np.broadcast_to(scaled_std + scaled_epsilon, centered.shape)
     advantages[stable_groups] = centered[stable_groups] / denominator[stable_groups]
+    if not np.all(np.isfinite(advantages)):
+        raise ValueError("group advantage normalization produced non-finite values")
     return advantages
 
 
