@@ -116,6 +116,50 @@ class ReinforcementLearningExampleTests(TestCase):
         np.testing.assert_allclose(result[1:].std(axis=-1, ddof=0), 1.0, atol=1e-7)
         np.testing.assert_array_equal(rewards, snapshot)
 
+    def test_group_advantages_preserves_unit_std_epsilon_boundary_at_large_offset(self):
+        objectives = load_module("policy_objectives")
+        positive = np.array([1e16, 1e16 + 2.0])
+        cases = (positive, -positive)
+        below_one = np.nextafter(1.0, 0.0)
+
+        for rewards in cases:
+            snapshot = rewards.copy()
+            with self.subTest(rewards=rewards), warnings.catch_warnings():
+                warnings.simplefilter("error")
+                at_boundary = objectives.group_advantages(rewards, epsilon=1.0)
+                below_boundary = objectives.group_advantages(
+                    rewards, epsilon=below_one
+                )
+
+            np.testing.assert_array_equal(at_boundary, np.zeros(2))
+            self.assertTrue(np.all(np.isfinite(below_boundary)))
+            self.assertTrue(np.all(below_boundary != 0.0))
+            np.testing.assert_allclose(below_boundary.sum(), 0.0, atol=1e-12)
+            np.testing.assert_array_equal(rewards, snapshot)
+
+    def test_group_advantages_preserves_unit_std_epsilon_boundary_per_batch_group(self):
+        objectives = load_module("policy_objectives")
+        positive = np.array([1e16, 1e16 + 2.0])
+        rewards = np.stack((positive, -positive, [1e16, 1e16], [0.0, 0.0]))
+        snapshot = rewards.copy()
+        below_one = np.nextafter(1.0, 0.0)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            at_boundary = objectives.group_advantages(rewards, epsilon=1.0)
+            below_boundary = objectives.group_advantages(
+                rewards, epsilon=below_one
+            )
+
+        np.testing.assert_array_equal(at_boundary, np.zeros_like(rewards))
+        self.assertTrue(np.all(np.isfinite(below_boundary)))
+        self.assertTrue(np.all(below_boundary[:2] != 0.0))
+        np.testing.assert_array_equal(below_boundary[2:], np.zeros((2, 2)))
+        np.testing.assert_allclose(
+            below_boundary[:2].sum(axis=-1), 0.0, atol=1e-12
+        )
+        np.testing.assert_array_equal(rewards, snapshot)
+
     def test_group_advantages_rejects_invalid_inputs(self):
         objectives = load_module("policy_objectives")
         cases = [
