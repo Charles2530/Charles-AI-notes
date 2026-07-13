@@ -69,6 +69,11 @@ class ReinforcementLearningCurriculumTests(TestCase):
         rows = {row[0]: row[1:] for row in map(cells, table[2:])}
         return header, rows
 
+    def normalize_formula_text(self, section):
+        without_spacing_commands = re.sub(r"\\[,;:!]", "", section)
+        without_delimiters = without_spacing_commands.replace("`", "").replace("$", "")
+        return re.sub(r"\s+", "", without_delimiters)
+
     def test_index_starts_with_definition_and_learning_route(self):
         text = (RL_ROOT / "index.md").read_text(encoding="utf-8")
         for heading in (
@@ -875,31 +880,76 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         text = (RL_ROOT / "llm-rlhf-rlvr-and-grpo.md").read_text(
             encoding="utf-8"
         )
-        group = text.split("### GRPO：同一 prompt 内做相对归一化", maxsplit=1)[
+        ppo = text.split("### PPO：旧策略上的 clipped surrogate", maxsplit=1)[
             1
-        ].split("### RLOO 的边界", maxsplit=1)[0]
-        for term in (
-            "同一 prompt",
-            "last axis",
-            "组内均值",
-            "总体标准差",
-            "ddof=0",
-            "zero-variance",
-            "精确零",
-        ):
-            self.assertIn(term, group)
+        ].split("### GRPO：同一 prompt 内做相对归一化", maxsplit=1)[0]
+        ppo_normalized = self.normalize_formula_text(ppo)
+        ratio_formula = (
+            r"r_t(\theta)=\exp\left(\log\pi_\theta(a_t\mids_t)-"
+            r"\log\pi_{\text{old}}(a_t\mids_t)\right)"
+        )
+        reversed_ratio_formula = (
+            r"r_t(\theta)=\exp\left(\log\pi_{\text{old}}(a_t\mids_t)-"
+            r"\log\pi_\theta(a_t\mids_t)\right)"
+        )
+        clipped_formula = (
+            r"L^{\text{clip}}(\theta)=\mathbbE\left[\min\left(r_tA_t,"
+            r"\operatorname{clip}(r_t,1-\epsilon,1+\epsilon)A_t\right)\right]"
+        )
+        self.assertIn(ratio_formula, ppo_normalized)
+        self.assertNotIn(reversed_ratio_formula, ppo_normalized)
+        self.assertIn("new_logp-old_logp", ppo_normalized)
+        self.assertNotIn("old_logp-new_logp", ppo_normalized)
+        self.assertIn(
+            "分子策略是当前policy，分母策略是采样这批response的oldpolicy",
+            ppo_normalized,
+        )
+        self.assertIn(clipped_formula, ppo_normalized)
+        self.assertIn("clipped_policy_loss返回这个surrogate的负均值", ppo_normalized)
+        self.assertIn("作为loss交给optimizer最小化", ppo_normalized)
+        self.assertIn("L^{\\text{clip}}写的是要最大化的正surrogate", ppo_normalized)
+        self.assertLess(
+            ppo_normalized.index(ratio_formula),
+            ppo_normalized.index(clipped_formula),
+        )
+
+        group = text.split("### GRPO：同一 prompt 内做相对归一化", maxsplit=1)[1].split(
+            "### RLOO 的边界", maxsplit=1
+        )[0]
+        group_normalized = self.normalize_formula_text(group)
+        group_formula = (
+            r"A_i=\begin{cases}\dfrac{R_i-\barR}{\sigma_R+\epsilon},"
+            r"&\sigma_R>\epsilon,\\0,&\sigma_R\le\epsilon.\end{cases}"
+        )
+        self.assertIn(group_formula, group_normalized)
+        self.assertNotIn(r"\barR-R_i", group_normalized)
+        self.assertIn("同一prompt", group_normalized)
+        self.assertIn("lastaxis当作同promptgroup", group_normalized)
+        self.assertIn("先减去组内均值，再按总体标准差", group_normalized)
+        self.assertIn("zero-variancegroup", group_normalized)
+        self.assertIn("返回精确零", group_normalized)
 
         sampled_kl = text.split(
             "### Pointwise log-ratio 不等于 full KL", maxsplit=1
         )[1].split("### DPO 是离线偏好优化对照", maxsplit=1)[0]
-        for term in (
-            "log\\pi_\\theta",
-            "log\\pi_{\\text{ref}}",
-            "pointwise",
-            "不是 full KL",
-            "expected KL",
-        ):
-            self.assertIn(term, sampled_kl)
+        sampled_kl_normalized = self.normalize_formula_text(sampled_kl)
+        sampled_formula = (
+            r"k_t=\log\pi_\theta(a_t\mids_t)-"
+            r"\log\pi_{\text{ref}}(a_t\mids_t)"
+        )
+        reversed_sampled_formula = (
+            r"k_t=\log\pi_{\text{ref}}(a_t\mids_t)-"
+            r"\log\pi_\theta(a_t\mids_t)"
+        )
+        self.assertIn(sampled_formula, sampled_kl_normalized)
+        self.assertNotIn(reversed_sampled_formula, sampled_kl_normalized)
+        self.assertIn("pointwisesampledlog-ratioestimator", sampled_kl_normalized)
+        self.assertIn("不是fullKL", sampled_kl_normalized)
+        self.assertIn("expectedKL", sampled_kl_normalized)
+
+        self.assertIn(
+            "](../assets/examples/reinforcement-learning/policy_objectives.py)", text
+        )
 
         dpo = text.split("### DPO 是离线偏好优化对照", maxsplit=1)[1].split(
             "## 训练数据流", maxsplit=1

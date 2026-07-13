@@ -61,7 +61,7 @@ r_t(\theta)=\exp\left(\log\pi_\theta(a_t\mid s_t)-
 \log\pi_{\text{old}}(a_t\mid s_t)\right).
 \]
 
-其中分子策略是当前 policy，分母策略是采样这批 response 的 old policy。
+其中分子策略是当前 policy，分母策略是采样这批 response 的 old policy。代码域中的同一方向是 `new_logp - old_logp`：先取当前策略减旧策略，再 exponentiate，不能反向。
 
 PPO clipped objective 为：
 
@@ -72,7 +72,7 @@ L^{\text{clip}}(\theta)=
 \operatorname{clip}(r_t,1-\epsilon,1+\epsilon)A_t\right)\right].
 \]
 
-这里的 $A_t$ 是 advantage，$\epsilon$ 是 ratio 裁剪宽度。代码中的 `clipped_policy_loss` 返回这个 surrogate 的负均值。正 advantage 时过大的增益被上界裁剪；负 advantage 时过大的概率下降被另一侧限制。old policy 负责定义采样时分布和 ratio，reference policy 负责限制离底座太远，两者不能混为同一个快照。
+这里的 $A_t$ 是 advantage，$\epsilon$ 是 ratio 裁剪宽度。代码中的 `clipped_policy_loss` 返回这个 surrogate 的负均值，作为 loss 交给 optimizer 最小化；$L^{\text{clip}}$ 写的是要最大化的正 surrogate，不是 helper 直接返回的正值。正 advantage 时过大的增益被上界裁剪；负 advantage 时过大的概率下降被另一侧限制。old policy 负责定义采样时分布和 ratio，reference policy 负责限制离底座太远，两者不能混为同一个快照。
 
 ### GRPO：同一 prompt 内做相对归一化
 
