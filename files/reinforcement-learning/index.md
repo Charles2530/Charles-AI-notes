@@ -53,7 +53,7 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 
 当**正确动作标签很便宜**、**交互不安全**，或 **reward 无法代表真实目标**时，RL 通常不是第一选择。此时应先考虑监督学习、模仿学习、规则规划、搜索或离线评估；即使最后采用 RL，也应先解决安全边界、奖励有效性和数据支持问题。
 
-## 完整学习路线
+## 完整学习路线 {#完整学习路线}
 
 下面是完整课程地图。当前已有的章节可以直接进入；“规划中”章节只列名称，不创建指向缺失文件的链接。
 
@@ -63,7 +63,7 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 | 建立语言 | 2. [Agent、环境与训练闭环](rl-agent-environment-loop.md) | 可阅读 |
 | 长期价值 | 3. [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) | 可阅读 |
 | 长期价值 | 4. [MDP、回报、价值函数与 Bellman](mdp-value-bellman.md) | 可阅读 |
-| 长期价值 | 5. 动态规划、Monte Carlo 与 TD | 规划中 |
+| 长期价值 | 5. [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) | 可阅读 |
 | 经典深度 RL | 6. Q-learning 与 DQN | 规划中 |
 | 经典深度 RL | 7. Policy Gradient 与 REINFORCE | 规划中 |
 | 经典深度 RL | 8. [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) | 可阅读；现有页面包含 GRPO 对照 |
@@ -81,7 +81,7 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 
 | 你的目标 | 建议入口与顺序 |
 | --- | --- |
-| 从零建立经典 RL 基础 | 当前页 -> [交互闭环](rl-agent-environment-loop.md) -> [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> 后续 TD、DQN 与 PPO 章节 |
+| 从零建立经典 RL 基础 | 当前页 -> [交互闭环](rl-agent-environment-loop.md) -> [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) -> 后续 DQN 与 PPO 章节 |
 | 理解 PPO / GRPO 与大模型后训练 | [MDP 与 Bellman](mdp-value-bellman.md) -> [Policy Gradient、Actor-Critic、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md) -> [verl 训练流程](verl-code-flow.md) |
 | 研究世界模型与规划 | [交互闭环](rl-agent-environment-loop.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> [世界模型中的强化学习](rl-for-world-models.md) |
 | 进入 VLA 与机器人闭环 | [交互闭环](rl-agent-environment-loop.md) -> [世界模型中的强化学习](rl-for-world-models.md) -> 后续连续控制、Offline RL 与 VLA 章节 |
