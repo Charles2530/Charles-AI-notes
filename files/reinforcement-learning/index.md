@@ -55,11 +55,11 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 
 ## 完整学习路线 {#完整学习路线}
 
-下面是完整课程地图。当前已有的章节可以直接进入；“规划中”章节只列名称，不创建指向缺失文件的链接。
+下面是完整课程地图。15 个章节均已发布，可以按依赖顺序阅读，也可以从下一节按任务方向进入。
 
 | 阶段 | 章节 | 当前状态 |
 | --- | --- | --- |
-| 建立语言 | 1. 强化学习专题首页 | 当前页 |
+| 建立语言 | 1. [强化学习专题首页](index.md) | 可阅读 |
 | 建立语言 | 2. [Agent、环境与训练闭环](rl-agent-environment-loop.md) | 可阅读 |
 | 长期价值 | 3. [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) | 可阅读 |
 | 长期价值 | 4. [MDP、回报、价值函数与 Bellman](mdp-value-bellman.md) | 可阅读 |
@@ -73,7 +73,7 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 | 大模型与具身系统 | 12. [LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md) | 可阅读 |
 | 大模型与具身系统 | 13. [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md) | 可阅读 |
 | 大模型与具身系统 | 14. [RL 系统工程与 verl](verl-code-flow.md) | 可阅读 |
-| 综合 | 15. 综合实践与算法选择 | 规划中 |
+| 综合 | 15. [综合实践与算法选择](practice-and-algorithm-selection.md) | 可阅读 |
 
 推荐按表格顺序学习。若 MDP、条件期望或策略目标仍陌生，可先读 [强化学习数学目标](../prerequisite-math/value-policy-and-rl-objectives.md)；它负责数学定义，本课程负责把定义放回算法与数据流。
 
@@ -82,8 +82,8 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 | 你的目标 | 建议入口与顺序 |
 | --- | --- |
 | 从零建立经典 RL 基础 | 当前页 -> [交互闭环](rl-agent-environment-loop.md) -> [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) -> [Q-learning 与 DQN](q-learning-and-dqn.md) -> [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) -> [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) -> [连续控制与 SAC](continuous-control-and-sac.md) |
-| 现代 RL 应用完整路线 | [连续控制与 SAC](continuous-control-and-sac.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) -> [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md) -> [VLA 与机器人闭环](vla-robotics-and-closed-loop-rl.md) -> [verl](verl-code-flow.md) |
-| 理解 PPO 与后续大模型强化学习 | [MDP 与 Bellman](mdp-value-bellman.md) -> [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) -> [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) -> [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md) -> [verl 训练流程](verl-code-flow.md) |
+| 现代 RL 应用完整路线 | [连续控制与 SAC](continuous-control-and-sac.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) -> [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md) -> [VLA 与机器人闭环](vla-robotics-and-closed-loop-rl.md) -> [verl](verl-code-flow.md) -> [综合实践与算法选择](practice-and-algorithm-selection.md) |
+| 理解 PPO 与后续大模型强化学习 | [MDP 与 Bellman](mdp-value-bellman.md) -> [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) -> [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) -> [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md) -> [verl 训练流程](verl-code-flow.md) -> [综合实践与算法选择](practice-and-algorithm-selection.md) |
 | 研究世界模型与规划 | [交互闭环](rl-agent-environment-loop.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) |
 | 进入 VLA 与机器人闭环 | [交互闭环](rl-agent-environment-loop.md) -> [连续控制与 SAC](continuous-control-and-sac.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) -> [VLA 与机器人闭环](vla-robotics-and-closed-loop-rl.md) |
 

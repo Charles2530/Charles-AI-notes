@@ -6,6 +6,22 @@ ROOT = Path(__file__).resolve().parents[1]
 RL_ROOT = ROOT / "files" / "reinforcement-learning"
 
 class ReinforcementLearningCurriculumTests(TestCase):
+    COURSE_PAGES = (
+        "rl-agent-environment-loop.md",
+        "multi-armed-bandits-and-exploration.md",
+        "mdp-value-bellman.md",
+        "dynamic-programming-monte-carlo-td.md",
+        "q-learning-and-dqn.md",
+        "policy-gradient-and-reinforce.md",
+        "policy-gradient-actor-critic-ppo-grpo.md",
+        "continuous-control-and-sac.md",
+        "offline-reinforcement-learning.md",
+        "rl-for-world-models.md",
+        "llm-rlhf-rlvr-and-grpo.md",
+        "vla-robotics-and-closed-loop-rl.md",
+        "verl-code-flow.md",
+        "practice-and-algorithm-selection.md",
+    )
     CLASSIC_PAGES = (
         "q-learning-and-dqn.md",
         "policy-gradient-and-reinforce.md",
@@ -36,16 +52,24 @@ class ReinforcementLearningCurriculumTests(TestCase):
 
     def assert_local_links_resolve(self, page):
         text = page.read_text(encoding="utf-8")
-        local_targets = []
-        for target in re.findall(r"!?\[[^]]*\]\(([^)]+)\)", text):
+        local_link_targets = []
+        for image_marker, target in re.findall(r"(!?)\[[^]]*\]\(([^)]+)\)", text):
             if target.startswith(("http://", "https://", "#")):
                 continue
             path = target.split("#", maxsplit=1)[0]
             if not path:
                 continue
-            local_targets.append(path)
+            if not image_marker:
+                local_link_targets.append(path)
             self.assertTrue((page.parent / path).resolve().is_file(), target)
-        self.assertGreaterEqual(len(local_targets), 2)
+        self.assertGreaterEqual(len(set(local_link_targets)), 2)
+
+    def h2_section(self, text, heading):
+        start = text.index(f"## {heading}")
+        following = re.search(r"^## ", text[start + 3 :], flags=re.MULTILINE)
+        if following is None:
+            return text[start:]
+        return text[start : start + 3 + following.start()]
 
     def first_markdown_table(self, section):
         groups = []
@@ -91,6 +115,46 @@ class ReinforcementLearningCurriculumTests(TestCase):
         section = nav[start:end]
         first_page = next(line for line in section.splitlines() if "reinforcement-learning/" in line)
         self.assertIn("reinforcement-learning/index.md", first_page)
+
+    def test_all_course_pages_share_final_contract_and_resolve_links(self):
+        for filename in self.COURSE_PAGES:
+            with self.subTest(filename=filename):
+                page = RL_ROOT / filename
+                self.assertTrue(page.is_file(), filename)
+                text = page.read_text(encoding="utf-8")
+                headings = [line for line in text.splitlines() if line.startswith("## ")]
+                self.assert_ordered_subsequence(self.REQUIRED_CHAPTER_HEADINGS, headings)
+                self.assert_local_links_resolve(page)
+
+                next_section = self.h2_section(text, "下一步")
+                course_targets = {
+                    target.split("#", maxsplit=1)[0]
+                    for target in re.findall(r"\[[^]]+\]\(([^)]+)\)", next_section)
+                }
+                self.assertTrue(
+                    course_targets.intersection({"index.md", *self.COURSE_PAGES}),
+                    f"{filename} 下一步 must link to the course or its index",
+                )
+
+    def test_published_course_exits_have_no_stale_planning_phrases(self):
+        stale_phrases = (
+            "规划中",
+            "规划状态",
+            "未来章节",
+            "尚未实现",
+            "没有独立课程页",
+            "还没有独立课程页",
+            "尚无独立课程页",
+        )
+        index = (RL_ROOT / "index.md").read_text(encoding="utf-8")
+        for stale in stale_phrases:
+            self.assertNotIn(stale, index)
+        for filename in self.COURSE_PAGES:
+            with self.subTest(filename=filename):
+                text = (RL_ROOT / filename).read_text(encoding="utf-8")
+                next_section = self.h2_section(text, "下一步")
+                for stale in stale_phrases:
+                    self.assertNotIn(stale, next_section)
 
     def test_index_has_complete_ordered_course_contract(self):
         text = (RL_ROOT / "index.md").read_text(encoding="utf-8")
@@ -148,6 +212,34 @@ class ReinforcementLearningCurriculumTests(TestCase):
                 "VLA、机器人与闭环强化学习",
                 "RL 系统工程与 verl",
                 "综合实践与算法选择",
+            ],
+        )
+        course_rows = []
+        for row in course_map.splitlines():
+            cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+            if len(cells) != 3 or not re.match(r"\d+\.\s+", cells[1]):
+                continue
+            match = re.fullmatch(r"(\d+)\.\s+\[([^]]+)\]\(([^)]+)\)", cells[1])
+            self.assertIsNotNone(match, cells[1])
+            course_rows.append((cells[0], int(match.group(1)), match.group(3), cells[2]))
+        self.assertEqual(
+            course_rows,
+            [
+                ("建立语言", 1, "index.md", "可阅读"),
+                ("建立语言", 2, "rl-agent-environment-loop.md", "可阅读"),
+                ("长期价值", 3, "multi-armed-bandits-and-exploration.md", "可阅读"),
+                ("长期价值", 4, "mdp-value-bellman.md", "可阅读"),
+                ("长期价值", 5, "dynamic-programming-monte-carlo-td.md", "可阅读"),
+                ("经典深度 RL", 6, "q-learning-and-dqn.md", "可阅读"),
+                ("经典深度 RL", 7, "policy-gradient-and-reinforce.md", "可阅读"),
+                ("经典深度 RL", 8, "policy-gradient-actor-critic-ppo-grpo.md", "可阅读"),
+                ("经典深度 RL", 9, "continuous-control-and-sac.md", "可阅读"),
+                ("低成本与模型驱动", 10, "offline-reinforcement-learning.md", "可阅读"),
+                ("低成本与模型驱动", 11, "rl-for-world-models.md", "可阅读"),
+                ("大模型与具身系统", 12, "llm-rlhf-rlvr-and-grpo.md", "可阅读"),
+                ("大模型与具身系统", 13, "vla-robotics-and-closed-loop-rl.md", "可阅读"),
+                ("大模型与具身系统", 14, "verl-code-flow.md", "可阅读"),
+                ("综合", 15, "practice-and-algorithm-selection.md", "可阅读"),
             ],
         )
         self.assertIn(
@@ -1020,6 +1112,162 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         self.assertIn("未测试场景", rows["real closed-loop success"][2])
         self.assertIn("普遍泛化", rows["real closed-loop success"][2])
 
+    def test_verl_has_field_level_flow_worker_boundaries_and_system_checks(self):
+        page = RL_ROOT / "verl-code-flow.md"
+        text = page.read_text(encoding="utf-8")
+        minimum_task = self.h2_section(text, "最小任务")
+        for term in ("prompt batch", "distributed rollout", "distributed update"):
+            self.assertIn(term, minimum_task)
+
+        core = self.h2_section(text, "核心机制")
+        workers = core.split("### Worker 角色与边界", maxsplit=1)[1]
+        worker_header, worker_rows = self.first_markdown_table(workers)
+        self.assertEqual(worker_header, ["角色", "职责", "产物或边界"])
+        self.assertEqual(
+            list(worker_rows),
+            [
+                "driver / controller",
+                "actor / rollout",
+                "critic（可选）",
+                "reward",
+                "reference",
+                "trainer",
+            ],
+        )
+        self.assertIn("placement", " ".join(worker_rows["driver / controller"]))
+        self.assertIn("communication", " ".join(worker_rows["driver / controller"]))
+        self.assertIn("不更新", " ".join(worker_rows["reference"]))
+        self.assertIn("PPO", " ".join(worker_rows["critic（可选）"]))
+
+        flow = self.h2_section(text, "训练数据流")
+        flow_header, flow_rows = self.first_markdown_table(flow)
+        self.assertEqual(flow_header, ["阶段", "输入字段", "输出字段", "首要边界"])
+        self.assertEqual(
+            list(flow_rows),
+            [
+                "prompt batch",
+                "rollout",
+                "reward",
+                "PPO estimates",
+                "advantage",
+                "minibatch",
+                "optimizer",
+                "weight sync",
+            ],
+        )
+        expected_fields = {
+            "prompt batch": ("prompt", "input_ids", "attention_mask"),
+            "rollout": ("response", "action_mask"),
+            "reward": ("reward",),
+            "PPO estimates": ("old_logp", "reference_logp", "value"),
+            "advantage": ("advantage", "returns"),
+            "minibatch": ("minibatch",),
+            "optimizer": ("optimizer",),
+            "weight sync": ("weight sync",),
+        }
+        for row, fields in expected_fields.items():
+            joined = " ".join(flow_rows[row])
+            for field in fields:
+                self.assertIn(field, joined)
+        for term in (
+            "terminated",
+            "truncated",
+            "response_mask",
+            "action_mask",
+            "padding",
+            "token-level",
+            "sequence-level",
+            "policy_version_id",
+            "rollout_version_id",
+            "staleness",
+            "prefix/KV reuse",
+            "throughput",
+            "freshness",
+            "reproducibility metadata",
+        ):
+            self.assertIn(term, text)
+        old_reference = core.split("### Old policy 不等于 reference policy", maxsplit=1)[1]
+        self.assertIn("PPO ratio", old_reference)
+        self.assertIn("KL", old_reference)
+        self.assertIn("不是同一个角色", old_reference)
+        failures = self.h2_section(text, "常见失败")
+        for term in (
+            "stale logp",
+            "wrong mask",
+            "reward/logp misalignment",
+            "reference/old confusion",
+            "duplicate samples",
+            "nondeterministic serving",
+        ):
+            self.assertIn(f"| {term} |", failures)
+        for source in (
+            "https://github.com/verl-project/verl",
+            "https://verl.readthedocs.io/en/latest/workers/ray_trainer.html",
+            "https://arxiv.org/abs/2409.19256",
+            "https://huggingface.co/blog/the_n_implementation_details_of_rlhf_with_ppo",
+            "https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html",
+            "https://arxiv.org/abs/1707.06347",
+            "https://arxiv.org/abs/1801.01290",
+        ):
+            self.assertIn(f"]({source})", text)
+        self.assertIn("](practice-and-algorithm-selection.md)", self.h2_section(text, "下一步"))
+        self.assert_local_links_resolve(page)
+
+    def test_capstone_has_exact_algorithm_decision_table(self):
+        page = RL_ROOT / "practice-and-algorithm-selection.md"
+        text = page.read_text(encoding="utf-8")
+        core = self.h2_section(text, "核心机制")
+        decision = core.split("### 算法选择表", maxsplit=1)[1]
+        header, rows = self.first_markdown_table(decision)
+        self.assertEqual(header, ["算法", "适用条件", "数据", "动作", "主要风险", "首个诊断"])
+        self.assertEqual(
+            list(rows),
+            ["Bandit", "DQN", "PPO", "SAC", "Offline RL", "Model-based RL", "GRPO"],
+        )
+        for row in rows.values():
+            self.assertTrue(all(cell for cell in row))
+        for axis in (
+            "observation/state/POMDP",
+            "discrete / continuous action",
+            "online interaction",
+            "fixed dataset",
+            "reward / verifier",
+            "learned model",
+            "calibration",
+        ):
+            self.assertIn(axis, core)
+
+    def test_capstone_defines_three_executable_projects_and_acceptance(self):
+        page = RL_ROOT / "practice-and-algorithm-selection.md"
+        text = page.read_text(encoding="utf-8")
+        projects = self.h2_section(text, "最小任务")
+        expected = (
+            (
+                "### Capstone 1：GridWorld 中比较 DP、TD 与 Q-learning",
+                "python files/assets/examples/reinforcement-learning/gridworld.py --seed 7",
+                ("输入", "步骤", "预期产物", "验收标准", "失败诊断", "terminal mask"),
+            ),
+            (
+                "### Capstone 2：Pendulum 中比较 SAC 与 PPO",
+                "python files/assets/examples/reinforcement-learning/deep_rl_smoke.py sac --seed 7 --steps 256",
+                ("输入", "步骤", "预期产物", "验收标准", "失败诊断", "actor", "critic", "alpha", "return", "smoke 不是收敛"),
+            ),
+            (
+                "### Capstone 3：Verifier LLM 的组内策略目标",
+                "python files/assets/examples/reinforcement-learning/policy_objectives.py --seed 7",
+                ("输入", "步骤", "预期产物", "验收标准", "失败诊断", "group advantage", "zero group", "sampled KL", "clipped loss", "reward hacking"),
+            ),
+        )
+        for index, (heading, command, terms) in enumerate(expected):
+            self.assertIn(heading, projects)
+            section = projects.split(heading, maxsplit=1)[1]
+            if index + 1 < len(expected):
+                section = section.split(expected[index + 1][0], maxsplit=1)[0]
+            self.assertIn(command, section)
+            for term in terms:
+                self.assertIn(term, section)
+        self.assert_local_links_resolve(page)
+
     def test_index_marks_modern_application_route_readable_and_linked(self):
         text = (RL_ROOT / "index.md").read_text(encoding="utf-8")
         course_map = text.split("## 完整学习路线", maxsplit=1)[1].split(
@@ -1043,32 +1291,49 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             text,
         )
 
-    def test_nav_uses_build_safe_course_list(self):
+    def test_nav_uses_final_grouped_course_order(self):
         nav = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
         start = nav.index("  - 强化学习:")
         end = nav.index("  - 世界模型与具身智能:", start)
         section = nav[start:end]
-        pages = [
-            line.strip()
-            for line in section.splitlines()
-            if "reinforcement-learning/" in line
-        ]
+        stage_labels = []
+        pages = []
+        for line in section.splitlines()[1:]:
+            page_match = re.fullmatch(
+                r"\s+-\s+[^:]+:\s+(reinforcement-learning/[^\s]+\.md)", line
+            )
+            if page_match:
+                pages.append(page_match.group(1))
+                continue
+            stage_match = re.fullmatch(r"      - ([^:]+):", line)
+            if stage_match:
+                stage_labels.append(stage_match.group(1))
+        self.assertEqual(
+            stage_labels,
+            [
+                "建立决策语言",
+                "经典深度强化学习",
+                "低成本与模型驱动学习",
+                "大模型、机器人与系统",
+            ],
+        )
         self.assertEqual(
             pages,
             [
-                "- 强化学习导读: reinforcement-learning/index.md",
-                "- Agent、环境与训练闭环: reinforcement-learning/rl-agent-environment-loop.md",
-                "- 多臂老虎机与探索: reinforcement-learning/multi-armed-bandits-and-exploration.md",
-                "- MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md",
-                "- 动态规划、Monte Carlo 与 TD: reinforcement-learning/dynamic-programming-monte-carlo-td.md",
-                "- Q-learning 与 DQN: reinforcement-learning/q-learning-and-dqn.md",
-                "- Policy Gradient 与 REINFORCE: reinforcement-learning/policy-gradient-and-reinforce.md",
-                "- Actor-Critic、GAE 与 PPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md",
-                "- 连续控制与 SAC: reinforcement-learning/continuous-control-and-sac.md",
-                "- Offline Reinforcement Learning: reinforcement-learning/offline-reinforcement-learning.md",
-                "- Model-based RL 与世界模型: reinforcement-learning/rl-for-world-models.md",
-                "- LLM 强化学习：RLHF、RLVR 与 GRPO: reinforcement-learning/llm-rlhf-rlvr-and-grpo.md",
-                "- VLA、机器人与闭环强化学习: reinforcement-learning/vla-robotics-and-closed-loop-rl.md",
-                "- verl 训练流程: reinforcement-learning/verl-code-flow.md",
+                "reinforcement-learning/index.md",
+                "reinforcement-learning/rl-agent-environment-loop.md",
+                "reinforcement-learning/multi-armed-bandits-and-exploration.md",
+                "reinforcement-learning/mdp-value-bellman.md",
+                "reinforcement-learning/dynamic-programming-monte-carlo-td.md",
+                "reinforcement-learning/q-learning-and-dqn.md",
+                "reinforcement-learning/policy-gradient-and-reinforce.md",
+                "reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md",
+                "reinforcement-learning/continuous-control-and-sac.md",
+                "reinforcement-learning/offline-reinforcement-learning.md",
+                "reinforcement-learning/rl-for-world-models.md",
+                "reinforcement-learning/llm-rlhf-rlvr-and-grpo.md",
+                "reinforcement-learning/vla-robotics-and-closed-loop-rl.md",
+                "reinforcement-learning/verl-code-flow.md",
+                "reinforcement-learning/practice-and-algorithm-selection.md",
             ],
         )

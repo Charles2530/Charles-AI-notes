@@ -207,4 +207,4 @@ Dynamic Programming 需要可查询的完整模型；Monte Carlo 与 TD 则从 s
 
 ## 下一步
 
-进入 [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md)，在同一个 2×3 GridWorld 中分别用已知模型、完整 episode 和一步 bootstrap 估计 value。随后沿 [Q-learning 与 DQN](q-learning-and-dqn.md) 学习 action-value control，沿 [Offline Reinforcement Learning](offline-reinforcement-learning.md) 学习固定数据的 support 边界，或进入 [Model-based RL 与世界模型](rl-for-world-models.md) 学习 transition 建模。课程地图中仅“综合实践与算法选择”仍标为规划中，见 [完整学习路线](index.md#完整学习路线)。
+进入 [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md)，在同一个 2×3 GridWorld 中分别用已知模型、完整 episode 和一步 bootstrap 估计 value。随后沿 [Q-learning 与 DQN](q-learning-and-dqn.md) 学习 action-value control，沿 [Offline Reinforcement Learning](offline-reinforcement-learning.md) 学习固定数据的 support 边界，或进入 [Model-based RL 与世界模型](rl-for-world-models.md) 学习 transition 建模。完成主线后，用 [综合实践与算法选择](practice-and-algorithm-selection.md) 检查任务假设、算法选择与验收证据。
