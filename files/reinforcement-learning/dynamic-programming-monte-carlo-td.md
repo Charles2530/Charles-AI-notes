@@ -121,7 +121,7 @@ MC 和 TD(0) 之间可以用 n-step return 连起来：
 G_t^{(n)}=\sum_{k=0}^{n-1}\gamma^k r_{t+k}+\gamma^n V(s_{t+n})
 \]
 
-这行式子先使用 \(n\) 个真实 reward，再从 \(s_{t+n}\) bootstrap。\(n=1\) 接近 TD(0)；当 \(n\) 延伸到 episode 末尾且不再 bootstrap 时，就得到 Monte Carlo return。较小 \(n\) 通常方差低但更依赖当前 value，bias 可能较大；较大 \(n\) 减少 bootstrap 依赖，却累积更多采样噪声。这就是 n-step target 的 bias-variance 权衡，不是“\(n\) 越大越准确”的单调关系。
+这行式子先使用 \(n\) 个真实 reward，再从 \(s_{t+n}\) bootstrap。\(n=1\) 就是 TD(0) target；若 \(n\) 步内遇到真正 terminal，则求和在该转移结束且不添加 bootstrap 项。当 \(n\) 延伸到 episode 末尾且不再 bootstrap 时，就得到 Monte Carlo return。较小 \(n\) 通常方差低但更依赖当前 value，bias 可能较大；较大 \(n\) 减少 bootstrap 依赖，却累积更多采样噪声。这就是 n-step target 的 bias-variance 权衡，不是“\(n\) 越大越准确”的单调关系。
 
 ### 7. Terminal mask 与 truncation 边界
 
