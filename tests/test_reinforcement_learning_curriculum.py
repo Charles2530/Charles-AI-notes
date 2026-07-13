@@ -1,6 +1,8 @@
 import re
+import unicodedata
 from pathlib import Path
 from unittest import TestCase
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 RL_ROOT = ROOT / "files" / "reinforcement-learning"
@@ -54,15 +56,39 @@ class ReinforcementLearningCurriculumTests(TestCase):
         text = page.read_text(encoding="utf-8")
         local_link_targets = []
         for image_marker, target in re.findall(r"(!?)\[[^]]*\]\(([^)]+)\)", text):
-            if target.startswith(("http://", "https://", "#")):
+            if target.startswith(("http://", "https://")):
                 continue
-            path = target.split("#", maxsplit=1)[0]
-            if not path:
-                continue
-            if not image_marker:
-                local_link_targets.append(path)
-            self.assertTrue((page.parent / path).resolve().is_file(), target)
+            path, _, fragment = target.partition("#")
+            target_page = page if not path else (page.parent / path).resolve()
+            if path:
+                if not image_marker:
+                    local_link_targets.append(path)
+                self.assertTrue(target_page.is_file(), target)
+            if fragment:
+                self.assertEqual(target_page.suffix, ".md", target)
+                self.assertIn(unquote(fragment), self.markdown_fragment_ids(target_page), target)
         self.assertGreaterEqual(len(set(local_link_targets)), 2)
+
+    def markdown_toc_slug(self, heading):
+        normalized = unicodedata.normalize("NFKC", heading).casefold()
+        words_only = re.sub(r"[^\w\s-]", "", normalized)
+        return re.sub(r"[-\s]+", "-", words_only).strip("-")
+
+    def markdown_fragment_ids(self, page):
+        ids = set()
+        for line in page.read_text(encoding="utf-8").splitlines():
+            heading = re.match(r"^#{1,6}\s+(.+)$", line)
+            if heading is None:
+                continue
+            title = heading.group(1).strip()
+            custom = re.search(r"\s+\{#([^}]+)\}\s*$", title)
+            if custom is not None:
+                ids.add(custom.group(1))
+                continue
+            slug = self.markdown_toc_slug(title)
+            if slug:
+                ids.add(slug)
+        return ids
 
     def h2_section(self, text, heading):
         start = text.index(f"## {heading}")
@@ -134,6 +160,38 @@ class ReinforcementLearningCurriculumTests(TestCase):
                 self.assertTrue(
                     course_targets.intersection({"index.md", *self.COURSE_PAGES}),
                     f"{filename} 下一步 must link to the course or its index",
+                )
+
+    def test_course_prerequisites_and_exits_follow_dependency_direction(self):
+        self.assertEqual(self.markdown_toc_slug("PPO Ratio: Old vs Current"), "ppo-ratio-old-vs-current")
+        self.assertEqual(self.markdown_toc_slug("完整学习路线"), "完整学习路线")
+        for index, filename in enumerate(self.COURSE_PAGES):
+            with self.subTest(filename=filename):
+                text = (RL_ROOT / filename).read_text(encoding="utf-8")
+                prereqs = self.h2_section(text, "先修知识")
+                prereq_targets = {
+                    target.split("#", maxsplit=1)[0]
+                    for target in re.findall(r"\[[^]]+\]\(([^)]+)\)", prereqs)
+                    if not target.startswith(("http://", "https://"))
+                }
+                self.assertTrue(
+                    any(target.startswith("../prerequisite-math/") for target in prereq_targets)
+                    or bool(prereq_targets.intersection(self.COURSE_PAGES[:index])),
+                    f"{filename} prerequisites must point to math or an earlier course page",
+                )
+
+                exits = self.h2_section(text, "下一步")
+                exit_targets = {
+                    target.split("#", maxsplit=1)[0]
+                    for target in re.findall(r"\[[^]]+\]\(([^)]+)\)", exits)
+                    if not target.startswith(("http://", "https://"))
+                }
+                expected = {"index.md"} if index == len(self.COURSE_PAGES) - 1 else set(
+                    self.COURSE_PAGES[index + 1 :]
+                )
+                self.assertTrue(
+                    exit_targets.intersection(expected),
+                    f"{filename} 下一步 must point later in the course",
                 )
 
     def test_published_course_exits_have_no_stale_planning_phrases(self):
@@ -1127,17 +1185,25 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             list(worker_rows),
             [
                 "RayPPOTrainer driver / controller",
-                "actor / rollout worker",
-                "critic worker（可选）",
+                "rollout generation layer",
+                "actor_rollout_wg actor training",
+                "critic_wg（可选）",
                 "reward role",
                 "reference role",
             ],
         )
         driver = " ".join(worker_rows["RayPPOTrainer driver / controller"])
-        actor = " ".join(worker_rows["actor / rollout worker"])
-        critic = " ".join(worker_rows["critic worker（可选）"])
+        generation = " ".join(worker_rows["rollout generation layer"])
+        actor = " ".join(worker_rows["actor_rollout_wg actor training"])
+        critic = " ".join(worker_rows["critic_wg（可选）"])
         self.assertIn("RPC", driver)
         self.assertIn("driver-side `compute_advantage`", driver)
+        for term in (
+            "LLMServerManager",
+            "AgentLoopManager",
+            "async_rollout_manager.generate_sequences",
+        ):
+            self.assertIn(term, generation)
         for term in ("logprob", "actor minibatch", "backward", "optimizer"):
             self.assertIn(term, actor)
         for term in ("values", "critic minibatch", "backward", "optimizer"):
@@ -1164,29 +1230,42 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             ],
         )
         expected_fields = {
-            "prompt batch": ("prompt", "input_ids", "attention_mask"),
-            "rollout": ("response", "action_mask", "rollout_log_probs"),
+            "prompt batch": ("prompts", "attention_mask"),
+            "rollout": ("responses", "response_mask", "rollout_log_probs"),
             "reward": ("reward",),
             "policy fields": ("rollout_log_probs", "old_log_probs", "ref_log_prob", "values"),
             "advantage": ("advantage", "returns"),
             "critic update": ("critic minibatch", "optimizer"),
-            "actor update": ("actor minibatch", "optimizer", "pi_theta"),
+            "actor update": ("actor minibatch", "optimizer", "current policy"),
             "weight sync": ("weight sync",),
         }
         for row, fields in expected_fields.items():
             joined = " ".join(flow_rows[row])
             for field in fields:
                 self.assertIn(field, joined)
+        for source in (
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/experimental/agent_loop/"
+            "agent_loop.py#L1047-L1060",
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L1248-L1282",
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L1451-L1507",
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L1580-L1638",
+        ):
+            self.assertIn(f"]({source})", flow)
         for term in (
             "terminated",
             "truncated",
             "response_mask",
-            "action_mask",
             "padding",
             "token-level",
             "sequence-level",
-            "policy_version_id",
-            "rollout_version_id",
+            "global_steps",
             "staleness",
             "prefix/KV reuse",
             "throughput",
@@ -1194,6 +1273,20 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "reproducibility metadata",
         ):
             self.assertIn(term, text)
+        for unsupported_field in ("`action_mask`", "`pi_theta`"):
+            self.assertNotIn(unsupported_field, text)
+        flow_text = " ".join(" ".join(row) for row in flow_rows.values())
+        for unsupported_field in ("policy_version_id", "rollout_version_id", "action_mask", "pi_theta"):
+            self.assertNotIn(unsupported_field, flow_text)
+        self.assertIn("application-level audit metadata", text)
+        self.assertIn("不是 pinned VERL 的内置 keys", text)
+        for recommended_identifier in ("policy_version_id", "rollout_version_id"):
+            containing_lines = [
+                line for line in text.splitlines() if recommended_identifier in line
+            ]
+            self.assertEqual(len(containing_lines), 1)
+            self.assertIn("application-level audit metadata", containing_lines[0])
+            self.assertIn("不是 pinned VERL 的内置 keys", containing_lines[0])
         failures = self.h2_section(text, "常见失败")
         for term in (
             "stale logp",
@@ -1240,7 +1333,9 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         self.assertIn("sampling behavior/version", " ".join(policy_rows["rollout policy"]))
         self.assertIn("old_log_probs", policy_rows["proximal old policy"][0])
         self.assertIn("PPO ratio anchor", " ".join(policy_rows["proximal old policy"]))
-        self.assertIn("pi_theta", policy_rows["current train policy"][0])
+        current_field = policy_rows["current train policy"][0]
+        self.assertIn(r"\pi_\theta", current_field)
+        self.assertNotIn("`pi_theta`", current_field)
         self.assertIn("当前 minibatch update", " ".join(policy_rows["current train policy"]))
         self.assertIn("ref_log_prob", policy_rows["reference policy"][0])
         self.assertIn("KL anchor", " ".join(policy_rows["reference policy"]))
@@ -1253,30 +1348,24 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         self.assertEqual(mode_header, ["模式", "old_log_probs 来源", "策略关系", "修正边界"])
         self.assertEqual(list(mode_rows), ["bypass", "decoupled / recompute"])
         bypass = " ".join(mode_rows["bypass"])
-        for term in ("old_log_probs = rollout_log_probs", "pi_rollout = pi_old", "两策略"):
-            self.assertIn(term, bypass)
-        decoupled = " ".join(mode_rows["decoupled / recompute"])
         for term in (
-            "actor worker 重新计算",
-            "pi_rollout、pi_old、pi_theta 可以不同",
-            "rollout correction / importance sampling",
-            "按配置",
-            "不能修复任意 staleness",
+            "old_log_probs = rollout_log_probs",
+            r"\pi_{\text{rollout}} = \pi_{\text{old}}",
+            "两策略",
         ):
-            self.assertIn(term, decoupled)
+            self.assertIn(term, bypass)
+        decoupled = " ".join(mode_rows["decoupled / recompute"]).replace("`", "")
+        self.assertIn("actor_rollout_wg 重新计算", decoupled)
+        self.assertIn("rollout correction", decoupled)
+        self.assertIn("不能修复任意 staleness", decoupled)
         pinned_policy_source = (
             "https://github.com/verl-project/verl/blob/"
             "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
             "ray_trainer.py#L1533-L1536"
         )
         self.assertIn(f"]({pinned_policy_source})", modes)
-        for stale_claim in (
-            "old policy 是采集当前 rollout 的策略快照",
-            "`old_logp` 必须对应实际生成该 response 的版本",
-            "old 来自 rollout",
-            "重新计算的 logp 不能替代采样时 `old_logp`",
-        ):
-            self.assertNotIn(stale_claim, text)
+        self.assertNotIn("sampling-vs-old/current mismatch", text)
+        self.assertNotIn("pi_theta", text)
 
     def test_verl_pinned_snapshot_assigns_driver_actor_and_critic_ownership(self):
         text = (RL_ROOT / "verl-code-flow.md").read_text(encoding="utf-8")
@@ -1289,10 +1378,75 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "https://github.com/verl-project/verl/blob/"
             "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
             "ray_trainer.py#L1368-L1373",
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L939-L953",
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L1472-L1476",
+            "https://github.com/verl-project/verl/blob/"
+            "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+            "ray_trainer.py#L1524-L1591",
         ):
             self.assertIn(f"]({source})", workers)
         self.assertNotIn("| trainer |", workers)
-        self.assertIn("概念流程阶段，不是独立 VERL process role", core)
+
+    def test_verl_separates_rollout_correction_ppo_ratio_and_actor_diagnostic(self):
+        text = (RL_ROOT / "verl-code-flow.md").read_text(encoding="utf-8")
+        core = self.h2_section(text, "核心机制")
+        self.assertIn("### 三种 ratio 与 mismatch", core)
+        ratios = core.split("### 三种 ratio 与 mismatch", maxsplit=1)[1].split(
+            "### Worker 角色与边界", maxsplit=1
+        )[0]
+        header, rows = self.first_markdown_table(ratios)
+        self.assertEqual(header, ["关系", "log-space orientation", "ratio / meaning", "用途"])
+        self.assertEqual(
+            list(rows),
+            [
+                "rollout correction",
+                "PPO optimization ratio",
+                "current-vs-rollout measurement",
+            ],
+        )
+        rollout = " ".join(rows["rollout correction"])
+        self.assertIn("old_log_probs - rollout_log_probs", rollout)
+        self.assertIn("exp(old - rollout)", rollout)
+        self.assertIn("decoupled", rollout)
+        ppo = " ".join(rows["PPO optimization ratio"])
+        self.assertIn("current_log_probs - old_log_probs", ppo)
+        self.assertIn("exp(current - old)", ppo)
+        measurement = " ".join(rows["current-vs-rollout measurement"])
+        self.assertIn("current_log_probs - rollout_log_probs", measurement)
+        self.assertIn("diagnostic helper", measurement)
+        self.assertIn("bypass", measurement)
+        self.assertIn("rejection / IS", measurement)
+        self.assertIn("`ref_log_prob` 不参与以上三个 ratio", ratios)
+        pinned_sources = {
+            "rollout correction": (
+                "https://github.com/verl-project/verl/blob/"
+                "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+                "rollout_corr_helper.py#L784-L848",
+                "https://github.com/verl-project/verl/blob/"
+                "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+                "rollout_corr_helper.py#L1011-L1055",
+            ),
+            "PPO optimization ratio": (
+                "https://github.com/verl-project/verl/blob/"
+                "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+                "core_algos.py#L1278-L1333",
+            ),
+            "current-vs-rollout measurement": (
+                "https://github.com/verl-project/verl/blob/"
+                "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+                "rollout_corr_helper.py#L1068-L1084",
+                "https://github.com/verl-project/verl/blob/"
+                "e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/"
+                "core_algos.py#L2372-L2506",
+            ),
+        }
+        for row, sources in pinned_sources.items():
+            for source in sources:
+                self.assertIn(f"]({source})", " ".join(rows[row]))
 
     def test_capstone_has_exact_algorithm_decision_table(self):
         page = RL_ROOT / "practice-and-algorithm-selection.md"

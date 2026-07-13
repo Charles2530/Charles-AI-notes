@@ -1,6 +1,7 @@
 import importlib.util
 import math
 from pathlib import Path
+import re
 import subprocess
 import sys
 from unittest import TestCase, skipUnless
@@ -18,10 +19,16 @@ except ModuleNotFoundError:
     torch = None
     nn = None
 
+try:
+    import gymnasium
+except ModuleNotFoundError:
+    gymnasium = None
+
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "files" / "assets" / "examples" / "reinforcement-learning"
 RL_COURSE = ROOT / "files" / "reinforcement-learning"
+CLI_TIMEOUT_SECONDS = 180
 
 
 def load_module(name: str):
@@ -30,6 +37,16 @@ def load_module(name: str):
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def run_example_cli(script: str, *args: str):
+    return subprocess.run(
+        [sys.executable, str(EXAMPLES / script), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=CLI_TIMEOUT_SECONDS,
+    )
 
 
 @skipUnless(np is not None, "course examples require NumPy")
@@ -245,15 +262,9 @@ class ReinforcementLearningExampleTests(TestCase):
                         objectives.clipped_policy_loss(*args)
 
     def test_policy_objectives_cli_is_deterministic_and_names_estimator_boundaries(self):
-        script = EXAMPLES / "policy_objectives.py"
-        base_command = [sys.executable, str(script)]
-        default = subprocess.run(base_command, check=True, capture_output=True, text=True)
-        seeded = subprocess.run(
-            [*base_command, "--seed", "7"], check=True, capture_output=True, text=True
-        )
-        repeated = subprocess.run(
-            [*base_command, "--seed", "7"], check=True, capture_output=True, text=True
-        )
+        default = run_example_cli("policy_objectives.py")
+        seeded = run_example_cli("policy_objectives.py", "--seed", "7")
+        repeated = run_example_cli("policy_objectives.py", "--seed", "7")
 
         self.assertEqual(default.stdout, seeded.stdout)
         self.assertEqual(seeded.stdout, repeated.stdout)
@@ -271,6 +282,21 @@ class ReinforcementLearningExampleTests(TestCase):
             line for line in seeded.stdout.splitlines() if line.startswith("clipped_policy_loss=")
         )
         self.assertTrue(math.isfinite(float(loss_line.split("=", maxsplit=1)[1])))
+
+    def test_gridworld_cli_reports_optimal_solution_and_finite_summaries(self):
+        completed = run_example_cli("gridworld.py", "--seed", "7")
+        optimal = re.search(
+            r"^optimal_value_start=([^,]+), greedy_policy=(\[[^]]+\])$",
+            completed.stdout,
+            flags=re.MULTILINE,
+        )
+        self.assertIsNotNone(optimal)
+        self.assertEqual(float(optimal.group(1)), -1.9)
+        self.assertEqual(optimal.group(2), "[1, 1, 2, 1, 1, -1]")
+        for label in ("policy_value_mean", "q_mean", "q_max"):
+            match = re.search(rf"\b{label}=([-+0-9.eE]+)", completed.stdout)
+            self.assertIsNotNone(match)
+            self.assertTrue(math.isfinite(float(match.group(1))))
 
     def test_example_readme_owns_tabular_apis_and_exact_runtime_contract(self):
         text = (EXAMPLES / "README.md").read_text(encoding="utf-8")
@@ -1121,3 +1147,24 @@ class DeepRLTorchPrimitiveTests(TestCase):
         self.assertTrue(any(parameter.grad is not None for parameter in actor.parameters()))
         self.assertTrue(all(parameter.grad is None for parameter in critic_parameters))
         self.assertTrue(all(parameter.requires_grad for parameter in critic_parameters))
+
+
+@skipUnless(
+    torch is not None and gymnasium is not None,
+    "SAC CLI requires PyTorch and Gymnasium",
+)
+class DeepRLCLITests(TestCase):
+    def test_sac_256_cli_executes_all_updates_and_changes_actor_and_critic(self):
+        completed = run_example_cli(
+            "deep_rl_smoke.py", "sac", "--seed", "7", "--steps", "256"
+        )
+        metrics = dict(re.findall(r"\b([a-z_]+)=([^\s]+)", completed.stdout))
+
+        self.assertTrue(completed.stdout.startswith("SAC summary:"))
+        self.assertEqual(metrics["env"], "Pendulum-v1")
+        self.assertEqual(int(metrics["updates"]), 193)
+        self.assertGreater(float(metrics["actor_parameter_delta"]), 0.0)
+        self.assertGreater(float(metrics["critic_parameter_delta"]), 0.0)
+        for key, value in metrics.items():
+            if key != "env" and value != "unavailable":
+                self.assertTrue(math.isfinite(float(value)))

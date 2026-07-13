@@ -2,7 +2,7 @@
 
 ## 本章回答什么
 
-`verl` 这一章负责回答系统问题：一个 prompt batch 如何经过分布式 rollout、reward、advantage、optimizer update 和 weight sync，最终成为下一版本的生成策略。它不重新推导 PPO 或 GRPO 公式，而是追踪公式依赖的字段由谁产生、在哪个 mask 上对齐，以及 rollout 与 update 是否仍属于同一个 policy version。
+`verl` 这一章负责回答系统问题：一个 prompt batch 如何经过分布式 rollout、reward、advantage、optimizer update 和 weight sync，最终成为下一版本的生成策略。它不重新推导 PPO 或 GRPO 公式，而是追踪公式依赖的字段由谁产生、在哪个 mask 上对齐，以及 rollout 与 update 是否仍属于兼容的策略状态。
 
 学完后应能画出 worker 拓扑和字段流，区分 rollout policy、proximal old policy、current train policy 与 reference policy，解释吞吐与样本新鲜度为何冲突，并用版本、mask、样本标识和服务元数据定位分布式训练故障。本文保留稳定概念；涉及具体字段和 worker ownership 的结论只对应文中锁定的 `e5687fce...` 代码快照，不外推为其他版本的 API。
 
@@ -15,17 +15,19 @@
 
 ## 最小任务
 
-把一次最小系统任务写成：输入一个带 `prompt`、`input_ids`、`attention_mask` 和唯一 sample id 的 prompt batch，由带版本号的 actor 执行 distributed rollout，再由 reward/reference/critic 等角色补齐训练字段，完成一次 distributed update，并把新权重同步给下一轮 rollout。
+把一次最小系统任务写成：输入一个带 tokenized prompt、`attention_mask` 和唯一 sample id 的 prompt batch，由生成层执行 distributed rollout，再由 reward/reference/critic 等角色补齐训练字段，完成一次 distributed update，并把新权重同步给下一轮 rollout。
 
 ```text
-prompt batch@policy_version_id=17
-  -> distributed rollout@rollout_version_id=17
-  -> response + masks + reward + logp/value
-  -> advantage/returns -> minibatch -> distributed update
-  -> weight sync -> policy_version_id=18
+prompt batch
+  -> distributed rollout
+  -> responses + response_mask + rollout_log_probs + reward
+  -> old/ref log probs + values + advantages/returns
+  -> actor/critic minibatches -> distributed update -> weight sync
 ```
 
-最小验收不是 reward 上升，而是每条 response 能反查 prompt、rollout sampling behavior/version、`rollout_log_probs`、`old_log_probs` 的生成模式、reference version 和 optimizer step。bypass 模式会令 old 与 rollout 相同；decoupled 模式会另外计算 proximal old anchor。若只看最终 loss，字段或策略角色错位也可能产生有限数值。
+最小验收不是 reward 上升，而是每条 response 能反查 prompt、rollout sampling behavior、`rollout_log_probs`、`old_log_probs` 的生成模式、reference 配置和 optimizer step。bypass 模式会令 old 与 rollout 相同；decoupled 模式会另外计算 proximal old anchor。若只看最终 loss，字段或策略角色错位也可能产生有限数值。
+
+如果部署需要跨队列审计，可由应用显式增加 `policy_version_id`、`rollout_version_id` 等 application-level audit metadata；它们不是 pinned VERL 的内置 keys，不能写进内置字段表或据此推断框架已自动校验版本一致性。
 
 ## 核心机制
 
@@ -41,7 +43,7 @@ SFT 的 target response 已在数据中，典型 batch 只需 forward、cross en
 | --- | --- | --- | --- |
 | rollout policy | `rollout_log_probs` | 实际生成 response 的 sampling behavior/version | 记录 behavior probability，并为 rollout correction 提供采样侧基准 |
 | proximal old policy | `old_log_probs` | 每个 data batch 固定的 proximal snapshot | PPO ratio anchor；来源由 bypass 或 recompute 模式决定 |
-| current train policy | `pi_theta`；actor loss 内计算 current log probs | 随当前 minibatch update 演进的参数 | PPO ratio 分子，执行 actor update |
+| current train policy | $\pi_\theta$；actor loss 内计算 current log probs | 随当前 minibatch update 演进的参数 | PPO ratio 分子，执行 actor update |
 | reference policy | `ref_log_prob` | 配置的 KL anchor，通常不随 actor minibatch 更新 | 约束策略偏移；不是 old policy，也不是 sampling behavior |
 
 reference policy 是否启用与 old logprob 模式是正交问题。pinned 源码注释中的“两策略/三策略”只计算 rollout、old、current 这条 PPO/rollout-correction 链，不把可选 reference KL anchor 算入数量。
@@ -50,24 +52,35 @@ reference policy 是否启用与 old logprob 模式是正交问题。pinned 源�
 
 | 模式 | old_log_probs 来源 | 策略关系 | 修正边界 |
 | --- | --- | --- | --- |
-| bypass | `old_log_probs = rollout_log_probs` | `pi_rollout = pi_old`，只有 pi_rollout 与 pi_theta 两策略 | 不另算 proximal snapshot；仍需监控当前更新相对 rollout behavior 的 mismatch |
-| decoupled / recompute | actor worker 重新计算 proximal old policy 的 `old_log_probs` | pi_rollout、pi_old、pi_theta 可以不同 | rollout correction / importance sampling 按配置处理 sampling-vs-old/current mismatch；不能修复任意 staleness |
+| bypass | `old_log_probs = rollout_log_probs` | $\pi_{\text{rollout}} = \pi_{\text{old}}$，rollout/old 合一后与 $\pi_\theta$ 构成两策略 | PPO ratio 与 current-vs-rollout ratio 重合；按配置还可在 actor loss 内做 rejection / IS |
+| decoupled / recompute | `actor_rollout_wg` 重新计算 proximal old policy 的 `old_log_probs` | $\pi_{\text{rollout}}$、$\pi_{\text{old}}$、$\pi_\theta$ 可以不同 | rollout correction 只处理 old-vs-rollout；不能修复任意 staleness 或 off-support 样本 |
 
-这一分支直接见 pinned [`ray_trainer.py` 1533-1536 行](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1533-L1536)：bypass 把 rollout logprob 作为 old anchor，decoupled 则为每个 data batch 重算一次稳定的 proximal old anchor。后续 correction 仅在实现与配置规定的范围内处理分布 mismatch；它不能把任意过期、错版本或字段错位的样本自动变成有效 on-policy 数据。
+这一分支直接见 pinned [`ray_trainer.py` 1533-1536 行](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1533-L1536)：bypass 把 rollout logprob 作为 old anchor，decoupled 则为每个 data batch 重算一次稳定的 proximal old anchor。
+
+### 三种 ratio 与 mismatch
+
+| 关系 | log-space orientation | ratio / meaning | 用途 |
+| --- | --- | --- | --- |
+| rollout correction | `old_log_probs - rollout_log_probs` | `exp(old - rollout)`；pinned 实现明确计算 $\pi_{\text{old}}/\pi_{\text{rollout}}$ | 仅在 decoupled 模式修正 old-vs-rollout 分布差异；[减法方向](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/rollout_corr_helper.py#L784-L848) 与[字段传入点](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/rollout_corr_helper.py#L1011-L1055) 均锁定在同一 commit |
+| PPO optimization ratio | `current_log_probs - old_log_probs` | `exp(current - old)`，即 $\pi_\theta/\pi_{\text{old}}$ | clipped actor objective 的独立 ratio；见 [pinned policy loss](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/core_algos.py#L1278-L1333) |
+| current-vs-rollout measurement | `current_log_probs - rollout_log_probs` | 训练中 $\pi_\theta$ 相对 rollout behavior 的 mismatch | [diagnostic helper](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/rollout_corr_helper.py#L1068-L1084) 单独测量该差异；[bypass actor loss](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/core_algos.py#L2372-L2506) 中 old=rollout，同一 ratio 还可按配置驱动 rejection / IS，或直接成为 PPO ratio |
+
+`ref_log_prob` 不参与以上三个 ratio；它只在启用 reference policy 时进入 KL penalty。这里说的 decoupled rollout correction 始终是 old-vs-rollout，不是 old-vs-current；bypass 因 old=rollout 而折叠了两条关系。无论哪种模式，correction 都不能把任意过期、字段错位或 off-support 样本修复成有效数据。
 
 ### Worker 角色与边界
 
-下表锁定 `e5687fce...` 的所有权。worker role 可能 colocate 或由配置启用；表中 role 不承诺独立进程，但明确哪个执行点承担计算。这里的“训练阶段”只是概念流程阶段，不是独立 VERL process role。
+下表锁定 `e5687fce...` 的所有权。worker role 可能 colocate 或由配置启用；表中 role 不承诺独立进程，但明确哪个执行点承担计算。
 
 | 角色 | 职责 | 产物或边界 |
 | --- | --- | --- |
 | RayPPOTrainer driver / controller | 通过 RPC 编排 worker calls，并执行 driver-side `compute_advantage` | 合并 batch、`advantages` / `returns`、调度与 metrics；不替 actor/critic 做 backward |
-| actor / rollout worker | 执行 rollout、相关 logprob 计算和 `update_actor` | response、`rollout_log_probs` / `old_log_probs`；actor minibatch、backward、optimizer |
-| critic worker（可选） | 计算 `values`，并用 `train_mini_batch` 拟合 returns | `values`；critic minibatch、backward、optimizer；无 critic 路线可省略 |
+| rollout generation layer | `LLMServerManager` 提供生成服务 client，`AgentLoopManager` 建立 `async_rollout_manager`，由 `async_rollout_manager.generate_sequences` 发起生成 | `responses` 与 rollout-side metadata；不承担 actor optimizer |
+| actor_rollout_wg actor training | 计算 logprob，并通过 `update_actor` 进入 actor minibatch 的 backward 与 optimizer | `old_log_probs`、current logprob 与 actor metrics；生成服务与训练权重可 colocate，但职责不同 |
+| critic_wg（可选） | 推理得到 `values`，并以 critic minibatch 的 `train_mini_batch` 执行 backward 与 optimizer | `values` 与 critic metrics；无 critic 路线可省略 |
 | reward role | 按配置调用规则、reward model 或 colocated/remote reward 路径 | token-level 或 sequence-level score 与 reward metadata |
 | reference role | 启用 reference policy 时计算 `ref_log_prob`，placement 可配置 | KL anchor；参数不更新，也不充当 proximal old policy |
 
-直接代码证据是：[`_update_actor` 与 `_update_critic` worker calls](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1332-L1359) 分别调用 actor worker group 的 `update_actor` 和 critic worker group 的 `train_mini_batch`；[`fit()` ownership 注释](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1368-L1373) 明确 driver 通过 RPC 构造 dataflow，轻量 advantage computation 在 driver process 完成。
+直接代码证据是：[`_update_actor` 与 `_update_critic` worker calls](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1332-L1359) 分别调用 `actor_rollout_wg.update_actor` 和 `critic_wg.train_mini_batch`；[`fit()` ownership 注释](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1368-L1373) 明确 driver 通过 RPC 构造 dataflow，轻量 advantage computation 在 driver process 完成。生成侧则先[构造 `LLMServerManager` 和 `AgentLoopManager`](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L939-L953)，再由 driver [调用 `async_rollout_manager.generate_sequences`](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1472-L1476)。同一 loop 中 [reward、reference logprob 与 critic values](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1524-L1591) 分别由对应角色补齐。底层通用训练引擎把 train batch 落到 [forward/backward 与 optimizer step](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/workers/engine/base.py#L113-L129)，因此这里没有额外的 trainer worker。
 
 ### HybridFlow：算法图映射到 worker 图
 
@@ -109,18 +122,20 @@ python -m verl.trainer.main_ppo \
 
 | 阶段 | 输入字段 | 输出字段 | 首要边界 |
 | --- | --- | --- | --- |
-| prompt batch | `prompt`、`input_ids`、`attention_mask`、sample id | tokenized prompt batch | tokenizer/version 与 padding side 固定 |
-| rollout | prompt batch、`policy_version_id`、sampling metadata | `response`、`response_mask`、`action_mask`、`rollout_version_id`、`rollout_log_probs` | 只把实际采样 token 当 action，并保留 sampling behavior/version |
-| reward | response、有效 token mask、verifier/reward version | token-level reward 或 sequence-level `reward` 及分量 | 分数必须回到同一 sample/token |
-| policy fields | response、rollout behavior、模式配置、reference/critic snapshot | `rollout_log_probs`、`old_log_probs`、`ref_log_prob`、PPO 可选 `values` | old 按 bypass/recompute 产生；reference 只作 KL anchor |
-| advantage | reward、`values`、终止语义、有效 token mask | driver-side `advantage`、`returns` | driver 执行；PPO/GAE 与 group estimator 不能混用边界 |
+| prompt batch | tokenized prompt、sample id | `prompts`、`attention_mask` | tokenizer 与 padding side 固定 |
+| rollout | `prompts`、`attention_mask`、`global_steps` metadata、sampling metadata | `responses`、`response_mask`、可选 `rollout_log_probs` | 概念上的 action-token mask 在该 pinned 流程具体映射为 `response_mask` |
+| reward | `responses`、有效 token mask、verifier/reward 配置 | token-level reward 或 sequence-level `reward` 及分量 | 分数必须回到同一 sample/token |
+| policy fields | `responses`、rollout behavior、模式配置、reference/critic snapshot | `rollout_log_probs`、`old_log_probs`、`ref_log_prob`、PPO 可选 `values` | old 按 bypass/recompute 产生；reference 只作 KL anchor |
+| advantage | reward、`values`、终止语义、`response_mask` | driver-side `advantages`、`returns` | driver 执行；PPO/GAE 与 group estimator 不能混用边界 |
 | critic update | 完整 batch、`values`、`returns`、masks | critic minibatch -> backward -> optimizer、critic metrics | critic worker 所有；无 critic 路线跳过 |
-| actor update | 完整 batch、`old_log_probs`、advantage、correction fields | actor minibatch -> current `pi_theta` loss -> backward -> optimizer | actor worker 所有；current policy 在 minibatch 间变化 |
-| weight sync | 新训练权重、目标 rollout workers | 完成 `weight sync` 的 rollout version | 全量确认后才为新样本标新版本 |
+| actor update | 完整 batch、`old_log_probs`、`advantages`、correction fields | actor minibatch -> current policy loss -> backward -> optimizer | `actor_rollout_wg` 所有；current policy 在 minibatch 间变化 |
+| weight sync | 新训练权重、目标 rollout replicas | 完成 `weight sync` | 全量确认后才为新样本记录新的应用层审计版本 |
+
+字段证据分别来自 pinned agent loop 对 [`prompts`、`responses`、`attention_mask`、`response_mask` 和 `rollout_log_probs` 的组装](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/experimental/agent_loop/agent_loop.py#L1047-L1060)，trainer 对 [`ref_log_prob` 与 `old_log_probs` 的构造](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1248-L1282)，生成前写入 [`global_steps` 并补齐 `response_mask`](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1451-L1507)，以及后续合并 [reference/value 并在 driver 计算 `advantages` / `returns`](https://github.com/verl-project/verl/blob/e5687fce0516d31e1fdc4580499074a9bd94c751/verl/trainer/ppo/ray_trainer.py#L1580-L1638)。
 
 LLM 的 `terminated` 常对应真实结束条件，例如 EOS 或任务完成；`truncated` 表示最大生成长度、调度边界等截断。两者都停止继续 decode，但只有算法语义上的 true termination 才能无条件去掉 critic bootstrap。系统应同时保留终止原因，而不是压成一个 `done`。
 
-`attention_mask` 描述输入序列中非 padding token，`response_mask` 描述 response 的有效位置，`action_mask` 进一步限定哪些 token 真正进入 policy loss。prompt token、padding、工具返回或被裁切尾部是否属于 action，必须由数据协议明确。reward 若是 sequence-level，需要说明怎样广播或只放在末 token；若是 token-level，则长度必须和 logp/value 对齐。reward/logp 的 token 偏移一位仍可能得到有限 loss，因此要用 sample id、token id 和 mask 总数做逐层断言。
+`attention_mask` 描述完整输入序列中非 padding token；概念上的 action-token mask 在这里具体由 `response_mask` 承担，它标出有效 response token，并可被 rollout rejection 进一步收紧。prompt token、padding、工具返回或被裁切尾部是否进入 policy loss，必须按该 concrete mask 的生产逻辑核对。reward 若是 sequence-level，需要说明怎样广播或只放在末 token；若是 token-level，则长度必须和 logp/value 对齐。reward/logp 的 token 偏移一位仍可能得到有限 loss，因此要用 sample id、token id 和 mask 总数做逐层断言。
 
 一次可审计运行还应保存 reproducibility metadata：代码 commit、容器和依赖版本、模型/tokenizer/reward 版本、随机 seed、数据切片、sampling 参数、并行拓扑、batch id、rollout behavior version、old-logprob mode、current actor step、reference version、终止原因与重试计数。seed 不能保证跨硬件或 serving kernel 位级一致，但这些元数据能区分配置变化、策略角色错配和 nondeterministic serving。
 
@@ -129,7 +144,7 @@ LLM 的 `terminated` 常对应真实结束条件，例如 EOS 或任务完成；
 | 失败 | 直接症状 | 首个检查 |
 | --- | --- | --- |
 | stale logp | PPO ratio 或 correction metrics 异常 | 分别核对 `rollout_log_probs` 的 behavior version、`old_log_probs` 模式和 current actor step |
-| wrong mask | prompt/padding 进入 loss，长度越长偏差越大 | 比较 `attention_mask`、`response_mask`、`action_mask` 的 token 计数 |
+| wrong mask | prompt/padding 进入 loss，长度越长偏差越大 | 比较 `attention_mask` 与 `response_mask` 的 token 计数，并核对 rejection 是否修改后者 |
 | reward/logp misalignment | reward 正常但更新方向反常 | 在同一样本上打印 token id、reward 位置和 logp 位置 |
 | reference/old confusion | KL 与 PPO ratio anchor 混用 | 核对 `ref_log_prob` 只服务 KL，`old_log_probs` 只服务 proximal ratio |
 | duplicate samples | 某些 prompt 权重被无意放大 | 检查全局 sample id、重试次数与去重位置 |
@@ -142,7 +157,7 @@ LLM 的 `terminated` 常对应真实结束条件，例如 EOS 或任务完成；
 ## 自检与练习
 
 1. 分别说明 bypass 与 decoupled 模式中 `old_log_probs` 的来源，并解释为何只有 bypass 把它直接设为 `rollout_log_probs`。
-2. 给一个 prompt 长 4、response 长 3、右侧 padding 2 的样本写出 `attention_mask`、`response_mask` 与 `action_mask`，说明各自进入哪个计算。
+2. 给一个 prompt 长 4、response 长 3、右侧 padding 2 的样本写出 `attention_mask` 与 `response_mask`，说明概念上的 action-token mask 为什么映射到后者。
 3. 若 rollout queue 从 1 扩到 8，列出 throughput、freshness、显存和 weight sync 等待时间应记录的指标。
 4. 为 rollout behavior、proximal old、current actor 和 reference 分别设计版本记录，并说明 rollout correction 为什么不能修复任意 staleness。
 5. 对 sequence-level verifier reward，说明怎样验证它与 group id、response 和 token logp 属于同一条样本。
