@@ -22,7 +22,7 @@ replay warm-up 的 batch size 是 64 条 transition。每次 interaction 先写�
 python files/assets/examples/reinforcement-learning/deep_rl_smoke.py sac --seed 7 --steps 256
 ```
 
-输出列出 critic loss、actor loss、temperature \(\alpha\)、episode return 和 actor/critic 参数变化。只要这些量有限且参数确实改变，smoke 契约就满足；负回报或单个 seed 的差异不能用来判断收敛与算法优劣。
+输出列出共享 interaction/episode 摘要、critic loss、actor loss、temperature \(\alpha\) 和独立的 actor/critic 参数变化。Pendulum 在 200 steps 才 time-limit truncation，因此合法的 `--steps 128` 会报告 `completed_episode_return_mean=unavailable`，并把已采奖励单列为 `current_partial_episode_return`，不会把 partial 冒充完整 episode 均值。只要这些量有限且参数确实改变，smoke 契约就满足；负回报或单个 seed 的差异不能用来判断收敛与算法优劣。
 
 ## 核心机制
 
@@ -60,7 +60,7 @@ tanh 改变概率密度，因此 logp 必须包含 tanh Jacobian correction：
 a_{\mathrm{env}}=\frac{h-l}{2}\tilde a+\frac{h+l}{2}
 \]
 
-critic 和 replay 都使用真实环境动作坐标。若 logp 定义在 environment action 上，还需减去缩放 Jacobian 的常数 \(\sum_i\log((h_i-l_i)/2)\)。把 normalized actor 输出直接传给 Pendulum 会把可用力矩从 `[-2,2]` 错缩成 `[-1,1]`。
+critic 和 replay 都使用真实环境动作坐标。smoke 使用 scale-corrected environment-action logprob：除 tanh correction 外，还减去缩放 Jacobian 的常数 \(\sum_i\log((h_i-l_i)/2)\)。把 normalized actor 输出直接传给 Pendulum 会把可用力矩从 `[-2,2]` 错缩成 `[-1,1]`；若 logp 又留在 normalized 坐标，entropy temperature 的数值口径也会和环境动作密度不一致。
 
 ### Maximum entropy、twin Q 与 target
 
@@ -72,7 +72,7 @@ y_t=r_t+\gamma(1-d_t)
 -\alpha\log\pi_\theta(a_{t+1}\mid s_{t+1})\right]
 \]
 
-twin Q 取较小值以减轻过估计；target network 用 Polyak averaging 缓慢跟随 online critics；`terminated` 屏蔽整个 bootstrap，truncation 有有效 next observation 时保留。actor 最小化 \(\alpha\log\pi-\min(Q_1,Q_2)\)。temperature \(\alpha\) 可学习，使 entropy 靠近 target entropy，而不是手工固定探索强度。
+twin Q 取较小值以减轻过估计；target network 用 Polyak averaging 缓慢跟随 online critics；`terminated` 屏蔽整个 bootstrap，truncation 有有效 next observation 时保留。actor 最小化 \(\alpha\log\pi-\min(Q_1,Q_2)\)。smoke 把一维动作的目标写成命名常量 `target_entropy=-1.0`，temperature \(\alpha\) 据此更新。由于 differential entropy 会随坐标缩放而改变，这个数值必须和上一节的 environment-action logprob 坐标一起解释，而不能脱离密度定义比较。
 
 这些 transition 来自 replay buffer，因而 critic 可以重复使用旧策略采集的数据；这也是 SAC 相对 PPO 的 off-policy 数据边界。
 

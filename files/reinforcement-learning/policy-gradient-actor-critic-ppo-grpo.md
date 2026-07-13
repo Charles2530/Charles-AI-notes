@@ -21,7 +21,7 @@ python files/assets/examples/reinforcement-learning/deep_rl_smoke.py reinforce -
 python files/assets/examples/reinforcement-learning/deep_rl_smoke.py ppo --seed 7 --steps 256
 ```
 
-前者提供无 critic 的对照，后者输出 PPO loss、approximate KL、回报与参数变化。两个命令都只验证有限计算链和真实 optimizer update，不是学习曲线或收敛证明。
+前者提供无 critic 的对照。PPO 输出共享 interaction/episode 摘要、loss、`sampled_approximate_kl`，以及独立的 `actor_parameter_delta` 和 `critic_parameter_delta`；两个非零 delta 分别证明 actor 与 critic 被更新。两个命令都只验证有限计算链和真实 optimizer update，不是学习曲线或收敛证明。
 
 ## 核心机制
 
@@ -73,7 +73,9 @@ L^{\mathrm{CLIP}}=\mathbb{E}_t\left[
 
 ### Entropy、KL 与 minibatch 复用
 
-entropy bonus 防止离散策略过早变成确定性；approximate KL 衡量 current 与 rollout policy 的偏离，可用于诊断或 early stop。PPO 对一批数据做有限 epoch/minibatch 复用，所以是 approximately on-policy：epoch 太多、学习率太高或 KL 激增后，old-policy importance ratio 不再可信。
+entropy bonus 防止离散策略过早变成确定性。PPO 对一批数据做有限 epoch/minibatch 复用，所以是 approximately on-policy：epoch 太多、学习率太高或 KL 激增后，old-policy importance ratio 不再可信。
+
+smoke 在所有 minibatch optimizer step 完成后，用 final actor 对完整 rollout 的已采 action 重新计算 logp，再报告 `old_logp - final_logp` 的样本均值。这个 sampled approximate KL 是 rollout 上的 Monte Carlo 诊断量，可能为负；它不是对完整 action distribution 求和得到的、保证非负的精确 KL divergence。若将每个 minibatch 的临时值覆盖到同一个变量，最后只会报告末个 minibatch，不能代表最终策略对完整 rollout 的偏移。
 
 old policy 是这批 rollout 的行为策略快照，用来构造 ratio。reference policy 则常用于限制模型长期偏移，例如 LLM RL 的 KL penalty；它可以跨很多轮固定。两者用途不同，不能把 reference logprob 填到 PPO old logprob 的分母。
 
@@ -83,7 +85,8 @@ old policy 是这批 rollout 的行为策略快照，用来构造 ratio。refere
 actor + environment -> rollout(state, action, reward, old logprob, old value)
 segment boundary + bootstrap value + terminated mask -> GAE -> advantage/return
 minibatch -> current logprob/value -> clipped actor loss + value loss + entropy
-optimizer update -> approximate KL check -> discard or refresh rollout
+all optimizer updates -> final actor on complete rollout -> sampled approximate KL
+then discard or refresh rollout
 ```
 
 rollout 与优化必须分阶段。old logprob 在采样后固定，advantage 也按该批数据固定；若每个 minibatch 重新用已更新 critic 生成 advantage，训练目标会在一个 epoch 内漂移。
@@ -104,7 +107,7 @@ rollout 与优化必须分阶段。old logprob 在采样后固定，advantage �
 1. 设 advantage 为 `2`、ratio 为 `1.4`、\(\epsilon=0.2\)，算负 clipped loss；再算 advantage 为 `-2`、ratio 为 `0.6`。
 2. 给定一次 true terminal 和一次 time-limit truncation，分别写出 value bootstrap 与 GAE recurrence 的处理。
 3. 解释 old policy 与 reference policy 为何可能参数相同但语义仍不同。
-4. 增加 PPO minibatch epoch，观察 approximate KL；这只是更新幅度诊断，不是收益改善证明。
+4. 增加 PPO minibatch epoch，观察完整 rollout 上的 sampled approximate KL，并解释它为什么可能为负、为什么不等于精确 KL；这只是更新幅度诊断，不是收益改善证明。
 
 ## 下一步
 

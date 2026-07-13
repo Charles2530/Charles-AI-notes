@@ -1,15 +1,25 @@
 import importlib.util
+import math
 from pathlib import Path
 from unittest import TestCase, skipUnless
+import warnings
 
 try:
     import numpy as np
 except ModuleNotFoundError:
     np = None
 
+try:
+    import torch
+    from torch import nn
+except ModuleNotFoundError:
+    torch = None
+    nn = None
+
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "files" / "assets" / "examples" / "reinforcement-learning"
+RL_COURSE = ROOT / "files" / "reinforcement-learning"
 
 
 def load_module(name: str):
@@ -22,6 +32,163 @@ def load_module(name: str):
 
 @skipUnless(np is not None, "course examples require NumPy")
 class ReinforcementLearningExampleTests(TestCase):
+    def test_example_readme_owns_tabular_apis_and_exact_runtime_contract(self):
+        text = (EXAMPLES / "README.md").read_text(encoding="utf-8")
+        for dependency in (
+            "NumPy `>=1.26,<3`",
+            "PyTorch `>=2.2,<3`",
+            "Gymnasium `>=1.0,<2`",
+        ):
+            self.assertIn(dependency, text)
+        for api in (
+            "`update_sample_average(values, counts, arm, reward)`",
+            "`epsilon_greedy(values, epsilon, rng)`",
+            "`ucb_action(values, counts, step)`",
+            "`run_experiment(seed, steps, epsilon)`",
+            "`GridWorld.reset()` / `GridWorld.step(action)`",
+            "`policy_evaluation(env, policy, ...)`",
+            "`value_iteration(env, ...)`",
+            "`monte_carlo_update(values, counts, state, return_)`",
+            "`td_target(reward, gamma, next_value, terminated)`",
+            "`q_learning_update(q, ...)`",
+        ):
+            self.assertIn(api, text)
+        for output_fact in (
+            "uniform smoke-quality floor",
+            "interaction_count",
+            "reward_per_interaction",
+            "completed_episode_count",
+            "completed_episode_return_mean=unavailable",
+            "current_partial_episode_return",
+            "sampled_approximate_kl",
+            "actor_parameter_delta",
+            "critic_parameter_delta",
+            "scale-corrected environment-action logprob",
+        ):
+            self.assertIn(output_fact, text)
+
+    def test_ppo_page_describes_final_sampled_kl_and_separate_deltas(self):
+        text = (
+            RL_COURSE / "policy-gradient-actor-critic-ppo-grpo.md"
+        ).read_text(encoding="utf-8")
+        for fact in (
+            "完整 rollout",
+            "old_logp - final_logp",
+            "sampled approximate KL",
+            "可能为负",
+            "actor_parameter_delta",
+            "critic_parameter_delta",
+        ):
+            self.assertIn(fact, text)
+
+    def test_sac_page_names_target_entropy_and_logprob_coordinate(self):
+        text = (RL_COURSE / "continuous-control-and-sac.md").read_text(
+            encoding="utf-8"
+        )
+        for fact in (
+            "target_entropy=-1.0",
+            "scale-corrected environment-action logprob",
+            "completed_episode_return_mean=unavailable",
+            "current_partial_episode_return",
+        ):
+            self.assertIn(fact, text)
+
+    def test_deep_objectives_reject_complex_without_warning(self):
+        deep_rl = load_module("deep_rl_smoke")
+        real = np.ones(2)
+        terminal = np.array([False, True])
+        complex_values = np.array([1.0 + 1.0j, 2.0 + 0.0j])
+        cases = {
+            "dqn_array": lambda: deep_rl.dqn_targets(
+                complex_values, real, terminal, 0.9
+            ),
+            "dqn_gamma": lambda: deep_rl.dqn_targets(
+                real, real, terminal, 0.9 + 0.0j
+            ),
+            "returns_array": lambda: deep_rl.discounted_returns(
+                complex_values, terminal, 0.9
+            ),
+            "returns_gamma": lambda: deep_rl.discounted_returns(
+                real, terminal, 0.9 + 0.0j
+            ),
+            "gae_array": lambda: deep_rl.gae(
+                real, np.array([1.0 + 1.0j, 1.0, 1.0]), terminal, 0.9, 0.8
+            ),
+            "gae_lambda": lambda: deep_rl.gae(
+                real, np.ones(3), terminal, 0.9, 0.8 + 0.0j
+            ),
+            "ppo_array": lambda: deep_rl.ppo_clipped_loss(
+                complex_values, real, real, 0.2
+            ),
+            "ppo_epsilon": lambda: deep_rl.ppo_clipped_loss(
+                real, real, real, 0.2 + 0.0j
+            ),
+            "sac_array": lambda: deep_rl.sac_targets(
+                real, real, complex_values, terminal, 0.9, 0.2
+            ),
+            "sac_alpha": lambda: deep_rl.sac_targets(
+                real, real, real, terminal, 0.9, 0.2 + 0.0j
+            ),
+        }
+
+        for name, call in cases.items():
+            with self.subTest(name=name), warnings.catch_warnings():
+                warnings.simplefilter("error")
+                with self.assertRaises(ValueError):
+                    call()
+
+    def test_interaction_summary_handles_no_completed_episode(self):
+        deep_rl = load_module("deep_rl_smoke")
+
+        summary = deep_rl.interaction_summary(
+            interaction_count=3,
+            total_reward=6.0,
+            completed_episode_returns=[],
+            current_partial_episode_return=6.0,
+        )
+
+        self.assertEqual(
+            summary,
+            {
+                "interaction_count": 3,
+                "reward_per_interaction": 2.0,
+                "completed_episode_count": 0,
+                "completed_episode_return_mean": None,
+                "current_partial_episode_return": 6.0,
+            },
+        )
+
+    def test_interaction_summary_separates_completed_and_partial_returns(self):
+        deep_rl = load_module("deep_rl_smoke")
+
+        summary = deep_rl.interaction_summary(
+            interaction_count=10,
+            total_reward=12.0,
+            completed_episode_returns=[5.0, 3.0],
+            current_partial_episode_return=4.0,
+        )
+
+        self.assertEqual(summary["reward_per_interaction"], 1.2)
+        self.assertEqual(summary["completed_episode_count"], 2)
+        self.assertEqual(summary["completed_episode_return_mean"], 4.0)
+        self.assertEqual(summary["current_partial_episode_return"], 4.0)
+
+    def test_managed_environment_closes_after_body_raises(self):
+        deep_rl = load_module("deep_rl_smoke")
+
+        class FakeEnvironment:
+            closed = False
+
+            def close(self):
+                self.closed = True
+
+        environment = FakeEnvironment()
+        with self.assertRaisesRegex(RuntimeError, "body failed"):
+            with deep_rl.managed_environment(environment):
+                raise RuntimeError("body failed")
+
+        self.assertTrue(environment.closed)
+
     def test_dqn_targets_mask_only_true_terminals(self):
         deep_rl = load_module("deep_rl_smoke")
         rewards = np.array([1.0, 1.0])
@@ -543,3 +710,174 @@ class ReinforcementLearningExampleTests(TestCase):
                     gridworld.monte_carlo_update(values, counts, state, return_)
                 np.testing.assert_array_equal(values, values_before)
                 np.testing.assert_array_equal(counts, counts_before)
+
+
+@skipUnless(torch is not None, "deep RL Torch primitives require PyTorch")
+class DeepRLTorchPrimitiveTests(TestCase):
+    def setUp(self):
+        self.deep_rl = load_module("deep_rl_smoke")
+        torch.manual_seed(7)
+
+    def test_dqn_torch_target_and_loss_mask_terminal_without_target_gradient(self):
+        predicted_q = torch.tensor([0.0, 0.0], requires_grad=True)
+        next_q = torch.tensor([10.0, 10.0], requires_grad=True)
+
+        targets, loss = self.deep_rl.torch_dqn_target_and_loss(
+            predicted_q,
+            torch.tensor([1.0, 1.0]),
+            next_q,
+            torch.tensor([True, False]),
+            gamma=0.9,
+        )
+
+        torch.testing.assert_close(targets, torch.tensor([1.0, 10.0]))
+        torch.testing.assert_close(loss, torch.tensor(5.0))
+        loss.backward()
+        self.assertIsNotNone(predicted_q.grad)
+        self.assertIsNone(next_q.grad)
+
+    def test_ppo_torch_losses_clip_exactly_and_own_separate_gradients(self):
+        actor = nn.Linear(1, 2, bias=False)
+        critic = nn.Linear(1, 1, bias=False)
+        nn.init.zeros_(actor.weight)
+        nn.init.zeros_(critic.weight)
+        states = torch.tensor([[1.0]])
+        actions = torch.tensor([0])
+        current_logp = torch.tensor([-math.log(2.0)])
+        old_logp = current_logp - math.log(1.4)
+
+        losses = self.deep_rl.torch_ppo_minibatch_losses(
+            actor,
+            critic,
+            states,
+            actions,
+            old_logp,
+            torch.tensor([2.0]),
+            torch.tensor([2.0]),
+            clip_epsilon=0.2,
+            value_coefficient=0.5,
+            entropy_coefficient=0.01,
+        )
+
+        torch.testing.assert_close(losses["policy_loss"], torch.tensor(-2.4))
+        torch.testing.assert_close(losses["value_loss"], torch.tensor(4.0))
+        torch.testing.assert_close(losses["entropy"], torch.tensor(math.log(2.0)))
+        expected_combined = -2.4 + 0.5 * 4.0 - 0.01 * math.log(2.0)
+        torch.testing.assert_close(
+            losses["combined_loss"], torch.tensor(expected_combined)
+        )
+
+        losses["policy_loss"].backward(retain_graph=True)
+        self.assertTrue(any(parameter.grad is not None for parameter in actor.parameters()))
+        self.assertTrue(all(parameter.grad is None for parameter in critic.parameters()))
+        actor.zero_grad(set_to_none=True)
+        critic.zero_grad(set_to_none=True)
+        losses["value_loss"].backward()
+        self.assertTrue(all(parameter.grad is None for parameter in actor.parameters()))
+        self.assertTrue(any(parameter.grad is not None for parameter in critic.parameters()))
+
+    def test_ppo_combined_loss_updates_actor_and_critic_separately(self):
+        actor = nn.Linear(1, 2)
+        critic = nn.Linear(1, 1)
+        optimizer = torch.optim.SGD(
+            list(actor.parameters()) + list(critic.parameters()), lr=0.1
+        )
+        actor_before = [parameter.detach().clone() for parameter in actor.parameters()]
+        critic_before = [parameter.detach().clone() for parameter in critic.parameters()]
+        states = torch.tensor([[1.0], [2.0]])
+        actions = torch.tensor([0, 1])
+        with torch.no_grad():
+            old_logp = torch.distributions.Categorical(
+                logits=actor(states)
+            ).log_prob(actions)
+
+        losses = self.deep_rl.torch_ppo_minibatch_losses(
+            actor,
+            critic,
+            states,
+            actions,
+            old_logp,
+            torch.tensor([1.0, -0.5]),
+            torch.tensor([2.0, -1.0]),
+        )
+        optimizer.zero_grad()
+        losses["combined_loss"].backward()
+        optimizer.step()
+
+        actor_delta = sum(
+            torch.sum(torch.abs(before - after.detach())).item()
+            for before, after in zip(actor_before, actor.parameters())
+        )
+        critic_delta = sum(
+            torch.sum(torch.abs(before - after.detach())).item()
+            for before, after in zip(critic_before, critic.parameters())
+        )
+        self.assertGreater(actor_delta, 0.0)
+        self.assertGreater(critic_delta, 0.0)
+
+    def test_sampled_approximate_kl_uses_complete_sample_mean_and_can_be_negative(self):
+        positive = self.deep_rl.torch_sampled_approximate_kl(
+            torch.tensor([0.0, 0.0]), torch.tensor([-0.2, -0.3])
+        )
+        negative = self.deep_rl.torch_sampled_approximate_kl(
+            torch.tensor([-0.2]), torch.tensor([-0.1])
+        )
+
+        torch.testing.assert_close(positive, torch.tensor(0.25))
+        torch.testing.assert_close(negative, torch.tensor(-0.1))
+
+    def test_sac_torch_target_masks_terminal_and_keeps_entropy(self):
+        targets = self.deep_rl.torch_sac_targets(
+            torch.tensor([1.0, 1.0]),
+            torch.tensor([10.0, 10.0]),
+            torch.tensor([2.0, 2.0]),
+            torch.tensor([True, False]),
+            gamma=0.9,
+            alpha=torch.tensor(0.5),
+        )
+
+        torch.testing.assert_close(targets, torch.tensor([1.0, 9.1]))
+
+    def test_temperature_loss_uses_named_target_and_updates_log_alpha_direction(self):
+        self.assertEqual(self.deep_rl.SAC_TARGET_ENTROPY, -1.0)
+        log_alpha = torch.tensor(math.log(0.2), requires_grad=True)
+        logp = torch.tensor([0.0], requires_grad=True)
+        optimizer = torch.optim.SGD([log_alpha], lr=0.1)
+        before = float(log_alpha.exp().detach())
+
+        loss = self.deep_rl.torch_temperature_loss(
+            log_alpha, logp, self.deep_rl.SAC_TARGET_ENTROPY
+        )
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        self.assertLess(float(log_alpha.exp().detach()), before)
+        self.assertIsNone(logp.grad)
+
+    def test_polyak_update_matches_weighted_average(self):
+        target = nn.Linear(1, 1, bias=False)
+        source = nn.Linear(1, 1, bias=False)
+        target.weight.data.fill_(2.0)
+        source.weight.data.fill_(10.0)
+
+        self.deep_rl.polyak_update(
+            list(target.parameters()), list(source.parameters()), tau=0.25
+        )
+
+        torch.testing.assert_close(target.weight, torch.tensor([[4.0]]))
+
+    def test_frozen_parameters_route_actor_gradient_without_critic_gradient(self):
+        actor = nn.Linear(1, 1, bias=False)
+        critic = nn.Linear(2, 1, bias=False)
+        state = torch.tensor([[1.0]])
+        critic_parameters = list(critic.parameters())
+
+        with self.deep_rl.frozen_parameters(critic_parameters):
+            action = actor(state)
+            loss = -critic(torch.cat((state, action), dim=-1)).mean()
+            loss.backward()
+
+        self.assertTrue(any(parameter.grad is not None for parameter in actor.parameters()))
+        self.assertTrue(all(parameter.grad is None for parameter in critic_parameters))
+        self.assertTrue(all(parameter.requires_grad for parameter in critic_parameters))

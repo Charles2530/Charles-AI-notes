@@ -18,9 +18,9 @@ source .venv-rl-course/bin/activate
 python -m pip install -r files/assets/examples/reinforcement-learning/requirements.txt
 ```
 
-The bounded dependencies are NumPy 1.x/2.x, PyTorch 2.x, and Gymnasium 1.x with
-Classic Control. A display and rendering backend are not required because the
-smoke modes never call `render`.
+The bounded dependencies are NumPy `>=1.26,<3`, PyTorch `>=2.2,<3`, and
+Gymnasium `>=1.0,<2` with the Classic Control extra. A display and rendering
+backend are not required because the smoke modes never call `render`.
 
 To roll back the isolated setup, first leave the environment and then delete
 only its directory:
@@ -47,12 +47,12 @@ python files/assets/examples/reinforcement-learning/deep_rl_smoke.py ppo --seed 
 python files/assets/examples/reinforcement-learning/deep_rl_smoke.py sac --seed 7 --steps 256
 ```
 
-Every deep mode rejects `--steps` below 128 with an exact CLI error because a
-replay or rollout batch must be large enough for an optimizer smoke update.
-REINFORCE finishes the current trajectory, so `collected_steps` can exceed the
-requested count. On a CPU laptop each mode is a short smoke-class run, normally
-seconds rather than a training job; package installation is usually slower
-than the commands.
+Every deep mode rejects `--steps` below 128. The value 128 is a
+uniform smoke-quality floor chosen to ensure update coverage across all four
+modes, not the mathematical minimum for every optimizer. REINFORCE finishes the current
+trajectory, so `interaction_count` can exceed `requested_steps`. On a CPU
+laptop each mode is a short smoke-class run, normally seconds rather than a
+training job; package installation is usually slower than the commands.
 
 ## Deep objective API
 
@@ -69,12 +69,23 @@ implicit broadcasting:
 | `ppo_clipped_loss(...)` | Scalar negative clipped PPO surrogate. |
 | `sac_targets(...)` | Entropy-regularized twin-Q target with terminal masking. |
 
-The DQN summary reports update count, final loss, observed episode-return mean,
-and online-network parameter change. REINFORCE reports requested/collected
-steps, complete episodes, policy loss, return mean, and parameter change. PPO
-adds minibatch count and approximate KL. SAC reports critic/actor loss,
-temperature, return mean, and actor/critic changes. The stable contract is the
-labeled finite fields and a zero exit code, not exact decimals across platforms.
+Every summary reports `interaction_count`, `reward_per_interaction`,
+`completed_episode_count`, and `current_partial_episode_return`. It reports a
+mean only over completed episodes; if there are none, the output is exactly
+`completed_episode_return_mean=unavailable`, never the partial return disguised
+as a mean.
+
+DQN adds update count, final loss, and network change. REINFORCE adds requested
+steps, policy loss, and policy change. PPO reports `sampled_approximate_kl`
+after recomputing the complete rollout under the final actor, plus separate
+`actor_parameter_delta` and `critic_parameter_delta`. The sampled mean can be
+negative and is not the exact nonnegative KL divergence. SAC reports critic and
+actor losses, temperature, update count, and separate actor/critic changes.
+Its entropy terms use a scale-corrected environment-action logprob: both the
+tanh Jacobian and environment action-scale Jacobian are included, so the named
+`target_entropy=-1.0` is interpreted in those density coordinates. The stable
+contract is the labeled fields and a zero exit code, not exact decimals across
+platforms.
 
 ## Terminated and truncated
 
@@ -105,15 +116,49 @@ sample efficiency, robustness, task solution, or convergence. Those claims
 require longer training, held-out evaluation episodes, multiple seeds, and
 uncertainty reporting.
 
-## Tabular examples
+## Bandit API and output
 
-`bandit.py` contains sample-average epsilon-greedy and UCB1 on one seeded task.
-It reports cumulative reward, average regret, and best-arm fraction. Independent
-task and policy RNG streams keep action selection from changing the task noise
-stream.
+`bandit.py` supports the [multi-armed bandit and exploration
+chapter](../../../reinforcement-learning/multi-armed-bandits-and-exploration.md).
 
-`gridworld.py` defines a deterministic 2-by-3 map and implements policy
-evaluation, value iteration, first-visit Monte Carlo updates, TD targets, and a
-tabular Q-learning update. States are row-major from 0 to 5; state 5 is
-terminal. Its CLI summary is also a teaching smoke run, not a generalization or
-convergence result.
+| API | Responsibility |
+| --- | --- |
+| `update_sample_average(values, counts, arm, reward)` | Atomically update one floating estimate and its nonnegative integer count. |
+| `epsilon_greedy(values, epsilon, rng)` | Explore uniformly with probability epsilon; otherwise choose the first maximum. |
+| `ucb_action(values, counts, step)` | Try unselected arms before computing the UCB1 score. |
+| `run_experiment(seed, steps, epsilon)` | Compare epsilon-greedy and UCB on one seeded task. |
+
+The CLI reports `cumulative_reward`, `average_regret`, and `best_arm_fraction`
+for each policy. Their field names and finite values are the output contract;
+one run does not establish statistical superiority. Separate task and policy
+random streams make the true means and potential reward noise reproducible
+without letting epsilon-greedy choices advance the task stream. A seed does not
+replace repeated tasks, uncertainty estimates, or non-stationary evaluation.
+
+## GridWorld API, terminal semantics, and output
+
+`gridworld.py` supports [dynamic programming, Monte Carlo, and
+TD](../../../reinforcement-learning/dynamic-programming-monte-carlo-td.md) plus
+the tabular bridge in [Q-learning and
+DQN](../../../reinforcement-learning/q-learning-and-dqn.md).
+
+| API | Responsibility |
+| --- | --- |
+| `GridWorld.reset()` / `GridWorld.step(action)` | Reset or execute one deterministic map transition. |
+| `policy_evaluation(env, policy, ...)` | Evaluate a tabular stochastic policy by synchronous backups. |
+| `value_iteration(env, ...)` | Solve optimal values and a first-argmax policy. |
+| `monte_carlo_update(values, counts, state, return_)` | Apply an incremental first-visit value sample average. |
+| `td_target(reward, gamma, next_value, terminated)` | Form a one-step target with true-terminal masking. |
+| `q_learning_update(q, ...)` | Atomically update one selected Q-table entry and return its target. |
+
+The deterministic 2-by-3 map numbers states row-major from 0 through 5; state 5
+is terminal. Ordinary transitions return `-1`, while entering or stepping from
+the terminal returns `0` with `terminated=True`. A true terminal removes the
+bootstrap term, so the TD/Q-learning target is just its reward. This semantic
+mask is separate from index validation.
+
+The CLI reports the uniform-policy value mean, optimal start value and greedy
+policy, plus learned Q summary fields. The transition model is deterministic;
+the seed controls only exploratory choices in the small Q-learning run. These
+finite teaching summaries do not prove convergence on other maps, stochastic
+dynamics, or function approximation.
