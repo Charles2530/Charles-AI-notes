@@ -83,6 +83,17 @@ class ReinforcementLearningCurriculumTests(TestCase):
                 "综合实践与算法选择",
             ],
         )
+        self.assertIn(
+            "| 长期价值 | 3. [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) | 可阅读 |",
+            course_map,
+        )
+        beginner_route = text.split("## 按方向进入课程", maxsplit=1)[1]
+        self.assertIn(
+            "[交互闭环](rl-agent-environment-loop.md) -> "
+            "[多臂老虎机与探索](multi-armed-bandits-and-exploration.md) -> "
+            "[MDP 与 Bellman](mdp-value-bellman.md)",
+            beginner_route,
+        )
         for target in re.findall(r"\]\(([^)]+\.md)\)", text):
             self.assertTrue((RL_ROOT / target).resolve().is_file(), target)
 
@@ -175,6 +186,7 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             [
                 "- 强化学习导读: reinforcement-learning/index.md",
                 "- Agent、环境与训练闭环: reinforcement-learning/rl-agent-environment-loop.md",
+                "- 多臂老虎机与探索: reinforcement-learning/multi-armed-bandits-and-exploration.md",
                 "- MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md",
                 "- Policy Gradient、Actor-Critic、PPO 与 GRPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md",
                 "- 世界模型中的强化学习: reinforcement-learning/rl-for-world-models.md",

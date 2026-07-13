@@ -61,7 +61,7 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 | --- | --- | --- |
 | 建立语言 | 1. 强化学习专题首页 | 当前页 |
 | 建立语言 | 2. [Agent、环境与训练闭环](rl-agent-environment-loop.md) | 可阅读 |
-| 长期价值 | 3. 多臂老虎机与探索 | 规划中 |
+| 长期价值 | 3. [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) | 可阅读 |
 | 长期价值 | 4. [MDP、回报、价值函数与 Bellman](mdp-value-bellman.md) | 可阅读 |
 | 长期价值 | 5. 动态规划、Monte Carlo 与 TD | 规划中 |
 | 经典深度 RL | 6. Q-learning 与 DQN | 规划中 |
@@ -81,7 +81,7 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 
 | 你的目标 | 建议入口与顺序 |
 | --- | --- |
-| 从零建立经典 RL 基础 | 当前页 -> [交互闭环](rl-agent-environment-loop.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> 后续 Bandit、TD、DQN 与 PPO 章节 |
+| 从零建立经典 RL 基础 | 当前页 -> [交互闭环](rl-agent-environment-loop.md) -> [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> 后续 TD、DQN 与 PPO 章节 |
 | 理解 PPO / GRPO 与大模型后训练 | [MDP 与 Bellman](mdp-value-bellman.md) -> [Policy Gradient、Actor-Critic、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md) -> [verl 训练流程](verl-code-flow.md) |
 | 研究世界模型与规划 | [交互闭环](rl-agent-environment-loop.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> [世界模型中的强化学习](rl-for-world-models.md) |
 | 进入 VLA 与机器人闭环 | [交互闭环](rl-agent-environment-loop.md) -> [世界模型中的强化学习](rl-for-world-models.md) -> 后续连续控制、Offline RL 与 VLA 章节 |

@@ -1,6 +1,7 @@
 """Small deterministic GridWorld and tabular reinforcement-learning updates."""
 
 import argparse
+import numbers
 
 import numpy as np
 
@@ -24,9 +25,7 @@ class GridWorld:
     def __init__(self):
         self.state = self.start_state
 
-    def reset(self, seed=None):
-        if seed is not None:
-            np.random.default_rng(seed)
+    def reset(self):
         self.state = self.start_state
         return self.state
 
@@ -59,14 +58,69 @@ class GridWorld:
             raise ValueError(f"action must be an integer in [0, {self.n_actions})")
 
 
+def _finite_real(value, name):
+    if (
+        isinstance(value, (bool, np.bool_))
+        or not isinstance(value, numbers.Real)
+        or not np.isfinite(value)
+    ):
+        raise ValueError(f"{name} must be a finite real number")
+    return float(value)
+
+
+def _validate_index(value, size, name):
+    if (
+        isinstance(value, (bool, np.bool_))
+        or not isinstance(value, (int, np.integer))
+        or not 0 <= value < size
+    ):
+        raise ValueError(f"{name} must be an integer in [0, {size})")
+
+
 def _validate_gamma(gamma):
+    gamma = _finite_real(gamma, "gamma")
     if not 0.0 <= gamma < 1.0:
         raise ValueError("gamma must be in [0, 1)")
+    return gamma
+
+
+def _validate_update_arrays(values, counts):
+    if not isinstance(values, np.ndarray) or not isinstance(counts, np.ndarray):
+        raise ValueError("values and counts must be NumPy arrays")
+    if (
+        values.ndim != 1
+        or counts.ndim != 1
+        or values.shape != counts.shape
+        or values.size == 0
+    ):
+        raise ValueError("values and counts must be matching non-empty 1D arrays")
+    if not np.issubdtype(values.dtype, np.floating) or not values.flags.writeable:
+        raise ValueError("values must be a writable floating-point array")
+    if not np.issubdtype(counts.dtype, np.integer) or not counts.flags.writeable:
+        raise ValueError("counts must be a writable integer array")
+    if np.any(counts < 0):
+        raise ValueError("counts must contain nonnegative integers")
+
+
+def _validate_solver_settings(tolerance, max_iterations):
+    tolerance = _finite_real(tolerance, "tolerance")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if (
+        isinstance(max_iterations, (bool, np.bool_))
+        or not isinstance(max_iterations, (int, np.integer))
+        or max_iterations <= 0
+    ):
+        raise ValueError("max_iterations must be a positive integer")
+    return tolerance, int(max_iterations)
 
 
 def policy_evaluation(env, policy, gamma=0.9, tolerance=1e-10, max_iterations=10_000):
     """Evaluate a tabular stochastic policy by iterative Bellman updates."""
-    _validate_gamma(gamma)
+    gamma = _validate_gamma(gamma)
+    tolerance, max_iterations = _validate_solver_settings(
+        tolerance, max_iterations
+    )
     policy = np.asarray(policy, dtype=float)
     if policy.shape != (env.n_states, env.n_actions):
         raise ValueError("policy must have shape (n_states, n_actions)")
@@ -87,12 +141,15 @@ def policy_evaluation(env, policy, gamma=0.9, tolerance=1e-10, max_iterations=10
         if np.max(np.abs(updated - values)) < tolerance:
             return updated
         values = updated
-    return values
+    raise RuntimeError("policy evaluation did not converge within max_iterations")
 
 
 def value_iteration(env, gamma=0.9, tolerance=1e-10, max_iterations=10_000):
     """Return optimal state values and a first-argmax deterministic policy."""
-    _validate_gamma(gamma)
+    gamma = _validate_gamma(gamma)
+    tolerance, max_iterations = _validate_solver_settings(
+        tolerance, max_iterations
+    )
     values = np.zeros(env.n_states)
     for _ in range(max_iterations):
         updated = np.zeros_like(values)
@@ -110,9 +167,13 @@ def value_iteration(env, gamma=0.9, tolerance=1e-10, max_iterations=10_000):
             values = updated
             break
         values = updated
+    else:
+        raise RuntimeError("value iteration did not converge within max_iterations")
 
-    greedy_policy = np.zeros(env.n_states, dtype=int)
+    greedy_policy = np.full(env.n_states, -1, dtype=int)
     for state in range(env.n_states):
+        if state == env.terminal_state:
+            continue
         action_values = []
         for action in range(env.n_actions):
             next_state, reward, terminated = env.transition(state, action)
@@ -122,8 +183,16 @@ def value_iteration(env, gamma=0.9, tolerance=1e-10, max_iterations=10_000):
 
 
 def monte_carlo_update(values, counts, state, return_):
-    counts[state] += 1
-    values[state] += (return_ - values[state]) / counts[state]
+    _validate_update_arrays(values, counts)
+    _validate_index(state, values.size, "state")
+    return_ = _finite_real(return_, "return")
+    new_count = int(counts[state]) + 1
+    if new_count > np.iinfo(counts.dtype).max:
+        raise ValueError("count cannot be incremented without overflow")
+    new_value = float(values[state] + (return_ - values[state]) / new_count)
+
+    values[state] = new_value
+    counts[state] = new_count
 
 
 def td_target(reward, gamma, next_value, terminated):
@@ -133,19 +202,26 @@ def td_target(reward, gamma, next_value, terminated):
 def q_learning_update(
     q, state, action, reward, next_state, alpha, gamma, terminated
 ):
-    if q.ndim != 2:
-        raise ValueError("q must have shape (n_states, n_actions)")
-    if not 0 <= state < q.shape[0] or not 0 <= next_state < q.shape[0]:
-        raise ValueError("state and next_state must index q")
-    if not 0 <= action < q.shape[1]:
-        raise ValueError("action must index q")
+    if (
+        not isinstance(q, np.ndarray)
+        or q.ndim != 2
+        or not np.issubdtype(q.dtype, np.floating)
+        or not q.flags.writeable
+    ):
+        raise ValueError("q must be a writable floating-point 2D array")
+    _validate_index(state, q.shape[0], "state")
+    _validate_index(action, q.shape[1], "action")
+    _validate_index(next_state, q.shape[0], "next_state")
+    reward = _finite_real(reward, "reward")
+    alpha = _finite_real(alpha, "alpha")
     if not 0.0 <= alpha <= 1.0:
         raise ValueError("alpha must be in [0, 1]")
-    _validate_gamma(gamma)
+    gamma = _validate_gamma(gamma)
 
     bootstrap = 0.0 if terminated else float(np.max(q[next_state]))
     target = reward + gamma * bootstrap
-    q[state, action] += alpha * (target - q[state, action])
+    updated = float(q[state, action] + alpha * (target - q[state, action]))
+    q[state, action] = updated
     return float(target)
 
 

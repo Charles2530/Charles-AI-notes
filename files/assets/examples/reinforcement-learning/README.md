@@ -29,10 +29,10 @@ location.
 
 | API | Purpose |
 | --- | --- |
-| `update_sample_average(values, counts, arm, reward)` | Increment the chosen arm's count and sample-mean value in place. |
+| `update_sample_average(values, counts, arm, reward)` | Atomically update writable floating values and matching nonnegative integer counts. |
 | `epsilon_greedy(values, epsilon, rng)` | Explore uniformly with probability epsilon; otherwise return the first maximum-value arm. |
-| `ucb_action(values, counts, step)` | Return the first untried arm, then use the UCB1 score once every arm has a sample. |
-| `run_experiment(seed, steps, epsilon)` | Compare epsilon-greedy and UCB on one seeded 10-arm task and shared potential reward table. |
+| `ucb_action(values, counts, step)` | At `step == counts.sum() + 1`, return the first untried arm or score UCB1. |
+| `run_experiment(seed, steps, epsilon)` | Compare epsilon-greedy and UCB on one seeded task with shared per-step potential rewards. |
 
 The command-line interface defaults to seed `7` and 2000 interaction steps.
 For each method it prints `cumulative_reward`, `average_regret`, and
@@ -43,11 +43,12 @@ actions that select the arm with the largest true mean. The output contract is
 the field names and finite numeric values, not exact decimal values that should
 be copied into documentation.
 
-Both methods receive the same true arm means and the same pre-generated
-time-by-arm noise table. Their observed reward sequences still differ because
-they choose different arms. This setup isolates action selection more carefully
-than running each method on a separately sampled task, while remaining only one
-seeded comparison.
+Both methods receive the same true arm means. At each step the task RNG creates
+one arm-length noise row, both methods choose against that same counterfactual
+row, and the row is then discarded. Their observed reward sequences still
+differ because they choose different arms. This avoids storing a full
+steps-by-arms table while isolating action selection more carefully than running
+each method on a separately sampled task.
 
 ## GridWorld API and terminal semantics
 
@@ -61,27 +62,35 @@ from the terminal state returns reward 0 and `terminated=True`.
 | --- | --- |
 | `GridWorld.reset()` / `GridWorld.step(action)` | Reset the state and execute deterministic transitions. |
 | `policy_evaluation(env, policy, ...)` | Iteratively evaluate a tabular stochastic policy. |
-| `value_iteration(env, ...)` | Compute optimal state values and a deterministic first-argmax policy. |
-| `monte_carlo_update(values, counts, state, return_)` | Apply an in-place incremental sample-average return update. |
+| `value_iteration(env, ...)` | Compute optimal values and a first-argmax policy whose terminal sentinel is `-1`. |
+| `monte_carlo_update(values, counts, state, return_)` | Atomically update writable floating values and matching nonnegative integer counts. |
 | `td_target(reward, gamma, next_value, terminated)` | Form a one-step TD target with terminal masking. |
-| `q_learning_update(q, ...)` | Update exactly one state-action entry and return its target. |
+| `q_learning_update(q, ...)` | Atomically update one entry in a writable floating Q-table and return its target. |
 
 Terminal masking is part of the algorithm, not a reporting detail. A normal TD
 target is `reward + gamma * next_value`, and a normal Q-learning target uses
 `reward + gamma * max(q[next_state])`. When `terminated=True`, the bootstrap
 term is zero, so both targets reduce to the terminal reward. Bootstrapping from
 an arbitrary value stored for terminal state 5 would leak value beyond the end
-of an episode.
+of an episode. `q_learning_update` still validates `next_state` on terminal
+transitions; masking changes the target calculation, not index validity.
+
+Dynamic-programming tolerances must be finite and positive, and iteration caps
+must be positive integers. Policy evaluation and value iteration raise
+`RuntimeError` rather than returning an unconverged result when the cap is
+exhausted.
 
 The GridWorld CLI prints a mean value under the uniform policy, the optimal
 start-state value and greedy action array, plus summary statistics for learned
-Q-values. These are compact smoke-test summaries; inspect the returned arrays
-directly when studying individual states or updates.
+Q-values. The terminal action is `-1` because no action is defined there. These
+are compact smoke-test summaries; inspect returned arrays directly when
+studying individual states or updates.
 
 ## Reproducibility and scope
 
-The bandit seed controls the sampled arm means, potential reward noise, and
-epsilon-greedy choices. The GridWorld transition function itself is
+The bandit seed is expanded into independent task and policy child streams. The
+task stream controls arm means and potential reward noise without being advanced
+by epsilon-greedy choices. The GridWorld transition function itself is
 deterministic; its seed controls the exploratory choices in the small Q-learning
 demonstration. Repeating a command with the same arguments reproduces its output
 under the same Python and NumPy behavior. Tests assert same-seed equality and

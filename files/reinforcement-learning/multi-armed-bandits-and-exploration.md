@@ -14,7 +14,7 @@ Bandit 没有随动作变化的 state transition，也没有跨多步传播的 d
 
 ## 最小任务
 
-环境有 10 个 arm。第 (a) 个 arm 的真实均值为 \(\mu_a\)，每次拉动得到带噪声的 reward。真实最优 arm 为 \(a^*=\arg\max_a\mu_a\)。实验固定一次真实均值，并预先生成相同的“时间步 × arm”噪声表，让两种算法面对同一个任务与潜在 reward 流。
+环境有 10 个 arm。第 (a) 个 arm 的真实均值为 \(\mu_a\)，每次拉动得到带噪声的 reward。真实最优 arm 为 \(a^*=\arg\max_a\mu_a\)。实验固定一次真实均值，每一步只生成一行包含全部 arm 的潜在噪声，让两种算法在该步面对同一个任务与反事实 reward，处理完后丢弃该行。
 
 每一步的 regret 定义为真实均值差：
 
@@ -44,11 +44,13 @@ Q(a)\leftarrow Q(a)+\frac{R-Q(a)}{N(a)}
 
 ```python
 def update_sample_average(values, counts, arm, reward):
-    counts[arm] += 1
-    values[arm] += (reward - values[arm]) / counts[arm]
+    new_count = int(counts[arm]) + 1
+    new_value = values[arm] + (reward - values[arm]) / new_count
+    values[arm] = new_value
+    counts[arm] = new_count
 ```
 
-这个估计默认 reward 分布近似 stationary，即同一个 arm 的真实均值不会随时间系统性漂移。若均值持续变化，所有历史样本等权的样本均值会反应迟缓，此时常数步长更新可能更合适，但需要另行分析步长带来的偏差与方差。
+实际函数会先验证浮点 values、非负整数 counts、arm 和有限 reward，再计算两个新值并写回，因此非法输入不会只改 count 而留下半次更新。这个估计默认 reward 分布近似 stationary，即同一个 arm 的真实均值不会随时间系统性漂移。若均值持续变化，所有历史样本等权的样本均值会反应迟缓，此时常数步长更新可能更合适，但需要另行分析步长带来的偏差与方差。
 
 ### Epsilon-greedy：显式保留随机探索
 
@@ -64,7 +66,7 @@ epsilon-greedy 以概率 \(\epsilon\) 均匀随机选 arm，否则利用当前�
 a_t=\arg\max_a\left[Q(a)+\sqrt{\frac{2\log t}{N(a)}}\right]
 \]
 
-其中 `t` 是从 1 开始的交互步。实现先按索引尝试每个 `count == 0` 的 arm，再计算分数，因此没有 `log(0)` 或除零；这也是一种乐观处理：未尝试 arm 不会因为初始估计低而永久被忽略。
+其中 `t` 是从 1 开始的交互步，调用时必须满足 `t == counts.sum() + 1`。实现先按索引尝试每个 `count == 0` 的 arm，再计算分数，因此没有 `log(0)` 或除零；这也是一种乐观处理：未尝试 arm 不会因为初始估计低而永久被忽略。
 
 UCB 的 bonus 会随选择次数增加而缩小，在这个 stationary、有限臂、特定噪声的教学设定中可能比固定 epsilon 更有效率。它不是在所有环境中都优于 epsilon-greedy；非平稳 reward、重尾噪声或不同超参数都可能改变比较结果。
 
@@ -78,7 +80,7 @@ Bandit 的数据流没有下一 state：
 arm + reward -> count / sample-average update -> 下一步选择
 ```
 
-为了让比较尽量公平，[`bandit.py`](../assets/examples/reinforcement-learning/bandit.py) 先固定真实均值和完整噪声表；算法只决定每一步读取哪个 arm 对应的潜在样本。两种算法仍会选择不同 arm，因此观察到的 reward 序列不同，这是策略行为的一部分。
+为了让比较尽量公平，[`bandit.py`](../assets/examples/reinforcement-learning/bandit.py) 先固定真实均值，再逐步生成共享的 arm 噪声行；算法只决定该步读取哪个 arm 对应的潜在样本。task RNG 与 epsilon-greedy 的 policy RNG 来自同一 seed 派生的独立子流，因此策略随机调用不会改变环境 reward。两种算法仍会选择不同 arm，所以观察到的 reward 序列不同，这是策略行为的一部分。
 
 进入 [`gridworld.py`](../assets/examples/reinforcement-learning/gridworld.py) 后，数据流多出 `state -> action -> next_state`。其中终止转移的 TD target 不 bootstrap：
 

@@ -131,6 +131,7 @@ nav:
   - 强化学习:
       - 强化学习导读: reinforcement-learning/index.md
       - Agent、环境与训练闭环: reinforcement-learning/rl-agent-environment-loop.md
+      - 多臂老虎机与探索: reinforcement-learning/multi-armed-bandits-and-exploration.md
       - MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md
       - Policy Gradient、Actor-Critic、PPO 与 GRPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md
       - 世界模型中的强化学习: reinforcement-learning/rl-for-world-models.md
