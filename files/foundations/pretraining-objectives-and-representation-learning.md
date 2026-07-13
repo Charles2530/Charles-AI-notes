@@ -4,6 +4,9 @@
 
 这页只回答一个核心问题：**读到一个预训练目标时，怎样判断它让模型学到了什么表示，又没有学到什么能力？**
 
+!!! tip "数学先修"
+    本文会用到[熵、KL 与互信息](../prerequisite-math/information-theory-and-divergence.md)比较训练目标，用[潜变量、ELBO、score 与 flow](../prerequisite-math/latent-likelihood-and-generative-objectives.md)理解生成式目标，并用[表示空间与内积](../prerequisite-math/linear-algebra-and-geometry.md)解释对比学习。
+
 ## 目标函数是在写信息接口
 
 一个预训练样本可以抽象成：
@@ -69,6 +72,74 @@ Masked 目标的边界也在这里。它能学上下文和结构，但不保证�
 
 对比学习的能力来自“哪些变化被视作同一个对象”。如果增强策略把小物体、文字、空间位置或接触点当成可忽略扰动，表示就可能在机器人、OCR、图表理解里丢掉关键细节。正样本和负样本不是采样小事，而是在写模型的不变性。
 
+## 表示坍缩：prediction loss 很低，表示却什么都没留下
+
+joint embedding 方法常比较两个表示：
+
+\[
+\mathcal L_{\mathrm{pred}}
+=
+\left\|
+p_\theta(h_c(x))
+-
+\operatorname{sg}(h_t(y))
+\right\|_2^2
+\]
+
+\(h_c\) 是 context / student encoder，\(h_t\) 是 target / teacher encoder，\(p_\theta\) 是 predictor，\(\operatorname{sg}\) 表示 stop-gradient。这个目标希望 context 表示能预测 target 表示。
+
+但如果两边都对任意输入输出同一个常数向量 \(c\)：
+
+\[
+h_c(x)=h_t(y)=c
+\]
+
+那么 prediction loss 也能接近 0。模型看起来“预测得完美”，实际没有保留输入差异，这就是 representation collapse。
+
+![Joint embedding representation collapse](../assets/images/paper-deep-dives/world-models/h-jepa/figure-5-energy-collapse.png){ width="680" }
+
+<small>图源：[H-JEPA 精读](../paper-deep-dives/world-models/h-jepa.md)，Figure 5。原图比较普通确定性预测和 joint embedding 的坏解：如果两个 encoder 都输出常数，表示距离可以很小。本站用它说明 loss 低只证明目标被满足，不证明表示仍携带信息。</small>
+
+防 collapse 的方法在解决不同问题：
+
+| 机制 | 它阻止什么捷径 | 它不能单独证明什么 |
+| --- | --- | --- |
+| Negative samples | 把不匹配样本也映到同一点 | 高维空间的负样本已覆盖所有错误区域 |
+| stop-gradient | 两条分支被同一 loss 同时拖向常数 | target 表示本身有信息 |
+| EMA teacher | target 每步变化过快、两边互相追逐 | teacher 学到的 invariance 对下游正确 |
+| variance regularization | 某个表示维度在 batch 内变成常数 | 不同维度没有重复编码 |
+| covariance regularization | 多个表示维度高度冗余 | 表示保留了动作、风险或几何 |
+| bottleneck / capacity constraint | latent 直接偷带完整答案 | 瓶颈后的信息足以支持所有任务 |
+
+VICReg 风格的 variance penalty 可以写成：
+
+\[
+\mathcal L_{\mathrm{var}}
+=
+\frac{1}{d}
+\sum_{j=1}^{d}
+\max
+\left(
+0,
+\gamma-
+\sqrt{\operatorname{Var}(z_j)+\epsilon}
+\right)
+\]
+
+如果第 \(j\) 个表示维度在整个 batch 几乎不变，标准差会低于阈值 \(\gamma\)，从而受到惩罚。covariance penalty 则压低不同维度间的冗余：
+
+\[
+\mathcal L_{\mathrm{cov}}
+=
+\frac{1}{d}
+\sum_{i\ne j}
+\operatorname{Cov}(z)_{ij}^2
+\]
+
+这两项一边要求每个维度保持变化，一边减少维度之间重复表达。协方差的数学含义见[概率论、分布与期望](../prerequisite-math/probability-distributions-and-expectation.md)。
+
+V-JEPA 采用 EMA target encoder 和 stop-gradient，让 predictor 追一个变化更慢的目标；H-JEPA 的讨论还强调 latent capacity 和 regularized energy landscape。它们都在提醒同一件事：**prediction error 只是第一张账，表示是否有信息要靠 anti-collapse 约束和独立下游评测证明。** stop-gradient、EMA 和不同梯度路径的关系见[梯度估计、离散变量与训练信号](gradient-estimators-and-training-signals.md)。
+
 ## Reconstruction：重建细节，不等于保留任务状态
 
 Reconstruction 目标让模型从压缩表示还原输入：
@@ -118,6 +189,7 @@ BC 的优点是稳定、可扩展、能直接吃示范数据。RT-1、RT-2、Ope
 | next-token | 续写、代码、语言知识、序列统一接口 | 事实验证、工具执行、动作安全 |
 | masked modeling | 上下文补全、局部到全局结构 | 自回归生成、因果动作后果 |
 | contrastive | 检索、语义对齐、开放类别识别 | 细粒度几何、生成细节、动力学 |
+| joint embedding prediction | 可迁移的抽象表示、时空预测特征 | collapse、动作后果和任务充分性 |
 | reconstruction | 压缩、tokenizer、decoder、保真细节 | 抽象任务状态、风险和可规划性 |
 | denoising | 多峰生成、图像/视频/动作分布 | 少步稳定、条件忠实、闭环控制 |
 | behavior cloning | 模仿专家动作、快速策略学习 | 分布外恢复、探索、长期规划 |
@@ -136,6 +208,8 @@ BC 的优点是稳定、可扩展、能直接吃示范数据。RT-1、RT-2、Ope
 - [MAE](https://arxiv.org/abs/2111.06377)
 - [SimCLR](https://arxiv.org/abs/2002.05709)
 - [CLIP](https://arxiv.org/abs/2103.00020)
+- [BYOL](https://arxiv.org/abs/2006.07733)
+- [VICReg](https://arxiv.org/abs/2105.04906)
 - [The Illustrated CLIP](https://jalammar.github.io/illustrated-clip/)
 - [V-JEPA](https://arxiv.org/abs/2404.08471)
 - [DDPM](https://arxiv.org/abs/2006.11239)

@@ -86,6 +86,8 @@ p_i
 {\sum_j\exp(s_j)}
 \]
 
+这里 \(s_i\) 表示第 \(i\) 个候选的原始 score，分母对全部候选求和，所以所有 \(p_i\) 的总和等于 1。
+
 MoE router 常在 top-k 之后只对被选中的 expert 重新归一化：
 
 \[
@@ -95,6 +97,8 @@ MoE router 常在 top-k 之后只对被选中的 expert 重新归一化：
 {\sum_{j\in S_k}\exp(s_j)},
 \quad i\in S_k
 \]
+
+其中 \(S_k\) 表示 score 最高的 \(k\) 个 expert 集合；新的分母只在 \(S_k\) 内求和，因此未入选 expert 的权重为 0，入选权重重新加总为 1。
 
 然后把 expert 输出加权合并：
 

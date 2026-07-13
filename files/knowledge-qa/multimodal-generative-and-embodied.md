@@ -84,7 +84,7 @@ L_{\text{vision}}=\text{frames}\times\text{patches per frame}\times\text{views}
 
 **追问展开。** 面试时要区分“模型真的使用了视觉证据”和“生成了一段看起来合理的解释”。更稳的做法是结合 grounding、引用框、可视化注意力或工具验证。  
 **易错点 / 边界。** 解释流畅不代表视觉证据正确；多模态 hallucination 常常来自模型语言先验压过图像证据。  
-**继续读。** [多模态 CoT 与推理基础](../foundations/multimodal-cot-and-reasoning-basics.md) / [多模态推理来源台账](../references/multimodal-reasoning-source-ledger.md)
+**继续读。** [多模态 CoT 与推理基础](../foundations/multimodal-cot-and-reasoning-basics.md)
 
 ### Q：OCR、图表理解和 grounding 为什么常常比普通 VQA 难？
 
@@ -193,4 +193,4 @@ s(\epsilon_{\text{cond}}-\epsilon_{\text{uncond}})
 
 **追问展开。** FID、FVD、CLIP score、人类偏好、VBench 等指标各自只覆盖一部分。生成模型论文通常需要定量、定性、消融和失败案例一起看。  
 **易错点 / 边界。** 不要把单个分数写成“模型更好”的充分证据；生成质量和下游可用性也不是一回事。  
-**继续读。** [扩散路线选择与方法对照](../diffusion/comparison-table.md) / [全站证据与复现状态标准](../references/evidence-and-reproducibility-standard.md)
+**继续读。** [扩散路线选择与方法对照](../diffusion/comparison-table.md)

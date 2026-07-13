@@ -30,7 +30,7 @@
 
 **追问展开。** 对时间序列、用户行为、机器人轨迹和生产日志，随机切分往往不够。更合理的切分可能按时间、用户、场景、设备、任务或数据来源分组，避免同源样本同时出现在训练和测试里。  
 **易错点 / 边界。** 测试集指标也只是对某个分布的估计；上线后仍要监控数据漂移、长尾失败和安全事件。  
-**继续读。** [数据划分、指标与评估基础](../foundations/data-splits-metrics-and-evaluation-basics.md) / [评测与证据链来源台账](../references/evaluation-source-ledger.md)
+**继续读。** [数据划分、指标与评估基础](../foundations/data-splits-metrics-and-evaluation-basics.md)
 
 ### Q：过拟合、欠拟合和泛化该怎么解释？
 

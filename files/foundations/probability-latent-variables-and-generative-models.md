@@ -4,6 +4,9 @@
 
 这页只回答一个核心问题：**当论文写 \(p_\theta(x)\)、\(p_\theta(x\mid z)\)、\(q_\phi(z\mid x)\)、ELBO、score 和 latent state 时，它们分别在训练链条里扮演什么角色？**
 
+!!! tip "数学先修"
+    本文会用到[概率、条件分布与贝叶斯](../prerequisite-math/probability-distributions-and-expectation.md)、[熵与 KL](../prerequisite-math/information-theory-and-divergence.md)，并把它们接到[潜变量、ELBO、energy 与 score](../prerequisite-math/latent-likelihood-and-generative-objectives.md)。
+
 ## 分布不是标签，而是可能性的形状
 
 如果真实数据来自未知分布，可以写成：
@@ -27,6 +30,18 @@ p_\theta(x\mid c)
 \]
 
 直觉很简单：真实样本 \(x_i\) 在模型分布下概率越高，loss 越小。但很多强生成模型不会直接显式写出完整 \(p_\theta(x)\)，而是借助 latent variable、denoising objective、score matching 或 autoregressive factorization 来训练。
+
+生成模型最容易被一个名字遮住差异。更稳的办法是先看它提供什么概率接口：
+
+| 建模接口 | 主要训练信号 | 能否直接得到规范化密度 | 推理 / 采样方式 |
+| --- | --- | --- | --- |
+| Autoregressive likelihood | next-token / next-step NLL | 能，靠条件概率连乘 | 按顺序逐步采样 |
+| Latent-variable likelihood | ELBO、reconstruction、KL | 边际 likelihood 常需近似 | 从 prior 采 \(z\)，再由 decoder 生成 |
+| Energy-based compatibility | 正负样本能量差或正则化 energy | partition function 常不可算 | 优化或采样寻找低能量状态 |
+| Implicit generator | adversarial / distribution matching | 通常不能 | 噪声一次或少步映射到样本 |
+| Score / diffusion model | denoising、score matching | 不是常用训练接口 | 沿 SDE、ODE 或离散 sampler 迭代 |
+
+这张表不是在选唯一赢家。Autoregressive 模型密度清楚但采样串行；VAE 有结构化 latent 但优化下界；EBM 表达兼容性灵活但归一化和搜索困难；implicit model 采样快却没有显式 likelihood；扩散生成质量强但推理要积分或多步更新。数学定义和边界见[潜变量、似然与生成模型目标](../prerequisite-math/latent-likelihood-and-generative-objectives.md)。
 
 ## 潜变量：把看不见的因素放进模型
 
@@ -103,7 +118,7 @@ q_\phi(z\mid x)
 
 ## 重参数化：让采样也能反向传播
 
-VAE 训练还需要解决一个工程问题：如果 \(z\sim q_\phi(z\mid x)\)，采样步骤会挡住对 \(\phi\) 的梯度。重参数化技巧把随机性搬到一个无参数噪声上。常见高斯 posterior 写成：
+VAE pipeline 里，encoder 不只要输出 posterior 参数，还要从 posterior 取一个 \(z\) 交给 decoder。直接的采样节点会挡住 encoder 梯度，所以高斯 posterior 常写成：
 
 \[
 q_\phi(z\mid x)=\mathcal{N}(\mu_\phi(x),\mathrm{diag}(\sigma_\phi^2(x)))
@@ -114,7 +129,7 @@ q_\phi(z\mid x)=\mathcal{N}(\mu_\phi(x),\mathrm{diag}(\sigma_\phi^2(x)))
 z=\mu_\phi(x)+\sigma_\phi(x)\odot \epsilon
 \]
 
-这样 \(z\) 仍然是从同一个分布采样，但梯度可以沿着 \(\mu_\phi(x)\) 和 \(\sigma_\phi(x)\) 回到 encoder。Auto-Encoding Variational Bayes 的关键价值就在这里：把 latent-variable model 的近似推断和神经网络的随机梯度训练接起来。
+这样 forward 仍从同一个 posterior 得到随机 \(z\)，backward 却可以沿 \(\mu_\phi(x)\) 和 \(\sigma_\phi(x)\) 回到 encoder。它在生成模型 pipeline 中负责连接“近似 posterior”和“可训练 decoder”；为什么这种改写能给出 pathwise gradient，以及离散 latent 为什么常改用 STE，放在[梯度估计、离散变量与训练信号](gradient-estimators-and-training-signals.md)中展开。
 
 ## KL 项不是装饰：太强太弱都会出问题
 
@@ -164,7 +179,7 @@ Score 是另一种描述分布的方式：
 
 ## 读生成模型时先问四个问题
 
-第一，模型定义的随机变量是什么：是 \(x\)、\(z\)、\(x_t\)、belief state，还是动作序列？第二，训练目标在逼近什么：likelihood、ELBO、score、denoising loss，还是下游 reward？第三，采样或推理时从哪里开始：prior、噪声、posterior state，还是真实历史观测？第四，评测看什么：likelihood、sample quality、prompt alignment、calibration、closed-loop success，还是 planner 的候选排序？
+第一，模型定义的随机变量是什么：是 \(x\)、\(z\)、\(x_t\)、belief state，还是动作序列？第二，模型提供的是规范化 likelihood、下界、energy、implicit samples，还是 score？第三，采样或推理时从哪里开始：prior、噪声、posterior state，还是真实历史观测？第四，评测看什么：likelihood、sample quality、prompt alignment、calibration、closed-loop success，还是 planner 的候选排序？
 
 这些问题能避免几个常见误解：likelihood 高不等于样本好看；重建好不等于 latent 可采样；视频预测清晰不等于能规划；score 准也不等于少步采样一定稳定；latent 省 token 不等于保留了行动相关状态。
 
@@ -181,6 +196,7 @@ VAE 用 ELBO 把不可算的边际似然变成可优化下界；扩散用受控�
 - [Tutorial on Variational Autoencoders](https://arxiv.org/abs/1606.05908)
 - [Variational Inference: A Review for Statisticians](https://arxiv.org/abs/1601.00670)
 - [Deep Generative Modelling: A Comparative Review](https://arxiv.org/abs/2103.04922)
+- [A Tutorial on Energy-Based Learning](http://yann.lecun.com/exdb/publis/pdf/lecun-06.pdf)
 - [RBC Borealis: Tutorial #5 Variational Auto-Encoders](https://rbcborealis.com/research-blogs/tutorial-5-variational-auto-encoders/)
 - [Yang Song: Generative Modeling by Estimating Gradients of the Data Distribution](https://yang-song.net/blog/2021/score/)
 - [DDPM](https://arxiv.org/abs/2006.11239)

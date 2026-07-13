@@ -108,6 +108,68 @@ V^\pi(s)=\mathbb E_\pi[G_t\mid S_t=s].
 
 RL 里的 policy gradient 方差大，是因为一次 trajectory 的 return 受很多随机因素影响；batch size 变大通常能降低估计噪声；baseline 和 advantage 也可以看成降低方差的工具。
 
+## 协方差：两个误差方向会不会一起变化
+
+方差只看一个随机变量自己的波动。协方差看两个随机变量是否倾向于一起偏离均值：
+
+\[
+\operatorname{Cov}(X,Y)
+=
+\mathbb{E}
+\left[
+(X-\mathbb{E}[X])
+(Y-\mathbb{E}[Y])
+\right]
+\]
+
+逐项读：
+
+| 情况 | 协方差符号 | 直觉 |
+| --- | --- | --- |
+| \(X\) 偏大时 \(Y\) 也常偏大 | 正 | 两个方向同向变化 |
+| \(X\) 偏大时 \(Y\) 常偏小 | 负 | 两个方向反向变化 |
+| 没有明显线性共同变化 | 接近 0 | 不代表完全独立 |
+
+协方差受变量单位影响。为了得到无量纲、范围在 \([-1,1]\) 的线性相关程度，常用 Pearson correlation：
+
+\[
+\rho_{XY}
+=
+\frac{
+\operatorname{Cov}(X,Y)
+}{
+\sqrt{
+\operatorname{Var}(X)
+\operatorname{Var}(Y)
+}
+}
+\]
+
+如果随机向量 \(x\in\mathbb{R}^d\) 有均值 \(\mu\)，所有维度两两协方差可以排成协方差矩阵：
+
+\[
+\Sigma
+=
+\mathbb{E}
+\left[
+(x-\mu)(x-\mu)^\top
+\right]
+\]
+
+对角线 \(\Sigma_{ii}\) 是每个维度自己的方差；非对角项 \(\Sigma_{ij}\) 表示两个方向怎样一起变化。协方差矩阵是对称半正定矩阵，因此可以用特征向量看不确定性主要沿哪些方向展开。
+
+一个机器人例子：设末端位置误差是 \(e=(e_x,e_y)\)。如果相机斜着观察桌面，深度误差可能同时投影到水平和垂直方向，使 \(e_x,e_y\) 正相关。此时只报“横向标准差 1 cm、纵向标准差 1 cm”会漏掉误差方向；完整 \(\Sigma\) 对应的是一条倾斜的不确定性椭圆。planner 若只检查轴对齐阈值，可能低估椭圆长轴方向上的碰撞风险。
+
+多元高斯常写成：
+
+\[
+x\sim\mathcal N(\mu,\Sigma)
+\]
+
+\(\mu\) 决定分布中心，\(\Sigma\) 决定各方向的尺度和耦合。DPM-Solver++ 里的 \(\sigma_t^2I\) 是各向同性协方差；RSSM posterior 可以输出对角高斯以节省计算；风险规划则可能需要保留方向相关的不确定性。
+
+这里要守住两个边界：零协方差通常只表示“没有线性相关”，不自动推出独立；相关系数高也不说明 \(X\) 导致 \(Y\)。因果解释要回到[因果、反事实与分布偏移](causality-counterfactual-and-distribution-shift.md)。
+
 ## 条件概率：知道一件事后，另一件事的可能性
 
 条件概率写成：
@@ -182,6 +244,8 @@ p_\theta(x)
 | 概率高就一定会发生 | 概率描述可能性，不保证单次结果 |
 | softmax 概率就是真实置信度 | 它是模型分布，可能未校准 |
 | 期望就是实际样本平均 | 样本平均只是对期望的估计 |
+| 协方差为 0 就代表两个变量独立 | 一般只能说明无线性相关；高斯等特殊条件下才可进一步推出独立 |
+| 相关系数高就说明存在因果 | 它只描述统计共变，因果还需要干预或额外假设 |
 | likelihood 和 probability 完全一样 | 数学形式相同，但关注对象不同：概率固定模型看数据，似然固定数据看参数 |
 
 ## 读完以后怎么判断
@@ -191,5 +255,6 @@ p_\theta(x)
 ## 相关阅读与下一步
 
 - 站内下一步：[概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md)。
+- 站内下一步：[采样、估计与校准](sampling-estimation-and-calibration.md)。
 - 站内下一步：[数据与数据集基础](../foundations/data-and-dataset-basics.md)。
 - 外部材料：[Dive into Deep Learning: Probability](https://d2l.ai/chapter_preliminaries/probability.html)。

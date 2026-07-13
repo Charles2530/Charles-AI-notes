@@ -6,6 +6,9 @@
 
 这页按高质量技术博客常用的讲法展开：先固定一个具体困惑，再把方法放回数据流和硬件路径里看。模型压缩不是“把模型变小”的同义词，而是在质量、成本和可部署结构之间重新设计模型。
 
+!!! tip "数学先修"
+    本文会用到[谱分解、Taylor、Hessian 与 Fisher](../prerequisite-math/spectral-second-order-and-low-rank.md)衡量敏感方向，用[数值、复杂度与估算](../prerequisite-math/numerics-complexity-and-estimation.md)核算真实成本；QAT 的不可导操作可先读[梯度估计与 STE](gradient-estimators-and-training-signals.md)。
+
 ## 把压缩目标写成成本账
 
 假设原模型是 \(M\)，压缩后的模型是 \(M'\)。我们希望 \(M'\) 的任务质量足够接近 \(M\)，同时降低某个真实成本：
@@ -86,6 +89,45 @@ Fast-FoundationStereo 的 refinement pruning 图很适合作为部署型剪枝�
 <small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 5。原图表达 refinement module 里的 ConvGRU 存在 recurrent dependency，剪枝时要区分可剪通道、固定通道和依赖关系。本站使用这张图说明：结构化剪枝不是简单按通道重要性排序，还要保证迭代模块前后接口一致。</small>
 
 图里最关键的是 recurrent dependency。ConvGRU 会反复更新 hidden state，上一轮输出的 hidden channel 下一轮还要继续用。若只按某一层局部重要性剪掉通道，后续迭代可能接口不一致。真正可部署的剪枝流程通常是：构建依赖图，按组评估重要性，剪掉结构组，短期恢复训练，再测真实 runtime。
+
+## QAT 为什么需要 STE：部署前向和训练反向不是同一条规则
+
+量化感知训练希望 forward 真正看到量化误差。一个简化均匀量化器可以写成：
+
+\[
+Q(x)
+=
+s\cdot
+\operatorname{clip}
+\left(
+\operatorname{round}(x/s),
+q_{\min},
+q_{\max}
+\right)
+\]
+
+这里 \(s\) 是 scale，round 把连续值映到整数格点，clip 限制可表示范围。如果按真实数学导数反向，round 几乎处处导数为 0，参数很难从量化后的 loss 得到可用信号。
+
+QAT 常用 Straight-Through Estimator。用 \(\operatorname{sg}\) 表示 stop-gradient，可以写成：
+
+\[
+x_{\mathrm{st}}
+=
+x
++
+\operatorname{sg}
+\left(
+Q(x)-x
+\right)
+\]
+
+forward 时 \(x_{\mathrm{st}}=Q(x)\)，模型会经历真实量化值；backward 时 stop-gradient 分支导数为 0，梯度近似把量化器当成恒等映射传回 \(x\)。
+
+这条梯度通常有偏。它的价值不是“精确求出 round 的导数”，而是让训练 forward 和部署数值尽量一致，同时给 optimizer 一条方差较低的 surrogate gradient。验收 QAT 时仍要检查真实 quantized forward、真实 kernel 和端到端任务质量，不能只看 fake-quant training loss。
+
+[Attn-QAT](../paper-deep-dives/foundations/attn-qat.md) 进一步说明：普通 GEMM 的 STE 还不够覆盖 attention。softmax probability、低精度 Q/K/V 和 backward 重算要保持各自的数值语义。STE、Gumbel-Softmax、重参数化和 stop-gradient 的统一比较见[梯度估计、离散变量与训练信号](gradient-estimators-and-training-signals.md)。
+
+这里还有一个术语陷阱：PyTorch pruning API 说的 parameter reparameterization，是把原参数改写成原始权重与 mask 的组合；VAE 的 reparameterization 则是把随机样本写成参数和独立噪声。两者同名，不是同一个数学技巧。
 
 ## Taylor 重要性是排队工具，不是最后证据
 
@@ -177,6 +219,7 @@ Fast-FoundationStereo 的 cost filtering 阶段直接结构剪枝收益有限，
 | 剪枝就是按重要性排序删除 | 结构化剪枝还要满足 dependency graph |
 | NAS 找到的是通用最优架构 | 它通常只在某个搜索空间、数据、硬件和预算下最优 |
 | MACs 是最公平指标 | MACs 方便比较，但不能替代真实 latency 和能耗 |
+| STE 给出了量化算子的真实梯度 | 它通常是有偏 surrogate，必须由真实量化前向和部署指标验收 |
 | 压缩只影响平均精度 | 长尾、OOD、校准、安全边界和失败模式常先被压坏 |
 
 ## 最后判断

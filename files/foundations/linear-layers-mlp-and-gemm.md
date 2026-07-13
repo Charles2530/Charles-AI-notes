@@ -4,6 +4,9 @@
 
 最短答案是：Transformer 里大量参数、FLOPs、量化收益、张量并行切分和低精度 kernel，都集中在线性层。Linear 在模型语义上是“把每个 token 的表示投影到新通道空间”；在数学上是矩阵乘；在硬件上通常会落到 GEMM 或 fused GEMM。把这三层分清，后面读量化、推理 runtime、Megatron、CUTLASS、Triton 和 DeepGEMM 才不会混成一团。
 
+!!! tip "数学先修"
+    本文会用到[向量、矩阵、投影与秩](../prerequisite-math/linear-algebra-and-geometry.md)解释 Linear/MLP 的表示变化，并用[复杂度、FLOPs 与 bytes](../prerequisite-math/numerics-complexity-and-estimation.md)把矩阵乘落到 GEMM 成本。
+
 ## Linear 改的是每个 token 的通道表示
 
 最常见的线性层公式是：

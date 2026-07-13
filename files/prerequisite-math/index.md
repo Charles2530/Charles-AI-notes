@@ -1,91 +1,121 @@
 # 前置数学知识
 
-这个专题不是把数学课本搬进来，而是给本站后面的 AI 文章补一套“能读懂公式和名词”的前置语言。
+这个专题不是把数学课本搬进来，而是给后面的 AI 博客准备一套可随时调用的工具。目标不是证明所有定理，而是看到公式时能回答：谁在变化，谁是随机的，谁被优化，误差怎样传播，最后为什么会影响质量、显存、延迟或闭环行为。
 
-后面的博客会反复出现这些词：向量空间、矩阵乘法、雅可比、牛顿-莱布尼茨公式、半线性 ODE、指数积分器、概率密度、期望、条件概率、贝叶斯、马尔可夫、随机过程、熵、KL、梯度下降、拉格朗日乘子、Bellman、λ-return、ODE、SDE、SVD、Hessian、Newton-Schulz、Monte Carlo、校准、位置编码、attention mask、top-k、beam search、MCTS、router、负载均衡、潜变量、先验、后验、ELBO、score、flow matching、价值函数、优势函数、卷积、频域、卷积定理、SNR、因果、分布偏移、相机内外参、深度、四元数、对极几何、位姿、缩放律、数值稳定性、复杂度。它们如果只作为符号出现，读者很容易看完公式却不知道公式在说什么；这个专题的目标，是把这些词先讲成可以使用的工具。
+推荐的使用方式有两种：
 
-## 建议阅读顺序
+1. 如果想系统学习，按下面五组从前往后读。
+2. 如果已经在某篇博客或论文里卡住，直接用“从下游反查”找到最短补课路径。
 
-| 你后面会遇到的问题 | 先读哪一篇 |
-| --- | --- |
-| embedding、attention、GEMM、低秩近似到底在什么空间里发生 | [线性代数与几何直觉](linear-algebra-and-geometry.md) |
-| SVD、谱能量、Hessian、Taylor 近似、Newton-Schulz 为什么会出现在优化、压缩和 KV 合并论文里 | [谱分解、二阶近似与低秩结构](spectral-second-order-and-low-rank.md) |
-| 梯度、积分、牛顿-莱布尼茨公式、ODE/SDE、指数积分器为什么总在训练和扩散里出现 | [微积分与牛顿-莱布尼茨公式](calculus-and-newton-leibniz.md) |
-| 概率、条件概率、期望、方差、似然、贝叶斯这些词怎么连起来 | [概率论、分布与期望](probability-distributions-and-expectation.md) |
-| Monte Carlo、偏差-方差、置信区间、分层估计、校准和 ECE 怎样读 | [采样、估计与校准](sampling-estimation-and-calibration.md) |
-| 熵、交叉熵、KL、互信息为什么能写进 loss | [信息论、熵与分布距离](information-theory-and-divergence.md) |
-| token 序列、RoPE、causal mask、temperature 和 KV cache 怎样读 | [序列、位置编码与注意力掩码](sequence-position-and-masking.md) |
-| 马尔可夫、转移概率、trajectory、MDP 为什么支撑 RL 和世界模型 | [随机过程与马尔可夫性](stochastic-processes-and-markov.md) |
-| loss 怎么变成参数更新，为什么优化器不是简单减梯度 | [优化、梯度与约束](optimization-and-gradient-methods.md) |
-| top-k、beam search、MCTS、router、gating、expert load 和稀疏选择怎样读 | [离散选择、Top-k 与稀疏路由](discrete-selection-topk-and-routing.md) |
-| latent、prior、posterior、ELBO、score 和 flow matching 怎样支撑生成模型 | [潜变量、似然与生成模型目标](latent-likelihood-and-generative-objectives.md) |
-| return、value、λ-return、advantage、PPO、GRPO 和 KL penalty 怎样支撑后训练 | [价值函数、策略梯度与强化学习目标](value-policy-and-rl-objectives.md) |
-| 状态空间、相图、稳定性、控制和规划怎么连接到机器人 | [动态系统、控制与状态空间](dynamic-systems-and-control.md) |
-| convolution、kernel、卷积定理、DCT、频率、SNR 和多尺度为什么常一起出现 | [卷积、频域与多尺度表示](convolution-frequency-and-multiscale.md) |
-| 相机内参、外参、深度、四元数、对极几何、位姿和点云怎样支撑 3D / 具身论文 | [几何、视觉与三维空间](geometry-vision-and-3d.md) |
-| causal、counterfactual、OOD、train-test mismatch 和 benchmark 泛化怎样读 | [因果、反事实与分布偏移](causality-counterfactual-and-distribution-shift.md) |
-| scaling law、log-log 曲线、Pareto frontier 和 ablation 应该怎么读 | [缩放律、幂律与实验曲线](scaling-laws-and-experimental-curves.md) |
-| FLOPs、Big-O、浮点误差、数值稳定性如何影响系统实现 | [数值计算、复杂度与估算](numerics-complexity-and-estimation.md) |
+## 数学语言与变化
 
-## 一张图上的全局关系
+这一组先回答“对象放在哪个空间里”和“输入动一点，输出怎样变”。它是 attention、自动微分、优化、量化和低秩方法的共同起点。
 
-```mermaid
+| 你要解决的问题 | 核心工具 | 页面 |
+| --- | --- | --- |
+| embedding、矩阵乘、投影、范数和低秩发生在哪个空间 | 向量、矩阵、内积、秩 | [线性代数与几何直觉](linear-algebra-and-geometry.md) |
+| SVD、谱能量、Newton-Schulz、Hessian 和 Fisher 怎样描述方向结构 | 特征值、奇异值、Taylor、二阶敏感度 | [谱分解、二阶近似与低秩结构](spectral-second-order-and-low-rank.md) |
+| 梯度、积分、链式法则、ODE/SDE 和指数积分器怎样连接 | 导数、积分、连续动力学 | [微积分与牛顿-莱布尼茨公式](calculus-and-newton-leibniz.md) |
+| 向量函数的扰动怎样传播，backward 为什么算 VJP | Jacobian、JVP、VJP、局部线性化 | [微分、Jacobian 与梯度传播](differential-jacobian-and-gradient-flow.md) |
+
+## 概率、统计与信息
+
+这一组回答“数据和未来有多不确定”“有限样本结论有多可信”以及“两个分布差多少”。
+
+| 你要解决的问题 | 核心工具 | 页面 |
+| --- | --- | --- |
+| 随机变量、条件概率、贝叶斯、方差和协方差怎么连起来 | 分布、期望、协方差矩阵 | [概率论、分布与期望](probability-distributions-and-expectation.md) |
+| Monte Carlo、置信区间、bootstrap、importance weight 和 calibration 怎样读 | 偏差、方差、Wilson、ESS、ECE | [采样、估计与校准](sampling-estimation-and-calibration.md) |
+| 熵、交叉熵、KL、互信息和 perplexity 为什么能写进 loss | 信息量和分布距离 | [信息论、熵与分布距离](information-theory-and-divergence.md) |
+| 一串随机状态怎样组成 trajectory，马尔可夫假设在说什么 | 转移概率、随机过程、MDP | [随机过程与马尔可夫性](stochastic-processes-and-markov.md) |
+
+## 优化与学习目标
+
+这一组把“模型应该学什么”变成可计算目标，再解释连续更新、离散选择、生成目标和长期收益分别怎样优化。
+
+| 你要解决的问题 | 核心工具 | 页面 |
+| --- | --- | --- |
+| loss 怎样变成参数更新，momentum、Adam 和约束在改什么 | 梯度下降、曲率、正则化 | [优化、梯度与约束](optimization-and-gradient-methods.md) |
+| prior、posterior、Jensen、ELBO、energy、score 和 flow 怎样统一 | 潜变量、下界、EBM、方向场 | [潜变量、似然与生成模型目标](latent-likelihood-and-generative-objectives.md) |
+| top-k、beam、MCTS、router 和 load balancing 怎样分配选择预算 | 离散搜索、gating、熵与容量 | [离散选择、Top-k 与稀疏路由](discrete-selection-topk-and-routing.md) |
+| return、value、Bellman、lambda-return、PPO 和 GRPO 怎样支撑决策 | 价值递推、advantage、策略梯度 | [价值函数、策略梯度与强化学习目标](value-policy-and-rl-objectives.md) |
+
+## 时序、控制与空间
+
+这一组把孤立样本接成序列、轨迹和三维世界，服务 Transformer、世界模型、VLA 和机器人视觉。
+
+| 你要解决的问题 | 核心工具 | 页面 |
+| --- | --- | --- |
+| token 顺序、RoPE、causal mask、temperature 和 KV cache 怎样读 | 序列索引、位置、可见性 | [序列、位置编码与注意力掩码](sequence-position-and-masking.md) |
+| 状态怎样演化，MPC/CEM 怎样用世界模型选择动作 | 状态空间、稳定性、闭环控制 | [动态系统、控制与状态空间](dynamic-systems-and-control.md) |
+| kernel、Fourier、DCT、卷积定理、SNR 和多尺度为什么一起出现 | 信号、频率、噪声尺度 | [卷积、频域与多尺度表示](convolution-frequency-and-multiscale.md) |
+| 相机内外参、深度、四元数、对极几何、位姿和点云怎样连接 | 投影几何、SE(3)、多视角约束 | [几何、视觉与三维空间](geometry-vision-and-3d.md) |
+
+## 研究判断与工程
+
+最后一组不直接定义模型层，而是帮助判断实验能否外推、曲线是否可信、方法在机器上是否划算。
+
+| 你要解决的问题 | 核心工具 | 页面 |
+| --- | --- | --- |
+| correlation、intervention、counterfactual、OOD 和 train-test mismatch 怎样区分 | 因果语言、分布偏移 | [因果、反事实与分布偏移](causality-counterfactual-and-distribution-shift.md) |
+| scaling law、log-log、边际收益、Pareto 和 ablation 怎样读 | 幂律、外推、实验曲线 | [缩放律、幂律与实验曲线](scaling-laws-and-experimental-curves.md) |
+| Big-O、FLOPs、bytes、浮点误差、条件数和 benchmark 怎样落到系统 | 数量级、数值稳定性、成本估算 | [数值计算、复杂度与估算](numerics-complexity-and-estimation.md) |
+
+## 一张图上的主依赖
+
+~~~mermaid
 flowchart LR
-  A["线性代数<br/>向量、矩阵、空间"] --> B["微积分<br/>变化率、积分、梯度"]
-  A --> I["谱与二阶近似<br/>SVD、Hessian、低秩"]
-  A --> M["序列与掩码<br/>RoPE、mask、KV cache"]
-  A --> R["离散选择<br/>top-k、router、负载均衡"]
-  B --> C["优化<br/>loss、约束、更新"]
-  D["概率论<br/>随机变量、分布、期望"] --> E["随机过程<br/>马尔可夫、trajectory、MDP"]
-  D --> J["采样估计<br/>Monte Carlo、校准、置信区间"]
-  D --> Q["潜变量与生成目标<br/>ELBO、score、flow"]
-  D --> F["信息论<br/>熵、交叉熵、KL"]
-  D --> P["因果与分布<br/>干预、反事实、OOD"]
-  E --> G["动态系统与控制<br/>状态、动作、稳定性"]
-  E --> N["价值与策略<br/>return、advantage、GRPO"]
-  G --> K["几何与三维视觉<br/>相机、深度、位姿"]
-  B --> O["信号与尺度<br/>卷积、频域、SNR"]
-  A --> H["数值与复杂度<br/>FLOPs、bytes、误差"]
-  J --> L["实验曲线<br/>缩放律、消融、Pareto"]
-  C --> H
-  F --> C
-  F --> N
+  A["线性代数"] --> B["微积分"]
+  B --> C["Jacobian / JVP / VJP"]
+  A --> D["谱分解"]
+  C --> E["自动微分与优化"]
+  C --> F["误差传播"]
+  D --> G["Hessian / Fisher"]
+  F --> H["量化与压缩"]
   G --> H
-  I --> C
-  M --> H
-  M --> G
-  R --> F
-  R --> H
-  Q --> E
-  Q --> B
-  Q --> F
-  N --> C
-  P --> J
-  P --> G
-  O --> K
-  O --> H
-  K --> G
-  L --> H
-```
 
-这张图的读法是：线性代数给数据找坐标，谱分解和二阶近似看清方向结构和敏感度，序列与掩码规定信息能沿哪些位置流动，离散选择解释 top-k、router 和稀疏预算分配，微积分描述坐标里的变化，概率论描述不确定性，采样估计告诉我们有限样本结论是否可信，潜变量和生成目标把 likelihood、ELBO、score 与连续生成路径接起来，信息论衡量分布之间的代价，价值函数和策略梯度把长期收益变成可优化目标，因果与分布偏移提醒我们不要把相关性误读成可部署机制，随机过程和动态系统把“下一步”接成长期行为，信号与尺度解释卷积、频率、噪声阶段和多分辨率，几何把像素、相机和三维空间接起来，数值计算、实验曲线和复杂度最后决定这些数学在机器上能不能跑得起。
+  P["概率论"] --> Q["采样与估计"]
+  P --> R["信息论"]
+  P --> S["随机过程"]
+  P --> T["潜变量与生成目标"]
+  B --> T
+  T --> U["扩散与世界模型"]
+  S --> V["价值、RL 与控制"]
+  V --> W["VLA 与具身闭环"]
 
-## 和“基础概念”的分工
+  X["序列与掩码"] --> E
+  Y["卷积与频域"] --> Z["几何与三维"]
+  Z --> W
+~~~
 
-`前置数学知识` 负责解释数学名词本身，例如什么是期望、KL、马尔可夫性、梯度、积分和矩阵分解。
+这张图只保留主干。线性代数和概率论是两条起点：前者描述表示和变化方向，后者描述不确定性和分布。微积分与 Jacobian 把局部变化接到自动微分和误差传播；随机过程、价值函数与控制把一步预测接成长期决策；卷积、频域和几何把像素接到三维状态。
 
-`基础概念` 负责解释 AI 模型和系统机制，例如 Transformer、计算图、优化训练、潜变量模型、数据集、生成解码和模型压缩。
+## 从下游专题反查
 
-如果你在后面的文章里卡在“这个符号/名词是什么意思”，回到这里；如果你知道数学名词，但想看它怎样变成模型结构或工程机制，去读基础概念和各专题正文。
+| 正在读的方向 | 建议先补的数学 |
+| --- | --- |
+| 训练、优化、量化与模型压缩 | [线性代数](linear-algebra-and-geometry.md) → [Jacobian](differential-jacobian-and-gradient-flow.md) → [谱、Hessian 与 Fisher](spectral-second-order-and-low-rank.md) → [数值与复杂度](numerics-complexity-and-estimation.md) |
+| 扩散、Flow Matching 与少步生成 | [微积分与 ODE/SDE](calculus-and-newton-leibniz.md) → [概率](probability-distributions-and-expectation.md) → [潜变量、score 与 flow](latent-likelihood-and-generative-objectives.md) → [卷积、SNR 与尺度](convolution-frequency-and-multiscale.md) |
+| 强化学习、Dreamer 与世界模型 | [概率](probability-distributions-and-expectation.md) → [随机过程](stochastic-processes-and-markov.md) → [价值与策略](value-policy-and-rl-objectives.md) → [动态系统与控制](dynamic-systems-and-control.md) |
+| VLM、VLA、3D 视觉与机器人 | [线性代数](linear-algebra-and-geometry.md) → [序列与掩码](sequence-position-and-masking.md) → [三维几何](geometry-vision-and-3d.md) → [控制](dynamic-systems-and-control.md) → [因果与分布偏移](causality-counterfactual-and-distribution-shift.md) |
+| 推理系统、MoE、算子与性能 | [离散选择](discrete-selection-topk-and-routing.md) → [数值与复杂度](numerics-complexity-and-estimation.md) → [采样与校准](sampling-estimation-and-calibration.md) → [实验曲线](scaling-laws-and-experimental-curves.md) |
+
+## 和基础概念怎样分工
+
+前置数学负责解释数学对象本身，例如 Jacobian、协方差、KL、ELBO、Fisher、importance weighting 和 MPC 目标分别在说什么。
+
+[基础概念](../foundations/index.md)负责把这些对象组装成 AI 机制，例如 backward 为什么计算 VJP、QAT 为什么需要 STE、JEPA 怎样防表示坍缩、Transformer 怎样组织 token、训练和推理怎样形成显存与延迟账。
+
+如果卡在“符号是什么意思”，回到这里；如果符号看懂了，却不知道它怎样进入模型结构、训练流程或工程系统，就进入基础概念。每篇基础正文开头都提供了最短数学先修入口，不需要先把全部数学页面读完。
 
 ## 读这些数学页时抓什么
 
 每篇文章都按同一套问题组织：
 
 1. 这个数学概念最朴素的直觉是什么。
-2. 它的核心公式在声明什么输入、输出和约束。
+2. 核心公式声明了什么输入、输出、分布或约束。
 3. 它在后面的 AI 文章里会以什么名字出现。
-4. 它最容易被误读到哪里。
-5. 读完后应该能解释哪个具体现象。
+4. 近似在什么条件下成立，最容易被误读到哪里。
+5. 读完后应该能解释哪个具体模型或系统现象。
 
-这个专题的目标不是让你能证明所有定理，而是让你读后面的模型文章时，能把公式翻译回机制：谁在变化，谁是随机的，谁被优化，谁在随时间转移，谁最后会变成显存、延迟或误差。
+最终目标不是背公式，而是把公式翻译回机制：变化从哪里来，随机性在哪里，训练信号怎样传，误差怎样累积，结论能否外推。

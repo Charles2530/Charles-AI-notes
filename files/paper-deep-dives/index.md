@@ -76,6 +76,8 @@
 - [π0.5：开放世界 VLA](embodied-ai/pi05.md)
 - [kai0：资源受限下的高可靠机器人操作](embodied-ai/kai0.md)
 - [Qwen-RobotManip：先对齐再扩规模的机器人操作基础模型](embodied-ai/qwen-robotmanip.md)
+- [DM0.5：开放世界具身基础模型](embodied-ai/dm05.md)
+- [GenCeption：视频生成模型如何成为通用视觉学习器](embodied-ai/genception.md)
 - [SpatialVLA：3D 空间表征接入 VLA](embodied-ai/spatialvla.md)
 - [Video Prediction Policy：预测视觉表征训练策略](embodied-ai/video-prediction-policy.md)
 - [Fast-WAM：训练时学世界，推理时不生成未来](embodied-ai/fast-wam.md)

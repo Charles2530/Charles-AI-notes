@@ -174,7 +174,6 @@ p_\theta(s_{t+1}\mid s_t,a_t,l)
 
 ## 外部精读
 
-- [本页来源台账](../references/visual-tokenizer-connector-source-ledger.md)：记录视觉 tokenizer、connector、图片使用和中文讲法边界。
 - [Vision Transformer](https://arxiv.org/abs/2010.11929)：理解图片怎样从 patch 变成 token 序列。
 - [Perceiver](https://arxiv.org/abs/2103.03206)：理解用少量 latent array 读取高维输入的通用思想。
 - [TokenLearner](https://arxiv.org/abs/2106.11297)：理解图像/视频里学习少量 informative tokens 的路线。

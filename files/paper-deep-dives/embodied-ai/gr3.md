@@ -291,5 +291,3 @@ GR-3 要按 vision-language-action 闭环系统读：方法重点是多模态输
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=GR-3+Technical+Report)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=GR-3+Technical+Report)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

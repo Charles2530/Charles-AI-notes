@@ -4,6 +4,9 @@
 
 这页只回答一个核心问题：**当论文或实验报告说“模型提升了 2 分”时，怎样判断这 2 分是真的、有用的、可泛化的，而不是数据污染、指标错配或平均分幻觉？**
 
+!!! tip "数学先修"
+    本文会用到[采样、置信区间与校准](../prerequisite-math/sampling-estimation-and-calibration.md)判断分数是否可信，并用[实验曲线、消融与 Pareto frontier](../prerequisite-math/scaling-laws-and-experimental-curves.md)比较质量和成本。已经熟悉可直接继续。
+
 ## 评测对象先要说清楚
 
 一个评测结论至少包含四个对象：

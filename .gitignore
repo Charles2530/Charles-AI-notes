@@ -9,5 +9,6 @@ site/
 __pycache__/
 *.pyc
 tmp/
+.firecrawl/
 .mkdocs-serve.log
 .mkdocs-serve-*.log

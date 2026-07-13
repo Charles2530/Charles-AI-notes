@@ -370,5 +370,3 @@ InCoder-32B 要按代码模型训练与工业评测读：方法重点是代码�
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=InCoder-32B%3A+Code+Foundation+Model+for+Industrial+Scenarios)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=InCoder-32B%3A+Code+Foundation+Model+for+Industrial+Scenarios)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

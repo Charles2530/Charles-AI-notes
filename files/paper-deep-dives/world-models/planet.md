@@ -392,5 +392,3 @@ PlaNet 的核心证据链是 RSSM posterior 用真实观测校正，prior 在 im
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Learning+Latent+Dynamics+for+Planning+from+Pixels)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Learning+Latent+Dynamics+for+Planning+from+Pixels)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

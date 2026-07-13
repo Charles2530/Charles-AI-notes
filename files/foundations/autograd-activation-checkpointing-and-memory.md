@@ -4,6 +4,9 @@
 
 推理只要把输入一路算到输出。训练不同，它还要知道“每个参数应该往哪边改”。这意味着框架不仅要执行 forward，还要为 backward 留下足够的信息：哪些算子参与了计算、哪些张量在反向公式里会被再次用到、梯度要累积到哪些参数上。自动微分让这件事看起来像一句 `loss.backward()`，但显存账就藏在这些被保存的中间值里。
 
+!!! tip "数学先修"
+    本文会用到[微积分里的链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)，并把 backward 写成 [Jacobian 与 VJP](../prerequisite-math/differential-jacobian-and-gradient-flow.md)。如果这些公式还不熟，先读对应数学页；已经熟悉可直接继续。
+
 ## Backward 不是倒放 forward
 
 先看一个两层 MLP。这里先定义 forward 里会出现的变量槽位：\(x\) 是输入，\(W_1,W_2\) 是参数，\(z_1\) 是第一层线性输出，\(a\) 是激活后的中间表示，\(y\) 是预测，\(L\) 是 loss：
@@ -36,6 +39,54 @@ x^\top\left(
 这两行式子在说 activation 显存的根源：反向不是把 forward 结果倒着播一遍，而是每个算子的 backward rule 会重新读取某些 forward 中间量。矩阵乘的 backward 要输入张量，GELU/SiLU 的 backward 要 pre-activation 或输出，dropout 的 backward 要 mask，attention 的 backward 可能要 \(Q,K,V\)、softmax 统计或 kernel 保存的辅助量。框架把这些值称为 saved tensors。
 
 自动微分系统做的事，可以粗略理解成保存一条 tape：forward 时把计算节点和必要张量记录下来；backward 时沿图反向调用每个算子的梯度规则。PyTorch、JAX、TensorFlow 的实现细节不同，但核心约束相同：如果 backward 公式需要某个中间值，你要么在 forward 后保存它，要么在 backward 前重新算出来。
+
+## Backward 通常在算 VJP，不会展开完整 Jacobian
+
+设一层向量函数是：
+
+\[
+y=f(x)
+\]
+
+它的 Jacobian 为：
+
+\[
+J_f(x)
+=
+\frac{\partial y}{\partial x}
+\]
+
+如果输出 \(y\) 有 \(m\) 维、输入 \(x\) 有 \(n\) 维，完整 Jacobian 是 \(m\times n\)。大模型 hidden state 的维度很高，显式构造每一层 Jacobian 会产生巨大矩阵，既浪费显存也没有必要。
+
+设上游已经给出 loss 对当前输出的梯度：
+
+\[
+g_y
+=
+\frac{\partial L}{\partial y}
+\]
+
+链式法则需要的是：
+
+\[
+g_x
+=
+J_f(x)^\top g_y
+\]
+
+转置后也可以写成：
+
+\[
+g_x^\top
+=
+g_y^\top J_f(x)
+\]
+
+右边就是 vector-Jacobian product，VJP。自动微分框架让每个算子的 backward rule 直接接收上游向量 \(g_y\)，返回这个乘积，而不是先物化 \(J_f\) 再做矩阵乘。
+
+这也更准确地解释 saved tensors 为什么存在。框架不是为了“记住所有 forward 输出”而保存 activation；它只需要保留当前算子计算 VJP 所需的局部量。例如矩阵乘要读输入，激活函数要读 pre-activation 或输出，softmax backward 要读 probability 或等价统计量。
+
+如果使用 activation checkpointing，就在需要计算这些局部 VJP 前重新执行一段 forward，把所需量恢复出来。Jacobian、JVP、VJP 的 shape 和方向在[微分、Jacobian 与梯度传播](../prerequisite-math/differential-jacobian-and-gradient-flow.md)中详细展开。
 
 ## 训练显存是一张状态账
 
@@ -133,7 +184,7 @@ model checkpoint 是训练资产，通常包含权重、optimizer state、schedu
 
 ## 读完以后怎么判断
 
-自动微分的显存成本来自 backward rule 对 forward 中间量的依赖。activation checkpointing 的本质不是魔法压缩，而是把“保存中间量”换成“反向时重算中间量”。它适合解决 activation 爆炸，尤其是长上下文、视频、多模态和极深网络；但参数、梯度、optimizer state、通信 buffer、训练恢复资产仍要靠 ZeRO/FSDP、低精度、offload、kernel 和 checkpoint 治理一起处理。
+自动微分通常从一个 scalar loss 开始，沿计算图用 VJP 得到所有参数梯度；它的显存成本来自这些局部 backward rule 对 forward 中间量的依赖。activation checkpointing 的本质不是魔法压缩，而是把“保存中间量”换成“反向时重算中间量”。它适合解决 activation 爆炸，尤其是长上下文、视频、多模态和极深网络；但参数、梯度、optimizer state、通信 buffer、训练恢复资产仍要靠 ZeRO/FSDP、低精度、offload、kernel 和 checkpoint 治理一起处理。
 
 ## 外部精读
 

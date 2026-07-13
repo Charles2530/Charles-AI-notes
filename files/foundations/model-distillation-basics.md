@@ -2,6 +2,9 @@
 
 模型蒸馏（Knowledge Distillation, KD）解决的是一个很实际的问题：已经有一个强但贵的 teacher model，能不能把它的行为、分布或中间表示压到更小、更快、更便宜的 student model 里。
 
+!!! tip "数学先修"
+    本文会用到[熵、交叉熵与 KL](../prerequisite-math/information-theory-and-divergence.md)比较 teacher/student 分布，用[概率与期望](../prerequisite-math/probability-distributions-and-expectation.md)理解 soft target；teacher 分支和离散信号可继续读[梯度估计与 stop-gradient](gradient-estimators-and-training-signals.md)。
+
 ## 1. 蒸馏解决什么
 
 蒸馏的常见目标可以分成三类：

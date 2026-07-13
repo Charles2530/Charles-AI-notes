@@ -394,4 +394,3 @@ VGGT-Ω 的核心不是“VGGT 又大了一版”，而是把 feed-forward 3D re
 - 站内下一步：[VGGT：一次前向推理怎样恢复相机、深度、点云与轨迹](vggt.md)。
 - 站内下一步：[VO-DP：语义-几何自适应扩散策略](vodp.md)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。

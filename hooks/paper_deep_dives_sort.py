@@ -72,6 +72,15 @@ def _h1_title_from_file(path: str) -> str | None:
     return match.group("title").strip()
 
 
+def _sidebar_title(title: str) -> str | None:
+    prefix, separator, _ = title.partition("：")
+    if not separator:
+        return None
+
+    prefix = prefix.strip()
+    return prefix or None
+
+
 def _sync_page_titles(items: list[Any], docs_dir: Path) -> None:
     for item in items:
         children = getattr(item, "children", None)
@@ -86,6 +95,10 @@ def _sync_page_titles(items: list[Any], docs_dir: Path) -> None:
         title = _h1_title_from_file(str(docs_dir / src_path))
         if title:
             item.title = title
+            if src_path.startswith("foundations/"):
+                sidebar_title = _sidebar_title(title)
+                if sidebar_title:
+                    item.typeset = {"title": sidebar_title}
 
 
 def _sort_sections(items: list[Any], docs_dir: Path) -> None:

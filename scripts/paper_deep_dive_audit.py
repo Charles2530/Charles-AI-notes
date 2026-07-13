@@ -57,7 +57,7 @@ class Finding:
 
 
 def iter_pages(root: Path) -> list[Path]:
-    skipped = {"index.md", "writing-standard.md"}
+    skipped = {"index.md"}
     return sorted(path for path in root.rglob("*.md") if path.name not in skipped)
 
 

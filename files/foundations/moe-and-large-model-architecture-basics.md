@@ -5,6 +5,9 @@
 这一页补的是“读架构表”的前置知识。它不是部署路由教程，而是帮你在技术报告里看懂稀疏专家模型到底怎样训练、怎样算账、怎样影响推理。
 可以先把这页当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背模型名，先看清哪一步在改变信息，哪一步在改变成本。
 
+!!! tip "数学先修"
+    本文会用到[Top-k、softmax gating 与负载均衡](../prerequisite-math/discrete-selection-topk-and-routing.md)、[概率分布](../prerequisite-math/probability-distributions-and-expectation.md)，以及[复杂度、FLOPs 和通信字节](../prerequisite-math/numerics-complexity-and-estimation.md)来同时读懂 router 和系统成本。
+
 ## 核心问题
 
 MoE 最容易被误读成“参数很多，所以能力强；激活参数少，所以推理便宜”。这两个判断都不够。真正要看的是：**总参数给了多少容量，router 每个 token 激活了多少专家，训练时专家有没有被均衡使用，推理时 token dispatch 和 all-to-all 有没有把节省的计算吃掉。**

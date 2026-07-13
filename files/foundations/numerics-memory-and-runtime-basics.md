@@ -4,6 +4,9 @@
 
 很多模型报告会同时出现 BF16、FP8、INT4、KV cache、FLOPs、bandwidth、kernel、runtime、TTFT、TPOT。它们不是一堆独立术语，而是同一条执行链上的不同账本：数值格式决定每个值怎么表示，显存决定哪些张量能常驻，带宽决定数据搬得多快，kernel 决定硬件是否吃到高效路径，runtime 决定请求、batch、cache 和 shape 能否被组织起来。
 
+!!! tip "数学先修"
+    本文会用到[浮点误差、条件数、FLOPs 与 bytes](../prerequisite-math/numerics-complexity-and-estimation.md)核算机器上的数值与搬运成本，并用[矩阵变换](../prerequisite-math/linear-algebra-and-geometry.md)连接 GEMM、attention 和 tensor layout。
+
 ## 第一张账：一个数占多少 bytes
 
 先从最小账开始。一个张量的粗略显存是：

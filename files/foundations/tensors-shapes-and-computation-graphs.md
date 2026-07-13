@@ -4,6 +4,9 @@
 
 张量不是“多维数组”这么简单。对深度学习系统来说，一个 tensor 至少同时携带五件事：底层 storage、shape、axis semantics、stride/layout、dtype/device。Shape 决定模块接口能不能接上；axis semantics 决定接上以后有没有接错；stride/layout 决定这次 reshape 是零拷贝视图还是隐式复制；计算图决定 forward 里哪些中间量要被 backward 留住。
 
+!!! tip "数学先修"
+    本文会用到[向量、矩阵与线性变换](../prerequisite-math/linear-algebra-and-geometry.md)解释 tensor axis 和矩阵乘，并用[复杂度、bytes 与数值格式](../prerequisite-math/numerics-complexity-and-estimation.md)判断 layout、复制和显存成本。
+
 ## 先把 tensor 拆开
 
 一个框架里的张量可以先拆成这张表：

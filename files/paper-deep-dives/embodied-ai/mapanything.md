@@ -526,5 +526,3 @@ MapAnything 的方法证据来自 factored scene representation、几何输入�
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=MapAnything%3A+Universal+Feed-Forward+Metric+3D+Reconstruction)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=MapAnything%3A+Universal+Feed-Forward+Metric+3D+Reconstruction)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

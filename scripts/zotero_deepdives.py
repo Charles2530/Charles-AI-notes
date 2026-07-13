@@ -127,7 +127,7 @@ def parse_paper_deepdives(root: Path) -> dict[str, PaperRef]:
         re.compile(r"arXiv[：:]\s*\[?([0-9]{4}\.[0-9]{4,5})(?:v\d+)?", re.I),
     ]
     for path in sorted(base.rglob("*.md")):
-        if path.name in {"index.md", "writing-standard.md"}:
+        if path.name == "index.md":
             continue
         text = path.read_text(encoding="utf-8")
         rel = path.relative_to(base).as_posix()

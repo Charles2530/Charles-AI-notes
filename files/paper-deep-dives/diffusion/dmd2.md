@@ -552,5 +552,3 @@ DMD2 最值得记住的不是“DMD 加 GAN”，而是它把一步/少步扩散
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Improved+Distribution+Matching+Distillation+for+Fast+Image+Synthesis)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Improved+Distribution+Matching+Distillation+for+Fast+Image+Synthesis)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

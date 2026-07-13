@@ -1,10 +1,8 @@
 # 世界模型评测：不要让好看的未来骗过决策系统
 
-> **这篇回答的问题。** 如何理解“世界模型评测”背后的核心机制、适用边界和下一步阅读路径。
-
 评测世界模型时，最容易被一段漂亮视频带偏。视频很清晰、动作很顺、物体看起来也没穿模，但只要换一个候选动作，未来仍然差不多；或者 planner 按它的预测去执行，真实环境里马上碰撞、滑落、卡住。这样的模型可以是很强的视频模型，却还不是可靠的决策模型。
 
-这页只回答一个问题：怎样判断一个世界模型真的改善了动作选择、风险识别或数据回流，而不是只生成了更顺眼的未来。
+本文适合正在阅读世界模型论文、设计机器人或 agent 评测的人；只需了解世界模型的基本概念，如果还不熟，可以先读[入门页](beginner-world-models-primer.md)。全文只追一个问题：怎样判断一个世界模型改善了动作选择、风险识别或数据回流，而不只是生成了更顺眼的未来。读完后，你应能根据消费方选择 open-loop、反事实、closed-loop 和风险分桶指标，并据此判断模型是否达到发布门槛。
 
 ## 先问谁要用它
 
@@ -19,17 +17,17 @@
 | data engine | 合成样本能补失败桶，进入训练后有效 | 生成样本数量 |
 | policy evaluator | 离线/仿真评估与真实成功率相关 | 演示视频成功 |
 
-所以“世界模型评测”不是一张榜单，而是一组接口测试。接口不同，分数不能互相代替。
+因此，一份有效的世界模型评测需要覆盖多组接口测试。接口不同，分数不能互相代替。
 
 ## 三把尺子
 
 第一把是画面尺。它回答“生成的视频像不像真实视频”。FVD、VBench、WorldArena 的视觉质量维度都属于这一层。它们能发现抖动、身份漂移、运动不平滑、背景不一致、物理不自然等问题，但不能单独证明模型能帮助机器人完成任务。
 
-第二把是动作尺。它回答“同一历史下，换动作后未来是否合理分叉”。这一步开始接近世界模型本体：模型必须对动作敏感，而且敏感点要落在任务变量上。向左推杯子，未来应改变杯子位置、遮挡和碰撞风险；不应只是随机换背景纹理。
+第二把是动作尺。它回答“同一历史下，换动作后未来是否合理分叉”。这一步检查动作条件是否生效：模型必须对动作敏感，而且敏感点要落在任务变量上。向左推杯子，未来应改变杯子位置、遮挡和碰撞风险；不应只是随机换背景纹理。
 
-第三把是部署尺。它回答“预测被系统消费之后，真实决策有没有变好”。World-in-World、WorldArena / WorldArena 2.0、WoW-World-Eval 这类新基准的重要变化，就在于把视觉质量放回功能用途里看：作为 data engine 是否提升 policy，作为 evaluator 是否相关，作为 planner 是否在闭环里提高成功率。
+第三把是部署尺。它回答“预测被系统消费之后，真实决策有没有变好”。[World-in-World](https://arxiv.org/abs/2510.18135)、[WorldArena](https://arxiv.org/abs/2602.08971)、[WorldArena 2.0](https://arxiv.org/abs/2605.17912) 和 [WoW-World-Eval](https://arxiv.org/abs/2601.04137) 这类新基准的重要变化，就在于把视觉质量放回功能用途里看：作为 data engine 是否提升 policy，作为 evaluator 是否相关，作为 planner 是否在闭环里提高成功率。
 
-截至 2026-06-03，世界模型评测前沿正在从 `vision-only + offline score` 往 `multimodal + interactive utility + cross-platform` 走。这个方向比“谁的视频更像真的”更接近机器人和 agent 需要的验收。
+截至 2026-06-03，本站根据上述基准公开的评测设计作出综合判断：世界模型评测前沿正从 `vision-only + offline score` 扩展到 `multimodal + interactive utility + cross-platform`。这是对公开材料的趋势归纳，不代表本站对各基准结果做过独立复现。
 
 ## Open-loop 只看漂移
 
@@ -54,7 +52,7 @@ $$
 \mathbb E[\ell(\hat o_{t+h}, o_{t+h})]
 $$
 
-这里 \(H\) 是预测步数。随着 \(H\) 增大，如果误差快速上升，说明模型只能做局部拟合，不能稳定推演。对机器人和自动驾驶来说，漂移不是美观问题，而是会把 planner 带到训练分布之外。
+这里 \(H\) 是预测步数。随着 \(H\) 增大，如果误差快速上升，说明模型只能做局部拟合，不能稳定推演。对机器人和自动驾驶来说，这类漂移会把 planner 带到训练分布之外。
 
 但即使多步 open-loop 很好，也只能说明“沿着真实历史继续预测”还可以。它还没有回答“换动作后会怎样”，也没有回答“planner 会不会利用模型漏洞”。
 
@@ -73,7 +71,7 @@ d\left(
 \right)
 $$
 
-这里 \(a\) 和 \(a'\) 是两组候选动作，\(\hat y\) 可以是未来状态、风险、reward、事件或视频 latent。重点不是 \(\Delta_{\text{act}}\) 越大越好，而是变化要落在正确变量上。
+这里 \(a\) 和 \(a'\) 是两组候选动作，\(\hat y\) 可以是未来状态、风险、reward、事件或视频 latent。需要检查的是变化是否落在正确变量上，\(\Delta_{\text{act}}\) 并非越大越好。
 
 反事实测试至少要覆盖三类样本。
 
@@ -129,11 +127,11 @@ World-in-World 的提醒很直接：视觉质量本身不保证任务成功，�
 
 ![DreamZero failure case 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-16-failure-case.png){ width="920" }
 
-<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 16。原图展示 video-action model 的失败案例。本站读法：WAM 的危险在于错误未来和错误动作可能互相支持，看起来像一条连贯计划；评测必须检查真实观测刷新后能否纠正，以及 safety layer 能否提前截停。</small>
+<small>图源：[World Action Models are Zero-shot Policies，Figure 16](https://arxiv.org/abs/2602.15922)。原图展示 video-action model 的失败案例。本站读法：WAM 的危险在于错误未来和错误动作可能互相支持，看起来像一条连贯计划；评测必须检查真实观测刷新后能否纠正，以及 safety layer 能否提前截停。</small>
 
 ## 失效模式按修复路径分类
 
-failure mode 最好按“下一步怎么修”分类，而不是只写现象。
+failure mode 最好根据“下一步怎么修”来分类，只写现象无法指导后续修改。
 
 | 失效类型 | 现象 | 更可能的修复方向 |
 | --- | --- | --- |
@@ -149,7 +147,7 @@ failure mode 最好按“下一步怎么修”分类，而不是只写现象。
 
 ## 发布门槛怎么写
 
-发布门槛应围绕消费方，而不是围绕论文榜单。
+发布门槛应由消费方决定，不能直接照搬论文榜单。
 
 | 给谁用 | 最小发布门槛 |
 | --- | --- |
@@ -163,9 +161,22 @@ failure mode 最好按“下一步怎么修”分类，而不是只写现象。
 
 最终判断很简单：如果世界模型不能在闭环里提升动作选择、风险识别或数据回流，它还只是预测模型或生成模型；只有当它改变系统决策质量时，才算通过验收。
 
+## 自测与下一步
+
+先独立回答下面三个迁移题，不要只复述本页结论：
+
+1. 仓储机械臂的世界模型生成质量提高了，但候选动作排序没有变化，碰撞漏报还在增加。它能否作为 planner、risk gate 或 data engine 发布？三种消费方分别还缺什么证据？
+2. 两个模型的 open-loop 误差曲线相近：一个模型换动作后只改变背景纹理，另一个会改变目标位置和接触结果。你会怎样设计 counterfactual hard set 和指标，把这两种行为区分开？
+3. 一个 policy evaluator 在常见任务上与真实成功率相关，却持续高估遮挡和 near-miss 桶。你会怎样写发布门槛、回退条件和下一轮数据回流规则？
+
+需要补概念或继续深入时，可以按问题选择：
+
+- [从零理解世界模型](beginner-world-models-primer.md)：补齐 belief state、action、rollout 和决策接口
+- [WM / WAM / VAM：动作到底怎样进入世界模型](wm-wam-vam-and-action-conditioned-modeling.md)：继续检查动作条件和消费接口
+- [不确定性与风险敏感规划](uncertainty-and-risk-aware-planning.md)：把风险分桶、校准和保守回退接到规划器
+
 ## 外部精读
 
-- [本页来源台账](../references/world-model-evaluation-source-ledger.md)：记录本页事实来源、图片使用和中文讲法参考。
 - [WorldArena 2.0](https://arxiv.org/abs/2605.17912)：理解最新 embodied world model 评测为什么从视觉扩展到触觉、交互式 RL 环境和多平台。
 - [World-in-World](https://arxiv.org/abs/2510.18135)：理解 closed-loop world model benchmark 为什么要把任务成功率放到核心位置。
 - [WorldArena](https://arxiv.org/abs/2602.08971)：理解感知质量、功能用途和人类偏好如何组合成世界模型评测框架。

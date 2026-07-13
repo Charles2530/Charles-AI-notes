@@ -10,7 +10,7 @@
 
 **追问展开。** 面试里最好举例：activation checkpointing 训练省显存但推理没反向传播；KV cache 推理很关键但训练 teacher forcing 时不是同一个瓶颈；量化推理省显存但训练低精度要更谨慎。  
 **易错点 / 边界。** 不能拿训练吞吐、离线 benchmark 或单条 demo 直接代表在线服务能力。  
-**继续读。** [推理服务系统](../inference/serving-systems.md) / [训练与推理系统来源台账](../references/inference-serving-systems-source-ledger.md)
+**继续读。** [推理服务系统](../inference/serving-systems.md)
 
 ### Q：TTFT、TPOT、吞吐和 P99 分别看什么？
 
@@ -186,7 +186,7 @@ x_q=\operatorname{round}\left(\frac{x}{s}\right),\quad \hat{x}=s x_q
 
 **追问展开。** 面试里可以用一句话收束：系统优化只有在“不降低关键质量和安全”的前提下才算收益。Microbenchmark、kernel speedup、平均吞吐都是中间证据。  
 **易错点 / 边界。** 如果更快导致幻觉、格式错误、安全拒答异常或尾延迟恶化，就不能说整体更好。  
-**继续读。** [成本建模与 SLO 设计](../inference/cost-modeling-and-slo-design.md) / [证据判断原则](../references/site-judgement-principles.md)
+**继续读。** [成本建模与 SLO 设计](../inference/cost-modeling-and-slo-design.md)
 
 ### Q：为什么推理优化不能只看 tokens/s，还要看成本模型和 SLO？
 

@@ -224,7 +224,6 @@ control interpretation:
 
 ## 外部精读
 
-- [本页来源台账](../references/robot-state-action-source-ledger.md)：记录本文事实来源、图片来源和写作边界。
 - [Hugging Face LeRobotDataset v3.0 blog](https://huggingface.co/blog/lerobot-datasets-v3)：理解 parquet、video、metadata、stats 和 episode 边界。
 - [Hugging Face Robotics Course: LeRobotDataset](https://huggingface.co/learn/robotics-course/unit1/3)：更教学化地理解 LeRobot 数据组织。
 - [robomimic Multimodal Observations](https://robomimic.github.io/docs/tutorials/observations.html)：理解 observation keys、modalities 和 low_dim/RGB/depth。

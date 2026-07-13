@@ -162,7 +162,6 @@ VLA 部署可以按这条链路收口：先缩小 ODD，再量化延迟和动作
 
 ## 外部精读
 
-- [本页来源台账](../references/vla-deployment-safety-source-ledger.md)：记录部署、安全、图片使用和中文讲法边界。
 - [SayCan](https://arxiv.org/abs/2204.01691)：理解高层语言建议为什么必须被 affordance / value function 约束。
 - [RT-2](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)：看 VLM 知识接入动作后仍需要机器人能力和动作接口约束。
 - [π0.5](https://arxiv.org/abs/2504.16054)：看开放世界 VLA 在真实家庭任务、数据消融和 long-horizon deployment 上的证据边界。

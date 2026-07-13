@@ -1147,6 +1147,14 @@ body.atlas-lightbox-open {
     box-shadow 160ms ease;
 }
 
+.md-sidebar--primary .md-nav__link .md-typeset {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+}
+
 .md-sidebar--primary .md-nav__link:hover {
   color: var(--atlas-ink);
   background: rgba(18, 95, 99, 0.08);

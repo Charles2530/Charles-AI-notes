@@ -469,5 +469,3 @@ DeepSeek-V3 的系统接口要按共设计读：MLA 降 KV，DeepSeekMoE 降 act
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=DeepSeek-V3+Technical+Report)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=DeepSeek-V3+Technical+Report)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

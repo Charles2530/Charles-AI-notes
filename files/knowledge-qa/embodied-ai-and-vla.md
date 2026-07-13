@@ -202,4 +202,3 @@
 
 **追问展开。** 面试或写作中可以用一句模板：这条证据在某数据、某任务、某硬件或某 demo 设置下支持某个结论，但不能外推到跨平台、真实闭环或生产安全。  
 **易错点 / 边界。** 最大误区是把 demo、open-loop 指标、system throughput、closed-loop success 混成同一种证据。  
-**继续读。** [全站证据与复现状态标准](../references/evidence-and-reproducibility-standard.md) / [Claim Ledger](../references/claim-ledger.md)

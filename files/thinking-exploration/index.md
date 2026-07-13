@@ -4,10 +4,18 @@
 
 写法会参考高质量技术博客和微信公众号的节奏：从一个具体争议或产品现象进入，逐步拆到论文、硬件、数据和部署边界。事实判断仍以论文、官方资料和可核验链接为准。
 
+最新一组文章来自对“论文精读”模块 76 篇正式专题的逐篇回看。五篇文章各自围绕一个跨论文问题组织：状态怎样搬运、少步生成怎样重新分配误差、未来预测由谁消费、机器人失败怎样被观察和恢复、前沿模型为什么越来越像一个受约束的系统闭环。
+
 ## 适合从这里进入的场景
 
 | 你正在想的问题 | 建议先读 |
 | --- | --- |
+| 训练与推理优化为什么常常卡在数据搬运和状态生命周期 | [高效 AI 的状态账本：少搬状态，比少算一次更重要](efficient-ai-is-state-movement.md) |
+| 扩散模型减少采样步数后，误差和瓶颈去了哪里 | [扩散模型加速：每删一步，都要重新安排误差](diffusion-speedup-redistributes-error.md) |
+| 世界模型究竟应该预测像素、latent、value 还是别的状态 | [世界模型该预测什么：答案取决于谁消费未来](world-model-future-consumers.md) |
+| 世界模型的 latent 怎样进入动作生成与规划 | [从预测未来到利用未来：Latent World Model 怎样进入规划闭环](latent-world-models-for-planning.md) |
+| 具身智能怎样把场景、任务、动作、执行和恢复接成可靠闭环 | [具身智能：一条可纠错的状态链](embodied-ai-correctable-state-chain.md) |
+| 为什么前沿模型的真实能力已经超出单个 checkpoint | [技术报告读后：前沿模型正在变成受约束的闭环](model-capability-is-a-constrained-loop.md) |
 | 端侧 AI、XR 芯片和量化部署有什么关系 | [XR2 Gen 2：端侧 AI 与量化部署](qualcomm-xr2-gen2.md) |
 | 自动驾驶里的世界模型如何从生成视频走向规划闭环 | [自动驾驶世界模型：从渲染、仿真到规划闭环](autonomous-driving-world-models.md) |
 | 世界模型如何从模型论文变成可复用工程栈 | [世界模型 Infra：从模型谱系到物理 AI 工程栈](world-model-infrastructure.md) |

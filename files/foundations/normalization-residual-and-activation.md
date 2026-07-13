@@ -4,6 +4,9 @@
 
 答案不是某一个模块单独立功。归一化控制每层看到的数值尺度，残差连接保留一条可传播的信息路径，激活函数让线性投影之间产生非线性选择。三者一起决定深层模型是否“可优化”：如果尺度漂移，后面的线性层和 softmax 会被极值支配；如果没有直通路径，反向梯度要穿过太多不稳定变换；如果没有非线性，多层矩阵乘法最终仍等价于一个矩阵。
 
+!!! tip "数学先修"
+    本文会用到[向量范数与线性变换](../prerequisite-math/linear-algebra-and-geometry.md)描述尺度，用[优化与曲率](../prerequisite-math/optimization-and-gradient-methods.md)理解稳定更新，并用[Jacobian 与梯度传播](../prerequisite-math/differential-jacobian-and-gradient-flow.md)判断残差路径怎样放大或保留信号。
+
 ## 先看坏掉的机制
 
 把一层写成

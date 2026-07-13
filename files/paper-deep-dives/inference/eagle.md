@@ -276,5 +276,3 @@ EAGLE 的核心不是某个 speedup 数字，而是一个接口判断：target L
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=EAGLE%3A+Speculative+Sampling+Requires+Rethinking+Feature+Uncertainty)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=EAGLE%3A+Speculative+Sampling+Requires+Rethinking+Feature+Uncertainty)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

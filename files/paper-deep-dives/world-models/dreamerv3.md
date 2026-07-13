@@ -273,5 +273,3 @@ DreamerV3 的主要内容是把 Dreamer 系列整理成跨域更稳的 world-mod
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Mastering+Diverse+Domains+through+World+Models)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Mastering+Diverse+Domains+through+World+Models)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

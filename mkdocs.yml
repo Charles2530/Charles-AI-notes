@@ -8,8 +8,10 @@ not_in_nav: |
 theme:
   name: material
   language: zh
+  font: false
   features:
     - navigation.tabs
+    - navigation.prune
     - navigation.top
     - navigation.sections
     - toc.follow
@@ -47,46 +49,53 @@ plugins:
   - search
 hooks:
   - hooks/paper_deep_dives_sort.py
+  - hooks/lazy_images.py
+  - hooks/site_performance.py
 extra_javascript:
-  - assets/javascripts/search-fallback.js
+  - assets/javascripts/search-fallback.js?v=20260710
   - assets/javascripts/term-tooltips.js
   - assets/javascripts/reading-controls.js
   - assets/javascripts/image-lightbox.js
-  - assets/javascripts/vendor/mermaid.min.js
-  - assets/javascripts/mermaid.js
-  - assets/javascripts/mathjax.js
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - assets/javascripts/diagram-renderer.js?v=20260710
+  - assets/javascripts/mathjax.js?v=20260710
 extra_css:
   - assets/stylesheets/extra.css
 nav:
-  - 首页: index.md
   - 前置数学知识:
       - 前置数学知识: prerequisite-math/index.md
-      - 线性代数与几何直觉: prerequisite-math/linear-algebra-and-geometry.md
-      - 谱分解、二阶近似与低秩结构: prerequisite-math/spectral-second-order-and-low-rank.md
-      - 微积分与牛顿-莱布尼茨公式: prerequisite-math/calculus-and-newton-leibniz.md
-      - 概率论、分布与期望: prerequisite-math/probability-distributions-and-expectation.md
-      - 采样、估计与校准: prerequisite-math/sampling-estimation-and-calibration.md
-      - 信息论、熵与分布距离: prerequisite-math/information-theory-and-divergence.md
-      - 序列、位置编码与注意力掩码: prerequisite-math/sequence-position-and-masking.md
-      - 随机过程与马尔可夫性: prerequisite-math/stochastic-processes-and-markov.md
-      - 优化、梯度与约束: prerequisite-math/optimization-and-gradient-methods.md
-      - 离散选择、Top-k 与稀疏路由: prerequisite-math/discrete-selection-topk-and-routing.md
-      - 潜变量、似然与生成模型目标: prerequisite-math/latent-likelihood-and-generative-objectives.md
-      - 价值函数、策略梯度与强化学习目标: prerequisite-math/value-policy-and-rl-objectives.md
-      - 动态系统、控制与状态空间: prerequisite-math/dynamic-systems-and-control.md
-      - 卷积、频域与多尺度表示: prerequisite-math/convolution-frequency-and-multiscale.md
-      - 几何、视觉与三维空间: prerequisite-math/geometry-vision-and-3d.md
-      - 因果、反事实与分布偏移: prerequisite-math/causality-counterfactual-and-distribution-shift.md
-      - 缩放律、幂律与实验曲线: prerequisite-math/scaling-laws-and-experimental-curves.md
-      - 数值计算、复杂度与估算: prerequisite-math/numerics-complexity-and-estimation.md
+      - 数学语言与变化:
+          - 线性代数与几何直觉: prerequisite-math/linear-algebra-and-geometry.md
+          - 谱分解、二阶近似与低秩结构: prerequisite-math/spectral-second-order-and-low-rank.md
+          - 微积分与牛顿-莱布尼茨公式: prerequisite-math/calculus-and-newton-leibniz.md
+          - 微分、Jacobian 与梯度传播: prerequisite-math/differential-jacobian-and-gradient-flow.md
+      - 概率、统计与信息:
+          - 概率论、分布与期望: prerequisite-math/probability-distributions-and-expectation.md
+          - 采样、估计与校准: prerequisite-math/sampling-estimation-and-calibration.md
+          - 信息论、熵与分布距离: prerequisite-math/information-theory-and-divergence.md
+          - 随机过程与马尔可夫性: prerequisite-math/stochastic-processes-and-markov.md
+      - 优化与学习目标:
+          - 优化、梯度与约束: prerequisite-math/optimization-and-gradient-methods.md
+          - 潜变量、似然与生成模型目标: prerequisite-math/latent-likelihood-and-generative-objectives.md
+          - 离散选择、Top-k 与稀疏路由: prerequisite-math/discrete-selection-topk-and-routing.md
+          - 价值函数、策略梯度与强化学习目标: prerequisite-math/value-policy-and-rl-objectives.md
+      - 时序、控制与空间:
+          - 序列、位置编码与注意力掩码: prerequisite-math/sequence-position-and-masking.md
+          - 动态系统、控制与状态空间: prerequisite-math/dynamic-systems-and-control.md
+          - 卷积、频域与多尺度表示: prerequisite-math/convolution-frequency-and-multiscale.md
+          - 几何、视觉与三维空间: prerequisite-math/geometry-vision-and-3d.md
+      - 研究判断与工程:
+          - 因果、反事实与分布偏移: prerequisite-math/causality-counterfactual-and-distribution-shift.md
+          - 缩放律、幂律与实验曲线: prerequisite-math/scaling-laws-and-experimental-curves.md
+          - 数值计算、复杂度与估算: prerequisite-math/numerics-complexity-and-estimation.md
   - 基础概念:
       - 基础概念专题: foundations/index.md
-      - 计算与张量:
+      - 术语表: glossary/index.md
+      - 计算、梯度与运行时:
           - 读懂公式的最小数学: foundations/symbols-and-minimal-math.md
           - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
           - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
           - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
+          - 梯度估计、离散变量与训练信号: foundations/gradient-estimators-and-training-signals.md
           - 数值、显存与运行时: foundations/numerics-memory-and-runtime-basics.md
       - 模型结构:
           - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
@@ -183,6 +192,12 @@ nav:
       - 一致性模型与 Rectified Flow: diffusion/consistency-models-and-rectified-flow.md
       - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
   - 思考探索:
+      - 高效 AI 的状态账本：少搬状态，比少算一次更重要: thinking-exploration/efficient-ai-is-state-movement.md
+      - 扩散模型加速：每删一步，都要重新安排误差: thinking-exploration/diffusion-speedup-redistributes-error.md
+      - 世界模型该预测什么：答案取决于谁消费未来: thinking-exploration/world-model-future-consumers.md
+      - 从预测未来到利用未来：Latent World Model 怎样进入规划闭环: thinking-exploration/latent-world-models-for-planning.md
+      - 具身智能：一条可纠错的状态链: thinking-exploration/embodied-ai-correctable-state-chain.md
+      - 技术报告读后：前沿模型正在变成受约束的闭环: thinking-exploration/model-capability-is-a-constrained-loop.md
       - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
       - 自动驾驶世界模型：从渲染、仿真到规划闭环: thinking-exploration/autonomous-driving-world-models.md
       - 世界模型 Infra：从模型谱系到物理 AI 工程栈: thinking-exploration/world-model-infrastructure.md
@@ -257,6 +272,8 @@ nav:
           - π0.5：开放世界 VLA: paper-deep-dives/embodied-ai/pi05.md
           - kai0：资源受限下的高可靠机器人操作: paper-deep-dives/embodied-ai/kai0.md
           - Qwen-RobotManip：先对齐再扩规模的机器人操作基础模型: paper-deep-dives/embodied-ai/qwen-robotmanip.md
+          - DM0.5：开放世界具身基础模型: paper-deep-dives/embodied-ai/dm05.md
+          - GenCeption：视频生成模型如何成为通用视觉学习器: paper-deep-dives/embodied-ai/genception.md
           - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
           - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
           - Fast-WAM：训练时学世界，推理时不生成未来: paper-deep-dives/embodied-ai/fast-wam.md
@@ -283,70 +300,3 @@ nav:
           - GPT-4o System Card：Omni 安全与多模态评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
           - InCoder-32B：工业代码模型与执行验证训练: paper-deep-dives/technical-reports/incoder-32b.md
           - Nemotron 3 Super：Mamba-MoE 与异步 RL: paper-deep-dives/technical-reports/nemotron-3-super.md
-      - 论文专题写作规范: paper-deep-dives/writing-standard.md
-  - 术语与来源:
-      - 术语表: glossary/index.md
-      - 外部精读来源台账: references/external-reading-ledger.md
-      - 知识 QA 来源台账: references/knowledge-qa-source-ledger.md
-      - 评测与证据链来源台账: references/evaluation-source-ledger.md
-      - 预训练与表示学习来源台账: references/pretraining-representation-source-ledger.md
-      - 归一化、残差与激活来源台账: references/norm-residual-activation-source-ledger.md
-      - 自动微分与激活显存来源台账: references/autograd-checkpointing-source-ledger.md
-      - 卷积与视觉特征来源台账: references/convolution-visual-feature-source-ledger.md
-      - 模型训练从零入门来源台账: references/beginner-model-training-source-ledger.md
-      - 预训练、微调与对齐来源台账: references/pretraining-finetuning-alignment-source-ledger.md
-      - 优化与训练基础来源台账: references/optimization-training-source-ledger.md
-      - Megatron、DeepSpeed 与训练栈来源台账: references/training-stack-source-ledger.md
-      - 分布式训练与 Checkpoint 来源台账: references/distributed-training-checkpoint-source-ledger.md
-      - 低比特训练与数值格式来源台账: references/low-bit-training-numerics-source-ledger.md
-      - PTQ、GPTQ、AWQ 与 SmoothQuant 来源台账: references/ptq-gptq-awq-smoothquant-source-ledger.md
-      - FP8 与混合精度推理来源台账: references/fp8-mixed-precision-serving-source-ledger.md
-      - 数值显存与运行时来源台账: references/numerics-memory-runtime-source-ledger.md
-      - 张量、Shape 与计算图来源台账: references/tensor-shape-computation-graph-source-ledger.md
-      - 读懂公式的最小数学来源台账: references/minimal-math-formula-reading-source-ledger.md
-      - 线性层、MLP 与 GEMM 来源台账: references/linear-mlp-gemm-source-ledger.md
-      - CUDA 编程模型与内存层次来源台账: references/cuda-programming-memory-source-ledger.md
-      - Reduction、Norm 与 Layout 来源台账: references/reduction-norm-layout-source-ledger.md
-      - 泛化、正则化与分布偏移来源台账: references/generalization-regularization-shift-source-ledger.md
-      - 多模态推理来源台账: references/multimodal-reasoning-source-ledger.md
-      - VLM 架构来源台账: references/vlm-architecture-source-ledger.md
-      - 视觉 Tokenizer 与连接器来源台账: references/visual-tokenizer-connector-source-ledger.md
-      - 世界模型入门来源台账: references/world-models-beginner-source-ledger.md
-      - RSSM、Dreamer 与规划来源台账: references/rssm-dreamer-planning-source-ledger.md
-      - Masked / JEPA 与潜变量预测来源台账: references/masked-jepa-latent-source-ledger.md
-      - WM / WAM / VAM 动作条件来源台账: references/wm-wam-vam-action-conditioned-source-ledger.md
-      - 世界模型评测与失效模式来源台账: references/world-model-evaluation-source-ledger.md
-      - 机器人 State / Action 来源台账: references/robot-state-action-source-ledger.md
-      - 推理服务系统来源台账: references/inference-serving-systems-source-ledger.md
-      - 推理运行时来源台账: references/serving-runtimes-source-ledger.md
-      - KV、缓存与投机解码来源台账: references/caching-routing-speculative-source-ledger.md
-      - FlashAttention 与长上下文来源台账: references/flashattention-long-context-source-ledger.md
-      - Triton 编程模型来源台账: references/triton-programming-source-ledger.md
-      - 噪声日程与参数化来源台账: references/diffusion-noise-schedules-source-ledger.md
-      - 扩散训练配方与排障来源台账: references/diffusion-training-recipes-source-ledger.md
-      - Score Matching 到 SDE 来源台账: references/score-sde-source-ledger.md
-      - 条件控制与 Guidance 来源台账: references/guidance-conditioning-source-ledger.md
-      - 扩散采样与推理加速来源台账: references/diffusion-inference-source-ledger.md
-      - 扩散路线选择来源台账: references/diffusion-method-comparison-source-ledger.md
-      - 一步生成与蒸馏来源台账: references/diffusion-distillation-source-ledger.md
-      - 一致性与 Rectified Flow 来源台账: references/consistency-rectified-flow-source-ledger.md
-      - 视频与多模态扩散来源台账: references/video-multimodal-diffusion-source-ledger.md
-      - 具身智能从零路线来源台账: references/embodied-ai-beginner-source-ledger.md
-      - VLA 动作接口来源台账: references/vla-action-interface-source-ledger.md
-      - VLA 数据与策略学习来源台账: references/vla-data-policy-learning-source-ledger.md
-      - VLA 动作分块与技能来源台账: references/vla-action-chunking-skill-source-ledger.md
-      - VLA 评测与数据引擎来源台账: references/vla-benchmark-data-engine-source-ledger.md
-      - VLA 闭环恢复来源台账: references/vla-closed-loop-recovery-source-ledger.md
-      - VLA 部署与安全来源台账: references/vla-deployment-safety-source-ledger.md
-      - Sim2Real 与数据引擎来源台账: references/sim2real-data-engine-source-ledger.md
-      - 数据与数据集基础来源台账: references/data-dataset-source-ledger.md
-      - Prompt、CoT 与 RAG 来源台账: references/prompt-cot-rag-source-ledger.md
-      - 生成与解码来源台账: references/generation-decoding-source-ledger.md
-      - 位置编码与 Mask 来源台账: references/positional-mask-context-source-ledger.md
-      - 模型压缩、剪枝与 NAS 来源台账: references/model-compression-pruning-nas-source-ledger.md
-      - 双目匹配与 Cost Volume 来源台账: references/stereo-cost-volume-source-ledger.md
-      - 全站证据与复现状态标准: references/evidence-and-reproducibility-standard.md
-      - 图片与公式质量标准: references/image-and-formula-quality-standard.md
-      - 图片资产治理台账: references/image-asset-governance-ledger.md
-      - 证据判断原则: references/site-judgement-principles.md
-      - Claim Ledger: references/claim-ledger.md

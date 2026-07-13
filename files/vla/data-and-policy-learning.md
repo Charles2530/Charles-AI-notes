@@ -182,7 +182,6 @@ VLA 数据与策略学习可以按这条链路收口：行为克隆让模型学�
 
 ## 外部精读
 
-- [本页来源台账](../references/vla-data-policy-learning-source-ledger.md)：记录数据、策略学习、图片使用和中文讲法边界。
 - [DAgger](https://arxiv.org/abs/1011.0686)：理解 sequential prediction 为什么会因为自行动作导致分布偏移。
 - [RT-1](https://arxiv.org/abs/2212.06817)：看真实机器人多任务示范、动作 token 和闭环控制如何规模化。
 - [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)：理解跨机器人数据为什么首先是接口对齐问题。

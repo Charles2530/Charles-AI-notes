@@ -4,6 +4,9 @@
 
 Attention 本身只会比较 token 向量之间的匹配分数。它不会天然知道第一个 token 在前、第二个 token 在后，也不会自动知道 padding、未来 token、另一个 packed sample 或未来动作标签不该被看见。位置机制负责把顺序、距离、时间或空间放进模型；mask 负责在 attention 里划出可见性边界。
 
+!!! tip "数学先修"
+    本文会用到[序列索引、位置编码与 attention mask](../prerequisite-math/sequence-position-and-masking.md)定义顺序和可见性，并用[向量内积与旋转](../prerequisite-math/linear-algebra-and-geometry.md)理解 attention score 与 RoPE。
+
 ## Attention 不天然知道顺序
 
 标准 attention score 可以写成：

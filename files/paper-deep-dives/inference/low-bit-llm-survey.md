@@ -464,5 +464,3 @@ Mixed precision 则承认一个更现实的问题：少量 outlier 或 salient w
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=A+Survey+of+Low-bit+Large+Language+Models%3A+Basics%2C+Systems%2C+and+Algorithms)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=A+Survey+of+Low-bit+Large+Language+Models%3A+Basics%2C+Systems%2C+and+Algorithms)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

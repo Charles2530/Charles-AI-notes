@@ -79,7 +79,7 @@ v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2
 
 **追问展开。** 常见 ablation 包括去掉模块、换数据配比、改 loss 权重、换 scale、换推理预算、去掉系统优化。面试时可以强调：ablation 不是为了凑表，而是为了验证 claim。  
 **易错点 / 边界。** Ablation 结论只在当前 setting 下成立；小模型上的贡献不一定能外推到大模型或生产流量。  
-**继续读。** [评测与消融方法](../training/evaluation-and-ablation-methodology.md) / [全站证据与复现状态标准](../references/evidence-and-reproducibility-standard.md)
+**继续读。** [评测与消融方法](../training/evaluation-and-ablation-methodology.md)
 
 ## 微调与参数高效训练
 

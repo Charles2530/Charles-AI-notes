@@ -155,7 +155,6 @@ VLA 评测与数据引擎可以按这条链路收口：benchmark 负责把能力
 
 ## 外部精读
 
-- [本页来源台账](../references/vla-benchmark-data-engine-source-ledger.md)：记录 benchmark、数据引擎、图片使用和中文讲法边界。
 - [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)：理解跨机器人数据和评测为什么首先是接口对齐问题。
 - [DROID](https://droid-dataset.github.io/)：看真实机器人 in-the-wild 数据采集如何覆盖多场景、多任务和长轨迹。
 - [BridgeData V2](https://arxiv.org/abs/2308.12952)：理解多环境机器人数据集如何服务离线策略学习。

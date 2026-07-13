@@ -54,7 +54,6 @@
 | Closed-loop gain | open-loop 指标和真实决策脱节 | [世界模型评测](evaluation-and-failure-modes.md) | Dreamer / V-JEPA 2-AC 等闭环设置 | 成功率需要配合失败桶和成本账 |
 | Risk calibration | near-miss 漏报、安全错判 | [不确定性与风险敏感规划](uncertainty-and-risk-aware-planning.md) | mini-chain risk ECE 示例 | 小样本 ECE 不能证明部署安全 |
 | Failure replay | 失败不可复盘、数据回流低效 | [端到端案例](action-conditioned-video-world-model-training-case.md) | Toy fixture failure replay | 需要真实视频、预测、动作和人工标签 |
-| Claim Ledger | 证据混淆、过度外推 | [Claim Ledger](../references/claim-ledger.md) | 全站证据账 | 证据账本身不替代复现实验 |
 
 ## 读完怎么用
 

@@ -186,7 +186,6 @@ FAST 用 frequency-space action sequence tokenization 压缩高频连续动作�
 
 ## 外部精读
 
-- [本页来源台账](../references/vla-action-interface-source-ledger.md)：记录动作接口事实来源、图片使用和讲法边界。
 - [RT-1](https://arxiv.org/abs/2212.06817)：理解真实机器人 Transformer policy、动作 token 和大规模机器人数据的早期接口。
 - [DeepMind RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/) 与 [RT-2 paper](https://arxiv.org/abs/2307.15818)：理解 VLM 如何通过 action token 接入机器人控制。
 - [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)：看跨机器人数据如何统一 gripper-frame 动作口径。

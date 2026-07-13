@@ -169,10 +169,8 @@ VLA 闭环恢复可以按这条链路收口：先用检测器发现偏离，再�
 
 ## 外部精读
 
-- [本页来源台账](../references/vla-closed-loop-recovery-source-ledger.md)：记录闭环恢复、失败分桶、图片使用和中文讲法边界。
 - [DAgger](https://arxiv.org/abs/1011.0686)：理解顺序决策中学习器自己造成的状态分布为什么需要被训练集覆盖。
 - [RT-2](https://arxiv.org/abs/2307.15818)：看 web-scale VLM 知识迁移到动作后的真实机器人能力和失败边界。
 - [SayCan](https://say-can.github.io/)：理解语言技能选择为什么要被 affordance / value function 约束。
 - [π0.5](https://arxiv.org/abs/2504.16054)：看 open-world VLA 如何报告真实家庭任务、数据消融和 high-level subtask。
-- [VLA 评测与数据引擎来源台账](../references/vla-benchmark-data-engine-source-ledger.md)：对接 hard set、failure replay 和数据回流。
 - [Datawhale Every-Embodied](https://github.com/datawhalechina/every-embodied)：学习具身智能中文教程如何组织数据、仿真、复现与部署路线；事实 claim 仍回到论文和项目页。

@@ -638,5 +638,3 @@ strong image/video diffusion teacher
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Phased+DMD%3A+Few-step+Distribution+Matching+Distillation+via+Score+Matching+within+Subintervals)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Phased+DMD%3A+Few-step+Distribution+Matching+Distillation+via+Score+Matching+within+Subintervals)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

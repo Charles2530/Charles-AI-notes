@@ -4,6 +4,9 @@
 
 Prompt engineering 不是找一句神奇提示词。它是在设计模型这次推理能看见什么、必须遵守什么、哪些文本只是数据、哪些结果要被外部验证。CoT 给复杂任务一个中间工作区；RAG 把外部证据接进上下文；ReAct 和工具调用把模型从单次生成推向多步状态机。它们不是孤立技巧，而是同一条执行链的不同控制点。
 
+!!! tip "数学先修"
+    本文会用到[序列、位置与可见性](../prerequisite-math/sequence-position-and-masking.md)理解上下文组装，用[条件概率](../prerequisite-math/probability-distributions-and-expectation.md)理解生成，并用[向量内积与相似度](../prerequisite-math/linear-algebra-and-geometry.md)解释 embedding retrieval。
+
 ## Prompt 是上下文组装，不是咒语
 
 模型一次回答时只能读到上下文窗口里的 token。Prompt 的本质是把不同来源的信息按权限和目的装进这个窗口：

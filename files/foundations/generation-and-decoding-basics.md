@@ -4,6 +4,9 @@
 
 解码不是“让模型回答”的按钮。它是一条状态机：每一步先拿到 logits，再做格式 mask、重复惩罚、temperature 缩放、top-k/top-p 截断、采样或搜索，然后把选中的 token 写回上下文和 KV cache。输出质量、格式稳定性、延迟和显存，都在这条链路上被决定。
 
+!!! tip "数学先修"
+    本文会把 logits 变成[条件概率分布](../prerequisite-math/probability-distributions-and-expectation.md)，再使用[Top-k、beam search 与离散选择](../prerequisite-math/discrete-selection-topk-and-routing.md)，同时依赖[序列位置和 causal mask](../prerequisite-math/sequence-position-and-masking.md)定义哪些 token 可见。
+
 ## 第一步：模型输出 logits，不是答案
 
 在第 \(t\) 步，语言模型输出的是词表上的一组 logits：

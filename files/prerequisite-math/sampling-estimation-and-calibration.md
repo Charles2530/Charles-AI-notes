@@ -129,6 +129,56 @@ PPO 使用的每步 action probability ratio 不是完整的 trajectory importan
 
 这里 \(\hat p\) 是样本成功率，\(n\) 是试验次数。这个近似在样本数太少或成功率非常接近 0 / 1 时会不稳，但足够提醒读者：`成功 18/20` 和 `成功 90/100` 看起来都是 90%，可信度并不一样。
 
+### Wilson 区间：小样本成功率别让上下界跑出 0 到 1
+
+上面的正态近似有一个明显问题：当 \(n\) 小或 \(\hat p\) 接近 0 / 1 时，区间可能跑到 \([0,1]\) 之外。Wilson score interval 会把中心向中间拉，并保持更合理的边界。令 \(z=1.96\) 表示常用的 95% 水平，Wilson 中心是：
+
+\[
+\tilde p
+=
+\frac{
+\hat p+\frac{z^2}{2n}
+}{
+1+\frac{z^2}{n}
+}
+\]
+
+半宽度是：
+
+\[
+h
+=
+\frac{z}{
+1+\frac{z^2}{n}
+}
+\sqrt{
+\frac{\hat p(1-\hat p)}{n}
++
+\frac{z^2}{4n^2}
+}
+\]
+
+区间写成：
+
+\[
+[\tilde p-h,\tilde p+h]
+\]
+
+例如 \(18/20=90\%\) 时，普通正态近似上界会略高于 1；Wilson 区间约为 \([0.70,0.97]\)。同样是 90%，\(90/100\) 的 Wilson 区间约为 \([0.83,0.95]\)，明显更窄。
+
+Wilson 也不是“真实成功率的精确答案”。它仍依赖独立同分布的二项试验假设。机器人 episode 如果共享同一场景、初始状态或操作者，实际有效样本数可能比 episode 数少，还需要按任务和场景分层。
+
+### Bootstrap：指标太复杂时，用重复重采样近似波动
+
+有些指标没有方便的标准误公式，比如分桶后的综合分数、median latency、多个任务加权的 success score。Bootstrap 可以从已有样本近似“如果重新做一批实验，指标会怎样变化”：
+
+1. 从 \(n\) 个观测中**有放回**地抽 \(n\) 个，得到一份 bootstrap sample。
+2. 在这份样本上重新计算目标指标。
+3. 重复很多次，得到一组 bootstrap statistics。
+4. 用这组统计量的经验分位数构造区间，例如取 2.5% 和 97.5% 分位点。
+
+有放回意味着同一条样本可能出现多次，也可能完全没被抽到。Bootstrap 的可信度仍取决于原始样本是否代表目标分布；如果原始评测漏掉夜间、遮挡或失败恢复场景，再多次重采样也不会凭空创造这些数据。时序轨迹或集群请求还可能存在相关性，需要按 episode、用户或时间 block 重采样，而不是把每一帧当独立样本。
+
 ## 分层估计：平均数要覆盖任务桶
 
 很多评测不是一个均匀分布。长上下文请求、数学题、工具调用、失败恢复、不同机器人任务和视频偏好，都可能来自不同任务桶。整体平均可以写成加权和：
@@ -142,6 +192,61 @@ PPO 使用的每步 action probability ratio 不是完整的 trajectory importan
 这里 \(g\) 是任务桶，\(w_g\) 是该桶权重，\(\mu_g\) 是桶内平均表现。如果线上真实权重 \(w_g\) 和论文 benchmark 权重不同，整体结论会变。
 
 所以通用读法不是“平均分更高就结束”，而是看每个关键桶：简单样本、困难样本、长尾、分布外、失败恢复、长输出和高并发场景是否都被覆盖。
+
+## 重要性采样：样本来自另一个分布时怎样重加权
+
+有时我们想计算目标分布 \(p(x)\) 下的期望，却只能从 proposal distribution \(q(x)\) 采样。只要 \(p(x)>0\) 的相关区域里 \(q(x)\) 也大于 0，就可以写成：
+
+\[
+\mathbb E_{x\sim p}[f(x)]
+=
+\int q(x)
+\frac{p(x)}{q(x)}
+f(x)\,dx
+\]
+
+因此：
+
+\[
+\mathbb E_{x\sim p}[f(x)]
+=
+\mathbb E_{x\sim q}
+\left[
+w(x)f(x)
+\right],
+\qquad
+w(x)=\frac{p(x)}{q(x)}
+\]
+
+这里 \(w(x)\) 表示目标分布和 proposal 分布在样本 \(x\) 处的密度比：\(q\) 过度采到的样本会被降权，\(q\) 很少采到但 \(p\) 重视的样本会被升权。
+
+Monte Carlo 估计变成：
+
+\[
+\hat\mu_{\mathrm{IS}}
+=
+\frac{1}{N}
+\sum_{i=1}^{N}
+w(x_i)f(x_i),
+\qquad
+x_i\sim q
+\]
+
+这行公式的重点不是“乘一个权重就能修复分布偏移”，而是 proposal 必须覆盖 target。若 \(q(x)=0\) 但 \(p(x)>0\)，现有样本完全看不到那个区域，任何权重都补不回来。
+
+即使 support 覆盖，权重也可能非常不均。若少数样本的 \(w_i\) 极大，整个估计几乎由它们决定。一个常用诊断是 effective sample size：
+
+\[
+\mathrm{ESS}
+\approx
+\frac{
+\left(\sum_i w_i\right)^2
+}{
+\sum_i w_i^2
+}
+\]
+
+名义上采了 \(N\) 个样本，ESS 却可能只有个位数。PPO 的新旧策略 probability ratio、off-policy evaluation、数据重采样和稀有任务加权都要面对这个问题。训练机制层面的关系放在[梯度估计、离散变量与训练信号](../foundations/gradient-estimators-and-training-signals.md)中展开。
 
 ## Acceptance rate：候选被接受的比例
 
@@ -206,11 +311,13 @@ Spearman rank correlation 衡量两个排序是否一致。它常用于比较想
 | acceptance rate 高就一定快 | draft 成本、验证并行、tree 构造和调度也会吃掉收益 |
 | 增加样本数能解决所有不确定性 | 它主要降低方差，不能自动修正系统性偏差 |
 | 总平均能代表所有用户 | 任务桶权重变化会改变整体结论 |
+| Bootstrap 次数很多，结论就一定可靠 | 它只能重采样已有数据，不能修复原始样本偏差和依赖结构 |
+| Importance weight 能修复任意分布差异 | proposal 没覆盖 target support 时，缺失区域无法补回 |
 | 相关性高就代表因果 | calibration / correlation 只说明统计关系，不自动说明机制 |
 
 ## 读完以后怎么判断
 
-看到采样指标、平均分、confidence 或 calibration 图时，先问样本来自哪里、样本数多少、方差多大、confidence 是否校准、平均收益是否覆盖 P95/P99 和任务桶。这样读 EAGLE、GRPO、world model evaluation 和 judge model 论文会清楚很多。
+看到采样指标、平均分、confidence 或 calibration 图时，先问样本来自哪里、样本数多少、方差多大、区间使用了什么假设、importance weight 是否退化、confidence 是否校准、平均收益是否覆盖 P95/P99 和任务桶。这样读 EAGLE、PPO/GRPO、world model evaluation 和 judge model 论文会清楚很多。
 
 ## 相关阅读与下一步
 

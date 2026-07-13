@@ -172,7 +172,6 @@ VLM 架构的核心不是“图片接进 LLM”，而是视觉证据如何被选
 
 ## 外部精读
 
-- [本页来源台账](../references/vlm-architecture-source-ledger.md)：记录 VLM 架构、图片使用和中文讲法边界。
 - [CLIP](https://arxiv.org/abs/2103.00020)：理解图文对比学习和 zero-shot 分类。
 - [The Illustrated CLIP](https://jalammar.github.io/illustrated-clip/)：用图建立 CLIP 的相似度矩阵和 prompt classifier 直觉。
 - [Hugging Face: Vision Language Models Explained](https://huggingface.co/blog/vlms)：用 vision encoder、projector、LLM 的三段结构理解 VLM。

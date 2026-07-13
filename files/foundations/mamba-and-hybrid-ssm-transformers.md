@@ -8,6 +8,9 @@ Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它的目
 
 > **一句话理解**：Mamba 与混合 SSM 架构 可以先当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背公式，先看清哪一步在改变信息、哪一步在改变成本。
 
+!!! tip "数学先修"
+    本文会用到[动态系统与状态空间](../prerequisite-math/dynamic-systems-and-control.md)理解隐藏状态更新，用[序列与位置](../prerequisite-math/sequence-position-and-masking.md)比较信息路径，并借助[微积分中的连续动力学](../prerequisite-math/calculus-and-newton-leibniz.md)连接 SSM 的离散化。
+
 ## 为什么需要 Mamba
 
 Transformer 的 self-attention 很强，因为它能让任意两个 token 直接交互。但代价也明显：

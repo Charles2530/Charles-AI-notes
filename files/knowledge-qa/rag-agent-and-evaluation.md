@@ -63,7 +63,7 @@
 
 **追问展开。** 如果召回没有命中，再强模型也答不好；如果召回命中但模型没用证据，那是生成或 prompt 问题；如果答案正确但引用错，事实性和可追溯性仍有风险。  
 **易错点 / 边界。** 不要只拿一个 LLM-as-judge 总分判断 RAG 好坏；分阶段指标才能指导优化。  
-**继续读。** [评测与消融方法](../training/evaluation-and-ablation-methodology.md) / [评测与证据链来源台账](../references/evaluation-source-ledger.md)
+**继续读。** [评测与消融方法](../training/evaluation-and-ablation-methodology.md)
 
 ## Agent 与工具调用
 
@@ -136,7 +136,7 @@ y \sim p_\theta(y\mid x,c)
 
 **追问展开。** 常见偏差包括位置偏好、长度偏好、模型家族偏好、过度相信流畅文本、对细节事实不敏感。更稳的做法是用人工标注、规则指标、真实任务结果对 judge 做校准。  
 **易错点 / 边界。** LLM-as-judge 是评估工具，不是地面真值。高风险评测不能完全交给另一个模型。  
-**继续读。** [观测与在线评估](../inference/observability-and-online-evaluation.md) / [评测与证据链来源台账](../references/evaluation-source-ledger.md)
+**继续读。** [观测与在线评估](../inference/observability-and-online-evaluation.md)
 
 ### Q：离线评测和在线评测的差别是什么？
 
@@ -176,4 +176,4 @@ y \sim p_\theta(y\mid x,c)
 
 **追问展开。** 一个稳的上线流程是：离线评测过线，灰度流量观察，监控核心指标，保留回滚，收集失败样本进入下一轮数据和评估。  
 **易错点 / 边界。** 单项指标上升不代表系统变好。例如答案更长可能 judge 分更高，但延迟、成本和用户满意度下降。  
-**继续读。** [成本建模与 SLO 设计](../inference/cost-modeling-and-slo-design.md) / [证据判断原则](../references/site-judgement-principles.md)
+**继续读。** [成本建模与 SLO 设计](../inference/cost-modeling-and-slo-design.md)

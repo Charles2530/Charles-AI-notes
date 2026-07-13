@@ -198,4 +198,4 @@ e^{m_{\text{block}}-m_{\text{new}}}l_{\text{block}}
 
 **追问展开。** 一个好的回答要包含“证据闭环”：改动前瓶颈在哪里，改动后指标提升多少，质量是否不变，哪些 shape 受益，失败时怎么回退。  
 **易错点 / 边界。** 如果优化增加大量分支、破坏可读性或只对罕见 shape 有收益，可能不值得。  
-**继续读。** [Kernel 成本模型与选择启发](../operators/kernel-cost-models-and-selection-heuristics.md) / [证据判断原则](../references/site-judgement-principles.md)
+**继续读。** [Kernel 成本模型与选择启发](../operators/kernel-cost-models-and-selection-heuristics.md)

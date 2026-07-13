@@ -4,6 +4,9 @@
 
 数据集不是一个目录、一张表或若干 JSONL。它是一组样本定义、标签规则、来源记录、processor、split、过滤和版本共同构成的训练契约。只要契约说不清，后面的 loss、benchmark 和训练曲线都可能在回答错误问题。
 
+!!! tip "数学先修"
+    本文会用到[概率分布与条件概率](../prerequisite-math/probability-distributions-and-expectation.md)来说明样本从哪里来，也会用[因果与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)区分数据相关性、泄漏和部署分布。已经熟悉可直接继续。
+
 ## 样本不是一行数据，而是一份契约
 
 一个样本可以先写成：

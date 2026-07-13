@@ -25,7 +25,7 @@
   }
 
   function indexUrl() {
-    return new URL("search/search_index.json", siteRoot()).href;
+    return new URL("search/search_index_full.json", siteRoot()).href;
   }
 
   function loadIndex() {
@@ -175,6 +175,9 @@
     window.clearTimeout(renderTimer);
     const query = input.value || "";
     renderTimer = window.setTimeout(() => {
+      const list = document.querySelector(".md-search-result__list");
+      if (list && hasNativeResults(list)) return;
+
       loadIndex()
         .then((docs) => renderResults(query, docs))
         .catch(() => {

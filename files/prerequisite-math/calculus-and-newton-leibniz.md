@@ -69,6 +69,8 @@ f'(x)=\lim_{\Delta x\to 0}\frac{f(x+\Delta x)-f(x)}{\Delta x}
 F(x)=\int_a^x f(t)\,dt
 \]
 
+这里 \(t\) 是积分内部的哑变量，\(x\) 是正在移动的上界；因此 \(F(x)\) 表示从固定起点 \(a\) 累积到当前位置 \(x\) 的总量。
+
 那么：
 
 \[
@@ -119,6 +121,8 @@ f(3)-f(1)
 \]
 
 这里 \(G=\partial\mathcal{L}/\partial Y\)。这解释了为什么训练会保存 activation，也解释了 activation checkpointing 为什么可以用重算换显存。
+
+如果输入和输出都是向量，所有输入分量对所有输出分量的偏导数会组成 Jacobian。反向传播通常不会显式生成这个大矩阵，而是直接计算 vector-Jacobian product。这个从标量链式法则到向量自动微分的过渡，放在[微分、Jacobian 与梯度传播](differential-jacobian-and-gradient-flow.md)中展开。
 
 ## ODE：状态按确定规则连续变化
 

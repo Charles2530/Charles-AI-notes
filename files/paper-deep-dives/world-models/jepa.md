@@ -354,5 +354,3 @@ JEPA 的核心贡献是把世界模型的预测目标从“未来像素”挪到
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=A+Path+Towards+Autonomous+Machine+Intelligence)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=A+Path+Towards+Autonomous+Machine+Intelligence)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

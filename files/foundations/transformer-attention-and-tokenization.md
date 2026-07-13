@@ -10,6 +10,9 @@ Transformer 最容易被讲成一张架构图：左边 encoder，右边 decoder�
 
 读完这篇应该能回答四个问题：tokenizer 为什么会影响上下文和成本；Q/K/V 的公式怎样落到 shape；causal mask 与 KV cache 为什么是同一条生成链；为什么现代 Transformer 的改进经常落在位置机制、KV 存储、attention kernel 和 MoE 上。
 
+!!! tip "数学先修"
+    本文会用到[向量内积与矩阵变换](../prerequisite-math/linear-algebra-and-geometry.md)拆 Q/K/V，用[序列、位置与 mask](../prerequisite-math/sequence-position-and-masking.md)定义可见性，并用[条件概率](../prerequisite-math/probability-distributions-and-expectation.md)理解 next-token 输出。
+
 ## Tokenization 先决定计算账本
 
 模型不能直接处理“字符串”“图片”或“机器人轨迹”，它先要把输入切成离散或连续的 token。文本里的常见做法是 byte-level BPE、WordPiece 或 Unigram：先从字符、字节或基础子词开始，再用训练语料中的频繁片段合并出更长 token。Hugging Face 的 tokenizer 课程和 OpenAI 的 `tiktoken` 都在强调同一件事：tokenizer 不是排版工具，它决定模型实际看到的序列长度。

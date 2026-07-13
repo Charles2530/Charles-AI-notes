@@ -4,6 +4,9 @@
 
 训练不是把模型多跑几轮。一次训练 step 至少包含四个动作：从数据分布采样一个 batch，计算当前参数下的 loss，用反向传播估计梯度，再让 optimizer 把梯度变成参数更新。任何一环错位，曲线都可能看起来正常，但真实任务变差。
 
+!!! tip "数学先修"
+    本文会用到[优化、梯度与约束](../prerequisite-math/optimization-and-gradient-methods.md)解释参数更新，用[微积分与链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)连接 backward，并用[采样估计](../prerequisite-math/sampling-estimation-and-calibration.md)理解 mini-batch 梯度为什么会抖。
+
 ## 目标函数定义训练压力
 
 大多数监督训练可以写成：

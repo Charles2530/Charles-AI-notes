@@ -4,6 +4,9 @@
 
 多模态推理的核心链路可以拆成五步：感知证据、模态对齐、连接到语言/策略空间、在 token 预算内组织中间状态、用工具或验证器校验输出。任何一步错了，后面的 CoT 写得再漂亮也可能只是围绕错误证据编故事。
 
+!!! tip "数学先修"
+    本文会用到[向量、内积与表示空间](../prerequisite-math/linear-algebra-and-geometry.md)解释图文对齐，用[互信息与分布距离](../prerequisite-math/information-theory-and-divergence.md)理解训练目标，并在空间推理处连接[相机与三维几何](../prerequisite-math/geometry-vision-and-3d.md)。
+
 ## 第一件事：对齐不是推理
 
 CLIP 是理解多模态模型的好入口，因为它把图像和文本放进同一个 embedding 空间：匹配的图文靠近，不匹配的图文远离。

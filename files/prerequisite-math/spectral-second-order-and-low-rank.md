@@ -107,23 +107,153 @@ H_{ij}
 
 后续例子：KVSlimmer 这类 KV cache 压缩论文会用 Hessian 近似来衡量合并 Key/Value 后输出误差的二阶影响。真正工程难点是：完整 Hessian 太贵，所以论文会尝试把二阶信息化简成 forward-pass 中可计算的量。
 
-## Fisher 信息：概率模型里的二阶近似
+## Fisher 信息：概率模型里的二阶敏感度
 
-Fisher 信息常写成：
+先从一个样本 \(x\) 的 log probability 看起。模型参数是 \(\theta\)，模型分布是 \(p_\theta(x)\)。对 log probability 求参数梯度：
+
+\[
+s_\theta(x)
+=
+\nabla_\theta \log p_\theta(x)
+\]
+
+这个 \(s_\theta(x)\) 叫 **score**。它不是“分数越高越好”的 score，而是在问：如果沿某个参数方向动一点，模型给这个样本的 log probability 会怎样变化。
+
+Fisher 信息矩阵常写成：
 
 \[
 F
 =
 \mathbb{E}
 \left[
-\nabla_\theta \log p_\theta(x)
-\nabla_\theta \log p_\theta(x)^\top
+s_\theta(x)s_\theta(x)^\top
 \right]
 \]
 
-它衡量模型分布对参数变化有多敏感。直觉上，如果稍微改参数，模型给数据的概率分布变化很大，这个方向的 Fisher 信息就大。
+逐项读：
 
-自然梯度、某些二阶优化、模型压缩和不确定性分析会借用 Fisher 或它的近似。读这类公式时要注意：期望来自哪个数据分布，log probability 是哪个模型输出，近似是否只在当前 batch 上成立。
+| 符号 | 含义 |
+| --- | --- |
+| \(s_\theta(x)\) | 当前样本对参数的 log-probability 梯度 |
+| \(s_\theta(x)s_\theta(x)^\top\) | 这个样本认为哪些参数方向一起敏感 |
+| \(\mathbb{E}[\cdot]\) | 对样本分布取平均，可能是模型分布、真实数据分布或校准集 |
+| \(F\) | 概率模型在当前参数附近的局部敏感度矩阵 |
+
+如果只看一个方向 \(u\)，Fisher 给出的敏感度是：
+
+\[
+u^\top F u
+=
+\mathbb{E}
+\left[
+\left(u^\top s_\theta(x)\right)^2
+\right]
+\]
+
+这行式子很有用：它说的不是“这个方向的梯度大不大”，而是“沿这个方向移动参数时，模型分布会不会明显变化”。如果 \(u^\top F u\) 很大，同样大小的参数扰动会让模型概率分布变很多；如果它很小，这个方向对分布相对不敏感。
+
+先做一个可以手算的二分类例子。设模型只有一个 logit 参数 \(\theta\)，输出正类概率：
+
+\[
+p=\sigma(\theta)
+\]
+
+标签 \(y\in\{0,1\}\) 服从 Bernoulli 分布，log probability 是：
+
+\[
+\log p_\theta(y)
+=
+y\log p+(1-y)\log(1-p)
+\]
+
+对 logit \(\theta\) 求导，score 恰好是：
+
+\[
+s_\theta(y)
+=
+\frac{\partial}{\partial\theta}\log p_\theta(y)
+=
+y-p
+\]
+
+因此单参数 Fisher 是：
+
+\[
+F
+=
+\mathbb E_{y\sim\operatorname{Bernoulli}(p)}[(y-p)^2]
+=
+p(1-p)
+\]
+
+当 \(p=0.5\) 时，\(F=0.25\)；当 \(p=0.99\) 时，\(F=0.0099\)。若两处都把 logit 改动 \(\Delta\theta=0.1\)，局部 KL 近似分别为：
+
+\[
+\frac{1}{2}F(\Delta\theta)^2
+=
+0.00125
+\quad\text{和}\quad
+0.0000495
+\]
+
+这和 sigmoid 的形状一致：在 \(p=0.5\) 附近，logit 动一点会明显重新分配两类概率；在 \(p=0.99\) 的饱和区，同样的 logit 步长对分布影响较小。这里比较的是 **logit 参数空间里的同样步长**；如果换成直接用概率 \(p\) 做参数，Fisher 的数值会随参数化改变，但它表达的局部分布距离不变。
+
+![Fisher information as local KL curvature](../assets/images/prerequisite-math/fisher-information-curvature.svg){ width="760" }
+
+<small>图源：本站自绘示意图。左右两边的参数步长一样，但高 Fisher 方向对应更大的局部 KL 变化。读自然梯度、Fisher 近似 Hessian、量化误差敏感度时，都可以先用这个图建立直觉。</small>
+
+Fisher 为什么算“二阶”？关键在 KL 的局部展开。对很小的参数扰动 \(\Delta\theta\)，有：
+
+\[
+D_{\mathrm{KL}}
+\left(
+p_\theta
+\;\|\;
+p_{\theta+\Delta\theta}
+\right)
+\approx
+\frac{1}{2}
+\Delta\theta^\top F \Delta\theta
+\]
+
+这和 Taylor 展开里的二阶项非常像。区别是：Hessian 通常描述 loss 曲面怎么弯，Fisher 描述“模型分布”在参数空间里怎么变。换句话说，Fisher 给参数空间加了一把尺子：两个参数向量欧氏距离一样远，不代表它们对应的模型分布一样远。
+
+在最大似然或交叉熵训练里，还有一个常见关系：
+
+\[
+F
+=
+-
+\mathbb{E}
+\left[
+\nabla_\theta^2
+\log p_\theta(x)
+\right]
+\]
+
+这个等式需要一些正则条件，也依赖期望到底取自哪里。它解释了为什么很多论文会说“用 gradient / Fisher 近似 Hessian”：完整 Hessian 太贵，于是用每个样本的 score 外积，或者它的 diagonal / block 近似，来获得一个更便宜的二阶敏感度信号。
+
+一个小例子：语言模型在上下文 \(c\) 下预测下一个 token \(y\)，log probability 是 \(\log p_\theta(y\mid c)\)。如果某个权重方向的 Fisher 很大，说明沿这个方向稍微改参数，就会显著改变模型对正确 token 或候选 token 的概率分配。做量化、剪枝、KV 合并或 LoRA 初始化时，这种方向就更“贵”，误差不能随便放大。
+
+自然梯度也来自这个直觉。普通梯度默认参数空间的欧氏距离有意义，而自然梯度会考虑“不要让输出分布变太猛”：
+
+\[
+\Delta\theta_{\text{natural}}
+\propto
+F^{-1}g
+\]
+
+其中 \(g=\nabla_\theta \mathcal{L}\)。高 Fisher 的方向会被压小，低 Fisher 的方向可以走得相对大一些。它不是魔法优化器，而是在用 KL / 分布变化来重新度量“这一步到底有多大”。
+
+后面读论文时常见三种版本：
+
+| 名称 | 常见写法 | 要问的问题 |
+| --- | --- | --- |
+| 理论 Fisher | \(\mathbb{E}_{x\sim p_\theta}[s_\theta(x)s_\theta(x)^\top]\) | 期望是不是来自模型自身分布 |
+| empirical Fisher | \(\frac{1}{n}\sum_i s_\theta(x_i)s_\theta(x_i)^\top\) | 样本来自训练集、校准集还是当前 batch |
+| diagonal / block Fisher | 只保留对角线或局部块 | 省掉了哪些参数耦合关系 |
+
+所以 Fisher 最容易踩坑的地方是：不要把它当成“精确 Hessian 的另一个名字”。Hessian 可以有非凸方向，Fisher 由外积平均得到，天然是半正定的；完整 Fisher、经验 Fisher、diagonal Fisher 的含义也不一样。读 KVSlimmer 里 “gradient / Fisher 近似 Hessian”，或读低比特 LoRA 里用 Fisher 衡量量化残差重要性时，都要先问：score 来自哪个输出概率，期望来自哪批数据，矩阵近似保留了哪些方向耦合。
 
 ## 低秩和二阶近似在论文里怎么用
 
@@ -133,7 +263,7 @@ F
 | KVSlimmer / KV 压缩 | 谱同质性、Hessian 二阶误差 |
 | LoRA / 低秩适配 | 用少数谱方向表达参数更新 |
 | 剪枝 / NAS | Taylor 近似估计删除某结构的 loss 变化 |
-| 量化 | 误差在敏感方向上会被放大 |
+| 量化 | 误差在 Hessian / Fisher 敏感方向上会被放大 |
 
 ## 常见误读
 
@@ -141,12 +271,13 @@ F
 | --- | --- |
 | 奇异值小的方向一定没用 | 小方向可能承载长尾知识或安全边界 |
 | Hessian 精确才有用 | 很多论文只需要可用的局部敏感度近似 |
+| Fisher 就是样本梯度平方的另一个名字 | 理论 Fisher、empirical Fisher 和它们的 diagonal / block 近似使用不同期望与结构，不能混写 |
 | 低秩一定省且不伤质量 | 低秩省参数和带宽，但会改变表达空间 |
 | 二阶方法一定比一阶方法好 | 二阶信息贵，近似质量和系统开销都要算 |
 
 ## 读完以后怎么判断
 
-看到谱图、SVD、Hessian 或 Taylor 近似时，先问：它在分析哪个对象的方向结构，扰动是什么，误差衡量在哪里，近似是否便宜到能放进真实系统。这样读 Muon、KVSlimmer、剪枝、量化和低秩论文会稳得多。
+看到谱图、SVD、Hessian、Fisher 或 Taylor 近似时，先问：它在分析哪个对象的方向结构，扰动是什么，误差衡量在哪里，近似是否便宜到能放进真实系统。这样读 Muon、KVSlimmer、剪枝、量化和低秩论文会稳得多。
 
 ## 相关阅读与下一步
 
@@ -154,3 +285,5 @@ F
 - 站内下一步：[优化、梯度与约束](optimization-and-gradient-methods.md)。
 - 论文精读：[Muon：LLM 预训练优化器](../paper-deep-dives/foundations/muon-is-scalable.md)。
 - 论文精读：[KVSlimmer：非对称 KV 合并](../paper-deep-dives/inference/kvslimmer.md)。
+- 外部材料：[Natural Gradient Works Efficiently in Learning](https://direct.mit.edu/neco/article/10/2/251/6143/Natural-Gradient-Works-Efficiently-in-Learning)。
+- 外部材料：[Limitations of the Empirical Fisher Approximation for Natural Gradient Descent](https://papers.neurips.cc/paper_files/paper/2019/hash/46a558d97954d0692411c861cf78ef79-Abstract.html)。

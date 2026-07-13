@@ -162,7 +162,6 @@ l \rightarrow \text{subtask / skill} \rightarrow \text{action chunk} \rightarrow
 
 ## 外部精读
 
-- [本页来源台账](../references/vla-action-chunking-skill-source-ledger.md)：记录 action chunk、hierarchical policy、latent skill、图片使用和中文讲法边界。
 - [ALOHA / ACT](https://arxiv.org/abs/2304.13705)：理解 action chunk、CVAE 和 temporal ensembling 如何服务精细操作。
 - [Options 框架](http://incompleteideas.net/papers/SPS-aij.pdf)：理解技能为什么需要启动集合、内部策略和终止函数。
 - [SayCan](https://say-can.github.io/)：理解语言技能选择为什么必须和 affordance / value function 结合。

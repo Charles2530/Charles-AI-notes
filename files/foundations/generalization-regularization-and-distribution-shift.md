@@ -10,6 +10,9 @@
 
 <small>图源：[Deep Double Descent: Where Bigger Models and More Data Hurt](https://arxiv.org/abs/1912.02292)，Figure 1。原图展示模型宽度、训练 epoch 与 test error 的 double descent 现象。本站用这张图说明：现代深度学习里的泛化不能只靠“模型越大越过拟合”这种旧直觉判断，必须看曲线、数据、正则化和分布证据。</small>
 
+!!! tip "数学先修"
+    本文会用到[因果、反事实与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)、[采样估计](../prerequisite-math/sampling-estimation-and-calibration.md)和[优化与正则化](../prerequisite-math/optimization-and-gradient-methods.md)，分别说明风险来自哪里、证据有多稳、训练约束改变了什么。
+
 ## 第一张账：训练风险不是部署风险
 
 训练时最小化的是经验风险：

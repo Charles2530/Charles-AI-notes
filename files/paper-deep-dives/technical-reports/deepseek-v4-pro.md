@@ -452,5 +452,3 @@ DeepSeek-V4 的重点不是某个单点指标，而是展示了一条百万上�
 - 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=DeepSeek-V4%3A+Towards+Highly+Efficient+Million-Token+Context+Intelligence)。
 - 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=DeepSeek-V4%3A+Towards+Highly+Efficient+Million-Token+Context+Intelligence)。
 - 站内下一步：[论文精读专题](../index.md)。
-- 站内下一步：[论文专题写作规范](../writing-standard.md)。
-- 站内下一步：[外部精读来源台账](../../references/external-reading-ledger.md)。

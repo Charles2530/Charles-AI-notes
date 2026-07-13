@@ -110,7 +110,7 @@ a_t\sim \pi_\psi(a_t\mid z_t)
 
 **追问展开。** 面试回答可以说：action-conditioned latent planning 的关键是目标图像、当前状态、候选动作之间的关系。模型必须让不同动作产生可区分的 latent 未来。  
 **易错点 / 边界。** 有 action-conditioned 论文结果也不代表通用机器人策略已解决；任务设置、平台、目标形式和 closed-loop 评测都要看。  
-**继续读。** [Masked / JEPA 与潜变量预测](../world-models/masked-jepa-and-latent-prediction.md) / [Claim Ledger](../references/claim-ledger.md)
+**继续读。** [Masked / JEPA 与潜变量预测](../world-models/masked-jepa-and-latent-prediction.md)
 
 ## 动作条件、WAM/VAM 与生成式仿真
 
@@ -158,7 +158,7 @@ p_\theta(\tau_{t+1:t+H}\mid s_t,a_{t:t+H})
 
 **追问展开。** 面试里可以给反例：固定当前画面，换不同动作，未来预测几乎不变；这说明模型学了视觉先验，却没学动作动力学。  
 **易错点 / 边界。** 系统吞吐、官方 demo、open-loop 视频都不能替代真实或仿真闭环评测。  
-**继续读。** [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md) / [证据判断原则](../references/site-judgement-principles.md)
+**继续读。** [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)
 
 ### Q：Action sensitivity 应该怎么测？
 
@@ -166,7 +166,7 @@ p_\theta(\tau_{t+1:t+H}\mid s_t,a_{t:t+H})
 
 **追问展开。** 更进一步可以看动作排序是否正确：模型认为更好的动作，真实执行成功率是否更高。也可以看 counterfactual consistency：小动作变化是否带来合理的小未来变化。  
 **易错点 / 边界。** 只看生成视频有变化不够；变化必须和动作语义一致，并能提升决策。  
-**继续读。** [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md) / [Claim Ledger](../references/claim-ledger.md)
+**继续读。** [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)
 
 ### Q：Open-loop loss、FVD 和 closed-loop success 分别能证明什么？
 
@@ -174,7 +174,7 @@ p_\theta(\tau_{t+1:t+H}\mid s_t,a_{t:t+H})
 
 **追问展开。** 如果目标是规划和控制，closed-loop success 更接近最终目标；open-loop 指标可用于模型调试，但不能替代执行结果。  
 **易错点 / 边界。** 不要用 FVD 证明控制能力。它最多说明视频分布相似，不说明动作选择正确。  
-**继续读。** [全站证据与复现状态标准](../references/evidence-and-reproducibility-standard.md) / [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)
+**继续读。** [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)
 
 ### Q：世界模型为什么需要不确定性和风险建模？
 
@@ -198,7 +198,7 @@ p_\theta(\tau_{t+1:t+H}\mid s_t,a_{t:t+H})
 
 **追问展开。** 但系统吞吐只证明成本下降，不证明模型预测更准或规划更好。工程优化必须和 action sensitivity、closed-loop success、质量回归同表评估。  
 **易错点 / 边界。** 不能因为 rollout 更快就说世界模型更强；速度和任务 utility 是两条证据链。  
-**继续读。** [世界模型高效训练实验报告](../world-models/world-model-efficient-training-experiment-report.md) / [Claim Ledger](../references/claim-ledger.md)
+**继续读。** [世界模型高效训练实验报告](../world-models/world-model-efficient-training-experiment-report.md)
 
 ### Q：如果面试让你设计一个世界模型系统，你会怎么说？
 
