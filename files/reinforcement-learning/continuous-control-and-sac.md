@@ -111,4 +111,4 @@ online critics -> Polyak averaging -> target critics
 
 ## 下一步
 
-SAC 已把经典模型无关的连续控制链路接通。若要研究用 learned dynamics 降低真实交互成本，继续 [世界模型中的强化学习](rl-for-world-models.md)；课程中尚未实现的 Offline RL、VLA 与综合算法选择只在 [完整学习路线](index.md#完整学习路线) 保留名称，避免产生空链接。
+SAC 已把经典模型无关的连续控制链路接通。固定日志和分布外动作风险见 [Offline Reinforcement Learning](offline-reinforcement-learning.md)；learned dynamics 与规划见 [Model-based RL 与世界模型](rl-for-world-models.md)；连续 action chunk、安全约束与真实部署见 [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md)。课程地图中仅“综合实践与算法选择”仍处于规划状态，见 [完整学习路线](index.md#完整学习路线)。

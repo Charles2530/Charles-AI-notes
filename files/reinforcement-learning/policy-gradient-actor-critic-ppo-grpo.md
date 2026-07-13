@@ -111,4 +111,4 @@ rollout 与优化必须分阶段。old logprob 在采样后固定，advantage �
 
 ## 下一步
 
-离散 CartPole 可以枚举 action logits；连续控制需要可重参数化策略与 off-policy critic，见 [连续控制与 SAC](continuous-control-and-sac.md)。经典课程之后，世界模型路线见 [世界模型中的强化学习](rl-for-world-models.md)，工程路线见 [verl 训练流程](verl-code-flow.md)；GRPO 与 LLM 强化学习保留在 [完整学习路线](index.md#完整学习路线) 的未来章节中。
+离散 CartPole 可以枚举 action logits；连续控制需要可重参数化策略与 off-policy critic，见 [连续控制与 SAC](continuous-control-and-sac.md)。GRPO、RLHF、RLVR 与 DPO 的边界见 [LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md)；世界模型路线见 [Model-based RL 与世界模型](rl-for-world-models.md)，工程路线见 [verl 训练流程](verl-code-flow.md)。

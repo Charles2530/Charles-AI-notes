@@ -47,6 +47,28 @@ class ReinforcementLearningCurriculumTests(TestCase):
             self.assertTrue((page.parent / path).resolve().is_file(), target)
         self.assertGreaterEqual(len(local_targets), 2)
 
+    def first_markdown_table(self, section):
+        groups = []
+        current = []
+        for line in section.splitlines():
+            if line.strip().startswith("|") and line.strip().endswith("|"):
+                current.append(line)
+            elif current:
+                groups.append(current)
+                current = []
+        if current:
+            groups.append(current)
+        self.assertTrue(groups, "section must contain a Markdown table")
+        table = groups[0]
+        self.assertGreaterEqual(len(table), 3)
+
+        def cells(line):
+            return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+        header = cells(table[0])
+        rows = {row[0]: row[1:] for row in map(cells, table[2:])}
+        return header, rows
+
     def test_index_starts_with_definition_and_learning_route(self):
         text = (RL_ROOT / "index.md").read_text(encoding="utf-8")
         for heading in (
@@ -317,7 +339,8 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "https://arxiv.org/abs/1312.5602",
             "https://doi.org/10.1038/nature14236",
             "https://arxiv.org/abs/2005.01643",
-            "index.md#完整学习路线",
+            "q-learning-and-dqn.md",
+            "offline-reinforcement-learning.md",
         ):
             self.assertIn(f"]({target})", bridge)
 
@@ -635,6 +658,40 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             self.assertIn(term, failures)
         self.assertIn("](https://arxiv.org/abs/2005.01643)", text)
 
+    def test_offline_rl_comparison_and_ope_keep_data_boundaries_distinct(self):
+        text = (RL_ROOT / "offline-reinforcement-learning.md").read_text(
+            encoding="utf-8"
+        )
+        minimum_task = text.split("## 最小任务", maxsplit=1)[1].split(
+            "## 核心机制", maxsplit=1
+        )[0]
+        header, rows = self.first_markdown_table(minimum_task)
+        self.assertEqual(header, ["方法", "训练时的数据来源", "能否主动纠正数据盲区", "主要风险"])
+        self.assertEqual(
+            set(rows), {"behavior cloning", "off-policy online RL", "offline RL"}
+        )
+        behavior = " ".join(rows["behavior cloning"])
+        off_policy = " ".join(rows["off-policy online RL"])
+        offline = " ".join(rows["offline RL"])
+        for term in ("fixed dataset", "不能", "示范"):
+            self.assertIn(term, behavior)
+        for term in ("replay", "持续环境交互", "能"):
+            self.assertIn(term, off_policy)
+        for term in ("fixed dataset", "不再交互", "不能", "OOD action"):
+            self.assertIn(term, offline)
+
+        ope = text.split("### Offline policy evaluation 的边界", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        self.assertIn(
+            "FQE 等直接价值估计方法会引入函数逼近和 Bellman 外推误差",
+            ope,
+        )
+        self.assertIn(
+            "基于 learned dynamics 的 OPE 还会额外引入 model bias", ope
+        )
+        self.assertNotRegex(ope, r"FQE[^。]*(模型化|model-based)")
+
     def test_model_based_page_stays_on_planning_and_learned_dynamics(self):
         text = (RL_ROOT / "rl-for-world-models.md").read_text(encoding="utf-8")
         core = text.split("## 核心机制", maxsplit=1)[1].split(
@@ -662,6 +719,124 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         self.assertNotIn("## 视频生成里的 RL", text)
         self.assertNotIn("## RLVR-World", text)
         self.assertNotIn("## Decision Transformer", text)
+
+    def test_model_based_evidence_and_migration_ownership_tables(self):
+        page = RL_ROOT / "rl-for-world-models.md"
+        text = page.read_text(encoding="utf-8")
+        evidence = text.split(
+            "### Open-loop prediction 与 closed-loop return", maxsplit=1
+        )[1].split("## 相邻路线的归属边界", maxsplit=1)[0]
+        evidence_header, evidence_rows = self.first_markdown_table(evidence)
+        self.assertEqual(evidence_header, ["证据", "测量什么", "不能单独证明什么"])
+        self.assertEqual(
+            set(evidence_rows),
+            {
+                "one-step prediction",
+                "open-loop rollout",
+                "counterfactual action test",
+                "model-based closed-loop return",
+            },
+        )
+        self.assertIn("策略会选择正确动作", evidence_rows["open-loop rollout"][1])
+        self.assertIn(
+            "reward/risk 校准正确", evidence_rows["counterfactual action test"][1]
+        )
+        self.assertIn(
+            "跨环境与真实机器人泛化",
+            evidence_rows["model-based closed-loop return"][1],
+        )
+
+        ownership = text.split("## 相邻路线的归属边界", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        ownership_header, ownership_rows = self.first_markdown_table(ownership)
+        self.assertEqual(
+            ownership_header, ["路线", "课程归属", "优化对象", "证据边界"]
+        )
+        self.assertEqual(
+            list(ownership_rows),
+            [
+                "RLVR-World",
+                "Decision Transformer",
+                "DDPO / Flow-GRPO / video generator RL",
+                "interactive video worlds",
+            ],
+        )
+        rlvr = " ".join(ownership_rows["RLVR-World"])
+        for term in (
+            "](rl-for-world-models.md",
+            "learned transition/world predictor",
+            "verifiable reward",
+            "decoded prediction",
+            "不能证明 real closed-loop return",
+            "](https://arxiv.org/abs/2505.13934)",
+        ):
+            self.assertIn(term, rlvr)
+        decision_transformer = " ".join(ownership_rows["Decision Transformer"])
+        for term in (
+            "](offline-reinforcement-learning.md)",
+            "fixed trajectory",
+            "不是 online environment interaction",
+            "](https://arxiv.org/abs/2106.01345)",
+        ):
+            self.assertIn(term, decision_transformer)
+        generator_rl = " ".join(
+            ownership_rows["DDPO / Flow-GRPO / video generator RL"]
+        )
+        for term in (
+            "](llm-rlhf-rlvr-and-grpo.md)",
+            "](../diffusion/video-and-multimodal-diffusion.md)",
+            "generator/sampler",
+            "不是 learned environment transition",
+            "不是 LLM 算法",
+            "](https://arxiv.org/abs/2305.13301)",
+            "](https://arxiv.org/abs/2505.05470)",
+        ):
+            self.assertIn(term, generator_rl)
+        interactive = " ".join(ownership_rows["interactive video worlds"])
+        for term in (
+            "](../world-models/evaluation-and-failure-modes.md)",
+            "](../vla/closed-loop-recovery-and-failure-analysis.md)",
+            "visual playability/open-loop demo",
+            "不能证明 real closed-loop",
+            "](https://openai.com/index/video-generation-models-as-world-simulators/)",
+            "](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)",
+        ):
+            self.assertIn(term, interactive)
+        self.assert_local_links_resolve(page)
+
+    def test_published_deep_rl_pages_do_not_keep_stale_exit_claims(self):
+        routes = {
+            "policy-gradient-actor-critic-ppo-grpo.md": (
+                "llm-rlhf-rlvr-and-grpo.md",
+            ),
+            "continuous-control-and-sac.md": (
+                "offline-reinforcement-learning.md",
+                "vla-robotics-and-closed-loop-rl.md",
+            ),
+            "mdp-value-bellman.md": (
+                "q-learning-and-dqn.md",
+                "offline-reinforcement-learning.md",
+            ),
+        }
+        stale_phrases = ("未来章节", "尚未实现", "没有独立课程页", "还没有独立课程页", "尚无独立课程页")
+        for filename, targets in routes.items():
+            with self.subTest(filename=filename):
+                text = (RL_ROOT / filename).read_text(encoding="utf-8")
+                next_section = text.split("## 下一步", maxsplit=1)[1]
+                for target in targets:
+                    self.assertIn(f"]({target})", next_section)
+                for stale in stale_phrases:
+                    self.assertNotIn(stale, next_section)
+
+        mdp = (RL_ROOT / "mdp-value-bellman.md").read_text(encoding="utf-8")
+        bridge = mdp.split("### 算法桥接：Q-learning 与数据来源", maxsplit=1)[
+            1
+        ].split("## 训练数据流", maxsplit=1)[0]
+        self.assertIn("](q-learning-and-dqn.md)", bridge)
+        self.assertIn("](offline-reinforcement-learning.md)", bridge)
+        self.assertNotIn("独立课程页出现前", bridge)
+        self.assertNotIn("未来专章", bridge)
 
     def test_llm_rl_page_maps_trajectory_and_objectives_without_blurring_dpo(self):
         page = RL_ROOT / "llm-rlhf-rlvr-and-grpo.md"
@@ -696,6 +871,48 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         self.assertIn("](https://arxiv.org/abs/2305.18290)", text)
         self.assertIn("](https://arxiv.org/abs/2501.12948)", text)
 
+    def test_llm_objective_sections_match_runnable_helper_semantics(self):
+        text = (RL_ROOT / "llm-rlhf-rlvr-and-grpo.md").read_text(
+            encoding="utf-8"
+        )
+        group = text.split("### GRPO：同一 prompt 内做相对归一化", maxsplit=1)[
+            1
+        ].split("### RLOO 的边界", maxsplit=1)[0]
+        for term in (
+            "同一 prompt",
+            "last axis",
+            "组内均值",
+            "总体标准差",
+            "ddof=0",
+            "zero-variance",
+            "精确零",
+        ):
+            self.assertIn(term, group)
+
+        sampled_kl = text.split(
+            "### Pointwise log-ratio 不等于 full KL", maxsplit=1
+        )[1].split("### DPO 是离线偏好优化对照", maxsplit=1)[0]
+        for term in (
+            "log\\pi_\\theta",
+            "log\\pi_{\\text{ref}}",
+            "pointwise",
+            "不是 full KL",
+            "expected KL",
+        ):
+            self.assertIn(term, sampled_kl)
+
+        dpo = text.split("### DPO 是离线偏好优化对照", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "offline preference optimization",
+            "固定的 chosen/rejected preference pair",
+            "不向在线环境采新 response",
+            "在线 PPO rollout",
+            "固定偏好数据上的离线优化",
+        ):
+            self.assertIn(term, dpo)
+
     def test_vla_page_separates_prediction_from_sim_and_real_closed_loop_evidence(self):
         text = (RL_ROOT / "vla-robotics-and-closed-loop-rl.md").read_text(
             encoding="utf-8"
@@ -728,6 +945,30 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             "能证明什么",
         ):
             self.assertIn(evidence, text)
+
+    def test_vla_evidence_table_keeps_cannot_prove_boundaries(self):
+        text = (RL_ROOT / "vla-robotics-and-closed-loop-rl.md").read_text(
+            encoding="utf-8"
+        )
+        minimum_task = text.split("## 最小任务", maxsplit=1)[1].split(
+            "## 核心机制", maxsplit=1
+        )[0]
+        header, rows = self.first_markdown_table(minimum_task)
+        self.assertEqual(header, ["评测层", "指标例子", "能证明什么", "不能证明什么"])
+        self.assertEqual(
+            list(rows),
+            [
+                "open-loop action prediction",
+                "simulator closed-loop success",
+                "real closed-loop success",
+            ],
+        )
+        self.assertIn("policy 能纠错", rows["open-loop action prediction"][2])
+        self.assertIn("任务会成功", rows["open-loop action prediction"][2])
+        self.assertIn("真实摩擦", rows["simulator closed-loop success"][2])
+        self.assertIn("长尾安全", rows["simulator closed-loop success"][2])
+        self.assertIn("未测试场景", rows["real closed-loop success"][2])
+        self.assertIn("普遍泛化", rows["real closed-loop success"][2])
 
     def test_index_marks_modern_application_route_readable_and_linked(self):
         text = (RL_ROOT / "index.md").read_text(encoding="utf-8")

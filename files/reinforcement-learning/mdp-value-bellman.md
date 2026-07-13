@@ -162,7 +162,7 @@ y_t=r_t+\gamma(1-d_t)\max_{a'}Q(s_{t+1},a')
 
 使用函数逼近时，DQN 可以把 bootstrap network 换成一段时间内冻结的 frozen target network；这是额外的函数逼近稳定机制，完整做法见 [2015 Nature DQN](https://doi.org/10.1038/nature14236)。
 
-replay buffer 也是 deep DQN 的工程机制，不是 tabular Q-learning 定义的一部分；早期 DQN 与 experience replay 见 2013 预印本 [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)。独立课程页出现前从 [完整学习路线](index.md#完整学习路线) 继续。
+replay buffer 也是 deep DQN 的工程机制，不是 tabular Q-learning 定义的一部分；早期 DQN 与 experience replay 见 2013 预印本 [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)，算法细节与可运行例子见 [Q-learning 与 DQN](q-learning-and-dqn.md)。
 
 数据来源还决定 value 估计的边界：
 
@@ -172,7 +172,7 @@ replay buffer 也是 deep DQN 的工程机制，不是 tabular Q-learning 定义
 | off-policy RL | 用其他或较旧 behavior policy 的数据学习当前目标 policy，常见于继续采样同时复用 replay | 必须处理行为分布与目标 policy 的差异 |
 | offline RL | 只用固定数据集，不再收集新 transition | 分布外（OOD）动作缺少数据支持，value 外推可能虚高 |
 
-这只是数据源区别，不替代算法章节。Offline RL 的 OOD/value 风险来源见 [Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems](https://arxiv.org/abs/2005.01643)；未来专章同样只从 [完整学习路线](index.md#完整学习路线) 接入，避免链接尚不存在的页面。
+这只是数据源区别，不替代算法章节。固定数据的 OOD/value 风险、保守估计与评测边界见 [Offline Reinforcement Learning](offline-reinforcement-learning.md)，其问题定义来源见 [Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems](https://arxiv.org/abs/2005.01643)。
 
 ## 训练数据流
 
@@ -207,4 +207,4 @@ Dynamic Programming 需要可查询的完整模型；Monte Carlo 与 TD 则从 s
 
 ## 下一步
 
-进入 [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md)，在同一个 2×3 GridWorld 中分别用已知模型、完整 episode 和一步 bootstrap 估计 value。Q-learning、DQN 与 Offline RL 尚无独立课程页，先通过 [完整学习路线](index.md#完整学习路线) 查看后续章节状态；世界模型只需暂时记住它对应 MDP 的 transition 建模，扩展阅读见 [世界模型中的强化学习](rl-for-world-models.md)。
+进入 [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md)，在同一个 2×3 GridWorld 中分别用已知模型、完整 episode 和一步 bootstrap 估计 value。随后沿 [Q-learning 与 DQN](q-learning-and-dqn.md) 学习 action-value control，沿 [Offline Reinforcement Learning](offline-reinforcement-learning.md) 学习固定数据的 support 边界，或进入 [Model-based RL 与世界模型](rl-for-world-models.md) 学习 transition 建模。课程地图中仅“综合实践与算法选择”仍标为规划中，见 [完整学习路线](index.md#完整学习路线)。

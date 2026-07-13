@@ -75,7 +75,7 @@ BCQ、CQL、IQL 是准确理解这些机制的短例子，不是算法排行榜�
 \left(\prod_t\frac{\pi(a_t^i\mid s_t^i)}{\mu(a_t^i\mid s_t^i)}\right)G_i.
 \]
 
-其中连乘项是整条 trajectory 的策略概率比；当策略差异和 horizon 增大时，权重方差会迅速上升。若行为概率未记录或 support 不重叠，估计甚至不可用。Fitted Q Evaluation 等模型化办法引入另一套函数逼近误差。Offline policy evaluation 可以筛掉明显失败方案，不能把日志之外的真实后果变成事实。
+其中连乘项是整条 trajectory 的策略概率比；当策略差异和 horizon 增大时，权重方差会迅速上升。若行为概率未记录或 support 不重叠，估计甚至不可用。FQE 等直接价值估计方法会引入函数逼近和 Bellman 外推误差；基于 learned dynamics 的 OPE 还会额外引入 model bias。Offline policy evaluation 可以筛掉明显失败方案，不能把日志之外的真实后果变成事实。
 
 ## 训练数据流
 

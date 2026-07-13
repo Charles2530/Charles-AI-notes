@@ -76,7 +76,7 @@ L^{\text{clip}}(\theta)=
 
 ### GRPO：同一 prompt 内做相对归一化
 
-GRPO 对每个 prompt 采样一组 $G$ 个 response，以组内 reward 构造 advantage。示例使用总体标准差（`ddof=0`）：
+GRPO 对同一 prompt 采样一组 $G$ 个 response，以组内 reward 构造 advantage。可运行 helper 把 batch 的 last axis 当作同 prompt group：每组 reward 先减去组内均值，再按总体标准差（`ddof=0`）归一化：
 
 
 \[
@@ -86,7 +86,7 @@ A_i=\begin{cases}
 \end{cases}
 \]
 
-这里的 $\epsilon$ 让非零组的标准差略小于 1；它是数值稳定项，不应被解释成新 reward。组内 reward 全相同时没有相对排序信息，`group_advantages` 返回精确零，因此这个例子产生零 policy update 信号而不是除零或虚构方向。
+这里的 $\epsilon$ 让非零组的标准差略小于 1；它是数值稳定项，不应被解释成新 reward。zero-variance group 的 reward 全相同，没有相对排序信息，`group_advantages` 返回精确零，因此这个例子产生零 policy update 信号而不是除零或虚构方向。
 
 GRPO 没有消除 baseline，而是把 baseline 变成同 prompt 的 group mean。于是一个 sample 的 advantage 依赖同组其他 sample，形成 cross-sample dependency。改变 group size、采样温度、去重或 verifier 分布都会改变 advantage；不能把每条 response 当成完全独立标签。
 

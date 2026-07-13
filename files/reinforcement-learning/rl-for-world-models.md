@@ -113,6 +113,19 @@ Dreamer 不在每个执行步做昂贵搜索，而是从真实 replay 的 latent
 
 自然视频可能忽略动作差异，仍有较好的视觉指标；这样的模型是有价值的预测先验，但不能仅凭 open-loop prediction 称为控制模型。决策模型还必须校准 terminal、reward 与 risk：done 太晚会让规划器穿过失败状态，reward 偏置会改变动作排序，风险低估会诱导危险探索。
 
+## 相邻路线的归属边界
+
+### 四条容易混淆的路线
+
+Model-based RL 的责任是让环境模型进入预测、规划或策略学习；相邻工作也可能使用 trajectory、reward 或 GRPO，但优化对象不同。下面只保留迁移桥，不把四条路线重新展开成独立综述。
+
+| 路线 | 课程归属 | 优化对象 | 证据边界 |
+| --- | --- | --- | --- |
+| RLVR-World | [本页](rl-for-world-models.md) | 用 RL 和 verifiable reward 直接优化 learned transition/world predictor 采样的 decoded prediction | verifier 指标改善不能证明 real closed-loop return；仍需 action sensitivity、transition 校准和 planner 评测。[RLVR-World](https://arxiv.org/abs/2505.13934) |
+| Decision Transformer | [Offline RL](offline-reinforcement-learning.md) | 对 fixed trajectory 做 return-conditioned sequence modeling，并从固定数据预测 action | 它不是 online environment interaction，仍受数据覆盖和分布外动作限制。[Decision Transformer](https://arxiv.org/abs/2106.01345) |
+| DDPO / Flow-GRPO / video generator RL | [LLM 强化学习中的通用 policy objective](llm-rlhf-rlvr-and-grpo.md)；[视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md) | 用 reward 优化 diffusion/flow generator/sampler 的生成轨迹 | 这是生成器策略优化，不是 learned environment transition，也不是 LLM 算法；DDPO 与 Flow-GRPO 的 logprob/采样器定义应分别核对。[DDPO](https://arxiv.org/abs/2305.13301)、[Flow-GRPO](https://arxiv.org/abs/2505.05470) |
+| interactive video worlds | [世界模型评测与失败模式](../world-models/evaluation-and-failure-modes.md)；[VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md) | 生成可受动作影响的视觉环境，供 agent 交互或评测 | visual playability/open-loop demo 不能证明 real closed-loop，更不能替代真实机器人风险与回报证据。[Sora](https://openai.com/index/video-generation-models-as-world-simulators/)、[Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/) |
+
 ## 训练数据流
 
 
