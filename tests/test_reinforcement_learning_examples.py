@@ -22,6 +22,168 @@ def load_module(name: str):
 
 @skipUnless(np is not None, "course examples require NumPy")
 class ReinforcementLearningExampleTests(TestCase):
+    def test_dqn_targets_mask_only_true_terminals(self):
+        deep_rl = load_module("deep_rl_smoke")
+        rewards = np.array([1.0, 1.0])
+        next_q = np.array([10.0, 10.0])
+        terminated = np.array([True, False])
+        snapshots = [array.copy() for array in (rewards, next_q, terminated)]
+
+        targets = deep_rl.dqn_targets(rewards, next_q, terminated, gamma=0.9)
+
+        np.testing.assert_allclose(targets, [1.0, 10.0])
+        for array, snapshot in zip((rewards, next_q, terminated), snapshots):
+            np.testing.assert_array_equal(array, snapshot)
+
+    def test_dqn_targets_reject_invalid_arrays_and_gamma(self):
+        deep_rl = load_module("deep_rl_smoke")
+        valid = (np.ones(2), np.ones(2), np.array([False, True]))
+        cases = [
+            (np.ones((2, 1)), valid[1], valid[2], 0.9),
+            (valid[0], np.ones(3), valid[2], 0.9),
+            (valid[0], valid[1], np.array([0, 1]), 0.9),
+            (np.array([1.0, np.nan]), valid[1], valid[2], 0.9),
+            (valid[0], np.array([1.0, np.inf]), valid[2], 0.9),
+            (*valid, -0.1),
+            (*valid, 1.1),
+            (*valid, np.nan),
+            (*valid, True),
+        ]
+        for rewards, next_q, terminated, gamma in cases:
+            with self.subTest(gamma=gamma):
+                with self.assertRaises(ValueError):
+                    deep_rl.dqn_targets(rewards, next_q, terminated, gamma)
+
+    def test_discounted_returns_reset_at_episode_boundaries(self):
+        deep_rl = load_module("deep_rl_smoke")
+        rewards = np.array([1.0, 2.0, 3.0, 4.0])
+        terminated = np.array([False, True, False, False])
+
+        returns = deep_rl.discounted_returns(rewards, terminated, gamma=0.5)
+
+        np.testing.assert_allclose(returns, [2.0, 2.0, 5.0, 4.0])
+        np.testing.assert_array_equal(rewards, [1.0, 2.0, 3.0, 4.0])
+        np.testing.assert_array_equal(terminated, [False, True, False, False])
+
+    def test_discounted_returns_validate_inputs(self):
+        deep_rl = load_module("deep_rl_smoke")
+        valid_rewards = np.ones(2)
+        valid_terminated = np.array([False, True])
+        cases = [
+            (np.ones((2, 1)), valid_terminated, 0.9),
+            (valid_rewards, np.array([False]), 0.9),
+            (valid_rewards, np.array([0, 1]), 0.9),
+            (np.array([1.0, np.inf]), valid_terminated, 0.9),
+            (valid_rewards, valid_terminated, -0.1),
+            (valid_rewards, valid_terminated, 1.1),
+        ]
+        for rewards, terminated, gamma in cases:
+            with self.subTest(gamma=gamma):
+                with self.assertRaises(ValueError):
+                    deep_rl.discounted_returns(rewards, terminated, gamma)
+
+    def test_gae_matches_manual_recurrence_and_terminal_reset(self):
+        deep_rl = load_module("deep_rl_smoke")
+        rewards = np.array([1.0, 2.0, 3.0])
+        values = np.array([0.5, 1.0, 2.0, 4.0])
+        terminated = np.array([False, True, False])
+
+        advantages = deep_rl.gae(
+            rewards, values, terminated, gamma=0.9, gae_lambda=0.8
+        )
+
+        np.testing.assert_allclose(advantages, [2.12, 1.0, 4.6])
+        np.testing.assert_array_equal(values, [0.5, 1.0, 2.0, 4.0])
+
+    def test_gae_validates_bootstrap_shape_and_factors(self):
+        deep_rl = load_module("deep_rl_smoke")
+        rewards = np.ones(2)
+        values = np.ones(3)
+        terminated = np.array([False, True])
+        cases = [
+            (np.ones((2, 1)), values, terminated, 0.9, 0.8),
+            (rewards, np.ones(2), terminated, 0.9, 0.8),
+            (rewards, values, np.array([False]), 0.9, 0.8),
+            (rewards, np.array([1.0, np.nan, 1.0]), terminated, 0.9, 0.8),
+            (rewards, values, terminated, -0.1, 0.8),
+            (rewards, values, terminated, 0.9, 1.1),
+        ]
+        for args in cases:
+            with self.subTest(gamma=args[3], gae_lambda=args[4]):
+                with self.assertRaises(ValueError):
+                    deep_rl.gae(*args)
+
+    def test_ppo_clipped_loss_handles_positive_and_negative_advantages(self):
+        deep_rl = load_module("deep_rl_smoke")
+
+        positive = deep_rl.ppo_clipped_loss(
+            np.array([np.log(1.4)]), np.array([0.0]), np.array([2.0]), 0.2
+        )
+        negative = deep_rl.ppo_clipped_loss(
+            np.array([np.log(0.6)]), np.array([0.0]), np.array([-2.0]), 0.2
+        )
+
+        self.assertIsInstance(positive, float)
+        self.assertAlmostEqual(positive, -2.4)
+        self.assertAlmostEqual(negative, 1.6)
+
+    def test_ppo_clipped_loss_rejects_broadcasting_and_nonfinite_values(self):
+        deep_rl = load_module("deep_rl_smoke")
+        valid = np.zeros(2)
+        cases = [
+            (np.zeros((2, 1)), valid, valid, 0.2),
+            (valid, np.zeros(3), valid, 0.2),
+            (valid, valid, np.array([0.0, np.inf]), 0.2),
+            (np.array([0.0, np.nan]), valid, valid, 0.2),
+            (valid, valid, valid, 0.0),
+            (valid, valid, valid, 1.0),
+            (valid, valid, valid, True),
+        ]
+        for new_logp, old_logp, advantages, epsilon in cases:
+            with self.subTest(epsilon=epsilon):
+                with self.assertRaises(ValueError):
+                    deep_rl.ppo_clipped_loss(
+                        new_logp, old_logp, advantages, epsilon
+                    )
+
+    def test_sac_targets_include_entropy_and_mask_terminals(self):
+        deep_rl = load_module("deep_rl_smoke")
+        rewards = np.array([1.0, 1.0])
+        next_min_q = np.array([10.0, 10.0])
+        next_logp = np.array([2.0, 2.0])
+        terminated = np.array([True, False])
+        snapshots = [
+            array.copy() for array in (rewards, next_min_q, next_logp, terminated)
+        ]
+
+        targets = deep_rl.sac_targets(
+            rewards, next_min_q, next_logp, terminated, gamma=0.9, alpha=0.5
+        )
+
+        np.testing.assert_allclose(targets, [1.0, 9.1])
+        for array, snapshot in zip(
+            (rewards, next_min_q, next_logp, terminated), snapshots
+        ):
+            np.testing.assert_array_equal(array, snapshot)
+
+    def test_sac_targets_validate_shapes_data_and_scalars(self):
+        deep_rl = load_module("deep_rl_smoke")
+        valid = (np.ones(2), np.ones(2), np.zeros(2), np.array([False, True]))
+        cases = [
+            (np.ones((2, 1)), *valid[1:], 0.9, 0.2),
+            (valid[0], np.ones(3), *valid[2:], 0.9, 0.2),
+            (*valid[:2], np.array([0.0, np.nan]), valid[3], 0.9, 0.2),
+            (*valid[:3], np.array([0, 1]), 0.9, 0.2),
+            (*valid, -0.1, 0.2),
+            (*valid, 1.1, 0.2),
+            (*valid, 0.9, -0.1),
+            (*valid, 0.9, np.inf),
+        ]
+        for args in cases:
+            with self.subTest(gamma=args[-2], alpha=args[-1]):
+                with self.assertRaises(ValueError):
+                    deep_rl.sac_targets(*args)
+
     def test_sample_average_updates_selected_arm(self):
         bandit = load_module("bandit")
         values = np.array([0.0, 0.0])

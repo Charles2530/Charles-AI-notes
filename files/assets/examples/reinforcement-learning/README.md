@@ -1,110 +1,119 @@
 # Reinforcement learning examples
 
-These executable examples support the bandit, exploration, dynamic-programming,
-Monte Carlo, and temporal-difference sections of the reinforcement-learning
-course. They deliberately use small arrays and a deterministic map so each
-update can be inspected without a training framework or an external simulator.
+These examples support the tabular and classic deep-reinforcement-learning
+chapters. `bandit.py` and `gridworld.py` use NumPy only. `deep_rl_smoke.py` uses
+Gymnasium Classic Control and PyTorch to verify that DQN, REINFORCE, PPO, and
+SAC each collect real transitions and execute at least one finite optimizer
+update. None of the short commands is a convergence benchmark.
 
-## Dependencies and commands
+## Isolated environment setup
 
-The scripts require Python 3 and NumPy. The focused tests additionally require
-pytest. No Gym installation, GPU, network access, or package-specific working
-directory is required. From the repository root, run:
+Create a course-only virtual environment from the repository root. This keeps
+NumPy, PyTorch, and Gymnasium out of the MkDocs site environment and does not
+change the root `requirements.txt`:
+
+```bash
+python -m venv .venv-rl-course
+source .venv-rl-course/bin/activate
+python -m pip install -r files/assets/examples/reinforcement-learning/requirements.txt
+```
+
+The bounded dependencies are NumPy 1.x/2.x, PyTorch 2.x, and Gymnasium 1.x with
+Classic Control. A display and rendering backend are not required because the
+smoke modes never call `render`.
+
+To roll back the isolated setup, first leave the environment and then delete
+only its directory:
+
+```bash
+deactivate
+rm -rf .venv-rl-course
+```
+
+`rm -rf` is intentionally scoped to `.venv-rl-course`; run it from the
+repository root and verify the name before deletion. Removing that directory
+does not remove course source or modify the site environment.
+
+## Commands
+
+With `.venv-rl-course` active, run:
 
 ```bash
 python files/assets/examples/reinforcement-learning/bandit.py --seed 7 --steps 2000
 python files/assets/examples/reinforcement-learning/gridworld.py --seed 7
-python -m pytest tests/test_reinforcement_learning_examples.py -q
+python files/assets/examples/reinforcement-learning/deep_rl_smoke.py dqn --seed 7 --steps 256
+python files/assets/examples/reinforcement-learning/deep_rl_smoke.py reinforce --seed 7 --steps 256
+python files/assets/examples/reinforcement-learning/deep_rl_smoke.py ppo --seed 7 --steps 256
+python files/assets/examples/reinforcement-learning/deep_rl_smoke.py sac --seed 7 --steps 256
 ```
 
-If the repository virtual environment is active, the same commands work with
-its `python`. Otherwise, replace `python` with the absolute path to any Python
-interpreter that has NumPy installed. All file arguments above are relative to
-the repository root, so the commands do not depend on the worktree's absolute
-location.
+Every deep mode rejects `--steps` below 128 with an exact CLI error because a
+replay or rollout batch must be large enough for an optimizer smoke update.
+REINFORCE finishes the current trajectory, so `collected_steps` can exceed the
+requested count. On a CPU laptop each mode is a short smoke-class run, normally
+seconds rather than a training job; package installation is usually slower
+than the commands.
 
-## Bandit API and output
+## Deep objective API
 
-`bandit.py` contains four public teaching functions:
+`deep_rl_smoke.py` imports NumPy at module load and delays PyTorch/Gymnasium
+until CLI dispatch. Numeric tests therefore work without optional deep-RL
+dependencies. The public helpers reject shape mismatch, non-finite values, and
+implicit broadcasting:
 
-| API | Purpose |
+| API | Objective |
 | --- | --- |
-| `update_sample_average(values, counts, arm, reward)` | Atomically update writable floating values and matching nonnegative integer counts. |
-| `epsilon_greedy(values, epsilon, rng)` | Explore uniformly with probability epsilon; otherwise return the first maximum-value arm. |
-| `ucb_action(values, counts, step)` | At `step == counts.sum() + 1`, return the first untried arm or score UCB1. |
-| `run_experiment(seed, steps, epsilon)` | Compare epsilon-greedy and UCB on one seeded task with shared per-step potential rewards. |
+| `dqn_targets(...)` | Terminal-masked one-step Q target. |
+| `discounted_returns(...)` | Reverse return-to-go recurrence with episode resets. |
+| `gae(...)` | GAE from rewards, one value per step, and one bootstrap value. |
+| `ppo_clipped_loss(...)` | Scalar negative clipped PPO surrogate. |
+| `sac_targets(...)` | Entropy-regularized twin-Q target with terminal masking. |
 
-The command-line interface defaults to seed `7` and 2000 interaction steps.
-For each method it prints `cumulative_reward`, `average_regret`, and
-`best_arm_fraction`. Cumulative reward is the sum of observed noisy rewards.
-Average regret uses the difference between the true best mean and the mean of
-the selected arm, averaged over steps. Best-arm fraction is the proportion of
-actions that select the arm with the largest true mean. The output contract is
-the field names and finite numeric values, not exact decimal values that should
-be copied into documentation.
+The DQN summary reports update count, final loss, observed episode-return mean,
+and online-network parameter change. REINFORCE reports requested/collected
+steps, complete episodes, policy loss, return mean, and parameter change. PPO
+adds minibatch count and approximate KL. SAC reports critic/actor loss,
+temperature, return mean, and actor/critic changes. The stable contract is the
+labeled finite fields and a zero exit code, not exact decimals across platforms.
 
-Both methods receive the same true arm means. At each step the task RNG creates
-one arm-length noise row, both methods choose against that same counterfactual
-row, and the row is then discarded. Their observed reward sequences still
-differ because they choose different arms. This avoids storing a full
-steps-by-arms table while isolating action selection more carefully than running
-each method on a separately sampled task.
+## Terminated and truncated
 
-## GridWorld API and terminal semantics
+Gymnasium returns `(observation, reward, terminated, truncated, info)`.
+`terminated=True` means the task reached a true MDP terminal and the bootstrap
+term is zero. `truncated=True` usually means a time limit or sampling boundary;
+when its final observation is valid, DQN, PPO, and SAC retain bootstrap value.
+Episode control resets on either flag.
 
-`gridworld.py` defines a deterministic 2-by-3 `GridWorld`. States are numbered
-row-major from 0 to 5; state 0 is the start and state 5 is terminal. Actions 0,
-1, 2, and 3 mean up, right, down, and left. A boundary action leaves the state
-unchanged. Ordinary transitions return reward -1, while entering or stepping
-from the terminal state returns reward 0 and `terminated=True`.
+PPO computes GAE separately for every episode or rollout segment. This keeps a
+truncation bootstrap while preventing the recurrence from leaking through the
+subsequent environment reset. REINFORCE has no critic to estimate an omitted
+tail: it ends its sampled Monte Carlo trajectory at truncation and documents
+that finite-horizon estimate instead of pretending to bootstrap it.
 
-| API | Purpose |
-| --- | --- |
-| `GridWorld.reset()` / `GridWorld.step(action)` | Reset the state and execute deterministic transitions. |
-| `policy_evaluation(env, policy, ...)` | Iteratively evaluate a tabular stochastic policy. |
-| `value_iteration(env, ...)` | Compute optimal values and a first-argmax policy whose terminal sentinel is `-1`. |
-| `monte_carlo_update(values, counts, state, return_)` | Atomically update writable floating values and matching nonnegative integer counts. |
-| `td_target(reward, gamma, next_value, terminated)` | Form a one-step TD target with terminal masking. |
-| `q_learning_update(q, ...)` | Atomically update one entry in a writable floating Q-table and return its target. |
+## Reproducibility and interpretation
 
-Terminal masking is part of the algorithm, not a reporting detail. A normal TD
-target is `reward + gamma * next_value`, and a normal Q-learning target uses
-`reward + gamma * max(q[next_state])`. When `terminated=True`, the bootstrap
-term is zero, so both targets reduce to the terminal reward. Bootstrapping from
-an arbitrary value stored for terminal state 5 would leak value beyond the end
-of an episode. `q_learning_update` still validates `next_state` on terminal
-transitions; masking changes the target calculation, not index validity.
+The scripts seed Python, NumPy, PyTorch, the Gymnasium environment, and its
+action space. A repeated run under the same package versions and hardware is
+intended to be reproducible, but seeds do not guarantee bit-identical behavior
+across PyTorch builds, processors, BLAS implementations, or Gymnasium versions.
+A single seed also gives no uncertainty estimate.
 
-Dynamic-programming tolerances must be finite and positive, and iteration caps
-must be positive integers. Policy evaluation and value iteration raise
-`RuntimeError` rather than returning an unconverged result when the cap is
-exhausted.
+These commands prove only that environment interaction, stored data, target or
+advantage construction, loss, backward pass, optimizer step, and finite metrics
+are connected. They do not prove monotonic learning, hyperparameter quality,
+sample efficiency, robustness, task solution, or convergence. Those claims
+require longer training, held-out evaluation episodes, multiple seeds, and
+uncertainty reporting.
 
-The GridWorld CLI prints a mean value under the uniform policy, the optimal
-start-state value and greedy action array, plus summary statistics for learned
-Q-values. The terminal action is `-1` because no action is defined there. These
-are compact smoke-test summaries; inspect returned arrays directly when
-studying individual states or updates.
+## Tabular examples
 
-## Reproducibility and scope
+`bandit.py` contains sample-average epsilon-greedy and UCB1 on one seeded task.
+It reports cumulative reward, average regret, and best-arm fraction. Independent
+task and policy RNG streams keep action selection from changing the task noise
+stream.
 
-The bandit seed is expanded into independent task and policy child streams. The
-task stream controls arm means and potential reward noise without being advanced
-by epsilon-greedy choices. The GridWorld transition function itself is
-deterministic; its seed controls the exploratory choices in the small Q-learning
-demonstration. Repeating a command with the same arguments reproduces its output
-under the same Python and NumPy behavior. Tests assert same-seed equality and
-finite results rather than using a rounded CLI transcript as a golden file.
-
-These examples demonstrate update equations, exploration decisions, fair use of
-one sampled bandit task, deterministic transitions, and correct terminal
-masking. They do not establish that UCB is universally better than
-epsilon-greedy, measure statistical significance across seeds, cover
-non-stationary or heavy-tailed bandits, or provide confidence intervals. The
-bandit assumes fixed reward means and independent Gaussian noise.
-
-The GridWorld is fully observable and tabular. It does not cover truncation,
-stochastic dynamics, function approximation, replay buffers, target networks,
-large-scale optimization, or production environment APIs. Its short capped
-training loop is a deterministic teaching run, not evidence that the chosen
-hyperparameters generalize to other tasks.
+`gridworld.py` defines a deterministic 2-by-3 map and implements policy
+evaluation, value iteration, first-visit Monte Carlo updates, TD targets, and a
+tabular Q-learning update. States are row-major from 0 to 5; state 5 is
+terminal. Its CLI summary is also a teaching smoke run, not a generalization or
+convergence result.

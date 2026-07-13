@@ -6,6 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 RL_ROOT = ROOT / "files" / "reinforcement-learning"
 
 class ReinforcementLearningCurriculumTests(TestCase):
+    CLASSIC_PAGES = (
+        "q-learning-and-dqn.md",
+        "policy-gradient-and-reinforce.md",
+        "policy-gradient-actor-critic-ppo-grpo.md",
+        "continuous-control-and-sac.md",
+    )
     REQUIRED_CHAPTER_HEADINGS = [
         "## 本章回答什么",
         "## 先修知识",
@@ -123,12 +129,23 @@ class ReinforcementLearningCurriculumTests(TestCase):
             "| 长期价值 | 5. [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) | 可阅读 |",
             course_map,
         )
+        for row in (
+            "| 经典深度 RL | 6. [Q-learning 与 DQN](q-learning-and-dqn.md) | 可阅读 |",
+            "| 经典深度 RL | 7. [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) | 可阅读 |",
+            "| 经典深度 RL | 8. [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) | 可阅读 |",
+            "| 经典深度 RL | 9. [连续控制与 SAC](continuous-control-and-sac.md) | 可阅读 |",
+        ):
+            self.assertIn(row, course_map)
         beginner_route = text.split("## 按方向进入课程", maxsplit=1)[1]
         self.assertIn(
             "[交互闭环](rl-agent-environment-loop.md) -> "
             "[多臂老虎机与探索](multi-armed-bandits-and-exploration.md) -> "
             "[MDP 与 Bellman](mdp-value-bellman.md) -> "
-            "[动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md)",
+            "[动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) -> "
+            "[Q-learning 与 DQN](q-learning-and-dqn.md) -> "
+            "[Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) -> "
+            "[Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) -> "
+            "[连续控制与 SAC](continuous-control-and-sac.md)",
             beginner_route,
         )
         for target in re.findall(r"\]\(([^)]+\.md)\)", text):
@@ -389,7 +406,143 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         ):
             self.assertIn(term, next_section)
 
-    def test_nav_uses_temporary_build_safe_course_list(self):
+    def test_classic_deep_rl_pages_share_contract_and_links(self):
+        for filename in self.CLASSIC_PAGES:
+            with self.subTest(filename=filename):
+                page = RL_ROOT / filename
+                self.assertTrue(page.is_file())
+                text = page.read_text(encoding="utf-8")
+                headings = [
+                    line for line in text.splitlines() if line.startswith("## ")
+                ]
+                self.assert_ordered_subsequence(
+                    self.REQUIRED_CHAPTER_HEADINGS, headings
+                )
+                self.assertIn(
+                    "](../assets/examples/reinforcement-learning/deep_rl_smoke.py)",
+                    text,
+                )
+                self.assertIn(
+                    "](../assets/examples/reinforcement-learning/README.md)", text
+                )
+                self.assertIn("smoke", text.lower())
+                self.assertIn("收敛", text)
+                self.assert_local_links_resolve(page)
+
+    def test_q_learning_and_dqn_core_contract(self):
+        text = (RL_ROOT / "q-learning-and-dqn.md").read_text(encoding="utf-8")
+        core = text.split("## 核心机制", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "SARSA",
+            "on-policy",
+            "Q-learning",
+            "off-policy",
+            "Q(s_t,a_t)\\leftarrow",
+            "frozen target network",
+            "replay buffer",
+            "epsilon-greedy",
+            "Huber loss",
+            "terminated",
+        ):
+            self.assertIn(term, core)
+        self.assertIn(
+            "deep_rl_smoke.py dqn --seed 7 --steps 256", text
+        )
+        self.assertIn("](dynamic-programming-monte-carlo-td.md)", text)
+        self.assertIn("](policy-gradient-and-reinforce.md)", text)
+        self.assertIn("](https://arxiv.org/abs/1312.5602)", text)
+        self.assertIn("](https://doi.org/10.1038/nature14236)", text)
+
+    def test_reinforce_core_contract(self):
+        text = (RL_ROOT / "policy-gradient-and-reinforce.md").read_text(
+            encoding="utf-8"
+        )
+        core = text.split("## 核心机制", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "score-function estimator",
+            "log-prob trick",
+            "J(\\theta)",
+            "return-to-go",
+            "action-independent baseline",
+            "方差",
+            "entropy",
+            "Categorical",
+        ):
+            self.assertIn(term, core)
+        flow = text.split("## 训练数据流", maxsplit=1)[1].split(
+            "## 常见失败", maxsplit=1
+        )[0]
+        for column in ("trajectory", "logp", "return", "loss"):
+            self.assertIn(f"| {column} |", flow)
+        self.assertIn(
+            "deep_rl_smoke.py reinforce --seed 7 --steps 256", text
+        )
+        self.assertIn("](q-learning-and-dqn.md)", text)
+        self.assertIn("](policy-gradient-actor-critic-ppo-grpo.md)", text)
+        self.assertIn("](https://doi.org/10.1007/BF00992696)", text)
+
+    def test_actor_critic_gae_ppo_core_contract(self):
+        page = RL_ROOT / "policy-gradient-actor-critic-ppo-grpo.md"
+        text = page.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("# Actor-Critic、GAE 与 PPO"))
+        core = text.split("## 核心机制", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "actor",
+            "critic",
+            "advantage",
+            "GAE",
+            "terminated",
+            "old logprob",
+            "probability ratio",
+            "clipped surrogate",
+            "entropy",
+            "KL",
+            "minibatch",
+            "approximately on-policy",
+            "reference policy",
+        ):
+            self.assertIn(term, core)
+        self.assertIn("deep_rl_smoke.py ppo --seed 7 --steps 256", text)
+        self.assertNotIn("## GRPO", text)
+        self.assertNotIn("## 视觉生成", text)
+        self.assertNotIn("## DeepSeek", text)
+        self.assertIn("](policy-gradient-and-reinforce.md)", text)
+        self.assertIn("](continuous-control-and-sac.md)", text)
+
+    def test_sac_core_contract(self):
+        text = (RL_ROOT / "continuous-control-and-sac.md").read_text(
+            encoding="utf-8"
+        )
+        core = text.split("## 核心机制", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "DQN",
+            "连续动作",
+            "reparameterization",
+            "squashed Gaussian",
+            "tanh Jacobian correction",
+            "action scaling",
+            "maximum entropy",
+            "twin Q",
+            "replay buffer",
+            "target network",
+            "temperature",
+            "terminated",
+        ):
+            self.assertIn(term, core)
+        self.assertIn("deep_rl_smoke.py sac --seed 7 --steps 256", text)
+        self.assertIn("](policy-gradient-actor-critic-ppo-grpo.md)", text)
+        self.assertIn("](rl-for-world-models.md)", text)
+        self.assertIn("](https://arxiv.org/abs/1801.01290)", text)
+
+    def test_nav_uses_build_safe_course_list(self):
         nav = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
         start = nav.index("  - 强化学习:")
         end = nav.index("  - 世界模型与具身智能:", start)
@@ -407,7 +560,10 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
                 "- 多臂老虎机与探索: reinforcement-learning/multi-armed-bandits-and-exploration.md",
                 "- MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md",
                 "- 动态规划、Monte Carlo 与 TD: reinforcement-learning/dynamic-programming-monte-carlo-td.md",
-                "- Policy Gradient、Actor-Critic、PPO 与 GRPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md",
+                "- Q-learning 与 DQN: reinforcement-learning/q-learning-and-dqn.md",
+                "- Policy Gradient 与 REINFORCE: reinforcement-learning/policy-gradient-and-reinforce.md",
+                "- Actor-Critic、GAE 与 PPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md",
+                "- 连续控制与 SAC: reinforcement-learning/continuous-control-and-sac.md",
                 "- 世界模型中的强化学习: reinforcement-learning/rl-for-world-models.md",
                 "- verl 训练流程: reinforcement-learning/verl-code-flow.md",
             ],

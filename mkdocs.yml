@@ -134,7 +134,10 @@ nav:
       - 多臂老虎机与探索: reinforcement-learning/multi-armed-bandits-and-exploration.md
       - MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md
       - 动态规划、Monte Carlo 与 TD: reinforcement-learning/dynamic-programming-monte-carlo-td.md
-      - Policy Gradient、Actor-Critic、PPO 与 GRPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md
+      - Q-learning 与 DQN: reinforcement-learning/q-learning-and-dqn.md
+      - Policy Gradient 与 REINFORCE: reinforcement-learning/policy-gradient-and-reinforce.md
+      - Actor-Critic、GAE 与 PPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md
+      - 连续控制与 SAC: reinforcement-learning/continuous-control-and-sac.md
       - 世界模型中的强化学习: reinforcement-learning/rl-for-world-models.md
       - verl 训练流程: reinforcement-learning/verl-code-flow.md
   - 世界模型与具身智能:
