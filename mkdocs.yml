@@ -129,6 +129,8 @@ nav:
           - FlashAttention 与长上下文: operators/long-context-and-flashattention-evolution.md
           - Triton 编程模型与自动调优: operators/triton-programming-model-and-autotuning.md
   - 强化学习:
+      - 强化学习导读: reinforcement-learning/index.md
+      - Agent、环境与训练闭环: reinforcement-learning/rl-agent-environment-loop.md
       - MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md
       - Policy Gradient、Actor-Critic、PPO 与 GRPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md
       - 世界模型中的强化学习: reinforcement-learning/rl-for-world-models.md
