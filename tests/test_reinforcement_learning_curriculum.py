@@ -234,6 +234,63 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
             self.assertIn(f"]({target})", text)
         self.assert_local_links_resolve(page)
 
+    def test_mdp_transition_reward_and_terminal_contract(self):
+        text = (RL_ROOT / "mdp-value-bellman.md").read_text(encoding="utf-8")
+        mdp_section = text.split(
+            "### MDP 五元组与 Markov property", maxsplit=1
+        )[1].split("### State 与 observation", maxsplit=1)[0]
+        self.assertIn(
+            "R(s,a,s')=\\mathbb{E}[r_t\\mid s_t=s,a_t=a,s_{t+1}=s']",
+            mdp_section,
+        )
+        self.assertIn(
+            "p(s_{t+1},r_t\\mid s_0,a_0,r_0,\\ldots,s_t,a_t)"
+            "=p(s_{t+1},r_t\\mid s_t,a_t)",
+            mdp_section,
+        )
+
+        expectation = text.split(
+            "### Bellman expectation：评估固定策略", maxsplit=1
+        )[1].split("### Bellman optimality：比较动作", maxsplit=1)[0]
+        for term in (
+            "非 terminal state",
+            "V^\\pi(s_{\\mathrm{terminal}})=0",
+            "transition 的随机性",
+            "条件期望 reward",
+        ):
+            self.assertIn(term, expectation)
+
+        optimality = text.split(
+            "### Bellman optimality：比较动作", maxsplit=1
+        )[1].split("### Discount 与 effective horizon", maxsplit=1)[0]
+        self.assertIn("非 terminal state", optimality)
+        self.assertIn("V^*(s_{\\mathrm{terminal}})=0", optimality)
+
+    def test_mdp_keeps_algorithm_and_data_source_bridges(self):
+        text = (RL_ROOT / "mdp-value-bellman.md").read_text(encoding="utf-8")
+        bridge = text.split("### 算法桥接", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "y_t=r_t+\\gamma(1-d_t)\\max_{a'}Q_{\\mathrm{target}}(s_{t+1},a')",
+            "真正 terminal",
+            "target network",
+            "replay buffer",
+            "online RL",
+            "off-policy RL",
+            "offline RL",
+            "固定数据集",
+            "分布外（OOD）动作",
+            "value 外推",
+        ):
+            self.assertIn(term, bridge)
+        for target in (
+            "https://arxiv.org/abs/1312.5602",
+            "https://arxiv.org/abs/2005.01643",
+            "index.md#完整学习路线",
+        ):
+            self.assertIn(f"]({target})", bridge)
+
     def test_dynamic_programming_monte_carlo_td_page_contract(self):
         page = RL_ROOT / "dynamic-programming-monte-carlo-td.md"
         self.assertTrue(page.is_file())
@@ -262,6 +319,51 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         ):
             self.assertIn(f"]({target})", text)
         self.assert_local_links_resolve(page)
+
+    def test_td_updates_each_predecessor_and_n_step_stops_at_terminal(self):
+        text = (RL_ROOT / "dynamic-programming-monte-carlo-td.md").read_text(
+            encoding="utf-8"
+        )
+        td_section = text.split("### 5. TD(0)：一步样本加 bootstrap", maxsplit=1)[
+            1
+        ].split("### 6. n-step return 与 bias-variance", maxsplit=1)[0]
+        for term in (
+            "每次 transition 都更新 predecessor state",
+            "非终止 target 为",
+            "r_t+\\gamma V(s_{t+1})",
+            "terminal target 为",
+            "r_t",
+        ):
+            self.assertIn(term, td_section)
+
+        n_step_section = text.split(
+            "### 6. n-step return 与 bias-variance", maxsplit=1
+        )[1].split("### 7. Terminal mask 与 truncation 边界", maxsplit=1)[0]
+        for term in (
+            "若 \\(n\\) 步内遇到真正 terminal",
+            "求和在该转移结束",
+            "不添加 bootstrap 项",
+        ):
+            self.assertIn(term, n_step_section)
+
+    def test_dp_page_links_authoritative_chapters(self):
+        text = (RL_ROOT / "dynamic-programming-monte-carlo-td.md").read_text(
+            encoding="utf-8"
+        )
+        next_section = text.split("## 下一步", maxsplit=1)[1]
+        self.assertIn(
+            "](http://incompleteideas.net/book/the-book-2nd.html)", next_section
+        )
+        for term in (
+            "Sutton & Barto",
+            "Chapter 4",
+            "Chapter 5",
+            "Chapter 6",
+            "Dynamic Programming",
+            "Monte Carlo Methods",
+            "Temporal-Difference Learning",
+        ):
+            self.assertIn(term, next_section)
 
     def test_nav_uses_temporary_build_safe_course_list(self):
         nav = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")

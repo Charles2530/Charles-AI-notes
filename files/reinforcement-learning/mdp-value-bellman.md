@@ -35,15 +35,21 @@ Markov Decision Process 写成：
 \mathcal{M}=(\mathcal{S},\mathcal{A},P,R,\gamma)
 \]
 
-其中 \(\mathcal{S}\) 是状态集合，\(\mathcal{A}\) 是动作集合，\(P(s'\mid s,a)\) 描述 transition，\(R\) 描述一次转移的 reward，\(\gamma\) 是折扣因子。有限任务还要说明初始状态分布和哪些状态是 terminal；它们决定 trajectory 从哪里开始、在哪里结束。
+其中 \(\mathcal{S}\) 是状态集合，\(\mathcal{A}\) 是动作集合，\(P(s'\mid s,a)\) 是下一状态的 transition probability，\(\gamma\) 是折扣因子。为允许 reward 本身也随机，本章把 \(R\) 定义为给定这次转移后的条件期望：
+
+\[
+R(s,a,s')=\mathbb{E}[r_t\mid s_t=s,a_t=a,s_{t+1}=s']
+\]
+
+因此样本中的 \(r_t\) 可以波动，而 \(R(s,a,s')\) 是这些 reward 的条件均值。有限任务还要说明初始状态分布和哪些状态是 terminal；它们决定 trajectory 从哪里开始、在哪里结束。
 
 MDP 的 Markov property 可以写成：
 
 \[
-P(s_{t+1}\mid s_0,a_0,\ldots,s_t,a_t)=P(s_{t+1}\mid s_t,a_t)
+p(s_{t+1},r_t\mid s_0,a_0,r_0,\ldots,s_t,a_t)=p(s_{t+1},r_t\mid s_t,a_t)
 \]
 
-这行式子说，当前 state 对预测下一状态已经是相关历史的充分统计量。它不是说世界没有历史，而是说历史中影响未来的信息已经编码进 \(s_t\)。
+这行式子说，给定当前 state 与 action 后，下一 state 和这次 reward 的联合分布不再依赖更早的 state、action、reward 历史。Markov property 不是说世界没有历史，而是说历史中影响下一转移与 reward 的信息已经编码进 \(s_t\)。
 
 ### State 与 observation
 
@@ -93,14 +99,20 @@ A^\pi(s,a)=Q^\pi(s,a)-V^\pi(s)
 
 ### Bellman expectation：评估固定策略
 
-对固定 \(\pi\)，Bellman expectation equation 为：
+对固定 \(\pi\)，下面的 Bellman expectation equation 适用于每个非 terminal state \(s\)：
 
 \[
 V^\pi(s)=\sum_a\pi(a\mid s)\sum_{s'}P(s'\mid s,a)
 \left[R(s,a,s')+\gamma V^\pi(s')\right]
 \]
 
-这行式子先按当前 policy 对动作求平均，再按环境 transition 对下一状态求平均。它回答“\(\pi\) 有多好”，动作分布由 \(\pi\) 给定，没有在每个状态偷偷改成最大值。
+terminal 的边界值约定为：
+
+\[
+V^\pi(s_{\mathrm{terminal}})=0
+\]
+
+Bellman 式先按当前 policy 对动作求平均，再用 \(P\) 对 transition 的随机性求和；\(R(s,a,s')\) 已经是给定该转移后的条件期望 reward，因此也纳入了 reward 的随机性。它回答“\(\pi\) 有多好”，动作分布由 \(\pi\) 给定，没有在每个状态偷偷改成最大值。
 
 同样地，动作价值满足：
 
@@ -113,11 +125,17 @@ Q^\pi(s,a)=\sum_{s'}P(s'\mid s,a)
 
 ### Bellman optimality：比较动作
 
-最优状态价值 \(V^*(s)=\max_\pi V^\pi(s)\) 满足 Bellman optimality equation：
+对非 terminal state \(s\)，最优状态价值 \(V^*(s)=\max_\pi V^\pi(s)\) 满足 Bellman optimality equation：
 
 \[
 V^*(s)=\max_a\sum_{s'}P(s'\mid s,a)
 \left[R(s,a,s')+\gamma V^*(s')\right]
+\]
+
+相应的 terminal 边界为：
+
+\[
+V^*(s_{\mathrm{terminal}})=0
 \]
 
 这里的 \(\max_a\) 是控制问题的关键：它比较当前可选动作，寻找最优 value。Bellman expectation 用给定 \(\pi\) 加权动作，Bellman optimality 用最大化改进决策；把二者混在一起，就会把“评估现有 policy”误写成“假设之后总能选最优动作”。
@@ -131,6 +149,26 @@ H_{\mathrm{eff}}\approx\frac{1}{1-\gamma}
 \]
 
 这里 \(H_{\mathrm{eff}}\) 只是“权重显著衰减需要多少步”的量级，不是任务的真实截止时间，也不是保证能准确归因的步数。控制频率改变时，同一个 \(\gamma\) 对应的真实时间也会改变。较大的 \(\gamma\) 并不自动更好：它会让长期 reward 更重要，也会让 value 误差传播得更远。有限 episodic 问题有时可用 \(\gamma=1\)，但仍需可靠的终止条件与有限 return。
+
+### 算法桥接：Q-learning 与数据来源
+
+Bellman optimality 可以给 Q-learning 构造 terminal-masked TD target：
+
+\[
+y_t=r_t+\gamma(1-d_t)\max_{a'}Q_{\mathrm{target}}(s_{t+1},a')
+\]
+
+其中 \(d_t=1\) 只表示真正 terminal，此时 target 就是 \(r_t\)。DQN 的 target network 与 replay buffer 是函数逼近和采样稳定机制，不属于 MDP 定义，本页不展开；原始方法见 [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602)，独立课程页出现前从 [完整学习路线](index.md#完整学习路线) 继续。
+
+数据来源还决定 value 估计的边界：
+
+| 设置 | 数据来源 | 主要边界 |
+| --- | --- | --- |
+| online RL | 持续与环境交互并产生新数据 | 新 policy 会改变后续数据分布 |
+| off-policy RL | 用其他或较旧 behavior policy 的数据学习当前目标 policy，常见于继续采样同时复用 replay | 必须处理行为分布与目标 policy 的差异 |
+| offline RL | 只用固定数据集，不再收集新 transition | 分布外（OOD）动作缺少数据支持，value 外推可能虚高 |
+
+这只是数据源区别，不替代算法章节。Offline RL 的 OOD/value 风险来源见 [Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems](https://arxiv.org/abs/2005.01643)；未来专章同样只从 [完整学习路线](index.md#完整学习路线) 接入，避免链接尚不存在的页面。
 
 ## 训练数据流
 

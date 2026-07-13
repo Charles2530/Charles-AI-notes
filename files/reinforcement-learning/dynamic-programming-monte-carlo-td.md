@@ -104,14 +104,14 @@ def monte_carlo_update(values, counts, state, return_):
 
 ### 5. TD(0)：一步样本加 bootstrap
 
-TD(0) 每得到一次非终止转移就构造 target \(r_t+\gamma V(s_{t+1})\)，并更新：
+TD(0) 每次 transition 都更新 predecessor state \(s_t\)。非终止 target 为 \(y_t=r_t+\gamma V(s_{t+1})\)，terminal target 为 \(y_t=r_t\)；两类转移都执行：
 
 \[
 V(s_t)\leftarrow V(s_t)+\alpha
-\left[r_t+\gamma V(s_{t+1})-V(s_t)\right]
+\left[y_t-V(s_t)\right]
 \]
 
-其中 \(\alpha\) 是步长，方括号内是 TD error。它不需要等 episode 结束，却用当前估计 \(V(s_{t+1})\) 作为学习目标的一部分，这就是 bootstrap。目标因此可能有估计偏差，但通常比完整 return 的方差低，也能在线更新。
+其中 \(\alpha\) 是步长，方括号内是 TD error。非终止 target 用当前估计 \(V(s_{t+1})\) 作为学习目标的一部分，这就是 bootstrap；terminal transition 仍更新 \(V(s_t)\)，只是没有终点之后的 bootstrap。目标因此可能有估计偏差，但通常比完整 return 的方差低，也能在线更新。
 
 ### 6. n-step return 与 bias-variance
 
@@ -173,5 +173,7 @@ DP 的“训练数据”是可枚举模型，不需要 rollout；MC 与 TD 都�
 4. **边界题**：分别为“到达目标”和“采样器每 32 步切片但保留下一状态”写出 \(d_t\)，解释两者为何不同。
 
 ## 下一步
+
+权威延伸阅读可用 [Sutton & Barto, Reinforcement Learning: An Introduction, 2nd edition](http://incompleteideas.net/book/the-book-2nd.html)：Chapter 4 是 Dynamic Programming，Chapter 5 是 Monte Carlo Methods，Chapter 6 是 Temporal-Difference Learning，与本章顺序对应。
 
 课程下一站是 Q-learning 与 DQN，但独立页面尚未创建。请从 [完整学习路线](index.md#完整学习路线) 查看当前可读章节与后续状态；若要继续理解 advantage 如何进入策略更新，可先读现有的 [Policy Gradient、Actor-Critic、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)。
