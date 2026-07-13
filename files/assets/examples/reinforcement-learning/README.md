@@ -1,10 +1,11 @@
 # Reinforcement learning examples
 
-These examples support the tabular and classic deep-reinforcement-learning
-chapters. `bandit.py` and `gridworld.py` use NumPy only. `deep_rl_smoke.py` uses
-Gymnasium Classic Control and PyTorch to verify that DQN, REINFORCE, PPO, and
-SAC each collect real transitions and execute at least one finite optimizer
-update. None of the short commands is a convergence benchmark.
+These examples support the tabular, classic deep-reinforcement-learning, and
+LLM policy-objective chapters. `bandit.py`, `gridworld.py`, and
+`policy_objectives.py` use NumPy only. `deep_rl_smoke.py` uses Gymnasium Classic
+Control and PyTorch to verify that DQN, REINFORCE, PPO, and SAC each collect real
+transitions and execute at least one finite optimizer update. None of the short
+commands is a convergence benchmark.
 
 ## Isolated environment setup
 
@@ -41,6 +42,7 @@ With `.venv-rl-course` active, run:
 ```bash
 python files/assets/examples/reinforcement-learning/bandit.py --seed 7 --steps 2000
 python files/assets/examples/reinforcement-learning/gridworld.py --seed 7
+python files/assets/examples/reinforcement-learning/policy_objectives.py --seed 7
 python files/assets/examples/reinforcement-learning/deep_rl_smoke.py dqn --seed 7 --steps 256
 python files/assets/examples/reinforcement-learning/deep_rl_smoke.py reinforce --seed 7 --steps 256
 python files/assets/examples/reinforcement-learning/deep_rl_smoke.py ppo --seed 7 --steps 256
@@ -86,6 +88,34 @@ tanh Jacobian and environment action-scale Jacobian are included, so the named
 `target_entropy=-1.0` is interpreted in those density coordinates. The stable
 contract is the labeled fields and a zero exit code, not exact decimals across
 platforms.
+
+## LLM policy-objective API and output
+
+`policy_objectives.py` supports the [LLM RLHF, RLVR, and GRPO
+chapter](../../../reinforcement-learning/llm-rlhf-rlvr-and-grpo.md). It depends
+only on NumPy and exposes three small, independently testable helpers:
+
+| API | Responsibility |
+| --- | --- |
+| `group_advantages(rewards, epsilon=1e-8)` | Normalize one group or a batch of groups on the last axis with population standard deviation. |
+| `sampled_forward_kl(policy_logp, reference_logp)` | Return the pointwise sampled policy/reference log-ratio without broadcasting. |
+| `clipped_policy_loss(new_logp, old_logp, advantages, clip_epsilon)` | Return the scalar negative mean PPO clipped surrogate. |
+
+Every group needs at least two candidates. A group whose reward standard
+deviation is at most `epsilon` receives exact zero advantages, without a divide
+warning; it supplies no relative update direction. For nonconstant groups the
+added epsilon makes the output standard deviation slightly below one. Group
+normalization also creates a cross-sample dependency because each candidate's
+advantage depends on the other rewards in its prompt group.
+
+The CLI prints `prompt`, `raw_reward`, `group_advantage`,
+`pointwise_kl_penalty`, and a finite `clipped_policy_loss`. The pointwise KL
+field is a sampled log-ratio estimate and can be negative; it is not the full
+expected, nonnegative KL divergence. `clip_epsilon` must be strictly between
+zero and one. No-argument execution uses `--seed 7`, and
+repeating either form produces identical output under the same NumPy version.
+The table demonstrates objective semantics only; it does not prove an LLM
+policy improves or converges.
 
 ## Terminated and truncated
 

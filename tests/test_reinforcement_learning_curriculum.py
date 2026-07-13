@@ -12,6 +12,12 @@ class ReinforcementLearningCurriculumTests(TestCase):
         "policy-gradient-actor-critic-ppo-grpo.md",
         "continuous-control-and-sac.md",
     )
+    MODERN_PAGES = (
+        "offline-reinforcement-learning.md",
+        "rl-for-world-models.md",
+        "llm-rlhf-rlvr-and-grpo.md",
+        "vla-robotics-and-closed-loop-rl.md",
+    )
     REQUIRED_CHAPTER_HEADINGS = [
         "## 本章回答什么",
         "## 先修知识",
@@ -569,6 +575,183 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
         self.assertIn("](rl-for-world-models.md)", text)
         self.assertIn("](https://arxiv.org/abs/1801.01290)", text)
 
+    def test_modern_rl_pages_share_ordered_contract_and_course_routes(self):
+        expected_routes = {
+            "offline-reinforcement-learning.md": (
+                "continuous-control-and-sac.md",
+                "rl-for-world-models.md",
+            ),
+            "rl-for-world-models.md": (
+                "offline-reinforcement-learning.md",
+                "llm-rlhf-rlvr-and-grpo.md",
+            ),
+            "llm-rlhf-rlvr-and-grpo.md": (
+                "rl-for-world-models.md",
+                "vla-robotics-and-closed-loop-rl.md",
+            ),
+            "vla-robotics-and-closed-loop-rl.md": (
+                "llm-rlhf-rlvr-and-grpo.md",
+                "verl-code-flow.md",
+            ),
+        }
+        for filename in self.MODERN_PAGES:
+            with self.subTest(filename=filename):
+                page = RL_ROOT / filename
+                self.assertTrue(page.is_file())
+                text = page.read_text(encoding="utf-8")
+                headings = [line for line in text.splitlines() if line.startswith("## ")]
+                self.assert_ordered_subsequence(self.REQUIRED_CHAPTER_HEADINGS, headings)
+                previous, following = expected_routes[filename]
+                next_section = text.split("## 下一步", maxsplit=1)[1]
+                self.assertIn(f"]({previous})", next_section)
+                self.assertIn(f"]({following})", next_section)
+                self.assert_local_links_resolve(page)
+
+    def test_offline_rl_core_has_support_shift_safety_and_evidence_boundaries(self):
+        text = (RL_ROOT / "offline-reinforcement-learning.md").read_text(encoding="utf-8")
+        core = text.split("## 核心机制", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "behavior cloning",
+            "off-policy online RL",
+            "fixed dataset",
+            "dataset support",
+            "distribution shift",
+            "OOD action",
+            "extrapolation error",
+            "value overestimation",
+            "behavior constraint",
+            "conservative value estimation",
+            "BCQ",
+            "CQL",
+            "IQL",
+        ):
+            self.assertIn(term, core)
+        failures = text.split("## 常见失败", maxsplit=1)[1].split(
+            "## 自检与练习", maxsplit=1
+        )[0]
+        for term in ("offline policy evaluation", "logged data", "real closed-loop", "安全"):
+            self.assertIn(term, failures)
+        self.assertIn("](https://arxiv.org/abs/2005.01643)", text)
+
+    def test_model_based_page_stays_on_planning_and_learned_dynamics(self):
+        text = (RL_ROOT / "rl-for-world-models.md").read_text(encoding="utf-8")
+        core = text.split("## 核心机制", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "known model",
+            "learned model",
+            "transition",
+            "reward",
+            "done",
+            "Dyna",
+            "MPC",
+            "PlaNet",
+            "Dreamer",
+            "latent dynamics",
+            "model bias",
+            "compounding error",
+            "model exploitation",
+            "action sensitivity",
+            "open-loop",
+            "closed-loop return",
+        ):
+            self.assertIn(term, core)
+        self.assertNotIn("## 视频生成里的 RL", text)
+        self.assertNotIn("## RLVR-World", text)
+        self.assertNotIn("## Decision Transformer", text)
+
+    def test_llm_rl_page_maps_trajectory_and_objectives_without_blurring_dpo(self):
+        page = RL_ROOT / "llm-rlhf-rlvr-and-grpo.md"
+        text = page.read_text(encoding="utf-8")
+        core = text.split("## 核心机制", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "prompt",
+            "prefix state",
+            "token action",
+            "response trajectory",
+            "reward model",
+            "verifier",
+            "old policy",
+            "reference policy",
+            "RLHF",
+            "RLVR",
+            "PPO",
+            "GRPO",
+            "RLOO",
+            "zero-variance",
+            "DPO",
+            "offline preference optimization",
+            "pointwise",
+            "expected KL",
+            "cross-sample",
+        ):
+            self.assertIn(term, core)
+        self.assertIn("](../assets/examples/reinforcement-learning/policy_objectives.py)", text)
+        self.assertIn("](https://arxiv.org/abs/1707.06347)", text)
+        self.assertIn("](https://arxiv.org/abs/2305.18290)", text)
+        self.assertIn("](https://arxiv.org/abs/2501.12948)", text)
+
+    def test_vla_page_separates_prediction_from_sim_and_real_closed_loop_evidence(self):
+        text = (RL_ROOT / "vla-robotics-and-closed-loop-rl.md").read_text(
+            encoding="utf-8"
+        )
+        core = text.split("## 核心机制", maxsplit=1)[1].split(
+            "## 训练数据流", maxsplit=1
+        )[0]
+        for term in (
+            "POMDP",
+            "belief",
+            "continuous action",
+            "action chunk",
+            "demonstration",
+            "offline pretraining",
+            "simulation",
+            "world-model rollout",
+            "real deployment data",
+            "safety constraint",
+            "recovery",
+            "distribution shift",
+            "reward design",
+            "imitation success",
+            "human intervention",
+        ):
+            self.assertIn(term, core)
+        for evidence in (
+            "open-loop action prediction",
+            "simulator closed-loop success",
+            "real closed-loop success",
+            "能证明什么",
+        ):
+            self.assertIn(evidence, text)
+
+    def test_index_marks_modern_application_route_readable_and_linked(self):
+        text = (RL_ROOT / "index.md").read_text(encoding="utf-8")
+        course_map = text.split("## 完整学习路线", maxsplit=1)[1].split(
+            "## 按方向进入课程", maxsplit=1
+        )[0]
+        expected_rows = (
+            "| 低成本与模型驱动 | 10. [Offline Reinforcement Learning](offline-reinforcement-learning.md) | 可阅读 |",
+            "| 低成本与模型驱动 | 11. [Model-based RL 与世界模型](rl-for-world-models.md) | 可阅读 |",
+            "| 大模型与具身系统 | 12. [LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md) | 可阅读 |",
+            "| 大模型与具身系统 | 13. [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md) | 可阅读 |",
+        )
+        for row in expected_rows:
+            self.assertIn(row, course_map)
+        self.assertIn(
+            "[连续控制与 SAC](continuous-control-and-sac.md) -> "
+            "[Offline RL](offline-reinforcement-learning.md) -> "
+            "[Model-based RL 与世界模型](rl-for-world-models.md) -> "
+            "[LLM 强化学习](llm-rlhf-rlvr-and-grpo.md) -> "
+            "[VLA 与机器人闭环](vla-robotics-and-closed-loop-rl.md) -> "
+            "[verl](verl-code-flow.md)",
+            text,
+        )
+
     def test_nav_uses_build_safe_course_list(self):
         nav = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
         start = nav.index("  - 强化学习:")
@@ -591,7 +774,10 @@ trajectory batch -> return / advantage / target -> loss -> policy update"""
                 "- Policy Gradient 与 REINFORCE: reinforcement-learning/policy-gradient-and-reinforce.md",
                 "- Actor-Critic、GAE 与 PPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md",
                 "- 连续控制与 SAC: reinforcement-learning/continuous-control-and-sac.md",
-                "- 世界模型中的强化学习: reinforcement-learning/rl-for-world-models.md",
+                "- Offline Reinforcement Learning: reinforcement-learning/offline-reinforcement-learning.md",
+                "- Model-based RL 与世界模型: reinforcement-learning/rl-for-world-models.md",
+                "- LLM 强化学习：RLHF、RLVR 与 GRPO: reinforcement-learning/llm-rlhf-rlvr-and-grpo.md",
+                "- VLA、机器人与闭环强化学习: reinforcement-learning/vla-robotics-and-closed-loop-rl.md",
                 "- verl 训练流程: reinforcement-learning/verl-code-flow.md",
             ],
         )

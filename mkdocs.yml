@@ -138,7 +138,10 @@ nav:
       - Policy Gradient 与 REINFORCE: reinforcement-learning/policy-gradient-and-reinforce.md
       - Actor-Critic、GAE 与 PPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md
       - 连续控制与 SAC: reinforcement-learning/continuous-control-and-sac.md
-      - 世界模型中的强化学习: reinforcement-learning/rl-for-world-models.md
+      - Offline Reinforcement Learning: reinforcement-learning/offline-reinforcement-learning.md
+      - Model-based RL 与世界模型: reinforcement-learning/rl-for-world-models.md
+      - LLM 强化学习：RLHF、RLVR 与 GRPO: reinforcement-learning/llm-rlhf-rlvr-and-grpo.md
+      - VLA、机器人与闭环强化学习: reinforcement-learning/vla-robotics-and-closed-loop-rl.md
       - verl 训练流程: reinforcement-learning/verl-code-flow.md
   - 世界模型与具身智能:
       - 世界模型:

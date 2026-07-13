@@ -1,6 +1,8 @@
 import importlib.util
 import math
 from pathlib import Path
+import subprocess
+import sys
 from unittest import TestCase, skipUnless
 import warnings
 
@@ -32,6 +34,147 @@ def load_module(name: str):
 
 @skipUnless(np is not None, "course examples require NumPy")
 class ReinforcementLearningExampleTests(TestCase):
+    def test_group_advantages_normalizes_each_group_without_mutation(self):
+        objectives = load_module("policy_objectives")
+        one_group = np.array([1.0, 2.0, 4.0])
+        batch = np.array([[1.0, 2.0, 4.0], [10.0, 7.0, 3.0]])
+        snapshots = (one_group.copy(), batch.copy())
+
+        one_result = objectives.group_advantages(one_group)
+        batch_result = objectives.group_advantages(batch)
+
+        self.assertEqual(one_result.shape, one_group.shape)
+        self.assertEqual(batch_result.shape, batch.shape)
+        np.testing.assert_allclose(one_result.sum(), 0.0, atol=1e-12)
+        np.testing.assert_allclose(batch_result.sum(axis=-1), 0.0, atol=1e-12)
+        np.testing.assert_allclose(one_result.std(ddof=0), 1.0, atol=1e-7)
+        np.testing.assert_allclose(batch_result.std(axis=-1, ddof=0), 1.0, atol=1e-7)
+        np.testing.assert_array_equal(one_group, snapshots[0])
+        np.testing.assert_array_equal(batch, snapshots[1])
+
+    def test_group_advantages_returns_exact_zero_for_constant_groups_without_warning(self):
+        objectives = load_module("policy_objectives")
+        rewards = np.array([[3.0, 3.0], [4.0, 6.0]])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result = objectives.group_advantages(rewards)
+
+        np.testing.assert_array_equal(result[0], np.zeros(2))
+        np.testing.assert_allclose(result[1], [-0.99999999, 0.99999999])
+
+    def test_group_advantages_rejects_invalid_inputs(self):
+        objectives = load_module("policy_objectives")
+        cases = [
+            ([1.0], 1e-8),
+            ([[1.0], [2.0]], 1e-8),
+            (np.ones((2, 2, 2)), 1e-8),
+            ([[1.0, 2.0], [3.0]], 1e-8),
+            ([1.0 + 0.0j, 2.0 + 0.0j], 1e-8),
+            ([1.0, np.nan], 1e-8),
+            ([1.0, np.inf], 1e-8),
+            ([1.0, 2.0], 0.0),
+            ([1.0, 2.0], -1.0),
+            ([1.0, 2.0], np.inf),
+            ([1.0, 2.0], 1e-8 + 0.0j),
+            ([1.0, 2.0], np.array([1e-8])),
+        ]
+        for rewards, epsilon in cases:
+            with self.subTest(rewards=rewards, epsilon=epsilon):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error")
+                    with self.assertRaises(ValueError):
+                        objectives.group_advantages(rewards, epsilon)
+
+    def test_sampled_forward_kl_is_pointwise_log_ratio(self):
+        objectives = load_module("policy_objectives")
+        policy_logp = np.array([[-0.2, -0.8], [-1.0, -0.5]])
+        reference_logp = np.array([[-0.5, -0.7], [-1.2, -0.5]])
+
+        result = objectives.sampled_forward_kl(policy_logp, reference_logp)
+
+        np.testing.assert_allclose(result, [[0.3, -0.1], [0.2, 0.0]])
+        self.assertEqual(result.shape, policy_logp.shape)
+        np.testing.assert_array_equal(policy_logp, [[-0.2, -0.8], [-1.0, -0.5]])
+
+    def test_sampled_forward_kl_rejects_broadcasting_and_invalid_values(self):
+        objectives = load_module("policy_objectives")
+        cases = [
+            (np.zeros((2, 1)), np.zeros(2)),
+            (np.zeros(2), np.zeros(3)),
+            (np.array([0.0, np.nan]), np.zeros(2)),
+            (np.zeros(2), np.array([0.0, np.inf])),
+            (np.array([0.0 + 0.0j]), np.zeros(1)),
+            (np.zeros(0), np.zeros(0)),
+        ]
+        for policy_logp, reference_logp in cases:
+            with self.subTest(shapes=(policy_logp.shape, reference_logp.shape)):
+                with self.assertRaises(ValueError):
+                    objectives.sampled_forward_kl(policy_logp, reference_logp)
+
+    def test_clipped_policy_loss_matches_positive_and_negative_exact_cases(self):
+        objectives = load_module("policy_objectives")
+        positive = objectives.clipped_policy_loss(
+            np.array([math.log(1.5)]), np.array([0.0]), np.array([2.0]), 0.2
+        )
+        negative = objectives.clipped_policy_loss(
+            np.array([math.log(0.5)]), np.array([0.0]), np.array([-2.0]), 0.2
+        )
+
+        self.assertAlmostEqual(positive, -2.4)
+        self.assertAlmostEqual(negative, 1.6)
+
+    def test_clipped_policy_loss_validates_exact_shapes_and_finite_real_inputs(self):
+        objectives = load_module("policy_objectives")
+        valid = np.zeros(2)
+        cases = [
+            (np.zeros((2, 1)), valid, valid, 0.2),
+            (valid, np.zeros(1), valid, 0.2),
+            (valid, valid, np.zeros(3), 0.2),
+            (np.array([0.0, np.nan]), valid, valid, 0.2),
+            (valid, np.array([0.0, np.inf]), valid, 0.2),
+            (valid, valid, np.array([0.0 + 0.0j, 1.0]), 0.2),
+            (valid, valid, valid, 0.0),
+            (valid, valid, valid, 1.0),
+            (valid, valid, valid, np.nan),
+            (valid, valid, valid, 0.2 + 0.0j),
+            (valid, valid, valid, np.array([0.2])),
+        ]
+        for args in cases:
+            with self.subTest(shapes=[getattr(value, "shape", None) for value in args]):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error")
+                    with self.assertRaises(ValueError):
+                        objectives.clipped_policy_loss(*args)
+
+    def test_policy_objectives_cli_is_deterministic_and_names_estimator_boundaries(self):
+        script = EXAMPLES / "policy_objectives.py"
+        base_command = [sys.executable, str(script)]
+        default = subprocess.run(base_command, check=True, capture_output=True, text=True)
+        seeded = subprocess.run(
+            [*base_command, "--seed", "7"], check=True, capture_output=True, text=True
+        )
+        repeated = subprocess.run(
+            [*base_command, "--seed", "7"], check=True, capture_output=True, text=True
+        )
+
+        self.assertEqual(default.stdout, seeded.stdout)
+        self.assertEqual(seeded.stdout, repeated.stdout)
+        for field in (
+            "prompt",
+            "raw_reward",
+            "group_advantage",
+            "pointwise_kl_penalty",
+            "sampled log-ratio estimator, not full KL",
+            "clipped_policy_loss",
+        ):
+            self.assertIn(field, seeded.stdout)
+        self.assertIn("zero-variance group -> exact zero advantages", seeded.stdout)
+        loss_line = next(
+            line for line in seeded.stdout.splitlines() if line.startswith("clipped_policy_loss=")
+        )
+        self.assertTrue(math.isfinite(float(loss_line.split("=", maxsplit=1)[1])))
+
     def test_example_readme_owns_tabular_apis_and_exact_runtime_contract(self):
         text = (EXAMPLES / "README.md").read_text(encoding="utf-8")
         for dependency in (
