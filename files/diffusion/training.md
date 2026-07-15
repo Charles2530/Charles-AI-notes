@@ -1,192 +1,252 @@
-# 扩散训练：从加噪到去噪方向场
+# DDPM 数学与训练：从前向高斯链到噪声预测
 
-扩散模型训练的核心不是“从噪声里变出图片”。更准确地说，它训练一个模型：在任意噪声强度下，看着一份被污染的样本，判断它应该往哪个方向移动，才更像真实数据。采样时再把这些局部方向串起来，从纯噪声走回图像、视频、音频或动作轨迹。
+DDPM 把生成问题写成两个方向相反的过程：前向过程用固定高斯转移逐步破坏数据，反向过程用神经网络近似未知的反向条件分布。训练的关键，是利用已知前向过程把变分目标转成不同噪声水平上的监督回归。
 
-这篇只回答一个问题：**为什么主动把好样本加噪，反而能得到一个强生成模型。**
+## 本文解决什么问题
 
-先用一张猫图想象。低噪声时，猫还清楚，模型主要学修边缘、毛发和颜色；中噪声时，主体轮廓开始模糊，模型要判断“这团灰影大概率是什么结构”；高噪声时，图像几乎像随机点，模型学的是从无结构噪声往数据分布移动的粗方向。扩散训练的知识含量就在这里：它把一次很难的生成问题，拆成很多不同噪声尺度下的局部修正问题。
+本文完整连接六个对象：逐步前向转移 \(q(x_t\mid x_{t-1})\)、任意时刻的闭式边缘 \(q(x_t\mid x_0)\)、可计算的后验 \(q(x_{t-1}\mid x_t,x_0)\)、需要学习的反向分布 \(p_\theta(x_{t-1}\mid x_t)\)、噪声预测 loss，以及从 \(x_T\) 到 \(x_0\) 的 DDPM 采样算法。
 
-## 先拆楼，再学建楼
+本文采用离散时间、方差保持（variance preserving）DDPM 记号。连续噪声尺度、EDM preconditioning、score SDE 和 Flow Matching 在后续文章中单独处理。
 
-DDPM 可以先按“拆楼 / 建楼”的直觉理解。直接从随机噪声一次性生成样本，相当于拿一堆砖瓦水泥直接造楼，跨度太大；但把一栋楼按固定规则一步步拆成材料，就容易多了。扩散模型的前向过程就是这个人为设计的拆楼过程：从真实样本 \(x_0\) 出发，一点点加入噪声，直到 \(x_T\) 接近标准高斯噪声。
+## 前置知识
 
-关键好处是，拆楼过程完全由我们控制。训练时不需要知道真实数据分布的密度，也不需要直接学习“噪声到图像”的大跳跃；只要随机选一个时间步，把 \(x_0\) 和噪声按该时间步的系数混合成 \(x_t\)，再让模型判断这一步应该怎样往回修。采样阶段的建楼过程，就是把这些学到的小步反向修正串起来。
+- [扩散模型基础](foundations-and-core-intuition.md)：概率路径、局部预测和采样轨迹。
+- [概率分布与条件概率](../prerequisite-math/probability-distributions-and-expectation.md)：高斯分布、条件分布和期望。
+- [潜变量与生成目标](../prerequisite-math/latent-likelihood-and-generative-objectives.md)：对数似然、潜变量和变分下界。
 
-这个类比还提醒一件事：DDPM 虽然沿用了“扩散模型”这个名字，但它和早期依赖能量模型、score matching、Langevin dynamics 的扩散路线不是同一套工程入口。DDPM 更像一个人为设计的“渐变过程”：先定义怎样从数据渐变到噪声，再训练反向渐变。理解了这一点，后面的 DDIM、DPM-Solver、Consistency、Flow Matching 和蒸馏方法就都可以看成在回答同一个问题：能不能少走一些中间层，同时不把结构、细节和条件控制弄丢。
+统一记号如下：
 
-## 前向加噪是人为造出来的监督任务
+| 符号 | 含义 |
+| --- | --- |
+| \(x_0\) | 来自真实数据分布的干净样本 |
+| \(x_t\) | 第 \(t\) 个噪声水平的随机变量 |
+| \(\beta_t\) | 第 \(t\) 步加入的方差，满足 \(0<\beta_t<1\) |
+| \(\alpha_t=1-\beta_t\) | 单步保留的信号方差比例 |
+| \(\bar\alpha_t=\prod_{s=1}^{t}\alpha_s\) | 从 0 到 \(t\) 的累计信号比例 |
+| \(\epsilon\sim\mathcal N(0,I)\) | 标准高斯噪声 |
+| \(q\) | 固定的前向过程及其可计算分布 |
+| \(p_\theta\) | 参数为 \(\theta\) 的反向生成模型 |
 
-DDPM 的前向过程从干净样本 \(x_0\) 出发，逐步加入高斯噪声。常见闭式写法是：
+## 核心机制
 
-\[
-q(x_t \mid x_0)=\mathcal{N}\left(\sqrt{\bar{\alpha}_t}x_0,\,(1-\bar{\alpha}_t)I\right)
-\]
+### 逐步前向高斯链
 
-这行公式的意思是：给定干净样本 \(x_0\)，第 \(t\) 个噪声水平的样本 \(x_t\) 服从一个高斯分布。均值是被缩小的干净样本 \(\sqrt{\bar{\alpha}_t}x_0\)，方差是 \((1-\bar{\alpha}_t)I\)。当 \(\bar{\alpha}_t\) 接近 1，样本还很干净；当 \(\bar{\alpha}_t\) 接近 0，样本接近纯噪声。
-
-训练时更常用显式采样形式：
-
-\[
-x_t=\sqrt{\bar{\alpha}_t}x_0+\sqrt{1-\bar{\alpha}_t}\epsilon,
-\qquad
-\epsilon\sim\mathcal{N}(0,I)
-\]
-
-这行式子非常关键。我们知道 \(x_0\)，也知道自己采样了哪份噪声 \(\epsilon\)，还知道时间步 \(t\)。所以训练数据可以无限构造：随机选一张真图，随机选一个噪声强度，随机采一份噪声，把它们混成 \(x_t\)，然后让模型从 \(x_t,t\) 里判断这份污染怎么修。
-
-这就是扩散训练稳定的原因之一。真实数据分布 \(p_{\text{data}}\) 很复杂，直接学它的密度很难；但“我刚加进去的噪声是什么”是一个明确的监督信号。模型学会这个监督任务后，采样时就能把预测噪声转成往数据分布走的方向。
-
-为什么前向过程常要求数据系数和噪声系数配合得很规整？一个朴素解释是：每一步都把样本拆成“剩余楼体 + 新材料”。如果单步写成 \(x_t=\alpha_t x_{t-1}+\beta_t\epsilon_t\)，让 \(\alpha_t^2+\beta_t^2=1\) 可以让多个独立高斯噪声叠加后仍然合并成一个总高斯噪声。这样就能直接从 \(x_0\) 闭式采样任意 \(x_t\)，不必真的一步步拆到第 \(t\) 层。
-
-![DDPM graphical model 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
-
-<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达前向过程逐步加噪，反向过程逐步去噪。本站使用这张图说明：训练时前向加噪由我们控制，采样时只保留学到的反向去噪模型。</small>
-
-看这张图时，左到右是固定的 noising chain，右到左是要学习的 denoising chain。扩散模型的巧妙之处不是“噪声很神奇”，而是前向过程让每个时间步都变成可监督的去噪学习问题。
-
-## 预测噪声不是唯一目标
-
-DDPM 常见训练目标是预测噪声：
+DDPM 规定一个马尔可夫前向过程：
 
 \[
-\mathcal{L}_{\epsilon}
-=\mathbb{E}_{x_0,\epsilon,t}\left[\|\epsilon-\epsilon_\theta(x_t,t)\|_2^2\right]
+q(x_t\mid x_{t-1})
+=\mathcal N\!\left(x_t;\sqrt{\alpha_t}x_{t-1},\beta_t I\right),
+\qquad \alpha_t=1-\beta_t.
 \]
 
-白话说：模型输入 \(x_t\) 和 \(t\)，输出它认为被加进去的噪声 \(\epsilon_\theta(x_t,t)\)。如果猜得接近真实噪声 \(\epsilon\)，loss 就小。这个目标看起来像普通 MSE，但它的作用不只是“去掉噪点”。在高斯加噪设定下，噪声方向和 score 方向可以互相换算，模型预测噪声其实也在学习当前噪声分布的概率梯度方向。
-
-从“建楼”角度看，最直接的目标似乎是让模型从 \(x_t\) 回归 \(x_{t-1}\)。但这样会让训练目标里混入更多随机变量，估计方差更大。DDPM 最后改成预测噪声，本质上是在利用高斯噪声的可合并性，把反向一步修正转换成更稳定的监督任务。模型不是因为“噪声更有意义”才预测噪声，而是因为在这套前向构造下，预测噪声更容易得到低方差、可复用的训练信号。
-
-如果模型能预测噪声，就能反推出干净样本估计：
+等价的采样式为：
 
 \[
-\hat{x}_0=
-\frac{x_t-\sqrt{1-\bar{\alpha}_t}\,\epsilon_\theta(x_t,t)}
-{\sqrt{\bar{\alpha}_t}}
+x_t=\sqrt{\alpha_t}x_{t-1}+\sqrt{\beta_t}\epsilon_t,
+\qquad \epsilon_t\sim\mathcal N(0,I).
 \]
 
-这说明 \(\epsilon\)-prediction 和 \(x_0\)-prediction 不是完全不同的世界，而是同一个加噪公式的不同坐标。模型也可以预测 score：
+每一步缩小已有信号，再加入独立高斯噪声。若 \(\beta_t\) 足够小并且累计步数足够多，\(x_T\) 会接近标准高斯。这个过程没有可学习参数；noise schedule 完全由训练配置规定。
+
+![DDPM 前向与反向图模型](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="700" }
+
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。左到右是固定前向链，右到左是需要学习的反向链。图能说明条件依赖关系，不能说明实际训练必须逐步生成所有中间状态。</small>
+
+### 任意时间步可以闭式采样
+
+独立高斯噪声在线性组合下仍是高斯，因此可以把前 \(t\) 步合并：
 
 \[
-s_\theta(x_t,t)\approx \nabla_{x_t}\log p_t(x_t)
+q(x_t\mid x_0)
+=\mathcal N\!\left(
+x_t;\sqrt{\bar\alpha_t}x_0,(1-\bar\alpha_t)I
+\right).
 \]
 
-score 表示在当前噪声水平下，往哪个方向移动会让样本更接近高概率区域。还可以预测 velocity \(v\)，它常被理解为在 \((x_0,\epsilon)\) 之间换一个更适合训练和采样的坐标。现代视频模型、DiT 和 flow/rectified flow 路线经常讨论 velocity，就是因为少步采样和强 guidance 下，输出坐标会影响优化几何和数值稳定性。
-
-所以不要把“预测噪声”背成唯一答案。更重要的问题是：这个参数化是否让不同 SNR 区间的训练信号平衡，是否适合采样器，是否在 guidance 或视频长时一致性下稳定。
-
-## Noise schedule 决定模型在哪些难度上练习
-
-Noise schedule 决定 \(\bar{\alpha}_t\) 或噪声标准差 \(\sigma_t\) 随时间如何变化。它不是装饰超参，而是在决定训练任务的难度分布。
-
-低噪声区接近细节修复：边缘、颜色、局部纹理还在，模型需要做精修。高噪声区接近语义重建：局部证据很少，模型要从条件和数据先验里猜全局结构。中间噪声区连接两者，是很多结构和语义开始形成的地方。
-
-![Improved DDPM VLB terms 原论文图](../assets/images/paper-figures/diffusion/improved-ddpm-figure-2-vlb-terms.png){ width="660" }
-
-<small>图源：[Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672)，Figure 2。原图表达不同时间步对 variational lower bound 的贡献差异。本站使用它说明：不同噪声区间的训练信号强弱不同，noise schedule 和 loss weighting 会改变模型把容量花在哪里。</small>
-
-如果 schedule 太快把样本推到高噪声，模型可能缺少学习中间结构的机会；如果太慢，训练和采样步数会很长。Improved DDPM 推动 cosine schedule，是因为它让信号衰减更平滑。EDM 进一步把噪声尺度、preconditioning、采样器和 NFE 放进同一个设计空间里看。
-
-![EDM sampler design space 原论文图](../assets/images/paper-figures/diffusion/edm-figure-2-sampler-design-space.png){ width="920" }
-
-<small>图源：[Elucidating the Design Space of Diffusion-Based Generative Models](https://arxiv.org/abs/2206.00364)，Figure 2。原图表达噪声水平、采样轨迹和 denoising network 之间的设计空间。本站使用它说明：扩散训练和采样不是两个孤立模块，噪声参数化会直接影响采样器如何走。</small>
-
-对图像、视频和动作扩散来说，schedule 的意义也不同。图像生成要平衡全局语义和高频纹理；视频生成还要让时间一致性跨噪声区间保持；动作扩散要避免把多峰可行动作平均成不可执行轨迹。噪声日程和 loss weighting 实际是在分配模型容量。
-
-## 条件不是后处理，训练时就要进入去噪器
-
-无条件扩散只学 \(p(x)\)。条件扩散学的是 \(p(x\mid c)\)，条件 \(c\) 可以是类别、文本、图像、mask、深度、姿态、动作或历史状态。训练时 denoiser 通常写成：
+用重参数化形式采样：
 
 \[
-\epsilon_\theta(x_t,t,c)
+x_t
+=\sqrt{\bar\alpha_t}x_0
++\sqrt{1-\bar\alpha_t}\epsilon,
+\qquad \epsilon\sim\mathcal N(0,I).
 \]
 
-这表示模型预测噪声时不仅看带噪样本和时间步，还要读取条件。文本到图像里的 cross-attention、ControlNet 里的结构条件、视频模型里的首帧或轨迹条件、动作扩散里的观测状态，都是在回答同一个问题：去噪时模型到底能用什么证据。
+这条公式解释了训练为何可以随机抽一个 \(t\)，直接从 \(x_0\) 构造 \(x_t\)。模型仍覆盖整条路径，因为不同 batch 会采到不同时间步；单个训练样本不需要真的执行 \(t\) 次加噪。
 
-Classifier-free guidance 也要从训练说起。训练时模型有一部分样本会把条件丢掉，使用空条件 \(\varnothing\)。这样同一个网络同时学到条件预测和无条件预测：
+![DDPM 数据与噪声系数](../assets/images/paper-figures/diffusion/ddpm-orthogonal-coefficients.svg){ width="760" }
+
+<small>这张本站图把 \(x_t\) 画成数据分量和噪声分量的系数组合，用来读取 \(\sqrt{\bar\alpha_t}\) 与 \(\sqrt{1-\bar\alpha_t}\) 的消长。它是参数化直觉，不是在断言真实图像向量与某次噪声样本在像素空间必然正交。</small>
+
+### 已知 \(x_0\) 时，单步后验仍是高斯
+
+训练推导中 \(x_0\) 已知。利用高斯条件分布，可以得到：
 
 \[
-\epsilon_\theta(x_t,t,c),\qquad \epsilon_\theta(x_t,t,\varnothing)
+q(x_{t-1}\mid x_t,x_0)
+=\mathcal N\!\left(
+x_{t-1};\tilde\mu_t(x_t,x_0),\tilde\beta_t I
+\right),
 \]
 
-采样时再把条件带来的方向差放大。也就是说，guidance 不是纯后处理魔法，它依赖训练时模型见过“有条件”和“无条件”两种输入。若条件 dropout、文本质量、条件编码器或跨模态接口本身不好，采样时再把 guidance scale 拉高，只会放大一个不可靠方向。
+其中：
 
-## 采样把局部方向串成生成轨迹
+\[
+\tilde\mu_t(x_t,x_0)
+=
+\frac{\sqrt{\bar\alpha_{t-1}}\beta_t}{1-\bar\alpha_t}x_0
++
+\frac{\sqrt{\alpha_t}(1-\bar\alpha_{t-1})}{1-\bar\alpha_t}x_t,
+\]
 
-训练学到的是局部方向：给定 \(x_t,t,c\)，模型告诉你当前应该怎么修。采样时从 \(x_T\sim \mathcal{N}(0,I)\) 开始，按照某个时间网格反复调用模型，把局部方向串成从噪声到数据的轨迹。
+\[
+\tilde\beta_t
+=\frac{1-\bar\alpha_{t-1}}{1-\bar\alpha_t}\beta_t.
+\]
 
-![DDPM progressive generation 原论文图](../assets/images/paper-figures/diffusion/ddpm-figure-14-progressive-generation.jpg){ width="670" }
+这个后验说明：如果知道干净样本，反向一步的均值和方差都能直接计算。但生成时只有 \(x_t\)，不知道对应的 \(x_0\)，所以需要模型提供足够的信息来近似反向均值。
 
-<small>图源：[DDPM](https://arxiv.org/abs/2006.11239)，Figure 14。原图表达从噪声到图像的逐步生成过程。本站使用它说明：采样不是一次性解码，而是在不同噪声尺度上逐步建立大结构、局部形状和细节。</small>
+### 学习反向条件分布
 
-DDPM 采样保留随机反向链，通常步数多；DDIM 改变采样路径，可以跳步；Score/SDE 和 probability flow ODE 把采样看成连续时间轨迹；DPM-Solver、Euler、Heun 等方法则是在有限 NFE 下更好地积分这条方向场。
+DDPM 用参数化高斯分布近似真实反向条件：
 
-这也解释少步采样为什么难。1000 步时，每一步只做小修正；10 步或 4 步时，每一步要跨越更大的分布距离。模型在训练时如果只学过细小步长的局部修正，少步采样就容易走偏。Consistency model、LCM、DMD、DMD2、Rectified Flow 等方法要重新设计训练目标或蒸馏目标，本质上是在训练一个更适合跨大步的学生模型或更直的生成路径。
+\[
+p_\theta(x_{t-1}\mid x_t)
+=\mathcal N\!\left(
+x_{t-1};\mu_\theta(x_t,t),\Sigma_t
+\right).
+\]
 
-## 表示空间决定扩散在哪儿发生
+原始 DDPM 常固定反向方差，只学习均值。把均值改写成噪声预测形式：
 
-早期扩散可以直接跑在像素空间，但高分辨率图像和视频会很贵。Latent diffusion 的关键是先用 VAE 把图像压到 latent，再在 latent 上扩散。这样空间尺寸更小，训练和采样更便宜；代价是 VAE 的压缩会限制细节，解码器也会成为质量上限的一部分。
+\[
+\mu_\theta(x_t,t)
+=\frac{1}{\sqrt{\alpha_t}}
+\left(
+x_t-
+\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}
+\epsilon_\theta(x_t,t)
+\right).
+\]
 
-DiT 把 denoiser 从 U-Net 换成 Transformer。图像 latent 被切成 patch token，时间步和文本条件进入 Transformer block。这里扩散目标和 Transformer 架构分工很清楚：扩散定义训练任务和采样轨迹，Transformer 负责建模 token 间关系。
+网络 \(\epsilon_\theta\) 读取带噪样本和时间步，预测构造 \(x_t\) 时使用的标准高斯噪声。给定噪声预测，也能反推出干净样本估计：
 
-读视频扩散或世界模型时，表示问题更尖锐。视频 latent 不只要像素好看，还要保持物体身份、运动、遮挡和长时一致性。若加入动作条件，模型还必须学到“不同动作会导致不同未来”。一个生成漂亮短视频的模型，不等于能作为世界模型给 planner 使用；它还需要动作敏感性、状态接口和闭环评测。
+\[
+\hat x_0(x_t,t)
+=\frac{x_t-\sqrt{1-\bar\alpha_t}\epsilon_\theta(x_t,t)}
+{\sqrt{\bar\alpha_t}}.
+\]
 
-## 训练日志应该看什么
+因此 ε-prediction 和 \(x_0\)-prediction 描述的是同一局部信息的不同坐标，但优化权重和数值稳定性并不自动相同。
 
-扩散训练不能只看一条平均 MSE。更实用的日志至少要按时间步或 SNR 分桶：
+### 从变分下界到噪声预测 MSE
+
+反向生成模型的联合分布为：
+
+\[
+p_\theta(x_{0:T})
+=p(x_T)\prod_{t=1}^{T}p_\theta(x_{t-1}\mid x_t).
+\]
+
+最大化数据对数似然可以转成对前向路径取期望的变分下界。中间时间步对应真实后验 \(q(x_{t-1}\mid x_t,x_0)\) 与模型反向分布 \(p_\theta(x_{t-1}\mid x_t)\) 的 KL 项。两者都是高斯，在固定方差和噪声参数化下，均值匹配可转成带时间权重的噪声预测误差。
+
+DDPM 实践中常用简化目标：
+
+\[
+\mathcal L_{\text{simple}}
+=\mathbb E_{x_0,t,\epsilon}
+\left[
+\lVert\epsilon-\epsilon_\theta(x_t,t)\rVert_2^2
+\right].
+\]
+
+这里的监督目标 \(\epsilon\) 是训练时真实采样的噪声。简化目标和完整 VLB 有明确联系，但不能把“无权重 MSE”说成与每个 VLB 项数值完全相同；不同方差参数化、时间权重和 learned variance 会改变目标。
+
+### 时间步和网络架构的接口
+
+同一个 \(x_t\) 数值在不同 \(t\) 下代表不同信噪比，因此网络必须读取时间步或噪声嵌入。无条件模型接口为：
+
+\[
+\epsilon_\theta(x_t,t),
+\]
+
+条件模型则为：
+
+\[
+\epsilon_\theta(x_t,t,c).
+\]
+
+扩散目标不要求网络必须是 U-Net。U-Net、DiT 或其他主干只要能处理样本表示、时间信息和条件，就能承担 denoiser。组件细节见[架构与 Stable Diffusion](architecture-and-stable-diffusion.md)。
+
+## DDPM 训练算法
 
 ```text
-loss by timestep / SNR bucket
-sample quality at fixed prompts and fixed seeds
-condition dropout behavior
-guidance scale sweep
-high-noise semantic failures
-low-noise texture / artifact failures
-采样器和真实 NFE 下的质量
+repeat:
+    x_0 ~ p_data
+    t ~ Uniform({1, ..., T})
+    epsilon ~ Normal(0, I)
+    x_t = sqrt(alpha_bar_t) * x_0
+          + sqrt(1 - alpha_bar_t) * epsilon
+    epsilon_pred = epsilon_theta(x_t, t, condition)
+    loss = mean_square_error(epsilon_pred, epsilon)
+    update theta with gradient(loss)
 ```
 
-如果低噪声 loss 很好但高噪声区差，样本可能纹理漂亮但主体乱；如果高噪声区正常而低噪声区差，构图可能对但细节糊、边缘脏。若训练 loss 正常但强 guidance 下崩，问题可能不在 denoiser 单步回归，而在条件方向、采样器和少步轨迹的组合。
+训练只需网络一次前向和一次反向，不随 \(t\) 线性增加计算。若时间步采样不是均匀分布，loss weighting 必须与采样分布一起解释，否则某些噪声区间会被隐式放大或削弱。
 
-视频和动作扩散还要加额外桶：身份一致性、运动连续性、遮挡再出现、动作条件敏感性、轨迹平滑度、闭环成功率。对世界模型而言，平均视觉指标很容易掩盖“动作后果不对”。
+## DDPM 采样算法
 
-## 容易误读的地方
+先从简单先验采样：
 
-**误解一：扩散模型就是不断去噪。**
-去噪只是表层动作。真正决定效果的是前向噪声过程、预测目标、noise schedule、条件接口、采样器和表示空间。
+\[
+x_T\sim\mathcal N(0,I).
+\]
 
-**误解二：预测噪声是唯一正确目标。**
-\(\epsilon\)、\(x_0\)、score、velocity 都是描述同一去噪问题的不同坐标。它们会影响训练权重、采样稳定性和少步蒸馏。
+然后对 \(t=T,T-1,\ldots,1\) 执行：
 
-**误解三：少步采样只是少跑几步。**
-步数少意味着每一步跨越更大的分布距离。没有合适 solver、distillation 或路径重构，少步会牺牲质量和稳定性。
+```text
+epsilon_pred = epsilon_theta(x_t, t, condition)
+mean = 1 / sqrt(alpha_t) * (
+    x_t - beta_t / sqrt(1 - alpha_bar_t) * epsilon_pred
+)
+if t > 1:
+    z ~ Normal(0, I)
+    x_{t-1} = mean + sqrt(posterior_variance_t) * z
+else:
+    x_0 = mean
+```
 
-**误解四：视频扩散自然就是世界模型。**
-没有动作条件、状态接口和闭环评测时，视频扩散更像生成器。世界模型还要证明未来预测能支持决策。
+这里采用 \(\tilde\beta_t\) 作为 posterior variance 的教学版本。不同实现可能使用 \(\beta_t\)、learned variance 或其他插值；比较 sampler 时必须同时记录方差约定和时间下标。
 
-## 读完以后怎么判断
+![DDPM 渐进生成](../assets/images/paper-figures/diffusion/ddpm-figure-14-progressive-generation.jpg){ width="700" }
 
-扩散训练的核心是把生成建模转成可监督的方向场学习。前向加噪由我们控制，所以模型可以在每个噪声水平学习“如何往数据分布修正”；预测 \(\epsilon\)、\(x_0\)、score 或 \(v\) 是不同坐标选择；noise schedule 决定不同难度区间的训练权重；条件接口决定去噪时能使用什么证据；采样器和蒸馏决定这些局部方向如何变成实际生成轨迹。
+<small>图源：[DDPM](https://arxiv.org/abs/2006.11239)，Figure 14。图展示反向链中的样本逐渐出现结构；它不能证明每个时间区间只负责一种固定语义或纹理。</small>
 
-读扩散论文时，先问五件事：数据在哪个表示空间里加噪；模型预测什么目标；时间步或噪声尺度如何采样；条件如何进入 denoiser；推理时用什么 sampler 和多少 NFE。问完这五件事，DDPM、latent diffusion、DiT、视频扩散和动作扩散就会落到同一条主线上。
+## 常见误解与失效边界
 
-## 外部精读
+**把 \(\beta_t\) 当成噪声标准差。**在上述记号中 \(\beta_t\) 是单步方差，采样噪声项使用 \(\sqrt{\beta_t}\)。代码里混淆两者会直接破坏 schedule。
 
-- [科学空间：生成扩散模型漫谈（一）：DDPM = 拆楼 + 建楼](https://kexue.fm/archives/9119)：适合先建立“人为前向拆解、学习反向建造”的 DDPM 直觉。
-- [零推导理解 Diffusion 和 Flow Matching](https://zhuanlan.zhihu.com/p/11228697012)：适合作为直观阅读入口，把 Diffusion / Flow Matching 放到同一条数据-噪声路径里看。
-- [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)：把 DDPM、score、SDE、采样和 guidance 放在同一条解释链里。
-- [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion)：用 PyTorch 代码把 forward process、noise schedule、loss 和采样过程对上。
-- [DDPM](https://arxiv.org/abs/2006.11239)：理解前向加噪、反向去噪和基本训练目标。
-- [Improved DDPM](https://arxiv.org/abs/2102.09672)：理解 cosine schedule、learned variance 和 VLB 贡献。
-- [Score-Based Generative Modeling through SDEs](https://arxiv.org/abs/2011.13456)：理解 score field、reverse SDE 和 probability flow ODE。
-- [EDM](https://arxiv.org/abs/2206.00364)：把噪声尺度、preconditioning、sampler 和 NFE 放进同一个设计空间。
-- [Latent Diffusion Models](https://arxiv.org/abs/2112.10752)：理解为什么现代高分辨率生成常在 latent space 里训练。
-- [DiT](https://arxiv.org/abs/2212.09748)：理解扩散目标如何和 Transformer denoiser 结合。
+**把 \(\alpha_t\) 和 \(\bar\alpha_t\) 混用。**前者是单步系数，后者是累计乘积。闭式构造 \(x_t\) 使用 \(\bar\alpha_t\)，反向均值同时使用单步和累计量。
+
+**在 \(t=0\) 继续加入随机噪声。**最终一步应返回均值估计；否则生成结果会被额外污染。不同代码使用 0-based 或 1-based 时间下标，必须先确认边界。
+
+**认为训练 MSE 可以单独评价生成质量。**MSE 是局部预测指标；真实结果还受 VAE、条件、时间离散、solver、CFG 和误差累积影响。
+
+**把 ε、score 和 \(v\) 当成完全独立模型。**在给定路径和系数时它们可以转换，但 loss weighting、preconditioning 和有限精度行为不同。转换公式见[噪声日程与参数化](noise-schedules-and-parameterization.md)。
+
+## 检查理解
+
+1. 从 \(q(x_t\mid x_{t-1})\) 到 \(q(x_t\mid x_0)\) 的闭式形式为什么依赖高斯噪声可合并性？
+2. 为什么 \(q(x_{t-1}\mid x_t,x_0)\) 在训练推导中可计算，而生成时不能直接使用？
+3. 噪声预测怎样进入反向均值 \(\mu_\theta\)？
+4. 简化 MSE 与完整变分下界是什么关系，为什么不能说二者逐项数值相等？
+5. 代码里将 \(\alpha_t\) 写成 \(\bar\alpha_t\) 会影响哪几个步骤？
 
 ## 相关阅读与下一步
 
-- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
-- 站内下一步：[扩散模型专题](index.md)。
-- 站内下一步：[扩散方法对比表](comparison-table.md)。
-- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。
+- 系统实现：[架构与 Stable Diffusion](architecture-and-stable-diffusion.md)。
+- 代码映射：[最小 DDPM 实现](minimal-ddpm-implementation.md)。
+- 参数化扩展：[噪声日程与参数化](noise-schedules-and-parameterization.md)。
+- 连续时间扩展：[Score Matching 到 SDE](score-matching-sde-and-probability-flow.md)。
+- 原始来源：[DDPM](https://arxiv.org/abs/2006.11239)、[Improved DDPM](https://arxiv.org/abs/2102.09672)。
+- 返回：[扩散模型专题](index.md)。

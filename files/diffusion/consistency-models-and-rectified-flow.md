@@ -1,200 +1,125 @@
-# 一致性模型与 Rectified Flow：终点映射和速度场不是一回事
+# Consistency Models 与 Flow：终点映射和局部速度的边界
 
-少步生成经常被讲成“把 50 步变成 4 步、1 步”。这个说法太粗。真正要分清的是：模型到底在学什么对象。
+Consistency Models、LCM、Flow Matching 和 Rectified Flow 都能服务少步生成，但它们学习的对象不同。一致性路线学习轨迹上不同时间点到同一终点的映射；Flow 路线学习当前位置的局部速度，再由 ODE solver 积分出终点。两者可以共享教师轨迹或相同端点分布，不能因此视为同一个训练目标。
 
-这篇只回答一个问题：**Consistency / LCM 和 Rectified Flow / Flow Matching 都能服务少步生成，但它们为什么不是同一种方法？**
+## 本文解决什么问题
 
-一个更好的抓手是：一致性模型学的是“同一条生成轨迹上的不同噪声点，应该映射到同一个终点”；Flow / Rectified 路线学的是“从噪声到数据的连续路径上，每个点应该沿哪个速度走”。前者更像学一个跨噪声层级的终点函数，后者更像学一张运输速度场。
+本文集中回答三个问题：一致性函数的约束是什么；LCM 如何把一致性蒸馏接入 latent diffusion；它与 Flow Matching、Rectified Flow 和普通 sampler 加速分别处在哪一层。
 
-## 先看多步扩散到底慢在哪里
+Flow 的条件速度、边缘速度、ODE 与 reflow 推导统一见 [Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)，本文不重复展开。
 
-普通扩散采样从高噪声状态 \(x_T\) 出发，经过很多小步到达干净样本 \(x_0\)：
+## 前置知识
+
+- [扩散模型基础](foundations-and-core-intuition.md)：模型、路径和 sampler 的分工。
+- [采样与推理加速](inference.md)：多步轨迹、NFE 与数值误差。
+- [Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)：局部速度和 ODE 生成接口。
+
+## 核心机制
+
+### 一致性函数学习同轨迹的共同终点
+
+设 \(x_t\) 与 \(x_s\) 位于同一条 probability flow ODE 或教师轨迹上。一致性函数 \(f_\theta\) 希望满足：
 
 \[
-x_T\rightarrow x_{t_1}\rightarrow x_{t_2}\rightarrow\cdots\rightarrow x_0
+f_\theta(x_t,t)\approx f_\theta(x_s,s).
 \]
 
-\(x_T\) 是几乎纯噪声，\(x_0\) 是最终图像或视频 latent，中间的 \(x_{t_i}\) 是模型和采样器一步步修正后的状态。多步采样慢，但它有一个很重要的好处：每一步只承担一小段纠错。
-
-少步方法要解决的不是“循环写少一点”，而是下面这件事：当中间状态变少，每一步都变成大跳时，模型怎样不丢全局结构、条件控制、细节和分布覆盖。
-
-## 一致性模型：同一条轨迹应指向同一个终点
-
-一致性模型把注意力放在终点映射上。设 \(f_\theta(x_t,t)\) 是模型，输入是一条生成轨迹上的某个带噪状态 \(x_t\) 和时间 \(t\)，输出是对干净样本的估计。理想情况是：
+它不是要求两个带噪状态相同，而是要求它们映射到同一个数据端结果。边界条件提供锚点：
 
 \[
-f_\theta(x_t,t)\approx x_0
+f_\theta(x_0,0)=x_0.
 \]
 
-这里 \(f_\theta\) 不再只是预测下一小步，而是尽量回答：“如果从当前噪声层级直接看终点，这条轨迹最后应该是什么？”
+没有边界锚点，“所有时间输出一致”并不能保证输出落在正确数据样本上。实际参数化常把 skip connection 和可学习分支组合起来，使边界条件由结构保证，而不只依靠损失学出。
 
-一致性约束更关键。若 \(x_t\) 和 \(x_s\) 来自同一条 probability-flow ODE 或教师采样轨迹上的两个时间点，那么它们虽然噪声强度不同，但应该回到同一个干净样本：
+### 训练来源：独立训练与教师蒸馏
+
+Consistency Models 可以采用两类训练方式：
+
+- consistency training 从数据与噪声构造相邻时间点，并通过数值近似形成一致性目标；
+- consistency distillation 使用已训练的 diffusion/score 教师，在教师 ODE 轨迹上产生配对状态。
+
+一个抽象的自蒸馏损失是：
 
 \[
-f_\theta(x_t,t)\approx f_\theta(x_s,s)
-\]
-
-\(x_t\) 和 \(x_s\) 可以理解为同一辆车在同一条路上的两个位置，\(f_\theta\) 输出的是“这辆车最终要到的目的地”。一致性的意思不是两个 noisy latent 长得一样，而是它们经过模型后指向同一个终点。
-
-训练时常见的损失可以写成：
-
-\[
-\mathcal{L}_{\mathrm{cons}}
+\mathcal L_{\mathrm{cons}}
 =
-\mathbb{E}_{(x_t,x_s)}
-\left[
-\|f_\theta(x_t,t)-\mathrm{sg}(f_\theta(x_s,s))\|_2^2
-\right]
+\mathbb E\left[
+d\!\left(
+f_\theta(x_{t_{n+1}},t_{n+1}),
+\operatorname{sg}\!\left(f_{\theta^-}(\hat x_{t_n},t_n)\right)
+\right)
+\right],
 \]
 
-期望符号表示对很多轨迹点对取平均；平方距离让两个输出靠近；\(\mathrm{sg}\) 表示 stop-gradient，意思是右边那一路只作为目标，不让梯度从那里反向修改，避免两个分支互相追着漂。论文实现会有 EMA、边界条件和参数化细节，但这条式子已经抓住核心：同一条轨迹不同时间点的终点估计要一致。
+其中 \(\hat x_{t_n}\) 由教师或数值一步从 \(x_{t_{n+1}}\) 得到，\(\theta^-\) 常表示 EMA target network，\(\operatorname{sg}\) 表示 stop-gradient。距离函数、时间离散和参数化会影响稳定性，不能把上式当成所有实现逐项相同的唯一配方。
 
-边界条件也很重要：
+### 一步生成与少步生成
 
-\[
-f_\theta(x_0,0)=x_0
-\]
+从高噪声状态直接调用一次 \(f_\theta(x_T,T)\) 可以得到一步样本；也可以在若干下降的时间点之间交替加入受控噪声并调用一致性函数，形成少步生成。少步模式让模型获得中途纠错机会，通常在延迟与质量之间更容易取得平衡。
 
-如果输入已经是干净样本，模型不应该再改它。没有这个锚点，一致性只会变成“大家输出一样”，但不保证输出的是正确图像。
+“支持一步”不等于“一步与教师完全等价”。跨度增大后，语义、局部结构、文字、条件控制和分布覆盖都可能退化。验收必须固定真实步数、条件强度和端到端延迟，而不是只比较 sampler 循环次数。
 
-## LCM 把一致性接到 latent diffusion
+### LCM：latent diffusion 上的一致性蒸馏
 
-Consistency Models 提供了少步映射的基本思路，Latent Consistency Models（LCM）把它接进 latent diffusion 生态。普通 Stable Diffusion 一类模型在 latent 空间里去噪，LCM 的目标是让学生在同一条教师 ODE 轨迹上学到一致映射，从而 1 到 4 步也能得到可用图像。
+Latent Consistency Models 把一致性蒸馏应用到 latent diffusion：使用预训练 latent diffusion 模型形成教师 ODE 轨迹，让学生学习少步一致映射。外层系统仍包含文本编码器、latent 表示和 VAE decoder；改变的是 latent 生成主干的训练与采样接口。
 
-LCM 为什么在工程上受欢迎？因为它不是重新发明完整生成系统，而是把已有 latent diffusion 教师蒸馏成快速学生，还可以通过 LoRA 形式进入原有生态。对交互预览、草图探索、低延迟 UI，这很有吸引力。
+LCM-LoRA 进一步把蒸馏得到的加速能力表示为 LoRA 参数，使它能接入一部分已有模型生态。兼容性仍依赖基础权重、prediction type、scheduler、LoRA 合并方式和条件模块，不能把任意 LCM-LoRA 当作通用的四步开关。
 
-但要记住它的代价：终点一致不等于细节无损。复杂 prompt、文字、局部编辑、ControlNet、参考图一致性和高频纹理，都可能在少步映射里被压平。读 LCM/Consistency 的结果时，不要只问 4 步是否“能出图”，还要看强条件、长尾 prompt 和局部细节是否退化。
+### 与普通 solver 加速的区别
 
-## Flow Matching：直接学习路径上的速度
+| 路线 | 是否重训 | 学习对象 | 推理方式 |
+| --- | --- | --- | --- |
+| DDIM / DPM-Solver | 通常不重训 | 沿用原模型输出 | 用更合适的离散路径或高阶 solver |
+| Progressive distillation | 需要学生训练 | 模仿教师多个小步的结果 | 逐轮减少采样步数 |
+| Consistency / LCM | 需要训练或蒸馏 | 同轨迹各时间点的共同终点 | 一步或少步一致性调用 |
+| Flow Matching | 训练速度场 | 概率路径的局部速度 | ODE solver 积分 |
+| Rectified Flow | 训练并可 reflow | 更易有限步积分的速度场 | 少步 ODE 积分 |
 
-Flow Matching / Rectified Flow 换了一个问题。它不先问“这个 noisy point 的终点是什么”，而是先选一条从噪声分布到数据分布的连续路径，再让模型学习路径上每个点的速度。
+solver 加速主要重排数值误差；Consistency 改变模型的监督对象；Flow Matching 改变路径速度的训练接口。只看最终 NFE 会掩盖这些差异。
 
-最简单的路径是线性插值：
+### 与 Flow 路线可以怎样组合
 
-\[
-x_t=(1-t)x_0+t x_1,\qquad t\in[0,1]
-\]
+Flow 模型给出局部速度，Consistency 模型给出跨时间终点映射。二者可以组合：例如以 Flow ODE 生成教师轨迹，再蒸馏一个一致性或其他少步学生。此时“教师轨迹来自 Flow”不代表学生仍在预测 Flow velocity。
 
-这里 \(x_0\) 是噪声端样本，\(x_1\) 是数据端样本，\(t\) 从 0 走到 1。\(t=0\) 时在噪声端，\(t=1\) 时在数据端，中间状态就是两者按比例混合。
+Rectified Flow 通过路径与 coupling 设计降低有限步积分难度；Consistency 通过函数约束减少抵达终点所需的调用次数。前者关注轨迹几何，后者关注跨时间映射。它们都可能降低步数，也都不能单独保证少步条件保持与分布覆盖。
 
-这条线性路径的目标速度很简单：
+### 评测应对准不同失效模式
 
-\[
-u_t=x_1-x_0
-\]
+一致性与 LCM 需要重点检查：
 
-它表示“从起点指向终点的方向”。模型 \(v_\theta(x_t,t,c)\) 要做的是在中间点 \(x_t\)、时间 \(t\)、条件 \(c\) 下预测这个方向：
+- 一步、二步、四步下质量是否单调且稳定；
+- 长 prompt、文字、身份和局部控制是否被压平；
+- CFG 或 guidance scale 改变时是否仍处于训练支持范围；
+- 多随机种子的覆盖率是否低于教师；
+- 实际端到端延迟是否被文本编码、VAE 解码或额外条件模块主导。
 
-\[
-\mathcal{L}_{\mathrm{FM}}
-=
-\mathbb{E}_{t,x_0,x_1}
-\left[
-\|v_\theta(x_t,t,c)-u_t(x_t\mid x_0,x_1)\|_2^2
-\right]
-\]
+Flow 与 Rectified Flow 还要检查时间 bucket 误差、路径曲率、solver 与时间网格，以及同一 NFE 下的积分误差。两类方法都不能只用少数视觉样例下结论。
 
-\(v_\theta\) 是模型预测速度，\(u_t\) 是所选路径给出的目标速度。这个损失不是让模型预测噪声，也不是让它直接输出终点，而是让它学“当前位置应该怎么移动”。采样时就沿 ODE 积分：
+## 常见误解与失效边界
 
-\[
-\frac{dx}{dt}=v_\theta(x,t,c)
-\]
+**把 consistency 当成输出恒等。**一致性约束只在同一生成轨迹上成立，并依赖正确的边界条件；不同初始噪声不应被压成同一结果。
 
-用 Euler 写成离散更新就是：
+**把 LCM 当成换 scheduler。**LCM 权重经过一致性蒸馏，必须与对应 prediction type 和时间配置一起使用。
 
-\[
-x_{t+\Delta t}=x_t+\Delta t\,v_\theta(x_t,t,c)
-\]
+**认为一步模型没有轨迹。**它在一次函数调用中近似了跨时间映射；训练目标仍依赖噪声时间和教师或自生成轨迹。
 
-\(\Delta t\) 是步长。路径越平滑、速度场越稳定、时间网格越合适，少数几步积分就越可能接近正确终点。
+**把 Flow velocity 与一致性输出互换。**局部速度需要积分，终点映射直接预测数据端表示。张量 shape 可能相同，语义和 sampler 接口不同。
 
-## Diffusion 和 Flow 可以先用同一张图理解
+**只比较模型前向次数。**不同方法的单次前向成本、CFG 分支、分辨率、VAE 和后处理可能不同；NFE 不是端到端延迟。
 
-很多初学困惑来自术语不同：DDPM 讲加噪去噪，DDIM 讲非马尔可夫采样，Score SDE 讲反向 SDE，Flow Matching 讲速度场。第一遍可以先把它们都看成在数据和噪声之间选一条路径：
+## 检查理解
 
-\[
-x_t=a_t x_{\mathrm{data}}+b_t\epsilon
-\]
+1. 一致性约束为什么还需要边界条件？
+2. consistency distillation 中教师轨迹承担什么作用？
+3. LCM 与只给原 DDPM 换一个四步 scheduler 有什么根本差别？
+4. Flow ODE 作为教师时，学生为什么不一定预测 velocity？
+5. 一步模型应怎样检查质量与分布覆盖，而不只看单张结果？
 
-Diffusion 路线通常从“这个带噪点里噪声是多少、score 往哪里指、下一步怎样少一点噪声”来组织训练和采样；Flow Matching 路线通常从“这个中间点沿路径的速度是多少”来组织训练和采样。前者的模型输出常常还要被采样器换算成 \(\hat x_0\)、\(\hat\epsilon\) 或 score，再按 DDIM / Solver 规则更新；后者的 \(v_\theta\) 更直接就是 ODE 的右边。
+## 相关阅读与下一步
 
-这个统一视角有两个好处。第一，它解释了为什么 \(v\)-prediction、Flow velocity、DDIM 公式看起来会相似：它们都在同一条数据-噪声混合路径附近换坐标。第二，它也防止把它们混成一回事：Diffusion 的 \(v\)-prediction 是输出参数化，Flow Matching 的 velocity 是生成动力学本身。相似的是几何直觉，不同的是训练目标和采样接口。
-
-用更图像化的话说：DDPM / DDIM 常被画成从数据轴到噪声轴的圆弧，因为它们显式控制数据系数和噪声系数的平方和；Flow Matching 常被画成一条直线，因为最简单的概率路径就是线性插值。圆弧和直线都只是帮助读者抓住路径几何，真正决定方法差异的是模型训练时回归什么：噪声、score、终点，还是速度场。
-
-## Rectified Flow：让路径更适合粗步走
-
-Rectified Flow 从线性连接噪声和数据出发，进一步关心“生成轨迹能不能变直、变好积分”。它的 reflow 思路可以理解为：先训练一个 flow，让它从噪声生成样本；再把模型实际生成的起点-终点配对拿来重新训练，使后续路径更接近直线。
-
-![Rectified Flow two Gaussian path](../assets/images/paper-figures/diffusion/consistency-rectified-flow/rectified-flow-two-gaussians.png){ width="700" }
-
-<small>图源：[Rectified Flow 官方实现](https://github.com/gnobitab/RectifiedFlow)，来自 `github_misc/intro_two_gauss.png`。原图用两个高斯分布展示线性插值路径和 Rectified Flow 路径的区别：蓝色是被模型整流后的运输路径，绿色是直接线性配对产生的路径。本站读法：Rectified Flow 的重点不是“少跑几个 timestep”，而是让从噪声到数据的运输关系更容易被低步数 ODE 积分跟上。</small>
-
-这张图适合先看左半边：如果起点和终点配对不合适，线性插值会出现交叉路径，模型要学的速度场就会很别扭。再看右半边：经过 flow 诱导后的配对更接近“同一簇到同一簇”，路径更平行，Euler 这类粗步积分也更容易工作。
-
-但“直”不是万能目标。Rectified Diffusion 的标题就提醒过：straightness is not your need in rectified flow。真正需要的是路径、时间采样、条件控制、数据几何和少步采样质量一起成立。路径看起来更直，如果低噪声细节弱、prompt 控制弱、视频运动被压慢，依然不是好模型。
-
-## v-prediction 和 Flow velocity 容易被混在一起
-
-扩散论文里也常见 \(v\)-prediction，这和 Flow Matching 的 velocity 有联系，但不是同一层东西。
-
-在扩散参数化里，\(v\)-prediction 通常是一种更方便的输出坐标。模型预测 \(\hat v\)，采样器再把它换算成 \(\hat\epsilon\) 或 \(\hat x_0\)，然后按 DDIM、DPM-Solver、Euler 等规则更新。
-
-在 Flow Matching 里，\(v_\theta(x,t,c)\) 直接就是 ODE 右边的速度场。采样器拿它做：
-
-\[
-x \leftarrow x + \Delta t\,v_\theta(x,t,c)
-\]
-
-所以可以这样记：
-
-| 名字 | 模型输出是什么 | 采样器怎样用 |
-| --- | --- | --- |
-| 扩散 \(v\)-prediction | 噪声/数据混合坐标里的预测量 | 先换算，再按扩散采样规则更新 |
-| Flow Matching velocity | 生成 ODE 的速度向量 | 直接作为积分方向 |
-
-这个区别很重要。否则读 SD3、Wan、Flux、视频 DiT 或机器人 diffusion policy 时，很容易把“视频里物体的运动速度”和“latent 空间里的生成速度场”混成一件事。Flow velocity 描述的是样本在高维 latent 里如何从噪声流向数据，不是画面中人物跑得多快。
-
-随机性也要按这个接口区分。扩散采样里的随机项通常和既定噪声日程一起设计；Flow Matching 默认的 ODE 轨迹是确定性的，若为了 RL 或多样性把它改成随机过程，就要额外检查是否仍保持目标时间步的数据系数和总噪声水平。否则看似只是“多探索”，实际可能是在采样轨迹里注入多余噪声。
-
-把随机性推广到 Flow Matching 时，可以沿用 DDIM 的直觉：如果在噪声端新加一份随机方向，就要从旧的预测噪声方向里扣掉相应方差，让总噪声半径仍等于目标时间步需要的值。这样做的目的不是让 Flow Matching “变回扩散”，而是让随机采样仍然沿着规定路径附近走，不把探索误写成额外噪声。
-
-## 两条路线到底怎么选
-
-如果你已经有一个强扩散教师，只想把现有模型压到 1 到 4 步，Consistency / LCM 往往更自然。它保留 teacher-student 语境，适合快速预览、交互式 UI 和已有 Stable Diffusion 生态。
-
-如果你在训练新一代图像或视频底座，Flow Matching / Rectified Flow 更值得看。SD3、Wan 这类系统都说明：在 latent 上学速度场、用 DiT 做主干、用 ODE sampler 推理，已经成为现代生成模型的一条主线。它不是只为一步生成服务，而是把训练目标和采样路径一起重写。
-
-如果目标是极限一步高质量，光有一致性或 rectified 路线通常还不够，还要看 DMD、DMD2、Phased DMD 这类分布匹配蒸馏。那是另一篇文章的重点：它关心的是学生最终分布是否像 teacher/data，而不是单纯轨迹一致或路径更直。
-
-## 评测要看各自最容易坏的地方
-
-Consistency / LCM 最怕“快但变钝”：图能出，结构大致对，但文字、手、边缘、局部编辑和强条件控制变弱。评测应拆 prompt 难度、ControlNet/参考图、局部编辑和高频细节。
-
-Flow / Rectified 路线最怕“路径好看但任务不保真”：速度场损失下降，少步积分也稳定，但条件没有被持续使用，视频运动变慢，低噪声细节不足，或者时间采样漏掉关键噪声区间。评测应拆 timestep bucket、condition bucket、视觉细节、视频 motion bucket 和端到端延迟。
-
-两条路线都不能只看 FID 或少数样例。少步生成的真正验收，是在真实 1/2/4/8 步、真实 CFG、真实 prompt 分布、真实服务延迟下，质量和控制性是否一起过线。
-
-## 读完以后怎么判断
-
-这篇可以用四句话收住：
-
-1. 一致性模型学终点映射：同一条轨迹上的不同噪声点，输出应该一致。
-2. LCM 把一致性蒸馏接到 latent diffusion，使 1 到 4 步交互式生成更实用。
-3. Flow Matching 学速度场：先选噪声到数据的路径，再回归路径上的移动方向。
-4. Rectified Flow 关心路径是否更适合少步积分，但“更直”本身不是质量保证。
-
-继续读时，可以把本文接到 [采样与推理加速](inference.md)、[一步生成、蒸馏与整流](distillation.md)、[Score Matching 到 SDE](score-matching-sde-and-probability-flow.md) 和 [视频与多模态扩散](video-and-multimodal-diffusion.md)。
-
-## 外部精读
-
-- [Consistency Models](https://arxiv.org/abs/2303.01469)：理解同一 PF-ODE 轨迹上不同点为什么要输出一致。
-- [Latent Consistency Models](https://arxiv.org/abs/2310.04378)：看一致性蒸馏如何进入 latent diffusion 和 Stable Diffusion 生态。
-- [Rectified Flow](https://arxiv.org/abs/2209.03003)：理解 reflow 和路径整流怎样服务少步生成。
-- [Flow Matching](https://arxiv.org/abs/2210.02747)：理解“先定义概率路径，再学习速度场”的生成框架。
-- [零推导理解 Diffusion 和 Flow Matching](https://zhuanlan.zhihu.com/p/11228697012)：适合先建立 Diffusion / Flow Matching 的统一几何直觉。
-- [零推导理解 Diffusion 和 Flow Matching（二）：随机性](https://zhuanlan.zhihu.com/p/1947597090311090928)：适合补 DDIM 随机项和确定性轨迹之间的直觉。
-- [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330)：适合继续看 Flow Matching 随机性注入的系数保持问题。
-- [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952)：正式分析 Flow-SDE 随机性可能带来的噪声伪影，并提出 CPS。
-- [Scaling Rectified Flow Transformers](https://arxiv.org/abs/2403.03206)：看 SD3 路线如何把 rectified flow 和多模态 DiT 接到高分辨率文生图。
-- [Meta Flow Matching Guide and Code](https://ai.meta.com/research/publications/flow-matching-guide-and-code/)：适合从工程角度复习 Flow Matching 的统一写法和代码入口。
+- 局部速度路线：[Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)。
+- 蒸馏全景：[一步生成、蒸馏与整流](distillation.md)。
+- 数值加速：[采样与推理加速](inference.md)。
+- 原始来源：[Consistency Models](https://arxiv.org/abs/2303.01469)、[Latent Consistency Models](https://arxiv.org/abs/2310.04378)、[Flow Matching](https://arxiv.org/abs/2210.02747)、[Rectified Flow](https://arxiv.org/abs/2209.03003)。
+- 返回：[扩散模型专题](index.md)。

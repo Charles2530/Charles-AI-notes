@@ -1,0 +1,89 @@
+<h2>图解、代码、证据与验收设计</h2>
+<p class="subtitle">最后一部分：让“内容更完整”变成可以检查的交付标准。</p>
+
+<div class="section">
+  <div class="label">必须新增的 6 组原创图解</div>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px">
+    <div class="mockup"><div class="mockup-header">01 · 总闭环</div><div class="mockup-body">数据 → 随机时间步加噪 → denoiser loss<br><br>随机噪声 → 重复 denoiser / scheduler → 样本</div></div>
+    <div class="mockup"><div class="mockup-header">02 · 分布演化</div><div class="mockup-body">二维 toy data 从多峰分布逐渐变成高斯，再沿学到的方向返回。</div></div>
+    <div class="mockup"><div class="mockup-header">03 · DDPM 系数</div><div class="mockup-body">把 <code>x₀</code>、噪声 <code>ε</code>、<code>xₜ</code> 与 signal/noise coefficient 放在一张图中。</div></div>
+    <div class="mockup"><div class="mockup-header">04 · U-Net / DiT 接口</div><div class="mockup-body">标出 noisy sample、timestep、condition 怎样进入网络，以及 prediction 怎样返回 sampler。</div></div>
+    <div class="mockup"><div class="mockup-header">05 · Stable Diffusion</div><div class="mockup-body">文本编码、latent 初始化、循环去噪、VAE 解码；训练流和推理流并排。</div></div>
+    <div class="mockup"><div class="mockup-header">06 · 方法坐标系</div><div class="mockup-body">DDPM、DDIM、Score/SDE、Flow、Consistency 分别改变训练目标、路径、求解器还是终点映射。</div></div>
+  </div>
+  <p>论文原图只在需要忠实说明原方法时使用；基础直觉优先用本站原创图，避免读者被论文符号和实验上下文淹没。</p>
+</div>
+
+<div class="section">
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">最小代码交付</div>
+      <div class="mockup-body">
+        <ul>
+          <li>独立示例目录与固定依赖说明</li>
+          <li>训练脚本、采样脚本、轻量 smoke test</li>
+          <li>固定 seed 与预期输出图</li>
+          <li>系数、shape、device 和范围断言</li>
+          <li>正文代码片段从可运行脚本抽取，避免两份实现漂移</li>
+        </ul>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">代码成功标准</div>
+      <div class="mockup-body">
+        <ul>
+          <li><code>q_sample(x0, t, noise)</code> 输出形状与输入一致</li>
+          <li><code>t=0</code> 接近干净样本，高时间步接近噪声</li>
+          <li>单 batch 能前向、反向并更新参数</li>
+          <li>reverse loop 在固定 seed 下可复现</li>
+          <li>短跑 smoke test 不承诺高画质，只验证链路完整</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">外部资料如何影响结构</div>
+  <div class="mockup">
+    <div class="mockup-body">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th style="text-align:left;padding:8px">资料</th><th style="text-align:left;padding:8px">借鉴点</th><th style="text-align:left;padding:8px">不照搬的部分</th></tr></thead>
+        <tbody>
+          <tr><td style="padding:8px"><a href="https://huggingface.co/learn/diffusion-course/en/unit1/1">Hugging Face Diffusion Course</a></td><td>先讲迭代生成，再用 from-scratch notebook 验证</td><td>本站不依赖 Diffusers API 才能理解核心算法</td></tr>
+          <tr><td style="padding:8px"><a href="https://huggingface.co/blog/annotated-diffusion">Annotated Diffusion</a></td><td>公式、U-Net、训练和采样代码逐段对应</td><td>拆开长文，降低单页认知负荷</td></tr>
+          <tr><td style="padding:8px"><a href="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/">Lil'Log</a></td><td>DDPM、score、guidance、加速和 latent diffusion 的统一地图</td><td>高级主题下沉到分支，不全部塞入入门页</td></tr>
+          <tr><td style="padding:8px"><a href="https://www.practical-diffusion.org/">MIT 6.S183</a></td><td>以“知道组件如何协作 + 能自己训练”为课程目标</td><td>博客不照课程周次组织，而按依赖关系组织</td></tr>
+          <tr><td style="padding:8px"><a href="https://docs.science.ai.cam.ac.uk/diffusion-models/">Cambridge Workshop</a></td><td>把 VAE、U-Net、CLIP 等组件与 DDPM 算法连接</td><td>不从物理类比展开过长背景</td></tr>
+          <tr><td style="padding:8px"><a href="https://www.nowpublishers.com/article/Details/CGV-114">Step-by-Step Diffusion</a></td><td>Fundamentals → DDPM → DDIM → Flow → Practice 的数学层次</td><td>保留本站工程和现代视频方向，不变成纯数学教材</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">三层验收</div>
+  <div class="options" data-multiselect>
+    <div class="option">
+      <div class="letter">A</div><div class="content"><h3>读者验收</h3><p>基础主线每篇 3–5 个自测；最终能画出训练/采样数据流、解释 loss、识别 Stable Diffusion 组件，并运行最小程序。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">B</div><div class="content"><h3>内容验收</h3><p>检查术语首次定义、符号一致性、跨页重复、图源边界、公式—代码映射和站内前后置链接。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">C</div><div class="content"><h3>仓库验收</h3><p><code>make quality</code>、<code>make image-quality</code>、示例 smoke test、<code>make build</code>；最后人工浏览移动端目录、公式和图片。</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">实施顺序</div>
+  <ol>
+    <li><strong>P0：</strong>先重写首页与导航，建立主线占位和文章职责。</li>
+    <li><strong>P1：</strong>完成 beginner primer 与 DDPM 数学页，让“扩散模型是什么”先真正成立。</li>
+    <li><strong>P2：</strong>完成架构/Stable Diffusion 与最小代码，打通理论到系统。</li>
+    <li><strong>P3：</strong>拆出 Flow 页面，清理旧文重复和站内链接。</li>
+    <li><strong>P4：</strong>补图、做全量质量检查与构建验证。</li>
+  </ol>
+</div>

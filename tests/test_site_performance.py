@@ -31,6 +31,17 @@ class SitePerformanceTests(TestCase):
         self.assertIn("line-height: inherit", stylesheet)
         self.assertIn("font-weight: inherit", stylesheet)
 
+    def test_desktop_primary_sidebar_has_room_for_nested_titles(self):
+        stylesheet = (ROOT / "files" / "assets" / "stylesheets" / "extra.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("--atlas-primary-sidebar-width: 15.5rem", stylesheet)
+        self.assertIn("width: var(--atlas-primary-sidebar-width)", stylesheet)
+        self.assertIn(".md-sidebar--primary .md-sidebar__inner", stylesheet)
+        self.assertIn("padding-right: 0", stylesheet)
+        self.assertIn("max-width: min(100%, 76rem)", stylesheet)
+
     def test_search_compaction_hook_omits_full_article_bodies(self):
         try:
             from hooks.site_performance import on_post_build

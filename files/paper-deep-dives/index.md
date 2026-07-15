@@ -70,6 +70,7 @@
 
 ## 具身智能
 
+- [RoboDojo：统一仿真与现实的机器人操作评测](embodied-ai/robodojo.md)
 - [RT-2：视觉语言模型接到机器人动作](embodied-ai/rt2.md)
 - [GR-2：Web 视频知识迁移到机器人](embodied-ai/gr2.md)
 - [GR-3：少样本长时程 VLA](embodied-ai/gr3.md)

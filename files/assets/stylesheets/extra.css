@@ -35,6 +35,7 @@
   --atlas-shadow-soft: 0 12px 28px rgba(20, 41, 43, 0.06);
   --atlas-heading-font: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", serif;
   --atlas-body-font: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --atlas-primary-sidebar-width: 15.5rem;
   --md-text-font-family: var(--atlas-body-font);
   --md-code-font-family: "JetBrains Mono", "Fira Code", "SFMono-Regular", Consolas, monospace;
   --md-typeset-a-color: var(--atlas-teal-soft);
@@ -2393,6 +2394,19 @@ body.atlas-zoom-2 .md-typeset {
 }
 
 @media screen and (min-width: 76.25em) {
+  .md-grid {
+    max-width: min(100%, 76rem);
+  }
+
+  .md-sidebar--primary {
+    width: var(--atlas-primary-sidebar-width);
+  }
+
+  .md-sidebar--primary .md-sidebar__inner {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
   .md-content {
     max-width: 46rem;
   }

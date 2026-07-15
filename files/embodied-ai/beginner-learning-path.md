@@ -1,93 +1,191 @@
-# 具身智能从零路线：先把闭环跑起来
+# 具身智能基础：观测、动作与反馈闭环
 
-具身智能最容易被讲成“把 VLM 接到机器人上”。这个说法只说中了入口，没有说中系统。真实机器人要在带噪声、会变化、会损坏东西的世界里行动：它看到环境，估计状态，选择动作，执行后再看世界有没有按预期变化。如果没有，系统要能减速、重试、换策略或求助。
+具身系统通过身体与环境交换信息和作用：传感器提供有限、延迟且带噪的观测，策略提出动作，规划与控制把动作变成物理执行，环境返回新的状态。能力来自整条反馈链，而不是单独一个视觉模型、语言模型或动作网络。
 
-所以入门时不要先追模型名。先把一条闭环链路想清楚：
+## 本文解决什么问题
+
+本文建立具身智能的系统坐标：任务与运行边界怎样定义；观测、状态和动作怎样组成 episode；VLA、policy、planner、controller 和 safety layer 各自负责什么；时间同步、坐标系和接触为什么是模型接口的一部分；数据与评测怎样回到闭环。
+
+本文以机器人操作和移动操作为主要例子。自动驾驶、无人机与虚拟 agent 共享反馈控制框架，但传感器、动力学和安全要求不同。
+
+## 前置知识
+
+- [动态系统、控制与状态空间](../prerequisite-math/dynamic-systems-and-control.md)：状态、动态与反馈。
+- [几何、视觉与三维空间](../prerequisite-math/geometry-vision-and-3d.md)：坐标、投影和位姿。
+- [Agent、环境与训练闭环](../reinforcement-learning/rl-agent-environment-loop.md)：观测、动作、奖励与 episode。
+- [世界模型与具身智能总入口](../world-models-and-embodied-ai/index.md)：策略、世界模型和控制器的系统关系。
+
+## 核心机制
+
+### 先定义任务、成功状态与运行边界
+
+“抓取杯子”不是完整任务定义。至少要写清：
+
+- 初始场景、目标物体和可接受目标区域；
+- 机器人、夹具、相机和控制接口；
+- 成功判定与最大 horizon；
+- 碰撞、掉落、超力、越界和人工接管条件；
+- 允许出现的人、物体、光照和布局范围；
+- 失败后是重试、恢复、拒绝还是停机。
+
+这些条件构成任务分布与 operational design domain（ODD）。若训练、评测和部署的 ODD 不一致，总成功率无法说明泛化范围。
+
+### 观测是传感器记录，状态是决策表示
+
+在时刻 \(t\)，系统可能接收：
+
+\[
+o_t =
+\{
+I_t^{1:K},\ d_t,\ q_t,\ \dot q_t,\ f_t,\ \ell
+\},
+\]
+
+包括多视角图像、深度、关节状态、力觉和语言条件。观测具有不同频率与延迟，需要通过时间戳、缓存或插值对齐。
+
+策略使用的状态可以是当前观测，也可以是历史编码或 belief：
+
+\[
+\hat s_t = e(o_{\le t},a_{<t}).
+\]
+
+遮挡、物体被机械臂挡住、接触状态和任务进度都可能要求历史。把最后一帧图像直接视为完整状态，会让策略在部分可观测任务中反复丢失上下文。
+
+### state 和 action 字段是一份控制协议
+
+机器人数据中的 `state` 可能表示关节角、末端位姿、夹爪状态或它们的组合；`action` 可能表示：
+
+- 绝对关节目标；
+- 关节或末端增量；
+- 速度；
+- 力矩；
+- 阻抗或力控制目标；
+- 技能与参数。
+
+动作必须同时带上坐标系、单位、归一化、控制周期和时间语义。同一个六维向量若分别表示世界坐标绝对位姿和末端局部增量，学习问题完全不同。字段解析见[机器人 State / Action 数据](state-action-robot-datasets.md)。
+
+### 策略、规划与控制是三层接口
+
+策略或 VLA 输出：
+
+\[
+a_{t:t+H}\sim\pi_\theta(\cdot\mid \hat s_t,\ell).
+\]
+
+它可能是一段末端轨迹目标、动作块或技能。随后：
+
+1. planner 检查运动学、碰撞和可达性，形成时间参数化参考；
+2. safety layer 对越界、危险接触和未知状态进行否决或投影；
+3. controller 以更高频率计算硬件命令，使真实状态跟踪参考。
+
+高层策略通常运行在数 Hz 到几十 Hz，底层控制可能更快。推理延迟若接近动作周期，模型看到的状态和动作真正生效时的状态已经不同。系统必须明确 observation timestamp、inference finish、command dispatch 和 actuator response。
+
+### 闭环执行不断重新读取动作后果
+
+闭环不是把长动作序列一次性发完，而是在执行中读取新观测：
 
 ```text
-传感器 -> 状态表示 -> 任务理解 -> 策略/规划 -> 控制器 -> 执行动作 -> 新观测
+observe and synchronize sensors
+estimate state and task progress
+predict action or action chunk
+check feasibility and safety
+execute a bounded prefix
+observe the consequence
+detect success, deviation, or failure
+continue, recover, ask for help, or stop
 ```
 
-VLM 主要解决“看见了什么、指令是什么意思”；VLA 进一步把视觉和语言接到动作；世界模型试图预测“这样做之后会发生什么”。但真正决定系统能不能落地的，往往是动作接口、坐标系、控制频率、数据口径、失败恢复和安全边界。
+动作块可以提高时间一致性并降低有效 horizon，但块太长会减少纠错机会。执行中应支持 receding horizon：只执行计划前缀，再根据最新状态更新。
 
-## 从抓杯子开始
+### 接触让机器人任务不同于纯视觉任务
 
-假设任务是“把桌上的杯子拿起来”。模型不是直接从文字跳到成功状态，它至少要经历几层转换：相机看到桌面；感知模块估计杯子位置、姿态和可抓区域；策略决定夹爪从哪边接近；控制器把末端位姿或关节命令送给机器人；夹爪闭合后，系统还要判断杯子是否真的被抓稳。
+抓取、插入、开门和工具使用依赖接触。图像可能看起来接近目标，但夹爪力、接触法向、摩擦或对象约束不正确。只用视觉终态判定会漏掉：
 
-这里每一层都有独立的失败方式。相机外参错了，目标点会落到桌面外；深度有噪声，夹爪可能撞到杯沿；策略没理解杯柄，抓点会不稳定；控制器延迟太大，实际轨迹会偏离计划；杯子滑落后，如果系统还按原轨迹执行，就会把一次小失误变成任务失败。
+- 虚抓或夹持不稳；
+- 物体已接触但没有插入；
+- 门把手跟随机械臂移动却未解锁；
+- 目标完成但发生过危险碰撞。
 
-这就是闭环的意义。闭环不是“机器人会动”，而是系统能持续回答三个问题：当前状态是否可信；上一步动作是否产生了预期后果；下一步应该继续、修正、回退还是停止。具身智能的难点，正是这些问题会在真实时间和真实物理约束下同时出现。
+success checker 应结合视觉、几何、本体状态、力觉和任务状态机。
 
-## VLA 只解决中间一段
+### VLA 只覆盖策略层
 
-RT-1 把图像、语言指令和历史动作放进 Transformer policy 里，输出离散化动作 token。它的价值在于证明大规模真实机器人数据可以训练一个跨任务的闭环控制模型，但它仍然依赖具体机器人数据、动作离散化和控制接口。
+VLA 把视觉、语言和状态映射到动作，擅长复用语义表示与跨任务数据。它不自动解决：
 
-![RT-1 overview](../assets/images/paper-figures/embodied-ai/rt1-figure-1-overview.png){ width="760" }
+- 相机标定与坐标变换；
+- action schema 和机器人适配；
+- 碰撞检测与轨迹可达性；
+- 高频控制和硬件实时性；
+- success checking、恢复与安全案例。
 
-<small>图源：[RT-1: Robotics Transformer for Real-World Control at Scale](https://arxiv.org/abs/2212.06817)，Figure 1。这里用它说明：机器人 Transformer policy 的输入不是单纯文本，而是图像、指令、历史动作和可执行动作空间的结合。</small>
+因此 VLA 应通过明确协议接入其上下游。完整路线见[VLA 专题](../vla/index.md)。
 
-RT-2 把 web-scale VLM 的知识迁移到机器人动作上，让模型可以把视觉语言推理转成 action token。它让“语义泛化”变得更强，例如理解从机器人数据里很少出现的物体或任务描述。但它没有消除机器人数据瓶颈：模型仍要学会本机动作空间、控制频率、末端执行器限制和失败恢复。
+### 世界模型提供动作后果预测
 
-![RT-2 overview](../assets/images/paper-figures/vla/rt2-overall-wide.png){ width="920" }
+世界模型可以在执行前比较候选动作：
 
-<small>图源：[RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control](https://arxiv.org/abs/2307.15818)，Figure 1。这里用它说明：VLA 的关键不是“聊天模型更聪明”，而是把视觉语言预训练接到可约束的动作 token。</small>
+\[
+\hat z_{t+1:t+H}
+\sim p_\phi(\cdot\mid z_t,a_{t:t+H}).
+\]
 
-OpenVLA 这类开源 VLA 把路线进一步推向可复现和可微调：使用开放模型、Open X-Embodiment 机器人数据、低秩微调和量化部署，让更多团队能训练和适配 VLA。它对入门者的启发是：VLA 已经不只是概念，但复现能力仍取决于数据格式、动作解码、评测任务和硬件闭环。
+它可用于 MPC、风险估计、反事实或合成数据。世界模型预测的是后果，不负责保证底层轨迹可执行；它和 planner、controller、safety layer 仍需分工。
 
-## 数据接口比数据规模更早卡住
+### 数据单元是 episode，不是独立帧
 
-机器人数据贵，是因为真实采集慢、会损耗设备，还需要人工重置环境。机器人数据也窄：同一个实验室、同一种夹爪、同一个相机角度的数据，换桌面高度、光照或物体材质就可能失效。更麻烦的是接口不统一：不同机器人使用末端位姿、关节角、速度控制、夹爪开合或离散 action token；不同数据集的时间戳、相机标定和成功标准也不一样。
+一个可用 episode 至少要对齐：
 
-![Open X-Embodiment dataset](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="760" }
+- 多视角传感器与 calibration；
+- 机器人 state、commanded action 和实际执行状态；
+- 语言任务、阶段或技能标签；
+- success、failure、termination 与人工接管；
+- 软件、模型、硬件和环境版本。
 
-<small>图源：[Open X-Embodiment](https://arxiv.org/abs/2310.08864)，Figure 1。这里用它说明：跨机器人数据的价值不只在规模，也在统一观测、动作、任务和评测格式。</small>
+若只保留成功轨迹，策略难以学习如何识别偏离和恢复。数据引擎需要把 near-miss、拒绝、碰撞前兆、恢复成功与恢复失败作为独立资产。
 
-读机器人数据集时，先看四件事。第一，观测来自单相机、多相机、深度、触觉还是 proprioception；第二，动作是末端位姿、关节空间、离散 token 还是 action chunk；第三，任务成功由脚本、人工、传感器还是视觉模型判定；第四，失败和 near-failure 有没有被保留下来。只看“多少条轨迹”会误导人，因为接口混乱的大数据会把控制噪声一起学进去。
+### 评测必须回到闭环
 
-## 动作表示决定策略上限
+离线 action error、视频指标和单帧识别可以诊断模块，但最终需要 episode 指标：
 
-动作不是一个后处理细节。动作表示会决定模型能不能表达精细操作、能不能稳定闭环、能不能跨机器人迁移。
+- 任务成功率与分阶段成功率；
+- 扰动后恢复率和平均恢复次数；
+- 碰撞、超力、越界与急停；
+- 推理延迟、控制频率和动作平滑性；
+- 人工接管、拒绝和无效尝试；
+- 新物体、新布局、新任务和新 embodiment 的泛化。
 
-ACT 把一段未来动作作为 chunk 输出，适合低成本双臂模仿学习里的高频控制问题。它减轻了逐步预测的抖动，但 chunk 太长会削弱实时修正能力。Diffusion Policy 把动作序列看成条件扩散生成，适合多峰动作分布和高维动作空间；代价是推理和闭环控制要处理多步去噪、receding horizon 和时序一致性。
+实验室、仿真和部署结果应分开报告。相同任务名在不同初始条件和 success checker 下不可直接比较。
 
-VLA 里的 action token、ACT 的 action chunk、Diffusion Policy 的动作轨迹扩散，解决的是同一个大问题的不同切面：如何把“我想做什么”变成机器人能执行、能纠错、能安全停止的动作接口。入门时把这个接口弄清楚，比背更多模型名更有用。
+## 常见误解与失效边界
 
-## 仿真要当成实验场，不要当成现实替身
+**把具身智能等同于 VLA。**VLA 是策略层；完整系统还包含感知、状态、规划、控制、安全、硬件和数据闭环。
 
-仿真能便宜地产生数据、覆盖危险场景、复现实验和做失败回放。RoboTwin 这类 benchmark 说明，数字孪生和仿真任务可以让双臂操作评测更系统，也能生成真实采集难以覆盖的情形。
+**认为真实机器人只是在仿真策略后面接驱动。**视觉、动力学、延迟、摩擦、线缆和安全分布都会变化，需要 system identification、randomization 和真实 hard set。
 
-但 Sim2Real 的核心不是“仿真越逼真越好”，而是哪些差异会伤害当前任务。视觉任务更怕纹理、光照、反光和运动模糊；抓取任务更怕接触、摩擦、软物体和夹爪建模；导航任务更怕定位误差、动态障碍和地图变化。仿真数据进入训练前，要先问它会不会把错误的物理规律、错误的传感器噪声或过于干净的任务流程写进策略。
+**只看成功演示。**固定初始状态下的成功无法证明对扰动、失败恢复和长期运行的能力。
 
-## 评测要按失败恢复来组织
+**忽略 commanded action 与 executed action 的差异。**控制器饱和、碰撞投影和通信延迟会让实际动作偏离策略输出，训练与评测都应记录两者。
 
-具身评测不能只看一次成功率。一个系统 80% 成功但失败时会撞倒物体，和另一个系统 70% 成功但能可靠停下、重试、请求人工接管，部署含义完全不同。
+**用单一成功率比较系统。**任务定义、horizon、重置、人工帮助和判定器不同，数字没有可比性。
 
-更有用的评测口径是把任务拆成阶段：找物、定位、接近、接触、抓稳、移动、放置、恢复。每个阶段都记录失败类型、恢复次数、碰撞、超时、人工介入和任务成本。长时任务还要看状态记忆是否漂移，因为前面一个小错误可能在十几步后才暴露。
+**认为更大模型自动解决接触和实时性。**模型容量不能替代正确的坐标、频率、力觉、控制与安全接口。
 
-SayCan 的启发是，语言模型给出的“该做什么”必须被 affordance 或 value 信号约束：语义上合理的动作，不代表当前机器人在当前场景能做。世界模型的启发也类似：未来预测只有在能区分不同动作后果、能暴露风险、能改善 closed-loop success 时，才真正帮助机器人控制。
+## 检查理解
 
-## 学习顺序
-
-入门可以按五层走。第一层学传感器、坐标系、深度、相机外参和控制频率，因为这些决定状态是否可信。第二层学动作接口：末端位姿、关节空间、夹爪、action token、action chunk 和轨迹分布。第三层读 RT-1、RT-2、OpenVLA，理解 VLA 如何把视觉语言接到动作。第四层读 Open X-Embodiment、ALOHA / ACT、Diffusion Policy 和 RoboTwin，把数据、仿真、评测连起来。第五层再读 SayCan、Dreamer、action-conditioned video model 和具身世界模型，思考规划、风险和恢复。
-
-读到任何新模型时，都用同一组问题检查：它输入哪些传感器；输出什么动作；控制频率是多少；是否闭环；失败样本怎么记录；是否跨机器人；是否真实执行；仿真和真实之间如何校验；安全层能否在模型失控时接管。能回答这些问题，才算真的读懂具身智能论文。
-
-## 外部精读
-
-- [RT-1](https://arxiv.org/abs/2212.06817)：理解大规模真实机器人数据如何训练 Transformer policy。
-- [RT-2](https://arxiv.org/abs/2307.15818)：理解 web-scale VLM 知识如何迁移到 robot action token。
-- [Open X-Embodiment](https://arxiv.org/abs/2310.08864)：理解跨机器人数据和 RT-X 模型的接口问题。
-- [OpenVLA](https://arxiv.org/abs/2406.09246)：理解开源 VLA、微调和量化部署的现实边界。
-- [ALOHA / ACT](https://arxiv.org/abs/2304.13705)：理解 action chunk 和双臂模仿学习。
-- [Diffusion Policy](https://arxiv.org/abs/2303.04137)：理解用扩散模型表示动作轨迹分布。
-- [SayCan](https://arxiv.org/abs/2204.01691)：理解语言规划为什么要被 affordance 约束。
-- [RoboTwin](https://arxiv.org/abs/2409.02920)：理解仿真 benchmark 和双臂任务评测。
+1. observation、state、policy action 和 control command 分别是什么？
+2. 为什么动作向量必须同时说明坐标系、单位和时间周期？
+3. 动作块怎样改善一致性，又怎样减少闭环纠错机会？
+4. VLA 输出为什么不能直接绕过 planner 与 safety layer？
+5. commanded action 与 executed action 的差异怎样进入数据和评测？
+6. 为什么具身评测必须报告恢复与安全事件？
 
 ## 相关阅读与下一步
 
-- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
-- 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[具身智能从零路线](beginner-learning-path.md)。
-- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
+- 完整任务链：[一个任务跑通具身闭环](closed-loop-task-walkthrough.md)。
+- 视觉与坐标：[相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)。
+- 数据协议：[机器人 State / Action 数据](state-action-robot-datasets.md)。
+- 策略接口：[VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)。
+- 执行层：[规划、控制与安全](planning-control-and-safety.md)。
+- 数据闭环：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
+- 原始来源：[RT-1](https://arxiv.org/abs/2212.06817)、[RT-2](https://arxiv.org/abs/2307.15818)、[Open X-Embodiment](https://arxiv.org/abs/2310.08864)、[DROID](https://arxiv.org/abs/2403.12945)、[OpenVLA](https://arxiv.org/abs/2406.09246)。
+- 返回：[具身智能专题](index.md)。

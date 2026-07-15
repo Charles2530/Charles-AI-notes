@@ -171,7 +171,7 @@ failure mode 最好根据“下一步怎么修”来分类，只写现象无法�
 
 需要补概念或继续深入时，可以按问题选择：
 
-- [从零理解世界模型](beginner-world-models-primer.md)：补齐 belief state、action、rollout 和决策接口
+- [世界模型基础：状态、动力学、观测与决策](beginner-world-models-primer.md)：补齐 belief state、action、rollout 和决策接口
 - [WM / WAM / VAM：动作到底怎样进入世界模型](wm-wam-vam-and-action-conditioned-modeling.md)：继续检查动作条件和消费接口
 - [不确定性与风险敏感规划](uncertainty-and-risk-aware-planning.md)：把风险分桶、校准和保守回退接到规划器
 

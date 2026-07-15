@@ -10,6 +10,7 @@
 
 | 你正在想的问题 | 建议先读 |
 | --- | --- |
+| “世界模型”究竟该怎样定义，视频生成为什么不必然等于世界模型 | [世界模型是什么：从预测画面到承受行动后果](what-is-a-world-model.md) |
 | 训练与推理优化为什么常常卡在数据搬运和状态生命周期 | [高效 AI 的状态账本：少搬状态，比少算一次更重要](efficient-ai-is-state-movement.md) |
 | 扩散模型减少采样步数后，误差和瓶颈去了哪里 | [扩散模型加速：每删一步，都要重新安排误差](diffusion-speedup-redistributes-error.md) |
 | 世界模型究竟应该预测像素、latent、value 还是别的状态 | [世界模型该预测什么：答案取决于谁消费未来](world-model-future-consumers.md) |

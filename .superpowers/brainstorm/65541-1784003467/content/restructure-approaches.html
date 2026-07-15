@@ -1,0 +1,76 @@
+<h2>扩散模型章节：三种重构路线</h2>
+<p class="subtitle">目标读者：有深度学习基础、第一次系统学习扩散模型。点击卡片可记录偏好。</p>
+
+<div class="section">
+  <div class="label">当前结构的问题</div>
+  <div class="mockup">
+    <div class="mockup-header">现在的首次阅读路径</div>
+    <div class="mockup-body">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span class="mock-button">发展脉络</span><span>→</span>
+        <span class="mock-button">训练与表示</span><span>→</span>
+        <span class="mock-button">噪声参数化</span><span>→</span>
+        <span class="mock-button">Score / SDE</span><span>→</span>
+        <span class="mock-button">Guidance / Solver / 蒸馏</span>
+      </div>
+      <p style="margin-top:14px">入口页未出现在导航；“模型是什么、由什么组成、训练和生成如何接起来、Stable Diffusion 如何落地”没有在进入高级名词前形成闭环。</p>
+    </div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px">
+      <div class="label">方案 A · 局部补洞</div>
+      <p>首页总览 → 新手导论 → 现有训练页 → 现有高级页</p>
+    </div>
+    <div class="card-body">
+      <h3>增加一个强入口</h3>
+      <p>新增 1–2 篇文章，旧目录基本不动。改动最小、上线最快，但架构与代码仍可能散落，旧文之间的重复和跳跃继续存在。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px">
+      <div class="label">方案 B · 双层课程（推荐）</div>
+      <p><strong>基础主线：</strong>总览 → DDPM 数学 → 网络与 Stable Diffusion → 最小实现</p>
+      <p><strong>进阶分支：</strong>参数化 → Score/SDE → Guidance → Solver → Flow/蒸馏 → 视频</p>
+    </div>
+    <div class="card-body">
+      <h3>先闭环，再分叉</h3>
+      <p>新增 3 篇左右，重写首页并调整旧文边界。初学者获得连续路径，原有高级内容被保留为进阶层；改动量适中，最符合“直觉 → 数学 → 代码 → 现代方法”。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px">
+      <div class="label">方案 C · 教材式重写</div>
+      <p>生成模型背景 → DDPM → 架构 → 代码实验 → 条件生成 → 连续时间 → 现代模型 → 工程</p>
+    </div>
+    <div class="card-body">
+      <h3>统一重写全部章节</h3>
+      <p>整体一致性最好，也最容易形成完整课程；但需要大范围合并、拆分和链接迁移，验证成本最高，且容易让现有论文精读链接失效。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>我推荐 B 的原因</h4>
+      <ul>
+        <li>修复导航与认知顺序，而不浪费现有高质量内容</li>
+        <li>基础层可以独立学完，进阶层按研究方向选择</li>
+        <li>与 Hugging Face、MIT 实践课程常见的“概念—组件—实现—进阶”顺序一致</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>需要控制的风险</h4>
+      <ul>
+        <li>新 DDPM 数学页与现有 training.md 容易重复</li>
+        <li>必须为每篇文章定义唯一职责和前置依赖</li>
+        <li>导航、站内链接和构建检查要一起更新</li>
+      </ul>
+    </div>
+  </div>
+</div>

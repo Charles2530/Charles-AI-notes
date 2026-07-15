@@ -1,0 +1,87 @@
+<h2>方案 B：新的学习架构</h2>
+<p class="subtitle">原则：先用 4 篇文章形成完整闭环，再按理论、控制、加速和应用分叉。</p>
+
+<div class="section">
+  <div class="label">专题入口</div>
+  <div class="mockup">
+    <div class="mockup-header">扩散模型专题首页（重写 index.md，并加入导航）</div>
+    <div class="mockup-body">
+      <p><strong>首页只做三件事：</strong>一句话定义扩散模型；展示训练/采样完整闭环；给出基础主线和进阶地图。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">第一层 · 必修基础主线</div>
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:12px">
+    <div class="mockup"><div class="mockup-header">1 · 新增</div><div class="mockup-body"><strong>从零理解扩散模型</strong><p>生成模型问题、加噪/去噪直觉、训练与生成为何不同、能做什么与不能做什么。</p></div></div>
+    <div class="mockup"><div class="mockup-header">2 · 重写旧文</div><div class="mockup-body"><strong>DDPM 数学与训练</strong><p>前向闭式采样、反向过程、噪声预测损失、训练/采样伪代码；现有 training.md 承担此职责。</p></div></div>
+    <div class="mockup"><div class="mockup-header">3 · 新增</div><div class="mockup-body"><strong>网络与 Stable Diffusion</strong><p>U-Net / DiT、时间嵌入、VAE、文本编码器、cross-attention、scheduler 的完整数据流。</p></div></div>
+    <div class="mockup"><div class="mockup-header">4 · 新增</div><div class="mockup-body"><strong>最小 PyTorch 实现</strong><p>在小数据集上实现加噪、模型、loss、采样与可视化；把公式逐行映射到代码。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">第二层 · 进阶分支</div>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">A · 理论坐标系</div>
+      <div class="mockup-body">
+        <p>发展脉络 → 噪声日程与参数化 → Score Matching / SDE → <strong>Flow Matching / Rectified Flow（新增独立页）</strong></p>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">B · 条件与采样</div>
+      <div class="mockup-body">
+        <p>Guidance 与条件控制 → DDPM / DDIM / Solver → 方法选择对照</p>
+      </div>
+    </div>
+  </div>
+  <div class="split" style="margin-top:12px">
+    <div class="mockup">
+      <div class="mockup-header">C · 少步与部署</div>
+      <div class="mockup-body">
+        <p>蒸馏 → Consistency / LCM（从原来的 Flow 合并页中拆出）→ 训练配方与故障分析</p>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">D · 应用扩展</div>
+      <div class="mockup-body">
+        <p>视频与多模态扩散 → 站内论文精读：Score SDE、DPM-Solver++、DMD、Wan 等</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>新增文件控制在 4 篇</h4>
+      <ul>
+        <li>beginner-primer.md</li>
+        <li>architecture-and-stable-diffusion.md</li>
+        <li>minimal-ddpm-from-scratch.md</li>
+        <li>flow-matching-and-rectified-flow.md</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>旧文调整重点</h4>
+      <ul>
+        <li>training.md 收敛为 DDPM 基础数学，移走过早出现的现代分支</li>
+        <li>consistency-models-and-rectified-flow.md 收敛为 Consistency / LCM</li>
+        <li>evolution.md 从第一入口后移为基础与进阶之间的桥</li>
+        <li>practical-training-recipes...md 纳入导航，不再成为隐藏页</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">读者完成基础主线后应能回答</div>
+  <ol>
+    <li>为什么“主动加噪”能变成一个可训练的生成模型？</li>
+    <li>模型究竟预测了什么，loss 与反向采样如何连接？</li>
+    <li>U-Net / DiT、VAE、文本编码器和 scheduler 分别负责什么？</li>
+    <li>如何把公式映射到一个能训练、能采样的最小程序？</li>
+  </ol>
+</div>

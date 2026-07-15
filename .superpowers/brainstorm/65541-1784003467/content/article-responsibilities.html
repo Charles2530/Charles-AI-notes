@@ -1,0 +1,81 @@
+<h2>每篇文章的唯一职责与内容边界</h2>
+<p class="subtitle">不是“哪里缺概念就补一句”，而是保证读者按顺序完成四次能力跃迁。</p>
+
+<div class="section">
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(280px,1fr));gap:14px">
+    <div class="mockup">
+      <div class="mockup-header">1 · beginner-primer.md — 建立心智模型</div>
+      <div class="mockup-body">
+        <p><strong>必须回答：</strong>什么是生成模型；扩散模型想学哪个分布；训练为何从真图加噪，生成为何从随机噪声开始；训练与采样不是同一条运行链。</p>
+        <p><strong>必须包含：</strong>一张总流程图、一个二维分布直觉、与 VAE/GAN/自回归模型的最小边界、应用与局限。</p>
+        <p><strong>暂不出现：</strong>SDE、ELBO 展开、DPM-Solver、DMD。</p>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">2 · training.md — 掌握 DDPM 数学闭环</div>
+      <div class="mockup-body">
+        <p><strong>补齐当前缺口：</strong>逐步前向链 → 任意时刻闭式采样 → 可计算后验 → 学习反向均值 → ELBO 到简化噪声 MSE 的关系。</p>
+        <p><strong>必须包含：</strong>统一记号表、训练算法、采样算法、每个公式的输入/输出/用途、为什么训练可随机抽一个时间步。</p>
+        <p><strong>迁出：</strong>Stable Diffusion 组件、视频世界模型、现代蒸馏讨论，只保留指向后文的桥。</p>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">3 · architecture-and-stable-diffusion.md — 看懂真实系统</div>
+      <div class="mockup-body">
+        <p><strong>模型接口：</strong><code>(x_t, t, condition) → prediction</code>。</p>
+        <p><strong>组件：</strong>时间嵌入、残差块、U-Net 跳连、attention、DiT；像素扩散与 latent diffusion；VAE、tokenizer、text encoder、cross-attention、denoiser、scheduler。</p>
+        <p><strong>两张数据流：</strong>训练路径与文生图推理路径，标清哪些模块冻结、哪些模块反复调用。</p>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">4 · minimal-ddpm-from-scratch.md — 把公式变成代码</div>
+      <div class="mockup-body">
+        <p><strong>最小实验：</strong>PyTorch + MNIST/FashionMNIST，小 U-Net，低分辨率，CPU 可读、GPU 可快速跑。</p>
+        <p><strong>逐段对应：</strong>schedule → <code>q_sample</code> → timestep embedding → denoiser → loss → reverse step → sample loop。</p>
+        <p><strong>必须有：</strong>中间加噪图、固定 seed 采样图、最小验收标准、常见 shape/device/系数错误。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">5 · flow-matching-and-rectified-flow.md — 接上现代路线</div>
+    <div class="mockup-body">
+      <p><strong>从 DDPM 已知概念出发：</strong>条件概率路径 → velocity target → ODE 采样 → 路径曲率与少步误差 → rectification。明确区分 DDPM 的 v-prediction、Flow velocity 和画面运动速度。</p>
+      <p><strong>边界：</strong>Consistency/LCM 留在旧页；新页只在结尾比较“终点一致映射”和“沿路径速度场”。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">旧文章调整矩阵</div>
+  <div class="mockup">
+    <div class="mockup-body">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th style="text-align:left;padding:8px">文章</th><th style="text-align:left;padding:8px">保留职责</th><th style="text-align:left;padding:8px">主要调整</th></tr></thead>
+        <tbody>
+          <tr><td style="padding:8px"><code>index.md</code></td><td>专题门户</td><td>加入一句话定义、完整闭环图、必修/进阶地图，并进入导航首位</td></tr>
+          <tr><td style="padding:8px"><code>evolution.md</code></td><td>历史地图</td><td>后移到基础主线之后，不再承担首次解释</td></tr>
+          <tr><td style="padding:8px"><code>noise-schedules...</code></td><td>高级参数化</td><td>假定读者已懂 DDPM；删去重复基础推导</td></tr>
+          <tr><td style="padding:8px"><code>score-matching...</code></td><td>连续时间理论</td><td>增加与基础页的接口表，不再重复“扩散是什么”</td></tr>
+          <tr><td style="padding:8px"><code>guidance...</code></td><td>条件与控制</td><td>补齐训练 dropout → CFG 采样 → failure 的连续链</td></tr>
+          <tr><td style="padding:8px"><code>inference.md</code></td><td>采样算法</td><td>以相同预训练模型下的路径/求解器差异组织</td></tr>
+          <tr><td style="padding:8px"><code>consistency-models...</code></td><td>Consistency / LCM</td><td>Flow 只保留边界比较，详细内容迁到新页</td></tr>
+          <tr><td style="padding:8px"><code>practical-training...</code></td><td>训练排障</td><td>纳入导航并链接最小实现中的可观察症状</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">内容写作规则</div>
+  <ol>
+    <li>每篇开头先写“读完能回答什么”和前置知识，不以论文名开场。</li>
+    <li>新符号第一次出现时同时给数学定义、白话解释和代码变量名。</li>
+    <li>每篇只保留一条主叙事；扩展知识用“进阶框”或链接下沉。</li>
+    <li>每个关键公式后紧跟用途；每张图写清它能证明什么、不能证明什么。</li>
+    <li>结尾用 3–5 个自测问题验收，而不是再复述一遍正文。</li>
+  </ol>
+</div>

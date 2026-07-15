@@ -1,8 +1,18 @@
-# 模型训练从零入门：把数据、目标和更新压力对齐
+# 模型训练的完整链路：数据、目标、更新与证据
 
-> **这篇回答的问题。** 如何理解“模型训练从零入门”背后的核心机制、适用边界和下一步阅读路径。
+## 本文解决什么问题
 
 训练不是“把数据喂给模型，然后等 loss 下降”。更准确地说，训练是在控制三件事：模型看见什么数据，用什么目标判断对错，用多大的更新压力修改参数。只要这三件事没有对齐，loss 曲线再顺，也可能只是模型学会了错误捷径。
+
+本文把单个 training step、完整训练 run 和分布式执行放进同一条链路，回答六个问题：梯度从哪里来，optimizer step 改了什么，effective tokens 和 global batch 怎样定义，模型为何需要多种并行，checkpoint contract 应保存哪些状态，以及怎样判断一次训练改动可信。
+
+## 前置知识
+
+阅读时只需要先区分参数、激活、梯度和优化器状态，并知道前向传播产生预测、反向传播计算梯度。相关数学可回看[优化与训练基础](../foundations/optimization-and-training-basics.md)和[数值、复杂度与估算](../prerequisite-math/numerics-complexity-and-estimation.md)。
+
+还需要记住几组容易混用的词：micro-batch 是单卡一次执行的数据，global batch 是所有设备和梯度累积合成的一次更新；data parallel、tensor parallel 与 pipeline parallel 分别切数据、层内张量和模型深度，它们解决的显存与计算问题不同。
+
+## 核心机制
 
 可以先把训练看成一条生产线：
 
@@ -19,7 +29,7 @@ data distribution
 
 这条线里每一环都会改变模型最终学到什么。数据决定“世界长什么样”，loss 决定“什么叫错”，batch 和学习率决定“每一步改多猛”，评测和 checkpoint 决定“这个实验能不能相信、能不能恢复、能不能比较”。
 
-## 先把一次 Step 看清楚
+### 先把一次 Step 看清楚
 
 最小监督学习目标可以写成：
 
@@ -44,11 +54,11 @@ optimizer.zero_grad()
 
 LLM 预训练只是这个框架的一个特例：输入是一段 token，目标通常是下一个 token。扩散模型可能预测噪声、velocity 或 score；VLA 行为克隆可能预测连续动作、离散动作 token 或动作 chunk；偏好训练让 chosen response 比 rejected response 更可能出现。形式不同，本质都是在定义“什么样的输出应该被奖励，什么样的输出应该被惩罚”。
 
-## 数据不是素材，是梯度来源
+### 数据不是素材，是梯度来源
 
-模型不是在“所有知识”上训练，而是在实际采样出来的分布上训练。一个训练集里代码、数学、中文、网页噪声、长上下文样本、机器人失败轨迹各占多少，都会改变梯度的平均方向。
+模型只会在实际采样出来的分布上训练。一个训练集里代码、数学、中文、网页噪声、长上下文样本、机器人失败轨迹各占多少，都会改变梯度的平均方向。
 
-大模型训练通常不是一次性把数据洗好就结束，而是阶段化的数据工程：
+大模型的数据工程会贯穿多个训练阶段，并持续调整清洗和混合策略：
 
 | 阶段 | 数据在提供什么信号 | 最容易漏看的问题 |
 | --- | --- | --- |
@@ -60,17 +70,17 @@ LLM 预训练只是这个框架的一个特例：输入是一段 token，目标�
 
 Hugging Face 的 Smol Training Playbook 和 SmolLM3 复盘值得参考，因为它们把训练写成数据、规模、评测和失败复盘的组合，而不是单个 loss 名字。
 
-对训练来说，真正重要的不是“样本条数”，而是有效 token 曝光：
+训练信号的规模应按有效 token 曝光计算，不能只看样本条数：
 
 \[
 N_{\text{eff}}=\sum_{\text{batch}}\text{valid tokens after packing and masking}
 \]
 
-这里 \(N_{\text{eff}}\) 表示真正参与 loss 的 token 数。padding、被 mask 的位置、坏样本、重复样本和没有参与 loss 的区域，都不应该被当成有效训练信号。长文本 packing 可以提高吞吐，但如果 attention mask 写错，会让样本边界泄漏；如果长度桶采样偏了，短样本可能被过度曝光，长样本反而学不到；如果只记录原始数据比例，不记录实际参与 loss 的 token 比例，实验结论会很虚。
+这里 \(N_{\text{eff}}\) 表示真正参与 loss 的 effective tokens。padding、被 mask 的位置、坏样本、重复样本和没有参与 loss 的区域，都不应该被当成有效训练信号。长文本 packing 可以提高吞吐，但如果 attention mask 写错，会让样本边界泄漏；如果长度桶采样偏了，短样本可能被过度曝光，长样本反而学不到；如果只记录原始数据比例，不记录实际参与 loss 的 token 比例，实验结论会很虚。
 
-一个现实例子：你给机器人策略加入 10,000 条“接触失败后恢复”的轨迹，但这些轨迹很长、被 packing 截断，又只占总 token 的 0.3%。训练 loss 可能几乎看不出变化，闭环恢复能力也不会明显提高。不是模型不懂恢复，而是恢复场景没有形成足够训练压力。
+一个现实例子：你给机器人策略加入 10,000 条“接触失败后恢复”的轨迹，但这些轨迹很长、被 packing 截断，又只占总 token 的 0.3%。训练 loss 可能几乎看不出变化，闭环恢复能力也不会明显提高。此时应先检查恢复场景是否形成了足够训练压力，不能直接归因为模型缺少恢复能力。
 
-## Loss 定义“错在哪里”
+### Loss 定义“错在哪里”
 
 以 next-token 语言建模为例，交叉熵目标是：
 
@@ -80,7 +90,7 @@ N_{\text{eff}}=\sum_{\text{batch}}\text{valid tokens after packing and masking}
 
 这里 \(L\) 表示序列长度，\(x_t\) 表示第 \(t\) 个真实 token，\(p_\theta(x_t\mid x_{<t})\) 表示模型在历史 token 条件下给真实下一个 token 的概率。真实 token 概率越低，惩罚越大。
 
-这个 loss 很适合训练语言模型的统计预测能力，但它不会自动保证模型会遵守指令、诚实拒答、稳定使用工具，或者在机器人闭环里安全执行动作。所以训练经常分阶段，不是因为后面的 loss 更“高级”，而是因为训练信号换了。
+这个 loss 很适合训练语言模型的统计预测能力，但它不会自动保证模型遵守指令、诚实拒答、稳定使用工具，或者在机器人闭环里安全执行动作。分阶段训练的原因在于监督信号发生了变化，不能据此给不同 loss 排出高低等级。
 
 | 信号 | 它主要改变什么 | 典型副作用 |
 | --- | --- | --- |
@@ -100,7 +110,7 @@ N_{\text{eff}}=\sum_{\text{batch}}\text{valid tokens after packing and masking}
 
 平均 loss 会下降，但真正影响机器人成功率的接触与遮挡桶变差。优化器没有犯错，它只是忠实优化了你给它的加权目标。训练报告必须有分桶评测、失败样本回放和下游指标。
 
-## Batch 和学习率决定更新压力
+### Batch 和学习率决定更新压力
 
 Batch 不是越大越好，它改变的是梯度估计。小 batch 噪声大，可能帮助探索，也可能让曲线抖动；大 batch 噪声小，吞吐更好，但学习率、warmup 和泛化行为都要重新匹配。
 
@@ -130,7 +140,7 @@ global batch:     所有卡、所有累积合起来的有效更新规模
 
 比较两个 run 时，优先对齐 consumed tokens、有效 batch、学习率日程、数据版本、tokenizer、packing 策略和评测脚本。只对齐 `step` 数，常常是在比较两种不同训练。
 
-## 系统先算显存账和时间账
+### 系统先算显存账和时间账
 
 训练态显存不只存参数，还要存梯度、优化器状态、激活、中间 buffer 和通信缓存。AdamW 通常要保存一阶动量、二阶动量和可能的 master weights；反向传播还需要保留或重算激活。一个模型推理能放下，不代表训练能放下。
 
@@ -146,9 +156,9 @@ global batch:     所有卡、所有累积合起来的有效更新规模
 
 <small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。本站用这张图说明 micro-batch 如何填充 pipeline bubble，让不同 accelerator 同时处理不同模型分段；没有用 image2 或其他生成式工具作图。</small>
 
-GPipe 图里的 micro-batch 很关键。没有 micro-batch，第一段算完才轮到第二段，很多设备会等待；micro-batch 把流水线填起来。但 micro-batch 太多又会增加激活保存、调度复杂度和恢复语义。系统优化不是把所有并行开关打开，而是让模型大小、显存、通信拓扑、batch 语义和 checkpoint 目标共同闭合。
+GPipe 图里的 micro-batch 很关键。没有 micro-batch，第一段算完才轮到第二段，很多设备会等待；micro-batch 把流水线填起来。但 micro-batch 太多又会增加激活保存、调度复杂度和恢复语义。系统优化需要让模型大小、显存、通信拓扑、batch 语义和 checkpoint 目标共同闭合；同时打开所有并行开关并不能保证更快。
 
-## Scaling Law 是预算分配问题
+### Scaling Law 是预算分配问题
 
 训练预算不是只堆参数。Chinchilla 的核心提醒是：固定计算量下，参数量和训练 token 数要配平。模型太大但 token 不够，会欠训练；模型太小但 token 很多，容量会成为瓶颈。
 
@@ -158,15 +168,15 @@ GPipe 图里的 micro-batch 很关键。没有 micro-batch，第一段算完才�
 
 这张图不要求读者记住某个固定比例，因为数据质量、架构、tokenizer、目标函数和后训练阶段都会改变实际选择。它真正有用的地方是改变问题问法：不要只问“模型要不要更大”，而要问“这笔算力应该分给参数、token、上下文长度、数据清洗、评测和失败复盘中的哪一块”。
 
-## Checkpoint 是证据链，不只是备份
+### Checkpoint 是证据链，不只是备份
 
-可信 checkpoint 不只是 `model.safetensors`。如果要恢复训练或解释结果，它至少要回答：来自哪份代码、哪份配置、哪份数据 manifest、哪个 tokenizer、哪个 sampler 状态、哪个 optimizer state、哪个 scheduler 位置、哪个 RNG 状态、已经消耗多少 token。
+可信 checkpoint 不只是 `model.safetensors`。checkpoint contract 如果要支持恢复训练和解释结果，至少要回答：来自哪份代码、哪份配置、哪份数据 manifest、哪个 tokenizer、哪个 sampler 状态、哪个 optimizer state、哪个 scheduler 位置、哪个 RNG 状态、已经消耗多少 token。
 
 只保存权重，通常只能推理，不能证明训练可以无缝续跑。恢复后最常见的问题是：学习率跳到错误位置，数据重复或跳样，gradient accumulation 边界错位，loss scaler 重置，分布式分片映射变化，packing 的 token 边界恢复不准。
 
 可靠做法是把 checkpoint 当作实验资产：保存模型、optimizer、scheduler、RNG、sampler、tokenizer、data manifest、配置和 eval artifacts。恢复后做短跑一致性检查，看若干 step 内的 loss、grad norm、吞吐、consumed tokens 和关键评测是否在可解释范围内。
 
-## 训练故障先按症状分桶
+### 训练故障先按症状分桶
 
 训练事故通常不是“模型坏了”这么笼统。先按症状分桶，排查会快很多。
 
@@ -178,9 +188,9 @@ GPipe 图里的 micro-batch 很关键。没有 micro-batch，第一段算完才�
 | 恢复训练后曲线偏移 | optimizer/scheduler/RNG/sampler 状态没恢复 | checkpoint manifest、consumed tokens、短跑对齐 |
 | 某个能力突然退化 | 数据混合或 loss 权重改坏了长尾桶 | 数据桶曝光、失败样本、下游评测 |
 
-Karpathy 的训练 recipe 仍然值得读，是因为它强调先让一个小模型、小数据、小 batch 的实验完全跑通，再逐步增加复杂度。成熟训练不是凭经验调几个超参，而是让每个异常都有可观察证据。
+Karpathy 的训练 recipe 仍然值得读，它强调先让一个小模型、小数据、小 batch 的实验完全跑通，再逐步增加复杂度。成熟训练需要给每个异常留下可观察证据，仅凭经验调整几个超参很难完成归因。
 
-## 一次训练改动是否可信
+### 一次训练改动是否可信
 
 一个训练改动声称“更快、更稳、更好”，至少要同时交代三类证据。
 
@@ -192,13 +202,40 @@ Karpathy 的训练 recipe 仍然值得读，是因为它强调先让一个小模
 
 这三类证据缺一类，结论都会变轻。只报质量，可能成本不可接受；只报吞吐，可能模型没变好；只报短跑稳定，可能长跑数据阶段切换后才崩。
 
-## 最后判断
+## 常见误解与失效边界
 
-训练的核心不是“让数字下降”，而是让数据分布、目标函数和更新压力共同服务真实能力。数据决定模型看见什么，loss 决定哪些错误被惩罚，batch 与学习率决定每一步压力，optimizer 和数值策略决定训练能不能稳定走下去，eval 与 checkpoint 决定实验是否可信。
+| 常见判断 | 问题在哪里 | 应补的证据 |
+| --- | --- | --- |
+| loss 下降，所以模型更好 | loss 只反映指定目标和当前数据分布 | 下游任务、失败桶、分布外与闭环评测 |
+| tokens/s 提高，所以训练更有效 | 可能只是 padding 更多、mask 位置变化或数据质量下降 | effective tokens/s、数据桶曝光与质量指标 |
+| 卡数翻倍，速度也应翻倍 | 通信、pipeline bubble、数据等待与 checkpoint 会进入关键路径 | scaling efficiency、通信占比、bubble 与 I/O 时间 |
+| checkpoint 能加载，所以恢复正确 | optimizer、scheduler、RNG、sampler 可能已经错位 | 恢复短跑、consumed tokens 与状态清单 |
+| 低精度不报 NaN 就没有数值问题 | 舍入和饱和可能缓慢改变参数轨迹 | 高精基线、分层统计与长跑质量回归 |
+
+这些判断的边界是：小规模研究可以暂时省略部分生产治理，但不能省略与结论直接相关的证据。研究吞吐就必须固定数据和质量；研究恢复就必须保存完整状态；研究新目标就必须验证它没有靠数据泄漏或代理指标获益。
+
+## 检查理解
+
+读完后，应能回答下面的问题：
+
+1. 两个 run 的 step 数相同，为什么 consumed tokens 和参数轨迹仍可能不同？
+2. global batch 由哪些量相乘得到，序列长度变化后为何还要换算 tokens per update？
+3. data parallel、tensor parallel 和 pipeline parallel 各自切分什么，新增了哪类通信或等待？
+4. 为什么平均 loss 下降时，关键数据桶和真实任务仍可能退化？
+5. 一份支持等价恢复的 checkpoint contract，除了权重还需要哪些状态？
+6. 一个“训练速度提升 20%”的结论，至少要同时报告哪些质量、稳定性和成本证据？
+
+### 最后判断
+
+训练要让数据分布、目标函数和更新压力共同服务真实能力，不能停在“让数字下降”。数据决定模型看见什么，loss 决定哪些错误被惩罚，batch 与学习率决定每一步压力，optimizer 和数值策略决定训练能不能稳定走下去，eval 与 checkpoint 决定实验是否可信。
 
 读任何训练报告时，先沿着这条链问：有效 token 是什么，loss 在优化什么，更新压力是否稳定，系统账是否闭合，质量证据是否覆盖关键失败桶。如果这些问题都能回答，训练才从一条曲线变成一套可以复盘、可以恢复、可以继续改进的工程过程。
 
-## 外部精读
+## 相关阅读与下一步
+
+先沿[目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md)补齐参数更新，再读[输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md)和[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。训练异常可直接进入[稳定性与故障排查](stability-numerics-and-failure-triage.md)，实验结论则用[评测与消融设计](evaluation-and-ablation-methodology.md)收口。完整训练—部署交接见[训练与推理系统总览](../training-and-inference-systems/index.md)。
+
+### 外部精读
 
 - [PyTorch: Optimization Loop](https://docs.pytorch.org/tutorials/beginner/basics/optimization_tutorial.html)：用官方最小训练循环理解 `loss.backward()`、`optimizer.step()` 和 `zero_grad()`。
 - [A Recipe for Training Neural Networks](https://karpathy.github.io/2019/04/25/recipe/)：训练排查经典博客，适合学习如何从小实验逐步走到可信训练。
@@ -209,7 +246,7 @@ Karpathy 的训练 recipe 仍然值得读，是因为它强调先让一个小模
 - [GPipe](https://arxiv.org/abs/1811.06965)：理解流水线并行为什么需要 micro-batch。
 - [Datawhale: VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)：中文显存估算补充读物，适合把参数、梯度、优化器状态拆成手算账。
 
-## 相关阅读与下一步
+### 站内与外部入口
 
 - 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
 - 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。

@@ -151,5 +151,5 @@ $$
 - 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
 - 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
 - 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[具身智能从零路线](beginner-learning-path.md)。
+- 站内下一步：[具身智能基础：观测、动作与反馈闭环](beginner-learning-path.md)。
 - 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
