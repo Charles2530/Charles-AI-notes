@@ -1,8 +1,8 @@
 # 扩散采样与推理加速
 
-训练阶段，扩散模型学会在不同噪声水平下判断“当前样本应该往哪里移动”。推理阶段，我们从噪声 \(x_T\) 出发，把这个方向连续兑现成图像、视频或动作序列。采样器要解决的不是“怎么把噪声擦掉”这么简单，而是在有限模型调用次数里，尽量沿着正确轨迹从高噪声分布走回数据分布。
+训练阶段，扩散模型学会在不同噪声水平下判断“当前样本应该往哪里移动”。推理阶段，我们从噪声 \(x_T\) 出发，把这个方向连续兑现成图像、视频或动作序列。采样器要在有限模型调用次数里，尽量沿着正确轨迹从高噪声分布走回数据分布。
 
-这页只抓住一条主线：**模型给方向，采样器决定怎样走这条方向。** DDPM、DDIM、Euler、Heun、DPM-Solver、DPM-Solver++ 和 EDM 的差异，都可以放进这个问题里看。
+扩散采样的主线是：模型给方向，采样器决定怎样沿这个方向走。DDPM、DDIM、Euler、Heun、DPM-Solver、DPM-Solver++ 和 EDM 的差异，都可以放进这条主线里看。
 
 ## 采样器接管的是有限步执行
 
@@ -35,7 +35,7 @@ x_{t-1}=\mu_\theta(x_t,t)+\sigma_t z,\qquad z\sim\mathcal N(0,I)
 
 ![DDPM progressive generation](../assets/images/paper-figures/diffusion/ddpm-figure-14-progressive-generation.jpg){ width="670" }
 
-<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 14。原图展示 CIFAR-10 unconditional generation 的反向链：样本从高噪声状态逐步变成可辨认图像。本站读法：早期步骤更负责大结构，中后期逐渐补颜色、边缘和纹理；多步采样的价值正是给这些修正留下时间。</small>
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 14。原图展示 CIFAR-10 unconditional generation 的反向链：样本从高噪声状态逐步变成可辨认图像。读图重点：早期步骤更负责大结构，中后期逐渐补颜色、边缘和纹理；多步采样的价值正是给这些修正留下时间。</small>
 
 DDPM 的优势是概率建模清楚，随机链也自然带来多样性。代价是慢。早期设置里常用上百到上千步，这在交互式图像生成、视频生成和机器人 rollout 里都太贵。
 
@@ -45,7 +45,7 @@ DDPM 的优势是概率建模清楚，随机链也自然带来多样性。代价
 
 ![DDIM accelerated generation](../assets/images/paper-figures/diffusion/ddim-figure-2-accelerated-generation.png){ width="720" }
 
-<small>图源：[Denoising Diffusion Implicit Models](https://arxiv.org/abs/2010.02502)，Figure 2。原图表达 accelerated generation 可以只使用时间子序列，从而减少生成步数。本站读法：虚线时间点不是训练时不存在，而是采样时可以跳过；DDIM 的重点是改反向路径，而不是让模型一次性直接吐出最终图。</small>
+<small>图源：[Denoising Diffusion Implicit Models](https://arxiv.org/abs/2010.02502)，Figure 2。原图表达 accelerated generation 可以只使用时间子序列，从而减少生成步数。读图重点：虚线时间点不是训练时不存在，而是采样时可以跳过；DDIM 的重点是改反向路径，而不是让模型一次性直接吐出最终图。</small>
 
 DDIM 常见更新会先从模型输出还原出当前的干净样本估计 \(\hat x_0\)，再按下一个噪声水平重新混合 \(\hat x_0\)、预测噪声和可选随机项：
 
@@ -65,7 +65,7 @@ x_{t'}
 
 ![DDIM 确定性一步更新几何示意图](../assets/images/paper-figures/diffusion/ddim-deterministic-step.svg){ width="780" }
 
-<small>图源：本站自绘，参考 DDIM 的确定性采样几何读法。红色箭头表示从 \(x_t\) 中减去当前预测噪声分量；绿色箭头表示按更低噪声水平 \(t'\) 重新组合数据分量和噪声分量。图只用于说明系数几何，不表示真实样本空间只有二维。</small>
+<small>图源：自绘，参考 DDIM 的确定性采样几何读法。红色箭头表示从 \(x_t\) 中减去当前预测噪声分量；绿色箭头表示按更低噪声水平 \(t'\) 重新组合数据分量和噪声分量。图只用于说明系数几何，不表示真实样本空间只有二维。</small>
 
 DDIM 让“少步采样”变成现实，但它没有消除误差。时间点越稀疏，每一步跨度越大，模型对 \(\hat x_0\) 或 \(\hat\epsilon\) 的小误差越容易累积成结构漂移、细节变软或 prompt 丢失。
 
@@ -124,7 +124,7 @@ x_{t_{n+1}}=\Phi(x_{t_n},\epsilon_\theta,t_n,t_{n+1})
 
 ![DPM-Solver++ guided instability](../assets/images/paper-deep-dives/diffusion/dpm-solver-plus-plus/figure-1-guided-instability.png){ width="640" }
 
-<small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 1。原图在 ImageNet 256×256、classifier guidance scale 8.0、15 NFE 下比较不同 solver。本站读法：高阶不自动等于稳定；强 guidance 会改变方向场形状，少步求解器必须为这种更陡的轨迹付出设计。</small>
+<small>图源：[DPM-Solver++](https://arxiv.org/abs/2211.01095)，Figure 1。原图在 ImageNet 256×256、classifier guidance scale 8.0、15 NFE 下比较不同 solver。读图重点：高阶不自动等于稳定；强 guidance 会改变方向场形状，少步求解器必须为这种更陡的轨迹付出设计。</small>
 
 这也连接到前一页的 CFG：guidance scale 改变的不是最终图上的一个滤镜，而是采样每一步使用的方向。采样器、步数和 guidance 必须一起报告，否则“这个 sampler 更好”的结论没有可复现意义。
 
@@ -170,7 +170,7 @@ CFG 是一个典型例子。理论上同一步需要条件和无条件两种预�
 
 读采样论文或调系统时，先问四件事：模型输出坐标是什么，采样时间表怎么选，每一步是否随机或 guided，总成本按 NFE 还是端到端延迟算。问清这些，sampler 名字就不再是一串菜单项，而是有限计算预算下怎样走生成轨迹。
 
-## 外部精读
+## 外部材料
 
 - [DDPM](https://arxiv.org/abs/2006.11239)：理解原始随机反向链、噪声预测和 progressive generation。
 - [DDIM](https://arxiv.org/abs/2010.02502)：理解不重训模型也能改变采样路径、跳步和确定性采样。

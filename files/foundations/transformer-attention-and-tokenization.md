@@ -8,10 +8,10 @@ Transformer 最容易被讲成一张架构图：左边 encoder，右边 decoder�
 
 这条链路适用于 LLM，也适用于 VLM、DiT、VLA 和世界模型。文本会被切成 subword token，图片会被切成 patch token，视频会变成时空 token，机器人策略还可能把状态、动作、相机视角和语言指令都塞进同一个序列。Transformer 的核心问题不是“图里有几个模块”，而是：**每个 token 在每一层到底能读谁、读多少、读回来以后怎么改写自己。**
 
-读完这篇应该能回答四个问题：tokenizer 为什么会影响上下文和成本；Q/K/V 的公式怎样落到 shape；causal mask 与 KV cache 为什么是同一条生成链；为什么现代 Transformer 的改进经常落在位置机制、KV 存储、attention kernel 和 MoE 上。
+读完后应该能回答四个问题：tokenizer 为什么会影响上下文和成本；Q/K/V 的公式怎样落到 shape；causal mask 与 KV cache 为什么是同一条生成链；为什么现代 Transformer 的改进经常落在位置机制、KV 存储、attention kernel 和 MoE 上。
 
 !!! tip "数学先修"
-    本文会用到[向量内积与矩阵变换](../prerequisite-math/linear-algebra-and-geometry.md)拆 Q/K/V，用[序列、位置与 mask](../prerequisite-math/sequence-position-and-masking.md)定义可见性，并用[条件概率](../prerequisite-math/probability-distributions-and-expectation.md)理解 next-token 输出。
+    需要用到[向量内积与矩阵变换](../prerequisite-math/linear-algebra-and-geometry.md)拆 Q/K/V，用[序列、位置与 mask](../prerequisite-math/sequence-position-and-masking.md)定义可见性，并用[条件概率](../prerequisite-math/probability-distributions-and-expectation.md)理解 next-token 输出。
 
 ## Tokenization 先决定计算账本
 
@@ -31,7 +31,7 @@ h_i = E[x_i] + p_i
 
 ![Transformer 原论文模型结构图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="500" .atlas-figure-tall }
 
-<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原图表达 encoder-decoder Transformer 的基本结构：embedding 与 positional encoding 进入多层 attention、feed-forward、残差和归一化模块。本站使用这张图时，先看输入如何变成 token 表示，再看 attention 如何跨 token 交换信息，最后看 FFN 如何逐 token 改写表示。</small>
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原图表达 encoder-decoder Transformer 的基本结构：embedding 与 positional encoding 进入多层 attention、feed-forward、残差和归一化模块。读这张图时，先看输入如何变成 token 表示，再看 attention 如何跨 token 交换信息，最后看 FFN 如何逐 token 改写表示。</small>
 
 原论文图里的 encoder 更像“把输入序列读成一组可被查询的表示”，decoder 更像“在已生成前缀上继续预测下一个 token”。Decoder 里的 masked multi-head attention 是关键：生成第 \(t\) 个位置时，它只能看 \(1\) 到 \(t\) 的前缀，不能偷看未来答案。后面的 encoder-decoder attention 则让 decoder 用当前 query 去读取 encoder 输出的 key/value。
 
@@ -69,7 +69,7 @@ query 是当前位置发出的“我想找什么”，key 是每个位置暴露�
 
 ![Scaled dot-product attention 与 multi-head attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-combined.png){ width="820" }
 
-<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 2。原图表达 scaled dot-product attention 和 multi-head attention 的组成。本站使用它说明：单个 head 完成一次“匹配、归一化、读取”，multi-head 则并行使用多套投影，让同一批 token 可以从不同关系里读信息。</small>
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 2。原图表达 scaled dot-product attention 和 multi-head attention 的组成。这张图说明：单个 head 完成一次“匹配、归一化、读取”，multi-head 则并行使用多套投影，让同一批 token 可以从不同关系里读信息。</small>
 
 Multi-head attention 的意义不是“多几个可解释脑区”，而是让模型在同一层里并行学习多种关系。一个 head 可能偏向局部语法，一个 head 可能偏向长距离指代，一个 head 可能在 VLM 中把词语和视觉 patch 对齐。多个 head 的输出会拼接后再过线性层，合并成下一层的 token 表示。
 
@@ -129,7 +129,7 @@ p(x_{1:L}) = \prod_{t=1}^{L} p(x_t \mid x_{<t})
 
 前面的 2 是 K 和 V 两份缓存，\(T\) 是历史 token 数，\(H_{\text{kv}}\) 是 KV head 数，\(d_{\text{head}}\) 是每个 head 的维度，`bytes` 是每个数值占多少字节。真实系统还要乘以层数、batch size，并考虑 allocator、block 管理、prefix 复用和并行切分。
 
-这个公式解释了很多推理系统设计。GQA/MQA 通过减少 KV head 数降低缓存；KV quantization 用更少字节存历史；vLLM 的 PagedAttention 用分页式 block 管理动态增长的 KV cache，减少碎片和浪费；TensorRT-LLM 这类 runtime 会把 KV block pool、reuse、eviction、offload 和 attention window 变成可配置的服务策略。换句话说，KV cache 不是一个小优化，而是自回归 Transformer 能否高吞吐服务的核心数据结构。
+这个公式解释了很多推理系统设计。GQA/MQA 通过减少 KV head 数降低缓存；KV quantization 用更少字节存历史；vLLM 的 PagedAttention 用分页式 block 管理动态增长的 KV cache，减少碎片和浪费；TensorRT-LLM 这类 runtime 会把 KV block pool、reuse、eviction、offload 和 attention window 变成可配置的服务策略。KV cache 不是一个小优化，而是自回归 Transformer 能否高吞吐服务的核心数据结构。
 
 ## 为什么长上下文和多模态会贵
 
@@ -145,7 +145,7 @@ Self-attention 的分数矩阵是 \(L \times L\)。当 \(L\) 从 4k 到 32k，�
 
 ![FlashAttention IO-aware attention 原论文图](../assets/images/paper-figures/transformer/flashattention-figure-1-io-aware.png){ width="920" }
 
-<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原图表达朴素 attention 会反复在 HBM 中读写中间矩阵，而 FlashAttention 通过 tiling 与 online softmax 避免物化完整 attention matrix。本站使用它说明：同一个 attention 公式，在不同内存访问路径下会有完全不同的吞吐和显存占用。</small>
+<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原图表达朴素 attention 会反复在 HBM 中读写中间矩阵，而 FlashAttention 通过 tiling 与 online softmax 避免物化完整 attention matrix。这张图说明：同一个 attention 公式，在不同内存访问路径下会有完全不同的吞吐和显存占用。</small>
 
 FlashAttention 的关键不是把 attention 数学上变成线性，而是把原本巨大、低效的中间读写变成更接近硬件友好的分块计算。它仍然在算精确 attention，仍然要面对 token 增长带来的总体计算压力；但它减少了 HBM 往返和中间结果物化，所以训练和推理都能大幅受益。
 
@@ -165,7 +165,7 @@ FlashAttention 的关键不是把 attention 数学上变成线性，而是把原
 
 ![DeepSeek-V3 architecture](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原图表达 DeepSeek-V3 block 使用 MLA 压缩 KV cache，并用 shared experts 与 routed experts 构成 DeepSeekMoE。本站使用它说明：现代 Transformer 的改进常常同时发生在 attention 的历史存储与 FFN 的稀疏激活上。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原图表达 DeepSeek-V3 block 使用 MLA 压缩 KV cache，并用 shared experts 与 routed experts 构成 DeepSeekMoE。这张图说明：现代 Transformer 的改进常常同时发生在 attention 的历史存储与 FFN 的稀疏激活上。</small>
 
 读这种技术报告图时，不要只看“参数多少、上下文多长”。更有效的读法是跟着 token 走：它被切成什么粒度，位置怎么编码，它能 attend 到谁，历史 K/V 怎么保存，每层实际激活多少专家，专家之间的通信是否吃掉了稀疏计算的收益。
 
@@ -189,7 +189,7 @@ Transformer 的核心不是“某个模型架构名”，而是一种把世界�
 
 所以读任何 Transformer 系论文或报告时，可以先问六个具体问题：输入被切成什么 token；序列长度大概是多少；每类 token 能看谁；位置和时间如何编码；历史 K/V 如何保存和复用；哪些信息在 connector、resampler、latent bottleneck 或 expert routing 里被压缩了。问完这六件事，论文里的大部分结构图就不再只是模块堆叠。
 
-## 外部精读
+## 外部材料
 
 - [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)：用可视化数据流建立 Transformer 第一层直觉，适合在看公式前阅读。
 - [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)：把原论文公式和 PyTorch 实现逐段对应，适合检查自己是否真的理解了 shape。
@@ -199,11 +199,6 @@ Transformer 的核心不是“某个模型架构名”，而是一种把世界�
 - [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 attention 为什么是内存系统问题，而不只是一个矩阵公式。
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：把 KV cache、分页管理和动态 serving batch 放到真实推理系统里看。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

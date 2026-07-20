@@ -116,7 +116,3 @@ reward 曲线本身尤其嘈杂：它同时受真实 arm 均值、动作选择�
 python files/assets/examples/reinforcement-learning/gridworld.py --seed 7
 python -m pytest tests/test_reinforcement_learning_examples.py -q
 ```
-
-## 下一步
-
-下一章进入 [MDP、价值函数与 Bellman](mdp-value-bellman.md)：加入 state、transition、discounted return 和终止状态，解释为什么 GridWorld 的更新必须区分普通转移与 terminal transition。

@@ -1,11 +1,9 @@
 # 偏好数据与对齐失效
 
-> **这篇回答的问题。** 如何理解“偏好数据与对齐失效”背后的核心机制、适用边界和下一步阅读路径。
-
 很多团队在做对齐时，会把注意力集中在 `RLHF`、`DPO`、`IPO`、`ORPO` 这样的算法名字上。
 但现实里更决定结果的，往往是偏好数据长什么样、偏好标签是否一致、对齐目标是否和真实业务一致，以及奖励或偏好目标到底在塑造什么行为。
 
-这页重点讨论偏好数据本身，以及对齐过程中最常见的失效模式。
+偏好数据本身和对齐过程中的常见失效模式，需要分开检查。
 **核心观点很简单**：
 
 **对齐首先是数据设计问题，其次才是优化算法问题。**
@@ -292,11 +290,8 @@ R(y|x)
 
 偏好对齐不是单独调一个 loss，而是把“想要什么行为”翻译成可标注、可复验、可回流的数据制度。上线前要校准 judge，按任务桶做人审抽查，区分风格收益与能力收益，并把关键配置、数据快照、失败案例、回滚条件和下游接口说明版本化；否则对齐经验很难沉淀为组织能力。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

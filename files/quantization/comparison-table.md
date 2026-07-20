@@ -1,19 +1,19 @@
 # 量化方法对照表
 
-这一页把量化主线里的代表方法放在同一页，不只是为了记住名字，而是为了回答三个工程里最常见的问题：误差主要出现在权重、激活、KV cache，还是量化 kernel 和调度兼容性上；某种方法“更准”到底是因为二阶补偿、通道保护、平滑激活，还是训练时已经让模型适应了量化噪声；真实线上收益到底来自显存下降、吞吐增加、单卡可部署，还是仅仅减少了模型文件大小。
+量化方法对比要回答三个工程问题：误差主要出现在权重、激活、KV cache，还是量化 kernel 和调度兼容性上；某种方法“更准”到底是因为二阶补偿、通道保护、平滑激活，还是训练时已经让模型适应了量化噪声；真实线上收益到底来自显存下降、吞吐增加、单卡可部署，还是仅仅减少了模型文件大小。
 
 量化最容易被误解成“把 16 位变成 4 位”，但真正难点在于：
 不同方法保护的对象不同，误差迁移的路径也不同。
 
 ![SmoothQuant main idea](../assets/images/paper-figures/quantization/smoothquant-figure-5-main-idea.png){ width="820" }
 
-<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 5。原图表达把激活中的 outlier 难度迁移到权重侧，使 W8A8 更容易部署；本站读法是把量化方法对照表里的 PTQ/GPTQ/AWQ/SmoothQuant/FP8 分到不同瓶颈。它不能证明 SmoothQuant 比所有方法更好，只解释一类激活 outlier 处理思路。</small>
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 5。原图表达把激活中的 outlier 难度迁移到权重侧，使 W8A8 更容易部署；读图重点是把量化方法对照表里的 PTQ/GPTQ/AWQ/SmoothQuant/FP8 分到不同瓶颈。它不能证明 SmoothQuant 比所有方法更好，只解释一类激活 outlier 处理思路。</small>
 
 ## 核心问题
 
 量化方法对照真正要回答的是：**同样是低比特，GPTQ、AWQ、SmoothQuant、QAT、QLoRA、KV 量化到底在保护哪一种误差，代价又落在校准、训练、kernel、显存还是质量回归上。**
 
-所以这页不按论文发布时间排序，而按误差控制对象来读。GPTQ 关心权重量化误差对输出的二阶影响，AWQ 关心被激活放大的关键通道，SmoothQuant 关心 activation outlier，QAT 让模型在训练时适应低比特误差，QLoRA 关心量化底座上的微调预算，KV cache 量化关心长上下文在线显存。
+更实用的排序方式是按误差控制对象来读。GPTQ 关心权重量化误差对输出的二阶影响，AWQ 关心被激活放大的关键通道，SmoothQuant 关心 activation outlier，QAT 让模型在训练时适应低比特误差，QLoRA 关心量化底座上的微调预算，KV cache 量化关心长上下文在线显存。
 
 ## 方法总表
 
@@ -207,7 +207,7 @@ h_{l+1} = f_l(h_l; W_l),
 
 量化方法对照时，最关键的不是“哪篇论文更新”，而是先分清它保护的是哪种误差、牺牲的是哪种成本、适配的是离线研究、单卡部署还是生产系统。只有把误差来源、系统瓶颈和训练预算一起放进去看，量化选型才不会停留在“4bit 看起来更省”这种表面层。
 
-## 外部精读
+## 外部材料
 
 - [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：适合先把 scheme、granularity 和 technique 分开。
 - [GPTQ](https://arxiv.org/abs/2210.17323)：理解二阶补偿和逐层权重量化。
@@ -216,11 +216,6 @@ h_{l+1} = f_l(h_l; W_l),
 - [QLoRA](https://arxiv.org/abs/2305.14314)：理解 4bit 底座微调和 NF4/double quantization。
 - [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 FP8 为什么更像硬件友好的混合精度路线，而不是传统整数 PTQ。
 
-## 相关阅读与下一步
-
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

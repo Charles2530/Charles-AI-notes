@@ -6,7 +6,7 @@
 
 ![Nsight Systems NVTX timeline](../assets/images/tools/nsight-systems/nvtx-timeline.png){ width="820" }
 
-<small>图源：[NVIDIA Nsight Systems / NVTX 文档](https://docs.nvidia.com/nsight-systems/)。原图表达用 NVTX 标记把 kernel、CPU 调用和时间线串起来；本站读法是：自定义 op 是否真的进了热路径，需要 profiler、dispatch、fallback 和端到端 trace 一起验证。它不能证明某个 custom op 正确或更快，只说明验证入口应该在哪里。</small>
+<small>图源：[NVIDIA Nsight Systems / NVTX 文档](https://docs.nvidia.com/nsight-systems/)。原图表达用 NVTX 标记把 kernel、CPU 调用和时间线串起来；读图重点是：自定义 op 是否真的进了热路径，需要 profiler、dispatch、fallback 和端到端 trace 一起验证。它不能证明某个 custom op 正确或更快，只说明验证入口应该在哪里。</small>
 
 ## 为什么很多高性能 kernel 最终没被用起来
 
@@ -126,11 +126,8 @@ CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和
 
 **反例**：如果目标系统永远只跑 eager 离线脚本，compile 集成可以延后；但只要进入生产训练或推理图，custom op 就必须以“完整框架路径”验收，而不是只验单函数。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

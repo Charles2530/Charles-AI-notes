@@ -1,12 +1,12 @@
 # QAT、Kernel 与 KV Cache
 
-这一页把三件常被混在一起的事情拆开：`QAT` 解决模型怎样适应量化误差，`kernel` 决定低比特是否真的跑得快，`KV cache quantization` 解决长上下文推理里的动态显存和带宽。
+`QAT`、`kernel` 和 `KV cache quantization` 是三件不同的事：`QAT` 解决模型怎样适应量化误差，`kernel` 决定低比特是否真的跑得快，`KV cache quantization` 解决长上下文推理里的动态显存和带宽。
 
 ## 核心问题
 
 量化落地最容易出错的地方，是把“模型能承受低比特误差”“低比特路径真的跑得快”“长上下文显存真的下降”混成一件事。实际上它们对应三条不同证据链：QAT 看质量恢复，kernel 看 profiler 和端到端延迟，KV cache 量化看长上下文并发和长程质量。
 
-所以这页按执行链路读：训练阶段是否让模型适应误差，导出后 runtime 是否命中低比特 kernel，decode 阶段 KV cache 是否成为新瓶颈。只有三条链都过关，量化才算从论文数字变成服务能力。
+量化要按执行链路读：训练阶段是否让模型适应误差，导出后 runtime 是否命中低比特 kernel，decode 阶段 KV cache 是否成为新瓶颈。只有三条链都过关，量化才算从论文数字变成服务能力。
 
 ## QAT 在优化什么
 
@@ -163,7 +163,7 @@ flowchart LR
 
 QAT、kernel 和 KV cache 是量化落地的三块拼图。QAT 让模型适应误差，kernel 把低比特转成真实速度，KV cache 解决长上下文动态显存。只有三者和任务质量一起过关，量化才算从论文数字变成可用系统。
 
-## 外部精读
+## 外部材料
 
 - [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：先区分 quantization scheme、granularity 和 technique。
 - [A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)：看 weight-only、W&A、KV cache 和低比特系统路径的总览。
@@ -171,11 +171,6 @@ QAT、kernel 和 KV cache 是量化落地的三块拼图。QAT 让模型适应�
 - [TensorRT-LLM documentation](https://nvidia.github.io/TensorRT-LLM/)：看低比特 kernel、FP8/INT8/INT4 和 serving engine 如何落到 NVIDIA 部署栈。
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：对照理解 KV cache 管理和 KV 量化为什么是两类问题。
 
-## 相关阅读与下一步
-
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

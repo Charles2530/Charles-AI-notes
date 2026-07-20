@@ -1,10 +1,8 @@
 # 噪声日程与参数化
 
-> **这篇回答的问题。** 如何理解“噪声日程与参数化”背后的核心机制、适用边界和下一步阅读路径。
-
 扩散训练看起来只是“给图加噪，再让模型预测噪声”。真正影响模型性格的，是两件更细的事：噪声日程决定训练样本会落在哪些难度区间，参数化决定模型用什么坐标回答这个去噪问题。它们会直接影响采样器、CFG、少步生成、视频一致性和世界模型里的动作敏感性。
 
-可以把这页当成训练和推理之间的桥。训练页讲模型怎样学会局部方向；Score/SDE 页讲这些方向怎样变成概率流；Inference 页讲采样器怎样有限步积分。噪声日程与参数化负责回答：这些方向在不同噪声区间到底有多难学，模型输出的坐标又是否适合采样器使用。
+噪声日程与参数化连接训练和推理：训练决定模型怎样学会局部方向，Score/SDE 把这些方向变成概率流，Inference 决定采样器怎样有限步积分。关键是判断这些方向在不同噪声区间有多难学，模型输出的坐标是否适合采样器使用。
 
 ## 噪声日程本质上是难度曲线
 
@@ -50,7 +48,7 @@ x_t=a_t x_{\mathrm{data}}+b_t\epsilon
 
 ![DDPM 数据和噪声系数几何示意图](../assets/images/paper-figures/diffusion/ddpm-orthogonal-coefficients.svg){ width="760" }
 
-<small>图源：本站自绘，参考 DDPM / DDIM 的系数几何读法。读图时把纵轴看成数据方向 \(x_0\)，横轴看成随机噪声方向 \(\epsilon\)。\(x_t\) 位于圆弧上，表示它由 \(\sqrt{\bar\alpha_t}x_0\) 和 \(\sqrt{1-\bar\alpha_t}\epsilon\) 两部分组成。图只用于建立直觉，不表示真实图像空间只有二维。</small>
+<small>图源：自绘，参考 DDPM / DDIM 的系数几何读法。读图时把纵轴看成数据方向 \(x_0\)，横轴看成随机噪声方向 \(\epsilon\)。\(x_t\) 位于圆弧上，表示它由 \(\sqrt{\bar\alpha_t}x_0\) 和 \(\sqrt{1-\bar\alpha_t}\epsilon\) 两部分组成。图只用于建立直觉，不表示真实图像空间只有二维。</small>
 
 ## SNR 比时间步更接近训练压力
 
@@ -64,7 +62,7 @@ x_t=a_t x_{\mathrm{data}}+b_t\epsilon
 
 ![Improved DDPM VLB terms](../assets/images/paper-figures/diffusion/improved-ddpm-figure-2-vlb-terms.png){ width="720" }
 
-<small>图源：[Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672)，Figure 2。原图分析 CIFAR-10 训练中 variational lower bound 各 timestep 项的贡献。本站读法：不同时间步对训练目标的压力差异很大；schedule、loss weighting 和 timestep sampling 会决定模型容量花在低噪声细节、中噪声结构还是高噪声语义上。</small>
+<small>图源：[Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672)，Figure 2。原图分析 CIFAR-10 训练中 variational lower bound 各 timestep 项的贡献。读图重点：不同时间步对训练目标的压力差异很大；schedule、loss weighting 和 timestep sampling 会决定模型容量花在低噪声细节、中噪声结构还是高噪声语义上。</small>
 
 Improved DDPM 推动 cosine schedule 的原因也在这里。它不是为了让曲线看起来漂亮，而是让信号衰减更平滑，避免某些 SNR 区间被过早或过晚挤压。现代训练还会继续调 loss weighting 或 timestep sampling，例如 Min-SNR weighting 这类方法，就是在处理不同噪声水平之间的优化冲突。
 
@@ -176,7 +174,7 @@ DDIM 完整公式正是在做这件事：新加入一份 \(\sigma_t z\) 后，�
 
 ![EDM sampler design space](../assets/images/paper-figures/diffusion/edm-figure-2-sampler-design-space.png){ width="920" }
 
-<small>图源：[Elucidating the Design Space of Diffusion-Based Generative Models](https://arxiv.org/abs/2206.00364)，Figure 2。原图在多个预训练模型上比较确定性采样设计，横轴是 NFE，纵轴是 FID。本站读法：采样质量不是由模型权重或 sampler 名字单独决定；噪声尺度、preconditioning、时间离散、solver 和 NFE 共同决定少步表现。</small>
+<small>图源：[Elucidating the Design Space of Diffusion-Based Generative Models](https://arxiv.org/abs/2206.00364)，Figure 2。原图在多个预训练模型上比较确定性采样设计，横轴是 NFE，纵轴是 FID。读图重点：采样质量不是由模型权重或 sampler 名字单独决定；噪声尺度、preconditioning、时间离散、solver 和 NFE 共同决定少步表现。</small>
 
 EDM 的价值是把“训练目标”和“采样技巧”重新放回同一个设计空间。噪声尺度决定模型见过哪些状态，preconditioning 决定不同 \(\sigma\) 下输入输出如何缩放，loss weighting 决定哪些噪声区间主导训练，sampler 决定推理时怎样走过这些区间。任何一项单独拿出来，都很容易过度简化。
 
@@ -196,7 +194,7 @@ EDM 的价值是把“训练目标”和“采样技巧”重新放回同一个�
 
 读论文或复现实验时，先问四件事：训练覆盖了哪些 SNR 区间；模型预测的是 \(\epsilon\)、\(x_0\)、score 还是 \(v\)；loss weighting 是否让某些噪声区间过强或过弱；推理 schedule 是否和训练 schedule 匹配。问清这四件事，noise schedule 就不再是配置文件里一串数字，而是模型学习难度和推理稳定性的核心接口。
 
-## 外部精读
+## 外部材料
 
 - [科学空间：生成扩散模型漫谈（一）：DDPM = 拆楼 + 建楼](https://kexue.fm/archives/9119)：用 \(\alpha_t,\beta_t\) 的系数关系建立前向加噪和闭式采样直觉。
 - [系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330)：作为 Flow Matching 随机性和系数保持的中文阅读入口。
@@ -210,11 +208,6 @@ EDM 的价值是把“训练目标”和“采样技巧”重新放回同一个�
 - [Diffusers Scheduler Overview](https://huggingface.co/docs/diffusers/en/api/schedulers/overview)：核对工程库里的 scheduler / prediction type / timestep spacing 语义。
 - [The Annotated Diffusion Model](https://huggingface.co/blog/annotated-diffusion)：用代码和公式把 forward process、schedule、loss 和采样过程对上。
 
-## 相关阅读与下一步
-
-- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
-- 站内下一步：[扩散模型专题](index.md)。
-- 站内下一步：[扩散方法对比表](comparison-table.md)。
-- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。
+- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。

@@ -2,7 +2,7 @@
 
 机器人看到的“图像”并不天然等于 3D 世界。相机类型、标定、深度质量和坐标系会决定机器人能不能估距离、能不能恢复物体尺寸、能不能把视觉结果交给抓取和规划模块。
 
-这页只讲一个问题：从 RGB 图像到机器人可用的 3D 状态，中间发生了什么。
+从 RGB 图像到机器人可用的 3D 状态，需要经过相机模型、深度估计、坐标转换和任务接口。
 
 ## 单目为什么有尺度歧义
 
@@ -10,7 +10,7 @@
 
 ![Pinhole camera model 网页图](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/pinhole-camera-model-wikimedia.svg){ width="820" }
 
-<small>图源：[Wikimedia Commons: Pinhole camera model](https://commons.wikimedia.org/wiki/File:Pinhole_camera_model_technical_version_-_no_annotation.svg)。原图展示针孔相机模型。本站读法：3D 点经过相机光心投影到 2D 成像平面，深度信息被压缩到尺度变化里，所以单张单目图像天然存在绝对尺度歧义。</small>
+<small>图源：[Wikimedia Commons: Pinhole camera model](https://commons.wikimedia.org/wiki/File:Pinhole_camera_model_technical_version_-_no_annotation.svg)。原图展示针孔相机模型。读图重点：3D 点经过相机光心投影到 2D 成像平面，深度信息被压缩到尺度变化里，所以单张单目图像天然存在绝对尺度歧义。</small>
 
 同一张图里，一个物体看起来大，可能是因为它真的很大，也可能只是离相机很近。单目深度模型可以从数据中学到透视、桌面、物体大小和场景结构先验，因此能估出相对深度；但它不是几何测量。换新相机、新物体尺度或透明反光表面时，绝对深度可能偏。
 
@@ -22,7 +22,7 @@
 
 ![Stereo camera model 网页图](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/stereo-camera-model-wikimedia.jpg){ width="760" }
 
-<small>图源：[Wikimedia Commons: Stereo-camera-model.jpg](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。原图展示双目相机几何。本站读法：同一个点在左右图上的像素偏移越大，通常表示它离相机越近。</small>
+<small>图源：[Wikimedia Commons: Stereo-camera-model.jpg](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。原图展示双目相机几何。读图重点：同一个点在左右图上的像素偏移越大，通常表示它离相机越近。</small>
 
 双目深度的直觉公式是：
 
@@ -40,7 +40,7 @@ RGB-D 相机同时输出颜色图和深度图。颜色图告诉模型“像素�
 
 ![Intel RealSense D435 RGB-D camera 网页图](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/intel-realsense-d435-wikimedia.jpg){ width="620" }
 
-<small>图源：[Wikimedia Commons: Intel Realsense depth camera D435.jpg](https://commons.wikimedia.org/wiki/File:Intel_Realsense_depth_camera_D435.jpg)。原图展示 RealSense D435。本站读法：RGB-D / depth camera 常用于把像素反投影成 3D 点，再接抓取、避障和 6D pose 估计。</small>
+<small>图源：[Wikimedia Commons: Intel Realsense depth camera D435.jpg](https://commons.wikimedia.org/wiki/File:Intel_Realsense_depth_camera_D435.jpg)。原图展示 RealSense D435。读图重点：RGB-D / depth camera 常用于把像素反投影成 3D 点，再接抓取、避障和 6D pose 估计。</small>
 
 给定像素 \((u,v)\)、深度 \(z\)、相机内参 \((f_x,f_y,c_x,c_y)\)，可以反投影到相机坐标系：
 
@@ -60,7 +60,7 @@ RGB-D 的常见失败也很实际：玻璃、黑色高反、金属、多径反�
 
 ![Chessboard calibration setup 网页图](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/chessboard-calibration-setup-wikimedia.png){ width="660" }
 
-<small>图源：[Wikimedia Commons: Chessboard calibration setup.png](https://commons.wikimedia.org/wiki/File:Chessboard_calibration_setup.png)。原图展示棋盘格标定设置。本站读法：已知尺寸的棋盘格、Charuco 或 AprilTag 把真实 3D 点和图像 2D 点配对，标定就是让投影结果尽量对齐这些角点。</small>
+<small>图源：[Wikimedia Commons: Chessboard calibration setup.png](https://commons.wikimedia.org/wiki/File:Chessboard_calibration_setup.png)。原图展示棋盘格标定设置。读图重点：已知尺寸的棋盘格、Charuco 或 AprilTag 把真实 3D 点和图像 2D 点配对，标定就是让投影结果尽量对齐这些角点。</small>
 
 内参矩阵常写成：
 
@@ -87,7 +87,7 @@ $$
 
 ![Eye-in-hand robot camera setup 原论文图](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/eye-in-hand-robot-camera-setup-原论文图.png){ width="920" }
 
-<small>图源：[A Simple Robotic Eye-In-Hand Camera Positioning and Alignment Control Method Based on Parallelogram Features](https://www.mdpi.com/2218-6581/7/2/31)，Figure 3。原图展示 eye-in-hand / wrist camera 设置。本站读法：腕部相机能看近距离接触，外部相机能看全局桌面，两者提供的是不同证据。</small>
+<small>图源：[A Simple Robotic Eye-In-Hand Camera Positioning and Alignment Control Method Based on Parallelogram Features](https://www.mdpi.com/2218-6581/7/2/31)，Figure 3。原图展示 eye-in-hand / wrist camera 设置。读图重点：腕部相机能看近距离接触，外部相机能看全局桌面，两者提供的是不同证据。</small>
 
 固定外部相机适合看全局布局、桌面对象和轨迹；腕部相机适合近距离抓取、插入和接触校正；移动机器人前置相机适合导航和避障；多相机 rig 适合把全局、局部和俯视信息组合起来。多相机不是简单多几张图，而是多组时间戳、内参、外参和延迟都要对齐。
 
@@ -108,7 +108,7 @@ RGB / RGB-D / multi-view images
 
 如果模型抓错了物体，不能只说“视觉失败”。要能定位是 tokenizer 丢了小目标，深度估错了距离，外参漂移导致坐标错，还是控制器没有执行到位。几何证据必须能追到 episode：相机时间戳、标定版本、深度质量、动作坐标系和失败 replay 都要保存。
 
-## 外部精读
+## 外部材料
 
 - [OpenCV camera calibration docs](https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html)：理解内参、畸变和重投影误差的工程口径。
 - [Depth Anything](../paper-deep-dives/embodied-ai/depth-anything.md) 与 [Depth Anything V2](../paper-deep-dives/embodied-ai/depth-anything-v2.md)：理解单目深度模型的能力和边界。

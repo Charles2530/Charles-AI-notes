@@ -1,14 +1,14 @@
 # WAM 与 3D 视觉：世界模型从视频想象走向物理闭环
 
-> **本文关注的问题。** `World Action Models` 与 `3DV in WM` 如何从视频想象走向机器人可用的物理闭环。
+> **关注的问题。** `World Action Models` 与 `3DV in WM` 如何从视频想象走向机器人可用的物理闭环。
 
-2026 年具身智能里，世界模型和 WAM 迅速升温，但真正值得追问的不是“又出了哪些新模型”，而是 **世界模型到底怎样变成机器人可用的物理闭环**。
+2026 年具身智能里，世界模型和 WAM 迅速升温，真正值得追问的是 **世界模型到底怎样变成机器人可用的物理闭环**。
 
 如果只从概念上讲，WAM 很容易被理解成“视频生成模型加动作头”。但结合 DreamZero、Fast-WAM、PointWorld 和 D4RT 几篇原论文看，事情更细：WAM 的价值不一定在推理时生成一段完整未来视频，而在于训练时让动作、未来状态和世界动态互相约束；3D 视觉的价值也不只是多一个输入模态，而是把未来预测变成深度、位姿、点流、轨迹和风险这些可检查的物理证据。
 
 ![DreamZero overview](../assets/images/thinking-exploration/wam-3dv-world-models/dreamzero-overview.png){ width="920" }
 
-<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 1，本站从论文 PDF 截取。原图展示 DreamZero 如何把多样非重复机器人数据、视频、语言、本体状态、未来视频和连续动作放进同一条 WAM 路线。本站读法：先看它的目标不是“生成好看的视频”，而是让视频动态先验服务真实机器人动作泛化。</small>
+<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 1，从论文 PDF 截取。原图展示 DreamZero 如何把多样非重复机器人数据、视频、语言、本体状态、未来视频和连续动作放进同一条 WAM 路线。读图重点：先看它的目标不是“生成好看的视频”，而是让视频动态先验服务真实机器人动作泛化。</small>
 
 ## 先把 WAM 和 VLA 分开
 
@@ -40,7 +40,7 @@ Fast-WAM 的关键结论是：训练时视频预测监督比推理时的视频�
 
 ![Fast-WAM paradigms](../assets/images/thinking-exploration/wam-3dv-world-models/fastwam-paradigms.png)
 
-<small>图源：[Fast-WAM: Do World Action Models Need Test-time Future Imagination?](https://arxiv.org/abs/2603.16666)，Figure 1，本站从论文 PDF 截取。原图对比三种 WAM 范式：联合去噪未来视频与动作、先生成未来视频再预测动作、以及 Fast-WAM 在推理时跳过未来视频分支。本站读法：这张图把“世界建模监督”和“测试时显式想象”拆开了。</small>
+<small>图源：[Fast-WAM: Do World Action Models Need Test-time Future Imagination?](https://arxiv.org/abs/2603.16666)，Figure 1，从论文 PDF 截取。原图对比三种 WAM 范式：联合去噪未来视频与动作、先生成未来视频再预测动作、以及 Fast-WAM 在推理时跳过未来视频分支。读图重点：这张图把“世界建模监督”和“测试时显式想象”拆开了。</small>
 
 Fast-WAM 原论文的问题非常尖锐：WAM 的收益到底来自测试时显式生成未来，还是来自训练时视频建模带来的表示塑形？论文的结论倾向后者。它保留训练阶段的视频 co-training，但推理时跳过未来预测，直接做动作生成；论文报告 190 ms 推理延迟，比 imagine-then-execute WAM 快 4 倍以上，同时去掉视频 co-training 会带来更大的性能下降。
 
@@ -77,11 +77,11 @@ PointWorld 最能代表“3D world model”的路线野心。原论文把状态�
 
 ![PointWorld overview](../assets/images/thinking-exploration/wam-3dv-world-models/pointworld-overview.png){ width="920" }
 
-<small>图源：[PointWorld: Scaling 3D World Models for In-The-Wild Robotic Manipulation](https://arxiv.org/abs/2601.03782)，Figure 1，本站从论文 PDF 截取。原图展示 PointWorld 用静态点云和机器人 3D 点流预测全场景 3D 点流。本站读法：这不是“给 VLA 加深度图”，而是把动作本身也改写成三维空间里的运动。</small>
+<small>图源：[PointWorld: Scaling 3D World Models for In-The-Wild Robotic Manipulation](https://arxiv.org/abs/2601.03782)，Figure 1，从论文 PDF 截取。原图展示 PointWorld 用静态点云和机器人 3D 点流预测全场景 3D 点流。读图重点：这不是“给 VLA 加深度图”，而是把动作本身也改写成三维空间里的运动。</small>
 
 ![PointWorld architecture](../assets/images/thinking-exploration/wam-3dv-world-models/pointworld-architecture.png){ .atlas-figure-compact }
 
-<small>图源：PointWorld 论文 Figure 2，本站从论文 PDF 截取。原图表达：RGB-D 观测、URDF、关节动作先被转换成 scene points 与 robot flows 的混合点云，再由 DINOv3 与 Point Transformer V3 处理并预测 full-scene point flow。本站读法：动作接口从“某个机器人专属关节空间”转向“末端和机器人表面在 3D 中怎样运动”。</small>
+<small>图源：PointWorld 论文 Figure 2，从论文 PDF 截取。原图表达：RGB-D 观测、URDF、关节动作先被转换成 scene points 与 robot flows 的混合点云，再由 DINOv3 与 Point Transformer V3 处理并预测 full-scene point flow。读图重点：动作接口从“某个机器人专属关节空间”转向“末端和机器人表面在 3D 中怎样运动”。</small>
 
 原论文的几个数字值得关注：
 
@@ -104,11 +104,11 @@ PointWorld 讨论的是机器人动作条件下的 3D 点流；D4RT 则从视频
 
 ![D4RT overview](../assets/images/thinking-exploration/wam-3dv-world-models/d4rt-overview.png){ .atlas-figure-compact }
 
-<small>图源：[Efficiently Reconstructing Dynamic Scenes One D4RT at a Time](https://arxiv.org/abs/2512.08924)，Figure 1，本站从论文 PDF 截取。原图展示 D4RT 用统一接口输出点云、点轨迹和相机参数。本站读法：D4RT 的意义不只是 4D 重建效果，而是把深度、点轨迹、相机和动态场景放进同一套查询接口。</small>
+<small>图源：[Efficiently Reconstructing Dynamic Scenes One D4RT at a Time](https://arxiv.org/abs/2512.08924)，Figure 1，从论文 PDF 截取。原图展示 D4RT 用统一接口输出点云、点轨迹和相机参数。读图重点：D4RT 的意义不只是 4D 重建效果，而是把深度、点轨迹、相机和动态场景放进同一套查询接口。</small>
 
 ![D4RT query interface](../assets/images/thinking-exploration/wam-3dv-world-models/d4rt-query-interface.png){ width="920" }
 
-<small>图源：D4RT 论文 Figure 2，本站从论文 PDF 截取。原图展示 D4RT 的全局场景表示和查询式 decoder：给定源点、源时刻、目标时刻和相机参考帧，模型预测目标 3D 位置。本站读法：这类 query interface 很适合作为世界模型状态层的设计参考。</small>
+<small>图源：D4RT 论文 Figure 2，从论文 PDF 截取。原图展示 D4RT 的全局场景表示和查询式 decoder：给定源点、源时刻、目标时刻和相机参考帧，模型预测目标 3D 位置。读图重点：这类 query interface 很适合作为世界模型状态层的设计参考。</small>
 
 D4RT 项目页和 DeepMind 博客都强调同一点：它不是为 depth、tracking、camera pose 分别做一个模块，而是用统一 encoder-decoder Transformer 和查询机制，在一个 global scene representation 上按需解码。DeepMind 博客还强调，传统动态场景 3D 理解往往慢且碎片化，而 D4RT 的查询式设计能让 4D 重建更接近实时应用。
 
@@ -134,7 +134,7 @@ DreamZero 论文自己的失败图就说明了这点。
 
 ![DreamZero failure pair](../assets/images/thinking-exploration/wam-3dv-world-models/dreamzero-failure-pair.png){ width="920" }
 
-<small>图源：DreamZero 论文 Figure 16，本站从论文 PDF 截取。原图展示 generated video 与 executed action 的失败配对。本站读法：WAM 更强也更危险，因为错误未来和错误动作可能互相支持；闭环系统必须能在真实观测刷新后纠偏。</small>
+<small>图源：DreamZero 论文 Figure 16，从论文 PDF 截取。原图展示 generated video 与 executed action 的失败配对。读图重点：WAM 更强也更危险，因为错误未来和错误动作可能互相支持；闭环系统必须能在真实观测刷新后纠偏。</small>
 
 ## 综合判断
 
@@ -177,7 +177,7 @@ WAM 的真正价值，不是让机器人拥有一段更高清的想象，而是�
 
 **3DV with Scaling will benefit WM，但前提是 3D 数据、动作接口和闭环评测一起 scaling。**
 
-## 外部精读
+## 外部材料
 
 - 原论文：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)。
 - 原论文：[Fast-WAM: Do World Action Models Need Test-time Future Imagination?](https://arxiv.org/abs/2603.16666)。
@@ -192,11 +192,3 @@ WAM 的真正价值，不是让机器人拥有一段更高清的想象，而是�
 - 中文解读：[青稞社区：关于 World Action Model 的思考和总结](https://qingkeai.online/archives/20260406)。
 - 中文解读：[36氪：世界模型驱动，具身智能告别“盲动”时代](https://eu.36kr.com/zh/p/3678363993252488)。
 - 中文解读：[雷峰网：D4RT 统一、高效的动态 4D 场景重建](https://www.leiphone.com/category/ai/gTcpiNZWLaQMDCtG.html)。
-
-## 相关阅读与下一步
-
-- 站内下一步：[WM / WAM / VAM：动作到底怎样进入世界模型](../world-models/wm-wam-vam-and-action-conditioned-modeling.md)。
-- 站内下一步：[DreamZero：世界动作模型为什么可以做零样本策略](../paper-deep-dives/embodied-ai/dreamzero.md)。
-- 站内下一步：[VLA、WAM 与世界模型系统图](../embodied-ai/vla-wam-world-model-system-map.md)。
-- 站内下一步：[相机、深度与机器人视觉](../embodied-ai/cameras-depth-and-robot-vision.md)。
-- 站内下一步：[VGGT：前向恢复相机、深度、点云与轨迹](../paper-deep-dives/embodied-ai/vggt.md)。

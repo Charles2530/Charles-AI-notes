@@ -1,12 +1,10 @@
 # 硬件感知排查清单
 
-> **这篇回答的问题。** 如何理解“硬件感知排查清单”背后的核心机制、适用边界和下一步阅读路径。
-
 当一个 kernel 或训练/推理路径性能异常时，最容易犯的错误是只在软件层找原因。实际上很多问题只有带着硬件感知去排查，才能快速定位。
 
 ![Nsight Systems GPU starvation](../assets/images/tools/nsight-systems/gpu-starvation.png){ width="820" }
 
-<small>图源：[NVIDIA Nsight Systems 文档](https://docs.nvidia.com/nsight-systems/)。原图表达 GPU 时间线中 CPU/GPU 等待和空洞如何暴露系统瓶颈；本站读法是把硬件排查从“猜 kernel 慢”改成先看带宽、occupancy、launch、同步和拓扑。它不能单独定位根因，只提供缩圈入口。</small>
+<small>图源：[NVIDIA Nsight Systems 文档](https://docs.nvidia.com/nsight-systems/)。原图表达 GPU 时间线中 CPU/GPU 等待和空洞如何暴露系统瓶颈；读图重点是把硬件排查从“猜 kernel 慢”改成先看带宽、occupancy、launch、同步和拓扑。它不能单独定位根因，只提供缩圈入口。</small>
 
 ## 先问是不是带宽问题
 
@@ -124,11 +122,8 @@ flowchart TD
 
 **反例**：如果单卡 kernel 也同步变慢、DRAM 吞吐接近上限、没有 rank 间拖尾，那么优先怀疑 kernel / layout / dtype 路径，而不是拓扑。拓扑问题的典型特征是“局部 rank 拖尾 + 通信 wait + 单卡基准正常”。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

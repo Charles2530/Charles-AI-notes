@@ -1,11 +1,11 @@
 # 数值、显存与运行时：模型为什么数学可行但系统跑不动
 
-这篇文章只回答一个问题：一个模型从“公式上能算”到“线上能跑快、跑稳、跑得起”，中间到底会被哪些系统成本卡住。
+模型从“公式上能算”到“线上能跑快、跑稳、跑得起”，中间会被数值、显存、带宽和运行时成本卡住。
 
-很多模型报告会同时出现 BF16、FP8、INT4、KV cache、FLOPs、bandwidth、kernel、runtime、TTFT、TPOT。它们不是一堆独立术语，而是同一条执行链上的不同账本：数值格式决定每个值怎么表示，显存决定哪些张量能常驻，带宽决定数据搬得多快，kernel 决定硬件是否吃到高效路径，runtime 决定请求、batch、cache 和 shape 能否被组织起来。
+很多模型报告会同时出现 BF16、FP8、INT4、KV cache、FLOPs、bandwidth、kernel、runtime、TTFT、TPOT。它们是同一条执行链上的不同账本：数值格式决定每个值怎么表示，显存决定哪些张量能常驻，带宽决定数据搬得多快，kernel 决定硬件是否吃到高效路径，runtime 决定请求、batch、cache 和 shape 能否被组织起来。
 
 !!! tip "数学先修"
-    本文会用到[浮点误差、条件数、FLOPs 与 bytes](../prerequisite-math/numerics-complexity-and-estimation.md)核算机器上的数值与搬运成本，并用[矩阵变换](../prerequisite-math/linear-algebra-and-geometry.md)连接 GEMM、attention 和 tensor layout。
+    需要用到[浮点误差、条件数、FLOPs 与 bytes](../prerequisite-math/numerics-complexity-and-estimation.md)核算机器上的数值与搬运成本，并用[矩阵变换](../prerequisite-math/linear-algebra-and-geometry.md)连接 GEMM、attention 和 tensor layout。
 
 ## 第一张账：一个数占多少 bytes
 
@@ -37,7 +37,7 @@ FP8 常见 E4M3 和 E5M2。E4M3 给 mantissa 更多位，精度更细；E5M2 给
 
 ![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="760" }
 
-<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原图对比 BF16 与 FP8 训练曲线。本站用这张图说明：低精度是否可用，要看训练曲线、scale 策略和质量回归，而不是只看每个值从 2 bytes 降到 1 byte。</small>
+<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原图对比 BF16 与 FP8 训练曲线。这张图说明：低精度是否可用，要看训练曲线、scale 策略和质量回归，而不是只看每个值从 2 bytes 降到 1 byte。</small>
 
 FP8 路径通常有一个缩放步骤：
 
@@ -105,7 +105,7 @@ x_{\text{fp8}}
 
 ![vLLM logical physical block table](../assets/images/paper-figures/inference/vllm-logical-physical-block-table.png){ width="760" }
 
-<small>图源：[vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)。原图表达：sequence 的逻辑 KV block 可以映射到不连续的物理 block。本站用这张图说明：serving runtime 的关键工作之一，是管理 KV cache 生命周期和碎片，而不是只调用一次模型 forward。</small>
+<small>图源：[vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)。原图表达：sequence 的逻辑 KV block 可以映射到不连续的物理 block。这张图说明：serving runtime 的关键工作之一，是管理 KV cache 生命周期和碎片，而不是只调用一次模型 forward。</small>
 
 PagedAttention、TensorRT-LLM KV cache reuse、KV offload、prefix cache 和 KV 量化，本质上都是围绕同一件事：有限 GPU 显存应该如何服务更多活跃请求，同时不伤质量和 P99。
 
@@ -199,7 +199,7 @@ Runtime 负责把请求组织成硬件能吃的形状。prefill 通常 batch 大
 
 数值格式决定每个值怎样表示，显存决定哪些状态能常驻，带宽决定数据搬运是否成瓶颈，kernel 决定低精度和融合能否兑现，runtime 决定请求、batch、KV cache 和 shape 是否被组织好。读 FP8、量化、FlashAttention、vLLM、TensorRT-LLM 或 DeepSeek-V3 这类材料时，不要先背技术名词，先问：它省的是哪张账，代价转移到哪里，质量和 P99 是否一起验证。
 
-## 外部精读
+## 外部材料
 
 - [NVIDIA Mixed Precision Training Guide](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html)：理解 loss scaling、Tensor Core 和混合精度训练的基本路径。
 - [NVIDIA Transformer Engine FP8 Delayed Scaling](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/fp8_delayed_scaling/fp8_delayed_scaling.html)：理解 FP8 scale 和 amax history。
@@ -210,11 +210,6 @@ Runtime 负责把请求组织成硬件能吃的形状。prefill 通常 batch 大
 - [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)：理解 KV reuse、offload、eviction 和生产 runtime。
 - [General Compute: Quantization for Inference](https://www.generalcompute.com/blog/quantization-for-inference-gptq-awq-smoothquant-fp8)：用工程视角区分 GPTQ、AWQ、SmoothQuant 和 FP8 的适用瓶颈。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

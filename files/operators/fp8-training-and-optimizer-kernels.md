@@ -2,11 +2,11 @@
 
 低精度话题里，`FP8` 和优化器 kernel 值得单独拿出来讲，因为它们主要影响的是训练主路径，而不是单纯的推理压缩。权重量化更多关注部署态显存和带宽；而 `FP8` 训练与 fused optimizer kernel 关心的是：在大规模训练中，如何把前向、反向、梯度、主权重、优化器状态和数值缩放组织成一套既快又稳的执行路径。
 
-这页建议和 [低比特训练与数值格式](../training/low-bit-training-and-numerics.md)、[分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 一起读。训练页解释数值格式和稳定性边界，分布式页解释状态切分与恢复，本页则关注这些约束落到 kernel、scale metadata 和 optimizer step 时会怎样影响吞吐。
+FP8 训练和优化器 kernel 要放在数值格式、状态切分、恢复路径和低精度 kernel 之间看，重点是这些约束落到 kernel、scale metadata 和 optimizer step 时怎样影响吞吐。
 
 ![DeepSeek-V3 FP8 mixed precision framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="860" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达 FP8 路径中哪些张量走低精、哪些路径保留高精和 scale；本站读法是说明 FP8 训练不是一个 dtype 开关，而是 kernel、scale metadata、累加和 checkpoint 状态的组合。它不能证明任意 FP8 recipe 都稳定。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达 FP8 路径中哪些张量走低精、哪些路径保留高精和 scale；读图重点是 FP8 训练不是一个 dtype 开关，而是 kernel、scale metadata、累加和 checkpoint 状态的组合。它不能证明任意 FP8 recipe 都稳定。</small>
 
 ## 为什么 FP8 训练和推理量化不是一回事
 
@@ -120,11 +120,8 @@ FP8 与优化器 kernel 的主题，核心不是“更低精度”，而是“�
 
 FP8 训练与优化器 kernel 要围绕 scale 管理、累加精度、统计同步、优化器状态和回退路径来验收。只看显存下降会漏掉 scale 漂移、训练/推理 FP8 路径不一致等问题；上线前应按层验证 FP8 可承受度，保留 BF16 回退，监控 scale 分布，并做长跑数值回归。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

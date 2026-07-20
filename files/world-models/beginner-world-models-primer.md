@@ -2,11 +2,9 @@
 
 世界模型学习环境怎样随时间和动作变化。它不必还原世界的全部细节，而要形成一套对下游消费方足够的内部状态和转移规律：规划器需要比较候选动作，策略学习需要在想象轨迹中估计回报，生成式模拟器需要产生连贯可见的未来，风险系统需要识别不确定和危险尾部。
 
-## 本文解决什么问题
+世界模型的共同接口包括：观测与状态为何不同；历史怎样形成 belief；动作条件转移怎样定义；随机未来怎样表示；训练目标为什么取决于消费方；latent dynamics、预测式表征和生成式模拟之间是什么关系。
 
-本文建立世界模型的共同接口：观测与状态为何不同；历史怎样形成 belief；动作条件转移怎样定义；随机未来怎样表示；训练目标为什么取决于消费方；latent dynamics、预测式表征和生成式模拟之间是什么关系。
-
-本文讨论连续环境中的学习型世界模型。经典物理模拟器、纯语言环境模型和离散 token 世界模型也可以放入同一框架，但状态、转移核和误差来源不同。
+这里讨论连续环境中的学习型世界模型。经典物理模拟器、纯语言环境模型和离散 token 世界模型也可以放入同一框架，但状态、转移核和误差来源不同。
 
 ## 前置知识
 
@@ -169,12 +167,6 @@ JEPA 类方法预测目标片段的表示，而不是完整像素。它减少对
 5. 世界模型进入 MPC 和进入 Dreamer actor training 的消费方式有什么不同？
 6. 如何检测规划器正在利用模型误差？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 潜变量控制：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 表示路线：[Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)。
-- 可交互生成：[生成式模拟与视频世界模型](generative-simulation-and-video.md)。
-- 动作接口：[WM / WAM / VAM](wm-wam-vam-and-action-conditioned-modeling.md)。
-- 评测边界：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
 - 原始来源：[World Models](https://arxiv.org/abs/1803.10122)、[PlaNet](https://arxiv.org/abs/1811.04551)、[Dreamer](https://arxiv.org/abs/1912.01603)、[V-JEPA](https://arxiv.org/abs/2404.08471)、[Genie](https://arxiv.org/abs/2402.15391)。
-- 返回：[世界模型专题](index.md)。

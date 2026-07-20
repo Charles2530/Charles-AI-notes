@@ -2,10 +2,10 @@
 
 普通反向传播有一个隐含前提：从 loss 到参数之间存在一条可微的计算路径。但很多重要模型偏偏会在中间采样、argmax、round、生成 one-hot 状态，或者用一个不参与反向传播的 teacher 提供目标。链式法则走到这里，路会突然断掉。
 
-真正的问题不是“怎样强行让一切可导”，而是：**训练目标的梯度还能从哪里来，这个梯度估计有多大偏差和方差？** VAE 的重参数化、REINFORCE、Straight-Through Estimator、Gumbel-Softmax、EMA teacher 和 PPO ratio，都是对这一个问题的不同回答。
+真正的问题是：**训练目标的梯度还能从哪里来，这个梯度估计有多大偏差和方差？** VAE 的重参数化、REINFORCE、Straight-Through Estimator、Gumbel-Softmax、EMA teacher 和 PPO ratio，都是对这一个问题的不同回答。
 
 !!! tip "数学先修"
-    本文会用到[微积分与链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)、[概率分布与期望](../prerequisite-math/probability-distributions-and-expectation.md)以及[采样估计的偏差和方差](../prerequisite-math/sampling-estimation-and-calibration.md)。如果这些公式还不熟，先读对应数学页；已经熟悉可直接继续。
+    需要用到[微积分与链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)、[概率分布与期望](../prerequisite-math/probability-distributions-and-expectation.md)以及[采样估计的偏差和方差](../prerequisite-math/sampling-estimation-and-calibration.md)。如果这些公式还不熟，先读对应数学页；已经熟悉可直接继续。
 
 ## 链式法则会在哪些地方断掉
 
@@ -20,7 +20,7 @@
 
 ![Decision map for gradient estimators](../assets/images/foundations/gradient-estimator-decision-map.svg){ width="820" }
 
-<small>图源：本站自绘决策图。先判断链式法则在哪里断，再选择重参数化、score-function、连续松弛、STE、stop-gradient/EMA 或 importance weighting。图里每条路线都只是估计方法，不自动保证目标正确或训练稳定。</small>
+<small>图源：自绘决策图。先判断链式法则在哪里断，再选择重参数化、score-function、连续松弛、STE、stop-gradient/EMA 或 importance weighting。图里每条路线都只是估计方法，不自动保证目标正确或训练稳定。</small>
 
 这些方法不能按“哪种更高级”排序。要比较的是四件事：
 
@@ -362,16 +362,9 @@ rollout 来自旧策略时，再乘新旧策略概率比，并用 clipping 限�
 
 把这五步说清楚，就能判断一个训练技巧是在正确估计目标、用可控偏差换稳定性，还是只让计算图表面上“有梯度”。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 数学前置：[微分、Jacobian 与梯度传播](../prerequisite-math/differential-jacobian-and-gradient-flow.md)。
-- 数学前置：[采样、估计与校准](../prerequisite-math/sampling-estimation-and-calibration.md)。
-- 站内下一步：[概率与潜变量模型](probability-latent-variables-and-generative-models.md)。
-- 站内下一步：[预训练目标与表示学习](pretraining-objectives-and-representation-learning.md)。
-- 专题下一步：[Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)。
-- 论文例子：[DreamerV2：离散世界模型玩 Atari](../paper-deep-dives/world-models/dreamerv2.md)。
-- 论文例子：[Attn-QAT：4-bit Attention 量化感知训练](../paper-deep-dives/foundations/attn-qat.md)。
-- 外部材料：[Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114)。
-- 外部材料：[Categorical Reparameterization with Gumbel-Softmax](https://arxiv.org/abs/1611.01144)。
-- 外部材料：[Bootstrap Your Own Latent](https://arxiv.org/abs/2006.07733)。
-- 外部材料：[Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)。
+- [Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114)。
+- [Categorical Reparameterization with Gumbel-Softmax](https://arxiv.org/abs/1611.01144)。
+- [Bootstrap Your Own Latent](https://arxiv.org/abs/2006.07733)。
+- [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)。

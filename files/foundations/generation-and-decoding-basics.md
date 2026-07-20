@@ -1,11 +1,11 @@
 # 生成与解码：模型给出概率后，系统怎样选 token
 
-这篇文章只回答一个问题：语言模型已经给出下一 token 的分数以后，系统怎样把概率分布变成一段可用、可控、成本可承受的输出。
+语言模型给出下一 token 分数以后，解码系统要把概率分布变成一段可用、可控、成本可承受的输出。
 
 解码不是“让模型回答”的按钮。它是一条状态机：每一步先拿到 logits，再做格式 mask、重复惩罚、temperature 缩放、top-k/top-p 截断、采样或搜索，然后把选中的 token 写回上下文和 KV cache。输出质量、格式稳定性、延迟和显存，都在这条链路上被决定。
 
 !!! tip "数学先修"
-    本文会把 logits 变成[条件概率分布](../prerequisite-math/probability-distributions-and-expectation.md)，再使用[Top-k、beam search 与离散选择](../prerequisite-math/discrete-selection-topk-and-routing.md)，同时依赖[序列位置和 causal mask](../prerequisite-math/sequence-position-and-masking.md)定义哪些 token 可见。
+    需要把 logits 变成[条件概率分布](../prerequisite-math/probability-distributions-and-expectation.md)，再使用[Top-k、beam search 与离散选择](../prerequisite-math/discrete-selection-topk-and-routing.md)，同时依赖[序列位置和 causal mask](../prerequisite-math/sequence-position-and-masking.md)定义哪些 token 可见。
 
 ## 第一步：模型输出 logits，不是答案
 
@@ -91,7 +91,7 @@ S:\sum_{i\in S}p_{t,i}\ge q
 
 ![Neural Text Degeneration Figure 5](../assets/images/paper-figures/foundations/neural-text-degeneration-figure-5.png){ width="880" }
 
-<small>图源：[The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)，Figure 5。原图展示不同上下文下 next-token distribution 有时很平、有时很尖。本站用这张图说明：固定 top-k 不知道当前分布形状，top-p 的价值是让候选集合随概率质量自适应变化。</small>
+<small>图源：[The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)，Figure 5。原图展示不同上下文下 next-token distribution 有时很平、有时很尖。这张图说明：固定 top-k 不知道当前分布形状，top-p 的价值是让候选集合随概率质量自适应变化。</small>
 
 Holtzman 等人的论文还指出，开放文本里高 likelihood 路径常常退化成重复、乏味或不自然的文本。这个结论不是说“采样永远更好”，而是提醒我们：开放生成和短结构预测不是同一种目标。
 
@@ -181,7 +181,7 @@ Layers\times 2\times B\times L\times D_{\text{kv}}\times bytes
 
 ![vLLM PagedAttention 原论文图](../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="620" }
 
-<small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 4。原图展示 PagedAttention 允许 K/V 存放在非连续物理块中，通过 block table 找到逻辑 token 的 KV block。本站用这张图说明：采样策略决定选哪个 token，serving runtime 还要决定这些 token 的 KV cache 如何分配、共享和释放。</small>
+<small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 4。原图展示 PagedAttention 允许 K/V 存放在非连续物理块中，通过 block table 找到逻辑 token 的 KV block。这张图说明：采样策略决定选哪个 token，serving runtime 还要决定这些 token 的 KV cache 如何分配、共享和释放。</small>
 
 PagedAttention、prefix cache、KV 量化、KV eviction、disaggregated prefill 和 speculative decoding 都是在救不同的系统账。调 sampling 参数只能改变输出选择；不能解决 KV 碎片、batch 调度、TTFT、TPOT 和 P99。
 
@@ -204,7 +204,7 @@ PagedAttention、prefix cache、KV 量化、KV eviction、disaggregated prefill 
 
 理解这条链路以后，prompt、RAG、工具调用、结构化输出、投机解码和推理服务不再是分散技巧，而是同一条生成状态机上的不同控制点。
 
-## 外部精读
+## 外部材料
 
 - [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)：理解 beam / greedy 为什么会让开放文本退化，以及 nucleus sampling 的动机。
 - [Hugging Face Generation Strategies](https://huggingface.co/docs/transformers/generation_strategies)：核对 greedy、beam、sampling、constraints 和 cache 等生成入口。
@@ -214,11 +214,6 @@ PagedAttention、prefix cache、KV 量化、KV eviction、disaggregated prefill 
 - [vLLM speculative decoding blog](https://vllm.ai/blog/spec-decode)：学习 acceptance rate、QPS 和 workload 如何决定投机解码收益。
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)：理解 KV cache 分页管理为什么是 serving 成本核心。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

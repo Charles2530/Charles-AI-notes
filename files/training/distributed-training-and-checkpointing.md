@@ -2,7 +2,7 @@
 
 分布式训练不是“多放几张 GPU”。它要同时满足四件事：模型和激活放得下，GPU 不长期等通信或数据，checkpoint 不把训练主链拖死，中断后还能从同一条训练轨迹继续。前两件决定训练能不能跑快，后两件决定训练能不能跑完。
 
-这页只回答一个问题：**一次大模型训练长跑里，并行拓扑、通信、checkpoint 和恢复状态怎样闭合。**
+一次大模型训练长跑里，并行拓扑、通信、checkpoint 和恢复状态必须闭合。
 
 框架分工放在 [Megatron、DeepSpeed 与 FSDP](megatron-lm-deepspeed-and-open-training-stacks.md)，这里重点看机制和验收。
 
@@ -77,7 +77,7 @@ M_{\text{state}}
 
 ![ZeRO memory optimization stages](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
 
-<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。本站用这张图说明：普通 data parallel 会复制 optimizer states、gradients 和 parameters，ZeRO 三个阶段分别把这些状态分片；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。这张图说明：普通 data parallel 会复制 optimizer states、gradients 和 parameters，ZeRO 三个阶段分别把这些状态分片。</small>
 
 读这张图时，先看普通 data parallel 为什么浪费：每张卡都有完整参数、梯度和 optimizer state。ZeRO Stage 1 先切 optimizer state，Stage 2 再切 gradient，Stage 3 连 parameter 也切。FSDP full sharding 和 ZeRO-3 的共同直觉也是这件事：状态不再每个 rank 常驻完整副本，而是在需要时 gather、用完后 reshard。
 
@@ -103,7 +103,7 @@ Pipeline parallelism 把模型层切成多个 stage，micro-batch 依次流过�
 
 ![GPipe pipeline parallelism](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png){ width="860" }
 
-<small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。本站用这张图说明：mini-batch 被拆成多个 micro-batch 后，不同 accelerator 可以同时处理不同模型分段，从而减少 stage 等待；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。这张图说明：mini-batch 被拆成多个 micro-batch 后，不同 accelerator 可以同时处理不同模型分段，从而减少 stage 等待。</small>
 
 1F1B、interleaved pipeline、DualPipe 等方法都在处理同一件事：让 forward、backward、all-to-all、stage 间通信和 weight-gradient computation 尽量互相重叠。它们不是越复杂越好。更激进的 schedule 可能降低 bubble，也可能增加 activation / parameter 内存、恢复复杂度和 trace 难度。
 
@@ -181,7 +181,7 @@ PyTorch Distributed Checkpoint 的核心能力之一是多 rank 并行保存/加
 
 如果只记住一句话：训练长跑能否成功，不取决于某个并行开关，而取决于显存账、通信账、数据进度和 checkpoint 恢复合同能不能同时成立。
 
-## 外部精读
+## 外部材料
 
 - [GPipe](https://arxiv.org/abs/1811.06965)：理解 micro-batch 如何填满 pipeline stage，以及 bubble 为什么存在。
 - [Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM](https://arxiv.org/abs/2104.04473)：理解 tensor、pipeline、data parallelism 如何组合到大规模集群。
@@ -193,11 +193,6 @@ PyTorch Distributed Checkpoint 的核心能力之一是多 rank 并行保存/加
 - [DeepSpeed ZeRO documentation](https://deepspeed.readthedocs.io/en/latest/zero3.html)：查 ZeRO-3、offload、参数 gather 和分片状态保存边界。
 - [Datawhale：VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)：中文显存账入口，用于配合原论文手算参数、梯度和优化器状态。
 
-## 相关阅读与下一步
-
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

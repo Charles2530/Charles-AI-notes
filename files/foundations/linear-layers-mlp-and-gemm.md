@@ -1,11 +1,11 @@
 # 线性层、MLP 与 GEMM：模型里的矩阵乘为什么这么重要
 
-这篇文章只回答一个问题：为什么大模型系统优化经常绕不开 Linear、MLP 和 GEMM。
+大模型系统优化经常绕不开 Linear、MLP 和 GEMM。
 
 最短答案是：Transformer 里大量参数、FLOPs、量化收益、张量并行切分和低精度 kernel，都集中在线性层。Linear 在模型语义上是“把每个 token 的表示投影到新通道空间”；在数学上是矩阵乘；在硬件上通常会落到 GEMM 或 fused GEMM。把这三层分清，后面读量化、推理 runtime、Megatron、CUTLASS、Triton 和 DeepGEMM 才不会混成一团。
 
 !!! tip "数学先修"
-    本文会用到[向量、矩阵、投影与秩](../prerequisite-math/linear-algebra-and-geometry.md)解释 Linear/MLP 的表示变化，并用[复杂度、FLOPs 与 bytes](../prerequisite-math/numerics-complexity-and-estimation.md)把矩阵乘落到 GEMM 成本。
+    需要用到[向量、矩阵、投影与秩](../prerequisite-math/linear-algebra-and-geometry.md)解释 Linear/MLP 的表示变化，并用[复杂度、FLOPs 与 bytes](../prerequisite-math/numerics-complexity-and-estimation.md)把矩阵乘落到 GEMM 成本。
 
 ## Linear 改的是每个 token 的通道表示
 
@@ -101,7 +101,7 @@ Triton 论文里的 roofline 图很适合作为第一张硬件直觉图。
 
 ![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="760" }
 
-<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原图比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 在矩阵乘 \(C=AB^\top\) 上相对 roofline model 的性能。本站使用这张图说明：GEMM 性能不仅取决于算术量，也取决于数据复用、访存和 kernel 实现能否接近硬件上限。</small>
+<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://doi.org/10.1145/3315508.3329973)，Figure 1。原图比较 cuBLAS、Triton、Auto-TVM、Tensor Comprehensions 和 PlaidML 在矩阵乘 \(C=AB^\top\) 上相对 roofline model 的性能。这张图说明：GEMM 性能不仅取决于算术量，也取决于数据复用、访存和 kernel 实现能否接近硬件上限。</small>
 
 Roofline 的横轴是 arithmetic intensity，也就是每搬运一单位数据能做多少计算；纵轴是性能。低 intensity 时，瓶颈常在带宽；高 intensity 时，瓶颈才更接近算力上限。GEMM 之所以适合加速器，是因为 tiling 可以让一小块 \(A\) 和 \(B\) 在 shared memory、cache 或 register 里反复复用，避免每个输出元素都从 HBM 重新读完整数据。
 
@@ -137,7 +137,7 @@ out = quantize(gelu(acc + bias))
 
 ![Megatron MLP tensor parallel](../assets/images/paper-deep-dives/foundations/megatron-lm/figure-3a-mlp-model-parallel.png){ width="820" }
 
-<small>图源：[Megatron-LM](https://arxiv.org/abs/1909.08053)，Figure 3a。原图表达 MLP 第一层按列切分 \(A=[A_1,A_2]\)，各 GPU 本地计算 \(XA_i\) 和 GeLU；第二层按行切分 \(B=\begin{bmatrix}B_1\\B_2\end{bmatrix}\)，最后通过通信合并输出。本站使用这张图说明：张量并行不是抽象切模型，而是在切 Linear/GEMM 的矩阵维度和通信位置。</small>
+<small>图源：[Megatron-LM](https://arxiv.org/abs/1909.08053)，Figure 3a。原图表达 MLP 第一层按列切分 \(A=[A_1,A_2]\)，各 GPU 本地计算 \(XA_i\) 和 GeLU；第二层按行切分 \(B=\begin{bmatrix}B_1\\B_2\end{bmatrix}\)，最后通过通信合并输出。这张图说明：张量并行不是抽象切模型，而是在切 Linear/GEMM 的矩阵维度和通信位置。</small>
 
 第一层 \(Y=\operatorname{GeLU}(XA)\) 按 \(A\) 的输出列切分，每张 GPU 得到一部分中间通道，可以本地做 GeLU。第二层 \(Z=YB\) 按输入行或中间通道切分，各 GPU 计算部分输出贡献，最后做 all-reduce 合并。这个设计的关键是把通信放在少数必要位置，而不是每个小操作后同步。
 
@@ -173,7 +173,7 @@ Linear 是每个 token 的通道投影，MLP 是逐 token 的非线性通道变�
 
 以后读任何 Transformer、量化、推理 runtime 或训练并行论文时，看到 Linear 不要只划过去。把它翻译成一次具体 GEMM：\(M\) 是多少，\(N\) 是多少，\(K\) 是多少，dtype 是什么，后面融合了什么，在哪个阶段运行。很多性能和显存问题就会立刻变得可解释。
 
-## 外部精读
+## 外部材料
 
 - [PyTorch `nn.Linear`](https://docs.pytorch.org/docs/stable/generated/torch.nn.Linear.html)：确认真实 API、weight shape 和前向定义。
 - [NVIDIA cuBLAS documentation](https://docs.nvidia.com/cuda/cublas/index.html)：理解 BLAS/GEMM 在 NVIDIA GPU 上的库接口。
@@ -182,11 +182,6 @@ Linear 是每个 token 的通道投影，MLP 是逐 token 的非线性通道变�
 - [Triton paper](https://doi.org/10.1145/3315508.3329973)：理解 tiled neural network computation 和 roofline 视角。
 - [Megatron-LM](https://arxiv.org/abs/1909.08053)：理解张量并行如何切 Linear/GEMM 并控制通信位置。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

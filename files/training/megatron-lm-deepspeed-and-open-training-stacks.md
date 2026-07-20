@@ -2,7 +2,7 @@
 
 大模型训练栈很容易被问成“Megatron、DeepSpeed、FSDP 谁更好”。这个问题本身就偏了。它们解决的不是同一层问题：Megatron-style parallelism 主要切 Transformer 层内计算和并行拓扑；ZeRO / FSDP 主要切数据并行里重复保存的训练状态；DeepSpeed 更像运行时和内存优化平台；checkpoint、导出和实验治理决定训练资产能不能进入后训练、评测和推理。
 
-这页只回答一个问题：**当模型单机放不下或跑不满时，应该怎样判断要切计算、切状态、切层、切序列、切专家，还是先修数据和 checkpoint。**
+当模型单机放不下或跑不满时，要判断瓶颈在计算、状态、层、序列、专家、数据还是 checkpoint。
 
 ## 先问哪张账爆了
 
@@ -52,7 +52,7 @@ Y^{(r)}=H^{(r)}W_2^{(r)},\qquad Y=\sum_{r=1}^{p}Y^{(r)}
 
 ![Megatron MLP tensor parallelism](../assets/images/paper-deep-dives/foundations/megatron-lm/figure-3a-mlp-model-parallel.png){ width="860" }
 
-<small>图源：[Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism](https://arxiv.org/abs/1909.08053)，Figure 3a。本站用这张图说明 MLP 中第一层 column parallel、第二层 row parallel，以及 GeLU 本地执行、输出处 all-reduce 的通信位置；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism](https://arxiv.org/abs/1909.08053)，Figure 3a。这张图说明 MLP 中第一层 column parallel、第二层 row parallel，以及 GeLU 本地执行、输出处 all-reduce 的通信位置。</small>
 
 Attention 也类似。多头 attention 天然可以按 heads 切分：不同 rank 负责不同 heads 的 Q / K / V projection 和 attention，最后在 output projection 之后同步。词表投影和 cross entropy 也可以走 vocab parallel，避免把巨大 logits 全量 gather 到每张卡。
 
@@ -110,7 +110,7 @@ ZeRO / FSDP 的核心就是减少 DP ranks 间的重复常驻状态。
 
 ![ZeRO memory optimization stages](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
 
-<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。本站用这张图说明 ZeRO Stage 1 切 optimizer states，Stage 2 继续切 gradients，Stage 3 连 parameters 也按需分片；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。这张图说明 ZeRO Stage 1 切 optimizer states，Stage 2 继续切 gradients，Stage 3 连 parameters 也按需分片。</small>
 
 三阶段可以这样读：
 
@@ -190,7 +190,7 @@ Megatron、DeepSpeed、FSDP 不应被读成同一张排行榜。Megatron 解决 
 
 如果只记住一句话：训练栈选型是成本账分解，不是框架名比较。先定位瓶颈属于计算、状态、激活、通信、数据还是资产，再决定用 TP、PP、ZeRO / FSDP、CP / SP、EP、offload、checkpointing 或数据系统治理。
 
-## 外部精读
+## 外部材料
 
 - [Megatron-LM](https://arxiv.org/abs/1909.08053)：理解 tensor parallelism 如何切 MLP、attention heads 和 vocab projection。
 - [Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM](https://arxiv.org/abs/2104.04473)：理解 tensor、pipeline、data parallelism 如何组合到大规模集群。
@@ -202,11 +202,6 @@ Megatron、DeepSpeed、FSDP 不应被读成同一张排行榜。Megatron 解决 
 - [PyTorch FSDP documentation](https://docs.pytorch.org/docs/stable/fsdp.html)：理解 PyTorch 原生 full sharding、state dict 和参数生命周期。
 - [Datawhale：VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)：中文显存账入口，适合配合原论文手算参数、梯度和优化器状态。
 
-## 相关阅读与下一步
-
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

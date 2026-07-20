@@ -1,6 +1,6 @@
 # 训练图片来源与授权
 
-本页记录 `files/assets/images/training/` 中图片的来源链接。
+`files/assets/images/training/` 中图片的来源链接记录如下。
 这些图片均来自 Wikimedia Commons，具体授权条款以各文件页面为准。
 
 训练专题曾经有一批概括图；现在不再在网页中使用。训练页里的方法图统一改为论文原图、论文项目图或明确来源的公共图。
@@ -79,7 +79,7 @@
 ## 使用说明
 
 1. 如果你要对外发布（网站、课程、论文附录等），建议在页面底部继续保留来源链接；
-2. 若替换图片，请同时更新本页中的文件名与来源；
+2. 若替换图片，请同时更新这里的文件名与来源；
 3. 若需严格法务审阅，请逐个打开来源页确认当前 license 字段。
 
 ## 图片使用审计流程
@@ -100,7 +100,7 @@ flowchart TD
     J --> K["构建检查"]
 ```
 
-这页虽然是来源清单，但它在站点质量里很重要。图文并茂不是随便插图，而是让每张图都能回溯来源、用途和解释。尤其是训练、量化、算子、VLA 这类技术页，图如果没有图源和图解，读者很难判断它是论文证据、概念示意，还是作者重绘。
+来源清单的价值在于让每张图都能回溯来源、用途和解释。尤其是训练、量化、算子、VLA 这类技术页，图如果没有图源和图解，读者很难判断它是论文证据、概念示意，还是作者重绘。
 
 ## 推荐图注格式
 
@@ -111,10 +111,10 @@ flowchart TD
 | 图源 | `Training Compute-Optimal Large Language Models` |
 | Figure | `Figure 4` |
 | 原图意 | 固定 FLOP 预算下参数量和 token 数的配平 |
-| 本页用途 | 解释 scaling law 中 compute/data/model size 的权衡 |
+| 使用目的 | 解释 scaling law 中 compute/data/model size 的权衡 |
 | 边界 | 该图说明趋势，不等于所有训练任务的精确配方 |
 
-图注不应只写“来源：论文”。好的图注要告诉读者这张图在本站里的解释角色：它支撑了哪条判断，不能过度推导什么。
+图注不应只写“来源：论文”。好的图注要告诉读者这张图的解释角色：它支撑了哪条判断，不能过度推导什么。
 
 ## 替换图片时的检查项
 
@@ -128,11 +128,8 @@ flowchart TD
 
 如果未来改用自绘 SVG 或脚本生成图，也建议把生成脚本或数据来源记录在这里。这样图不仅能看，也能维护。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

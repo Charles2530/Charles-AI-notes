@@ -90,7 +90,3 @@ REINFORCE 的原始来源是 Williams 的论文 [Simple statistical gradient-fol
 2. 解释为什么 \(b(s_t,a_t)\) 不能不加修正地充当 baseline，而 \(b(s_t)\) 可以。
 3. 比较 `Categorical.sample()` 与 `argmax` 采集的数据；哪一个仍代表当前 stochastic policy？
 4. 将 return normalization 移除，比较 loss 尺度，但不要用一次运行判断策略质量。
-
-## 下一步
-
-REINFORCE 等完整 return，方差通常较高。[Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md)引入 critic bootstrap、GAE 和受约束的 minibatch 复用。课程总览见 [完整学习路线](index.md#完整学习路线)。

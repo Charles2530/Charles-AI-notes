@@ -1,12 +1,12 @@
 # 通信算子与计算重叠
 
-当模型开始使用数据并行、张量并行、流水线并行、专家并行和上下文并行时，通信就不再是“附属开销”，而是训练与推理系统的主路径之一。很多大模型系统之所以吞吐上不去，不是因为 GPU 算得慢，而是因为 all-reduce 太频繁、all-gather 太重、reduce-scatter 时机不对、通信和计算没有重叠、拓扑映射不合理，或者某些 collective 让快 GPU 在等慢链路。
+当模型开始使用数据并行、张量并行、流水线并行、专家并行和上下文并行时，通信就成为训练与推理系统的主路径之一。很多大模型系统吞吐上不去，原因常常是 all-reduce 太频繁、all-gather 太重、reduce-scatter 时机不对、通信和计算没有重叠、拓扑映射不合理，或者某些 collective 让快 GPU 在等慢链路。
 
-因此理解通信算子，并不是通信工程师才需要的事，而是大模型系统工程的基础。
+理解通信算子是大模型系统工程的基础。
 
 ![DeepSeek-V3 DualPipe schedule](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-5-dualpipe.png){ width="900" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 5。原图表达 DualPipe 如何把双向 pipeline micro-batches 与通信/计算重叠起来；本站读法是说明通信优化的核心不是“少一次 collective”这么简单，而是把通信放到关键路径之外。它不能证明 DualPipe 适合所有并行度和拓扑。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 5。原图表达 DualPipe 如何把双向 pipeline micro-batches 与通信/计算重叠起来；读图重点是通信优化的核心不是“少一次 collective”这么简单，而是把通信放到关键路径之外。它不能证明 DualPipe 适合所有并行度和拓扑。</small>
 
 ## 通信问题为什么会在大模型时代爆发
 
@@ -214,11 +214,8 @@ MoE 的通信问题往往比稠密模型更复杂，因为 token 要 dispatch �
 
 一旦建立这套视角，你看待 `Megatron`、`DeepSpeed`、`FSDP`、MoE、长上下文和多节点推理时，就不会只看到名词，而会看到一张清晰的通信图和关键路径图。
 
-### 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

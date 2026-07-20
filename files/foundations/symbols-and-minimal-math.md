@@ -1,11 +1,11 @@
 # 读懂公式的最小数学：接口、概率、loss 和梯度
 
-这篇文章只回答一个问题：AI 文章里的公式到底应该怎么读，才不会停在“符号我都见过，但不知道它在说什么”。
+AI 文章里的公式需要读出对象、条件、shape、目标和近似边界，不能停在“符号我都见过”。
 
 公式不是为了显得高级。好的公式通常在声明四件事：输入是什么，输出是什么，哪些变量可见，训练或推理在优化什么。读不懂公式时，最容易犯的错是急着背符号表；更好的办法是把它还原成模型接口和数据流。
 
 !!! tip "数学先修"
-    这页本身就是公式阅读入口；遇到向量、导数、概率或期望不熟时，可从[前置数学知识导读](../prerequisite-math/index.md)按问题选择对应章节，不需要先把全部数学页读完。
+    公式阅读可以从这里开始；遇到向量、导数、概率或期望不熟时，可从[前置数学知识导读](../prerequisite-math/index.md)按问题选择对应章节，不需要先把全部数学页读完。
 
 ## 先把公式读成接口
 
@@ -13,7 +13,7 @@ Transformer 架构图看起来是模块图，但每条箭头背后都有 shape �
 
 ![Transformer architecture](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="760" }
 
-<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原图表达 encoder-decoder Transformer 的输入 embedding、positional encoding、multi-head attention、feed-forward、linear 和 softmax。本站使用这张图说明：公式不是孤立符号，而是在说明每个模块接收什么张量、输出什么张量，以及信息如何流动。</small>
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原图表达 encoder-decoder Transformer 的输入 embedding、positional encoding、multi-head attention、feed-forward、linear 和 softmax。这张图说明：公式不是孤立符号，而是在说明每个模块接收什么张量、输出什么张量，以及信息如何流动。</small>
 
 例如文本 hidden state 常写成：
 
@@ -108,7 +108,7 @@ p_i=\frac{\exp(s_i)}{\sum_j \exp(s_j)}
 
 ![Computation graph and gradients](../assets/images/paper-figures/foundations/sublinear-memory-figure-1-computation-graph-2x.png){ width="760" }
 
-<small>图源：[Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1。原图展示网络配置、梯度计算图和一种内存分配计划。本站使用这张图说明：forward 产生的中间张量会形成依赖图，backward 沿这些依赖计算梯度；训练显存高，常常是因为这些中间量要被保留给反传。</small>
+<small>图源：[Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1。原图展示网络配置、梯度计算图和一种内存分配计划。这张图说明：forward 产生的中间张量会形成依赖图，backward 沿这些依赖计算梯度；训练显存高，常常是因为这些中间量要被保留给反传。</small>
 
 以矩阵乘 \(Y=XW\) 为例，若上游给出 \(G=\partial\mathcal{L}/\partial Y\)，主要梯度是：
 
@@ -199,7 +199,7 @@ B\cdot L\cdot D\cdot bytes
 
 以后读论文公式时，不要问“这个符号叫什么”就停下。要问：它来自哪条数据流，进入哪个模块，改变哪个 loss，保存哪些中间量，最后会影响质量、显存、延迟还是安全边界。
 
-## 外部精读
+## 外部材料
 
 - [D2L：线性代数](https://zh.d2l.ai/chapter_preliminaries/linear-algebra.html)：补张量、矩阵乘法、范数和轴的基础。
 - [D2L：自动微分](https://zh.d2l.ai/chapter_preliminaries/autograd.html)：理解计算图、梯度和框架自动求导。
@@ -209,11 +209,6 @@ B\cdot L\cdot D\cdot bytes
 - [PyTorch Autograd Mechanics](https://docs.pytorch.org/docs/stable/notes/autograd.html)：理解 saved tensors、动态计算图和 backward 细节。
 - [NumPy Broadcasting](https://numpy.org/doc/stable/user/basics.broadcasting.html)：理解 shape 自动扩展为什么经常让错误静默发生。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

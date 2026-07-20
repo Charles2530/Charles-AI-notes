@@ -2,7 +2,7 @@
 
 ## 本章回答什么
 
-算法选择不是背诵“哪个更强”，而是检查任务信息、动作、数据和证据是否满足算法假设。本章给出一套紧凑决策流程，并用三个可执行 capstone 检查：GridWorld 的模型与 terminal mask、Pendulum 的连续控制更新、verifier LLM 的组内 advantage 与策略约束。
+算法选择要检查任务信息、动作、数据和证据是否满足算法假设。下面用一套紧凑决策流程和三个可执行 capstone 检查：GridWorld 的模型与 terminal mask、Pendulum 的连续控制更新、verifier LLM 的组内 advantage 与策略约束。
 
 完成后应能写出选择理由、运行命令、保存可审计产物，并明确 smoke test、离线指标或 verifier 分数不能证明什么。
 
@@ -127,7 +127,3 @@ python files/assets/examples/reinforcement-learning/policy_objectives.py --seed 
 3. 若 GridWorld 的 `terminated` 被当作 truncation，写出 TD/Q target 会多出的项。
 4. 给 GRPO 设计三组 verifier reward：有区分度、zero group、被格式捷径攻击，并给每组首个诊断。
 5. 为任一 capstone 写一页实验卡：代码/依赖版本、seed、输入、命令、原始输出、验收、失败边界和下一实验。
-
-## 下一步
-
-回到 [强化学习课程地图](index.md#完整学习路线)，按当前任务缺口选择方向：数据支持问题进入 [Offline Reinforcement Learning](offline-reinforcement-learning.md)，模型与规划问题进入 [Model-based RL 与世界模型](rl-for-world-models.md)，verifier 与策略目标进入 [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md)，真实机器人闭环进入 [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md)，分布式字段和版本问题返回 [verl 训练流程](verl-code-flow.md)。

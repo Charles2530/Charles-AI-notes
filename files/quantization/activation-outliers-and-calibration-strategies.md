@@ -1,10 +1,10 @@
 # 激活离群值：为什么量化常常败在 activation 上
 
-量化听起来像一个存储问题：把 FP16/BF16 权重换成 INT8/INT4，显存立刻下降。但真正让低比特部署翻车的，往往不是权重，而是 activation。权重在推理前已经固定，可以离线统计、分组、搜索；activation 是每个 prompt、每张图、每段上下文现场产生的动态张量。校准集没有覆盖到的输入，可能在某一层某几个通道上突然出现很大的数值，这就是 activation outlier。
+量化听起来像一个存储问题：把 FP16/BF16 权重换成 INT8/INT4，显存立刻下降。但真正让低比特部署翻车的，往往是 activation。权重在推理前已经固定，可以离线统计、分组、搜索；activation 是每个 prompt、每张图、每段上下文现场产生的动态张量。校准集没有覆盖到的输入，可能在某一层某几个通道上突然出现很大的数值，这就是 activation outlier。
 
-这篇只回答一个问题：**一个很少出现的大数，为什么会让一整层低比特量化变差？**
+少数 activation outlier 足以拉大量化范围，让一整层低比特量化变差。
 
-## 量化不是把数变小，而是给数分格子
+## 量化是在给数分格子
 
 均匀量化可以写成：
 
@@ -112,7 +112,7 @@ Y=(XD^{-1})(DW)
 
 ![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="730" }
 
-<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 2。原图表达：activation outlier 会拉大量化范围，使主体值只剩很少有效 bit；SmoothQuant 通过等价缩放把部分量化难度从 activation 迁移到 weight。本站读法：左边看 scale 为什么被尖峰决定，右边看缩放后普通 activation 如何重新获得分辨率。</small>
+<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 2。原图表达：activation outlier 会拉大量化范围，使主体值只剩很少有效 bit；SmoothQuant 通过等价缩放把部分量化难度从 activation 迁移到 weight。读图重点：左边看 scale 为什么被尖峰决定，右边看缩放后普通 activation 如何重新获得分辨率。</small>
 
 SmoothQuant 不是万能的。它更适合 W8A8 这类希望 activation 也低比特的场景；如果部署栈只支持 weight-only INT4，或者 kernel 没有把 Q/DQ 和 matmul 融合好，端到端收益可能不如理论显存账漂亮。
 
@@ -136,7 +136,7 @@ SmoothQuant 不是万能的。它更适合 W8A8 这类希望 activation 也低�
 
 第三，kernel 是否真的支持目标量化形态？量化收益不只来自模型文件变小，还来自低比特 GEMM、Q/DQ 融合、KV cache 布局、batching 和调度。如果 trace 里 Q/DQ、动态统计或格式转换占了太多时间，低比特可能只是把显存问题换成延迟问题。
 
-## 外部精读
+## 外部材料
 
 - [SmoothQuant 论文](https://arxiv.org/abs/2211.10438)：最适合理解 activation smoothing 为什么是等价变换。
 - [LLM.int8() 论文](https://arxiv.org/abs/2208.07339)：理解 outlier feature dimensions 和 mixed-precision decomposition。
@@ -147,11 +147,6 @@ SmoothQuant 不是万能的。它更适合 W8A8 这类希望 activation 也低�
 
 activation outlier 的要害不是“有几个异常值”，而是“谁决定 scale”。低比特量化把连续数轴切成有限格子，outlier 会把格子拉粗，让主体区域失去分辨率。理解这一点后，SmoothQuant、LLM.int8、KV cache quant、混合精度和校准集选择就不是一堆孤立技巧，而是在解决同一个问题：把有限的数值表示能力分给真正影响任务质量的地方。
 
-## 相关阅读与下一步
-
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

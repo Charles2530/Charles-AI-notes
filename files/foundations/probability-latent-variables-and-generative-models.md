@@ -2,10 +2,10 @@
 
 生成模型不是把训练样本背下来，也不是“随机画一个像样的东西”。它要学的是一个分布：哪些样本可能出现，哪些条件会改变样本，哪些隐藏因素可以解释观测到的数据。VAE、扩散模型、RSSM / Dreamer、JEPA、视频世界模型都会反复使用这套语言。
 
-这页只回答一个核心问题：**当论文写 \(p_\theta(x)\)、\(p_\theta(x\mid z)\)、\(q_\phi(z\mid x)\)、ELBO、score 和 latent state 时，它们分别在训练链条里扮演什么角色？**
+当论文写 \(p_\theta(x)\)、\(p_\theta(x\mid z)\)、\(q_\phi(z\mid x)\)、ELBO、score 和 latent state 时，需要判断它们分别在训练链条里扮演什么角色。
 
 !!! tip "数学先修"
-    本文会用到[概率、条件分布与贝叶斯](../prerequisite-math/probability-distributions-and-expectation.md)、[熵与 KL](../prerequisite-math/information-theory-and-divergence.md)，并把它们接到[潜变量、ELBO、energy 与 score](../prerequisite-math/latent-likelihood-and-generative-objectives.md)。
+    需要用到[概率、条件分布与贝叶斯](../prerequisite-math/probability-distributions-and-expectation.md)、[熵与 KL](../prerequisite-math/information-theory-and-divergence.md)，并把它们接到[潜变量、ELBO、energy 与 score](../prerequisite-math/latent-likelihood-and-generative-objectives.md)。
 
 ## 分布不是标签，而是可能性的形状
 
@@ -143,7 +143,7 @@ ELBO 里的 KL 项常被初学者当作“正则化”，但它实际控制的�
 
 ![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
 
-<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达前向过程 \(q(x_t\mid x_{t-1})\) 逐步加噪，反向过程 \(p_\theta(x_{t-1}\mid x_t)\) 逐步去噪。本站读法是把 \(x_t\) 看成一串受控噪声状态：训练目标不是直接写出 \(p(x)\)，而是在每个噪声水平学习回到数据分布的局部方向。</small>
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达前向过程 \(q(x_t\mid x_{t-1})\) 逐步加噪，反向过程 \(p_\theta(x_{t-1}\mid x_t)\) 逐步去噪。读图重点是把 \(x_t\) 看成一串受控噪声状态：训练目标不是直接写出 \(p(x)\)，而是在每个噪声水平学习回到数据分布的局部方向。</small>
 
 Score 是另一种描述分布的方式：
 
@@ -155,7 +155,7 @@ Score 是另一种描述分布的方式：
 
 ![Score SDE reverse-time process](../assets/images/paper-figures/diffusion/score-sde-figure-1-reverse-sde.png){ width="860" }
 
-<small>图源：[Score-Based Generative Modeling through Stochastic Differential Equations](https://arxiv.org/abs/2011.13456)，Figure 1。原图表达正向 SDE 把数据扰动到噪声，反向 SDE 依赖每个中间分布的 score 生成样本。本站读法是把 score 当作“分布地形上的坡度”：生成不是一次性解码，而是沿着学到的方向场积分回数据区域。</small>
+<small>图源：[Score-Based Generative Modeling through Stochastic Differential Equations](https://arxiv.org/abs/2011.13456)，Figure 1。原图表达正向 SDE 把数据扰动到噪声，反向 SDE 依赖每个中间分布的 score 生成样本。读图重点是把 score 当作“分布地形上的坡度”：生成不是一次性解码，而是沿着学到的方向场积分回数据区域。</small>
 
 ## 世界模型里的 latent：状态要服务预测和决策
 
@@ -163,7 +163,7 @@ Score 是另一种描述分布的方式：
 
 ![PlaNet latent dynamics model designs](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="860" }
 
-<small>图源：[Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)，Figure 2。原图比较 RNN、SSM 和 RSSM 三种 latent dynamics 设计。本站读法是看 deterministic memory 和 stochastic state 的分工：前者记历史，后者表达不确定未来，二者合在一起才能服务 planning。</small>
+<small>图源：[Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)，Figure 2。原图比较 RNN、SSM 和 RSSM 三种 latent dynamics 设计。读图重点是看 deterministic memory 和 stochastic state 的分工：前者记历史，后者表达不确定未来，二者合在一起才能服务 planning。</small>
 
 这也是为什么“latent”不能被翻译成一个固定概念就结束。读论文时要追问：这个 latent 来自哪里？它是从 prior 采样、从 posterior 推断、从 denoising chain 递推，还是从历史观测更新？它最后服务的是生成图像、压缩 token、预测未来，还是选择动作？
 
@@ -189,7 +189,7 @@ Score 是另一种描述分布的方式：
 
 VAE 用 ELBO 把不可算的边际似然变成可优化下界；扩散用受控加噪把分布学习变成方向场学习；世界模型用 latent state 把历史、不确定性和动作后果压到可 rollout 的状态空间。把这三条链看清，后面的扩散、Dreamer、V-JEPA、VLA 和视频世界模型公式就不再只是符号。
 
-## 外部精读
+## 外部材料
 
 - [Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114)
 - [An Introduction to Variational Autoencoders](https://arxiv.org/abs/1906.02691)
@@ -204,11 +204,6 @@ VAE 用 ELBO 把不可算的边际似然变成可优化下界；扩散用受控�
 - [TensorFlow Core 中文教程：卷积变分自编码器](https://www.tensorflow.org/tutorials/generative/cvae?hl=zh-CN)
 - [Pyro 中文教程：变分自编码器](https://pyro.org.cn/examples/vae.html)
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

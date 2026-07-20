@@ -4,7 +4,7 @@ Vision-Language-Action 模型把视觉观测、语言任务和机器人状态映
 
 ## VLA 的统一接口
 
-一个通用写法是：
+VLA 的策略接口常写成：
 
 \[
 a_{t:t+H}\sim\pi_\theta(
@@ -72,4 +72,10 @@ VLA 直接学习策略 \(\pi(a\mid o,\ell)\)；世界模型学习环境转移 \(
 
 仅仅让一个模型同时输出动作和视频，不足以证明二者形成有效闭环。需要验证预测是否会改变动作排序、是否改善真实成功率，以及模型误差是否被不确定性或安全门禁约束。系统边界见[VLA、WAM 与世界模型系统图](../embodied-ai/vla-wam-world-model-system-map.md)和[VLA 世界模型全链路](../world-models/vla-world-model-full-chain-case.md)。
 
-返回[具身智能专题](../embodied-ai/index.md)或[世界模型与具身智能总入口](../world-models-and-embodied-ai/index.md)。原始路线可对照 [RT-1](https://arxiv.org/abs/2212.06817)、[RT-2](https://arxiv.org/abs/2307.15818)、[Open X-Embodiment](https://arxiv.org/abs/2310.08864)、[OpenVLA](https://arxiv.org/abs/2406.09246) 与 [π0](https://arxiv.org/abs/2410.24164)。
+## 外部材料
+
+- [RT-1](https://arxiv.org/abs/2212.06817)
+- [RT-2](https://arxiv.org/abs/2307.15818)
+- [Open X-Embodiment](https://arxiv.org/abs/2310.08864)
+- [OpenVLA](https://arxiv.org/abs/2406.09246)
+- [π0](https://arxiv.org/abs/2410.24164)

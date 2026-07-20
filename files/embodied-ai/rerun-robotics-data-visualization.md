@@ -1,10 +1,8 @@
 # Rerun：具身智能的多模态时序数据层
 
-> **这篇回答的问题。** 如何理解“Rerun”背后的核心机制、适用边界和下一步阅读路径。
-
 Rerun 不是一个 VLA 模型，也不是仿真器。它更像具身智能系统里的**黑盒飞行记录仪 + 可视化回放器 + 可查询数据层**：把相机、深度、点云、机器人位姿、动作、文本、标量和模型输出放到同一条时间线上，让你能复盘“机器人到底在什么时候看到了什么、相信了什么、做了什么”。
 
-Rerun 官方把它定位为面向 Physical AI 的 unified data layer，用于理解和改进包含 2D、3D、文本、时间序列和 tensor 的复杂多模态过程。官方文档还特别强调它服务 robotics、spatial computing、embodied AI、computer vision、simulation 等传感器随时间变化的系统。[Rerun 文档](https://rerun.io/docs/overview/what-is-rerun)里也说得很清楚：它不是训练平台、不是部署工具、也不是机器人操作系统，而是帮助准备数据、理解系统和调试开发链路的工具。
+Rerun 官方把它定位为面向 Physical AI 的 unified data layer，用于理解和改进包含 2D、3D、文本、时间序列和 tensor 的复杂多模态过程。官方文档还特别强调它服务 robotics、spatial computing、embodied AI、computer vision、simulation 等传感器随时间变化的系统。[Rerun 文档](https://rerun.io/docs/overview/what-is-rerun)里也说得很清楚：它是帮助准备数据、理解系统和调试开发链路的工具。
 
 ## 先看它长什么样
 
@@ -12,7 +10,7 @@ Rerun 的基本体验是：代码或日志把多模态数据送进 Rerun，Viewe
 
 ![Rerun overview 官方效果图](../assets/images/tools/rerun/rerun-overview.png){ width="860" }
 
-<small>图源：[Rerun docs](https://rerun.io/docs/overview/what-is-rerun)。原图表达：SDK / data loader 把多模态 streams 送入 Viewer / Storage，用户既能配置 layout，也能查询结果。本站读法：把 Rerun 看成调试和数据治理层，而不是模型、仿真器或机器人中间件；它的价值在于把传感器、轨迹和模型输出放到同一条时间线上。</small>
+<small>图源：[Rerun docs](https://rerun.io/docs/overview/what-is-rerun)。原图表达：SDK / data loader 把多模态 streams 送入 Viewer / Storage，用户既能配置 layout，也能查询结果。读图重点：把 Rerun 看成调试和数据治理层，而不是模型、仿真器或机器人中间件；它的价值在于把传感器、轨迹和模型输出放到同一条时间线上。</small>
 
 下面是官方 quickstart 里第一次把 3D points 送进 Viewer 后的效果。对具身智能来说，把这里的 `Points3D` 换成点云、机械臂末端轨迹、抓取候选或相机坐标系，排查思路是一样的。
 
@@ -238,11 +236,8 @@ Rerun 观察：RGB 检测框正确，depth 边缘破碎；点云投到 base fram
 2. [Rerun Log and Ingest](https://rerun.io/docs/getting-started/data-in)
 3. [Rerun Documentation](https://rerun.io/docs)
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
-- 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[具身智能基础：观测、动作与反馈闭环](beginner-learning-path.md)。
-- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
+- [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- [RoboTwin 项目](https://robotwin-platform.github.io/)。

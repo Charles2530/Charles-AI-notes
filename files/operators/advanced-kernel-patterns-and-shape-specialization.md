@@ -4,7 +4,7 @@
 
 ![FlashAttention IO-aware tiling](../assets/images/paper-figures/operators/flashattention-io-aware-tiling.png){ width="820" }
 
-<small>图源：[FlashAttention](https://arxiv.org/abs/2205.14135)。原图表达通过 tiling 避免 materialize 巨大 attention 矩阵、减少 HBM 往返；本站读法是把 tiling、流水、fusion 和 shape specialization 看成同一类“让数据在正确层级复用”的设计。它不能证明所有高级 kernel 都应照搬 FlashAttention 的 tile 结构。</small>
+<small>图源：[FlashAttention](https://arxiv.org/abs/2205.14135)。原图表达通过 tiling 避免 materialize 巨大 attention 矩阵、减少 HBM 往返；读图重点是把 tiling、流水、fusion 和 shape specialization 看成同一类“让数据在正确层级复用”的设计。它不能证明所有高级 kernel 都应照搬 FlashAttention 的 tile 结构。</small>
 
 ## 为什么“高级模式”不是炫技
 
@@ -127,11 +127,8 @@ flowchart LR
 
 高级 kernel 模式要按 persistent、grouped、split-k、warp specialization 和 shape specialization 定位。最容易误判的是热 shape 优化伤害冷 shape、模板爆炸、过度依赖单机假设；上线前要限定 specialization 边界，记录适用 shape family，准备 generic fallback，并把代码生成和维护成本一起算。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

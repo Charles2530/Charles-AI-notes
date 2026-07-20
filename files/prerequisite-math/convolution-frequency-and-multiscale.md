@@ -1,8 +1,6 @@
 # 卷积、频域与多尺度表示
 
-这篇回答一个问题：卷积、kernel、filter、Fourier/DCT、频率、SNR、timestep 和多尺度金字塔为什么会同时出现在视觉、扩散、动作 chunk 和世界模型论文里。
-
-很多 AI 论文表面在讲不同对象：图像局部纹理、视频运动、机器人动作序列、扩散噪声阶段。数学上它们常在处理同一个问题：信号里哪些变化是局部的，哪些变化是全局的；哪些变化是低频趋势，哪些变化是高频细节；模型应该在哪个尺度上做判断。
+卷积、kernel、filter、Fourier/DCT、频率、SNR、timestep 和多尺度金字塔共同处理信号的局部变化、全局趋势、频率成分和尺度选择。视觉、扩散、动作 chunk 和世界模型论文虽然对象不同，常用这套数学判断模型该在什么范围内看、在什么频段上改、在什么噪声阶段生成。
 
 ## 卷积：用同一个局部模板扫过信号
 
@@ -96,9 +94,9 @@ DCT 可以理解为只使用 cosine 基的一类频域表示。动作 chunk 压�
 
 ![Wan SNR phases](../assets/images/paper-deep-dives/diffusion/wan/wan22-moe-snr.png){ width="820" }
 
-<small>图源：`Wan2.2` 相关论文图，本站已本地化于视频扩散专题。原图展示 denoising timestep 与 SNR 阶段，以及不同 expert 在不同噪声区间的验证曲线。本站在这里用它说明：timestep 可以被读成噪声尺度，不同阶段承担的生成职责不同。</small>
+<small>图源：`Wan2.2` 相关论文图，已本地化于视频扩散专题。原图展示 denoising timestep 与 SNR 阶段，以及不同 expert 在不同噪声区间的验证曲线。这里的重点是：timestep 可以被读成噪声尺度，不同阶段承担的生成职责不同。</small>
 
-Phased DMD 和 Wan2.2 这类论文把去噪过程分阶段，本质上是在承认：不同 SNR 区间不是同一个难度。低 SNR 阶段更像全局结构和运动，高 SNR 阶段更像局部细节和纹理。
+Phased DMD 和 Wan2.2 这类论文把去噪过程分阶段，原因是不同 SNR 区间难度不同。低 SNR 阶段更像全局结构和运动，高 SNR 阶段更像局部细节和纹理。
 
 ## 常见误读
 
@@ -113,10 +111,3 @@ Phased DMD 和 Wan2.2 这类论文把去噪过程分阶段，本质上是在承�
 ## 读完以后怎么判断
 
 看到 convolution、kernel、frequency、DCT、SNR、timestep 或 multi-scale，先问：模型在处理哪个信号，局部模板是什么，低频和高频分别承载什么，当前尺度服务全局结构还是局部细节。这个问题链会支撑 Depth Anything、MapAnything、Fast-WAM、Wan、Phased DMD 和动作 tokenization 论文。
-
-## 相关阅读与下一步
-
-- 站内下一步：[相机、深度与机器人视觉](../embodied-ai/cameras-depth-and-robot-vision.md)。
-- 站内下一步：[双目匹配与 Cost Volume](../embodied-ai/stereo-matching-and-cost-volume.md)。
-- 论文精读：[Wan 视频生成](../paper-deep-dives/diffusion/wan.md)。
-- 论文精读：[Phased DMD](../paper-deep-dives/diffusion/phased-dmd.md)。

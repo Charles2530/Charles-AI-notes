@@ -1,10 +1,8 @@
 # 扩散训练配方与排障
 
-> **这篇回答的问题。** 如何理解“扩散训练配方与排障”背后的核心机制、适用边界和下一步阅读路径。
+扩散训练最容易被误解成一组技巧：数据清洗、cosine schedule、EMA、condition dropout、CFG sweep、几个固定 prompt。真实项目里，这些开关构成一条排障链。样本糊、主体错、prompt 不听、视频闪烁、动作扩散成功率下降，都要追问：失败发生在哪个噪声区间，条件信号有没有进入 denoiser，训练分布和采样链路是否一致，模型容量和表示空间是否够用。
 
-扩散训练最容易被误解成一组技巧：数据清洗、cosine schedule、EMA、condition dropout、CFG sweep、几个固定 prompt。真实项目里，这些不是孤立开关，而是一条排障链。样本糊、主体错、prompt 不听、视频闪烁、动作扩散成功率下降，都要追问：失败发生在哪个噪声区间，条件信号有没有进入 denoiser，训练分布和采样链路是否一致，模型容量和表示空间是否够用。
-
-这页不做孤立开关罗列。它讲一个更实用的问题：**当扩散训练看起来正常、采样却不对时，怎样把失败归因到数据、噪声日程、参数化、条件接口、优化或部署预算。**
+扩散训练看起来正常、采样却不对时，需要把失败归因到数据、噪声日程、参数化、条件接口、优化或部署预算，而不是孤立调开关。
 
 ## Loss 只是入口，不是诊断结论
 
@@ -31,7 +29,7 @@ w(t)\|\epsilon-\epsilon_\theta(x_t,t,c)\|_2^2
 
 ![DiT compute scaling and FID](../assets/images/paper-figures/diffusion/dit-gflops-fid-compute.png){ width="860" }
 
-<small>图源：[Scalable Diffusion Models with Transformers](https://arxiv.org/abs/2212.09748)，Figures 8-9。原图用 forward pass GFLOPs 和训练计算量展示 DiT 模型规模与 FID 的关系。本站读法：扩散质量常常要用每步前向成本换；在视频和世界模型里，这个成本还会乘以帧数、候选动作数和去噪步数。</small>
+<small>图源：[Scalable Diffusion Models with Transformers](https://arxiv.org/abs/2212.09748)，Figures 8-9。原图用 forward pass GFLOPs 和训练计算量展示 DiT 模型规模与 FID 的关系。读图重点：扩散质量常常要用每步前向成本换；在视频和世界模型里，这个成本还会乘以帧数、候选动作数和去噪步数。</small>
 
 如果一个视频世界模型一次要处理多相机、多帧 latent，单次前向已经很贵，再乘以 20 到 50 个去噪步和多个候选 action sequence，闭环延迟会迅速失控。这里的排障顺序不是先问“用不用更 fancy 的 sampler”，而是先算 token 数、单步前向、采样步数、候选数和重规划频率。在线控制场景里，低 NFE 不是锦上添花，而是任务可用性的前提。
 
@@ -75,11 +73,11 @@ Classifier-free guidance 还要求训练时模型见过“有条件”和“无�
 
 ![DMD2 brightness stability](../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-brightness.png){ width="760" }
 
-<small>图源：[DMD2](https://arxiv.org/abs/2405.14867)，Appendix Figure 7。原图展示去掉 regression loss 后，不同 fake critic update ratio 对 ImageNet 生成样本平均亮度稳定性的影响。本站读法：distribution matching 背后是 generator 和 critic / score estimator 的动态追赶；critic 跟不上时，外观可能表现为亮度、颜色或清晰度振荡。</small>
+<small>图源：[DMD2](https://arxiv.org/abs/2405.14867)，Appendix Figure 7。原图展示去掉 regression loss 后，不同 fake critic update ratio 对 ImageNet 生成样本平均亮度稳定性的影响。读图重点：distribution matching 背后是 generator 和 critic / score estimator 的动态追赶；critic 跟不上时，外观可能表现为亮度、颜色或清晰度振荡。</small>
 
 ![DMD2 convergence](../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-convergence.png){ width="760" }
 
-<small>图源：[DMD2](https://arxiv.org/abs/2405.14867)，Appendix Figure 8。原图比较不同 fake critic update ratio 和原始 DMD 设置下的收敛表现。本站读法：少步蒸馏不能只看学生 loss；critic 更新、regression anchor、真实采样步数和样本多样性要一起看。</small>
+<small>图源：[DMD2](https://arxiv.org/abs/2405.14867)，Appendix Figure 8。原图比较不同 fake critic update ratio 和原始 DMD 设置下的收敛表现。读图重点：少步蒸馏不能只看学生 loss；critic 更新、regression anchor、真实采样步数和样本多样性要一起看。</small>
 
 如果 \(v\)-loss 下降但样例变差，问题可能在 sampler、CFG 或 train-inference mismatch；如果 distribution matching loss 下降但多样性变差，可能是学生向高密度安全模式坍缩；如果亮度或颜色周期性晃动，要看 fake critic 更新频率、学习率、EMA 和 generated batch 分布。少步训练最怕“曲线看起来有进展，真实样例变钝”。
 
@@ -103,7 +101,7 @@ Prompt adherence 差时，不要只调 CFG。先看文本编码器、caption 质
 
 读训练日志时先问四件事：平均 loss 是否拆成 SNR bucket；固定样例是否用真实 sampler 回放；条件桶和长尾桶是否单独看；端到端延迟和闭环指标是否进入验收。做到这四件事，扩散训练就不再是靠经验调一堆旋钮，而是能一步步把错误定位到具体接口。
 
-## 外部精读
+## 外部材料
 
 - [DDPM](https://arxiv.org/abs/2006.11239)：理解噪声预测目标和反向链的训练基础。
 - [Improved DDPM](https://arxiv.org/abs/2102.09672)：理解 learned variance、cosine schedule 和 timestep 贡献差异。
@@ -115,11 +113,6 @@ Prompt adherence 差时，不要只调 CFG。先看文本编码器、caption 质
 - [DMD2](https://arxiv.org/abs/2405.14867)：理解 distribution matching 蒸馏中的 fake critic、regression anchor 和训练稳定性。
 - [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解扩散用于动作策略时，评估目标如何从视觉质量转向 closed-loop control。
 
-## 相关阅读与下一步
-
-- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
-- 站内下一步：[扩散模型专题](index.md)。
-- 站内下一步：[扩散方法对比表](comparison-table.md)。
-- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。
+- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。

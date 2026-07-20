@@ -4,7 +4,7 @@
 
 `verl` 这一章负责回答系统问题：一个 prompt batch 如何经过分布式 rollout、reward、advantage、optimizer update 和 weight sync，最终成为下一版本的生成策略。它不重新推导 PPO 或 GRPO 公式，而是追踪公式依赖的字段由谁产生、在哪个 mask 上对齐，以及 rollout 与 update 是否仍属于兼容的策略状态。
 
-学完后应能画出 worker 拓扑和字段流，区分 rollout policy、proximal old policy、current train policy 与 reference policy，解释吞吐与样本新鲜度为何冲突，并用版本、mask、样本标识和服务元数据定位分布式训练故障。本文保留稳定概念；涉及具体字段和 worker ownership 的结论只对应文中锁定的 `e5687fce...` 代码快照，不外推为其他版本的 API。
+学完后应能画出 worker 拓扑和字段流，区分 rollout policy、proximal old policy、current train policy 与 reference policy，解释吞吐与样本新鲜度为何冲突，并用版本、mask、样本标识和服务元数据定位分布式训练故障。稳定概念可以保留；涉及具体字段和 worker ownership 的结论只对应文中锁定的 `e5687fce...` 代码快照，不外推为其他版本的 API。
 
 ## 先修知识
 
@@ -92,7 +92,7 @@ HybridFlow 的系统贡献不是重写 PPO 公式，而是把 rollout、reward�
 
 ### 配置按“谁生产字段”来读
 
-下面保留的是概念性配置读法，来源于本文原有 `verl.trainer.main_ppo` / Ray trainer 代码流分析。上游配置键会演进，使用时必须以锁定 commit 或安装版本的示例为准，不能把此片段当作当前 upstream API 保证。
+下面保留的是概念性配置读法，来源于原有 `verl.trainer.main_ppo` / Ray trainer 代码流分析。上游配置键会演进，使用时必须以锁定 commit 或安装版本的示例为准，不能把此片段当作当前 upstream API 保证。
 
 ```bash
 python -m verl.trainer.main_ppo \
@@ -165,7 +165,3 @@ LLM 的 `terminated` 常对应真实结束条件，例如 EOS 或任务完成；
 继续精读时可对照 [verl GitHub](https://github.com/verl-project/verl)、[verl PPO Ray Trainer docs](https://verl.readthedocs.io/en/latest/workers/ray_trainer.html) 与 [HybridFlow 论文](https://arxiv.org/abs/2409.19256)。前两者用于核对实际安装版本，论文用于理解 dataflow/resource mapping 设计；若三者细节不同，应以锁定代码快照为运行事实并记录 commit。
 
 原页保留的算法与实现背景也可继续使用：[Hugging Face 的 PPO/RLHF implementation details](https://huggingface.co/blog/the_n_implementation_details_of_rlhf_with_ppo) 用于核查容易遗漏的工程语义，[Spinning Up 的 Policy Optimization](https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html) 和 [PPO 论文](https://arxiv.org/abs/1707.06347) 用于回看 on-policy 目标，[Soft Actor-Critic 论文](https://arxiv.org/abs/1801.01290) 用作 off-policy 系统对照。这些来源解释算法责任，不能替代所用 `verl` commit 的运行事实。
-
-## 下一步
-
-进入 [综合实践与算法选择](practice-and-algorithm-selection.md)，用 GridWorld、Pendulum 和 verifier LLM 三个 capstone 把算法假设、可执行命令与验收证据连起来。需要回看目标定义时返回 [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md)，需要重新选择完整路径时返回 [强化学习课程地图](index.md#完整学习路线)。

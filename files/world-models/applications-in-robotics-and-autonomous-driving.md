@@ -367,11 +367,8 @@ imagined rollouts 很有价值，但不能无限制直接拿来训练闭环策�
 
 在机器人与自动驾驶里，世界模型从来不是唯一模块。它必须和感知、规划、控制、规则、安全壳、人工接管和数据飞轮一起证明自己的价值。若它只提升离线分数，却没有让预测更早暴露风险、规划更少走进死胡同、恢复更快找到可行动作、数据回流更聚焦，就很难抵消系统复杂度。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

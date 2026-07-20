@@ -1,11 +1,11 @@
 # 多模态推理：先看见证据，再组织推理
 
-这篇文章只回答一个问题：一个模型同时看到文字、图片、视频、音频和工具结果时，怎样把这些输入变成可靠判断，而不是把“看起来会描述”误读成“真的会推理”。
+模型同时看到文字、图片、视频、音频和工具结果时，需要把这些输入变成可靠判断，不能把“看起来会描述”误读成“真的会推理”。
 
 多模态推理的核心链路可以拆成五步：感知证据、模态对齐、连接到语言/策略空间、在 token 预算内组织中间状态、用工具或验证器校验输出。任何一步错了，后面的 CoT 写得再漂亮也可能只是围绕错误证据编故事。
 
 !!! tip "数学先修"
-    本文会用到[向量、内积与表示空间](../prerequisite-math/linear-algebra-and-geometry.md)解释图文对齐，用[互信息与分布距离](../prerequisite-math/information-theory-and-divergence.md)理解训练目标，并在空间推理处连接[相机与三维几何](../prerequisite-math/geometry-vision-and-3d.md)。
+    需要用到[向量、内积与表示空间](../prerequisite-math/linear-algebra-and-geometry.md)解释图文对齐，用[互信息与分布距离](../prerequisite-math/information-theory-and-divergence.md)理解训练目标，并在空间推理处连接[相机与三维几何](../prerequisite-math/geometry-vision-and-3d.md)。
 
 ## 第一件事：对齐不是推理
 
@@ -13,7 +13,7 @@ CLIP 是理解多模态模型的好入口，因为它把图像和文本放进同
 
 ![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }
 
-<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图展示 CLIP 用大量 image-text pairs 做对比预训练，再把类别写成文本 prompts 做 zero-shot prediction。本站用这张图说明：图文对齐给模型一个“图片像哪句话”的语义接口，但它不等于时序理解、工具推理或动作规划。</small>
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图展示 CLIP 用大量 image-text pairs 做对比预训练，再把类别写成文本 prompts 做 zero-shot prediction。这张图说明：图文对齐给模型一个“图片像哪句话”的语义接口，但它不等于时序理解、工具推理或动作规划。</small>
 
 如果图像 embedding 是 \(v\)，文本 embedding 是 \(t\)，CLIP 常用归一化后的相似度来比较二者：
 
@@ -33,7 +33,7 @@ s(v,t)=\frac{v^\top t}{\lVert v\rVert\lVert t\rVert}
 
 ![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="820" }
 
-<small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。原图展示冻结视觉 encoder，通过 Q-Former 的 query tokens 从视觉特征中抽取信息，并分别服务图文对比、图文匹配和 image-grounded generation。本站用这张图说明：connector 是信息瓶颈，它决定 LLM 最终能读到哪些视觉证据。</small>
+<small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。原图展示冻结视觉 encoder，通过 Q-Former 的 query tokens 从视觉特征中抽取信息，并分别服务图文对比、图文匹配和 image-grounded generation。这张图说明：connector 是信息瓶颈，它决定 LLM 最终能读到哪些视觉证据。</small>
 
 可以把连接器看成一个证据压缩器：
 
@@ -175,7 +175,7 @@ y^\*=\arg\max_y V(x,y)
 
 多模态推理的基础不是“图片接上 LLM”或“让模型多写 CoT”，而是证据链：视觉、音频、视频和工具结果先被编码和压缩，connector 决定哪些证据进入语言空间，token 预算决定哪些细节能留下，CoT 负责组织复杂约束，工具和验证器负责补外部事实与可执行检查。可靠性来自这条链路的每一环，而不是来自任意一个模型能力标签。
 
-## 外部精读
+## 外部材料
 
 - [CLIP](https://arxiv.org/abs/2103.00020)：理解图文对齐和 zero-shot transfer 的基础。
 - [The Illustrated CLIP](https://jalammar.github.io/illustrated-clip/)：用图讲清相似度矩阵和文本分类器构造。
@@ -186,12 +186,6 @@ y^\*=\arg\max_y V(x,y)
 - [ReAct](https://arxiv.org/abs/2210.03629)：理解推理和工具行动如何交替。
 - [MMMU](https://arxiv.org/abs/2311.16502)：理解多学科多模态推理评测为什么要覆盖证据定位与知识推理。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

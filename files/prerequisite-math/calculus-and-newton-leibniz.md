@@ -1,8 +1,6 @@
 # 微积分与牛顿-莱布尼茨公式
 
-这篇回答一个问题：为什么训练、优化、扩散模型和控制里总是出现导数、积分、梯度、ODE、SDE，以及牛顿-莱布尼茨公式。
-
-微积分的核心不是“求导技巧”，而是把变化讲清楚。导数描述局部变化率，积分累积一段区间里的变化，牛顿-莱布尼茨公式把二者接起来。
+训练、优化、扩散模型和控制都会把变化写成导数、积分、梯度、ODE 或 SDE。微积分提供这套语言：导数描述局部变化率，积分累积区间内的变化，牛顿-莱布尼茨公式把二者接起来。
 
 ## 导数：局部变化率
 
@@ -53,7 +51,7 @@ f'(x)=\lim_{\Delta x\to 0}\frac{f(x+\Delta x)-f(x)}{\Delta x}
 
 ![Integral as area](../assets/images/prerequisite-math/integral-as-area.svg){ width="560" }
 
-<small>图源：[Wikimedia Commons: Integral as region under curve](https://commons.wikimedia.org/wiki/File:Integral_as_region_under_curve.svg)。原图展示曲线下方面积。本站用它说明：积分不是抽象符号，而是在把连续区间里的局部贡献累积成总量。</small>
+<small>图源：[Wikimedia Commons: Integral as region under curve](https://commons.wikimedia.org/wiki/File:Integral_as_region_under_curve.svg)。原图展示曲线下方面积。这里的重点是：积分把连续区间里的局部贡献累积成总量。</small>
 
 ## 牛顿-莱布尼茨公式：变化率和累计量相连
 
@@ -194,9 +192,6 @@ dx=f(x,t)\,dt+g(t)\,dW_t
 
 看到导数，问“谁对谁敏感”；看到积分，问“沿什么区间累积了什么”；看到 ODE/SDE，问“状态怎样随时间推进，随机性从哪里进入”；看到 solver，问“有没有可解析结构被单独利用”。这几问足够支撑后面的训练、扩散、控制和世界模型文章。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 站内下一步：[优化与训练入门](../foundations/optimization-and-training-basics.md)。
-- 站内下一步：[Score Matching 到 SDE](../diffusion/score-matching-sde-and-probability-flow.md)。
-- 论文精读：[DPM-Solver++](../paper-deep-dives/diffusion/dpm-solver-plus-plus.md)。
-- 外部材料：[colah: Calculus on Computational Graphs](https://colah.github.io/posts/2015-08-Backprop/)。
+- [colah: Calculus on Computational Graphs](https://colah.github.io/posts/2015-08-Backprop/)。

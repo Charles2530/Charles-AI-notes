@@ -1,8 +1,8 @@
 # 双目匹配与 Cost Volume：把深度先变成对应点问题
 
-很多人第一次读 stereo matching，容易把它和 monocular depth 混在一起：都是输入图像，输出一张深度图。真正决定两者差异的不是网络名字，而是问题假设。单目深度主要在一张图里利用纹理、透视和语义线索推断距离；双目深度先有一对同步、标定、校正过的左右图，再利用同一个 3D 点在两张图里的横向位移来三角测量。
+很多人第一次读 stereo matching，容易把它和 monocular depth 混在一起：都是输入图像，输出一张深度图。两者差异由问题假设决定。单目深度主要在一张图里利用纹理、透视和语义线索推断距离；双目深度先有一对同步、标定、校正过的左右图，再利用同一个 3D 点在两张图里的横向位移来三角测量。
 
-所以这篇文章不把双目匹配写成一串术语，而是沿着一条工程链走一遍：
+双目匹配可以沿着一条工程链读：
 
 ```text
 rectified left/right images
@@ -28,7 +28,7 @@ right candidates:  (u - d, v), d = 0 ... D
 
 ![Stereo camera geometry](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/stereo-camera-model-wikimedia.jpg){ width="640" }
 
-<small>图源：[Wikimedia Commons: Stereo-camera-model.jpg](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。本站用这张图解释 baseline、focal length、左右投影点和深度之间的几何关系；没有用 image2 或其他生成式工具重画。</small>
+<small>图源：[Wikimedia Commons: Stereo-camera-model.jpg](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。这张图解释 baseline、focal length、左右投影点和深度之间的几何关系。</small>
 
 在最常见的平行双目近似下，深度公式可以写成：
 
@@ -142,7 +142,7 @@ Fast-FoundationStereo 关心的是实时账：一个强 stereo foundation model 
 
 ![Fast-FoundationStereo pipeline](../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-3-framework-padded.png){ width="920" }
 
-<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 3。本站用这张图说明 feature backbone、cost filtering、disparity refinement 三段式 stereo pipeline；没有用 image2 或其他生成式工具重画。</small>
+<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 3。这张图说明 feature backbone、cost filtering、disparity refinement 三段式 stereo pipeline。</small>
 
 这张图可以从上到下读。最上层是通用 stereo pipeline：左右图进入 feature backbone，构造 cost volume，经过 cost filtering 得到初始 disparity，再通过 refinement 输出最终 disparity。下面三块对应不同热路径：feature backbone 负责提特征，cost filtering 在 volume 上推理，refinement 负责迭代修正。Fast-FoundationStereo 的工程判断是：三段冗余形态不同，所以分别用蒸馏、blockwise NAS 和结构化剪枝处理。
 
@@ -186,7 +186,7 @@ Middlebury v3 明确提供多种 disparity accuracy measures，包括 bad pixel�
 
 所以读 FoundationStereo、Fast-FoundationStereo、RAFT-Stereo、PSMNet 或任何 stereo 模型时，先问五件事：输入几何假设是什么，cost volume 怎么构造，哪里最耗显存和 latency，失败区域是否被 benchmark 覆盖，输出 disparity 最后如何进入机器人、AR 或自动驾驶的控制链。
 
-## 外部精读
+## 外部材料
 
 - [OpenCV: Depth Map from Stereo Images](https://docs.opencv.org/4.x/dd/d53/tutorial_py_depthmap.html)：用最小代码和公式理解 disparity 到 depth。
 - [LearnOpenCV: Introduction to Epipolar Geometry and Stereo Vision](https://learnopencv.com/introduction-to-epipolar-geometry-and-stereo-vision/)：适合补 epipolar geometry、对应点和深度直觉。
@@ -199,11 +199,6 @@ Middlebury v3 明确提供多种 disparity accuracy measures，包括 bad pixel�
 - [Middlebury Stereo Evaluation v3](https://vision.middlebury.edu/stereo/eval3/MiddEval3-newFeatures.html)：理解 bad pixel、平均误差和分位数指标。
 - [KITTI Stereo Evaluation](https://www.cvlibs.net/datasets/kitti/eval_scene_flow.php?benchmark=stereo)：理解自动驾驶场景里的 stereo benchmark 口径。
 
-## 相关阅读与下一步
-
-- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
-- 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[具身智能基础：观测、动作与反馈闭环](beginner-learning-path.md)。
-- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
+- [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- [RoboTwin 项目](https://robotwin-platform.github.io/)。

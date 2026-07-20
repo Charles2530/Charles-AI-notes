@@ -1,8 +1,8 @@
 # 推理服务系统：快模型为什么上线后仍然慢
 
-离线测一个模型，常见做法是加载权重、喂 prompt、看 tokens/s。真正上线后，用户看到的不是这一个数字，而是一条请求链：排队、鉴权、路由、prefill、KV cache 分配、decode 循环、采样、detokenize、安全检查、工具调用、流式返回、日志追踪。任何一段慢，都会把“模型很快”变成“服务很慢”。
+离线测一个模型，常见做法是加载权重、喂 prompt、看 tokens/s。真正上线后，用户看到的是一条请求链：排队、鉴权、路由、prefill、KV cache 分配、decode 循环、采样、detokenize、安全检查、工具调用、流式返回、日志追踪。任何一段慢，都会把“模型很快”变成“服务很慢”。
 
-这页只抓一个问题：**同一份模型权重，为什么单请求 benchmark 看起来快，线上用户仍然觉得慢。**
+同一份模型权重在单请求 benchmark 里可能很快，在线上服务里仍可能让用户等待很久。
 
 先把一次请求拆成状态机，而不是一次 `generate()`：
 
@@ -97,7 +97,7 @@ vLLM 的 PagedAttention 把 KV cache 切成 block，用 block table 把逻辑 to
 
 ![vLLM serving system overview](../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="900" }
 
-<small>图源：[vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)。本站用这张图说明 scheduler、KV cache manager、CPU/GPU block allocator 和 worker 的关系；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)。这张图说明 scheduler、KV cache manager、CPU/GPU block allocator 和 worker 的关系。</small>
 
 读这张图时，先看三件事。第一，请求不是直接进入模型 worker，而是先被 scheduler 管理。第二，KV cache manager 和 block allocator 决定 GPU 显存怎样被分配、复用和释放。第三，worker 的吞吐和尾延迟取决于调度、KV 分配和 batch 形态，而不只取决于模型权重。
 
@@ -179,7 +179,7 @@ Speculative decoding 又是另一张账。它让 draft model 先猜多个 token�
 
 真正能落地的优化，通常不是一个开关，而是一张账单：这次改动省了 queue、prefill、KV、decode、工具链还是人工成本？又把成本转移到了质量、尾延迟、显存、工程复杂度还是可观测性上？把这张账拆清楚，推理服务才从黑箱变成可以改的系统。
 
-## 外部精读
+## 外部材料
 
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：理解 KV cache 分页、block table 和 continuous batching。
 - [vLLM paper](https://arxiv.org/abs/2309.06180)：理解 PagedAttention 在论文里的内存管理和吞吐证据。
@@ -194,11 +194,6 @@ Speculative decoding 又是另一张账。它让 draft model 先猜多个 token�
 - [智源转载：全栈 Transformer 推理优化](https://hub.baai.ac.cn/view/33449)：学习中文长文如何按模型、算子、显存、调度和工程分层讲推理优化。
 - [中国信通院：大模型推理优化关键技术与应用实践研究报告（2026）](https://www.caict.ac.cn/kxyj/qwfb/ztbg/202604/P020260415615308750699.pdf)：看产业报告如何组织模型压缩、PD 分离、KV 多级存储和服务调度。
 
-## 相关阅读与下一步
-
-- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
-- 站内下一步：[推理系统专题](index.md)。
-- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
-- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。
+- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- [SGLang 文档](https://docs.sglang.ai/)。

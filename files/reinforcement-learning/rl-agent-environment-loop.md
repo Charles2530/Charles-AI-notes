@@ -95,7 +95,3 @@ trajectory batch -> return / advantage / target -> loss -> policy update
 3. 若机器人在第 1,000 步被时间上限截断，但仍处于正常通道，解释为什么这与碰撞 termination 的 value target 不应自动相同。
 4. 把成功奖励从 `+100` 改成每向目标靠近一米 `+1`，列出至少一种 reward hacking 风险和一个独立评测指标。
 5. 比较训练早期与训练后期各 100 条 rollout 的状态覆盖；说明观察到的变化为何可能来自 policy，而不是环境本身。
-
-## 下一步
-
-下一章进入 [MDP、价值函数与 Bellman](mdp-value-bellman.md)，把本章的 state、transition、reward 和 trajectory 写成可递推的长期价值问题。若 return、value、advantage 或 policy objective 仍不熟悉，可并行阅读 [价值函数、策略梯度与强化学习目标](../prerequisite-math/value-policy-and-rl-objectives.md)。

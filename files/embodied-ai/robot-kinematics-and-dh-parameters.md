@@ -4,7 +4,7 @@
 
 ## 本章回答什么
 
-本文从串联机械臂出发，解释关节空间、任务空间、Forward Kinematics（FK）、Inverse Kinematics（IK）和 Jacobian 的职责边界；用经典 Denavit--Hartenberg（DH）四参数建立相邻连杆变换；再通过二维两连杆和 NumPy 示例验证整条运动学链。
+串联机械臂运动学需要解释关节空间、任务空间、Forward Kinematics（FK）、Inverse Kinematics（IK）和 Jacobian 的职责边界；经典 Denavit--Hartenberg（DH）四参数可以建立相邻连杆变换，二维两连杆和 NumPy 示例可以验证整条运动学链。
 
 读完以后，应能回答：
 
@@ -64,7 +64,7 @@ FK 是确定的前向计算。IK 可能有多个解、没有解，或解落在�
 | \(d_i\) | link offset | 沿 \(z_{i-1}\) 的平移 |
 | \(\theta_i\) | joint angle | 绕 \(z_{i-1}\) 的旋转 |
 
-相邻坐标系的变换顺序必须与所采用的约定一起写明。本文使用经典 DH：
+相邻坐标系的变换顺序必须与所采用的约定一起写明。这里使用经典 DH：
 
 \[
 {}^{i-1}T_i
@@ -135,7 +135,7 @@ y=l_1\sin\theta_1+l_2\sin(\theta_1+\theta_2).
 
 ### 用 NumPy 从 DH 表计算正运动学
 
-下面的实现严格对应本文声明的经典 DH 顺序：
+下面的实现严格对应这里声明的经典 DH 顺序：
 
 ~~~python
 import numpy as np
@@ -216,14 +216,9 @@ DH 和 FK 描述几何关系，不包含质量、惯量、摩擦、柔性、驱�
 6. 为什么 URDF 不能被视为“换了格式的 DH 表”？
 7. FK 数值正确时，真实末端仍可能因哪些标定或执行因素产生偏差？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 空间接口：[坐标变换与手眼协调](coordinate-transforms-and-hand-eye-calibration.md)。
-- 数据语义：[机器人 State / Action 数据](state-action-robot-datasets.md)。
-- 任务流水线：[资产、感知、抓取与轨迹 Pipeline](asset-perception-grasp-and-trajectory-pipeline.md)。
-- 执行边界：[规划、控制与安全](planning-control-and-safety.md)。
 - 原始笔记：[机器人运动学与 DH 参数](https://v11enp9ok1h.feishu.cn/wiki/UU7yw4IlDiiJX8kNWBucuCFJnab?from=from_copylink)。
 - 正运动学参考：[Modern Robotics](https://modernrobotics.northwestern.edu/nu-gm-book-resource/4-1-1-product-of-exponentials-formula-in-the-space-frame/)。
 - 工业参数参考：[Universal Robots DH 参数](https://www.universal-robots.com/articles/ur/application-installation/dh-parameters-for-calculations-of-kinematics-and-dynamics/)。
 - 模型边界参考：[ROS 2 URDF 可动关节](https://docs.ros.org/en/rolling/Tutorials/Intermediate/URDF/Building-a-Movable-Robot-Model-with-URDF.html)。
-- 返回：[具身智能专题](index.md)。

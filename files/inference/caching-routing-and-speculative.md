@@ -1,10 +1,8 @@
 # KV、缓存与投机解码：把贵模型用在值得的位置
 
-> **这篇回答的问题。** 如何理解“KV、缓存与投机解码”背后的核心机制、适用边界和下一步阅读路径。
-
 缓存、路由和投机解码看起来是三类技术：缓存复用历史计算，路由选择请求路径，投机解码让便宜 draft 先猜、昂贵 target 再验证。但它们在服务系统里回答的是同一个问题：有限的 GPU 时间、KV 显存和强模型调用次数，应该花在哪些 token 和哪些请求上。
 
-所以这页不按功能名分散介绍，而按一次请求的生命周期看：
+可以按一次请求的生命周期看这些技术：
 
 ```text
 request
@@ -139,9 +137,9 @@ EAGLE 系列把投机解码的重点从“找一个更小的 draft LLM”推进�
 | Speculative decoding | accepted length、rejected tokens、verify time、rollback |
 | End-to-end | TTFT、TPOT、P95/P99、cost/request、quality regression |
 
-短问答、长文档、长输出、agent、多模态、高温采样、结构化输出，应该分别看。缓存、路由和投机解码的成熟形态，是按 workload 分桶打开和关闭，而不是作为全站统一开关。
+短问答、长文档、长输出、agent、多模态、高温采样、结构化输出，应该分别看。缓存、路由和投机解码的成熟形态，是按 workload 分桶打开和关闭，而不是作为系统统一开关。
 
-## 外部精读
+## 外部材料
 
 - [vLLM / PagedAttention](https://vllm.ai/blog/vllm)：理解 KV cache 为什么需要分页式管理。
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)：用论文证据理解 block table、KV memory waste 和 serving throughput。
@@ -151,11 +149,6 @@ EAGLE 系列把投机解码的重点从“找一个更小的 draft LLM”推进�
 - [EAGLE](https://arxiv.org/abs/2401.15077)、[EAGLE-2](https://arxiv.org/abs/2406.16858) 与 [EAGLE-3](https://arxiv.org/abs/2503.01840)：理解 feature-level draft、dynamic draft tree 和 training-time test。
 - [RouteLLM](https://arxiv.org/abs/2406.18665)：理解模型路由如何在成本和质量之间做请求级选择。
 
-## 相关阅读与下一步
-
-- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
-- 站内下一步：[推理系统专题](index.md)。
-- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
-- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。
+- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- [SGLang 文档](https://docs.sglang.ai/)。

@@ -2,11 +2,9 @@
 
 Consistency Models、LCM、Flow Matching 和 Rectified Flow 都能服务少步生成，但它们学习的对象不同。一致性路线学习轨迹上不同时间点到同一终点的映射；Flow 路线学习当前位置的局部速度，再由 ODE solver 积分出终点。两者可以共享教师轨迹或相同端点分布，不能因此视为同一个训练目标。
 
-## 本文解决什么问题
+读一致性路线时，先分清三个问题：一致性函数的约束是什么；LCM 如何把一致性蒸馏接入 latent diffusion；它与 Flow Matching、Rectified Flow 和普通 sampler 加速分别处在哪一层。
 
-本文集中回答三个问题：一致性函数的约束是什么；LCM 如何把一致性蒸馏接入 latent diffusion；它与 Flow Matching、Rectified Flow 和普通 sampler 加速分别处在哪一层。
-
-Flow 的条件速度、边缘速度、ODE 与 reflow 推导统一见 [Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)，本文不重复展开。
+Flow 的条件速度、边缘速度、ODE 与 reflow 推导见 [Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)。
 
 ## 前置知识
 
@@ -116,10 +114,6 @@ Flow 与 Rectified Flow 还要检查时间 bucket 误差、路径曲率、solver
 4. Flow ODE 作为教师时，学生为什么不一定预测 velocity？
 5. 一步模型应怎样检查质量与分布覆盖，而不只看单张结果？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 局部速度路线：[Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)。
-- 蒸馏全景：[一步生成、蒸馏与整流](distillation.md)。
-- 数值加速：[采样与推理加速](inference.md)。
 - 原始来源：[Consistency Models](https://arxiv.org/abs/2303.01469)、[Latent Consistency Models](https://arxiv.org/abs/2310.04378)、[Flow Matching](https://arxiv.org/abs/2210.02747)、[Rectified Flow](https://arxiv.org/abs/2209.03003)。
-- 返回：[扩散模型专题](index.md)。

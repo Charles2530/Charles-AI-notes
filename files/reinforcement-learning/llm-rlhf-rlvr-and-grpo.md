@@ -110,7 +110,7 @@ k_t=\log\pi_\theta(a_t\mid s_t)-
 
 DPO 使用固定的 chosen/rejected preference pair 和 reference policy，直接优化成对分类形式的目标。它是 offline preference optimization：训练步骤不向在线环境采新 response，也不在每轮通过 reward model/verifier 闭环打分。DPO 可避免显式训练 reward model 与在线 PPO rollout，但仍依赖偏好数据覆盖，部署后的新状态不会自动进入训练集。
 
-所以“DPO 不属于 RL”或“DPO 就是在线 RLHF”都过于粗糙。更准确的课程边界是：它来自 KL-regularized reward optimization 的推导，但实际训练 dataflow 是固定偏好数据上的离线优化，应与本页在线 rollout -> reward -> update 主线分开。
+所以“DPO 不属于 RL”或“DPO 就是在线 RLHF”都过于粗糙。更准确的课程边界是：它来自 KL-regularized reward optimization 的推导，但实际训练 dataflow 是固定偏好数据上的离线优化，应与在线 rollout -> reward -> update 主线分开。
 
 ## 训练数据流
 
@@ -166,9 +166,3 @@ RLHF 还需要 reward model 的训练/验证切分与人工审计；RLVR 需要 
 - [DeepSeekMath](https://arxiv.org/abs/2402.03300)：GRPO 的方法来源与数学推理训练设置。
 - [DeepSeek-R1](https://arxiv.org/abs/2501.12948)：可验证 reward 与 reasoning-oriented RL 的报告边界。
 - [Back to Basics: Revisiting REINFORCE Style Optimization for Learning from Human Feedback](https://arxiv.org/abs/2402.14740)：RLOO 等 REINFORCE-style 方法。
-
-## 下一步
-
-- 前一章：[Model-based RL 与世界模型](rl-for-world-models.md)，区分 imagined rollout 与实际任务闭环。
-- 下一章：[VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md)，把 observation、连续动作和安全约束放回真实环境。
-- 工程下一步：[verl 训练流程](verl-code-flow.md)，理解 rollout worker、reward worker 与 actor update 如何组织。

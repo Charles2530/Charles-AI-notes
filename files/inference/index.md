@@ -86,5 +86,3 @@ SLO 把系统目标写成可验证约束，例如“指定请求桶下，TTFT P9
 | 吞吐提高但 P99 和超时率变差 | [成本与 SLO](cost-modeling-and-slo-design.md) → [可观测性](observability-and-online-evaluation.md) |
 | Agent 平均模型延迟正常，任务仍然很慢 | [RAG、Agent 与长上下文](rag-agents-and-long-context-systems.md) → [可观测性](observability-and-online-evaluation.md) |
 | 量化后显存下降但没有端到端加速 | [量化专题](../quantization/index.md) → [量化运行时](../quantization/quantization-runtimes-and-frameworks.md) |
-
-训练产物、量化、编译和线上反馈之间的完整关系见[训练与推理系统总览](../training-and-inference-systems/index.md)。

@@ -1,12 +1,12 @@
 # 后训练数据引擎与 Judge 模型
 
-基础预训练结束后，真正决定模型“像不像产品”的，往往是后训练：指令跟随、偏好对齐、工具使用、拒答边界、风格控制和领域适配。后训练的核心竞争力越来越不是单个算法名词，而是能否持续找到高价值样本、生成有效候选、用 judge 扩大评价吞吐、再把结果稳定回流到 SFT、偏好训练、reward model 和回归集。
+基础预训练结束后，真正决定模型“像不像产品”的，往往是后训练：指令跟随、偏好对齐、工具使用、拒答边界、风格控制和领域适配。后训练的核心竞争力越来越取决于能否持续找到高价值样本、生成有效候选、用 judge 扩大评价吞吐、再把结果稳定回流到 SFT、偏好训练、reward model 和回归集。
 
-这页建议和 [偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md)、[可观测性与在线评测](../inference/observability-and-online-evaluation.md) 一起读。它们分别覆盖偏好数据风险、实验方法学和线上回流。
+后训练数据引擎和 judge 模型要同时处理偏好数据风险、实验方法学和线上回流。
 
 ![InstructGPT RLHF pipeline](../assets/images/paper-figures/training/instructgpt-rlhf-pipeline.png){ width="860" }
 
-<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)。原图表达 SFT、reward model 和 PPO 的后训练流水线；本站读法是把现代后训练扩展成持续数据引擎：候选生成、judge、人审、回归集和线上回流。它不能证明 RLHF 是唯一后训练路线。</small>
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)。原图表达 SFT、reward model 和 PPO 的后训练流水线；读图重点是把现代后训练扩展成持续数据引擎：候选生成、judge、人审、回归集和线上回流。它不能证明 RLHF 是唯一后训练路线。</small>
 
 ## 一、后训练为什么是数据引擎
 
@@ -133,11 +133,8 @@ repeat_question:   18.0% -> 21.6%
 
 后训练飞轮常见失效不是算法不够新，而是采样没对准高价值问题、judge 偏差没校准、人审花在平均样本、训练导出没有针对性、回归集缺失。最终判断很直接：谁能更稳定地把真实失败样本变成下一轮有效监督信号，谁就更可能在后训练阶段形成持续优势。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

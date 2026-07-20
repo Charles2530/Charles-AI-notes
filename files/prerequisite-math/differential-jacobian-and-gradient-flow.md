@@ -1,8 +1,6 @@
 # 微分、Jacobian 与梯度传播
 
-读到神经网络、机器人控制或量化论文时，我们常看到一句话：“一个小误差会被后续层的 Jacobian 放大。”如果只把 Jacobian 记成“偏导数组成的矩阵”，这句话仍然很难落到直觉上。
-
-这篇从一个更有用的问题开始：**输入朝某个方向动一点，输出会朝哪里动、动多远？** Jacobian 就是当前点附近回答这个问题的局部地图。它把标量导数扩展到向量映射，也把微积分、自动微分、误差传播和控制连接到了一起。
+Jacobian 描述输入朝某个方向轻微变化时，输出会朝哪里动、动多远。它把标量导数扩展到向量映射，也连接微积分、自动微分、误差传播和控制；神经网络、机器人控制和量化论文里的“小误差被 Jacobian 放大”，说的就是这个局部线性地图。
 
 ## 导数其实在做局部线性近似
 
@@ -71,7 +69,7 @@ shape 也在声明同一件事：
 
 ![Jacobian as a local linear map](../assets/images/prerequisite-math/jacobian-local-linear-map.svg){ width="800" }
 
-<small>图源：本站自绘示意图。非线性函数在当前点附近可以先看成一个线性映射：输入扰动经过 Jacobian 后可能被旋转、拉伸或压缩。这个近似只在局部成立，换到远处需要重新计算 Jacobian。</small>
+<small>图源：自绘示意图。非线性函数在当前点附近可以先看成一个线性映射：输入扰动经过 Jacobian 后可能被旋转、拉伸或压缩。这个近似只在局部成立，换到远处需要重新计算 Jacobian。</small>
 
 来看一个两维例子：
 
@@ -253,7 +251,7 @@ u^\top J_f(x)
 
 它问：上游对输出的敏感度 \(u\) 传过当前函数后，对输入有多敏感。VJP 从输出敏感度往输入传，和 reverse-mode automatic differentiation，也就是深度学习常说的 backward，方向一致。
 
-当最终目标是一个标量 loss 时，reverse mode 很合算：从一个标量开始向后传播，可以一次得到 loss 对大量参数的梯度。后面的[自动微分与激活显存](../foundations/autograd-activation-checkpointing-and-memory.md)会把这个数学对象接到计算图、activation 保存和 checkpointing。
+当目标函数是一个标量 loss 时，reverse mode 很合算：从一个标量开始向后传播，可以一次得到 loss 对大量参数的梯度。后面的[自动微分与激活显存](../foundations/autograd-activation-checkpointing-and-memory.md)会把这个数学对象接到计算图、activation 保存和 checkpointing。
 
 ## Softmax Jacobian：改一个 logit，为什么所有概率都会动
 
@@ -387,15 +385,8 @@ J_{L-1}J_{L-2}\cdots J_l\,\delta h_l
 
 ## 读完以后怎么判断
 
-看到 Jacobian 时先问四件事：输入和输出分别是什么，矩阵 shape 是多少，乘在左边还是右边的向量代表什么，近似只在当前点附近还是覆盖了真实扰动范围。
+看到 Jacobian 或“误差被 Jacobian 放大”时，先问四件事：输入和输出分别是什么，矩阵 shape 是多少，乘在左边还是右边的向量代表什么，近似只在当前点附近还是覆盖真实扰动范围。若论文给出放大结论，还要看它用的是最坏方向范数、样本平均还是任务 loss，以及只算单层还是包含后续网络。
 
-如果论文说“误差被 Jacobian 放大”，还要继续问：它用的是最坏方向范数、样本平均，还是某个任务 loss；只算了一层，还是把后续网络也纳入了分析。能把这几问说清楚，Jacobian 就不再只是偏导数表，而是读自动微分、量化、控制和鲁棒性论文的一张局部地图。
+## 外部材料
 
-## 相关阅读与下一步
-
-- 站内前置：[微积分与牛顿-莱布尼茨公式](calculus-and-newton-leibniz.md)。
-- 站内下一步：[自动微分与激活显存](../foundations/autograd-activation-checkpointing-and-memory.md)。
-- 站内下一步：[谱分解、二阶近似与低秩结构](spectral-second-order-and-low-rank.md)。
-- 论文例子：[Attn-QAT：4-bit Attention 量化感知训练](../paper-deep-dives/foundations/attn-qat.md)。
-- 论文例子：[KVSlimmer：非对称 KV 合并](../paper-deep-dives/inference/kvslimmer.md)。
-- 外部材料：[Automatic Differentiation in Machine Learning: a Survey](https://jmlr.org/papers/v18/17-468.html)。
+- [Automatic Differentiation in Machine Learning: a Survey](https://jmlr.org/papers/v18/17-468.html)。

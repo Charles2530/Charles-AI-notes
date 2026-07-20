@@ -122,7 +122,7 @@ FlashAttention 的快，主要是 attention kernel 在给定 shape 上更少写 
 
 FlashAttention 把 attention 从“显式矩阵流水线”改成“分块流式归一化”。它解决的是 dense attention 的中间矩阵 I/O 账。长上下文系统还要继续解决 decode KV cache、runtime 调度、跨设备 sequence parallel 和长上下文评测。读任何新方法时，先问它改的是 kernel、cache、runtime、并行，还是评测证据。
 
-## 外部精读
+## 外部材料
 
 - [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 IO-aware tiling、online softmax、exact attention 和 backward 重算。
 - [FlashAttention-2](https://arxiv.org/abs/2307.08691)：理解为什么减少 HBM 往返后，GPU 内部工作分配会成为下一层瓶颈。
@@ -133,11 +133,6 @@ FlashAttention 把 attention 从“显式矩阵流水线”改成“分块流式
 - [Ring Attention](https://arxiv.org/abs/2310.01889)：理解 sequence blocks、ring pass K/V 和 blockwise attention。
 - [DeepSpeed Ulysses](https://arxiv.org/abs/2309.14509)：理解 long-sequence training 中的 sequence parallel 与 all-to-all 通信。
 
-## 相关阅读与下一步
-
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

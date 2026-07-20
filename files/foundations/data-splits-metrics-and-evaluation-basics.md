@@ -1,11 +1,11 @@
 # 数据划分与评测指标：一个分数为什么不够
 
-评测不是给模型贴一个排行榜分数，而是建立一条证据链：这个模型在什么数据上、按什么指标、相对哪个基线、在哪些分桶里变好或变差、结果有多大不确定性、失败能不能复现、能不能支撑发布决策。
+评测要建立一条证据链：这个模型在什么数据上、按什么指标、相对哪个基线、在哪些分桶里变好或变差、结果有多大不确定性、失败能不能复现、能不能支撑发布决策。
 
-这页只回答一个核心问题：**当论文或实验报告说“模型提升了 2 分”时，怎样判断这 2 分是真的、有用的、可泛化的，而不是数据污染、指标错配或平均分幻觉？**
+当论文或实验报告说“模型提升了 2 分”时，要判断这 2 分是真的、有用的、可泛化的，还是来自数据污染、指标错配或平均分幻觉。
 
 !!! tip "数学先修"
-    本文会用到[采样、置信区间与校准](../prerequisite-math/sampling-estimation-and-calibration.md)判断分数是否可信，并用[实验曲线、消融与 Pareto frontier](../prerequisite-math/scaling-laws-and-experimental-curves.md)比较质量和成本。已经熟悉可直接继续。
+    需要用到[采样、置信区间与校准](../prerequisite-math/sampling-estimation-and-calibration.md)判断分数是否可信，并用[实验曲线、消融与 Pareto frontier](../prerequisite-math/scaling-laws-and-experimental-curves.md)比较质量和成本。已经熟悉可直接继续。
 
 ## 评测对象先要说清楚
 
@@ -21,7 +21,7 @@
 
 ![Data Cards stakeholder typology 原论文图](../assets/images/paper-figures/foundations/data-cards-typology.png){ width="820" }
 
-<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。原图表达数据集文档要同时服务 producers、agents 和 users，不同角色关心的数据创建、使用、评估和影响不同。本站读法是：评测可信度不是从 metric 开始，而是从数据来源、使用边界和责任边界开始。</small>
+<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。原图表达数据集文档要同时服务 producers、agents 和 users，不同角色关心的数据创建、使用、评估和影响不同。读图重点是：评测可信度不是从 metric 开始，而是从数据来源、使用边界和责任边界开始。</small>
 
 ## Train、validation、test 不是三个名字
 
@@ -149,7 +149,7 @@ HELM 的思路值得学习：不要只用一个分数，而是把 scenarios、me
 
 当这些证据都能连起来，模型提升才不只是漂亮数字，而是可以支持训练决策、系统发布和长期维护的工程事实。
 
-## 外部精读
+## 外部材料
 
 - [Model Cards for Model Reporting](https://arxiv.org/abs/1810.03993)
 - [Data Cards](https://arxiv.org/abs/2204.01075)
@@ -159,13 +159,6 @@ HELM 的思路值得学习：不要只用一个分数，而是把 scenarios、me
 - [SuperCLUE](https://www.superclueai.com/)
 - [FlagEval](https://flageval.baai.ac.cn/)
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[数据与数据集基础](data-and-dataset-basics.md)。
-- 站内下一步：[泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

@@ -1,8 +1,6 @@
 # 信息论、熵与分布距离
 
-这篇回答一个问题：熵、交叉熵、KL、互信息为什么能出现在语言模型、扩散模型、蒸馏和 RLHF 的 loss 里。
-
-信息论关心的是不确定性和编码代价。模型输出一个概率分布，本质上就是在声明“我认为哪些结果更可能”。熵和 KL 这些量，就是用来衡量这个分布有多不确定、和另一个分布差多少。
+熵、交叉熵、KL 和互信息把模型输出的概率分布转成可优化、可比较的量。语言模型、扩散模型、蒸馏和 RLHF 的 loss 经常使用它们来衡量不确定性、编码代价以及两个分布之间的差异。
 
 ## 熵：不确定性有多大
 
@@ -81,7 +79,7 @@ r^{\text{task}}
 -\beta D_{\mathrm{KL}}(\pi_\theta\|\pi_{\mathrm{ref}})
 \]
 
-这里 \(r^{\text{task}}\) 鼓励模型完成任务，\(\pi_\theta\) 是当前策略，\(\pi_{\mathrm{ref}}\) 是参考模型，\(\beta\) 控制“不要偏离参考模型太远”的力度。这个公式不是在说 KL 越小越好，而是在平衡新能力和底座行为稳定性。
+这里 \(r^{\text{task}}\) 鼓励模型完成任务，\(\pi_\theta\) 是当前策略，\(\pi_{\mathrm{ref}}\) 是参考模型，\(\beta\) 控制“不要偏离参考模型太远”的力度。这个公式在平衡新能力和底座行为稳定性，不能读成 KL 越小越好。
 
 ## KL 用在哪个方向必须写清楚
 
@@ -110,7 +108,7 @@ D_{\mathrm{KL}}(\pi_\theta\|\pi_{\mathrm{ref}})
 
 ![Shannon communication system](../assets/images/prerequisite-math/shannon-communication-system.svg){ width="720" }
 
-<small>图源：[Wikimedia Commons: Shannon communication system](https://commons.wikimedia.org/wiki/File:Shannon_communication_system.svg)。原图展示信息源、编码器、信道、噪声和解码器。本站用它说明：信息论的基本问题是如何在有噪声的通道里表示、传输和恢复信息；这和模型压缩、表示学习、tokenization、通信并行都有呼应。</small>
+<small>图源：[Wikimedia Commons: Shannon communication system](https://commons.wikimedia.org/wiki/File:Shannon_communication_system.svg)。原图展示信息源、编码器、信道、噪声和解码器。这里的重点是：信息论研究如何在有噪声的通道里表示、传输和恢复信息；这和模型压缩、表示学习、tokenization、通信并行都有呼应。</small>
 
 把这个图放进 AI 里看：
 
@@ -158,9 +156,3 @@ Perplexity 常写成：
 ## 读完以后怎么判断
 
 看到熵、交叉熵、KL 或互信息，先问它在衡量哪个分布，分布来自数据、模型、teacher、reference policy 还是 posterior。分布来源一清楚，loss 的作用也会清楚。
-
-## 相关阅读与下一步
-
-- 站内下一步：[生成与解码基础](../foundations/generation-and-decoding-basics.md)。
-- 站内下一步：[预训练、微调与对齐](../training/pretraining-finetuning-alignment.md)。
-- 站内下一步：[Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)。

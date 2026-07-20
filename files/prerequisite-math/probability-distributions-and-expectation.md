@@ -1,12 +1,10 @@
 # 概率论、分布与期望
 
-这篇回答一个问题：概率论里的随机变量、分布、条件概率、期望、方差、似然和贝叶斯，为什么会成为机器学习的共同语言。
-
-AI 模型面对的不是确定世界。文本、图像、用户请求、机器人环境和训练数据都有不确定性。概率论让我们能描述“可能发生什么”“多可能”“在什么条件下可能”。
+随机变量、分布、条件概率、期望、方差、似然和贝叶斯提供机器学习处理不确定性的共同语言。文本、图像、用户请求、机器人环境和训练数据都不是确定对象，概率论描述“可能发生什么”“多可能”“在什么条件下可能”。
 
 ## 随机变量：把不确定结果变成可计算对象
 
-随机变量 \(X\) 不是“随机的数字”这么简单，而是把随机实验的结果映射成数值或类别。比如：
+随机变量 \(X\) 把随机实验的结果映射成数值或类别。比如：
 
 | 随机变量 | 可能取值 |
 | --- | --- |
@@ -23,7 +21,7 @@ AI 模型面对的不是确定世界。文本、图像、用户请求、机器�
 
 ![Normal distribution](../assets/images/prerequisite-math/normal-distribution.svg){ width="620" }
 
-<small>图源：[Wikimedia Commons: Normal Distribution PDF](https://commons.wikimedia.org/wiki/File:Normal_Distribution_PDF.svg)。原图展示正态分布概率密度。本站用它说明：分布不是一个点，而是一整片可能性的形状；均值、方差和尾部都会影响模型判断。</small>
+<small>图源：[Wikimedia Commons: Normal Distribution PDF](https://commons.wikimedia.org/wiki/File:Normal_Distribution_PDF.svg)。原图展示正态分布概率密度。这里的重点是：分布是一整片可能性的形状，均值、方差和尾部都会影响模型判断。</small>
 
 连续分布里，某个点的密度 \(p(x)\) 不是“取到这个点的概率”。真正的概率来自区间积分：
 
@@ -53,7 +51,7 @@ P(a\le X\le b)=\int_a^b p(x)\,dx
 \int p(x)f(x)\,dx
 \]
 
-这两行的差别只在 \(X\) 是离散还是连续。下标 \(X\sim p\) 告诉你样本来自哪个分布，\(f(X)\) 是你对样本计算的量。期望不是某一次样本的结果，而是“按分布长期抽样后的平均”。
+这两行的差别只在 \(X\) 是离散还是连续。下标 \(X\sim p\) 告诉你样本来自哪个分布，\(f(X)\) 是你对样本计算的量。期望表示按分布长期抽样后的平均，不等于某一次样本的结果。
 
 训练里常见的目标：
 
@@ -88,7 +86,7 @@ P(a\le X\le b)=\int_a^b p(x)\,dx
 =29\text{ 分钟}.
 \]
 
-固定“道路畅通”后，\(\mathbb E[X\mid Y=\text{畅通}]\) 仍会对红绿灯、装卸时长和路线中的其他随机因素取平均；全期望还会进一步对道路状态本身取平均。条件期望不是把未来变成确定值，而是明确哪些信息已经固定、哪些随机性仍被平均掉。
+固定“道路畅通”后，\(\mathbb E[X\mid Y=\text{畅通}]\) 仍会对红绿灯、装卸时长和路线中的其他随机因素取平均；全期望还会进一步对道路状态本身取平均。条件期望用来明确哪些信息已经固定、哪些随机性仍被平均掉，它不会把未来变成确定值。
 
 强化学习里的状态价值正是条件期望：
 
@@ -252,9 +250,6 @@ p_\theta(x)
 
 看到概率公式，先找随机变量、条件和分布来源。问清楚样本从哪里来，模型允许看见什么，期望是用真实分布还是 mini-batch 近似。后面的训练、生成、评估和 RL 公式都会因此清楚很多。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 站内下一步：[概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md)。
-- 站内下一步：[采样、估计与校准](sampling-estimation-and-calibration.md)。
-- 站内下一步：[数据与数据集基础](../foundations/data-and-dataset-basics.md)。
-- 外部材料：[Dive into Deep Learning: Probability](https://d2l.ai/chapter_preliminaries/probability.html)。
+- [Dive into Deep Learning: Probability](https://d2l.ai/chapter_preliminaries/probability.html)。

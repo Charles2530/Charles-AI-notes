@@ -1,6 +1,6 @@
 # RAG、Agent 与评估 QA
 
-这一页回答 RAG、embedding、rerank、Agent、tool calling、LLM-as-judge、幻觉、安全和在线评估中的高频问题。问题刻意覆盖面试里容易忽略的坑：检索和生成混淆、格式正确和事实正确混淆、demo 和线上可靠性混淆。
+RAG、embedding、rerank、Agent、tool calling、LLM-as-judge、幻觉、安全和在线评估的高频问题，经常卡在三类混淆：检索和生成混淆、格式正确和事实正确混淆、demo 和线上可靠性混淆。
 
 ## RAG 与检索
 

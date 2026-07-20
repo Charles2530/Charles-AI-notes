@@ -2,10 +2,10 @@
 
 预训练目标不是训练脚本里的一行 loss。它在规定模型看见什么、预测什么、哪些差异要保留、哪些差异可以忽略。LLM 的 next-token、BERT/MAE 的 masked modeling、CLIP 的对比学习、扩散的 denoising、V-JEPA 的 latent prediction、VLA 的 behavior cloning，表面都是“让模型学表示”，实际学到的接口很不一样。
 
-这页只回答一个核心问题：**读到一个预训练目标时，怎样判断它让模型学到了什么表示，又没有学到什么能力？**
+读到一个预训练目标时，要判断它让模型学到了什么表示，又没有学到什么能力。
 
 !!! tip "数学先修"
-    本文会用到[熵、KL 与互信息](../prerequisite-math/information-theory-and-divergence.md)比较训练目标，用[潜变量、ELBO、score 与 flow](../prerequisite-math/latent-likelihood-and-generative-objectives.md)理解生成式目标，并用[表示空间与内积](../prerequisite-math/linear-algebra-and-geometry.md)解释对比学习。
+    需要用到[熵、KL 与互信息](../prerequisite-math/information-theory-and-divergence.md)比较训练目标，用[潜变量、ELBO、score 与 flow](../prerequisite-math/latent-likelihood-and-generative-objectives.md)理解生成式目标，并用[表示空间与内积](../prerequisite-math/linear-algebra-and-geometry.md)解释对比学习。
 
 ## 目标函数是在写信息接口
 
@@ -47,7 +47,7 @@ BERT 预测被 mask 的文本 token；MAE 把图像切成 patch，只编码少�
 
 ![V-JEPA training procedure](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="760" }
 
-<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原图表达 context encoder 只处理未遮挡视频 token，predictor 结合 context output 和 mask tokens 去预测 target encoder 的 masked token representations。本站读法是看预测目标：V-JEPA 不是让模型画回像素，而是让模型在 latent 空间补全缺失时空结构，因此它更像表征预训练，不是完整动作世界模型。</small>
+<small>图源：[V-JEPA: Latent Video Prediction for Visual Representation Learning](https://arxiv.org/abs/2404.08471)，Figure 3。原图表达 context encoder 只处理未遮挡视频 token，predictor 结合 context output 和 mask tokens 去预测 target encoder 的 masked token representations。读图重点是看预测目标：V-JEPA 不是让模型画回像素，而是让模型在 latent 空间补全缺失时空结构，因此它更像表征预训练，不是完整动作世界模型。</small>
 
 Masked 目标的边界也在这里。它能学上下文和结构，但不保证自回归生成能力；能学视频表征，但如果没有 action、reward、done 或 closed-loop 反馈，就不能直接说明模型会规划。
 
@@ -68,7 +68,7 @@ Masked 目标的边界也在这里。它能学上下文和结构，但不保证�
 
 ![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }
 
-<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图表达 CLIP 用大量 image-text pairs 做对比预训练，再把类别写成文本 prompts，通过图文 embedding 相似度完成 zero-shot prediction。本站读法是：CLIP 的表示适合语义检索和开放类别识别，但图文相似度高不等于会预测物体被推动后的状态。</small>
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图表达 CLIP 用大量 image-text pairs 做对比预训练，再把类别写成文本 prompts，通过图文 embedding 相似度完成 zero-shot prediction。读图重点是：CLIP 的表示适合语义检索和开放类别识别，但图文相似度高不等于会预测物体被推动后的状态。</small>
 
 对比学习的能力来自“哪些变化被视作同一个对象”。如果增强策略把小物体、文字、空间位置或接触点当成可忽略扰动，表示就可能在机器人、OCR、图表理解里丢掉关键细节。正样本和负样本不是采样小事，而是在写模型的不变性。
 
@@ -98,7 +98,7 @@ h_c(x)=h_t(y)=c
 
 ![Joint embedding representation collapse](../assets/images/paper-deep-dives/world-models/h-jepa/figure-5-energy-collapse.png){ width="680" }
 
-<small>图源：[H-JEPA 精读](../paper-deep-dives/world-models/h-jepa.md)，Figure 5。原图比较普通确定性预测和 joint embedding 的坏解：如果两个 encoder 都输出常数，表示距离可以很小。本站用它说明 loss 低只证明目标被满足，不证明表示仍携带信息。</small>
+<small>图源：[H-JEPA 精读](../paper-deep-dives/world-models/h-jepa.md)，Figure 5。原图比较普通确定性预测和 joint embedding 的坏解：如果两个 encoder 都输出常数，表示距离可以很小。这里的重点是 loss 低只证明目标被满足，不证明表示仍携带信息。</small>
 
 防 collapse 的方法在解决不同问题：
 
@@ -160,7 +160,7 @@ Autoencoder、VAE、视觉 tokenizer、视频 VAE 都会用这类目标。它的
 
 ![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
 
-<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达前向过程 \(q(x_t\mid x_{t-1})\) 逐步加噪，反向过程 \(p_\theta(x_{t-1}\mid x_t)\) 逐步去噪。本站读法是：denoising 目标不是让模型一步输出最终样本，而是在不同噪声水平学习回到数据分布的方向。</small>
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达前向过程 \(q(x_t\mid x_{t-1})\) 逐步加噪，反向过程 \(p_\theta(x_{t-1}\mid x_t)\) 逐步去噪。读图重点是：denoising 目标不是让模型一步输出最终样本，而是在不同噪声水平学习回到数据分布的方向。</small>
 
 常见训练目标是预测噪声、干净样本、velocity 或 score 的等价形式。它和 next-token 不同：next-token 每步选择离散 token，denoising 则在噪声层级上反复更新样本。这个目标很适合图像、视频、动作轨迹等多峰输出，因为它不必把多个合理结果平均成一个均值。
 
@@ -202,7 +202,7 @@ BC 的优点是稳定、可扩展、能直接吃示范数据。RT-1、RT-2、Ope
 
 读论文时不要只问“loss 降了吗”，要问目标是否包含下游需要的变量。CLIP 学到图文语义，不等于学到动作后果；V-JEPA 学到视频 latent，不等于直接能闭环控制；BC 学到专家动作，不等于能从偏离状态恢复；扩散学到生成分布，不等于少步实时控制。把目标和接口对齐，才知道一个预训练方法该期待什么、不该期待什么。
 
-## 外部精读
+## 外部材料
 
 - [BERT](https://arxiv.org/abs/1810.04805)
 - [MAE](https://arxiv.org/abs/2111.06377)
@@ -216,11 +216,6 @@ BC 的优点是稳定、可扩展、能直接吃示范数据。RT-1、RT-2、Ope
 - [RT-1](https://robotics-transformer1.github.io/)
 - [Decision Transformer](https://arxiv.org/abs/2106.01345)
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

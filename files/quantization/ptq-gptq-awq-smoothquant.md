@@ -1,12 +1,10 @@
 # PTQ、GPTQ、AWQ 与 SmoothQuant：先找瓶颈，再分误差预算
 
-> **这篇回答的问题。** 如何理解“PTQ、GPTQ、AWQ 与 SmoothQuant”背后的核心机制、适用边界和下一步阅读路径。
-
 量化不是把 `float16` 文件改成 `int4` 文件。它真正做的是：用更少的离散格子近似原来的连续数值，同时让模型质量、服务延迟和长尾任务尽量不坏。文件变小只说明存储少了；上线成功还要证明低比特 kernel 命中、请求分布匹配、质量分桶没有退化。
 
-所以这页不按“INT8、INT4、FP8 谁更高级”排序，而按一个更实用的问题来讲：**量化到底在保护哪类误差，省下的成本又落在权重、activation、KV cache 还是 runtime kernel 上？**
+更实用的问题是：**量化到底在保护哪类误差，省下的成本又落在权重、activation、KV cache 还是 runtime kernel 上？**
 
-70B 模型的 FP16 权重大约是 140GB。把权重量化到 4-bit，可能让模型更容易放进显存，也可能降低 decode 阶段的权重带宽。但如果 runtime 没有高效 INT4 GEMM，系统先解包、反量化、再用高精度算，端到端 TPOT 不一定变好。量化选型的第一步，不是选方法名，而是找瓶颈。
+70B 模型的 FP16 权重大约是 140GB。把权重量化到 4-bit，可能让模型更容易放进显存，也可能降低 decode 阶段的权重带宽。但如果 runtime 没有高效 INT4 GEMM，系统先解包、反量化、再用高精度算，端到端 TPOT 不一定变好。量化选型的第一步是找瓶颈。
 
 ## 先分清三张账
 
@@ -94,7 +92,7 @@ Y=XW
 
 ![GPTQ procedure 原论文图](../assets/images/paper-figures/quantization/gptq-figure-2-procedure.png){ width="760" }
 
-<small>图源：[GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323)，Figure 2。本站复用已有论文图，未使用 image2 生成新图。原图表达 GPTQ 按列量化权重，并用近似 Hessian 信息更新尚未量化的列；本站用它说明 GPTQ 的重点是层输出重构，而不是单个权重逐个 round。</small>
+<small>图源：[GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323)，Figure 2。原图表达 GPTQ 按列量化权重，并用近似 Hessian 信息更新尚未量化的列；这里的重点是 GPTQ 的重点是层输出重构，而不是单个权重逐个 round。</small>
 
 GPTQ 常用于 W4A16：权重以 4-bit 存储，activation 保持更高精度。它适合降低权重显存和 decode 权重带宽。坑也很明确：校准集太窄，Hessian 近似会偏；group size 太大，误差会粗；部署栈只支持加载 GPTQ 文件，不代表热点 GEMM 真的走高效低比特路径。
 
@@ -104,7 +102,7 @@ AWQ 的出发点不同。它观察到 LLM 里不是所有权重同样重要：�
 
 ![AWQ activation-aware 原论文图](../assets/images/paper-figures/quantization/awq-figure-1-activation-aware.png){ width="900" }
 
-<small>图源：[AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978)，Figure 1。本站复用已有论文图，未使用 image2 生成新图。原图表达少量显著 activation 通道对应的权重更需要保护；本站用它说明 AWQ 的关键词是 activation-aware，重要性来自运行时输入如何使用这些通道，而不只来自权重绝对值。</small>
+<small>图源：[AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978)，Figure 1。原图表达少量显著 activation 通道对应的权重更需要保护；这里的重点是 AWQ 的关键词是 activation-aware，重要性来自运行时输入如何使用这些通道，而不只来自权重绝对值。</small>
 
 一句话讲 AWQ：权重 \(W\) 是静态的，但量化误差是否伤模型，要看它被什么 activation \(X\) 乘上。一个权重通道数值不一定最大，但如果真实输入经常在对应 activation 通道上给出大值，它的误差就会被放大。
 
@@ -132,7 +130,7 @@ Y=(XS^{-1})(SW)
 
 ![SmoothQuant intuition 原论文图](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="760" }
 
-<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 2。本站复用已有论文图，未使用 image2 生成新图。原图表达 activation outlier 会拉大量化范围，使主体值失去分辨率；SmoothQuant 通过等价缩放把部分难度迁移到 weight。</small>
+<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 2。原图表达 activation outlier 会拉大量化范围，使主体值失去分辨率；SmoothQuant 通过等价缩放把部分难度迁移到 weight。</small>
 
 SmoothQuant 更适合 W8A8：权重和 activation 都进入 INT8 GEMM，在 prefill、大 batch 或计算占比较高的场景里更可能兑现收益。若部署栈没有成熟 W8A8 kernel，或 Q/DQ 没有融合，数学上的等价缩放不一定转化成端到端速度。
 
@@ -172,7 +170,7 @@ PTQ 不是“训练后随手压一下”，而是用校准数据估计真实张�
 
 真正部署时，应该反过来读这些方法：先确认服务瓶颈和硬件/runtime，再决定量化对象，再选校准集、方法和评测桶。只看 `INT4`、`INT8`、`FP8` 标签，最容易得到一个文件更小、性能没涨、长尾任务还掉分的模型。
 
-## 外部精读
+## 外部材料
 
 - [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：量化概念、对象和 Transformers 生态入口。
 - [Hugging Face: selecting a quantization method](https://huggingface.co/docs/transformers/quantization/selecting)：按硬件、内存和延迟目标选择量化路线。
@@ -182,11 +180,6 @@ PTQ 不是“训练后随手压一下”，而是用校准数据估计真实张�
 - [LLM.int8()](https://arxiv.org/abs/2208.07339)：理解大模型 activation outlier 与 mixed-precision decomposition 的早期重要工作。
 - [PaddleNLP 大模型量化教程](https://paddlenlp.readthedocs.io/en/stable/llm/quantization.html)：中文官方文档，适合看 GPTQ、AWQ 等工具链参数如何落地。
 
-## 相关阅读与下一步
-
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

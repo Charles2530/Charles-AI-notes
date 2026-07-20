@@ -1,7 +1,5 @@
 # 具身智能的可纠错状态链：动作之外，系统还要记录什么
 
-> **本文回答的问题。** 一个 VLA 已经能从图像和语言生成动作，为什么真机长任务还是会在几厘米的偏差、一次遮挡或一个错误子任务之后一路失控？
-
 一次抓杯失败，可能来自深度、任务阶段、坐标映射、控制延迟，也可能发生在夹爪接触后的滑动。20 篇具身智能论文反复碰到同一个困难：动作头只能回答模型此刻想做什么，真实机器人还得知道场景现在是什么样、任务进行到了哪里、控制器实际执行了什么，以及失败后世界还剩下什么状态。
 
 少一项，闭环里就会出现无法定位的断点。系统仍可继续输出动作，却无法判断该回查感知、任务记忆、坐标接口、控制器，还是接触后的物体状态。
@@ -114,7 +112,7 @@ predicted action
 
 ![kai0 distribution-alignment pipeline](../assets/images/paper-deep-dives/embodied-ai/kai0/figure-1-pipeline.png){ width="920" }
 
-<small>图源：[χ₀: Resource-Aware Robust Manipulation via Taming Distributional Inconsistencies](https://arxiv.org/abs/2602.09021)，Figure 1。原图表达训练示教分布、模型策略分布和真实部署分布之间的错位，以及 Model Arithmetic、Stage Advantage、DAgger、时空增强和 action-chunk smoothing 的对应位置。本文借它说明 failure/recovery 必须进入状态链；该图只来自特定双臂衣物任务，不能证明五类状态链已经在所有机器人上成立。</small>
+<small>图源：[χ₀: Resource-Aware Robust Manipulation via Taming Distributional Inconsistencies](https://arxiv.org/abs/2602.09021)，Figure 1。原图表达训练示教分布、模型策略分布和真实部署分布之间的错位，以及 Model Arithmetic、Stage Advantage、DAgger、时空增强和 action-chunk smoothing 的对应位置。这里的重点是 failure/recovery 必须进入状态链；该图只来自特定双臂衣物任务，不能证明五类状态链已经在所有机器人上成立。</small>
 
 kai0 最有价值的提醒是：validation set 也属于状态链。若验证集只包含成功示教附近的状态，系统会选出“顺境里最像专家”的 checkpoint；若验证集包含 near-miss、人工接管和恢复轨迹，checkpoint 选择才更贴近部署。
 
@@ -180,7 +178,7 @@ $$
 R_{long}\approx O_{state}\times C_{transition}\times R_{recovery}\times S_{control},
 $$
 
-其中 \(O_{state}\) 表示状态可观察性，\(C_{transition}\) 表示状态转换的一致性，\(R_{recovery}\) 表示失败后的恢复覆盖，\(S_{control}\) 表示执行链稳定性。这个式子是本文的思考框架，不是论文公式。乘法只是强调：任何一项接近零，长任务都会迅速崩掉。
+其中 \(O_{state}\) 表示状态可观察性，\(C_{transition}\) 表示状态转换的一致性，\(R_{recovery}\) 表示失败后的恢复覆盖，\(S_{control}\) 表示执行链稳定性。这个式子是分析框架，不是论文公式。乘法只是强调：任何一项接近零，长任务都会迅速崩掉。
 
 ## 论文结论、综合推论与待验证假设
 
@@ -226,7 +224,7 @@ $$
 
 ## 证据边界
 
-本文的事实底稿来自站内 20 篇具身论文讲解及其所引用的论文、官方博客和项目材料。不同文章使用的机器人、任务、数据、成功率定义和控制栈差异很大，本文没有把它们的分数横向相加。
+事实底稿来自站内 20 篇具身论文讲解及其所引用的论文、官方博客和项目材料。不同文章使用的机器人、任务、数据、成功率定义和控制栈差异很大，这里不把它们的分数横向相加。
 
 几何论文多数没有机器人闭环证据；VLA/WAM 论文多数没有完整几何、安全与 tail-risk 验收；DM0.5、kai0 的部分结论属于官方报告或官方系统展示，不是独立复现。文中“五类状态链”“四个可靠性乘数”和“触发式显式 rollout”属于我的综合推论或待验证假设。
 

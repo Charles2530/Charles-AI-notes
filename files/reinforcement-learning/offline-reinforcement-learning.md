@@ -124,9 +124,3 @@ BCQ、CQL、IQL 是准确理解这些机制的短例子，不是算法排行榜�
 - [Off-Policy Deep Reinforcement Learning without Exploration（BCQ）](https://arxiv.org/abs/1812.02900)：behavior-constrained value learning。
 - [Conservative Q-Learning](https://arxiv.org/abs/2006.04779)：保守价值估计。
 - [Offline Reinforcement Learning with Implicit Q-Learning](https://arxiv.org/abs/2110.06169)：不直接查询数据外动作的 value learning 与 policy extraction。
-
-## 下一步
-
-- 前一章：[连续控制与 SAC](continuous-control-and-sac.md)，回顾 off-policy replay 与连续动作。
-- 下一章：[Model-based RL 与世界模型](rl-for-world-models.md)，学习如何用 learned dynamics 做规划和 imagined rollout。
-- 方向补充：[VLA 数据与策略学习](../vla/data-and-policy-learning.md) 与 [机器人仿真到真实数据引擎](../embodied-ai/sim2real-and-data-engines.md)。

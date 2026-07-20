@@ -70,7 +70,7 @@ InstructGPT 的流程图仍然是理解 RLHF 的好入口。它没有让人类�
 
 ![InstructGPT RLHF pipeline 原论文图](../assets/images/paper-figures/training/instructgpt-rlhf-pipeline.png){ width="920" }
 
-<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 2。本站复用已有论文图，未使用 image2 生成新图。原图展示三步流程：收集 demonstration data 做 SFT，收集模型输出排序训练 reward model，再用 PPO 按 reward model 优化 policy。</small>
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 2。原图展示三步流程：收集 demonstration data 做 SFT，收集模型输出排序训练 reward model，再用 PPO 按 reward model 优化 policy。</small>
 
 这三步最好分开看：
 
@@ -112,7 +112,7 @@ DPO、IPO、ORPO、RLAIF 和 Constitutional AI 的流程各不相同，但它们
 
 ![Qwen3 post-training pipeline](../assets/images/paper-deep-dives/technical-reports/qwen3/figure-1-posttrain-pipeline.png){ width="920" }
 
-<small>图源：[Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)，Figure 1。本站复用已有论文图，未使用 image2 生成新图。原图展示 Qwen3 post-training pipeline：旗舰模型经过 Long-CoT Cold Start、Reasoning RL、Thinking Mode Fusion、General RL；轻量模型通过 strong-to-weak distillation 继承大模型能力。</small>
+<small>图源：[Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)，Figure 1。原图展示 Qwen3 post-training pipeline：旗舰模型经过 Long-CoT Cold Start、Reasoning RL、Thinking Mode Fusion、General RL；轻量模型通过 strong-to-weak distillation 继承大模型能力。</small>
 
 这张图的价值，是把“后训练”从单个算法名词拉回生产流程。
 
@@ -164,7 +164,7 @@ DeepSeek-R1 的 GRPO/RLVR 路线也说明了类似趋势：当 reward 足够可�
 
 继续往下读，可以接 [目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md)、[偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) 和 [后训练数据引擎与 Judge 模型](post-training-data-engines-and-judge-models.md)。
 
-## 外部精读
+## 外部材料
 
 - [InstructGPT](https://arxiv.org/abs/2203.02155)：理解 demonstration、reward model 和 PPO 三步 RLHF。
 - [PPO](https://arxiv.org/abs/1707.06347)：理解 clipped surrogate 为什么是“小步更新”。

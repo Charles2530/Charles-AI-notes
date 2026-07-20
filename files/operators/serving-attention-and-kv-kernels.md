@@ -10,7 +10,7 @@
 
 ![PagedAttention KV mapping](../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="820" }
 
-<small>图源：[PagedAttention paper](https://arxiv.org/abs/2309.06180)。原图表达 logical KV blocks 到 physical KV blocks 的映射；本站读法是说明服务态 attention 的核心难点是动态 KV 内存、page lookup 和连续批处理，不只是 attention 数学。它不能证明 page size 或 block size 的唯一最佳值。</small>
+<small>图源：[PagedAttention paper](https://arxiv.org/abs/2309.06180)。原图表达 logical KV blocks 到 physical KV blocks 的映射；读图重点是服务态 attention 的核心难点是动态 KV 内存、page lookup 和连续批处理，不只是 attention 数学。它不能证明 page size 或 block size 的唯一最佳值。</small>
 
 ## 为什么服务态 attention 要单独讲
 
@@ -168,11 +168,8 @@ Decode 每步只生成极少数 token，因此很多操作开始呈现“太小�
 
 这类优化要同时看 kernel 与 runtime：prefill 吞吐、decode TPOT、P95/P99、page locality、碎片率、prefix 命中率都要进入同一张报告。只有这样，`FlashAttention`、`PagedAttention`、KV paging、prefix cache 和 continuous batching 才不会变成一堆孤立术语，而会成为可以一起调优的服务路径。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

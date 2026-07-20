@@ -1,8 +1,8 @@
 # 视觉 Tokenizer 与连接器：视觉证据怎样被压成可用 token
 
-VLM/VLA 的第一道瓶颈不是语言模型多大，而是视觉证据怎样进入后续模型。图片、视频、多相机、深度、点云和机器人 proprioception 都不能原样无限塞进上下文；它们必须先被切成 token、压成 latent，或者通过 query / cross-attention 被抽取成少量证据。
+VLM/VLA 的第一道瓶颈是视觉证据怎样进入后续模型。图片、视频、多相机、深度、点云和机器人 proprioception 都不能原样无限塞进上下文；它们必须先被切成 token、压成 latent，或者通过 query / cross-attention 被抽取成少量证据。
 
-这页只回答一个问题：**视觉 tokenizer 和 connector 在压缩什么，丢掉什么，以及这些丢失为什么会影响问答、动作和世界模型 rollout。**
+视觉 tokenizer 和 connector 会压缩视觉输入，也会丢掉部分信息；关键是判断它们压缩什么、丢掉什么，以及这些丢失为什么会影响问答、动作和世界模型 rollout。
 
 ## 视觉 token 先来自空间切块
 
@@ -78,7 +78,7 @@ BLIP-2 是连接器瓶颈的好例子。它冻结强视觉 encoder 和强语言�
 
 ![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="900" }
 
-<small>图源：[BLIP-2](https://arxiv.org/abs/2301.12597)，Figure 2。原图表达 Q-Former 用 learnable query 从冻结视觉 encoder 输出中抽取信息，并服务 image-text contrastive learning、image-grounded generation 和 image-text matching。本文用它说明：连接器是信息瓶颈，query 学到什么取决于训练目标。</small>
+<small>图源：[BLIP-2](https://arxiv.org/abs/2301.12597)，Figure 2。原图表达 Q-Former 用 learnable query 从冻结视觉 encoder 输出中抽取信息，并服务 image-text contrastive learning、image-grounded generation 和 image-text matching。这里的重点是：连接器是信息瓶颈，query 学到什么取决于训练目标。</small>
 
 读这张图时先看中间的 query tokens。它们不是普通文本 token，而是一组可训练的“视觉问题”：从海量 patch features 里问出哪些信息值得交给语言模型。训练目标如果是图文对比和 caption，query 会倾向保留类别、属性、关系和可描述细节；训练目标如果包含定位、OCR、动作或未来预测，query 才更可能保留局部几何、文字区域、接触状态和时间变化。
 
@@ -172,7 +172,7 @@ p_\theta(s_{t+1}\mid s_t,a_t,l)
 
 继续读相邻内容时，可以接 [VLM 架构：视觉证据怎样进入语言模型](architecture-and-training.md)、[VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md)、[VLA 数据与策略学习](../vla/data-and-policy-learning.md) 和 [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
 
-## 外部精读
+## 外部材料
 
 - [Vision Transformer](https://arxiv.org/abs/2010.11929)：理解图片怎样从 patch 变成 token 序列。
 - [Perceiver](https://arxiv.org/abs/2103.03206)：理解用少量 latent array 读取高维输入的通用思想。

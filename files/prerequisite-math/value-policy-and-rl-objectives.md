@@ -1,8 +1,6 @@
 # 价值函数、策略梯度与强化学习目标
 
-这篇回答一个问题：return、value、Q 函数、advantage、policy gradient、PPO、GRPO 和 KL penalty 为什么会反复出现在世界模型、VLA 后训练和大模型推理报告里。
-
-强化学习的数学核心很朴素：模型不是只预测一个标签，而是在一串状态和动作里最大化长期收益。难点也在这里：奖励可能延迟，轨迹有随机性，策略一改，后面的数据分布也会跟着改。
+return、value、Q 函数、advantage、policy gradient、PPO、GRPO 和 KL penalty 都在描述策略如何在随机轨迹里最大化长期收益。强化学习的难点在于奖励可能延迟，轨迹有随机性，策略一改，后面的数据分布也会跟着改。
 
 ## Return：一条轨迹最后值多少钱
 
@@ -14,7 +12,7 @@ G_t
 \sum_{k=0}^{\infty}\gamma^k r_{t+k}
 \]
 
-这里 \(r_{t+k}\) 是未来第 \(k\) 步奖励，\(\gamma\in[0,1]\) 是折扣因子。读这行式子时，重点不是求和技巧，而是时间偏好：\(\gamma\) 越接近 1，越重视长期后果；\(\gamma\) 越小，越重视眼前奖励。
+这里 \(r_{t+k}\) 是未来第 \(k\) 步奖励，\(\gamma\in[0,1]\) 是折扣因子。读这行式子时，重点是时间偏好：\(\gamma\) 越接近 1，越重视长期后果；\(\gamma\) 越小，越重视眼前奖励。
 
 机器人任务里，如果只在成功时给一个终局 reward，\(G_t\) 会很稀疏，训练信号很弱。世界模型和 VLA 论文常引入 progress、value、risk 或 termination head，就是为了把长期结果变成更密的学习信号。
 
@@ -103,7 +101,7 @@ A^\pi(s,a)
 Q^\pi(s,a)-V^\pi(s)
 \]
 
-它问的不是“这个动作绝对好不好”，而是“在这个状态下，它比策略通常会做的动作好多少”。这比直接用 return 稳，因为不同状态本来难度不同，直接比较原始回报会混掉状态差异。
+advantage 衡量“在这个状态下，这个动作比策略通常会做的动作好多少”，不直接比较动作的绝对好坏。这比直接用 return 稳，因为不同状态本来难度不同，直接比较原始回报会混掉状态差异。
 
 kai0 的 Stage Advantage、PPO 的 GAE、GRPO 的 group advantage，都在解决同一个问题：给策略更新一个更稳定的相对进展信号。
 
@@ -158,7 +156,7 @@ A_i
 
 ![PPO and GRPO](../assets/images/paper-deep-dives/technical-reports/deepseek-r1/figure-grpo.png){ width="760" }
 
-<small>图源：`DeepSeek-R1` 技术报告相关图，本站已本地化于论文专题。原图对比 PPO 和 GRPO 的训练流程。本站在这里用它说明：PPO 依赖 value/GAE 估计优势，GRPO 用同组候选的 reward 做相对优势。</small>
+<small>图源：`DeepSeek-R1` 技术报告相关图，已本地化于论文专题。原图对比 PPO 和 GRPO 的训练流程。这里的重点是：PPO 依赖 value/GAE 估计优势，GRPO 用同组候选的 reward 做相对优势。</small>
 
 ## KL penalty：别离参考策略太远
 
@@ -194,10 +192,3 @@ KL 的定义和不对称性在 [信息论、熵与分布距离](information-theo
 ## 读完以后怎么判断
 
 看到 return、value、advantage、PPO、GRPO 或 KL penalty，先问：奖励来自哪里，长期回报如何估计，优势是相对什么基线，策略更新有没有受约束，评测是否能发现 reward hacking 或 simulator exploitation。这个问题链会支撑 Dreamer、MuZero、DeepSeek-R1、LongCat-Video 和具身世界模型后训练论文。
-
-## 相关阅读与下一步
-
-- 站内下一步：[MDP、价值函数与 Bellman](../reinforcement-learning/mdp-value-bellman.md)。
-- 站内下一步：[Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)。
-- 论文精读：[Dreamer](../paper-deep-dives/world-models/dreamer.md)。
-- 论文精读：[DeepSeek-R1](../paper-deep-dives/technical-reports/deepseek-r1.md)。

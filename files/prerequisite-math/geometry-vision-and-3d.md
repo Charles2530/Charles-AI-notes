@@ -1,8 +1,6 @@
 # 几何、视觉与三维空间
 
-这篇回答一个问题：相机内参、外参、深度、视差、姿态、四元数、点云、对极几何、SE(3) 和多视角几何为什么会成为具身智能和 3D 视觉论文的共同数学语言。
-
-语言模型主要处理 token 序列，机器人和世界模型还要处理空间。空间不是一张图片那么简单：同一个物体会因为相机位置、焦距、遮挡和深度不同而投影成不同像素。几何知识就是把像素、相机和真实三维位置接起来。
+相机内参、外参、深度、视差、姿态、四元数、点云、对极几何、SE(3) 和多视角几何共同描述像素、相机与真实三维位置之间的关系。机器人和世界模型需要这套语言，因为同一个物体会随相机位置、焦距、遮挡和深度变化投影成不同像素，动作还必须落回真实空间。
 
 ## 针孔相机：三维点怎样落到二维图像
 
@@ -60,9 +58,9 @@ Z=\frac{fB}{d}
 
 ![Stereo camera model](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/stereo-camera-model-wikimedia.jpg){ width="680" }
 
-<small>图源：[Wikimedia Commons: Stereo camera model](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)，本站已用于相机与双目基础页。原图展示左右相机、baseline、投影点和深度关系。本站在这里用它说明：深度估计不是凭空猜距离，而是在几何约束下从视差反推三维位置。</small>
+<small>图源：[Wikimedia Commons: Stereo camera model](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。原图展示左右相机、baseline、投影点和深度关系。这里的重点是：深度估计在几何约束下从视差反推三维位置。</small>
 
-公式 \(Z=fB/d\) 的读法很直接：baseline 越大、焦距越大，同样视差对应的深度越远；视差越大，说明点离相机越近。Fast-FoundationStereo 这类论文关心 cost volume 和实时双目匹配，本质上就是在更稳、更快地估计 \(d\)。
+公式 \(Z=fB/d\) 的读法很直接：baseline 越大、焦距越大，同样视差对应的深度越远；视差越大，说明点离相机越近。Fast-FoundationStereo 这类论文关心 cost volume 和实时双目匹配，核心就是更稳、更快地估计 \(d\)。
 
 ## 位姿和 SE(3)：刚体在三维空间里的运动
 
@@ -103,7 +101,7 @@ q=(w,x,y,z)
 \min\left(\|q-\hat q\|_2,\|q+\hat q\|_2\right)
 \]
 
-这不是公式炫技，而是在处理四元数的双重表示。RT-2、\(\pi_0\) 系列、ACT、Diffusion Policy、MapAnything 这类动作或位姿预测论文里，看到 quaternion、axis-angle、6D rotation representation 时，都要先问：它表示的是相机姿态、物体姿态，还是机器人末端执行器姿态。
+这一步处理的是四元数的双重表示。RT-2、\(\pi_0\) 系列、ACT、Diffusion Policy、MapAnything 这类动作或位姿预测论文里，看到 quaternion、axis-angle、6D rotation representation 时，都要先问：它表示的是相机姿态、物体姿态，还是机器人末端执行器姿态。
 
 如果目标是机器人控制接口，优先看部署系统实际接收哪种姿态表示；如果目标是神经网络回归，连续性、归一化约束和 loss 是否处理等价表示，往往比人类可读性更重要。
 
@@ -141,7 +139,7 @@ l_2=F x_1
 E=[t]_\times R
 \]
 
-其中 \(R,t\) 是两台相机之间的相对旋转和平移，\([t]_\times\) 表示由平移向量构成的叉乘矩阵。VGGT、Fast-FoundationStereo、MapAnything 和 SfM/MVS 相关论文里的 epipolar geometry，本质上是在用这种约束缩小匹配搜索空间。
+其中 \(R,t\) 是两台相机之间的相对旋转和平移，\([t]_\times\) 表示由平移向量构成的叉乘矩阵。VGGT、Fast-FoundationStereo、MapAnything 和 SfM/MVS 相关论文里的 epipolar geometry，都在用这种约束缩小匹配搜索空间。
 
 对极几何的价值是：它不要求一开始就知道深度，而是先告诉你“匹配点应该去哪条线上找”。深度、位姿和三维点可以在后续通过三角化、PnP 或 bundle adjustment 进一步求出来。
 
@@ -149,7 +147,7 @@ E=[t]_\times R
 
 多视角系统最怕各相机各说各话。一个三维点从相机 A 变到相机 B，需要经过外参变换；同一个物体在不同视角下的 depth、mask、track 应该互相一致。
 
-这也是为什么 embodied AI 论文会强调 calibration、multi-view、depth、normal、trajectory 和 3D flow。它们不是额外传感器名词，而是在给模型更强的空间约束。
+因此 embodied AI 论文会强调 calibration、multi-view、depth、normal、trajectory 和 3D flow。这些量给模型提供更强的空间约束。
 
 两类常见名字也可以先这样读：PnP 是用 3D 点和 2D 像素对应来估计相机位姿；ICP 是用两组点云反复找对应、估计刚体变换，让它们对齐。它们都不是神经网络专属方法，但会成为 3D foundation model 和机器人系统里的几何验算工具。
 
@@ -167,10 +165,3 @@ E=[t]_\times R
 ## 读完以后怎么判断
 
 看到 depth、pose、camera、quaternion、epipolar、3D、point map 或 stereo，先问：坐标系是什么，内参外参是否已知，旋转怎样表示，匹配点受什么几何约束，深度来自视差还是学习先验，多视角是否一致，几何结果最后是否服务动作和闭环。这样读 Fast-FoundationStereo、VGGT、Depth Anything、SpatialVLA 和机器人世界模型会更稳。
-
-## 相关阅读与下一步
-
-- 站内下一步：[相机、深度与机器人视觉](../embodied-ai/cameras-depth-and-robot-vision.md)。
-- 站内下一步：[双目匹配与 Cost Volume](../embodied-ai/stereo-matching-and-cost-volume.md)。
-- 论文精读：[Fast-FoundationStereo：实时 Zero-Shot 双目匹配](../paper-deep-dives/inference/fast-foundation-stereo.md)。
-- 论文精读：[VGGT：前向恢复相机、深度、点云与轨迹](../paper-deep-dives/embodied-ai/vggt.md)。

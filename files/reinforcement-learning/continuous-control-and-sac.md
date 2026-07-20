@@ -108,7 +108,3 @@ online critics -> Polyak averaging -> target critics
 2. Pendulum action 上界为 2，若 normalized action 为 0.5，环境 action 是多少？
 3. 说明 tanh Jacobian correction 与 environment action scaling correction 分别来自哪次变量变换。
 4. 检查 Polyak 系数两端：\(\tau=1\) 与 \(\tau=0\) 各会发生什么。
-
-## 下一步
-
-SAC 已把经典模型无关的连续控制链路接通。固定日志和分布外动作风险见 [Offline Reinforcement Learning](offline-reinforcement-learning.md)；learned dynamics 与规划见 [Model-based RL 与世界模型](rl-for-world-models.md)；连续 action chunk、安全约束与真实部署见 [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md)。完成主线后，用 [综合实践与算法选择](practice-and-algorithm-selection.md) 比较 SAC、PPO 与其他候选的任务假设和验收证据。

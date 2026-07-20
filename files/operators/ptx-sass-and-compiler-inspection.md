@@ -5,7 +5,7 @@
 
 ![Nsight Systems synchronization calls](../assets/images/tools/nsight-systems/synchronization-calls.png){ width="820" }
 
-<small>图源：[NVIDIA Nsight Systems 文档](https://docs.nvidia.com/nsight-systems/)。原图表达同步调用和 kernel 时间线如何暴露源码意图之外的执行路径；本站读法是提醒编译检查要和 profile 结合：PTX/SASS 说明生成了什么，timeline 说明它何时真正阻塞。它不能替代逐条 SASS 审查。</small>
+<small>图源：[NVIDIA Nsight Systems 文档](https://docs.nvidia.com/nsight-systems/)。原图表达同步调用和 kernel 时间线如何暴露源码意图之外的执行路径；读图重点是提醒编译检查要和 profile 结合：PTX/SASS 说明生成了什么，timeline 说明它何时真正阻塞。它不能替代逐条 SASS 审查。</small>
 
 ## 为什么要看编译结果
 
@@ -122,11 +122,8 @@ PTX / SASS 检查要把 IR 结构、向量化、寄存器、访存指令和 Tens
 
 这就是 inspection 的实际价值。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

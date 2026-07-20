@@ -1,6 +1,6 @@
 # 世界模型是什么：从预测画面到承受行动后果
 
-> **本文关注的问题。** 当视频生成、3D 场景、机器人策略和强化学习都在使用“世界模型”这个词时，怎样给它一个既不过宽、也不把技术路线排除在外的定义？
+> **关注的问题。** 当视频生成、3D 场景、机器人策略和强化学习都在使用“世界模型”这个词时，怎样给它一个既不过宽、也不把技术路线排除在外的定义？
 
 “世界模型”正在变成 AI 里最容易产生误会的词之一。能生成一段视频的模型、可编辑的 3D 场景、物理仿真器、Dreamer 一类的 latent dynamics，以及带视觉输入的机器人策略，都可能被这样称呼。它们确实共享一些能力，却没有在做同一件事。
 
@@ -107,9 +107,3 @@ latent world model 的优势在于高效。它可以放弃不可预测的纹理�
 - [Fei-Fei Li: A Functional Taxonomy of World Models](https://drfeifei.substack.com/p/a-functional-taxonomy-of-world-models)。这篇与 World Labs 发布版本为同一篇文章的不同发布渠道。
 - [Xun Huang: Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)。
 - [Not Boring: World Models](https://www.notboring.co/p/world-models)。
-
-## 站内延伸
-
-- [世界模型该预测什么：答案取决于谁消费未来](world-model-future-consumers.md)。
-- [世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md)。
-- [WM / WAM / VAM：动作到底怎样进入世界模型](../world-models/wm-wam-vam-and-action-conditioned-modeling.md)。

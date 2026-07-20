@@ -1,7 +1,5 @@
 # 扩散模型加速：每删一步，都要重新安排误差
 
-> **本文回答的问题。** 扩散和 Flow 模型从几十步压到四步、两步甚至一步时，究竟删掉了什么？为什么“更少 NFE”经常伴随运动坍缩、模式丢失、训练不稳或预算失去弹性？
-
 读完这一组论文，我不再把少步生成理解成“原路径的快捷播放”。多步采样里的每一段时间，都承担了一部分结构、运动、纹理和误差修正。删掉步骤不会让这些责任消失，只会迫使训练目标、学生模型、在线 critic、采样器或系统模块接手。
 
 所以我对扩散加速形成了一个简单判断：**步数可以减少，误差不会凭空消失；好方法的区别，在于它把误差搬到了一个更可训练、更可验证的位置。**
@@ -52,7 +50,7 @@ Phased DMD 对 few-step 蒸馏提出了更细的批评。生成早期的低 SNR 
 
 ![Phased DMD timestep intervals](../assets/images/paper-deep-dives/diffusion/phased-dmd/timestep-intervals.png){ width="900" }
 
-<small>图源：[Phased DMD](https://arxiv.org/abs/2510.27684)，Supplementary Figure 7。原图表达不同 phase 负责不同噪声子区间。本文用它说明“步骤有职责分工”；它不能单独证明分阶段设计在所有 backbone、步数和数据分布上都最优。</small>
+<small>图源：[Phased DMD](https://arxiv.org/abs/2510.27684)，Supplementary Figure 7。原图表达不同 phase 负责不同噪声子区间。这里的重点是“步骤有职责分工”；它不能单独证明分阶段设计在所有 backbone、步数和数据分布上都最优。</small>
 
 这让我觉得，“几步”并不是最值得先问的问题。更重要的是：每一步覆盖哪个噪声区间，是否见过前一步真实会产生的状态，早期结构错误有没有机会被后期修复。
 
@@ -126,15 +124,6 @@ flowchart LR
 
 ## 证据边界与最后判断
 
-本文所引用的速度、质量和训练结论均来自各论文或官方材料，模型、数据、硬件、指标和人评设置并不统一。DMD 系列、AnyFlow、CausVid 和 Phased DMD 的训练成本较高；CPS 仍是进行中的工作；视频指标也不能替代动作因果、真实闭环或物理安全评测。
+引用的速度、质量和训练结论均来自各论文或官方材料，模型、数据、硬件、指标和人评设置并不统一。DMD 系列、AnyFlow、CausVid 和 Phased DMD 的训练成本较高；CPS 仍是进行中的工作；视频指标也不能替代动作因果、真实闭环或物理安全评测。
 
 “每删一步，都要重新安排误差”是我对这组材料的综合判断。它不意味着成本守恒，也不否认优秀算法能真正减少总计算。它强调的是：局部 NFE 下降只说明调用模型的次数变少，生成质量由谁维护、部署状态怎样被训练、端到端瓶颈去了哪里，仍要逐项验收。
-
-## 相关阅读与下一步
-
-- [高效 AI 的状态账本：少搬状态，比少算一次更重要](efficient-ai-is-state-movement.md)
-- [世界模型该预测什么：答案取决于谁消费未来](world-model-future-consumers.md)
-- [具身智能的可纠错状态链](embodied-ai-correctable-state-chain.md)
-- [前沿模型正在变成受约束的闭环](model-capability-is-a-constrained-loop.md)
-- [扩散模型方法对照](../diffusion/comparison-table.md)
-- [一致性模型与 Rectified Flow](../diffusion/consistency-models-and-rectified-flow.md)

@@ -171,9 +171,3 @@ DP 的“训练数据”是可枚举模型，不需要 rollout；MC 与 TD 都�
 2. **比较目标**：对 transition `(0, right, -1, 1, False)`，设当前 \(V(1)=-2\)，算 TD(0) target；再解释为什么只看这条 transition 不能得到 MC return。
 3. **代码实验**：运行 `gridworld.py`，把 `gamma` 从 `0.9` 改为 `0.5` 传给 `value_iteration`，预测并验证 `optimal_value_start`；不要修改环境 reward 语义。
 4. **边界题**：分别为“到达目标”和“采样器每 32 步切片但保留下一状态”写出 \(d_t\)，解释两者为何不同。
-
-## 下一步
-
-权威延伸阅读可用 [Sutton & Barto, Reinforcement Learning: An Introduction, 2nd edition](http://incompleteideas.net/book/the-book-2nd.html)：Chapter 4 是 Dynamic Programming，Chapter 5 是 Monte Carlo Methods，Chapter 6 是 Temporal-Difference Learning，与本章顺序对应。
-
-课程下一站是 Q-learning 与 DQN，但独立页面尚未创建。请从 [完整学习路线](index.md#完整学习路线) 查看当前可读章节与后续状态；若要继续理解 advantage 如何进入策略更新，可先读现有的 [Policy Gradient、Actor-Critic、PPO 与 GRPO](policy-gradient-actor-critic-ppo-grpo.md)。

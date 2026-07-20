@@ -1,11 +1,11 @@
 # Runtime Dispatch 与 Kernel 选择
 
-很多高性能系统并不是靠“一个万能 kernel”获胜，而是靠一整套运行时 dispatch 机制：根据 shape、dtype、layout、设备类型、batch 形态和任务阶段，为当前请求挑选最合适的 kernel 路径。
+很多高性能系统靠一整套运行时 dispatch 机制获胜：根据 shape、dtype、layout、设备类型、batch 形态和任务阶段，为当前请求挑选最合适的 kernel 路径。
 也就是说，真正的性能系统不仅要有好 kernel，还要有**挑 kernel 的能力**。
 
 ![vLLM runtime components](../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
 
-<small>图源：[vLLM 官方博客](https://vllm.ai/blog/2023-06-20-vllm)。原图表达 runtime 不只是模型 forward，还包含 scheduler、KV manager、allocator 和 worker；本站读法是把 kernel selection 放回 runtime dispatch：同一个算子在不同请求桶、cache 状态和 batch 形态下可能走不同路径。它不能证明 vLLM 的 dispatch 策略适用于所有框架。</small>
+<small>图源：[vLLM 官方博客](https://vllm.ai/blog/2023-06-20-vllm)。原图表达 runtime 不只是模型 forward，还包含 scheduler、KV manager、allocator 和 worker；读图重点是把 kernel selection 放回 runtime dispatch：同一个算子在不同请求桶、cache 状态和 batch 形态下可能走不同路径。它不能证明 vLLM 的 dispatch 策略适用于所有框架。</small>
 
 ## 核心问题
 
@@ -107,7 +107,7 @@ Runtime dispatch 真正要回答的是：**当同一个模型在不同 shape、d
 
 Runtime dispatch 要让 shape、dtype、layout、cache 状态和运行时队列都可观测。dispatch 规则过多无法解释、热路径命中不到最佳 kernel、回退路径无人监控，都会让性能问题难以复盘；上线前应统计命中率，保留异常 shape 黑名单，并在灰度时观察路径分布。
 
-## 外部精读
+## 外部材料
 
 - [Triton](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)：理解高性能 kernel 为什么要和 shape、tile、autotune 一起设计。
 - [PyTorch 2.x / TorchInductor docs](https://docs.pytorch.org/docs/stable/torch.compiler.html)：看编译缓存、graph specialization 和动态 shape 如何进入 runtime。
@@ -129,11 +129,6 @@ Runtime dispatch 要让 shape、dtype、layout、cache 状态和运行时队列�
 
 **反例**：如果命中率很高但收益仍低，问题才更可能在 kernel 本身、内存带宽或上游排队。dispatch 排查的第一问永远是“我以为跑的路径，线上真的跑了吗”。
 
-## 相关阅读与下一步
-
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

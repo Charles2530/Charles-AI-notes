@@ -1,6 +1,6 @@
 # 世界模型驱动的机器人数据飞轮：能持续生产经验的系统，才是真正的基础设施
 
-> **本文关注的问题。** 如果 World Model 是机器人获得“内部模拟器”的关键能力，那么它到底需要什么样的数据飞轮，才能学好、用上，并在真实部署中持续变强？
+> **关注的问题。** 如果 World Model 是机器人获得“内部模拟器”的关键能力，那么它到底需要什么样的数据飞轮，才能学好、用上，并在真实部署中持续变强？
 
 <div class="atlas-evidence-split">
   <div class="atlas-evidence-copy">
@@ -9,24 +9,24 @@
     <p>但如果从 World Model 的能力边界出发，问题会换一种问法：不是“模型和数据谁更重要”，而是“一个能预测动作后果、支撑仿真、评估策略的内部模拟器，到底靠什么经验变得可信”。我的判断是：<strong>模型架构决定能学什么，数据飞轮决定系统有没有机会学到。</strong></p>
     <pre><code>模型架构决定上限的形状，
 数据 infra 决定有没有机会接近那个上限。</code></pre>
-    <p>因此这篇文章不从“多收数据”开始，而从 World Model 的系统角色开始：它服务 policy，服务 simulator，也服务 evaluator。每一种角色都有自己的能力瓶颈，每一个瓶颈都会把问题推回到具体的数据系统。</p>
-    <p>换句话说，等一个丝滑通用的开源模型当然有意义，但如果没有数据 infra 和部署回流 infra，模型来了也只能吃一次性数据集；真正能形成壁垒的，是把真实世界经验持续变成训练资产、验证资产和回流资产的系统。</p>
+    <p>数据飞轮要从 World Model 的系统角色开始：它服务 policy，服务 simulator，也服务 evaluator。每一种角色都有自己的能力瓶颈，每一个瓶颈都会把问题推回到具体的数据系统。</p>
+    <p>等一个丝滑通用的开源模型当然有意义，但如果没有数据 infra 和部署回流 infra，模型来了也只能吃一次性数据集；真正能形成壁垒的，是把真实世界经验持续变成训练资产、验证资产和回流资产的系统。</p>
   </div>
   <aside class="atlas-evidence-stack" aria-label="产业报道截图证据">
     <figure class="atlas-evidence-card">
       <img src="../../assets/images/thinking-exploration/robot-data-flywheel-world-models/wangxingxing-21jingji-evidence.jpg" alt="21财经报道截图：宇树科技王兴兴谈机器人数据与模型" loading="lazy" decoding="async">
-      <figcaption>图源：<a href="https://www.21jingji.com/article/20250809/herald/fecc404938f03df050143f46e4922853.html">21 财经</a>，2025-08-09。本站裁剪标题与相关段落局部，用于核验“数据关注偏高、模型架构是瓶颈”的产业观点来源。</figcaption>
+      <figcaption>图源：<a href="https://www.21jingji.com/article/20250809/herald/fecc404938f03df050143f46e4922853.html">21 财经</a>，2025-08-09。裁剪标题与相关段落局部，用于核验“数据关注偏高、模型架构是瓶颈”的产业观点来源。</figcaption>
     </figure>
     <figure class="atlas-evidence-card">
       <img src="../../assets/images/thinking-exploration/robot-data-flywheel-world-models/wangxingxing-36kr-evidence.jpg" alt="36氪报道截图：聊模型的王兴兴" loading="lazy" decoding="async">
-      <figcaption>图源：<a href="https://eu.36kr.com/zh/p/3420014135987845">36 氪</a>，2025-08-13。本站裁剪标题与相关段落局部，作为同一观点的交叉佐证。</figcaption>
+      <figcaption>图源：<a href="https://eu.36kr.com/zh/p/3420014135987845">36 氪</a>，2025-08-13。裁剪标题与相关段落局部，作为同一观点的交叉佐证。</figcaption>
     </figure>
   </aside>
 </div>
 
-本文的证据链分成四层。产业报道只说明“模型架构优先”这类观点真实存在；综述图用来界定 World Model 在机器人系统中的角色；论文图用来拆四条数据飞轮；部署论文用来约束边界，避免把模型能力误读成系统可靠性。
+证据链分成四层：产业报道只说明“模型架构优先”这类观点真实存在；综述图用来界定 World Model 在机器人系统中的角色；论文图用来拆四条数据飞轮；部署论文用来约束边界，避免把模型能力误读成系统可靠性。
 
-| 本文判断 | 主要证据 | 证据边界 |
+| 判断 | 主要证据 | 证据边界 |
 | --- | --- | --- |
 | World Model 不是单个模型，而是机器人系统里的角色 | World Model for Robot Learning survey、Embodied AI world model survey | 综述给的是分类框架，不等于任何单一架构已经统一胜出 |
 | 三种系统角色对应三类能力瓶颈 | policy / simulator / evaluator 相关综述图、VLA / WAM 范式图 | 不同任务里三种角色的重要性不同，不能一刀切 |
@@ -59,7 +59,7 @@ history observation + action + goal -> future state / risk / score
 
 ![Embodied world model core concepts](../assets/images/paper-deep-dives/world-models/world-models-embodied-ai-survey/Fig1_core_concepts.png){ width="760" }
 
-<small>图源：[A Comprehensive Survey on World Models for Embodied AI](https://arxiv.org/abs/2510.16732)，Figure 1 子图，本站从论文 PDF 截取。原图把 world model 画成 internal simulator：从历史观测构造内部世界状态，再服务 imagination、planning 和控制。本文读法：数据 infra 要生产的不是孤立图片，而是能更新 internal state 的时序经验。</small>
+<small>图源：[A Comprehensive Survey on World Models for Embodied AI](https://arxiv.org/abs/2510.16732)，Figure 1 子图，从论文 PDF 截取。原图把 world model 画成 internal simulator：从历史观测构造内部世界状态，再服务 imagination、planning 和控制。读图重点：数据 infra 要生产的不是孤立图片，而是能更新 internal state 的时序经验。</small>
 
 从机器人系统看，World Model 至少有三种角色。
 
@@ -71,13 +71,13 @@ history observation + action + goal -> future state / risk / score
 
 ![World Model for Robot Learning survey organization](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-1-survey-organization.png){ width="920" }
 
-<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 1，本站从论文 PDF 截取。原图把机器人世界模型分成三类角色：接入 policy、作为 simulator、作为 robotic video world model。本文读法：数据 infra 不是单独服务某一个模型，而是要同时支撑动作生成、模拟评估、视频动态和数据生成。</small>
+<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 1，从论文 PDF 截取。原图把机器人世界模型分成三类角色：接入 policy、作为 simulator、作为 robotic video world model。读图重点：数据 infra 不是单独服务某一个模型，而是要同时支撑动作生成、模拟评估、视频动态和数据生成。</small>
 
 ![Temporal evolution of robot world models](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-2-temporal-evolution.png){ width="920" }
 
-<small>图源：World Model for Robot Learning survey，Figure 2，本站从论文 PDF 截取。原图展示 world model for policy 与 world model as simulator 的代表工作演进。本文读法：趋势不是“等一个统一模型突然出现”，而是 policy、simulator、post-training、evaluation 和 data generation 越来越缠在同一个闭环里。</small>
+<small>图源：World Model for Robot Learning survey，Figure 2，从论文 PDF 截取。原图展示 world model for policy 与 world model as simulator 的代表工作演进。读图重点：趋势不是“等一个统一模型突然出现”，而是 policy、simulator、post-training、evaluation 和 data generation 越来越缠在同一个闭环里。</small>
 
-所以本文的主线不是“数据比模型重要”，而是：
+主线不是“数据比模型重要”，而是：
 
 ```text
 World Model 的能力边界
@@ -100,11 +100,11 @@ World Model 的能力边界
 
 ![LeRobotDataset v3 pillars](../assets/images/embodied-ai/robot-state-action-data/lerobot-v3-pillars.png){ width="920" }
 
-<small>图源：[Hugging Face LeRobotDataset v3.0 blog](https://huggingface.co/blog/lerobot-datasets-v3)。原图把机器人数据拆成 tabular data、visual data 和 metadata。本文读法：一个 episode 不是视频文件，而是状态、动作、视频、统计量、episode 边界、schema 和元数据一起可追溯。</small>
+<small>图源：[Hugging Face LeRobotDataset v3.0 blog](https://huggingface.co/blog/lerobot-datasets-v3)。原图把机器人数据拆成 tabular data、visual data 和 metadata。读图重点：一个 episode 不是视频文件，而是状态、动作、视频、统计量、episode 边界、schema 和元数据一起可追溯。</small>
 
 ![CALVIN sensors](../assets/images/embodied-ai/robot-state-action-data/calvin-sensors.png){ width="820" }
 
-<small>图源：[CALVIN GitHub README](https://github.com/mees/calvin)，本站归档。原图展示多视角 RGB-D、静态相机、夹爪相机和本体状态。本文读法：World Model 要预测动作后果，必须先拿到同步的多模态时序记录。</small>
+<small>图源：[CALVIN GitHub README](https://github.com/mees/calvin)，归档。原图展示多视角 RGB-D、静态相机、夹爪相机和本体状态。读图重点：World Model 要预测动作后果，必须先拿到同步的多模态时序记录。</small>
 
 ### 瓶颈二：Simulator 如果只吃顺境数据，就只会生成顺境幻觉
 
@@ -118,11 +118,11 @@ World Model 作为 simulator 的价值很直观：降低真机采集成本，让
 
 ![Open X-Embodiment dataset overview](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="820" }
 
-<small>图源：[Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)，Figure 1，本站从论文 PDF / 项目材料归档。原图统计 robot embodiment、scene、trajectory、skill 和 object category 的分布。本文读法：公开数据集解决“少”的问题，但动作接口、相机视角、控制频率和失败样本分布仍会影响 simulator 的真实性。</small>
+<small>图源：[Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)，Figure 1，从论文 PDF / 项目材料归档。原图统计 robot embodiment、scene、trajectory、skill 和 object category 的分布。读图重点：公开数据集解决“少”的问题，但动作接口、相机视角、控制频率和失败样本分布仍会影响 simulator 的真实性。</small>
 
 ![Pi0.5 data ablation](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-10-data-ablation.png){ width="900" }
 
-<small>图源：[π0.5](https://www.physicalintelligence.company/blog/pi05)，Figure 10，本站从论文 / 官方材料归档。原图比较去掉 web data、cross-embodiment data、multi-environment data 等来源后的表现变化。本文读法：数据源不是简单相加，每类数据补的能力不同；simulator 需要知道自己的训练分布缺什么。</small>
+<small>图源：[π0.5](https://www.physicalintelligence.company/blog/pi05)，Figure 10，从论文 / 官方材料归档。原图比较去掉 web data、cross-embodiment data、multi-environment data 等来源后的表现变化。读图重点：数据源不是简单相加，每类数据补的能力不同；simulator 需要知道自己的训练分布缺什么。</small>
 
 ### 瓶颈三：Evaluator 如果只见过顺境样本，就会选错 checkpoint
 
@@ -136,11 +136,11 @@ Evaluator 的判断能力取决于它见过什么。如果它主要见过遥操�
 
 ![World model as learned simulator and evaluator](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-5-rl-vs-validation.png){ width="860" }
 
-<small>图源：World Model for Robot Learning survey，Figure 5，本站从论文 PDF 截取。原图左侧展示 learned simulator for RL，右侧展示 world model as validation / evaluator。本文读法：evaluator 不是离线打分器，而是把候选动作、policy ranking、reward / progress / risk 和真实部署失败连接起来的系统角色。</small>
+<small>图源：World Model for Robot Learning survey，Figure 5，从论文 PDF 截取。原图左侧展示 learned simulator for RL，右侧展示 world model as validation / evaluator。读图重点：evaluator 不是离线打分器，而是把候选动作、policy ranking、reward / progress / risk 和真实部署失败连接起来的系统角色。</small>
 
 ![kai0 pipeline](../assets/images/paper-deep-dives/embodied-ai/kai0/figure-1-pipeline.png){ width="920" }
 
-<small>图源：[χ₀: Resource-Aware Robust Manipulation via Taming Distributional Inconsistencies](https://arxiv.org/abs/2602.09021)，Figure 1，本站从论文 PDF 截取。原图展示 \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 三类分布及对齐模块。本文读法：这是部署回流的数据飞轮图，不只是模型 pipeline。</small>
+<small>图源：[χ₀: Resource-Aware Robust Manipulation via Taming Distributional Inconsistencies](https://arxiv.org/abs/2602.09021)，Figure 1，从论文 PDF 截取。原图展示 \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 三类分布及对齐模块。读图重点：这是部署回流的数据飞轮图，不只是模型 pipeline。</small>
 
 ## 从三类瓶颈推出四类数据需求
 
@@ -159,7 +159,7 @@ Evaluator 的判断能力取决于它见过什么。如果它主要见过遥操�
 
 ![自绘总结图：四条数据回路互相校正](../assets/images/thinking-exploration/robot-data-flywheel-world-models/four-data-loops-mutual-calibration.png){ width="920" }
 
-<small>图源：本站自绘。它把四种范式压成四条互相校正的数据回路：几何资产回路提供空间状态，视频动作回路约束动作后果，部署回流回路把真实失败放回训练和验证，混合生成回路生产长尾并接受真实数据校正。</small>
+<small>图源：自绘。它把四种范式压成四条互相校正的数据回路：几何资产回路提供空间状态，视频动作回路约束动作后果，部署回流回路把真实失败放回训练和验证，混合生成回路生产长尾并接受真实数据校正。</small>
 
 ## 范式一：几何资产飞轮，先把世界定位清楚
 
@@ -169,11 +169,11 @@ Evaluator 的判断能力取决于它见过什么。如果它主要见过遥操�
 
 ![Spatial latent grid world representation](../assets/images/paper-deep-dives/world-models/world-models-embodied-ai-survey/Fig1_SLG.png){ width="760" }
 
-<small>图源：A Comprehensive Survey on World Models for Embodied AI，Figure 1 子图，本站从论文 PDF 截取。原图展示 Spatial Latent Grid 用 BEV、voxel、occupancy 或 geometry-aligned latent grid 表示空间世界。本文读法：机器人数据 infra 需要把视觉日志转成可定位、可融合、可规划的空间状态。</small>
+<small>图源：A Comprehensive Survey on World Models for Embodied AI，Figure 1 子图，从论文 PDF 截取。原图展示 Spatial Latent Grid 用 BEV、voxel、occupancy 或 geometry-aligned latent grid 表示空间世界。读图重点：机器人数据 infra 需要把视觉日志转成可定位、可融合、可规划的空间状态。</small>
 
 ![Depth Anything 3 teaser](../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-1-teaser.png){ width="820" }
 
-<small>图源：[Depth Anything 3](https://arxiv.org/abs/2511.10647)，Figure 1，本站从论文 PDF 截取。原图展示 DA3 从任意数量视觉输入恢复 depth、ray、camera 和可融合 3D geometry。本文读法：它给机器人数据飞轮补的是“把普通 RGB 轨迹转成几何资产”的入口。</small>
+<small>图源：[Depth Anything 3](https://arxiv.org/abs/2511.10647)，Figure 1，从论文 PDF 截取。原图展示 DA3 从任意数量视觉输入恢复 depth、ray、camera 和可融合 3D geometry。读图重点：它给机器人数据飞轮补的是“把普通 RGB 轨迹转成几何资产”的入口。</small>
 
 DA3 的关键不是“深度估计更好”这么简单，而是 depth、ray、camera 统一输出。每个像素不只有深度值，还对应相机射线。这对机器人很重要，因为真实数据经常来自多相机、腕部相机和运动视角，标定本来就不稳定。
 
@@ -190,51 +190,51 @@ DA3 类方法的数据飞轮可以写成：
 
 ![DA3 pipeline](../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-2-pipeline.png){ width="920" }
 
-<small>图源：Depth Anything 3，Figure 2，本站从论文 PDF 截取。原图展示单个 DINOv2 主干、跨视角 attention、camera token 和 Dual-DPT head。本文读法：几何飞轮的核心不是把 depth 当附加标签，而是把多视角视觉输入落成 depth + ray 这样的统一几何接口。</small>
+<small>图源：Depth Anything 3，Figure 2，从论文 PDF 截取。原图展示单个 DINOv2 主干、跨视角 attention、camera token 和 Dual-DPT head。读图重点：几何飞轮的核心不是把 depth 当附加标签，而是把多视角视觉输入落成 depth + ray 这样的统一几何接口。</small>
 
 ![DA3 teacher supervision](../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-10-teacher-supervision.png){ width="820" }
 
-<small>图源：Depth Anything 3，teacher supervision visualization，本站从论文 PDF 截取。原图展示真实深度的噪声和 teacher depth 的连续结构。本文读法：数据飞轮里最早的增值点不是策略训练，而是把脏几何监督清洗成能被后续模型消费的状态。</small>
+<small>图源：Depth Anything 3，teacher supervision visualization，从论文 PDF 截取。原图展示真实深度的噪声和 teacher depth 的连续结构。读图重点：数据飞轮里最早的增值点不是策略训练，而是把脏几何监督清洗成能被后续模型消费的状态。</small>
 
 VGGT-Ω 则把几何飞轮推到更大规模。它展示了一个值得关注的现象：几何重建也能出现类似 foundation model 的 scaling 行为，模型规模和数据规模同时扩大时，3D point error 会下降。
 
 ![VGGT-Omega scaling](../assets/images/paper-deep-dives/embodied-ai/vggt-omega/figure-1-scaling.png){ width="760" }
 
-<small>图源：[VGGT-Ω](https://arxiv.org/abs/2605.15195)，Figure 1，本站从论文 PDF 截取。原图展示模型规模和数据规模增加时 3D point error 下降。本文读法：几何重建开始像 foundation model proxy task，前提是数据标注、过滤和一致性检查能跟上。</small>
+<small>图源：[VGGT-Ω](https://arxiv.org/abs/2605.15195)，Figure 1，从论文 PDF 截取。原图展示模型规模和数据规模增加时 3D point error 下降。读图重点：几何重建开始像 foundation model proxy task，前提是数据标注、过滤和一致性检查能跟上。</small>
 
 更值得机器人方向关注的是它的数据引擎。论文不是简单抓视频训练，而是经过 VLM 预过滤、动态 mask、特征匹配、初始化、bundle adjustment、dense depth 和多视角一致性检查。透明杯、细杆、反光、人体边界，这些机器人场景里常见的东西，恰好也是最容易产生几何伪标签的地方。
 
 ![VGGT-Omega architecture](../assets/images/paper-deep-dives/embodied-ai/vggt-omega/figure-2-architecture.png){ width="920" }
 
-<small>图源：VGGT-Ω，Figure 2，本站从论文 PDF 截取。原图展示从多视角图像到 camera、depth、track、point map 等几何输出的统一架构。本文读法：大规模几何模型不是“抓视频就训练”，而是数据过滤、几何一致性和输出接口共同组成的飞轮。</small>
+<small>图源：VGGT-Ω，Figure 2，从论文 PDF 截取。原图展示从多视角图像到 camera、depth、track、point map 等几何输出的统一架构。读图重点：大规模几何模型不是“抓视频就训练”，而是数据过滤、几何一致性和输出接口共同组成的飞轮。</small>
 
 ![VGGT-Omega data quality](../assets/images/paper-deep-dives/embodied-ai/vggt-omega/figure-data-quality.png){ width="820" }
 
-<small>图源：VGGT-Ω，Common Data Issues，本站从论文 PDF 截取。原图展示 sensor artifact、thin structure error 和 doming effect。本文读法：数据噪声会变成模型习惯，几何伪标签如果不清洗，最后会放大成真实执行风险。</small>
+<small>图源：VGGT-Ω，Common Data Issues，从论文 PDF 截取。原图展示 sensor artifact、thin structure error 和 doming effect。读图重点：数据噪声会变成模型习惯，几何伪标签如果不清洗，最后会放大成真实执行风险。</small>
 
 几何飞轮的边界也要说清楚：它能让世界“被定位”，不等于让机器人“会操作”。几何模型知道杯子在哪里，不代表知道从哪个角度抓不会滑；知道桌面结构，不代表知道接触后物体如何运动。动作因果需要下一条飞轮来补。
 
 ![VGGT-Omega motion aware](../assets/images/paper-deep-dives/embodied-ai/vggt-omega/figure-motion-aware.png){ width="820" }
 
-<small>图源：VGGT-Ω，motion-aware 示例，本站从论文 PDF 截取。本文读法：动态物体和运动场景进一步说明，几何资产飞轮必须处理时序状态，而不能只做单帧重建。</small>
+<small>图源：VGGT-Ω，motion-aware 示例，从论文 PDF 截取。读图重点：动态物体和运动场景进一步说明，几何资产飞轮必须处理时序状态，而不能只做单帧重建。</small>
 
 ## 范式二：视频动作飞轮，让动作对未来负责
 
 视频动作飞轮的核心，是从“状态到动作”转向“动作到未来状态”。传统 VLA 把动作作为输出；WAM 类方法把动作和未来视频共同建模，让模型必须解释动作会导致什么后果。
 
-这会改变同一段示教轨迹的价值。在普通 VLA 里，它主要提供动作标签；在 WAM 里，它同时提供动作、动作后的观测序列，以及未来是否接近任务目标的密集监督。换句话说，视频动作飞轮把“示教数据”升级成了“后果数据”。
+这会改变同一段示教轨迹的价值。在普通 VLA 里，它主要提供动作标签；在 WAM 里，它同时提供动作、动作后的观测序列，以及未来是否接近任务目标的密集监督。视频动作飞轮把“示教数据”升级成了“后果数据”。
 
 ![Policy paradigms for robot world models](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-3-policy-paradigms.png){ width="920" }
 
-<small>图源：World Model for Robot Learning survey，Figure 3，本站从论文 PDF 截取。原图展示 IDM-style、single-backbone-style 和 MoT-style 三种 world model 支撑 policy 的架构范式。本文读法：视频动作飞轮的关键问题是未来预测在哪里影响动作。</small>
+<small>图源：World Model for Robot Learning survey，Figure 3，从论文 PDF 截取。原图展示 IDM-style、single-backbone-style 和 MoT-style 三种 world model 支撑 policy 的架构范式。读图重点：视频动作飞轮的关键问题是未来预测在哪里影响动作。</small>
 
 ![DreamZero overview](../assets/images/paper-deep-dives/world-models/dreamzero/figure-1-overview.png){ width="920" }
 
-<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 1，本站从论文 PDF 截取。原图展示 DreamZero 从预训练视频扩散 backbone 出发，联合建模未来视频和动作。本文读法：它的数据飞轮关键不是“视频更多”，而是把异构机器人数据里的未来变化转成动作监督。</small>
+<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 1，从论文 PDF 截取。原图展示 DreamZero 从预训练视频扩散 backbone 出发，联合建模未来视频和动作。读图重点：它的数据飞轮关键不是“视频更多”，而是把异构机器人数据里的未来变化转成动作监督。</small>
 
 ![DreamZero joint video and action](../assets/images/paper-deep-dives/world-models/dreamzero/figure-2-joint-video-action.png){ width="920" }
 
-<small>图源：DreamZero，Figure 2，本站从论文 PDF 截取。原图展示模型同时生成未来视频和动作。本文读法：动作不再是从视频后处理出来的控制量，而是在训练目标里和未来画面共同对齐。</small>
+<small>图源：DreamZero，Figure 2，从论文 PDF 截取。原图展示模型同时生成未来视频和动作。读图重点：动作不再是从视频后处理出来的控制量，而是在训练目标里和未来画面共同对齐。</small>
 
 DreamZero 的思路可以拆成三层。
 
@@ -248,19 +248,19 @@ DreamZero 的思路可以拆成三层。
 
 ![DreamZero architecture](../assets/images/paper-deep-dives/world-models/dreamzero/figure-4-architecture.png){ width="920" }
 
-<small>图源：DreamZero，Figure 4，本站从论文 PDF 截取。原图展示视觉上下文、语言、本体状态、未来视频 latent 和动作 latent 如何进入同一个自回归 DiT。本文读法：视频基础模型要进入机器人闭环，必须接上状态、动作、动作 chunk 和真实观测刷新，而不是只离线生成未来画面。</small>
+<small>图源：DreamZero，Figure 4，从论文 PDF 截取。原图展示视觉上下文、语言、本体状态、未来视频 latent 和动作 latent 如何进入同一个自回归 DiT。读图重点：视频基础模型要进入机器人闭环，必须接上状态、动作、动作 chunk 和真实观测刷新，而不是只离线生成未来画面。</small>
 
 DreamZero 给数据飞轮的另一个启发，是推理不能长期相信自己生成的未来。真实机器人每执行一小段动作，都会得到新的观测；这些观测要回写上下文，打断错误想象的累积。对 WAM 来说，闭环观测刷新、低延迟推理和失败回放不是部署优化，而是模型能不能真机工作的前置条件。
 
 ![DreamZero cross embodiment](../assets/images/paper-deep-dives/world-models/dreamzero/figure-11-cross-embodiment.png){ width="920" }
 
-<small>图源：DreamZero，Figure 11，本站从论文 PDF 截取。原图展示 robot-to-robot 和 human-to-robot 的 video-only demonstration 对未见任务的帮助。本文读法：视频可以跨具身共享任务动态，但不能替代目标机器人的动作对齐。</small>
+<small>图源：DreamZero，Figure 11，从论文 PDF 截取。原图展示 robot-to-robot 和 human-to-robot 的 video-only demonstration 对未见任务的帮助。读图重点：视频可以跨具身共享任务动态，但不能替代目标机器人的动作对齐。</small>
 
 V-JEPA 2 和 WAM 可以放在一起看：先从大量观察数据里学习世界表征，再把动作接进来。V-JEPA 2 在潜空间预测未来表征，而不是直接生成像素；这使它更适合被 planner 消费，因为它的目标不是给人看漂亮视频，而是给机器人选择动作。
 
 ![V-JEPA 2 action-conditioned world model](../assets/images/paper-deep-dives/world-models/v-jepa2/figure-action-conditioned-world-model.png){ width="920" }
 
-<small>图源：[V-JEPA 2](https://arxiv.org/abs/2506.09985)，action-conditioned world model 图，本站从论文 PDF 截取。本文读法：World Model 要进入机器人闭环，必须接收候选动作并输出可用于规划的未来状态或评分。</small>
+<small>图源：[V-JEPA 2](https://arxiv.org/abs/2506.09985)，action-conditioned world model 图，从论文 PDF 截取。读图重点：World Model 要进入机器人闭环，必须接收候选动作并输出可用于规划的未来状态或评分。</small>
 
 视频动作飞轮可以按能力阶梯来判断证据强弱。更稳的拆法是三层：先能按任务想象结果，再能按动作预测未来，最后让 planner 或 MPC 真正消费这些预测。
 
@@ -272,17 +272,17 @@ V-JEPA 2 和 WAM 可以放在一起看：先从大量观察数据里学习世界
 
 ![Robotic video world models capability ladder](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-6-video-world-models.png){ width="920" }
 
-<small>图源：World Model for Robot Learning survey，Figure 6，本站从论文 PDF 截取。原图把 robotic video world model 的能力从 task-conditioned imagination 推到 action conditioning、structure priors 和 foundation-scale video backbone。本文读法：数据 infra 的任务，是把普通视频先验一步步接到动作、结构、长时一致和真实机器人闭环上。</small>
+<small>图源：World Model for Robot Learning survey，Figure 6，从论文 PDF 截取。原图把 robotic video world model 的能力从 task-conditioned imagination 推到 action conditioning、structure priors 和 foundation-scale video backbone。读图重点：数据 infra 的任务，是把普通视频先验一步步接到动作、结构、长时一致和真实机器人闭环上。</small>
 
 ![V-JEPA 2 planning results](../assets/images/paper-deep-dives/world-models/v-jepa2/table-3-planning-results.png){ width="900" }
 
-<small>图源：V-JEPA 2，robot planning results 表，本站从论文 PDF 截取。本文读法：真正有说服力的证据，不是生成视频是否逼真，而是 World Model 被规划器消费后，机器人任务成功率是否提升。</small>
+<small>图源：V-JEPA 2，robot planning results 表，从论文 PDF 截取。读图重点：真正有说服力的证据，不是生成视频是否逼真，而是 World Model 被规划器消费后，机器人任务成功率是否提升。</small>
 
 视频动作飞轮也有风险：错误想象会给错误动作找理由。WAM 把动作和未来画面耦合，如果未来预测错了，动作选择也会跟着错，而且模型可能生成一个看起来合理的未来画面，让错误推理链自洽。
 
 ![DreamZero failure case](../assets/images/paper-deep-dives/world-models/dreamzero/figure-16-failure-case.png){ width="920" }
 
-<small>图源：DreamZero，Figure 16，本站从论文 PDF 截取。原图展示 generated video 与 executed action 的失败配对。本文读法：数据飞轮不能只回收成功视频，也必须回收“模型想象和真实执行如何一起错”的样本。</small>
+<small>图源：DreamZero，Figure 16，从论文 PDF 截取。原图展示 generated video 与 executed action 的失败配对。读图重点：数据飞轮不能只回收成功视频，也必须回收“模型想象和真实执行如何一起错”的样本。</small>
 
 因此视频动作飞轮必须和部署回流飞轮配合。真实观测刷新、安全检查、低延迟部署、失败回放和人工接管，不是工程细节，而是 WAM 进入真机系统的底线。
 
@@ -296,11 +296,11 @@ V-JEPA 2 和 WAM 可以放在一起看：先从大量观察数据里学习世界
 
 ![部署回流飞轮](../assets/images/thinking-exploration/robot-data-flywheel-world-models/deployment-return-flywheel.png){ width="920" }
 
-<small>图源：本站自绘。它把部署回流拆成示教、policy 候选、真机部署、near-miss / 失败、人工接管、样本打包、OOD validation 和再训练。本文读法：部署飞轮不是“多收 demo”，而是让失败邻域进入训练和验证。</small>
+<small>图源：自绘。它把部署回流拆成示教、policy 候选、真机部署、near-miss / 失败、人工接管、样本打包、OOD validation 和再训练。读图重点：部署飞轮不是“多收 demo”，而是让失败邻域进入训练和验证。</small>
 
 ![部署分布对齐](../assets/images/thinking-exploration/robot-data-flywheel-world-models/deployment-distribution-alignment.png){ width="920" }
 
-<small>图源：本站自绘。它把 \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 画成三类分布。本文读法：evaluator 如果只见过训练顺境，就会选错 checkpoint；必须用 recovery data 和 OOD validation 把部署分布写回系统。</small>
+<small>图源：自绘。它把 \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 画成三类分布。读图重点：evaluator 如果只见过训练顺境，就会选错 checkpoint；必须用 recovery data 和 OOD validation 把部署分布写回系统。</small>
 
 kai0 的飞轮可以写成：
 
@@ -316,7 +316,7 @@ expert demos
 
 ![kai0 train deploy alignment](../assets/images/paper-deep-dives/embodied-ai/kai0/figure-4-train-deploy-alignment.png){ width="820" }
 
-<small>图源：kai0，Figure 4，本站从论文 PDF 截取。原图展示 Heuristic DAgger、spatio-temporal augmentation 和 temporal chunk-wise smoothing。本文读法：部署回流飞轮不是只把失败视频存起来，而是把失败初态、恢复动作、动作平滑和验证集选择一起纳入系统。</small>
+<small>图源：kai0，Figure 4，从论文 PDF 截取。原图展示 Heuristic DAgger、spatio-temporal augmentation 和 temporal chunk-wise smoothing。读图重点：部署回流飞轮不是只把失败视频存起来，而是把失败初态、恢复动作、动作平滑和验证集选择一起纳入系统。</small>
 
 这篇论文最值得借鉴的不是某一个模块名，而是工程习惯。
 
@@ -330,25 +330,25 @@ expert demos
 
 ![kai0 model arithmetic ablation](../assets/images/paper-deep-dives/embodied-ai/kai0/figure-7-model-arithmetic-ablation.png){ width="860" }
 
-<small>图源：kai0，Figure 7，本站从论文 PDF 截取。原图比较 model arithmetic 变体、single-best 和 full-data candidate。本文读法：checkpoint 合并本身不是魔法，关键在于用更接近部署失败邻域的 OOD validation 来选择和验证策略。</small>
+<small>图源：kai0，Figure 7，从论文 PDF 截取。原图比较 model arithmetic 变体、single-best 和 full-data candidate。读图重点：checkpoint 合并本身不是魔法，关键在于用更接近部署失败邻域的 OOD validation 来选择和验证策略。</small>
 
 ![kai0 stage advantage](../assets/images/paper-deep-dives/embodied-ai/kai0/figure-3-stage-advantage.png){ width="920" }
 
-<small>图源：kai0，Figure 3，本站从论文 PDF 截取。原图展示 stage advantage 如何把阶段信息注入训练。本文读法：长时任务里的相似视觉状态，需要 stage / progress 这样的结构化标签，否则动作很容易错位。</small>
+<small>图源：kai0，Figure 3，从论文 PDF 截取。原图展示 stage advantage 如何把阶段信息注入训练。读图重点：长时任务里的相似视觉状态，需要 stage / progress 这样的结构化标签，否则动作很容易错位。</small>
 
 ![kai0 stage advantage ablation](../assets/images/paper-deep-dives/embodied-ai/kai0/figure-8-stage-advantage-ablation.png){ width="860" }
 
-<small>图源：kai0，Figure 8，本站从论文 PDF 截取。原图比较 Stage Advantage 的稳定性和任务表现。本文读法：长时任务不能只记录最终成功失败，还要记录 stage、progress、停滞和回退，才能把失败回流变成可训练信号。</small>
+<small>图源：kai0，Figure 8，从论文 PDF 截取。原图比较 Stage Advantage 的稳定性和任务表现。读图重点：长时任务不能只记录最终成功失败，还要记录 stage、progress、停滞和回退，才能把失败回流变成可训练信号。</small>
 
 ![kai0 control ablation](../assets/images/paper-deep-dives/embodied-ai/kai0/figure-11-control-ablation.png){ width="860" }
 
-<small>图源：kai0，Figure 11，本站从论文 PDF 截取。原图比较 temporal chunk-wise smoothing、temporal ensembling、RTC 和增强策略。本文读法：数据飞轮最后要落到真实控制链路，推理延迟、动作 chunk 接缝和低层控制频率都会决定回流数据能否转化成可靠执行。</small>
+<small>图源：kai0，Figure 11，从论文 PDF 截取。原图比较 temporal chunk-wise smoothing、temporal ensembling、RTC 和增强策略。读图重点：数据飞轮最后要落到真实控制链路，推理延迟、动作 chunk 接缝和低层控制频率都会决定回流数据能否转化成可靠执行。</small>
 
 这里也必须保留边界。kai0 的证据集中在特定双臂衣物任务族、特定硬件平台和采集方式下。它的价值不在于证明“任意 20 小时数据都够”，而在于证明：当数据回流、验证分布和部署分布被系统性对齐时，真实机器人任务可以显著变稳。
 
 ![kai0 system efficacy](../assets/images/paper-deep-dives/embodied-ai/kai0/figure-6-system-efficacy.png){ width="920" }
 
-<small>图源：kai0，system efficacy 图，本站从论文 PDF 截取。本文读法：部署飞轮的可信度来自边界清楚，而不是 claim 更大。有效性必须绑定任务族、硬件系统、采集方式、验证分布和运行环境。</small>
+<small>图源：kai0，system efficacy 图，从论文 PDF 截取。读图重点：部署飞轮的可信度来自边界清楚，而不是 claim 更大。有效性必须绑定任务族、硬件系统、采集方式、验证分布和运行环境。</small>
 
 ## 范式四：混合生成飞轮，真实、仿真、合成互相校正
 
@@ -360,11 +360,11 @@ expert demos
 
 ![Video world model taxonomy](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-2-world-model-taxonomy.jpg){ width="920" }
 
-<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 2，本站从论文 / 项目材料归档。原图把 internal world model、external world model、video world model、simulation platform 和 neural 3D/4D 放在同一张 taxonomy 里。本文读法：混合生成飞轮不是单一视频生成路线，而是物理仿真、视频生成、3D/4D 表示和内部动态模型互相补位。</small>
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 2，从论文 / 项目材料归档。原图把 internal world model、external world model、video world model、simulation platform 和 neural 3D/4D 放在同一张 taxonomy 里。读图重点：混合生成飞轮不是单一视频生成路线，而是物理仿真、视频生成、3D/4D 表示和内部动态模型互相补位。</small>
 
 ![Simulation approaches](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="920" }
 
-<small>图源：Towards Video World Models，simulation approaches 图，本站从论文 / 项目材料归档。本文读法：仿真、视频生成和世界模型服务化之间不是替代关系，而是用真实数据互相校正的工程栈。</small>
+<small>图源：Towards Video World Models，simulation approaches 图，从论文 / 项目材料归档。读图重点：仿真、视频生成和世界模型服务化之间不是替代关系，而是用真实数据互相校正的工程栈。</small>
 
 | 数据域 | 适合提供什么 | 主要风险 |
 | --- | --- | --- |
@@ -442,7 +442,7 @@ kai0 解决“部署失败怎样回到训练集、验证集和控制链路”。
 - DreamZero / V-JEPA 2 的价值在于说明视频动作飞轮的方向，但真实机器人闭环仍需要动作接口、真实观测刷新、延迟、安全和失败回流。
 - DA3 / VGGT-Ω 说明几何资产飞轮的空间基础价值，但几何可定位不等于动作可执行。
 
-## 外部精读
+## 外部材料
 
 - 原论文：[Depth Anything 3: Recovering the Visual Space from Any Views](https://arxiv.org/abs/2511.10647)。
 - 项目页：[Depth Anything 3](https://depth-anything-3.github.io/)。
@@ -460,13 +460,3 @@ kai0 解决“部署失败怎样回到训练集、验证集和控制链路”。
 - 数据 infra：[LeRobotDataset v3.0](https://huggingface.co/blog/lerobot-datasets-v3)。
 - 数据配方：[π0.5 blog](https://www.physicalintelligence.company/blog/pi05)。
 - 产业观点：[21 财经：宇树科技王兴兴谈模型与数据](https://www.21jingji.com/article/20250809/herald/fecc404938f03df050143f46e4922853.html)；[36 氪：聊模型的王兴兴](https://eu.36kr.com/zh/p/3420014135987845)。
-
-## 相关阅读与下一步
-
-- 站内下一步：[WAM 与 3D 视觉：世界模型从视频想象走向物理闭环](wam-3dv-world-models.md)。
-- 站内下一步：[世界模型 Infra：从模型谱系到物理 AI 工程栈](world-model-infrastructure.md)。
-- 站内下一步：[具身智能现状：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md)。
-- 站内下一步：[Depth Anything 3：任意视角的 3D 几何底座](../paper-deep-dives/embodied-ai/depth-anything-3.md)。
-- 站内下一步：[VGGT-Ω：几何重建怎样变成具身空间表征](../paper-deep-dives/embodied-ai/vggt-omega.md)。
-- 站内下一步：[DreamZero：世界动作模型为什么可以做零样本策略](../paper-deep-dives/embodied-ai/dreamzero.md)。
-- 站内下一步：[kai0：资源受限下的高可靠机器人操作](../paper-deep-dives/embodied-ai/kai0.md)。

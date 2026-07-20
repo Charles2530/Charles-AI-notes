@@ -4,7 +4,7 @@
 
 REINFORCE 的 Monte Carlo return 方差很高，怎样用 critic bootstrap，又怎样在同一批 rollout 上做几次更新而不让新策略离采样策略太远？Actor-Critic 分开决策与估值，GAE 在 bias-variance 间插值，PPO 用 old logprob、probability ratio 与 clipped surrogate 限制更新。
 
-本页保留稳定 URL，但职责只覆盖经典 Actor-Critic、GAE 与 PPO。GRPO、LLM 后训练和系统成本以后续课程桥接，不在这里展开。
+这里的职责只覆盖经典 Actor-Critic、GAE 与 PPO。GRPO、LLM 后训练和系统成本以后续课程桥接。
 
 ## 先修知识
 
@@ -108,7 +108,3 @@ rollout 与优化必须分阶段。old logprob 在采样后固定，advantage �
 2. 给定一次 true terminal 和一次 time-limit truncation，分别写出 value bootstrap 与 GAE recurrence 的处理。
 3. 解释 old policy 与 reference policy 为何可能参数相同但语义仍不同。
 4. 增加 PPO minibatch epoch，观察完整 rollout 上的 sampled approximate KL，并解释它为什么可能为负、为什么不等于精确 KL；这只是更新幅度诊断，不是收益改善证明。
-
-## 下一步
-
-离散 CartPole 可以枚举 action logits；连续控制需要可重参数化策略与 off-policy critic，见 [连续控制与 SAC](continuous-control-and-sac.md)。GRPO、RLHF、RLVR 与 DPO 的边界见 [LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md)；世界模型路线见 [Model-based RL 与世界模型](rl-for-world-models.md)，工程路线见 [verl 训练流程](verl-code-flow.md)。

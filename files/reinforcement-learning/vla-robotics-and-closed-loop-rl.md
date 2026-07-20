@@ -128,9 +128,3 @@ demonstrations + historical failures
 - [Open X-Embodiment](https://arxiv.org/abs/2310.08864)：多机器人 demonstration 数据与跨 embodiment 学习。
 - [OpenVLA](https://arxiv.org/abs/2406.09246)：开源 VLA 训练与评测案例。
 - [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)：部分可观测 latent planning 的基础。
-
-## 下一步
-
-- 前一章：[LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md)，回顾 rollout、reward 与 policy objective。
-- 下一章：[RL 系统工程与 verl](verl-code-flow.md)，把生成、评价和更新的数据流扩展到训练系统。
-- 方向补充：[VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md)、[VLA 部署与安全](../vla/deployment-and-safety.md) 和 [具身闭环任务 walkthrough](../embodied-ai/closed-loop-task-walkthrough.md)。

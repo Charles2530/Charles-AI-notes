@@ -1,11 +1,11 @@
 # 优化与训练：loss 怎样变成一次可靠更新
 
-这篇文章只回答一个问题：模型训练时，loss 是怎样通过梯度、学习率和优化器变成参数更新的，以及为什么“loss 下降”仍然可能不代表模型真的更好。
+模型训练时，loss 通过梯度、学习率和优化器变成参数更新；“loss 下降”仍可能不代表模型真的更好。
 
 训练不是把模型多跑几轮。一次训练 step 至少包含四个动作：从数据分布采样一个 batch，计算当前参数下的 loss，用反向传播估计梯度，再让 optimizer 把梯度变成参数更新。任何一环错位，曲线都可能看起来正常，但真实任务变差。
 
 !!! tip "数学先修"
-    本文会用到[优化、梯度与约束](../prerequisite-math/optimization-and-gradient-methods.md)解释参数更新，用[微积分与链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)连接 backward，并用[采样估计](../prerequisite-math/sampling-estimation-and-calibration.md)理解 mini-batch 梯度为什么会抖。
+    需要用到[优化、梯度与约束](../prerequisite-math/optimization-and-gradient-methods.md)解释参数更新，用[微积分与链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)连接 backward，并用[采样估计](../prerequisite-math/sampling-estimation-and-calibration.md)理解 mini-batch 梯度为什么会抖。
 
 ## 目标函数定义训练压力
 
@@ -41,7 +41,7 @@
 
 ![Loss landscape visualization 原论文图](../assets/images/paper-figures/foundations/loss-landscape-figure-resnet56.png){ width="820" }
 
-<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)。原图用 filter normalization 等方法可视化 ResNet 附近的 loss surface。本站用这张图说明：optimizer 不是瞬间找到全局最优点，而是在局部地形上按梯度、历史统计和学习率一步步移动。</small>
+<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)。原图用 filter normalization 等方法可视化 ResNet 附近的 loss surface。这张图说明：optimizer 不是瞬间找到全局最优点，而是在局部地形上按梯度、历史统计和学习率一步步移动。</small>
 
 地形直觉可以解释几个常见现象：
 
@@ -129,7 +129,7 @@ AdamW 的关键是 decoupled weight decay。Adam 这类自适应方法里，把 
 
 ![Pascanu et al. Figure 6 exploding gradients](../assets/images/paper-figures/foundations/pascanu13-figure-6-exploding-gradients.png){ width="640" }
 
-<small>图源：[On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)，Figure 6。原图用单隐藏单元 RNN 的 error surface 展示高曲率墙。本站使用这张图说明：gradient clipping 不是修正目标函数，而是在异常大梯度出现时限制单步更新幅度，避免一步把参数推离稳定区域。</small>
+<small>图源：[On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)，Figure 6。原图用单隐藏单元 RNN 的 error surface 展示高曲率墙。这张图说明：gradient clipping 不是修正目标函数，而是在异常大梯度出现时限制单步更新幅度，避免一步把参数推离稳定区域。</small>
 
 常见 clipping 做法是按 global norm 缩放：
 
@@ -144,7 +144,7 @@ g\cdot
 
 ![Pascanu et al. Figure 7 gradient clipping success](../assets/images/paper-figures/foundations/pascanu13-figure-7-gradient-clipping-success.png){ width="760" }
 
-<small>图源：[On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)，Figure 7。原图比较 temporal order 任务中不同序列长度、初始化和训练策略的成功率。本站使用它说明：长序列训练是否成功，通常由梯度路径、初始化、学习率、裁剪和任务长度共同决定。</small>
+<small>图源：[On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)，Figure 7。原图比较 temporal order 任务中不同序列长度、初始化和训练策略的成功率。这张图说明：长序列训练是否成功，通常由梯度路径、初始化、学习率、裁剪和任务长度共同决定。</small>
 
 ## Loss 下降为什么仍会骗你
 
@@ -188,7 +188,7 @@ Karpathy 的训练 recipe 很值得学习的不是某个固定超参，而是过
 
 训练的核心不是让 loss 机械下降，而是让一个代理目标通过 noisy gradient、合适步长和可靠 optimizer 稳定改善真实任务。Loss 定义压力，batch 决定梯度估计，学习率决定每步幅度，optimizer 改变更新方向，clipping 和 warmup 保护训练早期与异常步长，评测和分桶证据防止平均 loss 欺骗你。读任何训练曲线时，都要问：这个下降服务的是哪个目标、哪个数据桶、哪种任务价值，以及它有没有用足够强的证据被验证。
 
-## 外部精读
+## 外部材料
 
 - [A Recipe for Training Neural Networks](https://karpathy.github.io/2019/04/25/recipe/)：学习如何从数据、baseline、过拟合小 batch 和逐步复杂化来排查训练。
 - [Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)：理解 loss landscape 可视化和结构/归一化对优化地形的影响。
@@ -197,11 +197,6 @@ Karpathy 的训练 recipe 很值得学习的不是某个固定超参，而是过
 - [PyTorch AdamW](https://pytorch.org/docs/stable/generated/torch.optim.AdamW.html) 与 [Hugging Face optimization schedules](https://huggingface.co/docs/transformers/main_classes/optimizer_schedules)：核对 optimizer 与 warmup/cosine/linear schedule 的工程语义。
 - [Google Deep Learning Tuning Playbook](https://developers.google.com/machine-learning/guides/deep-learning-tuning-playbook)：系统学习如何把调参问题拆成目标、搜索空间、训练长度和证据链。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

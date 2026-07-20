@@ -2,11 +2,11 @@
 
 仿真机器人数据集不是“收集一批 3D 模型”这么简单。一个资产要进入机器人训练，必须同时有视觉外观、真实尺寸、物理属性、碰撞体、抓取标注、任务脚本、轨迹规划和成功判定。缺其中一环，数据看起来很多，训练时却很难复现失败。
 
-这页只回答一个问题：从一个物体资产，到一条可训练的机器人轨迹，中间要经过哪些环节。
+从一个物体资产到一条可训练的机器人轨迹，中间要经过感知、抓取、轨迹、记录和评测等环节。
 
 ![SpatialVLA experiment setup 原论文图](../assets/images/paper-deep-dives/embodied-ai/spatialvla/figure-3-experiment-setup.png){ width="720" }
 
-<small>图源：[SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md)，Figure 3。原图展示机器人实验中的多视角相机、机器人本体和任务场景。本站读法：资产、scale、camera pose、grasp pose 和 trajectory GT 最终都要在这样的实验设置里对齐，才能支持 VLA、WAM 或传统 planner。</small>
+<small>图源：[SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md)，Figure 3。原图展示机器人实验中的多视角相机、机器人本体和任务场景。读图重点：资产、scale、camera pose、grasp pose 和 trajectory GT 最终都要在这样的实验设置里对齐，才能支持 VLA、WAM 或传统 planner。</small>
 
 ## 资产不是一张 3D 图
 
@@ -62,7 +62,7 @@ $$
 
 ![GR-2 bin picking setup 原论文图](../assets/images/paper-deep-dives/embodied-ai/gr2/figure-7-bin-picking-setup.png){ width="760" }
 
-<small>图源：[GR-2](../paper-deep-dives/embodied-ai/gr2.md)，Figure 7。原图展示 bin picking 真实机器人设置。本站读法：bin picking 的难点不是一个抓取点，而是多物体遮挡、候选抓法冲突、抓起后是否还能完成后续放置。</small>
+<small>图源：[GR-2](../paper-deep-dives/embodied-ai/gr2.md)，Figure 7。原图展示 bin picking 真实机器人设置。读图重点：bin picking 的难点不是一个抓取点，而是多物体遮挡、候选抓法冲突、抓起后是否还能完成后续放置。</small>
 
 ## Planner 把目标位姿变成轨迹
 
@@ -116,7 +116,7 @@ RoboTwin 这类平台的价值，就在于把资产、任务、功能点、专�
 
 如果只保存成功轨迹，模型学不到边界；如果只保存视频，模型学不到动作因果；如果只保存动作，不保存相机和物理状态，失败无法归因。真正有价值的数据包，是能同时提供观测、动作、状态、评测和失败原因。
 
-## 外部精读
+## 外部材料
 
 - [RoboTwin 2.0 docs](https://robotwin-platform.github.io/doc/)：理解双臂任务、资产、轨迹和 success checker 的组织方式。
 - [SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md)：理解空间编码和跨 embodiment 动作网格如何连接数据和模型。

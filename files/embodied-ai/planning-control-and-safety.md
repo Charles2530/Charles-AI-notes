@@ -1,12 +1,12 @@
 # 具身规划、控制与安全：高层动作为什么还要过安全层
 
-具身智能最容易被误解成“给机器人一个更聪明的大脑”。现实里，机器人失败常常不是因为它不会理解指令，而是因为它没有及时刹住、没有在几毫米误差内插进孔、没有在遮挡或接触变化时重新规划。
+具身智能最容易被误解成“给机器人一个更聪明的大脑”。现实里的机器人失败常常来自刹车不及时、几毫米插孔误差、遮挡变化、接触变化或重规划缺失。
 
-这页只回答一个问题：为什么 VLA/WAM 输出动作后，仍然需要 planner、controller 和 safety filter。
+VLA/WAM 输出动作后，planner、controller 和 safety filter 仍然负责可执行性、稳定性和安全边界。
 
 ![SayCan LLM and affordance scores 原论文图](../assets/images/paper-figures/embodied-ai/saycan-figure-3-llm-affordance.png){ width="920" }
 
-<small>图源：[Do As I Can, Not As I Say](https://research.google/pubs/do-as-i-can-not-as-i-say-grounding-language-in-robotic-affordances/)，Figure 3。原图展示语言模型分数和 affordance 分数如何组合。本站读法：高层语义判断“该做什么”，低层 affordance / value 判断“现在能不能做”。</small>
+<small>图源：[Do As I Can, Not As I Say](https://research.google/pubs/do-as-i-can-not-as-i-say-grounding-language-in-robotic-affordances/)，Figure 3。原图展示语言模型分数和 affordance 分数如何组合。读图重点：高层语义判断“该做什么”，低层 affordance / value 判断“现在能不能做”。</small>
 
 ## 三层分工
 
@@ -120,7 +120,7 @@ LLM / VLM / VLA planner
 
 这些例子里，高层计划可能完全正确，低层执行仍可能失败。规划告诉系统未来该往哪走，控制保证它真能走上去，安全决定它在异常情况下不把事情搞坏。
 
-## 外部精读
+## 外部材料
 
 - [SayCan](https://research.google/pubs/do-as-i-can-not-as-i-say-grounding-language-in-robotic-affordances/)：理解语言目标和可执行性为什么要组合。
 - [Control Barrier Functions: Theory and Applications](https://arxiv.org/abs/1903.11199)：理解 CBF 如何把安全约束接入控制。
@@ -128,11 +128,6 @@ LLM / VLM / VLA planner
 - [π0.5](https://www.pi.website/blog/pi05)：理解现代 VLA 的动作 chunk 为什么仍需要控制层。
 - [DreamZero](https://arxiv.org/abs/2602.15922)：理解 WAM 输出动作后为什么仍需要真实观测刷新和安全过滤。
 
-## 相关阅读与下一步
-
-- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
-- 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[具身智能基础：观测、动作与反馈闭环](beginner-learning-path.md)。
-- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
+- [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- [RoboTwin 项目](https://robotwin-platform.github.io/)。

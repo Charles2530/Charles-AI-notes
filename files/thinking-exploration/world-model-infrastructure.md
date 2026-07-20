@@ -1,10 +1,8 @@
 # 世界模型 Infra：从模型谱系到物理 AI 工程栈
 
-> **这篇回答的问题。** 如果不再只问“哪个模型是 world model”，而是问“什么基础设施能持续训练、评测、部署和治理 world model”，整个方向会怎样重新分层。
-
 世界模型已经不只是一个算法名词。早期 PlaNet、Dreamer、MuZero 让我们看到：agent 可以先学习环境动力学，再在内部 rollout、搜索或训练策略。后来的 V-JEPA、Genie、GAIA-1、Sora 2、NVIDIA Cosmos 又把这个问题推向更大的尺度：视频、动作、语言、3D、仿真和合成数据都开始进入同一个系统。
 
-但这也带来一个危险：大家在说 world model 时，可能指的是 latent dynamics、视频生成器、机器人策略、自动驾驶 simulator、物理仿真平台、数据引擎，甚至只是一个很会生成视频的模型。概念变大以后，最有价值的问题反而不是“它是不是世界模型”，而是：
+但这也带来一个危险：大家在说 world model 时，可能指的是 latent dynamics、视频生成器、机器人策略、自动驾驶 simulator、物理仿真平台、数据引擎，甚至只是一个很会生成视频的模型。概念变大以后，最有价值的问题是：
 
 ```text
 它的状态表示是什么？
@@ -19,7 +17,7 @@
 
 ## 操作性定义
 
-本文把世界模型基础设施定义为：
+世界模型基础设施可以定义为：
 
 > 一套支持“世界状态表示、动力学学习、记忆与检索、仿真与生成、接口编排、数据流水线、评测治理、部署运维”闭环的技术栈。
 
@@ -43,7 +41,7 @@
 
 ![World Model for Robot Learning survey organization](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-1-survey-organization.png){ width="920" }
 
-<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 1，本站从论文 PDF 截取。原图把机器人世界模型分成 policy、simulator、robotic video world model 三个功能角色。本文读法：world model infra 不是单一路线，而是要支撑这三类角色在同一工程闭环里互相调用。</small>
+<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 1，从论文 PDF 截取。原图把机器人世界模型分成 policy、simulator、robotic video world model 三个功能角色。读图重点：world model infra 不是单一路线，而是要支撑这三类角色在同一工程闭环里互相调用。</small>
 
 ## 一张分层图
 
@@ -74,7 +72,7 @@ flowchart TB
 
 ![Temporal evolution of robot world models](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-2-temporal-evolution.png){ width="920" }
 
-<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 2，本站从论文 PDF 截取。原图展示 world model for policy 与 world model as simulator 两条路线的时间演进。本文读法：从 decoupled 模块到 unified / latent / simulator 闭环，变化的不只是模型结构，也是采样、训练、评估和部署方式。</small>
+<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 2，从论文 PDF 截取。原图展示 world model for policy 与 world model as simulator 两条路线的时间演进。读图重点：从 decoupled 模块到 unified / latent / simulator 闭环，变化的不只是模型结构，也是采样、训练、评估和部署方式。</small>
 
 | 阶段 | 代表 | 主要问题 | 暴露出的 infra 需求 |
 | --- | --- | --- | --- |
@@ -118,7 +116,7 @@ PlaNet 和 Dreamer 证明了一个基本点：世界模型可以不是外部视�
 
 ![Embodied world model core concepts](../assets/images/paper-deep-dives/world-models/world-models-embodied-ai-survey/Fig1_core_concepts.png){ width="760" }
 
-<small>图源：[A Comprehensive Survey on World Models for Embodied AI](https://arxiv.org/abs/2510.16732)，Figure 1 子图，本站从论文 PDF 截取。原图把 world model 视为 internal simulator：从历史观测中构造内部世界状态，再服务 imagination、planning 与控制。本文读法：表示层不是视觉 encoder 的附属品，而是所有后续动力学、记忆、仿真和评测的共同接口。</small>
+<small>图源：[A Comprehensive Survey on World Models for Embodied AI](https://arxiv.org/abs/2510.16732)，Figure 1 子图，从论文 PDF 截取。原图把 world model 视为 internal simulator：从历史观测中构造内部世界状态，再服务 imagination、planning 与控制。读图重点：表示层不是视觉 encoder 的附属品，而是所有后续动力学、记忆、仿真和评测的共同接口。</small>
 
 | 表示路线 | 代表 | 优势 | 风险 |
 | --- | --- | --- | --- |
@@ -131,7 +129,7 @@ PlaNet 和 Dreamer 证明了一个基本点：世界模型可以不是外部视�
 
 ![Spatial latent grid world representation](../assets/images/paper-deep-dives/world-models/world-models-embodied-ai-survey/Fig1_SLG.png){ width="760" }
 
-<small>图源：[A Comprehensive Survey on World Models for Embodied AI](https://arxiv.org/abs/2510.16732)，Figure 1 子图，本站从论文 PDF 截取。原图展示 Spatial Latent Grid 用 BEV、voxel、occupancy 或 geometry-aligned latent grid 表示空间世界。本文读法：自动驾驶和机器人规划常常需要这种可落到空间坐标的状态，而不是只要 RGB 视频续写。</small>
+<small>图源：[A Comprehensive Survey on World Models for Embodied AI](https://arxiv.org/abs/2510.16732)，Figure 1 子图，从论文 PDF 截取。原图展示 Spatial Latent Grid 用 BEV、voxel、occupancy 或 geometry-aligned latent grid 表示空间世界。读图重点：自动驾驶和机器人规划常常需要这种可落到空间坐标的状态，而不是只要 RGB 视频续写。</small>
 
 动力学学习也至少有四种范式。
 
@@ -144,11 +142,11 @@ PlaNet 和 Dreamer 证明了一个基本点：世界模型可以不是外部视�
 
 ![DreamerV3 world model learning](../assets/images/paper-deep-dives/world-models/dreamerv3/x2.png){ width="920" }
 
-<small>图源：[Mastering Diverse Domains through World Models / DreamerV3](https://arxiv.org/abs/2301.04104)，Figure 3(a)，本站从论文 PDF 截取。原图展示 DreamerV3 如何把观测编码为离散 latent representation，并用 recurrent dynamics 在动作条件下预测未来 latent。本文读法：这是 world model infra 的最小闭环原型：replay、latent dynamics、reward / continuation head 和 imagined rollout 都必须同时存在。</small>
+<small>图源：[Mastering Diverse Domains through World Models / DreamerV3](https://arxiv.org/abs/2301.04104)，Figure 3(a)，从论文 PDF 截取。原图展示 DreamerV3 如何把观测编码为离散 latent representation，并用 recurrent dynamics 在动作条件下预测未来 latent。读图重点：这是 world model infra 的最小闭环原型：replay、latent dynamics、reward / continuation head 和 imagined rollout 都必须同时存在。</small>
 
 ![V-JEPA 2 action-conditioned world model](../assets/images/paper-deep-dives/world-models/v-jepa2/figure-action-conditioned-world-model.png){ width="920" }
 
-<small>图源：[V-JEPA 2](https://arxiv.org/abs/2506.09985)，论文 / 项目图，本站从论文材料截取。原图展示 action-conditioned world model 如何基于视频表征和动作预测未来状态。本文读法：V-JEPA 类表征路线要进入机器人控制，关键补丁就是让 action 显式进入 latent transition，并用规划结果而不是像素指标收口。</small>
+<small>图源：[V-JEPA 2](https://arxiv.org/abs/2506.09985)，论文 / 项目图，从论文材料截取。原图展示 action-conditioned world model 如何基于视频表征和动作预测未来状态。读图重点：V-JEPA 类表征路线要进入机器人控制，关键补丁就是让 action 显式进入 latent transition，并用规划结果而不是像素指标收口。</small>
 
 仿真层则需要区分两类世界。
 
@@ -161,11 +159,11 @@ PlaNet 和 Dreamer 证明了一个基本点：世界模型可以不是外部视�
 
 ![Genie model training](../assets/images/localized-remote/paper-deep-dives/world-models/genie/genie-model-training-原论文图.png){ width="920" }
 
-<small>图源：[Genie: Generative Interactive Environments](https://arxiv.org/abs/2402.15391)，Figure 2，本站从论文 PDF 截取。原图展示 video tokenizer、latent action model 与 dynamics model 的训练关系。本文读法：生成式世界模拟器要想可交互，必须把“状态 token 化”“动作接口发现”和“动作条件动态预测”拆成可训练、可评测的组件。</small>
+<small>图源：[Genie: Generative Interactive Environments](https://arxiv.org/abs/2402.15391)，Figure 2，从论文 PDF 截取。原图展示 video tokenizer、latent action model 与 dynamics model 的训练关系。读图重点：生成式世界模拟器要想可交互，必须把“状态 token 化”“动作接口发现”和“动作条件动态预测”拆成可训练、可评测的组件。</small>
 
 ![Robotic video world model capabilities](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-6-video-world-models.png){ width="920" }
 
-<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 6，本站从论文 PDF 截取。原图梳理 robotic video world model 从 imagination 到 controllable / structured / foundation-scale 的能力演进。本文读法：视频生成只是入口，真正进入 infra 后还要补动作条件、结构约束、长时一致和系统评测。</small>
+<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 6，从论文 PDF 截取。原图梳理 robotic video world model 从 imagination 到 controllable / structured / foundation-scale 的能力演进。读图重点：视频生成只是入口，真正进入 infra 后还要补动作条件、结构约束、长时一致和系统评测。</small>
 
 ## 支撑层：数据、记忆、编排和服务
 
@@ -229,9 +227,9 @@ estimate_risk(state, plan)
 
 ![World model as RL simulator and validation model](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-5-rl-vs-validation.png){ width="920" }
 
-<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 5，本站从论文 PDF 截取。原图对比 world model 作为 RL simulator 与 validation / candidate evaluation model 的不同用法。本文读法：评测治理层不只是打分表，它决定 world model 是拿来训练策略、筛选候选动作，还是作为上线前的风险过滤器。</small>
+<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 5，从论文 PDF 截取。原图对比 world model 作为 RL simulator 与 validation / candidate evaluation model 的不同用法。读图重点：评测治理层不只是打分表，它决定 world model 是拿来训练策略、筛选候选动作，还是作为上线前的风险过滤器。</small>
 
-[Hou et al. 2026](https://arxiv.org/abs/2605.00080) 的重要提醒是，机器人世界模型要按 policy、simulator、robotic video world model 的功能角色评估。[Li et al. 2025](https://arxiv.org/abs/2510.16732) 也把 pixel quality、state-level understanding、task performance 分开看。换句话说，FVD / LPIPS 是必要体检，但不能替代闭环任务指标。
+[Hou et al. 2026](https://arxiv.org/abs/2605.00080) 的重要提醒是，机器人世界模型要按 policy、simulator、robotic video world model 的功能角色评估。[Li et al. 2025](https://arxiv.org/abs/2510.16732) 也把 pixel quality、state-level understanding、task performance 分开看。FVD / LPIPS 是必要体检，但不能替代闭环任务指标。
 
 治理也必须进入基础设施层，而不是上线前补一个 checklist。原因很简单：world model 会生成视频、虚拟场景、驾驶场景、机器人行为和模拟数据，一旦进入产品或数据飞轮，来源追踪和标识会影响后续所有训练样本。
 
@@ -299,7 +297,7 @@ Gymnasium、TorchRL、RLlib、KServe、Kubeflow、MLflow Model Registry 这些�
 
 模型会继续变强，但真正稀缺的是可复用闭环。世界模型要从论文能力变成基础设施，靠的不是一个“能想象未来”的模型，而是一整套能持续发现错误、回收错误、修正错误的系统。
 
-## 外部精读
+## 外部材料
 
 - 综述：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)。
 - 综述：[A Comprehensive Survey on World Models for Embodied AI](https://arxiv.org/abs/2510.16732)。
@@ -310,11 +308,3 @@ Gymnasium、TorchRL、RLlib、KServe、Kubeflow、MLflow Model Registry 这些�
 - 仿真与数据：[MuJoCo](https://mujoco.readthedocs.io/)、[Isaac Lab](https://isaac-sim.github.io/IsaacLab/)、[CARLA](https://carla.org/)、[Open X-Embodiment](https://robotics-transformer-x.github.io/)、[Ego4D](https://ego4d-data.org/)、[Waymo Open Dataset](https://waymo.com/open/)。
 - 基础设施：[Hugging Face Datasets](https://huggingface.co/docs/datasets/)、[WebDataset](https://github.com/webdataset/webdataset)、[Reverb](https://github.com/google-deepmind/reverb)、[Ray](https://docs.ray.io/)、[KServe](https://kserve.github.io/website/)、[NVIDIA NIM](https://docs.nvidia.com/nim/)。
 - 治理：[互联网信息服务深度合成管理规定](https://www.cac.gov.cn/2022-12/11/c_1672221949354811.htm)、[人工智能生成合成内容标识办法](https://www.cac.gov.cn/2025-03/14/c_1743654684782215.htm)、[GB 45438-2025](https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=F32EA2A561F1886CD8D606513512D547)、[Waymo Open Dataset Terms](https://waymo.com/open/terms/)。
-
-## 相关阅读与下一步
-
-- 站内下一步：[世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md)。
-- 站内下一步：[WAM 与 3D 视觉：世界模型从视频想象走向物理闭环](wam-3dv-world-models.md)。
-- 站内下一步：[World Model for Robot Learning：机器人学习世界模型综述](../paper-deep-dives/world-models/world-model-for-robot-learning-survey.md)。
-- 站内下一步：[Embodied World Model Survey：具身世界模型综述](../paper-deep-dives/world-models/world-models-embodied-ai-survey.md)。
-- 站内下一步：[世界模型中的强化学习](../reinforcement-learning/rl-for-world-models.md)。

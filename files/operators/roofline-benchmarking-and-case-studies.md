@@ -1,14 +1,12 @@
 # Roofline 建模与性能案例
 
-做算子优化时，最常见的失败不是“技术不够强”，而是没有先判断瓶颈类型，benchmark 设计不可靠，看到局部提速就误以为端到端受益，或者没有把案例还原成通用方法。
+做算子优化时，最常见的失败来自瓶颈类型判断缺失、benchmark 设计不可靠、把局部提速误判成端到端受益，或者没有把案例还原成通用方法。
 
-因此这一页专门把 roofline、benchmark 设计和几个典型案例放在一起，帮助你把“性能感觉”变成“性能判断”。
-
-这页适合和 [GEMM 与 Attention Kernel](gemm-attention-and-fused-kernels.md)、[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) 一起读。前者提供热点算子的具体结构，后者解释 tile、program id 和 autotune 如何落到实现；Roofline 则负责先判断该往算力、带宽、layout 还是 launch 开销上用力。
+Roofline、benchmark 设计和典型案例要一起看，才能把“性能感觉”变成“性能判断”：先判断该往算力、带宽、layout 还是 launch 开销上用力，再谈优化动作是否值得。
 
 ![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="820" }
 
-<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)。原图表达不同实现相对 roofline 的位置；本站读法是把 microbenchmark 结果先放到“算力上限 vs 带宽上限”的坐标里，再判断优化方向。它不能证明某个 kernel 在端到端服务里必然更快。</small>
+<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)。原图表达不同实现相对 roofline 的位置；读图重点是把 microbenchmark 结果先放到“算力上限 vs 带宽上限”的坐标里，再判断优化方向。它不能证明某个 kernel 在端到端服务里必然更快。</small>
 
 ## Roofline 的真正用途
 
@@ -206,7 +204,7 @@ Roofline 报告的最低格式是 shape、FLOPs、bytes、arithmetic intensity�
 
 | 证据项 | 最小记录 | 世界模型追加项 |
 | --- | --- | --- |
-| 本页解决哪项成本 | bandwidth-bound、compute-bound、launch-bound 中哪一个 | 是压 rollout KV、视频 latent attention，还是 tokenization |
+| 成本问题 | bandwidth-bound、compute-bound、launch-bound 中哪一个 | 是压 rollout KV、视频 latent attention，还是 tokenization |
 | 可复算数字 | shape、dtype、FLOPs、bytes、AI、latency | 候选动作数、horizon、相机/latent token 数 |
 | 失败案例 | kernel speedup 大但端到端小 | 端到端小之外，还要看动作排序是否变坏 |
 | 证据等级 | microbenchmark 或 production trace | 是否有 hard replay / closed-loop task bucket |
@@ -267,11 +265,8 @@ Roofline 建模与性能案例的核心意义，在于把性能优化从“经�
 
 Roofline 不是展示图，而是把 FLOPs、带宽、算术强度、steady state 和真实 workload 对齐的排查工具。最容易出错的是字节数估错、只跑理想 shape、忽略服务态请求；上线前应同时做理论估算和实测，用 case study 解释偏差，并保留基准脚本。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

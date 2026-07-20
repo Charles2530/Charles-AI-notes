@@ -1,12 +1,6 @@
 # 基础概念专题：把数学工具组装成模型机制
 
-前置数学回答“公式本身在说什么”，基础概念回答“这些公式怎样组成一个能训练、能推理、能部署的 AI 系统”。这里不背术语表，而是沿数据流追问：张量在什么维度上移动，梯度从哪里来，目标函数让表示保留什么，工程实现又付出了多少显存、带宽和延迟。
-
-每篇基础正文开头都有一张“数学先修”卡。遇到公式不熟时，只补当前文章真正依赖的 1–3 篇数学页，不需要先完成整套课程。
-
-~~~text
-数学原理 -> 基础机制 -> 专题正文 -> 论文精读
-~~~
+基础概念用于把前置数学接到模型结构、训练目标、数据、生成、多模态、检索和工程成本。按下面分组定位需要补的机制；读专题或论文卡住时，用“从下游专题倒回来读”反查。
 
 ## 计算、梯度与运行时
 
@@ -78,14 +72,3 @@
 | [线性代数](../prerequisite-math/linear-algebra-and-geometry.md)、[信息论](../prerequisite-math/information-theory-and-divergence.md)、[卷积频域](../prerequisite-math/convolution-frequency-and-multiscale.md) | [卷积与视觉特征](convolution-and-feature-extraction.md)、[表示学习](pretraining-objectives-and-representation-learning.md)、[多模态推理](multimodal-cot-and-reasoning-basics.md) | [VLM 架构与训练](../vlm/architecture-and-training.md) | [V-JEPA](../paper-deep-dives/world-models/v-jepa.md)、[BAGEL](../paper-deep-dives/world-models/bagel.md) |
 | [三维几何](../prerequisite-math/geometry-vision-and-3d.md)、[控制](../prerequisite-math/dynamic-systems-and-control.md)、[分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md) | [数据与数据集](data-and-dataset-basics.md)、[评测指标](data-splits-metrics-and-evaluation-basics.md)、[多模态推理](multimodal-cot-and-reasoning-basics.md) | [VLA 动作表示](../vla/action-representation-and-interfaces.md)、[具身智能路线](../embodied-ai/beginner-learning-path.md) | [RT-2](../paper-deep-dives/embodied-ai/rt2.md)、[SpatialVLA](../paper-deep-dives/embodied-ai/spatialvla.md)、[VGGT](../paper-deep-dives/embodied-ai/vggt.md) |
 | [序列](../prerequisite-math/sequence-position-and-masking.md)、[概率](../prerequisite-math/probability-distributions-and-expectation.md)、[采样评估](../prerequisite-math/sampling-estimation-and-calibration.md) | [Prompt / CoT / RAG](prompt-engineering-cot-and-rag-basics.md)、[生成与解码](generation-and-decoding-basics.md)、[评测指标](data-splits-metrics-and-evaluation-basics.md) | [RAG、Agent 与长上下文系统](../inference/rag-agents-and-long-context-systems.md) | [Gemini 2.5](../paper-deep-dives/technical-reports/gemini-2-5.md) |
-
-## 四层内容怎样分工
-
-| 层级 | 回答的问题 |
-| --- | --- |
-| 前置数学 | 数学对象是什么，公式每一项表示什么，近似何时成立 |
-| 基础概念 | 数学怎样组成模型结构、训练信号和工程行为 |
-| 专题正文 | 多个机制怎样组成一条技术路线或完整系统 |
-| 论文精读 | 某篇论文具体采用了什么定义、近似、实现和实验口径 |
-
-读基础篇最有用的方式，是每读完一节就问：这个机制控制了什么信息、什么训练信号、什么成本和什么失败模式。能回答这四件事，名词就已经变成可以推理和复用的结构。

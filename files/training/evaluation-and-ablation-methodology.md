@@ -2,11 +2,11 @@
 
 训练系统做大之后，最容易出现一种表面繁荣：实验很多、曲线很多、表格很多，但结论并不可靠。模型变好了，是因为目标函数有效，还是因为数据更多、batch 更大、训练更久、judge 偏好改变？训练评测与消融设计的目标，就是把“看起来变了”和“确实因这个改动变了”尽量区分开。
 
-这页建议和 [在线评测](../inference/observability-and-online-evaluation.md)、[训练稳定性与故障排查](stability-numerics-and-failure-triage.md)、[数据质量、去重与治理](data-quality-dedup-and-governance.md) 一起读。在线评测关注上线后的真实流量，本页关注训练和离线实验如何形成可信证据。
+训练评测要把离线实验、训练稳定性、数据质量和线上证据接在一起，判断一个改动是否真实、可归因、值得上线。
 
 ![Boxplot and distribution comparison](../assets/images/training/boxplot-vs-pdf.svg){ width="760" }
 
-<small>图源：站内训练统计图素材，基于常见统计教学图重绘。原图表达均值、分布和离群点不能混为一谈；本站读法是提醒消融结论必须同时看均值、方差、分桶和失败样本。它不能替代真实多种子实验。</small>
+<small>图源：站内训练统计图素材，基于常见统计教学图重绘。原图表达均值、分布和离群点不能混为一谈；读图重点是提醒消融结论必须同时看均值、方差、分桶和失败样本。它不能替代真实多种子实验。</small>
 
 ## 一、先定义评测对象和证据链
 
@@ -130,11 +130,8 @@ $$
 
 最终判断是：训练评测与消融设计不是实验报告装饰，而是训练系统的证据基础设施。只有当每个重要结论都能说明“改了什么、固定了什么、收益在哪些桶、代价是什么、是否可复现、能否上线”，实验才真正支持决策。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

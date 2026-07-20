@@ -1,10 +1,6 @@
 # 术语表
 
-这一页把知识库中反复出现的术语做统一整理。目标不是百科定义，而是在本站语境里说明它主要指什么、最容易和什么概念混淆。
-
-**初学者先抓住。**
-
-术语表不是要背诵，而是用来防止“同一个词在不同层意思不同”。例如 checkpoint 在训练里是恢复资产，KV cache 在推理里是显存主角，sampler 在扩散和数据管线里又各有语境。
+术语表整理知识库中反复出现的词，说明它在本站语境里主要指什么、最容易和什么概念混淆。同一个词在不同层意思可能不同：checkpoint 在训练里是恢复资产，KV cache 在推理里是显存主角，sampler 在扩散和数据管线里又各有语境。
 
 | 使用场景 | 建议做法 |
 | --- | --- |
@@ -112,7 +108,7 @@
 | `Microscaling` | 微缩放低精度格式，让一小块元素共享 scale，再用 FP8/FP4 等低比特元素表示，降低局部动态范围压力。 |
 | `Fake Quantization` | 训练中先量化再反量化回高精度 tensor，用高精度 GEMM 模拟低比特误差，常用于 QAT。 |
 | `STE` | Straight-Through Estimator，量化等不可导操作中常用的梯度近似，backward 近似把量化当作恒等映射。 |
-| `Attn-QAT` | 面向 attention 的 4-bit QAT 方法，重点不是只量化 forward，而是修正 FlashAttention backward 重算和 softmax 梯度中的低精度一致性。 |
+| `Attn-QAT` | 面向 attention 的 4-bit QAT 方法，同时关注 forward 量化、FlashAttention backward 重算和 softmax 梯度中的低精度一致性。 |
 | `SageAttention` | 面向 attention inference 的低比特加速路线，常结合 Q/K smoothing、FP4 tensor core 和 attention probability 量化等技巧。 |
 | `Q/K smoothing` | 量化 attention 时对 Q/K 分布做平滑或重缩放，目标是缓解 outlier 对 \(QK^\top\) 的破坏。 |
 | `MXFP8` | Microscaling FP8，每块配缩放因子，常用于更细粒度低精度训练或推理。 |

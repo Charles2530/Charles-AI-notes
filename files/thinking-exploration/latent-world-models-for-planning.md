@@ -1,8 +1,6 @@
 # 从预测未来到利用未来：Latent World Model 怎样进入规划闭环
 
-> **本文回答的问题。** 世界模型学到的哪一种 latent 适合规划，它又该怎样进入动作生成？我的判断是：规划需要的 latent 要对决策足够、对动作敏感、能被闭环纠正；信息越丰富，不一定越适合规划。视觉生成、JEPA、稀疏场景预测、条件注入和 World-Action Model，分别在调整这份状态的内容与接口。
-
-> **材料范围与核验日期。** 本文由一份技术交流 PPT 重构，重点核验了 Vision Banana、DriveLaW、Drive-JEPA、SparseWorld、DriveFuture、DreamZero 和 WAM-Nav 的论文、项目页或官方仓库。Checked Date：2026-07-10。文中实验结果均为作者报告，本站没有独立复现。
+> **材料范围与核验日期。** 材料由一份技术交流 PPT 重构，重点核验了 Vision Banana、DriveLaW、Drive-JEPA、SparseWorld、DriveFuture、DreamZero 和 WAM-Nav 的论文、项目页或官方仓库。Checked Date：2026-07-10。相关实验结果均为作者报告，未独立复现。
 
 这组材料表面上有两场争论：先争生成式 latent、JEPA latent 与稀疏 latent 谁更适合规划，再争未来信息应该作为条件输入，还是和 action 放进同一个生成器。
 
@@ -84,7 +82,7 @@ DreamZero 把未来视频和 action 放进同一个 14B 视频扩散 backbone，
 
 ![DreamZero 联合视频—动作架构](../assets/images/paper-deep-dives/world-models/dreamzero/figure-4-architecture.png){ width="920" }
 
-<small>图源：[World Action Models are Zero-shot Policies，Figure 4](https://arxiv.org/abs/2602.15922)。原图展示训练时联合去噪未来视频 latent 与 action，推理时用真实观测刷新上下文。本文用它说明 WAM 的耦合与纠错接口；这张架构图不能证明所有任务都具有可靠的物理泛化。</small>
+<small>图源：[World Action Models are Zero-shot Policies，Figure 4](https://arxiv.org/abs/2602.15922)。原图展示训练时联合去噪未来视频 latent 与 action，推理时用真实观测刷新上下文。这里的重点是 WAM 的耦合与纠错接口；这张架构图不能证明所有任务都具有可靠的物理泛化。</small>
 
 WAM-Nav 又给联合生成加了一条有用限制：动作 horizon 可以长，视觉 foresight 可以短。论文消融中，visual horizon 为 1 优于更长预测；真实环境证据来自 Unitree G1 在 4 个场景中的 40 次试验。这个结果提示我们，未来视觉更像对动作的局部约束，不一定要扩展成长视频模拟器。
 
@@ -141,17 +139,11 @@ flowchart LR
 - DriveLaW、Drive-JEPA、DriveFuture 的主要证据来自 NAVSIM；SparseWorld 还报告 nuScenes 与 Bench2Drive。它们不能直接证明真实道路安全
 - Drive-JEPA 的最终结果同时依赖领域视频预训练、轨迹 pseudo-teacher 与 momentum selection；SparseWorld 也包含安全损失和轨迹选择，不能把全部提升归因于 latent 形式
 - DreamZero 与 WAM-Nav 有真实机器人实验，但 zero-shot 的定义、训练本体、场景数量、硬件与控制频率均有限定
-- 这些论文的模型规模、输入模态、任务、指标和闭环协议不同，本文不做横向总分排名
+- 这些论文的模型规模、输入模态、任务、指标和闭环协议不同，不做横向总分排名
 
-## 自测与下一步
+## 自测
+
 
 1. 如果两个 action 在模型里产生几乎相同的 future latent，即使视频 FVD 很好，这个 world model 能支持候选规划吗？为什么？
 2. SparseWorld 删除了外观与稠密 occupancy。你会设计哪组反事实或失败场景，检查被删信息是否影响最优动作？
 3. WAM 同时生成未来和动作时，为什么“二者很一致”仍不足以证明动作正确？真实观测回写应如何进入评测？
-
-下一步可以继续读：
-
-- [世界模型该预测什么：答案取决于谁消费未来](world-model-future-consumers.md)
-- [WM / WAM / VAM：动作到底怎样进入世界模型](../world-models/wm-wam-vam-and-action-conditioned-modeling.md)
-- [世界模型评测：不要让好看的未来骗过决策系统](../world-models/evaluation-and-failure-modes.md)
-- [DreamZero：世界动作模型为什么可以做零样本策略](../paper-deep-dives/embodied-ai/dreamzero.md)

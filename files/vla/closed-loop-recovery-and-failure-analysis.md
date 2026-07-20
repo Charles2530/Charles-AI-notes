@@ -1,8 +1,6 @@
 # VLA 闭环恢复与失败分析
 
-> **这篇回答的问题。** 如何理解“VLA 闭环恢复与失败分析”背后的核心机制、适用边界和下一步阅读路径。
-
-一个常见失败是：杯子第一次没被夹爪抓住，机器人却继续执行“移动到托盘上方”。从外面看，它不是不会移动，而是没有意识到前一步已经失败。VLA 的闭环恢复能力，核心不是“动作更准一点”，而是能检测偏差、判断偏差属于哪一类、选择合适恢复动作，并把这段失败变成下一轮数据资产。
+一个常见失败是：杯子第一次没被夹爪抓住，机器人却继续执行“移动到托盘上方”。从外面看，它没有意识到前一步已经失败。VLA 的闭环恢复能力，核心是检测偏差、判断偏差属于哪一类、选择合适恢复动作，并把这段失败变成下一轮数据资产。
 
 真实机器人一定会犯错。物体会滑、遮挡会变化、抽屉会卡住、触摸屏会延迟、相机外参会漂、语言指令也会有歧义。一个可部署系统不能假设自己永远走在演示分布里，它必须有办法把任务从小错误里拉回来。
 
@@ -93,7 +91,7 @@ RT-2 的真实机器人失败例子很适合提醒读者：web-scale 视觉语�
 
 ![RT-2 failure dynamics](../assets/images/paper-deep-dives/embodied-ai/rt2/figure-9-failure-dynamics.png){ width="920" }
 
-<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 9。原图展示模型在 unseen object dynamics 上的真实机器人失败案例。本站读法：语义泛化和动作执行是两层证据；失败图要进入 failure bucket 和恢复数据，而不是只作为 demo 之外的附录。</small>
+<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 9。原图展示模型在 unseen object dynamics 上的真实机器人失败案例。读图重点：语义泛化和动作执行是两层证据；失败图要进入 failure bucket 和恢复数据，而不是只作为 demo 之外的附录。</small>
 
 成功演示告诉模型“顺利时怎么做”，失败轨迹告诉系统“现实怎样偏离演示”。抓空后的二次对准、滑脱后的重新夹紧、触摸屏未响应后的等待和重按、抽屉半开后的再拉一点，都是比普通成功轨迹更稀缺的训练资产。
 
@@ -167,7 +165,7 @@ VLA 闭环恢复可以按这条链路收口：先用检测器发现偏离，再�
 
 继续读相邻内容时，可以接 [VLA 评测与数据引擎](benchmarks-and-data-engines.md)、[VLA 数据与策略学习](data-and-policy-learning.md)、[VLA 动作分块、层级策略与潜在技能](action-chunking-hierarchical-policies-and-latent-skills.md)、[Sim2Real 与具身数据引擎](../embodied-ai/sim2real-and-data-engines.md) 和 [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
 
-## 外部精读
+## 外部材料
 
 - [DAgger](https://arxiv.org/abs/1011.0686)：理解顺序决策中学习器自己造成的状态分布为什么需要被训练集覆盖。
 - [RT-2](https://arxiv.org/abs/2307.15818)：看 web-scale VLM 知识迁移到动作后的真实机器人能力和失败边界。

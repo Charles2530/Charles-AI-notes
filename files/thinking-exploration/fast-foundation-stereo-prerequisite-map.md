@@ -1,6 +1,6 @@
 # 读懂 Fast-FoundationStereo：从双目几何到高效推理
 
-为什么一篇 stereo matching 论文会放进“高效推理”专题？因为这里的推理不是 LLM 的逐 token decode，而是机器人、AR、自动驾驶和工业视觉里的实时稠密深度感知。模型每慢几十毫秒，系统看到的世界就会滞后一截；模型每错一块边界，后面的避障、抓取或空间理解就可能跟着错。
+Fast-FoundationStereo 的“推理”指机器人、AR、自动驾驶和工业视觉里的实时稠密深度感知。模型每慢几十毫秒，系统看到的世界就会滞后一截；模型每错一块边界，后面的避障、抓取或空间理解就可能跟着错。
 
 [Fast-FoundationStereo](../paper-deep-dives/inference/fast-foundation-stereo.md) 最值得读的地方，不只是“它比 FoundationStereo 快了十倍以上”，而是它把一个强但慢的 stereo foundation model 拆成三个热路径：feature backbone、cost filtering、disparity refinement，然后分别用蒸馏、分块 NAS 和结构化剪枝压成本。读这篇论文前，先把下面这张知识地图放进脑子里，会省很多绕路时间。
 
@@ -25,7 +25,7 @@ disparity 越大，通常说明物体越近；disparity 越小，通常说明物
 
 ![Stereo camera model 网页图](../assets/images/localized-remote/embodied-ai/cameras-depth-and-robot-vision/stereo-camera-model-wikimedia.jpg){ width="760" }
 
-<small>网页图源：[Wikimedia Commons: Stereo-camera-model.jpg](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。原图表达：双目深度来自 baseline 和左右图上的 disparity；同一个点在左右图中位置差越大，通常离相机越近。本站读法：这张图只解释几何前提，真正读 Fast-FoundationStereo 时还要继续检查 rectification、匹配代价和深度误差传播。</small>
+<small>网页图源：[Wikimedia Commons: Stereo-camera-model.jpg](https://commons.wikimedia.org/wiki/File:Stereo-camera-model.jpg)。原图表达：双目深度来自 baseline 和左右图上的 disparity；同一个点在左右图中位置差越大，通常离相机越近。读图重点：这张图只解释几何前提，真正读 Fast-FoundationStereo 时还要继续检查 rectification、匹配代价和深度误差传播。</small>
 
 这里有一个容易被初学者跳过的输入假设：stereo matching 通常默认左右图已经 rectified，也就是同一个 3D 点在左右图里位于同一条水平扫描线。这样模型只需要沿横向搜索 \(d\)，而不是在整张右图里找匹配点。如果相机没标定好、左右不同步、畸变没去掉，再强的模型也会被输入质量拖垮。
 

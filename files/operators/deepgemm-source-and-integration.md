@@ -1,10 +1,10 @@
 # DeepGEMM 源码与接入
 
-这页是 [DeepGEMM 解读](deepgemm-fp8-gemm-and-mega-moe.md) 的工程附录，重点放在源码阅读、API 地图、调用路径和接入检查。主页面负责建立系统判断，这页负责帮助你真的读仓库和评估能不能接进自己的服务链路。
+[DeepGEMM 解读](deepgemm-fp8-gemm-and-mega-moe.md) 负责建立系统判断；源码与接入页聚焦源码阅读、API 地图、调用路径和接入检查，帮助判断它能否接进自己的服务链路。
 
 ![DeepSeek-V3 FP8 framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png)
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)。原图表达 FP8 训练不是单一 dtype，而是由 scale、累加、通信、存储和高精保护共同组成的框架；本站读法是：读 DeepGEMM 源码时先追 scale layout、JIT dispatch、grouped GEMM 和端到端调用边界。它不能证明 DeepGEMM 接入你的 serving 栈一定变快，只说明源码阅读要围绕低精度系统契约展开。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)。原图表达 FP8 训练由 scale、累加、通信、存储和高精保护共同组成；读图重点是：读 DeepGEMM 源码时先追 scale layout、JIT dispatch、grouped GEMM 和端到端调用边界。它不能证明 DeepGEMM 接入你的 serving 栈一定变快，只说明源码阅读要围绕低精度系统契约展开。</small>
 
 ## 一、源码阅读顺序
 
@@ -119,11 +119,8 @@ def moe_expert_compute(tokens, expert_ids, runtime):
 
 这段伪代码强调两个判断：先按 expert 组织 token，再根据 shape、JIT cache 和 fallback 状态选择路径。真实工程里，端到端收益往往取决于这个选择逻辑，而不只是底层 kernel 的峰值 TFLOPS。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

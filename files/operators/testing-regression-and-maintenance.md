@@ -1,8 +1,6 @@
 # Kernel 测试、回归与维护
 
-> **这篇回答的问题。** 一个自定义 kernel 怎样从“跑得快的实验代码”变成能长期维护、可回归、可升级的工程资产。
-
-很多 kernel 项目最难的阶段，不是把第一版做快，而是把它长期维持在“正确、快、可升级”的状态。一个高性能算子如果没有测试、性能回归和版本维护机制，最终很容易退化成：
+很多 kernel 项目最难的阶段，是把第一版长期维持在“正确、快、可升级”的状态。一个高性能算子如果没有测试、性能回归和版本维护机制，最终很容易退化成：
 
 1. 只在作者机器上能跑；
 2. 一升级框架就坏；
@@ -14,7 +12,7 @@
 
 ![Nsight NVTX timeline](../assets/images/tools/nsight-systems/nvtx-timeline.png)
 
-<small>图源：[NVIDIA Nsight Systems / NVTX 文档](https://docs.nvidia.com/nsight-systems/)。原图表达用 NVTX 区间把 CPU 调用、kernel 和时间线关联起来；本站读法是：kernel 回归不能只看单测 pass，还要把正确性、性能、shape bucket 和线上 trace 串成闭环。它不能证明某个 kernel 正确，只提供定位性能回归和冷路径变热的观察入口。</small>
+<small>图源：[NVIDIA Nsight Systems / NVTX 文档](https://docs.nvidia.com/nsight-systems/)。原图表达用 NVTX 区间把 CPU 调用、kernel 和时间线关联起来；读图重点是：kernel 回归不能只看单测 pass，还要把正确性、性能、shape bucket 和线上 trace 串成闭环。它不能证明某个 kernel 正确，只提供定位性能回归和冷路径变热的观察入口。</small>
 
 ## 正确性测试至少要覆盖什么
 
@@ -132,11 +130,8 @@ Kernel 维护要同时看正确性、性能、数值边界、兼容性和可维�
 
 这很实际。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

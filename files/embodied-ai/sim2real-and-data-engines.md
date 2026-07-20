@@ -1,8 +1,8 @@
 # Sim2Real 与具身数据引擎：真实失败怎样变成下一轮能力
 
-Sim2Real 不是把仿真画面调得像照片。真实机器人失败时，问题往往不是“照片不像”，而是夹爪摩擦不对、透明包装反光、相机外参漂了、桌面被遮挡、控制器延迟、物体比仿真更软、或者人突然把目标物挪走。
+Sim2Real 要让仿真里的任务、资产、传感器和物理参数接近真实部署。真实机器人失败时，问题往往来自夹爪摩擦不对、透明包装反光、相机外参漂移、桌面遮挡、控制器延迟、物体比仿真更软，或者人突然把目标物挪走。
 
-这篇只回答一个问题：**怎样让仿真、真实日志和评测 hard set 形成闭环，让每轮真实失败都变成下一轮训练资产？**
+仿真、真实日志和评测 hard set 需要形成闭环，让每轮真实失败都变成下一轮训练资产。
 
 结论先说清楚：Sim2Real 的核心是一套数据引擎。仿真负责低成本覆盖变量，system identification 负责把仿真中心调准，真实部署日志负责暴露长尾，数据筛选和标注负责把失败变成训练样本，hard set 负责验证新模型是否真的补上短板。只做其中一环，系统很容易在演示里漂亮、上线后脆弱。
 
@@ -34,7 +34,7 @@ p_{\mathrm{real}}(o_{t+1}, s_{t+1}, y_t\mid o_t,s_t,a_t,c)
 
 ![RoboTwin 2.0 benchmark overview 官方图](../assets/images/localized-remote/embodied-ai/isaacsim-and-robotwin/robotwin-2-0-benchmark-overview-官方图.png){ width="900" }
 
-<small>图源：[RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/)。原图展示双臂任务、资产、domain randomization、专家数据、benchmark 和 Sim2Real 组织方式。本站读法：仿真数据能否进入 VLA/世界模型训练，不取决于渲染是否漂亮，而取决于任务脚本、success checker、轨迹导出和失败回放是否形成系统。</small>
+<small>图源：[RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/)。原图展示双臂任务、资产、domain randomization、专家数据、benchmark 和 Sim2Real 组织方式。读图重点：仿真数据能否进入 VLA/世界模型训练，不取决于渲染是否漂亮，而取决于任务脚本、success checker、轨迹导出和失败回放是否形成系统。</small>
 
 这张图应该按流水线读。一个仿真任务至少要回答：物体资产从哪里来，碰撞网格和抓取点是否标好，任务如何重置，专家轨迹如何生成，成功条件如何判定，失败时保存哪些中间状态，导出的数据能否和真实机器人日志放进同一套 schema。
 
@@ -100,7 +100,7 @@ Open X-Embodiment 这类数据集说明：具身数据不是图片数据。不�
 
 ![Open X-Embodiment dataset overview 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="780" }
 
-<small>图源：[Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)，Figure 1。原图统计不同 robot embodiment、scene、trajectory、skill 和 object category 的分布。本站读法：跨机器人数据的价值是扩大经验覆盖；风险是动作、相机和任务语义不对齐时，模型学到的不是泛化，而是混乱接口。</small>
+<small>图源：[Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)，Figure 1。原图统计不同 robot embodiment、scene、trajectory、skill 和 object category 的分布。读图重点：跨机器人数据的价值是扩大经验覆盖；风险是动作、相机和任务语义不对齐时，模型学到的不是泛化，而是混乱接口。</small>
 
 跨机器人数据至少要对齐五件事：观测口径、动作口径、时间戳、任务语言和结果标签。比如同样是 gripper close，不同夹爪的力度、速度和闭合定义可能不同；同样是相对位移，不同机器人坐标系和控制频率会让动作语义改变。数据引擎如果不记录这些 metadata，后续模型很难知道哪个差异来自任务，哪个差异来自机器人本体。
 
@@ -110,7 +110,7 @@ Open X-Embodiment 这类数据集说明：具身数据不是图片数据。不�
 
 ![π0.5 data ablation 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-10-data-ablation.png){ width="900" }
 
-<small>图源：[π0.5](https://arxiv.org/abs/2504.16054)，Figure 10。原图比较去掉 web data、cross-embodiment data、multi-environment data 等来源后的表现变化。本站读法：数据引擎不能只报告总样本量，要说明每类数据源补的是语义、动作、环境、长任务还是恢复能力。</small>
+<small>图源：[π0.5](https://arxiv.org/abs/2504.16054)，Figure 10。原图比较去掉 web data、cross-embodiment data、multi-environment data 等来源后的表现变化。读图重点：数据引擎不能只报告总样本量，要说明每类数据源补的是语义、动作、环境、长任务还是恢复能力。</small>
 
 读这类图时不要只问“哪种数据最重要”。更好的问题是：当前系统失败在哪个桶？如果失败是语义理解错，web/VLM 数据可能有帮助；如果失败是新厨房布局，multi-environment 数据更关键；如果失败是动作不稳，跨机器人数据未必够，还要看动作接口、controller 和失败恢复轨迹。
 
@@ -149,7 +149,7 @@ Sim2Real 可以按四句话记：
 
 继续读相邻内容时，可以接 [VLA 数据与策略学习](../vla/data-and-policy-learning.md)、[Isaac Sim 与 RoboTwin 仿真数据链](isaacsim-and-robotwin.md)、[Rerun 机器人数据可视化](rerun-robotics-data-visualization.md) 和 [世界模型数据引擎](../world-models/data-engines-and-self-improvement.md)。
 
-## 外部精读
+## 外部材料
 
 - [Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World](https://arxiv.org/abs/1703.06907)：理解“随机到足够宽，让真实世界落进训练分布”的经典思路。
 - [Learning Dexterous In-Hand Manipulation](https://arxiv.org/abs/1808.00177)：看大规模随机化、自动域随机化和真实灵巧手迁移的工程案例。

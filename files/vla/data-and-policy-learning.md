@@ -1,10 +1,8 @@
 # VLA 数据与策略学习：从示范轨迹到闭环策略
 
-> **这篇回答的问题。** 如何理解“VLA 数据与策略学习”背后的核心机制、适用边界和下一步阅读路径。
-
 想象一个开抽屉策略：离线验证时 action error 很低，演示视频也很顺。真机一跑，第一步夹爪偏了两厘米，第二帧相机看到的就是“手在把手旁边”的新状态；训练集里几乎没有这种偏差状态，模型继续输出演示分布里的动作，于是抖动、卡住、超时。
 
-VLA 策略学习的难点就在这里。它不是把图像、语言和动作放进同一个模型名字里，而是把“人能说清的任务”变成“机器人能从小错误中恢复的一串动作”。
+VLA 策略学习的难点就在这里。它要把“人能说清的任务”变成“机器人能从小错误中恢复的一串动作”。
 
 ## 先把轨迹对象写完整
 
@@ -92,7 +90,7 @@ DAgger 的核心提醒也在这里：顺序决策不是 i.i.d. 分类。学习�
 
 ![Open X-Embodiment dataset overview](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="820" }
 
-<small>图源：[Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)，数据集总览图。原图展示多机构、多机器人、多任务数据汇聚。本站读法：跨 embodiment 数据的难点不是“样本更多”，而是观测、动作、时间戳、坐标系、gripper 语义和任务标签都要对齐，否则模型学到的是接口噪声。</small>
+<small>图源：[Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)，数据集总览图。原图展示多机构、多机器人、多任务数据汇聚。读图重点：跨 embodiment 数据的难点不是“样本更多”，而是观测、动作、时间戳、坐标系、gripper 语义和任务标签都要对齐，否则模型学到的是接口噪声。</small>
 
 这也是为什么通用策略不能只按“用了多少数据”读。更关键的问题是：数据是否覆盖真实部署状态，动作接口是否统一，模型是否能适配新机器人，失败样本是否进入训练，评测是否真的闭环。
 
@@ -108,7 +106,7 @@ DAgger 的核心提醒也在这里：顺序决策不是 i.i.d. 分类。学习�
 
 ![ALOHA ACT algorithm](../assets/images/paper-figures/vla/aloha-act-algorithm-2x.png){ width="760" }
 
-<small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware / ACT](https://arxiv.org/abs/2304.13705)，方法图。原图展示 ACT 用 CVAE/Transformer 从多视角图像和关节状态预测动作 chunk，并用 temporal ensembling 平滑执行。本站读法：ACT 的重点不是“Transformer 更强”，而是 chunk 把精细操作从单步回归改成短时序生成。</small>
+<small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware / ACT](https://arxiv.org/abs/2304.13705)，方法图。原图展示 ACT 用 CVAE/Transformer 从多视角图像和关节状态预测动作 chunk，并用 temporal ensembling 平滑执行。读图重点：ACT 的重点不是“Transformer 更强”，而是 chunk 把精细操作从单步回归改成短时序生成。</small>
 
 ACT 的实践很能说明这个点。插电池、穿扎带、打开杯盖这类任务需要连续、精细、接触敏感的动作。如果每一步都独立预测，策略很容易在接近接触点时抖动；如果一次输出一段动作，模型更容易学出“接近、对齐、接触、推进”的连续结构。
 
@@ -126,7 +124,7 @@ A^\tau=\sqrt{\bar\alpha_\tau}A+\sqrt{1-\bar\alpha_\tau}\epsilon
 
 ![Diffusion Policy input-output](../assets/images/paper-figures/vla/diffusion-policy-input-output-padded.jpg){ width="880" }
 
-<small>图源：[Diffusion Policy: Visuomotor Policy Learning via Action Diffusion](https://diffusion-policy.cs.columbia.edu/)，Figure 2。原图展示模型在视觉条件下通过去噪生成未来动作序列，支持 CNN-based 和 Transformer-based policy。本站读法：扩散策略的价值是建模动作分布，而不是把图像扩散照搬到机器人；它让“左绕”和“右绕”这类多峰动作不必被 MSE 平均成危险中间路径。</small>
+<small>图源：[Diffusion Policy: Visuomotor Policy Learning via Action Diffusion](https://diffusion-policy.cs.columbia.edu/)，Figure 2。原图展示模型在视觉条件下通过去噪生成未来动作序列，支持 CNN-based 和 Transformer-based policy。读图重点：扩散策略的价值是建模动作分布，而不是把图像扩散照搬到机器人；它让“左绕”和“右绕”这类多峰动作不必被 MSE 平均成危险中间路径。</small>
 
 扩散策略尤其适合软体、接触和多解任务。折毛巾时，从左侧抓和从右侧抓都可能成功；清理桌面时，先移动杯子还是先拿碗也可能都合理。一个确定性回归模型容易输出折中动作；扩散策略可以从条件分布中采样出一条完整模式。
 
@@ -180,7 +178,7 @@ VLA 数据与策略学习可以按这条链路收口：行为克隆让模型学�
 
 继续读相邻内容时，可以接 [VLA 动作表示与控制接口](action-representation-and-interfaces.md)、[Sim2Real 与具身数据引擎](../embodied-ai/sim2real-and-data-engines.md)、[WM / WAM / VAM：动作到底怎样进入世界模型](../world-models/wm-wam-vam-and-action-conditioned-modeling.md) 和 [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
 
-## 外部精读
+## 外部材料
 
 - [DAgger](https://arxiv.org/abs/1011.0686)：理解 sequential prediction 为什么会因为自行动作导致分布偏移。
 - [RT-1](https://arxiv.org/abs/2212.06817)：看真实机器人多任务示范、动作 token 和闭环控制如何规模化。

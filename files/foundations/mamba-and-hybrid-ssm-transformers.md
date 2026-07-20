@@ -1,6 +1,6 @@
 # Mamba 与混合 SSM 架构
 
-Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它的目标不是把 token 之间两两做 attention，而是让序列沿时间方向维护一个紧凑状态，用线性复杂度处理长序列。混合 Mamba-Transformer 架构则更务实：保留一部分 attention 做精确检索和复杂 token 交互，把大量层换成 Mamba / SSM 来降低推理成本。
+Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它让序列沿时间方向维护一个紧凑状态，用线性复杂度处理长序列。混合 Mamba-Transformer 架构则更务实：保留一部分 attention 做精确检索和复杂 token 交互，把大量层换成 Mamba / SSM 来降低推理成本。
 
 ![Mamba selective SSM overview](../assets/images/paper-figures/foundations/mamba-selective-ssm-overview.png){ width="920" }
 
@@ -9,7 +9,7 @@ Mamba 是近几年最重要的 Transformer 替代/补充路线之一。它的目
 > **一句话理解**：Mamba 与混合 SSM 架构 可以先当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背公式，先看清哪一步在改变信息、哪一步在改变成本。
 
 !!! tip "数学先修"
-    本文会用到[动态系统与状态空间](../prerequisite-math/dynamic-systems-and-control.md)理解隐藏状态更新，用[序列与位置](../prerequisite-math/sequence-position-and-masking.md)比较信息路径，并借助[微积分中的连续动力学](../prerequisite-math/calculus-and-newton-leibniz.md)连接 SSM 的离散化。
+    需要用到[动态系统与状态空间](../prerequisite-math/dynamic-systems-and-control.md)理解隐藏状态更新，用[序列与位置](../prerequisite-math/sequence-position-and-masking.md)比较信息路径，并借助[微积分中的连续动力学](../prerequisite-math/calculus-and-newton-leibniz.md)连接 SSM 的离散化。
 
 ## 为什么需要 Mamba
 
@@ -194,7 +194,7 @@ Jamba 的重点是“怎么组合”：attention 和 Mamba 的比例、层排列
 | hidden state、latent state 和状态递推 | [概率与潜变量模型](probability-latent-variables-and-generative-models.md) |
 | kernel、显存带宽和推理 runtime | [数值、显存与运行时](numerics-memory-and-runtime-basics.md) |
 
-## 外部精读
+## 外部材料
 
 - [Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)：selective SSM、hardware-aware scan 和 Mamba block 的起点。
 - [Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality](https://arxiv.org/abs/2405.21060)：Mamba-2 和 SSD 统一视角。

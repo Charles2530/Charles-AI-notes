@@ -1,8 +1,8 @@
 # VLA、WAM 与世界模型系统图：谁负责什么
 
-具身智能不是某一个模型名字，而是一套闭环系统。VLA、world model、WAM、planner、controller、safety filter 和 data engine 各负责一部分；把它们混成“一个大模型”会让系统边界和失败归因都变得模糊。
+具身智能是一套闭环系统。VLA、world model、WAM、planner、controller、safety filter 和 data engine 各负责一部分；把它们混成“一个大模型”会让系统边界和失败归因都变得模糊。
 
-这页只回答一个问题：这些模块分别负责什么，彼此怎么接。
+VLA、WAM、planner、controller、safety layer 和数据引擎需要分清职责，并明确彼此怎么连接。
 
 ## 一条闭环链
 
@@ -48,7 +48,7 @@ $$
 
 ![π0.5 model overview 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-3-model-overview.png){ width="920" }
 
-<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 3。原图展示 high-level subtask prediction 和 flow-matching action expert。本站读法：π0.5 强化的是语义子任务和动作生成层，但图里没有替代低层碰撞检查、安全过滤和真实观测刷新。</small>
+<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 3。原图展示 high-level subtask prediction 和 flow-matching action expert。读图重点：π0.5 强化的是语义子任务和动作生成层，但图里没有替代低层碰撞检查、安全过滤和真实观测刷新。</small>
 
 VLA 不天然负责严格碰撞检查、高频控制、力控稳定，也不一定显式比较多个候选动作的未来。它给出的动作最好被看成候选或短时技能，而不是最终硬件命令。
 
@@ -79,11 +79,11 @@ $$
 
 ![DreamZero architecture 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-4-architecture.png){ width="920" }
 
-<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 4。原图展示 visual context、language、robot state 和 action prediction 如何进入同一生成主干。本站读法：WAM 不是普通视频生成器；必须看视觉历史、机器人状态、动作解码和真实观测刷新这四个接口。</small>
+<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 4。原图展示 visual context、language、robot state 和 action prediction 如何进入同一生成主干。读图重点：WAM 不是普通视频生成器；必须看视觉历史、机器人状态、动作解码和真实观测刷新这四个接口。</small>
 
 ![DreamZero failure case 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-16-failure-case.png){ width="920" }
 
-<small>图源：[World Action Models are Zero-shot Policies](https://arxiv.org/abs/2602.15922)，Figure 16。原图展示 WAM 失败案例。本站读法：WAM 绑定动作和未来后，成功时动作更能解释未来；失败时动作也可能忠实执行错误未来，所以验收不能只看视频，而要看 predicted future、issued action、real observation 和 checker 是否一致。</small>
+<small>图源：[World Action Models are Zero-shot Policies](https://arxiv.org/abs/2602.15922)，Figure 16。原图展示 WAM 失败案例。读图重点：WAM 绑定动作和未来后，成功时动作更能解释未来；失败时动作也可能忠实执行错误未来，所以验收不能只看视频，而要看 predicted future、issued action、real observation 和 checker 是否一致。</small>
 
 ## Planner、controller 和 safety 负责可执行性
 
@@ -103,7 +103,7 @@ SayCan 是一个很好的直觉例子：语言模型判断候选技能是否符�
 
 ![SayCan LLM and affordance scores 原论文图](../assets/images/paper-figures/embodied-ai/saycan-figure-3-llm-affordance.png){ width="920" }
 
-<small>图源：[Do As I Can, Not As I Say](https://research.google/pubs/do-as-i-can-not-as-i-say-grounding-language-in-robotic-affordances/)，Figure 3。原图展示 LLM score 和 affordance score 的组合。本站读法：模型的聪明必须被可执行性约束；够不到、会碰撞、不可抓的动作不能因为语言上合理就执行。</small>
+<small>图源：[Do As I Can, Not As I Say](https://research.google/pubs/do-as-i-can-not-as-i-say-grounding-language-in-robotic-affordances/)，Figure 3。原图展示 LLM score 和 affordance score 的组合。读图重点：模型的聪明必须被可执行性约束；够不到、会碰撞、不可抓的动作不能因为语言上合理就执行。</small>
 
 ## Data engine 让系统能进步
 
@@ -111,7 +111,7 @@ VLA、world model 和 WAM 都需要数据，但数据形态不同。VLA 需要�
 
 ![Open X-Embodiment dataset overview 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="760" }
 
-<small>图源：[Open X-Embodiment](https://arxiv.org/abs/2310.08864)，Figure 1。原图展示不同 robot embodiment、scene、trajectory、skill 和 object category 的分布。本站读法：跨数据训练时，动作坐标系、控制频率、相机视角、夹爪形态和任务标签必须记录清楚，否则模型会把硬件差异误学成任务差异。</small>
+<small>图源：[Open X-Embodiment](https://arxiv.org/abs/2310.08864)，Figure 1。原图展示不同 robot embodiment、scene、trajectory、skill 和 object category 的分布。读图重点：跨数据训练时，动作坐标系、控制频率、相机视角、夹爪形态和任务标签必须记录清楚，否则模型会把硬件差异误学成任务差异。</small>
 
 一个好的 data engine 不只是堆轨迹，而是把成功、失败、near-miss、恢复、人工接管和 checker 分歧都组织成可训练样本。失败样本要能指出是视觉、动作、世界模型、planner、controller 还是 checker 出了问题。
 
@@ -126,7 +126,7 @@ VLA、world model 和 WAM 都需要数据，但数据形态不同。VLA 需要�
 
 成熟系统往往不是四选一，而是组合：VLA 产生候选动作，world model 预测未来和风险，planner/controller 投影到可执行命令，success checker 判定结果，data engine 回流失败。
 
-## 外部精读
+## 外部材料
 
 - [π0.5](https://www.pi.website/blog/pi05)：理解 VLA 的 high-level subtask 和 action expert。
 - [DreamZero](https://arxiv.org/abs/2602.15922)：理解 WAM 的未来视频与动作联合建模。

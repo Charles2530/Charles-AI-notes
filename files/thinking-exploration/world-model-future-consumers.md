@@ -1,7 +1,5 @@
 # 世界模型该预测什么：答案取决于谁消费未来
 
-> **本文回答的问题。** 世界模型应该预测像素、视频 token、latent state、reward、value，还是下一步动作？我的判断是：先确定谁会使用这段未来，再决定预测什么、保留什么，以及用哪类证据验收。
-
 把 PlaNet、Dreamer、V-JEPA 和 LingBot-World 放在一起，最先出现的冲突是：它们预测的对象不同，却都被称作世界模型。于是，“像素生成和 latent dynamics 谁更接近真正的世界模型”这个争论就问错了方向。
 
 一段高清未来视频很容易检查，却可能没有严格响应动作；Dreamer 的 latent rollout 看不见，却能直接训练 actor；MuZero 连观测重建都不要，只保留搜索所需的 reward、policy 和 value；V-JEPA 在 frozen image/video probes 上表现出强表征，却没有动作、reward 和 planner。
@@ -114,7 +112,7 @@ BAGEL、Lance 和 Emu3.5 都在缩短理解与生成之间的接口。BAGEL 让�
 
 ![World Model for Robot Learning survey organization](../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-1-survey-organization.png){ width="920" }
 
-<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 1，本站从论文 PDF 截取。原图把机器人世界模型分成 world model for policy、world model as simulator 和 robotic video world model 三个功能角色，表达的是“未来会被不同模块消费”。本文借它说明 consumer 应进入模型定义；这张综述图不能证明任何具体方法已经在真实机器人闭环中有效。</small>
+<small>图源：[World Model for Robot Learning: A Comprehensive Survey](https://arxiv.org/abs/2605.00080)，Figure 1，从论文 PDF 截取。原图把机器人世界模型分成 world model for policy、world model as simulator 和 robotic video world model 三个功能角色，表达的是“未来会被不同模块消费”。这里的重点是 consumer 应进入模型定义；这张综述图不能证明任何具体方法已经在真实机器人闭环中有效。</small>
 
 这张图也提醒我，不能把三种角色排成高低顺序。用于 policy 的 latent state、用于 simulator 的 imagined rollout、用于数据引擎的视频未来，各自承担不同工作。评测应该沿消费者收口，而不是强迫所有模型参加同一场视频质量比赛。
 
@@ -156,15 +154,8 @@ flowchart LR
 
 ## 证据边界
 
-本文的事实底稿来自前述 20 篇专题页及其对应论文或官方材料。多数结果属于作者报告，本站没有独立复现所有模型、速度和 benchmark；两篇综述的横向表也来自不同任务、数据和协议，不能直接排列绝对强弱。
+事实底稿来自前述 20 篇专题页及其对应论文或官方材料。多数结果属于作者报告，未独立复现所有模型、速度和 benchmark；两篇综述的横向表也来自不同任务、数据和协议，不能直接排列绝对强弱。
 
 文中的“决策契约”“按消费者选择未来表示”“按需解码预测栈”均为综合推论。它们用于组织系统设计，不是已有统一 benchmark 验证的理论。尤其不能从当前材料推出：V-JEPA latent 天然适合机器人控制、少量动作数据足以学会接触物理、长上下文自动产生持久世界状态，或更逼真的视频一定带来更强 policy。
 
 目前最可靠的写法仍然是逐层报告证据：表示学到了什么，动作是否造成正确分叉，reward/value 是否校准，consumer 是否改善闭环结果，收益是否能跨对象、视角、动作幅度和真实硬件继续成立。
-
-## 相关阅读与下一步
-
-- [高效 AI 的状态账本：少搬状态，比少算一次更重要](efficient-ai-is-state-movement.md)
-- [扩散模型加速：每删一步，都要重新安排误差](diffusion-speedup-redistributes-error.md)
-- [具身智能的可纠错状态链](embodied-ai-correctable-state-chain.md)
-- [前沿模型正在变成受约束的闭环](model-capability-is-a-constrained-loop.md)

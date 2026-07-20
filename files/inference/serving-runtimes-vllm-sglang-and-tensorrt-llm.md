@@ -39,7 +39,7 @@ vLLM 的代表性贡献是 PagedAttention。它把 KV cache 拆成 block，并�
 
 ![vLLM system overview](../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
 
-<small>图源：[vLLM: Easy, Fast, and Cheap LLM Serving with PagedAttention](https://vllm.ai/blog/vllm)。图中把请求调度、KV block 管理和模型执行放在同一个系统里。本站复用仓库已有图片，用它说明 runtime 的核心是请求、缓存和调度的组合。</small>
+<small>图源：[vLLM: Easy, Fast, and Cheap LLM Serving with PagedAttention](https://vllm.ai/blog/vllm)。图中把请求调度、KV block 管理和模型执行放在同一个系统里。这张图说明 runtime 的核心是请求、缓存和调度的组合。</small>
 
 读 vLLM 时先看两个层面。第一层是 KV 内存管理：PagedAttention 让逻辑上连续的 token 序列可以落到非连续物理 block 中，从而减少碎片和过度预留。第二层是调度：continuous batching 让已完成的请求离开 batch，新请求尽快加入 batch，而不是等一整批请求同时结束。
 
@@ -119,7 +119,7 @@ TensorRT-LLM 的适用场景通常更明确：NVIDIA 生产部署、固定硬件
 
 把 vLLM、SGLang 和 TensorRT-LLM 放到一起看，区别可以压缩成一句话：vLLM 先把动态 KV cache 管成可分页工作流，SGLang 让 runtime 看见复杂生成程序，TensorRT-LLM 把模型图、cache policy 和 kernel 压到 NVIDIA 硬件友好的执行路径。读懂推理运行时，就是读懂这三条路分别省了哪张账，又把成本转移到了哪里。
 
-## 外部精读
+## 外部材料
 
 - [vLLM PagedAttention blog](https://vllm.ai/blog/vllm)：理解 KV block、block table、内存碎片、continuous batching 和 parallel sampling cache sharing。
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)：核对 vLLM 的论文表述、系统目标和 benchmark 边界。
@@ -131,11 +131,6 @@ TensorRT-LLM 的适用场景通常更明确：NVIDIA 生产部署、固定硬件
 - [Hugging Face Text Generation Inference](https://huggingface.co/docs/text-generation-inference/index)：对照另一个成熟 serving 栈，也注意官方文档对维护状态和下游 runtime 的说明。
 - [Orca](https://www.usenix.org/conference/osdi22/presentation/yu)：理解 iteration-level scheduling 为什么是大模型 serving 的系统背景。
 
-## 相关阅读与下一步
-
-- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
-- 站内下一步：[推理系统专题](index.md)。
-- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
-- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。
+- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- [SGLang 文档](https://docs.sglang.ai/)。

@@ -1,8 +1,6 @@
 # 谱分解、二阶近似与低秩结构
 
-这篇回答一个问题：为什么论文精读里会频繁出现特征值、SVD、谱能量、Hessian、Taylor 近似和低秩结构。
-
-很多论文不是只看一个矩阵有多大，而是看它的能量集中在哪些方向；不是只看 loss 变大变小，而是看小扰动会不会被二阶项放大。谱分解和二阶近似，就是把这些“方向”和“敏感度”讲清楚。
+特征值、SVD、谱能量、Hessian、Taylor 近似和低秩结构用来分析方向结构和扰动敏感度。谱分解看矩阵能量集中在哪些方向，二阶近似看 loss 或模型分布对小扰动有多敏感。
 
 ## 特征值：一个方向被放大多少
 
@@ -38,7 +36,7 @@ W=U\Sigma V^\top
 
 ![Muon SVD entropy](../assets/images/localized-remote/paper-deep-dives/foundations/muon-is-scalable/muon-svd-entropy-原图.png){ width="760" }
 
-<small>图源：[Muon is Scalable](https://arxiv.org/abs/2502.16982) 相关图，本站已本地化于 Muon 论文精读。原图用 SVD entropy 比较矩阵谱能量分布。本站在这里用它说明：看矩阵时不只看大小，也要看能量是否集中在少数谱方向。</small>
+<small>图源：[Muon is Scalable](https://arxiv.org/abs/2502.16982) 相关图，已本地化于 Muon 论文精读。原图用 SVD entropy 比较矩阵谱能量分布。这里的重点是：看矩阵时除了大小，也要看能量是否集中在少数谱方向。</small>
 
 ## 谱能量：信息是不是集中在少数方向
 
@@ -64,7 +62,7 @@ X_{k+1}
 \frac{1}{2}X_k(3I-X_k^\top X_k)
 \]
 
-在合适归一化和谱条件下，如果 \(X_k^\top X_k\) 接近 \(I\)，这个迭代会把它进一步推向 \(I\)。直觉上，它不是在求某个标量最小值，而是在用一串矩阵乘法修正方向之间的相关性。
+在合适归一化和谱条件下，如果 \(X_k^\top X_k\) 接近 \(I\)，这个迭代会把它进一步推向 \(I\)。直觉上，它用一串矩阵乘法修正方向之间的相关性。
 
 真正实现里，论文可能使用不同阶数、多项式系数或归一化策略。读 Muon 时不必先背每个系数，先抓住一点：Newton-Schulz 是一种便宜的矩阵正交化近似，适合放进 GPU 友好的优化器步骤里。
 
@@ -117,7 +115,7 @@ s_\theta(x)
 \nabla_\theta \log p_\theta(x)
 \]
 
-这个 \(s_\theta(x)\) 叫 **score**。它不是“分数越高越好”的 score，而是在问：如果沿某个参数方向动一点，模型给这个样本的 log probability 会怎样变化。
+这个 \(s_\theta(x)\) 叫 **score**。这里的 score 指概率密度的局部方向，不是“分数越高越好”的排名分；它在问：如果沿某个参数方向动一点，模型给这个样本的 log probability 会怎样变化。
 
 Fisher 信息矩阵常写成：
 
@@ -150,7 +148,7 @@ u^\top F u
 \right]
 \]
 
-这行式子很有用：它说的不是“这个方向的梯度大不大”，而是“沿这个方向移动参数时，模型分布会不会明显变化”。如果 \(u^\top F u\) 很大，同样大小的参数扰动会让模型概率分布变很多；如果它很小，这个方向对分布相对不敏感。
+这行式子衡量沿方向 \(u\) 移动参数时，模型分布会变化多少，而不是只看这个方向的梯度大小。如果 \(u^\top F u\) 很大，同样大小的参数扰动会让模型概率分布变很多；如果它很小，这个方向对分布相对不敏感。
 
 先做一个可以手算的二分类例子。设模型只有一个 logit 参数 \(\theta\)，输出正类概率：
 
@@ -200,7 +198,7 @@ p(1-p)
 
 ![Fisher information as local KL curvature](../assets/images/prerequisite-math/fisher-information-curvature.svg){ width="760" }
 
-<small>图源：本站自绘示意图。左右两边的参数步长一样，但高 Fisher 方向对应更大的局部 KL 变化。读自然梯度、Fisher 近似 Hessian、量化误差敏感度时，都可以先用这个图建立直觉。</small>
+<small>图源：自绘示意图。左右两边的参数步长一样，但高 Fisher 方向对应更大的局部 KL 变化。读自然梯度、Fisher 近似 Hessian、量化误差敏感度时，都可以先用这个图建立直觉。</small>
 
 Fisher 为什么算“二阶”？关键在 KL 的局部展开。对很小的参数扰动 \(\Delta\theta\)，有：
 
@@ -216,7 +214,7 @@ p_{\theta+\Delta\theta}
 \Delta\theta^\top F \Delta\theta
 \]
 
-这和 Taylor 展开里的二阶项非常像。区别是：Hessian 通常描述 loss 曲面怎么弯，Fisher 描述“模型分布”在参数空间里怎么变。换句话说，Fisher 给参数空间加了一把尺子：两个参数向量欧氏距离一样远，不代表它们对应的模型分布一样远。
+这和 Taylor 展开里的二阶项非常像。区别是：Hessian 通常描述 loss 曲面怎么弯，Fisher 描述“模型分布”在参数空间里怎么变。Fisher 给参数空间加了一把尺子：两个参数向量欧氏距离一样远，不代表它们对应的模型分布一样远。
 
 在最大似然或交叉熵训练里，还有一个常见关系：
 
@@ -243,7 +241,7 @@ F
 F^{-1}g
 \]
 
-其中 \(g=\nabla_\theta \mathcal{L}\)。高 Fisher 的方向会被压小，低 Fisher 的方向可以走得相对大一些。它不是魔法优化器，而是在用 KL / 分布变化来重新度量“这一步到底有多大”。
+其中 \(g=\nabla_\theta \mathcal{L}\)。高 Fisher 的方向会被压小，低 Fisher 的方向可以走得相对大一些。自然梯度用 KL / 分布变化来重新度量“这一步到底有多大”。
 
 后面读论文时常见三种版本：
 
@@ -279,11 +277,7 @@ F^{-1}g
 
 看到谱图、SVD、Hessian、Fisher 或 Taylor 近似时，先问：它在分析哪个对象的方向结构，扰动是什么，误差衡量在哪里，近似是否便宜到能放进真实系统。这样读 Muon、KVSlimmer、剪枝、量化和低秩论文会稳得多。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 站内下一步：[线性代数与几何直觉](linear-algebra-and-geometry.md)。
-- 站内下一步：[优化、梯度与约束](optimization-and-gradient-methods.md)。
-- 论文精读：[Muon：LLM 预训练优化器](../paper-deep-dives/foundations/muon-is-scalable.md)。
-- 论文精读：[KVSlimmer：非对称 KV 合并](../paper-deep-dives/inference/kvslimmer.md)。
-- 外部材料：[Natural Gradient Works Efficiently in Learning](https://direct.mit.edu/neco/article/10/2/251/6143/Natural-Gradient-Works-Efficiently-in-Learning)。
-- 外部材料：[Limitations of the Empirical Fisher Approximation for Natural Gradient Descent](https://papers.neurips.cc/paper_files/paper/2019/hash/46a558d97954d0692411c861cf78ef79-Abstract.html)。
+- [Natural Gradient Works Efficiently in Learning](https://direct.mit.edu/neco/article/10/2/251/6143/Natural-Gradient-Works-Efficiently-in-Learning)。
+- [Limitations of the Empirical Fisher Approximation for Natural Gradient Descent](https://papers.neurips.cc/paper_files/paper/2019/hash/46a558d97954d0692411c861cf78ef79-Abstract.html)。

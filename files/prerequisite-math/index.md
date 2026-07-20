@@ -1,8 +1,6 @@
 # 前置数学知识
 
-这个专题不是把数学课本搬进来，而是给后面的 AI 博客准备一套可随时调用的工具。目标不是证明所有定理，而是看到公式时能回答：谁在变化，谁是随机的，谁被优化，误差怎样传播，最后为什么会影响质量、显存、延迟或闭环行为。
-
-推荐的使用方式有两种：
+前置数学知识帮助你把 AI 文章里的公式翻译回机制：谁在变化，谁是随机的，谁被优化，误差怎样传播，以及这些因素如何影响质量、显存、延迟或闭环行为。
 
 1. 如果想系统学习，按下面五组从前往后读。
 2. 如果已经在某篇博客或论文里卡住，直接用“从下游反查”找到最短补课路径。
@@ -99,23 +97,3 @@ flowchart LR
 | 强化学习、Dreamer 与世界模型 | [概率](probability-distributions-and-expectation.md) → [随机过程](stochastic-processes-and-markov.md) → [价值与策略](value-policy-and-rl-objectives.md) → [动态系统与控制](dynamic-systems-and-control.md) |
 | VLM、VLA、3D 视觉与机器人 | [线性代数](linear-algebra-and-geometry.md) → [序列与掩码](sequence-position-and-masking.md) → [三维几何](geometry-vision-and-3d.md) → [控制](dynamic-systems-and-control.md) → [因果与分布偏移](causality-counterfactual-and-distribution-shift.md) |
 | 推理系统、MoE、算子与性能 | [离散选择](discrete-selection-topk-and-routing.md) → [数值与复杂度](numerics-complexity-and-estimation.md) → [采样与校准](sampling-estimation-and-calibration.md) → [实验曲线](scaling-laws-and-experimental-curves.md) |
-
-## 和基础概念怎样分工
-
-前置数学负责解释数学对象本身，例如 Jacobian、协方差、KL、ELBO、Fisher、importance weighting 和 MPC 目标分别在说什么。
-
-[基础概念](../foundations/index.md)负责把这些对象组装成 AI 机制，例如 backward 为什么计算 VJP、QAT 为什么需要 STE、JEPA 怎样防表示坍缩、Transformer 怎样组织 token、训练和推理怎样形成显存与延迟账。
-
-如果卡在“符号是什么意思”，回到这里；如果符号看懂了，却不知道它怎样进入模型结构、训练流程或工程系统，就进入基础概念。每篇基础正文开头都提供了最短数学先修入口，不需要先把全部数学页面读完。
-
-## 读这些数学页时抓什么
-
-每篇文章都按同一套问题组织：
-
-1. 这个数学概念最朴素的直觉是什么。
-2. 核心公式声明了什么输入、输出、分布或约束。
-3. 它在后面的 AI 文章里会以什么名字出现。
-4. 近似在什么条件下成立，最容易被误读到哪里。
-5. 读完后应该能解释哪个具体模型或系统现象。
-
-最终目标不是背公式，而是把公式翻译回机制：变化从哪里来，随机性在哪里，训练信号怎样传，误差怎样累积，结论能否外推。

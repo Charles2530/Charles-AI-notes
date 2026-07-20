@@ -1,12 +1,12 @@
 # 输入管线、Packing 与吞吐
 
-很多训练团队把精力放在模型、优化器、并行和混合精度上，最后却发现 GPU 利用率仍然不高。原因常常在输入管线：数据切片太碎、tokenizer 太慢、packing 太差、shuffle buffer 不合理、长样本让 padding 放大、恢复训练后数据游标错位。输入系统不是后台搬运工，而是训练统计分布、吞吐和可复现性的共同塑形者。
+很多训练团队把精力放在模型、优化器、并行和混合精度上，最后却发现 GPU 利用率仍然不高。原因常常在输入管线：数据切片太碎、tokenizer 太慢、packing 太差、shuffle buffer 不合理、长样本让 padding 放大、恢复训练后数据游标错位。输入系统共同塑造训练统计分布、吞吐和可复现性。
 
-这页建议和 [训练数据系统与吞吐优化](data-systems-and-optimization.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[训练评测与消融设计](evaluation-and-ablation-methodology.md) 一起读。数据系统页讲治理链路，本页聚焦训练消费路径和吞吐治理。
+训练消费路径和吞吐治理要放在数据系统、分布式 checkpoint 与训练评测之间看。
 
 ![GPipe pipeline parallelism](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png)
 
-<small>图源：[GPipe](https://arxiv.org/abs/1811.06965)。原图表达把 mini-batch 切成 micro-batch 后，pipeline 如何减少设备空泡；本站读法是：输入管线、packing 和 bucketing 也在服务同一个目标，即让每个训练 step 有稳定、可预测、可填满的工作量。它不能证明某个数据格式一定更快，只说明吞吐问题必须同时看数据、batch 形状和并行调度。</small>
+<small>图源：[GPipe](https://arxiv.org/abs/1811.06965)。原图表达把 mini-batch 切成 micro-batch 后，pipeline 如何减少设备空泡；读图重点是：输入管线、packing 和 bucketing 也在服务同一个目标，即让每个训练 step 有稳定、可预测、可填满的工作量。它不能证明某个数据格式一定更快，只说明吞吐问题必须同时看数据、batch 形状和并行调度。</small>
 
 ## 一、输入系统的真实职责
 
@@ -125,11 +125,8 @@ Deterministic resume 的验收应看恢复前后采样分布、长度桶、数�
 
 最终判断是：输入系统不是把数据喂进模型这么简单，而是把样本统计契约、吞吐契约、恢复契约和监控契约统一起来。只要进入多源混合、长上下文、多模态和对象存储流式训练阶段，这一层就会直接决定训练平台上限。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

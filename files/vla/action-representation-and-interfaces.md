@@ -1,7 +1,5 @@
 # VLA 动作表示与控制接口：模型输出怎样变成机器人动作
 
-> **这篇回答的问题。** 如何理解“VLA 动作表示与控制接口”背后的核心机制、适用边界和下一步阅读路径。
-
 VLA 最容易被讲成“把语言、图像和动作都 token 化”。这句话只讲到训练格式，没有讲到执行。真正要追的是：模型输出的东西，怎样变成机器人在某个坐标系、某个频率、某个安全边界内执行的动作。
 
 机器人动作不是文本答案。它可能是末端位姿增量、关节角、速度、夹爪开合、未来一段轨迹、离散 action token，或者高层技能名。动作接口一旦不清楚，模型看起来会“懂任务”，真实控制时却会抖、慢、撞、抓不稳。
@@ -85,7 +83,7 @@ p(a_t\mid o_{\le t},l)
 
 ![RT-2 overview](../assets/images/paper-deep-dives/embodied-ai/rt2/figure-1-overview.png){ width="920" }
 
-<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 1。原图表达 web-scale VQA / VLM 训练和 robot action token 如何被 co-fine-tune 到同一个 VLA 框架里。本文用它说明：VLA 的关键不是“多模态输入”，而是让动作进入可生成接口，并最终被真实机器人执行。</small>
+<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 1。原图表达 web-scale VQA / VLM 训练和 robot action token 如何被 co-fine-tune 到同一个 VLA 框架里。这里的重点是：VLA 的关键不是“多模态输入”，而是让动作进入可生成接口，并最终被真实机器人执行。</small>
 
 token 化的好处是训练接口统一：文本、视觉和动作都可以进入序列建模。代价是分桶会带来量化误差，精细插接、旋拧、力控和小幅姿态调整可能需要更高分辨率或连续控制头。
 
@@ -111,7 +109,7 @@ ACT 的 temporal ensembling 可以写成：
 
 ![ALOHA ACT algorithm](../assets/images/paper-figures/vla/aloha-act-algorithm-2x.png){ width="760" }
 
-<small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705)，ACT 方法图。原图表达 policy 根据当前观测输出一段 action sequence，并用 temporal ensembling 平滑执行。本文用它说明：action chunk 是短时控制接口，不是完整任务计划。</small>
+<small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](https://arxiv.org/abs/2304.13705)，ACT 方法图。原图表达 policy 根据当前观测输出一段 action sequence，并用 temporal ensembling 平滑执行。这里的重点是：action chunk 是短时控制接口，不是完整任务计划。</small>
 
 Action chunk 的代价也很清楚：如果前几步已经偏了，后面 chunk 可能继续执行错误。因此 chunk 不能开环到底，必须配合重新观察、chunk overlap、安全过滤和失败恢复。它解决的是短时连贯性，不替代闭环。
 
@@ -127,7 +125,7 @@ A_{t:t+H-1}\sim p_\theta(A\mid o_{\le t},l)
 
 ![Diffusion Policy input-output](../assets/images/paper-figures/vla/diffusion-policy-input-output-padded.jpg){ width="880" }
 
-<small>图源：[Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)。原图表达 Diffusion Policy 根据视觉观测和机器人状态生成未来动作序列。本文用它说明：连续动作接口可以用生成式模型表达多峰动作分布，并通过 receding horizon 控制落到闭环执行。</small>
+<small>图源：[Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)。原图表达 Diffusion Policy 根据视觉观测和机器人状态生成未来动作序列。这里的重点是：连续动作接口可以用生成式模型表达多峰动作分布，并通过 receding horizon 控制落到闭环执行。</small>
 
 Diffusion Policy 的关键不是“用了扩散模型所以更高级”，而是它把动作分布、连续动作序列和 receding horizon 控制接起来。它仍然需要 controller、动作限幅、执行频率和真实反馈；生成出的 action sequence 不是电机命令的终点，而是下一轮闭环的候选轨迹。
 
@@ -184,7 +182,7 @@ FAST 用 frequency-space action sequence tokenization 压缩高频连续动作�
 
 最后看动作链路：模型输出什么，单位是什么，谁执行，多久重规划，失败如何停。只有这条链路清楚，VLA 才不只是会看图说话，而是真的能把意图变成稳定动作。
 
-## 外部精读
+## 外部材料
 
 - [RT-1](https://arxiv.org/abs/2212.06817)：理解真实机器人 Transformer policy、动作 token 和大规模机器人数据的早期接口。
 - [DeepMind RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/) 与 [RT-2 paper](https://arxiv.org/abs/2307.15818)：理解 VLM 如何通过 action token 接入机器人控制。
@@ -194,11 +192,6 @@ FAST 用 frequency-space action sequence tokenization 压缩高频连续动作�
 - [Octo](https://octo-models.github.io/)：看通用机器人策略如何支持不同观测、动作空间和 diffusion decoding。
 - [FAST action tokenizer](https://arxiv.org/abs/2501.09747)：看现代 VLA 如何把高频连续动作压成更高效的离散 token。
 
-## 相关阅读与下一步
-
-- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- 外部材料：[ACT 论文](https://arxiv.org/abs/2304.13705)。
-- 站内下一步：[VLA 专题](index.md)。
-- 站内下一步：[VLA 数据与策略学习](data-and-policy-learning.md)。
-- 站内下一步：[VLA 闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md)。
+- [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- [ACT 论文](https://arxiv.org/abs/2304.13705)。

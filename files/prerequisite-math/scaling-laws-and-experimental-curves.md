@@ -1,8 +1,6 @@
 # 缩放律、幂律与实验曲线
 
-这篇回答一个问题：论文精读里那些 scaling law、log-log 曲线、Pareto frontier、ablation 和 loss curve 应该怎么看。
-
-很多论文不是只报告一个最终分数，而是报告“数据更多会怎样”“模型更大会怎样”“推理步数更多会怎样”“速度和质量如何权衡”。这些图背后的数学并不复杂，但很容易被误读。
+scaling law、log-log 曲线、Pareto frontier、ablation 和 loss curve 用来判断资源增加、模型变大、推理步数变多或速度质量权衡如何改变结果。这些图背后的数学通常不复杂，关键是看横轴、纵轴、尺度、误差范围和外推边界。
 
 ## 幂律：规模变大时按固定指数变化
 
@@ -32,7 +30,7 @@ L(N)=aN^{-\alpha}+b
 
 ![EAGLE-3 scaling law](../assets/images/paper-deep-dives/inference/eagle-3/figure-1-scaling-law-eagle3.png){ width="760" }
 
-<small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 1 相关 scaling law 图。本站在这里用它说明：读缩放曲线时要看横轴代表什么资源、纵轴代表什么收益、斜率是否稳定，以及外推是否仍在数据支持范围内。</small>
+<small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 1 相关 scaling law 图。这里的重点是：读缩放曲线时要看横轴代表什么资源、纵轴代表什么收益、斜率是否稳定，以及外推是否仍在数据支持范围内。</small>
 
 ## 边际收益：继续加资源还值不值
 
@@ -91,7 +89,7 @@ L(N)=aN^{-\alpha}+b
 
 曲线上的点如果来自单次 run，可能只是随机波动。训练曲线最好有多 seed 或至少有平滑窗口；评测曲线最好有置信区间；系统曲线最好报告硬件、batch、prompt/output 长度和并发分布。
 
-还要把收益除以成本看。一个方法让 score 从 70 到 72，但计算量增加 4 倍；另一个方法从 70 到 71，但几乎免费，二者服务的产品区间可能完全不同。Pareto frontier 的意义就在这里：它不是选“最高分”，而是选“给定预算下最合适的点”。
+还要把收益除以成本看。一个方法让 score 从 70 到 72，但计算量增加 4 倍；另一个方法从 70 到 71，但几乎免费，二者服务的产品区间可能完全不同。Pareto frontier 的意义是在给定预算下选最合适的点，而不是只看最高分。
 
 ## 常见误读
 
@@ -106,10 +104,3 @@ L(N)=aN^{-\alpha}+b
 ## 读完以后怎么判断
 
 看到 scaling law、loss curve、speedup curve 或 ablation 表，先问横轴资源、纵轴指标、坐标尺度、误差范围、是否可外推、单点收益是否转移到端到端任务。这样读 EAGLE、Genie、Muon、DeepSeek、Kimi、视频生成和推理系统论文会更稳。
-
-## 相关阅读与下一步
-
-- 站内下一步：[采样、估计与校准](sampling-estimation-and-calibration.md)。
-- 站内下一步：[数值计算、复杂度与估算](numerics-complexity-and-estimation.md)。
-- 论文精读：[EAGLE-3：训练时见过自己犯错](../paper-deep-dives/inference/eagle-3.md)。
-- 论文精读：[GPU Utilization：为什么 100% 不等于训练跑满](../paper-deep-dives/foundations/gpu-utilization-misleading.md)。

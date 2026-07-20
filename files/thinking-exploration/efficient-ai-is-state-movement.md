@@ -1,7 +1,5 @@
 # 高效 AI 的状态账本：少搬状态，比少算一次更重要
 
-> **本文回答的问题。** 为什么参数更少、bit 更低、attention 更稀疏、draft 接受更长，最后却不一定带来同等幅度的端到端加速？
-
 过去我理解高效 AI，首先会数 FLOPs：矩阵乘少了多少，attention block 跳过多少，模型调用减少几次。连续读完这一组训练与推理论文后，我更在意另一张账：一次训练或生成里，系统保存了哪些状态，这些状态被复制几份，何时跨设备搬运，又在什么时刻才真正需要完整物化。
 
 这里的“状态”范围很宽。参数、梯度和 Adam 一二阶矩是状态；attention 的 Q/K/V、反向重算中间量和长上下文 KV cache 也是状态；投机解码的候选树、stereo 的 cost volume、量化 scale 与 packed weight，同样会占据内存、带宽和调度位置。
@@ -14,7 +12,7 @@
 
 ## 15 篇材料分别在移动什么
 
-下表先把 15 篇文章放进同一张状态账本。表中的实验数字和系统结论属于论文作者或官方材料报告；“我的读法”是本文的跨文综合，不是这些论文共同证明的定律。
+下表先把 15 篇文章放进同一张状态账本。表中的实验数字和系统结论属于论文作者或官方材料报告；“我的读法”是这里的跨文综合，不是这些论文共同证明的定律。
 
 | 分组 | 材料 | 主要状态 | 怎样减少无效移动或复制 | 新增代价 / 我的读法 |
 | --- | --- | --- | --- | --- |
@@ -63,7 +61,7 @@ RingAttention 把同一思路推到序列维度：query block 留在设备上，
 
 ![RingAttention method 原图](../assets/images/localized-remote/paper-deep-dives/world-models/ringattention/ringattention-method-原图.png){ width="860" }
 
-<small>图源：[Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889)，Figure 2。原图上半部分展示 query block 留在本设备、KV block 沿 ring 传递，下半部分展示 blockwise attention 与 feedforward 的组织。本文用它说明“流动状态”可以替代“复制状态”；这张图不能证明长上下文数据一定有用，也不能证明慢互联下通信总能被隐藏。</small>
+<small>图源：[Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889)，Figure 2。原图上半部分展示 query block 留在本设备、KV block 沿 ring 传递，下半部分展示 blockwise attention 与 feedforward 的组织。这里的重点是“流动状态”可以替代“复制状态”；这张图不能证明长上下文数据一定有用，也不能证明慢互联下通信总能被隐藏。</small>
 
 MagiAttention 又给 Ring 的规则通信加了一层 workload awareness。heterogeneous mask 下，并非每个 rank 都需要每段 KV。AttnSlice、dispatch solver 和 GroupCast/GroupReduce 让数据移动感知有效 mask area，减少把无用 KV 绕完整个 ring 的情况。
 
@@ -153,13 +151,6 @@ GPU utilization 那篇文章给了一个很实用的顺序：先看设备是否 
 
 ## 证据边界
 
-本文的事实底稿来自站内 15 篇专题页及其对应论文或官方材料。文中的 16 bytes/parameter、MFU、kernel speedup、runtime、context length 和 benchmark 结果都属于作者报告，我没有把它们当成独立复现。不同论文使用的模型、硬件、数据、runtime 和 workload 不一致，数字不能直接横向排名。
+事实底稿来自站内 15 篇专题页及其对应论文或官方材料。文中的 16 bytes/parameter、MFU、kernel speedup、runtime、context length 和 benchmark 结果都属于作者报告，不等于独立复现。不同论文使用的模型、硬件、数据、runtime 和 workload 不一致，数字不能直接横向排名。
 
 “高效 AI 更像状态移动问题”“按需物化优于长期完整持有”“瓶颈会沿状态链迁移”是我的跨文综合。它们适合用来检查系统设计，还不是已经有统一实验证明的理论。具体项目仍应测自己的形状、流量、互联、任务质量与恢复路径。
-
-## 相关阅读与下一步
-
-- [扩散模型加速：每删一步，都要重新安排误差](diffusion-speedup-redistributes-error.md)
-- [世界模型该预测什么：答案取决于谁消费未来](world-model-future-consumers.md)
-- [具身智能的可纠错状态链](embodied-ai-correctable-state-chain.md)
-- [前沿模型正在变成受约束的闭环](model-capability-is-a-constrained-loop.md)

@@ -120,11 +120,8 @@ Scaling law 给出的是“资源与效果的大致地形图”，实验经济�
 
 Scaling law 要和实验经济学一起读：token 预算、模型规模、数据质量、长上下文成本和实验复用率都应进入同一张账本。做大实验前先明确能力目标、GPU 小时、token 预算、吞吐下降和恢复复杂度，再设置阶段预算门槛、短跑一致性测试、失败案例和回滚条件。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

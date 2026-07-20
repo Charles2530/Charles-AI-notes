@@ -1,6 +1,6 @@
 # RSSM、Dreamer 与规划：世界模型怎样变成控制信号
 
-Dreamer 这条线要回答的不是“能不能预测一段未来视频”，而是：真实环境交互很贵时，能不能先学一个内部环境，再让策略在这个内部环境里练习。RSSM 是这个内部环境的状态骨架，PlaNet 用它在线搜索动作，Dreamer 用它批量想象轨迹来训练 actor-critic。
+Dreamer 这条线要回答的是：真实环境交互很贵时，能不能先学一个内部环境，再让策略在这个内部环境里练习。RSSM 是这个内部环境的状态骨架，PlaNet 用它在线搜索动作，Dreamer 用它批量想象轨迹来训练 actor-critic。
 
 如果只记一个判断：**posterior 用真实观测校正现在，prior 在没有未来观测时预测未来，planner 或 actor 只能在这个 latent future 上做决策。**
 
@@ -49,7 +49,7 @@ z_t^{\text{prior}}\sim p_\theta(z_t\mid h_t)
 
 ![PlaNet latent dynamics model designs](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="860" }
 
-<small>图源：[Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)，Figure 2。本站复用已有论文图，未使用 image2 生成新图。原图比较 RNN、SSM 和 RSSM 三种 latent dynamics；本站用它说明 RSSM 同时保留 deterministic history 和 stochastic latent，适合在部分可观测环境里把历史记忆、不确定性和未来 rollout 接起来。</small>
+<small>图源：[Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)，Figure 2。原图比较 RNN、SSM 和 RSSM 三种 latent dynamics；这里的重点是 RSSM 同时保留 deterministic history 和 stochastic latent，适合在部分可观测环境里把历史记忆、不确定性和未来 rollout 接起来。</small>
 
 RNN 只有确定性记忆，容易把多种可能未来压成一个平均未来。SSM 有随机状态，但缺少强历史记忆。RSSM 把两者合起来：\(h_t\) 负责长时上下文，\(z_t\) 负责当前不确定性。真实观测进入 posterior 校正状态；没有真实观测时，prior 自己往前滚。
 
@@ -168,7 +168,7 @@ R_T^\lambda=V_\psi(s_T)
 
 ![Dreamer horizon ablation](../assets/images/paper-deep-dives/world-models/dreamer/figure-4-horizon.png){ width="760" }
 
-<small>图源：[Dreamer](https://arxiv.org/abs/1912.01603)，Figure 4。本站复用已有论文图，未使用 image2 生成新图。原图展示 imagined horizon 对控制表现的影响；本站用它说明 rollout horizon 是偏差和收益的折中，太短看不到长期后果，太长会放大模型误差。</small>
+<small>图源：[Dreamer](https://arxiv.org/abs/1912.01603)，Figure 4。原图展示 imagined horizon 对控制表现的影响；这里的重点是 rollout horizon 是偏差和收益的折中，太短看不到长期后果，太长会放大模型误差。</small>
 
 这张图比视频预测图更能解释 Dreamer 的控制逻辑。世界模型在控制里不是一个越长越好的模拟器，而是一个有限可信区间内的训练器。工程项目不能只问“能 rollout 多远”，更要问：rollout 多远之后，reward、done、接触、关键物体和风险还准不准。
 
@@ -180,13 +180,13 @@ DreamerV3 的重点不再是单个环境技巧，而是跨域稳定 recipe。它
 
 ![DreamerV3 world model learning](../assets/images/paper-deep-dives/world-models/dreamerv3/x2.png){ width="900" }
 
-<small>图源：[Mastering Diverse Domains through World Models](https://arxiv.org/abs/2301.04104)，Figure 3(a)。本站复用已有论文图，未使用 image2 生成新图。原图展示 DreamerV3 world model learning：观测被编码成离散 latent representation，recurrent dynamics 在动作条件下预测未来 latent；本站用它说明 DreamerV3 的稳定化技巧仍服务同一目标，让 prior、posterior、reward、continuation 和 reconstruction 在不同任务尺度下共同塑造可决策 state。</small>
+<small>图源：[Mastering Diverse Domains through World Models](https://arxiv.org/abs/2301.04104)，Figure 3(a)。原图展示 DreamerV3 world model learning：观测被编码成离散 latent representation，recurrent dynamics 在动作条件下预测未来 latent；这里的重点是 DreamerV3 的稳定化技巧仍服务同一目标，让 prior、posterior、reward、continuation 和 reconstruction 在不同任务尺度下共同塑造可决策 state。</small>
 
 这里最值得学的是设计重心的变化：PlaNet 证明 RSSM 能规划，Dreamer 证明 latent imagination 能训练 actor，DreamerV2 证明 discrete world model 能打 Atari，DreamerV3 证明这套 recipe 可以更少依赖单任务调参。
 
 ## 每篇论文承担一个问题
 
-| 论文 / 项目 | 它回答的问题 | 对本文主线的作用 |
+| 论文 / 项目 | 它回答的问题 | 对主线的作用 |
 | --- | --- | --- |
 | [World Models](https://worldmodels.github.io/) | 能否用 VAE + RNN + controller 建立 latent dream 的直觉 | 给“在内部模型里练习”提供早期概念入口。 |
 | [PlaNet](https://arxiv.org/abs/1811.04551) | 能否从像素学 RSSM，再用 CEM 在 latent space 规划 | 奠定 RSSM 和 latent MPC。 |
@@ -238,7 +238,7 @@ RSSM / Dreamer 这条线的知识含量在三点。第一，posterior 和 prior 
 
 继续往下读，可以接 [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)、[WM / WAM / VAM：动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) 和 [世界模型评测与失效模式](evaluation-and-failure-modes.md)。
 
-## 外部精读
+## 外部材料
 
 - [PlaNet project page](https://planetrl.github.io/)：先看 latent dynamics、CEM planning 和 planning from pixels 的整体直觉。
 - [PlaNet paper](https://arxiv.org/abs/1811.04551)：重点读 RSSM、latent overshooting 和 CEM planning。

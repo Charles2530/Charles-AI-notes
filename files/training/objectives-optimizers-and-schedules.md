@@ -2,7 +2,7 @@
 
 同一个模型、同一批数据，只要换一个 loss 配方、优化器或学习率日程，训练轨迹就可能完全不同。目标函数定义模型被什么信号推动；优化器决定梯度怎样变成更新方向；学习率日程决定什么时候大步探索、什么时候收力。
 
-这页只回答一个问题：**为什么训练不是把 loss 写出来，然后交给 AdamW 就结束。**
+训练不是把 loss 写出来再交给 AdamW 就结束；目标、优化器和学习率日程共同决定参数轨迹。
 
 可以先把训练配置看成三层合同：
 
@@ -60,7 +60,7 @@ SFT 仍然是交叉熵，只是输入变成指令 \(x\)，目标变成示范回�
 
 ![InstructGPT labeler ranking interface](../assets/images/paper-figures/training/instructgpt-labeler-ranking.png){ width="860" }
 
-<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b)。本站用这张图说明：偏好数据描述的是“哪个回答更好”，不是“每个 token 应该是什么”；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b)。这张图说明：偏好数据描述的是“哪个回答更好”，不是“每个 token 应该是什么”。</small>
 
 读这张图时，先看数据形态。标注者不是给每个 token 打标签，而是在同一个 prompt 下把多个模型输出从好到差排序。这个排序可以训练 reward model，也可以被 DPO 这类方法直接改写成偏好目标。
 
@@ -113,7 +113,7 @@ A_i=
 
 ![GRPO comparison](../assets/images/paper-deep-dives/technical-reports/deepseek-r1/figure-grpo.png){ width="920" }
 
-<small>图源：[DeepSeek-R1](https://arxiv.org/abs/2501.12948)，Supplementary Fig. 1。本站用这张图说明 PPO 使用 value model 估计 advantage，而 GRPO 从同一问题的一组 sampled outputs 的 reward scores 中估计相对 advantage；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[DeepSeek-R1](https://arxiv.org/abs/2501.12948)，Supplementary Fig. 1。这张图说明 PPO 使用 value model 估计 advantage，而 GRPO 从同一问题的一组 sampled outputs 的 reward scores 中估计相对 advantage。</small>
 
 这张图的重点不是“GRPO 一定比 PPO 好”，而是训练压力转移到了哪里：critic 少了一份，但同题多采样、reward / verifier 吞吐、答案长度偏置、组内方差和 KL 控制会变得更重要。
 
@@ -152,7 +152,7 @@ L = 1.0 * video_loss + 0.2 * action_loss + 0.05 * risk_loss
 
 ![Loss landscape visualization](../assets/images/paper-figures/foundations/loss-landscape-figure-resnet56.png){ width="820" }
 
-<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)，loss landscape visualization。本站用这张图说明 optimizer 不是一步跳到最低点，而是在复杂地形里按梯度、历史统计和学习率慢慢走；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)，loss landscape visualization。这张图说明 optimizer 不是一步跳到最低点，而是在复杂地形里按梯度、历史统计和学习率慢慢走。</small>
 
 常见优化器可以按“更新方向怎么被修正”来读：
 
@@ -226,7 +226,7 @@ LR schedule 必须和 effective batch、数据阶段、loss 切换、gradient cl
 
 如果一个改动说自己更好，它至少要说明：目标函数为什么更贴近任务，更新方向为什么更稳定，LR 和 batch 为什么匹配，checkpoint 是否能恢复同一条轨迹，分桶评测是否覆盖收益和退化。否则它只是让曲线换了形状，还不能证明训练真的变好。
 
-## 外部精读
+## 外部材料
 
 - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)：理解 SFT、偏好排序、reward model 和 PPO 的数据链。
 - [Direct Preference Optimization](https://arxiv.org/abs/2305.18290)：理解 DPO 如何把偏好 pair 变成 closed-form objective。
@@ -237,11 +237,6 @@ LR schedule 必须和 effective batch、数据阶段、loss 切换、gradient cl
 - [Hugging Face optimization schedules](https://huggingface.co/docs/transformers/main_classes/optimizer_schedules)：核对 warmup、linear、cosine、Adafactor 和 schedule API。
 - [Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)：建立优化地形的直觉。
 
-## 相关阅读与下一步
-
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

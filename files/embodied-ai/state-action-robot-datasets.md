@@ -1,18 +1,16 @@
 # 机器人数据里的 `state` 和 `action`：不要被字段名骗了
 
-> **这篇回答的问题。** 在 LeRobot、CALVIN、robomimic 或自采 parquet 里看到 `observation.state` 和 `action` 时，怎样判断它们到底表示当前状态、目标关节角、末端位姿增量、速度，还是被数据写入逻辑对齐过的字段。
-
 具身智能的入门很容易从模型名开始：VLA、Diffusion Policy、ACT、RT-2。可是训练真正落到机器人数据时，最先撞上的问题通常更朴素：一行数据里有 `observation.state`，还有 `action`，它们维度相同、数值也很像，那模型到底在学什么？
 
 结论先放前面：**字段名不决定语义，数据采集和控制接口才决定语义。** `observation.state` 一般表示机器人在当前时刻被观测到的低维本体状态；`action` 是策略要预测、控制器要接收的动作标签。二者可以同维度、同量纲，甚至在同一行里近似相等，但这不自动说明 `action = state`，也不说明应该执行 `state + action`。
 
 ## 先把一行样本放回 episode
 
-LeRobotDataset v3 的官方博客把机器人数据拆成三类：低维高频表格数据、视频数据和元数据。表格数据里会放 joint states、actions 这类高频量；`meta/info.json` 定义 `observation.state`、`action` 等 feature 的 shape 和 dtype；`meta/stats.json` 记录 mean、std、min、max；episode 边界也由 metadata 维护。换句话说，一行 parquet 不是孤立样本，它属于某个 episode、某个控制频率、某套归一化统计和某种动作空间。
+LeRobotDataset v3 的官方博客把机器人数据拆成三类：低维高频表格数据、视频数据和元数据。表格数据里会放 joint states、actions 这类高频量；`meta/info.json` 定义 `observation.state`、`action` 等 feature 的 shape 和 dtype；`meta/stats.json` 记录 mean、std、min、max；episode 边界也由 metadata 维护。一行 parquet 不是孤立样本，它属于某个 episode、某个控制频率、某套归一化统计和某种动作空间。
 
 ![LeRobotDataset v3 pillars](../assets/images/embodied-ai/robot-state-action-data/lerobot-v3-pillars.png){ width="920" }
 
-<small>图源：[Hugging Face LeRobotDataset v3.0 blog](https://huggingface.co/blog/lerobot-datasets-v3)。原图展示 LeRobot v3 把机器人数据组织为 tabular data、visual data 和 metadata。本站读法：排查 `state/action` 关系时不能只看 parquet 的一列，要同时看 schema、stats、fps 和 episode 边界。</small>
+<small>图源：[Hugging Face LeRobotDataset v3.0 blog](https://huggingface.co/blog/lerobot-datasets-v3)。原图展示 LeRobot v3 把机器人数据组织为 tabular data、visual data 和 metadata。读图重点：排查 `state/action` 关系时不能只看 parquet 的一列，要同时看 schema、stats、fps 和 episode 边界。</small>
 
 最小抽象可以写成：
 
@@ -38,7 +36,7 @@ CALVIN 很适合做这个入门对照。它的 sensory observations 同时包含
 
 ![CALVIN sensors](../assets/images/embodied-ai/robot-state-action-data/calvin-sensors.png){ width="880" }
 
-<small>图源：[CALVIN GitHub README](https://github.com/mees/calvin)，官方 sensors 图。原图展示 CALVIN 的多视角、多模态观测。本站读法：同一份机器人数据里，观测可以同时有 RGB、depth、本体状态；动作却必须落到某个明确 action space。</small>
+<small>图源：[CALVIN GitHub README](https://github.com/mees/calvin)，官方 sensors 图。原图展示 CALVIN 的多视角、多模态观测。读图重点：同一份机器人数据里，观测可以同时有 RGB、depth、本体状态；动作却必须落到某个明确 action space。</small>
 
 关节角和末端位姿之间有运动学映射，但不是一一对应字段：
 
@@ -178,7 +176,7 @@ RT-2 的官方博客有一张很适合放在这里的图：它把机器人动作
 
 ![RT-2 action string](../assets/images/embodied-ai/robot-state-action-data/rt2-action-string.png){ width="860" }
 
-<small>图源：[Google DeepMind RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)。原图展示 RT-2 training 中 action string 的组成。本站读法：把动作 token 化以后，仍然要知道每个 token 对应的控制量、坐标系、归一化范围和执行频率。</small>
+<small>图源：[Google DeepMind RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)。原图展示 RT-2 training 中 action string 的组成。读图重点：把动作 token 化以后，仍然要知道每个 token 对应的控制量、坐标系、归一化范围和执行频率。</small>
 
 这也是为什么 `state/action` 的问题不是低级细节，而是 VLA 的接口问题。模型输出的是：
 
@@ -222,7 +220,7 @@ control interpretation:
 
 但这句话必须以验证为前提：先看 `meta/info.json`、`meta/stats.json`、episode 边界、控制脚本和误差分布，再决定它是不是绝对 joint target。
 
-## 外部精读
+## 外部材料
 
 - [Hugging Face LeRobotDataset v3.0 blog](https://huggingface.co/blog/lerobot-datasets-v3)：理解 parquet、video、metadata、stats 和 episode 边界。
 - [Hugging Face Robotics Course: LeRobotDataset](https://huggingface.co/learn/robotics-course/unit1/3)：更教学化地理解 LeRobot 数据组织。
@@ -232,10 +230,3 @@ control interpretation:
 - [robosuite Controllers](https://robosuite.ai/docs/modules/controllers.html)：理解 controller 如何解释 policy action。
 - [MoveIt Pro IK docs](https://docs.picknik.ai/how_to/robotics_applications/computing_inverse_kinematics/)：理解 Cartesian 末端目标如何转成 joint states。
 - [Google DeepMind RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)：理解 VLA 如何把动作写成 token，但仍然需要动作接口。
-
-## 相关阅读与下一步
-
-- 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[VLA 数据、模型与评测](vla-data-model-and-evaluation-roadmap.md)。
-- 站内下一步：[规划、控制与安全](planning-control-and-safety.md)。
-- 站内下一步：[VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)。

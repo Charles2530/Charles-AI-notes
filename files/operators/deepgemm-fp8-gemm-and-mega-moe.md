@@ -1,12 +1,12 @@
 # DeepGEMM：FP8 GEMM 与 Mega-MoE
 
-`DeepGEMM` 值得单独讲，不是因为它只是一个更快的 GEMM 库，而是因为它把现代大模型算子工程中的几个关键趋势压缩到同一个样本里：细粒度 FP8 scaling、Hopper/Blackwell 硬件特化、运行时 JIT、MoE grouped GEMM、decode masked layout，以及从单个 GEMM 走向融合通信与计算的 Mega MoE 思路。
+`DeepGEMM` 值得单独讲，因为它把现代大模型算子工程中的几个关键趋势压缩到同一个样本里：细粒度 FP8 scaling、Hopper/Blackwell 硬件特化、运行时 JIT、MoE grouped GEMM、decode masked layout，以及从单个 GEMM 走向融合通信与计算的 Mega MoE 思路。
 
-这页定位为主线解读。源码阅读、API 名称和接入检查放到 [DeepGEMM 源码与接入](deepgemm-source-and-integration.md)。如果想先补底层背景，可先读 [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md)、[低精度与量化 Kernel](low-precision-and-quantized-kernels.md) 和 [MoE 路由与稀疏 Kernel](moe-routing-and-sparse-kernels.md)。
+DeepGEMM 的主线要放在 FP8 GEMM、MoE dispatch、kernel 调度和服务接入之间看。源码阅读、API 名称和接入检查见 [DeepGEMM 源码与接入](deepgemm-source-and-integration.md)。
 
 ![DeepSeek-V3 FP8 framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="860" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达 FP8 mixed precision 训练框架中的高精保留、scale 和累加路径；本站读法是把 DeepGEMM / FP8 GEMM 看成“低精度格式、scale layout、硬件搬运和 kernel 形状”共同设计的问题。它不能证明 DeepGEMM 在所有 GEMM 上优于通用库。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达 FP8 mixed precision 训练框架中的高精保留、scale 和累加路径；读图重点是把 DeepGEMM / FP8 GEMM 看成“低精度格式、scale layout、硬件搬运和 kernel 形状”共同设计的问题。它不能证明 DeepGEMM 在所有 GEMM 上优于通用库。</small>
 
 ## 一、DeepGEMM 到底是什么
 
@@ -135,11 +135,8 @@ tokens
 
 如果只记一句话：`DeepGEMM` 展示的是现代大模型算子优化的新边界，已经从“写快一个矩阵乘”扩展到“围绕低精度、MoE、JIT、硬件和服务运行时共同设计热路径”。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

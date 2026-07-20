@@ -90,5 +90,3 @@ flowchart LR
 | 曲线正常但某类能力持续下降 | [数据配比](scaling-curriculum-and-data-mixture.md) → [评测与消融](evaluation-and-ablation-methodology.md) |
 | 恢复后 loss、数据顺序或学习率漂移 | [分布式训练与 Checkpoint](distributed-training-and-checkpointing.md) → [集群运维](cluster-operations-and-experiment-management.md) |
 | 要把线上失败变成下一轮训练数据 | [后训练数据引擎](post-training-data-engines-and-judge-models.md) → [偏好数据与对齐失效](preference-data-and-alignment-pitfalls.md) |
-
-训练产物进入服务后的完整交接见[训练与推理系统总览](../training-and-inference-systems/index.md)。

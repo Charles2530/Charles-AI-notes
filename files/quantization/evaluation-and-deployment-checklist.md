@@ -1,12 +1,12 @@
 # 量化评测与部署清单
 
-量化工作最常见的问题，不是“没有方法”，而是离线评测太乐观、线上指标没对齐、精度和系统收益没有同时看。
+量化工作最常见的问题是离线评测太乐观、线上指标没对齐、精度和系统收益没有同时看。
 
 因此这一页给出一个更像 checklist 的结构，帮助把量化从论文实验推进到真实部署。
 
 ![SmoothQuant main idea](../assets/images/paper-figures/quantization/smoothquant-figure-5-main-idea.png)
 
-<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)。原图表达 activation outlier 可以通过等价缩放迁移到权重侧，让 W8A8 更可行；本站读法是：量化验收必须确认误差补偿、校准数据、runtime kernel 和业务分桶同时成立。它不能证明所有任务都适合 W8A8，也不能替代真实线上 P95/P99 与质量回归。</small>
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)。原图表达 activation outlier 可以通过等价缩放迁移到权重侧，让 W8A8 更可行；读图重点是：量化验收必须确认误差补偿、校准数据、runtime kernel 和业务分桶同时成立。它不能证明所有任务都适合 W8A8，也不能替代真实线上 P95/P99 与质量回归。</small>
 
 可以把量化上线前的判断拆成三层：`数值门禁` 看模型还能不能稳定工作，`系统门禁` 看显存、吞吐、延迟是否真的改善，`业务门禁` 看高价值任务有没有不可接受退化。
 
@@ -126,15 +126,12 @@ flowchart LR
 
 量化评测要把精度损失、硬件路径、量化格式、KV 影响和回退方案放在同一张上线判断里。最容易踩坑的是只看少数 benchmark、忽略长尾任务、回退链路没演练；更稳的验收方式是按任务桶比较 full precision 对照，把量化格式和 runtime 绑定，并写清灰度范围与回滚门槛。
 
-这页可以作为发布前的最后一页门禁：若某个量化方案无法说明收益来自哪里、风险落在哪些桶、回退如何触发，就不应该直接进入主线流量。
+量化发布前的最低门槛是：能说明收益来自哪里、风险落在哪些桶、回退如何触发；否则不应直接进入主线流量。
 
 量化发布结论也应进入版本记录，方便后续模型、runtime 或硬件升级时复查当初的收益边界。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

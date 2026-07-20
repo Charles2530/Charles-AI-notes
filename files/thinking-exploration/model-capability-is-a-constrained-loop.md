@@ -1,7 +1,5 @@
 # 读完 12 份技术报告：前沿模型正在变成受约束的闭环
 
-> **本文回答的问题。** 当技术报告同时讨论 MoE、低精度、长上下文、推理预算、工具环境、流式语音和安全评测时，我们究竟应该把“一个模型”理解成什么？
-
 把 12 份技术报告的目录并排，会看到一个反常现象：模型能力越强，报告花在数据、cache、rollout、工具环境和安全控制上的篇幅越多。**checkpoint 仍然重要，但它已经不足以描述一个前沿模型的真实能力。** 同一份权重接入不同的 KV cache、thinking budget、工具环境或安全控制，会表现出显著不同的能力与成本。
 
 这也改变了我读技术报告的顺序。我现在会先找四件事：模型保存什么状态，系统允许它花多少计算，环境怎样返回反馈，失败后由谁截断或恢复。参数量和榜单分数仍然要看，但它们更像结果，不再是解释的起点。
@@ -35,7 +33,7 @@ DeepSeek-V4 又把这条线推到长上下文。CSA、HCA、滑动窗口和 on-d
 
 ![DeepSeek-V4 KV cache layout](../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-6-kv-cache-layout.png){ width="920" }
 
-<small>图源：[DeepSeek-V4 Technical Report](https://arxiv.org/abs/2606.19348)，Figure 6。原图展示 SWA、CSA、HCA 的 state cache 与 classical KV cache。本文借它说明：上下文长度最终会落实为多种状态的存储、压缩和复用规则；这张图本身不能证明百万 token 的真实 agent 任务已经可靠。</small>
+<small>图源：[DeepSeek-V4 Technical Report](https://arxiv.org/abs/2606.19348)，Figure 6。原图展示 SWA、CSA、HCA 的 state cache 与 classical KV cache。这里的重点是：上下文长度最终会落实为多种状态的存储、压缩和复用规则；这张图本身不能证明百万 token 的真实 agent 任务已经可靠。</small>
 
 因此，我会把 checkpoint 理解成闭环里的一个状态快照。它封装了训练得到的参数，却没有封装完整的数据管线、运行时、工具权限、缓存策略和风险控制。单独下载权重，通常只能复现系统能力的一部分。
 
@@ -63,7 +61,7 @@ Kimi K2、Gemini 2.5、InCoder-32B 和 Nemotron 3 Super 都把 agent 训练写�
 
 ![InCoder Code-Flow pipeline](../assets/images/paper-deep-dives/technical-reports/incoder-32b/figure-3-code-flow-pipeline.png){ width="920" }
 
-<small>图源：InCoder-32B 报告，Figure 3；原报告入口见[论文专题页](../paper-deep-dives/technical-reports/incoder-32b.md)。图中 pre-train、mid-train、post-train 最终接到编译、仿真与执行验证。本文用它说明“评价工具也参与生产训练信号”，不据此比较工业榜单排名。</small>
+<small>图源：InCoder-32B 报告，Figure 3；原报告入口见[论文专题页](../paper-deep-dives/technical-reports/incoder-32b.md)。图中 pre-train、mid-train、post-train 最终接到编译、仿真与执行验证。这里的重点是“评价工具也参与生产训练信号”，不据此比较工业榜单排名。</small>
 
 这里还有一个容易忽略的后果：环境定义了模型能学到的能力边界。
 
@@ -130,15 +128,6 @@ flowchart LR
 
 ## 证据边界
 
-本文的事实底稿来自站内 12 篇专题页及其对应技术报告。多数结果属于作者自述，部分模型闭源，很多 agent、长上下文、多模态和安全评测依赖内部 harness、工具权限、硬件或 judge。本文没有把官方 benchmark 当作独立复现，也没有从单项消融推导完整系统的因果贡献。
+事实底稿来自站内 12 篇专题页及其对应技术报告。多数结果属于作者自述，部分模型闭源，很多 agent、长上下文、多模态和安全评测依赖内部 harness、工具权限、硬件或 judge。这里不把官方 benchmark 当作独立复现，也不从单项消融推导完整系统的因果贡献。
 
 “模型是受约束闭环”是我对这些报告的综合抽象。它能帮助组织问题，但还不是一个已有统一指标可以直接验证的理论。真正落地时，仍要按具体任务测量质量、延迟、成本、恢复率和安全事件。
-
-## 相关阅读与下一步
-
-- [高效 AI 的状态账本：少搬状态，比少算一次更重要](efficient-ai-is-state-movement.md)
-- [扩散模型加速：每删一步，都要重新安排误差](diffusion-speedup-redistributes-error.md)
-- [世界模型该预测什么：答案取决于谁消费未来](world-model-future-consumers.md)
-- [具身智能的可纠错状态链](embodied-ai-correctable-state-chain.md)
-- [训练与推理系统](../training/index.md)
-- [RAG、Agent 与长上下文系统](../inference/rag-agents-and-long-context-systems.md)

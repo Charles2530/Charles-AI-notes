@@ -10,7 +10,7 @@
 
 | 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
 | --- | --- | --- | --- |
-| 本页解决哪项成本 | 少做真实危险试错，提前过滤高风险候选 | 平均成功率高，但少数滑落/碰撞严重 | near-miss recall、collision rate |
+| 成本问题 | 少做真实危险试错，提前过滤高风险候选 | 平均成功率高，但少数滑落/碰撞严重 | near-miss recall、collision rate |
 | 风险校准 | 按 risk bin 统计真实 violation rate | predicted risk 0.2 的 fast grasp 实际滑落 | ECE、false negative、Brier score |
 | 不确定性动作 | 高 epistemic 时选择 wait/reobserve | 模型不确定却继续执行激进动作 | reobserve trigger precision/recall |
 | 候选排序 | 比较 risk-aware score 与真实安全成功动作 | top-1 选择错目标或危险动作 | top-k safe success agreement |
@@ -149,11 +149,8 @@ flowchart LR
 
 风险敏感世界模型的目标不是永远保守，而是在收益、风险、信息获取和回退之间做可控取舍。它真正的价值体现在少数关键分叉：平均未来看起来都还不错，但尾部风险决定系统能不能部署。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

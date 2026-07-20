@@ -2,7 +2,7 @@
 
 视频世界模型很容易被误读成“更强的视频生成”。在世界模型语境里，它真正要回答的是：给定历史、动作、目标和场景约束，未来是否会以可验证、可交互、可用于决策的方式演化。
 
-所以这页只讲一个问题：视频生成模型要补上什么，才能变成服务规划和数据回流的世界模型。
+视频生成模型要补上动作因果、交互约束和评测接口，才能变成服务规划和数据回流的世界模型。
 
 ## 普通视频生成缺少动作因果
 
@@ -29,7 +29,7 @@ $$
 
 ![LingBot-World training pipeline](../assets/images/paper-deep-dives/world-models/lingbot-world/figure-4-training-pipeline.png){ width="920" }
 
-<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 4。原图展示 LingBot-World 从 foundation video generator 出发，经过 pre-training、middle-training 和 post-training，逐步加入通用视频先验、交互数据、长时动态和因果低延迟能力。本站读法：继承视频底座只是起点，动作数据、因果结构和评测门禁才是世界模型分水岭。</small>
+<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 4。原图展示 LingBot-World 从 foundation video generator 出发，经过 pre-training、middle-training 和 post-training，逐步加入通用视频先验、交互数据、长时动态和因果低延迟能力。读图重点：继承视频底座只是起点，动作数据、因果结构和评测门禁才是世界模型分水岭。</small>
 
 这类路线可以理解成三阶段。第一阶段学“世界看起来怎样”，主要依靠大规模视频和图文数据。第二阶段学“动作如何改变未来”，引入游戏、机器人、相机控制或交互轨迹。第三阶段学“怎样实时向前滚”，包括因果 attention、KV cache、少步生成和流式解码。
 
@@ -39,7 +39,7 @@ $$
 
 ![LingBot-World system pipeline](../assets/images/paper-deep-dives/world-models/lingbot-world/figure-5-system-pipeline.png){ width="920" }
 
-<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 5。原图展示图像/视频、噪声 latent、文本和用户动作共同进入生成系统，并在 DiT block 中通过 action embedding、adaptive normalization、self-attention 和 text cross-attention 影响未来视频。本站读法：动作条件要成为模型内部变量，而不是生成后贴上的解释标签。</small>
+<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 5。原图展示图像/视频、噪声 latent、文本和用户动作共同进入生成系统，并在 DiT block 中通过 action embedding、adaptive normalization、self-attention 和 text cross-attention 影响未来视频。读图重点：动作条件要成为模型内部变量，而不是生成后贴上的解释标签。</small>
 
 最小反事实测试很简单：
 
@@ -57,7 +57,7 @@ $$
 
 ![LingBot-World causal adaptation](../assets/images/paper-deep-dives/world-models/lingbot-world/figure-6-causal-adaptation.png){ width="790" }
 
-<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 6。原图展示 causal generator adaptation 和 discriminator architecture。本站读法：block causal attention、KV cache、长时 discriminator 和少步生成共同解决“只能看过去还要持续交互”的问题。</small>
+<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 6。原图展示 causal generator adaptation 和 discriminator architecture。读图重点：block causal attention、KV cache、长时 discriminator 和少步生成共同解决“只能看过去还要持续交互”的问题。</small>
 
 在线系统还要分清频率。高频控制通常需要传统控制器或轻量 policy，不能等待昂贵视频采样；中频规划可以用 latent rollout、低分辨率未来或候选风险排序；低频分析和人审才适合高清视频反事实回放。
 
@@ -90,7 +90,7 @@ $$
 
 最直接的判断是：如果一个视频世界模型不能让系统更好地选择动作、发现风险或构造有价值的反事实，那它仍然只是视频生成模型；只有当它改变规划、训练和数据回流决策时，才真正进入世界模型工程范畴。
 
-## 外部精读
+## 外部材料
 
 - [LingBot-World / Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)：适合看视频底座如何继续训练成交互式世界模型。
 - [CausVid: From Slow Bidirectional to Fast Autoregressive Video Diffusion Models](https://arxiv.org/abs/2412.07772)：理解为什么因果化和少步生成对交互 rollout 很关键。
@@ -98,11 +98,6 @@ $$
 - [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)：适合看 physical AI 数据生成和世界基础模型平台。
 - [Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)：适合作为视频世界模型路线综述的外部参考。
 
-## 相关阅读与下一步
-
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

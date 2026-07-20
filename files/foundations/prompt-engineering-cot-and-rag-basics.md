@@ -1,11 +1,11 @@
 # Prompt、CoT 与 RAG：把模型输入做成可验证的信息流
 
-这篇文章只回答一个问题：怎样把“让模型回答”改造成一条可控、可复核、能接外部证据和工具的信息流。
+Prompt、CoT 与 RAG 把“让模型回答”改造成一条可控、可复核、能接外部证据和工具的信息流。
 
-Prompt engineering 不是找一句神奇提示词。它是在设计模型这次推理能看见什么、必须遵守什么、哪些文本只是数据、哪些结果要被外部验证。CoT 给复杂任务一个中间工作区；RAG 把外部证据接进上下文；ReAct 和工具调用把模型从单次生成推向多步状态机。它们不是孤立技巧，而是同一条执行链的不同控制点。
+Prompt engineering 是在设计模型这次推理能看见什么、必须遵守什么、哪些文本只是数据、哪些结果要被外部验证。CoT 给复杂任务一个中间工作区；RAG 把外部证据接进上下文；ReAct 和工具调用把模型从单次生成推向多步状态机。它们是同一条执行链的不同控制点。
 
 !!! tip "数学先修"
-    本文会用到[序列、位置与可见性](../prerequisite-math/sequence-position-and-masking.md)理解上下文组装，用[条件概率](../prerequisite-math/probability-distributions-and-expectation.md)理解生成，并用[向量内积与相似度](../prerequisite-math/linear-algebra-and-geometry.md)解释 embedding retrieval。
+    需要用到[序列、位置与可见性](../prerequisite-math/sequence-position-and-masking.md)理解上下文组装，用[条件概率](../prerequisite-math/probability-distributions-and-expectation.md)理解生成，并用[向量内积与相似度](../prerequisite-math/linear-algebra-and-geometry.md)解释 embedding retrieval。
 
 ## Prompt 是上下文组装，不是咒语
 
@@ -139,7 +139,7 @@ RAG 解决的是模型知识不够新、不够私有、不可追溯的问题。�
 
 ![RAG overview 原论文图](../assets/images/paper-figures/foundations/rag-figure-1-overview.png){ width="660" }
 
-<small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原图展示 query encoder、document index 和 generator 如何连接：输入问题先检索 top-K 文档，再基于检索文档生成。本站用这张图说明：RAG 的关键不是生成器本身，而是 retriever、index、evidence assembly 和 generator 之间的证据流。</small>
+<small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原图展示 query encoder、document index 和 generator 如何连接：输入问题先检索 top-K 文档，再基于检索文档生成。这张图说明：RAG 的关键不是生成器本身，而是 retriever、index、evidence assembly 和 generator 之间的证据流。</small>
 
 RAG paper 里可以把检索文档 \(z\) 看成外部 latent variable：
 
@@ -215,7 +215,7 @@ Prompt 改动最容易靠感觉评估。更好的做法是给每类任务建小�
 
 Prompt 是输入契约，CoT 是工作区，prompt chaining 是可调试流程，ReAct 是带工具的状态机，RAG 是证据管线。它们的共同目标不是让回答看起来更复杂，而是让模型能在明确边界、可信证据、可验证中间状态和可回放日志里工作。真正稳定的系统不会只靠一句 prompt，而会把上下文组装、检索、工具、schema、验证、评测和失败回流一起设计。
 
-## 外部精读
+## 外部材料
 
 - [Prompt Engineering Guide 中文版](https://www.promptingguide.ai/zh)：系统学习 zero-shot、few-shot、CoT、ReAct、RAG 等基本概念。
 - [OpenAI Prompt Engineering Guide](https://platform.openai.com/docs/guides/prompt-engineering)：看官方如何组织清晰指令、参考文本、复杂任务拆分和外部工具。
@@ -226,11 +226,6 @@ Prompt 是输入契约，CoT 是工作区，prompt chaining 是可调试流程�
 - [Retrieval-Augmented Generation](https://arxiv.org/abs/2005.11401)：理解 RAG 的 retriever、document latent variable 和 generator。
 - [Lilian Weng: LLM Powered Autonomous Agents](https://lilianweng.github.io/posts/2023-06-23-agent/)：高质量博客，适合把 planning、tool use、memory 和 agent 失败模式连起来读。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

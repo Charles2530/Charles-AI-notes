@@ -1,8 +1,6 @@
 # 离散选择、Top-k 与稀疏路由
 
-这篇回答一个问题：argmax、top-k、beam search、MCTS、router、gating、expert load、entropy 和 load balancing 为什么会出现在 MoE、大模型解码、检索、候选排序和稀疏注意力论文里。
-
-很多模型不是对所有候选都平均用力，而是在一组候选中选少数几个：选下一个 token、选 top-k expert、选检索文档、选候选轨迹、选需要扩展的 draft tree 节点。数学上，这些问题都可以先看成“打分、选择、归一化、再分配预算”。
+argmax、top-k、beam search、MCTS、router、gating、expert load、entropy 和 load balancing 都在处理有限预算下的离散选择。模型先给候选打分，再选择少数候选、归一化权重并重新分配计算预算：下一个 token、top-k expert、检索文档、候选轨迹和 draft tree 节点都可以这样读。
 
 ## 打分：先把候选变成可比较的数字
 
@@ -14,7 +12,7 @@ s_i=f_\theta(x,i)
 
 这里 \(x\) 是上下文，\(i\) 是候选编号。score 可以来自 logits、router MLP、retriever 相似度、value head 或 reward model。
 
-score 的作用不是直接说明“真理”，而是提供排序依据。后面所有选择错误，都可能来自 score 本身不准，也可能来自选择规则不适合任务。
+score 的作用是提供排序依据，不直接说明“真理”。后面所有选择错误，都可能来自 score 本身不准，也可能来自选择规则不适合任务。
 
 ## Argmax 和 Top-k：从连续分数到离散选择
 
@@ -48,7 +46,7 @@ beam search 会保留 \(B\) 条候选前缀，并按累计 log probability 排�
 \sum_{i=1}^{t}\log p(y_i\mid y_{<i},x)
 \]
 
-它不是随机采样，而是一种有限宽度搜索。\(B\) 越大，搜索空间覆盖越广，但计算越贵，也更可能偏向高似然但乏味或过短的序列。读 EAGLE 的 draft tree、传统 seq2seq 解码或候选轨迹搜索时，beam 都可以先理解成“预算有限的多分支前缀保留”。
+beam search 是一种有限宽度搜索，不是随机采样。\(B\) 越大，搜索空间覆盖越广，但计算越贵，也更可能偏向高似然但乏味或过短的序列。读 EAGLE 的 draft tree、传统 seq2seq 解码或候选轨迹搜索时，beam 都可以先理解成“预算有限的多分支前缀保留”。
 
 ## MCTS：边搜索边更新树上的价值
 
@@ -125,7 +123,7 @@ f_i
 
 ![DeepSeek expert load](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-9-expert-load.png){ width="820" }
 
-<small>图源：`DeepSeek-V3` 技术报告相关图，本站已本地化于论文专题。原图展示不同设置下 expert load 的热力图。本站在这里用它说明：稀疏路由不只是选 top-k，还必须监控专家负载是否均衡。</small>
+<small>图源：`DeepSeek-V3` 技术报告相关图，已本地化于论文专题。原图展示不同设置下 expert load 的热力图。这里的重点是：稀疏路由不仅要选 top-k，还要监控专家负载是否均衡。</small>
 
 ## Entropy：选择分布有多尖
 
@@ -168,11 +166,3 @@ H(p)
 ## 读完以后怎么判断
 
 看到 top-k、beam、MCTS、router、gating、expert load 或 entropy，先问：score 来自哪里，选择是硬的还是软的，被剪掉的候选是否还能恢复，树搜索怎样分配探索预算，负载是否均衡，稀疏选择省下的计算有没有被系统成本吃掉。这个问题链会支撑 DeepSeek-V3、Kimi-K2、Nemotron、Gemini、EAGLE-2、MuZero、稀疏注意力和候选轨迹排序论文。
-
-## 相关阅读与下一步
-
-- 站内下一步：[MoE 与大模型架构基础](../foundations/moe-and-large-model-architecture-basics.md)。
-- 站内下一步：[生成与解码基础](../foundations/generation-and-decoding-basics.md)。
-- 论文精读：[DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md)。
-- 论文精读：[EAGLE-2](../paper-deep-dives/inference/eagle-2.md)。
-- 论文精读：[MuZero](../paper-deep-dives/world-models/muzero.md)。

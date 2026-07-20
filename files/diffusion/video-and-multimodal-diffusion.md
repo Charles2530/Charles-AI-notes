@@ -2,9 +2,9 @@
 
 图像扩散只要生成一个静态样本，视频扩散要生成一段会动的样本。这个变化看起来只是多了时间轴，实际会把训练、架构、条件控制和评测全部变复杂。
 
-这篇只回答一个问题：**为什么视频扩散不能简单照搬图像扩散，现代视频生成系统又是靠哪些接口把质量、运动和成本一起撑住？**
+视频扩散不能简单照搬图像扩散；现代视频生成系统要靠 tokenizer、时空主干、条件接口、采样路径和评测一起撑住质量、运动和成本。
 
-视频扩散的核心不是“每帧都好看”，而是同时满足五件事：视频压缩器不能先丢掉运动，时空主干要能交换跨帧信息，条件要贯穿整段视频，采样路径要能在可接受步数内稳定生成，评测要把画质、运动、身份、条件和长时一致性拆开看。
+视频扩散的核心是同时满足五件事：视频压缩器不能先丢掉运动，时空主干要能交换跨帧信息，条件要贯穿整段视频，采样路径要能在可接受步数内稳定生成，评测要把画质、运动、身份、条件和长时一致性拆开看。
 
 ## 视频比图像多出来的不是一维坐标
 
@@ -47,7 +47,7 @@ z\in\mathbb{R}^{T'\times H'\times W'\times C}
 
 ![Wan-VAE framework](../assets/images/paper-deep-dives/diffusion/wan/figure-3-vae.png){ width="820" }
 
-<small>图源：[Wan: Open and Advanced Large-Scale Video Generative Models](https://arxiv.org/abs/2503.20314)，Figure 4。原图展示 Wan-VAE 如何把输入视频压到时空 latent，再解码回视频。本站读法：先看橙色时空压缩块和蓝色空间压缩块；视频 tokenizer 不是逐帧图像 VAE，而是在时间和空间上共同决定后端模型能看见什么。</small>
+<small>图源：[Wan: Open and Advanced Large-Scale Video Generative Models](https://arxiv.org/abs/2503.20314)，Figure 4。原图展示 Wan-VAE 如何把输入视频压到时空 latent，再解码回视频。读图重点：先看橙色时空压缩块和蓝色空间压缩块；视频 tokenizer 不是逐帧图像 VAE，而是在时间和空间上共同决定后端模型能看见什么。</small>
 
 这张图最重要的是中间 latent 的形状：Wan-VAE 把视频压成 \([1+T/4,H/8,W/8,C]\) 这类更短的时空表示。时间压缩让训练成本下降，但也带来风险：压缩率越激进，越容易丢掉短时接触、快速运动和细微表情。视频论文里的 VAE 重建指标、时空压缩率、chunk cache、因果性和首帧处理，不是附录小事，而是质量地基。
 
@@ -71,7 +71,7 @@ spatial attention 主要看一帧内部的物体、布局和关系；temporal at
 
 ![Wan DiT architecture](../assets/images/paper-deep-dives/diffusion/wan/figure-4-dit.png){ width="820" }
 
-<small>图源：[Wan](https://arxiv.org/abs/2503.20314)，Figure 5。原图展示 Wan-VAE、Video DiT、timestep 和文本编码器如何组成视频扩散系统。本站读法：左边 VAE 决定 latent 输入，中间 DiT blocks 负责时空去噪，底部文本通过 cross-attention 持续影响整段视频。</small>
+<small>图源：[Wan](https://arxiv.org/abs/2503.20314)，Figure 5。原图展示 Wan-VAE、Video DiT、timestep 和文本编码器如何组成视频扩散系统。读图重点：左边 VAE 决定 latent 输入，中间 DiT blocks 负责时空去噪，底部文本通过 cross-attention 持续影响整段视频。</small>
 
 这张图把现代视频生成的主干关系讲得很清楚：视频不是先逐帧画完再补运动，而是在 video latent 上让 DiT 同时处理空间布局、时间运动和条件信息。文本条件也不是只给第一帧用；如果 cross-attention 或条件调度弱，视频后半段会 prompt drift，开头符合描述，后面逐渐跑题。
 
@@ -168,7 +168,7 @@ Wan 的价值更像一个开放的视频 foundation model 配方：视频 VAE / 
 
 \(a_t\) 是加噪后的动作轨迹，\(c\) 是观察、语言或目标条件。它和视频扩散共享“序列、多模态、多解”的建模困难，但评测对象不同：视频看时序质量和条件对齐，动作策略看任务成功率、碰撞、安全和闭环恢复。
 
-这类连接应作为边界，而不是把所有多模态扩散塞进一篇文章。本站后续讲 VLA 和策略学习时，会专门讨论动作扩散为什么能表达多模态动作分布。
+这类连接应作为边界，而不是把所有多模态扩散塞进一篇文章。后续讲 VLA 和策略学习时，会专门讨论动作扩散为什么能表达多模态动作分布。
 
 ## 评测不能只看清晰度
 
@@ -197,7 +197,7 @@ VBench 这类 benchmark 有价值，因为它把视频质量拆成多个维度�
 
 继续读相邻内容时，可以接 [一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[一步生成、蒸馏与整流](distillation.md)、[Wan2.1 专题讲解](../paper-deep-dives/diffusion/wan.md)、[CausVid 论文精读](../paper-deep-dives/diffusion/causvid.md) 和 [Diffusion Policy / 动作策略学习](../vla/data-and-policy-learning.md)。
 
-## 外部精读
+## 外部材料
 
 - [Video Diffusion Models](https://arxiv.org/abs/2204.03458)：看图像扩散如何扩展到 space-time U-Net。
 - [Latent Video Diffusion Models](https://arxiv.org/abs/2211.13221)：理解为什么高分辨率视频生成需要 latent 空间。

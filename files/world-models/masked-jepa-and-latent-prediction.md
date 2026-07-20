@@ -2,7 +2,7 @@
 
 世界模型常被想象成“给当前画面和动作，生成未来视频”。这当然是一条路线，但不是唯一入口。对规划和控制来说，模型真正需要保住的是会改变动作选择的状态：物体位置、速度、接触、遮挡、任务阶段、风险、奖励和终止。高清纹理、背景光照、阴影细节有时只是昂贵的旁枝。
 
-Masked / JEPA 路线的核心问题是：**能不能先学一个更像状态的表征，再把动作条件、奖励、风险和 planner 接上去。**它不是把像素预测全部否定，而是把“训练信号”和“决策接口”分开看。
+Masked / JEPA 路线的核心问题是：**能不能先学一个更像状态的表征，再把动作条件、奖励、风险和 planner 接上去。**它把“训练信号”和“决策接口”分开看。
 
 ## 先把四类目标分清
 
@@ -47,7 +47,7 @@ Masked Autoencoder 的直觉很干净：把图像 patch 遮掉大部分，只让
 
 ![MWM framework](../assets/images/paper-deep-dives/world-models/masked-world-models/figure-1-mwm-framework.png){ width="920" }
 
-<small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1。本站复用已有论文图，未使用 image2 生成新图。原图表达：左侧训练 masked visual autoencoder 并预测 reward，右侧在 autoencoder latent space 中训练 latent dynamics。本站读法：左边负责“看懂并压缩”，右边负责“动作之后怎么变”；两者解耦是为了减少视觉噪声对 dynamics 的干扰。</small>
+<small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1。原图表达：左侧训练 masked visual autoencoder 并预测 reward，右侧在 autoencoder latent space 中训练 latent dynamics。读图重点：左边负责“看懂并压缩”，右边负责“动作之后怎么变”；两者解耦是为了减少视觉噪声对 dynamics 的干扰。</small>
 
 MWM 的关键词是 decoupling。视觉 encoder 如果一边为像素重建服务，一边被 dynamics 反复拉扯，容易在“画得像”和“对控制有用”之间互相干扰。先学表示，再学 dynamics，相当于把世界模型拆成两个问题：状态怎么表示，状态怎么随动作变化。
 
@@ -87,7 +87,7 @@ V-JEPA 的论文标题是 feature prediction。它训练的是视频表示：con
 
 ![V-JEPA training procedure](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="920" }
 
-<small>图源：[V-JEPA: Revisiting Feature Prediction for Learning Visual Representations from Video](https://arxiv.org/abs/2404.08471)，Figure 3。本站复用已有论文图，未使用 image2 生成新图。原图表达：context encoder 处理 masked sequence，predictor 用 mask tokens 预测目标位置，target encoder 处理完整输入并提供 latent target。本站读法：老师网络给目标表示，学生网络根据可见上下文预测；输出不是 RGB，而是 representation。</small>
+<small>图源：[V-JEPA: Revisiting Feature Prediction for Learning Visual Representations from Video](https://arxiv.org/abs/2404.08471)，Figure 3。原图表达：context encoder 处理 masked sequence，predictor 用 mask tokens 预测目标位置，target encoder 处理完整输入并提供 latent target。读图重点：老师网络给目标表示，学生网络根据可见上下文预测；输出不是 RGB，而是 representation。</small>
 
 这让 V-JEPA 更接近“状态学习”而不是“视频生成”。它可以学习时空连续性、对象关系和运动线索，但原始 V-JEPA 仍是 action-free：它从视频上下文预测视频表示，不直接回答“如果机器人采取动作 \(a_t\)，未来会怎样”。
 
@@ -153,7 +153,7 @@ Masked / JEPA 路线最容易出现几类“看起来学到了，其实 planner 
 | goal distance 不等于任务成功 | latent 接近目标，但真实执行失败。 | 同时看 goal distance、success、risk 和 failure replay。 |
 | 多步漂移 | 一步 latent prediction 好，多步 planning 崩。 | 分 horizon 报告 drift、ranking accuracy 和 closed-loop success。 |
 
-这也是本站反复强调的证据顺序：先看 representation，再看 action sensitivity，再看 reward/risk，再看 planner ablation，最后看 closed-loop。只停在任意一层，都不能把 claim 外推到完整世界模型。
+这也是证据顺序：先看 representation，再看 action sensitivity，再看 reward/risk，再看 planner ablation，最后看 closed-loop。只停在任意一层，都不能把 claim 外推到完整世界模型。
 
 ## 最后判断
 
@@ -161,7 +161,7 @@ Masked / JEPA 的价值不是“把像素藏起来再补出来”，而是把预
 
 但 latent prediction 只是世界模型的一层。要进入规划和控制，还必须接动作条件 dynamics、goal / reward / risk / done、planner 或 policy，以及真实闭环评测。最容易误读的地方正是在这里：**会预测表示，不等于已经会规划；但一个好表示，能让规划模型少背很多像素负担。**
 
-## 外部精读
+## 外部材料
 
 - [Masked Autoencoders Are Scalable Vision Learners](https://arxiv.org/abs/2111.06377)：理解 masked pixel reconstruction 的强训练信号和非对称 encoder-decoder。
 - [Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)：看 masked representation 如何接 model-based RL。
@@ -172,11 +172,6 @@ Masked / JEPA 的价值不是“把像素藏起来再补出来”，而是把预
 - [V-JEPA 2.1](https://arxiv.org/abs/2603.14482)：看 2026 年 dense video self-supervised features 的进展。
 - [Latent Video Prediction Learns Better World Models](https://arxiv.org/abs/2605.15618)：看 latent-prediction 视频模型在鲁棒性维度上的系统评测。
 
-## 相关阅读与下一步
-
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

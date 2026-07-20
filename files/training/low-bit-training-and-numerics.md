@@ -2,7 +2,7 @@
 
 低比特训练最容易被讲错的地方，是把它讲成“训练版量化”。推理量化的误差大多停在一次前向里；训练里的低精度会进入 loss、反向传播、梯度规约和 optimizer update，最后写回参数。下一步训练看到的，已经是被上一轮舍入、截断、scale 失配改过的模型。
 
-所以这页不急着比较 FP8、MXFP8、FP4、NVFP4 谁更省 bit。更重要的问题是：**哪些张量路径可以低精度，哪些路径必须被高精度保护，scale 和累加状态怎样随训练一起管理？**
+不要急着比较 FP8、MXFP8、FP4、NVFP4 谁更省 bit。更重要的问题是：**哪些张量路径可以低精度，哪些路径必须被高精度保护，scale 和累加状态怎样随训练一起管理？**
 
 这也是低比特训练和低比特推理的根本差别。推理系统关心的是一次请求的质量、延迟和 fallback；训练系统还要关心误差会不会沿着参数更新闭环放大。一个 FP8 kernel 能跑，只说明算子可用；一套低比特训练 recipe 能长跑，才说明格式、scale、累加、checkpoint 和监控真正合在了一起。
 
@@ -48,7 +48,7 @@ x=(-1)^{s_{\mathrm{sign}}}\times 2^e\times m
 
 ![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="700" }
 
-<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。本站复用已有论文图，未使用 image2 生成新图。原图比较 BF16 与 FP8 路线在 GPT/BERT 类模型上的 loss 或 perplexity 曲线；读图时重点不是“FP8 也能训”，而是格式选择、scale 策略、累加精度和敏感算子保护共同成立时，曲线才可能贴近 BF16。</small>
+<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原图比较 BF16 与 FP8 路线在 GPT/BERT 类模型上的 loss 或 perplexity 曲线；读图时重点不是“FP8 也能训”，而是格式选择、scale 策略、累加精度和敏感算子保护共同成立时，曲线才可能贴近 BF16。</small>
 
 这张图给的是底线，不是通行证。迁移到新模型、新激活函数、更长上下文或更长 token budget 时，还要重新监控 loss spike、梯度范数、activation percentile、scale 饱和率和 NaN/Inf。
 
@@ -92,7 +92,7 @@ activation 是低比特训练的主战场之一。权重、梯度和 optimizer s
 
 ![DeepSeek-V3 FP8 framework 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="920" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。本站复用已有论文图，未使用 image2 生成新图。原图展示 DeepSeek-V3 的 FP8 mixed precision training framework：GEMM 相关路径进入 FP8，部分状态、累加、embedding、MoE dispatch/combination 和 optimizer 相关路径保留更高精度或特殊处理。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图展示 DeepSeek-V3 的 FP8 mixed precision training framework：GEMM 相关路径进入 FP8，部分状态、累加、embedding、MoE dispatch/combination 和 optimizer 相关路径保留更高精度或特殊处理。</small>
 
 这张图最该看的不是颜色，而是边界。一个训练系统会把 `Fprop`、`Dgrad`、`Wgrad`、activation cache、通信、optimizer update 拆成不同路径。某些矩阵乘可以用 FP8 输入，某些中间量必须高精度累加，某些模块要保留 BF16/FP32，某些通信张量还要考虑量化、反量化和 overlap 开销。
 
@@ -109,7 +109,7 @@ DeepSeek-V3 的系统意义在这里：它把 FP8 放进大规模 MoE 预训练�
 
 ![DeepSeek-V3 FP8 accumulation 原论文图](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-7-fp8-accumulation.png){ width="880" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 7。本站复用已有论文图，未使用 image2 生成新图。原图展示细粒度量化、tile/group scale 与提高累加精度的设计；读图时重点看 FP8 元素只负责输入表示，GEMM 的部分和最终累加仍要由更安全的精度路径保护。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 7。原图展示细粒度量化、tile/group scale 与提高累加精度的设计；读图时重点看 FP8 元素只负责输入表示，GEMM 的部分和最终累加仍要由更安全的精度路径保护。</small>
 
 矩阵乘不是两个低精度数相乘就结束。一个输出元素来自很多乘积的求和：
 
@@ -176,9 +176,7 @@ FP4 的困难也在这里。元素只有 4 bit，最大值附近、零附近和�
 3. activation、梯度和 optimizer state 的风险不同，不能用一个“量化误差”统一带过。
 4. FP4/MXFP4 的收益更依赖硬件和 kernel，共同设计比单个量化公式更重要。
 
-想把这页和相邻内容连起来，可以读 [数值、显存与运行时](../foundations/numerics-memory-and-runtime-basics.md)、[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)、[FP8 与混合精度推理](../quantization/fp8-and-mixed-precision-serving.md) 和 [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。
-
-## 外部精读
+## 外部材料
 
 - [NVIDIA Transformer Engine: FP8 Delayed Scaling](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/fp8_delayed_scaling/fp8_delayed_scaling.html)：理解 amax history、recipe 和 FP8 runtime 状态。
 - [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 E4M3/E5M2 为什么服务训练和推理。

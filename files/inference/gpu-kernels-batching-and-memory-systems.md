@@ -1,6 +1,6 @@
 # GPU Kernel、Batching 与显存
 
-这一页把 [推理服务系统](serving-systems.md) 里的 queue、prefill、decode 和 KV cache 落到 GPU 执行层。你不需要先会写 CUDA，但要能判断：慢是因为 GPU 算不过来，还是因为 batch 太碎、KV 访存太重、量化 kernel 没命中，或者调度让用户等太久。
+推理服务系统里的 queue、prefill、decode 和 KV cache 最终会落到 GPU 执行层。读这条链时，要能判断慢是因为 GPU 算不过来，还是 batch 太碎、KV 访存太重、量化 kernel 没命中，或者调度让用户等太久。
 
 ## 从公式回到 GPU 时间线
 
@@ -16,7 +16,7 @@ T_{\text{queue}}
 + T_{\text{network}}
 \]
 
-这行式子在说：请求总耗时可以拆成排队、prefill、decode、后处理和网络传输几段；本页主要关心 GPU 上最重的 \(T_{\text{prefill}}\) 与 \(T_{\text{decode}}\)。
+这行式子在说：请求总耗时可以拆成排队、prefill、decode、后处理和网络传输几段；GPU 上最重的通常是 \(T_{\text{prefill}}\) 与 \(T_{\text{decode}}\)。
 
 GPU 页面重点看中间两段：
 
@@ -177,18 +177,13 @@ vLLM 的 Triton attention backend 文章很适合把这个排查顺序落到 ker
 
 GPU 推理优化不是微基准游戏。真正要改善线上体验，需要同时看请求分桶、queue、prefill、decode、KV 生命周期、kernel 热点和 SLO。一个优化只有在真实请求桶里同时改善成本、延迟和质量，才算真的有效。
 
-## 外部精读
+## 外部材料
 
 - [vLLM Triton Attention Backend Deep Dive](https://vllm.ai/blog/2026-03-04-vllm-triton-backend-deep-dive)：学习 attention kernel、Triton tile、autotuning、CUDA graphs 和 persistent kernels 如何连成工程链。
 - [CUTLASS GEMM API docs](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/gemm_api.html)：学习 GEMM 从 threadblock、warp 到 instruction 的层级。
 - [NVIDIA CUTLASS 3.x blog](https://developer.nvidia.com/blog/cutlass-3-x-orthogonal-reusable-and-composable-abstractions-for-gemm-kernel-design/)：学习如何用可组合抽象解释 kernel，而不是只列 API。
 - [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：学习 KV cache 为什么是推理系统容量瓶颈。
 
-## 相关阅读与下一步
-
-- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
-- 站内下一步：[推理系统专题](index.md)。
-- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
-- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。
+- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- [SGLang 文档](https://docs.sglang.ai/)。

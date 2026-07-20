@@ -1,16 +1,14 @@
 # 自动驾驶世界模型：从渲染、仿真到规划闭环
 
-> **这篇回答的问题。** 自动驾驶里的世界模型到底在做什么：它是更会生成视频的模型，还是能把观测、状态和动作接成闭环的系统能力？
-
 这份材料给我的核心启发是：自动驾驶中的世界模型不应该只被理解为“预测未来画面”。更准确的读法，是把它放回 `观测-状态-动作` 的闭环里：渲染回答“世界状态怎样变成传感器观测”，仿真回答“状态和动作怎样演化成下一状态”，规划回答“观测怎样变成动作”。
 
-所以，自动驾驶世界模型的真正价值，不是生成一段看起来更真实的视频，而是提供一种可被规划器、仿真器、数据引擎和安全评测共同消费的未来推演能力。
+所以，自动驾驶世界模型的真正价值，是提供一种可被规划器、仿真器、数据引擎和安全评测共同消费的未来推演能力。
 
-本文是基于一份分享材料做的路线思考，不替代单篇论文精读；文中论文名称和方向描述沿用 PPT 的整理口径，具体实验数字和实现细节仍应回到原论文核验。
+这份路线思考基于一份分享材料，不替代单篇论文精读；文中论文名称和方向描述沿用 PPT 的整理口径，具体实验数字和实现细节仍应回到原论文核验。
 
 ![World model functional taxonomy](../assets/images/thinking-exploration/autonomous-driving-world-models/world-model-functional-taxonomy.png){ width="900" }
 
-<small>图源：PPT 中引用的世界模型功能分类图。本站读法：不要先问“某个模型是不是世界模型”，而要先看它落在 render、simulate、plan 哪个环节，以及它是否能进入闭环。</small>
+<small>图源：PPT 中引用的世界模型功能分类图。读图重点：不要先问“某个模型是不是世界模型”，而要先看它落在 render、simulate、plan 哪个环节，以及它是否能进入闭环。</small>
 
 ## 先把三个词分清楚
 
@@ -38,7 +36,7 @@ PPT 里第一组例子集中在渲染。UniSceneV2 的路线很有代表性：�
 
 ![UniScene occupancy rendering](../assets/images/thinking-exploration/autonomous-driving-world-models/uniscene-occupancy-rendering.png){ width="880" }
 
-<small>图源：PPT 中 UniScene 系列示意图。本站读法：语义占用像是驾驶世界的中间状态，视频和点云是从状态派生出来的观测。</small>
+<small>图源：PPT 中 UniScene 系列示意图。读图重点：语义占用像是驾驶世界的中间状态，视频和点云是从状态派生出来的观测。</small>
 
 这条路线的关键价值是：它把“视觉生成”从纯像素空间往几何和语义状态上拉了一层。对自动驾驶来说，规划器最终关心的不是画面里建筑纹理有多逼真，而是：
 
@@ -55,7 +53,7 @@ Envision4D 这类工作给了另一个启发：世界模型不一定要预测像
 
 ![Envision4D Gaussian extrapolation](../assets/images/thinking-exploration/autonomous-driving-world-models/envision4d-gaussian-extrapolation.png){ width="920" }
 
-<small>图源：PPT 中 Envision4D 示例图。本站读法：4D Gaussian 的意义不是“换一种图片格式”，而是把未来预测放进带空间结构的表示里。</small>
+<small>图源：PPT 中 Envision4D 示例图。读图重点：4D Gaussian 的意义不是“换一种图片格式”，而是把未来预测放进带空间结构的表示里。</small>
 
 纯视频预测容易遇到两个问题。第一，多视角一致性难保证：同一个车、同一个行人，在不同相机里可能形状、位置或运动关系不一致。第二，长时外推容易漂移：模型能补出看似合理的画面，但物体运动、尺度和遮挡关系可能逐渐失真。
 
@@ -77,7 +75,7 @@ DreamForge 的位置比较典型。它和交通管理器、驾驶智能体一起
 
 ![DreamForge closed loop](../assets/images/thinking-exploration/autonomous-driving-world-models/dreamforge-closed-loop.png){ width="800" }
 
-<small>图源：PPT 中 DreamForge 闭环仿真结构图。本站读法：这里的世界模型不是孤立视频生成器，而是闭环仿真系统里的观测生成组件。</small>
+<small>图源：PPT 中 DreamForge 闭环仿真结构图。读图重点：这里的世界模型不是孤立视频生成器，而是闭环仿真系统里的观测生成组件。</small>
 
 视频扩散模型在这里有一个独特优势：它很擅长生成视觉风格，包括天气、光照、材质、道路纹理和城市外观。这对数据增强和场景迁移很有用。
 
@@ -96,7 +94,7 @@ I2World 的思路把仿真进一步推到语义占用空间：先把动态 4D �
 
 ![I2World occupancy tokenizer](../assets/images/thinking-exploration/autonomous-driving-world-models/i2world-occupancy-tokenizer.png){ width="920" }
 
-<small>图源：PPT 中 I2World 结构图。本站读法：如果把 occupancy 看成状态，那么模型预测的就不是“下一张图”，而是“下一刻世界被什么占据”。</small>
+<small>图源：PPT 中 I2World 结构图。读图重点：如果把 occupancy 看成状态，那么模型预测的就不是“下一张图”，而是“下一刻世界被什么占据”。</small>
 
 这条路线对自动驾驶尤其自然，因为驾驶规划本来就依赖空间占用和可行驶性。相比未来视频，未来 occupancy 更容易被 planner 消费：
 
@@ -115,7 +113,7 @@ I2World 的思路把仿真进一步推到语义占用空间：先把动态 4D �
 
 ![ReSim reliable world simulation](../assets/images/thinking-exploration/autonomous-driving-world-models/resim-reliable-world-simulation.png){ width="920" }
 
-<small>图源：PPT 中 ReSim 方法示意图。本站读法：关键不只是“生成未来视频”，而是让世界模型在非专家动作、偏离专家分布的轨迹下仍然可靠。</small>
+<small>图源：PPT 中 ReSim 方法示意图。读图重点：关键不只是“生成未来视频”，而是让世界模型在非专家动作、偏离专家分布的轨迹下仍然可靠。</small>
 
 这里有一个很重要的问题：只在专家数据上训练的世界模型，往往只见过“正常驾驶”。一旦规划器尝试非专家动作，比如靠近障碍物、偏离车道、急转或极端避让，模型可能产生幻觉。这个问题对安全很危险，因为自动驾驶最需要验证的恰恰是非常规、罕见和临界状态。
 
@@ -135,7 +133,7 @@ ResWorld 给了一个更偏规划的视角：未来状态预测不一定要被�
 
 ![ResWorld temporal residual](../assets/images/thinking-exploration/autonomous-driving-world-models/resworld-temporal-residual.png){ width="900" }
 
-<small>图源：PPT 中 ResWorld 结构图。本站读法：世界模型的目标不是复刻数据集中唯一发生过的未来，而是形成对规划有用的未来表征。</small>
+<small>图源：PPT 中 ResWorld 结构图。读图重点：世界模型的目标不是复刻数据集中唯一发生过的未来，而是形成对规划有用的未来表征。</small>
 
 这个点很有意思。自动驾驶数据里记录的是某个时刻人类或系统实际走过的一条轨迹，但在规划问题里，同一状态下本来就存在多种可能未来。模型如果被强行要求复刻数据里的那条真实未来，可能反而限制了它对候选轨迹的评估能力。
 
@@ -209,10 +207,3 @@ flowchart LR
 一句话概括：
 
 **自动驾驶世界模型的核心，不是预测未来会长什么样，而是预测不同动作会把世界带向哪里。**
-
-## 相关阅读
-
-- 站内下一步：[世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md)。
-- 站内下一步：[WAM 与 3D 视觉：世界模型从视频想象走向物理闭环](wam-3dv-world-models.md)。
-- 站内下一步：[Towards Video World Models：视频世界模型门槛](../paper-deep-dives/world-models/towards-video-world-models.md)。
-- 站内下一步：[World Models Survey：具身世界模型综述](../paper-deep-dives/world-models/world-models-embodied-ai-survey.md)。

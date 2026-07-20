@@ -3,7 +3,7 @@
 模型蒸馏（Knowledge Distillation, KD）解决的是一个很实际的问题：已经有一个强但贵的 teacher model，能不能把它的行为、分布或中间表示压到更小、更快、更便宜的 student model 里。
 
 !!! tip "数学先修"
-    本文会用到[熵、交叉熵与 KL](../prerequisite-math/information-theory-and-divergence.md)比较 teacher/student 分布，用[概率与期望](../prerequisite-math/probability-distributions-and-expectation.md)理解 soft target；teacher 分支和离散信号可继续读[梯度估计与 stop-gradient](gradient-estimators-and-training-signals.md)。
+    需要用到[熵、交叉熵与 KL](../prerequisite-math/information-theory-and-divergence.md)比较 teacher/student 分布，用[概率与期望](../prerequisite-math/probability-distributions-and-expectation.md)理解 soft target；teacher 分支和离散信号可继续读[梯度估计与 stop-gradient](gradient-estimators-and-training-signals.md)。
 
 ## 1. 蒸馏解决什么
 
@@ -163,11 +163,8 @@ LLM 时代经常蒸馏的不只是答案，还有 rationale。Distilling step-by
 
 模型蒸馏是一种把 teacher 里的可用信号转成 student 训练目标的方法。它可以压缩模型、迁移行为、提高数据效率，也可以把慢生成过程压成少步生成。但蒸馏不是免费午餐：teacher 质量、蒸馏信号、student 容量、数据覆盖和评测口径共同决定结果。读论文时先问四件事：蒸馏谁、蒸馏什么、用什么 loss、用什么独立证据证明 student 真的可替代。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

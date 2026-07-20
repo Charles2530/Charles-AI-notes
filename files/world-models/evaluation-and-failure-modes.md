@@ -2,7 +2,7 @@
 
 评测世界模型时，最容易被一段漂亮视频带偏。视频很清晰、动作很顺、物体看起来也没穿模，但只要换一个候选动作，未来仍然差不多；或者 planner 按它的预测去执行，真实环境里马上碰撞、滑落、卡住。这样的模型可以是很强的视频模型，却还不是可靠的决策模型。
 
-本文适合正在阅读世界模型论文、设计机器人或 agent 评测的人；只需了解世界模型的基本概念，如果还不熟，可以先读[入门页](beginner-world-models-primer.md)。全文只追一个问题：怎样判断一个世界模型改善了动作选择、风险识别或数据回流，而不只是生成了更顺眼的未来。读完后，你应能根据消费方选择 open-loop、反事实、closed-loop 和风险分桶指标，并据此判断模型是否达到发布门槛。
+世界模型评测要判断模型是否改善动作选择、风险识别或数据回流，而不只是生成更顺眼的未来。根据消费方选择 open-loop、反事实、closed-loop 和风险分桶指标，才能判断模型是否达到发布门槛。
 
 ## 先问谁要用它
 
@@ -27,7 +27,7 @@
 
 第三把是部署尺。它回答“预测被系统消费之后，真实决策有没有变好”。[World-in-World](https://arxiv.org/abs/2510.18135)、[WorldArena](https://arxiv.org/abs/2602.08971)、[WorldArena 2.0](https://arxiv.org/abs/2605.17912) 和 [WoW-World-Eval](https://arxiv.org/abs/2601.04137) 这类新基准的重要变化，就在于把视觉质量放回功能用途里看：作为 data engine 是否提升 policy，作为 evaluator 是否相关，作为 planner 是否在闭环里提高成功率。
 
-截至 2026-06-03，本站根据上述基准公开的评测设计作出综合判断：世界模型评测前沿正从 `vision-only + offline score` 扩展到 `multimodal + interactive utility + cross-platform`。这是对公开材料的趋势归纳，不代表本站对各基准结果做过独立复现。
+截至 2026-06-03，根据上述基准公开的评测设计可以得到一个趋势判断：世界模型评测前沿正从 `vision-only + offline score` 扩展到 `multimodal + interactive utility + cross-platform`。这是对公开材料的趋势归纳，不代表对各基准结果做过独立复现。
 
 ## Open-loop 只看漂移
 
@@ -127,7 +127,7 @@ World-in-World 的提醒很直接：视觉质量本身不保证任务成功，�
 
 ![DreamZero failure case 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-16-failure-case.png){ width="920" }
 
-<small>图源：[World Action Models are Zero-shot Policies，Figure 16](https://arxiv.org/abs/2602.15922)。原图展示 video-action model 的失败案例。本站读法：WAM 的危险在于错误未来和错误动作可能互相支持，看起来像一条连贯计划；评测必须检查真实观测刷新后能否纠正，以及 safety layer 能否提前截停。</small>
+<small>图源：[World Action Models are Zero-shot Policies，Figure 16](https://arxiv.org/abs/2602.15922)。原图展示 video-action model 的失败案例。读图重点：WAM 的危险在于错误未来和错误动作可能互相支持，看起来像一条连贯计划；评测必须检查真实观测刷新后能否纠正，以及 safety layer 能否提前截停。</small>
 
 ## 失效模式按修复路径分类
 
@@ -161,21 +161,15 @@ failure mode 最好根据“下一步怎么修”来分类，只写现象无法�
 
 最终判断很简单：如果世界模型不能在闭环里提升动作选择、风险识别或数据回流，它还只是预测模型或生成模型；只有当它改变系统决策质量时，才算通过验收。
 
-## 自测与下一步
+## 自测
 
-先独立回答下面三个迁移题，不要只复述本页结论：
+
+先独立回答下面三个迁移题，不要只复述前文结论：
 
 1. 仓储机械臂的世界模型生成质量提高了，但候选动作排序没有变化，碰撞漏报还在增加。它能否作为 planner、risk gate 或 data engine 发布？三种消费方分别还缺什么证据？
 2. 两个模型的 open-loop 误差曲线相近：一个模型换动作后只改变背景纹理，另一个会改变目标位置和接触结果。你会怎样设计 counterfactual hard set 和指标，把这两种行为区分开？
 3. 一个 policy evaluator 在常见任务上与真实成功率相关，却持续高估遮挡和 near-miss 桶。你会怎样写发布门槛、回退条件和下一轮数据回流规则？
-
-需要补概念或继续深入时，可以按问题选择：
-
-- [世界模型基础：状态、动力学、观测与决策](beginner-world-models-primer.md)：补齐 belief state、action、rollout 和决策接口
-- [WM / WAM / VAM：动作到底怎样进入世界模型](wm-wam-vam-and-action-conditioned-modeling.md)：继续检查动作条件和消费接口
-- [不确定性与风险敏感规划](uncertainty-and-risk-aware-planning.md)：把风险分桶、校准和保守回退接到规划器
-
-## 外部精读
+## 外部材料
 
 - [WorldArena 2.0](https://arxiv.org/abs/2605.17912)：理解最新 embodied world model 评测为什么从视觉扩展到触觉、交互式 RL 环境和多平台。
 - [World-in-World](https://arxiv.org/abs/2510.18135)：理解 closed-loop world model benchmark 为什么要把任务成功率放到核心位置。

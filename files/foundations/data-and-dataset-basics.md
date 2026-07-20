@@ -1,11 +1,11 @@
 # 数据与数据集基础：模型真正吃下去的不是“文件夹”
 
-这篇文章只回答一个问题：读到“我们用某数据集训练/评测”时，怎样判断这个结论是不是可信。
+读到“我们用某数据集训练/评测”时，关键是判断这个结论是否可信。
 
 数据集不是一个目录、一张表或若干 JSONL。它是一组样本定义、标签规则、来源记录、processor、split、过滤和版本共同构成的训练契约。只要契约说不清，后面的 loss、benchmark 和训练曲线都可能在回答错误问题。
 
 !!! tip "数学先修"
-    本文会用到[概率分布与条件概率](../prerequisite-math/probability-distributions-and-expectation.md)来说明样本从哪里来，也会用[因果与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)区分数据相关性、泄漏和部署分布。已经熟悉可直接继续。
+    需要用到[概率分布与条件概率](../prerequisite-math/probability-distributions-and-expectation.md)来说明样本从哪里来，也会用[因果与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)区分数据相关性、泄漏和部署分布。已经熟悉可直接继续。
 
 ## 样本不是一行数据，而是一份契约
 
@@ -117,7 +117,7 @@ Mixture 会直接改变训练目标。假设数据来自 \(K\) 个来源，第 \
 
 ![Data Cards stakeholder typology 原论文图](../assets/images/paper-figures/foundations/data-cards-typology.png){ width="800" }
 
-<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。原图把 dataset 文档相关角色分为 producers、agents 和 users。本站用这张图说明：数据文档不是附录礼仪，而是让不同角色能追问来源、用途、风险、评测和影响的共同接口。</small>
+<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。原图把 dataset 文档相关角色分为 producers、agents 和 users。这张图说明：数据文档不是附录礼仪，而是让不同角色能追问来源、用途、风险、评测和影响的共同接口。</small>
 
 Datasheets for Datasets 和 Data Cards 的共同思想是：数据集应该像模型和硬件一样有文档。基础阶段至少要能回答这些问题：
 
@@ -137,7 +137,7 @@ Datasheets for Datasets 和 Data Cards 的共同思想是：数据集应该像�
 
 ![Open X-Embodiment dataset overview 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="760" }
 
-<small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。原图统计 Open X-Embodiment 中 robot embodiment、scene、trajectory、skill 和 object category 的分布。本站用这张图说明：机器人数据的样本不是单张图，而是跨机器人、场景、物体、技能和动作接口的轨迹分布。</small>
+<small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。原图统计 Open X-Embodiment 中 robot embodiment、scene、trajectory、skill 和 object category 的分布。这张图说明：机器人数据的样本不是单张图，而是跨机器人、场景、物体、技能和动作接口的轨迹分布。</small>
 
 机器人/VLA 数据里，一个样本常常是一段轨迹：
 
@@ -173,7 +173,7 @@ Datasheets for Datasets 和 Data Cards 的共同思想是：数据集应该像�
 
 数据页最重要的结论很朴素：不要先相信“数据更多”，先问“数据是什么”。如果样本、标签、processor、split、去重、metadata、版本和使用边界说不清，训练曲线越漂亮，越可能只是把问题藏得更深。
 
-## 外部精读
+## 外部材料
 
 - [Datasheets for Datasets](https://arxiv.org/abs/1803.09010)：理解为什么数据集需要系统文档。
 - [Data Cards](https://arxiv.org/abs/2204.01075)：学习数据文档如何服务 producers、agents 和 users。
@@ -183,12 +183,6 @@ Datasheets for Datasets 和 Data Cards 的共同思想是：数据集应该像�
 - [DataComp](https://arxiv.org/abs/2304.14108)：理解数据过滤策略本身也可以成为 benchmark。
 - [Open X-Embodiment](https://arxiv.org/abs/2310.08864)：理解机器人数据里的 embodiment、轨迹、动作接口和跨数据集异质性。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

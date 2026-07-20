@@ -2,9 +2,7 @@
 
 Flow Matching 直接学习概率路径上的速度场，并通过常微分方程把简单分布输送到数据分布。它与 diffusion/score 方法可以共享“数据—噪声路径”的几何图，但监督目标、时间方向和生成方程必须分别写清。
 
-## 本文解决什么问题
-
-本文连接四个层次：条件概率路径怎样构造可监督的 conditional velocity；网络为何能从条件目标学到 marginal velocity；ODE sampler 怎样沿速度场生成；Rectified Flow 为什么通过 reflow 降低路径曲率，并改善有限步积分。
+Flow Matching 可以分成四层读：条件概率路径怎样构造可监督的 conditional velocity；网络为何能从条件目标学到 marginal velocity；ODE sampler 怎样沿速度场生成；Rectified Flow 为什么通过 reflow 降低路径曲率，并改善有限步积分。
 
 全文采用 \(t=0\) 为数据、\(t=1\) 为噪声的约定，生成从 \(t=1\) 反向积分到 \(t=0\)。部分论文采用相反时间方向，比较公式前必须先统一约定。
 
@@ -72,7 +70,7 @@ u_t=\dot\alpha(t)x_0+\dot\sigma(t)\epsilon.
 \frac{d x_t}{dt}=v_\theta(x_t,t).
 \]
 
-在本文约定下，训练路径从数据 \(t=0\) 指向噪声 \(t=1\)；生成从噪声初值 \(x_1\sim\mathcal N(0,I)\) 反向积分到 \(t=0\)。Euler 更新可以写成：
+按这里的时间约定，训练路径从数据 \(t=0\) 指向噪声 \(t=1\)；生成从噪声初值 \(x_1\sim\mathcal N(0,I)\) 反向积分到 \(t=0\)。Euler 更新可以写成：
 
 \[
 x_{t-\Delta t}
@@ -150,16 +148,11 @@ flowchart TB
 ## 检查理解
 
 1. conditional velocity 为什么可监督，marginal velocity 为什么不需要显式标签？
-2. 本文时间约定下，训练路径和生成积分分别朝哪个方向？
+2. 按这里的时间约定，训练路径和生成积分分别朝哪个方向？
 3. 为什么单个样本对使用直线插值，不保证学到的边缘速度场处处为直线？
 4. Flow velocity、DDPM \(v\)-prediction 和视频物体运动速度分别描述什么？
 5. Rectified Flow 减少曲率后，为什么仍不能保证一步生成无损？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 连续时间另一入口：[Score Matching 到 SDE](score-matching-sde-and-probability-flow.md)。
-- 少步终点映射：[Consistency Models 与 Flow 边界](consistency-models-and-rectified-flow.md)。
-- 数值执行：[采样与推理加速](inference.md)。
-- 视频系统：[视频与多模态扩散](video-and-multimodal-diffusion.md)。
-- 外部材料：[Flow Matching for Generative Modeling](https://arxiv.org/abs/2210.02747)、[Flow Matching Guide and Code](https://arxiv.org/abs/2412.06264)、[Flow Straight and Fast](https://arxiv.org/abs/2209.03003)。
-- 返回：[扩散模型专题](index.md)。
+- [Flow Matching for Generative Modeling](https://arxiv.org/abs/2210.02747)、[Flow Matching Guide and Code](https://arxiv.org/abs/2412.06264)、[Flow Straight and Fast](https://arxiv.org/abs/2209.03003)。

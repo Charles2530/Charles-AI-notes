@@ -2,9 +2,9 @@
 
 扩散采样慢，不只是因为循环次数多。多步采样的每一步都在做小修正：先定大结构，再补关系、材质、边缘和高频纹理。把 30 步、50 步压到 4 步甚至 1 步，等于要求学生模型一次跨过教师原来很多个噪声区间。
 
-这篇只回答一个问题：**当采样器不再有几十次纠错机会时，少步模型怎样仍然保住分布、细节、多样性和条件控制？**
+采样器不再有几十次纠错机会时，少步模型要同时保住分布、细节、多样性和条件控制。
 
-少步生成的关键不是删掉采样循环，而是把线上推理成本转移到离线训练里。Progressive Distillation 压缩教师轨迹，Consistency / LCM 学同一轨迹终点一致，DMD / DMD2 直接匹配最终分布，Rectified Flow / Rectified Diffusion 重新设计生成路径。它们都在换取更少 NFE，但付出的训练成本和失败模式完全不同。
+少步生成把线上推理成本转移到离线训练里。Progressive Distillation 压缩教师轨迹，Consistency / LCM 学同一轨迹终点一致，DMD / DMD2 直接匹配最终分布，Rectified Flow / Rectified Diffusion 重新设计生成路径。它们都在换取更少 NFE，但付出的训练成本和失败模式完全不同。
 
 ## 少步学生少了什么
 
@@ -82,13 +82,13 @@ D\big(p_{\mathrm{student}}(x),p_{\mathrm{target}}(x)\big)
 
 ![DMD overview 原论文图](../assets/images/paper-deep-dives/diffusion/dmd/overview.png){ width="920" }
 
-<small>图源：[One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)，Figure 2。原图展示一步生成器 \(G_\theta\) 从噪声生成样本，一条支路用 teacher 生成的 noise-image pair 做回归，另一条支路用 real / fake score 差异形成 distribution matching gradient。本站读法：DMD 的关键不是少跑几步，而是用分布信号约束学生最终落到哪里。</small>
+<small>图源：[One-step Diffusion with Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)，Figure 2。原图展示一步生成器 \(G_\theta\) 从噪声生成样本，一条支路用 teacher 生成的 noise-image pair 做回归，另一条支路用 real / fake score 差异形成 distribution matching gradient。读图重点：DMD 的关键不是少跑几步，而是用分布信号约束学生最终落到哪里。</small>
 
 DMD 的重要性在于，它给一步生成一个更合适的目标。一步学生很难逐点模仿教师轨迹，因为它几乎没有轨迹；用最终分布约束更自然。但分布约束也更危险：如果只往 real score 的高密度方向走，学生可能收缩到少数安全模式；如果 fake score 估计不准，梯度方向会偏。
 
 ![DMD objective comparison](../assets/images/paper-deep-dives/diffusion/dmd/matching_sim_figure.png){ width="640" }
 
-<small>图源：[DMD](https://arxiv.org/abs/2311.18828)，Figure 3。原图用二维 toy 分布比较只用 real score、加入 distribution matching、再加入 regression anchor 的效果。本站读法：分布匹配不能只看 loss 数字，关键是模式覆盖和样本多样性是否保住。</small>
+<small>图源：[DMD](https://arxiv.org/abs/2311.18828)，Figure 3。原图用二维 toy 分布比较只用 real score、加入 distribution matching、再加入 regression anchor 的效果。读图重点：分布匹配不能只看 loss 数字，关键是模式覆盖和样本多样性是否保住。</small>
 
 所以 DMD 类方法的验收要同时看分布质量和模式覆盖。只看单张样例锐不锐，很容易漏掉学生是否坍缩到少数风格。
 
@@ -98,7 +98,7 @@ DMD2 继续走分布匹配路线，但它把 DMD 的几个不稳定点拆开处�
 
 ![DMD2 method 原论文图](../assets/images/paper-deep-dives/diffusion/dmd2/method.png){ width="920" }
 
-<small>图源：[Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)，Figure 3。原图展示 generator、fake score function 和 GAN discriminator 交替训练。本站读法：DMD2 的少步速度不是白来的；部署端少跑几十步，训练端增加了动态 critic、GAN 分支和推理链路模拟。</small>
+<small>图源：[Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)，Figure 3。原图展示 generator、fake score function 和 GAN discriminator 交替训练。读图重点：DMD2 的少步速度不是白来的；部署端少跑几十步，训练端增加了动态 critic、GAN 分支和推理链路模拟。</small>
 
 可以用一个总目标直觉理解：
 
@@ -119,7 +119,7 @@ DMD2 的经验提醒是：少步模型的训练曲线不能按单一 loss 读。
 
 ![Phased DMD schematic](../assets/images/paper-deep-dives/diffusion/phased-dmd/phased-diagram.png){ width="920" }
 
-<small>图源：[Phased DMD](https://arxiv.org/abs/2510.27684)，Figure 1。原图对比 vanilla few-step DMD、DMD2/SGTS、4-phase Phased DMD 和结合 SGTS 的 2-phase 版本；红色表示记录梯度的 generator step，蓝色表示只前向的 step。本站读法：少步训练仍要保留阶段职责，不能把每次训练都退化成“从噪声直接到最终画面”。</small>
+<small>图源：[Phased DMD](https://arxiv.org/abs/2510.27684)，Figure 1。原图对比 vanilla few-step DMD、DMD2/SGTS、4-phase Phased DMD 和结合 SGTS 的 2-phase 版本；红色表示记录梯度的 generator step，蓝色表示只前向的 step。读图重点：少步训练仍要保留阶段职责，不能把每次训练都退化成“从噪声直接到最终画面”。</small>
 
 如果把少步蒸馏总压成一跳，模型为了稳定可能倾向保守：视频动作变慢、镜头运动变弱、不同 seed 更像。Phased DMD 把任务拆开：低 SNR 子区间负责大结构和运动，高 SNR 子区间负责细节。它和 DMD2 的关系不是谁替代谁，而是进一步处理“大模型、视频、少步”下的阶段退化问题。
 
@@ -173,7 +173,7 @@ Rectified Flow 的经典目标强调让噪声分布到数据分布的运输路�
 
 继续读相邻内容时，可以接 [采样与推理加速](inference.md)、[一致性模型与 Rectified Flow](consistency-models-and-rectified-flow.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) 和 [DMD2 论文精读](../paper-deep-dives/diffusion/dmd2.md)。
 
-## 外部精读
+## 外部材料
 
 - [Progressive Distillation](https://arxiv.org/abs/2202.00512)：理解把教师两步压成学生一步的逐级路线。
 - [Consistency Models](https://arxiv.org/abs/2303.01469)：理解为什么同一轨迹不同噪声点可以映射到一致终点。

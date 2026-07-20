@@ -2,7 +2,7 @@
 
 Triton 不是“Python 版 CUDA”。它真正提供的是一种适合神经网络张量算子的中间层：你不用手写每个 thread 的同步和访存细节，但仍然要明确一个 program instance 负责哪块输出、怎样计算地址、怎样处理边界、怎样累加、怎样选择 tile，以及编译和 autotune 什么时候发生。
 
-读 Triton kernel 时，最重要的问题不是“这段 Python 代码像不像普通循环”，而是：**`program_id` 如何映射到输出 tile，`tl.arange` 如何生成 block 内索引，`tl.load/tl.store` 访问了哪张地址矩阵，`tl.dot` 在什么 dtype 上累加，`@triton.autotune` 又在什么 shape bucket 上选择配置。**
+读 Triton kernel 时，最重要的问题是：**`program_id` 如何映射到输出 tile，`tl.arange` 如何生成 block 内索引，`tl.load/tl.store` 访问了哪张地址矩阵，`tl.dot` 在什么 dtype 上累加，`@triton.autotune` 又在什么 shape bucket 上选择配置。**
 
 ## 先判断它是不是 Triton 问题
 
@@ -90,7 +90,7 @@ C=AB,\qquad A\in\mathbb{R}^{M\times K},\quad B\in\mathbb{R}^{K\times N},\quad C\
 
 ![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="760" }
 
-<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)，Figure 1。本站复用已有论文图，未使用 image2 生成新图。原图比较 Triton、cuBLAS、AutoTVM、Tensor Comprehensions 和 PlaidML 在矩阵乘 roofline 图上的位置；本站用它说明 Triton 的价值不是替代所有库，而是在高层框架和手写 CUDA 之间提供 tile 级表达能力。</small>
+<small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)，Figure 1。原图比较 Triton、cuBLAS、AutoTVM、Tensor Comprehensions 和 PlaidML 在矩阵乘 roofline 图上的位置；这里的重点是 Triton 的价值不是替代所有库，而是在高层框架和手写 CUDA 之间提供 tile 级表达能力。</small>
 
 matmul kernel 可以按这个骨架读：
 
@@ -183,7 +183,7 @@ profile 证明热点
 
 如果只记住一句话：Triton 的核心不是把 CUDA 写成 Python，而是把张量 kernel 的 block 数据流暴露出来，让程序员控制 tile 和地址，让编译器生成底层并行代码；自动调优只能优化候选配置，不能替代数据流设计和端到端验证。
 
-## 外部精读
+## 外部材料
 
 - [Triton 官方 Vector Addition tutorial](https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html)：最小 `program_id`、`tl.arange`、mask、load/store 心智模型。
 - [Triton 官方 Matrix Multiplication tutorial](https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html)：理解 `BLOCK_M/N/K`、`tl.dot`、group ordering 和 autotune。
@@ -193,11 +193,6 @@ profile 证明热点
 - [PyTorch `torch.compile` documentation](https://docs.pytorch.org/docs/stable/torch.compiler.html)：理解 Inductor、编译缓存、graph capture 和生成 kernel 的上层路径。
 - [CUDA C++ Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/)：补 coalescing、occupancy、profiling、memory throughput 等 GPU 优化背景。
 
-## 相关阅读与下一步
-
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

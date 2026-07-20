@@ -6,7 +6,7 @@
 
 ![DDIM accelerated generation](../assets/images/paper-figures/diffusion/ddim-figure-2-accelerated-generation.png)
 
-<small>图源：[DDIM](https://arxiv.org/abs/2010.02502)。原图表达同一个训练好的扩散模型可以用更稀疏的反向路径加速采样；本站读法是把“换采样器”和“重训/蒸馏学生”先分开，避免把所有少步方法混成一类。它不能证明任意模型都能极少步高质量生成，只说明不重训路线的第一层收益来自采样路径。</small>
+<small>图源：[DDIM](https://arxiv.org/abs/2010.02502)。原图表达同一个训练好的扩散模型可以用更稀疏的反向路径加速采样；读图重点是把“换采样器”和“重训/蒸馏学生”先分开，避免把所有少步方法混成一类。它不能证明任意模型都能极少步高质量生成，只说明不重训路线的第一层收益来自采样路径。</small>
 
 ## 先定边界
 
@@ -73,9 +73,9 @@ Rectified Flow 和 Rectified Diffusion 的核心不是简单宣称“直线最�
 
 性能也要按系统口径记录：网络评估次数、单次前向耗时、VAE / decoder 成本、条件网络成本、显存峰值、P50/P95 延迟、吞吐和失败重试率。少了这些指标，“10 步”和“1 步”只是论文里的数字，不一定是产品里的速度。
 
-这也是本页的判断标准：DDIM、DPM-Solver++ 是推理侧加速；Consistency / LCM 是少步学生；DMD 系列是分布匹配蒸馏；Flow / Rectified 是路径和速度场重写。先确认自己在改哪一层，再谈哪一个方法更合适。
+判断标准是：DDIM、DPM-Solver++ 是推理侧加速；Consistency / LCM 是少步学生；DMD 系列是分布匹配蒸馏；Flow / Rectified 是路径和速度场重写。先确认自己在改哪一层，再谈哪一个方法更合适。
 
-## 外部精读
+## 外部材料
 
 - [DDPM: Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)：理解原始多步去噪教师的训练和采样基线。
 - [DDIM: Denoising Diffusion Implicit Models](https://arxiv.org/abs/2010.02502)：理解不重训换采样路径为什么可行。
@@ -84,11 +84,6 @@ Rectified Flow 和 Rectified Diffusion 的核心不是简单宣称“直线最�
 - [DMD](https://arxiv.org/abs/2311.18828)、[DMD2](https://arxiv.org/abs/2405.14867) 与 [Phased DMD](https://arxiv.org/abs/2510.27684)：理解一步/少步分布匹配路线的训练难点。
 - [Flow Matching](https://arxiv.org/abs/2210.02747)、[Rectified Flow](https://arxiv.org/abs/2209.03003) 与 [Rectified Diffusion](https://arxiv.org/abs/2410.07303)：理解路径和速度场重写为什么会影响少步采样。
 
-## 相关阅读与下一步
-
-- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
-- 站内下一步：[扩散模型专题](index.md)。
-- 站内下一步：[扩散方法对比表](comparison-table.md)。
-- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。
+- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。

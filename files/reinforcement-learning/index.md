@@ -1,10 +1,10 @@
 # 强化学习：从交互闭环到策略优化
 
-强化学习（Reinforcement Learning, RL）是一类序列决策方法：**agent 通过与环境交互学习 policy，使期望累计回报最大化**。它不是拿到固定标签后拟合答案，而是在动作改变未来的前提下，用一段时间后的结果判断此前决策是否有效。
+强化学习（Reinforcement Learning, RL）是一类序列决策方法：**agent 通过与环境交互学习 policy，使期望累计回报最大化**。动作会改变未来的数据分布，训练信号来自一段时间后的结果，而不是固定输入上的逐步标签。
 
 ## 什么是强化学习
 
-一个强化学习任务至少要说明：agent 能观察什么、能采取什么 action、环境怎样响应、reward 如何衡量结果，以及一段交互何时结束。策略 \(\pi\) 把 observation 或 state 映射为动作分布；训练目标不是让每一步都像某个标准答案，而是最大化轨迹的期望累计回报：
+一个强化学习任务至少要说明：agent 能观察什么、能采取什么 action、环境怎样响应、reward 如何衡量结果，以及一段交互何时结束。策略 \(\pi\) 把 observation 或 state 映射为动作分布；训练目标不能逐步比对标准答案，需要最大化轨迹的期望累计回报：
 
 \[
 J(\pi)=\mathbb{E}_{\tau\sim\pi}\left[\sum_{t=0}^{T-1}\gamma^t r_t\right]
@@ -41,7 +41,7 @@ J(\pi)=\mathbb{E}_{\tau\sim\pi}\left[\sum_{t=0}^{T-1}\gamma^t r_t\right]
 - **信用分配**：货箱最终送达才得分，早期哪次减速或绕行贡献了成功并不直接可见。
 - **探索与安全冲突**：agent 需要尝试未知动作，但真实机器人不能靠碰撞来遍历失败方式。
 - **部分可观测**：单帧相机看不到货架后的叉车，当前 observation 不等于完整 state。
-- **分布持续变化**：policy 更新会改变它访问的状态和采集的数据，训练目标不是固定数据集上的静态拟合。
+- **分布持续变化**：policy 更新会改变它访问的状态和采集的数据，训练目标随闭环数据一起变化。
 - **奖励错设**：若只奖励速度，机器人可能超速或走危险捷径；代理指标提高不代表真实目标改善。
 - **估计误差会被放大**：value、world model 或 reward model 的小偏差，可能被策略主动利用。
 
@@ -55,27 +55,23 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 
 ## 完整学习路线 {#完整学习路线}
 
-下面是完整课程地图。15 个章节均已发布，可以按依赖顺序阅读，也可以从下一节按任务方向进入。
-
-| 阶段 | 章节 | 当前状态 |
-| --- | --- | --- |
-| 建立语言 | 1. [强化学习专题首页](index.md) | 可阅读 |
-| 建立语言 | 2. [Agent、环境与训练闭环](rl-agent-environment-loop.md) | 可阅读 |
-| 长期价值 | 3. [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) | 可阅读 |
-| 长期价值 | 4. [MDP、回报、价值函数与 Bellman](mdp-value-bellman.md) | 可阅读 |
-| 长期价值 | 5. [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) | 可阅读 |
-| 经典深度 RL | 6. [Q-learning 与 DQN](q-learning-and-dqn.md) | 可阅读 |
-| 经典深度 RL | 7. [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) | 可阅读 |
-| 经典深度 RL | 8. [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) | 可阅读 |
-| 经典深度 RL | 9. [连续控制与 SAC](continuous-control-and-sac.md) | 可阅读 |
-| 低成本与模型驱动 | 10. [Offline Reinforcement Learning](offline-reinforcement-learning.md) | 可阅读 |
-| 低成本与模型驱动 | 11. [Model-based RL 与世界模型](rl-for-world-models.md) | 可阅读 |
-| 大模型与具身系统 | 12. [LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md) | 可阅读 |
-| 大模型与具身系统 | 13. [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md) | 可阅读 |
-| 大模型与具身系统 | 14. [RL 系统工程与 verl](verl-code-flow.md) | 可阅读 |
-| 综合 | 15. [综合实践与算法选择](practice-and-algorithm-selection.md) | 可阅读 |
-
-推荐按表格顺序学习。若 MDP、条件期望或策略目标仍陌生，可先读 [强化学习数学目标](../prerequisite-math/value-policy-and-rl-objectives.md)；它负责数学定义，本课程负责把定义放回算法与数据流。
+| 阶段 | 章节 |
+| --- | --- |
+| 建立语言 | 1. [强化学习专题首页](index.md) |
+| 建立语言 | 2. [Agent、环境与训练闭环](rl-agent-environment-loop.md) |
+| 长期价值 | 3. [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) |
+| 长期价值 | 4. [MDP、回报、价值函数与 Bellman](mdp-value-bellman.md) |
+| 长期价值 | 5. [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) |
+| 经典深度 RL | 6. [Q-learning 与 DQN](q-learning-and-dqn.md) |
+| 经典深度 RL | 7. [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) |
+| 经典深度 RL | 8. [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) |
+| 经典深度 RL | 9. [连续控制与 SAC](continuous-control-and-sac.md) |
+| 低成本与模型驱动 | 10. [Offline Reinforcement Learning](offline-reinforcement-learning.md) |
+| 低成本与模型驱动 | 11. [Model-based RL 与世界模型](rl-for-world-models.md) |
+| 大模型与具身系统 | 12. [LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md) |
+| 大模型与具身系统 | 13. [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md) |
+| 大模型与具身系统 | 14. [RL 系统工程与 verl](verl-code-flow.md) |
+| 综合 | 15. [综合实践与算法选择](practice-and-algorithm-selection.md) |
 
 ## 按方向进入课程
 
@@ -87,7 +83,7 @@ RL 更适合满足这些条件的任务：动作会影响未来；没有便宜�
 | 研究世界模型与规划 | [交互闭环](rl-agent-environment-loop.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) |
 | 进入 VLA 与机器人闭环 | [交互闭环](rl-agent-environment-loop.md) -> [连续控制与 SAC](continuous-control-and-sac.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) -> [VLA 与机器人闭环](vla-robotics-and-closed-loop-rl.md) |
 
-方向入口只是缩短到目标主题的路径，不替代基础依赖。读现代 RL 论文前，至少应能区分 observation 与 state、reward 与 return、on-policy 与 offline 数据。
+方向入口用于缩短到目标主题的路径。读现代 RL 论文前，至少应能区分 observation 与 state、reward 与 return、on-policy 与 offline 数据。
 
 ## 学完后如何判断自己真的理解了
 

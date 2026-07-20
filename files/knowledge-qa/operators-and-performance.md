@@ -1,6 +1,6 @@
 # 算子与性能 QA
 
-这一页回答 GEMM、attention kernel、CUDA/Triton、FlashAttention、roofline、MFU 和 profiling 中的高频问题。面试时要把局部 kernel 加速、端到端吞吐、数值正确性和维护成本分开讲。
+GEMM、attention kernel、CUDA/Triton、FlashAttention、roofline、MFU 和 profiling 的高频问题，需要把局部 kernel 加速、端到端吞吐、数值正确性和维护成本分开讲。
 
 ## GPU 与矩阵计算基础
 

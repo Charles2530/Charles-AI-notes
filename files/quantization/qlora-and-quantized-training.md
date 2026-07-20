@@ -2,7 +2,7 @@
 
 QLoRA 很容易被一句话误导：用 4bit 训练大模型。更准确的说法是：**冻结的底座模型用 4bit 存储，训练时只更新一小组 LoRA adapter；梯度穿过量化底座流向 adapter，但底座权重本身不做全量更新。**
 
-这篇只回答一个问题：QLoRA 为什么能显著省显存，同时又和 PTQ、QAT、全量低比特训练不是一回事？
+QLoRA 可以显著省显存，但它和 PTQ、QAT、全量低比特训练不是一回事。
 
 ## 先把显存账拆开
 
@@ -10,7 +10,7 @@ QLoRA 很容易被一句话误导：用 4bit 训练大模型。更准确的说�
 
 ![QLoRA memory comparison](../assets/images/paper-figures/quantization/qlora-figure-1-memory.png){ width="760" }
 
-<small>图源：[QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)，Figure 1。原图表达：对比 32-bit/16-bit 全量微调、LoRA 与 QLoRA 的显存组织；QLoRA 将冻结底座量化存储，只训练 adapter，并用 paged optimizer 缓解峰值。本站读法：看哪些参数“会训练”，哪些只是“低比特常驻”。</small>
+<small>图源：[QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)，Figure 1。原图表达：对比 32-bit/16-bit 全量微调、LoRA 与 QLoRA 的显存组织；QLoRA 将冻结底座量化存储，只训练 adapter，并用 paged optimizer 缓解峰值。读图重点：看哪些参数“会训练”，哪些只是“低比特常驻”。</small>
 
 这张图最关键的不是 4bit 标签，而是 optimizer 主要服务少量 adapter。底座模型仍参与前向和反向的计算图，但它是冻结的；训练压力最终落到 LoRA 矩阵上。
 
@@ -120,7 +120,7 @@ target modules 选得太少，adapter 学不动；选得太多，显存、过拟
 
 第四步明确部署形态。线上是加载 4bit base + adapter，还是 merge adapter 后再量化？runtime 是否支持对应量化格式、adapter 并发、KV cache 和 batch 合并？训练省显存，不自动等于部署省延迟。
 
-## 外部精读
+## 外部材料
 
 - [QLoRA 论文](https://arxiv.org/abs/2305.14314)：理解 NF4、double quantization 和 paged optimizer。
 - [LoRA 论文](https://arxiv.org/abs/2106.09685)：理解低秩适配为什么能减少可训练参数。
@@ -131,11 +131,6 @@ target modules 选得太少，adapter 学不动；选得太多，显存、过拟
 
 QLoRA 的核心不是“4bit 训练”，而是“4bit 冻结底座 + 高效 adapter 训练”。LoRA 先减少可训练更新的维度，QLoRA 再压低底座常驻显存，NF4/double quant/paged optimizer 分别处理权重格式、元数据和峰值显存。判断 QLoRA 是否适合一个任务，不要只看能否跑起来，而要看量化底座是否还可靠、adapter 是否覆盖关键模块、数据是否足够干净，以及部署 runtime 是否真的支持目标形态。
 
-## 相关阅读与下一步
-
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

@@ -4,7 +4,7 @@
 
 ![Hydraulic toy robot gripper](../assets/images/thinking-exploration/world-models-embodied-ai/hydraulic-gripper.jpg){ width="820" }
 
-<small>图源：[Wikimedia Commons: Hydraulic toy robot arm gripper.jpg](https://commons.wikimedia.org/wiki/File:Hydraulic_toy_robot_arm_gripper.jpg)。本站读法：即使是简单夹爪，也能暴露具身智能的核心难点；动作不是文本输出，而是接触、力、姿态、误差和恢复的连续闭环。</small>
+<small>图源：[Wikimedia Commons: Hydraulic toy robot arm gripper.jpg](https://commons.wikimedia.org/wiki/File:Hydraulic_toy_robot_arm_gripper.jpg)。读图重点：即使是简单夹爪，也能暴露具身智能的核心难点；动作是接触、力、姿态、误差和恢复的连续闭环。</small>
 
 ## VLA 的第一阶段已经过去
 
@@ -124,7 +124,7 @@ GEN-0 的 7B 阈值观察未必能直接泛化到所有团队，但它提醒我�
 
 这条思考方向是对的：不要把具身智能写成论文名清单，而要关注数据、任务状态、动作接口、控制器、评测和回流。机器人不会因为模型会说话就变可靠；它会因为每一次失败都被系统吸收，下一次少犯一点错，而逐步变可靠。
 
-## 外部精读
+## 外部材料
 
 - [π0.5: a VLA with Open-World Generalization](https://www.pi.website/blog/pi05)。
 - [DROID Dataset](https://droid-dataset.github.io/)。
@@ -132,11 +132,6 @@ GEN-0 的 7B 阈值观察未必能直接泛化到所有团队，但它提醒我�
 - [GEN-0](https://generalistai.com/blog/nov-04-2025-GEN-0)。
 - [Isaac Sim](https://developer.nvidia.com/isaac/sim)。
 
-## 相关阅读与下一步
-
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 外部材料：[NVIDIA TensorRT-LLM 文档](https://nvidia.github.io/TensorRT-LLM/)。
-- 站内下一步：[思考探索专题](index.md)。
-- 站内下一步：[世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md)。
-- 站内下一步：[具身智能现状：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- [NVIDIA TensorRT-LLM 文档](https://nvidia.github.io/TensorRT-LLM/)。

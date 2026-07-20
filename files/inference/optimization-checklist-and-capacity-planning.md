@@ -1,14 +1,12 @@
 # 容量规划与推理优化
 
-> **这篇回答的问题。** 如何理解“容量规划与推理优化”背后的核心机制、适用边界和下一步阅读路径。
+推理系统上线后，团队很快会遇到两个问题：现在还能撑多久，下一步该先优化哪里。这两个问题表面像“算资源”，本质是在做系统建模。大模型推理容量由请求分布、输入输出长度、模型结构、batch 策略、缓存命中、工具调用和 SLO 共同决定。
 
-推理系统上线后，团队很快会遇到两个问题：现在还能撑多久，下一步该先优化哪里。这两个问题表面像“算资源”，本质是在做系统建模。大模型推理容量不是固定常数，而是请求分布、输入输出长度、模型结构、batch 策略、缓存命中、工具调用和 SLO 共同作用的结果。
-
-这页把推理优化从零散技巧整理成容量规划和瓶颈归因框架。
+推理优化需要从零散技巧整理成容量规划和瓶颈归因框架。
 
 ![vLLM runtime components](../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
 
-<small>图源：[vLLM 官方博客](https://vllm.ai/blog/2023-06-20-vllm)。原图表达 serving runtime 中 scheduler、KV cache manager、allocator 与 GPU worker 的协作；本站读法是把容量规划落到请求队列、prefill/decode、KV 和 worker 饱和度，而不是只看 GPU 利用率。它不能证明某个优化动作一定优先，优先级仍由 workload 分桶决定。</small>
+<small>图源：[vLLM 官方博客](https://vllm.ai/blog/2023-06-20-vllm)。原图表达 serving runtime 中 scheduler、KV cache manager、allocator 与 GPU worker 的协作；读图重点是把容量规划落到请求队列、prefill/decode、KV 和 worker 饱和度，而不是只看 GPU 利用率。它不能证明某个优化动作一定优先，优先级仍由 workload 分桶决定。</small>
 
 ## 请求画像先于资源估算
 
@@ -134,11 +132,8 @@ flowchart LR
 
 **反例**：如果 trace 显示 GPU queue 和 prefill/decode 阶段长期饱和，且外部工具时间很小，扩 GPU 或分池才是正确方向。容量规划必须先定位瓶颈层。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
-- 站内下一步：[推理系统专题](index.md)。
-- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
-- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。
+- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- [SGLang 文档](https://docs.sglang.ai/)。

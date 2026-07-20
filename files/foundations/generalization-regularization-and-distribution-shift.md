@@ -1,17 +1,17 @@
 # 泛化、正则化与分布偏移：训练 loss 下降为什么不等于模型可用
 
-这篇文章只回答一个问题：训练集上的 loss 下降以后，为什么我们还不能说模型已经学会了任务。
+训练集 loss 下降以后，模型仍未必真正学会任务。
 
 优化回答的是“参数能不能把当前训练目标降下来”；泛化回答的是“这个规律能不能离开训练样本继续成立”；分布偏移回答的是“训练时看见的世界和真正使用时的世界是不是同一个世界”。这三件事连在一起，才决定模型是否可用。
 
-如果你关心 causal、intervention、counterfactual 和 OOD 这些判断语言，可以先读前置数学里的 [因果、反事实与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)。本文重点放在训练 loss、正则化、数据切分、分桶评测和部署风险如何连成一个可检查的工程问题。
+如果你关心 causal、intervention、counterfactual 和 OOD 这些判断语言，可以先读前置数学里的 [因果、反事实与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)。重点放在训练 loss、正则化、数据切分、分桶评测和部署风险如何连成一个可检查的工程问题。
 
 ![Deep Double Descent Figure 1](../assets/images/paper-figures/foundations/deep-double-descent-figure-1.png){ width="920" }
 
-<small>图源：[Deep Double Descent: Where Bigger Models and More Data Hurt](https://arxiv.org/abs/1912.02292)，Figure 1。原图展示模型宽度、训练 epoch 与 test error 的 double descent 现象。本站用这张图说明：现代深度学习里的泛化不能只靠“模型越大越过拟合”这种旧直觉判断，必须看曲线、数据、正则化和分布证据。</small>
+<small>图源：[Deep Double Descent: Where Bigger Models and More Data Hurt](https://arxiv.org/abs/1912.02292)，Figure 1。原图展示模型宽度、训练 epoch 与 test error 的 double descent 现象。这张图说明：现代深度学习里的泛化不能只靠“模型越大越过拟合”这种旧直觉判断，必须看曲线、数据、正则化和分布证据。</small>
 
 !!! tip "数学先修"
-    本文会用到[因果、反事实与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)、[采样估计](../prerequisite-math/sampling-estimation-and-calibration.md)和[优化与正则化](../prerequisite-math/optimization-and-gradient-methods.md)，分别说明风险来自哪里、证据有多稳、训练约束改变了什么。
+    需要用到[因果、反事实与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)、[采样估计](../prerequisite-math/sampling-estimation-and-calibration.md)和[优化与正则化](../prerequisite-math/optimization-and-gradient-methods.md)，分别说明风险来自哪里、证据有多稳、训练约束改变了什么。
 
 ## 第一张账：训练风险不是部署风险
 
@@ -166,7 +166,7 @@ WILDS 这类 benchmark 的价值不在于又多了一个总分，而在于它把
 
 泛化不是训练结束后的附加检查，而是从数据切分、训练目标、正则化、分桶评测到部署回放贯穿全程的问题。训练 loss 下降只证明优化在训练集上成功；模型是否可用，要看它能否在冻结决策、干净 split、关键 bucket 和真实分布变化下继续保持可靠。
 
-## 外部精读
+## 外部材料
 
 - [Understanding Deep Learning Requires Rethinking Generalization](https://arxiv.org/abs/1611.03530)：理解“可记忆”与“能泛化”之间的张力。
 - [Deep Double Descent](https://arxiv.org/abs/1912.02292)：理解现代模型容量、训练轮数和泛化曲线为什么不是单调直觉。
@@ -176,12 +176,6 @@ WILDS 这类 benchmark 的价值不在于又多了一个总分，而在于它把
 - [When Does Label Smoothing Help?](https://arxiv.org/abs/1906.02629)：理解 label smoothing 对过度自信、表示和蒸馏的影响边界。
 - [动手学深度学习：模型选择、欠拟合和过拟合](https://zh.d2l.ai/chapter_multilayer-perceptrons/underfit-overfit.html)：中文讲法清楚，适合补训练/验证曲线直觉。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[因果、反事实与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

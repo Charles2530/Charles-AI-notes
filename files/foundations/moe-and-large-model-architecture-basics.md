@@ -1,12 +1,12 @@
 # MoE 与大模型架构：总参数、激活参数和路由成本
 
-读 DeepSeek、Qwen、Kimi、Gemini、Nemotron 这类技术报告时，最容易被一张模型规模表带偏：`Total Params`、`Activated Params`、`Experts`、`Top-k`、`MLA/GQA`、`MTP`、`FP8/FP4` 全部挤在一起。真正要读懂它，不是背模型名字，而是先分清：**MoE 改的是容量和计算分配，MTP 改的是预测头，Mamba/SSM 改的是序列状态路径，低精度改的是数值和硬件执行。**
+读 DeepSeek、Qwen、Kimi、Gemini、Nemotron 这类技术报告时，最容易被一张模型规模表带偏：`Total Params`、`Activated Params`、`Experts`、`Top-k`、`MLA/GQA`、`MTP`、`FP8/FP4` 全部挤在一起。真正要读懂它，要先分清：**MoE 改的是容量和计算分配，MTP 改的是预测头，Mamba/SSM 改的是序列状态路径，低精度改的是数值和硬件执行。**
 
-这一页补的是“读架构表”的前置知识。它不是部署路由教程，而是帮你在技术报告里看懂稀疏专家模型到底怎样训练、怎样算账、怎样影响推理。
-可以先把这页当成一张入门地图：它把零散术语连成“输入、变化、输出”三件事。先不用背模型名，先看清哪一步在改变信息，哪一步在改变成本。
+读架构表时，要看懂稀疏专家模型怎样训练、怎样算账、怎样影响推理；这里不展开部署路由教程。
+这张入门地图把零散术语连成“输入、变化、输出”三件事。先不用背模型名，先看清哪一步在改变信息，哪一步在改变成本。
 
 !!! tip "数学先修"
-    本文会用到[Top-k、softmax gating 与负载均衡](../prerequisite-math/discrete-selection-topk-and-routing.md)、[概率分布](../prerequisite-math/probability-distributions-and-expectation.md)，以及[复杂度、FLOPs 和通信字节](../prerequisite-math/numerics-complexity-and-estimation.md)来同时读懂 router 和系统成本。
+    需要用到[Top-k、softmax gating 与负载均衡](../prerequisite-math/discrete-selection-topk-and-routing.md)、[概率分布](../prerequisite-math/probability-distributions-and-expectation.md)，以及[复杂度、FLOPs 和通信字节](../prerequisite-math/numerics-complexity-and-estimation.md)来同时读懂 router 和系统成本。
 
 ## 核心问题
 
@@ -271,7 +271,7 @@ flowchart LR
 6. 后训练表：SFT、reward、RL、distillation 是否改变能力结论？
 7. 证据表：benchmark、ablation、safety、system profiling 分别支持哪类 claim？
 
-| 报告类型 | 重点看什么 | 回到本站哪里读 |
+| 报告类型 | 重点看什么 | 继续读哪里 |
 | --- | --- | --- |
 | DeepSeek-V3 / V4 | DeepSeekMoE、MLA、auxiliary-loss-free routing、FP8、MTP、并行训练 | [DeepSeek-V3 讲解](../paper-deep-dives/technical-reports/deepseek-v3.md)、[DeepSeek-V4 讲解](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) |
 | Qwen3 / Qwen3.5-Omni | dense/MoE 版本、thinking、omni 模态、后训练和部署边界 | [Qwen3 讲解](../paper-deep-dives/technical-reports/qwen3.md)、[Qwen3.5-Omni 讲解](../paper-deep-dives/technical-reports/qwen35-omni.md) |
@@ -290,7 +290,7 @@ flowchart LR
 | Shared expert 是可有可无的细节 | shared expert 会影响通用知识和 routed expert 专业化 |
 | MoE Serving 路由和模型内 MoE router 是一回事 | 前者是请求/模型级调度，后者是 token/expert 级模型结构 |
 
-## 外部精读
+## 外部材料
 
 - [The Sparsely-Gated Mixture-of-Experts Layer](https://arxiv.org/abs/1701.06538)：MoE router、top-k、capacity 和 load balancing 的早期经典来源。
 - [GShard](https://arxiv.org/abs/2006.16668)：把稀疏专家、自动并行和大规模训练放到系统语境里。

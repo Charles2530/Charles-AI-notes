@@ -2,9 +2,7 @@
 
 扩散训练目标只规定网络在噪声状态上预测什么，并不规定网络必须采用哪种主干。U-Net、DiT、VAE、文本编码器和 scheduler 处在不同层：前两者近似去噪函数，VAE 定义表示空间，文本编码器提供条件，scheduler 负责沿时间轨迹更新状态。
 
-## 本文解决什么问题
-
-本文回答三个系统问题：denoiser 为什么必须同时读取样本、时间和条件；U-Net 与 DiT 怎样实现同一个预测接口；Stable Diffusion 如何把 autoencoder、文本编码器、条件去噪网络和采样器组合成训练与推理链路。
+读扩散网络架构时，先拆三个系统问题：denoiser 为什么必须同时读取样本、时间和条件；U-Net 与 DiT 怎样实现同一个预测接口；Stable Diffusion 如何把 autoencoder、文本编码器、条件去噪网络和采样器组合成训练与推理链路。
 
 ## 前置知识
 
@@ -168,11 +166,6 @@ CFG 不增加新的文本知识，只放大条件与无条件方向的差。\(w\
 4. 为什么 latent diffusion 更便宜，同时可能受 VAE 质量限制？
 5. scheduler 为什么必须知道模型的 prediction type？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 代码对应：[最小 DDPM 实现](minimal-ddpm-implementation.md)。
-- 条件机制：[条件控制与 Guidance](guidance-and-conditioning.md)。
-- 采样执行：[采样与推理加速](inference.md)。
-- 现代速度场：[Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)。
 - 原始来源：[Latent Diffusion Models](https://arxiv.org/abs/2112.10752)、[DiT](https://arxiv.org/abs/2212.09748)。
-- 返回：[扩散模型专题](index.md)。

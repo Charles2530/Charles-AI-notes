@@ -1,8 +1,8 @@
 # 世界模型高效训练路线图
 
-世界模型高效训练不是“找最新论文”，而是在有限预算下回答一个工程问题：**怎样少用真实交互、少用视频 token、少占显存和通信、少花 rollout 延迟，同时还能让预测真的改善决策。**
+世界模型高效训练要在有限预算下回答一个工程问题：**怎样少用真实交互、少用视频 token、少占显存和通信、少花 rollout 延迟，同时还能让预测真的改善决策。**
 
-这篇是全站主线枢纽。它不要求你先读总览页，也不把所有论文排成清单；它把世界模型训练拆成五类成本、四条主要路线和一套证据判断方法。
+世界模型训练可以拆成五类成本、四条主要路线和一套证据判断方法。
 
 ## 中心问题：预测未来是为了选动作
 
@@ -46,7 +46,7 @@ Dreamer 类方法的核心是：先学 latent dynamics，再在 latent imaginati
 
 ![DreamerV3 actor critic learning](../assets/images/paper-deep-dives/world-models/dreamerv3/x3.png){ width="900" }
 
-<small>图源：[DreamerV3](https://arxiv.org/abs/2301.04104)，Figure 3(a)/(b)。原图表达：Figure 3(a) 展示 world model learning，Figure 3(b) 展示 actor-critic 在 imagined latent trajectories 上学习。本站读法：真实经验进入 replay 训练 dynamics，策略大量更新发生在 latent rollout 内，因此能减少真实试错。</small>
+<small>图源：[DreamerV3](https://arxiv.org/abs/2301.04104)，Figure 3(a)/(b)。原图表达：Figure 3(a) 展示 world model learning，Figure 3(b) 展示 actor-critic 在 imagined latent trajectories 上学习。读图重点：真实经验进入 replay 训练 dynamics，策略大量更新发生在 latent rollout 内，因此能减少真实试错。</small>
 
 这条路线的效率机制是：
 
@@ -67,7 +67,7 @@ Dreamer 类方法的核心是：先学 latent dynamics，再在 latent imaginati
 
 ![MWM visual control results](../assets/images/paper-deep-dives/world-models/masked-world-models/figure-4-mwm-results.png){ width="920" }
 
-<small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1 与 Figure 4。原图表达：Figure 1 展示 masked visual representation learning 与 latent dynamics learning 的解耦；Figure 4 展示 Meta-world aggregate 与 RLBench 任务上的 success rate 学习曲线。本站读法：先学更紧凑的视觉表征，再把 dynamics 接到表征上，能减少像素级建模负担。</small>
+<small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1 与 Figure 4。原图表达：Figure 1 展示 masked visual representation learning 与 latent dynamics learning 的解耦；Figure 4 展示 Meta-world aggregate 与 RLBench 任务上的 success rate 学习曲线。读图重点：先学更紧凑的视觉表征，再把 dynamics 接到表征上，能减少像素级建模负担。</small>
 
 这条路线要分清两件事：
 
@@ -88,7 +88,7 @@ Masked/JEPA 类路线适合作为表征预训练或视觉压缩层，但如果�
 
 ![V-JEPA 2 planning results](../assets/images/paper-deep-dives/world-models/v-jepa2/table-3-planning-results.png){ width="920" }
 
-<small>图源：[V-JEPA 2](https://arxiv.org/abs/2506.09985)，Figure 7 与 Table 3。原图表达：Figure 7 展示用 V-JEPA 2-AC 做 model predictive control；Table 3 比较 V-JEPA 2-AC 与 Cosmos world model 在机器人操作任务中的规划性能与时间。本站读法：这张图的重点不是“视频表征很强”，而是表征空间 dynamics 能否在给定动作后预测目标接近程度，并进入 closed-loop planning。</small>
+<small>图源：[V-JEPA 2](https://arxiv.org/abs/2506.09985)，Figure 7 与 Table 3。原图表达：Figure 7 展示用 V-JEPA 2-AC 做 model predictive control；Table 3 比较 V-JEPA 2-AC 与 Cosmos world model 在机器人操作任务中的规划性能与时间。读图重点：这张图的重点不是“视频表征很强”，而是表征空间 dynamics 能否在给定动作后预测目标接近程度，并进入 closed-loop planning。</small>
 
 读 action-conditioned 世界模型时，最重要的不是 future frame 好不好看，而是三类测试：
 
@@ -114,7 +114,7 @@ Masked/JEPA 类路线适合作为表征预训练或视觉压缩层，但如果�
 
 ![MagiAttention mask patterns 原论文图](../assets/images/paper-deep-dives/foundations/magiattention/figure-4-mask-patterns.png){ width="920" }
 
-<small>图源：[MagiAttention docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html)。原图表达：长上下文训练中可能出现多种异构 attention mask。本站读法：世界模型和多轨迹训练常不是规则 dense attention，mask-aware 调度能省系统成本，但不能自动提升模型预测质量。</small>
+<small>图源：[MagiAttention docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html)。原图表达：长上下文训练中可能出现多种异构 attention mask。读图重点：世界模型和多轨迹训练常不是规则 dense attention，mask-aware 调度能省系统成本，但不能自动提升模型预测质量。</small>
 
 这类工作必须把 system throughput 和 quality regression 同表报告。只看 TFLOPs、MFU 或 latency，很容易把“跑得快”误写成“模型更好”。
 
@@ -160,7 +160,7 @@ flowchart TD
 
 这棵树的第一步是数据条件，不是模型名字。没有 action 的视频模型不能直接规划；没有 reward/done 的 dynamics 很难做长期价值；没有闭环验证的 open-loop 结果只能作为候选证据。
 
-## 外部精读
+## 外部材料
 
 - [World Models](https://worldmodels.github.io/)：用直观实验说明内部模型如何服务控制。
 - [DreamerV3](https://arxiv.org/abs/2301.04104)：latent world model + imagined actor-critic 的成熟代表。
@@ -173,11 +173,6 @@ flowchart TD
 
 世界模型高效训练的核心不是覆盖更多论文，而是把每个方法放回成本账：它省真实交互、视频 token、训练显存、rollout 延迟还是验证预算；它是否保留动作敏感性、reward/done/risk 和闭环收益；它的证据到底能支持什么，不能外推到哪里。
 
-## 相关阅读与下一步
-
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

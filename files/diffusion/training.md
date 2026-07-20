@@ -2,11 +2,9 @@
 
 DDPM 把生成问题写成两个方向相反的过程：前向过程用固定高斯转移逐步破坏数据，反向过程用神经网络近似未知的反向条件分布。训练的关键，是利用已知前向过程把变分目标转成不同噪声水平上的监督回归。
 
-## 本文解决什么问题
+DDPM 数学需要连接六个对象：逐步前向转移 \(q(x_t\mid x_{t-1})\)、任意时刻的闭式边缘 \(q(x_t\mid x_0)\)、可计算的后验 \(q(x_{t-1}\mid x_t,x_0)\)、需要学习的反向分布 \(p_\theta(x_{t-1}\mid x_t)\)、噪声预测 loss，以及从 \(x_T\) 到 \(x_0\) 的 DDPM 采样算法。
 
-本文完整连接六个对象：逐步前向转移 \(q(x_t\mid x_{t-1})\)、任意时刻的闭式边缘 \(q(x_t\mid x_0)\)、可计算的后验 \(q(x_{t-1}\mid x_t,x_0)\)、需要学习的反向分布 \(p_\theta(x_{t-1}\mid x_t)\)、噪声预测 loss，以及从 \(x_T\) 到 \(x_0\) 的 DDPM 采样算法。
-
-本文采用离散时间、方差保持（variance preserving）DDPM 记号。连续噪声尺度、EDM preconditioning、score SDE 和 Flow Matching 在后续文章中单独处理。
+这里采用离散时间、方差保持（variance preserving）DDPM 记号。连续噪声尺度、EDM preconditioning、score SDE 和 Flow Matching 分别使用不同公式边界。
 
 ## 前置知识
 
@@ -76,7 +74,7 @@ x_t
 
 ![DDPM 数据与噪声系数](../assets/images/paper-figures/diffusion/ddpm-orthogonal-coefficients.svg){ width="760" }
 
-<small>这张本站图把 \(x_t\) 画成数据分量和噪声分量的系数组合，用来读取 \(\sqrt{\bar\alpha_t}\) 与 \(\sqrt{1-\bar\alpha_t}\) 的消长。它是参数化直觉，不是在断言真实图像向量与某次噪声样本在像素空间必然正交。</small>
+<small>这张示意图把 \(x_t\) 画成数据分量和噪声分量的系数组合，用来读取 \(\sqrt{\bar\alpha_t}\) 与 \(\sqrt{1-\bar\alpha_t}\) 的消长。它是参数化直觉，不是在断言真实图像向量与某次噪声样本在像素空间必然正交。</small>
 
 ### 已知 \(x_0\) 时，单步后验仍是高斯
 
@@ -242,11 +240,6 @@ else:
 4. 简化 MSE 与完整变分下界是什么关系，为什么不能说二者逐项数值相等？
 5. 代码里将 \(\alpha_t\) 写成 \(\bar\alpha_t\) 会影响哪几个步骤？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 系统实现：[架构与 Stable Diffusion](architecture-and-stable-diffusion.md)。
-- 代码映射：[最小 DDPM 实现](minimal-ddpm-implementation.md)。
-- 参数化扩展：[噪声日程与参数化](noise-schedules-and-parameterization.md)。
-- 连续时间扩展：[Score Matching 到 SDE](score-matching-sde-and-probability-flow.md)。
 - 原始来源：[DDPM](https://arxiv.org/abs/2006.11239)、[Improved DDPM](https://arxiv.org/abs/2102.09672)。
-- 返回：[扩散模型专题](index.md)。

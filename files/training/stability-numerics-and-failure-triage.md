@@ -1,14 +1,12 @@
 # 训练稳定性与故障排查
 
-> **这篇回答的问题。** 如何理解“训练稳定性与故障排查”背后的核心机制、适用边界和下一步阅读路径。
+大模型训练里最贵的失败，往往发生在训练中后期：突然 `nan`、loss spike、恢复后曲线漂移、低精度路径悄悄失真，最后一整段 GPU 小时白白损失。稳定性排障的目标，是把这些高代价问题拆成可观测、可定位、可复现的流程。
 
-大模型训练里最贵的失败，往往不是“效果差一点”，而是训练跑到中后期突然 `nan`、loss spike、恢复后曲线漂移、低精度路径悄悄失真，最后一整段 GPU 小时白白损失。稳定性排障的目标，是把这些高代价问题拆成可观测、可定位、可复现的流程。
-
-这页关注训练故障的 triage 顺序。低精度训练细节可继续看 [低比特训练与数值体系](low-bit-training-and-numerics.md)，平台侧恢复流程见 [集群运维与实验治理](cluster-operations-and-experiment-management.md)。
+训练故障排查要先确定 triage 顺序：低精度训练看数值格式和 scale，平台侧恢复看 checkpoint、调度和实验治理。
 
 ![Exploding gradients in recurrent training](../assets/images/paper-figures/foundations/pascanu13-figure-6-exploding-gradients.png)
 
-<small>图源：[Pascanu et al., On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)。原图表达参数空间里的 cliff 会让梯度突然变大；本站读法是把 loss spike、`nan/inf` 和 grad norm 异常先当作可定位的数值现象，而不是直接归因于“模型太大”。它不能覆盖所有 Transformer 训练事故，只提供理解梯度爆炸和 clipping 的直觉入口。</small>
+<small>图源：[Pascanu et al., On the difficulty of training recurrent neural networks](https://proceedings.mlr.press/v28/pascanu13.html)。原图表达参数空间里的 cliff 会让梯度突然变大；读图重点是把 loss spike、`nan/inf` 和 grad norm 异常先当作可定位的数值现象，而不是直接归因于“模型太大”。它不能覆盖所有 Transformer 训练事故，只提供理解梯度爆炸和 clipping 的直觉入口。</small>
 
 ## 先分类，再排障
 
@@ -137,11 +135,8 @@ flowchart TD
 
 稳定性能力不是找一个万能超参，而是把高代价故障拆成可观察、可缩圈、可回归的问题。模型越大、训练越长、分布式栈越复杂，这套 triage 能力就越像训练系统的安全壳。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

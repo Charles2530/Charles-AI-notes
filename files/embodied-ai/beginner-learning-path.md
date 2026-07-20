@@ -2,11 +2,9 @@
 
 具身系统通过身体与环境交换信息和作用：传感器提供有限、延迟且带噪的观测，策略提出动作，规划与控制把动作变成物理执行，环境返回新的状态。能力来自整条反馈链，而不是单独一个视觉模型、语言模型或动作网络。
 
-## 本文解决什么问题
+具身智能的系统坐标包括：任务与运行边界怎样定义；观测、状态和动作怎样组成 episode；VLA、policy、planner、controller 和 safety layer 各自负责什么；时间同步、坐标系和接触为什么是模型接口的一部分；数据与评测怎样回到闭环。
 
-本文建立具身智能的系统坐标：任务与运行边界怎样定义；观测、状态和动作怎样组成 episode；VLA、policy、planner、controller 和 safety layer 各自负责什么；时间同步、坐标系和接触为什么是模型接口的一部分；数据与评测怎样回到闭环。
-
-本文以机器人操作和移动操作为主要例子。自动驾驶、无人机与虚拟 agent 共享反馈控制框架，但传感器、动力学和安全要求不同。
+这里以机器人操作和移动操作为主要例子。自动驾驶、无人机与虚拟 agent 共享反馈控制框架，但传感器、动力学和安全要求不同。
 
 ## 前置知识
 
@@ -179,13 +177,6 @@ VLA 把视觉、语言和状态映射到动作，擅长复用语义表示与跨�
 5. commanded action 与 executed action 的差异怎样进入数据和评测？
 6. 为什么具身评测必须报告恢复与安全事件？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 完整任务链：[一个任务跑通具身闭环](closed-loop-task-walkthrough.md)。
-- 视觉与坐标：[相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)。
-- 数据协议：[机器人 State / Action 数据](state-action-robot-datasets.md)。
-- 策略接口：[VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md)。
-- 执行层：[规划、控制与安全](planning-control-and-safety.md)。
-- 数据闭环：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
 - 原始来源：[RT-1](https://arxiv.org/abs/2212.06817)、[RT-2](https://arxiv.org/abs/2307.15818)、[Open X-Embodiment](https://arxiv.org/abs/2310.08864)、[DROID](https://arxiv.org/abs/2403.12945)、[OpenVLA](https://arxiv.org/abs/2406.09246)。
-- 返回：[具身智能专题](index.md)。

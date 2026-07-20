@@ -2,11 +2,11 @@
 
 VLA 不是“给机器人接一个大 VLM”这么简单。真正难的是把视觉、语言、机器人状态、动作、接触、任务进度和失败原因记录到同一条时间轴上。否则模型看起来在学动作，实际只是在拟合不同数据源之间的噪声。
 
-这页只回答一个问题：机器人 VLA 数据该怎样组织，才足够支撑动作学习、世界模型训练和闭环评测。
+机器人 VLA 数据需要支撑动作学习、世界模型训练和闭环评测。
 
 ![Franka Emika robot arm](../assets/images/thinking-exploration/world-models-embodied-ai/franka-emika2.jpg){ width="880" }
 
-<small>图源：[Wikimedia Commons: Franka Emika2.jpg](https://commons.wikimedia.org/wiki/File:Franka_Emika2.jpg)。原图展示 Franka 机械臂。本站读法：具身智能的关键不是机器人“像不像智能”，而是视觉、语言、动作、控制器、接触和任务判定能否形成稳定闭环。</small>
+<small>图源：[Wikimedia Commons: Franka Emika2.jpg](https://commons.wikimedia.org/wiki/File:Franka_Emika2.jpg)。原图展示 Franka 机械臂。读图重点：具身智能的关键不是机器人“像不像智能”，而是视觉、语言、动作、控制器、接触和任务判定能否形成稳定闭环。</small>
 
 ## 一条 episode 要记录什么
 
@@ -38,7 +38,7 @@ sequenceDiagram
 
 ![Open X-Embodiment dataset overview](../assets/images/paper-figures/vla/openx-data-vis.jpg){ width="920" }
 
-<small>图源：[Open X-Embodiment](https://arxiv.org/abs/2310.08864)，数据集可视化图。原图展示多机器人、多任务、多场景数据聚合。本站读法：跨 embodiment 数据能扩大覆盖，但不自动解决动作空间、标注噪声、相机视角和安全迁移。</small>
+<small>图源：[Open X-Embodiment](https://arxiv.org/abs/2310.08864)，数据集可视化图。原图展示多机器人、多任务、多场景数据聚合。读图重点：跨 embodiment 数据能扩大覆盖，但不自动解决动作空间、标注噪声、相机视角和安全迁移。</small>
 
 Open X-Embodiment 的价值在于把多机器人、多任务数据放进统一格式，帮助模型学习跨 embodiment 迁移。DROID 的价值在于大规模真实场景采集，覆盖大量真实房间、任务和操作者。RoboTwin 的价值在于双臂任务、数字孪生资产、success checker 和可控仿真生成。LIBERO 的价值在于把 lifelong learning、目标组合和知识迁移拆成可比较任务。
 
@@ -69,7 +69,7 @@ VLA benchmark 最容易让人误判，因为很多任务短、场景干净、成
 
 ![GR-3 data recipe 原论文图](../assets/images/paper-deep-dives/embodied-ai/gr3/figure-4-data.jpg){ width="960" }
 
-<small>图源：GR-3 Technical Report，Figure 4。原图展示 GR-3 的数据 recipe。本站读法：具身数据不应只有成功演示，还要组织机器人轨迹、人类轨迹、任务状态、无效指令和长任务数据，让 VLA 在 rollout 中知道何时继续、终止或拒绝。</small>
+<small>图源：GR-3 Technical Report，Figure 4。原图展示 GR-3 的数据 recipe。读图重点：具身数据不应只有成功演示，还要组织机器人轨迹、人类轨迹、任务状态、无效指令和长任务数据，让 VLA 在 rollout 中知道何时继续、终止或拒绝。</small>
 
 ## 任务状态比很多人想得重要
 
@@ -87,7 +87,7 @@ VLA benchmark 最容易让人误判，因为很多任务短、场景干净、成
 
 ![Hydraulic gripper](../assets/images/thinking-exploration/world-models-embodied-ai/hydraulic-gripper.jpg){ width="760" }
 
-<small>图源：[Wikimedia Commons: Hydraulic toy robot arm gripper.jpg](https://commons.wikimedia.org/wiki/File:Hydraulic_toy_robot_arm_gripper.jpg)。原图展示夹爪结构。本站读法：同样是“抓住”，不同夹爪的开合范围、力控能力、摩擦和接触反馈都不同；动作接口不能只停在文本描述。</small>
+<small>图源：[Wikimedia Commons: Hydraulic toy robot arm gripper.jpg](https://commons.wikimedia.org/wiki/File:Hydraulic_toy_robot_arm_gripper.jpg)。原图展示夹爪结构。读图重点：同样是“抓住”，不同夹爪的开合范围、力控能力、摩擦和接触反馈都不同；动作接口不能只停在文本描述。</small>
 
 ## 评测要看闭环收益
 
@@ -95,7 +95,7 @@ VLA 报告至少要同时写四张账。数据账说明 episode、camera、actio
 
 离线 loss 下降不等于闭环成功。更硬的指标包括 action sensitivity、candidate ranking agreement、closed-loop success、risk ECE、near-miss recall、人工接管率和 cost per success。模型必须证明自己让动作选择更好，而不是只让视频或语言输出更顺。
 
-## 外部精读
+## 外部材料
 
 - [RT-2 paper](https://arxiv.org/abs/2307.15818) 与 [DeepMind RT-2 blog](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)：理解 VLM 如何接到机器人动作 token。
 - [Open X-Embodiment](https://robotics-transformer-x.github.io/)：理解跨机器人数据和 RT-X 的统一格式。
@@ -103,11 +103,6 @@ VLA 报告至少要同时写四张账。数据账说明 episode、camera、actio
 - [RoboTwin 2.0 docs](https://robotwin-platform.github.io/doc/)：理解双臂任务、数字孪生资产和 success checker。
 - [LIBERO](https://arxiv.org/abs/2306.03310)：理解 lifelong robot learning 和任务组合评测。
 
-## 相关阅读与下一步
-
-- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
-- 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[具身智能基础：观测、动作与反馈闭环](beginner-learning-path.md)。
-- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
+- [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- [RoboTwin 项目](https://robotwin-platform.github.io/)。

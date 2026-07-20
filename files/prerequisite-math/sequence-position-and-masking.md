@@ -1,8 +1,6 @@
 # 序列、位置编码与注意力掩码
 
-这篇回答一个问题：token 序列、位置编码、causal mask、attention mask、temperature 和 KV cache 为什么会成为长上下文、投机解码和多模态世界模型论文的共同数学语言。
-
-语言、视频和机器人轨迹都可以先看成序列。区别在于：语言按 token 展开，视频按帧或 patch 展开，机器人按状态和动作展开。序列数学要解决的不是“有多少元素”，而是“第 \(t\) 个元素能看见谁、怎样知道自己在什么位置、生成下一个元素时概率怎样变化”。
+token 序列、位置编码、causal mask、attention mask、temperature 和 KV cache 共同定义序列模型的信息流、位置感和生成概率。语言、视频和机器人轨迹都可以按顺序展开，只是元素分别是 token、帧或 patch、状态和动作；序列数学关心第 \(t\) 个元素能看见谁、怎样知道自己在什么位置、生成下一个元素时概率怎样变化。
 
 ## 序列索引：把对象按时间或顺序排起来
 
@@ -20,7 +18,7 @@ p(x_{1:T})
 \prod_{t=1}^{T}p(x_t\mid x_{<t})
 \]
 
-这里 \(x_{<t}\) 表示第 \(t\) 步之前的全部历史。读这行公式时，重点是方向性：模型不是一次性猜完整句子，而是每一步根据前缀分布生成下一个 token。EAGLE、vLLM、PagedAttention、长视频 token 训练和世界模型 rollout 都在不同层面处理这条“逐步展开”的链。
+这里 \(x_{<t}\) 表示第 \(t\) 步之前的全部历史。读这行公式时，重点是方向性：模型每一步根据前缀分布生成下一个 token，而不是一次性猜完整句子。EAGLE、vLLM、PagedAttention、长视频 token 训练和世界模型 rollout 都在不同层面处理这条“逐步展开”的链。
 
 如果是视频世界模型，\(x_t\) 可能是一帧、一个 latent 或一组视觉 token；如果是机器人，\(x_t\) 可能和动作 \(a_t\) 交错出现：
 
@@ -47,7 +45,7 @@ Scaled dot-product attention 写成：
 
 ![Attention computation](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-combined.png){ width="760" }
 
-<small>图源：`Attention Is All You Need`，Figure 2，本站已本地化。原图展示 scaled dot-product attention 和 multi-head attention 的计算路径。本站在这里用它说明：mask、scale、softmax 和 value 加权不是附属细节，而是决定序列信息流的数学接口。</small>
+<small>图源：`Attention Is All You Need`，Figure 2，已本地化。原图展示 scaled dot-product attention 和 multi-head attention 的计算路径。这里的重点是：mask、scale、softmax 和 value 加权决定序列信息流的数学接口。</small>
 
 ## Causal mask：不能让未来泄漏到过去
 
@@ -110,7 +108,7 @@ decode 第 \(t\) 步时，新 token 只产生一个新的 query，但它要读�
 K_{1:t},V_{1:t}
 \]
 
-KV cache 的数学意义是“历史序列已经被投影成可被未来 query 读取的记忆”。工程意义是显存和带宽账本。PagedAttention、KVSlimmer、MLA、GQA/MQA 和长上下文服务，本质上都在问：这些历史 \(K,V\) 怎样存、怎样读、能不能压缩。
+KV cache 的数学意义是“历史序列已经被投影成可被未来 query 读取的记忆”。工程意义是显存和带宽账本。PagedAttention、KVSlimmer、MLA、GQA/MQA 和长上下文服务都在问：这些历史 \(K,V\) 怎样存、怎样读、能不能压缩。
 
 ## 常见误读
 
@@ -124,10 +122,3 @@ KV cache 的数学意义是“历史序列已经被投影成可被未来 query �
 ## 读完以后怎么判断
 
 看到 sequence、position、RoPE、mask、temperature 或 KV cache，先问：当前 token 能看见哪些历史，位置信息怎样进入 attention，生成概率是否被 temperature 改写，历史 \(K,V\) 是否被完整保存或近似压缩。这个问题链会支撑长上下文、投机解码、多模态序列和世界模型 rollout 论文。
-
-## 相关阅读与下一步
-
-- 站内下一步：[Transformer 输入与注意力](../foundations/transformer-attention-and-tokenization.md)。
-- 站内下一步：[位置编码与 Mask](../foundations/positional-encoding-masks-and-context.md)。
-- 论文精读：[vLLM PagedAttention](../paper-deep-dives/inference/vllm-pagedattention.md)。
-- 论文精读：[EAGLE-3](../paper-deep-dives/inference/eagle-3.md)。

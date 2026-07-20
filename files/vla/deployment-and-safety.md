@@ -2,7 +2,7 @@
 
 VLA 训练跑通，只能说明模型在数据分布里学会了某种“看图、读指令、输出动作”的映射。部署要回答的是另一组问题：动作来不来得及，控制器能不能执行，安全层会不会拒绝，人靠近时谁有最高优先级，失败后能不能停、能不能接管、能不能追溯。
 
-机器人错误会进入物理世界。一个回答系统答错了可以撤回；一个机器人多伸出 8 厘米，可能碰倒玻璃杯、夹住电线、撞到人或堵住工位。所以 VLA 部署不是“把模型放到机器人上”，而是把模型放进一套受限、可停、可审计的运行系统里。
+机器人错误会进入物理世界。一个回答系统答错了可以撤回；一个机器人多伸出 8 厘米，可能碰倒玻璃杯、夹住电线、撞到人或堵住工位。所以 VLA 部署要把模型放进一套受限、可停、可审计的运行系统里。
 
 ## 先定义运行边界
 
@@ -55,7 +55,7 @@ a_t^{\mathrm{safe}}=\Pi_{\mathcal C}(A(a_t,o_t,h_t))
 
 ![SayCan grounding language with affordances](../assets/images/paper-figures/vla/saycan-intro.png){ width="920" }
 
-<small>图源：[Do As I Can, Not As I Say / SayCan](https://arxiv.org/abs/2204.01691)，Figure 1。原图展示语言模型可能给出听起来合理但机器人不能执行的建议，SayCan 用 affordance / value function 约束技能选择。本站读法：VLA 部署不能只问语言上该做什么，还要问当前状态下能不能安全地做。</small>
+<small>图源：[Do As I Can, Not As I Say / SayCan](https://arxiv.org/abs/2204.01691)，Figure 1。原图展示语言模型可能给出听起来合理但机器人不能执行的建议，SayCan 用 affordance / value function 约束技能选择。读图重点：VLA 部署不能只问语言上该做什么，还要问当前状态下能不能安全地做。</small>
 
 这张图不是完整安全方案，但它抓住了部署核心：VLA 的高层语义能力必须被当前环境、机器人能力和任务状态约束。模型知道“清理饮料”并不等于当前可以用吸尘器；模型知道“把杯子放进柜子”也不等于柜门已开、路径可达、杯子不会撞层板。
 
@@ -154,13 +154,13 @@ a_t^{\mathrm{safe}}=\Pi_{\mathcal C}(A(a_t,o_t,h_t))
 
 ## 标准不是替代工程判断
 
-ISO 10218-1:2025、ISO 10218-2:2025 和 ISO/TS 15066:2016 这类机器人安全标准提醒我们：工业机器人和协作机器人安全需要风险评估、速度/力限制、集成边界和人机协作条件。本站只把它们作为安全论证的方向参考，不把本页写成合规指南。真实项目必须按行业、地区、场景和硬件做正式安全评估。
+ISO 10218-1:2025、ISO 10218-2:2025 和 ISO/TS 15066:2016 这类机器人安全标准提醒我们：工业机器人和协作机器人安全需要风险评估、速度/力限制、集成边界和人机协作条件。这些标准只作为安全论证的方向参考；真实项目必须按行业、地区、场景和硬件做正式安全评估。
 
 VLA 部署可以按这条链路收口：先缩小 ODD，再量化延迟和动作接口，给 safety filter 否决权，用状态机记录阶段和异常，保留人工接管与急停，最后让所有拒绝、near-miss、恢复和接管进入数据引擎。部署不是证明模型“聪明”，而是证明系统在明确边界内稳定、可停、可追溯。
 
 继续读相邻内容时，可以接 [VLA 闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md)、[VLA 评测与数据引擎](benchmarks-and-data-engines.md)、[VLA 动作表示与控制接口](action-representation-and-interfaces.md)、[具身部署模式与安全案例](../embodied-ai/deployment-patterns-and-safety-cases.md) 和 [Sim2Real 与具身数据引擎](../embodied-ai/sim2real-and-data-engines.md)。
 
-## 外部精读
+## 外部材料
 
 - [SayCan](https://arxiv.org/abs/2204.01691)：理解高层语言建议为什么必须被 affordance / value function 约束。
 - [RT-2](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)：看 VLM 知识接入动作后仍需要机器人能力和动作接口约束。

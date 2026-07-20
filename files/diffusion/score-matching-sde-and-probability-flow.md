@@ -2,7 +2,7 @@
 
 扩散模型表面上是在预测噪声，采样时又像在逐步去噪。更统一的读法是：模型在每个噪声水平上学习一个方向场，告诉当前样本应该往哪里移动，才能从噪声分布回到数据分布。这个方向场的核心对象叫 **score**。
 
-这页只回答一个问题：**为什么 DDPM 的噪声预测、Score SDE 的反向过程、Probability Flow ODE 和 DPM-Solver 这些名字，其实都围绕同一件事：学一个可积分的生成方向。**
+DDPM 的噪声预测、Score SDE 的反向过程、Probability Flow ODE 和 DPM-Solver，都围绕同一件事：学习一个可积分的生成方向。
 
 ## score 是概率密度的坡度
 
@@ -44,7 +44,7 @@ s(x_t,t)=\nabla_{x_t}\log p_t(x_t)
 
 ![Score SDE reverse-time process](../assets/images/paper-figures/diffusion/score-sde-figure-1-reverse-sde.png){ width="920" }
 
-<small>图源：[Score-Based Generative Modeling through Stochastic Differential Equations](https://arxiv.org/abs/2011.13456)，Figure 1。原图表达正向过程把数据逐渐扰动成噪声，反向过程依赖每个中间分布的 score 从噪声生成数据。本文用它说明：扩散采样不是凭空“去噪”，而是在一串噪声分布上沿概率方向移动。</small>
+<small>图源：[Score-Based Generative Modeling through Stochastic Differential Equations](https://arxiv.org/abs/2011.13456)，Figure 1。原图表达正向过程把数据逐渐扰动成噪声，反向过程依赖每个中间分布的 score 从噪声生成数据。这里的重点是：扩散采样不是凭空“去噪”，而是在一串噪声分布上沿概率方向移动。</small>
 
 读这张图时先看时间方向。左到右是正向加噪：数据越来越像高斯。右到左是生成：先采一个高斯噪声，再用模型估计每个时刻的 score，把样本推回数据区域。模型难的不是“最后一步修图”，而是在所有噪声水平上都给出可用方向。
 
@@ -161,7 +161,7 @@ f(x,t)-\frac{1}{2}g(t)^2\nabla_x\log p_t(x)
 
 ![Probability flow ODE](../assets/images/paper-deep-dives/diffusion/score-sde/figure-3-probability-flow-ode.png){ width="900" }
 
-<small>图源：[Score SDE](https://arxiv.org/abs/2011.13456)，Figure 3。原图表达 probability flow ODE 可以把数据确定性编码到 latent，也可以从 latent 确定性解码回数据。本文用它说明：ODE 视角让 likelihood、latent encoding 和高阶数值求解器进入扩散采样讨论。</small>
+<small>图源：[Score SDE](https://arxiv.org/abs/2011.13456)，Figure 3。原图表达 probability flow ODE 可以把数据确定性编码到 latent，也可以从 latent 确定性解码回数据。这里的重点是：ODE 视角让 likelihood、latent encoding 和高阶数值求解器进入扩散采样讨论。</small>
 
 ODE 视角解释了 DDIM、Euler、Heun、DPM-Solver 这些采样器为什么能接在扩散模型后面。模型提供方向场，采样器负责用有限步数积分这条路径。步数少时，主要风险不再是“模型不会去噪”，而是数值积分误差和方向场误差被放大。
 
@@ -210,7 +210,7 @@ Score matching 到 SDE 这条线的核心知识不是记公式，而是抓住一
 
 读扩散论文时可以先问三件事：模型输出的是噪声、score、\(x_0\) 还是 velocity；采样走的是随机 SDE、确定 ODE 还是 flow path；少步时靠 solver、蒸馏、consistency，还是重新训练目标。问清这三件事，DDPM、DDIM、Score SDE、DPM-Solver 和 Rectified Flow 就不再是一堆名字，而是一条生成轨迹的不同写法。
 
-## 外部精读
+## 外部材料
 
 - [Yang Song: Generative Modeling by Estimating Gradients of the Data Distribution](https://yang-song.net/blog/2021/score/)：作者博客，适合先建立 score、Langevin dynamics 和多噪声扰动的直觉。
 - [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)：把 DDPM、score、SDE、sampling 和 guidance 放在一条解释链里。
@@ -220,11 +220,6 @@ Score matching 到 SDE 这条线的核心知识不是记公式，而是抓住一
 - [DPM-Solver++](https://arxiv.org/abs/2211.01095)：看高阶 ODE solver 如何服务少步 guided diffusion。
 - [科学空间：得分匹配 = 条件得分匹配](https://spaces.ac.cn/archives/9509)：中文长文，适合补“为什么 DDPM 常见目标更准确地说是条件得分匹配”。
 
-## 相关阅读与下一步
-
-- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
-- 站内下一步：[扩散模型专题](index.md)。
-- 站内下一步：[扩散方法对比表](comparison-table.md)。
-- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。
+- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。

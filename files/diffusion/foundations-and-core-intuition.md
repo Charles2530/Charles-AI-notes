@@ -2,11 +2,9 @@
 
 扩散模型的关键不在“去掉图片上的噪点”，而在于把难以直接采样的数据分布，连接到一个容易采样的简单分布。模型学习这条路径上的局部信息，采样器再把局部信息积分成完整生成轨迹。
 
-## 本文解决什么问题
+扩散方法共用一组坐标：数据分布与单个样本的区别；前向过程为何由人规定；训练为何能构造监督信号；生成为何必须从噪声分布出发；DDPM、score-based model 和 Flow Matching 的共同结构在哪里。
 
-本文建立后续方法共用的坐标系：数据分布与单个样本的区别；前向过程为何由人规定；训练为何能构造监督信号；生成为何必须从噪声分布出发；DDPM、score-based model 和 Flow Matching 的共同结构在哪里。
-
-本文只使用高斯噪声和连续数据作为主要例子。离散扩散、冷扩散和更一般的 stochastic interpolant 可以沿用“路径—局部目标—采样动力学”的框架，但具体转移核和训练目标不同。
+这里主要使用高斯噪声和连续数据作为例子。离散扩散、冷扩散和更一般的 stochastic interpolant 可以沿用“路径—局部目标—采样动力学”的框架，但具体转移核和训练目标不同。
 
 ## 前置知识
 
@@ -125,9 +123,6 @@ return x_0
 4. 为什么“从噪声开始”不等于噪声中预先藏着目标图像？
 5. Flow Matching 和 DDPM 都可以写成数据与噪声之间的路径，它们的监督目标为何仍不相同？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 下一步：[DDPM 数学与训练](training.md)，把概率路径落实到离散高斯链、反向后验和噪声预测目标。
-- 系统层：[架构与 Stable Diffusion](architecture-and-stable-diffusion.md)，区分扩散目标与 U-Net、DiT、VAE、文本编码器。
-- 外部材料：[DDPM](https://arxiv.org/abs/2006.11239)、[Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)、[Step-by-Step Diffusion](https://arxiv.org/abs/2406.08929)。
-- 返回：[扩散模型专题](index.md)。
+- [DDPM](https://arxiv.org/abs/2006.11239)、[Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)、[Step-by-Step Diffusion](https://arxiv.org/abs/2406.08929)。

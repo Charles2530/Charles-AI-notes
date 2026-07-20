@@ -2,11 +2,11 @@
 
 很多人把训练问题理解成“调优化器”。这只对了一小部分。在大模型训练里，优化器当然重要，但真正决定结果的往往是整套训练系统：数据如何清洗和混合，batch 如何组织，序列如何 packing，学习率如何调度，dataloader 能否持续喂满 GPU，checkpoint 与容错是否可靠。
 
-这页把“优化”和“数据系统”放在一起看，因为现实里它们几乎总是耦合的。更细的数据配方讨论见 [Scaling、课程学习与数据配比](scaling-curriculum-and-data-mixture.md)，运维侧见 [集群运维与实验治理](cluster-operations-and-experiment-management.md)。
+训练数据系统和优化通常耦合在一起：数据配方决定样本进入训练的方式，运维链路决定吞吐、恢复和可复盘性。
 
 ![Chinchilla tokens vs parameters](../assets/images/paper-figures/training/chinchilla-tokens-vs-params.png){ width="760" }
 
-<small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)。原图表达在固定计算预算下参数量和训练 token 数需要共同选择；本站读法是把数据系统视为训练优化的一部分：有效 token、采样、packing 和吞吐都会改变实际学习预算。它不能证明某个数据配方最优。</small>
+<small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)。原图表达在固定计算预算下参数量和训练 token 数需要共同选择；读图重点是把数据系统视为训练优化的一部分：有效 token、采样、packing 和吞吐都会改变实际学习预算。它不能证明某个数据配方最优。</small>
 
 ## 有效 Token 是核心资源
 
@@ -139,11 +139,8 @@ Checkpoint 路径也要和数据读取路径分开规划。异步写入、热/�
 
 训练系统的核心目标，是把高质量 token 以稳定、可复现、可解释的方式送进优化过程。只有数据链路、batch 组织、优化日程和容错机制一起成立，训练曲线才值得被拿来做方法结论。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

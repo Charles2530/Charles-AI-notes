@@ -50,7 +50,7 @@
 
 ![ALOHA ACT algorithm](../assets/images/paper-figures/vla/aloha-act-algorithm-2x.png){ width="760" }
 
-<small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware / ACT](https://arxiv.org/abs/2304.13705)，方法图。原图展示 ACT 用 CVAE/Transformer 从多视角图像和关节状态预测 action chunk，并用 temporal ensembling 平滑执行。本站读法：chunk 的核心不是“输出更多动作”，而是把精细操作改成短时序生成，再用重叠预测降低抖动。</small>
+<small>图源：[Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware / ACT](https://arxiv.org/abs/2304.13705)，方法图。原图展示 ACT 用 CVAE/Transformer 从多视角图像和关节状态预测 action chunk，并用 temporal ensembling 平滑执行。读图重点：chunk 的核心不是“输出更多动作”，而是把精细操作改成短时序生成，再用重叠预测降低抖动。</small>
 
 ACT 里的 temporal ensembling 可以理解为：多个历史时刻都预测过当前时刻的动作，执行时把这些预测融合起来：
 
@@ -93,7 +93,7 @@ o_t\sim \mu(o\mid s_t,l)
 
 ![SayCan language skill affordance](../assets/images/paper-figures/embodied-ai/saycan-figure-3-llm-affordance.png){ width="900" }
 
-<small>图源：[Do As I Can, Not As I Say / SayCan](https://say-can.github.io/)，方法图。原图展示语言模型给候选技能打任务相关分，价值函数给技能打可执行性分，二者结合选择下一步技能。本站读法：高层技能选择不能只看语言合理性，还要被当前场景 affordance 约束。</small>
+<small>图源：[Do As I Can, Not As I Say / SayCan](https://say-can.github.io/)，方法图。原图展示语言模型给候选技能打任务相关分，价值函数给技能打可执行性分，二者结合选择下一步技能。读图重点：高层技能选择不能只看语言合理性，还要被当前场景 affordance 约束。</small>
 
 SayCan 不是现代 VLA 的唯一形态，但它把层级策略的核心讲得很清楚：语言模型可以提出“找苹果、拿苹果、放苹果”等候选技能，机器人系统还要判断这些技能在当前状态是否可执行。VLA 里如果跳过 affordance 和终止条件，语言规划会显得聪明，真实执行却容易在第一步就卡住。
 
@@ -160,7 +160,7 @@ l \rightarrow \text{subtask / skill} \rightarrow \text{action chunk} \rightarrow
 
 继续读相邻内容时，可以接 [VLA 动作表示与控制接口](action-representation-and-interfaces.md)、[VLA 数据与策略学习](data-and-policy-learning.md)、[WM / WAM / VAM：动作到底怎样进入世界模型](../world-models/wm-wam-vam-and-action-conditioned-modeling.md) 和 [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
 
-## 外部精读
+## 外部材料
 
 - [ALOHA / ACT](https://arxiv.org/abs/2304.13705)：理解 action chunk、CVAE 和 temporal ensembling 如何服务精细操作。
 - [Options 框架](http://incompleteideas.net/papers/SPS-aij.pdf)：理解技能为什么需要启动集合、内部策略和终止函数。

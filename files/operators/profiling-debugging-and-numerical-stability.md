@@ -1,8 +1,8 @@
 # Profiling、调试与数值稳定
 
-很多 kernel 优化最后不是败在“不会写更快代码”，而是败在三件事上：没有正确测量，优化方向从一开始就错了；没有可靠验证，性能上去了但结果悄悄错了；没有处理数值稳定性，速度和精度之间出现不可接受的偏差。
+很多 kernel 优化最后败在三件事上：没有正确测量，优化方向从一开始就错了；没有可靠验证，性能上去了但结果悄悄错了；没有处理数值稳定性，速度和精度之间出现不可接受的偏差。
 
-成熟算子工程不是“会写 kernel”，而是建立从热点识别、性能定位、正确性验证到数值验收的完整闭环。
+成熟算子工程要建立从热点识别、性能定位、正确性验证到数值验收的完整闭环。
 
 ## Profiling 先于优化
 
@@ -170,7 +170,7 @@ flowchart LR
 
 | 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
 | --- | --- | --- | --- |
-| 本页解决哪项成本 | 单 kernel、端到端 rollout、闭环 loop 三层时间线 | kernel 2x，端到端只有 1.05x | kernel latency、loop latency、Amdahl breakdown |
+| 成本问题 | 单 kernel、端到端 rollout、闭环 loop 三层时间线 | kernel 2x，端到端只有 1.05x | kernel latency、loop latency、Amdahl breakdown |
 | 正确性 | 与 BF16/reference 比较未来 latent、event、risk | 逐元素误差小，但 top-1 动作排序翻转 | ranking agreement、event F1 |
 | 数值稳定 | 长 horizon 反复 rollout 误差曲线 | 8s 后对象漂移，短测不暴露 | latent drift、object permanence |
 | 低精度路径 | scale、dequant、fallback 和 layout transform 计入 trace | 量化 kernel 快，前后 cast 慢 | kernel hit rate、dequant count |
@@ -178,11 +178,8 @@ flowchart LR
 
 一个世界模型 kernel PR 的证据不应只写“attention kernel 快 1.6x”。更稳的写法是：`视频 latent attention kernel 1.6x，端到端候选 rollout 1.23x；与参考实现相比 top-1 candidate ranking agreement 99.4%，risk ECE 变化 +0.002，hard replay 无新增 false negative。`
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

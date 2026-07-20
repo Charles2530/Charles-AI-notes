@@ -1,11 +1,11 @@
 # 自动微分与激活显存：训练为什么要保存中间值
 
-这篇文章只回答一个问题：为什么训练一个模型时，显存不只是装下权重就够了。
+训练显存不只要装下权重，还要容纳激活、梯度和优化器状态。
 
 推理只要把输入一路算到输出。训练不同，它还要知道“每个参数应该往哪边改”。这意味着框架不仅要执行 forward，还要为 backward 留下足够的信息：哪些算子参与了计算、哪些张量在反向公式里会被再次用到、梯度要累积到哪些参数上。自动微分让这件事看起来像一句 `loss.backward()`，但显存账就藏在这些被保存的中间值里。
 
 !!! tip "数学先修"
-    本文会用到[微积分里的链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)，并把 backward 写成 [Jacobian 与 VJP](../prerequisite-math/differential-jacobian-and-gradient-flow.md)。如果这些公式还不熟，先读对应数学页；已经熟悉可直接继续。
+    需要用到[微积分里的链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)，并把 backward 写成 [Jacobian 与 VJP](../prerequisite-math/differential-jacobian-and-gradient-flow.md)。如果这些公式还不熟，先读对应数学页；已经熟悉可直接继续。
 
 ## Backward 不是倒放 forward
 
@@ -104,7 +104,7 @@ g_y^\top J_f(x)
 
 ![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="820" }
 
-<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原图表达：普通数据并行会复制 optimizer states、gradients 和 parameters；ZeRO 分阶段把它们切到不同 rank。本站使用这张图说明：activation checkpointing 只管中间激活，参数状态这张账要由 ZeRO/FSDP、低精度优化器或 offload 处理。</small>
+<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原图表达：普通数据并行会复制 optimizer states、gradients 和 parameters；ZeRO 分阶段把它们切到不同 rank。这张图说明：activation checkpointing 只管中间激活，参数状态这张账要由 ZeRO/FSDP、低精度优化器或 offload 处理。</small>
 
 所以看到 OOM 时，不要只问“模型多少 B 参数”。更应该先拆账：是长期状态太大，还是 activation 太大，还是某个 attention kernel 或通信 workspace 峰值太高。不同账对应不同解法。
 
@@ -135,7 +135,7 @@ activation checkpointing 的核心很简单：forward 时不要保存所有中�
 
 ![Sublinear memory computation graph 原论文图](../assets/images/paper-figures/foundations/sublinear-memory-figure-1-computation-graph.png){ width="620" }
 
-<small>图源：[Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1。原图把前向计算表示成计算图，并说明反向需要中间节点值。本站用这张图说明 checkpointing 的真正折中：不是“不需要 activation”，而是把部分 activation 从“长期保存”改成“反向前重算”。</small>
+<small>图源：[Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1。原图把前向计算表示成计算图，并说明反向需要中间节点值。这张图说明 checkpointing 的真正折中：不是“不需要 activation”，而是把部分 activation 从“长期保存”改成“反向前重算”。</small>
 
 以 6 层网络为例：
 
@@ -186,7 +186,7 @@ model checkpoint 是训练资产，通常包含权重、optimizer state、schedu
 
 自动微分通常从一个 scalar loss 开始，沿计算图用 VJP 得到所有参数梯度；它的显存成本来自这些局部 backward rule 对 forward 中间量的依赖。activation checkpointing 的本质不是魔法压缩，而是把“保存中间量”换成“反向时重算中间量”。它适合解决 activation 爆炸，尤其是长上下文、视频、多模态和极深网络；但参数、梯度、optimizer state、通信 buffer、训练恢复资产仍要靠 ZeRO/FSDP、低精度、offload、kernel 和 checkpoint 治理一起处理。
 
-## 外部精读
+## 外部材料
 
 - [Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)：理解 activation checkpointing / rematerialization 的经典来源。
 - [PyTorch: Activation Checkpointing](https://pytorch.org/docs/stable/checkpoint.html)：看现代 PyTorch checkpoint 的 reentrant/non-reentrant、RNG state 和实现语义。
@@ -196,11 +196,6 @@ model checkpoint 是训练资产，通常包含权重、optimizer state、schedu
 - [Hugging Face Transformers performance guide](https://huggingface.co/docs/transformers/perf_train_gpu_one)：适合看 gradient checkpointing、mixed precision 和 batch 调整的实践入口。
 - [OneFlow 官方博客](https://blog.csdn.net/OneFlow_Official)：中文工程文章常用“显存账 + 并行策略 + kernel 细节”来组织讲解，可学习其问题驱动写法。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

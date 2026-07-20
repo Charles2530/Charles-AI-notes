@@ -1,16 +1,14 @@
 # 数值计算、复杂度与估算
 
-这篇回答一个问题：为什么同一个公式在论文里很短，到了训练和推理系统里却变成 FLOPs、bytes、精度、稳定性和复杂度问题。
-
-数学公式通常默认实数无限精确，机器实现却只能用有限位数、有限显存和有限带宽。数值计算和复杂度，就是把“公式能不能算、算得准不准、算得贵不贵”说清楚。
+论文里的短公式进入训练和推理系统后，会变成 FLOPs、bytes、精度、稳定性和复杂度问题。数值计算和复杂度把“公式能不能算、算得准不准、算得贵不贵”说清楚。
 
 ## Big-O：看规模增长趋势
 
-复杂度符号 \(O(\cdot)\) 不是精确时间，而是输入规模变大时成本怎样增长。
+复杂度符号 \(O(\cdot)\) 描述输入规模变大时成本怎样增长，不给出精确时间。
 
 ![Big-O complexity](../assets/images/prerequisite-math/big-o-complexity.svg){ width="700" }
 
-<small>图源：[Wikimedia Commons: Comparison computational complexity](https://commons.wikimedia.org/wiki/File:Comparison_computational_complexity.svg)。原图比较不同复杂度曲线的增长速度。本站用它说明：线性、平方、指数复杂度在小规模时差别不明显，规模一大就会决定系统是否可用。</small>
+<small>图源：[Wikimedia Commons: Comparison computational complexity](https://commons.wikimedia.org/wiki/File:Comparison_computational_complexity.svg)。原图比较不同复杂度曲线的增长速度。这里的重点是：线性、平方、指数复杂度在小规模时差别不明显，规模一大就会决定系统是否可用。</small>
 
 attention score 的显存常粗略写成：
 
@@ -20,7 +18,7 @@ O(BHL^2)
 
 这里 \(B\) 是 batch，\(H\) 是 head 数，\(L\) 是序列长度。平方项来自所有 query 和 key 两两比较。长上下文、多图、多帧视频一旦把 \(L\) 拉大，成本会非常快地上升。
 
-如果 \(L\) 从 4k 增到 8k，\(L^2\) 不是翻倍，而是变成 4 倍。这个数量级判断解释了为什么长上下文系统要做 FlashAttention、block attention、KV 压缩和上下文分层：核心不是公式难，而是平方增长太快。
+如果 \(L\) 从 4k 增到 8k，\(L^2\) 会变成 4 倍，不是翻倍。这个数量级判断解释了为什么长上下文系统要做 FlashAttention、block attention、KV 压缩和上下文分层：瓶颈在于平方增长太快。
 
 ## FLOPs：算了多少乘加
 
@@ -40,7 +38,7 @@ B\in\mathbb{R}^{K\times N}
 
 次浮点操作。训练和推理系统里，GEMM、attention、MLP、卷积的成本常常先从 FLOPs 估算开始。
 
-为什么是 \(2MKN\)：输出矩阵有 \(M\times N\) 个元素，每个元素要做长度为 \(K\) 的点积，约 \(K\) 次乘法和 \(K\) 次加法，所以是 \(2K\)。合起来就是 \(2MKN\)。后面看 MLP 或 GEMM benchmark 时，\(M,N,K\) 不是抽象字母，而是 batch/token 数、输入通道和输出通道。
+为什么是 \(2MKN\)：输出矩阵有 \(M\times N\) 个元素，每个元素要做长度为 \(K\) 的点积，约 \(K\) 次乘法和 \(K\) 次加法，所以是 \(2K\)。合起来就是 \(2MKN\)。后面看 MLP 或 GEMM benchmark 时，\(M,N,K\) 对应 batch/token 数、输入通道和输出通道。
 
 但 FLOPs 不等于速度。一个算子可能 FLOPs 不高，却因为读写太多数据而慢。
 
@@ -156,9 +154,3 @@ L=4\times16\times256=16384
 ## 读完以后怎么判断
 
 看到一个系统优化 claim，先问它省的是 FLOPs、bytes、通信还是 latency；再问质量指标有没有回归；最后问 benchmark 是否覆盖真实 shape 分布。这个判断会贯穿推理服务、量化、算子、长上下文和世界模型高效训练。
-
-## 相关阅读与下一步
-
-- 站内下一步：[数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。
-- 站内下一步：[推理服务系统](../inference/serving-systems.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](../operators/cuda-programming-model-and-memory.md)。

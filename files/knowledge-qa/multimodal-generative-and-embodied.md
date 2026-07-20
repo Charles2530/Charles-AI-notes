@@ -1,6 +1,6 @@
 # 多模态与生成模型 QA
 
-这一页回答 VLM、视觉连接器、扩散模型、视频生成和多模态评测中的高频问题。世界模型和具身智能已经拆到独立页面：读世界模型请看 [世界模型 QA](world-models.md)，读 VLA 与机器人闭环请看 [具身智能与 VLA QA](embodied-ai-and-vla.md)。
+VLM、视觉连接器、扩散模型、视频生成和多模态评测的高频问题，需要和世界模型、具身智能问题分开读：世界模型见 [世界模型 QA](world-models.md)，VLA 与机器人闭环见 [具身智能与 VLA QA](embodied-ai-and-vla.md)。
 
 ## VLM 与多模态表示
 

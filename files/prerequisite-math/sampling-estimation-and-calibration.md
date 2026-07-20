@@ -1,8 +1,6 @@
 # 采样、估计与校准
 
-这篇回答一个问题：论文里说的 Monte Carlo、估计器、方差、置信区间、acceptance rate、calibration 和 ECE 到底在衡量什么。
-
-很多模型目标写成期望，但真实系统只能采样；很多论文报告平均指标，但真实部署关心长尾；很多方法依赖 confidence，但 confidence 未必等于真实成功率。采样、估计和校准，就是把这些不确定性讲清楚。
+Monte Carlo、估计器、方差、置信区间、acceptance rate、calibration 和 ECE 衡量采样结果的稳定性、误差范围和概率是否可信。许多模型目标写成期望，但系统只能采样；论文报告平均指标，部署还要看长尾；方法依赖 confidence，也要验证 confidence 是否对应真实成功率。
 
 ## Monte Carlo 估计为什么会抖
 
@@ -112,7 +110,7 @@ PPO 使用的每步 action probability ratio 不是完整的 trajectory importan
 \hat\mu_N\pm 1.96\cdot \mathrm{SE}
 \]
 
-这可以粗略理解成 95% 置信区间。它不是说真实均值有 95% 概率在这个区间里，而是说如果重复很多次同样实验，这种构造区间的方法大约 95% 能覆盖真实均值。
+这可以粗略理解成 95% 置信区间。它描述重复实验下区间构造方法的覆盖率：如果重复很多次同样实验，这种方法大约 95% 能覆盖真实均值；不要读成“真实均值有 95% 概率在这个已生成区间里”。
 
 论文里如果两个方法平均分差很小，但置信区间高度重叠，就不能轻易说一个方法“显著更好”。
 
@@ -191,7 +189,7 @@ Wilson 也不是“真实成功率的精确答案”。它仍依赖独立同分�
 
 这里 \(g\) 是任务桶，\(w_g\) 是该桶权重，\(\mu_g\) 是桶内平均表现。如果线上真实权重 \(w_g\) 和论文 benchmark 权重不同，整体结论会变。
 
-所以通用读法不是“平均分更高就结束”，而是看每个关键桶：简单样本、困难样本、长尾、分布外、失败恢复、长输出和高并发场景是否都被覆盖。
+所以通用读法要看每个关键桶，而不是只看平均分是否更高：简单样本、困难样本、长尾、分布外、失败恢复、长输出和高并发场景是否都被覆盖。
 
 ## 重要性采样：样本来自另一个分布时怎样重加权
 
@@ -232,7 +230,7 @@ w(x_i)f(x_i),
 x_i\sim q
 \]
 
-这行公式的重点不是“乘一个权重就能修复分布偏移”，而是 proposal 必须覆盖 target。若 \(q(x)=0\) 但 \(p(x)>0\)，现有样本完全看不到那个区域，任何权重都补不回来。
+这行公式的重点是 proposal 必须覆盖 target，而不是“乘一个权重就能修复分布偏移”。若 \(q(x)=0\) 但 \(p(x)>0\)，现有样本完全看不到那个区域，任何权重都补不回来。
 
 即使 support 覆盖，权重也可能非常不均。若少数样本的 \(w_i\) 极大，整个估计几乎由它们决定。一个常用诊断是 effective sample size：
 
@@ -263,7 +261,7 @@ x_i\sim q
 
 ![Draft confidence calibration](../assets/images/paper-deep-dives/inference/eagle-2/figure-6-confidence-calibration.png){ width="690" }
 
-<small>图源：[EAGLE-2](https://arxiv.org/abs/2406.16858)，Figure 6。原图比较 draft confidence 与真实 acceptance rate。本站在这里用它说明：confidence 只有经过校准，才能作为昂贵验证前的便宜代理信号。</small>
+<small>图源：[EAGLE-2](https://arxiv.org/abs/2406.16858)，Figure 6。原图比较 draft confidence 与真实 acceptance rate。这里的重点是：confidence 只有经过校准，才能作为昂贵验证前的便宜代理信号。</small>
 
 ## 校准：模型说 80% 时，真的有 80% 吗
 
@@ -318,10 +316,3 @@ Spearman rank correlation 衡量两个排序是否一致。它常用于比较想
 ## 读完以后怎么判断
 
 看到采样指标、平均分、confidence 或 calibration 图时，先问样本来自哪里、样本数多少、方差多大、区间使用了什么假设、importance weight 是否退化、confidence 是否校准、平均收益是否覆盖 P95/P99 和任务桶。这样读 EAGLE、PPO/GRPO、world model evaluation 和 judge model 论文会清楚很多。
-
-## 相关阅读与下一步
-
-- 站内下一步：[概率论、分布与期望](probability-distributions-and-expectation.md)。
-- 站内下一步：[随机过程与马尔可夫性](stochastic-processes-and-markov.md)。
-- 论文精读：[EAGLE-2：动态 Draft Tree](../paper-deep-dives/inference/eagle-2.md)。
-- 论文精读：[DeepSeek-R1：RL 激发推理能力](../paper-deep-dives/technical-reports/deepseek-r1.md)。

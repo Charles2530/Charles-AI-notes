@@ -88,7 +88,3 @@ periodic copy: current Q -> target Q
 2. 写出同一 epsilon-greedy trajectory 下 SARSA 和 Q-learning 对下一状态使用的 action，并说明哪个 target 与行为策略一致。
 3. 将 target 同步频率从 32 次更新改为每次更新，观察 loss 与 Q 尺度；不要据单个 seed 下结论。
 4. 解释为什么 evaluation return 和 replay batch 中的 reward 均值不是同一个指标。
-
-## 下一步
-
-Q-learning 通过 \(\max_a Q\) 间接得到策略；下一章改为直接优化动作概率，见 [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md)。课程位置与尚未创建的主题只在 [完整学习路线](index.md#完整学习路线) 中列出。

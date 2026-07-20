@@ -1,6 +1,6 @@
 # VLA 评测与数据引擎
 
-一个仓库拣选 VLA 在离线集上动作误差很低，实验室里也能稳定抓常见纸箱。上线后最先暴露的却不是“不会抓”，而是透明塑封件反光、货物倾斜堆叠、人工临时挪动托盘、抓起后转运滑脱。这些长尾场景如果没有进入 benchmark 和数据回流，表格分数会继续变好，现场却不会变稳。
+一个仓库拣选 VLA 在离线集上动作误差很低，实验室里也能稳定抓常见纸箱。上线后最先暴露的是透明塑封件反光、货物倾斜堆叠、人工临时挪动托盘、抓起后转运滑脱。这些长尾场景如果没有进入 benchmark 和数据回流，表格分数会继续变好，现场却不会变稳。
 
 VLA 评测与数据引擎必须放在一起看。评测决定团队会发现什么失败；数据引擎决定这些失败能不能变成下一轮训练、回放和 hard set 资产。两者断开时，benchmark 只是排行榜；两者接上时，benchmark 才是系统进化的控制面。
 
@@ -77,7 +77,7 @@ Open X-Embodiment / RT-X、DROID、BridgeData、Octo、OpenVLA 和 π0.5 都说�
 
 ![Open X-Embodiment dataset overview](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="820" }
 
-<small>图源：[Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)，数据集总览图。原图展示多机构、多机器人、多任务和多对象数据汇聚。本站读法：跨 embodiment 评测要先核对观测、动作、任务、结果和部署语义是否一致，不能只看数据量或总成功率。</small>
+<small>图源：[Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)，数据集总览图。原图展示多机构、多机器人、多任务和多对象数据汇聚。读图重点：跨 embodiment 评测要先核对观测、动作、任务、结果和部署语义是否一致，不能只看数据量或总成功率。</small>
 
 跨机器人 benchmark 最容易出错的是 action 口径。一个数据集里的 7 维动作可能是 gripper frame delta pose，另一个可能是 base frame 或关节空间；gripper 的 1 可能表示闭合，也可能表示打开；控制频率和 latency 也可能不同。若这些不写进 metadata，模型和评测都会把接口噪声当成任务差异。
 
@@ -153,7 +153,7 @@ VLA 评测与数据引擎可以按这条链路收口：benchmark 负责把能力
 
 继续读相邻内容时，可以接 [VLA 数据与策略学习](data-and-policy-learning.md)、[VLA 动作分块、层级策略与潜在技能](action-chunking-hierarchical-policies-and-latent-skills.md)、[Sim2Real 与具身数据引擎](../embodied-ai/sim2real-and-data-engines.md) 和 [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
 
-## 外部精读
+## 外部材料
 
 - [Open X-Embodiment / RT-X](https://robotics-transformer-x.github.io/)：理解跨机器人数据和评测为什么首先是接口对齐问题。
 - [DROID](https://droid-dataset.github.io/)：看真实机器人 in-the-wild 数据采集如何覆盖多场景、多任务和长轨迹。

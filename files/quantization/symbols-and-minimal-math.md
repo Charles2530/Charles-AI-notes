@@ -10,7 +10,7 @@
 
 ![Low-bit LLM quantization granularity](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-2-granularity.png)
 
-<small>图源：[A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)。原图表达 per-tensor、per-channel、per-group 等量化粒度会改变 scale 覆盖范围；本站读法是把公式里的 \(s\)、\(z\)、group size 和误差预算对应到具体张量布局。它不能替代某个 runtime 的 kernel 文档，只提供读量化数学时的结构地图。</small>
+<small>图源：[A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)。原图表达 per-tensor、per-channel、per-group 等量化粒度会改变 scale 覆盖范围；读图重点是把公式里的 \(s\)、\(z\)、group size 和误差预算对应到具体张量布局。它不能替代某个 runtime 的 kernel 文档，只提供读量化数学时的结构地图。</small>
 
 ## 核心问题
 
@@ -207,7 +207,7 @@ KV cache 随层数、并发、上下文长度、KV head 数和 dtype 线性增�
 
 如果这四句答不清，先不要比较哪个方法更强。量化里最容易迷路的地方，就是把数值格式、误差控制算法和系统执行路径混成一件事。
 
-## 外部精读
+## 外部材料
 
 - [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：用 scheme、granularity、technique 三层拆量化概念。
 - [GPTQ](https://arxiv.org/abs/2210.17323)：看二阶近似怎样服务逐层权重量化补偿。
@@ -215,11 +215,6 @@ KV cache 随层数、并发、上下文长度、KV head 数和 dtype 线性增�
 - [SmoothQuant](https://arxiv.org/abs/2211.10438)：看 activation outlier 如何迁移到权重侧。
 - [QLoRA](https://arxiv.org/abs/2305.14314)：看 4bit 底座和 LoRA adapter 如何服务低资源微调。
 
-## 相关阅读与下一步
-
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

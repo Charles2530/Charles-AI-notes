@@ -1,6 +1,6 @@
 # 具身部署模式与安全案例
 
-具身智能一旦离开实验室，面对的就不再是“平均成功率”，而是具体责任边界、真实物理风险和持续运营问题。部署模式决定系统怎样接入业务流程，安全案例则回答一个更根本的问题：为什么我们相信它足够安全、何时必须回退、出了问题如何追责与修复。本页把具身智能系统从研究样机推向生产环境时常见的部署模式与安全论证框架做一个系统梳理。
+具身智能一旦离开实验室，面对的就不再是“平均成功率”，而是具体责任边界、真实物理风险和持续运营问题。部署模式决定系统怎样接入业务流程，安全案例则回答一个更根本的问题：为什么我们相信它足够安全、何时必须回退、出了问题如何追责与修复。
 
 ## 为什么具身智能部署比纯软件系统难
 
@@ -170,11 +170,8 @@ $$
 
 具身部署的关键不是把自治程度一次拉满，而是先把 ODD、接管条件、审计记录和回退动作写清楚。安全案例要能回答“为什么这个系统在这个边界内可以运行”，也要能回答“边界被突破时系统如何停下来或交给人”。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
-- 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[具身智能基础：观测、动作与反馈闭环](beginner-learning-path.md)。
-- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
+- [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- [RoboTwin 项目](https://robotwin-platform.github.io/)。

@@ -2,7 +2,7 @@
 
 世界模型与规划有一条重要线索：规划不一定只能写成显式搜索或值函数优化，也可以写成推断问题。与此同时，复杂动作空间直接规划太难，很多系统会把动作片段压缩成潜在动作或技能代码，再在更紧凑的空间里做推理。
 
-这页连接三件事：为什么奖励最大化可以改写成后验推断，为什么潜在动作适合高维控制，以及这条路线如何和 `WM / WAM / VAM` 接起来。
+规划即推理、潜在动作和 `WM / WAM / VAM` 连接三件事：奖励最大化如何改写成后验推断，潜在动作为什么适合高维控制，以及这条路线怎样接入世界模型接口。
 
 ## 规划为什么可以写成推断
 
@@ -137,11 +137,8 @@ Planning as inference 与潜在动作可以接到三类世界模型上：
 
 Planning as inference 的价值不在于把控制问题换个数学名字，而在于把奖励、先验、约束、不确定性和动作表示放进同一个概率框架。潜在动作则让这个框架在高维真实动作空间里更可计算。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

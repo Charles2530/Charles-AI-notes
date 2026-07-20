@@ -1,6 +1,6 @@
 # 扩散模型：从概率路径到现代生成系统
 
-扩散模型不是某一个固定网络，而是一组生成建模方法：先规定数据分布如何逐渐过渡到易采样的噪声分布，再学习从中间状态恢复数据所需的方向、噪声或速度。DDPM、Score SDE、DDIM、Flow Matching、Rectified Flow 和 Consistency Models 的共同问题都是“怎样把简单分布中的样本送回数据分布”，差别在于路径怎样定义、模型预测什么、采样动力学怎样写，以及训练和推理成本放在哪里。
+扩散模型是一组生成建模方法：先规定数据分布如何逐渐过渡到易采样的噪声分布，再学习从中间状态恢复数据所需的方向、噪声或速度。DDPM、Score SDE、DDIM、Flow Matching、Rectified Flow 和 Consistency Models 的共同问题都是“怎样把简单分布中的样本送回数据分布”，差别在于路径怎样定义、模型预测什么、采样动力学怎样写，以及训练和推理成本放在哪里。
 
 ## 扩散模型是什么
 
@@ -34,7 +34,7 @@ flowchart LR
 
 训练时，真实样本和所加噪声都已知，因此可以随机抽一个时间步，直接构造 \(x_t\) 并形成监督目标；通常不需要真的把一张图逐步加噪到第 \(t\) 步。生成时没有真实 \(x_0\) 可用，只能从随机噪声出发，把许多局部预测串成完整轨迹。训练 loss 很低不自动保证有限步采样稳定，因为误差会在闭环轨迹中累积。
 
-这张图说明两个执行链共享同一个模型接口，但数据来源和运行方式不同；它没有说明任意训练目标都能与任意采样器直接组合。
+训练和生成共享同一个模型接口，但数据来源和运行方式不同；任意训练目标不能直接与任意采样器组合。
 
 ## 核心技术脉络
 
@@ -47,8 +47,6 @@ flowchart LR
 | 方法演进 | DDPM、DDIM、Score SDE、Solver、Flow 和少步生成怎样衔接 | [发展脉络](evolution.md) |
 | 连续时间 | score、反向 SDE 和 probability flow ODE 怎样统一 | [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md) |
 | 速度场路线 | Flow Matching 如何回归速度，Rectified Flow 为什么关注路径曲率 | [Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md) |
-
-推荐顺序不是按论文发表年份机械排列，而是按依赖关系排列：先统一训练与生成接口，再理解 DDPM，随后进入架构、代码和连续时间方法。历史时间线适合在共同坐标系建立之后阅读。
 
 ## 方法分支与工程问题
 

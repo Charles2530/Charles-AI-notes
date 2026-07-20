@@ -1,14 +1,12 @@
 # 优化、梯度与约束
 
-这篇回答一个问题：loss、梯度下降、学习率、动量、Adam、约束优化和拉格朗日乘子，怎样连成训练算法。
-
-模型训练可以先看成一个最小化问题：
+loss、梯度下降、学习率、动量、Adam、约束优化和拉格朗日乘子共同构成训练算法的读法。模型训练可以先看成一个最小化问题：
 
 \[
 \min_\theta \mathcal{L}(\theta)
 \]
 
-其中 \(\theta\) 是参数，\(\mathcal{L}\) 是目标函数。训练不是“模型自己学会”，而是不断估计一个更新方向，再把参数往更低 loss 的地方推。
+其中 \(\theta\) 是参数，\(\mathcal{L}\) 是目标函数。训练过程会不断估计更新方向，再把参数往更低 loss 的地方推。
 
 这里 \(\min_\theta\) 的意思是“在所有可能参数里找一组让 loss 小的参数”。真实大模型当然不会穷举所有 \(\theta\)，优化器只是从当前参数出发，一步步沿局部信息移动。
 
@@ -38,7 +36,7 @@
 
 ![Gradient descent](../assets/images/prerequisite-math/gradient-descent.svg){ width="620" }
 
-<small>图源：[Wikimedia Commons: Gradient descent](https://commons.wikimedia.org/wiki/File:Gradient_descent.svg)。原图展示参数沿目标函数表面逐步下降。本站用它说明：优化器只能根据局部信息走路，loss landscape 的曲率、噪声和尺度都会影响路径。</small>
+<small>图源：[Wikimedia Commons: Gradient descent](https://commons.wikimedia.org/wiki/File:Gradient_descent.svg)。原图展示参数沿目标函数表面逐步下降。这里的重点是：优化器只能根据局部信息走路，loss landscape 的曲率、噪声和尺度都会影响路径。</small>
 
 ## SGD：用 mini-batch 估计真实梯度
 
@@ -160,8 +158,6 @@ RLHF 里的 KL penalty、PPO 的 clip、量化里的误差约束、模型压缩�
 
 看到一个训练公式时，先问：目标函数是什么，梯度怎么估计，更新受哪些约束，优化器多存了哪些状态，指标是否真的对应最终任务。这个问题链会贯穿预训练、微调、对齐、量化训练和世界模型训练。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 站内下一步：[优化与训练入门](../foundations/optimization-and-training-basics.md)。
-- 站内下一步：[目标函数、优化器与 LR 日程](../training/objectives-optimizers-and-schedules.md)。
-- 外部材料：[CS231n: Optimization](https://cs231n.github.io/optimization-1/)。
+- [CS231n: Optimization](https://cs231n.github.io/optimization-1/)。

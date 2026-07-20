@@ -1,11 +1,11 @@
 # 归一化、残差与激活：深层网络为什么能稳住
 
-这篇文章只回答一个问题：一个网络堆到几十层、几百层甚至上千层时，为什么还能把信号传下去、把梯度传回来，并且不被中间张量的尺度拖垮。
+网络堆到几十层、几百层甚至上千层时，归一化、残差和激活函数共同维持信号尺度与梯度流动。
 
 答案不是某一个模块单独立功。归一化控制每层看到的数值尺度，残差连接保留一条可传播的信息路径，激活函数让线性投影之间产生非线性选择。三者一起决定深层模型是否“可优化”：如果尺度漂移，后面的线性层和 softmax 会被极值支配；如果没有直通路径，反向梯度要穿过太多不稳定变换；如果没有非线性，多层矩阵乘法最终仍等价于一个矩阵。
 
 !!! tip "数学先修"
-    本文会用到[向量范数与线性变换](../prerequisite-math/linear-algebra-and-geometry.md)描述尺度，用[优化与曲率](../prerequisite-math/optimization-and-gradient-methods.md)理解稳定更新，并用[Jacobian 与梯度传播](../prerequisite-math/differential-jacobian-and-gradient-flow.md)判断残差路径怎样放大或保留信号。
+    需要用到[向量范数与线性变换](../prerequisite-math/linear-algebra-and-geometry.md)描述尺度，用[优化与曲率](../prerequisite-math/optimization-and-gradient-methods.md)理解稳定更新，并用[Jacobian 与梯度传播](../prerequisite-math/differential-jacobian-and-gradient-flow.md)判断残差路径怎样放大或保留信号。
 
 ## 先看坏掉的机制
 
@@ -92,7 +92,7 @@ y=x+F(x)
 
 ![ResNet residual block](../assets/images/paper-figures/foundations/resnet-figure-2-residual-block.png){ width="560" .atlas-figure-compact }
 
-<small>图源：[Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)，Figure 2。原图表达：主分支学习 \(F(x)\)，identity shortcut 把 \(x\) 直接送到相加节点。本站使用这张图说明 residual 的核心不是“跳过计算”，而是让每个块默认站在已有表示上做编辑。</small>
+<small>图源：[Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)，Figure 2。原图表达：主分支学习 \(F(x)\)，identity shortcut 把 \(x\) 直接送到相加节点。这张图说明 residual 的核心不是“跳过计算”，而是让每个块默认站在已有表示上做编辑。</small>
 
 反向传播时，残差块也改变了梯度路径：
 
@@ -140,7 +140,7 @@ h_{l+1}=h_l+F_l(\operatorname{Norm}(h_l))
 
 ![BERT layernorm residual 原论文图](../assets/images/paper-deep-dives/foundations/megatron-lm/figure-7-bert-layernorm-residual.png){ width="820" }
 
-<small>图源：[Megatron-LM](https://arxiv.org/abs/1909.08053)，Figure 7。原图对比 original BERT architecture 与 rearranged architecture 的 loss 曲线。本站使用这张图说明：LayerNorm / residual placement 是可观测的训练稳定性问题，不是架构图里的小排版。</small>
+<small>图源：[Megatron-LM](https://arxiv.org/abs/1909.08053)，Figure 7。原图对比 original BERT architecture 与 rearranged architecture 的 loss 曲线。这张图说明：LayerNorm / residual placement 是可观测的训练稳定性问题，不是架构图里的小排版。</small>
 
 2020 年的 Pre-LN/Post-LN 分析给了一个很实用的解释：Post-LN Transformer 初始化时，靠近输出层的梯度期望可能很大，大学习率会让训练不稳，所以 warmup 很关键；Pre-LN 把 LayerNorm 放进 residual block 后，初始化梯度更容易保持良性。这也是为什么很多大模型训练配方宁愿在 block 末尾再补一个 final norm，也要让每层的 residual path 尽量干净。
 
@@ -164,7 +164,7 @@ W_3W_2W_1x = W'x
 
 ![GELU、ReLU 与 Swish 激活曲线](../assets/images/paper-figures/foundations/activation-functions-naoki-shibuya.png){ width="440" }
 
-<small>图源：[Naoki Shibuya: SwiGLU: GLU Variants Improve Transformer](https://naokishibuya.github.io/blog/2023-04-30-swiglu-2020/index.html)，Activation Functions 图。原图对比 ReLU、GELU、Swish/SiLU 的曲线。本站使用它说明：ReLU 是硬门，GELU/SiLU 是软门，SwiGLU 则把软门扩展成两条投影分支的乘法门控。</small>
+<small>图源：[Naoki Shibuya: SwiGLU: GLU Variants Improve Transformer](https://naokishibuya.github.io/blog/2023-04-30-swiglu-2020/index.html)，Activation Functions 图。原图对比 ReLU、GELU、Swish/SiLU 的曲线。这张图说明：ReLU 是硬门，GELU/SiLU 是软门，SwiGLU 则把软门扩展成两条投影分支的乘法门控。</small>
 
 ReLU 是最简单的硬门：
 
@@ -263,7 +263,7 @@ Pre-Norm 不是永远优于 Post-Norm。它通常更适合深层稳定训练，�
 
 归一化解决的是“子模块入口尺度是否可控”，残差解决的是“信息和梯度是否有直通路径”，激活函数解决的是“线性投影之间能否做非线性选择”。深层网络能训练起来，不是因为这些模块各自有一个漂亮名字，而是因为它们共同把连续相乘的优化问题改造成更接近“稳定读取、局部更新、持续写回”的过程。
 
-## 外部精读
+## 外部材料
 
 - [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)：读 ResNet 时重点看 degradation problem 和 residual function 的改写。
 - [Layer Normalization](https://arxiv.org/abs/1607.06450)：理解为什么 LayerNorm 不依赖 batch statistics，适合序列模型。
@@ -275,11 +275,6 @@ Pre-Norm 不是永远优于 Post-Norm。它通常更适合深层稳定训练，�
 - [Datawhale LLM-Algo-LeetCode: RMSNorm](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/01_RMSNorm_Tutorial.html) 与 [SwiGLU](https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/02_SwiGLU_Activation.html)：适合看中文工程讲法、PyTorch 实现和混合精度陷阱。
 - [LLM.int8()](https://arxiv.org/abs/2208.07339) 与 [SmoothQuant](https://arxiv.org/abs/2211.10438)：理解 activation outlier 为什么会影响低比特部署。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

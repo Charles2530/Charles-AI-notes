@@ -1,8 +1,6 @@
 # 动作条件视频世界模型端到端训练案例
 
-> **这篇回答的问题。** 如何理解“动作条件视频世界模型端到端训练案例”背后的核心机制、适用边界和下一步阅读路径。
-
-这页用一个具体案例把全站主线串起来：**训练一个面向机器人桌面操作的动作条件视频世界模型**。目标不是追求最完整的工业方案，而是给读者一条可复盘的技术链路：从数据、视觉状态、动作接口，到训练系统、rollout 推理、量化和闭环评测。
+动作条件视频世界模型可以从一个机器人桌面操作案例拆开：数据、视觉状态、动作接口、训练系统、rollout 推理、量化和闭环评测需要形成一条可复盘的技术链路。
 
 ## 任务设定
 
@@ -40,11 +38,11 @@ flowchart LR
 
 ![DreamZero joint video-action 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-2-joint-video-action.png){ width="860" }
 
-<small>图源：`World Action Models are Zero-shot Policies`，Figure 2。原论文图意：DreamZero 同时生成未来视频和动作，强调动作预测与生成视频在未见任务上保持对齐。本站读法：这张图说明动作条件世界模型不能只预测“未来画面”，还要让动作、未来状态和执行结果互相约束；下面的 mini-chain 就按这个思路把 episode、rollout、risk 和失败 replay 接起来。</small>
+<small>图源：`World Action Models are Zero-shot Policies`，Figure 2。原论文图意：DreamZero 同时生成未来视频和动作，强调动作预测与生成视频在未见任务上保持对齐。读图重点：这张图说明动作条件世界模型不能只预测“未来画面”，还要让动作、未来状态和执行结果互相约束；下面的 mini-chain 就按这个思路把 episode、rollout、risk 和失败 replay 接起来。</small>
 
 ## 硬证据模块：一个可复算 mini-chain
 
-为了避免这页只停留在“设计蓝图”，这里放一个最小可复算 fixture。它不是生产模型结果，也不伪装成论文 benchmark；它的作用是把本页要求的证据链变成可运行格式：数据样例、token 统计、训练配置、rollout 输出、失败 replay 和验收指标都能从同一组文件算出来。
+为了避免设计只停留在蓝图，这里放一个最小可复算 fixture。它不是生产模型结果，也不伪装成论文 benchmark；它的作用是把这里要求的证据链变成可运行格式：数据样例、token 统计、训练配置、rollout 输出、失败 replay 和验收指标都能从同一组文件算出来。
 
 ```text
 files/assets/examples/world-model-mini-chain/
@@ -87,7 +85,7 @@ flowchart LR
 
 | 证据项 | 这个 fixture 里怎么体现 | 真实实验要替换成什么 |
 | --- | --- | --- |
-| 本页解决哪项成本 | raw patch token 到 compressed state token 的 `6.70x` 压缩账 | 真实 tokenizer / resampler 的统计直方图和训练 step time |
+| 成本问题 | raw patch token 到 compressed state token 的 `6.70x` 压缩账 | 真实 tokenizer / resampler 的统计直方图和训练 step time |
 | 最小可复算例子 | 4 条 episode、12 条候选 rollout、一个无依赖评测脚本 | 固定数据切分、固定 checkpoint、固定 eval seed |
 | 失败案例 | `wm_mini_003` 低估 fast grasp 滑落，`wm_mini_004` 把遮挡目标误判成可抓 | 失败视频、模型预测、真实结果、人工标签和重放日志 |
 | 论文或日志证据 | 当前只是文档 fixture，证据等级是 reproducible toy log | 论文 benchmark、ablation、系统吞吐或真实闭环日志 |
@@ -283,11 +281,8 @@ T_{\text{observe}}
 
 一个好用的动作条件视频世界模型，不是“生成最漂亮的未来”，而是用可承受成本预测出足够影响决策的未来差异。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

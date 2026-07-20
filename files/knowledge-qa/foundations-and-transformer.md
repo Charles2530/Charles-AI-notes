@@ -1,6 +1,6 @@
 # 基础与 Transformer QA
 
-这一页用面试高频问法快速复盘机器学习基础、Transformer、tokenizer、attention、位置编码和解码策略。回答按技术面试的正常体量写：先给主回答，再补公式、机制拆解、追问和边界。
+机器学习基础、Transformer、tokenizer、attention、位置编码和解码策略的高频问法，需要先回答主干，再补公式、机制拆解、追问和边界。
 
 ## 机器学习与深度学习基础
 

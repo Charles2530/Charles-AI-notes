@@ -1,13 +1,11 @@
 # 模型压缩、剪枝与 NAS：先问省的是哪张账
 
-> **这篇回答的问题。** 如何理解“模型压缩、剪枝与 NAS”背后的核心机制、适用边界和下一步阅读路径。
+很多模型压缩项目的第一版都会遇到一个尴尬结果：参数量少了，模型文件小了，论文表里的 MACs 也降了，但线上请求并没有明显变快，P99 甚至更差。原因通常是压缩方法改的是一张账，真实系统卡的是另一张账。
 
-很多模型压缩项目的第一版都会遇到一个尴尬结果：参数量少了，模型文件小了，论文表里的 MACs 也降了，但线上请求并没有明显变快，P99 甚至更差。原因通常不是“压缩没用”，而是压缩方法改的是一张账，真实系统卡的是另一张账。
-
-这页按高质量技术博客常用的讲法展开：先固定一个具体困惑，再把方法放回数据流和硬件路径里看。模型压缩不是“把模型变小”的同义词，而是在质量、成本和可部署结构之间重新设计模型。
+模型压缩要先固定具体成本账，再把方法放回数据流和硬件路径里看。它是在质量、成本和可部署结构之间重新设计模型。
 
 !!! tip "数学先修"
-    本文会用到[谱分解、Taylor、Hessian 与 Fisher](../prerequisite-math/spectral-second-order-and-low-rank.md)衡量敏感方向，用[数值、复杂度与估算](../prerequisite-math/numerics-complexity-and-estimation.md)核算真实成本；QAT 的不可导操作可先读[梯度估计与 STE](gradient-estimators-and-training-signals.md)。
+    需要用到[谱分解、Taylor、Hessian 与 Fisher](../prerequisite-math/spectral-second-order-and-low-rank.md)衡量敏感方向，用[数值、复杂度与估算](../prerequisite-math/numerics-complexity-and-estimation.md)核算真实成本；QAT 的不可导操作可先读[梯度估计与 STE](gradient-estimators-and-training-signals.md)。
 
 ## 把压缩目标写成成本账
 
@@ -86,7 +84,7 @@ Fast-FoundationStereo 的 refinement pruning 图很适合作为部署型剪枝�
 
 ![Fast-FoundationStereo refinement pruning](../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-5-refinement-pruning.png){ width="800" }
 
-<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 5。原图表达 refinement module 里的 ConvGRU 存在 recurrent dependency，剪枝时要区分可剪通道、固定通道和依赖关系。本站使用这张图说明：结构化剪枝不是简单按通道重要性排序，还要保证迭代模块前后接口一致。</small>
+<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 5。原图表达 refinement module 里的 ConvGRU 存在 recurrent dependency，剪枝时要区分可剪通道、固定通道和依赖关系。这张图说明：结构化剪枝不是简单按通道重要性排序，还要保证迭代模块前后接口一致。</small>
 
 图里最关键的是 recurrent dependency。ConvGRU 会反复更新 hidden state，上一轮输出的 hidden channel 下一轮还要继续用。若只按某一层局部重要性剪掉通道，后续迭代可能接口不一致。真正可部署的剪枝流程通常是：构建依赖图，按组评估重要性，剪掉结构组，短期恢复训练，再测真实 runtime。
 
@@ -181,7 +179,7 @@ Fast-FoundationStereo 的 cost filtering 阶段直接结构剪枝收益有限，
 
 ![Fast-FoundationStereo blockwise search](../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-8-blockwise-search.png){ width="780" }
 
-<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 8。原图比较不同 latency budget 下 searched candidate 和 random candidate 的精度/速度。本站使用这张图说明：NAS 的价值不是搜索空间听起来很大，而是在明确预算下找到比随机选择更好的结构组合。</small>
+<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 8。原图比较不同 latency budget 下 searched candidate 和 random candidate 的精度/速度。这张图说明：NAS 的价值不是搜索空间听起来很大，而是在明确预算下找到比随机选择更好的结构组合。</small>
 
 这类 blockwise proxy 有代价：局部误差不一定完全可加，候选之间可能有交互，最终仍要端到端 retrain 和评测。但它给了一个清晰工程模式：先把昂贵的全局搜索拆成局部候选，再用可解释的成本约束组合。
 
@@ -191,7 +189,7 @@ Fast-FoundationStereo 的 cost filtering 阶段直接结构剪枝收益有限，
 
 ![Fast-FoundationStereo framework](../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-3-framework-padded.png){ width="920" }
 
-<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 3。原图表达 FoundationStereo pipeline 包含 feature extraction、cost filtering 和 disparity refinement，论文分别用 backbone distillation、cost filtering blockwise search、refinement pruning 加速。本站使用这张图说明：部署型压缩要先做瓶颈拆解，再为每段选择不同方法。</small>
+<small>图源：[Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)，Figure 3。原图表达 FoundationStereo pipeline 包含 feature extraction、cost filtering 和 disparity refinement，论文分别用 backbone distillation、cost filtering blockwise search、refinement pruning 加速。这张图说明：部署型压缩要先做瓶颈拆解，再为每段选择不同方法。</small>
 
 这张图的读法是先找热路径，而不是先找“用了什么算法”。Feature backbone 重，适合用 distillation 换成轻量 student；cost filtering 的结构空间复杂，但直接剪枝收益有限，适合 blockwise NAS；refinement 是反复迭代模块，有结构冗余，适合 dependency-aware structured pruning；最后再接 TensorRT/runtime 验证。它的核心经验是：压缩策略应该跟瓶颈形态匹配，而不是拿同一种方法扫全模型。
 
@@ -228,7 +226,7 @@ Fast-FoundationStereo 的 cost filtering 阶段直接结构剪枝收益有限，
 
 读任何压缩、剪枝或 NAS 论文时，先画三件事：原模型的热路径，压缩方法改动的位置，目标硬件实际省下的成本。只要这三件事没对齐，参数表再漂亮也可能只是纸面压缩。
 
-## 外部精读
+## 外部材料
 
 - [Deep Compression](https://arxiv.org/abs/1510.00149)：理解 pruning、trained quantization、Huffman coding 如何共同降低存储和带宽。
 - [The Lottery Ticket Hypothesis](https://arxiv.org/abs/1803.03635)：理解稀疏子网络和剪枝现象，但不要把它直接等同于部署加速。
@@ -240,11 +238,6 @@ Fast-FoundationStereo 的 cost filtering 阶段直接结构剪枝收益有限，
 - [PyTorch Semi-Structured Sparsity](https://pytorch.org/blog/accelerating-neural-network-training/)：对照 2:4 sparse training 的工程边界。
 - [Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)：看蒸馏、blockwise NAS、结构化剪枝如何在同一个实时感知系统里配合。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

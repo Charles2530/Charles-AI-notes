@@ -1,6 +1,6 @@
 # VLM 架构：视觉证据怎样进入语言模型
 
-这篇文章只回答一个问题：图片、视频或多相机观测怎样变成语言模型能使用的证据，以及这条链为什么到了 VLA 和世界模型会变得更难。
+图片、视频或多相机观测要先变成语言模型能使用的证据；到了 VLA 和世界模型里，这条链还要保留空间、时间和动作信息。
 
 VLM 不是“给 LLM 加一张图”这么简单。真正的链路是：像素先被视觉 encoder 变成视觉特征，连接器把这些特征压成语言模型可消费的 token 或 memory，LLM 再用这些视觉证据生成文本、工具调用、动作 token 或中间推理。每一段都会丢掉一些信息；丢掉的如果只是纹理细节，问答可能没事；如果是位置、接触点、遮挡前状态或时间变化，机器人和世界模型就会出问题。
 
@@ -46,7 +46,7 @@ CLIP 是理解 VLM 的好入口，因为它把问题化成图像和文本的对�
 
 ![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="860" }
 
-<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图表达图像 encoder 和文本 encoder 通过图文对比学习进入同一表示空间，并用文本 prompt 做 zero-shot 分类。本站使用这张图说明：CLIP 解决的是静态图文语义对齐，不等于动作、接触或时间后果建模。</small>
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图表达图像 encoder 和文本 encoder 通过图文对比学习进入同一表示空间，并用文本 prompt 做 zero-shot 分类。这张图说明：CLIP 解决的是静态图文语义对齐，不等于动作、接触或时间后果建模。</small>
 
 CLIP 对图像向量 \(v\) 和文本向量 \(t\) 常用归一化相似度：
 
@@ -66,7 +66,7 @@ BLIP-2 的 Q-Former 是典型连接器：冻结图像 encoder 和 LLM，中间�
 
 ![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="920" }
 
-<small>图源：[BLIP-2](https://arxiv.org/abs/2301.12597)，Figure 2。原图表达 Q-Former 用 learnable query 从冻结视觉 encoder 输出中抽取信息，并服务 image-text contrastive learning、image-grounded generation 和 image-text matching。本站使用这张图说明：连接器是信息瓶颈，query 学到什么取决于训练目标。</small>
+<small>图源：[BLIP-2](https://arxiv.org/abs/2301.12597)，Figure 2。原图表达 Q-Former 用 learnable query 从冻结视觉 encoder 输出中抽取信息，并服务 image-text contrastive learning、image-grounded generation 和 image-text matching。这张图说明：连接器是信息瓶颈，query 学到什么取决于训练目标。</small>
 
 可以把连接器抽象写成：
 
@@ -130,7 +130,7 @@ V-JEPA 是理解视频状态的好例子：它不重建像素，而是在 latent
 
 ![V-JEPA training procedure](../assets/images/paper-deep-dives/world-models/v-jepa/figure-3-training-procedure.png){ width="920" }
 
-<small>图源：[V-JEPA](https://arxiv.org/abs/2404.08471)，Figure 3。原图表达 context encoder 只处理 masked video 的可见 token，predictor 用 context output 和 mask tokens 预测 target encoder 对完整视频产生的 masked token representations。本站使用这张图说明：视频 VLM/世界模型需要学习时空状态，不只是静态图文语义。</small>
+<small>图源：[V-JEPA](https://arxiv.org/abs/2404.08471)，Figure 3。原图表达 context encoder 只处理 masked video 的可见 token，predictor 用 context output 和 mask tokens 预测 target encoder 对完整视频产生的 masked token representations。这张图说明：视频 VLM/世界模型需要学习时空状态，不只是静态图文语义。</small>
 
 V-JEPA 的启发是：如果目标是运动理解和状态表示，不必把训练压力全放在像素重建上。预测 latent representation 可以让模型更关注对象、运动和上下文。但是它本身没有动作条件、奖励、风险和 planner 接口，因此更像世界模型的视觉状态 encoder 候选，不是完整 action-conditioned world model。
 
@@ -170,7 +170,7 @@ VLM 架构的核心不是“图片接进 LLM”，而是视觉证据如何被选
 
 继续读相邻内容时，可以接 [视觉 Tokenizer 与连接器](visual-tokenizers-and-connectors.md)、[VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md)、[VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md) 和 [Masked / JEPA 与潜变量预测](../world-models/masked-jepa-and-latent-prediction.md)。
 
-## 外部精读
+## 外部材料
 
 - [CLIP](https://arxiv.org/abs/2103.00020)：理解图文对比学习和 zero-shot 分类。
 - [The Illustrated CLIP](https://jalammar.github.io/illustrated-clip/)：用图建立 CLIP 的相似度矩阵和 prompt classifier 直觉。
@@ -179,5 +179,5 @@ VLM 架构的核心不是“图片接进 LLM”，而是视觉证据如何被选
 - [Flamingo](https://arxiv.org/abs/2204.14198)：理解 Perceiver Resampler 和 gated cross-attention。
 - [LLaVA](https://llava-vl.github.io/)：理解 projector + visual instruction tuning 的简单强路线。
 - [V-JEPA](https://arxiv.org/abs/2404.08471)：理解 latent video prediction 如何补静态 VLM 的时间状态短板。
-- [OpenBMB BLIP-2 论文速读](https://hub.baai.ac.cn/view/25807)：中文公众号式读法示例，适合对照本文的“问题、方法、消融、局限”结构复盘 BLIP-2。
+- [OpenBMB BLIP-2 论文速读](https://hub.baai.ac.cn/view/25807)：中文公众号式读法示例，适合对照“问题、方法、消融、局限”结构复盘 BLIP-2。
 - [AI Insight 多模态统一架构综述](https://www.ai-insight.org/reports/custom_multimodal-unified-architecture-2026)：中文报告式梳理，适合查 ViT-Bridge-LLM 范式、InternVL/Qwen-VL 等后续路线。

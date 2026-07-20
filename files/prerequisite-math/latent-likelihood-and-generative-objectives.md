@@ -1,8 +1,6 @@
 # 潜变量、似然与生成模型目标
 
-这篇回答一个问题：latent、prior、posterior、likelihood、ELBO、score matching、denoising loss 和 flow matching 为什么会同时出现在 VAE、扩散、世界模型和表征学习论文里。
-
-生成模型不是只问“标签是什么”，而是问“数据是从哪个分布、哪个隐藏状态、哪条生成过程里来的”。这会让公式里同时出现可见变量 \(x\)、潜变量 \(z\)、噪声状态 \(x_t\)、先验、后验和各种下界或匹配目标。
+latent、prior、posterior、likelihood、ELBO、score matching、denoising loss 和 flow matching 都在描述生成过程：数据来自哪个分布、哪个隐藏状态，或哪条从噪声到样本的路径。公式里因此会同时出现可见变量 \(x\)、潜变量 \(z\)、噪声状态 \(x_t\)、先验、后验和各种下界或匹配目标。
 
 ## 潜变量：看不见但解释观测的因素
 
@@ -163,7 +161,7 @@ z
 
 ![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="820" }
 
-<small>图源：`Denoising Diffusion Probabilistic Models`，Figure 2，本站已本地化。原图展示扩散模型的正向加噪链和反向生成链。本站在这里用它说明：生成模型常把直接建模 \(p(x)\) 改写成一条包含 latent/noise states 的逐步过程。</small>
+<small>图源：`Denoising Diffusion Probabilistic Models`，Figure 2，已本地化。原图展示扩散模型的正向加噪链和反向生成链。这里的重点是：生成模型常把直接建模 \(p(x)\) 改写成一条包含 latent/noise states 的逐步过程。</small>
 
 ## Energy-Based Model：先学兼容性，再决定怎样归一化和搜索
 
@@ -225,7 +223,7 @@ score 定义为：
 \nabla_x \log p_t(x)
 \]
 
-它表示在噪声水平 \(t\) 下，样本 \(x\) 往哪个方向移动会让 log density 上升。扩散模型看起来在做噪声预测或 denoising MSE，本质上是在不同噪声水平学习这个概率方向。
+它表示在噪声水平 \(t\) 下，样本 \(x\) 往哪个方向移动会让 log density 上升。扩散模型常以噪声预测或 denoising MSE 的形式训练，实际学习的是不同噪声水平下的概率方向。
 
 如果模型学到的 score 不准，采样路径就会偏；如果少步蒸馏让某些噪声阶段退化，生成会出现结构、纹理或动态上的问题。DMD、DMD2、Score SDE、Phased DMD 都能从这个角度读。
 
@@ -252,7 +250,7 @@ v_\theta(x_t,t)
 \right]
 \]
 
-这和 score matching 的读法相近：模型不是直接输出最终样本，而是在每个时间点告诉采样器下一步往哪里走。Rectified Flow、flow matching action head、连续时间视频生成都在使用这类语言。
+这和 score matching 的读法相近：模型在每个时间点告诉采样器下一步往哪里走，而不是一次输出最终样本。Rectified Flow、flow matching action head、连续时间视频生成都在使用这类语言。
 
 ## 世界模型里的 latent：要服务决策
 
@@ -266,7 +264,7 @@ p_\theta(z_{t+1}\mid z_t,a_t)
 
 ![PlaNet latent dynamics](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="820" }
 
-<small>图源：`PlaNet`，Figure 2，本站已本地化。原图比较不同 latent dynamics 设计。本站在这里用它说明：世界模型里的 latent state 既要压缩历史，也要表达可 rollout 的不确定未来。</small>
+<small>图源：`PlaNet`，Figure 2，已本地化。原图比较不同 latent dynamics 设计。这里的重点是：世界模型里的 latent state 既要压缩历史，也要表达可 rollout 的不确定未来。</small>
 
 ## 常见误读
 
@@ -282,11 +280,3 @@ p_\theta(z_{t+1}\mid z_t,a_t)
 ## 读完以后怎么判断
 
 看到 latent、prior、posterior、ELBO、energy、score 或 flow matching，先问：随机变量是什么，生成链从哪里开始，推断链看到什么，训练目标是在逼近 likelihood、下界、兼容性、方向场还是下游 reward，评测是否覆盖采样质量和决策价值。这个问题链会支撑 VAE、EBM、DDPM、Score SDE、DMD、Dreamer、PlaNet、V-JEPA、JEPA 和视频世界模型论文。
-
-## 相关阅读与下一步
-
-- 站内下一步：[概率、潜变量与生成模型](../foundations/probability-latent-variables-and-generative-models.md)。
-- 站内下一步：[Score Matching 到 SDE](../diffusion/score-matching-sde-and-probability-flow.md)。
-- 论文精读：[PlaNet](../paper-deep-dives/world-models/planet.md)。
-- 论文精读：[H-JEPA](../paper-deep-dives/world-models/h-jepa.md)。
-- 论文精读：[Score SDE](../paper-deep-dives/diffusion/score-sde.md)。

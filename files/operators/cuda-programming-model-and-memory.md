@@ -2,7 +2,7 @@
 
 CUDA 优化不是把一段 for 循环拆成很多线程就结束。真正要判断的是：一个算子里的数据，从 HBM 进来以后，怎样经过 L2、shared memory、register、Tensor Core 或普通 CUDA core，最后再写回 HBM。只要这条数据路径画不清，thread、block、warp、occupancy、coalescing 这些词就会变成散乱术语。
 
-对 AI kernel 来说，性能差距通常不是公式差距，而是数据流差距。PyTorch 默认算子、Triton 原型、CUTLASS kernel 和手写 CUDA 可能都在算同一个数学表达式，但它们搬了多少数据、复用了多少片上缓存、写回了几次中间张量、有没有命中 Tensor Core，都会完全不同。
+对 AI kernel 来说，性能差距通常来自数据流差距。PyTorch 默认算子、Triton 原型、CUTLASS kernel 和手写 CUDA 可能都在算同一个数学表达式，但它们搬了多少数据、复用了多少片上缓存、写回了几次中间张量、有没有命中 Tensor Core，都会完全不同。
 
 一个粗略的判断式可以这样读：
 
@@ -94,7 +94,7 @@ Nsight Systems 和 Nsight Compute 的分工要分清。Nsight Systems 看系统�
 
 CUDA 入门最该记住的不是 API 名，而是数据路径。先画出 HBM、L2、shared memory、register 和 Tensor Core 之间的数据流，再决定 thread/block 怎么分、tile 多大、是否融合、是否需要 Triton/CUTLASS/手写 CUDA。这样读后续的 FlashAttention、FP8 GEMM、MoE routing、KV cache 和 CUDA Graph，才不会被工具名牵着走。
 
-## 外部精读
+## 外部材料
 
 - [CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)：CUDA 编程模型、线程层级、内存空间和同步语义的官方入口。
 - [CUDA C++ Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/)：查 coalescing、occupancy、memory throughput、shared memory 和 profiling 方法。
@@ -103,11 +103,6 @@ CUDA 入门最该记住的不是 API 名，而是数据路径。先画出 HBM、
 - [Nsight Compute Documentation](https://docs.nvidia.com/nsight-compute/NsightCompute/index.html)：理解单 kernel 指标、roofline、memory 和 scheduler 计数器。
 - [CUTLASS GEMM API documentation](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/gemm_api.html)：理解 GEMM tile、threadblock、warp、MMA 和 epilogue 的组织方式。
 
-## 相关阅读与下一步
-
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

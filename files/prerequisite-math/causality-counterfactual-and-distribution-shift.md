@@ -1,10 +1,6 @@
 # 因果、反事实与分布偏移
 
-这篇回答一个问题：causal、intervention、counterfactual、OOD、train-test mismatch、distribution shift 和 benchmark generalization 为什么会反复出现在世界模型、机器人和大模型系统论文里。
-
-相关性告诉我们“两个变量一起变”；因果性要回答“如果我主动改变其中一个，另一个会不会跟着变”。机器学习模型很容易学到相关性，但机器人、工具使用和世界模型最终要处理动作、干预和部署分布，所以只会相关性往往不够。
-
-这篇偏数学读法：它解释 causal、intervention、counterfactual 和 OOD 这些词在问什么。若要把这些概念落到训练曲线、正则化、split、分桶评测和部署风险上，继续读基础概念里的 [泛化、正则化与分布偏移](../foundations/generalization-regularization-and-distribution-shift.md)。
+causal、intervention、counterfactual、OOD、train-test mismatch、distribution shift 和 benchmark generalization 都在追问同一件事：模型学到的是观察相关，还是能经得起动作、干预和部署分布变化的机制。相关性告诉我们“两个变量一起变”；因果性要回答“如果我主动改变其中一个，另一个会不会跟着变”。
 
 ## 相关性：一起变不等于互相导致
 
@@ -67,7 +63,7 @@ P_{\text{test}}(x,y)
 
 ![Deployment distribution alignment](../assets/images/thinking-exploration/robot-data-flywheel-world-models/deployment-distribution-alignment.png){ width="780" }
 
-<small>图源：本站机器人数据飞轮专题图。原图表达：示教分布、模型想象分布和真实部署分布必须被显式连接，否则 evaluator 或 checkpoint selection 容易选错。本站在这里用它说明：分布对齐不是评测附录，而是闭环系统能否可靠部署的前提。</small>
+<small>图源：机器人数据飞轮专题图。原图表达：示教分布、模型想象分布和真实部署分布必须被显式连接，否则 evaluator 或 checkpoint selection 容易选错。这里的重点是：分布对齐是闭环系统能否可靠部署的前提。</small>
 
 ## IID 假设：样本独立同分布只是理想起点
 
@@ -111,11 +107,3 @@ benchmark 是有限样本和有限任务集合。读论文分数时，要问：
 ## 读完以后怎么判断
 
 看到 causal、counterfactual、OOD、distribution shift 或 benchmark generalization，先问：模型学的是观察相关还是干预效果，是否有 paired counterfactual 样本，训练分布和部署分布哪里不同，评测是否覆盖失败恢复和长尾状态。这个问题链会支撑 DreamZero、kai0、世界模型综述、VLA 数据飞轮和大模型系统卡论文。
-
-## 相关阅读与下一步
-
-- 站内下一步：[数据与数据集基础](../foundations/data-and-dataset-basics.md)。
-- 站内下一步：[泛化、正则化与分布偏移](../foundations/generalization-regularization-and-distribution-shift.md)。
-- 站内下一步：[世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
-- 论文精读：[kai0](../paper-deep-dives/embodied-ai/kai0.md)。
-- 论文精读：[World Model for Robot Learning Survey](../paper-deep-dives/world-models/world-model-for-robot-learning-survey.md)。

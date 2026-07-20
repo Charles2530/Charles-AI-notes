@@ -1,6 +1,6 @@
 # 模拟器、反事实与合成 Rollout
 
-世界模型一旦不仅用于预测未来，而开始指导下一步收什么数据、在哪些场景做验证、如何构造高价值训练样本，就会自然走向模拟器、反事实生成和合成 rollout 数据。这条路线的核心不是“伪造更多样本”，而是让 imagined data 服务长尾风险覆盖、失败恢复、planner warmup、策略改进和数据引擎闭环。
+世界模型一旦不仅用于预测未来，而开始指导下一步收什么数据、在哪些场景做验证、如何构造高价值训练样本，就会自然走向模拟器、反事实生成和合成 rollout 数据。这条路线的核心是让 imagined data 服务长尾风险覆盖、失败恢复、planner warmup、策略改进和数据引擎闭环。
 
 ## 硬证据模块：合成 rollout 必须有门禁日志
 
@@ -8,7 +8,7 @@
 
 | 证据项 | 最小可复算例子 | 失败案例 | 验收指标 |
 | --- | --- | --- | --- |
-| 本页解决哪项成本 | 用 imagined rollout 减少真实 near-miss 采集 | 合成样本多，但都远离真实失败边界 | accepted hard cases per GPU-hour |
+| 成本问题 | 用 imagined rollout 减少真实 near-miss 采集 | 合成样本多，但都远离真实失败边界 | accepted hard cases per GPU-hour |
 | 反事实局部性 | 固定历史，只改动作或场景一个变量 | 改了动作，背景和物体身份也乱变 | counterfactual consistency |
 | 门禁日志 | generated / rejected / accepted / human-reviewed 分桶 | 错误合成样本直接回流污染训练 | rejection rate、human agreement |
 | 风险校准 | 合成 near-miss 是否提升真实 near-miss recall | 模型把事故边界平滑成安全未来 | near-miss recall、false negative |
@@ -131,11 +131,8 @@ Imagined data 最危险的地方，不是它“不真实”，而是它可能在
 
 世界模型合成数据的价值不在数量，而在能否稳定补齐真实系统最稀缺、最昂贵、最接近能力边界的数据。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

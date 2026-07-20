@@ -1,11 +1,11 @@
 # 卷积与视觉特征：局部窗口如何变成多尺度表示
 
-这篇文章只回答一个问题：为什么视觉模型曾经长期依赖卷积，以及卷积到今天仍然是理解 U-Net、扩散模型、视觉编码器和机器人感知的基础。
+卷积长期支撑视觉模型，也仍然是理解 U-Net、扩散模型、视觉编码器和机器人感知的基础。
 
 图像不是一串彼此无关的数字。相邻像素通常属于同一条边缘、同一个纹理或同一个物体部件；同一种局部模式也可能出现在画面的任何位置。卷积正是把这两个假设写进网络结构：**局部连接**让模型先看附近区域，**权重共享**让同一个检测器在全图复用，**多通道输出**让不同 filter 学不同模式。
 
 !!! tip "数学先修"
-    本文会用到[卷积、频域与多尺度](../prerequisite-math/convolution-frequency-and-multiscale.md)中的 kernel、感受野和尺度直觉，也会把 feature map 当作[向量与矩阵表示](../prerequisite-math/linear-algebra-and-geometry.md)。如果这些概念还不熟，先读对应数学页。
+    需要用到[卷积、频域与多尺度](../prerequisite-math/convolution-frequency-and-multiscale.md)中的 kernel、感受野和尺度直觉，也会把 feature map 当作[向量与矩阵表示](../prerequisite-math/linear-algebra-and-geometry.md)。如果这些概念还不熟，先读对应数学页。
 
 ## 为什么不能直接把图像摊平
 
@@ -86,7 +86,7 @@ H_{out}
 y_{o,i,j}=b_o+\sum_c W_{o,c}x_{c,i,j}
 \]
 
-这行式子表示：`1x1` 卷积是在每个空间位置上做通道投影。它常用于降维、升维、融合多分支特征或在 depthwise convolution 后做 pointwise mixing。换句话说，卷积不只有“空间窗口”，还有“通道变换”。
+这行式子表示：`1x1` 卷积是在每个空间位置上做通道投影。它常用于降维、升维、融合多分支特征或在 depthwise convolution 后做 pointwise mixing。卷积不只有“空间窗口”，还有“通道变换”。
 
 ## 感受野：一层看局部，多层看结构
 
@@ -108,7 +108,7 @@ U-Net 的设计正是为了解这个矛盾。
 
 ![U-Net architecture](../assets/images/paper-figures/foundations/unet-figure-1-architecture.png){ width="690" }
 
-<small>图源：[U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597)，Figure 1。原图表达：左侧 contracting path 下采样并扩大上下文，右侧 expanding path 上采样恢复分辨率，横向 skip connection 把高分辨率特征接回解码端。本站用这张图说明：dense prediction 不能只要深层语义，也要把早期定位细节带回来。</small>
+<small>图源：[U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597)，Figure 1。原图表达：左侧 contracting path 下采样并扩大上下文，右侧 expanding path 上采样恢复分辨率，横向 skip connection 把高分辨率特征接回解码端。这张图说明：dense prediction 不能只要深层语义，也要把早期定位细节带回来。</small>
 
 U-Net 可以拆成三条机制。
 
@@ -161,7 +161,7 @@ U-Net 的 skip connection 不只是“防止梯度消失”。在 dense predicti
 
 卷积把图像先验写进网络：局部窗口负责看邻域，权重共享负责在全图复用检测器，channel 负责组织多种视觉响应，stride/padding/dilation 决定空间信息还剩多少，多层堆叠和多尺度结构把局部特征变成对象与场景表示。读扩散、VLA、深度估计或视觉 tokenizer 时，真正要抓住的不是“卷积过时了吗”，而是这套局部到全局、语义到定位的特征账有没有被模型结构保住。
 
-## 外部精读
+## 外部材料
 
 - [CS231n: Convolutional Neural Networks](https://cs231n.github.io/convolutional-networks/)：系统理解 local connectivity、weight sharing、stride/padding 和 volume depth。
 - [PyTorch `nn.Conv2d`](https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html)：核对工程 API、groups、dilation 和输出 shape 语义。
@@ -172,11 +172,6 @@ U-Net 的 skip connection 不只是“防止梯度消失”。在 dense predicti
 - [CNN Explainer](https://poloclub.github.io/cnn-explainer/)：适合用交互方式看卷积、ReLU、pooling 和分类路径。
 - [动手学深度学习：卷积神经网络](https://zh.d2l.ai/chapter_convolutional-neural-networks/index.html)：中文入门材料，适合把公式、张量 shape 和代码对上。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

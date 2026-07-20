@@ -1,6 +1,6 @@
 # GPU 互联与拓扑映射
 
-大模型系统的很多瓶颈不是单卡 kernel 慢，而是通信路径选错。你可以有很强的 GPU、很快的 GEMM、很成熟的并行框架，但如果张量并行跨了慢链路，MoE token all-to-all 穿过拥塞网络，或者 GPU 到 NIC 走了错误 NUMA 域，端到端吞吐仍然会塌。
+大模型系统的很多瓶颈来自通信路径选错。你可以有很强的 GPU、很快的 GEMM、很成熟的并行框架，但如果张量并行跨了慢链路，MoE token all-to-all 穿过拥塞网络，或者 GPU 到 NIC 走了错误 NUMA 域，端到端吞吐仍然会塌。
 
 ## 核心问题
 
@@ -20,7 +20,7 @@ T_{\text{comm}} \approx \alpha + \frac{\text{bytes}}{\text{effective bandwidth}}
 
 ![GH100 GPU block diagram](../assets/images/paper-deep-dives/foundations/gpu-utilization-misleading/figure-1-gh100-sms.png){ width="860" }
 
-<small>图源：[NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)。原图表达 GH100 内部 SM、L2、HBM、NVLink、PCIe 和控制模块的组织。本站用它说明：GPU 不是孤立算力块，节点内高速互联、共享缓存、HBM 控制器和外部网络共同决定多 GPU 系统上限。</small>
+<small>图源：[NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)。原图表达 GH100 内部 SM、L2、HBM、NVLink、PCIe 和控制模块的组织。这里的重点是：GPU 不是孤立算力块，节点内高速互联、共享缓存、HBM 控制器和外部网络共同决定多 GPU 系统上限。</small>
 
 ## 节点内和节点间不是一个量级
 
@@ -115,7 +115,7 @@ node_id, rack_id, gpu_id, nvlink_domain, nic_id, numa_domain, tp_group, pp_stage
 | 理论带宽够就没问题 | effective bandwidth、延迟、拥塞、NCCL 路径和 overlap 都会改变结果。 |
 | 拓扑只是部署细节 | 它会直接改变训练成本、推理 P99 和并行策略上限。 |
 
-## 外部精读
+## 外部材料
 
 - [NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)：理解 H100/GH100 的 NVLink、HBM、L2 和 SM 组织。
 - [NVIDIA NCCL documentation](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/)：查 collective、拓扑检测、环境变量和调试方法。
@@ -123,11 +123,6 @@ node_id, rack_id, gpu_id, nvlink_domain, nic_id, numa_domain, tp_group, pp_stage
 - [Megatron-LM paper](https://arxiv.org/abs/1909.08053)：理解 tensor model parallelism 为什么通信频繁。
 - [DeepSpeed ZeRO](https://arxiv.org/abs/1910.02054)：理解数据并行状态分片和通信/显存权衡。
 
-## 相关阅读与下一步
-
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

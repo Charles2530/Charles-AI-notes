@@ -1,10 +1,10 @@
 # 量化运行时与部署框架
 
-量化 checkpoint 只有在 runtime 能把低比特格式、权重布局、KV cache、batching 和 kernel 路径接起来时，才会变成真实端到端收益。硬件和成本模型放在 [量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)，底层 kernel 细节放在 [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。本页聚焦中间这层：**低比特模型怎样被运行时可靠地加载、调度、执行、观测和回滚**。
+量化 checkpoint 只有在 runtime 能把低比特格式、权重布局、KV cache、batching 和 kernel 路径接起来时，才会变成真实端到端收益。硬件和成本模型放在 [量化服务栈与硬件选择](serving-stacks-and-hardware-tradeoffs.md)，底层 kernel 细节放在 [低精度与量化 Kernel](../operators/low-precision-and-quantized-kernels.md)。重点聚焦中间这层：**低比特模型怎样被运行时可靠地加载、调度、执行、观测和回滚**。
 
 ## Runtime 在量化链路里的职责边界
 
-量化上线不是一个单点开关，而是一条跨工具、格式、runtime 和 kernel 的链路：
+量化上线是一条跨工具、格式、runtime 和 kernel 的链路：
 
 ```mermaid
 flowchart LR
@@ -20,7 +20,7 @@ flowchart LR
 
 ![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png){ width="720" }
 
-<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 6。原图表达激活/权重不同张量在 INT8 路径中的精度与缩放处理；本站读法是把量化 runtime 的责任看成“格式、scale、layout、kernel dispatch 和回滚”的整条链路。它不能证明 SmoothQuant 是所有部署场景的最佳方法。</small>
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 6。原图表达激活/权重不同张量在 INT8 路径中的精度与缩放处理；读图重点是把量化 runtime 的责任看成“格式、scale、layout、kernel dispatch 和回滚”的整条链路。它不能证明 SmoothQuant 是所有部署场景的最佳方法。</small>
 
 这条链路里，runtime 不是“加载权重的包”，而是模型和硬件之间的执行层。它至少负责：
 
@@ -163,7 +163,7 @@ flowchart LR
 
 这类结论同时说明 runtime、硬件、请求桶、kernel 证据、质量边界和回滚范围，比单独报告 bit 数可靠得多。
 
-## 外部精读
+## 外部材料
 
 1. vLLM Quantization：<https://docs.vllm.ai/en/latest/features/quantization/index.html>
 2. SGLang Quantization：<https://docs.sglang.io/docs/advanced_features/quantization>

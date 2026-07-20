@@ -1,14 +1,12 @@
 # 一个任务跑通具身闭环：从看见到失败回流
 
-> **这篇回答的问题。** 如何理解“一个任务跑通具身闭环”背后的核心机制、适用边界和下一步阅读路径。
-
 具身智能最容易在抽象层面讲得很漂亮：VLA、WAM、世界模型、planner、controller、success checker 全都重要。但真正理解它，最好从一个任务走一遍。
 
-这页只用一个例子：把圆柱体放进罐口尺寸接近的罐子。它看起来像普通 pick-and-place，实际会同时考察尺寸感知、目标绑定、抓取、路径规划、动作执行、成功判定和失败恢复。
+把圆柱体放进罐口尺寸接近的罐子，看起来像普通 pick-and-place，实际会同时考察尺寸感知、目标绑定、抓取、路径规划、动作执行、成功判定和失败恢复。
 
 ![π0.5 cleaning a new kitchen 原论文图](../assets/images/paper-deep-dives/embodied-ai/pi05/figure-2-cleaning-kitchen.png){ width="920" }
 
-<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 2。原图展示机器人在未见过的新厨房中执行多个清理子任务。本站读法：长任务不是一次性输出完整答案，而是反复经历“看见、选择、抓取、移动、放置、判定”。</small>
+<small>图源：[π0.5](../paper-deep-dives/embodied-ai/pi05.md)，Figure 2。原图展示机器人在未见过的新厨房中执行多个清理子任务。读图重点：长任务不是一次性输出完整答案，而是反复经历“看见、选择、抓取、移动、放置、判定”。</small>
 
 ## 闭环一次到底发生什么
 
@@ -131,7 +129,7 @@ $$
 
 ![DreamZero seen task evaluation 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-8-seen-task.png){ width="920" }
 
-<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 8。原图展示 World-Action Model 在机器人任务上的执行和评测样例。本站读法：闭环走读时要把 predicted future、issued action、real observation 和 success checker 并排看，才能判断失败来自视频预测、动作接口还是执行控制。</small>
+<small>图源：[DreamZero](../paper-deep-dives/embodied-ai/dreamzero.md)，Figure 8。原图展示 World-Action Model 在机器人任务上的执行和评测样例。读图重点：闭环走读时要把 predicted future、issued action、real observation 和 success checker 并排看，才能判断失败来自视频预测、动作接口还是执行控制。</small>
 
 ## 安全和控制不能省
 
@@ -161,7 +159,7 @@ action chunk
 
 具身闭环的价值在这里：每次失败都能变成下一轮训练、评测或系统约束的输入。不能回放的失败，只能变成模糊抱怨。
 
-## 外部精读
+## 外部材料
 
 - [π0.5](https://www.pi.website/blog/pi05)：理解开放世界 VLA 为什么需要 high-level subtask 和 action expert。
 - [DreamZero](https://arxiv.org/abs/2602.15922)：理解 WAM 如何把未来视频和动作绑定到闭环控制。

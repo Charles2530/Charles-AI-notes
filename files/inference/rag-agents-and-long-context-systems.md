@@ -6,15 +6,13 @@
 \text{retrieval} \rightarrow \text{context assembly} \rightarrow \text{model} \rightarrow \text{tools/agents}
 \]
 
-如果只想先建立 RAG、Prompt Chaining、ReAct 和 CoT 的基础直觉，可以先回看 [Prompt、CoT 与 RAG 入门](../foundations/prompt-engineering-cot-and-rag-basics.md)。本页重点放在推理系统里的容量、状态、上下文装配和线上失效。
-
-这意味着推理系统必须同时处理检索、长上下文、工具调用和多轮状态：从外部文档、数据库或索引中找证据，把证据、历史和用户问题装进有限 token 预算，让模型在需要时调用搜索、数据库、OCR、浏览器或业务 API，并持续追踪已经查过什么、得到什么、下一步该做什么。
+推理系统必须同时处理检索、长上下文、工具调用和多轮状态：从外部文档、数据库或索引中找证据，把证据、历史和用户问题装进有限 token 预算，让模型在需要时调用搜索、数据库、OCR、浏览器或业务 API，并持续追踪已经查过什么、得到什么、下一步该做什么。
 
 而这四件事一旦组合起来，系统的核心问题就会从“单次推理质量”转向“信息如何被组织、更新、裁剪和追踪”。这也是为什么很多看似是模型问题的线上故障，最后会落到检索、上下文装配或状态管理上。
 
 ![RAG overview](../assets/images/paper-figures/foundations/rag-figure-1-overview.png){ width="760" }
 
-<small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原图表达 retriever 把文档作为 latent evidence 提供给 generator；本站读法是把 RAG 放进线上系统后继续追问 evidence 如何排序、裁剪、引用、缓存和回放。它不能证明“加检索器就会减少幻觉”，因为检索质量、上下文装配和引用校验都会改变结果。</small>
+<small>图源：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)，Figure 1。原图表达 retriever 把文档作为 latent evidence 提供给 generator；读图重点是把 RAG 放进线上系统后继续追问 evidence 如何排序、裁剪、引用、缓存和回放。它不能证明“加检索器就会减少幻觉”，因为检索质量、上下文装配和引用校验都会改变结果。</small>
 
 ## 为什么 RAG 不只是“加个检索器”
 
@@ -26,7 +24,7 @@ RAG 的核心不只是把文档拼进 prompt，而是决定查文档、表格、
 
 很多系统刚做 RAG 时，目标只是“把相关文本找回来”。更成熟的目标应该是判断证据能否直接支撑回答、是否足够新、多份证据是否相互一致，以及在有限上下文预算内是否值得保留。
 
-换句话说，RAG 真正优化的是 evidence orchestration，而不只是 retrieval recall。
+RAG 真正优化的是 evidence orchestration，而不只是 retrieval recall。
 
 ## 上下文装配本身就是系统设计
 
@@ -154,11 +152,8 @@ RAG、Agent 和长上下文系统的结合，代表着推理系统已经从“�
 
 RAG、Agent 和长上下文系统要把检索质量、上下文压缩、工具链时延、长文档 prefill 和会话级反馈分开看。生产验收要区分检索失败与推理失败，记录每轮工具收益，让长上下文走专门通路，并维护 session 回放；oncall 面板也应直接看到 route、cache、queue 和 fallback 状态。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
-- 站内下一步：[推理系统专题](index.md)。
-- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
-- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。
+- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- [SGLang 文档](https://docs.sglang.ai/)。

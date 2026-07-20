@@ -1,7 +1,5 @@
 # 世界模型现状：从视频模拟到工程闭环
 
-> **这篇回答的问题。** 如何理解“世界模型现状”背后的核心机制、适用边界和下一步阅读路径。
-
 世界模型这几年变成了一个很热的词，但它正在同时指向两件并不完全相同的东西：
 
 1. **会生成可交互世界的外部模拟器**，例如从文本生成一个能走进去探索的环境；
@@ -11,7 +9,7 @@
 
 ![Velodyne lidar](../assets/images/thinking-exploration/world-models-embodied-ai/velodyne-lidar.jpg){ width="860" }
 
-<small>图源：[Wikimedia Commons: Velodyne High-Def LIDAR.jpg](https://commons.wikimedia.org/wiki/File:Velodyne_High-Def_LIDAR.jpg)。本站读法：世界模型面向真实系统时，核心不是“画面像不像”，而是传感器、空间、动作和风险能不能被同一套状态表示消费。</small>
+<small>图源：[Wikimedia Commons: Velodyne High-Def LIDAR.jpg](https://commons.wikimedia.org/wiki/File:Velodyne_High-Def_LIDAR.jpg)。读图重点：世界模型面向真实系统时，核心不是“画面像不像”，而是传感器、空间、动作和风险能不能被同一套状态表示消费。</small>
 
 ## 当下的三股力量
 
@@ -126,7 +124,7 @@ flowchart LR
 
 这条思考路线很务实：先让 3D、动作、仿真和评测形成闭环，再逐步换更强的模型。这个顺序也许不够酷，但它更接近能交付的世界模型。
 
-## 外部精读
+## 外部材料
 
 - [Genie 3](https://deepmind.google/models/genie/)。
 - [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)。

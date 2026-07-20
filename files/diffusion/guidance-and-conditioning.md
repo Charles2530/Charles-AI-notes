@@ -62,7 +62,7 @@ s\left[
 
 ![Classifier-Free Guidance guidance scale](../assets/images/paper-figures/diffusion/cfg-figure-1-guidance-scale.png){ width="920" }
 
-<small>图源：[Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)，Figure 1。原图展示 ImageNet 类别条件下 guidance weight 增大时，样本更贴近目标类别。本站读法：guidance 的确会强化条件方向，但这张图不能推出“scale 越大越好”；它同时提醒我们，多样性、自然度和稳定性也在被采样轨迹重新分配。</small>
+<small>图源：[Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)，Figure 1。原图展示 ImageNet 类别条件下 guidance weight 增大时，样本更贴近目标类别。读图重点：guidance 的确会强化条件方向，但这张图不能推出“scale 越大越好”；它同时提醒我们，多样性、自然度和稳定性也在被采样轨迹重新分配。</small>
 
 ## 为什么 CFG scale 不是质量旋钮
 
@@ -112,7 +112,7 @@ s\left[
 
 真实调参也应该这样拆。先固定 sampler 和步数扫 CFG scale，看 prompt adherence、自然度和多样性的拐点；再固定 scale 换 sampler，看少步下是否过冲；最后按条件类型分桶评估，比如纯文本、ControlNet、参考图、局部编辑、视频首帧和动作条件。只有这样，guidance 才不会被误用成一个玄学旋钮。
 
-## 外部精读
+## 外部材料
 
 - [Diffusion Models Beat GANs on Image Synthesis](https://arxiv.org/abs/2105.05233)：理解 classifier guidance 如何用外部分类器梯度改变采样方向。
 - [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)：CFG 原论文，重点看 condition dropout、公式和 guidance weight 对样本的影响。
@@ -123,11 +123,6 @@ s\left[
 - [DPM-Solver++](https://arxiv.org/abs/2211.01095)：理解 guided diffusion 下少步 ODE solver 为什么需要专门处理稳定性。
 - [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)：补 DDPM、score、classifier guidance 和 CFG 的连续直觉。
 
-## 相关阅读与下一步
-
-- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
-- 站内下一步：[扩散模型专题](index.md)。
-- 站内下一步：[扩散方法对比表](comparison-table.md)。
-- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。
+- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。

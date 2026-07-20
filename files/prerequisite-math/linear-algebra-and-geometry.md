@@ -1,8 +1,6 @@
 # 线性代数与几何直觉
 
-这篇回答一个问题：为什么 AI 文章总是在讲向量、矩阵、投影、范数、秩和特征空间。
-
-线性代数不是只为了算矩阵乘法。它给模型提供了一种表示世界的方式：把 token、图像 patch、机器人状态、动作、记忆都放进向量空间，再用矩阵把它们旋转、缩放、投影、混合和压缩。
+AI 文章频繁使用向量、矩阵、投影、范数、秩和特征空间，因为模型需要把 token、图像 patch、机器人状态、动作、记忆放进向量空间，再用矩阵旋转、缩放、投影、混合和压缩这些表示。
 
 ## 向量是带方向的特征
 
@@ -47,7 +45,7 @@ y=xW+b
 
 ![Matrix multiplication](../assets/images/prerequisite-math/matrix-multiplication.svg){ width="620" }
 
-<small>图源：[Wikimedia Commons: Matrix multiplication diagram](https://commons.wikimedia.org/wiki/File:Matrix_multiplication_diagram.svg)。原图展示矩阵乘法中行与列如何配对相乘并求和。本站用它说明：线性层和 GEMM 的核心是把输入特征按权重列重新组合成新特征。</small>
+<small>图源：[Wikimedia Commons: Matrix multiplication diagram](https://commons.wikimedia.org/wiki/File:Matrix_multiplication_diagram.svg)。原图展示矩阵乘法中行与列如何配对相乘并求和。对线性层和 GEMM 来说，核心是把输入特征按权重列重新组合成新特征。</small>
 
 在 Transformer 里，一个 `[B,L,D]` hidden state 进入 Linear 时，通常是每个 token 的 \(D\) 维向量乘同一个 \(W\)：
 
@@ -57,9 +55,9 @@ y=xW+b
 (B,L,D_{\text{out}})
 \]
 
-这就是为什么后面的系统文章总在关心 \(M,N,K\)、GEMM、Tensor Core 和 layout：模型概念里的“特征变换”，落到硬件上常常就是大规模矩阵乘法。
+系统文章常关心 \(M,N,K\)、GEMM、Tensor Core 和 layout：模型概念里的“特征变换”，落到硬件上常常就是大规模矩阵乘法。
 
-这里的读法是：前两个轴 \(B,L\) 不参与权重维度匹配，它们只是告诉系统“有多少个 token 要并行做同一个线性变换”；最后一维 \(D_{\text{in}}\) 必须和 \(W\) 的第一维对上。很多 shape bug 就发生在把 token 轴和特征轴混掉。
+读这组 shape 时，前两个轴 \(B,L\) 不参与权重维度匹配，它们只是告诉系统“有多少个 token 要并行做同一个线性变换”；最后一维 \(D_{\text{in}}\) 必须和 \(W\) 的第一维对上。很多 shape bug 就发生在把 token 轴和特征轴混掉。
 
 ## 投影是在问“沿这个方向有多少”
 
@@ -83,8 +81,6 @@ Scaled dot-product attention 写成：
 
 这里 \(QK^\top\) 是所有 query 和 key 的两两内积，\(\sqrt{d_k}\) 用来控制分数尺度，softmax 把相似度变成权重，最后对 \(V\) 做加权求和。
 
-更细一点看：
-
 1. \(Q\) 是 query，表示每个位置想找什么信息。
 2. \(K\) 是 key，表示每个位置能被什么查询匹配上。
 3. \(QK^\top\) 得到一个 `[query_length, key_length]` 分数矩阵。
@@ -107,7 +103,7 @@ B\in\mathbb{R}^{r\times d_{\text{out}}}
 
 且 \(r\) 很小，就说明它的主要变化集中在少数方向上。LoRA、低秩适配、PCA、SVD、某些压缩方法都在利用这个思想。
 
-但低秩不是免费午餐。压缩掉的方向如果正好承载长尾知识、风险状态或动作敏感信息，指标可能在平均样本上还行，在关键场景里失败。
+低秩有代价。压缩掉的方向如果正好承载长尾知识、风险状态或动作敏感信息，指标可能在平均样本上还行，在关键场景里失败。
 
 ## 常见误读
 
@@ -122,8 +118,6 @@ B\in\mathbb{R}^{r\times d_{\text{out}}}
 
 看到向量、矩阵或 embedding 时，先问三件事：这个向量表示什么对象，矩阵在把哪些方向混合，变换后的空间服务什么任务。能回答这三点，后面的 attention、MLP、GEMM、LoRA、量化和视觉 token 压缩就都有了共同底座。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 站内下一步：[张量、Shape 与计算图](../foundations/tensors-shapes-and-computation-graphs.md)。
-- 站内下一步：[线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md)。
-- 外部材料：[Dive into Deep Learning: Linear Algebra](https://d2l.ai/chapter_preliminaries/linear-algebra.html)。
+- [Dive into Deep Learning: Linear Algebra](https://d2l.ai/chapter_preliminaries/linear-algebra.html)。

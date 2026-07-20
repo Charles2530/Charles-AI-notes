@@ -1,6 +1,6 @@
 # 推理服务与量化 QA
 
-这一页回答 LLM 推理、服务系统、KV cache、batching、投机解码、运行时和量化中的高频问题。面试时要把 prefill、decode、显存、吞吐、尾延迟和质量回归分开讲。
+LLM 推理、服务系统、KV cache、batching、投机解码、运行时和量化的高频问题，都要把 prefill、decode、显存、吞吐、尾延迟和质量回归分开讲。
 
 ## 推理基础与服务指标
 

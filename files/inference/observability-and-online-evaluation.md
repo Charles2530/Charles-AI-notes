@@ -1,12 +1,12 @@
 # 可观测性与在线评测
 
-模型上线后，真正难的不是“服务有没有活着”，而是能不能持续回答四个问题：线上发生了什么、质量有没有变好、成本和稳定性是否可控、异常能不能回放并进入下一轮修复。可观测性回答“系统现在如何运行”，在线评测回答“这次变化是否值得保留”。两者应被设计成同一套闭环，而不是两个互不相干的 dashboard。
+模型上线后，需要持续回答四个问题：线上发生了什么、质量有没有变好、成本和稳定性是否可控、异常能不能回放并进入下一轮修复。可观测性回答“系统现在如何运行”，在线评测回答“这次变化是否值得保留”。两者应被设计成同一套闭环，而不是两个互不相干的 dashboard。
 
-这页建议和 [推理服务系统](serving-systems.md)、[成本建模与 SLO 设计](cost-modeling-and-slo-design.md)、[RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md) 一起读。前者解释推理链路和容量约束，本页关注上线后如何持续判断系统是否真的变好。
+线上系统是否真的变好，要放在推理链路、容量约束、RAG/Agent 行为和长上下文成本里持续判断。
 
 ![W&B experiment dashboard](../assets/images/tools/wandb/wandb-quickstart-runs.png){ width="820" }
 
-<small>图源：[Weights & Biases 官方文档](https://docs.wandb.ai/)。原图表达实验运行、指标和版本记录如何被组织到 dashboard；本站读法是：线上可观测性也要把请求、模型版本、路由、质量、成本和回放样本接到同一条证据链。它不能替代生产 trace，也不能单独证明模型质量变好。</small>
+<small>图源：[Weights & Biases 官方文档](https://docs.wandb.ai/)。原图表达实验运行、指标和版本记录如何被组织到 dashboard；读图重点是：线上可观测性也要把请求、模型版本、路由、质量、成本和回放样本接到同一条证据链。它不能替代生产 trace，也不能单独证明模型质量变好。</small>
 
 ## 一、为什么离线 benchmark 不够
 
@@ -189,11 +189,8 @@ Trace 和 replay 往往包含完整上下文，必须把隐私治理放进主流
 
 如果这些问题还答不快，说明系统只是有 dashboard，还没有形成可运营的线上评测能力。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- 外部材料：[TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- 外部材料：[SGLang 文档](https://docs.sglang.ai/)。
-- 站内下一步：[推理系统专题](index.md)。
-- 站内下一步：[推理运行时](serving-runtimes-vllm-sglang-and-tensorrt-llm.md)。
-- 站内下一步：[缓存、路由与投机解码](caching-routing-and-speculative.md)。
+- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
+- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
+- [SGLang 文档](https://docs.sglang.ai/)。

@@ -1,8 +1,6 @@
 # 算子与编译器专题：把性能问题落到内存和形状
 
-算子工程不是“手写 CUDA 才算高级”。现代 AI 系统里，PyTorch、Triton、CUTLASS、cuBLAS、FlashAttention、TensorRT、XLA/Inductor 共同决定一个模型能否跑满硬件。读这一章时，先把性能问题落到三个对象：tensor shape、memory movement、kernel dispatch。
-
-这一章会参考 NVIDIA、Triton、CUTLASS 文档、工程博客和中文技术公众号的讲法，用具体算子解释抽象性能模型。重点不是炫实现细节，而是让你能判断一个瓶颈应该交给图编译、库函数、自定义 kernel 还是系统调度解决。
+现代 AI 系统里，PyTorch、Triton、CUTLASS、cuBLAS、FlashAttention、TensorRT、XLA/Inductor 共同决定一个模型能否跑满硬件。定位性能问题时，先把瓶颈落到三个对象：tensor shape、memory movement、kernel dispatch。
 
 ## 建立硬件和内存直觉
 

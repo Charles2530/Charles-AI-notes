@@ -3,9 +3,9 @@
 家庭机器人常被视为具身智能最具想象力的落地场景，但它也是最容易被低估的复杂场景。
 家庭环境看起来比工厂轻松，实际上却包含更多开放物体、更强分布变化、更多人类打断，以及远高于实验室的长尾。真正理解家庭机器人，不仅要看它能做哪些任务，更要看它在哪些流程上最容易失败。
 
-这页的重点不是列举 demo，而是把家庭机器人放回真实家庭流程中看：任务会被打断，环境会变化，指令常常很口语，成功标准也并不总是单一步动作是否完成。
+家庭机器人要放回真实家庭流程中看：任务会被打断，环境会变化，指令常常很口语，成功标准也并不总是单一步动作是否完成。
 
-ALOHA 原论文的任务示例图很适合提醒读者：家庭和桌面操作不是一个“抓取”动作，而是很多精细接触、双臂协调、物体状态变化和阶段性恢复的组合。
+ALOHA 原论文的任务示例图很适合提醒读者：家庭和桌面操作由很多精细接触、双臂协调、物体状态变化和阶段性恢复组成。
 
 ![ALOHA teleoperation tasks 原论文图](../assets/images/paper-figures/vla/aloha-teleop-tasks.jpg){ width="920" }
 
@@ -174,11 +174,8 @@ ACT 图里的重点是 action chunk：策略一次预测一小段动作，而不
 
 家庭机器人要验收的是连续流程，而不是单个动作。任务状态、物体记忆、异常恢复、人类打断和安全边界都要进入评测与日志；否则系统即使会抓取、会导航，也很容易在真实家庭的长尾变化里失稳。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- 外部材料：[Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- 外部材料：[RoboTwin 项目](https://robotwin-platform.github.io/)。
-- 站内下一步：[具身智能专题](index.md)。
-- 站内下一步：[具身智能基础：观测、动作与反馈闭环](beginner-learning-path.md)。
-- 站内下一步：[Sim2Real 与具身数据引擎](sim2real-and-data-engines.md)。
+- [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
+- [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
+- [RoboTwin 项目](https://robotwin-platform.github.io/)。

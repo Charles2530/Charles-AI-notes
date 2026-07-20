@@ -1,10 +1,8 @@
 # MTP 与投机解码
 
-> **这篇回答的问题。** 如何理解“MTP 与投机解码”背后的核心机制、适用边界和下一步阅读路径。
-
 `MTP`（Multi-Token Prediction）和 `speculative decoding` 经常一起出现，但它们不是同一件事。`MTP` 首先是训练目标或模型结构设计，让模型在一个位置上学习多个未来 token；投机解码首先是推理加速算法，用便宜路径草拟，再用目标模型并行验证；`Self-speculative decoding` 才是二者交汇的系统形态，草稿路径来自模型自身的中间层、辅助头或 MTP 模块。
 
-这页放在训练专题里，是因为一旦决定训练 `MTP`，改变的不只是 serving 策略，还包括 loss、checkpoint 结构、评测口径和未来推理接口。推理侧实现细节可继续看 [缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)。
+训练 `MTP` 会同时改变 loss、checkpoint 结构、评测口径和未来推理接口；推理侧投机解码还要继续看缓存、路由、KV 与 draft/verify 的系统路径。
 
 ## 概念拆分
 
@@ -99,7 +97,7 @@ DeepSeek-V3 把 MTP 放在训练设计里，目标首先是提升训练信号密
 
 ![DeepSeek-V3 MTP module](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-3-mtp.png){ width="820" }
 
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 3。原图表达 DeepSeek-V3 的串行 MTP 模块如何融合 hidden state 与未来 token embedding；本站读法是区分“训练时的多 token 监督”和“推理时的 draft/verify 接口”。它不能证明线上一定启用 MTP，也不能替代 acceptance rate 与端到端 latency 的验证。</small>
+<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 3。原图表达 DeepSeek-V3 的串行 MTP 模块如何融合 hidden state 与未来 token embedding；读图重点是区分“训练时的多 token 监督”和“推理时的 draft/verify 接口”。它不能证明线上一定启用 MTP，也不能替代 acceptance rate 与端到端 latency 的验证。</small>
 
 这解释了一个容易混淆的点：DeepSeek-V3 的 MTP 不等于线上必然启用 MTP。很多 serving 框架需要处理 dynamic batching、KV cache、prefix sharing、异构请求长度和调度开销；如果 draft/verify 路径没有和 runtime 深度集成，MTP 的理论收益可能被系统开销吃掉。
 
@@ -146,11 +144,8 @@ MTP 不是大模型时代才出现的新概念，它可以追溯到早期的 blo
 
 只成立其中一两项时，MTP 更像阶段性实验技巧；三者都成立时，它才是可维护的训练-推理一体化架构收益。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

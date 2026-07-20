@@ -1,6 +1,6 @@
 # 世界模型：从内部状态到可决策的未来
 
-世界模型不是一个固定架构，而是一组关于环境变化的学习接口。它可以压缩历史形成 belief，预测动作条件下的未来状态，生成未来观测，估计奖励与终止，或为策略提供可想象的训练轨迹。判断一项工作是否真正服务世界建模，关键不是输出看起来像不像视频，而是预测对象能否支持它声称的消费方。
+世界模型是一组关于环境变化的学习接口：压缩历史形成 belief，预测动作条件下的未来状态，生成未来观测，估计奖励与终止，或为策略提供可想象的训练轨迹。判断一项工作是否真正服务世界建模，关键看预测对象能否支持它声称的消费方。
 
 ## 世界模型的统一接口
 
@@ -82,5 +82,3 @@ z_t\sim q_\phi(z_t\mid h_t).
 | 多步预测怎样表达不确定性和尾部风险 | [风险感知规划](uncertainty-and-risk-aware-planning.md) |
 | 从一个动作条件视频模型开始怎样安排里程碑 | [端到端训练案例](action-conditioned-video-world-model-training-case.md) |
 | 训练和 serving 成本从哪里来 | [高效训练路线图](efficient-training-roadmap.md) → [Rollout Serving](rollout-serving-quantization-kernel-case.md) |
-
-返回[世界模型与具身智能总入口](../world-models-and-embodied-ai/index.md)。

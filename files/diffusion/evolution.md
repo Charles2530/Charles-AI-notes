@@ -1,6 +1,6 @@
 # 扩散模型发展脉络
 
-这页把扩散模型的发展放在一条连续主线上看：`DDPM` 解决如何稳定训练高质量生成模型，`DDIM / ODE solver` 解决如何更快采样，`Consistency / LCM / DMD / Rectified Flow` 继续追问能否把几十步甚至几百步压到几步或一步。
+扩散模型的发展可以放在一条连续主线上看：`DDPM` 解决如何稳定训练高质量生成模型，`DDIM / ODE solver` 解决如何更快采样，`Consistency / LCM / DMD / Rectified Flow` 继续追问能否把几十步甚至几百步压到几步或一步。
 
 ## 统一记号
 
@@ -42,7 +42,7 @@ DDPM
 
 ![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="760" }
 
-<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达 DDPM 的正向加噪链和反向去噪链；本站读法是把后续 DDIM、Score SDE、DPM-Solver、Consistency 和 DMD 都看成在这条“从数据到噪声再回来”的路径上重新分配训练、采样和蒸馏成本。它不能证明哪条新路线一定更好，只提供共同坐标系。</small>
+<small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达 DDPM 的正向加噪链和反向去噪链；读图重点是把后续 DDIM、Score SDE、DPM-Solver、Consistency 和 DMD 都看成在这条“从数据到噪声再回来”的路径上重新分配训练、采样和蒸馏成本。它不能证明哪条新路线一定更好，只提供共同坐标系。</small>
 
 **常见误区：新方法不是简单替代旧方法。**
 这条时间线更像一组不同代价分配方式，而不是“后来的名字自动淘汰前面的名字”。`DDIM` 主要改采样路径，`DPM-Solver` 主要改数值求解，`Consistency / LCM` 更依赖新的训练或蒸馏目标，`DMD` 关注生成分布对齐。读论文时先问“它动的是训练、采样、蒸馏还是分布匹配”，比先记年份更有用。
@@ -119,11 +119,8 @@ Rectified Flow / Rectified Diffusion 试图学习更直的生成路径，把噪�
 
 扩散模型的发展主线，就是在质量、步数、稳定性和多样性之间不断重新分配代价。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- 外部材料：[DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- 外部材料：[Score SDE 论文](https://arxiv.org/abs/2011.13456)。
-- 站内下一步：[扩散模型专题](index.md)。
-- 站内下一步：[扩散方法对比表](comparison-table.md)。
-- 站内下一步：[Score Matching、SDE 与 Probability Flow](score-matching-sde-and-probability-flow.md)。
+- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
+- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
+- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。

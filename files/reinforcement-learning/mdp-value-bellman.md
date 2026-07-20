@@ -204,7 +204,3 @@ Dynamic Programming 需要可查询的完整模型；Monte Carlo 与 TD 则从 s
 2. **手算题**：设 \(\gamma=0.9\)，三次 reward 为 `-1, -1, 0`，随后真正终止。分别算 \(G_0,G_1,G_2\)。
 3. **Bellman 辨析**：把 Bellman expectation 与 Bellman optimality 中的动作聚合项圈出来，说明何时是 \(\sum_a\pi(a\mid s)\)，何时是 \(\max_a\)。
 4. **小改动题**：把 GridWorld 的普通 reward 从 `-1` 改为 `-2`，先不运行代码，预测最优路径和起点 \(V^*\) 会怎样变化，再用下一章示例验证。
-
-## 下一步
-
-进入 [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md)，在同一个 2×3 GridWorld 中分别用已知模型、完整 episode 和一步 bootstrap 估计 value。随后沿 [Q-learning 与 DQN](q-learning-and-dqn.md) 学习 action-value control，沿 [Offline Reinforcement Learning](offline-reinforcement-learning.md) 学习固定数据的 support 边界，或进入 [Model-based RL 与世界模型](rl-for-world-models.md) 学习 transition 建模。完成主线后，用 [综合实践与算法选择](practice-and-algorithm-selection.md) 检查任务假设、算法选择与验收证据。

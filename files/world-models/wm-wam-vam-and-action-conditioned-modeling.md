@@ -1,10 +1,8 @@
 # WM / WAM / VAM：动作到底怎样进入世界模型
 
-> **这篇回答的问题。** 如何理解“WM / WAM / VAM”背后的核心机制、适用边界和下一步阅读路径。
-
 近两年，世界模型、视频模型和机器人策略越来越容易被写到同一篇论文里：有的给动作预测未来，有的直接从视觉语言输出动作，有的把未来视频和未来动作一起生成。`WM / WAM / VAM` 不是统一标准术语，但很适合作为读论文的接口坐标系。
 
-这页只抓一个问题：**动作在模型里放在哪里，决定了它能不能服务规划和控制。**
+动作在模型里放在哪里，决定了世界模型能不能服务规划和控制。
 
 不要先问模型名字。先问四件事：输入里有没有动作，输出里有没有未来，换动作后未来会不会变，最后谁消费这个未来。一个模型能生成漂亮视频，不等于能做控制；一个模型能输出动作，也不等于理解动作后果。世界模型用于机器人时，最小门槛是：同一历史下换一条动作，模型预测的未来、风险或成功排序应该随之改变。
 
@@ -46,7 +44,7 @@ a_t = \pi_\theta(o_{\le t}, l)
 
 \(o_{\le t}\) 是观测历史，\(l\) 是语言指令，输出直接是动作 token、连续控制量或 action chunk。RT-2 这类模型的意义在于把 web-scale 视觉语言知识迁移到机器人动作空间；Open X-Embodiment / RT-X 则说明跨机器人数据需要处理动作口径、相机、embodiment 和任务语义。
 
-但 policy 输出动作，不代表模型内部显式预测了动作后果。一个 VLA 可以很会把“把苹果放进碗里”翻译成动作模板，却不一定能回答“如果我从右侧推，苹果会不会碰倒杯子”。所以本站不把所有 VLA 都称为世界模型。只有当模型显式预测或评估动作后的未来，并让 planner、risk checker 或 policy 消费这个未来时，才进入世界模型证据层。
+但 policy 输出动作，不代表模型内部显式预测了动作后果。一个 VLA 可以很会把“把苹果放进碗里”翻译成动作模板，却不一定能回答“如果我从右侧推，苹果会不会碰倒杯子”。所以不能把所有 VLA 都称为世界模型。只有当模型显式预测或评估动作后的未来，并让 planner、risk checker 或 policy 消费这个未来时，才进入世界模型证据层。
 
 这不是贬低 VLA。很多真实系统会让 VLA 直接做 policy，再用世界模型或风险模型做前瞻检查。关键是把角色说清：VLA 负责把语义落到动作，WM 负责评估动作后果，低层 controller 负责让动作可执行。
 
@@ -62,7 +60,7 @@ p_\theta(o_{t+1:t+H}, a_{t:t+K}\mid o_{\le t}, s_{\le t}, g)
 
 ![DreamZero joint video-action architecture](../assets/images/paper-deep-dives/world-models/dreamzero/figure-4-architecture.png){ width="920" }
 
-<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 4。本站复用已有论文图，未使用 image2 生成新图。原图表达：训练时联合去噪未来视频 latent 和动作 latent，推理时用真实观测刷新上下文。本站读法：WAM 不是“视频模型旁边加动作头”，而是让动作与未来世界互相约束，并在闭环中不断用真实观测纠偏。</small>
+<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 4。原图表达：训练时联合去噪未来视频 latent 和动作 latent，推理时用真实观测刷新上下文。读图重点：WAM 不是“视频模型旁边加动作头”，而是让动作与未来世界互相约束，并在闭环中不断用真实观测纠偏。</small>
 
 WAM 的吸引力在于，很多机器人动作的合理性只能通过未来来判断。抓杯子不是单帧分类，拉抽屉也不是一句语言到一个动作 token 的翻译；它们要求模型理解接触、遮挡、手爪姿态、目标物移动和失败恢复。把未来视觉和未来动作联合建模，理论上能让模型从视频动态里学到更多物理约束。
 
@@ -84,7 +82,7 @@ a_{t:t+K}=G_{\mathrm{policy}}(o_{\le t}, g, \phi_{t:t+H})
 
 ![Video Prediction Policy overview](../assets/images/paper-deep-dives/embodied-ai/vpp/figure-1-overview.png){ width="920" }
 
-<small>图源：[Video Prediction Policy](https://arxiv.org/abs/2412.14803)，Figure 1。本站复用已有论文图，未使用 image2 生成新图。原图展示先训练文本条件视频预测模型，再聚合视频模型内部 predictive visual representations 来输出机器人动作。本站读法：中间表征比最终视频画质更关键；VAM 要证明视频预测学到的动态先验能提升动作成功率。</small>
+<small>图源：[Video Prediction Policy](https://arxiv.org/abs/2412.14803)，Figure 1。原图展示先训练文本条件视频预测模型，再聚合视频模型内部 predictive visual representations 来输出机器人动作。读图重点：中间表征比最终视频画质更关键；VAM 要证明视频预测学到的动态先验能提升动作成功率。</small>
 
 VPP 的动机很直接：传统视觉 encoder 往往偏静态，能识别物体，却不一定知道下一秒手和物体会怎样相互作用；视频扩散模型为了预测未来帧，可能学到更强的动态表征。VAM 把这种动态表征转给 policy，让动作模型少从零学习物理变化。
 
@@ -136,7 +134,7 @@ WM 把动作作为条件，最小证据是反事实动作会改变未来、rewar
 
 大规模视频预训练可以提供动态先验，但要服务控制，必须接上动作、目标、风险、延迟和恢复。读相邻内容时，可以接 [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)、[Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)、[VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md) 和 [世界模型评测与失效模式](evaluation-and-failure-modes.md)。
 
-## 外部精读
+## 外部材料
 
 - [DreamerV3](https://arxiv.org/abs/2301.04104)：理解 latent world model 如何通过 imagined future 训练行为。
 - [Genie 2 DeepMind blog](https://deepmind.google/blog/genie-2-a-large-scale-foundation-world-model/)：理解 action-controllable world model 和可交互生成环境的边界。

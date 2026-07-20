@@ -85,5 +85,3 @@ VLA 和行为策略回答“根据当前观测应该做什么”，规划与控�
 | 应该选择哪类 benchmark | [任务谱系与评测](task-taxonomy-and-benchmarks.md) |
 | 仿真数据怎样迁移到真实机器人 | [Sim2Real 与数据引擎](sim2real-and-data-engines.md) |
 | 家庭与人机协作场景为什么不能只测成功率 | [家庭机器人失败模式](household-robotics-workflows-and-failure-patterns.md) → [人机交互评测](human-robot-interaction-and-evaluation.md) |
-
-返回[世界模型与具身智能总入口](../world-models-and-embodied-ai/index.md)。

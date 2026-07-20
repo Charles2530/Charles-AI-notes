@@ -1,6 +1,6 @@
 # FP8 与混合精度推理：它不是一个 dtype 开关
 
-FP8 在服务里的价值，不是把全模型粗暴改成 8 bit，而是把最吃带宽、最适合 Tensor Core 的大块矩阵计算放到低精度路径上，同时把归一化、softmax、残差、输出头、KV cache、坐标或动作头这些敏感位置留在更高精度或更谨慎的量化策略里。
+FP8 在服务里的价值，是把最吃带宽、最适合 Tensor Core 的大块矩阵计算放到低精度路径上，同时把归一化、softmax、残差、输出头、KV cache、坐标或动作头这些敏感位置留在更高精度或更谨慎的量化策略里。
 
 所以判断 FP8 值不值得上，先别问“能不能压到 8 bit”。更该问四件事：热路径是不是 GEMM 或 HBM 带宽瓶颈；硬件和 runtime 是否真的命中 FP8 kernel；scale、amax、累加和 fallback 是否可观测；质量回归是否覆盖长上下文、多模态、工具调用或动作安全这类高风险桶。
 
@@ -71,7 +71,7 @@ FP8 验收不能只看 perplexity 或一个 GSM8K 分数。文本 LLM 至少要�
 
 系统侧要同时记录：峰值显存、常驻显存、TTFT、TPOT、吞吐、P95/P99、fallback 率、kernel 命中率、scale 统计、编译开销、calibration 数据版本和回滚策略。一个实用判断是：如果 FP8 只让离线 benchmark 好看，但线上 P99 变长、质量桶掉点或观测不到 scale 状态，它还没有真正上线。
 
-## 外部精读
+## 外部材料
 
 - [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 E4M3/E5M2、scale 和训练曲线证据。
 - [NVIDIA Transformer Engine FP8 delayed scaling](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/fp8_delayed_scaling/fp8_delayed_scaling.html)：核对 amax history、delayed scaling 和 FP8 recipe。
@@ -80,11 +80,6 @@ FP8 验收不能只看 perplexity 或一个 GSM8K 分数。文本 LLM 至少要�
 - [vLLM Quantized KV Cache](https://docs.vllm.ai/en/latest/features/quantization/quantized_kvcache/)：理解 FP8 KV cache、scale 校准和 backend 支持边界。
 - [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：把 FP8 放到权重、激活、KV cache 和 runtime support 的量化生态里理解。
 
-## 相关阅读与下一步
-
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

@@ -1,12 +1,12 @@
 # 世界模型开发路线：先把数据、动作和评测接成闭环
 
-面向机器人任务开发世界模型，第一步不是选最大的视频模型，而是把“世界状态是什么、动作如何改变它、怎样判定成功”讲清楚。否则模型即使能生成未来，也不知道自己在预测哪个坐标系里的未来，更无法服务真实闭环。
+面向机器人任务开发世界模型，第一步是把“世界状态是什么、动作如何改变它、怎样判定成功”讲清楚。否则模型即使能生成未来，也不知道自己在预测哪个坐标系里的未来，更无法服务真实闭环。
 
-这页只回答一个问题：如果今天要做一个能服务机器人任务的世界模型，数据、几何、动作、仿真和评测应该怎样接起来。
+能服务机器人任务的世界模型，需要把数据、几何、动作、仿真和评测接成闭环。
 
 ![Autonomous vehicle sensors](../assets/images/thinking-exploration/world-models-embodied-ai/autonomous-vehicle-equipment.jpg){ width="920" }
 
-<small>图源：[Wikimedia Commons: Equipment for self-driving car.jpg](https://commons.wikimedia.org/wiki/File:Equipment_for_self-driving_car.jpg)。原图展示自动驾驶车上的多传感器硬件。本站读法：世界模型的输入通常不是一张 RGB 图，而是一组带时间戳、坐标系、外参、深度、控制状态和风险语义的数据流。</small>
+<small>图源：[Wikimedia Commons: Equipment for self-driving car.jpg](https://commons.wikimedia.org/wiki/File:Equipment_for_self-driving_car.jpg)。原图展示自动驾驶车上的多传感器硬件。读图重点：世界模型的输入通常不是一张 RGB 图，而是一组带时间戳、坐标系、外参、深度、控制状态和风险语义的数据流。</small>
 
 ## 先定义世界状态
 
@@ -42,7 +42,7 @@ $$
 
 ![Velodyne LiDAR sensor](../assets/images/thinking-exploration/world-models-embodied-ai/velodyne-lidar.jpg){ width="760" }
 
-<small>图源：[Wikimedia Commons: Velodyne High-Def LIDAR.jpg](https://commons.wikimedia.org/wiki/File:Velodyne_High-Def_LIDAR.jpg)。原图展示 LiDAR 传感器。本站读法：depth、LiDAR、pose 和 point map 都在把视觉问题改写为空间问题；机器人世界模型要服务动作选择，就不能只停在图像语义。</small>
+<small>图源：[Wikimedia Commons: Velodyne High-Def LIDAR.jpg](https://commons.wikimedia.org/wiki/File:Velodyne_High-Def_LIDAR.jpg)。原图展示 LiDAR 传感器。读图重点：depth、LiDAR、pose 和 point map 都在把视觉问题改写为空间问题；机器人世界模型要服务动作选择，就不能只停在图像语义。</small>
 
 ## 动作接口要能被反事实测试
 
@@ -58,7 +58,7 @@ $$
 
 ![Simulation approaches for video world models 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="960" }
 
-<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 9。原图比较不同模拟路线。本站读法：真实项目中的世界模型不是孤立预测器，而是在 data、reconstruction、simulation、policy/evaluation 之间反复循环。</small>
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 9。原图比较不同模拟路线。读图重点：真实项目中的世界模型不是孤立预测器，而是在 data、reconstruction、simulation、policy/evaluation 之间反复循环。</small>
 
 Success checker 要比最终状态更细。比如“把物体放进抽屉”不能只检查物体最后是否在抽屉范围内，还要检查抽屉是否打开、是否穿模、是否碰撞、夹爪是否释放、轨迹是否平滑、失败时是否可回放。一个只看最终坐标的 checker 会让模型学会钻评测漏洞。
 
@@ -87,7 +87,7 @@ episode schema
 
 视频世界模型还要额外看动作敏感性、长时一致性、因果 rollout 和决策收益。同一状态下换动作，未来是否合理分叉；绕回同一场景时物体是否还在；自回归 rollout 是否越滚越偏；接入 planner 或 policy 后是否真的提高成功率。
 
-## 外部精读
+## 外部材料
 
 - [Genie 3](https://deepmind.google/models/genie/)：理解实时交互世界模型的产品化方向，但要记住它不等于机器人闭环控制已经解决。
 - [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)：理解 physical AI 的 world foundation model 平台，适合看数据生成、仿真和评测工具链。
@@ -95,11 +95,6 @@ episode schema
 - [RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/)：适合学习任务、资产、轨迹和 success checker 的组织方式。
 - [Isaac Sim container installation](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html)：适合看 headless 仿真和远程部署的工程口径。
 
-## 相关阅读与下一步
-
-- 外部材料：[World Models 论文](https://arxiv.org/abs/1803.10122)。
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 站内下一步：[世界模型专题](index.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)。
-- 站内下一步：[世界模型评测与失效模式](evaluation-and-failure-modes.md)。
+- [World Models 论文](https://arxiv.org/abs/1803.10122)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。

@@ -1,11 +1,11 @@
 # 张量、Shape 与计算图：为什么很多模型问题先是接口问题
 
-这篇文章只回答一个问题：为什么模型里的很多 bug、OOM、速度异常和多模态错位，最后都能追到 shape。
+模型里的许多 bug、OOM、速度异常和多模态错位，最后都能追到 shape。
 
 张量不是“多维数组”这么简单。对深度学习系统来说，一个 tensor 至少同时携带五件事：底层 storage、shape、axis semantics、stride/layout、dtype/device。Shape 决定模块接口能不能接上；axis semantics 决定接上以后有没有接错；stride/layout 决定这次 reshape 是零拷贝视图还是隐式复制；计算图决定 forward 里哪些中间量要被 backward 留住。
 
 !!! tip "数学先修"
-    本文会用到[向量、矩阵与线性变换](../prerequisite-math/linear-algebra-and-geometry.md)解释 tensor axis 和矩阵乘，并用[复杂度、bytes 与数值格式](../prerequisite-math/numerics-complexity-and-estimation.md)判断 layout、复制和显存成本。
+    需要用到[向量、矩阵与线性变换](../prerequisite-math/linear-algebra-and-geometry.md)解释 tensor axis 和矩阵乘，并用[复杂度、bytes 与数值格式](../prerequisite-math/numerics-complexity-and-estimation.md)判断 layout、复制和显存成本。
 
 ## 先把 tensor 拆开
 
@@ -116,7 +116,7 @@ y = x_t.reshape:    [B, D*L], may copy
 
 ![TensorFlow computation graph 原论文图](../assets/images/paper-figures/foundations/tensorflow-figure-2-simple-graph.svg){ .atlas-figure-compact width="380" }
 
-<small>图源：[TensorFlow: Large-Scale Machine Learning on Heterogeneous Distributed Systems](https://arxiv.org/abs/1603.04467)，Figure 2。原图把输入、常量和算子节点连接成 dataflow graph。本站用这张图说明：计算图的边不是抽象箭头，而是张量在算子之间流动；训练时反向传播会沿这张依赖关系把梯度传回去。</small>
+<small>图源：[TensorFlow: Large-Scale Machine Learning on Heterogeneous Distributed Systems](https://arxiv.org/abs/1603.04467)，Figure 2。原图把输入、常量和算子节点连接成 dataflow graph。这张图说明：计算图的边不是抽象箭头，而是张量在算子之间流动；训练时反向传播会沿这张依赖关系把梯度传回去。</small>
 
 计算图记录的是“哪些张量由哪些算子产生”。Forward 负责算出输出和 loss；backward 不是重新猜梯度，而是沿计算图用链式法则把 loss 对每个中间量的影响传回去。
 
@@ -213,7 +213,7 @@ actions:       [B, Horizon, ActionDim]
 
 张量是 storage 加 metadata，shape 是模块接口，axis semantics 是接口含义，stride/layout 是性能和复制风险，计算图是 forward 与 backward 的依赖记录。读模型时先把这些账写清楚，很多看起来像训练技巧、显存技巧或多模态建模技巧的问题，都会还原成“哪些轴被合并了、哪些值被保存了、哪些 layout 被 kernel 读了”。
 
-## 外部精读
+## 外部材料
 
 - [PyTorch Tensor Views](https://docs.pytorch.org/docs/main/tensor_view.html)：理解 view、reshape、transpose、contiguous 和共享 storage。
 - [PyTorch Storage](https://docs.pytorch.org/docs/stable/storage.html)：理解 tensor 的 storage、shape、stride、offset、dtype 这组 metadata。
@@ -223,11 +223,6 @@ actions:       [B, Horizon, ActionDim]
 - [TensorFlow systems paper](https://arxiv.org/abs/1603.04467)：理解 dataflow graph 如何把张量、算子和设备执行连接起来。
 - [动手学深度学习：数据操作](https://zh.d2l.ai/chapter_preliminaries/ndarray.html)：中文讲法很清楚，适合补 shape、广播和基本张量操作直觉。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

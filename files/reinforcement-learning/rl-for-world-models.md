@@ -1,12 +1,12 @@
 # Model-based RL 与世界模型
 
-Model-based RL 显式使用环境模型预测动作后果，再用规划或策略学习选择动作。模型可以是已知规则，也可以从真实 transition 中学习；world model 是 learned model 的一种，通常在 latent space 中预测状态、reward 与终止。统一判断标准不是“未来画面是否自然”，而是模型是否改善 closed-loop return。
+Model-based RL 显式使用环境模型预测动作后果，再用规划或策略学习选择动作。模型可以是已知规则，也可以从真实 transition 中学习；world model 是 learned model 的一种，通常在 latent space 中预测状态、reward 与终止。统一判断标准是模型是否改善 closed-loop return。
 
-## 本章回答什么
+## 模型怎样成为决策工具
 
-本章沿一条主线展开：已知或 learned transition model 如何进入规划；Dyna 怎样混合真实经验与模型生成经验；MPC 为什么每步只执行计划的第一个动作；PlaNet 与 Dreamer 怎样在 latent dynamics 中规划或训练 actor；model bias、compounding error 与 model exploitation 为什么必须回到真实闭环校准。
+核心链条是：已知或 learned transition model 如何进入规划；Dyna 怎样混合真实经验与模型生成经验；MPC 为什么每步只执行计划的第一个动作；PlaNet 与 Dreamer 怎样在 latent dynamics 中规划或训练 actor；model bias、compounding error 与 model exploitation 为什么必须回到真实闭环校准。
 
-这页不展开 LLM 的 GRPO，也不把视频生成、机器人和语言模型写成三篇独立综述。它只负责解释模型怎样成为 RL 的决策工具。
+LLM 的 GRPO、视频生成和机器人系统只在与这条链路相关时出现，重点是模型怎样成为 RL 的决策工具。
 
 ## 先修知识
 
@@ -121,7 +121,7 @@ Model-based RL 的责任是让环境模型进入预测、规划或策略学习�
 
 | 路线 | 课程归属 | 优化对象 | 证据边界 |
 | --- | --- | --- | --- |
-| RLVR-World | [本页](rl-for-world-models.md) | 用 RL 和 verifiable reward 直接优化 learned transition/world predictor 采样的 decoded prediction | verifier 指标改善不能证明 real closed-loop return；仍需 action sensitivity、transition 校准和 planner 评测。[RLVR-World](https://arxiv.org/abs/2505.13934) |
+| RLVR-World | Model-based RL / learned transition | 用 RL 和 verifiable reward 直接优化 learned transition/world predictor 采样的 decoded prediction | verifier 指标改善不能证明 real closed-loop return；仍需 action sensitivity、transition 校准和 planner 评测。[RLVR-World](https://arxiv.org/abs/2505.13934) |
 | Decision Transformer | [Offline RL](offline-reinforcement-learning.md) | 对 fixed trajectory 做 return-conditioned sequence modeling，并从固定数据预测 action | 它不是 online environment interaction，仍受数据覆盖和分布外动作限制。[Decision Transformer](https://arxiv.org/abs/2106.01345) |
 | DDPO / Flow-GRPO / video generator RL | [LLM 强化学习中的通用 policy objective](llm-rlhf-rlvr-and-grpo.md)；[视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md) | 用 reward 优化 diffusion/flow generator/sampler 的生成轨迹 | 这是生成器策略优化，不是 learned environment transition，也不是 LLM 算法；DDPO 与 Flow-GRPO 的 logprob/采样器定义应分别核对。[DDPO](https://arxiv.org/abs/2305.13301)、[Flow-GRPO](https://arxiv.org/abs/2505.05470) |
 | interactive video worlds | [世界模型评测与失败模式](../world-models/evaluation-and-failure-modes.md)；[VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md) | 生成可受动作影响的视觉环境，供 agent 交互或评测 | visual playability/open-loop demo 不能证明 real closed-loop，更不能替代真实机器人风险与回报证据。[Sora](https://openai.com/index/video-generation-models-as-world-simulators/)、[Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/) |
@@ -173,9 +173,3 @@ real transition (observation, action, reward, done)
 - [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)：PlaNet 的 latent dynamics 与在线规划。
 - [Dream to Control](https://arxiv.org/abs/1912.01603)：Dreamer 的 latent imagination actor-critic。
 - [DreamerV3](https://arxiv.org/abs/2301.04104)：统一 world model 与 imagined behavior learning 的后续系统。
-
-## 下一步
-
-- 前一章：[Offline Reinforcement Learning](offline-reinforcement-learning.md)，理解 learned model 与 policy 共同面对的数据 support 边界。
-- 下一章：[LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md)，把 response rollout、verifier 与 policy objective 接起来。
-- 方向补充：[世界模型开发路线](../world-models/development-roadmap-data-simulation-and-evaluation.md) 与 [不确定性和风险感知规划](../world-models/uncertainty-and-risk-aware-planning.md)。

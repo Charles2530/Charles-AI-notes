@@ -1,6 +1,6 @@
 # 量化服务栈与硬件选择
 
-这一页讲量化放到服务系统里以后，怎样按硬件、延迟、吞吐、成本和质量目标做取舍。具体 runtime 兼容性放在 [量化运行时与部署框架](quantization-runtimes-and-frameworks.md)。
+量化放到服务系统里以后，需要按硬件、延迟、吞吐、成本和质量目标做取舍。具体 runtime 兼容性见 [量化运行时与部署框架](quantization-runtimes-and-frameworks.md)。
 
 ## 核心问题
 
@@ -10,7 +10,7 @@
 
 ![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png)
 
-<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)。原图表达不同算子和张量在低精度部署中的精度映射；本站读法是：服务栈选型不是只选“几 bit”，而是要确认硬件 kernel、runtime fallback、activation scale 和质量门槛是否同时成立。它不能直接证明某张 GPU 上的线上 P99 收益，实际仍需按请求分布压测。</small>
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)。原图表达不同算子和张量在低精度部署中的精度映射；读图重点是：服务栈选型不是只选“几 bit”，而是要确认硬件 kernel、runtime fallback、activation scale 和质量门槛是否同时成立。它不能直接证明某张 GPU 上的线上 P99 收益，实际仍需按请求分布压测。</small>
 
 ## 量化收益的三种来源
 
@@ -162,7 +162,7 @@ KV 显存：
 
 量化服务选型不是“哪个 bit 最低”，而是“在你的硬件、runtime、请求分布和质量门槛下，哪种精度分配最划算”。权重、KV、kernel 和业务质量要放在一张表里算，才不会把压缩率误当成系统收益。
 
-## 外部精读
+## 外部材料
 
 - [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：先把 scheme、granularity 和 technique 分开。
 - [TensorRT-LLM documentation](https://nvidia.github.io/TensorRT-LLM/)：理解 NVIDIA serving 栈里的 FP8/INT8/INT4、kernel 和 engine 构建。
@@ -170,11 +170,6 @@ KV 显存：
 - [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 FP8 作为硬件友好混合精度格式的动机。
 - [A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)：把低比特方法、系统传输和 KV cache 量化放在同一张图谱里。
 
-## 相关阅读与下一步
-
-- 外部材料：[Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- 外部材料：[GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- 外部材料：[AWQ 论文](https://arxiv.org/abs/2306.00978)。
-- 站内下一步：[量化专题](index.md)。
-- 站内下一步：[PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md)。
-- 站内下一步：[量化评测与部署清单](evaluation-and-deployment-checklist.md)。
+- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
+- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
+- [AWQ 论文](https://arxiv.org/abs/2306.00978)。

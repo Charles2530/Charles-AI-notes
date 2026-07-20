@@ -2,7 +2,7 @@
 
 AI kernel 工程里常见误解是：既然已有 `torch.compile`、Triton、cuBLAS、TensorRT，为什么还要理解 `CUTLASS`、`CuTe`、模板库、DSL 和图编译器？真正原因是，AI 系统不是单一抽象层能解决的。不同工具分别负责图级融合、库级高性能基元、模板级可组合 kernel，以及更低层的 layout、MMA、流水线和访存控制。
 
-这页建立一张从模型图到 GPU 指令的中间栈地图。
+从模型图到 GPU 指令，中间要经过算子表达、tile 抽象、kernel 模板和编译器后端。
 
 ## 从模型图到硬件执行
 
@@ -112,7 +112,7 @@ Kernel 设计不能脱离上层系统。一个很快的 kernel 也可能因为�
 
 ## 读者自查
 
-读完这页，应能把一个热点算子放到正确层级：
+读完后，应能把一个热点算子放到正确层级：
 
 | 问题 | 如果答案是肯定 |
 | --- | --- |
@@ -121,11 +121,8 @@ Kernel 设计不能脱离上层系统。一个很快的 kernel 也可能因为�
 | 需要维护多个 GEMM/attention 变体吗 | 再看 CUTLASS / CuTe |
 | 必须确认底层指令路径吗 | 下钻 PTX / SASS |
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

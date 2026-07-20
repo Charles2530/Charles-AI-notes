@@ -2,7 +2,7 @@
 
 现代 AI kernel 的性能，大多围绕数据如何穿过 GEMM、Attention、Norm、Quantization 和 Memory Movement 这一串热点算子被决定。GEMM 是计算主引擎，Attention 是序列模型的结构性热点，融合 kernel 则试图减少中间读写和 launch 开销，让系统更接近硬件上限。
 
-这页不重复数学推导，而是解释这些算子为什么重要、共享哪些优化模式，以及训练和推理系统为什么一再围绕它们重构。
+GEMM、Attention 与 fused kernel 的关键在于：它们承载主要 FLOPs 和访存路径，共享 tile、并行、融合和调度优化模式，训练和推理系统也常围绕它们重构。
 
 ## 热点算子地图
 
@@ -110,11 +110,8 @@ Softmax、LayerNorm、RMSNorm、Reduce、RoPE、activation 单次看起来小，
 
 GEMM、Attention 和融合 kernel 的共同原则是：不只优化公式，更要优化数据流。现代 AI 系统的很多性能跃迁，来自把原本在 HBM 中反复读写的中间状态，改成在片上存储和寄存器里连续完成。
 
-## 相关阅读与下一步
+## 外部材料
 
-- 外部材料：[NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- 外部材料：[Triton 文档](https://triton-lang.org/main/index.html)。
-- 外部材料：[CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
-- 站内下一步：[算子与编译器专题](index.md)。
-- 站内下一步：[CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md)。
-- 站内下一步：[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。
+- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
+- [Triton 文档](https://triton-lang.org/main/index.html)。
+- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。

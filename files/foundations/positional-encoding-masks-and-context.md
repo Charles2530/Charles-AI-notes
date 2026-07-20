@@ -1,11 +1,11 @@
 # 位置编码与 Mask：顺序、可见性和长上下文边界
 
-这篇文章只回答一个问题：Transformer 里的 token 为什么需要知道“我在哪里”和“我能看谁”。
+Transformer 里的 token 需要同时知道自己在哪里、能看见谁。
 
 Attention 本身只会比较 token 向量之间的匹配分数。它不会天然知道第一个 token 在前、第二个 token 在后，也不会自动知道 padding、未来 token、另一个 packed sample 或未来动作标签不该被看见。位置机制负责把顺序、距离、时间或空间放进模型；mask 负责在 attention 里划出可见性边界。
 
 !!! tip "数学先修"
-    本文会用到[序列索引、位置编码与 attention mask](../prerequisite-math/sequence-position-and-masking.md)定义顺序和可见性，并用[向量内积与旋转](../prerequisite-math/linear-algebra-and-geometry.md)理解 attention score 与 RoPE。
+    需要用到[序列索引、位置编码与 attention mask](../prerequisite-math/sequence-position-and-masking.md)定义顺序和可见性，并用[向量内积与旋转](../prerequisite-math/linear-algebra-and-geometry.md)理解 attention score 与 RoPE。
 
 ## Attention 不天然知道顺序
 
@@ -27,7 +27,7 @@ h_i = E(x_i)+p_i
 
 ![Transformer long-distance attention](../assets/images/paper-figures/foundations/attention-is-all-you-need-figure-3-long-distance-attention.png){ width="760" }
 
-<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 3。原图展示 encoder self-attention head 关注长距离依赖。本站用这张图说明：attention 可以跨远距离读信息，但“能读远处”不等于“知道顺序”，顺序仍要由位置机制注入。</small>
+<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 3。原图展示 encoder self-attention head 关注长距离依赖。这张图说明：attention 可以跨远距离读信息，但“能读远处”不等于“知道顺序”，顺序仍要由位置机制注入。</small>
 
 位置机制大致有四类：
 
@@ -56,7 +56,7 @@ q_i' = R_i q_i,\qquad k_j'=R_j k_j
 q_i^\top R_i^\top R_j k_j
 \]
 
-这行式子是 RoPE 的核心：\(R_i^\top R_j\) 只和相对位置 \(j-i\) 有关，所以模型比较 token \(i\) 和 token \(j\) 时，点积里已经带有它们的相对距离。换句话说，RoPE 不是简单告诉模型“我是第 17 个 token”，而是让模型在每次比较两个 token 时知道“我们相隔多远”。
+这行式子是 RoPE 的核心：\(R_i^\top R_j\) 只和相对位置 \(j-i\) 有关，所以模型比较 token \(i\) 和 token \(j\) 时，点积里已经带有它们的相对距离。RoPE 不是简单告诉模型“我是第 17 个 token”，而是让模型在每次比较两个 token 时知道“我们相隔多远”。
 
 第一次读 RoPE，不要先背矩阵块。更好的路线是：先问“score 能不能只依赖相对距离”，再看二维旋转怎样保持向量长度，最后把每两维一组推广到高维。科学空间的 [旋转式位置编码](https://kexue.fm/archives/8265/comment-page-5) 和 Hugging Face 的 [设计位置编码](https://huggingface.co/blog/zh/designing-positional-encoding) 都很适合沿着这条路补读；前者把复数旋转、矩阵形式和相对位置推导连起来，后者用“从简单编码一路设计到 RoPE”的方式降低入门阻力。
 
@@ -155,7 +155,7 @@ Hugging Face 的 attention backend 文档也提醒：不同 backend 需要不同
 
 ![MagiAttention mask patterns](../assets/images/paper-deep-dives/foundations/magiattention/figure-4-mask-patterns.png){ width="920" }
 
-<small>图源：[MagiAttention](https://arxiv.org/abs/2502.13138)，Figure 4。原图展示 long-context、packed、block-causal 等不同 attention mask pattern。本站用这张图说明：现代训练里的 mask 不是只有 causal 三角形，视频、packed sequence、多段 memory 和长上下文会把可见性变成复杂图。</small>
+<small>图源：[MagiAttention](https://arxiv.org/abs/2502.13138)，Figure 4。原图展示 long-context、packed、block-causal 等不同 attention mask pattern。这张图说明：现代训练里的 mask 不是只有 causal 三角形，视频、packed sequence、多段 memory 和长上下文会把可见性变成复杂图。</small>
 
 ## 长上下文不是只改位置长度
 
@@ -197,7 +197,7 @@ Layers\times L\times d_{\text{kv}}\times bytes
 
 读任何 Transformer、长上下文、VLM、VLA 或 packed training 方案时，先画 token 排列，再画可见性矩阵。很多看似神秘的训练捷径、长上下文失败和多模态错位，都会还原成位置或 mask 的问题。
 
-## 外部精读
+## 外部材料
 
 - [Attention Is All You Need](https://arxiv.org/abs/1706.03762)：位置编码和 attention 的原始入口。
 - [RoFormer / RoPE](https://arxiv.org/abs/2104.09864)：理解旋转位置编码如何把相对距离放进 Q/K 点积。
@@ -209,11 +209,6 @@ Layers\times L\times d_{\text{kv}}\times bytes
 - [Hugging Face Attention Interface](https://huggingface.co/docs/transformers/attention_interface)：理解不同 attention backend 对 causal、padding、packing、sliding-window mask 的接口要求。
 - [MagiAttention](https://arxiv.org/abs/2502.13138)：看复杂 mask、长上下文和分布式 attention 如何绑在一起。
 
-## 相关阅读与下一步
-
-- 外部材料：[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- 外部材料：[Dive into Deep Learning](https://d2l.ai/)。
-- 外部材料：[Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
-- 站内下一步：[基础概念专题](index.md)。
-- 站内下一步：[Transformer 输入与注意力](transformer-attention-and-tokenization.md)。
-- 站内下一步：[数值、内存与运行时基础](numerics-memory-and-runtime-basics.md)。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
+- [Dive into Deep Learning](https://d2l.ai/)。
+- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。

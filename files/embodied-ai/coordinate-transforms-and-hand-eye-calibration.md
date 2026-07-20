@@ -4,7 +4,7 @@
 
 ## 本章回答什么
 
-本文建立从相机观测到机器人动作的最小空间接口：怎样表示旋转和平移；怎样组合、求逆和检查一条坐标变换链；eye-in-hand 与 eye-to-hand 有什么不同；手眼标定解决哪个未知变换；为什么同一个末端增量在局部坐标和世界坐标中会产生不同轨迹。
+从相机观测到机器人动作的最小空间接口包括：怎样表示旋转和平移；怎样组合、求逆和检查一条坐标变换链；eye-in-hand 与 eye-to-hand 有什么不同；手眼标定解决哪个未知变换；为什么同一个末端增量在局部坐标和世界坐标中会产生不同轨迹。
 
 读完以后，应能把“相机看到了物体”展开成一条可验证的链：
 
@@ -36,7 +36,7 @@
 | camera | 相机光学坐标 | 相机标定与安装 |
 | object | 物体自身参考 | 6D pose 或资产标注 |
 
-本文用 \(^{A}T_B\) 表示“把 \(B\) 坐标系中的坐标变换到 \(A\) 坐标系”。因此：
+这里用 \(^{A}T_B\) 表示“把 \(B\) 坐标系中的坐标变换到 \(A\) 坐标系”。因此：
 
 \[
 \bar p_A = {}^{A}T_B \bar p_B.
@@ -221,13 +221,7 @@ np.linalg.inv 适合这个教学验证；工程代码若已知输入是刚体变
 5. 为什么 \(T_t\Delta T\) 和 \(\Delta T T_t\) 会产生不同轨迹？
 6. 变换链数值看起来正常时，还需要检查哪些单位、时间和标定条件？
 
-## 相关阅读与下一步
+## 外部材料
 
-- 数学前置：[几何、视觉与三维空间](../prerequisite-math/geometry-vision-and-3d.md)。
-- 感知入口：[相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)。
-- 动作协议：[机器人 State / Action 数据](state-action-robot-datasets.md)。
-- 执行边界：[规划、控制与安全](planning-control-and-safety.md)。
-- 下一步：[机器人运动学与 DH 参数](robot-kinematics-and-dh-parameters.md)。
 - 原始笔记：[机器人基础和控制、手眼协调](https://v11enp9ok1h.feishu.cn/wiki/D5tuwjNfOiWPeakiNEhc88yOnqd?from=from_copylink)。
 - 权威接口：[OpenCV calibrateHandEye](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html)。
-- 返回：[具身智能专题](index.md)。

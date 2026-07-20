@@ -4,7 +4,7 @@
 
 ![Meta Quest 3 headset and Touch Plus controllers on a wooden table](../assets/images/thinking-exploration/qualcomm-xr2-gen2/meta-quest-3-headset-controllers.png){ width="820" }
 
-<small>图源：用户提供图片。原图表达：Meta Quest 3 使用 Snapdragon XR2 Gen 2，图中可见头显前侧传感器窗口和 Touch Plus 控制器。本站读法：把它当成一体式 MR / VR 头显的系统边界，后文所有 AI 推理都要和相机、显示、追踪、无线和散热共享预算。</small>
+<small>图源：用户提供图片。原图表达：Meta Quest 3 使用 Snapdragon XR2 Gen 2，图中可见头显前侧传感器窗口和 Touch Plus 控制器。读图重点：把它当成一体式 MR / VR 头显的系统边界，后文所有 AI 推理都要和相机、显示、追踪、无线和散热共享预算。</small>
 
 这就是 XR2 Gen 2 的真实工作现场：**它不是一次性跑分机器，而是持续运行的感知-渲染-交互闭环。**所以讨论 Qualcomm XR 平台时，只问“AI TOPS 有多少”并不够；更关键的是模型如何进入软件栈，并在真实头显里稳定、低延迟、低功耗地跑。
 
@@ -14,7 +14,7 @@
 - **先看代际**：QCS8450 Proxy 在 AI Hub Models 元数据里是 HTP v69，接近 SM8450 / Snapdragon 8 Gen 1 的后端口径，不能直接套用 v73+ 的量化经验。
 - **先分 runtime**：量化通常能压缩模型大小，但不保证更快；同一 `w8a8` 模型在 TFLite、QNN DLC、ONNX Runtime QNN EP 上可能走完全不同的执行路径。
 
-因此这篇文章沿三条线往下拆：XR2 Gen 2 / QCS8450 到底是什么；一个模型从 PyTorch / ONNX 怎么走到头显上；为什么量化部署不能只看 `INT8` 这个标签。
+后面的判断沿三条线展开：XR2 Gen 2 / QCS8450 到底是什么；一个模型从 PyTorch / ONNX 怎么走到头显上；为什么量化部署不能只看 `INT8` 这个标签。
 
 ## 从一个动作看整机闭环
 
@@ -70,7 +70,7 @@ AI Hub 里的 QCS8450 不是“名字里带 8450，所以一定等价于某个�
 | --- | --- | --- | ---: | ---: | --- |
 | Snapdragon 888 | SM8350 | Mobile | 68 | 30 | 前一代高端移动平台，可作为 v69 之前的参照 |
 | Snapdragon 8 Gen 1 | SM8450 | Mobile | 69 | 36 | 和 QCS8450 Proxy 在 AI Hub 元数据里处在同一 HTP / SoC model 口径 |
-| QCS8450 (Proxy) | XR2 Gen 2 / QCS8450 target | XR | 69 | 36 | 本文重点，适合做 XR 模型早筛，但不是 v73+ 后端 |
+| QCS8450 (Proxy) | XR2 Gen 2 / QCS8450 target | XR | 69 | 36 | 重点，适合做 XR 模型早筛，但不是 v73+ 后端 |
 | QCS8550 (Proxy) | QCS8550 target | IoT | 73 | 43 | 进入 HTP v73 口径，较新的 QNN / 量化路径更值得优先验证 |
 | Snapdragon 8 Gen 2 | SM8550 | Mobile | 73 | 43 | 和 QCS8550 Proxy 在 HTP / SoC model 口径上对齐 |
 | Snapdragon 8 Gen 3 | SM8650 | Mobile | 75 | 57 | 后续移动旗舰平台，NPU / HTP 能力继续演进 |
@@ -81,7 +81,7 @@ AI Hub 里的 QCS8450 不是“名字里带 8450，所以一定等价于某个�
 
 这个定位会直接影响后面的量化判断。比如 ViT 配置里列出 `w8a16`，但这不等于 QCS8450 / SM8450 这一代后端就应该优先走 `w8a16`。在 XR2 Gen 2 上做实验，更稳的顺序是先把 `float` 和 `w8a8` 跑扎实，再把 `w8a16` 或更新 precision 路径留给 QCS8550、8 Gen 2 或更新平台复验。
 
-**工程判断：**本文讨论 QCS8450 / SM8450 这一代 v69 后端上的工程取舍；不要把更新 HTP 版本上的量化、融合或 QNN 编译经验直接倒推到 XR2 Gen 2。
+**工程判断：**QCS8450 / SM8450 属于 v69 后端口径；不要把更新 HTP 版本上的量化、融合或 QNN 编译经验直接倒推到 XR2 Gen 2。
 
 ## 硬件资源账本：头显 SoC 同时在忙什么
 
@@ -91,16 +91,16 @@ Qualcomm 的[官方发布稿](https://www.qualcomm.com/news/releases/2023/09/qua
 
 ![Snapdragon XR2 Gen 2 Product Brief page 1](../assets/images/thinking-exploration/qualcomm-xr2-gen2/xr2-gen2-product-brief-page-1.png){ width="720" .atlas-figure-page }
 
-<small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 1。原图表达：平台定位包括 next-generation MR and VR、on-device AI、3K-by-3K display、2.5x GPU、8x AI、10 concurrent cameras、12ms video see-through latency、Wi-Fi 7 / Wi-Fi 6E 等。本站读法：先看多链路并发，不要只看 AI 倍数；XR SoC 的瓶颈常在相机、显示、内存和热预算之间互相挤压。</small>
+<small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 1。原图表达：平台定位包括 next-generation MR and VR、on-device AI、3K-by-3K display、2.5x GPU、8x AI、10 concurrent cameras、12ms video see-through latency、Wi-Fi 7 / Wi-Fi 6E 等。读图重点：先看多链路并发，不要只看 AI 倍数；XR SoC 的瓶颈常在相机、显示、内存和热预算之间互相挤压。</small>
 
 **这张图真正想表达什么。**
-这页 Product Brief 不是在说“XR2 Gen 2 只有 AI 很强”，而是在讲一颗头显 SoC 必须同时处理几条链路。`3K-by-3K display` 和 `2.5x GPU` 指向双眼高分辨率渲染；`10 concurrent cameras` 和 `12ms video see-through latency` 指向 MR 透视、追踪和空间定位；`Wi-Fi 7 / Wi-Fi 6E` 服务 PC 串流、多人同步和高带宽内容。`8x AI` 可以当作方向性信号带过，真正做模型时仍要回到 runtime、layer placement、内存和持续功耗。
+这张 Product Brief 不是在说“XR2 Gen 2 只有 AI 很强”，而是在讲一颗头显 SoC 必须同时处理几条链路。`3K-by-3K display` 和 `2.5x GPU` 指向双眼高分辨率渲染；`10 concurrent cameras` 和 `12ms video see-through latency` 指向 MR 透视、追踪和空间定位；`Wi-Fi 7 / Wi-Fi 6E` 服务 PC 串流、多人同步和高带宽内容。`8x AI` 可以当作方向性信号带过，真正做模型时仍要回到 runtime、layer placement、内存和持续功耗。
 
 下面这张完整规格页最值得看的是显示和相机：10 路并发相机、2x IFE 视频透视、8x IFE-Lite 感知、每眼 3.1K x 3.1K @ 90 FPS、time-warp 2.8K x 3K @ 90 FPS。它说明 XR2 Gen 2 是多传感器低延迟闭环平台，不是单纯“AI 加速器”。
 
 ![Snapdragon XR2 Gen 2 specifications and features](../assets/images/thinking-exploration/qualcomm-xr2-gen2/xr2-gen2-product-brief-page-2.png){ width="720" .atlas-figure-page }
 
-<small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 2。原图表达：完整规格覆盖显示、相机、ISP、GPU、连接、AI 和内存等模块。本站读法：正文只提炼模型部署最相关的部分，尤其是并发相机、低延迟透视和每眼显示分辨率如何挤占端侧 AI 预算。</small>
+<small>图源：`Snapdragon XR2 Gen 2 Platform Product Brief (87-73689-1 Rev A)`，page 2。原图表达：完整规格覆盖显示、相机、ISP、GPU、连接、AI 和内存等模块。读图重点：正文只提炼模型部署最相关的部分，尤其是并发相机、低延迟透视和每眼显示分辨率如何挤占端侧 AI 预算。</small>
 
 | Hardware block | Role in an XR product | Practical question |
 | --- | --- | --- |
@@ -124,7 +124,7 @@ Qualcomm 文档里经常同时出现 `Hexagon`、`HTP` 和 `NPU`。可以粗略�
 
 ![AI Hub Workbench how it works](../assets/images/thinking-exploration/qualcomm-xr2-gen2/ai-hub-how-it-works.png){ width="920" }
 
-<small>图源：Qualcomm AI Hub Workbench `How-It-Works.png`。原图表达：upload -> optimize -> validate -> deploy 的 device-in-the-loop 流程。本站读法：这张图说明端侧 AI 不是“导出一个 ONNX 就结束”，模型要经过编译、量化、设备侧 profile 和部署资产生成。</small>
+<small>图源：Qualcomm AI Hub Workbench `How-It-Works.png`。原图表达：upload -> optimize -> validate -> deploy 的 device-in-the-loop 流程。读图重点：这张图说明端侧 AI 不是“导出一个 ONNX 就结束”，模型要经过编译、量化、设备侧 profile 和部署资产生成。</small>
 
 | Layer | Qualcomm software | Main function |
 | --- | --- | --- |
@@ -196,7 +196,7 @@ AI Hub Workbench 的 [Quantization 文档](https://workbench.aihub.qualcomm.com/
 顺序上有一个容易忽略的细节：**要先把图变成接近部署形态的 ONNX，再做校准和量化。**部署图会经历算子融合、常量折叠、shape 固化、layout 调整和 runtime 适配；如果直接在原始训练图上插 Q/DQ，后续编译可能改变图结构，让校准假设和真实执行路径错位。校准数据也要贴近线上输入，随机样本最多用于快速估计 latency，不适合判断 accuracy。
 
 **QCS8450 上的 w8a16 口径。**
-要区分“模型库声明支持某种 precision”和“某个目标 SoC / runtime path 真正适合用它”。ViT 配置里列出 `w8a16`，但 QCS8450 Proxy / SM8450 在 AI Hub Models 设备元数据里是 HTP v69；本文按实验口径处理为：QCS8450 上优先比较 `float` 和 `w8a8`，不要把 v73+ 路径直接套回 XR2 Gen 2。
+要区分“模型库声明支持某种 precision”和“某个目标 SoC / runtime path 真正适合用它”。ViT 配置里列出 `w8a16`，但 QCS8450 Proxy / SM8450 在 AI Hub Models 设备元数据里是 HTP v69；实验口径更稳的是：QCS8450 上优先比较 `float` 和 `w8a8`，不要把 v73+ 路径直接套回 XR2 Gen 2。
 
 开源仓库中的 VIT [`perf.yaml`](https://github.com/qualcomm/ai-hub-models/blob/main/src/qai_hub_models/models/vit/perf.yaml) 给出 QCS8450 Proxy 上的部分 profile 数字：
 
@@ -207,7 +207,7 @@ AI Hub Workbench 的 [Quantization 文档](https://workbench.aihub.qualcomm.com/
 | w8a8 | tflite | QCS8450 (Proxy) | Passed | 20.594 | 0-447 | NPU | total 1451, npu 1451 |
 | w8a8 | qnn_dlc | QCS8450 (Proxy) | Passed | 13.179 | 0-310 | NPU | total 889, npu 889 |
 
-<small>数据源：`qualcomm/ai-hub-models` 中 VIT 的 [`perf.yaml`](https://github.com/qualcomm/ai-hub-models/blob/main/src/qai_hub_models/models/vit/perf.yaml)。当前仓库文件的 QCS8450 Proxy 片段来自 profile job 记录，适合做方向判断；但它仍然是 proxy 数字，而且同一文件里不同设备、runtime、tool version 的内存区间有明显波动，所以本文把它当成“需要复现实验的参考值”，不是产品验收值。</small>
+<small>数据源：`qualcomm/ai-hub-models` 中 VIT 的 [`perf.yaml`](https://github.com/qualcomm/ai-hub-models/blob/main/src/qai_hub_models/models/vit/perf.yaml)。当前仓库文件的 QCS8450 Proxy 片段来自 profile job 记录，适合做方向判断；但它仍然是 proxy 数字，而且同一文件里不同设备、runtime、tool version 的内存区间有明显波动，所以只能把它当成“需要复现实验的参考值”，不是产品验收值。</small>
 
 这组数字说明三件事：
 
@@ -246,7 +246,7 @@ AI Hub Workbench 的 [Quantization 文档](https://workbench.aihub.qualcomm.com/
 
 **工程判断：**XR2 Gen 2 是 XR 产品平台，不是单纯 AI 加速芯片；QCS8450 / XR2 Gen 2 Proxy 是很有用的开发入口，但真正的难点是把模型放进 XR 整机的持续并发预算里。
 
-## 外部精读
+## 外部材料
 
 1. [Qualcomm AI Hub Workbench Documentation](https://workbench.aihub.qualcomm.com/docs/)
 2. [Qualcomm AI Hub](https://aihub.qualcomm.com/)
@@ -265,11 +265,6 @@ AI Hub Workbench 的 [Quantization 文档](https://workbench.aihub.qualcomm.com/
 15. [Qualcomm launch release: Snapdragon XR2 Gen 2 and AR1 Gen 1](https://www.qualcomm.com/news/releases/2023/09/qualcomm-launches-its-next-generation-xr-and-ar-platforms--enabl)
 16. [Meta Quest 3 launch article](https://about.fb.com/news/2023/09/meet-meta-quest-3-mixed-reality-headset/)
 
-## 相关阅读与下一步
-
-- 外部材料：[DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- 外部材料：[Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
-- 外部材料：[NVIDIA TensorRT-LLM 文档](https://nvidia.github.io/TensorRT-LLM/)。
-- 站内下一步：[思考探索专题](index.md)。
-- 站内下一步：[世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md)。
-- 站内下一步：[具身智能现状：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md)。
+- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
+- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+- [NVIDIA TensorRT-LLM 文档](https://nvidia.github.io/TensorRT-LLM/)。

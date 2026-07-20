@@ -1,10 +1,8 @@
 # 模型训练的完整链路：数据、目标、更新与证据
 
-## 本文解决什么问题
-
 训练不是“把数据喂给模型，然后等 loss 下降”。更准确地说，训练是在控制三件事：模型看见什么数据，用什么目标判断对错，用多大的更新压力修改参数。只要这三件事没有对齐，loss 曲线再顺，也可能只是模型学会了错误捷径。
 
-本文把单个 training step、完整训练 run 和分布式执行放进同一条链路，回答六个问题：梯度从哪里来，optimizer step 改了什么，effective tokens 和 global batch 怎样定义，模型为何需要多种并行，checkpoint contract 应保存哪些状态，以及怎样判断一次训练改动可信。
+单个 training step、完整训练 run 和分布式执行要放进同一条链路读：梯度从哪里来，optimizer step 改了什么，effective tokens 和 global batch 怎样定义，模型为何需要多种并行，checkpoint contract 应保存哪些状态，以及怎样判断一次训练改动可信。
 
 ## 前置知识
 
@@ -146,7 +144,7 @@ global batch:     所有卡、所有累积合起来的有效更新规模
 
 ![ZeRO memory optimization stages](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
 
-<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。本站用这张图说明 optimizer states、gradients、parameters 在普通数据并行里为什么会重复保存，以及 ZeRO 三个阶段分别切走哪部分状态；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。这张图说明 optimizer states、gradients、parameters 在普通数据并行里为什么会重复保存，以及 ZeRO 三个阶段分别切走哪部分状态。</small>
 
 读这张图时，先看普通 data parallel 为什么浪费：每张卡都有完整参数、梯度和 optimizer state。ZeRO Stage 1 先切 optimizer state，Stage 2 再切 gradient，Stage 3 连参数也切。显存省下来了，但训练中会多出 gather、scatter、通信 overlap 和 checkpoint 分片管理。
 
@@ -154,7 +152,7 @@ global batch:     所有卡、所有累积合起来的有效更新规模
 
 ![GPipe pipeline parallelism](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png){ width="860" }
 
-<small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。本站用这张图说明 micro-batch 如何填充 pipeline bubble，让不同 accelerator 同时处理不同模型分段；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。这张图说明 micro-batch 如何填充 pipeline bubble，让不同 accelerator 同时处理不同模型分段。</small>
 
 GPipe 图里的 micro-batch 很关键。没有 micro-batch，第一段算完才轮到第二段，很多设备会等待；micro-batch 把流水线填起来。但 micro-batch 太多又会增加激活保存、调度复杂度和恢复语义。系统优化需要让模型大小、显存、通信拓扑、batch 语义和 checkpoint 目标共同闭合；同时打开所有并行开关并不能保证更快。
 
@@ -164,7 +162,7 @@ GPipe 图里的 micro-batch 很关键。没有 micro-batch，第一段算完才�
 
 ![Chinchilla IsoFLOP curves](../assets/images/paper-figures/training/chinchilla-isoflop-curves.png){ width="920" }
 
-<small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)，Figure 4。本站用这张图说明固定 FLOP 预算下，不同模型大小会得到不同最终 loss，曲线谷底对应更合适的参数/token 配比；没有用 image2 或其他生成式工具作图。</small>
+<small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)，Figure 4。这张图说明固定 FLOP 预算下，不同模型大小会得到不同最终 loss，曲线谷底对应更合适的参数/token 配比。</small>
 
 这张图不要求读者记住某个固定比例，因为数据质量、架构、tokenizer、目标函数和后训练阶段都会改变实际选择。它真正有用的地方是改变问题问法：不要只问“模型要不要更大”，而要问“这笔算力应该分给参数、token、上下文长度、数据清洗、评测和失败复盘中的哪一块”。
 
@@ -231,11 +229,7 @@ Karpathy 的训练 recipe 仍然值得读，它强调先让一个小模型、小
 
 读任何训练报告时，先沿着这条链问：有效 token 是什么，loss 在优化什么，更新压力是否稳定，系统账是否闭合，质量证据是否覆盖关键失败桶。如果这些问题都能回答，训练才从一条曲线变成一套可以复盘、可以恢复、可以继续改进的工程过程。
 
-## 相关阅读与下一步
-
-先沿[目标函数、优化器与 LR 日程](objectives-optimizers-and-schedules.md)补齐参数更新，再读[输入管线、Packing 与吞吐](input-pipelines-packing-and-throughput-governance.md)和[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。训练异常可直接进入[稳定性与故障排查](stability-numerics-and-failure-triage.md)，实验结论则用[评测与消融设计](evaluation-and-ablation-methodology.md)收口。完整训练—部署交接见[训练与推理系统总览](../training-and-inference-systems/index.md)。
-
-### 外部精读
+## 外部材料
 
 - [PyTorch: Optimization Loop](https://docs.pytorch.org/tutorials/beginner/basics/optimization_tutorial.html)：用官方最小训练循环理解 `loss.backward()`、`optimizer.step()` 和 `zero_grad()`。
 - [A Recipe for Training Neural Networks](https://karpathy.github.io/2019/04/25/recipe/)：训练排查经典博客，适合学习如何从小实验逐步走到可信训练。
@@ -245,12 +239,6 @@ Karpathy 的训练 recipe 仍然值得读，它强调先让一个小模型、小
 - [ZeRO](https://arxiv.org/abs/1910.02054)：理解大模型训练显存账。
 - [GPipe](https://arxiv.org/abs/1811.06965)：理解流水线并行为什么需要 micro-batch。
 - [Datawhale: VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)：中文显存估算补充读物，适合把参数、梯度、优化器状态拆成手算账。
-
-### 站内与外部入口
-
-- 外部材料：[PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- 外部材料：[DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- 外部材料：[Weights & Biases 文档](https://docs.wandb.ai/)。
-- 站内下一步：[训练系统专题](index.md)。
-- 站内下一步：[分布式训练与 Checkpoint](distributed-training-and-checkpointing.md)。
-- 站内下一步：[评测与 Ablation 方法论](evaluation-and-ablation-methodology.md)。
+- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
+- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
+- [Weights & Biases 文档](https://docs.wandb.ai/)。

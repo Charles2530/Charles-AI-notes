@@ -1,8 +1,6 @@
 # 随机过程与马尔可夫性
 
-这篇回答一个问题：马尔可夫、转移概率、trajectory、MDP、rollout 这些词到底在说什么。
-
-当随机变量按时间排成一串，就有了随机过程。语言模型生成 token、机器人执行动作、世界模型预测未来、扩散模型逐步去噪，都可以看成某种过程。
+马尔可夫、转移概率、trajectory、MDP 和 rollout 描述随机过程如何随时间推进。语言模型生成 token、机器人执行动作、世界模型预测未来、扩散模型逐步去噪，都可以先看成按时间展开的随机变量序列。
 
 ## 随机过程：一串随时间变化的随机变量
 
@@ -31,7 +29,7 @@ P(X_{t+1}\mid X_t,X_{t-1},\dots,X_0)
 P(X_{t+1}\mid X_t)
 \]
 
-意思是：如果当前状态 \(X_t\) 已经包含了足够信息，那么预测下一步不需要再看更早历史。这里的关键不是“历史不重要”，而是“历史已经被当前状态总结了”。
+意思是：如果当前状态 \(X_t\) 已经包含了足够信息，那么预测下一步不需要再看更早历史。关键是历史信息已经被当前状态总结，而不是历史不重要。
 
 逐项读这行式子：
 
@@ -61,13 +59,13 @@ P(S_{t+1},R_t\mid S_t,A_t,H_t)
 P(S_{t+1},R_t\mid S_t,A_t).
 \]
 
-这行式子不是说历史从未发生过，而是说历史里所有会影响下一状态和奖励的信息，都已经压进 \(S_t\)。因此，Markov property 是“给定充分状态后的条件独立”，不是“系统没有记忆”。状态可以是物理世界的完整描述，也可以是从观测历史构造的统计量；单帧 observation 只有在它确实保留了预测未来所需的信息时，才可直接当作 state。
+这行式子的含义是：所有会影响下一状态和奖励的历史信息，都已经压进 \(S_t\)。因此，Markov property 是“给定充分状态后的条件独立”；它不要求系统没有记忆。状态可以是物理世界的完整描述，也可以是从观测历史构造的统计量；单帧 observation 只有在它确实保留了预测未来所需的信息时，才可直接当作 state。
 
 例如仓库机器人当前相机画面看不到货架后的叉车，但过去几帧记录了叉车的行进方向。丢掉历史的单帧图像不是充分状态；把位置、速度和遮挡信息汇总后的表示才更接近 state。state、observation 与交互数据流的边界见 [Agent、环境与训练闭环](../reinforcement-learning/rl-agent-environment-loop.md)。
 
 ![Markov chain](../assets/images/prerequisite-math/markov-chain.svg){ width="520" }
 
-<small>图源：[Wikimedia Commons: Markovkate 01](https://commons.wikimedia.org/wiki/File:Markovkate_01.svg)。原图展示状态之间按概率转移的马尔可夫链。本站用它说明：马尔可夫过程的核心是状态和转移概率，下一步由当前状态分布决定。</small>
+<small>图源：[Wikimedia Commons: Markovkate 01](https://commons.wikimedia.org/wiki/File:Markovkate_01.svg)。原图展示状态之间按概率转移的马尔可夫链。这里的重点是：马尔可夫过程的核心是状态和转移概率，下一步由当前状态分布决定。</small>
 
 ## 转移概率：从一个状态到另一个状态
 
@@ -133,7 +131,7 @@ J(\theta)=\mathbb{E}_{\tau\sim\pi_\theta}[R(\tau)]
 | \(R(s,a)\) | 奖励函数 |
 | \(\gamma\) | 折扣因子 |
 
-在这篇里，MDP 只需要先看成“状态、动作、转移、奖励、折扣”放在一起的框架。Bellman 方程是这个框架上的核心递推：当前价值可以拆成眼前奖励和未来价值。完整的 value、Q、TD error、advantage、PPO 和 GRPO，会在 [价值函数、策略梯度与强化学习目标](value-policy-and-rl-objectives.md) 里展开。
+这里先把 MDP 看成“状态、动作、转移、奖励、折扣”放在一起的框架。Bellman 方程是这个框架上的核心递推：当前价值可以拆成眼前奖励和未来价值。完整的 value、Q、TD error、advantage、PPO 和 GRPO，会在 [价值函数、策略梯度与强化学习目标](value-policy-and-rl-objectives.md) 里展开。
 
 如果 \(\gamma=0\)，系统只看眼前奖励；如果 \(\gamma\) 接近 1，系统会更重视长期后果。后面读 RLHF、PPO 或 VLA 闭环恢复时，很多差异都来自“奖励什么时候出现”和“未来价值怎么估”。
 
@@ -175,9 +173,3 @@ agent 只看到观测，看不到完整的潜在状态；遮挡、传感器噪�
 ## 读完以后怎么判断
 
 看到马尔可夫、trajectory、rollout、MDP 或 Bellman，先问：状态里包含什么，动作是否进入转移，奖励或目标在哪里，长时间误差会不会累积。这个问题链会直接支撑强化学习、世界模型和具身智能文章。
-
-## 相关阅读与下一步
-
-- 站内下一步：[MDP、价值函数与 Bellman](../reinforcement-learning/mdp-value-bellman.md)。
-- 站内下一步：[世界模型中的强化学习](../reinforcement-learning/rl-for-world-models.md)。
-- 站内下一步：[RSSM、Dreamer 与规划](../world-models/rssm-dreamer-and-planning.md)。
