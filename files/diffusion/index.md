@@ -14,6 +14,10 @@
 
 Stable Diffusion 中的 U-Net、DiT、VAE 和文本编码器属于系统组件；DDPM、Flow Matching 和 Consistency 属于训练或生成机制。把这两层混在一起，很容易误以为“换成 Transformer”就等于换了一种扩散目标。
 
+近年的 VAE-free / pixel-space diffusion 又把表示空间问题推回到台前。PixelGen、PixelDiT 直接在像素空间训练新底座，目标是绕开 VAE 重建误差和细节瓶颈，代价则转移到高维优化、token 数、感知监督和架构效率上。Z-Image-Pixel 又展示了阶段化路线：先在 latent space 高效预训练，再迁移到 pixel space 做 post-training，让 VAE-free 描述最终生成器，而不是限制整个训练历史。它们改的是“在哪个空间、哪个阶段扩散”，和“用 DDPM、Flow 还是少步蒸馏采样”属于不同层。
+
+DINO / DINOv2 / DINOv3 这类自监督视觉编码器又提供了第三种接口：不直接生成像素，也不替代 denoiser，而是作为冻结视觉老师、感知损失或评测特征，告诉生成模型哪些结构、对象和跨帧语义更值得保住。它常和 DiT、Flow、VAE-free、视频微调一起出现，但本质上改的是训练监督和表征约束。
+
 ## 训练与生成是两条不同的执行链
 
 ```mermaid
@@ -56,11 +60,13 @@ flowchart LR
 | 条件生成 | 文本、类别、结构条件如何进入网络，CFG 如何放大条件方向 | [条件控制与 Guidance](guidance-and-conditioning.md) |
 | 采样与求解器 | DDPM、DDIM、Euler、Heun、DPM-Solver 怎样离散同一方向场 | [采样与推理加速](inference.md) |
 | 少步与一步生成 | 蒸馏、一致性和分布匹配怎样把多步纠错压缩成大步映射 | [扩散蒸馏](distillation.md)、[Consistency 与 Flow 边界](consistency-models-and-rectified-flow.md) |
+| 表示空间与 VAE-free | 在 latent VAE、直接 pixel pre-training 和 latent-to-pixel post-training 之间选择 | [架构与 Stable Diffusion](architecture-and-stable-diffusion.md)、[PixelDiT 精读](../paper-deep-dives/diffusion/pixeldit.md)、[Z-Image-Pixel 精读](../paper-deep-dives/diffusion/z-image-pixel.md) |
+| DINO 与表示对齐 | 冻结视觉编码器怎样作为感知老师、REPA 目标、跨帧一致性约束或评测特征 | [架构与 Stable Diffusion](architecture-and-stable-diffusion.md)、[视频与多模态扩散](video-and-multimodal-diffusion.md) |
 | 训练排障 | 数据、VAE、SNR bucket、EMA、条件接口和真实采样回放怎样定位失败 | [训练配方与排障](practical-training-recipes-and-failure-analysis.md) |
-| 视频与多模态 | 时空表示、条件保持、运动一致性和长序列成本怎样改变扩散系统 | [视频与多模态扩散](video-and-multimodal-diffusion.md) |
+| 视频与多模态 | Video VAE、时空表示、条件保持、运动一致性和长序列成本怎样改变扩散系统 | [视频与多模态扩散](video-and-multimodal-diffusion.md) |
 | 方法选择 | 已有模型、重训预算、目标步数和质量约束怎样决定路线 | [扩散路线选择与方法对照](comparison-table.md) |
 
-这些分支不是互斥标签。例如一个现代文生视频系统可以同时采用 latent VAE、DiT、Flow Matching、CFG、ODE solver 和少步蒸馏；每个名字描述的是系统中的不同层。
+这些分支不是互斥标签。例如一个现代文生视频系统可以同时采用 latent VAE、DiT、Flow Matching、CFG、ODE solver 和少步蒸馏；一个 VAE-free 图像系统也可以同时采用 pixel-space DiT、Flow Matching、感知损失和高阶 solver。每个名字描述的是系统中的不同层。
 
 ## 按问题进入
 
@@ -69,6 +75,9 @@ flowchart LR
 | 为什么主动加噪反而能训练生成模型 | [基础与核心直觉](foundations-and-core-intuition.md) -> [DDPM 数学与训练](training.md) |
 | 预测噪声、预测 \(x_0\)、预测 score 和预测 velocity 有什么关系 | [DDPM 数学与训练](training.md) -> [噪声日程与参数化](noise-schedules-and-parameterization.md) |
 | Stable Diffusion 到底由哪些模块组成 | [架构与 Stable Diffusion](architecture-and-stable-diffusion.md) |
+| VAE-free 模型到底省掉了什么，又把成本放到了哪里 | [架构与 Stable Diffusion](architecture-and-stable-diffusion.md) -> [PixelDiT 精读](../paper-deep-dives/diffusion/pixeldit.md) -> [Z-Image-Pixel 精读](../paper-deep-dives/diffusion/z-image-pixel.md) |
+| DINO 在扩散生成里到底起什么作用 | [架构与 Stable Diffusion](architecture-and-stable-diffusion.md) -> [视频与多模态扩散](video-and-multimodal-diffusion.md) |
+| 为什么 Video VAE 的第一帧经常和后续帧质量不同 | [视频与多模态扩散](video-and-multimodal-diffusion.md) |
 | 如何亲手验证训练和反向采样链路 | [最小 DDPM 实现](minimal-ddpm-implementation.md) |
 | DDIM 为什么可以少走时间步 | [采样与推理加速](inference.md) |
 | Score SDE、Probability Flow ODE 和 DDPM 怎样对应 | [Score Matching 到 SDE](score-matching-sde-and-probability-flow.md) |

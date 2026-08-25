@@ -20,6 +20,14 @@ RAG、embedding、rerank、Agent、tool calling、LLM-as-judge、幻觉、安全
 **易错点 / 边界。** 不要背一个固定 chunk size。真实系统里 chunk size、overlap 和切分策略要靠检索评测和最终答案质量调。  
 **继续读。** [RAG、Agent 与长上下文系统](../inference/rag-agents-and-long-context-systems.md) / [数据与数据集基础](../foundations/data-and-dataset-basics.md)
 
+### Q：Query rewrite 和上下文拼接为什么会决定 RAG 上限？
+
+**面试回答。** Query rewrite 把用户问题变成适合检索的表达，可能补全实体、时间和过滤条件，也可能拆成多个子问题。上下文拼接负责去重、排序、保留来源并控制 token 预算。前者决定系统找什么，后者决定模型实际看到什么。
+
+**追问展开。** 多轮对话中，孤立的“它什么时候发布”必须先解析指代；复杂比较问题可能需要分别检索多个实体。召回后还要避免相互矛盾的版本、重复 chunk 和重要证据被截断。  
+**易错点 / 边界。** Rewrite 可能改坏原意，摘要也可能丢掉限定条件。应保存原始 query，并分别评估改写前后的 recall 与最终答案。  
+**继续读。** [RAG、Agent 与长上下文系统](../inference/rag-agents-and-long-context-systems.md) / [Prompt、CoT 与 RAG 基础](../foundations/prompt-engineering-cot-and-rag-basics.md)
+
 ### Q：Embedding 检索为什么可能召回错误内容？
 
 **面试回答。** Embedding 检索用向量相似度近似语义相关性，常用 cosine 或 dot product：

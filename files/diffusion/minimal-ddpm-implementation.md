@@ -9,6 +9,10 @@
 
 完整代码见 [`minimal_ddpm.py`](../assets/examples/diffusion/minimal_ddpm.py)，测试见 [`test_minimal_ddpm.py`](../assets/examples/diffusion/test_minimal_ddpm.py)。
 
+## 本文解决什么问题
+
+这篇文章把 DDPM 的数学对象落到最小可运行代码：schedule 怎样缓存系数，`q_sample` 怎样闭式构造带噪样本，denoiser 为什么要读时间，loss 怎样对应噪声预测，采样循环怎样逐步调用 `p_sample`。读完后应该能从公式跳到代码，再从代码回到公式检查每个张量的形状和边界。
+
 ## 前置知识
 
 - [扩散模型基础](foundations-and-core-intuition.md)：概率路径、局部预测与 sampler 的职责。
@@ -151,6 +155,6 @@ python files/assets/examples/diffusion/minimal_ddpm.py smoke
 4. 为什么网络输出 shape 必须与采样噪声相同？
 5. smoke test 能证明哪些性质，不能证明哪些性质？
 
-## 外部材料
+## 相关阅读与下一步
 
 - 原始来源：[DDPM](https://arxiv.org/abs/2006.11239)、[Improved DDPM](https://arxiv.org/abs/2102.09672)。

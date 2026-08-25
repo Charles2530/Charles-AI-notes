@@ -88,6 +88,14 @@
 **易错点 / 边界。** 数据量大不等于可用；动作、观测和任务标签必须对齐，且要能覆盖失败和恢复。  
 **继续读。** [VLA 数据与策略学习](../vla/data-and-policy-learning.md) / [资产、感知、抓取与轨迹流水线](../embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md)
 
+### Q：Behavior cloning 为什么离线拟合很好，闭环仍可能失败？
+
+**面试回答。** Behavior cloning 在专家轨迹分布上学习 \(\pi_\theta(a_t\mid o_{\le t},l)\)。部署后只要一个小动作偏差把机器人带到示范中少见的状态，后续观测分布就会继续偏移，模型缺少从错误状态恢复的监督，误差会在闭环中累积。
+
+**追问展开。** 缓解方法包括收集失败与恢复轨迹、DAgger 式数据聚合、动作扰动训练、闭环评测、risk head、offline RL 或在线微调。Action chunking 能减少高频决策次数，却不能自动解决分布外恢复。  
+**易错点 / 边界。** 离线 action accuracy 和 validation loss 只说明模型拟合示范数据，不能替代真实或仿真 closed-loop success。  
+**继续读。** [预训练目标与表示学习](../foundations/pretraining-objectives-and-representation-learning.md) / [VLA 数据与策略学习](../vla/data-and-policy-learning.md)
+
 ### Q：Open X-Embodiment 这类跨机器人数据集难在哪里？
 
 **面试回答。** 跨机器人数据集把不同机器人、传感器、动作空间、任务和环境的数据混在一起，规模更大，但异构性也更强。核心难点是动作标准化、观察对齐、任务语义统一和 embodiment gap。
@@ -112,6 +120,14 @@
 **易错点 / 边界。** 仿真 benchmark 成绩高不能直接代表真实机器人成功率；必须做 real-world eval 或至少做 domain gap 分析。  
 **继续读。** [Sim2Real 与具身数据引擎](../embodied-ai/sim2real-and-data-engines.md) / [IsaacSim 与 RoboTwin](../embodied-ai/isaacsim-and-robotwin.md)
 
+### Q：机器人 episode 里的 state、action 和时间戳为什么必须一起定义？
+
+**面试回答。** 机器人数据是一条时序契约。State 要说明传感器、关节、末端和任务状态，action 要说明控制对象、坐标系、单位、频率和执行语义，时间戳负责把相机、力传感器、proprioception 与控制命令对齐。缺少任一项，模型都可能学到错误的动作后果。
+
+**追问展开。** 数据集还应记录 episode 边界、成功条件、机器人本体、标定版本、控制延迟、丢帧和 reset 原因。训练前要检查 action 是命令值、执行后状态，还是两者的差分。  
+**易错点 / 边界。** 字段同名不代表语义相同。两个数据集都叫 `action`，可能分别表示关节位置、末端增量或速度，不能直接拼接。  
+**继续读。** [机器人 State / Action 数据](../embodied-ai/state-action-robot-datasets.md) / [VLA 数据与策略学习](../vla/data-and-policy-learning.md)
+
 ## 感知、几何与状态
 
 ### Q：机器人为什么需要深度、点云或 3D 几何？
@@ -129,6 +145,14 @@
 **追问展开。** 面试时可以按部署说：真实机器人常需要相机标定、深度置信度、遮挡处理和多视角融合。选择传感器不是只看模型分数，还要看环境和硬件。  
 **易错点 / 边界。** 深度图看起来合理不代表可用于精细操作；边缘、透明物体、反光物体和近距离接触都很难。  
 **继续读。** [相机、深度与机器人视觉](../embodied-ai/cameras-depth-and-robot-vision.md) / [双目匹配与 Cost Volume](../embodied-ai/stereo-matching-and-cost-volume.md)
+
+### Q：坐标变换和手眼标定为什么是机器人视觉的硬接口？
+
+**面试回答。** 相机得到的点位于 camera frame，控制器通常在 robot base 或 end-effector frame 下执行动作。坐标变换把这些 frame 串成同一条变换链，手眼标定估计相机与末端或基座之间的固定关系，让视觉目标能转换成机器人可执行位姿。
+
+**追问展开。** 读系统时应明确变换方向、右乘或左乘约定、单位、时间戳和标定版本，并检查闭环误差。Eye-in-hand 与 eye-to-hand 的未知变换不同，不能混用同一套公式。  
+**易错点 / 边界。** 感知网络输出很准，坐标链方向写反或标定漂移，机械臂仍会稳定地抓偏。  
+**继续读。** [坐标变换与手眼协调](../embodied-ai/coordinate-transforms-and-hand-eye-calibration.md) / [相机、深度与机器人视觉](../embodied-ai/cameras-depth-and-robot-vision.md)
 
 ### Q：几何感知和世界模型是什么关系？
 

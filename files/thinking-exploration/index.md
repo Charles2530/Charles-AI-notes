@@ -15,11 +15,13 @@
 | 为什么前沿模型的真实能力已经超出单个 checkpoint | [技术报告读后：前沿模型正在变成受约束的闭环](model-capability-is-a-constrained-loop.md) |
 | 端侧 AI、XR 芯片和量化部署有什么关系 | [XR2 Gen 2：端侧 AI 与量化部署](qualcomm-xr2-gen2.md) |
 | 自动驾驶里的世界模型如何从生成视频走向规划闭环 | [自动驾驶世界模型：从渲染、仿真到规划闭环](autonomous-driving-world-models.md) |
+| 自动驾驶世界模型为什么需要重建作为可审计状态接口 | [从生成视频到维护世界：重建为什么是自动驾驶世界模型的状态接口](reconstruction-as-world-model-state-interface-0724-1059.md) |
 | 世界模型如何从模型论文变成可复用工程栈 | [世界模型 Infra：从模型谱系到物理 AI 工程栈](world-model-infrastructure.md) |
 | 世界模型从视频模拟走向工程闭环卡在哪里 | [世界模型现状：从视频模拟到工程闭环](world-models-status-and-engineering-loop.md) |
 | WAM 为什么会和 3D 视觉合流 | [WAM 与 3D 视觉：世界模型从视频想象走向物理闭环](wam-3dv-world-models.md) |
 | World Model 的能力边界如何推出机器人数据飞轮 | [世界模型驱动的机器人数据飞轮：能持续生产经验的系统，才是真正的基础设施](robot-data-flywheel-world-models.md) |
 | 具身智能为什么总绕不开 VLA、数据工厂和真实闭环 | [具身智能现状：VLA、数据工厂与真实闭环](embodied-ai-status-and-real-world-loop.md) |
+| 为什么“更多机器人数据”不等于更强具身智能 | [具身智能的数据鸿沟：先对齐，再扩规模](embodied-ai-data-gap-alignment-and-scaling-0731-1219.md) |
 | 读 Fast-FoundationStereo 前要补哪些视觉和推理基础 | [读懂 Fast-FoundationStereo](fast-foundation-stereo-prerequisite-map.md) |
 
 ## 和专题页怎么配合

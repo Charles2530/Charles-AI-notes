@@ -6,6 +6,10 @@ DDPM 数学需要连接六个对象：逐步前向转移 \(q(x_t\mid x_{t-1})\)�
 
 这里采用离散时间、方差保持（variance preserving）DDPM 记号。连续噪声尺度、EDM preconditioning、score SDE 和 Flow Matching 分别使用不同公式边界。
 
+## 本文解决什么问题
+
+这篇文章把 DDPM 的前向高斯链、闭式边缘、可计算后验、噪声预测 loss 和逐步采样放到同一套记号里。目标不是背公式，而是知道训练时为什么能直接采样任意 \(x_t\)，为什么模型通常预测噪声，以及 sampler 怎样把网络输出还原成 \(p_\theta(x_{t-1}\mid x_t)\) 的更新。
+
 ## 前置知识
 
 - [扩散模型基础](foundations-and-core-intuition.md)：概率路径、局部预测和采样轨迹。
@@ -240,6 +244,6 @@ else:
 4. 简化 MSE 与完整变分下界是什么关系，为什么不能说二者逐项数值相等？
 5. 代码里将 \(\alpha_t\) 写成 \(\bar\alpha_t\) 会影响哪几个步骤？
 
-## 外部材料
+## 相关阅读与下一步
 
 - 原始来源：[DDPM](https://arxiv.org/abs/2006.11239)、[Improved DDPM](https://arxiv.org/abs/2102.09672)。

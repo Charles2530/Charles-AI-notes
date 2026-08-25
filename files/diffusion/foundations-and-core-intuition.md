@@ -6,6 +6,10 @@
 
 这里主要使用高斯噪声和连续数据作为例子。离散扩散、冷扩散和更一般的 stochastic interpolant 可以沿用“路径—局部目标—采样动力学”的框架，但具体转移核和训练目标不同。
 
+## 本文解决什么问题
+
+这篇文章先把扩散模型放回生成建模问题：模型学习的是数据分布，而不是修复某一张带噪图片。读完后应该能分清前向加噪为什么由人规定、训练监督为什么可构造、反向生成为什么必须从简单噪声分布出发，以及 DDPM、score-based model 和 Flow Matching 为什么能放在同一张路径图里比较。
+
 ## 前置知识
 
 需要区分随机变量、概率分布、条件概率和期望。相关定义见[概率论、分布与期望](../prerequisite-math/probability-distributions-and-expectation.md)与[潜变量、似然与生成目标](../prerequisite-math/latent-likelihood-and-generative-objectives.md)。神经网络部分只假定已知监督学习中的输入、目标、loss 和参数更新。
@@ -123,6 +127,6 @@ return x_0
 4. 为什么“从噪声开始”不等于噪声中预先藏着目标图像？
 5. Flow Matching 和 DDPM 都可以写成数据与噪声之间的路径，它们的监督目标为何仍不相同？
 
-## 外部材料
+## 相关阅读与下一步
 
 - [DDPM](https://arxiv.org/abs/2006.11239)、[Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)、[Step-by-Step Diffusion](https://arxiv.org/abs/2406.08929)。

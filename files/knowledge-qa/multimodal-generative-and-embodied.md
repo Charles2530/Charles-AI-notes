@@ -26,6 +26,14 @@ VLM、视觉连接器、扩散模型、视频生成和多模态评测的高频�
 **易错点 / 边界。** CLIP 不直接学习像素级定位、3D 几何、动作后果或长视频因果；相似度高不等于机器人能执行。  
 **继续读。** [VLM 架构：视觉表征、连接器与记忆](../vlm/architecture-and-training.md) / [CLIP 论文](https://arxiv.org/abs/2103.00020)
 
+### Q：多模态对齐为什么不等于多模态推理？
+
+**面试回答。** 对齐让图像、视频和文本中语义相关的表示能够互相匹配，解决模型能否把“红色杯子”和对应视觉区域联系起来。推理还要求模型保留具体证据，并完成计数、比较、空间关系、时间顺序或工具验证等组合操作。
+
+**追问展开。** CLIP 相似度可以证明全局图文匹配，却不能证明模型读准小字、找到接触点或理解动作后果。多模态 CoT 只是组织推理的工作区，证据是否正确仍要通过 grounding、OCR、计算器或环境反馈验证。  
+**易错点 / 边界。** 生成一段流畅解释不代表模型使用了图像证据；语言先验可能在视觉信息不足时补出看似合理的答案。  
+**继续读。** [多模态推理基础](../foundations/multimodal-cot-and-reasoning-basics.md) / [多模态评估与失败模式](../vlm/multimodal-evaluation-and-failure-modes.md)
+
 ### Q：视觉 tokenizer 和 connector 各自做什么？
 
 **面试回答。** 视觉 tokenizer/encoder 把图像或视频压成视觉 token，决定视觉信息保留的粒度；connector 把这些视觉 token 映射到 LLM 可读的表示空间，决定语言模型如何读取视觉证据。一个常见结构是 ViT encoder + linear projector 或 Q-Former。
@@ -108,6 +116,36 @@ q(x_t|x_0)=\mathcal{N}(\sqrt{\bar{\alpha}_t}x_0,(1-\bar{\alpha}_t)I)
 **追问展开。** 面试时要说清：加噪过程是人为定义的训练桥梁，去噪网络学的是每个噪声水平下如何往数据分布方向走。  
 **易错点 / 边界。** 去噪能力不等于理解物理因果；图像/视频自然不代表可以做规划。  
 **继续读。** [扩散训练与表示](../diffusion/training.md) / [DDPM](https://arxiv.org/abs/2006.11239)
+
+### Q：扩散模型预测 epsilon、x0、score 和 v 有什么区别？
+
+**面试回答。** 四种参数化描述的是同一个噪声状态下的不同坐标。Epsilon prediction 预测加入的噪声，\(x_0\) prediction 预测干净样本，score prediction 预测对数密度梯度，\(v\) prediction 则组合噪声与干净样本，让不同信噪比区间的训练尺度更均衡。
+
+**追问展开。** 给定噪声日程，这些目标可以相互换算，但优化权重、数值尺度和不同时间步的学习难度并不相同。选择参数化时应和 sampler、loss weighting、VAE latent scale 以及训练数据一起看。  
+**易错点 / 边界。** 数学上可转换不等于训练行为完全等价；同一网络容量和采样器下，梯度分布与误差放大方式会不同。  
+**继续读。** [噪声日程与参数化](../diffusion/noise-schedules-and-parameterization.md) / [Score Matching 到 SDE](../diffusion/score-matching-sde-and-probability-flow.md)
+
+### Q：噪声日程和 SNR 为什么会影响扩散训练？
+
+**面试回答。** 噪声日程决定每个时间步保留多少信号、加入多少噪声，SNR 则衡量当前状态里信号相对噪声的强度。它们共同决定模型在接近干净、结构成形和接近纯噪声的区间分别投入多少训练压力。
+
+**追问展开。** 高 SNR 区间更关注细节恢复，低 SNR 区间更关注从噪声建立全局结构。时间步采样和 loss weighting 如果失衡，模型可能在某一段学得很好，却在完整采样链里积累误差。  
+**易错点 / 边界。** 训练 loss 的均值会掩盖时间步差异。应按 SNR 或 timestep 分桶看误差，并用真实采样回放验证。  
+**继续读。** [噪声日程与参数化](../diffusion/noise-schedules-and-parameterization.md) / [扩散训练配方与失败分析](../diffusion/practical-training-recipes-and-failure-analysis.md)
+
+### Q：VAE 的 ELBO 在平衡什么？
+
+**面试回答。** VAE 用近似 posterior \(q_\phi(z\mid x)\) 编码样本，再从 latent 生成观测。ELBO 包含 reconstruction likelihood 和 KL 两部分，前者要求 latent 能解释当前样本，后者让 posterior 接近统一 prior，保证采样时从 prior 取得的 latent 仍能被 decoder 使用。
+
+\[
+\mathcal{L}_{\text{ELBO}}=
+\mathbb{E}_{q_\phi(z\mid x)}[\log p_\theta(x\mid z)]
+-\operatorname{KL}(q_\phi(z\mid x)\|p(z))
+\]
+
+**追问展开。** KL 太弱时 latent 可能分散且难以从 prior 采样，KL 太强时 decoder 可能忽略 latent，出现 posterior collapse。重参数化把随机采样改写成参数与独立噪声的可微变换，让 encoder 获得梯度。  
+**易错点 / 边界。** 重建质量高不代表 latent 适合语义、控制或规划；它也可能主要保存纹理和压缩细节。  
+**继续读。** [概率与潜变量模型](../foundations/probability-latent-variables-and-generative-models.md) / [潜变量、似然与生成目标](../prerequisite-math/latent-likelihood-and-generative-objectives.md)
 
 ### Q：Latent Diffusion 为什么要在 latent space 里生成？
 

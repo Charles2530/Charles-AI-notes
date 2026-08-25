@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI answer renderer browser test</title>
+  <link rel="stylesheet" href="../../files/assets/stylesheets/extra.css">
+</head>
+<body>
+  <main id="answer" class="atlas-ai-answer"></main>
+  <pre id="result" aria-live="polite">RUNNING</pre>
+  <script src="../../files/assets/javascripts/vendor/marked/marked.umd.js"></script>
+  <script src="../../files/assets/javascripts/vendor/dompurify/purify.min.js"></script>
+  <script src="../../files/assets/javascripts/ai-answer-renderer.min.js"></script>
+  <script>
+    "use strict";
+    window.__atlasXss = false;
+
+    function assert(condition, name) {
+      if (!condition) throw new Error(name);
+      return name;
+    }
+
+    window.addEventListener("load", () => {
+      const answer = document.querySelector("#answer");
+      const dangerousScript = "<scr" + "ipt>window.__atlasXss=true</scr" + "ipt>";
+      const markdown = [
+        "## Browser behavior",
+        "",
+        "| A | B |",
+        "|---|---|",
+        "| 1 | 2 |",
+        "",
+        "- [x] complete",
+        "",
+        "[safe](https://example.com/) [unsafe](javascript:window.__atlasXss=true)",
+        "",
+        "Inline $x+y$ and \\(a+b\\).",
+        "",
+        "$$",
+        "c=d",
+        "$$",
+        "",
+        "\\[",
+        "e=f",
+        "\\]",
+        "",
+        dangerousScript,
+        '<img src="https://example.com/tracker.png" onerror="window.__atlasXss=true">',
+        '<iframe src="https://example.com/"></iframe>',
+        '<form><input type="text" value="spoof"></form>'
+      ].join("\n");
+
+      try {
+        window.AtlasAIAnswerRenderer.render(answer, markdown);
+        const external = answer.querySelector('a[href^="https://example.com"]');
+        const checks = [
+          assert(answer.querySelectorAll(".atlas-ai-table-scroll table").length === 1, "table wrapper"),
+          assert(answer.querySelectorAll('.task-list-item input[type="checkbox"]:disabled').length === 1, "task checkbox"),
+          assert(answer.querySelectorAll(".arithmatex").length === 4, "four math delimiters"),
+          assert(external && external.target === "_blank" && external.rel === "noopener noreferrer", "external link safety"),
+          assert(!answer.querySelector('script, img, iframe, form, input:not([type="checkbox"]), [onerror], a[href^="javascript:"]') && !window.__atlasXss, "dangerous markup removed"),
+          assert(getComputedStyle(answer.querySelector("span.arithmatex")).overflowX === "auto", "inline math overflow")
+        ];
+        document.querySelector("#result").textContent = `PASS\n${checks.join("\n")}`;
+        document.body.dataset.status = "passed";
+      } catch (error) {
+        document.querySelector("#result").textContent = `FAIL\n${error.message}`;
+        document.body.dataset.status = "failed";
+        throw error;
+      }
+    });
+  </script>
+</body>
+</html>

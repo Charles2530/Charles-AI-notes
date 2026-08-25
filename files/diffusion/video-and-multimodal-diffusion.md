@@ -49,9 +49,59 @@ z\in\mathbb{R}^{T'\times H'\times W'\times C}
 
 <small>图源：[Wan: Open and Advanced Large-Scale Video Generative Models](https://arxiv.org/abs/2503.20314)，Figure 4。原图展示 Wan-VAE 如何把输入视频压到时空 latent，再解码回视频。读图重点：先看橙色时空压缩块和蓝色空间压缩块；视频 tokenizer 不是逐帧图像 VAE，而是在时间和空间上共同决定后端模型能看见什么。</small>
 
-这张图最重要的是中间 latent 的形状：Wan-VAE 把视频压成 \([1+T/4,H/8,W/8,C]\) 这类更短的时空表示。时间压缩让训练成本下降，但也带来风险：压缩率越激进，越容易丢掉短时接触、快速运动和细微表情。视频论文里的 VAE 重建指标、时空压缩率、chunk cache、因果性和首帧处理，不是附录小事，而是质量地基。
+这张图最重要的是中间 latent 的形状。Wan-VAE 这类设计会把首帧和后续时间块压成更短的时空表示，常见读法是首帧单独保留，后续每 4 帧形成一个 temporal latent。时间压缩让训练成本下降，但也带来风险：压缩率越激进，越容易丢掉短时接触、快速运动和细微表情。视频论文里的 VAE 重建指标、时空压缩率、chunk cache、因果性和首帧处理，不是附录小事，而是质量地基。
 
 因此读视频模型时，第一问应该是：它的 tokenizer 在时间上压了多少，第一帧是否特殊处理，重建是否只看单帧清晰度，还是也检查跨帧一致性。
+
+### Video VAE / Causal VAE 里的首帧边界
+
+图像 VAE 只需要把一张图压到 latent 再解码回来。Video VAE 多做了一件事：把若干帧在时间上合并到更短的 latent 序列里。常见形状可以写成：
+
+\[
+T_{\text{latent}}
+=
+1+\left\lfloor\frac{T-1}{r}\right\rfloor
+\]
+
+\(r\) 是 temporal compression ratio。这里的第一个 \(1\) 很关键。它表示第一帧常常先形成一个单独 latent，后面的帧再按 \(r\) 帧一组进入时间压缩。Wan 的开源 VAE 代码就是按 `1,4,4,4...` 切输入时间块，因此实际使用时会经常遇到 `num_frames - 1` 需要匹配 4 倍时间压缩的约束。
+
+```text
+Frame 0       -> latent 0
+Frame 1..4    -> latent 1
+Frame 5..8    -> latent 2
+Frame 9..12   -> latent 3
+```
+
+这样第一帧更接近 image VAE reconstruction，后续 latent 更接近 spatiotemporal reconstruction。第一帧只需要承受空间压缩，后续 latent 还要同时表示外观、纹理、运动、遮挡和帧间对应关系。若只看单帧重建，首帧更清楚、后续帧略软或高速区域更糊，是很自然的结果。
+
+Causal 3D convolution 又会给首帧加一层边界条件。causal encoder 只能读取当前帧和过去帧：
+
+\[
+z_t=f(x_{\le t})
+\]
+
+第一帧没有历史帧，通常要用 temporal padding 或 cache 的初始状态补齐卷积窗口。
+
+```text
+pad  pad  x0  -> z0
+pad  x0   x1  -> z1
+x0   x1   x2  -> z2
+x1   x2   x3  -> z3
+```
+
+如果实现用 zero padding，第一帧可能更差，表现为偏色、亮度漂移或边界模糊；如果第一帧独立编码、replicate padding 或单独保留 keyframe，第一帧往往更好。IV-VAE 论文把这个问题概括为 causal reasoning 带来的帧间信息交互不均衡，并用 keyframe-based temporal compression 和 group causal convolution 去缓解。
+
+| VAE 设计 | 首帧常见现象 | 排查重点 |
+| --- | --- | --- |
+| 首帧独立 latent，后续按 \(r\) 帧压缩 | 首帧更像图像重建，细节通常更稳 | 首帧和后续帧的 LPIPS / PSNR / 频谱差异 |
+| 普通 causal conv 加 zero padding | 首帧可能偏色、变暗或变糊 | padding、cache 初始化、第一块 decode |
+| replicate / reflection padding | 首帧差异减小 | 边界帧是否仍有重复纹理或亮度跳变 |
+| non-causal 或 symmetric VAE | 首帧特殊性较弱 | 是否牺牲流式编码和前缀生成能力 |
+| keyframe / group causal 设计 | 试图兼顾关键帧保真和时间压缩 | keyframe 分支与 temporal 分支的容量分配 |
+
+这一点会继续传到生成模型。DiT 训练的不是 RGB 视频，而是 \(z=E(x)\)。如果 \(z_0\) 来自首帧特殊路径，\(z_{t>0}\) 来自 temporal-compressed 路径，后端 denoiser 实际面对的是两个略有差异的 latent 分布。生成时看到“第一帧质量不同”，来源可能既有 VAE reconstruction boundary，也有 DiT 学到的 latent distribution boundary。
+
+对 Wan、HunyuanVideo、CogVideoX、Cosmos 这类使用 3D VAE 或 temporally causal tokenizer 的系统，工程上不要默认 `latent[:, :, 0]` 和后续 temporal latent 完全同分布。首帧 latent 的量化、cache 复用、VAE chunk 切分、temporal tiling 和长视频拼接，都应单独做重建回放和指标分桶。
 
 ## 第二接口：时空主干要决定谁和谁交换信息
 
@@ -90,6 +140,23 @@ spatial attention 主要看一帧内部的物体、布局和关系；temporal at
 | 动作/控制 | 不同动作导致不同未来 | 视频好看但 action insensitive |
 
 对于内容生成，条件漂移是观感问题；对于世界模型和机器人，这会变成因果问题。如果同一段历史视频在不同动作条件下生成出几乎一样的未来，画面再清晰也不能用于规划。
+
+## DINO 在视频生成里通常做什么
+
+很多视频生成论文会提到 DINO，原因不只是“DINO 特征强”。视频扩散的难点在于，模型既要生成每一帧的像素，又要让同一个主体、同一个动作和同一个场景关系跨帧延续。VAE latent 和 denoising loss 给了模型可训练目标，但它们未必直接告诉模型哪些视觉结构最应该稳定。DINO / DINOv2 / DINOv3 这类视觉基础模型，常被简称为 VFM（Vision Foundation Model），可以提供对象、部件和布局特征，放在训练或评测链路里当参照。
+
+最常见的用法有四类。
+
+| 用法 | 怎么接入视频扩散 | 解决什么问题 | 主要边界 |
+| --- | --- | --- | --- |
+| 帧级 REPA | 把每帧或采样帧的 DiT hidden state 对齐到冻结 DINO 特征 | 加快训练，增强对象和空间结构表征 | 逐帧对齐可能不够约束跨帧一致性 |
+| 跨帧表示对齐 | 让某一帧 hidden state 对齐邻近帧或参考帧的外部视觉特征 | 减少视频微调后的主体漂移和语义跳变 | 对齐过强可能压低运动变化 |
+| DINO perceptual / semantic loss | 在预测帧或 \(x_0\) 上比较 DINO patch features | 保住全局语义和主体结构，弥补像素或 VAE loss 的盲区 | 不直接保证文字、物理接触和细粒度时序 |
+| DINO 相似度评测 | 比较同 prompt 不同样本或前后帧的特征距离 | 读多样性、身份一致性或编辑保真 | 只能作为辅助读数，不能替代人评和任务评测 |
+
+CREPA 这类工作说明了一个细节：把图像 REPA 直接搬到视频里，收敛会变好，但跨帧语义一致性仍可能不足；因此它改成 cross-frame representation alignment，让当前帧的 hidden state 对齐邻近帧的外部视觉特征。Align4Gen 则从另一个角度看同一件事：不同自监督视觉编码器在 discriminability 和 temporal consistency 上并不一样，视频生成不能只问特征是否适合图像分类，还要问它在时间上是否稳定。
+
+所以读视频生成里的 DINO，要先问它放在哪个位置。如果它只在训练时作为 auxiliary loss，推理成本通常不会增加；如果它进入参考图分支或控制分支，就可能改变推理图；如果它只作为 DINOv3 cosine similarity 一类评测指标，它不能证明生成模型真的理解动作，只是在某个视觉特征空间里比较样本距离。
 
 ## 第四接口：Flow、少步蒸馏和视频成本是绑在一起的
 
@@ -181,6 +248,8 @@ Wan 的价值更像一个开放的视频 foundation model 配方：视频 VAE / 
 | 运动合理性 | 步态、相机、接触、速度变化 | motion smoothness、dynamic degree、人工分桶 |
 | 条件遵循 | prompt、首帧、姿态、音频、动作 | text alignment、I2V consistency、控制误差 |
 | 长时稳定 | 事件顺序、漂移、滚动生成退化 | 长视频分段评测、prefix consistency |
+| VAE 边界 | 首帧、chunk 边界、temporal tiling 拼接处 | per-frame PSNR / LPIPS、亮度曲线、频谱、局部 crop |
+| 表示对齐 | DINO / VFM 特征里的主体、布局和语义距离 | DINO cosine、cross-frame feature distance、同主体检索 |
 | 部署成本 | 步数、首帧延迟、吞吐、显存 | NFE、P50/P95 latency、peak memory |
 
 VBench 这类 benchmark 有价值，因为它把视频质量拆成多个维度，而不是只给一个总分。但自动指标仍不能替代人评和任务评测。尤其是世界模型或机器人场景，open-loop 视频自然度不能直接推出 closed-loop utility。
@@ -204,6 +273,13 @@ VBench 这类 benchmark 有价值，因为它把视频质量拆成多个维度�
 - [Lumiere](https://arxiv.org/abs/2401.12945)：理解一次性生成完整时长视频和 Space-Time U-Net 的取舍。
 - [Sora technical report](https://openai.com/index/video-generation-models-as-world-simulators/)：把视频生成和世界模拟器关系放在一起读，但要保守区分 open-loop 和 closed-loop。
 - [Wan technical report](https://arxiv.org/abs/2503.20314)：看现代开源视频基础模型如何组织 VAE、Video DiT、Flow Matching、多任务和系统训练。
+- [Wan2.1 VAE implementation](https://github.com/Wan-Video/Wan2.1/blob/main/wan/modules/vae.py)：对照 `1,4,4...` 时间切块、causal conv、cache 和 decode 逻辑。
+- [Improved Video VAE](https://arxiv.org/abs/2411.06449)：理解 causal VAE 的帧间信息不均衡、keyframe-based temporal compression 和 group causal convolution。
+- [Cosmos Tokenizer](https://research.nvidia.com/labs/cosmos-lab/cosmos-tokenizer/)：看 temporally causal tokenizer 如何统一图像和视频 tokenization。
+- [DINOv3](https://arxiv.org/abs/2508.10104)：理解 DINO 系列视觉基础模型为何常被用作 dense visual feature reference。
+- [CREPA](https://arxiv.org/abs/2506.09229)：看 REPA 如何扩展到视频微调中的跨帧语义一致性。
+- [Align4Gen](https://arxiv.org/abs/2509.09547)：看自监督视觉编码器特征如何用于视频 DiT 的多特征融合与对齐。
+- [RefAlign](https://arxiv.org/abs/2603.25743)：看参考图到视频生成里，视觉基础模型特征如何约束 reference branch。
 - [Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952)：理解 Flow Matching 接入 GRPO 时，随机性、scheduler 噪声水平和 reward 可靠性为什么必须一起看。
 - [VBench](https://arxiv.org/abs/2311.17982)：理解视频生成评测为什么必须拆 temporal quality、motion、alignment 等维度。
 - [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解扩散思想怎样迁移到动作序列生成。

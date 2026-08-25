@@ -22,6 +22,8 @@
 | Progressive Distillation / Consistency / LCM | 需要教师或蒸馏训练 | 线上网络评估次数 | 学生把教师的纠错过程压扁，局部纹理和多样性下降 | 交互式预览、4 到 8 步生成 |
 | DMD / DMD2 / Phased DMD | 需要更重训练 | 整条采样轨迹 | 分布匹配不稳，容易出现安全但单调的输出 | 一步或两步高质量生成研究 |
 | Flow Matching / Rectified Flow | 通常是新底座训练 | 路径弯曲带来的积分成本 | 路径、时间采样、条件注入都要重新设计 | 新训练 latent flow、视频或多模态生成底座 |
+| VAE-free / pixel-space diffusion | 新底座训练，或 latent-to-pixel 后训练 | VAE 重建瓶颈和部署端 decode | 像素 pre-training 慢，token、目标、噪声与 decoder 都要重新设计 | 小字、纹理、局部编辑敏感，或已有强 latent checkpoint 的图像系统 |
+| DINO / VFM representation alignment | 通常需要训练或微调 | 表示学习和语义一致性 | 只约束视觉特征，不直接解决文本、物理和运动 | DiT 加速训练、视频 LoRA 微调、参考图视频一致性 |
 
 ## 不重训时，先把采样器榨干
 
@@ -57,6 +59,16 @@ Rectified Flow 和 Rectified Diffusion 的核心不是简单宣称“直线最�
 
 但它不是旧扩散模型的万能替代品。新的路径目标会影响时间采样、损失权重、条件注入、CFG 行为和蒸馏接口。对视频尤其如此：减少采样步数只是总成本的一部分，时空 token、注意力缓存、条件编码器和解码器同样可能成为瓶颈。
 
+## 瓶颈在 VAE 时，看表示空间
+
+Latent diffusion 的核心收益来自压缩。VAE 把高分辨率图像变成更短的 latent 网格，后面的 U-Net 或 DiT 才能承受训练和采样成本。这个收益有上限：VAE reconstruction 会先决定小字、细线、纹理和局部编辑背景能保留多少，生成模型很难凭空补回编码时已经损坏的细节。
+
+VAE-free pixel-space diffusion 把这层瓶颈拿掉。PixelGen 的选择是保留简单的像素空间 DiT 接口，用 LPIPS 和 DINO 感知监督把训练目标拉向 perceptual manifold，避免模型平均用力去拟合不可感知的像素扰动。PixelDiT 的选择是改架构，把全局语义交给 patch-level DiT，把局部纹理交给 pixel-level DiT，再用 compaction 控制 attention 成本。
+
+[Z-Image-Pixel](../paper-deep-dives/diffusion/z-image-pixel.md) 补上了第三种工程路线：先在 latent space 预训练，再迁移权重做 pixel post-training。它的受控实验把两边都设成相同的 $64\times64$ token grid，并使用超过 20B 图文对，pixel pre-training 在 matched compute 下仍收敛更慢。这个结果说明 VAE 不只是压缩计算，也提供了更容易优化的 learned representation。因而 VAE-free 可以是最终生成器和部署形态，不必要求整个训练历史从未使用 VAE。
+
+这一路线适合先问四个问题：任务是否真的受 VAE 细节损失限制；是从头 pixel pre-training，还是复用强 latent checkpoint；训练预算能否覆盖像素空间更高的优化难度；最终服务延迟是被 VAE decode 卡住，还是被 denoiser 前向、CFG 分支和采样步数卡住。答案若偏向后者，VAE-free 不会自动变成最快路线。Z-Image-Pixel 的结果也显示，单独改成 pixel output 只有约 1.10x 加速，3x-5x 级收益还依赖 larger patch 与少步蒸馏。
+
 ## 按约束选，而不是按名气选
 
 已有 Stable Diffusion 或同类模型，目标是把线上延迟从几秒压到一秒左右，先试 DPM-Solver++、Euler、Heun 和更合适的时间表。这个阶段的收益最快，也最容易保持 LoRA、ControlNet、adapter 和 prompt 工作流的兼容。
@@ -66,6 +78,10 @@ Rectified Flow 和 Rectified Diffusion 的核心不是简单宣称“直线最�
 目标是一步高质量生成，且能承担训练预算和失败分析，才进入 DMD2、Phased DMD、Rectified Diffusion 这类路线。这里不要期待一个 solver 参数解决问题，需要配套的训练、判别信号、教师、正则和评估集。
 
 目标是从头训练视频、多模态或 latent flow 底座，Flow Matching / Rectified 路线更值得认真评估。它们改的是生成路径和速度场，不是只换最后的采样器；因此要把模型结构、数据、条件控制和部署成本放在同一张表里算。
+
+目标是摆脱 VAE 对文字、纹理和局部编辑的限制，才进入 VAE-free / pixel-space 路线。从头训练新底座，可以评估 PixelGen 的感知监督或 PixelDiT 的双层级架构；已经有强 latent checkpoint，则应优先评估 latent-to-pixel post-training，避免重复支付大规模 pixel pre-training 的优化成本。验收时要同时看重建敏感区域、生成质量、NFE、GFLOPs、显存峰值、VAE decode 占比和端到端延迟。
+
+目标是让视频微调更快、更稳，或者让主体跨帧不容易漂，可以考虑 REPA、CREPA、Align4Gen、RefAlign 这类 DINO / VFM representation alignment。这里的 VFM 指 Vision Foundation Model。它们通常不改变 sampler，也不必增加推理成本；代价是训练中多了冻结编码器前向、层选择、loss 权重和抽帧策略。验收时不要只看 DINO 相似度，要同时看运动幅度、prompt alignment、身份一致性和人评。
 
 ## 验收看失败桶
 
@@ -83,6 +99,8 @@ Rectified Flow 和 Rectified Diffusion 的核心不是简单宣称“直线最�
 - [Progressive Distillation](https://arxiv.org/abs/2202.00512)、[Consistency Models](https://arxiv.org/abs/2303.01469) 与 [Latent Consistency Models](https://arxiv.org/abs/2310.04378)：理解少步学生如何替代长轨迹教师。
 - [DMD](https://arxiv.org/abs/2311.18828)、[DMD2](https://arxiv.org/abs/2405.14867) 与 [Phased DMD](https://arxiv.org/abs/2510.27684)：理解一步/少步分布匹配路线的训练难点。
 - [Flow Matching](https://arxiv.org/abs/2210.02747)、[Rectified Flow](https://arxiv.org/abs/2209.03003) 与 [Rectified Diffusion](https://arxiv.org/abs/2410.07303)：理解路径和速度场重写为什么会影响少步采样。
+- [PixelGen](https://arxiv.org/abs/2602.02493)、[PixelDiT](https://arxiv.org/abs/2511.20645) 与 [Z-Image-Pixel](https://arxiv.org/abs/2608.16887)：理解 VAE-free / pixel-space diffusion 如何把瓶颈从 autoencoder 转移到感知监督、像素 token 建模或阶段化后训练。
+- [REPA](https://arxiv.org/abs/2410.06940)、[CREPA](https://arxiv.org/abs/2506.09229) 与 [Align4Gen](https://arxiv.org/abs/2509.09547)：理解 DINO / VFM 表示对齐怎样改变训练监督，而不是直接改变采样器。
 
 - [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
 - [DDPM 论文](https://arxiv.org/abs/2006.11239)。

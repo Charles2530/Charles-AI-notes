@@ -11,5 +11,6 @@ __pycache__/
 tmp/
 .firecrawl/
 .superpowers/
+.env.local
 .mkdocs-serve.log
 .mkdocs-serve-*.log

@@ -1,6 +1,10 @@
 (function () {
   const STORAGE_KEY = "atlas-reading-preferences";
   const SIDEBAR_NAV_STORAGE_KEY = "atlas-sidebar-nav-open-topics";
+  const ATLAS_READING_STATUS_STORAGE_KEY = "atlas-reading-status";
+  const ATLAS_GLOSSARY_MASTERY_STORAGE_KEY = "atlas-glossary-mastery";
+  const READ_MARKER_CLASS = "atlas-nav-read-status--read";
+  const UNREAD_MARKER_CLASS = "atlas-nav-read-status--unread";
 
   function loadPrefs() {
     try {
@@ -52,6 +56,38 @@
   function saveSidebarNavState(state) {
     try {
       localStorage.setItem(SIDEBAR_NAV_STORAGE_KEY, JSON.stringify(state));
+    } catch (_) {
+      // Ignore storage failures in private browsing or locked environments.
+    }
+  }
+
+  function loadReadingStatus() {
+    try {
+      return JSON.parse(localStorage.getItem(ATLAS_READING_STATUS_STORAGE_KEY) || "{}");
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveReadingStatus(status) {
+    try {
+      localStorage.setItem(ATLAS_READING_STATUS_STORAGE_KEY, JSON.stringify(status));
+    } catch (_) {
+      // Ignore storage failures in private browsing or locked environments.
+    }
+  }
+
+  function loadGlossaryMastery() {
+    try {
+      return JSON.parse(localStorage.getItem(ATLAS_GLOSSARY_MASTERY_STORAGE_KEY) || "{}");
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveGlossaryMastery(status) {
+    try {
+      localStorage.setItem(ATLAS_GLOSSARY_MASTERY_STORAGE_KEY, JSON.stringify(status));
     } catch (_) {
       // Ignore storage failures in private browsing or locked environments.
     }
@@ -414,6 +450,79 @@
     if (!ok) throw new Error("copy failed");
   }
 
+  function setGlossaryMasteryButtonState(button, mastered) {
+    button.classList.toggle("atlas-glossary-mastery-button--mastered", mastered);
+    button.textContent = "";
+    button.title = mastered ? "已掌握，点击标记为未掌握" : "未掌握，点击标记为已掌握";
+    button.setAttribute("aria-pressed", String(mastered));
+    button.setAttribute("aria-label", button.title);
+  }
+
+  function mountGlossaryMasteryControls() {
+    const path = window.location.pathname.replace(/\/index\.html$/, "/");
+    if (!path.endsWith("/glossary/")) return;
+
+    const mastery = loadGlossaryMastery();
+    document.querySelectorAll(".md-content__inner table").forEach((table) => {
+      const headerRow = table.tHead && table.tHead.rows[0];
+      const headerCells = headerRow ? headerRow.cells : [];
+      if (headerCells.length < 2) return;
+      const existingStatusHeader = Array.from(headerCells).find((cell) => cell.classList.contains("atlas-glossary-status-column"));
+      if (headerCells[0].textContent.trim() !== "术语" || (!existingStatusHeader && headerCells[1].textContent.trim() !== "含义")) return;
+
+      table.dataset.atlasGlossary = "true";
+      let statusHeader = existingStatusHeader;
+      if (!statusHeader) {
+        statusHeader = document.createElement("th");
+        statusHeader.className = "atlas-glossary-status-column";
+        statusHeader.scope = "col";
+        headerRow.insertBefore(statusHeader, headerCells[1]);
+      }
+      statusHeader.textContent = "";
+      statusHeader.setAttribute("aria-label", "掌握状态");
+
+      Array.from(table.tBodies).forEach((body) => {
+        Array.from(body.rows).forEach((row) => {
+          const termCell = row.cells[0];
+          if (!termCell) return;
+
+          const term = termCell.textContent.replace(/\s+/g, " ").trim();
+          if (!term) return;
+
+          let statusCell = Array.from(row.cells).find((cell) => cell.classList.contains("atlas-glossary-status-column"));
+          if (!statusCell) {
+            statusCell = document.createElement("td");
+            statusCell.className = "atlas-glossary-status-column";
+            row.insertBefore(statusCell, row.cells[1]);
+          }
+
+          let button = statusCell.querySelector(".atlas-glossary-mastery-button");
+          if (!button) {
+            button = document.createElement("button");
+            button.type = "button";
+            button.className = "atlas-glossary-mastery-button";
+            button.addEventListener("click", () => {
+              const current = loadGlossaryMastery();
+              const mastered = !Object.prototype.hasOwnProperty.call(current, term);
+
+              if (mastered) {
+                current[term] = { masteredAt: new Date().toISOString() };
+              } else {
+                delete current[term];
+              }
+
+              saveGlossaryMastery(current);
+              setGlossaryMasteryButtonState(button, mastered);
+            });
+            statusCell.appendChild(button);
+          }
+
+          setGlossaryMasteryButtonState(button, Object.prototype.hasOwnProperty.call(mastery, term));
+        });
+      });
+    });
+  }
+
   function mountTableCopyButtons() {
     document.querySelectorAll(".md-typeset table").forEach((table) => {
       if (table.closest(".atlas-table-wrap")) return;
@@ -607,6 +716,52 @@
     return { href, label: label || href, key: normalizeUrl(anchor.href) };
   }
 
+  function markCurrentPageRead() {
+    const current = normalizeUrl(window.location.href);
+    const status = loadReadingStatus();
+
+    status[current] = Object.assign({}, status[current], {
+      readAt: new Date().toISOString()
+    });
+    saveReadingStatus(status);
+  }
+
+  function clearSidebarReadingMarker(anchor) {
+    Array.from(anchor.children)
+      .filter((child) => child.classList.contains("atlas-nav-read-status"))
+      .forEach((child) => child.remove());
+    anchor.classList.remove("atlas-nav-link--read", "atlas-nav-link--unread");
+    delete anchor.dataset.atlasReadingState;
+  }
+
+  function markSidebarReadingState() {
+    const primary = document.querySelector(".md-sidebar--primary");
+    if (!primary) return;
+
+    const status = loadReadingStatus();
+    const current = normalizeUrl(window.location.href);
+
+    primary.querySelectorAll("a.md-nav__link[href]").forEach((anchor) => {
+      clearSidebarReadingMarker(anchor);
+
+      const info = navLinkInfo(anchor);
+      if (!info) return;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+
+      const read = info.key === current || Object.prototype.hasOwnProperty.call(status, info.key);
+      const marker = document.createElement("span");
+      marker.className = `atlas-nav-read-status ${read ? READ_MARKER_CLASS : UNREAD_MARKER_CLASS}`;
+      marker.setAttribute("aria-hidden", "true");
+      marker.title = read ? "已读" : "未读";
+
+      anchor.classList.add(read ? "atlas-nav-link--read" : "atlas-nav-link--unread");
+      anchor.dataset.atlasReadingState = read ? "read" : "unread";
+      anchor.insertBefore(marker, anchor.firstChild);
+    });
+  }
+
   function adjacentFromPrimaryNav() {
     const links = Array.from(document.querySelectorAll(".md-sidebar--primary a.md-nav__link[href]"));
     const seen = new Set();
@@ -747,10 +902,13 @@
     if (!document.body) return;
     markPageContext();
     markSidebarTopicNav();
+    markCurrentPageRead();
+    markSidebarReadingState();
     softenNumberedHeadings();
     mountReadingProgress();
     mountReaderControls();
     mountPaperDeepDiveSorting();
+    mountGlossaryMasteryControls();
     mountTableCopyButtons();
     mountTopicRelatedLinks();
     mountPageNav();

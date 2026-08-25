@@ -6,6 +6,10 @@ Flow Matching 可以分成四层读：条件概率路径怎样构造可监督的
 
 全文采用 \(t=0\) 为数据、\(t=1\) 为噪声的约定，生成从 \(t=1\) 反向积分到 \(t=0\)。部分论文采用相反时间方向，比较公式前必须先统一约定。
 
+## 本文解决什么问题
+
+这篇文章说明 Flow Matching 和 Rectified Flow 怎样把扩散式生成改写成速度场学习。重点是区分 conditional velocity 与 marginal velocity，理解为什么训练可以用配对样本构造监督，而生成时只沿 ODE 积分；再看 reflow 如何通过降低路径曲率，让有限步采样更容易。
+
 ## 前置知识
 
 - [扩散模型基础](foundations-and-core-intuition.md)：概率路径、网络目标与 sampler。
@@ -153,6 +157,6 @@ flowchart TB
 4. Flow velocity、DDPM \(v\)-prediction 和视频物体运动速度分别描述什么？
 5. Rectified Flow 减少曲率后，为什么仍不能保证一步生成无损？
 
-## 外部材料
+## 相关阅读与下一步
 
 - [Flow Matching for Generative Modeling](https://arxiv.org/abs/2210.02747)、[Flow Matching Guide and Code](https://arxiv.org/abs/2412.06264)、[Flow Straight and Fast](https://arxiv.org/abs/2209.03003)。

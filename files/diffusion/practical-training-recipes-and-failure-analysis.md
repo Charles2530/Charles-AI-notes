@@ -27,6 +27,8 @@ w(t)\|\epsilon-\epsilon_\theta(x_t,t,c)\|_2^2
 
 表示空间同样决定上限。Latent diffusion 通过 VAE 把高分辨率像素压到 latent，显著降低 U-Net / DiT 的 token 和空间成本；代价是 VAE 重建质量、压缩倍率和解码器能力会变成细节上限。视频 latent 更敏感，因为时间压缩、chunk 切分和因果性会影响身份、运动和遮挡能否被后端模型看见。
 
+视频 VAE 排障要单独看首帧和 chunk 边界。Causal 3D VAE 常把第一帧作为单独 latent，再把后续帧按 temporal compression ratio 合并；或者在第一帧前使用 padding / cache 初始化。这样 \(z_0\) 和后续 temporal latent 可能不是完全同分布。训练 DiT 时，这种差异会变成模型输入分布的一部分；部署时，量化、tiling、cache、chunk overlap 和 long-video stitching 又会继续放大它。固定一段视频只做 encode-decode 回放，按帧画 PSNR、LPIPS、亮度均值和局部纹理 crop，往往比直接调 denoiser 更快定位问题。
+
 ![DiT compute scaling and FID](../assets/images/paper-figures/diffusion/dit-gflops-fid-compute.png){ width="860" }
 
 <small>图源：[Scalable Diffusion Models with Transformers](https://arxiv.org/abs/2212.09748)，Figures 8-9。原图用 forward pass GFLOPs 和训练计算量展示 DiT 模型规模与 FID 的关系。读图重点：扩散质量常常要用每步前向成本换；在视频和世界模型里，这个成本还会乘以帧数、候选动作数和去噪步数。</small>
@@ -81,6 +83,21 @@ Classifier-free guidance 还要求训练时模型见过“有条件”和“无�
 
 如果 \(v\)-loss 下降但样例变差，问题可能在 sampler、CFG 或 train-inference mismatch；如果 distribution matching loss 下降但多样性变差，可能是学生向高密度安全模式坍缩；如果亮度或颜色周期性晃动，要看 fake critic 更新频率、学习率、EMA 和 generated batch 分布。少步训练最怕“曲线看起来有进展，真实样例变钝”。
 
+## DINO / VFM 对齐也要防止误用
+
+DINOv2、DINOv3、CLIP image encoder、MAE、SigLIP 等视觉基础模型，也常写作 VFM（Vision Foundation Model），现在经常被拿来给扩散训练加辅助目标。它们的共同思路是：冻结一个外部视觉编码器，把 clean frame、预测 \(x_0\) 或中间 hidden state 投到一个更语义化的特征空间，再让生成模型对齐过去。REPA、PixelGen、CREPA、Align4Gen 都属于这条大路线的不同位置。
+
+这类目标能帮模型更快学到对象、部件、布局和跨帧语义，但排障时要分清三件事：
+
+| 现象 | 可能原因 | 检查方式 |
+| --- | --- | --- |
+| DINO loss 下降，视频仍闪烁 | 只做逐帧语义对齐，没有约束跨帧轨迹 | 看 cross-frame feature distance、身份 crop 和短循环回放 |
+| 语义更稳但运动变小 | 对齐目标过强，把真实运动当成特征漂移压掉 | 分桶看 dynamic degree、相机运动和主体位移 |
+| 画面结构对但细节软 | DINO 偏全局结构，低层纹理仍靠 LPIPS、VAE 或低噪声采样 | 看局部 crop、频谱、LPIPS 和低 SNR bucket |
+| prompt 对齐没改善 | DINO 是视觉特征，不是文本对齐器 | 单独看 text encoder、caption、CFG 和 text-video alignment |
+
+使用这类辅助目标时，最好记录目标编码器、取第几层、是否用 CLS 或 patch token、loss 权重、作用在哪些帧、是否跨帧、是否只训练 LoRA。否则“用了 DINO”这句话没有可复现含义。视频里还要额外检查特征抽帧策略：只取首帧会强化初始外观，却可能放过后半段漂移；均匀抽帧能覆盖全段，但会增加训练成本；取相邻帧做 cross-frame alignment 才更直接约束时间一致性。
+
 ## 从现象反推原因
 
 生成很糊时，先区分是全局没学会，还是低噪声细化不足。前者常伴随主体和语义也不稳；后者常表现为构图对但纹理软、边缘脏、文字坏。对应检查数据质量、VAE、低噪声 loss、采样尾段和分辨率 curriculum。
@@ -92,6 +109,10 @@ Prompt adherence 差时，不要只调 CFG。先看文本编码器、caption 质
 模式单一或风格一股味时，要查数据覆盖和训练权重。扩散比 GAN 更不容易经典坍缩，但在垂直商品图、固定 UI、单一艺术风格或 teacher 蒸馏场景里，学生仍可能只学到安全主模态。
 
 视频闪烁、变脸或运动变慢时，要把失败切到时间桶。问题可能来自 video VAE、时空 attention、低噪声细节、少步跨度或 motion data 过滤。单帧 FID 或美观样例不能证明视频基础模型能稳定 rollout。
+
+第一帧明显更清楚或更差时，不要立刻归因给 DiT。先用原视频跑 VAE reconstruction，比较 frame 0、frame 1 到 frame r、chunk 边界帧和普通中间帧。若重建阶段已经有系统差异，优先检查 temporal padding、首帧独立 latent、causal cache、temporal tiling、VAE 量化和 decoder overlap。若 VAE 重建正常，生成样本才出现首帧差异，再查 DiT 的 position embedding、首帧条件注入、loss mask、I2V conditioning 和采样时的 latent 初始化。
+
+DINO 指标变好但人眼觉得视频无聊时，要回到运动桶。DINO cosine 更容易读出主体和语义相似，不一定惩罚动作幅度不足、物理接触错误或镜头节奏变慢。少步蒸馏和偏好优化尤其要同时报告 DINO / LPIPS 多样性、motion score、人评和失败样例。
 
 动作扩散成功率下降时，平均 MSE 常常是误导。多峰动作分布里，MSE 会奖励平均轨迹，而平均轨迹可能正好碰撞或错过抓取。Diffusion Policy 这类路线的价值在于表达多峰 action distribution，但真实验收仍要看 closed-loop success、碰撞率、接触阶段和 receding-horizon 执行，而不是只看轨迹相似度。
 
@@ -108,7 +129,10 @@ Prompt adherence 差时，不要只调 CFG。先看文本编码器、caption 质
 - [EDM](https://arxiv.org/abs/2206.00364)：理解噪声尺度、preconditioning、loss weighting 和 sampler 需要共同设计。
 - [Min-SNR Weighting](https://arxiv.org/abs/2303.09556)：理解按 SNR 调整训练权重来处理不同时间步冲突。
 - [Latent Diffusion Models](https://arxiv.org/abs/2112.10752)：理解为什么高分辨率生成常在 latent space 里训练，以及 VAE 会成为质量边界。
+- [Improved Video VAE](https://arxiv.org/abs/2411.06449)：理解视频 VAE 中 causal reasoning、关键帧压缩和帧间信息不均衡。
 - [DiT](https://arxiv.org/abs/2212.09748)：理解扩散 Transformer 的 compute / quality tradeoff。
+- [DINOv3](https://arxiv.org/abs/2508.10104) 与 [REPA](https://arxiv.org/abs/2410.06940)：理解冻结视觉编码器特征怎样加速 DiT / SiT 表示学习。
+- [CREPA](https://arxiv.org/abs/2506.09229) 与 [Align4Gen](https://arxiv.org/abs/2509.09547)：理解 DINO / 自监督视觉编码器在视频扩散训练里的跨帧对齐和多特征融合。
 - [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)：理解 condition dropout 与 CFG 的训练基础。
 - [DMD2](https://arxiv.org/abs/2405.14867)：理解 distribution matching 蒸馏中的 fake critic、regression anchor 和训练稳定性。
 - [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解扩散用于动作策略时，评估目标如何从视觉质量转向 closed-loop control。

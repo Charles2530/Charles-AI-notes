@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI article context browser test</title>
+</head>
+<body>
+  <article class="md-content__inner">
+    <h1 id="article-title">全文上下文测试</h1>
+    <p>文章开头说明全文模式。</p>
+    <p id="selection-target">局部选择目标</p>
+    <p id="emoji-selection"></p>
+    <p id="padding"></p>
+  </article>
+  <pre id="result" aria-live="polite">RUNNING</pre>
+  <script>
+    "use strict";
+    document.querySelector("#article-title").textContent = "题".repeat(299) + "😀标题尾部";
+    document.querySelector("#emoji-selection").textContent = "选".repeat(3999) + "😀尾部";
+    document.querySelector("#padding").textContent = "文".repeat(80_000);
+    window.__atlasPayloads = [];
+    window.fetch = async (url, options = {}) => {
+      const target = String(url);
+      if (target.endsWith("/health")) {
+        return new Response(JSON.stringify({ ready: true, model: "browser-test" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      if (!target.endsWith("/chat")) throw new Error("unexpected request");
+      window.__atlasPayloads.push(JSON.parse(options.body));
+      const answer = window.__atlasPayloads.length === 1
+        ? "答".repeat(7999) + "😀尾部"
+        : "测试回答";
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", delta: answer })}\n\n`));
+          controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+          controller.close();
+        }
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" }
+      });
+    };
+  </script>
+  <script src="../../files/assets/javascripts/ai-reading-assistant.min.js"></script>
+  <script>
+    "use strict";
+
+    function assert(condition, name) {
+      if (!condition) throw new Error(name);
+      return name;
+    }
+
+    async function waitUntil(predicate, timeout = 5_000) {
+      const deadline = performance.now() + timeout;
+      while (!predicate()) {
+        if (performance.now() > deadline) throw new Error("browser test timeout");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+
+    async function ask(question) {
+      const expectedPayloads = window.__atlasPayloads.length + 1;
+      const input = document.querySelector(".atlas-ai-input");
+      input.value = question;
+      document.querySelector(".atlas-ai-composer").requestSubmit();
+      await waitUntil(() => (
+        window.__atlasPayloads.length === expectedPayloads &&
+        !input.disabled &&
+        document.querySelectorAll(".atlas-ai-message--assistant").length >= expectedPayloads
+      ));
+      return window.__atlasPayloads.at(-1);
+    }
+
+    async function selectText(selector) {
+      const target = document.querySelector(selector).firstChild;
+      const range = document.createRange();
+      range.setStart(target, 0);
+      range.setEnd(target, target.textContent.length);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+      await waitUntil(() => !document.querySelector(".atlas-ai-selection-action").hidden);
+    }
+
+    function hasLoneSurrogate(value) {
+      for (let index = 0; index < value.length; index += 1) {
+        const code = value.charCodeAt(index);
+        if (code >= 0xD800 && code <= 0xDBFF) {
+          const next = value.charCodeAt(index + 1);
+          if (!(next >= 0xDC00 && next <= 0xDFFF)) return true;
+          index += 1;
+        } else if (code >= 0xDC00 && code <= 0xDFFF) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    window.addEventListener("load", async () => {
+      try {
+        await selectText("#selection-target");
+        document.querySelector(".atlas-ai-launcher").click();
+        const wholeArticle = await ask("全文问题");
+        const checks = [
+          assert(
+            wholeArticle.selection === "" &&
+            wholeArticle.context.includes("文章开头说明全文模式。") &&
+            document.querySelector(".atlas-ai-quote").hidden,
+            "whole article fallback"
+          ),
+          assert(wholeArticle.selection === "", "unconfirmed selection stays article"),
+          assert(
+            new TextEncoder().encode(JSON.stringify(wholeArticle)).length <= 128 * 1024 &&
+            wholeArticle.context.length < 80_000,
+            "utf8 request budget"
+          )
+        ];
+
+        await selectText("#emoji-selection");
+        document.querySelector(".atlas-ai-selection-action").click();
+
+        const selected = await ask("选区问题");
+        checks.push(assert(
+          selected.selection.endsWith("😀") && selected.context.includes("😀"),
+          "selection takes priority"
+        ));
+        checks.push(assert(
+          !hasLoneSurrogate(selected.title) &&
+          !hasLoneSurrogate(selected.selection) &&
+          selected.history.every((item) => !hasLoneSurrogate(item.content)),
+          "unicode safe selection and history"
+        ));
+
+        document.querySelector(".atlas-ai-quote__remove").click();
+        const fallbackAgain = await ask("再次询问全文");
+        checks.push(assert(
+          fallbackAgain.selection === "" && fallbackAgain.context.includes("文章开头说明全文模式。"),
+          "remove selection returns to article"
+        ));
+
+        document.querySelector("#result").textContent = `PASS\n${checks.join("\n")}`;
+        document.body.dataset.status = "passed";
+      } catch (error) {
+        document.querySelector("#result").textContent = `FAIL\n${error.message}`;
+        document.body.dataset.status = "failed";
+        throw error;
+      }
+    });
+  </script>
+</body>
+</html>

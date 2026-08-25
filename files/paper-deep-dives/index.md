@@ -42,8 +42,13 @@
 - [Phased DMD：分阶段少步蒸馏](diffusion/phased-dmd.md)
 - [AnyFlow：任意步视频扩散蒸馏](diffusion/anyflow.md)
 - [CausVid：流式自回归视频扩散](diffusion/causvid.md)
+- [LongLive-2.0：NVFP4 长视频生成基础设施](diffusion/longlive2.md)
 - [Diffusion Forcing：next-token 与全序列扩散](diffusion/diffusion-forcing.md)
 - [Wan2.1：开源视频生成系统路线](diffusion/wan.md)
+- [PixelDiT：无 VAE 的像素空间 DiT](diffusion/pixeldit.md)
+- [Z-Image-Pixel：像素扩散更适合 post-training](diffusion/z-image-pixel.md)
+- [REPA：用外部视觉表征加速 DiT 训练](diffusion/repa.md)
+- [DeltaQuant：视频扩散的 4-bit core-delta 量化](diffusion/deltaquant.md)
 
 ## 世界模型
 
@@ -63,6 +68,8 @@
 - [World Models Survey：具身世界模型综述](world-models/world-models-embodied-ai-survey.md)
 - [World Model for Robot Learning：机器人学习综述](world-models/world-model-for-robot-learning-survey.md)
 - [LingBot-World：视频基础模型到世界模拟器](world-models/lingbot-world.md)
+- [LingBot-VA 2.0：原生视频-动作预训练](world-models/lingbot-va2.md)
+- [RISE：用组合式世界模型做机器人想象强化学习](world-models/rise.md)
 - [Lance：统一多模态世界建模启发](world-models/lance.md)
 - [BAGEL：交错多模态预训练](world-models/bagel.md)
 - [Emu3.5：原生多模态世界学习器](world-models/emu3-5.md)

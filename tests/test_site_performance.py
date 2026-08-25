@@ -42,6 +42,73 @@ class SitePerformanceTests(TestCase):
         self.assertIn("padding-right: 0", stylesheet)
         self.assertIn("max-width: min(100%, 76rem)", stylesheet)
 
+    def test_sidebar_reading_state_is_tracked_in_local_storage(self):
+        controls = (ROOT / "files" / "assets" / "javascripts" / "reading-controls.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("ATLAS_READING_STATUS_STORAGE_KEY", controls)
+        self.assertIn("markCurrentPageRead", controls)
+        self.assertIn("markSidebarReadingState", controls)
+        self.assertIn("atlas-nav-read-status--unread", controls)
+        self.assertIn("readAt", controls)
+
+    def test_sidebar_reading_state_has_visible_markers(self):
+        stylesheet = (ROOT / "files" / "assets" / "stylesheets" / "extra.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(".atlas-nav-read-status", stylesheet)
+        self.assertIn(".atlas-nav-read-status--unread", stylesheet)
+        self.assertIn(".atlas-nav-read-status--read", stylesheet)
+        self.assertIn("未读", stylesheet)
+        self.assertIn("已读", stylesheet)
+
+    def test_glossary_mastery_adds_a_persistent_status_column(self):
+        controls = (ROOT / "files" / "assets" / "javascripts" / "reading-controls.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("ATLAS_GLOSSARY_MASTERY_STORAGE_KEY", controls)
+        self.assertIn("mountGlossaryMasteryControls", controls)
+        self.assertIn('document.querySelectorAll(".md-content__inner table")', controls)
+        self.assertNotIn('document.querySelectorAll(".md-content__inner .md-typeset table")', controls)
+        self.assertIn('table.dataset.atlasGlossary = "true"', controls)
+        self.assertIn('headerCells[0].textContent.trim() !== "术语"', controls)
+        self.assertIn('headerCells[1].textContent.trim() !== "含义"', controls)
+        self.assertIn('statusHeader.textContent = ""', controls)
+        self.assertIn('statusHeader.setAttribute("aria-label", "掌握状态")', controls)
+        self.assertIn("headerRow.insertBefore(statusHeader, headerCells[1])", controls)
+        self.assertIn("row.insertBefore(statusCell, row.cells[1])", controls)
+        self.assertIn('button.textContent = ""', controls)
+        self.assertIn('button.setAttribute("aria-pressed"', controls)
+        self.assertIn('button.setAttribute("aria-label", button.title)', controls)
+        self.assertNotIn('button.textContent = mastered ? "已掌握" : "未掌握"', controls)
+        self.assertIn("已掌握", controls)
+        self.assertIn("未掌握", controls)
+
+    def test_glossary_mastery_status_column_is_compact_and_print_safe(self):
+        stylesheet = (ROOT / "files" / "assets" / "stylesheets" / "extra.css").read_text(
+            encoding="utf-8"
+        )
+        status_column_styles = stylesheet[
+            stylesheet.index(".md-typeset table .atlas-glossary-status-column"):
+            stylesheet.index(".atlas-glossary-mastery-button {")
+        ]
+
+        self.assertIn(".atlas-glossary-status-column", stylesheet)
+        self.assertIn(".atlas-glossary-mastery-button", stylesheet)
+        self.assertIn(".atlas-glossary-mastery-button--mastered", stylesheet)
+        self.assertIn("width: 3.4rem", status_column_styles)
+        self.assertIn('table[data-atlas-glossary="true"]', stylesheet)
+        self.assertIn("min-width: 38rem", stylesheet)
+        self.assertIn("table-layout: fixed", stylesheet)
+        self.assertIn("width: 9rem", stylesheet)
+        self.assertIn("width: 1.5rem", stylesheet)
+        self.assertIn("height: 1.5rem", stylesheet)
+        self.assertIn(r'content: "\2713"', stylesheet)
+        self.assertIn(".atlas-glossary-status-column", stylesheet[stylesheet.index("@media print"):])
+
     def test_search_compaction_hook_omits_full_article_bodies(self):
         try:
             from hooks.site_performance import on_post_build

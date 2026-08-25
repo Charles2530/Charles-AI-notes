@@ -52,6 +52,30 @@
 **易错点 / 边界。** loss NaN 不一定就是梯度爆炸，也可能是坏数据、低精度溢出、除零、分布式通信错误或自定义 kernel bug。  
 **继续读。** [归一化、残差与激活](../foundations/normalization-residual-and-activation.md) / [训练稳定性与失败排查](../training/stability-numerics-and-failure-triage.md)
 
+### Q：为什么 shape、stride 和 broadcast 是理解模型代码的基础？
+
+**面试回答。** Shape 描述张量每个轴的长度，stride 描述相邻元素在底层存储中的步进，broadcast 让兼容维度在不显式复制数据的情况下参与逐元素运算。模型公式能否正确落到代码，往往取决于 batch、sequence、head、channel 等轴是否对齐。
+
+**追问展开。** 两个张量能算出结果，不代表语义一定正确。把 `[B,T,D]` 和 `[B,D]` 误广播，程序可能不报错，却把特征轴和时间轴混在一起；transpose 后的张量也可能 non-contiguous，影响后续 view 和 kernel 性能。排查时应同时看 shape、轴语义、stride 和实际内存布局。  
+**易错点 / 边界。** Broadcast 只解决形状兼容，不会检查业务语义；能运行的张量表达式仍可能是静默错误。  
+**继续读。** [张量、Shape 与计算图](../foundations/tensors-shapes-and-computation-graphs.md) / [Reduction、Norm、Layout 与 Indexing](../operators/reduction-norm-layout-and-indexing.md)
+
+### Q：自动微分为什么还需要保存 activation？
+
+**面试回答。** 反向传播要用链式法则计算局部导数，很多算子的梯度依赖前向输入或输出，所以训练时需要保存 activation。Activation checkpointing 只保留少量边界状态，反向时重算中间前向结果，用额外计算换显存。
+
+**追问展开。** 训练显存不能只看参数。还要拆成参数、梯度、优化器状态、activation 和临时 workspace。长序列、深网络和大 micro-batch 往往让 activation 成为主要压力，此时 checkpointing 才有明显价值。  
+**易错点 / 边界。** Checkpointing 不会减少参数和优化器状态，也不保证端到端更快；重算会增加 FLOPs，并可能改变通信与 kernel 调度。  
+**继续读。** [自动微分与激活显存](../foundations/autograd-activation-checkpointing-and-memory.md) / [分布式训练与 Checkpoint](../training/distributed-training-and-checkpointing.md)
+
+### Q：JVP、VJP 和完整 Jacobian 有什么关系？
+
+**面试回答。** Jacobian 记录向量函数每个输出对每个输入的局部影响，但深度网络中显式展开它通常太大。JVP 计算 \(Jv\)，适合追踪输入方向怎样影响输出；VJP 计算 \(v^\top J\)，反向传播从 loss 梯度往参数回传时主要使用 VJP。
+
+**追问展开。** 标量 loss 对大量参数求梯度时，reverse-mode autodiff 能用一次反向遍历得到所需 VJP，不必构造完整 Jacobian。Forward-mode 更适合输入维度较小、输出维度较大的方向导数问题。  
+**易错点 / 边界。** 自动微分给出当前计算图的精确导数，不会自动修复错误的 loss、detach、in-place 操作或不可导的硬选择。  
+**继续读。** [微分、Jacobian 与梯度流](../prerequisite-math/differential-jacobian-and-gradient-flow.md) / [自动微分与激活显存](../foundations/autograd-activation-checkpointing-and-memory.md)
+
 ### Q：交叉熵为什么常用于分类和语言模型？
 
 **面试回答。** 交叉熵衡量真实分布 \(q\) 和模型预测分布 \(p_\theta\) 的差异。分类中，如果真实标签是 one-hot，交叉熵就是最大化正确类别概率；语言模型中，就是最大化训练文本里每个 next token 的条件概率。
@@ -136,6 +160,14 @@ y = x' + \operatorname{MLP}(\operatorname{LN}(x'))
 **易错点 / 边界。** 这些模块看似基础，但激活函数、归一化位置、宽度比例和残差缩放都会影响训练稳定和吞吐。  
 **继续读。** [归一化、残差与激活](../foundations/normalization-residual-and-activation.md) / [线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md)
 
+### Q：Pre-Norm 和 Post-Norm 为什么会影响深层 Transformer 训练？
+
+**面试回答。** Pre-Norm 在 attention 或 MLP 之前做归一化，残差主路更接近恒等映射，梯度更容易跨很多层传播；Post-Norm 在残差相加后归一化，原始 Transformer 常用这种形式，但深层训练通常更依赖初始化、warmup 和残差缩放。
+
+**追问展开。** Pre-Norm 常带来更稳的优化，Post-Norm 的表示与最终归一化行为不同。现代架构还会搭配 RMSNorm、residual scaling、sandwich norm 等变体，所以读模型结构时要同时确认 norm 类型、位置和残差公式。  
+**易错点 / 边界。** Pre-Norm 只是稳定性设计之一。数据、学习率、深度、低精度和初始化仍可能导致 loss spike 或梯度异常。  
+**继续读。** [归一化、残差与激活](../foundations/normalization-residual-and-activation.md) / [优化与训练入门](../foundations/optimization-and-training-basics.md)
+
 ### Q：MoE 为什么能扩参数但不同比例增加计算？
 
 **面试回答。** MoE 的核心是稀疏激活：模型有很多专家参数，但每个 token 只路由到 top-k 个专家。总参数量可以很大，单 token 实际计算只经过少量专家，所以计算量不按总参数线性增长。
@@ -148,6 +180,14 @@ y = \sum_{i \in \operatorname{TopK}(g(x))} g_i(x) E_i(x)
 **追问展开。** 面试时要补系统成本：MoE 需要专家并行、负载均衡、all-to-all 通信和 router 稳定训练。它不是“免费变大”，而是把 dense compute 换成 routing 和通信问题。  
 **易错点 / 边界。** MoE 的收益依赖硬件拓扑、batch、token 分布和 serving 实现；小规模或低并发场景未必划算。  
 **继续读。** [MoE 与大模型架构](../foundations/moe-and-large-model-architecture-basics.md) / [MoE 路由与多模型服务](../inference/moe-routing-and-multi-model-serving.md)
+
+### Q：Mamba 和状态空间模型为什么能挑战 Attention？
+
+**面试回答。** 状态空间模型把历史压缩到持续更新的状态中，Mamba 用 selective state update 让输入决定哪些信息被写入和保留。它避免显式构造完整的 \(T\times T\) attention 矩阵，长序列计算和内存成本可以随序列长度近似线性增长。
+
+**追问展开。** Attention 允许任意 token 直接读取历史位置，检索路径短但 KV 和注意力计算随上下文增长；SSM 依赖递推状态，流式推理自然，却要把需要的信息压进有限状态。实践中常见 SSM 与 Attention 混合架构，让前者承担长程扫描，让后者保留精确内容寻址。  
+**易错点 / 边界。** 线性复杂度不等于所有任务更快或更准。硬件 kernel、状态大小、训练稳定性和长距离精确检索都会影响结果。  
+**继续读。** [Mamba 与混合 SSM 架构](../foundations/mamba-and-hybrid-ssm-transformers.md) / [位置编码与 Mask](../foundations/positional-encoding-masks-and-context.md)
 
 ## Tokenizer、位置编码与 Mask
 
@@ -230,6 +270,14 @@ p_i = \operatorname{softmax}(z_i / T)
 **追问展开。** Nucleus sampling 的动机是动态选择概率质量最高的一小团候选，而不是固定 k。这样既避免低概率乱采样，也避免只沿最高概率路径走到底。  
 **易错点 / 边界。** 多样性和事实性是不同维度；更随机可能更有趣，也可能更容易出错。  
 **继续读。** [生成与解码基础](../foundations/generation-and-decoding-basics.md) / [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)
+
+### Q：结构化解码为什么不能只靠低温度？
+
+**面试回答。** 降低 temperature 只会让概率分布更尖，无法保证括号闭合、字段齐全、类型正确或 token 序列符合 JSON schema。结构化解码会在每一步根据语法、有限状态机或 schema 屏蔽非法 token，把格式约束直接写进候选集合。
+
+**追问展开。** 约束解码能保证语法层可解析，生成后仍要做 schema validation、业务规则检查和必要的重试。工具调用还要检查参数范围、权限、幂等和副作用。  
+**易错点 / 边界。** 格式正确不代表值正确。模型可以生成合法 JSON，同时填入错误日期、实体或工具参数。  
+**继续读。** [生成与解码基础](../foundations/generation-and-decoding-basics.md) / [Prompt、CoT 与 RAG 基础](../foundations/prompt-engineering-cot-and-rag-basics.md)
 
 ### Q：Embedding 是不是就等于语义？
 

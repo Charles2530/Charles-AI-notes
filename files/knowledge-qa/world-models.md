@@ -86,6 +86,14 @@ a_t\sim \pi_\psi(a_t\mid z_t)
 **易错点 / 边界。** 不要只说 model-based 更省样本。它还要付出训练 dynamics、uncertainty、planning 和验证成本。  
 **继续读。** [世界模型中的强化学习](../reinforcement-learning/rl-for-world-models.md) / [MDP、价值函数与 Bellman](../reinforcement-learning/mdp-value-bellman.md)
 
+### Q：世界模型怎样真正参与规划？
+
+**面试回答。** Planner 从当前 belief state 出发，提出多组候选动作序列，用世界模型 rollout 它们的未来状态、reward、success 和 risk，再选择预测效用更高且满足约束的动作。执行时通常只落地第一步，收到新观测后重新规划，这就是 model predictive control 的基本闭环。
+
+**追问展开。** 候选动作可以由随机采样、CEM、梯度优化、树搜索或 learned policy 提供。世界模型的价值在于比较动作后果，planner 的价值在于搜索和约束，两者还需要真实观测持续校正状态。  
+**易错点 / 边界。** 能 rollout 视频不等于能规划。系统还要有可比较的 reward/risk 接口、动作可达性检查和闭环重规划。  
+**继续读。** [Planning as Inference 与潜在动作](../world-models/planning-as-inference-and-latent-actions.md) / [不确定性与风险感知规划](../world-models/uncertainty-and-risk-aware-planning.md)
+
 ## JEPA、Masked Prediction 与表示学习
 
 ### Q：JEPA / masked prediction 为什么常被拿来谈世界模型？
@@ -149,6 +157,14 @@ p_\theta(\tau_{t+1:t+H}\mid s_t,a_{t:t+H})
 **追问展开。** CausVid、Diffusion Forcing、Self Forcing 等路线都在处理视频生成和在线 rollout 的错配。核心问题是：模型能不能边接收新观测、边更新未来预测。  
 **易错点 / 边界。** 视频流式更快不等于规划更好；还要看动作条件和闭环任务。  
 **继续读。** [生成式仿真与视频](../world-models/generative-simulation-and-video.md) / [CausVid：流式自回归视频扩散](../paper-deep-dives/diffusion/causvid.md)
+
+### Q：多步 rollout 为什么会累积误差并被策略利用？
+
+**面试回答。** 世界模型通常在真实轨迹的一步条件上训练，rollout 时却要把自己的预测继续当下一步输入。小误差会把状态推离训练分布，随后逐步放大；planner 或 policy 还可能主动寻找模型错误较大的区域，获得虚假的高 reward。
+
+**追问展开。** 常见缓解方式包括缩短 rollout、周期性注入真实观测、ensemble 或不确定性惩罚、约束候选动作、加入 multi-step loss，并把模型预测与仿真器或真实回放做反事实对照。  
+**易错点 / 边界。** 一步 prediction loss 很低不能证明长 horizon 可用。必须按 horizon 分桶检查状态误差、动作排序、风险校准和 closed-loop success。  
+**继续读。** [模拟器、反事实与合成 Rollout](../world-models/simulators-counterfactuals-and-synthetic-rollouts.md) / [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)
 
 ## 评测、证据与工程落地
 

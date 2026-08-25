@@ -55,9 +55,10 @@ extra_javascript:
   - assets/javascripts/search-fallback.js?v=20260710
   - assets/javascripts/term-tooltips.js
   - assets/javascripts/reading-controls.js
+  - assets/javascripts/ai-reading-assistant.min.js?v=20260825-1943
   - assets/javascripts/image-lightbox.js
   - assets/javascripts/diagram-renderer.js?v=20260710
-  - assets/javascripts/mathjax.js?v=20260710
+  - assets/javascripts/mathjax.js?v=20260825
 extra_css:
   - assets/stylesheets/extra.css
 nav:
@@ -321,14 +322,15 @@ nav:
       - 技术报告读后：前沿模型正在变成受约束的闭环: thinking-exploration/model-capability-is-a-constrained-loop.md
       - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
       - 自动驾驶世界模型：从渲染、仿真到规划闭环: thinking-exploration/autonomous-driving-world-models.md
+      - 从生成视频到维护世界：重建为什么是自动驾驶世界模型的状态接口: thinking-exploration/reconstruction-as-world-model-state-interface-0724-1059.md
       - 世界模型 Infra：从模型谱系到物理 AI 工程栈: thinking-exploration/world-model-infrastructure.md
       - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
       - WAM 与 3D 视觉：世界模型从视频想象走向物理闭环: thinking-exploration/wam-3dv-world-models.md
       - 世界模型驱动的机器人数据飞轮：能持续生产经验的系统，才是真正的基础设施: thinking-exploration/robot-data-flywheel-world-models.md
       - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
+      - 具身智能的数据鸿沟：先对齐，再扩规模: thinking-exploration/embodied-ai-data-gap-alignment-and-scaling-0731-1219.md
       - 读懂 Fast-FoundationStereo: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
   - 知识 QA:
-      - 知识 QA: knowledge-qa/index.md
       - 基础与 Transformer: knowledge-qa/foundations-and-transformer.md
       - 训练与对齐: knowledge-qa/training-and-alignment.md
       - 推理服务与量化: knowledge-qa/inference-serving-and-quantization.md
@@ -364,8 +366,13 @@ nav:
           - Phased DMD：分阶段少步蒸馏: paper-deep-dives/diffusion/phased-dmd.md
           - AnyFlow：任意步视频扩散蒸馏: paper-deep-dives/diffusion/anyflow.md
           - CausVid：流式自回归视频扩散: paper-deep-dives/diffusion/causvid.md
+          - LongLive-2.0：NVFP4 长视频生成基础设施: paper-deep-dives/diffusion/longlive2.md
           - Diffusion Forcing：next-token 与全序列扩散: paper-deep-dives/diffusion/diffusion-forcing.md
           - Wan2.1：开源视频生成系统路线: paper-deep-dives/diffusion/wan.md
+          - PixelDiT：无 VAE 的像素空间 DiT: paper-deep-dives/diffusion/pixeldit.md
+          - Z-Image-Pixel：像素扩散更适合 post-training: paper-deep-dives/diffusion/z-image-pixel.md
+          - REPA：用外部视觉表征加速 DiT 训练: paper-deep-dives/diffusion/repa.md
+          - DeltaQuant：视频扩散的 4-bit core-delta 量化: paper-deep-dives/diffusion/deltaquant.md
       - 世界模型:
           - PlaNet：像素规划的潜变量动力学: paper-deep-dives/world-models/planet.md
           - MuZero：只预测对规划有用的世界模型: paper-deep-dives/world-models/muzero.md
@@ -382,6 +389,8 @@ nav:
           - World Models Survey：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
           - World Model for Robot Learning：机器人学习综述: paper-deep-dives/world-models/world-model-for-robot-learning-survey.md
           - LingBot-World：视频基础模型到世界模拟器: paper-deep-dives/world-models/lingbot-world.md
+          - LingBot-VA 2.0：原生视频-动作预训练: paper-deep-dives/world-models/lingbot-va2.md
+          - RISE：用组合式世界模型做机器人想象强化学习: paper-deep-dives/world-models/rise.md
           - Lance：统一多模态世界建模启发: paper-deep-dives/world-models/lance.md
           - BAGEL：交错多模态预训练: paper-deep-dives/world-models/bagel.md
           - Emu3.5：原生多模态世界学习器: paper-deep-dives/world-models/emu3-5.md

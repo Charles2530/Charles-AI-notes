@@ -125,6 +125,14 @@ LLM 推理、服务系统、KV cache、batching、投机解码、运行时和量
 **易错点 / 边界。** 系统吞吐证据只能说明成本下降，不能证明语义保真或决策可靠。  
 **继续读。** [上下文压缩、KV 驱逐与记忆层级](../inference/context-compression-kv-eviction-and-memory-hierarchies.md) / [KVSlimmer：非对称 KV 合并](../paper-deep-dives/inference/kvslimmer.md)
 
+### Q：KV cache 的压缩、驱逐和分层存储有什么区别？
+
+**面试回答。** 压缩改变 KV 的表示精度或维度，驱逐决定哪些历史 token 不再保留，分层存储则把 KV 放到 GPU、CPU 或远端存储的不同层级。三者分别在表示大小、保留范围和驻留位置上交换成本。
+
+**追问展开。** 量化 KV 主要降低每个 token 的字节数；token pruning 或 eviction 降低保留 token 数；offload 保留信息但增加搬运延迟。选择时要结合长文引用、多轮一致性、命中率、带宽和尾延迟分桶验证。  
+**易错点 / 边界。** 显存占用下降只是资源证据。历史细节被量化、删除或换出后，质量和 TPOT 都可能出现新的瓶颈。  
+**继续读。** [上下文压缩、KV 驱逐与记忆层级](../inference/context-compression-kv-eviction-and-memory-hierarchies.md) / [QAT、Kernel 与 KV Cache](../quantization/qat-kernels-and-kv-cache.md)
+
 ## 量化与部署
 
 ### Q：PTQ、QAT、GPTQ、AWQ、SmoothQuant 怎么分？
@@ -155,6 +163,14 @@ x_q=\operatorname{round}\left(\frac{x}{s}\right),\quad \hat{x}=s x_q
 **追问展开。** Decode 阶段除了权重读取，还要读 KV cache；所以 weight-only 可能不能解决所有瓶颈。Prefill 阶段大矩阵计算多，W&A 或 FP8 路径可能更重要。  
 **易错点 / 边界。** 量化对象要和瓶颈匹配；只看模型大小下降不代表端到端延迟下降。  
 **继续读。** [PTQ / GPTQ / AWQ / SmoothQuant](../quantization/ptq-gptq-awq-smoothquant.md) / [FP8 与混合精度推理](../quantization/fp8-and-mixed-precision-serving.md)
+
+### Q：量化、蒸馏、剪枝和 NAS 分别改哪张成本账？
+
+**面试回答。** 量化主要改变数值格式与存储带宽，蒸馏改变 student 的容量和行为，剪枝删除权重、通道、head 或 block，NAS 在给定搜索空间与硬件预算下选择结构。它们可能降低参数量、FLOPs、显存或延迟，但这些指标不会自动同步下降。
+
+**追问展开。** 非结构化稀疏若没有硬件 kernel 支持，稀疏率很高也可能不加速；结构化剪枝更容易改变 dense shape，但要维护残差和通道依赖；平台感知 NAS 应把目标硬件的真实 latency 放入搜索目标。  
+**易错点 / 边界。** 参数少、MACs 低和线上 P99 低是三种证据。压缩方法必须命中真实瓶颈，并在同硬件、同 runtime、同流量分布下验收。  
+**继续读。** [模型压缩、剪枝与 NAS](../foundations/model-compression-pruning-and-nas-basics.md) / [量化评估与部署检查清单](../quantization/evaluation-and-deployment-checklist.md)
 
 ### Q：FP8 和 INT8 是一回事吗？
 
