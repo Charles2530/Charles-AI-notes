@@ -10,5 +10,6 @@ __pycache__/
 *.pyc
 tmp/
 .firecrawl/
+.superpowers/
 .mkdocs-serve.log
 .mkdocs-serve-*.log
