@@ -2,6 +2,8 @@
 
 Vision-Language-Action 模型把视觉观测、语言任务和机器人状态映射为动作。它可以复用视觉语言模型的表征与语义知识，但最终必须满足机器人动作空间、控制频率、延迟和闭环恢复要求。VLA 是策略接口，不等于完整具身系统，也不自动等于世界模型。
 
+判断一个 VLA 是否有用，先看它能否在自己的动作后果下继续完成任务。视觉语言能力只解决“看见什么、理解什么”，策略还要处理坐标系、控制频率、接触动力学、延迟和失败恢复。动作头的形式只是接口的一部分，闭环中的状态变化才是最终验收对象。
+
 ## VLA 的统一接口
 
 VLA 的策略接口常写成：
@@ -61,6 +63,17 @@ flowchart LR
 
 VLA 评测至少需要报告任务成功、分阶段成功、动作平滑性、推理延迟、恢复次数、安全事件和跨场景泛化。离线 action MSE 只能说明模型接近数据集动作，不能单独证明闭环任务能力。
 
+## 一次部署要验收哪几层
+
+可以把 VLA 的验收拆成四层。第一层是接口，确认相机、state、语言和动作的时间戳、坐标系、归一化与频率一致；第二层是单步动作，检查延迟、平滑性和约束；第三层是 episode，记录偏离发生在感知、规划、执行还是恢复；第四层是分布外场景，观察遮挡、物体变化、传感器异常和长时任务是否触发安全门禁。
+
+| 层级 | 关键问题 | 不能替代的指标 |
+| --- | --- | --- |
+| 接口 | 输入输出是否严格对齐 | schema、时间戳、坐标系 |
+| 动作 | 单步预测是否可执行 | 延迟、平滑性、碰撞与越界 |
+| 任务 | 策略能否承受自己的动作后果 | 成功率、失败阶段、恢复次数 |
+| 泛化与安全 | 异常和分布偏移如何处理 | 安全事件、人工接管、拒绝与降级 |
+
 ## 与世界模型的关系
 
 VLA 直接学习策略 \(\pi(a\mid o,\ell)\)；世界模型学习环境转移 \(p(z_{t+1}\mid z_t,a_t)\)。组合方式包括：
@@ -71,6 +84,15 @@ VLA 直接学习策略 \(\pi(a\mid o,\ell)\)；世界模型学习环境转移 \(
 4. VLA 与 world model 共享视觉表征，但使用不同输出头和目标。
 
 仅仅让一个模型同时输出动作和视频，不足以证明二者形成有效闭环。需要验证预测是否会改变动作排序、是否改善真实成功率，以及模型误差是否被不确定性或安全门禁约束。系统边界见[VLA、WAM 与世界模型系统图](../embodied-ai/vla-wam-world-model-system-map.md)和[VLA 世界模型全链路](../world-models/vla-world-model-full-chain-case.md)。
+
+## 按问题进入
+
+| 现在的问题 | 推荐路径 |
+| --- | --- |
+| 动作看起来合理，但任务经常中途失败 | [闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md) → [评测与数据引擎](benchmarks-and-data-engines.md) |
+| 不同机器人之间迁移很差 | [动作表示与控制接口](action-representation-and-interfaces.md) → [数据与策略学习](data-and-policy-learning.md) |
+| 动作块更长后延迟下降但恢复变差 | [动作分块、层级策略与潜在技能](action-chunking-hierarchical-policies-and-latent-skills.md) → [部署与安全](deployment-and-safety.md) |
+| 想把世界模型接入策略 | [VLA 世界模型全链路](../world-models/vla-world-model-full-chain-case.md) → [规划与 latent action](../world-models/planning-as-inference-and-latent-actions.md) |
 
 ## 外部材料
 

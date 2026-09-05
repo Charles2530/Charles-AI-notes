@@ -33,9 +33,13 @@
       const answer = window.__atlasPayloads.length === 1
         ? "答".repeat(7999) + "😀尾部"
         : "测试回答";
+      const model = window.__atlasPayloads.length === 2
+        ? "LongCat-2.0"
+        : "browser-test";
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "model", model })}\n\n`));
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", delta: answer })}\n\n`));
           controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
           controller.close();
@@ -123,6 +127,21 @@
           )
         ];
 
+        const fullscreenToggle = document.querySelector(".atlas-ai-fullscreen");
+        const drawer = document.querySelector(".atlas-ai-drawer");
+        fullscreenToggle.click();
+        checks.push(assert(
+          drawer.classList.contains("atlas-ai-drawer--fullscreen") &&
+          fullscreenToggle.getAttribute("aria-label") === "退出全屏",
+          "fullscreen toggle enters fullscreen"
+        ));
+        fullscreenToggle.click();
+        checks.push(assert(
+          !drawer.classList.contains("atlas-ai-drawer--fullscreen") &&
+          fullscreenToggle.getAttribute("aria-label") === "全屏显示",
+          "fullscreen toggle exits fullscreen"
+        ));
+
         await selectText("#emoji-selection");
         document.querySelector(".atlas-ai-selection-action").click();
 
@@ -130,6 +149,10 @@
         checks.push(assert(
           selected.selection.endsWith("😀") && selected.context.includes("😀"),
           "selection takes priority"
+        ));
+        checks.push(assert(
+          document.querySelector(".atlas-ai-status").textContent === "LongCat-2.0",
+          "stream model status updates"
         ));
         checks.push(assert(
           !hasLoneSurrogate(selected.title) &&

@@ -55,12 +55,12 @@ extra_javascript:
   - assets/javascripts/search-fallback.js?v=20260710
   - assets/javascripts/term-tooltips.js
   - assets/javascripts/reading-controls.js
-  - assets/javascripts/ai-reading-assistant.min.js?v=20260825-1943
+  - assets/javascripts/ai-reading-assistant.min.js?v=20260827-0001
   - assets/javascripts/image-lightbox.js
   - assets/javascripts/diagram-renderer.js?v=20260710
   - assets/javascripts/mathjax.js?v=20260825
 extra_css:
-  - assets/stylesheets/extra.css
+  - assets/stylesheets/extra.css?v=20260826-0001
 nav:
   - 前置数学知识:
       - 前置数学知识: prerequisite-math/index.md

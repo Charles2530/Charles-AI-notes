@@ -15,6 +15,10 @@ from urllib.parse import urlsplit
 DEFAULT_BASE_URL = "https://47.95.249.76"
 DEFAULT_MODEL = "gpt-5.6-sol"
 DEFAULT_REASONING_EFFORT = "high"
+DEFAULT_LONGCAT_BASE_URL = "https://api.longcat.chat/openai/v1"
+DEFAULT_LONGCAT_MODEL = "LongCat-2.0"
+DEFAULT_LONGCAT_MAX_TOKENS = 1000
+DEFAULT_LONGCAT_TEMPERATURE = 0.7
 AI_PROXY_HOST = "127.0.0.1"
 AI_PROXY_PORT = 8765
 GENERIC_CLIENT_ERROR = "AI 服务暂时不可用，请稍后重试。"
@@ -31,10 +35,29 @@ class AIConfig:
     base_url: str = DEFAULT_BASE_URL
     model: str = DEFAULT_MODEL
     reasoning_effort: str = DEFAULT_REASONING_EFFORT
+    longcat_api_key: str = ""
+    longcat_base_url: str = DEFAULT_LONGCAT_BASE_URL
+    longcat_model: str = DEFAULT_LONGCAT_MODEL
 
     @property
     def responses_url(self) -> str:
         return f"{self.base_url.rstrip('/')}/responses"
+
+    @property
+    def longcat_url(self) -> str:
+        return f"{self.longcat_base_url.rstrip('/')}/chat/completions"
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.api_key or self.longcat_api_key)
+
+    @property
+    def display_model(self) -> str:
+        if self.api_key:
+            return self.model
+        if self.longcat_api_key:
+            return self.longcat_model
+        return ""
 
 
 @dataclass(frozen=True)
@@ -80,6 +103,9 @@ def load_config(*, environ: Mapping[str, str], env_path: Path) -> AIConfig:
         reasoning_effort=values.get(
             "ATLAS_AI_REASONING_EFFORT", DEFAULT_REASONING_EFFORT
         ),
+        longcat_api_key=values.get("LONGCAT_API_KEY", ""),
+        longcat_base_url=values.get("LONGCAT_BASE_URL", DEFAULT_LONGCAT_BASE_URL),
+        longcat_model=values.get("LONGCAT_MODEL", DEFAULT_LONGCAT_MODEL),
     )
 
 
@@ -153,7 +179,7 @@ def validate_chat_payload(payload: Mapping[str, Any]) -> ChatRequest:
     )
 
 
-def build_upstream_payload(config: AIConfig, request: ChatRequest) -> dict[str, Any]:
+def build_context_question(request: ChatRequest) -> str:
     if request.selection:
         context_lines = [
             "上下文模式：划线引用",
@@ -169,7 +195,11 @@ def build_upstream_payload(config: AIConfig, request: ChatRequest) -> dict[str, 
             f"页面路径：{request.path}",
             f"文章正文：{request.context}",
         ]
-    current_question = "\n".join([*context_lines, f"用户问题：{request.question}"])
+    return "\n".join([*context_lines, f"用户问题：{request.question}"])
+
+
+def build_upstream_payload(config: AIConfig, request: ChatRequest) -> dict[str, Any]:
+    current_question = build_context_question(request)
     return {
         "model": config.model,
         "reasoning": {"effort": config.reasoning_effort},
@@ -177,6 +207,21 @@ def build_upstream_payload(config: AIConfig, request: ChatRequest) -> dict[str, 
         "stream": True,
         "instructions": SYSTEM_INSTRUCTIONS,
         "input": [*request.history, {"role": "user", "content": current_question}],
+    }
+
+
+def build_longcat_payload(config: AIConfig, request: ChatRequest) -> dict[str, Any]:
+    current_question = build_context_question(request)
+    return {
+        "model": config.longcat_model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_INSTRUCTIONS},
+            *request.history,
+            {"role": "user", "content": current_question},
+        ],
+        "stream": True,
+        "max_tokens": DEFAULT_LONGCAT_MAX_TOKENS,
+        "temperature": DEFAULT_LONGCAT_TEMPERATURE,
     }
 
 
@@ -208,6 +253,68 @@ def iter_browser_events(lines: Any):
             return
     if not terminal_event_seen:
         yield {"type": "error"}
+
+
+def iter_longcat_sse_events(lines: Any):
+    terminal_event_seen = False
+    for raw_line in lines:
+        if isinstance(raw_line, bytes):
+            line = raw_line.decode("utf-8", errors="replace").strip()
+        else:
+            line = str(raw_line).strip()
+        if not line.startswith("data: "):
+            continue
+        data = line[6:].strip()
+        if data == "[DONE]":
+            terminal_event_seen = True
+            yield {"type": "done"}
+            return
+        try:
+            event = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        if event.get("error"):
+            terminal_event_seen = True
+            yield {"type": "error"}
+            return
+        for choice in event.get("choices", []):
+            if not isinstance(choice, Mapping):
+                continue
+            delta = choice.get("delta")
+            if isinstance(delta, Mapping):
+                content = delta.get("content")
+                if isinstance(content, str) and content:
+                    yield {"type": "delta", "delta": content}
+            if choice.get("finish_reason"):
+                terminal_event_seen = True
+                yield {"type": "done"}
+                return
+    if not terminal_event_seen:
+        yield {"type": "error"}
+
+
+def iter_longcat_json_events(payload: Mapping[str, Any]):
+    if payload.get("error"):
+        yield {"type": "error"}
+        return
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        yield {"type": "error"}
+        return
+    first = choices[0]
+    if not isinstance(first, Mapping):
+        yield {"type": "error"}
+        return
+    message = first.get("message")
+    if not isinstance(message, Mapping):
+        yield {"type": "error"}
+        return
+    content = message.get("content")
+    if not isinstance(content, str) or not content:
+        yield {"type": "error"}
+        return
+    yield {"type": "delta", "delta": content}
+    yield {"type": "done"}
 
 
 class AIProxyHandler(BaseHTTPRequestHandler):
@@ -244,6 +351,9 @@ class AIProxyHandler(BaseHTTPRequestHandler):
         self.wfile.write(f"data: {data}\n\n".encode("utf-8"))
         self.wfile.flush()
 
+    def _send_model_event(self, model: str) -> None:
+        self._send_sse({"type": "model", "model": model})
+
     def do_OPTIONS(self) -> None:
         origin = self._allowed_origin()
         if self.path != "/chat" or not origin:
@@ -263,8 +373,8 @@ class AIProxyHandler(BaseHTTPRequestHandler):
         self._send_json(
             200,
             {
-                "ready": bool(self.config.api_key),
-                "model": self.config.model,
+                "ready": self.config.ready,
+                "model": self.config.display_model,
             },
         )
 
@@ -296,11 +406,87 @@ class AIProxyHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": GENERIC_CLIENT_ERROR})
             return
 
-        if not self.config.api_key:
+        if not self.config.ready:
             self.logger("[atlas-ai] chat unavailable category=missing_api_key")
             self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
             return
 
+        if self.config.api_key:
+            try:
+                upstream = self._open_primary_upstream(chat_request)
+            except urllib_error.HTTPError as exc:
+                if not self.config.longcat_api_key:
+                    self.logger(
+                        "[atlas-ai] chat unavailable provider=primary "
+                        f"category=upstream_http status={exc.code}"
+                    )
+                    self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
+                    return
+                self.logger(
+                    "[atlas-ai] primary unavailable category=upstream_http "
+                    f"status={exc.code} fallback=longcat"
+                )
+            except urllib_error.URLError as exc:
+                if not self.config.longcat_api_key:
+                    self.logger(
+                        "[atlas-ai] chat unavailable provider=primary "
+                        "category=upstream_network "
+                        f"detail={type(exc.reason).__name__}"
+                    )
+                    self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
+                    return
+                self.logger(
+                    "[atlas-ai] primary unavailable category=upstream_network "
+                    f"detail={type(exc.reason).__name__} fallback=longcat"
+                )
+            except TimeoutError:
+                if not self.config.longcat_api_key:
+                    self.logger(
+                        "[atlas-ai] chat unavailable provider=primary "
+                        "category=upstream_timeout"
+                    )
+                    self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
+                    return
+                self.logger(
+                    "[atlas-ai] primary unavailable category=upstream_timeout "
+                    "fallback=longcat"
+                )
+            else:
+                self._stream_primary_response_events(upstream, chat_request)
+                return
+
+        if not self.config.longcat_api_key:
+            self.logger("[atlas-ai] chat unavailable category=missing_longcat_api_key")
+            self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
+            return
+
+        try:
+            upstream = self._open_longcat_upstream(chat_request)
+        except urllib_error.HTTPError as exc:
+            self.logger(
+                "[atlas-ai] chat unavailable provider=longcat "
+                f"category=upstream_http status={exc.code}"
+            )
+            self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
+            return
+        except urllib_error.URLError as exc:
+            self.logger(
+                "[atlas-ai] chat unavailable provider=longcat "
+                f"category=upstream_network detail={type(exc.reason).__name__}"
+            )
+            self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
+            return
+        except TimeoutError:
+            self.logger(
+                "[atlas-ai] chat unavailable provider=longcat "
+                "category=upstream_timeout"
+            )
+            self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
+            return
+
+        self._stream_longcat_response_events(upstream)
+
+    def _open_primary_upstream(self, chat_request: ChatRequest) -> Any:
         upstream_request = urllib_request.Request(
             self.config.responses_url,
             data=json.dumps(build_upstream_payload(self.config, chat_request)).encode(
@@ -313,43 +499,71 @@ class AIProxyHandler(BaseHTTPRequestHandler):
             },
             method="POST",
         )
+        return urllib_request.urlopen(upstream_request, timeout=90)
 
-        try:
-            upstream = urllib_request.urlopen(upstream_request, timeout=90)
-        except urllib_error.HTTPError as exc:
-            self.logger(
-                f"[atlas-ai] chat unavailable category=upstream_http status={exc.code}"
-            )
-            self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
-            return
-        except urllib_error.URLError as exc:
-            self.logger(
-                f"[atlas-ai] chat unavailable category=upstream_network detail={type(exc.reason).__name__}"
-            )
-            self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
-            return
-        except TimeoutError:
-            self.logger("[atlas-ai] chat unavailable category=upstream_timeout")
-            self._send_json(503, {"error": GENERIC_CLIENT_ERROR})
-            return
+    def _open_longcat_upstream(self, chat_request: ChatRequest) -> Any:
+        upstream_request = urllib_request.Request(
+            self.config.longcat_url,
+            data=json.dumps(build_longcat_payload(self.config, chat_request)).encode(
+                "utf-8"
+            ),
+            headers={
+                "Authorization": f"Bearer {self.config.longcat_api_key}",
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream, application/json",
+            },
+            method="POST",
+        )
+        return urllib_request.urlopen(upstream_request, timeout=90)
 
+    def _stream_primary_response_events(
+        self,
+        upstream: Any,
+        chat_request: ChatRequest,
+    ) -> None:
+        emitted_text = False
+        fallback_started = False
         try:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache")
             self._send_cors(self._allowed_origin())
             self.end_headers()
+            self._send_model_event(self.config.model)
+
             with upstream:
                 for event in iter_browser_events(upstream):
-                    if event.get("type") == "error":
+                    if event.get("type") == "delta":
+                        emitted_text = True
+                        self._send_sse(event)
+                        continue
+                    if event.get("type") != "error":
+                        self._send_sse(event)
+                        continue
+                    if emitted_text or not self.config.longcat_api_key:
                         self.logger(
                             "[atlas-ai] stream unavailable "
                             "category=upstream_incomplete"
                         )
-                    self._send_sse(event)
+                        self._send_sse(event)
+                        continue
+
+                    fallback_started = True
+                    self._stream_longcat_fallback(chat_request, "primary_stream")
+                    return
         except (BrokenPipeError, ConnectionResetError):
             upstream.close()
         except Exception as exc:
+            if (
+                not emitted_text
+                and not fallback_started
+                and self.config.longcat_api_key
+            ):
+                self._stream_longcat_fallback(
+                    chat_request,
+                    f"primary_stream_exception detail={type(exc).__name__}",
+                )
+                return
             self.logger(
                 f"[atlas-ai] stream unavailable category={type(exc).__name__}"
             )
@@ -357,6 +571,102 @@ class AIProxyHandler(BaseHTTPRequestHandler):
                 self._send_sse({"type": "error", "error": GENERIC_CLIENT_ERROR})
             except (BrokenPipeError, ConnectionResetError):
                 pass
+
+    def _stream_longcat_fallback(
+        self,
+        chat_request: ChatRequest,
+        category: str,
+    ) -> None:
+        self.logger(
+            "[atlas-ai] primary stream unavailable "
+            f"category={category} fallback=longcat"
+        )
+        try:
+            fallback = self._open_longcat_upstream(chat_request)
+        except urllib_error.HTTPError as exc:
+            self.logger(
+                "[atlas-ai] chat unavailable provider=longcat "
+                f"category=upstream_http status={exc.code}"
+            )
+            self._send_sse({"type": "error", "error": GENERIC_CLIENT_ERROR})
+        except urllib_error.URLError as exc:
+            self.logger(
+                "[atlas-ai] chat unavailable provider=longcat "
+                "category=upstream_network "
+                f"detail={type(exc.reason).__name__}"
+            )
+            self._send_sse({"type": "error", "error": GENERIC_CLIENT_ERROR})
+        except TimeoutError:
+            self.logger(
+                "[atlas-ai] chat unavailable provider=longcat "
+                "category=upstream_timeout"
+            )
+            self._send_sse({"type": "error", "error": GENERIC_CLIENT_ERROR})
+        else:
+            self._send_model_event(self.config.longcat_model)
+            self._send_longcat_events(fallback)
+
+    def _stream_longcat_response_events(self, upstream: Any) -> None:
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self._send_cors(self._allowed_origin())
+            self.end_headers()
+            self._send_model_event(self.config.longcat_model)
+            self._send_longcat_events(upstream)
+        except (BrokenPipeError, ConnectionResetError):
+            upstream.close()
+        except Exception as exc:
+            self.logger(
+                f"[atlas-ai] stream unavailable provider=longcat "
+                f"category={type(exc).__name__}"
+            )
+            try:
+                self._send_sse({"type": "error", "error": GENERIC_CLIENT_ERROR})
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    def _send_longcat_events(self, upstream: Any) -> None:
+        try:
+            for event in self._iter_longcat_response_events(upstream):
+                if event.get("type") == "error":
+                    self.logger(
+                        "[atlas-ai] stream unavailable provider=longcat "
+                        "category=upstream_incomplete"
+                    )
+                self._send_sse(event)
+        except (BrokenPipeError, ConnectionResetError):
+            raise
+        except Exception as exc:
+            self.logger(
+                "[atlas-ai] stream unavailable provider=longcat "
+                f"category=stream_exception detail={type(exc).__name__}"
+            )
+            self._send_sse({"type": "error", "error": GENERIC_CLIENT_ERROR})
+
+    def _iter_longcat_response_events(self, upstream: Any) -> Any:
+        content_type = upstream.headers.get("Content-Type", "").lower()
+        if "text/event-stream" in content_type:
+            with upstream:
+                yield from iter_longcat_sse_events(upstream)
+            return
+
+        try:
+            with upstream:
+                payload = json.loads(upstream.read().decode("utf-8"))
+                if not isinstance(payload, Mapping):
+                    raise json.JSONDecodeError("payload must be object", "", 0)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            upstream.close()
+            self.logger(
+                "[atlas-ai] stream unavailable provider=longcat "
+                "category=invalid_json"
+            )
+            yield {"type": "error"}
+            return
+
+        yield from iter_longcat_json_events(payload)
 
     def log_message(self, _format: str, *_args: Any) -> None:
         return

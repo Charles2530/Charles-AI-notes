@@ -140,10 +140,19 @@
   box-shadow: 0 24px 58px rgba(20, 41, 43, 0.24);
   pointer-events: auto;
   backdrop-filter: blur(18px);
+  transition: inset 180ms ease, width 180ms ease, height 180ms ease, border-radius 180ms ease;
 }
 
 .atlas-ai-drawer[hidden] {
   display: none !important;
+}
+
+.atlas-ai-drawer--fullscreen {
+  inset: max(0.8rem, env(safe-area-inset-top)) max(0.8rem, env(safe-area-inset-right))
+    max(0.8rem, env(safe-area-inset-bottom)) max(0.8rem, env(safe-area-inset-left));
+  width: auto;
+  height: auto;
+  border-radius: 20px;
 }
 
 .atlas-ai-header {
@@ -173,6 +182,51 @@
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
+}
+
+.atlas-ai-window-controls {
+  display: flex;
+  align-items: center;
+  margin: 0 0.28rem 0 0.5rem;
+  flex: 0 0 auto;
+}
+
+.atlas-ai-fullscreen {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 0.76rem;
+  height: 0.76rem;
+  padding: 0;
+  border: 1px solid rgba(23, 118, 78, 0.32);
+  border-radius: 50%;
+  color: rgba(13, 72, 53, 0.78);
+  background: #2ec45f;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.atlas-ai-fullscreen::before {
+  content: "↗";
+  font-size: 0.48rem;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(-0.01rem);
+}
+
+.atlas-ai-drawer--fullscreen .atlas-ai-fullscreen::before {
+  content: "↙";
+}
+
+.atlas-ai-fullscreen:hover::before,
+.atlas-ai-fullscreen:focus-visible::before {
+  opacity: 1;
+}
+
+.atlas-ai-fullscreen:hover,
+.atlas-ai-fullscreen:focus-visible {
+  outline: 2px solid rgba(46, 196, 95, 0.28);
+  outline-offset: 3px;
 }
 
 .atlas-ai-heading {
@@ -608,6 +662,14 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
+  .atlas-ai-drawer--fullscreen {
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
   .atlas-ai-drawer::before {
     content: "";
     display: block;
@@ -617,6 +679,10 @@
     flex: 0 0 auto;
     border-radius: 999px;
     background: rgba(20, 41, 43, 0.2);
+  }
+
+  .atlas-ai-drawer--fullscreen::before {
+    display: none;
   }
 
   .atlas-ai-header {
@@ -634,7 +700,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .atlas-ai-selection-action,
-  .atlas-ai-launcher {
+  .atlas-ai-launcher,
+  .atlas-ai-drawer {
     transition: none;
   }
 }

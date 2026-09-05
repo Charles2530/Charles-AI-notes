@@ -17,8 +17,12 @@ class AIReadingAssistantSiteTests(TestCase):
         self.assertIn("ATLAS_AI_BASE_URL=https://47.95.249.76", example)
         self.assertIn("ATLAS_AI_MODEL=gpt-5.6-sol", example)
         self.assertIn("ATLAS_AI_REASONING_EFFORT=high", example)
+        self.assertIn("LONGCAT_API_KEY=", example)
+        self.assertIn("LONGCAT_BASE_URL=https://api.longcat.chat/openai/v1", example)
+        self.assertIn("LONGCAT_MODEL=LongCat-2.0", example)
         self.assertNotIn("ATLAS_AI_ADDR", example)
         self.assertNotRegex(example, r"OPENAI_API_KEY=sk-[A-Za-z0-9]")
+        self.assertNotRegex(example, r"LONGCAT_API_KEY=ak_[A-Za-z0-9]")
 
     def test_make_serve_starts_the_local_ai_coordinator(self):
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
@@ -293,7 +297,33 @@ class AIReadingAssistantSiteTests(TestCase):
             "utf8 request budget",
             "unconfirmed selection stays article",
             "selection takes priority",
+            "stream model status updates",
             "unicode safe selection and history",
             "remove selection returns to article",
+            "fullscreen toggle enters fullscreen",
+            "fullscreen toggle exits fullscreen",
         ):
             self.assertIn(case, source)
+
+    def test_chat_drawer_fullscreen_toggle_contract(self):
+        script = (
+            ROOT / "files" / "assets" / "javascripts" / "ai-reading-assistant.js"
+        ).read_text(encoding="utf-8")
+        stylesheet = (
+            ROOT / "files" / "assets" / "stylesheets" / "extra.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("atlas-ai-fullscreen", script)
+        self.assertIn("toggleFullscreen", script)
+        self.assertIn("atlas-ai-drawer--fullscreen", script)
+        self.assertIn(".atlas-ai-window-controls", stylesheet)
+        self.assertIn(".atlas-ai-drawer--fullscreen", stylesheet)
+
+    def test_ai_reader_status_reflects_the_active_stream_model(self):
+        script = (
+            ROOT / "files" / "assets" / "javascripts" / "ai-reading-assistant.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('streamEvent.type === "model"', script)
+        self.assertIn("setModelStatus(streamEvent.model)", script)
+        self.assertNotIn(" · 高推理", script)

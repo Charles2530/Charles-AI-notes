@@ -1,4 +1,4 @@
-/*! atlas-ai-build: 20260825-1943 */
+/*! atlas-ai-build: 20260827-0001 */
 (function () {
   "use strict";
 
@@ -31,7 +31,8 @@
     busy: false,
     controller: null,
     elements: null,
-    selectionBound: false
+    selectionBound: false,
+    fullscreen: false
   };
 
   function element(tag, className, text) {
@@ -73,9 +74,13 @@
     const status = element("span", "atlas-ai-status", "正在连接本地服务…");
     status.setAttribute("role", "status");
     headingGroup.append(heading, status);
+    const windowControls = element("div", "atlas-ai-window-controls");
+    const fullscreen = button("atlas-ai-fullscreen", "", "全屏显示");
+    fullscreen.setAttribute("aria-pressed", "false");
+    windowControls.append(fullscreen);
     const clear = button("atlas-ai-icon-button", "↺", "清空当前页面对话");
     const close = button("atlas-ai-icon-button", "×", "关闭 AI 阅读助手");
-    header.append(mark, headingGroup, clear, close);
+    header.append(mark, headingGroup, windowControls, clear, close);
 
     const quote = element("aside", "atlas-ai-quote");
     quote.hidden = true;
@@ -121,6 +126,7 @@
       launcher,
       drawer,
       status,
+      fullscreen,
       clear,
       close,
       quote,
@@ -137,6 +143,7 @@
     selectionAction.addEventListener("pointerdown", (event) => event.preventDefault());
     selectionAction.addEventListener("click", openFromSelection);
     launcher.addEventListener("click", toggleDrawer);
+    fullscreen.addEventListener("click", toggleFullscreen);
     close.addEventListener("click", closeDrawer);
     clear.addEventListener("click", clearConversation);
     quoteRemove.addEventListener("click", clearReference);
@@ -166,6 +173,19 @@
     state.elements.drawer.setAttribute("aria-hidden", "true");
     state.elements.launcher.setAttribute("aria-expanded", "false");
     document.body.classList.remove("atlas-ai-open");
+  }
+
+  function setFullscreen(enabled) {
+    const ui = mountShell();
+    state.fullscreen = Boolean(enabled);
+    ui.drawer.classList.toggle("atlas-ai-drawer--fullscreen", state.fullscreen);
+    ui.fullscreen.title = state.fullscreen ? "退出全屏" : "全屏显示";
+    ui.fullscreen.setAttribute("aria-label", ui.fullscreen.title);
+    ui.fullscreen.setAttribute("aria-pressed", state.fullscreen ? "true" : "false");
+  }
+
+  function toggleFullscreen() {
+    setFullscreen(!state.fullscreen);
   }
 
   function toggleDrawer() {
@@ -400,81 +420,15 @@
 
   function renderSafeMarkdown(target, source) {
     target.replaceChildren();
-    const lines = String(source || "").split("\n");
-    let paragraph = [];
-    let list = null;
-    let code = null;
-
-    function flushParagraph() {
-      if (!paragraph.length) return;
-      const node = element("p");
-      appendInlineCode(node, paragraph.join(" "));
-      target.appendChild(node);
-      paragraph = [];
-    }
-
-    function closeList() {
-      list = null;
-    }
-
-    lines.forEach((line) => {
-      if (line.trim().startsWith("```")) {
-        flushParagraph();
-        closeList();
-        if (code) {
-          const pre = element("pre");
-          const codeNode = element("code", "", code.join("\n"));
-          pre.appendChild(codeNode);
-          target.appendChild(pre);
-          code = null;
-        } else {
-          code = [];
-        }
-        return;
-      }
-      if (code) {
-        code.push(line);
-        return;
-      }
-      if (!line.trim()) {
-        flushParagraph();
-        closeList();
-        return;
-      }
-
-      const unordered = line.match(/^\s*[-*]\s+(.+)$/);
-      const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
-      if (unordered || ordered) {
-        flushParagraph();
-        const tag = ordered ? "ol" : "ul";
-        if (!list || list.tagName.toLowerCase() !== tag) {
-          list = element(tag);
-          target.appendChild(list);
-        }
-        const item = element("li");
-        appendInlineCode(item, (unordered || ordered)[1]);
-        list.appendChild(item);
-        return;
-      }
-
-      const heading = line.match(/^#{1,3}\s+(.+)$/);
-      if (heading) {
-        flushParagraph();
-        closeList();
-        const node = element("strong", "atlas-ai-answer-heading");
-        appendInlineCode(node, heading[1]);
+    String(source || "")
+      .split(/\n{2,}/)
+      .map((block) => block.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .forEach((block) => {
+        const node = element("p");
+        appendInlineCode(node, block);
         target.appendChild(node);
-        return;
-      }
-      paragraph.push(line.trim());
-    });
-
-    if (code) {
-      const pre = element("pre");
-      pre.appendChild(element("code", "", code.join("\n")));
-      target.appendChild(pre);
-    }
-    flushParagraph();
+      });
   }
 
   function renderAssistantMarkdown(body, message) {
@@ -553,6 +507,22 @@
       break;
     }
     renderMessages();
+  }
+
+  function setModelStatus(model) {
+    const name = String(model || "").trim();
+    if (!name) return;
+    const ui = mountShell();
+    ui.status.textContent = name;
+    ui.status.classList.add("atlas-ai-status--online");
+    ui.launcher.classList.remove("atlas-ai-launcher--offline");
+  }
+
+  function setServiceUnavailableStatus() {
+    const ui = mountShell();
+    ui.status.textContent = "AI 服务暂时不可用";
+    ui.status.classList.remove("atlas-ai-status--online");
+    ui.launcher.classList.add("atlas-ai-launcher--offline");
   }
 
   function historyForRequest() {
@@ -663,6 +633,8 @@
           if (streamEvent.type === "delta") {
             answer.content += streamEvent.delta || "";
             renderMessages();
+          } else if (streamEvent.type === "model") {
+            setModelStatus(streamEvent.model);
           } else if (streamEvent.type === "done") {
             complete = true;
           } else if (streamEvent.type === "error") {
@@ -688,17 +660,17 @@
   }
 
   async function checkHealth() {
-    const ui = mountShell();
+    mountShell();
     try {
       const response = await fetch(`${API_ORIGIN}/health`, { cache: "no-store" });
       const health = response.ok ? await response.json() : { ready: false };
-      ui.status.textContent = health.ready ? `${health.model} · 高推理` : "AI 服务暂时不可用";
-      ui.status.classList.toggle("atlas-ai-status--online", !!health.ready);
-      ui.launcher.classList.toggle("atlas-ai-launcher--offline", !health.ready);
+      if (health.ready) {
+        setModelStatus(health.model);
+      } else {
+        setServiceUnavailableStatus();
+      }
     } catch (_) {
-      ui.status.textContent = "AI 服务暂时不可用";
-      ui.status.classList.remove("atlas-ai-status--online");
-      ui.launcher.classList.add("atlas-ai-launcher--offline");
+      setServiceUnavailableStatus();
     }
   }
 
@@ -723,6 +695,7 @@
       stopGeneration();
       state.messages = [];
       state.reference = null;
+      setFullscreen(false);
       renderReference();
       renderMessages();
       closeDrawer();

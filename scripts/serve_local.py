@@ -72,13 +72,15 @@ def run_services(
                 logger=logger,
             )
             threading.Thread(target=proxy.serve_forever, daemon=True).start()
-            if config.api_key:
+            if config.ready:
                 logger(
                     f"[atlas-ai] 本地代理已启动：http://{AI_PROXY_HOST}:{proxy.server_port} "
-                    f"model={config.model}"
+                    f"model={config.display_model}"
                 )
             else:
-                logger("[atlas-ai] AI 服务暂时不可用：未配置 OPENAI_API_KEY")
+                logger(
+                    "[atlas-ai] AI 服务暂时不可用：未配置 OPENAI_API_KEY 或 LONGCAT_API_KEY"
+                )
         except OSError as exc:
             logger(
                 f"[atlas-ai] AI 服务暂时不可用：代理启动失败 category={type(exc).__name__}"
