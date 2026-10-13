@@ -60,6 +60,7 @@ flowchart LR
 - [评测与数据引擎](benchmarks-and-data-engines.md)：以 episode 和失败阶段组织指标与回流样本。
 - [闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md)：检测偏离、选择恢复动作并防止重复失败。
 - [部署与安全](deployment-and-safety.md)：定义 ODD、延迟预算、安全否决和人工接管。
+- [投机推理与闭环验证](../inference/vla-speculative-decoding-0928-1144.md)：对照离散动作、连续动作块与执行期验证，结合 FLASH 和 WA-SpecDec 精读理解速度与成功率的权衡。
 
 VLA 评测至少需要报告任务成功、分阶段成功、动作平滑性、推理延迟、恢复次数、安全事件和跨场景泛化。离线 action MSE 只能说明模型接近数据集动作，不能单独证明闭环任务能力。
 

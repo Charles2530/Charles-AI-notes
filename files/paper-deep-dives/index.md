@@ -28,6 +28,8 @@
 - [EAGLE：为什么 draft 不一定要是小模型](inference/eagle.md)
 - [EAGLE-2：动态 Draft Tree](inference/eagle-2.md)
 - [EAGLE-3：训练时见过自己犯错](inference/eagle-3.md)
+- [Realtime-VLA FLASH：并行 Flow 验证与回退](inference/realtime-vla-flash-0928-1144.md)
+- [WA-SpecDec：共享物理场景表征](inference/wa-specdec-0928-1144.md)
 - [KVSlimmer：非对称 KV 合并](inference/kvslimmer.md)
 - [Low-bit LLM Survey：低比特大模型系统](inference/low-bit-llm-survey.md)
 - [Fast-FoundationStereo：实时 Zero-Shot 双目匹配](inference/fast-foundation-stereo.md)
@@ -49,6 +51,9 @@
 - [Z-Image-Pixel：像素扩散更适合 post-training](diffusion/z-image-pixel.md)
 - [REPA：用外部视觉表征加速 DiT 训练](diffusion/repa.md)
 - [DeltaQuant：视频扩散的 4-bit core-delta 量化](diffusion/deltaquant.md)
+- [RDM：用表征分布匹配训练一步视觉生成器](diffusion/rdm.md)
+- [Drifting：把生成分布的迭代搬到训练阶段](diffusion/drifting.md)
+- [TBSM：用三体散射把分布距离变成一步监督](diffusion/tbsm.md)
 
 ## 世界模型
 
@@ -110,6 +115,7 @@
 - [Cosmos 3：面向 Physical AI 的全模态世界模型平台](technical-reports/cosmos3.md)
 - [Kimi K2：MuonClip、万亿 MoE 与 Agent 数据](technical-reports/kimi-k2.md)
 - [LongCat-Video：长视频生成、GRPO 与高效推理](technical-reports/longcat-video.md)
+- [MiniMax H3：统一任务与模态的视频生成模型](technical-reports/minimax-h3-1010-1401.md)
 - [Gemini 2.5：动态 Thinking 与长上下文 Agent](technical-reports/gemini-2-5.md)
 - [GPT-4o System Card：Omni 安全与多模态评测](technical-reports/gpt-4o-system-card.md)
 - [InCoder-32B：工业代码模型与执行验证训练](technical-reports/incoder-32b.md)

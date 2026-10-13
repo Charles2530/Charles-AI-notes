@@ -60,7 +60,7 @@ extra_javascript:
   - assets/javascripts/diagram-renderer.js?v=20260710
   - assets/javascripts/mathjax.js?v=20260825
 extra_css:
-  - assets/stylesheets/extra.css?v=20260826-0001
+  - assets/stylesheets/extra.css?v=20261010-reader-v1
 nav:
   - 前置数学知识:
       - 前置数学知识: prerequisite-math/index.md
@@ -154,6 +154,7 @@ nav:
               - GPU Kernel、Batching 与显存: inference/gpu-kernels-batching-and-memory-systems.md
           - 状态、调度与扩展:
               - KV、缓存与投机解码: inference/caching-routing-and-speculative.md
+              - VLA 投机推理与闭环验证: inference/vla-speculative-decoding-0928-1144.md
               - 上下文压缩与 KV 内存管理: inference/context-compression-kv-eviction-and-memory-hierarchies.md
               - 解耦 Prefill 与 KV 服务: inference/disaggregated-prefill-kv-services-and-capacity-ops.md
               - MoE 路由与多模型服务: inference/moe-routing-and-multi-model-serving.md
@@ -287,6 +288,7 @@ nav:
           - VLA 评测与数据引擎: vla/benchmarks-and-data-engines.md
           - VLA 闭环恢复与失败分析: vla/closed-loop-recovery-and-failure-analysis.md
           - VLA 部署与安全: vla/deployment-and-safety.md
+          - VLA 投机推理与闭环验证: inference/vla-speculative-decoding-0928-1144.md
       - VLM:
           - VLM 架构：视觉表征、连接器与记忆: vlm/architecture-and-training.md
           - 视觉 Tokenizer 与连接器: vlm/visual-tokenizers-and-connectors.md
@@ -313,6 +315,7 @@ nav:
       - 应用扩展:
           - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
   - 思考探索:
+      - 具身推理加速与观测时效: thinking-exploration/embodied-inference-observation-age-1009-2059.md
       - 世界模型是什么：从预测画面到承受行动后果: thinking-exploration/what-is-a-world-model.md
       - 高效 AI 的状态账本：少搬状态，比少算一次更重要: thinking-exploration/efficient-ai-is-state-movement.md
       - 扩散模型加速：每删一步，都要重新安排误差: thinking-exploration/diffusion-speedup-redistributes-error.md
@@ -340,6 +343,7 @@ nav:
       - 世界模型: knowledge-qa/world-models.md
       - 具身智能与 VLA: knowledge-qa/embodied-ai-and-vla.md
   - 论文精读:
+      - 论文阅读器: paper-library/index.md
       - 基础与训练:
           - ZeRO：为什么数据并行会浪费这么多显存: paper-deep-dives/foundations/zero.md
           - Megatron-LM：Tensor Model Parallel: paper-deep-dives/foundations/megatron-lm.md
@@ -354,6 +358,8 @@ nav:
           - EAGLE：为什么 draft 不一定要是小模型: paper-deep-dives/inference/eagle.md
           - EAGLE-2：动态 Draft Tree: paper-deep-dives/inference/eagle-2.md
           - EAGLE-3：训练时见过自己犯错: paper-deep-dives/inference/eagle-3.md
+          - Realtime-VLA FLASH：并行 Flow 验证与回退: paper-deep-dives/inference/realtime-vla-flash-0928-1144.md
+          - WA-SpecDec：共享物理场景表征: paper-deep-dives/inference/wa-specdec-0928-1144.md
           - KVSlimmer：非对称 KV 合并: paper-deep-dives/inference/kvslimmer.md
           - Low-bit LLM Survey：低比特大模型系统: paper-deep-dives/inference/low-bit-llm-survey.md
           - Fast-FoundationStereo：实时 Zero-Shot 双目匹配: paper-deep-dives/inference/fast-foundation-stereo.md
@@ -373,6 +379,9 @@ nav:
           - Z-Image-Pixel：像素扩散更适合 post-training: paper-deep-dives/diffusion/z-image-pixel.md
           - REPA：用外部视觉表征加速 DiT 训练: paper-deep-dives/diffusion/repa.md
           - DeltaQuant：视频扩散的 4-bit core-delta 量化: paper-deep-dives/diffusion/deltaquant.md
+          - RDM：用表征分布匹配训练一步视觉生成器: paper-deep-dives/diffusion/rdm.md
+          - Drifting：把生成分布的迭代搬到训练阶段: paper-deep-dives/diffusion/drifting.md
+          - TBSM：用三体散射把分布距离变成一步监督: paper-deep-dives/diffusion/tbsm.md
       - 世界模型:
           - PlaNet：像素规划的潜变量动力学: paper-deep-dives/world-models/planet.md
           - MuZero：只预测对规划有用的世界模型: paper-deep-dives/world-models/muzero.md
@@ -408,6 +417,7 @@ nav:
           - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
           - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
           - Fast-WAM：训练时学世界，推理时不生成未来: paper-deep-dives/embodied-ai/fast-wam.md
+          - OpenWAM：把 World–Action Model 变成可控的研究程序: paper-deep-dives/embodied-ai/openwam.md
           - Motus：统一 latent action 世界模型: paper-deep-dives/embodied-ai/motus.md
           - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md
           - VO-DP：语义-几何自适应扩散策略: paper-deep-dives/embodied-ai/vodp.md
@@ -427,6 +437,7 @@ nav:
           - Cosmos 3：面向 Physical AI 的全模态世界模型平台: paper-deep-dives/technical-reports/cosmos3.md
           - Kimi K2：MuonClip、万亿 MoE 与 Agent 数据: paper-deep-dives/technical-reports/kimi-k2.md
           - LongCat-Video：长视频生成、GRPO 与高效推理: paper-deep-dives/technical-reports/longcat-video.md
+          - MiniMax H3：统一任务与模态的视频生成模型: paper-deep-dives/technical-reports/minimax-h3-1010-1401.md
           - Gemini 2.5：动态 Thinking 与长上下文 Agent: paper-deep-dives/technical-reports/gemini-2-5.md
           - GPT-4o System Card：Omni 安全与多模态评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
           - InCoder-32B：工业代码模型与执行验证训练: paper-deep-dives/technical-reports/incoder-32b.md

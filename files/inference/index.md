@@ -58,6 +58,7 @@ prefill 一次处理输入 token，通常有更高并行度，更接近大矩阵
 | 问题 | 页面 |
 | --- | --- |
 | prefix cache、路由与投机解码怎样减少重复计算 | [缓存、路由与投机解码](caching-routing-and-speculative.md) |
+| VLA 的动作 token、连续动作块和执行期验证怎样加速 | [VLA 投机推理与闭环验证](vla-speculative-decoding-0928-1144.md) |
 | 为什么把 prefill 和 decode 拆到不同资源池 | [解耦 Prefill 与 KV 服务](disaggregated-prefill-kv-services-and-capacity-ops.md) |
 | MoE expert 与多模型副本怎样路由 | [MoE 路由与多模型服务](moe-routing-and-multi-model-serving.md) |
 | RAG、Agent 和工具调用怎样扩大状态与故障面 | [RAG、Agent 与长上下文系统](rag-agents-and-long-context-systems.md) |

@@ -1,0 +1,7 @@
+PDF.js 5.4.624
+Source: https://github.com/mozilla/pdf.js/tree/v5.4.624
+Package: pdfjs-dist@5.4.624 (https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-5.4.624.tgz)
+License: Apache-2.0 (see LICENSE); font/decoder notices remain in their directories.
+Bundled without modifications: browser build, worker, CMaps, standard fonts and WASM decoders.
+Text layer layout rules in extra.css adapted from the same package web/pdf_viewer.css (Apache-2.0).
+Easy Reviewer and Wren informed the product design; their application code is not included.
