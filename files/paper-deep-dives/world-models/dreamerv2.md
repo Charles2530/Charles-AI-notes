@@ -15,410 +15,232 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/danijar/dreamerv2](https://github.com/danijar/dreamerv2)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2010.02193)；[GitHub API / repo](https://github.com/danijar/dreamerv2)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 在 Atari 上，世界模型终于足以承担策略训练
 
-### 研究背景
+DreamerV1 已证明，在潜在空间中想象轨迹，再沿多步价值学习策略，可以解决一批视觉连续控制任务。但 Atari 对模型提出了不同要求。物体可能突然消失、房间切换改变整个画面，奖励和动作后果并不总是平滑变化；一张图像中很小的对象，又可能决定整局游戏。一个看起来能重建画面的模型，未必能产生足够可靠的轨迹来训练策略。
 
-DreamerV2 是 Dreamer 路线从连续控制走向 Atari 的关键版本。DreamerV1 已经证明 RSSM latent imagination 可以训练 actor-critic，但 Atari 这样的离散动作、像素输入、长时信用分配基准长期由 model-free 方法占优。此前许多 model-based 方法要么预测像素未来但规划效果弱，要么在复杂视觉环境中不如 Rainbow、IQN 等强基线。
+DreamerV2 将问题集中到潜在状态与训练目标。它把 RSSM 的高斯随机变量换成多个类别变量，用 straight-through 梯度训练离散表示，并通过 KL balancing 让动力学 prior 更积极地追赶包含真实观察的 posterior。策略仍然在单独训练好的世界模型中学习，但 Atari 的 actor 改用主要依赖 REINFORCE 的梯度估计。这些变化共同把 imagined policy learning 带到更有竞争力的 Atari 水平。[↗](https://arxiv.org/pdf/2010.02193v4#page=2)
 
-Atari 对世界模型很苛刻：环境状态变化常是离散事件，如得分、死亡、房间切换、物体消失；奖励稀疏且尺度变化大；如果 learned model 在 imagination 中有偏差，actor 会利用模型漏洞。DreamerV2 因此关注 latent representation 和 KL 训练方式，而不是只扩大模型。
+下图的横线是人类 gamer 参考分数，纵轴是跨游戏归一化后的中位数。DreamerV2 达到 2.15，表示这一汇总指标超过参考水平，不代表每个游戏都超过人类。
 
-### 问题（Challenge）
+![DreamerV2 的 Atari 汇总表现](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-1-first.png){ width="520" }
 
-论文要解决的问题是：**一个单独训练的 latent world model 能否支撑 Atari 级别的策略学习，并达到人类水平或强 model-free baseline 的水平？** 难点在于 Atari 的未来不是平滑连续变化，Gaussian stochastic latent 容易把离散事件平均掉；同时，prior 必须在没有未来图像的情况下准确 rollout，posterior 又不能把 prior 学不会的图像细节全塞进 latent。
+*原论文 Figure 1。主实验使用 55 个 Atari 游戏、sticky actions 与 200M 环境帧；SimPLe 的任务子集和训练预算不同，不能将这张总览视为所有方法完全同协议重跑。*
 
-这个问题的价值是给 world model RL 一次更强的基准检验。连续控制成功可能被解释为低维动力学相对平滑；如果 Atari 也能成功，就说明 latent imagination 不是小任务技巧，而能扩展到更复杂的视觉决策。
+每个游戏独立训练一个 agent，使用单张 V100 和一个环境实例。论文的“单 GPU”描述单次训练的资源，不是整个 55 游戏研究只消耗十天。它也没有训练一个能在游戏之间直接迁移的统一模型。把这些边界放在前面，后面的机制与成绩才有准确对应。
 
-### Finding
+## 一次观察如何进入离散 RSSM
 
-作者的 finding 是：**对 Atari 这类离散视觉环境，世界模型需要离散化的 stochastic latent 和更有方向性的 KL 训练，让 prior 学到可 rollout 的事件状态，而不是只让 posterior 重建当前画面。** 这个洞见把 DreamerV1 的核心保留住，但改变了 latent 的表达形式和正则方式。
-
-这个 finding 解释了 DreamerV2 的 categorical latent 与 KL balancing。多个 categorical variables 比 Gaussian latent 更适合表达物体出现/消失、游戏模式切换、生命数变化等离散因素；KL balancing 则让 posterior 保留任务相关信息，同时给 prior 足够学习压力，使 imagination 阶段不至于脱离真实动力学。
-
-### 方法
-
-DreamerV2 仍使用 RSSM，但把 stochastic state 从 Gaussian 改成多个 categorical variables，并用 straight-through gradient 训练。world model 接收 Atari 图像、动作、reward 和 discount，训练目标包括图像重建、reward prediction、discount prediction，以及 prior/posterior 之间的 KL 项。KL balancing 控制梯度更多更新 prior 还是 posterior，避免表示只对重建有用、却不适合未来 rollout。
-
-行为学习仍在 latent imagination 中进行。从 replay 的 posterior states 出发，actor 产生离散动作，RSSM prior rollout 未来 latent，reward 和 value head 估计 imagined return。与连续控制不同，Atari 的 actor 更新更多依赖 REINFORCE-style gradient 和 entropy regularization，而不是主要通过 dynamics path 反向传播。
-
-### 结论
-
-实验显示，DreamerV2 在 55 个 sticky-action Atari games 的 gamer-normalized median score 上达到 human-level，并超过 Rainbow 和 IQN 等 single-GPU model-free baselines。论文的消融表明，categorical latent、KL balancing、actor gradient 选择和 reward/value 建模都会影响结果；这说明成功不是简单把 DreamerV1 跑到 Atari 上。
-
-这篇论文的结论是：world model 不必重建完美像素未来，也可以支撑强 Atari 策略；关键是 latent dynamics 是否捕捉对 reward、value 和 action choice 有用的离散事件。它仍然在模拟游戏环境中验证，不能直接推出真实机器人或开放世界交互的安全性。
-
-### 关键术语
-
-- **Categorical Latent（类别型潜变量）**：用多个离散类别变量表示 stochastic state，更适合 Atari 这类离散事件环境。
-- **KL Balancing（KL 平衡）**：调整 KL 项对 prior 和 posterior 的训练压力，避免模型只学会重建而不会 rollout。
-- **Straight-through Gradient（直通梯度）**：前向使用离散采样，反向近似传递梯度的训练技巧。
-- **Sticky-action Atari（粘滞动作 Atari）**：动作有概率延续上一动作的 Atari 评估设置，用来提高随机性和防止过拟合。
-- **Imagination Rollout（想象轨迹）**：world model 在 latent space 内根据 actor 动作预测未来状态和奖励的序列。
-- **Gamer-normalized Score（玩家归一化得分）**：用人类玩家和随机策略分数归一化 Atari 表现的指标。
-
-DreamerV2 是 [Dreamer](dreamer.md) 到 [DreamerV3](dreamerv3.md) 之间的关键版本。DreamerV1 已经证明了可以在 RSSM 的 latent imagination 中训练 actor-critic，但主要成功集中在连续控制。DreamerV2 把这条路线推进到 Atari 这种更成熟、更竞争激烈的离散动作视觉基准上。
-
-这篇论文最重要的结论是：**一个单独训练的 world model，如果 latent dynamics 足够准确，也可以支撑 Atari 级别的 policy learning，而不只是服务连续控制或小规模视觉任务。**
-
-## 论文位置
-
-DreamerV2 的改动不大，但位置很重要。
-
-| 阶段 | 代表 | 关键问题 | 核心变化 |
-| --- | --- | --- | --- |
-| Latent planning | PlaNet | 从像素学 world model 后怎么选动作 | CEM 在 latent space 在线规划 |
-| Latent imagination | DreamerV1 | 如何避免每步规划成本 | 在 imagined trajectories 上训练 actor-critic |
-| Discrete world model | DreamerV2 | world model 能否打 Atari | categorical latent、KL balancing、Atari policy gradients |
-| Generalist world model RL | DreamerV3 | 如何跨域固定超参 | 更稳健的表示、reward/value 标定和训练 recipe |
-
-DreamerV2 仍然属于交互轨迹驱动的 latent dynamics 世界模型路线。它不是从大规模视频生成模型出发，而是从 agent 收集到的 Atari 交互数据中学习：
-
-```text
-image x_t, action a_t, reward r_t, discount gamma_t
-  -> discrete RSSM world model
-  -> imagined latent trajectories
-  -> actor-critic learning
-  -> actor acts in real environment
-```
-
-![Human-level Atari performance](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-1-first.png){ width="520" }
-
-<small>Figure source: `Mastering Atari with Discrete World Models`, Figure 1. 原论文图注要点：DreamerV2 在 55 个 sticky-action Atari games 的 gamer-normalized median score 上达到 human-level，并超过 Rainbow 和 IQN 等 single-GPU model-free baselines。</small>
-
-**Atari 结果图先看 world model 是否支撑 policy learning。**
-**输入输出**：输入是 Atari 像素、动作和 reward，输出是离散 latent dynamics 与 imagined actor-critic。
-**效率机制**：离散 latent 和 world model actor-critic 提升像素控制样本效率。
-**对主线意义**：它说明 latent dynamics 可以从控制 benchmark 扩展到更复杂离散状态。
-**不能证明什么**：Atari 结果不能外推为真实机器人、开放视频或 VLA 安全性。
-
-## 核心问题
-
-在 DreamerV2 之前，world model 路线在 Atari 上一直不够有说服力。原因有三点：
-
-1. Atari 的视觉输入虽然低分辨率，但状态变化离散、非平滑，进入新房间、物体消失、敌人被击败等事件很难用连续 unimodal latent 表示。
-2. Model-free Atari 方法已经非常成熟，DQN、Rainbow、IQN 形成了强基线，world model 必须在同等计算预算下比较。
-3. 如果 learned dynamics 不够准，actor 会在 imagination 里学到模型漏洞，而不是可执行的游戏策略。
-
-DreamerV2 的核心判断是：DreamerV1 的 Gaussian latent 对 Atari 这样的离散环境不是最合适。论文把 RSSM 的 stochastic state 换成多个 categorical variables，并配合 KL balancing，让 prior dynamics 更容易学准。
-
-## 总体训练循环
-
-DreamerV2 和 DreamerV1 的大框架一致：
-
-```text
-从环境收集 Atari 交互数据，写入 replay dataset
-  -> 采样固定长度序列训练 world model
-  -> 从 posterior states 启动 latent imagination
-  -> actor 采样动作，RSSM prior rollout latent states
-  -> reward/discount/critic 估计 lambda-return
-  -> 更新 critic 和 actor
-  -> actor 回到真实环境收集更多数据
-```
-
-区别在于 DreamerV2 面向 Atari 做了几个关键替换：
-
-| Component | DreamerV1 | DreamerV2 |
-| --- | --- | --- |
-| Latent state | Gaussian stochastic latent | vector of categorical variables |
-| Latent gradient | reparameterization | straight-through gradient |
-| KL regularization | free nats | KL balancing |
-| Action space | mostly continuous control | categorical action distribution for Atari |
-| Actor gradient | dynamics backprop dominant in continuous control | Reinforce dominant for Atari |
-| Exploration | external noise in continuous action | policy entropy regularization |
-
-这说明 DreamerV2 不是简单把 DreamerV1 跑到 Atari 上，而是把 world model 表示、KL 训练方向和 policy gradient 估计都换成更适合离散环境的版本。
-
-## World Model 训练
-
-DreamerV2 的 world model 仍然是 RSSM，但随机状态不再是 Gaussian，而是多个 categorical variables。
-
-![World Model Learning](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-2-world-model.png){ width="920" }
-
-<small>Figure source: `Mastering Atari with Discrete World Models`, Figure 2. 原论文图注要点：训练序列图像先由 CNN 编码；RSSM 维护 deterministic recurrent states \(h_t\)，每步计算看到当前图像的 posterior stochastic state \(z_t\)，以及不看当前图像、只靠历史预测的 prior stochastic state \(\hat z_t\)。DreamerV2 的 stochastic state 是多个 categorical variables，训练好的 prior 会在 imagination 中使用。</small>
-
-**prior 和 posterior 为什么要分开看。**
-图里的 posterior \(z_t\) 和 prior \(\hat z_t\) 是 DreamerV2 world model 的核心。训练时 posterior 可以看到当前真实图像 \(x_t\)，所以它负责把观测编码进 latent state；prior 不能看当前图像，只能根据历史 recurrent state 预测下一步 latent。推理和 imagination 时没有未来图像，因此真正被 rollout 使用的是 prior。
-
-KL loss 的作用就是让 prior 逐渐靠近 posterior：训练阶段借助真实观测校正状态，部署阶段靠 prior 自己往前想象。DreamerV2 把随机 latent 改成 categorical variables，是为了让 Atari 这类离散、事件驱动的环境更容易被 world model 表示。读这张图时要记住：posterior 是训练用的“带观测修正状态”，prior 是控制用的“无观测预测状态”。
-
-### 数据与输入
-
-world model 的训练数据来自 agent 不断增长的 replay dataset：
+世界模型仍由确定性循环状态与随机状态共同组成。令 $h_t$ 为 GRU 保存的历史，$z_t$ 为从类别分布采样得到的当前状态，模型状态为二者的拼接。原文式（1）的主要关系为
 
 $$
-(x_{1:T}, a_{1:T}, r_{1:T}, \gamma_{1:T})
-$$
-
-其中 \(x_t\) 是图像，\(a_t\) 是动作，\(r_t\) 是奖励，\(\gamma_t\) 是 discount factor。episode 内部 \(\gamma_t\) 等于固定超参，terminal step 设为 0。Atari 实验使用 sticky actions、action repeat 4、完整动作空间、单任务训练、每个游戏一个 agent。
-
-论文特别强调 DreamerV2 不使用 frame stacking，因为 RSSM 的 recurrent state 会自己整合时间信息。原始 Atari 灰度图像为 \(84\times84\)，训练时下采样到 \(64\times64\)，以复用 DreamerV1 的卷积架构。
-
-### 模型组件
-
-DreamerV2 的 world model 包含：
-
-$$
-h_t = f_\phi(h_{t-1}, z_{t-1}, a_{t-1})
-$$
-
-这行式子在说：recurrent state \(h_t\) 由上一时刻记忆 \(h_{t-1}\)、上一 stochastic state \(z_{t-1}\) 和上一动作 \(a_{t-1}\) 递推得到。
-
-$$
-z_t \sim q_\phi(z_t \mid h_t, x_t)
-$$
-
-这行式子是 posterior：训练时看见当前图像 \(x_t\)，用它校正 stochastic latent \(z_t\)。
-
-$$
-\hat z_t \sim p_\phi(\hat z_t \mid h_t)
-$$
-
-这行式子是 prior：只看 recurrent state \(h_t\)，不看当前图像，预测 imagination 会使用的 \(\hat z_t\)。
-
-$$
-\hat x_t \sim p_\phi(\hat x_t \mid h_t,z_t)
-$$
-
-这行式子在说：image predictor 从 \(h_t,z_t\) 解码观测 \(\hat x_t\)，主要用于 world model 训练，不是 behavior learning 时必须生成图像。
-
-$$
-\hat r_t \sim p_\phi(\hat r_t \mid h_t,z_t)
+h_t=f_\phi(h_{t-1},z_{t-1},a_{t-1}),
 $$
 
 $$
-\hat\gamma_t \sim p_\phi(\hat\gamma_t \mid h_t,z_t)
+z_t\sim q_\phi(z_t\mid h_t,x_t),\qquad
+\hat z_t\sim p_\phi(\hat z_t\mid h_t).
 $$
 
-这里 \(q_\phi(z_t \mid h_t,x_t)\) 是 posterior，训练时能看到当前图像；\(p_\phi(\hat z_t \mid h_t)\) 是 prior，imagination 阶段只能用它往前 rollout。行为学习阶段不会生成图像，只使用 latent transition、reward predictor、discount predictor 和 critic。
+posterior $q_\phi$ 接收当前图像 $x_t$ 与历史 $h_t$，因此知道真实环境现在呈现了什么；prior $p_\phi$ 只能使用历史，必须预测真实观察会带来怎样的状态。训练时后验为动力学提供目标，想象时先验替代未来观察。
 
-### Discrete Latents
+从 $(h_t,z_t)$ 出发，三个头分别重建图像、预测奖励和预测 discount。discount 在 episode 内取某个固定折扣值，在终止处为零，使模型能够估计想象轨迹是否仍然继续。图像经过 CNN 编码，再与 recurrent state 一起进入 MLP；图像解码采用 transposed CNN，其他预测头采用 MLP。[↗](https://arxiv.org/pdf/2010.02193v4#page=3)
 
-DreamerV2 的随机状态是 `32` 个 categorical variables，每个 categorical 有 `32` 个 classes。展平后相当于长度 `1024` 的 sparse binary vector，其中有 `32` 个 active bits。
+Figure 2 应先沿蓝色观察路径读到 $z_t$，再看绿色虚线如何连接 posterior 与 prior，最后看右侧离散变量的具体组织。
 
-这对 Atari 有几个潜在优势：
+![DreamerV2 离散世界模型的学习流程](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-2-world-model.png){ width="920" }
 
-| 可能原因 | 解释 |
+*原论文 Figure 2。每个随机状态由 32 个 categorical variables 组成，每个变量有 32 个类别；循环状态 $h_t$ 仍然连续，整个模型没有变成纯离散状态机。*
+
+32 个类别变量各采样一个 one-hot，展平后得到长度 1,024、恰有 32 个激活位置的稀疏向量。它可以表达 $32^{32}$ 种组合，这是从表示结构计算出的组合数，不是一个实际存储了这么多条目的 codebook，也不说明训练访问过所有组合。
+
+这种设计与 VQ-VAE 式“先找最近码字，再更新词表”的机制不同。本文直接输出类别概率并采样，没有以最近邻量化作为核心操作。也不能把“离散世界模型”理解成动作只能离散，后面的 Humanoid 实验仍然使用连续动作。
+
+Atari 输入也有一个容易混淆的细节。论文将标准处理得到的 $84\times84$ 灰度图像进一步缩小到 $64\times64$，以沿用卷积架构。这里不是把 Atari 当作 RGB 图像任务，也没有通过 frame stacking 代替状态记忆；时间信息由 RSSM 累积。
+
+## 离散采样怎样获得梯度
+
+从类别分布采样 one-hot 对 logits 不可微，不能直接沿普通导数更新 encoder。DreamerV2 使用 straight-through estimator，将前向离散值与反向连续近似拼在一起。原文 Algorithm 1 等价于
+
+$$
+\begin{aligned}
+p&=\operatorname{softmax}(\ell),\\
+z_{\mathrm{hard}}&=\operatorname{onehot}(\operatorname{sample}(p)),\\
+z_{\mathrm{ST}}&=z_{\mathrm{hard}}+p-\operatorname{sg}(p).
+\end{aligned}
+$$
+
+$\ell$ 是 logits，$\operatorname{sg}$ 表示停止梯度。前向时 $p-\operatorname{sg}(p)=0$，后续网络确实看到一个离散样本；反向时把 $z_{\mathrm{hard}}$ 当作不可微样本，梯度通过 $p$ 的 softmax 路径传播。这不是采样操作真实导数的无偏估计，而是一个实用的替代梯度。[↗](https://arxiv.org/pdf/2010.02193v4#page=3)
+
+离散潜变量为什么更好，论文没有给出唯一确定的原因。作者提出了几种假说。对于一个类别变量，多个后验类别分布的混合仍然可以写成类别分布；单个对角高斯却未必能匹配多个高斯后验形成的多峰分布。one-hot 的稀疏结构也可能有利于泛化，straight-through 的梯度形式可能更容易优化，类别变化还可能适合描述房间切换、物体消失等不连续事件。
+
+这些是对实验现象的解释方向，不能写成已经分别验证的因果机制。特别是“类别混合仍为类别”针对单个变量的分布性质，并不意味着因子化的 32 个类别变量自动表达了任意复杂的联合相关性。实验能直接确认的是，在其余设置受控的消融中，categorical latents 在 42 个任务上优于 Gaussian latents，8 个任务落后，5 个任务在作者定义的 5% 范围内持平。[↗](https://arxiv.org/pdf/2010.02193v4#page=9)
+
+## KL balancing 为什么改变梯度，却不改变前向 KL 数值
+
+世界模型同时优化图像、奖励、discount 与潜在转移。原文式（2）写为
+
+$$
+\mathcal L_{\mathrm{WM}}(\phi)=\mathbb E_{q_\phi}\sum_t\left[
+-\ln p_\phi(x_t\mid h_t,z_t)
+-\ln p_\phi(r_t\mid h_t,z_t)
+-\ln p_\phi(\gamma_t\mid h_t,z_t)
++\beta\operatorname{KL}(q_t\Vert p_t)
+\right],
+$$
+
+其中 $q_t=q_\phi(z_t\mid h_t,x_t)$，$p_t=p_\phi(z_t\mid h_t)$。图像采用单位方差的对角高斯 likelihood，奖励采用单位方差的一维高斯，discount 采用 Bernoulli likelihood。Atari 奖励先经 tanh 变换，KL 总权重为 $\beta=0.1$。这些都是 V2 的具体实现，不能混入 V3 的 symlog、twohot 或 percentile return normalization。[↗](https://arxiv.org/pdf/2010.02193v4#page=4)
+
+KL 项承担两个任务。它要求 prior 学会预测 posterior，又要求 posterior 不要从当前图像抽取太多先验无法预测的信息。问题在于训练早期 prior 还很弱。如果两边同样积极地降低 KL，系统可能通过把 posterior 变得更模糊来迎合 prior，而没有真正学好转移。
+
+V2 因此将 KL 写成两条具有不同梯度路径的项
+
+$$
+\mathcal L_{\mathrm{KL-bal}}
+=\alpha\operatorname{KL}\!\left(\operatorname{sg}(q_t)\Vert p_t\right)
++(1-\alpha)\operatorname{KL}\!\left(q_t\Vert\operatorname{sg}(p_t)\right),
+\qquad\alpha=0.8.
+$$
+
+第一项固定 posterior，主要推动 prior 追赶它；第二项固定 prior，推动 posterior 变得更容易预测。前向数值上，两项都是同一个 KL，而 $0.8+0.2=1$，所以加权后仍是原来的 KL 数值。变化发生在反向传播，prior 一侧的权重是 posterior 一侧的四倍。这种“loss 数值一样，参数更新不同”的性质，是理解 KL balancing 的关键。[↗](https://arxiv.org/pdf/2010.02193v4#page=4)
+
+还可以从分解式理解它
+
+$$
+\operatorname{KL}(q\Vert p)=\mathcal H(q,p)-\mathcal H(q).
+$$
+
+prior 必须通过改善对 posterior 的预测来降低交叉熵；posterior 则还可以改变自身信息量与熵。较强的 prior 更新让模型更多地通过学会预测来改善目标，而不是过早削弱观察表示。$\beta$ 控制整体 KL 与重建之间的权衡，$\alpha$ 控制同一个 KL 中不同分支的更新方向与强度，二者可以独立调整。
+
+附录特别说明，这一版本以 KL balancing 替代之前的 free nats。后续 V3 会把 balancing 与 free bits 结合起来，不能因此在 V2 的原始训练式中擅自加上那一层下限截断。[↗](https://arxiv.org/pdf/2010.02193v4#page=18)
+
+## 在想象中，模型梯度与策略梯度是两件事
+
+世界模型训练完成一个更新后，actor 和 critic 从 replay 的 posterior states 出发，展开长度为 15 的想象轨迹。后续只使用 prior、actor、reward predictor 与 discount predictor。模型参数在行为学习阶段固定，actor 和 value 的优化不会反过来塑造模型表示。
+
+下图应从左下角唯一的真实图像开始，沿 purple recurrent path 和 actor 动作向前读。reward 与 value 在每个状态上计算，图像 decoder 不参与后续策略学习的展开。
+
+![DreamerV2 在潜在状态中学习 actor 与 critic](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-3-actor-critic.png){ width="920" }
+
+*原论文 Figure 3。posterior 提供起点，prior 生成后续状态；完整状态包括 $h$ 与 $z$。论文行为学习部分用简写 $\hat z$ 表示紧凑模型状态。*
+
+为避免把完整状态与随机部分混淆，下文统一把想象状态记为 $\hat s_t$。critic 估计从该状态出发、执行当前 actor 所能获得的未来回报。它使用 $\lambda=0.95$ 的多步目标，在 $t<H$ 时递推
+
+$$
+V_t^\lambda
+=\hat r_t+\hat\gamma_t\left[
+(1-\lambda)v_\xi(\hat s_{t+1})+\lambda V_{t+1}^\lambda
+\right],
+\qquad
+V_H^\lambda=v_\xi(\hat s_H).
+$$
+
+这里将末端边界单独写出，按原文相邻说明，最后一步 target 等于 critic，因此不对最后一步另设回归损失。预测 discount 还用于累乘加权 actor 与 critic 的时刻损失，减少已经可能终止的轨迹后段对学习的影响。[↗](https://arxiv.org/pdf/2010.02193v4#page=5)
+
+critic 最小化
+
+$$
+\mathcal L_{\mathrm{critic}}(\xi)
+=\mathbb E\sum_{t=1}^{H-1}\frac12
+\left[v_\xi(\hat s_t)-\operatorname{sg}(V_t^\lambda)\right]^2.
+$$
+
+V2 还加入 slow target critic，用一个每 100 个梯度更新才复制一次参数的网络计算回报目标，缓解 critic 追逐自身快速变化预测的问题。这是硬更新间隔，不能改写成 V3 的 EMA 正则。[↗](https://arxiv.org/pdf/2010.02193v4#page=6)
+
+actor 的完整形式保留两类梯度。原文式（6）可以写成
+
+$$
+\mathcal L_{\mathrm{actor}}(\psi)
+=\mathbb E\sum_{t=1}^{H-1}\left[
+-\rho\log p_\psi(\hat a_t\mid\hat s_t)
+\operatorname{sg}\!\left(V_t^\lambda-v_\xi(\hat s_t)\right)
+-(1-\rho)V_t^\lambda
+-\eta\mathcal H[p_\psi(\cdot\mid\hat s_t)]
+\right].
+$$
+
+第一项是 REINFORCE，使用减去 state value 的 advantage 加权动作对数概率。它不要求对离散动作造成的状态变化求精确导数；baseline 用于减小方差。第二项直接提高 $V_t^\lambda$，通过动作与模型状态的 straight-through 路径传播梯度，方差较低，但会受到替代导数偏差影响。最后的 entropy regularizer 鼓励策略保留探索。
+
+主 Atari 配置使用 $\rho=1$、$\eta=10^{-3}$，即只用 REINFORCE 训练 actor。这并没有取消离散 world model 训练中的 straight-through，两个梯度估计器作用于不同位置。反过来，在连续控制中作者发现 dynamics backpropagation 更有效，采用 $\rho=0$。不能把论文的通用混合式直接等同于“所有实验都同时混合两种策略梯度”。
+
+REINFORCE 的“无偏”也有范围。它针对当前想象环境中的策略梯度估计，不会自动消除世界模型对真实环境的预测误差。即便策略优化完全正确，模型如果高估某类动作的后果，真实表现仍可能不佳。[↗](https://arxiv.org/pdf/2010.02193v4#page=6)
+
+## 训练量怎样从真实帧变成数千亿潜在状态
+
+Atari 主协议训练到 200M 环境帧，action repeat 为 4，因此真实策略接收约 50M 个观察。经验池按 FIFO 保留 $2\times10^6$ 个时步；每个训练 batch 为 50 条长度 50 的序列，共 2,500 个 posterior states。每个状态都能作为想象起点，因此一次行为更新可以并行生成 2,500 条紧凑轨迹。
+
+论文报告，整个 200M 帧训练过程中，actor 从模型中学习了约 468B 个 imagined states，相对 50M 真实输入约为 9,360 倍，作者将其概括为约 10,000 倍。这些模型状态并不是同等数量的真实新信息，价值在于把已有经验用于大量当前策略下的动作后果预测。[↗](https://arxiv.org/pdf/2010.02193v4#page=6)
+
+| Setting | Atari configuration |
 | --- | --- |
-| 多模态 prior 更容易拟合 | mixture of categoricals 仍是 categorical，Gaussian prior 很难拟合多峰 posterior |
-| 离散事件更匹配 | Atari 中进房间、物体消失、敌人被击败等状态跳变天然离散 |
-| 稀疏表示有助泛化 | 32-of-1024 sparse binary representation 可能比 dense Gaussian 更适合游戏状态 |
-| straight-through 优化更稳定 | 论文推测 ST estimator 忽略某些会缩放梯度的项，可能缓解梯度爆炸或消失 |
+| Replay capacity, FIFO | $2\times10^6$ |
+| Batch size / sequence length | 50 / 50 |
+| Categorical variables / classes | 32 / 32 |
+| RSSM recurrent units | 600 |
+| MLP layers / units | 4 / 400 |
+| World model parameters | 20M |
+| Actor / critic parameters | 1M / 1M |
+| World model learning rate | $2\times10^{-4}$ |
+| Actor / critic learning rate | $4\times10^{-5}$ / $10^{-4}$ |
+| Policy steps per gradient step | 4 |
+| Gradient clipping | 100 |
+| Adam epsilon | $10^{-5}$ |
+| Decoupled weight decay | $10^{-6}$ |
 
-categorical sample 用 straight-through gradient 训练。实现思想是：forward 用 one-hot sample，backward 用 softmax probabilities 的梯度。
+序列采样还特意照顾 episode 末尾。先在 episode 中均匀采样起点，再把过晚的起点截到“episode 长度减训练序列长度”。这样末尾片段得到更多机会，discount predictor 才能看到足够的终止例子。它与只在所有合法窗口起点中均匀采样并不等价。[↗](https://arxiv.org/pdf/2010.02193v4#page=2)
 
-```text
-sample = one_hot(draw(logits))
-probs  = softmax(logits)
-sample = sample + probs - stop_grad(probs)
-```
+折扣系数在论文中有一处配置差异，正文 experience dataset 段写 $\gamma=0.999$，Table D.1 写 0.995；附录给新任务的候选搜索值又包括 0.99 和 0.999。复现时应将所用实现版本与实际配置一起记录，不能假定文中这些位置完全一致。这个参数直接影响稀疏奖励下的 value 学习，后面的 Montezuma 例子会显示它能显著改变表现。[↗](https://arxiv.org/pdf/2010.02193v4#page=19)
 
-这个技巧让离散 latent 在 forward 上保持离散，同时让自动微分系统把梯度传回 logits。
+单次训练使用一张 V100、一个环境实例，在不到 10 天内达到 200M 帧。以 55 个游戏、5 个种子、每次约 10 天粗算，一轮完整组合就是约 2,750 GPU days，这只是按公开配置计算的量级，不是作者报告的研究总耗时。论文也指出，全套消融每改一个组件就可能需要超过 60,000 GPU hours，所以实际消融使用较早版本及更少种子。资源预算解释了为什么最终结果与所有消融不宜直接混成一张对照表。[↗](https://arxiv.org/pdf/2010.02193v4#page=18)
 
-### World Model Loss
+## 与 SimPLe、MuZero 的分界在于模型监督与搜索位置
 
-DreamerV2 联合训练 image predictor、reward predictor、discount predictor、transition predictor 和 representation model：
+同样被归为 model-based RL，模型承担的职责仍可能完全不同。SimPLe 在像素空间预测下一帧，再用生成的图像训练 PPO；连续想象因而需要反复经过高维图像。DreamerV2 用图像重建训练表示，但行为学习只在紧凑潜在状态中展开，训练好的 actor 在真实交互时直接给出动作。图像监督的位置与策略消费模型的位置被分开了，解码器不进入想象轨迹或每一步决策。[↗](https://arxiv.org/pdf/2010.02193v4#page=10)
 
-$$
-\mathcal{L}(\phi)
-=
-\mathbb{E}_{q_\phi(z_{1:T}\mid a_{1:T},x_{1:T})}
-\left[
-\sum_{t=1}^{T}
--
-\ln p_\phi(x_t\mid h_t,z_t)
--
-\ln p_\phi(r_t\mid h_t,z_t)
--
-\ln p_\phi(\gamma_t\mid h_t,z_t)
-+
-\beta\mathrm{KL}
-\left[
-q_\phi(z_t\mid h_t,x_t)
-\|
-p_\phi(z_t\mid h_t)
-\right]
-\right]
-$$
+MuZero 则让隐状态服务于任务相关的奖励和价值预测，Table 3 将这一差别概括为经 value gradients 学出的任务表示。它没有 DreamerV2 的图像重建监督，这不意味着它不接收图像，也不意味着它没有潜在动力学。区别在于模型被要求保留什么信息，以及用什么信号判断状态预测是否有用。DreamerV2 的世界模型独立于 actor–critic 优化，消融中切断奖励梯度后仍能依靠图像获得有用表示；MuZero 的模型与任务价值更紧密地结合。[↗](https://arxiv.org/pdf/2010.02193v4#page=9) [↗](https://arxiv.org/pdf/2010.02193v4#page=11)
 
-这行式子在说：在 posterior \(q_\phi(z_{1:T}\mid a_{1:T},x_{1:T})\) 采样到的潜变量轨迹上，同时优化重建观测、预测奖励、预测 continuation/discount，以及让 posterior \(q_\phi(z_t\mid h_t,x_t)\) 和 prior \(p_\phi(z_t\mid h_t)\) 对齐。这里 \(\phi\) 是 world model 参数，\(\beta\) 是 KL 权重。
+搜索位置也随之改变。DreamerV2 在训练阶段通过大量想象轨迹把行为压进 actor，部署时不执行 Monte Carlo Tree Search。MuZero 用 MCTS 组织模型预测与动作选择。训练期间在模型中改善策略，与每次决策时在模型中搜索动作，是两种不同的计算安排。这里的比较不是“有模型就必须在线搜索”。论文明确把 MuZero 的规划组件视为与 DreamerV2 世界模型正交、原则上可结合的部分，同时指出树搜索增加了系统复杂度与并行化难度。
 
-各项作用如下：
+下面保留原论文 Table 3 的列名与预算，用来定位不同方法的工作区间。
 
-| Loss term | Trains | Why it matters |
-| --- | --- | --- |
-| image log loss | visual representation | 让 latent state 学到一般环境状态，不只对已见 reward 过拟合 |
-| reward log loss | reward prediction | 支撑 imagination 中的 return estimate |
-| discount log loss | termination / continuation | 让 imagined rollout 能软处理 episode ends |
-| KL loss | prior and posterior alignment | 让 prior 在没有未来图像时能预测 posterior |
+| Algorithm | Reward Modeling | Image Modeling | Latent Transitions | Single GPU | Trainable Parameters | Atari Frames | Accelerator Days |
+|---|---|---|---|---|---:|---:|---:|
+| DreamerV2 | ✓ | ✓ | ✓ | ✓ | 22M | 200M | 10 |
+| SimPLe | ✓ | ✓ | ✗ | ✓ | 74M | 4M | 40 |
+| MuZero | ✓ | ✗ | ✓ | ✗ | 40M | 20B | 80 |
+| MuZero Reanalyze | ✓ | ✗ | ✓ | ✗ | 40M | 200M | 80 |
 
-论文的消融非常明确：image gradients 对 world model 至关重要；reward gradients 不是必须，甚至停止 reward gradients 在一些任务上更好。这和 MuZero 类只靠 reward/value/policy 学任务特定 representation 的路线不同。DreamerV2 更强调从图像重建信号中学习一般环境状态。
+*原论文 Table 3。这里是论文所汇总的概念与资源比较，不是作者在统一硬件、统一 Atari 协议下重跑四个系统。*
 
-### KL Balancing
+4M、200M 与 20B 都是表中 **Atari Frames** 的口径，不能把环境帧与 action repeat 后的 agent steps 混算。MuZero Reanalyze 的 200M 帧表明它改变了真实数据复用条件；这不自动消除训练搜索的计算成本。最后一列原名是 **Accelerator Days**，DreamerV2 的 10 对应其单张 V100 约 10 GPU-days 的训练配置，SimPLe 的 40 和两个 MuZero 条目的 80 则应保留原表的加速器时间口径。硬件类型、并行规模和实现不同，不能据此宣布同硬件下恰好快 4 倍或 8 倍，也不能把这四行的性能与样本效率直接排名。论文支持的判断是 DreamerV2 把较高 Atari 表现带到了可用单 GPU 运行的独立世界模型训练路径。[↗](https://arxiv.org/pdf/2010.02193v4#page=10)
 
-标准 KL 同时做两件事：
+## 四种汇总指标为什么会改变算法排序
 
-1. 训练 prior 逼近 posterior；
-2. 正则 posterior 不要偏离 prior 太多。
+Atari 游戏的原始分数单位不同，不能把 Assault 的几万分直接与 Pong 的二十分相加。论文同时报告 gamer normalization 与 human world record normalization，并讨论中位数、均值和截断均值。
 
-问题是训练早期 prior 很弱，如果 KL 直接强压 posterior，posterior 可能为了贴近差 prior 而丢掉图像信息。DreamerV2 用 KL balancing 改变梯度方向权重：
+用 $R_g$ 表示算法在游戏 $g$ 的分数，$R_g^{\mathrm{random}}$ 为随机策略分数，$R_g^{\mathrm{ref}}$ 为所选人类参考，归一化可写为
 
 $$
-\alpha\cdot
-\mathrm{KL}
-\left[
-\operatorname{sg}(q_\phi(z_t\mid h_t,x_t))
-\|
-p_\phi(z_t\mid h_t)
-\right]
-+
-(1-\alpha)\cdot
-\mathrm{KL}
-\left[
-q_\phi(z_t\mid h_t,x_t)
-\|
-\operatorname{sg}(p_\phi(z_t\mid h_t))
-\right]
+N_g=\frac{R_g-R_g^{\mathrm{random}}}
+{R_g^{\mathrm{ref}}-R_g^{\mathrm{random}}}.
 $$
 
-这条 loss 的优化对象是 world model 参数 \(\phi\)。期望分布来自 posterior 轨迹 \(q_\phi(z_{1:T}\mid a_{1:T},x_{1:T})\)；前几项训练图像、奖励和 discount 预测；两个 KL 项分别约束 prior 追 posterior、posterior 不要离 prior 太远，\(\operatorname{sg}\) 表示 stop-gradient。
+gamer median 报告这些数的中位数，容易理解为典型任务表现，但相当一部分低分游戏对中位数没有直接影响。gamer mean 使用所有游戏，却可能被少数参考分数较低、分母很小的游戏支配。换成 world record 可以减轻这种问题，但算法超过纪录很多倍的游戏仍能主导均值。
 
-Atari 中 \(\alpha=0.8\)。这相当于更快训练 prior，而不是主要通过增加 posterior entropy 来降低 KL。论文消融显示，KL balancing 对整体 Atari 表现贡献很大。
-
-## Behavior Learning
-
-DreamerV2 在 world model 的 latent space 中训练 actor 和 critic。world model 在 behavior learning 阶段固定，不让 actor/value gradients 改写 representation。这样做的原因很实际：world model 应该先成为相对稳定的 environment surrogate，否则 actor 和 dynamics 会互相追逐。
-
-![Actor Critic Learning](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-3-actor-critic.png){ width="920" }
-
-<small>Figure source: `Mastering Atari with Discrete World Models`, Figure 3. 原论文图注要点：训练好的 world model 用于在 compact latent space 中想象 trajectories；trajectory 从 model training 中计算出的 posterior states 出发，由 actor 采样动作并通过 prior rollout，critic 预测每个 state 的未来 reward sum。actor 可用 Reinforce、straight-through dynamics gradients 或两者组合训练。</small>
-
-### Imagination MDP
-
-imagined trajectory 从 world model 训练阶段得到的 posterior model state 出发。之后模型不再看真实图像：
+作者因此推荐 clipped record mean，先将 record-normalized score 的上限截为 1，再对游戏求平均
 
 $$
-\hat a_t \sim p_\psi(\hat a_t\mid \hat z_t)
+\operatorname{CRM}
+=\frac1G\sum_{g=1}^{G}\min(1,N_g^{\mathrm{record}}).
 $$
 
-这行式子在说：actor \(p_\psi\) 根据 imagined latent \(\hat z_t\) 采样动作 \(\hat a_t\)，\(\psi\) 是 actor 参数。
+它让一个已经超过世界纪录很多倍的任务不能无限补偿其他任务的失败。这里是截断高端，不应擅自增加论文未要求的下端零截断。论文还为没有登记世界纪录的两个游戏填入了参考值，所以这组分母并非全都来自实际登记纪录。[↗](https://arxiv.org/pdf/2010.02193v4#page=8)
 
-$$
-\hat z_{t+1}\sim p_\phi(\hat z_{t+1}\mid \hat z_t,\hat a_t)
-$$
+Figure 4 的四个面板用同样的训练横轴、不同的聚合方式展示结果。先看最右侧是否仍有优势，再回看均值比中位数大多少，可以判断优势是否只是由极少数高分游戏拉动。
 
-这行式子在说：固定的 world model prior 用当前 imagined latent 和动作，rollout 下一步 latent；这里不再看真实图像。
+![四种 Atari 分数聚合下的训练曲线](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-4-atari-performance.png){ width="920" }
 
-$$
-\hat r_{t+1}\sim p_\phi(\hat r_{t+1}\mid \hat z_{t+1})
-$$
-
-$$
-\hat\gamma_{t+1}\sim p_\phi(\hat\gamma_{t+1}\mid \hat z_{t+1})
-$$
-
-论文指出，DreamerV2 在单 GPU 上可以并行模拟约 `2500` 条 latent trajectories。因为 behavior learning 不生成图像，计算主要发生在 compact latent state 上。
-
-### Critic
-
-critic 预测从当前 imagined latent state 出发的 expected future rewards：
-
-$$
-v_\xi(\hat z_t)
-\approx
-\mathbb{E}_{p_\phi,p_\psi}
-\left[
-\sum_{\tau\ge t}
-\hat\gamma^{\tau-t}\hat r_\tau
-\right]
-$$
-
-这行式子在说：critic \(v_\xi\) 估计从当前 imagined latent \(\hat z_t\) 出发的未来折扣奖励；期望由 world model \(p_\phi\) 和 actor \(p_\psi\) 共同生成。
-
-目标使用 \(\lambda\)-target：
-
-$$
-V^\lambda_t
-=
-\hat r_t
-+
-\hat\gamma_t
-\begin{cases}
-(1-\lambda)v_\xi(\hat z_{t+1})+\lambda V^\lambda_{t+1} & t < H \\
-v_\xi(\hat z_H) & t=H
-\end{cases}
-$$
-
-这行式子在说：\(\lambda\)-target 把当前 imagined reward \(\hat r_t\)、discount \(\hat\gamma_t\)、下一步 value 估计和更远的 \(V^\lambda_{t+1}\) 混合起来。\(t<H\) 时递归展开，到了 horizon \(H\) 用 critic \(v_\xi(\hat z_H)\) bootstrap。
-
-critic 用 squared loss 回归 stop-gradient target，并使用 slow critic target network，每 100 个 gradient steps 更新一次。这一点相比 DreamerV1 更像常规 deep RL 稳定化技巧。
-
-### Actor
-
-DreamerV2 的 Atari actor 输出 categorical action distribution。actor loss 混合三类信号：
-
-| Component | Meaning |
-| --- | --- |
-| Reinforce | unbiased but high-variance policy gradient |
-| dynamics backprop | biased but low-variance straight-through gradient through world model |
-| entropy regularizer | 鼓励可行位置的探索，同时允许需要精确动作时降低熵 |
-
-论文最终设置对 Atari 很明确：`Reinforce only` 效果最好，因此使用 \(\rho=1\)、\(\eta=10^{-3}\)。其中 \(\rho\) 表示 actor 更新里 reinforce gradient 的混合权重，\(\eta\) 表示 dynamics backprop 项的系数；对于 continuous control，情况相反，dynamics backprop 更好，因此设置 \(\rho=0\)。
-
-这点很关键：DreamerV2 并没有教条地坚持“所有 actor 梯度都穿过 dynamics”。在离散 Atari 上，straight-through dynamics gradient 有偏，单独使用表现差；Reinforce 虽然方差高，但更适合最终 Atari policy optimization。
-
-## 训练超参
-
-论文给出的 Atari hyper parameters 如下，字段和值保留原格式。
-
-| Name | Symbol | Value |
-| --- | --- | --- |
-| World Model |  |  |
-| Dataset size (FIFO) | --- | \(2\cdot10^6\) |
-| Batch size | \(B\) | 50 |
-| Sequence length | \(L\) | 50 |
-| Discrete latent dimensions | --- | 32 |
-| Discrete latent classes | --- | 32 |
-| RSSM number of units | --- | 600 |
-| KL loss scale | \(\beta\) | 0.1 |
-| KL balancing | \(\alpha\) | 0.8 |
-| World model learning rate | --- | \(2\cdot10^{-4}\) |
-| Reward transformation | --- | \(\operatorname{tanh}\) |
-| Behavior |  |  |
-| Imagination horizon | \(H\) | 15 |
-| Discount | \(\gamma\) | 0.995 |
-| \(\lambda\)-target parameter | \(\lambda\) | 0.95 |
-| Actor gradient mixing | \(\rho\) | 1 |
-| Actor entropy loss scale | \(\eta\) | \(1\cdot10^{-3}\) |
-| Actor learning rate | --- | \(4\cdot10^{-5}\) |
-| Critic learning rate | --- | \(1\cdot10^{-4}\) |
-| Slow critic update interval | --- | 100 |
-| Common |  |  |
-| Policy steps per gradient step | --- | 4 |
-| MPL number of layers | --- | 4 |
-| MPL number of units | --- | 400 |
-| Gradient clipping | --- | 100 |
-| Adam epsilon | \(\epsilon\) | \(10^{-5}\) |
-| Weight decay (decoupled) | --- | \(10^{-6}\) |
-
-<small>表源：`Mastering Atari with Discrete World Models`，Appendix hyperparameters table。原论文表格要点：该表列出 DreamerV2 Atari 实验的 world model、behavior learning 和 common 超参；关键设置包括 `32 x 32` categorical latent、KL balancing \(\alpha=0.8\)、imagination horizon `15`、actor gradient mixing \(\rho=1\) 和 FIFO replay size \(2\cdot10^6\)。</small>
-
-这些超参说明 DreamerV2 的训练重心很清楚：
-
-1. world model 需要足够大的 discrete latent 容量；
-2. prior learning 通过 KL balancing 被重点强化；
-3. actor 在 Atari 上主要靠 Reinforce，而不是 dynamics backprop；
-4. replay dataset 用 FIFO 限制到 \(2\cdot10^6\)，避免无限增长；
-5. imagined states 数量远大于真实环境输入数量，论文报告 200M environment steps 中从 world model imagination 学习了 468B compact states。
-
-## 实验结果
-
-DreamerV2 在 55 个 Atari games 上评估，使用 sticky actions、200M environment steps、单 GPU、单 environment instance。论文把 DreamerV2 和 IQN、Rainbow、C51、DQN 对比。
-
-![Atari performance](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-4-atari-performance.png){ width="920" }
-
-<small>Figure source: `Mastering Atari with Discrete World Models`, Figure 4. 原论文图注要点：该图展示 200M steps 的 Atari 表现，并比较四种聚合指标。论文认为 gamer median 和 gamer mean 都可能被特定任务分布扭曲，因此推荐 clipped record normalized mean 作为更稳健的 Atari 汇总指标。</small>
-
-Table 1 reports Atari performance at 200M steps.
+*原论文 Figure 4。横轴到 200M 环境帧；DreamerV2 在四种汇总中均领先这里的单 GPU model-free 基线。*
 
 | Agent | Gamer Median | Gamer Mean | Record Mean | Clipped Record Mean |
 | --- | ---: | ---: | ---: | ---: |
@@ -429,106 +251,96 @@ Table 1 reports Atari performance at 200M steps.
 | C51 | 1.09 | 7.70 | 0.15 | 0.15 |
 | DQN | 0.65 | 2.84 | 0.12 | 0.12 |
 
-<small>表源：`Mastering Atari with Discrete World Models`，Table 1。原论文表格要点：该表用 gamer-normalized、record-normalized 和 clipped record-normalized 指标比较 DreamerV2 与 IQN、Rainbow、C51、DQN；DreamerV2 在 200M steps、单 GPU 设置下整体超过这些 model-free baseline。</small>
+DreamerV2 的 0.28 对 IQN 的 0.21，说明在限制极端高分贡献后优势仍然存在。但 schedules 将 gamer median 从 2.15 提高到 2.64 时，clipped record mean 保持 0.28，gamer mean 反而下降。这展示了只选一种统计量可能遗漏的信息。
 
-这张表支持三个结论。第一，DreamerV2 在四种聚合指标上都超过 model-free single-GPU baselines。第二，DreamerV2 schedules 可以提高 gamer median，但 clipped record mean 没变，所以论文主结果没有依赖复杂 schedule。第三，不同聚合方式会改变算法相对差距，因此论文建议用 clipped record mean 避免少数超高分游戏主导平均值。
+IQN 与 Rainbow 的排序也取决于指标。Rainbow 的 gamer median 和 gamer mean 较高，IQN 的 record mean 与 clipped record mean 较高。比较必须落到具体列，不能把“某一种归一化下胜出”扩展成其他所有口径都更好。[↗](https://arxiv.org/pdf/2010.02193v4#page=7)
 
-## 消融实验
+主结果来自五个种子。附录逐游戏表已经对种子取平均，但涉及中位数和截断的总体统计，应按论文要求先在每个种子的游戏集合上聚合，再跨种子平均；非线性操作通常不能交换次序。直接从逐游戏均值表重新算出一个不同数字，并不自动说明主表错误。[↗](https://arxiv.org/pdf/2010.02193v4#page=26)
 
-DreamerV2 的消融结果很适合理解“world model 到底靠什么训练成功”。
+## 汇总领先没有消除逐游戏失败
 
-![DreamerV2 ablations](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-5-ablations.png){ width="920" }
+Table K.1 能看见 DreamerV2 与 model-free 方法的能力轮廓很不一样。下面选取强项与弱项，均为 200M 环境帧的逐游戏原始分数。
 
-<small>Figure source: `Mastering Atari with Discrete World Models`, Figure 5. 原论文图注要点：该图展示 DreamerV2 的主要消融，包括 categorical vs Gaussian latent variables、KL balancing、image gradients 和 reward gradients。结果突出 categorical latents、KL balancing 和 image gradients 的重要性。</small>
+| Task | Rainbow | IQN | DreamerV2 |
+| --- | ---: | ---: | ---: |
+| Assault | 3229 | 4885 | 23625 |
+| James Bond | 1097 | 3166 | 40445 |
+| Up N Down | 34888 | 59944 | 653662 |
+| Video Pinball | 466895 | 415833 | 41860 |
+| Star Gunner | 57909 | 80003 | 7800 |
+| Chopper Command | 12338 | 9282 | 2861 |
+| Seaquest | 9903 | 17039 | 7480 |
+| Venture | 1529 | 1313 | 2 |
+| Montezuma Revenge | 500 | 500 | 81 |
 
-Table 2 reports ablations to DreamerV2 measured by Atari performance at 200M frames.
+Assault、James Bond 与 Up N Down 中，DreamerV2 获得很大的分数优势；Video Pinball 则落后一个数量级左右。作者提出的解释是，球只占一个像素，图像重建损失可能没有足够重视它。这个解释指出了像素平均误差与控制重要性之间的冲突，但论文没有通过改变该像素权重的受控实验确认其因果关系。
 
-| Agent | Gamer Median | Gamer Mean | Record Mean | Clipped Record Mean |
-| --- | ---: | ---: | ---: | ---: |
-| DreamerV2 | 1.64 | 11.33 | 0.36 | 0.25 |
-| No Layer Norm | 1.66 | 5.95 | 0.38 | 0.25 |
-| No Reward Gradients | 1.68 | 6.18 | 0.37 | 0.24 |
-| No Discrete Latents | 1.08 | 3.71 | 0.24 | 0.19 |
-| No KL Balancing | 0.84 | 3.49 | 0.19 | 0.16 |
-| No Policy Reinforce | 0.69 | 2.74 | 0.16 | 0.15 |
-| No Image Gradients | 0.04 | 0.31 | 0.01 | 0.01 |
+Star Gunner、Chopper Command、Venture 也明显落后，不能把失败缩成只有 Video Pinball 一个特例。尤其在难探索任务上，模型有能力模拟访问过的状态，并不保证能迅速发现新的高奖励路径。实际采用时，应保留目标任务分数与训练曲线，避免用总体“人类水平”掩盖具体能力缺口。[↗](https://arxiv.org/pdf/2010.02193v4#page=26)
 
-<small>表源：`Mastering Atari with Discrete World Models`，Table 2。原论文表格要点：该表通过移除 layer norm、reward gradients、discrete latents、KL balancing、policy Reinforce 和 image gradients 来定位 DreamerV2 的关键设计；`No Image Gradients` 和 `No KL Balancing` 的明显退化说明视觉重建与 prior/posterior 对齐对 Atari world model 训练很重要。</small>
+这些主结果使用 sticky actions、完整动作空间、无 life information、108,000 帧 episode 上限，每个游戏一个 agent 和一个环境实例。IQN、Rainbow、C51、DQN 来自 Dopamine 的 sticky-action 结果，不是它们原始论文在确定性 Atari 中的所有最高分。结论因此是，在这套协议与单 GPU 参照下，独立世界模型中的策略学习达到了很强的总体水平。[↗](https://arxiv.org/pdf/2010.02193v4#page=7)
 
-这张表的含义非常直接：
+## 消融把收益定位到表示、动力学与策略更新
 
-| Ablation | Interpretation |
-| --- | --- |
-| No Discrete Latents | categorical latent 是 Atari 表现提升的核心来源之一 |
-| No KL Balancing | prior dynamics 学不准会直接伤害 imagination policy learning |
-| No Policy Reinforce | Atari actor 主要依赖 Reinforce，而不是纯 dynamics backprop |
-| No Image Gradients | world model 不能只靠 reward，图像重建提供了关键 representation signal |
-| No Reward Gradients | reward-specific representation 不是必须，停止 reward gradients 几乎不伤害 clipped record mean |
+主结果同时改变了多个系统组件，不能仅凭 V2 比 V1 高分就把全部提升归给离散 latent。Figure 5 和 Table 2 分别移除一个组件，观察世界模型表示和行为的退化。应先看 categorical 与 Gaussian 的差别，再看 KL balancing，最后比较图像梯度与奖励梯度。
 
-最有启发的是 `No Image Gradients` 和 `No Reward Gradients` 的对比。DreamerV2 不是靠 reward 把 latent state 变成 task-specific representation，而是靠 image reconstruction 学一般环境状态，再在 latent imagination 中学习 policy。这个结论也解释了为什么 DreamerV2 和 MuZero 的世界模型训练哲学不同。
+![DreamerV2 关键组件消融](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-5-ablations.png){ width="920" }
 
-## 和 MuZero / SimPLe 的关系
+*原论文 Figure 5。纵轴为 clipped record normalized score；这组实验使用较早版本，完整模型基准约为 0.25，不能直接拿最终主结果的 0.28 作为消融起点。*
 
-论文还给出 conceptual comparison，字段和值保留原格式。
+| Agent variant | Gamer Median | Record Mean | Clipped Record Mean |
+| --- | ---: | ---: | ---: |
+| DreamerV2, ablation baseline | 1.64 | 0.36 | 0.25 |
+| No Layer Norm | 1.66 | 0.38 | 0.25 |
+| No Reward Gradients | 1.68 | 0.37 | 0.24 |
+| No Discrete Latents | 1.08 | 0.24 | 0.19 |
+| No KL Balancing | 0.84 | 0.19 | 0.16 |
+| No Policy Reinforce | 0.69 | 0.16 | 0.15 |
+| No Image Gradients | 0.04 | 0.01 | 0.01 |
 
-| Algorithm | Reward Modeling | Image Modeling | Latent Transitions | Single GPU | Trainable Parameters | Atari Frames | Accelerator Days |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| DreamerV2 | ✓ | ✓ | ✓ | ✓ | 22M | 200M | 10 |
-| SimPLe | ✓ | ✓ | ✗ | ✓ | 74M | 4M | 40 |
-| MuZero | ✓ | ✗ | ✓ | ✗ | 40M | 20B | 80 |
-| MuZero Reanalyze | ✓ | ✗ | ✓ | ✗ | 40M | 200M | 80 |
+移除离散潜变量使 clipped record mean 从 0.25 降到 0.19，移除 KL balancing 降到 0.16。这两组消融的附录曲线使用两个种子。前者在 42 个游戏改善，后者在 44 个游戏改善，说明结果不只是一个偶然高分游戏造成。KL balancing 仍在 6 个游戏落后、5 个持平，离散表示也有前述 8 个落后任务，因此证据是广泛有效，不能写成无条件更好。[↗](https://arxiv.org/pdf/2010.02193v4#page=9)
 
-<small>表源：`Mastering Atari with Discrete World Models`，conceptual comparison table。原论文表格要点：该表把 DreamerV2、SimPLe、MuZero 和 MuZero Reanalyze 按 reward modeling、image modeling、latent transitions、单 GPU 可训练性、参数量、Atari frames 和 accelerator days 对齐比较，用来说明 DreamerV2 处在 image-trained latent world model 路线。</small>
+最强的退化来自阻断 image reconstruction gradients，clipped record mean 降到 0.01；逐任务统计中 51 个任务下降。只阻断 reward gradients 则基本保留总体水平，0.24 对 0.25，其中 15 个任务提高、22 个下降、18 个持平。
 
-这个表很适合用来区分三条路线：
+这里的操作是让相应梯度不能进入模型状态，并未取消奖励预测头，也没有让 actor 在无奖励目标下学习。实验说明，表示主要依赖图像信号建立，奖励预测不必始终直接塑造表示才能得到有效策略。作者由此提出“不局限于已见奖励的表示可能更有泛化能力”的解释，但没有把这项消融扩展成独立的跨任务迁移验证。
 
-| Route | Representative | Key idea |
-| --- | --- | --- |
-| Full image world model | SimPLe | 在像素或图像空间建模环境，但效率和长期误差压力大 |
-| Task-specific latent model | MuZero | 学 reward/value/policy 相关 latent dynamics，不做 image reconstruction |
-| General image-trained latent world model | DreamerV2 | 用图像重建训练一般 latent state，再用 latent transitions 学 policy |
+策略梯度的消融也有版本条件。较早版本允许混合 REINFORCE 与 straight-through dynamics gradients，仅使用后者时，44 个游戏下降、5 个提高、6 个持平；保留 REINFORCE 而去掉 dynamics gradients，绝大多数总体收益仍在。混合在 James Bond、Seaquest 等少数任务上的提升能拉高 gamer mean，但最终主配置采用更简单的 $\rho=1$。因此“V2 通过 straight-through 玩好 Atari”需要拆开说，离散世界模型确实依赖它训练，主 Atari actor 的成功则主要依赖 REINFORCE。[↗](https://arxiv.org/pdf/2010.02193v4#page=10) [↗](https://arxiv.org/pdf/2010.02193v4#page=24)
 
-DreamerV2 的路线介于两者之间。它不像 SimPLe 那样在行为学习中依赖图像生成，也不像 MuZero 那样只从 reward/value/policy 信号学任务特定模型。它用图像预测塑造 latent representation，但 actor-critic 学习只在 compact latent space 中发生。
+附录还列出尝试后没有稳定收益的改变。更多二值 latent 比 categorical 更差；把未来策略熵纳入 value target、调度学习率或 KL 系数、GRU layer normalization 等没有显示普遍的大幅提升。完整模型从 V1 的 13M 扩大到 22M 也被列为有帮助的工程变化，但并没有对所有改动完成同等规模的消融。不能把未隔离的参数量影响全部归到某一条理论解释上。[↗](https://arxiv.org/pdf/2010.02193v4#page=18)
 
-## 和 DreamerV3 的关系
+## Montezuma 的成功演示为何不能替换主表的 81 分
 
-DreamerV3 可以看作把 DreamerV2 的一些经验推广成更通用的跨域 recipe：
+主表中 Montezuma Revenge 得分 81，显然不足以支持“统一默认设置已解决探索”。附录另做了一个实验，仅将 discount 改为 $\gamma=0.99$，其他设置保持默认，学习曲线显著改善。
 
-| Design | DreamerV2 | DreamerV3 |
-| --- | --- | --- |
-| Latent type | categorical latent | categorical latent 继续保留 |
-| KL training | KL balancing | 拆成 dynamics / representation losses，并配合 free bits |
-| Reward scale | tanh reward for Atari | symlog + twohot 处理跨域数值尺度 |
-| Value learning | scalar critic with target network | distributional critic / twohot return target |
-| Goal | solve Atari competitively | fixed hyperparameters across many domains |
+先看蓝线标签中的折扣值，再把它与橙色 Rainbow + Curiosity 比较，而不是直接与主表的一行互换。
 
-所以 DreamerV2 的价值不只是 Atari 分数，而是证明了 discrete latent world model 是一条可行路线。DreamerV3 后续把这条路线从 Atari 扩展到更多环境，并解决跨域稳定性问题。
+![修改 discount 后的 Montezuma 结果](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-b2-montezuma-discount.png)
 
-## 局限与风险
+*原论文 Figure B.2。DreamerV2 使用 $\gamma=0.99$，没有额外加入显式 curiosity 机制；图中的设置与主结果表不同。*
 
-DreamerV2 仍有清楚的边界。
+按图中曲线读数，DreamerV2 在训练后期达到约两千多分，接近图中的 curiosity 参照量级。作者猜测较短折扣可能稳定稀疏奖励下的价值学习，也讨论模型泛化、更多 actor-critic 更新或 reward predictor 平滑奖励等可能因素。这些解释并未被逐项控制验证。
 
-1. 单任务训练。每个 Atari game 都训练独立 agent，不是一个多任务或通用 Atari world model。
-2. 仍依赖大量环境步数。200M environment steps 和 10 天单 V100 不是小成本，只是相对 MuZero 这类设置更可复现。
-3. reconstruction loss 可能忽略关键小物体。论文特别提到 Video Pinball，关键 ball 只有一个像素，图像重建未必强迫 latent 表示关注它。
-4. Atari actor 使用 Reinforce 为主，说明通过离散 world model 直接 dynamics backprop 训练 policy 仍有偏差问题。
-5. 视觉世界复杂度仍有限。Atari 远不是开放真实世界，DreamerV2 不能直接代表视频世界模型路线。
+它对实际工作的启发很具体，critic 的远期目标与探索表现可能强烈耦合，调小 discount 有时比单纯扩大模型更有效。但这属于任务配置敏感性的证据，不能用附录调参后的表现替换统一配置的 81 分，再声称默认算法已经具备同样能力。[↗](https://arxiv.org/pdf/2010.02193v4#page=17)
 
-## 阅读结论
+## 离散世界模型也能控制连续动作的人形机器人
 
-DreamerV2 最值得记住的是三点：
+另一项补充实验选择 Humanoid Walk，从图像学习先起身、再行走。动作是 21 维连续向量，因此 actor 改为 truncated normal distribution，策略更新采用 dynamics backpropagation，即 $\rho=0$。离散的是世界模型的随机表示，而不是所有对外接口。
 
-1. categorical latent variables 是让 RSSM 更适合 Atari 离散动态的关键改动；
-2. KL balancing 让 prior dynamics 更快追上 posterior，直接服务 imagination rollout；
-3. image reconstruction gradients 对 world model representation 至关重要，而 reward gradients 不是核心。
+下图是 agent 观察到的行为画面，先看前半段起身，再看后半段连续行走。它不是模型预测帧，也不是现实机器人实验。
 
-一句话总结：DreamerV2 证明了交互轨迹驱动的 latent dynamics 世界模型不仅能做连续控制，也能在 Atari 这种强基准上训练出竞争力 policy。它把 DreamerV1 的 latent imagination actor-critic 推进到离散状态、离散动作和强 model-free baseline 对抗的阶段，为 DreamerV3 的通用化 recipe 铺好了路。
+![DreamerV2 从像素学习 Humanoid 起身与行走](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-a1-humanoid-pixels.png)
 
-落地读 DreamerV2 时要把三层证据分开：categorical latent 和 KL balancing 是方法抓手，Atari performance 与 ablation 说明它能支撑 policy learning，但 reward、done 和动作接口仍来自 RL 环境。这篇证明的是 latent dynamics 可以进入强离散控制基准，不是开放视频生成或真实机器人泛化。
+*原论文 Figure A.1。任务来自 DeepMind Control Suite，图像输入与 21 维连续动作共同检验表示和策略接口的适用性。*
 
-## 相关阅读与下一步
+附录该实验使用 $\beta=2$、$\eta=10^{-5}$，与主文一般连续控制描述中的系数不同。Figure A.2 在约 40M 步附近达到接近 800 的回报，这是曲线读数；它展示较复杂连续控制的可行性，但没有把 Atari 的原封不动配置直接搬过来。
 
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Mastering+Atari+with+Discrete+World+Models&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Mastering+Atari+with+Discrete+World+Models)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Mastering+Atari+with+Discrete+World+Models)。
-- 站内下一步：[论文精读专题](../index.md)。
+这项结果与 Atari 策略梯度消融放在一起，有助于理解一个设计选择。离散动作下，straight-through 动作梯度的偏差可能伤害策略学习；连续动作可用更合适的重参数化路径，沿模型求导仍然很有价值。V2 没有用一个梯度估计器统一压过所有动作类型。[↗](https://arxiv.org/pdf/2010.02193v4#page=16)
+
+## 采用这套模型时，最应保留的接口与比较条件
+
+DreamerV2 的可复用部分是一个能从图像构建离散状态、学习动作条件 prior，并在紧凑状态中产生大量训练轨迹的系统。图像重建为表示提供主要监督，KL balancing 优先改善 prior，actor 再利用模型预测学习行为。对新任务，首先应检查这三个环节是否分别工作，不能只看重建图像是否好看。
+
+模型训练中的 straight-through、Atari actor 的 REINFORCE、连续 actor 的 dynamics backpropagation 必须分开实现和记录。主结果采用的 slow critic 硬更新、tanh 奖励、类别 latent，也不能与后来 V3 的配置混在一起后仍称为同一个实验。
+
+论文给新任务的优先搜索项包括 KL scale $\beta\in\{0.1,0.3,1,3\}$、actor entropy scale $\eta\in\{3\times10^{-5},10^{-4},3\times10^{-4},10^{-3}\}$ 与 discount $\gamma\in\{0.99,0.999\}$。提高训练频率可以争取更高数据效率，但需要额外计算。这些建议与模型的实际瓶颈对应，分别控制表示压缩、探索和远期价值估计。[↗](https://arxiv.org/pdf/2010.02193v4#page=19)
+
+评估时应同时保留逐任务成绩、至少一种不会被少数极端高分主导的汇总指标，以及训练预算和随机种子。DreamerV2 的价值在于证明了独立学习的世界模型能够承担大部分策略训练，并在明确的 Atari 协议下超过强单 GPU 基线；Venture、Video Pinball 与 Montezuma 的结果也提醒读者，表示、重要小对象和探索仍可能成为新任务的主要障碍。

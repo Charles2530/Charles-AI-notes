@@ -15,362 +15,260 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
     **元数据来源与核验口径：** 来源：[官方原文](https://www.xunhuang.me/blogs/world_model.html)；Checked Date：2026-07-07；Repro Status：Blog / official materials reviewed, independent reproduction not claimed。
 
-## 原文故事线
+## 先问它要理解世界，还是要提供一个可操作的世界
 
-### 研究背景
+“世界模型”可以指机器人脑中的预测模块，也可以指机器人外部的训练环境。两者都要预测动作后果，但前者可能只需知道一个动作能否达成目标，后者还要产生让相机、控制器或人类用户能够持续接收的环境反馈。若不先区分用途，就容易把“为什么要生成无关像素”和“模拟器为什么缺少视觉细节”当成同一个争论。
 
-这篇文章讨论的是 video generation 和 world model 之间的边界。近几年 Sora、Veo 等视频生成系统已经能生成高保真、动态合理的视频，但“能生成视频”不等于“能作为世界模型”。传统 world model 可以指 agent 内部用于 planning 和 decision making 的抽象预测器，也可以指面向机器人、游戏和交互媒体的外部世界模拟器。本文关注第二类：用视频模型搭建高保真、可交互的外部世界模拟。
+Xun Huang 的《Towards Video World Models》是一篇研究路线评论。它没有提出新训练损失或新排行榜，而是针对视频生成如何变成外部世界模拟器，提出五项要求，并用已有方法说明每一项的障碍与可能路线。文章发表于 2025 年 7 月，其模型例子与比较应放在这一研究背景下理解。[原文开篇](https://www.xunhuang.me/blogs/world_model.html)
 
-作者先把 internal world understanding model 和 external world simulation model 区分开。前者不一定需要像素级细节，目标是帮助智能体理解和决策；后者必须生成足够真实、连续、可干预的外部世界。Video world model 属于后者，它继承视频生成模型的视觉能力，但还要补上交互系统必须具备的因果、动作、记忆、低延迟和物理约束。
+Figure 1 的重点是脑内与脑外的分工。内部 world model 和 perception、actor、critic 等模块协作，预测对当前决策有用的后果；外部 simulator 则承担“世界”的角色，让行动产生可以观察到的结果。
 
-### 问题（Challenge）
+![Internal world understanding and external world simulation](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-1-world-model-paradigms.jpg){ width="860" }
 
-文章要回答的问题是：**为什么当前强视频生成模型还不能直接称为 true video world model，以及从视频生成走向世界模型还缺什么能力。** 这个问题有挑战性，是因为普通视频模型优化的是“给定条件生成一段合理视频”，而世界模型要支持用户或 agent 在运行过程中不断输入动作，让未来随动作分叉。
+*原文 Figure 1，由 LeCun 的相关示意图改编。红字区分 World Model (Understand) 与 World Model (Simulate)，不能仅凭两者同名就要求它们输出相同细节。*
 
-普通视频生成可以一次性学习 \(p(v_{1:T}\mid c)\)，其中 \(c\) 是文本、图片、首帧或历史片段。交互式世界模型至少要学习 \(p(v_{t+1:t+H}\mid v_{\le t}, a_{t:t+H-1}, c)\)，其中 \(a\) 是运行时注入的动作。这里的价值在于：如果这个问题解决了，视频模型就不只是内容生成工具，而可以变成机器人训练环境、游戏世界、自动驾驶仿真器和沉浸式交互媒体的基础设施。
+可以用一个导航例子理解差别。决策模块可能只需预测前方是否可通行，不需要还原每片树叶；若环境要给视觉导航策略提供训练观测，则需要生成足够一致的视角、障碍外观和运动反馈。这里的“足够”取决于任务，并非外部模拟必须在所有细节上达到无限精度才有价值。
 
-### Finding
+文章将两类目标分别称为内部世界理解与外部世界模拟。它们可以协作，机器人用内部模型规划，再通过外部环境中的交互经验改进内部表示。视频世界模型只是外部模拟的一条实现路线，并不包揽所有 world model 研究。[原文 What Are World Models](https://www.xunhuang.me/blogs/world_model.html#what-are-world-models)
 
-作者的 finding 是：**video world model 的本质不是“更长、更清晰的视频生成”，而是一个必须同时满足 causal、interactive、persistent、real-time 和 physically accurate 五个属性的外部世界模拟器。** 这个观点把问题从单一模型尺度或画质竞赛，翻转成一组系统约束：只要缺少其中的基础约束，视频再真实也很难进入闭环交互。
+## 分类图先分目标，再分实现，避免把不同层级的方法排成一列
 
-这个 finding 的因果关系很清楚。没有 causal，模型可能在生成当前帧时利用未来信息，运行时就无法让新动作真正改变未来；没有 interactive，模型只是 observer-mode simulator；没有 persistence，长时间游走后场景和对象会漂移；没有 real-time，系统不能服务游戏、VR 或机器人闭环；没有 physical accuracy，生成结果看似合理但不能承担训练和仿真的后果。因此，五个属性不是装饰性的评价词，而是把“视频生成”改造成“世界模拟”的必要条件。
+Figure 2 先将 Goals 分成抽象理解预测和详细生成模拟，再列出对应 Approaches。这个顺序比简单列模型名更重要。
 
-### 方法
+![Goals and approaches in world-model taxonomy](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-2-world-model-taxonomy.jpg){ width="900" }
 
-本文不是提出一个新模型，而是提出一个路线图和 taxonomy。作者先定义 world model 的两种范式：internal world understanding model 面向抽象预测和决策，external world simulation model 面向高保真外部模拟。随后聚焦 video world model，逐一分析五个能力门槛以及对应研究路线。
+*原文 Figure 2。左侧是共同名称，中间是不同目标，右侧才是候选架构与技术路线。图中 (M)LLM 后的问号也保留了作者对这一路线的开放判断。*
 
-在 causal 方面，文章指出许多 diffusion transformer 依赖非因果的双向注意力，一次性生成固定帧块，这会让未来信息影响过去。可行路线是把 diffusion 的画质和 autoregressive 的时间因果性结合起来，例如 Diffusion Forcing、CausVid 和 MAGI-1。CausVid 的例子说明，可以从预训练 bidirectional video diffusion model 出发，适配成 causal attention 的 few-step autoregressive video diffusion model。
+内部理解一侧，文章讨论多模态语言模型与 JEPA。LWM 通过长视频和语言上下文吸收时序信息，V-JEPA 2 一类方法预测抽象视频表示，避免把所有细节都还原成像素。文章将它们作为具身世界理解的候选路线，并没有证明任何能描述视频的语言模型已经具备完整的行动后果预测能力。
 
-在 interactive 方面，模型要把动作视为让未来分叉的变量，而不是浅层提示词。动作可以是游戏控制、机器人关节或末端执行器命令、自动驾驶控制量、导航视角变化等。核心训练瓶颈是 frame-action alignment：游戏和仿真数据可以直接记录动作，互联网视频则需要 Genie 这类 latent action learning 路线。
+外部模拟一侧，视频生成、物理仿真平台和神经 3D/4D 表示并列。它们都能向智能体或人提供环境体验，但保存状态、接收控制和产生观测的方法不同。将“JEPA 是否更好”和“视频模拟器是否更逼真”直接放进同一排行榜，往往先混淆了比较目标。
 
-在 persistence、real-time 和 physical accuracy 方面，文章分别梳理了长记忆压缩、3D/4D 条件、state-space memory、few-step distilled diffusion、KV cache、training-time rollout、物理目标函数和物理 stress test 等方向。整体方法不是给出单一架构，而是把 video world model 拆成一组必须共同满足的训练和系统要求。
+| 首先要做什么 | 世界模型主要需要保留什么 | 更直接的检验方向 |
+|---|---|---|
+| 辅助智能体理解、预测和规划 | 决策相关的抽象状态与变化 | 预测能否帮助选择动作、提高任务表现 |
+| 为智能体提供可学习的外部环境 | 与动作相符的状态转移和观测 | 策略在环境中学到的行为是否有效 |
+| 为人提供可交互的虚拟体验 | 连贯环境、响应动作的视觉未来 | 是否能持续操作，等待与漂移是否破坏体验 |
 
-### 结论
+这张表是对原文目标区分的整理，不是作者提供的新评测标准。它提示读者先确定服务对象，再讨论是否必须生成像素、是否需要显式几何，以及速度应该以什么口径计算。
 
-因为这篇文章是技术博客和研究路线图，不是带统一实验设置的新模型论文，所以它没有报告一个自有 benchmark 的 SOTA 数字。它的“实验性结论”主要来自对已有工作的归纳：CausVid、Self-Forcing 等说明因果自回归视频扩散可以兼顾质量和低延迟；Genie / Genie-2 说明无动作标签视频中可以学习 latent action 并形成可交互环境；state-space video world model 等方向说明长时记忆不能只依赖无限上下文；PhyWorld、VideoJAM、Ctrl-Crash、PISA 等工作说明物理一致性需要专门评估和训练信号。
+## 五项要求是一组相互制约的接口条件
 
-作者最终给出的判断是：causality 和 interactivity 是硬约束，persistence 是从短 demo 走向可用系统的连续谱约束，real-time responsiveness 与 physical accuracy 之间存在应用相关的取舍。娱乐和交互媒体可能优先低延迟和视觉欺骗性，机器人学习和自动驾驶仿真则更重视物理准确性和可泛化后果。换句话说，video world model 的研究路线不能只问“视频像不像”，还要问“能不能被动作驱动、长期保持一致、低延迟响应，并在任务相关物理上可靠”。
+作者提出 causal、interactive、persistent、real-time、physically accurate 五项要求。它们不是五个可以随意相加的分数，也不是已经由社区统一认证的等级。每一项针对一类容易被漂亮视频掩盖的问题。
 
-### 关键术语
+| Requirement | 需要回答的问题 | 单靠什么还不能证明它 |
+|---|---|---|
+| Causal | 新的未来能否在已呈现历史之后继续生成 | 整段视频看起来时间顺畅 |
+| Interactive | 运行中输入动作能否改变后续结果 | 开始前给过一个文本提示 |
+| Persistent | 足够长时间后，原有环境事实是否仍成立 | 能不停产生新帧 |
+| Real-time | 能否既跟上播放，又及时反馈控制 | 只报告高 FPS |
+| Physically accurate | 动作后果是否遵循任务所需物理关系 | 纹理逼真、运动视觉上自然 |
 
-- **Video World Model（视频世界模型）**：用视频生成方式模拟外部世界，并能支持动作条件预测和交互式 rollout 的世界模型。
-- **Internal World Understanding Model（内部世界理解模型）**：面向 agent reasoning、planning 和 decision making 的抽象预测模型，不一定生成像素级细节。
-- **External World Simulation Model（外部世界模拟模型）**：面向机器人训练、游戏、仿真和沉浸式体验的高保真外部环境模拟器。
-- **Causality（因果性）**：在本文语境中指时间单向性，即过去决定未来、未来不能泄漏到过去；这是运行时交互的前提。
-- **Interactive Controllability（交互可控性）**：用户或 agent 能在生成过程中注入动作，并让未来按不同动作产生一致分叉的能力。
-- **Persistence（长期一致性）**：模型在长时间生成中保持场景布局、对象身份和历史状态不漂移的能力。
-- **Real-Time Responsiveness（实时响应性）**：模型不仅有足够吞吐量，还要让动作到画面变化的延迟足够低。
-- **Physical Accuracy（物理准确性）**：生成结果不仅视觉逼真，还要在碰撞、接触、质量、速度、遮挡和罕见事件等任务相关物理上可靠。
+前两项是作者定义交互视频世界时的基础条件，持续性可以有程度差别，实时性与物理精度则会随应用形成不同权重。将这层关系想清楚，后面的技术路线就不再是孤立的方法清单。[原文 Summary](https://www.xunhuang.me/blogs/world_model.html#summary)
 
-这篇文章很适合放在 LingBot-World 前面读。它不提出一个新模型，而是回答一个更基础的问题：**为什么 Sora、Veo 这类强视频生成模型还不能直接等价于 video world model，以及从视频生成走向世界模型需要补哪些训练和系统能力。**
+## 因果性先给尚未发生的动作留下位置
 
-作者把 video world model 的核心要求概括成五个属性：`causal`、`interactive`、`persistent`、`real-time` 和 `physically accurate`。这五个词可以直接变成评估视频世界模型的 checklist。
+### 这里说的是时间依赖，不是从相关性中识别干预效应
 
-## 论文位置
+文章专门区分两种 causal。本文要求已生成的过去不再依赖尚未知的未来，强调时间单向性；因果机器学习还会讨论混杂、干预和相关性识别，那是另一组问题。一个采用 causal attention 的视频模型，并不会因此自动证明它学到了正确的物理因果规律。[原文 Causal](https://www.xunhuang.me/blogs/world_model.html#causality)
 
-这篇文章先区分了两类经常被混用的 world model。
+普通双向 video DiT 同时处理一段固定长度视频，前后帧在去噪中相互协调。这对离线制作很有效，因为模型可以利用整段信息调整每一帧。但若视频已经全部确定，用户在播放到中间时临时按下左转，后续内容不会自然改变，系统需要一个重新生成未来的机制。
 
-第一类是 internal world understanding model。它更接近人脑里的抽象世界模型，用语义状态预测粗粒度未来，服务 reasoning、planning 和 decision making。Dreamer、JEPA、V-JEPA 更接近这一侧。
+时间自回归将接口改成先生成当前帧或短块，再把它作为历史继续生成下一块。过去已经确定，新动作可以进入尚未完成的后续条件。关键不是把矩阵形状改成三角形本身，而是系统真的按这个时间关系执行，让未来保持可受输入影响。
 
-第二类是 external world simulation model。它要生成足够详细、足够真实的外部世界模拟，服务机器人仿真训练、游戏、交互媒体和沉浸式体验。LingBot-World、Genie、CausVid、GameNGen、GAIA-1 等视频世界模型更接近这一侧。
+### 扩散与自回归可以承担不同层次的生成
 
-![World model paradigms](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-1-world-model-paradigms.jpg){ width="860" }
+文章回顾了离散 token 视频生成路线，如 CogVideo 和 VideoPoet，并指出当时一些方法面临 VQ 压缩损失和逐 token 解码速度问题。这个判断针对所讨论的实现，不应推广成所有自回归方法都必然低质量。
 
-<small>Figure source: `Towards Video World Models`, Figure 1. 原文图注要点：图中对比 internal world model 和 external world model，前者像人脑内部对粗粒度未来的预测，后者则试图模拟现实世界的完整细节。</small>
+更有用的结构是让自回归负责时间顺序，让扩散负责当前视觉单元的连续生成。当前块内可以并行去噪，块之间保留过去到未来的依赖，避免必须逐个空间 token 生成整张图像。
 
-**Figure 1 先分清 internal 和 external world model。**
-**输入输出**：输入是视频世界模型方法谱系和能力门槛，输出是 taxonomy 与评估维度。
-**效率机制**：用门槛框架减少概念混淆，避免把视频生成直接当世界模型。
-**对主线意义**：它为全站判断“视频模型是否服务决策”提供检查表。
-**不能证明什么**：taxonomy 不能证明具体系统具备闭环控制收益。
+![Adapting a bidirectional video DiT into a causal AR DiT](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-3-causvid.jpg){ width="920" }
 
-这个区分很重要。前者不一定需要生成像素，甚至可以故意丢掉视觉细节；后者则必须尽可能真实地模拟未来画面、对象、运动和交互后果。文章讨论的重点是后者，也就是 video world model。
+*原文 Figure 3，引用 CausVid。左图整段 attention 可双向读取，右图按时间限制可见关系；少步采样是配套的速度改造。*
 
-![World model taxonomy](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-2-world-model-taxonomy.jpg){ width="900" }
+作者用三项工作串起路线。Diffusion Forcing 让不同帧具有独立噪声水平，使模型可以处理历史较确定、当前更不确定的生成状态；CausVid 将已有大规模双向视频模型转成因果 AR-DiT，并进行少步蒸馏；MAGI-1 探索直接预训练 AR-DiT，并为此调整基础设施。[原文 Causal](https://www.xunhuang.me/blogs/world_model.html#causality)
 
-<small>Figure source: `Towards Video World Models`, Figure 2. 原文图注要点：该图给出 world model 的 taxonomy，把内部理解型世界模型、外部模拟型世界模型以及 video world model、simulation platform、neural 3D/4D 等路线放在同一张图中。</small>
+这三者的角色不同。前者提供训练条件的表达方式，第二项提供从强预训练模型迁移的路径，第三项探索原生训练。不能都概括成“让视频模型变快”，因为因果接口与采样速度分别解决能否接收新输入、多久给出结果。
 
-**这张分类图怎么读。**
-这张图的价值是把“world model”这个容易泛化过度的词拆开。internal world model 更像 agent 内部的抽象预测器，重点是帮助 reasoning、planning 和 decision making；external world simulation model 则要生成可观察、可交互的外部世界，重点是视觉真实、动作后果和长期一致。
+## 交互性要求同一个过去在不同动作下走向不同未来
 
-Video world model 位在后者里面，但又不同于传统 simulator。传统 simulator 依赖显式物理和手工资产，neural video world model 则依赖大规模视频生成先验，再补动作、因果和实时化。读这张图时要先判断项目目标：如果目标是机器人策略学习，可能不需要像素级真实；如果目标是交互世界模拟器，就必须同时满足 causal、interactive、persistent、real-time 和 physical accuracy。
+一个因果模型可以不停生成视频，却完全不接收外部动作。作者称它为 observer mode 的被动模拟器。要成为可操作环境，模型还要根据运行中注入的行为改变后续预测。
 
-## 核心判断
+游戏中的按键、机器人电机命令、汽车的转向与加速，都是动作接口，但维度、频率和后果完全不同。开始时输入“一个人在房间里走动”，主要是语义条件；运行中连续输入左转、停下、后退，并让画面相应变化，才是这里强调的 interactive controllability。[原文 Interactive](https://www.xunhuang.me/blogs/world_model.html#interactive)
 
-普通视频生成模型通常学习：
+原文 Figure 4 的 Genie-2 视频将相近初始场景展开为三个控制分支。下图保留原视频中的前后抽帧，按键显示与路径变化一起出现。
 
-$$
-p(v_{1:T}\mid c),
-$$
+![Original Genie-2 video frames under different interactive actions](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-4-genie2-action-frames.png)
 
-其中 \(c\) 可以是文本、图片、首帧或历史视频片段。这个目标能让模型生成视觉上合理的视频，但它不保证模型能被 agent 或用户动态控制。
+*原文 Figure 4 视频的两组原始抽帧。每组横向三列展示不同控制下的未来，后期路径明显分开；它提供定性控制例子，并非动作跟踪误差统计。*
 
-video world model 至少要学习：
+文章回顾的早期 recurrent VAE 世界模型、Dreamer 系列，以及较新的 GameNGen、DIAMOND 等扩散环境，虽然视觉表达不同，都需要连接行动与观察。驾驶和导航路线也各自采用相应动作空间。因此比较方法时，首先应问它能接收什么控制，而非只看环境视频是否真实。
 
-$$
-p(v_{t+1:t+H}\mid v_{\le t}, a_{t:t+H-1}, c),
-$$
+### 视频规模不能替代动作对齐
 
-其中 \(a\) 是动作、相机控制、键盘输入、机器人控制量或其他外部干预。也就是说，世界模型不只要回答“未来看起来像什么”，还要回答：
+网络视频覆盖很多外观与事件，但通常没有同步的电机、按键或车辆控制记录。游戏可以输出输入日志，机器人可以记录动作和传感器，真实互联网视频却往往只提供“发生了什么”，缺少“施加了什么控制”。
 
-```text
-在同一个历史状态下，如果动作不同，未来是否真的会分叉？
-```
+Genie 的无监督 latent action 学习尝试从相邻视觉状态中压缩变化因素，再让动力学使用这些因素预测。文章将它视为利用无动作标签视频的路径，也提到 Genie-2 采用 AR-DiT 的交互表现。它降低了显式动作标签要求，却没有让潜在动作天然等于某台机器人的可执行电机命令。[原文 Interactive](https://www.xunhuang.me/blogs/world_model.html#interactive)
 
-这也是文章和 LingBot-World、DreamZero 等页面的连接点。LingBot-World 给出一个具体系统如何继续训练和因果化；DreamZero 则把 video-action prediction 推到机器人 policy。本文更像上层路线图，明确这些系统应该满足哪些约束。
+这条边界直接影响应用。能够按键控制相机游览，不表示系统已经知道夹爪开合、摩擦接触和物体受力；能够生成抓取画面，也不表示它对每个关节命令都给出可信后果。控制接口、对齐数据与任务范围需要一起定义。
 
-## 五个门槛
+## 持续性包含长度，也包含同一个世界没有被悄悄换掉
 
-文章提出的五个要求可以压缩成下表。
+持续生成首先要长到足以完成任务。几秒视频可以展示一个动作，却未必覆盖探索、回访或多阶段操作。更严格的要求是，后续结果必须与先前生成保持一致。
 
-| Requirement | 解决的问题 | 对训练和系统的直接含义 |
-| --- | --- | --- |
-| Causal | 未来不能影响过去 | 需要 causal attention、autoregressive rollout 或等价的时间因果结构 |
-| Interactive | 用户或 agent 的动作能改变未来 | 数据必须包含 frame-action alignment，模型必须 action-conditioned |
-| Persistent | 长时间生成不丢场景和对象状态 | 需要长记忆、状态压缩、3D/4D 约束或 state-space memory |
-| Real-time | 交互延迟足够低 | 需要 few-step generation、KV cache、蒸馏和低延迟架构 |
-| Physically accurate | 未来不能只视觉合理，还要物理合理 | 需要物理相关目标、数据筛选、仿真数据或稀有事件微调 |
+可以用离开房间再返回的情形理解。模型在离开期间仍不断输出清晰图像，只说明 rollout 没有停止；返回时桌子、门和此前移动过的物体应当仍处在相容状态，才说明环境具有一定 persistence。这个例子是对文章要求的解释，不是原文额外报告的一组成功率实验。
 
-前两个是硬约束。没有 causal，就无法在生成过程中插入新动作；没有 interactive，就只是 observer-mode simulator。后三个更像连续谱：不同应用对 persistence、real-time 和 physical accuracy 的优先级不同。
+长 context Transformer 理论上能读取更多历史，但每次生成也可能随历史增长而变贵。人类交互环境不能因为运行十分钟就比第一分钟明显卡顿，因此记忆结构同时是一个运行时问题。[原文 Persistent](https://www.xunhuang.me/blogs/world_model.html#persistence)
 
-## Causal：从双向视频生成到自回归世界模拟
+### 压缩远期历史，隐含了近期信息更重要的假设
 
-当前很多强视频模型使用 diffusion transformer，在一个视频块内用双向注意力同时生成所有帧。这对离线视频生成很有效，但对世界模型有根本问题：模型在生成当前帧时可以利用未来帧信息，时间结构不是因果的。
+FAR 与 FramePack 类路线对较远的历史压缩得更强，将计算优先分配给近帧。这适合近期视觉已足够决定未来的场景，但可能丢失很早出现、当前才重新变重要的细节。
 
-如果模型一次性生成 \(T\) 秒视频，那么用户在第 \(t\) 秒输入的新动作无法真正改变已经被“整体决定”的未来。它最多重新生成下一段视频，而不是在统一世界状态里连续响应。
+作者借用 needle in a haystack 类比说明这个问题。压缩做得越激进，模型越需要知道什么是未来仍有用的事实；如果所有远期细节一概压低，某个目标物体、房间入口或早先交互状态可能恰好被丢掉。它是一种明确的归纳偏置，不能只用“支持长上下文”掩盖信息选择。
 
-文章因此强调：video world model 需要把 diffusion 的画质和并行效率，与 autoregressive 的时间因果性结合起来。
+### 显式三维条件擅长保存空间，动态世界还需要时间状态
 
-![CausVid](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-3-causvid.jpg){ width="920" }
+另一类方法将持久 3D 条件输入视频生成，例如 GEN3C、显式 3D 建模和空间记忆路线。相机移动时，可以重新查询同一几何结构，因此静态场景的一致性较容易保持。
 
-<small>Figure source: `Towards Video World Models`, Figure 3. 原文图注要点：CausVid 将预训练的 bidirectional video diffusion model 改造成带 causal attention 的 few-step autoregressive video diffusion model。本站读法：这张图支撑 causal 门槛，也就是视频世界模型必须避免未来帧泄漏；它不证明 CausVid 本身已经具备动作交互和长期记忆。</small>
+困难转向动态环境。物体不仅占据空间，还会运动、变形、被拿走或遮挡。若用显式表示保存这些变化，就要处理更复杂的 4D 状态更新。静态几何一致并不能单独保证不可见对象仍按时间正确变化。[原文 Persistent](https://www.xunhuang.me/blogs/world_model.html#persistence)
 
-**为什么 CausVid 被放在 causal 门槛下面。**
-这张图说明的是视频世界模型和普通视频生成模型的第一道分界：未来不能泄漏到过去。bidirectional video diffusion 可以一次性生成整段视频，画质高，但推理时当前帧可能隐式依赖未来帧；交互系统里未来动作还没发生，因此这种依赖会破坏闭环。
+### 循环状态将历史压成固定形式，局部 attention 保留近期细节
 
-CausVid 的意义在于把高质量 bidirectional teacher 改造成 causal student，并用少步蒸馏保证实时性。它不是说所有 video world model 都必须用 CausVid，而是说明一条通用路线：先继承强视频扩散先验，再改成自回归/因果 rollout，最后用 few-step 生成和 KV cache 降低延迟。
+第三条路线使用线性 RNN 或 state-space model，让时间推进主要表现为隐藏状态更新，避免每帧重新读取不断增长的历史。原文引用的 State-Space Video World Model 将 block-wise SSM scan、3D hidden states 与 frame-local attention 结合。
 
-这里涉及三类训练路线：
+![State-space scans and local frame attention](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-5-state-space-video-world-model.png){ width="920" }
 
-| 路线 | 训练思路 | 对世界模型的意义 |
-| --- | --- | --- |
-| Diffusion Forcing | 给不同帧设置独立噪声水平，让扩散模型具备 next-token-like 的自回归生成能力 | 把 full-sequence diffusion 和 next-frame prediction 接起来 |
-| CausVid | 从预训练 bidirectional video diffusion model 出发，适配成 causal attention 的 AR-DiT，并通过少步生成降低延迟 | 尽量保留视频扩散质量，同时获得流式 rollout |
-| MAGI-1 | 从头预训练 AR-DiT，并针对自回归视频生成做基础设施优化 | 说明因果视频生成也可以作为基础模型路线，而不只是后训练补丁 |
+*原文 Figure 5。中间为分块 SSM 扫描，右侧 local attention 只读取近邻帧；结构在长期压缩记忆与近期高保真信息之间分工。*
 
-这对训练框架的启发是：如果目标是交互式世界模型，训练和推理都必须避免“未来帧泄漏”。否则离线生成质量再高，闭环交互时也会出现训练-推理不一致。
+3D hidden state 让空间组织参与历史更新，局部 attention 则保留最近画面的详细关系。它与早期 ConvLSTM 视频预测在“循环保存历史”这一点上有相似性，但图示并不证明固定状态能够无损记住无限细节。状态容量、更新规则和训练目标仍决定哪些事实会留下。
 
-## Interactive：动作不是附加条件，而是未来分叉变量
+| Memory route | 保存历史的方式 | 主要优势 | 关键压力点 |
+|---|---|---|---|
+| 远期帧压缩 | 保留历史但降低远期表示精度 | 控制 context 成本，保留近期细节 | 早期关键事实可能被压掉 |
+| 持久 3D 条件 | 将场景空间结构显式保留 | 便于跨视角一致和回访 | 动态对象与 4D 更新复杂 |
+| 循环 / SSM 状态 | 持续更新固定形式隐藏状态 | 每步成本更稳定 | 压缩状态是否保留任务信息 |
 
-interactive controllability 是 video world model 的分水岭。文章把它定义为：用户或 agent 可以在运行过程中注入动作，并让模型预测随动作改变的未来。
+这三条路线没有在本文接受统一预算的定量比较。它们回答的是如何处理记忆与成本，实际选择仍要看应用中的关键历史是什么。
 
-动作形式取决于应用：
+## 实时性需要同时看生成速度和动作反馈
 
-| 应用 | 动作接口 |
-| --- | --- |
-| 游戏 | 键盘、鼠标、手柄、角色操作、物体交互 |
-| 机器人 | 末端位姿、关节角、夹爪控制、移动底盘指令 |
-| 自动驾驶 | 转向、速度、轨迹点、规划意图 |
-| 导航世界模型 | 相机位姿、前进/转向/停止、视角控制 |
+高 FPS 容易掩盖交互延迟。一个系统可能提前算好很多帧，播放一直流畅，却要等缓冲区中的旧内容播完，才让刚按下的控制键改变画面。用户感受到的仍是动作迟钝。
 
-训练难点不只是把 action token 拼进模型，而是拿到足够好的 frame-action alignment。游戏和仿真环境可以直接记录动作；互联网视频通常没有动作标签，因此需要从视频中学习 latent action 或通过伪标签补控制信号。
+文章因此分开讨论 throughput 与 latency。前者问单位时间产出多少帧，后者问新动作进入系统后，多久出现真正受它影响的画面。生成吞吐至少跟得上播放消费，是长时间流畅运行的必要条件；动作响应还需要满足应用自己的延迟预算。[原文 Real-Time](https://www.xunhuang.me/blogs/world_model.html#real-time)
 
-文章提到 Genie 的意义就在这里：它尝试从未标注视频中学习可控 latent action。Genie-2 进一步展示了大规模 foundation world model 可以根据不同交互动作生成不同未来。
+| Quantity | 原文定义及判断用途 | 不能据此直接推出什么 |
+|---|---|---|
+| Throughput | 模型每秒生成的帧数，能否长期支撑播放 | FPS 高不等于动作响应快 |
+| Latency | 交互动作到响应帧之间的延迟 | 低首帧延迟不等于之后每个动作都及时 |
+| Buffer | 原视频界面显示已生成与已播放帧的差额 | 缓冲能改善播放连续性，也可能延后新动作生效 |
 
-从训练角度看，interactive world model 需要满足三个条件：
+前两项是作者明确提出的评价维度，第三项来自原始演示界面的阅读，用来解释二者如何在系统中相互影响。缓冲不是越多越好，关键要看已经生成的未来还能否接受新动作，以及旧帧能否被替换。
 
-1. 同一类状态下存在不同动作导致的不同后果，否则模型会学到平均未来；
-2. action condition 要进入生成主干或 dynamics predictor，而不是只在浅层作为提示；
-3. 评测必须固定历史、改变动作，检查未来是否出现一致、可解释的分叉。
+作者引用研究，举出直播约 1 秒、游戏约 0.1 秒、VR 约 0.01 秒的可接受延迟例子。这些数值在文中用于说明应用差异，不能当作所有设备、内容、用户与任务通用的硬标准。机器人闭环还会有自己的传感、控制周期与安全边界，本文没有给出统一阈值。
 
-这也解释了 LingBot-World 为什么强调 interaction data engine、action adapter 和 causal rollout。没有动作对齐数据，视频模型只能做视觉续写；有了动作但没有因果推理，模型也很难实时响应新输入。
+### 非因果长块的问题是未来提前确定
 
-## Persistent：长时记忆不能只靠无限长上下文
+原文将一次性生成 $t$ 秒视频的非因果模型描述为至少具有 $t$ 秒交互延迟，并进一步断言它无法真正实时。理解这个判断需要保留其系统前提。
 
-世界模拟不能只生成几秒视频。游戏、机器人训练和导航都要求模型在长时间内保持同一个世界：房间结构不能变、对象身份不能漂移、走过的路径不能被重新生成。
+若整段未来已经固定，系统继续按原计划播放，段中到来的动作确实无法影响这些帧。但实际等待多长，还取决于动作在块内何时到来，系统是否允许丢弃已生成帧、重新生成剩余内容，以及是否采用部分流式输出。固定块长本身并不是所有实现的普适墙钟延迟下界。
 
-直觉上可以把 persistence 当成“长上下文问题”，但文章指出这在 video world model 里不够。LLM 可以随着上下文变长而变慢，交互世界模型不行；如果游戏或仿真越玩越卡，系统就不可用。
+能够稳妥保留的结论是，交互系统需要让未显示的未来及时接受新动作。时间自回归提供自然接口，小块生成缩短提交范围，少步蒸馏减少每次计算，KV cache 则复用过去条件。因果 attention 解决的是依赖关系，不能单独保证整个系统已足够快。
 
-因此 persistence 需要在长记忆和固定延迟之间折中。文章提到几条路线：
+这也解释了文章为何同时讨论 CausVid 与 Self Forcing。前者将因果生成与分布匹配蒸馏结合，后者在训练时运行自己的自回归生成过程，让模型学习处理自身输出构成的历史，并采用 KV 缓存。速度和长程质量在这里互相牵制，推理步骤少了，模型还要能在自己的误差上继续生成。
 
-| 路线 | 核心思路 | 风险 |
-| --- | --- | --- |
-| Temporal compression | 对远处历史做激进压缩，例如 FAR、FramePack | 如果关键细节埋在早期帧，压缩后可能丢失 |
-| Persistent 3D condition | 用 3D/4D 表示维护世界几何或场景状态 | 对动态对象和开放世界变化建模困难 |
-| State-space memory | 用 linear RNN / SSM 处理长程依赖，让每帧计算不随历史线性增长 | 需要在长记忆和局部视觉细节之间补足归纳偏置 |
+![Original Self Forcing streaming demonstration](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-6-self-forcing-streaming-frame.png)
 
-![State-Space Video World Model](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-5-state-space-video-world-model.png){ width="920" }
+*原文 Figure 6 视频抽帧。界面同时显示生成中、目标播放 15 FPS、frames ready 39 与 displayed 34；这些是该演示时刻的运行状态，不是独立测得的模型吞吐基准。*
 
-<small>Figure source: `Towards Video World Models`, Figure 5. 原文图注要点：State-Space Video World Model 将 block-wise SSM scan 与 3D hidden states 结合，用于长期记忆，同时用 local attention 提升视觉细节。本站读法：先看 SSM 负责长程状态，再看 local attention 补局部视觉细节；它说明 persistence 需要固定延迟记忆机制，不是单纯把 context 拉长。</small>
+博客引用 Self Forcing 的结果为单 GPU 约 17 FPS、亚秒级延迟，并提到 APT2 继续探索训练时 rollout 和交互控制微调。这里的 17 FPS 是所引工作的性能报告，不能从视频文件的编码帧率推出，也不能推广到任意分辨率、硬件、帧块长度或动作条件。
 
-对训练世界模型来说，persistence 不能只看 FVD 或单段视频质量。更直接的评测应该包括：
+更完整的系统报告应同时给出硬件、输出分辨率、吞吐、首帧或动作响应延迟、长时间运行速度是否下降，以及测量时采用的缓冲策略。这些项目是由文章讨论推导出的阅读准则；博客本身没有把列举的所有系统放在统一环境下重测。
 
-1. 长时间 rollout 后对象身份是否保持；
-2. agent 转身再回来时场景是否一致；
-3. 被遮挡或暂时离开画面的目标是否能恢复；
-4. 生成速度是否随历史增长明显下降；
-5. 错误是否会在自回归 rollout 中持续累积。
+## 物理准确性决定生成的经验是否值得学习
 
-## Real-Time：吞吐和延迟是两个指标
+对于娱乐，画面在视觉上可信可能已经有价值。对于训练机器人，问题会更具体。夹爪是否真能托住物体，支撑消失后物体是否会落下，碰撞后运动方向是否合理，这些后果决定策略会学到什么。
 
-文章对 real-time 的区分很有工程价值：吞吐量和延迟不是一回事。
+因此，视觉质量高并不能直接证明动态规律正确。模型可能很好地复现熟悉动作的外观，却在训练数据较少覆盖的速度、质量、接触状态或动作组合上产生错误。若策略持续利用这样的预测，错误会从画面进入决策。
 
-吞吐量是每秒能生成多少帧。只要生成速度大于播放速度，理论上可以实时播放。延迟是用户动作到响应画面的时间。交互式世界模型必须同时满足二者。
+### 组合泛化与物理参数外推需要分开检验
 
-一个模型可以离线 30 FPS 生成一段 8 秒视频，但如果每次响应动作都必须先生成完整 8 秒块，它的最小交互延迟就是 8 秒。这对游戏、VR 或机器人闭环控制都不可接受。
+原文引用 Kang 等人的 PhyWorld 研究。该研究使用物理模拟器产生的简单二维数据，区分组合泛化与物理属性分布外的外推；博客概括的发现是，前者有一定可行性，后者在未见速度、质量等条件下仍有明显失败。[原文 Physically Accurate](https://www.xunhuang.me/blogs/world_model.html#physically-accurate)
 
-文章给出一个关键结论：**非因果 diffusion model 无法获得真正 frame-wise 低延迟交互。** 只要模型必须整段生成，动作响应就被 chunk length 下限卡住。
+这个结果的意义是将“看起来懂物理”拆成可检查的问题。见过分别运动的物体后，能否处理它们的新组合；见过某一速度范围后，能否正确处理范围之外的运动，两者不是同一能力。把有限数据分布中的成功直接称为掌握普适物理定律，会忽略这个差别。
 
-因此 real-time video world model 通常需要组合：
+同样，这项被引用的实验也不能支持“所有视频世界模型都不可能学会物理”。实验使用特定数据、架构与测试设置，能说明相应外推问题尚未解决。博客没有提供逐项实验表或新的复现，因此这里保留结论层级，不另造成功率或误差数值。
 
-```text
-causal / autoregressive generation
-  + KV cache or recurrent state
-  + few-step distilled diffusion
-  + training-time rollout simulation
-  + action-conditioned finetuning
-```
+作者随后提出乐观判断，认为很多实际任务可能与互联网视频中已有情形具有组合相似性，并用“训练分布覆盖整个世界就没有分布外”作轻松表达。这句话适合读作对扩大数据覆盖的期待。现实数据有限，机器人执行自己的策略后还会主动进入稀有状态；相似外观也不能保证关键物理参数已被观测。因此它不是分布外问题已经消失的证据。
 
-文章提到 CausVid 使用 DMD 方向的 distillation，Self-Forcing 进一步在训练中模拟推理过程，也就是让模型在训练时经历 autoregressive rollout + KV cache 的状态分布。它报告在单 GPU 上实现 `17FPS` 和 subsecond latency，同时接近强开源视频扩散模型的质量。
+### 目标函数与数据覆盖是两种互补干预
 
-这个训练细节很重要：如果训练只看 teacher-forced clean context，推理时却不断吃自己生成的历史，误差会滚雪球。Self-Forcing、APT2 这类方向的共同点，是把 inference-time rollout 的状态分布提前带进训练。
+文章给出三项增强物理真实感的例子。VideoJAM 认为仅关注常用像素重建目标不足以表达运动一致性，因此联合引入 optical flow 去噪目标，让训练显式关心运动。Ctrl-Crash 使用汽车事故片段微调，补充正常行驶视频较少覆盖的碰撞事件。PISA 则使用合成或真实物体下落视频进行微调。
 
-## Physically Accurate：视觉真实不等于物理可用
+| Work cited | 博客强调的干预 | 希望补足的信息 |
+|---|---|---|
+| VideoJAM | 联合视频与光流去噪目标 | 图像变化所对应的运动结构 |
+| Ctrl-Crash | 用汽车事故视频微调 | 稀有碰撞及其后果 |
+| PISA | 用合成或真实物体下落视频微调 | 重力、支撑与下落相关情形 |
 
-video world model 作为模拟器，不能只生成“看起来像真的”视频，还要尽量遵守物理约束。文章指出一个现实问题：模型规模和数据量会提升物理 realism，但不等于模型学会可外推的物理规律。
+三者提示两条可以叠加的路线。一条改变模型被要求预测什么，避免清晰图像掩盖运动错误；另一条改变模型见过什么，让重要但稀少的事件在训练中有足够权重。本文没有给出统一控制变量的比较，因此不能据此排列三项工作的强弱。
 
-PhyWorld 这类工作用简单 2D 物理数据评估视频模型的 generalization。文章总结的关键现象是：组合式泛化可能做得到，但对速度、质量等物理属性的 OOD extrapolation 仍然困难。
+应用时还要决定什么物理误差真正影响任务。远景布料的细节变化可能只影响观看效果，抓取过程中接触点偏移却可能改变动作成功与否。针对下游动作后果定义评价，比单一“物理真实感”总分更容易定位问题。这是从文章论点延伸出的应用分析，并非作者新增的实验结论。
 
-这不意味着视频世界模型不可用，而是提醒我们区分两种目标：
+## 双头金字塔把应用分歧留在图里
 
-| 使用场景 | 需要的物理能力 |
-| --- | --- |
-| 娱乐和交互媒体 | 足够骗过人眼，局部物理合理即可 |
-| 机器人训练 | 必须保留接触、碰撞、摩擦、质量和可操作性 |
-| 自动驾驶仿真 | 对罕见风险、事故、遮挡、碰撞有更高要求 |
-| 科学仿真 | 需要可外推规律，纯视频模型通常不够 |
+五项要求并非一条完全线性的排行榜。作者在总结图中把 causal、interactive、persistent 排成底部层级，随后让顶端分向 real-time 与 physically accurate。
 
-除了扩大数据和模型，文章提到两类增强方法：
+![The dual-head pyramid of video world model requirements](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-8-levels-pyramid.jpg){ width="760" }
 
-1. 目标函数增强：例如 VideoJAM 加入 optical flow denoising objective，让模型不只重建外观，也学习运动一致性；
-2. 数据分布增强：例如 Ctrl-Crash、PISA 这类方法对事故、物体下落等物理关键场景做 fine-tuning 或数据策展。
+*原文 Figure 8。底部三层说明环境接口与持续运行，两个顶端分别对应对实时交互和物理准确的强调；这是作者提出的组织框架，不是社区认证标准。*
 
-对训练世界模型来说，这一节的启发是：物理能力不能只靠视频质量指标验收。需要构造任务相关的 stress test，例如碰撞、接触、遮挡、快速运动、罕见事件和 OOD 参数。
+在作者选择的外部视频仿真定义下，因果性和交互性属于硬要求。一个不能让新动作改变后续结果的系统，很难承担可操作环境；持续性则有程度差别，即使尚不能无限保持全部细节，中等长度、局部可靠的模拟仍可能有用。[原文 Summary](https://www.xunhuang.me/blogs/world_model.html#summary)
 
-## 五个属性之间的取舍
+两个顶端提醒读者先确定使用者。面向人的交互娱乐必须及时回应操作，只要运动足以支持观看和操控，未必需要精确恢复全部物理量。面向机器人学习的模拟则更关心动作后果是否值得信任，离线生成训练经验未必必须与真实时间同步。
 
-文章最后用一个双头金字塔总结了取舍关系。causality 和 interactivity 更像底座；persistence 是从短 demo 走向可用系统的中间约束；real-time 和 physical accuracy 之间存在明显冲突。
+“训练时不要求实时”也不等于速度无关。吞吐仍决定单位预算内能生成多少轨迹，延迟仍可能影响在线规划是否可用。只是当目标是离线训练策略时，物理错误导致的错误经验可能比慢一些生成更加昂贵；当人正在游戏中转向时，即使结果很真实，迟到的响应也无法补回操作体验。
 
-![Levels of video world models](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-8-levels-pyramid.jpg){ width="760" }
+原文用模型规模概括这种取舍，大模型往往较准确但较慢，小模型更适合实时。这个方向具有解释力，但不能当作不变定律。训练数据、蒸馏质量、动作空间、模型结构和运行系统都能移动两者的边界；本文没有建立规模与物理准确性的通用定量曲线。
 
-<small>Figure source: `Towards Video World Models`, Figure 8. 原文图注要点：图中把 video world model 的层级画成双头金字塔，强调 real-time responsiveness 与 physical accuracy 之间存在 trade-off，不同应用会选择不同优先级。</small>
+## 物理引擎、神经三维表示和视频模型各自保存了什么
 
-**这张层级金字塔图怎么读。**
+讨论五项门槛以后，作者回到更宽的外部仿真路线。视频生成只是其中一种，显式物理模拟与神经三维、四维表示也能承担不同职责。
 
-这个判断很适合指导项目选型：
+物理仿真平台通常将动力学引擎与渲染器分开。状态、碰撞、约束与控制由明确的模拟机制推进，再把状态渲染成观察。MuJoCo、Isaac 和 Genesis 是文中例子。这类系统便于接入机器人训练，但制作具体场景、物体和任务常需额外工作，照片级视觉与实时渲染也会带来成本。[原文 Other Approaches](https://www.xunhuang.me/blogs/world_model.html#other-approaches)
 
-| 项目目标 | 优先级 |
-| --- | --- |
-| 交互游戏 / 虚拟体验 | causal、interactive、real-time 优先，physical accuracy 够用即可 |
-| 机器人仿真训练 | interactive、persistent、physical accuracy 优先，real-time 不一定是硬约束 |
-| 自动驾驶仿真 | physical accuracy、rare event coverage、long-horizon consistency 优先 |
-| 数据生成 / 视频资产 | photorealism 和 controllability 优先，不一定需要低延迟 |
+神经三维、四维路线让网络生成显式世界表示，例如 3D 或 4D Gaussian Splatting。Wonderland、WonderWorld、Bolt3D 等工作被列为相关方向。对于已有的三维场景，同一表示可以服务多个视角，渲染效率与视角一致性有明显结构优势；若世界中的物体还要自由运动并响应复杂交互，动态状态的建模会增加难度。
 
-所以“最强视频世界模型”不是单一指标。不同应用会在速度、真实感、物理、可控性和长期一致性之间选择不同 Pareto 点。
+视频世界模型把大量外观与事件规律放进生成模型，在条件变化、场景多样性和写实画面上具有吸引力。不过，它并不自动显式保存可查询的三维状态，也不天然满足实时互动。前面讨论的 persistence 与 real-time，正是在这里重新出现。
 
-## 其他世界模拟路线
+![Qualitative comparison of simulation paradigms](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="920" }
 
-文章还把 video world model 放到更大的 world simulation 路线里比较：传统 simulation platform、neural 3D/4D 和 video world model。
+*原文 Figure 9。表中 High、Mid、Low、Good 与 N/A 是作者在 2025 年文章中的定性判断，没有统一测试集、硬件和误差指标。*
 
-![Simulation approaches](../../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="920" }
+为便于对照原图，下面保留其英文条目。N/A 也按原图记录，不将其改写成“所有神经三维方法都没有动力学”。
 
-<small>图源：`Towards Video World Models`，Figure 9。表格要点：该表比较 Simulation Platform、Neural 3D/4D 和 Video World Model 在 Dynamic Physics、3D consistency、Photorealism、Speed 与 Generalizability 上的优劣。</small>
+| Axis | Simulation Platform | Neural 3D/4D | Video World Model |
+|---|---|---|---|
+| Dynamic Physics | Good | N/A | Mid |
+| 3D Consistency | High | High | Low |
+| Photorealism | Mid | Mid | High |
+| Speed | Mid | High | Low |
+| Generalizability | Low | Mid | High |
 
-**这张 simulation approaches 表怎么读。**
-这个表的重点是权衡：video world model 在 photorealism 和 generalizability 上有优势，但 3D consistency 和 speed 仍弱；传统仿真平台物理强、可控性好，但泛化和 photorealism 受限；neural 3D/4D 渲染快、3D 一致性更好，但动态物理和开放世界泛化仍难。读这张表时不要把它当排行榜，而要先问任务更需要哪一列：训练机器人接触策略更需要物理，做开放世界视觉想象更需要泛化和真实感，做实时交互又会被速度卡住。
+这个比较适合作为寻找结构优势的入口，不适合当成定量榜单。“泛化高”尤其需要限定含义，视频模型对视觉场景和语言条件的适应广，并不自动意味着它对未见质量、接触或机器人控制也具有高外推准确率；前面的 PhyWorld 讨论已经给出反例方向。
 
-因此短期更现实的方向可能是 hybrid system：
+### 混合系统可以把不同责任分配给不同表示
 
-```text
-physics simulator / 3D state
-  + neural 3D/4D representation
-  + video diffusion / AR-DiT renderer
-  + action-conditioned rollout
-```
+文章用 WonderPlay 举例，将物理模拟器、3D Gaussian 表示和视频扩散组合起来。可以从职责分配理解这条路线，动力学机制约束对象如何运动，三维表示维持空间结构，视频生成补足视觉表达。
 
-WonderPlay 这类方向就是把物理仿真、3D Gaussian 表示和视频扩散结合起来，试图同时获得物理动态、3D 一致性和照片级视觉。
+这种组合的价值取决于接口是否可靠。渲染出的接触位置应与动力学状态相容，生成过程不能随意改变会影响控制的物体身份或几何，新的视觉细节也不能使观察偏离可执行动作的实际后果。否则，单个模块分别漂亮或准确，合起来仍可能产生不一致经验。
 
-## 和 LingBot-World 的关系
+这些接口问题是对混合路线的工程分析。博客没有为 WonderPlay 提供重新测量的比较表，也没有证明某种组合已经满足五项要求。它提出的是一种值得探索的分工，避免把所有问题都压在同一个表示和生成目标上。
 
-本文可以看作 LingBot-World 页面的前置路线图。
+## 从这篇文章带走一套能用于项目的追问方式
 
-| 维度 | Towards Video World Models | LingBot-World |
-| --- | --- | --- |
-| 类型 | 路线综述和研究判断 | 具体开源系统论文 |
-| 主要问题 | video generator 距离 world model 缺什么 | 如何把视频基础模型训练成交互世界模拟器 |
-| 核心框架 | causal、interactive、persistent、real-time、physical accuracy | 数据引擎、长序列训练、动作条件、因果化、少步蒸馏 |
-| 训练细节 | 总结 Diffusion Forcing、CausVid、Self-Forcing、SSM memory、VideoJAM 等方向 | 给出 LingBot-World 自己的多阶段训练和系统 pipeline |
-| 适合用途 | 搭建判断框架和阅读地图 | 学习具体 video world model 工程实现 |
+这篇博客的贡献在于给“从视频生成到世界模拟”的讨论补上接口与运行条件。它没有提出新损失函数、统一训练配方或新的综合基准，因而最适合用来组织选型与实验问题。
 
-如果把 LingBot-World 的 pipeline 放进本文的五个门槛里，可以对应成：
+若要做可互动环境，首先写清输入的动作空间、输入到来频率、可修改未来的粒度，以及响应延迟如何测量。若要做机器人训练，还要写清哪些动作后果必须可信，哪些状态超出了训练覆盖，策略是否会主动进入模型最不可靠的区域。若要做长程探索，则需要设计离开再返回、遮挡后重现、对象被移动后回访等能检验历史状态的任务。
 
-| 本文门槛 | LingBot-World 对应设计 |
-| --- | --- |
-| Causal | block causal attention、causal student、streaming rollout |
-| Interactive | action adapter、Plücker camera embedding、keyboard/action condition |
-| Persistent | 5 秒到 60 秒 curriculum、long-horizon middle training、spatial memory |
-| Real-time | few-step distillation、self-rollout、DMD/adversarial optimization |
-| Physically accurate | 主要依赖视频基础模型和数据覆盖，仍是局限之一 |
+这些问题会把宣传中宽泛的“实时”“长时”“懂物理”变成可复查的条件。同样的模型可以在一个用途里足够好，在另一个用途里仍缺少关键接口；判断依据应是任务需要和所提供的证据。
 
-所以本文不是 LingBot 的替代，而是解释为什么 LingBot 必须做这些训练改造：它不是为了“让视频更好看”，而是为了满足世界模型的因果、交互、长记忆和实时约束。
-
-## 对世界模型训练的启发
-
-第一，训练视频世界模型不能只用视频质量指标。FVD、VBench 或人眼偏好只能说明画面是否自然，不能说明动作是否真正改变未来、长期状态是否一致、物理是否可用于控制。
-
-第二，causalization 应该尽早进入架构设计。后训练可以把 bidirectional DiT 改成 AR-DiT，但如果目标一开始就是交互系统，从数据、attention mask、cache、chunking 到 loss 都应该围绕 causal rollout 设计。
-
-第三，动作数据是瓶颈。游戏和仿真环境天然有 action labels，互联网视频没有。无监督 latent action learning、相机轨迹估计、机器人日志、多模态伪标签会成为 video world model 数据引擎的核心。
-
-第四，real-time 要训练时处理，而不是部署时再优化。KV cache、自回归 rollout、少步蒸馏和模型自生成历史都会改变输入分布；如果训练不覆盖这些状态，推理时延迟和误差累积会一起爆炸。
-
-第五，物理能力需要任务化评测。对机器人和自动驾驶来说，真正重要的是接触、碰撞、遮挡、风险和 OOD 事件，而不是平均视频质量。
-
-## 诊断实验应该怎么设计
-
-这篇文章不是实证论文，但它给出了很好的实验设计框架。要判断一个视频生成器是否接近 video world model，可以把五个门槛分别转成 stress test。
-
-| Requirement | 最小诊断实验 | 通过标准 | 常见假阳性 |
-| --- | --- | --- | --- |
-| Causal | 只给历史帧，不允许未来帧泄漏，逐帧或逐 chunk rollout | 当前输出只依赖过去和已发生动作 | 离线整段 diffusion 画面好看，但交互时未来动作无法插入 |
-| Interactive | 固定同一历史，系统性改变动作 | 未来按动作出现可解释分叉 | 模型只改变镜头方向，物体状态仍沿默认未来走 |
-| Persistent | 长 rollout 后回到旧地点或旧对象 | 场景拓扑、对象身份和遮挡后状态保持 | 短片段 FVD 好，但转身回来房间被重新生成 |
-| Real-time | 测动作输入到首帧响应延迟，而不只测平均 FPS | 延迟低于应用阈值，且随历史增长不失控 | 离线能 30FPS 生成，但每次动作要等完整 chunk |
-| Physically accurate | 设计接触、碰撞、遮挡、下落和罕见事件 | 后果符合任务需要的物理约束 | 视觉上自然，但 planner/robot 一用就失败 |
-
-这张诊断表比“谁的视频更真实”更接近工程验收。比如机器人项目可以降低 photorealism 权重，但必须提高 interactive、physical accuracy 和 long-horizon consistency；交互游戏可以接受局部物理不准，但不能接受按键延迟和场景身份漂移。
-
-## 局限与不可外推结论
-
-这篇文章是高质量路线综述，但不是实证论文。它不提供统一 benchmark，也不证明某个模型同时满足五个属性。
-
-需要注意的边界包括：
-
-1. `causal`、`interactive`、`persistent`、`real-time` 和 `physically accurate` 是作者提出的判断框架，不是社区统一标准；
-2. 文章引用的很多方法来自不同任务、不同数据和不同评测口径，不能直接横向比较指标；
-3. video world model 更偏外部模拟器，不等于 Dreamer 那类 latent dynamics / model-based RL 世界模型；
-4. 对机器人训练来说，视觉真实仍可能不足以解决 sim-to-real，物理和接触建模更关键；
-5. 对人类交互娱乐来说，低延迟可能比严格物理更重要，不能用同一套指标评价所有应用。
-
-## 阅读结论
-
-最实用的读法是：把这篇文章当作视频世界模型的“需求规格说明”。如果一个视频模型要从生成器升级成世界模拟器，至少要逐项回答：是否因果、是否可控、是否持久、是否低延迟、是否物理可信。
-
-它的可复用机制是把视频生成评测改成任务化 stress test：固定历史换动作、长 rollout 回到旧对象、实时响应、物理接触和罕见事件。不可外推项是这不是统一 benchmark，也没有证明某个模型同时满足五个门槛；它更适合作为后续 CausVid、LingBot-World、DreamZero 等工作的阅读框架。
-
-## 相关阅读与下一步
-
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Towards+Video+World+Models&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Towards+Video+World+Models)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Towards+Video+World+Models)。
-- 站内下一步：[论文精读专题](../index.md)。
+文章开头区分的内部理解与外部模拟，也因此回到同一条链路。机器人内部模型可以只保留决策所需的抽象状态，外部模拟器则负责产生可交互的经验。二者能够相互帮助，但各自应接受与职责一致的检验，不能用漂亮视频替代动作后果验证，也不能用一个抽象预测指标代表完整环境已经建成。

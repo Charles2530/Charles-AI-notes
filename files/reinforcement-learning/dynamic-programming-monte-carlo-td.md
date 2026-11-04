@@ -1,173 +1,102 @@
-# 动态规划、Monte Carlo 与 TD
+# 动态规划、Monte Carlo 与 TD，怎样估计同一个价值
 
-## 本章回答什么
+六格地图中的策略在状态 0 选择向右，经过 $0\to1\to2\to5$ 到达终点，奖励为 $[-1,-1,0]$。只凭这条经历，应该怎样修改各状态的价值？如果还能查询环境所有动作后果，计算又有什么不同？动态规划、Monte Carlo 与 TD 共享价值定义，区别在于怎样获得未来的信息。
 
-已经有了 Bellman 方程，怎样真正算出 value？本章用同一个 2×3 GridWorld 比较三条路径：Dynamic Programming（DP）枚举已知模型，Monte Carlo（MC）等待完整 episode，Temporal-Difference（TD）从单步样本 bootstrap。
+环境、终止奖励和动作编号沿用 [Bellman](mdp-value-bellman.md)。本文把策略固定下来讨论预测，再说明怎样进入控制，避免把评估一个策略和寻找最优策略混成同一项计算。
 
-三类方法解决的是同一个预测问题，却依赖不同数据、产生不同偏差与方差。读完后，你应能说明 policy evaluation、policy improvement、policy iteration、value iteration、first-visit Monte Carlo、TD(0) 和 n-step return 之间的依赖关系，并正确处理 terminal mask。
+## 有模型时，当前没走过的分支也能算
 
-## 先修知识
+假设策略在每个非终止状态均匀选四个方向。动态规划可以查询所有动作与后继状态，以概率加权构造目标
 
-先读 [MDP、价值函数与 Bellman](mdp-value-bellman.md)。本章直接使用 \(V^\pi\)、\(Q^\pi\)、Bellman expectation、Bellman optimality、return 和 discount，不重新定义它们。
+\[
+V_{k+1}(s)=\sum_a\pi(a\mid s)\sum_{s'}P(s'\mid s,a)
+[R(s,a,s')+\gamma V_k(s')].
+\]
 
-代码实现与运行前提见 [强化学习示例 README](../assets/examples/reinforcement-learning/README.md)。示例只依赖 Python 与 NumPy；完整源码是 [`gridworld.py`](../assets/examples/reinforcement-learning/gridworld.py)。
+在状态 2，只有向下进入终点得到 0，其他三个动作得到 −1。初始 $V_0=0$ 时，一次备份为 −0.75。虽然实际采到的轨迹从 2 向下、回报为 0，DP 仍计入策略可能向其他方向走的后果。它做的是完整期望，而非拟合这一条好运路径。
 
-## 最小任务
+固定策略反复评估得到 $V^\pi$。Policy iteration 在评估之后把每个状态的动作改成当前最好的，再重新评估；value iteration 则直接在备份中取动作最大值。仓库 [GridWorld](../assets/examples/reinforcement-learning/gridworld.py)的 `policy_evaluation` 和 `value_iteration` 分别实现这两种算子，不要只因为都返回数组就认为它们在估计相同对象。
 
-`GridWorld` 是确定性的 2×3 地图，状态按行编号：
+## 没有模型时，先等这条轨迹走完
 
-```text
-0  1  2
-3  4  5*
+Monte Carlo 用真实完整回报作目标。折扣为 0.9 时，从末尾倒算
+
+\[
+G_2=0,\quad G_1=-1+0.9\times0=-1,\quad
+G_0=-1+0.9\times(-1)=-1.9.
+\]
+
+假设当前价值在状态 0、1、2、5 上分别为 $[-5,-3,-1,0]$，步长 0.1。MC 更新 $V(s_t)\leftarrow V(s_t)+0.1(G_t-V(s_t))$ 后，它们分别变为 −4.69、−2.8、−0.9、0。目标不含旧 value，因此旧 critic 的错误没有被直接复制到目标里。
+
+这条路径恰好最短，不能把一次 MC 更新当作均匀策略的精确价值。均匀策略还会绕路，需要多条按该策略产生的轨迹平均。MC 的随机性来自整段未来，优点是直接使用观察到的结果，代价是等待完整回报以及较大的采样波动。
+
+如果同一状态在一条轨迹里出现多次，first-visit MC 只用时间上的第一次访问，every-visit 使用每次访问。先倒序算所有 return，再正序挑首次状态，能避免把“倒序遇到的第一次”错当成时间上第一次。
+
+## TD 用当前估计补齐尚未发生的未来
+
+TD(0) 在每次转移后就形成目标
+
+\[
+y_t=r_t+\gamma b_tV(s_{t+1}),\qquad
+\delta_t=y_t-V(s_t),\qquad
+V(s_t)\leftarrow V(s_t)+\alpha\delta_t.
+\]
+
+$b_t$ 在真实终止时为零。沿同一条路径，使用更新前的价值 $[-5,-3,-1,0]$，三个目标为 $[-3.7,-1.9,0]$，residual 为 $[1.3,1.1,1]$。步长 0.1 后，值变为 $[-4.87,-2.89,-0.9]$。
+
+这与 MC 的差别来自对未来的信任位置。第一步 TD 还不知道状态 1 之后这次走得很好，先相信旧估计 −3；MC 看到了后续实际 −1。TD 可以立即更新，但把后继估计误差带入当前目标。若后继 V 高估 3，这一项给目标带来 $0.9\times3=2.7$ 的高估。
+
+把两种更新并排运行，更容易看清旧值、目标与结果。
+
+```python
+import numpy as np
+
+states = np.array([0, 1, 2])
+next_states = np.array([1, 2, 5])
+rewards = np.array([-1., -1., 0.])
+terminated = np.array([False, False, True])
+old = np.array([-5., -3., -1., -2., -1., 0.])
+gamma, alpha = 0.9, 0.1
+returns = np.zeros(3)
+carry = 0.0
+for t in reversed(range(3)):
+    carry = rewards[t] + gamma * carry
+    returns[t] = carry
+
+td_targets = rewards + gamma * (~terminated) * old[next_states]
+mc, td = old.copy(), old.copy()
+mc[states] += alpha * (returns - old[states])
+td[states] += alpha * (td_targets - old[states])
+print('MC target', returns, 'updated', mc[states])
+print('TD target', td_targets, 'updated', td[states])
+assert np.allclose(mc[states], [-4.69, -2.8, -0.9])
+assert np.allclose(td[states], [-4.87, -2.89, -0.9])
 ```
 
-状态 `0` 是起点，`5` 是 terminal。动作 `0/1/2/3` 是上、右、下、左；撞边界时留在原状态。每个非终止转移 reward 为 `-1`，进入或从终点转移的 reward 为 `0` 且 `terminated=True`。因此 `0 -> 1 -> 2 -> 5` 的 reward 序列是 `-1, -1, 0`，而不是每步都 `-1`。
+代码特意冻结旧数组，使目标来源一目了然。若在线更新过程中再次访问已经更新的状态，后面的 bootstrap 会使用新值，逐步数值可能不同，必须说明更新顺序。
 
-从仓库根目录运行：
+## 多走一步再 bootstrap，会得到什么
+
+$n$-step target 使用前 $n$ 步真实奖励，再接一个 value
+
+\[
+G_t^{(n)}=\sum_{k=0}^{n-1}\gamma^k r_{t+k}+\gamma^nV(s_{t+n}).
+\]
+
+从状态 0 开始，取 $n=2$，目标为 $-1-0.9+0.9^2(-1)=-2.71$。它比一步 TD 的 −3.7 更依赖真实轨迹，但仍使用了状态 2 的旧估计。使用完整三步并在终点去掉尾值，就得到 MC 的 −1.9。
+
+增大 $n$ 减少了对早期 value 的依赖，同时引入更多随机奖励，不能保证在所有任务都更准确。GAE 将多个时间尺度的 residual 组合起来，详见 [Actor-Critic 与 PPO](policy-gradient-actor-critic-ppo-grpo.md)，其中继续使用这条轨迹。
+
+真实终止与采样边界仍需区分。若只收集到状态 2，任务尚未结束，应保留它的 bootstrap；若已进入终点 5，尾部价值为零。把外部截断后的未知未来当零，会改变估计目标。完整交互定义见[Agent 与环境](rl-agent-environment-loop.md)。
+
+## 从价值预测走向动作改进
+
+固定策略的 MC/TD 只告诉我们这个策略怎样。要改进动作，需要学习 Q 或利用环境模型比较动作。SARSA 把下一次实际选择的动作价值接进目标，Q-learning 接下一状态最大的动作价值，区别见 [Q-learning 与 DQN](q-learning-and-dqn.md)。
+
+从仓库根目录运行
 
 ```bash
 python files/assets/examples/reinforcement-learning/gridworld.py --seed 7
 ```
 
-当前示例输出：
-
-```text
-policy_value_mean=-4.464
-optimal_value_start=-1.900, greedy_policy=[1, 1, 2, 1, 1, -1]
-q_mean=-1.166, q_max=0.000
-```
-
-前两行分别来自均匀随机 policy evaluation 与 value iteration。`greedy_policy` 中动作 `1` 是右、`2` 是下；terminal 的 `-1` 是“无动作”的 sentinel。第三行是脚本附带的 Q-learning smoke test，不是本章用来证明收敛的实验。
-
-## 核心机制
-
-### 1. Policy evaluation：已知模型下求 \(V^\pi\)
-
-若能查询每个 \((s,a)\) 的 transition 与 reward，可反复应用 Bellman expectation backup：
-
-\[
-V_{k+1}(s)=\sum_a\pi(a\mid s)\sum_{s'}P(s'\mid s,a)
-\left[R(s,a,s')+\gamma V_k(s')\right]
-\]
-
-这行式子在第 \(k\) 轮旧数组 \(V_k\) 上计算整张新数组 \(V_{k+1}\)。[`policy_evaluation`](../assets/examples/reinforcement-learning/gridworld.py) 正是这种同步更新：先创建 `updated = np.zeros_like(values)`，所有 state 都读旧 `values`，一轮结束后才替换。若改成 in-place 更新，仍可能收敛到同一不动点，但每轮数值与收敛速度会不同，不能把两种实验逐轮硬对齐。
-
-对均匀随机 policy，\(\pi(a\mid s)=1/4\)。边界动作会原地不动，也必须计入四个动作的平均；漏掉它会改变被评估的 policy。
-
-### 2. Policy improvement 与 policy iteration
-
-有了 \(V^\pi\)，可用一次前瞻计算每个动作的分数：
-
-\[
-q_\pi(s,a)=\sum_{s'}P(s'\mid s,a)
-\left[R(s,a,s')+\gamma V^\pi(s')\right]
-\]
-
-其中 \(q_\pi(s,a)\) 表示当前先做 \(a\)、之后遵循 \(\pi\) 的价值。policy improvement 令新策略在每个状态选择 \(\arg\max_a q_\pi(s,a)\)。交替执行“policy evaluation 评估当前策略”和“policy improvement 变成 greedy”，直到策略稳定，就是 policy iteration。
-
-这里先完整评估再改进，概念边界最清楚。实际实现可以提前停止评估或交错更新，但必须明确自己使用的是哪种近似，不能把尚未收敛的 \(V\) 当成精确 \(V^\pi\)。
-
-### 3. Value iteration：直接应用 Bellman optimality
-
-Value iteration 把 evaluation 与 improvement 压进一次 backup：
-
-\[
-V_{k+1}(s)=\max_a\sum_{s'}P(s'\mid s,a)
-\left[R(s,a,s')+\gamma V_k(s')\right]
-\]
-
-这行式子使用 Bellman optimality 的 \(\max_a\)，所以目标是 \(V^*\)，不是某个固定 \(V^\pi\)。示例的 [`value_iteration`](../assets/examples/reinforcement-learning/gridworld.py) 也做同步更新，并在最大绝对变化小于 `tolerance` 时停止；若达到 `max_iterations` 仍不满足容差，则抛出 `RuntimeError`，不会返回伪装成收敛的数组。
-
-在本任务中，从 `0` 到 `5` 最少三次转移，reward 是 `-1,-1,0`。取 \(\gamma=0.9\)，最优起点 value 为 \(-1-0.9=-1.9\)，与 CLI 的 `optimal_value_start=-1.900` 一致。
-
-### 4. First-visit Monte Carlo：等 episode 结束
-
-若不知道完整 \(P,R\)，可以按 policy 采样 episode，再从末尾反算每个时刻的 return。first-visit Monte Carlo 只用一个 episode 中某 state 第一次出现处的 \(G_t\) 更新该 state；下一个 episode 再计一次。对上述最短 episode，\(\gamma=0.9\) 时：
-
-```text
-states:   0    1    2    5
-rewards:    -1   -1    0
-returns: -1.9 -1.0  0.0
-```
-
-示例的增量样本均值更新为：
-
-```python
-def monte_carlo_update(values, counts, state, return_):
-    new_count = int(counts[state]) + 1
-    new_value = float(values[state] + (return_ - values[state]) / new_count)
-    values[state] = new_value
-    counts[state] = new_count
-```
-
-真实函数还会验证数组、索引、有限 return 与计数溢出。MC target 不含当前 value 估计，因此没有 bootstrap bias；但必须等到 episode 结束，长轨迹中的随机 reward 会带来较高方差。
-
-### 5. TD(0)：一步样本加 bootstrap
-
-TD(0) 每次 transition 都更新 predecessor state \(s_t\)。非终止 target 为 \(y_t=r_t+\gamma V(s_{t+1})\)，terminal target 为 \(y_t=r_t\)；两类转移都执行：
-
-\[
-V(s_t)\leftarrow V(s_t)+\alpha
-\left[y_t-V(s_t)\right]
-\]
-
-其中 \(\alpha\) 是步长，方括号内是 TD error。非终止 target 用当前估计 \(V(s_{t+1})\) 作为学习目标的一部分，这就是 bootstrap；terminal transition 仍更新 \(V(s_t)\)，只是没有终点之后的 bootstrap。目标因此可能有估计偏差，但通常比完整 return 的方差低，也能在线更新。
-
-### 6. n-step return 与 bias-variance
-
-MC 和 TD(0) 之间可以用 n-step return 连起来：
-
-\[
-G_t^{(n)}=\sum_{k=0}^{n-1}\gamma^k r_{t+k}+\gamma^n V(s_{t+n})
-\]
-
-这行式子先使用 \(n\) 个真实 reward，再从 \(s_{t+n}\) bootstrap。\(n=1\) 就是 TD(0) target；若 \(n\) 步内遇到真正 terminal，则求和在该转移结束且不添加 bootstrap 项。当 \(n\) 延伸到 episode 末尾且不再 bootstrap 时，就得到 Monte Carlo return。较小 \(n\) 通常方差低但更依赖当前 value，bias 可能较大；较大 \(n\) 减少 bootstrap 依赖，却累积更多采样噪声。这就是 n-step target 的 bias-variance 权衡，不是“\(n\) 越大越准确”的单调关系。
-
-### 7. Terminal mask 与 truncation 边界
-
-把结束边界写进 TD error：
-
-\[
-\delta_t=r_t+\gamma(1-d_t)V(s_{t+1})-V(s_t)
-\]
-
-其中 \(d_t=1\) 只表示**真正 terminal**：任务语义上已结束，后面没有可计入当前 return 的价值。此时 bootstrap 乘零。源码中的实现完全对应这个边界：
-
-```python
-def td_target(reward, gamma, next_value, terminated):
-    return float(reward) if terminated else float(reward + gamma * next_value)
-```
-
-`truncated=True` 常表示时间上限、采样片段长度或外部中断，而非 MDP 到达 terminal。时间上限处是否 bootstrap，要看是否仍有有效 successor state 及其 value：若环境返回的是可继续任务的有效下一状态，通常保留 bootstrap；若截断同时销毁了状态语义或任务本身确实以时限定义失败，则需按该任务定义处理。不要把 `terminated or truncated` 无条件塞给 \(d_t\)。
-
-## 训练数据流
-
-三类估计的输入边界可以压缩为：
-
-```text
-已知模型 DP: P,R + policy/value -> 枚举全部转移 -> Bellman backup -> 新 value
-first-visit MC: sampled episode -> 从末尾算 return -> 每个 state 首次出现处更新
-TD / n-step: sampled transition 或短片段 -> reward + bootstrap value -> 在线更新
-```
-
-DP 的“训练数据”是可枚举模型，不需要 rollout；MC 与 TD 都需要 policy 产生样本，因此它们估计的是采样 policy 所覆盖的数据分布。仅用 on-policy trajectory 做 prediction，不会因为把 target 写成 TD 就自动成为 optimal control。
-
-一次样本记录至少保留 `state, action, reward, next_state, terminated, truncated`。先依据结束语义构造 bootstrap mask，再计算 MC/TD target，最后更新 value；若先丢掉两个结束标志的区别，后面无法可靠恢复。
-
-## 常见失败
-
-| 失败 | 表现 | 修正 |
-| --- | --- | --- |
-| 混淆 in-place 与 synchronous DP | 每轮数组和讲义不同就判错 | 先确认读取旧数组还是立即写回；比较最终不动点与停止条件 |
-| MC 未等 episode 结束 | 用不完整后缀冒充完整 return | 等真正结束，或明确改用 n-step / bootstrapped target |
-| terminal target leakage | 终点 value 被加到前一状态 target | 对真正 terminal 令 \(d_t=1\) |
-| tolerance / limit 错误 | 容差非正、上限耗尽仍返回结果 | 用正有限容差；未收敛达到上限时显式失败 |
-| prediction / control 混淆 | 用 on-policy 样本评估 \(\pi\)，却声称得到最优策略 | prediction 固定 policy；control 还需要 improvement 或最优性更新 |
-| 所有 truncation 都置零 | 时间片段末端系统性低估 value | 判断是否有有效 successor state/value，再决定 bootstrap |
-
-## 自检与练习
-
-1. **手算 Bellman update**：令初始 \(V_0=0\)、\(\gamma=0.9\)。对状态 `2` 的四个动作分别算一次 target，再写出 value iteration 的 \(V_1(2)\)。注意向下进入 `5` 的 reward 是 `0`。
-2. **比较目标**：对 transition `(0, right, -1, 1, False)`，设当前 \(V(1)=-2\)，算 TD(0) target；再解释为什么只看这条 transition 不能得到 MC return。
-3. **代码实验**：运行 `gridworld.py`，把 `gamma` 从 `0.9` 改为 `0.5` 传给 `value_iteration`，预测并验证 `optimal_value_start`；不要修改环境 reward 语义。
-4. **边界题**：分别为“到达目标”和“采样器每 32 步切片但保留下一状态”写出 \(d_t\)，解释两者为何不同。
+`policy_value_mean` 是均匀策略的 DP 评估摘要，`optimal_value_start` 来自 value iteration，`q_mean` 是有限采样 Q 表的均值。它们跨不同策略和统计对象，不能直接把最大数字当最好方法。系统教材可对照 [Sutton 与 Barto](http://incompleteideas.net/book/the-book-2nd.html) 第 4、5、6 章，分别讨论动态规划、MC 与 TD。

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="660" viewBox="0 0 1120 660" role="img"><title>ARIA 约束每一个前缀，仍允许不同交织顺序</title><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#52687e"/></marker></defs><rect width="100%" height="100%" fill="#f7fafc"/><g font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+<text x="36" y="46" font-size="27" font-weight="700" fill="#172f48">ARIA 约束每一个前缀，仍允许不同交织顺序</text><text x="36" y="80" font-size="17" fill="#50677c">说明性例子 · 全句 4 个文字 token、8 个语音 token；数量为讲解假设，方块不代表等长时间</text>
+<text x="36" y="126" font-size="23" fill="#233c54" font-weight="600">整体比例 S/T = 2，所以任一前缀需要满足 Sₖ ≤ 2Tₖ。</text>
+<text x="36" y="213" font-size="21" fill="#233c54" font-weight="400">合法顺序 A</text>
+<rect x="218" y="180" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="238" y="214" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="286" y="180" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="306" y="214" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="354" y="180" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="374" y="214" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="422" y="180" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="442" y="214" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="490" y="180" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="510" y="214" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="558" y="180" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="578" y="214" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="626" y="180" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="646" y="214" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="694" y="180" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="714" y="214" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="762" y="180" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="782" y="214" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="830" y="180" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="850" y="214" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="898" y="180" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="918" y="214" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="966" y="180" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="986" y="214" font-size="24" fill="#233c54" font-weight="600">S</text>
+<text x="218" y="265" font-size="19" fill="#233c54" font-weight="400">T S S 后，Tₖ=1、Sₖ=2；继续放 T，文字预算随之增加。</text>
+<text x="36" y="333" font-size="21" fill="#233c54" font-weight="400">合法顺序 B</text>
+<rect x="218" y="300" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="238" y="334" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="286" y="300" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="306" y="334" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="354" y="300" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="374" y="334" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="422" y="300" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="442" y="334" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="490" y="300" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="510" y="334" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="558" y="300" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="578" y="334" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="626" y="300" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="646" y="334" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="694" y="300" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="714" y="334" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="762" y="300" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="782" y="334" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="830" y="300" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="850" y="334" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="898" y="300" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="918" y="334" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="966" y="300" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="986" y="334" font-size="24" fill="#233c54" font-weight="600">S</text>
+<text x="218" y="385" font-size="19" fill="#233c54" font-weight="400">也可以先放更多文字。相同总比例不决定唯一顺序，更不决定逐词时间戳。</text>
+<text x="36" y="453" font-size="21" fill="#233c54" font-weight="400">超前的前缀</text>
+<rect x="218" y="420" width="58" height="52" rx="8" fill="#c9dcf6" stroke="#617b94"/>
+<text x="238" y="454" font-size="24" fill="#233c54" font-weight="600">T</text>
+<rect x="286" y="420" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="306" y="454" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="354" y="420" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="374" y="454" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="422" y="420" width="58" height="52" rx="8" fill="#c8e6d8" stroke="#617b94"/>
+<text x="442" y="454" font-size="24" fill="#233c54" font-weight="600">S</text>
+<rect x="414" y="412" width="74" height="68" rx="10" fill="none" stroke="#c55243" stroke-width="3"/>
+<text x="520" y="442" font-size="21" fill="#ad4338" font-weight="600">第 4 个位置已有 3 个 S、1 个 T</text>
+<text x="520" y="474" font-size="20" fill="#ad4338" font-weight="400">3 &gt; 2 × 1，超过这一前缀的上限</text>
+<rect x="36" y="538" width="1048" height="88" rx="12" fill="#fff4e8" stroke="#b7c9d8" stroke-width="2"/>
+<text x="54" y="570" font-size="21" fill="#233c54" font-weight="600">读图时要分开两件事</text>
+<text x="54" y="602" font-size="18" fill="#233c54" font-weight="400">“语音不要超过累计文字预算”是已公开规则；具体帧率、比例估计和部署调度没有由此确定。</text>
+</g></svg>

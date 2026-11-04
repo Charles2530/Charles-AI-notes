@@ -1,191 +1,73 @@
-# 多模态推理：先看见证据，再组织推理
+# 多模态推理怎样使用视觉证据
 
-模型同时看到文字、图片、视频、音频和工具结果时，需要把这些输入变成可靠判断，不能把“看起来会描述”误读成“真的会推理”。
+一张柱状图显示甲产品销量 120、乙产品销量 80，问题是“甲比乙高百分之多少”。正确计算是 \((120-80)/80=50\%\)。如果模型读成 120 和 90，再长的推理都只会围绕错误数字展开；如果数字读对却用 120 作分母，又属于另一种错误。
 
-多模态推理的核心链路可以拆成五步：感知证据、模态对齐、连接到语言/策略空间、在 token 预算内组织中间状态、用工具或验证器校验输出。任何一步错了，后面的 CoT 写得再漂亮也可能只是围绕错误证据编故事。
+这个例子把多模态推理拆成能核查的过程：图像中的证据是否进入模型，数字与对象是否正确对应，最后的计算是否符合问题。视觉对齐、语言推理和工具验证分别作用于不同环节。
 
-!!! tip "数学先修"
-    需要用到[向量、内积与表示空间](../prerequisite-math/linear-algebra-and-geometry.md)解释图文对齐，用[互信息与分布距离](../prerequisite-math/information-theory-and-divergence.md)理解训练目标，并在空间推理处连接[相机与三维几何](../prerequisite-math/geometry-vision-and-3d.md)。
+## 像素先被变成有限数量的表示
 
-## 第一件事：对齐不是推理
+视觉编码器可能把图像分成 patch，再产生特征 token；连接器把特征映射到语言模型可处理的维度。一个线性 projector 主要改变通道表示，resampler 还可能改变 token 数量。这些步骤都不会自动保证小文字被保留。
 
-CLIP 是理解多模态模型的好入口，因为它把图像和文本放进同一个 embedding 空间：匹配的图文靠近，不匹配的图文远离。
+假设原图为 `1024×1024`，缩成 `224×224` 后，原本宽 8 像素的数字笔画只剩不到 2 像素。即使后面增加推理 token，也不能凭空恢复可靠的原始笔画。高分辨率裁剪可以保留细节，但需要把局部图块放回全局坐标，避免把甲的标签接到乙的柱子。
 
-![CLIP pre-training and zero-shot transfer](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="830" }
+![BLIP-2 的查询与三种训练目标](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="820" }
 
-<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。原图展示 CLIP 用大量 image-text pairs 做对比预训练，再把类别写成文本 prompts 做 zero-shot prediction。这张图说明：图文对齐给模型一个“图片像哪句话”的语义接口，但它不等于时序理解、工具推理或动作规划。</small>
+<small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。</small>
 
-如果图像 embedding 是 \(v\)，文本 embedding 是 \(t\)，CLIP 常用归一化后的相似度来比较二者：
+先找左侧图像特征，再沿 cross-attention 看 queries 怎样读取它们。右侧对比、生成与匹配任务采用不同的信息交互方式。有限 queries 是一种压缩接口，是否保留小字和精确位置仍需任务测试。
 
-\[
-s(v,t)=\frac{v^\top t}{\lVert v\rVert\lVert t\rVert}
-\]
+图文相似度训练能鼓励“图里有销量比较”的语义匹配，却未必对 80 与 90 的差别施加强监督。读取数值、定位文字和保持对象对应关系，要用相应数据与任务检查。
 
-这里 \(s(v,t)\) 越高，表示图像和文本在语义空间里越接近。对比学习会让正确图文对的相似度更高，让错误配对更低。这个机制非常适合开放类别识别、图文检索和视觉语义底座，但它只回答“这张图和哪段文字更匹配”。它不回答“物体接下来会怎么动”“工具结果能不能信”“这一步推理是不是引用了真实证据”。
+![CLIP 学习图文配对的监督位置](../assets/images/paper-figures/contrastive-learning/clip-figure-1.png){ width="820" }
 
-所以读多模态模型时，第一条边界要立住：**看见语义不等于完成推理**。一个模型能说出“图里有一个红杯子”，不代表它知道杯口朝向、夹爪距离、杯子是否装满水，也不代表它能安全执行抓取。
+<small>图源：[Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)，Figure 1。</small>
 
-## 第二件事：连接器决定哪些证据进入模型
+左侧对角线是训练中匹配的图文对，右侧是用文本类别做预测。目标能鼓励整体语义匹配；若配套文本从未区分 80 与 90，就不能仅由配对能力断言模型能读准这两个数字。
 
-现代 VLM 通常不是直接把所有像素交给 LLM，而是先用视觉 encoder 得到特征，再通过 connector 变成语言模型可读的 token 或 hidden states。连接器可以是线性 projector、Q-Former、Perceiver Resampler、cross-attention adapter，也可以是更复杂的多模态融合模块。
+## 把对象、数值和单位一起保留
 
-这里先把 connector 当作“证据瓶颈”理解；如果要系统比较 projector、Q-Former、resampler、visual token compression 和 VLA/世界模型里的动作敏感表示，继续读 [视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md)。
+对这张图，可把读取结果组织成三元组 `(对象, 数值, 单位)`，例如 `(甲,120,件)`、`(乙,80,件)`。还要确认纵轴是否从零开始、数字是标签还是坐标刻度、单位是否为“万件”。
 
-![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="820" }
+这些字段可以由模型、OCR 或组合流程产生。无论哪一种，都应该能回到图中的区域核查。OCR 输出 80，却没有坐标和对象关系，仍可能在后续组合时配错产品。
 
-<small>图源：[BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models](https://arxiv.org/abs/2301.12597)，Figure 2。原图展示冻结视觉 encoder，通过 Q-Former 的 query tokens 从视觉特征中抽取信息，并分别服务图文对比、图文匹配和 image-grounded generation。这张图说明：connector 是信息瓶颈，它决定 LLM 最终能读到哪些视觉证据。</small>
+如果关键数字模糊，正确处理是保留不确定性并请求更清晰证据或给出条件答案。把语言先验里常见的比例填进缺口，会让解释看起来完整，却失去证据基础。
 
-可以把连接器看成一个证据压缩器：
+## 问题决定分母，工具只执行给定算式
 
-\[
-H_{\text{vision}} = E_{\text{vision}}(I),\qquad
-Z = C(H_{\text{vision}}, Q),\qquad
-Y = \operatorname{LLM}(X_{\text{text}}, Z)
-\]
+“甲比乙高多少”以乙为参照，所以分母是 80；“乙比甲低多少”以甲为参照，结果是 \((120-80)/120\approx33.33\%\)。同一组数字，对应不同问题。
 
-这里 \(I\) 是图像或视频帧，\(E_{\text{vision}}\) 是视觉 encoder，\(H_{\text{vision}}\) 是视觉特征，\(Q\) 可以是一组可学习 query tokens，\(C\) 是 connector，\(Z\) 是送进 LLM 的视觉证据，\(X_{\text{text}}\) 是文本 token。公式想表达的是：LLM 并没有直接读原图，它读的是 connector 压缩后的证据。
+计算器能保证指定表达式的数值计算，却不能自动判断表达式是否正确。模型需要先把自然语言关系映射到运算，再由工具执行，最后核对单位和参照对象。完整记录应同时保存识别到的数字、选择的表达式与结果。
 
-这会带来一个很实际的判断：如果 connector 只保留“红杯”这种语义，问答可能正确；但如果任务需要杯口边缘、遮挡、刻度、小字、时间顺序或接触几何，压缩后的 \(Z\) 可能已经丢掉关键证据。很多多模态幻觉不是语言模型最后一步突然乱说，而是前面进入语言空间的证据已经不够。
-
-## 第三件事：多模态 token 预算会改写问题
-
-文本 prompt 的 token 密度通常低；图像、视频和音频的 token 密度高得多。一个视频输入如果按相机、帧、patch 展开，长度会很快爆炸：
-
-\[
-L_{\text{vision}}=Cams\times Frames\times Patches
-\]
-
-如果 `Cams=4`、`Frames=16`、每帧 `Patches=256`，那么视觉 token 就是：
-
-\[
-L_{\text{vision}}=4\times16\times256=16{,}384
-\]
-
-这还没有加文字、工具结果、历史对话、动作状态和思考 token。完整上下文更像：
-
-\[
-L_{\text{total}}
-=
-L_{\text{vision}}
-+L_{\text{audio}}
-+L_{\text{text}}
-+L_{\text{tool}}
-+L_{\text{thinking}}
-+L_{\text{memory}}
-\]
-
-这里每一项都在抢同一个上下文窗口和同一笔 KV cache。音频如果保留细粒度时间特征，视频如果保留高分辨率 patch，工具如果返回整页日志，CoT 如果无限展开，最后不是“信息更多”，而是注意力稀释、延迟上升、关键证据被截断。
-
-因此多模态系统常常要做取舍：
-
-| 压缩动作 | 省下什么 | 可能丢什么 |
-| --- | --- | --- |
-| 图像降分辨率 | 视觉 token、prefill 成本 | 小字、细小物体、接触边缘 |
-| 视频抽帧 | 时间 token、KV cache | 快速动作、因果顺序、短暂事件 |
-| audio token 降采样 | 长音频上下文 | 语气、停顿、背景声细节 |
-| query/resampler 压缩 | LLM 输入长度 | 空间几何和局部证据 |
-| 工具结果摘要 | 上下文预算 | 原始证据、异常日志、边界条件 |
-| shorter thinking | decode 延迟 | 复杂任务的中间检查空间 |
-
-多模态推理不是简单地“把所有模态都塞进来”。更成熟的做法是先判断任务需要哪类证据：读表格要 OCR 和布局，视频问答要时间定位，机器人动作要几何和接触，语音对话要语义、说话人状态和时间节奏。证据类型不同，token 分配就应该不同。
-
-## 第四件事：CoT 是工作区，不是证据本身
-
-Chain-of-Thought 的价值在于给复杂任务留出中间工作区：列条件、分解问题、做计算、比较候选、检查矛盾。经典 CoT prompting 论文证明，在数学和符号推理任务中，中间推理样例能显著改善模型表现；Self-Consistency 进一步把“采样多条推理路径再聚合答案”变成一种 test-time search。
-
-但多模态任务里，CoT 的第一步往往不是推导，而是证据定位。比如用户上传一张工厂面板照片问“能不能启动”，可靠流程应该先确认急停按钮、报警灯、压力表、屏幕提示和操作条件；如果第一步把报警灯颜色看错了，后面的推理只会更流畅地错下去。
-
-可以把多模态推理写成：
-
-\[
-e=\operatorname{Perceive}(x_{\text{image}},x_{\text{audio}},x_{\text{video}})
-\]
-
-\[
-r=\operatorname{Reason}(q,e,c)
-\]
-
-\[
-y=\operatorname{Answer}(r,e)
-\]
-
-这里 \(e\) 是感知证据，\(q\) 是用户问题，\(c\) 是上下文或工具结果，\(r\) 是中间推理，\(y\) 是最终回答。这三行式子强调一件事：推理 \(r\) 应该依赖证据 \(e\)，最终回答也应该能回指证据。没有证据的长解释不是可靠性，最多是语言流畅性。
-
-产品系统也不一定要暴露完整内部 CoT。更有用的是暴露可复核的外部形态：关键观察、引用来源、工具调用结果、计算步骤、置信边界和下一步建议。完整内部草稿可以服务训练和调试，但面向用户时，可靠性来自证据和验证，而不是解释越长越好。
-
-## 第五件事：工具和验证器改变的是搜索过程
-
-复杂任务经常不能只靠模型内部状态完成。视觉模型可能需要 OCR 工具，代码任务需要运行测试，事实问答需要检索，数学题可以调用计算器，机器人任务需要状态估计和安全规则。
-
-ReAct 的重要性在于把 reasoning 和 acting 交替起来：
-
-```text
-观察问题
-  -> 判断缺什么证据
-  -> 调用工具或读取外部状态
-  -> 解释工具返回
-  -> 更新中间状态
-  -> 回答或继续行动
+```python
+a, b = 120.0, 80.0
+print(round((a-b)/b*100, 2))
+print(round((a-b)/a*100, 2))
 ```
 
-多候选推理可以写成：
+输出为 50.0 和 33.33。这个差别是语义决定的，不能通过多数投票或更长解释直接消除。
 
-\[
-y^{(1)},\ldots,y^{(n)}\sim p_\theta(y\mid x)
-\]
+## 用对照输入区分看图与猜测
 
-\[
-y^\*=\arg\max_y V(x,y)
-\]
+保持问题不变，把乙的数值从 80 改为 100，答案应从 50% 变为 20%。若回答几乎不变，说明系统可能没有稳定使用该视觉证据。再保持数字不变、交换甲乙标签，检查对象绑定是否随之改变。
 
-这里 \(V(x,y)\) 是验证器，可以是单元测试、规则检查、检索证据匹配、reward model、OCR 结果一致性，也可以是人审。这个过程不是让 base model 突然看见更多世界，而是把“生成一次答案”改成“搜索多个候选，并用更接近任务的信号筛选”。
+这些是受控测试思路，不是关于某个模型已经失败的实验结论。实际测试应重新渲染清晰图像、保证只有目标因素变化，并记录预处理后的图像。直接修改 prompt 中的数字，测到的是文字推理，不是视觉读取。
 
-验证器也有边界。OCR 会错，检索会漏，judge model 会偏，工具结果里可能有 prompt injection，机器人传感器也会漂移。因此工具返回必须被当作证据读取，而不是当作更高优先级的新指令；验证器通过了，也只说明它覆盖的条件通过了。
+遮掉数字后模型仍能猜对某一题，也不能单独证明它作弊，可能存在其他视觉线索。需要一组具有对照和随机化的样本，才能区分语言偏好、视觉线索和真正的数值读取。
 
-## 怎么判断一篇多模态/CoT 论文有没有讲清楚
+## 视频多了时间顺序与采样问题
 
-读这类论文，不要只看 benchmark 表。更重要的是看它有没有交代证据链。
+设一个 2 秒视频中，手在 0.8 到 0.9 秒短暂接触杯子。若只取 0 秒和 1 秒的帧，模型可能看到接触前后状态，却没看到接触本身。回答“手何时接触杯子”需要承认采样边界，不能把帧间推测当作已观察事件。
 
-| 论文说法 | 应该追问 |
-| --- | --- |
-| 支持图像、视频、音频 | 每种模态如何 token 化，token 密度是多少 |
-| 视觉接入 LLM | connector 是 projector、query、cross-attention 还是 resampler，丢了哪些信息 |
-| 支持 reasoning / thinking | thinking 是 prompt、SFT、RL、蒸馏还是 test-time search |
-| 支持 tool use | 工具结果如何进入上下文，是否有注入防护和失败恢复 |
-| 多模态 benchmark 提升 | 是看对了、想对了、还是数据格式更像训练集 |
-| 长上下文能力强 | 关键证据在长输入中是否能被定位，而不是只看 needle retrieval |
-| 可解释 | 解释是否绑定证据，还是只生成顺滑理由 |
+视频编码还要保留帧时间、相机变化与对象身份。把两个动作顺序颠倒可以检验模型是否利用时间；只用单帧的成功不能证明它理解了动作因果。更多机制见[视频表示与记忆](../vlm/video-representation-and-memory.md)。
 
-一个系统如果没有区分“看错了”和“想错了”，就很难改。看错了通常要改数据、分辨率、OCR、视觉 encoder、connector 或证据定位；想错了才更多涉及 CoT、工具、验证器、训练目标和 reward。
+## 推理步骤什么时候有帮助
 
-## 一个完整例子：图片问答到可靠诊断
+明确写出“读到甲120、乙80，参照乙，计算差值再除以80”，能使错误位置可见。它有助于检查流程，却不是独立的正确性证据。模型也可能事后生成一段与答案相符的解释，真正可靠的依据仍是输入区域、数值对应和可复算操作。
 
-假设用户上传一张设备面板照片，问“现在是否可以启动”。一个脆弱系统会直接回答“可以”或“不可以”。一个更可靠的多模态推理系统会拆成四层：
+对机器人任务，图中“杯子在左边”还需转换到相机、机械臂和世界坐标。语言空间描述正确，不代表动作坐标正确，视觉推理与控制之间还有标定和执行接口，详见[几何与三维](../prerequisite-math/geometry-vision-and-3d.md)。
 
-| 层 | 要做什么 | 失败时怎么暴露 |
-| --- | --- | --- |
-| 感知 | 读出急停按钮、报警灯、压力表、屏幕文字 | 标出无法确认的小字或遮挡区域 |
-| 对齐 | 把观察和启动条件对应起来 | 明确哪个条件由哪条观察支撑 |
-| 推理 | 判断是否满足启动规则 | 区分“证据不足”和“条件不满足” |
-| 验证 | OCR 复核、规则校验、请求补拍或人工确认 | 不把高风险结论伪装成确定答案 |
+## 阅读入口
 
-这种回答可能没有最长 CoT，但更可靠，因为它把证据、规则和不确定性分开了。多模态推理的成熟标志不是模型能写出很长分析，而是它知道自己在用哪些证据，以及哪些证据还没看清。
-
-## 读完以后怎么判断
-
-多模态推理的基础不是“图片接上 LLM”或“让模型多写 CoT”，而是证据链：视觉、音频、视频和工具结果先被编码和压缩，connector 决定哪些证据进入语言空间，token 预算决定哪些细节能留下，CoT 负责组织复杂约束，工具和验证器负责补外部事实与可执行检查。可靠性来自这条链路的每一环，而不是来自任意一个模型能力标签。
-
-## 外部材料
-
-- [CLIP](https://arxiv.org/abs/2103.00020)：理解图文对齐和 zero-shot transfer 的基础。
-- [The Illustrated CLIP](https://jalammar.github.io/illustrated-clip/)：用图讲清相似度矩阵和文本分类器构造。
-- [BLIP-2](https://arxiv.org/abs/2301.12597)：理解 Q-Former 作为视觉证据瓶颈。
-- [Flamingo](https://arxiv.org/abs/2204.14198)：理解 cross-attention 和 Perceiver Resampler 如何让 LLM 读取视觉信息。
-- [LLaVA](https://llava-vl.github.io/)：理解视觉指令微调如何把 VLM 推向对话式使用。
-- [Chain-of-Thought Prompting](https://arxiv.org/abs/2201.11903)：理解中间推理样例为什么能改善复杂任务。
-- [ReAct](https://arxiv.org/abs/2210.03629)：理解推理和工具行动如何交替。
-- [MMMU](https://arxiv.org/abs/2311.16502)：理解多学科多模态推理评测为什么要覆盖证据定位与知识推理。
-
-- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- [Dive into Deep Learning](https://d2l.ai/)。
-- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- [VLM 的视觉编码与连接器](../vlm/visual-tokenizers-and-connectors.md)解释证据如何进入语言模型。
+- [多模态评测与失败模式](../vlm/multimodal-evaluation-and-failure-modes.md)讨论分辨率、定位与时序的分项检查。
+- [Prompt、CoT 与 RAG](prompt-engineering-cot-and-rag-basics.md)解释外部证据、工具和验证如何接到生成过程。

@@ -1,175 +1,61 @@
-# 推理 Attention 与 KV Kernel
+# 一次 decode 怎样找到历史 KV
 
-训练里的 attention kernel 和在线服务里的 attention kernel，看起来在算同一个公式，实际上往往面对完全不同的系统条件。训练时更像规则的大矩阵运算；服务时尤其是 decode 阶段，更像一个在动态批处理、KV 页面管理、长短请求混杂和 tail latency 约束下运作的内存系统。
+生成一个新token时，attention需要当前query与历史K计算分数，再用分数加权V。历史长度不断增长，多个请求又共享同一显存池，因此服务kernel通常还要理解逻辑位置、物理页和有效长度。
 
-因此“服务态 attention”最好被单独拿出来看。它的核心问题不只是 attention 算得快不快，而是 KV cache 如何布局、page table 如何组织、prefill 和 decode 是否走同一类 kernel、MQA/GQA 对读写模式有什么影响，以及 prefix reuse 和 paged attention 如何互相作用。
+## 先算一条短请求
 
-**初学者先抓住。**
+假设请求已经计算了10个token的KV，页大小为4，它需要3个逻辑页。页表为 `[7,2,9]`，表示逻辑页0、1、2分别存放在物理页7、2、9。
 
-服务态 attention 的重点是动态内存系统。Prefill 像大块规则计算，decode 像每步读取不断变化的 KV 历史；KV page、prefix cache、MQA/GQA 和连续批处理会一起决定尾延迟。
+逻辑token位置i对应
+
+$$
+page=\lfloor i/4\rfloor,\qquad offset=i\bmod4.
+$$
+
+位置9落在逻辑页2，页表给出物理页9，页内偏移1。Kernel再结合层、KV头和head dimension计算最终地址。这里物理页9与token位置9数值恰巧相同，没有语义关联。
+
+最后一页只使用2个位置，读取attention时必须依据真实长度屏蔽剩余位置。分配了空间不表示其中KV已经计算完成。
+
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  I["逻辑token位置9"] --> L["9整除4=逻辑页2"] --> T["页表7,2,9 · 查第2项"] --> P["物理页9"]
+  I --> O["9取模4=页内偏移1"]
+  P --> A["按层、头、维度得到最终地址"]
+  O --> A
+```
+
+逻辑位置和物理页编号是不同坐标系，页表承担转换；真实长度另行屏蔽无效槽位。
+
+## 页管理和 attention 计算分工不同
+
+调度器在执行前为待计算token分配空间，kernel在执行时写入新K/V并读取允许的历史位置。vLLM V1调度代码维护已计算token数、待处理token和缓存分配，返回输出后再更新请求状态。
+
+共享前缀可让不同请求引用相同历史页。引用关系改变时要避免过早释放仍被其他请求使用的页，生成分叉写入时还需遵循相应共享策略。Kernel正确读页，不会自动保证管理层的引用计数正确。
+
+## 单query扫描历史为什么昂贵
+
+对于每个query头、T个key、头维d，QK与PV主运算约4Td FLOPs。若每个头各有独立KV且用BF16，读取K与V主体约4Td字节，理想算术强度约1FLOP/byte。
+
+GQA让多个query头共享较少KV头，理论上可减少存储并提高复用。但实际读取是否被复用，取决于kernel工作分配和缓存。不能只把头数代入公式就断言实现达到理论强度。
+
+## 历史太长时怎样增加并行
+
+只有一条query却有很长的KV，单个程序可能工作过久或并行度不足。Split-K把历史分段，各段计算局部最大值、分母和加权输出，再进行一次合并。合并必须使用与[在线softmax](long-context-and-flashattention-evolution.md)相同的重标定，不能直接平均局部归一化输出。
+
+更多分段增加并行，也增加临时统计量、合并kernel与同步。当历史较短时，这些新增开销可能超过收益，所以dispatch通常需要依据长度与batch选择路径。
+
+## Prefix命中改变计算量，不消除后续历史读取
+
+前缀KV可复用时，可以少做重复prefill。后续每个新query仍要关注允许的前缀历史，因此decode仍有KV读取。统计prefix命中率时，应区分请求命中、token命中和节省的计算量。
+
+比较服务attention kernel时固定真实长度、页大小、物理布局、KV头数与dtype，分别测短历史和长历史。只测连续KV张量，不能覆盖分页索引与共享前缀的实际路径。
 
 ![PagedAttention KV mapping](../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="820" }
 
 <small>图源：[PagedAttention paper](https://arxiv.org/abs/2309.06180)。原图表达 logical KV blocks 到 physical KV blocks 的映射；读图重点是服务态 attention 的核心难点是动态 KV 内存、page lookup 和连续批处理，不只是 attention 数学。它不能证明 page size 或 block size 的唯一最佳值。</small>
 
-## 为什么服务态 attention 要单独讲
+## 对照源码与延伸阅读
 
-**最直接的原因是**：服务里的瓶颈画像和训练不同。请求长度动态变化、每步 decode 工作量很小、KV cache 生命周期不同步、连续批处理会不断改变活跃序列集合，多租户或多 LoRA 还会让 shape 更碎。
-
-在这种条件下，即使 attention 的数学公式完全一样，最优 kernel 设计也会显著不同。
-
-## Prefill Attention 与 Decode Attention 的差异
-
-| 阶段 | 计算形态 | 主要瓶颈 | kernel 重点 |
-| --- | --- | --- | --- |
-| Prefill | 长序列、大矩阵、规则批处理 | attention 吞吐、HBM 往返、Tensor Core 利用 | FlashAttention、长序列 tile、I/O 感知调度 |
-| Decode | 小步迭代、频繁读取历史 KV | KV 读带宽、page lookup、launch 开销、cache 命中 | PagedAttention、KV layout、small-M fusion、连续批处理 |
-
-### 2.1 为什么不能把 prefill kernel 直接拿来做 decode
-
-**因为 decode 时**每步只增加少量 token，K/V 的历史长度大，新增长度小，主要工作是“读历史、写少量新增”；动态 batch 又会让活跃序列长度分布非常不整齐。
-
-所以 decode 的最佳实现，通常比 prefill 更像一个精细的读取系统。
-
-## FlashAttention 在服务里还重要吗
-
-重要，但形式会变化。
-FlashAttention 的核心思想是减少中间 score 矩阵的 materialization 和 HBM 往返，这在服务里依然成立。
-但服务态 attention 通常还要额外面对 paged KV、prefix cache、多请求长度不一致和 decode 的极小步长。
-
-### 3.1 FlashAttention 的服务价值
-
-它在 prefill 阶段极其重要，在长上下文 decode 的某些场景也有价值。更重要的是，它提供了一种 I/O 感知的基础思路，后续 paged attention 也在沿着这条思路组织数据流。
-
-## PagedAttention 的系统本质
-
-PagedAttention 的核心并不是“新的数学公式”，而是把 KV cache 组织成更像虚拟内存分页的结构。这样可以降低碎片，便于动态请求加入和退出，让不同长度请求更容易复用内存块，也更适合 continuous batching。
-
-### 4.1 为什么页面化会改变 kernel 设计
-
-因为此时 attention kernel 读取的已经不再是简单连续的 K/V 张量，而是 page table、page 内偏移、可能跨多个页面的逻辑序列，以及某些请求共享的前缀页面。这使得 decode attention 的读取路径变成“结构化不连续访问”，kernel 必须同时考虑页面索引、读放大、page size、cache 行为、对齐和向量化。
-
-## Page Size 不是纯内存参数
-
-**page size 会同时影响**碎片率、page table 大小、kernel 读取粒度、prefix 复用效率和 decode 的访存局部性。
-
-| 选择 | 优点 | 代价 |
-| --- | --- | --- |
-| page 较小 | 内部碎片低，短请求更省显存 | 元数据开销大，索引跳转频繁，向量化读取更难 |
-| page 较大 | 索引更少，连续读取更友好 | 内部碎片变大，prefix 共享粒度变粗，动态回收效率下降 |
-
-所以服务态 attention 的 page 设计，本质上是内存系统与 kernel 设计的共同折中。
-
-## Prefix Cache 与 Attention Kernel 的关系
-
-很多人把 prefix cache 看成“系统层优化”，但它其实会直接影响 attention kernel：某些 K/V 页面变成只读共享，访问模式更偏向“复用老页面 + 追加新页面”，prefill 工作可被部分消除，decode 阶段的热数据分布也会改变。
-
-### 6.1 Prefix cache 为什么能显著改变 TTFT
-
-因为共享前缀若已被编码，就不必再次进行完整 prefill。
-这相当于把服务的一部分 attention 计算提前做掉并缓存起来。
-
-### 6.2 Prefix cache 为什么又很难完全做好
-
-**因为它要求**前缀一致性判断、安全隔离、页面生命周期管理、不同租户之间的数据隔离，以及 prefix 与后续 token 拼接时的布局兼容。
-
-## MQA / GQA 为什么会改变服务性能
-
-多查询注意力 `MQA` 和分组查询注意力 `GQA` 的核心收益之一，就是减少 K/V 存储和访问压力。
-
-### 7.1 为什么这对服务特别重要
-
-因为服务尤其 decode 阶段，K/V 读取经常是带宽主瓶颈。若多个 query head 共享更少的 K/V 组，就意味着 KV cache 更小、读取更少、长上下文服务更便宜、page 管理压力也更低。
-
-### 7.2 它不是纯模型设计问题
-
-从服务视角看，MQA/GQA 会改变 cache layout、kernel 中 head 维的并行映射、页面对齐方式和实际带宽消耗。
-
-因此它同时是模型结构和 kernel 工程问题。
-
-## Long Context 服务里的 attention 痛点
-
-长上下文服务面临的不是单一瓶颈，而是一串耦合问题：prefill attention 很重，KV cache 很大，decode 时历史读取很长，page table 更大，prefix reuse 和上下文压缩是否配合良好也会影响系统上限。
-
-### 8.1 为什么长上下文系统往往不能只靠“更大显存”
-
-因为问题不只是装不装得下，还包括 TTFT 是否可接受、decode 是否被超长 KV 拖慢、并发是否被长请求吃掉、tail latency 是否失控。
-
-所以长上下文 attention kernel 必须和缓存、调度、压缩策略一起设计。
-
-## Decode 下的 kernel 颗粒度问题
-
-Decode 每步只生成极少数 token，因此很多操作开始呈现“太小而不够密”的特征。
-**这时常见的问题是**单步 kernel 太多、每个 kernel 工作量太小、launch 开销占比高，以及连续批处理下 shape constantly changing。
-
-### 9.1 为什么小 kernel 融合在 decode 下格外重要
-
-因为 decode 每步本来就没有多少计算可摊薄。
-**只要把** rope、norm、bias、logits 后处理这类小操作融合起来，就可能显著改善单步延迟。
-
-## PagedAttention 的常见失效模式
-
-### 10.1 页面访问过碎
-
-如果页面布局和调度不匹配，kernel 会频繁跨页跳转，导致读取不连续、向量化变差、L2 利用不稳定。
-
-### 10.2 page 元数据负担过重
-
-某些情况下并不是主数据慢，而是 page table 查找、索引重排、pointer chasing 这些辅助逻辑开始变得显著。
-
-### 10.3 共享前缀和回收策略冲突
-
-如果 prefix cache 做得不好，就可能出现页面该回收时回收不了、某些共享页占着显存过久，反而损害整体并发。
-
-## 诊断服务态 attention 的顺序
-
-如果怀疑服务里的 attention 是瓶颈，较稳妥的排查顺序通常是：
-
-1. 先区分 prefill 还是 decode 主导；
-2. 再看是 attention kernel 本身，还是 KV cache / page 管理主导；
-3. 再看是否是 prefix reuse 不足；
-4. 再看是否和 MQA/GQA、LoRA、多租户交互有关；
-5. 最后才决定是换 kernel、改 page size、改 layout 还是改调度。
-
-## 直觉例子
-
-服务态 attention 可以想成图书馆里的阅览和存档系统。Prefill 像一次性把整本书扫描入库，decode 像读者不断来借阅之前存下的章节。PagedAttention 就像把书分成标准档案盒管理，prefix cache 像把热门前几章提前复印好共享。真正的难点，不只是扫描速度，而是如何让不同读者以最低冲突成本访问同一批资料，同时不把档案室塞爆。
-
-## 读完以后怎么判断
-
-服务态 attention 与 KV kernel 的关键，不在于把 attention 数学公式算出来，而在于把长时历史、页面管理、动态批处理和内存局部性组织成一条稳定高效的数据路径。也正因为如此，它已经不只是 kernel 问题，而是 attention kernel、KV cache、prefix 复用、调度和模型结构共同构成的系统问题。
-
-理解这一点，才能真正看懂为什么现代 LLM serving 框架会把 `FlashAttention`、`PagedAttention`、`KV paging`、`prefix cache` 和 `continuous batching` 放在同一张系统图里。
-
-## 工程排查
-
-### 服务态排查顺序
-
-服务态 attention 的排查不要直接从“换哪个 kernel”开始，而是先判断瓶颈属于 prefill、decode、KV 管理还是调度路径。
-
-| 检查点 | 该看什么 |
-| --- | --- |
-| 阶段归因 | TTFT 偏高通常先看 prefill；TPOT 或 P99 偏高通常先看 decode 与 KV 读取 |
-| KV 布局 | page size、page table、head layout、MQA/GQA 是否匹配真实请求分布 |
-| Prefix reuse | 命中率、共享页生命周期、安全隔离与回收策略是否互相冲突 |
-| 小 kernel | rope、norm、logits 后处理、采样等是否在 decode 中造成 launch 碎片 |
-| 长跑稳定性 | 观察碎片率、page hit/locality、显存水位和 tail latency 是否随时间恶化 |
-
-### 常见误判
-
-| 误判 | 为什么会错 | 更可靠的判断 |
-| --- | --- | --- |
-| 只优化 attention 主公式 | decode 常被 KV 读取、page lookup 和 launch 开销主导 | 同时看 kernel trace、KV 读带宽和 page 元数据 |
-| page 越小越省 | 元数据和跳转可能抵消碎片收益 | 用真实长度分布比较碎片率与 P99 |
-| prefix cache 一定降低成本 | 热共享页可能拖慢回收，甚至降低并发 | 看命中率、回收延迟和显存占用曲线 |
-| MQA/GQA 只是模型结构 | 它直接改变 KV cache 大小、head 维并行映射和页面对齐 | 与 kernel layout 一起评估 |
-
-### 收束口径
-
-这类优化要同时看 kernel 与 runtime：prefill 吞吐、decode TPOT、P95/P99、page locality、碎片率、prefix 命中率都要进入同一张报告。只有这样，`FlashAttention`、`PagedAttention`、KV paging、prefix cache 和 continuous batching 才不会变成一堆孤立术语，而会成为可以一起调优的服务路径。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [V1调度器的KV分配与computed token状态](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)
+- [分块attention的稳定归约](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/06-fused-attention.py)

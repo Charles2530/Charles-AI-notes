@@ -1,128 +1,105 @@
-# 条件控制与 Guidance
+# 条件怎样进入生成过程，CFG 又改变了什么
 
-扩散模型的条件控制，常被一句“调 prompt 和 CFG scale”带过。真正做系统时，这句话太粗：prompt、边缘图、姿态、mask、参考图和首帧，首先要被模型在每一步去噪时读到；而 guidance 只是在采样时，把“有条件”和“基准方向”的差额放大。前者是条件怎么进入模型，后者是采样轨迹怎么被拉扯。
+固定同一份初始噪声，分别要求“红球向左移动”和“红球向右移动”。模型能否产生不同且方向正确的视频，取决于条件有没有被读进预测函数，以及训练数据是否建立了文字与运动之间的关系。CFG 进一步组合不同条件下的预测，但它本身不提供新的动作知识。
 
-把这两件事分开以后，很多现象会变得清楚：为什么 CFG scale 太大容易过饱和，为什么 negative prompt 不是万能禁止词，为什么 ControlNet 不能被理解成“更强 prompt”，也为什么视频生成里单帧更贴词并不等于整段更稳定。
+先把生成状态写成 \(x_t\)，条件写成 \(c\)。目标为 \(p_t(x_t\mid c)\)。文本、参考图、深度和动作序列都能成为条件，它们在信息内容、空间对齐和时间含义上不同，接口必须与这些结构对应。
 
-## 先分清：给模型看条件，和放大条件方向
+## Bayes 公式怎样给出条件方向
 
-无条件扩散可以把去噪网络写成：
-
-\[
-\epsilon_\theta(x_t,t)
-\]
-
-这里 \(x_t\) 是当前噪声水平下的带噪样本，\(t\) 告诉模型现在噪声大概有多重。模型只靠这两件事预测应当去掉的噪声。条件扩散则多看一个 \(c\)：
+由 \(p_t(x\mid c)\propto p_t(x)p_t(c\mid x)\)，对 \(x\) 求导可得
 
 \[
-\epsilon_\theta(x_t,t,c)
+\nabla_x\log p_t(x\mid c)
+=\nabla_x\log p_t(x)+\nabla_x\log p_t(c\mid x).
 \]
 
-\(c\) 可以是文本、类别、深度图、边缘图、姿态图、mask、参考图、视频首帧或动作历史。这个写法的重点不是“最后按条件筛图”，而是每一个去噪步骤都在问：在当前噪声水平下，如果我要满足这个条件，哪些变化更像信号，哪些变化更像噪声？
+第一项描述当前噪声分布，第二项描述怎样改变样本可以提高条件的相容性。Classifier guidance 使用一个能读取带噪输入和噪声时间的分类器估计第二项。分类器只在干净图片上训练时，不能默认其梯度对高噪声输入仍然可靠。
 
-所以 conditioning 是证据入口。文本常通过 text encoder 和 cross-attention 进入 U-Net / DiT；类别可以变成 embedding 或归一化里的调制信号；深度、边缘、姿态这类空间条件需要保住每个位置的结构信息；参考图通常要经过 image encoder 或额外 adapter，把身份、风格或局部外观传进模型。条件入口弱，guidance 再高也只是放大一个不可靠方向；条件之间冲突，guidance 会把冲突推得更明显。
-
-## Classifier Guidance：外部分类器给采样轨迹加坡度
-
-早期 classifier guidance 的想法很直接：训练一个能看带噪图的分类器 \(p_\phi(c\mid x_t)\)，采样时让当前样本朝“更像类别 \(c\)”的方向移动：
+给第二项乘权重 \(s\)，在固定时间上形式对应
 
 \[
-\nabla_{x_t}\log p_\phi(c\mid x_t)
+s_{\mathrm{guided}}=s_{\mathrm{base}}+
+ s\nabla_x\log p_t(c\mid x).
 \]
 
-这不是让分类器生成图片，而是借它提供一个梯度。当前样本稍微往哪个方向挪，分类器会更确信它属于目标类别，采样器就把这个方向加进反向扩散过程。[Diffusion Models Beat GANs](https://arxiv.org/abs/2105.05233) 展示了这种做法能显著提升类别条件图像质量，也让“guidance 改变采样方向场”这个概念变得很具体。
+这说明引导是一种分布偏好变化，权重增大并不等于输出质量无条件提高。固定时间的 score 组合还不能单独保证整条时间路径都精确对应某个简单幂次重加权的终点分布，有限模型和求解器会再引入误差。
 
-它的问题同样具体：需要额外训练噪声鲁棒分类器，而且分类器必须在每个噪声水平下都靠谱。文本、边缘图、参考图、mask 这类条件很难都配一个外部分类器，因此后来更常用的是 classifier-free guidance。
+## CFG 怎样让一个网络提供两种预测
 
-## CFG：把有条件和无条件预测之间的差额放大
+直接训练条件模型 \(f_\theta(x_t,t,c)\)，文本可以通过 cross-attention 进入。图像位置产生 query，文本 token 产生 key 和 value，因此每一层、每一次噪声更新都能读取文字。参考图或深度也可以通过拼接、适配器或额外注意力进入，具体结构由模型定义。
 
-[Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598) 的关键训练技巧是 condition dropout：训练时有时给模型条件 \(c\)，有时把条件丢掉，让同一个网络同时学会“看条件去噪”和“不看条件去噪”。推理时，模型在同一步会给出两种预测：
+训练 CFG 时，按一定概率把条件替换成训练约定的空条件。这样同一组参数学习有条件和基准两种输入。空字符串的编码、特殊 null token、零向量并非总是可互换，应按实际训练接口读取。
+
+生成时分别求出 \(\epsilon_c\) 与 \(\epsilon_{\varnothing}\)，组合为
 
 \[
-\epsilon_\theta(x_t,t,c)
-\quad\text{和}\quad
-\epsilon_\theta(x_t,t,\varnothing)
+\epsilon_{\mathrm{cfg}}=
+\epsilon_{\varnothing}+s(\epsilon_c-\epsilon_{\varnothing}).
 \]
 
-第一项是看条件后的方向，第二项是空条件下的自然生成方向。CFG 采样把它们组合成：
+在相同路径系数下，score 与 epsilon 成线性关系，因此这种组合也对应两个 score 的线性外推。\(s=0\) 精确返回基准分支，\(s=1\) 精确返回条件分支，\(s>1\) 超过两者之间的插值范围。
+
+取二维教学预测 \(\epsilon_{\varnothing}=[1,-1]\)、\(\epsilon_c=[3,2]\)，当 \(s=2\) 时结果为 \([5,5]\)。它不是一句更强的文字，而是交给 sampler 的两个数发生了变化。若当前系数为 \(a=.8,b=.6\)，相对条件分支，干净样本估计变化为
 
 \[
-\hat{\epsilon}_{\text{cfg}}
-=
-\epsilon_\theta(x_t,t,\varnothing)
-+
-s\left[
-\epsilon_\theta(x_t,t,c)
--
-\epsilon_\theta(x_t,t,\varnothing)
-\right]
+\Delta\hat x_0=-\frac b a
+(\epsilon_{\mathrm{cfg}}-\epsilon_c)
+=-.75[2,3]=[-1.5,-2.25].
 \]
 
-这行公式可以直接按采样动作读：先站在空条件预测给出的自然方向上，再看条件预测相对空条件多出了哪一段方向差，最后把这段差乘以 \(s\) 加回去。\(s=1\) 接近普通条件预测；\(s>1\) 是额外强调条件；\(s\) 越大，采样器看到的方向场越偏向条件差额。
+这个变化还会进入后续状态和下一次网络输入。条件分支本来就错时，放大差异也可能放大错误；高噪声处的系数和大步长还会改变误差影响。
 
 ![Classifier-Free Guidance guidance scale](../assets/images/paper-figures/diffusion/cfg-figure-1-guidance-scale.png){ width="920" }
 
 <small>图源：[Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)，Figure 1。原图展示 ImageNet 类别条件下 guidance weight 增大时，样本更贴近目标类别。读图重点：guidance 的确会强化条件方向，但这张图不能推出“scale 越大越好”；它同时提醒我们，多样性、自然度和稳定性也在被采样轨迹重新分配。</small>
 
-## 为什么 CFG scale 不是质量旋钮
+## 负面提示词为什么不是禁止词过滤器
 
-很多界面把 CFG scale 做成滑块，于是用户很容易把它当成“质量”或“听话程度”的单轴控制。更准确地说，它是在 prompt adherence、分布自然度和多样性之间重新分配概率质量。
-
-以 `rainy cyberpunk convenience store at night` 为例，scale 太低时，模型可能只生成普通夜景，因为文本条件带来的方向差没有被充分强调；scale 适中时，霓虹、雨夜反光、便利店主体和赛博朋克材质会更明确；scale 太高时，颜色可能过饱和，边缘变硬，对象关系开始僵化，甚至出现局部纹理崩坏。这里坏掉的不是 prompt，而是采样器每一步都沿着被放大的条件差额走，轨迹变陡以后更容易离开模型训练中最自然的区域。
-
-少步采样会放大这个问题。50 步采样时，错误方向还有很多次微调机会；4 到 10 步采样时，每一步跨得更远，高 guidance 更容易过冲。Imagen 论文里讨论了高 guidance 下的阈值处理，DPM-Solver++ 也专门分析了 guided sampling 下高阶 solver 的稳定性。工程上不能只报告“用了什么 sampler”，还要同时报告步数、参数化、CFG scale、是否做 thresholding，以及 prompt 难度。
-
-## Negative prompt 改的是基准方向，不是事实过滤器
-
-在很多 Stable Diffusion 风格的界面里，negative prompt 会被放到 CFG 的基准分支里。没有 negative prompt 时，基准通常接近空条件；有 negative prompt 时，基准会更像“朝负面条件生成”的方向。可以把它写成：
+把空条件换成负面文本 \(c_-\)，组合变成
 
 \[
-\hat{\epsilon}_{\text{neg}}
-=
-\epsilon_\theta(x_t,t,c_{\text{neg}})
-+
-s\left[
-\epsilon_\theta(x_t,t,c_{\text{pos}})
--
-\epsilon_\theta(x_t,t,c_{\text{neg}})
-\right]
+\epsilon_{\mathrm{guided}}=
+\epsilon_{c_-}+s(\epsilon_{c_+}-\epsilon_{c_-}).
 \]
 
-这行公式的读法是：先用负面条件给出一个基准方向，再放大正面条件相对负面条件的差。于是 negative prompt 更像“从这个方向拉开”，不是一个可以绝对禁止内容的规则系统。写 `low quality, blurry, extra fingers` 可能会减少一些常见坏模式，但如果负面词太宽、太强，或者和正面 prompt 共享语义，它也会把本来需要的纹理、风格和对象细节一起拉走。
+此时基准也有条件。在固定噪声时间、精确 score 和可归一化的形式下，它可理解为偏向 \(p_t(x\mid c_+)^s/p_t(x\mid c_-)^{s-1}\) 的局部 score。它没有一个逐对象的硬禁止判断，负面描述和正面描述共享特征时，可能一起压掉需要的内容。
 
-这也解释了为什么同一组 prompt 换 sampler、scale 或 seed 后，negative prompt 的效果会变。它参与的是每一步采样方向，不是在成图后做语义审核。
+图生视频里也可能两分支都保留参考图，只改变文本。这样的 CFG 放大的是“同一图像条件下两种文本预测”的差异，不能解释成移除了所有条件。应分别列清文本、图像、姿态和动作哪些被丢弃，哪些一直存在。
 
-## ControlNet、Adapter 和参考图：结构条件不是更长的文本
+## ControlNet 的零初始化为什么仍然能学习
 
-文本条件擅长描述语义和风格，但它很难稳定表达“这个边缘必须在这里”“这只手的骨架必须按这个姿态”“相机深度关系不能变”。[ControlNet](https://arxiv.org/abs/2302.05543) 的价值在于给预训练扩散模型加一个可训练控制分支，把边缘、深度、姿态、分割等空间条件送进中间层，让每个位置都能看到结构约束。[T2I-Adapter](https://arxiv.org/abs/2302.08453) 走的是更轻量的 adapter 思路，同样是在承认结构条件和文本条件不是同一种信号。
+文字没有精确指定每个像素的位置。边缘、深度或姿态提供空间对齐的条件，ControlNet 类结构把条件变成额外特征，加入冻结或部分冻结的主干。用简化的残差支路表示
 
-参考图又是另一类条件。[IP-Adapter](https://arxiv.org/abs/2308.06721) 把图像 prompt 接到文本到图像模型中，让模型可以利用参考图里的身份、风格或外观信息。它和 ControlNet 的目标不同：ControlNet 更像固定几何和布局，IP-Adapter 更像提供视觉身份和风格证据。把它们都叫“conditioning”是可以的，但不能把它们都调成同一个 prompt 权重问题。
+\[
+h'=h+W_z g_\phi(x_t,c_{\mathrm{spatial}}),
+\]
 
-多条件生成真正难的是优先级和作用范围。文本可能想改变风格，深度图要求保几何，参考图要求保身份，mask 只允许局部区域变化。强 guidance 会放大最终的条件差额，却不会自动解决“谁覆盖谁”的冲突。好的系统要明确每个条件进哪一层、影响哪一块区域、和 CFG scale 或 control strength 怎样一起扫参。
+其中 \(W_z\) 是零初始化的输出卷积。初始化时 \(W_z=0\)，新增支路不会立即扰乱原模型。设上游梯度为 \(\delta=\partial L/\partial h'\)，则
 
-## 视频和世界模型里，过强 guidance 会伤到时间
+\[
+\frac{\partial L}{\partial W_z}=\delta g_\phi^\top,
+\qquad
+\frac{\partial L}{\partial\phi}
+=\left(\frac{\partial g_\phi}{\partial\phi}\right)^\top W_z^\top\delta.
+\]
 
-单张图里，高 CFG 造成的坏处通常表现为过饱和、边缘发硬、构图僵硬或多样性下降。视频里，同样的过冲会沿时间轴积累：前几帧看起来更贴 prompt，后面却可能出现身份漂移、纹理闪烁、动作忽快忽慢，或者首帧条件逐渐丢失。
+第一步 \(W_z\) 的梯度通常非零，因此它能离开零；同一步内部支路的梯度在这个简化连接处被零矩阵阻断。后续 \(W_z\ne0\)，梯度就能传入 \(g_\phi\)。这解释了“初始输出为零”与“可以逐步学会控制”如何同时成立。真实 ControlNet 有多个注入层和更完整的结构，需逐层检查连接。
 
-世界模型和具身场景更敏感。动作条件下的未来预测，目标不是“生成看起来像真实视频的一段画面”，而是让动作、状态变化和物理后果保持对应。如果 guidance 只强化视觉语义，却削弱 action sensitivity，模型会生成漂亮但不能用于规划的未来。这类系统评测要同时看条件遵循、时间一致性、动作改变后的反应、长时 rollout 和服务延迟，而不能只看单帧审美或 text alignment。
+空间条件的坐标必须与图像预处理一致。原图裁剪了左边 20 像素，深度图却没有同样裁剪，网络会接到错位监督。提高 CFG 无法修复这种几何错误。mask 还需说明 1 表示已知区域还是待生成区域，这种相反约定也可能产生形状正确的失败。
 
-## 读论文和调系统时该看什么
+## 硬约束需要放进更新过程
 
-读 guidance 相关论文，可以先问三个问题。第一，条件是怎么进入模型的：文本 cross-attention、类别 embedding、ControlNet 分支、adapter、参考图 encoder、mask，还是视频历史？第二，采样时有没有改变方向场：classifier guidance、CFG、negative prompt、guidance schedule，还是把 guidance 蒸馏进学生模型？第三，评测有没有拆开条件强度、scale、sampler、步数和失败模式，而不是只给一组最好看的样例图。
+若局部编辑要求保留已知像素，只把原图作为条件并不保证逐像素相等。一种机制是在采样的适当状态上，用同噪声水平的已知区域替换相应位置，再让未知区域继续更新。具体替换发生在像素还是 latent、已知区域怎么加噪、边界怎样融合，都要与模型匹配。
 
-真实调参也应该这样拆。先固定 sampler 和步数扫 CFG scale，看 prompt adherence、自然度和多样性的拐点；再固定 scale 换 sampler，看少步下是否过冲；最后按条件类型分桶评估，比如纯文本、ControlNet、参考图、局部编辑、视频首帧和动作条件。只有这样，guidance 才不会被误用成一个玄学旋钮。
+同样，动作条件世界模型要对不同动作给出正确不同未来。固定初始观察和噪声，交换左右动作，可以检查模型是否使用动作；但有变化只证明敏感性，还要与环境真值对照才能判断方向和幅度正确。
 
-## 外部材料
+## 用受控比较判断条件在哪一步失效
 
-- [Diffusion Models Beat GANs on Image Synthesis](https://arxiv.org/abs/2105.05233)：理解 classifier guidance 如何用外部分类器梯度改变采样方向。
-- [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)：CFG 原论文，重点看 condition dropout、公式和 guidance weight 对样本的影响。
-- [GLIDE](https://arxiv.org/abs/2112.10741)：理解文本到图像系统中 guidance、文本条件和编辑能力如何结合。
-- [Imagen](https://arxiv.org/abs/2205.11487)：看大规模文生图系统如何处理文本条件、高 guidance 和 thresholding。
-- [ControlNet](https://arxiv.org/abs/2302.05543)：理解结构条件为什么需要额外控制分支，而不是只靠 prompt。
-- [T2I-Adapter](https://arxiv.org/abs/2302.08453) 与 [IP-Adapter](https://arxiv.org/abs/2308.06721)：分别理解轻量结构控制和参考图条件接口。
-- [DPM-Solver++](https://arxiv.org/abs/2211.01095)：理解 guided diffusion 下少步 ODE solver 为什么需要专门处理稳定性。
-- [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)：补 DDPM、score、classifier guidance 和 CFG 的连续直觉。
+先固定样本与噪声，比较正确条件、空条件和打乱条件。在已知带噪目标上，正确条件若完全不能改善预测，需要检查编码、mask、数据配对与网络是否忽略条件。接着运行完整采样，在相同种子下只改变一个条件，观察所要求的属性是否变化，同时保留其他属性。
 
-- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+最后才比较 guidance 强度。图像看条件遵循、细节和多样性；视频还要看运动幅度与跨帧变化。静止视频可能主体很一致，却没有完成“向右移动”。同一设置在多个提示词和种子上有效，才比一条精选结果提供更强证据。
+
+- [Classifier guidance](https://arxiv.org/abs/2105.05233)讨论噪声分类器的引导。
+- [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)给出条件丢弃与预测组合。
+- [ControlNet](https://arxiv.org/abs/2302.05543)讨论零卷积和空间条件支路。
+- [视频 DiT 的条件接口](video-dit-1029-1246.md)具体展开文本、参考图与 mask 的通道和注意力关系。

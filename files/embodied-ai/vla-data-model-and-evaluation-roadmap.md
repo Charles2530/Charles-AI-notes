@@ -1,108 +1,77 @@
-# VLA 数据、模型与评测：机器人数据到底该怎么读
+# 一条机器人轨迹怎样进入模型与评测
 
-VLA 不是“给机器人接一个大 VLM”这么简单。真正难的是把视觉、语言、机器人状态、动作、接触、任务进度和失败原因记录到同一条时间轴上。否则模型看起来在学动作，实际只是在拟合不同数据源之间的噪声。
-
-机器人 VLA 数据需要支撑动作学习、世界模型训练和闭环评测。
+从下载数据到训练 VLA，中间最容易丢失的是样本的时间含义。一个 batch 里图像、state 和 action 的形状可以全部正确，却仍然把执行后的图像配给执行前的动作。本页沿一条构造轨迹解释数据、训练与评测如何保持同一语义。
 
 ![Franka Emika robot arm](../assets/images/thinking-exploration/world-models-embodied-ai/franka-emika2.jpg){ width="880" }
 
 <small>图源：[Wikimedia Commons: Franka Emika2.jpg](https://commons.wikimedia.org/wiki/File:Franka_Emika2.jpg)。原图展示 Franka 机械臂。读图重点：具身智能的关键不是机器人“像不像智能”，而是视觉、语言、动作、控制器、接触和任务判定能否形成稳定闭环。</small>
 
-## 一条 episode 要记录什么
+## 先为采样时刻建立协议
 
-具身数据最容易“看起来很丰富，训练时却很脏”。多相机视频、机器人状态、动作、语言、任务进度和失败原因如果没有对齐到同一条时间轴，后面再大的 VLA 或 world model 都只是在拟合噪声。
+设机器人以 10 Hz 记录并发出动作，每个决策使用两路相机的最近两帧、七维本体状态和一句指令，预测未来八个七维动作。若 batch 为 32，图像张量可以组织为 `[32,2,2,3,224,224]`，依次是 batch、历史、相机、通道、高、宽；动作标签为 `[32,8,7]`。
+
+张量顺序只是程序约定，数据语义还需说明相机时间戳、动作起止区间和各维含义。当前 state 若来自 1.05 秒，图像来自 1.00 秒，动作从 1.10 秒执行，不能只写一个共同 t 掩盖差异。训练应复现部署能够获得的历史信息。
+
+取其中一条episode在1.00秒的决策，沿用100毫秒的控制周期。两帧历史应对应截止时刻前可获得的观测，8步动作覆盖从1.00秒到1.80秒的8个执行区间。若只执行前2步，下一次重规划发生在约1.20秒，此时新的输入应使用可用的最新观测，而不是把原来的第3个动作假装成新的专家标签。
+
+训练batch把32个这样的窗口堆起来，张量的batch维并不保留episode之间的连续性。模型内部可以联合预测8步动作，但训练验证切分仍要在切窗前按episode或场景完成。否则同一次抓取的高度重叠窗口进入两侧，会让离线分数高估对新场景的泛化。
 
 ```mermaid
 sequenceDiagram
-    participant Cam as Multi-camera rig
-    participant Robot as Robot state/action
-    participant Sync as Sync + calibration
-    participant VLA as VLA / policy
-    participant WM as World model
-    participant Eval as Replay + evaluation
-    Cam->>Sync: frames + timestamps
-    Robot->>Sync: proprioception + action chunk
-    Sync->>VLA: calibrated observations
-    VLA->>WM: candidate actions
-    WM->>Eval: predicted future + risk
-    Eval->>WM: failure label + hard replay
+  participant O as 带时间戳的观测
+  participant P as 策略
+  participant C as 控制器
+  O->>P: 1.00 秒前可用的历史
+  P->>C: 预测 8 步，每步 0.1 秒
+  Note over P,C: 预测覆盖 1.00 至 1.80 秒
+  C->>C: 只执行前 2 步
+  C->>O: 1.20 秒附近刷新观测
+  O->>P: 用新历史重新预测
+  Note over P,C: 未执行的旧动作不等于新示范标签
 ```
 
-一条能支撑 VLA 和世界模型训练的 episode，至少要回答六件事。多相机观测记录每路图像、时间戳、内参、外参和延迟；本体状态记录关节、夹爪、底盘和末端位姿；动作 chunk 记录起止时间、控制频率、动作空间和归一化参数；语言和任务状态记录指令、进度、是否完成和是否无效；失败标签记录 slip、collision、wrong target、lost object、timeout 等原因；评测结果记录 success、人工接管、恢复、耗时和 cost per success。
+图中暂忽略推理和通信延迟，只检查动作区间。真实执行时应再把采集、完成推理与动作生效的时间分开记录。
 
-这些字段的意义不是让 schema 变复杂，而是让失败能回放。后续排查时应该能重建：某个动作执行前，模型看到了哪些视角，机器人手臂在哪，语言目标是什么，世界模型预测了什么风险，最终为什么失败。
+## 归一化不是把所有字段混成一个均值
 
-## 数据集不是越大越好，而是异质性是否可控
+位置、角度、夹爪与速度单位不同，应按动作协议分别处理。构造位置维度均值 0.01 米、标准差 0.02 米，原始标签 0.03 米归一化为 1。模型输出 1 后必须用同一统计量恢复为 0.03 米。训练集外新任务不能擅自重新计算尺度，否则模型输出协议改变。
 
-今天的 VLA 数据来自很多来源：单机器人成功演示、多机器人数据集、真实家庭/办公室采集、仿真轨迹、人类视频、失败纠正和在线回流。规模当然重要，但更关键的是不同数据源的动作空间、相机视角、任务标签和成功判定能不能对齐。
+末尾不足八步的标签可以补齐，但 mask 必须排除虚构动作。若一个样本只有五步真实标签，损失除数也应按有效元素计算，而不是仍除以八步导致它的权重无意减小。mask 属于目标定义，不只是 tensor padding 技巧。
 
 ![Open X-Embodiment dataset overview](../assets/images/paper-figures/vla/openx-data-vis.jpg){ width="920" }
 
 <small>图源：[Open X-Embodiment](https://arxiv.org/abs/2310.08864)，数据集可视化图。原图展示多机器人、多任务、多场景数据聚合。读图重点：跨 embodiment 数据能扩大覆盖，但不自动解决动作空间、标注噪声、相机视角和安全迁移。</small>
 
-Open X-Embodiment 的价值在于把多机器人、多任务数据放进统一格式，帮助模型学习跨 embodiment 迁移。DROID 的价值在于大规模真实场景采集，覆盖大量真实房间、任务和操作者。RoboTwin 的价值在于双臂任务、数字孪生资产、success checker 和可控仿真生成。LIBERO 的价值在于把 lifelong learning、目标组合和知识迁移拆成可比较任务。
+多机器人混合数据还需处理关节数、末端定义、控制器和夹爪差异。统一文件格式便于读取，不等于动作已在同一物理空间。可以用机器人条件与适配器保留差异，也可以对有共同语义的部分做转换，但必须说明哪些维度可比较。
 
-这些数据集各自回答不同问题。Open X 更适合问“不同机器人经验能否正迁移”；DROID 更适合问“真实环境多样性是否足够”；RoboTwin 更适合问“仿真任务和自动判卷能否规模化”；LIBERO 更适合问“语言目标和任务组合是否泛化”。读数据集时不要只看轨迹数量，要看 train-test split、动作接口、success checker、失败记录和是否能回放。
+## 训练目标要求哪些标签
 
-## Benchmark 先看成功判定
+行为克隆需要可作为示范的动作，动力学学习需要动作后的观测或状态，风险学习需要有定义的失败事件。一次滑落日志能提供真实失败转移，却未必包含正确恢复动作。将它作为风险样本与将其所有动作当成成功示范，是不同使用方式。
 
-VLA benchmark 最容易让人误判，因为很多任务短、场景干净、成功条件单一。读 benchmark 时先问四个问题：任务是否长时程，是否跨环境，是否真实机器人，success checker 是否可靠。
-
-| Benchmark | 主要考点 | 最适合看什么 |
-| --- | --- | --- |
-| CALVIN | 语言条件下连续任务链 | 长时程、语言跟随、环境泛化 |
-| MetaWorld | 多任务 Sawyer 操作 | 操作技能广度和 baseline 对比 |
-| LIBERO | lifelong robot learning 和任务组合 | 目标、空间、对象和知识迁移 |
-| BridgeData / Simpler | 真实数据与仿真评测连接 | Sim2Real 与 zero-shot 策略评估 |
-| RoboTwin | 双臂操作、资产和 success checker | 自动判卷、功能点、仿真生成 |
-| DROID | in-the-wild 真实操作数据 | 真实场景多样性和数据收集协议 |
-
-一个 benchmark 如果只检查最终物体位置，可能漏掉碰撞、穿模、夹爪强挤、路径不安全和任务过程错误。具身评测应同时记录中间接触、遮挡、速度、动作平滑、人工接管和恢复。
-
-## VLA 模型正在补三个短板
-
-第一是数据短板。RT-2 证明 web-scale VLM 知识可以接到机器人动作 token 上，但它不能凭空获得未训练的 motor skill；Open X 和 DROID 这类数据集继续补真实机器人覆盖。
-
-第二是动态短板。GR-2、Video Prediction Policy、DreamZero 这些路线都在尝试“先想象未来，再让动作和未来对齐”。它们说明视频预测不只是展示品，未来表征可以成为动作生成的条件。
-
-第三是空间短板。SpatialVLA、DepthVLA、VGGT、Depth Anything 一类方法强调 3D、深度、相机和空间坐标。机器人抓取、插入、避障和放置不是纯语义问题，模型必须知道物体在哪里、离手多远、是否被遮挡、是否可达。
+人类视频可以提供运动、对象与任务语义，但未必有机器人关节或控制命令；不能假设它天然提供与实机轨迹相同的动作监督。多源训练要按可获得的标签分别设计目标。
 
 ![GR-3 data recipe 原论文图](../assets/images/paper-deep-dives/embodied-ai/gr3/figure-4-data.jpg){ width="960" }
 
 <small>图源：GR-3 Technical Report，Figure 4。原图展示 GR-3 的数据 recipe。读图重点：具身数据不应只有成功演示，还要组织机器人轨迹、人类轨迹、任务状态、无效指令和长任务数据，让 VLA 在 rollout 中知道何时继续、终止或拒绝。</small>
 
-## 任务状态比很多人想得重要
+<small>此图保留为原技术报告的数据组织示例。数据源具体作用需通过该报告的训练配方和消融判断，不能从来源名称直接推断所有模型的能力。</small>
 
-真实 VLA 不只要输出动作，还要知道任务是否仍在进行、是否已经完成、当前指令是否无效。比如桌上没有蓝色杯子时，机器人不应该乱抓一个相似物体；抽屉已经关上时，机器人不应该继续推；目标被遮挡时，机器人应该重新观察或请求澄清。
+## 动作误差怎样与任务结果脱节
 
-可以把任务状态分成三类：`in progress` 表示继续执行，`terminate` 表示完成并安全收尾，`invalid` 表示当前条件下指令不可完成。这个头看起来简单，却能显著减少“模型一直动下去”和“无效任务硬执行”的失败。
+示范末端从左侧绕过杯子，另一条右侧路径也可能成功。模型生成右侧路径，与示范的逐步 MSE 可以很大，但任务正确；反过来，平均两条路径得到接近障碍的中间路线，MSE 可能不大却执行失败。
 
-这也是为什么失败数据重要。成功演示教模型怎么做，失败和纠正教模型什么时候停、什么时候拒绝、什么时候恢复。
-
-## 动作表示决定能不能落到真实控制
-
-动作表示是 VLA 和机器人控制之间的接口。单步 action 简单但容易抖动；action chunk 更平滑但错了会连续错；末端执行器位姿更跨机器人，但需要 IK 和 controller；关节动作更直接，却很难跨 embodiment；动作 token 适合 Transformer，但离散化会丢精度。
-
-跨数据集训练时，动作尺度和控制模式尤其危险。一个数据集的 action 可能是末端位姿增量，另一个是关节角，第三个是夹爪命令；如果没有 `<control mode>`、单位、频率和归一化规则，模型会把硬件差异误学成任务差异。
+因此离线误差检查模型是否拟合标签，闭环评测检查它是否承受自己的动作后果。二者都需要，但不能相互替代。若使用 action token，除了交叉熵，还应在反量化后计算物理误差；若使用扩散头，则记录完整采样与执行延迟。
 
 ![Hydraulic gripper](../assets/images/thinking-exploration/world-models-embodied-ai/hydraulic-gripper.jpg){ width="760" }
 
 <small>图源：[Wikimedia Commons: Hydraulic toy robot arm gripper.jpg](https://commons.wikimedia.org/wiki/File:Hydraulic_toy_robot_arm_gripper.jpg)。原图展示夹爪结构。读图重点：同样是“抓住”，不同夹爪的开合范围、力控能力、摩擦和接触反馈都不同；动作接口不能只停在文本描述。</small>
 
-## 评测要看闭环收益
+夹爪图提醒我们，动作维度最后仍对应硬件。相同“闭合”命令在不同开口、指尖材质和力控条件下会产生不同接触结果，跨机器人评测不能忽略这些条件。
 
-VLA 报告至少要同时写四张账。数据账说明 episode、camera、action、reward、done 和 failure_type；状态账说明 raw tokens、compressed tokens、接触和小目标是否保留；决策账说明候选动作、预测 success/risk 和最终选择；失败账说明 slip、wrong target、occlusion、collision 和 recovery。
+## 用测试划分声明要测哪种泛化
 
-离线 loss 下降不等于闭环成功。更硬的指标包括 action sensitivity、candidate ranking agreement、closed-loop success、risk ECE、near-miss recall、人工接管率和 cost per success。模型必须证明自己让动作选择更好，而不是只让视频或语言输出更顺。
+同场景新 episode 测重复执行，新物体实例测对象变化，新房间测环境变化，新机器人测接口与本体迁移。不同变化轴可以分开控制，也可以组合，但报告时应明确是哪一种。DROID、Open X-Embodiment、LIBERO 与 RoboTwin 的数据和任务设计各有目标，不能仅按总轨迹数选择。
 
-## 外部材料
+先按独立来源切分，再切训练窗口。保留采集版本、标定、动作协议和成功判定器；对于人工提示、重置与接管单独记账。这样一个模型版本的提升才可以追溯到具体数据与行为变化。
 
-- [RT-2 paper](https://arxiv.org/abs/2307.15818) 与 [DeepMind RT-2 blog](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)：理解 VLM 如何接到机器人动作 token。
-- [Open X-Embodiment](https://robotics-transformer-x.github.io/)：理解跨机器人数据和 RT-X 的统一格式。
-- [DROID](https://arxiv.org/abs/2403.12945)：理解 in-the-wild 真实机器人数据的采集规模和多样性。
-- [RoboTwin 2.0 docs](https://robotwin-platform.github.io/doc/)：理解双臂任务、数字孪生资产和 success checker。
-- [LIBERO](https://arxiv.org/abs/2306.03310)：理解 lifelong robot learning 和任务组合评测。
-
-- [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
-- [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
-- [RoboTwin 项目](https://robotwin-platform.github.io/)。
+数据字段见[state/action](state-action-robot-datasets.md)，训练目标见[VLA 策略学习](../vla/data-and-policy-learning.md)，统计与回流见[评测数据引擎](../vla/benchmarks-and-data-engines.md)。原始资料见 [Open X-Embodiment](https://robotics-transformer-x.github.io/)、[DROID](https://arxiv.org/abs/2403.12945)、[LIBERO](https://arxiv.org/abs/2306.03310)与 [RoboTwin](https://robotwin-platform.github.io/)。

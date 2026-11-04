@@ -15,380 +15,286 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/danijar/planet](https://github.com/danijar/planet)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1811.04551)；[GitHub API / repo](https://github.com/danijar/planet)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 让像素模型真正进入控制回路
 
-### 研究背景
+PlaNet 要跨过的门槛，是让一个只看图像的智能体能够靠自己学出的动力学规划动作。它没有先拿到模拟器中的关节位置、速度，也没有把世界模型作为辅助任务挂在一个现成的策略网络旁边。真实交互得到图像、动作和奖励，模型从这些序列学习状态与转移；决策时，智能体直接在模型中试算候选动作，选出预计回报较高的一段，只执行第一步，再根据新图像重新规划。PlaNet 的全称是 **Deep Planning Network**。[↗](https://arxiv.org/pdf/1811.04551v5#page=1)
 
-PlaNet 是 Dreamer 系列之前的关键世界模型论文。经典控制常常假设 dynamics 已知，planner 可以直接在真实动力学或 simulator 里搜索动作；但很多真实任务没有这个条件，例如从像素玩游戏、机器人在复杂环境里操作物体，agent 只看到图像、动作和奖励，不知道真实环境状态，也没有可用的动力学公式。PlaNet 问的就是：能不能先从交互数据学一个 world model，再在这个学出来的模型里 planning。
+这个问题比“预测下一帧”多了两层困难。第一，图像不直接给出控制所需的状态。同一张摆杆图像可能对应向左或向右的速度，小车还可能离开镜头；模型必须保存历史，并表达当前看不清的部分。第二，规划需要比较大量可能的动作序列。若每条候选轨迹的每一步都生成一张图像，计算会被高维像素预测占据，而控制器真正需要的只是这些动作会把系统带到什么状态、得到多少奖励。
 
-传统 model-based RL 如果直接在像素空间预测未来，计算很重，而且多步误差会迅速累积；model-free RL 可以避免模型误差，但真实交互样本效率很低。PlaNet 的切入点是保留 planning 的好处，同时把要学的对象从完整图像未来改成低维 latent dynamics。
+PlaNet 的关键安排是把图像监督与规划计算分开。训练时，图像重建提供密集的表示学习信号；规划时，只执行紧凑的状态转移和奖励预测，图像解码器不参与搜索。支撑这一安排的 Recurrent State-Space Model（RSSM，循环状态空间模型）同时有确定性记忆和随机潜变量。前者记住运动历史，后者让状态推断与未来预测保留不确定性，避免每一个未知量都被压成单一确定值。
 
-PlaNet 的研究背景可以概括为一个折中：让世界模型学习一个 latent dynamics，而不是完整像素模拟器；规划时在 latent space 中搜索动作序列，而不是为每个候选动作生成未来图像。
+六个实验任务分别把这些要求具体化。Cartpole 需要长一些的动作后果预测，也可能需要记住画面外的小车；Reacher 和 Cup 的奖励稀疏；Finger 包含接触；Cheetah 的状态与动作空间较大；Walker 则必须先站起来，再持续行走。它们全部使用 $64\times64\times3$ 的第三人称摄像机图像。
 
-### 问题（Challenge）
+![PlaNet 在六个 DeepMind Control Suite 任务中仅接收图像](../../assets/images/paper-deep-dives/world-models/planet/figure-1-domains.png){ width="920" }
 
-论文要解决的问题是：**能否从像素轨迹学习一个足够好的 latent dynamics model，使 agent 直接在 latent space 中规划并完成连续控制任务？** 挑战有四个。第一，像素观测是部分可观测的，单帧图像不能表示速度、接触和隐藏状态。第二，规划需要多步预测，一步重建好不代表多步 rollout 好。第三，planner 会搜索高回报动作，因此容易利用模型错误。第四，如果每个候选未来都解码成像素，CEM planning 的计算成本会很高。
+*原论文 Figure 1。依次为 Cartpole Swing Up、Reacher Easy、Cheetah Run、Finger Spin、Cup Catch、Walker Walk；图中视觉外观是模型实际面对的观察接口。*
 
-这里还有一个典型的 train-test mismatch。训练时模型常被 posterior 和真实观测不断校正，错误只需要跨一步；规划时却要从当前 belief 出发，连续用 prior 想象未来十几步。一步误差在训练 loss 里可能不显眼，但在 CEM 的多步搜索里会被累计、放大，甚至变成 planner 主动利用的模型漏洞。
+论文由此给出的证据不是任意视觉环境都能被一个模型解决，而是在这六类连续控制任务上，单靠学习动力学加在线规划，已经能够用远少于强 model-free 基线的交互接近其性能。理解这个结果，需要把模型结构、训练目标和每一步规划都连起来看。[↗](https://arxiv.org/pdf/1811.04551v5#page=6)
 
-这个问题的价值在于，它把世界模型从“视频预测是否好看”转成“latent state 是否足以支持控制”。对于后续机器人和 agent 训练，这个转变很重要。
+## 一次真实动作之前，模型怎样比较未来
 
-### Finding
+设当前观察为 $o_t$，过去执行的动作为 $a_{<t}$。模型首先形成当前状态的 belief，也就是条件分布 $q(s_t\mid o_{\le t},a_{<t})$。这里先沿用规划算法的简化记号，把整个潜在状态记作 $s_t$；下一节会把 RSSM 中的确定性和随机部分展开。
 
-作者的 finding 是：**对控制而言，模型不需要在规划时生成未来图像；只要 latent state 同时保留历史记忆和随机不确定性，并能预测 reward，就可以在 latent space 中完成有效规划。** 这个洞见把像素复杂性和动作搜索复杂性分开了。
+规划器使用 **Cross-Entropy Method（CEM，交叉熵方法）**。它维护的是未来一段动作序列的分布，而不是对当前动作逐个打分。序列中的每个时刻、每个动作维度都有自己的均值和尺度，分布按这些维度因子化。因此，某个候选可以表示“先向左加速几步，再向右制动”，而不必局限于重复同一个动作。
 
-这个 finding 解释了 RSSM 的设计。deterministic recurrent path 记住历史，stochastic latent path 表达当前观测和不确定性；observation model 训练 latent 不丢视觉信息，reward model 让 latent 对任务有用；CEM 只 rollout latent 和 reward，不再把每个候选动作序列解码成图像。
+每一次真实控制调用都按以下顺序运行。[↗](https://arxiv.org/pdf/1811.04551v5#page=3)
 
-### 方法
+1. 把动作序列分布重新初始化为零均值、单位尺度的高斯。作者没有把上一步的最优序列平移过来作为 warm start，目的是避免搜索持续被同一个局部最优吸引。
+2. 从当前动作分布采样 $J=1000$ 条候选序列，规划距离设为 $H=12$。
+3. 对每条动作序列，从当前状态 belief 采样起点，再沿学到的转移模型采样一条潜在轨迹；沿途用奖励模型计算预期奖励并求和。
+4. 选出回报最高的 $K=100$ 条序列，用这些 elite samples 重新拟合各时刻、各动作维度的均值与尺度。
+5. 重复采样、评价、拟合共 $I=10$ 轮，最后执行拟合分布在第一个时刻的均值动作。
 
-PlaNet 的输入是真实环境收集的 image observation、action 和 reward 序列。模型使用 Recurrent State-Space Model：encoder 把图像编码到 latent，recurrent hidden state 根据上一 latent 和动作更新，posterior 在训练时结合当前观测，prior 用于没有未来观测的 rollout。训练目标包括 observation reconstruction、reward prediction 和 KL regularization；论文还提出 latent overshooting，用多步 latent consistency 改善长期预测。
-
-控制时，PlaNet 没有单独 policy network。每一步先用当前观测更新 belief/state，再用 Cross-Entropy Method 在 latent space 采样并优化多条候选动作序列；模型预测每条序列的未来 latent 和 reward，选择回报最高序列的第一个动作执行，然后下一个环境步重新规划。
-
-### 结论
-
-实验在六个基于图像的连续控制任务上验证 PlaNet。论文报告 PlaNet 能在远少于 model-free 方法的 episode 数下达到相近或更好表现，并在若干任务上相比 D4PG 有明显样本效率优势。消融显示，RSSM 优于纯 deterministic 或纯 stochastic dynamics，说明历史记忆和随机 latent 的组合对像素控制有价值。
-
-需要补充的是，PlaNet 的规划仍依赖在线 CEM，每一步执行成本较高；这也正是 Dreamer 后续把规划摊销进 actor 的原因。PlaNet 的贡献边界是：它证明了“像素 -> latent dynamics -> latent planning”可行，而不是解决所有真实环境中的模型误差和长期探索。
-
-### 关键术语
-
-- **PlaNet（Planning Network）**：从像素学习 latent dynamics，并用 CEM 在 latent space 规划动作的 model-based RL agent。
-- **Recurrent State-Space Model, RSSM（循环状态空间模型）**：结合 deterministic memory 和 stochastic latent 的时序模型，处理部分可观测环境。
-- **Latent Overshooting（潜变量超前预测）**：训练模型在 latent space 中对多步未来保持一致，缓解只做一步预测导致的 rollout 误差。
-- **Cross-Entropy Method, CEM（交叉熵方法）**：通过反复采样、筛选高回报候选并重拟合分布来优化动作序列的规划算法。
-- **Model Predictive Control, MPC（模型预测控制）**：每一步重新规划一段未来动作，但只执行第一个动作。
-- **Reward Model（奖励模型）**：从 latent state 预测奖励，使规划可以不解码像素而直接评估动作序列。
-
-这篇论文是 Dreamer 系列之前非常关键的一步。它提出的问题很直接：如果只有像素观测，能否先学习一个 latent dynamics model，再完全在 latent space 里做在线规划，而不是训练 model-free policy。
-
-这件事的吸引力不只是“有模型”。model-based planning 通常更省数据，因为每条交互轨迹可以同时训练 observation、reward 和 transition，而不只是在已采样状态上更新策略或价值函数；它也不必完全依赖 Bellman backup 把远期奖励一层层往前传。任务很长、reward 很稀疏时，这个差异会变得很重要：model-free 方法需要反复交互才能把奖励信号传播到早期动作，而 PlaNet 试图让 learned dynamics 直接给 planner 一个可搜索的未来。
-
-另一个好处是 test-time compute。学好 world model 后，不一定每次都重新训练 policy；决策时可以投入更多计算，采样和评估更多候选动作序列，尝试换来更好的当前动作。PlaNet 后面的限制也来自这里：在线搜索很灵活，但每一步都要付计算成本。
-
-PlaNet 的答案是：
-
-```text
-image observation + action + reward trajectories
-  -> Recurrent State-Space Model (RSSM)
-  -> latent-space CEM planning
-  -> execute first action
-  -> receive next observation and replan
-```
-
-它和 [DreamerV3](dreamerv3.md) 属于同一条“交互轨迹驱动的 latent dynamics 世界模型路线”，但接口不同：PlaNet 每一步用 CEM 做 model-predictive control；Dreamer 则在 world model 的 imagined rollout 上训练 actor-critic，把规划成本摊到 policy 学习里。
-
-## 论文位置
-
-PlaNet 的历史位置可以这样理解：
-
-| 阶段 | 代表 | 关键变化 |
-| --- | --- | --- |
-| 早期像素 model-based RL | PlaNet | 从像素学习 RSSM，并直接在 latent space 中规划 |
-| policy learning from imagination | Dreamer | 不再每步 CEM 搜索，而是在 imagined latent trajectories 上训练 actor-critic |
-| 鲁棒跨域 world model RL | DreamerV3 | 固定超参数、离散 latent、symlog/twohot/free bits 等稳定化技巧 |
-
-所以 PlaNet 最值得放进世界模型专题的原因，不是它今天仍是最强控制算法，而是它把后续 Dreamer 路线的两个核心概念打牢了：**RSSM latent state** 和 **action-conditioned latent rollout**。
-
-![Image-based control domains](../../assets/images/paper-deep-dives/world-models/planet/figure-1-domains.png){ width="920" }
-
-<small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 1. 原论文图注要点：该图展示六个像素控制任务，覆盖固定视角部分可观测、稀疏奖励、接触动力学、较大状态动作空间和平衡控制等挑战。</small>
-
-**PlaNet 任务图要看像素控制覆盖哪些难点。**
-**输入输出**：输入是像素观测、动作和 reward，输出是 RSSM belief/state 与 CEM 规划动作。
-**效率机制**：规划时只在 latent space rollout reward，避免为每个候选动作生成像素未来。
-**对主线意义**：它奠定了“从像素学 latent dynamics 再规划”的世界模型路线。
-**不能证明什么**：PlaNet benchmark 不能证明所有真实硬件或长时稀疏任务同样稳定。
-
-## 核心问题
-
-传统 planning 在已知动力学里很强，但未知环境中必须先学 dynamics。困难在于像素输入下的 dynamics learning 很容易失败：
-
-1. 单帧图像不是完整状态，任务本质是 POMDP；
-2. 模型如果只会一步预测，规划时多步 rollout 会迅速漂移；
-3. planner 会主动寻找模型漏洞，导致 model exploitation；
-4. 如果在像素空间生成每个候选未来，计算成本太高。
-
-PlaNet 的设计选择是把视觉复杂性和规划复杂性拆开。视觉重建用于训练 latent state，但规划时不生成图像，只在 latent state 上预测 reward 并评估 action sequence。
-
-这使它的世界模型回答的是：
+例如，把候选轨迹的状态记作 $s_{t+1:t+H}$，其评分可以概括为
 
 $$
-h_t, s_t, a_t \rightarrow h_{t+1}, s_{t+1}, r_{t+1}
+R^{(j)}=\sum_{\tau=t+1}^{t+H}\mathbb E_{p(r_\tau\mid s^{(j)}_\tau)}[r_\tau].
 $$
 
-而不是简单回答：
+这是有限规划距离内的预测奖励之和。原文 Algorithm 2 的索引采用包含端点的写法，动作写至 $t+H$、状态写至 $t+H+1$；上式用 $H$ 个预测步说明相同的计算过程。算法没有在末端接一个学到的 value estimate，也没有给出额外的风险惩罚项。重新拟合的均值就是 elite 动作的平均值
 
 $$
-o_t \rightarrow o_{t+1}
+\mu_\tau=\frac{1}{K}\sum_{j\in\mathcal K}a^{(j)}_\tau,
+\qquad a_t=\mu_t.
 $$
 
-这正是 PlaNet 和普通视频预测模型的根本区别。
+这里 $\mathcal K$ 是本轮 elite 序列集合。整条候选序列在模型中帮助比较动作，但真实环境只执行第一个动作；下一个观察到来后，belief 被更新，规划重新开始。这就是 **Model Predictive Control（MPC，模型预测控制）** 的滚动执行方式。它不要求一次预测把整个任务完成，也允许真实观察不断纠正已经积累的模型偏差。[↗](https://arxiv.org/pdf/1811.04551v5#page=12)
 
-## 总体训练循环
+这个实现有一个容易被“概率模型”四个字遮住的细节。每条候选动作序列只对应一次采样出的潜在 rollout，算法没有为同一序列重复大量 rollout 来精确估计其期望回报或方差。随机状态让不同可能未来进入搜索，但不能据此把 PlaNet 描述为有校准误差保证的风险敏感控制器。它也没有一个区分模型知识不足与环境随机性的 ensemble。
 
-PlaNet 的 agent 没有 policy network，也没有 value network。它的行为完全来自在线 planning：
+默认设置意味着一次控制决策要评价约一万条候选序列，潜在转移计算达到 $10^5$ 量级。这个数量由 $I\times J\times H$ 的量级估算得到，不是论文报告的实际耗时。省去图像解码使这样的搜索可行，但在线搜索的成本仍然存在。PlaNet 的行为能力保存在世界模型和规划器的组合中，它没有额外训练一个 actor 来替代每次决策的搜索。
 
-```text
-用随机动作收集少量 seed episodes
-  -> 从 replay data 训练 RSSM world model
-  -> 当前观测通过 encoder 得到 latent belief
-  -> CEM 在 latent space 搜索未来 action sequence
-  -> 执行第一个动作并加入少量探索噪声
-  -> 收集新 episode，继续更新 world model
-```
+## RSSM 为何同时保留记忆与随机状态
 
-每次环境 step 后都会重新规划，所以这是典型的 MPC 风格：规划一个 horizon，但只执行当前动作。新观测回来后，先用 encoder 修正当前 latent belief，再重新搜索动作序列。
+纯粹的 deterministic RNN 可以用隐藏向量记住历史，但每次只能输出一条确定演化路径。部分可观测问题中，当前图像不足以判断速度、接触状态或画面外物体的位置，强行把这些可能性压成一个值，可能让规划器利用模型中过于乐观的预测。反过来，纯 stochastic state-space model 虽然能表达分布，长期信息却必须穿过连续的随机采样与状态压缩，保存历史更困难。
 
-这个循环里有两个关键约束：
-
-1. world model 必须能在没有未来图像的情况下多步 rollout；
-2. reward head 必须足够准确，因为 planner 只看 latent reward prediction，不看生成图像。
-
-## RSSM World Model
-
-PlaNet 使用 `Recurrent State-Space Model`。RSSM 把状态拆成两部分：
-
-| State component | Role |
-| --- | --- |
-| deterministic state \(h_t\) | 通过 RNN 记住历史，承载长时记忆 |
-| stochastic state \(s_t\) | 表达当前不确定性，支持多未来预测 |
-
-也可以把 latent state 直观理解成两层：deterministic component 是一条确定性隐藏状态轨迹，负责把过去观测和动作压成记忆；stochastic component 是每一步的随机 latent variable，负责表达同一段历史下仍然不确定的当前状态和未来分支。PlaNet 论文强调二者都重要，不是为了架构复杂，而是因为像素控制同时需要记忆和不确定性。
-
-论文对比了三种 latent dynamics 设计。
-
-![Latent dynamics model designs](../../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="860" }
-
-<small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 2. 原论文图注要点：该图比较 RNN、SSM 和 RSSM。RNN 只有确定性路径，SSM 只有随机状态，RSSM 同时保留确定性记忆和随机状态，以更稳健地预测多个未来。</small>
-
-**这张结构对比图怎么读。**
-PlaNet 的关键不是“用了一个 latent model”，而是选择了 RSSM 这种同时包含确定性状态和随机状态的结构。RNN 只有确定性 hidden state，适合记历史，但不擅长表达同一个过去下可能有多个未来；SSM 有随机状态，但缺少强 recurrent memory，长时部分可观测任务容易丢上下文。
-
-RSSM 把两者拆开：\(h_t\) 负责累计历史和动作，\(s_t\) 负责当前不确定性。训练时 posterior \(q(s_t\mid h_t,o_t)\) 可以看真实观测修正 belief；规划时只能用 prior \(p(s_t\mid h_t)\) 往前 rollout。读这张图时要抓住这个分工：**记忆靠 deterministic path，不确定未来靠 stochastic latent**。
-
-RSSM 的 generative model 可以写成：
+RSSM 把两种路径并行保留。下面恢复论文 Equation 4 的记号，$h_t$ 表示确定性记忆，$s_t$ 专指随机潜变量，二者合起来才是完整的模型状态。
 
 $$
-h_t = f(h_{t-1}, s_{t-1}, a_{t-1})
+\begin{aligned}
+h_t &= f(h_{t-1},s_{t-1},a_{t-1}),\\
+s_t &\sim p(s_t\mid h_t),\\
+o_t &\sim p(o_t\mid h_t,s_t),\\
+r_t &\sim p(r_t\mid h_t,s_t).
+\end{aligned}
 $$
 
-$$
-s_t \sim p(s_t \mid h_t)
-$$
-
-这行式子表示：在给定 deterministic state \(h_t\) 后，从 prior dynamics \(p(s_t\mid h_t)\) 里采样当前 stochastic state \(s_t\)。这里 \(h_t\) 负责历史记忆，\(s_t\) 负责当前不确定性。
+$h_t$ 的更新由 GRU 完成。它接收上一时刻的记忆、随机状态和动作，得到当前时刻的历史摘要。prior $p(s_t\mid h_t)$ 据此预测随机状态；图像和奖励的生成分布都使用 $(h_t,s_t)$。当真实图像 $o_t$ 可用时，状态推断由 posterior 完成
 
 $$
-o_t \sim p(o_t \mid h_t, s_t), \quad
-r_t \sim p(r_t \mid h_t, s_t)
+q(s_t\mid h_t,o_t).
 $$
 
-训练时，模型还需要一个 encoder / inference model：
+posterior 同时看历史与当前图像，因此比只看历史的 prior 更有信息。训练时使用 posterior 构造状态序列，规划时未来图像不可用，就沿 prior 继续生成状态。两条路径之间的差距，正是后面 KL 项要约束的对象。[↗](https://arxiv.org/pdf/1811.04551v5#page=4)
+
+沿 Figure 2 从左到右读，确定性模型只有一条记忆链，随机模型只有采样状态链，RSSM 则让确定性链跨越时间，同时把每个时刻的随机状态接入更新。图中实线表示生成过程，虚线表示观测进入推断的路径；方块和圆圈分别标记确定性与随机变量。
+
+![确定性 RNN、随机 SSM 与两者结合的 RSSM](../../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="860" }
+
+*原论文 Figure 2。右侧 RSSM 的重点是两条跨时间的信息通路，以及观察只在推断阶段进入模型的接口。*
+
+确定性路径并不意味着图像可以绕过随机瓶颈。当前图像先影响 posterior，再通过采样得到的 $s_t$ 进入重建和后续记忆更新；模型没有一条把当前观察直接送到 decoder 的确定性捷径。否则，decoder 可以依赖图像编码重建得很好，而 prior 根本不必学会产生规划所需的状态。保留随机瓶颈，使“解释看到的图像”与“预测没有看到的未来”必须在同一状态空间内协调。
+
+这种拆分也解释了模型容量的使用方式。确定性记忆负责稳定传递过去的信息，随机变量负责在给定历史下补充当前仍有歧义的部分。但作者没有证明两种角色会在每一个维度上自动清晰分工；网络仍然通过整体训练目标学习表示。随机性为何提升控制，最终要看结构消融，而不能仅凭模型图下结论。
+
+## 从图像重建到可用于规划的先验
+
+如果只训练图像重建，posterior 可以形成一个很会解释当前画面的状态，但规划器未来没有图像可看，未必能够自己预测出这个状态。PlaNet 使用变分目标，把重建与 prior 的学习绑在一起。将论文的观察目标与奖励预测合并，并显式写出 RSSM 的确定性状态，可将训练目标表示为
 
 $$
-q(s_t \mid h_t, o_t)
+\mathcal L_{\mathrm{model}}
+=\mathbb E_q\sum_{t=1}^{T}\left[
+\log p(o_t\mid h_t,s_t)
++\log p(r_t\mid h_t,s_t)
+-\mathrm{KL}\big(q(s_t\mid h_t,o_t)\,\|\,p(s_t\mid h_t)\big)
+\right].
 $$
 
-直觉上，\(q\) 是看到真实图像后的 posterior belief；\(p\) 是没有未来图像时的 prior dynamics。训练阶段可以用真实图像修正 \(s_t\)，但 planning 阶段只能从当前 belief 出发，用 prior 自己往前滚。
+优化方向是最大化这个目标。第一项要求状态保留解释图像所需的信息，第二项让同一状态能够预测奖励，第三项要求只靠历史得到的 prior 接近看过真实图像的 posterior。若没有重建，稀疏奖励可能不足以教模型理解运动和接触；若没有 prior 与 posterior 的一致性，重建得到的状态又无法在没有观察时继续使用。[↗](https://arxiv.org/pdf/1811.04551v5#page=4)
 
-这就是为什么 RSSM 的结构很重要。纯 RNN 容易给 planner 一个确定但错误的未来；纯 SSM 难以记住长时历史；RSSM 用 \(h_t\) 负责记忆，用 \(s_t\) 负责不确定性，兼顾部分可观测和多未来。
+训练中的一条序列先按真实动作更新 $h_t$，再从 posterior 采样 $s_t$，据此计算图像、奖励似然和 KL。高斯随机变量采用 reparameterization，使误差可以穿过采样过程传回编码器和动力学；期望在实现中用单次 Monte Carlo 样本估计。观察与奖励分布使用单位方差高斯时，负对数似然对应平方误差加常数，因此直观上是在同时减少图像误差、奖励误差和状态分布的预测差距。
 
-## 训练目标
+三个目标之间仍有容量取舍。KL 太强，posterior 不愿从图像提取 prior 尚不知道的信息，状态可能过于贫乏；KL 太弱，posterior 能重建得很好，但 rollout 时的 prior 跟不上。最终配置把每步 KL 损失在下方截到 **3 free nats**。当 KL 低于这个门槛，继续压小它不会降低这部分损失，从而给模型一定的信息容量；超过门槛后仍需支付完整 KL 代价。这是一个下限截断，不是给所有 KL 乘以 3，也不是后来对 prior 与 posterior 分别分配梯度权重的 KL balancing。[↗](https://arxiv.org/pdf/1811.04551v5#page=12)
 
-PlaNet 的基本训练目标是变分序列模型的 evidence lower bound。简化理解可以分成三项：
+训练时，每一步 prior 都拿到上一时刻的 posterior 状态。这个状态已经利用了真实图像，因此单步预测的起点质量通常较好。规划时，模型连续使用自己的预测作为下一步输入，误差却会累积。确定性记忆可以跨时间传播信息，但它没有自动消除“训练多为一步预测，使用却要连续预测”的差别。latent overshooting 正是针对这个问题提出的。
 
-| Loss term | What it trains |
-| --- | --- |
-| observation reconstruction | latent state 是否包含足够视觉信息 |
-| reward prediction | latent state 是否包含决策相关信息 |
-| KL regularization | prior dynamics 是否能预测 posterior belief |
+## Latent overshooting 把多步误差放回潜在空间
 
-写成概念式：
+一个理想、容量无限且每一步都精确的模型，当然也能得到精确的多步预测。现实中，模型容量有限，分布形式受限，单步目标的最佳解未必是长 rollout 的最佳解。若只在 posterior 状态附近训练下一步预测，模型可能对一小段自己的预测误差非常敏感，连续滚动后就走到训练时少见的状态。
 
-$$
-\mathcal{L}
-=
--\log p(o_t \mid h_t, s_t)
--\log p(r_t \mid h_t, s_t)
-+\mathrm{KL}\left(q(s_t \mid h_t,o_t)\,\|\,p(s_t \mid h_t)\right)
-$$
+一种直接补救是 **observation overshooting**。从某个时刻开始，让模型连续预测多步，再把每一步预测状态都解码成图像，与对应的真实图像比较。问题是多个起点、多个距离都要经过图像 decoder，计算和显存随之增加。PlaNet 提出在潜在分布之间比较，把额外监督放在紧凑空间中。
 
-这里的核心矛盾是：标准 KL 主要训练一步 prior。如果模型只在 \(t \rightarrow t+1\) 上准确，但 planning 需要连续 rollout 十几步，那么一小点误差会在 CEM 搜索里被放大。
+Figure 3 中的 $s_{i\mid j}$ 表示时刻 $i$ 的状态、只使用截至 $j$ 的观察。标准目标比较 $s_{3\mid2}$ 与 $s_{3\mid3}$，而 latent overshooting 还要求只看到第一帧时预测出的 $s_{3\mid1}$ 与当前有信息的 posterior 一致。看右图的波浪线，就能找到这些跨越多步的 KL 约束；它们不要求把所有预测状态解码成额外图像。
 
-### Latent Overshooting
+![标准变分训练、图像 overshooting 与潜在 overshooting](../../assets/images/paper-deep-dives/world-models/planet/figure-3-latent-overshooting.png){ width="860" }
 
-为了解决多步预测问题，论文提出 `latent overshooting`。
+*原论文 Figure 3。阴影观察节点旁的箭头表示重建项，波浪线表示 KL；右侧把多步一致性训练留在潜在空间。*
 
-![Latent overshooting](../../assets/images/paper-deep-dives/world-models/planet/figure-3-latent-overshooting.png){ width="860" }
-
-<small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 3. 原论文图注要点：该图比较 standard variational bound、observation overshooting 和 latent overshooting。latent overshooting 不解码所有多步预测图像，而是在 latent space 里约束多步 prior 接近对应 posterior。</small>
-
-**为什么 overshooting 放在 latent space。**
-标准 ELBO 主要约束一步 prior 接近下一步 posterior，但 PlaNet 的规划要连续想象很多步。一小步模型误差在 CEM 规划中会被放大，所以作者加入 overshooting，让从更早时刻 rollout 多步得到的 prior 也接近后面时刻的 posterior。
-
-直接在 observation space 做 overshooting 要解码每个多步预测图像，成本高，而且像素误差会把模型拉向视觉细节。latent overshooting 只约束 latent belief 的多步一致性，更贴近规划真正需要的 dynamics accuracy。读这张图时可以把它理解成：不是让模型多步“画得像”，而是让模型多步“状态信念滚得准”。
-
-标准目标只约束：
+多步预测首先要定义清楚。省略动作条件，并暂时沿用论文一般状态空间模型的 $s_t$ 记号，从 $s_{t-d}$ 预测 $s_t$ 的分布是把中间状态积分掉
 
 $$
-p(s_t \mid s_{t-1}, a_{t-1}) \approx q(s_t \mid o_{\le t}, a_{<t})
+p(s_t\mid s_{t-d})
+=\int\prod_{\tau=t-d+1}^{t}p(s_\tau\mid s_{\tau-1})\,
+\mathrm ds_{t-d+1:t-1}
+=\mathbb E_{p(s_{t-1}\mid s_{t-d})}
+\big[p(s_t\mid s_{t-1})\big].
 $$
 
-latent overshooting 进一步约束多步 prior：
+$d$ 是预测距离，$d=1$ 时退回普通单步转移。公式不是假设多步边缘分布仍然属于一个简单高斯族；即使每一步条件分布是高斯，经过非线性转移和中间状态积分后，完整边缘也可能很复杂。实际训练通过采样中间轨迹构造监督。[↗](https://arxiv.org/pdf/1811.04551v5#page=5)
+
+令 $q_t=q(s_t\mid o_{\le t})$ 表示有当前观察的 posterior。忽略奖励的同类项，论文 Equation 7 的潜在 overshooting 目标右侧可以写成
 
 $$
-p(s_t \mid s_{t-d}, a_{t-d:t-1}) \approx q(s_t \mid o_{\le t}, a_{<t})
+\mathcal L_{\mathrm{over}}
+=\sum_{t=1}^{T}\left[
+\mathbb E_{q_t}\log p(o_t\mid s_t)
+-\frac{1}{D}\sum_{d=1}^{D}\beta_d
+\mathbb E_{q(s_{t-d}\mid o_{\le t-d})p(s_{t-1}\mid s_{t-d})}
+\mathrm{KL}\big(q_t\,\|\,p(s_t\mid s_{t-1})\big)
+\right].
 $$
 
-这里的 \(d\) 是 overshooting distance。它的意义是让模型从更早的 latent state 出发，经过多步 transition 后仍能落到真实 posterior 附近。
+$D$ 是参与训练的最大预测距离，$\beta_d$ 控制不同距离的权重。读这个式子时，关键是 KL 外面的期望。它先从 $t-d$ 时刻的 posterior 采样一个起点，之后不用中间图像，沿 prior 滚动到 $t-1$，再用这时的预测分布 $p(s_t\mid s_{t-1})$ 与真实图像支持的 $q_t$ 比较。模型受到惩罚的是“从若干步前独立滚动过来之后，下一步仍与当前 posterior 不一致”。
 
-这和 observation overshooting 的区别很关键。observation overshooting 会把多步预测都解码成图像再做 reconstruction loss，在像素任务中很贵。latent overshooting 只在 latent space 做 KL 约束，避免大量额外图像解码。
+因此，这个目标不是直接计算 $q_t$ 与完整多步混合分布之间的闭式 KL。它对采样得到的中间状态条件下的 KL 求期望，避免显式构造那个复杂的边缘分布。图像重建仍围绕 posterior 进行，额外增加的是多步潜在预测与 posterior 的匹配。
 
-需要注意一个细节：论文实验中，RSSM 本身已经比较稳健，latent overshooting 对 RSSM 的主结果不是唯一决定因素；但它明显揭示了 model-based RL 的关键训练压力：**规划需要的是多步 latent dynamics，而不是只会一步重建的视觉模型**。
+在 $d>1$ 的项中，作者对作为目标的 posterior **停止梯度**。这一步决定了学习方向。posterior 有真实观察提供的信息，多步 prior 则更容易积累错误；让两者共同向中间妥协，可能使 posterior 丢失有用信息。停止目标端的梯度，就要求多步预测追赶有信息的 posterior。$d=1$ 时仍保留普通的单步训练关系。[↗](https://arxiv.org/pdf/1811.04551v5#page=6)
 
-## Latent Planning
+理论表述也有边界。论文先推导固定距离 $d$ 的 predictive distribution $p_d$ 的变分下界，再将不同距离的目标合在一起；将这个下界进一步关联到原始一步生成模型的似然时，正文明确使用了 **“we conjecture”**，依据是数据处理不等式。因而更稳妥的理解是，一套有变分推导支撑、用于强化多步一致性的训练目标，而不是任意模型、任意 $\beta_d$ 权重下都已证明等价的标准 ELBO。加入可调距离权重后，其实际作用也应从正则化角度理解。
 
-PlaNet 的 planning 使用 `Cross-Entropy Method`。流程如下：
+## 为什么最终 PlaNet 反而不需要 overshooting
 
-```text
-当前 belief: q(s_t | o_{<=t}, a_{<t})
-  -> 初始化未来 action sequence 的 Gaussian distribution
-  -> 采样 J 条候选 action sequences
-  -> 用 RSSM prior rollout 每条候选序列
-  -> 累加 reward head 预测的 mean rewards
-  -> 选择 top K sequences
-  -> 重新拟合 Gaussian
-  -> 重复 I 次
-  -> 执行当前步 mean action
-```
+latent overshooting 是论文的独立方法贡献，却不是最终 RSSM agent 的必选组件。正文与 Appendix A 明确说明，最终配置不再需要 earlier version 中的 latent overshooting 和额外固定全局 prior。只看方法介绍而把 overshooting 列成主实验成功的必要条件，会得到错误的复现方案。[↗](https://arxiv.org/pdf/1811.04551v5#page=12)
 
-CEM 可以理解成一种“采样、筛选、更新”的黑盒优化方法。它不需要对 action 求梯度，只需要 world model 能给一串动作打分。PlaNet 在模型内部尝试很多未来动作序列，保留预测回报最高的一小批 elite sequences，再用这些 elite sequences 重新拟合下一轮采样分布。多轮之后，planner 取当前步的 mean action 执行；真正进入环境的只有第一个动作，下一步拿到新观测后再重新规划。
+附录把问题拆得更细。除了 RSSM，作者还考虑 DRNN，一种在编码和生成两侧都使用循环网络、二者之间放置随机变量的结构。Figure 8 的六个面板对应六个任务，每个面板都画出两种结构有无 overshooting 的四条曲线。先比较红色 DRNN 与紫色 DRNN + Overshooting，Reacher 与 Cup 加入多步约束后明显改善，说明只依赖单步训练的结构确实可能受益于跨距离监督；再比较蓝色 RSSM 与绿色 RSSM + Overshooting，加入 overshooting 没有形成一致增益，部分任务的学习反而略慢或更差。
 
-论文使用的典型 planner 设置是：
+![不同动力学结构加入 latent overshooting 后的控制结果](../../assets/images/paper-deep-dives/world-models/planet/figure-8-overshooting-ablation.png)
 
-| Hyperparameter | Value | Meaning |
-| --- | --- | --- |
-| \(H\) | 12 | planning horizon |
-| \(I\) | 10 | CEM optimization iterations |
-| \(J\) | 1000 | sampled action sequences |
-| \(K\) | 100 | elite sequences used for refitting |
+*原论文 Figure 8。上下两排按任务排列；每个面板内，蓝色与绿色比较 RSSM 有无 overshooting，红色与紫色比较 DRNN 有无 overshooting。*
 
-最重要的工程点是：candidate action sequences 的评估完全在 latent space 里完成。模型不需要为每条候选序列生成未来图像，只需要预测 latent state 和 reward。这就是 PlaNet 能在每个环境 step 在线规划的原因。
+这组结果把两个问题分开了。多步一致性是否值得训练，取决于模型结构、已有的记忆路径和误差来源；一个合理目标能改善某种架构，不保证改善另一种已经较强的架构。RSSM 的确定性路径和随机路径组合，本身可能已让这些任务上的多步预测足够好，额外的约束还会改变重建、单步预测与长程预测之间的平衡。后一句是对实验的解释，论文没有进一步隔离所有原因。
 
-因此 PlaNet 没有直接训练一个 policy 来输出动作，而是把 policy 的角色交给在线 MPC：模型负责预测未来，CEM 负责搜索动作，环境只看到搜索结果的第一个动作。这个接口很干净，也暴露了代价：模型越不准，搜索越容易被误导；动作维度或 horizon 越大，CEM 需要的候选序列就越多。
+采用时可以把 overshooting 看作可单独测试的机制。若模型在 teacher-forced 单步验证上很好，开放循环一长就漂移，它给出了一个不用额外图像解码的训练入口；若已采用本文最终 RSSM 配置，则应先复现没有 overshooting 的基线，再检验额外约束是否改善真实控制，而不是只看潜在 KL 下降。论文最有用的部分也包括这一负结果。[↗](https://arxiv.org/pdf/1811.04551v5#page=14)
 
-它也解释了 PlaNet 和视频世界模型的差别。视频世界模型通常重视未来画面质量；PlaNet 只把像素重建当成训练信号，推理时真正服务 planning 的是 latent dynamics 和 reward head。
+## 模型更新与环境采集怎样交替
 
-## 实验结论
+PlaNet 从少量随机经验启动，然后交替训练模型和收集新数据。初始经验池来自 5 个随机动作回合；每完成 100 次梯度更新，就用当前模型与 CEM 再收集一个回合，并在执行动作时加入标准差为 0.3 的高斯噪声。新经验进入数据集，下一轮模型训练因此覆盖当前控制器实际到达的状态。[↗](https://arxiv.org/pdf/1811.04551v5#page=12)
 
-PlaNet 在 DeepMind Control Suite 的六个像素控制任务上评估。论文重点不是最终分数绝对最高，而是样本效率：PlaNet 使用 1,000 episodes，从 pixels 训练；A3C 和 D4PG 对照结果使用 100,000 episodes。
+这个循环与监督视频预测的差别在于数据分布会随能力变化。随机动作也许足以看见机械臂在小范围内移动，却很少让 Walker 稳定站起并走动。规划器取得一点进步，就会收集更接近成功区域的轨迹；模型再利用这些轨迹改善后续预测。世界模型与数据采集互相推动，不能把结果理解成随机收一批视频、离线拟合后就自然具备同样的控制能力。
 
-![Model comparison](../../assets/images/paper-deep-dives/world-models/planet/figure-4-model-comparison.png){ width="920" }
+| Component | Setting | Role |
+|---|---|---|
+| Observation | $64\times64\times3$ RGB, 5-bit depth | 从像素学习表示；降低输入位深 |
+| Deterministic state | GRU, 200 units | 保存历史信息 |
+| Stochastic state | 30-dimensional diagonal Gaussian | 预测及推断状态分布 |
+| Other networks | 2 layers, 200 units, ReLU | 实现潜变量分布与奖励等映射 |
+| Training batch | 50 chunks × 50 steps | 在真实序列上训练模型 |
+| Optimizer | Adam, learning rate $10^{-3}$, $\epsilon=10^{-4}$ | 联合更新表示与动力学 |
+| Gradient clipping | Global norm 1000 | 限制单次更新的梯度范数 |
+| Free nats | 3 | 避免低 KL 区间继续压缩状态信息 |
+| Seed episodes | 5 | 提供初始随机经验 |
+| Collection schedule | 1 episode / 100 updates | 交替改进模型与覆盖范围 |
+| Exploration noise | $\mathcal N(0,0.3)$ | 在执行动作时增加探索 |
+| CEM | $H=12$, $I=10$, $J=1000$, $K=100$ | 潜在空间中的在线动作搜索 |
 
-<small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 4. 原论文图注要点：该图比较 PlaNet、model-free baselines 和不同 dynamics model 设计；结果强调 RSSM 比纯 GRU 或纯 SSM 更适合从像素学习可规划的 dynamics。</small>
+*根据原论文 Appendix A 与 Algorithm 2 整理。CNN 与反卷积 decoder 沿用文中引用的 Ha & Schmidhuber 架构；表中 MLP 设置不应误读为图像编码器也只有两层全连接。*
 
-Table 1 reports comparison of PlaNet to model-free algorithms and true-simulator CEM planning.
+不同任务中单独调整的是 action repeat。Cartpole 为 8，Reacher、Cheetah、Cup 为 4，Finger、Walker 为 2。一个模型步对应重复执行同一动作若干个环境步，因此 $H=12$ 在不同任务中约覆盖 24 至 96 个底层模拟步。这个换算只是说明时间尺度，不等同于统一的 12 帧视频预测任务，也不能忽略 action repeat 后比较规划距离。
+
+action repeat 同时决定控制频率、模型需要预测的时间跨度和每回合要调用多少次 CEM。较大的 repeat 能减少决策次数，也让单个动作的后果更远；较小的 repeat 可以更及时纠正接触或平衡误差，却增加控制调用数量。论文把 action repeat、KL 尺度和学习率列为重要超参数，所以“多数超参数跨任务固定”不意味着时间分辨率不需要选择。
+
+作者报告每次任务训练约 10–20 小时，使用一张 Nvidia V100，具体取决于任务。这是单次训练运行的量级，不能视为六任务、多个随机种子和全部消融的总成本。数据效率提升也不会自动消除计算成本，模型的梯度更新与每一步 CEM 搜索都要付费；它们换来的是更少的真实环境交互。[↗](https://arxiv.org/pdf/1811.04551v5#page=6)
+
+## 1,000 回合得到了什么，约 200 倍又如何计算
+
+主实验首先回答，完全基于模型的像素规划能否接近强 model-free 控制方法。对照来自 DeepMind Control Suite 已报告的 A3C 与 D4PG 结果。A3C 接收 proprioceptive state，D4PG 与 PlaNet 接收像素；两个 model-free 基线训练到 100,000 回合，PlaNet 主表训练到 1,000 回合。因此，这不是所有方法在相同观察接口、相同数据量下的横向排名，而是论文以较小交互预算追赶强基线的可行性检验。
+
+原论文 Table 1 的最终平均分如下。顺着同一任务的列比较，才能看见哪些任务接近、哪些仍有明显差距。
 
 | Method | Modality | Episodes | Cartpole Swing Up | Reacher Easy | Cheetah Run | Finger Spin | Cup Catch | Walker Walk |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
 | A3C | proprioceptive | 100,000 | 558 | 285 | 214 | 129 | 105 | 311 |
 | D4PG | pixels | 100,000 | 862 | 967 | 524 | 985 | 980 | 968 |
 | PlaNet (ours) | pixels | 1,000 | 821 | 832 | 662 | 700 | 930 | 951 |
 | CEM + true simulator | simulator state | 0 | 850 | 964 | 656 | 825 | 993 | 994 |
-| Data efficiency gain PlaNet over D4PG (factor) |  |  | 250 | 40 | 500+ | 300 | 100 | 90 |
+| Data efficiency gain PlaNet over D4PG (factor) | — | — | 250 | 40 | 500+ | 300 | 100 | 90 |
 
-<small>表源：`Learning Latent Dynamics for Planning from Pixels`，Table 1。原论文表格要点：该表比较 PlaNet、model-free baselines 和真实 simulator CEM 在 DeepMind Control Suite 六个任务上的分数；重点是 PlaNet 用 `1,000` episodes 从 pixels 学习，就能接近或超过若干使用 `100,000` episodes 的 model-free 结果。</small>
+*原论文 Table 1。最终分数为 5 个种子、10 条评估轨迹上的均值；最后一行是根据 D4PG 学习曲线估计的数据效率倍率，不是上方 Episodes 两个数字的直接比值。*[↗](https://arxiv.org/pdf/1811.04551v5#page=7)
 
-这张表支持两个判断。第一，PlaNet 在 1,000 episodes 下接近或超过强 model-free baseline 的部分结果，尤其 Cheetah Run 上 PlaNet 高于 D4PG。第二，真实 simulator 上的 CEM 上界说明，planner 本身在这些任务中可行，关键瓶颈是 learned dynamics 是否足够准确。
+从最终结果看，Walker 为 951 对 968、Cup 为 930 对 980，PlaNet 已接近 D4PG；Cheetah 为 662 对 524，按 $(662-524)/524$ 计算约提升 26%，对应论文强调的优势任务。Finger 则为 700 对 985，差距仍然很大。Reacher 的 832 也低于 D4PG 的 967，不能用“接近 model-free”抹平每个任务的表现。
 
-这里的数据效率要按机制读，而不是只看最终分数。PlaNet 从每段 episode 中同时学视觉状态、transition 和 reward，planning 又能把当前模型用于主动收集后续数据；model-free baseline 则主要依赖环境回报通过价值或策略更新逐步传播。论文没有证明所有稀疏奖励任务都能被 learned model 解决，但它说明在这组六个像素控制任务上，latent dynamics + online planning 可以用少得多的环境交互达到有竞争力的表现。
+学习曲线还提供了最终表格没有的信息。论文报告，在约 100 回合以内，PlaNet 已在所有任务上超过训练了 100,000 回合的 A3C；到约 500 回合，除 Finger 外接近 D4PG 的最终表现。这一结果比只看 1,000 回合的最终行更直接地支持数据效率主张。
 
-![Agent designs](../../assets/images/paper-deep-dives/world-models/planet/figure-5-agent-designs.png){ width="920" }
+“平均约 200 倍”来自另一种口径。作者查看 D4PG 的学习曲线，估计它达到 PlaNet 最终表现需要多少回合，再与 PlaNet 所用数据比较，所以得到 Cartpole 250、Reacher 40、Cheetah 500+ 等不同倍率。单纯用 100,000 除以 1,000 只能得到 100，无法复原这组值；Cheetah 的 500+ 也带有基线没有在相应曲线上达到目标分数的界限含义，不是精确计时测量。
 
-<small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 5. 原论文图注要点：该图比较 PlaNet、random collection 和 random shooting，说明在线数据收集与 CEM 迭代优化都对任务表现有贡献。</small>
+主曲线的统计方式也不同于表格。Figure 4 的实线是中位数，阴影是第 5–95 百分位，来自 5 个种子和 10 条评估轨迹；Table 1 给均值。Reacher、Cup 的曲线中位数可以接近高分，表格均值却仍低于那个水平，因为稀疏奖励任务中成功与失败轨迹的差别很大。阴影宽不是绘图噪声，而是结果分布的重要信息。
 
-Figure 5 的结论更偏系统设计：如果只用 random actions 收集数据，模型很难看到任务相关状态；如果只做 random shooting 而不用 CEM 迭代优化，动作序列搜索也不够强。PlaNet 的效果来自两个闭环同时成立：
+最后一行 CEM + true simulator 给规划器提供真实模拟器状态和动力学，无需学习模型，所以 Episodes 写 0；它并不代表从零经验、只看像素就能完成任务。作者把它作为估计的性能上限参考，但它不是严格上界。Cheetah 中学习模型的 662 甚至略高于真实模拟器规划的 656，有限候选数和随机搜索足以使这类小差异出现。更准确的用途是判断，在相同有限 CEM 设置下，真实动力学能达到什么水平。
 
-1. planning 让数据收集更接近任务分布；
-2. 新数据让 world model 更适合后续 planning。
+## 模型结构消融与数据收集消融各回答什么
 
-## Open-Loop Prediction
+主结果证明系统可行，却不能告诉我们为什么可行。Figure 4 同时替换动力学模型中的确定性与随机部分，让三种模型使用同一类规划方式。先看蓝色 RSSM 相对红色 GRU，再看它相对绿色 SSM，就能分开观察两个组成部分的价值。
 
-论文还用 open-loop video prediction 检查 latent dynamics 是否真的能往前滚。
+![PlaNet、纯随机 SSM 与纯确定性 GRU 的控制学习曲线](../../assets/images/paper-deep-dives/world-models/planet/figure-4-model-comparison.png){ width="920" }
 
-![Open-loop predictions](../../assets/images/paper-deep-dives/world-models/planet/figure-9-open-loop-predictions.png){ width="560" .atlas-figure-tall }
+*原论文 Figure 4。横轴为收集的回合数，纵轴为任务回报；横向虚线为已训练 100,000 回合的 A3C 与 D4PG 参考结果。阴影为第 5–95 百分位，不是均值的标准误。*
 
-<small>Figure source: `Learning Latent Dynamics for Planning from Pixels`, Figure 9. 原论文图注要点：该图展示测试 episode 上的 open-loop video predictions，前 5 列是 reconstructed context frames，后续帧由模型 open-loop 生成，用于观察不同 dynamics model 的长期预测质量。</small>
+纯确定性 GRU 在多数任务上接近失败，Cartpole 虽有约 200 分的表现，也明显低于 RSSM。纯随机 SSM 不是完全不能学，Reacher 和 Cup 中可以得到高回报，但结果更不稳定；Walker 的表现又明显落后。RSSM 因而不是简单“加一个 RNN 让网络更大”，其收益同时与长期记忆路径和随机状态建模相关。[↗](https://arxiv.org/pdf/1811.04551v5#page=6)
 
-这张图不应该被理解成“PlaNet 是视频生成模型”。PlaNet 的视频预测主要是诊断工具和训练约束。真正用于控制的是 latent state 和 reward prediction。换句话说，PlaNet 需要视觉预测足够好来塑造状态，但部署时不依赖生成未来视频给 planner 看。
+作者提出两种可能解释。环境从图像观察者角度具有不确定性，随机状态有助于表示这些未知因素；模型噪声也可能给规划加上某种鲁棒余量，降低对过于精确但错误预测的利用。但实验没有独立区分这两种原因，也没有直接测量置信度是否校准。可以据消融判断“这个系统中随机成分非常有用”，却不能把收益唯一归因于某一种不确定性理论。
 
-## 和 DreamerV3 的关系
+Figure 5 转而固定模型思路，改变智能体的两项工作方式。绿色版本始终用随机动作收集训练数据，红色版本把 CEM 换成一次性 random shooting，即采样 1,000 条动作序列后直接选择最好的候选。它们分别问，在线收集当前策略到达的数据是否必要，以及迭代调整动作分布是否有帮助。
 
-PlaNet 和 DreamerV3 的共同点是：
+![在线规划采集与迭代 CEM 的作用](../../assets/images/paper-deep-dives/world-models/planet/figure-5-agent-designs.png){ width="920" }
 
-| 维度 | PlaNet | DreamerV3 |
-| --- | --- | --- |
-| 世界模型 | RSSM | RSSM 变体 |
-| 数据 | environment interaction trajectories | environment interaction trajectories |
-| 核心变量 | latent state, action, reward | latent representation, action, reward, continuation |
-| rollout 空间 | latent space | latent space |
-| 视觉重建 | 用于训练 latent state | 用于训练 latent representation |
+*原论文 Figure 5。蓝色为完整 PlaNet，绿色使用随机动作采集数据，红色使用单轮 random shooting。两种替换针对不同环节。*
 
-它们的关键区别是 action selection：
+随机采集在 Reacher、Cup 上仍可能覆盖足够有用的状态，所以不应说“随机数据一概无用”；在 Cartpole、Finger 和 Walker 上，它成为明显瓶颈。尤其是必须先学会站立再学走路的 Walker，成功动作会创造后续学习所需的状态分布。这解释了为什么仅提高模型的离线拟合能力，还不足以替代交互闭环。
 
-| 维度 | PlaNet | DreamerV3 |
-| --- | --- | --- |
-| 控制方式 | 每个 step 用 CEM 在线规划 | 用 imagined rollout 训练 actor-critic |
-| 推理成本 | 高，需要大量候选 action rollout | 低，actor 直接输出动作 |
-| 策略网络 | 无 | 有 |
-| 价值网络 | 无 | 有 |
-| 主要瓶颈 | planning latency 和短 horizon 搜索 | model bias 与 actor-critic 稳定性 |
+完整 CEM 在六个任务上都优于一次性 random shooting。不过，这个消融同时改变了搜索过程和评价预算。random shooting 总共评价 1,000 条序列，默认 CEM 则进行 10 轮、每轮 1,000 条；结果支持“这套迭代规划配置更有效”，不能单独证明在完全等量候选评价下，收益全部来自 CEM 的分布更新。若实际系统受到严格在线延迟约束，这个预算差别会直接影响选择。[↗](https://arxiv.org/pdf/1811.04551v5#page=8)
 
-可以把 Dreamer 看成对 PlaNet 的一次关键工程升级：把在线规划变成离线 amortized policy learning。PlaNet 每一步都问“现在搜索哪条 action sequence 最好”；Dreamer 则训练一个 actor，让它学会在类似 latent state 下直接给出动作。
+## 一个共享模型学六个任务，迁移到了哪一步
 
-## 和视频世界模型路线的关系
+单任务结果仍留下一个问题，RSSM 学到的是只适配某一套图像和动作的表示，还是能容纳多种视觉域与动力学。论文训练了一个同时面对六个任务的共享 agent，不提供 task ID，而要求它从当前图像判断所在环境。不同任务的动作维度通过补上无用维度对齐；每完成 100 次模型更新，就在每个任务上各收集一个回合。[↗](https://arxiv.org/pdf/1811.04551v5#page=6)
 
-PlaNet 和 LingBot-World 这类视频世界模型都涉及未来预测，但研究目标完全不同。
+Figure 7 中，应该比较同一任务的共享模型与单独训练模型，而不是跨任务比较分数。共享 agent 能学会所有任务，但整体学习更慢，Cheetah 与 Walker 这类运动任务尤其明显。它需要在同一容量内同时保存多套状态转移和视觉信息，不能由单任务的强结果推出共享训练一定更高效。
 
-| 维度 | PlaNet | 视频生成型世界模型 |
-| --- | --- | --- |
-| 输入数据 | 交互轨迹：observation, action, reward | 大规模视频、文本、图像、动作或相机轨迹 |
-| 训练目标 | 重建观测、预测 reward、约束 latent dynamics | 生成未来视频、动作条件续写、长时视觉一致性 |
-| 推理输出 | 当前动作 | 未来视频或可交互视觉场景 |
-| planning 接口 | CEM 在 latent reward 上搜索 | 通常需要额外 policy/planner 接入 |
-| 强项 | 决策相关 dynamics 明确 | 视觉真实感、开放域场景、多样性 |
+![单个共享 PlaNet 与六个单任务 agent 的学习结果](../../assets/images/paper-deep-dives/world-models/planet/figure-7-multitask.png)
 
-因此，PlaNet 是 `interaction-trajectory-based latent dynamics world model` 的早期代表。它不追求开放域视觉真实感，而是追求一个能让 planner 使用的低维世界状态。
+*原论文 Figure 7。横轴为每个任务收集的回合数；该图注报告 4 个种子、10 条评估轨迹，曲线与阴影分别为中位数和第 5–95 百分位。*
 
-## 局限与风险
+“每个任务”是这张图的关键计量单位。如果横轴为 1,000，共享 agent 已在六个任务各收集约 1,000 回合，总量约 6,000，而不是拿总共 1,000 回合完成全部六项。它也在训练中见过全部任务，所以这是已知多任务共同学习的证据，不是对未见环境的 zero-shot transfer。
 
-PlaNet 的局限也很清楚。
+这项实验仍然有明确价值。任务身份可以从观察中隐式推断，动作接口经过简单对齐后，一个潜在动力学模型能够同时承担多个域的预测和规划；但共享表示是否减少总交互、是否促进跨任务迁移，需要额外对照。本文结果首先证明了“装得下并能使用”，并未证明“共享训练在每个维度都更划算”。[↗](https://arxiv.org/pdf/1811.04551v5#page=13)
 
-1. **在线规划成本高**：每个环境 step 都要采样和评估大量 action sequences，难以直接扩展到高频真实机器人控制。
-2. **planning horizon 有限**：CEM 在高维长 horizon action space 中搜索困难，太长的 horizon 反而会降低表现。
-3. **依赖 reward signal**：PlaNet 需要 reward head 服务规划，不像纯视频模型那样可以只用互联网视频预训练。
-4. **模型误差会被 planner 利用**：如果 learned dynamics 有系统性漏洞，CEM 会主动搜索这些漏洞。
-5. **实验环境仍偏模拟控制**：DeepMind Control Suite 是重要基准，但还不是开放真实世界交互。
-6. **train-test mismatch 没有完全消失**：latent overshooting 缓解多步 prior rollout 的训练压力，但不能保证部署时所有长 horizon 想象都可靠。
+## 预测图像好看之外，状态究竟保留了什么
 
-这些限制解释了为什么后续 Dreamer 系列会转向 actor-critic imagination：它保留 PlaNet 的 latent world model，但避免每一步都做昂贵的 CEM 搜索。
+规划效果是模型的最终用途，预测可视化则帮助检查它在没有新观察时会怎样演化。Figure 10 用 5 帧真实上下文初始化模型，之后给定测试轨迹的动作，让模型开放循环预测，图中一直展示到第 50 帧。这里包含最初 5 帧上下文，因此是后续约 45 帧预测，不应改写成“看 5 帧之后又精确预测了 50 帧”。测试动作还包含噪声，使预测面对更丰富的轨迹。
 
-## 阅读结论
+![四种动力学模型的 Cheetah 开放循环图像预测](../../assets/images/paper-deep-dives/world-models/planet/figure-9-open-loop-predictions.png){ width="560" .atlas-figure-tall }
 
-PlaNet 的核心贡献可以概括为三点：
+*原论文 v5 Figure 10。四组分别为 PlaNet、PlaNet + Overshooting、Deterministic (GRU)、Stochastic (SSM)；每组对照真实图像与模型预测，前 5 帧为上下文。*
 
-1. 提出用 RSSM 从像素学习 action-conditioned latent dynamics；
-2. 证明 planner 可以只在 latent space 里评估 reward，而不必生成未来图像；
-3. 用 latent overshooting 强调 world model 训练必须关注多步 rollout，而不是只优化一步重建。
+从长时间范围的身体姿态和运动方向看，RSSM 能维持有意义的 Cheetah 动态；确定性模型在后段出现姿态偏离，纯随机 SSM 的预测更容易模糊或丢失身体细节。图中也能看见，即使预测整体运动合理，也不等于每一个像素或每一次足部接触都准确。因此，这幅图支持模型学习了较长时间尺度的运动结构，不能单独证明每个任务都具有同样精确的长程预测，更不能替代控制回报的比较。[↗](https://arxiv.org/pdf/1811.04551v5#page=18)
 
-一句话总结：PlaNet 是“世界模型用于控制”的经典原型。它把世界模型从视频预测器推进成一个可供规划器调用的 latent simulator，也为后续 DreamerV3 这类 imagined rollout policy learning 铺好了路线。
+更直接的诊断在 Figure 11。作者冻结已经训练好的世界模型，再训练小网络从潜在状态预测模拟器的真实位置、速度和奖励。这样可以问，尽管主训练只看到图像，潜在状态是否保存了与物理控制相关的信息。真实状态标签在这里是 probe 的监督信号，不能倒过来说 PlaNet 原本就用它们训练动力学。
 
-PlaNet 的核心证据链是 RSSM posterior 用真实观测校正，prior 在 imagination 中 rollout，再用 CEM 在 latent space 规划动作。DMC 分数、latent overshooting 和 open-loop prediction 图要一起读：它证明 latent planning 有数据效率优势，也暴露在线 CEM 成本高，这正是 Dreamer 后来改成 actor 的原因。
+这些曲线总体上跟随真实运动，说明状态并非只记住与控制无关的图像纹理。但误差也可见，部分位置通道随预测距离漂移，奖励预测在后段仍保持较高值时，真实奖励已经接近零。后者尤其关系到规划器，因为它优化的正是预测奖励；图像中大体像在跑，不足以保证回报估计同样可靠。论文没有给这张诊断图提供一个统一误差指标，因此不应把它包装成“完整恢复物理状态”的定量结论。[↗](https://arxiv.org/pdf/1811.04551v5#page=19)
 
-## 相关阅读与下一步
+这也解释了 MPC 的实际价值。PlaNet 不必在开放循环中无误差地跑完整个回合，它只执行短计划的第一个动作，然后用真实图像重新推断状态。好的局部预测加频繁重规划，可以产生比单看长程视频外观更可靠的闭环行为；另一方面，一旦短距离内的奖励预测已经被模型误差误导，重规划本身也不是万能修复。
 
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Learning+Latent+Dynamics+for+Planning+from+Pixels&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Learning+Latent+Dynamics+for+Planning+from+Pixels)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Learning+Latent+Dynamics+for+Planning+from+Pixels)。
-- 站内下一步：[论文精读专题](../index.md)。
+## 更长的规划距离，为什么连真实模拟器也未必受益
+
+限制规划距离常被解释为模型误差会积累，但本文的 Appendix J 还展示了另一个原因。Figure 12 在 Cheetah 上直接用真实模拟器规划，扫描规划距离、CEM 迭代数、候选数与 elite 比例。此时没有学习动力学误差，却仍不是距离越长越好。
+
+![在真实 Cheetah 模拟器上扫描 CEM 规划参数](../../assets/images/paper-deep-dives/world-models/planet/figure-12-planning-parameters.png)
+
+*原论文 Figure 12。网格覆盖规划距离 6、8、10、12、14；迭代数 3、5、10、15；候选数 100、300、500、1000；elite 比例 0.05、0.1、0.3、0.5。颜色对应回报，图示范围约为 132–837。*
+
+较短的距离可能看不到当前动作的延迟收益，图中 $H=6$ 就不足；但延长距离同时扩大动作序列的搜索空间。如果候选数量没有相应增加，有限采样可能很难找到一条整段都好的序列。图中这个 Cheetah 设置下 $H=8$ 较好，继续变长反而可能下降。因为使用的是真实动力学，这一现象不能归因于世界模型预测失真。
+
+增加候选数和迭代数通常有帮助，较小 elite 比例也往往更好，但它们是在计算预算和搜索集中程度之间取舍。更多候选提高覆盖，更多迭代允许分布逐步靠近高回报区域，较小 elite 集合让更新更集中；过度集中又可能降低探索。主实验选择 $H=12$ 是跨六任务的一套默认配置，不是声称每个任务单独调参时都以 12 为最优。[↗](https://arxiv.org/pdf/1811.04551v5#page=20)
+
+这个结果使 PlaNet 的适用条件更加具体。如果环境交互昂贵、潜在模型推理相对便宜，花大量内部预测换取更少外部试错具有吸引力；如果在线控制必须极低延迟，反复搜索一万条序列就会成为约束。仅仅增大模型或延长规划距离，不能替代对搜索预算、动作重复频率和误差传播的共同设计。
+
+论文讨论了在规划末端使用 value prediction、通过模型梯度改进动作优化、减少对图像重建的依赖以及时间抽象等方向，它们在本文中仍是后续方案。当前系统已经提供的可复用接口更明确：用观察更新 posterior，用 prior 在潜在空间推演，用 reward head 评价动作，再以真实观察刷新计划。RSSM 解决的是这条接口能否承载有用的记忆和不确定性，overshooting 提供了额外的多步一致性训练工具，而六任务实验则告诉我们，数据效率收益能够出现，但依赖模型结构、在线采集和足够的规划计算共同成立。[↗](https://arxiv.org/pdf/1811.04551v5#page=8)

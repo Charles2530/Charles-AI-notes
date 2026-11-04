@@ -1,244 +1,188 @@
-# 模型训练的完整链路：数据、目标、更新与证据
+# 一段文本怎样变成一次参数更新
 
-训练不是“把数据喂给模型，然后等 loss 下降”。更准确地说，训练是在控制三件事：模型看见什么数据，用什么目标判断对错，用多大的更新压力修改参数。只要这三件事没有对齐，loss 曲线再顺，也可能只是模型学会了错误捷径。
+训练代码最重要的几行很短，读取一批数据，前向计算，求 loss，反向传播，更新参数。难的是知道这些行之间传递的张量代表什么，以及哪些操作真正改变了模型。下面沿着同一段 token 走完一次更新，再对照 nanoGPT 的实际训练循环。先让计算完全可检查，再接入更大的模型。
 
-单个 training step、完整训练 run 和分布式执行要放进同一条链路读：梯度从哪里来，optimizer step 改了什么，effective tokens 和 global batch 怎样定义，模型为何需要多种并行，checkpoint contract 应保存哪些状态，以及怎样判断一次训练改动可信。
+## 输入和答案只错开一个位置
 
-## 前置知识
-
-阅读时只需要先区分参数、激活、梯度和优化器状态，并知道前向传播产生预测、反向传播计算梯度。相关数学可回看[优化与训练基础](../foundations/optimization-and-training-basics.md)和[数值、复杂度与估算](../prerequisite-math/numerics-complexity-and-estimation.md)。
-
-还需要记住几组容易混用的词：micro-batch 是单卡一次执行的数据，global batch 是所有设备和梯度累积合成的一次更新；data parallel、tensor parallel 与 pipeline parallel 分别切数据、层内张量和模型深度，它们解决的显存与计算问题不同。
-
-## 核心机制
-
-可以先把训练看成一条生产线：
+假设分词后的连续文本为 `[0, 1, 2, 0, 1]`，词表有四个 token。取长度为 4 的训练窗口，输入与目标分别是
 
 ```text
-data distribution
-  -> sampling / packing
-  -> batch
-  -> forward
-  -> loss
-  -> backward
-  -> optimizer step
-  -> eval / checkpoint
+位置       0  1  2  3
+输入 X     0  1  2  0
+目标 Y     1  2  0  1
 ```
 
-这条线里每一环都会改变模型最终学到什么。数据决定“世界长什么样”，loss 决定“什么叫错”，batch 和学习率决定“每一步改多猛”，评测和 checkpoint 决定“这个实验能不能相信、能不能恢复、能不能比较”。
+每个位置用已经出现的上下文预测下一个 token。位置 0 的目标是 1，位置 1 的目标是 2。训练时整条目标已经知道，因此可以同时计算这四个位置的预测误差；因果 attention 仍需阻止位置 0 看见未来输入。
 
-### 先把一次 Step 看清楚
+[nanoGPT 的 get_batch](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py#L116)正是从 token 文件随机选起点，取 `data[i:i+block_size]` 作为 X，再取向后移动一位的窗口作为 Y。这个项目在数据端完成移位，`model.py` 直接比较 logits 与 targets。其他模型接口可能内部移位，移植训练代码前先确认，不能两边各移一次。
 
-最小监督学习目标可以写成：
+一批有 B 条窗口、每条 T 个 token 时，X 与 Y 形状为 `[B,T]`。Token ID 是离散类别编号，不是数值大小有意义的测量值。
 
-\[
-\min_\theta \; \mathbb{E}_{(x,y)\sim \mathcal D}[\ell(f_\theta(x),y)]
-\]
+## 用一张四乘四的表代替 Transformer
 
-这里 \(\theta\) 表示模型参数，\(\mathcal D\) 表示训练数据分布，\(x\) 表示输入，\(y\) 表示目标，\(f_\theta(x)\) 表示模型预测，\(\ell\) 表示 loss。训练就是不断从 \(\mathcal D\) 里抽样，让模型预测，再用 loss 把错误变成梯度，最后更新 \(\theta\)。
+为了看清更新，先用最小 bigram 模型。它只依据当前 token 预测下一个 token，参数是一张 $4\times4$ 的表 W。输入 token 为 0 时，取第 0 行的四个数作为 logits；输入为 1 时取第 1 行。这个模型没有 attention，不能理解更早的上下文，但其 loss 与优化循环和 GPT 使用同一种接口。
 
-代码层面，一步训练像这样：
+令所有 W 初始为 0，则每个位置输出 `[0,0,0,0]`。Softmax 把它变成概率
 
-```text
-batch = next(dataloader)
-pred = model(batch.inputs)
-loss = loss_fn(pred, batch.targets)
-loss.backward()
-optimizer.step()
-optimizer.zero_grad()
+$$
+p_j=\frac{e^{z_j}}{\sum_{k=0}^{3}e^{z_k}}=\frac14.
+$$
+
+此时模型对四种下一词完全没有偏好。对第一个目标 token 1，交叉熵是 $-\log p_1=\log4\approx1.386294$。四个位置都一样，取平均后的 loss 仍为 1.386294。
+
+GPT 把这张简单查表替换为 embedding、若干 Transformer block、归一化和词表投影。它输出 `[B,T,V]` 的 logits，V 为词表大小。nanoGPT 的 [forward](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/model.py#L170)随后把 logits 展平为 `[B*T,V]`、targets 展平为 `[B*T]`，对每个位置计算交叉熵。
+
+传给交叉熵的是 logits。若先 softmax 后又调用接受 logits 的 CrossEntropyLoss，函数会把概率当作 logits 再归一化，目标就变了。[PyTorch 官方优化教程](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/beginner_source/basics/optimization_tutorial.py)明确使用模型 logits 作为输入。
+
+## 从概率得到梯度
+
+单个位置的交叉熵对 logits 的导数为
+
+$$
+\frac{\partial\ell}{\partial z_j}=p_j-\mathbf1[j=y].
+$$
+
+目标类别的导数是 $0.25-1=-0.75$，其余三类各为 0.25。做梯度下降时减去导数，所以会提高目标 logit、降低其他 logits。训练没有直接把“目标概率加一点”，它通过改变 logits 及其上游参数，让归一化后的概率随之变化。
+
+同一个 W 被所有位置共享。输入 0 出现两次，而且目标都是 1。对四个位置取平均后，第 0 行梯度是
+
+$$
+\nabla W_0=\frac24[0.25,-0.75,0.25,0.25]
+=[0.125,-0.375,0.125,0.125].
+$$
+
+输入 1 与 2 各出现一次，因此其对应行梯度只占单位置梯度的四分之一。输入 3 没出现，第 3 行这一步没有收到该 loss 的梯度。换成 Transformer，链式法则继续把同样的 logit 梯度传回每层参数，自动微分负责计算这些依赖。
+
+## 更新发生在 optimizer step
+
+使用学习率为 1 的 SGD，更新 $W\leftarrow W-\nabla W$ 后，第 0 行变成 `[-0.125,0.375,-0.125,-0.125]`。目标 token 1 的概率成为
+
+$$
+\frac{e^{0.375}}{e^{0.375}+3e^{-0.125}}
+=\frac{e^{0.5}}{e^{0.5}+3}\approx0.354661.
+$$
+
+另外两条参与更新的行，正确下一词概率约为 0.299724。重新前向，四个位置平均 loss 约为 1.120743，低于更新前的 1.386294。
+
+下面的完整程序只需 Python 标准库。它显式计算 softmax、梯度和更新，便于逐项核对。
+
+```python
+import math
+
+x, targets = [0, 1, 2, 0], [1, 2, 0, 1]
+w = [[0.0] * 4 for _ in range(4)]
+
+def softmax(row):
+    shifted = [math.exp(v - max(row)) for v in row]
+    return [v / sum(shifted) for v in shifted]
+
+def mean_loss(weights):
+    return -sum(math.log(softmax(weights[a])[b])
+                for a, b in zip(x, targets)) / len(x)
+
+before = mean_loss(w)
+grad = [[0.0] * 4 for _ in range(4)]
+for token, target in zip(x, targets):
+    probs = softmax(w[token])
+    for j in range(4):
+        grad[token][j] += (probs[j] - (j == target)) / len(x)
+for i in range(4):
+    for j in range(4):
+        w[i][j] -= grad[i][j]
+print(round(before, 6), round(mean_loss(w), 6))
+print(w[0])
 ```
 
-这几行不是口号。`next(dataloader)` 决定模型这一刻看见哪个数据桶；`model(...)` 决定当前参数如何解释输入；`loss_fn(...)` 决定哪些错误被放大；`backward()` 把错误沿计算图传回参数；`optimizer.step()` 才真正改变模型。很多训练故障并不在模型结构，而在这几行之间的语义没有对齐。
+输出应为 `1.386294 1.120743`，随后是 `[-0.125, 0.375, -0.125, -0.125]`。这是机制验证，尚未测试泛化。一直训练同一条序列，只能说明模型越来越适应这条序列。
 
-LLM 预训练只是这个框架的一个特例：输入是一段 token，目标通常是下一个 token。扩散模型可能预测噪声、velocity 或 score；VLA 行为克隆可能预测连续动作、离散动作 token 或动作 chunk；偏好训练让 chosen response 比 rejected response 更可能出现。形式不同，本质都是在定义“什么样的输出应该被奖励，什么样的输出应该被惩罚”。
-
-### 数据不是素材，是梯度来源
-
-模型只会在实际采样出来的分布上训练。一个训练集里代码、数学、中文、网页噪声、长上下文样本、机器人失败轨迹各占多少，都会改变梯度的平均方向。
-
-大模型的数据工程会贯穿多个训练阶段，并持续调整清洗和混合策略：
-
-| 阶段 | 数据在提供什么信号 | 最容易漏看的问题 |
-| --- | --- | --- |
-| Pretraining | 语言、知识、代码、模式和通用表示 | 去重、污染、混合比例、低质网页 |
-| Mid-training | 长上下文、推理、多语言、领域或模态能力 | 新数据是否冲刷底座能力 |
-| SFT | 指令格式、任务示范和交互入口 | 模板过拟合、回答风格变窄 |
-| Preference / RL | 偏好、规则、可验证奖励和安全边界 | reward hacking、过度拒答、长尾退化 |
-| Distillation | teacher 行为、分布或中间表示 | 复制 teacher 错误、丢失探索性 |
-
-Hugging Face 的 Smol Training Playbook 和 SmolLM3 复盘值得参考，因为它们把训练写成数据、规模、评测和失败复盘的组合，而不是单个 loss 名字。
-
-训练信号的规模应按有效 token 曝光计算，不能只看样本条数：
-
-\[
-N_{\text{eff}}=\sum_{\text{batch}}\text{valid tokens after packing and masking}
-\]
-
-这里 \(N_{\text{eff}}\) 表示真正参与 loss 的 effective tokens。padding、被 mask 的位置、坏样本、重复样本和没有参与 loss 的区域，都不应该被当成有效训练信号。长文本 packing 可以提高吞吐，但如果 attention mask 写错，会让样本边界泄漏；如果长度桶采样偏了，短样本可能被过度曝光，长样本反而学不到；如果只记录原始数据比例，不记录实际参与 loss 的 token 比例，实验结论会很虚。
-
-一个现实例子：你给机器人策略加入 10,000 条“接触失败后恢复”的轨迹，但这些轨迹很长、被 packing 截断，又只占总 token 的 0.3%。训练 loss 可能几乎看不出变化，闭环恢复能力也不会明显提高。此时应先检查恢复场景是否形成了足够训练压力，不能直接归因为模型缺少恢复能力。
-
-### Loss 定义“错在哪里”
-
-以 next-token 语言建模为例，交叉熵目标是：
-
-\[
-\mathcal L_{\text{CE}}=-\sum_{t=1}^{L}\log p_\theta(x_t\mid x_{<t})
-\]
-
-这里 \(L\) 表示序列长度，\(x_t\) 表示第 \(t\) 个真实 token，\(p_\theta(x_t\mid x_{<t})\) 表示模型在历史 token 条件下给真实下一个 token 的概率。真实 token 概率越低，惩罚越大。
-
-这个 loss 很适合训练语言模型的统计预测能力，但它不会自动保证模型遵守指令、诚实拒答、稳定使用工具，或者在机器人闭环里安全执行动作。分阶段训练的原因在于监督信号发生了变化，不能据此给不同 loss 排出高低等级。
-
-| 信号 | 它主要改变什么 | 典型副作用 |
-| --- | --- | --- |
-| Pretraining CE | 底座表示、知识、语言和代码能力 | 学到数据噪声和错误模式 |
-| SFT | 任务格式、指令遵循和示范行为 | 模板化、风格变窄 |
-| Preference / RL | 输出排序、规则偏好和可验证行为 | reward hacking、过拟合偏好模型 |
-| Distillation | teacher 行为或分布 | 复制 teacher 错误，压窄分布 |
-| Domain adaptation | 领域语言和任务模式 | 通用能力被冲刷 |
-
-平均 loss 下降也不等于关键能力提高。假设世界模型训练中有三类数据桶：
-
-| Bucket | Token Share | Old Loss | New Loss | Closed-loop |
-| --- | ---: | ---: | ---: | ---: |
-| 静态背景 | `72%` | `0.180` | `0.158` | `+0.3%` |
-| 物体移动 | `18%` | `0.246` | `0.241` | `+0.1%` |
-| 接触与遮挡 | `10%` | `0.310` | `0.337` | `-6.8%` |
-
-平均 loss 会下降，但真正影响机器人成功率的接触与遮挡桶变差。优化器没有犯错，它只是忠实优化了你给它的加权目标。训练报告必须有分桶评测、失败样本回放和下游指标。
-
-### Batch 和学习率决定更新压力
-
-Batch 不是越大越好，它改变的是梯度估计。小 batch 噪声大，可能帮助探索，也可能让曲线抖动；大 batch 噪声小，吞吐更好，但学习率、warmup 和泛化行为都要重新匹配。
-
-分布式训练里要区分三层 batch：
-
-```text
-micro-batch:      单卡一次 forward/backward 能放下多少
-accumulation:     累积几个 micro-batch 再更新一次
-global batch:     所有卡、所有累积合起来的有效更新规模
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  X["输入0 · 目标1 · 共出现两次"] --> W["W第0行初始全0"] --> P["目标概率0.25"]
+  P --> G["平均梯度0.125,-0.375,0.125,0.125"]
+  G --> U["lr1更新为 -0.125,0.375,-0.125,-0.125"] --> N["目标概率约0.354661"]
 ```
 
-如果 8 张卡，每卡 micro-batch 是 2，gradient accumulation 是 16，那么一次 optimizer step 的样本数是：
+同一参数行被两个位置共享，因此梯度先累加再按四个目标位置平均。
 
-\[
-8\times2\times16=256
-\]
+## PyTorch 把手算的哪部分接过去
 
-这里的 256 只表示样本数。对 LLM 和多模态模型，最好继续换算成 tokens per update。两次实验如果 global batch 都是 256，但一个平均 512 token，另一个平均 4096 token，它们的训练压力和系统负载完全不同。
+下面是同一模型的一次更新，需要已安装 PyTorch，使用 CPU 即可。代码没有数据下载。
 
-最小参数更新可以写成：
+```python
+import torch
+from torch import nn
 
-\[
-\theta \leftarrow \theta-\eta\nabla_\theta\mathcal L
-\]
+x = torch.tensor([[0, 1, 2, 0]], dtype=torch.long)
+y = torch.tensor([[1, 2, 0, 1]], dtype=torch.long)
+w = nn.Parameter(torch.zeros(4, 4))
+optimizer = torch.optim.SGD([w], lr=1.0)
 
-这里 \(\nabla_\theta\mathcal L\) 表示 loss 对参数的梯度，\(\eta\) 表示学习率。真实训练里，AdamW、Momentum、Muon 等优化器会用历史梯度、自适应尺度或矩阵结构修正这一步。学习率决定这一步有多大，warmup 是为了让参数、激活、优化器状态和混合精度统计先进入稳定区，decay 则是在后期减少震荡。
+optimizer.zero_grad(set_to_none=True)
+logits = w[x]                         # [1, 4, 4]
+loss = nn.functional.cross_entropy(logits.reshape(-1, 4), y.reshape(-1))
+loss.backward()                       # writes w.grad, leaves w unchanged
+optimizer.step()                      # writes new values to w
+with torch.no_grad():
+    after = nn.functional.cross_entropy(w[x].reshape(-1, 4), y.reshape(-1))
+print(loss.item(), after.item())
+```
 
-比较两个 run 时，优先对齐 consumed tokens、有效 batch、学习率日程、数据版本、tokenizer、packing 策略和评测脚本。只对齐 `step` 数，常常是在比较两种不同训练。
+`backward()` 只计算并累积梯度，`step()` 才写回参数，`zero_grad()` 清理上一轮累计的梯度。清零放在一次更新前，或像官方教程一样放在更新后，都可以，前提是下一次累积前没有不该保留的旧梯度。
 
-### 系统先算显存账和时间账
+`model.train()` 与 `model.eval()` 切换 dropout、BatchNorm 等模块行为，`no_grad()` 控制是否记录自动微分计算；两者功能不同。评测时通常二者配合使用，评测后再回到训练模式。我们的查表模型没有这些模块，因此模式切换不会改变数值。
 
-训练态显存不只存参数，还要存梯度、优化器状态、激活、中间 buffer 和通信缓存。AdamW 通常要保存一阶动量、二阶动量和可能的 master weights；反向传播还需要保留或重算激活。一个模型推理能放下，不代表训练能放下。
+## 放不下一整个 batch 时，先累积再更新
+
+若把四个位置拆成两个等大小 micro-batch，每份先求均值再除以 2、各调用一次 backward，最后只执行一次 optimizer step，就能恢复完整 batch 的平均梯度。两次前向必须使用同一组参数。
+
+nanoGPT 的 [训练循环](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py#L290)正是在每个 micro-step 把 loss 除以累积次数，完成多次 backward 后再更新。其固定长度、等大小 batch 为这个归一化提供条件。
+
+长度不同时，需要更小心。两个 micro-batch 有效目标 token 分别为 2 和 6，平均 loss 分别为 1 和 3，完整 token 平均应为 $(2\times1+6\times3)/8=2.5$，简单平均却是 2。此时要以整个更新窗口的有效目标数作为分母。本文把直接参与 loss 的位置称为 effective tokens，prompt 虽被 loss mask 排除，仍可作为条件影响预测。
+
+在数据并行中，一次更新的 global batch 样本数为每卡 micro-batch 乘累积次数再乘 DP 副本数。8 卡、每卡 2 条、累积 16 次得到 256 条。序列长度与 mask 不同，256 条并不对应固定目标 token 数。多卡梯度归一化详见 [分布式训练](distributed-training-and-checkpointing.md)。
+
+## 精度、通信和显存都插在这条循环里
+
+nanoGPT 在 autocast 范围内前向，对 FP16 使用 GradScaler；累积完成后先 unscale，再裁剪梯度，之后调用 scaler 的 step/update。这样裁剪阈值作用在未缩放梯度上，异常梯度也有机会阻止不安全更新。具体逻辑见 [低比特训练](low-bit-training-and-numerics.md)。
+
+换 Adam 后，更新不再只依赖当前梯度，还会读取并修改一二阶矩；反向需要的激活也占内存。因此推理能装下权重，不代表训练能装下完整状态。
 
 ![ZeRO memory optimization stages](../assets/images/paper-figures/training/zero-memory-stages.png){ width="860" }
 
 <small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。这张图说明 optimizer states、gradients、parameters 在普通数据并行里为什么会重复保存，以及 ZeRO 三个阶段分别切走哪部分状态。</small>
 
-读这张图时，先看普通 data parallel 为什么浪费：每张卡都有完整参数、梯度和 optimizer state。ZeRO Stage 1 先切 optimizer state，Stage 2 再切 gradient，Stage 3 连参数也切。显存省下来了，但训练中会多出 gather、scatter、通信 overlap 和 checkpoint 分片管理。
-
-训练慢也不一定是 GPU 算不动。数据管线、通信、pipeline bubble、checkpoint I/O、kernel launch、CPU/GPU 同步都可能拖后腿。
+普通 data parallel 复制模型并汇总不同数据的梯度；tensor parallel 切分层内计算；pipeline parallel 把不同层放在不同设备。它们仍需实现同一个前向、反向与更新目标，只是张量的位置与通信时刻改变。
 
 ![GPipe pipeline parallelism](../assets/images/paper-figures/training/gpipe-pipeline-parallelism.png){ width="860" }
 
 <small>图源：[GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism](https://arxiv.org/abs/1811.06965)，Figure 2(c)。这张图说明 micro-batch 如何填充 pipeline bubble，让不同 accelerator 同时处理不同模型分段。</small>
 
-GPipe 图里的 micro-batch 很关键。没有 micro-batch，第一段算完才轮到第二段，很多设备会等待；micro-batch 把流水线填起来。但 micro-batch 太多又会增加激活保存、调度复杂度和恢复语义。系统优化需要让模型大小、显存、通信拓扑、batch 语义和 checkpoint 目标共同闭合；同时打开所有并行开关并不能保证更快。
+GPipe 图中的 micro-batch 流过多个模型分段。它与前面的梯度累积共享“小批次最后合成一次更新”的思想，但还要安排不同设备的等待与激活保存。细节可沿 [分布式训练](distributed-training-and-checkpointing.md)继续推导。
 
-### Scaling Law 是预算分配问题
+## 保存什么，决定恢复到哪一个时刻
 
-训练预算不是只堆参数。Chinchilla 的核心提醒是：固定计算量下，参数量和训练 token 数要配平。模型太大但 token 不够，会欠训练；模型太小但 token 很多，容量会成为瓶颈。
+一次更新完成后保存模型与 optimizer，描述的是更新后的参数和历史状态。若在 micro-batch 累积中途保存，未提交的梯度与累积计数也属于当前状态。最容易实现的恢复边界是完整 optimizer step 之后。
+
+nanoGPT 的 checkpoint 保存 `model`、`optimizer`、`model_args`、`iter_num`、`best_val_loss` 和配置。这份代码适合读懂基本保存流程，但它未在该字典里保存完整 RNG 与随机窗口采样进度，因此不能仅凭这个示例宣称逐样本精确续训。自己的 checkpoint contract 还要覆盖数据版本、随机状态、sampler、精度状态和进度。
+
+验证时可连续运行六次更新，在第三次后保存，再从保存点运行后三次，比较参数与样本 ID。先保证这条小循环可重放，再讨论跨拓扑和大规模异步保存。
+
+## 训练误差下降后，还缺什么证据
+
+我们的模型记住了 0 后面常出现 1。要知道它是否学到可泛化规律，需要另一组不参与更新的样本；要判断代码、工具或机器人任务能力，还需要对应任务评测。训练 loss、验证 loss 与任务成功率回答不同问题。
+
+增加模型大小或训练 token 时也应延续同一个比较口径。Chinchilla 在固定计算预算下比较参数量与 token 数，图中的谷底依赖所研究的训练设置。
 
 ![Chinchilla IsoFLOP curves](../assets/images/paper-figures/training/chinchilla-isoflop-curves.png){ width="920" }
 
 <small>图源：[Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)，Figure 4。这张图说明固定 FLOP 预算下，不同模型大小会得到不同最终 loss，曲线谷底对应更合适的参数/token 配比。</small>
 
-这张图不要求读者记住某个固定比例，因为数据质量、架构、tokenizer、目标函数和后训练阶段都会改变实际选择。它真正有用的地方是改变问题问法：不要只问“模型要不要更大”，而要问“这笔算力应该分给参数、token、上下文长度、数据清洗、评测和失败复盘中的哪一块”。
+阅读后续专题时，可以始终回到这段循环，数据页解释 X、Y 与分母怎样形成，优化器页解释梯度怎样变成更新，分布式页解释张量怎样跨设备流动，评测页解释更新后获得了什么证据。
 
-### Checkpoint 是证据链，不只是备份
+## 本页对照的源码
 
-可信 checkpoint 不只是 `model.safetensors`。checkpoint contract 如果要支持恢复训练和解释结果，至少要回答：来自哪份代码、哪份配置、哪份数据 manifest、哪个 tokenizer、哪个 sampler 状态、哪个 optimizer state、哪个 scheduler 位置、哪个 RNG 状态、已经消耗多少 token。
-
-只保存权重，通常只能推理，不能证明训练可以无缝续跑。恢复后最常见的问题是：学习率跳到错误位置，数据重复或跳样，gradient accumulation 边界错位，loss scaler 重置，分布式分片映射变化，packing 的 token 边界恢复不准。
-
-可靠做法是把 checkpoint 当作实验资产：保存模型、optimizer、scheduler、RNG、sampler、tokenizer、data manifest、配置和 eval artifacts。恢复后做短跑一致性检查，看若干 step 内的 loss、grad norm、吞吐、consumed tokens 和关键评测是否在可解释范围内。
-
-### 训练故障先按症状分桶
-
-训练事故通常不是“模型坏了”这么笼统。先按症状分桶，排查会快很多。
-
-| 症状 | 先怀疑什么 | 需要看的证据 |
-| --- | --- | --- |
-| loss spike + grad norm 暴涨 | 学习率过大、异常 batch、低精溢出、梯度爆炸 | batch 样本、grad norm、overflow、LR |
-| train loss 降，eval loss 不降 | 过拟合、数据泄漏、目标错位、评测分布不匹配 | train/eval bucket、contamination、eval script |
-| 吞吐很高，质量不变 | 系统变快了，训练信号没变强 | tokens/s、有效 token、分桶指标 |
-| 恢复训练后曲线偏移 | optimizer/scheduler/RNG/sampler 状态没恢复 | checkpoint manifest、consumed tokens、短跑对齐 |
-| 某个能力突然退化 | 数据混合或 loss 权重改坏了长尾桶 | 数据桶曝光、失败样本、下游评测 |
-
-Karpathy 的训练 recipe 仍然值得读，它强调先让一个小模型、小数据、小 batch 的实验完全跑通，再逐步增加复杂度。成熟训练需要给每个异常留下可观察证据，仅凭经验调整几个超参很难完成归因。
-
-### 一次训练改动是否可信
-
-一个训练改动声称“更快、更稳、更好”，至少要同时交代三类证据。
-
-| 证据 | 看什么 | 缺失时的风险 |
-| --- | --- | --- |
-| 质量证据 | train/eval loss、任务 benchmark、分桶指标、失败样本、人工/闭环评估 | 只优化了代理目标 |
-| 稳定性证据 | loss spike、NaN/Inf、grad norm、activation 分布、overflow、恢复后一致性 | 短跑正常，长跑崩 |
-| 成本证据 | tokens/s、MFU、显存峰值、通信等待、checkpoint pause、data loader stall | 质量提高但不可负担 |
-
-这三类证据缺一类，结论都会变轻。只报质量，可能成本不可接受；只报吞吐，可能模型没变好；只报短跑稳定，可能长跑数据阶段切换后才崩。
-
-## 常见误解与失效边界
-
-| 常见判断 | 问题在哪里 | 应补的证据 |
-| --- | --- | --- |
-| loss 下降，所以模型更好 | loss 只反映指定目标和当前数据分布 | 下游任务、失败桶、分布外与闭环评测 |
-| tokens/s 提高，所以训练更有效 | 可能只是 padding 更多、mask 位置变化或数据质量下降 | effective tokens/s、数据桶曝光与质量指标 |
-| 卡数翻倍，速度也应翻倍 | 通信、pipeline bubble、数据等待与 checkpoint 会进入关键路径 | scaling efficiency、通信占比、bubble 与 I/O 时间 |
-| checkpoint 能加载，所以恢复正确 | optimizer、scheduler、RNG、sampler 可能已经错位 | 恢复短跑、consumed tokens 与状态清单 |
-| 低精度不报 NaN 就没有数值问题 | 舍入和饱和可能缓慢改变参数轨迹 | 高精基线、分层统计与长跑质量回归 |
-
-这些判断的边界是：小规模研究可以暂时省略部分生产治理，但不能省略与结论直接相关的证据。研究吞吐就必须固定数据和质量；研究恢复就必须保存完整状态；研究新目标就必须验证它没有靠数据泄漏或代理指标获益。
-
-## 检查理解
-
-读完后，应能回答下面的问题：
-
-1. 两个 run 的 step 数相同，为什么 consumed tokens 和参数轨迹仍可能不同？
-2. global batch 由哪些量相乘得到，序列长度变化后为何还要换算 tokens per update？
-3. data parallel、tensor parallel 和 pipeline parallel 各自切分什么，新增了哪类通信或等待？
-4. 为什么平均 loss 下降时，关键数据桶和真实任务仍可能退化？
-5. 一份支持等价恢复的 checkpoint contract，除了权重还需要哪些状态？
-6. 一个“训练速度提升 20%”的结论，至少要同时报告哪些质量、稳定性和成本证据？
-
-### 最后判断
-
-训练要让数据分布、目标函数和更新压力共同服务真实能力，不能停在“让数字下降”。数据决定模型看见什么，loss 决定哪些错误被惩罚，batch 与学习率决定每一步压力，optimizer 和数值策略决定训练能不能稳定走下去，eval 与 checkpoint 决定实验是否可信。
-
-读任何训练报告时，先沿着这条链问：有效 token 是什么，loss 在优化什么，更新压力是否稳定，系统账是否闭合，质量证据是否覆盖关键失败桶。如果这些问题都能回答，训练才从一条曲线变成一套可以复盘、可以恢复、可以继续改进的工程过程。
-
-## 外部材料
-
-- [PyTorch: Optimization Loop](https://docs.pytorch.org/tutorials/beginner/basics/optimization_tutorial.html)：用官方最小训练循环理解 `loss.backward()`、`optimizer.step()` 和 `zero_grad()`。
-- [A Recipe for Training Neural Networks](https://karpathy.github.io/2019/04/25/recipe/)：训练排查经典博客，适合学习如何从小实验逐步走到可信训练。
-- [Smol Training Playbook](https://huggingface.co/spaces/HuggingFaceTB/smol-training-playbook)：把训练目标、数据、评测和成本放到同一份工程手册里看。
-- [SmolLM3: smol, multilingual, long-context reasoner](https://huggingface.co/blog/smollm3)：官方训练复盘，适合理解多阶段数据与后训练如何组成 recipe。
-- [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)：理解参数、token 和计算预算如何配平。
-- [ZeRO](https://arxiv.org/abs/1910.02054)：理解大模型训练显存账。
-- [GPipe](https://arxiv.org/abs/1811.06965)：理解流水线并行为什么需要 micro-batch。
-- [Datawhale: VRAM Calculation and ZeRO](https://datawhalechina.github.io/llm-algo-leetcode/01_Hardware_Math_and_Systems/06_VRAM_Calculation_and_ZeRO.html)：中文显存估算补充读物，适合把参数、梯度、优化器状态拆成手算账。
-- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- [Weights & Biases 文档](https://docs.wandb.ai/)。
+- [PyTorch optimization_tutorial.py](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/beginner_source/basics/optimization_tutorial.py)，固定 commit `5672cd98`，对照训练与评测循环。
+- [nanoGPT train.py](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py)，固定 commit `3adf61e1`，对照 `get_batch`、梯度累积、AMP 与 checkpoint。
+- [nanoGPT model.py](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/model.py)，同一 commit，对照 `[B,T,V]` 与交叉熵。
+- [目标函数与优化器](objectives-optimizers-and-schedules.md)继续计算 Momentum、AdamW 与学习率日程。

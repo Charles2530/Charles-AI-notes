@@ -69,7 +69,8 @@ def _h1_title_from_file(path: str) -> str | None:
     if not match:
         return None
 
-    return match.group("title").strip()
+    # Markdown heading attributes belong to the rendered anchor, not its label.
+    return re.sub(r"\s+\{[ \t]*[.#][^{}]*\}[ \t]*$", "", match.group("title")).strip()
 
 
 def _sidebar_title(title: str) -> str | None:
@@ -121,6 +122,9 @@ def _sort_sections(items: list[Any], docs_dir: Path) -> None:
 
 
 def on_nav(nav: Any, config: Any, files: Any) -> Any:
+    # MkDocs serve reuses this module across builds; file contents may change.
+    _h1_title_from_file.cache_clear()
+    _paper_date_from_file.cache_clear()
     docs_dir = Path(config["docs_dir"])
     nav_items = list(nav.items)
     _sync_page_titles(nav_items, docs_dir)

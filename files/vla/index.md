@@ -1,104 +1,52 @@
-# VLA：从多模态条件到机器人动作策略
+# 视觉语言动作模型
 
-Vision-Language-Action 模型把视觉观测、语言任务和机器人状态映射为动作。它可以复用视觉语言模型的表征与语义知识，但最终必须满足机器人动作空间、控制频率、延迟和闭环恢复要求。VLA 是策略接口，不等于完整具身系统，也不自动等于世界模型。
+VLA 根据视觉、语言与机器人本体状态生成动作。以“拿起红杯”为例，模型需要把语言绑定到具体对象，再输出某个坐标系中的夹爪目标或动作序列。系统还要把动作转换为硬件命令，并观察物体是否真的被抓起。
 
-判断一个 VLA 是否有用，先看它能否在自己的动作后果下继续完成任务。视觉语言能力只解决“看见什么、理解什么”，策略还要处理坐标系、控制频率、接触动力学、延迟和失败恢复。动作头的形式只是接口的一部分，闭环中的状态变化才是最终验收对象。
+## 策略到底输出什么
 
-## VLA 的统一接口
-
-VLA 的策略接口常写成：
+统一写法为
 
 \[
-a_{t:t+H}\sim\pi_\theta(
-\,\cdot\mid o_{\le t},s_{\le t},\ell
-),
+A_t=(a_t,\ldots,a_{t+H-1})\sim\pi_\theta(\cdot\mid o_{\le t},q_{\le t},l).
 \]
 
-其中 \(o\) 是图像或多模态观测，\(s\) 是本体状态，\(\ell\) 是语言条件，输出可以是单步动作或长度为 \(H\) 的动作块。动作可以表示为：
+这里动作块恰有 \(H\) 步，\(q\) 表示本体状态，\(l\) 表示任务。输出可以是离散 action token，也可以是连续关节目标、末端位姿或技能。动作表示必须同时指定单位、坐标、控制周期和解码方式。
 
-- 离散 action token；
-- 关节位置、速度或增量；
-- 末端位姿及夹爪状态；
-- 连续动作分布或扩散生成的动作序列；
-- 技能 token 与低层控制参数。
+例如同一个数 0.01，如果表示每 100 毫秒移动 0.01 米，理想平均速度为 0.1 米每秒；如果表示速度，则是 0.01 米每秒。模型参数没有变化，接口解释已经相差十倍。理解 VLA 应先能解释这种差异，再比较架构。
 
-动作含义、坐标系、归一化和执行频率共同构成模型接口，详见[动作表示与控制接口](action-representation-and-interfaces.md)。
-
-## 训练与执行是两条链
+## 训练与执行为何需要两条链
 
 ```mermaid
 %% vla-training-execution
 flowchart LR
-  subgraph Train[训练]
-    Episode[机器人 episode] --> Align[图像 / state / action / language 对齐]
-    Align --> Policy[VLA policy]
-    Policy --> Loss[动作 token / 回归 / diffusion loss]
-  end
-  subgraph Execute[闭环执行]
-    Obs[最新观测与 state] --> Run[策略推理]
-    Run --> Action[动作或动作块]
-    Action --> Safety[规划 / 控制 / safety]
-    Safety --> Robot[机器人与环境]
-    Robot --> Obs
-  end
+  Data[示范 episode] --> Align[时间与动作接口对齐]
+  Align --> Loss[条件动作分布训练]
+  Observe[最新观测] --> Policy[策略推理]
+  Policy --> Adapter[解码与坐标变换]
+  Adapter --> Control[约束检查与控制]
+  Control --> Environment[机器人和环境]
+  Environment --> Observe
 ```
 
-离线训练的输入来自行为策略采集到的轨迹；部署时模型会访问自己动作导致的新状态。训练分布与闭环状态分布不一致，是行为克隆误差累积的根源之一。真实评测必须让策略承受自己的动作后果。
+训练数据通常来自专家或已有策略，部署时观测来自模型自己的动作后果。两者的闭环状态分布不同，解释了为什么离线动作误差很低仍可能中途失败。重观测、动作块取消和恢复数据都属于这个问题的一部分。
 
-## 动作表示与策略学习
-
-| 问题 | 入口 |
+| 需要理解的机制 | 正文 |
 | --- | --- |
-| action token、连续控制和坐标系怎样定义 | [动作表示与控制接口](action-representation-and-interfaces.md) |
-| 从示范轨迹到行为克隆、扩散策略和 VLA 怎样连接 | [数据与策略学习](data-and-policy-learning.md) |
-| 为什么输出动作块，怎样选择 chunk size | [动作分块、层级策略与潜在技能](action-chunking-hierarchical-policies-and-latent-skills.md) |
+| 数组如何变成有单位的命令 | [动作表示与控制接口](action-representation-and-interfaces.md) |
+| 示范如何形成概率训练目标 | [数据与策略学习](data-and-policy-learning.md) |
+| 一段动作如何与实时反馈结合 | [动作块、层级策略与技能](action-chunking-hierarchical-policies-and-latent-skills.md) |
+| 偏离后怎样取消旧计划并恢复 | [闭环恢复](closed-loop-recovery-and-failure-analysis.md) |
+| 成功率与训练数据如何互相约束 | [评测与数据引擎](benchmarks-and-data-engines.md) |
+| 延迟、命令有效期与约束如何执行 | [部署与安全](deployment-and-safety.md) |
 
-语言和视觉预训练可以改善对象、语义和任务泛化，但不会自动解决接触动力学和机器人接口差异。跨 embodiment 训练必须显式处理观测、动作空间、频率、相机布局和标注语义的异构性。
+假设第一段动作让夹爪比示范偏右 1 厘米，下一帧里杯子相对夹爪的位置已经改变。闭环策略读取新观察后应重新决定动作，不能仅继续比较原示范时间索引下的标签。若数据中没有偏移后的状态，模型可能不知道怎样修正，这就是离线动作误差与闭环成功之间的缺口。
 
-## 闭环、评测与部署
+因此动作表示解决“输出什么意思”，chunk 解决“预测和执行多长”，恢复机制解决“状态已经偏离后怎样重新开始”。显式世界模型再增加候选动作后果的预测，它不是建立基本反馈闭环的必要条件。
 
-- [评测与数据引擎](benchmarks-and-data-engines.md)：以 episode 和失败阶段组织指标与回流样本。
-- [闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md)：检测偏离、选择恢复动作并防止重复失败。
-- [部署与安全](deployment-and-safety.md)：定义 ODD、延迟预算、安全否决和人工接管。
-- [投机推理与闭环验证](../inference/vla-speculative-decoding-0928-1144.md)：对照离散动作、连续动作块与执行期验证，结合 FLASH 和 WA-SpecDec 精读理解速度与成功率的权衡。
+## 与世界模型组合时新增了什么
 
-VLA 评测至少需要报告任务成功、分阶段成功、动作平滑性、推理延迟、恢复次数、安全事件和跨场景泛化。离线 action MSE 只能说明模型接近数据集动作，不能单独证明闭环任务能力。
+策略学习 \(\pi_\theta(a\mid o,l)\)，世界模型学习 \(p(z_{t+1}\mid z_t,a_t)\)。前者提出动作，后者估计后果。若世界模型用于选动作，需要证明它能正确区分候选，而不只是生成流畅视频。只记录实际执行动作的轨迹，也不能提供所有未执行候选的真实未来标签。
 
-## 一次部署要验收哪几层
+系统分工见[VLA、WAM 与世界模型](../embodied-ai/vla-wam-world-model-system-map.md)。推理优化可进一步看[投机推理与闭环验证](../inference/vla-speculative-decoding-0928-1144.md)，但加速结果应与任务成功、取消延迟和观测年龄一起解释。
 
-可以把 VLA 的验收拆成四层。第一层是接口，确认相机、state、语言和动作的时间戳、坐标系、归一化与频率一致；第二层是单步动作，检查延迟、平滑性和约束；第三层是 episode，记录偏离发生在感知、规划、执行还是恢复；第四层是分布外场景，观察遮挡、物体变化、传感器异常和长时任务是否触发安全门禁。
-
-| 层级 | 关键问题 | 不能替代的指标 |
-| --- | --- | --- |
-| 接口 | 输入输出是否严格对齐 | schema、时间戳、坐标系 |
-| 动作 | 单步预测是否可执行 | 延迟、平滑性、碰撞与越界 |
-| 任务 | 策略能否承受自己的动作后果 | 成功率、失败阶段、恢复次数 |
-| 泛化与安全 | 异常和分布偏移如何处理 | 安全事件、人工接管、拒绝与降级 |
-
-## 与世界模型的关系
-
-VLA 直接学习策略 \(\pi(a\mid o,\ell)\)；世界模型学习环境转移 \(p(z_{t+1}\mid z_t,a_t)\)。组合方式包括：
-
-1. VLA 产生多个候选动作，world model rollout 后由 planner 选择；
-2. world model 在 latent imagination 中生成策略训练数据；
-3. 动作条件视频模型为失败场景生成反事实或 hard cases；
-4. VLA 与 world model 共享视觉表征，但使用不同输出头和目标。
-
-仅仅让一个模型同时输出动作和视频，不足以证明二者形成有效闭环。需要验证预测是否会改变动作排序、是否改善真实成功率，以及模型误差是否被不确定性或安全门禁约束。系统边界见[VLA、WAM 与世界模型系统图](../embodied-ai/vla-wam-world-model-system-map.md)和[VLA 世界模型全链路](../world-models/vla-world-model-full-chain-case.md)。
-
-## 按问题进入
-
-| 现在的问题 | 推荐路径 |
-| --- | --- |
-| 动作看起来合理，但任务经常中途失败 | [闭环恢复与失败分析](closed-loop-recovery-and-failure-analysis.md) → [评测与数据引擎](benchmarks-and-data-engines.md) |
-| 不同机器人之间迁移很差 | [动作表示与控制接口](action-representation-and-interfaces.md) → [数据与策略学习](data-and-policy-learning.md) |
-| 动作块更长后延迟下降但恢复变差 | [动作分块、层级策略与潜在技能](action-chunking-hierarchical-policies-and-latent-skills.md) → [部署与安全](deployment-and-safety.md) |
-| 想把世界模型接入策略 | [VLA 世界模型全链路](../world-models/vla-world-model-full-chain-case.md) → [规划与 latent action](../world-models/planning-as-inference-and-latent-actions.md) |
-
-## 外部材料
-
-- [RT-1](https://arxiv.org/abs/2212.06817)
-- [RT-2](https://arxiv.org/abs/2307.15818)
-- [Open X-Embodiment](https://arxiv.org/abs/2310.08864)
-- [OpenVLA](https://arxiv.org/abs/2406.09246)
-- [π0](https://arxiv.org/abs/2410.24164)
+[RT-2](https://arxiv.org/abs/2307.15818)、[OpenVLA](https://arxiv.org/abs/2406.09246)、[ACT](https://arxiv.org/abs/2304.13705)和 [Diffusion Policy](https://arxiv.org/abs/2303.04137)分别提供不同接口与训练方式的原始材料，不代表一种统一的动作协议。

@@ -1,123 +1,135 @@
 # 线性代数与几何直觉
 
-AI 文章频繁使用向量、矩阵、投影、范数、秩和特征空间，因为模型需要把 token、图像 patch、机器人状态、动作、记忆放进向量空间，再用矩阵旋转、缩放、投影、混合和压缩这些表示。
+两个样本经同一个矩阵变换后，哪些区别会保留下来？下面从一次 \(XW+b\) 计算出发，逐步看坐标、投影与秩。它们分别解释数组里的数怎么计算、向量的方向怎样理解，以及压缩时哪些信息可能消失。
 
-## 向量是带方向的特征
+本文先固定行向量约定；出现列向量几何例子时会明确标注。这个约定能避免把权重存储布局误当成数学变换方向。
 
-一个 embedding 向量可以写成：
+## 一次矩阵乘法究竟组合了什么
 
-\[
-x=(x_1,x_2,\dots,x_d)\in\mathbb{R}^d
-\]
-
-这里 \(d\) 是维度。不要把它只理解成一排数字；更有用的读法是：这个对象在 \(d\) 个隐含特征方向上各有多强。两个向量相近，通常表示模型在当前表示空间里认为它们有相似语义、视觉形状或动作含义。
-
-常见名词可以这样读：
-
-| 名词 | 直觉 | 后面会在哪里用 |
-| --- | --- | --- |
-| 向量 | 一个对象在多个特征方向上的坐标 | embedding、hidden state、latent state |
-| 基 | 描述空间的一组参考方向 | PCA、低秩分解、特征空间 |
-| 范数 | 向量有多大 | 梯度裁剪、归一化、正则化 |
-| 内积 | 两个方向有多对齐 | attention score、相似度检索 |
-| 余弦相似度 | 忽略长度，只看方向接近程度 | embedding 检索、RAG、聚类 |
-
-## 矩阵是空间里的变换
-
-线性层常写成：
+本文把一个样本写成行向量。取两个样本，每个有两个特征，定义
 
 \[
-y=xW+b
+X=\begin{bmatrix}1&2\\3&4\end{bmatrix},\quad
+W=\begin{bmatrix}2&-1&0\\1&1&3\end{bmatrix},\quad
+b=[0,1,-2].
 \]
 
-这里 \(x\) 是输入向量，\(W\) 是权重矩阵，\(b\) 是偏置，\(y\) 是输出向量。几何上，\(W\) 把输入空间里的点搬到另一个空间：有些方向被放大，有些方向被压缩，有些方向被混合。
-
-把公式拆开读：
-
-| 符号 | 在说什么 | 在代码里常见形状 |
-| --- | --- | --- |
-| \(x\) | 一个样本或 token 的输入特征 | `[D_in]` 或 `[B, L, D_in]` |
-| \(W\) | 可学习的特征混合规则 | `[D_in, D_out]` |
-| \(b\) | 每个输出维度的平移量 | `[D_out]` |
-| \(y\) | 变换后的新特征 | `[D_out]` 或 `[B, L, D_out]` |
-
-例如一个 token 的 hidden size 是 4096，MLP 第一层把它升到 11008 维，那么 \(W\) 的形状就是 \(4096\times11008\)。这行公式在后面的 [线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md) 里会变成参数量、FLOPs 和显存账本。
-
-![Matrix multiplication](../assets/images/prerequisite-math/matrix-multiplication.svg){ width="620" }
-
-<small>图源：[Wikimedia Commons: Matrix multiplication diagram](https://commons.wikimedia.org/wiki/File:Matrix_multiplication_diagram.svg)。原图展示矩阵乘法中行与列如何配对相乘并求和。对线性层和 GEMM 来说，核心是把输入特征按权重列重新组合成新特征。</small>
-
-在 Transformer 里，一个 `[B,L,D]` hidden state 进入 Linear 时，通常是每个 token 的 \(D\) 维向量乘同一个 \(W\)：
+输入形状是 \([2,2]\)，权重形状是 \([2,3]\)，偏置有三个分量。输出 \(Y=XW+b\) 为
 
 \[
-(B,L,D_{\text{in}})\times(D_{\text{in}},D_{\text{out}})
-\rightarrow
-(B,L,D_{\text{out}})
+XW=\begin{bmatrix}4&1&6\\10&1&12\end{bmatrix},\qquad
+Y=\begin{bmatrix}4&2&4\\10&2&10\end{bmatrix}.
 \]
 
-系统文章常关心 \(M,N,K\)、GEMM、Tensor Core 和 layout：模型概念里的“特征变换”，落到硬件上常常就是大规模矩阵乘法。
+第一行第一个输出是 \(1\times2+2\times1=4\)。第二个输出先计算 \(1\times(-1)+2\times1=1\)，再加上对应偏置 1，得到 2。每个输出位置都读取输入的两个特征，使用权重矩阵里自己对应的一列。
 
-读这组 shape 时，前两个轴 \(B,L\) 不参与权重维度匹配，它们只是告诉系统“有多少个 token 要并行做同一个线性变换”；最后一维 \(D_{\text{in}}\) 必须和 \(W\) 的第一维对上。很多 shape bug 就发生在把 token 轴和特征轴混掉。
-
-## 投影是在问“沿这个方向有多少”
-
-如果 \(u\) 是单位方向，向量 \(x\) 在 \(u\) 上的投影长度是：
+这里两行样本互不混合，偏置沿样本维复制。对于 \([B,L,D_{\rm in}]\) 的 token 表示，同一个权重对每个样本、每个位置重复应用
 
 \[
-\langle x,u\rangle
+Y_{b,l,j}=\sum_{i=1}^{D_{\rm in}}X_{b,l,i}W_{i,j}+b_j.
 \]
 
-attention 的 query-key 点积也可以先这样理解：query 在问“我想找某种信息”，key 在声明“我这里有某种信息”，点积越大，说明两个方向越对齐。
+结果形状为 \([B,L,D_{\rm out}]\)。匹配的是特征维 \(D_{\rm in}\)，不是 token 数 \(L\)。框架也可能把权重保存成 \([D_{\rm out},D_{\rm in}]\)，前向中再转置；矩阵的保存布局与公式里的数学方向需要分别核对。
 
-如果 \(x=(1,2)\)，\(u=(0,1)\)，那么 \(\langle x,u\rangle=2\)。它表示 \(x\) 在第二个方向上的分量是 2。换到 embedding 空间里，方向不再叫“横轴/纵轴”，而可能对应语法、实体、颜色、动作意图等模型自己学出来的隐含因素。
+![矩阵乘法中的行列配对](../assets/images/prerequisite-math/matrix-multiplication.svg){ width="620" }
 
-Scaled dot-product attention 写成：
+<small>图源为 [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Matrix_multiplication_diagram.svg)。行与列配对相乘求和，对应上面的每一个输出元素。</small>
+
+## 一个向量的坐标依赖所选的基
+
+把 \(x=(3,4)\) 看作二维空间里的箭头时，它在标准基 \(e_1=(1,0),e_2=(0,1)\) 下的坐标为 3 和 4。换一组基，同一个箭头可以有不同的坐标，几何对象没有因此改变。
+
+神经网络的隐藏向量同样要结合整套参数理解。某个坐标较大，不足以证明该坐标独立对应“颜色”或“语法”。对一层表示做可逆变换，并在下一层使用相应逆变换，整个网络函数可以保持不变。很多语义分布在多个方向中，也未必对应单个轴。
+
+矩阵可以改变长度、方向和维度。取列向量约定下的 \(A=\operatorname{diag}(2,1)\)，它把横向长度放大两倍，纵向不变；旋转矩阵则改变方向并保持欧氏长度。同一段推导应固定行列约定，不能把 \(Ax\) 和 \(xA\) 随意混用。
+
+## 内积、长度与相似度要分开看
+
+向量 \(x=(3,4)\) 的欧氏范数是
 
 \[
-\mathrm{Attention}(Q,K,V)
-=
-\mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
+\|x\|_2=\sqrt{3^2+4^2}=5.
 \]
 
-这里 \(QK^\top\) 是所有 query 和 key 的两两内积，\(\sqrt{d_k}\) 用来控制分数尺度，softmax 把相似度变成权重，最后对 \(V\) 做加权求和。
-
-1. \(Q\) 是 query，表示每个位置想找什么信息。
-2. \(K\) 是 key，表示每个位置能被什么查询匹配上。
-3. \(QK^\top\) 得到一个 `[query_length, key_length]` 分数矩阵。
-4. 除以 \(\sqrt{d_k}\) 是为了避免维度越大，点积分数尺度越大，softmax 过早变得很尖。
-5. softmax 后每一行变成“这个 query 应该读哪些 key”的概率权重。
-6. 乘 \(V\) 是把被选中的 value 信息加权汇总回来。
-
-后面读 FlashAttention 或 KV cache 时，也是在拆这行公式：prefill 阶段一次算完整 \(QK^\top\)，decode 阶段每个新 token 只带一个新 query 去读历史 K/V。
-
-## 秩和低秩是在说信息压缩
-
-矩阵的秩可以理解为：这个线性变换真正用到了多少个独立方向。如果一个大矩阵可以近似分解成两个小矩阵：
+给定 \(y=(6,8)\)，内积为 50，余弦相似度为
 
 \[
-W\approx AB,\quad
-A\in\mathbb{R}^{d_{\text{in}}\times r},
-\quad
-B\in\mathbb{R}^{r\times d_{\text{out}}}
+\cos(x,y)=\frac{x^\top y}{\|x\|_2\|y\|_2}=1.
 \]
 
-且 \(r\) 很小，就说明它的主要变化集中在少数方向上。LoRA、低秩适配、PCA、SVD、某些压缩方法都在利用这个思想。
+它们方向完全相同，但欧氏距离为 5。把 \(y\) 再放大十倍，内积也放大十倍，余弦仍为 1。因此“点积大”同时受到方向和长度影响；若想只比较方向，要先明确归一化。零向量的余弦没有定义，实现里添加 epsilon 是数值约定，不能给它创造一个确定方向。
 
-低秩有代价。压缩掉的方向如果正好承载长尾知识、风险状态或动作敏感信息，指标可能在平均样本上还行，在关键场景里失败。
+对于单位向量 \(u\)，\(x^\top u\) 是投影的带符号长度，真正的投影向量为 \((x^\top u)u\)。例如 \(u=(1,1)/\sqrt2\)，则
 
-## 常见误读
+\[
+x^\top u=7/\sqrt2,\qquad
+\operatorname{proj}_u(x)=(3.5,3.5).
+\]
 
-| 误读 | 更稳的理解 |
-| --- | --- |
-| 维度越高越聪明 | 维度更高只是容量更大，也更贵、更难训练 |
-| 内积大就是语义真相 | 内积只是当前表示空间里的相似度，受训练目标和数据分布影响 |
-| 低秩一定不损质量 | 低秩保留主方向，可能牺牲长尾方向 |
-| 矩阵乘只是数学细节 | 它通常是训练和推理的主要计算成本 |
+剩余向量 \((-0.5,0.5)\) 与 \(u\) 正交，内积为零。投影把一个方向的成分留下，把垂直方向的区别丢掉。给定非零但未归一化的方向 \(v\)，投影应写成 \(v(v^\top x)/(v^\top v)\)，不能省掉分母。
 
-## 读完以后怎么判断
+## 从内积到一次注意力计算
 
-看到向量、矩阵或 embedding 时，先问三件事：这个向量表示什么对象，矩阵在把哪些方向混合，变换后的空间服务什么任务。能回答这三点，后面的 attention、MLP、GEMM、LoRA、量化和视觉 token 压缩就都有了共同底座。
+设一个 query 为 \(q=(1,0)\)，两个 key 为 \(k_1=(1,0),k_2=(0,1)\)。点积得到 \([1,0]\)，除以 \(\sqrt2\) 后约为 \([0.7071,0]\)，softmax 权重约为 \([0.6698,0.3302]\)。若对应 value 是标量 2 和 6，输出约为
 
-## 外部材料
+\[
+0.6698\times2+0.3302\times6=3.3210.
+\]
 
-- [Dive into Deep Learning: Linear Algebra](https://d2l.ai/chapter_preliminaries/linear-algebra.html)。
+key 用于计算匹配分数，value 提供被汇总的数值，它们可以是不同的向量。多个 query 一起计算，就得到
+
+\[
+\operatorname{Attention}(Q,K,V)
+=\operatorname{softmax}_{\rm row}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
+\]
+
+若有 \(N_q\) 个 query、\(N_k\) 个 key，分数矩阵形状为 \([N_q,N_k]\)，输出为 \([N_q,d_v]\)。softmax 沿 key 维归一化，使每个 query 获得自己的权重行。权重表示模型当前的特征汇总方式，不自动等于真实语义对应或因果解释。
+
+## 秩说明哪些区别还能被保留
+
+考虑矩阵
+
+\[
+W=\begin{bmatrix}1&2\\2&4\end{bmatrix}.
+\]
+
+第二列是第一列的两倍，因此秩为 1。对行向量 \(x=[a,b]\)，有 \(xW=[a+2b,2(a+2b)]\)，输出永远落在一条直线上。输入 `[2,0]` 与 `[0,1]` 都得到 `[2,4]`，后续只看这个输出就无法区分两个原始输入。
+
+虽然输出仍有两个数字，独立变化方向只有一个。这是维度和秩的差别，也是压缩的具体含义。该矩阵可以精确分解为
+
+\[
+W=\begin{bmatrix}1\\2\end{bmatrix}
+\begin{bmatrix}1&2\end{bmatrix}.
+\]
+
+一般的秩 \(r\) 分解 \(W\approx AB\) 需要 \(d_{\rm in}r+rd_{\rm out}\) 个参数，而完整矩阵需要 \(d_{\rm in}d_{\rm out}\)。压缩能否保留任务所需方向，要由数据和目标判断，不能只看参数减少比例。
+
+LoRA 将训练更新写成 \(\Delta W=AB\)，限制的是增量的秩。最终 \(W_0+AB\) 仍可能满秩，不能把“低秩适配”解释成整个模型权重已经变成低秩矩阵。奇异值怎样给出最优低秩近似，见[谱分解与低秩结构](spectral-second-order-and-low-rank.md)。
+
+## 换一组输入分布，低秩误差也会改变
+
+如果用 \(\widetilde W\) 近似 W，记误差矩阵为 \(E=W-\widetilde W\)。对行向量输入 x，输出平方误差为 \(\|xE\|^2\)，在数据分布上平均得到 \(\operatorname{tr}(E^\top\mathbb E[x^\top x]E)\)。这里使用二阶矩，不要求输入已经中心化。
+
+只有在输入二阶矩与单位阵成比例时，这个目标才与普通矩阵 Frobenius 误差成比例。因此相同权重误差，在某个输入方向经常出现的数据上可能更严重。这把“秩减少了多少”连接到“实际输出损失多少”，后者才决定压缩是否适合任务。
+
+## 用代码核对坐标和乘法
+
+下面只使用 Python 标准库，直接实现文首的运算。
+
+```python
+X = [[1, 2], [3, 4]]
+W = [[2, -1, 0], [1, 1, 3]]
+b = [0, 1, -2]
+Y = [[sum(row[i] * W[i][j] for i in range(2)) + b[j]
+      for j in range(3)] for row in X]
+print(Y)
+```
+
+输出为 `[[4, 2, 4], [10, 2, 10]]`。每个下标都对应前面公式中的一个维度，因此可以用这个小例子检查转置与广播，再把相同运算交给优化过的矩阵乘库。更完整的模型实现见[线性层、MLP 与 GEMM](../foundations/linear-layers-mlp-and-gemm.md)，计算图上的形状约定见[张量与轴](../foundations/tensors-shapes-and-computation-graphs.md)。
+
+## 参考资料
+
+- [Dive into Deep Learning 的线性代数章节](https://d2l.ai/chapter_preliminaries/linear-algebra.html)讨论向量、矩阵、范数与张量运算。
+
+
+- [D2L 的线性计算](https://github.com/d2l-ai/d2l-zh/blob/e6b18ccea71451a55fcd861d7b96fddf2587b09a/chapter_linear-networks/linear-regression.md)，用具体矩阵核对轴、内积和批处理，再讨论几何解释。

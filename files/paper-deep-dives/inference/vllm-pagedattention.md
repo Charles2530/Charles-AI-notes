@@ -15,210 +15,289 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：[github.com/vllm-project/vllm](https://github.com/vllm-project/vllm)；项目页：[vllm.ai/blog/2023-06-20-vllm](https://vllm.ai/blog/2023-06-20-vllm)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2309.06180)；[GitHub API / repo](https://github.com/vllm-project/vllm)；[官方 / 项目材料](https://vllm.ai/blog/2023-06-20-vllm)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## GPU 还有计算能力，为什么服务却装不下更多请求
 
-### 研究背景
+PagedAttention 的出发点是一个系统层面的矛盾。自回归模型一次为每个请求生成一个 token，单请求计算往往不能充分利用 GPU；把多个请求放进同一批次，可以摊薄读取模型权重的成本。然而，每个活跃请求都带着不断增长的 KV cache。计算资源尚有余量时，显存已经可能阻止 batch 继续扩大。
 
-原论文面对的是 LLM serving 的实际瓶颈。训练时大家关心参数和 FLOPs，在线服务时 decode 阶段常被 KV cache 限制：每个请求的 prompt 和输出长度不同，请求动态到达和结束，batch 形状不断变化。传统系统把每条 sequence 的 KV cache 放在连续显存里，类似给每个请求分配一条大数组；这会造成预留浪费、内部碎片和外部碎片。
+论文发现，问题不只在于历史本身很长，还在于历史怎样被保存。将每个请求的 KV 放进一段预先分配的连续空间，需要为未知输出预留容量；不同请求的长度和生命周期又制造碎片。多个候选回答明明拥有相同前缀，连续张量管理却往往为它们复制整份缓存。在论文的对照实验中，已有方案真正用于 token states 的 KV 显存只有 20.4%–38.2%。[↗](https://arxiv.org/pdf/2309.06180v1#page=2)
 
-### 问题（Challenge）
+**PagedAttention 将逻辑上的连续历史与物理存储位置分开。** attention kernel 按块表访问分散的 KV 块，管理器只为已经到来的 token 分配空间，并允许不同序列共享相同块。vLLM 把这种内存表示与迭代调度、抢占恢复和多卡执行组合起来，让更多请求进入有效 batch。
 
-vLLM / PagedAttention 要解决的问题是：如何管理动态增长的 KV cache，让 GPU 显存尽可能用于有效 token，而不是被预留和碎片浪费掉。挑战在于 attention 逻辑上需要按 sequence 顺序读历史 KV，但物理显存如果强制连续，就无法高效复用小块空间；并且 parallel sampling、beam search、共享 prompt 等场景还会让多个序列共享前缀 KV，传统连续分配难以表达这种共享。
+这篇论文的关键结果是相同延迟水平下的服务吞吐提升。它没有要求每个 attention kernel 都更快；恰恰相反，微基准显示分页 kernel 存在额外延迟。只有把“单次算子成本”和“整个服务能处理多少并发”连起来，才能理解其贡献。
 
-### Finding
+## Prefill、decode 与 KV 的增长发生在什么时刻
 
-论文的 finding 是：KV cache 管理可以借鉴操作系统虚拟内存。sequence 的 KV 在逻辑上连续即可，物理上不必连续；只要用 block table 把逻辑 token block 映射到物理 block，就能按需分配、释放和共享 KV。这个 insight 把 LLM serving 的瓶颈从“模型算得不够快”翻转成“内存管理粒度不对”。分页后，碎片浪费被限制在 block 级别，prompt 共享也能用 copy-on-write 方式表达。
+prompt 已经完整给出时，模型可以同时处理其中所有位置，用矩阵乘法计算各层表示和 KV，并预测第一个输出 token。论文称为 prompt phase，也就是通常所说的 prefill。接下来的 decode 每次输入最新一个 token，读取历史 KV，计算该 token 的新 KV，再预测下一个 token。
 
-### 方法
+这里有一个容易混淆的时间点。prefill 预测出第一个输出 token 时，缓存里已有的是 prompt 的 KV；这个输出 token 自身的 KV，要在它作为下一次 decode 的输入经过模型后才产生。块分配因此跟随实际进入模型的位置增长，而不是把刚采样出的所有 token 都视为已经有完整 KV。
 
-PagedAttention 把每条 sequence 的 KV cache 拆成固定大小 blocks。系统维护 block table，记录逻辑 block 到物理 block 的映射；attention kernel 在计算时通过 block table 读取可能不连续的物理 KV。vLLM 在此基础上实现 continuous batching、按需 block allocation、block sharing、copy-on-write 等 serving 机制。输入是动态请求队列和每步新增 token，输出是更高并发下的 target model decode；模型权重不变，改变的是 runtime 内存组织和调度。
+单条 decode 的矩阵规模很小，却要反复读取大量权重和历史状态。批处理能让不同请求共享一次权重读取所支持的计算，但请求并不会同时到达、同时结束。如果一个 batch 必须等其中最长请求生成完才能换人，短请求结束后就留下闲置位置，新请求则继续排队。
 
-### 结论
+Orca 等工作已经提出 iteration-level scheduling：每轮迭代结束，移除完成请求并加入新请求，配合变长 kernel 避免 padding。vLLM 沿用这种细粒度调度思想，进一步处理它尚未解决的容量问题。调度器能够加入新请求，不等于缓存管理器有空间接纳它；两者解决的是不同环节。[↗](https://arxiv.org/pdf/2309.06180v1#page=3)
 
-论文实验比较 vLLM 与 FasterTransformer、Orca 等 serving baseline，在 ShareGPT 等请求分布和不同 parallel sampling / beam search 设置下报告吞吐。核心结果是 PagedAttention 显著降低 KV cache 浪费，使系统能容纳更大 batch，从而提升吞吐；共享前缀场景下 block sharing 进一步减少内存复制。需要注意的是，PagedAttention 提升的是 serving capacity 和 memory utilization，不改变单 token 模型质量；收益大小取决于请求长度分布、block size、kernel 实现和调度策略。
+## 先把实际历史、未来预留和碎片分开计算
 
-### 关键术语
+对普通多头 attention，一条长度为 $T$ 的序列，KV 占用可以展开为
 
-- **PagedAttention（分页注意力）**：把 KV cache 按固定 block 分页存放，并通过 block table 在 attention 中寻址
-- **Block Table（块表）**：逻辑 KV block 到物理显存 block 的映射表
-- **Internal Fragmentation（内部碎片）**：已分配 block 中未使用空间造成的浪费
-- **Continuous Batching（连续批处理）**：服务过程中动态加入和移除请求，而不是等待一个 batch 全部结束
-- **Copy-on-Write（写时复制）**：共享前缀 KV，只有分支继续生成不同 token 时才复制对应 block
+$$
+M_{\mathrm{KV}}=2\,T\,L\,d_{\mathrm{KV}}\,b_e.
+$$
 
-## 先算清 KV cache 为什么会压垮并发
+前一个 2 表示 K 与 V，$L$ 是层数，$d_{\mathrm{KV}}$ 是每层所有 KV heads 的总宽度，$b_e$ 是每个元素的字节数。这是原文 OPT 例子的记账方式；若用于不同 KV-head 配置，必须使用实际 KV 宽度。
 
-自回归生成时，每生成一个 token，模型都会为每层 attention 保存这个 token 的 key/value。下一步 decode 只输入最新 token，但它要 attend 到历史所有 token，因此必须读历史 KV cache。对一条长度为 \(T\) 的请求，KV cache 的显存大致是：
+OPT-13B 的 $L=40$、$d_{\mathrm{KV}}=5120$、FP16 每元素 2 bytes，所以每 token 为 819200 bytes，即 800 KiB；2048 tokens 为 1677721600 bytes，约 1.56 GiB。原文将后者概述为约 1.6 GB。A100 40GB 还要容纳约 26 GB 权重和运行空间，实际留给 KV 的预算约为 12 GB，因此长请求数量很快受限。[↗](https://arxiv.org/pdf/2309.06180v1#page=4)
 
-\[
-\text{KV bytes}
-\approx
-2 \times L \times H_{\text{kv}} \times D_{\text{head}} \times T \times \text{bytes}
-\]
+连续预分配在这份真实需求之外又增加三类占用。**Reservation（预留）** 是未来会用、现在尚未生成的 token 槽；**Internal fragmentation（内部碎片）** 是超过最终长度、始终不会使用的槽；**External fragmentation（外部碎片）** 则是分配器中难以用于新请求的间隙。预留最终有用途，但在它尚未使用的时间内，同样阻止其他请求进入。
 
-这里的 2 来自 key 和 value，\(L\) 是层数，\(H_{\text{kv}}\) 是 KV heads 数，\(D_{\text{head}}\) 是 head dimension，\(\text{bytes}\) 是每个元素的字节数。batch 里有 \(B\) 条活跃请求时，这个量还要乘以 \(B\)。GQA/MQA 可以降低 \(H_{\text{kv}}\)，量化可以降低 bytes，但只要服务长输出、多并发或多候选采样，KV cache 仍然会成为容量瓶颈。
+Figure 2 的绿色部分才是正在保存有效 token states 的比例。先比较 Oracle 与 vLLM，能排除一个过于简单的解释：即使提前知道最终输出长度，也没有自动消除所有浪费。
 
-更麻烦的是，KV cache 不是训练时那种形状固定的大 tensor。请求会在不同时间到来，不同时间结束，prompt 长度不同，输出长度也不可预测。传统连续分配要么提前按最大长度预留，浪费大量空间；要么运行时扩容、搬移、压缩，调度复杂且容易产生碎片。
+![不同缓存管理方式中的有效状态与浪费](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-2-memory-utilization.png){ width="760" }
 
-## 从系统图看 vLLM 管的是什么
+*原论文 Figure 2。四种设置的有效 token states 比例依次为 20.4%、26.8%、38.2%、96.3%；灰色还包含 external fragmentation 以外的其他开销。*
 
-![vLLM serving system overview](../../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
+Orca Oracle 不再需要为错误的最大长度多留内部空间，但图中仍有 25.2% reservation，以及 36.6% external fragmentation & others。它从请求开始就为整个已知最终长度占住一段连续空间，当前未生成的位置仍不能交给别的请求。vLLM 的 96.3% 正是在按需增长与固定尺寸分配两方面同时改善的结果，而不是预测输出长度更准确。
 
-<small>图源：[vLLM 官方博客：Easy, Fast, and Cheap LLM Serving with PagedAttention](https://vllm.ai/blog/2023-06-20-vllm)。原图表达 vLLM 在 scheduler、KV cache manager、GPU workers 和模型执行之间的关系。本站读法是把 vLLM 看成 serving runtime：它不只跑 forward，还要决定哪些请求同一轮执行、哪些 block 分配或释放、哪些 KV 可以共享。</small>
+压紧所有活跃张量也可以减少外部碎片，但 KV 很大，反复移动它们会产生传输成本；压紧本身还没有解决多候选共享。论文因此选择改变缓存的表示和消费者接口，使不连续物理布局直接成为可计算的布局。[↗](https://arxiv.org/pdf/2309.06180v1#page=5)
 
-这张图把 vLLM 的位置讲得很清楚。模型权重只是一部分；真正的 runtime 还要管理请求队列、iteration-level batching、KV block 分配、GPU worker 执行和返回结果。PagedAttention 是其中的 attention/KV 内存接口，让调度器可以更自由地把变长请求塞进 batch。
+## 分页 attention 怎样保持同一个概率计算
 
-## PagedAttention：逻辑连续，物理不必连续
+设每块容纳 $B$ 个 token 的 K/V，逻辑块 $j$ 保存连续位置的一段历史。块本身可以位于任意可用物理位置，kernel 通过 block table 找到它。图中三个物理块的排列顺序不影响 query 对全部历史的注意力。
 
 ![PagedAttention 原理图](../../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="860" }
 
-<small>图源：[vLLM 官方博客](https://vllm.ai/blog/2023-06-20-vllm)。原图表达每条 sequence 的 KV cache 被切成 block，逻辑 block 通过 block table 映射到物理 block。本站读法是看两层地址：token 序列在逻辑上连续，GPU DRAM 里的 KV block 可以散落在不同位置。</small>
+*原论文 Figure 5。沿 query 到各个 K/V 块的箭头读，块中的位置仍属于同一条序列。分页改变地址映射，不删除历史。*
 
-论文把 KV cache 按固定 token 数切成 KV blocks。设 block size 是 \(B\)，第 \(j\) 个 key/value block 可以写成：
+为展开原文式（4），令 $\mathcal B_j$ 表示第 $j$ 个块内、当前 query 能看见的有效位置，$d_h$ 是单个 head 的维度。完整 softmax 分母为
 
-\[
-K_j = (k_{(j-1)B+1},\ldots,k_{jB}), \qquad
-V_j = (v_{(j-1)B+1},\ldots,v_{jB})
-\]
+$$
+Z_i=\sum_j\sum_{t\in\mathcal B_j}
+\exp(q_i^\top k_t/\sqrt{d_h}),
+$$
 
-对第 \(i\) 个 query token，attention 仍然要看 \(1\) 到 \(i\) 的历史 token，只是读取方式变了：kernel 不再假设这些 key/value 在显存里连续，而是按 block table 找到每个逻辑 block 对应的物理 block，再分块读取 \(K_j,V_j\) 做 attention。
+输出为
 
-这和操作系统分页的类比非常贴切，但要注意它不是把 OS page table 直接搬进 GPU，而是在 serving runtime 和 attention kernel 里显式维护 block table。请求继续生成时追加 block；请求结束时释放 block；最后一个 block 里没有填满的槽位是主要内部浪费。
+$$
+o_i=\frac{1}{Z_i}\sum_j\sum_{t\in\mathcal B_j}
+\exp(q_i^\top k_t/\sqrt{d_h})v_t.
+$$
 
-## Block table：为什么它能减少碎片
+物理块分散，但分母仍覆盖所有可见位置，尾块未填充的槽不能参加计算。这是原 attention 的块式组织，数学上没有引入滑动窗口、稀疏丢弃或历史压缩。[↗](https://arxiv.org/pdf/2309.06180v1#page=5)
 
-![vLLM logical and physical block table 原论文图](../../assets/images/paper-figures/inference/vllm-logical-physical-block-table.png){ width="760" }
+不能对每块独立做 softmax，再简单平均块输出。一个解释性例子是，第一块两个位置的未归一化权重为 1、1，value 都为 0；第二块一个位置权重为 3，value 为 1。全局输出是 $3/(1+1+3)=0.6$，分别归一化后的块输出却是 0 和 1，平均仅为 0.5。块内权重总量不同，跨块组合必须保留统一的归一化信息。
 
-<small>图源：[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，Figure 6。原图展示 block table 如何把 logical KV blocks 映射到 physical KV blocks，并记录 block 中已填位置。本站读法是看“何时分配”：prompt 只分配已经需要的 block，decode 时当前 block 填满才申请下一个物理 block。</small>
+这套机制由应用内的块管理器、映射表和 CUDA kernel 实现。它借用了虚拟内存的逻辑与物理解耦思想，并不是让操作系统通过 GPU 页故障自动完成 attention 张量管理。论文实现为不同层和 heads 的 KV 使用独立块组织，以便实现；这些块仍服从相同序列位置的管理语义。
 
-假设 block size 是 4，一个 prompt 有 7 个 token，那么它只需要两个 logical blocks。第一个 block 填 4 个 token，第二个 block 填 3 个 token，还留 1 个位置给后续生成。下一步 decode 时，如果最后一个 block 还有空位，就直接写进去；如果满了，才向 block pool 申请新物理 block，并更新 block table。
+## 用七个 prompt tokens 看一次完整的块增长
 
-这个策略解决了三类浪费。第一，不再按最大可能输出长度预留整段 KV。第二，逻辑上相邻的 block 不要求物理相邻，外部碎片不再阻止新请求进入。第三，每条请求的主要未用空间被限制在最后一个 block 内。结果不是单个 token attention 公式变少了，而是同样显存里能容纳更多活跃请求，batch 更大，吞吐更高。
+Figure 6 采用 $B=4$。prompt 是 “Four score and seven years ago our”，共七个 tokens；逻辑块 0、1 分别映射到物理块 7、1。第一个块填满四个位置，第二个块已有三个位置，还留一个槽。
 
-## 共享前缀和 copy-on-write
+![vLLM 逻辑块与物理块映射](../../assets/images/paper-figures/inference/vllm-logical-physical-block-table.png){ width="760" }
 
-PagedAttention 还有一个很实用的收益：多个候选输出可以共享 prompt KV。parallel sampling、beam search、同一系统提示词下的多请求，都可能拥有相同前缀。vLLM 可以让多个 logical blocks 指向同一组 physical blocks，并给物理 block 维护 reference count。
+*原论文 Figure 6。表中既记录 physical block number，也记录已填位置数。重点看第二个逻辑块从 3 个位置变成 4 个位置，以及下一个新块何时出现。*
 
-当两个样本共享 prompt 后开始生成不同 token，它们只有最后需要写入的 block 会分叉。此时 runtime 使用 copy-on-write：如果某个物理 block 的 reference count 大于 1，写入前先复制出一个新物理 block，再让其中一个 sequence 写入新 block。这样，长 prompt 的 KV 不需要为每个候选完整复制，只有真正分歧的位置才产生额外显存。
+prefill 后预测出 “fathers”。下一轮把它作为输入执行 decode，其新 KV 写入物理块 1 的最后一格，同时预测 “brought”。再下一轮处理 “brought” 时，原有块已满，管理器才分配物理块 3，并将新逻辑块映射过去。整个过程不需要找到一段能容纳未来最大输出长度的连续内存。
 
-这点对程序生成、搜索、多候选回答特别重要。没有 block-level sharing，多候选采样会把同一 prompt 的 KV 重复存很多份；有了 sharing，显存压力主要来自分叉之后的输出部分。
+GPU worker 的 block engine 会预先分配一块物理显存池，并将它划成固定尺寸块；按需分配发生在这个池的块级管理中。因而，进程已经占住显存池与某个请求已经用掉全部槽位，是两件不同的事。判断利用率应检查池内有效 token states、共享引用与空闲块，不能只看进程的显存占用数字。
 
-## Continuous batching 为什么离不开内存管理
+对一条没有共享的活跃序列，逻辑块按顺序填满后才开新块，因此未使用位置只出现在最后一块，上界为 $B-1$ 个 token 槽。请求结束后，所有引用计数归零的块都能重新分配。不同请求可以交错使用物理块，释放出的固定尺寸块不需要与相邻空闲区域拼接才能服务新请求。[↗](https://arxiv.org/pdf/2309.06180v1#page=6)
 
-很多介绍会把 vLLM 的吞吐提升归结为 continuous batching，但 continuous batching 本身并不是魔法。它要求 runtime 能在每一轮 decode 里动态加入新请求、移除完成请求、给正在增长的请求追加 KV 空间。如果 KV cache 只能按连续大段预留，调度器即使想换 batch，也会被显存碎片和预留浪费卡住。
+以 $B=16$、长度 33 为解释性例子，请求需要三块、共 48 个槽，最后空 15 个；长度增长到 48 仍无需新增块，处理第 49 个位置时才申请第四块。这个上界说明按需分配为何有效，也揭示短序列下大块可能浪费很多相对空间。不能把“每条序列只浪费一个尾块”理解成任何负载下浪费比例都接近零。
 
-PagedAttention 给 continuous batching 提供了可操作的内存模型：每轮选出当前要执行的 sequences，给需要新空间的逻辑 block 分配物理 block，attention kernel 按 block table 读取历史 KV，生成后写回对应 block。请求结束时，它的物理 block 立即回到 pool。调度、内存和 kernel 这三件事必须一起看，不能把 vLLM 简化成单个 CUDA kernel 优化。
+## 共享前缀之后，如何防止一个分支覆盖另一个分支
 
-## 实验结果应该怎样读
+### Parallel sampling 的共享边界
 
-vLLM 的实验不是在证明 attention 数学被改写，而是在证明内存管理能转化成 serving throughput。论文和官方博客里的关键指标包括吞吐提升、显存浪费比例、parallel sampling / beam search 下的内存共享收益，以及不同 request workload 的表现。读这些图表时，先问 workload 是什么：prompt 长度、输出长度、并发数、候选数、模型大小和 GPU 类型都会改变结论。
+同一 prompt 生成多个答案时，prompt KV 完全相同，可以让各序列映射到相同物理块。每个物理块维护 reference count；只要有一个序列仍引用它，就不能释放。已经填满的共享前缀块不再写入，可以持续共享。
 
-| 证据 | 支撑什么 | 不能证明什么 |
-| --- | --- | --- |
-| KV fragmentation / waste 分析 | 连续分配会在变长请求下浪费大量 KV 空间 | 不代表单 token attention 计算减少 |
-| Throughput benchmark | 更高活跃 batch 能带来更多 tokens/s | 不代表每个请求 P99 一定下降 |
-| Parallel sampling / beam search | block sharing 和 copy-on-write 能减少重复 prompt KV | 不代表分叉后的输出部分也能共享 |
-| Ablation / workload 对比 | PagedAttention 对长输出、多并发、共享前缀更有利 | 不代表 prefill-bound 流量同样受益 |
+问题在于不满的最后一块。不同分支接下来可能生成不同 token，如果继续向同一物理块写，就会互相覆盖。Figure 8 沿用七 token prompt：两条样本都引用物理块 7 和 1，引用计数均为 2。当 A1 需要在尾块写入自己的新 KV 时，系统先将物理块 1 复制到新块 3，调整 A1 的映射，并把原块引用计数减到 1。A2 随后就能在原块中直接写入自己的分支。[↗](https://arxiv.org/pdf/2309.06180v1#page=7)
 
-一个稳的读法是把 vLLM 的收益拆成两步：先减少 KV cache 的外部碎片和过度预留，让同样显存容纳更多活跃 token；再通过 iteration-level scheduling 把这些活跃 token 组织成更大的执行批次。第一步是容量收益，第二步才是吞吐收益。只做其中一步，效果都会打折。
+![并行采样中的 copy-on-write](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-8-copy-on-write.png){ width="900" }
 
-## Block size 是吞吐和浪费的折中
+*原论文 Figure 8。红色箭头只复制发生分叉的尾块，完整 prompt 块 7 仍由两条序列共享。先读 ref count 的变化，再看 “fathers” 与 “mothers” 的写入位置。*
 
-PagedAttention 的 block size 不是随便定的。block 太大，每条 sequence 最后一个未填满 block 的内部浪费变大；block 太小，block table 变长，kernel 读取更碎，metadata 和调度开销增加。论文采用固定大小 block，是为了让分配和释放足够简单，同时让 attention kernel 可以按规则访问 KV。
+这个 **Copy-on-write（写时复制）** 将成本限制在真正需要修改的共享块。它并不意味着任意相同 token 都可共享 KV：同一个词出现在不同前文或不同位置，其表示通常不同。共享成立的条件是相同有效前缀及对应模型计算上下文。
 
-对实际服务来说，block size 应该和模型、head dimension、GPU kernel、请求长度分布一起调。短输出、短 prompt 的聊天流量更怕内部浪费；长上下文或长输出流量更怕 block table 过长和内存带宽压力。这个参数的工程意义类似训练里的 microbatch：它不是模型能力参数，而是系统吞吐、碎片和实现复杂度之间的折中。
+### Beam search 还会共享生成中的历史
 
-因此，看到“PagedAttention 减少 KV 浪费”时不要把它理解成浪费归零。它把连续大段预留的外部碎片，换成最后一个 block 的有限内部碎片和 block table metadata。这个交易在高并发、变长和共享前缀场景下非常划算，但仍要通过 profiling 确认。
+beam search 每轮保留最有希望的候选，多个新候选可能来自同一个旧候选，所以共享关系随搜索树变化。Figure 9 中，四个旧候选都分享块 0，候选 0–2 还分享块 1、3；下一轮保留下来的四个候选全部源于旧候选 1、2。
 
-## Prefix sharing 需要正确的写时复制
+![Beam search 的动态块共享](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-9-beam-sharing.png){ width="900" }
 
-共享前缀听起来简单：相同 prompt 的 KV 指向同一组物理 block。但只要生成开始分叉，就必须立刻区分“只读共享块”和“可写当前块”。copy-on-write 的核心是 reference count：多个 sequence 指向同一个 block 时，写入前必须复制；只有 reference count 为 1 时才能原地追加。
+*原论文 Figure 9。虚线表示候选更新边界，打叉的块失去全部引用；新候选沿已有树枝共享历史，再为后续位置申请新块。*
 
-如果这个细节处理错，后果很隐蔽。一个候选输出写入共享 block，会污染另一个候选的历史 KV；beam search 里不同 beam 可能互相看到不该看到的 token；多用户共享系统 prompt 时，甚至会出现跨请求上下文泄漏。PagedAttention 的 block table 设计正是为了让共享、分叉、释放这些状态都可以被 runtime 显式管理。
+淘汰旧候选 0、3 后，块 2、4、5、8 的引用归零，可以释放。新候选获得块 9–12，共享块 0、1、3，并按来源进一步共享块 6 或 7。传统连续张量若重新排列 beam，可能复制很长的历史；块表只需重建引用关系，在分叉落入不满旧块时才触发一个块的写时复制。
 
-工程验收时至少要测三类 case：同一 prompt 的 parallel sampling、beam search 中 beam 分叉、多个请求共享 system prompt 但用户 prompt 不同。每类 case 都要检查输出是否稳定、KV block reference count 是否按预期变化、请求结束后物理 block 是否回收。
+这种操作被抽象成 `fork`、`append`、`free`。`fork` 创建带共享历史的新序列，`append` 增长一个 token，`free` 删除序列并处理引用。parallel sampling、beam search 和公共前缀都能由这三类操作组合，kernel 只看到每条序列的物理块列表，无需理解上层属于哪种搜索算法。[↗](https://arxiv.org/pdf/2309.06180v1#page=9)
 
-## 和今天的 serving stack 怎么连接
+## 公共系统提示的共享，为什么又不同于聊天历史缓存
 
-现代 LLM serving 已经不止 vLLM 一种 runtime，但 PagedAttention 提供的抽象仍然非常通用：把 KV cache 当成受调度器管理的动态资源，而不是模型 forward 函数里的普通 tensor。这个抽象可以和 GQA/MQA、KV cache quantization、prefix cache、speculative decoding、disaggregated prefill、chunked prefill 一起用。
+服务提供方可以预先为一组固定公共提示计算 KV。新请求只需将相应逻辑前缀映射到已有物理块，prefill 重点处理本次任务输入；末尾不满的共享块仍按 copy-on-write 管理。论文用带翻译示例的提示展示这种跨请求共享。[↗](https://arxiv.org/pdf/2309.06180v1#page=8)
 
-组合时要注意收益边界。GQA/MQA 减少每 token KV bytes；KV quantization 降低每元素 bytes；PagedAttention 减少分配浪费和共享重复；prefix cache 避免重复 prefill；speculative decoding 改变每轮验证 token 数。这些技术作用在不同层，不应互相替代。真正的容量规划应把公式写清楚：
+它直接减少了重复计算，也减少了重复状态占用。这两类收益可以叠加：长公共前缀不必每次重算，释放出的 KV 空间又使更多请求同时运行。反之，几乎没有公共前缀的负载，主要收益仍来自按需分配。
 
-```text
-active KV bytes
-  = active tokens
-  x layers
-  x KV heads
-  x head dim
-  x dtype bytes
-  x sharing / quantization / block utilization factors
-```
+这里描述的是服务端预定义前缀的共享接口。论文的聊天实验却明确选择不在不同轮对话之间保留 KV，以免用户等待下一次输入时，缓存持续占用其他请求的空间。因此，公共前缀实验不能被扩写成“本文聊天加速全部来自跨轮缓存复用”；两组实验实际采用了不同的状态保留策略。
 
-vLLM 的贡献是把最后一项变成可控的 runtime 变量。对线上系统而言，这比单个 benchmark speedup 更有价值，因为它让调度器可以在显存接近满载时仍然做出明确决策：接新请求、延迟请求、驱逐 prefix cache，还是降低并发。
+## 所有块都用完以后，抢占为什么以序列组为单位
 
-## 一个容量规划例子
+未知输出长度意味着，只接纳当下能装下的请求仍可能在后续增长时用完显存。vLLM 使用 FCFS 优先级，优先服务早到请求，需要抢占时从晚到请求开始。它没有提前承诺每个已接纳请求都能无抢占地生成到最大长度。
 
-假设某个 32 层模型使用 GQA，KV heads 为 8，head dimension 为 128，KV dtype 为 fp16。每个 token 的 KV cache 大约是：
+一般缓存替换会猜测哪个块最晚再用，但完整 attention 每轮都需要该序列的全部历史。只换出其中一块，会让整个序列无法继续。因此本文使用 all-or-nothing 策略，整条序列的块一起处理。一个请求中的多个候选可能共享状态，还需要作为 sequence group 一起调度、抢占和恢复。[↗](https://arxiv.org/pdf/2309.06180v1#page=8)
 
-\[
-2 \times 32 \times 8 \times 128 \times 2
-= 131{,}072 \text{ bytes}
-\]
+两种恢复方法保留的信息不同。
 
-也就是每 token 约 128KB。一个 8K token 的请求，仅 KV cache 就约 1GB；如果并发 64 条，理论 KV 空间已经到 64GB 量级，还没算权重、workspace、fragmentation 和临时 verification token。这个数字说明：KV cache 管理不是“优化一点碎片”，而是决定一张 GPU 能不能承载目标并发。
+| Method | What is retained | How the request resumes | Main cost |
+| --- | --- | --- | --- |
+| Swapping | CPU RAM 中的 KV 块 | 将块搬回 GPU 后继续 decode | CPU–GPU 传输及小块搬运开销 |
+| Recomputation | prompt 与已生成 token 序列 | 将它们作为一个新 prompt 重算 KV | 一次已知序列的前向计算 |
 
-PagedAttention 的价值在这个例子里很直观。传统连续预留若按 max length 分配，短请求也会占掉接近 8K 的空间；PagedAttention 只按已使用 token 分 block 分配。若其中许多请求共享长 system prompt，block sharing 又能把 prompt KV 从“每个候选一份”变成“公共块 + 分叉后增量”。这就是为什么 vLLM 特别适合多候选、长 prompt 和批量服务场景。
+重计算不必把过去的随机采样重新做一遍，也不必逐 token 重放旧 decode。已生成 tokens 已知，可以合并为一个序列，在一次 prefill 中并行恢复其缓存。原来的结果保留，重建的是中间状态。这是 LLM 应用语义提供的恢复方式，普通操作系统无法对任意被换出页都这样重算。
 
-但容量规划仍要加上 block utilization。最后一个 block 未填满时会有内部浪费；prefix cache 也会占常驻空间；speculative decoding 的候选树会产生临时 KV。生产系统要做的是在真实 traffic replay 上统计：平均 block 利用率、共享 block 比例、峰值活跃 token、cache hit rate 和请求排队时间。只有这些数稳定，tokens/s 才有解释力。
+原文 swapping 策略还有一个限制 CPU 占用的配套规则：出现抢占以后，暂停接纳新请求，直到被抢占序列全部完成；已有请求完成释放空间后，逐步换回等待序列。这样 CPU 中的换出块不会超过 GPU KV 池的总块数。这个上界依赖接纳策略，不能只保留“换到 CPU”一句，就推断任意调度器的主存占用都有相同保证。
 
-## 为什么它改变了调度器的设计空间
+分页使回收和恢复可控，并没有消除过载。当到达率长期高于系统服务能力，仍会产生越来越长的队列。后面的延迟曲线正是通过这个拐点比较各系统能承受的请求率。
 
-没有 PagedAttention 时，调度器经常被显存连续空间绑住：即使总空闲显存够，也可能因为碎片或预留策略无法接新请求。PagedAttention 让调度器面对的是 block pool，而不是一段段大数组。这样，调度决策可以从“有没有连续空间”变成“还有多少可用 block、哪些 block 可共享、哪些请求即将释放”。
+## 多卡执行与三个融合 kernel 如何承接块管理
 
-这会改变三个策略。
+中央 scheduler 决定本轮参与的请求和新增块，将 input token IDs 与各请求的 block table 广播给 GPU workers；worker 执行模型并返回采样结果。图中 cache engine 负责物理块操作，模型 shard 负责计算，二者通过同一映射接口衔接。
 
-第一，admission control 可以更精细。新请求不必一次预留 max output length，只要 prompt 和当前 decode 需要的 block 能放下，就可以进入队列。第二，preemption 更可控。低优先级请求的 block 可以被释放或换出，恢复时通过 block table 重建逻辑序列。第三，多候选生成更便宜。beam 或 parallel sampling 共享 prompt block 后，调度器可以把更多预算花在分叉后的真正差异上。
+![vLLM 服务系统总图](../../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
 
-这也是为什么 vLLM 论文被后续 serving 系统反复引用：它把 KV cache 从“模型私有 tensor”提升成“runtime 管理的资源”。一旦 KV 成为资源，SLO、优先级、缓存策略和容量规划就都能被系统化讨论。
+*原论文 Figure 4。先沿 scheduler 到 worker 的控制路径读，再看 CPU/GPU block allocator 与 cache engine 的关系。调度策略没有进入每个 attention head 的数值计算。*
 
-对工程团队来说，PagedAttention 的长期价值是让“显存不够”变成可量化的调度问题。你可以统计每个请求占用多少 block、哪些 block 因共享而省下、哪些 block 因最后一页未填满而浪费、哪些请求因为 block pool 紧张被延迟。这些数比单次 benchmark 更能指导线上容量扩容。
+模型采用 Megatron-LM 风格张量并行时，各 GPU 处理相同 tokens，保存不同 attention heads 的 KV。所有 worker 使用相同物理块编号和逻辑映射，但编号对应的具体数据是本卡的 KV 分片。中央管理器因而只需统一广播管理决定；worker 之间的模型 all-reduce 由分布式执行本身完成，无需每次都经 scheduler 协调。[↗](https://arxiv.org/pdf/2309.06180v1#page=9)
 
-## 和其他 KV 优化的边界
+间接寻址会引入新开销，论文用三种融合操作减少它。第一，生成新 KV 后，将 reshape、适配块读取的布局转换和按地址写入融合，减少 kernel launch。第二，读取块表与 attention 计算融合，让 warp 按块读取并当场计算，同时支持 batch 中不同序列长度。第三，将多个不连续块的 copy-on-write 复制合并为一次 kernel，避免为每个小块都发出单独的 `cudaMemcpyAsync`。
 
-PagedAttention 不压缩 KV 的内容，它只改变 KV 的存放和共享方式。KV quantization 降低每个元素的字节数，GQA/MQA 减少 KV head 数，sliding window 或 eviction 改变历史可见范围，context compression 改变被保留的信息。PagedAttention 可以和这些技术叠加，但不能替代它们。
+这说明块管理不能只停在 Python 中维护一个字典。消费者必须直接读取分块布局，写入和复制路径也要适配。如果每轮先把所有散块拼成完整连续 KV 再运行原 kernel，就会重新支付大规模搬运，削弱分页所要获得的收益。
 
-这一区分在长上下文系统里尤其重要。一个 128K prompt 即使用分页存储，decode 时仍要面对大量历史 KV 的读取；如果目标是降低 attention 带宽，还需要稀疏注意力、分层记忆、KV 压缩或检索式上下文管理。PagedAttention 解决的是“如何把变长 KV 放进显存并高效调度”，不是“如何让模型少看历史”。
+## 吞吐实验的硬件、负载和基线如何限定结论
 
-因此，读 vLLM 时要把它放在 serving runtime 层：它把内存碎片、动态请求和多候选共享处理好，为上层调度和下层 kernel 提供稳定接口。至于长上下文质量、KV 压缩误差、跨 GPU KV 服务和 prefix cache 策略，需要回到其他系统论文继续讨论。
+论文主要使用 Google Cloud A2 实例上的 OPT 模型，公共前缀实验另外使用 LLaMA-13B。Table 1 的容量如下。
 
-一个合格的 vLLM 容量报告也应避免只写“吞吐提升”。更有用的是同时给出活跃请求数、活跃 token 数、block 利用率、prefix cache 命中率、GPU 显存峰值、请求排队时间和 P95/P99 延迟。PagedAttention 的价值就在于这些指标可以被系统地观测和调度。
+| Model size | GPUs | Total GPU memory | Parameter size | Memory for KV cache | Max. KV cache slots |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 13B | 1 × A100 | 40 GB | 26 GB | 12 GB | 15.7K |
+| 66B | 4 × A100 | 160 GB | 132 GB | 21 GB | 9.7K |
+| 175B | 8 × A100-80GB | 640 GB | 346 GB | 264 GB | 60.1K |
 
-这些指标也能帮助团队判断瓶颈到底在 KV、prefill、decode、采样还是网络层。
+这些是整个模型并行组的总量。66B 使用更多 GPU，却因为权重和每 token KV 都更大，总 token slots 还低于 13B；175B 则有明显更宽裕的 KV 空间。模型规模不能独立于硬件配置解释并发能力。[↗](https://arxiv.org/pdf/2309.06180v1#page=9)
 
-如果 block pool 经常满，但 GPU 利用率不高，问题可能是长尾请求占住 KV；如果 GPU 满载而 block 利用率健康，瓶颈更可能在 compute 或 memory bandwidth。PagedAttention 的好处是让这两种情况能被区分。
+负载从 ShareGPT 和 Alpaca 中取得输入、输出长度，再用 Poisson 到达过程合成请求时间。ShareGPT 平均输入 161.31 tokens、输出 337.99；Alpaca 平均输入 19.31、输出 58.45。前者平均输入约长 8.4 倍、输出约长 5.8 倍，方差也更大。它们提供实际文本的长度分布，但没有原始线上时间戳，所以实验不是对真实突发流量的原样回放。
 
-## 它没有解决什么
+大部分实验使用一小时 trace，OPT-175B 因成本限制使用十五分钟。比较对象也需要明确。[↗](https://arxiv.org/pdf/2309.06180v1#page=10)
 
-PagedAttention 解决的是 KV cache 分配、碎片和共享问题，不是所有推理瓶颈。长上下文仍然需要读大量 KV，attention 的内存带宽压力不会因为分页而消失。长 prompt 短输出的 workload 主要受 prefill 影响；短 prompt 长输出更容易受 decode、KV bandwidth 和调度影响。模型权重本身、跨 GPU 通信、采样逻辑、tokenizer、网络队列和 P99 延迟，也都可能成为瓶颈。
+| Baseline | Scheduling / allocation assumption |
+| --- | --- |
+| FasterTransformer | 作者外接动态 batch scheduler，按容量选择最大 batch，取最早到达的一组请求执行 |
+| Orca (Max) | 迭代调度；为模型最大长度 2048 预留空间 |
+| Orca (Pow2) | 依据实际输出长度向上取二次幂，如 25 个输出位置预留 32 个 |
+| Orca (Oracle) | 假定提前知道真正输出长度，按该长度预留 |
 
-**读数边界。** 所以读 vLLM benchmark 时不能只看一个 tokens/s，也不能把系统吞吐提升误读成单个 attention kernel 的加速。要看 prompt/output 长度分布、并发数、是否启用 prefix cache、是否使用 beam/parallel sampling、block size、模型结构是否有 GQA/MQA、服务是否受 prefill 还是 decode 支配；PagedAttention 在高并发、变长请求、长输出、多候选共享 prompt 的场景里最能体现价值。
+Orca 当时未公开可用，论文作者自行实现，并假定使用 buddy allocator。这是带明确假设的复现基线，不是直接运行原 Orca 发布版本。Oracle 显然拥有线上不可得的未来信息，Pow2 在实验中也依据真实输出长度构造理想预留量；两者用于观察不同过度预留程度，不能当成已经解决了输出长度预测的可部署策略。
 
-## 阅读结论
+FasterTransformer 主要优化推理计算，作者为它加的调度方式又不同于迭代级调度。因此，它与 vLLM 的差异包含内存和调度两方面；最高加速比不能全部归因于某个页表操作。
 
-vLLM/PagedAttention 这篇论文的核心知识有三层。第一，KV cache 是 decode 阶段的主要动态显存对象，按最大长度连续预留会造成严重浪费。第二，PagedAttention 用 logical block 到 physical block 的映射，让 KV cache 可以按需增长、非连续存放、完成后释放。第三，block-level sharing 和 copy-on-write 让 parallel sampling、beam search 和共享前缀请求少复制 KV。
+### Normalized latency 不是单步 decode 时间
 
-看任何 LLM serving 系统时，都可以沿着这条线追问：KV cache 是怎么分配的？请求变长时是否需要搬移？prefix 和多候选能否共享？batch 是按请求、按 token 还是按 iteration 调度？benchmark 的 workload 是否和你的线上请求长度一致？
+论文指标可写为
 
-## 外部精读
+$$
+L_{\mathrm{norm}}=\frac1N\sum_{r=1}^{N}
+\frac{L_r^{\mathrm{end\text{-}to\text{-}end}}}{T_r^{\mathrm{output}}}.
+$$
 
-- [PagedAttention paper](https://arxiv.org/abs/2309.06180)
-- [vLLM official blog: Easy, Fast, and Cheap LLM Serving with PagedAttention](https://vllm.ai/blog/2023-06-20-vllm)
-- [vLLM documentation](https://docs.vllm.ai/en/latest/)
-- [vLLM GitHub](https://github.com/vllm-project/vllm)
-- [智源社区：伯克利开源 LLM 推理与服务库 vLLM](https://hub.baai.ac.cn/view/27505)
+它先将每个请求从到达至完成的延迟除以其输出长度，再对请求求均值。排队、prefill 和 decode 都进入分子。这不是只在相邻输出 token 之间测量的 TPOT，也不是总延迟之和除以总输出 tokens；后者会按输出长度隐式给请求不同权重。
 
-## 相关阅读与下一步
+例如两个请求分别用 2 秒产生 10 tokens、用 10 秒产生 100 tokens，按论文口径得到 $(0.2+0.1)/2=0.15$ 秒/token；用总量相除则为 $12/110\approx0.109$。这个解释性例子说明，报告同一个单位仍可能对应不同统计量。评估时必须保留指标定义。
 
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=vllm+pagedattention&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=vllm+pagedattention)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=vllm+pagedattention)。
-- 站内下一步：[论文精读专题](../index.md)。
+## 单输出结果怎样连接到内存利用率
+
+Figure 12 每个面板固定模型与数据集，横轴是请求到达率，纵轴是 normalized latency。应在相近纵轴高度比较横向能承受多少请求，而不是只比较低负载下曲线起点。曲线突然陡升时，系统已难以消化到达流量，排队成为延迟的主要来源。
+
+![单输出场景的请求率与延迟](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-12-throughput-latency.png){ width="1000" }
+
+*原论文 Figure 12。上排为 ShareGPT，下排为 Alpaca；各列分别是 OPT-13B、66B、175B。右下角是分页优势缩小的重要条件。*
+
+ShareGPT 上，相同延迟水平下 vLLM 相对 Orca Oracle 可承受约 1.7–2.7 倍请求率，相对 Orca Max 为约 2.7–8 倍。相对 FasterTransformer 的最高值达到 22 倍，但同时包含后者缺少细粒度调度和预留浪费的影响。论文概述的 2–4 倍不是所有面板、所有基线、所有负载下恒定的加速系数。[↗](https://arxiv.org/pdf/2309.06180v1#page=11)
+
+Figure 13 进一步检查中间变量：在 OPT-13B 的固定到达率下，究竟有多少请求同时进入 batch。
+
+| System | ShareGPT, 2 req/s | Alpaca, 30 req/s |
+| --- | ---: | ---: |
+| Orca (Max) | 7.00 | 7.00 |
+| Orca (Pow2) | 9.81 | 43.24 |
+| Orca (Oracle) | 13.62 | 72.75 |
+| vLLM | 30.42 | 132.44 |
+
+ShareGPT 的 30.42 相对 Oracle 的 13.62 约为 2.2 倍，相对 Max 的 7.00 约为 4.3 倍。这与有效 KV 状态比例提高共同支持论文的机制解释：更多请求的工作集装得下，才有机会用更大 batch 摊薄权重访问。这里的 batch 数是持续服务过程中的平均值，不是强制固定 batch 的单次 kernel 对比。
+
+右下角 OPT-175B、Alpaca 则展示了限制。它有 264 GB KV 预算，而请求很短，Oracle 和 Pow2 即使浪费一部分空间，也能放进足够多请求。系统更接近计算受限，分页再提高内存利用率，吞吐优势就缩小。这个反例直接说明，优化有效的前提是容量确实限制了并发。
+
+## 多候选和公共前缀如何放大共享收益
+
+### 共享的是 prompt，还是搜索过程中的更长历史
+
+Figure 15 的分母是“不共享时所需的总块数”，衡量共享减少了多少 KV 块。先比较左右两个面板，再比较每个面板中候选数增加的趋势。
+
+![并行采样与 beam search 的 KV 共享节省](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-15-sharing-savings.png){ width="880" }
+
+*原论文 Figure 15。OPT-13B、Alpaca 负载。左侧只共享 prompt，右侧还可以共享生成树中的历史。*
+
+| Decoding method | 2 outputs / beams | 4 outputs / beams | 6 outputs / beams |
+| --- | ---: | ---: | ---: |
+| Parallel sampling | 6.09% | 8.53% | 9.79% |
+| Beam search | 37.56% | 53.13% | 55.16% |
+
+parallel sampling 的答案很快分叉，只共享 prompt，所以在短 prompt 的 Alpaca 上节省有限。beam search 的新候选可能来自同一个高分旧候选，生成历史也可以继续共享，六 beams 时节省超过一半。ShareGPT 前缀更长，同组实验中 parallel sampling 节省 16.2%–30.5%，beam search 为 44.3%–66.3%。这些百分比属于 KV 块，不能直接写成整张 GPU 显存下降相同比例。
+
+相应地，OPT-13B、Alpaca 上相对 Oracle 的吞吐优势，从单输出约 1.3 倍扩大到 beam width 6 的约 2.3 倍。它把共享机制与最终服务结果连接起来，也说明一个只测单输出的 benchmark 会漏掉动态前缀共享的价值。[↗](https://arxiv.org/pdf/2309.06180v1#page=11)
+
+### 跨请求前缀同时减少计算与存储
+
+公共前缀实验使用 LLaMA-13B 和 WMT16 英译德任务。一个前缀包含一条翻译示例、共 80 tokens，另一个包含五条示例、共 341 tokens。注意正文任务是英译德，方法示意图中的英法示例不应替代实际实验设置。
+
+![不同公共前缀长度的吞吐实验](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-16-prefix-sharing.png){ width="820" }
+
+*原论文 Figure 16。先比较相同延迟下蓝绿曲线的横向距离，再比较单示例与五示例前缀。*
+
+共享 80-token 前缀时，相对 Orca Oracle 的吞吐约提高 1.67 倍；341-token 前缀时提高到 3.58 倍。更长公共上下文提供了更大的重复计算与重复状态消除空间。这个实验支持预定义前缀接口的价值，并没有评测所有自动发现、淘汰或持久化前缀的策略。[↗](https://arxiv.org/pdf/2309.06180v1#page=12)
+
+### 聊天实验主要检验长输入下的分配行为
+
+聊天负载使用 OPT-13B，将历史和当前输入拼接，只保留最后 1024 prompt tokens，最多再生成 1024 tokens；不同轮次不保留 KV。由于大部分长对话的输入已接近 1024，作者的 buddy allocation 基线会为输出再保留约 1024 个位置，三种 Orca 设置表现接近。vLLM 在这组负载下可承受约两倍请求率，收益主要来自减少长请求的预留与碎片，而不是跨轮跳过历史计算。
+
+## 为什么单个 kernel 更慢，服务却更快
+
+动态块表要求额外读取地址、执行分支并处理变长序列。Figure 18a 在 batch 8、32，以及 context length 64、128、256 下比较 attention kernel；vLLM 的延迟相对优化后的 FasterTransformer 高约 20%–26%。这个代价真实存在。
+
+![attention kernel 与块大小消融](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-18-kernel-block-size.png){ width="900" }
+
+*原论文 Figure 18。左图说明间接寻址的局部代价，右图说明不同工作负载对块大小的响应。两个面板的横轴与纵轴含义不同。*
+
+但这项开销只发生在相应 attention 操作，不能直接等同于整个模型每步变慢 20%–26%。与此同时，分页让系统装下更多请求、减轻排队，并摊薄每请求承担的其他模型运算和访存成本。这就是局部微基准与整体吞吐可以朝不同方向变化的原因。[↗](https://arxiv.org/pdf/2309.06180v1#page=12)
+
+块大小消融进一步展示折中。太小的块增加寻址与管理粒度，难以充分利用 GPU 读取和处理 KV 的并行性；太大的块增加尾部空洞，也降低前缀能够完整共享的机会。ShareGPT 中 16–128 表现较好，Alpaca 中 16、32 较好，更大块明显恶化，因为许多序列比块还短。论文据此选择默认 16，属于该实现与负载下的经验配置。
+
+这个结果也纠正了一个常见直觉：把块做到一个 token 可以最小化尾部浪费，却不保证服务最快。系统需要在有效存储比例、GPU 并行访问和管理开销之间找到平衡。
+
+## 重算与换入换出，怎样随块大小改变优劣
+
+Figure 19 左图测恢复操作本身，右图测相同请求率下的 OPT-13B、ShareGPT 服务。应先看小块处红色 swapping 曲线，再看中间块大小处两种方法的端到端曲线是否仍有明显差异。
+
+![重计算与 swapping 的恢复成本](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-19-recompute-swap.png){ width="860" }
+
+*原论文 Figure 19。左侧将 swap in、swap out 与往返总成本分开；右侧包含这些恢复操作对整个服务的影响。*
+
+小块导致大量 CPU–GPU 小传输，PCIe 有效带宽利用不好，swapping 开销很大。recomputation 通过一次已知序列前向完成，不依赖这些 KV 块的搬运粒度，所以微基准曲线相对平坦。块变大后，传输更有效，swapping 可以更有利；在 16–64 的中等块大小下，两种方法端到端表现接近。[↗](https://arxiv.org/pdf/2309.06180v1#page=13)
+
+恢复策略因此不能只按“传数据总比重算便宜”选择。模型计算能力、CPU–GPU 带宽、序列长度、块大小与发生抢占的频率共同决定代价。微基准中某个操作快，也未必会等比例改变整体延迟，因为大部分执行时间可能仍在正常请求处理。
+
+## 这套设计适合什么样的系统问题
+
+PagedAttention 提供的是一种让动态状态可以增长、共享和回收的接口。迭代 batching 让请求在时间上灵活组合，分页让它们在显存中更容易共同驻留；词表、模型权重和完整 attention 的数学语义无需为此改变。对长序列、多候选、公共前缀较多且并发受 KV 容量限制的服务，这个接口尤其有用。
+
+它与 FlashAttention 也处在不同层面。后者主要通过分块计算和 kernel 组织减少 attention 的中间存储与 I/O；这里管理的是跨解码步长期驻留、随请求变化的 KV 状态。论文 prefill 本身可以使用传统高效 attention，包括其引用的 FlashAttention。二者不能只因都出现 “block” 就视为同一个算法。[↗](https://arxiv.org/pdf/2309.06180v1#page=14)
+
+采用时最值得复用的检查方式，是把四层指标连起来：有效 token states 占了多少 KV 池、平均同时运行多少请求、相同延迟下承受多少到达率，以及共享和恢复分别花了多少时间。若前三者没有相应变化，仅比较一个更复杂的分页 kernel，可能只看到间接寻址的代价。
+
+对于形状静态、分配可提前规划的训练任务，或者计算已经饱和的短请求服务，提高内存利用率未必带来吞吐提升。论文既给出了按需管理与共享的正例，也用短序列、大显存及 kernel 微基准划出了边界。可迁移的认识是沿请求生命周期管理状态，并让计算接口直接消费这种状态布局；具体收益仍由真实长度分布、到达流量与硬件决定。

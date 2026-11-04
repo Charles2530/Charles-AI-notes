@@ -1,145 +1,66 @@
-# WM / WAM / VAM：动作到底怎样进入世界模型
+# WM、WAM、VAM 与动作条件建模
 
-近两年，世界模型、视频模型和机器人策略越来越容易被写到同一篇论文里：有的给动作预测未来，有的直接从视觉语言输出动作，有的把未来视频和未来动作一起生成。`WM / WAM / VAM` 不是统一标准术语，但很适合作为读论文的接口坐标系。
+机械臂要把红杯子放进托盘。一个模型可以直接输出抓取动作，另一个可以回答“如果先松开夹爪会怎样”，还有一个同时生成未来视频和动作。要判断它们能否互换，先看动作在概率分解中的位置。动作作为条件时，模型预测给定行动的后果；动作作为输出时，模型产生行为；动作与未来一起生成时，还需要解释二者怎样一致且可执行。WM、WAM、VAM 的名称并非统一标准，接口比缩写更可靠。
 
-动作在模型里放在哪里，决定了世界模型能不能服务规划和控制。
+## 条件预测与策略输出是不同任务
 
-不要先问模型名字。先问四件事：输入里有没有动作，输出里有没有未来，换动作后未来会不会变，最后谁消费这个未来。一个模型能生成漂亮视频，不等于能做控制；一个模型能输出动作，也不等于理解动作后果。世界模型用于机器人时，最小门槛是：同一历史下换一条动作，模型预测的未来、风险或成功排序应该随之改变。
+记历史为 $h$，目标为 $g$，未来观察为 $o'$，动作序列为 $a$。四种接口可以写成
 
-## 先把接口摆正
+| 接口 | 概率形式 | 模型可以直接回答什么 |
+| --- | --- | --- |
+| 动作条件世界预测 | $p(o'\mid h,a)$ | 这组动作会产生什么未来 |
+| VLA policy | $\pi(a\mid h,g)$ | 为这个目标应该做什么 |
+| 联合 world-action model | $p(o',a\mid h,g)$ | 生成一组相互配对的未来与动作 |
+| 视频表示驱动的 policy | $\pi(a\mid h,g,f_{\mathrm{video}})$ | 如何利用视频预测先验选择动作 |
 
-| 路线 | 动作在哪里 | 模型回答的问题 | 主要消费方 | 最容易误读成 |
-| --- | --- | --- | --- | --- |
-| WM | 动作是条件 | 如果我做 \(a\)，世界会怎样变 | planner、critic、risk checker | 普通视频预测器 |
-| VLA policy | 动作是输出 | 当前观测和语言下，现在该做什么 | controller、task executor | 有世界模型的 agent |
-| WAM | 动作和未来联合输出 | 目标下，什么动作和什么未来应该一起出现 | policy、trajectory generator、closed-loop controller | 视频模型加动作头 |
-| VAM | 视频预测表征服务动作 | 视频模型学到的动态先验能不能帮助选动作 | action model、data engine、robot policy | 生成视频就能控制 |
+拥有一个 $p(o'\mid h,a)$ 并不会自动给出最优动作，还需要枚举、搜索或 actor。相反，一个动作策略即使学会成功抓取，也未必能对任意指定动作预测后果。两项能力可以共享表示，但不能互相替代。
 
-这张表的用法不是给缩写下定义，而是防止证据错位。WM 要看反事实动作和候选动作排序；VLA 要看真实动作成功率和恢复；WAM 要看视频、动作和闭环执行是否互相支撑；VAM 要看视频预测的中间表征是否真的提升 policy，而不是视频画质是否好看。
+## 同一目标下，查询方式怎样改变
 
-## WM：动作作为条件，未来作为评估对象
+对红杯子任务，给策略输入目标，它会输出某种抓取动作；给条件世界模型指定“松开夹爪”，它应预测该动作后果，即使后果不符合目标。若模型无论输入什么动作都生成成功放置视频，它可能是在遵循目标先验，尚未提供可查询的动力学。
 
-最清楚的世界模型接口是：
+构造一个两动作例子。策略选择快抓、慢抓的概率为 0.8 和 0.2，模型预测两者成功概率为 0.5 和 0.9。按这条策略平均的成功概率为 $0.8\times0.5+0.2\times0.9=0.58$。动作条件模型则允许 planner 比较两者，在不考虑其他代价时选慢抓，模型预测成功率变为 0.9。这里的 0.58 和 0.9 都是构造概率的计算，实际是否成功还需要独立执行。
 
-\[
-p_\theta(z_{t+1:t+H}, r_{t:t+H}, d_{t:t+H}, u_{t:t+H}
-\mid z_t, a_{t:t+H-1}, c)
-\]
+这个差异说明，联合样本分布既受策略偏好影响，也受动作后果影响。只观察大量生成样本中的成功比例，无法单独确定某个指定动作的可靠性。
 
-\(z_t\) 是当前 latent state，\(a_{t:t+H-1}\) 是候选动作序列，\(r\) 是 reward 或任务进展，\(d\) 是 done / continuation，\(u\) 是 risk 或 uncertainty，\(c\) 是语言、目标图像、地图等上下文。这个式子的重点不是概率符号，而是动作在条件里：模型被要求回答“给定这串动作，未来会怎样”。
+## 联合生成中，动作与未来如何配对
 
-Dreamer 系列是干净的 WM 基线。它不追求把每个未来像素画清楚，而是在 latent space 里学习 dynamics，再用 imagined rollout 训练 actor 和 critic。读 Dreamer 时要看动作如何进入 transition、reward/value 如何消费未来，而不是把它当成普通视频生成器。
-
-WM 的核心证据是反事实动作。固定同一个 \(z_t\)，替换 \(a_{t:t+H-1}\)，未来状态、reward、risk 或 done 应该合理变化。如果换动作后未来几乎不变，模型只是惯性视频预测器；如果未来会变，但 reward/risk 不变，planner 仍然没有可靠依据。
-
-Genie 2 / Genie 3 这类可交互世界模型把这个接口扩展到更开放的 3D 环境：从图像或提示生成可被人或 AI agent 操作的 playable world。它说明“世界模型”不只限于机器人 latent dynamics，也可以是可交互生成环境。但用于机器人控制时仍要补上机器人动作空间、风险、任务成功、真实观测刷新和安全层。
-
-## VLA：能输出动作，不等于有世界模型
-
-VLA policy 的常见接口更像：
+联合分布可形式化分解为
 
 \[
-a_t = \pi_\theta(o_{\le t}, l)
+p(o',a\mid h,g)=p(a\mid h,g)p(o'\mid h,a,g).
 \]
 
-\(o_{\le t}\) 是观测历史，\(l\) 是语言指令，输出直接是动作 token、连续控制量或 action chunk。RT-2 这类模型的意义在于把 web-scale 视觉语言知识迁移到机器人动作空间；Open X-Embodiment / RT-X 则说明跨机器人数据需要处理动作口径、相机、embodiment 和任务语义。
+模型也可能通过共同去噪同时生成两类变量，而没有显式按这个顺序采样。关键仍是得到一组配对样本。如果独立生成一条“杯子已经放入托盘”的未来和一条只会抬起夹爪的动作，它们各自合理，组合却不能执行。
 
-但 policy 输出动作，不代表模型内部显式预测了动作后果。一个 VLA 可以很会把“把苹果放进碗里”翻译成动作模板，却不一定能回答“如果我从右侧推，苹果会不会碰倒杯子”。所以不能把所有 VLA 都称为世界模型。只有当模型显式预测或评估动作后的未来，并让 planner、risk checker 或 policy 消费这个未来时，才进入世界模型证据层。
-
-这不是贬低 VLA。很多真实系统会让 VLA 直接做 policy，再用世界模型或风险模型做前瞻检查。关键是把角色说清：VLA 负责把语义落到动作，WM 负责评估动作后果，低层 controller 负责让动作可执行。
-
-## WAM：动作和未来世界一起生成
-
-WAM 更像把 world model 和 policy 合成一个生成过程。它不只是问“给定动作后未来怎样”，还问“在这个目标下，什么动作和什么未来应该一起出现”。简化接口可以写成：
-
-\[
-p_\theta(o_{t+1:t+H}, a_{t:t+K}\mid o_{\le t}, s_{\le t}, g)
-\]
-
-\(o_{\le t}\) 是历史观测，\(s_{\le t}\) 是本体状态，\(g\) 是语言或目标条件，模型同时输出未来观测和未来动作。动作不再只是外部输入，而是和未来世界一起被建模。
+[DreamZero](https://arxiv.org/abs/2602.15922)将未来视频与动作联合建模，原始论文与[项目页](https://dreamzero0.github.io/)给出其具体结构和闭环设置。它不代表所有使用 WAM 名称的方法都采用相同动作表示、时间尺度或训练目标。
 
 ![DreamZero joint video-action architecture](../assets/images/paper-deep-dives/world-models/dreamzero/figure-4-architecture.png){ width="920" }
 
-<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 4。原图表达：训练时联合去噪未来视频 latent 和动作 latent，推理时用真实观测刷新上下文。读图重点：WAM 不是“视频模型旁边加动作头”，而是让动作与未来世界互相约束，并在闭环中不断用真实观测纠偏。</small>
+<small>图源：World Action Models are Zero-shot Policies，DreamZero 架构图。</small>
 
-WAM 的吸引力在于，很多机器人动作的合理性只能通过未来来判断。抓杯子不是单帧分类，拉抽屉也不是一句语言到一个动作 token 的翻译；它们要求模型理解接触、遮挡、手爪姿态、目标物移动和失败恢复。把未来视觉和未来动作联合建模，理论上能让模型从视频动态里学到更多物理约束。
+联合生成还面临自洽但错误的问题。模型生成“成功夹住”的视频并同时生成“抬起”动作，实际却抓空。未来视频与动作互相支持，无法作为独立验证证据；必须回到真实后继观察检查。
 
-但 WAM 的风险也更难排查。动作错了，未来视频可能仍然看起来合理；未来视频错了，动作又可能被错误未来“解释”得好像合理。联合生成会让归因变难：到底是语言理解错、视频动态错、动作接口错，还是闭环刷新太慢？
+## 视频先验怎样帮助动作模型
 
-所以读 WAM 论文时，要把 open-loop 和 closed-loop 分开。open-loop 视频能证明模型会生成某种未来；closed-loop rollout 才证明动作在真实观测刷新后还能继续有效。DreamZero 论文和项目页报告了 7Hz closed-loop control、real robot generalization 和 cross-embodiment transfer，这类证据比单纯展示未来视频更接近 WAM 的核心 claim；但它仍是特定数据、机器人平台和任务集合下的论文证据。
-
-## VAM：视频先验不直接等于策略
-
-VAM 可以理解成“让视频模型的动态表征帮助动作生成”。它通常不要求视频模型自己就是 planner，而是把未来预测过程中的 latent、attention 或 intermediate feature 交给 action model。
-
-\[
-\phi_{t:t+H}=F_{\mathrm{video}}(v_{\le t}, g),
-\qquad
-a_{t:t+K}=G_{\mathrm{policy}}(o_{\le t}, g, \phi_{t:t+H})
-\]
-
-\(F_{\mathrm{video}}\) 是视频模型，\(\phi\) 是预测过程中产生的动态表征，\(G_{\mathrm{policy}}\) 是动作模型。这个式子想表达的重点是：视频模型提供的不是最终画出来的视频，而是对未来运动、遮挡、接触和任务阶段的内部表示。
+视频预训练可提供物体运动、遮挡和任务阶段的表征，再由动作模块映射到机器人控制量。[Video Prediction Policy](https://arxiv.org/abs/2412.14803)以预测视觉表示支持动作学习，具体接口可对照其[项目页](https://video-prediction-policy.github.io/)。这种路线不必在每次控制时把所有未来帧解码成人眼可见的视频。
 
 ![Video Prediction Policy overview](../assets/images/paper-deep-dives/embodied-ai/vpp/figure-1-overview.png){ width="920" }
 
-<small>图源：[Video Prediction Policy](https://arxiv.org/abs/2412.14803)，Figure 1。原图展示先训练文本条件视频预测模型，再聚合视频模型内部 predictive visual representations 来输出机器人动作。读图重点：中间表征比最终视频画质更关键；VAM 要证明视频预测学到的动态先验能提升动作成功率。</small>
+<small>图源：Video Prediction Policy，整体方法图。</small>
 
-VPP 的动机很直接：传统视觉 encoder 往往偏静态，能识别物体，却不一定知道下一秒手和物体会怎样相互作用；视频扩散模型为了预测未来帧，可能学到更强的动态表征。VAM 把这种动态表征转给 policy，让动作模型少从零学习物理变化。
+人类视频中的“手伸向杯子”与机器人动作空间之间仍有映射问题。相机角度、手臂长度、夹爪形状和控制器都改变可执行动作。视频先验扩大可学习的信息来源，不能直接提供每个机器人的力矩或关节目标。[RT-2](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)则展示另一种把视觉语言表示接到动作 token 的接口。
 
-这条路线的边界也要讲清。视频好看不等于动作成功，FVD 或视觉质量不等于控制质量。一个合格 VAM 实验应报告动作成功率、真实机器人 rollout、跨场景泛化、失败恢复、动作平滑度和推理延迟。视频预测只是中间机制，机器人是否完成任务才是最终证据。
+## 动作必须对应一段真实时间
 
-## V-JEPA 2-AC：在 latent 里比较动作后果
+假设视频为 10 Hz，关节控制为 50 Hz，每两个视频帧之间有五个控制周期。如果动作记录的是速度，需要按每个周期积分；若已经记录位移增量，则应直接累加。动作块长度为 8、控制频率 10 Hz 时覆盖 0.8 秒，不能无说明地拿来预测 1.6 秒后果。
 
-V-JEPA 2-AC 很适合作为 WM 与 VAM 之间的桥。它先用大规模视频/图像做 action-free self-supervised representation，再用少量机器人轨迹后训练 action-conditioned world model。规划时，给当前观测、目标图像和候选动作序列，在 latent space 里 rollout，选让未来表示接近目标表示的动作。
+若需要 1.6 秒预测，应提供两个连续动作块、规定第二段默认控制，或明确只预测第一块后的 0.8 秒。缺少后半段动作却把未来当成条件确定，会把采集策略的行为先验混入动力学。候选动作评分时，模型可能继续“替用户做”训练数据里常见的后续动作。
 
-\[
-\hat z_{t+1:t+H}=f_\theta(z_t,a_{t:t+H-1}),
-\qquad
-a^\star=\arg\min_a D(\hat z_{t+H}, z_{\mathrm{goal}})
-\]
+## 条件预测何时能解释为干预后果
 
-这个公式的重点是：动作作为候选条件进入模型，未来 latent 作为比较对象，planner 选择代价最低的动作。它比纯 VLA 更强调动作后果，比完整视频生成更节省输出成本。它也提醒我们：action-free 视频预训练可以提供动态先验，但要规划真实动作，仍需要 interaction data 把表示接到 action-conditioned world model。
+观察数据给出 $p(o'\mid h,a)$，规划真正关心的是改变动作后的结果。若历史 $h$ 已控制影响动作与后果的共同因素，且数据覆盖候选动作，两者才有机会对齐。隐藏接触力同时影响示范者动作和物体滑落时，模型可能把动作相关性误当成动作因果。
 
-## 动作放在哪里，失败就在哪里
+因此反事实检查需要固定相同起点，改变动作，同时控制其他条件。可重置模拟器或重复的受控实验比任意日志中的“相似画面”更接近这个要求。[V-JEPA 2-AC](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/)在表示空间接入动作条件规划，仍需要在其具体机器人与目标设置中解释证据。
 
-| 动作位置 | 典型失败 | 怎么验证 |
-| --- | --- | --- |
-| 输入条件 | 模型忽略动作，未来只按视频惯性滚动。 | 固定历史，替换动作，比较未来 latent、reward、risk。 |
-| 输出动作 | 动作像训练集平均行为，不理解后果。 | 真实观测刷新后连续执行，看是否能恢复偏差。 |
-| 联合输出 | 视频和动作互相“圆谎”，归因困难。 | 分开评估视频预测、动作成功、失败回放和人审。 |
-| prompt 弱条件 | 文本说左转，模型按常见运动继续。 | 构造反事实 prompt 和动作冲突案例。 |
-| latent planning | latent 距离不等于任务成功。 | 用真实机器人或 simulator 验证 goal reach、collision、done。 |
-
-这张表是写作和实验的核心。世界模型不是一个标签，而是动作、未来和消费方之间的合同。合同最薄的地方，就是最容易失败的地方。
-
-一个机器人系统还必须处理闭环刷新。无论模型多强，真实环境都会偏离想象：物体滑动、遮挡变化、手爪接触失败、相机延迟、控制器限幅都会改变下一步输入。开环生成两秒动作看起来顺滑，不代表闭环执行安全。靠谱系统通常会短 horizon 执行、重新观测、重新规划，并把失败样本回流给数据引擎。
-
-## 按消费方读证据
-
-| 消费方 | 应该看的证据 | 不能替代它的证据 |
-| --- | --- | --- |
-| Planner | candidate ranking、MPC / CEM ablation、closed-loop success、cost per success | 只展示未来视频 |
-| Policy | action chunk 成功率、真实观测刷新后的稳定性、失败恢复 | 离线 action L2 loss |
-| Risk checker | collision recall、near-miss recall、risk calibration | 视频清晰度或 CLIPScore |
-| Data engine | hard-negative yield、failure replay usefulness、新任务覆盖 | 合成样本数量 |
-| 人审 / 调试 | 可视 rollout、反事实回放、错误归因 | 平均 benchmark 分数 |
-
-论文里最容易偷换的是证据等级。视频 demo 只能说明模型能生成可视未来；offline benchmark 只能说明某些数据分布上预测或动作接近标签；real robot closed-loop 才能说明模型输出在真实噪声、延迟和偏差下仍能完成任务。读 WM/WAM/VAM 论文时，先把证据放到对应消费方，再判断 claim 有没有越界。
-
-## 最后判断
-
-WM / WAM / VAM 的核心不是缩写，而是动作接口。
-
-WM 把动作作为条件，最小证据是反事实动作会改变未来、reward 或 risk。WAM 把动作和未来联合生成，最小证据是真实观测刷新后的闭环执行。VAM 用视频预测表征帮助动作，最小证据是机器人任务成功率和泛化，而不是视频画质。
-
-大规模视频预训练可以提供动态先验，但要服务控制，必须接上动作、目标、风险、延迟和恢复。读相邻内容时，可以接 [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)、[Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)、[VLA 动作表示与控制接口](../vla/action-representation-and-interfaces.md) 和 [世界模型评测与失效模式](evaluation-and-failure-modes.md)。
-
-## 外部材料
-
-- [DreamerV3](https://arxiv.org/abs/2301.04104)：理解 latent world model 如何通过 imagined future 训练行为。
-- [Genie 2 DeepMind blog](https://deepmind.google/blog/genie-2-a-large-scale-foundation-world-model/)：理解 action-controllable world model 和可交互生成环境的边界。
-- [Genie 3](https://deepmind.google/models/genie/)：看 Google DeepMind 对交互式世界模型最新入口的官方表述。
-- [V-JEPA 2 Meta research page](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/)：理解 action-free 视频预训练如何接到 action-conditioned planning。
-- [DreamZero / World Action Models](https://dreamzero0.github.io/)：理解 WAM 为什么强调联合预测未来视频和动作，以及为什么要看 closed-loop control。
-- [Video Prediction Policy](https://video-prediction-policy.github.io/)：理解 VAM 如何把视频模型内部的 predictive visual representation 接到机器人动作。
-- [RT-2 DeepMind blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)：对比 VLA 直接输出动作与 WM/WAM/VAM 预测动作后果之间的差异。
+模型选择可按缺口进行。需要候选评分时关注可查询的动作条件动力学，需要直接控制时关注可执行策略与延迟，需要合成环境时关注持续交互、状态一致性和重置接口。Latent imagination 可对照 [DreamerV3](https://arxiv.org/abs/2301.04104)，交互视频可对照 [Genie 2](https://deepmind.google/blog/genie-2-a-large-scale-foundation-world-model/)与 [Genie 系列](https://deepmind.google/models/genie/)。接口评测方法见[评测页](evaluation-and-failure-modes.md)。

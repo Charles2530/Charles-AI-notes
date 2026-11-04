@@ -1,84 +1,55 @@
-# 世界模型：从内部状态到可决策的未来
+# 世界模型
 
-世界模型是一组关于环境变化的学习接口：压缩历史形成 belief，预测动作条件下的未来状态，生成未来观测，估计奖励与终止，或为策略提供可想象的训练轨迹。判断一项工作是否真正服务世界建模，关键看预测对象能否支持它声称的消费方。
+世界模型学习环境怎样随时间和行动变化。它可以把历史压缩成内部状态，预测动作后果，估计奖励和终止，或生成供人和 agent 观察的未来视频。不同用途需要不同输出，判断模型是否有用，要看预测是否满足具体使用目的。用于控制时，需要进一步验证它是否改善动作选择。
 
-## 世界模型的统一接口
+## 一个状态模型要接上哪些接口
 
-给定历史 \(h_t=(o_{\le t},a_{<t})\)，状态模型先得到内部状态：
-
-\[
-z_t\sim q_\phi(z_t\mid h_t).
-\]
-
-动作条件动力学预测：
+把相机图像、机器人关节与动作历史记为 $h_t$，内部状态为 $z_t$。最小计算链是
 
 \[
+z_t\sim q_\phi(z_t\mid h_t),\qquad
 \hat z_{t+1}\sim p_\theta(z_{t+1}\mid z_t,a_t).
 \]
 
-根据用途，模型还可以包含观测、奖励、终止和风险头：
+第一步回答“根据已经看见的证据，现在可能处于什么状态”，第二步回答“如果执行这个动作，下一步会怎样”。观察 decoder 可以生成图像，reward/continuation head 可以服务价值估计，risk head 可以为候选动作打分。内部状态不必等于物理真值，但必须保留下游所需的信息。
 
-\[
-\hat o_t\sim p_\theta(o_t\mid z_t),\quad
-\hat r_t=r_\theta(z_t,a_t),\quad
-\hat d_t=d_\theta(z_t,a_t).
-\]
+例如杯子被手遮住后，单帧图像里看不到杯子，历史状态仍应保留它大致在哪里、是否已经抓稳。若压缩把这些信息丢掉，生成背景再清晰也无法补回抓取判断。若模型只学到视频中常见的下一帧，却不区分松手和夹紧，就无法比较这两个动作的后果。
 
-这里的 \(z_t\) 不要求等于真实物理状态；它只需保留下游任务所需的信息。用于视频生成的状态可能强调可见细节，用于控制的状态更强调动作相关性、奖励和可预测性。完整基础见[状态、动力学、观测与决策](beginner-world-models-primer.md)。
+## 预测对象与使用方式
 
-## 三类建模对象
-
-| 路线 | 主要预测对象 | 是否要求像素生成 | 典型用途 |
+| 路线 | 训练时预测什么 | 怎样被使用 | 需要额外验证什么 |
 | --- | --- | --- | --- |
-| latent dynamics | belief、下一 latent、reward、continuation | 否，decoder 可选 | MPC、actor-critic、latent imagination |
-| predictive representation | 被遮挡或未来片段的目标表征 | 否 | 表征学习、物理推理、动作条件规划 |
-| generative simulation | 未来帧、视频 latent、交互环境 | 通常是 | 可视化仿真、合成 rollout、agent 训练 |
+| Latent dynamics | 隐状态、奖励、继续信号 | MPC 或想象中的 actor-critic | 多步误差与任务回报 |
+| Predictive representation | 被遮挡或未来片段的目标表示 | 理解、检索、动作条件预测 | 表示是否保留控制因素 |
+| Generative simulation | 未来像素、视频 latent 或交互环境 | 可视化、合成数据、agent 环境 | 动作响应、记忆和物理事件 |
 
-对应阅读：
+三者可以组合。视频 autoencoder 可以定义压缩空间，动作条件 Transformer 预测其演化，额外输出奖励与风险。也可以只预测目标表示，完全不解码像素。是否生成视频不是唯一分类依据，输入和输出的数学关系更重要。
 
-- [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md)：latent dynamics 怎样进入 MPC 和 actor 学习。
-- [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md)：预测表示怎样避免对不可预测像素投入全部容量。
-- [生成式模拟与视频世界模型](generative-simulation-and-video.md)：视频底座何时能够承担动作条件 rollout。
-- [WM / WAM / VAM](wm-wam-vam-and-action-conditioned-modeling.md)：动作放在条件、输出或 latent 接口的不同位置意味着什么。
+## 按技术问题查阅
 
-三类路线可以组合。一个系统可以用视频 autoencoder 定义 latent，用 Transformer 预测动作条件 latent，再用 decoder 生成可见未来，同时用 reward head 给规划器评分。
-
-## 从预测到决策
-
-世界模型进入决策有三种主要方式：
-
-1. **在线规划。**从当前 belief 展开多个候选动作序列，用预测 reward、constraint 和 terminal 选择第一步，再读取真实观测重规划。见 [planning as inference](planning-as-inference-and-latent-actions.md)。
-2. **想象中训练策略。**先从真实历史得到 latent，随后在模型中 rollout，训练 actor 与 critic，部署时由 actor 直接输出动作。见 [RSSM 与 Dreamer](rssm-dreamer-and-planning.md)。
-3. **生成训练与评测环境。**模型产生可交互未来、反事实或 hard cases，供 agent 学习和测试。见[模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md)。
-
-预测误差必须按消费方评测：像素误差小不代表候选动作排序正确；短期 latent 准确不代表长时 rollout 校准；平均未来合理不代表危险尾部没有被漏掉。对应方法见[世界模型评测与失效模式](evaluation-and-failure-modes.md)与[不确定性及风险规划](uncertainty-and-risk-aware-planning.md)。
-
-## 应用与工程
-
-| 分支 | 主要问题 | 入口 |
-| --- | --- | --- |
-| 机器人与驾驶 | 状态、动作、几何和风险怎样进入实际闭环 | [机器人与自动驾驶应用](applications-in-robotics-and-autonomous-driving.md) |
-| VLA 结合 | world model 怎样影响候选动作，而非只生成旁路视频 | [VLA 世界模型全链路](vla-world-model-full-chain-case.md) |
-| 动作条件视频 | 数据 schema、action alignment、loss 与 rollout 怎样连接 | [端到端训练案例](action-conditioned-video-world-model-training-case.md) |
-| 数据飞轮 | 失败、near-miss、反事实和主动采样怎样回流 | [数据引擎与自我改进](data-engines-and-self-improvement.md) |
-| 开发路线 | 数据、几何、动作、仿真和评测以什么顺序建立 | [开发路线](development-roadmap-data-simulation-and-evaluation.md) |
-| 训练效率 | 表示、长序列、系统和验证成本怎样拆账 | [高效训练路线图](efficient-training-roadmap.md) |
-| 技术选择 | 不同效率方法实际覆盖了哪一类瓶颈 | [效率技术覆盖矩阵](efficiency-technique-coverage-matrix.md) |
-| rollout 服务 | 量化、KV、kernel 与交互延迟怎样共同约束部署 | [Rollout Serving 案例](rollout-serving-quantization-kernel-case.md) |
-| 实验报告 | 数据、系统账、评测和失败归因怎样形成可复现实验 | [完整实验报告样例](world-model-efficient-training-experiment-report.md) |
-
-工程上应先写清三张表：状态与动作 schema、训练目标与时间对齐、下游消费方与失败门禁。模型规模和架构选择应在这些接口之后讨论。
-
-## 按问题进入
-
-| 问题 | 建议阅读 |
+| 问题 | 正文 |
 | --- | --- |
-| 世界模型和视频预测、仿真器、策略的边界 | [世界模型基础](beginner-world-models-primer.md) |
-| 为什么部分可观测环境需要 belief state | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) |
-| 为什么 JEPA 选择预测表示而不是像素 | [Masked / JEPA](masked-jepa-and-latent-prediction.md) |
-| 动作条件为什么是“可交互”的最低门槛 | [WM / WAM / VAM](wm-wam-vam-and-action-conditioned-modeling.md) |
-| 世界模型怎样用于规划而不是只展示未来 | [Planning as Inference](planning-as-inference-and-latent-actions.md) |
-| 合成 rollout 怎样避免模型错误自我强化 | [模拟器与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md) |
-| 多步预测怎样表达不确定性和尾部风险 | [风险感知规划](uncertainty-and-risk-aware-planning.md) |
-| 从一个动作条件视频模型开始怎样安排里程碑 | [端到端训练案例](action-conditioned-video-world-model-training-case.md) |
-| 训练和 serving 成本从哪里来 | [高效训练路线图](efficient-training-roadmap.md) → [Rollout Serving](rollout-serving-quantization-kernel-case.md) |
+| 观测、隐藏状态、belief 与动力学有什么区别 | [世界模型基础](beginner-world-models-primer.md) |
+| RSSM 的 prior/posterior 怎样支持规划与策略学习 | [RSSM、Dreamer 与规划](rssm-dreamer-and-planning.md) |
+| 预测像素、masked feature 与 JEPA embedding 有何差别 | [Masked / JEPA 与潜变量预测](masked-jepa-and-latent-prediction.md) |
+| 视频模型怎样接动作并持续交互 | [生成式模拟与视频](generative-simulation-and-video.md) |
+| WM、VLA、WAM、VAM 的接口如何区分 | [动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md) |
+| 奖励怎样变成轨迹后验，latent action 怎样落到控制器 | [规划即推理与潜在动作](planning-as-inference-and-latent-actions.md) |
+| 随机未来和模型未知怎样影响选择 | [不确定性与风险规划](uncertainty-and-risk-aware-planning.md) |
+| 合成未来能用来训练什么 | [模拟器、反事实与合成 Rollout](simulators-counterfactuals-and-synthetic-rollouts.md) |
+| 如何测动作排序、误差传播与闭环收益 | [评测与失败模式](evaluation-and-failure-modes.md) |
+| 机器人与驾驶怎样接入世界模型 | [应用接口](applications-in-robotics-and-autonomous-driving.md) |
+| VLA 候选动作怎样经过模型评分与执行 | [VLA 全链路案例](vla-world-model-full-chain-case.md) |
+| 多相机历史、动作、损失与 rollout 怎样组织 | [从轨迹构造训练目标](action-conditioned-video-world-model-training-case.md) |
+| 失败样本怎样影响下一轮数据采集 | [数据引擎](data-engines-and-self-improvement.md) |
+| 数据、几何、仿真和模型应怎样联调 | [开发路线](development-roadmap-data-simulation-and-evaluation.md) |
+| 真实交互、token、显存和延迟怎样分别计算 | [高效训练路线图](efficient-training-roadmap.md) |
+| 哪种效率技术针对哪个瓶颈 | [效率技术覆盖矩阵](efficiency-technique-coverage-matrix.md) |
+| KV、量化、kernel 与 rollout 服务怎样协作 | [Serving 案例](rollout-serving-quantization-kernel-case.md) |
+| 怎样复算并解释一份模型评测 | [手工评测示例逐项复算](world-model-efficient-training-experiment-report.md) |
+
+## 一个数值预测为何还不是一项能力
+
+设两个动作真实回报为 $[2,1]$，模型预测为 $[1.1,1.2]$。预测的平均绝对误差只有 $0.55$，却把两个动作的顺序反了。若 planner 取预测最大值，它会选第二个动作，真实回报损失为 $1$。用于规划时，排序和选择后悔值比单独的平均预测误差更接近消费目标。
+
+同样，视觉压缩减少 token 不自动缩短等比例的总时间；模型内想象减少真实交互，也会增加计算并继承模型偏差。本站的[小型评测数据](../assets/examples/world-model-mini-chain/episodes.jsonl)与[计算脚本](../assets/examples/world-model-mini-chain/eval_mini_chain.py)专门保留了排序失败。它们用于解释指标，没有训练真实模型，也不构成机器人实验结果。

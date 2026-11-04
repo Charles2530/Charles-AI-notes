@@ -15,285 +15,374 @@ paper_topic: 具身智能 / VLA
     **GitHub / 项目：** GitHub：[github.com/roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)；项目页：[video-prediction-policy.github.io/](https://video-prediction-policy.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2412.14803)；[GitHub API / repo](https://github.com/roboterax/video-prediction-policy)；[官方 / 项目材料](https://video-prediction-policy.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 视频模型的未来表示，能不能比一张图更适合控制
 
-### 研究背景
+Video Prediction Policy（VPP）的核心选择，是把经过操作视频训练的扩散模型用作视觉编码器。每次收到当前图像和语言指令，模型只运行一次前向，就从内部读取带有未来运动信息的特征；Video Former 压缩这些特征，再由动作扩散模型生成控制序列。机器人因此不必等一段清晰视频全部生成完，才开始决定动作。
 
-Video Prediction Policy（VPP）讨论的是机器人策略视觉表征的问题。许多 generalist robot policies 使用单图重建、对比学习或静态图像 encoder 作为视觉输入，这些表示能捕捉当前场景语义和空间布局，但不显式表示“接下来会发生什么”。机器人操作却天然依赖未来动态：物体会被推开、夹爪会接触、遮挡会改变、任务状态会演化。
+这项工作提出的问题与普通物体识别不同。当前画面中的机械臂、杯子和抽屉分别是什么，只说明场景里有什么；“接下来手臂将朝哪里移动、物体将被放到哪里”，才更直接地接近动作预测所需信息。视频预测训练必须处理前后帧的变化，因此其内部表示可能包含静态编码器没有显式学习的运动趋势。
 
-视频扩散模型和文本引导视频预测模型在训练中必须预测未来帧，因此内部 latent 不只包含当前图像信息，也包含未来视觉变化的表征。VPP 的背景判断是：这些 predictive visual representations 可能比静态视觉特征更适合动作学习，因为它们把物理动态和未来状态提前压进了表示。
-
-### 问题（Challenge）
-
-论文要解决的问题是：**如何利用视频预测模型内部的未来表征来训练 generalist robot policy。** 难点在于，直接在部署时生成完整未来视频成本高，也未必需要；而只拿普通视觉 encoder，又缺少动态先验。模型需要一种中间路线：从视频模型中抽取未来感 latent，再让动作模型利用它。
-
-这个问题的价值在于连接 world model 和 policy。如果中间 predictive representation 足够有用，机器人不必每步显式 rollout 清晰视频，也能获得视频模型学到的物理动态知识。这对高效世界模型训练和机器人控制都很关键。
-
-### Finding
-
-作者的 finding 是：**视频预测模型的中间表示显式包含当前帧和预测未来帧的信息；策略可以把这些 predictive visual representations 当作条件，隐式学习 inverse dynamics。** 这个洞见把视频模型从“生成未来画面”的工具翻转成“提供未来感视觉状态”的表征模型。
-
-这个 finding 能解决挑战，是因为动作学习需要知道“为了让未来变成这样，现在该怎么动”。VPP 不要求部署时生成完整高质量视频，而是取视频扩散模型内部的 future representations，再训练 diffusion action model / inverse dynamics policy 根据这些表征输出动作。这样，未来动态先验以 latent 形式进入策略。
-
-### 方法
-
-VPP 采用两阶段流程。第一阶段训练 Text-guided Video Prediction（TVP）模型：以预训练视频 foundation model 为基础，在机器人数据、互联网人类 manipulation 视频和目标 benchmark 数据上微调，使模型能根据当前观测和语言预测未来。第二阶段训练 inverse dynamics policy：从 TVP 中抽取中间 predictive visual representations，条件化一个 diffusion action model 来生成机器人动作。
-
-输入包括当前/历史图像和语言指令；TVP 内部表示具有 \((T,H,W)\) 结构，包含当前 step 和未来 step 的 latent。策略不直接以像素未来视频为输入，而是使用这些 latent 表征。论文还分析不同视频模型层的表示效果、视频预训练和互联网 manipulation data 的贡献。
-
-### 结论
-
-实验覆盖 CALVIN ABC-D generalization benchmark、MetaWorld 50-task multi-task setting 和真实机器人 dexterous manipulation。论文报告 VPP 在 CALVIN ABC-D 上相比此前 SOTA 获得 18.6% relative improvement，在复杂真实灵巧手任务上成功率提升 31.6%。MetaWorld 中，VPP 的平均成功率达到 0.682，高于 RT-1、Diffusion Policy、Susie 和 GR-1 等基线。
-
-消融显示，video pretraining、internet manipulation data 和 predictive representations 都对策略表现有贡献。边界是，VPP 主要证明“预测 latent 有助于动作学习”，没有证明完整 action-conditioned world model 已经解决；同一历史下改变动作的反事实未来、长时恢复和真实安全仍需额外评估。
-
-### 关键术语
-
-- **Predictive Visual Representations（预测视觉表征）**：视频预测模型内部同时编码当前和未来视觉信息的 latent。
-- **Text-Guided Video Prediction, TVP（文本引导视频预测）**：根据当前观测和语言预测未来视频的模型。
-- **Inverse Dynamics Policy（逆动力学策略）**：根据当前/未来表征推断应执行动作的策略。
-- **Video Diffusion Model, VDM（视频扩散模型）**：通过扩散/去噪过程生成或预测视频的模型。
-- **Diffusion Action Model（扩散动作模型）**：用扩散生成方式输出连续机器人动作序列。
-- **CALVIN ABC-D（CALVIN 泛化基准）**：训练环境 A/B/C 到未见环境 D 的长序列机器人任务评测。
-
-VPP 的核心观点很漂亮：很多视觉策略只编码当前图像，而视频扩散模型内部包含“未来会怎样”的预测表征。把这些 predictive visual representations 拿来当 policy 的视觉条件，可以让机器人从视频模型的动态先验中受益。
-
-举个桌面操作例子。只看当前图像时，policy 能知道“杯子、海绵、机械臂在哪里”，但不一定知道下一步接触后会发生什么：海绵会不会碰到杯沿，杯子会不会被推歪，手爪继续下压会不会卡住。视频预测模型在训练中被迫学习“当前画面往后如何演化”，它的中间表征会更关注物体即将移动、接触和状态变化的区域。VPP 的想法不是让机器人每次都生成一段漂亮未来视频，而是把这种未来感抽成低延迟 latent，再让 inverse dynamics policy 从 latent 里解码动作。
-
-## 证据等级与外推边界
-
-VPP 的证据结构比较清楚：核心 claim 由 CALVIN / MetaWorld benchmark、真实机器人实验和表征可视化共同支撑；效率 claim 主要来自“single forward step 取中间表征”，而不是完整系统吞吐表。因此它适合作为“预测表征能帮 policy”的证据，不适合直接当成“完整视频 rollout world model 已经足够便宜”的证据。
-
-```mermaid
-flowchart LR
-    A["Text-guided video prediction"] --> B["Intermediate predictive representation"]
-    B --> C["Inverse dynamics policy"]
-    C --> D["CALVIN / MetaWorld"]
-    C --> E["Real robot tasks"]
-    B --> F["One-step encoder cost"]
-    D --> G["Evidence: benchmark"]
-    E --> H["Evidence: closed-loop"]
-    F --> I["Evidence: efficiency direction"]
-```
-
-| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
-| --- | --- | --- | --- | --- |
-| 预测视觉表征比静态表征更适合策略 | CALVIN、MetaWorld、真实机器人结果 | Benchmark + Closed-loop | 世界模型中间 latent 可以作为 policy state，而不必每次生成完整未来视频 | 不能证明所有 video latent 都天然对动作有用 |
-| one-step TVP 表征已经包含运动趋势 | one-step prediction 可视化和 policy 性能 | Qualitative + Benchmark | 训练时可把“未来感”压进状态表示，降低完整视频生成成本 | 不能把模糊 one-step 图像当作可靠物理仿真 |
-| 互联网人类/机器人操作视频能补动态先验 | 数据规模、采样比例和下游结果 | Dataset evidence + Benchmark | 世界模型数据引擎应混合人类视频、机器人视频和目标任务轨迹 | 不能说明无动作标注视频足以学习动作因果性 |
-| inverse dynamics 能把预测表征接到动作 | diffusion action model 和机器人实验 | Benchmark + Closed-loop | 可借鉴“视频预测表征 + 动作解码器”的模块分工 | 不能替代 action-conditioned rollout 和反事实动作评测 |
-| 真实机器人验证覆盖多平台任务 | Panda、xArm + XHand 任务集合 | Closed-loop signal | 论文不是纯仿真结果，适合作为具身表征迁移参考 | 不能外推到开放家庭长时任务和安全拒绝执行 |
-
-对本站主线，VPP 最值得吸收的是：世界模型训练不一定每一步都生成清晰视频；有时只需要一个含未来动态的 latent state，再由 policy 或 action head 使用它。它最需要补的证据是动作反事实：同一历史下改变候选动作时，中间表征是否足够区分未来后果。
-
-## 论文位置
-
-GR-2 是“视频预训练 + 机器人轨迹微调”；DreamZero 是“joint video-action prediction”；VPP 介于两者之间：它先训练文本引导的视频预测模型，然后用视频模型的中间表征训练逆动力学 policy。
+下图将这条思路放在一起。左侧视频网络产生沿时间排列的表示，中间将其交给动作学习；阅读重点是未来时间维度怎样进入控制条件。
 
 ![VPP overview](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-1-overview.png){ width="920" }
 
-<small>Figure source: `Video Prediction Policy`, Figure 1. 原论文图意：视频 diffusion model 内部表征同时包含当前信息和未来预测信息；VPP 基于这些表征在多个 benchmark 上提升机器人策略表现。</small>
+*VPP 总体示意。图中 CALVIN 概览成绩为 4.29；下文定量比较采用论文 v2 Table 1 的完整结果 4.33。*
 
-**总览图先看表示流向。**
-左侧视频预测模型不是部署时的画面生成器，而是 future-aware encoder：它从历史观测和语言中抽取中间预测表征。右侧 policy 不直接问“未来视频长什么样”，而是问“这个未来表征暗示我现在该怎么动”。这张图支撑的是“预测 latent 能服务策略”，还不能证明显式世界模型、反事实动作规划或长期恢复能力已经成立。
+作者将这些特征称为 **Predictive Visual Representations（预测性视觉表示）**。这里的“未来”是模型根据当前观测与指令推断的状态，并非部署时可以读取真实未来图像。方法的有效性取决于预测中保留下来的信息是否有助于控制，而不取决于一次前向就能否产生可播放、纹理逼真的视频。[↗](https://arxiv.org/pdf/2412.14803v2#page=2)
 
-## 两阶段训练
+主要结果支持这条路线。在 CALVIN ABC→D 五任务链中，VPP 的平均连续完成长度达到 4.33，完整五任务成功率为 76.9%；MetaWorld 50 任务平均成功率为 68.2%。但理解这些数字之前，需要先分清视频模型训练、视频特征提取与动作采样三个环节，它们的目标和计算次数并不相同。
 
-论文流程很清晰：
+## 两阶段训练，先学习画面如何变化，再学习怎样发出动作
 
-```text
-Stage 1: train Text-guided Video Prediction (TVP)
-  pre-trained video foundation model
-  + internet human/robot manipulation data
-  + CALVIN / MetaWorld / real robot data
+Figure 2 左侧是视频域适配，右侧是动作学习。最值得看的是中间向下的多层特征出口，以及右侧仍然存在的 action denoise 回路。
 
-Stage 2: train inverse dynamics policy
-  TVP intermediate predictive representation
-  -> diffusion action model
-  -> robot actions
-```
+![VPP v2 feature aggregation pipeline](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-2-v2-feature-aggregation.png){ width="920" }
 
-![VPP training pipeline](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-3-training-pipeline.png){ width="760" }
+*Figure 2，多层预测特征经过 Video Former 后，成为动作 diffusion policy 的条件。*
 
-<small>Figure source: `Video Prediction Policy`, Figure 3. 原论文图意：VPP 先从预训练视频 foundation model 出发训练 text-guided video prediction model，再基于 TVP 内部预测表征学习机器人动作。</small>
+第一阶段将通用 Stable Video Diffusion 适配到人类与机器人操作视频，并加入语言控制。第二阶段冻结这个视频网络，利用机器人示范训练 Video Former 与动作头。没有机器人动作标签的人类视频可以进入第一阶段；第二阶段则需要示范动作，学习从视觉变化意图到具体机器人的控制量。
 
-### Stage 1：Text-guided Video Prediction
+这就是论文所说的 **Implicit Inverse Dynamics（隐式逆动力学）**。给定模型内部表示的当前与未来状态变化，策略学习“什么动作能够对应这种变化”。它不显式提取手臂轨迹后运行几何求解器，也没有先生成完整视频再把两帧交给一个独立逆动力学模块。动作监督通过下游网络直接利用预测特征。[↗](https://arxiv.org/pdf/2412.14803v2#page=3)
 
-VPP 的第一阶段不是直接训练机器人策略，而是把预训练视频扩散模型调成一个文本条件未来预测模型。给定当前/历史视频帧 \(o_{\le t}\) 和语言 \(l\)，TVP 学习预测未来帧：
+这个概念也不意味着 VPP 建成了可以任意输入候选动作、预测接触结果并搜索最优计划的世界模型。视频分支的条件是当前图像与语言，动作头学习跟随其条件表示；论文没有在执行时枚举大量动作候选并通过视频打分选择。
 
-$$
-p_\theta(o_{t+1:t+H} \mid o_{\le t}, l)
-$$
+## 把 SVD 变成语言可控的操作视频预测器
 
-在扩散模型里，它实际学习的是去噪目标。若 \(\mathbf{z}_0\) 是未来视频 latent，\(\mathbf{z}_\tau\) 是加噪后的 latent，模型学习预测噪声或速度：
+### 原有视频先验与目标域数据分别补什么
+
+基础 SVD 约 1.5B 参数，原本以首帧图像为主要条件。VPP 增加 CLIP 语言特征 $\ell_{\mathrm{emb}}$ 的 cross-attention，使同一场景下不同指令能够对应不同未来；还将视频输出调整为通常 16 帧、$256\times256$，降低训练和推理成本。
+
+当前观测 $s_0$ 沿通道与各待预测帧拼接，作为持续可见的条件。这样模型不只依赖一次输入的语言，也始终能够结合当前机器人和物体的位置生成相应未来。通用 SVD 提供视频生成的初始化，操作视频微调则把这个能力集中到手、机械臂、抓取与放置等变化上。
+
+设干净视频序列为 $x_0$，扩散时间为 $t$，加入高斯噪声后的输入按原文式（1）写为
 
 $$
-\mathcal{L}_{\mathrm{TVP}}
-= \mathbb{E}_{\tau,\epsilon}
-\left[
-\left\|
-\epsilon_\theta(\mathbf{z}_\tau, \tau, o_{\le t}, l)
-- \epsilon
-\right\|_2^2
-\right]
+x_t=\sqrt{\bar\alpha_t}\,x_0+
+\sqrt{1-\bar\alpha_t}\,\epsilon,
+\qquad \epsilon\sim\mathcal N(0,I).
 $$
 
-这里最重要的是条件：模型不只是做通用视频生成，而是在操作视频和机器人数据上学习“给定任务语言和当前观测，未来该往哪个方向演化”。这就是 predictive visual representation 的来源。
-
-### Stage 2：Inverse Dynamics Policy
-
-第二阶段把 TVP 当成 future-aware encoder。VPP 从视频扩散模型中取中间表征 \(\mathbf{h}_{\mathrm{pred}}\)，再训练一个动作扩散/DiT 策略：
+$\bar\alpha_t$ 决定干净信号与噪声的比例。视频模型在不同噪声程度下，利用首帧和语言条件恢复完整视频。原文式（3）的目标直接写为回归干净视频 $x_0$。
 
 $$
-\pi_\phi(a_{t:t+K}\mid o_{\le t}, l, \mathbf{h}_{\mathrm{pred}})
+\mathcal L_D=
+\mathbb E_{x_0\sim D,\epsilon,t}
+\left\|V_\theta(x_t,\ell_{\mathrm{emb}},s_0)-x_0\right\|^2.
 $$
 
-这可以看成 implicit inverse dynamics：TVP 内部表征暗示“未来视觉会怎样变”，policy 学“要让未来这样变，现在该怎么动”。注意它不是显式规划器，没有枚举候选动作并 rollout；它把未来预测压缩进视觉表征，再用动作模型直接解码。
+这里保留的是论文的 clean-sample 目标，不能仅因为模型属于 diffusion，就把右侧监督擅自改成噪声 $\epsilon$。损失让网络理解在给定图像、指令条件下，视频序列应具有怎样的结构和变化。[↗](https://arxiv.org/pdf/2412.14803v2#page=3)
 
-## 为什么用中间表征，而不是完整生成视频
+### 视频提供共同监督接口，不要求人手和机械臂共享动作维度
 
-论文的关键工程选择是：VPP 把视频 diffusion model 主要当作 vision encoder，而不是完整 denoiser。它只做 single forward step，得到并不清晰但含有未来运动趋势的中间表征。
+第一阶段将人类操作视频 $D_H$、机器人视频 $D_R$ 与自采视频 $D_C$ 加权混合。
+
+$$
+\mathcal L_{\mathrm{video}}
+=\lambda_H\mathcal L_{D_H}
++\lambda_R\mathcal L_{D_R}
++\lambda_C\mathcal L_{D_C}.
+$$
+
+各项都学习图像序列预测，因此人手与不同机械臂无需具有相同动作向量。$\lambda$ 或对应采样比例控制来源影响，避免某个规模特别大的数据集主导所有更新。它不是让人类视频直接给机器人的关节数值提供标签，而是先迁移可观察的操作变化。
+
+Appendix Table 8 给出具体混合。
+
+| Dataset | Trajectory Numbers | Sample Ratio |
+| --- | ---: | ---: |
+| Something-Something-v2 | 191,642 | 0.30 |
+| RT-1 | 87,212 | 0.15 |
+| Bridge | 23,377 | 0.15 |
+| BC-Z | 43,264 | 0.08 |
+| Taco-Play | 3,603 | 0.01 |
+| Jaco-Play | 1,085 | 0.01 |
+| CALVIN-ABC | 18,033 | 0.10 |
+| MetaWorld | 2,500 | 0.05 |
+| Panda Arm | 2,000 | 0.05 |
+| Dexterous Hand | 2,476 | 0.10 |
+| Total | 375,192 | 1.00 |
+
+采样比例不按轨迹数量简单分配。自采灵巧手视频只占较小数量，却有 0.10 的采样权重，与 CALVIN 相同；这使模型更充分地适配目标机器人和动作模式。表中还将目标任务 CALVIN、MetaWorld 视频纳入训练，所以 VPP 的视频表示并非只来自与下游无关的互联网数据。
+
+作者留出 5,558 条 Bridge 与 2,048 条 Something-Something-v2 轨迹做验证，其余来源按 3% 留出。正文使用的人类视频总数 193,690，与表中的 191,642 相差的正是 2,048 条验证轨迹。相比之下，灵巧手数据规模在正文、附录的描述不一致，后面讨论实机设置时需要单独说明，不能把所有数字机械相加。[↗](https://arxiv.org/pdf/2412.14803v2#page=14)
+
+## 一次视频前向怎样产生可用的未来条件
+
+### 读取的是上采样层特征，不是已经生成好的视频
+
+动作训练与执行时，TVP 参数固定。输入为当前图像、语言和高噪声未来 latent，通常为白噪声；执行端不需要、也无法获取真实未来 $x_0$。一次前向虽然不足以把所有纹理去噪干净，却可能已经形成手臂与物体大致移动的特征。
+
+第 $m$ 个上采样层的输出记为
+
+$$
+L_m=V_\theta(x_{t'},\ell_{\mathrm{emb}},s_0)^{(m)},
+\qquad
+L_m\in\mathbb R^{T\times C_m\times W_m\times H_m}.
+$$
+
+$T$ 是时间位置数，包含当前与预测未来；$C_m$、$W_m$、$H_m$ 是该层通道与空间尺寸。这里的时间维来自模型对未来的表示，不是一段已经发生的机器人历史。把两者混淆，会错误地认为 VPP 自动拥有长期观测记忆。
+
+各上采样层具有不同分辨率和内容。VPP 将它们插值到共同的 $W_p\times H_p$，再沿通道维拼接。
+
+$$
+L'_m=\operatorname{Interpolation}(L_m),\qquad
+F_p=\operatorname{Concat}_{\mathrm{channel}}(L'_0,\ldots,L'_m),
+$$
+
+$$
+F_p\in\mathbb R^{T\times(\sum_m C_m)\times W_p\times H_p}.
+$$
+
+拼接保留不同层对场景和运动的描述，后续模块再学习哪些部分与动作有关。它避免只能使用最终层偏重像素细节的输出，也减少人工挑一个层的需求。静态相机与腕部相机先分别得到预测特征，再在 Video Former 中合并；视频模型没有直接要求两路图像共享一个显式三维重建。[↗](https://arxiv.org/pdf/2412.14803v2#page=4)
+
+### 粗糙图像的意义是展示信息存在，不是直接证明控制成功
+
+Figure 4 同时给出真实未来、30 步去噪后的未来与一次前向的直接预测。先跟踪机械臂和目标物体的位置，再比较纹理，可以看到两类变化并不同步。
 
 ![One-step prediction](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-5-one-step-prediction.png){ width="720" }
 
-<small>Figure source: `Video Prediction Policy`, Figure 5. 原论文图意：比较 ground-truth video、完整 denoised video 和 one-step forward predictions；one-step 纹理不清晰，但已经包含物理演化信息。</small>
+*Figure 4，一次前向的蓝框结果更粗糙，但已经呈现部分手臂和物体的运动趋势。*
 
-这个选择非常具身：机器人 policy 不需要每次生成好看的未来视频，它需要低延迟、对动作有用的表示。中间表征比完整视频便宜，也比普通静态视觉 encoder 更有动态信息。
+这张图支持“有用运动信息可能早于精细纹理出现”的解释。它没有证明一次前向预测完全符合物理规律，也不能证明所有任务都只需要同样粗略的未来。是否足以控制，仍须看相同动作头更换视觉表示、改变特征层与增加去噪次数后的结果。
 
-**Figure 5 怎么读。**
-这张图要反着读：one-step prediction 画面模糊，正是它的工程价值。若策略每个控制周期都要完整 denoise 出高清视频，延迟会压垮 closed-loop 控制；VPP 只取 single forward step 的内部表示，让纹理不完整但运动方向、物体接触趋势和目标变化已经进入 latent。它支撑的是“预测表征可用”，不是“单步图像可当真实模拟器”。
-
-## 数据与训练细节
-
-VPP 的 TVP 训练数据包括：
-
-| Data source | Scale / role |
-| --- | --- |
-| Something-Something-V2 human manipulation | 193,690 human manipulation trajectories |
-| Internet robotic manipulation datasets | 179,074 high-quality trajectories |
-| CALVIN ABC | downstream long-horizon robot data |
-| MetaWorld | 50 tasks, oracle trajectories |
-| Real-world robot datasets | Panda arm and xArm + XHand tasks |
-
-论文记录 TVP 训练约 `two days on eight NVIDIA A100 GPUs`。动作策略阶段再用 TVP 的中间预测表征训练 diffusion action model。
-
-英文原表中 Table 9 给出 dataset scales and sample ratios；这里不逐项全文搬表，但保留一个工程重点：VPP 不是把所有数据均匀混合，而是根据数据规模和质量设置采样概率。
-
-几个训练细节对复用很关键：
-
-| Detail | Why it matters |
-| --- | --- |
-| Stable Video Diffusion initialization | 让 TVP 从已有视频动态先验出发，而不是从机器人小数据冷启动 |
-| CLIP text features | 语言条件进入视频预测，避免只学无条件未来 |
-| Human manipulation + robot video mixture | 人类视频补丰富动态，机器人视频补相机和任务分布 |
-| Single forward representation | 控制侧只取中间表征，不承担完整视频生成延迟 |
-| Diffusion inverse dynamics policy | 用生成式动作头处理多模态动作分布 |
-
-这也解释了为什么 VPP 和 GR-2 相似但不一样：GR-2 同时生成未来视频和动作轨迹，VPP 则更激进地把视频生成压成“取中间表示”，让部署时不必真的生成完整未来。
-
-## 实验结果
-
-VPP 在 CALVIN 和 MetaWorld 上验证了 predictive visual representations 的价值。
-
-| Benchmark | Setup | Main claim |
-| --- | --- | --- |
-| CALVIN | ABC→D, five chained tasks | VPP improves average task completion length |
-| MetaWorld | 50 tasks with language-conditioned policy | VPP improves average success rate over strong baselines |
-| Real-world Panda | 30+ tasks, 6 skills, about 2000 trajectories | predictive representations transfer to real robot |
-| xArm + XHand | 100+ tasks, 13 skills, about 4000 trajectories | dexterous manipulation and tool-use settings |
-
-Table 1 from the paper can be redrawn as follows, keeping the original English fields:
-
-| Category | Method | Annotated Data | 1 | 2 | 3 | 4 | 5 | Avg. Len ↑ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Direct Action Learning Method | RT-1 | 100%ABC | 0.533 | 0.222 | 0.094 | 0.038 | 0.013 | 0.90 |
-| Direct Action Learning Method | Diffusion Policy | 100%ABC | 0.402 | 0.123 | 0.026 | 0.008 | 0.00 | 0.56 |
-| Direct Action Learning Method | Robo-Flamingo | 100%ABC | 0.824 | 0.619 | 0.466 | 0.331 | 0.235 | 2.47 |
-| Future Prediction Related Method | Uni-Pi | 100%ABC | 0.560 | 0.160 | 0.080 | 0.080 | 0.040 | 0.92 |
-| Future Prediction Related Method | MDT | 100%ABC | 0.631 | 0.429 | 0.247 | 0.151 | 0.091 | 1.55 |
-| Future Prediction Related Method | Susie | 100%ABC | 0.870 | 0.690 | 0.490 | 0.380 | 0.260 | 2.69 |
-| Future Prediction Related Method | GR-1 | 100%ABC | 0.854 | 0.712 | 0.596 | 0.497 | 0.401 | 3.06 |
-| 3D Method | 3D Diffuser Actor | 100%ABC | 0.938 | 0.803 | 0.662 | 0.533 | 0.412 | 3.35 |
-| Ours | VPP (ours) | 100%ABC | 0.957 | 0.912 | 0.863 | 0.810 | 0.750 | 4.29 |
-| Data Efficiency | MDT | 10%ABC | 0.408 | 0.131 | 0.034 | 0.008 | 0.001 | 0.58 |
-| Data Efficiency | GR-1 | 10%ABC | 0.672 | 0.371 | 0.198 | 0.108 | 0.069 | 1.41 |
-| Data Efficiency | VPP (ours) | 10%ABC | 0.878 | 0.746 | 0.632 | 0.540 | 0.453 | 3.25 |
-
-<small>表源：`Video Prediction Policy`，Table 1。原表含义：CALVIN ABC→D zero-shot long-horizon evaluation，`1` 到 `5` 表示连续完成第 1 到第 5 个任务的比例，`Avg. Len` 是平均完成链长。最值得注意的是，VPP 不用 depth / point cloud，仍把平均链长从 3D Diffuser Actor 的 `3.35` 推到 `4.29`；只用 `10%ABC` 标注数据时也达到 `3.25`。</small>
-
-**Table 1 怎么读。**
-CALVIN 不是单任务成功率，而是连续 5 个语言任务的链式完成。`1` 到 `5` 的数字越往右越难，因为前一步失败会阻断后续任务。VPP 最突出的不是第一个任务 `0.957`，而是第 5 个任务仍有 `0.750`，说明预测表征对状态保持和长链执行有帮助。`10%ABC` 设置更关键：只用十分之一标注数据时，VPP 的 `Avg. Len=3.25` 接近强 3D baseline 的完整数据表现，说明动态先验确实缓解了机器人标注稀缺。
-
-![VPP real robots](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-7-real-robot.png){ width="760" }
-
-<small>Figure source: `Video Prediction Policy`, Figure 7. 原论文图意：展示 Panda arm 和 xArm + 12-DoF XHand 两个真实硬件平台及任务可视化。</small>
-
-真实机器人结果的读法要分平台。Panda arm 覆盖 `30+` tasks、`6` skills、约 `2000` trajectories，主要验证普通机械臂桌面操作；xArm + XHand 覆盖 `100+` tasks、`13` skills、约 `4000` trajectories，强调灵巧手、工具和更复杂接触。论文摘要报告复杂真实灵巧操作成功率相对提升约 `31.6%`，这说明 predictive representation 不只在仿真里有效，但仍属于受控任务集合，而不是开放家庭环境。
-
-论文还可视化了 predictive representations：
+附录的局部放大更容易看到这一点。蓝框中画面存在模糊和失真，但仍能辨认手臂与抽屉关系随时间的变化；VPP 将内部特征交给策略，并不要求机器人先从这张模糊图中显式识别所有物体。
 
 ![VPP predictive representations](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-12-predictive-representations.png){ width="920" }
 
-<small>Figure source: `Video Prediction Policy`, Figure 12. 原论文图意：绿色是真实未来，红色是预测未来，蓝色是 predictive representations 的可视化；即便细节不精确，运动趋势已经出现。</small>
+*预测性表示可视化的局部，绿色为真实序列，红色为生成未来，蓝色为一次前向结果。*[↗](https://arxiv.org/pdf/2412.14803v2#page=17)
 
-**Figure 12 怎么读。**
-这张图是 VPP 的机制诊断。绿色真实未来、红色预测未来和蓝色表征可视化不是为了证明图像生成很漂亮，而是说明中间 representation 已经朝未来物体运动、手部接触或目标状态变化聚焦。如果蓝色区域只响应当前静态纹理，它就和普通视觉 encoder 没太大区别；如果它开始响应即将发生变化的区域，才说明 TVP 给 policy 提供了未来感。
+## Video Former 把多帧、多层、多视角压成有限条件
 
-### Ablation：预测表征到底贡献在哪里
+即使省去完整视频生成，$F_p$ 仍然很大。若将所有帧、所有位置与所有层直接送入动作 Transformer，每轮动作去噪都要处理大量条件信息，延迟仍可能过高。
 
-VPP 的实验可以压成三个对照问题：
+Video Former 为每个时间位置设置一组可学习 query。空间注意力先让第 $i$ 帧 query 读取该帧各相机的视觉特征；时间注意力再让不同帧的 query 交换信息，随后经过 FFN。用原文式（5）的操作表示为
 
-| Question | Evidence | Takeaway |
-| --- | --- | --- |
-| 只用静态视觉 encoder 够不够 | CALVIN / MetaWorld 与 RT-1、Diffusion Policy、Robo-Flamingo 等对比 | 静态表征能识别物体，但对长链状态变化和动作趋势不够 |
-| 显式未来预测是否有用 | Uni-Pi、Susie、GR-1 等 future-prediction 方法对照 | 未来预测类方法整体更强，VPP 进一步把中间表征直接接入 policy |
-| 需要完整生成视频吗 | one-step representation 与完整 denoising 可视化 | policy 需要低延迟 future-aware latent，不需要每步生成清晰视频 |
+$$
+Q'=
+\left\{\operatorname{SpatAttn}
+\left(Q[i],\left(F_p^{\mathrm{static}}[i],F_p^{\mathrm{wrist}}[i]\right)\right)\right\}_i,
+$$
 
-最重要的消融结论是：VPP 的收益来自“视频预测模型的内部表示”，不是来自额外深度、点云或真实 3D 几何。它说明 future-aware latent 可以补足静态视觉，但也留下一个问题：这个 latent 是否能处理反事实动作，例如同一状态下往左推和往右推会导致不同未来？原论文主要证明表征有用，还没有完全证明它是 action-conditioned simulator。
+$$
+Q''=\operatorname{FFN}\left(\operatorname{TempAttn}(Q')\right).
+$$
 
-## 训练细节要点
+空间分支在每帧中选择与任务相关的位置，时间分支连接这些位置在未来序列中的变化。query 数量固定，输出条件大小便不再随原始视觉特征数量无限增长。这个模块同时承担信息提取与计算压缩，不能只把它理解为对特征做一次平均池化。
 
-| Detail | VPP choice | Why it matters |
-| --- | --- | --- |
-| Video backbone | Stable Video Diffusion + CLIP text features | 从视频 foundation model 继承动态先验 |
-| TVP objective | text-guided video prediction | 让模型按语言预测操作未来 |
-| Policy input | intermediate predictive representation | 避免完整视频生成成本 |
-| Inference | single forward step as encoder | 低延迟，适合控制 |
-| Action model | diffusion inverse dynamics | 从预测表征生成动作 |
-| Training compute | two days on 8 A100 for TVP | 说明路线相对可复现 |
-| Real robots | Panda 30+ tasks / xArm + XHand 100+ tasks | 验证不是只在仿真有效 |
+下面的结构示意把这两个注意力方向与右侧动作去噪分开。读取时可沿 query 到空间特征、再到时间关系的路径，追踪最终条件怎样进入动作头。
 
-## 和 GR-2、DreamZero 的区别
+![VPP training pipeline](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-3-training-pipeline.png){ width="760" }
 
-| Dimension | GR-2 | VPP | DreamZero |
-| --- | --- | --- | --- |
-| Video role | pre-training and future video prediction | predictive representation encoder | joint video-action generation |
-| Action learning | robot trajectory fine-tuning | inverse dynamics from TVP features | action latent co-denoising |
-| Deployment | trajectory + WBC | policy from visual representation | WAM as closed-loop policy |
-| Main insight | web video helps robot manipulation | future-aware visual features help policy | world-action model can be zero-shot policy |
+*Video Former 的空间、时间聚合及动作 DiT 条件接口。*
 
-VPP 的独特位置在于：它不要求每次部署都生成高质量未来视频，也不把视频和动作完全合并到一个大生成器里，而是把视频模型内部的“未来感”抽出来给策略用。
+附录 Table 13 的 Video Former 使用 6 层、8 个 attention heads、latent dimension 512。CALVIN 的 token shape 为 $16\times14\times384$，MetaWorld 为 $8\times28\times384$，二者都对应 224 个 384 维输出 token。动作 DiT 的 condition shape 列为 $225\times384$。应按表保留这个接口规模，不宜在缺少实现说明时自行给额外位置添加未经证实的语义。[↗](https://arxiv.org/pdf/2412.14803v2#page=16)
 
-## 局限
+## 动作头仍然进行多步扩散采样
 
-VPP 的表征依赖 TVP 的预测质量。若 TVP 在新场景里预测错误动态，policy 也会被误导。另外，它的真实机器人数据仍以可控平台和任务集合为主，开放家庭长时任务、无效指令拒绝、跨房间记忆等问题还需要其他机制。
+Video Former 得到的 $Q''$ 经 cross-attention 进入动作 Diffusion Transformer。训练时，示范动作块 $a_0$ 被加入噪声。
 
-## 阅读结论
+$$
+a_k=\sqrt{\bar\beta_k}\,a_0+
+\sqrt{1-\bar\beta_k}\,\epsilon.
+$$
 
-VPP 最值得记住的是“未来视频不一定要生成出来，未来信息可以先变成策略表征”。它把视频扩散模型当作带动态先验的视觉编码器，只取 single forward step 的中间表征，再用 inverse dynamics policy 解码动作。这样做把视频世界模型的一个昂贵能力压缩成控制侧能用的 latent。
+其中 $k$ 为动作扩散时间，与视频扩散的 $t'$ 是不同过程。原文式（6）给出的训练目标为
 
-因此，VPP 支持的结论是：动态预测能改进机器人策略的状态表示，尤其在长链任务和标注数据较少时有帮助。它不等于完整 action-conditioned world model，也没有证明开放环境里的反事实规划已经解决；真正部署还要看同一状态下不同动作是否能导致可区分的未来表征，以及真机闭环中错误能否被恢复。
+$$
+\mathcal L_{\mathrm{diff}}=
+\mathbb E_{a_0,\epsilon,k}
+\left\|D_\psi(a_k,\ell_{\mathrm{emb}},Q'')-a_0\right\|^2.
+$$
 
-## 外部精读
+尽管附近文字使用了估计 noise 的说法，印出的公式监督是干净动作 $a_0$。这里沿用原公式，避免将两种扩散参数化混写。视频分支提供未来条件，动作分支学习在该条件下的控制分布；它仍然需要机器人示范来确定不同平台动作的数值含义。[↗](https://arxiv.org/pdf/2412.14803v2#page=5)
 
-1. [Video Prediction Policy](https://arxiv.org/abs/2412.14803)：原论文；重点读 Section 3 的 TVP 表征提取和 inverse dynamics policy。
-2. [VPP project page](https://video-prediction-policy.github.io/)：看真实机器人视频、可视化和论文图的上下文。
-3. [GitHub: roboterax/video-prediction-policy](https://github.com/roboterax/video-prediction-policy)：核对代码、模型入口和实验复现说明。
-4. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2412.14803)：适合逐图阅读，尤其 Figure 5 与 Figure 12。
+| Setting | Video length | Action chunk shape | Action sampling steps |
+| --- | ---: | --- | ---: |
+| CALVIN | 16 | $10\times7$ | 10 |
+| MetaWorld | 8 | $4\times4$ | 10 |
+| Franka Panda | 16 | $10\times7$ | 10 |
+| Xhand | 16 | $10\times18$ | 10 |
 
-## 相关阅读与下一步
+“视频一次前向”“动作十步去噪”“输出十个动作”描述三件不同的事。MetaWorld 就以十步采样生成四个动作。Xhand 的动作向量有 18 维，包含该平台的整体控制；它不能被理解成论文所用灵巧手本身有 18 个关节，因为硬件描述中的手是 12 自由度。
 
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Video+Prediction+Policy%3A+A+Generalist+Robot+Policy+with+Predictive+Visual+Representations&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Video+Prediction+Policy%3A+A+Generalist+Robot+Policy+with+Predictive+Visual+Representations)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Video+Prediction+Policy%3A+A+Generalist+Robot+Policy+with+Predictive+Visual+Representations)。
-- 站内下一步：[论文精读专题](../index.md)。
+DiT 使用 width 384、8 heads、4 个 encoder layers 与 4 个 decoder layers。Table 13 列出的 policy batch size 为 CALVIN 76、MetaWorld 64、Panda 128、Xhand 128；epochs 分别为 12、30、30、40，学习率分别为 $10^{-4}$、$5\times10^{-5}$、$10^{-4}$、$10^{-4}$，TVP batch size 列为 4。表中没有展开所有优化器和 batch 分配细节，不能据此反推出严格相同的训练计算量。[↗](https://arxiv.org/pdf/2412.14803v2#page=16)
+
+第一阶段微调视频模型约需 8 张 A100、2–3 天，第二阶段策略训练约需 4 张 A100、6–12 小时。RTX 4090 部署报告约 7–10 Hz；Table 4 的完整 VPP 延迟约 140 ms。方法节还报告每个观测的视频前向少于 160 ms，这些近似计时不应与动作块长度相乘后当成新测得的控制频率。VPP 避免的是每次执行前的完整视频去噪，仍然承担大视频网络和动作扩散头的成本。[↗](https://arxiv.org/pdf/2412.14803v2#page=6)
+
+## CALVIN 的长任务指标，为什么不能只看第一步
+
+### ABC→D 测场景迁移，五任务链测连续执行
+
+CALVIN ABC→D 在 A、B、C 环境训练，在未见 D 环境测试。策略按语言指令连续完成五项任务，前一项成功后才能继续后面的任务。第一列回答能否完成第一项，第五列回答能否连做五项；它们不是五个互相独立任务的单项成功率。
+
+令 $L\in\{0,1,\ldots,5\}$ 为一条链连续成功的任务数，则表中的平均长度可理解为
+
+$$
+\mathbb E[L]=\sum_{j=1}^{5}P(L\ge j).
+$$
+
+例如 VPP 的五列相加为 $0.965+0.909+0.866+0.820+0.769=4.329$，按原表显示为 4.33。这是指标的等价解释，说明较高的第一步成功率若伴随后续快速衰减，仍无法得到高平均长度。
+
+| Method | Annotated Data | 1 | 2 | 3 | 4 | 5 | Avg. Len |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| RT-1 | 100% ABC | 0.533 | 0.222 | 0.094 | 0.038 | 0.013 | 0.90 |
+| Diffusion Policy | 100% ABC | 0.402 | 0.123 | 0.026 | 0.008 | 0.000 | 0.56 |
+| Robo-Flamingo | 100% ABC | 0.824 | 0.619 | 0.466 | 0.331 | 0.235 | 2.47 |
+| Uni-Pi | 100% ABC | 0.560 | 0.160 | 0.080 | 0.080 | 0.040 | 0.92 |
+| MDT | 100% ABC | 0.631 | 0.429 | 0.247 | 0.151 | 0.091 | 1.55 |
+| Susie | 100% ABC | 0.870 | 0.690 | 0.490 | 0.380 | 0.260 | 2.69 |
+| GR-1 | 100% ABC | 0.854 | 0.712 | 0.596 | 0.497 | 0.401 | 3.06 |
+| Vidman | 100% ABC | 0.915 | 0.764 | 0.682 | 0.592 | 0.467 | 3.42 |
+| RoboUniview | 100% ABC | 0.942 | 0.842 | 0.734 | 0.622 | 0.507 | 3.65 |
+| VPP | 100% ABC | 0.965 | 0.909 | 0.866 | 0.820 | 0.769 | 4.33 |
+| GR-1 | 10% ABC | 0.672 | 0.371 | 0.198 | 0.108 | 0.069 | 1.41 |
+| VPP | 10% ABC | 0.878 | 0.746 | 0.632 | 0.540 | 0.453 | 3.25 |
+
+VPP 相对 RoboUniview 的第一步只从 94.2% 到 96.5%，第五步却从 50.7% 到 76.9%。优势并非仅体现在起始场景识别，还体现在连续执行时保持较高完成概率。Avg. Len 从 3.65 到 4.33，相对提高约 18.6%；若改与 GR-1 的 3.06 比较，相对提高约 41.5%。这两个百分比使用不同基线，不能混成同一个“对前代 SOTA”的提升口径。[↗](https://arxiv.org/pdf/2412.14803v2#page=5)
+
+### 10% 标注结果没有取消视频先验与目标域视频
+
+使用 10% 标注 ABC 数据时，VPP 仍达到 3.25，GR-1 为 1.41。它说明动作监督减少时，预测性表示能提供有用先验。但 10% 指该行策略学习使用的标注数据比例，模型仍继承 SVD 预训练与操作视频适配，不能解释成整个系统只用了完整方案 10% 的所有训练资源。
+
+同时，表中基线来源并非全部由作者按同一预算重训。有些采用原论文成绩，有些运行官方实现，Diffusion Policy 等也进行了语言条件适配。这张表支持方法的整体竞争力，不能唯一证明“未来表示”是所有跨方法差异的原因；相同条件下替换表示的实验更适合回答因果更窄的问题。[↗](https://arxiv.org/pdf/2412.14803v2#page=6)
+
+## MetaWorld 检查单个策略能否处理不同难度的五十个任务
+
+MetaWorld 使用 Sawyer，作者以官方 oracle policy 为每个任务收集 50 条示范，共 2500 条，训练一个语言条件策略处理全部 50 个任务。Table 2 将它们划分为 28 个 easy、11 个 middle、11 个 hard。
+
+| Method | Easy, 28 tasks | Middle, 11 tasks | Hard, 11 tasks | Average, 50 tasks |
+| --- | ---: | ---: | ---: | ---: |
+| RT-1 | 0.605 | 0.042 | 0.015 | 0.346 |
+| Diffusion Policy | 0.442 | 0.062 | 0.095 | 0.279 |
+| Susie | 0.560 | 0.196 | 0.255 | 0.410 |
+| GR-1 | 0.725 | 0.327 | 0.451 | 0.574 |
+| VPP | 0.818 | 0.493 | 0.526 | 0.682 |
+
+VPP 整体从 GR-1 的 57.4% 提高到 68.2%，差值为 **10.8 个百分点**。Middle 从 32.7% 到 49.3%，Hard 从 45.1% 到 52.6%，说明优势不限于容易任务；但 hard 仍只有约一半成功，也没有因使用视频预测就达到稳定完成。
+
+难度分组由不同任务组成，因此 Middle 数值低于 Hard 并不矛盾。表内结果不能被读成同一个任务从 easy 逐级加难后的严格曲线。[↗](https://arxiv.org/pdf/2412.14803v2#page=5)
+
+## 控制消融怎样检验预测性表示，而不只检验更大模型
+
+### 替换视觉编码器后，保持下游接口与动作学习
+
+Table 3 替换 VDM 视觉编码器，其余组件与设置保持一致。Stable-VAE 使用图像重建表示；VC-1 使用 MAE 表示；Voltron 结合重建与语言生成。VC-1 和 Voltron 还在与 VPP 相同的视频数据上适配，再重采样成固定 token 后接动作头。它们并非完全没有目标域训练的弱基线。
+
+| Encoder | Pre-training Type | Avg. Length |
+| --- | --- | ---: |
+| VDM | Video Generation | 4.33 |
+| Stable-VAE | VAE Reconstruction | 2.58 |
+| VC-1 | MAE Reconstruction | 1.23 |
+| Voltron | MAE Reconstruction + Language Generation | 1.54 |
+
+预测表示在这个相同下游接口中表现更好，支持视频预训练所得特征适合动作学习。不过编码器的容量、架构与预训练目标也不同，因此这仍不是只把一个模型中的“未来信息”单独删除的实验。可以肯定这套 VDM 表示有效，不能据此精确计算所有增益中有多少来自某一种内部物理知识。[↗](https://arxiv.org/pdf/2412.14803v2#page=7)
+
+### 目标域视频适配的重要性，不低于额外互联网数据
+
+| Ablation Type | Avg. Length | Latency |
+| --- | ---: | ---: |
+| VPP | 4.33 | ≈140 ms |
+| Without Internet data | 3.97 | ≈140 ms |
+| Without CALVIN video | 3.31 | ≈140 ms |
+| Without Internet data and SVD pretraining | 1.63 | ≈140 ms |
+| Without Video Former | 3.86 | ≈450 ms |
+| Without Feature Aggregation | 3.60 | ≈140 ms |
+
+删除额外互联网操作数据后，平均长度降低 0.36；删除 CALVIN 视频适配后，降低 1.02。当前任务的视频预测能力对这组结果尤其重要，不能将 4.33 全部归因于互联网视频中的通用物理先验。
+
+同时删除互联网数据与 SVD 初始化，降到 1.63。它说明仅在目标域小数据上从头学习视频模型不足以复现完整效果，但这一行改变了两个因素，不能把 4.33 到 1.63 的全部差距当成单独的“SVD 预训练增益”。
+
+移除 Video Former、直接把高维特征接入动作头后，延迟从约 140 ms 变成约 450 ms，平均长度也从 4.33 降到 3.86。这是对压缩模块双重作用的直接证据：它既减少反复动作去噪时的条件处理成本，也改善对任务相关信息的提取。[↗](https://arxiv.org/pdf/2412.14803v2#page=7)
+
+### 聚合优于最终层，但不明显超过最佳单层
+
+主消融中的 Without Feature Aggregation 使用最终层特征，平均长度为 3.60。附录进一步选择不同中间层。
+
+| Feature selection | Layer 3 | Layer 6 | Layer 9 | Layer 12 | VPP aggregation |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Avg. Len | 3.72 | 3.88 | 4.29 | 4.05 | 4.33 |
+
+第九层已经达到 4.29，距离完整聚合只有 0.04。多层方案显著降低了依赖最终层的风险，也省去手工挑层，但这张表没有支持“多层聚合比任何单层都大幅更强”。更有用的认识是，控制所需信息在中间层很丰富，最终像素细节不是唯一、更不是必然最好的接口。[↗](https://arxiv.org/pdf/2412.14803v2#page=15)
+
+### 一次前向并非近似方案的无奈下限
+
+附录还将视频前向增加为两步。若更清晰的视频表示一定带来更好控制，两步应该优于一步；实际结果没有出现这种关系。
+
+| Setting | Five tasks completed | Avg. Len |
+| --- | ---: | ---: |
+| VPP | 0.769 | 4.33 |
+| Single-view | 0.518 | 3.58 |
+| Without temporal attention | 0.714 | 4.18 |
+| Two TVP denoising steps | 0.718 | 4.19 |
+
+两步平均长度为 4.19，低于一步的 4.33，同时接近翻倍视频端成本。它支持在当前设置中粗预测已经足够有用，而不是越接近最终像素视频就越适合控制。移除时间注意力降到 4.18，说明按时间组织和交互这些特征也有贡献。
+
+单视角仍能达到 3.58，但五任务全成功率是 0.518。原文附近文字将 3.58 写成“Task 5 success rate”，与 Table 12 不一致；这里按表中的指标列解释，避免混用任务数与概率。
+
+另一个消融比较读取特征时的扩散时间索引 10、20、30，平均长度分别为 4.21、4.33、4.25。这是在改变噪声位置，不是在分别执行 10、20、30 次视频前向。时间索引、去噪步数与动作块长度是三个需要保持独立的参数。[↗](https://arxiv.org/pdf/2412.14803v2#page=15)
+
+## 视频生成质量与机器人成功率，需要两套证据
+
+除了控制结果，作者在 Bridge 验证集上评价 TVP 的视频生成质量。
+
+| Model | Bridge FVD ↓ |
+| --- | ---: |
+| VideoFusion | 501.2 |
+| Tune-A-Video | 515.7 |
+| Seer | 246.3 |
+| VPP | 41.4 |
+
+Table 9 的比较方法成绩取自 Seer 的实验，VPP 的低 FVD 表明其操作视频分布预测更接近验证数据。这个结果支持视频域适配有效，但 FVD 不直接测量末端接触正确性，也不等价于机器人执行成功率。
+
+附录完整视频展示使用 30 个去噪步骤、classifier-free guidance 7.5，预测 16 帧并隔帧展示其中 8 帧。它与策略使用的一次前向特征不是相同采样预算。因此不能将 FVD 41.4 直接描述成“一步视频生成达到的质量”，更不能从生成质量排序推导任意控制任务的可靠性。[↗](https://arxiv.org/pdf/2412.14803v2#page=14)
+
+## 真机结果应同时看平均、具体技能和试验次数
+
+### 两个平台使用不同采集与动作接口
+
+Franka Panda 通过 Spacemouse 遥操作收集约 2000 条示范，覆盖 30 多项任务，包含拾取、放置、按压、布线、开关等六类技能。另一平台为 Xarm 搭配 12 自由度 Xhand，使用 Vision Pro 捕获手指运动后重定向到机器人手，低层 PD 控制器平滑策略轨迹。
+
+![VPP real robots](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-7-real-robot.png){ width="760" }
+
+*真实机器人平台与对象、场景、工具使用任务示例。*
+
+灵巧手数据规模的报告存在差异：正文写 4000 条、13 类技能，附录 A.2 写约 2500 条、10 类技能，视频训练配方表则列 2476 条。可以确认平台包含 100 多项任务，但不能把不同位置的数字合成一个精确统一的采集规模。[↗](https://arxiv.org/pdf/2412.14803v2#page=8) [↗](https://arxiv.org/pdf/2412.14803v2#page=12)
+
+这里的 unseen 是操作对象或背景场景未在相应训练数据中出现。它主要测试已学操作在新对象、新场景中的使用，不能扩大成任意未见技能零示范执行。作者的网球、可乐和勺子案例也只明确说这些对象没有出现在自采集合中，不代表通用 SVD 或其他互联网数据从未见过相关概念。
+
+### 平均成功率还要与类别及测试次数相互核对
+
+下表以 Appendix Tables 6、7 的细分结果为基础，数值为成功概率。Susie 的灵巧手 unseen 一项采用主文 Table 5 的 0.28；附录该项存在需要单独说明的汇总差异。
+
+| Platform / Setting | Diffusion Policy | Susie | GR-1 | VPP |
+| --- | ---: | ---: | ---: | ---: |
+| Panda / Seen | 0.425 | 0.563 | 0.519 | 0.856 |
+| Panda / Unseen | 0.250 | 0.463 | 0.388 | 0.737 |
+| Dexterous / Seen | 0.287 | 0.450 | 0.319 | 0.749 |
+| Dexterous / Unseen | 0.110 | 0.28 | 0.159 | 0.605 |
+| Dexterous / Tool-use | 0.05 | 0.23 | 0.15 | 0.68 |
+
+这些平均不是将每一类别成功率不加权相加。Panda 已见的 Pick、Place 各测试 50 次，其他类别各 20 次；未见的 Pick、Place 各 25 次，其他各 10 次。灵巧手已见 Pick、Pick&Place 各 100 次，其余各 25 次；附录对未见设置给出前两类各 50 次、其余各 20 次。不同任务重复数不同，平均更受抓取和放置类别影响。[↗](https://arxiv.org/pdf/2412.14803v2#page=12) [↗](https://arxiv.org/pdf/2412.14803v2#page=13)
+
+Susie 在附录 Table 7 的未见平均印为 0.328，但按该表列出的各类别成功率和上述次数加权，得到约 0.281，与主文的 0.28 接近。因此不能仅因附录更详细就优先采用 0.328。这个重算值只是对表格内部一致性的检查；部分单项概率也不能直接还原为所述次数下的整数成功数，例如 20 次试验中的 0.76。论文没有充分说明这些口径差异，故不进一步重构原始成功计数。
+
+Panda 中 VPP 的总体明显更高，但已见 Press 只有 0.85，Susie 为 0.90；因此“总体最好”不等于每项技能都最好。未见时 VPP 的 Pick、Place、Press、Route、Drawer 分别为 0.80、0.72、0.80、0.70、0.60，抽屉仍弱于其他几类。
+
+灵巧手的能力跨度更大。VPP 未见 Relocate 为 0.76，Press 为 0.88，Stack 为 0.56，而 Pass 只有 0.32、Unplug 只有 0.20。将这组结果只写成“复杂灵巧操作成功率 60.5%”，会掩盖接触精度、协调与任务结构带来的差异。已见 Press 中 VPP 和 Susie 同为 0.96，也不是每个任务都有提升。
+
+### 工具使用有实际执行证据，但每项只有十次测试
+
+| Tool-use Task | Diffusion Policy | Susie | GR-1 | VPP |
+| --- | ---: | ---: | ---: | ---: |
+| Spoon | 0.0 | 0.4 | 0.3 | 0.9 |
+| Hammer | 0.2 | 0.2 | 0.1 | 0.6 |
+| Drill | 0.0 | 0.1 | 0.2 | 0.8 |
+| Pipette | 0.0 | 0.0 | 0.0 | 0.4 |
+
+VPP 在四类工具任务中都有非零成功，并高于这组基线。这里测试的是实际工具操作，证据强于仅根据常识选择合适工具。不过每项只有十次，Spoon 的 0.9 对应九次成功，Pipette 的 0.4 对应四次；不能把整体 0.68 写成在任何工具、液体或装配条件下的稳定水平。[↗](https://arxiv.org/pdf/2412.14803v2#page=13)
+
+## 这条路线最值得迁移的是预测任务与控制接口的分离
+
+VPP 的实验共同支持一项具体判断。视频生成训练可以让视觉网络学习未来变化，而下游控制不一定需要等待这个网络把全部纹理生成完。读取中间特征、聚合多层信息、压缩时空条件，再用机器人动作监督学习对应关系，是一个可以分环节测量成本与收益的方案。
+
+“隐式追踪机械臂运动”是作者对泛化机制的解释。预测视频与真实轨迹相似的案例为它提供直观支持，但论文没有直接证明动作头只跟踪机械臂、完全忽略新对象动力学。接触、摩擦与工具姿态仍然决定实际任务能否完成，Pass、Unplug 和 Pipette 的低成功率也显示，合理的视觉未来不等于所有控制细节已经可靠。
+
+复用这项方法时，最有价值的检查顺序是先确认目标域视频能否预测与任务相关的变化，再比较中间层、最终层和多层聚合对动作的实际收益，最后单独测 Video Former、视频前向与动作采样的延迟。数据效率也应分开报告视频资源和动作标注比例。这样既能保留视频基础模型的作用，也能识别真正的瓶颈究竟在未来预测、表示压缩，还是机器人动作学习。[↗](https://arxiv.org/pdf/2412.14803v2#page=9)

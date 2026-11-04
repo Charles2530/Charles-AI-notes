@@ -1,0 +1,40 @@
+python scripts/content_quality_report.py
+Scanned 327 markdown pages under files/
+Thresholds: short<2500 chars, long>30000 chars, h2>18, h3>60
+Excluded directories: roadmap
+
+Summary:
+  by flag:
+    too-many-h2: 4
+    short: 3
+  by directory:
+    assets: 3
+    paper-deep-dives/diffusion: 2
+    paper-deep-dives/embodied-ai: 1
+    operators: 1
+  by page type:
+    topic: 4
+    paper-deep-dive: 3
+
+Flagged pages:
+- files/paper-deep-dives/diffusion/dmd.md: chars=27350, h2=19, h3=21, flags=too-many-h2
+- files/paper-deep-dives/diffusion/phased-dmd.md: chars=26974, h2=19, h3=18, flags=too-many-h2
+- files/paper-deep-dives/embodied-ai/vggt-omega.md: chars=23585, h2=20, h3=9, flags=too-many-h2
+- files/operators/communication-kernels-and-overlap.md: chars=5376, h2=19, h3=17, flags=too-many-h2
+- files/assets/javascripts/vendor/dompurify/README.md: chars=547, h2=0, h3=0, flags=short
+- files/assets/javascripts/vendor/marked/README.md: chars=486, h2=0, h3=0, flags=short
+- files/assets/javascripts/vendor/mathjax/README.md: chars=391, h2=0, h3=0, flags=short
+python scripts/paper_deep_dive_audit.py
+Scanned 92 paper deep-dive pages under files/paper-deep-dives/
+Paper deep-dive audit findings:
+- [error] diffusion/drifting.md: missing required story sections: ### 研究背景, ### 问题（Challenge）, ### Finding, ### 方法, ### 结论, ### 关键术语
+- [error] diffusion/drifting.md: missing ablation/diagnostic/scaling/failure signal
+- [error] diffusion/rdm.md: missing required story sections: ### 研究背景, ### 问题（Challenge）, ### Finding, ### 方法, ### 结论, ### 关键术语
+- [error] diffusion/rdm.md: missing ablation/diagnostic/scaling/failure signal
+- [error] diffusion/tbsm.md: missing required story sections: ### 研究背景, ### 问题（Challenge）, ### Finding, ### 方法, ### 结论, ### 关键术语
+- [error] embodied-ai/openwam.md: missing required story sections: ### 方法, ### 结论, ### 关键术语
+- [error] technical-reports/minimax-h3-1010-1401.md: expected exactly one 论文信息 admonition, found 0
+- [error] technical-reports/minimax-h3-1010-1401.md: missing required story sections: ### 问题（Challenge）, ### Finding, ### 方法, ### 结论, ### 关键术语
+- [error] technical-reports/minimax-h3-1010-1401.md: missing 阅读结论 section
+- [error] index.md: index.md missing links for: embodied-ai/openwam.md
+make: *** [quality] Error 1

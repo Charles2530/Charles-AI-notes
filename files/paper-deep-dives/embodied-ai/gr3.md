@@ -15,279 +15,226 @@ paper_topic: 具身智能 / VLA
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[seed.bytedance.com/en/GR3](https://seed.bytedance.com/en/GR3)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2507.15493)；[官方 / 项目材料](https://seed.bytedance.com/en/GR3)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 会做常见任务，为什么仍可能没有听懂指令
 
-### 研究背景
+GR-3 最有解释力的场景，是机器人面前有叉子、餐具盒和垃圾桶，指令却要求把叉子扔进垃圾桶。沿训练中最常见的物体与容器关联行动，机器人可能熟练地把叉子放回餐具盒；这条轨迹运动平滑、抓取正确，却没有执行当前要求。另一种情况是桌上根本没有蓝碗，机器人仍挑选某个物体开始搬运。它们暴露了 VLA 的一个具体问题：视觉输入足以提示常见动作时，动作训练未必迫使模型使用语言条件。[↗](https://arxiv.org/pdf/2507.15493v2#page=5) [↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-GR-3 延续的是 generalist robot policy / VLA 路线。早期 VLA 已经能把视觉、语言和动作放进同一个模型，让机器人按自然语言做多种任务；GR-2 则强调 web video 里的动态知识如何迁移到操作。到了 GR-3，问题更接近真实部署：机器人不仅要识别新物体，还要理解抽象指令、适配新环境，并执行长时程、双臂和灵巧操作。
+GR-3 围绕这个问题，把预训练视觉语言模型与连续动作专家连接起来，并同时调整训练目标、数据组织和动作网络。机器人示范提供可执行动作，视觉语言共同训练维持物体、关系与概念知识，额外的任务状态监督要求模型判断指令在当前场景中是否成立。人类手部轨迹则用于已有策略的新物体适配。这套方法仍以模仿学习为基础，论文把强化学习留作改善失败恢复的后续方向。[↗](https://arxiv.org/pdf/2507.15493v2#page=4) [↗](https://arxiv.org/pdf/2507.15493v2#page=14)
 
-论文同时引入 ByteMini 双臂移动机器人作为硬件平台。这个设置很重要，因为移动底盘、双臂协作和衣物/桌面任务会放大 imitation learning 的常见短板：语言理解不够细、训练示教不够多、rollout 进入 OOD 状态后难恢复。GR-3 的背景就是把 VLA 从“单步看图出动作”推进到更接近日常服务机器人的多阶段任务。
+Figure 1 上方的三类数据，应分别对应下方需要解释的能力。视觉语言数据与开放语义有关，人类轨迹与少样本适配有关，机器人轨迹与实际控制有关。下方拾放、清理餐桌、衣物晾挂的展示，进一步把语义泛化、长流程和双臂精细操作分开。
 
-### 问题（Challenge）
+![GR-3 overview](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-1-teaser.jpeg){ width="920" }
 
-论文要解决的问题是：**如何构建一个能严格跟随复杂指令、少样本适配新设置，并执行长时程/灵巧任务的 VLA。** 这个问题难在三层。第一，机器人轨迹数据覆盖不了所有新物体、新类别和抽象概念，例如大小、空间关系、常识类别。第二，新场景采集机器人示教成本高，需要用更便宜的人类轨迹快速适配。第三，长时程双臂操作容易因局部错误进入分布外状态，单纯行为克隆难以恢复。
+*原论文 Figure 1，三类训练数据与任务展示。箭头表达训练方案的组成；三种任务的能力需要由各自的实验协议与指标判断。* [↗](https://arxiv.org/pdf/2507.15493v2#page=2)
 
-这个问题的价值在于，现实机器人如果只能执行训练任务清单，泛化意义有限；如果每个新场景都要大量机器人示教，成本也不可持续。GR-3 要证明的是：通过 VLM co-training、人类轨迹 few-shot learning 和机器人 imitation learning 的组合，可以显著改善这些部署瓶颈。
+理解论文时尤其要区分两个层次。GR-3 展示了一种可用于多类任务的模型和训练配方，但实验按任务训练策略，清理餐桌还分别训练 Flat 与 Instruction Following 两种版本。因此，后面的结果证明的是这套方案在相应训练设置下的能力，不能把它们合并成一个检查点同时完成全部任务的成绩。[↗](https://arxiv.org/pdf/2507.15493v2#page=8) [↗](https://arxiv.org/pdf/2507.15493v2#page=11)
 
-### Finding
+## 从多视角理解到动作块，4B 模型如何分工
 
-作者的 finding 是：**VLA 的泛化不能只靠机器人轨迹本身；必须把视觉语言知识、人类轨迹中的任务先验、以及机器人动作学习放进同一个训练 recipe。** 这个洞见把“更多机器人示教”翻转成“用不同数据源分别补不同缺口”：web-scale vision-language data 补语义和抽象概念，人类 VR 轨迹补新设置的任务过程，机器人轨迹补可执行动作。
+模型的输入包括自然语言指令 $l$、当前时刻的多相机观测 $o_t$ 和机器人状态 $s_t$，输出为一个连续动作块。这里的 **Action Chunk（动作块）** 表示连续一段时间的动作序列，网络一次预测多个动作位置，之后由执行系统处理轨迹。论文用 $a_t=a_{t:t+k}$ 表示长度为 $k$ 的动作块；$k$ 的具体取值并未在报告中展开。[↗](https://arxiv.org/pdf/2507.15493v2#page=4)
 
-这个 finding 能解决挑战，是因为复杂指令失败往往不是动作头问题，而是视觉语言 grounding 不够；少样本新场景失败往往不是策略结构不够大，而是缺少便宜可采的人类演示；长时程任务失败则需要动作生成与任务状态建模更稳。GR-3 用 VLM backbone 保留理解能力，用 Action DiT 生成连续动作块，再通过 co-training 和微调 recipe 对齐这些能力。
-
-### 方法
-
-GR-3 使用 Qwen2.5-VL-3B-Instruct 作为 VLM backbone，并接 flow matching Action DiT，总规模约 4B parameters。输入包括图像、语言指令和机器人状态；VLM 负责视觉语言理解，Action DiT 读取 VLM 后层 KV cache，并以 flow matching 方式生成 K-length continuous action chunk。动作头使用 causal mask、AdaLN/timestep conditioning 等生成式动作建模设计。
-
-训练 recipe 包含三部分。第一，在 robot trajectory data 和 large-scale vision-language data 上 co-train，使模型既学动作又保持通用视觉语言能力。第二，用 VR 设备采集少量 human trajectories，对新物体、新环境或新任务做高效适配。第三，用真实机器人轨迹做 imitation learning，训练模型控制 ByteMini 完成双臂移动操作。论文还引入任务状态相关输出/判断，用于区分任务进行、完成或无效等状态。
-
-### 结论
-
-真实机器人实验覆盖三类任务：generalizable pick-and-place、long-horizon table bussing 和 dexterous cloth manipulation。GR-3 在这些任务上整体超过 π0 baseline。论文报告，在 unseen instructions 和 unseen objects 设置中，GR-3 相比 π0 有明显优势；在泛化 pick-and-place 中，它对抽象概念、空间关系和常识指令的理解更强；在长时程和衣物任务中，GR-3 展示了双臂移动平台上的连续操作能力。
-
-消融结果说明，vision-language co-training 对 unseen instruction/object 泛化关键，而 few-shot human trajectory adaptation 能降低新设置适配成本。边界同样明确：GR-3 仍会在未见概念、新形状抓取和 rollout OOD 状态中犯错；作为 imitation learning 方法，它缺少失败恢复和超越示教的优化能力。论文提出未来需要更多数据、模型规模和 reinforcement learning 来提升复杂灵巧任务鲁棒性。
-
-### 关键术语
-
-- **Vision-Language-Action, VLA（视觉语言动作模型）**：把视觉、语言指令和动作生成连接起来的机器人策略模型。
-- **Flow Matching Action DiT（流匹配动作 DiT）**：用 flow matching 训练的 diffusion transformer 动作头，生成连续动作块。
-- **Co-Training（协同训练）**：同时使用机器人轨迹和视觉语言数据训练，以保留理解能力并学习动作。
-- **Human Trajectory Data（人类轨迹数据）**：通过 VR 等设备采集的人类操作轨迹，用于少样本适配新设置。
-- **ByteMini（ByteMini 双臂移动机器人）**：论文使用的双臂移动机器人平台，用于长时程和灵巧任务验证。
-- **Instruction Following Rate, IF Rate（指令跟随率）**：衡量策略是否按语言约束选择正确目标或行为的指标。
-
-> **这篇回答的问题。** 如何理解“GR-3”背后的核心机制、适用边界和下一步阅读路径。
-
-GR-3 是一篇很适合放进具身智能专题的技术报告，因为它把 VLA 从“看图出动作”继续推向三个更真实的问题：严格语言跟随、少样本新物体适配，以及长时程/灵巧任务执行。
-
-它最值得记的一点是：**VLA 不只要输出 action chunk，还要知道任务是在进行、结束，还是根本无效。**
-
-## 论文位置
-
-GR-3 接在 π0 / π0.5、GR-2 之后看最顺。GR-2 重点是视频知识迁移；π0.5 重点是异构数据和高层子任务；GR-3 更强调任务状态、VLM co-training、few-shot human trajectory adaptation 和真实双手移动机器人部署。
-
-![GR-3 teaser](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-1-teaser.jpeg){ width="920" }
-
-<small>Figure source: `GR-3 Technical Report`, Figure 1. 原论文图意：展示 GR-3 在新物体、新环境、抽象指令、长时程任务和灵巧衣物操作上的能力。</small>
-
-**Teaser 图先看任务覆盖，不要当完整安全证明。**
-**输入输出**：输入是少量机器人数据、视觉语言上下文和任务条件，输出是长时程操作策略。
-**效率机制**：通过数据配方和模型结构提高少样本真实机器人任务覆盖。
-**对主线意义**：它服务 VLA 的数据效率与开放任务泛化讨论。
-**不能证明什么**：少样本结果不能证明所有新 embodiment 或安全恢复都解决。
-
-## 模型结构
-
-GR-3 使用 `Qwen2.5-VL-3B-Instruct` 作为 VLM 主干，并接 flow matching Action DiT。总规模约 `4B parameters`。
+GR-3 采用 mixture-of-transformers 结构，以 Qwen2.5-VL-3B-Instruct 处理多视角图像和文字，另用 action Diffusion Transformer 预测动作，两者总规模约 4B。Figure 3 左半部分需要从下往上读：头部和双腕相机图像、指令进入 VLM；机器人状态与带噪动作块进入动作 DiT；VLM 的键值表示向动作专家提供条件。上方的动作输出是一组连续动作 token，不需要先把动作变成自然语言回答再执行。
 
 ![GR-3 model architecture](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-3-model-arch.jpg){ width="920" }
 
-<small>Figure source: `GR-3 Technical Report`, Figure 3. 原论文图意：GR-3 同时在 robot trajectories 和 vision-language data 上 co-train；左侧用 flow-matching objective 训练动作，右侧用 next-token prediction 保持视觉语言能力。</small>
+*原论文 Figure 3。左侧机器人数据监督连续动作，右侧视觉语言数据监督文字 token；两种训练路径共享 VLM，但动作 DiT 只参与动作路径。* [↗](https://arxiv.org/pdf/2507.15493v2#page=4)
 
-| Component | GR-3 choice | Why it matters |
-| --- | --- | --- |
-| VLM backbone | Qwen2.5-VL-3B-Instruct | 保留强视觉语言理解和 grounding |
-| Action model | flow matching Action DiT | 输出连续 action chunk |
-| Conditioning | current robot state + VLM KV cache | 让动作生成利用 VLM 表征 |
-| Action sequence | K-length action chunk as tokens | 建模短时动作依赖 |
-| Attention | causal mask in Action DiT | 保持动作块内部时间结构 |
-| Efficiency | Action DiT has about half the VLM layers and uses later-layer KV cache | 降低推理成本 |
-| Stability | extra RMSNorm after attention and FFN linear layers | 提升训练稳定性和 instruction following |
+动作侧把长度为 $k$ 的带噪动作块表示为 $k$ 个 token，再拼接一个机器人状态 token。流匹配时间通过 AdaLN 注入，使同一个动作网络知道当前处理的噪声程度。动作 DiT 内部采用 causal attention mask，建模动作块内部的时间依赖。这里的因果掩码并不意味着逐个生成文字式的动作 token；动作块仍通过后文的流积分过程整体更新。[↗](https://arxiv.org/pdf/2507.15493v2#page=4)
 
-GR-3 不只是把 VLM 输出接到动作头。它让动作 DiT 读取 VLM 后半层 KV cache，并通过 flow matching timestep / AdaLN 等方式生成动作块。这让视觉语言理解可以更直接地调制动作生成。
+连接两个网络的接口是 VLM 的 **KV Cache（键值缓存）**。动作专家利用视觉语言网络已产生的键和值读取条件，避免每次更新带噪动作时重复完成整套图像与语言计算。为缩小动作分支的成本，DiT 层数为 VLM 的一半，仅使用 VLM 后半部分层的 KV。这个设计把较重的场景理解和需要反复运行的动作更新分开，同时明确了动作分支实际读取的 VLM 层范围。[↗](https://arxiv.org/pdf/2507.15493v2#page=4)
 
-### Flow Matching Action DiT 怎么读
+另一个改动发生在动作 DiT 内部。作者早期训练频繁遇到不稳定，受 QK norm 启发，在注意力与 FFN 内的线性层后增加 RMSNorm。它既改善了训练稳定性，也在后续指令遵循消融中带来明显收益。报告提供了行为层面的证据，但没有用注意力可视化或专门的中间变量实验，证明某一条归一化到语言利用的唯一因果路径；准确的判断是，这个数值结构设计对最终的语言条件控制有实际影响。[↗](https://arxiv.org/pdf/2507.15493v2#page=4) [↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-GR-3 的动作头不是离散 action token，也不是简单 MLP 回归。它把一段连续动作块 \(\mathbf{a}_{1:K}\) 当作要从噪声搬运到真实动作的生成对象。flow matching 的训练可以写成：
+## 流匹配究竟学什么，五步生成又发生在哪里
+
+训练的总体目标是模仿专家示范。论文先用专家数据集 $\mathcal D$ 上的条件策略对数似然说明这个目标，再把连续动作学习具体落实为 flow matching。这里需要分清两个时间：$t$ 是真实机器人轨迹中的时刻，$\tau$ 是生成动作时从噪声走向数据的内部时间。机器人可以处在同一个 $t$，而动作生成器在多个 $\tau$ 上更新同一个动作块。[↗](https://arxiv.org/pdf/2507.15493v2#page=4)
+
+给定示范动作 $a_t$，随机取高斯噪声 $\epsilon$ 和流时间 $\tau$，构造中间动作
 
 $$
-\mathbf{x}_t = (1-t)\boldsymbol{\epsilon} + t\mathbf{a}, \quad
-\mathbf{u}_t = \mathbf{a} - \boldsymbol{\epsilon}
+a_t^\tau=(1-\tau)\epsilon+\tau a_t,
+\qquad \epsilon\sim\mathcal N(0,I),\quad
+\tau\sim\mathcal U(0,1).
 $$
 
+这条插值路径在 $\tau=0$ 时是纯噪声，在 $\tau=1$ 时到达示范动作。沿着这条直线路径，目标速度为 $u(a_t^\tau\mid a_t)=a_t-\epsilon$。因此，动作专家需要在图像、语言和状态条件下，根据当前中间动作预测它向示范动作分布演化的方向。论文的动作损失可以写为
+
 $$
-\mathcal{L}_{\mathrm{FM}}
-= \mathbb{E}_{t,\boldsymbol{\epsilon},\mathbf{a}}
+\mathcal L_{\mathrm{action}}(\theta)=
+\mathbb E_{\mathcal D,\tau,\epsilon}
 \left[
-\left\|
-f_\theta(\mathbf{x}_t, t, c) - \mathbf{u}_t
-\right\|_2^2
-\right]
+\left\|v_\theta(l,o_t,s_t,a_t^\tau)
+-(a_t-\epsilon)\right\|^2
+\right].
 $$
 
-这里 \(\boldsymbol{\epsilon}\) 是随机噪声动作，\(\mathbf{a}\) 是示范中的真实动作块，\(t\in[0,1]\) 是生成时间，\(c\) 是由 VLM 视觉语言上下文、机器人状态和 KV cache 组成的条件。训练目标不是直接预测动作值，而是预测“从当前 noisy action 往真实动作走的速度场”。推理时从噪声开始，沿这个速度场积分，得到连续 action chunk。
+上式把论文在公式后定义的随机 $\tau,\epsilon$ 显式写进期望，目标仍是原文式（2）的速度回归。$v_\theta$ 输出与动作块同形状的速度；$\tau$ 通过前述 AdaLN 进入网络，虽然论文的函数简写未再单列它。图像与语言决定目标对象和任务，状态帮助把目标动作放在当前机器人的运动条件下。[↗](https://arxiv.org/pdf/2507.15493v2#page=4)
 
-**为什么这比离散 token 更适合 GR-3。**
-GR-3 要控制 ByteMini 的双手移动平台，动作空间连续、维度高，而且包含全身运动。离散 token 会让动作精度、token 数和解码延迟互相拉扯；flow matching 可以直接生成连续动作块，并保留多模态动作分布。Action DiT 再通过 VLM KV cache 接收任务语义，避免动作头只看到一个压扁的图文 embedding。
+训练时，同一条示范可以抽取多个 $\tau$。这些样本共享相同的图像和指令，因此作者在一次 VLM 前向后，复用其结果计算多个流时间的动作损失。它节省的是重复条件编码的成本，动作 DiT 仍需处理相应的带噪动作。报告没有给出每次 VLM 前向具体复用多少个时间样本，不能据此计算精确训练加速比。[↗](https://arxiv.org/pdf/2507.15493v2#page=5)
 
-## 任务状态：in progress / terminate / invalid
+推理时不再有专家动作可供插值。系统从随机噪声 $a_t^0$ 出发，用学到的速度场做 Euler 更新
 
-GR-3 的一个关键设计，是把 task status 作为辅助监督的附加动作维度：
+$$
+a_t^{\tau+\Delta\tau}
+=a_t^\tau+\Delta\tau\,
+v_\theta(l,o_t,s_t,a_t^\tau),
+\qquad \Delta\tau=0.2.
+$$
 
-| Status | Meaning | System behavior |
-| --- | --- | --- |
-| `in progress` | task is being executed | continue rolling out action chunks |
-| `terminate` | task has been successfully completed | stop and return to safe posture |
-| `invalid` | instruction cannot be completed under current observation | refuse execution or ask for clarification |
+从 0 到 1 一共进行五步更新。五步指动作生成器的积分步数；VLM 的条件表示可以被复用，不能把它理解成五次完整的大模型视觉语言前向。生成结果还要进入机器人轨迹控制层，五个积分步也不能直接换算成控制频率或每秒能完成多少次抓取。[↗](https://arxiv.org/pdf/2507.15493v2#page=5)
 
-论文指出，策略可能利用多视角里的虚假相关性，而不真正关注语言条件。加入 task status 后，模型被迫理解指令和当前场景是否匹配。训练时会随机把语言指令替换成无效指令，并让模型预测 `invalid`，但不监督动作块其他维度。
+## 让语言真正影响动作，数据和监督分别补哪一环
 
-这对真实机器人非常关键：桌上没有刀时，“put the knife into the basket” 不应该触发机器人乱抓；它应该判断任务无效。
+### 无效指令为什么只监督状态
 
-可以把 task status 看成一个安全控制接口，而不只是分类头：
+如果同一张桌面的所有示范都要求把叉子放入餐具盒，模型即使忽略语言，也可能学出很好的动作预测。GR-3 在动作输出中增加一个 **Task Status（任务状态）** 维度，既表示任务进展，也判断当前指令是否与观测相容。
 
-```text
-status = in progress -> execute next action chunk
-status = terminate   -> stop task, return or hold safe posture
-status = invalid     -> refuse execution / ask for clarification
-```
+| Task Status | Value | Meaning |
+|---|---:|---|
+| Ongoing | 0 | 当前任务正在执行 |
+| Terminated | 1 | 当前任务已经成功完成 |
+| Invalid | −1 | 给定当前观测，指令无效 |
 
-这和传统 imitation learning 最大的差别是，模型被训练去回答“现在是否应该继续动”。很多 VLA 只会在任务完成后继续输出近似无意义的小动作，或者在无效指令下从训练集中找一个相似动作硬执行。GR-3 把停止和拒绝纳入动作空间，等于给 closed-loop rollout 加了一个最小的任务级刹车。
+训练时，部分样本的语言被随机替换成当前场景无法完成的要求，例如桌上没有刀，却让机器人把刀放进篮子。对于这类样本，**只监督 Invalid 状态，其余动作维度不参与监督**。这一点很关键：原来那条专家轨迹对应的是原指令，换成无效指令后，它不再是正确运动标签；继续监督全部动作，会迫使网络一边报告任务无效、一边复现另一项任务的运动。屏蔽这些维度，才能把新增样本用于可执行性判断，而不制造冲突的运动示范。[↗](https://arxiv.org/pdf/2507.15493v2#page=5)
 
-## 训练 recipe
+这个监督也给“是否读了语言”提供了直接压力。对于相同观测，有效指令与无效指令需要不同状态输出，仅靠桌面的视觉布局无法区分。其作用范围是当前任务与观测是否匹配，论文并没有把 Invalid 定义成通用碰撞检测、危险行为识别或物理安全认证。后续十秒不操作物体的测试，检验的是无效指令下能否避免执行错误任务。[↗](https://arxiv.org/pdf/2507.15493v2#page=11)
 
-GR-3 训练由三类数据共同构成：
+### 共同训练保留语义，机器人示范提供动作
 
-1. robot trajectory data for imitation learning；
-2. web-scale vision-language data for co-training；
-3. few-shot human trajectory data from VR for adaptation。
+预训练 VLM 已有相当多物体和关系知识，但把它接到动作网络上后，仅用狭窄的机器人数据继续训练，不能保证这些能力仍被保留并用于控制。GR-3 混入 image captioning、VQA、image grounding 和 interleaved grounded image captioning 数据，并对数据进行过滤和重标注。文字监督持续要求 VLM 利用开放语义，动作监督则学习如何据此移动机器人。[↗](https://arxiv.org/pdf/2507.15493v2#page=5)
 
-![GR-3 data recipe](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-4-data.jpg){ width="920" }
+| Training data | Supervision | Parameters updated | Role |
+|---|---|---|---|
+| Robot trajectories | Flow matching on action chunks | VLM + action DiT | 把语言、观测与机器人运动对应起来 |
+| Vision-language data | Next-token prediction | VLM | 保持并训练视觉语义和语言关系理解 |
+| Human trajectories，第二阶段加入 | 可观测的手部轨迹 | 沿动作学习路径训练 | 用少量新对象示范适配已有策略 |
 
-<small>Figure source: `GR-3 Technical Report`, Figure 4. 原论文图意：展示 robot trajectory data、vision-language data 和 human trajectory data 的收集与 co-training 配方。</small>
+机器人与 VL 数据以等权方式动态混入 minibatch，总目标为 next-token loss 与 flow-matching loss 之和。这里的“等权”描述论文的数据混合方式，不能扩展成每个 token、每秒视频或每个具体 VL 来源恰好相等。VL 分支不需要提供机器人动作标签，动作 DiT 也不在这条文字预测分支上更新。[↗](https://arxiv.org/pdf/2507.15493v2#page=5)
 
-### Robot trajectory + vision-language co-training
+Figure 4 上方还给出一个容易被模型结构掩盖的环节：机器人数据采集调度器在每条轨迹开始前，指定动作、物体组合和背景，操作者据此布置场景。之后还会过滤无效或低质量轨迹。这样的数据组织有助于主动改变条件组合，减少采集者反复执行最顺手搭配的倾向；它与在已有图像上做光度增强承担不同作用。
 
-GR-3 把机器人轨迹和视觉语言数据联合训练。VL 数据覆盖 image captioning、visual question answering、image grounding 和 interleaved grounded image captioning。这样做的目的不是让机器人“会聊天”，而是让动作 DiT 在动作预测时仍能利用 VLM 的开放视觉语言能力。
+![GR-3 training data](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-4-data.jpg){ width="920" }
 
-这一步要避免一个误解：co-training 不是把网页图文数据和机器人动作数据混在一起做同一个 loss。机器人数据走 imitation / flow matching 目标，VL 数据走 next-token prediction，二者共享 VLM 主干。这样既能让动作条件继承语言 grounding，也能防止纯机器人微调把 VLM 的物体、属性和空间关系知识磨掉。
+*原论文 Figure 4。上方是有调度的机器人采集，中间是第一视角人类手部轨迹，下方是不同 VL 任务。三类数据的观测和标签并不相同，训练接口必须处理这些差异。* [↗](https://arxiv.org/pdf/2507.15493v2#page=6)
 
-### Few-shot human trajectory adaptation
+### 人类示范怎样接入缺少机器人状态的接口
 
-论文用 `PICO 4 Ultra Enterprise` 收集人类轨迹。PDF 笔记里记录了一个很实用的数字：人类轨迹可达到约 `450 trajectories/hour`，高于机器人遥操作约 `250 trajectories/hour`。人类轨迹缺少腕部视图、关节状态和夹爪状态，因此训练时填充空白腕部图像，并用手部轨迹监督。
+人类数据来自 PICO 4 Ultra Enterprise，包含第一视角视频与手部轨迹，语言标注沿用机器人数据的流程。它没有双腕相机图像，也没有机器人的手臂关节状态和夹爪状态。GR-3 对缺失腕部视图填充空白图像，在人类样本上只训练可观测的手部轨迹；不会把不存在的关节、夹爪标签补成伪示范。[↗](https://arxiv.org/pdf/2507.15493v2#page=6)
 
-这个设计说明：新物体适配未必只能重收昂贵机器人轨迹，人类 VR 轨迹可以作为快速适配信号。
+训练顺序同样影响“少样本”的含义。第一阶段先用机器人轨迹和 VL 数据得到策略，第二阶段才加入少量人类数据，同时继续混合原有两类数据。人类样本因此是在已有控制能力上补充新对象经验，不能把这项结果理解为从零只看少量人类视频就掌握机器人操作。报告也没有展开完整的手部轨迹到机器人坐标标定配方，实际迁移这一做法仍需解决对应接口。[↗](https://arxiv.org/pdf/2507.15493v2#page=6)
 
-但人类轨迹不是机器人轨迹的直接替代。它更像一种低成本“空间意图标注”：人手从哪里接近、抓哪一侧、把物体移向哪里。真正部署时仍要靠机器人数据和控制器把这些手部轨迹映射到 ByteMini 的可达空间、夹爪约束和全身运动上。
+作者报告人类轨迹采集约为每小时 450 条，机器人遥操作约为每小时 250 条，前者约为后者的 1.8 倍，这是按原文吞吐量相除得到的比较。它说明有手部追踪的示范采集可能降低适配成本；它不是策略推理速度，也不等于下文 450 条视频总时长约 30 分钟所描述的时间口径。[↗](https://arxiv.org/pdf/2507.15493v2#page=5)
 
-### Training tricks
+## ByteMini 和控制层决定动作怎样真正落地
 
-| Trick | Role |
-| --- | --- |
-| Extra RMSNorm | 稳定 Action DiT 训练，并显著提升 instruction following |
-| Multi-sampled flow timesteps per VLM forward | 加速训练，降低重复 VLM 前向开销 |
-| Co-training with VL and robot data | 保住视觉语言泛化，同时学习动作 |
-| Task status auxiliary dimension | 学会拒绝无效任务和判断终止 |
-
-## ByteMini 机器人系统
-
-GR-3 部署在 ByteMini 双手移动机器人上。
+GR-3 的真实机器人实验依托 ByteMini。它有双臂、双夹爪、移动底盘、升降机构和头部，总计 22 个自由度。每条手臂为 7 自由度，紧凑的球形腕部用于在较小空间内操作，肘部允许向内收至 2.53 rad，帮助双臂在胸前区域协作。头部和双腕各装一台 RGBD 相机，腕部视角用于观察近距离接触区域；相机带深度能力，并不自动说明 VLM 输入显式使用了深度通道。[↗](https://arxiv.org/pdf/2507.15493v2#page=6) [↗](https://arxiv.org/pdf/2507.15493v2#page=7)
 
 ![ByteMini robot](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-5-bytemini.jpg){ width="920" }
 
-<small>Figure source: `GR-3 Technical Report`, Figure 5. 原论文图意：展示 ByteMini 的机器人规格、多相机视角和 wrist sphere joint 的运动范围。</small>
+*原论文 Figure 5。左侧标出机器人部件与自由度，右上展示头部和双腕视角，右下展示球形腕部运动范围。衣物任务所需的胸前双臂操作，与这套结构和视角配置直接相关。* [↗](https://arxiv.org/pdf/2507.15493v2#page=7)
 
-论文强调全身顺应性控制和全身遥操作。策略 rollout 时，GR-3 用预测的 action chunk 控制 `19 DoF`，并加入 pure pursuit 和 trajectory optimization 以减少抖动、保持路径点和轨迹之间的平滑过渡。
+采集时，Meta VR Quest 用于全身遥操作，把人的运动重定向到机器人末端，同时控制手臂、夹爪、升降和底盘。它与前述采集人类手部轨迹的 PICO 设备承担不同工作。全身柔顺控制同时处理可操作性、奇异位形和关节限制，把遥操作输入变成可执行运动，给模仿学习提供专家轨迹。[↗](https://arxiv.org/pdf/2507.15493v2#page=7)
 
-**这张机器人图怎么读。**
-ByteMini 不是论文背景里的展示硬件，而是 GR-3 结果的一部分。双臂、移动底盘、多相机和 wrist sphere joint 让任务空间远比单臂桌面抓取复杂。也正因为如此，GR-3 输出的 action chunk 不能直接等同于底层电机命令；pure pursuit、轨迹优化和全身控制器承担了平滑、可达性和安全约束。读实验时要把“VLA 能力”和“机器人控制栈能力”一起看。
+策略部署时，动作块控制其中 19 个自由度，排除头部与升降机构的 3 个自由度。系统再使用 pure pursuit 与轨迹优化，降低 jerk，并平滑路径点及相邻动作块之间的衔接。因此，一次完整执行包含“视觉语言条件计算—动作块生成—轨迹处理—机器人运动”的链条；长流程稳定性来自策略与控制层共同作用，不能只归给五步 flow matching。报告没有给出足以换算闭环刷新频率的模型延迟数据。[↗](https://arxiv.org/pdf/2507.15493v2#page=7)
 
-## 实验：从抓取到长时程桌面清理
+## 拾放实验先拆开选目标、抓取与跨环境泛化
 
-GR-3 的实验覆盖三类任务。
+拾放使用 35K 条机器人轨迹，约 69 小时，覆盖 101 种物体，语言形式主要为“put A into B”。GR-3 用机器人与 VL 数据共同训练，消融 GR-3 w/o Co-Training 只使用机器人数据；基线 $\pi_0$ 从官方提供、已做大规模机器人预训练的 base model 出发，用该任务的机器人数据微调。机器人图像还使用光度增强。这不是让两种模型从相同随机初始化、相同预训练材料起步的实验，架构和预训练背景不能完全拆开归因。[↗](https://arxiv.org/pdf/2507.15493v2#page=8)
 
-### Generalizable pick-and-place
+Figure 6 上方分别展示已见和未见物体，下方展示不同环境。这里“未见物体”以机器人轨迹为参照，不能扩大为 VLM 或所有视觉语言数据从未接触过该类别。新环境实验则刻意保留物体和布局，使环境变化与新对象识别尽量分开。
 
-训练数据约 `35K robot trajectories`，覆盖 `101 objects`，总计约 `69 hours`。Unseen Objects 设置下，对 45 个未见对象每个最多收集 10 条人类轨迹；450 条人类轨迹总时长约 30 分钟，再 co-train 20K steps。
+![GR-3 pick-and-place settings](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-6-pick-place-settings.png){ width="920" }
+
+*原论文 Figure 6。Basic 与四个新环境使用相同已见物体和一致布局，Unseen Objects 则改变物体集合；二者回答不同的泛化问题。* [↗](https://arxiv.org/pdf/2507.15493v2#page=8)
+
+| Setting | Protocol | Main question |
+|---|---|---|
+| Basic | 54 件已见物体分 9 组，每组 6 件，环境已见 | 能否按普通类别指令选对并搬运目标 |
+| Unseen Environments | 相同物体与布局，换到收银台、会议室、书桌、休息室 | 场景变化是否破坏已学动作和对象选择 |
+| Unseen Instructions | 大小、空间关系、常识描述，如“最大的物体”“雪碧旁边的可乐”“海洋动物” | 能否把机器人示范外的语义用于动作 |
+| Unseen Objects | 45 件新物体分 9 组，每组 5 件，超过 70% 来自机器人示范中未见类别 | 能否识别、选择并操纵新对象 |
+
+为了让不同模型的测试可比，作者用预先捕获的布局掩码摆放物体。两项指标又进一步拆分失败环节：**IF Rate** 只要求正确接近指令指定的目标；**Success Rate** 要求把这个目标放进容器。机器人选对物体但没抓牢，会被前一指标认可，却在后一指标中失败。两列一起看，才能避免把“理解对了”直接等同于“做成了”。[↗](https://arxiv.org/pdf/2507.15493v2#page=9)
+
+Figure 7(a) 的上排是 IF，下排是任务成功。先看 Basic 和 Unseen Environments，完整 GR-3 与不做共同训练的版本差别不明显；再看 Unseen Instructions 和 Unseen Objects，完整模型的优势显著扩大。这组消融把共同训练的价值定位在开放语义条件上，说明它的作用不能只用训练场景的熟练程度衡量。
 
 ![GR-3 pick-and-place results](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-7-pick-place-results.jpg){ width="920" }
 
-<small>Figure source: `GR-3 Technical Report`, Figure 7. 原论文图意：展示 GR-3 在 basic、unseen environments、unseen objects 和 few-shot human trajectory settings 下的 pick-and-place 结果。</small>
+*原论文 Figure 7。左侧比较共同训练与基线，右侧比较人类轨迹的 0/1/5/10-shot 适配。柱图没有逐柱精确数值标签，下表采用正文明确报告的 Success Rate。* [↗](https://arxiv.org/pdf/2507.15493v2#page=9)
 
-**Figure 7 怎么读。**
-这组实验的主线是“泛化从哪里来”。Basic / unseen environments 主要看机器人轨迹 imitation 和视觉语言 co-training 是否稳；unseen objects 则测试物体外观、形状和语言 grounding；few-shot human trajectories 专门测试 VR 人类轨迹是否能快速补新物体。最突出的结论不是某个单点数字，而是 GR-3 在只给每个未见物体少量人类轨迹时仍能明显提升，相当于把昂贵机器人遥操作的一部分换成更快的人类空间示范。
+| Setting | $\pi_0$ Success Rate | GR-3 Success Rate | Difference |
+|---|---:|---:|---:|
+| Unseen Instructions | 40.0% | 77.1% | +37.1 percentage points |
+| Unseen Objects | 40.0% | 57.8% | +17.8 percentage points |
 
-### Long-horizon table bussing
+差值由论文数值直接相减。新指令结果支持模型把大小、空间关系和常识描述转成目标选择；新物体结果还包含抓取新形状的难度，因此成功率更低也不能单独归咎于语义失败。作者同时观察到，只用机器人数据训练的 GR-3 在这两个条件中弱于 $\pi_0$，并推测后者的大规模跨本体预训练发挥了作用。这一推测不等于单独控制预训练数据后得到的因果结论。[↗](https://arxiv.org/pdf/2507.15493v2#page=10)
 
-这部分最能体现 task status 的价值。任务包括 Flat Setting 和 Instruction-Following Setting；invalid trials 要求模型在 `10 seconds` 内不操纵任何对象才算成功。论文记录该任务约 `101 hours` 机器人轨迹。
+### 十条人类轨迹把哪一个条件从 57.8% 推到 86.7%
+
+少样本实验针对上述 45 件未见物体，每件最多收集 10 条人类轨迹，共 450 条，**录制内容总时长约 30 分钟**。随后从已经用机器人和 VL 数据训练的 GR-3 检查点继续训练 20K 步，混合人类、机器人与 VL 三种数据。这里的 30 分钟是轨迹内容时长，不包含一个完整采集项目所需的摆物、准备、筛选、标注和训练时间。[↗](https://arxiv.org/pdf/2507.15493v2#page=10)
+
+| Adaptation condition | Target objects | Success Rate |
+|---|---|---:|
+| 0-shot | 机器人训练中未见的 45 件物体 | 57.8% |
+| 10-shot human trajectories per object | 同一批物体，每件加入至多 10 条人类示范 | 86.7% |
+
+增加 10-shot 人类示范后，成功率提升 28.9 个百分点。Figure 7(b) 还展示 1-shot 和 5-shot，中间档位整体优于零样本；已见对象上的表现没有明显退化。由于新物体已进入适配数据，86.7% 衡量的是少样本适配后的迁移结果，57.8% 才是这组对象适配前的零样本结果，两者不应都冠以“未见对象零样本成功率”。[↗](https://arxiv.org/pdf/2507.15493v2#page=10)
+
+这项实验实际支持了一种较具体的数据经济性：已有机器人策略可以用带手部运动标签的人类示范，补充对新物体的操作经验，同时继续保留原机器人数据约束。它没有测试纯视频、无手部标签、不同人类设备之间任意迁移，也没有消除原先 69 小时机器人数据的投入。
+
+## 清理餐桌，把长流程与听指令分别测量
+
+餐桌清理包含把食物装入外带盒、把餐具放入周转箱、把垃圾扔进垃圾桶，底盘需要移动才能覆盖工作区域。作者采集约 101 小时机器人轨迹，并设置两种评估。Figure 8(a) 的连续六帧展示一次整体清理，Figure 8(b) 则逐一改变语言要求；它们看似在同一张桌子上做相似动作，却有不同任务边界。[↗](https://arxiv.org/pdf/2507.15493v2#page=10)
 
 ![GR-3 table bussing](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-8-table-bussing.jpg){ width="920" }
 
-<small>Figure source: `GR-3 Technical Report`, Figure 8. 原论文图意：展示 table bussing 的任务设置、Flat / Instruction-Following / Invalid settings 和实验结果。</small>
+*原论文 Figure 8。右下 Flat 的纵轴是 Average Task Progress，Instruction Following 的纵轴是 Success Rate；比较柱高前需要先看轴名。两种设置分别训练模型。* [↗](https://arxiv.org/pdf/2507.15493v2#page=11)
 
-**Figure 8 怎么读。**
-Table bussing 不是单步 pick-and-place，而是长时程清理：机器人要在桌面上连续识别目标、选择顺序、移动双臂/底盘，并在任务完成或无效指令时停下来。`invalid` 试验尤其重要，因为成功标准不是“做对动作”，而是 `10 seconds` 内不乱动。这里 task status 的价值就很清楚：没有 terminate/invalid 监督，模型可能在完成后继续找东西抓，或者在指令不成立时执行相似训练动作。
+| Setting | Instruction and execution | Training instructions | Metric |
+|---|---|---|---|
+| Flat | “clean up the dining table”，单次运行自主完成整桌清理；评估 5 组物体 | 随机使用总体任务或子任务描述 | 成功子任务数 / 总子任务数的平均进度 |
+| Instruction Following | 每次给具体子任务，每个子任务从 home position 开始 | 只使用子任务描述 | 平均子任务成功率 |
 
-### Dexterous cloth manipulation
+Flat 更接近连续长流程，途中错误会改变后续观测与任务状态；IF 通过每个子任务从 home position 开始，把重点移到指定对象、数量和容器是否被执行。每种方法都分别训练 Flat 和 IF 两个模型，因此 IF 的高分不能直接预测一个连续清理回合完整成功的概率。[↗](https://arxiv.org/pdf/2507.15493v2#page=10) [↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-衣物任务约 `116 hours` 机器人轨迹，要求模型处理柔体、衣架和晾衣架等复杂接触。
+IF 的六组指令逐渐改变模型可能依赖的习惯。Basic 接近训练布局；Multiple Objects 要求搬走某类别的全部实例；Multiple Destinations 增加编织篮等可选容器；Multiple Objects & Destinations 同时改变数量与目的地。这些条件要求语言中的“哪些”“多少”“到哪里”都参与动作决策。[↗](https://arxiv.org/pdf/2507.15493v2#page=10) [↗](https://arxiv.org/pdf/2507.15493v2#page=11)
 
-![GR-3 cloth manipulation](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-10-cloth-results.jpg){ width="920" }
+另外两组更直接检验视觉捷径。Novel Destinations 使用训练中未出现的物体—容器配对，例如叉子放进垃圾桶，物体和容器本身不必都陌生。Invalid Tasks 则让模型处理当前场景不成立的要求；桌上没有蓝碗却要求拿蓝碗时，只有在十秒内不操作任何物体才算成功。后一条件下“没有动”可以是正确结果，前提是这个具体指令确实无效，不能脱离条件把静止视作普遍成功。[↗](https://arxiv.org/pdf/2507.15493v2#page=11)
 
-<small>Figure source: `GR-3 Technical Report`, Figure 10. 原论文图意：展示衣物操作任务的阶段拆解、成功/失败流向和不同设置下的结果。</small>
+论文明确报告 IF 成功率从 $\pi_0$ 的 53.8% 提升到 GR-3 的 97.5%，即提高 43.7 个百分点。$\pi_0$ 的失败包括混淆叉子和勺子，以及在新目标容器条件中把物体放回训练时常见的容器。它可以执行相当多清理动作，却没有可靠地让当前语言覆盖学到的物体—目的地关联。**97.5% 对应 IF 子任务成功率，不能写成整桌连续清理完成率。**[↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-**Figure 10 怎么读。**
-衣物任务的证据意义不在于证明 GR-3 已经掌握柔体物理，而在于它把 VLA 评测推到更难的接触分布。衣物会形变、遮挡、缠绕，成功往往依赖多阶段恢复。图中阶段拆解和失败流向比单个平均成功率更重要：它告诉读者模型在哪一步失手，是抓取、展开、挂衣架，还是移动到晾衣架。对工程复用来说，这类分阶段结果比“总成功率”更能指导数据补采。
+消融把这项表现与前面的机制连接起来。GR-3 w/o Norm 去掉动作 DiT 内新增的 RMSNorm，Flat 与 IF 都下降，IF 尤其明显，新目的地泛化也变差；GR-3 w/o TS 去掉任务状态，IF 同样退化。Figure 8(d) 中无归一化版本在 Flat 仍能完成不少工作，而 IF 接近较低水平，这正说明动作熟练程度不足以判断语言利用情况。图中未标注各消融的精确柱值，但退化方向及其在两种设置下的程度差异很清楚。[↗](https://arxiv.org/pdf/2507.15493v2#page=11) [↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-## 训练细节要点
+## 衣物晾挂揭示剩下的接触和协作难点
 
-| Detail | GR-3 choice | Why it matters |
-| --- | --- | --- |
-| VLM backbone | Qwen2.5-VL-3B-Instruct | 强视觉语言 grounding |
-| Total size | about 4B parameters | 比早期小 VLA 更接近 foundation policy |
-| Action objective | flow matching Action DiT | 连续 action chunk 生成 |
-| Task status | in progress / terminate / invalid | 让模型学会停止和拒绝 |
-| Few-shot adaptation | PICO VR human trajectories | 快速适配新物体和新设置 |
-| Pick-and-place data | 35K trajectories, 101 objects, 69 hours | 泛化抓取基础 |
-| Table bussing data | about 101 hours | 长时程任务和 invalid refusal |
-| Cloth data | about 116 hours | 柔体和灵巧操作 |
-| Stabilization | RMSNorm after attention / FFN linear | 改善训练稳定和指令跟随 |
+衣物任务把难点从离散物体选择推进到可变形物体操作。机器人需要拿起衣架，把衣物左右肩依次套好，再转动底盘将衣服挂到晾衣架。数据约 116 小时，GR-3 仍使用机器人与 VL 共同训练，$\pi_0$ 在该任务数据上微调。[↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-## 消融与工程判断
+Figure 9 左侧列出六件已见衣物与四件未见衣物。所有训练衣物都是长袖，未见集合中有两件短袖，因而变化包含衣物实例、图案和袖长。右侧的 Position 设置则直接旋转、揉皱已见衣物，用来检验状态与布局变化带来的困难。
 
-GR-3 技术报告没有像一些学术论文那样把每个模块都做成完整表格消融，但从报告叙述和实验设计里，可以抽出三条重要结论。
+![GR-3 cloth manipulation settings](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-9-cloth-settings.png){ width="920" }
 
-| Mechanism | 证据来自哪里 | 可支持的结论 | 不能证明什么 |
-| --- | --- | --- | --- |
-| VLM co-training | 模型结构图、VL 数据配方、抽象指令和属性跟随实验 | 保留视觉语言 grounding 对真实指令执行有帮助 | 不能单独证明动作物理泛化 |
-| Human trajectory adaptation | unseen object few-shot 设置 | VR 人类轨迹可作为低成本新物体适配信号 | 不能完全替代机器人接触数据 |
-| Task status | table bussing terminate / invalid 任务 | 停止和拒绝应进入策略输出空间 | 不能解决所有安全策略和碰撞风险 |
-| Full-body control stack | ByteMini 部署、pure pursuit、trajectory optimization | VLA 输出需要控制器吸收抖动和可达性约束 | 不能把模型结果归因给 VLA 单独能力 |
+*原论文 Figure 9。Basic、Position 与 Unseen Instances 改变的变量不同，后两者分别偏向初始布置与新衣物泛化。* [↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-最值得警惕的是最后一行：GR-3 是系统论文。它的强结果来自模型、数据、人类轨迹、真实机器人硬件和控制栈共同作用。把它简化成“4B VLA + flow matching 就够了”，会误读这篇报告。
+该实验采用平均任务进度。完整成功记为 1.0，过程划分为拿起衣架、套上右肩、套上左肩、最终挂上晾衣架四个里程碑，每个里程碑贡献部分分数。报告没有明确展开各里程碑权重，不能额外假设一定等分；更不能把平均进度直接当成完整成功的试验比例。[↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-## 证据链快照
+| Setting | Evaluation change | GR-3 Average Task Progress |
+|---|---|---:|
+| Basic | 六件已见衣物，初始位置接近训练 | 86.7% |
+| Position | 旋转、揉皱衣物 | 83.9% |
+| Unseen Instances | 四件未见衣物，其中两件短袖 | 75.8% |
 
-| 论文主张 | 主要证据 | 读数边界 |
-| --- | --- | --- |
-| 少样本人类轨迹能辅助新物体适配 | unseen object few-shot、VR trajectory adaptation | 不能完全替代机器人接触数据 |
-| 任务状态输出很重要 | in progress / terminate / invalid 设计和 table bussing | 不是完整安全系统，只是策略接口的一部分 |
-| ByteMini 系统支撑长时任务 | 真实机器人、pure pursuit、trajectory optimization | 不能把成功全部归因给 VLA 模型 |
-| 多任务数据覆盖影响泛化 | pick-place、table bussing、cloth 数据 | 数据规模和硬件设置仍限制外推 |
+Position 相比 Basic 下降 2.8 个百分点，未见衣物下降 10.9 个百分点，差值由论文结果计算。这说明报告中的布置扰动尚能较好应对，新实例仍明显增加难度。Figure 10(b) 中 GR-3 在三个条件都高于 $\pi_0$，后者的成绩以未标注精确数值的柱图展示。[↗](https://arxiv.org/pdf/2507.15493v2#page=13)
 
-## 局限与启发
+![GR-3 cloth manipulation results](../../assets/images/paper-deep-dives/embodied-ai/gr3/figure-10-cloth-results.jpg){ width="920" }
 
-GR-3 很强，但它也暴露了 VLA 走向真实机器人的成本：需要机器人数据、VL co-training、人类轨迹适配、全身控制器、任务状态标签和大量真实评测。模型本身只是系统的一层。
+*原论文 Figure 10。左侧 Sankey 用实色表示成功流、斜线表示失败，沿四个里程碑追踪 Basic 回合；右侧汇总平均进度。左图没有给完整成功率的精确数字，不能由右侧 86.7% 反推。* [↗](https://arxiv.org/pdf/2507.15493v2#page=13)
 
-它最值得复用的工程经验是三条：
+最难的一步发生在右肩已套好之后。左领口经常折在衣架后面，机器人必须一边保持衣架，一边把左领口拉出来，再完成另一侧套入。动作会改变布料自身形状，还可能遮住下一次抓取位置；前一步成功并不保证后一步仍处在训练中的熟悉状态。作者另指出，套左肩时衣架可能从夹爪滑落，导致最后无法挂起。Sankey 因此把“知道要晾衣服”与“稳定完成接触密集的双臂过程”之间的差距显示出来。[↗](https://arxiv.org/pdf/2507.15493v2#page=13)
 
-1. 任务状态要进入训练和部署；
-2. 人类轨迹可以作为新设置快速适配桥梁；
-3. VLA action chunk 必须接控制器和平滑优化，不能直接当电机命令。
+## 可以迁移的设计，以及实验仍留下的难题
 
-## 阅读结论
+GR-3 给出的可复用经验，首先体现在评测和监督如何对应。若想知道策略是否使用了语言，就需要改变大小与空间描述、物体—容器配对，或给出与当前观测不相容的指令；只有标准场景的抓取成功率，很容易让固定关联掩盖条件控制的问题。对应到训练，VL 共同训练维持开放语义，任务状态及无效样本让动作专家必须检查指令，归一化则让这套条件学习能稳定进行。三种设计承担不同环节，也有不同实验支持，不能用一句“更大模型理解更好”替代它们。[↗](https://arxiv.org/pdf/2507.15493v2#page=5) [↗](https://arxiv.org/pdf/2507.15493v2#page=12)
 
-GR-3 要按 vision-language-action 闭环系统读：方法重点是多模态输入、任务数据和动作头的分工，实验重点是 ByteMini、cloth/table bussing 与跨任务泛化。它的强项是真机操作证据，边界是数据分布、长时任务和跨 embodiment 可迁移性。
+人类轨迹实验给出另一种可操作的适配路线：先有可执行的机器人策略，再采集新对象的第一视角视频和手部轨迹，只监督真实存在的运动标签，并继续混合原数据。这把“新对象适配需要多少新机器人遥操作”转化为“哪些对象经验可以用更易采集的人类轨迹补充”。86.7% 的结果属于这个具体前提，既包含先前机器人训练的投入，也包含适配阶段的运动标签和继续训练。[↗](https://arxiv.org/pdf/2507.15493v2#page=10)
 
-## 外部精读
-
-1. [arXiv:2507.15493](https://arxiv.org/abs/2507.15493)
-2. [GR-3 project page](https://seed.bytedance.com/en/GR3)
-3. [ar5iv HTML and figures](https://ar5iv.labs.arxiv.org/html/2507.15493)
-
-## 相关阅读与下一步
-
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=GR-3+Technical+Report&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=GR-3+Technical+Report)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=GR-3+Technical+Report)。
-- 站内下一步：[论文精读专题](../index.md)。
+未解决的问题也很具体。模型仍会误解新概念或新对象指令，抓取未见形状时会失败；模仿学习策略在执行中进入分布外状态后，还可能卡住而无法恢复。更长的任务会把这些状态偏移累积起来，衣架滑落便可能让后续动作失去起点。论文提出未来引入强化学习改善这种恢复能力，但当前成绩尚未验证这条路径。因而，采用 GR-3 的方法时，最有价值的下一项检验是让策略面对可控的中途扰动，观察它能否重新建立有效任务状态并继续执行，而不只重复正常起点上的成功回合。[↗](https://arxiv.org/pdf/2507.15493v2#page=14)

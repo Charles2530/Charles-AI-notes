@@ -183,7 +183,7 @@ class SitePerformanceTests(TestCase):
             script
             for script in scripts
             if urlsplit(script).path.endswith(
-                ("/search-fallback.js", "/diagram-renderer.js", "/mathjax.js")
+                ("/search-fallback.js", "/diagram-renderer.js", "/diagram-renderer.min.js", "/mathjax.js")
             )
         ]
 

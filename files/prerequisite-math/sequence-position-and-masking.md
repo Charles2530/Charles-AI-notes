@@ -1,6 +1,8 @@
 # 序列、位置编码与注意力掩码
 
-token 序列、位置编码、causal mask、attention mask、temperature 和 KV cache 共同定义序列模型的信息流、位置感和生成概率。语言、视频和机器人轨迹都可以按顺序展开，只是元素分别是 token、帧或 patch、状态和动作；序列数学关心第 \(t\) 个元素能看见谁、怎样知道自己在什么位置、生成下一个元素时概率怎样变化。
+一段 `[BOS,A,B,EOS]` 同时包含训练输入和标签，二者必须错开一位。本文沿这条序列看索引、可见性、位置与缓存，避免把“第t个输入”和“第t个预测目标”混为同一个对象。
+
+Attention的行对应query，列对应key。先明确这两个轴，三角mask、位置旋转和KV追加的含义才一致。
 
 ## 序列索引：把对象按时间或顺序排起来
 
@@ -49,7 +51,7 @@ Scaled dot-product attention 写成：
 
 ## Causal mask：不能让未来泄漏到过去
 
-语言模型训练第 \(t\) 个 token 时，只能使用 \(1,\ldots,t-1\) 的历史。一个 causal mask 可以抽象成：
+预测目标token \(x_t\) 时只能使用 \(x_{<t}\)，但实现中常把输入与标签错开一位。输入 `[BOS,A,B]` 对应标签 `[A,B,EOS]`，输入位置0的隐藏状态预测A，位置1预测B，位置2预测EOS。因此每个输入位置可以读取自己，causal mask写成
 
 \[
 M_{ij}=
@@ -59,7 +61,21 @@ M_{ij}=
 \end{cases}
 \]
 
-其中 \(i\) 是当前 query 位置，\(j\) 是被读取的 key 位置。\(j>i\) 表示未来位置，因此被遮掉。
+其中 \(i\) 是输入query位置，\(j\) 是key位置。对三个位置，允许矩阵为
+
+\[
+A=\begin{bmatrix}1&0&0\\1&1&0\\1&1&1\end{bmatrix}.
+\]
+
+如果所有未遮挡attention logits相等，归一化后的权重为
+
+\[
+P=\begin{bmatrix}1&0&0\\1/2&1/2&0\\1/3&1/3&1/3\end{bmatrix}.
+\]
+
+令标量value为 \((2,4,9)\)，输出为 \((2,3,5)\)。位置1只能混合BOS和A的信息，得到3；如果误用全可见mask，它会读取B的value，训练时泄漏了当前要预测的答案。
+
+padding mask禁止把填充位置当作可用key，loss mask决定哪些标签进入损失，二者作用不同。prompt可以不计算损失，但其表示仍应被回答token读取。把两篇文档拼在一条序列中且要求独立训练时，还需要按文档隔开的block-causal mask，并在边界处理标签移位；单纯去掉padding不能阻止跨文档读取。
 
 这也是为什么论文里会反复强调 attention mask。Self-Forcing、EAGLE-3、Bagel、RingAttention、MagiAttention 等方法如果 mask 设计错了，模型可能在训练时偷看未来，或者在推理时让不同候选分支互相泄漏信息。
 
@@ -83,7 +99,22 @@ M_{ij}=
 
 这里 \(pos\) 是位置，\(i\) 是特征维度编号。不同维度使用不同频率的正弦和余弦，让模型同时感知短距离和长距离关系。
 
-RoPE 可以理解为把位置写成旋转：位置越靠后，query/key 在二维子空间里旋转得越多。它的好处是，点积天然带上相对位置信息。因此 DeepSeek-V3、LWM、长上下文模型和多模态序列模型经常会讨论 RoPE \(\theta\)、context extension 和位置外推。
+RoPE在每一对特征上施加二维旋转。记
+
+\[
+R(\phi)=\begin{bmatrix}\cos\phi&-\sin\phi\\\sin\phi&\cos\phi\end{bmatrix},\quad
+q_i'=R(i\omega)q_i,\quad k_j'=R(j\omega)k_j.
+\]
+
+因为 \(R(i\omega)^\top R(j\omega)=R((j-i)\omega)\)，点积成为
+
+\[
+(q_i')^\top k_j'=q_i^\top R((j-i)\omega)k_j.
+\]
+
+相对位置差进入了匹配分数。例如 \(q_i=k_j=(1,0)\)、\(\omega=\pi/2\)，同位置分数为1，相差一个位置为0，相差两个位置为-1。实际模型为多对维度选择不同频率，以表达多种距离尺度；上述单频例子只用于核对旋转。
+
+相对形式不保证任意长度外推都正确。频率、训练位置范围和内容分布共同影响效果。复用KV时也必须保留对应的位置语义；把带有旧位置旋转的key直接挪到新位置，会改变点积，除非实现按相应约定重新变换。
 
 ## Temperature：把 logits 变成更尖或更平的分布
 
@@ -98,7 +129,15 @@ p_i
 
 \(\tau\) 是 temperature。较小的 \(\tau\) 会让最大 logit 更突出，生成更确定；较大的 \(\tau\) 会让分布更平，生成更多样。
 
-投机解码论文读 temperature 时要特别小心：temperature 会改变下一个 token 分布，也会改变 draft token 的 acceptance rate。低温请求更可预测，draft 更容易连续猜中；高温请求更随机，候选树需要更多分支才可能覆盖目标分布。
+取两个logits \((2,0)\)。温度1得到概率约 \((0.8808,0.1192)\)，温度2得到 \((0.7311,0.2689)\)，温度0.5得到 \((0.9820,0.0180)\)。温度必须为正；所谓温度0通常是API对贪心选择的特殊约定，不能直接代入除法。
+
+投机采样的接受率取决于草稿与目标分布是否接近，不能只看温度或目标熵。若草稿分布为 \(q\)、目标为 \(p\)，标准单token接受规则的平均接受概率为 \(\sum_x\min(p(x),q(x))\)。两者完全相同时，即使分布很平，接受率也为1；若低温让它们各自集中到不同token，接受率反而可能更低。具体算法还要核对是否使用同一套温度和截断后的概率。
+
+## 训练一行与生成一步如何对齐
+
+训练输入位置B的输出分布用于预测EOS。生成时若上下文已经是`[BOS,A,B]`，读取最后一个位置的分布，就在做同一个条件预测。若错误地读取A的位置，得到的是“预测B”的分布，会产生看似合理却错一位的行为。
+
+KV中保存的是已经处理过的输入位置，不包括尚未送入网络的候选token。采样出EOS后通常直接结束；采样出普通token后，下一轮才为它计算新K/V。具体运行时可以批处理或预分配缓存，但逻辑上的已计算长度与已输出长度仍应区分。
 
 ## KV cache：序列历史的可复用记忆
 
@@ -110,15 +149,5 @@ K_{1:t},V_{1:t}
 
 KV cache 的数学意义是“历史序列已经被投影成可被未来 query 读取的记忆”。工程意义是显存和带宽账本。PagedAttention、KVSlimmer、MLA、GQA/MQA 和长上下文服务都在问：这些历史 \(K,V\) 怎样存、怎样读、能不能压缩。
 
-## 常见误读
 
-| 误读 | 更稳的理解 |
-| --- | --- |
-| mask 只是实现细节 | mask 定义了信息能否流动，错了会改变训练目标 |
-| 位置编码只是给 token 加编号 | 位置编码决定模型怎样比较距离、顺序和长上下文外推 |
-| temperature 只是生成风格参数 | 它直接改变概率分布，也影响 acceptance、评测和复现 |
-| KV cache 只是缓存 | 它是历史序列的 attention 记忆，也是长上下文成本的主要来源 |
-
-## 读完以后怎么判断
-
-看到 sequence、position、RoPE、mask、temperature 或 KV cache，先问：当前 token 能看见哪些历史，位置信息怎样进入 attention，生成概率是否被 temperature 改写，历史 \(K,V\) 是否被完整保存或近似压缩。这个问题链会支撑长上下文、投机解码、多模态序列和世界模型 rollout 论文。
+- [LLMs from scratch 的切片与因果注意力](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，对照input_chunk、target_chunk与mask轴。

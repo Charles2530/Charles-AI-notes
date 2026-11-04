@@ -15,301 +15,154 @@ paper_topic: 高效训练
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[www.trainy.ai/blog/gpu-utilization-misleading](https://www.trainy.ai/blog/gpu-utilization-misleading)。<br>
     **元数据来源与核验口径：** 来源：[官方 / 项目材料](https://www.trainy.ai/blog/gpu-utilization-misleading)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原文故事线
+## 100% GPU utilization 之后，优化为什么还没有结束
 
-### 研究背景
+Trainy 为一家基础模型公司优化 LLM 训练时，先做了最常见的一轮调整。数据加载端增加 worker、调整 batch size、使用 pinned memory 与预取；计算端采用 FP16/BF16 混合精度以及 FusedAdam、FusedAdamW 一类融合优化器；硬件端选择适合训练的 SXM GPU 和网络。GPU utilization 随后达到 100%，功耗也很高，但按模型吞吐算出的 **Model FLOPs Utilization（MFU，模型浮点运算利用率）只有约 20%**。机器持续繁忙，模型却没有相应地跑快。[↗](https://www.trainy.ai/blog/gpu-utilization-misleading)
 
-这篇 Trainy 技术文章讨论的是训练性能观测。很多团队用 `nvidia-smi` 的 GPU Utilization 判断 GPU 是否跑满，也会把它作为集群监控的核心指标；但大模型训练真正关心的是 GPU 峰值算力中有多少被模型计算转化为 tokens/s，也就是 MFU、SM efficiency、kernel timeline 等更具体的指标。
+这篇文章的核心洞见，是把“设备有没有在执行”“工作分布到多少计算单元”“每秒完成多少有效模型计算”拆开。沿着这三层去看，100% 和 20% 完全可以同时成立。GPU utilization 达到上限，只说明排查工作应该从设备空闲转向执行效率，不能宣布性能优化已经完成。
 
-### 问题（Challenge）
+作者接下来用 profiler 定位到 Softmax 等算子，替换融合实现，再调整模型并行程度，最终报告约 4 倍训练加速和 38% MFU。这是一条从监控现象到具体算子的工程诊断链。要复用它，最需要读懂的是每个指标的分母，以及某个局部优化如何真正缩短训练 step。
 
-文章要解决的问题是：为什么 GPU Utilization 已经 100%，训练仍然可能很慢。挑战在于 GPU Utilization 只说明 GPU 某些 compute 或 memory interface 正在活动，并不区分是在做高效 tensor core GEMM、低效 memory copy，还是 launch-heavy / memory-bound kernel。这个问题有价值，因为如果团队把 100% utilization 当作优化终点，就会错过 kernel fusion、并行切分、通信重叠和模型结构层面的真实瓶颈。
+## GPU utilization 先把整个 GPU 压成一个“忙或闲”的信号
 
-### Finding
+文章采用的定义是，过去一个采样周期内，GPU 上有一个或多个 kernel 正在执行的时间占比。下面是对该定义的解释性表达，并非原文给出的数学公式。设采样窗口长度为 $T$，$K(t)$ 表示时刻 $t$ 是否至少有一个 kernel 在执行，则
 
-文章的 finding 是：GPU Utilization 衡量的是“忙不忙”，不是“算得好不好”。Trainy 案例中，训练已经达到 100% GPU utilization 和较高功耗，但 MFU 只有约 20%；profile 后发现 softmax 等 kernel 能让 GPU 看起来繁忙，却没有高效使用 SM 和 tensor core。这个 insight 把性能诊断从单一表盘翻转成多指标证据链：先看端到端 MFU，再用 profiler 追 kernel 级 SM efficiency、memory bottleneck 和并行策略。
+$$
+U_{\mathrm{GPU}}=\frac{1}{T}\int_0^T \mathbf{1}[K(t)]\,\mathrm{d}t.
+$$
 
-### 方法
+这个表达只对“有没有”计时。一个 kernel 使用一个 SM，另一个 kernel 使用所有 SM，只要它们各自覆盖完整采样窗口，都可能得到 100%。kernel 内执行的是矩阵乘法、读取内存，还是等待已发出的访存请求，这个高层百分数也不负责区分。PyTorch 的 profiler 文档同样用“一个线程持续执行也能得到 100%”解释这一限制。[↗](https://pytorch.org/blog/pytorch-profiler-1.9-released/#gpu-metric-on-timeline)
 
-文章的方法是一次性能排查流程：先做常规优化，如 dataloader、batch size、pin memory、mixed precision、fused optimizer、合适实例类型；然后计算 MFU，把实际 tokens/s 与理论峰值 FLOPs 对齐；接着用 profiler 检查 kernel timeline、SM efficiency、SM activity 和具体慢 kernel；最后通过 fused kernels 与更合适的 model parallelism 调整训练路径。输入是训练 workload 与硬件峰值，输出不是一个模型，而是一套诊断和优化决策。
+因此，原文所说“只读写内存、做 0 FLOPs 也可能达到 100%”，描述的是指标没有浮点吞吐的含义。它不等于没有执行指令，更不意味着 memcpy、显存容量占用与所有监控工具中的 utilization 字段都是同一指标。理解读数之前，要先确认具体字段来自哪套计数和哪段采样时间。
 
-### 结论
+这也解释了为什么高功耗不能补上缺失的信息。功率说明设备消耗了能量，却没有回答这些能量换回多少模型 token。训练系统中的内存访问、通信和低效 kernel 都可能很忙，端到端吞吐仍然有限。
 
-Trainy 报告的案例里，GPU utilization 达到 100% 后，MFU 仍只有约 20%；经过 profiling、kernel fusion 和 model parallelism 调整，训练时间获得约 4x 加速，MFU 提升到约 38%。额外结论是：功耗、GPU utilization、SM activity、SM efficiency、MFU 各自回答不同问题，不能互相替代。本站引用中文辅助材料时，以 Trainy 原文数字为准：MFU 是从约 20% 到 38%，不是更高的二次转述数字。
+## 从整卡到 SM，再到 warp，观察尺度逐层缩小
 
-### 关键术语
+### 原图中的 144 SM 与例子里的 132 SM
 
-- **GPU Utilization（GPU 利用率）**：GPU compute 或 memory interface 处于活动状态的比例，不能直接代表有效算力利用
-- **MFU（Model FLOPs Utilization，模型 FLOPs 利用率）**：模型实际吞吐相对硬件理论峰值 FLOPs 的比例
-- **SM Efficiency（流多处理器效率）**：GPU SM 实际执行有效工作的程度，用于判断 kernel 是否铺满计算资源
-- **Kernel Fusion（算子融合）**：把多个小算子合成更少 kernel，降低访存和 launch 开销
-- **Model Parallelism（模型并行）**：把模型计算或参数切到多 GPU，改变单卡计算/通信形态
-
-## 它的效率贡献是什么
-
-| 维度 | 贡献 |
-| --- | --- |
-| 节省的成本 | 避免把 100% GPU utilization 误读成训练已经吃满算力，从而把优化停在数据加载、混合精度和基础并行配置之后 |
-| 核心机制 | 用 MFU 判断端到端计算效率，用 SM efficiency / SM activity 定位 kernel 是否真正铺满 SM，再用 profiler 找到 memory-bound 或 launch-heavy 层 |
-| 对世界模型主线的意义 | 视频 DiT、LLM、VLA 和世界模型训练都容易被 attention、softmax、通信和数据管线卡住；GPU utilization 只能做 idle signal，不能做效率验收 |
-| 主要风险 | SM efficiency 也不是最终答案；SM 活跃不代表 Tensor Core、内存带宽、occupancy、NCCL 和端到端 step time 都健康 |
-| 应接到本站哪里 | [训练路线图](../../training/index.md)、[训练数据系统与吞吐优化](../../training/data-systems-and-optimization.md)、[GEMM 与 Attention Kernel](../../operators/gemm-attention-and-fused-kernels.md)、[世界模型高效训练技术路线图](../../world-models/efficient-training-roadmap.md) |
-
-## 证据等级与外推边界
-
-这篇文章的证据来自一个 LLM 训练优化项目、PyTorch Profiler 截图、指标定义解释和优化后 MFU/训练时间变化。它能支撑“GPU utilization 会误导训练性能判断”，但不能替代完整 benchmark 或严格消融。
-
-| Claim | Evidence | Evidence level | Can reuse for training systems | Cannot directly infer |
-| --- | --- | --- | --- | --- |
-| 100% GPU utilization can still waste compute | 100% utilization with about 20% MFU in the case study | Engineering case | Treat GPU utilization as an idle detector, not a compute-efficiency metric | All 100% utilization jobs are inefficient |
-| SM efficiency helps expose underused kernels | PyTorch Profiler shows low SM efficiency during Softmax | Profiler evidence | Add SM activity / SM efficiency to cluster observability and per-layer profiling | High SM efficiency alone means the workload is optimal |
-| Fused kernels matter for Transformer training | Softmax, FlashAttention, MLP, dropout-layernorm-residual fusion discussion | System mechanism | Replace memory-bound PyTorch-native layer stacks with fused CUDA/Triton implementations when profiling supports it | Kernel fusion always improves every model or batch shape |
-| MFU is a better top-level training efficiency metric | MFU moved from about 20% to 38% after optimization | Case result | Use MFU with tokens/s, step time and peak FLOPs to judge whether more optimization is worth pursuing | MFU can localize the bottleneck by itself |
-| Model parallelism must match model and network | Case mentions tuning model-parallel level under 3.2 Tbps InfiniBand | System tuning | Profile communication and compute together instead of only changing batch size | A fixed TP/PP/FSDP layout is best across models and clusters |
-
-最稳的外推方式是把它当成一套诊断顺序：先看 GPU 是否 idle，再看 MFU 是否低，再用 profiler 和 SM / memory / tensor 指标定位具体 kernel 或通信阶段，最后做单项替换并回归训练 loss、吞吐和显存。
-
-## 文章位置
-
-很多训练优化教程会先列四件事：调大 batch 和 dataloader 参数、打开 fp16/bf16、换 fused optimizer、使用训练型 GPU 和高速网络。这些都重要，但它们只能把训练从“明显喂不饱 GPU”推进到“GPU 一直有活干”。
-
-Trainy 文章提醒的是下一层问题：GPU 一直有活干，不代表这些活是高价值计算。一个 memory-bound softmax、一个很小的 kernel、一个通信等待阶段，或者一串频繁读写 HBM 的算子，都可能让 GPU utilization 很高，但实际 FLOPs 很低。
-
-所以这篇文章在高效训练专题里的位置是“观测指标与排障入口”。Megatron-LM、ZeRO、MagiAttention、Attn-QAT 这些页面讨论的是具体并行、显存、attention 和低比特机制；这篇先回答：**你怎么知道自己的训练真的需要这些优化，以及该先优化哪一层。**
-
-## GPU Utilization 到底测了什么
-
-原文先用 GH100 / H100 的 SM 结构解释为什么 GPU utilization 容易误导。SM 可以理解成 GPU 内调度和执行线程块的基本计算单元；一个 CUDA kernel 只要在某个采样窗口里持续运行，就可能让 GPU utilization 看起来很高，但它未必使用了足够多的 SM，更未必让每个 SM 内部的 Tensor Core 或 CUDA core 高效工作。
+先看原文的 GH100 整体结构图。图内大量重复的小块才是执行 kernel 的 SM；HBM、L2 Cache、互连等组件围绕这些执行单元组织数据移动。观察重点是工作可以分布到很多个 SM，而整卡 utilization 把这种空间分布压成了一个时间读数。
 
 ![GH100 SM overview 原图](../../assets/images/paper-deep-dives/foundations/gpu-utilization-misleading/figure-1-gh100-sms.png){ width="820" }
 
-<small>图源：[Trainy: GPU Utilization is a Misleading Metric](https://www.trainy.ai/blog/gpu-utilization-misleading)。原图说明：GH100 GPU 中包含大量 Streaming Multiprocessors；原文用它说明 GPU 并行能力来自很多 SM 的协同工作。</small>
+*Trainy 引用的 GH100 完整芯片结构示意图。图示为 144 SM，后文例子使用启用 132 SM 的 H100 配置。二者不能混为同一产品的启用规格。*
+
+再把一个 SM 放大。图中既有 FP32、FP64 执行单元，也有 Tensor Core、LD/ST、寄存器和共享内存；顶部的 warp scheduler 负责调度线程组。因此，“某个 SM 处于活跃状态”仍然没有指定内部哪类单元在工作，更没有保证 Tensor Core 一直执行适合它的矩阵计算。
 
 ![H100 single SM 原图](../../assets/images/paper-deep-dives/foundations/gpu-utilization-misleading/figure-2-h100-sm.png){ width="760" }
 
-<small>图源：[Trainy: GPU Utilization is a Misleading Metric](https://www.trainy.ai/blog/gpu-utilization-misleading)。原图说明：H100 单个 SM 内部包含多个执行单元；原文用它说明“有 kernel 在跑”和“所有计算单元都被有效使用”不是同一件事。</small>
+*原文的单个 SM 结构图。读取数据、保存中间结果与执行算术是不同环节；看到活跃线程，不能直接推出所有算术资源已被充分使用。*
 
-**SM 总图和单 SM 图要一起看 utilization 的盲区。**
-Figure 1 看的是整块 GPU 被拆成多少个 SM；Figure 2 看的是单个 SM 内还有很多执行资源。GPU utilization 的问题在于，它首先回答“有没有 kernel 在跑”，不是回答“多少 SM 在跑、每个 SM 内部多忙、Tensor Core 是否在做矩阵乘”。因此一个只占少量 SM、主要读写内存的 kernel，也可能让 utilization 看起来很好。
+文章以 132 SM、每个 SM 128 个 CUDA core 的 H100 为例，总数是 16,896。假设一个 kernel 连续运行 10 秒，却只使用其中一个 SM，那么整卡 utilization 可以达到 100%，而按活跃 SM 的时空平均计算，活动率只有 $1/132\approx0.76\%$。原文写约 0.7%，这里的 0.76% 是直接除法后的更精细近似。[↗](https://www.trainy.ai/blog/gpu-utilization-misleading)
 
-原文给了一个很极端但非常有用的思想实验：如果一个 kernel 连续运行 10 秒，但只用到 1 个 SM，那么 `nvidia-smi` 风格的 GPU utilization 可能显示 100%；可是在 132 SM 的 H100 上，SM efficiency 只有 \(1/132 \approx 0.7\%\)。这说明 utilization 是必要信号，但不是充分信号。
+### SM activity 增加了空间维度，但仍然不是有效计算比例
 
-## 指标分层
+NVIDIA DCGM 对 **SM Activity** 的定义更精确：每个 SM 至少有一个活跃 warp 的时间比例，再对全部 SM 求平均。这里的活跃 warp **包括等待内存的 warp**，不要求它当下正在发射算术指令。对应字段是 `DCGM_FI_PROF_SM_ACTIVE`，编号 1002。[↗](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html#profiling-metrics)
 
-训练排障时更稳的做法，是把指标按粒度分层看。
-
-| Metric | What it measures | Useful for | Blind spot | Typical tool |
-| --- | --- | --- | --- | --- |
-| GPU Utilization | Time with at least one running kernel or active GPU work | Detecting idle GPUs and data-loader stalls | Does not reveal SM coverage, arithmetic intensity, Tensor Core use, or memory-bound kernels | `nvidia-smi`, NVML, dashboards |
-| SM Efficiency / SM Activity | Fraction of SMs active over a sampling window | Finding kernels that do not spread work across SMs | Active SMs can still be doing low-value memory work or underfilled warps | PyTorch Profiler, DCGM, Nsight |
-| Achieved Occupancy | Active warps per SM relative to hardware capacity | Diagnosing whether each active SM has enough resident work | High occupancy does not guarantee high FLOPs; memory stalls can still dominate | Nsight Compute, PyTorch Profiler |
-| Tensor Core / Pipe Utilization | How busy specific execution pipelines are | Checking whether bf16/fp16/fp8 GEMMs are actually using accelerated math units | Does not explain data input or communication stalls by itself | Nsight Compute, DCGM profiling metrics |
-| Memory Bandwidth | HBM or memory-interface traffic relative to peak | Identifying memory-bound softmax, norm, copies, cache misses | High bandwidth can be healthy or a symptom depending on arithmetic intensity | Nsight, DCGM, vendor dashboards |
-| MFU | Model FLOPs achieved relative to theoretical peak FLOPs | Top-level training efficiency comparison across runs | Requires a model FLOPs estimate and does not localize the slow layer | Training logs plus hardware peak FLOPs |
-
-这里最重要的是别把这些指标排成“谁替代谁”。它们回答的问题不同：
-
-```text
-GPU utilization: is the GPU idle?
-MFU: is the training job using enough of theoretical compute?
-SM efficiency: are kernels spreading work across SMs?
-Occupancy / pipe / memory metrics: why are active SMs still slow?
-Profiler timeline: which operator or communication phase is responsible?
-```
-
-### GPU utilization 高但 Tensor Core 低
-
-用户最容易遇到的下一层问题是：GPU utilization 已经很高，SM activity 也不低，但 Tensor Core / tensor pipe utilization 仍然偏低。这通常不是“卡坏了”，而是 workload 没有把时间花在 Tensor Core 擅长的 dense matrix multiply / convolution 上。
-
-NVIDIA 的 [mixed precision 文档](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html)把 Tensor Core 优化拆成三件事：满足 shape 约束、提高 arithmetic intensity、减少 non-Tensor-Core work 的占比。NVIDIA 的[矩阵乘性能指南](https://docs.nvidia.com/deeplearning/performance/dl-performance-matrix-multiplication/index.html)也强调，现代 cuBLAS/cuDNN 即使在部分未对齐 shape 上仍可能使用 Tensor Core，但维度按 16 bytes 或更高粒度对齐时效率更好。PyTorch 侧还要看 [AMP/autocast op eligibility](https://docs.pytorch.org/docs/2.8/amp.html#op-eligibility)、[TF32 开关](https://docs.pytorch.org/docs/2.8/notes/cuda.html#tensorfloat-32-tf32-on-ampere-and-later-devices)和具体 op eligibility：例如 `linear`、`matmul`、`mm`、`bmm`、`conv` 更容易走低精度矩阵路径，而 `softmax`、`layer_norm`、`sum`、`log`、部分 loss 和 reduction 常会保持或转到 fp32 路径。
-
-| Symptom | Likely reason | How to verify | Typical fix |
-| --- | --- | --- | --- |
-| High GPU Util, low Tensor Core, high memory bandwidth | Memory-bound kernels dominate | Nsight Compute roofline, memory workload analysis, profiler operator table | Fuse memory-bound ops, reduce HBM traffic, use FlashAttention / fused norm / fused optimizer |
-| High GPU Util, low Tensor Core, many non-GEMM kernels | Work is softmax, layer norm, activation, embedding, optimizer, scatter/gather, masking, or NCCL | PyTorch Profiler categories, Nsight Systems timeline | Reduce non-Tensor-Core fraction, fuse pointwise/reduction ops, overlap communication |
-| Matmul exists, but Tensor Core low | Dtype path is not eligible: fp32 with TF32 disabled, AMP disabled, explicit `dtype=`, in-place or `out=` ops bypass autocast | Check PyTorch autocast regions, `torch.set_float32_matmul_precision`, TF32 flags, kernel metrics | Enable bf16/fp16 AMP where stable, enable TF32 for fp32 matmul when acceptable, avoid autocast-breaking calls |
-| Tensor Core kernels appear, but utilization low | GEMM shapes are too small, fragmented, or poorly aligned | Inspect M/N/K, batch size, sequence packing, head dimension, tile count | Increase micro-batch, pad dimensions, pack sequences, choose hidden/head sizes aligned with Tensor Core-friendly multiples |
-| Tensor Core active only in short bursts | Kernel launch overhead or many tiny kernels dominate | Nsight Systems launch timeline, CPU overhead, graph breaks | Use fused modules, CUDA Graphs where applicable, `torch.compile` only after validating graph breaks |
-| Good Tensor Core in forward, low step-level Tensor Core | Backward, optimizer, communication, checkpoint recompute or dataloader consumes wall time | Step breakdown: forward/backward/optimizer/NCCL/dataloader | Fused optimizer, communication overlap, better FSDP/TP buckets, input pipeline fixes |
-| Tensor Core low in MoE / sparse / retrieval-heavy model | Routing, top-k, all-to-all, unstructured sparsity and gather/scatter dominate | Per-layer trace and NCCL timeline | Batch/routing coalescing, expert capacity tuning, structured sparsity or dense fallback for hot paths |
-
-这个现象和 Trainy 文章里的 Softmax 案例是同一个家族：GPU 一直忙，但忙的是内存读写、reduction、通信或小 kernel，而不是大块 dense GEMM。Tensor Core 低时，优先问四个问题：
-
-1. 当前 step 的 wall time 里，dense GEMM/conv 到底占多少？
-2. 这些 GEMM/conv 的 dtype、shape、layout 是否能走 Tensor Core 高效路径？
-3. 非 Tensor Core work 是否被 softmax、norm、optimizer、mask、embedding、NCCL 或 dataloader 放大？
-4. 即使 Tensor Core kernel 很快，端到端 step time 是否被通信、checkpointing 或 Python/launch overhead 吃掉？
-
-**诊断口径。**
-不要只看一个 `tensor_core_utilization` 面板。更稳的方式是同时看 Nsight Systems 的时间线、[Nsight Compute roofline](https://docs.nvidia.com/nsight-compute/2023.3/NsightCompute/index.html#rooflines) 里的 tensor pipe / memory / roofline、PyTorch Profiler 的 op 表，以及训练日志里的 MFU。若 roofline 显示 kernel 被 memory ceiling 限制，Tensor Core 低是结果，不是根因；若 GEMM shape 很小或未对齐，Tensor Core 低才可能是直接优化点。
-
-### MFU 的训练口径
-
-MFU 来自 PaLM 等大模型训练报告中常用的口径。对 dense Transformer，粗略上可以写成：
+用 $M$ 表示 SM 数、$a_m(t)$ 表示第 $m$ 个 SM 是否至少有一个活跃 warp，可把这个定义解释为
 
 $$
-\mathrm{MFU} =
-\frac{\mathrm{model\ FLOPs\ per\ token} \times \mathrm{tokens/s}}
-{\mathrm{number\ of\ GPUs} \times \mathrm{peak\ FLOPs\ per\ GPU}}
+A_{\mathrm{SM}}=\frac{1}{MT}\sum_{m=1}^{M}\int_0^T a_m(t)\,\mathrm{d}t.
 $$
 
-如果是图像、视频或世界模型训练，也可以把分子改成每 step 估算的训练 FLOPs 除以 step time：
+它同时平均时间和空间。DCGM 给出的两个例子尤其有用：若五分之一的 SM 持续工作，活动率约为 20%；若全部 SM 只在五分之一的时间工作，其余时间完全空闲，活动率也约为 20%。相同的平均数，背后可能是并行覆盖不足，也可能是工作供应不连续。需要把指标与时间线对齐，才能选择不同的改进方式。
+
+反过来，即使所有 SM 都有活跃 warp，如果它们经常等待内存，活动率仍可以很高。这里不能把旧的判断“GPU utilization 高，所以性能好”，换成新的判断“SM activity 高，所以性能好”。活动率帮助缩小排查范围；算术流水线、内存带宽与实际 step time 才能继续区分原因。
+
+### Occupancy 衡量驻留的 warp 数量
+
+**SM Occupancy（SM 占用率）**进一步关心每个 SM 驻留多少 warp，相对于该硬件支持的最大并发 warp 数是多少。DCGM 的字段是 `DCGM_FI_PROF_SM_OCCUPANCY`，编号 1003。它与仅要求“至少一个 warp”的 SM activity 不同。[↗](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html#profiling-metrics)
+
+更多驻留 warp 有时能让调度器在一组线程等待数据时，切换到另一组已有数据的线程，从而隐藏延迟。但寄存器、共享内存和每个 block 的线程数共同限制驻留量；较高 occupancy 也不保证较短的 kernel 时间。若计算单元或内存通路已经成为瓶颈，继续提高驻留数量可能不再带来收益。更不能把“驻留”解释为每个 warp 都在同一时刻执行。
+
+三个层次的区别可以放在同一张解释表里。这张表用于梳理定义，不是原文的实验表。
+
+| Metric | Measurement | Useful question | What it does not establish |
+|---|---|---|---|
+| GPU Utilization | 有 kernel 执行的时间比例 | GPU 是否经常空闲 | 工作是否覆盖整卡、有效 FLOPs 是否高 |
+| SM Activity | SM 上至少一个 warp 活跃的时间比例，再跨 SM 平均 | 工作是否覆盖更多 SM 和时间 | 活跃 warp 是否正在算术运算 |
+| SM Occupancy | 驻留 warp 相对最大并发容量的比例 | 是否有足够线程组隐藏延迟 | 提高该比例是否会缩短运行时间 |
+| Tensor Activity | Tensor 指令管线活跃的周期比例 | Tensor Core 管线是否得到工作 | 完整模型训练是否接近理论效率 |
+| MFU | 有效模型计算吞吐相对硬件峰值 | 当前实现每秒完成多少有用模型工作 | 哪一个 kernel 或通信步骤造成损失 |
+
+## MFU 把分子换回模型真正要完成的工作
+
+对于相同模型，用户最终关心每秒处理多少训练 token、完成固定训练预算要多久。设模型每 token 必需的前向和反向计算量为 $C_{\mathrm{model}}$ FLOPs，实测吞吐为 $R$ tokens/s，使用 $N$ 个相同 GPU，每卡在所用数值精度下的峰值为 $P$ FLOPs/s，那么 MFU 可按定义写为
 
 $$
-\mathrm{MFU} =
-\frac{\mathrm{estimated\ training\ FLOPs\ per\ step} / \mathrm{step\ time}}
-{\mathrm{cluster\ peak\ FLOPs}}
+\mathrm{MFU}=\frac{C_{\mathrm{model}}R}{NP}.
 $$
 
-这个公式有三个容易踩坑的地方：
+等价地，$NP/C_{\mathrm{model}}$ 是假定全部峰值都用于模型有效计算时的理论 token 吞吐，MFU 是实测吞吐与它的比值。这里各项必须使用同一口径：序列长度会影响注意力计算，模型架构会影响每 token 工作量，分母则需要对应实际设备数、精度及适用的峰值条件。不能拿 BF16 训练的吞吐随意除以另一种精度或不适用的稀疏峰值。
 
-1. `model FLOPs` 要和模型结构一致。MoE 要按 activated experts 和实际路由算，不能简单用 total parameters；长上下文 attention 还要补 \(O(BS^2H)\) 或对应 fused attention 的等价 FLOPs。
-2. `peak FLOPs` 要和实际精度一致。bf16/fp16/fp8/fp4 的理论峰值不同，Tensor Core 是否被用上也会影响解释。
-3. `tokens/s` 或 `samples/s` 要在 warmup 后稳态测。包含 checkpoint、eval、数据缓存未命中和编译 warmup 的窗口会污染 MFU。
+原文引用的 PaLM 定义还有一个关键边界：**MFU 不把 activation rematerialization 的重复计算计作额外有效模型工作**。重计算确实会让硬件执行更多 FLOPs，但它是在显存约束下重复完成已有前向计算。若把这部分也算入分子，得到的是包含实现额外工作的硬件利用率口径，而非 PaLM 用来比较训练效率的 MFU。[↗](https://arxiv.org/html/2204.02311v5#S4)
 
-所以 MFU 很适合做“还有没有大优化空间”的判断。比如 20% MFU 通常说明值得继续 profile；40% 到 50% 之后，再提升十个百分点可能就需要更深的 kernel、通信和并行布局改造。
+PaLM 本身提供了一个清楚的例子：论文给出包含注意力的 MFU 为 46.2%，包含重计算的 hardware FLOPs utilization 为 57.8%。同一次训练可以有不同百分数，区别来自计量目标。重计算仍可能帮助性能，因为它释放显存、允许更合适的 batch；是否值得，需要看由此换回的 token 吞吐，而不能靠“多执行了 FLOPs”证明。[↗](https://arxiv.org/html/2204.02311v5#S4)
 
-## Softmax 为什么会暴露问题
+Trainy 提到的常见 35%–45% MFU 是其 2025 年文章的经验参照。模型、序列长度、精度、规模与并行策略不同，不宜把它当作所有训练系统通用的合格线。在这次案例中，20% 的作用是提示仍有明显效率空间，并推动作者寻找具体原因。
 
-Trainy 的案例中，PyTorch Profiler 显示 Softmax kernel 的 GPU utilization 很高，但 SM efficiency 很低。
+## Profiler 把“有空间”变成可以修改的算子
+
+下面的原图应沿同一时间轴对齐三条信息：底部标红的长 Softmax kernel、上方的 GPU Utilization，以及 **Est. SM Efficiency**。Softmax 持续执行时，整卡忙碌条仍很高，而估计的 SM efficiency 明显降低。
 
 ![PyTorch Profiler SM efficiency 原图](../../assets/images/paper-deep-dives/foundations/gpu-utilization-misleading/figure-3-pytorch-profiler-sm-efficiency.webp){ width="860" }
 
-<small>图源：[Trainy: GPU Utilization is a Misleading Metric](https://www.trainy.ai/blog/gpu-utilization-misleading)。原图说明：PyTorch Profiler 中 Softmax kernel 显示低 SM Efficiency；原文用它说明 GPU utilization 高并不等于 kernel 高效。</small>
+*原文的 PyTorch Profiler 截图。这里显示的是 Est. SM Efficiency，保留“估计”这一标签；截图没有提供可重建完整基准的算子尺寸和精确计数。*
 
-**这张 profiler 图怎么读。**
-先看时间轴里是哪类算子占据训练循环，再看同一段里的 GPU utilization、SM efficiency 和算子名称是否一致。这里的重点不是“Softmax 永远不好”，而是 naive softmax 常常读写多、算术强度低、shape 又可能不够饱满；它可以让 GPU 忙着搬数据，却没有把大量时间花在 Tensor Core GEMM 这类高 FLOPs 计算上。
+这张图首先支持定位判断：慢的区间可以落到一个具体 kernel，不能继续只看整个训练作业的平均 utilization。它并不单独证明究竟有多少带宽未用、多少 warp 在等待，或更大的 batch 必然能解决问题。后续仍需要结合算子的计算模式来解释。
 
-Transformer block 里 attention softmax 特别容易成为指标陷阱：
+原文指出，朴素 Softmax 是典型的内存相关瓶颈。为了理解为何融合能帮助它，可以把数值稳定的 Softmax 展开为一个说明性过程。对一行输入 $x$，先找最大值 $m$，再计算指数、求和、归一化：
 
-| Workload pattern | Why GPU Utilization can look good | Why MFU / SM metrics may stay low | Typical fix |
-| --- | --- | --- | --- |
-| Naive Softmax | A kernel runs continuously and touches memory | Low arithmetic intensity, repeated HBM traffic, poor fusion | Fused softmax, FlashAttention / SDPA |
-| Small elementwise ops | Many kernels keep launching | Launch overhead and fragmented memory reads dominate | Fuse dropout, bias, residual, layer norm |
-| Tiny micro-batches | GPU always has some work | GEMMs are too small to saturate Tensor Cores | Larger micro-batch, gradient accumulation, better sequence packing |
-| Communication-heavy step | NCCL or synchronization keeps devices active | Compute units wait around collectives or imbalance | Tune TP/PP/DP/FSDP, overlap communication, fix stragglers |
-| Input pipeline almost-but-not-quite stable | GPU rarely fully idle | Short bubbles between batches reduce steady-state throughput | Prefetch, pin memory, CPU/GPU preprocessing split |
+$$
+m=\max_j x_j,\qquad e_i=\exp(x_i-m),\qquad y_i=\frac{e_i}{\sum_j e_j}.
+$$
 
-这张表也说明，GPU utilization 不是没用。它能告诉你机器有没有明显空闲，但它不能告诉你“忙的内容是否值钱”。
+如果这些步骤由分离的操作实现，中间值可能反复写入和读出显存。算术本身并不复杂，数据却在算子之间搬运。GPU 可以一直执行 kernel，时间仍大量消耗在访存上。这个展开用于解释内存流量，并不声称截图中的具体 Softmax 恰好按四个独立 kernel 实现。
 
-## 优化路径：从替换指标到替换 kernel
+在注意力内部，问题还会放大：若显式存储整张 attention score，再存储归一化概率，长序列会产生大量中间读写。融合注意力实现能够改变计算与中间结果的存放方式，让相关操作一起执行，减少这些往返。这里减少的是执行路径上的数据移动，不要求改变模型本来要计算的注意力功能。
 
-原文最终把优化落到 Transformer block 内的 kernel fusion。
+## 融合优化改变了哪些环节
+
+原文并没有为每个层重新开发 CUDA。它复用了 FlashAttention 等已有库里的实现，重点是把模型中的相应模块换成兼容的融合版本。下图从输入到输出标出四组候选位置：注意力、前馈网络、dropout–residual–normalization，以及输出 Softmax。
 
 ![Kernel fusion 原图](../../assets/images/paper-deep-dives/foundations/gpu-utilization-misleading/figure-4-kernel-fusions.webp){ width="540" }
 
-<small>图源：[Trainy: GPU Utilization is a Misleading Metric](https://www.trainy.ai/blog/gpu-utilization-misleading)。原图说明：Transformer block 中可以通过 fused attention / fused MLP / fused dropout-layernorm-residual 等减少内存读写和 kernel launch 开销。</small>
+*原文的融合位置示意图，保留 `flash_attn_qkvpacked_func`、`FusedMlp`、`DropoutAddLayerNorm`、`FusedSoftMax` 标注。图采用带交叉注意力的通用 Transformer 示意，不足以据此推断客户模型就是同样的 decoder 结构。*
 
-**这张 kernel fusion 图怎么读。**
-图里的重点不是“所有层都要手写 CUDA”，而是把多个 PyTorch 原生小算子替换成更少、更贴近硬件的数据流。FlashAttention 是典型例子：它不只是把 softmax 写快，而是避免把完整 attention matrix 反复写入 HBM。MLP、dropout、layer norm、residual add 的融合也类似，目标是减少读写、减少 launch，并让 shape 更容易喂饱 GPU。
+**注意力路径。** 文中使用 FlashAttention 作为融合的代表。应关注 Q/K/V 到注意力输出的整个计算区域，不能把图最上方的 `FusedSoftMax` 当成对注意力所有中间读写的替代。对现有模型，接入点需要匹配张量布局、mask、精度以及前后向接口；已有库的模块封装减少了手写 autograd 的负担，但不会自动消除接口差异。[↗](https://github.com/Dao-AILab/flash-attention)
 
-训练优化可以按下面顺序做，避免一上来就改复杂分布式结构：
+**MLP 路径。** 图中的 `FusedMlp` 对应前馈网络内可合并的计算。其实际收益来自实现减少部分中间写回和调度成本。模块名不意味着两个矩阵乘法、激活和全部反向传播都被压进同一个 kernel。原文提供的是可复用实现方向，没有报告这一个模块独立贡献的加速倍数。[↗](https://github.com/Dao-AILab/flash-attention/blob/9a11f440d3a34f618b4ba814c825b109c6d7e8f5/flash_attn/ops/fused_dense.py#L531)
 
-1. **先确认不是输入饿死 GPU**：记录 dataloader wait time、CPU preprocessing、storage bandwidth、batch ready time。常见调参是 `num_workers`、`pin_memory`、`prefetch_factor`、persistent workers、数据缓存和 GPU-side preprocessing。
-2. **再确认数值路径对**：bf16/fp16 是否真的启用 Tensor Core；是否有意外 fp32 fallback；loss scale、grad scaler 和 autocast 范围是否合理。
-3. **再算 MFU**：如果 GPU utilization 高但 MFU 低，说明训练还没把理论峰值转成有效模型 FLOPs。
-4. **用 profiler 找层级瓶颈**：按 step time 排序，看 attention、MLP、norm、optimizer、all-reduce、all-gather、activation checkpoint recompute、dataloader 哪些占比异常。
-5. **按证据替换 fused implementation**：优先替换 profiler 指出的 memory-bound 或 launch-heavy 算子，例如 FlashAttention / SDPA、fused MLP、fused bias-dropout-add-layernorm、fused optimizer。
-6. **重新选并行切分**：TP、PP、DP、FSDP、ZeRO、sequence/context parallelism 都会改变通信/计算比。模型小却过度切分，通信会盖过计算；模型大但切分不足，又会 OOM 或 micro-batch 太小。
-7. **回归质量和稳定性**：吞吐提升后要同时看 loss curve、grad norm、溢出、checkpoint 可恢复性和验证集指标。训练系统优化不能只看 tokens/s。
+**Dropout、残差加法与 LayerNorm。** 这些操作相邻地处理同一批激活。若每一步单独读写整个张量，计算量不大，带宽成本却会累积。融合可以复用已读入的数据并减少中间张量。不过，训练时 dropout 的随机行为、归一化的数值语义及梯度都必须保持正确。局部更快，只有在前向、反向和训练稳定性都符合要求时才是可用优化。
 
-这里的训练细节尤其适合和 [Megatron-LM](megatron-lm.md)、[ZeRO](zero.md)、[MagiAttention](magiattention.md) 一起读：Megatron-LM 解释 tensor parallel 为什么能把大 GEMM 切开；ZeRO 解释参数、梯度和优化器状态为什么要分片；MagiAttention 解释长上下文 attention 为什么还要按 mask area 和通信路径调度。Trainy 这篇则提醒你：这些复杂技术要由指标和 profiler 触发，而不是凭感觉堆上去。
+这些替换共同说明，kernel fusion 的收益不限于“少启动几个 kernel”。对访存受限的操作，更重要的是减少中间值经过高带宽显存的次数，以及让数据在靠近计算单元的位置被继续消费。不同算子、张量尺寸和硬件下，哪种收益占主导需要实际测量。
 
-## 对 LLM / 世界模型训练的具体启发
+文章还讨论了 `torch.compile` 与 FSDP、graph break 的实际体验。它反映的是 2025 年发表时的环境，不能直接改写成当前版本的兼容性结论。可复用的判断是查看实际编译覆盖了哪些计算、在哪些边界断开，再决定是否采用手工模块替换；“启用了编译”与“关键区间已经得到融合”之间仍需要运行结果连接。
 
-### LLM 预训练
+## 4 倍加速与 20%→38% MFU 应当分别怎样读
 
-LLM 训练中，最常见的误判是“GPU utilization 100%，所以吞吐慢只能加卡”。实际可能是：
+作者报告，大部分收益来自融合 kernel，以及依据模型大小和 3.2 Tbps InfiniBand 网络调整模型并行程度。这里不只有单卡算子优化：并行切分改变每张卡收到的工作量，也改变跨卡通信安排，因此要一起看端到端 step time。[↗](https://www.trainy.ai/blog/gpu-utilization-misleading)
 
-| Symptom | Likely bottleneck | Training detail to inspect |
-| --- | --- | --- |
-| 100% GPU Utilization, low MFU | Memory-bound kernels or tiny GEMMs | Attention implementation, sequence length, micro-batch, tensor shapes |
-| High SM Activity, low Tensor Core use | Non-GEMM kernels dominate | Softmax, layer norm, embedding, optimizer, fp32 fallback |
-| Good single-GPU step, poor multi-GPU scaling | Communication or sharding imbalance | NCCL timeline, TP all-reduce, FSDP all-gather, gradient bucket sizes |
-| High throughput but unstable loss | Numerical or optimizer issue | bf16/fp16 range, fused optimizer behavior, gradient clipping, loss scaling |
-| Profiler dominated by dataloader | Input pipeline | Token packing, mmap/cache, CPU preprocessing, prefetch and worker count |
+下面整理原文唯一的客户结果。列名为说明方便而设，原文没有对应的正式消融表。
 
-这也是为什么训练日志里不应该只写 `gpu_util`。更稳的最小日志集包括：
+| Reported quantity | Before | After / available condition |
+|---|---:|---|
+| GPU Utilization after initial tuning | 100% | 后续优化的 utilization 未单列 |
+| Model FLOPs Utilization | ~20% | 38% |
+| Training speedup | Baseline | 4× reported |
+| Network | — | 3.2 Tbps InfiniBand available |
+| Main changes | 已做常规数据、精度、优化器调整 | Fused kernels + model-parallelism tuning |
 
-```text
-global_step
-tokens_per_second / samples_per_second
-step_time_ms
-forward_time_ms / backward_time_ms / optimizer_time_ms
-dataloader_wait_ms
-gpu_utilization
-sm_activity
-memory_bandwidth_utilization
-tensor_core_or_pipe_utilization
-peak_memory_allocated
-nccl_time_ms
-estimated_mfu
-loss / grad_norm / overflow_count
-```
+从 20% 到 38% 是提高约 18 个百分点，相对提高约 90%。若模型工作量、设备数和峰值口径完全不变，根据 MFU 定义可推出 token 吞吐比为 $38/20=1.9$。**这不能推出 4 倍训练加速。** 原文没有公开足够的阶段基线、模型配置和 GPU 规模，不能替作者补出一组能强行对齐两者的条件。
 
-### 视频 DiT 和世界模型
+这也限制了收益归因。没有逐项开关的消融，便不能把 4 倍分配给 FlashAttention、MLP 或某一种并行方式；没有完整训练配置，也不能预期任意模型采用同样模块就获得 38% MFU。它有力地支持的是更具体的工程观察：已有 100% utilization 的训练仍可能通过算子实现和并行配置得到明显改善。
 
-视频生成和世界模型训练更容易被 GPU utilization 误导，因为它们同时有长序列 attention、VAE/tokenizer、视频解码、数据增强、条件编码器、跨帧 mask、分布式通信和 rollout 评测。
+## 把诊断链带回自己的训练任务
 
-如果只看 GPU utilization，你很难区分下面几种情况：
+可复用的起点是为固定工作建立基线。记录模型、序列长度、有效 global batch、数值精度、GPU 类型与数量，在稳定运行区间比较 token/s 和 step time。编译预热、数据等待或周期性 checkpoint 若进入计时，需要在前后实验保持一致；否则指标变化可能来自计时窗口，而不是被修改的算子。
 
-| World-model case | Looks like | Real question |
-| --- | --- | --- |
-| Long video attention | GPU is busy | Is attention compute-bound, memory-bound, or communication-bound? |
-| Action-conditioned rollout | GPU is busy | Is decode dominated by denoising steps, KV cache, or action adapter? |
-| Multi-camera batch | GPU is busy | Are camera streams packed efficiently or padded into wasted tokens? |
-| Synthetic data generation | GPU is busy | Are generated samples accepted by checker, or just burning rollout compute? |
-| Closed-loop evaluation | GPU is busy | Is simulator / environment step blocking model compute? |
+接着对齐时间线。若 GPU 经常空闲，优先调查数据供应、CPU 调度、kernel 启动间隙和同步；若 GPU 持续忙碌而模型吞吐低，就把耗时区间落到 kernel 或通信操作，进一步区分 SM 覆盖、驻留 warp、内存活动和 Tensor 管线工作情况。DCGM 的设备级平均适合持续观察，profiler 的算子时间线适合定位问题，两者回答的尺度不同。
 
-对世界模型高效训练来说，真正应该验收的是“每 GPU-hour 产生多少有效训练信号”。这比 GPU utilization 更接近工程目标：
+最后只改动可以解释的一组因素，例如替换已定位的融合模块，或调整一种并行配置。先比较输出与梯度，再比较完整训练 step。吞吐改善后重新计算 MFU，并检查节省的显存、通信变化和训练稳定性是否影响实际可用的配置。这样才能知道局部 kernel 加速有没有转化为整个训练任务的收益。
 
-```text
-accepted_tokens_or_frames_per_gpu_hour
-valid_rollouts_per_gpu_hour
-action-sensitive_success_cases_per_gpu_hour
-risk_event_replay_hits_per_gpu_hour
-loss_reduction_per_gpu_hour
-closed_loop_score_delta_per_gpu_hour
-```
-
-换句话说，GPU 忙不忙只是第一层；它忙出来的 token、帧、rollout 和 hard cases 是否进入有效训练，才是高效训练的最终账。
-
-## 一个可复用排障流程
-
-把 Trainy 的经验压缩成工程流程，可以这样跑：
-
-```text
-1. Warm up training for enough steps
-2. Record steady-state throughput and GPU utilization
-3. Estimate MFU from model FLOPs and tokens/s
-4. If utilization is high but MFU is low, capture profiler traces
-5. Inspect SM activity, achieved occupancy, tensor pipe, memory bandwidth and NCCL timeline
-6. Pick one bottleneck class: input, kernel, memory, communication, optimizer, checkpointing
-7. Apply one change: fused kernel, batch/packing, parallelism, overlap, optimizer, dataloader
-8. Re-run the same window and compare step time, MFU, memory and loss stability
-```
-
-这套流程的关键是单变量迭代。不要同时改 batch、precision、FlashAttention、FSDP bucket、activation checkpointing 和数据加载，否则吞吐涨了也很难知道原因，loss 波动时更难回滚。
-
-## 局限和风险
-
-这篇文章有几个边界要保留：
-
-1. 它是工程案例，不是公开可复现实验。`4x` 加速和 `20% -> 38% MFU` 不能直接套到所有模型。
-2. SM efficiency 比 GPU utilization 更细，但不是最终指标。高 SM activity 仍可能因为内存、warp divergence、低 Tensor Core use 或通信等待而低效。
-3. MFU 依赖 FLOPs 估算。MoE、稀疏 attention、activation checkpointing、重计算和多模态 encoder 都会让估算变复杂。
-4. Fused kernel 可能改变数值路径、autograd 图、checkpoint 兼容性和调试难度。尤其在 FSDP、ZeRO、sequence parallel 和 `torch.compile` 混用时，要用小规模回归先验证。
-5. 训练效率不是唯一目标。对世界模型和 VLA 来说，action sensitivity、风险校准、长时一致性和闭环成功率必须和吞吐一起验收。
-
-## 阅读结论
-
-这篇文章最值得记住的是一个诊断顺序：`GPU utilization` 只能说明 GPU 大概率没闲着，不能说明算力被高价值使用。训练效率要先看 MFU，再用 SM activity、Tensor Core / memory / NCCL 指标和 profiler timeline 找瓶颈，最后才决定要不要上 fused kernel、改 batch packing、调并行切分或优化数据管线。
-
-对 LLM、视频 DiT、VLA 和世界模型训练来说，真正的效率指标应该是“每 GPU-hour 产生多少有效训练信号”。如果 GPU 很忙，但忙出来的是无效 padding、低质量 rollout、未通过 verifier 的合成数据或不能改善闭环指标的样本，那仍然不是高效训练。
-
-## 外部精读
-
-1. [Trainy: GPU Utilization is a Misleading Metric](https://www.trainy.ai/blog/gpu-utilization-misleading)：原文；重点读 GPU utilization、SM efficiency、MFU 和 Softmax 案例。
-2. [NVIDIA Mixed Precision Training Guide](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html)：理解 Tensor Core 路径、shape 和 arithmetic intensity。
-3. [NVIDIA Matrix Multiplication Background User's Guide](https://docs.nvidia.com/deeplearning/performance/dl-performance-matrix-multiplication/index.html)：看 GEMM shape、tile 和 Tensor Core 性能约束。
-4. [Nsight Compute Roofline](https://docs.nvidia.com/nsight-compute/2023.3/NsightCompute/index.html#rooflines)：区分 compute-bound、memory-bound 和 roofline 诊断。
+这篇案例最值得带走的工作习惯，是让监控指标承担它真正能回答的问题。GPU utilization 告诉你设备是否经常没有工作；更细粒度指标帮助定位执行瓶颈；固定训练工作所需的时间，负责决定优化是否成功。

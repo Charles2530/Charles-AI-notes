@@ -1,133 +1,62 @@
-# 自定义算子与框架集成
+# 自定义乘加算子怎样接入 PyTorch
 
-很多人第一次写自定义 kernel 时，会把注意力放在“这个 kernel 跑得够不够快”。但在真实工程里，性能只是其中一部分。一个自定义算子想真正进入训练或推理系统，还必须解决框架调用、autograd、图编译、profiler、shape / dtype / device dispatch、fallback、测试和版本演进。
+设要实现逐元素 $y=a\times b+c$，a与b是同shape tensor，c是标量。GPU kernel只负责算出值；PyTorch还需要知道这个操作的参数、返回shape、设备实现和反向公式，才能把它接进训练与编译图。
 
-因此“自定义算子开发”其实更像一条完整集成链，而不是孤立的 kernel 编写。
+## Schema定义框架能依赖的事实
+
+官方C++自定义算子教程用 `mymuladd(Tensor a, Tensor b, float c) -> Tensor` 声明接口，再分别注册CPU与CUDA实现。实现需检查shape、dtype、device与支持的layout。
+
+若kernel会修改输入，schema必须准确标记mutation和alias关系，否则编译器可能按纯函数假设重排或消除操作。更快的设备代码无法补救错误的框架契约。
+
+## Fake实现让编译器只看元数据也能推演
+
+图编译时不一定执行真实数值。FakeTensor实现应依据输入shape、stride、dtype和device返回正确的输出元数据。对于本例，检查a/b同shape等条件后，返回相应空输出即可，不应读取tensor数据来决定结果。
+
+`register_fake`不能取代CUDA实现；它只回答“结果会长什么样”。若真实kernel输出连续布局，fake实现却承诺另一种stride，编译器可能在后续推演中作出错误选择。
+
+## 训练需要一个明确的反向公式
+
+若上游梯度为g，则
+
+$$
+\partial L/\partial a=g\odot b,\qquad
+\partial L/\partial b=g\odot a.
+$$
+
+本例c是普通标量参数，不作为可训练tensor返回梯度。若将c改为tensor并允许广播，反向还需要沿广播维求和，接口和公式都要一起变化。
+
+官方教程通过 `register_autograd` 注册backward与保存上下文的方法。Backward使用框架理解的操作组合；若其中再调用自定义CUDA核，它也需要自己的注册边界。
+
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  M["数学 y=a*b+c"] --> S["Schema与输入契约"]
+  S --> K["CPU/CUDA真实实现"]
+  S --> F["Fake · shape/stride/dtype"]
+  S --> A["Autograd · g*b与g*a"]
+  K --> T["前向参考对照"]
+  F --> O["opcheck · 注册契约"]
+  A --> G["gradcheck · 梯度数学"]
+```
+
+前向、元数据和反向各有独立验证，opcheck不能替代梯度正确性检查。
+
+## 三种验证回答三个不同问题
+
+先把输出与 `a*b+c` 比较，覆盖尾部长度、非连续输入和极值，验证前向数学。再用手算或 `torch.autograd.gradcheck` 检验梯度，通常在适合数值差分的高精度小输入上进行。最后用 `torch.library.opcheck` 检查注册与框架协作。
+
+`opcheck`不验证梯度公式是否数学正确，这是官方教程明确写出的边界。Eager能跑也不代表compile、autograd或图捕获都能跑，需要检查实际支持的调用环境。
+
+## 接入后才有完整性能账
+
+若wrapper为了兼容输入先调用 `contiguous()`，或返回前额外同步，这些成本属于完整算子。分别比较kernel耗时与算子端到端耗时，再测它在真实层里的占比。
+
+一个只能处理连续输入的快路径可以保留，但必须明确拒绝或分流其他输入。比起让所有输入悄悄复制，显式适用条件更容易解释实际收益。
 
 ![Nsight Systems NVTX timeline](../assets/images/tools/nsight-systems/nvtx-timeline.png){ width="820" }
 
 <small>图源：[NVIDIA Nsight Systems / NVTX 文档](https://docs.nvidia.com/nsight-systems/)。原图表达用 NVTX 标记把 kernel、CPU 调用和时间线串起来；读图重点是：自定义 op 是否真的进了热路径，需要 profiler、dispatch、fallback 和端到端 trace 一起验证。它不能证明某个 custom op 正确或更快，只说明验证入口应该在哪里。</small>
 
-## 为什么很多高性能 kernel 最终没被用起来
+## 对照源码与延伸阅读
 
-常见原因不是它不够快，而是集成太难、只支持少量 shape、autograd 路径缺失、无法进入 graph compile、fallback 和错误处理太弱，或部署、打包和兼容成本太高。
-
-也就是说，真正让一个 kernel 有工程价值的，不只是性能，而是可接入性。
-
-## 自定义算子的典型组成
-
-一个较完整的 custom op 通常包含前端 API、shape / dtype 检查、forward kernel、backward kernel 或 autograd 定义、dispatch 注册、测试与 benchmark，必要时还要补图编译兼容和 profiler 标记。
-
-### 2.1 为什么这和“写个 CUDA 文件”不是一回事
-
-因为一旦进入真实系统，你还要考虑 contiguous 和 non-contiguous 输入、CPU fallback 或 error path、多卡与 stream 语义、mixed precision、编译缓存和运行时加载。
-
-## 集成链路图
-
-```mermaid
-flowchart TD
-    A["Python API"] --> B["shape / dtype / device check"]
-    B --> C{"dispatch path"}
-    C --> D["CUDA / Triton forward"]
-    C --> E["reference fallback"]
-    D --> F{"training?"}
-    F -- "是" --> G["backward / autograd"]
-    F -- "否" --> H["inference only"]
-    G --> I["torch.compile / graph lowering"]
-    H --> I
-    I --> J["profiler markers"]
-    J --> K["CI correctness + performance"]
-```
-
-自定义算子只写 kernel 等于只完成了中间一格。真正进入系统，需要 API、dispatch、fallback、autograd、compile、profile 和 CI 都接上。每缺一格，线上就可能出现“单测很快，真实路径没用上”的情况。
-
-## 与 PyTorch 集成时要想清楚的几件事
-
-### 3.1 接口边界
-
-先判断这个 op 是完全替换现有算子、作为 fused op、只服务某些 shape，还是只服务训练/推理中的一条路径。不同定位会决定 API 如何设计、fallback 如何写，以及是否需要多个后端实现。
-
-### 3.2 Autograd 边界
-
-如果是训练路径，还必须考虑 backward 是否自己写、是否可由已有算子组合求导、中间缓存如何保存，以及 backward 是否也要高性能。
-
-很多 kernel 的集成难点其实不在 forward，而在 backward。
-
-## 与 `torch.compile` / 图编译的关系
-
-自定义算子如果完全绕开图编译器，有时会导致断图、融合机会丢失、上层优化无法继续穿透，profiler 也只能看到一大片黑盒。这并不意味着不能写 custom op，但你需要清楚它是否值得成为黑盒边界，是否会阻断更大的图优化，以及是否只在真正热点处使用。
-
-## Triton 自定义算子与 CUDA 自定义算子的差异
-
-### 5.1 Triton
-
-Triton 的优势是开发快、适合快速试 fusion、与 Python / PyTorch 路径更近；代价是某些极致优化、复杂同步和特化路径不如底层 CUDA 灵活。
-
-### 5.2 CUDA
-
-CUDA 的优势是底层控制更强、可做更极致特化、对复杂同步和特定硬件路径支持更充分；代价是集成与维护成本更高，开发调试更慢，对团队要求也更高。
-
-## 什么时候值得做 custom op
-
-通常需要同时满足多项条件才值得做：热点明显、默认实现慢、可融合收益明确、形状相对稳定，并且业务收益足以覆盖维护成本。
-
-如果只是“理论上也许能快一点”，往往不值得。
-
-## 测试与验收不能省
-
-一个可上线的 custom op 至少要经过正确性对比、多 shape 测试、dtype 测试、contiguous / stride 测试、训练或推理端到端回归、profiler 对照和 fallback 验证。
-
-否则一个快 kernel 很容易变成线上隐患。
-
-## 版本演进与兼容
-
-自定义算子不是“一次写完永远不动”的资产。
-它会持续受新 GPU 架构、新 PyTorch 版本、编译器后端变化、shape 分布变化和模型结构变化影响。因此一个工程上成熟的 custom op，必须有版本管理、持续 benchmark、fallback 和清晰的适用边界。
-
-## 接口契约模板
-
-| 契约项 | 要写清楚什么 |
-| --- | --- |
-| 输入 shape | 支持哪些维度、哪些 bucket、是否允许 dynamic shape |
-| dtype | FP32/BF16/FP16/FP8/INT8 各自路径和误差阈值 |
-| layout | contiguous、channels-last、stride、alignment 要求 |
-| autograd | backward 是否自定义，保存哪些中间量 |
-| compile | eager、`torch.compile`、ONNX/TensorRT 是否支持 |
-| fallback | 不支持 shape/dtype/device 时走哪里，是否记录 |
-| profile | kernel name、NVTX range、版本号如何显示 |
-
-这个模板很朴素，但能显著降低维护风险。没有接口契约的 custom op，过几个月后通常没人敢改，也没人知道为什么某些 shape 被排除。
-
-## 直觉例子
-
-自定义算子就像为工厂定制一台专用设备。设备本身可能很快，但如果它接不上现有流水线、维护手册不全、只能处理一种规格的零件、坏了又没有备用流程，那么它的工程价值就会大打折扣。真正有价值的 custom op，不只是“局部最快”，而是能顺滑进入整条生产线。
-
-## 读完以后怎么判断
-
-自定义算子开发的关键，不只是 kernel 写得快，而是把性能、集成、autograd、图编译、测试、fallback 和版本演进放在同一张设计图里。只有这样，一个自定义 kernel 才会从 demo 变成真正可维护、可部署、可复用的系统组件。
-
-## 工程收束
-
-自定义算子要从 API 语义、张量布局、autograd、打包发布和兼容矩阵开始设计。原型能跑不代表集成成本可接受；上线前应先定义接口契约，提供参考实现，把构建与测试自动化，并记录支持限制，尤其要同时覆盖 eager、compile 和 runtime 路径。
-
-真正值得保留的 custom op，应该能被新同事理解、被 CI 复验、被框架升级压力测试，并且在不适用的 shape 或硬件上自动走回安全路径。
-
-## 真实排查案例：自定义算子在 `torch.compile` 后悄悄失效
-
-**输入症状**：Eager 模式下 custom RMSNorm 快 30%，接入 `torch.compile` 后端到端没有收益，某些 batch 还出现数值差异报警。
-
-**关键指标**：Eager benchmark 命中 custom op；compile 模式下 kernel 名称消失，图里出现 framework fallback；数值误差集中在 BF16 和非 contiguous 输入；CI 只覆盖了 contiguous FP16。
-
-**Nsight / trace 观察**：trace 显示 compile 路径没有调用自定义 kernel，而是图重写后走了默认实现；fallback 前多了一次 `contiguous` 拷贝；少数输入 stride 触发参考实现。
-
-**判断**：自定义算子只集成了 eager API，没有把图编译、stride 契约和 dtype 边界写进接口。性能收益在真实运行路径里没有兑现。
-
-**修复**：补充 custom op 的 meta function、decomposition / lowering 规则和 stride 检查；CI 覆盖 eager、compile、FP16/BF16、contiguous/non-contiguous；fallback 必须打日志并计入性能回归。
-
-**反例**：如果目标系统永远只跑 eager 离线脚本，compile 集成可以延后；但只要进入生产训练或推理图，custom op 就必须以“完整框架路径”验收，而不是只验单函数。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [PyTorch mymuladd 的schema、fake、autograd和测试教程](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/advanced_source/cpp_custom_ops.rst)

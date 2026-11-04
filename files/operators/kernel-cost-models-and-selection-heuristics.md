@@ -1,119 +1,60 @@
-# Kernel 成本模型与选型
+# 用读写量和计算量选择优化方向
 
-很多性能决策如果没有成本模型，就会变成“凭经验猜”。虽然完整精确建模很难，但在工程上仍然需要一个够用的启发式成本模型，帮助判断：
+一个kernel变慢，可能因为算得多、搬得多，也可能大部分时间花在启动与同步。成本模型先给出可计算的下界，再用实际时间判断还有哪些开销没有解释。它帮助缩小调查范围，不替代测量。
 
-1. 该优先做 fusion，还是优先做 layout 优化；
-2. 该写 Triton，还是直接调用现成库；
-3. 某个 shape 值不值得特化；
-4. 某条路径更可能受带宽、launch 还是通信主导。
+## 向量加先算多少字节
+
+对N个FP32元素计算 `z=x+y`，读取x、y各4N字节，写z为4N字节，总逻辑流量12N字节，计算量N次加法。算术强度约为1/12 FLOP/byte。
+
+设N为一百万，流量12MB。如果假想设备的有效可用带宽为1TB/s，单纯搬运下界为12微秒。这里的带宽是明确假设，不是任何机器实测。实际时间还包括launch、地址处理、内存事务和未达到带宽上限的损失。
+
+Triton向量加教程也按三份tensor大小计算有效GB/s。若报告的带宽高于HBM峰值，先检查数据是否反复命中缓存，以及字节口径是否把缓存读取误称为HBM读取。
+
+## 计算与访存通常有重叠
+
+令运算量F、实际读写M、计算上限P、带宽上限B，则理想下界可写为
+
+$$
+T_{lower}=\max(F/P,M/B).
+$$
+
+直接把两项相加隐含完全串行，未必符合kernel流水。实际时间还可能包括未隐藏的launch、同步、转换与通信，但这些项目也可能彼此重叠，最终要看关键路径。
+
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  S["固定表达式与shape"] --> F["运算量F / 算力P"]
+  S --> M["字节M / 带宽B"]
+  F --> L["理想下界取max"]
+  M --> L
+  L --> E["再查launch、转换、同步与重叠"] --> W["按真实频率加权"]
+```
+
+计算与搬运可能重叠，不能默认相加；完整路径还包含下界没有描述的开销。
+
+## Fusion究竟减少哪项
+
+设两步为 `u=x+y`、`z=relu(u)`，FP32且忽略缓存。分开执行共读写5N个元素，即20N字节；融合后读取x、y并写z，共12N字节，理论少8N字节，同时少一次launch。
+
+若中间u还被另一个分支使用，就不能无条件消除它的写回。若融合使寄存器不足而spill，也会新增流量。模型必须反映完整计算图，而非只看两行源码。
+
+## 优化价值还取决于出现频率
+
+假设路径A每次100微秒、占调用90%，路径B每次2毫秒、占10%。每100次调用，A累计9毫秒，B累计20毫秒。B虽然少见，却占更多时间。
+
+若把A提速两倍，总时间从29毫秒降到24.5毫秒；若把B提速两倍，则降到19毫秒。这个简单加权说明，应按累计关键路径时间筛热点，再讨论特化。
+
+## 选择库、融合或自定义实现
+
+当已有GEMM接近可用计算上限，换语言重写通常缺少明确收益来源；当中间张量反复写回，融合可能有可计算的流量优势；当只有少数shape明显落后，先检查layout和dispatch，再考虑特化。
+
+每个提案先写明它要消除哪次读写、哪段等待或哪项浪费。若写不出这一步，继续profiling比直接改tile更有用。
 
 ![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="820" }
 
 <small>图源：[Triton MAPL 2019 paper](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)。原图表达实现结果相对 roofline 上限的位置；读图重点是把 kernel 选型先拆成 compute、memory 和 overhead 三张账。它不能替代真实 workload profile。</small>
 
-## 一个够用的粗模型
+## 对照源码与延伸阅读
 
-很多 kernel 可以先粗略分成三类成本：
-
-1. 计算成本；
-2. 数据移动成本；
-3. 调度与 launch 成本。
-
-**直觉上可以写成**：
-
-$$
-T \approx T_{\text{compute}} + T_{\text{memory}} + T_{\text{overhead}}.
-$$
-
-虽然这不是精确公式，但足够指导很多工程判断。
-
-## 成本模型决策图
-
-```mermaid
-flowchart TD
-    A["热点路径"] --> B["估算 FLOPs / bytes / launch"]
-    B --> C{"算术强度低？"}
-    C -- "是" --> D["优先减少读写、fusion、layout"]
-    C -- "否" --> E{"Tensor Core 利用低？"}
-    E -- "是" --> F["tile、dtype、MMA、shape specialization"]
-    E -- "否" --> G{"launch / dispatch 占比高？"}
-    G -- "是" --> H["融合、persistent、CUDA graph"]
-    G -- "否" --> I{"通信或 runtime 放大？"}
-    I -- "是" --> J["overlap、bucket、调度"]
-    I -- "否" --> K["现成库可能已经足够"]
-```
-
-成本模型不是为了精确预测毫秒数，而是为了决定第一刀切哪里。低算术强度优先看带宽，高算术强度但 Tensor Core 低再看 tile 和 dtype，launch 多则看融合，端到端不快则回到 runtime 和通信。
-
-### 2.1 一个可复用模板
-
-| 项 | 要填什么 | 例子 |
-| --- | --- | --- |
-| shape | `B/M/N/K/L/H/D` | decode attention: `B=8,H=32,T=8192,D=128` |
-| FLOPs | 主计算量 | QK + PV 约 1.07 GFLOPs |
-| bytes | 主要读写量 | KV 读取约 1.0 GiB |
-| arithmetic intensity | FLOPs / bytes | 约 1 FLOP/byte |
-| 真实耗时 | microbenchmark | 0.55 ms |
-| 端到端占比 | 在请求或 step 中占多少 | 17.6/58 ms |
-| 优先动作 | 该改哪里 | KV layout / quant / paging |
-
-只要每个性能提案都先填这张表，团队就不容易为了一个漂亮 microbenchmark 投入过多维护成本。
-
-## 什么时候优先考虑 fusion
-
-如果一个路径包含很多小算子，且：
-
-1. 每个算子计算量不大；
-2. 中间张量需要反复写回；
-3. launch 次数多；
-
-那通常优先考虑 fusion。
-
-## 什么时候优先考虑特化
-
-**如果某些 shape**：
-
-1. 出现频率很高；
-2. 默认路径明显慢；
-3. 对齐和向量化潜力明显；
-
-那通常值得单独做 shape specialization。
-
-## 什么时候不该急着写自定义 kernel
-
-如果：
-
-1. 热点占比不大；
-2. 现成库已经接近上限；
-3. workload 分布并不稳定；
-4. 维护成本会明显高于收益；
-
-那更应该先从调度、数据布局或系统级优化入手。
-
-## 读完以后怎么判断
-
-Kernel 成本模型不需要一开始就非常精确，但需要足够实用。只要你能先把问题拆成计算、内存和调度三部分，再结合 workload 频率做判断，就比单纯凭直觉选技术路线要稳得多。
-
-## 工程收束
-
-Kernel 选型要按 shape family、算术强度、访存模式、launch 开销和布局变换建成本模型。只按单点 benchmark 选 kernel 很容易忽略边界 shape、runtime 和 cache 交互；上线前应按 workload 建族，区分训练与服务场景，记录回退条件，并把成本模型接进 dispatch。
-
-## 真实排查案例：Fused kernel 单测更快，端到端反而更慢
-
-**输入症状**：把 `bias + gelu + dropout` 合成一个 Triton kernel 后，单 kernel benchmark 快 18%，但训练 step time 只快 1%，某些 micro-batch 反而慢 6%。
-
-**关键指标**：单 kernel latency 下降，端到端 kernel 数减少；但整步 HBM 读写没有明显下降，register 使用升高，低 batch bucket 的 occupancy 降低；fallback 命中率从 0 增到 9%。
-
-**Nsight / trace 观察**：Nsight Compute 显示新 kernel 出现寄存器压力和局部 spill；Nsight Systems 里低频 shape 触发 fallback，前后多了一次 layout 转换；高频 bucket 受益，尾部 bucket 变慢。
-
-**判断**：成本模型只算了 launch 和单 kernel 时间，没有把寄存器压力、layout 转换和 shape 分布放进去。这个 fusion 只适合高频对齐 shape，不适合全流量替换。
-
-**修复**：把 dispatch 改成按 bucket 选择：高频对齐 shape 走 fused path，长尾 shape 走原始实现；把 layout 转换计入 benchmark；新增 “端到端 step time + bucket 覆盖率 + fallback 率” 验收项。
-
-**反例**：如果多个小算子之间确实反复写回大中间张量，且 fused path 没有提高 register pressure、覆盖率又超过 80%，那 fusion 很可能是正确方向。不能因为一次融合失败就否定 fusion，本质是成本项漏算。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [向量加的有效流量口径](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/01-vector-add.py)
+- [融合softmax的读写分析](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/02-fused-softmax.py)

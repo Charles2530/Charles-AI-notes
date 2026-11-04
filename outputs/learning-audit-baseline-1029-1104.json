@@ -1,0 +1,39 @@
+{
+  "baseline_commit": "c16f9e9421ad360e1ea03e6c44ba99f54838c777",
+  "page_count": 322,
+  "raw_character_count": 3256917,
+  "nav_entries": 316,
+  "nav_unique": 315,
+  "group_counts": {
+    "diffusion": 16,
+    "embodied-ai": 19,
+    "foundations": 24,
+    "glossary": 1,
+    "inference": 13,
+    "knowledge-qa": 8,
+    "operators": 26,
+    "paper-deep-dives": 93,
+    "paper-library": 1,
+    "prerequisite-math": 20,
+    "quantization": 12,
+    "reinforcement-learning": 15,
+    "thinking-exploration": 19,
+    "training": 20,
+    "training-and-inference-systems": 1,
+    "vla": 7,
+    "vlm": 7,
+    "world-models": 19,
+    "world-models-and-embodied-ai": 1
+  },
+  "not_in_nav": [
+    "paper-deep-dives/index.md",
+    "thinking-exploration/index.md",
+    "vlm/index.md",
+    "vlm/multimodal-evaluation-and-failure-modes.md",
+    "vlm/video-representation-and-memory.md",
+    "vlm/vlm-vla-for-efficient-world-model-training.md",
+    "vlm/vlm-vla-symbols-and-minimal-math.md"
+  ],
+  "inventory": "/Users/charles/Documents/coding_file/lab/Charles-AI-notes/outputs/learning-content-inventory-1029-1104.csv",
+  "limitations": "Structural signals only; absent marker is not proof that teaching content is absent. No full corpus factual verification."
+}

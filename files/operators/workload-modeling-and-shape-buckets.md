@@ -1,126 +1,49 @@
-# Workload 建模与 Shape Bucketing
+# 怎样从shape分布选出值得优化的路径
 
-很多 kernel 优化最终有效，是因为它精准命中了真实 workload 中最常出现的那些 shape bucket。
-因此在进入特化和 autotune 之前，先理解 workload 分布本身，往往比直接写新 kernel 更重要。
+平均序列长度不能代表kernel看到的工作。一个请求会触发许多层和许多decode迭代，同一个请求的shape还在变化。建模时需要连接请求分布、实际调用次数与累计时间。
+
+## 一百分之一的请求可以占一半时间
+
+教学设定中，99个短请求各花1毫秒，1个长请求花99毫秒。长请求只占1%，却占总时间的一半。若目标是总计算成本，长请求值得关注；若目标是普通请求P50，结论可能不同。
+
+再设长请求包含很多decode步，就会多次访问增长中的KV。只按请求入口记一次长度，会丢掉真实kernel调用分布。应记录每次调用的M/N/K、query/key长度、head结构、dtype与stride。
+
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  R["100个请求"] --> S["99短请求 · 各1ms"]
+  R --> L["1长请求 · 99ms"]
+  S --> A["累计99ms"]
+  L --> B["累计99ms"]
+  A --> C["各占总时间50%"]
+  B --> C
+```
+
+请求频率和累计成本是两种权重，优化优先级取决于目标指标。
+
+## Bucketing会同时改变调度与计算量
+
+把长度33和63都放进64桶，可以复用执行shape，但有效token共96，分配槽位128，利用率75%。若分别按实际长度执行，padding少了，动态shape和调度开销却可能增加。
+
+对于dense attention，按长度平方计的配对计算更敏感。两条真实长度的平方和为5058，若都按64完整计算则为8192；是否真的支付这些padding计算，还要看mask和变长kernel实现。
+
+## 优化权重应使用累计时间
+
+对桶b记录调用次数 $n_b$、基准延迟 $t_b$，简化串行总成本为 $\sum_b n_bt_b$。新路径比较的是 $\sum_b n_bt'_b$，而非每桶加速倍数的算术平均。
+
+例如90次100微秒与10次2毫秒，总共29毫秒。前一桶快2倍，后一桶慢10%，新总量26.5毫秒，整体只快约9.4%。只汇报高频桶“快2倍”会掩盖代价。
+
+## 桶必须包含会改变语义的条件
+
+相同shape但不同stride，可能需要不同地址计算；相同长度但不同mask，可能采用不同attention实现；相同FP8数据但不同scale布局，也未必兼容。桶可以为统计合并一些相近输入，dispatch却不能省略正确性条件。
+
+建立候选桶后，保留每桶代表性真实输入与边界输入。特别检查桶边界前后、空输入、尾块和非连续视图。真实流量迁移后重新计算频率与累计时间，旧热点不应永久占据特化预算。
 
 ![vLLM serving system overview](../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
 
 <small>图源：[vLLM 官方博客](https://vllm.ai/blog/2023-06-20-vllm)。原图表达请求调度、KV 管理和 worker 执行之间的关系；读图重点是把 shape bucket 看成 runtime 调度和 kernel 选择的前置条件。它不能证明某一组 bucket 适合所有业务，bucket 必须从真实流量统计中来。</small>
 
-## 为什么 shape bucket 重要
+## 对照源码与延伸阅读
 
-真实系统的输入通常不是均匀分布的：
-
-1. 某些 batch 特别常见；
-2. 某些 head dim / hidden size 固定；
-3. 某些请求长度集中在少数区间；
-4. 某些 LoRA 或模型配置只占很小一部分。
-
-如果不先做 workload 建模，很容易把大量工程时间浪费在低频 shape 上。
-
-## Workload 建模在回答什么
-
-**至少要回答**：
-
-1. 高频 shape 是哪些；
-2. 长尾 shape 有多长；
-3. prefill 和 decode 各自的 shape 分布如何；
-4. 量化与非量化路径比例如何；
-5. 哪些 bucket 值得特化，哪些应走通用 fallback。
-
-## Shape 画像应该怎么画
-
-```mermaid
-flowchart LR
-    A["线上请求日志"] --> B["抽取 shape: B/L/H/D/M/N/K"]
-    A --> C["抽取成本: latency/GPU time/KV"]
-    A --> D["抽取路径: prefill/decode/quant/cache"]
-    B --> E["流量占比"]
-    C --> F["成本占比"]
-    D --> G["kernel hit / fallback"]
-    E --> H["bucket 策略"]
-    F --> H
-    G --> H
-    H --> I["benchmark matrix + dispatch"]
-```
-
-一个常见错误是只画长度直方图。对 kernel 优化来说，长度只是其中一维，还要看它消耗了多少 GPU 时间、是否命中量化路径、是否触发编译、是否属于 prefill 或 decode。真正的 bucket 应该服务 dispatch 和 benchmark。
-
-### 一个 bucket 表示例
-
-| bucket | 请求占比 | GPU 时间占比 | 主路径 | 优先级 |
-| --- | ---: | ---: | --- | --- |
-| short chat 0-2k | 64% | 18% | decode + launch | 中 |
-| doc QA 8k-16k | 20% | 32% | prefill + KV | 高 |
-| long report 32k+ | 4% | 28% | KV / page / prefill | 高 |
-| image QA | 9% | 16% | vision encoder + prefill | 中 |
-| tool agent | 3% | 6% | tool latency | 低 GPU 优先级 |
-
-如果只按请求占比，短聊天看起来最重要；按 GPU 时间占比，长文档才是最该优化的桶。这就是 workload 建模的价值。
-
-## 为什么这会影响 kernel 设计
-
-因为：
-
-1. autotune 搜索空间要围绕高频 bucket 设计；
-2. shape specialization 的收益取决于 bucket 覆盖率；
-3. benchmark 不应只测理想 shape；
-4. dispatch 逻辑需要围绕 bucket 组织。
-
-workload 建模是特化内核、调度系统和基准设计的共同前提。
-
-### 3.1 采集 shape 时不要只记维度
-
-一个可用的 workload 画像，通常不只记录 `M/N/K`、batch size 或序列长度，还要记录它们出现的频率、贡献的 token 数、消耗的端到端时间、是否命中 cache、是否走量化路径、是否属于 prefill 或 decode。否则一个低频但极贵的长上下文请求，可能被“出现次数”掩盖；一个高频但很便宜的小请求，又可能被“总耗时”掩盖。
-
-更稳的做法是同时看两种占比：**流量占比**和**成本占比**。前者告诉你哪些 bucket 最常见，后者告诉你哪些 bucket 最值得优化。只有这两者都清楚，shape specialization 才不会只服务漂亮的 benchmark。
-
-### 3.2 bucket 边界要能被 dispatch 使用
-
-分桶不是为了画图，而是为了让 runtime 能据此选择 kernel。边界太细，dispatch 规则会碎，编译缓存和 autotune 版本会膨胀；边界太粗，热点 shape 又无法得到足够特化。一个实用口径是：先保留少数覆盖率最高的热桶，再为尾部 shape 准备保守通用路径，并在灰度期记录每个桶的命中率和回退率。
-
-在 LLM serving 里，还要把 prefill 和 decode 分开建模。prefill 更接近长序列大矩阵，decode 更接近 small-M、KV 读取和 page lookup；把两者混在一个平均 shape 里，会让优化方向变得含糊。训练场景也类似：micro-batch、sequence packing、activation checkpointing 和并行策略都会改变真实 shape 家族。
-
-### 3.3 什么时候该重算 bucket
-
-只要模型版本、tokenizer、上下文窗口、流量来源、LoRA 租户或量化策略发生明显变化，旧 bucket 就可能失效。比较成熟的系统会把 bucket 统计做成周期性任务，并把“热桶变化”接进性能回归：如果热桶迁移了，原来的特化 kernel 可能不再值得维护，新的热点则需要进入 benchmark 和 dispatch 规则。
-
-## 直觉例子
-
-可以把 shape bucket 想成工厂的订单画像。不是每种尺寸的零件都值得单独开一条专用产线，只有那些真正高频、长期出现的规格，才值得配专用模具。kernel 特化也是一样：先知道订单分布，再决定哪里值得投入特化成本。
-
-## 读完以后怎么判断
-
-Workload 建模与 shape bucket 的价值，在于把“我能优化什么”转化成“我最应该优化什么”。没有这一步，很多高性能算子开发都会陷入局部最优；有了这一步，特化、autotune、dispatch 和回归测试才会真正围绕真实系统收益展开。
-
-## 工程收束
-
-Workload 建模要把长度桶、批量桶、head 维、expert 分布和请求混合比放在一起看。桶太细会碎片化，桶太粗会浪费性能，只看均值会漏掉尾部；上线前应让 shape 分桶和线上流量对齐，保留热桶统计，并在灰度期重点看尾桶。
-
-分桶策略还要定期重算，因为线上请求、模型版本和产品入口都会改变 shape 分布。一个曾经合理的 bucket，过一段时间可能就会变成吞吐浪费或 P99 抖动来源。
-
-因此 bucket 配置最好和流量快照、模型版本、kernel 版本绑定，避免调度策略和真实 workload 悄悄脱节。
-
-一旦入口流量变化，先复查桶命中率和尾桶延迟，通常比直接换 kernel 更快定位问题。
-
-这一步很朴素，却经常省掉大量误调。
-
-## 真实排查案例：平均长度没变，P99 却变差
-
-**输入症状**：线上平均输入长度从 3.8k 到 4.1k，看起来变化很小，但推理 P99 从 5.2s 涨到 8.7s，GPU 利用率和请求量都没有明显异常。
-
-**关键指标**：按请求数统计，短请求仍占多数；按 GPU 时间统计，32k 以上长上下文请求从 6% 成本占比涨到 28%；prefix cache 命中率从 71% 降到 43%；尾桶 KV 占用长期贴近水位。
-
-**Nsight / trace 观察**：trace 中 prefill 阶段出现更多长条块，decode 阶段频繁等待 KV page 分配；kernel 本身没有明显退化，但 scheduler 中长请求和短请求混排后，短请求被长 prefill 挤压。
-
-**判断**：平均长度掩盖了长尾迁移。真实变化不是“模型变慢”，而是新产品入口引入了少量长文档请求，它们改变了成本占比和 KV 生命周期。
-
-**修复**：重算 shape bucket，把请求数占比和 GPU 时间占比分开看；长文档请求进入单独队列，prefill 分离并限制最大并发；为 16k/32k/64k bucket 单独记录 cache 命中、KV 水位和 P99。
-
-**反例**：如果所有 bucket 的 P99 都同步上涨，且 queue time 明显升高，问题更可能是整体容量不足；如果只有某个 kernel 的时间上涨，才回到 kernel 版本或 dtype 路径排查。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [按M/N/K选择配置并测量的实际教程](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/03-matrix-multiplication.py)
+- [不同shape上的persistent候选](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/09-persistent-matmul.py)

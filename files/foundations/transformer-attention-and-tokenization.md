@@ -1,204 +1,189 @@
 # Transformer、Tokenization 与注意力
 
-Transformer 最容易被讲成一张架构图：左边 encoder，右边 decoder，中间有很多箭头。但真正决定模型如何工作的是一条更朴素的链路：
+一段文本进入 Transformer 时，会先被切成 token，再转换成整数编号。模型根据编号取出向量，用注意力读取其他位置的信息，用前馈网络改写每个位置的表示，最后把向量投影成下一 token 的分数。
 
-```text
-原始输入 -> token 序列 -> embedding + position -> Q/K/V -> mask 后的 attention -> FFN -> 下一层表示
+这些操作各有明确的输入和输出。Tokenization 决定序列由哪些单元组成，embedding 决定编号怎样变成可学习向量，attention 决定当前位置从哪些位置取信息。把这几个过程分开，再连接起来，结构图就容易读得多。
+
+这里会用到[张量与 Shape](tensors-shapes-and-computation-graphs.md)、[线性层与 MLP](linear-layers-mlp-and-gemm.md)，以及把一组分数归一化为概率的 softmax。下面先用小词表和二维向量演算，不要求先记住完整模型结构。
+
+## 文字怎样变成向量
+
+假设我们自己定义一个小词表，给“我”“喜欢”“猫”“。”分配编号 0、1、2、3，并把“我喜欢猫”切成 `[我, 喜欢, 猫]`。得到的编号序列就是 `[0, 1, 2]`。这只是说明流程的人工词表，真实 tokenizer 的切分取决于它自己的词表、规则和特殊 token。
+
+编号是离散标识。编号 2 不代表比编号 1 多一份语义，直接把整数大小当成特征会引入没有依据的顺序。Embedding 层维护一个矩阵
+
+\[
+E\in\mathbb R^{V\times D},
+\]
+
+其中 \(V\) 是词表大小，\(D\) 是向量维度。编号为 \(i\) 的 token 取矩阵第 \(i\) 行。若小词表的矩阵为
+
+\[
+E=\begin{bmatrix}1&0\\0&1\\1&1\\-1&0\end{bmatrix},
+\]
+
+那么 `[0, 1, 2]` 就变成三行二维向量 \([[1,0],[0,1],[1,1]]\)。真实的 embedding 参数通常通过训练学习，矩阵中的单个维度并不预先指定为某个人类概念。
+
+常见文本 tokenizer 会使用字符、字节或子词等单元。以 BPE 为例，它从较小的单元开始，根据训练语料逐步合并相邻单元，形成词表和合并规则；实际编码时按已经学到的规则切分。WordPiece、Unigram 也可构造子词词表，但训练与切分算法不同，不能统一描述为 BPE 的频次合并过程。
+
+切分方式会影响序列长度、罕见词处理和计算量。同一句话在不同 tokenizer 中可能得到不同 token 数。训练和推理必须使用匹配的词表、特殊 token 与格式约定，否则相同编号会被解释成错误的输入。
+
+## 位置怎样进入表示
+
+只提供 token 向量时，模型还需要知道它们的位置。原始 Transformer 使用的一种办法是把位置向量加到 token embedding 上
+
+\[
+h_i=E[\operatorname{id}_i]+p_i.
+\]
+
+这里 \(p_i\) 是第 \(i\) 个位置的向量，可以按固定函数构造，也可以学习。没有位置机制和位置相关掩码约束的 self-attention，会随着输入置换产生相应置换的输出，仅靠内容匹配无法区分所有序列顺序。
+
+位置机制并不都采用相加。RoPE 对 query 和 key 按位置施加旋转，让两者的点积包含相对位置信息。学习绝对位置向量、旋转位置编码和相对位置偏置的实现不同，阅读代码时要确认位置究竟在哪一步参与计算。更详细的推导见[序列位置与掩码](../prerequisite-math/sequence-position-and-masking.md)。
+
+## Query、Key、Value 是三组可学习投影
+
+取一个样本的输入表示 \(X\in\mathbb R^{L\times D}\)。单个注意力头先计算
+
+\[
+Q=XW_Q,\qquad K=XW_K,\qquad V=XW_V.
+\]
+
+若 \(W_Q,W_K\) 为 `[D, d_k]`，\(W_V\) 为 `[D, d_v]`，那么 \(Q,K,V\) 分别为 `[L, d_k]`、`[L, d_k]`、`[L, d_v]`。这些矩阵的各行都对应一个位置。
+
+对第 \(i\) 个位置，query 向量 \(q_i\) 与每个 key 向量 \(k_j\) 计算点积。点积经过缩放后成为匹配分数，再经 softmax 得到一组权重。最后用这些权重对 value 向量加权求和。
+
+Query 和 key 决定从哪里取多少，value 决定被取出的内容。它们来自训练得到的投影，不保证每个头都对应一个容易命名的语言关系。某个注意力权重很高，也不能单独证明该位置对模型最终决定有同等强度的因果影响。
+
+![缩放点积注意力和多头注意力](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-combined.png){ width="820" }
+
+<small>图源为 [Attention Is All You Need](https://arxiv.org/abs/1706.03762) Figure 2。左侧依次执行点积、缩放、可选掩码、softmax 和加权求和。右侧并行执行多组投影，再拼接各头输出。</small>
+
+## 完整计算一个两位置的注意力
+
+直接给定两行投影结果
+
+\[
+Q=K=V=\begin{bmatrix}1&0\\0&1\end{bmatrix}.
+\]
+
+这是为了手算选取的中间值，\(d_k=2\)。先计算分数
+
+\[
+S=\frac{QK^\top}{\sqrt{2}}
+=\begin{bmatrix}0.707107&0\\0&0.707107\end{bmatrix}.
+\]
+
+缩放因子 \(\sqrt{d_k}\) 的动机是控制点积随维度增大的尺度。在分量独立、均值为零、方差为 1 的简化假设下，点积方差为 \(d_k\)，除以 \(\sqrt{d_k}\) 后方差回到 1。真实网络不必严格满足这些假设，但这个推导解释了缩放的由来。
+
+不加掩码时，对分数矩阵的每一行分别做 softmax，得到
+
+\[
+A\approx\begin{bmatrix}0.669762&0.330238\\0.330238&0.669762\end{bmatrix}.
+\]
+
+以第二行为例，两个未归一化权重是 \(e^0=1\) 和 \(e^{0.707107}\approx2.028115\)，除以它们的和，就得到 0.330238 和 0.669762。每一行的权重之和为 1。
+
+现在加入因果约束，让第一个位置只能读自己，第二个位置可以读前两个位置。加性掩码为
+
+\[
+M=\begin{bmatrix}0&-\infty\\0&0\end{bmatrix}.
+\]
+
+完整公式是
+
+\[
+O=\operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}+M\right)V.
+\]
+
+掩码在分数缩放之后相加。被禁止的位置得到 \(-\infty\)，指数变成零。这里 softmax 沿 key 轴执行，得到
+
+\[
+A_{\mathrm{causal}}
+\approx\begin{bmatrix}1&0\\0.330238&0.669762\end{bmatrix},
+\qquad
+O\approx\begin{bmatrix}1&0\\0.330238&0.669762\end{bmatrix}.
+\]
+
+这次输出恰好与权重矩阵相同，是因为我们特意把 \(V\) 设成单位矩阵。一般的输出是 value 的加权和，两个矩阵不会相同。
+
+下面只用 Python 展开相同的计算。代码通过只枚举可见位置实现掩码，避免直接处理无穷大。
+
+```python
+import math
+
+q = k = v = [[1.0, 0.0], [0.0, 1.0]]
+for i, query in enumerate(q):
+    scores = [sum(a * b for a, b in zip(query, key)) / math.sqrt(2)
+              for key in k[:i + 1]]
+    exp_scores = [math.exp(s - max(scores)) for s in scores]
+    weights = [e / sum(exp_scores) for e in exp_scores]
+    output = [sum(weights[j] * v[j][d] for j in range(i + 1))
+              for d in range(2)]
+    print([round(x, 6) for x in output])
 ```
 
-这条链路适用于 LLM，也适用于 VLM、DiT、VLA 和世界模型。文本会被切成 subword token，图片会被切成 patch token，视频会变成时空 token，机器人策略还可能把状态、动作、相机视角和语言指令都塞进同一个序列。Transformer 的核心问题不是“图里有几个模块”，而是：**每个 token 在每一层到底能读谁、读多少、读回来以后怎么改写自己。**
+输出为 `[1.0, 0.0]` 和 `[0.330238, 0.669762]`。[数值示例文件](../assets/examples/foundations/mechanisms.py)提供可处理更多行的 `attention` 函数。
 
-读完后应该能回答四个问题：tokenizer 为什么会影响上下文和成本；Q/K/V 的公式怎样落到 shape；causal mask 与 KV cache 为什么是同一条生成链；为什么现代 Transformer 的改进经常落在位置机制、KV 存储、attention kernel 和 MoE 上。
+实际实现还需要处理 padding。因果掩码控制能否读未来位置，padding 掩码控制能否读补齐位置。若某一行把所有 key 都屏蔽，普通 softmax 无法形成有效概率分布，需要由具体实现或输入规则妥善处理。布尔掩码的真值含义也可能因 API 而异，不能仅凭变量名照搬。
 
-!!! tip "数学先修"
-    需要用到[向量内积与矩阵变换](../prerequisite-math/linear-algebra-and-geometry.md)拆 Q/K/V，用[序列、位置与 mask](../prerequisite-math/sequence-position-and-masking.md)定义可见性，并用[条件概率](../prerequisite-math/probability-distributions-and-expectation.md)理解 next-token 输出。
+## 同一计算在源码里怎样排列
 
-## Tokenization 先决定计算账本
+在 LLMs from scratch 的 `MultiHeadAttention` 中，三个 Linear 先生成 `[B,L,D]`，随后 `view` 拆成 `[B,L,H,d]`，再 `transpose` 成 `[B,H,L,d]`。此时 `queries @ keys.transpose(2,3)` 才会在每个样本、每个头内生成 `[L,L]` 的分数。
 
-模型不能直接处理“字符串”“图片”或“机器人轨迹”，它先要把输入切成离散或连续的 token。文本里的常见做法是 byte-level BPE、WordPiece 或 Unigram：先从字符、字节或基础子词开始，再用训练语料中的频繁片段合并出更长 token。Hugging Face 的 tokenizer 课程和 OpenAI 的 `tiktoken` 都在强调同一件事：tokenizer 不是排版工具，它决定模型实际看到的序列长度。
+如果把头轴和长度轴交换错，即使两个尺寸碰巧相等，矩阵乘法也可能照常运行，却变成不同头之间互相匹配。对照本文两位置例子时，可以先用一个头，核对每行和为1、未来权重为0、输出等于value加权和，再恢复多头布局。该教程在合并头前调用 `contiguous()`，也是因为转置后的访问布局未必能直接按目标方式view。
 
-同一句话在不同 tokenizer 里可能有完全不同的 token 数。英文常见词可能被合成一个 token；中文、代码、罕见专名、空格和标点的切分会受词表与训练语料影响。token 数变多并不只是“上下文被占用”，它会直接进入 attention 的 \(L^2\) 成本、KV cache 显存和 serving batch 调度。
+## 多个头与不同来源的上下文
 
-多模态模型里这个问题更明显。图片如果按 14x14 patch 切，224x224 图像就是 256 个视觉 token；4 路相机、16 帧视频就是 \(4 \times 16 \times 256 = 16{,}384\) 个视觉 token，还没加语言、状态和动作。把 patch 做小、帧数做多、动作频率做高，模型会获得更细粒度的证据，但 Transformer 要为每个 token 建立和其他 token 的关系。
+多头注意力让多组投影分别计算信息读取。常见配置把宽度 \(D\) 分成 \(H\) 个头，每个头的宽度为 \(d=D/H\)。带 batch 时，query 可以表示为 `[B, H, L, d]`，每个头产生 `[B, L, d]` 的结果。把各头的最后一维拼起来，得到 `[B, L, D]`，再乘输出矩阵 \(W_O\)。
 
-进入模型后，token id 会先查 embedding 表：
+多头是在不同投影空间里进行匹配，不等于把整段文本切成几个互不相通的片段。普通全注意力的每个头仍然可以访问掩码允许的全部位置。头的数量、query 宽度与 value 宽度还可以有其他设计，上面的尺寸是便于理解的常见配置。
 
-\[
-h_i = E[x_i] + p_i
-\]
+Self-attention 的 query、key、value 来自同一序列。Cross-attention 则让 query 来自需要更新的序列，key 和 value 来自另一个序列。例如文本 query 读取图像表示时，查询长度可能为 \(L_q\)，图像长度为 \(L_k\)，单头权重矩阵为 `[L_q, L_k]`，输出仍有 \(L_q\) 行。
 
-这里 \(x_i\) 是第 \(i\) 个 token id，\(E[x_i]\) 是词表或 patch projection 给出的内容向量，\(p_i\) 是位置相关的信息。注意这个公式的含义很具体：embedding 只告诉模型“这个位置是什么内容”，position 才告诉模型“它在序列里的哪里”。没有位置机制，两个 token 交换顺序后，纯 attention 很难知道谁先谁后。
+把图像 token 与文本 token 拼接后做 self-attention，是另一种组织方式。它要求为拼接后的序列定义位置、模态信息和可见关系，不能仅凭最终都使用矩阵乘，就把它与 cross-attention 当作完全相同的结构。
 
-![Transformer 原论文模型结构图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="500" .atlas-figure-tall }
+## 一个 Transformer block 怎样接起来
 
-<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 1。原图表达 encoder-decoder Transformer 的基本结构：embedding 与 positional encoding 进入多层 attention、feed-forward、残差和归一化模块。读这张图时，先看输入如何变成 token 表示，再看 attention 如何跨 token 交换信息，最后看 FFN 如何逐 token 改写表示。</small>
-
-原论文图里的 encoder 更像“把输入序列读成一组可被查询的表示”，decoder 更像“在已生成前缀上继续预测下一个 token”。Decoder 里的 masked multi-head attention 是关键：生成第 \(t\) 个位置时，它只能看 \(1\) 到 \(t\) 的前缀，不能偷看未来答案。后面的 encoder-decoder attention 则让 decoder 用当前 query 去读取 encoder 输出的 key/value。
-
-## 从 `[B,L,D]` 到 Q/K/V
-
-假设一层 Transformer 收到的 hidden states 是：
+注意力负责跨位置读取，前馈网络则分别改写每个位置的特征。残差连接让子层输出与输入相加，归一化调整送入子层或从子层输出的表示尺度。一个常见的 Pre-Norm block 可以示意为
 
 \[
-X \in \mathbb{R}^{B \times L \times D}
+U=X+\operatorname{Attention}(\operatorname{Norm}(X)),
 \]
-
-\(B\) 是 batch size，\(L\) 是 token 数，\(D\) 是每个 token 的隐藏维度。注意这里的 \(X\) 不是原始 token id，而是上一层已经加工过的向量表示。
-
-Attention 的第一步是用三组线性投影把同一个 \(X\) 变成 query、key、value：
 
 \[
-Q = XW_Q,\quad K = XW_K,\quad V = XW_V
+Y=U+\operatorname{FFN}(\operatorname{Norm}(U)).
 \]
 
-如果只看单个 head，常见形状可以写成：
+两次相加要求对应张量具有相同 shape。这里省略了 dropout 等细节，Norm 可以采用不同形式，FFN 也可使用门控结构。原始 Transformer 使用的归一化顺序与许多现代模型不同，读图时应以对应论文和代码为准。各子层的推导见[归一化、残差与激活](normalization-residual-and-activation.md)。
 
-\[
-Q,K,V \in \mathbb{R}^{B \times L \times d_{\text{head}}}
-\]
+![原始 Transformer 的编码器与解码器](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-1.png){ width="500" .atlas-figure-tall }
 
-query 是当前位置发出的“我想找什么”，key 是每个位置暴露给别人匹配的“索引”，value 是真正被读走的“内容”。这三个名字不只是符号，读公式时要把它们当成一次信息检索：
+<small>图源为 [Attention Is All You Need](https://arxiv.org/abs/1706.03762) Figure 1。左侧编码器处理输入序列，右侧解码器包含有因果约束的 self-attention，还通过 cross-attention 读取编码器输出。常见的纯文本生成模型采用 decoder-only 结构，通过因果 self-attention 读取上下文，省去独立编码器及对应的 cross-attention。这张图展示的是原始架构。</small>
 
-\[
-\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\left(\frac{QK^\top + M}{\sqrt{d_{\text{head}}}}\right)V
-\]
+多层 block 之后，语言模型把每个位置的最终表示从 \(D\) 维投影到词表大小 \(V\)，产生 `[B, L, V]` 的 logits。此时模型才给出每个位置对各候选 token 的分数，如何把分数变成生成结果见[生成与解码](generation-and-decoding-basics.md)。
 
-\(QK^\top\) 会得到一个 \(L \times L\) 的分数矩阵。第 \(i\) 行表示第 \(i\) 个 token 对所有 token 的匹配分数；第 \(j\) 列表示第 \(j\) 个 token 被别人读到的可能性。除以 \(\sqrt{d_{\text{head}}}\) 是为了让点积尺度不要随着维度变大而过尖。\(M\) 是 mask，可以把“不允许看的位置”加上很大的负数；softmax 后这些位置的权重接近 0。最后乘 \(V\)，就是把被允许、且匹配分数高的位置的信息加权读回来。
+## 因果训练为什么能并行，生成却逐步进行
 
-用一句话说：**attention 不是直接判断答案，而是在每一层为每个 token 做一次带权限的加权检索。**
+训练自回归语言模型时，输入位置 \(i\) 可以看到位置不超过 \(i\) 的 token，并预测下一个 token。以带起始标记的“我喜欢猫”为例，可以把输入与标签写成
 
-![Scaled dot-product attention 与 multi-head attention 原论文图](../assets/images/paper-figures/transformer/attention-is-all-you-need-figure-2-combined.png){ width="820" }
+| 位置 | 输入 token | 该位置预测的标签 |
+| --- | --- | --- |
+| 0 | BOS | 我 |
+| 1 | 我 | 喜欢 |
+| 2 | 喜欢 | 猫 |
+| 3 | 猫 | EOS |
 
-<small>图源：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，Figure 2。原图表达 scaled dot-product attention 和 multi-head attention 的组成。这张图说明：单个 head 完成一次“匹配、归一化、读取”，multi-head 则并行使用多套投影，让同一批 token 可以从不同关系里读信息。</small>
+输入和标签错开一个位置。模型在“喜欢”的位置能读 BOS、我、喜欢，目标是预测“猫”。训练时整个正确序列已经存在，因此这些位置可以放在一次前向中并行计算；因果掩码保证每个预测没有偷看自己的目标和更远的未来。
 
-Multi-head attention 的意义不是“多几个可解释脑区”，而是让模型在同一层里并行学习多种关系。一个 head 可能偏向局部语法，一个 head 可能偏向长距离指代，一个 head 可能在 VLM 中把词语和视觉 patch 对齐。多个 head 的输出会拼接后再过线性层，合并成下一层的 token 表示。
+生成时，下一个 token 尚未选出，必须先得到当前位置的分布、选择一个 token、把它接到上下文后面，再继续。对标准因果 Transformer，固定前缀在追加后续 token 时不会读取新增位置，所以此前各层的 key 和 value 可以缓存。新位置只计算自己的 query、key、value，再读取已有缓存。这就是 KV cache 的基本依据。
 
-把它放进一个具身任务里会更直观：“把桌边红色杯子拿起来。”语言 token 里的“杯子”需要和视觉 patch 中的杯身、杯沿、桌边建立关系；“拿起来”需要和夹爪状态、动作历史、目标位置建立关系；如果是自回归动作模型，当前动作 token 还只能看过去的视觉和动作，不能看未来动作。每层 attention 都在更新这些关系，而不是一次性给出最终动作。
+缓存节省了重复处理旧位置的工作，但长上下文的缓存仍占空间，新 query 读取历史也仍有代价。GQA、MQA 等方法改变 query 头与 KV 头的共享关系，FlashAttention 改变注意力中间结果的计算和存储方式。相关系统细节分别见[推理中的 GPU 与显存](../inference/gpu-kernels-batching-and-memory-systems.md)和[长上下文与 FlashAttention](../operators/long-context-and-flashattention-evolution.md)。
 
-## Self-attention、cross-attention 与 concat tokens
+## 参考资料
 
-Self-attention 指 \(Q,K,V\) 都来自同一组 hidden states。LLM 读文本上下文、ViT 读一张图的 patch、视频 Transformer 读一段时空 token，都是这种结构。它的优点是统一：任何 token 都可以在 mask 允许的范围内读其他 token。代价也统一：序列越长，分数矩阵越大。
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762) 是缩放点积注意力、多头结构和原始编码器解码器设计的来源。
+- [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/) 将公式与实现逐段对应。
+- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/) 用图示展示投影和注意力计算。
+- [Hugging Face BPE 说明](https://huggingface.co/docs/course/chapter6/5) 解释子词合并与编码流程。
 
-Cross-attention 指 \(Q\) 来自主序列，\(K,V\) 来自条件序列。扩散模型里，图像 latent 可以用 query 去读文本 prompt 的 key/value；encoder-decoder 翻译模型里，decoder token 也通过 cross-attention 读取 encoder 输出；Flamingo 这类多模态模型会让语言主干通过 gated cross-attention 读取视觉 token。
-
-还有一种常见设计是 concat tokens：把文本、图像、动作、状态全部拼成一条长序列，再用 self-attention 和 mask 控制谁能看谁。很多 VLA、原生多模态模型、世界模型都会接近这条路。它实现简单，接口统一，但必须付出更高的 token 账本，因此常常需要视觉 resampler、action tokenizer、局部 attention 或 latent bottleneck。
-
-```text
-self-attention:
-  Q = X @ Wq
-  K = X @ Wk
-  V = X @ Wv
-
-cross-attention:
-  Q = image_or_action_states @ Wq
-  K = text_or_memory_states  @ Wk
-  V = text_or_memory_states  @ Wv
-
-concat-token attention:
-  X = [language_tokens, visual_tokens, state_tokens, action_tokens]
-  mask 决定每类 token 能读哪些位置
-```
-
-这三种接口没有绝对高下。读论文时更应该问：信息在哪里被压缩？哪个模块承担跨模态对齐？mask 是否允许未来泄漏？长视觉或长视频 token 是否会把 serving 成本推爆？
-
-如果这个问题具体落到 VLM/VLA，下一步要看视觉 token 是怎样被切块、压缩和交给 LLM、policy 或 world model 的；对应专题页是 [视觉 Tokenizer 与连接器](../vlm/visual-tokenizers-and-connectors.md)。
-
-## Causal mask 把训练和生成连起来
-
-自回归语言模型的训练目标通常是预测下一个 token：
-
-\[
-p(x_{1:L}) = \prod_{t=1}^{L} p(x_t \mid x_{<t})
-\]
-
-这个公式说的是：整段序列概率被分解成每一步的条件概率。第 \(t\) 步只能依赖 \(t\) 之前的 token。Transformer 训练时虽然可以并行处理整段序列，但 causal mask 会让第 \(t\) 行的 attention 看不到 \(t+1\) 到 \(L\) 的位置，因此数学上仍然对应“只用前缀预测下一个 token”。
-
-这也是 decoder-only LLM、动作 token VLA、一些视频 next-token world model 共享同一种骨架的原因。它们都在学一个条件分布：给定过去的文本、图像、状态或动作，预测下一个 token。区别在于 token 的来源、损失函数和输出空间，而不是“有没有 Transformer”。
-
-训练和推理的差异也从这里出现。训练时一整段序列已知，可以一次性算出所有位置的 loss；推理时未来 token 不存在，模型只能一个 token 一个 token 地生成。这个差异会把 KV cache 推到系统中心。
-
-## KV cache 是生成链路的内存
-
-生成第 \(t\) 个 token 时，前 \(t-1\) 个 token 的 \(K,V\) 已经算过。如果每一步都把完整前缀重新过一遍 Transformer，decode 会浪费大量计算。KV cache 的做法是：prefill 阶段把提示词的 K/V 算好并存起来，decode 阶段每来一个新 token，只计算它自己的 Q/K/V，再用新 Q 去读历史 K/V。
-
-单层、单 batch 的 KV cache 大致可以按下面这项估算：
-
-\[
-2 \times T \times H_{\text{kv}} \times d_{\text{head}} \times \text{bytes}
-\]
-
-前面的 2 是 K 和 V 两份缓存，\(T\) 是历史 token 数，\(H_{\text{kv}}\) 是 KV head 数，\(d_{\text{head}}\) 是每个 head 的维度，`bytes` 是每个数值占多少字节。真实系统还要乘以层数、batch size，并考虑 allocator、block 管理、prefix 复用和并行切分。
-
-这个公式解释了很多推理系统设计。GQA/MQA 通过减少 KV head 数降低缓存；KV quantization 用更少字节存历史；vLLM 的 PagedAttention 用分页式 block 管理动态增长的 KV cache，减少碎片和浪费；TensorRT-LLM 这类 runtime 会把 KV block pool、reuse、eviction、offload 和 attention window 变成可配置的服务策略。KV cache 不是一个小优化，而是自回归 Transformer 能否高吞吐服务的核心数据结构。
-
-## 为什么长上下文和多模态会贵
-
-Self-attention 的分数矩阵是 \(L \times L\)。当 \(L\) 从 4k 到 32k，再到多相机视频的十几万 token，问题不是“多一点显存”这么简单，而是计算、内存访问、调度、cache 管理、通信都会一起变难。
-
-继续看前面的机器人视频例子：4 路相机、16 帧、每帧 256 个视觉 token，会产生 16,384 个视觉 token。单个 head 的 attention score 元素数是：
-
-\[
-16{,}384^2 = 268{,}435{,}456
-\]
-
-如果把完整 score matrix 用 BF16 物化，只是这个中间矩阵就约 512 MiB；16 个 heads 就接近 8 GiB，还没算 Q/K/V、dropout、反向传播保存、FFN 激活、多层堆叠和 optimizer states。很多读者第一次看到长视频或机器人世界模型的 token 账本，会意识到“多模态大模型”不是把图片和文字拼起来这么简单。
-
-![FlashAttention IO-aware attention 原论文图](../assets/images/paper-figures/transformer/flashattention-figure-1-io-aware.png){ width="920" }
-
-<small>图源：[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)，Figure 1。原图表达朴素 attention 会反复在 HBM 中读写中间矩阵，而 FlashAttention 通过 tiling 与 online softmax 避免物化完整 attention matrix。这张图说明：同一个 attention 公式，在不同内存访问路径下会有完全不同的吞吐和显存占用。</small>
-
-FlashAttention 的关键不是把 attention 数学上变成线性，而是把原本巨大、低效的中间读写变成更接近硬件友好的分块计算。它仍然在算精确 attention，仍然要面对 token 增长带来的总体计算压力；但它减少了 HBM 往返和中间结果物化，所以训练和推理都能大幅受益。
-
-这也解释了为什么长上下文论文、VLM/VLA 架构和推理 runtime 经常同时出现这些词：sliding window、local attention、block-sparse attention、resampler、KV eviction、prefix cache、PagedAttention、GQA/MQA、MLA。它们不只是“模型技巧”，而是在不同位置压缩同一张 token 账本。
-
-## 现代 Transformer 改在哪里
-
-原始 Transformer 的大结构很稳定：attention 做跨 token 信息路由，FFN 做逐 token 非线性变换，残差和归一化保证深层训练。但现代模型的关键变化往往不在课堂图的外壳上，而在四个位置。
-
-第一，位置机制。绝对位置编码、RoPE、ALiBi、YaRN 等方法改变模型如何感知顺序、距离和长上下文外推。位置不是附属项，因为 attention 本身对顺序并不敏感。
-
-第二，KV 存储。GQA、MQA、MLA、KV quantization 和 paged cache 都在减少历史 K/V 的显存和读写成本。只看参数量很容易低估推理瓶颈。
-
-第三，attention kernel。FlashAttention、Triton attention backend、persistent kernels、context parallel 都在处理同一个现实：矩阵公式能不能高效落到 GPU 内存层级和通信拓扑上。
-
-第四，FFN 与 MoE。很多大模型把 dense FFN 换成 routed experts，让每个 token 只激活一部分专家。这样能扩大总参数量，但也引入 router、负载均衡、专家并行和通信问题。
-
-![DeepSeek-V3 architecture](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-2-architecture.png){ width="920" }
-
-<small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 2。原图表达 DeepSeek-V3 block 使用 MLA 压缩 KV cache，并用 shared experts 与 routed experts 构成 DeepSeekMoE。这张图说明：现代 Transformer 的改进常常同时发生在 attention 的历史存储与 FFN 的稀疏激活上。</small>
-
-读这种技术报告图时，不要只看“参数多少、上下文多长”。更有效的读法是跟着 token 走：它被切成什么粒度，位置怎么编码，它能 attend 到谁，历史 K/V 怎么保存，每层实际激活多少专家，专家之间的通信是否吃掉了稀疏计算的收益。
-
-## 容易误读的地方
-
-**误解一：attention 权重就是解释。**
-Attention 权重只是某一层、某个 head 的信息路由。最终表示还会经过残差、归一化、FFN 和后续层改写。它可以提供线索，但不能直接等同于“模型为什么这么想”。
-
-**误解二：tokenizer 只是预处理。**
-Tokenizer 决定 \(L\)，而 \(L\) 同时进入 attention 计算、上下文窗口、KV cache 和 serving 调度。多语言、代码、长视频、机器人动作频率，都会通过 token 数改变系统成本。
-
-**误解三：FlashAttention 解决了长上下文。**
-FlashAttention 解决的是中间矩阵物化和内存 IO，不能取消长序列本身的计算。长上下文还需要位置外推、cache 管理、batch 调度、稀疏或分块机制。
-
-**误解四：多模态只是把图像 token 接到 LLM。**
-关键问题是视觉信息在哪里被压缩、语言 token 如何读取视觉证据、动作或状态如何进入序列、mask 是否符合因果关系、输出 token 能否被真实系统执行。
-
-## 读完以后怎么判断
-
-Transformer 的核心不是“某个模型架构名”，而是一种把世界切成 token、再让 token 互相读取信息的计算方式。tokenization 决定模型看到多少证据；位置机制告诉模型顺序和距离；attention 决定每个 token 能从哪里读信息；causal mask 把并行训练变成前缀预测；KV cache 把自回归生成变成可服务的系统；kernel、resampler、GQA/MQA/MLA、MoE 和 paged cache 则是在现实硬件上压缩这条链路的成本。
-
-所以读任何 Transformer 系论文或报告时，可以先问六个具体问题：输入被切成什么 token；序列长度大概是多少；每类 token 能看谁；位置和时间如何编码；历史 K/V 如何保存和复用；哪些信息在 connector、resampler、latent bottleneck 或 expert routing 里被压缩了。问完这六件事，论文里的大部分结构图就不再只是模块堆叠。
-
-## 外部材料
-
-- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)：用可视化数据流建立 Transformer 第一层直觉，适合在看公式前阅读。
-- [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)：把原论文公式和 PyTorch 实现逐段对应，适合检查自己是否真的理解了 shape。
-- [Attention Is All You Need](https://arxiv.org/abs/1706.03762)：原论文仍然是 Figure 1、Figure 2、scaled dot-product attention 与 mask 机制的第一来源。
-- [Hugging Face NLP Course: Byte-Pair Encoding](https://huggingface.co/docs/course/chapter6/5)：清楚解释 BPE merge 如何从语料统计生成 subword token。
-- [OpenAI tiktoken](https://github.com/openai/tiktoken)：理解现代 byte-pair tokenizer 的工程接口，也可配合 token 计数工具看真实上下文成本。
-- [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 attention 为什么是内存系统问题，而不只是一个矩阵公式。
-- [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：把 KV cache、分页管理和动态 serving batch 放到真实推理系统里看。
-
-- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- [Dive into Deep Learning](https://d2l.ai/)。
-- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- [LLMs from scratch 的 GPT 实现](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，用于把正文的数学对象对应到具体数据布局和执行顺序。

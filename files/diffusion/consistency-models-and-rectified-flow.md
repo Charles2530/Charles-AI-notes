@@ -1,119 +1,103 @@
-# Consistency Models 与 Flow：终点映射和局部速度的边界
+# 一致性模型怎样把轨迹压成终点映射
 
-Consistency Models、LCM、Flow Matching 和 Rectified Flow 都能服务少步生成，但它们学习的对象不同。一致性路线学习轨迹上不同时间点到同一终点的映射；Flow 路线学习当前位置的局部速度，再由 ODE solver 积分出终点。两者可以共享教师轨迹或相同端点分布，不能因此视为同一个训练目标。
+普通速度模型在当前状态预测一个局部方向，采样器再积分很多次。一致性模型直接学习这条轨迹通向的低噪声端点。两个网络都能输出与输入同形状的数组，但一个输出变化率，一个输出端点；把它们接到相同更新公式会出错。
 
-读一致性路线时，先分清三个问题：一致性函数的约束是什么；LCM 如何把一致性蒸馏接入 latent diffusion；它与 Flow Matching、Rectified Flow 和普通 sampler 加速分别处在哪一层。
+用一个可以精确求解的轨迹说明。设 \(p_t=\mathcal N(0,1+t)\)，其 probability flow ODE 为 \(\mathrm dx/\mathrm dt=x/[2(1+t)]\)。从 \(t=3,x=2\) 出发，沿逆时间走到 \(t=0\) 得到 1。中间 \(t=1\) 时，状态是 \(\sqrt2\)。这个例子的推导见[Score 与 ODE](score-matching-sde-and-probability-flow.md)。
 
-Flow 的条件速度、边缘速度、ODE 与 reflow 推导见 [Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)。
+## 同一轨迹上的不同状态应得到相同终点
 
-## 前置知识
+将终点函数写成
 
-- [扩散模型基础](foundations-and-core-intuition.md)：模型、路径和 sampler 的分工。
-- [采样与推理加速](inference.md)：多步轨迹、NFE 与数值误差。
-- [Flow Matching 与 Rectified Flow](flow-matching-and-rectified-flow.md)：局部速度和 ODE 生成接口。
+\[
+f(x,t)=\frac{x}{\sqrt{1+t}}.
+\]
 
-## 核心机制
+于是 \(f(2,3)=1\)，\(f(\sqrt2,1)=1\)，\(f(1,0)=1\)。这些输入值并不相同，只有映射后的终点相同。另一条轨迹从 −2 开始，应该映到 −1，不能把所有轨迹都变成同一个结果。
 
-### 一致性函数学习同轨迹的共同终点
-
-设 \(x_t\) 与 \(x_s\) 位于同一条 probability flow ODE 或教师轨迹上。一致性函数 \(f_\theta\) 希望满足：
+在一般模型中，函数用 \(f_\theta\) 近似，要求同轨迹状态满足
 
 \[
 f_\theta(x_t,t)\approx f_\theta(x_s,s).
 \]
 
-它不是要求两个带噪状态相同，而是要求它们映射到同一个数据端结果。边界条件提供锚点：
+只优化这条等式有一个明显坏解，\(f_\theta\equiv0\) 对任意输入都满足一致性，却没有恢复数据分布。必须增加低噪声边界，使输出回到输入本身。
+
+## 边界条件怎样排除恒定输出
+
+为便于展示，前面的高斯例子使用 0 作为数据端。原始 Consistency Models 通常以一个小正数 \(\epsilon>0\) 作为最小噪声端点，要求
 
 \[
-f_\theta(x_0,0)=x_0.
+f_\theta(x,\epsilon)=x.
 \]
 
-没有边界锚点，“所有时间输出一致”并不能保证输出落在正确数据样本上。实际参数化常把 skip connection 和可学习分支组合起来，使边界条件由结构保证，而不只依靠损失学出。
-
-### 训练来源：独立训练与教师蒸馏
-
-Consistency Models 可以采用两类训练方式：
-
-- consistency training 从数据与噪声构造相邻时间点，并通过数值近似形成一致性目标；
-- consistency distillation 使用已训练的 diffusion/score 教师，在教师 ODE 轨迹上产生配对状态。
-
-一个抽象的自蒸馏损失是：
+一种结构性实现为
 
 \[
-\mathcal L_{\mathrm{cons}}
-=
-\mathbb E\left[
-d\!\left(
-f_\theta(x_{t_{n+1}},t_{n+1}),
-\operatorname{sg}\!\left(f_{\theta^-}(\hat x_{t_n},t_n)\right)
-\right)
-\right],
+f_\theta(x,t)=c_{\mathrm{skip}}(t)x+
+ c_{\mathrm{out}}(t)F_\theta(x,t),
 \]
 
-其中 \(\hat x_{t_n}\) 由教师或数值一步从 \(x_{t_{n+1}}\) 得到，\(\theta^-\) 常表示 EMA target network，\(\operatorname{sg}\) 表示 stop-gradient。距离函数、时间离散和参数化会影响稳定性，不能把上式当成所有实现逐项相同的唯一配方。
+并令 \(c_{\mathrm{skip}}(\epsilon)=1\)、\(c_{\mathrm{out}}(\epsilon)=0\)。边界由结构满足，网络学习离开边界后的修正。实际预条件化还可以缩放网络输入与时间，系数应按具体实现读取。
 
-### 一步生成与少步生成
+边界与一致性一起约束整条轨迹。只满足边界不保证远端正确，只在稀疏的训练配对上满足一致性也不保证所有状态正确。因此有限训练仍需要检查高噪声端、不同时间跨度和分布覆盖。
 
-从高噪声状态直接调用一次 \(f_\theta(x_T,T)\) 可以得到一步样本；也可以在若干下降的时间点之间交替加入受控噪声并调用一致性函数，形成少步生成。少步模式让模型获得中途纠错机会，通常在延迟与质量之间更容易取得平衡。
+## Consistency distillation 怎样得到一对同轨迹状态
 
-“支持一步”不等于“一步与教师完全等价”。跨度增大后，语义、局部结构、文字、条件控制和分布覆盖都可能退化。验收必须固定真实步数、条件强度和端到端延迟，而不是只比较 sampler 循环次数。
+有预训练 score 或 diffusion 教师时，可以从数据加噪得到 \(x_{t_{n+1}}\)，再用教师的 ODE 数值步得到较低噪声的 \(\hat x_{t_n}\)。学生与目标网络分别计算
 
-### LCM：latent diffusion 上的一致性蒸馏
+\[
+\mathcal L_{\mathrm{CD}}
+=\mathbb E\left[
+\lambda(t_n)d\left(
+ f_\theta(x_{t_{n+1}},t_{n+1}),
+ \operatorname{stopgrad}(f_{\theta^-}(\hat x_{t_n},t_n))
+\right)\right].
+\]
 
-Latent Consistency Models 把一致性蒸馏应用到 latent diffusion：使用预训练 latent diffusion 模型形成教师 ODE 轨迹，让学生学习少步一致映射。外层系统仍包含文本编码器、latent 表示和 VAE decoder；改变的是 latent 生成主干的训练与采样接口。
+\(\theta^-\) 是目标分支的参数，常按 EMA 更新；stop-gradient 阻止这次损失通过目标分支回传。教师提供相邻状态的运输关系，目标网络提供其当前终点估计。教师误差、求解器误差和学生函数误差都会进入训练。
 
-LCM-LoRA 进一步把蒸馏得到的加速能力表示为 LoRA 参数，使它能接入一部分已有模型生态。兼容性仍依赖基础权重、prediction type、scheduler、LoRA 合并方式和条件模块，不能把任意 LCM-LoRA 当作通用的四步开关。
+在前面的解析例子中，可以直接用准确轨迹配对 \((2,3)\) 与 \((\sqrt2,1)\)，让两个输出接近。若换成近似 Euler 教师，两点就只近似位于同轨迹。训练监督的质量由这个配对构造决定。
 
-### 与普通 solver 加速的区别
+## Consistency training 如何省去预训练教师
 
-| 路线 | 是否重训 | 学习对象 | 推理方式 |
-| --- | --- | --- | --- |
-| DDIM / DPM-Solver | 通常不重训 | 沿用原模型输出 | 用更合适的离散路径或高阶 solver |
-| Progressive distillation | 需要学生训练 | 模仿教师多个小步的结果 | 逐轮减少采样步数 |
-| Consistency / LCM | 需要训练或蒸馏 | 同轨迹各时间点的共同终点 | 一步或少步一致性调用 |
-| Flow Matching | 训练速度场 | 概率路径的局部速度 | ODE solver 积分 |
-| Rectified Flow | 训练并可 reflow | 更易有限步积分的速度场 | 少步 ODE 积分 |
+无教师的一致性训练需要另一种可构造的近邻关系。用原始论文常见的加性噪声坐标举例，取同一个干净样本 \(x_0\) 和同一份噪声 \(z\)，构造
 
-solver 加速主要重排数值误差；Consistency 改变模型的监督对象；Flow Matching 改变路径速度的训练接口。只看最终 NFE 会掩盖这些差异。
+\[
+x_{t_n}=x_0+t_nz,
+\qquad
+x_{t_{n+1}}=x_0+t_{n+1}z.
+\]
 
-### 与 Flow 路线可以怎样组合
+这里 \(t\) 表示噪声标准差，与上一节高斯路径的布朗时间不是同一坐标。两个状态共享噪声，因此它们的差恰好为 \((t_{n+1}-t_n)z\)，可以在足够细的时间离散下建立相应的一致性训练近似。
 
-Flow 模型给出局部速度，Consistency 模型给出跨时间终点映射。二者可以组合：例如以 Flow ODE 生成教师轨迹，再蒸馏一个一致性或其他少步学生。此时“教师轨迹来自 Flow”不代表学生仍在预测 Flow velocity。
+这两个点属于同一条人为构造的加噪线，有限间隔下不应直接宣称它们是边缘 PF-ODE 的准确轨迹点。论文的连续极限关系、时间离散和目标设计解释了这种配对为何可用。若两个噪声独立，相邻时间的差就额外包含大幅随机变化，会破坏所需的近邻构造。
 
-Rectified Flow 通过路径与 coupling 设计降低有限步积分难度；Consistency 通过函数约束减少抵达终点所需的调用次数。前者关注轨迹几何，后者关注跨时间映射。它们都可能降低步数，也都不能单独保证少步条件保持与分布覆盖。
+因此 CD 与 CT 的关键区别落在训练配对的来源。CD 读取教师速度来走一步；CT 从数据和共享噪声产生可训练近似。二者都要有边界约束，不能仅用一句“让不同时间输出一样”概括实现。
 
-### 评测应对准不同失效模式
+## 一步和多步一致性采样怎样运行
 
-一致性与 LCM 需要重点检查：
+一次调用可以从高噪声直接预测低噪声端点。多步模式则在预测端点后，按较低噪声尺度重新加噪，再调用一致性函数。例如加性噪声路径的一个示意更新为
 
-- 一步、二步、四步下质量是否单调且稳定；
-- 长 prompt、文字、身份和局部控制是否被压平；
-- CFG 或 guidance scale 改变时是否仍处于训练支持范围；
-- 多随机种子的覆盖率是否低于教师；
-- 实际端到端延迟是否被文本编码、VAE 解码或额外条件模块主导。
+\[
+\hat x=f_\theta(x_t,t),
+\qquad x_s=\hat x+\sqrt{s^2-\epsilon^2}\,z,
+\qquad z\sim\mathcal N(0,I).
+\]
 
-Flow 与 Rectified Flow 还要检查时间 bucket 误差、路径曲率、solver 与时间网格，以及同一 NFE 下的积分误差。两类方法都不能只用少数视觉样例下结论。
+\(\hat x\) 表示最小噪声端的估计，额外随机项把它送到下一次调用支持的噪声尺度。公式需要与模型训练的路径配套。不能把终点输出当成速度再乘时间差，也不能给普通 DDPM 权重换个一致性 scheduler 就得到已经蒸馏好的函数。
 
-## 常见误解与失效边界
+LCM 将一致性蒸馏用于 latent diffusion，外层文本编码器、VAE 和条件接口仍然存在。LCM-LoRA 保存某些加速能力为低秩参数，适配范围依赖基座权重与训练设置。模型支持的时间点、guidance 输入和条件控制都应与其训练约定对应。
 
-**把 consistency 当成输出恒等。**一致性约束只在同一生成轨迹上成立，并依赖正确的边界条件；不同初始噪声不应被压成同一结果。
+## 与 Flow Matching 的区别可以直接算出来
 
-**把 LCM 当成换 scheduler。**LCM 权重经过一致性蒸馏，必须与对应 prediction type 和时间配置一起使用。
+回到 \(t=3,x=2\) 的高斯例子。局部速度是 \(2/[2(1+3)]=.25\)，终点函数输出 1。若错误地把终点 1 当成速度，一步从 3 到 0 会得到 \(2-3\times1=-1\)。若把局部速度 .25 当成最终样本，则得到 .25。两者 shape 一样，两个错误都能在程序里正常运行。
 
-**认为一步模型没有轨迹。**它在一次函数调用中近似了跨时间映射；训练目标仍依赖噪声时间和教师或自生成轨迹。
+Flow Matching 学的是一个可积分的局部场；一致性模型学习沿场跨越多个时间的映射。可以用 Flow ODE 作为教师训练终点函数，此时教师与学生的输出语义仍然不同。Reflow 则重新选择端点 coupling 并训练速度，目标是让场更适合有限步积分，见[Flow Matching](flow-matching-and-rectified-flow.md)。
 
-**把 Flow velocity 与一致性输出互换。**局部速度需要积分，终点映射直接预测数据端表示。张量 shape 可能相同，语义和 sampler 接口不同。
+比较时固定输出分辨率、条件集合和真实前向工作量。分别观察一步与多步的文本遵循、细节和不同种子覆盖，再计算端到端时间。较少模型调用的收益可能被 VAE 解码或额外控制模块限制；这些成本不属于一致性损失本身。
 
-**只比较模型前向次数。**不同方法的单次前向成本、CFG 分支、分辨率、VAE 和后处理可能不同；NFE 不是端到端延迟。
+## 参考资料
 
-## 检查理解
-
-1. 一致性约束为什么还需要边界条件？
-2. consistency distillation 中教师轨迹承担什么作用？
-3. LCM 与只给原 DDPM 换一个四步 scheduler 有什么根本差别？
-4. Flow ODE 作为教师时，学生为什么不一定预测 velocity？
-5. 一步模型应怎样检查质量与分布覆盖，而不只看单张结果？
-
-## 外部材料
-
-- 原始来源：[Consistency Models](https://arxiv.org/abs/2303.01469)、[Latent Consistency Models](https://arxiv.org/abs/2310.04378)、[Flow Matching](https://arxiv.org/abs/2210.02747)、[Rectified Flow](https://arxiv.org/abs/2209.03003)。
+- [Consistency Models](https://arxiv.org/abs/2303.01469)给出边界参数化、一致性蒸馏、无教师训练与多步采样。
+- [Latent Consistency Models](https://arxiv.org/abs/2310.04378)把该目标应用于 latent 条件生成。
+- [采样器的有限步误差](inference.md)解释不重训情况下的数值求解；[扩散蒸馏](distillation.md)比较轨迹回归与分布匹配。

@@ -1,99 +1,44 @@
-# 前置数学知识
+# 数学工具
 
-前置数学知识帮助你把 AI 文章里的公式翻译回机制：谁在变化，谁是随机的，谁被优化，误差怎样传播，以及这些因素如何影响质量、显存、延迟或闭环行为。
+这里把数学放回具体计算。矩阵乘法解释特征怎样组合，导数解释参数怎样影响损失，概率解释未知结果如何平均，动力学解释状态怎样随时间变化。每篇都包含可复算的数值或推导，可以从当前公式涉及的对象进入。
 
-1. 如果想系统学习，按下面五组从前往后读。
-2. 如果已经在某篇博客或论文里卡住，直接用“从下游反查”找到最短补课路径。
+## 数组、方向与变化
 
-## 数学语言与变化
-
-这一组先回答“对象放在哪个空间里”和“输入动一点，输出怎样变”。它是 attention、自动微分、优化、量化和低秩方法的共同起点。
-
-| 你要解决的问题 | 核心工具 | 页面 |
+| 当前不清楚的问题 | 入口 | 正文里实际计算什么 |
 | --- | --- | --- |
-| embedding、矩阵乘、投影、范数和低秩发生在哪个空间 | 向量、矩阵、内积、秩 | [线性代数与几何直觉](linear-algebra-and-geometry.md) |
-| SVD、谱能量、Newton-Schulz、Hessian 和 Fisher 怎样描述方向结构 | 特征值、奇异值、Taylor、二阶敏感度 | [谱分解、二阶近似与低秩结构](spectral-second-order-and-low-rank.md) |
-| 梯度、积分、链式法则、ODE/SDE 和指数积分器怎样连接 | 导数、积分、连续动力学 | [微积分与牛顿-莱布尼茨公式](calculus-and-newton-leibniz.md) |
-| 向量函数的扰动怎样传播，backward 为什么算 VJP | Jacobian、JVP、VJP、局部线性化 | [微分、Jacobian 与梯度传播](differential-jacobian-and-gradient-flow.md) |
+| 一个矩阵保留哪些输入差别 | [线性代数](linear-algebra-and-geometry.md) | 两个样本经同一个矩阵投影，秩如何丢掉方向 |
+| 局部变化率怎样形成一次更新或轨迹 | [微积分](calculus-and-newton-leibniz.md) | 回归梯度、Euler误差、SDE噪声尺度 |
+| 向量函数怎样反向求导 | [Jacobian](differential-jacobian-and-gradient-flow.md) | 同一二维映射的JVP、VJP和差分检查 |
+| 为什么保留90%谱能量仍可能丢任务 | [谱与二阶结构](spectral-second-order-and-low-rank.md) | 截断SVD、Hessian方向、Fisher与KL |
+| 同一局部窗口怎样改变信号 | [卷积与频域](convolution-frequency-and-multiscale.md) | 四点信号、相位、循环滤波与混叠 |
 
-## 概率、统计与信息
+只想先读懂公式记号，可以从[一个分类器的全部符号](../foundations/symbols-and-minimal-math.md)开始。需要写张量代码时，再对照[轴、广播和存储](../foundations/tensors-shapes-and-computation-graphs.md)。
 
-这一组回答“数据和未来有多不确定”“有限样本结论有多可信”以及“两个分布差多少”。
+## 分布、目标与有限样本
 
-| 你要解决的问题 | 核心工具 | 页面 |
+| 当前的问题 | 入口 | 关键计算 |
 | --- | --- | --- |
-| 随机变量、条件概率、贝叶斯、方差和协方差怎么连起来 | 分布、期望、协方差矩阵 | [概率论、分布与期望](probability-distributions-and-expectation.md) |
-| Monte Carlo、置信区间、bootstrap、importance weight 和 calibration 怎样读 | 偏差、方差、Wilson、ESS、ECE | [采样、估计与校准](sampling-estimation-and-calibration.md) |
-| 熵、交叉熵、KL、互信息和 perplexity 为什么能写进 loss | 信息量和分布距离 | [信息论、熵与分布距离](information-theory-and-divergence.md) |
-| 一串随机状态怎样组成 trajectory，马尔可夫假设在说什么 | 转移概率、随机过程、MDP | [随机过程与马尔可夫性](stochastic-processes-and-markov.md) |
+| 为什么测试比例改变会影响成功率 | [概率与期望](probability-distributions-and-expectation.md) | 联合表、条件概率、分层权重 |
+| CE和KL为何数值不同却可能梯度相同 | [信息论](information-theory-and-divergence.md) | 同一p/q上的熵、交叉熵和KL |
+| 80/100次成功到底有多可信 | [采样与校准](sampling-estimation-and-calibration.md) | Wilson区间、重要性权重、概率校准 |
+| 看不到隐藏原因，怎样训练生成器 | [潜变量目标](latent-likelihood-and-generative-objectives.md) | 两个隐藏状态的后验、ELBO与精确间隙 |
+| 两组数据都胜出，汇总却落后 | [因果与偏移](causality-counterfactual-and-distribution-shift.md) | 分层反转、调整权重与识别条件 |
 
-## 优化与学习目标
+概率期望需要明确抽样来源，损失需要明确归约单位。公式里的一个平均号，可能对应样本、token、轨迹或模型自己的输出，这些对象不能互换。
 
-这一组把“模型应该学什么”变成可计算目标，再解释连续更新、离散选择、生成目标和长期收益分别怎样优化。
+## 优化、选择与时间
 
-| 你要解决的问题 | 核心工具 | 页面 |
+| 当前的问题 | 入口 | 关键计算 |
 | --- | --- | --- |
-| loss 怎样变成参数更新，momentum、Adam 和约束在改什么 | 梯度下降、曲率、正则化 | [优化、梯度与约束](optimization-and-gradient-methods.md) |
-| prior、posterior、Jensen、ELBO、energy、score 和 flow 怎样统一 | 潜变量、下界、EBM、方向场 | [潜变量、似然与生成模型目标](latent-likelihood-and-generative-objectives.md) |
-| top-k、beam、MCTS、router 和 load balancing 怎样分配选择预算 | 离散搜索、gating、熵与容量 | [离散选择、Top-k 与稀疏路由](discrete-selection-topk-and-routing.md) |
-| return、value、Bellman、lambda-return、PPO 和 GRPO 怎样支撑决策 | 价值递推、advantage、策略梯度 | [价值函数、策略梯度与强化学习目标](value-policy-and-rl-objectives.md) |
+| 学习率为何能让负梯度也增大loss | [优化方法](optimization-and-gradient-methods.md) | 二次曲面的稳定步长、Adam和约束 |
+| Top-k、采样和专家路由差在哪里 | [离散选择](discrete-selection-topk-and-routing.md) | 分数、集合、权重、容量与搜索 |
+| 标签右移和因果mask怎么对齐 | [序列与位置](sequence-position-and-masking.md) | 同一短序列的输入、目标和缓存 |
+| 带伞观测如何改变天气预测 | [马尔可夫过程](stochastic-processes-and-markov.md) | 转移矩阵、多步分布和belief更新 |
+| 奖励怎样变成策略更新 | [RL目标](value-policy-and-rl-objectives.md) | 两步return、TD、GAE和clipping |
+| 计划遇到误差后怎样修正 | [动态系统与控制](dynamic-systems-and-control.md) | 两步MPC、反馈稳定、可观测性 |
 
-## 时序、控制与空间
+## 空间与计算成本
 
-这一组把孤立样本接成序列、轨迹和三维世界，服务 Transformer、世界模型、VLA 和机器人视觉。
+[几何与三维](geometry-vision-and-3d.md)从一个点的投影与反投影解释相机、位姿和深度。[数值与复杂度](numerics-complexity-and-estimation.md)用同一矩阵乘法算FLOPs、字节与性能下界。[缩放曲线](scaling-laws-and-experimental-curves.md)解释如何从有限实验估计资源收益，以及为什么不能随意外推。
 
-| 你要解决的问题 | 核心工具 | 页面 |
-| --- | --- | --- |
-| token 顺序、RoPE、causal mask、temperature 和 KV cache 怎样读 | 序列索引、位置、可见性 | [序列、位置编码与注意力掩码](sequence-position-and-masking.md) |
-| 状态怎样演化，MPC/CEM 怎样用世界模型选择动作 | 状态空间、稳定性、闭环控制 | [动态系统、控制与状态空间](dynamic-systems-and-control.md) |
-| kernel、Fourier、DCT、卷积定理、SNR 和多尺度为什么一起出现 | 信号、频率、噪声尺度 | [卷积、频域与多尺度表示](convolution-frequency-and-multiscale.md) |
-| 相机内外参、深度、四元数、对极几何、位姿和点云怎样连接 | 投影几何、SE(3)、多视角约束 | [几何、视觉与三维空间](geometry-vision-and-3d.md) |
-
-## 研究判断与工程
-
-最后一组不直接定义模型层，而是帮助判断实验能否外推、曲线是否可信、方法在机器上是否划算。
-
-| 你要解决的问题 | 核心工具 | 页面 |
-| --- | --- | --- |
-| correlation、intervention、counterfactual、OOD 和 train-test mismatch 怎样区分 | 因果语言、分布偏移 | [因果、反事实与分布偏移](causality-counterfactual-and-distribution-shift.md) |
-| scaling law、log-log、边际收益、Pareto 和 ablation 怎样读 | 幂律、外推、实验曲线 | [缩放律、幂律与实验曲线](scaling-laws-and-experimental-curves.md) |
-| Big-O、FLOPs、bytes、浮点误差、条件数和 benchmark 怎样落到系统 | 数量级、数值稳定性、成本估算 | [数值计算、复杂度与估算](numerics-complexity-and-estimation.md) |
-
-## 一张图上的主依赖
-
-~~~mermaid
-flowchart LR
-  A["线性代数"] --> B["微积分"]
-  B --> C["Jacobian / JVP / VJP"]
-  A --> D["谱分解"]
-  C --> E["自动微分与优化"]
-  C --> F["误差传播"]
-  D --> G["Hessian / Fisher"]
-  F --> H["量化与压缩"]
-  G --> H
-
-  P["概率论"] --> Q["采样与估计"]
-  P --> R["信息论"]
-  P --> S["随机过程"]
-  P --> T["潜变量与生成目标"]
-  B --> T
-  T --> U["扩散与世界模型"]
-  S --> V["价值、RL 与控制"]
-  V --> W["VLA 与具身闭环"]
-
-  X["序列与掩码"] --> E
-  Y["卷积与频域"] --> Z["几何与三维"]
-  Z --> W
-~~~
-
-这张图只保留主干。线性代数和概率论是两条起点：前者描述表示和变化方向，后者描述不确定性和分布。微积分与 Jacobian 把局部变化接到自动微分和误差传播；随机过程、价值函数与控制把一步预测接成长期决策；卷积、频域和几何把像素接到三维状态。
-
-## 从下游专题反查
-
-| 正在读的方向 | 建议先补的数学 |
-| --- | --- |
-| 训练、优化、量化与模型压缩 | [线性代数](linear-algebra-and-geometry.md) → [Jacobian](differential-jacobian-and-gradient-flow.md) → [谱、Hessian 与 Fisher](spectral-second-order-and-low-rank.md) → [数值与复杂度](numerics-complexity-and-estimation.md) |
-| 扩散、Flow Matching 与少步生成 | [微积分与 ODE/SDE](calculus-and-newton-leibniz.md) → [概率](probability-distributions-and-expectation.md) → [潜变量、score 与 flow](latent-likelihood-and-generative-objectives.md) → [卷积、SNR 与尺度](convolution-frequency-and-multiscale.md) |
-| 强化学习、Dreamer 与世界模型 | [概率](probability-distributions-and-expectation.md) → [随机过程](stochastic-processes-and-markov.md) → [价值与策略](value-policy-and-rl-objectives.md) → [动态系统与控制](dynamic-systems-and-control.md) |
-| VLM、VLA、3D 视觉与机器人 | [线性代数](linear-algebra-and-geometry.md) → [序列与掩码](sequence-position-and-masking.md) → [三维几何](geometry-vision-and-3d.md) → [控制](dynamic-systems-and-control.md) → [因果与分布偏移](causality-counterfactual-and-distribution-shift.md) |
-| 推理系统、MoE、算子与性能 | [离散选择](discrete-selection-topk-and-routing.md) → [数值与复杂度](numerics-complexity-and-estimation.md) → [采样与校准](sampling-estimation-and-calibration.md) → [实验曲线](scaling-laws-and-experimental-curves.md) |
+这些工具分别约束不同结论。几何往返正确不代表标定无误，复杂度低不保证运行快，拟合曲线漂亮也不保证超出观测范围后仍成立。正文会把相应条件放在推导旁边。

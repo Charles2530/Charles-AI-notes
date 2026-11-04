@@ -15,303 +15,330 @@ paper_topic: 世界模型 / Planning / Model-Based RL
     **GitHub / 项目：** 论文未在 arXiv 元数据中给出官方 GitHub；arXiv ancillary files 包含 pseudocode 和评测 JSON。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1911.08265)、官方 PDF、arXiv ancillary `pseudocode.py`；Checked Date：2026-07-06；Repro Status：Paper / pseudocode / ancillary data reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 搜索需要的世界，必须长得像真实世界吗
 
-### 研究背景
+MuZero 把 AlphaZero 的一个重要前提拿掉了。AlphaZero 在搜索树中调用已知游戏规则，得到下一局面、合法落子和终局结果，再由神经网络估计策略与价值。MuZero 改为学习一个能够响应动作的内部模型，用它代替树内的真实状态转移。在围棋、国际象棋和将棋中，这个模型足以支撑接近 AlphaZero 的搜索能力；在 57 个 Atari 游戏中，它又能处理图像输入和中间奖励。[↗](https://arxiv.org/pdf/1911.08265v2#page=1)
 
-MuZero 继承 AlphaZero 的搜索式强化学习背景，但移除了一个关键前提：已知游戏规则或完美模拟器。AlphaZero 在棋类游戏里很强，是因为 MCTS 可以调用真实规则展开未来；但在 Atari、机器人或其他真实环境中，agent 通常没有这样一个模拟器。传统 model-based RL 试图学习环境动力学，但常把大量容量花在预测像素或真实状态细节上，规划效果未必好。
+这里最值得理解的变化，是模型不以还原观察为训练目标。一个像素世界模型可能需要预测背景、纹理、物体外观和运动，才能生成下一帧；MuZero 只要求内部状态预测搜索直接需要的三种量，执行动作得到的 reward、之后如何行动的 policy，以及继续行动能得到多少回报的 value。状态可以采用任何有助于这些预测的表示，既不必等同于模拟器状态，也不必能解码回图像。
 
-MuZero 把问题重新放回 planning：如果模型的唯一用途是给搜索树提供未来回报信息，那么它是否需要预测真实 observation？论文的回答是否定的。模型只要预测 reward、policy 和 value，就能服务 MCTS。
+这种取舍来自 **value-equivalent model（价值等价模型）** 的思路。若一个抽象模型能保留动作序列的回报关系，规划未必需要它复原现实的每个细节。不过，MuZero 的损失和实验并没有证明学到的模型与真实环境在所有动作序列上严格等价。论文提供的是一种以决策目标塑造模型的训练方法，以及它在若干强规划基准上确实可用的证据。
 
-### 问题（Challenge）
+与 PlaNet 的潜在空间规划相比，二者都把搜索移出像素空间，但训练状态的信号不同。PlaNet 要求状态解释图像，MuZero 通过搜索得到的策略与价值目标组织表示学习。与直接输出动作的 model-free 网络相比，MuZero 又保留了逐动作推进状态的接口，允许在当前观察下多想几步。这两端之间的结合，才是论文要检验的对象。[↗](https://arxiv.org/pdf/1911.08265v2#page=2)
 
-论文要解决的问题是：**能否在不知道环境规则的情况下，学习一个足以支持 MCTS 的模型，并同时在棋类和 Atari 上达到强性能？** 难点在于，搜索需要展开 hypothetical future；如果模型误差累积，MCTS 会被误导。另一方面，如果要求模型重建完整真实状态或像素，任务又太难，且很多细节与规划无关。
+## 三个函数怎样接成一个可搜索的模型
 
-这个问题的价值在于，它直接连接真实世界决策：很多环境没有可调用规则模拟器，但仍需要 planning。MuZero 想保留 AlphaZero 的搜索优势，同时让模型从交互数据中学习。
+MuZero 在每个真实时间步 $t$，先将当前可用的观察历史编码为根状态。随后只给模型假想动作，就能继续展开搜索。论文用三个函数定义这个接口
 
-### Finding
+$$
+\begin{aligned}
+s_t^0 &= h_\theta(o_1,\ldots,o_t),\\
+(r_t^k,s_t^k) &= g_\theta(s_t^{k-1},a_{t+k}),\\
+(p_t^k,v_t^k) &= f_\theta(s_t^k).
+\end{aligned}
+$$
 
-作者的 finding 是：**用于规划的世界模型不必等价于真实环境模型；它只需要在搜索树中保持 value-equivalent，即能预测对决策有用的 reward、policy 和 value。** 这个洞见把世界模型从“复原世界”翻转为“服务规划的抽象状态机”。
+$h_\theta$ 是 **representation function**，把实际观察变成搜索根状态；$g_\theta$ 是 **dynamics function**，接收隐藏状态和动作，预测这一步的奖励及下一个隐藏状态；$f_\theta$ 是 **prediction function**，给出该状态上的策略先验和长期价值。上标 $k$ 表示从当前根节点向前展开了多少步，下标 $t$ 则指出模型从哪个真实时刻启动。
 
-这个 finding 能解决挑战，因为它大幅减少了模型必须学习的信息。hidden state 不需要可解释、不需要重建图像、不需要对应真实棋盘或 Atari RAM；只要在真实动作序列上 unroll 后能对齐 reward、MCTS policy target 和 n-step return，搜索就可以利用它。模型容量因此集中在决策相关变量上。
+奖励和价值的时间位置需要区分。$r_t^k$ 对应到达 $s_t^k$ 的这次转移奖励，目标是实际环境的 $u_{t+k}$；$v_t^k$ 估计到达这个状态之后的未来回报，从 $u_{t+k+1}$ 开始。搜索回传时要把沿途立即奖励与叶节点的剩余价值接起来，否则会遗漏或重复计算某一步收益。
 
-### 方法
+Figure 1 的三个面板把同一模型的三种用法放在一起。A 中分支是候选动作，模型帮助比较还没有真实执行的未来；B 中搜索完成后，智能体选择一个动作交给环境，得到新观察与真实奖励；C 则从经验池取一条已经发生的轨迹，按其中的真实动作展开模型，用后续实际数据和搜索结果训练输出。
 
-MuZero 模型由三个函数组成。representation function \(h\) 把历史 observations 编码成 root hidden state；dynamics function \(g\) 接收 hidden state 和假设 action，输出 immediate reward 和下一 hidden state；prediction function \(f\) 从 hidden state 输出 policy prior 和 value。MCTS 在这些 hidden states 上展开搜索，selection 使用 policy prior 和 value，expansion 调用 learned dynamics，backup 使用 predicted rewards 和 values。
+![MuZero 的潜在搜索、真实交互与序列训练](../../assets/images/paper-deep-dives/world-models/muzero/figure-1-planning-acting-training.png){ width="920" }
 
-训练时，从 replay buffer 采样真实轨迹。模型先用 \(h\) 编码真实历史，再沿真实动作序列用 \(g\) unroll 多步，并在每一步用 \(f\) 预测 policy 和 value。loss 对齐三类 target：真实 observed reward、由搜索 visit counts 得到的 policy target、以及 board games 的最终 outcome 或 Atari 的 n-step return。行动时，agent 对当前 observation 运行 MCTS，并按搜索 visit counts 选择动作。
+*原论文 Figure 1。蓝色 $h$ 只在根节点接收观察，绿色 $g$ 依动作推进状态，粉色 $f$ 输出策略与价值。规划中的候选动作和训练中的真实动作承担不同作用。*
 
-### 结论
+模型转移在本文中是确定性的。每次给定隐藏状态与动作，$g$ 输出同一个下一状态；论文将随机转移扩展留给后续工作。这里也没有要求 $g(h(o_t),a_{t+1})$ 必须与 $h(o_{t+1})$ 在隐藏向量上相等，训练直接比较的是后续 reward、policy、value。因而，控制效果好不能直接推导出内部状态恢复了可解释物理量，或者可以作为一个通用视频模拟器。[↗](https://arxiv.org/pdf/1911.08265v2#page=4)
 
-实验显示，MuZero 在 chess、shogi、Go 中达到或匹配 AlphaZero 的超人类表现，同时在 57 个 Atari games 上超过当时强 model-free 方法的平均和中位人类归一化分数。论文还通过 Go 和 Ms. Pacman 的分析展示，增加搜索模拟数能提升或稳定性能，说明 learned model 不是只作为普通 policy network 使用，而确实支撑了 planning。
+## MCTS 怎样把网络预测变成更好的动作分布
 
-MuZero 的结论边界也很重要：它不是一个可解释环境模拟器，也不输出可视化未来；它证明的是 value-equivalent model 足以支持 MCTS。对世界模型专题来说，MuZero 提醒我们：世界模型可以按用途定义。如果用途是规划，预测决策相关量可能比预测所有像素更有效。
+根节点的 policy 只是网络当前的先验。**Monte Carlo Tree Search（MCTS，蒙特卡洛树搜索）** 利用有限计算，把预算分配给有希望或尚未充分探索的动作，再用后续奖励与价值修正最初判断。MuZero 每次 simulation 并不是从头生成一条完整视频，也不总是把一条轨迹滚动到游戏结束；它沿已有树选择路径，在一个新叶节点调用模型，然后回传估计。
 
-### 关键术语
+对每个节点 $s$ 的动作边，论文保存访问数 $N(s,a)$、平均回报统计 $Q(s,a)$、策略先验 $P(s,a)$、预测奖励 $R(s,a)$ 和已计算的后继状态 $S(s,a)$。一次 simulation 的过程分为三个环节。
 
-- **Value-equivalent Model（价值等价模型）**：不要求复原真实环境状态，只要求在规划中产生等价的 reward、policy 和 value 信息。
-- **Representation Function, h（表征函数）**：把历史观测编码成搜索根节点 hidden state。
-- **Dynamics Function, g（动力学函数）**：在 hidden state 和假设动作上展开下一 hidden state，并预测即时奖励。
-- **Prediction Function, f（预测函数）**：从 hidden state 输出 policy prior 和 value，指导 MCTS。
-- **Monte Carlo Tree Search, MCTS（蒙特卡洛树搜索）**：通过模拟多条未来路径、累积访问次数和价值估计来选择动作的搜索算法。
-- **Visit Count Policy（访问次数策略）**：MCTS 后根据每个动作被访问次数形成的训练或行动策略目标。
+首先是 selection。选择得分兼顾当前价值和由先验引导的探索项，论文 Equation 2 写为
 
-MuZero 的核心不是“学一个能重建环境的模型”，而是更锋利的一句话：**世界模型只需要预测规划直接需要的量：reward、policy、value。** 它不要求 hidden state 能重建像素，也不要求 hidden state 对齐真实环境状态；只要这个内部状态能支撑 MCTS 产生更好的 policy/value target，它就可以成为用于 planning 的模型。
+$$
+a^*=\arg\max_a\left[
+Q(s,a)+P(s,a)\frac{\sqrt{\sum_b N(s,b)}}{1+N(s,a)}
+\left(c_1+\log\frac{\sum_bN(s,b)+c_2+1}{c_2}\right)
+\right].
+$$
 
-这让 MuZero 和 PlaNet/Dreamer 路线形成鲜明对照。PlaNet/Dreamer 用 observation reconstruction、reward、discount 和 latent dynamics 学一个可 rollout 的状态空间；MuZero 则把模型直接训练成搜索树里的抽象状态转移器。它更像“把 AlphaZero 的真实规则模拟器替换成 learned dynamics model”，再把搜索结果反过来训练模型。
+其中 $c_1=1.25$、$c_2=19652$。较高 $Q$ 吸引搜索利用当前已知的好动作；较高 $P$ 让网络认为有希望的动作较早得到计算；一个动作被访问越多，分母越大，其额外探索奖励就下降。先验因此影响搜索顺序，却没有完全代替搜索得到的价值判断。
 
-## 它的贡献位置
+其次是 expansion。已经扩展过的边可以直接读取缓存的奖励和后继隐藏状态；到达尚未扩展的叶节点时，调用一次 $g$ 得到新状态与奖励，再调用一次 $f$ 得到 policy 和 value。一次 simulation 至多新增这样的一个模型节点，因此代价主要由新增节点数控制，而不是把整条路径的神经网络计算重复一遍。隐藏状态的缓存也是 MuZero 能把表征计算留在树中的原因。[↗](https://arxiv.org/pdf/1911.08265v2#page=12)
 
-MuZero 站在三条路线的交叉处：
+最后是 backup。从叶节点价值出发，依次把立即奖励和折扣放回去。为明确时间位置，设本次路径深度为 $l$，用 $G_k$ 表示从状态 $s^k$ 开始的剩余回报，则
 
-| Route | 典型方法 | 模型预测什么 | 规划 / 控制接口 |
-| --- | --- | --- | --- |
-| Perfect simulator + search | AlphaZero | 真实游戏规则状态转移 | MCTS 使用规则 simulator 展开树 |
-| Reconstruction world model | PlaNet / Dreamer | observation / latent state / reward / discount | latent planning 或 latent actor-critic |
-| Value-equivalent model | MuZero | reward / policy / value | MCTS 在 learned hidden states 上搜索 |
+$$
+G_l=v^l,\qquad G_k=r^{k+1}+\gamma G_{k+1}.
+$$
 
-MuZero 的大胆之处是放弃“模型必须预测真实世界长什么样”的执念。论文明确强调 hidden state 没有环境状态语义，只需要服务未来 policy、value、reward 预测。换句话说，MuZero 的世界模型不是照片式模拟器，而是 planning interface。
+这等价于把从 $k+1$ 开始的预测奖励求折扣和，再接上 $\gamma^{l-k}v^l$。节点统计对多次 simulation 的回传结果求平均，并增加访问数。若实现把价值存在子节点上，选择父节点动作时还要计入这条边的立即奖励；官方伪代码正是分别保存 `node.reward` 与节点价值，再按 `reward + discount × value` 向上推进。双人零和游戏还要根据当前玩家切换价值符号，不能把双方收益都当作同一方向累加。[↗](https://arxiv.org/src/1911.08265v2/anc/pseudocode.py)
 
-## 总体流程
+Atari 的回报尺度跨游戏相差很大，不能未经处理就与策略概率混进同一个选择得分。论文用当前搜索树中出现过的最小和最大价值统计做 min–max 归一化，将用于比较的价值压到 $[0,1]$。官方伪代码在最大值与最小值相等时跳过除法，避免初始化阶段除以零。这个归一化服务于树内动作选择，与后面网络训练时对 reward/value 的数值编码是两个不同层次。
 
-![MuZero planning acting training](../../assets/images/paper-deep-dives/world-models/muzero/figure-1-planning-acting-training.png){ width="920" }
+搜索结束后的动作分布由根节点各动作访问数形成。带温度的形式是
 
-<small>图源：`Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model`，Figure 1。原论文图意：MuZero 用 representation、dynamics、prediction 三个函数进行规划、行动和训练；真实环境轨迹进入 replay buffer，模型在真实动作序列上 recurrent unroll，并预测 policy、value、reward。</small>
+$$
+\pi_t(a)=\frac{N(s_t^0,a)^{1/T}}{\sum_bN(s_t^0,b)^{1/T}}.
+$$
 
-**这张图怎么读。**
-Figure 1 分成三块。A 是搜索：root hidden state 来自 representation function \(h\)，树内每走一个假设动作就调用 dynamics function \(g\)，再用 prediction function \(f\) 输出 policy/value。B 是行动：每个真实时间步都跑 MCTS，从 visit count policy 采样动作，再把轨迹存进 replay。C 是训练：从 replay 采一段真实轨迹，用真实动作把模型 unroll \(K\) 步，并在每一步对齐搜索 policy、return value 和真实 reward。
+$T$ 较高时保留更多探索，趋近零时倾向于最多访问的动作。Atari 在前 500,000 个训练步使用 $T=1$，接下来 250,000 步用 $0.5$，最后 250,000 步用 $0.25$，且在整局中采样；棋类则在前 30 步保持采样，之后使用最大访问数动作。训练数据生成时，根先验还混入 25% 的 Dirichlet noise，以免每次只走当前网络最熟悉的分支。[↗](https://arxiv.org/pdf/1911.08265v2#page=13)
 
-这三块形成闭环：
+## “不知道游戏规则”仍然包含哪些接口
 
-```text
-observation history -> h -> root hidden state
-root hidden state + candidate actions -> MCTS over learned dynamics
-MCTS visit counts/value -> policy/value targets
-environment rewards -> reward targets
-replay sequence + real actions -> train h, g, f by BPTT
-```
+MuZero 不调用真实规则推进搜索树，并不意味着它不知道动作集合，也不意味着真实交互时不需要环境判断终局。Appendix A 将与 AlphaZero 的差别拆成三个位置，这比一句“完全没有规则知识”更准确。[↗](https://arxiv.org/pdf/1911.08265v2#page=11)
 
-## 三个函数：h、g、f
+| Search component | AlphaZero | MuZero |
+|---|---|---|
+| State transitions | 真实规则产生下一棋局 | 学习的 $g$ 产生下一隐藏状态 |
+| Legal actions | 搜索树每个节点调用规则掩码 | 只在根节点使用环境给出的合法动作，内部不再掩码 |
+| Terminal nodes | 用规则识别终局并返回终局值 | 树内继续依赖模型价值，训练中处理为吸收状态 |
 
-MuZero 模型可以写成：
+根节点是当前真实局面，环境可以提供合法动作；内部节点只是隐藏状态，没有对应的真实棋盘规则调用。网络从实际轨迹中学习哪些动作值得赋予概率，但这不是内部动作合法性的形式化保证。真实游戏仍然由环境执行动作、返回奖励并告知何时结束。
 
-\[
-s^0 = h_\theta(o_1,\ldots,o_t)
-\]
+树内也不专门停止在一个由规则识别出的终局。训练将真实轨迹末端之后的状态视为 absorbing states，使后续预测保持适当的吸收行为；搜索可以继续扩展这些状态，而不需要真实终局检测器。这把终局处理从手写规则接口转移到了学习目标。由此得到的能力是，在已给定观察、动作和奖励接口的任务中学会有效搜索，并非从零发明游戏的交互协议。
 
-\[
-r^k, s^k = g_\theta(s^{k-1}, a^k)
-\]
+这一范围也解释了论文为何明确不直接处理 Poker 这类不完全信息博弈。围棋、象棋与将棋中的潜在搜索成功，没有自动解决隐藏对手信息、信念更新和策略随机化所带来的全部问题。[↗](https://arxiv.org/pdf/1911.08265v2#page=4)
 
-\[
-p^k, v^k = f_\theta(s^k)
-\]
+## 搜索产生的监督如何反过来塑造动力学
 
-其中 \(h\) 是 representation function，负责把过去观测编码成 root hidden state；\(g\) 是 dynamics function，负责在搜索树内部根据 hidden state 和假设动作生成下一 hidden state 与即时 reward；\(f\) 是 prediction function，负责从任意 hidden state 预测 action-selection policy 和 value。
+MuZero 的学习闭环依靠搜索生成的更好策略。经验池除观察、真实动作和奖励外，还保存每个时间步的根节点搜索分布 $\pi_t$ 与搜索价值 $\nu_t$。训练从某个真实时刻初始化 $s_t^0$，沿这段经验中实际执行过的动作展开 $K=5$ 步。每一个展开状态都需要预测其对应时刻的三种量。
 
-关键点是：\(s^k\) 不是棋盘状态、Atari RAM 状态，也不是可解码图像 latent。论文把它定义成模型内部状态，只要求对未来 policy/value/reward 有用。这和传统 model-based RL 的“预测下一状态”和 Dreamer 式“预测可重建 latent”都不同。
+总目标沿用论文 Equation 1 的结构
 
-| Function | Input | Output | 用途 |
-| --- | --- | --- | --- |
-| Representation \(h_\theta\) | past observations | root hidden state \(s^0\) | 把真实历史转成搜索 root |
-| Dynamics \(g_\theta\) | hidden state + action | reward \(r^k\), next hidden state \(s^k\) | 在 MCTS 树内展开假设未来 |
-| Prediction \(f_\theta\) | hidden state | policy \(p^k\), value \(v^k\) | 指导树搜索并提供叶子估值 |
+$$
+\ell_t(\theta)=\sum_{k=0}^{K}\left[
+\ell^r(u_{t+k},r_t^k)
++\ell^v(z_{t+k},v_t^k)
++\ell^p(\pi_{t+k},p_t^k)
+\right]+c\lVert\theta\rVert^2.
+$$
 
-## MCTS：把 learned model 当作树搜索环境
+reward target $u$ 来自真实环境；policy target $\pi$ 来自对应实际状态上的搜索；value target $z$ 综合真实回报与必要的 bootstrap。三种信号的来源不同，不能把它们都说成模型自己生成的伪标签。真实奖励将动力学预测固定在任务后果上，搜索策略则提供当前网络经过规划后得到的改进方向。统一公式中的 $k=0$ 还包含根节点项；官方伪代码为接口一致性保留了最近已知奖励的预测，而真正随候选动作产生的新奖励从 $r_t^1$ 开始。根节点已知奖励不应再次算入未来规划回报。
 
-MuZero 的搜索继承 AlphaZero 的 MCTS，但把真实 simulator 换成 learned dynamics。
+在棋类中，$z_t$ 是最终胜负结果，按玩家视角解释。在 Atari 中，原始 MuZero 使用 $n=10$、$\gamma=0.997$ 的目标
 
-每条边保存 \(N(s,a), Q(s,a), P(s,a), R(s,a), S(s,a)\)，分别表示 visit count、mean value、policy prior、reward 和 transition state。每次 simulation 分三步：
+$$
+z_t=\sum_{i=1}^{n}\gamma^{i-1}u_{t+i}+\gamma^n\nu_{t+n}.
+$$
 
-| MCTS stage | MuZero 做什么 | 和 AlphaZero 的差别 |
-| --- | --- | --- |
-| Selection | 用 pUCT 在树内选择 action | Q 需要做 min-max normalization，因为 Atari value 无界 |
-| Expansion | 对 leaf 调用 \(g_\theta\) 得到 reward/state，再调用 \(f_\theta\) 得到 policy/value | transition 来自 learned dynamics，不来自规则 simulator |
-| Backup | 用 predicted reward + leaf value 回传更新 Q/N | 支持 single-agent、intermediate rewards、discount |
+前 $n$ 步是已经发生的真实奖励，末端用未来真实状态上的搜索价值 $\nu_{t+n}$ 补足未观察到的更长回报。这里的 $\nu$ 不是当前训练 unroll 的预测 $v_t^n$，而是经验数据中对应时间位置的搜索估计；两者的角色不能混写。无中间奖励的棋类实验还省略 reward prediction loss，直接学习结果价值。[↗](https://arxiv.org/pdf/1911.08265v2#page=15)
 
-在棋类里，AlphaZero 依赖规则知识做三件事：搜索树状态转移、合法动作 mask、terminal node value。MuZero 分别替换成 learned dynamics、只在 root 用环境合法动作信息、树内 terminal 也交给 value 预测处理。论文还把 terminal state 作为 absorbing state 训练，让模型在搜索树内越过 terminal 时也能稳定预测。
+policy loss 按最小化交叉熵写作
 
-## 训练目标
+$$
+\ell^p(\pi,p)=-\sum_a\pi(a)\log p(a).
+$$
 
-![MuZero equations](../../assets/images/paper-deep-dives/world-models/muzero/figure-s2-equations.png){ width="760" }
+它推动网络靠近访问计数给出的搜索策略，而不是仅模仿自己原先的 policy prior。更新之后，新的 prior 与 value 又进入下一轮搜索，获得新策略目标。模型学习和 policy improvement 因而相互推进。MCTS 本身不需要被微分，梯度来自这些固定训练目标，经过 prediction、连续的 dynamics unroll，再传到最初的 representation。
 
-<small>图源：`Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model`，Figure S2。原论文图意：该图汇总模型、搜索、学习规则和 loss。MuZero 的 loss 同时包含 reward、value、policy 三类目标，并对 board games 和 general MDPs 使用不同目标定义。</small>
+原论文的汇总图把这套对应关系集中放在一起。读时应先从 Model 到 Search，再把 Search 输出的 $\pi,\nu$ 接到 Learning Rule，而不是把所有符号都视为同一个网络前向输出。
 
-**这张公式图怎么读。**
-训练时，MuZero 不用 pixel reconstruction loss。它从 replay 中取时间 \(t\) 的真实轨迹，先用 \(h\) 编码历史，再沿真实动作 \(a_{t+1},\ldots,a_{t+k}\) unroll。每个 unroll step 都预测三类量：
+![MuZero 的模型接口、搜索输出与学习目标](../../assets/images/paper-deep-dives/world-models/muzero/figure-s2-equations.png){ width="760" }
 
-| Target | Board games | Atari / general MDPs |
-| --- | --- | --- |
-| Policy | MCTS search policy \(\pi_{t+k}\) | MCTS search policy \(\pi_{t+k}\) |
-| Value | final outcome \(u_T\) | n-step return \(u_{t+1}+\gamma u_{t+2}+\cdots+\gamma^n\nu_{t+n}\) |
-| Reward | omitted for no intermediate rewards | observed reward \(u_{t+k}\) |
+*原论文 Figure S2。图中 categorical loss 的对数项省略了负号；正文按最小化交叉熵的方向书写，与官方伪代码中的 `softmax_cross_entropy_with_logits` 一致。*
 
-总 loss 是：
+recurrent unroll 的作用也不只是增加几个训练样本。第 $k$ 步的误差要穿过前面 $k$ 次动作转移，要求模型在连续使用自己的隐藏状态后，仍然保留预测未来决策量所需的信息。不过，训练只约束经验覆盖的动作及对应目标，没有直接监督搜索树中的每一种反事实动作序列。测试时更深的搜索能否继续改善表现，需要实验而不能靠网络可反复调用这一事实保证。
 
-\[
-l_t(\theta)=\sum_{k=0}^{K}
-l^r(u_{t+k}, r_t^k)
-+l^v(z_{t+k}, v_t^k)
-+l^p(\pi_{t+k}, p_t^k)
-+c\lVert\theta\rVert^2
-\]
+## 为什么 reward 和 value 使用分类输出
 
-这就是 MuZero 的世界模型哲学：不要学“环境全貌”，而是学“搜索需要的充要摘要”。如果 hidden state 能让 MCTS 产生更强 policy，哪怕它完全不可解释，也满足目标。
+Atari 中，某些游戏的每步奖励很小，某些分数却能达到几十万乃至百万。直接对所有标量使用同一平方误差，训练容易被大尺度目标主导。论文先使用可逆的数值压缩变换，再将压缩后的 reward/value 目标表示为离散支撑上的概率分布，网络通过交叉熵学习这个分布。
 
-## 训练细节
+支撑集合包含从 $-300$ 到 $300$ 的所有整数，共 601 个位置。若变换后的标量 $x$ 落在相邻整数 $i$ 与 $i+1$ 之间，目标概率只放在这两个位置
 
-论文和 ancillary pseudocode 给出的训练配置很细。先看共同设置：
+$$
+\phi(x)_i=i+1-x,\qquad
+\phi(x)_{i+1}=x-i.
+$$
 
-| Item | MuZero setting |
-| --- | --- |
-| Hypothetical unroll steps | \(K=5\) |
-| Training steps | 1M mini-batches |
-| Board game batch size | 2048 |
-| Atari batch size | 1024 |
-| Board game search | 800 simulations per move |
-| Atari search | 50 simulations per move |
-| UCB constants | \(c_1=1.25\), \(c_2=19652\) |
-| Weight decay | \(1e-4\) in pseudocode |
-| Momentum | 0.9 in pseudocode |
+例如原文的 $3.7$ 被编码为位置 3 上的 0.3 和位置 4 上的 0.7。这是对一个标量做插值编码，不意味着环境真实奖励只可能取这两个整数。network 输出 601 维 softmax，以这个双点目标计算负对数似然。
 
-不同 domain 的配置：
+推理时先在支撑上求期望，再做压缩变换的逆变换。若将数值压缩函数记作 $\psi$，读出方式为
 
-| Domain | Action space | Max moves | Discount | Dirichlet alpha | Num simulations | Batch size | TD steps | Num actors | LR init |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Go | 362 | 722 | 1.0 | 0.03 | 800 | 2048 | max_moves | 3000 | 0.01 |
-| Chess | 4672 | 512 | 1.0 | 0.3 | 800 | 2048 | max_moves | 3000 | 0.1 |
-| Shogi | 11259 | 512 | 1.0 | 0.15 | 800 | 2048 | max_moves | 3000 | 0.1 |
-| Atari | 18 | 27000 | 0.997 | 0.25 | 50 | 1024 | 10 | 350 | 0.05 |
+$$
+\hat x=\psi^{-1}\left(\sum_{i=-300}^{300}i\,p_i\right).
+$$
 
-<small>表源：arXiv ancillary `pseudocode.py`。原字段名保留英文；`max_moves` 在 board games 中等价于 Monte Carlo return 到终局。</small>
+顺序很重要，先求变换空间的期望再还原，与先逐个还原支撑点再求期望一般不同。恢复出的 reward 和 value 交给搜索算法后，搜索无需再了解分类输出的内部表示。论文的数值压缩采用带小线性项的有符号平方根形式，$\epsilon=0.001$；核心用途是压低大数值的动态范围，而保留可逆读出的接口。[↗](https://arxiv.org/pdf/1911.08265v2#page=14)
 
-### Replay 和数据生成
+棋类的价值范围和终局目标更规整，使用与 AlphaZero 相同的平方误差。因而，MuZero 并非把同一个 loss 原样套到所有任务上；它保留统一的 reward/value/policy 接口，同时根据回报尺度调整输出编码。
 
-MuZero 用最新 checkpoint 做 self-play / acting，checkpoint 每 1000 training steps 更新一次。board games 中，每局结束后发给训练任务；Atari episode 很长，最长 30 分钟或 108,000 frames，因此每 200 moves 发送中间 sequence。
+## 图像、历史动作与梯度尺度怎样进入实现
 
-| Replay item | Board games | Atari |
-| --- | --- | --- |
-| Buffer | most recent 1 million games | most recent 125 thousand sequences of length 200 |
-| Sampling | uniform states | prioritized replay |
-| Atari priority | \(P(i)=p_i^\alpha / \sum_k p_k^\alpha\), \(p_i=|\nu_i-z_i|\) |
-| Importance correction | \(w_i=(1/N\cdot 1/P(i))^\beta\) |
-| Priority exponents | \(\alpha=\beta=1\) |
+Atari representation 的输入不是单帧。它接收最近 32 张 $96\times96$ RGB 图像，以及产生这些图像的最近 32 个动作。三个颜色通道加动作平面，合计 128 个输入平面。历史动作以 $a/18$ 的常量平面编码，因为某个动作不一定在下一张图像上留下可见差别，单靠图像序列可能无法恢复完整的控制历史。
 
-Atari 的 action selection temperature 随训练退火：前 500k steps 为 1，接下来 250k steps 为 0.5，最后 250k steps 为 0.25。这让早期探索更强，后期更贪心。
+高分辨率输入只在根节点处理。representation 先通过 stride-2 convolution、残差块和 average pooling，将空间从 $96\times96$ 逐步降到 $48\times48$、$24\times24$、$12\times12$，最终得到 $6\times6$ 的隐藏特征。dynamics 一直在这个低分辨率状态上运行，每个候选动作以 one-hot 平面拼接进去。因此，真实观察的编码较贵，树内的大量动作推演相对紧凑。[↗](https://arxiv.org/pdf/1911.08265v2#page=13)
 
-### 输入和网络结构
+主网络沿用 AlphaZero 的 residual architecture，使用 256 个隐藏通道、$3\times3$ 卷积，并将残差块数量从 20 改为 16。Atari 输入端还有专门的降采样阶段，不能把“16 个 block”理解为从原始图像到所有输出的唯一完整层数。棋类的输入是结构化棋盘历史，Go 与 Shogi 使用最近 8 个局面，Chess 扩展到最近 100 个局面，以支持和棋判断；所以“跨像素与棋类的统一算法”不等于所有任务都使用原始 RGB 输入。[↗](https://arxiv.org/pdf/1911.08265v2#page=14)
 
-Board games 的输入类似 AlphaZero：Go 和 shogi 使用最近 8 个 board states；chess 增加到最近 100 个 board states，以便正确预测 draw。
+| Setting | Board Games | Atari |
+|---|---:|---:|
+| Training steps | 1M | 1M |
+| Batch size | 2048 | 1024 |
+| Unroll steps $K$ | 5 | 5 |
+| Simulations per search | 800 | 50 |
+| Discount | 1 | 0.997 |
+| Value bootstrap | Final outcome | 10-step return |
+| Replay buffer | Most recent 1M games | Most recent 125k sequences × 200 moves |
+| Sampling | Uniform | Prioritized replay |
+| Checkpoint interval | 1000 steps | 1000 steps |
 
-Atari 更特殊：
+*原论文正文与 Appendices C–G。这里的 training steps 是优化器更新次数，不是环境帧；Atari 的一个动作通常重复 4 帧。*
 
-| Component | Atari detail |
-| --- | --- |
-| Observation input | last 32 RGB frames |
-| Resolution | 96 x 96 |
-| Action history | last 32 actions, encoded as bias planes scaled as \(a/18\) |
-| No preprocessing | no whitening or additional normalization beyond RGB scaled to [0, 1] |
-| Dynamics input | hidden state concatenated with spatial action planes |
-| Downsampled resolution | 6 x 6 for dynamics |
+Atari 优先采样的依据是搜索价值与实际 $n$-step target 的差异，$p_i=|\nu_i-z_i|$，采样概率按 $p_i^\alpha$ 归一化，并用 importance weight 修正采样偏差；论文设 $\alpha=\beta=1$。它更频繁重访价值预测误差较大的位置，但没有因此获得新的真实经验，数据覆盖仍由 self-play 或环境交互决定。
 
-网络架构也沿用 AlphaZero 风格，但做了 Atari 下采样：
+模型连续展开会改变梯度总量。作者将 recurrent loss 按展开长度缩放，并在 dynamics 之间把反向梯度乘以 $1/2$，使较远时刻的误差不至于让共享动力学的更新尺度失控。官方伪代码更具体，根节点 loss 的权重为 1，之后每个 recurrent step 的梯度权重为 $1/K$；`scale_gradient` 用 stop-gradient 保持前向数值不变，只改反向导数。它与直接把隐藏状态数值乘以一半不同。隐藏状态本身另做 min–max 缩放，使其范围与动作输入同为 $[0,1]$。[↗](https://arxiv.org/src/1911.08265v2/anc/pseudocode.py)
 
-| Network part | Architecture detail |
-| --- | --- |
-| Representation and dynamics | AlphaZero-style residual network, 16 residual blocks instead of 20, 3x3 kernels, 256 hidden planes |
-| Prediction function | AlphaZero-style policy/value head: one or two conv layers, then fully connected output |
-| Atari representation stem | 96x96 input -> stride-2 conv 128 planes -> residual blocks -> stride-2 conv 256 planes -> residual blocks -> average pooling -> 6x6 hidden state |
-| Atari value/reward output | scalar targets transformed by invertible \(h(x)\), then represented on support size 601 from -300 to 300 |
+伪代码还给出 Momentum SGD，momentum 为 0.9、weight decay 为 $10^{-4}$。初始学习率 Go 为 0.01、Chess 与 Shogi 为 0.1、Atari 为 0.05；学习率按指数衰减，棋类以 400,000 步、Atari 以 350,000 步作为下降一个 0.1 倍因子的尺度。这些设置说明论文的统一性主要体现在学习与搜索结构，而非每个优化数值都跨任务完全相同。
 
-训练时还有两个梯度缩放细节。第一，每个 head 的 loss 按 \(1/K\) 缩放，避免 unroll steps 增多导致总梯度变大。第二，在 dynamics function 开始处把梯度缩放 \(1/2\)，让作用到 dynamics 的总梯度更稳定。hidden state 也被缩放到 [0, 1]，和 action input 范围一致。
+## Reanalyze 如何用额外计算减少新交互
 
-### Reanalyze
+标准 MuZero 的经验池里，policy target 来自当时收集数据所用的网络。网络不断变强，旧状态上的策略标签却可能停留在较弱阶段。MuZero Reanalyze 重访这些旧状态，用最新模型重新运行 MCTS，得到更好的策略目标；这样，同一条真实轨迹可以继续为更强网络提供训练信号。[↗](https://arxiv.org/pdf/1911.08265v2#page=15)
 
-MuZero Reanalyze 是为了提高 Atari 小数据设置下的样本效率。它会用最新模型重新对旧 time-steps 跑 MCTS，生成 fresh policy target，并用于 80% 的训练更新；同时用 target network 给 value 提供更稳定的新 n-step bootstrap target。
+但论文的 Reanalyze 结果包含一组同时调整的设置，不能只归因于“重新跑搜索”这一项。
 
-| Reanalyze change | Setting |
-| --- | --- |
-| Fresh policy targets | re-run MCTS with latest model for 80% of updates |
-| Target network | used for stable n-step bootstrapped value |
-| Samples per state | 2.0 instead of 0.1 |
-| Value target weight | 0.25 vs 1.0 for policy/reward |
-| TD steps | n = 5 instead of n = 10 |
+| Component | MuZero | MuZero Reanalyze |
+|---|---|---|
+| Policy target | Collected search policy | 80% updates use freshly reanalyzed policy |
+| Value bootstrap | Stored search value $\nu_{t+n}$ | Recent target-network value $v^-_{t+n}$ |
+| Samples per state | 0.1 | 2.0 |
+| Value loss weight | 1.0 | 0.25 |
+| Policy / reward loss weight | 1.0 / 1.0 | 1.0 / 1.0 |
+| $n$-step return | 10 | 5 |
 
-这个变体说明 MuZero 的训练数据不是一锤子买卖。旧轨迹里的 observation/action/reward 不变，但 policy/value target 可以随着模型变强被重新标注。
+新的价值目标为
 
-## 结果与图表
+$$
+z_t=\sum_{i=1}^{n}\gamma^{i-1}u_{t+i}+\gamma^n v^-_{t+n}.
+$$
 
-![MuZero training evaluation](../../assets/images/paper-deep-dives/world-models/muzero/figure-2-training-evaluation.png){ width="920" }
+这里 $v^-$ 来自近期参数的 target network，作用是提供较新而稳定的 bootstrap。它不是再分析搜索的根价值 $\nu$，因此不能把 Reanalyze 简写成“所有监督都换成最新 MCTS 输出”。重新搜索主要刷新策略标签，value target 的生成机制也单独改变。
 
-<small>图源：`Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model`，Figure 2。原论文图意：MuZero 在 chess、shogi、Go 中和 AlphaZero Elo 对比，在 Atari 中展示 57 个游戏的 mean/median human-normalized scores，并与 R2D2 对比。</small>
+每个状态采样次数从 0.1 增到 2.0，是 20 倍的数据使用率变化；value weight 降到 0.25、bootstrap 从 10 步缩到 5 步，则服务于高复用条件下的训练稳定性和价值过拟合问题。这些调整共同构成了论文中的低数据配置。重新分析没有创造新的真实观察，仍然依赖已有轨迹能否覆盖有价值的区域；它用额外模型计算提高已有数据的可用程度。
 
-**这张图怎么读。**
-左三列说明 MuZero 在不知道游戏规则的情况下，用 learned dynamics 接近或超过 AlphaZero 水平；右侧 Atari 说明同一个算法能处理视觉复杂、单智能体、有中间奖励的环境。关键不是某条曲线的瞬时波动，而是统一算法同时覆盖 precision planning 和 visual RL 两类以前分开的场景。
+## 主结果要先分开 20B 与 200M 两种预算
 
-Atari 总表如下，保留原英文列名：
+棋类实验比较的对象是知道真实规则的 AlphaZero。两边在标准比较中都使用每步 800 次 simulation，Figure 2 显示 MuZero 在 Chess、Shogi 接近 AlphaZero，在 Go 略高于它。这个结果支持学习模型能够承担精细规划，但不代表搜索完全不再受模型误差影响。作者关于隐藏状态缓存可能帮助更深理解局面的解释，是对结果的假设，不是单独验证过的机制结论。
+
+![MuZero 在三种棋类与 Atari 上的训练曲线](../../assets/images/paper-deep-dives/world-models/muzero/figure-2-training-evaluation.png){ width="920" }
+
+*原论文 Figure 2。棋类纵轴是 Elo，橙线为 AlphaZero；Atari 实线和虚线分别为 57 游戏上的 human-normalized mean 与 median，橙线为 R2D2。横轴都是百万次训练更新。*
+
+Atari 主表必须拆开读。上组是数十亿帧的训练设置，下组强调较少交互。完整结果保留了训练帧数与时间，避免只摘分数造成比较条件丢失。
 
 | Agent | Median | Mean | Env. Frames | Training Time | Training Steps |
-| --- | ---: | ---: | ---: | --- | ---: |
+|---|---:|---:|---:|---|---:|
 | Ape-X | 434.1% | 1695.6% | 22.8B | 5 days | 8.64M |
 | R2D2 | 1920.6% | 4024.9% | 37.5B | 5 days | 2.16M |
 | MuZero | 2041.1% | 4999.2% | 20.0B | 12 hours | 1M |
-| IMPALA | 191.8% | 957.6% | 200M | -- | -- |
-| Rainbow | 231.1% | -- | 200M | 10 days | -- |
-| UNREAL | 250% | 880% | 250M | -- | -- |
-| LASER | 431% | -- | 200M | -- | -- |
+| IMPALA | 191.8% | 957.6% | 200M | — | — |
+| Rainbow | 231.1% | — | 200M | 10 days | — |
+| UNREAL | 250% | 880% | 250M | — | — |
+| LASER | 431% | — | 200M | — | — |
 | MuZero Reanalyze | 731.1% | 2168.9% | 200M | 12 hours | 1M |
 
-<small>表源：`Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model`，Table 1。原表分 large data setting 和 small data setting 两组比较，除 MuZero 外其他 agent 使用 model-free RL 技术。</small>
+*原论文 Table 1。前三行属于 large data setting，其余属于 small data setting；UNREAL 的脚注注明逐游戏调参。空白项以原表的“—”保留。*[↗](https://arxiv.org/pdf/1911.08265v2#page=6)
 
-这张表的边界要讲清楚。MuZero 的 large-data Atari 使用 20.0B env frames，不是低数据量设置；MuZero Reanalyze 才是 200M frames 小数据设置。论文主张不是“MuZero 总是样本最省”，而是：在大量数据下达到 Atari SOTA，同时在 200M setting 也显著超过当时的 model-free baseline。
+human-normalized score 按每个游戏的随机与人类基线计算
 
-## 规划、消融和模型边界
+$$
+S_{\mathrm{norm}}=100\%\times
+\frac{S_{\mathrm{agent}}-S_{\mathrm{random}}}
+{S_{\mathrm{human}}-S_{\mathrm{random}}}.
+$$
 
-![MuZero evaluations](../../assets/images/paper-deep-dives/world-models/muzero/figure-3-evaluations.png){ width="920" }
+100% 表示达到所用人类参考分数，0% 表示随机基线，负值表示低于随机表现。2041.1% 是归一化分数的中位数，约为这个归一化尺度上的 20.4 倍，不是 2,041% 的胜率，也不是所有游戏都超过人类 20 倍。没有截断的 mean 很容易受少数极高分游戏拉动，因此 mean 与 median 一起报告才有意义。
 
-<small>图源：`Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model`，Figure 3。原论文图意：A 比较 Go 中 learned model 与 real simulator 的 search scaling；B 展示 Atari 搜索 simulation 数对最终分数的影响；C 比较 MuZero MCTS training 与 Q-learning objective；D 展示 Ms. Pacman 中训练时 simulation 数对学习速度的影响。</small>
+大数据配置中，MuZero 用每游戏 20B 帧得到 2041.1% median 与 4999.2% mean，高于 R2D2 的 1920.6% 与 4024.9%。论文报告它在 57 个游戏中的 42 个上超过 R2D2；附录表中“37 个 best”则是与该表所有列共同竞争最佳，不是同一种计数。SimPLe 仅有部分游戏结果，不能把可比较子集的领先改写成在全部 57 游戏、同样预算下击败 SimPLe。
 
-**这张图怎么读。**
-Figure 3 是理解 MuZero 的关键消融。A 说明在 Go 中，learned model 的搜索 scaling 可以接近真实 simulator；B 说明 Atari 中增加搜索 simulation 有收益但会 plateau，论文推测和 learned model 在视觉复杂环境中更不准确有关；C 说明在相同框架下，MCTS-based training 明显强于 Q-learning objective；D 说明训练时搜索 simulation 越多，学习越快，但即使 simulation 少于动作数也能学到有效策略。
+低数据配置中，Reanalyze 用 200M 帧获得 731.1% median，明显高于表中 LASER 的 431%。但它也低于 20B 帧标准 MuZero 的 2041.1%，数据使用效率与最终能力上限在这里是两个不同问题。20B 到 200M 是 100 倍真实帧预算差异，不能将两行结果当成只替换一个模块、其余完全相同的消融。
 
-补充 Figure S3 进一步说明 policy improvement：
+“12 小时”还需要与硬件同时阅读。所有实验使用第三代 Google Cloud TPU；每个棋类任务用 16 个 TPU 训练、1,000 个 TPU 生成 self-play；每个 Atari 游戏用 8 个 TPU 训练、32 个 TPU 生成数据。短 wall-clock time 来自大量并行计算，并不等于低总算力。更不能拿这 12 小时与单 GPU 方法的若干天直接相除，声称得到了等硬件速度倍率。20B 帧同样是每个游戏的设置，完整 57 游戏研究的总资源远大于表中单次运行口径。[↗](https://arxiv.org/pdf/1911.08265v2#page=15)
 
-![MuZero policy improvement details](../../assets/images/paper-deep-dives/world-models/muzero/figure-s3-details.png){ width="920" }
+## 汇总高分没有解决稀疏探索与逐游戏失败
 
-<small>图源：`Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model`，Figure S3。原论文图意：A/B 展示搜索树实际评估深度分布，红线是训练 unroll depth 5；C/D 展示 Ms. Pacman 和 Go 中 search policy 相比 raw policy network 的改进。</small>
+Atari 评估对每个游戏运行 1,000 个 episode，每局最多 30 分钟，即 108,000 环境帧。论文使用两种初始状态协议，一种先执行 0–30 个随机数量的 no-op，另一种从人类游戏轨迹抽取起始状态。Table S1 与 S2 分别对应这两种协议，不能将它们的分数当作同一设置下重复测量；论文这套协议也不应直接并入另一些工作使用的 sticky actions 比较。[↗](https://arxiv.org/pdf/1911.08265v2#page=16)
 
-**这张图怎么读。**
-红线提醒一个很有意思的点：训练只 unroll 5 步，但评估时搜索可以更深。Go 中 deeper search 的收益更明显，Atari 中收益较弱。这不是矛盾，而是说明 learned dynamics 在规则清晰的棋类中更适合被深搜索反复调用；在 Atari 这类视觉环境里，模型误差会更早限制规划深度。
+从 Table S1 选取几个强项和弱项，可以看清全局分数隐藏了什么。
 
-## 为什么它属于世界模型
+| Game | R2D2 | MuZero | MuZero normalized |
+|---|---:|---:|---:|
+| alien | 229,496.90 | 741,812.63 | 10,747.5% |
+| ms pacman | 42,281.70 | 243,401.10 | 3,658.7% |
+| bank heist | 24,235.90 | 1,278.98 | 171.2% |
+| qbert | 408,850.00 | 72,276.00 | 542.6% |
+| montezuma revenge | 2,061.30 | 0.00 | 0.0% |
+| venture | 1,970.70 | 0.40 | 0.0% |
+| solaris | 3,787.20 | 56.62 | -10.6% |
+| skiing | -30,021.70 | -29,968.36 | -100.9% |
 
-MuZero 很容易被误读成“只是 AlphaZero 加了一个模型”。更准确地说，它是 value-equivalent world model 的代表：它不学环境真实状态，也不学像素未来，而是学一个抽象 MDP，使得在这个抽象 MDP 上规划得到的 policy/value 对真实环境有用。
+*原论文 Table S1，30 random no-op starts。Venture 的 normalized score 因四舍五入显示为 0.0%，不等于原始分数严格为零。*[↗](https://arxiv.org/pdf/1911.08265v2#page=17)
 
-这给世界模型研究一个重要分叉：
+Ms. Pacman 的差距很大，也因此成为后面搜索消融的重点任务。但 Montezuma 为 0，Venture 接近 0，说明学习模型加深搜索并未自动解决困难探索。若真实经验几乎没有触及有奖励的区域，模型就很难得到可靠监督去判断那些远处状态的价值；在一个缺乏相关经验的模型上继续搜索，不会凭空生成正确的奖励知识。
 
-| 问题 | Dreamer 式回答 | MuZero 式回答 |
-| --- | --- | --- |
-| state 应该包含什么 | 足以重建观测、预测 reward/discount、支持 imagination | 足以预测 policy/value/reward 并支持 MCTS |
-| future 如何使用 | actor/value 在 latent rollout 中学习 | MCTS 在 learned hidden states 上搜索 |
-| 是否需要重建图像 | 需要，作为 representation learning 信号 | 不需要 |
-| 最终证据 | 真实环境 return / sample efficiency | 真实环境 return / search improvement |
+Bank Heist 与 Q*bert 还表明，低于 R2D2 的任务并不都只属于最极端的稀疏奖励类别。Skiing 的归一化分数低于随机，Solaris 同样为负，应该与高分任务一起保留。论文的结论是跨游戏汇总表现和多数任务比较取得进展，而不是每个任务的决策误差都被世界模型修复。
 
-所以 MuZero 对当前具身智能也有启发：如果目标是控制，不一定要把世界模型训练成逼真视频生成器；也可以训练成“对规划器足够有用”的抽象 dynamics。不过，这条路线要求有 reward、policy/value target 和可搜索动作接口，不像开放视频预训练那样直接吃无标签视频。
+human starts 也没有消除这些弱项。Table S2 中 Montezuma 为 57.10、normalized 0.8%，Pitfall 为 -801.10、normalized -7.1%，Solaris 为 2108.08、normalized 0.7%。这些值与 no-op starts 可能明显不同，但都不足以支撑“只要给搜索更多时间就能解决探索”的判断。[↗](https://arxiv.org/pdf/1911.08265v2#page=18)
 
-## 证据等级与风险
+## 测试时多搜索，与训练时学得更好，是两项实验
 
-| Claim | Evidence | Boundary |
-| --- | --- | --- |
-| Learned model can replace perfect simulator in planning | Chess/shogi/Go Elo against AlphaZero, Go search scaling | 棋类规则清晰、状态完全可观测，不能直接代表真实机器人 |
-| Planning-relevant predictions are enough | No observation reconstruction; strong Atari/board-game results | 隐状态不可解释，失败时难诊断模型学到了什么 |
-| MCTS targets are stronger than Q-learning targets in this framework | Ms. Pacman MCTS vs Q-learning ablation | 单游戏消融，不能证明所有视觉 RL 都如此 |
-| More search helps, but model accuracy matters | Go scales strongly; Atari plateaus around 100 simulations | 深搜索会放大 learned model bias |
-| Reanalyze improves sample efficiency | 200M Atari frames: MuZero Reanalyze 731.1% median | 需要重新搜索旧数据，计算换样本效率 |
+Figure 3 的四个面板需要按变量分开读。A、B 固定已经训练好的模型，只改变测试时搜索量；C 改变学习算法；D 则分别训练使用不同搜索预算的模型，再把评估搜索量统一起来。这四组结果分别回答推理扩展、学习信号和训练计算的作用，不能混为一条“搜索越多分数越高”的曲线。
 
-## 阅读结论
+![MuZero 的测试搜索扩展与训练搜索消融](../../assets/images/paper-deep-dives/world-models/muzero/figure-3-evaluations.png){ width="920" }
 
-MuZero 的核心贡献是把“世界模型”从状态/像素预测器改写成规划用的抽象模型。它用 \(h\) 把观测历史转成 root hidden state，用 \(g\) 在假设动作下展开 learned hidden dynamics，用 \(f\) 预测 policy/value，再用 MCTS 生成更强的 policy/value targets 反过来训练模型。整个系统没有 observation reconstruction loss，也不要求 hidden state 有人类可解释语义。
+*原论文 Figure 3。A 为 Go 搜索时间，B 为 Atari 每步 simulation 数；C、D 为 Ms. Pacman 的训练比较。D 中所有模型统一用每步 50 次 simulation 评估。*
 
-模型训练相关最重要的细节是：训练 unroll \(K=5\) 步；每步都有 policy/value/reward loss；board games 使用 800 simulations、batch 2048、Monte Carlo return 到终局；Atari 使用 50 simulations、batch 1024、10-step return、prioritized replay、32 帧 RGB + action history 输入和 support-based value/reward 输出。Reanalyze 进一步把旧轨迹用新模型重新搜索，提升 200M frames 设置下的样本效率。
+Go 中，训练时的标准搜索约为 0.1 秒、800 次 simulation，而测试图延伸到 50 秒。官方附带数据提供了精确值，MuZero 的 Elo 从 0.1 秒时的 4182，上升到 10 秒时的 5252，再到 50 秒时的 5291。对应真实模拟器搜索的 AlphaZero 为 4000、5145、5398。因此，学习模型确实能在远超训练搜索时间的条件下继续获益，但在最长的 50 秒点，真实模拟器又高于学习模型，不能只挑前段宣布 learned model 全面优于精确规则。[↗](https://arxiv.org/src/1911.08265v2/anc/go_scaling.json)
 
-它的边界也同样清楚。MuZero 证明的是 planning-relevant learned model 可以支撑强搜索和强 RL，不是证明模型学到了真实世界完整动力学。对机器人和开放世界任务来说，如果没有稳定 reward、可搜索动作空间和足够好的 target 生成机制，MuZero 的抽象模型路线不会自动成立。更稳的读法是：MuZero 提供了一种“面向决策而非面向重建”的世界模型范式，和 Dreamer/LingBot 这类 latent/video world model 形成互补。
+Atari 的情况不同。固定同一个以每步 50 次 simulation 训练的模型，官方数据给出以下均值变化。
+
+| Simulations per Move | Human-normalized Mean | Median Search Depth |
+|---:|---:|---:|
+| 1 | 4745.37% | 1 |
+| 50 | 4999.24% | 7 |
+| 100 | 5014.84% | 8 |
+| 500 | 4967.13% | 11 |
+
+*由原论文 `atari_scaling.json` 整理，分数保留两位小数；最后一列来自同一数据中的搜索深度分布，不是环境帧数。*
+
+从 1 到 50 次有收益，从 50 加到 100 次则只增加约 15.6 个归一化百分点，500 次时还略有下降。论文把单次 simulation 这一条件解释为基本按照 policy network 行动，结果已经很强，说明训练后的策略吸收了相当一部分搜索收益。更多测试计算没有按比例变成更强行为。作者推测 Atari 的模型不准确性比 Go 更大，但这个实验没有单独控制模型误差，因此应保留为解释而不是确定的因果归因。[↗](https://arxiv.org/src/1911.08265v2/anc/atari_scaling.json)
+
+Figure 3C 检验的则是训练。作者保持网络规模与训练量，将 policy/value 双头替换为 Q head，把目标换成 Q-learning，并在训练与评估中去掉搜索。Ms. Pacman 中，这个版本接近 R2D2 的数万分水平，明显低于 MuZero 的约 24 万分。它支持搜索驱动的 policy improvement 能提供有力学习信号；不过，目标、输出头和搜索同时改变，不能把结果精确归因于某一个 loss，也不能理解成两种系统的所有计算成本完全相等。
+
+Figure 3D 更进一步控制评估过程。分别用每步 5、6、7、10、25、50 次 simulation 训练，最终都用 50 次评估。6 次已经少于 Ms. Pacman 的 8 个可用动作，却仍能学到有效策略；5 次则差得多。这说明搜索不必在每个状态把所有动作完整展开一次，网络先验和跨状态学习可以使少量搜索有用。但“6 次足够”只是这个任务、这套先验与训练过程中的观察，不能转化为通用的最小搜索预算。[↗](https://arxiv.org/pdf/1911.08265v2#page=7)
+
+## 五步训练为什么能支持更深的树
+
+模型训练只展开 $K=5$ 步，并不意味着搜索最多能走 5 步。$g$ 是共享的 recurrent dynamics，可以被重复调用；真正的问题是，超过受监督距离后还能否维持有用的 reward/value/policy 关系。Figure S3 的上排直接给出了搜索实际到达的深度分布。
+
+![搜索深度与训练过程中策略改进的关系](../../assets/images/paper-deep-dives/world-models/muzero/figure-s3-details.png){ width="920" }
+
+*原论文 Figure S3。A、B 的红线为训练展开长度 5；C、D 固定训练模型，在多个 checkpoint 上比较不同评估搜索量及原始策略。*
+
+Go 搜索 0.1 秒时，深度中位数为 6，第 95 百分位为 12；到 50 秒时，中位数为 13，第 95 百分位为 26。Atari 在标准 50 次 simulation 下，中位深度为 7，第 95 百分位为 9；500 次时则为 11 和 15。它们证明训练过的转移能够在这些评估分布上被连续使用到超过 5 步，而不是证明任意长度 rollout 都准确。深度还取决于树的分支分配，不能把 simulation 数直接当成单条路径长度。
+
+下排回答另一个问题，搜索是在最后才临时拉高分数，还是在整个学习过程中不断产生更好的标签。Ms. Pacman 中，按原始 policy 行动的曲线与使用搜索的曲线都逐渐升高，但搜索通常保持优势；这正是学习算法可以持续追赶的 policy improvement gap。Go 中，这个差距更大，而且贯穿训练，说明精细规划任务对显式搜索更依赖。
+
+这两组现象放在一起才构成完整证据。多步模型并非只在训练损失里存在，它确实被树搜索用到更深处；搜索也并非纯粹的测试技巧，它不断产生高于当前 policy 的监督，帮助网络变强。但收益在任务之间差别显著，Atari 接近收敛时的原始策略已很强，Go 则仍显著受益于较大搜索量。[↗](https://arxiv.org/pdf/1911.08265v2#page=20)
+
+## 重复运行暴露了平均曲线之外的波动
+
+主结果使用每个游戏 1,000 条评估轨迹，不等于全部 57 个游戏都训练了 1,000 次或做了同等数量的随机种子重复。Appendix I 的 Figure S1 另外选择 5 个游戏进行重复性实验，深色线为训练运行之间的中位数，阴影为第 25–75 百分位，浅色线是各次运行。
+
+![五个 Atari 游戏上的 MuZero 重复运行结果](../../assets/images/paper-deep-dives/world-models/muzero/figure-s1-repeatability.png)
+
+*原论文 Figure S1。Breakout、Gravitar、Ms. Pacman、Q*bert 和 Seaquest 的重复训练轨迹；图注称 10 次运行，公开 JSON 中 Ms. Pacman 实际列出 8 条，其余四项各 10 条。*
+
+Breakout 中多数运行最终接近 864，但公开数据仍有两次在一百万训练步时约为 271 和 303；Seaquest 多次接近百万分，也存在约 110 分的最终结果。Q*bert 的运行间差异同样很大。这样的图比只报告一条高分曲线更能说明训练稳定性的实际范围，模型、搜索和数据分布之间仍可能形成不同的学习轨迹。[↗](https://arxiv.org/src/1911.08265v2/anc/atari_repeatability.json)
+
+也要区分不同阴影的含义。Figure S1 关注独立训练运行之间的差别，Figure S4 的逐游戏学习曲线则报告 1,000 个评估 episode 的均值与标准差。前者问“重新训练一次会怎样”，后者问“同一个训练状态下，不同游戏过程表现怎样”；二者不能互相替代。[↗](https://arxiv.org/pdf/1911.08265v2#page=21)
+
+## 这套方法最值得保留的设计边界
+
+MuZero 给出的可复用原则，是先定义规划需要的预测接口，再让表示和动力学端到端服务于这个接口。reward 把模型固定在真实任务后果上，value 提供有限搜索之外的长期估计，policy prior 把计算优先给值得考虑的动作；MCTS 把三者组合成更好的行动与训练目标。少了其中一个环节，系统可能仍可运行，但就不再是本文验证的完整学习闭环。
+
+它适合讨论“模型要为决策保留什么”的问题，而不是直接承诺一个通用环境模拟器。论文在每个棋类和 Atari 游戏上分别训练 agent，没有证明同一组参数跨这些任务迁移；没有图像重建也意味着模型不直接提供视频生成能力。对奖励函数或任务目标发生显著变化后的适应，不能仅凭隐藏状态足够抽象就默认成立。
+
+采用时最实际的取舍是计算放在哪里。较大的训练搜索能产生更好的策略标签，Reanalyze 能在不增加真实帧的情况下更新旧经验的用法，测试搜索则是否值得增加，要由具体任务的曲线决定。Go 展示了额外推理计算的明显价值，Atari 展示了接近平台后的有限收益，稀疏探索任务又提醒我们，搜索只能利用模型已经学会的后果关系。MuZero 的进展在于把未知动力学中的强搜索变成可学习的系统，同时把表示目标、数据覆盖和搜索预算紧密绑在了一起。

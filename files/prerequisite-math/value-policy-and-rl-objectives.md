@@ -1,194 +1,199 @@
 # 价值函数、策略梯度与强化学习目标
 
-return、value、Q 函数、advantage、policy gradient、PPO、GRPO 和 KL penalty 都在描述策略如何在随机轨迹里最大化长期收益。强化学习的难点在于奖励可能延迟，轨迹有随机性，策略一改，后面的数据分布也会跟着改。
+一条两步轨迹得到奖励(1,2)，折扣率0.9。它可以产生完整回报、TD残差、GAE和策略梯度，但这些量不是同一个数字。本文沿这一条轨迹计算，说明何时使用真实终止、何时需要bootstrap，以及优势怎样影响动作概率。
+
+所有期望都需要说明由哪个策略、哪些状态和动作产生。实现中的一个mean，可能同时决定按时间、轨迹或token的权重，不能把归约细节藏在符号后面。
 
 ## Return：一条轨迹最后值多少钱
 
-从时间 \(t\) 开始的折扣回报可以写成：
+从位置 \(t\) 开始的相对折扣回报为
 
 \[
-G_t
-=
-\sum_{k=0}^{\infty}\gamma^k r_{t+k}
+G_t=\sum_{k=0}^{T-t-1}\gamma^k r_{t+k},\qquad 0\le\gamma\le1.
 \]
 
-这里 \(r_{t+k}\) 是未来第 \(k\) 步奖励，\(\gamma\in[0,1]\) 是折扣因子。读这行式子时，重点是时间偏好：\(\gamma\) 越接近 1，越重视长期后果；\(\gamma\) 越小，越重视眼前奖励。
+两步奖励为 \((1,2)\)，折扣为0.9，则 \(G_1=2\)、\(G_0=1+0.9\times2=2.8\)。同一笔终局奖励，对更早的动作折扣更多。有限终止任务可以使用 \(\gamma=1\)；无限持续任务需要额外条件保证和或期望存在，常用有界奖励及 \(\gamma<1\)。
 
-机器人任务里，如果只在成功时给一个终局 reward，\(G_t\) 会很稀疏，训练信号很弱。世界模型和 VLA 论文常引入 progress、value、risk 或 termination head，就是为了把长期结果变成更密的学习信号。
+稀疏奖励意味着许多轨迹得到相同或接近零的反馈。增加value head可以估计未来结果，但不会凭空产生正确奖励；改写奖励函数还可能改变目标任务，必须说明新增奖励鼓励什么行为。
 
 ## Value 和 Q：把未来压成一个数
 
-状态价值函数：
+给定策略 \(\pi\)，定义
 
 \[
-V^\pi(s)
-=
-\mathbb{E}_{\pi}[G_t\mid s_t=s]
+V^\pi(s)=\mathbb E_\pi[G_t\mid s_t=s],\qquad
+Q^\pi(s,a)=\mathbb E_\pi[G_t\mid s_t=s,a_t=a].
 \]
 
-这里条件 \(s_t=s\) 固定当前状态，期望 \(\mathbb E_\pi\) 则对策略后续动作和环境转移产生的所有可能轨迹取平均。
-
-动作价值函数：
+V平均了当前动作和之后所有随机性；Q先固定当前动作，再平均后续。两者满足
 
 \[
-Q^\pi(s,a)
-=
-\mathbb{E}_{\pi}[G_t\mid s_t=s,a_t=a]
+V^\pi(s)=\sum_a\pi(a\mid s)Q^\pi(s,a).
 \]
 
-\(V^\pi(s)\) 问的是“在状态 \(s\) 继续按策略 \(\pi\) 做，平均能得到多少回报”。\(Q^\pi(s,a)\) 多问一步：“如果第一步指定做动作 \(a\)，后面再按策略走，平均能得到多少回报”。
+假设某状态有两个动作，策略各选一半，动作价值分别为4和2，那么状态价值为3。换成以0.9概率选第一个动作，状态价值就变成3.8。价值既依赖环境与奖励，也依赖后续策略，不能把某个critic输出当成状态永远不变的属性。
 
-这两个函数是把长轨迹折叠成局部判断的工具。MuZero 做 planning 时要估计 value，Dreamer 在 imagined trajectory 里训练 actor-critic，机器人世界模型用 value/risk head 排候选动作，都是这个想法的变体。
+单条轨迹的return是一次随机实现；V和Q是分布上的期望，critic则是对这些期望的近似。三者不能混写。
 
 ## Bellman：价值可以递推
 
-Bellman 期望方程写成：
+从回报拆出第一项，有 \(G_t=r_t+\gamma G_{t+1}\)。对后续取条件期望，得到
 
 \[
-V^\pi(s)
-=
-\mathbb{E}_{a\sim\pi,\,s'\sim P}
-\left[
-r(s,a)+\gamma V^\pi(s')
-\right]
+V^\pi(s)=\mathbb E_{a\sim\pi,\,(r,s')\sim P}
+[r+\gamma V^\pi(s')\mid s].
 \]
 
-它说：当前价值等于当前奖励加上下一个状态价值的折扣期望。这个公式之所以重要，是因为它把“长期回报”改写成“一步奖励 + 下一步价值”，从而可以递推学习。
-
-如果把它用于样本更新，就会出现 TD error：
+这里写联合转移 \(P(r,s'\mid s,a)\)，允许奖励也随机。真正终止状态的后续价值设为零。对采样转移及当前估计 \(V_\phi\)，TD误差为
 
 \[
-\delta_t
-=
-r_t+\gamma V(s_{t+1})-V(s_t)
+\delta_t=r_t+\gamma b_tV_\phi(s_{t+1})-V_\phi(s_t),
 \]
 
-\(\delta_t\) 可以理解为预测误差：当前 value 预测得太低还是太高。actor-critic、Dreamer、PPO 和很多机器人后训练方法都在某种形式上使用这个误差信号。
+其中 \(b_t=0\) 表示任务真正终止，其他可继续自举的转移取1。假设两步轨迹上的估计为 \(V_\phi(s_0)=0.5,V_\phi(s_1)=0.8\)，第二步结束任务。则
+
+\[
+\delta_0=1+0.9\times0.8-0.5=1.22,\qquad
+\delta_1=2-0.8=1.2.
+\]
+
+一步TD把下一个状态的当前估计当作部分监督，这叫bootstrap。它可以很早更新，但误差也来自当前critic。若只是采集器达到长度上限，环境任务还未终止，通常保留最后观测的bootstrap；若时间限制本身就是任务定义的一部分，则应把剩余时间纳入状态并按真正终止处理。不能把所有`truncated`都当作一种数学事件。
 
 ## 多步回报和 λ-return：在一阶 TD 与整条轨迹之间折中
 
-一步 TD 只看 \(r_t+\gamma V(s_{t+1})\)，Monte Carlo return 则尽量看完整条未来轨迹。很多世界模型和 actor-critic 方法会用 \(n\)-step return 折中：
+未跨过真正终止时，n步目标为
 
 \[
-G_t^{(n)}
-=
-\sum_{k=0}^{n-1}\gamma^k r_{t+k}
-+
-\gamma^n V(s_{t+n})
+G_t^{(n)}=\sum_{k=0}^{n-1}\gamma^k r_{t+k}+\gamma^nV_\phi(s_{t+n}).
 \]
 
-这行公式表示先累积前 \(n\) 步真实或想象奖励，再用第 \(n\) 步的 value 估计剩余未来。
+到真正终止时，末尾bootstrap为零。在两步例子中，\(G_0^{(1)}=1.72\)，\(G_0^{(2)}=2.8\)。前者依赖估计0.8，后者使用实际终局奖励2。
 
-\(\lambda\)-return 把不同长度的 \(n\)-step return 加权混合：
+剩余有 \(H\) 步的有限段，lambda-return需要把最后一项的尾部权重保留下来
 
 \[
-G_t^\lambda
-=
-(1-\lambda)
-\sum_{n=1}^{\infty}
-\lambda^{n-1}G_t^{(n)}
+G_t^\lambda=(1-\lambda)\sum_{n=1}^{H-1}\lambda^{n-1}G_t^{(n)}
++\lambda^{H-1}G_t^{(H)}.
 \]
 
-\(\lambda\) 越小，越接近短视但低方差的一步 TD；\(\lambda\) 越接近 1，越接近长视但高方差的 Monte Carlo。Dreamer、DreamerV2/V3 和很多 imagined rollout 训练都喜欢这类目标，因为 world model 里的长 rollout 会积累模型误差，完全只看一步又太短视。
+权重之和为1。取 \(\lambda=0.95,H=2\)，得到 \(0.05\times1.72+0.95\times2.8=2.746\)。若把无限和直接截成两项却忘记尾项，权重不再归一化。\(\lambda=0\) 回到一步目标，\(\lambda=1\) 使用整个有限段的回报，段末是否仍bootstrap由终止语义决定。
+
+长回报可以减少对critic的依赖，但往往增加采样方差。使用学到的世界模型生成回报时，还会累积模型偏差，不能把“更长”一概视作更准确。
 
 ## Advantage：这个动作比平均水平好多少
 
-优势函数写成：
+真实优势定义为
 
 \[
-A^\pi(s,a)
-=
-Q^\pi(s,a)-V^\pi(s)
+A^\pi(s,a)=Q^\pi(s,a)-V^\pi(s).
 \]
 
-advantage 衡量“在这个状态下，这个动作比策略通常会做的动作好多少”，不直接比较动作的绝对好坏。这比直接用 return 稳，因为不同状态本来难度不同，直接比较原始回报会混掉状态差异。
+前面的两动作例子中，Q为4和2、V为3，优势为1和-1。第二个动作绝对回报仍是正的，但比该状态下策略平均选择差，因此优势为负。
 
-kai0 的 Stage Advantage、PPO 的 GAE、GRPO 的 group advantage，都在解决同一个问题：给策略更新一个更稳定的相对进展信号。
+实践中常用GAE近似优势
+
+\[
+\hat A_t=\delta_t+\gamma\lambda c_t\hat A_{t+1}.
+\]
+
+\(c_t\) 表示是否可以继续累积同一段轨迹的下一项。它与TD里的bootstrap mask职责不同，不能跨episode重置把新轨迹的优势接进来；采集片段末尾也须停止递推，即使该处保留价值bootstrap。
+
+两步例子从后向前计算，\(\hat A_1=1.2\)，\(\hat A_0=1.22+0.9\times0.95\times1.2=2.246\)。加回 \(V_\phi(s_0)=0.5\)，得到2.746，与上面的lambda-return相同。这个等价需要相同的value、折扣、边界与索引约定。
 
 ## Policy gradient：让更好动作更可能发生
 
-策略目标可以写成：
+明确以轨迹起点的折扣回报为目标
 
 \[
-J(\theta)
-=
-\mathbb{E}_{\tau\sim\pi_\theta}[G(\tau)]
+J(\theta)=\mathbb E_{\tau\sim\pi_\theta}\left[\sum_{t=0}^{T-1}\gamma^tr_t\right].
 \]
 
-经典 policy gradient 形式是：
+环境转移不依赖策略参数时，轨迹概率对参数的梯度来自策略概率。利用log-derivative和未来奖励的因果关系，可得
 
 \[
-\nabla_\theta J(\theta)
-=
-\mathbb{E}
-\left[
-\nabla_\theta\log\pi_\theta(a_t\mid s_t) A_t
-\right]
+\nabla_\theta J
+=\mathbb E\left[\sum_t\gamma^t\nabla_\theta\log\pi_\theta(a_t\mid s_t)G_t\right].
 \]
 
-这行式子的直觉很直接：如果 \(A_t>0\)，说明动作比平均好，就提高它的 log probability；如果 \(A_t<0\)，说明动作比平均差，就降低它的 log probability。
+外层 \(\gamma^t\) 对应从起点计的折扣，G内部从当前位置计折扣。也可以把时间权重吸收到折扣状态分布中，但必须同时声明期望的采样分布。实际代码常对采集到的时间步直接平均、或使用 \(\gamma=1\)；不能只删掉一个因子却声称目标和估计完全没变。
 
-但策略不能改得太猛。大模型 RLHF、RLVR 和 VLA 后训练中，策略一旦偏离 reference model 太多，可能语言能力退化、格式崩坏，或在 learned simulator 里钻漏洞。
+给定状态时，减去不依赖当前采样动作的基线不会改变期望梯度，因为
+
+\[
+\mathbb E_{a\sim\pi}[b(s)\nabla\log\pi(a\mid s)]
+=b(s)\nabla\sum_a\pi(a\mid s)=0.
+\]
+
+取基线V，就得到优势形式。若回报2和4都不减基线，两个被采样动作都会在各自样本更新中受到增加概率的激励，只是强度不同；“低于其他样本就自动降低概率”需要基线或其他相对比较机制。共享参数也意味着一次更新会同时影响多个状态和动作。
 
 ## PPO 和 GRPO：控制更新步子
 
-PPO 常用概率比值：
+PPO把采集策略固定为 \(\pi_{\rm old}\)，定义动作概率比
 
 \[
-r_t(\theta)
-=
-\frac{\pi_\theta(a_t\mid s_t)}
-{\pi_{\theta_{\text{old}}}(a_t\mid s_t)}
+\rho_t(\theta)=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\rm old}(a_t\mid s_t)}.
 \]
 
-如果 \(r_t\) 远大于 1，说明新策略把这个动作概率提高太多；远小于 1，说明压低太多。PPO 用 clipping 限制这个比值，避免一次更新把策略推远。
-
-GRPO 的直觉是：对同一个问题采样一组回答，用组内 reward 标准化得到相对优势。一个常见抽象是：
+用 \(\rho\) 表示比值，避免与奖励r混淆。PPO-Clip最大化的样本代理项为
 
 \[
-A_i
-=
-\frac{r_i-\operatorname{mean}(r_{1:G})}
-{\operatorname{std}(r_{1:G})+\epsilon}
+\min\big(\rho_t\hat A_t,
+\operatorname{clip}(\rho_t,1-\epsilon,1+\epsilon)\hat A_t\big).
 \]
 
-这让训练不必为每个 token 都训练一个独立 value model，而是用同组候选之间的相对好坏来提供 advantage。DeepSeek-R1、Kimi-K2、LongCat-Video 这类报告里出现 GRPO、reward curve、KL 和 group computation 时，可以先按这个框架读。
+取 \(\epsilon=0.2\)。正优势 \(\hat A=2\) 时，比值从1升至1.2，代理项从2升至2.4；继续升至1.5仍为2.4，失去继续鼓励该方向的收益。负优势 \(\hat A=-2\) 时，比值降到0.8，代理项为-1.6；再降到0.5仍为-1.6。若反而升到1.5，代理项为-3，错误方向继续受惩罚。
 
-![PPO and GRPO](../assets/images/paper-deep-dives/technical-reports/deepseek-r1/figure-grpo.png){ width="760" }
+这截断了特定方向的代理收益，没有把参数投影进可行集。其他样本、共享参数和多轮优化仍可能让某个比值超出区间，因此PPO不保证硬概率比边界，也不保证整体KL小于阈值。
 
-<small>图源：`DeepSeek-R1` 技术报告相关图，已本地化于论文专题。原图对比 PPO 和 GRPO 的训练流程。这里的重点是：PPO 依赖 value/GAE 估计优势，GRPO 用同组候选的 reward 做相对优势。</small>
+GRPO用同一问题下的一组回答奖励构造相对信号。一个常见形式为
+
+\[
+\hat A_i=\frac{R_i-\bar R}{\operatorname{std}(R_{1:G})+\epsilon}.
+\]
+
+若四个奖励为 \((0,0,1,1)\)，采用总体标准差，忽略极小epsilon后得到 \((-1,-1,1,1)\)。如果全组奖励相同，中心化后为零，epsilon只防止除零，不会创造区分好坏的信息。这是组内相对估计，不自动等于每个token状态的真实 \(A^\pi\)。std定义、token/序列归一化和KL计算都可能随实现变化。
+
+![PPO和GRPO的数据流](../assets/images/paper-deep-dives/technical-reports/deepseek-r1/figure-grpo.png){ width="760" }
+
+<small>图源为站内已保存的DeepSeek-R1技术报告相关图。图中比较带critic的PPO流程与组内奖励比较流程；具体训练约定需结合对应论文与实现。</small>
+
+## 一个正优势怎样改变伯努利策略
+
+假设某状态选动作1的概率是 \(p=0.25\)，参数为logit，且采到动作1、固定优势为2.246。负策略损失 \(-A\log p\) 的logit梯度为 \(-A(1-p)=-1.6845\)，梯度下降会提高该动作概率。若同样动作的优势为负，方向相反。
+
+这里把优势视为固定权重，没有通过critic重新求导。PPO还会乘新旧概率比并按优势符号选择clipping分支，所以同一个样本进入截断区后可能停止贡献部分改进激励；这不等于所有参数更新都被硬截断。
 
 ## KL penalty：别离参考策略太远
 
-很多大模型 RL 目标会加 KL 惩罚：
+若采用最大化约定，可以写成
 
 \[
-\mathcal{L}
-=
-\mathcal{L}_{\text{reward}}
--
-\beta D_{\mathrm{KL}}
-\left(
-\pi_\theta \,\|\, \pi_{\text{ref}}
-\right)
+J_{\rm reg}=\mathbb E[R]-\beta D_{\rm KL}(\pi_\theta\|\pi_{\rm ref}).
 \]
 
-这里 \(\pi_{\text{ref}}\) 是参考模型，\(\beta\) 控制约束强度。直觉是：reward 鼓励模型朝高分回答走，KL 约束防止它为了分数偏离原有语言分布太远。
+若代码最小化loss，通常取相反符号，KL项变成正号。KL仍需要说明是在什么状态分布上、对token条件分布还是整条序列分布计算。单个采样log-ratio可以为负，只有适当分布下的期望才是对应KL。
 
-KL 的定义和不对称性在 [信息论、熵与分布距离](information-theory-and-divergence.md) 里已经讲过；这里更关心它在策略优化里的角色：作为行为边界，而不是单独的评测指标。
+参考策略用于惩罚偏离，旧策略用于校正采集概率，这两个模型角色不同。固定 \(\beta\) 表示收益与偏离的软折中，不能保证KL永不超过某值；KL较低也不保证没有奖励漏洞。应同时检查任务成功、奖励构造和失败样本，详见[语言模型强化学习](../reinforcement-learning/llm-rlhf-rlvr-and-grpo.md)。
 
-这也是为什么读 RL 论文不能只看 reward 曲线。reward 上升但 KL 暴涨，可能意味着模型在利用 reward 漏洞；KL 很稳但 reward 不动，可能说明约束太强。
+## 一个可执行的回报与优势计算
 
-## 常见误读
+```python
+rewards = [1.0, 2.0]
+values = [0.5, 0.8, 0.0]
+bootstrap = [1.0, 0.0]
+continuation = [1.0, 0.0]
+gamma, lam = 0.9, 0.95
+advantages = [0.0, 0.0]
+carry = 0.0
+for t in reversed(range(2)):
+    delta = rewards[t] + gamma*bootstrap[t]*values[t+1] - values[t]
+    carry = delta + gamma*lam*continuation[t]*carry
+    advantages[t] = carry
+print(advantages)  # [2.246, 1.2]
+print([advantages[t] + values[t] for t in range(2)])  # [2.746, 2.0]
+```
 
-| 误读 | 更稳的理解 |
-| --- | --- |
-| reward 高就代表策略好 | reward 可能有漏洞，必须看真实任务和分布外行为 |
-| value 是最终答案 | value 是对未来回报的估计，误差会影响 planning 和策略更新 |
-| \(\lambda\)-return 越长越好 | 长回报偏差小但方差和模型误差更大，需要折中 |
-| advantage 只是 reward 的别名 | advantage 是相对当前状态基线的好坏 |
-| PPO/GRPO 只是训练技巧 | 它们决定策略每次能被推多远，也决定稳定性边界 |
+代码中的两个mask在这个终止例子里相同；保留它们各自的名字，是为了在片段截断和episode重置时处理不同职责。它验证上述数值链，没有训练策略，也没有验证真实环境收益。
 
-## 读完以后怎么判断
 
-看到 return、value、advantage、PPO、GRPO 或 KL penalty，先问：奖励来自哪里，长期回报如何估计，优势是相对什么基线，策略更新有没有受约束，评测是否能发现 reward hacking 或 simulator exploitation。这个问题链会支撑 Dreamer、MuZero、DeepSeek-R1、LongCat-Video 和具身世界模型后训练论文。
+- [Spinning Up 策略梯度推导](https://github.com/openai/spinningup/blob/038665d62d569055401d91856abb287263096178/docs/spinningup/rl_intro3.rst)，把每条轨迹概率展开后，再使用reward-to-go与baseline。

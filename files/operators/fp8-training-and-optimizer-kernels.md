@@ -1,127 +1,49 @@
-# FP8 训练与优化器 Kernel
+# 低精度前向之后，优化器怎样写回参数
 
-低精度话题里，`FP8` 和优化器 kernel 值得单独拿出来讲，因为它们主要影响的是训练主路径，而不是单纯的推理压缩。权重量化更多关注部署态显存和带宽；而 `FP8` 训练与 fused optimizer kernel 关心的是：在大规模训练中，如何把前向、反向、梯度、主权重、优化器状态和数值缩放组织成一套既快又稳的执行路径。
+低精度训练不仅要近似一次矩阵乘，还要把误差信号写回长期参数。FP8操作数、累加器、梯度、Adam历史状态和主权重可以使用不同精度。沿一次更新查看这些状态，比给整个模型贴一个dtype标签更准确。
 
-FP8 训练和优化器 kernel 要放在数值格式、状态切分、恢复路径和低精度 kernel 之间看，重点是这些约束落到 kernel、scale metadata 和 optimizer step 时怎样影响吞吐。
+## 梯度先进入历史统计
+
+AdamW维护一阶矩m和二阶矩v。忽略weight decay，设首步梯度g=0.1、$\beta_1=0.9,\beta_2=0.999$，初始m=v=0。更新后m=0.01、v=0.00001，偏差校正得到 $\hat m=0.1,\hat v=0.01$。
+
+于是更新量近似为 $\eta\hat m/(\sqrt{\hat v}+\epsilon)\approx\eta$。学习率0.001时，参数从1变到约0.999。m/v是跨步积累的状态，丢失它们后即使权重相同，下一步轨迹也会改变。
+
+## 为什么低精度写回可能吞掉更新
+
+BF16在1附近的相邻可表示值并不均匀跨越两侧；向下相邻值与1相差约0.00390625。直接把0.999舍入回BF16，仍可能得到1。因此许多混合精度方案保留更高精度主权重或更新状态，再生成较低精度计算副本。
+
+FP8前向的scale同样要与对应操作数匹配。若使用历史范围估计，恢复时遗漏相关状态或改变更新顺序，后续数值路径可能变化。是否需要保存哪些scale历史，应依据具体实现，不能假定所有FP8方案完全一样。
+
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  X["输入与scale"] --> F["低精度forward"] --> L["loss"] --> G["梯度与unscale"] --> C["裁剪"] --> M["Adam m/v"] --> W["主权重更新"] --> Q["计算副本与新scale"]
+  Q --> F
+```
+
+低精度操作数只是闭环的一段。主权重、矩状态和尺度的保存精度可以不同。
+
+## Fused optimizer省下哪些访问
+
+对每个参数，简化FP32 Adam更新至少读参数、梯度、m、v四项，写参数、m、v三项，共28字节，尚未计主副本、weight decay细节和其他元数据。运算不多时，多个独立逐元素kernel反复读写这些状态，会产生额外流量和launch。
+
+融合可在一次读取后完成矩估计、偏差校正与参数更新，再写回必要状态。收益来自减少中间tensor和调度；若状态跨CPU/GPU或分片在不同rank，还需把迁移与同步算入完整step。
+
+## AMP顺序决定梯度是否被正确处理
+
+若使用loss scaling，先放大loss反向传播，再在梯度裁剪前unscale，随后step并更新scaler。若先裁剪放大后的梯度，实际阈值就变了。nanoGPT的训练循环明确按unscale、clip、step、update的顺序组织。
+
+溢出时是否跳过更新、学习率进度如何计数，也要与训练循环一致。一次forward数值接近，只能验证局部近似；还需比较多步loss、梯度与更新轨迹，判断误差是否随训练扩大。
+
+## 测量应分别覆盖前向和状态更新
+
+先测低精度GEMM包含转换的完整路径，再测optimizer段和整步。若主要时间已经在通信或数据等待，进一步压缩Adam kernel未必显著改善吞吐。检查有限值、短程恢复一致性与任务指标后，才能讨论更激进的状态精度。
 
 ![DeepSeek-V3 FP8 mixed precision framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="860" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达 FP8 路径中哪些张量走低精、哪些路径保留高精和 scale；读图重点是 FP8 训练不是一个 dtype 开关，而是 kernel、scale metadata、累加和 checkpoint 状态的组合。它不能证明任意 FP8 recipe 都稳定。</small>
 
-## 为什么 FP8 训练和推理量化不是一回事
+## 对照源码与延伸阅读
 
-推理量化更多是在“压缩已有模型”；
-FP8 训练则是在“用更低精度直接完成学习过程”。
-这意味着它要同时面对前向数值范围、反向梯度范围、累加精度、scale 更新和 optimizer state 的保存格式。
-
-也就是说，FP8 训练不是只换一个 dtype，而是整条训练 pipeline 的重构。
-
-## FP8 训练真正依赖什么
-
-要让 FP8 训练可用，通常至少需要合适的 per-tensor 或更细粒度 scaling，某些路径保留更高精度累加，稳定的 cast / dequant / requant kernel，对异常值和 outlier 有合理处理，并让训练框架、kernel、optimizer 路径配套。
-
-因此 FP8 更像系统级能力，而不是某个局部技巧。
-
-## Scale 元数据为什么是训练的一部分
-
-在 FP8 路径里，真正参与计算的并不只是张量本身，还包括 scale、history 或统计量、cast 策略、溢出检测或 guard。这些额外元数据会影响 kernel 输入输出格式、张量布局、fused path 设计和 checkpoint 状态。
-
-所以 FP8 训练 kernel 的核心不只是低精度乘法，而是“低精度张量 + 缩放元数据”的联合管理。
-
-## FP8 训练主路径图
-
-```mermaid
-flowchart LR
-    A["BF16 master weight"] --> B["cast / scale to FP8"]
-    B --> C["FP8 forward GEMM"]
-    C --> D["loss"]
-    D --> E["backward GEMM"]
-    E --> F["gradient accumulation"]
-    F --> G["unscale / clip"]
-    G --> H["fused optimizer"]
-    H --> A
-    I["amax history / scale metadata"] --> B
-    I --> E
-    J["checkpoint"] --> A
-    J --> I
-```
-
-这张图说明 FP8 训练要保存的不只是权重。`amax history`、scale、master weight、optimizer state 和梯度缩放都属于训练状态。如果 checkpoint 只保存模型权重，恢复后 scale 统计不同，后续 loss 曲线可能悄悄漂移。
-
-### 4.1 一个 scale 失配事故
-
-**症状**：FP8 训练从 checkpoint 恢复后没有立刻 `nan`，但 2k step 后 loss 比连续训练高 0.08，梯度极值更抖。
-
-**排查**：权重和 optimizer state 恢复正常，但 FP8 amax history 没有恢复，scale 从默认值重新 warmup；前几百 step 的 cast 范围和连续训练不同，导致部分层 underflow / overflow 统计改变。
-
-**修复**：checkpoint 中保存 FP8 scale metadata、amax history、loss scaler 和相关随机状态；恢复后跑固定 batch，对比连续训练路径的 loss、amax、grad norm 和参数 diff。
-
-## 为什么优化器 kernel 也是主战场
-
-在大模型训练里，优化器 step 的成本不容忽视，因为参数很多、optimizer state 很大、每步都要更新，还常与 ZeRO / FSDP 分片状态耦合。
-
-如果优化器实现仍然是多次读写参数、动量和方差，并拆成分散的 elementwise kernel，训练吞吐就会被明显拖慢。
-
-## Fused Optimizer 的意义
-
-Fused optimizer kernel 的核心，是把原本分散的多步 elementwise 操作合并起来，例如读梯度、更新一阶矩和二阶矩、计算校正、应用权重衰减、更新参数。
-
-### 5.1 为什么这比看起来更重要
-
-因为这些步骤本质上都是内存带宽敏感的 elementwise 操作。
-如果拆成多个 kernel，同一组参数和状态会被反复读写，launch 次数也会增加，大模型下总时间会很可观。
-
-## FP8 与优化器之间的精度分层
-
-**一个很现实的问题是**：
-即使前向和反向更多地走 FP8，优化器状态也未必适合全面降到同样精度。
-
-常见原因是 moment 累积对精度敏感，长时间训练误差会积累，不同参数组的动态范围差异也很大。
-
-因此实际系统常采用更复杂的精度分层：前向低精度，累加更高精度，optimizer state 保留更稳定格式，最终参数更新路径再做折中。
-
-## 训练态低精度 kernel 的常见热点
-
-常见热点包括 FP8 GEMM、cast / scale 相关 kernel、gradient unscale / clip、optimizer step、master weight 更新，以及分布式梯度聚合前后的数据格式转换。这些路径如果彼此不协调，就会让理论上的 FP8 收益被大量格式转换吃掉。
-
-## 优化器 kernel 的带宽账
-
-AdamW 更新一个参数通常至少要读写：参数、梯度、一阶动量、二阶动量，很多实现还保留 master weight。若这些 elementwise 操作拆成多个 kernel，同一组张量会被反复读写。
-
-| 路径 | 典型读写 | 风险 |
-| --- | --- | --- |
-| 非融合 AdamW | 多次读写 grad、m、v、param | launch 多，HBM 往返多 |
-| fused optimizer | 一次 kernel 内完成多步更新 | 寄存器压力和数值边界更复杂 |
-| ZeRO/FSDP 分片优化器 | 状态分片，减少单卡显存 | 通信、gather/scatter 和恢复更复杂 |
-| FP8 + BF16 master | 主计算低精，更新保持高精 | scale 与 master weight 一致性要验收 |
-
-验收 fused optimizer 时不要只看 step time，还要看长跑 loss、权重范数、moment 分布和恢复一致性。优化器 kernel 一旦数值错，通常不会立刻炸，而是慢慢改变训练轨迹。
-
-## 直觉例子
-
-如果把训练看成一条长期运转的工厂流水线，那么 FP8 训练不只是把原材料改成更轻的包装，而是要求整个仓储、计量、称重和装配流程都能适应更轻、更敏感的零件。优化器 kernel 则像最后的总装和校准工位，如果这一步仍然非常笨重，前面节省下来的吞吐也会被吃掉。
-
-## 读完以后怎么判断
-
-FP8 与优化器 kernel 的主题，核心不是“更低精度”，而是“训练主路径是否能以更低精度仍然稳定运行”。这要求 kernel、scale、优化器状态、mixed precision 策略和分布式训练框架一起工作。
-因此它是训练系统能力的一部分，而不只是单个算子技巧。
-
-## 发布前最小门禁
-
-| 门禁 | 要求 |
-| --- | --- |
-| 数值 | 固定 batch 对齐 BF16 基线，loss、grad norm、amax 不异常 |
-| 性能 | FP8 GEMM、cast、optimizer step 分别报告收益 |
-| 恢复 | checkpoint 恢复后 scale / amax / optimizer state 连续 |
-| 分布式 | 梯度聚合、ZeRO/FSDP、通信 dtype 与主路径一致 |
-| 回退 | 敏感层和异常 bucket 可切回 BF16 |
-
-## 工程收束
-
-FP8 训练与优化器 kernel 要围绕 scale 管理、累加精度、统计同步、优化器状态和回退路径来验收。只看显存下降会漏掉 scale 漂移、训练/推理 FP8 路径不一致等问题；上线前应按层验证 FP8 可承受度，保留 BF16 回退，监控 scale 分布，并做长跑数值回归。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [AMP、梯度裁剪与optimizer step顺序](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py)
+- [低精度GEMM数据和scale接口](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)

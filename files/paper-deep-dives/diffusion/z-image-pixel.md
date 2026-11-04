@@ -17,345 +17,395 @@ paper_topic: 扩散模型 / 像素空间后训练
 
 ## 原论文故事线
 
-### 研究背景
+这篇论文提出的判断有明确阶段性。大规模文生图预训练中，latent 表示让模型更快学到物体结构与文字对应；当这些能力已经形成后，再转到 RGB 像素空间训练，可以摆脱固定 VAE 解码器的输出限制，并进一步压缩推理成本。因此，作者把研究重点放在 latent-to-pixel 迁移配方，而没有将“直接生成像素”当成从头训练每个阶段都更优的理由。[↗](https://arxiv.org/pdf/2608.16887v1#page=2)
 
-主流文生图系统几乎都把大规模预训练放在 VAE latent space：VAE 先把 RGB 图像压缩成更短、更结构化的 latent token，扩散 Transformer 再学习文本条件下的生成分布。像素空间扩散则绕过 VAE，直接从噪声生成 RGB，理论上没有 VAE 重建上限，也省去推理末端固定的 VAE decode。
+最终方案沿一条有依赖关系的路径推进。先取得已训练的 latent diffusion 权重，在与原模型相同的空间 token 网格上接入 RGB 输入和输出；用源模型生成数据与高质量真实图像共同训练；采用 clean-image prediction，但仍在 velocity 空间计算损失；选择轻量卷积像素头并校准噪声幅度；待像素模型稳定后，再将 patch 从 16 扩到 32，最后通过两阶段蒸馏得到四次网络调用的 Turbo 模型。每一步都针对迁移中的不同变化，直接把全部变化同时施加到模型上并不等价。
 
-过去的 pixel diffusion 工作大多停留在 ImageNet class-conditional 或较小规模 T2I。真正欠缺的不是“像素能不能生成”，而是一个更实际的问题：当数据、模型和训练预算都进入现代 T2I 规模时，pixel space 能否像 latent space 一样高效地吸收知识？如果不能，应该把像素训练放在哪个阶段？
+结果中最醒目的数字是 Z-Image 系列四步像素模型的 0.20 秒与 4.75 倍加速。它们对应 Table 3 中单张 H800、$1024\times1024$、4 NFE、未做系统级优化的比较，latent Turbo 基线为 0.95 秒。100 NFE 的像素模型为 4.56 秒，latent 基线为 20.12 秒。这些速度收益同时来自更少视觉 token、更轻的像素输出路径和少步生成，不能全部归于“去掉 VAE”。而且不同质量指标仍有小幅升降，论文支持的是可用的质量与效率取舍。[↗](https://arxiv.org/pdf/2608.16887v1#page=8)
 
-### 问题（Challenge）
+## 为什么像素空间的优势没有直接转成预训练优势
 
-作者先做了一个受控的大规模比较：latent 与 pixel 模型使用相同的 Z-Image Transformer、Qwen3-4B 文本条件、训练数据、算力、优化配置和 Transformer token 长度，只改变预测空间。两者都看过超过 20B 图文对，但 pixel-space 模型在相同预算内收敛更慢，早期全局结构和文本对齐明显落后，训练末期也没有追平 latent baseline。
+### 去掉表示瓶颈，也去掉了一部分已经学好的视觉结构
 
-这意味着 pixel diffusion 的主要障碍不只是 token 多。论文已经把两条路线都控制在 $64\times64$ token grid，差距仍然存在。Pixel 模型必须一边从原始 RGB 中发现局部冗余和高频规律，一边学习全局语义、文本对齐与去噪；latent 模型则直接接收 VAE 整理过的感知表示。
+latent diffusion 先用 VAE 把 RGB 图像编码为更紧凑的表示，扩散模型在这个空间中学习生成，最后再解码回像素。它带来两个效果。一方面，生成器不必直接处理所有局部像素变化，训练难度下降；另一方面，最终图像受到自编码器表示和重建能力的限制，一些细节可能在编码阶段丢失，独立的解码过程也有固定开销。
 
-### Finding
+像素生成取消了最后这个独立 VAE 解码环节，训练监督可以直接作用到 RGB。但若从随机初始化开始，模型既要建立物体、布局和文本对齐，又要处理局部纹理、高频变化与噪声。作者将像素预训练较慢的现象解释为，VAE 除了压缩计算，还提供了一种经过大规模数据学习的视觉表示；去掉它以后，原来由表示模块承担的一部分组织工作转移到了生成器。这是对实验现象的机制解释，论文没有把语义结构、局部冗余和频率分布分别做因果干预，因此不能将其当成已严格分解的理论结论。[↗](https://arxiv.org/pdf/2608.16887v1#page=3)
 
-论文最重要的 finding 不是“pixel diffusion 不行”，而是 **latent space 和 pixel space 适合不同训练阶段**：
+### 受控比较首先要控制 Transformer 的序列长度
 
-- 大规模 pre-training 的目标是用有限算力快速吸收视觉知识和文本对齐，latent representation 更容易优化。
-- post-training 的目标是把一个已有生成器变成最终可部署形态，pixel supervision 可以移除 VAE 上限与 decode 成本。
-- 因此更合理的路线是先在 latent space 预训练，再把共享 Transformer 权重迁移到 pixel model，做较短的全参数 post-training。
+原实验使用相同 Z-Image Transformer 主干与预训练 Qwen-3-4B 文本条件模块。latent 路径使用 FLUX-AE，空间每轴下采样 8 倍，再以 latent patch size 2 分块，等效每轴缩减 16 倍；pixel 路径直接使用 $16\times16$ RGB patch。在 $1024\times1024$ 分辨率下，两者都给主干提供 $64\times64=4096$ 个视觉 token。因此，看到的收敛差异不能简单解释成“像素模型用了长得多的主干序列”。[↗](https://arxiv.org/pdf/2608.16887v1#page=13)
 
-换句话说，VAE 不只是一种压缩器，也像是大规模生成预训练的 learned preconditioner；等先验学完，再把 VAE 从最终生成路径里拿掉，可能比从头在 RGB 上硬学更划算。
-
-### 方法
-
-作者以 Z-Image 为主实验底座，把 latent checkpoint 的 Transformer 和条件模块迁移到 pixel model，新建 pixel-specific input/output modules，并在 1K 分辨率做全参数后训练。论文逐项消融了五个迁移决定：权重初始化、post-training 数据、$v$-prediction 或 $x_0$-prediction、RGB decoder head、noise scale。
-
-最终配方是：latent-pretrained initialization；同一 latent teacher 的 self-generated data 与高质量 real data 按 1:1 混合；切换到 $x_0$-prediction；采用轻量卷积 U-Net 形式的 DiP head；使用 $\gamma=2$ 的像素噪声尺度。随后模型先从 patch size 16 迁移到 patch size 32，再做 Decoupled-DMD 与 DMDR 少步蒸馏。
-
-### 结论
-
-在论文报告的系统对比中，这套 recipe 能迁移到 Z-Image 和 FLUX2-klein 两个模型族。100 NFE 时，像素模型相对 latent counterpart 获得 3.18x-4.41x 端到端加速；4 NFE 时获得 3.29x-4.75x 加速，同时在 GenEval、DPG、OneIG、LongText 上整体保持相近或更优，但不是每个指标都胜出。
-
-证据边界也要说清楚。论文证明的是“matched compute 下 pixel pre-training 更慢”和“精心设计的 pixel post-training 有效”，不是数学上证明 pixel pre-training 永远不能 scale。20B 是训练语料规模，不等于公开了 20B 数据配方；最终扩大后的 post-training 数据量、训练迭代数、总算力和 paper-specific code/weights 也没有完整公开。
-
-### 关键术语
-
-- **Pixel-Space Diffusion（像素空间扩散）**：直接在 RGB 空间定义加噪和去噪过程，最终输出无需 VAE decode。
-- **Latent-to-Pixel Adaptation（潜空间到像素空间迁移）**：复用 latent diffusion 的 Transformer 先验，再把输入输出接口和监督空间换成 RGB。
-- **Post-Training（后训练）**：这里指大规模 latent pre-training 之后的 pixel-space 全参数适配，不只是常见的 SFT 或 RL。
-- **Self-Generated Data（自生成数据）**：由提供初始化权重的同一个 latent model 离线生成的图文样本，用来降低迁移时的分布偏移。
-- **Prediction Target（预测目标）**：模型直接输出 velocity $v$ 或 clean image $x_0$；两者可以转换到同一个 velocity-space loss 和 ODE solver。
-- **Noise Scale（噪声尺度）**：论文在 flow path 中用 $\gamma$ 调整 RGB 噪声幅值，以校准 latent 到 pixel 后信噪比分布的变化。
-- **Progressive Patch-Size Adaptation（渐进式 patch 尺寸迁移）**：先完成 latent-to-pixel，再逐步增大 RGB patch，避免同时改变预测空间和 token 粒度。
-
-## 论文位置
-
-这篇论文和 [PixelDiT](pixeldit.md) 都讨论 pixel diffusion，但两者的回答层级不同。PixelDiT 更像一篇 architecture paper：怎样用 dual-level Transformer 和 pixel token compaction 从头做像素建模；这篇工作更像一篇 training recipe paper：现成的大规模 latent generator 怎样迁移成 pixel generator。
-
-| Route | Main question | Core choice | Evidence emphasis |
-| --- | --- | --- | --- |
-| Latent diffusion | 怎样高效吸收大规模图文知识 | VAE latent pre-training | 训练效率、成熟 scaling recipe |
-| [PixelDiT](pixeldit.md) | 怎样让 pixel-space Transformer 可计算 | patch-level + pixel-level dual path | ImageNet / T2I 架构消融 |
-| JiT / DiP | 怎样稳定训练原生 pixel model | $x_0$-prediction 或局部 decoder bias | pixel modeling 与 decoder 设计 |
-| L2P / AsymFlow | 怎样把 latent model 迁移到 pixel | latent-to-pixel adaptation | 迁移可行性 |
-| This paper | 大规模 pixel T2I 应放在 pre-train 还是 post-train | latent pre-train + pixel post-train | 20B 对照、五项 recipe 消融、两模型族系统结果 |
-
-真正值得迁移的不是某一个组件，而是训练阶段的重新分工：**latent 负责学知识，pixel 负责做最终生成器。**
-
-## 为什么超过 20B 图文对仍没有追平
+两者使用同一个超过 20B 图文对的训练语料和原 Z-Image 预训练配方，包括 $256^2\rightarrow512^2$ 的渐进分辨率，以及相同 batch、学习率、优化器等设置。这里 $1024^2$ 用于说明表示对应关系，预训练对照本身的分辨率课程仍是 $256^2$ 到 $512^2$，不能写成两者全程都在 1K 训练。作者控制了这次生成器训练中的主要配置和资源；预训练 VAE 的历史成本并未另列，因此比较回答的是“给定这两种表示，生成器怎样学习”，不是从零建立全部组件的全生命周期成本排名。
 
 ![Latent versus pixel pre-training curves](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-2-pretraining-bench.png){ width="900" }
 
-<small>图源：`An Empirical Study of Training Pixel-Space Text-to-Image Diffusion Models`，Figure 2。两条曲线使用相同训练设置，只改变 prediction space。</small>
+*Figure 2，原论文第 3 页。横轴为训练更新数，左为 GenEval、右为 DPG；两条曲线使用相同主干 token 网格，差异主要来自预测表示。*
 
-**这张图怎么读：先看早期斜率，再看 150K steps 是否闭合。** Latent model 在 2K steps 已经取得明显的 GenEval 和 DPG 分数，pixel model 的早期语义学习非常慢。到 150K steps，pixel 曲线继续改善，但 GenEval 仍保留明显差距，DPG 也没有完全追平。
-
-### 受控比较到底控制了什么
-
-| Component | Latent-space model | Pixel-space model |
-| --- | --- | --- |
-| Backbone | Same Z-Image Transformer | Same Z-Image Transformer |
-| Text conditioning | Pre-trained Qwen3-4B | Pre-trained Qwen3-4B |
-| Visual representation | Flux-AE latent, 8x spatial downsampling | RGB pixels |
-| Patch size | latent patch size 2 | RGB patch size 16 |
-| Effective compression | 16x | 16x token spacing |
-| Token grid at 1024x1024 | 64x64 | 64x64 |
-| Data | More than 20B image-text pairs | Same corpus |
-| Recipe | Z-Image progressive 256² to 512² pre-training | Same batch size, LR, optimizer and schedule |
-| Varied factor | Prediction space | Prediction space |
-
-这个设计排除了一个常见反驳：pixel model 慢不是因为 Transformer sequence 更长。两边都是 4096 个视觉 token，backbone computation 基本可比。差异主要来自每个 token 要预测的表示：latent token 已经经过 Flux-AE 的感知压缩；RGB patch 仍包含大量局部冗余、颜色统计和高频细节。
+曲线最显著的差距出现在早期。按图估读，2K 更新时 latent 的 GenEval 已约为 0.33，pixel 还接近零；到 150K，latent 约为 0.73，pixel 约为 0.54。DPG 的后期差距较小，分别约为 87 和 84，但仍未闭合。这里是从图中读取的近似值，不能与后文表格中的四位小数当成相同精度。两项指标显示，像素模型在继续学习，却没有在给定预算内追上。
 
 ![Latent versus pixel qualitative progression](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-3-pretraining-visual.png){ width="900" }
 
-<small>图源：论文 Figure 3。上排是 pixel-space，下排是 latent-space；列方向展示 2K、10K、50K、150K training iterations。</small>
+*Figure 3，原论文第 3 页。上排 pixel、下排 latent，同一提示从 2K 走到 150K，观察对象身份与布局何时变得可辨认。*
 
-定性样本进一步说明差距发生在哪里。Latent model 很早就能形成消防栓、球拍和长椅的全局结构；pixel model 早期更像在同时解决低级纹理与物体组合，直到 50K 之后才出现稳定语义。论文把原因归因于 VAE latent 对原始图像分布做了预先整理：抑制局部冗余和高频变化，同时保留生成所需的语义与外观。
+消防栓与球拍、长椅两个提示把分数差异变成具体的学习过程。latent 在较早阶段已经出现可辨认对象，而 pixel 的早期样例仍是混乱局部形状，之后才逐渐组织成完整场景。这些例子支持更快学习结构的观察，但不足以说明所有内容类别都具有相同差距，也没有证明无限算力下像素模型的最终上限一定较低。论文标题中的经验研究，适用范围正是这组大规模训练设置及其有限预算。
 
-这里可以给出一个更准确的工程判断：**VAE 的价值不只是把 $H\times W$ 变小，它还改变了优化问题的条件。** 论文没有直接测量 Hessian、gradient noise 或频谱学习速度，所以“learned preconditioner”是对实验的机制性解释，而不是作者给出的严格优化理论。
+## 迁移首先保留生成先验，再学习新的输入输出接口
 
-## Latent-to-Pixel 总体路线
+### 哪些权重被继承，哪些模块仍从头学习
 
-完整训练路径可以压缩成四段：
+latent-to-pixel 不是简单把原 latent decoder 的输出叫作像素。输入变为带噪 RGB patch，输出需要直接重建 RGB；不再先预测某个独立 VAE 的 latent 再调用其 decoder。可复用的是 Transformer 与条件模块已经学到的文字视觉关系、布局和生成先验，像素专用输入与输出模块仍需建立新的表示接口。
 
-```text
-large-scale image-text data
-  -> latent-space Z-Image pre-training
-  -> transfer Transformer + conditioning weights
-  -> pixel-space full-model post-training at 1K
-  -> ps16 -> ps32 adaptation -> 4-NFE distillation
-```
+初始化实验中，latent-initialized 模型加载源模型的 Transformer 与 conditioning 权重；像素专用输入输出模块与 from-scratch 对照采用相同初始化。两组使用相同架构、混合数据、优化器、学习率日程与更新数。这样，差异主要来自可迁移生成知识，不是其中一组额外获得了一个预训练好的像素 decoder。[↗](https://arxiv.org/pdf/2608.16887v1#page=13)
 
-迁移时，共享 Transformer 和 conditioning weights 从 latent checkpoint 加载；pixel-specific input projection 与 RGB output head 从头初始化。后训练并不是只更新新 head，论文明确写的是 optimize the full model。默认全参数 post-training 配置为 global batch size 128、learning rate $5\times10^{-5}$、直接训练 1K resolution。
+![Latent initialization comparison](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-4-initialization.png){ width="900" }
 
-这条路线成立的前提是共享 backbone 已经学到了可迁移的文本条件生成先验。Weight initialization 消融表明，同样的数据、架构和优化配置下，从 latent checkpoint 初始化的 pixel model 在 GenEval、DPG 和定性结构形成速度上都远好于完全从头训练。
+*Figure 4，原论文第 4 页。两组都在像素空间训练；紫线继承 latent 权重，红线按从头训练方案初始化。*
 
-## Post-Training 数据：teacher 样本搭桥，真实图像纠错
+按图估读，50K 更新时，继承权重的一组 GenEval 约 0.75、DPG 约 87，而从头训练的一组约为 0.12 与 28。这里与上一节预训练曲线的绝对差距不能直接对比，因为这一节进入了不同的后训练数据与配置；可比较的是本图两组共享设置下的初始化作用。Figure 5 的定性例子也显示，继承 latent 权重后，人物、场景与风格结构更早形成。
+
+这说明表示空间发生变化，并不意味着全部生成知识失效。主干此前处理的是空间 token 与文本条件之间的关系，只要迁移初期保留相近的 token 网格，就有机会让新接口接到这些已有特征上。这个观察支持用 latent 预训练作为初始化，但没有把已有预训练的成本抹掉；对已有成熟 checkpoint 的团队与必须从零训练的团队，它的经济含义不同。
+
+### 组件消融围绕同一个基线，只改变指定变量
+
+后训练实验在 1K 分辨率直接优化完整模型，global batch size 为 128，学习率为 $5\times10^{-5}$。默认配置是 latent 初始化、真实与源模型生成数据混合、x-prediction、DiP 像素头、噪声尺度 $\gamma=2$、patch size 16。除被消融项外，文本条件、数据预处理、优化与评测协议保持一致。这里并非只冻结主干训练一个输出头，而是允许生成器在新的表示和监督下整体调整。[↗](https://arxiv.org/pdf/2608.16887v1#page=14)
+
+下表压缩整理 Appendix Tables 4–5 的控制关系。它的用途是明确一条曲线改变了什么，不能将这些单项结果当成所有组合都已穷举。
+
+| Study | Varied setting | Other settings |
+| --- | --- | --- |
+| Weight initialization | From scratch / Latent-pretrained | Mixed data, x-prediction, DiP, γ=2, ps16 |
+| Training data | Real / Self-generated / Other-model / Mixed | Latent-pretrained, x-prediction, DiP, γ=2, ps16 |
+| Prediction target | v-prediction / x-prediction | Latent-pretrained, Mixed data, DiP, γ=2, ps16 |
+| Decoder architecture | JiT / DiP / PiT / Deco; VAE reference | Latent-pretrained, Mixed data, x-prediction, γ=2, ps16 |
+| Noise scale | γ∈{1,2,4,8} | Latent-pretrained, Mixed data, x-prediction, DiP, ps16 |
+| Patch size | ps16 / ps32 / ps32-adapt16 / ps64-adapt32 | Latent-pretrained lineage, Mixed data, x-prediction, DiP, γ=2 |
+
+这是一种围绕工作基线展开的组件研究，适合得到可执行配方，但不同组件之间可能存在交互。例如更换 decoder 后，最好的噪声尺度或 patch size 可能变化；论文没有用完整交叉实验证明每个最佳选项在所有组合中独立成立。最终整套模型的结果用于检验这些选项放在一起能否工作，和单项机制解释承担不同证据作用。
+
+## 真实图像与源模型生成图像解决不同的迁移问题
+
+### 为什么同一源模型的数据比任意合成图像更容易迁移
+
+像素监督的一个吸引力，是可以直接学习真实 RGB 中被 VAE 损失的细节。但实验发现，只用真实图像，迁移反而收敛较慢。作者比较四组数据，真实图像来自最新 Z-Image SFT 集合；self-generated 图像由提供初始化权重的同一个 Z-Image latent checkpoint 按默认设置生成；other-model 图像由 FLUX2-klein-9B 使用相同 prompt pool 生成；mixed 按 self-generated 与 real 的 1:1 比例采样。合成数据离线生成，与原始提示配对。[↗](https://arxiv.org/pdf/2608.16887v1#page=13)
+
+这个设置把“合成数据”进一步拆成是否与源模型一致。模型原来的条件分布由该 latent checkpoint 表达，使用其生成样本时，新模型在改变输出表示的同时，仍面对较熟悉的内容分布；直接切到真实图像，表示变化与目标分布变化叠加。作者据此提出较低 distribution shift 的解释。外部 FLUX 生成样本弱于同源样本，与该解释相容，但外部模型的风格、错误和质量分布也同时不同，不能仅凭四组曲线证明唯一原因就是分布距离。
 
 ![Post-training data ablation curves](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-6-data-bench.png){ width="900" }
 
-<small>图源：论文 Figure 6。比较 Real、Self Latent Generated、Other Model Generated 与 Mix Real & Self 四种数据来源。</small>
+*Figure 6，原论文第 4 页。绿色为源 latent 模型生成数据，紫色为 1:1 混合，粉色为真实图像，橙色为其他模型生成图像。*
 
-论文比较了四种 post-training corpus：
+图中 real-only 始终较慢，self-generated 迅速获得较高分数。50K 附近按图估读，GenEval 中 self-generated 约 0.760，mixed 约 0.755，other-model 约 0.710，real-only 约 0.690；DPG 则 mixed 约 87.5，self-generated 约 86.9，other-model 约 85.6，real-only 约 84.7。混合数据并非两个 benchmark 都第一，它在保持较快适应的同时取得更高 DPG，并在部分细节样例上改善。这比“真实加合成一定全面最好”更符合图中的证据。
 
-| Data source | Construction | Role in adaptation | Main issue |
-| --- | --- | --- | --- |
-| Real images | Z-Image 最新 SFT data | 提供真正的 RGB 细节与纠错监督 | 单独使用时收敛慢 |
-| Self-generated | 初始化所用 Z-Image latent checkpoint 默认采样 | 与 source model 分布最接近，迁移快 | 继承 latent model 与 VAE 错误 |
-| Other-model generated | FLUX2-klein-9B，用同一 prompt pool 离线生成 | 测试“任意 synthetic data 是否都有效” | 分布不匹配，弱于 self-generated |
-| Real + Self | Self-generated : Real = 1:1 | 同时保先验、补像素细节 | 需要两类高质量数据管线 |
+### 为什么只复制源分布会继承源模型的错误
 
-曲线中 self-generated data 的 GenEval 收敛最快，说明它像一座低 distribution shift 的桥：输入 prompt 和输出分布都接近初始化模型，pixel model 主要学习“把同一生成能力改写成 RGB 输出”。用另一个强模型 FLUX2-klein-9B 生成的数据反而更弱，说明 synthetic data 的作用不是一般意义上的数据扩充，而是 source-distribution matching。
-
-但 teacher 样本无法自动突破 teacher 的错误。它们经过 source latent generator 与 VAE decoder，文字错误、对象关系错误和重建损失都会进入监督。因此作者加入 real images，让后训练同时承担两件事：保持原有生成先验，并用真实 RGB 恢复 latent compression 丢掉的信息。
+源模型生成图像已经通过原 VAE 解码，包含源生成器与 decoder 的共同缺陷。只使用这些图像训练，即使最终网络直接输出 RGB，也没有获得纠正错误的新监督。比如源图像的文字拼写错误、局部结构扭曲或对象关系缺陷，可能继续进入像素模型；取消独立 VAE 并不会凭空生成正确目标。
 
 ![Qualitative effect of mixed post-training data](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-7-data-visual.png){ width="900" }
 
-<small>图源：论文 Figure 7。每组依次为 latent baseline、只用 source latent data 的 pixel model、real + self mixed data 的 pixel model。</small>
+*Figure 7，原论文第 4 页。每组三列依次为原 latent、仅用源模型数据的 pixel、混合数据的 pixel；文字和对象组合提供不同观察入口。*
 
-**这张图怎么读：重点看文字，不只看照片质感。** 只用 self-generated data 时，pixel model 很容易复刻 teacher 的残缺英文和中文书法；加入真实数据后，部分字符结构得到纠正。这也给 post-training 数据配方一个很实用的分工：synthetic teacher data 负责 continuity，real data 负责 correction。
+英文海报的例子能直接看到，仅用源生成图像的像素模型仍可能保留破损拼写，混合真实图像后文字更完整。人物与交通灯、蓝色羊与三只猪的例子展示对象和关系的差异。它们支持真实监督可以修正部分继承缺陷，但精选图不能给出全部文字的纠错率，也不能证明任意真实图像都能带来同样收益。真实数据的质量、描述准确性以及与目标任务的关联仍然重要。
 
-论文没有公开 real SFT subset 的样本数、清洗规则、caption 来源和最终扩大后的数据规模。因此可以迁移“1:1 self + real”的方向，但不能把它当成已完全复现的开放数据 recipe。
+因此，1:1 混合并非简单的数据量扩充。self-generated 约束迁移初期不要丢失既有生成能力，真实 SFT 图像提供源模型自身输出之外的像素目标。实际成本也有两部分，后训练更新之外，还需离线生成和存储合成样本。论文给出了比例和来源，没有完整列出最终混合数据量、合成采样预算与全部 GPU-hour，不能由推理加速倍数反推出训练投入很小。
 
-## 为什么 $x_0$-prediction 优于 $v$-prediction
+## x-prediction 的优势来自参数化，损失仍在速度空间
+
+### 先区分网络输出、监督目标与采样器接口
+
+源 latent 模型使用 v-prediction，迁移后可以继续输出速度，也可以改为预测干净图像。论文 Figure 8 表明，latent 初始化足以让两种像素模型都收敛，x-prediction 在展示训练区间内得分更高。这一结果没有复现“像素 v-prediction 必然发散”的强说法，也没有说明原 latent 权重因目标变化而无法利用。[↗](https://arxiv.org/pdf/2608.16887v1#page=5)
 
 ![Prediction target ablation](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-8-prediction-target.png){ width="900" }
 
-<small>图源：论文 Figure 8。两组实验共享 latent initialization、flow path、timestep sampler、noise scale、decoder、loss weighting 与 solver。</small>
+*Figure 8，原论文第 5 页。紫线为 x-prediction、黄线为 v-prediction，两组都继承 latent 权重，并共享 velocity-space objective。*
 
-论文问得很具体：source latent model 原本是 $v$-prediction，迁移到 pixel 后要不要保留原目标？实验显示 latent initialization 足以让 $v$ 和 $x_0$ 两种参数化都稳定收敛，但直接预测 clean RGB 的 $x_0$-prediction 在 10K-50K steps 的 GenEval 和 DPG 上持续更好。
+按图估读，50K 时 x-prediction 的 GenEval 约 0.755、DPG 约 87.5，v-prediction 约为 0.729、85.5。这里比较的关键条件在附录，两组使用相同 flow path、logit-normal 时间采样、噪声尺度、主干、像素头和求解器，而且都使用 velocity-space loss。x-prediction 输出必须先转换为对应速度，才能计算损失与执行 ODE 采样。若把它实现成无权重的 clean-image MSE，就已经改变了论文实验。[↗](https://arxiv.org/pdf/2608.16887v1#page=13)
 
-Flow path 写成：
+### 从论文路径推导 clean image 到 velocity 的转换
 
-\[
-\mathbf{x}_t
-=
-t\mathbf{x}_0
-+
-(1-t)\gamma\boldsymbol{\epsilon},
-\qquad
-\boldsymbol{\epsilon}\sim\mathcal{N}(\mathbf{0},\mathbf{I}).
-\]
+原文将干净 RGB 记为 $x_0$，但采用的插值是
 
-其速度场是：
+$$
+x_t=t x_0+(1-t)\gamma\epsilon,
+\qquad \epsilon\sim\mathcal N(0,I).
+$$
 
-\[
-\mathbf{v}_t
-=
-\frac{d\mathbf{x}_t}{dt}
-=
-\mathbf{x}_0-\gamma\boldsymbol{\epsilon}.
-\]
+因此时间端点仍是 $t=0$ 对应噪声、$t=1$ 对应干净图像，不能因为干净样本下标叫 0 就反转采样方向。$\gamma$ 控制噪声标准差，后面单独讨论其校准。[↗](https://arxiv.org/pdf/2608.16887v1#page=6)
 
-为了让比较只反映 output parameterization，作者没有给 $x_0$ 版本换一套 loss。模型先输出 $\hat{\mathbf{x}}_0$，再转换成对应 velocity，在相同 velocity-space objective 下训练，并在推理时转换回同一 ODE solver 需要的 velocity field。于是两边共享 timestep 的 logit-normal sampling、loss weighting、数值求解器与采样 schedule。
+根据这条路径，可以直接得到以下解释性推导。固定一对 $x_0,\epsilon$，路径速度为
 
-这个结果的合理解释是：pixel output 具有直接、稳定的监督目标，模型可以显式恢复 RGB；$v$-prediction 同时混合 clean signal 和 noise，在 raw pixel statistics 下更难。论文数据支持“在这套 latent-to-pixel recipe 中 $x_0$ 更好”，但没有覆盖所有噪声参数化、所有网络或从头 pixel pre-training，不能外推为 $v$-prediction 在像素空间永远不可用。
+$$
+v_t=\frac{dx_t}{dt}=x_0-\gamma\epsilon
+=\frac{x_0-x_t}{1-t},\qquad t<1.
+$$
 
-## Decoder：线性 head 太硬，PiT 又太重
+若网络直接输出 $\hat x_0=f_\theta(x_t,t,c)$，其中 $c$ 是文本条件，那么交给 velocity loss 和 ODE solver 的量为
 
-![JiT versus DiP decoder artifacts](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-9-decoder-head.png){ width="860" }
+$$
+\hat v_\theta=\frac{f_\theta(x_t,t,c)-x_t}{1-t}.
+$$
 
-<small>图源：论文 Figure 9。上排 JiT linear head 在 patch 边界出现块状不连续；下排 DiP head 用局部卷积交互平滑相邻 patch。</small>
+在固定的 $t<1$ 上，两者的速度误差满足
 
-Pixel model 不再调用 VAE decoder，但 Transformer token 仍要还原成 $16\times16$ RGB patch。这个 output head 不能随便选：完全独立的线性映射最便宜，却容易让相邻 patch 互不沟通；大 Transformer decoder 质量高，但会把省下的 VAE 成本重新加回来。
+$$
+\lVert\hat v_\theta-v_t\rVert^2
+=\frac{\lVert f_\theta(x_t,t,c)-x_0\rVert^2}{(1-t)^2}.
+$$
+
+这说明“输出干净图像”与“按相同权重最小化干净图像误差”并非同一训练方案。论文将两种参数化放在共同的速度目标下，变化的是网络需要直接表示什么；x-prediction 把输出约束到结构化 RGB 目标，再通过解析转换适配采样器。上面的式子由原路径和附录描述推出，并非论文额外提出的新损失。
+
+当 $t$ 接近 1，转换中的分母会变小，端点处理对数值稳定性有实际影响。论文没有在这组说明中列出精确 clipping 或端点截断实现，因而复现时需要与所用 JiT/L2P 及求解器实现保持一致，不能随意在 $t=1$ 直接除以零。这个局部实现边界不影响两条曲线的主要判断，却影响“照公式写代码”能否得到相同训练行为。
+
+## 像素 decoder 决定每个 token 怎样变成连续画面
+
+### 移除独立 VAE，仍然需要从主干特征生成 RGB
+
+像素模型依然需要一个将 Transformer 特征映射成 RGB 的输出模块。它属于每次去噪网络调用的一部分，与 latent 模型在整个去噪轨迹结束后单独执行一次的 VAE decoder 不同。这一区分影响质量，也影响成本，不能因为最终输出是像素就认为所有解码工作都消失了。
+
+论文固定主干、latent 初始化、混合数据、x-prediction、$\gamma=2$ 与 ps16，只替换输出 head。JiT 使用线性投影，每个视觉 token 直接产生其 patch 对应的像素；DiP 使用与 L2P 一致的轻量卷积 U-Net；PiT 采用 PixelDiT 风格的 4 个额外 Transformer block；Deco 使用频率分解的输出设计；FLUX-AE 列为 VAE 参考。像素 head 从头初始化，共享主干从同一 latent checkpoint 继承。[↗](https://arxiv.org/pdf/2608.16887v1#page=13)
+
+Table 1 的 Params、Latency 与 GFLOPs 都是 decoder 本身，测试为单 H800、$1024^2$、batch size 1。GenEval 和 DPG 则来自使用对应 head 的生成模型，不能把 6.02 ms 当成 DiP 模型生成一张图的总时长。
 
 | Metric | JiT | DiP | PiT | Deco | VAE |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| GenEval ↑ | 0.7380 | 0.7545 | **0.7697** | 0.7347 | - |
-| DPG ↑ | 86.19 | **87.54** | 86.36 | 86.10 | - |
-| Params (M) ↓ | **2.95** | 10.09 | 2249.82 | 315.92 | 49.55 |
-| Latency (ms) ↓ | **0.07** | 6.02 | 74.96 | 5.01 | 91.88 |
-| GFLOPs ↓ | **24.16** | 834.03 | 19731.88 | 2587.05 | 10472.20 |
+| GenEval ↑ | 0.7380 | 0.7545 | 0.7697 | 0.7347 | — |
+| DPG ↑ | 86.19 | 87.54 | 86.36 | 86.10 | — |
+| Params (M) ↓ | 2.95 | 10.09 | 2249.82 | 315.92 | 49.55 |
+| Latency (ms) ↓ | 0.07 | 6.02 | 74.96 | 5.01 | 91.88 |
+| GFLOPs ↓ | 24.16 | 834.03 | 19731.88 | 2587.05 | 10472.20 |
 
-<small>表源：论文 Table 1。decoder-only latency / GFLOPs 在单张 H800、1024x1024、batch size 1 下测量。</small>
+PiT 的 GenEval 最高，为 0.7697，但 head 达到约 2.25B 参数，相当于 6B 主干的 37.5%，单次约 19,731.88 GFLOPs。它展示容量可以改善某些分数，同时也说明若目标是低延迟部署，不能只看最高分。JiT 最轻、最快，却在 GenEval 和局部画面连续性上付出代价。DiP 的 DPG 为最高的 87.54，GenEval 为 0.7545，在 10.09M 参数下取得较好的综合取舍。[↗](https://arxiv.org/pdf/2608.16887v1#page=6)
 
-PiT 的 GenEval 最高，但 decoder 自身有 2.25B 参数，相当于 6B backbone 的 37.5%，工程上过重。JiT linear head 只有 2.95M 参数和 0.07 ms，却有明显 patch boundary artifacts。DiP 是折中点：10.09M 参数、6.02 ms、最高 DPG，并通过轻量 convolutional U-Net 的局部性与权重共享平滑相邻 patch。
+这里还有一个反直觉但有用的比较，Deco 的 FLOPs 为 2587.05，高于 DiP 的 834.03，实际 head latency 却是 5.01 ms，略低于 DiP 的 6.02 ms。算子组织、并行性和硬件利用率会使计算量与实测延迟不完全同序。因此论文选 DiP 的依据是质量、规模、计算和细节表现的组合，不能概括为“DiP 每项成本都最小”。VAE 的质量栏为未列结果，也不能将横杠当成零分来排名。
 
-这部分和 PixelDiT 的答案很有意思地分叉了。PixelDiT 接受较重的 pixel-level Transformer 来换取 dense refinement；这篇工作以部署效率为目标，选择小卷积 decoder head。它说明 pixel diffusion 并没有唯一架构，decoder 选择取决于最终瓶颈是质量、参数还是端到端延迟。
+### 相邻 patch 的边界为什么需要局部交互
 
-## 加噪方式：理论上的 $\gamma=8$ 为什么输给 2
+线性 head 对每个 token 独立输出像素，主干虽然可以交换全局信息，最后的像素映射仍容易在 patch 边缘形成不连续。DiP 的卷积局部性与权重共享让邻近特征在像素合成时继续交互，对连续边缘与平滑区域提供更直接的结构偏置。
 
-从 Flux-AE latent 转到 RGB 后，数据的空间分辨率、方差与频谱都变了。直接复用 latent noise schedule，会让同一个 timestep 对应完全不同的 SNR。作者没有重新设计整条 schedule，只加一个全局 noise-scale $\gamma$：
+![JiT versus DiP decoder artifacts](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-9-decoder-head.png){ width="860" }
 
-\[
-\mathbf{x}_t=t\mathbf{x}_0+(1-t)\gamma\boldsymbol{\epsilon}.
-\]
+*Figure 9，原论文第 5 页。观察放大区域的规则网格边界，上排 JiT 更明显，下排 DiP 的过渡更平滑。*
 
-如果把 VAE encoder 粗略近似成对 RGB 做 $r\times r$ average pooling，那么独立噪声方差会缩小 $r^2$，有：
+原图的远景差别不一定显著，放大后，JiT 在相邻 patch 边界出现规则块状痕迹，而 DiP 的局部连续性更好。这给轻量卷积头的选择提供了可见依据。不过两者参数量与结构同时不同，局部归纳偏置是作者提出的解释，实验没有把卷积共享、容量和感受野各自的贡献全部隔离。可复用的结论是，在当前大规模文生图迁移中，极简线性输出的速度优势会伴随可观察的边界问题，较小的卷积模块提供了有效修补方向。
 
-\[
-\operatorname{SNR}_{\mathrm{pixel}}^{\downarrow r}(t)
-\approx
-\frac{r^2}{\gamma^2}
-\operatorname{SNR}_{\mathrm{latent}}(t).
-\]
+此外，Table 1 不能用来计算整个推理路径的简单“VAE 91.88 / DiP 6.02”倍数。latent 的 VAE 在最后调用一次，pixel head 随去噪网络反复调用；Table 1 的 ps16 与最终 ps32 也不同。真正部署收益需要把主干 token 数、NFE 和输出模块一起计时，后文 Table 3 才是端到端证据。
 
-Flux-AE 空间下采样率是 $r=8$，按这个简化推导，SNR matching 应取 $\gamma=8$。但 VAE encoder 并不是 average pooling，latent 与 RGB 的 signal statistics、prediction target 也不同，结果是理论参考值并不最优。
+## 噪声尺度需要校准表示变化，不能只按分辨率套公式
 
-| Metric | $\gamma=1$ | $\gamma=2$ | $\gamma=4$ | $\gamma=8$ |
+### γ 改变的是噪声标准差与有效信噪比
+
+迁移后，网络面对的表示从 VAE latent 变成归一化到 $[-1,1]$ 的 RGB，空间尺寸与信号统计同时变化。论文在已有线性 flow path 中引入单个噪声尺度 $\gamma$，不全面重写时间日程。由
+
+$$
+x_t=t x_0+(1-t)\gamma\epsilon
+$$
+
+可以看到，同一 $t$ 下，$\gamma$ 越大，噪声标准差越大；其方差按 $\gamma^2$ 变化。它不是 CFG strength，也不是将采样时间简单乘以一个常数。训练时间仍来自相同的 logit-normal 分布，噪声尺度实验保持预测目标、损失权重、初始化和优化日程一致。[↗](https://arxiv.org/pdf/2608.16887v1#page=14)
+
+### 分辨率推导为什么只得到参考值 8
+
+设 RGB 与 VAE latent 的每轴分辨率比为 $r$，此处 $r=8$。如果用 $r\times r$ 平均池化近似压缩，独立像素噪声的平均包含 $r^2$ 个随机量。均值噪声的方差为
+
+$$
+\operatorname{Var}\!\left(\frac{1}{r^2}\sum_{i=1}^{r^2}\gamma\epsilon_i\right)
+=\frac{\gamma^2}{r^2}.
+$$
+
+这一步要求噪声独立、方差相同。进一步假设信号统计在对应尺度可比较，就得到论文的近似关系
+
+$$
+\mathrm{SNR}^{\downarrow r}_{\mathrm{pixel}}(t)
+\approx\frac{r^2}{\gamma^2}\mathrm{SNR}_{\mathrm{latent}}(t).
+$$
+
+若只考虑分辨率变化，匹配两边 SNR 会给出 $\gamma=r=8$。它是一个建立在平均池化和可比信号假设上的参考，VAE encoder 具有学习到的非线性表示、通道和尺度变化，不能等同于平均池化。RGB 与 latent 的信号分布、预测目标也不同，所以几何比例不足以唯一决定迁移的最佳噪声强度。[↗](https://arxiv.org/pdf/2608.16887v1#page=6)
+
+### 实验最优值为 2，而非理论参考值 8
+
+Table 2 固定其他设置，只比较四个噪声尺度。GenEval 与 DPG 均为越高越好。
+
+| Metric | γ=1 | γ=2 | γ=4 | γ=8 |
 | --- | ---: | ---: | ---: | ---: |
-| GenEval ↑ | 0.6811 | **0.7545** | 0.7413 | 0.7316 |
-| DPG ↑ | 84.03 | **87.54** | 86.01 | 85.64 |
+| GenEval ↑ | 0.6811 | 0.7545 | 0.7413 | 0.7316 |
+| DPG ↑ | 84.03 | 87.54 | 86.01 | 85.64 |
 
-<small>表源：论文 Table 2。四组共享 timestep distribution、prediction target、loss weighting、初始化与优化 schedule。</small>
+$\gamma=2$ 在这四点中最优。与默认不放大噪声的 1 相比，GenEval 增加 0.0734、DPG 增加 3.51；与分辨率推导的 8 相比，也分别高 0.0229 和 1.90。这里的差值由表中数字直接计算。它支持经验校准的重要性，未证明 2 是连续区间的全局最优，更没有证明所有分辨率、数据标准化和模型都应采用 2。
 
 ![Noise scale qualitative comparison](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-10-noise-scale.png){ width="760" }
 
-<small>图源：论文 Figure 10。比较 $\gamma\in\{1,2,4,8\}$；$\gamma=1,4,8$ 出现不同程度色偏，$\gamma=2$ 的颜色更平衡。</small>
+*Figure 10，原论文第 6 页。两种风格样例按噪声尺度横向比较，作者指出 1、4、8 存在可见色偏，2 的色彩较平衡。*
 
-这项消融的重要性在于：latent-to-pixel 不是“换一下输入输出层”就结束。噪声路径本身定义在数据空间上，一旦 representation 变了，SNR calibration 也必须重做。论文选择 $\gamma=2$，并在训练和 sampling 的 noise initialization 中使用相同值。
+人物与水墨风格的样例使噪声变化的影响不只表现为抽象分数，还体现在色彩与局部视觉分布上。它们不构成独立的大规模色彩准确性基准，但提醒迁移后应检查像素统计，而不只检查是否出现了正确对象。
 
-## 先迁移 prediction space，再增大 patch
+推理必须使用训练时同一个 $\gamma$ 初始化噪声，即从相应的 $\gamma\epsilon$ 出发。若训练用 2、推理仍从标准差 1 的噪声出发，就改变了模型所学习的路径端点。论文明确保持这一对应关系；只修改训练端加噪幅度、忽略采样初始化，并不是原配方。
 
-Pixel-space 的另一个部署收益是可以直接用更大 RGB patch 降低 token 数，而不需要把 VAE 压缩率继续加大。1024x1024 下：
+## 大 patch 的效率来自渐进适应，不是直接扩大就能保住细节
 
-| Configuration | Token grid | Relative token count | Initialization |
-| --- | --- | ---: | --- |
-| ps16 | 64x64 | 1x | latent checkpoint -> pixel ps16 |
-| ps32 | 32x32 | 1/4x | latent checkpoint -> pixel ps32 directly |
-| ps32-adapt16 | 32x32 | 1/4x | converged pixel ps16 -> ps32 |
-| ps64-adapt32 | 16x16 | 1/16x | converged ps32-adapt16 -> ps64 |
+### 三种空间网格改变了什么
 
-直接从 latent checkpoint 切到 ps32 同时改变了两件事：预测空间从 latent 变成 RGB，token 粒度也从等效 16x 变成 32x。实验中它收敛慢、局部 artifact 明显。ps32-adapt16 把两个 distribution shift 拆开：先在相同 $64\times64$ grid 上学会 pixel output，再把 patch size 翻倍。
+在 $1024\times1024$ 图像上，ps16、ps32、ps64 分别对应 $64\times64$、$32\times32$、$16\times16$ 的 token 网格。每次 patch 边长翻倍，token 数变成四分之一。这里较大的 patch 是可学习输入投影的覆盖范围，最终仍在完整 RGB 图像上监督；它与将 VAE latent 更强压缩并不是同一个操作。[↗](https://arxiv.org/pdf/2608.16887v1#page=7)
+
+| Setting | Patch size | Token grid at 1024² | Visual tokens | Initialization |
+| --- | ---: | --- | ---: | --- |
+| ps16 | 16 | 64 × 64 | 4096 | Latent checkpoint |
+| ps32 | 32 | 32 × 32 | 1024 | Latent checkpoint |
+| ps32-adapt16 | 32 | 32 × 32 | 1024 | Converged ps16 pixel checkpoint |
+| ps64-adapt32 | 64 | 16 × 16 | 256 | Converged ps32-adapt16 checkpoint |
+
+direct ps32 也从 latent 主干初始化，不是从随机权重开始。它同时改变预测表示和空间网格，每个 token 覆盖更大的 RGB 区域，源模型原来在较细网格上形成的局部先验更难接入。ps32-adapt16 先完成同网格的 latent-to-pixel 迁移，再从已收敛像素模型适应更粗网格，将两类变化分开。
 
 ![Progressive patch-size adaptation curves](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-11-patch-adaptation.png){ width="900" }
 
-<small>图源：论文 Figure 11。虚线是 ps16 reference；ps32-adapt16 明显快于 direct ps32，并接近 ps16。</small>
+*Figure 11，原论文第 7 页。紫色 ps32-adapt16 优于直接 ps32，橙色 ps64-adapt32 再次出现性能下降；虚线为 ps16 参考。*
 
-权重扩展也不是随机初始化。patch 从 $p$ 变成 $2p$ 时，一个新 patch 包含四个旧 sub-patches，作者把第一层 projection MLP 权重扩成：
+50K 时按图估读，ps32-adapt16 的 GenEval 约为 75.5，直接 ps32 约为 69.8，ps64-adapt32 约为 73.0；DPG 分别约为 87.0、85.3、86.3。这里 GenEval 图使用接近百分数的纵轴写法，75.5 对应约 0.755，不能误读成比前面 0.75 高两个数量级。ps32-adapt16 接近 ps16，但虚线仍略高，因此“token 减少四倍、质量完全不变”也超出了图中证据。
 
-\[
-\mathbf{W}'
-=
-\frac{1}{2}
-[\mathbf{W},\mathbf{W},\mathbf{W},\mathbf{W}].
-\]
+横轴表示本阶段适应更新数，渐进方案还包含此前 ps16 或 ps32 的训练。图显示的是更好初始化带来的适应效率，没有把所有阶段累计 GPU-hour 做成严格匹配的总训练成本比较。对已有收敛 checkpoint 的使用者，这种迁移效率很有价值；若从零计算总预算，必须把前序阶段算进去。
 
-复制后乘 $1/2$ 用来补偿 fan-in 变成四倍，近似维持 activation variance；bias 直接复制，其余 Transformer 与 decoder 参数保持不变。迁移后的 Transformer 和 decoder 使用 5000-step linear warm-up，新扩展的 input projection 不 warm up，从第一步就用目标学习率快速适应。
+### 扩展输入投影的 1/2 系数在保护什么
 
-ps32-adapt16 用四分之一 token 获得接近 ps16 的 GenEval / DPG，是最终效率配方。继续到 ps64-adapt32 虽然再减四倍 token，但局部细节和 benchmark 下滑，说明 pixel space 可以承受更大 patch，却不是无限压缩。
+附录给出了关键实现。Transformer 与 decoder 的架构不变，其余权重直接继承；patch 从 $p$ 扩到 $2p$ 时，输入投影 MLP 第一层需要接受四个原尺寸子块。设旧权重为 $W$，新权重沿输入维拼接为
 
-## 少步蒸馏为什么在 pixel space 更值钱
+$$
+W'=\frac12[W,W,W,W],
+\qquad b'=b.
+$$
 
-Latent diffusion 做到 4 NFE 后，DiT denoising 已经很短，固定的一次 VAE decode 会占越来越大的端到端比例。继续减少 diffusion steps，收益会被 VAE latency 截住。Pixel model 直接输出 RGB，这个固定成本不存在，所以 step distillation 更容易转化为真实延迟下降。
+新输入维度扩大四倍，bias 直接复制。这不是把主干复制四份，也不是将旧 patch embedding 的平均值取成 $1/4$。论文用 $1/2$ 补偿 fan-in 增长，近似保持初始化激活方差。[↗](https://arxiv.org/pdf/2608.16887v1#page=14)
 
-作者从收敛的 ps32-adapt16 checkpoint 开始，第一阶段使用 Decoupled-DMD，第二阶段使用 DMDR + Z-Reward，最后用 4 NFE ODE sampler，无需 CFG。它与本站的 [DMD](dmd.md) 和 [DMD2](dmd2.md) 可以连起来读：这里不是提出新的 DMD objective，而是把分布匹配蒸馏放到无 VAE 的 pixel pipeline 中。
+可以用一个简化计算理解系数。若四个子块经旧投影得到的响应互不相关、方差相同为 $\sigma^2$，那么未缩放的响应之和方差为 $4\sigma^2$；乘以 $1/2$ 后，方差变为 $(1/2)^2\times4\sigma^2=\sigma^2$。真实图像子块存在相关性，因此这只是方差保持的近似动机，不保证每个新 token 与原 token 输出完全相同。按平均值使用 $1/4$ 会产生不同的方差尺度，不能当成等价替换。
+
+优化日程也对新旧参数区别处理。继承的 Transformer 与 decoder 使用 5,000 步线性 learning-rate warmup，扩展的输入投影 MLP 从第一步就使用目标学习率。输入接口要尽快适应新的像素组织，已有生成先验则缓慢增加更新幅度；把所有模块都放进同一个 warmup 会改变这个策略。ps64-adapt32 使用相同的权重扩展方式。[↗](https://arxiv.org/pdf/2608.16887v1#page=15)
+
+论文交代了投影权重和训练日程，但没有在正文逐层展开不同 patch 网格进入 DiP 的全部张量布局。实际重建模型仍应与其采用的 DiP/L2P 实现对齐，不能仅凭 $W'$ 公式自行假定输出头怎样重排所有空间位置。这是接口实现需要补齐的地方，不是渐进迁移结果本身缺少实验支持。
+
+### ps64 的反例说明局部信息没有无限压缩空间
+
+![Progressive patch adaptation details](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-12-patch-details.png){ width="900" }
+
+*Figure 12，原论文第 7 页。ps16 与 ps32-adapt16 的局部细节更稳定，直接 ps32 与进一步压到 ps64 的样例出现局部伪影。*
+
+放大眼睛和面部边缘后，可以看到直接 ps32 的局部结构问题，而 ps32-adapt16 改善了这些细节；继续到 ps64，伪影重新出现。其 benchmark 也下降，因此失败不是只由某一个精选截图得出。更大的 patch 将更多局部变化压到单个 token 的表示与输出处理中，即使监督仍然是完整像素，也可能超过当前网络和训练配方能够保留的细节范围。
+
+token 减少四倍也不等于端到端恰好加速四倍。主干中线性层与注意力的序列依赖不同，文本 token、像素 head、数据搬运与固定开销未必同比缩减；最理想的纯视觉 attention 二次项甚至有不同的缩减比例。最终选择 ps32-adapt16，需要同时依靠质量曲线、局部观察和实测端到端延迟，不能只凭 token 数做结论。
+
+## 少步蒸馏把更短序列的收益带到最终延迟
+
+### 两阶段训练，而非推理时直接少走几步
+
+作者从收敛的 ps32-adapt16 像素模型初始化 DMD 训练，第一阶段使用 Decoupled-DMD，第二阶段使用 DMDR 并引入 Z-Reward。相关损失系数、fake-sample 更新频率和时间采样分布遵循所引用的 DMD2、Decoupled-DMD 方法；本论文没有逐项重印全部数值。因此其贡献主要是将既有少步蒸馏流程接到已完成像素迁移的模型上，不是另行提出一个新的分布匹配目标。[↗](https://arxiv.org/pdf/2608.16887v1#page=15)
+
+最终 Turbo 使用 ODE sampler，4 次 function evaluation，不需要 CFG。对照的 latent distilled baseline 也使用相同 NFE。这一条件重要，因为带 CFG 的一次求解更新可能需要条件与无条件两路计算，表中的 NFE 应按实际网络调用口径理解，不能任意将 4 NFE 再乘二。这里比较的是已经训练成少步生成器的模型，不是把一个普通 100 NFE checkpoint 的推理循环改成四次就会得到相同质量。
+
+第二阶段还引入奖励优化，因此 final Turbo 与多步模型之间的质量变化可能包含蒸馏与奖励塑形共同作用。不能把某个 benchmark 上的改善全部解释成“少步本身比多步更好”。同样，论文与官方 latent Turbo 的比较是最终成品比较，并非证明两种表示在完全相同蒸馏训练预算下的唯一差异。
+
+### 固定 VAE 开销为何在少步时更显眼
+
+一个简化成本模型能帮助理解这条路线。latent 推理包含 $N$ 次去噪网络调用，再加一次 VAE 解码；pixel 推理包含 $N$ 次主干与像素 head 调用，最后直接得到 RGB。把这些部分写成解释性计时式，可表示为
+
+$$
+T_{\mathrm{latent}}\approx N C_{\mathrm{latent}}+D_{\mathrm{VAE}}+C_{\mathrm{other}},
+$$
+
+$$
+T_{\mathrm{pixel}}\approx N(C_{\mathrm{backbone}}+C_{\mathrm{head}})+C'_{\mathrm{other}}.
+$$
+
+这里 $C$ 表示相应单次耗时，$D_{\mathrm{VAE}}$ 为一次独立解码，其他开销包括文本处理和运行固定成本。这个式子只是拆解计时的分析模型，未声称论文逐项测出了这些常量。当 $N$ 很大，主干计算占主导；当 $N$ 很小，无法随 NFE 一起减少的 VAE 解码占比上升。pixel head 同样有成本，但与更短序列和少步生成一起设计后，可以得到更有利的端到端取舍。[↗](https://arxiv.org/pdf/2608.16887v1#page=7)
 
 ![End-to-end latency decomposition](../../assets/images/paper-deep-dives/diffusion/z-image-pixel/figure-13-inference-latency.png){ width="760" }
 
-<small>图源：论文 Figure 13。图注标注单张 NVIDIA H100、1024x1024、无 FlashAttention 等系统优化；Table 3 的系统对比则标注 H800，硬件口径不能混为同一组测量。</small>
+*Figure 13，原论文第 8 页。图比较各阶段整体延迟，未单独测出 VAE 与 head 的每一项耗时；图注写 H100，而同页 Table 3 写 H800，硬件标注存在冲突。*
 
-读图时要分清三个增益来源：
+原 latent 为 20.12 秒，单纯 pixel-space transition 的比较点为 18.26 秒，约 1.10 倍；加入 larger-patch adaptation 后为 4.56 秒，相对原 latent 约 4.41 倍；四步 pixel 为 0.20 秒，相同四步 latent 为 0.95 秒，约 4.75 倍。这个顺序说明，迁移空间本身只带来有限变化，缩短 token 序列是多步模型的大幅收益来源，少步训练再进一步降低总调用成本。
 
-- 只把 latent output 换成 pixel output，20.12 s 到 18.26 s，只有 1.10x，因为 100-step DiT 仍是主要成本。
-- 迁移到 ps32 后，token 数降到四分之一，延迟到 4.56 s，相对 latent baseline 为 4.41x。
-- 4-step 蒸馏后，pixel model 为 0.20 s，latent distilled counterpart 为 0.95 s，相对为 4.75x；相对最初 20.12 s pipeline 为 100.6x。
+图中 100.6 倍来自 $20.12/0.20$，起点是 100 NFE latent，终点是 4 NFE pixel，跨越了表示、patch 和蒸馏多个变化。它适合描述整条升级路径，不能写成相同采样预算下 pixel 对 latent 的纯架构优势。图中 18.26 秒也与 Table 3 的 L2P 对应；应把它作为报告提供的迁移参考点，不能将整幅图误当成所有训练条件严格相同的逐项因果消融。
 
-因此论文真正的部署结论不是“去掉 VAE 就快 4.75 倍”。单独去 VAE 只有 1.10x；大的收益来自 **pixel transition + larger patch + few-step distillation** 的组合，而且随着 NFE 降低，VAE 固定成本才越来越显眼。
+Table 3 标注单 H800，Figure 13 图注标注单 H100，但显示同一组主要时间。论文没有在这里解释差异，因此后文表格按其明确写出的 H800 口径转录，图注冲突保留在对应位置。它不妨碍读取作者报告的相对时间，但限制了将 0.20 秒当成任意 H100/H800 环境必然可复现的硬件承诺。
 
-## 最终训练配方
+## 最终模型在两个家族上保留了哪些能力
 
-| Stage | Setting | Why it exists |
-| --- | --- | --- |
-| Latent pre-training | Z-Image / FLUX2-klein latent model | 高效吸收大规模视觉知识与文本对齐 |
-| Weight transfer | Transformer + conditioning weights | 保留生成先验，避免 pixel from-scratch 慢收敛 |
-| Pixel modules | Input/output modules initialized from scratch | 适配 RGB patch 和 pixel decoder |
-| Pixel post-training | Full-model optimization, 1K, global batch 128, LR $5\times10^{-5}$ | 让 backbone 与 RGB 接口共同适配 |
-| Data | Self-generated + real, default 1:1 | synthetic 搭桥，real 纠错 |
-| Target | $x_0$-prediction, converted to velocity loss | 更适合 clean RGB，同时保持 solver 对照一致 |
-| Decoder | DiP lightweight convolutional U-Net | 在质量、边界连续性和开销间折中 |
-| Flow path | logit-normal timesteps, $\gamma=2$ | 重新校准 pixel SNR |
-| Token reduction | ps16 -> ps32-adapt16 | 把空间迁移和粒度迁移分开 |
-| Distillation | Decoupled-DMD -> DMDR + Z-Reward, 4 NFE, no CFG | 把无 VAE 优势放大到端到端延迟 |
+### 最终训练规模与组件消融不同
 
-没有公开到可复现级别的部分包括：20B corpus 组成与清洗、最新 Z-Image SFT real subset 规模、最终扩大后的 mixed dataset、最终 post-training updates、总训练算力，以及两模型族适配中的全部 architecture-specific modifications。
+完成组件研究后，作者扩大混合训练集并延长像素后训练，再得到 Table 3 的最终模型。不能将最终分数直接当成前面 50K 单项曲线的末点，也不能用 Table 2 中 0.7545 与最终 0.7644 的差值单独归因于 patch 变化。这里还有数据规模与训练时长的变化。[↗](https://arxiv.org/pdf/2608.16887v1#page=15)
 
-## 系统级实验
+第二个模型家族从 FLUX2-klein-9B-Base 初始化，仍使用 synthetic-to-real 1:1、x-prediction、DiP、$\gamma=2$ 和渐进 patch 适应，只做该家族所需的架构接口调整。这比只在 Z-Image 上报告一组结果更能支持配方的可迁移性，但两个家族仍不能覆盖所有 VAE、文本编码器、分辨率和生成任务。
+
+评测使用 benchmark 原始提示，没有使用 Prompt-Enhanced 版本。延迟对应 $1024\times1024$、单 H800、未进行系统级优化。L2P 与 AsymFlow 的比较使用各自官方开源 checkpoint 和推理设置；它们不是在本文统一预算下从头重训的算法消融。下面将原 Table 3 按模型家族分成两部分，数值和列名保留原口径。[↗](https://arxiv.org/pdf/2608.16887v1#page=8)
+
+### Z-Image 在组合与长文本指标上并非完全同向
 
 | Model | NFE | Latency (s) ↓ | GenEval ↑ | DPG ↑ | OneIG ↑ | LongText ↑ |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Z-Image (latent-space) | 100 | 20.12 | 0.7510 | 86.91 | **0.566** | **0.9332** |
+| Z-Image (latent-space) | 100 | 20.12 | 0.7510 | 86.91 | 0.566 | 0.9332 |
 | L2P (pixel-space) | 100 | 18.26 | 0.7612 | 86.00 | 0.499 | 0.7798 |
-| **Ours (pixel-space)** | 100 | **4.56 (4.41x)** | **0.7644** | **87.60** | 0.564 | 0.9252 |
-| Z-Image-Turbo (latent-space) | 4 | 0.95 | 0.7625 | 85.31 | **0.520** | 0.8639 |
-| **Ours-Turbo (pixel-space)** | 4 | **0.20 (4.75x)** | **0.7698** | **86.85** | 0.512 | **0.8732** |
+| Ours (pixel-space) | 100 | 4.56 (4.41×) | 0.7644 | 87.60 | 0.564 | 0.9252 |
+| Z-Image-Turbo (latent-space) | 4 | 0.95 | 0.7625 | 85.31 | 0.520 | 0.8639 |
+| Ours-Turbo (pixel-space) | 4 | 0.20 (4.75×) | 0.7698 | 86.85 | 0.512 | 0.8732 |
+
+100 NFE 时，Ours 相对原 latent 的 GenEval 从 0.7510 到 0.7644，DPG 从 86.91 到 87.60；OneIG 从 0.566 略降到 0.564，LongText 从 0.9332 降到 0.9252。与此同时，延迟从 20.12 秒降到 4.56 秒。因而主要结论是，在较接近的整体质量下获得明显提速，且部分对齐指标上升；“四个 benchmark 全部超过 latent”不成立。
+
+与 L2P 比，Ours 四项质量指标都更高，特别是 OneIG 0.564 对 0.499、LongText 0.9252 对 0.7798，并且更快。这个对照说明较完整的迁移配方能够缓解早期 latent-to-pixel 方法在某些能力上的损失。它不能把每项改善分解到某一个组件，因为最终训练规模、配方与 checkpoint 来源也不同。
+
+4 NFE 时，Ours-Turbo 的 GenEval 0.7698、DPG 86.85、LongText 0.8732 高于对应 latent Turbo 的 0.7625、85.31、0.8639，但 OneIG 为 0.512，低于 0.520。4.75 倍速度对应的是相同 NFE 比较，比 100.6 倍更适合回答“已经有四步 latent 模型时，迁移方案还能带来多少收益”。若应用特别关注 OneIG 涵盖的综合能力，仍需检查这项下降是否在实际需求中可接受。
+
+也不能只因为某些指标提高就宣称完全没有质量代价。GenEval、DPG、OneIG、LongText 看不同方面，表中没有提供重复运行误差或显著性区间；0.002 这样的差距与大幅延迟变化应使用不同强度的语言。较稳妥的读法是，速度改善幅度清楚，质量整体接近并有分项得失。
+
+### FLUX2-klein 验证迁移性，也留下明确反例
+
+| Model | NFE | Latency (s) ↓ | GenEval ↑ | DPG ↑ | OneIG ↑ | LongText ↑ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | FLUX2-klein-Base (latent-space) | 100 | 20.25 | 0.8027 | 84.89 | 0.541 | 0.5456 |
-| AsymFlow (pixel-space) | 100 | 21.42 | **0.8181** | 86.70 | 0.508 | 0.4498 |
-| **Ours (pixel-space)** | 100 | **6.38 (3.18x)** | 0.8096 | **86.88** | **0.554** | **0.6632** |
-| FLUX2-klein (latent-space) | 4 | 0.92 | 0.8142 | 84.36 | **0.537** | 0.4763 |
-| **Ours-Turbo (pixel-space)** | 4 | **0.28 (3.29x)** | **0.8185** | **86.00** | 0.530 | **0.6105** |
+| AsymFlow (pixel-space) | 100 | 21.42 | 0.8181 | 86.70 | 0.508 | 0.4498 |
+| Ours (pixel-space) | 100 | 6.38 (3.18×) | 0.8096 | 86.88 | 0.554 | 0.6632 |
+| FLUX2-klein (latent-space) | 4 | 0.92 | 0.8142 | 84.36 | 0.537 | 0.4763 |
+| Ours-Turbo (pixel-space) | 4 | 0.28 (3.29×) | 0.8185 | 86.00 | 0.530 | 0.6105 |
 
-<small>表源：论文 Table 3。图像使用 benchmark 原始 prompts，不使用 Prompt-Enhanced variants；latency 为单张 H800、1024x1024、无系统级优化。</small>
+100 NFE 时，FLUX 系 Ours 在四项质量指标上都高于原 latent，延迟从 20.25 秒降到 6.38 秒，论文标注为 3.18 倍。LongText 从 0.5456 到 0.6632，说明这个家族没有简单重复 Z-Image 的 LongText 小幅下降，迁移影响依赖源模型和训练条件。表中倍数沿用论文报告；仅用已四舍五入的延迟反算，会与某些标注存在末位差异，不能从展示精度推断更精确的原始计时。
 
-这张表支持三层结论。第一，Z-Image 路线在 100 NFE 和 4 NFE 都能大幅降低延迟，并保持整体质量。第二，recipe 可以迁移到 FLUX2-klein，不只是 Z-Image 特例。第三，不能说 pixel model 全面超过 latent model：Z-Image 的 OneIG、FLUX2-klein 100 NFE 的 GenEval、4 NFE 的 OneIG 等指标仍由 baseline 或 AsymFlow 更高。
+AsymFlow 的 GenEval 为 0.8181，高于 Ours 的 0.8096；其 DPG、OneIG、LongText 则较低，且延迟 21.42 秒较高。因此 Ours 对既有 pixel 方法的优势主要是大部分指标与速度的组合，并未在本组全部质量列压过 AsymFlow。这也是为什么实际选型不应把 “pixel-space” 当成单一统一架构，不同迁移和输出方案可能得到不同能力分布。
 
-此外，100 NFE 结果里的 4.41x / 3.18x 不只是“pixel vs latent”，还包含 ps32 progressive patch adaptation；4 NFE 结果又叠加了蒸馏。把整套系统收益全部归因于去 VAE 会夸大 pixel representation 本身的贡献。
+4 NFE 时，Ours-Turbo 的 GenEval、DPG、LongText 分别为 0.8185、86.00、0.6105，高于 latent 的 0.8142、84.36、0.4763；OneIG 从 0.537 降至 0.530。0.92 秒到 0.28 秒对应约 3.29 倍，方向与 Z-Image 的少步结果一致。两个家族的 Turbo 都出现 OneIG 小幅下降，至少提醒读者，少步像素配方的综合能力仍需要保留多维检查，而不能只凭 GenEval 改善认为全部能力更强。
 
-## 主要贡献
+### 系统收益的适用条件
 
-1. 在超过 20B 图文对、同 backbone、同 token grid 和 matched compute 下，给出 latent 与 pixel 大规模预训练的直接对照，显示 pixel pre-training 明显更慢。
-2. 把 pixel diffusion 的定位从“替代 latent pre-training”改成“接在 latent pre-training 后面的最终生成器后训练”。
-3. 系统拆解 latent-to-pixel transition 的五个关键选择，并给出可操作 recipe：latent initialization、self + real data、$x_0$-prediction、DiP head、$\gamma=2$。
-4. 通过 ps16 -> ps32 progressive adaptation 和 4-NFE distillation，把表示空间优势转化为端到端 3.18x-4.75x 加速。
-5. 在 Z-Image 与 FLUX2-klein 两个模型族上验证迁移性，而不是只报告单一 backbone。
+论文明确未使用系统级优化，Figure 13 甚至以 FlashAttention 为例说明未启用的优化类型。因而速度表最适合比较所报告实现中的结构收益，不等同于经过编译、低精度、融合算子与高度优化 attention 后的最终产品差距。改变软件栈可能同时改变主干、head 和固定开销比例，倍数未必保持不变。
 
-## 局限与风险
+0.20 秒与 0.28 秒也只对应单张 1K 图像、指定设备与四次调用，不能外推到消费卡、批量吞吐、多图条件、视频或更高分辨率。论文没有完整给出显存曲线、能耗或端到端训练成本，因而“推理更快”具有直接计时证据，“完整生命周期一定更省”仍需要额外预算核算。对部署方，这意味着先在自己的输出尺寸、batch、硬件和系统栈上复测，再决定迁移训练的投入是否值得。
 
-- **不是 pixel pre-training 的不可能性证明。** 实验结论限定在相同 Z-Image recipe 和 matched compute；新的架构、课程学习、频谱目标或更大预算可能改变结论。
-- **20B 数据不可复现。** 论文只说明沿用 Z-Image pre-training corpus 和 recipe，没有公开数据组成、过滤、重复率和许可信息。
-- **最终 recipe 缺少完整训练账单。** 扩大后的 mixed data、最终 steps、GPU 数、wall-clock 和总 FLOPs 未报告。
-- **主要 benchmark 是自动指标。** GenEval、DPG、OneIG、LongText 覆盖组合与文本能力，但不能替代大规模人类偏好、真实性和安全评测。
-- **硬件口径有差异。** Figure 13 标注 H100，Table 3 标注 H800；不同图表的绝对 latency 不宜直接拼成新的精确硬件结论。
-- **数据闭环会继承 teacher 偏差。** Self-generated data 是迁移桥，也是错误放大器；真实图像比例、质量和覆盖不足时，pixel model 可能只学会复刻 latent teacher。
-- **大 patch 仍有细节上限。** ps32 是当前折中，ps64 已出现局部退化；去掉 VAE 不代表可以无限增大 patch。
-- **代码与权重状态有限。** 截至核验日，arXiv source 可读、Z-Image base repo 可用，但 paper-specific pixel training code 和 checkpoint 未确认公开。
+## 如何把论文配方转成可检查的迁移流程
 
-## 阅读结论
+如果已经有成熟 latent 文生图模型，最先应检查的是是否能在 RGB 表示下保持原来的空间 token 网格。本文先用 ps16 对齐原 $8\times2$ 的等效空间尺度，让可迁移主干面对相近的 token 布局。然后只接入必要的像素输入输出模块，并让生成器在新的监督中整体适应。初始化实验说明，这个已有先验是收敛速度的主要来源之一，不能把像素输出头单独拿来替换原 decoder 就期待相同效果。
 
-这篇论文最值得记住的不是某个单点 SOTA，而是一条训练资源分配原则：**不要要求 pixel diffusion 在最不擅长的阶段完成全部学习。** 大规模 pre-training 先借助 VAE latent 把语义、构图和文本对齐学快；post-training 再把这些权重迁移回 RGB，用真实像素监督补细节、去掉 VAE ceiling，并为大 patch 和少步蒸馏打开更直接的端到端加速空间。
+数据应同时检验迁移稳定性与纠错来源。本文用同 checkpoint 离线生成图像保持源条件分布，再混合高质量真实 SFT 图像；应分别观察是否遗忘原有内容、是否继承源错误、真实数据是否具有可靠描述。其他模型生成图像不是当然等价的替代品，1:1 也只是已验证的工作点，论文没有做完整比例扫描来证明它适合每个数据集。
 
-如果把它和 PixelDiT 放在一起读，可以看到 pixel diffusion 正分成两条路线：一条试图改架构，让像素空间从头预训练变得可行；另一条接受 latent pre-training 的优化优势，把 pixel space 变成 final-stage representation。这篇论文给出的证据更支持第二条路线，尤其适合已有强 latent checkpoint、希望降低 VAE 固定成本并继续做 few-step post-training 的团队。
+训练目标需要将输出参数化、损失和求解器接口一起定义。若采用 x-prediction，仍按原线性路径转成 velocity 再计算共享目标；图像归一化、$\gamma$ 和推理初始噪声必须一致。随后以相同质量协议比较 head 的局部伪影与端到端成本，不能仅用 GFLOPs 或单次 decoder latency 决定输出结构。
 
-但工程决策仍需保留条件：pixel transition 单独只带来约 1.10x，真正的 3x-5x 来自更大 patch 与少步蒸馏的组合；而完整数据配方和训练成本尚未公开。它是一份很强的经验路线图，还不是一份任何团队都能原样复刻的 recipe card。
+等 ps16 稳定后，再用复制缩放的输入投影与分组 warmup 适应 ps32。渐进路线的收益来自减少同时发生的分布与空间粒度变化，代价是额外训练阶段；ps64 结果提醒不能无限扩大 patch。最后才进行本文采用的两阶段少步蒸馏，在相同 NFE 下对比 latent Turbo，并同时测量综合质量和尾部失败，而不是只报告最好的单项分数。
 
-## 外部精读
+这套流程中有足够明确的接口、公式和超参数可以作为实验起点，但完整复现还需要源 checkpoint、真实 SFT 数据、离线生成集合、decoder 具体布局以及所依赖蒸馏实现。最终数据量、延长训练的准确预算等没有在报告中全部列出，不能仅凭“global batch 128、学习率 5e-5”估算训练到最终结果的时间。对研究工作，先在可控样本上验证迁移曲线与局部图像变化，比直接照搬整张速度表更有意义。
 
-- 原论文：[arXiv 2608.16887](https://arxiv.org/abs/2608.16887)
-- 论文 PDF：[An Empirical Study of Training Pixel-Space Text-to-Image Diffusion Models](https://arxiv.org/pdf/2608.16887)
-- 官方基础模型仓库：[Tongyi-MAI/Z-Image](https://github.com/Tongyi-MAI/Z-Image)
-- 相关本站精读：[PixelDiT：无 VAE 的像素空间 DiT](pixeldit.md)
-- 相关本站精读：[DMD：一步扩散蒸馏](dmd.md)
-- 相关本站精读：[DMD2：更稳的少步分布匹配蒸馏](dmd2.md)
+## 论文结论的边界与下一步问题
+
+最有支撑的结论是，表示空间可以按训练阶段选择。在本文的大规模设置下，latent 预训练更快建立生成能力，pixel 后训练则提供直接 RGB 监督与新的部署效率空间。这个结论同时依赖已有 latent 权重、适合迁移的数据、经过选择的输出参数化和像素 head；它没有证明“所有像素模型从头训练都不值得”，也没有否认未来更好的架构或优化可能缩小预训练差距。
+
+三项尚未完全拆开的因素尤其影响后续研究。其一，真实与同源合成混合的最优比例是否随源模型质量和真实数据规模变化；其二，ps64 的失败有多少来自单 token 容量、局部输出结构或适应预算；其三，系统优化与更少 NFE 会如何重新分配主干、像素 head 和固定开销。论文分别提供了可观察的起点，但没有给出这些问题的统一最优解。
+
+对于已有 latent 模型的团队，最值得带走的是迁移顺序。先在原空间粒度上保存语义能力，再让真实像素监督修正源输出，随后改变粒度并压缩采样预算。把这些阶段分开，既有助于训练稳定，也让失败能够被定位到数据、表示、局部细节或速度环节。最终的 3.18–4.75 倍同 NFE 加速，是这组相互配合的选择在两类文生图模型上的系统结果。
+
+## 关键术语
+
+**Latent-to-Pixel Adaptation（潜空间到像素空间迁移）** 将已学会在 VAE 表示上生成的主干转为直接处理、预测 RGB，保留可迁移权重并重新训练表示接口。
+
+**Prediction Parameterization（预测参数化）** 指网络直接输出 clean image 还是 velocity；它与最终计算损失的空间可以不同，本文两种参数化都使用 velocity loss。
+
+**Source-model-generated Data（源模型生成数据）** 由提供初始化的同一 latent checkpoint 生成，用于降低迁移中的目标分布变化，仍会继承源生成器及 VAE 的错误。
+
+**Pixel Decoder Head（像素解码头）** 将 Transformer 特征映射到 RGB 的网络内模块，每次去噪调用都会使用；它与去噪结束后独立执行一次的 VAE decoder 不同。
+
+**Noise Scale γ（噪声尺度）** 线性插值路径中高斯噪声的标准差倍率，训练加噪与推理初始化要保持一致。
+
+**Progressive Patch-size Adaptation（渐进 patch 大小适应）** 先完成 ps16 像素迁移，再继承其权重扩展到 ps32，通过分阶段训练分开表示变化与 token 粒度变化。
+
+**Fan-in Variance Preservation（输入规模变化下的方差保持）** 将输入投影复制四份时乘以 1/2，以近似补偿输入维度四倍增长带来的激活方差变化，并非对四个子块求平均。
+
+**Number of Function Evaluations / NFE（网络函数调用次数）** 采样所需的模型评估预算；本文 Turbo 为 4 NFE、无 CFG，与 100 NFE 模型的比较必须明确预算变化。

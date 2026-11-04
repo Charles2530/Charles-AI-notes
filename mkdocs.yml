@@ -1,8 +1,6 @@
 site_name: Charles AI notes
 site_description: 面向扩散模型、VLM、VLA、量化、训练、推理、强化学习、世界模型与具身智能的中文知识库
 docs_dir: files
-exclude_docs: |
-  roadmap/**
 not_in_nav: |
   **/*.md
 theme:
@@ -44,7 +42,7 @@ markdown_extensions:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+          format: !!python/name:pymdownx.superfences.fence_div_format
 plugins:
   - search
 hooks:
@@ -53,392 +51,403 @@ hooks:
   - hooks/site_performance.py
 extra_javascript:
   - assets/javascripts/search-fallback.js?v=20260710
-  - assets/javascripts/term-tooltips.js
+  - assets/javascripts/term-tooltips.js?v=20261104-beautify
   - assets/javascripts/reading-controls.js
-  - assets/javascripts/ai-reading-assistant.min.js?v=20260827-0001
-  - assets/javascripts/image-lightbox.js
-  - assets/javascripts/diagram-renderer.js?v=20260710
+  - assets/javascripts/ai-reading-assistant.min.js?v=20261104-1918
+  - assets/javascripts/image-lightbox.min.js?v=20261104-1918
+  - assets/javascripts/diagram-renderer.min.js?v=20261104-1918
   - assets/javascripts/mathjax.js?v=20260825
 extra_css:
-  - assets/stylesheets/extra.css?v=20261010-reader-v1
+  - assets/stylesheets/extra.css?v=20261104-1918
 nav:
-  - 前置数学知识:
-      - 前置数学知识: prerequisite-math/index.md
-      - 数学语言与变化:
-          - 线性代数与几何直觉: prerequisite-math/linear-algebra-and-geometry.md
-          - 谱分解、二阶近似与低秩结构: prerequisite-math/spectral-second-order-and-low-rank.md
-          - 微积分与牛顿-莱布尼茨公式: prerequisite-math/calculus-and-newton-leibniz.md
-          - 微分、Jacobian 与梯度传播: prerequisite-math/differential-jacobian-and-gradient-flow.md
-      - 概率、统计与信息:
-          - 概率论、分布与期望: prerequisite-math/probability-distributions-and-expectation.md
-          - 采样、估计与校准: prerequisite-math/sampling-estimation-and-calibration.md
-          - 信息论、熵与分布距离: prerequisite-math/information-theory-and-divergence.md
-          - 随机过程与马尔可夫性: prerequisite-math/stochastic-processes-and-markov.md
-      - 优化与学习目标:
-          - 优化、梯度与约束: prerequisite-math/optimization-and-gradient-methods.md
-          - 潜变量、似然与生成模型目标: prerequisite-math/latent-likelihood-and-generative-objectives.md
-          - 离散选择、Top-k 与稀疏路由: prerequisite-math/discrete-selection-topk-and-routing.md
-          - 价值函数、策略梯度与强化学习目标: prerequisite-math/value-policy-and-rl-objectives.md
-      - 时序、控制与空间:
-          - 序列、位置编码与注意力掩码: prerequisite-math/sequence-position-and-masking.md
-          - 动态系统、控制与状态空间: prerequisite-math/dynamic-systems-and-control.md
-          - 卷积、频域与多尺度表示: prerequisite-math/convolution-frequency-and-multiscale.md
-          - 几何、视觉与三维空间: prerequisite-math/geometry-vision-and-3d.md
-      - 研究判断与工程:
-          - 因果、反事实与分布偏移: prerequisite-math/causality-counterfactual-and-distribution-shift.md
-          - 缩放律、幂律与实验曲线: prerequisite-math/scaling-laws-and-experimental-curves.md
-          - 数值计算、复杂度与估算: prerequisite-math/numerics-complexity-and-estimation.md
-  - 基础概念:
-      - 基础概念专题: foundations/index.md
-      - 术语表: glossary/index.md
-      - 计算、梯度与运行时:
-          - 读懂公式的最小数学: foundations/symbols-and-minimal-math.md
-          - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
-          - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
-          - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
-          - 梯度估计、离散变量与训练信号: foundations/gradient-estimators-and-training-signals.md
-          - 数值、显存与运行时: foundations/numerics-memory-and-runtime-basics.md
-      - 模型结构:
-          - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
-          - 位置编码与 Mask: foundations/positional-encoding-masks-and-context.md
-          - 归一化、残差与激活: foundations/normalization-residual-and-activation.md
-          - 卷积与视觉特征: foundations/convolution-and-feature-extraction.md
-          - MoE 与大模型架构: foundations/moe-and-large-model-architecture-basics.md
-          - Mamba 与混合 SSM 架构: foundations/mamba-and-hybrid-ssm-transformers.md
-      - 训练目标与数据:
-          - 优化与训练入门: foundations/optimization-and-training-basics.md
-          - 预训练目标与表征学习: foundations/pretraining-objectives-and-representation-learning.md
-          - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
-          - 模型蒸馏入门: foundations/model-distillation-basics.md
-          - 数据与数据集基础: foundations/data-and-dataset-basics.md
-          - 数据划分与评测指标: foundations/data-splits-metrics-and-evaluation-basics.md
-          - 泛化、正则化与分布偏移: foundations/generalization-regularization-and-distribution-shift.md
-      - 生成、多模态与检索:
-          - 生成与解码基础: foundations/generation-and-decoding-basics.md
-          - 多模态推理基础: foundations/multimodal-cot-and-reasoning-basics.md
-          - Prompt、CoT 与 RAG: foundations/prompt-engineering-cot-and-rag-basics.md
-      - 压缩与架构搜索:
-          - 模型压缩、剪枝与 NAS: foundations/model-compression-pruning-and-nas-basics.md
-  - 训练与推理系统:
-      - 专题总览: training-and-inference-systems/index.md
-      - 训练系统:
-          - 训练系统专题: training/index.md
-          - 核心机制:
-              - 模型训练的完整链路: training/beginner-model-training-primer.md
-              - 目标函数、优化器与 LR 日程: training/objectives-optimizers-and-schedules.md
-              - 预训练、微调与对齐: training/pretraining-finetuning-alignment.md
-          - 数据与配方:
-              - 数据质量、去重与治理: training/data-quality-dedup-and-governance.md
-              - 输入管线、Packing 与吞吐: training/input-pipelines-packing-and-throughput-governance.md
-              - 训练数据系统与吞吐优化: training/data-systems-and-optimization.md
-              - Scaling、课程学习与数据配比: training/scaling-curriculum-and-data-mixture.md
-          - 分布式执行与稳定性:
-              - 分布式训练与 Checkpoint: training/distributed-training-and-checkpointing.md
-              - Megatron、DeepSpeed 与 FSDP: training/megatron-lm-deepspeed-and-open-training-stacks.md
-              - 低比特训练与数值格式: training/low-bit-training-and-numerics.md
-              - 训练稳定性与故障排查: training/stability-numerics-and-failure-triage.md
-          - 评测、治理与后训练:
-              - Scaling Law 与训练经济学: training/scaling-laws-and-experiment-economics.md
-              - 训练评测与消融设计: training/evaluation-and-ablation-methodology.md
-              - W&B 实验追踪与治理: training/wandb-experiment-tracking-and-governance.md
-              - 集群运维与实验治理: training/cluster-operations-and-experiment-management.md
-              - 偏好数据与对齐失效: training/preference-data-and-alignment-pitfalls.md
-              - 后训练数据引擎与 Judge 模型: training/post-training-data-engines-and-judge-models.md
-              - MTP 与投机解码: training/mtp-and-speculative-decoding.md
-              - 训练图片来源与授权: training/image-sources.md
-      - 推理系统:
-          - 推理系统专题: inference/index.md
-          - 请求与执行:
-              - 推理服务系统: inference/serving-systems.md
-              - 推理运行时: inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md
-              - GPU Kernel、Batching 与显存: inference/gpu-kernels-batching-and-memory-systems.md
-          - 状态、调度与扩展:
-              - KV、缓存与投机解码: inference/caching-routing-and-speculative.md
-              - VLA 投机推理与闭环验证: inference/vla-speculative-decoding-0928-1144.md
-              - 上下文压缩与 KV 内存管理: inference/context-compression-kv-eviction-and-memory-hierarchies.md
-              - 解耦 Prefill 与 KV 服务: inference/disaggregated-prefill-kv-services-and-capacity-ops.md
-              - MoE 路由与多模型服务: inference/moe-routing-and-multi-model-serving.md
-          - 应用与线上治理:
-              - RAG、Agent 与长上下文系统: inference/rag-agents-and-long-context-systems.md
-              - 成本建模与 SLO 设计: inference/cost-modeling-and-slo-design.md
-              - 可观测性与在线评测: inference/observability-and-online-evaluation.md
-              - 容量规划与推理优化: inference/optimization-checklist-and-capacity-planning.md
-      - 量化:
-          - 量化专题: quantization/index.md
-          - 数学与方法:
-              - 量化符号与最小数学: quantization/symbols-and-minimal-math.md
-              - PTQ / GPTQ / AWQ / SmoothQuant: quantization/ptq-gptq-awq-smoothquant.md
-              - 激活离群值与校准: quantization/activation-outliers-and-calibration-strategies.md
-              - 量化方法对照表: quantization/comparison-table.md
-          - 训练与模型形态:
-              - QLoRA 与量化训练: quantization/qlora-and-quantized-training.md
-              - QAT、Kernel 与 KV Cache: quantization/qat-kernels-and-kv-cache.md
-              - 多模态与 VLA 量化: quantization/quantization-for-multimodal-and-vla-models.md
-          - 运行时与部署:
-              - FP8 与混合精度推理: quantization/fp8-and-mixed-precision-serving.md
-              - 量化运行时与框架: quantization/quantization-runtimes-and-frameworks.md
-              - 量化服务栈与硬件选择: quantization/serving-stacks-and-hardware-tradeoffs.md
-              - 量化评测与部署清单: quantization/evaluation-and-deployment-checklist.md
-      - 算子与编译器:
-          - 算子与编译器专题: operators/index.md
-          - 硬件、成本与分析:
-              - CUDA 编程模型与内存层次: operators/cuda-programming-model-and-memory.md
-              - GPU 互联与拓扑映射: operators/gpu-interconnects-and-topology-mapping.md
-              - Workload 与 Shape Bucketing: operators/workload-modeling-and-shape-buckets.md
-              - Kernel 成本模型与选型: operators/kernel-cost-models-and-selection-heuristics.md
-              - Roofline 建模与性能案例: operators/roofline-benchmarking-and-case-studies.md
-              - Profiling、调试与数值稳定: operators/profiling-debugging-and-numerical-stability.md
-              - 硬件感知排查清单: operators/hardware-aware-debug-checklist.md
-          - 核心算子:
-              - GEMM、Attention 与融合 Kernel: operators/gemm-attention-and-fused-kernels.md
-              - FlashAttention 与长上下文: operators/long-context-and-flashattention-evolution.md
-              - Reduction、Norm、Layout 与 Indexing: operators/reduction-norm-layout-and-indexing.md
-              - 低精度与量化 Kernel: operators/low-precision-and-quantized-kernels.md
-              - FP8 训练与优化器 Kernel: operators/fp8-training-and-optimizer-kernels.md
-              - 推理 Attention 与 KV Kernel: operators/serving-attention-and-kv-kernels.md
-              - MoE 路由与稀疏 Kernel: operators/moe-routing-and-sparse-kernels.md
-              - 通信算子与计算重叠: operators/communication-kernels-and-overlap.md
-              - 高级 Kernel 与形状特化: operators/advanced-kernel-patterns-and-shape-specialization.md
-          - 编程与编译栈:
-              - Triton 编程模型与自动调优: operators/triton-programming-model-and-autotuning.md
-              - CUTLASS / CuTe 与编译栈: operators/cutlass-cute-and-compiler-stack.md
-              - PTX / SASS 与编译检查: operators/ptx-sass-and-compiler-inspection.md
-              - Runtime Dispatch 与 Kernel 选择: operators/runtime-dispatch-and-kernel-selection.md
-              - 自定义算子与框架集成: operators/custom-op-development-and-framework-integration.md
-              - DeepGEMM、FP8 GEMM 与 Mega-MoE: operators/deepgemm-fp8-gemm-and-mega-moe.md
-              - DeepGEMM 源码与接入: operators/deepgemm-source-and-integration.md
-          - 测试与维护:
-              - 性能反模式与失败案例: operators/performance-anti-patterns-and-failure-modes.md
-              - Kernel 测试、回归与维护: operators/testing-regression-and-maintenance.md
-  - 强化学习:
-      - 强化学习导读: reinforcement-learning/index.md
-      - 建立决策语言:
-          - Agent、环境与训练闭环: reinforcement-learning/rl-agent-environment-loop.md
-          - 多臂老虎机与探索: reinforcement-learning/multi-armed-bandits-and-exploration.md
-          - MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md
-          - 动态规划、Monte Carlo 与 TD: reinforcement-learning/dynamic-programming-monte-carlo-td.md
-      - 经典深度强化学习:
-          - Q-learning 与 DQN: reinforcement-learning/q-learning-and-dqn.md
-          - Policy Gradient 与 REINFORCE: reinforcement-learning/policy-gradient-and-reinforce.md
-          - Actor-Critic、GAE 与 PPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md
-          - 连续控制与 SAC: reinforcement-learning/continuous-control-and-sac.md
-      - 低成本与模型驱动学习:
-          - Offline Reinforcement Learning: reinforcement-learning/offline-reinforcement-learning.md
-          - Model-based RL 与世界模型: reinforcement-learning/rl-for-world-models.md
-      - 大模型、机器人与系统:
-          - LLM 强化学习：RLHF、RLVR 与 GRPO: reinforcement-learning/llm-rlhf-rlvr-and-grpo.md
-          - VLA、机器人与闭环强化学习: reinforcement-learning/vla-robotics-and-closed-loop-rl.md
-          - verl 训练流程: reinforcement-learning/verl-code-flow.md
-          - 综合实践与算法选择: reinforcement-learning/practice-and-algorithm-selection.md
-  - 世界模型与具身智能:
-      - 专题总览: world-models-and-embodied-ai/index.md
-      - 世界模型:
-          - 世界模型专题: world-models/index.md
-          - 核心机制:
-              - 状态、动力学、观测与决策: world-models/beginner-world-models-primer.md
-              - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
-              - Masked / JEPA 与潜变量预测: world-models/masked-jepa-and-latent-prediction.md
-              - 生成式模拟与视频世界模型: world-models/generative-simulation-and-video.md
-              - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
-              - 规划即推理与潜在动作: world-models/planning-as-inference-and-latent-actions.md
-          - 评测、风险与数据:
-              - 世界模型评测与失效模式: world-models/evaluation-and-failure-modes.md
-              - 不确定性与风险感知规划: world-models/uncertainty-and-risk-aware-planning.md
-              - 模拟器、反事实与合成 Rollout: world-models/simulators-counterfactuals-and-synthetic-rollouts.md
-              - 数据引擎与自我改进: world-models/data-engines-and-self-improvement.md
-          - 应用与案例:
-              - 机器人与自动驾驶应用: world-models/applications-in-robotics-and-autonomous-driving.md
-              - VLA 世界模型全链路案例: world-models/vla-world-model-full-chain-case.md
-              - 动作条件视频模型训练案例: world-models/action-conditioned-video-world-model-training-case.md
-              - 数据、仿真与评测开发路线: world-models/development-roadmap-data-simulation-and-evaluation.md
-          - 训练与系统效率:
-              - 高效训练路线图: world-models/efficient-training-roadmap.md
-              - 效率技术覆盖矩阵: world-models/efficiency-technique-coverage-matrix.md
-              - Rollout Serving、量化与 Kernel: world-models/rollout-serving-quantization-kernel-case.md
-              - 高效训练实验报告样例: world-models/world-model-efficient-training-experiment-report.md
-      - 具身智能:
-          - 具身智能专题: embodied-ai/index.md
-          - 闭环与状态:
-              - 观测、动作与反馈闭环: embodied-ai/beginner-learning-path.md
-              - 一个任务跑通具身闭环: embodied-ai/closed-loop-task-walkthrough.md
-              - 机器人 State / Action 数据: embodied-ai/state-action-robot-datasets.md
-              - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
-              - 坐标变换与手眼协调: embodied-ai/coordinate-transforms-and-hand-eye-calibration.md
-              - 机器人运动学与 DH 参数: embodied-ai/robot-kinematics-and-dh-parameters.md
-              - 双目匹配与 Cost Volume: embodied-ai/stereo-matching-and-cost-volume.md
-          - 策略、规划与执行:
-              - 规划、控制与安全: embodied-ai/planning-control-and-safety.md
-              - 资产、感知、抓取与轨迹 Pipeline: embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md
-              - VLA、WAM 与世界模型系统图: embodied-ai/vla-wam-world-model-system-map.md
-          - 仿真与数据链:
-              - Sim2Real 与具身数据引擎: embodied-ai/sim2real-and-data-engines.md
-              - Isaac Sim 与 RoboTwin: embodied-ai/isaacsim-and-robotwin.md
-              - Rerun 机器人数据可视化: embodied-ai/rerun-robotics-data-visualization.md
-          - 评测、交互与部署:
-              - 任务谱系与评测: embodied-ai/task-taxonomy-and-benchmarks.md
-              - 家庭机器人流程与失败排查: embodied-ai/household-robotics-workflows-and-failure-patterns.md
-              - 人机协作与交互评测: embodied-ai/human-robot-interaction-and-evaluation.md
-              - 部署模式与安全案例: embodied-ai/deployment-patterns-and-safety-cases.md
-              - VLA 数据、模型与评测路线: embodied-ai/vla-data-model-and-evaluation-roadmap.md
-      - VLA:
-          - VLA 专题: vla/index.md
-          - VLA 动作表示与控制接口: vla/action-representation-and-interfaces.md
-          - VLA 数据与策略学习: vla/data-and-policy-learning.md
-          - VLA 动作分块、层级策略与潜在技能: vla/action-chunking-hierarchical-policies-and-latent-skills.md
-          - VLA 评测与数据引擎: vla/benchmarks-and-data-engines.md
-          - VLA 闭环恢复与失败分析: vla/closed-loop-recovery-and-failure-analysis.md
-          - VLA 部署与安全: vla/deployment-and-safety.md
-          - VLA 投机推理与闭环验证: inference/vla-speculative-decoding-0928-1144.md
-      - VLM:
-          - VLM 架构：视觉表征、连接器与记忆: vlm/architecture-and-training.md
-          - 视觉 Tokenizer 与连接器: vlm/visual-tokenizers-and-connectors.md
-  - 扩散与生成模型:
-      - 扩散模型专题: diffusion/index.md
-      - 核心机制:
-          - 概率路径与核心直觉: diffusion/foundations-and-core-intuition.md
-          - DDPM 数学与训练: diffusion/training.md
-          - 网络架构与 Stable Diffusion: diffusion/architecture-and-stable-diffusion.md
-          - 最小 DDPM 实现: diffusion/minimal-ddpm-implementation.md
-      - 理论脉络:
-          - 扩散模型发展脉络: diffusion/evolution.md
-          - 噪声日程与参数化: diffusion/noise-schedules-and-parameterization.md
-          - Score Matching 到 SDE: diffusion/score-matching-sde-and-probability-flow.md
-          - Flow Matching 与 Rectified Flow: diffusion/flow-matching-and-rectified-flow.md
-      - 条件与采样:
-          - 条件控制与 Guidance: diffusion/guidance-and-conditioning.md
-          - 采样与推理加速: diffusion/inference.md
-      - 少步与工程:
-          - 扩散路线选择与方法对照: diffusion/comparison-table.md
-          - 一步生成、蒸馏与整流: diffusion/distillation.md
-          - Consistency Models 与 Flow 边界: diffusion/consistency-models-and-rectified-flow.md
-          - 扩散训练配方与排障: diffusion/practical-training-recipes-and-failure-analysis.md
-      - 应用扩展:
-          - 视频与多模态扩散: diffusion/video-and-multimodal-diffusion.md
-  - 思考探索:
-      - 具身推理加速与观测时效: thinking-exploration/embodied-inference-observation-age-1009-2059.md
-      - 世界模型是什么：从预测画面到承受行动后果: thinking-exploration/what-is-a-world-model.md
-      - 高效 AI 的状态账本：少搬状态，比少算一次更重要: thinking-exploration/efficient-ai-is-state-movement.md
-      - 扩散模型加速：每删一步，都要重新安排误差: thinking-exploration/diffusion-speedup-redistributes-error.md
-      - 世界模型该预测什么：答案取决于谁消费未来: thinking-exploration/world-model-future-consumers.md
-      - 从预测未来到利用未来：Latent World Model 怎样进入规划闭环: thinking-exploration/latent-world-models-for-planning.md
-      - 具身智能：一条可纠错的状态链: thinking-exploration/embodied-ai-correctable-state-chain.md
-      - 技术报告读后：前沿模型正在变成受约束的闭环: thinking-exploration/model-capability-is-a-constrained-loop.md
-      - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
-      - 自动驾驶世界模型：从渲染、仿真到规划闭环: thinking-exploration/autonomous-driving-world-models.md
-      - 从生成视频到维护世界：重建为什么是自动驾驶世界模型的状态接口: thinking-exploration/reconstruction-as-world-model-state-interface-0724-1059.md
-      - 世界模型 Infra：从模型谱系到物理 AI 工程栈: thinking-exploration/world-model-infrastructure.md
-      - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
-      - WAM 与 3D 视觉：世界模型从视频想象走向物理闭环: thinking-exploration/wam-3dv-world-models.md
-      - 世界模型驱动的机器人数据飞轮：能持续生产经验的系统，才是真正的基础设施: thinking-exploration/robot-data-flywheel-world-models.md
-      - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
-      - 具身智能的数据鸿沟：先对齐，再扩规模: thinking-exploration/embodied-ai-data-gap-alignment-and-scaling-0731-1219.md
-      - 读懂 Fast-FoundationStereo: thinking-exploration/fast-foundation-stereo-prerequisite-map.md
+- 技术地图: index.md
+- 基础知识:
+  - 基础知识总览: foundations/index.md
+  - 计算与梯度:
+    - 读懂公式的最小数学: foundations/symbols-and-minimal-math.md
+    - 张量、Shape 与计算图: foundations/tensors-shapes-and-computation-graphs.md
+    - 自动微分与激活显存: foundations/autograd-activation-checkpointing-and-memory.md
+    - 梯度估计、离散变量与训练信号: foundations/gradient-estimators-and-training-signals.md
+    - 数值、显存与运行时: foundations/numerics-memory-and-runtime-basics.md
+  - 学习目标与数据:
+    - 优化与训练入门: foundations/optimization-and-training-basics.md
+    - 预训练目标与表征学习: foundations/pretraining-objectives-and-representation-learning.md
+    - 概率与潜变量模型: foundations/probability-latent-variables-and-generative-models.md
+    - 模型蒸馏入门: foundations/model-distillation-basics.md
+    - 数据与数据集基础: foundations/data-and-dataset-basics.md
+    - 数据划分与评测指标: foundations/data-splits-metrics-and-evaluation-basics.md
+    - 泛化、正则化与分布偏移: foundations/generalization-regularization-and-distribution-shift.md
+  - 生成与应用的基本概念:
+    - 生成与解码基础: foundations/generation-and-decoding-basics.md
+    - 多模态推理基础: foundations/multimodal-cot-and-reasoning-basics.md
+    - Prompt、CoT 与 RAG: foundations/prompt-engineering-cot-and-rag-basics.md
+  - 数学工具:
+    - 前置数学知识: prerequisite-math/index.md
+    - 数学语言与变化:
+      - 线性代数与几何直觉: prerequisite-math/linear-algebra-and-geometry.md
+      - 微积分与牛顿-莱布尼茨公式: prerequisite-math/calculus-and-newton-leibniz.md
+      - 微分、Jacobian 与梯度传播: prerequisite-math/differential-jacobian-and-gradient-flow.md
+      - 谱分解、二阶近似与低秩结构: prerequisite-math/spectral-second-order-and-low-rank.md
+    - 概率、统计与信息:
+      - 概率论、分布与期望: prerequisite-math/probability-distributions-and-expectation.md
+      - 采样、估计与校准: prerequisite-math/sampling-estimation-and-calibration.md
+      - 信息论、熵与分布距离: prerequisite-math/information-theory-and-divergence.md
+      - 随机过程与马尔可夫性: prerequisite-math/stochastic-processes-and-markov.md
+    - 优化与学习目标:
+      - 优化、梯度与约束: prerequisite-math/optimization-and-gradient-methods.md
+      - 潜变量、似然与生成模型目标: prerequisite-math/latent-likelihood-and-generative-objectives.md
+      - 离散选择、Top-k 与稀疏路由: prerequisite-math/discrete-selection-topk-and-routing.md
+      - 价值函数、策略梯度与强化学习目标: prerequisite-math/value-policy-and-rl-objectives.md
+    - 时序、控制与空间:
+      - 序列、位置编码与注意力掩码: prerequisite-math/sequence-position-and-masking.md
+      - 动态系统、控制与状态空间: prerequisite-math/dynamic-systems-and-control.md
+      - 卷积、频域与多尺度表示: prerequisite-math/convolution-frequency-and-multiscale.md
+      - 几何、视觉与三维空间: prerequisite-math/geometry-vision-and-3d.md
+    - 研究判断与工程:
+      - 因果、反事实与分布偏移: prerequisite-math/causality-counterfactual-and-distribution-shift.md
+      - 缩放律、幂律与实验曲线: prerequisite-math/scaling-laws-and-experimental-curves.md
+      - 数值计算、复杂度与估算: prerequisite-math/numerics-complexity-and-estimation.md
+- 模型结构:
+  - 模型结构总览: model-architectures/index.md
+  - 线性层、MLP 与 GEMM: foundations/linear-layers-mlp-and-gemm.md
+  - Transformer 输入与注意力: foundations/transformer-attention-and-tokenization.md
+  - 位置编码与 Mask: foundations/positional-encoding-masks-and-context.md
+  - 归一化、残差与激活: foundations/normalization-residual-and-activation.md
+  - 卷积与视觉特征: foundations/convolution-and-feature-extraction.md
+  - MoE 与大模型架构: foundations/moe-and-large-model-architecture-basics.md
+  - Mamba 与混合 SSM 架构: foundations/mamba-and-hybrid-ssm-transformers.md
+  - 模型压缩、剪枝与 NAS: foundations/model-compression-pruning-and-nas-basics.md
+- 训练:
+  - 训练系统专题: training/index.md
+  - 核心机制:
+    - 模型训练的完整链路: training/beginner-model-training-primer.md
+    - 目标函数、优化器与 LR 日程: training/objectives-optimizers-and-schedules.md
+    - 预训练、微调与对齐: training/pretraining-finetuning-alignment.md
+  - 数据与配方:
+    - 数据质量、去重与治理: training/data-quality-dedup-and-governance.md
+    - 输入管线、Packing 与吞吐: training/input-pipelines-packing-and-throughput-governance.md
+    - 训练数据系统与吞吐优化: training/data-systems-and-optimization.md
+    - Scaling、课程学习与数据配比: training/scaling-curriculum-and-data-mixture.md
+  - 分布式执行与稳定性:
+    - 分布式训练与 Checkpoint: training/distributed-training-and-checkpointing.md
+    - Megatron、DeepSpeed 与 FSDP: training/megatron-lm-deepspeed-and-open-training-stacks.md
+    - 低比特训练与数值格式: training/low-bit-training-and-numerics.md
+    - 训练稳定性与故障排查: training/stability-numerics-and-failure-triage.md
+  - 评测、治理与后训练:
+    - Scaling Law 与训练经济学: training/scaling-laws-and-experiment-economics.md
+    - 训练评测与消融设计: training/evaluation-and-ablation-methodology.md
+    - W&B 实验追踪与治理: training/wandb-experiment-tracking-and-governance.md
+    - 集群运维与实验治理: training/cluster-operations-and-experiment-management.md
+    - 偏好数据与对齐失效: training/preference-data-and-alignment-pitfalls.md
+    - 后训练数据引擎与 Judge 模型: training/post-training-data-engines-and-judge-models.md
+    - MTP 与投机解码: training/mtp-and-speculative-decoding.md
+    - 训练图片来源与授权: training/image-sources.md
+  - 从训练到推理: training-and-inference-systems/index.md
+- 推理与效率:
+  - 推理系统专题: inference/index.md
+  - 请求与执行:
+    - 推理服务系统: inference/serving-systems.md
+    - 推理运行时: inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md
+    - GPU Kernel、Batching 与显存: inference/gpu-kernels-batching-and-memory-systems.md
+  - 状态、调度与扩展:
+    - KV、缓存与投机解码: inference/caching-routing-and-speculative.md
+    - VLA 投机推理与闭环验证: inference/vla-speculative-decoding-0928-1144.md
+    - 上下文压缩与 KV 内存管理: inference/context-compression-kv-eviction-and-memory-hierarchies.md
+    - 解耦 Prefill 与 KV 服务: inference/disaggregated-prefill-kv-services-and-capacity-ops.md
+    - MoE 路由与多模型服务: inference/moe-routing-and-multi-model-serving.md
+  - 应用与线上治理:
+    - RAG、Agent 与长上下文系统: inference/rag-agents-and-long-context-systems.md
+    - 成本建模与 SLO 设计: inference/cost-modeling-and-slo-design.md
+    - 可观测性与在线评测: inference/observability-and-online-evaluation.md
+    - 容量规划与推理优化: inference/optimization-checklist-and-capacity-planning.md
+  - 量化:
+    - 量化专题: quantization/index.md
+    - 数学与方法:
+      - 量化符号与最小数学: quantization/symbols-and-minimal-math.md
+      - PTQ / GPTQ / AWQ / SmoothQuant: quantization/ptq-gptq-awq-smoothquant.md
+      - 激活离群值与校准: quantization/activation-outliers-and-calibration-strategies.md
+      - 量化方法对照表: quantization/comparison-table.md
+    - 训练与模型形态:
+      - QLoRA 与量化训练: quantization/qlora-and-quantized-training.md
+      - QAT、Kernel 与 KV Cache: quantization/qat-kernels-and-kv-cache.md
+      - 多模态与 VLA 量化: quantization/quantization-for-multimodal-and-vla-models.md
+    - 运行时与部署:
+      - FP8 与混合精度推理: quantization/fp8-and-mixed-precision-serving.md
+      - 量化运行时与框架: quantization/quantization-runtimes-and-frameworks.md
+      - 量化服务栈与硬件选择: quantization/serving-stacks-and-hardware-tradeoffs.md
+      - 量化评测与部署清单: quantization/evaluation-and-deployment-checklist.md
+  - 算子与编译器:
+    - 算子与编译器专题: operators/index.md
+    - 硬件、成本与分析:
+      - CUDA 编程模型与内存层次: operators/cuda-programming-model-and-memory.md
+      - GPU 互联与拓扑映射: operators/gpu-interconnects-and-topology-mapping.md
+      - Workload 与 Shape Bucketing: operators/workload-modeling-and-shape-buckets.md
+      - Kernel 成本模型与选型: operators/kernel-cost-models-and-selection-heuristics.md
+      - Roofline 建模与性能案例: operators/roofline-benchmarking-and-case-studies.md
+      - Profiling、调试与数值稳定: operators/profiling-debugging-and-numerical-stability.md
+      - 硬件感知排查清单: operators/hardware-aware-debug-checklist.md
+    - 核心算子:
+      - GEMM、Attention 与融合 Kernel: operators/gemm-attention-and-fused-kernels.md
+      - FlashAttention 与长上下文: operators/long-context-and-flashattention-evolution.md
+      - Reduction、Norm、Layout 与 Indexing: operators/reduction-norm-layout-and-indexing.md
+      - 低精度与量化 Kernel: operators/low-precision-and-quantized-kernels.md
+      - FP8 训练与优化器 Kernel: operators/fp8-training-and-optimizer-kernels.md
+      - 推理 Attention 与 KV Kernel: operators/serving-attention-and-kv-kernels.md
+      - MoE 路由与稀疏 Kernel: operators/moe-routing-and-sparse-kernels.md
+      - 通信算子与计算重叠: operators/communication-kernels-and-overlap.md
+      - 高级 Kernel 与形状特化: operators/advanced-kernel-patterns-and-shape-specialization.md
+    - 编程与编译栈:
+      - Triton 编程模型与自动调优: operators/triton-programming-model-and-autotuning.md
+      - CUTLASS / CuTe 与编译栈: operators/cutlass-cute-and-compiler-stack.md
+      - PTX / SASS 与编译检查: operators/ptx-sass-and-compiler-inspection.md
+      - Runtime Dispatch 与 Kernel 选择: operators/runtime-dispatch-and-kernel-selection.md
+      - 自定义算子与框架集成: operators/custom-op-development-and-framework-integration.md
+      - DeepGEMM、FP8 GEMM 与 Mega-MoE: operators/deepgemm-fp8-gemm-and-mega-moe.md
+      - DeepGEMM 源码与接入: operators/deepgemm-source-and-integration.md
+    - 测试与维护:
+      - 性能反模式与失败案例: operators/performance-anti-patterns-and-failure-modes.md
+      - Kernel 测试、回归与维护: operators/testing-regression-and-maintenance.md
+- 生成模型:
+  - 扩散模型专题: diffusion/index.md
+  - 核心机制:
+    - 概率路径与核心直觉: diffusion/foundations-and-core-intuition.md
+    - DDPM 数学与训练: diffusion/training.md
+    - 网络架构与 Stable Diffusion: diffusion/architecture-and-stable-diffusion.md
+    - 最小 DDPM 实现: diffusion/minimal-ddpm-implementation.md
+  - 理论脉络:
+    - 扩散模型发展脉络: diffusion/evolution.md
+    - 噪声日程与参数化: diffusion/noise-schedules-and-parameterization.md
+    - Score Matching 到 SDE: diffusion/score-matching-sde-and-probability-flow.md
+    - Flow Matching 与 Rectified Flow: diffusion/flow-matching-and-rectified-flow.md
+  - 条件与采样:
+    - 条件控制与 Guidance: diffusion/guidance-and-conditioning.md
+    - 采样与推理加速: diffusion/inference.md
+  - 少步与工程:
+    - 扩散路线选择与方法对照: diffusion/comparison-table.md
+    - 一步生成、蒸馏与整流: diffusion/distillation.md
+    - Consistency Models 与 Flow 边界: diffusion/consistency-models-and-rectified-flow.md
+    - 扩散训练配方与排障: diffusion/practical-training-recipes-and-failure-analysis.md
+  - 视频生成:
+    - 视频生成如何工作: diffusion/video-and-multimodal-diffusion.md
+    - 视频 VAE 与因果压缩: diffusion/video-vae-1029-1246.md
+    - Video DiT 与条件控制: diffusion/video-dit-1029-1246.md
+    - 视频训练与采样: diffusion/video-training-and-sampling-1029-1246.md
+    - 长视频生成与缓存: diffusion/long-video-and-cache-1029-1246.md
+- 强化学习:
+  - 强化学习导读: reinforcement-learning/index.md
+  - 建立决策语言:
+    - Agent、环境与训练闭环: reinforcement-learning/rl-agent-environment-loop.md
+    - 多臂老虎机与探索: reinforcement-learning/multi-armed-bandits-and-exploration.md
+    - MDP、价值函数与 Bellman: reinforcement-learning/mdp-value-bellman.md
+    - 动态规划、Monte Carlo 与 TD: reinforcement-learning/dynamic-programming-monte-carlo-td.md
+  - 经典深度强化学习:
+    - Q-learning 与 DQN: reinforcement-learning/q-learning-and-dqn.md
+    - Policy Gradient 与 REINFORCE: reinforcement-learning/policy-gradient-and-reinforce.md
+    - Actor-Critic、GAE 与 PPO: reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md
+    - 连续控制与 SAC: reinforcement-learning/continuous-control-and-sac.md
+  - 低成本与模型驱动学习:
+    - Offline Reinforcement Learning: reinforcement-learning/offline-reinforcement-learning.md
+    - Model-based RL 与世界模型: reinforcement-learning/rl-for-world-models.md
+  - 大模型、机器人与系统:
+    - LLM 强化学习：RLHF、RLVR 与 GRPO: reinforcement-learning/llm-rlhf-rlvr-and-grpo.md
+    - VLA、机器人与闭环强化学习: reinforcement-learning/vla-robotics-and-closed-loop-rl.md
+    - verl 训练流程: reinforcement-learning/verl-code-flow.md
+    - 综合实践与算法选择: reinforcement-learning/practice-and-algorithm-selection.md
+- 多模态与具身:
+  - 多模态与具身总览: world-models-and-embodied-ai/index.md
+  - 视觉语言模型:
+    - 视觉语言模型总览: vlm/index.md
+    - 符号与最小数学: vlm/vlm-vla-symbols-and-minimal-math.md
+    - 架构与训练: vlm/architecture-and-training.md
+    - 多模态评测与失败模式: vlm/multimodal-evaluation-and-failure-modes.md
+    - 视频表征与记忆: vlm/video-representation-and-memory.md
+    - VLM/VLA 与世界模型训练: vlm/vlm-vla-for-efficient-world-model-training.md
+    - 视觉 Tokenizer 与连接器: vlm/visual-tokenizers-and-connectors.md
+  - 世界模型:
+    - 世界模型专题: world-models/index.md
+    - 核心机制:
+      - 状态、动力学、观测与决策: world-models/beginner-world-models-primer.md
+      - RSSM、Dreamer 与规划: world-models/rssm-dreamer-and-planning.md
+      - Masked / JEPA 与潜变量预测: world-models/masked-jepa-and-latent-prediction.md
+      - 生成式模拟与视频世界模型: world-models/generative-simulation-and-video.md
+      - WM / WAM / VAM：动作条件建模: world-models/wm-wam-vam-and-action-conditioned-modeling.md
+      - 规划即推理与潜在动作: world-models/planning-as-inference-and-latent-actions.md
+    - 评测、风险与数据:
+      - 世界模型评测与失效模式: world-models/evaluation-and-failure-modes.md
+      - 不确定性与风险感知规划: world-models/uncertainty-and-risk-aware-planning.md
+      - 模拟器、反事实与合成 Rollout: world-models/simulators-counterfactuals-and-synthetic-rollouts.md
+      - 数据引擎与自我改进: world-models/data-engines-and-self-improvement.md
+    - 应用与案例:
+      - 机器人与自动驾驶应用: world-models/applications-in-robotics-and-autonomous-driving.md
+      - VLA 世界模型全链路案例: world-models/vla-world-model-full-chain-case.md
+      - 动作条件视频模型训练案例: world-models/action-conditioned-video-world-model-training-case.md
+      - 数据、仿真与评测开发路线: world-models/development-roadmap-data-simulation-and-evaluation.md
+    - 训练与系统效率:
+      - 高效训练路线图: world-models/efficient-training-roadmap.md
+      - 效率技术覆盖矩阵: world-models/efficiency-technique-coverage-matrix.md
+      - Rollout Serving、量化与 Kernel: world-models/rollout-serving-quantization-kernel-case.md
+      - 高效训练实验报告样例: world-models/world-model-efficient-training-experiment-report.md
+  - VLA:
+    - VLA 专题: vla/index.md
+    - VLA 动作表示与控制接口: vla/action-representation-and-interfaces.md
+    - VLA 数据与策略学习: vla/data-and-policy-learning.md
+    - VLA 动作分块、层级策略与潜在技能: vla/action-chunking-hierarchical-policies-and-latent-skills.md
+    - VLA 评测与数据引擎: vla/benchmarks-and-data-engines.md
+    - VLA 闭环恢复与失败分析: vla/closed-loop-recovery-and-failure-analysis.md
+    - VLA 部署与安全: vla/deployment-and-safety.md
+  - 具身智能:
+    - 具身智能专题: embodied-ai/index.md
+    - 闭环与状态:
+      - 观测、动作与反馈闭环: embodied-ai/beginner-learning-path.md
+      - 一个任务跑通具身闭环: embodied-ai/closed-loop-task-walkthrough.md
+      - 机器人 State / Action 数据: embodied-ai/state-action-robot-datasets.md
+      - 相机、深度与机器人视觉: embodied-ai/cameras-depth-and-robot-vision.md
+      - 坐标变换与手眼协调: embodied-ai/coordinate-transforms-and-hand-eye-calibration.md
+      - 机器人运动学与 DH 参数: embodied-ai/robot-kinematics-and-dh-parameters.md
+      - 双目匹配与 Cost Volume: embodied-ai/stereo-matching-and-cost-volume.md
+    - 策略、规划与执行:
+      - 规划、控制与安全: embodied-ai/planning-control-and-safety.md
+      - 资产、感知、抓取与轨迹 Pipeline: embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md
+      - VLA、WAM 与世界模型系统图: embodied-ai/vla-wam-world-model-system-map.md
+    - 仿真与数据链:
+      - Sim2Real 与具身数据引擎: embodied-ai/sim2real-and-data-engines.md
+      - Isaac Sim 与 RoboTwin: embodied-ai/isaacsim-and-robotwin.md
+      - Rerun 机器人数据可视化: embodied-ai/rerun-robotics-data-visualization.md
+    - 评测、交互与部署:
+      - 任务谱系与评测: embodied-ai/task-taxonomy-and-benchmarks.md
+      - 家庭机器人流程与失败排查: embodied-ai/household-robotics-workflows-and-failure-patterns.md
+      - 人机协作与交互评测: embodied-ai/human-robot-interaction-and-evaluation.md
+      - 部署模式与安全案例: embodied-ai/deployment-patterns-and-safety-cases.md
+      - VLA 数据、模型与评测路线: embodied-ai/vla-data-model-and-evaluation-roadmap.md
+- 论文精读:
+  - 论文阅读与实现: paper-deep-dives/index.md
+  - 基础与训练:
+    - ZeRO：为什么数据并行会浪费这么多显存: paper-deep-dives/foundations/zero.md
+    - Megatron-LM：Tensor Model Parallel: paper-deep-dives/foundations/megatron-lm.md
+    - MagiAttention：超长上下文分布式 Attention: paper-deep-dives/foundations/magiattention.md
+    - RingAttention：近无限上下文训练: paper-deep-dives/world-models/ringattention.md
+    - Attn-QAT：4-bit Attention 量化感知训练: paper-deep-dives/foundations/attn-qat.md
+    - Muon：LLM 预训练优化器: paper-deep-dives/foundations/muon-is-scalable.md
+    - SLA / SLA2：DiT 稀疏线性 Attention: paper-deep-dives/foundations/sla-sparse-linear-attention.md
+    - GPU Utilization：为什么 100% 不等于训练跑满: paper-deep-dives/foundations/gpu-utilization-misleading.md
+  - 推理系统:
+    - vLLM / PagedAttention：KV cache 分页管理: paper-deep-dives/inference/vllm-pagedattention.md
+    - EAGLE：为什么 draft 不一定要是小模型: paper-deep-dives/inference/eagle.md
+    - EAGLE-2：动态 Draft Tree: paper-deep-dives/inference/eagle-2.md
+    - EAGLE-3：训练时见过自己犯错: paper-deep-dives/inference/eagle-3.md
+    - Realtime-VLA FLASH：并行 Flow 验证与回退: paper-deep-dives/inference/realtime-vla-flash-0928-1144.md
+    - WA-SpecDec：共享物理场景表征: paper-deep-dives/inference/wa-specdec-0928-1144.md
+    - KVSlimmer：非对称 KV 合并: paper-deep-dives/inference/kvslimmer.md
+    - Low-bit LLM Survey：低比特大模型系统: paper-deep-dives/inference/low-bit-llm-survey.md
+    - Fast-FoundationStereo：实时 Zero-Shot 双目匹配: paper-deep-dives/inference/fast-foundation-stereo.md
+  - 扩散生成:
+    - Score SDE：连续时间生成过程: paper-deep-dives/diffusion/score-sde.md
+    - DPM-Solver++：Guidance 场景 ODE 求解器: paper-deep-dives/diffusion/dpm-solver-plus-plus.md
+    - CPS：Flow-RL 的系数保持采样: paper-deep-dives/diffusion/cps.md
+    - DMD：一步扩散蒸馏: paper-deep-dives/diffusion/dmd.md
+    - DMD2：更稳的少步分布匹配蒸馏: paper-deep-dives/diffusion/dmd2.md
+    - Phased DMD：分阶段少步蒸馏: paper-deep-dives/diffusion/phased-dmd.md
+    - AnyFlow：任意步视频扩散蒸馏: paper-deep-dives/diffusion/anyflow.md
+    - CausVid：流式自回归视频扩散: paper-deep-dives/diffusion/causvid.md
+    - LongLive-2.0：NVFP4 长视频生成基础设施: paper-deep-dives/diffusion/longlive2.md
+    - Diffusion Forcing：next-token 与全序列扩散: paper-deep-dives/diffusion/diffusion-forcing.md
+    - Wan2.1：开源视频生成系统路线: paper-deep-dives/diffusion/wan.md
+    - PixelDiT：无 VAE 的像素空间 DiT: paper-deep-dives/diffusion/pixeldit.md
+    - Z-Image-Pixel：像素扩散更适合 post-training: paper-deep-dives/diffusion/z-image-pixel.md
+    - REPA：用外部视觉表征加速 DiT 训练: paper-deep-dives/diffusion/repa.md
+    - DeltaQuant：视频扩散的 4-bit core-delta 量化: paper-deep-dives/diffusion/deltaquant.md
+    - RDM：用表征分布匹配训练一步视觉生成器: paper-deep-dives/diffusion/rdm.md
+    - Drifting：把生成分布的迭代搬到训练阶段: paper-deep-dives/diffusion/drifting.md
+    - TBSM：用三体散射把分布距离变成一步监督: paper-deep-dives/diffusion/tbsm.md
+  - 世界模型:
+    - PlaNet：像素规划的潜变量动力学: paper-deep-dives/world-models/planet.md
+    - MuZero：只预测对规划有用的世界模型: paper-deep-dives/world-models/muzero.md
+    - Dreamer：想象轨迹中训练控制策略: paper-deep-dives/world-models/dreamer.md
+    - DreamerV2：离散世界模型玩 Atari: paper-deep-dives/world-models/dreamerv2.md
+    - DreamerV3：latent 里训练策略: paper-deep-dives/world-models/dreamerv3.md
+    - JEPA：预测式表征学习路线: paper-deep-dives/world-models/jepa.md
+    - H-JEPA：层级 JEPA 与潜变量 EBM: paper-deep-dives/world-models/h-jepa.md
+    - V-JEPA：视频潜变量预测表征: paper-deep-dives/world-models/v-jepa.md
+    - Genie：无动作标签学可交互环境: paper-deep-dives/world-models/genie.md
+    - LWM：百万 token 视频语言世界模型: paper-deep-dives/world-models/lwm.md
+    - Self Forcing：对齐视频训练与推理: paper-deep-dives/world-models/self-forcing.md
+    - Towards Video World Models：视频世界模型门槛: paper-deep-dives/world-models/towards-video-world-models.md
+    - World Models Survey：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
+    - World Model for Robot Learning：机器人学习综述: paper-deep-dives/world-models/world-model-for-robot-learning-survey.md
+    - LingBot-World：视频基础模型到世界模拟器: paper-deep-dives/world-models/lingbot-world.md
+    - LingBot-VA 2.0：原生视频-动作预训练: paper-deep-dives/world-models/lingbot-va2.md
+    - RISE：用组合式世界模型做机器人想象强化学习: paper-deep-dives/world-models/rise.md
+    - Lance：统一多模态世界建模启发: paper-deep-dives/world-models/lance.md
+    - BAGEL：交错多模态预训练: paper-deep-dives/world-models/bagel.md
+    - Emu3.5：原生多模态世界学习器: paper-deep-dives/world-models/emu3-5.md
+    - Beyond Language Modeling：多模态预训练与世界模型: paper-deep-dives/world-models/beyond-language-modeling.md
+  - 具身智能:
+    - RoboDojo：统一仿真与现实的机器人操作评测: paper-deep-dives/embodied-ai/robodojo.md
+    - RT-2：视觉语言模型接到机器人动作: paper-deep-dives/embodied-ai/rt2.md
+    - GR-2：Web 视频知识迁移到机器人: paper-deep-dives/embodied-ai/gr2.md
+    - GR-3：少样本长时程 VLA: paper-deep-dives/embodied-ai/gr3.md
+    - π0.5：开放世界 VLA: paper-deep-dives/embodied-ai/pi05.md
+    - kai0：资源受限下的高可靠机器人操作: paper-deep-dives/embodied-ai/kai0.md
+    - Qwen-RobotManip：先对齐再扩规模的机器人操作基础模型: paper-deep-dives/embodied-ai/qwen-robotmanip.md
+    - DM0.5：开放世界具身基础模型: paper-deep-dives/embodied-ai/dm05.md
+    - GenCeption：视频生成模型如何成为通用视觉学习器: paper-deep-dives/embodied-ai/genception.md
+    - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
+    - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
+    - Fast-WAM：训练时学世界，推理时不生成未来: paper-deep-dives/embodied-ai/fast-wam.md
+    - OpenWAM：把 World–Action Model 变成可控的研究程序: paper-deep-dives/embodied-ai/openwam.md
+    - Motus：统一 latent action 世界模型: paper-deep-dives/embodied-ai/motus.md
+    - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md
+    - VO-DP：语义-几何自适应扩散策略: paper-deep-dives/embodied-ai/vodp.md
+    - VGGT：前向恢复相机、深度、点云与轨迹: paper-deep-dives/embodied-ai/vggt.md
+    - VGGT-Ω：几何重建怎样变成具身空间表征: paper-deep-dives/embodied-ai/vggt-omega.md
+    - D4RT：动态场景的 4D 重建与跟踪: paper-deep-dives/embodied-ai/d4rt.md
+    - Depth Anything：无标注数据释放单目深度: paper-deep-dives/embodied-ai/depth-anything.md
+    - Depth Anything V2：单目深度数据配方: paper-deep-dives/embodied-ai/depth-anything-v2.md
+    - Depth Anything 3：任意视角 3D 几何底座: paper-deep-dives/embodied-ai/depth-anything-3.md
+    - MapAnything：统一前向 Metric 3D 重建骨干: paper-deep-dives/embodied-ai/mapanything.md
+  - 技术报告:
+    - DeepSeek-V3：671B MoE、MLA 与 FP8: paper-deep-dives/technical-reports/deepseek-v3.md
+    - DeepSeek-R1：RL 激发推理能力: paper-deep-dives/technical-reports/deepseek-r1.md
+    - DeepSeek-V4：百万上下文与 FP4 后训练: paper-deep-dives/technical-reports/deepseek-v4-pro.md
+    - Qwen3：Thinking 模式、预训练与蒸馏: paper-deep-dives/technical-reports/qwen3.md
+    - Qwen3.5-Omni：Thinker-Talker 与全模态 Agent: paper-deep-dives/technical-reports/qwen35-omni.md
+    - Cosmos 3：面向 Physical AI 的全模态世界模型平台: paper-deep-dives/technical-reports/cosmos3.md
+    - Kimi K2：MuonClip、万亿 MoE 与 Agent 数据: paper-deep-dives/technical-reports/kimi-k2.md
+    - LongCat-Video：长视频生成、GRPO 与高效推理: paper-deep-dives/technical-reports/longcat-video.md
+    - MiniMax H3：统一任务与模态的视频生成模型: paper-deep-dives/technical-reports/minimax-h3-1010-1401.md
+    - Gemini 2.5：动态 Thinking 与长上下文 Agent: paper-deep-dives/technical-reports/gemini-2-5.md
+    - GPT-4o System Card：Omni 安全与多模态评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
+    - InCoder-32B：工业代码模型与执行验证训练: paper-deep-dives/technical-reports/incoder-32b.md
+    - Nemotron 3 Super：Mamba-MoE 与异步 RL: paper-deep-dives/technical-reports/nemotron-3-super.md
+- 工具与查阅:
+  - 查阅入口: technical-reference/index.md
+  - 术语表: glossary/index.md
   - 知识 QA:
-      - 基础与 Transformer: knowledge-qa/foundations-and-transformer.md
-      - 训练与对齐: knowledge-qa/training-and-alignment.md
-      - 推理服务与量化: knowledge-qa/inference-serving-and-quantization.md
-      - 算子与性能: knowledge-qa/operators-and-performance.md
-      - RAG、Agent 与评估: knowledge-qa/rag-agent-and-evaluation.md
-      - 多模态与生成模型: knowledge-qa/multimodal-generative-and-embodied.md
-      - 世界模型: knowledge-qa/world-models.md
-      - 具身智能与 VLA: knowledge-qa/embodied-ai-and-vla.md
-  - 论文精读:
-      - 论文阅读器: paper-library/index.md
-      - 基础与训练:
-          - ZeRO：为什么数据并行会浪费这么多显存: paper-deep-dives/foundations/zero.md
-          - Megatron-LM：Tensor Model Parallel: paper-deep-dives/foundations/megatron-lm.md
-          - MagiAttention：超长上下文分布式 Attention: paper-deep-dives/foundations/magiattention.md
-          - RingAttention：近无限上下文训练: paper-deep-dives/world-models/ringattention.md
-          - Attn-QAT：4-bit Attention 量化感知训练: paper-deep-dives/foundations/attn-qat.md
-          - Muon：LLM 预训练优化器: paper-deep-dives/foundations/muon-is-scalable.md
-          - SLA / SLA2：DiT 稀疏线性 Attention: paper-deep-dives/foundations/sla-sparse-linear-attention.md
-          - GPU Utilization：为什么 100% 不等于训练跑满: paper-deep-dives/foundations/gpu-utilization-misleading.md
-      - 推理系统:
-          - vLLM / PagedAttention：KV cache 分页管理: paper-deep-dives/inference/vllm-pagedattention.md
-          - EAGLE：为什么 draft 不一定要是小模型: paper-deep-dives/inference/eagle.md
-          - EAGLE-2：动态 Draft Tree: paper-deep-dives/inference/eagle-2.md
-          - EAGLE-3：训练时见过自己犯错: paper-deep-dives/inference/eagle-3.md
-          - Realtime-VLA FLASH：并行 Flow 验证与回退: paper-deep-dives/inference/realtime-vla-flash-0928-1144.md
-          - WA-SpecDec：共享物理场景表征: paper-deep-dives/inference/wa-specdec-0928-1144.md
-          - KVSlimmer：非对称 KV 合并: paper-deep-dives/inference/kvslimmer.md
-          - Low-bit LLM Survey：低比特大模型系统: paper-deep-dives/inference/low-bit-llm-survey.md
-          - Fast-FoundationStereo：实时 Zero-Shot 双目匹配: paper-deep-dives/inference/fast-foundation-stereo.md
-      - 扩散生成:
-          - Score SDE：连续时间生成过程: paper-deep-dives/diffusion/score-sde.md
-          - DPM-Solver++：Guidance 场景 ODE 求解器: paper-deep-dives/diffusion/dpm-solver-plus-plus.md
-          - CPS：Flow-RL 的系数保持采样: paper-deep-dives/diffusion/cps.md
-          - DMD：一步扩散蒸馏: paper-deep-dives/diffusion/dmd.md
-          - DMD2：更稳的少步分布匹配蒸馏: paper-deep-dives/diffusion/dmd2.md
-          - Phased DMD：分阶段少步蒸馏: paper-deep-dives/diffusion/phased-dmd.md
-          - AnyFlow：任意步视频扩散蒸馏: paper-deep-dives/diffusion/anyflow.md
-          - CausVid：流式自回归视频扩散: paper-deep-dives/diffusion/causvid.md
-          - LongLive-2.0：NVFP4 长视频生成基础设施: paper-deep-dives/diffusion/longlive2.md
-          - Diffusion Forcing：next-token 与全序列扩散: paper-deep-dives/diffusion/diffusion-forcing.md
-          - Wan2.1：开源视频生成系统路线: paper-deep-dives/diffusion/wan.md
-          - PixelDiT：无 VAE 的像素空间 DiT: paper-deep-dives/diffusion/pixeldit.md
-          - Z-Image-Pixel：像素扩散更适合 post-training: paper-deep-dives/diffusion/z-image-pixel.md
-          - REPA：用外部视觉表征加速 DiT 训练: paper-deep-dives/diffusion/repa.md
-          - DeltaQuant：视频扩散的 4-bit core-delta 量化: paper-deep-dives/diffusion/deltaquant.md
-          - RDM：用表征分布匹配训练一步视觉生成器: paper-deep-dives/diffusion/rdm.md
-          - Drifting：把生成分布的迭代搬到训练阶段: paper-deep-dives/diffusion/drifting.md
-          - TBSM：用三体散射把分布距离变成一步监督: paper-deep-dives/diffusion/tbsm.md
-      - 世界模型:
-          - PlaNet：像素规划的潜变量动力学: paper-deep-dives/world-models/planet.md
-          - MuZero：只预测对规划有用的世界模型: paper-deep-dives/world-models/muzero.md
-          - Dreamer：想象轨迹中训练控制策略: paper-deep-dives/world-models/dreamer.md
-          - DreamerV2：离散世界模型玩 Atari: paper-deep-dives/world-models/dreamerv2.md
-          - DreamerV3：latent 里训练策略: paper-deep-dives/world-models/dreamerv3.md
-          - JEPA：预测式表征学习路线: paper-deep-dives/world-models/jepa.md
-          - H-JEPA：层级 JEPA 与潜变量 EBM: paper-deep-dives/world-models/h-jepa.md
-          - V-JEPA：视频潜变量预测表征: paper-deep-dives/world-models/v-jepa.md
-          - Genie：无动作标签学可交互环境: paper-deep-dives/world-models/genie.md
-          - LWM：百万 token 视频语言世界模型: paper-deep-dives/world-models/lwm.md
-          - Self Forcing：对齐视频训练与推理: paper-deep-dives/world-models/self-forcing.md
-          - Towards Video World Models：视频世界模型门槛: paper-deep-dives/world-models/towards-video-world-models.md
-          - World Models Survey：具身世界模型综述: paper-deep-dives/world-models/world-models-embodied-ai-survey.md
-          - World Model for Robot Learning：机器人学习综述: paper-deep-dives/world-models/world-model-for-robot-learning-survey.md
-          - LingBot-World：视频基础模型到世界模拟器: paper-deep-dives/world-models/lingbot-world.md
-          - LingBot-VA 2.0：原生视频-动作预训练: paper-deep-dives/world-models/lingbot-va2.md
-          - RISE：用组合式世界模型做机器人想象强化学习: paper-deep-dives/world-models/rise.md
-          - Lance：统一多模态世界建模启发: paper-deep-dives/world-models/lance.md
-          - BAGEL：交错多模态预训练: paper-deep-dives/world-models/bagel.md
-          - Emu3.5：原生多模态世界学习器: paper-deep-dives/world-models/emu3-5.md
-          - Beyond Language Modeling：多模态预训练与世界模型: paper-deep-dives/world-models/beyond-language-modeling.md
-      - 具身智能:
-          - RoboDojo：统一仿真与现实的机器人操作评测: paper-deep-dives/embodied-ai/robodojo.md
-          - RT-2：视觉语言模型接到机器人动作: paper-deep-dives/embodied-ai/rt2.md
-          - GR-2：Web 视频知识迁移到机器人: paper-deep-dives/embodied-ai/gr2.md
-          - GR-3：少样本长时程 VLA: paper-deep-dives/embodied-ai/gr3.md
-          - π0.5：开放世界 VLA: paper-deep-dives/embodied-ai/pi05.md
-          - kai0：资源受限下的高可靠机器人操作: paper-deep-dives/embodied-ai/kai0.md
-          - Qwen-RobotManip：先对齐再扩规模的机器人操作基础模型: paper-deep-dives/embodied-ai/qwen-robotmanip.md
-          - DM0.5：开放世界具身基础模型: paper-deep-dives/embodied-ai/dm05.md
-          - GenCeption：视频生成模型如何成为通用视觉学习器: paper-deep-dives/embodied-ai/genception.md
-          - SpatialVLA：3D 空间表征接入 VLA: paper-deep-dives/embodied-ai/spatialvla.md
-          - Video Prediction Policy：预测视觉表征训练策略: paper-deep-dives/embodied-ai/video-prediction-policy.md
-          - Fast-WAM：训练时学世界，推理时不生成未来: paper-deep-dives/embodied-ai/fast-wam.md
-          - OpenWAM：把 World–Action Model 变成可控的研究程序: paper-deep-dives/embodied-ai/openwam.md
-          - Motus：统一 latent action 世界模型: paper-deep-dives/embodied-ai/motus.md
-          - DreamZero：WAM 零样本策略: paper-deep-dives/embodied-ai/dreamzero.md
-          - VO-DP：语义-几何自适应扩散策略: paper-deep-dives/embodied-ai/vodp.md
-          - VGGT：前向恢复相机、深度、点云与轨迹: paper-deep-dives/embodied-ai/vggt.md
-          - VGGT-Ω：几何重建怎样变成具身空间表征: paper-deep-dives/embodied-ai/vggt-omega.md
-          - D4RT：动态场景的 4D 重建与跟踪: paper-deep-dives/embodied-ai/d4rt.md
-          - Depth Anything：无标注数据释放单目深度: paper-deep-dives/embodied-ai/depth-anything.md
-          - Depth Anything V2：单目深度数据配方: paper-deep-dives/embodied-ai/depth-anything-v2.md
-          - Depth Anything 3：任意视角 3D 几何底座: paper-deep-dives/embodied-ai/depth-anything-3.md
-          - MapAnything：统一前向 Metric 3D 重建骨干: paper-deep-dives/embodied-ai/mapanything.md
-      - 技术报告:
-          - DeepSeek-V3：671B MoE、MLA 与 FP8: paper-deep-dives/technical-reports/deepseek-v3.md
-          - DeepSeek-R1：RL 激发推理能力: paper-deep-dives/technical-reports/deepseek-r1.md
-          - DeepSeek-V4：百万上下文与 FP4 后训练: paper-deep-dives/technical-reports/deepseek-v4-pro.md
-          - Qwen3：Thinking 模式、预训练与蒸馏: paper-deep-dives/technical-reports/qwen3.md
-          - Qwen3.5-Omni：Thinker-Talker 与全模态 Agent: paper-deep-dives/technical-reports/qwen35-omni.md
-          - Cosmos 3：面向 Physical AI 的全模态世界模型平台: paper-deep-dives/technical-reports/cosmos3.md
-          - Kimi K2：MuonClip、万亿 MoE 与 Agent 数据: paper-deep-dives/technical-reports/kimi-k2.md
-          - LongCat-Video：长视频生成、GRPO 与高效推理: paper-deep-dives/technical-reports/longcat-video.md
-          - MiniMax H3：统一任务与模态的视频生成模型: paper-deep-dives/technical-reports/minimax-h3-1010-1401.md
-          - Gemini 2.5：动态 Thinking 与长上下文 Agent: paper-deep-dives/technical-reports/gemini-2-5.md
-          - GPT-4o System Card：Omni 安全与多模态评测: paper-deep-dives/technical-reports/gpt-4o-system-card.md
-          - InCoder-32B：工业代码模型与执行验证训练: paper-deep-dives/technical-reports/incoder-32b.md
-          - Nemotron 3 Super：Mamba-MoE 与异步 RL: paper-deep-dives/technical-reports/nemotron-3-super.md
+    - 基础与 Transformer: knowledge-qa/foundations-and-transformer.md
+    - 训练与对齐: knowledge-qa/training-and-alignment.md
+    - 推理服务与量化: knowledge-qa/inference-serving-and-quantization.md
+    - 算子与性能: knowledge-qa/operators-and-performance.md
+    - RAG、Agent 与评估: knowledge-qa/rag-agent-and-evaluation.md
+    - 多模态与生成模型: knowledge-qa/multimodal-generative-and-embodied.md
+    - 世界模型: knowledge-qa/world-models.md
+    - 具身智能与 VLA: knowledge-qa/embodied-ai-and-vla.md
+  - 思考探索:
+    - 问题与探索总览: thinking-exploration/index.md
+    - 具身推理加速与观测时效: thinking-exploration/embodied-inference-observation-age-1009-2059.md
+    - 世界模型是什么：从预测画面到承受行动后果: thinking-exploration/what-is-a-world-model.md
+    - 高效 AI 的状态账本：少搬状态，比少算一次更重要: thinking-exploration/efficient-ai-is-state-movement.md
+    - 扩散模型加速：每删一步，都要重新安排误差: thinking-exploration/diffusion-speedup-redistributes-error.md
+    - 世界模型该预测什么：答案取决于谁消费未来: thinking-exploration/world-model-future-consumers.md
+    - 从预测未来到利用未来：Latent World Model 怎样进入规划闭环: thinking-exploration/latent-world-models-for-planning.md
+    - 具身智能：一条可纠错的状态链: thinking-exploration/embodied-ai-correctable-state-chain.md
+    - 技术报告读后：前沿模型正在变成受约束的闭环: thinking-exploration/model-capability-is-a-constrained-loop.md
+    - XR2 Gen 2：端侧 AI 与量化部署: thinking-exploration/qualcomm-xr2-gen2.md
+    - 自动驾驶世界模型：从渲染、仿真到规划闭环: thinking-exploration/autonomous-driving-world-models.md
+    - 从生成视频到维护世界：重建为什么是自动驾驶世界模型的状态接口: thinking-exploration/reconstruction-as-world-model-state-interface-0724-1059.md
+    - 世界模型 Infra：从模型谱系到物理 AI 工程栈: thinking-exploration/world-model-infrastructure.md
+    - 世界模型现状：从视频模拟到工程闭环: thinking-exploration/world-models-status-and-engineering-loop.md
+    - WAM 与 3D 视觉：世界模型从视频想象走向物理闭环: thinking-exploration/wam-3dv-world-models.md
+    - 世界模型驱动的机器人数据飞轮：能持续生产经验的系统，才是真正的基础设施: thinking-exploration/robot-data-flywheel-world-models.md
+    - 具身智能现状：VLA、数据工厂与真实闭环: thinking-exploration/embodied-ai-status-and-real-world-loop.md
+    - 具身智能的数据鸿沟：先对齐，再扩规模: thinking-exploration/embodied-ai-data-gap-alignment-and-scaling-0731-1219.md
+    - 读懂 Fast-FoundationStereo: thinking-exploration/fast-foundation-stereo-prerequisite-map.md

@@ -1,103 +1,61 @@
-# 生成式模拟与视频世界模型：从好看视频到可交互未来
+# 生成式模拟与视频世界模型
 
-视频世界模型很容易被误读成“更强的视频生成”。在世界模型语境里，它真正要回答的是：给定历史、动作、目标和场景约束，未来是否会以可验证、可交互、可用于决策的方式演化。
+交互场景里，桌上有一只红杯子。用户转身走向门口，随后转回来，杯子应该仍在原来的桌上；如果途中伸手把它推到边缘，返回时还应看到这个动作留下的变化。视频生成器需要连续产生画面，交互模型还要接收新动作并维持已有状态。两者可以共享视觉底座，但训练掩码、动作时间对齐和缓存有效条件会改变。
 
-视频生成模型要补上动作因果、交互约束和评测接口，才能变成服务规划和数据回流的世界模型。
+## 环境时间与生成时间先分开
 
-## 普通视频生成缺少动作因果
+令 $t$ 表示环境帧时间，$\tau$ 表示扩散或 flow 采样时间。一次生成未来四帧，可能对同一组未来 latent 运行多次去噪。去噪步数减少不等于环境推进更少，也不改变动作每隔多久生效。
 
-普通视频生成常建模：
+普通条件视频模型写作 $p(v_{t+1:t+H}\mid v_{\le t},g)$；动作条件模型写作
 
-$$
-p_\theta(v_{t+1:t+H}\mid v_{\le t}, c)
-$$
+\[
+p_\theta(v_{t+1:t+H}\mid v_{\le t},a_{t:t+H-1},g).
+\]
 
-这里 \(v_{\le t}\) 是历史视频帧或视频 latent，\(c\) 是文本、首帧、风格或场景条件，模型输出未来 \(H\) 步视频。这能学到外观、光照、构图和一般运动规律，但还不能证明它理解动作后果。
+模型可以通过 action token、cross-attention 或调制层注入动作。但接口中出现动作张量，只能说明模型有机会使用动作，不能证明训练后一定响应动作。需要固定相同起点与随机种子，替换动作并检查任务变量变化，而不是只比较像素差异。
 
-视频世界模型至少要把动作放进条件里：
+## 转身过程中，模型到底承诺保留什么
 
-$$
-p_\theta(v_{t+1:t+H}, u_{t+1:t+H}
-\mid v_{\le t}, a_{t:t+H-1}, c)
-$$
+假设一秒生成十帧，用户转身两秒，杯子有二十帧完全不可见。逐帧外观一致并没有为杯子的位置提供监督，因为它不在画面中。返回时模型可能重新生成一只外观合理的杯子，却放错位置。需要保存的状态包括物体身份、离开前位置，以及遮挡期间是否发生能改变它的事件。
 
-这里 \(a_{t:t+H-1}\) 是未来动作，\(u\) 可以是风险、不确定性、可达性、碰撞或成功概率。公式里的关键变化是：固定同一历史时，换动作应该得到不同未来。如果动作只写在 prompt 里但不改变模型内部生成路径，模型很可能仍然靠视频惯性生成平均未来。
+如果场景中只有相机转动，几何记忆可以约束返回画面；如果桌子会被其他人推动，还要表达未观测事件的不确定性。把杯子永远固定在原位与每次随机重画，都会在不同情形失效。评测应分别包含静态返回、用户已移动物体、外部事件可能发生的返回，不能用一段流畅短片同时证明三者。
 
-## 为什么要继承视频生成底座
+## 视频底座与交互适配分别学什么
 
-从零训练一个世界模型很贵。大规模视频生成底座已经学到物体外观、短中程运动、场景布局、相机变化和视觉连续性。很多视频世界模型因此选择先继承视频底座，再继续训练动作条件、长时一致性、因果 rollout 和低延迟生成。
+视频预训练提供外观与运动先验，动作数据再约束“给定控制会怎样”，因果适配与蒸馏则处理在线生成的输入分布和成本。[LingBot-World](https://arxiv.org/abs/2601.20540)在原论文中区分 pre-training、middle-training 与 post-training，可用来阅读这些责任如何拆开。
 
 ![LingBot-World training pipeline](../assets/images/paper-deep-dives/world-models/lingbot-world/figure-4-training-pipeline.png){ width="920" }
 
-<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 4。原图展示 LingBot-World 从 foundation video generator 出发，经过 pre-training、middle-training 和 post-training，逐步加入通用视频先验、交互数据、长时动态和因果低延迟能力。读图重点：继承视频底座只是起点，动作数据、因果结构和评测门禁才是世界模型分水岭。</small>
-
-这类路线可以理解成三阶段。第一阶段学“世界看起来怎样”，主要依靠大规模视频和图文数据。第二阶段学“动作如何改变未来”，引入游戏、机器人、相机控制或交互轨迹。第三阶段学“怎样实时向前滚”，包括因果 attention、KV cache、少步生成和流式解码。
-
-## 动作必须进入模型内部
-
-动作可以是键盘输入、相机轨迹、机器人关节动作、末端位姿、离散技能、语言子目标或工具调用。关键不是动作名字，而是它是否影响去噪路径、latent dynamics 或预测头。
+<small>图源：Advancing Open-source World Models，Figure 4，训练阶段示意。</small>
 
 ![LingBot-World system pipeline](../assets/images/paper-deep-dives/world-models/lingbot-world/figure-5-system-pipeline.png){ width="920" }
 
-<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 5。原图展示图像/视频、噪声 latent、文本和用户动作共同进入生成系统，并在 DiT block 中通过 action embedding、adaptive normalization、self-attention 和 text cross-attention 影响未来视频。读图重点：动作条件要成为模型内部变量，而不是生成后贴上的解释标签。</small>
+<small>图源：同上，Figure 5，输入条件与生成系统示意。</small>
 
-最小反事实测试很简单：
+共享视频底座不保证接触动力学正确。互联网视频多为观察数据，动作与后果之间可能含隐藏变量；机器人或相机控制数据还需要单位、坐标系和执行时长。条件建模的因果边界见 [WM/WAM/VAM 接口](wm-wam-vam-and-action-conditioned-modeling.md)。
 
-```text
-固定同一历史画面
-  -> 给三组不同动作
-  -> 检查未来视频、latent、风险和成功排序是否合理分叉
-```
+## Chunk causal attention 限制哪些信息
 
-如果三组未来几乎一样，模型可能只是普通视频续写器。如果未来分叉合理，但 planner 不能用它选动作，它还只是动作条件预测器。只有接入 planner 或 policy 后成功率、恢复率、风险控制或数据回流变好，才进入世界模型证据层。
+假设每块生成四帧。Block-causal 模型可允许同一块中的 noisy token 相互注意，但禁止当前块读取以后块的真实内容；已经生成的过去块提供上下文。下一动作到达后，后续块根据这个新输入继续生成。
 
-## 交互 rollout 需要因果化
-
-普通视频生成可以整段视频一起生成；交互式世界模型必须一步步向前，持续接收用户或 agent 的动作，并保持环境记忆。这会带来 train-test gap：训练时模型可能看完整片段，推理时只能看过去和当前 chunk。
+如果训练当前块时能看到未来真实帧，在线推理却只能看到过去，模型可能利用泄漏信息得到很低训练 loss。Teacher-forced 的真实历史与在线滚动的生成历史也存在差异，后续 rollout 评测必须让模型消费自己的输出。
 
 ![LingBot-World causal adaptation](../assets/images/paper-deep-dives/world-models/lingbot-world/figure-6-causal-adaptation.png){ width="790" }
 
-<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 6。原图展示 causal generator adaptation 和 discriminator architecture。读图重点：block causal attention、KV cache、长时 discriminator 和少步生成共同解决“只能看过去还要持续交互”的问题。</small>
+<small>图源：LingBot-World，Figure 6，因果适配相关结构。</small>
 
-在线系统还要分清频率。高频控制通常需要传统控制器或轻量 policy，不能等待昂贵视频采样；中频规划可以用 latent rollout、低分辨率未来或候选风险排序；低频分析和人审才适合高清视频反事实回放。
+缓存也取决于计算图。对已经固定且不会受后续输入影响的过去 token，可以考虑复用 K/V；对双向模型中会随未来变化的过去表示，或依赖当前去噪时间的状态，不能默认跨步复用。改换动作分支时，分叉之前的共同前缀可能共享，分叉之后的状态必须各自维护。视频缓存的更多条件见 [Serving 案例](rollout-serving-quantization-kernel-case.md)。
 
-这就是为什么视频解码不一定在控制主路径上。主路径更需要的是哪个动作更安全、更可达、更可能完成任务。
+## 交互成本为什么随候选数增长
 
-## 生成式模拟的三种用法
+教学系统用 32 条动作候选，每条预测 8 块，每块 4 次网络采样。忽略共享与批处理时，共有 $32\times8\times4=1024$ 次“候选块前向”的计算量。减少采样步数至 2 可将这一部分减半，但编码、候选评分和解码没有必然同比减少。
 
-第一种是在线规划。机器人可以对多条候选轨迹做短 horizon rollout，筛掉会碰撞、滑落或遮挡关键物体的动作；自动驾驶可以比较刹车、让行、变道的未来风险。
+若 planner 只需要终点 latent 和碰撞概率，逐候选解码高清视频可能浪费关键路径预算。可以让控制路径使用 latent 和任务头，人审时再解码选中的少数轨迹。这样改变了输出用途，需要分别报告控制延迟与可视化延迟。
 
-第二种是反事实与失败回放。真实危险事件稀有、采集成本高、复现困难。视频世界模型可以回答：如果当时慢一点、换一条路径、先移动另一个物体，会不会避免失败。
+[CausVid](https://arxiv.org/abs/2412.07772)研究因果视频生成与少步采样，相关视频机制见[视频扩散](../diffusion/video-and-multimodal-diffusion.md)。其视觉生成结果不能直接作为动作规划收益的证据。
 
-第三种是数据引擎。模型可以生成相邻反事实、扩增长尾场景、辅助人工标注和错误归因。但合成数据不能直接信任，必须经过真实数据校准、failure replay 和 closed-loop evaluation。
+## 一个交互环境还需要什么
 
-## 评测不要只看视频质量
+模型需要定义 reset、step、动作频率、状态保存、终止原因与随机种子。对红杯子例子，reset 应恢复约定初始场景，step 应按动作持续时间推进，保存再恢复状态后应延续同一条件分支。若转身后物体身份被重新生成，短视频可以连贯，环境记忆却不成立。若改变动作后只有背景纹理改变，像素差异很大，动作语义仍可能无效。
 
-视频世界模型至少要过六层评测。视觉层看清晰度、连续性和对象身份；动力学层看接触、遮挡、碰撞、速度和空间结构；动作层看固定历史换动作是否分叉；任务层看接入 planner 或 policy 后成功率是否提升；风险层看 near-miss、碰撞和不确定性是否被低估；系统层看 latency、显存、吞吐和 cost per success。
-
-如果方法声称是 VAM/WAM/视频世界模型，还应报告 action sensitivity、candidate ranking agreement、temporal consistency、risk calibration 和 cost per success。只报告 FVD、视频 demo 或少数交互样例，不足以证明它能服务规划。
-
-## 常见失效模式
-
-| 失败 | 表现 | 为什么危险 |
-| --- | --- | --- |
-| 视觉上对，动力学上错 | 画面自然但接触、摩擦、碰撞不对 | planner 会选错动作 |
-| 动作被历史惯性淹没 | 换动作后未来差异很小 | 反事实和规划失效 |
-| 长时重造世界 | 地标、房间结构、物体身份漂移 | 数据回流会污染策略 |
-| 平均化未来 | 稀有危险分支被抹掉 | 风险被低估 |
-| 采样太慢 | 每个候选动作都要多步扩散 | 无法在线规划 |
-| 自生成偏差回灌 | 合成数据越来越像模型自己 | 策略适应模拟器而非现实 |
-
-最直接的判断是：如果一个视频世界模型不能让系统更好地选择动作、发现风险或构造有价值的反事实，那它仍然只是视频生成模型；只有当它改变规划、训练和数据回流决策时，才真正进入世界模型工程范畴。
-
-## 外部材料
-
-- [LingBot-World / Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)：适合看视频底座如何继续训练成交互式世界模型。
-- [CausVid: From Slow Bidirectional to Fast Autoregressive Video Diffusion Models](https://arxiv.org/abs/2412.07772)：理解为什么因果化和少步生成对交互 rollout 很关键。
-- [Genie 3](https://deepmind.google/models/genie/)：适合看实时、可交互世界模型的前沿展示。
-- [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)：适合看 physical AI 数据生成和世界基础模型平台。
-- [Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)：适合作为视频世界模型路线综述的外部参考。
-
-- [World Models 论文](https://arxiv.org/abs/1803.10122)。
-- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+评测可以分别检查固定动作序列下的多步误差、相同起点不同动作的后果、回看同一地标的状态一致性、风险事件校准以及 agent 使用后的任务成功。可交互产品入口包括 [Genie](https://deepmind.google/models/genie/) 与 [Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)，其展示能力与当前任务所需的控制接口应分别核对。[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)提供路线整理，具体数据门槛见[合成 rollout](simulators-counterfactuals-and-synthetic-rollouts.md)。

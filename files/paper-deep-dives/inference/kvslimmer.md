@@ -15,555 +15,397 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：[github.com/lianjunl13-sudo/KVSlimmer](https://github.com/lianjunl13-sudo/KVSlimmer)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2603.00907)；[GitHub API / repo](https://github.com/lianjunl13-sudo/KVSlimmer)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 压缩历史信息之前，先看压缩本身有多贵
 
-### 研究背景
+长上下文解码需要反复读取此前的 Key 和 Value。随着历史增长，KV cache 占用更多显存，每个新 query 也要查询更多位置。删除部分历史可以降低开销，但被删掉的位置可能恰好包含下一步才需要的证据。KV merging 尝试另一种折中，把多个位置合成较少的表示，让一部分信息继续留在缓存里。
 
-原论文面对的是长上下文 LLM serving 的 KV cache 压力。随着上下文长度和并发请求增加，KV cache 占用显存并拉高 decoder 读带宽；已有 eviction、compression、merge 方法试图减少 cache，但很多方法把 Key 和 Value 当成同质对象，或者需要反向传播 / Hessian 近似，难以直接放进高吞吐推理系统。
+合并又带来新的问题。Key 决定一段历史何时被检索，Value 决定检索后送出什么内容。两个相邻位置可能具有相似的 Key，却包含不同的 Value；对两者使用相同平均规则，未必同时保住检索方式与内容。AsymKV 据此采用非对称合并，但它估计 Key 重要性时需要反向传播。原本用于降低推理成本的操作，反过来引入了反向图、额外计算和峰值显存。
 
-### 问题（Challenge）
+KVSlimmer 主要改动这个环节。它先用投影矩阵的谱分析解释 Q/K 与 V 的相似性差别，再把相邻 Key 的耦合纳入局部二阶模型，最后用一个经验性的夹角关系消去梯度依赖。实际运行的规则只读取前向 attention 权重、Value 与 attention 输出，不再为合并执行反向传播。[↗](https://arxiv.org/pdf/2603.00907v2#page=2)
 
-KVSlimmer 要解决的问题是 asymmetric KV merging：如何压缩 KV cache，同时尽量不损伤长上下文任务质量，并降低合并算法本身的开销。挑战在于 Key 决定 attention 匹配位置，Value 承载被聚合的信息内容；相邻 token 的 K 可能相似，但 V 未必可平均。若粗暴合并 K/V，会丢语义；若用复杂二阶方法，又会引入反向传播和额外显存，抵消推理收益。
+下面的原图应先比较红色反向箭头。上方 AsymKV 从损失回传到需要合并的层，下方 KVSlimmer 在该层利用前向变量构造合并权重。两者都保留了压缩操作，只是计算权重的路径不同。
 
-### Finding
+![AsymKV and KVSlimmer](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-1-asymkv-vs-kvslimmer.png){ width="760" }
 
-论文的 finding 是：Key 和 Value 的冗余结构本来就不对称，应当只合并更同质的 Key，并保留 Value 的异质信息。作者用 Q/K/V 相似度、谱分布和 Hessian 推导说明：Key 侧存在更可利用的相邻冗余，而 Value 合并更容易引入输出误差。进一步，他们发现 Key merge 的二阶优化可以化成只依赖 forward-pass 变量的闭式权重，不必像 AsymKV 那样走反向传播。
+<small>原论文 Figure 1。图中 “Exact Hessian” 是作者对局部推导的表述，后文会区分这部分求导与最终无梯度规则采用的近似。[↗](https://arxiv.org/pdf/2603.00907v2#page=1)</small>
 
-### 方法
+它的主要实证价值也落在这条路径上。Llama3.1-8B-Instruct 的 LongBench 平均分相对 AsymKV 从 43.12 提高到 44.04，同时默认 chunk size 512 下的平均峰值显存从 32.9 GB 降到 23.4 GB。质量增益不算巨大，减少压缩本身的时间与显存才使这项改动更有实际意义。完整上下文的平均分仍是 48.07，因此这里讨论的是压缩方案之间的折中。
 
-方法先进行理论推导：从 attention output 对 Key perturbation 的二阶影响出发，得到包含 off-diagonal Key-Key coupling 的合并目标；再把该目标化简成 forward-only 的可计算权重。推理时，KVSlimmer 在相邻 token / chunk 上选择 Key 合并，Value 保持更细粒度或按非对称规则处理。输入是当前层 KV cache 和 forward 过程中已有的 Q/K/V 相关量，输出是压缩后的 Key cache 与保真 Value 表示；模型权重不更新。
+## 一次压缩怎样改变后续 attention
 
-### 结论
+KVSlimmer 是针对已训练模型的推理期缓存处理，不需要重新训练基础模型。默认 context budget 为 2048，chunk size 为 512，并保留最初 32 个 attention sink tokens。缓存随新块增长后，一次并行合并 512 对相邻位置，把位置数从 budget 加 chunk size 降回 budget。每对变成一个位置，才会净减少 512 个槽位；这与“只挑出 512 个 token 两两配对”不同。[↗](https://arxiv.org/pdf/2603.00907v2#page=3)
 
-实验包括谱分析、长上下文 benchmark、不同模型 / chunk size 下的性能和系统开销对比。结果显示，KVSlimmer 相比 AsymKV 保留或提升任务质量，同时减少反向传播相关开销；runtime ratio、decoder stage 时间和峰值 GPU memory 表明 forward-only 合并更适合服务场景。边界是局部相邻合并可能错过非局部冗余，不同层和 head 的最优压缩率也未必一致；视频/世界模型 KV 还要额外验证动作和时序信息是否被保留。
+可以把一次压缩拆成几个相连的操作。
 
-### 关键术语
+1. 根据已有 attention 信息选择适合合并的相邻位置。附录说明，方法主要合并累积 attention mass 较小的相邻 Key。
+2. 用这些位置的 attention 权重、Value 和输出计算局部敏感性代理，得到 Key 的非均匀合并权重。
+3. 两个 Key 变成一个代表 Key；两个 Value 按沿用的非对称规则相加，同时保留它代表多少原始位置的基数信息。
+4. 后续 query 读取压缩后的缓存。合并不再发生时，模型仍按自回归方式继续计算与生成。
 
-- **KV Cache（键值缓存）**：自回归推理中保存历史 token 的 attention key/value，用于后续 decode
-- **Asymmetric KV Merging（非对称 KV 合并）**：Key 和 Value 采用不同压缩策略，而不是一起平均或删除
-- **Hessian（二阶海森矩阵）**：衡量输出误差对变量扰动二阶敏感性的矩阵
-- **Forward-only（仅前向）**：不需要反向传播即可计算合并权重，适合推理服务
-- **Off-diagonal Coupling（非对角耦合）**：不同 Key 之间的相互影响项，保留它能更准确估计合并误差
+这里的 budget 控制常驻缓存规模，chunk size 控制多长时间集中做一次压缩。较大的 chunk 可以减少触发频率，却也让压缩前的瞬时缓存、attention 中间量及工作区变大。后面的显存实验正是改变 chunk size 来观察这一代价，不能把它理解成只改变了最终保留的 token 数。
 
-## 它的效率贡献是什么
+### Value 相加为什么还需要基数
 
-| Dimension | KVSlimmer |
-| --- | --- |
-| Saved cost | KV cache memory、decoder latency、backprop-based merge overhead |
-| Main idea | Use Q/K/V spectral asymmetry to merge homogeneous Keys while preserving heterogeneous Values |
-| Math core | Exact Hessian block derivation plus closed-form Key merge weights using only forward variables |
-| Inference role | Long-context KV compression during serving; no model weight update required |
-| Main risk | Local adjacent merging may miss non-local redundancy; uniform compression ratio may be suboptimal |
-| Connect to | [上下文压缩与 KV 内存管理](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)、[推理系统路线图](../../inference/index.md)、[Transformer 输入与注意力](../../foundations/transformer-attention-and-tokenization.md) |
+论文沿用 AsymKV 的 $v^*=v_m+v_{m+1}$ 与 cardinality normalization（基数归一化）。只保存这个和，然后当普通单位置 Value 使用，会改变 attention 输出的尺度。一个解释性恒等式可以说明基数的作用。
 
-## 证据等级与外推边界
+假设组 $G$ 内的 Key 完全相同，对某个 query 都产生 logit $e_G$。令 $n_G$ 为组大小，$V_G=\sum_{i\in G}v_i$，原 attention 可以精确整理成
 
-KVSlimmer 的证据来自谱分析、二阶推导、公开长上下文任务和推理效率对比。它很适合作为 KV cache compression 的工程参考，但世界模型 rollout 里的 KV 还会承载动作分叉、视频 latent 和风险判断，不能只按文本长上下文指标验收。
+$$
+o=\frac{\sum_G \exp(e_G)V_G}
+        {\sum_G n_G\exp(e_G)}.
+$$
 
-| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
-| --- | --- | --- | --- | --- |
-| Key 比 Value 更适合合并 | Q/K/V 相似度和投影谱分布分析 | Mechanistic evidence | KV 压缩应区分 K/V，不要统一删或统一合并 | 不能说明视频 latent KV 也有同样谱结构 |
-| forward-only 合并可避免 backprop 开销 | Hessian 化简和闭式权重推导 | Algorithm + System | 在线压缩最好不引入反向传播路径 | 不能替代真实 runtime benchmark |
-| 长上下文任务保持质量 | 文本 benchmark、长上下文评测 | Benchmark | 适合作为 rollout KV 压缩的候选 baseline | 不能证明动作候选排序和 risk calibration 不变 |
-| decoder latency 和 cache memory 可降 | 推理测量和压缩率对比 | System throughput | bandwidth-bound KV 读取场景优先考虑 cache 压缩 | 不能保证端到端收益等于 KV kernel 收益 |
-| 相邻合并有局部性假设 | 方法设计本身和风险讨论 | Assumption boundary | world model 可先压远期 memory KV，再保护当前窗口 | 不能激进压接触帧、动作分叉帧和失败 replay |
+分子仍保留组内所有 Value 的和，分母则保留这一 logit 原本出现了多少次。等价地，也可以使用组平均 Value 与加上 $\log n_G$ 的 logit。这个式子是对相同 Key 情况的代数解释，说明“合并后位置减少”不能同时悄悄减少原有归一化质量。
 
-如果用于世界模型，应额外做三类验证：低精/合并 KV 下不同动作未来是否仍分叉，risk head 的 near-miss recall 是否下降，规划器 top-k 候选排序是否和高精版本一致。
+实际相邻 Key 只是近似相同，所以还需要选择一个合适的 $k^*$。即使 Value 聚合在相同 Key 的条件下可以等价，替换不相同的 Key 仍可能改变未来 attention。不能把 Value 路径中的“无损”扩展成整个压缩过程对所有 query 都无损。[↗](https://arxiv.org/pdf/2603.00907v2#page=3)
 
-## 论文位置
+## 为什么相邻 Key 容易相似，Value 却不一定
 
-长上下文推理有三类常见省 KV 路线：
+Q、K、V 都从隐藏状态投影而来，但三套投影矩阵可以保留不同的方向。对一个 attention head，把任意一种投影统一写成 $y_t=x_tW$。相邻投影结果的余弦相似度为
 
-1. **eviction**：删掉一部分 KV，只保留 attention heavy hitters 或 recent tokens；
-2. **compression / prompt compression**：把输入上下文在进入模型前压短；
-3. **KV merging**：把相近 KV cache entry 合并，让模型仍保留某种压缩后的历史。
+$$
+\cos(y_t,y_{t+1})=
+\frac{(x_tW)(x_{t+1}W)^\top}
+{\|x_tW\|_2\|x_{t+1}W\|_2}.
+$$
 
-KVSlimmer 属于第三类。它不是重新训练长上下文模型，也不是改 attention 架构；它是在推理阶段压缩已有 KV cache。它和 AsymKV 的关系最直接：AsymKV 已经发现相邻 `K` 更同质、`V` 更异质，但 KVSlimmer 认为 AsymKV 还有三个问题：
+令 $M=WW^\top$，它就变成输入空间中由 $M$ 加权的相似度
 
-1. 为什么会有这种 `K/V` 非对称，理论解释不够；
-2. Hessian 近似忽略了相邻 Key 之间的 off-diagonal coupling；
-3. 需要 gradient/backprop 近似 Hessian，推理时有额外时间和显存开销。
+$$
+\cos(y_t,y_{t+1})=
+\frac{x_tMx_{t+1}^\top}
+{\sqrt{x_tMx_t^\top}\sqrt{x_{t+1}Mx_{t+1}^\top}}.
+$$
 
-![KVSlimmer vs AsymKV 原论文图](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-1-asymkv-vs-kvslimmer.png){ width="760" }
+这一步没有近似。它说明同一对 $x_t,x_{t+1}$，经过不同投影后可以有完全不同的相似度，因为不同的 $W$ 改变了哪些方向更重要。[↗](https://arxiv.org/pdf/2603.00907v2#page=3)
 
-<small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 1。原论文图意：AsymKV 依赖反向传播和近似 Hessian；KVSlimmer 使用 forward-only 变量构造 exact Hessian 相关合并权重，避免 gradient 路径。</small>
+### 将相似度拆到各个谱方向
 
-**这张图支撑什么判断。**
-图里的核心不是“又一种 KV 压缩框架”，而是 merge 计算路径发生了变化：AsymKV 为了估计 Hessian 走 backprop，KVSlimmer 把二阶信息化简成 forward variables 上的范数和线性组合。对在线推理来说，这意味着 KV 压缩本身不应成为新的长上下文瓶颈。
+对 $W$ 做 SVD，写成 $W=U\Sigma V^\top$，则 $M=U\Sigma^2U^\top$。记 $\lambda_i=\sigma_i^2$，$p_{t,i}=x_tu_i$，其中 $u_i$ 是第 $i$ 个左奇异向量。原文式 7 给出
 
-## 数学主线一：为什么 Key 更能合并，Value 不能简单合并
+$$
+\cos(y_t,y_{t+1})=
+\frac{\sum_i\lambda_i p_{t,i}p_{t+1,i}}
+{\sqrt{\sum_i\lambda_i p_{t,i}^2}
+ \sqrt{\sum_i\lambda_i p_{t+1,i}^2}}.
+$$
 
-论文首先解释一个现象：相邻 token 的 `Q/K` 表征通常相似，而 `V` 表征差异更大。它不是只用经验图说明，而是从投影矩阵的谱能量分布推出来。
+每个方向对分子的贡献还可单独写成
 
-设输入相邻 token 表示为 \(x_t, x_{t+1}\)，某个投影矩阵为 \(W\)，输出为：
+$$
+c_i=
+\frac{\lambda_i p_{t,i}p_{t+1,i}}
+{\sqrt{\sum_j\lambda_j p_{t,j}^2}
+ \sqrt{\sum_j\lambda_j p_{t+1,j}^2}},
+\qquad \cos(y_t,y_{t+1})=\sum_i c_i.
+$$
 
-\[
-y_t = x_t W,\qquad y_{t+1}=x_{t+1}W.
-\]
+若谱衰减很快，少数大的 $\lambda_i$ 会主导分子和分母。相邻输入在这些主导方向上同向时，投影后的相似度就容易较高；许多原本不同的次要方向被压低了。若能量分散，更多输入差异继续影响输出，相邻向量就可能保留更大的差别。
 
-相邻输出的点积可以写成：
+关键条件是“主导方向上同向”。仅有谱集中，不能保证任意两个向量相似。例如同一主方向上的两个输入符号相反，投影后仍可能反向。谱分解提供了分析工具，模型内相邻 token 的实际对齐还要看数据。[↗](https://arxiv.org/pdf/2603.00907v2#page=4)
 
-\[
-y_t y_{t+1}^{\top}
-= x_t W W^{\top} x_{t+1}^{\top}.
-\]
+原图将三类证据放在同一行。先看左列相邻 token 的余弦，Q/K 多数较高，V 更低且波动更大；再看中列按大小排序的特征值；最后用右列的 $c_i$ 检查相似度是否主要来自前几个方向。只看中间的权重谱，解释还不完整，右列把权重与实际输入联系起来了。
 
-令
+![QKV similarity and spectral analysis](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-2-qkv-spectral-analysis.png){ width="920" }
 
-\[
-M = W W^{\top} = U\Lambda U^{\top},
-\]
+<small>原论文 Figure 2。前两行为 Llama3.1-8B-Instruct 的第 4、12 层，后两行为 Mistral-7B-Instruct-v0.3 的第 5、20 层；相似度按 head 平均。[↗](https://arxiv.org/pdf/2603.00907v2#page=4)</small>
 
-其中 \(\Lambda\) 是特征值对角阵。把输入投到 \(U\) 的谱模态上：
+附录 Figures 8、9 又展示了两个模型的其他层，说明观察不只来自这四行样例。不过这些图不是“所有模型所有层必然如此”的证明，也没有单独改变投影谱后测量压缩质量的干预实验。可用于算法设计的认识是，Key 的局部冗余与 Value 的内容差异值得分别处理，而不是先假定两类向量适合相同聚合。[↗](https://arxiv.org/pdf/2603.00907v2#page=13) [↗](https://arxiv.org/pdf/2603.00907v2#page=14)
 
-\[
-p_{t,i}=x_t u_i.
-\]
+## 改一个 Key，为什么会改变所有位置的权重
 
-那么点积可以展开为：
+对固定 query $q$，写出 attention 的三个步骤
 
-\[
-x_t M x_{t+1}^{\top}
-=
-\sum_i \lambda_i p_{t,i}p_{t+1,i}.
-\]
+$$
+e_i=\frac{q^\top k_i}{\sqrt{d_k}},\qquad
+\alpha_i=\frac{\exp(e_i)}{\sum_t\exp(e_t)},\qquad
+o=\sum_t\alpha_tv_t.
+$$
 
-相邻输出的 cosine similarity 进一步可以写成每个谱模态贡献的和：
+$e_i$ 是位置 $i$ 的 logit，$\alpha_i$ 是归一化权重，$d_k$ 是 Key 维度。增加一个 logit，不仅提高对应位置的权重，还通过共同分母压低其他位置。因此，两个 Key 一起变化时，输出变化不能只由各自独立的重要性相加描述。
 
-\[
-\cos(y_t,y_{t+1})
-=
-\frac{\sum_i \lambda_i p_{t,i}p_{t+1,i}}
-{\sqrt{\sum_i \lambda_i p_{t,i}^2}
-\sqrt{\sum_i \lambda_i p_{t+1,i}^2}}
-=
-\sum_i c_i.
-\]
+Softmax 导数为 $\partial\alpha_j/\partial e_i=\alpha_j(\delta_{ji}-\alpha_i)$。把所有 Value 的贡献都加起来，得到
 
-这一步的含义很关键：
+$$
+\frac{\partial o}{\partial e_i}=\alpha_i(v_i-o).
+$$
 
-- 如果 \(W\) 的谱能量很集中，少数大 \(\lambda_i\) 主导输出，相邻 token 会被投到类似的低维主方向上，输出更同质；
-- 如果 \(W\) 的谱能量更分散，很多模态都保留下来，输出保留更多 token-specific 信息，输出更异质。
+$v_i-o$ 是该位置内容相对当前加权输出的残差。即使一个位置 attention 较大，若它的 Value 与当前输出很接近，改变其权重也未必明显改变输出。仅用 attention 大小排序，会丢掉这一层信息。
 
-论文的观察是：\(W_Q\) 和 \(W_K\) 的谱能量更集中，所以 `Q/K` 更容易同质；\(W_V\) 的谱能量更分散，所以 `V` 保留更多异质信息。直觉上，`Q/K` 服务于“匹配/对齐”，同质有利于稳定 attention；`V` 服务于“信息传输”，异质才不容易把内容压扁。
+令 $E=\partial L/\partial o$，沿链式法则得到原文式 12
 
-![QKV spectral analysis 原论文图](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-2-qkv-spectral-analysis.png){ width="920" }
+$$
+\nabla_{k_i}L=
+\frac{\alpha_i}{\sqrt{d_k}}
+\big[E^\top(v_i-o)\big]q.
+$$
 
-<small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 2。原论文图意：左列展示 Q/K/V 相邻 token cosine similarity，中列展示 \(W_Q,W_K,W_V\) 特征值分布，右列展示谱模态贡献系数 \(c_i\)。</small>
+这一式子把敏感性拆成了 attention 质量、Value 残差与下游梯度的对齐，再乘以共同方向 $q$。在固定 query 的局部分析里，所有 Key 梯度都沿 $q$，不同位置改变的是标量系数。[↗](https://arxiv.org/pdf/2603.00907v2#page=5)
 
-**这张图支撑什么判断。**
-左列说明 Q/K 的相邻相似度通常高于 V；中列和右列给出原因：Q/K 投影的谱能量更集中，少数模态主导相似度；V 的谱更分散，保留更多异质信息。因此，“Key 可以更激进地合并，Value 不能照搬同一合并策略”不是单纯经验规则，而是和投影矩阵的谱结构有关。
+### 相邻位置的交叉项来自共同分母
 
-## 数学主线二：Key 合并为什么要看 Hessian
+对需要合并的 $m,m+1$ 两个位置，定义三个前向向量
 
-给定一段 Key：
-
-\[
-K=[k_1,\ldots,k_n],
-\]
-
-目标是把相邻两个 Key \((k_m,k_{m+1})\) 合成一个 \(k^*\)，并尽量让 loss 变化最小：
-
-\[
-k^*=\arg\min_k L(k,k).
-\]
-
-如果只做平均：
-
-\[
-k^*=\frac{k_m+k_{m+1}}{2},
-\]
-
-就默认两个 Key 对 loss 的影响一样大。但 attention 里不同 Key 的影响取决于 query、attention weight、Value residual 和下游 loss，所以更合理的是用二阶近似衡量“改动这个 Key 会让 loss 变多少”。
-
-更完整地说，如果把两个位置都替换成同一个 \(k\)，对应扰动是：
-
-\[
-\Delta_m=k-k_m,\qquad \Delta_{m+1}=k-k_{m+1}.
-\]
-
-只看这两个 Key 的二阶项，loss 变化可以近似成：
-
-\[
-\Delta L(k)
-\approx
-\frac{1}{2}
-\begin{bmatrix}
-\Delta_m\\
-\Delta_{m+1}
-\end{bmatrix}^{\top}
-\begin{bmatrix}
-h_{mm} & h_{m,m+1}\\
-h_{m+1,m} & h_{m+1,m+1}
-\end{bmatrix}
-\begin{bmatrix}
-\Delta_m\\
-\Delta_{m+1}
-\end{bmatrix}.
-\]
-
-如果把每个 Hessian block 的有效标量写成 \(g_{11},g_{12},g_{22}\)，那么目标等价于最小化：
-
-\[
-g_{11}\|k-k_m\|^2
-+2g_{12}(k-k_m)^\top(k-k_{m+1})
-+g_{22}\|k-k_{m+1}\|^2.
-\]
-
-对 \(k\) 求导并令导数为 0：
-
-\[
-(g_{11}+g_{12})(k-k_m)
-+(g_{12}+g_{22})(k-k_{m+1})
-=0.
-\]
-
-这行式子在说：合并后的 Key \(k\) 应该让二阶近似目标的一阶导数为 0。\(g_{11}\)、\(g_{22}\) 是两个 Key 自身的敏感度，\(g_{12}\) 是相邻 Key 之间的耦合敏感度。
-
-整理后得到：
-
-\[
-k^*
-=
-\frac{(g_{11}+g_{12})k_m+(g_{12}+g_{22})k_{m+1}}
-{g_{11}+2g_{12}+g_{22}}.
-\]
-
-所以 \(g_{12}\) 不是可有可无的小修正。它同时进入分子和分母，决定两个相邻 Key 的 coupling 会把合并结果推向哪一边。
-
-AsymKV 也沿着 Hessian 思路走，但它近似掉了 off-diagonal block \(h_{m,m+1}\)，并用 gradient/Fisher 近似 Hessian。KVSlimmer 的关键是：直接推 exact Hessian block，并最终消掉反传依赖。
-
-## 数学主线三：从 attention 到 exact Hessian
-
-对单个 query \(q\)，attention 写作：
-
-\[
-e_i=\frac{qk_i^\top}{\sqrt{d_k}},
-\qquad
-\alpha_i=\frac{\exp e_i}{\sum_t \exp e_t},
-\qquad
-o=\sum_t \alpha_t v_t.
-\]
-
-这三项分别是 attention logit、softmax 权重和输出：\(q\) 是 query，\(k_i\) 和 \(v_i\) 是第 \(i\) 个 key/value，\(d_k\) 是 key 维度，\(\alpha_i\) 表示第 \(i\) 个位置被关注的权重。
-
-令 loss 对 attention 输出的梯度为：
-
-\[
-E=\frac{\partial L}{\partial o}.
-\]
-
-这里 \(E\) 是下游 loss \(L\) 对 attention 输出 \(o\) 的梯度，表示输出往哪个方向变化会更影响 loss。
-
-先看 Key 的一阶梯度。因为 \(k_i\) 只影响 \(e_i\)，而 \(e_i\) 通过 softmax 改变所有 \(\alpha\)，最终得到：
-
-\[
-\frac{\partial o}{\partial k_i}
-=
-\frac{1}{\sqrt{d_k}}\alpha_i(v_i-o)q^\top.
-\]
-
-这行式子在说：改变 key \(k_i\) 对输出 \(o\) 的影响，由 query \(q\)、attention 权重 \(\alpha_i\)、以及该位置 value \(v_i\) 相对总输出 \(o\) 的残差共同决定。
-
-所以：
-
-\[
-g_i=\nabla_{k_i}L
-=
-\frac{1}{\sqrt{d_k}}\alpha_i
-\left[E^\top(v_i-o)\right]q.
-\]
-
-这条式子很有解释力：
-
-- \(q\) 给出 Key 梯度的公共方向；
-- \(\alpha_i\) 表示这个位置被当前 query 关注多少；
-- \(v_i-o\) 表示这个 Value 和当前输出的残差；
-- \(E^\top(v_i-o)\) 表示这个残差是否沿着下游 loss 想改变的方向。
-
-再看 Hessian block：
-
-\[
-h_{ij}=\frac{\partial g_i}{\partial k_j^\top}.
-\]
-
-论文把
-
-\[
-s_i=\alpha_i(v_i-o)
-\]
-
-这里 \(s_i\) 把 softmax 权重和 value 残差合成一个局部敏感向量，后面 Hessian block 的差异主要来自它对 logit \(e_j\) 的导数。
-
-代入，可以得到统一形式：
-
-\[
-h_{ij}
-=
-\frac{1}{d_k}
-\left[
-E^\top\frac{\partial s_i}{\partial e_j}
-\right]qq^\top.
-\]
-
-这说明每个 Hessian block 都是 \(qq^\top\) 这个 rank-one 矩阵乘一个标量敏感度。真正的区别藏在 \(\partial s_i/\partial e_j\)。
-
-对 diagonal case：
-
-\[
-\frac{\partial s_i}{\partial e_i}
-=
-\alpha_i(1-2\alpha_i)(v_i-o).
-\]
-
-对 off-diagonal case：
-
-\[
-\frac{\partial s_i}{\partial e_j}
-=
--\alpha_i\alpha_j(v_i+v_j-2o),
-\qquad i\ne j.
-\]
-
-这就是 KVSlimmer 说的 exact Hessian coupling：相邻两个 Key 的二阶影响不只是各自的 self-sensitivity，还包括 softmax 归一化带来的交叉项。忽略 \(h_{m,m+1}\)，就会漏掉“改一个 Key 会通过 softmax 影响另一个 Key”的耦合。
-
-## 数学主线四：怎么从 Hessian 变成 forward-only 权重
-
-对相邻 Key \((k_m,k_{m+1})\)，论文定义三个只由 forward 变量构造的向量：
-
-\[
+$$
 c_{11}=\alpha_m(1-2\alpha_m)(v_m-o),
-\]
+$$
 
-\[
+$$
 c_{22}=\alpha_{m+1}(1-2\alpha_{m+1})(v_{m+1}-o),
-\]
+$$
 
-\[
+$$
 c_{12}=-\alpha_m\alpha_{m+1}(v_m+v_{m+1}-2o).
-\]
+$$
 
-对应的 Hessian 标量敏感度是：
+前两个描述本位置权重改变时的局部曲率，第三个描述一处改变如何通过 Softmax 影响另一处。固定上游信号 $E$ 后，论文对应的二阶块具有统一形式
 
-\[
-g_{ij}=E^\top c_{ij}.
-\]
+$$
+\widetilde H_{ij}=\frac{g_{ij}}{d_k}qq^\top,
+\qquad g_{ij}=E^\top c_{ij},
+\qquad ij\in\{11,12,22\}.
+$$
 
-如果直接用这个式子，仍需要 \(E=\partial L/\partial o\)，也就是仍要反向传播。KVSlimmer 的关键化简在这里。
+这里用波浪号明确它是按论文局部求导得到的块。AsymKV 在实用近似里忽略相邻 Key 的非对角块，并用梯度平方近似对角重要性；KVSlimmer 保留 $c_{12}$ 所对应的相互影响。算法改变的是合并权重的构造，不是给基础模型增加一层新的 attention。[↗](https://arxiv.org/pdf/2603.00907v2#page=3) [↗](https://arxiv.org/pdf/2603.00907v2#page=5)
 
-先把 \(g_{ij}\) 分解成范数和角度：
+### “精确二阶信息”需要限定到哪个对象
 
-\[
-g_{ij}
-=
-\|E\|_2\|c_{ij}\|_2\cos(E,c_{ij}).
-\]
+上面的 attention 导数可以直接核对，但从 $E^\top c_{ij}$ 推到任意最终损失的完整 Hessian，还差一步。若下游损失对输出 $o$ 存在曲率，$E$ 本身也会随 Key 变化。令 $J_i=\partial o/\partial k_i$、$H_o=\partial^2L/\partial o^2$，完整链式法则还包含
 
-论文经验和附录分析给出一个关系：
+$$
+H_{ij}=\widetilde H_{ij}+J_i^\top H_oJ_j.
+$$
 
-\[
-\cos(E,c_{11})
-\approx
-\cos(E,c_{22})
-\approx
--\cos(E,c_{12}).
-\]
+后项在固定 $E$、或者局部下游目标对 $o$ 为线性时消失；一般神经网络损失并不自动满足这个条件。因此，论文的求导更适合被理解为保留 Softmax 耦合的局部曲率模型，不能直接声称恢复了整个模型最终损失的完整精确 Hessian。这个区别影响对理论保证的理解，却不妨碍单独评价最终规则的实测质量与成本。
 
-![Head alignment relationships 原论文图](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-3-head-alignment.png){ width="760" }
+## 从秩一线性系统到 Key 合并权重
 
-<small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 3。原论文图意：在 Llama-3.1-8B-Instruct 的 Layer 2 上展示 \(\cos(E,c_{11})\)、\(\cos(E,c_{12})\)、\(\cos(E,c_{22})\) 的 head-level 线性关系。</small>
+论文从将两个 Key 替换成同一个 $k$ 的目标 $L(k,k)$ 出发，采用其所称的 modified Newton 形式。将三个二阶块代入，得到
 
-**这张图支撑什么判断。**
-图中三组关系接近线性，且 \(c_{12}\) 与 diagonal 项呈相反符号关系。这正是 KVSlimmer 能把 \(E\) 消掉的实验证据：如果角度关系稳定，合并权重只需要看 \(\|c_{11}\|_2,\|c_{12}\|_2,\|c_{22}\|_2\)，不必真的反传求 \(E\)。
-
-原始二阶合并可以写成：
-
-\[
-k^* = w_m k_m + w_{m+1}k_{m+1},
-\]
-
-其中：
-
-\[
-w_m=\frac{g_{11}+g_{12}}{g_{11}+2g_{12}+g_{22}},
+$$
+\mathcal M k^*=N,
 \qquad
-w_{m+1}=\frac{g_{12}+g_{22}}{g_{11}+2g_{12}+g_{22}}.
-\]
+\mathcal M=\frac{\gamma}{d_k}qq^\top,
+\qquad
+\gamma=g_{11}+2g_{12}+g_{22},
+$$
 
-利用上面的角度关系，\(\|E\|_2\) 和共同角度项被消去，得到 forward-only 形式：
+$$
+N=\frac1{d_k}qq^\top b,
+\qquad
+b=(g_{11}+g_{12})k_m+(g_{12}+g_{22})k_{m+1}.
+$$
 
-\[
-k^*
-=
-\left(
-\|c_{11}\|_2-2\|c_{12}\|_2+\|c_{22}\|_2
-\right)^{-1}
-\left[
-(\|c_{11}\|_2-\|c_{12}\|_2)k_m
-+
-(\|c_{22}\|_2-\|c_{12}\|_2)k_{m+1}
-\right].
-\]
+交叉项在这里出现两次，因为两个位置都要一起移动到新代表。若直接删掉它，就退回只根据两个位置各自敏感性加权的形式。
 
-这条式子是全文最重要的工程结果。它说明：
+这个模型也不应被误读为一般二阶 Taylor 展开的无条件最小解。对 $L(k,k)$ 保留完整一阶项时，驻点方程还应包含两处梯度之和；原文采用的 modified Newton 合并式没有保留该项，局部二阶型也未必正定。后续代数是在这一合并模型之内成立的。[↗](https://arxiv.org/pdf/2603.00907v2#page=3)
 
-1. 合并 Key 仍然保留了 Hessian 的 self 和 coupling 信息；
-2. 计算只需要 \(\alpha_i,v_i,o\) 等 forward-pass 变量；
-3. 不需要 loss、label、反向传播或额外训练；
-4. 合并操作退化成 norm 计算和线性组合，适合推理时执行。
+### 为什么伪逆解与实际加权 Key 不必相同
 
-## 算一遍：KV cache 为什么值得压
+$qq^\top$ 是秩一矩阵，无法在全部 Key 维度上普通求逆。对于 $q\ne0$、$\gamma\ne0$，原文用 Moore–Penrose pseudoinverse 得到
 
-以 Llama-3.1-8B 这类 GQA 模型做一个粗略估算：假设 `32` 层、`8` 个 KV heads、head dim `128`、BF16。每个 token 的 KV cache 大约是：
+$$
+k^*_{\mathrm{proj}}=\frac1\gamma P_qb,
+\qquad P_q=\frac{qq^\top}{q^\top q}.
+$$
 
-\[
-32 \times 2 \times 8 \times 128 \times 2\text{ bytes}
-=131{,}072\text{ bytes}
-\approx128\text{KiB}.
-\]
+它是落在 $q$ 所在一维空间里的解。实际使用的加权代表则为
 
-于是单个请求只看 KV cache：
+$$
+\bar k=\frac b\gamma
+=\frac{g_{11}+g_{12}}\gamma k_m
+ +\frac{g_{22}+g_{12}}\gamma k_{m+1}.
+$$
 
-| Context | KV cache / request |
-| ---: | ---: |
-| `8K` tokens | `~1 GiB` |
-| `32K` tokens | `~4 GiB` |
-| `128K` tokens | `~16 GiB` |
+二者具有相同的 $q^\top k$，都满足这条秩一线性约束，但通常不是逐元素相同的向量。$\bar k$ 保留了原 Key 平面中一些与当前 $q$ 垂直的分量，而投影解删掉了这些分量。下一条 query 若方向不同，会重新读到这些差别。
 
-如果 batch 是 `8`，`32K` 上下文就可能让 KV cache 接近 `32 GiB`。这还没有算参数、激活、runtime workspace、fragmentation 和并发请求。KVSlimmer 这类方法的价值不只是“省一点显存”，而是让系统能在同一张卡上保住更大的 batch、更长上下文或更低 P99。
+因此，式 29 到式 30 可以理解为在同一局部约束下选择一个 Key 空间中的代表，不能理解为已经证明一个向量对所有未来 query 都最优。这个结论也解释了为何论文的理论分析之后仍需要长上下文任务实验。[↗](https://arxiv.org/pdf/2603.00907v2#page=6)
 
-但压缩不是免费午餐。若合并策略丢掉了长文档中的关键 evidence token，LongBench 平均分可能还行，RAG 或 agent 的具体任务会失败。因此 KV 压缩必须同时看 memory、latency 和任务质量。
+## 真正省掉反向传播的，是夹角近似
 
-## 实验设置
+到这里仍然需要 $E$，所以还没有实现无梯度压缩。作者把三个标量敏感性拆成
 
-论文没有重新训练模型，而是在已有指令模型上做推理时 KV 压缩评测。
+$$
+g_{ij}=\|E\|_2\|c_{ij}\|_2\cos(E,c_{ij}).
+$$
 
-| Item | Setting |
-| --- | --- |
-| Base Models | Llama3.1-8B-Instruct, Mistral-7B-Instruct-v0.3, Qwen2-1.5B-Instruct |
-| Baselines | StreamingLLM, LongCache, H2O, LLMLingua-2, CaM, AsymKV |
-| Default compression context budget | 2048 tokens |
-| Default chunk size | 512 |
-| Preserved initial tokens | 32 tokens |
-| Hardware | one NVIDIA A100 80GB |
-| Training | No model training or fine-tuning; forward-only KV merging during inference |
+共同的 $\|E\|_2$ 可以约掉，三个夹角却一般不同。关键经验观察是，在相邻 Key 较同质的区域
 
-这里最值得注意的是最后一行。KVSlimmer 的“数学逻辑”虽然用了 loss gradient 和 Hessian 语言，但最终算法并不需要训练数据标签，也不需要在 serving 时反传；它把训练目标中的 \(E\) 通过角度关系消掉，落成推理时可用的闭式合并。
+$$
+\cos(E,c_{11})\approx\cos(E,c_{22})
+\approx-\cos(E,c_{12}).
+$$
 
-## LongBench 结果
+Figure 3 用 Llama3.1-8B-Instruct 第 2 层的 head 均值检验这一关系。先看中图，同一 head 的 $c_{11}$ 与 $c_{22}$ 平均对齐近似同向；左右两图中 $c_{12}$ 与它们近似反向。三组拟合的 $R^2$ 分别为 0.9973、0.9944、0.9946，但斜率分别是 −1.193、1.034、−0.866，并不精确等于 −1、1、−1。
 
-下面重绘论文 Table 1 的核心数据，保留原始英文列名。KVSlimmer 在三个模型上都优于 AsymKV 的平均分，尤其在 Synthetic 类任务上收益明显。
+![Head-level cosine alignment](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-3-head-alignment.png){ width="760" }
 
-| Model / Method | Single-Doc | Multi-Doc | Sum | Few-shot | Synthetic | Code | Avg. |
+<small>原论文 Figure 3，2WikiMQA 上每个点为一个 attention head 的全局平均对齐。高相关性支持采用近似，但不能代替逐 token、逐 query 的误差界。[↗](https://arxiv.org/pdf/2603.00907v2#page=5)</small>
+
+附录在 Llama 的第 5、22 层和 Mistral 的第 9、15、20 层补充了同类图。例如 Mistral 第 20 层，$c_{11}$ 与 $c_{22}$ 的拟合斜率为 0.917、$R^2=0.9519$。方向关系仍然明显，接近程度却会变化。把这些结果写成经验规律，比把每个位置都当成严格相等更符合证据。[↗](https://arxiv.org/pdf/2603.00907v2#page=14) [↗](https://arxiv.org/pdf/2603.00907v2#page=16)
+
+### 代入之后，剩下前向向量的范数
+
+用同一个夹角因子近似前两个方向，对第三个取相反符号，公共因子在分子、分母中消去，得到原文式 33
+
+$$
+k^*=
+\frac{(\|c_{11}\|_2-\|c_{12}\|_2)k_m
+     +(\|c_{22}\|_2-\|c_{12}\|_2)k_{m+1}}
+{\|c_{11}\|_2-2\|c_{12}\|_2+\|c_{22}\|_2}.
+$$
+
+每个 $c$ 都由 $\alpha,v,o$ 得到。推理实现可以先从前向结果计算三个向量，再求范数、生成两个系数、线性组合 Key。此时不需要保留完整反向图，也不需要先选一个最终损失再从后层回传。
+
+这个式子保留了交叉项的结构，又将不能直接从前向得到的角度替换为经验近似。不能因为最后消公共因子的代数步骤是精确的，就把前一步的近似也变成精确保证。[↗](https://arxiv.org/pdf/2603.00907v2#page=6)
+
+两个系数在分母非零时相加为 1，但不一定都非负。例如仅用于解释代数，若 $\|c_{11}\|_2=0.4$、$\|c_{12}\|_2=0.3$、$\|c_{22}\|_2=0.25$，则分母为 0.05，两个权重为 2 和 −1。它已经是外推型组合，而不是普通凸平均。这个数例不是论文测量，也不声称任意范数组合都会在实际 attention 中出现；它说明实现需要认真处理分母接近零、权重放大与低精度误差。
+
+### 附录解释可以支持到哪一步
+
+附录将合并对象限制到较小 attention mass 的相邻位置，通常 $\alpha_i<1/2$。此时 $\alpha_i(1-2\alpha_i)>0$，所以 $c_{11},c_{22}$ 分别保留对应 Value 残差的方向，$c_{12}$ 则与两段残差的和方向相反。这有助于解释符号关系。
+
+但夹角的大小还取决于两个残差怎样排列。梯度范数变小并不会自行改变余弦；“与两个残差分别有近似相同夹角”也不自动保证“与它们的和仍是同一个夹角”。附录提供的是这条经验规律的动机，尚不足以替代一般误差证明。
+
+原文附录还有两处求导式需要与主文区分。式 37 比主文式 12 多出 $(1-\alpha_i)$，而对所有 Softmax 输出应用链式法则得到的是前面的式 12。式 41 将部分一阶导数形式写成了 Softmax Hessian；例如正确的同坐标二阶导数应为 $\partial^2\alpha_i/\partial e_i^2=\alpha_i(1-\alpha_i)(1-2\alpha_i)$。理解和实现合并规则时，应依照主文完整的 attention 求导，不把附录这两式继续代入。最终的无梯度公式仍应作为有实验支持的局部代理来评价。[↗](https://arxiv.org/pdf/2603.00907v2#page=16) [↗](https://arxiv.org/pdf/2603.00907v2#page=17)
+
+## 相同缓存规模下，质量究竟保住了多少
+
+主实验覆盖 Llama3.1-8B-Instruct、Mistral-7B-Instruct-v0.3 和 Qwen2-1.5B-Instruct，使用单张 A100 80GB。LongBench 选取 16 个英文任务，分成 Single-Doc、Multi-Doc、Sum、Few-shot、Synthetic、Code 六类。默认 budget 2048、chunk size 512；H2O 则沿用 recent 2048 加 heavy 512 的独立配置，不能说所有方法最终都只保留完全相同数量的槽位。[↗](https://arxiv.org/pdf/2603.00907v2#page=6)
+
+### 先用全套基线判断它处在哪条折中曲线上
+
+| Method · Llama3.1-8B-Instruct | Single-Doc | Multi-Doc | Sum | Few-shot | Synthetic | Code | Avg. |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Llama3.1-8B-Instruct / Full Context** | 43.73 | 44.49 | 29.12 | 69.36 | 53.56 | 50.95 | 48.07 |
+| Full Context | 43.73 | 44.49 | 29.12 | 69.36 | 53.56 | 50.95 | 48.07 |
 | StreamingLLM | 28.15 | 27.19 | 25.15 | 63.17 | 16.33 | 52.15 | 35.50 |
 | LongCache | 28.98 | 27.84 | 25.35 | 64.73 | 19.68 | 51.61 | 36.46 |
 | H2O | 33.30 | 34.43 | 26.60 | 66.23 | 14.75 | 52.65 | 38.53 |
 | LLMLingua-2 | 32.02 | 32.24 | 24.99 | 27.87 | 17.67 | 50.07 | 30.43 |
 | CaM | 32.14 | 32.63 | 24.91 | 63.09 | 16.77 | 52.13 | 37.26 |
 | AsymKV | 39.42 | 38.93 | 27.30 | 65.66 | 39.39 | 48.57 | 43.12 |
-| **KVSlimmer** | **40.24** | **39.61** | 27.19 | 65.00 | **44.52** | 49.73 | **44.04** |
-| **Mistral-7B-Instruct-v0.3 / Full Context** | 38.74 | 38.29 | 29.04 | 70.70 | 51.00 | 53.05 | 46.15 |
-| AsymKV | 33.71 | 32.81 | 27.04 | 67.21 | 34.56 | 51.33 | 40.88 |
-| **KVSlimmer** | 33.42 | 32.62 | 26.83 | **67.86** | **36.78** | **52.34** | **41.28** |
-| **Qwen2-1.5B-Instruct / Full Context** | 30.03 | 28.68 | 26.16 | 66.68 | 5.50 | 41.49 | 34.29 |
-| AsymKV | 26.14 | 27.70 | 23.33 | **62.99** | 4.75 | 40.89 | 31.98 |
-| **KVSlimmer** | **26.54** | **29.54** | **23.90** | 61.54 | **5.50** | **41.84** | **32.45** |
+| KVSlimmer | 40.24 | 39.61 | 27.19 | 65.00 | 44.52 | 49.73 | 44.04 |
 
-<small>表源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Table 1。原表完整列名和任务类别保留；此处突出 Full Context、AsymKV 和 KVSlimmer 的关键对比，并保留其它 Llama3.1 baseline 以说明整体位置。</small>
+<small>原文 Table 1 的完整 Llama 部分，分数越高越好。Avg. 沿用论文对任务的汇总，不重新对六个显示类别做等权平均。[↗](https://arxiv.org/pdf/2603.00907v2#page=7)</small>
 
-## 长上下文极限与效率结果
+AsymKV 与 KVSlimmer 相比其他压缩方法，更好地保留了文档问答和合成任务的表现。两者之间最显著的变化在 Synthetic，39.39 升到 44.52，增加 5.13 分；Single-Doc 与 Multi-Doc 分别增加 0.82、0.68。这个分布比平均只增加 0.92 更能说明哪些任务对合并方式敏感。
 
-论文还在 LongBenchV2 上用 `Llama3.1-8B-Instruct`、cache size `8192` 做极长上下文评测。Table 2 显示 KVSlimmer 在 Overall、Easy、Short、Long 上最好，但 Hard 和 Medium 不是最好。
+同时，Sum 从 27.30 降至 27.19，Few-shot 从 65.66 降至 65.00；Code 虽比 AsymKV 高，仍低于 H2O 的 52.65。完整上下文平均分还高出 4.03，Synthetic 也高出 9.04。方法没有把所有被压缩的信息恢复回来，它改善的是既定预算下的信息保留方式。
 
-| Model | Overall | Easy | Hard | Short | Medium | Long |
+### 换模型后，增益没有固定落在同一类别
+
+| Model / Method | Single-Doc | Multi-Doc | Sum | Few-shot | Synthetic | Code | Avg. |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Mistral / Full Context | 38.74 | 38.29 | 29.04 | 70.70 | 51.00 | 53.05 | 46.15 |
+| Mistral / AsymKV | 33.71 | 32.81 | 27.04 | 67.21 | 34.56 | 51.33 | 40.88 |
+| Mistral / KVSlimmer | 33.42 | 32.62 | 26.83 | 67.86 | 36.78 | 52.34 | 41.28 |
+| Qwen2 / Full Context | 30.03 | 28.68 | 26.16 | 66.68 | 5.50 | 41.49 | 34.29 |
+| Qwen2 / AsymKV | 26.14 | 27.70 | 23.33 | 62.99 | 4.75 | 40.89 | 31.98 |
+| Qwen2 / KVSlimmer | 26.54 | 29.54 | 23.90 | 61.54 | 5.50 | 41.84 | 32.45 |
+
+<small>原文 Table 1 节选。Mistral 为 7B-Instruct-v0.3，Qwen2 为 1.5B-Instruct。</small>
+
+Mistral 的平均分提高 0.40，贡献来自 Few-shot、Synthetic、Code，Single-Doc、Multi-Doc、Sum 都略降。Qwen2 平均提高 0.47，但 Few-shot 下降 1.45。Qwen2 的 Multi-Doc 和 Code 甚至略高于完整上下文，这只能说明特定测试上压缩结果有时更好，不能推断压缩普遍增强模型能力。尤其 Qwen2 的 Synthetic 绝对分数只有 5.50，不能只看它“追平 Full Context”就认为模型已经可靠解决了这类任务。
+
+三种模型都出现平均收益，提供了跨模型的支持；收益在哪些任务上出现，则仍然受模型与输入影响。论文没有用一组独立消融分别测“只加交叉项”“只换夹角代理”“只去掉反向”，因此不能把全部质量增益单独归给某一个部件。
+
+## 更长任务中，平均领先掩盖了哪些退步
+
+LongBenchV2 覆盖原始上下文从 8K 到 2M 的任务，论文用 Llama3.1-8B-Instruct 和更大的 8192 cache budget 评测。这个数据集范围不能直接证明模型在每个样本上都无截断地处理了 2M 输入；表中结果应理解为作者报告的评测配置。[↗](https://arxiv.org/pdf/2603.00907v2#page=7)
+
+| Method | Overall | Easy | Hard | Short | Medium | Long |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Full Context | 30.02 | 30.73 | 29.58 | 35.00 | 27.91 | 25.93 |
 | StreamingLLM | 27.04 | 27.60 | 26.69 | 32.78 | 23.26 | 25.00 |
 | LongCache | 28.43 | 28.13 | 28.62 | 32.78 | 25.58 | 26.85 |
 | H2O | 28.23 | 28.12 | 28.29 | 31.67 | 26.98 | 25.00 |
 | CaM | 28.23 | 28.64 | 27.97 | 31.67 | 26.98 | 25.00 |
-| AsymKV | 30.02 | 30.23 | **29.90** | 32.78 | **27.44** | 28.85 |
-| **KVSlimmer** | **30.22** | **32.81** | 28.62 | **36.11** | 25.12 | **30.56** |
+| AsymKV | 30.02 | 30.23 | 29.90 | 32.78 | 27.44 | 28.85 |
+| KVSlimmer | 30.22 | 32.81 | 28.62 | 36.11 | 25.12 | 30.56 |
 
-<small>表源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Table 2。</small>
+<small>原文 Table 2，保留全部对照及难度、长度分组。[↗](https://arxiv.org/pdf/2603.00907v2#page=8)</small>
 
-效率图更直接说明工程价值。
+KVSlimmer 的 Overall 比 AsymKV 高 0.20，Easy、Short、Long 分别高 2.58、3.33、1.71；但 Hard 低 1.28，Medium 低 2.32。难度与长度是不同分类轴，不能把“Long 有提升”改写成“越难越有优势”。
 
-![Relative runtime 原论文图](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-4-runtime-relative.png){ width="760" }
+0.20 的总体差距也很小，表中没有置信区间，无法仅凭这个数字判断稳定的统计优势。对实际部署更有用的是保留分组结果。如果目标是难题长文推理，应直接测那一类请求的错误，而不是借 Overall 的最高值替代任务匹配。
 
-<small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 4。原论文图意：KVSlimmer 相对 AsymKV 的 runtime ratio，均值约 0.72。</small>
+## 时间与显存省在哪里，要分三个实验读
 
-![Decoder efficiency 原论文图](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-5-decoder-efficiency.png){ width="520" }
+无反向规则的目标首先是降低合并成本。论文分别给出真实任务的相对运行时间、长序列 decoder 的累计耗时，以及不同 chunk 下的峰值显存。三者回答不同问题，不能混成同一个“加速百分比”。
 
-<small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 5。原论文图意：长上下文 decoder stage 中，KVSlimmer 相比 AsymKV 约有 27% 时间开销下降。</small>
+### 任务运行时间，先看分母与平均口径
 
-![Peak GPU memory 原论文图](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-6-peak-gpu-memory.png){ width="620" }
+Figure 4 的纵轴是 KVSlimmer 时间除以 AsymKV 时间。低于 1 表示更快，0.56 表示相同任务耗时减少 44%。先看 HotpotQA 的最低点，再看接近 1 的 MultiNews，可以直接看到任务差异。
 
-<small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 6。原论文图意：不同 chunk size 下，KVSlimmer 的峰值 GPU memory 明显低于 AsymKV；chunk size 越大差距越明显。</small>
+![Relative runtime across LongBench tasks](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-4-runtime-relative.png){ width="760" }
 
-**这些效率图支撑什么判断。**
-Figure 4/5/6 支撑的是系统层判断：KVSlimmer 不是只在 LongBench 分数上小幅超过 AsymKV，而是把 AsymKV 的反传合并开销拿掉后，在 decoder 时间和峰值显存上也更稳。尤其 Figure 6 说明 chunk size 变大时，AsymKV 的内存压力增长更快，KVSlimmer 更适合受限 GPU 上的长上下文服务。
+<small>原论文 Figure 4。图中虚线为 16 个任务运行时间比的平均值 0.72。[↗](https://arxiv.org/pdf/2603.00907v2#page=7)</small>
 
-## 消融与诊断怎么读
+| Dataset | Runtime ratio | Reduction versus AsymKV |
+| --- | ---: | ---: |
+| HotpotQA | 0.56 | 44% |
+| MusiQue / NarrativeQA / PassageCount / PassageRetrieval-en | 0.62 | 38% |
+| 2WikiMultihopQA | 0.64 | 36% |
+| LCC | 0.85 | 15% |
+| GovReport | 0.91 | 9% |
+| MultiNews | 0.99 | 1% |
 
-KVSlimmer 的实验要同时看质量和系统开销。它的优势不是“所有任务都更准”，而是在接近 AsymKV 甚至略优质量的同时，把反传式合并换成 forward-only 闭式合并。
+不同任务中压缩触发次数、输入输出结构和其他计算占比不同，去掉反向能省下的总时间也不同。图中的 0.72 是任务比值的平均，不是把全库运行秒数加起来后得到的总耗时比，更不等于所有线上请求都提高相同吞吐。作者将差异主要联系到长上下文开销，但图本身没有隔离长度、生成预算和触发次数各自的贡献。
 
-| Diagnostic | 论文证据 | 说明什么 | 不能说明什么 |
-| --- | --- | --- | --- |
-| LongBench Table 1 | 三个模型、多个任务族平均分 | KVSlimmer 在 2048 cache budget 下通常优于 AsymKV 平均分，Synthetic 收益明显 | 不能保证每个业务任务都不丢关键证据 |
-| LongBenchV2 Table 2 | 8192 cache size 极长上下文 | Overall/Long 最好，但 Hard/Medium 不总是最好 | 压缩策略仍会改变难题证据分布 |
-| Figure 4 runtime | 相对 AsymKV runtime ratio 约 0.72 | 去掉反传合并后端到端开销更低 | 不能说明所有 serving 框架都同等收益 |
-| Figure 5 decoder | decoder stage 时间下降 | decode 阶段是 KV 压缩收益的重要位置 | prefill、batching、scheduler 仍需单独测 |
-| Figure 6 memory | chunk size 越大，KVSlimmer 峰值显存优势越明显 | forward-only 合并更适合大 chunk / 显存紧张场景 | 非局部冗余和 layer/head 自适应仍未解决 |
+### 长序列 decoder，比较增长趋势与压缩开销
 
-部署前最该补的是“lost-evidence”诊断：抽一批 RAG、代码定位、法律条款和工具 trace 请求，记录压缩后答案引用的关键 token 是否被合并掉。KVSlimmer 的平均分不错，但线上风险往往来自极少数关键 token。
+下面的图把横轴 Length 以 K 为单位，纵轴 Time Cost 以秒为单位。绿色 Origin 曲线随长度增长越来越陡；多种压缩方法更接近线性，其中 KVSlimmer 的红色星形曲线靠近 StreamingLLM、LongCache，低于 AsymKV。
 
-## 工程上怎么用
+![Decoder stage inference cost](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-5-decoder-efficiency.png){ width="520" }
 
-如果把 KVSlimmer 接进推理系统，建议按下面顺序判断，而不是一上来就全局开启：
+<small>原论文 Figure 5，保留 Length (K) 与 Time Cost (s) 坐标。右端约 65K 处的标注为相对 AsymKV 节省约 27%。[↗](https://arxiv.org/pdf/2603.00907v2#page=8)</small>
 
-```text
-症状：长上下文请求 KV cache 撑爆显存，或 batch 一大 P99 decode 延迟上升
-指标：KV memory/request、decode TPOT、cache compression ratio、LongBench/RAG bucket score、lost-evidence rate
-机制：相邻 Key 同质，可合并；Value 异质，不能按同一规则粗暴合并
-修复：在长上下文、低价值或后台请求中开启 KVSlimmer；保留初始 sink tokens 和 recent window
-反例：代码定位、needle retrieval、法律条款引用等任务可能对少数 token 极敏感
-边界：KVSlimmer 当前主要是 local adjacent merging，非局部冗余和 layer/head adaptive ratio 仍未充分解决
-```
+按图读取，右端 AsymKV 大约 2500 秒，KVSlimmer 大约 1900 秒，图中另以约 27% 标出两者差距。这些是曲线上的近似读数，不是额外披露的一张精确计时表。实验支持无梯度合并能把开销压到接近较简单的上下文截断方案，同时前面的质量表说明它通常保留了更多任务信息。
 
-## 和世界模型高效训练主线的关系
+曲线没有给出足以恢复每项计时的完整输入与生成配置，因此不能将这些秒数直接转换成其他服务的 token/s。实际采用时，仍要测固定模型、输出长度和 batch 下的 decoder 成本。
 
-KVSlimmer 不是世界模型训练算法，但它服务同一条效率主线：长上下文、多模态历史、agent memory 和 VLA rollout 都会把 KV cache 推高。它降低的是**推理成本、部署成本和长上下文评测成本**。
+### 峰值显存，chunk 越大差距越明显
 
-对世界模型和 VLA 来说，典型场景包括：
+Figure 6 按 16 个 LongBench 任务汇总峰值显存。先比较相同 chunk 下两条线，再看间距随 chunk 增大而扩大。它测到的既包括模型与缓存，也包括压缩过程中的临时资源。
 
-1. 多轮 agent 需要保留长工具轨迹；
-2. VLA 需要读取长历史观测、语言和动作；
-3. world model rollout 需要比较多个候选未来；
-4. 离线评测要批量跑长上下文任务。
+![Peak GPU memory by chunk size](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-6-peak-gpu-memory.png){ width="620" }
 
-KVSlimmer 这类方法的价值在于让这些请求能塞进更小显存或更大 batch。但它也可能把成本转移到质量侧：如果压掉关键证据 token，系统会更快地产生错误答案。因此它必须和任务分桶评测、证据追踪、cache policy 和降级策略一起用。
+<small>原论文 Figure 6。1536 处 AsymKV 标记为 OOM；曲线顶端不是一个有效的 80 GB 成功运行测量。[↗](https://arxiv.org/pdf/2603.00907v2#page=8)</small>
 
-## 局限与边界
+| Chunk Size | AsymKV Peak Memory (GB) | KVSlimmer Peak Memory (GB) | Reduction |
+| --- | ---: | ---: | ---: |
+| 128 | 20.2 | 17.4 | 13.9% |
+| 256 | 23.9 | 19.1 | 20.1% |
+| 512 | 32.9 | 23.4 | 28.9% |
+| 1024 | 57.5 | 35.2 | 38.8% |
+| 1536 | OOM | 51.4 | — |
 
-第一，KVSlimmer 主要针对 local adjacent merging。相邻 token 冗余很常见，但很多长文档冗余是跨段、跨页面或跨工具调用的，非局部合并可能还需要额外检索或聚类。
+<small>Reduction 由图中数据按 $(M_{\rm AsymKV}-M_{\rm KVSlimmer})/M_{\rm AsymKV}$ 计算，其余数值为原图标注。</small>
 
-第二，论文默认使用 uniform compression ratio。真实线上服务里，不同 layer、head、任务和请求长度的重要性并不一样。统一比例更简单，但可能不是最优。
+默认 512 时少用 9.5 GB，1024 时少用 22.3 GB。这里的 29%、39% 是整体峰值相对 AsymKV 的减少，不是最终 KV cache 槽位又少了相同比例。较大 chunk 下，节约反向相关中间状态的收益更明显；但 KVSlimmer 自身也从 17.4 GB 增至 51.4 GB，不能据此认为任意增大 chunk 都没有成本。
 
-第三，LongBench 类平均分不能覆盖所有业务失败。尤其是 RAG、代码修复、法律/医疗引用、agent tool trace 这类任务，一个被合并掉的 token 可能正好是关键证据。
+## 保留得越少，质量下降是否还能接受
 
-第四，KVSlimmer 是推理时压缩方法，不会让模型本身学会更好地使用压缩记忆。如果希望模型原生适应压缩 KV，还需要训练时注入类似扰动或做 compression-aware finetuning。
+Figure 7 在 HotpotQA 上改变保留比例。论文把 compression ratio 定义为保留 token 数除以原始长度，因此 2% 比 20% 压缩得更强。这个定义与有些文献使用的“删除比例”相反，必须先弄清再读曲线。
 
-## 阅读结论
+![HotpotQA performance at different retained-token ratios](../../assets/images/paper-deep-dives/inference/kvslimmer/figure-7-compression-ratio.png){ width="960" }
 
-KVSlimmer 最值得记住的不是“又省了 29% memory / 28% latency”，而是它把 KV merging 的数学解释补上了：**Q/K 的谱能量集中导致相邻同质，V 的谱能量分散保留异质；Key 合并应保留 Hessian off-diagonal coupling，但这个二阶信息可以被化简成 forward-only 的闭式权重。**这让它从经验压缩技巧变成一个更可解释、也更适合在线推理的 KV cache 合并方法。
+<small>原论文 Figure 7，左为 Mistral-7B，右为 Llama3.1-8B。横轴为保留比例 2%、10%、20%，纵轴是 Score。[↗](https://arxiv.org/pdf/2603.00907v2#page=9)</small>
 
-**阅读结论。**
-KVSlimmer 要按 KV cache 结构压缩读：方法核心是 Q/K/V 谱分析、head alignment 和 asymmetric KV；实验看 runtime、decoder efficiency 与 peak memory。采用时要按模型、上下文长度、batch 和任务质量分桶验，不要只看平均显存。
+AsymKV 与 KVSlimmer 两条曲线总体接近，明显高于图中多数其他压缩方案。随着保留比例增加，质量提高；KVSlimmer 在多数点略高，但 Mistral 的 2% 点略低于 AsymKV。这项实验支持局部合并在不同预算下维持较好的质量，并没有显示在最激进压缩时也必然占优。
 
-## 参考
+正文还报告，在 10% 保留比例下，相对 AsymKV 的时间与显存分别减少约 20%、27%。这组值属于该压缩率实验，不能与默认配置的 28%、29% 互换。Figure 7 本身只画质量，没有给出完整成本曲线；使用时应同时指定保留比例与测量场景。[↗](https://arxiv.org/pdf/2603.00907v2#page=8)
 
-1. [KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging](https://arxiv.org/abs/2603.00907).
-2. [KVSlimmer GitHub](https://github.com/lianjunl13-sudo/KVSlimmer).
+## 从公式走向可用实现，还缺哪些接口
+
+论文给出的核心计算输入很明确，即相邻 Key、对应 Value、attention 权重和输出。但推导主要针对一条 query、一个 head；批量压缩还需要确定怎样跨 query 聚合统计、怎样处理 GQA 多个 query heads、怎样避免相邻配对冲突，以及分母接近零时采取什么回退。它们都会影响稳定性与实际速度。
+
+官方仓库当前公开的评测入口也提示，论文公式与可运行工程需要分开核对。在提交 `cdb3daf7010c29b3319d83dd3b219dcc844309c1` 中，`pred.py` 导入 `kvslimmer.cache` 与 `kvslimmer.patch`，但该提交的文件树没有这两个核心模块；`setup.py` 只调用 `find_packages()`，不会自动补出它们。README 仍将更多复现材料列为后续发布内容。因此，这个提交提供了部分评测入口，尚不能据此得到完整的端到端实现。[代码快照](https://github.com/lianjunl13-sudo/KVSlimmer/tree/cdb3daf7010c29b3319d83dd3b219dcc844309c1)
+
+可见的 `build_hessian_proxy_from_ratio` 还与论文式 33 有具体区别。它先对 query 维度求和，再对同一 KV head 对应的 query heads 求平均，结合基数重新归一化；残差大小使用逐维绝对值之和，并构造 $\alpha(1-2\alpha)$ 乘残差大小的对角代理。这个可见函数没有计算式 33 的两个相邻位置及 $c_{12}$ 的 L2 范数。缺失的缓存模块也使最终合并行为无法从这段入口代码完整推出。[评测入口](https://github.com/lianjunl13-sudo/KVSlimmer/blob/cdb3daf7010c29b3319d83dd3b219dcc844309c1/pred.py)
+
+这不是对论文全部实验的否定，而是实现采用时的具体差距。直接根据入口中的函数名认定已经复现了全部 Hessian 合并式，会跳过真正改变结果的步骤。该入口还使用 eager attention、额外取得 attention 权重的前向调用；README 将支持 KVSlimmer 的 Triton FlashAttention kernel 列为 TODO。论文的无反向优势不能直接解释成已经兼容所有高吞吐 attention 内核的零成本替换。
+
+对已有推理系统，较稳妥的复用顺序是先确认压缩后基数与 attention 归一化一致，再核对无梯度权重公式和数值回退，最后测量取得前向统计本身的开销。质量测试需要保留 Full Context、AsymKV 和目标方案，并分别记录任务分数、压缩次数、压缩耗时及峰值显存。这样才能区分“合并更准确”与“只是压缩触发得更少”。
+
+KVSlimmer 留下的可用认识是，缓存算法的成本不仅由最后保留多少位置决定，还由每次压缩怎样取得决策信息决定。前向敏感性代理让局部非对称合并更接近实用，但它仍依赖相邻位置、经验对齐和均匀的逐层压缩设置。若下一步要处理相隔很远的相关证据，或按层分配不同预算，就需要重新验证代理的条件与任务质量，而不能直接沿用当前曲线上的收益。

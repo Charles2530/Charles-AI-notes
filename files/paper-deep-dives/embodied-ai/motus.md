@@ -15,397 +15,340 @@ paper_topic: 具身智能 / Latent Action World Model
     **GitHub / 模型：** GitHub：[thu-ml/Motus](https://github.com/thu-ml/Motus)；HF 组织：[motus-robotics](https://huggingface.co/motus-robotics)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2512.13030)、[项目页](https://motus-robotics.github.io/motus)、[GitHub](https://github.com/thu-ml/Motus)、[HF paper API](https://huggingface.co/api/papers/2512.13030)；Checked Date：2026-06-17；Repro Status：Paper / official code and checkpoints reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 当世界模型和策略模型需要学习同一批经验
 
-### 研究背景
+让机器人把面包放进烤箱，需要理解指令、判断门和面包的位置、预测开门之后的状态，再输出一串动作。现有系统往往把这些能力拆成不同模型。VLA 直接从图像与语言预测控制，世界模型在给定动作后预测画面，逆动力学模型从前后状态恢复动作。它们观察的是同一段交互，却各自使用不同训练目标和数据接口。[↗](https://arxiv.org/pdf/2512.13030v2#page=3)
 
-Motus 的背景是 embodied agent 的能力被拆成了多个孤立模型：VLA 负责看图和语言出动作，world model 负责给定动作预测未来，inverse dynamics model 负责从观测轨迹反推动作，video generation model 负责想象未来视频。真实具身智能需要这些能力在同一个系统里协同，但现有方法往往是级联或分别训练，导致数据不能共享、误差会跨模块累积，也难以利用大规模异构视频和机器人数据。
+Motus 要处理两处断点。第一处在模型之间，如何让已有视觉语言模型的语义能力、视频模型的动态先验和动作模型的控制能力持续交换信息。第二处在数据之间，人类视频与机器人轨迹都有运动，却没有共同的动作坐标，很多视频甚至没有动作标签。论文分别用 **Mixture-of-Transformers（多专家 Transformer）** 和光流潜在动作处理这两个问题，再用独立的模态噪声时间选择推理任务。[↗](https://arxiv.org/pdf/2512.13030v2#page=4) [↗](https://arxiv.org/pdf/2512.13030v2#page=5)
 
-另一个背景是 action data 的稀缺和不统一。互联网视频、第一视角视频和合成视频包含大量运动信息，但没有机器人动作标签；不同机器人动作空间也不同。Motus 试图用 latent action 作为中间桥梁：不直接要求所有数据都有真实控制量，而是先从视觉运动中学习可共享的“delta action”先验，再把它迁移到真实机器人动作。
+这里最值得关注的结果，是动作专家也获得了一条利用无动作标签视频进行预训练的路径。它最终仍要用目标机器人轨迹微调，才能把通用运动表示落到具体控制空间。论文的实验既支持这条训练路线，也显示其收益因任务、本体和指标而变化。
 
-### 问题（Challenge）
+## 五个任务，只改变哪些未来变量已知
 
-论文要解决的问题是：**如何构建一个统一模型，同时支持 VLA、world model、inverse dynamics、video generation 和 video-action joint prediction，并能从大规模异构数据中预训练动作能力。** 难点在于，这五种任务的条件变量和生成变量不同：有时动作已知要生成视频，有时视频已知要生成动作，有时两者都要生成。
+记当前观测为 $o_t$、语言指令为 $\ell$，未来动作块为 $A=a_{t+1:t+k}$，未来视觉序列为 $O=o_{t+1:t+k}$。论文把以下五种分布放进同一个模型。
 
-更难的是动作预训练。语言和视觉可以在 web data 上大规模预训练，动作专家却通常只能看机器人数据。若没有可共享动作表示，模型很难从 unlabeled video 中学习“如何动”的先验；若简单级联 VGM 和 IDM，又不能形成真正统一的生成框架。
+| Mode | Distribution | 已知什么，生成什么 |
+|---|---|---|
+| VLA | $p(A\mid o_t,\ell)$ | 已知当前图像与指令，生成动作 |
+| World Model | $p(O\mid o_t,A)$ | 已知要执行的动作，预测视觉后果 |
+| IDM | $p(A\mid o_t,O)$ | 已知前后视觉状态，恢复可能的动作 |
+| Video Generation Model | $p(O\mid o_t,\ell)$ | 根据初始图像与指令想象未来 |
+| Video-Action Joint Prediction | $p(O,A\mid o_t,\ell)$ | 同时生成未来视觉与动作 |
 
-### Finding
+这是论文为了比较接口给出的简写；正式策略定义也允许条件中包含机器人本体状态 $p_t$。未来观测与动作块代表同一时间段，实际采样频率可以不同。世界模型预测的是指定动作的后果，视频生成则没有这组动作约束，两者生成相似画面时，承担的任务仍然不同。[↗](https://arxiv.org/pdf/2512.13030v2#page=3)
 
-作者的 finding 是：**VLA、WM、IDM、VGM 和 video-action joint prediction 可以被看成同一组视频/动作变量在不同噪声状态和条件化方式下的生成问题；而 optical flow 可以作为像素级 delta action，给动作专家提供跨数据源的 latent action 预训练信号。** 这个洞见把五个任务从孤立模块翻转成统一调度问题。
+与 UWM 把观测、动作 token 拼到一个 Transformer 的思路相比，Motus 保留预训练专家的参数结构，让它们在注意力层交换信息。与先单独生成未来、再用另一套 IDM 解码动作的流水线相比，联合模式让视频与动作在去噪过程中共同变化。后者不自动构成搜索式规划器，论文没有在该接口上再加入候选动作搜索、奖励打分或模型预测控制。[↗](https://arxiv.org/pdf/2512.13030v2#page=3) [↗](https://arxiv.org/pdf/2512.13030v2#page=14)
 
-这个 finding 能解决挑战，是因为 UniDiffuser-style scheduler 可以通过给视频和动作设置不同 timestep / noise level 来切换模式：视频干净、动作加噪就是 IDM；动作干净、视频加噪就是 WM；二者都加噪就是 joint prediction。Optical flow 则让没有真实动作标签的视频也能提供运动监督，使 action expert 不再只能依赖小规模机器人轨迹。
+## 三个专家怎样组成一个约 8B 的模型
 
-### 方法
-
-Motus 使用 Mixture-of-Transformer（MoT）架构整合三个专家：Video Generation Expert、Action Expert 和 Understanding Expert。Video branch 继承预训练视频生成模型，Understanding branch 接入 VLM 视觉语言理解，Action Expert 负责真实动作或 latent action 的生成。三者通过 Tri-model Joint Attention 交换信息，但保留各自的 Transformer/FFN/normalization 结构。
-
-训练上，Motus 使用 UniDiffuser-style scheduler，为视频侧 \(\tau_v\) 和动作侧 \(\tau_a\) 分配不同 rectified flow timestep，从而统一五种 inference mode。动作预训练阶段，论文用 DPFlow / optical flow 和 DC-AE 学 latent action，把未标注视频里的像素运动压成可迁移的动作先验。整体训练 recipe 分三阶段，并组织六层数据金字塔：从 web data、egocentric video、synthetic data，到 task-agnostic robot data、multi-robot data 和 target-robot demonstrations，逐步提高动作相关性。
-
-### 结论
-
-实验显示 Motus 在仿真和真实机器人任务上优于多个强基线。论文报告在 simulation 中相对 X-VLA 提升约 15%，相对 π0.5 提升约 45%；在真实场景中提升约 11-48%。RoboTwin 等实验和 ablation 表明，三阶段训练、latent action pretraining 和统一模式调度都对性能有贡献。模型还展示了 VLA、WM、IDM、VGM 和 video-action joint prediction 的多模式推理能力。
-
-边界是，optical flow 捕捉的是视觉运动，不等同于真实控制因果和接触力；统一模型是否适合所有 embodiment、高频力控和长 horizon 任务仍需独立验证。Motus 的结论是“用 latent action 和调度器统一多种具身生成任务有明显收益”，不是“一个模型已经完全解决所有机器人世界模型功能”。
-
-### 关键术语
-
-- **Latent Action（潜在动作）**：从视觉运动中学习到的中间动作表示，可在无真实动作标签视频和机器人动作之间搭桥。
-- **World Model, WM（世界模型）**：给定当前观测和动作，预测未来观测的模型。
-- **Inverse Dynamics Model, IDM（逆动力学模型）**：给定观测轨迹，反推产生该变化的动作。
-- **Mixture-of-Transformer, MoT（Transformer 混合架构）**：让理解、视频生成和动作专家通过联合注意力交互的结构。
-- **UniDiffuser-Style Scheduler（UniDiffuser 式调度器）**：通过不同模态的噪声/timestep 设置切换条件生成模式。
-- **Optical Flow（光流）**：像素在相邻帧间的运动场，本文用作 pixel-level delta action 预训练信号。
-
-Motus 的核心不是“再做一个 VLA”，而是提出一个统一生成框架：同一个模型既能像 VLA 一样从观测和语言出动作，也能像世界模型一样给定动作预测未来观测，还能做 inverse dynamics、video generation，以及 video-action joint prediction。
-
-这篇论文最值得精读的地方在训练配方。它试图回答一个很实际的问题：机器人 action label 稀缺、跨机器人动作空间不统一、互联网视频又没有真实控制量，动作专家怎样像 VLM / VGM 一样获得大规模预训练？Motus 的答案是把 optical flow 当成像素级 delta action，先学 latent action，再用三阶段训练和六层数据金字塔把 web / egocentric / synthetic / task-agnostic / multi-robot / target-robot 数据接起来。
-
-## 它的训练贡献是什么
-
-| 维度 | 贡献 |
-| --- | --- |
-| 统一对象 | 同时覆盖 VLA、WM、IDM、VGM、Video-Action Joint Prediction 五种分布 |
-| 架构抓手 | 用 MoT 连接 Video Gen. Model、Action Expert、Understanding Expert，并通过 Tri-model Joint Attention 交换信息 |
-| 训练抓手 | 用 UniDiffuser-style scheduler 给视频和动作分配不同 rectified flow timestep / noise scale |
-| 动作预训练抓手 | 用 DPFlow 光流和 DC-AE 学 latent action，把 unlabeled video 的运动压成可转移动作先验 |
-| 数据抓手 | 三阶段训练配六层数据金字塔，从 web data 到 target-robot demonstrations 逐步提高动作相关性 |
-| 主要风险 | 统一建模和强实验结果来自论文与官方材料；仍要单独验证不同 embodiment、真实闭环安全、长 horizon rollout 漂移和第三方复现 |
-
-## 证据等级与外推边界
-
-| 论文结论 | 主要证据 | 可以吸收 | 不能直接外推 |
-| --- | --- | --- | --- |
-| 一个模型可以切换五种 embodied modeling mode | 架构图、训练算法、附录五种 inference algorithm、VLA / WM / IDM / VGM / joint 实验 | 用 modality timestep 控制“哪些变量干净、哪些变量要生成”是很强的统一接口 | 不能证明所有任务都适合同一个共享模型，尤其是高频力控或强接触任务 |
-| latent action 能提升动作专家预训练 | Stage 2 pretrain、data pyramid、RoboTwin ablation、real-world w/o pretrain 对比 | optical flow 是比 RGB reconstruction 更直接的 motion prior，可作为跨 embodiment 中间动作空间 | 光流不等于真实控制因果，遮挡、接触力、末端约束仍可能丢失 |
-| 三阶段训练优于从零或只做 Stage 1 | RoboTwin ablation：Rand. 从 `77.00` 到 `81.86` 再到 `87.02` | 先让 VGM 看机器人动态，再让 action expert 看 latent action，最后对目标机器人 SFT，顺序有工程意义 | 论文没有把所有数据层、所有 loss、所有冻结策略逐项完全消融 |
-| Motus 在仿真和真实任务上超过基线 | RoboTwin 50+ tasks、两种真实双臂平台、LIBERO-Long / VLABench 附录 | 结果说明统一预训练对 multi-task manipulation 有收益 | real-world 是 partial success rate，且每任务 `100` trajectories；不能等同于开放家庭长期自主 |
-| 官方代码和 checkpoint 已发布 | GitHub、HF 模型、README / TRAINING / INFERENCE 文档 | 可作为工程参考和复现实验起点 | 官方 release 不是 independent reproduction，硬件、数据转换和 checkpoint 匹配仍是门槛 |
-
-## 论文位置
-
-Motus 把现有具身模型拆成五类分布：
-
-| Mode | Distribution | Meaning |
-| --- | --- | --- |
-| VLA | \(p(a_{t+1:t+k} \mid o_t,\ell)\) | 给当前观测和语言，直接预测动作 chunk |
-| WM | \(p(o_{t+1:t+k} \mid o_t,a_{t+1:t+k})\) | 给当前观测和动作，预测未来观测 |
-| IDM | \(p(a_{t+1:t+k} \mid o_{t:t+k})\) | 给一段观测轨迹，反推动作 |
-| VGM | \(p(o_{t+1:t+k} \mid o_t,\ell)\) | 给当前观测和语言，生成未来视频 |
-| Video-Action Joint Prediction | \(p(o_{t+1:t+k},a_{t+1:t+k} \mid o_t,\ell)\) | 同时生成未来视频和动作 |
-
-传统路线通常只覆盖其中一两项。VLA 强在出动作，但未必显式建模未来；视频世界模型强在生成未来，但动作接口弱；IDM 可以从想象视频回推动作，却经常依赖级联结构。Motus 的主张是：这些不是五个孤立模型，而是同一组多模态变量在不同条件化方式下的生成问题。
-
-这也是它和 [Fast-WAM](fast-wam.md) 的关系。Fast-WAM 问“推理时是否必须显式生成未来视频”；Motus 问得更大：“能不能让动作、视频、语言、理解专家在一个模型里用不同模式切换”。前者更像 WAM 部署效率论文，后者更像 unified embodied foundation model 的训练 recipe。
-
-## 总体架构
+Figure 1 应沿三路输入分别向上读。左侧视频编码器把条件帧和待生成视觉序列变成视频 token；中间动作编码器接收真实动作或潜在动作；右侧冻结的 VLM 提取当前图像与语言的最后层特征。三路特征经过各自的归一化和投影，在 Tri-model Joint Attention 中共同交互，再回到各自的前馈网络与输出路径。
 
 ![Motus architecture 原论文图](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-1-architecture.png){ width="860" }
 
-<small>图源：`Motus: A Unified Latent Action World Model`，Figure 1。原论文图意：Motus 由 Video Gen. Model、Action Expert 和 Understanding Expert 三个专家组成，通过 Tri-model Joint Attention 连接；\(\tau_v\) 与 \(\tau_a\) 分别表示视频和动作侧的 rectified flow timestep。</small>
+*原论文 Figure 1。雪花标在预训练 VLM 特征提取器上；其上方的 understanding expert 仍参与统一训练。动作输出在潜在动作预训练和目标机器人微调中具有不同含义。* [↗](https://arxiv.org/pdf/2512.13030v2#page=2)
 
-**Figure 1 怎么读。**
-中间横跨三列的是 Tri-model Joint Attention。它的作用不是把三个模型简单拼接，而是让每个专家保留自己的 Transformer / FFN / normalization 结构，同时共享 attention 信息流。Video Gen. Model 负责视频 latent 的生成和解码；Action Expert 负责编码/解码动作或 latent action；Understanding Expert 接入预训练 VLM 的视觉语言理解 token。
+生成专家采用 Wan2.2-5B，扩展其自注意力上下文以接入其他模态。动作专家采用与 Wan 相同深度的 Transformer，每层包括时间条件 AdaLN、联合注意力与 FFN。理解专家接收 Qwen3-VL-2B 的最后层对应 token，再通过自己的 Transformer 层参与交互；它与冻结的 VLM 是两个不同部分。[↗](https://arxiv.org/pdf/2512.13030v2#page=5)
 
-这个设计有一个现实动机：如果从零训练一个统一 UWM，需要巨量完全对齐的语言、视频、动作数据；Motus 选择继承已有强先验。VGM 采用 `Wan 2.2 5B`，理解分支采用 `Qwen3-VL-2B`，动作专家用与 Wan 同深度的 Transformer block，并用 AdaLN 注入 rectified flow timestep。
+| Component | Configuration | Parameter count |
+|---|---|---:|
+| Video generation model | Wan2.2-5B | 5.00B |
+| VLM feature extractor | Qwen3-VL-2B | 2.13B |
+| Action expert | Hidden size 1024；30 layers；24 attention heads | 641.5M |
+| Understanding expert | Hidden size 512；30 layers；24 attention heads | 253.5M |
+| Total | 原表以整数规模表示 | ≈8B |
 
-| Component | Base / Configuration | Role |
-| --- | --- | --- |
-| VGM | Wan 2.2 5B | 继承视频生成、物体外观和时序动态先验 |
-| VLM | Qwen3-VL-2B | 提供 3D grounding、spatial understanding、object localization 等理解能力 |
-| Action Expert | 30 layers, hidden size 1024, 24 heads | 生成 action chunk 或 latent action |
-| Understanding Expert | 30 layers, hidden size 512, 24 heads | 把 VLM token 接进统一注意力 |
-| Joint Attention | Tri-model Joint Attention | 在三个专家之间交换多模态特征 |
+动作与理解专家都使用 GELU，LayerNorm epsilon 为 $10^{-5}$。这里的“专家”按模态分工，并非路由器为每个 token 只选择少数网络执行的稀疏 MoE。各自的 QKV 投影、归一化和 FFN 保留不同表示空间，联合注意力提供跨模态读取通道。因此不能从 MoT 这个名字推导出“每步只激活很少参数”或固定推理加速比。[↗](https://arxiv.org/pdf/2512.13030v2#page=4) [↗](https://arxiv.org/pdf/2512.13030v2#page=16)
 
-架构表里最重要的是“继承”。Motus 不把视频模型、VLM 和动作头都洗成同一个 backbone，而是在 MoT 结构里保留专家分工。这样做降低了从零训练成本，也减少了统一模型常见的任务互相干扰风险。
+这也解释了预训练先验如何保留下来。Wan 不必重新从机器人小数据中学会全部图像生成规律，Qwen 提供语言、空间和物体语义，动作专家则逐步学习如何利用这些信息预测控制。网络结构为融合创造了条件，但“完全没有任务干扰”仍需靠实验检验，不能仅由分支分开推出。
 
-## 统一训练目标
+## 独立噪声时间如何实现五种推理模式
 
-Motus 用 rectified flow 同时预测未来动作和未来观测。对训练样本 \((o_{t:t+k}, a_{t+1:t+k}, \ell)\)，分别给动作和观测采样 timestep 与噪声：
+### 两条流分别学习恢复动作和视觉
 
-$$
-l_{\text{action}}^\theta
-=
-\mathbb{E}
-\left[
-\left\|v_a^\theta - (\epsilon_a-a_{t+1:t+k})\right\|_2^2
-\right],
-$$
+训练为动作与未来观测分别采样高斯噪声 $\epsilon_a,\epsilon_o$ 和噪声时间 $\tau_a,\tau_o$。用归一化到 $[0,1]$ 的时间说明附录 Algorithm 1，干净数据位于 0，纯噪声位于 1，插值为
 
 $$
-l_{\text{obs}}^\theta
-=
-\mathbb{E}
-\left[
-\left\|v_o^\theta - (\epsilon_o-o_{t+1:t+k})\right\|_2^2
-\right],
+A^{\tau_a}=(1-\tau_a)A^0+\tau_a\epsilon_a,
+\qquad
+O^{\tau_o}=(1-\tau_o)O^0+\tau_o\epsilon_o.
 $$
 
+当前条件帧 $o_t$ 保持可见。模型同时接收两种带噪序列、各自时间和语言条件，输出速度 $v_a^\theta,v_o^\theta$。两项训练目标相加
+
 $$
-l^\theta=l_{\text{action}}^\theta+l_{\text{obs}}^\theta.
+\mathcal L=\mathbb E\left[
+\|v_a^\theta-(\epsilon_a-A^0)\|_2^2
++\|v_o^\theta-(\epsilon_o-O^0)\|_2^2
+\right].
 $$
 
-这里的关键不是公式本身，而是动作和观测可以有不同 timestep：\(\tau_a\) 控制动作侧噪声，\(\tau_o\) 控制视频/观测侧噪声。于是推理时只要设置哪个模态是 clean、哪个模态是 noise，就能切换不同任务。
+这是沿数据到噪声插值路径的速度目标，视频侧实际经过模型的视频编码表示。独立采样意味着训练能遇到“动作已接近干净、视频仍很噪”以及相反状态，模型不必只学习两个模态同步变清晰的一条路径。[↗](https://arxiv.org/pdf/2512.13030v2#page=4) [↗](https://arxiv.org/pdf/2512.13030v2#page=13)
 
-| Inference Mode | Clean / Conditioned Part | Denoised / Generated Part |
-| --- | --- | --- |
-| VGM | \(o_t,\ell\) | \(o_{t+1:t+k}\)，action side kept noisy |
-| World Model | \(o_t,a_{t+1:t+k},\ell\) | \(o_{t+1:t+k}\) |
-| IDM | \(o_{t:t+k},\ell\) | \(a_{t+1:t+k}\) |
-| VLA | \(o_t,\ell\) | \(a_{t+1:t+k}\)，future observation side kept noisy |
-| Video-Action Joint Prediction | \(o_t,\ell\) | \(o_{t+1:t+k}\) and \(a_{t+1:t+k}\) together |
+附录伪代码用 Uniform 表达时间采样，具体超参数 Table 11 列出的 Sampling Strategy 是 Logit Normal。前者适合理解算法，复现训练设置应区分后者，不能把所有实验都描述为均匀时间采样。推理配置给出 10 步，伪代码的 $T_\tau$ 不能直接当作实际网络调用次数。[↗](https://arxiv.org/pdf/2512.13030v2#page=16)
 
-这种读法很接近 UniDiffuser：同一个联合模型，通过噪声水平和条件化方式切出 marginal、conditional、joint distribution。对具身模型来说，这比“先视频生成，再 IDM 出动作”的级联方案更紧，因为模型内部已经共享了动作、视频和理解特征。
+### 固定为干净条件，和固定为纯噪声，有本质区别
 
-## Action-Dense Video-Sparse Prediction
+在推理过程中，一种模态可以保持已知值，也可以保持纯噪声，或随去噪过程更新。附录 Algorithms 2–6 给出以下完整对应关系。
+
+| Mode | Future video $O$ | Actions $A$ | Returned output |
+|---|---|---|---|
+| VGM | 从纯噪声逐步去噪 | 一直固定为初始高斯噪声，时间为 1 | 视频 |
+| World Model | 从纯噪声逐步去噪 | 固定已知干净动作，时间为 0 | 视频 |
+| IDM | 固定已知干净未来视频，时间为 0 | 从纯噪声逐步去噪 | 动作 |
+| VLA | 一直固定为初始高斯噪声，时间为 1 | 从纯噪声逐步去噪 | 动作 |
+| Joint | 从纯噪声逐步去噪 | 从纯噪声逐步去噪 | 视频与动作 |
+
+纯噪声表示没有可用的该模态内容，干净输入则提供明确约束。VLA 模式虽然在结构中保留未来视频槽位，却没有偷看真实未来；World Model 模式的动作也不能换成全零向量来代表“不提供动作”，因为全零控制本身可能有特定物理含义。VGM 与 VLA 都固定各自不生成的模态为同一份初始噪声，而非每一步重新采样。[↗](https://arxiv.org/pdf/2512.13030v2#page=13) [↗](https://arxiv.org/pdf/2512.13030v2#page=14)
+
+采样从噪声端走回数据端。以动作分支的一步更新为例，按上述时间方向写为
+
+$$
+A_{s-1}=A_s+v_a^\theta\,\Delta\tau,
+\qquad \Delta\tau<0.
+$$
+
+负的时间增量与目标 $\epsilon_a-A^0$ 配合，才能沿逆向恢复动作。Joint 模式每步同时更新两路，附录使用相同的当前去噪时间；这并不与训练独立采样矛盾，前者是一种推理轨迹，后者覆盖更广的模态噪声组合。完成采样后，动作解码器输出相应动作块，视频解码器可把视觉潜变量恢复为未来帧。[↗](https://arxiv.org/pdf/2512.13030v2#page=14)
+
+### 动作稠密、视频稀疏，是时间对齐而非逐步配帧
+
+一张视频帧包含大量空间 token，而一个机器人动作向量很短。如果每个控制时刻都预测完整画面，视觉分支将主导计算与注意力上下文，并产生大量近乎重复的相邻帧。Motus 的 Action-Dense Video-Sparse 策略保留稠密动作，只在较稀疏时间点生成视觉状态。
 
 ![Motus action-dense video-sparse prediction 原论文图](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-2-action-dense-video-sparse.png){ width="760" }
 
-<small>图源：`Motus`，Figure 2。原论文图意：动作和视频的采样频率不同，动作更密集，视频更稀疏。</small>
+*原论文 Figure 2。先看两路覆盖同一条时间线，再看上下采样间隔；动作步数与视频帧数不必相等。* [↗](https://arxiv.org/pdf/2512.13030v2#page=4)
 
-机器人控制里 action chunk 通常比视频帧密得多。如果模型同时预测 \(k\) 个动作和 \(k\) 帧视频，视频 token 会压倒 action token，Tri-model Joint Attention 容易偏向视频重建，反而削弱动作预测。
+Table 11 给出 8 帧、5 Hz 的视频和 48 步、30 Hz 的动作配置，采样频率相差六倍。这不代表视觉 token 与动作 token 数严格相等，也不代表系统有六倍实测加速。30 Hz 是动作序列频率，不是整个约 8B 模型完成 10 步去噪的闭环刷新率。另一个需区分的设置是 RoboTwin 的 IDM 实验，附录明确使用 action chunk size 16，不能把 48 步配置无条件套到全部实验。[↗](https://arxiv.org/pdf/2512.13030v2#page=14) [↗](https://arxiv.org/pdf/2512.13030v2#page=16)
 
-Motus 的处理是 Action-Dense Video-Sparse Prediction：训练和推理时下采样视频帧，让视频 token 数和动作 token 数更平衡。论文给的例子是视频帧率设为动作帧率的六分之一。这个设计看似小，但很重要：统一模型不是把所有模态按原始频率粗暴堆在一起，而是先让 token budget 与任务目标匹配。
+## 光流潜在动作让视频进入动作专家
 
-## Latent Action：把光流变成动作预训练接口
+### 从像素运动压缩到 14 维，并不自动得到机器人控制
+
+对缺少动作标签的视频，普通下一帧重建容易把纹理、背景等外观信息也塞进 latent。Motus 先用 DPFlow 估计相邻帧光流，将像素位移转换为 RGB 编码图，再由 DC-AE 压缩成四个 512 维 token。拼接后的 $4\times512$ 特征通过轻量编码器，得到 14 维潜在动作 $z_t$；解码路径再恢复光流。[↗](https://arxiv.org/pdf/2512.13030v2#page=5)
+
+Figure 3 的关键在中间的瓶颈。网络要通过很短的 latent 重建稠密运动，而不是原始画面的全部外观。低维表示因此能作为动作专家的预训练目标，使人类、不同机器人以及仿真视频都提供运动监督。
 
 ![Motus latent action VAE 原论文图](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-3-latent-action-vae.png){ width="430" }
 
-<small>图源：`Motus`，Figure 3。原论文图意：用 DPFlow 从相邻帧得到 optical flow，把 flow 转成 RGB 图后经 DC-AE 和轻量 encoder 压缩成 latent action，再解码重建 flow。</small>
+*原论文 Figure 3。DPFlow 产生训练目标，编码器与解码器围绕 $z_t$ 学习光流压缩。动作监督由正文损失补充，图中没有画出一条独立的监督箭头。* [↗](https://arxiv.org/pdf/2512.13030v2#page=5)
 
-**Figure 3 怎么读。**
-Motus 把 optical flow 看作像素级 delta action。普通视频里没有机器人关节或末端控制量，但相邻帧之间的像素位移包含运动信息。先用 DPFlow 计算光流，再转成 RGB flow image；DC-AE 负责重建 flow 并编码成 `4 x 512` latent tokens；轻量 encoder 再把拼接后的特征投到 14 维，接近常见机器人动作空间尺度。
+14 维与常见双臂动作向量的尺度接近，有利于后续接口对接，却不能仅凭维度一致认定语义一致。二维光流取决于视角、相机运动与可见表面，同一种真实控制在不同摄像机下可能对应不同位移。光流减少了静态外观负担，但不会自动消除背景运动，也不是跨本体共享的完整动力学坐标。
 
-这一步解决的是 action pretraining 的入口问题：
+### 少量真动作监督把运动瓶颈拉向可执行行为
 
-| Step | Detail | Why it matters |
-| --- | --- | --- |
-| Optical flow extraction | DPFlow between adjacent frames, then RGB-format flow image | 避开 RGB 外观重建，把目标放在 motion |
-| Compression | DC-AE encodes flow into four 512-dimensional tokens | 保留高容量 motion 表示，同时可接生成模型 |
-| Control-level projection | lightweight encoder maps \(4 \times 512\) to 14-dimensional vector | 让 latent action 尺度靠近机器人动作向量 |
-| Weak action supervision | `90%` unlabeled reconstruction + `10%` labeled trajectories | 用少量真实动作把 latent space 锚到可执行控制分布 |
-| Task-agnostic alignment | Curobo randomly samples target robot action space following AnyPos | 不依赖具体任务，也能看到目标机器人可行动作范围 |
+潜在动作训练混合 90% 无标签数据与 10% 有动作标签的轨迹。后者既含机器人任务示范，也含 task-agnostic 数据，即用 Curobo 在目标机器人的动作空间随机采样，采集图像—动作对。这些数据不必完成某个复杂任务，却能告诉编码器哪些视觉运动对应机器人可执行的控制。[↗](https://arxiv.org/pdf/2512.13030v2#page=5)
 
-Latent Action VAE 的 loss 是：
+损失写成
 
 $$
-\mathcal L
-=
-\mathcal L_{\text{recon}}
-+
-\lambda_a\|a_{\text{real}}-a_{\text{pred}}\|^2
-+
-\beta\mathcal L_{\text{KL}}.
+\mathcal L_{\mathrm{latent}}
+=\mathcal L_{\mathrm{recon}}
++\lambda_a\|a_{\mathrm{real}}-a_{\mathrm{pred}}\|^2
++\beta\mathcal L_{\mathrm{KL}}.
 $$
 
-其中 \(\mathcal L_{\text{recon}}\) 约束 flow reconstruction，第二项把 latent action 对齐真实动作，KL 项正则 latent space。附录给出的配置是 \(\lambda_a=1.0\)，\(\beta=1\times10^{-6}\)。
+重建项保留光流信息；动作回归项要求潜在表示支持真实动作预测；KL 项约束潜在分布。附录取 $\lambda_a=1.0$、$\beta=10^{-6}$。动作监督只在有标签样本上成立，90/10 也是这一表示学习过程的混合比例，不是整个 Motus 预训练数据金字塔的采样配比。[↗](https://arxiv.org/pdf/2512.13030v2#page=5) [↗](https://arxiv.org/pdf/2512.13030v2#page=16)
 
-这里最容易误读的是“latent action 就是真动作”。更稳的理解是：latent action 是一个 motion-centric bridge。它能从无动作视频里抽取可共享运动先验，但最后仍要在 Stage 3 用目标机器人真实动作做 SFT，才能接到具体 embodiment。
+这条路径使用了未来帧来离线提取训练标签。部署时的策略无需先获得真实未来才能输出动作，它从当前观测和指令预测动作块；最后的目标机器人微调使用真实控制信号。将“从前后帧学习 latent”与“在线先看见未来才能控制”混为一谈，会误解这种预训练方式的因果顺序。
 
-## 三阶段训练与六层数据金字塔
+## 六层数据如何进入三个训练阶段
+
+Figure 4 将数据按与机器人任务的距离组织起来。底层 Web Data 首先为现成 VLM 和 VGM 提供通用先验，顶层目标机器人轨迹则给出最终控制语义。中间几层通过视频或潜在动作参与领域适配；层级表达数据用途，不能当成所有样本质量都严格递增的定律。
 
 ![Motus embodied data pyramid 原论文图](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-4-data-pyramid.png){ width="760" }
 
-<small>图源：`Motus`，Figure 4。原论文图意：数据从 Level 1 Web Data 到 Level 6 Target-Robot Task Trajectory Data，越往上数量越少、质量和策略相关性越高；论文说明 Level 3 和 Level 4 的顺序有时可能互换。</small>
+*原论文 Figure 4。Level 3 与 Level 4 的顺序可以变化；Web Data 主要由现成基础模型继承，不应被误写为作者额外训练了一遍全量互联网视频。* [↗](https://arxiv.org/pdf/2512.13030v2#page=6)
 
-**Figure 4 怎么读。**
-金字塔底部是 web data，数量大但离机器人动作远；中间有 egocentric human videos、synthetic data、task-agnostic data 和 multi-robot task trajectories；顶部是 target-robot demonstrations，数量最少但最能决定具体部署动作。Motus 的训练不是一次性混合所有数据，而是按阶段使用不同层级。
+| Stage | Data levels | Trained components / targets |
+|---|---|---|
+| Foundation models | Level 1，Web Data | 使用现成 VGM 与 VLM |
+| Stage 1，Video Generation | Level 2 人类视频；Level 3 合成数据；Level 5 多机器人任务轨迹 | 仅适配 VGM，从初始图像与语言预测机器人交互未来 |
+| Stage 2，Unified Training | Level 2 / 3 / 4 / 5 | 三个专家共同训练，动作侧目标为潜在动作；VLM 特征提取器冻结 |
+| Stage 3，SFT | Level 6，目标机器人任务轨迹 | 用真实动作微调统一模型，适配目标本体 |
 
-Table 1 from the paper can be redrawn as follows, keeping the original English fields:
+Stage 1 先修正视频基础模型与机器人交互域的差距，Stage 2 再让动作专家读取这些动态知识，Stage 3 最后完成控制空间对接。这个顺序也解释了消融中“w/o Pretraining”的含义，它跳过本文的具身预训练阶段，但仍继承 Wan 与 Qwen 的基础模型先验，不是所有权重随机初始化。[↗](https://arxiv.org/pdf/2512.13030v2#page=6)
 
-| Stage | Data | Training |
-| --- | --- | --- |
-| Pretrained Foundation Models (Off-the-shelf) | Level 1: Web Data | VGM and VLM |
-| Stage 1 (Video Generation) | Level 2: Egocentric Human Videos<br>Level 3: Synthetic Data<br>Level 5: Multi-Robot Task Trajectory Data | Only VGM |
-| Stage 2 (Unified Training with Latent Actions) | Level 2: Egocentric Human Videos<br>Level 3: Synthetic Data<br>Level 4: Task-agnostic Data<br>Level 5: Multi-Robot Task Trajectory Data | Motus (all 3 experts, with latent actions) |
-| Stage 3 (SFT) | Level 6: Target-Robot Task Trajectory Data | Motus (all 3 experts, with actions) |
+Table 12 列出实际使用的数据，下面保留原表 Size 数字。该列没有统一注明时长单位，因此不能直接转换成视频小时或帧数。
 
-<small>表源：`Motus`，Table 1。原表含义：三阶段训练如何对应六层数据金字塔。注意论文正文同时说明 Stage 2 中 VLM frozen，因此这里的 “all 3 experts” 更稳的读法是三条专家分支进入联合训练，但预训练 VLM 主体不参与全量更新。</small>
+| Dataset | Size | Embodiment | Level |
+|---|---:|---|---|
+| Egodex | 230,949 | Human | 2 |
+| Agibot | 728,209 | Genie-1 Robot | 5 |
+| RDT | 6,083 | Aloha Robot | 5 |
+| RoboMind Franka | 9,589 | Franka Robot | 5 |
+| RoboMind Aloha | 7,272 | Aloha Robot | 5 |
+| RoboTwin | 27,500 | Aloha Robot | 3 |
+| Task-Agnostic Data | 1,000 | Aloha Robot | 4 |
+| In-house Data | 2,000 | Aloha Robot | 6 |
 
-三阶段可以这样理解：
+人类与 Agibot 数据占据很大的记录规模，但是否对某个下游任务最有效，还取决于混合采样、内容和本体差异，不能仅按表中条数推断贡献。In-house 一行的本体标记也不足以推导两个真机平台的所有细分数据分配。[↗](https://arxiv.org/pdf/2512.13030v2#page=17)
 
-1. **Stage 1: Learning Visual Dynamics.** 只训练 VGM，让 Wan 2.2 5B 的视频生成能力适应机器人操作视频。它先学“机器人任务未来看起来怎样”，不是直接出动作。
-2. **Stage 2: Learning Action Representations.** 用 videos、language、latent actions 预训练 Motus，初始化 action expert。这里最关键的是 latent action：动作专家终于能从大规模无动作或异构动作数据里学 motion prior。
-3. **Stage 3: Specializing for the Target Robot.** 用 Level 6 目标机器人轨迹做 SFT，把 latent action 和通用运动先验落到真实 action space。
+训练预算则比“少量目标数据微调”更完整地反映成本。
 
-附录 Table 12 gives the dataset details:
-
-| Dataset | Size | Embodiment | Data Level in the Pyramid |
-| --- | --- | --- | --- |
-| Egodex | 230,949 | Human | Level 2: Egocentric Human Videos |
-| Agibot | 728,209 | Genie-1 Robot | Level 5: Multi-Robot Task Trajectory Data |
-| RDT | 6,083 | Aloha Robot | Level 5: Multi-Robot Task Trajectory Data |
-| RoboMind Franka | 9,589 | Franka Robot | Level 5: Multi-Robot Task Trajectory Data |
-| RoboMind Aloha | 7,272 | Aloha Robot | Level 5: Multi-Robot Task Trajectory Data |
-| RoboTwin | 27,500 | Aloha Robot | Level 3: Synthetic Data |
-| Task-Agnostic Data | 1,000 | Aloha Robot | Level 4: Task-Agnostic Data |
-| In-house Data | 2,000 | Aloha Robot | Level 6: Target-Robot Task Trajectory Data |
-
-<small>表源：`Motus`，Table 12。原表含义：列出预训练和微调数据规模、embodiment 与金字塔层级。这里的 size 按论文表格记录，不代表所有数据都公开可下载。</small>
-
-附录 Table 13 gives the training configuration:
-
-| Stages | Stage 1 | Stage 2 | Stage 3 |
-| --- | --- | --- | --- |
-| Batch Size | 256 | 256 | 256 |
-| Learning Rate | \(8 \times 10^{-5}\) | \(5 \times 10^{-5}\) | \(1\sim5 \times 10^{-5}\) |
+| Training configuration | Stage 1 | Stage 2 | Stage 3 |
+|---|---:|---:|---:|
+| Batch size | 256 | 256 | 256 |
+| Learning rate | $8\times10^{-5}$ | $5\times10^{-5}$ | $(1\!\sim\!5)\times10^{-5}$ |
 | Optimizer | AdamW | AdamW | AdamW |
-| Weight Decay | 0.01 | 0.01 | 0.01 |
-| GPU Hours | ~8000 | ~10000 | ~400 |
+| Weight decay | 0.01 | 0.01 | 0.01 |
+| GPU hours | ≈8,000 | ≈10,000 | ≈400 |
 
-<small>表源：`Motus`，Table 13。原表含义：三阶段训练的 batch size、learning rate、optimizer、weight decay 和 GPU hours。</small>
+三阶段合计约 18,400 GPU 小时，是按原表相加得到的量，且不包括现成基础模型最初的训练。论文没有在该表给出 GPU 型号，因此无法据此可靠换算墙钟时间或金钱。它说明作者减少了从零学习通用知识的需求，却仍进行了一次规模可观的具身预训练。[↗](https://arxiv.org/pdf/2512.13030v2#page=17)
 
-训练成本读法也要谨慎。Stage 2 的 `~10000` GPU hours 是把 latent action pretraining 做起来的主要成本；Stage 3 的 `~400` GPU hours 则更像目标机器人适配成本。也就是说，Motus 的工程叙事不是“少数据直接成功”，而是“前面用大量跨源 motion prior 预训练，后面用少量目标机器人数据适配”。
+## 五个接口分别获得了什么实验支持
 
-## 官方代码口径下的训练和推理
+### 联合预测对控制有增益，但 VLA 模式也能工作
 
-官方 GitHub README / TRAINING / INFERENCE 文档补充了几个工程细节：
+RoboTwin 2.0 randomized 上，Motus 的 VLA 模式平均成功率为 83.90%，Joint 模式为 87.02%，相差 3.12 个百分点。该对照支持在这个模型和评测设置中，联合生成未来视觉有利于动作控制；同时，固定未来视觉为噪声仍能得到可用策略，说明五模式并非只停留在分布符号上。[↗](https://arxiv.org/pdf/2512.13030v2#page=14)
 
-| Item | Official Setting |
-| --- | --- |
-| Training runtime | single-node `torchrun` + DeepSpeed, or SLURM single / multi-node scripts |
-| Getting started script | `scripts/train.sh` with `configs/robotwin.yaml` |
-| Fine-tune checkpoint | Stage 3 sets `finetune.checkpoint_path: ./pretrained_models/Motus` |
-| Resume behavior | when resuming or fine-tuning, WAN and VLM pretrained weights are not reloaded; VAE is still needed |
-| From scratch behavior | set both `resume.checkpoint_path` and `finetune.checkpoint_path` to `null`, then load Wan2.2 and Qwen3-VL pretrained weights |
-| Training hardware guidance | `> 80 GB` VRAM, recommended A100 80GB / H100 / B200 |
-| Inference memory | with pre-encoded T5 `> 24 GB`; without pre-encoded T5 about `41 GB` |
-| Real-world input format | three-view concatenated image: head + left/right wrist cameras |
+Figure 12 展示真机联合推理中的视觉序列。应观察机器人和被操作物体的变化是否与任务进展相联系；图中没有单独画出的关节轨迹误差，不能据此估算动作精度，也不能把可视化当作模型已经具备候选未来搜索的证据。
 
-这部分很适合复现前排雷。第一，Motus 不只是一个轻量 policy head，训练需要大显存和分布式脚本。第二，推理时 T5 是否预编码会直接改变显存口径。第三，real-world inference 要求三视角拼接图像，如果输入格式错了，动作预测差不一定是模型能力问题。
+![Motus joint prediction](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-12-joint-prediction.png){ width="1000" }
 
-官方 checkpoint 也对应三阶段：
+*原论文 Figure 12。联合模式同时生成视频与动作，控制收益应结合 83.90% 对 87.02% 的任务成功率比较。* [↗](https://arxiv.org/pdf/2512.13030v2#page=22)
 
-| Model | Use Case | Description |
-| --- | --- | --- |
-| Motus_Wan2_2_5B_pretrain | Pretrain / VGM Backbone | Stage 1 VGM pretrained checkpoint |
-| Motus | Fine-Tuning | Stage 2 latent action pretrained checkpoint |
-| Motus_robotwin2 | Inference / Fine-Tuning | Stage 3 RoboTwin2 fine-tuned checkpoint |
+### 世界模型指标检验画面预测，不直接检验规划可靠性
 
-这里可以把 `Motus` checkpoint 理解成“带 latent action 预训练的统一模型”，把 `Motus_robotwin2` 理解成“已经对 RoboTwin2 动作空间适配过的模型”。如果换真实机器人，最关键的不是直接拿 RoboTwin checkpoint 硬跑，而是数据格式、动作维度、相机拼接和 Stage 3 SFT 是否匹配。
+World Model 模式给定真实动作后预测未来，Table 6 在两个真实机器人平台的数据上评估生成质量。
 
-## 实验设置
-
-RoboTwin 2.0 的实验是多任务训练：50 个代表性 manipulation tasks，每个任务 `50` 条 clean demonstrations 和 `500` 条 randomized demonstrations，总计 `2,500` clean + `25,000` randomized。随机化包括背景、桌面杂物、桌高扰动和光照变化。所有模型从预训练 checkpoint 出发，在 RoboTwin 上 finetune `40k` steps，并按每任务 `100` 次执行 trial 统计 success rate。
-
-真实实验覆盖 AC-One 和 Agilex-Aloha-2 两个双臂平台。每个任务使用 `100` trajectories 训练，同一平台上的任务做 multi-task joint training。因为任务多为可分解长时程任务，论文采用 partial success rate：完成子目标给部分分，完整完成给满分。
-
-![Motus task definitions 原论文图](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-5-task-definitions.png){ width="860" }
-
-<small>图源：`Motus`，Figure 5。原论文图意：展示 Brew Coffee using Coffee Maker、Touch Instructed Keyboard、Put Bread into Oven 等真实任务的语言指令和子任务定义。</small>
-
-**Figure 5 怎么读。**
-这张图解释了为什么论文不用纯 success / failure。比如 Put Bread into Oven 至少包含开门、抓面包、放入、关门、按按钮等步骤；Touch Keyboard 要把屏幕识别和末端定位接起来；Brew Coffee 涉及杯子、咖啡机、放置和开关。partial success rate 更能反映长任务在哪个阶段失败，但也意味着它和一次性任务 success rate 不能直接混用。
-
-## 仿真结果
-
-Table 2 from the paper is very large. The average rows can be redrawn as follows, keeping the original English fields:
-
-| Method | Clean | Rand. |
-| --- | ---: | ---: |
-| \(\pi_{0.5}\) | 42.98 | 43.84 |
-| X-VLA | 72.80 | 72.84 |
-| w/o Pretrain | 72.80 | 77.00 |
-| Stage1 | 82.86 | 81.86 |
-| Motus | 88.66 | 87.02 |
-
-<small>表源：`Motus`，Table 2。原表含义：RoboTwin 2.0 50+ tasks clean / randomized 设置下的平均 success rate。主文表格列出部分任务和平均值，附录 Table 14 给出含 GO-1 的完整 50 任务版本。</small>
-
-这张表支撑两个结论。第一，Motus 在 randomized 平均值上比 X-VLA 高 `14.18` 个点，比 \(\pi_{0.5}\) 高 `43.18` 个点，所以摘要中写成约 `+15%` 和 `+45%`。第二，w/o Pretrain、Stage1 和 Motus 的阶梯差异说明：只做目标数据训练不够，只有视频动态预训练也不够，Stage 2 latent action pretraining 是关键增量。
-
-不过这里也要看边界。所有模型都在 RoboTwin 数据上 finetune `40k` steps；这不是零样本仿真泛化。它测的是预训练如何影响有限 finetune 后的 multi-task success rate。
-
-## 真实机器人结果
-
-Table 3 from the paper can be redrawn as follows, keeping the original English fields:
-
-| Task Description | \(\pi_{0.5}\) | w/o Pretrain | Motus |
-| --- | ---: | ---: | ---: |
-| **AC-One** |  |  |  |
-| Fold Towel | 4 | 1 | **14.5** |
-| Brew Coffee using Coffee Maker | 0 | 0 | **62** |
-| Get Water from Water Dispenser | 30 | 8 | **36** |
-| Place Cube into Plate | 46 | 60 | **100** |
-| Place Cube into Plate(OOD) | 28.125 | 18.75 | **75** |
-| Grind Coffee Beans with Grinder | 8 | 0 | **92** |
-| Pour Water from Kettle to Flowers | 5 | 5 | **65** |
-| Touch Instructed Keyboard | 0 | **100** | 82.5 |
-| Put Bread into Oven | 12 | 40 | **42** |
-| Average | 14.79 | 25.86 | **63.22** |
-| **Agilex-Aloha-2** |  |  |  |
-| Fold Towel | 27.5 | 0 | **39** |
-| Get Water from Water Dispenser | 62 | 8 | **96** |
-| Pour Water from Kettle to Flowers | 45 | 40 | **47.5** |
-| Touch Instructed Keyboard | 72.5 | **85** | 80 |
-| Put Bread into Oven | **36** | 0 | 34 |
-| Average | 48.60 | 26.60 | **59.30** |
-
-<small>表源：`Motus`，Table 3。原表含义：两个真实双臂平台上的 partial success rate。AC-One 平均从 \(\pi_{0.5}\) 的 `14.79` 到 Motus 的 `63.22`，Agilex-Aloha-2 平均从 `48.60` 到 `59.30`。</small>
-
-真实任务结果有两个值得保留的细节。第一，Motus 平均值明显更高，尤其 AC-One 上差距很大。第二，Motus 不是每个单项都赢，例如 AC-One 的 Touch Instructed Keyboard 被 w/o Pretrain 超过，Agilex-Aloha-2 的 Put Bread into Oven 被 \(\pi_{0.5}\) 略高。也就是说，论文强证据是平均和多数任务收益，而不是“所有任务无条件碾压”。
-
-## 消融：训练阶段到底带来什么
-
-![Motus ablation 原论文图](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-6-ablation.png){ width="760" }
-
-<small>图源：`Motus`，Figure 6。原论文图意：RoboTwin 2.0 randomized multi-task setting 中，w/o pretrain、Stage1 pretrain、Stage2 pretrain 的总 success rate 对比。</small>
-
-**Figure 6 怎么读。**
-随机化设置里，w/o pretrain 是 `77.00%`，Stage1 pretrain 是 `81.86%`，Stage2 pretrain 是 `87.02%`；clean 设置里分别是 `77.56%`、`82.26%`、`88.66%`。因此 Stage1 主要说明“让 VGM 先适应机器人视频动态有用”，Stage2 进一步说明“latent action 预训练 action expert 有用”。
-
-这张图比最终 SOTA 表更重要，因为它回答了训练 recipe 的因果问题。Motus 的提升不是只来自模型更大或基线更弱，而是在固定同一套模型家族时，逐步加入预训练阶段会持续提升。
-
-## 附录里的多模式能力
-
-论文附录还单独报告了 Motus 在世界模型、IDM 和 VLA 模式下的结果。
-
-| Platform | FID↓ | FVD↓ | SSIM↑ | LPIPS↓ | PSNR↑ |
-| --- | ---: | ---: | ---: | ---: | ---: |
+| Platform | FID ↓ | FVD ↓ | SSIM ↑ | LPIPS ↓ | PSNR ↑ |
+|---|---:|---:|---:|---:|---:|
 | Agilex-Aloha-2 | 9.4571 | 49.2848 | 0.88618 | 0.05449 | 26.1021 |
 | AC-One | 12.9609 | 73.1325 | 0.84605 | 0.07280 | 24.0379 |
 | Avg. | 11.209 | 61.20865 | 0.8661 | 0.063645 | 25.0700 |
 
-<small>表源：`Motus`，Table 6。原表含义：World Model mode 在两种真实机器人数据上的生成质量指标。</small>
+FID/FVD 提供生成分布层面的比较，SSIM、LPIPS、PSNR 衡量与参考画面的关系。这张表没有放入外部世界模型基线，所以它证明了该模式能被量化评估，不能单独支持“优于现有世界模型”的排名。视觉相似也不等价于长时间滚动预测、接触动力学或基于模型规划已经可靠。[↗](https://arxiv.org/pdf/2512.13030v2#page=14)
 
-| ResNet18+MLP | DINOv2+MLP | Motus |
-| ---: | ---: | ---: |
-| 0.044 | 0.122 | **0.014** |
+Figure 10 将 Pred. 与 GT 成对排放，横向是时间，纵向切换任务。应先固定同一任务比较上下两行，观察末端、杯子或屏幕状态，再看跨帧一致性。VGM 模式的 Figures 7、9 没有已知动作条件，其视频展示不应替代这组动作条件预测。
 
-<small>表源：`Motus`，Table 7。原表含义：IDM mode 在 100 个 RoboTwin 2.0 randomized samples 上的 action MSE。</small>
+![Motus world model on Aloha](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-10-world-model-aloha.png){ width="950" }
 
-| Motus (VLA) | Motus (Joint) |
-| ---: | ---: |
-| 83.90 | 87.02 |
+*原论文 Figure 10。Pred. 与 GT 的差异属于给定动作后的预测误差；它与真机执行时策略是否选对动作是两项不同评估。* [↗](https://arxiv.org/pdf/2512.13030v2#page=20)
 
-<small>表源：`Motus`，Table 8。原表含义：RoboTwin 2.0 randomized data 上 VLA mode 与 video-action joint prediction mode 的平均 success rate。</small>
+### IDM 的较低 MSE 要结合输入协议理解
 
-这些附录结果说明 Motus 的 unified mode 不是只停留在架构示意。它确实能按不同条件化方式运行。不过也要注意，World Model mode 的图像指标不等同于闭环规划收益；IDM 的 MSE 是 100 samples 上的离线指标；VLA mode 比 joint mode 低 `3.12` 个点，说明联合预测未来视频和动作仍然可能提供额外上下文。
+在 100 个 RoboTwin randomized 样本上，ResNet18+MLP、DINOv2+MLP 和 Motus 的 Action MSE 分别为 0.044、0.122、0.014。附录说这些比较使用 16 步动作块，基线通过回归未来动作训练。Motus 在该表中误差最低，但文字将基线输入描述为 current observation，而 IDM 的形式定义使用当前与未来观测，条件是否完全一致没有讲清。[↗](https://arxiv.org/pdf/2512.13030v2#page=14)
 
-## 训练启发
+因此，这一结果可以说明统一模型的逆动力学接口具有动作恢复能力，却不宜被放大成严格匹配输入、预算和参数量后对所有专用 IDM 的优势。MSE 也未在这里转换成毫米或角度，不能把 0.014 当作物理执行误差。
 
-Motus 给具身智能训练路线的启发可以压成四条。
+## RoboTwin 的平均提升来自哪里
 
-第一，动作专家也需要预训练。很多 VLA 继承了语言和视觉先验，但 action head 往往只靠机器人数据从头学。Motus 通过 latent action 给 action expert 补了一个 scalable pretraining path。
+### 同样的下游训练步骤，不等于同样的全部训练成本
 
-第二，跨 embodiment 不一定要先统一关节或末端动作格式。Motus 先把不同来源数据对齐到 optical-flow motion space，再在目标机器人上做真实动作 SFT。这条路线适合动作空间很杂、但视觉运动模式有共享性的场景。
+主实验在 50 个 RoboTwin 2.0 任务上进行多任务训练，使用 2,500 条 clean 示范，每任务 50 条，以及 25,000 条 randomized 示范，每任务 500 条。随机化包含背景、桌面杂物、桌高和光照。各模型从自己的预训练 checkpoint 出发微调 40K 步，每任务测试 100 次。[↗](https://arxiv.org/pdf/2512.13030v2#page=7)
 
-第三，统一模型的关键不是“所有任务一个 loss”，而是 scheduler。通过 \(\tau_o,\tau_a\) 控制哪些模态是噪声、哪些模态是条件，统一模型才真的能切换 VLA、WM、IDM、VGM 和 joint prediction。
+这里测的是一套多任务策略对不同任务的表现，并非为每项任务独立训练一个模型。统一下游数据和步数有助于比较预训练起点，但预训练数据、参数量和总计算量仍不同，不能称为全部资源严格相同的架构实验。
 
-第四，视频 token 和 action token 的比例会影响学习重心。Action-Dense Video-Sparse Prediction 提醒我们：多模态统一训练首先是 token budget 和采样率设计问题，不只是模型名义上支持多个模态。
+下表采用附录 Table 14 的完整 50 任务汇总，其 Motus 各阶段 Clean 数值也与 Figure 6 一致。
 
-## 局限和风险
+| Model | Clean Success (%) | Randomized Success (%) |
+|---|---:|---:|
+| GO-1 | 37.80 | 36.24 |
+| π0.5 | 42.98 | 43.84 |
+| X-VLA | 72.80 | 72.84 |
+| Motus w/o Pretraining | 77.56 | 77.00 |
+| Motus with Stage 1 | 82.26 | 81.86 |
+| Motus | 88.66 | 87.02 |
 
-第一，latent action 以 optical flow 为核心，但光流主要描述像素运动。接触力、关节限位、抓取摩擦、遮挡后的物体状态，不一定能被光流完整表达。因此它适合作为 motion prior，不应被当成完整控制状态。
+按原表汇总，Motus 对 X-VLA 的提升是 Clean 15.86、Randomized 14.18 个百分点；对 π0.5 则分别是 45.68 和 43.18 个百分点。因此摘要的“约 +15 / +45”是跨设置的概括，不能写成随机化条件下精确提高 45 个百分点，更不能把百分点差当作相对百分比。[↗](https://arxiv.org/pdf/2512.13030v2#page=18)
 
-第二，真实机器人实验使用 partial success rate，且每任务 `100` trajectories。这个指标更适合拆长任务进度，但不等价于工业部署所需的完整成功率、失败恢复率、安全边界或长时间 unattended operation。
+原文汇总还存在需要保留的口径差异。正文 Table 2 将 w/o Pretraining 和 Stage 1 的 Clean 平均写成 72.80、82.86，而完整 Table 14 与 Figure 6 是 77.56、82.26；后两者能由完整逐任务记录复算得到。Table 14 的 GO-1、X-VLA Clean 原表汇总为 37.80、72.80，按所列 50 行简单平均则为 37.86、72.88。上表保留作者汇总，不将这些差异隐藏为精确无误的统一账目。[↗](https://arxiv.org/pdf/2512.13030v2#page=7) [↗](https://arxiv.org/pdf/2512.13030v2#page=18)
 
-第三，数据金字塔里的多源数据并不都等价可获得。论文列出 in-house data 和多个外部数据集，官方代码发布不代表每个数据源、训练混合比例和所有实验细节都能完全复刻。
+### 分阶段预训练提供增益，逐任务仍有退化
 
-第四，统一模型会带来工程复杂度。VGM、VLM、action expert、understanding expert、VAE、T5 预编码、三视角拼接和分布式训练脚本都要对齐。对小团队来说，先复现 Stage 3 fine-tuning 或 RoboTwin inference，比直接重训 Stage 1/2 更现实。
+在 Randomized 条件下，视频领域适配从 77.00% 提升到 81.86%，增加 4.86 个百分点；再进行统一潜在动作预训练后达到 87.02%，增加 5.16 个百分点。Clean 对应从 77.56% 到 82.26% 再到 88.66%，两段增益为 4.70 和 6.40 个百分点。两个环境条件的阶段趋势一致，支持先适配视频动态、再训练动作表示的配方。
 
-## 阅读结论
+![Motus ablation 原论文图](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-6-ablation.png){ width="760" }
 
-Motus 是一篇很值得放进具身智能专题的前沿系统论文。它的价值不只在分数，而在把“动作专家如何获得大规模预训练”讲成了一个可执行 recipe：optical flow latent action、三阶段训练、六层数据金字塔、MoT 三专家和 UniDiffuser-style scheduler。最可复用的是训练结构和多模式推理接口；最不能过度外推的是开放真实环境长期自主、第三方复现和光流对接触物理的完整表达。下一步最需要看的证据，是官方代码在不同机器人上的独立复现、更多 Stage 2 数据/损失消融，以及 real-world closed-loop failure trace。
+*原论文 Figure 6。左右两组分别是 Randomized 与 Clean，总增益为 10.02、11.10 个百分点；这些 Clean 数值对应完整附录表。* [↗](https://arxiv.org/pdf/2512.13030v2#page=8)
 
-- 站内下一步：[Fast-WAM：训练时学世界，推理时不生成未来](fast-wam.md)。
-- 站内下一步：[π0.5：开放世界 VLA](pi05.md)。
-- 站内下一步：[VLA 数据、模型与评测路线图](../../embodied-ai/vla-data-model-and-evaluation-roadmap.md)。
+平均值背后有明显不均匀性。Pick Dual Bottles 的随机化成功率在三个阶段为 68% → 17% → 90%，Pick Diverse Bottles 为 62% → 18% → 91%，视频适配本身一度降低动作表现，统一训练后才恢复并超过原值。反过来，Handover Mic 的随机化结果是 95% → 88% → 63%，完整预训练也没有保证每项技能改善。Adjust Bottle 中 Motus 为 93%，仍低于 X-VLA 的 99%。[↗](https://arxiv.org/pdf/2512.13030v2#page=18)
+
+这些消融分离了训练阶段，尚未分别隔离光流目标、14 维瓶颈、弱动作监督、每一种数据源和 MoT 结构本身。完整 Stage 2 的收益与它新增的数据和训练计算共同出现，不能把全部 5.16 个百分点归给其中一个模块。
+
+## 其他基准把泛化结论缩小到具体任务
+
+LIBERO-Long 的 10 项长时序任务中，Motus 与 X-VLA 都报告 97.6 的平均成功分数；表中的 π0、GR00T-N1、UniVLA、OpenVLA-OFT 分别为 85.2、90.6、94.0、94.5。这支持 Motus 在该基准达到较高水平，结果是与 X-VLA 持平，也不能自动沿用 RoboTwin 的 40K 步协议解释所有这些行。[↗](https://arxiv.org/pdf/2512.13030v2#page=15)
+
+VLABench 更直接暴露跨类别差异。作者对一个 Motus 模型进行多任务微调，在三个任务的 In Distribution 与 Cross Category 两条轨道上测试，π0.5 来自其官方实现。下面保留原表 0–1 的成功率口径。
+
+| Track / Model | Add Condiment | Select Toy | Select Fruit | Avg. |
+|---|---:|---:|---:|---:|
+| In Distribution / π0.5 | 0.56 | 0.30 | 0.42 | 0.43 |
+| In Distribution / Motus | 0.63 | 0.47 | 0.33 | 0.48 |
+| Cross Category / π0.5 | 0.06 | 0.24 | 0.36 | 0.22 |
+| Cross Category / Motus | 0.14 | 0.40 | 0.20 | 0.25 |
+
+Motus 的报告平均值在两条轨道更高，但 Select Fruit 在分布内从 0.42 降到 0.33，跨类别从 0.36 降到 0.20。跨类别平均值本身也只有 0.25。这一组结果支持有限任务上的平均收益，同时说明视频和潜在动作预训练没有普遍解决语义类别泛化。[↗](https://arxiv.org/pdf/2512.13030v2#page=16)
+
+## 真机结果首先要区分进展分数与完整成功
+
+### 每个平台是一套目标本体多任务模型
+
+真机使用 AC-One 和 Agilex-Aloha-2，每项任务收集 100 条训练轨迹，各平台内部把多个任务共同训练，再逐任务评测。这属于目标机器人数据适配后的表现，不能描述为新本体零样本迁移。任务包括软物折叠、倒水、按键、研磨咖啡和烤箱操作。[↗](https://arxiv.org/pdf/2512.13030v2#page=7)
+
+Figure 5 将任务拆成可评分的步骤。先识别烤箱的开门、取面包、放入、关门、旋钮等过程，再读 partial success rate，才能知道一个中间分数表达多少进展。
+
+![Motus task definitions 原论文图](../../assets/images/paper-deep-dives/embodied-ai/motus/figure-5-task-definitions.png){ width="860" }
+
+*原论文 Figure 5。图示帮助理解任务流程，具体分值与成功次数仍应以子任务统计表为准。* [↗](https://arxiv.org/pdf/2512.13030v2#page=8)
+
+Table 3 的关键任务与平均结果如下，数值都是 Partial Success Rate (%)。
+
+| Platform / Task | π0.5 | w/o Pretraining | Motus |
+|---|---:|---:|---:|
+| AC-One / Fold Towel | 4.0 | 1.0 | 14.5 |
+| AC-One / Brew Coffee | 0 | 0 | 62 |
+| AC-One / Place Cube into Plate | 46 | 60 | 100 |
+| AC-One / Place Cube into Plate (OOD) | 28.125 | 18.75 | 75 |
+| AC-One / Grind Coffee Beans | 8 | 0 | 92 |
+| AC-One / Touch Instructed Keyboard | 0 | 100 | 82.5 |
+| AC-One / Put Bread into Oven | 12 | 40 | 42 |
+| **AC-One / Average, 9 tasks** | **14.79** | **25.86** | **63.22** |
+| Aloha2 / Fold Towel | 27.5 | 0 | 39 |
+| Aloha2 / Get Water from Dispenser | 62 | 8 | 96 |
+| Aloha2 / Pour Water to Flowers | 45 | 40 | 47.5 |
+| Aloha2 / Touch Instructed Keyboard | 72.5 | 85 | 80 |
+| Aloha2 / Put Bread into Oven | 36 | 0 | 34 |
+| **Aloha2 / Average, 5 tasks** | **48.60** | **26.60** | **59.30** |
+
+AC-One 平均还包含 Get Water from Dispenser 的 30 / 8 / 36，以及 Pour Water to Flowers 的 5 / 5 / 65。按原表计算，Motus 对 π0.5 的平台平均增益为 48.43 和 10.70 个百分点。两平台任务集合不同，不适合用 63.22 对 59.30 判断哪个机器人整体更强。[↗](https://arxiv.org/pdf/2512.13030v2#page=8)
+
+收益也并非覆盖全部任务。AC-One 键盘从无具身预训练版本的 100 降至 82.5，Aloha2 键盘从 85 降至 80；Aloha2 烤箱低于 π0.5 的 36。正文“所有任务均优于基线”的概括超出了表格支持范围。
+
+### 42 分可以只对应 3 次完整成功
+
+AC-One 烤箱任务在 Table 4 中有 10 次测试。Motus 的结果是 5 次完全失败、1 次停在拿到面包、1 次停在关门、3 次完成旋钮步骤。用相应分值重算
+
+$$
+\mathrm{PartialScore}
+=\frac{5\times0+1\times0.4+1\times0.8+3\times1}{10}
+=0.42.
+$$
+
+所以 42% 是平均进展分，完整成功为 $3/10=30\%$。无预训练版本的部分分数为 40%，但完整成功只有 1 次；两者分数接近，不表示完成整条任务链的次数接近。另一方面，Motus 有一半测试完全失败，这也是均值没有直接展示的重要信息。[↗](https://arxiv.org/pdf/2512.13030v2#page=8)
+
+Aloha2 饮水机是另一个例子。Motus 8 次完整成功、2 次停在“杯子装满水”，计算为 $(8+2\times0.8)/10=96\%$，完整成功率则为 80%。π0.5 的 62% 来自 5 次拿到杯子、4 次装满水、1 次完整成功，其完整成功率为 10%。这组实验表明 Motus 确实改善了任务完成，但不能把 96% 原样写成完整成功概率。[↗](https://arxiv.org/pdf/2512.13030v2#page=8)
+
+折毛巾更容易被误读。五种毛巾各测试四次，共 20 次；Motus 在 AC-One 得到 14.5%，在 Aloha2 得到 39%，但两平台都没有完成“两次折叠”的完整目标。Aloha2 的 39% 主要来自 12 次完成一次折叠、2 次到达下一抓取步骤和 1 次抓到两边。该分数说明中间技能出现了，不说明折毛巾任务已经有 39% 完成率。[↗](https://arxiv.org/pdf/2512.13030v2#page=19)
+
+同样，Aloha2 烤箱的 34% 没有一次完整成功；AC-One 冲咖啡的 62% 只有 2/10 次到达最终开关，研磨咖啡的 92% 则有 6/10 次完成。将子目标权重与最终完成次数并列看，才能判断模型距离实际连续使用还差哪一段。
+
+### 跨本体的 OOD 结果方向相反
+
+附录的 OOD 取方块定义很具体，方块摆到训练空间之外。AC-One 上，Motus 在表列 16 次试验中完成 12 次，得到 75%；π0.5 有 4 次完整、1 次半程，为 28.125%。这支持该本体上对新位置的泛化。[↗](https://arxiv.org/pdf/2512.13030v2#page=19)
+
+Aloha2 却是反例。分布内方块任务，Motus 为 20/20 次成功；摆放位置超出训练空间后，只有 5/16 次成功，即 31.25%，π0.5 为 11/16，即 68.75%。预训练带来的运动知识没有在两种平台上转化成同样的空间外推能力，而且这项 Aloha2 OOD 测试没有进入正文 Table 3 的五任务均值。
+
+![Motus Aloha real-task breakdown](../../assets/images/paper-deep-dives/embodied-ai/motus/table-16-ood-cube.png){ width="680" }
+
+*原论文 Table 16。将分布内与 OOD 的 Grab Cube 两组连起来读，再检查烤箱、毛巾的完整成功行。更高的部分分数和分布内成功不保证空间外推成功。* [↗](https://arxiv.org/pdf/2512.13030v2#page=19)
+
+原文计数还需按表格本身理解。附录文字说每种颜色测试五次，但 OOD 表中三种方法的计数均合计 16 次，所报百分比也对应这个分母。AC-One 分布内方块，Table 3 的 π0.5 分数为 46%，Table 15 按 7 次失败、3 次半程、10 次成功得到 57.5%。前面的平台汇总保留 Table 3 原口径，不用附录单行替换后继续沿用旧平均。这些差异不改变 Motus 在 AC-One 的整体优势，却限制了对精确增益的进一步解释。
+
+## 采用 Motus 时真正可以复用的部分
+
+对已有多种视频和机器人数据的团队，Motus 给出了一条明确顺序。先把视频基础模型适配到交互域，再离线提取光流并用少量真实动作训练潜在动作表示，让动作专家吸收无标签运动，最后用目标本体控制信号微调。潜在动作承担预训练中的共同目标，真实动作监督承担部署时的控制含义，二者职责清楚。
+
+对需要多个接口的系统，独立噪声时间更有直接复用价值。已知动作时固定干净动作做世界预测，已知未来视觉时固定视觉做逆动力学，只需要策略时把未来视觉保持为噪声。这个条件选择机制能减少为不同任务维护完全独立模型的需求，但实际运行仍涉及约 8B 参数和报告中的 10 步去噪；论文没有给出足够的端到端延迟与硬件数据，无法把动作 30 Hz 直接等同于实时闭环性能。[↗](https://arxiv.org/pdf/2512.13030v2#page=13) [↗](https://arxiv.org/pdf/2512.13030v2#page=16)
+
+实验最有力地支持的是多源预训练对目标机器人平均策略表现的改善。它同时留下了清楚的问题，如何避免某些任务预训练后退化，如何让两种本体都获得空间外推收益，以及如何把能推进若干子目标的策略变成可靠完成整条任务链的系统。这些问题都能从逐任务结果和子目标计数中定位，不能仅靠更高的总平均分回答。

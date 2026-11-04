@@ -15,222 +15,276 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/danijar/dreamer](https://github.com/danijar/dreamer)；项目页：[danijar.com/project/dreamer/](https://danijar.com/project/dreamer/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/1912.01603)；[GitHub API / repo](https://github.com/danijar/dreamer)；[官方 / 项目材料](https://danijar.com/project/dreamer/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 看见未来十五步，怎样学会更远的动作后果
 
-### 研究背景
+Dreamer 的问题从一个已经能预测的世界模型开始。模型可以根据观察和动作，在潜在空间里向前展开一段轨迹，但接下来怎样选动作，还存在很大差别。PlaNet 在每次决策时搜索一批候选动作序列，挑出预测奖励较高的序列；另一种办法是在模型里训练策略，让策略直接输出高回报动作。若两者都只计算有限想象长度内的奖励，就可能忽略更远的后果。
 
-Dreamer 接在 PlaNet 之后，属于 model-based reinforcement learning from pixels。这个领域的目标是：真实环境交互很贵时，能不能先从少量像素轨迹里学一个 world model，再在模型内部训练或规划，从而减少真实试错。PlaNet 已经证明可以从图像学 RSSM latent dynamics，然后用 CEM 在 latent space 在线规划动作。
+这在控制任务中很具体。摆杆要先向看似错误的方向运动才能积累动能，hopper 要先调整姿态才有机会持续跳跃。一小段轨迹内的奖励不一定能区分这些准备动作。单纯加长模拟又会增加计算量，并暴露更多模型误差。Dreamer 的核心做法是，在潜在空间中同时学习动作模型与状态价值模型，用 value 估计接上想象窗口之外的奖励，再把多步价值的梯度沿动力学传回动作模型。[↗](https://arxiv.org/pdf/1912.01603v3#page=1)
 
-Dreamer 改变的是控制接口。它不希望每个环境步都重新搜索动作序列，而是把在 world model 里“想象未来”的结果转化成 actor-critic 的训练信号。这样，策略执行时只需前向 actor，训练时则可以在 latent imagination 里生成大量虚拟 rollout。
+下图的三个部分应连起来读。经验先变成可微的 latent dynamics；actor 与 value 随后在这个模型里学习；得到的 actor 再回真实环境收集新经验。价值函数让模型无需真的模拟到所有遥远奖励出现的位置。
 
-### 问题（Challenge）
+![Dreamer 从经验到想象行为的总体流程](../../assets/images/paper-deep-dives/world-models/dreamer/figure-1-overview.png){ width="860" }
 
-论文要解决的问题是：**如何让策略从 learned latent dynamics 中直接学习行为，而不是每次决策都依赖昂贵的在线规划？** 这个问题难在，world model 的 rollout 不是环境真值。如果 actor 在想象轨迹里学习，它可能利用模型错误；如果只用真实环境训练，又失去 model-based RL 的样本效率。另一个困难是像素观测本身是部分可观测的，模型必须把历史、动作和当前观测压成可预测、可控制的 latent state。
+*原论文 Figure 1。最后一层加入 action 和 value prediction，承接前面已经学到的潜在动力学。*
 
-这个问题的价值在于，它把 model-based RL 从“学模型后做在线搜索”推进到“学模型后训练可部署策略”。这对真实控制任务更重要，因为执行时不能每一步都花大量计算做 CEM。
+论文的主要创新因此落在行为学习上。它采用已有 RSSM 学习潜在状态，而后展示，利用这个模型的解析梯度和多步价值，可以在 20 个视觉控制任务中获得比只做有限窗口规划更强的行为。世界模型、价值学习和策略更新在这里各有明确分工。
 
-### Finding
+## 真实观察与想象轨迹使用不同的状态更新路径
 
-作者的 finding 是：**世界模型最有价值的地方不是生成逼真的未来视频，而是提供一个可微的 latent imagination 空间，让 actor 和 critic 在其中优化长期回报。** 这个洞见把世界模型从“环境模拟器”重新定位为“策略学习的内部训练场”。
+环境被建模为部分可观测过程。agent 看到图像 $o_t$，执行动作 $a_t$，收到奖励 $r_t$，却没有直接得到完整物理状态。单张图像通常也无法唯一确定速度等信息，所以表示必须结合历史。
 
-这个 finding 解释了 Dreamer 的结构：posterior 负责用真实观测校正当前 state，prior 负责在没有新观测时向未来 rollout；reward、value 和 continuation head 让 imagined state 直接服务回报估计；actor 的梯度可以通过 imagined trajectories 更新，而不需要把未来图像解码出来再学习。
+原文式（1）将模型接口写成
 
-### 方法
+$$
+\begin{aligned}
+\text{Representation: }&p_\theta(s_t\mid s_{t-1},a_{t-1},o_t),\\
+\text{Transition: }&q_\theta(s_t\mid s_{t-1},a_{t-1}),\\
+\text{Reward: }&q_\theta(r_t\mid s_t).
+\end{aligned}
+$$
 
-Dreamer 使用 Recurrent State-Space Model。输入是真实交互轨迹中的 observation、action、reward 和 continuation；encoder 把像素观测映射到 latent，RSSM 维护 deterministic hidden state 和 stochastic state。训练 world model 时，posterior 可以看到当前观测，prior 只能根据历史和动作预测 latent；loss 包括观测重建、reward prediction、discount/continuation prediction 和 KL regularization。
+这里沿用论文的符号，$p$ 是利用真实观察推断状态的 representation model，$q$ 是用于想象的近似模型。阅读后续 Dreamer 论文时不能仅凭 $p$、$q$ 的字母判断 prior 或 posterior，应该看分布是否接收当前观察。
 
-行为学习时，Dreamer 从 replay 中的 posterior state 出发，不再读取未来真实图像。actor 根据 latent state 采样动作，RSSM prior 产生下一 latent state，reward head 给出 imagined reward，value head 估计后续回报。critic 用 lambda-return 学 value，actor 则最大化 imagined return。训练循环是在真实环境收集数据、更新 world model、在 latent imagination 中更新 actor-critic，然后再回真实环境采样。
+representation model 把新图像与历史结合，形成当前状态；transition model 则在没有新图像的情况下预测状态。RSSM 将确定性的循环记忆与随机潜变量结合，本文随机部分使用 30 维对角高斯分布。循环路径保留过去的信息，随机部分描述当前状态中不能仅由历史确定的内容。模型还可以从状态解码图像，为表示学习提供监督，但 actor 在想象时不需要每一步把 latent 还原为像素。[↗](https://arxiv.org/pdf/1912.01603v3#page=2) [↗](https://arxiv.org/pdf/1912.01603v3#page=14)
 
-### 结论
+Figure 3 把训练与执行的差别画得很清楚。先读左图中持续进入模型的观察，再看中图只有起点使用真实观察，最后看右图如何在真实交互时重新获得观察纠正。
 
-实验显示，Dreamer 在多个基于像素的连续控制任务上比纯 model-free 方法更省样本，并且相比 PlaNet 的在线 CEM planning，摊销成 actor 后执行更快。论文还通过组件实验说明，RSSM 的 posterior/prior 分工、reward/value heads 和 imagination horizon 对最终控制性能都很关键。
+![Dreamer 的模型学习、想象学习与环境交互](../../assets/images/paper-deep-dives/world-models/dreamer/figure-3-components.png){ width="860" }
 
-需要注意的是，Dreamer 的证据来自模拟连续控制，不能直接等同于开放世界视频生成或真实机器人部署。它的结论更具体：只要 latent dynamics 对奖励和可控未来足够准确，策略可以在想象出的 latent trajectories 中学习，而不必在像素空间预测每一个未来画面。
+*原论文 Figure 3。左侧学表示和动力学，中间学 actor 与 value，右侧执行已学策略。三者共享状态接口，使用的监督和更新对象不同。*
 
-### 关键术语
+模型训练从经验池取连续片段，用真实观察推断各个状态，并拟合图像、奖励及状态转移。行为训练以这些推断出的状态为起点，让当前 actor 产生动作，再由 transition model 生成后续状态。由于起点来自已经历的轨迹，想象被连接到实际访问过的状态分布；随后生成的动作与未来则来自当前模型和策略。
 
-- **Latent Imagination（潜空间想象）**：从真实编码状态出发，用 world model 的 prior 生成未来 latent rollout，供 actor-critic 学习。
-- **Recurrent State-Space Model, RSSM（循环状态空间模型）**：结合 deterministic hidden state 和 stochastic latent state 的时序模型，用于处理部分可观测像素环境。
-- **Posterior（后验状态）**：训练时看到当前观测后得到的 latent state，负责校正真实当前状态。
-- **Prior（先验状态）**：不看未来观测、仅根据历史和动作预测的 latent state，是想象 rollout 的核心。
-- **Lambda-return（λ 回报）**：把多步 imagined rewards 和 value bootstrap 结合起来训练 critic 的回报估计。
-- **Actor-Critic（演员-评论家）**：actor 选动作，critic 估计 value；Dreamer 在 world model 想象轨迹中训练二者。
+部署时，agent 根据新观察更新状态，直接调用动作模型。它没有在每个环境时刻重新搜索一大批动作序列。训练阶段已把许多想象轨迹中的比较结果写进 actor 参数，因此环境交互可以采用较短的决策路径。[↗](https://arxiv.org/pdf/1912.01603v3#page=3)
 
-Dreamer 要回答的问题不是“能不能生成未来视频”，而是：如果真实环境交互很贵，能不能先从少量真实 episode 学一个 latent world model，再让策略在这个模型想象出的轨迹里学习控制？这篇论文的关键贡献是把四件事接成一条闭环训练链：从像素历史得到 belief state，在 latent space 预测未来，用 reward/value 估计 imagined return，再把这个 return 变成 actor 的更新信号。
+## 策略梯度怎样穿过动作采样与世界模型
 
-把 Dreamer 读成一句话就是：**posterior 用真实观测校正现在，prior 在没有新观测时想象未来，actor/value 不在像素上学，而在 imagined latent rollout 上学。**
+Dreamer 使用的 actor 是 tanh-transformed Gaussian。网络根据状态输出高斯参数，再通过重参数化采样
 
-## 它为什么不是普通 model-based RL
+$$
+a_\tau=\tanh\!\left(\mu_\phi(s_\tau)+\sigma_\phi(s_\tau)\epsilon\right),
+\qquad \epsilon\sim\mathcal N(0,I).
+$$
 
-Model-free RL 直接从真实试错里学策略，缺点是样本效率低。早期 model-based RL 学一个环境模型后，常见做法是在模型里做规划，比如用 CEM 搜索一段动作序列。PlaNet 就是这个方向：它用 RSSM 从图像学 latent dynamics，然后每一步在线规划动作。
+$\tau$ 表示想象轨迹中的时间，$\phi$ 是 actor 参数。随机性被集中在外部噪声 $\epsilon$ 上。对一次固定的噪声采样，动作仍是网络输出的可微函数；连续高斯 latent 同样可以重参数化。这使得“采样了一条随机轨迹”与“沿这条轨迹反向传播”能够同时成立。[↗](https://arxiv.org/pdf/1912.01603v3#page=4)
 
-Dreamer 的不同之处在于，它不想每次决策都临时搜索动作序列，而是把“在模型里规划”的能力摊销进一个 actor 网络。训练时，Dreamer 在 world model 里生成大量 imagined trajectories；执行时，actor 直接根据 latent state 输出动作。这样做的收益是推理更快、训练时可以并行生成很多短轨迹；代价是 actor 可能学会利用 world model 的错误，所以最终证据必须回到真实环境回报。
+梯度的路径是，价值和奖励依赖想象状态，想象状态依赖之前动作，动作又依赖 actor 参数。作为链式法则的示意，其中一段可以写成
 
-```text
-真实交互数据
-  -> RSSM posterior 编码成 latent state
-  -> 训练 transition / observation / reward / continuation
-  -> 从 replay state 出发，用 prior + actor 想象未来
-  -> 用 imagined reward 和 value 训练 actor-critic
-  -> 回真实环境收集新数据
-```
+$$
+\frac{\partial v(s_{\tau+1})}{\partial\phi}
+=\frac{\partial v}{\partial s_{\tau+1}}
+\frac{\partial s_{\tau+1}}{\partial a_\tau}
+\frac{\partial a_\tau}{\partial\phi}
++\text{其他跨时间依赖项}.
+$$
 
-## 先跟着一张图看数据流
+这条示意式突出动力学提供的 $\partial s_{\tau+1}/\partial a_\tau$。actor 得到的反馈不只是“这次动作回报高，所以提高它的概率”，还包括模型给出的局部方向，动作怎样改变后续状态，后续状态怎样改变奖励和价值。实际更新通过整个展开图计算这些依赖。
 
-![Dreamer overview 原论文图](../../assets/images/paper-deep-dives/world-models/dreamer/figure-1-overview.png){ width="860" }
+行为学习时世界模型参数 $\theta$ 固定。固定参数并不意味着切断模型对输入的梯度，actor 仍需要通过模型的动作与状态 Jacobian 获得反馈。反过来，不能让 actor 为了提高预测回报直接修改奖励模型，否则它可能通过改变评判标准来提高目标值。
 
-<small>图源：[Dream to Control: Learning Behaviors by Latent Imagination](https://arxiv.org/abs/1912.01603)，Figure 1。原图表达 Dreamer 的三段循环：从真实经验学习世界模型、用世界模型预测的 trajectory 学 actor/value、再用 actor 回环境采集数据。本站读法是顺着箭头看“证据从哪里来”：模型 loss 来自真实 replay，actor/value 的梯度主要来自 imagined rollout，最终验证仍在真实环境。</small>
+critic 的用法也与 REINFORCE 中单纯降低方差的 baseline 不同。Dreamer 在 actor 更新中穿过 value model 求导，让 value 对状态的梯度参与选择动作；在训练 value model 自身时，则停止目标回报的梯度，只让当前预测靠近目标。两条梯度路径处理的是不同问题。[↗](https://arxiv.org/pdf/1912.01603v3#page=5)
 
-这张图最容易被误读成“先训练一个视频预测器，再拿它做 RL”。实际更准确的说法是：世界模型的 latent state 是策略学习的工作空间，图像重建只是训练这个工作空间的一个辅助约束。Dreamer 关心的不是把未来每个像素预测到多清楚，而是 latent rollout 是否保留了足够的任务信息，让 reward、value 和 actor 能在其中学习。
+## 短期奖励、bootstrap 与 λ-return 如何接起来
 
-## RSSM：posterior 负责看见，prior 负责想象
+设一条想象轨迹从 $t$ 展开到 $t+H$。最简单的目标只累加窗口内奖励，论文式（4）记为
 
-Dreamer 的 world model 继承了 PlaNet 的 RSSM。RSSM 不是单个向量，而是把历史记忆和随机状态合在一起：
+$$
+V_R(s_\tau)=\mathbb E_{q_\theta,q_\phi}
+\left[\sum_{n=\tau}^{t+H}r_n\right].
+$$
 
-\[
-h_t = f_\theta(h_{t-1}, z_{t-1}, a_{t-1})
-\]
+这正是“不学习 value”的对照。只要关键奖励出现在窗口外，动作模型就看不到它。窗口末端的一个状态即使很有前途，也可能与一个走入死路的状态得到近似评价。
 
-\[
-z_t^{\text{post}} \sim q_\phi(z_t \mid h_t, o_t), \qquad
-z_t^{\text{prior}} \sim p_\theta(z_t \mid h_t)
-\]
+引入 value 后，可以先模拟 $k$ 步，再让 $v_\psi$ 估计剩余回报。原文式（5）为
 
-这里的 \(h_t\) 是 deterministic hidden state，它吃前一步 latent state 和动作，因此能记住速度、接触、遮挡这类单帧图像看不全的信息。\(z_t\) 是 stochastic latent state，用来表达不确定性和多种可能的未来。真实观测 \(o_t\) 到来时，posterior \(q_\phi\) 会把图像信息并入当前 state；做未来想象时，模型没有新图像可看，只能用 prior \(p_\theta\) 往前滚。
+$$
+V_N^k(s_\tau)=\mathbb E_{q_\theta,q_\phi}\!\left[
+\sum_{n=\tau}^{h-1}\gamma^{n-\tau}r_n
++\gamma^{h-\tau}v_\psi(s_h)
+\right],
+\qquad h=\min(\tau+k,t+H).
+$$
 
-这个 posterior/prior 的分工是 Dreamer 能从像素控制走向 latent control 的核心。真实 replay 让模型知道“现在到底发生了什么”；prior rollout 让策略在没有真实交互成本的情况下试未来动作。只要 prior 预测的 latent future 足够对任务有用，actor 就不需要每次都等环境反馈才能更新。
+$\gamma$ 是折扣系数，$h$ 保证不超过当前想象片段的末端。第一项保留实际生成的短期奖励，第二项在截断状态上接入价值。若用很小的 $k$，目标较依赖当前 critic；若用很大的 $k$，更多地依赖多步模型预测与轨迹采样。两者的误差来源不同。
 
-![Dreamer components 原论文图](../../assets/images/paper-deep-dives/world-models/dreamer/figure-3-components.png){ width="860" }
+Dreamer 将多个 $k$ 步估计做指数加权，得到式（6）
 
-<small>图源：[Dreamer](https://arxiv.org/abs/1912.01603)，Figure 3。原图把 representation、transition、observation、reward、actor、value 画在同一张计算图里。本站读法是分清两条边：蓝色世界模型边学习“状态如何随动作变化”，绿色行为学习边使用 imagined state sequence 更新 actor/value。</small>
+$$
+V_\lambda(s_\tau)
+=(1-\lambda)\sum_{n=1}^{H-1}\lambda^{n-1}V_N^n(s_\tau)
++\lambda^{H-1}V_N^H(s_\tau).
+$$
 
-## World model loss：重建图像只是其中一项
+最后一项吸收剩余权重，因此这些权重合计为 1。$\lambda$ 较小更依赖短 bootstrap，较大更依赖较长的预测回报。本文默认 $\lambda=0.95$、$\gamma=0.99$、$H=15$。这个 value 学的是当前策略在世界模型中预计能获得的未来奖励，它会随 actor 改善而更新，并非一个外部提供的正确答案。[↗](https://arxiv.org/pdf/1912.01603v3#page=4)
 
-训练 RSSM 时，Dreamer 会从 replay buffer 取一段真实序列 \((o_t, a_t, r_t)\)，用 posterior 得到 state，再让 state 同时解释观测、奖励、continuation，并让 posterior 不要偏离 prior 太远。一个简化写法是：
+actor 与 critic 随后使用同一批想象轨迹，分别优化
 
-\[
-\mathcal{L}_{\text{model}}
-=
-\sum_t
-\Big[
--\log p_\theta(o_t \mid h_t, z_t^{\text{post}})
--\log p_\theta(r_t \mid h_t, z_t^{\text{post}})
--\log p_\theta(\gamma_t \mid h_t, z_t^{\text{post}})
-+ \beta\, \mathrm{KL}\big(q_\phi(z_t \mid h_t,o_t)\,\|\,p_\theta(z_t \mid h_t)\big)
-\Big]
-\]
+$$
+\max_\phi\ \mathbb E_{q_\theta,q_\phi}
+\left[\sum_{\tau=t}^{t+H}V_\lambda(s_\tau)\right],
+$$
 
-图像项让 state 保留可观测结构，reward 项让 state 对任务有用，continuation/discount 项告诉模型 episode 是否快结束，KL 项把“看过真实图像后的 posterior state”和“只凭历史往前猜的 prior state”拉到同一个可 rollout 的空间里。
+$$
+\min_\psi\ \mathbb E_{q_\theta,q_\phi}
+\left[\sum_{\tau=t}^{t+H}\frac12
+\left(v_\psi(s_\tau)-\operatorname{sg}(V_\lambda(s_\tau))\right)^2\right].
+$$
 
-如果只看 reconstruction loss，容易把 Dreamer 误解成自编码器。真正重要的是这些 loss 共同塑造了一个 actor/value 可以消费的 state：它既能解释当前观测，也能在没有新观测时产生下一步状态和奖励预测。
+actor 通过动力学提高估计回报，critic 则拟合这些新回报目标。这种交替改善可以把短片段中的奖励信息逐步传向更早的状态，使 actor 不必等到一次想象覆盖完整任务才获得方向。
 
-## Imagination：从真实 state 出发，但未来不再看图像
+遇到提前终止的环境，还要防止模型把死亡或结束之后的虚构回报算进去。论文增加从 latent state 预测 discount 的分类器，目标为 0 或 $\gamma$，并用预测折扣的累积乘积加权 actor 与 critic 的各时刻目标。越可能已经终止的轨迹，其后续项权重越小。[↗](https://arxiv.org/pdf/1912.01603v3#page=5)
 
-Dreamer 不是从空白开始做梦。它先从 replay 里的真实序列抽取 posterior state，把这个 state 当作 imagined rollout 的起点。之后每一步：
+## 世界模型为什么需要学习奖励以外的信息
 
-\[
-a_\tau \sim \pi_\eta(a_\tau \mid h_\tau, z_\tau), \qquad
-z_{\tau+1} \sim p_\theta(z_{\tau+1} \mid h_{\tau+1})
-\]
+行为学习要求模型能预测动作后果，但模型本身怎样学出足够好的状态，仍是独立的选择。Dreamer 比较了图像重建、对比估计与仅奖励预测三种方法，并没有将某一种表示目标当作算法定义的一部分。
 
-\[
-\hat r_\tau = r_\theta(h_\tau,z_\tau), \qquad
-\hat\gamma_\tau = \gamma_\theta(h_\tau,z_\tau)
-\]
+使用重建时，模型额外预测 $q_\theta(o_t\mid s_t)$。原文式（10）最大化的目标为
 
-也就是说，想象阶段不再把未来图像喂回模型。actor 根据 latent state 选动作，transition prior 给出下一 latent state，reward/discount head 给出学习信号。图像 decoder 可以把 latent rollout 可视化出来，但 actor 的训练并不依赖“先把图像解出来再识别”。
+$$
+\mathcal J_{\mathrm{REC}}
+=\mathbb E_p\sum_t\left[
+\ln q_\theta(o_t\mid s_t)
++\ln q_\theta(r_t\mid s_t)
+-\beta\operatorname{KL}\!\left(
+ p_\theta(s_t\mid s_{t-1},a_{t-1},o_t)
+ \Vert q_\theta(s_t\mid s_{t-1},a_{t-1})
+\right)\right].
+$$
 
-![Dreamer algorithm 原论文图](../../assets/images/paper-deep-dives/world-models/dreamer/algorithm-1-dreamer.png){ width="780" }
+图像项要求状态能解释观察，奖励项使状态保留任务价值，KL 则让真实观察推断出的状态与仅靠历史预测的状态兼容。否则，训练时 encoder 得到一套很丰富的状态，想象时 transition model 却只能生成另一套分布，actor 就会在不相容的模型状态上学习。
 
-<small>图源：[Dreamer](https://arxiv.org/abs/1912.01603)，Algorithm 1。原图列出 collect experience、learn world model、learn actor/value 三个循环。本站读法是注意训练单位的变化：world model 用真实 sequence 训练，actor/value 用 model-imagined sequence 训练，这两类 sequence 不能混在一起理解。</small>
+本文使用 $\beta=1$，并把 KL 损失设为不低于 3 free nats。KL 小于阈值时不再继续推动压缩，给模型保留表达信息的空间；这与把过大的 KL 限制在某个上限不同。这里尚没有后续 DreamerV2、V3 的 KL balancing 或离散 latent 配置。[↗](https://arxiv.org/pdf/1912.01603v3#page=6) [↗](https://arxiv.org/pdf/1912.01603v3#page=14)
 
-这一步解释了 Dreamer 的名字：它不是为了展示一段好看的未来视频，而是在 compact latent state 里“做很多便宜的短期未来试验”。便宜来自两个地方：latent state 比图像小得多；很多 imagined trajectories 可以在 GPU 上并行。
+附录从 information bottleneck 解释这一目标。表示既要包含足以预测观察与奖励的信息，又限制每一步从当前样本额外取入的信息。当历史已经能预测一部分观察时，模型应尽量复用历史，必要时才从新图像补充信息。这使 KL 正则同时参与时间结构的学习，而不仅是对单张图像做压缩。[↗](https://arxiv.org/pdf/1912.01603v3#page=15)
 
-## Actor/value：用 lambda return 把短 horizon 接成长视野
+重建的代价是模型要花容量预测大量像素。论文因此尝试用 state model $q_\theta(s_t\mid o_t)$ 替换图像 decoder，并采用对比项
 
-imagined rollout 不能无限长。滚得太短，actor 看不到动作的长期后果；滚得太长，transition error 会累积，模型偏差会污染学习信号。Dreamer 用 value network 在 horizon 末端 bootstrap，并用 lambda return 把短 rollout 和长期价值接起来：
+$$
+\mathcal J_S^t
+=\ln q_\theta(s_t\mid o_t)
+-\ln\!\left(\sum_{o'}q_\theta(s_t\mid o')\right).
+$$
 
-\[
-V_t^\lambda
-=
-\hat r_t
-+ \hat\gamma_t
-\Big((1-\lambda)v_\psi(s_{t+1}) + \lambda V_{t+1}^\lambda\Big)
-\]
+其中 $o'$ 来自当前 sequence batch。第一项鼓励当前图像预测对应状态，分母项比较其他图像，防止所有图像与状态都坍缩到同一个表示。完整目标仍包含奖励预测和相同的 KL 项，只替换图像学习信号。仅奖励预测则进一步去掉观察辅助目标。[↗](https://arxiv.org/pdf/1912.01603v3#page=6)
 
-这里 \(s_t=(h_t,z_t)\)。value network \(v_\psi\) 学习预测 imagined state 的长期回报；actor 最大化这些 imagined returns。论文强调的“analytic gradients”指的是：reward、value 和 latent dynamics 都在同一张可微计算图里，actor 的动作改变会影响后续 latent state 和 reward 预测，因此梯度可以沿着 imagined trajectory 传回 actor。
+仅预测奖励看起来最贴近任务，但在线数据有限时，它可能提供过少监督。没有奖励的许多帧包含不同的位置、速度和接触关系，如果模型只需把它们都预测成零奖励，就缺少把这些状态区分开的动力。图像重建或对比目标给这些时刻提供更密集的信息，之后策略才有可能利用它们解释未来奖励。
 
-这和 model-free actor-critic 的差别很大。model-free 方法主要从真实 trajectory 的采样回报里估计策略好坏；Dreamer 则先用真实数据学出一个可微 surrogate environment，再在这个 surrogate environment 里更新 actor。它减少真实交互，但也把风险转移到了 world model 是否可信。
+## 一次完整训练迭代的更新顺序
 
-![Dreamer value learning 原论文图](../../assets/images/paper-deep-dives/world-models/dreamer/figure-7-value-small.png){ width="760" }
+原论文 Algorithm 1 可以作为实现时的流程检查。先看 dynamics learning 更新 $\theta$，再看 behavior learning 更新 $\phi$、$\psi$，最后才是真实环境采集。把三类参数混成一次没有边界的联合更新，就失去了前面所说的梯度分工。
 
-<small>图源：[Dreamer](https://arxiv.org/abs/1912.01603)，Figure 7。原图展示 value learning 对 long-horizon behavior 的影响。本站读法是把 value 看成 horizon 之外的“尾部估计器”：没有它，imagined rollout 很容易只优化短期奖励；有了它，短 rollout 才能服务长期控制。</small>
+![Dreamer 原论文训练算法](../../assets/images/paper-deep-dives/world-models/dreamer/algorithm-1-dreamer.png){ width="780" }
 
-## Horizon ablation：世界模型不是滚得越远越好
+*原论文 Algorithm 1。想象从 replay 推断出的状态开始，actor 与 value 使用相同轨迹，真实交互再扩充数据集。*
 
-![Dreamer horizon ablation](../../assets/images/paper-deep-dives/world-models/dreamer/figure-4-horizon.png){ width="760" }
+连续控制的配置相当具体。初始化时收集 5 个随机 episode，随后交替执行 100 个训练更新和 1 个真实 episode。采集时使用 actor 预测的 mode action，并加入标准差 0.3 的高斯探索噪声；想象训练中的动作则通过前述分布采样得到。二者不能简单合并成“始终执行随机 actor 样本”。
 
-<small>图源：[Dreamer](https://arxiv.org/abs/1912.01603)，Figure 4。原图比较不同 imagination horizon 的表现。本站读法是把它当成 bias-control tradeoff：horizon 太短，策略学不到延迟后果；horizon 太长，模型误差沿 prior rollout 累积，actor 可能优化到虚假的高回报。</small>
+| Component / setting | Value |
+| --- | --- |
+| Batch size × sequence length | 50 × 50 |
+| Stochastic latent | 30-dimensional diagonal Gaussian |
+| Dense networks | 3 layers × 300 units, ELU |
+| World model learning rate | $6\times10^{-4}$ |
+| Actor / value learning rate | $8\times10^{-5}$ / $8\times10^{-5}$ |
+| Optimizer | Adam |
+| Gradient norm clipping | 100 |
+| KL scale / free nats | 1 / 3 |
+| Imagination horizon | 15 |
+| Discount / return lambda | 0.99 / 0.95 |
+| Action repeat | 2 |
 
-这张图比视频预测图更能说明 Dreamer 的控制逻辑。世界模型在控制里不是一个越长越好的模拟器，而是一个有限可信区间内的训练器。工程上迁移 Dreamer 思路时，horizon、value bootstrap、模型不确定性和 replay 数据覆盖度必须一起调；只把 rollout length 拉长，通常不会自动得到更强 agent。
+图像 encoder 与 decoder 使用卷积网络，RSSM 承担转移，其余函数使用上述 MLP。actor 在高斯参数化内部将 tanh mean 乘以 5，标准差经 softplus，再对采样结果做 tanh，使策略有能力接近动作边界。论文报告，在这组连续任务中没有发现必须使用 latent overshooting、actor entropy bonus 或 value target networks。[↗](https://arxiv.org/pdf/1912.01603v3#page=14)
 
-## 视频预测图：是诊断，不是最终证据
+这些选择不要与后续版本混用。V1 连续控制主要靠解析动力学梯度和高斯潜变量，既没有 V3 的 twohot value，也没有跨任务 return normalization；将这些后来的配置写回本文，会掩盖原论文究竟验证了什么。
 
-![Dreamer video prediction](../../assets/images/paper-deep-dives/world-models/dreamer/figure-5-video.png){ width="860" }
+## 相同世界模型下，value 真正改变了哪些任务
 
-<small>图源：[Dreamer](https://arxiv.org/abs/1912.01603)，Figure 5。原图把 latent rollout 解码成未来画面，用于展示模型是否捕捉到粗略运动和场景结构。本站读法是把它当诊断工具：它能帮人发现模型有没有学到动态，但不能替代真实环境中的闭环控制回报。</small>
+最直接的消融保持世界模型采用图像重建，比较三种行为获取方式。Dreamer 学 actor 与 value；No value 学 actor，但只最大化想象窗口内的奖励；PlaNet 在线规划，也只看有限窗口奖励。这比单独与 model-free 方法比平均成绩更能定位 value 的作用。
 
-这也是读世界模型论文时最常见的误区。视频越清晰，不等于策略越强；视频有些模糊，也不一定意味着控制失败。对 Dreamer 来说，关键是 latent state 是否保留了 reward-relevant dynamics。比如速度、姿态和接触关系可能对奖励很重要，但不一定需要每个纹理像素都预测得精确。
+先看 Acrobot Swingup 与 Cartpole Swingup Sparse，再看 Walker Walk。前两者需要先经过没有立即好处的准备过程，后者更容易从短期奖励中找到有效运动。
 
-## 实验结果应该看三层证据
+![有无 value 以及在线规划的学习曲线](../../assets/images/paper-deep-dives/world-models/dreamer/figure-7-value-small.png){ width="760" }
 
-![Dreamer benchmark bars](../../assets/images/paper-deep-dives/world-models/dreamer/figure-6-bars.png){ width="860" }
+*原论文 Figure 7。蓝色为 Dreamer，绿色为 No value，紫色为 PlaNet；横轴是环境步数，阴影表现种子间差异。水平虚线是文献基线参考。*
 
-<small>图源：[Dreamer](https://arxiv.org/abs/1912.01603)，Figure 6。原图比较 Dreamer 和多个 baseline 在 visual control tasks 上的表现。本站读法是先看同样 environment interaction budget 下的样本效率，再看最终真实环境回报，最后回到 ablation 理解哪些组件支撑结果。</small>
+Acrobot 和稀疏 Cartpole 中，Dreamer 能明显上升，而另外两种模型方法长时间停留在低回报。Hopper Stand 中 No value 能获得部分行为，仍明显落后；Walker Walk 中几种方法却都能达到较高回报。这说明 value 最有价值的地方，是窗口内奖励不足以解释好动作的任务，而不是给所有控制问题都增加同样幅度的收益。[↗](https://arxiv.org/pdf/1912.01603v3#page=7)
 
-第一层证据是任务回报：Dreamer 的 claim 必须落在真实环境中的 episode return，而不是 reconstruction 或 reward prediction loss。第二层证据是样本效率：world model 的价值在于减少真实交互，不只是提高最终分数。第三层证据是组件消融：RSSM、imagination horizon、value bootstrap、actor learning 这些模块分别影响哪一段。
+进一步的 horizon sweep 改变想象长度，检验收益是否只是 Dreamer 看得更多。应沿横轴比较同一个任务内三条曲线，再看小 horizon 是否已经能产生高回报。
 
-这套读法也适合后来 DreamerV2、DreamerV3 和机器人世界模型论文。凡是声称“学会世界模型即可控制”的工作，都应该问同样的问题：真实交互预算是多少？想象 rollout 的 horizon 多长？world model loss 和下游 reward 是否一致？是否存在模型漏洞被 actor 利用？
+![不同想象长度下的行为学习表现](../../assets/images/paper-deep-dives/world-models/dreamer/figure-4-horizon.png){ width="760" }
 
-## 和 PlaNet、DreamerV2、DreamerV3 的关系
+*原论文 Figure 4。Dreamer 使用 $V_\lambda$，No value 和 PlaNet 使用窗口内奖励 $V_R$；action repeat 固定为 2。*
 
-PlaNet 证明了 RSSM 可以从像素学 latent dynamics，并用在线规划解决视觉控制。Dreamer 接在它后面，把“每次规划”改成“训练一个 actor”，因此更像把规划摊销成策略网络。DreamerV2 继续推进到 Atari，重要变化包括离散 latent state 和更适合离散动作/复杂视觉任务的训练细节。DreamerV3 的重点不再只是某个环境上的技巧，而是寻找跨任务更稳的 world-model RL recipe。
+Cartpole Swingup 与 Cheetah Run 中，Dreamer 在较短长度就能达到较高分数；Quadruped Walk 中 No value 需要更长窗口才接近它。value 由此减少了对“大 horizon 正好覆盖关键事件”的依赖。
 
-这个脉络里最值得记住的不是版本号，而是控制接口的变化：World Models 时代强调 latent dream 的概念展示，PlaNet 强调 latent planning，Dreamer 强调 latent imagination 里的 actor-critic，后续版本强调更广任务和更稳训练。
+图中也有重要反例，Walker Walk 在 horizon 40 时，Dreamer 的成绩明显下降，没有呈现“想象越长越好”。长展开增加计算与模型误差，value 学习本身也可能不稳定，因此论文支持的是较短想象配合价值学习的有效性。对新任务盲目加长 horizon，并不能替代对动力学误差和 critic 的检查。[↗](https://arxiv.org/pdf/1912.01603v3#page=4)
 
-## 迁移到具身智能时的边界
+## 20 个视觉控制任务的成绩与预算
 
-Dreamer 的思想对机器人和具身智能很有启发，但原论文实验主要还是规整的视觉控制 benchmark。真实机器人会额外遇到多相机标定、动作延迟、接触不可逆、安全约束、稀疏奖励、长时任务、数据分布漂移和 sim-to-real 差距。世界模型在这些场景中不能只证明“能预测未来画面”，还要证明预测能被 planner、actor 或 evaluator 稳定消费。
+主实验使用 DeepMind Control Suite 中 20 个任务，观察为 $64\times64\times3$ 图像，动作维度为 1 到 12，奖励在 0 到 1 之间，episode 长度为 1,000 环境步，初始状态随机。任务选择依据是此前参考报告中已经从像素取得非零成绩的任务，不能把结果理解成对控制套件所有可能困难的穷举。
 
-因此，读 Dreamer 时应该把它当成一个非常清楚的机制范式，而不是直接把所有现实控制问题都宣称已经解决。它教会我们如何把表示学习、动态模型和策略优化接起来；现实系统还要补数据、约束、安全和分布外检测。
+下图在固定训练预算下比较最终成绩。首先注意图例，Dreamer 与重跑的 PlaNet 使用 5M 环境步，D4PG 与 A3C 使用 100M；A3C 还使用 proprioceptive state，而非像素输入。
 
-## 证据链快照
+![Dreamer 与已有方法的逐任务结果](../../assets/images/paper-deep-dives/world-models/dreamer/figure-6-bars.png){ width="860" }
 
-| 论文主张 | 主要证据 | 读数边界 |
-| --- | --- | --- |
-| latent imagination 可以训练 actor-critic | Figure 1/3、imagined rollout 和 lambda return | 成功依赖 world model bias 可控 |
-| RSSM 能从像素学决策状态 | posterior/prior、reconstruction/reward/continue loss | 重建好不等于控制好 |
-| horizon 不是越长越好 | horizon ablation | 长 rollout 会放大模型误差 |
-| 真实环境 return 是最终证据 | control benchmark 结果 | 视频预测图只是诊断，不是控制证明 |
+*原论文 Figure 6。比较同一任务的柱形时，同时保留输入模态与预算；quadruped 两项缺少 D4PG、A3C 参考结果。*
 
-## 阅读结论
+附录数值表报告 Dreamer 平均 823.39，PlaNet 332.97，D4PG 786.32，A3C 243.70。Dreamer 与 PlaNet 有 20 个任务，D4PG 和 A3C 缺少两个 quadruped 结果，其平均值覆盖 18 个任务。100M 与 5M 的预算相差 20 倍，这是环境交互量的比值，并非所有任务统一达到同一目标分数的加速倍数。
 
-Dreamer 的核心知识含量在三点。第一，RSSM 把真实观测校正和无观测未来预测分开：posterior 学“现在”，prior 学“未来”。第二，world model loss 同时约束观测、奖励、continuation 和 KL，不是单纯图像重建。第三，actor/value 在 imagined latent trajectories 上学习，lambda return 和 value bootstrap 让有限 horizon 的想象服务长期控制。
+| Task | PlaNet, 5M steps | Dreamer, 5M steps | D4PG, 100M steps |
+| --- | ---: | ---: | ---: |
+| Acrobot Swingup | 3.21 | 365.26 | 91.70 |
+| Cartpole Swingup Sparse | 0.64 | 812.22 | 482.00 |
+| Cheetah Run | 496.12 | 894.56 | 523.80 |
+| Hopper Hop | 0.37 | 368.97 | 242.00 |
+| Hopper Stand | 5.96 | 923.72 | 929.90 |
+| Pendulum Swingup | 3.27 | 833.00 | 680.90 |
+| Finger Spin | 495.25 | 498.88 | 985.70 |
+| Reacher Hard | 187.02 | 817.05 | 957.10 |
+| Walker Walk | 944.70 | 961.67 | 968.30 |
 
-读完这篇论文后，再看新的世界模型论文，可以直接追问：它的 state 是什么？未来 rollout 是否真的被控制模块消费？训练目标和下游 reward 是否一致？最终证据是闭环任务成功，还是只展示了 open-loop 预测？
+这些行让总体优势与剩余困难同时可见。稀疏 Cartpole 和 Pendulum 的大幅提升符合长时价值的机制解释；Finger Spin 上 Dreamer 仍只有 D4PG 大约一半成绩，Reacher Hard 也落后。Hopper Stand、Walker Walk 则接近 D4PG 水平，不能把平均分超过 D4PG 简化成所有任务都超过它。[↗](https://arxiv.org/pdf/1912.01603v3#page=20)
 
-## 外部精读
+PlaNet 在这篇论文中统一重跑为 action repeat 2，没有沿用原论文对不同任务选择 repeat 的配置，所以它的分数与 PlaNet 原始报告不同。这项对照便于比较固定控制频率下的行为学习，但其较低成绩不能被拿去直接改写 PlaNet 原论文结论。
 
-- [Dreamer paper: Dream to Control](https://arxiv.org/abs/1912.01603)
-- [Dreamer project page](https://danijar.com/project/dreamer/)
-- [Google Research Blog: Introducing Dreamer](https://research.google/blog/introducing-dreamer-scalable-reinforcement-learning-using-world-models/)
-- [PlaNet paper](https://arxiv.org/abs/1811.04551)
-- [DreamerV2](https://arxiv.org/abs/2010.02193)
-- [DreamerV3](https://arxiv.org/abs/2301.04104)
+计算成本也需要区分口径。每个 Dreamer run 使用一张 V100 与 10 个 CPU cores，在 Control Suite 上约每 1M 环境步训练 3 小时；PlaNet 约需 11 小时。论文另报告 D4PG 用约 24 小时达到相似表现，后者是达到表现的时间，不是每 1M 步的时间。Dreamer 的优势来自将搜索工作分摊到策略学习，并在紧凑 latent 中批量计算想象，而不是取消了模型训练成本。[↗](https://arxiv.org/pdf/1912.01603v3#page=8)
 
-## 相关阅读与下一步
+## 重建、对比学习和仅奖励预测的对照
 
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=dreamer&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=dreamer)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=dreamer)。
-- 站内下一步：[论文精读专题](../index.md)。
+有了行为学习的证据，还需要知道模型从哪里得到可用表示。Figure 8 保持 Dreamer 行为学习方式，替换世界模型中的观察学习目标。先看 Acrobot 与 Cheetah，再看 Cup Catch 和 Finger Spin，可以避免只盯着汇总趋势。
+
+![Dreamer 的表示学习目标比较](../../assets/images/paper-deep-dives/world-models/dreamer/figure-8-representation-learning.png)
+
+*原论文 Figure 8。蓝线使用 Reconstruction，绿线使用 Contrastive，紫线使用 Reward only；奖励预测和潜在动力学仍是共同部分。*
+
+重建在大多数任务上提供最强学习信号。Acrobot、Cheetah 中对比目标明显落后，reward only 更接近停滞。Cup Catch、Walker Stand 中对比学习也能达到较高水平，Finger Spin 的对比版本甚至高于重建版本。因此不能把实验总结成“对比学习不能控制”或“重建在每个任务都最好”。
+
+作者概括，对比目标能解决约一半任务，仅预测奖励在这批有限数据实验中不足以形成有效模型。实验同时改变了观察目标所提供的信息和优化难度，没有单独证明某个表征家族必然优越。它更具体地提示，actor 学习即使保持不变，表示目标仍会决定哪些状态信息能进入想象，进而改变最终行为。[↗](https://arxiv.org/pdf/1912.01603v3#page=8)
+
+这也解释了 Dreamer 的扩展接口。若能在保持可微、动作条件转移和奖励预测的前提下，找到更好的表示学习方式，actor-critic 的核心更新可以保留。论文将表示学习作为可替换部分，是对系统结构的划分，不能解读成任意 encoder 都会得到同样的成绩。
+
+## 预测图、离散动作与控制频率还说明了什么
+
+原论文用两条留出轨迹可视化模型预测。给前 5 帧观察和整段动作序列，之后 45 步只用 transition model 向前生成，再通过 decoder 显示预测画面。
+
+![Dreamer 世界模型的长时预测](../../assets/images/paper-deep-dives/world-models/dreamer/figure-5-video.png){ width="860" }
+
+*原论文 Figure 5。True 与 Model 对照展示姿态和运动趋势，后段预测未再接收真实图像。*
+
+模型能保留主要运动结构，但后段身体姿态、位置与接触并不总是准确。特别是 hopper 的较远预测与真实轨迹出现明显偏离。这解释了为什么用短想象加 bootstrap 有实际意义，策略需要有用的局部动力学与价值，不必要求模型对任意长的像素轨迹都精确。图片也没有证明模型能在训练分布之外充当可靠的物理模拟器。[↗](https://arxiv.org/pdf/1912.01603v3#page=5)
+
+离散控制被放在附录中，测试的是部分 Atari 游戏和两个 DMLab levels，尚不是完整 Atari 57 游戏的竞争性结果。观察仍为 $64\times64\times3$，动作在 3 到 18 个类别之间，Atari 使用 sticky actions。actor 改为 categorical distribution，并用 straight-through 梯度穿过动作采样；探索采用 epsilon-greedy，在前 200,000 个梯度更新中将 $\epsilon$ 从 0.4 降到 0.1。
+
+离散配置还把 horizon 改为 10、KL 系数改为 0.1、奖励经 tanh 限幅，并加入终止折扣预测。这意味着本文是在连续任务内部固定一套配置、离散任务内部固定另一套配置，不能提前赋予它 V3 那种跨领域共用全部算法超参数的结论。附录展示了若干 Atari 行为与 DMLab object collection 的成功，也明确将更高视觉复杂度下的竞争性表示学习留作后续问题。[↗](https://arxiv.org/pdf/1912.01603v3#page=14) [↗](https://arxiv.org/pdf/1912.01603v3#page=16)
+
+action repeat 也不是无关细节。相同动作重复更多环境步，会改变控制精细程度，以及一个固定 imagination horizon 覆盖的物理时间。附录比较 repeat 1、2、4，作者选择 2 作为总体较好的折中，但 Finger Spin 等任务的曲线排序与其他任务不同。该实验只有两个种子，并使用较早的超参数设置，支持的是存在一个可复用折中值，不能说算法对控制频率完全不敏感。[↗](https://arxiv.org/pdf/1912.01603v3#page=19)
+
+## 怎样把本文的做法迁移到一个控制实验
+
+Dreamer 提供的可复用核心，是把真实经验中的状态作为想象起点，在一个可微、动作条件的模型中短期展开，再通过 value 接上更远回报。若环境交互昂贵、动作连续、训练阶段可以批量计算，而执行阶段希望直接调用策略，这种分工有明确吸引力。
+
+首先要保证状态和奖励模型能够形成有用梯度。图像重建看起来不错却不代表动作 Jacobian 准确，actor 仍可能利用模型误差。因此应同时观察真实 episode 回报、不同起点的开放环预测，以及改变 horizon 后的行为；只提高 imagined return 无法证明环境行为改善。
+
+其次要分别检查三类更新。模型从真实轨迹学，actor 沿固定模型的梯度提高 $V_\lambda$，critic 对停止梯度的回报目标回归。把 critic target 的 stop-gradient 用到 actor 路径，会切断本文最关键的学习信号；允许 actor 更新模型参数，又会改变优化对象。
+
+最后，采用时保留与论文一致的预算口径。环境帧、agent action、模型更新与墙钟时间分别记录，在目标任务上报告最终成功或回报。本文证明了短想象、价值 bootstrap 和解析梯度在这组视觉控制任务上的结合价值；它的失败任务和离散扩展也表明，表示质量、探索与模型误差仍需在新环境中单独解决。

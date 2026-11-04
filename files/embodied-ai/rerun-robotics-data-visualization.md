@@ -24,12 +24,12 @@ Rerun 的基本体验是：代码或日志把多模态数据送进 Rerun，Viewe
 
 <small>图源：[Rerun Log and Ingest](https://rerun.io/docs/getting-started/data-in)。时间线让多模态数据按 frame、step 或 sensor timestamp 对齐。</small>
 
-## 5 分钟跑通
+## 用构造轨迹记录位置和动作
 
-最小使用路径很简单：
+以下示例采用当前官方文档中的 `set_time` 与 `Scalars` API。先在隔离 Python 环境安装依赖，避免改变机器人运行环境：
 
 ```bash
-pip install rerun-sdk
+python -m pip install rerun-sdk numpy
 ```
 
 新建 `rerun_demo.py`：
@@ -41,13 +41,12 @@ import rerun as rr
 rr.init("robot_debug_demo", spawn=True)
 
 for step in range(100):
-    rr.set_time_sequence("step", step)
+    rr.set_time("step", sequence=step)
 
-    points = np.random.randn(200, 3)
-    points[:, 2] += step * 0.01
+    points = np.array([[step * 0.01, 0.0, 0.0]])
 
     rr.log("world/points", rr.Points3D(points, radii=0.02))
-    rr.log("metrics/gripper_width", rr.Scalar(0.08 - step * 0.0003))
+    rr.log("metrics/gripper_width", rr.Scalars(0.08 - step * 0.0003))
     rr.log("events/status", rr.TextLog("running"))
 ```
 
@@ -57,7 +56,7 @@ for step in range(100):
 python rerun_demo.py
 ```
 
-你应该看到 Rerun Viewer 被拉起，里面有一个 3D 点云、一个标量曲线和文本事件。这个 demo 还不是机器人系统，但它已经包含 Rerun 的三个核心动作：`init` 创建 recording，`set_time_sequence` 设定时间线，`log` 写入不同类型的数据。
+在装有兼容 SDK 与图形 Viewer 的环境中，运行会请求打开 Rerun Viewer，里面有一个 3D 点云、一个标量曲线和文本事件。这个 demo 还不是机器人系统，但它已经包含 Rerun 的三个核心动作：`init` 创建 recording，`set_time` 设定时间线，`log` 写入不同类型的数据。
 
 ## 它解决什么现场问题
 
@@ -104,22 +103,22 @@ o_t = \{I_t, D_t, q_t, f_t, a_{t-1}, \ell_t\}
 
 这里 \(I_t\) 是 RGB，\(D_t\) 是深度，\(q_t\) 是关节，本体力觉 \(f_t\)，上一动作 \(a_{t-1}\)，语言或事件日志 \(\ell_t\)。如果它们没有共同 timeline，就很难判断模型在第 \(t\) 步的动作到底基于哪一帧观测。
 
-Rerun 的另一条关键线是坐标系。机器人里经常需要：
+空间对齐要保持维度一致。若深度 z 为光轴深度，先计算三维相机点，再补齐次坐标后乘外参。
 
 \[
-X_{\text{world}}
-=
-T^{\text{world}}_{\text{base}}
-T^{\text{base}}_{\text{camera}}
-K^{-1}
-\begin{bmatrix}
-u d\\
-v d\\
-d
-\end{bmatrix}
+p_C=zK^{-1}[u,v,1]^\top,\qquad
+\bar p_W={}^WT_B{}^BT_C[p_C^\top,1]^\top.
 \]
 
-这里 \(K\) 是相机内参，\(T^{\text{base}}_{\text{camera}}\) 是相机到机器人 base 的外参。Rerun 不替你自动修正标定，但它让你把 `Pinhole`、`Transform3D`、depth、point cloud 和 robot frame 一起可视化。很多“模型抓不准”的问题，最后其实是坐标轴方向、外参版本或时间戳错了。
+不能直接用 4×4 齐次矩阵乘三维像素向量。Rerun 可以把相机、变换、点云放在同一空间视图中，但不会自动修正错误的单位或变换方向。
+
+### 时间线对齐不等于传感器同步
+
+假设相机帧曝光于 1.00 秒，网络到达于 1.08 秒，关节状态采样于 1.06 秒。若两者都按到达顺序标成 `step=10`，Viewer 虽然并排显示，却不是同一物理时刻。应保留采样时刻和接收时刻，统一时钟后按事件时间检查。
+
+官方 timeline 支持 sequence、duration 与 timestamp。sequence 表示帧序号，不包含真实间隔；duration 可以记录 episode 内秒数；timestamp 表示绝对时间。不同时间线只在记录的数据关联下有意义，工具不会替传感器校准时钟偏移。
+
+查询或显示还可能沿用上一条值。机械臂状态停留在最后一条记录，并不证明此后保持不动；需要显示数据年龄或失联事件。这个区别对分析过期动作尤其重要。
 
 ## 在具身数据引擎里的位置
 
@@ -146,7 +145,7 @@ import rerun as rr
 rr.init("pick_place_debug", spawn=True)
 
 for step, sample in enumerate(episode):
-    rr.set_time_sequence("step", step)
+    rr.set_time("step", sequence=step)
 
     rr.log("world/camera/rgb", rr.Image(sample.rgb))
     rr.log("world/camera/depth", rr.DepthImage(sample.depth, meter=1.0))
@@ -155,18 +154,18 @@ for step, sample in enumerate(episode):
         resolution=[sample.width, sample.height],
     ))
     rr.log("world/camera", rr.Transform3D(
-        translation=sample.T_base_camera[:3, 3],
-        mat3x3=sample.T_base_camera[:3, :3],
+        translation=sample.T_world_camera[:3, 3],
+        mat3x3=sample.T_world_camera[:3, :3],
     ))
 
     rr.log("world/points", rr.Points3D(sample.point_cloud))
     rr.log("world/grasp_candidates", rr.Points3D(sample.grasp_points))
     rr.log("robot/action", rr.Tensor(sample.action))
-    rr.log("metrics/gripper_width", rr.Scalar(sample.gripper_width))
+    rr.log("metrics/gripper_width", rr.Scalars(sample.gripper_width))
     rr.log("events/status", rr.TextLog(sample.failure_reason or "running"))
 ```
 
-这段代码的重点不是 API 本身，而是记录粒度：观测、几何、动作、控制状态和事件标签要落在同一条 `step` timeline 上。
+这是接入结构示意，`episode` 和 `sample` 由项目提供，不能单独执行；其中 `world/camera` 的变换必须把相机坐标变到 world，不能给它 base 外参却遗漏 world-to-base 关系。`meter=1.0` 假定深度数值已以米计。记录粒度上，观测、几何、动作、控制状态和事件标签要落在同一条 `step` timeline 上。
 
 ## 常用对象速查
 
@@ -176,22 +175,19 @@ for step, sample in enumerate(episode):
 | 相机模型 | `rr.Pinhole` | 把 2D 像素和 3D 空间对应起来 |
 | 坐标系 / 外参 | `rr.Transform3D`, `rr.TransformAxes3D` | 检查 camera、base、end-effector 是否对齐 |
 | 点云 / 轨迹 | `rr.Points3D`, `rr.LineStrips3D` | 查看重建点云、抓取候选、末端轨迹 |
-| 标量曲线 | `rr.Scalar` | 看置信度、gripper width、力觉、速度、延迟 |
+| 标量曲线 | `rr.Scalars` | 看置信度、gripper width、力觉、速度、延迟 |
 | 文本事件 | `rr.TextLog` | 记录 failure reason、planner state、人工接管原因 |
 | 模型输出 | `rr.Tensor` 或结构化对象 | 保存 action chunk、logits、embedding 或中间特征 |
 
-## 一个真实排查案例
+## 一个明确标为构造的排查过程
 
-```text
-症状：模型在仿真里抓取成功率 87%，真机只有 42%，失败集中在透明盒子
-指标：grasp_empty 率高，detector confidence 不低，end-effector 到目标中心误差偏大
-Rerun 观察：RGB 检测框正确，depth 边缘破碎；点云投到 base frame 后整体偏左约 3 cm
-判断：不是 VLA 语义问题，优先怀疑深度噪声和相机外参
-修复：透明物体单独建 hard bucket；重做 hand-eye calibration；把低置信 depth mask 记录进训练样本
-反例：如果点云和外参正确，但 action chunk 后半段越来越偏，则应回看 policy rollout 或控制器
-```
+假设 RGB 框覆盖杯子，点云在底座坐标中却持续偏向一侧。先叠加已知标定板或固定几何，检查偏差是否也出现。如果静止时同样偏，优先检查内外参、深度单位与坐标链；如果只在运动时偏，检查时间差与运动模糊。
 
-这里 Rerun 支撑的是证据链：不是“感觉模型不行”，而是能证明视觉、几何、动作、控制哪一层先错。
+进一步把模型目标、过滤后命令和实测末端轨迹画成三条曲线。若目标正确而命令被限幅，是执行边界问题；若命令正确而末端没有跟上，需要检查控制器与硬件；若模型在收到新观测后仍输出旧目标，才回到策略和记忆。这个过程给出可检验假设，不凭可视化截图直接宣布根因。
+
+可以沿同一个静止目标点核验时间与坐标。先把相机点乘以曝光时刻的世界外参，目标在世界视图中应基本静止。若改用消息到达时刻的机器人位姿，而相机在这段延迟内移动，显示的点就会随机器人速度偏移。误差与速度相关，比固定方向的静态偏差更像时间对齐问题。
+
+反过来，机器人停住时仍存在固定偏移，应继续检查外参、内参和单位。这个对照不能独立证明哪一项一定错，但它把可视化变成了有控制变量的几何检验。保存时同时保留原始点、所用变换、两个时间戳和变换版本，后续才可以重放同一次计算，而非只看一段画得很平滑的视频。
 
 ## 和 W&B、ROS、仿真器的区别
 
@@ -220,7 +216,7 @@ Rerun 观察：RGB 检测框正确，depth 边缘破碎；点云投到 base fram
 3. 已有成熟内部多模态回放系统，且能导出训练所需 dataframe；
 4. 线上部署只关心告警和 SLA，不需要逐 episode 复盘。
 
-## 具身智能里的判断方式
+## 保存能复查的记录
 
 读 Rerun 时不要把它当“好看的可视化工具”。它真正改变的是排查方法：
 

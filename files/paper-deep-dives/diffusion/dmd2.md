@@ -15,540 +15,453 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/tianweiy/DMD2](https://github.com/tianweiy/DMD2)；项目页：[tianweiy.github.io/dmd2/](https://tianweiy.github.io/dmd2/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2405.14867)；[GitHub API / repo](https://github.com/tianweiy/DMD2)；[官方 / 项目材料](https://tianweiy.github.io/dmd2/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 目标是分布匹配，为什么还要逐张模仿教师
 
-### 研究背景
+DMD2 的起点是 DMD 内部的一处矛盾。DMD 希望学生只在**输出分布**上接近教师，不必从同一个随机种子生成同一张图片；实际训练却仍需要教师预先生成的噪声—图像对，用回归损失稳定学生。于是，一个本来允许重新组织生成映射的方法，又被拉回了逐样本模仿。
 
-原论文把 DMD2 写成 DMD 的工程化续作。DMD 已经说明，少步扩散蒸馏可以不依赖逐轨迹回归，而用 real/fake score difference 做分布匹配；但在 ImageNet、Stable Diffusion、SDXL 这类大模型上，原始 DMD 的 paired regression 数据成本很高，fake score model 也容易落后于快速变化的 generator。另一方面，真实数据监督和多步 generator 又是高质量文生图少步采样必须面对的实际问题。
+这项约束同时带来计算成本和学习限制。对于 SDXL，原文估算每个噪声—图像对约需 5 秒；覆盖 DMD 所用的 1200 万条提示，大约需要 700 A100 天。学生还必须在很少的网络调用中复刻教师长轨迹的终点，即使另一种噪声到图像的映射能够产生同样好的分布，也会受到回归项惩罚。[↗](https://arxiv.org/pdf/2405.14867v2#page=5)
 
-### 问题（Challenge）
+DMD2 没有把改进归结为删去一个损失项，而是分别处理删掉它之后暴露的三个问题。**生成分布变化太快，fake score 跟不上；教师的 real score 也有近似误差；多步学生在部署时接收到的输入，与训练时的输入不同。**对应的改变是增加 fake critic 的更新频率、加入真实图像上的对抗监督，以及用学生自己的采样过程构造训练输入。
 
-论文要解决的问题是：如何把 DMD 从一步 proof-of-concept 推到更稳、更大规模的少步 image synthesis。挑战有三层。第一，预先生成大量 teacher pairs 成本巨大，而且会把学生绑在 teacher deterministic path 上；第二，DMD 梯度依赖 fake critic 准确估计当前 generator distribution，critic 如果追不上，generator 会收到错误方向；第三，4-step / few-step generator 的中间状态来自自己，而不是 teacher 干净轨迹，训练时必须模拟这种推理分布。这个问题的价值在于，少步 SD / SDXL 是实际部署可感知的延迟收益。
+最终结果显示，这套组合能把 ImageNet-64×64 生成压到一次前向，将 SDXL 压到四次前向，并在部分指标上超过教师的指定采样配置。理解这些结果需要同时看三件事：分布匹配梯度是怎样得到的，训练阶段究竟增加了哪些信息与计算，以及 FID、细节、文本对齐和多样性是否给出相同判断。
 
-### Finding
+## 一、DMD 的两种分数，分别描述什么分布
 
-DMD2 的 finding 是：DMD 的关键不是 paired regression，而是一个足够可靠的 distribution matching critic。只要让 fake critic 以更合适的时间尺度追踪 generator，并用真实数据 adversarial signal 补上 teacher score 的偏差，就可以去掉昂贵的 paired regression。进一步说，多步学生不是简单重复一步学生；它必须在训练中见到自己上一步生成的中间状态，所以 backward simulation 是 few-step 蒸馏成立的必要条件。
+### 从去噪输出得到 score
 
-### 方法
+先把生成器与去噪器分开。学生生成器 $G_\theta$ 从随机噪声 $z\sim\mathcal N(0,I)$ 生成图像 $x=G_\theta(z)$；扩散去噪器 $\mu$ 接收一张已加噪的图像，预测其干净内容。类别或文本条件在下面的式子中省略，但实际条件生成始终使用它们。
 
-方法从四个方向改造 DMD。第一，移除 regression loss，降低 teacher pair 依赖。第二，引入 TTUR，让 fake critic 更新频率和强度高于 generator，避免 score estimator 滞后。第三，加入 GAN loss，把真实图像数据作为额外监督，让模型不只依赖 teacher score。第四，对多步 generator 使用 backward simulation：从噪声沿学生当前 few-step 轨迹展开中间状态，再在这些状态上训练，使训练分布靠近推理分布。论文分别在 ImageNet-64、SD v1.5、SDXL 上给出训练配置和结果。
+正向加噪过程为
 
-### 结论
+$$
+x_t=F(x,t)=\alpha_t x+\sigma_t\epsilon,
+\qquad \epsilon\sim\mathcal N(0,I),
+$$
 
-实验表明，DMD2 在 ImageNet-64、COCO 文本生成、SD v1.5 和 SDXL 少步采样上，比原始 DMD 和多种少步 baseline 更稳，尤其能把 4-step SDXL 推到可用质量。消融显示 TTUR 对 fake critic 稳定性关键，GAN loss 能提升真实数据对齐，多步 backward simulation 对 4-step 结果重要。人类偏好评测进一步说明指标提升不只是 FID 数字变化，而对应更可接受的视觉质量。边界是系统更复杂，训练仍然昂贵，并不等同于免成本的一步采样器。
+等价于条件分布 $q_t(x_t\mid x)=\mathcal N(\alpha_t x,\sigma_t^2I)$。这里，$t$ 指定噪声水平，$\alpha_t$ 控制保留多少图像信号，$\sigma_t$ 控制高斯噪声强度。将真实图像分布中的所有样本都经过这一过程，就得到噪声尺度 $t$ 上的分布 $p_{\mathrm{real},t}$。
 
-### 关键术语
+论文式（1）把这个分布的 score 与去噪预测联系起来
 
-- **TTUR（Two-Time-Scale Update Rule，双时间尺度更新）**：让 critic 与 generator 使用不同更新节奏，使 fake score 更快跟上生成分布
-- **Fake Critic（伪分布 critic）**：DMD2 中估计当前 generator distribution score 的模型
-- **GAN Loss（生成对抗损失）**：用真实数据判别信号补充 diffusion score 监督，提高样本真实感
-- **Backward Simulation（反向模拟）**：用当前学生模型展开 few-step 中间状态，让训练分布接近推理分布
-- **Few-step Generator（少步生成器）**：用 2、4 等少量 denoising / generation step 完成扩散采样的学生模型
+$$
+s_{\mathrm{real}}(x_t,t)
+=\nabla_{x_t}\log p_{\mathrm{real},t}(x_t)
+=-\frac{x_t-\alpha_t\mu_{\mathrm{real}}(x_t,t)}{\sigma_t^2}.
+$$
 
-## 论文位置
+$\mu_{\mathrm{real}}$ 是预训练教师给出的干净样本估计。右侧把“当前含噪样本”与“教师认为应保留的信号”作差，再按噪声方差缩放。在精确去噪估计的条件下，它给出真实分布的 score；实际训练使用神经网络近似。[↗](https://arxiv.org/pdf/2405.14867v2#page=5)
 
-DMD 原论文已经证明：不必让学生逐步复刻 teacher 轨迹，也可以用 real/fake score 差分把多步扩散 teacher 蒸馏成一步 generator。但 DMD 为了稳定训练，仍然保留了一项 regression loss，需要预先构造大量 noise-image pairs：
+这里的 score 是与样本同形状的方向向量，不是“这张图得多少分”的标量。它描述在当前噪声尺度上，往哪个方向改变样本会提高对应分布的对数密度。后面出现的 GAN 判别器才输出真伪分类结果，两者承担不同任务。
 
-\[
-(z,y), \qquad y=\text{TeacherODE}(z).
-\]
+### 为什么教师之外还需要一个 fake diffusion model
 
-这带来两个问题。第一，对 SDXL 这类大模型，预采样数据非常贵；论文估算为 SDXL 生成 1200 万个 LAION prompt 的 paired outputs 约需 700 A100-days。第二，regression loss 会把学生拉回 teacher 的 deterministic sampling path，削弱 DMD 原本的分布匹配优势。
+学生产生的图像也定义了一个分布 $p_{\mathrm{fake}}$，加噪后得到 $p_{\mathrm{fake},t}$。DMD 为它另训练一个去噪器 $\mu_{\mathrm{fake}}$，用相同关系估计 $s_{\mathrm{fake}}$。这个网络的训练样本来自当前学生，因此学生一变化，它要拟合的分布也随之变化。
 
-| Method family | Training signal | Main bottleneck |
-| --- | --- | --- |
-| Progressive / trajectory distillation | match teacher trajectory or teacher outputs | hard to learn exact noise-to-image mapping |
-| Original DMD | distribution matching plus paired regression | paired teacher data is expensive and constraining |
-| GAN-based fast diffusion | real/fake discrimination on generated images | text guidance and diffusion prior integration can be weak |
-| DMD2 | DMD score difference plus TTUR plus GAN plus backward simulation | more moving parts, still costly at SDXL scale |
+DMD 优化的是噪声尺度上的近似反向 KL
 
-DMD2 的核心判断是：DMD 真正有价值的是 distribution matching，不是 paired regression。要去掉 regression loss，就必须让 fake diffusion critic 更准确、更稳定地追踪当前 generator 分布。
+$$
+\mathcal L_{\mathrm{DMD}}
+=\mathbb E_t\left[
+D_{\mathrm{KL}}\big(p_{\mathrm{fake},t}\Vert p_{\mathrm{real},t}\big)
+\right].
+$$
 
-可以把 DMD2 想成在修一台少步采样机器。原始 DMD 的 regression loss 像一根安全绳：它把学生拴在 teacher 用同一个噪声走出的确定性路径上，训练更稳，但每个 prompt 都要先让 teacher 慢慢生成配对答案，成本巨大，而且学生也被限制在 teacher 的采样路径附近。DMD2 剪掉这根安全绳后会遇到三个新问题：fake critic 如果追不上 generator，梯度会乱；只看 teacher score，学生很难纠正 teacher 自己的分数误差；多步学生在第 2 步以后看到的是自己造出的中间状态，不是干净真实图像加噪。TTUR、GAN branch 和 backward simulation 分别对应这三个问题。
+不需要显式计算两个高维密度的值，便可以用两种 score 构造生成器梯度。沿用论文式（2）的记号
 
-![DMD2 SDXL teaser](../../assets/images/paper-deep-dives/diffusion/dmd2/teaser.png){ width="720" }
+$$
+\nabla_\theta\mathcal L_{\mathrm{DMD}}
+=-\mathbb E_t\left[
+\int
+\left(
+ s_{\mathrm{real}}(F(G_\theta(z),t),t)
+-s_{\mathrm{fake}}(F(G_\theta(z),t),t)
+\right)
+\frac{dG_\theta(z)}{d\theta}\,dz
+\right].
+$$
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 1。原论文图意：DMD2 可将 SDXL 蒸馏成 4-step generator，并生成 1024 x 1024 结果。</small>
+积分表示对生成噪声的采样平均，$dG_\theta(z)/d\theta$ 将图像空间的调整传回生成器参数。实际理解时，先看括号里的差值：**同一张学生样本，在同一个加噪状态下，同时询问教师分布与学生分布的方向。**如果两种分布已匹配，理想情况下两种 score 相同，这部分更新就消失；如果 fake score 估计不准，差值也会偏离应有的方向。
 
-**Teaser 图先说明 DMD2 的目标尺度。**
-这张 teaser 不是方法细节图，而是在告诉你 DMD2 的目标已经从小分辨率一步 toy setting 扩展到 SDXL 级 1024 x 1024 文生图。读它时关注两个信号：第一，student 只用很少 forward passes，因此每一步要承担更大的去噪跨度；第二，高分辨率结果要求模型同时保 prompt alignment、整体构图和局部纹理，不能只用单一 FID 解释质量。
+因此，只保留教师分数并不等价于 DMD。教师告诉模型什么方向更符合目标，fake score 则让更新考虑当前学生分布已经在哪里。两者共同形成分布差异，而不是要求当前样本等于某张指定的教师图片。[↗](https://arxiv.org/pdf/2405.14867v2#page=5)
 
-## 方法总览
+### 原来的回归项怎样改变这个目标
+
+DMD 额外收集配对数据 $(z,y)$，其中 $y$ 由教师从同一个 $z$ 沿确定性采样轨迹生成，再优化
+
+$$
+\mathcal L_{\mathrm{reg}}
+=\mathbb E_{(z,y)}\,d\big(G_\theta(z),y\big).
+$$
+
+$d$ 在 DMD 的实现中使用 LPIPS。分布项允许同一随机种子映射到另一张合理图像，回归项却会要求它回到 $y$ 附近。原文将回归项的作用归纳为保持模式覆盖与训练稳定；代价是需要生成配对数据，也限制了学生脱离教师原有映射的空间。
+
+DMD2 希望让主训练真正依靠分布监督完成，但“取消大规模配对回归”有一个必须保留的配置例外：**SDXL 一步模型仍用了 1 万组配对样本做短暂回归初始化。**四步 SDXL 和其他 backbone 不需要这个处理。这个例外不改变 DMD2 主训练的分布目标，却意味着不能把每一种 DMD2 配置都称为从头到尾完全不用配对数据。[↗](https://arxiv.org/pdf/2405.14867v2#page=23)
+
+## 二、先沿方法图走完一次训练
+
+下图中先看左侧红色生成器，再沿同一张生成图像进入两种 score 的路径向右读。灰色教师带锁，蓝色 fake diffusion model 会训练；绿色分支接在后者的中间特征上，并额外读取真实图片。
 
 ![DMD2 method](../../assets/images/paper-deep-dives/diffusion/dmd2/method.png){ width="830" }
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 3。原论文图意：DMD2 交替训练 generator、fake score function 和 GAN discriminator；generator 接收 distribution matching gradient 与 GAN loss，fake score function 学当前 fake samples 的分布，GAN branch 区分 fake samples 与 real images。</small>
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 3。</small>
 
-**方法图先看三条训练信号。**
-DMD2 不是在 generator 旁边随手加一个判别器，而是让三个监督信号分工：冻结 teacher 提供 real score，在线 fake diffusion critic 估计当前 generator 分布，GAN branch 把真实图像分布拉进训练。generator 最终同时接收 DMD score gradient 和 GAN generator loss；fake critic 则要更频繁更新，避免在 generator 分布移动后继续给旧梯度。
+图中的三种信号可以拆开理解。
 
-读这张图时，主线不是“模块多”，而是“删掉 paired regression 后，稳定性从哪里来”。TTUR 解决 fake critic 滞后，GAN branch 补 teacher score 的误差，backward simulation 让多步训练输入更接近推理输入。它能证明 DMD2 是一个更完整的少步图像扩散蒸馏配方，但不能直接证明动作条件世界模型、闭环规划或真实机器人安全。
+| Component | Input | Training signal | Parameter status |
+| --- | --- | --- | --- |
+| Generator $G_\theta$ | 一步时为随机噪声；多步时还包括自身生成的中间状态与时间条件 | Distribution matching gradient + GAN gradient | 更新 |
+| Real diffusion model $\mu_{\mathrm{real}}$ | 加噪后的学生输出与条件 | 提供目标分布 score | 冻结 |
+| Fake diffusion model $\mu_{\mathrm{fake}}$ | 加噪后的学生输出与条件 | 以学生输出为干净目标的去噪学习 | 更新 |
+| GAN classification head $D$ | 真实或生成样本加噪后得到的中间特征 | Real / fake classification | 与所连接的上游编码特征一起更新 |
 
-DMD2 的训练系统里有四个关键对象：
+先固定学生产生当前 fake samples，fake diffusion model 学会对这些样本去噪，同时分类分支区分真实图像与生成图像。随后更新学生：将生成样本加噪，由教师与 fake model 提供 score 差，并叠加判别器提供的对抗梯度。这个交替过程持续进行，fake model 更新得比学生更频繁。[↗](https://arxiv.org/pdf/2405.14867v2#page=6)
 
-| Object | Role | Updated during training? |
-| --- | --- | --- |
-| Teacher diffusion model \(\mu_{\text{real}}\) | provides real score / teacher score | No |
-| Generator \(G_\theta\) | one-step or few-step student | Yes |
-| Fake diffusion critic \(\mu_{\text{fake}}\) | estimates score of generator distribution | Yes, more frequently than \(G_\theta\) |
-| GAN classifier \(D\) | distinguishes noised real images and noised fake images | Yes |
+两种“监督图像”不要混淆。fake 去噪任务的干净目标就是学生自己生成的图像，因此它学习的是学生分布；GAN 的真实一侧来自外部真实数据，提供学生尚未掌握的分布信息。后者不要求与随机种子一一配对。
 
-对应的改动可以拆成四条：
+教师也不必为每个训练样本跑完几十步，再交出一张配对目标。它在学生生成的含噪样本上估计 score。这样取消的是昂贵的教师轨迹数据生产，而不是教师在训练中的作用。部署时保留学生的生成过程，real score、fake score 与 GAN 判别头都是训练组件，不进入逐张生成的推理循环。
 
-1. 去掉 DMD 的 regression loss，不再依赖大规模 paired noise-image dataset；
-2. 用 two time-scale update rule，让 fake diffusion critic 多更新几次再更新 generator；
-3. 在 fake diffusion critic 的 bottleneck 上加 GAN classification head，引入真实图像数据；
-4. 对 SDXL 这类大模型支持多步 generator，并用 backward simulation 消除训练-推理输入错配。
+## 三、取消回归后，为什么增加 critic 更新次数能救回训练
 
-## 回到 DMD 的核心梯度
+### 不稳定首先表现为整体统计量来回摆动
 
-DMD 的目标是让 generator 输出分布 \(p_{\text{fake}}\) 贴近 teacher / real 分布 \(p_{\text{real}}\)。在加噪后的 timestep \(t\) 上，可以写成：
+如果 fake model 能精确描述当前学生，DMD 梯度才有正确参照。但两个网络同时变化时，fake model 可能还在追上一轮分布，学生已经依据这个过时的估计继续移动。作者将取消回归后的不稳定归因于这种在线估计误差。[↗](https://arxiv.org/pdf/2405.14867v2#page=6)
 
-\[
-\nabla\mathcal{L}_{\text{DMD}}
-=
-\mathbb{E}_t
-\nabla_\theta
-\operatorname{KL}(p_{\text{fake},t}\|p_{\text{real},t}).
-\]
-
-这个梯度可由两个 score 的差近似：
-
-\[
-\nabla\mathcal{L}_{\text{DMD}}
-\approx
--
-\mathbb{E}_t
-\left[
-\left(
-s_{\text{real}}(F(G_\theta(z),t),t)
--
-s_{\text{fake}}(F(G_\theta(z),t),t)
-\right)
-\frac{dG_\theta(z)}{d\theta}
-\right].
-\]
-
-这里 \(F\) 是 forward diffusion，即给 clean sample 加噪；\(s_{\text{real}}\) 来自冻结 teacher，\(s_{\text{fake}}\) 来自动态训练的 fake diffusion critic。
-
-这条式子的工程含义很具体：
-
-| Term | What it does |
-| --- | --- |
-| \(s_{\text{real}}\) | pulls generated samples toward teacher / data high-density regions |
-| \(s_{\text{fake}}\) | estimates the current generator distribution and corrects the reverse-KL gradient |
-| \(s_{\text{real}}-s_{\text{fake}}\) | provides distribution-level supervision without matching individual teacher trajectories |
-
-DMD2 认为原始 DMD 之所以还需要 regression loss，不是因为分布匹配思路错了，而是因为 \(\mu_{\text{fake}}\) 在在线训练里不够准。generator 每次更新都会改变 fake distribution，如果 fake critic 只跟着同频更新，它估计的 score 会滞后，生成器梯度就会带偏。
-
-## 去掉 Regression Loss
-
-原始 DMD 的 regression loss 是：
-
-\[
-\mathcal{L}_{\text{reg}}
-=
-\mathbb{E}_{(z,y)} d(G_\theta(z),y),
-\]
-
-其中 \(y\) 是 teacher 用 deterministic sampler 从同一个 noise \(z\) 生成的图像。它能稳定训练，也能保 mode coverage，但副作用很明显：
-
-| Issue | Consequence |
-| --- | --- |
-| Large paired dataset construction | SDXL / LAION scale becomes expensive before training even starts |
-| Pointwise teacher-path matching | student quality is tied to teacher sampling path |
-| Less flexible conditioning | complex controls require new paired data generation |
-| Conflicts with distribution matching | generator is encouraged to match paths instead of only matching distribution |
-
-DMD2 的第一步就是删掉这项损失。删掉以后模型确实会不稳：论文观察到生成图像平均亮度等统计量会周期性波动，FID 变差。这说明 regression loss 在 DMD 中实际承担了“稳定 fake score 误差”的角色。
-
-## TTUR：让 Fake Critic 追上 Generator
-
-DMD2 的关键诊断是：不稳定来自 fake diffusion critic 对当前 fake distribution 的估计误差。因为 \(G_\theta\) 每次更新都会改变 fake samples 的分布，\(\mu_{\text{fake}}\) 需要更频繁地训练，才能接近当前 generator 的真实 score。
-
-论文采用 two time-scale update rule：
-
-```text
-repeat:
-  for k fake critic updates:
-    sample z
-    x_fake = stopgrad(G_theta(z))
-    train mu_fake on denoising score matching
-    train GAN branch on noised real/fake images
-
-  sample z
-  update G_theta with DMD score gradient plus GAN generator loss
-```
-
-在 ImageNet 上，论文发现 `5 fake diffusion critic updates : 1 generator update` 是稳定性和速度之间的较好平衡。1:1 会不稳，10:1 虽然更稳但训练慢。
+亮度图给出了比一张失败样本更有用的诊断。先比较蓝线和红线在训练后段的振幅：蓝线是每次学生更新只训练一次 fake critic，红线是五次。纵轴是 Pixel Brightness，横轴是 Training Steps。
 
 ![DMD2 ImageNet brightness stability](../../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-brightness.png){ width="820" }
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Appendix Figure 7。原论文图意：去掉 regression loss 且只做 1 次 fake critic update 会造成平均亮度等统计量振荡；TTUR 用 5 次 fake critic update 可显著稳定训练。</small>
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 8。</small>
+
+蓝线不断经历变亮、变暗、再变亮的周期，训练后段也没有稳定下来；红线集中在约 0.45 附近，波动明显缩小。这支持一个具体判断：失败不仅是某些纹理没学好，连整体分布的简单统计量都在被不准确的更新来回推动。
+
+**Two Time-scale Update Rule，TTUR**在这里主要通过更新频率实现。在 ImageNet 的主要配置中，每更新生成器一次，先后执行五次 fake model 更新，让估计器在下一次学生变化前更充分地适应当前分布。它增加了每次学生更新配套的 critic 计算，但能减少无效振荡。
+
+### 五次并非越多越好，也不等价于把学习率乘五
+
+下一张图把代价纳入比较。横轴明确是 **Training Hours**，不是生成器更新次数；因此绿色曲线更低，意味着在这组实验实际消耗的训练时间内更有效。
 
 ![DMD2 ImageNet convergence](../../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-convergence.png){ width="820" }
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Appendix Figure 8。原论文图意：5 次 fake diffusion update 在稳定性与收敛速度上更均衡，也比带 regression loss 的原始 DMD 收敛更快。</small>
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 9。</small>
 
-**TTUR 图表在证明什么。**
-这两张图不是单纯展示“多训 critic 更好”，而是在定位去掉 regression loss 后的失稳来源。亮度曲线振荡说明 generator 的整体图像统计在训练中来回漂，通常意味着它收到的 score gradient 有系统偏差。DMD2 的解释是：fake diffusion critic 没有足够快地跟上 generator 分布，所以 \(s_{\text{fake}}\) 估错，real/fake score difference 就会把 generator 推向错误方向。
+红线取消回归但仅更新一次 fake model，FID 出现反复尖峰。绿色五次更新既稳定又下降较快；紫色十次更新同样稳定，却把更多时间花在 critic 上，降低了整体收敛速度。青色方案保持不同的学习率，让 fake model 的学习率达到生成器的五倍，表现仍不如执行五次实际更新。原始 DMD 的蓝线稳定，但在该图的墙钟比较中收敛更慢。[↗](https://arxiv.org/pdf/2405.14867v2#page=19)
 
-收敛曲线进一步说明 update ratio 不是越大越好。1:1 不稳，10:1 稳但慢，5:1 是折中。这个结论可以迁移到很多在线蒸馏系统：当 generator 的 loss 依赖一个动态 critic 或 score estimator 时，critic 的“跟踪速度”本身就是主超参，不能只调 generator learning rate。
+这个实验区分了三个容易混用的调参方向：让 critic 多看几个优化步骤、让单步更新更大，以及让生成器更新得更少。它们对估计误差和计算分配的影响并不相同。作者给新数据与模型的建议，是选择**能稳定图像统计量的最小更新次数**，而不是无条件采用 5:1。附录的 SD v1.5 配置实际用了 10:1，说明该比例确实随任务变化。
 
-这点是 DMD2 最值得复用的训练经验：如果 loss 依赖一个在线估计器，不能只看 generator 的学习率；还要看估计器是否足够快地跟上 generator 分布变化。
+## 四、fake score 跟上之后，为什么还需要真实图片
 
-## 为什么加 GAN Loss
+TTUR 解决了学生分布估计不准的问题，无法让冻结教师自动变得更准确。教师 $\mu_{\mathrm{real}}$ 本身只是数据 score 的近似。如果它在某些方向存在偏差，而学生只接收教师信号，那么学生没有额外信息去修正这些偏差。
 
-删掉 regression loss 和加入 TTUR 后，DMD2 已经能达到原始 DMD 级别。但它还想超过 teacher。原因在于 DMD 的 real score 也只是 teacher diffusion model 的估计：
+作者据此提出，用真实数据上的 GAN 监督补充分布匹配。这个误差来源在原文中是解释假说；后面的消融证明加入该监督确实改善了结果，但没有单独测量并完全分解教师 score 的误差。[↗](https://arxiv.org/pdf/2405.14867v2#page=6)
 
-\[
-s_{\text{real}}(x_t,t)
-=
--
-\frac{x_t-\alpha_t\mu_{\text{real}}(x_t,t)}{\sigma_t^2}.
-\]
+### 对抗分支比较的仍然是分布
 
-如果 teacher score 本身有误差，这个误差会通过 DMD 梯度传给 generator。原始 DMD 只看 teacher，不直接看真实图像，因此很难纠正 teacher 的 score approximation error。
+判别器接收两类输入
 
-DMD2 引入 GAN loss，把真实图像放进训练：
-
-\[
-\mathcal{L}_{\text{GAN}}
-=
-\mathbb{E}_{x\sim p_{\text{real}},t}[\log D(F(x,t))]
-+
-\mathbb{E}_{z,t}[-\log D(F(G_\theta(z),t))].
-\]
-
-实现上，GAN classifier 不是单独再训练一个大 discriminator，而是加在 fake diffusion denoiser 的 middle block / bottleneck 特征上。appendix 里给出的 classifier head 是一组 stride 2 的 \(4\times4\) convolutions、group normalization、SiLU，再下采样到 \(4\times4\)，最后用卷积池化和线性层输出分类。
-
-| Design | Reason |
-| --- | --- |
-| Discriminate noised real/fake images | smooths distribution gap, similar to DiffusionGAN-style discriminator |
-| Attach head to fake diffusion model | reuse representation instead of adding a full standalone discriminator |
-| Train on real images | lets student move beyond teacher sampling errors |
-| Keep DMD score loss | preserves diffusion prior and natural CFG distillation path |
-
-这不是把 DMD2 变成普通 GAN。它仍然用 DMD 的 score difference 作为主干监督，GAN branch 负责补充真实数据分布信号，尤其改善锐度、局部质感和 teacher score 误差。
-
-## 多步 Generator 与 Backward Simulation
-
-一步生成在 ImageNet 和 SD v1.5 上表现强，但 SDXL 的高分辨率图像更复杂。DMD2 因此把 student 从 one-step 扩展到 few-step。
-
-4-step generator 使用固定 timestep schedule：
-
-```text
-999 -> 749 -> 499 -> 249
-```
-
-推理时每一步交替做 denoising 和 noise injection：
-
-\[
-\hat{x}_{t_i}=G_\theta(x_{t_i},t_i),
-\]
-
-这行式子在说：generator \(G_\theta\) 接收当前噪声状态 \(x_{t_i}\) 和时间步 \(t_i\)，输出当前步估计的干净样本 \(\hat{x}_{t_i}\)。
-
-\[
-x_{t_{i+1}}
-=
-\alpha_{t_{i+1}}\hat{x}_{t_i}
-+
-\sigma_{t_{i+1}}\epsilon,
+$$
+F(x_{\mathrm{real}},t),
 \qquad
-\epsilon\sim\mathcal{N}(0,I).
-\]
+F(G_\theta(z),t).
+$$
 
-\(\epsilon\sim\mathcal{N}(0,I)\) 是标准高斯噪声采样，括号里的 \(0\) 是均值、\(I\) 是单位协方差；\(\sigma_{t_{i+1}}\) 决定这份噪声在下一噪声水平里占多大。
+两类样本都加噪，判别器在不同噪声尺度上学习区分真假。真实图片不需要对应某个 $z$ 的指定输出，因此这项监督不会重新引入原来逐种子回归的约束。
 
-这里最关键的是训练输入。很多多步蒸馏方法训练时让模型 denoise noised real images，但推理时第 2 步之后的输入并不是 noised real image，而是上一步 generator 自己生成的 \(\hat{x}_{t_i}\) 再加噪。这个错配会累积。
+对于生成器，论文式（4）中的非饱和对抗项为
 
-DMD2 的 backward simulation 是：训练时也跑当前 student 的少步生成过程，构造“推理时会看到的 synthetic intermediate inputs”，再对这些输入施加 DMD 和 GAN 监督。
+$$
+\mathcal L_{G,\mathrm{GAN}}
+=-\mathbb E_{z,t}
+\log D\big(F(G_\theta(z),t)\big).
+$$
+
+$D$ 给出“真实”的分类概率。最小化这项损失会推动生成器输出更容易被判为真实的样本；与此同时，判别分支学习区分真实与生成样本。生成器还继续接收 DMD 的 score 差，两个目标共同作用，不能把完整 DMD2 等同于单独训练一个 GAN。[↗](https://arxiv.org/pdf/2405.14867v2#page=7)
+
+### 为什么分类头接在 fake UNet 中间
+
+DMD2 复用 fake diffusion model 的特征，而不是再从头建立一套独立的大判别网络。分类头接在 UNet middle block 输出上，由若干 $4\times4$、stride 2 卷积，GroupNorm 和 SiLU 组成，逐步将特征图缩小至 $4\times4$；再经 kernel size 与 stride 都为 4 的卷积聚合成向量，最后用线性投影输出分类结果。
+
+分类分支及其上游编码特征接受 GAN 训练，fake 去噪任务仍保留。这种共享方式让一个已经学习噪声、语义和生成图像结构的表示承担分类任务，增加的主要是预测头和相应训练信号。[↗](https://arxiv.org/pdf/2405.14867v2#page=23)
+
+这也解释了“学生超过教师”需要怎样理解。学生的主干来自教师，但训练时额外接触真实图像的分布监督，已经不只是压缩教师自身的输出。在指定指标上超过某个教师采样器，是增加信息后取得的结果；它不表示任意采样预算、任意质量维度都优于教师。
+
+## 五、四步模型每一步究竟在做什么
+
+对于 SDXL，单次前向要直接把纯噪声变成多样、细致的百万像素内容，模型容量与优化都更吃力。DMD2 因此将学生扩展为时间条件生成器，用数次“预测干净图像，再加回较少噪声”的操作逐步改善结果。
+
+固定时间序列 $\{t_1,\ldots,t_N\}$ 后，先从高斯噪声开始。第 $i$ 步执行
+
+$$
+\hat x_{t_i}=G_\theta(x_{t_i},t_i),
+$$
+
+再构造下一步输入
+
+$$
+x_{t_{i+1}}
+=\alpha_{t_{i+1}}\hat x_{t_i}
++\sigma_{t_{i+1}}\epsilon,
+\qquad \epsilon\sim\mathcal N(0,I).
+$$
+
+$\hat x_{t_i}$ 的下标表示“在 $t_i$ 这一步预测的干净结果”，并不表示它还保留同样的噪声强度。下一步的噪声来自第二个式子；最后输出 $\hat x_{t_N}$，不再为其构造下一步输入。四步 SDXL 使用 $999,749,499,249$，训练与推理采用同一个预定日程。[↗](https://arxiv.org/pdf/2405.14867v2#page=7)
+
+这种采样沿用 consistency model 的去噪—再加噪形式。虽然每一步都调用同一个时间条件学生，它也不是在四个时间点简单运行原教师的 ODE 求解器。网络已经被训练成能在这些位置直接预测干净结果。
+
+还需要区分两类时间。$t_i$ 决定学生在生成链上的输入位置；DMD 或 GAN 监督使用的加噪时间 $t$，决定在哪个噪声尺度比较输出分布。前者组织推理过程，后者构造训练信号。把二者当成一个变量，会误以为学生只能在自身采样日程的四个位置接受分布监督。
+
+## 六、Backward simulation 修复的是输入来源
+
+### 真实图片加噪，与学生上一步输出加噪并不相同
+
+一种直接的多步训练方式，是从真实图像采样 $x$，加噪到某个 $t_i$，然后让学生去噪。这样容易构造训练样本，但推理时第二步以后并没有真实图片可用。实际输入来自学生刚刚生成的 $\hat x_{t_{i-1}}$，其中包含当前模型自己的构图、细节与误差。
+
+图中左边从真实图片向右加噪，右边从纯噪声向左运行学生。应重点比较中间状态，而不只是看两边最终是否都能形成一张人像。
 
 ![DMD2 backward simulation](../../assets/images/paper-deep-dives/diffusion/dmd2/backward-simulation.png){ width="830" }
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 4。原论文图意：常见训练方式用 forward diffusion 构造 intermediate inputs，会和推理时 generator-produced inputs 不一致；DMD2 用 backward simulation 在训练时模拟推理链路，降低 train-inference mismatch。</small>
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 4。</small>
 
-**Backward simulation 在补训练-推理错配。**
-左边的普通做法从真实图像加噪得到 intermediate input，但 few-step student 推理时看到的中间状态并不是“真实图像加噪”，而是“自己上一阶段生成结果再加噪”。右边的 backward simulation 先让当前 student 真的滚出这些 synthetic intermediate states，再在这些状态上训练。这个细节很关键：步数越少，模型自己的中间分布越偏离 teacher 的前向加噪分布；如果训练集不包含这种偏移，推理时误差会逐步累积。
+DMD2 用右侧过程替代左侧输入生产方式。在训练中运行当前学生的少步采样，走到需要训练的位置，再让学生对这个中间输入去噪，并对输出施加 DMD 与 GAN 监督。因为学生只运行数步，模拟成本远低于为每个样本运行完整教师轨迹。
 
-这一点后来在视频扩散、流式生成和世界模型蒸馏里都很重要：少步模型的中间状态不再服从真实数据加噪分布，而是服从“模型自己滚出来的分布”。训练不看这个分布，推理就会出现 exposure bias。
+以四步日程的第三步为例，这个输入可以沿下面的过程构造。这是对论文流程的展开，而不是新增算法
 
-## 训练细节
+1. 从随机噪声在 $t_1=999$ 运行学生，得到第一张干净预测。
+2. 按 $t_2=749$ 的噪声强度重新加噪，再运行学生，得到第二张预测。
+3. 按 $t_3=499$ 加噪，得到第三步真正会遇到的输入。
+4. 让该步输出接受分布与对抗监督，学习怎样处理自身前面步骤留下的状态。
 
-DMD2 的训练细节比方法名更重要，因为它有多个互相耦合的优化器、更新频率和数据来源。
+这里不需要寻找“该中间状态应对应哪张教师图片”。监督作用于输出分布，这正好允许训练输入来自学生自身，而不要求它停留在教师的确定性轨迹上。[↗](https://arxiv.org/pdf/2405.14867v2#page=7)
 
-### ImageNet-64
+### 它与逐步追随教师的区别
 
-| Item | Detail |
-| --- | --- |
-| Teacher | EDM pretrained model |
-| Student | one-step generator |
-| Optimizer | AdamW |
-| Learning rate | \(2\times10^{-6}\) |
-| Weight decay | 0.01 |
-| Betas | (0.9, 0.999) |
-| Batch size | 280 |
-| Hardware | 7 A100 GPUs |
-| Standard training | 200K iterations, about 2 days |
-| Fake critic updates | 5 per generator update |
-| GAN loss weight | \(3\times10^{-3}\) |
-| Longer training | 400K iterations without GAN, then resume best FID checkpoint |
-| Longer training fine-tune | enable GAN, LR \(5\times10^{-7}\), 150K more iterations |
-| Longer training time | about 5 days |
+论文也讨论了同期 Imagine Flash 的相近动机：训练时同样使用学生生成的中间结果，减轻学生输入的偏移。不过作者指出，如果后续监督仍依赖教师在这些合成输入上提供回归目标，教师自身也可能面临未见过这些状态的问题。DMD2 的分布目标不要求为每个学生输入指定一个教师终点，因此绕开了这层对应关系。
 
-这个配置说明 TTUR 不是一个概念性 trick，而是直接写进训练预算：generator 更新次数减少，但 fake score 质量更好，整体收敛反而更快。
+这是两种监督接口的区别，不是表格里完成了与 Imagine Flash 的同预算比较。对采用者最直接的启示，是在多步模型上先检查训练样本来自何处；单纯增加推理步数，并不会自动让模型学会纠正自己的中间错误。
 
-### SD v1.5
+## 七、ImageNet 先检验稳定性，再检验一步生成上限
 
-| Item | Detail |
-| --- | --- |
-| Teacher | Stable Diffusion v1.5 |
-| Student | one-step generator |
-| Prompt data | LAION-Aesthetic 6.25+ prompts |
-| GAN real image data | 500K LAION-Aesthetic 5.5+ images |
-| Filtering | remove images smaller than \(1024\times1024\) and unsafe content |
-| Stage 1 | GAN disabled |
-| Stage 1 LR | \(1\times10^{-5}\) |
-| Stage 1 fake critic updates | 10 per generator update |
-| Stage 1 guidance scale for real diffusion model | 1.75 |
-| Stage 1 batch size | 2048 |
-| Stage 1 hardware | 64 A100 GPUs |
-| Stage 1 iterations | 40K |
-| Stage 2 | enable GAN loss |
-| Stage 2 GAN loss weight | \(10^{-3}\) |
-| Stage 2 LR | \(5\times10^{-7}\) |
-| Stage 2 iterations | 5K |
-| Total training time | about 26 hours |
+### 组件消融把“恢复稳定”与“继续提高质量”分开
 
-SD v1.5 用 10:1 的 fake critic update ratio，比 ImageNet 和 SDXL 更高。一个合理解释是：文生图条件更复杂，fake distribution 的移动更快，需要 critic 更保守地追踪。
+ImageNet-64×64 使用类别条件生成，FID 越低越好。Table 3 先从 DMD 出发，依次取消回归、改变更新频率、加入 GAN；最后两行再检查只用 GAN 的结果。
 
-### SDXL
+| Configuration | DMD Objective | No Regression | TTUR | GAN | FID ↓ |
+| --- | --- | --- | --- | --- | ---: |
+| DMD | ✓ | — | — | — | 2.62 |
+| Remove regression only | ✓ | ✓ | — | — | 3.48 |
+| Remove regression + TTUR | ✓ | ✓ | ✓ | — | 2.61 |
+| DMD2 | ✓ | ✓ | ✓ | ✓ | 1.51 |
+| GAN only | — | — | — | ✓ | 2.56 |
+| GAN only + TTUR | — | — | ✓ | ✓ | 2.52 |
 
-| Item | Detail |
-| --- | --- |
-| Teacher | SDXL |
-| Student | one-step and four-step generators |
-| Prompt data | LAION-Aesthetic 6.25+ prompts |
-| GAN real image data | 500K LAION-Aesthetic 5.5+ images |
-| Filtering | remove images smaller than \(1024\times1024\) and unsafe content |
-| Optimizer | AdamW |
-| Learning rate | \(5\times10^{-7}\) |
-| Weight decay | 0.01 |
-| Betas | (0.9, 0.999) |
-| Fake critic updates | 5 per generator update |
-| Real diffusion guidance scale | 8 |
-| Batch size | 128 |
-| Hardware | 64 A100 GPUs |
-| 4-step training | 20K iterations |
-| 1-step training | 25K iterations |
-| Total training time | about 60 hours |
-| 1-step SDXL special fix | timestep shift, conditioning timestep 399 |
-| 1-step initialization | short regression pretraining with 10K pairs |
+取消回归使 FID 从 2.62 退到 3.48，说明原来的稳定器不能直接删除。TTUR 将它恢复到 2.61，基本回到原 DMD 水平，且省去了大规模配对数据构造。加入 GAN 后进一步降至 1.51，改善 1.10 FID。
 
-注意最后两行。DMD2 主张去掉 regression loss，但 SDXL one-step 版本仍然用了小规模 regression pretraining 来缓解 block noise artifacts。这不影响论文主线：多步 SDXL 不需要这个修正；问题更像 SDXL one-step 的特殊 artifact，而不是 DMD2 必需的大规模 paired dataset。
+最后两行很关键。GAN-only 已经达到 2.56，但只给它增加 TTUR，结果为 2.52，变化很小；完整 DMD2 的 1.51 明显更低。这支持 DMD 与 GAN 提供互补信号，也说明 TTUR 在这里的关键作用与在线 fake score 估计有关，不能概括成“所有对抗训练多更新几次 critic 都会获得同样收益”。[↗](https://arxiv.org/pdf/2405.14867v2#page=9)
 
-## 实验结果
+### 1.51 和 1.28 不是同一训练预算
 
-### ImageNet-64
+主表的代表性结果如下。ImageNet FID 使用 50000 张生成图像和 EDM 的评测代码；前向次数统计的是每张图像的生成网络调用。
 
-| Method | # Fwd Pass (\(\downarrow\)) | FID (\(\downarrow\)) |
+| Method | # Fwd Pass ↓ | FID ↓ |
 | --- | ---: | ---: |
-| BigGAN-deep | 1 | 4.06 |
-| ADM | 250 | 2.07 |
-| RIN | 1000 | 1.23 |
-| StyleGAN-XL | 1 | 1.52 |
-| Progress. Distill. | 1 | 15.39 |
-| DFNO | 1 | 7.83 |
-| BOOT | 1 | 16.30 |
-| TRACT | 1 | 7.43 |
-| [Guided Distill. (Meng et al., 2022)](https://arxiv.org/abs/2210.03142) | 1 | 7.54 |
-| Diff-Instruct | 1 | 5.57 |
 | Consistency Model | 1 | 6.20 |
 | iCT-deep | 1 | 3.25 |
-| CTM | 1 | 1.92 |
 | DMD | 1 | 2.62 |
-| **DMD2 (Ours)** | 1 | **1.51** |
-| **+ longer training (Ours)** | 1 | **1.28** |
-| EDM (Teacher, ODE) | 511 | 2.32 |
-| EDM (Teacher, SDE) | 511 | 1.36 |
+| CTM | 1 | 1.92 |
+| StyleGAN-XL | 1 | 1.52 |
+| DMD2 | 1 | 1.51 |
+| DMD2 + longer training | 1 | 1.28 |
+| EDM Teacher, ODE | 511 | 2.32 |
+| EDM Teacher, SDE | 511 | 1.36 |
+| RIN | 1000 | 1.23 |
 
-<small>表源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Table 1 左侧。原论文表格要点：DMD2 一步生成在 ImageNet-64 上达到 1.28 FID，优于原始 DMD 和 EDM ODE teacher，接近 EDM SDE teacher。</small>
+标准 DMD2 已经优于表中的一步蒸馏方法；更长训练将 FID 提高到 1.28。它也低于 EDM 的 ODE 2.32 和 SDE 1.36，但原表仍有使用 1000 次前向的 RIN 达到 1.23。因此，这里的强项是极少调用下的质量，不宜写成所有图像生成方法的统一最高成绩。[↗](https://arxiv.org/pdf/2405.14867v2#page=8)
+
+原文摘要的约 500 倍推理成本压缩，直接对应教师 511 次与学生 1 次前向的数量级；它不是同一硬件上完成了 500 倍端到端延迟测量。教师 ODE 和 SDE 也必须分别列出，因为仅更换采样方式，教师 FID 就会显著变化。
+
+下面的样本来自 FID 1.28 的延长训练模型。先看不同动物与物体类别内部的颜色、姿态和背景变化，它展示了一步模型能够产生细粒度类别内容；定量质量判断仍由上述 50000 张样本的分布评估承担。
 
 ![DMD2 ImageNet samples](../../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-visual.png){ width="760" }
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Appendix Figure 9。原论文图意：ImageNet 上一步 DMD2 generator 的 class-conditional samples，对应 FID 1.28 设置。</small>
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 12。</small>
 
-**ImageNet 样例图主要看覆盖面。**
-这类 class-conditional 样例不是为了逐张评价审美，而是看一步 generator 是否能覆盖多类别、多纹理和多形状。若模型只会生成少数稳定模板，FID 可能还不错但类别多样性会变差；若局部纹理发糊或颜色统计异常，通常说明 fake critic、GAN branch 或训练比例还没有稳定。它和前面的 TTUR 曲线要一起读：稳定的 critic 更新频率应该最终反映到样例多样性和局部质量上。
+## 八、SD v1.5 的 8.35 FID，采用了哪一种 COCO 协议
 
-### SDXL on COCO 2014
+文本生成使用 LAION-Aesthetics 提示训练，主文报告采样了约 300 万条；GAN 另使用 50 万张真实图像。COCO 用作 zero-shot 评测，并不是在这些评测提示上做配对蒸馏。
 
-| Method | # Fwd Pass (\(\downarrow\)) | FID (\(\downarrow\)) | Patch FID (\(\downarrow\)) | CLIP (\(\uparrow\)) |
+SD v1.5 的 Table 5 使用 COCO 2014 validation 中的 30000 条提示。生成结果先缩小到 $256\times256$，用 clean-FID 与同一 validation 集的 40504 张真实图像比较。这个协议与后面的 SDXL 主表不同，不能把 8.35 和 19.32 排在一起，当作同条件的不同模型质量。[↗](https://arxiv.org/pdf/2405.14867v2#page=24)
+
+| Method | Resolution ↑ | Latency ↓ | FID ↓ |
+| --- | ---: | ---: | ---: |
+| DPM++ (4 step) | 512 | 0.26 s | 22.36 |
+| UniPC (4 step) | 512 | 0.26 s | 19.57 |
+| LCM-LoRA (4 step) | 512 | 0.19 s | 23.62 |
+| InstaFlow-0.9B | 512 | 0.09 s | 13.10 |
+| SwiftBrush | 512 | 0.09 s | 16.67 |
+| UFOGen | 512 | 0.09 s | 12.78 |
+| SLAM (4 step) | 512 | 0.19 s | 10.06 |
+| DMD | 512 | 0.09 s | 11.49 |
+| DMD2 | 512 | 0.09 s | 8.35 |
+| SDv1.5 Teacher, 50 step, cfg=3, ODE | 512 | 2.59 s | 8.59 |
+| SDv1.5 Teacher, 200 step, cfg=2, SDE | 512 | 10.25 s | 7.21 |
+
+DMD2 相对 DMD 改善 3.14 FID，并低于 50 步 PNDM ODE 教师的 8.59。但教师用 200 步 SDE、CFG 2 时达到 7.21，仍优于学生。于是，“超过教师”在这里准确的含义是超过指定的较短 ODE 采样配置，而非超过教师所有可用采样结果。[↗](https://arxiv.org/pdf/2405.14867v2#page=18)
+
+Latency 列保留原表数值，用于呈现论文报告的成本尺度。它没有为这份跨方法表提供足以统一所有硬件与实现差异的详细计时条件，因此实际部署时仍应测量自己的完整生成路径。对于论文的主张，更直接的结构性收益是学生只需一步，而不再运行教师的几十到几百步采样。
+
+## 九、SDXL 的四步究竟改善了哪些质量
+
+### 百万像素生成需要把整体构图与局部细节分开
+
+SDXL 结果输出 $1024\times1024$ 图像。下图先观察女孩与菊石化石、老人面部、西瓜椅和滑板上的玩具熊：它们分别包含局部纹理、面部细节、材料与形状组合、主体与场景关系。这个展示说明四步模型的生成范围，是否优于对照仍需由后面的统一提示实验判断。
+
+![DMD2 SDXL teaser](../../assets/images/paper-deep-dives/diffusion/dmd2/teaser.png){ width="720" }
+
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 1。</small>
+
+SDXL 主表使用 COCO 2014 的随机 10000 条提示，对应 10000 张真实参考图像；完整图像缩小到 $512\times512$ 后计算 FID。Patch FID 计算中心裁剪的 $299\times299$ 区域，专门检查高分辨率局部细节；CLIP Score 使用 OpenCLIP-G，衡量文本与图像的关联。[↗](https://arxiv.org/pdf/2405.14867v2#page=24)
+
+| Method | # Fwd Pass ↓ | FID ↓ | Patch FID ↓ | CLIP ↑ |
 | --- | ---: | ---: | ---: | ---: |
 | LCM-SDXL | 1 | 81.62 | 154.40 | 0.275 |
 | LCM-SDXL | 4 | 22.16 | 33.92 | 0.317 |
-| SDXL-Turbo | 1 | 24.57 | 23.94 | **0.337** |
+| SDXL-Turbo | 1 | 24.57 | 23.94 | 0.337 |
 | SDXL-Turbo | 4 | 23.19 | 23.27 | 0.334 |
-| SDXL Lightning | 1 | 23.92 | 31.65 | 0.316 |
-| SDXL Lightning | 4 | 24.46 | 24.56 | 0.323 |
-| **DMD2 (Ours)** | 1 | **19.01** | 26.98 | 0.336 |
-| **DMD2 (Ours)** | 4 | 19.32 | **20.86** | 0.332 |
+| SDXL-Lightning | 1 | 23.92 | 31.65 | 0.316 |
+| SDXL-Lightning | 4 | 24.46 | 24.56 | 0.323 |
+| DMD2 | 1 | 19.01 | 26.98 | 0.336 |
+| DMD2 | 4 | 19.32 | 20.86 | 0.332 |
 | SDXL Teacher, cfg=6 | 100 | 19.36 | 21.38 | 0.332 |
 | SDXL Teacher, cfg=8 | 100 | 20.39 | 23.21 | 0.335 |
 
-<small>表源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Table 1 右侧。原论文表格要点：DMD2 的 4-step SDXL 在 patch FID 上超过 teacher，FID 和 CLIP 与 teacher 接近；1-step 版本 FID 更低但 patch FID 不如 4-step。</small>
+DMD2 一步的整体 FID 为 19.01，甚至略低于自身四步的 19.32；CLIP 也由 0.336 变为 0.332。四步的突出收益是 Patch FID 从 26.98 降到 20.86，且优于表中 CFG 6 教师的 21.38。增加调用改善了局部细节，并没有让每个指标都单调提高。[↗](https://arxiv.org/pdf/2405.14867v2#page=8)
 
-这里要小心读指标。1-step DMD2 的整体 FID 是 19.01，比 4-step 更低；但 4-step 的 patch FID 是 20.86，更接近高分辨率局部细节质量，也优于 teacher cfg=6 的 21.38。论文更强调 4-step 在 megapixel image synthesis 上的视觉质量。
+其他方法也有类似的交叉趋势。Lightning 从一步到四步，Patch FID 与 CLIP 改善，整体 FID 却从 23.92 略升至 24.46。因而“多步是否值得”的问题不能只看一个全图 FID，尤其当应用看重原生分辨率下的纹理与结构时。
+
+### 相同提示与噪声能看出哪些差异
+
+下图各列从左到右是 DMD2、LCM、Turbo、Lightning 和教师。先看第一行的“戴墨镜的羊驼”，再看最后一行同时要求帽子、考拉、车窗与窗外椰树的场景。所有列使用相同提示与初始噪声；蒸馏模型四步，教师五十步并使用 CFG。
 
 ![DMD2 SDXL comparison](../../assets/images/paper-deep-dives/diffusion/dmd2/sdxl-comparison.png){ width="720" .atlas-figure-tall }
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 6。原论文图意：相同 prompt 和 noise 下比较 DMD2、SDXL teacher、LCM-SDXL、SDXL-Turbo 和 SDXL-Lightning；所有蒸馏模型用 4 steps，teacher 用 50 steps CFG。</small>
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 6。</small>
 
-**SDXL 横向对比图要看同 prompt、同 noise。**
-这张图的公平点在于相同 prompt 和 noise 下比较不同少步方法，因此视觉差异更能暴露训练目标本身的偏差。读图时不要只问“哪张最好看”，而要看 DMD2 是否同时保住三件事：主体结构不崩，文本条件不跑偏，局部纹理不过度平滑或过饱和。teacher 用 50 steps CFG，蒸馏模型只用 4 steps，所以这里展示的是速度预算大幅减少后质量是否还能接近 teacher。
+在第一行，LCM 的羊驼没有清楚呈现要求的墨镜，DMD2 的主体、眼镜与太空背景同时可见；在考拉场景中，不同列对主体、帽子和窗外环境的保留程度也有差别。这些样例帮助把“文本关联分数”还原为具体条件是否进入画面。它们是选定提示上的定性比较，更广泛的偏好比例由后面的用户研究给出。
 
-### SD v1.5 on COCO 2014
+## 十、SDXL 消融解释了为什么最低 FID 可能选错模型
 
-| Family | Method | Resolution (\(\uparrow\)) | Latency (\(\downarrow\)) | FID (\(\downarrow\)) |
-| --- | --- | ---: | ---: | ---: |
-| Original, unaccelerated | DALL-E | 256 | - | 27.5 |
-| Original, unaccelerated | DALL-E 2 | 256 | - | 10.39 |
-| Original, unaccelerated | Parti-750M | 256 | - | 10.71 |
-| Original, unaccelerated | Parti-3B | 256 | 6.4s | 8.10 |
-| Original, unaccelerated | Make-A-Scene | 256 | 25.0s | 11.84 |
-| Original, unaccelerated | GLIDE | 256 | 15.0s | 12.24 |
-| Original, unaccelerated | LDM | 256 | 3.7s | 12.63 |
-| Original, unaccelerated | Imagen | 256 | 9.1s | 7.27 |
-| Original, unaccelerated | eDiff-I | 256 | 32.0s | **6.95** |
-| GANs | LAFITE | 256 | 0.02s | 26.94 |
-| GANs | StyleGAN-T | 512 | 0.10s | 13.90 |
-| GANs | GigaGAN | 512 | 0.13s | **9.09** |
-| Accelerated diffusion | DPM++ (4 step) | 512 | 0.26s | 22.36 |
-| Accelerated diffusion | UniPC (4 step) | 512 | 0.26s | 19.57 |
-| Accelerated diffusion | LCM-LoRA (4 step) | 512 | 0.19s | 23.62 |
-| Accelerated diffusion | InstaFlow-0.9B | 512 | 0.09s | 13.10 |
-| Accelerated diffusion | SwiftBrush | 512 | 0.09s | 16.67 |
-| Accelerated diffusion | HiPA | 512 | 0.09s | 13.91 |
-| Accelerated diffusion | UFOGen | 512 | 0.09s | 12.78 |
-| Accelerated diffusion | SLAM (4 step) | 512 | 0.19s | 10.06 |
-| Accelerated diffusion | DMD | 512 | 0.09s | 11.49 |
-| Accelerated diffusion | **DMD2 (Ours)** | 512 | 0.09s | **8.35** |
-| Teacher | SDv1.5 (50 step, cfg=3, ODE) | 512 | 2.59s | 8.59 |
-| Teacher | SDv1.5 (200 step, cfg=2, SDE) | 512 | 10.25s | 7.21 |
+### 删除三个组件，会产生三种不同退化
 
-<small>表源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Appendix Table 3。原论文表格要点：DMD2 蒸馏 SD v1.5 后以 0.09s latency 达到 8.35 FID，优于原始 DMD，也略优于 50-step ODE teacher。</small>
+Table 4 固定 SDXL 四步生成，分别移除 GAN、distribution matching 或 backward simulation。先看三个指标的交叉变化，而不是只寻找每列最小值。
 
-这个结果最能体现 DMD2 的目标：不是只把 teacher 压快，而是在某些评测口径下超过 teacher 的 deterministic sampler。原因来自两部分：GAN branch 直接看真实数据，DMD 去掉大规模 regression 后不再被 teacher 采样路径强约束。
-
-## 消融实验
-
-### ImageNet 消融
-
-| DMD | No Regress. | TTUR | GAN | FID (\(\downarrow\)) |
-| --- | --- | --- | --- | ---: |
-| Yes |  |  |  | 2.62 |
-| Yes | Yes |  |  | 3.48 |
-| Yes | Yes | Yes |  | 2.61 |
-| Yes | Yes | Yes | Yes | **1.51** |
-|  |  |  | Yes | 2.56 |
-|  |  | Yes | Yes | 2.52 |
-
-<small>表源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Table 2 左侧。原论文表格要点：直接去掉 regression loss 会让 FID 从 2.62 退化到 3.48；加入 TTUR 后回到 2.61；再加入 GAN 后到 1.51。</small>
-
-这张表的结论非常清楚：
-
-1. 只删 regression loss 不行；
-2. TTUR 解决稳定性，基本恢复原始 DMD；
-3. GAN loss 带来主要质量提升；
-4. GAN alone 不如 DMD + TTUR + GAN，说明 diffusion score difference 仍然关键。
-
-### SDXL 消融
-
-| Method | FID (\(\downarrow\)) | Patch FID (\(\downarrow\)) | CLIP (\(\uparrow\)) |
+| Method | FID ↓ | Patch FID ↓ | CLIP ↑ |
 | --- | ---: | ---: | ---: |
 | w/o GAN | 26.90 | 27.66 | 0.328 |
-| w/o Distribution Matching | **13.77** | 27.96 | 0.307 |
+| w/o Distribution Matching | 13.77 | 27.96 | 0.307 |
 | w/o Backward Simulation | 20.66 | 24.21 | 0.332 |
-| **DMD2 (Ours)** | 19.32 | **20.86** | **0.332** |
+| DMD2 | 19.32 | 20.86 | 0.332 |
 
-<small>表源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Table 2 右侧。原论文表格要点：w/o distribution matching 的 FID 最低但 CLIP 和视觉质量差；完整 DMD2 在 patch FID 和 CLIP 上最好，说明不能只看单一 FID。</small>
+**去掉 GAN**，全图与局部 FID 都明显恶化。它说明只修复 fake score 跟踪、保留教师分布监督，还不足以取得完整模型的质量；真实图像上的额外监督有实质作用。
 
-**为什么这张消融不能只看 FID。**
-`w/o Distribution Matching` 的 FID 最低，看起来像是纯 GAN 更强，但它的 CLIP 分数明显下降，图像也更容易偏离 prompt。这说明 COCO FID 更像“生成图像整体分布像不像真实 COCO 图像”，并不能充分衡量文本条件是否被执行。
+**去掉 distribution matching**则得到全表最低的整体 FID 13.77，但 Patch FID 恶化为 27.96，CLIP 降到 0.307。作者将其解释为纯 GAN 更贴近未经 guidance 强化的真实图像分布，却缺少自然结合 classifier-free guidance 的方式，文本一致性和美学质量因此下降。这里的“更像参考数据集的总体特征统计”与“更符合某条提示、局部更好看”是不同目标。[↗](https://arxiv.org/pdf/2405.14867v2#page=9)
 
-DMD2 完整模型的价值在于平衡三件事：GAN branch 提供真实图像分布信号，DMD score loss 保留 teacher diffusion 的条件控制，backward simulation 让多步输入接近推理时的 synthetic intermediate states。读这张表时应该同时看 FID、Patch FID 和 CLIP：FID 低不等于文生图更可用，Patch FID 更反映高分辨率局部细节，CLIP 才对应 prompt alignment。
+**去掉 backward simulation**，CLIP 仍为 0.332，但全图 FID 为 20.66、Patch FID 为 24.21，均差于完整模型。这个对照支持匹配训练与推理输入能改善生成质量，尤其是局部细节；它没有显示文本理解分数获得同样幅度的提升。
+
+### 图像中的退化与指标是否相符
+
+下面四列分别为完整模型、无分布匹配、无 GAN、无 backward simulation。第一行先看化石与人物关系，第四行看霓虹光下的脸部色彩和质感，而不是把“更鲜艳”直接当作更高质量。
 
 ![DMD2 SDXL ablation](../../assets/images/paper-deep-dives/diffusion/dmd2/sdxl-ablation.png){ width="560" .atlas-figure-tall }
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 7。原论文图意：SDXL 消融显示，去掉 distribution matching 会伤害 text alignment 和 aesthetic quality；去掉 GAN 会产生过饱和、过平滑图像；去掉 backward simulation 会降低质量。</small>
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 7。</small>
 
-**SDXL 消融图在拆三种质量来源。**
-`w/o Distribution Matching` 暴露的是条件控制退化：图像可能更像自然图片，但更不听 prompt。`w/o GAN` 暴露的是视觉真实感和局部质感不足：容易过饱和、过平滑。`w/o Backward Simulation` 暴露的是多步推理分布错配：中间状态没被训练好，最终质量下降。这张消融很适合提醒一个常见误读：FID 不是文生图唯一目标，DMD2 的价值在于同时保留扩散 teacher 的条件控制、GAN 的真实数据信号和 few-step 推理链路的一致性。
+无分布匹配的一列在化石场景中加入了另一名儿童，整体画面也更接近普通数据照片，却不如完整模型集中呈现提示指定的内容。无 GAN 的霓虹人像颜色更强烈、表面更平滑，与原文指出的过饱和、过平滑现象相符。无 backward simulation 的化石样例缺少完整模型中清晰的螺旋结构，也与局部 FID 较差的方向一致。
 
-## 人类偏好评测
+这些图像与消融表共同解释了组合的必要性：GAN 帮助真实质感，分布匹配保留教师提供的条件与 guidance 信号，backward simulation 让学生在自己会遇到的输入上学习。三个组件解决不同的问题，不能用“GAN 让图更真”一句话代替完整机制。
+
+## 十一、人类偏好和多样性补上了自动指标的另一面
+
+### 62% 的质量偏好，与 50.5% 的文本偏好应分开读
+
+用户研究使用 LADD 所选的 128 条 PartiPrompts。每次对比由随机五名评价者判断，图像左右位置随机；两个问题分别询问哪张更有视觉吸引力，以及哪张更符合提示。蒸馏模型都用四步，教师用五十步；教师 CFG 的条件与无条件计算对应主表中的 100 次前向。[↗](https://arxiv.org/pdf/2405.14867v2#page=24)
+
+下图左侧看 Image Quality，右侧看 Prompt Alignment。虚线是 50%，不要把两组问题合成一个总胜率。
 
 ![DMD2 human evaluation](../../assets/images/paper-deep-dives/diffusion/dmd2/human-eval.png){ width="920" }
 
-<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 5。原论文图意：在 128 个 PartiPrompts 子集上做 pairwise human preference，对比 teacher 和 4-step distillation baselines；DMD2 在 image quality 与 prompt alignment 上均有较强偏好。</small>
+<small>图源：`Improved Distribution Matching Distillation for Fast Image Synthesis`，Figure 5。</small>
 
-**人评图补的是自动指标看不到的部分。**
-自动指标会把质量拆成 FID、Patch FID、CLIP 等近似量，但用户真正看到的是图像是否自然、prompt 是否被执行、细节是否可信。pairwise human preference 让评审在相同 prompt 下直接比较两张图，因此能补足“FID 低但不听 prompt”或“CLIP 高但画面差”的盲区。DMD2 在 image quality 和 prompt alignment 上同时被偏好，说明它不是只优化了某一个单指标。
+| Comparison | DMD2 Preference: Image Quality | DMD2 Preference: Prompt Alignment |
+| --- | ---: | ---: |
+| vs. SDXL-LCM | 76.6% | 63.1% |
+| vs. SDXL-Turbo | 60.5% | 50.6% |
+| vs. SDXL-Lightning | 53.4% | 57.3% |
+| vs. SDXL-Teacher | 62.0% | 50.5% |
 
-人评的一个重要信息是：DMD2 不是只在自动指标上好看。论文报告 DMD2 在 24% 样本上被认为图像质量优于 teacher，同时保持相近 prompt alignment；而 teacher 使用更多 forward passes。
+与教师比较时，质量偏好为 DMD2 62.0%、教师 38.0%，净差是 **24 个百分点**。这对应原文“24%”表述的图中来源，不能读成 DMD2 只有 24% 胜率，也不能把它解释为图像质量这种物理量提升 24%。文本偏好为 50.5% 对 49.5%，支持的是接近持平，而非明显领先。[↗](https://arxiv.org/pdf/2405.14867v2#page=9)
 
-## 和 DMD、CausVid、Phased DMD 的关系
+对 Turbo 的结果也呈现相同区分：质量偏好 60.5%，文本偏好只有 50.6%。这补充了自动指标提供的信息——DMD2 的优势更多体现为视觉质量，而不是所有对照上的文本遵循都大幅提高。四次对一百次前向意味着调用数减少 25 倍；这个比值应与偏好结果一起理解，而不应直接替换成未经测量的端到端加速倍数。
 
-| Dimension | DMD | DMD2 | CausVid / Phased DMD |
-| --- | --- | --- | --- |
-| Core objective | real/fake score difference | stronger DMD objective with TTUR and GAN | adapt DMD/DMD2 to video or phased subintervals |
-| Regression loss | large paired teacher outputs | removed for main training, except small SDXL one-step init | usually replaced by better initialization or phased objective |
-| Fake critic | same update rhythm by default | more frequent fake critic updates | still needs careful score tracking |
-| Real data | not directly used in main DMD loss | GAN branch uses real images | video methods may add adversarial or self-rollout signals |
-| Sampling | mostly one-step | one-step and four-step | few-step / streaming / phased |
-| Main lesson | match distribution, not teacher path | make distribution matching stable and sharper | expose train-test mismatch and phase-specific score quality |
+### 同一提示下的变化仍略少于教师
 
-DMD2 是后续很多 DMD 系路线的实际工程基线。CausVid 的 asymmetric DMD、LingBot-World 里提到的少步蒸馏、Phased DMD 对 SGTS 和 SNR 子区间的修正，都可以看成是在 DMD2 已经揭示的问题上继续扩展：fake score 要准，训练时要看到推理时的分布，少步模型不能只依赖真实数据加噪分布。
+论文还检查了一个与 FID 不完全相同的问题：同一个提示换不同随机采样，能得到多少变化。它为 PartiPrompts 子集的每条提示生成四张图，计算平均两两 LPIPS 距离，作为 Diversity Score。该指标越高，表示输出在感知特征上越不相似。
 
-## 少步蒸馏要守住的五个机制
+| Method | # Fwd Pass ↓ | CLIP ↑ | Diversity Score ↑ |
+| --- | ---: | ---: | ---: |
+| LCM-SDXL | 4 | 0.317 | 0.61 |
+| SDXL-Turbo | 4 | 0.334 | 0.58 |
+| SDXL-Lightning | 4 | 0.323 | 0.63 |
+| DMD2 | 4 | 0.332 | 0.61 |
+| SDXL-Teacher, cfg=6 | 100 | 0.332 | 0.64 |
+| SDXL-Teacher, cfg=8 | 100 | 0.335 | 0.64 |
 
-DMD2 的第一条机制是 critic 更新速度。Generator 的 loss 依赖 fake critic 估计当前生成分布的 score；如果这个估计器追不上 generator，分布匹配梯度会把模型推向错误方向。因此 TTUR 不是训练小技巧，而是 DMD2 能稳定扩到 ImageNet 和 SDXL 的前提。
+DMD2 比 Turbo 更有变化，但仍低于教师的 0.64；Lightning 的 0.63 更高，却有较低的文本对齐。作者认为，其中部分变化可能来自偏离提示的随机输出。这一解释提醒读者，多样性分数也要与条件一致性一起看，不能只追求图与图之间尽量不同。[↗](https://arxiv.org/pdf/2405.14867v2#page=18)
 
-第二条机制是训练自己的中间分布。多步 generator 的第 2 步以后输入来自前一步生成结果，而不是来自真实图像加噪。Backward simulation 的价值就在这里：它让训练样本进入学生真实会遇到的中间状态，减少 few-step 推理时的 exposure bias。
+附录指出，提高 GAN 权重可以让模型更接近未加 guidance 的真实分布，并增加多样性，但没有给出一条证明某个权重在所有质量维度都最佳的曲线。DMD 与 GAN 的权重因此也是选择条件遵循、质感和变化范围的实际接口，而非简单把其中一个信号加得越强越好。
 
-第三条机制是真实数据锚点。GAN branch 不只是让图更锐，它还在 teacher score 不完美时提供来自真实图像分布的额外约束。少步蒸馏如果只相信 teacher，容易把 teacher 的偏差和 score error 一起继承下来。
+## 十二、训练配方决定了怎样复用这些结果
 
-第四条机制是指标冲突。SDXL 消融里 `w/o Distribution Matching` 的 FID 反而最低，但 CLIP 和视觉对齐更差。这说明文生图蒸馏不能只看 FID；patch FID、人评、prompt alignment 和定性图要一起读。
+### 所有配置都从预训练扩散模型出发
 
-第五条机制是 guidance 固定代价。DMD2 把特定 CFG 效果蒸馏进 generator，推理很快，但用户在推理时调 guidance scale 的自由度下降。少步模型的速度收益，经常会换来交互控制面的缩窄。
+DMD2 的收益主要来自减少采样调用，并非把大 UNet 压缩成小网络。训练时还要维护学生、冻结教师、fake diffusion model 及分类头。采用现成学生权重时，这些额外网络不进入生成循环；自行蒸馏时，它们及其激活、优化器状态仍占用资源。
 
-## 局限与风险
+ImageNet 使用 EDM 预训练模型，文本任务分别使用 SD v1.5 与 SDXL。后两者的训练提示来自 LAION-Aesthetic 6.25+，GAN 图像来自 5.5+，筛除小于 $1024\times1024$ 及含不安全内容的图像。这样，取消教师配对数据并不代表没有数据准备：仍要准备提示集和真实图像集，只是不需要为每个种子生产一个完整教师终点。[↗](https://arxiv.org/pdf/2405.14867v2#page=23)
 
-1. **训练仍然重**：虽然省掉大规模 paired teacher dataset，但 SDXL 仍需 64 A100、约 60 小时，且要同时维护 generator、fake critic 和 GAN branch。
-2. **SDXL one-step 仍有特殊处理**：论文为了处理 block noise artifacts，对 one-step SDXL 用了 timestep shift 和 10K pairs 的短回归预训练。
-3. **多样性略低于 teacher**：appendix 报告 DMD2 的 diversity score 接近但仍低于 SDXL teacher。
-4. **固定 guidance scale 限制交互性**：和许多蒸馏模型一样，训练时固定 guidance scale，推理时不如原扩散模型灵活。
-5. **GAN branch 增加训练调参面**：GAN loss weight、critic update ratio、真实图像过滤都会影响质量、对齐和稳定性。
-6. **安全与偏见风险未由方法本身解决**：更快生成会降低滥用门槛，仍需要数据过滤、检测和部署策略。
+### ImageNet 的标准训练与长训练
 
-## 阅读结论
+标准配置采用 AdamW，学习率 $2\times10^{-6}$，weight decay 0.01，$\beta=(0.9,0.999)$；batch size 280，fake model 与生成器更新比 5:1，GAN 权重 $3\times10^{-3}$。在 7 张 A100 上训练 200K iterations，约两天，得到主表的 1.51 FID。
 
-DMD2 最值得记住的不是“DMD 加 GAN”，而是它把一步/少步扩散蒸馏的失败原因拆得更清楚：**DMD 的分布匹配梯度依赖 fake critic 的准确性；大模型少步采样依赖训练时模拟自己的推理分布；想超过 teacher 时，不能只相信 teacher score，还要引入真实数据监督。**
+1.28 FID 的延长训练并非原封不动再跑若干步。它先**关闭 GAN 训练 400K iterations**，按 FID 选择最佳 checkpoint，再启用权重 $3\times10^{-3}$ 的 GAN，将学习率降至 $5\times10^{-7}$，继续训练 150K iterations；总时间约五天。因此，这一行同时包含更长预算、阶段切换与更低学习率，不能将全部增益单独归因于“训练步数更多”。
 
-因此，DMD2 是理解后续少步扩散、视频扩散蒸馏和实时生成系统的重要节点。它把 DMD 的思想从 proof-of-concept 推成了更接近工程可用的训练配方。
+### SD v1.5 采用 10:1 更新和分阶段 GAN
 
-## 外部精读
+SD v1.5 第一阶段关闭 GAN，AdamW 学习率为 $10^{-5}$，weight decay 0.01，$\beta=(0.9,0.999)$。fake model 每更新十次，生成器更新一次；教师 guidance scale 为 1.75，batch size 2048，使用 64 张 A100 训练 40K iterations。
 
-1. Yin et al. [Improved Distribution Matching Distillation for Fast Image Synthesis](https://arxiv.org/abs/2405.14867)：原论文；重点读 Section 3 的 TTUR、GAN branch 和 backward simulation。
-2. 官方项目页：[DMD2](https://tianweiy.github.io/dmd2/)：看 SDXL 4-step 样例、指标表和 checkpoint 入口。
-3. 官方代码：[tianweiy/DMD2](https://github.com/tianweiy/DMD2)：确认训练配置、推理脚本和权重接口。
-4. Yin et al. [Distribution Matching Distillation](https://arxiv.org/abs/2311.18828)：先理解 DMD 的 real/fake score difference，DMD2 的问题意识才清楚。
-5. Luo et al. [Latent Consistency Models](https://arxiv.org/abs/2310.04378)：对比少步生成的另一条路线，帮助区分 consistency distillation 和 distribution matching。
-6. Song et al. [Consistency Models](https://arxiv.org/abs/2303.01469)：理解“一条 PF-ODE 轨迹上不同点映射一致”与 DMD2 的差别。
+第二阶段启用权重 $10^{-3}$ 的 GAN，把学习率降至 $5\times10^{-7}$，继续 5K iterations；合计约 26 小时。这里的 1.75 是用于蒸馏监督的教师 CFG，不应与 Table 5 中评测教师 ODE 的 CFG 3、SDE 的 CFG 2 混写。它们分别影响训练目标与教师对照的采样结果。
 
-## 相关阅读与下一步
+### SDXL 一步有额外初始化，四步没有
 
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=Improved+Distribution+Matching+Distillation+for+Fast+Image+Synthesis&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=Improved+Distribution+Matching+Distillation+for+Fast+Image+Synthesis)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=Improved+Distribution+Matching+Distillation+for+Fast+Image+Synthesis)。
-- 站内下一步：[论文精读专题](../index.md)。
+SDXL 一步模型出现块状噪声伪影。作者采用 timestep shift，将送给模型的**条件时间步设为 399**，并在正式训练前用 10K 组配对样本做短暂回归预训练。这是纯噪声到图像映射的初始化与条件接口调整，不能与四步采样日程中的某一步混为一谈。
+
+这两项处理不用于四步 SDXL 或其他 backbone。它也解释了为什么“一步和四步共用一套方法”不意味着两个 checkpoint 的训练细节完全一样。需要自己训练单步 SDXL 时，不能只从四步配置删除三个采样步骤，就认为复现了论文的一步结果。
+
+主要 SDXL 优化采用 AdamW，学习率 $5\times10^{-7}$，weight decay 0.01，$\beta=(0.9,0.999)$；fake:G 为 5:1，教师 guidance scale 为 8，batch size 128，使用 64 张 A100。四步训练 20K iterations，一步训练 25K iterations，附录给出约 60 小时的训练时间。附录没有列出 SDXL 对应的具体 GAN 权重，不能把 SD v1.5 的 $10^{-3}$ 或 ImageNet 的 $3\times10^{-3}$ 直接当作它的已知配置。[↗](https://arxiv.org/pdf/2405.14867v2#page=23)
+
+### 省下的配对成本，与仍需承担的训练成本
+
+将论文报告的设备数与约略墙钟时间相乘，可以得到下面的计算尺度。A100-days 是据原文值换算，不是独立测得的完整研发账单。
+
+| Training configuration | Hardware | Reported duration | Derived A100-days |
+| --- | --- | ---: | ---: |
+| ImageNet standard | 7 × A100 | ≈2 days | ≈14 |
+| ImageNet longer training | 7 × A100 | ≈5 days | ≈35 |
+| SD v1.5 | 64 × A100 | ≈26 hours | ≈69.3 |
+| SDXL | 64 × A100 | ≈60 hours | ≈160 |
+
+以 SDXL 的约 160 A100 天对照前述约 700 A100 天，单是原大规模配对数据生成就约为这里训练量的 4.4 倍。这解释了为什么删除配对要求有价值；同时，64 张 A100 训练数十小时仍是一笔显著投入。DMD2 将资源从反复生产教师轨迹，转移到在线 critic、真实数据监督和少步学生的优化，训练本身并没有变成低成本操作。
+
+## 十三、哪些设计值得带走
+
+如果目的是部署现成模型，首先应按目标决定一步还是四步。一步更少调用，四步 SDXL 的主要收益在局部细节；原图分辨率、文本对齐和同提示多样性需要一起检查。训练中固定的 guidance scale 也限制了推理时自由调整条件强度的空间，不能默认它保留原教师完整的 CFG 控制范围。[↗](https://arxiv.org/pdf/2405.14867v2#page=10)
+
+如果目的是重新蒸馏另一种模型，最可复用的是这三个可以分别诊断的环节。取消配对回归后，先观察亮度等统计量与 FID 是否振荡，再调整 fake critic 的更新频率；教师分布监督仍留下质感问题时，用真实图像上的 GAN 分支补充；扩展多步时，让训练输入来自当前学生实际运行的轨迹。随后保留组件消融，检查改善来自哪条信号，而不是一开始把所有模块同时加入后只比较一个最终分数。
+
+DMD2 由此给出了一个更完整的少步蒸馏思路：让学生自由选择生成映射，同时把支撑这种自由所需的分布估计、真实数据反馈和输入覆盖补齐。ImageNet 的稳定性阶梯、SDXL 中整体 FID 与局部质量的分歧，以及仍略低于教师的多样性，正好说明这些环节各自解决了什么，也说明结果应该怎样用于实际选型。

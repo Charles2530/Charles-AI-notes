@@ -15,505 +15,493 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/NVlabs/AnyFlow](https://github.com/NVlabs/AnyFlow)；项目页：[nvlabs.github.io/AnyFlow/](https://nvlabs.github.io/AnyFlow/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.13724)；[GitHub API / repo](https://github.com/NVlabs/AnyFlow)；[官方 / 项目材料](https://nvlabs.github.io/AnyFlow/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 少步视频模型还应该能接受更多计算
 
-### 研究背景
+AnyFlow 要解决的部署问题很具体。同一个视频模型，交互预览时可能只允许四次网络调用，最终出片时则愿意使用十六次或三十二次。理想情况下，只调整采样预算就能继续提高质量，不必为每一种步数维护不同 checkpoint。已有少步蒸馏方法擅长前一种工作，却不一定保留后一种能力。
 
-原论文把 AnyFlow 放在视频扩散加速的谱系里读：Wan、FAR 这类视频 diffusion / flow-matching teacher 质量高，但一次生成要走很多 denoising 或 flow integration 步；consistency distillation、rectified consistency model、Self-Forcing 等方法能把步数压到很少，却常把学生训练成固定 NFE 的 endpoint projector。这个领域关心的不是单张图的少步采样，而是视频生成系统里“预览要快、最终稿要能继续变好”的同一模型接口。
+论文观察到，基于 consistency 的代表模型在增加采样步数后，VBench 分数可能下降。其解释是，consistency model 学习从不同噪声状态直接预测干净终点。多步使用时，每轮先到终点，再重新加噪回中间状态；这条采样轨迹与预训练 flow model 的概率流 ODE 轨迹不同。更多调用可能增加这种轨迹偏移，而不只是把原本的大步积分变细。[原论文，第1—3页](https://arxiv.org/pdf/2605.13724v1#page=2)
 
-### 问题（Challenge）
-
-论文要解决的核心问题是 any-step video generation：同一个蒸馏后的视频模型，在 4 步时要快，在 8、16、32 步时也应该能把额外计算转成更高质量。难点在于，许多少步蒸馏目标只教模型从 \(z_t\) 直接跳到 \(z_0\)。这种 endpoint 目标适合固定少步推理，但测试时如果把轨迹拆得更细，学生反复执行的不是 teacher 的局部 flow，而是一串不匹配的端点投影，质量可能随步数增加反而下降。这个问题有工程价值，因为生产视频系统常需要快速预览和高质量 refinement 共用一个模型。
-
-### Finding
-
-AnyFlow 的关键发现是：少步学生不应该只学习“到终点”，而应该学习任意两个时间点之间的 flow map。也就是说，把学生函数写成 \(\mathbf f_\theta(\mathbf z_t,t,r)\mapsto \mathbf z_r\)，让它既能跨大时间间隔做 shortcut，也能跨小时间间隔做局部 ODE refinement。这个 finding 改变了蒸馏问题的视角：固定步数退化并不是模型容量天然不足，而是训练目标没有保留 teacher 轨迹的局部可组合性。只要学生学到可组合的区间转移，测试时增加步数就不再是重复 endpoint projection，而是更细地沿 flow 前进。
-
-### 方法
-
-方法分两阶段。第一阶段是 forward flow map training：从 teacher 轨迹或 flow matching 过程里采样 \((t,r)\)，训练学生从 \(\mathbf z_t\) 预测 \(\mathbf z_r\)；论文还加入 interpolated timestep conditioning、time sampler、loss reweighting 和 guidance-fused training，让模型在不同区间长度和 guidance 条件下都能稳定。第二阶段是 on-policy flow map distillation：不只在 teacher 状态上训练，而是在学生自己的 rollout 轨迹上做 backward simulation，再用 DMD 风格的 teacher-guided 分布匹配纠正误差。论文分别把它接到 bidirectional Wan2.1 和 causal FAR 视频模型，说明这个目标不是某个单一 backbone 的 trick。
-
-### 结论
-
-实验围绕一个主张展开：AnyFlow 的质量不会被固定 NFE 锁死。论文在 T2V、I2V、causal video generation、downstream continued training 等设置里比较了不同采样步数下的 VBench / VBench-I2V 和定性结果；关键趋势是 AnyFlow 在少步区间已经快于 teacher，同时增加步数时仍能提升或保持质量，而 endpoint/consistency 类 baseline 更容易出现 step scaling 退化。消融则用来说明 time sampler、loss reweighting、guidance-fused training 和 on-policy distillation 不是装饰项，它们分别处理区间覆盖、训练权重、条件生成和学生自 rollout 误差。
-
-### 关键术语
-
-- **Flow Map（流映射）**：从一个噪声时间点的 latent state 直接映射到另一个更低噪声时间点的函数，强调区间转移而不是终点投影
-- **Any-Step Sampling（任意步采样）**：同一模型在不同 NFE 下都可用，且额外步数应能带来 refinement
-- **On-Policy Distillation（在策略蒸馏）**：在学生自己生成的中间状态上训练，而不是只在 teacher 轨迹状态上训练
-- **Backward Simulation（反向模拟）**：沿学生当前采样路径展开中间状态，用于暴露并修正推理时会出现的误差
-
-## 它的效率贡献是什么
-
-| 维度 | 贡献 |
-| --- | --- |
-| 节省的成本 | 用 LoRA 后训练把 Wan2.1 级视频模型蒸馏成 few-step / any-step 生成器，减少视频扩散推理中的 NFE 成本 |
-| 核心机制 | Flow map training 学任意 \((t,r)\) transition；flow map backward simulation 用 shortcut 分解 Euler rollout；DMD-style on-policy distillation 修正学生自 rollout 误差 |
-| 对世界模型主线的意义 | 交互世界模型需要快速 preview 和高质量 refinement 两种模式；AnyFlow 说明少步模型不必放弃 test-time scaling |
-| 主要风险 | 主要证据来自 VBench / VBench-I2V 和官方开源模型；它证明视频生成质量和采样弹性，不证明动作因果性、闭环规划收益或真实物理准确性 |
-| 应接到本站哪里 | [视频与多模态扩散](../../diffusion/video-and-multimodal-diffusion.md)、[DMD2](dmd2.md)、[CausVid](causvid.md)、[Phased DMD](phased-dmd.md)、[Wan2.1](wan.md) |
-
-## 证据等级与外推边界
-
-| 论文结论 | 证据来源 | 证据等级 | 可外推到世界模型高效训练 | 不能直接外推 |
-| --- | --- | --- | --- | --- |
-| Flow map 比 endpoint consistency 更适合 any-step sampling | Figure 1/2、paradigm table、VBench step-scaling 曲线 | Benchmark + Mechanism | 少步蒸馏目标应该保留 ODE trajectory 的局部 refinement 能力 | 不能证明所有 flow-map 方法都优于 consistency；还依赖训练 recipe |
-| On-policy flow map distillation 能减少 test-time errors | Flow map backward simulation、ablation、DMD-style rollout loss | Ablation + System design | 世界模型 rollout 训练要尽量在学生自己的状态分布上纠偏 | 不等于解决动作条件 exposure bias 或闭环策略分布偏移 |
-| 同一模型支持 causal 和 bidirectional video diffusion | 1.3B / 14B、FAR causal 与 Wan bidirectional 实验 | Benchmark | 可以把蒸馏框架接到离线视频生成和流式生成两类模型 | 不能推出实时交互延迟已满足所有应用 |
-| AnyFlow 支持 downstream continued training | downstream pipeline 与机器人/驾驶可视化 | Official demo + qualitative evidence | 蒸馏模型仍保留可微 flow field，适合领域微调 | 不能证明小数据下不会遗忘或过拟合 |
-| 开源代码与模型增强可复现性 | GitHub、HF collection、Diffusers pipeline | Reproducibility signal | 可直接作为 Wan2.1 any-step baseline | 主训练数据是 teacher 合成数据；完整训练成本仍较高 |
-
-对本站主线来说，AnyFlow 最值得吸收的是一个判断：**少步蒸馏不应把模型锁死在固定 NFE 上；如果测试时有更多预算，质量应继续上升。**
-
-## 论文位置
-
-传统视频扩散的采样路径可以看成沿 probability-flow ODE 从高噪声状态走向数据状态。多步 teacher 虽慢，但采样步数增加通常能让数值积分更细，质量更稳。
-
-Consistency distillation 的问题是，它常把目标改写成 endpoint projection：
-
-\[
-\mathbf z_t \to \mathbf z_0.
-\]
-
-这对 2-step / 4-step 很有效，因为每一步都像在做一次强投影。但当测试时采样步数变多，模型会反复执行“投到 \(z_0\)，再 re-noise 到中间状态”的路径，采样轨迹可能偏离原来的 PF-ODE。结果就是：更多 steps 没有带来更好结果，甚至让视频质量下降。
-
-AnyFlow 把目标改成两时间点之间的 transition：
-
-\[
-\mathbf z_t \to \mathbf z_r.
-\]
-
-这表达两种行为：
-
-| Step gap | Model behavior | Inference meaning |
-| --- | --- | --- |
-| large \(t-r\) | long-range shortcut transition | few-step fast generation |
-| small \(t-r\) | local ODE refinement | higher-step quality scaling |
+先看原图的曲线方向。左图比较因果 AnyFlow 与 Self-Forcing，中图比较双向 AnyFlow 与 rCM，右图比较 AnyFlow 与未蒸馏教师。红线既要在低预算端足够高，又要在右移时保持改善；只证明四步好，或者只证明三十二步好，都没有完整回答问题。
 
 ![AnyFlow test-time scaling 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-1-test-time-scaling.png){ width="920" }
 
-<small>图源：`AnyFlow`，Figure 1(a)。原论文图意：AnyFlow 在 causal 和 bidirectional 设置下随 sample steps 增加保持或提升 VBench score；Self-Forcing / rCM 等 consistency-based 方法在更多 steps 下会下降；teacher model 则体现原始 flow-matching 采样的 test-time scaling。</small>
+*原论文 Figure 1(a)。横轴是采样步数，各面板纵轴范围不同。红线的提升幅度不能仅凭视觉斜率跨面板比较。*
 
-**Test-time scaling 图看额外步数是否仍有收益。**
-左图比较 causal AnyFlow 与 Self-Forcing：Self-Forcing 从 4 steps 后开始下降，而 AnyFlow 继续上升。中图比较 bidirectional AnyFlow 与 rCM：rCM 随 steps 增加明显退化。右图比较 AnyFlow 与原始 teacher：AnyFlow 在少步区间大幅补强，同时仍保留“多给 steps 会更好”的趋势。
+AnyFlow 的回答包括两个相互依赖的改变。第一，把端点映射 $z_t\to z_0$ 改为两个时间之间的 flow map $z_t\to z_r$，让大跨度跳跃与小跨度推进成为同一种接口。第二，让学生在自己的生成状态上做分布匹配蒸馏，并用三段 shortcut 近似不同步数的完整轨迹，使训练成本不必随目标步数线性增加。
 
-这张图支撑的不是“AnyFlow 永远最高”，而是一个更具体的 claim：**蒸馏后的学生仍能使用额外测试时计算预算**。这对生产系统很重要，因为用户常需要 4-step 快速预览和 16/32-step 最终渲染共用同一个模型。
+“Any-step”在这里描述同一权重支持改变采样预算。它不表示任何步数都达到相同质量，也不构成质量对步数严格单调的数学保证。主要证据来自1.3B和14B、双向和因果模型上的有限预算比较，尤其是四步与三十二步。理解这层范围，才能区分灵活的推理接口与特定评测中的收益。
 
-## Flow Map 是什么
+## 从终点预测到区间运输，改变的是模型接口
 
-令 \(\mathbf z_t\) 是 PF-ODE 在时间 \(t\) 的 latent state：
+### ODE、flow map 和平均速度分别是什么
 
-\[
-\frac{d\mathbf z_t}{dt}=\mathbf v(\mathbf z_t,t).
-\]
+设视频 latent 在扩散时间 $t$ 的状态为 $z_t$，其概率流 ODE 为
 
-精确 flow map \(\Phi_{r\leftarrow t}\) 表示把状态从 \(t\) 传送到 \(r\)：
+$$
+\frac{\mathrm d z_t}{\mathrm dt}=v(z_t,t).
+$$
 
-\[
-\Phi_{r\leftarrow t}(\mathbf z_t)=\mathbf z_r.
-\]
+$v$ 是瞬时速度场，告诉模型当前状态沿时间变化的局部方向。精确 flow map $\Phi_{r\leftarrow t}$ 则直接回答，从 $t$ 出发沿这条 ODE 走到 $r$，会到达哪里。它满足
 
-它有两个自然性质：
+$$
+\Phi_{t\leftarrow t}(z)=z,
+\qquad
+\Phi_{q\leftarrow r}\circ\Phi_{r\leftarrow t}
+=\Phi_{q\leftarrow t},\quad t\ge r\ge q.
+$$
 
-| Property | Meaning |
-| --- | --- |
-| identity | \(\Phi_{t\leftarrow t}(\mathbf z)=\mathbf z\) |
-| composition | \(\Phi_{q\leftarrow r}\circ \Phi_{r\leftarrow t}=\Phi_{q\leftarrow t}\) |
+前一条是零长度区间不改变状态，后一条是走完整段与分两段走的结果相同。神经网络学习的是这一算子的近似
 
-AnyFlow 用神经网络近似这个 flow map：
+$$
+f_\theta(z_t,t,r)\approx z_r.
+$$
 
-\[
-\mathbf f_\theta(\mathbf z_t,t,r)\approx \mathbf z_r.
-\]
+按照 MeanFlow 的参数化，网络内部预测区间平均速度 $u_\theta$，再由
 
-和普通 denoiser 或 consistency model 的区别在于，模型输入里同时有 \(t\) 和 \(r\)。所以它不是只回答“从当前噪声去到干净样本”，而是回答“从当前时间去到任意更低噪声时间”。这就是 any-step 的根。
+$$
+f_\theta(z_t,t,r)
+=z_t-(t-r)u_\theta(z_t,r,t)
+$$
 
-## 蒸馏范式对比
+转换成下一状态。这里必须分清 $u_\theta$ 与 $f_\theta$ 的输出。前者是速度，后者是状态；不能把网络给出的速度直接当成 $z_r$。论文公式中两者的时间参数顺序也有区别，上式沿用其数学定义。[原论文，第5页，式1—3](https://arxiv.org/pdf/2605.13724v1#page=5)
+
+当 $r=0$，这个接口能够一次到终点，覆盖 consistency 类方法所关注的特殊情形。当 $r$ 接近 $t$，区间平均速度趋于局部瞬时速度，适合较小步长推进。严格在 $r=t$ 时，$f_\theta$ 的恒等边界由乘数 $t-r=0$ 保证，而 $u_\theta$ 仍应学习有意义的瞬时速度；后面的边界样本正是为了保住这一能力。
+
+### 多步推理不必每次回到干净终点
+
+下图将两种训练和模拟方式并排。上半部分中，蓝色映射不断指向 $z_0$，多步模拟通过重新加噪产生下一中间状态。下半部分中，红色映射直接在 $z_t,z_r$ 之间移动，长区间和短区间都属于同一个 flow map 的调用。
 
 ![AnyFlow distillation paradigms 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-2-distillation-paradigms.png){ width="920" }
 
-<small>图源：`AnyFlow`，Figure 2。原论文图意：上半部分展示 consistency distillation 学 endpoint consistency mapping，并在 backward simulation 中需要 re-noise state；下半部分展示 flow map distillation 学 \(z_t\to z_r\) transition，并用 shortcut transition 分解 Euler sampling trajectory。</small>
+*原论文 Figure 2。右侧图例区分是否记录梯度；下半图的两端 shortcut 为后面的三段可微模拟提供接口。*
 
-**蒸馏范式图要分清 endpoint 和 transition。**
-蓝色 consistency 路线的核心是 endpoint：每次都往 \(z_0\) 投影，再通过 re-noise 回到中间状态。这让少步效果强，但多步时轨迹不再像原始 ODE refinement。
+可以用一个解释性例子理解。预算为四步时，模型学习跨越较大的时间间隔；预算变为三十二步时，同一网络接收更相近的两个时间，执行更短的运输。两种设置都不要求每一步先预测整张干净视频再把它打回噪声状态。这样，多次调用才更接近“细化运输轨迹”的含义。
 
-红色 flow map 路线的核心是 transition：forward training 学 \(z_t\to z_r\)，backward simulation 也沿 Euler trajectory 做区间分解。它不是每一步都假装已经到终点，而是让学生保留“从一个噪声水平过渡到另一个噪声水平”的局部能力。
+但神经 flow map 并不自动等于精确 ODE 解。恒等边界可以由参数化保证，任意区间的正确性与组合性质需要训练近似获得。AnyFlow 的第一阶段负责提供稳定的区间能力，第二阶段负责修正这些区间在学生实际 rollout 中组合时暴露的问题。
 
-论文 Table 1 把几类视频扩散蒸馏方法放在同一个坐标里。这里保留英文表头和原术语：
+## 第一阶段如何把瞬时速度改造成平均速度
 
-| Method | Forward Training | On-Policy Distillation | Causal | Bidirectional | Any-Step |
-| --- | --- | --- | --- | --- | --- |
-| APT1&2 | Consistency Training | One-Step Backward Simulation + GAN Loss | ✓ | ✓ | ✗ |
-| rCM | Consistency Training | Consistency Backward Simulation + DMD Loss | ✗ | ✓ | ✗ |
-| Self-Forcing | Consistency ODE Init | Consistency Backward Simulation + DMD Loss | ✓ | ✗ | ✗ |
-| AnyFlow | Flow Map Training | Flow Map Backward Simulation + DMD Loss | ✓ | ✓ | ✓ |
+### MeanFlow 目标来自区间位移的一条恒等关系
 
-<small>表源：`AnyFlow`，Table 1。原论文表格要点：AnyFlow 与 APT、rCM、Self-Forcing 的差异在于 forward training 和 on-policy distillation 都换成 flow map 形式，同时覆盖 causal、bidirectional 和 any-step。</small>
+沿精确轨迹，$z_t-z_r$ 可以写成时间区间上的速度积分。把它除以 $t-r$ 得到平均速度 $u$，便有
 
-这张表要和 [CausVid](causvid.md) 放在一起读。CausVid 证明了 causal student 可以流式少步生成；AnyFlow 进一步追问：如果学生要在 2/4/8/16/32 steps 都可用，训练目标该怎么改。
+$$
+(t-r)u(z_t,r,t)=\int_r^t v(z_\tau,\tau)\,\mathrm d\tau.
+$$
 
-## 方法总览
+固定区间终点 $r$，沿轨迹对 $t$ 求导，得到
 
-![AnyFlow pipeline 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-3-anyflow-pipeline.png){ width="920" }
+$$
+u+(t-r)\frac{\mathrm du}{\mathrm dt}=v(z_t,t),
+\qquad
+u=v-(t-r)\frac{\mathrm du}{\mathrm dt}.
+$$
 
-<small>图源：`AnyFlow`，Figure 3。原论文图意：AnyFlow 由 forward flow map training 和 on-policy flow map distillation 两阶段组成；student 使用 LoRA 训练，teacher 参数冻结；on-policy 阶段通过 flow map backward simulation 得到学生 rollout，再用 teacher real score 与 fake score 的差做 distribution matching。</small>
+这段展开用于解释论文采用的 MeanFlow 关系。它表明平均速度与瞬时速度并非无关的两种预测，二者通过沿轨迹的导数联系起来。AnyFlow 因此训练
 
-**这张 pipeline 图怎么读。**
-左侧说明系统对象：红色是学生模型，灰色是 teacher，雪花表示固定参数，红色 LoRA 标记表示只训练低秩适配参数。右上是 Stage 1：用合成数据做 forward flow map training。右下是 Stage 2：学生自己 rollout 到 \(\hat z_0\)，再 re-noise 到 \(z_{t'}\)，用 teacher / fake score difference 做 DMD-style on-policy distillation。
-
-这张图最重要的信息是“LoRA 后训练 + frozen teacher + on-policy rollout”三者同时存在。AnyFlow 不是从零训练视频模型，也不是只做 supervised teacher trajectory fitting；它先让学生学会 flow map，再让学生在自己的测试时状态分布上被 teacher 纠偏。
-
-可以把整条方法压成：
-
-```text
-Wan2.1 video diffusion teacher
-  -> synthetic prompt-video dataset
-  -> Stage 1: forward flow map training
-  -> Stage 2: on-policy flow map distillation
-  -> any-step causal / bidirectional video generator
-```
-
-## Stage 1：Forward Flow Map Training
-
-AnyFlow 采用 MeanFlow 风格的 flow map 训练。模型不是直接预测 \(\mathbf z_r\)，而是预测区间平均速度 \(\mathbf u_\theta\)，再用：
-
-\[
-\mathbf f_\theta(\mathbf z_t,t,r)
-=
-\mathbf z_t-(t-r)\mathbf u_\theta(\mathbf z_t,r,t).
-\]
-
-训练目标是：
-
-\[
-\mathcal L(\theta)
-=
-\mathbb E
-\left[
-\left\|
-\mathbf u_\theta(\mathbf z_t,r,t)
--
-\operatorname{sg}(\mathbf u_{\text{tgt}})
-\right\|_2^2
+$$
+\mathcal L_{\mathrm{flow}}(\theta)
+=\mathbb E\left[
+\left\|u_\theta(z_t,r,t)-\operatorname{sg}(u_{\mathrm{tgt}})\right\|_2^2
 \right],
-\]
+$$
 
-其中 \(\operatorname{sg}\) 是 stop-gradient。论文重点不在重新发明 MeanFlow，而是在视频扩散后训练里补了几个很实际的 recipe。
+$$
+u_{\mathrm{tgt}}
+=v(z_t,t)-(t-r)\frac{\mathrm d u_\theta(z_t,r,t)}{\mathrm dt}.
+$$
 
-### Interpolated Timestep Conditioning
+$\operatorname{sg}$ 表示目标分支停止梯度。网络虽然参与构造目标，却不在这一步通过目标继续反传高阶依赖。边界 $t=r$ 时，导数修正项消失，目标直接回到瞬时速度，因而能够与已有 flow-matching 模型衔接。[原论文，第5—6页](https://arxiv.org/pdf/2605.13724v1#page=5)
 
-预训练视频 diffusion model 通常只有一个 timestep embedding。Flow map 需要同时输入 \(t\) 和 \(r\)。最直接的做法是新增一个 \(r\) 或 \(t-r\) embedding projection，但论文发现 zero-init projection 会让新 embedding norm 在训练中膨胀，导致生成结果过饱和。
+训练视频由教师合成，记干净 latent 为 $x$，高斯噪声为 $\epsilon$，算法使用线性插值
 
-AnyFlow 改用插值形式：
+$$
+z_t=(1-t)x+t\epsilon,
+\qquad v=\epsilon-x.
+$$
 
-\[
-g\cdot\operatorname{emb}(t)+(1-g)\cdot\operatorname{emb}'(r),
-\]
+这些样本提供 forward flow map training 的回归信号。这里的“forward training”是论文对数据驱动初始化阶段的命名，不应误读为部署时沿噪声增加方向生成视频；实际采样仍从噪声端向干净端推进。
 
-其中 \(\operatorname{emb}'\) 从预训练的 \(\operatorname{emb}\) 初始化，论文实验固定 \(g=0.25\)。这个设计有两个作用：
+### 有限差分要同时移动状态和时间
 
-1. 当 \(t=r\) 时，模型更接近原预训练 timestep 表示，保住 instantaneous flow field；
-2. 当 \(t\ne r\) 时，模型也能看到目标时间 \(r\)，不必从一个完全冷启动的新 projection 学起。
+直接计算 $\mathrm du_\theta/\mathrm dt$ 涉及 Jacobian-vector product，在大型视频模型和 FSDP 下不便实现。作者沿用有限差分方案，用对称的两次邻近查询近似导数
+
+$$
+\frac{\mathrm d u_\theta(z_t,r,t)}{\mathrm dt}
+\approx
+\frac{u_\theta(z_{t+\delta},r,t+\delta)
+-u_\theta(z_{t-\delta},r,t-\delta)}{2\delta}.
+$$
+
+由于这是沿轨迹的全导数，状态也要随时间移动。在算法的线性数据路径上，使用 $z_+=z_t+\delta v$、$z_-=z_t-\delta v$。只改时间 embedding 而让 $z_t$ 不动，得到的是不同的导数，不能替代论文的目标。
+
+有限差分避免显式 JVP，却增加目标构造的前向计算。它需要两个邻近状态查询，并不意味着完整训练一共只有两次网络调用；当前预测、无条件预测和后续 DMD 分支另有开销。它也引入数值近似，不能被描述为完全无误差地复现原始 MeanFlow 导数。[原论文，第6、8页，式4与Algorithm 1](https://arxiv.org/pdf/2605.13724v1#page=8)
+
+## 新增时间条件时，先保住预训练模型的输入尺度
+
+预训练 Wan 模型主要根据当前时间 $t$ 调节去噪行为。flow map 还要知道目标时间 $r$，否则无法判断自己该走多远。最自然的改法是增加时间 embedding，例如 $\operatorname{emb}(t)+\operatorname{emb}'(t-r)$。一些方案将新增分支的输出投影零初始化，希望训练开始时不扰动原网络。
+
+AnyFlow 发现，在自己的后训练设置中，这种零初始化并未稳定解决问题。新时间分支随后需要逐渐放大影响，embedding 范数持续增长，生成视频出现过饱和。作者改用插值
+
+$$
+\gamma\operatorname{emb}(t)
++(1-\gamma)\operatorname{emb}'(r),
+\qquad \gamma=0.25,
+$$
+
+其中 $\operatorname{emb}'$ 从预训练 embedding 复制初始化。训练刚开始且 $t=r$ 时，两路相同，插值恰好回到原来的时间条件；而 $t\ne r$ 时，新条件从一开始就有合理尺度，不必完全从零分支长出来。这里用 $\gamma$ 表示插值系数，以避免与后文 CFG scale 混淆；论文在不同上下文复用了字母 $g$。[原论文，第7—8页](https://arxiv.org/pdf/2605.13724v1#page=8)
+
+下面的范数曲线应按四个采样区间分别看。前三个区间中，插值版本的红线较早稳定，通常比灰色零初始化版本更接近蓝色预训练参照。但最后 $250\to0$ 的面板里，红线高于预训练水平，也高于灰线，不能把原图概括成“所有阶段范数都更小”或“全部恢复原始范数”。
 
 ![AnyFlow embedding norms 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-8-embedding-norms.png){ width="820" }
 
-<small>图源：`AnyFlow`，Figure 7(a)。原论文图意：zero-init timestep conditioning 的 embedding norm 会在训练中变得明显大于 pretrained embedding；interpolated timestep conditioning 的 norm 更接近预训练模型。</small>
+*原论文 Figure 11(a)。横轴为训练迭代数，四个面板为不同采样区间。主要支持更稳定的条件适配，最后一个面板保留明显例外。*
+
+对应样例中，零初始化版本的草地、狗毛和城市画面颜色更强烈，插值版本减轻了这种过饱和。它为时间条件影响视觉分布提供了定性证据；范数曲线和样例的对应关系也不能提升为适用于所有模型的充分因果证明。
 
 ![AnyFlow timestep conditioning visual 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-9-timestep-conditioning-visual.png){ width="920" }
 
-<small>图源：`AnyFlow`，Figure 7(b)。原论文图意：zero-init timestep conditioning 容易带来过饱和视觉结果；interpolated timestep conditioning 能抑制该问题。</small>
+*原论文 Figure 11(b)。每种设置展示第1、40、80帧；两行分别观察动物场景与城市场景。*
 
-### Time Sampler 与 Loss Reweighting
+这种接口修改的工程意义很明确。后训练不只是给输入多拼一个标量，而要让新增条件与预训练网络已有的激活尺度相容。边界保持为复用旧能力提供起点，非边界区间再逐渐学习新的长距离运输。[原论文，第15页](https://arxiv.org/pdf/2605.13724v1#page=15)
 
-论文先从 uniform 采样 \(t,r\) 开始，再重排成 \(t=\max(t,r)\)、\(r=\min(t,r)\)。但直接 uniform 不匹配 Wan2.1 预训练里的时间分布，于是作者引入 \(w(t)\) 来平衡不同噪声水平的 loss。
+## 两类权重分别控制噪声分配和长区间损失
+
+### 排序两个均匀时间，不会得到均匀的起点
+
+对非边界样本，作者先独立采样两个均匀时间，再把较大者作为 $t$、较小者作为 $r$。如果将时间归一化到 $[0,1]$，$t$ 是两个均匀变量的最大值，其累计分布为 $P(t\le a)=a^2$，密度因此为
+
+$$
+p(t)=2t.
+$$
+
+这一推导解释了为什么“两个时间均匀采样”不等于训练均匀关注所有起点。排序本身已让较大 $t$，也就是更高噪声区域，获得更多权重。论文进一步引入 $w(t)$ 重加权，图中的有效密度按 $p(t)w(t)$ 表示。
 
 ![AnyFlow time sampler 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-7-time-sampler.png){ width="660" }
 
-<small>图源：`AnyFlow`，Figure 6(a)。原论文图意：展示不同 \(w(t)\) 诱导的 timestep density \(f(t)=p(t)\cdot w(t)\)，其中 \(p(t)=2t\)。</small>
+*原论文 Figure 10(a)。绿线对应均匀损失权重后的 $2t$，蓝线和红线在此基础上分别施加 Normal 与 Beta 权重。*
 
-论文的 time sampler 消融如下，表头和原文保持英文：
-
-| \(w(t)\) | Bidirectional 4 NFEs | Bidirectional 32 NFEs | Causal 4 NFEs | Causal 32 NFEs |
+| $w(t)$ | Bidirectional, 4 NFEs | Bidirectional, 32 NFEs | Causal, 4 NFEs | Causal, 32 NFEs |
 | --- | ---: | ---: | ---: | ---: |
-| \(\text{Uniform}(0, 1)\) | 83.46 | 83.75 | **83.58** | 83.91 |
-| \(\text{Normal}(0.5, 0.25)\) | 83.40 | 83.79 | 83.54 | 83.93 |
-| \(\text{Beta}(2, 1.5)\) | **83.48** | **83.96** | 83.54 | **83.96** |
+| Uniform(0, 1) | 83.46 | 83.75 | 83.58 | 83.91 |
+| Normal(0.5, 0.25) | 83.40 | 83.79 | 83.54 | 83.93 |
+| Beta(2, 1.5) | 83.48 | 83.96 | 83.54 | 83.96 |
 
-<small>表源：`AnyFlow`，Figure 6(b)。原论文表格要点：\(w(t)=\text{Beta}(2,1.5)\) 在 bidirectional 和 causal 设置下给出最好的整体 step-scaling 表现，因此主实验采用该配置。</small>
+*原论文 Figure 10(b)，数值为 VBench Overall。*
 
-AnyFlow 还使用 adaptive loss reweighting。直觉是：后训练时模型在 \(t=r\) 的 instantaneous field 已经比较可靠，所以用 \(t=r\) 的 loss 当 baseline，动态缩放 \(t\ne r\) 的 loss：
+Beta 在两种架构的32 NFE结果最好，双向从 uniform 的83.75提高到83.96。但四步因果结果中 uniform 的83.58略高于 Beta 的83.54。作者最后统一采用 Beta(2,1.5)，可理解为兼顾整个预算范围的选择，而不是每一列都显著最优。图中 Beta 也没有把全部质量放到极端 $t=1$，而是在较高噪声区保留较多训练压力。[原论文，第14—15页](https://arxiv.org/pdf/2605.13724v1#page=14)
 
-\[
-w_{t,r} =
-\begin{cases}
-1, & t=r, \\
-\displaystyle\frac{\mu_{t=r}}{\|\Delta\|_2^2+c}, & t\ne r.
+### 一半边界样本给平均速度学习设定尺度
+
+时间权重 $w(t)$ 之外，论文还用边界样本确定回归损失的尺度。每批训练样本中，50%取边界 $t=r$。这些样本不要求长跨度映射，主要维持预训练模型已经比较可靠的瞬时速度场。非边界样本则负责学习不同长度区间的平均速度。
+
+设 $\Delta$ 为回归残差，以边界样本的平均平方损失
+
+$$
+\mu_{t=r}=\mathbb E_{t=r}[\lVert\Delta\rVert_2^2]
+$$
+
+作为参考，论文的自适应权重为
+
+$$
+w_{t,r}=\begin{cases}
+1,&t=r,\\[2mm]
+\displaystyle\frac{\mu_{t=r}}{\lVert\Delta\rVert_2^2+c},&t\ne r,
 \end{cases}
-\]
+$$
 
-这一步是为了避免远距离 transition 的梯度把预训练好的局部速度场冲坏。
+$c$ 是小常数。它与前面的 $w(t)$ 解决不同问题。$w(t)$ 决定不同噪声区域的训练关注，$w_{t,r}$ 则利用边界回归尺度约束非边界损失，避免长区间误差过大时主导更新，破坏已经可用的局部流场。
 
-### Guidance-Fused Training
+这也改变了对采样密度的理解。$p(t)=2t$ 描述独立采样再排序的非边界时间对；实际训练还显式混入一半 $t=r$ 样本，不能把整批训练都描述成只按这一二维排序分布采样。论文没有把边界样本仅作为少量额外正则，而是为它分配了相当大的批量份额。[原论文，第8—9页，式7](https://arxiv.org/pdf/2605.13724v1#page=9)
 
-AnyFlow 把 CFG 融进训练，使测试时可以省掉 conditional / unconditional 双分支计算。论文采用：
+## CFG 融进预测后，四步才对应四次网络评估
 
-\[
-\mathbf u =
-\frac{1}{g}
-\left(
-\mathbf u_c
--
-(1-g)\operatorname{sg}(\mathbf u_{\varnothing})
-\right),
-\]
+标准 classifier-free guidance 通常需要条件与无条件两次预测。若蒸馏后仍每步运行两路，四个采样步便是 $4\times2$ 次网络求值。AnyFlow 在第一阶段把指导行为融入条件分支，部署时省去额外无条件调用。
 
-其中 \(\mathbf u_c\) 是条件预测，\(\mathbf u_{\varnothing}\) 是空条件预测。注意这里的 \(g\) 是 CFG scale，不要和前面 timestep embedding interpolation 里的 \(g=0.25\) 混淆。
+令 $u_c$ 为带文本条件的预测，$u_\varnothing$ 为无条件预测，$g$ 为 CFG scale。论文将送入回归目标的预测改写为
 
-工程含义是：如果训练时已经把 guidance 行为融合进学生，测试时可以用更少 forward pass 得到接近 CFG 的 prompt-following。
+$$
+u=\frac1g\left[u_c-(1-g)\operatorname{sg}(u_\varnothing)\right].
+$$
 
-## Stage 2：On-Policy Flow Map Distillation
+不同于把 guidance 融入目标速度，作者在预测侧进行这一变换，以对应预训练模型使用的 guidance 定义。无条件项停止梯度，当前优化推动条件输出包含所需的指导效果。
 
-Stage 1 学到的是一个能做任意区间 transition 的学生，但它仍可能在测试时遇到两个误差：
+边界处 $u_{\mathrm{tgt}}=v$。若这个回归精确满足，则可以代数重排为
 
-| Error | Where it appears | Why it matters |
-| --- | --- | --- |
-| discretization error | few-step sampling | 大步跳跃时，每一步的数值误差更大 |
-| exposure bias | causal generation | 学生推理时看到的是自己生成的历史，不是 teacher-forced 真实历史 |
+$$
+u_c=g\,v+(1-g)u_\varnothing.
+$$
 
-因此 Stage 2 从 Stage 1 checkpoint 出发，联合优化 forward flow map 目标和 DMD-style on-policy 目标。核心不是直接完整 rollout 所有 steps，而是用 flow map backward simulation。
+这条解释式说明条件分支怎样学习经过 guidance 的输出；它不是另外新增的训练损失。部署时调用已训练的 $u_c$，不需要再现场做两分支组合。[原论文，第8页，式6](https://arxiv.org/pdf/2605.13724v1#page=8)
+
+在 Algorithm 1 中，有限差分也包含相应的 $1/g$ 尺度。对两侧状态 $z_\pm=z_t\pm\delta v$，算法使用
+
+$$
+D_\theta=
+\frac{u_c(z_+,r,t+\delta)-u_c(z_-,r,t-\delta)}{2\delta g},
+\qquad
+u_{\mathrm{tgt}}=v-(t-r)D_\theta.
+$$
+
+这里将算法的参数顺序统一为前文平均速度的 $(z,r,t)$ 记法。复用配方时不能只抄 CFG 的预测公式，却遗漏导数项中的尺度；也不能把此处 $g$ 当作时间 embedding 的固定0.25。一个控制条件指导，另一个控制两路时间 embedding 的混合，是两个独立参数。
+
+## 为什么已有 flow map 还需要 on-policy 蒸馏
+
+第一阶段在教师合成数据及其加噪状态上学习区间映射。推理时，输入却来自学生自己的前一步。即使单个区间回归已经较好，有限步长误差也会把下一状态送到训练路径之外。因果视频还会把自己生成的历史作为后续条件，局部错误可能沿视频时间继续积累。
+
+论文把这两类问题分别称为少步离散误差与因果生成的 exposure bias。它们解释了为什么模型可以在数据上的速度回归正常，实际少步视频却仍有纹理或运动问题。第二阶段因此从学生当前权重产生的 rollout 出发，用教师评价这种真实会出现的输出，而不只继续拟合合成数据的前向路径。
+
+整个流程图中，右上是数据上的 forward flow map training，右下是学生从噪声出发的模拟。第二阶段没有删除右上分支，而是联合优化两个目标，让局部速度知识与实际生成质量同时受到约束。
+
+![AnyFlow pipeline 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-3-anyflow-pipeline.png){ width="920" }
+
+*原论文 Figure 4。冻结教师提供 real score，可训练 fake 分支估计学生分布；DMD 梯度从生成终点回到下方的 flow map 链。*
+
+设学生生成的干净样本为 $\hat z_0=F_\theta(z)$。为避免将用于评估的噪声时间与三段模拟中的 $t,r$ 混淆，这里把 DMD 加噪时间记为 $a$，
+
+$$
+z_a=(1-a)\hat z_0+a\epsilon.
+$$
+
+论文采用的分布匹配梯度写作
+
+$$
+\nabla_\theta\mathcal L_{\mathrm{DMD}}
+=-\mathbb E_{a,z}\left[
+\left(s_{\mathrm{real}}(z_a,a)-s_{\mathrm{fake}}(z_a,a)\right)
+\frac{\partial F_\theta(z)}{\partial\theta}
+\right].
+$$
+
+$s_{\mathrm{real}}$ 来自强教师，$s_{\mathrm{fake}}$ 描述学生当前输出的分布。二者之差给生成器一个分布层面的修正方向。这里继续使用了 DMD 家族的核心信号，AnyFlow 的新意主要在于如何构造可训练、可改变步数的 $F_\theta$。[原论文，第6页，式5](https://arxiv.org/pdf/2605.13724v1#page=6)
+
+还要区分两种“重新加噪”。AnyFlow 避免在实际 flow-map 采样中，每个中间步骤都执行端点预测再加噪；但 DMD 为查询不同噪声层的 real/fake score，仍会对最后的 $\hat z_0$ 加噪。前者是采样轨迹设计，后者是分布损失的评价方式，不能笼统写成整个训练与采样都不再加噪。
+
+## 三段 shortcut 怎样让任意预算的模拟可训练
+
+### 监督终点，但保留中间区间的梯度
+
+DMD 通常需要一个干净终点才能评价分布。consistency 模型每次调用天然输出终点，因此容易挑其中一步记录梯度，其余模拟步截断梯度来节省成本。flow map 的一次调用却可能只从 $t$ 到 $r$，直接停在中间噪声状态，不能简单沿用同一套终点监督方式。
+
+最直观的方案是，为目标预算 $N$ 完整执行 $N$ 次映射，再从 $z_0$ 回传。但训练需要覆盖许多 $N$，大步数模拟既耗时又扩大激活和反传链。AnyFlow 使用近似组合性质
+
+$$
+f_\theta(z_t,t,q)
+\approx f_\theta\big(f_\theta(z_t,t,r),r,q\big)
+$$
+
+把完整路线拆成三段。用 $T$ 表示噪声端的时间端点，归一化时间下 $T=1$；选定预算 $N$ 后，在对应轨迹上取一个中间位置 $t$，使相邻目标点满足
+
+$$
+t-r=\frac{T}{N}.
+$$
+
+随后计算
+
+$$
+\hat z_t=f_\theta(z_T,T,t),\qquad
+\hat z_r=f_\theta(\hat z_t,t,r),\qquad
+\hat z_0=f_\theta(\hat z_r,r,0).
+$$
+
+两端 $T\to t$ 与 $r\to0$ 使用长跨度 shortcut，中间 $t\to r$ 保留目标推理预算对应的局部间隔。最终在 $\hat z_0$ 上计算 DMD 梯度，再通过这三次映射的整条计算链反传。改变 $N$ 主要改变中间间隔与所选位置，模拟链始终只有三段。[原论文，第9—10页，Figure 5与式8](https://arxiv.org/pdf/2605.13724v1#page=10)
 
 ![AnyFlow backward simulation 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-4-backward-simulation.png){ width="820" }
 
-<small>图源：`AnyFlow`，Figure 4。原论文图意：consistency backward simulation 需要沿 consistency trajectory 做 re-noise，且常用 truncated gradient 控制成本；flow map backward simulation 把 Euler sampling trajectory 拆成 shortcut segments，用 learned flow map 高效模拟不同 step budgets。</small>
+*原论文 Figure 5。上方 consistency 链的大部分步骤 Detach Gradient；下方三段 flow map 链全部 With Gradient。右下是推理时正常的多步推进，不是部署时也固定只走三段。*
 
-**Flow map backward simulation 怎么读。**
-假设目标测试预算是 \(N\) steps。AnyFlow 先在采样轨迹上选中一个中间 timestep \(t\)，再令 \(r=t-T/N\)。完整 \(T\to0\) rollout 被拆成三段：\(T\to t\)、\(t\to r\)、\(r\to0\)。第一段和最后一段用 flow map shortcut 跳过，中间 \(t\to r\) 是目标 transition。
+保留整条三段链的梯度有实际意义。终点分布的修正不仅作用于中间那一步，也可以改变前段怎样把初始噪声送到 $\hat z_t$，以及后段怎样把 $\hat z_r$ 送往终点。三次调用共享学生参数，因此参数更新同时涉及不同区间的行为。这里的“整条链”指图示的三段扩散模拟，不能自动理解成无限长自回归视频的所有历史状态都做完整反传。
 
-这个设计让训练可以模拟不同 \(N\) 的测试轨迹，但计算成本不随 \(N\) 线性增长。它也解释了为什么 Table 训练成本里 4-step flow map simulation 比 consistency 略贵，但 16-step 时明显更便宜。
+### Shortcut 近似不等于逐步 rollout 的严格替代
 
-DMD 部分仍然沿用 real / fake score 差分：
+精确 ODE flow map 满足组合恒等式，学习到的 $f_\theta$ 只是近似满足。因此，先一步跳到 $t$ 得到的状态，不一定与实际执行前面若干个小步所得状态完全相同。三段链利用模型自身的区间能力近似目标轨迹，以固定模拟成本覆盖多种局部步长；它没有在数学上消除全部训练—推理差异。
 
-\[
-\nabla_\theta \mathcal L_{\text{DMD}}
-=
--
-\mathbb E_{t,\mathbf z}
-\left[
-\left(
-s_{\text{real}}(\mathbf z_t,t)
--
-s_{\text{fake}}(\mathbf z_t,t)
-\right)
-\frac{\partial\mathbf f_\theta(\mathbf z)}{\partial\theta}
-\right].
-\]
+这也是第一阶段不可随意删除的原因。如果长跨度 flow map 尚不可靠，用它产生的 shortcut 起点和终点就不能有效代表所需的轨迹区间。论文先收敛一个稳定初始化，再同时保留 forward 目标和 DMD 精炼，是为了让近似组合与最终分布修正相互支撑。
 
-其中 \(s_{\text{real}}\) 来自强 teacher，\(s_{\text{fake}}\) 学当前学生生成分布。这个目标的意义是：不是让学生逐点复刻 teacher 的采样路径，而是把学生 rollout 分布推回 teacher / data 的高密度区域。
+推理时使用论文所称的 standard Euler scheduler。对均匀网格 $t_n=(N-n)T/N$，相邻两点通过 flow-map 更新
 
-## Causal AnyFlow：接到 FAR 视频模型
+$$
+z_{t_{n+1}}
+=z_{t_n}-(t_n-t_{n+1})
+ u_\theta(z_{t_n},t_{n+1},t_n).
+$$
 
-AnyFlow 同时支持 bidirectional video diffusion 和 causal video diffusion。对 causal 模型，论文采用 FAR pipeline，并补了几项系统设计：
+它在形式上是按时间网格逐步推进，使用的网络则已学习所给区间的平均速度。预算越大，网格越密；最后一步直接落到0，不需要中途不断重新投影至干净终点。论文中的伪代码混用速度预测与状态转移的简写，实现时应按 $f=z-(t-r)u$ 明确区分两者。
 
-| Design | Detail | Why it matters |
+## 因果版本增加历史压缩，目标函数保持同一套
+
+双向版本让视频内部位置互相使用上下文，直接应用前面的两阶段配方。因果版本采用 FAR 的训练框架，用非对称 patchify kernel 压缩视频历史，并在 rollout 与采样时缓存、复用 KV 状态。
+
+具体设置保留三个 full-token chunks，使用标准大小为2的 patchify kernel；其余 chunks 用大小为4的 kernel 压缩。历史块压缩后占用的 token 和 KV cache 更少，减少 teacher-forcing 训练与自回归生成的负担。它改变的是上下文表示和计算规模，并没有把 DMD 换成另一种质量目标。
+
+为同时支持 T2V 与 I2V，chunk 划分也不是均匀的。第一个 chunk 只有一个 latent frame，方便精确接收首图条件；后续 chunks 的长度为3，在时间建模与吞吐之间折中。这里的1和3是模型内部的 latent chunk 设定，不宜直接当作最终视频像素帧数来理解。[原论文，第10—11页](https://arxiv.org/pdf/2605.13724v1#page=11)
+
+这些组件承担不同责任。flow map 控制扩散时间上的区间运输；FAR 压缩视频时间上的历史；KV cache 避免重复计算已经形成的上下文；on-policy 蒸馏让模型适应自己的生成状态。它们共同支持因果少步视频，却不等价于已经证明无限长度生成稳定。论文将有专门长视频训练的自回归扩展列为后续方向。
+
+## 最关键的消融，把初始化和模拟方式分开
+
+仅看最终 AnyFlow 与另一个模型比较，很难知道收益来自新时间接口、初始化数据还是 DMD 模拟。Table 2 将几种组合放在同一组实验里，分别比较只做 forward training，以及在其后加入不同 backward simulation。下面按架构拆开保留 Quality、Semantic 与 Overall，避免总分掩盖语义变化。
+
+| Method | NFEs | Bidirectional Quality | Bidirectional Semantic | Bidirectional Overall |
+| --- | ---: | ---: | ---: | ---: |
+| Flow Matching Training | $4\times2$ | 77.82 | 61.91 | 74.64 |
+| Flow Matching Training | $32\times2$ | 85.48 | 77.24 | 83.83 |
+| Consistency ODE-Init | 4 | 83.01 | 70.13 | 80.44 |
+| Consistency ODE-Init | 32 | 84.78 | 75.15 | 82.86 |
+| Flow Map Training | 4 | 84.39 | 71.20 | 81.75 |
+| Flow Map Training | 32 | 85.35 | 75.63 | 83.40 |
+| Consistency ODE-Init + Consistency Backward Simulation | 4 | 84.77 | 75.71 | 82.96 |
+| Consistency ODE-Init + Consistency Backward Simulation | 32 | 83.70 | 64.18 | 79.80 |
+| Flow Map Training + Consistency Backward Simulation | 4 | 85.47 | 75.88 | 83.55 |
+| Flow Map Training + Consistency Backward Simulation | 32 | 85.15 | 74.19 | 82.96 |
+| Flow Map Training + Flow Map Backward Simulation | 4 | 85.24 | 76.41 | 83.48 |
+| Flow Map Training + Flow Map Backward Simulation | 32 | 85.70 | 76.99 | 83.96 |
+
+*原论文 Table 2 的双向部分。Flow Matching 行显式计入双分支 CFG，因此不能把 $4\times2$ 与4视作相同 NFE。*
+
+只做 Flow Matching 时，少步74.64与多步83.83差距很大；Flow Map 初始化把四步提高到81.75，并在32 NFE保留83.40，说明它确实学到了更有效的长距离运输，同时维持可用的局部场。继续使用 consistency 模拟后，四步83.55很好，但32步退到82.96。改成 flow map 模拟，四步为83.48，32步达到83.96。
+
+这里存在一个必须保留的反例。完整 AnyFlow 的四步总分83.48低于混合方案的83.55，Quality 也较低；优势主要是更好的 Semantic 与扩步表现，而非每个预算、每个分项都胜出。原文整体叙述若压成“全套方法所有设置最好”，会丢失这张表真正显示的取舍。[原论文，第5页，Table 2](https://arxiv.org/pdf/2605.13724v1#page=5)
+
+| Method | NFEs | Causal Quality | Causal Semantic | Causal Overall |
+| --- | ---: | ---: | ---: | ---: |
+| Flow Matching Training | $4\times2$ | 79.05 | 67.79 | 76.80 |
+| Flow Matching Training | $32\times2$ | 85.21 | 76.65 | 83.50 |
+| Consistency ODE-Init | 4 | 76.99 | 61.88 | 73.97 |
+| Consistency ODE-Init | 32 | 79.73 | 68.81 | 77.55 |
+| Flow Map Training | 4 | 82.80 | 71.16 | 80.48 |
+| Flow Map Training | 32 | 85.23 | 74.71 | 83.13 |
+| Consistency ODE-Init + Consistency Backward Simulation | 4 | 84.37 | 74.97 | 82.49 |
+| Consistency ODE-Init + Consistency Backward Simulation | 32 | 82.43 | 68.48 | 79.64 |
+| Flow Map Training + Consistency Backward Simulation | 4 | 84.99 | 74.97 | 82.99 |
+| Flow Map Training + Consistency Backward Simulation | 32 | 85.67 | 74.78 | 83.49 |
+| Flow Map Training + Flow Map Backward Simulation | 4 | 85.60 | 75.30 | 83.54 |
+| Flow Map Training + Flow Map Backward Simulation | 32 | 85.92 | 76.12 | 83.96 |
+
+*原论文 Table 2 的因果部分。与双向使用相同的组合顺序，便于定位结构变化。*
+
+因果设置中，只做 Consistency ODE-Init 的四步73.97明显低于 flow map 的80.48。两种 backward simulation 都能改善 flow-map 初始化，完整方案在四步达到83.54，比只做初始化提高3.06，在32步达到83.96。它支持 on-policy 修正对因果实际 rollout 有帮助。
+
+同时，Flow Map Training + Consistency Backward Simulation 的因果分支从四步82.99升到32步83.49，并没有像其双向分支那样退步。因此证据是不同组合的扩步能力存在差异，完整配方在测试端点表现更强，而非任意使用 consistency 模拟的方案增加步数都会失败。
+
+论文对 ODE-Init 的额外定性对照还说明，由于拿不到 Wan 原始训练数据，作者先在相同合成数据上微调教师，使比较更接近同一数据条件。Table 2 的消融组合也不应与主结果表中已发布 Self-Forcing 模型混成同一行，后者四步 Overall 为83.39，并非这里的82.49。[原论文，第15页](https://arxiv.org/pdf/2605.13724v1#page=15)
+
+## 主结果显示可扩步，但收益规模取决于架构与底座
+
+### 文生视频保留质量和语义两列
+
+主评测采用 VBench 的16个细分维度，汇总成 Quality 和 Semantic。作者对 Wan 基础模型、rCM、Self-Forcing，以及若干14B因果社区模型，使用官方 augmented prompts 重新评价；原表用 $\dagger$ 标记这些行。其他模型的数字直接取自各自论文，不能当作同一运行环境下的严格对照。
+
+下面优先保留重新评测、分辨率同为 $480\times832$ 的双向模型，避免把不同分辨率、提示设置和论文转载结果混成一个同预算排序。
+
+| Model | #Params | NFEs | Quality ↑ | Semantic ↑ | Total ↑ |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Wan2.1-T2V-1.3B | 1.3B | $50\times2$ | 84.99 | 76.23 | 83.24 |
+| rCM-Wan2.1-T2V-1.3B | 1.3B | 4 | 84.71 | 73.74 | 82.51 |
+| AnyFlow-Wan2.1-T2V-1.3B | 1.3B | 4 | 85.24 | 76.41 | 83.48 |
+| AnyFlow-Wan2.1-T2V-1.3B | 1.3B | 32 | 85.70 | 76.99 | 83.96 |
+| Wan2.1-T2V-14B | 14B | $50\times2$ | 85.77 | 75.58 | 83.74 |
+| rCM-Wan2.1-T2V-14B | 14B | 4 | 85.47 | 76.72 | 83.73 |
+| AnyFlow-Wan2.1-T2V-14B | 14B | 4 | 85.70 | 77.38 | 84.04 |
+| AnyFlow-Wan2.1-T2V-14B | 14B | 32 | 85.76 | 77.44 | 84.10 |
+
+*原论文 Table 3 的双向重评行，均使用官方 augmented prompts。*
+
+在1.3B上，AnyFlow 四步比 rCM 提高0.97总分，语义从73.74到76.41是较明显的贡献；继续到32步，总分再提高0.48。在14B上，四步比 rCM 提高0.31，但4到32步仅从84.04到84.10，提高0.06。后者证明增加预算没有像某些 consistency 曲线那样退化，却没有显示很大的边际收益。
+
+所以 AnyFlow 的扩步接口为系统提供选择空间，实际是否值得多做28次网络调用，还取决于目标场景对小幅质量变化的价值。不能把“可 test-time scaling”直接理解为调用次数增加八倍、质量也按比例增加。[原论文，第12、14页](https://arxiv.org/pdf/2605.13724v1#page=12)
+
+| Model | #Params | NFEs | Quality ↑ | Semantic ↑ | Total ↑ |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Self-Forcing | 1.3B | 4 | 85.23 | 76.01 | 83.39 |
+| AnyFlow-FAR-Wan2.1-1.3B | 1.3B | 4 | 85.60 | 75.30 | 83.54 |
+| AnyFlow-FAR-Wan2.1-1.3B | 1.3B | 32 | 85.92 | 76.12 | 83.96 |
+| LightX2V-Wan2.1-14B-CausVid | 14B | 9 | 85.29 | 75.96 | 83.42 |
+| FastVideo-CausalWan2.2-A14B-Preview | 14B | 8 | 84.28 | 78.49 | 83.12 |
+| Krea-Realtime-Wan2.1-14B | 14B | 4 | 84.80 | 77.07 | 83.25 |
+| AnyFlow-FAR-Wan2.1-14B | 14B | 4 | 85.82 | 76.97 | 84.05 |
+| AnyFlow-FAR-Wan2.1-14B | 14B | 32 | 86.12 | 77.55 | 84.41 |
+
+*原论文 Table 3 的因果重评行，均为 $480\times832$。模型底座、上下文机制和训练过程仍有区别，因此这不是只替换一个蒸馏目标的消融。*
+
+14B因果 AnyFlow 从4 NFE的84.05提高到32 NFE的84.41，Quality 与 Semantic 都提高，扩步收益0.36比同规模双向设置更明显。与同为四步的 Krea-Realtime 相比，总分高0.80，主要来自 Quality 的85.82对84.80；其四步 Semantic 76.97其实略低于 Krea 的77.07。FastVideo 的 Semantic 78.49又高于两者，但 Quality 较低。
+
+1.3B因果比较也有类似取舍。AnyFlow 四步总分83.54高于 Self-Forcing 的83.39，Quality 更高，Semantic 却从76.01降至75.30。保留分项能避免把“总分更好”说成文本遵循、运动与画质每一方面都更好。扩到32步后，AnyFlow 的 Semantic 才达到76.12。
+
+### 图生视频的87.87是总分，不是I2V分项
+
+因果模型通过第一块单 latent frame 接收首图，复用同一生成器完成 I2V。VBench-I2V 同时报告 Quality、I2V 与 Total，主比较如下。
+
+| Model | #Params | Resolution | NFEs | Quality ↑ | I2V ↑ | Total ↑ |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| Wan2.1-I2V-14B | 14B | $480\times832$ | $50\times2$ | 80.30 | 95.12 | 87.71 |
+| FastVideo-CausalWan2.2-A14B-Preview | 14B | $480\times832$ | 8 | 78.82 | 94.81 | 86.82 |
+| AnyFlow-FAR-Wan2.1-14B | 14B | $480\times832$ | 4 | 80.39 | 95.35 | 87.87 |
+
+*原论文 Table 4 中标注重评的三行。I2V 衡量首图条件相关表现，87.87是汇总 Total。*
+
+AnyFlow 四次调用的 Quality 为80.39、I2V为95.35，与使用 $50\times2$ 次调用的 Wan2.1-I2V-14B相近并略高。按表中的采样 NFE 计算，100到4是25倍减少；这不是论文测得的25倍端到端延迟提升。因果模型还需按顺序生成多个 chunk，NFE 不能当作整段视频合计只执行四次网络前向；编码、解码、缓存与硬件利用率也影响实际时间。
+
+原表中更大或更高分辨率的其他模型还包括 Step-Video-TI2V 30B，总分88.36，以及 MAGI-1 24B，总分89.28。它们调用数、分辨率和评价来源不同，因此 AnyFlow 的结果应理解为四 NFE 下有竞争力的14B配置，而不是全表无条件最高质量。[原论文，第12页，Table 4](https://arxiv.org/pdf/2605.13724v1#page=12)
+
+## 两阶段训练的资源，哪些地方真的节省了计算
+
+实现建立在 Wan2.1 与 Diffusers 上。第一阶段使用 Wan2.1-T2V-14B生成的256K提示—视频对，每个样本最多81帧、分辨率 $480\times832$。这一合成数据集是学习 flow map 的重要基础，也意味着训练前已有教师生成数据的成本。
+
+| Setting | Stage 1: Forward Flow Map Training | Stage 2: On-Policy Distillation |
 | --- | --- | --- |
-| context compression | keep three full-token chunks; compress remaining chunks with a larger patchify kernel size 4 | 降低 teacher-forcing 训练成本和 KV-cache 体积 |
-| non-uniform chunk partition | first chunk size 1; subsequent chunks size 3 | 第一帧条件更精确，同时保住后续运动建模吞吐 |
-| unified causal generator | same causal model supports T2V, I2V and V2V | 让一个 few-step 模型覆盖多种视频任务 |
-| KV reuse in rollout | cache and reuse KV states during causal rollouts | 降低 on-policy simulation 和采样成本 |
+| Objective | Flow map regression | Forward flow map + DMD |
+| Optimizer | AdamW | AdamW |
+| Learning rate | $5\times10^{-5}$ | $2\times10^{-6}$ |
+| Iterations, 1.3B | 6,000 | 800 |
+| Iterations, 14B | 4,000 | 800 |
+| Global batch, Stage 1 | 32 for 1.3B; 16 for 14B | — |
+| Parameter adaptation | LoRA, rank 256 | LoRA, rank 256 |
 
-这里可以看到 AnyFlow 和 CausVid / Self-Forcing 的连续性：它同样关心 causal rollout 和 exposure bias，但它把 forward training 与 backward simulation 都改成 flow map 版本，目标是让同一个 causal 模型在不同 steps 下都可靠。
+*据原论文第12—13页的实现细节整理。第二阶段从收敛的一阶段 checkpoint 开始；表中没有将一阶段 batch 自动外推给未单列的配置。*
 
-## 模型训练细节
+LoRA 限制需要更新的参数量，但学生前向、反向、教师与 fake score 查询仍需计算，不能把参数高效微调等同于训练成本很低。论文给出了更有用的分项耗时，测量条件为 Wan2.1-1.3B-T2V、batch 16、单节点8张 H100。下面数值是秒／迭代，不是 GPU-hours，也不是14B训练的总成本。
 
-论文的训练 setting 值得单独记，因为 AnyFlow 的效果来自“强 teacher + 合成数据 + LoRA + 两阶段后训练”，不是低成本 prompt trick。
-
-| Item | Detail |
-| --- | --- |
-| Base implementation | Wan2.1 in Diffusers |
-| Training data | synthetic dataset of 256K prompt-video pairs |
-| Data source | generated from Wan2.1-T2V-14B |
-| Video shape | up to 81 frames |
-| Resolution | \(480\times832\) |
-| Trainable parameters | parameter-efficient fine-tuning with LoRA |
-| LoRA rank | 256 |
-| Stage 1 objective | forward flow map objective |
-| Stage 1 optimizer | AdamW |
-| Stage 1 learning rate | \(5\times10^{-5}\) |
-| Stage 1 global batch | 32 for 1.3B, 16 for 14B |
-| Stage 1 iterations | 6,000 for 1.3B, 4,000 for 14B |
-| Stage 2 objective | jointly optimize forward flow map and on-policy objectives |
-| Stage 2 optimizer | AdamW |
-| Stage 2 learning rate | \(2\times10^{-6}\) |
-| Stage 2 iterations | 800 |
-
-<small>表源：`AnyFlow`，Section 5.1 Implementation Details。原论文要点：所有主模型都基于 Wan2.1，用 Wan2.1-T2V-14B 生成的 256K 合成 prompt-video pairs 做后训练，并以 LoRA rank 256 执行两阶段训练。</small>
-
-这组配置里有几个信号：
-
-1. **合成数据是 teacher 生成的**：AnyFlow 没有直接宣称用真实大规模视频重新训练，它是在强 Wan2.1 teacher 上做 distillation / post-training。
-2. **LoRA rank 很高**：rank 256 说明视频 DiT 的后训练容量需求不小，不能把它理解成极小 adapter。
-3. **Stage 1 比 Stage 2 长很多**：先学稳定 flow map，再上 on-policy DMD 纠偏。
-4. **14B batch 更小、iteration 更少**：这符合大模型视频训练的系统约束。大模型不是简单把 1.3B 配方无脑放大。
-5. **训练目标保留 forward flow map**：Stage 2 不是只做 DMD；它联合保留 forward flow map training，避免 on-policy 目标把任意步 transition 能力带偏。
-
-开源仓库也给出了一些落地信号：训练配置位于 `options/train/anyflow/`，FAR causal 示例包含 `chunk_partition: [1,3,3,3,3,3,3,2]`、`compressed_patch_size: [1,4,4]`、`lora_rank: 256`、`gate_value: 0.25`、`weight_type: beta08` 和 `fuse_guidance_scale: 3.0`。这说明 AnyFlow 发布的是完整训练 pipeline，而不只是权重。
-
-### 训练成本表
-
-| Method | Causal | Bidirectional |
+| Method | Causal, s/iter | Bidirectional, s/iter |
 | --- | ---: | ---: |
 | Standard Flow-Matching | 5.8 | 9.7 |
 | + Guidance-Fused Training | 7.8 | 12.3 |
 | + Guidance-Fused Training + Differential Derivation Equation | 10.4 | 16.8 |
 | Consistency Backward Simulation (4 Steps) | 45.9 | 41.8 |
-| Flow Map Backward Simulation (4 Steps) | 53.1 (+15.7%) | 51.2 (+22.5%) |
+| Flow Map Backward Simulation (4 Steps) | 53.1 | 51.2 |
 | Consistency Backward Simulation (16 Steps) | 93.8 | 96.6 |
-| Flow Map Backward Simulation (16 Steps) | 53.1 (-43.4%) | 51.2 (-47.0%) |
+| Flow Map Backward Simulation (16 Steps) | 53.1 | 51.2 |
 
-<small>表源：`AnyFlow`，Table 4。原论文表格要点：成本在 Wan2.1-1.3B-T2V、batch size 16、8×NVIDIA H100 上测得，单位是 seconds/iter；on-policy distillation 报告的是包含一次 generator 和一次 discriminator update 的 simulation upper-bound cost。</small>
+*原论文 Table 5。On-policy 部分测量一次 generator 与一次论文所称 discriminator 更新构成的上界成本；这不是简单的纯生成器 rollout 时间。*
 
-这张表很重要，因为它解释了 flow map backward simulation 的取舍：
+前向阶段从标准 flow matching 到完整 flow map，因果每步由5.8秒到10.4秒，双向由9.7秒到16.8秒，CFG 融合与有限差分都要付出额外成本。第二阶段在四步模拟时也没有更便宜：因果53.1对45.9秒，增加15.7%；双向51.2对41.8秒，增加22.5%。原因之一是三段链都保留梯度，而 consistency 模拟截断了较早部分。
 
-1. 在 4 steps 下，flow map simulation 需要反传完整 shortcut chain，比 consistency backward simulation 略贵；
-2. 在 16 steps 下，consistency simulation 成本随 steps 增长，而 flow map shortcut 基本保持不变；
-3. 如果目标只是固定 4-step，收益不一定来自训练吞吐；如果目标是 any-step，flow map 的训练成本结构更合理。
+收益在目标模拟步数增加时显现。十六步 consistency 模拟涨到因果93.8秒、双向96.6秒；flow map 仍是53.1与51.2秒，对应减少43.4%与47.0%。这组结果支持的是**覆盖较多推理步数时，固定三段模拟比完整逐步模拟更划算**。它没有证明 AnyFlow 在所有预算上都训练更快，也不能把这张1.3B表乘以主训练迭代数，直接当作14B整个项目的总费用。[原论文，第15—16页，Table 5](https://arxiv.org/pdf/2605.13724v1#page=16)
 
-## 实验结果
+## 保留瞬时流场，还带来继续微调的接口
 
-T2V 使用 VBench，报告 Quality、Semantic 和 Total。I2V 使用 VBench-I2V，报告 Quality、I2V 和 Total。论文为了公平比较，对 Wan2.1 base、Self-Forcing、rCM 以及若干 community 14B causal models 使用官方 VBench augmented prompts 重新评测；表中 \(\dagger\) 表示 re-evaluate under the same setting。
+AnyFlow 的另一个应用是后续领域适配。如果蒸馏模型只擅长固定步数、固定终点的预测，沿用原来的数据训练方式继续更新可能比较困难。AnyFlow 保留了 $t=r$ 的瞬时速度能力，并在第二阶段继续训练 forward flow map，因此能从已经蒸馏的学生 checkpoint 接着训练。
 
-这点要注意：AnyFlow 对关键近邻模型做了统一协议重评测，但 VBench 仍是自动评测，不能替代用户偏好、真实工作流或世界模型闭环能力。
-
-### T2V 结果
-
-| Model | #Params | Resolution | NFEs | Quality | Semantic | Total |
-| --- | ---: | --- | ---: | ---: | ---: | ---: |
-| *Bidirectional Video Diffusion Models* |  |  |  |  |  |  |
-| LTX-Video | 1.9B | \(512\times768\) | \(40\times2\) | 82.30 | 70.79 | 80.00 |
-| CogVideoX-2B | 2B | \(480\times720\) | \(50\times2\) | 82.48 | 77.81 | 81.55 |
-| HunyuanVideo | 13B | \(720\times1280\) | \(50\times2\) | 85.09 | 76.88 | 83.24 |
-| \(\dagger\)Wan2.1-T2V-1.3B | 1.3B | \(480\times832\) | \(50\times2\) | 84.99 | 76.23 | 83.24 |
-| \(\dagger\)rCM-Wan2.1-T2V-1.3B | 1.3B | \(480\times832\) | 4 | 84.71 | 73.74 | 82.51 |
-| \(\dagger\)AnyFlow-Wan2.1-T2V-1.3B | 1.3B | \(480\times832\) | 4 | 85.24 | 76.41 | 83.48 |
-| \(\dagger\)AnyFlow-Wan2.1-T2V-1.3B | 1.3B | \(480\times832\) | 32 | **85.70** | **76.99** | **83.96** |
-| \(\dagger\)Wan2.1-T2V-14B | 14B | \(480\times832\) | \(50\times2\) | 85.77 | 75.58 | 83.74 |
-| \(\dagger\)rCM-Wan2.1-T2V-14B | 14B | \(480\times832\) | 4 | 85.47 | 76.72 | 83.73 |
-| \(\dagger\)AnyFlow-Wan2.1-T2V-14B | 14B | \(480\times832\) | 4 | 85.70 | 77.38 | 84.04 |
-| \(\dagger\)AnyFlow-Wan2.1-T2V-14B | 14B | \(480\times832\) | 32 | **85.76** | **77.44** | **84.10** |
-| *Causal Video Diffusion Models* |  |  |  |  |  |  |
-| MAGI-1 | 4.5B | \(720\times720\) | 8 | 80.98 | 65.68 | 77.92 |
-| SkyReels-V2 | 1.3B | \(540\times960\) | \(50\times2\) | 84.70 | 74.53 | 82.67 |
-| \(\dagger\)Self-Forcing | 1.3B | \(480\times832\) | 4 | 85.23 | 76.01 | 83.39 |
-| \(\dagger\)AnyFlow-FAR-Wan2.1-1.3B | 1.3B | \(480\times832\) | 4 | 85.60 | 75.30 | 83.54 |
-| \(\dagger\)AnyFlow-FAR-Wan2.1-1.3B | 1.3B | \(480\times832\) | 32 | **85.92** | **76.12** | **83.96** |
-| \(\dagger\)LightX2V-Wan2.1-14B-CausVid | 14B | \(480\times832\) | 9 | 85.29 | 75.96 | 83.42 |
-| \(\dagger\)FastVideo-CausalWan2.2-A14B-Preview | 14B | \(480\times832\) | 8 | 84.28 | **78.49** | 83.12 |
-| \(\dagger\)Krea-Realtime-Wan2.1-14B | 14B | \(480\times832\) | 4 | 84.80 | 77.07 | 83.25 |
-| \(\dagger\)AnyFlow-FAR-Wan2.1-14B | 14B | \(480\times832\) | 4 | 85.82 | 76.97 | 84.05 |
-| \(\dagger\)AnyFlow-FAR-Wan2.1-14B | 14B | \(480\times832\) | 32 | **86.12** | 77.55 | **84.41** |
-
-<small>表源：`AnyFlow`，Table 2。原论文表格要点：AnyFlow 在 1.3B 和 14B、bidirectional 和 causal 设置下都能在 few-step regime 匹配或超过 consistency baseline，并在 32 NFEs 继续提升。</small>
-
-读表时抓四点：
-
-1. **14B bidirectional**：AnyFlow-Wan2.1-T2V-14B 在 4 NFEs 得到 84.04，高于 rCM-Wan2.1-T2V-14B 的 83.73；32 NFEs 进一步到 84.10。
-2. **14B causal**：AnyFlow-FAR-Wan2.1-14B 在 4 NFEs 得到 84.05，32 NFEs 到 84.41，是表里 causal 14B 的最高 Total。
-3. **Semantic 不是所有项都最高**：FastVideo-CausalWan2.2-A14B-Preview 的 Semantic 是 78.49，高于 AnyFlow-FAR-14B 的 76.97/77.55，说明不能只读 Total。
-4. **核心 claim 是 step scaling**：AnyFlow 最重要的证据不是单个 4-step 数值，而是 4 到 32 steps 的趋势仍然向上。
-
-### I2V 结果
-
-| Model | #Params | Resolution | NFEs | Quality | I2V | Total |
-| --- | ---: | --- | ---: | ---: | ---: | ---: |
-| CogVideoX-5B-I2V | 5B | \(480\times720\) | \(50\times2\) | 78.61 | 94.79 | 86.70 |
-| HunyuanVideo-I2V | 13B | \(720\times1280\) | \(50\times2\) | 78.54 | 95.10 | 86.82 |
-| Step-Video-TI2V | 30B | \(540\times960\) | \(50\times2\) | 81.22 | 95.50 | 88.36 |
-| MAGI-1 | 24B | \(720\times1280\) | \(32\times2\) | 82.44 | 96.12 | 89.28 |
-| \(\dagger\)Wan2.1-I2V-14B | 14B | \(480\times832\) | \(50\times2\) | 80.30 | 95.12 | 87.71 |
-| \(\dagger\)FastVideo-CausalWan2.2-A14B-Preview | 14B | \(480\times832\) | 8 | 78.82 | 94.81 | 86.82 |
-| \(\dagger\)AnyFlow-FAR-Wan2.1-14B | 14B | \(480\times832\) | 4 | **80.39** | **95.35** | **87.87** |
-
-<small>表源：`AnyFlow`，Table 3。原论文表格要点：AnyFlow-FAR-Wan2.1-14B 只用 4 NFEs 就达到 87.87，总分接近或略高于 Wan2.1-I2V-14B 的 \(50\times2\) NFEs。</small>
-
-I2V 表说明了 causal AnyFlow 的多任务性：同一个 FAR causal generator 不只做 T2V，还能接第一帧做 I2V。这里最重要的是 NFE 差异：AnyFlow 4 NFEs 对比 Wan2.1-I2V-14B 的 \(50\times2\) NFEs。这是非常大的推理预算差异。
-
-## Downstream Continued Training
-
-AnyFlow 还强调一个和很多蒸馏模型不同的性质：它保留了细粒度 instantaneous flow field，所以蒸馏后仍然适合继续在下游数据上训练。Self-Forcing 这类已经强绑定到特定 consistency / causal 采样范式的模型，继续训练更麻烦。
+下面流程图比较两种下游管线。左边是论文描述的 Self-Forcing 方案，先微调教师，再重新执行因果初始化与 DMD。右边则保留已有 AnyFlow 学生，从其 v1.0 继续更新到 v2.0。值得注意的是，右图仍然有教师从 v1.0 微调到 v2.0 的分支；省去的是学生从头重做整个蒸馏转换，而不是完全取消教师适配与 DMD。
 
 ![AnyFlow downstream fine-tuning pipeline 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-5-downstream-finetuning-pipeline.png){ width="820" }
 
-<small>图源：`AnyFlow`，Figure 5。原论文图意：AnyFlow 支持从 pretrained checkpoint 继续在下游数据上训练，避免重新训练一个 causal generator。</small>
+*原论文 Figure 7。右侧学生沿 Teacher Forcing + DMD 继续训练，下方教师仍基于领域数据更新。*
+
+这种能力在机器人与驾驶视频上有可见用途。原始 AnyFlow-FAR-Wan2.1-1.3B虽然已经能四步生成，仍可能改变机械臂类型，或让行人轨迹不符合场景要求。领域数据继续训练后，图中机械臂外观与行人路径更接近对应场景。
 
 ![AnyFlow downstream results 原图](../../assets/images/paper-deep-dives/diffusion/anyflow/figure-6-downstream-results.png){ width="920" }
 
-<small>图源：`AnyFlow`，Figure 6。原论文图意：AnyFlow-FAR-Wan2.1-1.3B 在机器人和驾驶等 specialized domains 上继续训练后，identity preservation 和 trajectory accuracy 都有改善。</small>
+*原论文 Figure 8。左侧为预训练模型，右侧为领域微调后，均为四 NFE；每侧按条件帧、第40帧、第80帧查看红框内的身份与轨迹变化。*
 
-**下游训练图怎么读。**
-这部分证据目前更像官方 qualitative demonstration，而不是完整 benchmark。它支撑的结论是：AnyFlow 的 flow map 形式没有把模型变成只能固定采样的死学生，仍可做领域继续训练。它不能单独证明下游小数据训练一定稳定，也不能证明机器人或自动驾驶闭环收益。
+这个实验支持视频生成的视觉域适应。它没有给出机器人真实执行成功率、自动驾驶闭环安全指标，也没有证明视频中的所有运动符合物理规律。论文将 Self-Forcing 的继续训练称为困难，是对其管线与该比较的描述，不应扩大成任何 consistency 蒸馏模型在理论上都不可能微调。[原论文，第11页](https://arxiv.org/pdf/2605.13724v1#page=11)
 
-对工程而言，这个性质很有吸引力：如果少步模型仍能继续训练，品牌、机器人、驾驶等特殊域就不必每次都重新蒸馏。
+同时，合成数据仍可能改变基础模型的分布。作者明确承认拿不到原始 Wan 训练集，外部或合成数据会带来轻微分布偏移，例如纹理变得更平滑。flow map 可以保留局部速度接口，却不能保证换用另一批数据后完全保留原模型所有外观与运动偏好。[原论文，第17页](https://arxiv.org/pdf/2605.13724v1#page=17)
 
-## 和 CausVid / Phased DMD / Wan 的关系
+## 这项工作的价值落在可调整的训练与推理接口上
 
-| Dimension | CausVid | Phased DMD | Wan2.1 | AnyFlow |
-| --- | --- | --- | --- | --- |
-| Main target | streaming causal video diffusion | preserve diversity and motion in few-step DMD | open video foundation model | any-step video diffusion distillation |
-| Key object | causal student with KV cache | SNR phase expert / subinterval score | VAE + Video DiT + Flow Matching | flow map transition \((z_t,t,r)\to z_r\) |
-| Main bottleneck | latency and causal rollout | one-step degeneration / biased score | large-scale video data and training system | fixed-step student cannot use extra test-time budget |
-| Training emphasis | ODE init + asymmetric DMD | progressive distribution matching | staged pretraining/post-training | forward flow map + on-policy flow map distillation |
-| Best use case | low-latency streaming video | few-step image/video distillation quality | base video generation model | one model for fast preview and higher-step refinement |
+AnyFlow 把少步蒸馏从“学会迅速到达干净终点”扩展为“学会运输任意时间区间”。平均速度与瞬时速度的关系提供训练依据，边界样本和时间条件插值保护预训练接口，on-policy DMD 纠正学生自身轨迹上的误差，三段 shortcut 则控制覆盖多种步数时的模拟成本。这些组件分别回答数学目标、稳定适配、真实 rollout 与算力预算的问题。
 
-AnyFlow 不是替代 Wan，而是站在 Wan2.1 上做后训练和蒸馏。它吸收了 CausVid 的 causal rollout 问题意识，但主要突破是 any-step scaling；相较 Phased DMD，它更关注任意步测试预算。
+对需要四步预览和多步最终生成的系统，它提供了使用同一权重调节预算的可行方案。对需要领域适配的视频模型，它保留从数据继续学习局部流场的入口。选择是否采用时，应同时看四步质量、扩到高预算后的实际增益，以及能够承担的合成数据与两阶段训练成本；14B双向仅0.06的扩步增益与14B因果0.36的增益，已经说明这些判断不会在所有设置里相同。
 
-## 最值得复用的设计经验
-
-### 1. 少步模型也要保留 test-time scaling
-
-很多蒸馏系统只追 4-step 分数，结果是多给 steps 反而坏。AnyFlow 的核心提醒是：真实产品常有两种模式，快速预览和高质量导出。如果同一模型不能随预算伸缩，部署上就要维护多个模型或多个蒸馏版本。
-
-### 2. Endpoint mapping 会改变采样轨迹
-
-Consistency distillation 很强，但 endpoint projection + re-noise 的路径不等于原始 PF-ODE。AnyFlow 把目标改成 \(z_t\to z_r\)，本质是在保护 ODE transition 的局部结构。
-
-### 3. On-policy 训练要和推理路径一致
-
-Stage 2 不是在 teacher-forced 状态上训练，而是让学生自己 rollout，再用 teacher / fake score 差分纠偏。这和 Self-Forcing、CausVid 的训练-推理对齐思想一致，只是这里的 backward simulation 换成了 flow map shortcut。
-
-### 4. Timestep embedding 是后训练稳定性的核心
-
-增加第二个 timestep \(r\) 看起来是小改动，但 zero-init embedding 会导致 norm 膨胀和视觉过饱和。AnyFlow 的 interpolated timestep conditioning 是很实用的后训练 trick。
-
-### 5. 合成 teacher 数据不是坏事，但要承认证据边界
-
-256K prompt-video pairs 来自 Wan2.1-T2V-14B。这使训练数据可控、版权和质量更易管理，也让学生直接继承 teacher 分布。但这意味着模型上限、偏差和内容覆盖也强依赖 teacher。
-
-## 局限与风险
-
-1. **不是动作条件世界模型**：AnyFlow 支持 T2V/I2V/V2V 视频生成，但没有证明固定历史下不同动作会导致可验证的未来分叉。
-2. **主要评测是自动指标**：VBench / VBench-I2V 有价值，但不能替代人类偏好、生产工作流和长期一致性评测。
-3. **训练仍然不轻**：虽然用 LoRA，Stage 1/2 仍依赖强 teacher、合成视频数据、H100 训练和 DMD-style teacher/fake score。
-4. **合成数据继承 teacher 偏差**：Wan2.1-T2V-14B 生成的 256K 样本会把 teacher 的视觉偏好、失败模式和安全过滤边界带进学生。
-5. **下游继续训练证据偏 qualitative**：机器人和驾驶可视化说明方向成立，但还缺系统 ablation、数据规模曲线和任务指标。
-6. **Any-step 不等于任意长上下文**：采样步数弹性不等于视频时长、记忆窗口或物理状态长期一致性都解决。
-7. **4-step 成本收益和 16/32-step 成本收益不同**：训练成本表显示 flow map backward simulation 在 4 steps 下略贵，真正优势在更高 step simulation。
-
-## 阅读结论
-
-AnyFlow 的关键贡献是把视频扩散蒸馏目标从 endpoint consistency 改成 flow map transition，让蒸馏学生不再被固定 NFE 锁死。它通过两阶段训练实现这一点：
-
-```text
-forward flow map training
-  -> learn arbitrary z_t to z_r transitions
-on-policy flow map distillation
-  -> correct student rollout errors with teacher-guided DMD
-```
-
-工程上最值得带走的是：**少步学生也要能把额外采样预算转化成更好质量。**
-
-## 外部精读
-
-1. Gu et al. [AnyFlow: Any-Step Video Diffusion Model with On-Policy Flow Map Distillation](https://arxiv.org/abs/2605.13724). arXiv:2605.13724.
-2. 官方项目页：[AnyFlow](https://nvlabs.github.io/AnyFlow/).
-3. 官方代码：[NVlabs/AnyFlow](https://github.com/NVlabs/AnyFlow).
+最值得继续检验的是 shortcut 与实际多步轨迹之间剩余的偏差，以及这种接口在更长视频上的表现。当前结果足以支持可变步数的短视频蒸馏与继续训练，但稳定的任意长视频生成仍需要相应的数据和训练。把时间区间显式纳入模型后，这些问题终于可以在同一套映射与采样接口中逐项研究。

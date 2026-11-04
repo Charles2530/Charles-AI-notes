@@ -1,157 +1,69 @@
-# 扩散模型发展脉络
+# 扩散方法怎样沿不同问题分化
 
-扩散模型的发展可以放在一条连续主线上看：`DDPM` 解决如何稳定训练高质量生成模型，`DDIM / ODE solver` 解决如何更快采样，`Consistency / LCM / DMD / Rectified Flow` 继续追问能否把几十步甚至几百步压到几步或一步。
+一个文生图系统同时需要解决几件事，怎样从数据获得可训练的目标，怎样表示高分辨率图像，怎样读取文字，以及怎样在有限时间内生成。DDPM、Latent Diffusion、DiT、DPM-Solver 和 DMD 分别改变其中不同部分。因此把它们排成单线的“后一种替代前一种”，容易误解真实系统。
 
-## 统一记号
+下面沿同一个系统遇到的障碍展开。方法出现时间可以作为检索线索，理解实现更需要知道它改动了哪个输入、输出或训练目标。
 
-后文统一使用这组记号：
+## DDPM 让训练标签可以由数据直接构造
 
-\[
-x_t=\alpha_t x_0+\sigma_t\epsilon,\qquad \epsilon\sim\mathcal{N}(0,I)
-\]
-
-\(\epsilon\sim\mathcal{N}(0,I)\) 读作：噪声 \(\epsilon\) 从标准高斯分布采样；括号里的第 1 个参数 \(0\) 是均值，表示噪声整体不偏向正或负；第 2 个参数 \(I\) 是单位协方差，表示每个维度独立、方差为 1。
-
-在 DDPM 文献中常见等价写法是：
-
-\[
-x_t=\sqrt{\bar{\alpha}_t}x_0+\sqrt{1-\bar{\alpha}_t}\epsilon
-\]
-
-可以理解为真实信号 \(x_0\) 和噪声 \(\epsilon\) 的按时刻混合。扩散模型学习的是如何从噪声状态一步步回到数据分布。
-
-## 一条主线
-
-扩散模型的发展主要围绕三件事：
-
-1. 把生成过程写成更容易训练的逐步去噪问题；
-2. 把逐步去噪解释成 SDE/ODE 数值求解，引入 Euler、Heun、DPM-Solver；
-3. 用蒸馏、分布匹配、Rectified Flow 把多步采样压缩成少步甚至一步。
-
-一个简化路线是：
-
-```text
-DDPM
-  -> DDIM
-  -> Score SDE / Probability Flow ODE
-  -> Euler / Heun / DPM-Solver / DPM-Solver++
-  -> Progressive Distillation / Consistency / LCM
-  -> DMD / DMD2 / Phased DMD
-  -> Rectified Flow / Rectified Diffusion
-```
-
-这条主线主要讲采样路径和步数。另有一条横向脉络围绕表示空间展开：Latent Diffusion 用 VAE 压缩图像，把 denoiser 成本降下来；RAE、VAVAE 等路线继续修 autoencoder；VAE-free / pixel-space diffusion 则直接绕开 autoencoder，把问题交给像素空间训练信号和 token 架构。PixelDiT 与 PixelGen 就落在这条分叉上。
-
-还有一条近年的辅助线索是 DINO / VFM representation alignment。REPA 发现扩散 Transformer 自己也会学出有用视觉表示，但训练早期较弱，于是用 DINOv2 等冻结视觉编码器做外部老师；CREPA、Align4Gen、RefAlign 又把这个想法搬到视频微调、跨帧一致性和参考图视频生成里。它不重写扩散路径，却会改变训练时模型学到的中间表示。
+给真实样本加上已知噪声，网络就有可比较的监督目标。线性高斯链使任意时刻都能闭式采样，反向高斯均值又能用噪声预测表达。这样把难以直接拟合的图像密度，转成多个噪声水平上的回归任务。
 
 ![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="760" }
 
 <small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。原图表达 DDPM 的正向加噪链和反向去噪链；读图重点是把后续 DDIM、Score SDE、DPM-Solver、Consistency 和 DMD 都看成在这条“从数据到噪声再回来”的路径上重新分配训练、采样和蒸馏成本。它不能证明哪条新路线一定更好，只提供共同坐标系。</small>
 
-**常见误区：新方法不是简单替代旧方法。**
-这条时间线更像一组不同代价分配方式，而不是“后来的名字自动淘汰前面的名字”。`DDIM` 主要改采样路径，`DPM-Solver` 主要改数值求解，`Consistency / LCM` 更依赖新的训练或蒸馏目标，`DMD` 关注生成分布对齐。读论文时先问“它动的是训练、采样、蒸馏还是分布匹配”，比先记年份更有用。
+训练只需随机抽一个时间，生成却要沿反向链多次调用网络，这留下了采样成本问题。[DDPM 训练推导](training.md)把高斯后验和 loss 权重算清，[基础篇](foundations-and-core-intuition.md)解释局部 MSE 为何并不要求最终输出所有图像的平均值。
 
-## 时间线
+## DDIM 与连续时间视角打开采样器选择
 
-| 时间 | 方法 | 解决的问题 | 代表意义 |
-| --- | --- | --- | --- |
-| 2020 | DDPM | 训练稳定、生成质量高但采样慢 | 扩散模型主流化起点 |
-| 2020 | DDIM | 不重训减少采样步数 | 从马尔可夫链走向确定性路径 |
-| 2020 | Score SDE / Probability Flow ODE | 连续时间统一视角 | 采样变成微分方程求解 |
-| 2022 | EDM | 系统整理噪声参数化和采样设计 | 工程采样器设计成熟 |
-| 2022 | DPM-Solver / DPM-Solver++ | 高阶 diffusion ODE 求解 | 10 到 20 步高质量采样 |
-| 2023 | Consistency / LCM | 学习一步或少步一致映射 | 少步生成进入实用区间 |
-| 2023 | DMD | 分布匹配式一步蒸馏 | 从轨迹模仿转向分布对齐 |
-| 2024 | DMD2 / Rectified Diffusion | 改善一步生成质量和稳定性 | 少步/一步生成继续逼近教师 |
-| 2024 | REPA | 用冻结视觉编码器对齐扩散中间表示 | DINOv2 等视觉先验进入 DiT 训练 |
-| 2025 | Phased DMD | 分阶段分布匹配 | 在复杂任务中兼顾质量和多样性 |
-| 2025 | CREPA / Align4Gen | 把表示对齐扩展到视频扩散 | 关注跨帧语义一致性和视频特征训练 |
-| 2025 | PixelDiT | 用 dual-level DiT 做像素空间扩散 | VAE-free 图像生成重新接近 latent DiT 质量 |
-| 2026 | PixelGen | 用 LPIPS 和 DINO 感知监督训练像素扩散 | 把像素扩散目标从完整像素流形推向感知流形 |
-| 2026 | Z-Image-Pixel | 先 latent pre-training，再 pixel post-training | VAE-free 从“新底座路线”扩展为“最终生成器路线” |
+同一套训练边缘并不只允许一种反向采样组织。DDIM 构造兼容训练目标的过程，并可以在时间子序列上生成。Score SDE 则把加噪与反向生成放进连续时间，probability flow ODE 提供共享边缘分布的确定性运输。
 
-## DDPM 到 DDIM
+从这里产生数值求解分支。Euler 读取当前方向，Heun 增加预测终点的方向，DPM-Solver 利用已知线性部分解析积分。它们尽量用更少评估近似模型所定义的动态过程，不为模型增加缺失的概念。[采样篇](inference.md)用同一带噪值算出 DDIM 更新，并在解析方程上比较 NFE。
 
-`DDPM` 的核心是正向逐步加噪，反向学习逐步去噪。训练时通常预测噪声、\(x_0\) 或 velocity，把难的生成建模转成监督学习式的去噪问题。
+这条线不自动要求重训，但替换必须兼容输出参数化、时间坐标和尺度。换一个 scheduler 名字并不保证两个接口数学等价。
 
-它的价值是训练稳定、质量高、与 score matching 和变分推断建立联系；代价是采样常需几百到上千步，部署时延迟很高。
+## Latent Diffusion 与 DiT 改变表示和计算结构
 
-`DDIM` 的关键贡献是改变采样路径，而不是重训模型。它证明可以在兼容 DDPM 训练框架下构造非马尔可夫反向过程，并在特定设置下近似确定性采样。这让扩散采样从“逐步反马尔可夫链”走向“沿连续轨迹做离散积分”。
+采样器减少调用次数以后，每次调用本身仍可能昂贵。Latent Diffusion 把图像压成较小的连续网格，在该表示中训练生成模型，再解码成像素。它减少空间成本，也加入编解码保真问题。
 
-## ODE Solver 时代
+DiT 将 latent 切成 patch 并用 Transformer 交换信息。它可以预测 epsilon、数据或 Flow velocity，主干名称不决定训练目标。U-Net 与 DiT 可以共享外层 pipeline，而文本编码、VAE 与 scheduler 仍需单独说明。[系统篇](architecture-and-stable-diffusion.md)沿一张 512 × 512 图像追踪这些组件。
 
-Score SDE 和 probability flow ODE 把扩散模型放进连续时间框架。采样可以被理解为逆时间 SDE 或确定性 ODE 的数值求解。
+视频把表示增加到时间轴，带来时间压缩、时空注意力和长期依赖。减少噪声步骤只能降低其中一部分成本；视频块之间的生成顺序是另一件事。
 
-这带来一个直接工程收益：同一个训练好的模型，换更好的求解器就能更快出图。
+## 少步学生开始改变训练任务
 
-| 求解器 | 特点 |
-| --- | --- |
-| Euler | 一阶、简单、每步便宜，低步数误差较大 |
-| Heun | 二阶 predictor-corrector，更稳但每步更贵 |
-| DPM-Solver | 针对 diffusion ODE 设计的高阶求解器 |
-| DPM-Solver++ | 改善 classifier-free guidance 下的稳定性 |
-| EDM sampler | 系统整理噪声参数化和采样细节 |
+当原网络在粗网格下明显退化，只改求解器未必足够。Progressive Distillation 用教师多步复合构造学生一步标签；Consistency Models 学习同轨迹共同终点；DMD 用 real/fake score 差来约束最终生成分布。
 
-这一阶段的核心不是改变模型训练，而是把采样当作数值分析问题。
+这些目标可以使用相同教师，学生却学习不同函数。逐点模仿要求保留噪声到输出的配对，分布匹配允许映射变化，只要求输出集合满足分布约束。DMD2 进一步处理 fake 模型追踪、真实数据监督和学生中间输入分布。[蒸馏篇](distillation.md)用高斯分布直接核验 score 差梯度。
 
-## 蒸馏与一致性
+少步也带来训练成本。教师、额外 score 模型、数据与反向传播都可能变多，部署端省下的工作转移到训练端。方法比较需要把两部分成本分开记录。
 
-少步采样进一步依赖蒸馏和一致性学习。Progressive Distillation 把多步模型逐级压缩成更少步；Consistency Models 和 LCM 直接学习不同噪声水平之间的一致映射，让模型能在很少步内到达数据分布。
+## Flow Matching 是另一条局部场学习路线
 
-这类方法的核心取舍是：
+Flow Matching 从可构造的端点路径得到速度监督。线性路径的条件速度为 \(\epsilon-x_0\)，网络学其条件均值，形成边缘速度场，再用 ODE 生成。它与 score 路线可以建立关系，但输出坐标和训练目标需明确转换。
 
-1. 步数更少，速度更快；
-2. 训练目标更复杂；
-3. 可能损失多样性或细节；
-4. 对 teacher、数据和噪声日程更敏感。
+Rectified Flow 的 reflow 使用旧模型生成的相关端点重新训练，尝试让新的场更适合粗步积分。它没有在时间上继承所有 DMD 或一致性方法，也不是它们的必然后继。Flow 可以独立训练，也可充当蒸馏教师，与 DiT、VAE、CFG组合。完整条件速度到边缘速度的推导见[Flow Matching](flow-matching-and-rectified-flow.md)。
 
-少步模型的验收不能只看单张视觉效果，还要看多样性、文本对齐、结构稳定和不同 guidance 强度下的表现。
+## 表示老师与像素生成是横向分支
 
-## DMD 与分布匹配
+REPA 类目标用冻结视觉编码器的干净特征监督生成网络中间表示。它改变训练信号，通常保留原本的概率路径与 sampler。视频中的跨帧对齐还要处理帧与 token 的对应，特征接近本身不保证物理正确。
 
-`DMD`（Distribution Matching Distillation）代表了一条从轨迹模仿转向分布对齐的路线。它不只要求 student 逐步模仿 teacher 的去噪轨迹，而是更直接地让 student 生成分布对齐 teacher / data 分布。
+VAE-free 像素生成则重新选择建模空间。省去有损编解码，意味着主干要处理更多像素变化。可以改架构、加入感知监督，也可以先做 latent 预训练再迁移到像素输出。具体路线见[PixelDiT](../paper-deep-dives/diffusion/pixeldit.md)与[Z-Image-Pixel](../paper-deep-dives/diffusion/z-image-pixel.md)，这些论文的比较需要保留各自预算与数据口径。
 
-`DMD2` 继续改善一步蒸馏中的模糊、训练不稳和细节不足；`Phased DMD` 则把分布匹配分阶段进行，试图在复杂生成任务中兼顾结构、细节和多样性。
+一个系统因此可以同时是 DiT 主干、Flow 目标、latent 预训练、最终像素输出、少步蒸馏。每个标签回答一个不同问题。
 
-这条路线的吸引力很明确：如果能用一步或极少步达到多步扩散质量，推理成本会大幅下降。但它也更容易暴露 teacher bias、模式坍缩和分布覆盖不足。
+## 读取新方法时把它放回接口
 
-## Latent 表示到 VAE-free 像素空间
+| 层次 | 要查的具体内容 | 相邻机制 |
+| --- | --- | --- |
+| 表示 | RGB、VAE latent、patch 或动作，如何归一化 | [架构](architecture-and-stable-diffusion.md) |
+| 概率路径 | 时间端点、信号与噪声系数、末端先验 | [参数化](noise-schedules-and-parameterization.md) |
+| 监督 | 噪声、数据、速度、终点或分布梯度 | [训练](training.md)、[蒸馏](distillation.md) |
+| 条件 | 文本、图像、动作进入哪里，丢弃哪些分支 | [Guidance](guidance-and-conditioning.md) |
+| 生成 | 更新公式、NFE、随机项、缓存与端点处理 | [采样](inference.md)、[长视频](long-video-and-cache-1029-1246.md) |
 
-Stable Diffusion 以后，latent diffusion 成了高分辨率生成的默认工程形态。VAE 带来的压缩让 U-Net、DiT、Flow 和少步蒸馏都更容易做大，但它也会把细文字、线条、纹理和局部编辑背景先压坏。后端 denoiser 只能在这个表示上继续工作。
+先能画出这些输入输出，再看论文的改动能否解释实验收益。同一个方法名在后续系统里可能只保留部分机制，最终应以实际训练和推理代码为准。
 
-VAE-free pixel diffusion 重新打开早期像素扩散的问题。PixelDiT 的回答偏架构：把 patch-level semantic modeling 和 pixel-level texture refinement 分开，用 Pixel Token Compaction 避免 dense pixel attention 失控。PixelGen 的回答偏训练信号：模型仍直接在像素空间预测 clean image，但额外用 LPIPS loss 和 DINO 感知 loss 约束局部纹理与全局语义，让学习目标更接近人真正会看的 perceptual manifold。
+## 原始资料
 
-[Z-Image-Pixel](../paper-deep-dives/diffusion/z-image-pixel.md) 又给出第三种回答：不要强迫 pixel space 承担全部 pre-training。论文在相同 backbone、相同 token grid、相同数据与训练预算下比较 latent 和 pixel pre-training；即使使用超过 20B 图文对，pixel model 仍明显收敛更慢。于是训练被拆成两段：先借助 VAE latent 高效学习视觉知识和文本对齐，再把共享 Transformer 迁移到 RGB，用 self-generated + real data 做 pixel post-training。VAE 在前期是表示学习工具，最终部署链路则可以不再包含 VAE。
-
-因此它们不应和 DDIM、DPM-Solver 或 DMD 放在同一个比较维度里。DDIM 和 solver 改采样路径，DMD 改少步学生的分布匹配，PixelGen 和 PixelDiT 改的是图像在哪个空间被建模，Z-Image-Pixel 进一步改变这种表示空间在训练流程中的启用阶段。一个系统可以同时是 latent-pretrained、VAE-free at inference、Flow Matching、DiT 主干和少步蒸馏模型。
-
-## DINO 与生成模型的表示对齐
-
-DINO 进入扩散生成，通常不是作为一个新的生成器，而是作为冻结视觉表征。REPA 把 noisy hidden state 的投影对齐到 clean image 的 DINOv2 等特征，让 DiT / SiT 更快学到视觉结构。PixelDiT 用这条路线稳定 patch-level 语义，PixelGen 则把 DINO 放到 perceptual loss 里，让像素扩散少拟合不可感知噪声，多关注全局语义。
-
-视频里这件事更难。逐帧 DINO 对齐可以强化主体和布局，但未必保证相邻帧同一个人还沿着同一条运动轨迹走。CREPA 的思路就是把对齐从单帧扩到 cross-frame；Align4Gen 进一步比较不同自监督视觉编码器是否同时具备 discriminability 和 temporal consistency。这里的关键判断是：DINO 提供的是视觉表征先验，时间一致性还要通过抽帧、邻帧对齐、视频指标和真实回放来验证。
-
-## Rectified Flow 与收口判断
-
-Rectified Flow / Rectified Diffusion 试图学习更直的生成路径，把噪声到数据的传输路径整流，从而减少采样步数。它和 DMD、consistency、LCM 都指向同一个工程目标：少步甚至一步生成。
-
-理解扩散演化时，不必把每个方法割裂成独立名词。更实用的判断是：
-
-1. 它改变训练目标，还是只改变采样器；
-2. 它减少步数的代价是什么；
-3. 它是否保持多样性、结构和条件对齐；
-4. 它是否在真实分辨率、真实 prompt 和真实延迟预算下成立。
-
-扩散模型的发展主线，就是在质量、步数、稳定性和多样性之间不断重新分配代价。
-
-## 外部材料
-
-- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。
-- [REPA 论文](https://arxiv.org/abs/2410.06940)。
-- [CREPA 论文](https://arxiv.org/abs/2506.09229)。
-- [Align4Gen 论文](https://arxiv.org/abs/2509.09547)。
-- [PixelGen 论文](https://arxiv.org/abs/2602.02493)。
-- [PixelDiT 论文](https://arxiv.org/abs/2511.20645)。
-- [Z-Image-Pixel 论文](https://arxiv.org/abs/2608.16887)。
+[DDPM](https://arxiv.org/abs/2006.11239)、[DDIM](https://arxiv.org/abs/2010.02502)、[Score SDE](https://arxiv.org/abs/2011.13456)提供离散与连续基础；[Latent Diffusion](https://arxiv.org/abs/2112.10752)、[DiT](https://arxiv.org/abs/2212.09748)处理表示与主干；[Flow Matching](https://arxiv.org/abs/2210.02747)、[Consistency Models](https://arxiv.org/abs/2303.01469)、[DMD](https://arxiv.org/abs/2311.18828)分别提供速度、终点和分布监督。

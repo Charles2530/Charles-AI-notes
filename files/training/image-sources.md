@@ -1,9 +1,6 @@
-# 训练图片来源与授权
+# 训练专题图片来源索引
 
-`files/assets/images/training/` 中图片的来源链接记录如下。
-这些图片均来自 Wikimedia Commons，具体授权条款以各文件页面为准。
-
-训练专题曾经有一批概括图；现在不再在网页中使用。训练页里的方法图统一改为论文原图、论文项目图或明确来源的公共图。
+这里保留图片文件、原始出处和当前解释用途，方便从正文追到证据。来源链接不等于许可已核验，原论文图也只支持其自身实验设置。该页是资源索引，计算机制请回到相应正文阅读。
 
 ## 文件清单
 
@@ -53,7 +50,7 @@
 | `instructgpt-labeler-ranking.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Appendix Figure 19(b) | 解释同题多答排序数据如何训练 reward model |
 | `instructgpt-main-preference.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 1 | 解释 RLHF 后训练需要看人类偏好胜率 |
 | `instructgpt-preference-facetted.png` | [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)，Figure 4 | 解释不同 prompt 分布和 labeler 分组下的偏好结果 |
-| `ppo-clipped-surrogate.png` | [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Figure 1 | 解释 PPO clipped surrogate 如何限制策略概率变化 |
+| `ppo-clipped-surrogate.png` | [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)，Figure 1 | 解释 clipping 如何截断部分目标激励；它不构成更新后概率比的硬边界 |
 
 ## 强化学习专题论文原图
 
@@ -76,60 +73,18 @@
 | `../foundations/loss-landscape-figure-resnet56.png` | [Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913) | 解释优化路径和稳定性排查 |
 | `../inference/specinfer-workflow.png` | [SpecInfer](https://arxiv.org/abs/2305.09781)，Figure 3 | 解释投机推理和 token tree verification |
 
-## 使用说明
-
-1. 如果你要对外发布（网站、课程、论文附录等），建议在页面底部继续保留来源链接；
-2. 若替换图片，请同时更新这里的文件名与来源；
-3. 若需严格法务审阅，请逐个打开来源页确认当前 license 字段。
-
-## 图片使用审计流程
-
+<!-- systems-workflow-visual -->
 ```mermaid
-flowchart TD
-    A["新增图片"] --> B{"来源类型"}
-    B --> C["论文 / 官方项目"]
-    B --> D["Wikimedia / 公共图"]
-    B --> E["截图 / 自绘图"]
-    C --> F["记录论文、Figure 编号、链接"]
-    D --> G["记录文件页、license、作者"]
-    E --> H["记录截图页面或生成脚本"]
-    F --> I["写入页面图注"]
-    G --> I
-    H --> I
-    I --> J["同步更新本来源页"]
-    J --> K["构建检查"]
+flowchart LR
+  P["正文中的图"] --> F["文件与Figure编号"] --> S["原论文或资源页"]
+  S --> E["核对图能支持的结论"]
+  S --> L["单独核对作者与许可"]
 ```
 
-来源清单的价值在于让每张图都能回溯来源、用途和解释。尤其是训练、量化、算子、VLA 这类技术页，图如果没有图源和图解，读者很难判断它是论文证据、概念示意，还是作者重绘。
+出处、证据含义与许可是三项独立核对，来源存在不自动完成另外两项。
 
-## 推荐图注格式
+## 怎样使用这份索引
 
-页面中使用论文原图时，建议图注至少包含：
+查论文图时核对标题、Figure编号、实验对象及原始图注，再判断正文推论是否超出图能支持的范围。查Commons资源时进入具体文件页核对作者和许可；公开可读不能自动推导任意转载授权。当前表未声称完成全部许可复核。
 
-| 字段 | 示例 |
-| --- | --- |
-| 图源 | `Training Compute-Optimal Large Language Models` |
-| Figure | `Figure 4` |
-| 原图意 | 固定 FLOP 预算下参数量和 token 数的配平 |
-| 使用目的 | 解释 scaling law 中 compute/data/model size 的权衡 |
-| 边界 | 该图说明趋势，不等于所有训练任务的精确配方 |
-
-图注不应只写“来源：论文”。好的图注要告诉读者这张图的解释角色：它支撑了哪条判断，不能过度推导什么。
-
-## 替换图片时的检查项
-
-| 检查项 | 为什么重要 |
-| --- | --- |
-| 文件名是否稳定 | 避免页面链接失效 |
-| 图源是否仍可访问 | 方便后续复查 |
-| license 是否允许当前用途 | 避免发布风险 |
-| 页面图注是否同步 | 避免旧解释套新图 |
-| 是否有更权威来源 | 优先论文、官方文档或公共授权图 |
-
-如果未来改用自绘 SVG 或脚本生成图，也建议把生成脚本或数据来源记录在这里。这样图不仅能看，也能维护。
-
-## 外部材料
-
-- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- [Weights & Biases 文档](https://docs.wandb.ai/)。
+引用时保留出处，注明原图、裁剪或站内重绘。若替换资产，保持已有URL稳定或同步更新引用，并复查新图是否仍支持旧图注。文件存在、页面能显示和解释正确需要分别确认。

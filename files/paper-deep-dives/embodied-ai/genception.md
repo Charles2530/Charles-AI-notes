@@ -17,339 +17,329 @@ paper_topic: 具身智能 / 视频生成 / 通用视觉感知
     **项目页：** [genception.github.io](https://genception.github.io)。论文未在正文中给出独立 GitHub 代码仓库。<br>
     **元数据来源与核验口径：** 来源为 arXiv 摘要页、PDF 和项目页；Checked Date：2026-07-13；Repro Status：Paper / project page reviewed, independent reproduction not claimed。
 
-## 先给结论
+## 生成视频的知识，怎样变成可用的感知输出
 
-GenCeption 的核心主张是：**大规模 text-to-video 扩散模型不仅学习“怎样生成视频”，也可以作为通用视觉感知的预训练底座。** 作者把 WAN 2.1 的视频 DiT、VAE 和文本编码器改造成一个单步 feed-forward 感知模型，用文本 prompt 指定输出模态，再用以合成数据为主的多任务后训练统一学习深度、法线、前景分割、表达式指代分割、DensePose、相机 raymap、2D/3D keypoint 等任务。
+GenCeption 把预训练视频生成器改造成文本指令驱动的视频感知模型。输入一段真实 RGB 视频和目标任务，模型一次前向输出深度、法向、分割或相机 raymap；通过额外的查询 token，还能回归 2D/3D 关键点。它要解决的困难是，生成器虽然学过大规模视频，却原本从噪声逐步生成视觉内容，不能直接当作输入视频到几何状态的预测器。[↗](https://arxiv.org/pdf/2607.09024v1#page=5)[↗](https://arxiv.org/pdf/2607.09024v1#page=6)
 
-这篇论文对具身智能的直接价值，不是提供一个机器人 policy，而是提供一条 **视频生成预训练 -> 几何/语义状态估计 -> VLA 或世界模型消费** 的感知路线。它报告的结果显示，14B WAN 2.1 backbone 在多项任务上接近或超过专用模型，并在深度估计上以远少于 D4RT、VGGT-Ω 的训练帧数达到可比性能。但“通用世界模型”仍是作者根据感知迁移和泛化现象提出的解释，不等于已经证明了可用于规划或物理闭环的世界模拟器。
+论文把改造尽量集中在三个地方。首先，把带噪输入与多步采样改成干净视频 latent 的一次前向。其次，把多种密集标签编码为同一种三通道视频，让原来的 VAE 解码器继续工作。最后，把任务选择交给文本条件，并以统一的 $L_2$ 损失做感知微调。这样可以继承生成模型的视觉、时间和语言表示，减少为每个任务重新设计网络接口的工作。
 
-## 原论文故事线
+结果需要分两层看。专项微调后的大模型，在多个任务上接近或超过表内专用方法；一套权重联合训练多个任务后，前景分割改善，部分深度与相机指标退化，稀疏人体关键点更出现严重的联合训练问题。因而“同一种架构能表达多种任务”和“同一个模型能无损兼顾所有任务”是两项不同主张，本文对前者的证据更完整。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)[↗](https://arxiv.org/pdf/2607.09024v1#page=12)
 
-### 研究背景
-
-视觉领域仍然被大量专用模型切分：Depth Anything 负责深度，Segment Anything 负责分割，VGGT 或 D4RT 负责几何与动态场景，人体模型负责姿态。它们各自可以很强，但架构、decoder、loss 和数据格式常常跟着任务变化。作者把问题类比到 NLP：LLM 之所以能统一处理翻译、摘要、推理和代码，一个关键前提是存在可规模化的通用生成预训练目标。
-
-论文寻找的是视觉领域对应的“next-token prediction”。作者认为 text-to-video generation 同时满足三个条件：
-
-1. **Spatio-Temporal Evolution（时空演化）**：生成连续视频迫使模型学习运动、3D 几何、物体持续存在和物理交互等时空先验；
-2. **Vision-Language Alignment（视觉语言对齐）**：视频生成原生以文本为条件，视觉表征与语义概念在预训练阶段就发生绑定；
-3. **Scaled Up（可规模化）**：视频生成受到商业需求推动，能使用大规模数据和计算，比许多密集标注的视觉预训练路线更容易继续扩展。
-
-### 问题（Challenge）
-
-论文要解决的问题是：**能否把一个已经完成大规模视频生成预训练的扩散 DiT，改造成单个统一架构，用文本指令完成多种密集和稀疏视觉任务，而且保持接近专用模型的精度和推理效率。**
-
-困难在于，生成模型和感知模型的接口不一样。生成模型从噪声出发，重复 denoising 后得到视频；感知模型需要给定输入视频，在一次前向中直接输出几何、分割或坐标。不同感知任务的输出空间也不一样：深度是单通道标量图，法线是三维向量，位姿可能是矩阵或 raymap，3D keypoint 则是每帧的稀疏坐标。如果为每个任务单独设计 head 和 loss，就失去了统一架构的主要收益。
-
-### Finding
-
-作者的 finding 可以分成三层：
-
-- **预训练层：** 视频生成骨干包含可迁移的时空和语义先验，且在相同后训练数据下优于 V-JEPA、VideoMAE V2 等替代预训练；
-- **接口层：** 任务差异可以主要放进 prompt 和 target data representation，而不是放进不同 backbone、head 和 loss；
-- **泛化层：** 以人类合成视频为主的训练，可以迁移到真实视频、多实例和训练中未出现的动物或类人对象。
-
-这改变了问题的表述：通用视觉模型不一定要从零设计一个“万能感知头”，也可以把生成模型已经学到的时空表征保留下来，只在数据格式和最小输出接口上做后训练适配。
-
-### 方法
-
-GenCeption 的信息流可以概括为：
-
-```text
-input RGB video + task prompt
-    -> VAE encoder -> video latents
-    -> text encoder -> text tokens
-    -> pretrained WAN 2.1 DiT, t = 0, single forward
-    -> VAE decoder / learnable-token MLP
-    -> dense RGB-like target or sparse per-frame coordinates
-```
-
-密集任务共享 VAE decoder 和 RGB ambient-space 表示；稀疏任务额外添加每帧 learnable tokens，再由轻量 MLP 解码为 K 维坐标。训练时只使用一个标准 L2 loss：密集任务在 latent space 监督，稀疏任务在输出坐标空间监督。任务特定性主要通过 target representation 和 data mixture 表达。
-
-### 结论
-
-论文在 surface normal、depth、camera pose、soft foreground segmentation、expression-referring open-world segmentation 和 3D human keypoint 上进行评测。作者报告：
-
-- 统一模型在多项指标上接近或超过 DepthAnything3、D4RT、VGGT-Ω、SAM3、Sapiens、DAViD、Genmo 和 Lotus-2 等专用模型；
-- 相同 7,500 个视频和约 0.9M 帧后训练数据下，WAN 2.1 优于 V-JEPA 与 VideoMAE V2；
-- 14B WAN 2.1 的平均深度 AbsRel 为 0.093，使用 4 个合成数据集和 1.23M 帧时为 0.071；对比的 D4RT 为 0.082，VGGT-Ω 为 0.067，但后两者使用的训练帧数约为 86M 与 600M；
-- 论文还展示了从合成到真实、从单实例到多实例、从人类到动物和类人对象的泛化，但其中一部分证据是定性展示，不能直接等价为机器人闭环泛化。
-
-## 论文位置：从视频生成到具身状态
-
-GenCeption 位于视频生成、通用视觉表征和具身感知的交叉点。它与 [VGGT：前向恢复相机、深度、点云与轨迹](vggt.md)、[VGGT-Ω：几何重建怎样变成具身空间表征](vggt-omega.md)、[Depth Anything 3：任意视角 3D 几何底座](depth-anything-3.md) 关注相似的几何状态，但路线不同：VGGT 系列直接针对几何重建建模，GenCeption 试图从更大规模的视频生成预训练中迁移通用先验。
-
-它也不同于 [Video Prediction Policy：预测视觉表征训练策略](video-prediction-policy.md) 和 [Motus：统一 latent action 世界模型](motus.md)。后两类工作更接近 action-conditioned policy 或 latent action world model；GenCeption 的输入是视频和任务 prompt，输出是感知状态，没有动作条件、动作生成或机器人执行评测。
-
-因此，在具身智能系统里，GenCeption 更适合被放在状态估计层：
-
-```mermaid
-flowchart LR
-    A["视频生成预训练"] --> B["GenCeption 感知后训练"]
-    B --> C["深度 / 法线 / 相机 raymap"]
-    B --> D["分割 / 2D-3D keypoint"]
-    C --> E["空间状态与几何约束"]
-    D --> E
-    E --> F["VLA、规划器或世界模型消费"]
-    F --> G["机器人闭环执行"]
-```
-
-图中的最后两步是本站的系统推断，不是论文实验。论文只证明了前半段的多任务感知能力，尚未证明 GenCeption 输出直接能支撑某个机器人控制器的安全执行。
-
-## 方法一：把扩散 DiT 改成单步感知器
-
-### 原始生成路径
-
-WAN 2.1 的核心由 VAE encoder-decoder、text encoder 和 latent diffusion transformer（DiT）组成。原始生成路径从高斯噪声 latent 开始，DiT 在多个时间步反复 denoise，最后由 VAE decoder 还原视频。论文采用 Rectified Flow 形式时，DiT 预测速度：
-
-$$
-v = \epsilon - x_0,
-$$
-
-其中 $x_0$ 是原始干净视频的 latent，$\epsilon$ 是噪声。生成模型依赖多个时间步，是因为每个时间步都在把当前 noisy latent 推向目标分布。
-
-### Feed-Forward Reformulation
-
-GenCeption 不再把 noisy latent 当输入，而是直接把输入 RGB 视频经过 VAE encoder 得到的 clean latent 输入 DiT，并固定 conditioning timestep 为 $t=0$。在 Rectified Flow 约定下，作者将 DiT 的原始输出取负：
-
-$$
--v = x_0 - \epsilon.
-$$
-
-这个量更接近目标视频 latent，之后进入 dense decoder 或 loss。直观上，DiT 不再被当作一个必须完整采样的生成器，而被当作一个已经包含时空先验的特征提取器和单步预测器。作者还强调直接使用最终层特征，使其与原生 decoder 保持接口一致，避免为了下游感知重新插入复杂的中间 feature adapter。
-
-这一步的工程意义是把迭代式生成成本换成一次前向，但代价是模型不再执行完整的生成采样过程。它能否保持生成预训练中的全部能力，必须回到后面的 ablation 和跨任务结果判断，而不能只由结构图推出。
-
-## 方法二：用数据表示统一不同任务
-
-### 密集任务统一到 RGB ambient space
-
-所有密集输出都被整理到 $[0,1]$ 的三通道 RGB 空间：
-
-| 任务 | 目标表示 | 处理方式 |
-| --- | --- | --- |
-| Depth | 单通道深度图 | 复制到三个通道 |
-| Foreground / open-world segmentation | mask | 复制到三个通道 |
-| Surface normal | 三维方向向量 | 三个通道分别表示方向分量 |
-| DensePose | 三维人体语义/几何量 | 映射到三个通道 |
-| Camera pose | raymap | 用空间布局把高维 ray 信息装入 3 通道图 |
-
-相机位姿通常不是天然的三通道图。论文使用 pixel-space raymap：rotation raymap 与 translation raymap 的信息被空间划分到同一张三通道图中，中心区域保存 ray origins，周边区域保存 ray directions。作者把这种设计称为 “Rothko” raymap。它的关键不是名字，而是把原本高维、结构化的相机信息重排成视频生成模型熟悉的连续空间。
-
-深度的尺度歧义也在数据层处理，而不是增加 scale-invariant loss。论文先用场景 median depth 归一化，再使用：
-
-$$
-d' = \operatorname{clip}\left(\alpha\log(d+1), 0, 1\right),
-$$
-
-其中 $d$ 是归一化后的深度，$\alpha$ 控制模型更关注近场细节还是远场结构。这样多任务训练可以保留一个统一的 L2 objective，把任务差异转移给 target encoding 和 mixture ratio。
-
-### 稀疏任务使用 learnable tokens
-
-3D keypoint、2D keypoint 和 camera pose 中的部分结构需要直接输出坐标，单纯用 RGB-like 视频表示并不方便。GenCeption 为每个视频帧添加一个 learnable token，共 $T$ 个 token。DiT 处理后，MLP 将每帧 token 解码成 $K$ 维目标：
-
-$$
-z_{1:T} = \operatorname{DiT}(x_{\text{video}}, x_{\text{text}}, q_{1:T}),
-\qquad
-\hat y_t = \operatorname{MLP}(z_t) \in \mathbb{R}^{K}.
-$$
-
-这些额外 token 使用 DiT 原生的 3D RoPE。因为它们没有固定空间位置，空间位置设为可学习；时间位置则把真实帧索引按视频 latent 的压缩长度 $T'$ 做 interpolation，避免超出预训练时见过的 temporal range。作者报告，这种 additional-query 方式优于增加额外 attention layers。
-
-这里也埋下了一个重要风险：learnable tokens 是从零开始训练的，而生成 DiT 的原生能力主要在连续 pixel / latent 空间中形成。后面的 joint-training ablation 显示，稀疏 token 接口会损害 3D keypoint 任务，这说明“统一架构”不是无条件成立的。
+Figure 1 左侧先展示预训练目标如何从噪声到视频，再展示感知后训练如何从真实视频到目标模态。右侧的对比重点是任务差异被放在哪里：不同骨干、不同输出头、不同损失，还是同一模型配合不同数据表示与任务文本。后文的 raymap 和深度归一化，正是把任务要求放进数据格式的具体例子。
 
 ![GenCeption 方法总览](../../assets/images/paper-deep-dives/embodied-ai/genception/figure-1-methodology.png){ width="920" }
 
-<small>图源：[Video Generation Models are General-Purpose Vision Learners](https://arxiv.org/abs/2607.09024)，Figure 1。左侧是视频生成预训练、合成数据多任务后训练和泛化行为；右侧对比专用模型、共享 backbone / 多 head、共享 loss 与 GenCeption 的统一视觉模型。</small>
+*原论文 Figure 1。左侧区分视频生成预训练与感知后训练，右侧展示作者希望统一的 backbone、head、loss。稀疏查询分支及其联合训练结果，需要结合 Figure 4 和消融实验理解。[↗](https://arxiv.org/pdf/2607.09024v1#page=2)*
 
-**这张图怎么读。** 左侧不是“先生成一个视频再做感知”，而是说明生成预训练提供 base model，后训练把它改成单步感知器。右侧的真正变化是把 task specification 从架构和 loss 迁移到 task prompt 与 target data representation。图能支持“统一接口”的方法主张，但不能单独证明所有任务在联合训练中都不互相干扰。
+GenCeption 的输出是感知状态，论文没有训练动作生成器，也没有机器人闭环控制实验。放进具身系统时，它更接近视频到状态的感知模块。深度、相机和关键点可以为后续模块提供输入，但论文的感知成绩不能直接换算成控制成功率。
+
+## 干净输入、零时间与取负输出分别解决什么
+
+原来的 text-to-video 模型包含 VAE、文本编码器和视频 Diffusion Transformer。VAE 在像素视频与 latent 之间转换；文本编码器提供语言条件；DiT 在噪声时间 $t$ 下处理带噪 latent，经多轮更新后得到可解码的视频。Wan2.1 使用 rectified flow 形式，其速度目标为
+
+$$
+v=\epsilon-x_0,
+$$
+
+其中 $x_0$ 是干净视频 latent，$\epsilon$ 是噪声。这种预训练接口与感知任务有两处不匹配。感知已经拥有输入视频，不需要从随机噪声生成一个场景；所需输出是输入对应的目标模态，也通常不需要对同一段视频采样许多可能结果。[↗](https://arxiv.org/pdf/2607.09024v1#page=6)
+
+GenCeption 因此直接将真实 RGB 视频经 VAE 得到的干净 latent 输入 DiT，将噪声条件固定为 **$t=0$**，并只运行一次。在本文采用的时间约定下，$t=0$ 对应生成过程的干净端点。固定这个条件，是让 DiT 的噪声调制与实际输入匹配，并不意味着仍在执行完整扩散过程的第一步。
+
+接下来还要处理输出的含义。预训练 DiT 原本预测速度，而后续 VAE decoder 需要视频 latent。作者对 DiT 原始输出取负，再交给监督或解码器。对应原速度定义，有
+
+$$
+-v=x_0-\epsilon.
+$$
+
+这一变换保留了干净信号的正号，作者报告它能改善收敛与性能。但这个关系不是 $-v=x_0$ 的恒等式，也不是无需训练就能把输入 RGB 变成目标深度。感知微调仍要学习从输入视频到指定模态的映射；取负是在复用预训练末端输出时选择较合适的初始化接口。[↗](https://arxiv.org/pdf/2607.09024v1#page=7)
+
+论文直接使用 DiT **最后一层**的输出，避免从中间层提特征后另建任务专用密集解码器。原因在于最后输出原本就与 VAE 解码路径相接，继续沿用它可以保留更多预训练接口。干净输入、正确的时间条件、速度取负和末层解码，是一组配合使用的设计；原文说明了这些选择的动机，但现有消融没有逐项分离各设计的贡献。
+
+## 哪些模块被冻结，哪些参数在学习
+
+GenCeption 基于开源权重的 **Wan2.1**，实验使用 1.3B 和 14B 两种 DiT 规模。Figure 4 的雪花与火焰图标给出了训练边界：VAE encoder、VAE decoder 和 text encoder 冻结，DiT 参与训练，稀疏任务新增的 learnable tokens 与 MLP 也参与训练。因此这里既不是从零学习视频表示，也不是仅在冻结的视频骨干上训练一个读出头。[↗](https://arxiv.org/pdf/2607.09024v1#page=6)
+
+| Component | 输入与输出 | Training status |
+|---|---|---|
+| VAE Encoder | RGB 视频或目标模态视频 → latent | Frozen |
+| Text Encoder | 任务文本或指代表达式 → text tokens | Frozen |
+| Pretrained DiT | 干净输入 latent、文本条件、固定 $t=0$ → 目标表示 | Trainable |
+| VAE Decoder | 预测的密集 latent → 三通道目标视频 | Frozen |
+| Learnable tokens | 每个原视频帧一个可学习查询 | Trainable |
+| MLP | 稀疏查询输出 → 每帧结构化坐标 | Trainable |
+
+沿 Figure 4 上方的密集路径，输入视频进入 VAE，latent 与任务文本共同进入 DiT，预测结果再经原 VAE decoder 还原成指定模态。沿下方稀疏路径，附加查询与视频 token 一起处理，查询输出交给 MLP。两条路径共享 DiT，但读出方式确实不同。
 
 ![GenCeption 统一感知架构](../../assets/images/paper-deep-dives/embodied-ai/genception/figure-4-architecture.png){ width="920" }
 
-<small>图源：同论文 Figure 4。输入视频和 task prompt 经过 VAE / text encoder 后进入预训练 DiT；密集任务通过 VAE decoder 输出视频式 target，稀疏任务通过 learnable tokens 和 MLP 输出每帧坐标。</small>
+*原论文 Figure 4。雪花表示冻结组件，火焰表示训练组件；上方密集模态沿用 VAE decoder，下方稀疏坐标由新增 token 与 MLP 输出。相机位姿也可以通过先预测 raymap 再恢复几何量的路径获得。[↗](https://arxiv.org/pdf/2607.09024v1#page=6)*
 
-**架构图的关键接口。** 冻结雪花标记表示 VAE encoder、text encoder 和 VAE decoder 保持预训练接口；火焰标记表示 DiT 和稀疏任务 MLP 是后训练中适配的部分。这里体现了作者的最小修改原则：尽量不破坏视频生成 backbone，同时让 dense / sparse 两条输出路径共用主干。
+任务文本指定本次请求的输出。例如，深度与法向可以使用不同任务条件，指代分割则还需要描述要定位的对象。图上列出多种可能结果，不表示一次前向自动同时返回所有模态。共享模型权重减少了部署多个专用网络的负担，但若逐项请求多种输出，仍需按任务调用这个接口。
 
-## 方法三：合成数据和训练配方
+## 把密集任务放进三通道空间
 
-### 合成数据构造
+统一密集解码器的约束来自 VAE 的原生输出格式。GenCeption 将所有密集目标表示为值域在 $[0,1]$ 的三通道视频，再把这些目标经同一个 VAE 编成训练 latent。模型面对的始终是视频到视频 latent 的映射，任务之间的语义差异由文本条件与目标编码定义。[↗](https://arxiv.org/pdf/2607.09024v1#page=7)
 
-论文认为真实世界数据很难同时提供深度、法线、分割、DensePose、2D/3D keypoint 和相机位姿标注，因此以可规模化的 synthetic data 为主：
+| Target modality | Three-channel representation | 表示所承载的信息 |
+|---|---|---|
+| Depth | 将处理后的单通道深度复制到三个通道 | 每像素相对深度 |
+| Segmentation | 将单通道前景或目标 mask 复制到三个通道 | 前景归属或指代目标区域 |
+| Surface normal | 三个通道分别表示不同分量 | 局部表面方向 |
+| DensePose | 不同通道承载对应的密集人体表示 | 人体表面相关的密集输出 |
+| Camera raymap | 在同一图像的不同空间区域放置 origins 与 directions | 相机相关的射线几何 |
 
-| 组成 | 论文设置 | 作用 |
-| --- | --- | --- |
-| 人体资产 | 800 个 RenderPeople assets | 身份和外观多样性 |
-| 运动 | 200 个 CMU motion capture motions | 动态和姿态覆盖 |
-| 场景 | 多种 3D full scenes / HDRI backdrops | 背景与光照变化 |
-| 相机 | focal length、位置和轨迹随机化 | 相机运动和几何条件 |
-| 总规模 | 7,500 个视频 | 主要多任务合成训练集 |
-| 标注 | Blender render passes、rig joint positions | 深度、法线、mask、DensePose、2D/3D keypoint、camera pose |
+复制单通道目标并不会增加三份独立监督信息，它只是使深度或 mask 符合已训练 VAE 的输入格式。法向则需要三维分量，三个通道分别有意义。这种表示统一让多个任务使用同一个输出网络，却没有消除每个任务的数据解释规则。
 
-数据预处理阶段缓存输入 RGB video latent、target-modality video latent 和 text embedding。这降低了后训练期间重复 VAE / text encoder 计算的开销，也让大批量多任务训练更接近 latent-space 数据管线。
+相机任务更能说明这种思路。射线原点和方向合计需要六个通道，直接堆叠会超出三通道接口。作者使用 **“Rothko” raymap**，将 origins 放在中心区域，将 directions 放在周边。Figure 5 左侧的 translation 与 rotation raymap 在右侧合成一幅三通道图，空间位置承担了区分两类信息的职责。[↗](https://arxiv.org/pdf/2607.09024v1#page=7)
 
-作者还加入少量公开 synthetic datasets：TartanAir、Virtual KITTI、MVS Synth 用于额外深度和相机轨迹；expression-referring segmentation 则使用 MeViS、Ref-COCO、YouTube-VOS 的真实数据，因为这类语言指代表达式标注不能简单由 Blender render pass 替代。
+![GenCeption Rothko raymap](../../assets/images/paper-deep-dives/embodied-ai/genception/figure-5-rothko-raymap.png){ width="1000" }
 
-### 训练细节
+*原论文 Figure 5。先看中心色块承载的平移相关部分，再看周边变化的方向场。这个例子说明如何通过任务特定的空间布局沿用三通道解码器。[↗](https://arxiv.org/pdf/2607.09024v1#page=7)*
 
-| 项目 | 论文披露的设置 |
-| --- | --- |
-| Backbone | 开源、开放权重的 WAN 2.1 text-to-video diffusion model |
-| 输入 | 480×832，81 frames，24 FPS |
-| 压缩 | temporal factor 4，空间宽高 factor 8 |
-| Batch | 64 |
-| 硬件 | 256 v6e TPUs |
-| 优化器 | Adam，learning rate (5\times10^{-5}) |
-| 训练步数 | 15,000 steps，前 250 steps linear warmup |
-| 稳定性 | gradient clipping；超过更高阈值的 batch 做 gradient dropping |
-| Dense loss | latent space 中的标准 L2 |
-| Sparse loss | 输出坐标空间中的标准 L2 |
-| 数据输入 | 离线缓存 video latent、target latent 和 text embedding |
+该设计使用了相机几何表示的结构，不能泛化为任意六通道数据都能无损塞进三通道。部署还需要知道布局、坐标约定及从预测 raymap 恢复相机参数的方法；论文没有展开完整的区域比例和求解流程，所以“可统一成 RGB”与“下游立即得到标准相机矩阵”之间仍有接口工作。
 
-论文只说明使用 gradient clipping 和 gradient dropping，但没有在正文给出对应阈值；这类未披露的数值不能自行补齐。训练配方的核心不是某个复杂 loss，而是用数据表示处理深度尺度和通道差异，再让 data mixture ratio 承担任务平衡。
+## 稀疏坐标为什么需要额外查询
 
-## 推理成本：从 50-step diffusion 到一次前向
+关键点与密集图像不同。下游通常需要直接读取每帧的坐标数组，不能只得到一幅绘有骨架的图片。GenCeption 为原视频的每一帧添加一个可学习 token，共 $T$ 个；这些 token 经过 DiT 后，由 MLP 输出该帧的 $K$ 维结构化目标。$K$ 表示每帧目标向量维度，不应直接理解成关键点数量。[↗](https://arxiv.org/pdf/2607.09024v1#page=7)
 
-GenCeption 的 feed-forward 改写直接消除了 WAN 标准生成流程中的 50-step diffusion。论文在单张 v6e TPU、81 帧、480×832 输入上报告：
+位置编码需要处理两种不一致。第一，新增查询没有天然对应的空间像素位置，因此作者让空间位置可学习。第二，视频 VAE 把原来的 $T$ 帧压缩成较短的 latent 时间轴 $T'$，但查询仍是一帧一个。如果直接把原帧索引用于 3D RoPE，就会让查询时间位置超出预训练时视觉 token 使用的范围。作者通过 position interpolation 缩放查询的时间索引，使其落在压缩后的时间范围内。
 
-| 模型 | 总耗时 / clip | DiT 耗时 | 吞吐 | VRAM |
-| --- | ---: | ---: | ---: | ---: |
-| WAN 2.1 S，1.3B | 5.92 s | 0.96 s | 13.6 FPS | 15.3 GB |
-| WAN 2.1 L，14B | 10.03 s | 5.11 s | 8.0 FPS | 42.8 GB |
+这既保留了原始帧级输出的粒度，也尽量沿用 DiT 现有的时空位置机制。原文报告增加查询 token 比额外增加 attention layers 更好，但没有给出对应的量化表格。可确认的贡献是一个具体稀疏接口，不能把它写成已经消除了密集与稀疏任务的表示冲突。后面的联合训练失败，正发生在这个扩展上。
 
-两种配置共享约 10GB text encoder 和 0.25GB VAE，这些组件可以 offload 到系统内存，以速度换显存。这里的 FPS 是对固定 81 帧视频 clip 的感知吞吐，不能直接写成机器人控制频率，也不能证明整个 VLA 闭环满足实时安全约束。
+## 统一损失的关键在目标如何归一化
 
-## 实验与结论
+GenCeption 使用统一的 $L_2$ 损失。密集任务在 **latent 空间**比较预测与目标 VAE latent；稀疏任务在 **输出坐标空间**比较预测与真值。统一的是损失形式，监督所在的表示空间仍然不同。模型没有为法向、深度和分割分别设计一组专用损失，但它需要先让各任务的目标适合这种回归。[↗](https://arxiv.org/pdf/2607.09024v1#page=9)
 
-### 评测协议
+深度是最清楚的例子。单目深度具有尺度歧义，同一视觉结构可能对应不同绝对尺寸。作者先按每段视频的场景中位深度归一化目标，把不同场景的尺度差异移到数据预处理阶段。随后对归一化后的深度 $d$ 使用
 
-| 任务 | Benchmark | 指标 |
-| --- | --- | --- |
-| Surface normal | Hi4D、SINTEL | mean angular error 等 |
-| Depth | KITTI、SINTEL、ETH3D、Goliath | AbsRel、RMSE；Table 2 还报告 δ1 |
-| Camera pose | SINTEL | ATE、RPE-T、RPE-R |
-| Soft foreground segmentation | VideoMatte、PhotoMatte 85、PPM-100 | MSE |
-| Expression-referring segmentation | Ref-DAVIS、MeViS | J&F |
-| 3D human keypoint | EMDB | MPJPE |
+$$
+d'=\operatorname{clip}\bigl(\alpha\log(d+1),0,1\bigr).
+$$
 
-作者强调，除 expression-referring segmentation 外，GenCeption 不使用评测 benchmark 的训练集，主要依赖合成数据。Goliath 的评测沿用 DAViD 的选取：12 cameras、16 frames、4 subjects，约 2.2k frames。VideoMatte 没有官方 split，使用先前工作构造的 static split，因此不同论文之间的数字仍需按协议对齐。
+对数映射压缩深度动态范围，$\alpha$ 改变近处细节与远处结构在有限区间中的分配，最后裁剪到 RGB 目标所需的 $[0,1]$。原文没有提供 $\alpha$ 的具体值。[↗](https://arxiv.org/pdf/2607.09024v1#page=9)
 
-### 多任务结果：统一模型的收益和代价
+这种处理有两个实际后果。预测目标已经去掉每段视频的原始中位尺度，所以输出不能天然当作任意场景的绝对米制深度；落入裁剪饱和区的值，也不能仅靠逆变换恢复全部原始数值。这里的“统一”是选择一个可用的规范化感知目标，而非证明每项物理量都能无损地经 RGB VAE 往返。
 
-下面保留 Table 1 中最能说明问题的行。指标方向均按论文原表：mAE、AbsRel、ATE、RPE 和 MSE 越低越好，J&F 越高越好，MPJPE 越低越好。
+统一损失还没有取消任务间的平衡问题。作者把它主要交给 **data mixture ratio**，通过不同任务数据出现的比例调整学习。深度的归一化、raymap 的空间布局、任务采样比例共同决定了各类监督的实际作用。因此工程定制从网络头和损失函数转移到了目标表示与数据混合，仍需认真设计和记录。
 
-| Method | Backbone | Normals: SINTEL / Hi4D mAE | Depth: SINTEL / KITTI / ETH3D / Goliath AbsRel | Cam. pose: ATE / RPE-T / RPE-R | Foreground: V.Mat / P.Mat MSE | Referring: Ref-DAVIS / MeViS J&F | 3D human MPJPE |
-| --- | --- | --- | --- | --- | --- | --- | ---: |
-| DepthAnything 3 | DINOv2 1.15B | - | 0.201 / 0.059 / 0.028 / - | 0.065 / 0.048 / 0.456 | - | - | - |
-| D4RT | VideoMAE2 1B | - | 0.148 / 0.051 / - / - | 0.065 / 0.024 / 0.126 | - | - | - |
-| VGGT-Ω | DINOv3 1B | - | 0.145 / 0.041 / 0.016 / - | 0.057 / 0.059 / 0.407 | - | - | - |
-| Ours, Specialist-L | WAN 2.1 14B | 29.7 / 10.99 | 0.130 / 0.048 / 0.037 / 0.008 | 0.050 / 0.018 / 0.464 | 0.0027 / 0.0009 | 76.4 / 70.0 | 71.8 |
-| Ours, Generalist-L | WAN 2.1 14B | 29.3 / 11.47 | 0.156 / 0.048 / 0.044 / 0.011 | 0.062 / 0.018 / 0.485 | 0.0010 / 0.0008 | 75.8 / 69.0 | - |
+## 合成数据怎样一次提供多种监督
 
-“Specialist” 是每个任务单独训练的模型，“Generalist” 是单个模型联合训练所有任务。结果说明统一模型确实能覆盖宽任务面，但 joint training 并不总是优于 specialist：Generalist-L 在部分 depth、camera pose 和 3D keypoint 项目上退化或没有结果，而 foreground 和 referring segmentation 更稳定。
+多任务视频感知需要时间对齐的多模态标签，而现实数据集往往只提供其中一部分。GenCeption 用可控渲染构造基础训练集：800 个 RenderPeople 人体资产配合 200 种 CMU motion capture 动作，变化三维场景或 HDRI 背景、焦距、相机位置和运动轨迹，总计生成 **7500 段视频**。[↗](https://arxiv.org/pdf/2607.09024v1#page=8)[↗](https://arxiv.org/pdf/2607.09024v1#page=9)
 
-### 预训练、规模和数据效率
+Blender 的不同 render passes 提供法向、深度和分割 mask；绑定骨架中的关节位置提供 2D/3D 关键点真值。这样同一个动作序列可以给出多种对齐监督，不必分别采集多套真实视频标签。输入 RGB、目标模态视频及任务文本还会离线编码，缓存为 latent 和 text embeddings，减少训练中的重复编码成本。
 
-Table 2 固定深度任务后训练数据，比较预训练 backbone：
+这套人体合成集并不是全部训练数据。作者还引入 TartanAir、Virtual KITTI 和 MVS Synth 增加深度监督，并使用 TartanAir 的相机轨迹。表达式指代分割则使用真实的 MeViS、Ref-COCO 和 YouTube-VOS 数据，因为这类语言与对象对应监督已有可用数据。[↗](https://arxiv.org/pdf/2607.09024v1#page=9)
 
-| Method | Size | Training frames | Average AbsRel ↓ | Average δ1 ↑ |
-| --- | ---: | ---: | ---: | ---: |
-| V-JEPA-H | 0.6B | 0.9M | 0.281 | 52.2 |
-| VideoMAE V2-H | 0.6B | 0.9M | 0.175 | 62.0 |
-| VideoMAE V2-G | 1B | 0.9M | 0.154 | 66.9 |
-| WAN 2.1-S | 1.3B | 0.9M | 0.122 | 85.8 |
-| WAN 2.1-L | 14B | 0.9M | 0.093 | 90.7 |
-| D4RT | 1B | about 86M | 0.082 | 91.7 |
-| VGGT-Ω | 1B | about 600M | 0.067 | 95.2 |
-| WAN 2.1-S | 1.3B | 1.23M | 0.094 | 90.6 |
-| WAN 2.1-L | 14B | 1.23M | 0.071 | 93.8 |
+| Data source | 提供的监督或变化 | 比较时应保留的边界 |
+|---|---|---|
+| Human-centric synthetic videos | 人体、动作、场景与相机变化，多种对齐标签 | 基础合成集为 7500 段 |
+| TartanAir | 额外深度与相机轨迹 | 几何训练已不限于人体合成场景 |
+| Virtual KITTI / MVS Synth | 额外深度 | 改变训练域与场景多样性 |
+| MeViS / Ref-COCO / YouTube-VOS | 真实语言指代分割监督 | 此任务不属于纯合成感知训练 |
+| Wan2.1 pretraining | 大规模文本到视频的初始化 | 不包含在下游 7500 段等数据统计内 |
 
-这组结果支持三条比较谨慎的判断：
+“从合成到真实”的主张针对相应感知任务的后训练数据，不能扩展成基础视频模型从未使用真实视频。类似地，作者强调多数任务没有使用评测 benchmark 的配套训练集；但 MeViS 本身同时出现在指代训练数据和评测列表中，该任务应按其数据划分和监督设置理解，不能统称所有 benchmark 都是完全未见数据集。
 
-1. 在相同约 0.9M frame 后训练数据下，WAN 2.1 预训练比 V-JEPA / VideoMAE V2 更有利于深度估计；
-2. 在作者测试的区间内，增加 WAN 模型规模和后训练数据通常带来更好的深度结果；
-3. 相比 D4RT 和 VGGT-Ω 的报告训练规模，GenCeption 以约 7× 到 500× 更少的训练帧达到可比区间，但这些数字来自不同论文的数据与模型管线，不能当作严格的相同预算对照。
+## 训练资源与评测协议决定结果怎样比较
+
+实现保留 Wan2.1 的视频输入规格。每段输入 81 帧，24 FPS，分辨率 $480\times832$；VAE 的时间压缩因子为 4，两个空间维度压缩因子均为 8。训练使用 batch size 64，在 **256 个 v6e TPU** 上运行 15000 步。[↗](https://arxiv.org/pdf/2607.09024v1#page=9)
+
+| Training item | Setting |
+|---|---|
+| Backbone sizes | Wan2.1 1.3B / 14B |
+| Video input | 81 frames, 24 FPS, $480\times832$ |
+| VAE compression | Temporal $4\times$, spatial $8\times$ per axis |
+| Optimizer | Adam |
+| Learning rate | $5\times10^{-5}$ |
+| Warmup | First 250 steps, linear |
+| Training length | 15000 steps |
+| Batch size / Hardware | 64 / 256 v6e TPUs |
+| Stability | Gradient clipping and gradient dropping |
+
+Gradient clipping 将梯度范数限制在阈值内；gradient dropping 则在范数超过更高阈值时直接丢弃整个 batch。后者会改变哪些样本实际参与一次参数更新，与普通裁剪不是同一操作。作者称二者对稳定训练重要，但未给出具体阈值、各任务数据比例及训练墙钟时间。下游数据规模相对较小，并不代表这套 14B 后训练只需要很少的计算资源。
+
+评测中的几项具体选择影响可比性。Hi4D 沿用 Sapiens/DAVID 的 pairs 28、32、37，使用 camera 4、六名受试者，共 1195 帧。Goliath 沿用 DAVID 选取的 12 台相机、16 帧和四名受试者，含 face、upper body、full body 分组，共约 2.2K 帧。VideoMatte 没有官方 split，作者使用先前 RVM 工作构造的 static split。指代分割沿用 VoCap 的 Ref-VOS-DAVIS 与 MeViS 评测口径。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)
+
+| Task | Main reported metric | 读数方向与含义 |
+|---|---|---|
+| Surface normal | mAE | 越低越好，平均角度误差 |
+| Depth | AbsRel | 越低越好，相对深度误差 |
+| Camera pose | ATE, RPE-T, RPE-R | 越低越好，平移与旋转误差分别观察 |
+| Soft foreground | MSE | 越低越好，软前景目标的均方误差 |
+| Expression-referring segmentation | J&F | 越高越好，区域重叠与轮廓质量的均值 |
+| 3D human keypoints | MPJPE | 越低越好，关节位置误差 |
+
+主表同时含不同指标，不能把各列差值直接合并成统一精度。原表的 `-` 表示模型不能开箱处理该任务，`~` 表示没有取得结果，两者都不是零误差。专项版与通用版也必须分别读取，否则会把不同权重的最好成绩拼成一个并不存在的万能模型。
+
+## 几何结果的优势随数据域和误差分量变化
+
+先看法向估计。Sintel 中，14B 专项版 mAE 为 29.7，低于 Marigold-E2E-FT 的 33.5、NormalCrafter 的 30.7 和 Lotus-2 的 30.3；通用版进一步达到 29.3。Hi4D 中，专项版为 10.99，通用版为 11.47，二者都低于 David-Large 的 15.37 和 Sapiens 的 12.14，但联合训练在这个数据集上略有退化。即使同一个任务，跨数据集的多任务收益也不一致。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)
+
+深度的比较更能避免“所有几何任务全面领先”的误读。以下摘自 Table 1，均为 AbsRel。
+
+| Method | Sintel ↓ | KITTI ↓ | ETH3D ↓ | Goliath ↓ |
+|---|---:|---:|---:|---:|
+| MapAnything | 0.306 | 0.096 | ~ | ~ |
+| VGGT | 0.247 | 0.067 | ~ | ~ |
+| DepthAnything 3 | 0.201 | 0.059 | 0.028 | ~ |
+| D4RT | 0.148 | 0.051 | ~ | ~ |
+| VGGT-Ω | 0.145 | 0.041 | 0.016 | ~ |
+| Ours - Specialist - S | 0.167 | 0.060 | 0.056 | ~ |
+| Ours - Specialist - L | 0.130 | 0.048 | 0.037 | 0.008 |
+| Ours - Generalist - L | 0.156 | 0.048 | 0.044 | 0.011 |
+
+14B 专项版在 Sintel 的 0.130 优于 VGGT-Ω 的 0.145，但 KITTI 和 ETH3D 分别为 0.048、0.037，仍高于 VGGT-Ω 的 0.041、0.016。ETH3D 上 DepthAnything 3 的 0.028 也更低。视频生成先验带来有效的几何迁移，不代表每个数据域都胜过专用重建模型。人体相关 Goliath 上，专项版 0.008 与通用版 0.011 则优于 Table 1 中 David-Large 的 0.012 和 Sapiens 的 0.033。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)
+
+相机位姿还要区分平移和旋转。下表同样取自 Table 1 的 Sintel 评测。
+
+| Method | ATE ↓ | RPE-T ↓ | RPE-R ↓ |
+|---|---:|---:|---:|
+| MapAnything | 0.202 | 0.089 | 2.383 |
+| VGGT | 0.168 | 0.056 | 0.428 |
+| DepthAnything 3 | 0.065 | 0.048 | 0.456 |
+| D4RT | 0.065 | 0.024 | 0.126 |
+| VGGT-Ω | 0.057 | 0.059 | 0.407 |
+| Ours - Specialist - S | 0.057 | 0.023 | 0.720 |
+| Ours - Specialist - L | 0.050 | 0.018 | 0.464 |
+| Ours - Generalist - L | 0.062 | 0.018 | 0.485 |
+
+专项大模型的 ATE 和 RPE-T 很强，但 RPE-R 0.464 高于 D4RT 的 0.126，也高于 VGGT-Ω 的 0.407。通用模型的 RPE-T 保持 0.018，ATE 与 RPE-R 则退化。若实际系统依赖准确朝向，单看 ATE 会遗漏有影响的差异；raymap 的统一表示并未让所有位姿分量都达到最佳。
+
+## 分割、语言指代与人体关键点各自证明什么
+
+软前景分割最明显地受益于联合训练。VideoMatte 的 MSE 从专项版 0.0027 降到通用版 0.0010，与表内 RVM 相同；PhotoMatte 从 0.0009 降到 0.0008。这个变化说明共享任务可以带来正迁移，但不宜推广成所有密集任务都受益，因为前面的深度与位姿已经给出反例。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)
+
+表达式指代分割还考察语言条件是否能定位对象，而不只是输出通用前景。J&F 对所有文本查询取平均，以下保留 Table 1 的方法名称与数值。
+
+| Method | Ref-DAVIS J&F ↑ | MeViS J&F ↑ |
+|---|---:|---:|
+| ReferFormer | 61.1 | 31.0 |
+| VISA | 70.4 | 44.5 |
+| Vocap | 75.1 | 51.9 |
+| ReferEverything | 75.0 | 60.3 |
+| SAM 3 | 41.3 | 38.3 |
+| SAM 3 + Gemini 3.5 Flash | 64.5 | 57.5 |
+| Ours - Specialist - S | 69.7 | 59.9 |
+| Ours - Specialist - L | 76.4 | 70.0 |
+| Ours - Generalist - L | 75.8 | 69.0 |
+
+专项大模型在两个 benchmark 都取得较高成绩，通用版分别降低 0.6 和 1.0 个 J&F 点。与同样基于 Wan2.1 14B 的 ReferEverything 相比，它在 Ref-DAVIS 上提高 1.4 点，在 MeViS 上提高 9.7 点。不过，这张表没有把所有方法的数据、适配过程及交互方式统一，不能把全部差距单独归因于某一种预训练目标。这里尤其应记住，指代分割使用了真实的语言监督数据。
+
+稀疏人体姿态展示了架构扩展的可行性。Figure 8 的设置直接输入完整视频帧，不要求先运行 person detection 或 2D keypoint estimation。Table 1 中，14B 专项版的 EMDB MPJPE 为 71.8，对照 GVHMR、TRAM、Genmo 分别为 72.6、74.4、73.0。专项模型在这种直接输入接口下达到有竞争力的结果。[↗](https://arxiv.org/pdf/2607.09024v1#page=10)[↗](https://arxiv.org/pdf/2607.09024v1#page=11)
+
+但通用版关键点一格为 `~`，不能把专项版的 71.8 填过去。作者明确报告，加入关键点联合训练会严重损害关键点成绩，也会影响其他密集任务。这不是一个可以用“通用版略有下降”带过的细节，它决定了论文的统一模型到底统一到了什么程度。[↗](https://arxiv.org/pdf/2607.09024v1#page=12)
+
+![GenCeption task comparison table](../../assets/images/paper-deep-dives/embodied-ai/genception/table-1-task-comparison.png){ width="1200" }
+
+*原论文 Table 1。阅读底部 Specialist-S、Specialist-L 和 Generalist-L 三行时，要沿同一列比较；Generalist 的关键点结果为空缺，不能与 Specialist 的最佳值合并。上方专用方法也只在对应任务列有可用结果。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)*
+
+## 联合训练的负面结果为何重要
+
+统一输出格式可以降低工程复杂度，却不会自动让任务梯度兼容。把 14B 专项版与通用版放在一起，能看到模型容量、训练混合与任务接口共同带来的取舍。
+
+| Metric / Benchmark | Specialist-L | Generalist-L | Joint-training change |
+|---|---:|---:|---|
+| Normal mAE / Sintel ↓ | 29.7 | 29.3 | Improves |
+| Normal mAE / Hi4D ↓ | 10.99 | 11.47 | Regresses |
+| Depth AbsRel / Sintel ↓ | 0.130 | 0.156 | Regresses |
+| Depth AbsRel / KITTI ↓ | 0.048 | 0.048 | Unchanged |
+| Depth AbsRel / ETH3D ↓ | 0.037 | 0.044 | Regresses |
+| Camera ATE / Sintel ↓ | 0.050 | 0.062 | Regresses |
+| Camera RPE-T / Sintel ↓ | 0.018 | 0.018 | Unchanged |
+| Foreground MSE / VideoMatte ↓ | 0.0027 | 0.0010 | Improves |
+| Foreground MSE / PhotoMatte ↓ | 0.0009 | 0.0008 | Improves |
+| Referring J&F / Ref-DAVIS ↑ | 76.4 | 75.8 | Regresses slightly |
+| Referring J&F / MeViS ↑ | 70.0 | 69.0 | Regresses slightly |
+
+这些差异支持的是选择性正迁移。比如通用版让前景 MSE 更低，但 Sintel 深度 AbsRel 从 0.130 增至 0.156，相对增加 20%；这个相对变化由表内数值计算，各任务仍需按自身指标判断。评估通用模型时，需要按目标应用分别决定这些交换是否可以接受。
+
+作者为稀疏任务退化提出两种解释。坐标回归与预训练的连续像素输出差异较大；从零学习的额外 token 进入 DiT 后，可能扰动原本已经训练好的注意力模式，需要更多数据重新协调。这两点是与现象相符的机制假设，论文没有通过逐项控制实验把它们完全分离。不能直接断言“所有负迁移都由随机查询造成”，也不能据此认定查询 token 这条路线本身不可行。[↗](https://arxiv.org/pdf/2607.09024v1#page=12)[↗](https://arxiv.org/pdf/2607.09024v1#page=13)
+
+更稳妥的设计启示是，预训练接口的一致性可以减少适配困难，但统一框架需要同时验证单任务可表达性和多任务可共训性。GenCeption 的密集 RGB 路径较贴近生成预训练；稀疏坐标路径则用更大的接口变化换取下游直接可用的结构化输出，其代价需要独立评估。
+
+## 哪些实验支持预训练有效，哪些还不能证明目标本身最优
+
+论文提供了两类相关证据。Table 2 将不同预训练骨干在同一感知训练集上微调，比较深度结果；Figure 9 在 DiT 内改变继承预训练权重的层数，观察训练收敛。两者回答不同问题，不能合并成一个完全控制了数据与算力的“预训练目标优劣”实验。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)[↗](https://arxiv.org/pdf/2607.09024v1#page=13)
+
+同一个 7.5K 视频、约 0.9M 帧的合成感知训练集上，Table 2 的结果如下。前三列深度误差与 Average 均为 AbsRel，最后一列是作者报告的平均 $\delta_1$。
+
+| Backbone | Model size | Sintel ↓ | KITTI ↓ | ETH3D ↓ | Average AbsRel ↓ | Average $\delta_1$ ↑ |
+|---|---:|---:|---:|---:|---:|---:|
+| V-JEPA-H | 0.6B | 0.422 | 0.226 | 0.196 | 0.281 | 52.2 |
+| VideoMAE V2-H | 0.6B | 0.275 | 0.124 | 0.126 | 0.175 | 62.0 |
+| VideoMAE V2-G | 1B | 0.260 | 0.105 | 0.099 | 0.154 | 66.9 |
+| Wan2.1-S | 1.3B | 0.201 | 0.099 | 0.068 | 0.122 | 85.8 |
+| Wan2.1-L | 14B | 0.181 | 0.060 | 0.039 | 0.093 | 90.7 |
+
+Wan 初始化在这套适配方案中表现更好。与接近规模的 VideoMAE V2-G 相比，1.3B Wan 的平均 AbsRel 从 0.154 降到 0.122；继续放大至 14B，则降到 0.093。这是生成模型可提供有效感知初始化的证据。
+
+但下游数据相同，不等于基础预训练数据、目标和规模全部相同。14B 与 0.6B 的参数差距很大；即使比较 1B 与 1.3B，原始视频数据和预训练配方也未被严格控制。因此，这个实验不足以把全部优势归因为 diffusion objective 本身。它更直接支持“现有 Wan 权重在此感知后训练方案中更有效”，而不是“在任何等预算条件下扩散预训练一定最佳”。
+
+Figure 9 更接近对预训练必要性的直接检验。图中继承预训练权重的层数为 0、8、16、24、32、40；纵轴是对数刻度的 **training loss**，横轴到 2500 步。完全从零初始化的曲线整体下降很慢，继承更多层后通常下降更快、终点更低，完整预训练的 40 层表现较好。
+
+![GenCeption pretrained-layer ablation](../../assets/images/paper-deep-dives/embodied-ai/genception/figure-9-pretrained-layers.png){ width="1000" }
+
+*原论文 Figure 9。先对比从零初始化与任何一条继承预训练权重的曲线，再看增加继承层数的趋势。图测量训练损失，支持收敛收益，不能直接当作测试集几何误差或证明从零训练永远无法学习。[↗](https://arxiv.org/pdf/2607.09024v1#page=12)*
+
+这个结果也解释了为什么保持解码接口、少改网络结构具有实际价值。大量有效参数已经来自生成预训练，下游数据主要承担把它们导向目标任务的工作；新增随机初始化组件则需要在较小后训练数据上补学其与这些表示的配合。
+
+## 数据效率成立于感知后训练口径
+
+扩大数据时，作者从一个人体合成数据集增加到四个合成数据集，统计从 7.5K 视频、0.9M 帧变为 8.08K 视频、1.23M 帧。这里同时改变了数据量和场景组成，不能当作只复制更多同分布样本的纯规模实验。
+
+| Backbone | Datasets | Videos | Frames | Average AbsRel ↓ | Average $\delta_1$ ↑ |
+|---|---:|---:|---:|---:|---:|
+| Wan2.1-S, 1.3B | 1 | 7.5K | 0.9M | 0.122 | 85.8 |
+| Wan2.1-S, 1.3B | 4 | 8.08K | 1.23M | 0.094 | 90.6 |
+| Wan2.1-L, 14B | 1 | 7.5K | 0.9M | 0.093 | 90.7 |
+| Wan2.1-L, 14B | 4 | 8.08K | 1.23M | 0.071 | 93.8 |
+
+增大模型与扩充数据都改善平均成绩。1.3B 的平均误差减少 0.028，14B 减少 0.022；四数据集条件下，大模型比小模型进一步降低 0.023。它们支持初步的规模与数据收益，但只有两档模型、两种数据组成，尚不足以拟合稳定 scaling law 或预言任意扩展后的性能。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)[↗](https://arxiv.org/pdf/2607.09024v1#page=13)
+
+再与 Table 2 中其他感知模型的训练规模比较。
+
+| Method | Model size | Training datasets | Training frames | Average AbsRel ↓ |
+|---|---:|---:|---:|---:|
+| DepthAnything V3-G | 1.15B | 22+ | ~200M | 0.096 |
+| D4RT | 1B | 11+ | ~86M | 0.082 |
+| VGGT-Ω | 1B | 33+ | ~600M | 0.067 |
+| Ours - Wan2.1-L | 14B | 4 | 1.23M | 0.071 |
+
+按该表帧数直接计算，200M、86M、600M 分别约为 1.23M 的 **163、70、488 倍**。GenCeption 用较少的感知监督帧达到接近这些模型的误差区间，但 0.071 仍高于 VGGT-Ω 的 0.067；模型规模也从约 1B 增至 14B。论文使用“7–500 倍更少数据”概括数据效率，具体比较时应以相应行的数量和统计口径为准，而不是把这个区间当成每种对照都满足的精确倍率。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)
+
+更重要的是，这里的 1.23M 没有计入 Wan2.1 先前的生成预训练视频和计算。它反映的是复用已有基础权重后，下游感知标注与训练数据需求较少，不能证明完整训练生命周期比其他方法便宜同样倍数。
 
 ![GenCeption 多任务结果和数据效率](../../assets/images/paper-deep-dives/embodied-ai/genception/figure-2-results-and-efficiency.png){ width="920" }
 
-<small>图源：同论文 Figure 2。左侧雷达图比较多任务 specialist/generalist 与专用模型；右侧以 unique training frames 为横轴、depth AbsRel 为纵轴，展示预训练方法、模型大小和数据量的关系。</small>
+*原论文 Figure 2。左侧区分专项与通用模型，右侧横轴为对数刻度的感知训练帧数，纵轴为平均深度 AbsRel，越低越好。右图应结合参数规模及基础预训练来源读取。[↗](https://arxiv.org/pdf/2607.09024v1#page=3)*
 
-**这张结果图的读数边界。** 右图最有价值的是“同一后训练数据下的预训练比较”和“随着数据/模型规模增加的趋势”；它不是一个严格的 scaling law，也不意味着所有视觉任务都遵循同样曲线。左图显示的是多任务覆盖能力，不能被压缩成单一总分。
+![GenCeption pretraining and data comparison](../../assets/images/paper-deep-dives/embodied-ai/genception/table-2-pretraining-data.png){ width="1100" }
 
-### Ablation：统一并不等于没有冲突
+*原论文 Table 2。上半部分固定感知微调数据比较骨干，下半部分比较外部模型与扩充数据后的 Wan；它们分别回答初始化效果与下游数据效率的问题。[↗](https://arxiv.org/pdf/2607.09024v1#page=11)*
 
-论文给出的消融诊断比“全任务 SOTA”更重要：
+Table 1 与 Table 2 对 D4RT 的部分数值并不一致。前者 KITTI AbsRel 为 0.051、ETH3D 未列结果，后者为 0.055 和 0.045。本文保留各自表格口径；在缺少解释时，不应混合这些单元格重新计算一个所谓统一排名。
 
-| 诊断 | 结果 | 说明 |
-| --- | --- | --- |
-| Joint training vs. task-specific | foreground segmentation 稳定受益；surface normal、depth、camera pose 混合；3D human keypoint 严重退化 | 稀疏 token 回归和 dense latent 预训练空间存在接口冲突 |
-| Pretrained layers transfer | 从随机初始化 DiT 开始几乎没有学习曲线；迁移的预训练层越多，性能越好 | 下游性能依赖视频生成预训练，不只是模型容量 |
-| WAN vs. V-JEPA / VideoMAE | 相同后训练集下 WAN 深度结果更好 | 支持生成式目标携带更强时空先验，但不完全排除实现与结构差异 |
-| Data / model scaling | 测试区间内更多数据、更大 WAN 模型通常更好 | 论文只报告 preliminary scaling property，尚未给出普适 scaling law |
+## 一次前向的真实成本与泛化边界
 
-作者解释 3D keypoint 退化有两个原因：第一，token-based coordinate regression 与连续 pixel-space 预训练不一致；第二，从零初始化的 learnable tokens 会扰动预训练 DiT 的 native attention mechanics，需要更多数据才能收敛。这是对统一多任务模型设计很有价值的反例：共享 backbone 和 unified loss 可以减少工程分支，但不代表不同输出接口天然兼容。
+GenCeption 去掉了原 Wan 的 50 步扩散采样，但整个感知路径还包含文本编码、视频 VAE 编码、DiT 和输出解码。作者在 **单个 v6e TPU**、81 帧、$480\times832$ 输入下报告以下成本。[↗](https://arxiv.org/pdf/2607.09024v1#page=10)
 
-### Emergent behaviors：从合成到真实、从人到非人
+| Model | End-to-end latency | Throughput | DiT latency | Reported memory |
+|---|---:|---:|---:|---:|
+| GenCeption 1.3B | 5.92 s | 13.6 FPS | 0.96 s | 15.3 GB |
+| GenCeption 14B | 10.03 s | 8.0 FPS | 5.11 s | 42.8 GB |
 
-论文 Figure 10 展示三类泛化：
+按表内总时间减去 DiT 时间，剩余路径分别约为 4.96 秒和 4.92 秒。这个差额包括其他端到端环节，不能全部指定为 VAE 解码耗时；但它已经表明，小模型的多数时间并不在 DiT 内。继续压缩 DiT 时，需要同时检查编码、解码与数据移动，否则网络前向的加速不会等比例转化为整体吞吐。
 
-- 训练视频每次只有一个对象，测试时可对真实视频中的多个对象做预测；
-- 训练只使用人类类别，测试时可处理动物和类人 articulated objects；
-- 合成 Blender 数据训练后，真实视频中的细节仍能得到较好的深度、mask 和姿态结果。
+两种规模还共享约 10 GB 的文本编码器和约 0.25 GB 的 VAE，论文提出可以卸载到系统内存，以速度交换设备内存。原文没有完全展开总内存数字的包含关系和卸载后的速度，所以不能自行把这些数字重复相加，或声称卸载不影响延迟。
+
+81 帧除以完整处理时间得到的是 clip 吞吐率，不是每一帧到达后立即返回预测的延迟。模型按完整视频片段处理，报告的 8.0/13.6 FPS 也低于输入的 24 FPS。一次 DiT 前向因此不等于已经实现逐帧实时感知，更不能从原来 50 个采样步骤直接推导端到端快了 50 倍。
+
+最后看 Figure 10 的泛化例子。左侧模型在单人体合成训练后，可以对真实多人的场景输出密集人体表示；右侧在猫、猴子、大型猫科动物、河马等对象上展示法向、深度、mask 和关键点。下游感知监督以人为主，模型仍能在这些类别上输出有结构的结果，说明预训练知识可以超出后训练类别被调用。[↗](https://arxiv.org/pdf/2607.09024v1#page=13)
 
 ![GenCeption 的跨实例和跨类别泛化](../../assets/images/paper-deep-dives/embodied-ai/genception/figure-10-emergent-generalization.png){ width="920" }
 
-<small>图源：同论文 Figure 10。左侧是从单实例合成训练到真实多实例视频；右侧是仅在人类视频上训练后，对猫、猴、牛、河马等非人类别进行深度、分割和关键点预测。</small>
+*原论文 Figure 10。左侧是单实例到多实例的迁移，右侧是人体感知训练之外的类别。它展示定性输出，不提供这些动物类别上的系统误差统计，也不意味着动物从未出现在基础视频预训练中。[↗](https://arxiv.org/pdf/2607.09024v1#page=13)*
 
-**证据边界。** 这些行为可以说明视频生成预训练中存在可迁移的视觉先验，但“emergent”是作者对现象的命名和解释，不是对机制的独立证明。尤其是 Figure 10 的跨类别结果主要是定性展示；它不能替代在机器人、非刚体物体、遮挡、接触和动作条件下的定量闭环评测。
+这些例子与标准 benchmark 的几何成绩共同支持视频生成先验具有迁移价值，但不应把可视化的动物关键点直接当作经过解剖标注验证的姿态。类似地，原生视频骨干为跨帧一致性提供了建模基础，主表却没有单独量化各任务的时间一致性收益。输出看起来连续、单帧误差较低、下游能稳定使用，仍是需要分别检验的性质。
 
-## 对具身智能的启发
-
-### 1. 把视频生成骨干当作状态编码器
-
-具身系统需要的不是一张“看起来合理”的图，而是可被规划器和 policy 消费的状态：深度、相机、物体 mask、关键点、动态轨迹和不确定性。GenCeption 的统一 prompt 接口提供了一个可能的状态提取层：同一视频输入可以按任务请求不同 modality，再把结果写入 episode state。
-
-这条启发属于本站推断。论文没有测试 action-conditioned prediction，也没有报告 perception error 如何传递到机器人成功率，因此落地时仍需单独做几何尺度校准、时序稳定性、遮挡恢复和控制敏感性评测。
-
-### 2. 合成数据的价值不只在数量
-
-论文的 7,500 个视频不是简单复制，而是把 identity、motion、scene、HDRI、焦距和相机轨迹组合成可控变化，并利用 render pass 生成多种 ground truth。这种设计适合具身数据引擎：同一段状态变化可以同时产生深度、法线、mask、joint 和 pose label，减少跨任务标注不一致。
-
-但人体中心的合成数据并不等于机器人世界的充分覆盖。桌面物体、柔性物体、接触动力学、夹爪遮挡和相机安装方式仍然需要额外数据或仿真资产；Figure 10 的 OOD object 结果不能替代这些物理条件。
-
-### 3. Prompt 和 data representation 是可扩展接口
-
-如果新任务能被编码成连续 target video 或 per-frame sparse token，就有机会复用 backbone、decoder 和 L2 loss。对具身系统而言，候选任务包括：相机 raymap、末端关键点、抓取区域、物体可达性 mask、场景深度和短时轨迹。
-
-但是，输出“能被编码”不等于“足够支持决策”。动作可行性、碰撞约束、接触状态和置信度可能需要显式结构化输出；如果一味把所有东西塞进 RGB-like space，会掩盖坐标系、尺度和不确定性语义。
-
-## 局限与风险
-
-1. **没有机器人闭环。** 论文评测的是视觉感知 benchmark，不包含机械臂、移动机器人、动作条件、抓取成功率、控制延迟或安全停止。
-2. **泛化证据部分是定性的。** synthetic-to-real、multi-instance 和 OOD category 现象有启发，但不能直接等价于长时程具身泛化。
-3. **统一模型存在任务冲突。** Table 1 明确显示 joint training 对 3D keypoint 可能严重退化，generalist 也不总是优于 specialist。
-4. **训练配方仍有未披露项。** gradient clipping / dropping 的阈值、任务 mixture ratio、每任务样本权重和完整数据清洗细节没有在正文中给出，独立复现会受影响。
-5. **预训练比较不是完全隔离变量。** WAN、V-JEPA 和 VideoMAE 的架构与训练目标不同，结果支持“WAN 路线更强”，但不能把全部差异严格归因于 diffusion objective。
-6. **所谓 universal world model 仍未被闭环验证。** 感知迁移说明模型可能学到了丰富的视觉先验，但没有证明它能预测动作后果、进行规划或在分布外物理交互中保持稳定。
-
-### 关键术语
-
-- **GenCeption（GenCeption）**：本文提出的通用视频感知模型，把视频生成扩散 backbone 改造成单步、多任务感知器。
-- **Video Generative Pre-training（视频生成式预训练）**：以 text-to-video 生成作为预训练目标，学习时空、几何和视觉语言先验。
-- **Feed-Forward Reformulation（前向化重写）**：给定 clean input latent，固定 $t=0$，用一次 DiT 前向替代多步 diffusion sampling。
-- **Rectified Flow（整流流）**：把噪声与目标样本之间的速度场作为生成训练目标；本文利用 $v=\epsilon-x_0$ 的形式做单步感知重写。
-- **Unified Task Representation（统一任务表示）**：把不同密集目标编码到 RGB ambient space，任务差异由数据格式和 prompt 指定。
-- **Rothko Raymap（Rothko 光线图）**：将相机 ray origins 和 directions 按空间布局装入三通道图，用于共享视频 decoder。
-- **Learnable Tokens（可学习 token）**：为稀疏任务按帧添加的查询 token，再由 MLP 输出坐标。
-- **Expression-Referring Segmentation（表达式指代分割）**：根据“左边正在奔跑的人”这类语言表达，在视频中分割对应对象。
-- **Emergent Behavior（涌现行为）**：论文对训练目标之外的跨实例、跨类别和 synthetic-to-real 泛化现象的称呼；这里不等同于已证明的通用智能机制。
-
-## 阅读结论
-
-GenCeption 属于 **前沿待复现 / 官方论文结果**。它最可复用的机制是把大规模视频生成预训练当作视觉状态底座，再以 prompt、target representation 和统一 L2 loss 扩展任务；对具身系统最值得吸收的是合成多模态标注、视频级时空表征和几何状态接口。它不能外推为机器人 policy、物理世界模拟器或已经验证的闭环 world model。下一步证据应包括公开代码和完整训练配方、机器人或动作条件评测、任务冲突下的更细 ablation，以及独立复现和感知误差到控制成功率的链路分析。
-
-## 外部精读
-
-- [原论文 arXiv 页面](https://arxiv.org/abs/2607.09024)
-- [原论文 PDF](https://arxiv.org/pdf/2607.09024)
-- [GenCeption 项目页](https://genception.github.io)
-- [WAN：Open and Advanced Large-Scale Video Generative Models](https://arxiv.org/abs/2503.20314)
+这篇论文最可复用的部分，是一条具体的模型改造路径：复用生成预训练末端接口，用干净输入和固定噪声条件建立确定性感知映射，将密集任务差异落实到目标编码，并把标注资源集中到感知后训练。它同时留下一个明确的未解问题：当结构化稀疏输出要求新增查询与坐标头时，怎样在保留原视频表示的同时实现可靠共训。GenCeption 已经证明多种感知能力能够从同一类视频生成器中提取出来，统一模型的任务冲突与部署成本则决定了这条路线还能走多远。

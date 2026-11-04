@@ -1,194 +1,77 @@
-# WAM 与 3D 视觉：世界模型从视频想象走向物理闭环
+# WAM 与三维视觉，分别怎样解释一次推杯子的动作
 
-> **关注的问题。** `World Action Models` 与 `3DV in WM` 如何从视频想象走向机器人可用的物理闭环。
+机械臂准备从左侧推杯子。视频模型可以预测杯子会向右移动，三维模型可以预测杯子表面各点的位移，控制策略可以直接输出末端轨迹。它们描述同一个过程，却在提供不同类型的信息。选择哪种表示，需要看后续决策怎样使用它。
 
-2026 年具身智能里，世界模型和 WAM 迅速升温，真正值得追问的是 **世界模型到底怎样变成机器人可用的物理闭环**。
+把 VLA 简化成“只懂语义”、把 WAM 简化成“已经懂物理”都过于粗糙。动作学习也可以包含记忆、几何和反馈，未来视频监督也会遗漏接触与隐藏力。下面沿推杯子任务解释视频、点流和重建的连接。
 
-如果只从概念上讲，WAM 很容易被理解成“视频生成模型加动作头”。但结合 DreamZero、Fast-WAM、PointWorld 和 D4RT 几篇原论文看，事情更细：WAM 的价值不一定在推理时生成一段完整未来视频，而在于训练时让动作、未来状态和世界动态互相约束；3D 视觉的价值也不只是多一个输入模态，而是把未来预测变成深度、位姿、点流、轨迹和风险这些可检查的物理证据。
+## 视频与动作联合建模，增加了哪条约束
+
+如果训练样本只给当前图像和动作，模型主要学习它们的配对。加入未来视频后，内部表示还需要解释动作附近的可见变化，例如夹爪接近、杯子平移和任务阶段推进。
+
+DreamZero 的总览图可以从观测、语言与机器人状态顺着箭头读到未来视频和动作。这展示联合建模的输入输出，支持“动作与可见后果共同学习”这一机制；是否学会未见接触规律，应由作者具体实验和进一步验证回答。
 
 ![DreamZero overview](../assets/images/thinking-exploration/wam-3dv-world-models/dreamzero-overview.png){ width="920" }
 
-<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 1，从论文 PDF 截取。原图展示 DreamZero 如何把多样非重复机器人数据、视频、语言、本体状态、未来视频和连续动作放进同一条 WAM 路线。读图重点：先看它的目标不是“生成好看的视频”，而是让视频动态先验服务真实机器人动作泛化。</small>
+<small>图源：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)，Figure 1，从论文 PDF 截取。原图展示 DreamZero 如何把多样非重复机器人数据、视频、语言、本体状态、未来视频和连续动作放进同一条 WAM 路线。</small>
 
-## 先把 WAM 和 VLA 分开
+这种训练可能利用视频预训练先验，也会面临动作尺度、时序对齐和生成成本。杯子看起来平移得合理，仍可能发生夹爪穿模，或者动作实际上没有足够摩擦推动杯子。可见一致性是证据的一部分。
 
-VLA 和 WAM 的差异可以先压成两句话：VLA 有强语义理解能力和大量真机部署实例；WAM 有物理动态建模能力和更强场景泛化潜力。这个对比还可以继续往下拆。
+## 训练时预测未来，部署时是否还要生成
 
-VLA 的典型接口是：
+假设一次行动预算很紧，生成未来视频要占用大部分时间。可以问，视频分支是否必须在线运行，还是它已经在训练中改善了动作表示。
 
-```text
-观测 + 语言 -> 动作
-```
-
-WAM 的典型接口更像：
-
-```text
-观测 + 语言 + 本体状态 -> 未来世界 + 动作
-```
-
-差异不只是输出多了一个未来视频，而是训练信号变了。VLA 可以把动作当成监督标签回归；WAM 则要求动作和未来世界共同成立。一个动作是否合理，要看它是否能解释未来画面、物体运动、接触关系和任务进展。
-
-DreamZero 论文的核心证据也在这里。原文强调，它基于预训练视频扩散 backbone 构建 WAM，通过联合建模 video 和 action，从异构机器人数据中学习技能，而不依赖大量重复演示；论文报告在真实机器人新任务和新环境泛化上相对 VLA 有超过 2 倍提升，并通过系统优化让 14B 自回归视频扩散模型达到 7Hz 闭环控制。这里最关键的不是数字本身，而是证据等级：它不是只展示离线视频，而是把 WAM 放进真实闭环里验证。
-
-中文解读文章也基本抓住了这个点。具身智能观察室的 DreamZero 文章把它解释成从“观测到动作映射”转向“让动作解释未来物理状态”；机器之心转载的分析则提出一个很好的追问：DreamZero 到底是范式突破，还是数据、模型规模、时间上下文和视频辅助监督共同作用的结果。这个问题比简单喊“WAM 取代 VLA”更值得保留。
-
-更稳妥的判断是：**WAM 不是 VLA 的替代词，而是动作学习的一种更强约束方式。** 语义层面仍需要 VLA / VLM，执行层面仍需要 controller，安全层面仍需要 checker。WAM 的独特位置，是把动作和未来动态绑定起来。
-
-## Fast-WAM 的反向提醒：训练时世界建模，推理时未必要想象
-
-Fast-WAM 的关键结论是：训练时视频预测监督比推理时的视频预测先验更重要；为 action prediction 加入未来帧 video tokens，并没有显著增加成功率；推理时不预测视频 tokens，则能显著减少计算开销。
+Fast-WAM 的范式图恰好区分联合生成、先想象后动作与部署跳过未来预测。原文在作者设置中比较这些因素，发现保留视频共同训练、跳过测试时未来生成仍有竞争力。这个对照支持把两个因素拆开分析，不支持“未来预测对所有任务都没用”。
 
 ![Fast-WAM paradigms](../assets/images/thinking-exploration/wam-3dv-world-models/fastwam-paradigms.png)
 
-<small>图源：[Fast-WAM: Do World Action Models Need Test-time Future Imagination?](https://arxiv.org/abs/2603.16666)，Figure 1，从论文 PDF 截取。原图对比三种 WAM 范式：联合去噪未来视频与动作、先生成未来视频再预测动作、以及 Fast-WAM 在推理时跳过未来视频分支。读图重点：这张图把“世界建模监督”和“测试时显式想象”拆开了。</small>
+<small>图源：[Fast-WAM: Do World Action Models Need Test-time Future Imagination?](https://arxiv.org/abs/2603.16666)，Figure 1，从论文 PDF 截取。原图对比三种 WAM 范式：联合去噪未来视频与动作、先生成未来视频再预测动作、以及 Fast-WAM 在推理时跳过未来视频分支。</small>
 
-Fast-WAM 原论文的问题非常尖锐：WAM 的收益到底来自测试时显式生成未来，还是来自训练时视频建模带来的表示塑形？论文的结论倾向后者。它保留训练阶段的视频 co-training，但推理时跳过未来预测，直接做动作生成；论文报告 190 ms 推理延迟，比 imagine-then-execute WAM 快 4 倍以上，同时去掉视频 co-training 会带来更大的性能下降。
+推杯子若只需要快速修正末端，直接策略可能足够；若需要比较十种绕障碍路线，显式后果查询仍可能提供价值。应在同一任务、数据和端到端预算下做取舍。
 
-这对理解 WAM 很关键。很多时候，未来视频更像训练时的教师，而不一定是部署时的输出。视频预测迫使模型学习物体、手、工具和场景的时序变化；但到了控制循环里，系统可能只需要 action chunk、风险估计、任务进展或 latent state。
+## 点流让“杯子向右移动”成为可查询的几何量
 
-所以“WAM 的价值可能不只在推理时想象未来”这一点，可以更明确地表达为：
+设杯子上一个点当前位置为 $p=(0.4,0.1,0.2)$ m，动作后位移预测为 $\Delta p=(0.03,0,0)$ m，则下一位置为 $(0.43,0.1,0.2)$ m。对许多点都做这种预测，就可以检查目标距离、物体形变或与障碍的接近程度。
 
-```text
-训练时：视频预测提供密集动态监督，帮助动作表征对齐物理世界。
-推理时：是否显式生成未来视频，要看下游是否真的消费它。
-```
-
-这也回应了青稞社区那篇 WAM 总结里的一个直觉：AC-WM 和 WAM 的区别可以从“动作是输入还是输出”来理解，但真实系统未必只选一种纯形态。未来更可能是 VLA、WAM、AC-WM、risk model 和 controller 的混合架构。
-
-## 为什么 3D 视觉会进入 WAM
-
-如果 WAM 只生成二维视频，它仍然会遇到一个工程问题：像素未来能不能被控制系统使用？
-
-机器人真正关心的不是一段未来视频是否逼真，而是：
-
-1. 物体、夹爪和目标区域在什么三维位置；
-2. 相机外参、深度和尺度是否可信；
-3. 动作后是否会遮挡、碰撞、滑落或卡住；
-4. 任务阶段是否推进；
-5. 真实观测刷新后，模型能否纠偏。
-
-这些问题都指向 3D。二维视频可以隐含几何，但隐含不等于可检查；对 planner 和 checker 来说，深度、位姿、点云、点流和可见性比纹理更直接。
-
-DepthVLA、PointVLA、Spatial Forcing、BridgeVLA 可以理解成“显式注入三维信息”的路线：把深度、点云、空间 token 或几何约束接入 VLA / WAM。它的优点是容易和现有架构结合，缺点是三维信号可能只是辅助特征。要证明它真的进入了世界模型层，仍然要看反事实动作、闭环成功率和失败回放。
-
-## PointWorld：把状态和动作都放进 3D 点流
-
-PointWorld 最能代表“3D world model”的路线野心。原论文把状态和动作统一到共享三维空间：输入 RGB-D、机器人 URDF 和关节动作后，先把机器人动作转换成 3D robot point flows，再和场景点云拼接，最后预测全场景未来点流。
+[PointWorld](https://arxiv.org/abs/2601.03782)把环境和机器人动作表示为三维点流。总览图中应先区分当前场景点与用于条件化的机器人点运动，再看预测的全场景位移。它并非只在图像输入旁添加一张深度图。
 
 ![PointWorld overview](../assets/images/thinking-exploration/wam-3dv-world-models/pointworld-overview.png){ width="920" }
 
-<small>图源：[PointWorld: Scaling 3D World Models for In-The-Wild Robotic Manipulation](https://arxiv.org/abs/2601.03782)，Figure 1，从论文 PDF 截取。原图展示 PointWorld 用静态点云和机器人 3D 点流预测全场景 3D 点流。读图重点：这不是“给 VLA 加深度图”，而是把动作本身也改写成三维空间里的运动。</small>
+<small>图源：[PointWorld: Scaling 3D World Models for In-The-Wild Robotic Manipulation](https://arxiv.org/abs/2601.03782)，Figure 1，从论文 PDF 截取。原图展示 PointWorld 用静态点云和机器人 3D 点流预测全场景 3D 点流。</small>
+
+动作点流可由机器人已知 URDF、关节配置序列和正向运动学得到。原文实际为效率主要采样夹爪表面点。这种公共几何描述能减少本体专属关节空间差异，但仍依赖运动学、标定与动作可执行性。
 
 ![PointWorld architecture](../assets/images/thinking-exploration/wam-3dv-world-models/pointworld-architecture.png){ .atlas-figure-compact }
 
-<small>图源：PointWorld 论文 Figure 2，从论文 PDF 截取。原图表达：RGB-D 观测、URDF、关节动作先被转换成 scene points 与 robot flows 的混合点云，再由 DINOv3 与 Point Transformer V3 处理并预测 full-scene point flow。读图重点：动作接口从“某个机器人专属关节空间”转向“末端和机器人表面在 3D 中怎样运动”。</small>
+<small>图源：PointWorld 论文 Figure 2，从论文 PDF 截取。原图表达：RGB-D 观测、URDF、关节动作先被转换成 scene points 与 robot flows 的混合点云，再由 DINOv3 与 Point Transformer V3 处理并预测 full-scene point flow。</small>
 
-原论文的几个数字值得关注：
+结构图进一步说明 scene points 与 robot flows 怎样进入模型。查询预测后仍需成本函数和搜索决定动作，点流本身不等于策略。深度噪声、遮挡和点对应错误会继续传入规划；预测一段位移也不意味着系统建立了永久对象身份。
 
-| 维度 | PointWorld 论文证据 |
-| --- | --- |
-| 数据规模 | 约 2M trajectories / 500 hours，覆盖真实与仿真、Franka 与双臂人形机器人 |
-| 训练配置 | PointWorld-1B 使用 128 张 H100 训练 20 天 |
-| 推理速度 | 约 0.1s，可接入 MPC |
-| 输出形式 | full-scene 3D point flow，而不是只预测单个物体或末端轨迹 |
+## 三维重建提供当前证据，未来干预需要额外模型
 
-这条路线对 WAM 的启发很大：如果动作最终发生在三维空间里，就不要总把动作困在某个 embodiment 的关节角里。用 3D 点流表示动作，可以更自然地表达接触、遮挡、物体形变、重力和跨机器人迁移。
-
-但它也把数据 pipeline 的难度暴露出来了。PointWorld 的附录提到使用 FoundationStereo、VGGT、CoTracker3 等组件改善 DROID 的深度、外参和点跟踪质量。也就是说，3D 世界模型不是只靠模型结构“长出几何”，而是严重依赖深度、相机姿态、机器人 mask、点追踪和质量过滤。
-
-这也引出一个工程判断：**Data Pipeline 仍为重中之重。**
-
-## D4RT：4D 重建提示我们重新理解“世界状态”
-
-PointWorld 讨论的是机器人动作条件下的 3D 点流；D4RT 则从视频 4D 重建角度给了另一个启发：动态世界不应该被拆成一堆互相打补丁的任务。
+杯子被手遮住时，重建模型可以利用多帧恢复可见几何与运动。[D4RT](https://arxiv.org/abs/2512.08924)用统一查询接口估计视频中的深度、点轨迹和相机相关量。下图先看它输出的三类结果，它们来自共享场景表示。
 
 ![D4RT overview](../assets/images/thinking-exploration/wam-3dv-world-models/d4rt-overview.png){ .atlas-figure-compact }
 
-<small>图源：[Efficiently Reconstructing Dynamic Scenes One D4RT at a Time](https://arxiv.org/abs/2512.08924)，Figure 1，从论文 PDF 截取。原图展示 D4RT 用统一接口输出点云、点轨迹和相机参数。读图重点：D4RT 的意义不只是 4D 重建效果，而是把深度、点轨迹、相机和动态场景放进同一套查询接口。</small>
+<small>图源：[Efficiently Reconstructing Dynamic Scenes One D4RT at a Time](https://arxiv.org/abs/2512.08924)，Figure 1，从论文 PDF 截取。原图展示 D4RT 用统一接口输出点云、点轨迹和相机参数。</small>
+
+下一张图把查询写得更具体，给出源图像点、源时间、目标时间和相机参考帧，得到对应三维位置。目标时间属于被输入视频支持的重建问题；这是对已观测动态的推断，并不自动给出“换一种机器人动作会怎样”的反事实动力学。
 
 ![D4RT query interface](../assets/images/thinking-exploration/wam-3dv-world-models/d4rt-query-interface.png){ width="920" }
 
-<small>图源：D4RT 论文 Figure 2，从论文 PDF 截取。原图展示 D4RT 的全局场景表示和查询式 decoder：给定源点、源时刻、目标时刻和相机参考帧，模型预测目标 3D 位置。读图重点：这类 query interface 很适合作为世界模型状态层的设计参考。</small>
+<small>图源：D4RT 论文 Figure 2，从论文 PDF 截取。原图展示 D4RT 的全局场景表示和查询式 decoder：给定源点、源时刻、目标时刻和相机参考帧，模型预测目标 3D 位置。</small>
 
-D4RT 项目页和 DeepMind 博客都强调同一点：它不是为 depth、tracking、camera pose 分别做一个模块，而是用统一 encoder-decoder Transformer 和查询机制，在一个 global scene representation 上按需解码。DeepMind 博客还强调，传统动态场景 3D 理解往往慢且碎片化，而 D4RT 的查询式设计能让 4D 重建更接近实时应用。
+因此可以构想先用重建建立状态，再由动作条件点流模型预测后果，最后由 planner 选择动作。但这是系统组合假设。模块之间的误差、表示转换和总时延都可能让组合不如更简单策略，必须实测。
 
-雷峰网的中文解读有一句判断值得吸收：D4RT 重要的不是“更多模块”，而是用一个干净接口把原本分裂的任务收拢到同一套表示里。这个观点放到 WAM 里也成立。真正有用的世界模型，不应该是视频模型、深度模型、跟踪模型、位姿模型和动作模型的松散拼接；它至少要有一个能被不同消费方查询的状态表示。
+## 让同一次失败检验三种表示
 
-## 中文公众号文章给的三个提醒
+假设模型预测杯子平稳移动，实际却翻倒。视频消费者可能看到姿态变化但不知道接触原因；点流消费者可以检查哪部分位移预测错误；控制日志则能指出夹爪实际轨迹是否偏离提案。
 
-相关中文解读里，有三类观点值得吸收，但它们都应该作为“理解线索”，不能替代论文证据。
-
-**第一，WAM 的核心争议是动作接口。**
-
-青稞社区的 WAM 总结把 AC-WM 和 WAM 的差别讲得很直观：AC-WM 里动作是输入，WAM 里动作和未来状态一起输出。这是很好的入门视角。但工程上不能停在二分法，因为 Fast-WAM 已经说明，训练时的世界建模和推理时的未来生成可以拆开。
-
-**第二，DreamZero 的成功不该被解释成单因素胜利。**
-
-机器之心转载的分析文章问得很对：DreamZero 是范式突破，还是数据、模型主干、时间上下文和视频辅助监督一起造成的结果？更稳妥的解释倾向后者。WAM 的范式很重要，但没有多样数据、14B 视频 backbone、闭环缓存、系统优化和真实评测，它很难单独成立。
-
-**第三，产业文章里的“先思后行”叙事要保留，但要降温。**
-
-36氪等文章把 WAM 写成从“盲动”到“规划推理”的转变，这个方向感是对的：机器人需要执行前评估动作后果。但学术写作里还要补一句：模型想象可能错，错误未来会诱导错误动作，所以必须有真实观测刷新、安全过滤和失败回放。
-
-DreamZero 论文自己的失败图就说明了这点。
+DreamZero 的失败配对图将生成未来与执行结果放在一起。应沿同一任务比较两者在哪个阶段分离；它说明需要真实反馈打断错误想象，不足以得出某个模型家族普遍更危险或更可靠。
 
 ![DreamZero failure pair](../assets/images/thinking-exploration/wam-3dv-world-models/dreamzero-failure-pair.png){ width="920" }
 
-<small>图源：DreamZero 论文 Figure 16，从论文 PDF 截取。原图展示 generated video 与 executed action 的失败配对。读图重点：WAM 更强也更危险，因为错误未来和错误动作可能互相支持；闭环系统必须能在真实观测刷新后纠偏。</small>
+<small>图源：DreamZero 论文 Figure 16，从论文 PDF 截取。原图展示 generated video 与 executed action 的失败配对。</small>
 
-## 综合判断
+一个有诊断价值的实验可固定起点、杯子和三个候选推法，分别记录视频、关键点位移、碰撞或倾倒结果和总时延。再改变杯子材质、摩擦和遮挡，检查每种表示丢失的信息。只展示最好的一段视频，很难发现这些条件差异。
 
-把原论文和中文解读合起来看，可以收束成三句话。
-
-**第一，WAM 的核心不是生成未来，而是让动作对未来负责。**
-
-DreamZero 证明视频动作联合建模可以做真实机器人闭环策略；Fast-WAM 则提醒我们，显式未来生成未必是部署时必要条件。两篇放在一起看，结论更稳：WAM 的关键收益来自 world modeling 对动作表征的约束，而不是每次推理都必须完整想象未来。
-
-**第二，3D 视觉进入 WM，不是为了“多模态”，而是为了可验证。**
-
-PointWorld 把状态和动作统一成 3D point flows；D4RT 用统一查询接口重建动态 4D 世界。它们都在回答同一个问题：世界模型输出的未来，能不能被 planner、controller、checker、人审和 replay 系统消费？
-
-**第三，Data Pipeline 是 3DV with Scaling 的前提。**
-
-二维视频模型 scaling 有 web video 支撑；3D 世界模型 scaling 需要深度、外参、尺度、点轨迹、机器人 mask、仿真与真实对齐。没有这些，3D 只会成为 noisy auxiliary signal；有了这些，WAM 才可能从“视频想象”走向“物理闭环”。
-
-## 一个更可落地的系统图
-
-```mermaid
-flowchart LR
-    A["RGB-D / 多视角视频 / 本体状态"] --> B["3D 数据管线<br/>depth / pose / point tracks / masks"]
-    B --> C["状态表示<br/>point flow / 4D scene / latent"]
-    C --> D["WAM / AC-WM 联合训练"]
-    D --> E["动作 chunk / 风险 / 任务进展"]
-    E --> F["planner / controller / safety checker"]
-    F --> G["真实执行"]
-    G --> H["观测刷新 / 失败回放"]
-    H --> B
-    H --> D
-```
-
-这张图比“一个大模型控制机器人”更朴素，但更接近工程现实。WAM 提供动态先验，3D 视觉提供物理状态，VLA 提供语义接口，planner/controller 提供可执行性，data pipeline 提供持续改善。
-
-## 最后判断
-
-WAM 的真正价值，不是让机器人拥有一段更高清的想象，而是让动作必须对未来负责。3D 视觉的真正价值，也不是给模型多一个输入通道，而是把未来变成可验证、可规划、可回放的空间事实。
-
-核心判断可以压成一句话：
-
-**3DV with Scaling will benefit WM，但前提是 3D 数据、动作接口和闭环评测一起 scaling。**
-
-## 外部材料
-
-- 原论文：[World Action Models are Zero-shot Policies / DreamZero](https://arxiv.org/abs/2602.15922)。
-- 原论文：[Fast-WAM: Do World Action Models Need Test-time Future Imagination?](https://arxiv.org/abs/2603.16666)。
-- 原论文：[PointWorld: Scaling 3D World Models for In-The-Wild Robotic Manipulation](https://arxiv.org/abs/2601.03782)。
-- 原论文：[Efficiently Reconstructing Dynamic Scenes One D4RT at a Time](https://arxiv.org/abs/2512.08924)。
-- 项目页：[DreamZero project](https://dreamzero0.github.io/)。
-- 项目页：[Fast-WAM project](https://yuantianyuan01.github.io/FastWAM/)。
-- 项目页：[PointWorld project](https://point-world.github.io/)。
-- 项目页：[D4RT project](https://d4rt-paper.github.io/)。
-- 中文解读：[具身智能观察室：DreamZero 世界模型实现零样本泛化与跨具身迁移](https://zhuanlan.zhihu.com/p/2018725795179295138)。
-- 中文解读：[机器之心：训练机器人方式对了吗？英伟达 DreamZero 双榜第一新反思](https://h5.ifeng.com/c/vivo/v0020FItFu9mPWErnPrPMhIuSL2lAGRS6r2Rf5vwu9zgYEQ__?vivoBusiness=hiboardnews)。
-- 中文解读：[青稞社区：关于 World Action Model 的思考和总结](https://qingkeai.online/archives/20260406)。
-- 中文解读：[36氪：世界模型驱动，具身智能告别“盲动”时代](https://eu.36kr.com/zh/p/3678363993252488)。
-- 中文解读：[雷峰网：D4RT 统一、高效的动态 4D 场景重建](https://www.leiphone.com/category/ai/gTcpiNZWLaQMDCtG.html)。
+三维表示提供几何查询，视频提供丰富可见线索，直接策略提供低成本反应。它们可以共同使用，也可以按任务选择。判断连接是否成立，应沿状态、动作、后果与反馈逐段检查，基础接口见[WM、WAM 与动作条件建模](../world-models/wm-wam-vam-and-action-conditioned-modeling.md)。

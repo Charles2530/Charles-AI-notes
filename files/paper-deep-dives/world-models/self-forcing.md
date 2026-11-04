@@ -15,404 +15,353 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/guandeh17/Self-Forcing](https://github.com/guandeh17/Self-Forcing)；项目页：[self-forcing.github.io/](https://self-forcing.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2506.08009)；[GitHub repo](https://github.com/guandeh17/Self-Forcing)；[官方项目页](https://self-forcing.github.io/)；Checked Date：2026-07-08；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 自回归视频最容易出问题的地方，是它总要继续相信自己的上一段
 
-### 研究背景
+视频模型可以在训练样本之后预测一个不错的片段，却在连续生成时逐渐出现颜色过饱和、纹理过锐、主体变化等问题。原因不一定在单步去噪能力。训练时给它的历史通常是真实视频，推理时给它的历史却是自己刚刚生成的结果，上一段的细小偏差会成为下一段的输入。
 
-Self Forcing 属于 autoregressive video diffusion，也就是一种 hybrid generative model：它用 autoregressive chain-rule decomposition 拆解视频序列，又用 diffusion / flow matching 来建模每个条件分布。直观地说，模型按时间一帧或一块一块往前生成；生成当前 frame/chunk 时，从 Gaussian noise 开始逐步去噪，并条件化于此前已经生成的内容。
+Self Forcing 将这种 exposure bias 直接放进训练流程。模型按部署时的自回归方式生成整段视频，后一个 frame 或 chunk 读取前面自己的输出，再用视频级分布匹配目标评价完整结果。它的核心变化是训练样本怎样由模型产生，而不只是换一个 attention mask 或减少 diffusion steps。[原文 §1](https://arxiv.org/pdf/2506.08009#page=2)
 
-这条路线试图结合两类模型的优点。普通视频 diffusion 画质强，但常用 bidirectional denoising 一次性生成整段视频，不适合实时交互；自回归模型天然可以流式输出，降低观看延迟，也更适合实时互动内容创作、游戏模拟和机器人学习。代价是 exposure bias：训练时模型依赖真实上下文，推理时却必须依赖自己之前生成的、有误差的输出继续生成。如果某一步偏了一点，下一步就会在这个偏差上继续去噪，错误可能沿时间放大。
+![Teacher Forcing, Diffusion Forcing and Self Forcing](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-training-paradigms-原图.png){ width="760" }
 
-这个背景和世界模型直接相关。交互世界模型必须长期 rollout，并在每一步接收用户或 agent 的新输入。如果模型只在干净 ground-truth context 上训练，部署时小错误会沿时间积累，导致漂移、闪烁、过锐化、过饱和或语义断裂。
+*原文 Figure 1。先看历史来自真实数据还是模型，再看损失评价单帧去噪还是整段生成分布。*
 
-### 问题（Challenge）
+这项工作是在已有视频模型之上进行后训练。作者采用 Wan2.1-T2V-1.3B，先做因果初始化，再用少步采样和梯度截断控制训练成本。最终 chunk-wise 版本在单张 H100、$832\times480$ 分辨率下达到 17 FPS，首帧延迟 0.69 秒，VBench total 为 84.31。理解这些数字时，要把持续吞吐、开始看到画面的等待时间，以及生成质量分别看待。
 
-论文要解决的问题是：**如何让自回归视频扩散模型在训练时就面对推理时的自生成上下文，从而减少长时 rollout 的 train-test mismatch？** 难点在于，真正 unroll 自回归扩散很贵；如果对完整 rollout 反向传播，显存会爆；如果只做 frame-wise denoising，又无法惩罚整段视频分布的漂移。此外，实时场景还要求 KV cache、低延迟和足够吞吐。
+## Teacher Forcing 和 Diffusion Forcing 改变了噪声，但历史仍来自数据
 
-有些方法会在推理阶段引入 noisy context frames，希望模型不要过度相信历史帧。这能缓解一部分误差累积，但会牺牲 temporal consistency，KV-cache 设计也更复杂，生成延迟更高；更关键的是，它没有改变训练时主要依赖 ground-truth context 的事实，因此没有从根上解决 exposure bias。
+### 两层生成过程怎样组合
 
-这个问题有价值，因为世界模拟器不是只生成一个短 clip，而是要边看边生成、边交互边更新。训练分布和推理分布不对齐，会直接限制可交互性。
+自回归视频扩散先在时间上分解联合分布。
 
-### Finding
+$$
+p_\theta(x^{1:N})=\prod_{i=1}^{N}p_\theta(x^i\mid x^{<i}).
+$$
 
-作者的 finding 是：**解决 AR 视频扩散的长期漂移，关键不是给 ground-truth context 加噪声，而是在训练中执行和推理一致的 self-rollout，并用视频级 distribution matching 约束整段生成序列。** 这个洞见把训练对象从“下一帧在真实历史下是否去噪正确”转为“模型自己滚出来的视频分布是否像真实视频”。
+每个条件分布再用 diffusion 生成。外层决定当前生成第几个时间单元，内层将这个单元从噪声逐步去噪。论文中的 $x^i$ 为简化符号叫作 frame，实际也可以是一组 latent frames；它不总是一张最终 RGB 图像。[原文 §3.1](https://arxiv.org/pdf/2506.08009#page=4)
 
-这个 finding 解释了 Self Forcing 和 Diffusion Forcing 的差别。Diffusion Forcing 让不同帧处在不同噪声水平，缓解一部分上下文不确定性，但上下文仍不是模型真实生成分布；Self Forcing 直接用当前模型生成的历史帧作为下一步条件，让模型在训练时就见过自己犯下的小错误，并学习如何从这些错误里恢复。
+网络在 causal 3D VAE 的压缩 latent 中工作，信号仍是连续值。采用时间自回归，并不意味着必须将视频离散成 VQ tokens。它可以保留扩散生成连续视觉的能力，同时用因果时间关系逐块输出。
 
-### 方法
+正文用一般噪声过程描述每帧输入。
 
-Self Forcing 以 few-step autoregressive diffusion model 为基础，每个条件分布 \(p(x_i|x_{<i})\) 由少步扩散近似。训练时，模型按推理流程自回归 rollout：生成第 \(i\) 帧或 chunk 时，条件是前面自己生成的 \(\hat{x}_{<i}\)，并使用 KV cache 模拟真实推理。为控制显存，论文采用 gradient truncation，不对完整历史无限反传。
+$$
+x^i_{t_i}=\Psi(x^i,\epsilon^i,t_i)
+=\alpha_{t_i}x^i+\sigma_{t_i}\epsilon^i,
+\qquad \epsilon^i\sim\mathcal N(0,I).
+$$
 
-损失方面，Self Forcing 不只逐帧检查生成结果是否接近真实帧，而是对完整生成视频施加 holistic distribution matching loss，直接评价整段序列的整体质量。论文讨论了 DMD、SiD、GAN-style objectives 等视频级匹配方式。长视频推理使用 rolling KV cache 和 sliding-window 机制，支持训练长度之外的 extrapolation，同时避免双向模型每步重算完整上下文。
+常规 denoising loss 让网络根据当前带噪帧和上下文预测所加噪声。
 
-### 结论
+$$
+\mathcal L^{\mathrm{DM}}_\theta=
+\mathbb E_{x^i,t_i,\epsilon^i}
+\left[w_{t_i}\left\|\hat\epsilon^i_\theta-\epsilon^i\right\|_2^2\right].
+$$
 
-实验显示，Self Forcing 可以把预训练视频扩散模型转成实时自回归视频生成器，在单 H100 GPU 上报告约 17 FPS 和亚秒级延迟，同时质量可与更慢的非因果或双向扩散模型竞争。消融表明，self-rollout、视频级 distribution matching、few-step diffusion、gradient truncation 和 rolling KV cache 都服务于同一个目标：对齐训练和推理的生成分布。
+$w_{t_i}$ 控制不同噪声时间的权重。Teacher Forcing 与 Diffusion Forcing 的关键差异位于上下文条件，而不是这两个方法中有一个完全不做去噪。
 
-边界是：论文仍是视频生成/外推评估，不直接评估动作条件反事实或真实机器人控制。对世界模型来说，它提供的是长期自回归视频模拟器的训练策略，尤其适合解决交互 rollout 中由模型自身历史造成的误差积累。
+### TF 的历史干净，DF 的历史带噪，但都不是自己的错误
 
-### 关键术语
+Teacher Forcing 在真实、干净的历史帧上去噪当前帧，常见训练中不同帧共享所选噪声时间。Diffusion Forcing 给不同帧独立采样噪声时间，当前帧可能高度带噪，过去帧可能接近干净，也可能仍有噪声。
 
-- **Teacher Forcing（教师强制）**：训练时用真实历史作为条件，推理时却用模型生成历史，容易产生分布错位。
-- **Exposure Bias（暴露偏差）**：模型训练时没有暴露于自身错误，推理时错误逐步累积的问题。
-- **Self-rollout（自生成展开）**：训练时让模型按推理方式逐步生成历史，再用这些历史继续生成后续帧。
-- **Distribution Matching Loss（分布匹配损失）**：直接让完整生成视频分布接近真实视频分布的目标。
-- **Autoregressive Video Diffusion（自回归视频扩散）**：按时间分解视频分布，每个 frame/chunk 的条件分布再由扩散去噪过程建模。
-- **Few-step Diffusion（少步扩散）**：用很少 denoising steps 近似扩散生成，以满足实时生成需求。
-- **Rolling KV Cache（滚动键值缓存）**：长视频自回归生成时保留近期历史缓存、滑动更新上下文的机制。
+DF 因而覆盖了“历史较干净、当前帧很噪”的输入形式，但带噪真实视频仍不等于模型输出。真实图像加高斯噪声，不会自动重现模型特有的几何扭曲、身份变化、颜色偏移或语义错误。只改变 noise level 没有消除 context source 的差异。[原文 Figure 1、§3.1](https://arxiv.org/pdf/2506.08009#page=4)
 
-一句话读法：Self Forcing 要做的不是从零学会“什么是视频”，而是在已有视频扩散模型的 post-training 阶段修正一个具体错位：训练时依赖真实上下文，推理时依赖自己生成的上下文。它把模型放回真实推理轨道里训练，再用视频级分布匹配约束整段 rollout。
+| Training scheme | 历史的来源 | 当前单元怎样得到 | 与实际 AR rollout 的主要差别 |
+|---|---|---|---|
+| Teacher Forcing | 干净真实帧 | 条件去噪 | 没有经历自己生成的历史 |
+| Diffusion Forcing | 不同噪声水平的真实帧 | 条件去噪 | 噪声覆盖不等于生成误差覆盖 |
+| Self Forcing | 前面已经生成的帧或块 | 按时间继续少步去噪 | 采用自己的上下文，但训练仍有随机退出和梯度截断近似 |
 
-## 论文位置
+Figure 2 再把这个区别落实到 attention。TF 和 DF 为了并行处理整段训练视频，用自定义 mask 限制可见关系；Self Forcing 顺序展开时间，把历史放进 KV cache，当前调用只接收已生成历史与当前单元。
 
-Self Forcing 和 [Diffusion Forcing](../diffusion/diffusion-forcing.md)、[CausVid](../diffusion/causvid.md)、[LingBot-World](lingbot-world.md) 在同一条路线附近，但解决层级不同。
+![Attention layouts and sequential KV-cached rollout](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-attention-masks-原图.png){ width="760" }
 
-| Method | Core idea | Main limitation it addresses |
-| --- | --- | --- |
-| Teacher Forcing | train next frame/chunk using clean ground-truth context | inference uses generated context, so exposure bias remains |
-| Diffusion Forcing | assign independent noise levels to different frames/chunks | covers noisy context, but training context still not true model rollout |
-| CausVid | causal student distilled from bidirectional teacher with DMD | fast streaming generation, but DF-generated training outputs differ from inference outputs |
-| Self Forcing | train with autoregressive self-rollout and video-level distribution matching | directly aligns training outputs with inference-time model distribution |
+*原文 Figure 2。Self Forcing 每次调用可使用普通 attention，是因为未来单元尚未放进输入，不是因为整段视频改成了任意双向读取。*
 
-从世界模型角度看，这篇论文重要，是因为流式视频世界模拟器最终必须长期 rollout。一个只在固定短片段里好看的模型，不一定能在交互闭环里稳定；Self Forcing 把训练目标改成“模型要学会处理自己造成的历史误差”。
+这种执行结构同时决定交互接口。如果未来片段已经预先部分生成，后来用户输入就难以立即改变它们。论文将严格按时间条件生成与 rolling diffusion 类方法区分，后者可能提前承诺未来，因此“可以连续输出”与“能够及时响应尚未知的输入”并不完全相同。[原文 §2](https://arxiv.org/pdf/2506.08009#page=3)
 
-这里也能看出它和“推理时给历史帧加噪”的区别。noisy context inference 是在部署路径上补丁式地降低历史帧置信度，可能牺牲时间一致性并增加 KV cache 和延迟成本；Self Forcing 则把错位前移到训练阶段处理，让 loss 直接作用在模型真实会生成的序列分布上。
+## Self Forcing 的训练是真实展开生成流程，但反向只保留必要部分
 
-![Self Forcing training paradigms 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-training-paradigms-原图.png){ width="760" }
+### 内层去噪先预测干净结果，再重新加较少噪声
 
-<small>图源：`Self Forcing`，Figure 1。原图对比 Teacher Forcing、Diffusion Forcing 和 Self Forcing：前两者训练输出不来自推理时真实模型分布，Self Forcing 在训练中执行 autoregressive self-rollout，并对最终视频序列施加 distribution matching loss。</small>
+设少步噪声网格为 $\{t_0=0,t_1,\ldots,t_T=1000\}$。当前时间单元从高斯噪声开始，网络 $G_\theta$ 在每个选定时间预测干净输出；如果还需要下一步，则将这个预测按更低噪声时间重新加噪。
 
-## 核心问题
-
-自回归视频扩散把视频分布拆成时间上的条件分布：
-
-\[
-p(x_{1:T}) = \prod_{t=1}^{T} p(x_t \mid x_{<t}).
-\]
-
-每个条件分布不是一次性输出 token，而是通过扩散或 flow matching 逐步去噪：
-
-\[
-x_t^{\tau} = \alpha_\tau x_t^0 + \sigma_\tau \epsilon,
+$$
+\hat x^i_0=G_\theta(x^i_{t_j},t_j,x^{<i}),
 \qquad
-\epsilon \sim \mathcal N(0,I).
-\]
+x^i_{t_{j-1}}=\Psi(\hat x^i_0,\epsilon_{j-1},t_{j-1}).
+$$
 
-\(\epsilon\sim\mathcal N(0,I)\) 表示标准高斯噪声：\(0\) 是均值，\(I\) 是单位协方差；\(\alpha_\tau\) 保留原 latent，\(\sigma_\tau\) 控制噪声强度。
+完成一个单元后，clean output 成为后续单元的历史。这让整段视频来自模型自己的条件链，错误会真实地影响后面的生成，而不是只在损失里抽象惩罚一下。
 
-Teacher Forcing 训练的是：
+但如果对每一帧的每一步去噪，以及所有跨帧依赖都反传，显存会随两层展开迅速增加。因此作者把训练分成前向尽量像部署、反向只保留局部路径两部分。[原文 §3.2](https://arxiv.org/pdf/2506.08009#page=5)
 
-\[
-p_\theta(x_t \mid x_{<t}^{\text{data}}),
-\]
+### 每条序列随机选择一个退出步
 
-但推理时实际使用的是：
+Algorithm 1 给出具体执行顺序。一次训练为每条序列采样 $s\sim\operatorname{Uniform}\{1,\ldots,T\}$，所有时间单元都从 $t_T$ 去噪到 $t_s$，在这个位置把网络预测的干净输出作为本次结果。
 
-\[
-p_\theta(x_t \mid \hat x_{<t}^{\theta}).
-\]
+![Self Forcing training algorithm](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-training-algorithm-原图.png)
 
-这里 \(x_{<t}^{\text{data}}\) 是真实历史，\(\hat x_{<t}^{\theta}\) 是模型自己生成的历史。二者分布不同，训练时没有教模型如何纠正自己的错误，推理时错误就会滚雪球。
+*原文 Algorithm 1。第 4 行的随机退出位置在序列循环外；第 9 行只为当前单元的最后计算步骤开启梯度；第 13 行另外用干净输出生成 KV。*
 
-可以先想一个 5 秒滑板视频。模型生成第 1 秒时，滑板边缘稍微锐化过头，衣服颜色也比真实视频更饱和；如果第 2 秒仍然用真实历史训练，模型永远不用面对这个错误。但推理时第 2 秒只能接着自己刚生成的“偏红衣服”和“过锐滑板”往下滚，到了第 4 秒，颜色、轮廓和动作节奏都可能被放大成漂移。Self Forcing 要解决的正是这个问题：训练时不再把模型保护在干净历史里，而是让它在自己造成的历史误差上继续生成，并用完整视频分布来惩罚这种长期漂移。
+在 $j>s$ 的早期去噪步，不保存反向图；到 $j=s$ 时才开启梯度，保存当前单元输出用于整段损失。随后关闭梯度，在 timestep 0 对这个干净输出取得 KV embeddings，追加到历史缓存，再生成下一单元。
 
-Diffusion Forcing 把上下文噪声水平随机化，确实比纯 clean ground-truth 更接近推理场景，但仍然没有真正从模型自己的 rollout 分布里取上下文。Self Forcing 的核心变化是把训练上下文改成：
+这里有两个容易混淆的截断。第一，只对每个单元本次最后执行的去噪步反传，不是整段视频只给最后一帧梯度。第二，历史 KV 被 detach，当前输出的梯度不会通过缓存回传到所有过去帧的生成过程。整段视频中的各输出仍可以从同一个视频级评价获得直接训练信号。
 
-\[
-\hat x_{<t}^{\theta}
-\quad\text{generated by the current model itself}.
-\]
+随机退出使不同去噪阶段轮流获得监督，避免永远只优化固定最后一步。但它也意味着训练批次混合了不同去噪长度的 rollout，并非每次都精确复现推理的完整四步链。论文所说的 train-test alignment，核心是上下文来自模型自己的生成以及相同的时间展开结构；它不等于对完整推理分布进行了没有近似的全梯度优化。
 
-这就是它名字里的 `Self`。
+这个区分有实际意义。Self Forcing 主要解决自己历史的输入偏差，梯度截断则解决算力与显存代价；两者配合才可训练，后者也可能限制长距离依赖学习，作者在局限部分明确承认了这一点。
 
-## 方法总览
+## 损失评价完整视频分布，而不是把每一帧都对齐到固定答案
 
-Self Forcing 的训练流程可以压成一条链：
+训练 rollout 得到 $x^{1:N}_\theta\sim p_\theta$ 后，可以比较整段生成视频与目标视频分布。为了利用预训练 diffusion 模型，并改善训练稳定性，作者先对两种完整视频分布加入噪声。
 
-```text
-initialize causal AR diffusion model from Wan2.1 / CausVid-style ODE init
-  -> during training, run autoregressive rollout with KV cache
-  -> each new frame/chunk conditions on self-generated previous frames/chunks
-  -> truncate gradients to keep memory manageable
-  -> apply holistic video-level distribution matching loss
-  -> update generator and optional critic / fake score network
-```
+$$
+p_{\cdot,t}(x_t^{1:N})=
+\int q_{t\mid0}(x_t^{1:N}\mid x^{1:N})
+\,p_\cdot(x^{1:N})\,\mathrm dx^{1:N}.
+$$
 
-这条链说明 Self Forcing 的成本为什么可控：它不是从零训练一个视频模型，而是在 post-training 阶段修正 rollout 分布错位；再配合 few-step diffusion backbone 和梯度截断，让顺序 rollout 训练不会退化成不可承受的全序列反传。
+比较的是 $p_{\theta,t}$ 与 $p_{\mathrm{data},t}$。它允许存在多种合理视频，而不要求同一文本提示总是回到某一条固定真实轨迹。重要的是，$p_\theta$ 中的视频确实经过自回归生成，而不是从真实上下文并行去噪后拼起来的另一个输出分布。[原文 §3.3](https://arxiv.org/pdf/2506.08009#page=5)
 
-![Self Forcing attention masks 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-attention-masks-原图.png){ width="760" }
+CausVid 是最直接的比较对象。它也使用少步生成与 DMD，但训练输出来自 DF 条件。若训练时对齐的是“读取带噪真实历史后得到的输出”，推理时却是“读取自己的历史后得到的输出”，同一个分布匹配损失仍会优化不同的对象。Self Forcing 改变的是被评价的样本如何产生，而非仅为 CausVid 换一项更强损失。[原文 §2、§3.3](https://arxiv.org/pdf/2506.08009#page=6)
 
-<small>图源：`Self Forcing`，Figure 2。原图展示 TF/DF 需要在整段视频上用特殊 causal mask 并行训练，而 Self Forcing 训练过程直接模仿 AR inference，使用 KV cache，不需要特殊 attention mask。</small>
+论文检验 DMD、SiD 和 GAN 三种目标。它们共同使用这条生成路径，各自提供不同的分布比较方式。三者都有效能够支持训练范式的普适性，但具体教师、batch 与优化配置并不完全相同，不能把结果解读为纯粹只替换一个数学 divergence 的严格控制实验。
 
-**attention mask 图在比较训练形态。**
-TF/DF 看起来并行高效，但需要人为设计 attention mask，让模型“假装”在做因果生成；上下文仍主要来自数据或带噪数据。Self Forcing 反过来：训练时就真的逐步生成，并用 KV cache 复用历史，因此模型看到的是自己 rollout 造成的上下文分布。读这张图时重点看“训练时上下文从哪里来”，而不是只看是否用了 causal mask。
+## DMD 用目标分布与学生分布的 score 差更新生成器
 
-## 自回归 self-rollout
+DMD 最小化加噪分布上的 reverse KL。
 
-论文采用 few-step diffusion / flow matching，让每个 frame 或 chunk 只用 4 个 denoising steps。否则，如果每帧都要几十步扩散，还要反传整条 rollout，训练成本会不可接受。
+$$
+\mathbb E_t\left[D_{\mathrm{KL}}
+\left(p_{\theta,t}\Vert p_{\mathrm{data},t}\right)\right].
+$$
 
-这里的“自回归一步”不一定是一帧。实践中也可以一次生成一个 frame chunk，再把这个 chunk 当成下一步上下文；论文为了记号简洁，常把 chunk 也记作 frame。这个选择会直接影响首帧延迟、AR 链长度和时间一致性压力。
+固定的 real score network 近似目标分布 score，另一个 critic 用学生生成的视频做标准 diffusion 训练，估计当前学生分布的 fake score。对同一个带噪生成样本比较二者，得到生成器应如何移动的更新方向。
 
-论文实现里有两种自回归粒度：
+$$
+\nabla_\theta\mathbb E_tD_{\mathrm{KL}}(p_{\theta,t}\Vert p_{\mathrm{data},t})
+=-\mathbb E\left[
+\big(s_{\mathrm{real}}(\hat x_t,t)-s_{\mathrm{fake}}(\hat x_t,t)\big)
+\frac{\partial\hat x}{\partial\theta}
+\right].
+$$
 
-| Variant | Generation unit | Strength | Weakness |
-| --- | --- | --- | --- |
-| Frame-wise AR | one latent frame at finer temporal granularity | lower first-frame latency, more responsive | more AR steps, more temporal consistency pressure |
-| Chunk-wise AR | 3 latent frames per block | better quality and consistency | slightly higher latency |
+这里 $\hat x$ 是整段生成视频，$\hat x_t$ 是它的带噪版本。critic 必须跟随生成器更新，否则它估计的就不再是当前输出分布。作者使用的可优化 surrogate 为
 
-chunk-wise 是主结果，frame-wise 用来说明 Self Forcing 在更长 AR chain 下也能稳住质量。
+$$
+\mathcal L_{\mathrm{DMD}}=
+\mathbb E\left[\frac12
+\left\|\hat x-\operatorname{sg}\left[
+\hat x-\big(f_\psi(\hat x_t,t)-f_\phi(\hat x_t,t)\big)
+\right]\right\|_2^2\right].
+$$
 
-训练时，模型在第 \(t\) 个 frame/chunk 上执行几步去噪，并把生成结果写入 KV cache，下一步生成会读这个 cache。这个流程和推理一致，所以训练 loss 看到的是模型真实会产生的错误。
+$f_\phi$ 是固定 real 网络，$f_\psi$ 是学习中的 critic，$\operatorname{sg}$ 固定括号内的目标，不让生成器这条损失同时更新目标构造。注意这里差值顺序是 fake 减 real，应与 score 梯度的参数化转换一起理解，不能随意交换符号。[原文 Appendix A, Eq. 2–3](https://arxiv.org/pdf/2506.08009#page=17)
 
-## 梯度截断
+一个影响实验归因的细节是，主结果使用的 DMD real score network 为 **Wan2.1-T2V-14B**，学生和 critic 为 **1.3B**。所以它同时受益于更强教师的分布指导，不能把主表中略高于原 1.3B 基础模型的分数全部解释为“同等教师能力下，仅靠因果生成超越双向模型”。在相同后训练框架内比较 TF、DF 与 SF，才更直接隔离训练历史的影响。
 
-Self-rollout 的难点是内存。若对所有历史 frame/chunk 和所有 denoising steps 全量反传，代价会爆炸。论文采用 stochastic gradient truncation：
+## SiD 与 GAN 说明方法不依赖单一训练目标
 
-1. 对每个训练序列随机采样一个 denoising step \(s \in \{1,\dots,S\}\)，其中 \(S\) 是少步扩散的 denoising step 数；
-2. 用第 \(s\) 步 denoised output 作为当前训练样本的最终输出，让不同中间步都有机会收到监督；
-3. 只对当前 frame/chunk 的相关 denoising step 开启梯度；
-4. 历史 frames/chunks 写入 KV cache 后 detach；
-5. 前面生成的上下文仍影响当前输出，但不承受跨整条序列的反传。
+### SiD 的实际设置省掉了不稳定的一项
 
-这种设计的取舍很清楚：它牺牲了一部分长程 credit assignment，但换来可训练性。论文也在局限里承认，梯度截断可能限制模型学习更长距离依赖。
+SiD 使用目标与生成分布 score 的距离。论文给出的实现损失为
 
-## 视频级 distribution matching
+$$
+\begin{aligned}
+\mathcal L_{\mathrm{SiD}}=
+\mathbb E\Big[&
+(f_\phi(\hat x_t,t)-f_\psi(\hat x_t,t))^\top
+(f_\psi(\hat x_t,t)-\hat x)\\
+&+(1-\alpha)
+\left\|f_\phi(\hat x_t,t)-f_\psi(\hat x_t,t)\right\|_2^2
+\Big].
+\end{aligned}
+$$
 
-Self Forcing 的 loss 不再是单纯 frame-wise denoising MSE，而是对完整生成视频分布做匹配：
+原文说明 $\alpha=0.5$ 对应 Fisher divergence 的梯度，但第二项在实践中容易不稳定，所以实际取 $\alpha=1$，将它去掉。不能在概述中说“SiD 使用 Fisher divergence”，随后又默认实验精确采用 $\alpha=0.5$ 的那一套梯度。[原文 Appendix A, Eq. 4](https://arxiv.org/pdf/2506.08009#page=17)
 
-\[
-\hat x_{1:T} \sim p_\theta^{\text{AR}}(x_{1:T}),
-\qquad
-\mathcal L = D(p_\theta^{\text{AR}} \,\|\, p_{\text{data}}).
-\]
+SiD 的 real score 与 critic 都初始化为 Wan2.1-T2V-1.3B，real score CFG weight 为 3.0，与 DMD 的教师规模不同。这为较小教师下的后训练提供了另一种实现，但也限制了跨目标分数的直接因果解释。
 
-这句话的重点是“完整生成视频”。传统 frame-wise objective 更像在问：当前帧在给定真实或带噪上下文时是否去噪正确；Self Forcing 问的是：模型按推理方式连续滚出来的一整段视频，整体分布是否像真实视频。这个目标更直接对应用户最终看到的序列质量。
+### GAN 直接比较生成样本和目标样本
 
-论文实验支持三类 distribution matching objective：
+GAN 版本在 critic 上增加 cross-attention layers 与 classification heads，采用 R3GAN 的 relativistic pairing 目标。判别器判断真实目标视频相对生成视频是否更真，生成器反过来提高自己的相对分数。
 
-| Objective | Matched divergence / signal | Notes |
-| --- | --- | --- |
-| DMD | reverse KL via score difference | main result; data-free when using pretrained diffusion score networks |
-| SiD | Fisher-divergence-style score identity distillation | also works, but training can be less stable |
-| GAN | Jensen-Shannon via discriminator | uses generated real video dataset and R3GAN-style objective |
+$$
+\mathcal L_D=-\mathbb E\log\operatorname{sigmoid}
+\left(f_\psi(x_t)-f_\psi(\hat x_t)\right)
++\lambda\mathcal L_{\mathrm{reg}},
+$$
 
-重点不是哪个 objective 单独最强，而是 Self Forcing 框架本身可以接不同的视频级分布匹配目标。论文 Table 2 显示 DMD、SiD、GAN 三者都比 TF/DF 基线更稳。
+$$
+\mathcal L_G=-\mathbb E\log\operatorname{sigmoid}
+\left(f_\psi(\hat x_t)-f_\psi(x_t)\right).
+$$
 
-## Rolling KV cache
+$x_t$ 与 $\hat x_t$ 分别是带噪目标数据和带噪生成数据。R1、R2 用 finite difference 近似，对二者额外施加小高斯扰动，约束 critic 输出不要剧烈变化。报告使用 $\lambda=30$、扰动尺度 $\sigma=0.05$。对于随机退出步 $s$ 产生的视频，只从 $[t_{s-1},t_s]$ 采样判别噪声时间以改善稳定性。[原文 Appendix A, Eq. 5–7](https://arxiv.org/pdf/2506.08009#page=17)
 
-自回归模型相对标准视频 diffusion 的一个关键优势，是理论上可以通过 sliding-window inference 不断往训练长度之外外推。Self Forcing 还提出 rolling KV cache，用于让这种长视频外推在系统上可行。问题是：普通 sliding-window 视频扩散在窗口移动时，要重复计算重叠 frames 的 KV；已有 causal diffusion 实现也常常需要在新窗口重算 cache。
+GAN 的 effective batch size 为 768，明显高于 DMD/SiD 的 64；它使用的 70K 目标视频也是由 Wan2.1 14B 生成的数据集。因此这里的 real/fake 是判别训练的两类角色，不能把所有 real videos 写成相机拍摄的真实视频。
 
-Self Forcing 的做法更像 StreamingLLM：
+DMD 与 SiD 后训练可以不读取视频训练样本，但仍依赖预训练 diffusion 模型，以及前面的 ODE 初始化数据。论文称其 data-free，指这一分布匹配后训练阶段不用目标视频语料，不等于整套流程从未使用视频知识或没有生成任何初始化样本。
 
-```text
-keep fixed-size KV cache for recent frames/chunks
-when generating a new chunk:
-  if cache is full, evict the oldest KV entry
-  denoise current chunk using cached recent context
-  append new KV entry
-```
+## Rolling KV cache 解决重复计算，还需要解决第一帧离场后的分布变化
 
-![Self Forcing rolling KV cache 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-rolling-kv-cache-原图.png){ width="760" }
+### 因果 attention 并不自动保证窗口移动时无需重算
 
-<small>图源：`Self Forcing`，Figure 3。原图对比 bidirectional sliding window、causal sliding window with KV recomputation 和 Self Forcing rolling KV cache。Self Forcing 不重算 KV，将长视频外推复杂度降到随长度线性增长。</small>
+固定长度模型要继续生成更长视频，通常需要滑动时间窗口。Figure 3 比较三种做法，区别在旧历史需要重新计算多少，而不只在网络是否声明为 autoregressive。
 
-**为什么 rolling KV cache 是系统关键。**
-长视频流式生成时，问题不只是模型能不能 causal，还包括历史上下文的计算能不能复用。bidirectional sliding window 每次处理一个窗口都需要看窗口内全部 token，不能自然复用过去计算；普通 causal sliding window 虽然不看未来，但如果每次移动窗口都重算历史 KV，长视频成本仍然很高。
+![Sliding windows and rolling KV cache](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-rolling-kv-cache-原图.png){ width="760" }
 
-Self Forcing 的 rolling KV cache 把过去 chunk 的 key/value 缓存下来，新 chunk 只计算自己的 KV，并读最近历史 cache。窗口满了就淘汰最旧 KV。这样每新增一段视频，计算量主要来自新段，而不是反复重算整段历史。对世界模型或交互视频来说，这个设计决定了它能不能长期 rollout，而不只是生成一个短 demo。
+*原文 Figure 3。左侧双向窗口反复计算历史，中间因果窗口仍重算重叠部分，右侧保存最近窗口的 KV 并逐出最旧条目。*
 
-论文还发现一个细节：naive rolling KV 会有明显闪烁，因为模型训练时总能看到第一帧 image latent，而 rolling cache 长视频推理时第一帧会被淘汰。解决办法是在训练时限制 attention window，让模型在 denoise 最后一个 chunk 时看不到第一 chunk，从而模拟长视频推理条件。
+双向 diffusion 在每次新窗口中重新处理整个窗口，不支持直接复用因果历史 KV。因果模型能够缓存，但已有实现仍会在窗口平移时重编码重叠历史；为了降低开销，常使用较大步幅，代价是窗口起始部分可用的历史更少。
 
-## 训练细节
+Self Forcing 维护容量为最近 $L$ 个时间单元的缓存。新单元完成后，以 timestep 0 计算 clean KV，若缓存已满则逐出最旧条目，再追加新条目。过去条目随窗口移动继续保留，不因位置变化重新计算。[原文 §3.4、Algorithm 2](https://arxiv.org/pdf/2506.08009#page=6)
 
-论文和官方代码给出的实现细节如下。
+| Sliding-window method | 原文给出的 attention 复杂度 | 主要重复工作 |
+|---|---|---|
+| Bidirectional diffusion | $O(TL^2)$ | 每个去噪步处理整个窗口 |
+| Causal with KV recomputation | $O(L^2+TL)$ | 窗口切换时重算重叠历史 |
+| Rolling KV cache | $O(TL)$ | 新单元读取保留的历史 KV |
 
-| Item | Detail |
-| --- | --- |
-| Base model | Wan2.1-T2V-1.3B |
-| Model family | Flow Matching text-to-video model with causal 3D VAE latent space |
-| Video setting | 5s videos, 16 FPS, 480P-level generation |
-| Initialization | CausVid-style ODE initialization |
-| ODE pairs | 16K ODE solution pairs sampled from the base model |
-| Prompt source | filtered and LLM-extended VidProM / VidProS prompts |
-| Prompt filtering | remove too-short prompts, command-line args, and high-NSFW prompts |
-| Prompt expansion | Qwen/Qwen2.5-7B-Instruct with Wan2.1-style prompt extension |
-| Diffusion steps | 4-step schedule |
-| Denoising step list in code | `[1000, 750, 500, 250]` |
-| Timestep shift | `5.0` |
-| CFG / guidance scale | `3.0` |
-| Chunk-wise AR | 3 latent frames per block |
-| DMD training | about 600 iterations, under 2 hours on 64 H100 GPUs in released repo |
-| Paper training budget | each DMD Self Forcing experiment converges in about 1.5 hours on 64 H100 GPUs |
-| Repro note | repo suggests gradient accumulation can reproduce in under 16 hours on 8 H100 GPUs |
-| Attention | Self Forcing uses FlashAttention-3; TF/DF baselines use FlexAttention |
-| Mixed precision | enabled in released config |
-| FSDP sharding | `hybrid_full` in released config |
-| EMA | `0.99`, starts at step 200 in released config |
-| DMD total batch size | 64 |
-| DMD learning rate | generator `2e-6`, critic/fake score `4e-7` |
-| SiD learning rate | generator `2e-6`, critic `2e-6` |
-| DMD / SiD update ratio | `dfake_gen_update_ratio = 5` in released configs |
-| Stochastic truncation | randomly sample one denoising step \(s\) per training sequence and use the \(s\)-th denoised output as final output |
+这里 $T$ 是去噪步数，$L$ 是时间窗口规模，表达的是原文省略固定空间 token 等因素后的 attention 成本关系。它不是整个视频系统的精确 FLOPs，也不意味着每一层与所有硬件都会按同一比例提速。
 
-有两个细节特别值得注意：
+这种缓存能持续循环生成，却只有有限历史容量。较旧内容被逐出后，不能保证所有对象身份和早先场景都永久保留；保存下来的历史表示也不等于对新截取窗口从头重算一定得到完全相同的特征。它是一种高效流式执行方式，质量还要由训练验证。
 
-1. DMD/SiD 版本可以是 data-free post-training：不需要真实视频数据，只需要 prompts 和 pretrained score networks；
-2. GAN 版本需要真实或生成的视频数据，论文用 Wan2.1-14B 生成 70K videos 作为 GAN 训练数据，也用于 many-step TF/DF AR baseline 微调。
+### 第一 latent frame 的统计特性不同
 
-### Table 3: Specification of training hyperparameters
+causal 3D VAE 的第一 latent frame 只编码首张图像，之后的 latent frames 才包含时间压缩。训练短片时，模型总能看到这个特殊的初始 image latent；长生成的 rolling cache 将它逐出后，窗口中不再有同样类型的锚点。
 
-下面根据论文 Table 3 与官方配置重绘，保留英文表头。部分 GAN 细节论文只在公式和文字中描述，开源 repo 当前主要提供 DMD / SiD 配置。
+直接部署 rolling cache 因而出现另一种 train-test mismatch。作者的处理是在训练最终 chunk 时，禁止它读取第一 chunk，提前让模型经历“特殊首块已经不可见”的条件。并非永久把第一块固定在缓存里，也不是训练全程去掉所有历史。[原文 §3.4、Appendix B](https://arxiv.org/pdf/2506.08009#page=17)
 
-| Hyperparameters | DMD | SiD | GAN |
-| --- | --- | --- | --- |
+![Rolling-cache extrapolation with and without local-attention training](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-rolling-cache-ablation-原图.png)
+
+*原文 Figure 7。每组上行为朴素 rolling cache，下行为加入局部窗口训练；比较 starting frames 与 extrapolated frames 中出现的变淡、闪烁及结构伪影。*
+
+在 10 秒生成设置中，重算 KV 的 throughput 为 4.6 FPS，经过局部窗口适配的 rolling cache 为 16.1 FPS。吞吐比约为 $16.1/4.6=3.5$，这项比较针对长视频缓存执行，不能与主表 5 秒设置中的 17 FPS 当作同一个实验点。[原文 §4](https://arxiv.org/pdf/2506.08009#page=9)
+
+图中适配明显缓解了窗口外推伪影，但原文没有宣称无限生成都保持训练长度内的质量。作者明确指出，大幅超出训练长度后仍会退化。可无限追加的算法结构与可无限保持正确内容，是两种不同能力。
+
+## 初始化、提示词和教师配置都是实验条件的一部分
+
+基础模型 Wan2.1-T2V-1.3B 生成约 5 秒、16 FPS、$832\times480$ 视频。作者先使用基础模型采样的 16K ODE solution pairs，按 CausVid 的协议加入 causal attention masking 做初始化，再进行 Self Forcing 后训练。[原文 §4](https://arxiv.org/pdf/2506.08009#page=7)
+
+两种主要变体只改变时间生成单位。chunk-wise 每次生成 3 个 latent frames，frame-wise 每次生成 1 个 latent frame。latent 的时间压缩意味着这两个名称不能直接理解成每次输出三张或一张最终 RGB 图像。
+
+少步网格按附录写为 $[1000,750,500,250]$，time shift factor 为 5。附录前向式写出的噪声系数和时间方向，与 Algorithm 1 在 $t_T=1000$ 初始化纯高斯噪声的约定存在不一致；其 data prediction 参数式也未在正文展开转换。因此这里以正文一般形式 $\alpha_t x+\sigma_t\epsilon$ 解释机制，保留明确的步数与 shift 配置，不把附录那一行未经澄清直接当作可运行 scheduler。[原文 Appendix A](https://arxiv.org/pdf/2506.08009#page=16)
+
+训练提示词来自 VidProM 的 VidProS 子集，约 100 万条语义去重的用户提示，经过长度、命令行参数和标注内容概率过滤后约剩 25 万条，再由 Qwen2.5-7B-Instruct 按 Wan2.1 的系统提示扩写。VBench 测试提示也做同类改写；Wan2.1 及支持这类增强的基线同样使用改写输入。[原文 Appendix A](https://arxiv.org/pdf/2506.08009#page=16)
+
+这使模型得到更详细的语义条件，也意味着结果不是所有方法都在最短原始提示上直接测试。不能漏掉 prompt rewriting，再把语义分数全部归因于 Self Forcing 的训练历史。
+
+## 主结果要同时读吞吐、首帧延迟与质量
+
+所有速度测试使用单张 NVIDIA H100。Table 1 保留各模型自身的参数量与分辨率，整体给出实际系统对照，其中 CausVid 与 Self Forcing 使用相同 1.3B、$832\times480$ 设置，比较最直接。
+
+| Model | #Params | Resolution | Throughput (FPS) ↑ | Latency (s) ↓ | Total ↑ | Quality ↑ | Semantic ↑ |
+|---|---:|---|---:|---:|---:|---:|---:|
+| LTX-Video | 1.9B | 768×512 | 8.98 | 13.5 | 80.00 | 82.30 | 70.79 |
+| Wan2.1 | 1.3B | 832×480 | 0.78 | 103 | 84.26 | **85.30** | 80.09 |
+| SkyReels-V2 | 1.3B | 960×540 | 0.49 | 112 | 82.67 | 84.70 | 74.53 |
+| MAGI-1 | 4.5B | 832×480 | 0.19 | 282 | 79.18 | 82.04 | 67.74 |
+| CausVid | 1.3B | 832×480 | **17.0** | 0.69 | 81.20 | 84.05 | 69.80 |
+| **Self Forcing, chunk-wise** | **1.3B** | **832×480** | **17.0** | **0.69** | **84.31** | **85.07** | **81.28** |
+| NOVA | 0.6B | 768×480 | 0.88 | 4.1 | 80.12 | 80.39 | 79.05 |
+| Pyramid Flow | 2B | 640×384 | 6.7 | 2.5 | 81.72 | 84.74 | 69.62 |
+| Self Forcing, frame-wise | 1.3B | 832×480 | 8.9 | **0.45** | 84.26 | 85.25 | 80.30 |
+
+*原文 Table 1。Self Forcing 两行均使用 DMD 和 4-step diffusion；Latency 为开始得到首帧的等待时间，Total/Quality/Semantic 为 VBench 分数。*
+
+chunk-wise 在保留 CausVid 同样 17 FPS、0.69 秒的同时，将 total 从 81.20 提高到 84.31，semantic 从 69.80 提高到 81.28。由于时间结构与少步规模相近，这直接显示改进不只来自加速，更来自生成分布的质量。
+
+与 Wan2.1 相比，total 仅高 0.05，quality 还略低 0.23，semantic 高 1.19。不能概括为所有质量维度都超过基础模型。显著变化在等待时间，从 103 秒降到 0.69 秒，约 $149$ 倍；吞吐则是 $17/0.78\approx21.8$ 倍。论文约 150× 的表述对应 latency，不是所有速度指标都提高 150 倍。[原文 Table 1、Figure 5](https://arxiv.org/pdf/2506.08009#page=8)
+
+frame-wise 将 latency 进一步降至 0.45 秒，代价是 throughput 8.9 FPS，低于基础视频的 16 FPS 播放速率。它更快给出第一段结果，却不能仅凭这个设置在 16 FPS 下无限期无缓冲播放。chunk-wise 的 17 FPS 则超过该播放率，兼顾亚秒启动和持续供帧。交互应用应根据启动响应与持续流畅程度选择，不能只拿最好的 latency 数字代表整个系统实时性。
+
+## 人类偏好支持可感知的质量，但评测规模有明确含义
+
+Figure 4 比较 Self Forcing chunk-wise 与四个主要模型。每次展示相同提示下的两段视频，用户依据整体质量与提示符合程度选择更好的一段。
+
+![Human preference comparison](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-user-preference-原图.png)
+
+*原文 Figure 4。虚线为 50% 偏好率；Self Forcing 对四个基线均超过该线，幅度不同。*
+
+| Baseline | Preference for Self Forcing | Preference for baseline |
+|---|---:|---:|
+| MAGI-1 | 54.2% | 45.8% |
+| SkyReels-V2 | 57.9% | 42.1% |
+| Wan2.1 | 62.7% | 37.3% |
+| CausVid | 66.1% | 33.9% |
+
+附录说明使用 MovieGenBench 的全部 1,003 个提示，每个提示由一名用户评价。1,003 是提示数量，不能自动解释成 1,003 名互不重复的评审，也不能写成每条提示都由多人投票。报告没有给出多评审一致性或偏好置信区间。[原文 Appendix E](https://arxiv.org/pdf/2506.08009#page=19)
+
+结果支持改进在整体观看体验上可感知，尤其相对 CausVid。它不证明所有具体场景都更优，也没有独立测量动作控制响应或物理世界真实性；本论文主体仍是 text-to-video 生成质量与时序效率评测。
+
+## 控制消融说明关键在 self-rollout，而不只在 DMD
+
+主表 CausVid 的 81.20 来自官方实现，Table 2 的 DF + DMD 则在作者自己的训练框架中复现对应机制。两者不能互换，因为后者才控制了当前实验环境中的实现条件。
+
+| Training paradigm / Objective | Chunk-wise Total | Chunk-wise Quality | Chunk-wise Semantic | Frame-wise Total | Frame-wise Quality | Frame-wise Semantic |
+|---|---:|---:|---:|---:|---:|---:|
+| Many (50×2)-step DF | 82.95 | 83.66 | 80.09 | 77.24 | 79.72 | 67.33 |
+| Many (50×2)-step TF | 83.58 | 84.34 | 80.52 | 80.34 | 81.34 | 76.34 |
+| Few (4)-step DF + DMD | 82.76 | 83.49 | 79.85 | 80.56 | 81.02 | 78.71 |
+| Few (4)-step TF + DMD | 82.32 | 82.73 | 80.67 | 78.12 | 79.62 | 72.11 |
+| **Self Forcing + DMD** | **84.31** | **85.07** | **81.28** | **84.26** | **85.25** | **80.30** |
+| Self Forcing + SiD | 84.07 | 85.52 | 78.24 | 83.54 | 84.71 | 78.86 |
+| Self Forcing + GAN | 83.88 | 85.06 | 79.16 | 83.27 | 84.57 | 78.08 |
+
+*原文 Table 2，保留原表 Many (50×2)-step 标签。它描述作者的多步基线配置，不应与 Self Forcing 的两个时间循环自行对应。*
+
+在相同 DMD 目标下，chunk-wise SF 比 DF 高 1.55、比 TF 高 1.99 total 分。换成 frame-wise 后，SF 比 DF 高 3.70、比 TF 高 6.14。更细的时间生成单位需要更多 AR 展开，基线下降更明显，而 SF total 只从 84.31 变化到 84.26。这与“自己历史的误差会沿更多生成轮次放大”的机制相吻合。[原文 §4](https://arxiv.org/pdf/2506.08009#page=9)
+
+SiD 与 GAN 也保持较好的 total，说明优势不限于 DMD 一种目标。但 SiD 的 chunk-wise quality 85.52 高于 DMD 的 85.07，semantic 却低于 DMD；不同目标会形成不同取舍。教师大小与 batch 配置也不同，不能只按总分宣称某个 divergence 在所有条件下最优。
+
+定性图提供了随时间变化的可见例子。它并非只比较第一帧有多漂亮，而是沿 0、2.5、5 秒检查饱和度与细节是否逐渐偏离。
+
+![Qualitative comparison over generation time](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-qualitative-comparison-原图.png){ width="760" }
+
+*原文 Figure 5。CausVid 示例中后段出现更明显的过饱和，Self Forcing 的视觉变化更稳定；这是对具体样例的观察，不能代替完整误差统计。*
+
+附录 Figure 8 还显示，frame-wise 不是毫无代价地获得低延迟。它的 dynamic degree 更高，但 background consistency、motion smoothness 与 temporal flickering 方面较 chunk-wise 差。两个 total 分接近，并不表示它们在所有时序属性上相同。
+
+![VBench comparison across 16 dimensions](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-vbench-dimensions-原图.png)
+
+*原文 Figure 8。雷达图用于观察维度取舍，不从没有数值标注的轴上读取并编造精确分数。*
+
+## 顺序生成训练未必更慢，取决于一次调用实际做了什么
+
+Self Forcing 外层按时间顺序运行，看起来不如 TF/DF 全序列并行；但一个 frame/chunk 内仍有大量空间与局部时间 tokens 并行计算，GPU 不一定因此闲置。
+
+另一个差别是 attention 实现。TF/DF 需要专门的 mask，作者使用 FlexAttention；SF 每次只处理已可见内容，可以直接使用 FlashAttention-3。顺序展开付出的调用次数，与更简单 attention kernel 节省的开销共同决定每次迭代时间。[原文 §4、Appendix A](https://arxiv.org/pdf/2506.08009#page=16)
+
+![Iteration cost and quality against wall-clock training time](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-training-efficiency-原图.png){ width="920" }
+
+*原文 Figure 6。左图分别计 generator 与 critic update，右图比较相同 wall-clock 下的 VBench；应同时看每步成本和达到质量所需时间。*
+
+图中 SF 不同退出长度的单次成本与 TF/DF 可比，且相同训练时间下质量更高。这证明在当前模型、kernel 与后训练配置中，顺序 rollout 可以有效执行，不能扩大成所有顺序训练都比并行训练快。更重要的可复用结论是，分布对齐可能减少达到有效质量所需的更新，从而抵消部分执行结构成本。
+
+DMD 在 64 张 H100 上约 1.5 小时收敛，SiD/GAN 约 2–3 小时。前者约为 96 GPU-hours，后两者约 128–192 GPU-hours，均只是对应后训练运行的粗略换算，不包含 Wan 基础模型预训练、16K ODE 初始化样本准备，以及 GAN 的 70K 视频数据生成。
+
+| Hyperparameter | DMD | SiD | GAN |
+|---|---|---|---|
 | Real score network | Wan2.1-T2V-14B | Wan2.1-T2V-1.3B | N/A |
-| Real score CFG weight | 3.0 | 3.0 | N/A |
-| Critic network initialization | Wan2.1-T2V-1.3B | Wan2.1-T2V-1.3B | Wan2.1-T2V-1.3B |
-| Batch size | 64 | 64 | 768 |
-| Generator optimizer | AdamW | Adam | AdamW |
-| Critic optimizer | AdamW | Adam | AdamW |
-| Generator LR | 2e-6 | 2e-6 | reported in paper appendix |
-| Critic LR | 4e-7 | 2e-6 | reported in paper appendix |
-| EMA decay | 0.99 | 0.99 | reported in paper appendix |
-| Denoising steps | 4 | 4 | 4 |
-| Distribution loss | DMD | SiD | R3GAN / relativistic GAN with R1 + R2 |
+| Critic initialization | Wan2.1-T2V-1.3B | Wan2.1-T2V-1.3B | Wan2.1-T2V-1.3B |
+| Effective batch size | 64 | 64 | 768 |
+| Generator learning rate | $2\times10^{-6}$ | $2\times10^{-6}$ | $2\times10^{-6}$ |
+| Critic learning rate | $4\times10^{-7}$ | $2\times10^{-6}$ | $2\times10^{-6}$ |
+| Optimizer | AdamW | Adam | AdamW |
+| EMA decay | 0.99 | 0.99 | 0.99 |
 
-<small>表源：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`，Table 3。原论文表格要点：该表汇总 DMD、SiD 和 GAN 三类 Self Forcing objective 的训练超参；DMD/SiD 使用 pretrained score networks 和 4-step generator，GAN 版本则使用 R3GAN-style 对抗目标与更大的 batch。</small>
+*原文 Table 3。通常每 GPU batch 为 1，较大 effective batch 通过梯度累积实现；DMD/SiD 的 real score CFG weight 为 3.0。*
 
-## 实验结果
+这些配置说明它是一条适合已有视频模型团队采用的后训练路径。单张 H100 推理与 64 张 H100 训练分别对应部署和优化预算，不能因为模型可单卡运行，就暗示全部训练也只需要同样资源。
 
-### Table 1: Comparison with relevant baselines
+## 对世界模型研究最有用的是训练历史的对齐方式
 
-论文使用 VBench 和速度指标比较同规模模型。表格保留英文格式。
+Self Forcing 将一个常被掩盖的差异显式化。把真实历史加噪、把去噪步数减少、把 attention 改成因果，都不会自动让训练见到部署时自己的错误。只有真正从当前模型生成样本，再评价这条生成分布，损失才作用于系统实际会产生的轨迹。
 
-| Model | #Params | Resolution | Throughput (FPS) | Latency (s) | Total Score | Quality Score | Semantic Score |
-| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
-| LTX-Video | 1.9B | 480P | 8.98 | 13.5 | 80.00 | 82.30 | 70.79 |
-| Wan2.1 | 1.3B | 480P | 0.78 | 103 | 84.26 | 85.30 | 80.09 |
-| SkyReels-V2 | 1.3B | 480P | 0.49 | 112 | 82.67 | 84.70 | 74.53 |
-| MAGI-1 | 4.5B | 480P | 0.19 | 282 | 79.18 | 82.04 | 67.74 |
-| CausVid | 1.3B | 480P | 17.0 | 0.69 | 81.20 | 84.05 | 69.80 |
-| Self Forcing (Ours, chunk-wise) | 1.3B | 480P | 17.0 | 0.69 | 84.31 | 85.07 | 81.28 |
-| NOVA | 0.6B | 480P | 0.88 | 4.1 | 80.12 | 80.39 | 79.05 |
-| Pyramid Flow | 2B | 480P | 6.7 | 2.5 | 81.72 | 84.74 | 69.62 |
-| Self Forcing (Ours, frame-wise) | 1.3B | 480P | 8.9 | 0.45 | 84.26 | 85.25 | 80.30 |
+这给交互视频与世界模型提供了可复用方法，但本文没有直接验证机器人动作控制、任务成功率或物理动力学精度。将它接入动作条件世界模型后，还需要测量动作是否正确改变未来；将它用于长期环境时，还需要独立评估对象与场景是否能持续保留。VBench 和人类视频偏好不能替代这些任务证据。
 
-<small>表源：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`，Table 1。原论文表格要点：该表比较同类视频生成模型的参数量、分辨率、吞吐、延迟和 VBench 分数；Self Forcing 在保持 Wan2.1 级别总分的同时，把延迟降到 `0.69s` chunk-wise 或 `0.45s` frame-wise。</small>
+当前方法也有明确边界。rolling cache 只保留有限上下文，视频远超训练长度仍会退化；KV detach 与去噪梯度截断虽然节省显存，也减少了长程反向学习路径。论文提出改进外推和探索 state-space 等循环结构作为后续方向，尚未由当前实验解决。[原文 §5](https://arxiv.org/pdf/2506.08009#page=10)
 
-这张表支撑三点：
-
-1. chunk-wise Self Forcing 和 CausVid 速度相同，但质量和语义分数明显更高；
-2. frame-wise Self Forcing 延迟最低，为 0.45s；
-3. 相对 Wan2.1，Self Forcing 基本保住 VBench 总分，同时把 latency 从 103s 降到 0.69s 或 0.45s。
-
-![Self Forcing qualitative comparison 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-qualitative-comparison-原图.png){ width="760" }
-
-<small>图源：`Self Forcing`，Figure 5。原图对比 Wan2.1、SkyReels-V2、CausVid 和 Self Forcing 在多个时间点的生成结果，展示 CausVid 随时间出现过饱和，而 Self Forcing 更稳定。</small>
-
-**定性对比图要沿时间读。**
-这类视频结果不能只看第一帧或最漂亮的一帧，要沿时间检查颜色是否逐步过饱和、主体是否漂移、背景是否跳变、动作是否变慢。图中 CausVid 的问题更像长期 rollout 的统计漂移，而不是单帧能力不足；Self Forcing 的优势在于训练时已经让模型条件在自己生成的历史上，所以更能适应这种推理时分布。它和前面的 self-rollout 训练图是一组因果链：训练分布更接近推理分布，长时视觉漂移更轻。
-
-### Table 2: Ablation study
-
-| Chunk-wise AR | Total Score | Quality Score | Semantic Score |
-| --- | ---: | ---: | ---: |
-| Diffusion Forcing (DF), Many (502)-step models | 82.95 | 83.66 | 80.09 |
-| Teacher Forcing (TF), Many (502)-step models | 83.58 | 84.34 | 80.52 |
-| DF + DMD, Few (4)-step models | 82.76 | 83.49 | 79.85 |
-| TF + DMD, Few (4)-step models | 82.32 | 82.73 | 80.67 |
-| Self Forcing (Ours, DMD) | 84.31 | 85.07 | 81.28 |
-| Self Forcing (Ours, SiD) | 84.07 | 85.52 | 78.24 |
-| Self Forcing (Ours, GAN) | 83.88 | 85.06 | 79.16 |
-
-| Frame-wise AR | Total Score | Quality Score | Semantic Score |
-| --- | ---: | ---: | ---: |
-| Diffusion Forcing (DF), Many (502)-step models | 77.24 | 79.72 | 67.33 |
-| Teacher Forcing (TF), Many (502)-step models | 80.34 | 81.34 | 76.34 |
-| DF + DMD, Few (4)-step models | 80.56 | 81.02 | 78.71 |
-| TF + DMD, Few (4)-step models | 78.12 | 79.62 | 72.11 |
-| Self Forcing (Ours, DMD) | 84.26 | 85.25 | 80.30 |
-| Self Forcing (Ours, SiD) | 83.54 | 84.71 | 78.86 |
-| Self Forcing (Ours, GAN) | 83.27 | 84.57 | 78.08 |
-
-<small>表源：`Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion`，Table 2。原论文表格要点：该表在 chunk-wise 和 frame-wise AR 两种设置下比较 TF、DF、DMD 后训练和 Self Forcing；frame-wise AR 链更长、误差累积更强，而 Self Forcing 仍保持最高或接近最高 VBench 分数，直接支撑 train-test distribution alignment 的主张。</small>
-
-**为什么这张消融表重要。**
-这张表要分 chunk-wise 和 frame-wise 两部分读。chunk-wise 每次生成一个较大的 latent block，AR 链较短，误差累积压力较小；frame-wise 的生成粒度更细，链更长，更容易暴露 train-test mismatch。若一个方法只在 chunk-wise 好，在 frame-wise 掉很多，说明它可能仍然依赖较短 rollout 掩盖误差。
-
-Self Forcing 在 frame-wise 下仍保持接近 84 的总分，而 TF/DF 和它们的 DMD 后训练版本掉得更明显。这直接支撑论文主张：训练时使用模型自己的 rollout 分布，比只在真实历史或 noisy context 上训练更能抗长期误差累积。这里的重点不是 Self Forcing 换了一个更强 backbone，而是同一类 AR 设置下训练分布对齐带来的差异。
-
-![Self Forcing training efficiency 原图](../../assets/images/localized-remote/paper-deep-dives/world-models/self-forcing/self-forcing-training-efficiency-原图.png){ width="920" }
-
-<small>图源：`Self Forcing`，Figure 6。原图左侧比较 DMD loss 下不同训练范式的单 iteration 时间，右侧比较相同 wall-clock budget 下 VBench score。Self Forcing 虽然顺序 rollout，但训练效率不差，且同等时间质量更高。</small>
-
-**这张效率图怎么读。**
-常见担心是 Self Forcing 训练时要顺序 rollout，会比 TF/DF 慢太多。左图看单次 iteration 成本，右图看同样 wall-clock budget 下的 VBench 分数；真正要比较的是“单位训练时间换来多少质量”，不是单步是否最并行。图里的结论是：Self Forcing 虽然牺牲了一部分并行形态，但因为训练分布更对齐推理分布，同等时间下质量收益更好。
-
-## 和 CausVid 的关系
-
-CausVid 和 Self Forcing 都从 Wan2.1-1.3B 出发，都追求 few-step causal video generation，也都使用 distribution matching。但它们的训练分布不同。
-
-| Dimension | CausVid | Self Forcing |
-| --- | --- | --- |
-| Training context | DF-style noisy / ground-truth-derived context | self-generated context from AR rollout |
-| Loss target | distribution matching on DF-generated outputs | distribution matching on actual inference-time outputs |
-| KV cache in training | mainly inference-side system mechanism | used during training self-rollout |
-| Main failure addressed | bidirectional-to-causal distillation and speed | exposure bias and error accumulation |
-| Reported speed | 17 FPS, 0.69s latency in comparable Wan-1.3B setting | 17 FPS, 0.69s chunk-wise; 8.9 FPS, 0.45s frame-wise |
-
-论文对 CausVid 的批评非常明确：CausVid 的 DMD loss 匹配的是 DF 训练输出分布，而不是模型真实推理分布。Self Forcing 认为这会导致 loss 对错分布做优化。它的修正方式就是训练时真的跑 AR inference。也就是说，Self Forcing 不是让模型在推理时临时处理 noisy context，而是让训练 loss 从一开始就看见真实 self-rollout 输出。
-
-## 和 LingBot-World 的关系
-
-LingBot-World 要把视频生成模型变成可交互世界模拟器；Self Forcing 则解决这条路线里的一个关键训练问题。
-
-| Requirement for interactive world model | Self Forcing contribution |
-| --- | --- |
-| low latency | 0.45s / 0.69s first-frame latency on single H100 |
-| streaming generation | causal AR generation with KV cache |
-| long rollout | rolling KV cache avoids recomputing overlapping windows |
-| train-test consistency | training uses self-generated context |
-| robust sequence quality | holistic video-level distribution matching reduces error accumulation |
-
-不过 Self Forcing 本身仍不是完整的动作条件世界模型。它主要解决“视频如何稳定、低延迟地自回归生成”，还没有解决动作、交互、物理约束和闭环评测。要变成 LingBot-World 一类系统，还需要接动作条件数据、用户输入、交互接口和长期记忆。
-
-## 最值得复用的设计经验
-
-### 1. 并行训练不一定总是正确目标
-
-TF/DF 的优势是并行，但并行训练把模型放在一个不同于推理的分布里。Self Forcing 的观点是：基础预训练可以并行，关键 post-training 可以顺序化，以换取训练-推理一致性。
-
-### 2. 少量 post-training 也能改变 rollout 行为
-
-论文和 repo 都显示，DMD Self Forcing 只需要数百到数千级别的 post-training iteration，就能显著改善 AR rollout。这对已有视频模型工程很实用：它要修的是“训练上下文”和“推理上下文”的错位，而不是重新学习完整视频分布。
-
-### 3. distribution matching 应该匹配真实生成分布
-
-如果训练 loss 作用在 teacher-forced 或 diffusion-forced 输出上，而推理输出来自 self-rollout，那么优化目标和真实用户看到的视频不一致。Self Forcing 的核心原则是：loss 要施加在模型实际会生成的序列上。
-
-### 4. KV cache 不是只属于推理
-
-Self Forcing 把 KV cache 放进训练 loop，让训练过程也经历推理时的状态更新。这是它和常规“训练并行、推理缓存”的关键区别。
-
-## 局限与风险
-
-1. **超过训练长度仍会退化**：论文承认训练长度内误差累积明显缓解，但远超 5s 训练 horizon 后仍会质量下降。
-2. **梯度截断限制长程学习**：为了可训练，历史 KV 被 detach，可能影响长距离 credit assignment。
-3. **不是动作条件模型**：没有显式建模动作如何改变未来视频，不能直接作为交互世界模型。
-4. **真实数据依赖因 objective 而异**：DMD/SiD 可以 data-free，但 GAN 版本需要视频数据。
-5. **实时性依赖硬件和优化**：论文速度主要在单 H100 上报告，项目页也提到 4090 需要优化才能接近实时。
-6. **生成风险更高**：低延迟视频生成降低了滥用门槛，论文也提醒 deepfake、虚假信息和偏见风险。
-
-## 阅读结论
-
-Self Forcing 最值得记住的不是“视频扩散又快了一点”，而是它把自回归生成的监督对象改对了。Teacher Forcing 和 Diffusion Forcing 都在某种外部构造的历史上训练模型，Self Forcing 则直接在模型自己的 rollout 分布上训练：历史帧从模型来，KV cache 按推理方式更新，loss 作用在完整生成视频上。
-
-它的工程成熟度属于前沿待复现：论文和官方代码给出了清晰 post-training 路线，也报告了单 H100 上 17 FPS、亚秒级延迟和 VBench 结果，但本站没有独立复现这些数字。可复用机制主要是 self-rollout post-training、视频级 distribution matching、stochastic gradient truncation 和 rolling KV cache。不可外推项也很明确：它不能凭空补出动作因果、物理约束或闭环安全性；但如果一个视频模型连自己的生成历史都没见过，就很难指望它在交互系统里长期稳定运行。
-
-## 外部精读
-
-1. Huang et al. [Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion](https://arxiv.org/abs/2506.08009). arXiv:2506.08009.
-2. 官方项目页：[Self Forcing](https://self-forcing.github.io/).
-3. 官方代码：[guandeh17/Self-Forcing](https://github.com/guandeh17/Self-Forcing).
-4. 论文 HTML 版本：[ar5iv:2506.08009v2](https://ar5iv.labs.arxiv.org/html/2506.08009v2).
+真正值得带走的实践判断是，先检查模型训练时读到的历史是否来自同一个生成过程，再选择分布目标和加速方案。Self Forcing 的价值就在于把这三件事接起来，同时保留了足够具体的速度、质量和消融证据，让“低延迟连续生成”成为可以衡量的系统行为。

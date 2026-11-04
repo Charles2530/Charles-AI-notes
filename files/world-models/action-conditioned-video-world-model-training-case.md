@@ -1,288 +1,130 @@
-# 动作条件视频世界模型端到端训练案例
+# 动作条件视频世界模型，从一条抓取轨迹到训练目标
 
-动作条件视频世界模型可以从一个机器人桌面操作案例拆开：数据、视觉状态、动作接口、训练系统、rollout 推理、量化和闭环评测需要形成一条可复盘的技术链路。
+机械臂准备提起桌边的玻璃杯。候选动作有快速提起和缓慢提起，图像里两者的起点相同，但接触与滑落后果可能不同。我们希望学习的模型接收过去的观察和指定动作，预测这次动作之后会发生什么。本文沿这一个任务构造训练样本，解释时间、张量、目标和评测如何接起来。
 
-## 任务设定
+仓库的 [world-model-mini-chain](../assets/examples/world-model-mini-chain/eval_mini_chain.py) 是手工数据的评测示例。它能复算 token 数、候选选择与风险误差，**没有视频张量、训练器或模型 checkpoint**。下面的设计解释真实训练还要补齐哪些环节；文中的小型数值程序会训练一维动力学，用来直接检查动作条件的作用。
 
-假设我们要训练一个模型，用于桌面机器人任务：
+## 先确定一条动作到底覆盖哪段未来
 
-```text
-输入：最近 N 帧 RGB-D / wrist camera / proprioception / language goal / action history
-输出：未来 H 步视频 latent、风险信号、可恢复性标签、可选动作候选
-用途：给 VLA policy、planner 或数据引擎判断“如果执行这个动作 chunk，接下来会怎样”
-```
+设控制器每 0.1 秒接收一次动作，动作包含末端三维位移、旋转增量与夹爪命令。位移单位、旋转表示、坐标系及饱和限制必须由控制器约定。世界模型应学习实际执行动作的后果，因此日志需同时保留策略提议和控制器执行值；两者不一致时不能只存提议。
 
-这个模型不是普通视频生成器。它必须满足四个条件：
+把当前时刻记为 $t$，历史图像覆盖 $t-4$ 秒到 $t$，预测未来 1.6 秒。10 Hz 下，这个窗口需要 16 个动作间隔。每个训练样本应能回答，图像 $o_{t+1}$ 是在哪一个动作持续区间之后采集的。若相机有固定延迟，匹配依据应是采集时间，而非视频文件写入时间。
 
-1. **动作敏感**：同一历史下换动作，未来应合理分叉。
-2. **长时一致**：物体身份、位置、遮挡和接触状态不能几秒后重置。
-3. **可被消费**：输出要服务 policy、planner、risk module 或数据引擎。
-4. **训练可承受**：视频 token、真实交互、GPU 显存和验证预算不能无限增长。
+现有 [`training-config.yaml`](../assets/examples/world-model-mini-chain/training-config.yaml) 同时写了 `rollout_horizon_seconds: 1.6`、`control_rate_hz: 10` 和 `8_step_delta_ee_pose_gripper_chunk`。八步只覆盖 0.8 秒。真实实现可以提供两个 chunk、把预测窗口缩短，或明确剩余动作由什么策略补齐；不能默默让模型预测未知控制输入之后的唯一未来。该 YAML 目前只是设计示意，评测脚本不会读取它。
 
-## 总体链路
+对于有遮挡的玻璃杯，4 秒历史也不保证状态完整。摩擦系数可能没有被观测到，夹紧程度可能只有力传感器能辨认。因此目标通常是条件分布，或带有可检验误差的条件预测。
+
+\[
+p_\theta(o_{t+1:t+16},e_{t+1:t+16}\mid o_{\le t},a_{t:t+15},g).
+\]
+
+$g$ 是拿起玻璃杯的任务条件，$e$ 可以包含接触、滑落和完成等事件。它们需要有独立标签来源，不能让同一模型先猜事件，再把自己的猜测当监督真值。
+
+## 把时间窗口变成模型能够读取的样本
+
+假设先取三路相机各八帧历史，每个相机每帧经 encoder 和 resampler 得到 64 个、维数 256 的 token。一个 batch 可以组织成下表。这些形状是教学设计，并非现有 fixture 已保存的张量。
+
+| 张量 | 形状 | 它包含的信息 |
+| --- | --- | --- |
+| `history_tokens` | `[B, 3, 8, 64, 256]` | 相机、时间和空间位置都可识别的历史 |
+| `actions` | `[B, 16, 7]` | 实际控制接口下的连续动作 |
+| `future_targets` | `[B, 16, D]` | 各预测时刻的目标表征 |
+| `future_valid` | `[B, 16]` | 该时刻是否有有效观测与标签 |
+| `slip_targets` | `[B, 16]` | 指定窗口中滑落事件的监督 |
+
+三路相机 token 不能只拼成无身份的序列。模型需要知道哪一路相机、哪一帧、何种标定，否则同一个物体在不同视角的移动会被误读。Resampler 的工作是把一帧许多 patch 映射为少量表示；token 数下降只证明表示更短，是否保留了杯沿与手指接触，还需要任务检验。
+
+设历史编码成 $z_t$，最简单的动作条件递推为
+
+\[
+\hat z_{t+k+1}=F_\theta(\hat z_{t+k},a_{t+k},g),\qquad \hat z_t=z_t.
+\]
+
+训练时，可以给每一步输入真实编码状态来学一步转移，也可以从 $z_t$ 连续使用自己的预测来学多步 rollout。前者容易优化，却没有直接经历多步误差积累；后者更接近使用方式，但早期预测误差会改变后续输入。两者的损失和评测应分别报告。
 
 ```mermaid
-flowchart LR
-    A["真实/仿真轨迹日志"] --> B["数据清洗与事件标注"]
-    B --> C["视觉 tokenizer / latent state"]
-    B --> D["动作 token / action chunk"]
-    C --> E["动作条件世界模型训练"]
-    D --> E
-    E --> F["causal rollout / KV cache / few-step decoding"]
-    F --> G["闭环评测与失败回放"]
-    G --> H["near-miss / hard negatives / 数据回流"]
-    H --> B
+flowchart TB
+  H[真实历史] --> E[编码当前状态 z_t]
+  E --> F[同一个动作条件转移模型 F]
+  A[本间隔实际执行动作 a_t] --> F
+  F --> P[预测下一状态]
+  O[真实下一帧] --> T[目标编码与有效标签]
+  T --> L[预测误差]
+  P --> L
+  P -. 多步 rollout 时作为下一次输入 .-> F
 ```
 
-这条链路要同时优化七类成本：真实交互成本、视觉 token 成本、动作条件成本、长序列训练成本、数值和显存成本、rollout 推理成本、闭环验证成本。
+实线展示一步训练的输入和目标。虚线展示多步 rollout 怎样回用自己的预测。真实下一帧可以生成监督标签，但在本文的条件预测设定中，不应偷偷进入当前状态分支。
+
+## 先在一维模型中检查动作有没有真的被使用
+
+把杯子一维位置作为状态，构造 $x'=x+0.8a$。模型只学一个参数 $b$，预测 $\hat x'=x+ba$。若完全忽略动作，等于固定 $b=0$，不论快慢推都预测杯子不动。均方损失及其梯度为
+
+\[
+L(b)=\frac1N\sum_i(x_i+ba_i-x'_i)^2,\qquad
+\frac{\mathrm dL}{\mathrm db}=\frac2N\sum_i a_i(x_i+ba_i-x'_i).
+\]
+
+下面的 NumPy 程序完成样本、训练、动作对照与多步预测，可以单独运行。
+
+```python
+import numpy as np
+
+x = np.array([0., 0., 1., 1., -1., -1.])
+a = np.array([-1., 1., -1., 1., -0.5, 0.5])
+x_next = x + 0.8 * a
+b = 0.0
+before = np.mean((x + b * a - x_next) ** 2)
+for _ in range(100):
+    error = x + b * a - x_next
+    b -= 0.2 * 2.0 * np.mean(error * a)
+after = np.mean((x + b * a - x_next) ** 2)
+
+def rollout(start, actions):
+    states = []
+    for action in actions:
+        start = start + b * action
+        states.append(start)
+    return np.array(states)
+
+print(f"b={b:.6f}, mse={before:.4f} -> {after:.4e}")
+print("positive", rollout(0.0, [1.0, 1.0]))
+print("negative", rollout(0.0, [-1.0, -1.0]))
+assert np.isclose(b, 0.8)
+assert np.allclose(rollout(0.0, [1.0, 1.0]), [0.8, 1.6])
+```
+
+这里动作改变预测方向，是因为训练数据中动作与位移的关系提供了监督。仅增加一个“不同动作的 latent 必须离得远”的损失并不能保证这种关系正确。模型可以让背景特征大幅变化，甚至交换正负动作的后果，同样满足距离足够大的要求。真实世界中的反事实检查还必须比较变化的方向、任务变量和独立结果。
+
+这个一维程序假设状态完全可见、动力学线性、数据无噪声。视频模型要处理的隐藏摩擦、多视角、随机后果和接触突变都没有在其中得到验证。它的用途是把条件输入、梯度与预测联系清楚。
+
+## 视频表征和事件标签分别约束什么
+
+未来表征可来自一个目标编码器 $E_{\bar\theta}$。一种基本目标为
+
+\[
+L_z=\frac{\sum_{i,k}m_{ik}\|\hat z_{i,k}-\operatorname{sg}(E_{\bar\theta}(o_{i,k}))\|^2}
+{\sum_{i,k}m_{ik}},
+\]
+
+其中 $m$ 为有效时刻 mask，`sg` 表示目标分支停止梯度。使用缓慢更新的 teacher 只是某些表示学习方法的一部分，单有 stop-gradient 并不构成通用防塌缩保证。若 encoder 把所有画面都映射成常数，预测损失也可能很小，但无法区分快慢抓取。
+
+滑落概率 $p_{ik}$ 可以用二元交叉熵拟合标签 $y_{ik}$。需要先定义它是“下一间隔滑落概率”，还是“未来 1.6 秒至少滑落一次的概率”。后者的多个时间窗口会重叠，不能把它们当独立单步事件随意相加。任务成功和安全违反也不是同一个标签，抓错杯子可能不碰撞，却仍未完成目标。
+
+组合 $L=L_z+\lambda_eL_e$ 时，$\lambda_e$ 调节两个数值尺度下的优化权重。它不自动代表某种安全保证。修改标签频率、平均维度或有效 token 数后，即使权重没变，实际梯度比例也可能变化。
 
 ![DreamZero joint video-action 原论文图](../assets/images/paper-deep-dives/world-models/dreamzero/figure-2-joint-video-action.png){ width="860" }
 
-<small>图源：`World Action Models are Zero-shot Policies`，Figure 2。原论文图意：DreamZero 同时生成未来视频和动作，强调动作预测与生成视频在未见任务上保持对齐。读图重点：这张图说明动作条件世界模型不能只预测“未来画面”，还要让动作、未来状态和执行结果互相约束；下面的 mini-chain 就按这个思路把 episode、rollout、risk 和失败 replay 接起来。</small>
+<small>图源：[DreamZero](https://arxiv.org/abs/2602.15922)，联合视频与动作示意图。论文展示联合建模的一种设计；本文的条件预测器、线性算例与手工 fixture 并未实现这套模型。</small>
 
-## 硬证据模块：一个可复算 mini-chain
+如果还要同时生成动作，就从条件分布 $p(o'\mid o,a)$ 扩展到世界与动作的联合建模。这会改变训练数据、因子分解和调用接口，详见 [WM、WAM、VAM 与动作条件](wm-wam-vam-and-action-conditioned-modeling.md)。不能仅因为数据中有动作就声称已经实现联合策略。
 
-为了避免设计只停留在蓝图，这里放一个最小可复算 fixture。它不是生产模型结果，也不伪装成论文 benchmark；它的作用是把这里要求的证据链变成可运行格式：数据样例、token 统计、训练配置、rollout 输出、失败 replay 和验收指标都能从同一组文件算出来。
+## 训练时看到未来，部署时怎样避免泄漏
 
-```text
-files/assets/examples/world-model-mini-chain/
-  episodes.jsonl
-  rollouts.jsonl
-  training-config.yaml
-  eval_mini_chain.py
-```
+真实未来可以出现在监督目标一侧，却不能作为一个未声明的输入流入当前决策。对于自回归预测，后一步可读取已经生成的前一步；对于扩散预测，未来位置可以承载带噪变量，训练和推理必须遵守同一条件约定。双向去噪未来变量本身不等于看到了干净真值，是否泄漏要追踪数据路径，不能简单规定所有未来 token 永远只能 causal。
 
-运行：
+把多条 episode 打包时，attention mask 还必须隔离不同 episode。否则一条轨迹可以读取另一条的未来或任务标签，得到部署时不存在的信息。评测也应按 episode 或场景切分，不能让同次抓取的相邻帧跨越训练与测试。
 
-```bash
-python3 files/assets/examples/world-model-mini-chain/eval_mini_chain.py
-```
+模型训练完成后，先固定同一真实历史比较快抓和慢抓，再让实际规划器选择并执行短前缀，接收新观察。训练 loss、动作条件响应和闭环成功分别对应不同层证据。仓库当前 fixture 能展示后两层应如何记账，却没有产生这些模型预测。复算过程见[评测报告](world-model-efficient-training-experiment-report.md)，完整系统的数据流见[VLA 到世界模型](vla-world-model-full-chain-case.md)。
 
-当前 fixture 输出：
-
-| Metric | Value |
-| --- | ---: |
-| episodes | 4 |
-| raw_patch_tokens | 82368 |
-| compressed_state_tokens | 12292 |
-| compression_ratio | 6.70x |
-| action_sensitivity_pass | 3/4 |
-| top1_safe_success_agreement | 2/4 |
-| risk_ece_3bin | 0.103 |
-
-这条小链路覆盖的是“证据格式”，不是声称模型已经可用。它让读者能看到一条世界模型实验最小应该长什么样：
-
-```mermaid
-flowchart LR
-    A["episodes.jsonl"] --> B["token stats"]
-    C["training-config.yaml"] --> D["model/eval gates"]
-    E["rollouts.jsonl"] --> F["action sensitivity / risk ECE"]
-    F --> G["failure replay"]
-    B --> H["evidence report"]
-    D --> H
-    G --> H
-```
-
-| 证据项 | 这个 fixture 里怎么体现 | 真实实验要替换成什么 |
-| --- | --- | --- |
-| 成本问题 | raw patch token 到 compressed state token 的 `6.70x` 压缩账 | 真实 tokenizer / resampler 的统计直方图和训练 step time |
-| 最小可复算例子 | 4 条 episode、12 条候选 rollout、一个无依赖评测脚本 | 固定数据切分、固定 checkpoint、固定 eval seed |
-| 失败案例 | `wm_mini_003` 低估 fast grasp 滑落，`wm_mini_004` 把遮挡目标误判成可抓 | 失败视频、模型预测、真实结果、人工标签和重放日志 |
-| 论文或日志证据 | 当前只是文档 fixture，证据等级是 reproducible toy log | 论文 benchmark、ablation、系统吞吐或真实闭环日志 |
-| 反例和适用边界 | 4 条样本太小，不能说明泛化；没有真实训练和硬件延迟 | 扩到任务桶、环境桶、机器人桶和硬件桶 |
-| 验收指标 | action sensitivity、top-1 safe success、risk ECE、failure replay | 加上闭环成功率、恢复率、cost per success、P95/P99 latency |
-
-两个失败 replay 是这条链路里最值得看的部分：
-
-| episode | top_candidate | predicted_risk | predicted_success | actual_event | 含义 |
-| --- | --- | ---: | ---: | --- | --- |
-| `wm_mini_003` | `fast_grasp` | 0.20 | 0.80 | `slip` | 风险头低估快速抓取导致滑落，说明不能只看成功概率 |
-| `wm_mini_004` | `grasp_visible_decoy` | 0.16 | 0.76 | `wrong_target` | 遮挡后对象身份漂移，说明视觉 memory 和多相机对齐要进评测 |
-
-如果这是真实实验，当前结果不能通过发布门禁：`top1_safe_success_agreement=2/4` 太低，说明模型排序会选错动作；`action_sensitivity_pass=3/4` 暴露遮挡任务中动作分叉不够；虽然 `risk_ece_3bin=0.103` 看起来可接受，但它被小样本掩盖，必须按 hard-negative 桶单独看。这个反例很重要：一个平均风险校准数不错的模型，仍可能在关键失败桶里不可用。
-
-## 数据 schema：先保证动作和后果能对齐
-
-数据不要只存视频和动作值。一个可训练的动作条件世界模型，至少需要：
-
-| 字段 | 例子 | 为什么重要 |
-| --- | --- | --- |
-| 观测 | multi-view RGB、depth、wrist camera、proprioception | 建立当前状态和遮挡记忆 |
-| 动作 | end-effector delta、gripper、base velocity、action chunk | 让未来预测对动作条件敏感 |
-| 任务 | language goal、subtask、object id | 判断未来是否朝目标推进 |
-| 事件 | grasped、dropped、collision、contact、done | 给风险和恢复建监督 |
-| 失败标签 | near-miss、recoverable failure、irrecoverable failure | 数据引擎优先回流高价值片段 |
-| 系统日志 | latency、controller reject、human takeover | 区分模型错、控制错和系统错 |
-
-如果动作时间戳和视频帧没有对齐，模型会学到“动作大概和未来有关”，但很难学到准确因果。对高效训练来说，**对齐质量比数据量更先决定上限**。
-
-## 数据分桶：不要随机采样全部视频
-
-世界模型训练最容易浪费在低信息片段上。建议按任务价值分桶：
-
-| 桶 | 采样策略 | 训练价值 |
-| --- | --- | --- |
-| 成功稳定轨迹 | 保留主分布，但不过采 | 让模型知道正常动态 |
-| 成功但过程不稳 | 提高采样权重 | 学会边界状态和恢复空间 |
-| near-miss | 高权重采样 | 学风险、接触和动作敏感性 |
-| 可恢复失败 | 高权重采样 | 学恢复策略和错误传播起点 |
-| 不可恢复失败 | 门禁采样 | 学安全边界和终止信号 |
-| 人工接管 | 单独标注 | 学“不该自主执行”的区域 |
-
-这一步直接对应 [世界模型数据引擎](data-engines-and-self-improvement.md)：高效训练不是“更多数据”，而是“当前模型最缺的高价值数据”。
-
-## 视觉表示：先压 token，再谈大模型
-
-原始视频 token 太贵。一个桌面操作任务如果用 4 个相机、16 帧、每帧几百个 patch，很快会把 attention、显存和通信压垮。更现实的路线是：
-
-1. 用视觉 encoder / video tokenizer 得到 latent。
-2. 用连接器或 resampler 只保留任务相关 token。
-3. 对关键对象、接触区域、gripper 附近区域提高保真。
-4. 把长期状态放进结构化 memory，而不是无限加帧。
-
-| 视觉信息 | 保留策略 |
-| --- | --- |
-| 目标物、夹爪、接触点 | 高优先级 token 或 crop latent |
-| 背景、桌面纹理 | 低频压缩或丢弃 |
-| 遮挡前物体位置 | 进入工作记忆 |
-| 多相机几何关系 | 通过 calibration / pose token 显式给出 |
-
-判断视觉 tokenizer 是否合格，不只看 VQA，而要看动作相关能力：抓取点、接触边界、左右/前后、遮挡后的物体持久性，以及同一动作在不同相机下是否可对齐。
-
-## 动作接口：动作太细和太粗都会浪费
-
-动作接口决定训练序列长度和可控性。常见选择：
-
-| 动作形式 | 适用场景 | 成本与风险 |
-| --- | --- | --- |
-| 单步连续动作 | 高频控制、低层反馈强 | 序列长，模型容易抖 |
-| action chunk | 桌面抓取、开关抽屉、放置 | 降低决策频率，但错误会持续多个 step |
-| 离散 action token | 复用 Transformer 训练框架 | 有量化误差，需要控制器平滑 |
-| latent skill | 长时程任务和规划 | 难解释，安全边界更难写 |
-
-对动作条件世界模型，一个实用起点是：**用 action chunk 做主条件，用低层控制器保证可执行性，用真实执行反馈刷新状态**。这样既能减少 token 数，又不至于让动作语义太粗。
-
-## 训练目标：不要只预测像素
-
-如果训练目标只要求未来视频好看，模型很容易学到平均未来。更稳的目标组合是：
-
-\[
-\mathcal{L}
-=
-\lambda_v \mathcal{L}_{\text{video-latent}}
-+ \lambda_a \mathcal{L}_{\text{action-sensitivity}}
-+ \lambda_e \mathcal{L}_{\text{event}}
-+ \lambda_r \mathcal{L}_{\text{risk}}
-+ \lambda_c \mathcal{L}_{\text{consistency}}
-\]
-
-| 目标 | 作用 |
-| --- | --- |
-| video latent prediction | 学未来观测和时序动态 |
-| action contrast / sensitivity | 强迫不同动作产生可区分未来 |
-| event prediction | 预测 grasp、drop、collision、done 等关键事件 |
-| risk / uncertainty | 给 planner 和安全层使用 |
-| temporal consistency | 约束对象身份、位置和状态跨帧保持 |
-
-最关键的是 action sensitivity。可以构造同一历史下的动作对照：真实动作、扰动动作、保守动作、专家修正动作。模型不仅要预测未来，还要让未来差异能解释动作差异。
-
-## 长序列训练：把 mask、packing 和通信提前设计好
-
-桌面操作看似短，但真实训练会很长：多相机、多帧、语言、动作、事件、memory token 和未来 latent 都在同一条序列里。高效训练要先设计序列结构：
-
-| 组件 | 典型可见性 |
-| --- | --- |
-| 历史观测 token | 可被未来预测读取 |
-| 未来视频 latent | 训练时可用 denoising / masked prediction，推理时必须 causal |
-| action chunk | 可被对应未来窗口读取 |
-| language / subtask | 全局可见 |
-| memory token | 按任务阶段读取 |
-| 不同样本 packed 在一起 | 必须用 block mask 隔离 |
-
-如果使用 patch-and-pack、block-causal mask 或 variable-length trajectory，attention 负载会很不均衡。这时 [MagiAttention](../paper-deep-dives/foundations/magiattention.md) 这类方法的价值就出现了：它不是“再快一点 attention”，而是解决异构 mask 下的负载均衡和通信冗余。
-
-## 数值与显存：低比特要保护敏感模块
-
-世界模型训练中，低比特策略不能照搬纯 LLM：
-
-| 模块 | 精度建议 | 原因 |
-| --- | --- | --- |
-| 大型线性层 / MLP | BF16 -> FP8 / FP4 QAT 逐步尝试 | 主要省权重、激活和带宽 |
-| attention 主路径 | FP8 或专项 QAT 后再低比特 | softmax、重算和长序列误差会放大 |
-| vision connector / action head | 保守精度 | 坐标、抓取点和动作平滑对误差敏感 |
-| risk / safety head | 保守精度 | 误差可能导致风险低估 |
-| KV cache rollout | 可按任务桶量化 | 长 horizon 时显存收益明显，但要验一致性 |
-
-低比特验收不能只看 loss。至少要看：动作敏感性、长时一致性、事件预测、风险校准、闭环成功率和失败恢复率。图像看起来差不多，不代表世界模型可用。
-
-## Rollout 推理：从离线生成变成可交互系统
-
-训练时可以看完整片段，部署时不行。部署需要：
-
-1. causal attention，不能读取未来。
-2. KV cache，降低连续 rollout 成本。
-3. action chunk streaming，执行一段动作后刷新真实观测。
-4. few-step diffusion / consistency / DMD 蒸馏，降低每个未来窗口的采样步数。
-5. 分桶调度，让短闭环任务不被长视频 rollout 拖住。
-
-端到端时延可以粗略拆成：
-
-\[
-T_{\text{loop}}
-=
-T_{\text{observe}}
-+ T_{\text{encode}}
-+ T_{\text{rollout}}
-+ T_{\text{policy/risk}}
-+ T_{\text{control}}
-\]
-
-这行式子表示一次闭环的总时延 \(T_{\text{loop}}\) 可以拆成观测、编码、rollout、策略/风险判断和控制执行五段。每个 \(T_{\text{...}}\) 都是一个可单独 profile 的耗时，不应只看模型 forward 时间。
-
-世界模型如果让 \(T_{\text{rollout}}\) 太大，即使预测准，也进不了实时闭环。因此 rollout 效率要和 [推理成本建模](../inference/cost-modeling-and-slo-design.md) 一起看。
-
-## 评测：不要用好看视频代替闭环证据
-
-最小评测集应覆盖：
-
-| 指标 | 问题 |
-| --- | --- |
-| action sensitivity | 换动作后未来是否合理分叉 |
-| temporal consistency | 物体、空间和状态是否跨帧保持 |
-| event accuracy | 抓取、掉落、碰撞、完成是否预测正确 |
-| risk calibration | 高风险动作是否被低估 |
-| recovery usefulness | 预测是否帮助 policy 修正失败 |
-| cost per successful rollout | 每个成功 rollout 消耗多少 GPU / 真实交互 |
-
-其中 `cost per successful rollout` 很重要。一个模型如果让每次预测更贵，却没有提升闭环成功率，就不算高效训练路线的成功。
-
-## 一个可执行里程碑
-
-| 阶段 | 目标 | 验收 |
-| --- | --- | --- |
-| M0 数据对齐 | 视频、动作、事件、任务标签时间对齐 | 随机抽样回放能解释动作后果 |
-| M1 视觉状态 | video latent 支持物体持久性和接触区域 | 遮挡、抓取点、左右/前后专项评测 |
-| M2 动作条件 | 同历史不同动作产生不同未来 | action sensitivity 显著高于无动作 baseline |
-| M3 长序列训练 | 支持 packed trajectory 和 block-causal mask | step time、显存、通信无异常拖尾 |
-| M4 低成本 rollout | causal + KV + 少步生成 | 延迟进入闭环预算 |
-| M5 数据回流 | near-miss 和失败样本自动成桶 | 回流后目标 bucket 成功率提升 |
-
-这条路线的关键不在于每一步都用最先进模型，而在于每一步都有可验证的效率贡献。
-
-## 常见反例
-
-| 看起来合理的做法 | 为什么可能错 |
-| --- | --- |
-| 先把视频模型做得很大 | 如果动作条件弱，只会得到更贵的平均未来 |
-| 全部视频帧都进上下文 | 长序列成本爆炸，且大量背景 token 没有决策价值 |
-| 只看 FVD / VBench | 视频质量不能证明对 policy 有用 |
-| 低比特全模型统一压 | 视觉连接器、动作头和风险头可能被误差放大 |
-| 合成 rollout 直接回流 | 容易形成模型自我强化的数据污染 |
-
-一个好用的动作条件视频世界模型，不是“生成最漂亮的未来”，而是用可承受成本预测出足够影响决策的未来差异。
-
-## 外部材料
-
-- [World Models 论文](https://arxiv.org/abs/1803.10122)。
-- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+进一步读真实方法时，可以对照 [MWM](https://arxiv.org/abs/2206.14244) 的表征/动力学分工、[V-JEPA 2](https://arxiv.org/abs/2506.09985) 的动作条件预测与规划，以及 [PlaNet](https://arxiv.org/abs/1811.04551) 的历史状态推断。每一条路线都要回到同样的问题，模型在预测时究竟已知什么，损失用了什么真值，使用者又根据哪个输出改变了动作。

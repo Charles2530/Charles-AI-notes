@@ -909,9 +909,29 @@ def compact_markdown_table(lines: list[str]) -> str:
     return "；".join(" / ".join(cell for cell in row if cell) for row in rows if row)
 
 
+def without_catalog_metadata(text: str) -> str:
+    """Keep article content while excluding frontmatter and its source information box."""
+    text = re.sub(r"\A\s*---[ \t]*\n.*?\n---[ \t]*(?:\n|$)", "", text, count=1, flags=re.S)
+    lines: list[str] = []
+    metadata_indent: int | None = None
+    for line in text.splitlines(keepends=True):
+        expanded = line.expandtabs(4)
+        indent = len(expanded) - len(expanded.lstrip())
+        if metadata_indent is not None:
+            if not line.strip() or indent > metadata_indent:
+                continue
+            metadata_indent = None
+        if re.match(r'''^[ \t]*(?:!!!|\?\?\?\+?)[ \t]+\w+[ \t]+(["'])(?:论文信息|资料信息)\1[ \t]*$''', line.rstrip()):
+            metadata_indent = indent
+            lines.append("\n")
+            continue
+        lines.append(line)
+    return "".join(lines)
+
+
 def markdown_blocks(text: str) -> list[str]:
     blocks: list[str] = []
-    raw_blocks = re.split(r"\n\s*\n", text)
+    raw_blocks = re.split(r"\n\s*\n", without_catalog_metadata(text))
     for raw in raw_blocks:
         lines = []
         for line in raw.splitlines():
@@ -937,7 +957,7 @@ def markdown_blocks(text: str) -> list[str]:
 
 
 def extract_numbered_items(text: str) -> list[str]:
-    lines = text.splitlines()
+    lines = without_catalog_metadata(text).splitlines()
     groups: list[list[str]] = []
     anchor_re = re.compile(r"核心贡献|核心思想|主要内容|阅读结论|总结|可以概括为三点|落成两个损失|核心方法")
     reject_re = re.compile(r"局限|风险|不能证明|限制|短板|缺点|失败")

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="650" viewBox="0 0 720 650" role="img" aria-labelledby="title desc">
+<title id="title">视频模型的训练与采样</title>
+<desc id="desc">训练从真实视频编码、加噪到预测目标并更新参数。生成从随机latent开始，重复DiT预测和采样器更新，最后解码视频。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#176b67"/></marker></defs>
+<rect width="720" height="650" rx="16" fill="#f9fbfa"/>
+<g font-family="'PingFang SC','Noto Sans CJK SC',sans-serif" fill="#183c3a" text-anchor="middle">
+<text x="184" y="36" font-size="24" font-weight="600">训练</text><text x="536" y="36" font-size="24" font-weight="600">生成</text>
+<text x="184" y="61" font-size="15">已知真实视频与加入的噪声</text><text x="536" y="61" font-size="15">只有条件与随机初值</text>
+<rect x="44" y="91" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="184" y="119" font-size="20">真实视频</text>
+<text x="184" y="142" font-size="15">RGB 帧</text>
+<path d="M184,162 v25" stroke="#176b67" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="44" y="194" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="184" y="222" font-size="20">VAE 编码与归一化</text>
+<text x="184" y="245" font-size="15">得到干净 latent</text>
+<path d="M184,265 v25" stroke="#176b67" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="44" y="297" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="184" y="325" font-size="20">抽噪声与噪声时间</text>
+<text x="184" y="348" font-size="15">构造带噪输入与速度目标</text>
+<path d="M184,368 v25" stroke="#176b67" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="44" y="400" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="184" y="428" font-size="20">DiT 预测速度</text>
+<text x="184" y="451" font-size="15">读取带噪 latent、文本与时间</text>
+<path d="M184,471 v25" stroke="#176b67" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="44" y="503" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="184" y="531" font-size="20">比较预测与已知目标</text>
+<text x="184" y="554" font-size="15">反向传播并更新 DiT 参数</text>
+<rect x="396" y="91" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="536" y="119" font-size="20">随机 latent</text>
+<text x="536" y="142" font-size="15">尺寸由帧数与分辨率确定</text>
+<path d="M536,162 v25" stroke="#176b67" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="396" y="194" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="536" y="222" font-size="20">DiT 预测速度</text>
+<text x="536" y="245" font-size="15">读取当前 latent、文本与时间</text>
+<path d="M536,265 v25" stroke="#176b67" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="396" y="297" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="536" y="325" font-size="20">采样器更新 latent</text>
+<text x="536" y="348" font-size="15">按时间网格重复预测与更新</text>
+<path d="M536,368 v25" stroke="#176b67" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="396" y="400" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="536" y="428" font-size="20">最终 latent</text>
+<text x="536" y="451" font-size="15">反归一化，再由 VAE 解码</text>
+<path d="M536,471 v25" stroke="#176b67" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="396" y="503" width="280" height="66" rx="9" fill="#e7f1ee" stroke="#8fb8ad"/>
+<text x="536" y="531" font-size="20">RGB 帧组成视频</text>
+<text x="536" y="554" font-size="15">按指定帧率保存与播放</text>
+<path d="M682,330 H704 V227 H682" stroke="#b45b2d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<text x="360" y="620" font-size="16">视频中的帧顺序，与采样时的噪声时间是两套坐标</text></g></svg>

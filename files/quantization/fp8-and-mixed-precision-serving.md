@@ -1,85 +1,60 @@
-# FP8 与混合精度推理：它不是一个 dtype 开关
+# FP8 矩阵乘里的数据、尺度和累加
 
-FP8 在服务里的价值，是把最吃带宽、最适合 Tensor Core 的大块矩阵计算放到低精度路径上，同时把归一化、softmax、残差、输出头、KV cache、坐标或动作头这些敏感位置留在更高精度或更谨慎的量化策略里。
+FP8用8个bit保存浮点数，但不同格式的指数位和尾数位分配不同，范围与精度也不同。服务系统要同时决定数据格式、scale粒度、累加方式和硬件路径。一个tensor标记为FP8，还不足以说明它会怎样参与计算。
 
-所以判断 FP8 值不值得上，先别问“能不能压到 8 bit”。更该问四件事：热路径是不是 GEMM 或 HBM 带宽瓶颈；硬件和 runtime 是否真的命中 FP8 kernel；scale、amax、累加和 fallback 是否可观测；质量回归是否覆盖长上下文、多模态、工具调用或动作安全这类高风险桶。
+## 从一块输入到一次矩阵乘
 
-## 先问瓶颈在哪
+先约定 $A\approx s_A A_q$、$B\approx s_B B_q$，即s表示反量化尺度。若两块各用一个scale，则
 
-FP8 省的是每个元素的字节数，也可能提高 GEMM 吞吐。但服务系统不一定因此端到端变快。prefill 往往更像大矩阵吞吐问题，FP8 projection 和 MLP 更容易兑现收益；decode 可能卡在 KV cache 读写、调度、batch 形状、采样和网络输出上，只有权重 GEMM 变快不一定能明显降低 TPOT。
+$$
+AB\approx s_As_B(A_qB_q).
+$$
 
-这也是为什么 FP8 评估要分开看 TTFT、TPOT、throughput、P95/P99、显存峰值和 kernel trace。若 trace 里大量 fallback 到 BF16，或者低精度 kernel 只覆盖冷路径，理论压缩就不会变成线上收益。
+量化时先除以s，再转换到FP8可表示值；矩阵乘通常把低精度操作数送入适用的矩阵指令，在选定精度下累加，最后恢复尺度。某些库保存的是这里s的倒数，读API时必须核对，不能只看变量名scale。
 
-| 系统位置 | FP8 更可能有效 | 需要小心的原因 |
-| --- | --- | --- |
-| Linear / MLP / attention projection | 大块 GEMM 和激活搬运成本高 | shape 不合适或 kernel 不支持时可能 fallback |
-| KV cache | 长上下文显存压力大 | scale 校准、注意力质量和 backend 支持会限制收益 |
-| LayerNorm / RMSNorm | 通常不作为第一批 FP8 目标 | 统计量敏感，误差会跨层传播 |
-| Softmax / attention score | 通常保 BF16/FP16 | 指数和归一化会放大量化误差 |
-| lm head / projector / action head | 先保守 | 输出分布、坐标、工具参数或动作边界更容易出事故 |
+用十进制教学数说明尺度关系，设 $A_q=[2,4]$、$B_q=[3,1]^\top$，$s_A=0.5,s_B=0.25$。整数样式的点积为10，恢复结果为1.25。实际FP8操作数可以带小数，这个例子只演示scale乘回的位置。
 
-## E4M3 和 E5M2 是范围与格点的取舍
+## 分块尺度会改变归约结构
 
-FP8 常见格式是 E4M3 和 E5M2。E 是 exponent，决定动态范围；M 是 mantissa，决定同一数量级里能分多细。E4M3 的有效数字更细，范围更窄，常用于前向权重和激活；E5M2 范围更大、格点更粗，常用于动态范围更大的张量。
+若K方向分成两块，每块有不同尺度，结果为
 
-![FP8 training loss curves](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="630" }
+$$
+C=\sum_g s_{A,g}s_{B,g}(A_{q,g}B_{q,g}).
+$$
 
-<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原图用多类模型训练曲线说明 FP8 路线可以接近高精度基线。这里用它说明：格式定义本身不能证明可用，必须回到任务曲线和质量回归。</small>
+不能先把所有未缩放部分和加起来，最后随便乘一个scale。Kernel需要把scale读取、部分累加和布局一起组织。因此细粒度scale既是数值选择，也是执行接口。
 
-把一个张量 cast 到 FP8 前，通常要先用 scale 把数值映射到可表示范围：
-
-\[
-x_{\mathrm{fp8}}=\operatorname{FP8Cast}\left(\frac{x}{s}\right),\qquad
-\hat{x}=s\cdot x_{\mathrm{fp8}}
-\]
-
-这行式子说的是：真实张量 \(x\) 先除以 scale \(s\)，再落到 FP8 格点；反量化时再乘回 \(s\)。如果 \(s\) 太小，大值会溢出；如果 \(s\) 太大，大多数普通值会挤到很粗的格点上。FP8 的难点，很多时候不是 E4M3 还是 E5M2，而是 scale 何时更新、按什么粒度更新、是否被 outlier 拖坏。
-
-## scale 是控制面
-
-生产级 FP8 通常有一套 scale 控制面。per-tensor scale 简单，元数据少，但容易被少数尖峰值影响；per-channel 或 per-head scale 更细，质量更稳，但 kernel 和元数据布局更复杂；per-block scale 能折中稳定性和开销，但 block size 必须和矩阵布局、Tensor Core tile、通信和 cache 对齐。
-
-Transformer Engine 的 delayed scaling 思路，是用历史 amax 统计来更新 scale。它避免每个 batch 都剧烈改变 scale，但分布突变时可能滞后。vLLM 的 FP8 KV cache 文档也把校准路径单独拎出来：默认 scale、warmup 估计和数据集校准会带来不同质量风险；KV cache 量化还受 attention backend 和 per-head scale 支持影响。
-
-因此上线 FP8 时，scale 本身要进监控：amax 分布、overflow / underflow、scale 更新频率、fallback 次数、每层误差、长上下文注意力退化，都应该能被追踪。没有这些信号，FP8 问题会表现成“模型偶尔变笨”，很难定位。
-
-## 混合精度才是生产形态
-
-成熟系统不会只改一个 dtype。DeepSeek-V3 的 FP8 mixed precision framework 就把核心 GEMM、scale、累加、通信和高精度保护放在一套系统里看。
+DeepGEMM锁定版本的README明确区分SM90与SM100的scale布局。前者使用FP32尺度，后者相应路径要求打包UE8M0尺度；左操作数scale还需符合其转置和TMA对齐要求。支持某种FP8数据格式，并不自动意味着现有scale张量就可直接传入。
 
 ![DeepSeek-V3 FP8 mixed precision framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="920" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达大模型训练中的 FP8 mixed precision framework。这里用它说明：FP8 是低精度计算、高精度保护、scale 与通信策略的组合，不是单一开关。</small>
 
-低精度乘法也不等于低精度累加。很多 FP8 GEMM 会用更高精度或分块累加，再把结果按需要 cast 回低精度。累加精度不够、block scale 不合适或 outlier 没处理好，都会把局部误差放大到整层输出。
-
 ![DeepSeek-V3 FP8 accumulation](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-7-fp8-accumulation.png){ width="860" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 7。原图表达 FP8 quantization、scale、accumulation 和高精度处理的关系。这里用它说明：FP8 工程难点在于计算路径和 scale 路径一起设计。</small>
 
-推理服务可以借这个思路做拆分：主干大矩阵先尝试 FP8；norm、softmax、残差和输出敏感层保 BF16；KV cache 单独评估；多模态 projector、OCR 坐标、工具参数、动作头和 risk head 先放在高精度保护区。这样得到的是可回退的 mixed-precision recipe，而不是不可解释的全局 dtype 改动。
+## 静态范围和动态范围各花什么成本
 
-## FP8、INT8 和 INT4 不该按 bit 数排序
+静态scale可在校准时决定，减少请求期统计，但输入范围变化可能增加截断或下溢。动态scale依据当前张量统计范围，能适应当前输入，却增加归约、转换与元数据操作。小batch的短kernel里，这些开销可能占较大比例。
 
-FP8 像“小浮点”，动态范围天然比整数格点友好；INT8/INT4 更依赖 scale、zero point、group size、outlier 处理和校准数据。INT4 的压缩率更激进，但 kernel、解量化、group metadata 和质量回归也更敏感。FP8 常见优势是新硬件上更容易获得稳定低精度 GEMM 路径，质量回归通常比极低 bit 温和。
+例如一个教学流水线原先GEMM花10个时间单位，其余操作花10。改FP8后GEMM变成6，量化与布局多花3，整条路径从20降到19。算子内部节省40%，端到端只节省5%。这组数字用于拆账，不是任何GPU的实测。
 
-真正的选择标准是瓶颈。若瓶颈是权重常驻显存，W4A16 可能更有吸引力；若瓶颈是 prefill 的大块 GEMM 和激活带宽，FP8 W&A 更值得试；若瓶颈是长上下文 KV cache，KV 量化要单独校准；若瓶颈是 decode 调度或小 batch 形状，换 dtype 可能不是第一优先级。
+![FP8 training loss curves](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="630" }
 
-## 验收要按服务和任务分桶
+<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原图用多类模型训练曲线说明 FP8 路线可以接近高精度基线。这里用它说明：格式定义本身不能证明可用，必须回到任务曲线和质量回归。</small>
 
-FP8 验收不能只看 perplexity 或一个 GSM8K 分数。文本 LLM 至少要看数学、代码、长上下文、工具调用、结构化输出和拒答边界。VLM 要额外看 OCR、表格、坐标定位、细粒度视觉问答和跨模态 projector。VLA 或世界模型要看动作抖动、near-miss、risk head、短 horizon 纠错和 closed-loop success。
+## 混合精度如何由误差定位得到
 
-系统侧要同时记录：峰值显存、常驻显存、TTFT、TPOT、吞吐、P95/P99、fallback 率、kernel 命中率、scale 统计、编译开销、calibration 数据版本和回滚策略。一个实用判断是：如果 FP8 只让离线 benchmark 好看，但线上 P99 变长、质量桶掉点或观测不到 scale 状态，它还没有真正上线。
+先固定输入，对照每层浮点与FP8输出。若某层误差显著放大，再尝试只恢复该层或某段计算的高精度，并观察任务质量是否恢复。归一化、softmax或输出头常值得单独检查，但不应预先宣布它们在所有模型里最敏感。
 
-## 外部材料
+同样，保留高精度模块可能引入转换与阻断融合。最终方案要比较完整计算路径，同时保留质量与延迟结果。FP8权重、FP8激活、FP8 KV是三个独立配置，修改其中一个时不要把另外两个默认算入收益。
 
-- [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 E4M3/E5M2、scale 和训练曲线证据。
-- [NVIDIA Transformer Engine FP8 delayed scaling](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/fp8_delayed_scaling/fp8_delayed_scaling.html)：核对 amax history、delayed scaling 和 FP8 recipe。
-- [NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)：理解 FP8 Tensor Core 的硬件背景。
-- [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)：看大规模模型里 FP8 mixed precision、scale 和累加路径如何系统化组织。
-- [vLLM Quantized KV Cache](https://docs.vllm.ai/en/latest/features/quantization/quantized_kvcache/)：理解 FP8 KV cache、scale 校准和 backend 支持边界。
-- [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：把 FP8 放到权重、激活、KV cache 和 runtime support 的量化生态里理解。
+## 从源码确认收益会落在哪里
 
-- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- [AWQ 论文](https://arxiv.org/abs/2306.00978)。
+DeepGEMM README明确要求输入转置和FP8转换由调用方负责，辅助PyTorch函数可能较慢。因此计时至少分为“已准备好的矩阵乘”和“包含转换的完整层”两种边界。框架加载成功只能证明某个路径能执行，trace中实际kernel与输入布局才说明执行了什么。
+
+
+## 对照源码与延伸阅读
+
+- [DeepGEMM 固定版本的格式、布局和调用方职责](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)

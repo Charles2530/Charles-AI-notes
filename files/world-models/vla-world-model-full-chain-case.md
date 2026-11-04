@@ -1,87 +1,90 @@
-# VLA 到世界模型：一条机器人闭环链路怎么搭
+# VLA 到世界模型，跟踪一次抓取决策
 
-VLA、世界模型、训练系统和评测经常被分开讲，但真实项目里它们必须接成一条链：机器人数据给出观测和动作，VLA 产生候选动作，世界模型预测动作后果，评测系统判断这些预测是否真的改善闭环决策。
+机械臂要提起桌边玻璃杯。VLA 根据图像和指令提出 `fast_grasp` 与 `slow_grasp` 两个候选，世界模型预测后果，决策器选择动作，控制器执行后再接收观察。把这些模块连接起来的关键，是让每一个预测都能追溯到同一历史、同一动作和同一时间窗口。
 
-做“机器人数据 + VLA 动作 + 世界模型预测 + 闭环评测”方案时，每一层都要讲清输入、输出、证据和失败边界。
+本页沿仓库 `wm_mini_003` 的手工候选解释这个过程。其数字用于复算选择规则；当前仓库并没有执行下面的机器人系统。实际数据来源和完整计算见[评测报告](world-model-efficient-training-experiment-report.md)。
 
-## 数据和动作先对齐
+## 先给所有模块同一份当前状态
 
-VLA / 世界模型项目最常见的失败，不是模型不够大，而是视频和动作日志没有对齐。视频里看得到状态变化，但动作日志缺单位、坐标系、频率或控制模式；VLA 能输出动作 token，但世界模型不知道这些 token 如何改变未来状态。
+一次请求可以用 `episode_id`、决策序号和观测采集时间定位。图像拍摄后还会经历传输、预处理与排队，策略看到它时世界已经继续变化。世界模型若使用比 VLA 更新的图像，二者可能是在不同起点讨论同一动作；若时间戳相同却相机同步错误，也可能把不同位置拼成一个状态。
+
+假设教学系统在 10 Hz 控制下预测八步动作，这段动作覆盖 0.8 秒。一个动作的七个分量可以约定为末端平移、旋转增量和夹爪命令，但必须继续说明单位、旋转参数化和坐标系。语言里的“向上”不能直接决定控制器的正轴。动作归一化的统计量和版本也要与训练一致。
 
 ![RT-2 overall architecture](../assets/images/paper-figures/vla/rt2-overall-wide.png){ width="920" }
 
-<small>图源：[RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control](https://arxiv.org/abs/2307.15818)，整体结构图。原图展示视觉语言模型如何扩展到机器人动作 token 输出。读图重点：RT-2 的启发是把 web-scale VLM 知识接到动作接口上，但世界模型还必须知道动作 token、坐标系和控制频率怎样进入 dynamics。</small>
+<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，整体架构图。动作可以被编码成 token，但落到执行前仍要还原成指定控制接口。图示不意味着任意动作 token 可直接由任意机器人执行。</small>
 
-一个最小 episode schema 应同时记录：图像或多相机视频、语言指令、机器人本体状态、动作 chunk、控制频率、坐标系、reward / done、失败类型、人工接管、near-miss 和恢复片段。只存成功 demonstration 会让模型误以为所有动作都通向成功；只存视频不存动作，会让世界模型无法做反事实。
+VLA 输出的是提议。安全过滤器若削小了位移或替换了动作，世界模型应评价过滤后的实际候选，或明确把过滤器纳入预测过程。若预测的是快抓、执行的是受限慢抓，再把结果挂到快抓名下，就破坏了动力学监督。
 
-## 数据覆盖决定泛化上限
+## 候选动作必须真有区别，且能够执行
 
-真实机器人数据昂贵，所以数据集不能只追求干净。它要覆盖不同机器人、不同场景、不同任务、失败和恢复过程。多 embodiment 数据的价值，是让模型看到同一语义目标可以对应不同身体和控制接口。
+从随机策略采样多次不一定产生有意义的候选。温度很低时，两条 chunk 可能几乎相同；温度过高时，差异可能全是不可执行的关节跳变。候选来源可以是策略采样、动作扰动、不同技能或规划器，但都要经过同一接口和有效性检查。
+
+这里把 fast 和 slow 理解为两段已经定义好的末端轨迹。为公平比较，二者从相同历史出发，评价相同时间范围内的目标成功与风险。若 slow 的完成时间超出评价窗口，提前把它标成失败就会偏爱快速动作。可以统一终局定义，或显式把完成时间计入代价。
+
+多机器人数据扩大了可见动作和场景，但每种身体能执行什么仍然不同。
 
 ![Open X-Embodiment dataset overview](../assets/images/paper-figures/vla/openx-data-vis.jpg){ width="920" }
 
-<small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，数据集可视化图。原图展示多机器人、多任务、多场景数据聚合。读图重点：多数据集聚合能扩大覆盖，但不能自动解决动作空间不一致、标注噪声和跨机器人安全迁移。</small>
+<small>图源：[Open X-Embodiment](https://arxiv.org/abs/2310.08864)，多机器人数据可视化。将样本合在一起之前，需要保留 embodiment、控制语义和传感器配置。</small>
 
-数据账本至少要能回答：哪些任务成功，哪些失败，失败是碰撞、遮挡、滑落、错目标、不可达还是人工接管；哪些动作导致 near-miss；哪些场景属于长尾；哪些样本适合进入再训练，哪些只能做人审或评测。
+同样的“抬起杯子”在另一夹爪上可能需要不同接触位置。共享任务语义不等于共享原始动作向量。动作转换与时序对齐更详细地讨论于[训练样本设计](action-conditioned-video-world-model-training-case.md)。
 
-## 先压缩状态，再学动作条件 dynamics
+## 世界模型为什么既需要状态，又需要动作
 
-四路相机、16 帧历史、RGBD、多模态 token 和语言上下文很快会把 context 撑爆。工程上通常先把视觉压成 latent 或表征，再在该状态上学习动作条件转移。
+历史编码器得到 $z_t$，转移模型计算每个候选下的未来 $\hat z_{t+1:t+H}^{(a)}$。若两条候选共享历史编码，能够节省重复工作；动作开始分叉以后，后续状态和缓存必须属于各自分支。
+
+状态应保留杯子位置、目标身份和接触信息。压缩掉桌面纹理可能无碍，压缩掉手指与杯沿的相对位置则会影响滑落判断。无法只用压缩比判断两种情况。
 
 ![MWM framework](../assets/images/paper-deep-dives/world-models/masked-world-models/figure-1-mwm-framework.png){ width="920" }
 
-<small>图源：[Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)，Figure 1。原图展示 masked visual representation learning 与 latent dynamics 的解耦。读图重点：状态层不是为了重建所有像素，而是保留对控制有用的视觉结构、小物体、接触和动作后果。</small>
+<small>图源：[Masked World Models](https://arxiv.org/abs/2206.14244)，Figure 1。图中的表征学习与潜状态动力学分工，为检查“看漏了”还是“预测错了”提供了一个分析角度。</small>
 
-状态压缩要被测试，而不是只报告 compression ratio。压缩后，小物体是否还在，接触状态是否可读，遮挡后的目标是否保持身份，不同动作是否造成可区分未来，risk head 是否还能识别危险。否则压缩只是把关键信息一起扔掉。
+一种设计通过 future latent 接 event/risk head，另一种设计直接比较目标图像在特征空间的距离。两者需要不同标签与校准，不能默认为同一个通用世界模型已经提供全部输出。
 
 ![V-JEPA 2 action-conditioned world model](../assets/images/paper-deep-dives/world-models/v-jepa2/figure-action-conditioned-world-model.png){ width="920" }
 
-<small>图源：[V-JEPA 2](https://arxiv.org/abs/2506.09985)，Figure 7。原图展示 action-conditioned 模块如何在 JEPA 表征空间中做目标图像规划。读图重点：JEPA/latent 表征适合降低像素重建压力，但仍要补动作条件、reward/risk 和闭环评测。</small>
+<small>图源：[V-JEPA 2](https://arxiv.org/abs/2506.09985)，Figure 7。它展示动作条件模型如何被 MPC 消费；本页的成功与风险双头是教学接口，不是对该图实现的逐项复述。</small>
 
-## 世界模型要影响动作选择
+## 一次明确的选错，比抽象成功率更能定位问题
 
-全链路里，世界模型最有价值的输出不是“未来视频”，而是“哪个候选动作更可能成功、更安全、更可恢复”。因此实验报告必须写出候选动作、预测成功率、预测风险、真实结果和最终选择。
+Fixture 中 fast 的预测成功为 0.80、风险为 0.20，slow 为 0.62、0.32。按 $S=p_{\mathrm{success}}-p_{\mathrm{risk}}$，两者分数分别为 0.60 和 0.30，决策器选择 fast。
 
-一个最小决策账可以这样组织：
-
-```text
-history observation
-  -> VLA proposes K action chunks
-  -> world model rolls out each candidate
-  -> risk / success / reward heads score candidates
-  -> planner chooses action
-  -> real execution logs outcome and failure type
+```python
+candidates = {
+    "fast_grasp": {"success": 0.80, "risk": 0.20},
+    "slow_grasp": {"success": 0.62, "risk": 0.32},
+}
+chosen = max(candidates, key=lambda a: candidates[a]["success"]
+             - candidates[a]["risk"])
+assert chosen == "fast_grasp"
 ```
 
-这里的核心指标是 candidate ranking agreement：世界模型预测的 top-1 安全成功动作，是否和真实安全成功动作一致。没有这项，所谓“世界模型帮助规划”就很难成立。
+给定标签却是 fast 滑落、slow 安全成功。这里可以确认选择规则忠实使用了分数，问题在这些分数对本例后果的判断。仅把 planner 写得更复杂并不会自动修好。把风险惩罚系数加大也未必有帮助，因为模型反而认为 slow 更危险。
 
-## 失败必须进入报告
+接下来需要区分，模型有没有看到夹持不稳，看到后有没有预测出滑落，预测中有滑落却是否被风险头漏读。三者对应状态、动力学、读出三个不同位置。只有最终两个数，无法可靠定位到其中某一层；应保存必要中间状态、事件预测与输入回放。
 
-一个合格的全链路报告至少有四张账。
+## 执行短前缀后，新的观察怎样改变判断
 
-| 账本 | 最小字段 | 为什么重要 |
-| --- | --- | --- |
-| 数据账 | episode、camera、action、reward、done、failure_type | 没有字段契约就无法复盘 |
-| 状态账 | raw tokens、compressed tokens、关键状态探针 | 证明压缩省了什么、丢了什么 |
-| 决策账 | candidate action、predicted success/risk、chosen action | 证明模型影响了动作选择 |
-| 失败账 | slip、wrong_target、occlusion、collision、recovery | 证明下一轮数据该补哪里 |
+设两条 chunk 都预测八步，系统实际只执行前两步，再根据 0.2 秒后的新观察重规划。若新图像出现杯子相对夹爪下滑，状态估计应吸收这条证据，之前“已经稳定夹持”的预测不能继续作为事实保留。
 
-失败账不是附录。世界模型最需要的往往不是更多成功样本，而是边界样本：快碰撞但没碰、差一点滑落、遮挡导致错抓、语言理解正确但动作不可达、成功 checker 漏判。它们决定下一轮训练是否真的补上系统短板。
+重新观察带来修正机会，但修正本身也有时延。观察、编码、预测与下发若又耗时 0.2 秒，动作真正生效时依据的信息仍然较旧。长 chunk 与低时延模型之间的关系，需要按实际执行前缀和时间戳分析，见[具身推理中的观测年龄](../thinking-exploration/embodied-inference-observation-age-1009-2059.md)。
 
-## 交付顺序
+一次反馈循环至少应能恢复下面这条事件链。
 
-第一步，确定动作 schema：坐标系、频率、chunk 长度、归一化、单位和控制器接口。第二步，确定状态压缩：视觉 token、几何状态、mask、episode boundary 和关键状态探针。第三步，训练 VLA 或动作生成器，让它能产生候选动作而不是只输出单一步动作。第四步，训练世界模型预测 reward、risk、done 或未来 latent。第五步，评测 action sensitivity、candidate ranking、risk ECE、failure replay 和 closed-loop success。第六步，把失败样本回流到数据桶。
+```text
+capture_42 -> history_state_42 -> fast/slow proposals
+-> executed-action constraints -> candidate predictions -> chosen fast
+-> execute two controls -> capture_43 -> observed slip
+-> revised state -> recovery / stop -> outcome
+```
 
-这条链路最怕跳步。没有动作 schema，VLA 输出无法被世界模型消费；没有状态探针，压缩是否丢掉接触和小目标没人知道；没有候选动作账，世界模型是否改善决策没人能证明；没有失败回放，下一轮训练只能盲目加数据。
+这些标识是建议的应用日志结构，并非现有 fixture 内置字段。若机器人由人工接管恢复，应同时报告接管前的自主失败与辅助完成，不能把最终杯子被放好算作纯自主成功。
 
-## 外部材料
+## 怎样证明世界模型带来了增益
 
-- [RT-2 paper](https://arxiv.org/abs/2307.15818) 与 [DeepMind RT-2 blog](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)：理解 VLM 如何被训练成 VLA。
-- [Open X-Embodiment](https://arxiv.org/abs/2310.08864)：理解多机器人、多任务数据为什么是 VLA 泛化的重要来源。
-- [Masked World Models for Visual Control](https://arxiv.org/abs/2206.14244)：理解表征学习和 latent dynamics 为什么可以解耦。
-- [V-JEPA 2](https://arxiv.org/abs/2506.09985)：理解 JEPA 表征如何接 action-conditioned planning。
-- [DreamerV3](https://arxiv.org/abs/2301.04104)：理解 imagined rollout 如何服务策略学习。
+保留同一 VLA、任务分布、候选集合和执行策略，比较直接使用 VLA、加入世界模型排序，以及必要的简单规则基线。若加入世界模型还同时增加候选数量和推理时间，收益中就混入了搜索预算变化。延迟导致的过期动作也需要计入最终结果。
 
-- [World Models 论文](https://arxiv.org/abs/1803.10122)。
-- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+报告应记录任务成功、风险事件、恢复、接管、完成时间与额外计算成本。Top-1 选择成功只评价该次候选决策，完整闭环还会改变后续状态分布。四条静态 fixture 不足以回答这些问题，却能帮助提前发现字段错位、指标命名和选择规则的错误。
+
+失败回流随后才有明确目的。Fast 的滑落提示应补接触变化及相邻动作的反馈，遮挡错目标则提示身份记忆与重新观察。是否真的改善，应在保留任务上验证，具体方法见[数据引擎](data-engines-and-self-improvement.md)。

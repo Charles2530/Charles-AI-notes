@@ -1,126 +1,42 @@
-# DeepGEMM 源码与接入
+# 沿一次 DeepGEMM 调用阅读源码
 
-[DeepGEMM 解读](deepgemm-fp8-gemm-and-mega-moe.md) 负责建立系统判断；源码与接入页聚焦源码阅读、API 地图、调用路径和接入检查，帮助判断它能否接进自己的服务链路。
+先选一个普通低精度GEMM，确认逻辑shape和输出，再进入grouped或MegaMoE。这样能够把数据准备、API选择、代码生成与kernel计时分别定位。本文锁定commit `5081f851`，不假定其他版本具有相同导出。
+
+## Python入口告诉我们哪些名字真实存在
+
+`deep_gemm/__init__.py`从 `_C`导出普通、grouped、attention及布局接口，并从 `.mega`导出MegaMoE相关入口。模块末尾调用 `_C.init(...)`初始化扩展，还注册关闭回调。仅阅读Python导出能确认入口存在，不能推断每个C++函数内部的执行细节。
+
+普通矩阵乘可先看 `fp8_gemm_nt`及更一般的FP8/FP4组合接口；专家前向看M-grouped contiguous或masked；专家权重反向则涉及K-grouped路径。选入口时以当前版本文档与真实签名为准。
+
+## 在调用前写清四份元数据
+
+分别记录A、B逻辑shape与存储stride，数据格式，scale的shape/格式，以及输出dtype与累加约定。对nt路径，A为M×K、B为N×K。Scale不是随便附加的同shape张量，需要遵守架构对应布局。
+
+先用一个小输入计算高精度参考，再用相同量化数据反量化得到参考值。比较低精度kernel与后者，有助于把量化误差和执行误差分开。不要在一开始就加入多机路由，把错误来源叠在一起。
+
+## 将准备成本和kernel成本分别计时
+
+第一次调用可能涉及JIT与加载。稳态基准先预热，再测已经准备好的输入；完整层基准则将每次实际发生的cast、scale变换和转置纳入。若权重只在启动时转换，其成本应放在加载时间，不必重复算进每个请求。
+
+README提供 `DG_PRINT_CONFIGS` 观察选择配置，`DG_JIT_DEBUG`与相关选项帮助查看编译命令、PTXAS输出或汇编。调试开关可能影响输出和性能，正式计时前应固定设置。
+
+## 从普通GEMM扩到专家批量
+
+先让两个专家有相同N/K、不同M，核对每段token顺序、段对齐和输出回填。再加入真实路由的置换与加权合并。Masked模式还要测试有效计数为0、很小和接近容量的情况。
+
+MegaMoE另有对称内存、多进程和权重布局前提。该版本README给出缓冲建立、权重变换、填入x/scale/topk信息、执行的顺序；进一步接入应运行其对应测试，而不能将这一流程示意当作已验证部署脚本。
+
+## 接入失败时缩小到接口边界
+
+若小矩阵结果不对，先检查方向、scale与packing；若小矩阵正确而专家输出错误，检查段边界和反置换；若完整结果正确但慢，再比较准备开销、padding、JIT与实际kernel。
+
+保留固定输入、版本与输出误差，能让问题回到可重复调用。本文没有运行DeepGEMM GPU测试，说明的是已查证的入口与阅读路径。
 
 ![DeepSeek-V3 FP8 framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png)
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)。原图表达 FP8 训练由 scale、累加、通信、存储和高精保护共同组成；读图重点是：读 DeepGEMM 源码时先追 scale layout、JIT dispatch、grouped GEMM 和端到端调用边界。它不能证明 DeepGEMM 接入你的 serving 栈一定变快，只说明源码阅读要围绕低精度系统契约展开。</small>
 
-## 一、源码阅读顺序
+## 对照源码与延伸阅读
 
-第一次读 `DeepGEMM` 不建议从最底层 JIT kernel 开始。更稳的顺序是从“外部接口和测试”向下钻：
-
-1. `README.md`：先看官方定义、支持架构、核心能力和 benchmark 口径；
-2. `deep_gemm/__init__.py`：确认 Python 层导出了哪些能力；
-3. `tests/test_fp8_fp4.py`：看普通低精度 dense GEMM 怎么调用；
-4. `tests/test_layout.py`：看 scale、layout、transpose 相关假设；
-5. `tests/test_mega_moe.py`：看 MoE 和系统级路径如何组织；
-6. `deep_gemm/utils/`、`deep_gemm/testing/`：看 benchmark、数据生成和校验方式；
-7. `csrc/python_api.cpp`：看 Python 到 C++ 的桥；
-8. `csrc/apis/`：看不同功能族的 C++ API；
-9. `csrc/jit/`、`csrc/jit_kernels/`：最后再看 JIT 与 kernel 生成细节。
-
-这个顺序的好处是：先知道“外部用户以为什么方式使用它”，再理解“内部为什么必须这样设计”。
-
-## 二、关键 API 地图
-
-从功能上看，可以先把 API 分成五类：
-
-| API 类别 | 关注点 | 适合先看什么 |
-| --- | --- | --- |
-| Dense GEMM | 普通 FP8/FP4/BF16 GEMM | shape 约束、scale layout、transpose |
-| Grouped GEMM | MoE expert 计算 | M 轴分组、expert token 分布 |
-| Layout / Scale | 低精度数据准备 | scale factor 排布、TMA-friendly layout |
-| Attention / MQA | 服务态注意力热点 | decode 访问模式、paged/masked 路线 |
-| Mega MoE | 系统级融合路径 | dispatch、combine、通信和计算边界 |
-
-读 API 时不要只看参数类型。更重要的是问：
-
-1. 哪些 layout 被显式暴露；
-2. 哪些 shape 被假设稳定；
-3. scale factor 是否在接口里有特殊格式；
-4. API 是否服务 dense、grouped、masked 还是 fused path；
-5. 这个接口在 prefill 还是 decode 中更可能是热路径。
-
-## 三、调用路径怎么追
-
-一个常见主路径可以写成：
-
-```text
-Python test / user call
-  -> deep_gemm Python wrapper
-  -> C++ binding
-  -> API dispatch
-  -> JIT config / cache lookup
-  -> generated CUDA kernel
-  -> runtime launch
-```
-
-建议追三条链：
-
-1. **普通 FP8 dense GEMM**：理解 scale layout、JIT 和 kernel launch 的基本链路；
-2. **layout / scale 变换**：理解为什么低精度不是 dtype 改一下；
-3. **Mega MoE / grouped GEMM**：理解 token 分组、expert shape、masked layout 和系统融合。
-
-`python_api.cpp` 很关键，因为它通常暴露了 Python 世界和 C++/CUDA 世界之间的真实边界。很多“接口为什么长这样”的答案，都能在绑定层和测试用例里找到。
-
-## 四、接入真实系统前检查什么
-
-接入前先做五项硬检查：
-
-1. **硬件检查**：目标环境是否主要是 H100/H800/B100 等支持路径；
-2. **Shape 检查**：真实请求的 M/N/K、expert token 分布是否集中；
-3. **Layout 检查**：上游能否提供 DeepGEMM 需要的 scale 和数据布局；
-4. **Runtime 检查**：JIT cache、CUDA Graph、fallback、灰度和监控是否准备好；
-5. **端到端检查**：dispatch、permute、combine、dequant、同步是否全部计入收益。
-
-如果这些前提不满足，直接替换 kernel 很可能只会得到漂亮的 microbenchmark，而不是线上收益。
-
-## 五、最常见 Benchmark 误读
-
-`DeepGEMM` 这类库最容易被误读的地方不是实现，而是结果解释。
-
-| 误读 | 更稳的解释 |
-| --- | --- |
-| 单 shape 快，所以所有 GEMM 都该换 | 只说明该 shape 命中假设 |
-| GEMM 快，所以 MoE serving 一定快 | dispatch/combine、路由和通信也可能主导 |
-| JIT 快，所以没有运维成本 | 首次编译、缓存失效和版本复现都要治理 |
-| FP8 快，所以端到端成本下降 | scale、layout、数值补偿和 fallback 都要算 |
-
-上线前应做 replay，而不是只做 synthetic benchmark。真实流量里的长尾 shape、租户隔离、LoRA、expert 热点和 fallback 才会决定收益是否稳定。
-
-## 六、灰度上线顺序
-
-一个更稳妥的上线顺序是：
-
-1. 保留原有 `cuBLASLt/Triton` 路径作为 fallback；
-2. 在离线 replay 中按 shape bucket 对比端到端 latency；
-3. 单独测 prefill 和 decode；
-4. 记录 JIT compile latency 和 cache hit rate；
-5. 先替换最稳定的 dense/grouped GEMM 热点；
-6. 再小流量灰度 masked decode 或 MoE path；
-7. 最后才考虑 Mega MoE 这类更深融合。
-
-灰度指标至少包括：P50/P95/P99、TTFT/TPOT、JIT cache miss、fallback rate、错误率、显存峰值、expert token 分布和端到端单位请求成本。
-
-## 七、最小伪代码
-
-下面代码块优先看 shape、缓存、状态更新或资源申请相关行；这些行通常决定故障是语义、并发还是容量问题。
-```python
-def moe_expert_compute(tokens, expert_ids, runtime):
-    groups = group_by_expert(tokens, expert_ids)
-    shape_key = make_shape_key(groups)
-
-    if runtime.deepgemm_enabled and runtime.jit_cache.ready(shape_key):
-        return runtime.deepgemm.grouped_gemm(groups)
-
-    return runtime.fallback.grouped_gemm(groups)
-```
-
-这段伪代码强调两个判断：先按 expert 组织 token，再根据 shape、JIT cache 和 fallback 状态选择路径。真实工程里，端到端收益往往取决于这个选择逻辑，而不只是底层 kernel 的峰值 TFLOPS。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [Python导出与初始化代码](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/deep_gemm/__init__.py)
+- [接口前提、调试选项与调用示意](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)

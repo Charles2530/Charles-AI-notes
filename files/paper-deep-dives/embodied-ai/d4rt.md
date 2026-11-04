@@ -15,476 +15,418 @@ paper_topic: 具身智能 / 4D 重建
     **GitHub / 项目：** GitHub：未找到官方代码链接；项目页提供论文、arXiv、blog 和交互式可视化。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2512.08924)；[项目页](https://d4rt-paper.github.io/)；[Google DeepMind blog](https://deepmind.google/blog/d4rt-teaching-ai-to-see-the-world-in-four-dimensions/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 动态场景需要回答的，不只是每一帧有多深
 
-### 研究背景
+D4RT 的核心贡献是一种可查询的四维场景表示。它先编码整段视频，再让一个共享解码器回答这样的问题：**源帧中这个像素对应的物理点，在目标时刻位于哪里，用哪一帧相机的坐标表达？**只要改变查询，便能取得深度、三维轨迹、统一坐标下的点云，以及恢复相机参数所需的点对应。
 
-D4RT 处在动态 3D/4D 重建、视频跟踪和具身感知的交叉点。传统 3D reconstruction 更擅长回答静态场景里的几何问题：相机怎么动、表面在哪里、点云如何融合。但机器人、AR 和世界模型面对的是动态世界，里面同时存在相机运动、物体运动、遮挡和再出现。上层策略要在这种世界里行动，首先需要一个稳定的几何状态接口。
+这个接口解决了动态重建中容易混在一起的三件事。点的身份由选作起点的帧与像素位置确定，点的状态随着物体运动而变化，数值坐标还会随着参考相机改变。把它们拆开，模型就可以既描述物体运动，又保持共同的空间参考，不必为每种输出配置一套大型解码网络。
 
-已有方法通常把问题拆成多个模块：单目深度、metric depth、motion segmentation、camera pose、2D/3D tracking 再各自估计，然后通过优化或后处理拼起来。VGGT 这类 feed-forward 模型已经把很多静态几何任务统一起来，但动态区域的跨时间对应仍然不足；SpatialTrackerV2 能处理动态跟踪，却仍有独立流程和迭代 refinement 的成本。D4RT 的背景就是：动态 4D 场景理解需要一个统一、可扩展、可按需查询的表示。
-
-### 问题（Challenge）
-
-论文要解决的问题是：**如何从单段普通视频中，高效地同时恢复动态场景的深度、相机参数、点云和 3D 点轨迹。** 这个问题难在三件事叠在一起：同一像素可能对应运动物体，物体可能被遮挡后再出现，坐标还会随着相机参考帧改变。如果每个任务都用独立 decoder 或独立模型，不仅计算重，还很难保证几何一致。
-
-这个问题的价值在于它提供了具身系统的底层状态接口。机器人不一定每次都需要完整稠密重建，但经常需要问“这个任务相关点在未来几帧的 3D 位置在哪里”“这帧深度和相机位姿是否一致”“动态物体是否有连续轨迹”。D4RT 试图让这些问题都落到同一个查询接口上。
-
-### Finding
-
-作者的 finding 是：**动态 4D 重建不必先密集解码每一帧，也不必为每个几何任务设计一个专用 head；只要视频先被编码成全局场景表示，后续可以通过独立的点查询来按需取出任意时空点的 3D 位置。** 这个洞见把“完整重建整个视频”翻转成“对全局表示提出低层几何查询”。
-
-这个 finding 能解决挑战，是因为动态场景里的 depth、tracking、camera pose 和 point cloud 本质上都可以写成同一种问题：给定源帧里的一个 2D 点、目标时间和参考相机时间，预测该点在目标时刻、目标坐标系中的 3D 位置。查询彼此独立后，训练时只需采样少量点即可监督，推理时则可按需查询少量点或所有像素，避免密集 per-frame decoder 的固定成本。
-
-### 方法
-
-D4RT 使用 encoder-decoder 架构。输入是一段视频 \(V\)，encoder 通过全局 self-attention 得到 Global Scene Representation \(F=E(V)\)，表示整段视频的场景结构、跨帧对应和时间变化。decoder 是轻量 query-based cross-attention decoder，输入 query 与全局表示，输出某个点的 3D 坐标。
-
-每个 query 包含 \((u, v, t_{\text{src}}, t_{\text{tgt}}, t_{\text{cam}})\)：\((u,v)\) 是源帧 2D 点，\(t_{\text{src}}\) 定义这个点来自哪一帧，\(t_{\text{tgt}}\) 定义要查询哪个时间状态，\(t_{\text{cam}}\) 定义输出表达在哪个相机参考系。decoder 还使用源点附近的 local RGB patch embedding 帮助识别细节。模型训练时对 depth、3D point、point track、camera/intrinsics 等任务统一采样查询，用同一个接口监督；推理时可以构造不同 query 组合得到稀疏 3D tracking、稠密 point cloud、depth map 和相机参数。
-
-### 结论
-
-实验覆盖 4D reconstruction、depth/point cloud estimation 和 3D point tracking 等任务。论文报告 D4RT 在多项动态 4D 重建和跟踪指标上达到新的 state of the art，并且相比把 CoTracker、UniDepth/VGGT 或 SpatialTrackerV2 拼起来的管线，在动态区域和全像素重建上更统一。可视化中，D4RT 对动态物体如动物、车辆、花等场景更能保持连续轨迹，避免静态重建方法把运动物体重复融合成多个残影。
-
-额外结论是效率来自查询接口本身：encoder 只计算一次，decoder 成本随查询点数线性增长。少量查询适合机器人任务点跟踪，密集查询则可以恢复全视频点云。边界也很明确：D4RT 是几何/运动感知模型，不直接学习动作策略、接触动力学或闭环控制；它给具身智能提供状态表示，而不是替代策略学习。
-
-### 关键术语
-
-- **Dynamic 4D Reconstruction（动态四维重建）**：从视频中恢复随时间变化的 3D 场景几何，第四维指时间。
-- **Global Scene Representation（全局场景表示）**：encoder 对整段视频形成的 latent 表示，用于承载场景结构、跨帧对应和动态信息。
-- **Query-Based Decoder（查询式解码器）**：通过低层几何 query 按需预测点的 3D 位置，而不是固定输出所有任务结果。
-- **Spatio-Temporal Correspondence（时空对应）**：同一物理点或区域在不同时间和视角中的对应关系。
-- **Camera Reference Time（相机参考时间）**：query 中指定输出 3D 坐标所在相机坐标系的时间索引。
-- **Dense Tracking（稠密跟踪）**：对视频中大量像素甚至所有像素建立跨帧轨迹。
-
-D4RT 放在具身智能专题里，不是因为它直接输出机器人动作，而是因为它补了一块很底层、很关键的状态接口：**从普通视频里同时恢复动态 3D 几何、点轨迹、深度、相机参数和可见性。**
-
-如果把 VLA、机器人 planner 或世界模型看成“要在空间里行动的上层模块”，它们首先要知道世界在哪里、物体怎么动、相机自己怎么动。D4RT 试图把这些几何问题统一成一个查询接口，而不是为 depth、pose、tracking、point cloud 分别接一堆模型。
-
-## 一句话核心
-
-D4RT 的核心机制是：
-
-```text
-input video
-  -> global self-attention encoder
-  -> Global Scene Representation
-  -> lightweight pointwise cross-attention decoder
-  -> query any point in space and time
-```
-
-它的查询写成：
-
-\[
-q = (u, v, t_{\text{src}}, t_{\text{tgt}}, t_{\text{cam}})
-\]
-
-其中 \((u, v)\) 是源帧里的 2D 点，\(t_{\text{src}}\) 是这个点来自哪一帧，\(t_{\text{tgt}}\) 是想查询哪个时刻的 3D 位置，\(t_{\text{cam}}\) 是希望结果表达在哪个相机坐标系里。模型输出：
-
-\[
-\mathbf{P} = \mathrm{Dec}(q, F) \in \mathbb{R}^3,\quad F=\mathrm{Enc}(V)
-\]
-
-最重要的是：查询之间彼此独立。训练时只要采样少量 query 就能产生监督；推理时可以按需要查几个点，也可以查所有像素。这个设计让它同时服务 sparse tracking 和 dense reconstruction。
+Figure 1 中，视频只经过左侧编码器一次。右侧不同颜色的查询，从同一个场景表示中取出点云、点轨迹与相机信息；下方蓝色运动轨迹和粉色相机路径则是不同对象，不应把两者都归结为“画面在移动”。
 
 ![D4RT teaser 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-1-teaser.png){ width="720" }
 
-<small>Figure source: `Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`, Figure 1。原论文图意：D4RT 用统一接口输出 point cloud、point tracks 和 camera parameters。本站读法：先看“统一输出”而不是单项指标，D4RT 的价值在于把动态 4D 场景理解变成同一个 query-decoder 问题。</small>
+*Figure 1，同一个全局场景表示支持多种几何查询。*[↗](https://arxiv.org/pdf/2512.08924v2#page=1)
 
-## 它解决的不是静态 3D，而是动态 4D
+这一设计带来的效率也很具体。需要少量轨迹时，只解码这些轨迹；需要相机位姿时，只查询粗网格；需要完整场景时，再增加覆盖点。编码整段视频仍有固定成本，但输出成本能够随应用真正需要的信息量调整。论文在 A100 上报告的 200+ FPS 是相机估计吞吐，完整密集四维重建则必须另看查询数量。
 
-传统 3D reconstruction 更像回答“这一堆照片对应的静态几何是什么”。但机器人、AR 和世界模型面对的是动态世界：人会走动，物体会遮挡，摄像头也在动。这里同时有三类运动：
+## 静态点云、单帧跟踪各自漏掉了什么
 
-| Motion source | What changes | Why it is hard |
-| --- | --- | --- |
-| Camera motion | viewpoint and coordinate frame | 同一个静态点在不同帧里的投影变化，不等于物体自身运动 |
-| Object motion | dynamic foreground geometry | 动态物体不能简单用静态 SfM / MVS 融合 |
-| Occlusion and reappearance | visibility over time | 点可能短暂不可见，但 3D track 仍应保持连续 |
+把多帧深度恢复为三维点并堆在一起，对静态环境很自然；面对移动物体，同一个实体在不同时间的位置却会同时留在点云中。反过来，只从第一帧选点并跟踪，虽然保留了运动对应，但第一帧被遮挡的背景、后来转向相机的表面，都没有可跟踪的起点。
 
-D4RT 的查询参数把这三件事拆开：\((u,v,t_{\text{src}})\) 定义源点，\(t_{\text{tgt}}\) 定义世界处于哪个时间状态，\(t_{\text{cam}}\) 定义用哪个相机坐标系表达。这个拆分使它能问出很多具体问题：
-
-1. 这个像素在后续每一帧的 3D 位置在哪里；
-2. 某一帧所有像素在同一参考相机下组成什么点云；
-3. 这段视频每帧的 depth map 是什么；
-4. 两个相机参考系之间的相对位姿是什么；
-5. 当前帧内参如何从一组 3D 点反推出。
-
-这也是它对具身智能有用的地方：上层策略不一定需要完整电影级重建，但经常需要“某些任务相关点在 3D 空间里怎样运动”。
-
-## 方法图怎么读
-
-![D4RT method 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-2-method.png){ width="920" }
-
-<small>Figure source: `Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`, Figure 2。原论文图意：全局 self-attention encoder 先把输入视频变成 Global Scene Representation，轻量 decoder 再根据 \((u,v,t_{\text{src}},t_{\text{tgt}},t_{\text{cam}})\) 查询任意点的 3D 位置，query 还包含源点附近的 local video patch embedding。</small>
-
-这张图要分三层看。
-
-第一层是 encoder。D4RT 不是逐帧独立估深度，而是先用全局 self-attention 编码整段视频，让表示里包含跨帧对应、时间流动和场景结构。
-
-第二层是 query。query 不是一个语义 prompt，而是低层几何问题：源点坐标、源时间、目标时间、参考相机时间。这个接口非常“笨”，但也正因为笨，depth、tracking、pose、point cloud 都能落到同一组变量上。
-
-第三层是 decoder。decoder 只做 cross-attention，不让不同 queries 之间 self-attend。论文明确说早期实验中让 queries 互相交互会导致明显性能下降。这里的直觉是：每个 query 都应该独立地从全局场景表示中取答案；如果 query 之间互相通信，训练时少量 query 的分布和推理时密集 query 的分布会更容易错位。
-
-## Table 1：统一查询接口
-
-论文 Table 1 是理解 D4RT 的入口。下面保留原表的英文列名和单元格格式。
-
-| Task | \(u\) | \(v\) | \(t_{src}\) | \(t_{tgt}\) | \(t_{cam}\) |
-| --- | --- | --- | --- | --- | --- |
-| Point Track | Fixed | Fixed | Fixed | \(1 \ldots T\) | \(1 \ldots T\) |
-| Point Cloud | \(1 \ldots W\) | \(1 \ldots H\) | \(1 \ldots T\) | \(1 \ldots T\) | Fixed |
-| Depth Map | \(1 \ldots W\) | \(1 \ldots H\) | \(1 \ldots T\) | \(1 \ldots T\) | \(1 \ldots T\) |
-| Extrinsics | \(1 \ldots h\) | \(1 \ldots w\) | Fixed | Fixed | \(1 \ldots T\) |
-| Intrinsics | \(1 \ldots h\) | \(1 \ldots w\) | \(1 \ldots T\) | \(1 \ldots T\) | \(1 \ldots T\) |
-
-<small>表源：`Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`，Table 1。原论文表格含义：不同几何任务都能通过 Cartesian product of query entries 推出；intrinsics / extrinsics 为了速度只查 coarse \((h,w)\) grid。</small>
-
-**Point Track。** 固定一个源点和源帧，扫过 \(t_{\text{tgt}}\) 与 \(t_{\text{cam}}\)，得到这个点在视频全过程中的 3D trajectory。
-
-**Point Cloud。** 扫所有像素和时间，把点都表达在固定参考相机下，就能得到同一坐标系里的点云。它不需要先估每帧相机再把点云硬融合。
-
-**Depth Map。** 令 \(t_{\text{src}}=t_{\text{tgt}}=t_{\text{cam}}\)，再只取输出 \(\mathbf{P}\) 的 Z 维，就是对应帧的 depth。
-
-**Extrinsics。** 论文用同一批 grid source points，在两个参考相机坐标系下查询同一组 3D 点，再用 Umeyama algorithm 求刚体变换。
-
-**Intrinsics。** 对一个 grid 解码 3D 点，假设 pinhole camera principal point 在 \((0.5,0.5)\)，由
-
-\[
-f_x = p_z(u-0.5)/p_x,\quad f_y = p_z(v-0.5)/p_y
-\]
-
-估计 focal length，并取 median 增强鲁棒性。
-
-## 模型结构
-
-D4RT 的主干是 ViT 风格 encoder 加 pointwise decoder。
-
-| Component | D4RT choice | Why it matters |
-| --- | --- | --- |
-| Encoder | Vision Transformer with interleaved local frame-wise and global self-attention | 局部 attention 保留帧内结构，全局 attention 建立跨帧场景关系 |
-| Input resizing | resize input video to fixed square resolution | 简化 tokenization，同时用额外 token 编码 original aspect ratio |
-| Query embedding | Fourier feature for \((u,v)\) + learned timestep embeddings for \(t_{src}, t_{tgt}, t_{cam}\) | 让连续 2D 坐标和离散时间索引都能进入 decoder |
-| Local patch | \(9 \times 9\) local RGB patch centered at \((u,v)\) | 给 decoder 低层纹理和边界线索，弥补全局表示的分辨率损失 |
-| Decoder | small cross-attention transformer | query 独立 cross-attend 到 Global Scene Representation |
-| Output head | 3D position plus auxiliary predictions | 同时监督 3D、2D、visibility、motion、normal、confidence |
-
-![D4RT full model overview 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-6-full-model.png){ width="920" }
-
-<small>Figure source: `Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`, Appendix Figure。原论文图意：完整展示视频输入、aspect-ratio token、query embedding、encoder / decoder blocks 和 13 维 4D predictions。本站读法：注意右侧输出不只有 XYZ，还包括 UV、visibility、point motion、surface normal 和 confidence，这些辅助头是训练稳定和几何质量的一部分。</small>
-
-## 训练细节
-
-这部分值得认真读，因为 D4RT 的效率不是只来自“模型小”。它靠的是训练时只采样 query、推理时按需解码，以及用多种辅助监督稳定几何表示。
-
-### 主模型训练配置
-
-| Detail | Value |
-| --- | --- |
-| Implementation | Kauldron |
-| Encoder variant | ViT-g |
-| Encoder depth | 40 layers |
-| Spatio-temporal patch size | \(2 \times 16 \times 16\) |
-| Encoder parameters | 1B |
-| Decoder | 8-layer cross-attention decoder |
-| Decoder parameters | 144M |
-| Training clips | 48-frame clips |
-| Training resolution | \(256 \times 256\) |
-| Queries per clip | 2048 random queries |
-| Query sampling | oversampled on challenging regions |
-| Optimizer | AdamW |
-| Main training steps | 500k |
-| Hardware | 64 TPU chips |
-| Local batch size | 1 |
-| Training time | just over 2 days |
-
-论文没有把 D4RT 训练成一个逐帧密集预测器。每个 batch 只解码一批 sampled queries，因此 decoder 训练成本随 query 数线性增长。这个设计非常重要：如果每步都要求对 48 帧所有像素做 dense decoding，训练会被输出分辨率和时间长度拖垮。
-
-### 数据混合
-
-论文主文明确列出的训练数据包括公开和内部数据：
-
-| Dataset type | Listed datasets |
-| --- | --- |
-| Multi-view / reconstruction | BlendedMVS, Co3Dv2, MVS-Synth, ScanNet++, ScanNet |
-| Dynamic / synthetic | Dynamic Replica, Kubric, PointOdyssey, VirtualKitti |
-| Navigation / driving | Tartanair, Waymo Open |
-
-这里要注意外推边界：论文训练混合包含 internal datasets，公开信息不足以完全复现实验数据配方。因此本站只把训练数据表作为“模型能力来源”理解，不把它写成可复现 recipe。
-
-### Loss 设计
-
-主监督是 normalized 3D point position 的 \(L_1\) loss。论文会先按 mean depth 对预测点和目标点归一化，再经过
-
-\[
-\mathrm{sign}(x)\cdot \log(1+|x|)
-\]
-
-来减弱远距离点对 loss 的影响。除此之外，decoder 输出还接多个辅助头：
-
-| Auxiliary prediction | Loss |
-| --- | --- |
-| 2D coordinates | \(L_1\) |
-| 3D surface normals | cosine similarity |
-| target point visibility | binary cross-entropy |
-| point motion / displacement | \(L_1\) |
-| confidence | confidence penalty and confidence-related supervision |
-
-Appendix 中给出的 composite loss 可以概括为：
-
-\[
-\mathcal{L}
-= \frac{1}{N}\sum_i
-\left(
-c\lambda_{3D}\mathcal{L}_{3D}
--\lambda_{\text{conf}}\log c
-+\lambda_{2D}\mathcal{L}_{2D}
-+\lambda_{\text{vis}}\mathcal{L}_{\text{vis}}
-+\lambda_{\text{disp}}\mathcal{L}_{\text{disp}}
-+\lambda_{\text{conf}}\mathcal{L}_{\text{conf}}
-+\lambda_{\text{normal}}\mathcal{L}_{\text{normal}}
-\right)_i
-\]
-
-对应权重：
-
-| Weight | Value |
-| --- | --- |
-| \(\lambda_{3D}\) | 1.0 |
-| \(\lambda_{2D}\) | 0.1 |
-| \(\lambda_{vis}\) | 0.1 |
-| \(\lambda_{disp}\) | 0.1 |
-| \(\lambda_{conf}\) | 0.2 |
-| \(\lambda_{normal}\) | 0.5 |
-
-读这组 loss 时，不要把 auxiliary heads 当成附属装饰。D4RT 要同时推 depth、pose、tracks 和 point cloud，单纯监督 3D 点可能无法稳定分解可见性、局部边界和相机坐标变化。辅助头给了模型更多几何约束。
-
-### Optimizer 和 schedule
-
-Appendix 给出更细的优化配置：
-
-| Hyperparameter | Value |
-| --- | --- |
-| Optimizer | AdamW |
-| Weight decay | 0.03 |
-| Warmup | 2,500 steps |
-| Peak learning rate | \(10^{-4}\) |
-| Schedule after warmup | cosine annealing |
-| Final learning rate | \(10^{-6}\) |
-| Gradient clipping | max \(L^2\)-norm 10 |
-
-### Data augmentation
-
-训练增强覆盖颜色、空间和时间：
-
-| Augmentation | Detail |
-| --- | --- |
-| Color jitter | random brightness, saturation, contrast, hue |
-| Color drop | probability 0.2 |
-| Gaussian blur | probability 0.4 |
-| Random crop | scale ratio 0.3 to 1.0 |
-| Aspect ratio | sampled uniformly in log domain |
-| Random zoom-in during crop | probability 0.05 |
-| Temporal sampling | frames subsampled with random stride |
-
-这说明 D4RT 不是只在规整多视角数据上学习。随机 stride 和强 spatial / color augmentation 会逼模型处理真实视频里的视角、尺度、颜色和时间采样变化。
-
-### Query sampling
-
-论文对 training queries 的处理很值得借鉴：
-
-| Query detail | Setting |
-| --- | --- |
-| Source | sampled from available ground-truth point trajectories |
-| Challenging regions | 30% of \((u,v)\) queries near depth discontinuities or motion boundaries |
-| Boundary detection | pre-computed using Sobel filter on depth maps |
-| Time sampling | \(t_{src}, t_{tgt}, t_{cam}\) sampled uniformly at random |
-| Special constraint | enforce \(t_{tgt}=t_{cam}\) with probability 0.4 |
-
-这比“随机采点”更强。深度边界和运动边界正是 4D 重建最容易错的地方：物体轮廓、遮挡边缘、动态前景和背景分离。把 30% queries 放在这些区域，相当于把训练预算花到几何决策边界上。
-
-## 推理效率：为什么 query decoder 快
-
-普通 dense reconstruction 很容易变成：
-
-```text
-每一帧都解 depth / pose / track / flow
-  -> 再做跨帧融合或优化
-  -> 动态物体处还要单独处理 correspondence
-```
-
-D4RT 的成本结构不同：
-
-```text
-encode video once
-  -> cache Global Scene Representation
-  -> ask only the queries needed by the task
-```
-
-如果只需要少量 3D tracks，就只查那些点；如果需要 dense reconstruction，再查所有像素。也就是说，encoder 成本固定，decoder 成本随 query 数线性扩展。
-
-论文还提出 all-pixels dense tracking 的加速算法。朴素做法需要 \(O(T^2HW)\) queries，因为每个时空像素都要追踪到所有时间。D4RT 用 occupancy grid 记录已经被可见 track 覆盖的时空像素，只从未访问像素启动新 track。论文报告这带来 5-15x 自适应加速，具体取决于视频运动复杂度。
-
-![D4RT speed 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-3-speed.png){ width="650" }
-
-<small>Figure source: `Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`, Figure 3。原论文图意：比较 pose accuracy 和 throughput，throughput 在 A100 GPU 上测量。本站读法：D4RT 右上角的位置说明它不是单靠牺牲精度换速度，而是用 query-based decoder 改变了计算路径。</small>
-
-吞吐表也能体现这个差异：
-
-| Method | 60 FPS | 24 FPS | 10 FPS | 1 FPS |
-| --- | ---: | ---: | ---: | ---: |
-| DELTA | 0 | 5 | 408 | 5,770 |
-| SpatialTrackerV2 | 29 | 84 | 219 | 2,290 |
-| D4RT (Ours) | 550 | 1,570 | 3,890 | 40,180 |
-
-<small>表源：`Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`，Table 3。原论文表格含义：在单张 A100 GPU 上，不同方法在目标 FPS 下能维持的 full-video 3D point tracks 数量。论文总结 D4RT 相比先前方法快 18-300x。</small>
-
-Google DeepMind blog 还给了一个更直观的系统口径：D4RT 处理一分钟视频约 5 秒，而先前 SOTA 方法可能需要约 10 分钟；这对应约 120x 的应用级速度差。这个数字来自官方 blog，不是论文主表里的标准 benchmark，应作为部署直觉而非可复现实验配置。
-
-## 实验怎么读
-
-D4RT 的实验覆盖三层问题。
-
-第一层是 qualitative reconstruction：动态物体是不是被重建成连续对象，而不是在不同位置重复出现。
+Figure 4 把这两个问题分开呈现。先看第一行天鹅，静态点云积累出现多个位置的重复形体；再看 SpatialTrackerV2 的天鹅后方，以及第三行小火车经过的位置，单帧起点造成的覆盖缺口仍然存在。
 
 ![D4RT reconstruction comparison 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-4-reconstruction-comparison.png){ width="920" }
 
-<small>Figure source: `Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`, Figure 4。原论文图意：比较 Input video、MegaSaM、\(\pi^3\)、SpatialTrackerV2 和 D4RT。本站读法：看动态前景是否被重复、漏掉，或只追踪一帧来源的稀疏区域。D4RT 的重点是 full 4D representation including all pixels。</small>
+*Figure 4，不同方法的重建对比。D4RT 可以从后续帧补充源点，并把它们放进统一时空表示。*
 
-这张图很适合说明 D4RT 和静态 reconstruction 的差别。MegaSaM / \(\pi^3\) 这类重建方法在动态物体上会出现重复或缺失；SpatialTrackerV2 能处理动态轨迹，但通常只从一帧出发追踪，导致遮挡后区域有缺口；D4RT 通过 all-pixels tracking 试图补齐完整动态场景。
+D4RT 的改动是允许任意源时刻发起查询。一个表面在后来的帧才显露，就从那一帧选点，查询它在其他时刻的位置。这样，覆盖范围不再完全由第一帧决定。不过“所有像素”仍指输入视频中被观察到的像素，不能据此认为模型重建了从未进入任何视野的全部物体表面。[↗](https://arxiv.org/pdf/2512.08924v2#page=5)
 
-第二层是 in-the-wild visualization：它能不能处理真实静态和动态视频。
+与论文直接比较的方案相比，区别主要落在信息组织方式上。MegaSaM 将多个深度、运动等模块与测试时优化结合；VGGT 等方法为不同几何任务配置独立输出头；SpatialTrackerV2 能处理动态轨迹，但需要更重的多阶段与迭代处理。D4RT 将这些任务首先改写成点的时空查询，再用同一个轻量解码器回答。统一的是任务接口与解码主干，不表示网络只有一个输出数值，也不表示没有几何后处理。[↗](https://arxiv.org/pdf/2512.08924v2#page=4)
 
-![D4RT in-the-wild visualization 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-5-in-the-wild.png){ width="920" }
+## 三个时间索引怎样把物体运动与相机运动分开
 
-<small>Figure source: `Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`, Figure 5。原论文图意：展示 D4RT 在静态和动态 in-the-wild videos 上的重建；动态场景还展示 3D point trajectories。</small>
+### 源时刻确定身份，目标时刻确定状态，相机时刻确定参考系
 
-第三层是 quantitative benchmark：论文在 TAPVid-3D、point cloud、video depth、camera pose 上和 MegaSaM、VGGT、MapAnything、SpatialTrackerV2、\(\pi^3\) 等对比。对本站主线来说，不必背每个数字，但要知道证据覆盖了哪些输出：
+输入为 $T$ 帧视频，编码器先得到全局特征。
 
-| Output | Benchmarks / metrics in paper | What it supports |
+$$
+V\in\mathbb R^{T\times H\times W\times3},
+\qquad F=E(V)\in\mathbb R^{N\times C}.
+$$
+
+$N$ 是表示中的 token 数，$C$ 为特征维度。随后固定 $F$，对任意查询独立解码。
+
+$$
+q=(u,v,t_{\mathrm{src}},t_{\mathrm{tgt}},t_{\mathrm{cam}}),
+\qquad P=D(q,F)\in\mathbb R^3.
+$$
+
+$(u,v)\in[0,1]^2$ 是源帧中的归一化像素坐标。$t_{\mathrm{src}}$ 与它一起指定被询问的物理点；$t_{\mathrm{tgt}}$ 指定这个点的状态属于哪一时刻；$t_{\mathrm{cam}}$ 指定用哪个相机参考系表达三维坐标。
+
+可以用一个解释性例子理解。选择第一帧中人的手腕，查询第十帧时手腕的位置，同时仍用第一帧相机的坐标系表达。此时 source 是 1、target 是 10、camera 是 1。若只把 camera 改成 10，询问的手腕和物理时刻都不变，变化的只是坐标表达。若保持 camera 为 1、让 target 遍历视频，就能在同一参考系中看到手腕真正的运动。
+
+Figure 2 的黄色、橙色和粉色分别对应源点、目标状态与相机参考。顺着三种颜色进入 query，再看右侧三维点的位置，可以比仅记住五个变量更直观地理解这种分离。
+
+![D4RT method 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-2-method.png){ width="920" }
+
+*Figure 2，点身份、物理时间和相机参考分别进入查询。*[↗](https://arxiv.org/pdf/2512.08924v2#page=2)
+
+### 同一接口怎样变成不同输出
+
+| Desired output | Query configuration | 输出含义 |
 | --- | --- | --- |
-| 3D tracking | TAPVid-3D, AJ, APD3D, OA, L1 | 动态点轨迹和世界坐标 tracking |
-| Point cloud | Sintel, ScanNet, L1 | 同一坐标系下的场景重建 |
-| Video depth | Sintel, ScanNet, KITTI, Bonn, AbsRel | 单视频深度估计能力 |
-| Camera pose | Sintel, ScanNet, Re10K, ATE / RPE / Pose AUC | 相机轨迹和位姿恢复 |
-| Throughput | target FPS on A100 | query decoder 的效率优势 |
+| Depth map at frame $i$ | $t_{\mathrm{src}}=t_{\mathrm{tgt}}=t_{\mathrm{cam}}=i$，遍历像素 | 取 $P$ 的 $Z$ 分量 |
+| Camera-coordinate point track | 固定源点，令 $t_{\mathrm{tgt}}=t_{\mathrm{cam}}=k$ 遍历视频 | 每一时刻在当时相机中的坐标 |
+| World-coordinate point track | 固定源点及 $t_{\mathrm{cam}}$，遍历 $t_{\mathrm{tgt}}$ | 同一参考系中的点运动 |
+| Point cloud in a shared reference | 从多帧选源点，固定 $t_{\mathrm{cam}}$ | 直接将不同观测放到共同坐标系 |
+| Scene state at target time $j$ | 多个源点共同设置 $t_{\mathrm{tgt}}=j$，固定 $t_{\mathrm{cam}}$ | 将不同来源的点查询到同一物理时刻 |
 
-## 消融：训练设计里哪些真的有用
+“统一参考系”与“统一物理时刻”是两个条件。若只固定 camera，却让每个点保留各自被观察时的 target，得到的是不同时间的观测集合；若要一个具体时刻的动态场景，还要统一 target。这一区别正是动态重建不能只做坐标对齐的原因。
 
-### Local RGB patch
+这些时间索引都在输入视频的 $1,\ldots,T$ 范围内。D4RT 可以查询遮挡期间的点状态，但本文接口与训练并不等于在视频结束后任意外推未来运动，更不是输入候选机器人动作后模拟其后果。[↗](https://arxiv.org/pdf/2512.08924v2#page=2)
 
-local \(9 \times 9\) patch 是 D4RT 最容易被忽略的小设计。它把源点附近的 RGB 局部外观编码进 query，帮助 decoder 找对应点和边界。
+## 相机参数为什么可以从点查询中恢复
 
-| w/ local appear. patch | AbsRel (S) ↓ | AbsRel (SS) ↓ | ATE ↓ | RPE-T ↓ | RPE-R ↓ |
+### 估计相机变化时，先把物体的物理状态固定住
+
+若想估计相机帧 $i$ 与 $j$ 的相对位姿，从帧 $i$ 的粗网格取源点 $(u_k,v_k)$，构造两组查询。
+
+$$
+q_{i,k}=(u_k,v_k,i,i,i),\qquad
+q_{j,k}=(u_k,v_k,i,i,j).
+$$
+
+注意第二组的 target 仍是 $i$。这样，两组输出描述的是**同一时刻、同一批物理点**，只是分别用相机 $i$、$j$ 作参考。模型不需要假设这个物体在两个视频时刻之间没有运动。若误把第二组 target 也设为 $j$，两组差异就会同时包含相机运动和物体运动，不能直接全部解释成相机刚性变换。
+
+拿到两组对应点之后，使用 Umeyama 算法求刚性对齐，核心步骤只是一个 $3\times3$ 的 SVD。相机估计由统一点查询加一个小型几何计算完成，因此只需解码粗网格，无须先恢复全部像素的稠密点云。[↗](https://arxiv.org/pdf/2512.08924v2#page=3)
+
+### 内参由投影关系恢复，但仍有相机模型假设
+
+对于同帧查询得到的 $P=(p_x,p_y,p_z)$，论文采用主点位于 $(0.5,0.5)$ 的针孔模型，计算归一化焦距。
+
+$$
+f_x=\frac{p_z(u-0.5)}{p_x},\qquad
+f_y=\frac{p_z(v-0.5)}{p_y}.
+$$
+
+这来自针孔投影中图像偏移与 $p_x/p_z$、$p_y/p_z$ 的关系。对粗网格多个点分别估计，再取中位数，减小个别点误差的影响。这里的归一化焦距不能直接当作像素单位的焦距。
+
+作者提出鱼眼等畸变模型可在初始估计后追加非线性优化，但主要公式仍建立在针孔与中心主点条件上。统一三维查询消除了独立大相机头，并没有自动取消所有相机标定假设。[↗](https://arxiv.org/pdf/2512.08924v2#page=3)
+
+## 全局视频编码与局部外观怎样配合
+
+### 查询彼此独立，场景上下文仍然共享
+
+编码器交替进行逐帧局部 self-attention 与跨帧全局 self-attention，让不同位置、不同时间的信息先在全视频表示 $F$ 中交互。为支持不同宽高比，输入视频被缩放到固定正方形；原始 $W/H$ 被嵌入为额外 token，一并传入编码器。
+
+查询 token 则由三类信息相加。$(u,v)$ 用 Fourier features 表示连续空间位置；三个时间索引分别采用可学习离散 embedding；源像素周围 $9\times9$ 的 RGB patch 提供局部外观。解码器只让该 query cross-attend 到 $F$，没有 query 之间的 self-attention。
+
+这一约束首先保证输出接口可自由改变。训练时只抽一小批点，推理时可以解码另一批完全不同的点，也可以把大批查询切成多块。某个点的输出不应因为同批次附带了哪些其他查询而改变。作者报告早期加入 query self-attention 反而明显损害性能，但没有给出可复刻的逐项数值表，不能将它当成普遍禁止点间交互的结论。[↗](https://arxiv.org/pdf/2512.08924v2#page=3)
+
+独立解码也不意味着各点没有共同几何依据。它们全部读取同一个经过全局时空交互的 $F$，共享关系已经在编码阶段建立。真正被移除的是输出 query 之间额外的依赖，收益是推理并行和任意采样，而非放弃场景整体理解。
+
+### 一个共享主干输出十三个标量
+
+下面这张图是附录 Figure 7 的完整架构。先看中间原始宽高比如何进入编码器，再看左下 query 的外观与位置输入，最后看右侧各项预测。
+
+![D4RT full model overview 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-6-full-model.png){ width="920" }
+
+*Figure 7，完整模型与 13 维预测接口。*
+
+共享解码特征通过轻量投影得到 XYZ 位置 3 维、UV 位置 2 维、可见性 1 维、运动向量 3 维、表面法向 3 维、置信度 1 维，合计 13 维。后面这些辅助量既提供训练约束，也支持置信筛选和可见性判断。所以“单解码器”指共享时空推理主干，不是只保留一个 XYZ 回归量。[↗](https://arxiv.org/pdf/2512.08924v2#page=12)
+
+## 稀疏点监督如何训练一个完整场景表示
+
+### 三维主损失控制尺度与远点的影响
+
+最主要的监督是三维点位置。论文先分别用预测点集、真实点集各自的平均深度归一化，再对坐标分量施加
+
+$$
+g(x)=\operatorname{sign}(x)\log(1+|x|),
+$$
+
+最后计算 L1 误差。归一化减小不同场景尺度的影响；对数变换则压低很远的点对损失的支配，使近处几何细节也能提供有效梯度。它保留坐标符号，并非简单对深度直接取对数。
+
+置信度 $c$ 加权三维误差，同时承担 $-\log c$ 惩罚。原式中可明确读出的这一部分是
+
+$$
+c\lambda_{3D}\mathcal L_{3D}-\lambda_{\mathrm{conf}}\log c.
+$$
+
+降低 $c$ 可以减少难点的误差权重，但对数项防止模型把所有置信度压到零来逃避监督。这个机制是否有用，应由消融判断，不能仅凭公式就把预测置信度当成已经校准的成功概率。
+
+辅助损失包括二维位置 L1、法向余弦相似度、可见性 binary cross-entropy，以及运动向量 L1；只在相应真值可用的位置计算。这让含不同几何标签的数据可以参与同一训练。附录给出的权重为 $\lambda_{3D}=1.0$、$\lambda_{2D}=\lambda_{\mathrm{vis}}=\lambda_{\mathrm{disp}}=0.1$、$\lambda_{\mathrm{normal}}=0.5$、$\lambda_{\mathrm{conf}}=0.2$。
+
+完整损失的印刷式还额外列出 $\lambda_{\mathrm{conf}}\mathcal L_{\mathrm{conf}}$，权重说明也重复了 confidence 项，却未单独定义这个 $\mathcal L_{\mathrm{conf}}$。因此可以理解主损失与辅助约束的作用，但不能仅凭这一行公式擅自补齐一份严格可复现的 confidence 实现。[↗](https://arxiv.org/pdf/2512.08924v2#page=12)
+
+### 点在哪里采样，会改变模型把能力用在哪里
+
+每个训练片段只解码 2048 个查询。它们从带真值的轨迹中抽取，其中 30% 的空间位置偏向深度不连续或运动边界，边界预处理使用深度图上的 Sobel filter。这使训练信号更集中于物体轮廓、前后景分界等难点，而不被大块平坦区域淹没。
+
+三个时间索引通常均匀随机采样，但以 0.4 的概率强制 $t_{\mathrm{tgt}}=t_{\mathrm{cam}}$。此时目标点直接表达在目标帧相机中，强化常用的相机坐标跟踪配置。其余查询仍学习物理时刻与参考相机分离的情况，保留统一接口的灵活性。
+
+稀疏查询节省的是解码与监督成本。全视频编码器仍然处理完整输入片段，不能把“2048 点监督”写成整个系统只看到了 2048 个像素。相反，局部点损失通过共享 $F$ 反向传播，训练编码器组织能够支持这些查询的时空信息。[↗](https://arxiv.org/pdf/2512.08924v2#page=12)
+
+### 主模型的资源与数据来源
+
+| Component / setting | Reported configuration |
+| --- | --- |
+| Encoder | ViT-g，40 layers，约 1B parameters |
+| Decoder | 8 cross-attention layers，约 144M parameters |
+| Clip / resolution | 48 frames，$256\times256$ |
+| Spatio-temporal patch | $2\times16\times16$ |
+| Queries per clip | 2048 |
+| Training | 500K steps，64 TPU chips，local batch size 1 |
+| Optimizer | AdamW，weight decay 0.03 |
+| Learning rate | 2500-step warmup 至 $10^{-4}$，cosine decay 至 $10^{-6}$ |
+| Gradient clipping | maximum L2 norm 10 |
+| Reported training time | 略多于两天 |
+
+训练混合公共与内部数据，论文列出的来源包括 BlendedMVS、Co3Dv2、Dynamic Replica、Kubric、MVS-Synth、PointOdyssey、ScanNet++、ScanNet、TartanAir、VirtualKitti 和 Waymo Open。它们覆盖静态多视图与动态轨迹等监督。原文没有给出全部混合比例和内部数据规模，因此这些名称与超参数尚不足以保证从公开资源完全重建训练分布。[↗](https://arxiv.org/pdf/2512.08924v2#page=5)
+
+数据增强保持视频内部的颜色变化一致，包含 brightness、saturation、contrast、hue 调整；color drop 概率 0.2，Gaussian blur 概率 0.4。空间裁剪范围为原尺寸比例 0.3–1.0，宽高比在对数域均匀采样，另以 0.05 概率缩放放大；时间上随机 stride 抽帧。这里的目的不仅是图像多样化，还要避免增强本身制造不真实的帧间对应变化。[↗](https://arxiv.org/pdf/2512.08924v2#page=12)
+
+## 动态跟踪实验首先要分清坐标系与内参条件
+
+### 已知内参的优势，不能直接搬到未知内参场景
+
+TAPVid-3D 包含 DriveTrack、ADT、PStudio 三个子集。相机坐标评测要求模型预测同一个点在各帧相机下的位置，报告 APD3D，即落在规定误差阈值内的点比例；OA 为遮挡判断准确率；AJ 为结合跟踪与可见性表现的 Average Jaccard。三者考察的错误不完全相同。
+
+Table 4 还明确区分是否提供真实相机内参。下表保留主要方法的 AJ 与 APD3D，两项都越高越好；每格依次为 **AJ / APD3D**。
+
+| GT intrinsics | Method | DriveTrack | ADT | PStudio |
+| --- | --- | ---: | ---: | ---: |
+| No | CoTracker3 + UniDepthV2 | 0.038 / 0.062 | 0.102 / 0.146 | 0.119 / 0.176 |
+| No | CoTracker3 + VGGT | 0.129 / 0.189 | 0.132 / 0.190 | 0.045 / 0.070 |
+| No | SpatialTrackerV2 | 0.064 / 0.100 | 0.260 / 0.342 | 0.097 / 0.152 |
+| No | D4RT | 0.257 / 0.345 | 0.240 / 0.319 | 0.138 / 0.186 |
+| Yes | CoTracker3 + UniDepthV2 | 0.147 / 0.225 | 0.173 / 0.254 | 0.205 / 0.311 |
+| Yes | CoTracker3 + VGGT | 0.245 / 0.342 | 0.175 / 0.250 | 0.215 / 0.318 |
+| Yes | DELTA | 0.170 / 0.238 | 0.199 / 0.258 | 0.175 / 0.261 |
+| Yes | SpatialTrackerV2 | 0.195 / 0.275 | 0.303 / 0.404 | 0.175 / 0.270 |
+| Yes | D4RT | 0.304 / 0.410 | 0.307 / 0.408 | 0.372 / 0.498 |
+
+真实内参可用时，D4RT 在三个子集的 AJ 和 APD3D 均领先这组比较对象。PStudio 的 AJ 从 SpatialTrackerV2 的 0.175 到 0.372，差距较大；ADT 则只有 0.303 到 0.307，不能一概描述成同样明显的提升。
+
+未知内参时，ADT 上 D4RT 的 AJ 为 0.240，低于 SpatialTrackerV2 的 0.260，APD3D 也从后者的 0.342 降到 0.319。提供内参后，两者顺序才改变。这个对照说明“模型具备内参恢复接口”与“在所有真实场景中恢复得足够准确”是两回事，也提醒部署者把内参条件视为任务的一部分。
+
+遮挡指标同样不是全面领先。D4RT 在三个子集的 OA 为 0.875、0.926、0.897；SpatialTrackerV2 为 0.865、0.936、0.805。ADT 的遮挡判断仍是后者更高，CoTracker3 组合在那里还能达到 0.937。三维位置改善不保证可见性判断同步改善。[↗](https://arxiv.org/pdf/2512.08924v2#page=6)
+
+### 共同世界坐标进一步检验跨帧几何一致性
+
+相机坐标轨迹允许每一时刻使用不同参考系。世界坐标评测则要求所有点落在一个一致空间中，因此还检验隐式参考系转换是否正确。PStudio 没有相机运动，这一任务与前者基本重合，论文因此只报告 DriveTrack 和 ADT。
+
+| GT intrinsics | Method | DriveTrack APD3D ↑ | DriveTrack L1 ↓ | ADT APD3D ↑ | ADT L1 ↓ |
+| --- | --- | ---: | ---: | ---: | ---: |
+| No | St4RTrack | 0.020 | 0.499 | 0.062 | 0.839 |
+| No | CoTracker3 + VGGT | 0.205 | 0.170 | 0.192 | 0.736 |
+| No | SpatialTrackerV2 | 0.101 | 0.139 | 0.336 | 0.238 |
+| No | D4RT | 0.373 | 0.020 | 0.319 | 0.096 |
+| Yes | CoTracker3 + VGGT | 0.292 | 0.160 | 0.234 | 0.755 |
+| Yes | SpatialTrackerV2 | 0.201 | 0.117 | 0.378 | 0.263 |
+| Yes | D4RT | 0.470 | 0.017 | 0.398 | 0.093 |
+
+DriveTrack 未知内参的 L1 从 SpatialTrackerV2 的 0.139 降到 0.020，APD3D 同时大幅提高，说明收益不只是单帧点位置更接近，还体现在跨帧共同参考下的轨迹。
+
+ADT 未知内参则更有辨析价值。D4RT 的 L1 为 0.096，明显低于 0.238，但 APD3D 为 0.319，仍低于 0.336。平均整体偏差更小，并不必然意味着落进每组阈值的点比例更高。把这两项压缩成一句“跟踪精度更好”，会遗漏实际选择时可能重要的误差分布差异。表中 L1 沿用作者协议数值，不将其未经定义地换算为厘米精度。[↗](https://arxiv.org/pdf/2512.08924v2#page=6)
+
+## 统一动态表示有没有损害普通三维重建
+
+### 点云评测看共同空间中的几何误差
+
+点云重建要求把各帧观察到的像素表达在同一世界坐标系中。论文在动态 Sintel 和静态室内 ScanNet 上评测，按所采用的协议先对预测与真值点云进行 mean-shifting 对齐，再报告平均 L1。
+
+| Method | Sintel point cloud L1 ↓ | ScanNet point cloud L1 ↓ |
+| --- | ---: | ---: |
+| MegaSaM | 1.531 | 0.072 |
+| VGGT | 1.582 | 0.063 |
+| MapAnything | 1.718 | 0.064 |
+| SpatialTrackerV2 | 1.375 | 0.036 |
+| π3 | 1.139 | 0.030 |
+| D4RT | 0.768 | 0.028 |
+
+D4RT 在两组数据中都得到最低误差。Sintel 与 π3 的差值为 0.371，ScanNet 则只有 0.002。它支持统一动态建模没有以明显牺牲静态点云质量为代价，同时显示最突出差距仍在复杂动态内容中。这里比较的是对齐后的几何结果，不能直接视为绝对世界原点和真实尺度都已无误恢复。[↗](https://arxiv.org/pdf/2512.08924v2#page=7)
+
+### 视频深度使用整段序列的对齐，不能逐帧消掉漂移
+
+Depth 通过同帧查询的 $Z$ 得到。评测分别采用 scale-only（S）与 scale-and-shift（SS）对齐，按整段视频确定共享对齐参数。S 只调整尺度，SS 允许额外 shift；它们不是每一帧单独寻找最佳尺度，因此时间不一致不能全部被逐帧对齐掩盖。
+
+下表摘录 Table 5 的代表方法，每格为 **AbsRel (S) / AbsRel (SS)**，越低越好。
+
+| Method | Sintel | ScanNet | KITTI | Bonn |
+| --- | ---: | ---: | ---: | ---: |
+| MegaSaM | 0.342 / 0.249 | 0.050 / 0.047 | 0.109 / 0.101 | 0.056 / 0.056 |
+| VGGT | 0.318 / 0.247 | 0.044 / 0.040 | 0.094 / 0.067 | 0.055 / 0.051 |
+| π3 | 0.241 / 0.163 | 0.021 / 0.019 | 0.055 / 0.053 | 0.033 / 0.032 |
+| D4RT | 0.171 / 0.148 | 0.020 / 0.018 | 0.055 / 0.051 | 0.036 / 0.036 |
+
+Sintel 的 S-AbsRel 从 π3 的 0.241 到 0.171，说明其优势并非只靠更宽松的 shift 对齐出现。KITTI 的 S 指标则同为 0.055；Bonn 上 D4RT 的 0.036/0.036 还略差于 π3 的 0.033/0.032。动态表示对复杂场景有价值，不意味着每个静态或相对容易的数据域都会继续获得相同比例的收益。[↗](https://arxiv.org/pdf/2512.08924v2#page=7)
+
+### 相机位姿必须把整体轨迹与相对旋转分开
+
+相机评测采用 Sim(3) 对齐后的 ATE、相对平移 RPE-T、相对旋转 RPE-R，并在 Re10K 报告 Pose AUC@30。Sintel 使用包含运动模糊和大气效果的 14 序列子集，不能把这里的数值当成无噪声渲染的结果。
+
+| Method | Sintel ATE ↓ | RPE-T ↓ | RPE-R ↓ | ScanNet ATE ↓ | RPE-T ↓ | RPE-R ↓ | Re10K Pose AUC@30 ↑ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| MegaSaM | 0.074 | 0.030 | 0.126 | 0.029 | 0.016 | 0.839 | 71.0 |
+| VGGT | 0.168 | 0.056 | 0.428 | 0.016 | 0.012 | 0.316 | 70.2 |
+| SpatialTrackerV2 | 0.126 | 0.053 | 1.052 | 0.018 | 0.012 | 0.324 | 75.7 |
+| π3 | 0.086 | 0.039 | 0.248 | 0.015 | 0.010 | 0.291 | 78.7 |
+| D4RT | 0.065 | 0.024 | 0.126 | 0.014 | 0.010 | 0.302 | 83.5 |
+
+D4RT 在 Sintel 的 ATE 和相对平移更低，旋转与 MegaSaM 相同；Re10K AUC 从 π3 的 78.7 到 83.5，提高 4.8 个点。但 ScanNet 的相对旋转为 0.302，仍略高于 π3 的 0.291。整体轨迹对齐更好和每一局部旋转都更准确，是不同判断。[↗](https://arxiv.org/pdf/2512.08924v2#page=7)
+
+## 局部 patch 与辅助损失分别贡献了什么
+
+下面的控制实验默认采用 ViT-L、6 层 decoder、300K iterations、batch size 16。它们用于分辨设计作用，不能直接当成前面 ViT-g、500K steps 完整模型的最终成绩。
+
+### 高层场景 token 仍需要低层外观来定位边界
+
+Figure 6 重点比较放大后的细长结构与前后景轮廓。无 local patch 时深度边缘更平滑、细节更容易融合；加入源点周边 RGB 后，窄结构与边缘分界更清晰。
+
+![D4RT local RGB patch ablation](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-6-local-patch.png){ width="720" }
+
+*Figure 6，局部 RGB patch 对深度细节的作用。*
+
+| Local appearance patch | AbsRel (S) ↓ | AbsRel (SS) ↓ | ATE ↓ | RPE-T ↓ | RPE-R ↓ |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| ✗ | 0.366 | 0.306 | 0.173 | 0.031 | 0.262 |
-| ✓ | 0.302 | 0.257 | 0.091 | 0.028 | 0.245 |
+| Without | 0.366 | 0.306 | 0.173 | 0.031 | 0.262 |
+| With | 0.302 | 0.257 | 0.091 | 0.028 | 0.245 |
 
-<small>表源：`Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`，Local RGB patch ablation table。原论文表格含义：在 Sintel 上比较 ViT-L 模型是否把 local appearance patch 输入 decoder。</small>
+ATE 从 0.173 降到 0.091，说明 patch 的作用不止是让输出看起来锐利。作者将其解释为两方面：局部外观帮助 query 在全局时空特征中寻找可靠对应，低层图像线索又帮助区分物体与周边背景。这是对观察到的收益的机制解释，实验没有把两项贡献单独量化。[↗](https://arxiv.org/pdf/2512.08924v2#page=8)
 
-这个消融说明，全局 video representation 不足以保留所有低层细节。尤其在物体边缘、细小结构和遮挡边界处，query 附带局部 RGB patch 能显著改善 depth 和 pose。
+附录的 patch size 曲线显示 9–12 像素附近具有较好的总体权衡，默认采用 $9\times9$。更大的 patch 并非自动更好，15 的深度平均误差反而回升。这意味着 query 需要足够外观上下文，但把更大邻域全部压进同一个局部 embedding，并不能保证继续提高匹配质量。[↗](https://arxiv.org/pdf/2512.08924v2#page=15)
 
-### Backbone size
+### 辅助任务不是各自单调提高所有指标
 
-| Backbone size | AbsRel (S) ↓ | AbsRel (SS) ↓ | ATE ↓ | RPE-T ↓ | RPE-R ↓ |
+Table 8 报告的是相对完整控制模型的变化量。正号代表误差变大，负号代表误差变小。
+
+| Removed loss | Δ AbsRel (S) | Δ AbsRel (SS) | Δ ATE | Δ RPE-T | Δ RPE-R |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2D position | +0.071 | +0.063 | +0.002 | +0.002 | −0.028 |
+| Normal | +0.043 | +0.026 | +0.003 | +0.003 | −0.022 |
+| Displacement | +0.011 | +0.007 | +0.011 | +0.003 | +0.007 |
+| Visibility | −0.003 | −0.025 | +0.012 | +0.011 | +0.022 |
+| Confidence | +0.002 | −0.025 | +0.126 | +0.061 | +0.115 |
+
+二维位置与法向对深度最明显，移除后 S-AbsRel 分别增加 0.071 和 0.043。位移监督带来的收益较小，却覆盖所有列。Confidence 最明显地影响相机估计，移除后 ATE 从 0.091 增加到 0.217，这是按表中基准加变化量得到的值。
+
+与此同时，去掉 confidence 或 visibility，SS 深度误差都会下降 0.025；去掉二维或法向监督，RPE-R 反而降低。作者选择的是联合任务间的总体权衡，而非每个辅助项都在每个指标上提供正收益。复用方法时，如果应用只看某一个深度指标，损失组合的选择可能与同时重建相机和动态轨迹时不同。[↗](https://arxiv.org/pdf/2512.08924v2#page=8)
+
+### 预训练和规模也占有实际份额
+
+Appendix Table 11 将随机初始化与 VideoMAE 初始化直接比较。
+
+| Model initialization | AbsRel (S) ↓ | AbsRel (SS) ↓ | ATE ↓ | RPE-T ↓ | RPE-R ↓ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| None | 0.738 | 0.520 | 0.334 | 0.139 | 1.126 |
+| VideoMAE | 0.302 | 0.257 | 0.091 | 0.028 | 0.245 |
+
+差异覆盖深度和相机各列。统一 query 接口提供了训练与推理组织方式，但好结果还明显依赖视频编码器预训练，不能只照搬接口、从随机权重开始，就预期得到相同性能。[↗](https://arxiv.org/pdf/2512.08924v2#page=15)
+
+编码器规模实验进一步显示容量的作用。
+
+| Backbone | AbsRel (S) ↓ | AbsRel (SS) ↓ | ATE ↓ | RPE-T ↓ | RPE-R ↓ |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | ViT-B | 0.319 | 0.232 | 0.145 | 0.034 | 0.266 |
 | ViT-L | 0.256 | 0.214 | 0.073 | 0.027 | 0.191 |
 | ViT-H | 0.226 | 0.173 | 0.070 | 0.028 | 0.186 |
 | ViT-g | 0.191 | 0.168 | 0.078 | 0.026 | 0.160 |
 
-<small>表源：`Efficiently Reconstructing Dynamic Scenes One D4RT at a Time`，Backbone size ablation table。原论文表格含义：在 Sintel 上比较不同 encoder backbone size 的 depth 和 camera pose 表现。</small>
+从 B 到 g，深度与相对旋转总体持续改善，但 ATE 在 H 为 0.070，优于 g 的 0.078。更大模型带来更强表征，仍不能概括成每个几何误差都随参数量单调下降。此表的 ViT-L 数值也不同于局部 patch 消融的基准，两张表应分别按各自控制实验阅读，不能拼成同一轮训练逐步加组件的轨迹。[↗](https://arxiv.org/pdf/2512.08924v2#page=8)
 
-这个表的信号很清楚：D4RT 的统一 query 接口并不意味着小模型就够。encoder 需要强全局场景表示来承载跨帧对应、动态物体和相机运动；decoder 轻量，但 encoder 不能太弱。
+## 按需解码怎样真正节省计算
 
-### Pretrained encoder
+### 追踪所有像素，不必从每个像素重复发起整条轨迹
 
-Appendix 还比较了从随机初始化和 VideoMAE 初始化出发的差异：
+如果视频有 $THW$ 个像素位置，而每个位置都独立查询一条包含 $T$ 个时刻的轨迹，朴素做法需要
 
-| Model weight initialization | AbsRel (S) ↓ | AbsRel (SS) ↓ | ATE ↓ | RPE-T ↓ | RPE-R ↓ |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| None | 0.738 | 0.520 | 0.334 | 0.139 | 1.126 |
-| VideoMAE | 0.302 | 0.257 | 0.091 | 0.028 | 0.245 |
+$$
+O(T^2HW)
+$$
 
-这个结果很重要。D4RT 不是只靠几何 loss 从零学出一切，它明显受益于视频预训练初始化。对具身智能系统来说，这和 VLA / world model 路线有相似经验：底层时空表征先验通常比从零拟合小规模机器人数据更可靠。
+次点查询。浪费来自同一个物理点在许多帧中反复出现，逐帧重新发起轨迹，会重复解释已被覆盖的内容。
 
-### Auxiliary losses
+论文的 Algorithm 1 使用大小为 $T\times H\times W$ 的 occupancy grid，记录哪些时空像素已被轨迹访问。编码一次视频后，循环从尚未访问的位置采样源点；对每个源点令 $t_{\mathrm{tgt}}=t_{\mathrm{cam}}=k$，解码它在全部 $k=1,\ldots,T$ 中的位置；将轨迹可见时穿过的像素标记为已访问，保存轨迹，然后继续补充剩余位置。
 
-论文逐项移除 auxiliary losses，观察到不同 loss 对 depth 和 pose 的贡献不同。最值得记的是：
+它与只跟第一帧的区别，在于源点可以来自任何仍未覆盖的帧。先前被遮挡的区域后来出现，就可以产生新的轨迹；已经被已有轨迹解释的位置，则无需再重复起步。Visibility 参与覆盖判断，因此从机制上看，可见性估计错误也可能影响覆盖决策；论文没有给出将这一影响单独量化的消融。
 
-| Ablation | Main effect |
-| --- | --- |
-| w/o 2D position | depth 明显变差 |
-| w/o normal | depth 明显变差 |
-| w/o confidence | camera pose 明显变差 |
-| w/o displacement / visibility | 对部分指标有较小但仍可见影响 |
+作者报告该策略按视频运动复杂度带来约 5–15 倍加速。这个范围来自具体视频，不是把最坏查询复杂度严格降成某个统一线性上界。任意源点、独立查询和较低单点成本共同使这一算法可行，只有“全帧一次共同解码”的接口难以同样灵活地跳过冗余位置。[↗](https://arxiv.org/pdf/2512.08924v2#page=3) [↗](https://arxiv.org/pdf/2512.08924v2#page=4)
 
-这说明 D4RT 的输出头不是“为了多任务好看”。2D position、normal、visibility、motion、confidence 都在帮模型把动态 4D 几何拆成可学习的约束。
+### 轨迹数量、视频吞吐和相机估计速度是不同账本
 
-## 和 VGGT / MapAnything 的关系
+Table 3 在单张 A100 上测量的是，为维持指定 FPS，最多能输出多少条完整视频三维轨迹。D4RT 每条轨迹仍包含 $T$ 个独立点查询。
 
-D4RT 应该接在 [VGGT](vggt.md) 和 [MapAnything](mapanything.md) 后面读。
+| Method | Max. tracks @60 FPS | @24 FPS | @10 FPS | @1 FPS |
+| --- | ---: | ---: | ---: | ---: |
+| DELTA | 0 | 5 | 408 | 5,770 |
+| SpatialTrackerV2 | 29 | 84 | 219 | 2,290 |
+| D4RT | 550 | 1,570 | 3,890 | 40,180 |
 
-| Model | Strong at | D4RT changes |
-| --- | --- | --- |
-| VGGT | feed-forward camera / depth / point map / tracks for static or mostly rigid settings | D4RT 更强调 dynamic correspondence 和 single query decoder |
-| MapAnything | 融合 images、intrinsics、poses、depth 等 auxiliary geometric inputs | D4RT 更强调从单视频统一查询 4D point state |
-| SpatialTrackerV2 | dynamic point tracking | D4RT 用全局视频表示和独立 query decoder 支持 all-pixels tracking 和更多几何任务 |
-| MegaSaM / \(\pi^3\) | reconstruction / geometry recovery | D4RT 针对动态物体和高效查询补上短板 |
+例如在 24 FPS 条件下，D4RT 支持 1570 条，SpatialTrackerV2 支持 84 条，前者约为 18.7 倍；相对 DELTA 的 5 条则约为 314 倍。这解释了论文概括的 18–300 倍效率优势来自哪些预算与对照。
 
-如果说 VGGT 是“前向几何底座”，MapAnything 是“可吃多种几何输入的 metric reconstruction 底座”，D4RT 更像是“动态视频里的点级 4D 状态查询器”。三者都不是机器人 policy，但都能成为机器人状态估计、数据质检、world model grounding 的底层模块。
+但倍数不应脱离表格泛化到每一格。1 FPS 下 40180/5770 约为 7.0，因而不能说在任何目标吞吐下都至少快 18 倍。不同方法有不同固定开销和扩展曲线，应用应按实际所需轨迹密度读取对应列。[↗](https://arxiv.org/pdf/2512.08924v2#page=5)
 
-## 对具身智能的启发
+Figure 3 则只比较相机估计。横轴为 A100 上 FPS，采用对数尺度；纵轴将 Sintel 与 ScanNet 的若干位姿误差综合为 accuracy。右上角意味着在这个综合口径下更快且误差更低。
 
-D4RT 对具身智能最有价值的不是论文标题里的 4D，而是它把几何状态做成了可查询接口。
+![D4RT speed 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-3-speed.png){ width="650" }
 
-| Embodied need | D4RT output that helps | Remaining gap |
-| --- | --- | --- |
-| Navigation in dynamic scenes | camera pose, point cloud, moving object tracks | 还需要 collision checking、local planner 和实时传感器融合 |
-| Manipulation with moving objects | 3D point tracks, visibility, depth | 还需要接触、物体刚柔性、抓取 affordance |
-| Robot dataset debugging | reconstructed trajectories, camera motion, confidence | 还需要和 robot state/action 时间同步 |
-| World model grounding | disentangle camera motion, object motion, static geometry | D4RT 不是动作条件动力学模型 |
-| AR / spatial computing | low-latency geometry and camera state | 还需要设备端部署、漂移控制和交互稳定性 |
+*Figure 3，相机估计的速度与综合准确率，不能替代完整稠密输出的吞吐表。*
 
-最关键的边界是：D4RT 是 perception / reconstruction 模型，不是闭环控制器。它能告诉你“点在 3D/4D 中可能在哪里”，但不能直接决定机器人应该怎么抓、怎么避障、怎么在失败后恢复。
+作者为了比较相机任务，移除了基线中与相机估计无关的 decoder heads。即便如此，D4RT 仍报告 200+ FPS，约为 VGGT 的 9 倍、MegaSaM 的 100 倍。其优势与相机只需粗网格查询有关，不能把该速度直接写成“所有像素完整四维轨迹达到 200 FPS”。此外，模型先读取一段视频的全局上下文，离线吞吐没有直接测量因果在线系统在新帧到达后的反馈延迟。[↗](https://arxiv.org/pdf/2512.08924v2#page=4) [↗](https://arxiv.org/pdf/2512.08924v2#page=7)
 
-不过，把它作为中间状态层很自然。例如一个机器人系统可以用 D4RT 产生：
+## 更密的查询能否恢复低分辨率编码丢掉的细节
 
-```text
-video episode
-  -> camera pose / depth / point cloud / dynamic tracks / confidence
-  -> task-relevant state extraction
-  -> VLA policy / planner / world model / failure analysis
-```
+连续空间坐标让解码分辨率不必等于编码分辨率。即使全局编码器始终读取 $256\times256$ 视频，也可以在原图大小的坐标网格上查询。这里有一个重要区别：更多输出位置可以减少像素块状观感，却未必能凭空恢复编码器没保留下来的高频外观。
 
-这里的好处是失败归因更清楚。VLA 失败时，可以检查：是相机位姿错了、动态物体 track 丢了、深度边界不可信，还是策略本身动作选择错了。
+附录 C 通过四种配置检验这一点。所有编码器分辨率都固定为 $256\times256$；PDBE 是用于度量深度边界的误差指标，数值越低越好。
 
-## 证据链快照
+| Config. | RGB patch | Output resolution | Patch source resolution | AbsRel (S) ↓ | PDBE (S) ↓ | AbsRel (SS) ↓ | PDBE (SS) ↓ |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| 1 | No | 256×256 | — | 0.254 | 3.323 | 0.219 | 3.307 |
+| 2 | Yes | 256×256 | 256×256 | 0.218 | 2.254 | 0.179 | 2.243 |
+| 3 | Yes | Original | 256×256 | 0.217 | 2.266 | 0.178 | 2.258 |
+| 4 | Yes | Original | Original | 0.220 | 2.193 | 0.176 | 2.185 |
 
-| 论文主张 | 主要证据 | 读数边界 |
-| --- | --- | --- |
-| 单一 query interface 能统一 4D geometry tasks | Table 1、Figure 2、method derivation | 统一接口不等于所有任务部署约束都解决 |
-| 独立 pointwise decoder 提高训练和推理效率 | decoder design、throughput table、speed figure | encoder 仍较大，训练仍依赖大规模数据和 TPU |
-| D4RT 能处理动态 correspondence | TAPVid-3D、qualitative dynamic reconstructions | benchmark 不等于真实机器人长尾场景全覆盖 |
-| local patch 和 auxiliary heads 很关键 | local patch / loss ablations | 不是一个纯架构 trick，数据和监督质量同样重要 |
-| 视频预训练初始化很重要 | VideoMAE initialization ablation | 从零训练或公开数据复现难度较高 |
+从配置 2 到 3，仅提高查询密度，S-AbsRel 只从 0.218 到 0.217，PDBE 还从 2.254 小幅升到 2.266。它说明更多输出点与更准确边缘并不是同一件事。配置 4 进一步从原始高分辨率图像提取局部 RGB patch，PDBE 才降到 2.193，SS 条件下也从 2.258 降到 2.185。
 
-## 阅读结论
+Figure 9 的底部毛发边缘最容易体现差别。先比较配置 2 的像素化边界与配置 3 的平滑边界，再看配置 4 是否出现细小轮廓；后一变化来自查询端获得了高分辨率外观线索。
 
-D4RT 最值得带走的知识点是：**动态 4D 场景理解可以被组织成一个“点在任意时间、任意参考相机下的位置查询”问题。** 这个抽象把 depth、tracking、pose 和 point cloud 放进同一个 decoder，不需要为每个任务单独堆模块。
+![D4RT high-resolution decoding](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-9-high-resolution.png){ width="920" }
 
-对具身智能来说，D4RT 更像一个几何状态层，而不是动作模型。它能给机器人、AR 或世界模型提供更稳定的 camera / depth / point track / dynamic reconstruction 输入；但闭环控制、安全约束、接触建模和动作选择仍然要由 VLA、planner、controller 或 world model 继续承担。
+*Figure 9，固定全局编码分辨率，通过原始分辨率的局部 patch 改善细节。*
 
-## 外部精读
+配置 4 的 S-AbsRel 为 0.220，略高于配置 3 的 0.217，说明边缘更细并不等于所有整体深度误差同步下降。它提供的是一种有价值的分工：全局编码负责场景和时空关系，局部高分辨率输入补充精细边界。
 
-1. [arXiv:2512.08924](https://arxiv.org/abs/2512.08924)
-2. [D4RT project page](https://d4rt-paper.github.io/)
-3. [Google DeepMind blog: D4RT](https://deepmind.google/blog/d4rt-teaching-ai-to-see-the-world-in-four-dimensions/)
-4. [VGGT](https://arxiv.org/abs/2503.11651)：理解 D4RT 为什么要强调 single query decoder 和 dynamic correspondence。
-5. [MapAnything](https://arxiv.org/abs/2509.13414)：作为 metric reconstruction 与几何输入融合路线对照。
+该设计无须把整个全局编码器提升到原图分辨率，避免相应的高分辨率编码开销。但完整输出查询数增加时，解码工作量仍然增加；不能把“固定编码分辨率”扩大成“任意提高输出密度都完全零成本”。[↗](https://arxiv.org/pdf/2512.08924v2#page=14)
 
-## 相关阅读与下一步
+## 长视频需要分段对齐，单个全局表示并不覆盖无限时间
 
-- 站内下一步：[VGGT：前向恢复相机、深度、点云与轨迹](vggt.md)。
-- 站内下一步：[MapAnything：统一前向 Metric 3D 重建骨干](mapanything.md)。
-- 站内下一步：[Depth Anything 3：任意视角 3D 几何底座](depth-anything-3.md)。
-- 站内下一步：[具身智能专题](../../embodied-ai/index.md)。
-- 站内下一步：[论文精读专题](../index.md)。
+训练片段长度为 48 帧。对更长视频，作者采用重叠分段分别预测，从重叠区域取置信度最高的 85% 点，用 Umeyama 求 Sim(3) 变换，将相邻片段对齐。这里的 Sim(3) 包含尺度，与前面在同一片段中恢复两相机参考的刚性对应，不应混成同一个用途。
+
+为直接检验模型原始预测的拼接精度，实验省去了回环检测和全局优化。Figure 8 上方展示 KITTI sequence 00 的 1000 帧重建，下方红色为预测轨迹、灰色虚线为真值。阅读时应看长距离累积后形状是否逐渐偏离，而不只看局部道路是否像真实场景。
+
+![D4RT long sequence alignment](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-8-long-sequences.png){ width="920" }
+
+*Figure 8，重叠片段对齐后的长视频结果，没有加入回环和全局优化。*
+
+| Example | VGGT ATE ↓ | π3 ATE ↓ | D4RT ATE ↓ |
+| --- | ---: | ---: | ---: |
+| KITTI sequence 00, first example | 58.7 m | 35.6 m | 15.5 m |
+| Second example in Figure 8 | 36.0 m | 15.8 m | 16.3 m |
+
+第一组中 D4RT 的累积误差明显更小；第二组与 π3 接近，并略高于后者。15.5 m 和 16.3 m 也表明，长序列拼接仍存在实际漂移。这些结果支持较好的跨片段原始一致性，不能写成无需 SLAM 后端就已解决长距离无漂移建图。
+
+这里同样不是一次将 1000 帧输入同一个全局注意力编码器。实验使用分段和几何对齐延伸长度，论文没有完整给出所有 chunk 长度与 overlap 参数，因此部署时仍需围绕片段跨度、对齐点质量和回环需求选择系统配置。[↗](https://arxiv.org/pdf/2512.08924v2#page=13)
+
+## 这项工作提供的是可按任务取用的几何接口
+
+Figure 5 展示了这个接口对不同内容的适应方式。静态环境重点看整体表面结构，动态场景则额外看三维点随实体运动的轨迹。它们是能力示例，不能代替前面按指标、内参和对齐协议拆开的评测。
+
+![D4RT in-the-wild visualization 原论文图](../../assets/images/paper-deep-dives/embodied-ai/d4rt/figure-5-in-the-wild.png){ width="920" }
+
+*Figure 5，静态场景重建与动态三维轨迹共享模型和查询接口。*[↗](https://arxiv.org/pdf/2512.08924v2#page=6)
+
+对需要几何感知的系统，D4RT 最值得复用的是三个接口选择。首先把点身份、物理时刻和参考坐标明确分开，避免在动态场景中将物体运动误当相机运动。其次让查询端保留局部外观，使全局时空表示与精细边界各有信息来源。最后把输出密度交给应用决定，用粗网格估计相机、少量点跟踪目标、补充未覆盖轨迹恢复场景，而不是每次请求都生成全部中间结果。
+
+这些选择也规定了使用边界。需要公制尺度时，应额外核对尺度监督与标定条件，不能仅凭对齐后的深度分数；需要实时反馈时，应测完整窗口获取和编码延迟，不能只引用 FPS；需要长距离建图时，应把分段漂移和回环优化纳入系统。D4RT 使多种几何任务可以共享一份可查询表示，真正的工程收益来自对查询配置、精度要求和输出预算的共同设计。

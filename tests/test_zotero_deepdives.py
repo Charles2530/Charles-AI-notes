@@ -1,3 +1,4 @@
+import html
 import json
 import sqlite3
 from pathlib import Path
@@ -114,6 +115,106 @@ def _create_minimal_zotero_db(path: Path) -> None:
 
 
 class ZoteroDeepdivesTests(TestCase):
+    def test_metadata_blocks_are_excluded_from_summary_candidates(self):
+        for header in ('!!! info "论文信息"', "!!! info '资料信息'", '???+ info "资料信息"'):
+            with self.subTest(header=header):
+                text = f'''---
+paper_title: Metadata training report
+description: FRONTMATTERONLY dataset 900 training steps
+---
+
+{header}
+    **资料题名** CATALOGONLY 模型训练与数据实验 2026。<br>
+
+    **核验信息** CATALOGCONTINUATION 数据集 999 samples，训练 888 hours。
+
+## 决策前如何压缩观察
+
+模型把图像编码为 latent state，然后依据动作预测下一状态与奖励。
+
+!!! info "训练预算"
+    正文中的训练配置使用 400 episodes，batch size 为 8。
+'''
+                blocks = "\n".join(zd.markdown_blocks(text))
+                self.assertNotIn("FRONTMATTERONLY", blocks)
+                self.assertNotIn("CATALOGONLY", blocks)
+                self.assertNotIn("CATALOGCONTINUATION", blocks)
+                self.assertIn("latent state", blocks)
+                self.assertIn("400 episodes", blocks)
+
+    def test_free_heading_summary_uses_body_instead_of_metadata(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "files/paper-deep-dives/world-models/sample.md"
+            page.parent.mkdir(parents=True)
+            meta = zd.ArxivMeta(
+                arxiv_id="2606.12345", title="Sample Planning Agent",
+                abstract="ABSTRACTFALLBACK: We propose an agent.", authors=["Ada Lovelace"],
+                published="2026-06-01T00:00:00Z", updated="2026-06-01T00:00:00Z",
+                categories="cs.AI", pdf_url="https://arxiv.org/pdf/2606.12345.pdf",
+                abs_url="https://arxiv.org/abs/2606.12345",
+            )
+            for heading in ("搜索之前先整理观察", "A state for action search"):
+                with self.subTest(heading=heading):
+                    page.write_text(f'''---
+paper_title: Sample Planning Agent
+---
+
+!!! info "论文信息"
+    **核验记录** CATALOGONLY 模型训练数据实验 2026；需要重新确认来源。
+
+    核心贡献记录仅供目录检索：
+    1. CATALOGIDEAONE 模型训练数据。
+    2. CATALOGIDEATWO 模型训练数据。
+    3. CATALOGIDEATHREE 模型训练数据。
+
+## {heading}
+
+机器人交互代价昂贵，困难在于只有图像与奖励，无法直接读取物体的完整状态。
+
+模型用 RSSM 构建 latent dynamics，latent state 表示观测历史，动作推动 latent rollout。
+
+规划方法用 CEM 搜索动作，模型为每条 rollout 预测奖励，规划器据此选择动作。
+
+训练方法用 latent overshooting 校准多步 rollout，让模型预测支持更长的规划。
+
+## 运行成本记录
+
+训练使用 FixtureSet 的 400 episodes，batch size 为 8，在 2 张 GPU 上运行 6 hours。
+''', encoding="utf-8")
+                    note = zd.build_summary_note_html(meta, pages=["world-models/sample.md"], root=root)
+                    motivation = note.split("<p><b>动机：</b>", 1)[1].split("</p>", 1)[0]
+                    ideas = note.split("<ol>", 1)[1].split("</ol>", 1)[0]
+                    training = note.split("<p><b>训练/数据细节：</b></p>", 1)[1].split("</ul>", 1)[0]
+                    self.assertNotIn("CATALOG", note)
+                    self.assertNotIn("ABSTRACTFALLBACK", ideas)
+                    self.assertIn("机器人交互代价昂贵", motivation)
+                    self.assertIn("latent", ideas)
+                    self.assertIn("CEM", ideas)
+                    self.assertIn("FixtureSet", training)
+                    self.assertIn("400 episodes", training)
+
+    def test_metadata_alone_does_not_supply_training_evidence(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "files/paper-deep-dives/world-models/sample.md"
+            page.parent.mkdir(parents=True)
+            page.write_text('''!!! info "资料信息"
+    **资料题名** 模型训练数据报告 2026，核验来源 CATALOGONLY。
+    **核验时间** 2026-10-29，仅说明资料检查时间。
+''', encoding="utf-8")
+            meta = zd.ArxivMeta(
+                arxiv_id="2606.12345", title="Sample Planning Agent",
+                abstract="We propose an agent.", authors=["Ada Lovelace"],
+                published="2026-06-01T00:00:00Z", updated="2026-06-01T00:00:00Z",
+                categories="cs.AI", pdf_url="https://arxiv.org/pdf/2606.12345.pdf",
+                abs_url="https://arxiv.org/abs/2606.12345",
+            )
+            note = zd.build_summary_note_html(meta, pages=["world-models/sample.md"], root=root)
+            training = note.split("<p><b>训练/数据细节：</b></p>", 1)[1].split("</ul>", 1)[0]
+            self.assertNotIn("CATALOGONLY", note)
+            self.assertIn("未给出训练数据集", training)
+
     def test_summary_note_html_contains_requested_sections(self):
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -251,21 +352,26 @@ Figure 5 的结论更偏系统设计。PlaNet 的效果来自两个闭环同时�
         self.assertIn("latent overshooting", note)
         self.assertNotIn("在线规划成本高", note.split("<ol>", 1)[1].split("</ol>", 1)[0])
 
-    def test_actual_planet_page_uses_reading_conclusion_as_ideas(self):
+    def test_actual_planet_page_supplies_substantive_ideas_without_fixed_headings(self):
         root = Path(__file__).resolve().parents[1]
         page = root / "files" / "paper-deep-dives" / "world-models" / "planet.md"
         if not page.exists():
             self.skipTest("PlaNet deep-dive page is not available")
-        ideas = zd.extract_numbered_items(page.read_text(encoding="utf-8"))
-
-        self.assertEqual(
-            ideas[:3],
-            [
-                "提出用 RSSM 从像素学习 action-conditioned latent dynamics；",
-                "证明 planner 可以只在 latent space 里评估 reward，而不必生成未来图像；",
-                "用 latent overshooting 强调 world model 训练必须关注多步 rollout，而不是只优化一步重建。",
-            ],
+        meta = zd.ArxivMeta(
+            arxiv_id="1811.04551", title="Learning Latent Dynamics for Planning from Pixels",
+            abstract="ABSTRACTFALLBACK: We propose a planning agent.", authors=["Ada Lovelace"],
+            published="2018-11-01T00:00:00Z", updated="2018-11-01T00:00:00Z",
+            categories="cs.LG", pdf_url="https://arxiv.org/pdf/1811.04551.pdf",
+            abs_url="https://arxiv.org/abs/1811.04551",
         )
+        note = zd.build_summary_note_html(meta, pages=["world-models/planet.md"], root=root)
+        ideas = note.split("<ol>", 1)[1].split("</ol>", 1)[0]
+        self.assertEqual(ideas.count("<li>"), 3)
+        self.assertRegex(ideas, r"latent|RSSM|潜在")
+        self.assertRegex(ideas, r"planning|规划|搜索")
+        self.assertNotIn("ABSTRACTFALLBACK", ideas)
+        self.assertNotIn("论文题名", ideas)
+        self.assertNotIn("元数据来源", ideas)
 
     def test_summary_note_does_not_use_limitations_as_motivation_or_idea(self):
         with TemporaryDirectory() as tmpdir:
@@ -347,7 +453,7 @@ Figure 5 的结论更偏系统设计。PlaNet 的效果来自两个闭环同时�
         self.assertIn("Wall-clock：around 36 hours", training_html)
         self.assertNotIn("| Item | Detail |", training_html)
 
-    def test_actual_dmd_page_does_not_use_limitations_as_motivation_or_idea(self):
+    def test_actual_dmd_page_supplies_body_content_without_metadata(self):
         root = Path(__file__).resolve().parents[1]
         page = root / "files" / "paper-deep-dives" / "diffusion" / "dmd.md"
         if not page.exists():
@@ -368,10 +474,13 @@ Figure 5 的结论更偏系统设计。PlaNet 的效果来自两个闭环同时�
 
         idea_html = note.split("<ol>", 1)[1].split("</ol>", 1)[0]
         motivation = note.split("<p><b>动机：</b>", 1)[1].split("</p>", 1)[0]
-        self.assertIn("核心思想", motivation)
-        self.assertNotIn("仍和 teacher 有质量差距", idea_html)
-        self.assertNotIn("Dimension / DMD", idea_html)
-        self.assertNotIn("训练显存重", motivation)
+        body = page.read_text(encoding="utf-8").split("\n## ", 1)[1]
+        self.assertIn(html.unescape(motivation).removesuffix("…"), zd.strip_markdown(body))
+        self.assertNotEqual(html.unescape(motivation), meta.abstract)
+        self.assertRegex(motivation, r"teacher|教师|分布|蒸馏")
+        self.assertRegex(idea_html, r"score|distillation|分布|蒸馏")
+        self.assertNotIn("论文题名", motivation + idea_html)
+        self.assertNotIn("元数据来源", motivation + idea_html)
 
     def test_actual_planet_page_uses_opening_problem_as_motivation(self):
         root = Path(__file__).resolve().parents[1]
@@ -393,10 +502,15 @@ Figure 5 的结论更偏系统设计。PlaNet 的效果来自两个闭环同时�
         note = zd.build_summary_note_html(meta, pages=["world-models/planet.md"], root=root)
 
         motivation = note.split("<p><b>动机：</b>", 1)[1].split("</p>", 1)[0]
-        self.assertIn("提出的问题很直接", motivation)
+        body = page.read_text(encoding="utf-8").split("\n## ", 1)[1]
+        self.assertIn(html.unescape(motivation).removesuffix("…"), zd.strip_markdown(body))
+        self.assertNotEqual(html.unescape(motivation), meta.abstract)
+        self.assertRegex(motivation, r"图像|像素")
+        self.assertRegex(motivation, r"动作|规划|决策")
+        self.assertNotIn("论文题名", motivation)
         self.assertNotIn("| 维度 |", motivation)
 
-    def test_actual_planet_training_details_skip_comparison_table(self):
+    def test_actual_planet_supplies_numeric_training_details_without_metadata(self):
         root = Path(__file__).resolve().parents[1]
         page = root / "files" / "paper-deep-dives" / "world-models" / "planet.md"
         if not page.exists():
@@ -416,8 +530,10 @@ Figure 5 的结论更偏系统设计。PlaNet 的效果来自两个闭环同时�
         note = zd.build_summary_note_html(meta, pages=["world-models/planet.md"], root=root)
 
         training_html = note.split("<p><b>训练/数据细节：</b></p>", 1)[1].split("</ul>", 1)[0]
-        self.assertIn("1,000 episodes", training_html)
-        self.assertNotIn("维度 / PlaNet / DreamerV3", training_html)
+        self.assertRegex(training_html, r"\d[\d.,–—\- ]*\s*(?:episodes|hours|小时|GPUs?|tokens|samples|chunks|steps|次梯度更新|个(?:随机动作)?回合)")
+        self.assertNotIn("论文题名", training_html)
+        self.assertNotIn("元数据来源", training_html)
+        self.assertNotIn("未给出训练数据集", training_html)
 
     def test_summary_note_uses_primary_page_when_arxiv_is_related_elsewhere(self):
         root = Path(__file__).resolve().parents[1]
@@ -444,8 +560,13 @@ Figure 5 的结论更偏系统设计。PlaNet 的效果来自两个闭环同时�
         )
 
         motivation = note.split("<p><b>动机：</b>", 1)[1].split("</p>", 1)[0]
-        self.assertIn("提出的问题很直接", motivation)
-        self.assertNotIn("Dreamer 要回答的问题", motivation)
+        primary_note = zd.build_summary_note_html(meta, pages=["world-models/planet.md"], root=root)
+        primary_motivation = primary_note.split("<p><b>动机：</b>", 1)[1].split("</p>", 1)[0]
+        self.assertEqual(motivation, primary_motivation)
+        body = planet.read_text(encoding="utf-8").split("\n## ", 1)[1]
+        self.assertIn(html.unescape(motivation).removesuffix("…"), zd.strip_markdown(body))
+        self.assertNotEqual(html.unescape(motivation), meta.abstract)
+        self.assertNotIn("论文题名", motivation)
         self.assertIn("file://", note)
 
     def test_apply_summary_notes_adds_one_idempotent_child_note(self):

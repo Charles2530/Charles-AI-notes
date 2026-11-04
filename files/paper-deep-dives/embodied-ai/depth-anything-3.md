@@ -15,409 +15,521 @@ paper_topic: 具身智能
     **GitHub / 项目：** GitHub：[github.com/ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/Depth-Anything-3)；项目页：[depth-anything-3.github.io/](https://depth-anything-3.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2511.10647)；[GitHub API / repo](https://github.com/ByteDance-Seed/Depth-Anything-3)；[官方 / 项目材料](https://depth-anything-3.github.io/)；Checked Date：2026-06-22；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 从一张深度图走向可以组合的空间几何
 
-### 研究背景
+Depth Anything 3（DA3）将单图、多视图和视频帧的几何恢复写成同一个问题：对每张输入图像，预测与像素对应的**深度图和射线图**，再把它们组合成一致坐标系中的三维点。输入还可以携带已知相机参数，因此模型既能从未知相机的照片集合恢复场景，也能利用已有标定或位姿信息改善几何。
 
-Depth Anything 3 站在单目深度基础模型和多视角几何恢复之间。Depth Anything / DA2 已经证明，大规模视觉先验和高质量深度监督可以训练出泛化很强的单目深度模型；VGGT 等工作则推动了 feed-forward visual geometry，让模型从多张图直接预测相机、深度、点图和轨迹。具身智能、AR 和机器人场景需要的不是单张图的深度，而是跨视角一致、能融合成点云、能估计相机并可用于渲染的视觉空间。
+论文的关键不只是增加输入张数。单目深度可以在各图中独立给出合理的远近关系，但多张“各自正确”的相对深度，并不自动组成同一个三维场景。各视角的尺度、相机中心、方向和投影关系必须协调。DA3 通过 depth-ray 分解为这种协调提供显式接口，并用跨视图注意力从图像之间取得证据。
 
-这篇论文的背景问题因此变成：是否必须为 pose、depth、point map、rendering 等任务设计复杂多头网络，才能恢复任意视角几何？DA3 试图延续 Depth Anything 系列的“简单但可扩展”思路，把任意数量图像、可选相机参数和几何输出统一进一个更少任务假设的模型。
-
-### 问题（Challenge）
-
-论文要解决的问题是：**给定任意数量视觉输入，在相机已知或未知的情况下，如何预测空间一致的 geometry。** 这个问题难在输入数量不固定、相机可能缺失、不同视角需要对齐，而输出又要同时支持单目深度、多视角点云、pose accuracy 和 3D Gaussian rendering。
-
-传统管线会把这些问题拆成 SfM、MVS、depth estimation、pose estimation 等步骤，误差会在模块之间传递。多任务神经网络虽然可以一次预测很多输出，但任务头越多，训练和架构越复杂。DA3 的价值在于：如果能把所有输出压缩到一个足够通用的几何表示，模型就更容易扩展到开放视觉输入和具身系统的状态恢复。
-
-### Finding
-
-作者的 finding 是：**任意视角几何恢复不需要复杂的专用架构和多任务头；一个 plain transformer 加上单一 depth-ray prediction target 就足以作为统一几何接口。** 这个洞见把“多视角几何必须多任务化”的直觉翻转成“预测每个像素沿哪条 ray、走多远到达表面”。
-
-Depth 和 ray 的组合能解决挑战，是因为它同时表达了局部表面距离和相机几何。depth 给出像素到表面的距离，ray 给出这个像素在 3D 空间中的投影方向与相机关系；二者相乘即可得到点云，也可反推出相机参数或进入 3DGS 渲染。这样，pose、geometry 和 rendering 不再需要各自独立的目标，而是从同一个 depth-ray 表示派生。
-
-### 方法
-
-DA3 的输入是任意数量图像，以及可选相机位姿。模型主干使用 vanilla DINOv2 vision transformer，不引入高度定制化的几何 Transformer。通过 input-adaptive attention，单图时模型主要做图内推理，多图时后层加入 cross-view self-attention，让不同视角在同一上下文中对齐。若有相机参数，模型会把 FOV、rotation/translation 等编码为 camera tokens；若没有，则使用可学习 token。
-
-输出端使用 Dual-DPT head 预测 depth map 和 ray map。对像素 \((u,v)\)，模型预测深度 \(D(u,v)\) 与 ray direction/origin 相关表示，从而可形成 3D 点。训练采用 teacher-student paradigm：先构造强 teacher 以产生更细致、更干净的 pseudo-depth，再教 DA3 学到既有 DA2 细节又有多视角一致性的几何输出。论文还构建了 visual geometry benchmark，覆盖 camera pose estimation、any-view geometry 和 visual rendering，并提供 monocular / metric / streaming / 3DGS 等应用接口。
-
-### 结论
-
-实验显示 DA3 在新 visual geometry benchmark 上整体超过此前 SOTA VGGT：论文报告 camera pose accuracy 平均提升 35.7%，geometric accuracy 平均提升 23.6%。在单目深度上，DA3 也超过 DA2，同时保留细节和开放域泛化。消融实验支持两个核心判断：depth-ray 表示足以支撑几何任务，single plain transformer 不需要复杂专用结构也能达到强结果。
-
-补充结论是，DA3 的优势不仅体现在指标上，也体现在统一接口上：相机未知、相机已知、单目、多视角、点云融合和 feed-forward 3D Gaussian splatting 都能从同一输出形式出发。边界是它仍主要是视觉几何模型，不能直接保证动态物体的物理因果、机器人动作成功率或在线 SLAM 的长期闭环一致性。
-
-### 关键术语
-
-- **Any-View Geometry（任意视角几何）**：从任意数量、任意视角图像中恢复一致 3D 空间结构的任务。
-- **Depth-Ray Representation（深度-射线表示）**：每个像素同时预测深度和相机射线，用于统一表达表面点与相机几何。
-- **Plain Transformer（普通 Transformer）**：不加入复杂几何专用模块的标准 ViT 主干；本文用 DINOv2 作为代表。
-- **Cross-View Attention（跨视角注意力）**：让不同输入图像的 tokens 彼此交换信息，以恢复多视角一致几何。
-- **Teacher-Student Learning（教师-学生学习）**：先用强 teacher 生成高质量伪标签，再训练更通用或更轻量的 student。
-- **Visual Geometry Benchmark（视觉几何基准）**：论文提出的评测集合，覆盖相机位姿、几何重建和视觉渲染。
-
-Depth Anything 3 放在具身智能专题里，是因为它补的是机器人闭环最基础的一层：**从 RGB、多视角或视频恢复稳定的 3D 几何状态**。VLA 可以输出动作，世界模型可以预测未来，但真正执行抓取、导航、避障和视角规划时，系统仍然要知道物体在哪里、相机在哪里、深度是否一致、点云能不能融合。
-
-可以先想一个机器人数据管线里的小场景：你有一段厨房操作视频，腕部相机看见杯子边缘，第三人称相机看见桌面和机械臂，另一个视角看见杯子后面的遮挡。如果每一帧只是一张 RGB 图，VLA 只能在像素上猜“杯子离夹爪多远”；如果能把这些视角恢复成一致的 depth、ray、camera pose 和 point cloud，后续抓取候选、可达性检查和失败回放才有可计算的空间状态。DA3 的核心价值就在这里：它不是替代策略模型，而是把普通视觉输入变成几何接口。
-
-## 论文位置
-
-DA3 的主线可以概括成一句话：把 Depth Anything 系列的单目深度能力扩展到任意数量视角，并让输出从一张深度图升级为可融合、可估姿、可渲染的 visual space。
-
-这里有三条前置线索需要先分清：
-
-- [Depth Anything / DA](depth-anything.md)：核心是强单目深度估计。它把大规模视觉先验转成相对深度，对细节和开放域泛化很强，但主要处理单张图像。
-- [Depth Anything 2 / DA2](depth-anything-v2.md)：是 DA 路线的更强版本，也是 DA3 对比和继承的重要对象。DA2 在单目相对深度上很稳，但它本身不解决多视角一致性、相机位姿和点云融合。
-- [VGGT](vggt.md)：是另一条 feed-forward visual geometry 路线，目标是一次前向预测 camera parameters、depth maps、point maps、tracks 等 3D 属性。DA3 和 VGGT 对的是同一类多视角几何问题，但 DA3 认为更简单的 depth-ray 目标和单个预训练 Transformer 更有效。
-
-所以 DA3 不是简单的 “DA2 + 多图输入”。它更像是把 DA/DA2 的深度细节、VGGT 的任意视角几何目标，以及具身系统需要的相机/点云/3DGS 接口合到了一起。
-
-如果从传统 3D 视觉任务读，DA3 的位置会更清楚：
-
-| 传统任务 | 输入是什么 | 输出是什么 | DA3 对应关系 |
-| --- | --- | --- | --- |
-| Monocular Depth Estimation / 单目深度估计 | 一张 RGB 图 | 每个像素的深度 | DA3 在单张输入时自然退化成单目深度，但输出仍服务后续几何接口 |
-| Structure from Motion / SfM | 同一场景的多张图，通常未知相机运动 | 稀疏 3D 结构和相机轨迹 | DA3 直接前向估计 camera、depth 和 ray，不走传统特征匹配 + BA（bundle adjustment）管线 |
-| Multi-View Stereo / MVS | 多视角图像，通常有已知或估计位姿 | 更稠密的表面几何 | DA3 用跨视角 depth / ray 一次性生成更适合融合的 dense geometry |
-| SLAM | 连续视频或传感器流 | 在线定位和地图 | `DA3-Streaming` 更接近长序列几何感知层，但不等价于完整 SLAM 系统 |
-
-这也是论文反复强调 minimal modeling 的原因：它不是把 MDE、SfM、MVS、SLAM 各自做一个任务头再硬拼成多任务网络，而是把共同部分抽象成“任意数量视觉输入 -> 像素对齐的 depth + ray”。这样既能复用 DINOv2 这类大规模预训练视觉主干，又避免从零训练一个高度定制化的多任务系统。
+Figure 1 先看上方的单图、多图和视频输入，再看左下 depth、ray 与中央点云。右侧几何与位姿雷达图、左下单目结果属于不同评测，说明模型覆盖多种任务，不能合成一个“空间理解准确率”。
 
 ![Depth Anything 3 teaser 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-1-teaser.png){ width="760" }
 
-<small>图源：`Depth Anything 3`，Figure 1。原论文图意：DA3 接收任意数量图像和可选相机位姿，输出一致的 depth maps 与 ray maps，并进一步融合为点云、相机和 3D Gaussian 表示。</small>
+*Figure 1，从任意数量的视图和可选相机信息恢复空间几何。*[↗](https://arxiv.org/pdf/2511.10647v1#page=3)
 
-**DA3 teaser 先看 depth、ray、camera 三个输出接口。**
-**输入输出**：输入是任意视角图像，输出是 depth、ray、camera 和 3D geometry。
-**效率机制**：把多视角几何恢复做成统一前向感知底座，减少手写几何管线成本。
-**对主线意义**：它服务世界模型的 geometry/state interface，而不是替代 dynamics。
-**不能证明什么**：几何重建不能证明动作因果、接触建模或真实机器人策略安全。
+这条路线包含三个相互配合的改变。第一，用深度与射线分解几何，不必同时直接回归许多冗余三维目标。第二，把一个完整预训练的 ViT 改成能交换跨视图信息的骨干，尽量保留原有视觉能力。第三，用合成数据训练的教师改善真实数据的深度标签，再通过原始几何测量为教师输出固定尺度。模型结构的简洁并不意味着训练数据、标签处理或评测协议可以同样省略。
 
-## 核心表示：Depth + Ray
+## Depth-ray 表示怎样把每个像素放进三维世界
 
-DA3 最关键的设计不是预测更多任务，而是把预测目标压到最小：每个像素预测 depth，再预测一条 camera ray。讲课时可以把它拆成两个问题：
+### 射线保留方向和投影尺度，深度才有一致含义
 
-- `ray map` 回答“这个像素对应世界里的哪条光线”：从哪里出发、朝哪里走。
-- `depth map` 回答“沿着这条光线走多远会碰到物体表面”。
-
-只有 depth，你知道近远关系，但没有统一世界坐标下的射线，很难把多张图融合到同一 3D 空间。只有 ray，你知道像素射线，却不知道表面点落在射线上的哪个位置。DA3 把二者绑在一起，才得到可以融合、可估姿、可接点云的几何表示。
-
-对第 \(i\) 个视角的像素 \((u,v)\)，模型输出深度 \(D_i(u,v)\)、ray origin \(o_i\) 和 ray direction \(d_i(u,v)\)，3D 点可以写成：
+对一张图像，设像素齐次坐标为 $p=(u,v,1)^\top$，内参为 $K$，从相机坐标到世界坐标的旋转和平移为 $R,t$。常规反投影为
 
 $$
-X_i(u,v) = o_i + D_i(u,v) d_i(u,v).
+P=R\bigl(D(u,v)K^{-1}p\bigr)+t.
 $$
 
-这比直接预测 point map 或相机矩阵有几个好处。第一，depth 保留了 Depth Anything 系列擅长的局部结构和边界细节。第二，ray map 可以看成把相机内参 \(K\) 和外参 \(R,t\) 对每个像素的作用展开成逐像素表示，不需要模型直接回归一个必须满足旋转矩阵约束的 pose。第三，depth 与 ray 分开后，给定外部相机位姿时也容易做 pose-conditioned depth，让多视角深度更一致。
+DA3 把它拆成每个像素的射线起点和方向。
 
-论文还说明，ray direction 不做单位归一化，方向向量的尺度会保留投影几何信息。需要显式相机参数时，可以从 ray map 里用 DLT 和 RQ decomposition 恢复相机；工程上则额外提供轻量 camera head，方便直接输出 intrinsics / extrinsics。
+$$
+d=RK^{-1}p,\qquad r=(t,d)\in\mathbb R^6,
+\qquad P=t+D(u,v)d.
+$$
 
-## 架构：单个 DINOv2 + Cross-view Attention + Dual-DPT
+射线图的前三个通道表示相机中心，后三个通道表示像素指向的方向。虽然同一张图的理想射线应共享起点，模型以稠密形式回归它们，使监督与图像位置对齐。由深度和射线逐像素相乘、相加，便得到点云。
 
-DA3 的建模思路很克制。它没有堆两个专用 Transformer，也没有把 camera、depth、point、track 都变成独立复杂任务，而是用一个 vanilla DINOv2 ViT 作为主干，再通过 token 重排让同一个主干在单图和多图之间切换。
+这里的 $d$ **不归一化为单位向量**。$D$ 对应相机深度，$K^{-1}p$ 的尺度与其匹配；如果把 $d$ 改成单位向量，却仍乘同一个 $D$，结果会改变，因为欧氏射线长度与光轴方向的深度一般不同。这个细节决定了输出是否能被正确反投影，不能把它当作任意可替换的归一化操作。
+
+直接回归 $R$ 需要满足旋转正交约束，而稠密射线可以像其他像素预测一样训练。这并未从数学上强制每条预测射线都严格来自同一个理想相机，因而还需要射线、深度与组合点云监督共同约束。表示提供结构，训练负责让结构一致。[↗](https://arxiv.org/pdf/2511.10647v1#page=6)
+
+### 相机输出头与射线监督解决不同问题
+
+理论上可以从射线恢复相机参数。原文式（1）对射线起点求均值得到相机中心。
+
+$$
+t_c=\frac{1}{HW}\sum_{h=1}^{H}\sum_{w=1}^{W}M(h,w,:3).
+$$
+
+方向部分则通过像素与射线对应拟合一个单应矩阵，使用 DLT 求解，再分解旋转与内参。这里有一处会影响实现的原文约定不一致。前面定义为 $d=RK^{-1}p$，因此按这一映射方向，像素到预测方向的矩阵应与 $RK^{-1}$ 成比例；相机恢复段却写成 $H=KR$，并据此描述 RQ 分解。两段不能在相同坐标约定下直接同时成立，不能不核对映射方向就将恢复公式照搬成代码。
+
+最终系统另设轻量 camera head，直接从每张图的 camera token 预测平移 3 个值、旋转四元数 4 个值与两个 FoV 参数。这里是 9 个表示数值，不表示物理相机拥有 9 个互相独立的自由度。作者报告该头计算约为骨干的 0.1%，主要价值是省去从稠密射线拟合相机的成本；是否有助训练准确率，则需要单独看消融。[↗](https://arxiv.org/pdf/2511.10647v1#page=6) [↗](https://arxiv.org/pdf/2511.10647v1#page=7) [↗](https://arxiv.org/pdf/2511.10647v1#page=17)
+
+## 一个预训练 Transformer 怎样处理不同数量的视图
+
+Figure 2 中，绿色层执行跨视图注意力，灰色层仍在图内处理。先沿 patch token 看它们何时开始交换不同图像的信息，再看下方 camera token 进入同一主干，最后追踪深度、射线和组合点云的监督。
 
 ![Depth Anything 3 pipeline 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-2-pipeline.png){ width="860" }
 
-<small>图源：`Depth Anything 3`，Figure 2。原论文图意：DA3 使用单个 DINOv2 主干，通过 input-adaptive cross-view self-attention 做跨视角推理，再用 Dual-DPT head 输出 depth 与 ray。</small>
+*Figure 2，单个视觉 Transformer、相机条件与深度—射线输出。*
 
-**Pipeline 要按三段读。**
-第一段是 image tokens 进入 DINOv2 主干，提供单视角视觉先验；第二段是 cross-view attention 和 camera token，把不同视角放到同一个几何上下文里；第三段是 Dual-DPT head，同时输出 depth 和 ray。图里的重点不是“多了一个 head”，而是 DA3 把多视角一致性放进 backbone 推理过程，再把结果落到可融合的几何接口。
+### 保留前部图像特征，再在后部交换视图信息
 
-架构里有三个容易混淆的点：
+骨干是标准预训练 ViT，例如 DINOv2。总计 $L$ 个 block 分成前部 $L_s$ 与后部 $L_g$，采用
 
-1. **Input-adaptive self-attention**：前 \(L_s\) 层主要在单张图内部做视觉特征提取，后 \(L_g\) 层交替做跨视角和视角内 attention。输入只有单张图时，它自然退化成单目深度模型；输入多视角时，同一主干又能跨视角对齐几何。
-2. **Camera token**：如果有相机参数，就把 FOV、quaternion、translation 编码成每个视角的 camera token；如果没有，就用可学习 token。camera token 会参与所有 attention，而不是只在输出端做后处理。
-3. **Dual-DPT head**：depth 和 ray 共用 DPT reassembly 的一部分，再分成两个分支输出。这样比完全独立 head 更轻，也比单一混合输出更容易分别约束深度细节和相机几何。
+$$
+L=L_s+L_g,\qquad L_s:L_g=2:1.
+$$
+
+前 $L_s$ 层只在每张图内部做 self-attention。后 $L_g$ 层交替执行跨视图与图内 self-attention，具体通过重排 token 的组织维度实现。没有再串接一整套大型、随机初始化的几何 Transformer，全部主干层都能继承图像预训练。
+
+这个安排使模型先形成每幅图的局部视觉表示，再利用后部层判断多视角对应与相机关系。若输入只剩一张图，跨视图操作自然退化为单图操作，架构仍然成立。不过输入接口支持单图，并不等于统一模型在所有单目数据集上都优于专门训练的单目模型。[↗](https://arxiv.org/pdf/2511.10647v1#page=7)
+
+### 相机条件用于输入，相机头用于输出
+
+每个视图前面有一个 camera token。已有相机参数时，将 FoV、四元数和平移送入小型 MLP，得到条件 token；没有相机参数时，使用共享的可学习 token 作为占位。它与图像 patch 一起参加注意力，模型因而可以在同一套权重下处理 posed 与 unposed 输入。
+
+这与上一节的 camera head 是两个方向。条件编码器把已知几何送进网络，相机头则把网络特征变成相机预测。实验中的“去掉 camera condition”不能等同于“去掉相机输出能力”；提供真值相机用于最终点云融合，也不能等同于模型在推理时已读取这些相机条件。
+
+### Dual-DPT 的共享与分离各有用途
+
+深度和射线来自相同图像，但回归内容不同。Dual-DPT 先共享 reassembly 模块，将多层 token 恢复成适合稠密预测的特征，再分别通过两组 fusion layers 和 output layers 输出深度与射线。
 
 ![Dual-DPT head 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-dual-dpt.png){ width="400" .atlas-figure-compact }
 
-<small>图源：`Depth Anything 3`，Dual-DPT architecture figure。图本身信息密度较低，这里缩小显示，重点看 shared reassembly 与 depth/ray 两个分支的关系。</small>
+*Figure 3，两条分支共享 reassembly，保留独立的特征融合与输出。*
 
-**Dual-DPT 看 shared 和 split。**
-上半部分的 shared reassembly 负责把 ViT token 还原成多尺度 spatial features；下半部分再拆成 depth branch 和 ray branch。读这张图时不要把 ray 当成相机参数表，它更像每个像素对应的空间射线表示，和 depth 相乘后才能落成 3D 点。
+共享前部减少两种几何输出各自形成不一致中间表示的机会，独立末端则保留不同回归目标所需的自由度。因此它既不同于将两个完全独立的 DPT 接在骨干上，也不同于强迫所有输出共用最后一层参数。Figure 2 示意中的 ray map 采用半分辨率输出，而方法的几何定义按像素描述六通道射线；概念上的像素对应关系不应与每一支的原生输出尺寸混为一谈。[↗](https://arxiv.org/pdf/2511.10647v1#page=5) [↗](https://arxiv.org/pdf/2511.10647v1#page=7)
 
-## 为什么说它不是 VGGT-style
+## 损失同时检查深度、射线和组合后的点云
 
-VGGT 的贡献是把 feed-forward 3D geometry 推到很强的统一接口：输入一组图像，输出相机、深度、点、track 等几何属性。DA3 赞同这个问题设定，但对建模选择有不同判断。它反对的不是“统一几何模型”这个方向，而是为统一任务引入过多专用结构、冗余预测目标和从零联合训练成本。
+两条分支各自接近标签，还不足以说明组合结果具有正确几何。DA3 的训练同时监督深度、射线、反投影点云，并可加入相机头监督。
 
-DA3 的消融里，`VGGT Style` 指使用两个不同 Transformer 组合成更复杂的结构；在近似参数量下，它不如单个完整预训练的 ViT-L 主干。论文的解释是：单个 DINOv2 主干可以完整继承预训练视觉特征，而 VGGT-style 结构里有更多未充分预训练的 block。另一个关键消融是预测目标：`depth + ray` 明显强于 `depth + cam` 或 `depth + pcd + cam`，说明“少而准”的几何目标比把所有显式任务都塞进去更稳。
+$$
+\mathcal L=
+\mathcal L_D(\hat D,D)+\mathcal L_M(\hat R,M)
++\mathcal L_P(\hat D\odot d+t,P)
++\beta\mathcal L_C(\hat c,v)
++\alpha\mathcal L_{\mathrm{grad}}(\hat D,D).
+$$
 
-论文里的 prediction-target 消融可以改写成下面这张表，保留原始英文指标名方便和原文对照：
+这里 $\hat R$ 是原文用于表示预测 ray map 的符号，并非前文的旋转矩阵；$d,t$ 为射线组成，$\hat c,v$ 为相机预测与标签。$\mathcal L_P$ 检查的是两支组合后的三维位置，防止单独合理的预测在组合时产生几何冲突。
 
-| Methods | HiRoom Auc3 | HiRoom F1 | ETH3D Auc3 | ETH3D F1 | DTU Auc3 | DTU CD | 7Scenes Auc3 | 7Scenes F1 | ScanNet++ Auc3 | ScanNet++ F1 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| depth + pcd + cam | 9.1 | 12.8 | 19.0 | 60.4 | 42.3 | 4.918 | 20.8 | 43.4 | 22.0 | 43.0 |
-| depth + cam | 10.8 | 16.5 | 9.9 | 48.0 | 23.3 | 5.316 | 13.0 | 38.5 | 13.3 | 41.0 |
-| depth + ray | 48.7 | 60.3 | 25.5 | 65.4 | 46.5 | 3.919 | 24.0 | 46.5 | 35.5 | 53.4 |
-| depth + ray + cam | 37.2 | 45.4 | 22.3 | 59.4 | 56.3 | 3.066 | 25.7 | 45.6 | 34.1 | 56.5 |
+计算损失前，各类真值使用共同尺度归一化，这个尺度为有效反投影点的平均 L2 范数。它使深度、相机平移和三维点的数值保持可比，而非为每个输出头各自任意选一个尺度。论文采用 L1 为基础，设 $\alpha=\beta=1$。
 
-<small>表源：`Depth Anything 3`，ablation of prediction-target combinations。原表要点：在无 camera condition 的设置下，depth + ray 是最核心的预测目标；camera head 有工程便利性，但 ray 本身已经能承载相机几何。</small>
+深度项还引入置信度，原式写为
 
-这张表最适合讲一个判断：DA3 不是“输出越多越好”。`depth + pcd + cam` 看起来更全，但点、深度、相机之间会互相约束，一旦某个分支学偏，其他分支也会被拖住。`depth + ray` 反而把目标压回最少的几何变量，让模型既能继承单目深度的细节，又能恢复跨视角相机关系。额外 camera head 更像工程便利接口，而不是核心几何表示。
+$$
+\mathcal L_D=
+\frac{1}{Z_\Omega}\sum_{p\in\Omega}m_p
+\left(D_{c,p}|\hat D_p-D_p|-\lambda_c\log D_{c,p}\right).
+$$
 
-## 训练：DA2 细节 + 多视角几何
+$m_p$ 选出有效监督位置，$D_{c,p}$ 为深度置信度，$Z_\Omega$ 为归一化项。误差项允许不同像素承担不同权重，对数惩罚则避免将置信度全部压低以逃避误差。原文未在这一段给出 $\lambda_c$ 的具体数值，不宜从其他模型的习惯配置补入。
 
-DA3 的训练有两层：先训练一个强单目 teacher，再用 teacher-student 方式训练任意视角 DA3。
+梯度损失约束相邻像素的变化。
 
-### Teacher 如何继承又改造 DA2
+$$
+\mathcal L_{\mathrm{grad}}=
+\|\nabla_x\hat D-\nabla_xD\|_1+
+\|\nabla_y\hat D-\nabla_yD\|_1.
+$$
 
-论文明确说 teacher 是在 [Depth Anything 2](depth-anything-v2.md) 路线上扩展出来的，但改了两个关键点。
+它让深度边界与局部平面结构也进入训练，而不只关心逐像素绝对误差。所有这些约束仍依赖标签质量，下一步便是解释为什么教师模型和数据清洗占据论文很大篇幅。[↗](https://arxiv.org/pdf/2511.10647v1#page=8)
 
-第一，数据更偏 synthetic geometry。真实 RGB-D、COLMAP 或 LiDAR 深度常常稀疏、噪声大、边界不干净；如果直接监督，会把错误深度也教给模型。因此 teacher 主要用高质量合成数据训练，再给真实数据生成更干净的 relative depth pseudo-label。
+## 教师提供细节，真实数据提供几何尺度
 
-第二，表示从 disparity 转向 depth。DA2 常见路线更偏相对深度/视差表达；DA3 teacher 直接预测 scale-shift-invariant depth，并用 exponential depth 改善近处几何分辨率。这个变化在 2D benchmark 上未必看起来特别夸张，但在点云和 3D reconstruction 里更重要，因为近处物体、桌面边缘、机械臂可达区域都会放大几何误差。
+### 为什么不直接信任真实深度，也不直接照搬单目教师输出
 
-Teacher 的目标函数不只是普通 depth loss，还加入 depth-gradient、global-local ranking、surface normal、sky mask、object mask 等约束。直观上说，depth loss 管绝对顺序，gradient 管边界和局部形状，normal 管表面朝向，sky/object mask 管那些普通深度监督很容易出错的区域。
+真实数据中的相机位姿和几何测量，对跨场景泛化很有价值；但 COLMAP 深度可能稀疏，传感器深度也可能有孔洞和粗边界。DA3 先用合成数据训练单目教师，再用教师生成更完整、细致的深度监督。
 
-### 如何把 teacher 用到 DA3
+教师自身只输出相对深度，不能直接覆盖所有真实标签。若每张图的教师输出具有不同尺度与偏移，多视图之间就会失去几何一致性。原有稀疏测量负责锚定尺度和偏移，教师负责补充结构，两者需要通过显式对齐结合。
 
-DA3 训练时会遇到一个现实问题：多视角真实数据需要 pose 泛化，但真实深度往往不干净。论文做法是让 teacher 先给出高质量 relative depth，再用 RANSAC scale-shift least squares 把 teacher depth 对齐到 sparse/noisy metric depth。这样得到的监督既保留 teacher 的干净几何，又和真实场景的尺度、pose 更一致。
+设教师深度为 $\tilde D$，原有有效测量为 $D$，有效掩码为 $m_p$，原文式（8）为
+
+$$
+(\hat s,\hat t)=
+\arg\min_{s>0,t}\sum_{p\in\Omega}m_p
+\bigl(s\tilde D_p+t-D_p\bigr)^2,
+\qquad D_{T\to M}=\hat s\tilde D+\hat t.
+$$
+
+这里的 $t$ 是标量深度偏移，与相机三维平移不是同一个变量。正尺度 $s>0$ 保持远近顺序。实际通过 RANSAC least squares 降低异常测量影响，inlier threshold 使用残差相对残差中位数的平均绝对偏差。得到的 $D_{T\to M}$ 才进入统一几何模型的训练。
+
+这条路径不会凭空消除原始测量的系统偏差，却使真实标签的几何尺度与教师的稠密细节各自发挥作用。它比让每个视角使用未经对齐的单目伪标签，更符合跨视图点云组合的要求。[↗](https://arxiv.org/pdf/2511.10647v1#page=10)
+
+### 教师为什么改成预测深度
+
+DA2 使用 scale–shift-invariant disparity，DA3 教师改用 scale–shift-invariant depth。多视图反投影和公制深度任务都直接在 depth 空间操作，改为深度能减少下游表示转换与几何失真的问题。作者还采用 exponential depth 输出，以改善深度表示相对 disparity 在近相机区域的分辨能力。
+
+教师仍采用 DINOv2 加 DPT，训练数据全部来自合成来源，涵盖室内、驾驶、物体级和多样环境。新增或扩展的来源包括 Hypersim、TartanAir、IRS、vKITTI2、SPRING、UnrealStereo4K、GTA-SfM、MatrixCity、PointOdyssey、Structured3D、Objaverse、TRELLIS 等。它们扩展的是场景和几何监督分布，不是让某一种新深度参数化独自承担全部收益。[↗](https://arxiv.org/pdf/2511.10647v1#page=9)
+
+教师目标除梯度项和 global–local depth loss 外，还加入局部法向约束。在中心像素邻域构造未归一化法向 $n_i$，按其他法向模长之和为其分配权重，再组合单位化法向。把原文式（4）至（6）省略具体求和上下标，可写成
+
+$$
+w_i=\sum_j\|n_j\|-\|n_i\|,
+\qquad n_m=\sum_i w_i\frac{n_i}{\|n_i\|},
+$$
+
+$$
+\mathcal L_N=
+\mathcal E(\hat n_m,n_m)+\sum_i\mathcal E(\hat n_i,n_i),
+$$
+
+其中 $\mathcal E$ 为角度误差。作者希望降低较远邻域对局部平均法向的影响，同时约束平均表面方向与各局部方向。原文将邻域描述为四个邻点，但求和下标写成 $0\ldots4$；它没有充分展开邻点与法向的具体构造，不能单凭这些式子补造精确采样代码。
+
+天空和纯物体数据的背景往往没有有效深度，教师还预测 sky mask 与 object mask，以 MSE 监督。完整目标为
+
+$$
+\mathcal L_T=0.5\mathcal L_{\mathrm{grad}}
++\mathcal L_{\mathrm{gl}}+\mathcal L_N
++\mathcal L_{\mathrm{sky}}+\mathcal L_{\mathrm{obj}}.
+$$
+
+这些掩码将“没有定义的深度”与正常几何区域区分开，而不是要求网络给所有背景都回归一个虚假的有限距离。[↗](https://arxiv.org/pdf/2511.10647v1#page=10)
+
+### 合成数据的真值也需要清洗
+
+附录并未把合成标签视作天然准确。Figure 13 的红箭头指向图像轮廓和深度轮廓错位的位置；若直接训练，即使像素损失下降，也会学到错误边界。
+
+![DA3 synthetic label misalignment](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-13-label-misalignment.png){ width="860" }
+
+*Figure 13，IRS 数据中的图像与深度空间错位。*
+
+IRS 的处理先分别对灰度图与深度图做 Canny edge detection，将边缘膨胀 1 像素和 3 像素，比较两种容差下的交叠比例，再过滤比例过低的样本。具体过滤阈值未在附录展开，但方法解释了如何区分正常边界误差与显著配准错位。
+
+其他清洗包括删除 TartanAir 的无效 skybox 场景 `amusement`；删除 UnrealStereo4K 中大面积错误的 `00003`、有裁剪问题的 `00004`，并过滤 `00008` 中海面缺失深度的样本；移除 PointOdyssey 两个地面深度错误场景；过滤 TRELLIS 中没有纹理的特定文件后缀样本。不同数据还设置不同深度上限，例如 GTA-SfM 为 1000、KenBurns 为 50000、OmniObject3D 为 10，不能把它们当作一个适用于所有原始单位的通用阈值。
+
+这部分给出的可复用做法，是先检查图像—深度配准、无效区域与数据集尺度，再谈扩大合成训练。更多样本只有在监督语义一致时才更有价值。[↗](https://arxiv.org/pdf/2511.10647v1#page=31) [↗](https://arxiv.org/pdf/2511.10647v1#page=32)
+
+## 主模型如何组织公共数据与训练预算
+
+作者强调所有模型使用公共学术数据训练。Table 1 的 pose-geometry 训练清单同时包含合成几何、COLMAP 重建和 LiDAR 数据，下面保留其规模口径。
+
+| Dataset | #Scenes | Data Type |
+| --- | ---: | --- |
+| AriaDigitalTwin | 237 | Synthetic |
+| AriaSyntheticENV | 99,950 | Synthetic |
+| ArkitScenes | 4,388 | LiDAR |
+| BlendedMVS | 503 | 3D Recon |
+| Co3dv2 | 30,616 | Colmap |
+| DL3DV | 6,379 | Colmap |
+| HyperSim | 344 | Synthetic |
+| MapFree | 921 | Colmap |
+| MegaDepth | 268 | Colmap |
+| MegaSynth | 6,049 | Synthetic |
+| MvsSynth | 121 | Synthetic |
+| Objaverse | 505,557 | Synthetic |
+| Omniobject | 5,885 | Synthetic |
+| OmniWorld | 1,039 | Synthetic |
+| PointOdyssey | 44 | Synthetic |
+| ReplicaVMAP | 17 | Synthetic |
+| ScanNet++ | 230 | LiDAR |
+| ScenenetRGBD | 16,866 | Synthetic |
+| TartanAir | 355 | Synthetic |
+| Trellis | 557,408 | Synthetic |
+| vKitti2 | 50 | Synthetic |
+| WildRGBD | 23,050 | LiDAR |
+
+原列名为 `#Scenes`，其中也包含大量物体级资产，不能将这些计数直接当成同质视频时长或训练图像数。它们也不是采样权重。ScanNet++ 的 230 个训练场景与评测场景严格分开，而后面的 NVS 任务使用另一套 DL3DV 场景数量，不能把不同阶段的数据表混为同一份配方。[↗](https://arxiv.org/pdf/2511.10647v1#page=9)
+
+主模型在 128 张 H100 上训练 200K steps，warm-up 为 8K steps，峰值学习率 $2\times10^{-4}$。分辨率从 $504\times504$、$504\times378$、$504\times336$、$504\times280$、$336\times504$、$896\times504$、$756\times504$、$672\times504$ 中采样。在 $504\times504$ 下，视图数均匀采样 2–18，通过动态 batch 使每步 token 数近似恒定。
+
+前 120K steps 使用原始深度监督，此后切换到教师标签；位姿条件以 20% 概率启用。这个过程让模型既接触原始几何锚点，又学习教师的细结构，并在训练中同时经历相机已知和未知两种条件。
+
+完整 Giant 模型报告耗时约十天。主要消融改用 ViT-L、最多 10 个视图，在 32 张 H100 上约四天；表示消融明确使用 batch size 128、120K steps。不同表的控制模型不能直接视为完整 Giant 的廉价等价替代。[↗](https://arxiv.org/pdf/2511.10647v1#page=8) [↗](https://arxiv.org/pdf/2511.10647v1#page=16)
+
+## 深度与射线的收益，怎样从控制实验中辨认
+
+### 增加更多几何输出，并没有自动提高一致性
+
+Table 6 固定 ViT-L、训练步数、batch 和视图数，比较 `depth`、直接点云 `pcd`、相机 `cam` 与射线 `ray` 的组合。所有配置都没有相机条件 token，避免把“模型读到了真值相机”混入表示能力比较。
+
+下表每格依次为 **Auc3 / reconstruction metric**；HiRoom、ETH3D、7Scenes、ScanNet++ 的重建指标是 F1，越高越好，DTU 为 Chamfer Distance，越低越好。
+
+| Prediction targets | HiRoom | ETH3D | DTU | 7Scenes | ScanNet++ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| depth + pcd + cam | 9.1 / 12.8 | 19.0 / 60.4 | 42.3 / 4.918 | 20.8 / 43.4 | 22.0 / 43.0 |
+| depth + cam | 10.8 / 16.5 | 9.9 / 48.0 | 23.3 / 5.316 | 13.0 / 38.5 | 13.3 / 41.0 |
+| depth + ray | 48.7 / 60.3 | 25.5 / 65.4 | 46.5 / 3.919 | 24.0 / 46.5 | 35.5 / 53.4 |
+| depth + ray + cam | 37.2 / 45.4 | 22.3 / 59.4 | 56.3 / 3.066 | 25.7 / 45.6 | 34.1 / 56.5 |
+
+最明确的结果是 `depth + ray` 优于两种不含 ray 的方案。HiRoom 的 Auc3 从 `depth + cam` 的 10.8 到 48.7，F1 从 16.5 到 60.3；简单增加直接点云头并没有解决这个问题，`depth + pcd + cam` 反而只有 9.1/12.8。
+
+加入 camera head 后是任务之间的权衡。HiRoom 从 48.7/60.3 降到 37.2/45.4，但 DTU 的 Auc3 从 46.5 提高到 56.3，CD 从 3.919 降到 3.066。最终选择 `depth + ray + cam` 还考虑了直接输出相机的便利，不能把这张表解读为相机头处处提升或处处无效。
+
+这项消融支持 depth-ray 是有效且足够紧凑的几何接口。它没有单独隔离表示形式、稠密监督和 Dual-DPT 的全部作用，因为 ray 分支本身使用了这种共享结构；进一步的架构消融才检验后者。[↗](https://arxiv.org/pdf/2511.10647v1#page=17)
+
+### 单个完整预训练骨干，优于本实验中的额外堆叠
+
+Table 7 比较近似参数规模的设计。`VGGT Style` 使用更小的 ViT-B 构造堆叠结构，使参数量与单 ViT-L 可比；它是作者训练的架构控制组，不是直接拿完整公开 VGGT 主结果来替换比较。
+
+| Architecture | HiRoom Auc3 / F1 ↑ | ETH3D Auc3 / F1 ↑ | DTU Auc3 ↑ / CD ↓ | 7Scenes Auc3 / F1 ↑ | ScanNet++ Auc3 / F1 ↑ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Proposed Arch. | 39.2 / 47.0 | 21.0 / 55.4 | 45.8 / 3.82 | 26.2 / 47.6 | 30.3 / 51.1 |
+| VGGT Style | 3.72 / 14.5 | 2.31 / 27.4 | 1.38 / 6.93 | 0.97 / 21.4 | 2.03 / 12.2 |
+| Full Alt. | 24.7 / 29.3 | 13.1 / 51.9 | 44.6 / 4.23 | 21.1 / 48.6 | 27.7 / 47.5 |
+| w/o Dual DPT | 5.59 / 11.5 | 13.6 / 33.4 | 21.7 / 5.14 | 14.2 / 49.4 | 26.5 / 46.6 |
+
+堆叠方案明显较弱。作者将差距主要归因于 DA3 能完整利用预训练，而该堆叠结构中大量 block 未经同等预训练；这项实验并不是在严格相同预训练覆盖下只改变网络连接，因此不宜推导成“任何双 Transformer 都不如单 Transformer”。
+
+`Full Alt.` 在全部层交替图内与跨图注意力，主要指标低于保留前部图内层的方案，但 7Scenes F1 从 47.6 升到 48.6。移除 Dual-DPT、让两支独立预测也大多下降，却同样在 7Scenes F1 达到更高的 49.4。共享与部分交替的总体价值很明确，原文“所有指标都下降”的概括却需要按表格保留这一例外。[↗](https://arxiv.org/pdf/2511.10647v1#page=18)
+
+### 教师细化标签的收益也受数据域影响
+
+移除 teacher labels 后，HiRoom Auc3/F1 从 39.2/47.0 降到 11.2/16.0，7Scenes 从 26.2/47.6 到 23.3/40.3，ScanNet++ 从 30.3/51.1 到 26.2/47.7。相反，DTU 的 Auc3/CD 从 45.8/3.82 改善为 52.5/3.29，ETH3D 的 F1 也从 55.4 到 57.6。
+
+Figure 8 应先看火烈鸟的细腿、玩具机械的结构和树林的竖直边界。加入教师监督后，这些细节更清晰，解释了为何它对细结构丰富的场景尤其有用；但图中的视觉改善不能替代各数据集的数值变化。
 
 ![Teacher supervision 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-10-teacher-supervision.png){ width="820" }
 
-<small>图源：`Depth Anything 3`，teacher supervision visualization figure。原论文图意：真实深度可能稀疏或噪声明显，teacher 提供更连续的相对深度，再通过 robust alignment 变成可用于 DA3 的监督。</small>
+*Figure 8，教师标签对统一几何模型深度细节的影响。*
 
-**Teacher 不是替代真实深度。**
-这张图要从监督质量读：真实 metric depth 提供尺度和几何锚点，但会有空洞、噪声或边界问题；teacher depth 更连续，负责补充可学习的相对结构。DA3 的做法是先对齐 teacher 与真实深度，再把二者组合成训练信号，所以它证明的是监督清洗和对齐的重要性，不是说伪标签天然比传感器真值可靠。
+论文将 HiRoom 的大幅收益与其丰富细结构联系起来，这是合理的实验解释；控制组没有进一步单独拆分标签噪声、细节分布和教师偏差，不能把所有域间差异都归于单一原因。[↗](https://arxiv.org/pdf/2511.10647v1#page=18) [↗](https://arxiv.org/pdf/2511.10647v1#page=19)
 
-DA3 主模型的 loss 由 depth、ray、point、optional camera、gradient 等部分组成，整体以 L1 类损失为主。训练细节里最值得记的是这些数字：
+## 联合几何基准测的究竟是什么
 
-| Setting | Value |
-| --- | --- |
-| Hardware | 128 H100 GPUs |
-| Training steps | 200K |
-| Warm-up | 8K steps |
-| Peak learning rate | `2e-4` |
-| Base resolution | `504 x 504` |
-| Random resolutions | `504x504`, `504x378`, `504x336`, `504x280`, `336x504`, `896x504`, `756x504`, `672x504` |
-| Number of views | uniformly sampled from `[2, 18]` for `504x504` |
-| Batch strategy | dynamic batch size to keep token count roughly constant |
-| Teacher-label transition | switch from GT depth to teacher labels at 120K steps |
-| Pose conditioning | activated with probability `0.2` |
+### 位姿与点云指标有不同协议
 
-这个 recipe 对具身系统很有启发：多视角几何模型不能只靠“相机参数很准、深度很干净”的理想数据。真正可泛化的训练需要把 synthetic clean geometry、real noisy geometry、teacher pseudo-label、pose conditioning 混起来。
+论文建立了 HiRoom、ETH3D、DTU、7Scenes、ScanNet++ 五组几何评测。Table 1 分别列出 29、11、22、7、20 个场景，合计 89；HiRoom 的数据集介绍另写 30 个场景，因此这里使用基准表口径。
 
-**Training datasets table from the paper。**
+每场景使用可用图像，超过上限时以固定随机种子抽取 100 张。Pose AUC 来自相对旋转与相对平移的角误差曲线，综合 RRA 与 RTA，并报告 3 度和 30 度阈值。Auc3 对精细位姿更严格，Auc30 对较大误差更宽容，不能互相替代。
 
-| Usage | Dataset | #Scenes | Data Type |
+重建则将预测相机与深度共同用于融合。预测位姿先通过 evo 与真值对齐；为减少错误相机的影响，使用随机位姿子集产生候选变换，按平移误差判定 inliers，选择支持最多的变换，再进行深度融合。因而最终几何成绩既取决于深度，也取决于相机和对齐，不是单独深度头的独立评测。[↗](https://arxiv.org/pdf/2511.10647v1#page=12)
+
+F1 同时检查重建是否准确与完整。Precision 统计重建点中有多少接近真值，recall 统计真值点中有多少被重建覆盖，二者以调和平均合并。各数据集采用不同距离容差和融合设置。
+
+| Dataset | Reconstruction metric | F1 distance threshold | Fusion / sampling detail |
 | --- | --- | --- | --- |
-| Pose-geometry benchmark | HiRoom (ours) | 29 | Synthetic |
-| Pose-geometry benchmark | ETH3D | 11 | LiDAR |
-| Pose-geometry benchmark | DTU | 22 | LiDAR |
-| Pose-geometry benchmark | 7Scenes | 7 | LiDAR |
-| Pose-geometry benchmark | ScanNet++ | 20 | LiDAR |
-| Pose-geometry Training | AriaDigitalTwin | 237 | Synthetic |
-| Pose-geometry Training | AriaSyntheticENV | 99950 | Synthetic |
-| Pose-geometry Training | ArkitScenes | 4388 | LiDAR |
-| Pose-geometry Training | BlendedMVS | 503 | 3D Recon |
-| Pose-geometry Training | Co3dv2 | 30616 | Colmap |
-| Pose-geometry Training | DL3DV | 6379 | Colmap |
-| Pose-geometry Training | HyperSim | 344 | Synthetic |
-| Pose-geometry Training | MapFree | 921 | Colmap |
-| Pose-geometry Training | MegaDepth | 268 | Colmap |
-| Pose-geometry Training | MegaSynth | 6049 | Synthetic |
-| Pose-geometry Training | MvsSynth | 121 | Synthetic |
-| Pose-geometry Training | Objaverse | 505557 | Synthetic |
-| Pose-geometry Training | Omniobject | 5885 | Synthetic |
-| Pose-geometry Training | OmniWorld | 1039 | Synthetic |
-| Pose-geometry Training | PointOdyssey | 44 | Synthetic |
-| Pose-geometry Training | ReplicaVMAP | 17 | Synthetic |
-| Pose-geometry Training | ScanNet++ | 230 | LiDAR |
-| Pose-geometry Training | ScenenetRGBD | 16866 | Synthetic |
-| Pose-geometry Training | TartanAir | 355 | Synthetic |
-| Pose-geometry Training | Trellis | 557408 | Synthetic |
-| Pose-geometry Training | vKitti2 | 50 | Synthetic |
-| Pose-geometry Training | WildRGBD | 23050 | LiDAR |
+| HiRoom | F1 ↑ | 0.05 m | TSDF voxel 0.007 m |
+| ETH3D | F1 ↑ | 原文设为 0.25 | TSDF voxel 0.039 m，使用全部帧 |
+| DTU | CD ↓，mm | — | 22 evaluation scans，RMBG 2.0 去背景，专用深度融合 |
+| 7Scenes | F1 ↑ | 0.05 m | TSDF voxel 0.007 m，帧数降采样 11 倍 |
+| ScanNet++ | F1 ↑ | 0.05 m | TSDF voxel 0.02 m，帧数降采样 5 倍，laser-scan 深度真值 |
 
-## 应用：Feed-forward NVS / 3DGS
+DTU 报告 Chamfer Distance，数值越低越好；其他四组 F1 越高越好。不同 F1 距离阈值也使跨数据集绝对分数不能直接当作难度排名。[↗](https://arxiv.org/pdf/2511.10647v1#page=13)
 
-论文还用 feed-forward novel view synthesis，FF-NVS，验证 DA3 的几何理解能不能迁移到渲染任务。这里先把术语分清：
+### 相机条件与真值位姿融合必须分开
 
-| 概念 | 含义 | 和 DA3 的关系 |
-| --- | --- | --- |
-| NVS / Novel View Synthesis | 给定一个场景的若干已知视角，合成一个没有直接拍摄过的新视角 | 需要模型理解场景 3D 几何，否则新视角容易出现漂浮、断裂和遮挡错误 |
-| FF-NVS / Feed-forward NVS | 通过一次前向推理直接生成 3D 表示或新视角结果，避免每个场景单独优化 | DA3 可以作为 image-to-3D 的几何 backbone |
-| 3DGS / 3D Gaussian Splatting | 用一组 3D Gaussian 表示场景，再从新相机位姿渲染图像 | 论文给 DA3 加额外 GS-DPT head，预测像素对齐的 3D Gaussian 参数 |
+Table 7 的 pose-conditioning 消融中，两组都使用真值相机作最终融合，区别是模型是否也读取相机条件。
 
-这部分的关键不是“DA3 重新发明了 NVS”，而是说明：如果一个 backbone 已经能稳定恢复 depth、ray 和 camera，那么它天然适合作为 FF-NVS 的几何底座。论文做法是在 DA3 主干上微调一个 GS-DPT head，预测 opacity、rotation、scale、RGB / view-dependent color 等 Gaussian 参数，再用预测深度把这些局部 Gaussian unproject 到世界坐标中渲染新视角。
+| Pose conditioning, GT pose fusion | HiRoom F1 ↑ | ETH3D F1 ↑ | DTU CD ↓ | 7Scenes F1 ↑ | ScanNet++ F1 ↑ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Without | 65.8 | 63.2 | 3.65 | 58.4 | 62.8 |
+| With | 73.8 | 70.9 | 2.14 | 46.0 | 65.7 |
 
-这里的证据边界也要讲清。FF-NVS 结果能说明强几何 backbone 对渲染质量有帮助，尤其是薄结构、遮挡和宽基线视角；但它不能直接证明 DA3 已经解决机器人动作预测、接触动力学或闭环控制。对具身专题来说，这部分更像一个旁证：几何状态越稳，后续渲染、仿真资产和世界模型状态接口越有可用基础。
+HiRoom、ETH3D、DTU、ScanNet++ 改善，说明把相机作为网络输入可以帮助深度预测，而不只是改善最终坐标摆放。7Scenes 却从 58.4 降到 46.0，不能跟随正文的“所有指标一致提高”表述。真实部署已有相机时，模型能够使用这些条件是便利，但仍需在目标数据域检查它是否确实改善重建。[↗](https://arxiv.org/pdf/2511.10647v1#page=18)
 
-## 实验结论怎么读
+## 主结果在哪些条件下领先
 
-DA3 的实验不要读成“一个模型包打天下”，而要按 claim、证据和边界分开：
+### 严格位姿精度提升明显，大模型也有例外
 
-| 论文主张 | 主要证据 | 读数边界 |
-| --- | --- | --- |
-| `depth + ray` 是核心表示 | prediction-target 消融里 `depth + ray` 整体优于 `depth + cam`、`depth + pcd + cam` | 证明的是该 benchmark 和设置下的目标选择，不等于所有场景都不需要显式 camera / point head |
-| 单个预训练 Transformer 足够强 | VGGT-style 消融和 DINOv2 backbone 继承预训练能力 | 不能外推成所有复杂架构都没价值；更准确的说法是 DA3 这组任务里简单主干更占优 |
-| teacher-student 能改善真实数据监督 | synthetic teacher + RANSAC scale-shift 对齐稀疏 / 噪声深度，提升 label 完整性 | teacher label 不是传感器真值；尺度、动态物体和失败 case 仍要单独验收 |
-| 几何能力能迁移到渲染 | 加 GS-DPT head 后做 FF-NVS / 3DGS，新视角渲染质量更好 | 渲染质量不等于机器人策略安全，也不等于 closed-loop 成功率 |
+Table 2 的核心位姿结果如下，每格为 **Auc3 / Auc30**。
 
-## 模型规模、速度与选择
+| Method | HiRoom | ETH3D | DTU | 7Scenes | ScanNet++ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| VGGT | 49.1 / 88.0 | 26.3 / 80.8 | 79.2 / 99.8 | 23.9 / 85.0 | 62.6 / 95.1 |
+| Pi3 | 67.0 / 94.8 | 35.2 / 87.3 | 62.5 / 94.9 | 25.5 / 86.3 | 50.7 / 92.1 |
+| DA3-Giant | 80.3 / 95.9 | 48.4 / 91.2 | 94.1 / 99.4 | 28.5 / 86.8 | 85.0 / 98.1 |
+| DA3-Large | 58.7 / 94.2 | 32.2 / 86.9 | 70.2 / 96.7 | 29.2 / 86.6 | 60.2 / 94.7 |
+| DA3-Base | 19.0 / 83.2 | 15.1 / 74.6 | 60.1 / 95.9 | 20.1 / 82.9 | 25.1 / 83.4 |
+| DA3-Small | 9.49 / 75.2 | 8.59 / 62.1 | 30.6 / 91.2 | 14.0 / 78.7 | 10.9 / 71.9 |
 
-DA3 不是只发布一个大模型。论文分析表里同时给出 Giant、Large、Base、Small，并和 VGGT 做参考比较。
+Giant 在五组 Auc3 中都超过列出的外部基线，ScanNet++ 从 VGGT 的 62.6 到 85.0，是明显的严格阈值收益。不过 DTU 的 Auc30 为 99.4，低于 VGGT 的 99.8；DA3 系列内部，Large 的 7Scenes Auc3 29.2 也高于 Giant 的 28.5。
 
-| Model | Max # of Images | Backbone | DualDPT | CameraHead | Running Speed |
-| --- | --- | --- | --- | --- | --- |
-| VGGT(Reference) | 400-500 | 0.91B | 0.064B | 0.22B | 34.1 FPS |
-| DA3-Giant | 900-1000 | 1.130B | 0.050B | 0.018B | 37.6 FPS |
-| DA3-Large | 1500-1600 | 0.300B | 0.047B | 0.008B | 78.37 FPS |
-| DA3-Base | 2100-2200 | 0.086B | 0.015B | 0.004B | 126.5 FPS |
-| DA3-Small | 4000-4100 | 0.022B | 0.003B | 0.001B | 160.5 FPS |
+缩小模型后，HiRoom、ETH3D 和 ScanNet++ 的严格位姿指标下降较快。这说明“同一接口能够缩放到小模型”与“小模型保留同样精确的跨视图相机恢复”是两回事，选择模型时不能只看它是否支持任意视图输入。[↗](https://arxiv.org/pdf/2511.10647v1#page=14)
 
-<small>表源：`Depth Anything 3`，model analysis table。原表要点：DA3 的小模型能处理更多图像并有更高吞吐，Giant 则追求更强几何质量；实际部署还要看分辨率、显存、输出格式和是否启用 3DGS。</small>
+### 已知相机并不保证所有模型都获得相同收益
 
-对具身工程来说，可以这样选：
+下表摘录重建结果，每格为 **without pose / with pose**。DTU 的单位为 mm 且越低越好，其余均为 F1，越高越好。
 
-- 离线资产重建、数据标注、仿真场景几何补全：优先看 `DA3-Giant`、`DA3-Large` 或 nested 模型。
-- 单目 metric depth 或在线感知辅助：先看 `DA3Metric-Large`、`DA3-Base`、`DA3-Small`，再按延迟和显存调分辨率。
-- 长视频、巡检、移动机器人记录流：关注 `DA3-Streaming`，它用 chunk streaming 管理长序列显存，但它仍然是几何感知管线，不等价于完整 SLAM 系统。
+| Method | HiRoom F1 ↑ | ETH3D F1 ↑ | DTU CD ↓ | 7Scenes F1 ↑ | ScanNet++ F1 ↑ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| MapAnything | 32.4 / 69.2 | 54.8 / 71.9 | 7.91 / 3.97 | 44.8 / 55.2 | 39.4 / 71.3 |
+| Pi3 | 75.8 / 85.0 | 72.7 / 80.6 | 3.28 / 1.72 | 44.2 / 57.5 | 63.1 / 73.3 |
+| VGGT | 56.7 / 70.2 | 57.2 / 66.7 | 2.05 / 1.44 | 47.9 / 51.4 | 66.4 / 70.7 |
+| DA3-Giant | 85.1 / 95.6 | 79.0 / 87.1 | 1.85 / 1.85 | 53.5 / 56.5 | 77.0 / 79.3 |
+| DA3-Large | 69.5 / 87.1 | 65.8 / 75.2 | 2.08 / 1.23 | 56.3 / 49.2 | 67.9 / 75.7 |
 
-## GitHub 仓库怎么读
+未知相机时，Giant 在五个数据集均超过外部对照；同系列 Large 在 7Scenes 的 56.3 则更高。已知相机时，Giant 在 HiRoom 提高到 95.6，但 DTU 仍是 1.85，没有改善，并落后 VGGT 的 1.44 和 Large 的 1.23；7Scenes 的 Pi3 57.5 也高于 Giant 56.5。Large 的 7Scenes 还从 56.3 降到 49.2。
 
-官方仓库不是只放权重链接，而是提供了比较完整的工具链。
+这些结果使“已有相机时更适合嵌入现有流程”的判断更具体。接口上确实可以利用标定信息，准确率收益则受到模型容量、深度本身和数据域影响，不能一律期待已知位姿消除所有重建问题。[↗](https://arxiv.org/pdf/2511.10647v1#page=15)
 
-`Model Zoo` 分成三类：Main Series 处理 any-view geometry，Metric Series 面向单目 metric depth，Monocular Series 面向高质量相对单目深度。README 还提醒，带 `-1.1` 后缀的 refreshed checkpoints 修复了训练 bug，街景等场景通常应优先使用新版权重。
+Figure 6 中可直接比较办公桌面和物体边缘的厚度、浮点噪声。DA3 点云更规整的案例与主表一致，但这里只是两个场景的可视化，不是额外的独立复现实验。
 
-Python API 的核心接口是 `DepthAnything3.from_pretrained(...).inference(...)`，输入可以是图片路径、PIL 或 numpy array；可选传入 `extrinsics` 和 `intrinsics` 做 pose-conditioned depth。输出对象里包含 `processed_images`、`depth`、`conf`、`extrinsics`、`intrinsics` 等字段。工程上最常用的几个开关是：
+![DA3 point cloud comparison](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-6-point-cloud-comparison.png){ width="920" }
 
-- `use_ray_pose=True`：从 ray head 推 pose，通常更准但稍慢；
-- `ref_view_strategy="middle"`：视频序列常用中间帧作为参考视角；
-- `export_format="mini_npz-glb-depth_vis-feat_vis"`：按需要导出 npz、glb、深度可视化或特征可视化；
-- `infer_gs=True`：启用 Gaussian Splatting 分支，主要用于支持 GS 的模型和导出格式。
+*Figure 6，点云结构与噪声的定性比较。*[↗](https://arxiv.org/pdf/2511.10647v1#page=16)
 
-CLI 则更适合批处理：可以对图片集、视频帧目录或机器人采集序列直接导出 `glb`、`ply`、`npz`、depth images、3DGS video 等结果。对具身数据管线来说，这意味着 DA3 可以作为“把 RGB 轨迹转成几何资产”的中间层：先跑 DA3 得到 depth / pose / point cloud，再交给抓取候选生成、可达性检查、仿真资产构建或数据质检。
+## “DA3 单目性能”至少对应三种不同模型
 
-### 本地 demo：SOH 两视角导出点云
+### 统一主模型、教师与专门单目学生不能混用成绩
 
-下面这个命令可以当作仓库 CLI 的最小可读案例：
+主模型接受一张输入图时也能输出深度，但论文还另外训练了单目学生。学生沿用教师—学生范式，在未标注真实图像上学习教师伪标签，输出相对深度，并采用教师对应的损失。它不是将统一模型的视图数量设成一就得到的另一个运行模式。
 
-```bash
-da3 auto assets/examples/SOH \
-  --model-dir depth-anything/DA3-SMALL \
-  --export-format mini_npz-glb \
-  --export-dir workspace/demo_soh \
-  --process-res 336 \
-  --auto-cleanup
-```
+下面并列保留 Table 4 与 Table 10 的 $\delta_1$，数值以百分数显示，越高越好。
 
-这次运行可以理解成：把 `assets/examples/SOH` 里的两张图当作同一个场景的多视角输入，分别估计深度、相机内外参，再融合导出一个 3D 点云场景。输入目录里有：
+| Model / evaluation source | KITTI | NYU | SINTEL | ETH3D | DIODE |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| DA2, Table 4 / 10 baseline | 94.6 | 97.9 | 77.2 | 86.5 | 95.2 |
+| VGGT, Table 4 | 91.7 | 97.9 | 67.9 | 97.5 | 95.3 |
+| DA3 unified model, Table 4 | 95.3 | 97.4 | 75.5 | 98.6 | 95.4 |
+| DA3 Teacher, Table 4 | 97.2 | 97.9 | 81.4 | 99.8 | 96.6 |
+| DA3 mono-student, Table 10 | 97.1 | 98.0 | 82.3 | 98.8 | 96.5 |
 
-```text
-assets/examples/SOH/000.png
-assets/examples/SOH/010.png
-```
+统一 DA3 在 ETH3D 从 DA2 的 86.5 到 98.6，但 NYU 为 97.4，低于 97.9；SINTEL 为 75.5，也低于 77.2。所以“统一模型单目表现整体有竞争力”不能改写为每个单目基准都超过 DA2。
 
-把输入图也放进日志里会更直观：读者可以先看到两个 view 只是相机位置略有变化，后面再理解为什么 DA3 能把它们当作同一场景融合。
+专门的 ViT-L 单目学生在五列都超过该 DA2 对照。SINTEL 从 77.2 到 82.3，提高的是 5.1 个百分点；ETH3D 从 86.5 到 98.8，提高 12.3 个百分点。教师在某些数据集仍高于学生，而 SINTEL 学生 82.3 又高于教师 81.4，说明教师质量与真实图像蒸馏共同影响最终泛化，学生并非机械复制教师的每项分数。[↗](https://arxiv.org/pdf/2511.10647v1#page=15) [↗](https://arxiv.org/pdf/2511.10647v1#page=19) [↗](https://arxiv.org/pdf/2511.10647v1#page=20)
 
-| View 0：`000.png` | View 1：`010.png` |
-| --- | --- |
-| ![DA3 SOH 示例输入 view 0](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-input-view-000.png){ width="360" } | ![DA3 SOH 示例输入 view 1](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-input-view-010.png){ width="360" } |
+### 教师的改进主要来自哪些选择
 
-<small>图源：DA3 的 GitHub 示例图片。两张图来自同一个场景，是悉尼歌剧院附近的相邻视角，适合作为多视角几何恢复 demo。</small>
+Teacher 消融使用 ViT-L、batch size 64，在 KITTI、NYU、ETH3D、SUN-RGBD 和 DIODE 上取平均；这组平均不包含上表的 SINTEL，因此不能把不同平均值直接相减。
 
-它们会按文件名排序，作为第 0、1 个 view 输入。原图是 `1208x680`，推理时长边被缩到 `336`，并调整到 patch size 的倍数，所以日志里看到：
+| Data configuration | $\delta_1$ ↑ | AbsRel ↓ | SqRel ↓ |
+| --- | ---: | ---: | ---: |
+| V2 datasets | 0.919 | 0.087 | 0.596 |
+| V3 datasets | 0.929 | 0.079 | 0.508 |
+| V3 + multi-resolution | 0.938 | 0.072 | 0.452 |
 
-```text
-torch.Size([2, 3, 196, 336])
-```
+扩大数据从 V2 到 V3，以及增加多分辨率训练，三项指标均持续改善。这是较清楚的数据与训练配置收益，不能全部归因于法向损失或深度参数化。
 
-含义是 `2` 张图，`3` 个 RGB 通道，处理后高度 `196`、宽度 `336`。这也提醒一个容易漏掉的点：后面导出的内参对应的是处理后的 `336x196` 分辨率，而不是原始 `1208x680`。
+| Geometry target | $\delta_1$ ↑ | AbsRel ↓ | SqRel ↓ |
+| --- | ---: | ---: | ---: |
+| Disparity | 0.919 | 0.095 | 1.033 |
+| Pointmap | 0.912 | 0.096 | 0.693 |
+| Depth | 0.918 | 0.089 | 0.637 |
 
-输出目录是 `workspace/demo_soh`，关键文件可以这样读：
+Depth 在 AbsRel、SqRel 上更好，$\delta_1$ 则比 Disparity 略低。它更适合下游几何并拥有更低的平均相对误差，不表示所有常用深度指标都必须同时提升。
 
-| 文件 | 作用 | 怎么看 |
-| --- | --- | --- |
-| `scene.glb` | 融合后的 3D 点云 / 相机场景 | 用 GLB viewer 打开，快速检查两张图是否拼到同一几何空间里 |
-| `scene.jpg` | 快速预览图 | 这次实际是第 0 张 `depth_vis`，适合打开目录时先看一眼结果 |
-| `depth_vis/0000.jpg` | 第 0 张输入图的深度可视化 | 看近远关系是否合理，薄结构、边缘和遮挡处是否破碎 |
-| `depth_vis/0001.jpg` | 第 1 张输入图的深度可视化 | 和第 0 张一起检查跨视角深度是否一致 |
-| `exports/mini_npz/results.npz` | 数值结果 | 后续接点云融合、数据质检、机器人几何管线时主要读这个 |
+| Teacher loss | $\delta_1$ ↑ | AbsRel ↓ | SqRel ↓ |
+| --- | ---: | ---: | ---: |
+| MAE-Loss | 0.918 | 0.089 | 0.637 |
+| Without distance-weighted normal | 0.918 | 0.087 | 0.600 |
+| Full loss | 0.919 | 0.087 | 0.596 |
 
-对应的 `depth_vis` 可以一起作为运行日志保存。每张图左侧是处理后的输入视图，右侧是 DA3 产生的深度伪彩色可视化：
+完整损失进一步改善，但幅度明显小于前面数据扩展带来的变化。法向监督有助于局部几何，实验不支持把它宣传成教师全部优势的唯一来源。[↗](https://arxiv.org/pdf/2511.10647v1#page=19)
 
-| `depth_vis/0000.jpg` | `depth_vis/0001.jpg` |
-| --- | --- |
-| ![DA3 SOH view 0 depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0000.jpg){ width="420" .atlas-figure-compact } | ![DA3 SOH view 1 depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0001.jpg){ width="420" .atlas-figure-compact } |
+## 公制深度需要另外处理相机焦距与尺度
 
-<small>图源：输入图来自 DA3 的 GitHub 示例图片；右侧深度图是用上面命令在本地运行 DA3 后生成的 `depth_vis` 输出。暖色区域通常表示相对更近，冷色区域通常表示相对更远，重点是看同一建筑轮廓在两个 view 中是否保持一致。</small>
+### Canonical camera space 让不同焦距的训练数据可比较
 
-**这两张 depth_vis 怎么读。**
-两张可视化要横向比较同一建筑、栏杆和地面边界在不同视角下是否保持近远关系一致。颜色是相对深度提示，不是直接的物理距离标尺；真正接机器人几何管线时，还要回到 `results.npz` 里的 depth、confidence、intrinsics 和 extrinsics 做数值检查。
+相对深度模型的输出不能直接当作以米为单位的距离。DA3-Metric 是另外训练的模型，采用 canonical camera space transformation，将不同相机焦距的标签变换到共同参考。
 
-`results.npz` 里这次包含四类数组：
+设真实焦距为 $f$，标准焦距为 $f^c$，训练标签按比例变换。
 
-| 字段 | 形状 | 含义 |
-| --- | --- | --- |
-| `depth` | `(2, 196, 336)` | 每张图的深度 |
-| `conf` | `(2, 196, 336)` | 每个深度像素的置信度 |
-| `extrinsics` | `(2, 3, 4)` | 每个 view 的相机外参，方向是 `world-to-camera` |
-| `intrinsics` | `(2, 3, 3)` | 每个 view 的相机内参，对应处理后的 `336x196` 图像 |
+$$
+D^c=D\frac{f^c}{f},\qquad f^c=300.
+$$
 
-实际 inspect 一遍 `results.npz`，可以把下面这张表当作运行日志里的“数值体检”：
+这个变换将焦距引起的深度歧义显式纳入接口。相应地，若模型输出处于 canonical 空间，换回原相机的深度应遵循该定义的逆比例；不能在改变图像缩放或焦距后继续使用不匹配的标定数值。
 
-| 字段 | dtype | min / max / mean | 读法 |
-| --- | --- | --- | --- |
-| `depth` | `float32` | `0.5287 / 3.5556 / 1.4738` | 深度值范围正常，但这里是相对几何尺度，不能直接解释成米 |
-| `conf` | `float32` | `1.0000 / 2.8500 / 1.4005` | 置信度不是 0 到 1 概率，更适合做相对过滤和低质量像素筛选 |
-| `extrinsics` | `float32` | `-0.2169 / 1.0000 / 0.2439` | 这是两个 `3x4` 的 `world-to-camera` 矩阵；统计值只能检查是否有限、是否量级异常，真正调试要看矩阵本身 |
-| `intrinsics` | `float32` | `0.0000 / 420.9074 / 113.4363` | 内参对应处理后分辨率；第一张图里能看到 \(c_x=168\)、\(c_y=98\)，正好接近 `336x196` 的图像中心 |
+公制训练同样将教师相对深度与测量标签做尺度、偏移对齐。训练中 20% 概率仍使用原始真值，其余采用对齐教师预测；立体数据还使用 FoundationStereo 生成训练标签。数据来源涵盖室内扫描和驾驶集合，包括 Taskonomy、DDAD、Waymo、ScanNet++、ARKitScenes、DSEC 等。
 
-**`results.npz` inspect 摘要。**
+实现采用 AdamW，encoder 学习率 $5\times10^{-6}$，decoder 为 $5\times10^{-5}$，batch size 64，训练 160K iterations。基础分辨率为 504，结合多种宽高比；以 5% 概率施加 90 或 270 度旋转增强。目标组合 depth、gradient 和 sky-mask loss。这些是公制模型的配方，不能挪作前面 128 H100 主模型全部超参数的补充。[↗](https://arxiv.org/pdf/2511.10647v1#page=11)
 
-```text
-keys (4): ['depth', 'conf', 'extrinsics', 'intrinsics']
+### 公制模型更擅长哪类场景
 
-depth:      shape (2, 196, 336), dtype float32, min 0.5287, max 3.5556, mean 1.4738
-conf:       shape (2, 196, 336), dtype float32, min 1.0000, max 2.8500, mean 1.4005
-extrinsics: shape (2, 3, 4),     dtype float32, min -0.2169, max 1.0000, mean 0.2439
-intrinsics: shape (2, 3, 3),     dtype float32, min 0.0000, max 420.9074, mean 113.4363
-```
+Table 11 的每格依次为 **$\delta_1$ / AbsRel**，前者越高越好，后者越低越好。DIODE 使用 indoor 子集。
 
-这段日志对博客是有用的，因为它把“模型输出了什么”从概念变成了可复现的数组契约。读者照着这四个字段，就能知道后处理代码该读取哪些 key、按什么形状遍历、哪些值能做点云、哪些值只能做质量筛选。
+| Method | NYUv2 | KITTI | ETH3D | SUN-RGBD | DIODE |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| DepthPro | 0.932 / 0.093 | 0.843 / 0.121 | 0.386 / 0.349 | 0.950 / 0.126 | 0.734 / 0.173 |
+| UniDepthv1 | 0.980 / 0.061 | 0.978 / 0.051 | 0.234 / 0.464 | 0.971 / 0.113 | 0.570 / 0.266 |
+| UniDepthv2 | 0.968 / 0.064 | 0.968 / 0.076 | 0.863 / 0.152 | 0.977 / 0.111 | 0.856 / 0.123 |
+| DA3-Metric | 0.963 / 0.070 | 0.953 / 0.086 | 0.917 / 0.104 | 0.973 / 0.105 | 0.838 / 0.128 |
 
-这里用的是 `DA3-SMALL`，它属于 any-view / relative depth 模型，不是 metric depth 专用模型。因此 `depth` 里的数值更适合理解为模型内部一致的相对深度尺度，用于重建和相对几何；不要直接当成真实世界的“米”。如果要做机器人抓取距离、避障安全距离或尺寸测量，就需要 metric 模型、真实 RGB-D / 双目、标定尺度，或额外的尺度对齐。
+DA3-Metric 在 ETH3D 的两项都优于这组对照，SUN-RGBD 的 AbsRel 也最低。但 NYUv2、KITTI 的 UniDepthv1 更强，DIODE 的 UniDepthv2 为 0.856/0.123，也好于 DA3-Metric 的 0.838/0.128。这组结果更支持跨域能力与细节质量的价值，而非一个不依任务分布的统一最佳选项。[↗](https://arxiv.org/pdf/2511.10647v1#page=20) [↗](https://arxiv.org/pdf/2511.10647v1#page=21)
 
-日志里几个关键项也很有信息量：
+### 教师让边缘更清晰，却可能降低某些数值指标
 
-```text
-Detected input type: IMAGES
-Auto-cleaning existing export directory: workspace/demo_soh
-conf_thresh_percentile: 40.0
-num max points: 1000000
-```
+公制模型的教师消融使用略有不同的训练分辨率，所以它的 `with teacher` 行与最终模型行并不完全一致。
 
-`Detected input type: IMAGES` 说明 `da3 auto` 判断输入是图片目录。`--auto-cleanup` 会让旧的 `workspace/demo_soh` 输出被清掉后重新生成。`conf_thresh_percentile: 40.0` 表示导出 `scene.glb` 时会按置信度过滤低质量点；`num max points: 1000000` 表示最多保留 100 万个点。这次只有 `2 * 196 * 336 = 131712` 个像素点，所以上限不是瓶颈。
+| Metric-model supervision | NYUv2 $\delta_1$ / AbsRel | KITTI | ETH3D | SUN-RGBD | DIODE |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| With teacher | 0.966 / 0.073 | 0.947 / 0.086 | 0.906 / 0.105 | 0.973 / 0.104 | 0.824 / 0.132 |
+| Without teacher | 0.969 / 0.066 | 0.965 / 0.067 | 0.907 / 0.105 | 0.975 / 0.099 | 0.816 / 0.134 |
 
-**目录输入不是无关图片批处理。**
-这里最重要的输入理解是：目录输入不是“批量处理两张无关图片”，而是“把多张图片当作同一场景的多视角输入”。如果两张图是同一物体或同一场景的不同视角，`scene.glb` 才有几何意义；如果是完全无关的两张图，建议分开跑，每张图一个输出目录。
+去掉教师后，NYUv2、KITTI 和 SUN-RGBD 的数值都更好；DIODE 则保留教师更好。仅看这些全局深度指标，无法说明教师在所有数据上都提高精度。
 
-放到具身智能里看，这个 demo 是一个很小但很实用的桥：它把普通 RGB 多视角图像转成 `depth + confidence + camera pose + point cloud`。这些结果可以继续接到点云融合、可见性检查、抓取候选生成、世界模型数据质检，或者仿真资产构建流程里。
+Figure 10 提供另一类证据。先看台灯支架、椅子和植物轮廓，再比较相邻两列的边缘是否融进背景。有教师时结构更锐利，解释了为何作者仍希望保留这类监督。
 
-`DA3-Streaming` 是仓库里值得单独看的部分。它基于 DA3 和 VGGT-Long 思路，用滑窗 chunk 处理超长视频，输出 `camera_poses.txt`、`intrinsic.txt` 和融合点云。README 报告在 A100 上接近 10 FPS 的视频处理速度，并给出 KITTI / TUM RGB-D 的 ATE RMSE 对比。这个模块的意义不是替代成熟 SLAM，而是把 DA3 的几何先验变成更适合长序列工程处理的形态。
+![DA3 metric teacher supervision](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-10-metric-teacher.png){ width="920" }
 
-## 对具身智能的启发
+*Figure 10，公制深度模型中的教师监督，重点是细结构与边界质量。*
 
-DA3 对机器人和 VLA 的价值，不是让模型“看图更清楚”这么泛。它把三类接口变得更直接：
+应用若关心障碍物轮廓、前后景分界或渲染边缘，细节质量有独立价值；若主要关心某个域的平均深度误差，则应结合表中反例选择配置。视觉锐利与公制距离准确不能互相代替。[↗](https://arxiv.org/pdf/2511.10647v1#page=21)
 
-1. **感知状态接口**：depth、confidence、camera pose、point cloud 可以进入 grasping、navigation、tracking 和 safety checker。
-2. **数据生产接口**：真实机器人视频、仿真渲染、多相机采集可以被转成统一几何资产，方便后续标注和失败回放。
-3. **世界模型接口**：视频世界模型如果只生成 RGB，仍然难以判断物理可达性；DA3 这类几何底座可以把未来帧或历史帧补成 depth / pose / 3D state，让规划器有更多可验证信号。
+## 几何骨干如何用于前馈 3D Gaussian Splatting
 
-也要注意边界。DA3 不直接输出机器人动作，也不解决接触动力学、力控、安全策略和长时记忆。它更像具身系统里的几何传感与重建层：给 VLA、WAM、planner 和仿真器提供更可靠的空间状态。
+### 让几何确定位置，再学习可渲染的高斯属性
 
-## 外部精读
+为了检验几何表示是否能支持其他任务，作者加入 GS-DPT head，预测像素对应的 3D Gaussian 参数。深度经反投影确定高斯中心；新头预测旋转、尺度和颜色，透明度由相应 confidence head 输出。模型先在局部相机空间表示这些量，再放到共同世界坐标中渲染新视角。
 
-1. [Depth Anything 3 technical report](https://arxiv.org/abs/2511.10647)：读 depth + ray、teacher supervision、model analysis 和数据表；具体数字以当前版本为准。
-2. [Depth Anything 3 project page](https://depth-anything-3.github.io/)：看任意视角 demo、ICLR 2026 paper 入口和模型系列说明。
-3. [ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/Depth-Anything-3)：确认 CLI、Python API、model zoo、streaming 和 3DGS 导出路径。
-4. [DepthAnything3 API documentation](https://github.com/ByteDance-Seed/Depth-Anything-3/blob/main/docs/API.md)：写工程教程时优先核对输入格式、输出字段和 pose-conditioned depth 参数。
-5. [DA3-Streaming README](https://github.com/ByteDance-Seed/Depth-Anything-3/tree/main/da3_streaming)：理解长视频 chunk、相机轨迹和点云融合的工程入口。
-6. [Hugging Face: DA3-LARGE](https://huggingface.co/depth-anything/DA3-LARGE)：查看模型卡、权重入口和部署依赖。
-7. [Depth Anything V2](https://arxiv.org/abs/2406.09414)：理解 DA3 teacher 为什么强调 synthetic clean geometry 与相对深度细节。
-8. [VGGT](https://arxiv.org/abs/2503.11651)：对比 feed-forward 3D geometry 的另一条路线，帮助分清 DA3 为什么选择 depth + ray。
+这样不需要每个测试场景重新进行耗时优化，便可以前馈生成一组可渲染高斯。训练不仅使用新视角的 MSE、LPIPS 图像损失，也保留输入视图深度监督。后者约束模型不要为了某些渲染画面而任意牺牲几何结构。[↗](https://arxiv.org/pdf/2511.10647v1#page=11)
 
-## 阅读结论
+论文进一步提出 pose-adaptive 版本。相机已知时，将预测深度与高斯对齐到已知位姿；未知时使用网络预测位姿。GS-DPT 还增加 depth offset，以缓解表面几何与渲染质量之间的冲突，并将简单 RGB 改成 spherical harmonic coefficients，表达与观察方向有关的外观。
 
-DA3 的关键接口是“多视角 RGB 输入 -> 一致 depth / ray / camera / point cloud 输出”。Dual-DPT 和 teacher supervision 负责把单图深度先验改造成跨视角几何约束；SOH demo 则把这个接口落到可复现数组和导出文件上。读这篇时不要把它当普通单目深度升级，也不要把跨视角一致性直接等同于 metric SLAM 完成：相机标定、动态物体、尺度对齐和机器人安全距离仍要由外部系统验收。
+这个面向灵活输入的版本冻结预训练 DA3 骨干，只训练 GS-DPT；高分辨率输入配较少视图，低分辨率配更多视图，以控制训练预算。它与用于统一比较的 pose-conditioned NVS 方案需要分开理解，不能因为存在一个可处理未知相机的变体，就把后面的全部基准结果描述成 pose-free 渲染。[↗](https://arxiv.org/pdf/2511.10647v1#page=12)
+
+### NVS 比较使用已知相机和固定十二张上下文图
+
+训练使用 DL3DV 的 10015 个场景，评测的 140 个 DL3DV 场景与训练互斥。域外评测为 Tanks and Temples 的 6 个场景、MegaDepth 的 19 个场景，总计 165 个测试场景。
+
+每场景约有 300–400 个视图，每 8 个取一个作为目标新视角；其余视图根据相机平移和旋转距离做 farthest point sampling，选出 12 张上下文。模型使用给定的 COLMAP 位姿，分辨率固定为 $270\times480$。这是一套明确的 posed NVS 协议。
+
+对比方法均按该设置重训，并加入深度训练损失。通常使用 8 张 A100、200K steps、batch size 1；pixelSplat 因 epipolar attention 较慢，只训练 100K steps。两组训练步数不同，这个条件必须与结果一起保留。[↗](https://arxiv.org/pdf/2511.10647v1#page=12) [↗](https://arxiv.org/pdf/2511.10647v1#page=21)
+
+| Method / backbone | DL3DV PSNR ↑ / LPIPS ↓ | Tanks and Temples PSNR ↑ / LPIPS ↓ | MegaDepth PSNR ↑ / LPIPS ↓ |
+| --- | ---: | ---: | ---: |
+| pixelSplat | 16.55 / 0.480 | 13.81 / 0.558 | 13.87 / 0.561 |
+| MVSplat | 18.13 / 0.393 | 14.81 / 0.508 | 14.67 / 0.533 |
+| DepthSplat | 19.24 / 0.322 | 15.80 / 0.418 | 15.90 / 0.450 |
+| Fast3R | 19.30 / 0.320 | 16.24 / 0.409 | 16.43 / 0.421 |
+| MV-DUSt3R | 20.01 / 0.294 | 17.04 / 0.370 | 16.20 / 0.437 |
+| VGGT | 20.96 / 0.253 | 17.18 / 0.347 | 16.45 / 0.417 |
+| DA3 | 21.33 / 0.241 | 18.10 / 0.311 | 17.89 / 0.351 |
+
+DA3 不只在训练域 DL3DV 上提高。Tanks and Temples 相比 VGGT 的 PSNR 从 17.18 到 18.10，MegaDepth 从 16.45 到 17.89，LPIPS 同时降低。这是几何骨干改善能够传递到渲染的具体证据。Table 5 的 SSIM 也分别从 VGGT 的 0.697、0.550、0.500，提高到 DA3 的 0.711、0.578、0.561。
+
+各方法在域外整体更弱，说明训练与测试分布仍然重要。作者将其与轨迹和位姿分布联系起来，但没有通过独立控制场景内容、相机轨迹来排除其他解释，因此不能把域外差距全部归因于轨迹。[↗](https://arxiv.org/pdf/2511.10647v1#page=17)
+
+Figure 11 中，每个场景连续两行是两个目标视角。先看细柱、屋檐和大基线外景中的结构能否保持，再看纹理是否清晰；几何错位往往会同时破坏两个视角的结构。
+
+![DA3 novel view synthesis comparison](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/figure-11-novel-view-synthesis.png){ width="920" }
+
+*Figure 11，前馈新视角合成的定性比较，前三组来自 DL3DV，随后为 Tanks and Temples 与 MegaDepth。*[↗](https://arxiv.org/pdf/2511.10647v1#page=23)
+
+## 模型大小、视图数量与实际吞吐要一起看
+
+Table 8 在 80 GB A100 上测最大输入图像数；吞吐则另用 32 张图像的场景测量，报告平均每图速度，分辨率为 $504\times336$。
+
+| Model | Max # of images | Backbone / Dual-DPT / CameraHead parameters | Running speed |
+| --- | ---: | --- | ---: |
+| VGGT, reference | 400–500 | 0.91B / 0.064B / 0.22B | 34.1 FPS |
+| DA3-Giant | 900–1000 | 1.130B / 0.050B / 0.018B | 37.6 FPS |
+| DA3-Large | 1500–1600 | 0.300B / 0.047B / 0.008B | 78.37 FPS |
+| DA3-Base | 2100–2200 | 0.086B / 0.015B / 0.004B | 126.5 FPS |
+| DA3-Small | 4000–4100 | 0.022B / 0.003B / 0.001B | 160.5 FPS |
+
+Large 的速度约为 Giant 的两倍，同时能容纳更多视图；前面的严格位姿表也显示，小模型在若干数据集明显损失精度。输出接口相同，实际应按重建精度与输入规模选择。
+
+参数数量有一处报告差异。主结果 Table 2 将 Giant 列为 1.10B，Table 8 的三部分按表相加则为 1.198B；这里保留各表原值，不能声称两者完全一致。Large 的 0.300B 是骨干部分，包含输出头后约 0.355B，与主表约 0.36B 接近，因此也不宜把 backbone 参数单独拿去与其他模型总参数比较。
+
+最大可输入图像数表示这一显存设置下的容量，不意味着在数千视图上已经评测出同样准确的长程几何。论文还提出把部分中间 token 放到 CPU 可以处理更多视图，但没有给出统一的额外吞吐结果。32 图场景的平均 FPS 也不是新视频帧到达后立即可用的流式延迟。[↗](https://arxiv.org/pdf/2511.10647v1#page=18)
+
+## 从示例到实际使用，需要保留输出的几何语义
+
+下面两组 SOH 示例展示了输入图与深度的像素对应。先看歌剧院屋顶、远处建筑和水面的边界，确认模型的深度结构如何跟随输入视角变化。深度可视化文件本身已经包含左右并排的 RGB 与伪彩色深度。
+
+![DA3 SOH 示例输入 view 0](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-input-view-000.png){ width="360" }
+
+![DA3 SOH view 0 RGB and depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0000.jpg){ width="420" .atlas-figure-compact }
+
+![DA3 SOH 示例输入 view 1](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-input-view-010.png){ width="360" }
+
+![DA3 SOH view 1 RGB and depth visualization](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-3/soh-depth-vis-0001.jpg){ width="420" .atlas-figure-compact }
+
+*SOH 示例输入及对应深度可视化，用于观察像素对齐关系，不属于上述基准的新增测量。*
+
+真正采用这套模型时，第一步是区分所需输出。如果只要单图相对深度，应看单目学生的质量与预算；需要公制距离，应使用相应模型并保持焦距、缩放和尺度一致；需要多视角重建，则要同时检查位姿、深度、坐标系和融合协议。已有相机信息的系统可以利用 camera condition，但仍应验证目标域中的收益。
+
+DA3 最可复用的设计，是让深度与射线保留明确几何含义，让完整预训练骨干通过有限的注意力重排处理多视图，再通过经过尺度锚定的教师标签补充细节。论文把动态场景推理列为后续方向，输入支持视频不等于已经获得动态点对应或动作条件世界模型。它提供的是较统一的几何基础，下一层应用仍需根据时间变化、尺度要求和实时预算组织自己的接口。[↗](https://arxiv.org/pdf/2511.10647v1#page=22)

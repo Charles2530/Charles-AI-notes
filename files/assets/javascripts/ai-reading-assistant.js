@@ -1,4 +1,4 @@
-/*! atlas-ai-build: 20260827-0001 */
+/*! atlas-ai-build: 20261104-1918 */
 (function () {
   "use strict";
 
@@ -32,7 +32,8 @@
     controller: null,
     elements: null,
     selectionBound: false,
-    fullscreen: false
+    fullscreen: false,
+    returnFocus: null
   };
 
   function element(tag, className, text) {
@@ -161,18 +162,28 @@
 
   function openDrawer() {
     const ui = mountShell();
+    if (ui.drawer.hidden) state.returnFocus = document.activeElement;
     ui.drawer.hidden = false;
     ui.drawer.setAttribute("aria-hidden", "false");
     ui.launcher.setAttribute("aria-expanded", "true");
     document.body.classList.add("atlas-ai-open");
+    ui.textarea.focus({ preventScroll: true });
   }
 
   function closeDrawer() {
-    if (!state.elements) return;
+    if (!state.elements || state.elements.drawer.hidden) return;
+    const restoreFocus = state.elements.drawer.contains(document.activeElement);
     state.elements.drawer.hidden = true;
     state.elements.drawer.setAttribute("aria-hidden", "true");
     state.elements.launcher.setAttribute("aria-expanded", "false");
     document.body.classList.remove("atlas-ai-open");
+    if (restoreFocus) {
+      const target = state.returnFocus;
+      const canRestore = target instanceof HTMLElement && target.isConnected &&
+        !target.hidden && !target.closest("[hidden]") && target !== document.body;
+      (canRestore ? target : state.elements.launcher).focus({ preventScroll: true });
+    }
+    state.returnFocus = null;
   }
 
   function setFullscreen(enabled) {

@@ -1,6 +1,7 @@
 (function () {
   const runtimeUrl = new URL("vendor/mermaid.min.js", document.currentScript.src).href;
   let runtimePromise = null;
+  let configured = false;
 
   const config = {
     startOnLoad: false,
@@ -64,27 +65,41 @@
   }
 
   async function renderMermaid() {
-    if (!document.querySelector(".mermaid")) return;
-
     markPending();
-
-    document.querySelectorAll(".mermaid[data-processed]").forEach((node) => {
-      node.removeAttribute("data-processed");
-      node.textContent = node.dataset.atlasMermaidSource || node.textContent;
-    });
+    const nodes = Array.from(document.querySelectorAll(".mermaid")).filter(
+      (node) => !node.dataset.atlasMermaidState
+    );
+    if (!nodes.length) return;
+    nodes.forEach((node) => { node.dataset.atlasMermaidState = "rendering"; });
 
     try {
       const mermaid = await loadRuntime();
-      mermaid.initialize(config);
-      await mermaid.run({ querySelector: ".mermaid" });
-    } catch (error) {
-      document.querySelectorAll(".mermaid").forEach((node) => {
-        if (!node.querySelector("svg")) {
-          node.classList.add("atlas-mermaid-error");
-          node.textContent = node.dataset.atlasMermaidSource || node.textContent;
+      if (!configured) {
+        mermaid.initialize(config);
+        configured = true;
+      }
+      nodes.forEach((node) => {
+        node.textContent = node.dataset.atlasMermaidSource;
+      });
+      await mermaid.run({ nodes });
+      nodes.forEach((node) => {
+        node.dataset.atlasMermaidState = "ready";
+        const svg = node.querySelector("svg");
+        const width = svg?.viewBox.baseVal.width;
+        if (width) {
+          svg.style.width = `${width}px`;
+          svg.style.maxWidth = "none";
         }
       });
-      console.warn("Mermaid rendering failed", error);
+    } catch (error) {
+      nodes.forEach((node) => {
+        node.dataset.atlasMermaidState = "error";
+        if (!node.querySelector("svg:not([aria-roledescription='error'])")) {
+          node.classList.add("atlas-mermaid-error");
+          node.textContent = "图表暂时无法渲染，以下为原始内容：\n\n" + node.dataset.atlasMermaidSource;
+        }
+      });
+      console.warn("Mermaid rendering failed", error.message || error.str || String(error));
     }
   }
 

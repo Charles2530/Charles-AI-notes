@@ -1,0 +1,16 @@
+........................................................................ [ 30%]
+........................................................................ [ 61%]
+.............................sssssssss.................................. [ 92%]
+.................                                                        [100%]
+=========================== short test summary info ============================
+SKIPPED [1] files/assets/examples/diffusion/test_minimal_ddpm.py:10: could not import 'torch': No module named 'torch'
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:987: deep RL Torch primitives require PyTorch
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:1136: deep RL Torch primitives require PyTorch
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:1124: deep RL Torch primitives require PyTorch
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:1045: deep RL Torch primitives require PyTorch
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:1005: deep RL Torch primitives require PyTorch
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:1095: deep RL Torch primitives require PyTorch
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:1084: deep RL Torch primitives require PyTorch
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:1107: deep RL Torch primitives require PyTorch
+SKIPPED [1] tests/test_reinforcement_learning_examples.py:1157: SAC CLI requires PyTorch and Gymnasium
+224 passed, 10 skipped in 6.21s

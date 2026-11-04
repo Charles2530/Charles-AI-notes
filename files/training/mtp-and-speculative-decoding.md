@@ -1,151 +1,53 @@
-# MTP 与投机解码
+# 多token预测怎样变成可验证的生成
 
-`MTP`（Multi-Token Prediction）和 `speculative decoding` 经常一起出现，但它们不是同一件事。`MTP` 首先是训练目标或模型结构设计，让模型在一个位置上学习多个未来 token；投机解码首先是推理加速算法，用便宜路径草拟，再用目标模型并行验证；`Self-speculative decoding` 才是二者交汇的系统形态，草稿路径来自模型自身的中间层、辅助头或 MTP 模块。
+模型看到前缀“今天下”时，普通下一词目标预测第一个后续token。MTP可以增加更远位置的训练目标，投机解码则让便宜模型先提出一段候选，再由目标模型验证。前者改变学习信号，后者改变推理执行，两者需要明确的接口才能结合。
 
-训练 `MTP` 会同时改变 loss、checkpoint 结构、评测口径和未来推理接口；推理侧投机解码还要继续看缓存、路由、KV 与 draft/verify 的系统路径。
+## 两个预测头各看到了什么
 
-## 概念拆分
+设训练序列为 `[A,B,C,D]`。普通目标在位置A预测B，在B预测C。一个额外预测头可以要求位置A预测C，但这不自动等于先采样B、再以采样出的B为条件预测C。
 
-标准自回归语言模型通常只学习 next-token prediction：
+若第二个头只看原前缀，它学习的是更远边缘预测；若逐层条件化到前一个目标或预测，则条件信息不同。阅读MTP架构时先列每个头的输入与标签，再讨论是否能直接提出联合候选。
 
-\[
-\mathcal{L}_{\text{NTP}}
-=
-- \sum_t \log p_\theta(x_{t+1}\mid x_{\le t})
-\]
-
-`MTP` 的核心变化是让同一个位置同时监督多个未来 token：
-
-\[
-\mathcal{L}_{\text{MTP}}
-=
-\sum_t \sum_{k=1}^{K}
-\lambda_k
-\Big(
-- \log p_\theta^{(k)}(x_{t+k}\mid x_{\le t})
-\Big)
-\]
-
-其中 \(K\) 是预测深度，\(p_\theta^{(k)}\) 是第 \(k\) 个未来位置的预测头或预测模块，\(\lambda_k\) 是损失权重。
-
-投机解码回答的是另一个问题：如何减少逐 token 串行解码的主模型调用次数。它通常先用便宜路径 draft 出若干候选 token，再让目标模型一次性并行 verify，最后 accept 与目标模型一致的最长前缀，错误位置由目标模型修正。
-
-因此两者的关系是：`MTP` 可以提供内建 draft 能力，但 speculative decoding 不一定需要 MTP；反过来，模型训练了 MTP，也不代表线上一定能提速。
-
-## 从 NTP 到 MTP
-
-MTP 的训练价值不只是“多预测几个 token”。它改变了 hidden state 必须承载的信息：模型不只要为 \(t+1\) 做准备，还要为更远的未来保留可解码结构。
-
-这会带来两类潜在收益。训练侧得到更密集的监督信号、更强的前瞻性表示和更好的长程依赖建模；推理侧则可能把额外头或模块变成 serving 中的 draft 路径，用于自投机解码。
-
-但 MTP 也会引入额外风险：未来越远，监督越噪，过高权重可能拉坏 next-token 主质量；多头或多模块会增加 checkpoint、加载和兼容成本；训练时看到真实前缀，推理时 draft 会消费模型自己的前缀，训练-推理分布不一致会降低 acceptance；如果 runtime 不支持 draft/verify，MTP 参数只能作为训练辅助，不能自动兑现推理收益。
-
-一个实用判断是：如果团队只能改训练或只能改 serving，而不能把两边接口一起设计，MTP 的投入产出通常会变差。
-
-## 架构路线
-
-外部都叫 MTP，工程实现至少有三类。
-
-| 路线 | 做法 | 优点 | 主要风险 |
-| --- | --- | --- | --- |
-| 并行多头 | 共享主干，多个 head 分别预测 \(t+1,t+2,\dots,t+K\) | 结构直观，实现简单 | 远距 head 更难学，和推理递归不完全一致 |
-| 串行 MTP 模块 | 每个预测深度依赖前一深度表示，形成微型因果链 | 更接近自回归过程，未来 token 之间更连贯 | 模块、KV、runtime 接口更复杂 |
-| 中间层/早退草稿 | 用浅层或中间层输出作为 draft，再由完整模型验证 | 不一定增加独立小模型，KV 可能复用 | 需要训练提升中间层可解码性 |
-
-Meta 的 `Better & Faster Large Language Models via Multi-token Prediction` 更接近“共享 trunk + 多个预测头”的并行路线。DeepSeek-V3 的 MTP 更强调串行模块：第 \(k\) 个 MTP 模块会融合前一深度表示和目标 token embedding，再通过模块产生下一深度预测，从而保留更完整的因果链。
-
-这也是 DeepSeek 路线和简单多头路线的关键差别：它不是只在最后挂几个独立分类头，而是把多 token 预测变成单次前向里的小型自回归过程。
-
-## 投机解码的核心机制
-
-传统解码生成 \(N\) 个 token 通常需要主模型串行运行 \(N\) 次。投机解码利用 Transformer 可并行评分候选序列的特点，把一部分串行生成改成“草拟 + 批量验证”。
-
-一个够用的速度模型是：
-
-\[
-\text{TPS}_{\text{spec}}
-\approx
-\frac{\mathbb{E}[A]}{C_{\text{draft}} + C_{\text{verify}} + C_{\text{overhead}}}
-\]
-
-\[
-\text{Speedup}
-\approx
-\frac{\mathbb{E}[A] \cdot C_{\text{decode}}}
-{C_{\text{draft}} + C_{\text{verify}} + C_{\text{overhead}}}
-\]
-
-其中 \(\mathbb{E}[A]\) 是每轮平均接受 token 数，\(C_{\text{draft}}\) 是草稿路径开销，\(C_{\text{verify}}\) 是目标模型验证开销，\(C_{\text{overhead}}\) 包括 KV 管理、调度、fallback 和 batch 组织成本。
-
-这个公式的价值在于提醒两件事：接受 token 少，分子上不去；draft、verify 或调度太贵，分母降不下来。
-
-经典 speculative decoding 可以通过拒绝采样保持输出分布与目标模型一致，因此是无损加速算法。但工程实现里还存在近似验证、tree draft、relaxed acceptance 等变体，是否无损要看具体接受规则。
-
-## 自投机与 Logit Lens
-
-`Self-speculative decoding` 的目标是避免长期维护一个独立小草稿模型。草稿路径可以来自模型自己的浅层或中间层、early-exit head、MTP head / MTP module，也可以来自 EAGLE 一类特征级 draft 模块。
-
-这条路线背后的一个观察来自 `Logit Lens`：很多 Transformer 中间层已经能通过最终 LM head 投射出接近最终 token 的分布。后续深层计算在不少位置并不是完全改变 token，而是在降低熵、提高置信度、修正困难位置。
-
-因此，中间层或辅助头可以作为“便宜草稿”，完整模型作为“昂贵验证器”。这类方法的关键不是中间层是否偶尔猜对，而是猜对的 token 是否形成足够长的可接受前缀，draft 阶段的 KV / hidden state 是否能复用，早退或辅助头是否会影响主模型质量，以及真实 batch 和动态流量下是否仍有端到端收益。
-
-`LayerSkip` 和 `Draft & Verify` 都属于这条思路：通过训练或解码设计，让模型自己的早期计算承担 draft 角色，再由完整模型验证。
-
-## DeepSeek-V3 的位置
-
-DeepSeek-V3 把 MTP 放在训练设计里，目标首先是提升训练信号密度和模型对未来 token 的建模能力。推理时可以丢弃 MTP 模块，只保留 main model，像普通 next-token 模型一样部署；也可以保留 MTP 模块，把它作为自投机 draft 路径，用 target model 并行验证。
+多头loss还会共同更新共享表示，其辅助训练收益与用于draft的推理收益是两个实验问题。
 
 ![DeepSeek-V3 MTP module](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-3-mtp.png){ width="820" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 3。原图表达 DeepSeek-V3 的串行 MTP 模块如何融合 hidden state 与未来 token embedding；读图重点是区分“训练时的多 token 监督”和“推理时的 draft/verify 接口”。它不能证明线上一定启用 MTP，也不能替代 acceptance rate 与端到端 latency 的验证。</small>
 
-这解释了一个容易混淆的点：DeepSeek-V3 的 MTP 不等于线上必然启用 MTP。很多 serving 框架需要处理 dynamic batching、KV cache、prefix sharing、异构请求长度和调度开销；如果 draft/verify 路径没有和 runtime 深度集成，MTP 的理论收益可能被系统开销吃掉。
+## 投机一轮先产生候选再并行核验
 
-DeepSeek MTP 的工程启发是：MTP 可以先作为训练目标提升数据利用率；如果推理栈成熟，再把 MTP 模块接入 self-speculative decoding；如果推理栈不支持，仍可把 MTP 模块裁掉，保留主模型部署灵活性。
+设draft分布为q、目标分布为p。Draft顺序产生K个候选，目标模型通过因果前向计算各候选位置所需的条件分布。核验从第一个候选依次进行，只有前面的候选被接受，后面对应条件才仍然成立。
 
-这类“训练资产可选服务化”的设计，比把 MTP 直接当作单一推理加速技巧更稳。
+在标准随机投机采样中，候选x的接受概率为 $\min(1,p(x)/q(x))$。拒绝后从与 $(p-q)_+$ 成正比的残差分布采样修正token，并停止提交后续draft候选。
 
-## 评测与上线口径
+## 两个类别验证目标分布
 
-MTP 和 speculative 的评测不能只看 perplexity 或平均 speedup。建议按三层闸门推进。
+令 $p=(0.6,0.4)$、$q=(0.8,0.2)$。第一类被draft提出的概率0.8，接受概率0.75，所以最终通过接受得到它的概率0.6。第二类接受概率1，通过接受贡献0.2。
 
-| 阶段 | 目标 | 必看指标 |
-| --- | --- | --- |
-| 离线训练 | 主质量不退化，draft 信号可用 | perplexity、任务分数、future-token accuracy、模拟 acceptance |
-| 回放验证 | 真实请求分桶下收益可重复 | p50/p95/p99、tokens/s、acceptance 分布、fallback 率 |
-| 小流量灰度 | 系统可运营，尾部不恶化 | 峰值流量收益、p99 波动、熔断触发、回退后等价性 |
+剩余拒绝概率为0.2，残差只在第二类上为正，因此修正再贡献0.2。最终分布正是(0.6,0.4)。这个例子说明残差重采样的必要性，拒绝后直接随意换一个token并不保分布。
 
-分桶比均值更重要。至少要按输出长度、任务类型、解码配置和系统状态切开看：短输出、中输出、长输出的 acceptance 不同，代码、问答、结构化生成和工具调用的错误容忍度不同，温度、top-p、重复惩罚会改变草稿可接受性，batch size、队列压力、KV 命中和 prefix 复用又会改变端到端收益。
+推导条件与完整算法见[Speculative Decoding](https://arxiv.org/abs/2211.17192)。确定性贪心验证、树状候选与近似策略有各自规则，不应统一套用这个接受式。
 
-上线前还要写清接口契约：checkpoint 里 MTP head/module 的命名和版本，draft 输出格式、verify 输入格式和回退点定义，acceptance、吞吐和延迟统计口径，speculative 关闭时是否严格退化为 baseline，以及模型版本、runtime、kernel 和配置是否绑定发布。
+## 速度分子是实际提交的token
 
-一个保守起步配置通常是：\(K=2\) 或 \(3\)，\(\lambda_k\) 随 \(k\) 递减，先在低温长输出任务桶验证收益，再按请求特征分层开启 speculative。
+在简化假设下，各位置独立以a接受，K个draft候选加修正或bonus token，期望提交量为
 
-## 论文脉络
+$$
+E[N]=1+a+\cdots+a^K.
+$$
 
-MTP 不是大模型时代才出现的新概念，它可以追溯到早期的 blockwise parallel decoding 和未来 n-gram 预测。近年的变化在于：模型足够大、推理足够贵、训练和 serving 系统足够复杂，使得“训练期未来预测 + 推理期草稿验证”重新变得有工程价值。
+K=3、a=0.8时为2.952。每轮成本包含draft、目标核验、采样与状态管理；即使接受率高，draft过贵或目标核验效率差，仍可能不加速。
 
-| 方向 | 代表工作 | 核心贡献 |
-| --- | --- | --- |
-| 分块并行解码 | Blockwise Parallel Decoding, NeurIPS 2018 | 训练多个辅助预测头，提出候选块并由基础模型验证 |
-| 未来 n-gram 预测 | ProphetNet, ACL 2020 | Seq2Seq 预训练中同时预测未来多个 token，提高全局规划能力 |
-| 经典投机解码 | Fast Inference from Transformers via Speculative Decoding, ICML 2023 | 小 draft model + 大 target model，无损拒绝采样验证 |
-| 自投机解码 | LayerSkip, Draft & Verify, ACL 2024 | 用中间层/早退路径作为草稿，减少独立 draft model 依赖 |
-| MTP 训练目标 | Better & Faster LLMs via Multi-token Prediction, ICML 2024 | 共享主干 + 多未来头，提升训练效率并支持自投机 |
-| DeepSeek MTP | DeepSeek-V3 Technical Report, 2024 | 串行 MTP 模块，训练增强与可选 self-speculative deployment |
-| 特征级草稿 | EAGLE / EAGLE-2 / EAGLE-3 | 在 feature space 预测草稿，构造动态 draft tree |
-| 新型 MTP 变体 | MuToR、L-MTP | 用 register token 或 leap prediction 改善多 token 监督 |
+实际接受概率随位置和上下文变化，以上几何和只是直觉模型。测量应直接统计提交token数和整轮耗时，不能只用被接受draft数量作吞吐分子。
 
-如果把这些工作放在一起看，可以得到一个清晰判断：MTP 的长期价值不在“多几个预测头”，而在于它是否能把训练目标、模型结构、推理 runtime 和线上观测体系连成一条闭环。
+## 拒绝后KV状态也必须回到正确前缀
 
-## 收口结论
+目标模型可能已经为整段候选分配或计算临时KV。后半段被拒绝后，这些状态不能当成已提交上下文继续使用。vLLM调度代码在处理投机结果时相应调整已计算token状态，具体异步路径还要考虑请求结束与取消。
 
-`MTP` 值不值得做，不取决于它是否“先进”，而取决于三件事是否同时成立：训练侧能稳定产出不伤主质量的未来预测能力，推理侧能把 acceptance 转成真实吞吐而不是只赢理论步数，系统侧能在动态 batch、长尾请求和高峰流量下维持收益并可靠回退。
+MTP能否作为有效draft，最终取决于候选质量、额外计算和状态接口。训练loss下降、draft准确率提高与端到端服务更快，需分别验证。
 
-只成立其中一两项时，MTP 更像阶段性实验技巧；三者都成立时，它才是可维护的训练-推理一体化架构收益。
 
-## 外部材料
+## 对照源码与延伸阅读
 
-- [PyTorch Distributed 文档](https://pytorch.org/docs/stable/distributed.html)。
-- [DeepSpeed ZeRO 教程](https://www.deepspeed.ai/tutorials/zero/)。
-- [Weights & Biases 文档](https://docs.wandb.ai/)。
+- [投机输出处理与computed token回退](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)
+- [普通下一词目标的对照实现](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/model.py)

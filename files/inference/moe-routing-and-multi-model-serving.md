@@ -1,139 +1,41 @@
-# MoE 路由与多模型服务
+# 专家路由与请求路由分别选择什么
 
-MoE 和多模型服务看起来属于不同层级，但共同主题是：如何决定“哪一个模型 / 哪一部分参数该为当前请求工作”。MoE 在 token 级选择 expert，多模型服务在请求级选择模型、版本、精度路径或工具链。
+MoE根据token隐藏向量选专家，服务路由根据整个请求选择模型或实例。两者都分配计算，但输入、状态与质量保证不同。先分别算一次，就能看清“只激活部分参数”不等于所有成本按比例下降。
 
-## 路由的本质
+## 一个token选中两个专家
 
-路由本质是资源分配：
+设四个专家的router概率为 `[0.5,0.3,0.15,0.05]`，选择前两个。若模型规定在选中集合重新归一化，权重变成0.625和0.375；若不归一化，则保留0.5和0.3。两种模型定义会得到不同输出。
 
-\[
-r(x)\rightarrow \text{resource subset}
-\]
+假设选中专家标量输出为2和6，归一化结果为3.5。实际专家输出是向量，按同样权重逐元素合并。具体门控与共享专家规则需读模型实现。
 
-在 MoE 中，资源子集是 experts；在多模型服务中，资源子集是小模型、大模型、VLM、reranker、embedding、工具模型或高精度路径。
+## 一批token决定专家计算的shape
 
-路由目标通常是在质量、成本和延迟之间折中：
+T个token、top-k为k时，约有Tk条token-expert记录。它们按专家重排后，各专家的token数就是其GEMM的M维。平均负载小，不代表最热门专家也小。
 
-\[
-\min_{m\in\mathcal{M}}
-\lambda_1\text{Latency}(m,x)
-+\lambda_2\text{Cost}(m,x)
--\lambda_3\text{Quality}(m,x)
-\]
+若8个token、top-2产生16条记录，其中某专家收到10条，另外几个总共6条，计算与通信会不均。是否丢弃超额token、动态分配或padding，取决于capacity策略；dropless实现也可能承担尾部延迟。
 
-难点在于 Quality 常无法事先精确知道，只能通过分类器、置信度、历史统计或规则代理估计。
-
-## MoE 基本机制
-
-设 token 表示为 \(h\)，有 \(E\) 个 experts，gate 输出分数：
-
-\[
-\alpha=\mathrm{TopK}(\mathrm{softmax}(W_g h))
-\]
-
-输出为：
-
-\[
-y=\sum_{e\in\mathcal{K}(h)}\alpha_e\mathrm{Expert}_e(h)
-\]
-
-MoE 的收益来自“总参数很多，但每个 token 只激活一部分”。它也带来新问题：负载不均、专家塌缩、跨设备通信、capacity 限制和调试困难。
-
-训练中常加入 load balancing loss，避免少数 expert 被过度使用。推理中则更关注热点 expert、all-to-all 通信、decode 小 token 场景下的延迟，以及 experts 到设备拓扑的映射。
-
-## Capacity 与拓扑
-
-每个 expert 在 batch 中有容量上限：
-
-\[
-C=\left\lceil \text{capacity factor}\cdot \frac{kN}{E}\right\rceil
-\]
-
-若某 expert 超载，多余 token 可能被丢弃、重路由或延迟处理。这会影响训练稳定性、质量和推理吞吐。
-
-部署 MoE 时要同时考虑：
-
-1. experts 如何映射到 GPU / 节点；
-2. 常被共同激活的 experts 是否靠近；
-3. all-to-all 是否跨慢速互联；
-4. decode 阶段小 token 是否放大通信开销；
-5. 热点 expert 是否造成局部排队。
-
-MoE 的理论 FLOPs 省下来了，不代表线上一定更快。通信和负载不均可能吃掉收益。
+未激活专家参数通常仍需在某处驻留或加载，所以激活参数量更小不自动等于整模型显存同样小。专家并行还增加dispatch与combine通信。
 
 ![DeepSeek-V3 expert load balance](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-9-expert-load.png){ width="760" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)。原图表达 MoE expert load 在训练中的均衡状态；读图重点是把路由看成质量、成本、延迟和负载之间的动态分配问题。它不能推出任意 MoE 或多模型路由都会自然均衡，线上仍要按 expert、设备和请求桶观测热点。</small>
 
-## 多模型服务是系统级 MoE
+## 请求级路由先看整项任务
 
-在线系统常同时运行：
+小模型可先处理简单请求，复杂或不确定的请求升级大模型。假设小模型成本1、大模型10、升级率30%，不复用计算时平均成本4。若小模型耗时0.2秒、大模型1秒，串行升级请求至少增加到1.2秒，再加队列和路由判断。
 
-1. 小语言模型；
-2. 大语言模型；
-3. reasoning model；
-4. embedding 和 reranker；
-5. VLM / OCR / 表格模型；
-6. 工具调用模型；
-7. 安全审核模型。
+若路由器错把困难题交给小模型且未升级，质量会受损。若过于保守，大量重复尝试又增加成本。因此需要在固定任务集上测路由误判、最终成功率与完整等待。
 
-可以把它看作系统级 MoE：不是 token 路由到 expert，而是请求路由到最合适的模型子系统。
+## 服务状态可能不能跨模型复用
 
-常见路由策略包括：
+不同权重、tokenizer或结构的KV通常不能直接共享。切换模型可能重新prefill，adapter和缓存身份也需核对。将升级成本只记为大模型decode，会漏掉重新构建上下文的费用。
 
-| 策略 | 优点 | 风险 |
-| --- | --- | --- |
-| 规则路由 | 简单可控 | 规则膨胀、维护困难 |
-| 分类器路由 | 可学习任务类型和难度 | 训练数据和校准要求高 |
-| 置信度升级 | 小模型先答，低置信升级 | 置信度不准会误路由 |
-| 级联路由 | 成本低，质量可兜底 | 两段排队导致尾延迟恶化 |
-| 在线学习 | 可适应流量变化 | 线上探索风险高 |
+## 两种路由怎样一起测
 
-## 缓存与级联
+MoE层记录每专家token、重排、通信和GEMM时间；请求路由记录每模型调用、升级、重试与任务结果。前者解释一条模型路径内部的不均衡，后者解释请求选择和重复计算。两套指标可以关联，但不应合成一个笼统“路由命中率”。
 
-多模型系统的成本不只来自模型本身，还来自重复 prefill、检索、工具和中间状态。
 
-设计级联路由时应明确：
+## 对照源码与延伸阅读
 
-1. 小模型失败后，大模型能否复用 prefix；
-2. 检索结果是否跨模型共享；
-3. 工具结果是否缓存；
-4. tokenizer、prompt template 和安全模板是否一致；
-5. 升级路径是否会导致两边都排队。
-
-若小模型经常先答再升级，且无法复用前缀或检索结果，级联策略可能比直接走大模型更慢、更贵。
-
-## 失效模式
-
-| 失效 | 表现 | 处理方向 |
-| --- | --- | --- |
-| 热点 expert / 模型 | 局部排队，其他资源闲置 | 负载均衡、拓扑调整、限流 |
-| 错误分流 | 难题送小模型，质量崩 | 校准、升级阈值、风险规则 |
-| 级联震荡 | 大量请求先失败再升级 | 改阈值、提前分类、共享缓存 |
-| 版本耦合 | 换 reranker 后全链路负载变 | 版本绑定、回放评测 |
-| 路由黑箱 | 不知道为什么走某模型 | 记录路由特征和决策证据 |
-| 成本反噬 | 小模型省下的成本被重试吃掉 | 端到端成本核算 |
-
-路由系统必须可观测，否则质量问题和成本问题很难归因。
-
-## 指标与验收
-
-建议同时看 MoE 和多模型两层指标：
-
-1. expert token 分布、overflow、drop、all-to-all 时间；
-2. 不同 expert 的延迟和错误桶；
-3. 请求路由分布、升级率、降级率；
-4. 各模型池的 queue、GPU 利用率和 p95/p99；
-5. 路由前后任务质量、成本和用户体验；
-6. 缓存复用率和级联重算成本；
-7. 路由错误样本的人工复盘。
-
-MoE 路由与多模型服务的共同原则是：路由必须同时服务质量、成本和稳定性。只追省算力，会把难题送错地方；只追质量，会让最大模型被所有请求占满。
-
-上线后还应保留路由回放集：固定一批真实请求，记录旧路由、新路由、质量判断、成本和延迟。每次调整 gate、阈值、模型版本或 reranker，都先在回放集上验证负载分布是否被意外改写。
-
-## 外部材料
-
-- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- [SGLang 文档](https://docs.sglang.ai/)。
+- [专家矩阵的grouped调度](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/08-grouped-gemm.py)
+- [请求状态、缓存身份与调度接口](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)

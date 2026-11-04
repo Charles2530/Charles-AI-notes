@@ -1,97 +1,55 @@
-# 强化学习：从交互闭环到策略优化
+# 强化学习
 
-强化学习（Reinforcement Learning, RL）是一类序列决策方法：**agent 通过与环境交互学习 policy，使期望累计回报最大化**。动作会改变未来的数据分布，训练信号来自一段时间后的结果，而不是固定输入上的逐步标签。
+强化学习研究怎样根据行动的后果改进决策。系统收到观察，选择动作，环境给出奖励和新观察；动作既改变当前得分，也改变以后能看到的数据。机器人为了抓住杯子先绕开障碍，语言模型为了答对问题先进行推理，都涉及眼前成本与后续收益的关系。是否适合用强化学习，取决于能否定义决策过程、获得有意义的反馈，并承担探索或离线外推的代价。
 
-## 什么是强化学习
+## 导航任务怎样产生学习信号
 
-一个强化学习任务至少要说明：agent 能观察什么、能采取什么 action、环境怎样响应、reward 如何衡量结果，以及一段交互何时结束。策略 \(\pi\) 把 observation 或 state 映射为动作分布；训练目标不能逐步比对标准答案，需要最大化轨迹的期望累计回报：
+设一个教学任务连续三次行动得到奖励 $1,0,2$，折扣因子 $\gamma=0.9$。从起点看的回报为
 
 \[
-J(\pi)=\mathbb{E}_{\tau\sim\pi}\left[\sum_{t=0}^{T-1}\gamma^t r_t\right]
+G_0=1+0.9\times0+0.9^2\times2=2.62.
 \]
 
-这里 \(\tau\) 是按策略采集的 trajectory，\(r_t\) 是单步 reward，\(\gamma\) 决定多远的未来仍影响当前选择。期望同时覆盖策略采样和环境随机性，所以一次成功不等于策略已经学会，必须看重复运行后的回报分布与真实任务指标。
+第二步虽然没有即时奖励，却可能是获得最后两分的必要动作。只拟合“哪一步的奖励最大”，会丢掉这条因果链。强化学习里的价值函数估计从某个状态或动作继续执行策略能得到多少回报；策略则决定如何行动。价值预测和策略改进因此相互依赖。
 
-## Agent 与环境怎样形成闭环
+这里有三种容易混在一起的量。reward 是环境给某次转移的反馈，return 是一段未来反馈的累计，value 是在策略与环境随机性下对 return 的条件期望。单条轨迹回报高，不保证策略平均表现好；value 高，也不表示眼前奖励高。它可能来自预计稍后获得的机会，也可能来自错误外推。
 
-以仓储机器人把货箱送到出库口为例，一个时间步可以这样展开：
+## 先辨认数据怎样产生
 
-1. 环境给出 `observation_t`：前置相机图像、激光雷达、当前速度和局部目标。
-2. policy 根据观测输出 `action_t`：左右轮速度。
-3. 环境执行动作，机器人向前移动或转弯，并返回 `reward_t`、`observation_{t+1}` 以及是否结束。
-4. agent 用新观测继续决策，直到送达、碰撞，或达到时间上限。
+| 设置 | 训练中有什么 | 优化的直接对象 | 容易漏掉的限制 |
+| --- | --- | --- | --- |
+| 监督学习 | 输入与目标标签 | 标签预测误差 | 标签未必表达长期后果 |
+| 模仿学习 | 示范状态与动作 | 模仿行为的概率或距离 | 自己行动后可能进入示范未覆盖的状态 |
+| Offline RL | 固定的状态、动作、奖励和后继状态日志 | 数据约束下的长期回报 | 无法现场验证没见过的动作 |
+| Online RL | 能持续与环境交互 | 交互产生的回报 | 探索消耗时间、资源并可能产生失败 |
 
-这不是静态数据管线。policy 决定机器人会走到哪些通道、看到哪些遮挡、遇到哪些风险；policy 更新后，下一批 rollout 的数据分布也会改变。完整的数据闭环与术语定义见 [Agent、环境与训练闭环](rl-agent-environment-loop.md)。
+Off-policy 和 offline 也不同。DQN、SAC 可以从旧策略的 replay 学习，同时继续收集新数据，因此属于 online off-policy 方法。Offline RL 的训练数据固定，错误动作价值缺少新反馈纠正。[离线强化学习](offline-reinforcement-learning.md)专门处理这一困难。
 
-## 强化学习和监督学习有什么不同
+## 按问题查阅 {#完整学习路线}
 
-四种学习范式最关键的差别，是训练信号从哪里来、策略能否影响后续数据：
+这些文章按技术依赖连接，可以围绕眼前的问题阅读。数学符号不熟时，可随时返回[概率与期望](../prerequisite-math/probability-distributions-and-expectation.md)。
 
-| 范式 | 数据来源 | 学习信号 | 策略是否在训练中改变数据分布 | 典型限制 |
-| --- | --- | --- | --- | --- |
-| 监督学习 | 固定的输入与正确标签 | 单样本预测误差 | 否 | 依赖可靠标签，通常不表达动作的长期后果 |
-| 模仿学习 | 专家 demonstration | 复现专家动作 | 部署时会，纯行为克隆训练时不会 | 偏离专家数据后容易累积误差 |
-| Offline RL | 固定历史 trajectory | reward、return 与价值估计 | 训练采样不变 | 新策略动作可能超出数据支持范围 |
-| Online RL | 当前 policy 与环境持续交互 | rollout 得到的 reward / return | 是 | 交互昂贵、不安全或回报稀疏时成本很高 |
-
-模仿学习回答“专家在这里会怎么做”，RL 回答“什么动作能带来更高长期回报”。Offline RL 虽不在训练期间与环境交互，仍要根据 reward 比较长期决策；online RL 则把采样和优化放在持续变化的闭环里。
-
-## 强化学习真正难在哪里
-
-- **信用分配**：货箱最终送达才得分，早期哪次减速或绕行贡献了成功并不直接可见。
-- **探索与安全冲突**：agent 需要尝试未知动作，但真实机器人不能靠碰撞来遍历失败方式。
-- **部分可观测**：单帧相机看不到货架后的叉车，当前 observation 不等于完整 state。
-- **分布持续变化**：policy 更新会改变它访问的状态和采集的数据，训练目标随闭环数据一起变化。
-- **奖励错设**：若只奖励速度，机器人可能超速或走危险捷径；代理指标提高不代表真实目标改善。
-- **估计误差会被放大**：value、world model 或 reward model 的小偏差，可能被策略主动利用。
-
-因此，RL 实验不能只报告 reward 曲线。还要检查成功率、约束违反、数据覆盖、策略熵、价值估计误差和分布外行为。
-
-## 什么任务适合强化学习
-
-RL 更适合满足这些条件的任务：动作会影响未来；没有便宜的逐步正确标签；结果可以用回报或约束评价；能够承受足够的仿真、离线数据或在线交互；并且需要在探索、延迟后果或长期规划之间权衡。例如游戏控制、可重置仿真中的机器人策略、带可验证结果的推理，以及世界模型中的规划与策略学习。
-
-当**正确动作标签很便宜**、**交互不安全**，或 **reward 无法代表真实目标**时，RL 通常不是第一选择。此时应先考虑监督学习、模仿学习、规则规划、搜索或离线评估；即使最后采用 RL，也应先解决安全边界、奖励有效性和数据支持问题。
-
-## 完整学习路线 {#完整学习路线}
-
-| 阶段 | 章节 |
+| 当前问题 | 对应正文 |
 | --- | --- |
-| 建立语言 | 1. [强化学习专题首页](index.md) |
-| 建立语言 | 2. [Agent、环境与训练闭环](rl-agent-environment-loop.md) |
-| 长期价值 | 3. [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) |
-| 长期价值 | 4. [MDP、回报、价值函数与 Bellman](mdp-value-bellman.md) |
-| 长期价值 | 5. [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) |
-| 经典深度 RL | 6. [Q-learning 与 DQN](q-learning-and-dqn.md) |
-| 经典深度 RL | 7. [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) |
-| 经典深度 RL | 8. [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) |
-| 经典深度 RL | 9. [连续控制与 SAC](continuous-control-and-sac.md) |
-| 低成本与模型驱动 | 10. [Offline Reinforcement Learning](offline-reinforcement-learning.md) |
-| 低成本与模型驱动 | 11. [Model-based RL 与世界模型](rl-for-world-models.md) |
-| 大模型与具身系统 | 12. [LLM 强化学习：RLHF、RLVR 与 GRPO](llm-rlhf-rlvr-and-grpo.md) |
-| 大模型与具身系统 | 13. [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md) |
-| 大模型与具身系统 | 14. [RL 系统工程与 verl](verl-code-flow.md) |
-| 综合 | 15. [综合实践与算法选择](practice-and-algorithm-selection.md) |
+| observation、state、action 与一次环境交互分别是什么 | [Agent、环境与训练闭环](rl-agent-environment-loop.md) |
+| 未知选项该怎样探索，探索成本如何计算 | [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) |
+| 延迟奖励怎样写成可递推的价值 | [MDP、价值函数与 Bellman](mdp-value-bellman.md) |
+| 有模型和只有轨迹时怎样估计同一个价值 | [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) |
+| 怎样通过动作价值学习离散决策 | [Q-learning 与 DQN](q-learning-and-dqn.md) |
+| 奖励为什么能对动作概率求梯度 | [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) |
+| 怎样用 critic 降低方差，并约束策略更新 | [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) |
+| 连续动作的概率、熵和 replay 怎样协作 | [连续控制与 SAC](continuous-control-and-sac.md) |
+| 固定日志为什么会诱发分布外动作高估 | [Offline Reinforcement Learning](offline-reinforcement-learning.md) |
+| 怎样利用环境预测进行规划或策略学习 | [Model-based RL 与世界模型](rl-for-world-models.md) |
+| 人类偏好、可验证奖励怎样训练语言模型 | [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md) |
+| 分布式系统怎样保存采样与更新的概率关系 | [verl 训练流程](verl-code-flow.md) |
+| 动作块怎样接上真实反馈、恢复和人工接管 | [VLA、机器人与闭环强化学习](vla-robotics-and-closed-loop-rl.md) |
+| 算法假设和实验结果怎样一起判断 | [实践与算法选择](practice-and-algorithm-selection.md) |
 
-## 按方向进入课程
+## 从一次更新核对到实际行为
 
-| 你的目标 | 建议入口与顺序 |
-| --- | --- |
-| 从零建立经典 RL 基础 | 当前页 -> [交互闭环](rl-agent-environment-loop.md) -> [多臂老虎机与探索](multi-armed-bandits-and-exploration.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md) -> [Q-learning 与 DQN](q-learning-and-dqn.md) -> [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) -> [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) -> [连续控制与 SAC](continuous-control-and-sac.md) |
-| 现代 RL 应用完整路线 | [连续控制与 SAC](continuous-control-and-sac.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) -> [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md) -> [VLA 与机器人闭环](vla-robotics-and-closed-loop-rl.md) -> [verl](verl-code-flow.md) -> [综合实践与算法选择](practice-and-algorithm-selection.md) |
-| 理解 PPO 与后续大模型强化学习 | [MDP 与 Bellman](mdp-value-bellman.md) -> [Policy Gradient 与 REINFORCE](policy-gradient-and-reinforce.md) -> [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md) -> [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md) -> [verl 训练流程](verl-code-flow.md) -> [综合实践与算法选择](practice-and-algorithm-selection.md) |
-| 研究世界模型与规划 | [交互闭环](rl-agent-environment-loop.md) -> [MDP 与 Bellman](mdp-value-bellman.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) |
-| 进入 VLA 与机器人闭环 | [交互闭环](rl-agent-environment-loop.md) -> [连续控制与 SAC](continuous-control-and-sac.md) -> [Offline RL](offline-reinforcement-learning.md) -> [Model-based RL 与世界模型](rl-for-world-models.md) -> [VLA 与机器人闭环](vla-robotics-and-closed-loop-rl.md) |
+价值方法先检查 reward、bootstrap 和 Q 的尺度；策略梯度先检查动作 log probability、advantage 的符号和优化方向；模型方法先检查预测是否会随动作正确变化。它们最后都要回到闭环行为。训练 loss 降低、奖励上涨和真实任务成功，是三种不同证据。
 
-方向入口用于缩短到目标主题的路径。读现代 RL 论文前，至少应能区分 observation 与 state、reward 与 return、on-policy 与 offline 数据。
+仓库的[可运行示例](../assets/examples/reinforcement-learning/README.md)提供 Bandit、GridWorld、策略目标数值计算，以及 DQN、REINFORCE、PPO、SAC 的短更新流程。前几种适合逐项核对公式；深度 RL 的短运行只检查数据流、有限 loss 和参数变化，不能据此宣称收敛。每篇文章会说明具体检查了什么，以及哪些结论仍需要多个随机种子和独立环境评测。
 
-## 学完后如何判断自己真的理解了
-
-你应能独立完成以下检查，而不只是复述算法缩写：
-
-1. 把一个具体任务写成 observation、state、action、reward、termination / truncation 与 trajectory。
-2. 画出从 `environment step` 到 rollout batch、target / advantage、loss 和 policy update 的数据流。
-3. 解释 reward、return、value、Q 与 advantage 各自估计什么，以及 Bellman 或 policy gradient 在哪里使用它们。
-4. 根据动作空间、数据来源、交互成本和奖励质量，在监督学习、模仿学习、offline RL 与 online RL 之间作出可辩护的选择。
-5. 运行最小实验并诊断：表现变化来自策略真的改善，还是 reward hacking、价值偏差、数据不足或评测泄漏。
-6. 面对 PPO、SAC、GRPO、Dreamer 或机器人 RL 系统，能指出 rollout 来自哪个 policy、优化目标依赖哪些估计、部署时最大的分布与安全风险是什么。
+本站 [REINFORCE](policy-gradient-and-reinforce.md) 与 [PPO](policy-gradient-actor-critic-ppo-grpo.md) 使用同一张六格地图，正文给出可独立运行的完整 NumPy 学习循环，并用环境的精确价值评估训练前后变化。它们让轨迹、目标和参数更新对应起来；两者训练预算不同，文中的结果不用于算法性能排名。

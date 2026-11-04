@@ -15,389 +15,294 @@ paper_topic: 具身智能
     **GitHub / 模型：** GitHub：[OpenDriveLab/KAI0](https://github.com/OpenDriveLab/KAI0)；Hugging Face：[OpenDriveLab-org/Kai0](https://huggingface.co/OpenDriveLab-org/Kai0)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2602.09021)、[GitHub](https://github.com/OpenDriveLab/KAI0)、[Hugging Face model card](https://huggingface.co/OpenDriveLab-org/Kai0)；Checked Date：2026-06-15；Repro Status：Paper / official repo / official model card reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 长任务的失败，发生在示范、策略和执行的交界处
 
-### 研究背景
+χ₀ 研究的是两套双臂机器人协作整理衣物。衣服从任意初态被展平，T 恤继续折叠，有领衬衫交接到另一侧并挂起。这样的任务会反复遇到部分滑落、抓点偏移、布料遮挡和阶段切换。示范中一条流畅的成功轨迹，只覆盖了其中很窄的一部分；模型输出的动作块，也未必按预测时的时间和状态被实际执行。论文把这两种差异与策略自身的学习偏差放在一起，解释为什么模仿损失已经下降，机器人仍会反复重抓或停在原地。[↗](https://arxiv.org/pdf/2602.09021v3#page=2)
 
-χ₀ / kai0 讨论的是长时程真实机器人操作中的可靠性问题。机器人 manipulation 与自动驾驶不同，面对的是柔性物体、接触、遮挡、双臂协作和大量难以穷举的初始状态。近年来 π0、π0.5 等 robot foundation model 说明大模型和更多数据能提升能力，但生产级可靠性仍然很难靠“继续堆规模”直接解决。
+它的三个组件分别改动不同接口。**Model Arithmetic（MA）** 合并在不同数据子集上训练的策略权重；**Stage Advantage（SA）** 根据阶段与前后观测判断动作是否带来进展；**Train-Deploy Alignment（TDA）** 用恢复示范、时空增强和动作块平滑处理真实执行中的偏离。主要基座是 $\pi_{0.5}$，每个任务独立后训练。论文的贡献在于把这些环节组织成可比较的后训练与部署方案。[↗](https://arxiv.org/pdf/2602.09021v3#page=4) [↗](https://arxiv.org/pdf/2602.09021v3#page=15)
 
-论文把问题放在 robot learning 的三段分布上：人类示教分布 \(P_{\text{train}}\)、模型学习后形成的策略偏置 \(Q_{\text{model}}\)、真实部署 rollout 分布 \(P_{\text{test}}\)。长时程任务失败并不只体现在最终成功率，也体现在动作是否顺滑、重试成本、系统吞吐和错误是否会累积。kai0 的背景就是：要让机器人长期运行，需要把这些分布错位当成一等公民来处理。
-
-### 问题（Challenge）
-
-论文要解决的问题是：**在资源受限条件下，如何让双臂机器人完成高可靠长时程衣物操作。** 这里的资源受限指不依赖海量新示教、从零训练超大模型或无限算力，而是在约 20 小时/任务数据和 8 张 A100 全参微调条件下提升可靠性。任务包括 flattening、folding、hanging 等柔性衣物操作，状态空间大、阶段多、失败恢复复杂。
-
-挑战来自三类不一致：示教数据覆盖不了所有恢复状态，导致 \(P_{\text{train}}\) 与 \(P_{\text{test}}\) 不一致；模型训练会形成自己的 inductive bias，导致 \(Q_{\text{model}}\) 与 \(P_{\text{train}}\) 不一致；部署时延迟、动作 chunk 接缝和真实执行误差又会让 rollout 偏离训练轨迹。单纯提高成功率均值不足以解决这些多阶段误差累积。
-
-### Finding
-
-作者的 finding 是：**长时程机器人可靠性的主要瓶颈不只是数据和模型规模，而是示教、模型和部署三类分布之间的系统性不一致。** 这个洞见把“更大模型/更多数据”的问题翻转成“先定位哪一对分布错位，再用对应模块修补”。
-
-这个 finding 能解决挑战，是因为每类错位需要不同工具。\(Q_{\text{model}}\) 偏离 \(P_{\text{train}}\) 时，Model Arithmetic 可以在权重空间合并不同子分布训练出的策略，降低单一策略偏置；长时程阶段混淆时，Stage Advantage 提供阶段感知的密集进度信号；\(P_{\text{train}}\) 与 \(P_{\text{test}}\) 偏离时，Train-Deploy Alignment 通过 DAgger corrections、时空增强和 temporal smoothing 把部署误差带回训练与控制设计。
-
-### 方法
-
-kai0 建在 π0.5 / π0 系列策略后训练之上，面向两个双臂 ALOHA 机器人组成的协作系统。第一根支柱是 Model Arithmetic：把按不同数据子集训练得到的 checkpoint 进行 weight-space merging，并用 OOD validation / DAgger recovery trajectories 选择合并策略，让模型吸收外观、状态和恢复行为的多样性。
-
-第二根支柱是 Stage Advantage：对长时程任务进行阶段建模，构造 stage-aware advantage estimator，为视觉相似但任务阶段不同的状态提供更稳定的进度信号，缓解 value oscillation 和 temporal mismatch。第三根支柱是 Train-Deploy Alignment：通过 spatio-temporal augmentation、heuristic DAgger corrections 和 temporal chunk-wise smoothing 对齐训练与真实部署，减少延迟、动作块接缝和执行漂移带来的错误累积。
-
-### 结论
-
-实验在 flattening、folding、hanging 等复杂衣物操作上验证 kai0。论文报告，在仅约 20 小时数据和 8 A100 训练资源下，χ₀ 相比 baseline π0.5 成功率提升接近 250%，并展示从任意初始状态连续 24 小时 non-stop 运行的系统能力。模块消融表明，Model Arithmetic、Stage Advantage 和 Train-Deploy Alignment 分别对应覆盖不足、阶段错位和部署偏移等失败源，组合后对长时程可靠性贡献最大。
-
-边界也很重要：论文主要验证双臂衣物操作，没有证明方法可直接迁移到所有 rigid-body manipulation 或所有 robot foundation model；后训练是否保留预训练先验仍需进一步评估；Model Arithmetic 能否合并不同任务策略而不只是子分布策略，也还没有完全回答。kai0 的结论是“分布一致性工程能显著提升可靠性”，不是“少量数据即可通用解决所有机器人操作”。
-
-### 关键术语
-
-- **Distributional Inconsistency（分布不一致）**：示教、模型和部署阶段数据分布不匹配，导致策略在长时 rollout 中累积错误。
-- **\(P_{\text{train}}\)（训练示教分布）**：人类示教和训练数据覆盖的状态/动作分布。
-- **\(Q_{\text{model}}\)（模型策略分布）**：模型训练后因 inductive bias 和数据覆盖形成的输出分布。
-- **\(P_{\text{test}}\)（部署执行分布）**：真实机器人 rollout 时实际访问的状态和动作分布。
-- **Model Arithmetic（模型算术）**：在权重空间合并多个 checkpoint，以吸收不同数据子分布的能力。
-- **Stage Advantage（阶段优势）**：阶段感知的 advantage / progress 信号，用于长时程任务中的稳定学习。
-- **Train-Deploy Alignment（训练-部署对齐）**：通过 DAgger、增强和平滑等方法减少训练轨迹和真实执行轨迹的错位。
-
-kai0（论文正式题名写作 χ₀）不是传统意义上“生成未来视频”的世界模型论文。它更像一篇机器人世界模型闭环里的**分布一致性工程论文**：真实机器人要从示教数据学策略，再在有延迟、有接触、有失败恢复的物理环境里执行。论文把这条链拆成 \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 三个分布，并用 Model Arithmetic、Stage Advantage、Train-Deploy Alignment 去逐一修补它们之间的错位。
-
-放到具身智能专题里读，它回答的不是“策略网络能不能输出动作”，而是另一个同样重要的问题：**如果一个 VLA / policy 已经能预测动作，怎样让训练数据、策略偏置和真实执行轨迹足够一致，避免长时任务中的错误滚雪球。**
-
-## 为什么不是继续堆 scale
-
-高可靠性长时程机器人操作过去常常依赖 resource scale：更多人类演示轨迹、更大的 VLA / policy backbone、更长训练、更大 batch、更多 GPU，以及更多机器人、环境和任务数据。kai0 不否认 scaling 有用，但它强调：真实机器人任务失败，很多时候不是因为模型还不够大，而是因为训练时、模型学习后、真实执行时看到的是三套不一致的分布。
-
-| Resource scale | 能带来的帮助 | 仍然解决不了的错位 |
-| --- | --- | --- |
-| 更多演示数据 | 扩大成功轨迹覆盖 | 失败恢复状态仍然稀缺 |
-| 更大 policy backbone | 提高拟合和泛化能力 | 模型可能形成自己的动作偏好 |
-| 更多算力 | 允许更长训练和更大 batch | 推理延迟和控制误差仍在部署侧发生 |
-| 更多任务/机器人 | 提高跨场景经验 | 真实执行轨迹会被当前 policy 自己改变 |
-
-所以这篇论文的核心动机是：不要只把鲁棒性问题写成“数据不够多、模型不够大”，而要系统处理多阶段真实机器人任务中的分布错位和误差累积。
-
-## 它的效率贡献是什么
-
-| 维度 | 贡献 |
-| --- | --- |
-| 节省的成本 | 不靠海量新示教或从零训练大模型，而是在约 20 h / task 数据、8×A100 全参微调条件下，通过 checkpoint 合并、优势重标注和部署侧平滑提高可靠性 |
-| 核心机制 | Model Arithmetic 合并不同数据子集训练出的策略；Stage Advantage 给长时任务提供 stage-aware progress signal；Train-Deploy Alignment 用 Heuristic DAgger、时空增强和 temporal chunk-wise smoothing 对齐部署 |
-| 对具身智能主线的意义 | VLA / robot policy 闭环不能只看模型能力，还要管理 \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 的分布错位、延迟和恢复数据 |
-| 主要风险 | 证据集中在双臂衣物操作；不是通用物理世界模型；成功率提升仍依赖任务标注、人工恢复数据和硬件 SOP |
-| 应接到本站哪里 | [VLA、WAM 与世界模型系统地图](../../embodied-ai/vla-wam-world-model-system-map.md)、[VLA 数据、模型与评测路线](../../embodied-ai/vla-data-model-and-evaluation-roadmap.md)、[世界模型数据引擎](../../world-models/data-engines-and-self-improvement.md) |
-
-## 证据等级与外推边界
-
-kai0 最容易被误读成“少量数据也能稳定解决机器人长时任务”。更稳的读法是：它证明了在特定硬件、特定任务、特定 π₀.₅ / π₀ 后训练体系下，分布对齐模块可以显著提高可靠性；它还没有证明这些模块能无损迁移到所有机器人、物体和控制接口。
-
-```mermaid
-flowchart TD
-    A["Human demonstrations: P_train"] --> B["Full-parameter pi0.5 finetuning"]
-    B --> C["Subset checkpoints"]
-    C --> D["Model Arithmetic: merged Q_model"]
-    A --> E["Stage labels + frame pairs"]
-    E --> F["Stage Advantage estimator"]
-    F --> G["Advantage-weighted policy learning"]
-    D --> H["Deployment: P_test"]
-    G --> H
-    H --> I["Heuristic / on-policy DAgger"]
-    I --> A
-    H --> J["Temporal chunk-wise smoothing"]
-```
-
-| 论文结论 | 证据来源 | 证据等级 | 可外推到具身智能 / VLA 系统 | 不能直接外推 |
-| --- | --- | --- | --- | --- |
-| \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 的错位是长时操作的核心瓶颈 | 方法定义、pipeline 图、系统消融 | System design + Ablation | VLA / 机器人项目要记录示教、模型输出和实际执行三条分布，而不是只存成功轨迹 | 不能证明所有失败都来自这三类错位 |
-| Model Arithmetic 能用少量子模型合并提高覆盖 | Task A/B/C 的 MA 消融，OOD validation 对比 | Ablation | 可以把不同外观、初始状态、恢复数据训练出的 checkpoint 当成低成本多模态策略集合 | 不等于任意 checkpoint 线性合并都有效；OOD validation 质量很关键 |
-| Stage Advantage 比 value-diff 更稳定 | SA 曲线、SFR/MSTD、任务成功率对比 | Ablation + Training diagnostic | 长时任务应把 stage / progress 明确进训练信号，减少视觉相似状态的多值歧义 | 不能替代真实 reward，也不保证非单调任务的优势标签正确 |
-| Train-Deploy Alignment 提高真实部署表现 | DAgger、Heuristic DAgger、控制策略和时空增强消融 | Closed-loop robot evaluation | 真实执行延迟、动作 chunk 接缝、恢复数据都应进入训练和部署设计 | 不能只看 SR；retry cost、throughput 和硬件差异必须一起看 |
-| 24 小时连续运行展示高可靠性 | 官方论文/项目材料中的 stress test 描述 | Official demo / system claim | 可作为生产级机器人评测目标参考 | 不是第三方复现，也不覆盖更多机器人平台 |
-
-## 论文位置
-
-在具身智能谱系里，很多 VLA 论文先回答“视觉、语言和动作怎样接起来”，也就是给定观测和指令后输出动作。kai0 的切入点更靠近部署：即使 VLA 或 policy 能输出动作，真实机器人还会因为三类不一致失败。
-
-| 分布 | 含义 | 典型失败 |
-| --- | --- | --- |
-| \(P_{\text{train}}\) | 人类示教轨迹分布 | 数据太稀疏，只覆盖少数衣物状态、抓取路径和恢复场景 |
-| \(Q_{\text{model}}\) | policy 从示教里学到的归纳偏置 | 模型偏向训练中最常见的动作模式，遇到相似但不同 stage 的状态会套错动作 |
-| \(P_{\text{test}}\) | 部署时真实执行轨迹分布 | 推理延迟、控制器限制、接触误差和衣物形变让实际执行偏离模型计划 |
-
-这三者可以这样理解。\(P_{\text{train}}\) 通常来自人类遥操作，轨迹干净、成功、接近专家行为；例如人类每次都从正面抓杯子，训练集中就很少出现侧面、滑落、偏抓后的恢复。\(Q_{\text{model}}\) 是模型根据这些轨迹和架构学出来的默认判断方式，它不等于人类演示本身，而是对演示的压缩和偏好；同一个例子里，模型可能学成“只会从正面抓”。\(P_{\text{test}}\) 则是机器人部署时真正走出来的状态分布，它会被模型自己的动作、控制延迟、接触扰动和物体形变不断改变。
-
-所以这篇论文对本站具身智能主线的意义是：VLA 不只是一段动作预测网络，还包括数据闭环、部署延迟、失败恢复和 action smoothing。没有这些，模型输出看起来再合理，真机也可能在执行中积累小误差。
+总流程图要从左侧的训练数据读起。恢复数据与增强扩展输入覆盖，人工阶段标注供进展估计器使用；中间的多个候选策略在权重空间合并；右侧动作缓冲负责把新预测接到正在执行的轨迹上，策略执行中暴露的问题又可进入 DAgger 数据回路。
 
 ![kai0 pipeline 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-1-pipeline.png){ width="920" }
 
-<small>图源：`χ₀: Resource-Aware Robust Manipulation via Taming Distributional Inconsistencies`，Figure 1。原论文图意：展示 \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) 三阶段中的对齐模块，包括 Heuristic DAgger、spatio-temporal augmentation、stage annotation、Model Arithmetic、Stage Advantage、temporal chunk-wise smoothing 和 on-policy DAgger。</small>
+*对应原论文 v3 Figure 2 的系统流程。图中的优势估计器为策略训练提供信号，执行端还包含独立的动作缓冲处理；两者解决的时间问题不同。* [↗](https://arxiv.org/pdf/2602.09021v3#page=3)
 
-**这张 pipeline 图怎么读。**
-左侧是训练分布，论文先用 Heuristic DAgger 和时空增强扩展示教覆盖，再给长时任务打 stage annotation。中间是模型分布，多个数据子集训练出的策略通过 Model Arithmetic 合并，Stage Advantage 作为高质量动作偏好信号参与训练。右侧是真实部署分布，temporal chunk-wise smoothing 处理动作 chunk 接缝和延迟，on-policy DAgger 再把部署失败回流到数据。
+论文报告了相对基线近 250% 的成功率提升与连续 24 小时运行展示。理解这两个表述，仍要回到具体任务、相对增幅、重试次数和吞吐量。附录还保留了阶段条件失效、控制组合退化的结果，它们限定了哪些组件可以直接迁移、哪些必须重新验证。[↗](https://arxiv.org/pdf/2602.09021v3#page=1) [↗](https://arxiv.org/pdf/2602.09021v3#page=16)
 
-这张图支撑的是“分布对齐系统”，不是单个新网络结构。读它时要抓住一个顺序：先让训练数据覆盖更多状态，再让策略吸收多种数据模态，最后让真实执行不因为延迟和失败恢复脱离训练假设。
+## 三个“分布”分别是什么，为什么不能只修训练集
 
-## 核心问题
+作者用 $P_{\mathrm{train}}$ 表示专家轨迹分布，用 $Q_{\mathrm{model}}=\pi(a\mid s;\hat\phi)$ 表示学到的条件动作策略，用 $P_{\mathrm{test}}$ 表示机器人部署时产生的轨迹分布。它们属于一个流程的不同层次：前后两者描述轨迹，中间是状态到动作的条件映射。论文没有通过一个直接计算的 KL 距离，同时把这三项优化到相等。[↗](https://arxiv.org/pdf/2602.09021v3#page=4)
 
-论文把机器人操作写成有限时域 MDP。轨迹为
-
-$$
-\tau=(s_0,a_0,s_1,a_1,\dots,s_H),
-$$
-
-策略诱导的轨迹分布可以写成：
+执行端的区别在式（2）中最清楚。理想情况下，策略动作 $a_t$ 进入真实动力学 $T$；实际部署中，推理与执行算子 $I$ 产生真正施加的动作 $\tilde a_t$，于是有效转移为
 
 $$
-P_{\pi}(\tau)=\mu(s_0)\prod_{t=0}^{H-1}\pi(a_t\mid s_t;\phi)T(s_{t+1}\mid s_t,a_t,\xi).
+\widetilde T(s_{t+1}\mid s_t,a_t,\xi)
+=\mathbb E_{\tilde a_t\sim I(\cdot\mid a_t,s_t)}
+\left[T(s_{t+1}\mid s_t,\tilde a_t,\xi)\right].
 $$
 
-但部署时真正执行的不是理想动作 \(a_t\)，而是受推理延迟、控制器和物理限制影响后的 \(\tilde a_t\)。所以论文把 test-time 轨迹写成由 \(Q_{\text{model}}\) 和实际执行算子共同诱导的 \(P_{\text{test}}\)。这一步很关键：它承认“模型输出动作”和“机器人真正执行动作”不是一回事。
+$\xi$ 是固定的环境参数，$I$ 汇总推理到执行过程的影响，$T$ 则描述物理状态如何变化。这一写法强调，即使策略在当前输入下预测了合适动作，实际运动仍受执行链条影响。机器人在等待新动作块时已经运动，新块的早期命令可能过期；直接从新块开头执行，就会把过去时刻的计划施加给现在的机器人。[↗](https://arxiv.org/pdf/2602.09021v3#page=4)
 
-三类不一致分别对应三类工程痛点：
+| Inconsistency | Concrete failure | Main intervention |
+|---|---|---|
+| Coverage Deficiency | 有限示范与单次优化遗漏可行操作模式 | 在同任务互补子集上训练并合并策略 |
+| Temporal Mismatch | 相似画面处于不同任务阶段；新动作块到达时已与当前执行错位 | 阶段条件进展信号；过期动作删除与平滑衔接 |
+| Failure Cascade | 小幅滑落或抓点偏差使策略进入缺少恢复示范的状态 | DAgger / Heuristic DAgger 与数据增强 |
 
-1. **Coverage Deficiency**：示教分布太稀疏，policy 学到的动作模式覆盖不了真实可行轨迹流形；
-2. **Temporal Mismatch**：长时任务不同 stage 视觉上相似，模型会误用动作；推理到控制的延迟也会让 action chunk 接不上；
-3. **Failure Cascade**：训练数据缺少失败恢复，部署时一旦偏离成功轨迹，错误会连续放大。
+这里有两个不同的“时间”。SA 处理任务语义随阶段变化的问题，例如同样的平铺衣物，在展平阶段与折叠阶段需要不同动作；动作缓冲处理真实时间上的延迟。只改进进展估计器，无法自动消除动作执行错位；只平滑关节轨迹，也无法教会模型滑落后怎样重新抓起衣物。[↗](https://arxiv.org/pdf/2602.09021v3#page=4) [↗](https://arxiv.org/pdf/2602.09021v3#page=6)
 
-如果把这篇论文和 LingBot-World 对读，LingBot 更关心“视频生成器如何变成可交互模拟器”，kai0 更关心“机器人策略如何在真实执行中保持可恢复、可持续、低重试”。前者偏 world simulator，后者偏 deployment-aligned policy world loop。
+## Model Arithmetic，把有限示范中的不同模式合成一个策略
 
-## 现有路线为什么不够
+### 合并的对象是同任务候选模型的权重
 
-π 系列这类 VLA 通过大规模预训练数据获得了强泛化能力，但真实机器人操作还有几个硬约束：专家演示采集很贵，推理到控制存在明显延迟，训练大模型本身也有算力负担。DAgger 能缓解分布偏移，因为它让当前策略先 rollout，再请专家给策略遇到的偏离状态标注正确动作；问题是这通常需要人在真实机器人执行中实时监督、接管和标注，安全和时间成本都很高。
+MA 先把某个任务的数据随机分为互不重叠子集，分别训练策略。每个子集覆盖的衣物状态、外观和操作模式不同，优化后候选策略也可能保留不同偏好。论文实现使用 4 个检查点，再通过非负、和为 1 的系数进行权重插值
 
-kai0 因此把问题拆成三件事：Model Arithmetic 负责吸收更多演示分布，Stage Advantage 负责给长任务更稳定的训练信号，Train-Deploy Alignment 负责让训练分布和部署分布更接近。
+$$
+\theta_{\mathrm{merged}}=\sum_{i=1}^{n}\alpha_i\theta_i,
+\qquad \alpha_i\geq0,\qquad\sum_{i=1}^{n}\alpha_i=1.
+$$
 
-## Model Arithmetic：用权重合并补覆盖
+$\theta_i$ 是候选策略参数，$\alpha_i$ 是融合系数，最终部署的是 $\theta_{\mathrm{merged}}$ 这一个模型。它不需要同时运行四个策略后投票，也没有推理路由器，因此收益不以多模型在线推理为代价。不过训练多个候选、收集验证轨迹和搜索系数仍有成本，“部署无额外模型”不能延伸为整个流程零成本。[↗](https://arxiv.org/pdf/2602.09021v3#page=4) [↗](https://arxiv.org/pdf/2602.09021v3#page=14)
 
-Model Arithmetic 解决的是 \(P_{\text{train}}\) 覆盖不足导致的 \(Q_{\text{model}}\) 偏置。论文不是训练一个复杂 MoE，也不是部署多个模型投票，而是把不同数据子集上训练出来的 policy checkpoint 直接在权重空间合并。
-
-这里的关键词是 model merging：不重新从头训练一个大模型，而是在权重空间直接操作多个已训练模型的参数。它和把所有数据混在一起 joint training 不同，也和模型集成不同；集成是在输出层合并多个预测，MA 则合成一个统一策略模型。它也不同于 MoE，后者需要 router 和专门训练设计，MA 不引入部署时的显式路由。
+Figure 3 上半部分把验证损失映射成权重，下半部分列出其他搜索方法。重点是用什么数据计算这些损失，以及评估的是单个候选还是合并后的策略。
 
 ![Model Arithmetic 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-2-model-arithmetic.png){ width="760" }
 
-<small>图源：`kai0`，Figure 2。原论文图意：展示 Model Arithmetic 中的 souping strategies，包括 inverse loss weighting、average weighting、gradient descent 和 greedy search 等 checkpoint 合并方式。</small>
+*原论文 v3 Figure 3。Inverse Loss 用单个模型的验证损失构造权重；Gradient Descent 与 Greedy Search 则需要比较合并结果的验证表现。* [↗](https://arxiv.org/pdf/2602.09021v3#page=4)
 
-形式上，给定数据子集 \(\{D_1,D_2,\ldots,D_n\}\)，分别训练出策略权重 \(\{\theta_1,\theta_2,\ldots,\theta_n\}\)，然后合并：
+| Strategy | Coefficient selection | What it tests |
+|---|---|---|
+| Average Weighting | 所有 $\alpha_i=1/n$ | 单纯合并是否已优于单个候选 |
+| Inverse Loss | $\alpha_i\propto1/(L_i+\epsilon)^p$，再归一化 | 单模型验证损失能否指导权重分配 |
+| Gradient Descent | 用 $\operatorname{softmax}(w)$ 参数化系数，优化合并模型的验证损失 | 连续优化能否找到更好的组合 |
+| Greedy Search | 逐步加入能降低验证损失的检查点，在入选模型间均匀平均 | 简单候选筛选能否避免较差模型稀释能力 |
 
-$$
-\theta_{\text{merged}}=\sum_{i=1}^{n}\alpha_i\theta_i,\quad
-\alpha_i\ge 0,\quad \sum_i\alpha_i=1.
-$$
+表中的 $L_i$ 为候选模型验证损失，$\epsilon$ 防止分母不稳定，$p$ 控制低损失模型获得多大偏重；它与 SA 中同样写作 $\epsilon$ 的筛选参数用途不同。附录方法细节采用 inverse-loss，主实验又比较了梯度下降及其自适应变体、贪心等方法，因此应区分一个实现配置与对多种合并策略的经验比较。[↗](https://arxiv.org/pdf/2602.09021v3#page=7) [↗](https://arxiv.org/pdf/2602.09021v3#page=14)
 
-关键不是这条公式，而是 \(\alpha_i\) 怎么选。论文比较了四类策略：
+### 决定合并效果的验证集，来自机器人实际偏离的状态
 
-| Strategy | Weight selection idea | Why it matters |
-| --- | --- | --- |
-| Average weighting | Set \(\alpha_i=1/n\) | 最便宜，但默认每个 checkpoint 质量相同 |
-| Inverse-loss | \(\alpha_i\propto 1/(L_i+\epsilon)^p\) after normalization | validation loss 低的 checkpoint 获得更高权重 |
-| Gradient descent | Optimize softmax coefficients on validation loss | 直接最小化 merged validation loss |
-| Greedy search | Iteratively add checkpoints that reduce validation loss | 用搜索方式选择更好的合并组合 |
+如果验证集仍是干净的专家轨迹，低验证损失可能只奖励模型复现已经覆盖的动作。χ₀ 使用子集策略运行时收集的 DAgger 恢复轨迹作为 OOD 验证数据。它们相对原始子集包含新的失败邻域，系数搜索因此会考虑“偏离后能否接回来”。这里 OOD 的参照是原始示范分布，并非一个完全不相关的新领域。[↗](https://arxiv.org/pdf/2602.09021v3#page=4)
 
-论文的经验结论是：OOD validation 比 in-domain validation 更有用，尤其是用 DAgger / recovery trajectories 做验证时，更能反映 \(P_{\text{test}}\) 里的失败邻域。对具身数据引擎来说，这个点很重要：验证集不应该只像训练集，而应该像部署时会出问题的地方。
+这也说明 MA 的能力边界。它让已有候选的参数组合更适合验证状态，没有凭权重相加创造此前完全不存在的恢复标签。恢复轨迹本身仍需要采集；如果所有候选都缺乏某个必要技能，模型合并并不提供从无到有的保证。论文只检验同任务不同子集的合并，跨任务策略融合被列为后续研究。[↗](https://arxiv.org/pdf/2602.09021v3#page=9)
 
-## Stage Advantage：把长时任务拆成 stage
+Task C 的 Figure 8 同时放入 full data 和 single best 两个对照。前者排除“只是看到了更多训练数据”的简单解释，后者排除“其实只要挑中最强子模型”的解释。成功率和吞吐量上的整体优势支持参数合并的价值，但不同合并方法的重试成本并不一致，贪心也不是每一列吞吐都最高。
 
-Stage Advantage 解决的是长时任务中的 temporal mismatch。普通 value-diff 会先估计两个状态的 value，再相减：
+![Model Arithmetic ablation 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-7-model-arithmetic-ablation.png){ width="840" }
+
+*原论文 v3 Figure 8，Task C。每张子图内部先比较 full data、single best 与合并策略，再横向比较 In-domain 与 OOD 验证；误差线和各指标方向都要保留。图中没有逐柱精确数值标签。* [↗](https://arxiv.org/pdf/2602.09021v3#page=7)
+
+扩展到 Task A/B 后，结论需要收窄。Figure 14 中 Task B 的合并策略大幅减少重试，但 Task A 的某些梯度合并配置在吞吐上并不高于 full-data；OOD 也并非在每项指标上更好。附录明确承认，验证损失与最终表现的相关性不够稳定，并提出 OOD 数据必须足够接近实际 $P_{\mathrm{test}}$ 才能成为有效代理的解释。因而，复用 MA 时应先审查恢复验证集的代表性，而非把“OOD”这个标签本身当作质量保证。[↗](https://arxiv.org/pdf/2602.09021v3#page=16)
+
+![Model Arithmetic on Tasks A and B](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-14-ma-tasks-ab.png){ width="1000" }
+
+*原论文 Figure 14。左侧 Task A、右侧 Task B。Task B 的 Retry Cost 降低很明显；Task A 的吞吐与 OOD 对照则显示，正文概括的优势不能逐项推广。* [↗](https://arxiv.org/pdf/2602.09021v3#page=16)
+
+## Stage Advantage，从单帧分数改为阶段内的前后比较
+
+### 为什么两个进度值相减容易出问题
+
+长时程示范包含有效推进、重复动作和恢复动作。普通行为克隆把这些动作都当成同等监督，可能学到重复展平却迟迟不折叠的行为。论文采用进展信号区分样本质量，先比较一种基于独立单帧进度值的方式
 
 $$
 A(s,a)=V(s')-V(s).
 $$
 
-问题是两个 value 都有误差，相减会放大噪声；更麻烦的是同一个视觉状态在不同 stage 里含义不同。例如衣物被摊开可能是“flattening 快完成”，也可能是“folding 前的中间状态”。全局 value 容易多值。
+其中 $V$ 预测状态的任务进度，$s'$ 为后续状态。若两个预测都带误差，相减后的信号可能波动；如果相似图像出现在不同阶段，单帧全局值还可能缺少确定语义。实验基线是作者在 $\pi_{0.5}$ 的 PaliGemma 上自行实现的 RECAP / $\pi_{0.6}^{*}$ 风格方法，以同轨迹未来 50 步的值减当前值。它不等同于官方完整 $\pi_{0.6}^{*}$ 系统的直接对照。[↗](https://arxiv.org/pdf/2602.09021v3#page=5) [↗](https://arxiv.org/pdf/2602.09021v3#page=7)
 
-如果不区分阶段，长任务里的 advantage 还会遇到两个直观问题。第一，奖励或进展信号很稀疏，中间动作到底有没有推进任务并不清楚。第二，不同阶段的 value 尺度差异很大，前后状态跨度越长，advantage 噪声越容易放大，训练也更不稳定。
-
-kai0 改成直接预测 pairwise progress：
+SA 首先把两个独立预测变为一个配对预测，让 VLM-based estimator 同时读取前后图像，直接输出相对进展；再加入当前阶段 $g$
 
 $$
-A(s,a)=f_{\theta}(s,s'),
+A_{\mathrm{stage}}(s,a,g)=f_\theta(s,s'\mid g),
+\qquad g\in\left\{0,\frac1S,\ldots,\frac{S-1}{S}\right\}.
 $$
 
-再加入 stage 条件：
+$S$ 是阶段数，阶段由人工语义标注获得。训练帧对来自同一 episode，时间跨度随机抽取，$s'=s_{t+\Delta}$，避免只适配固定间隔。公式中的 $a$ 表示从 $s$ 到后续状态的行为，但网络的明确输入接口是两幅观测与阶段条件；不能据符号自行添加论文未给出的动作编码器。[↗](https://arxiv.org/pdf/2602.09021v3#page=5)
 
-$$
-A_{\text{stage}}(s,a,g)=f_{\theta}(s,s'\mid g).
-$$
+| Task | Stage annotations |
+|---|---|
+| A | flattening → folding |
+| B | retrieving、flattening、folding、handover，覆盖条件分支中的子目标 |
+| C | retrieving、dressing the rack、hanging |
 
-其中 \(g\) 是人工标注的 stage 标量，取 \(\{0,\frac{1}{S},\ldots,\frac{S-1}{S}\}\)。附录给出的任务划分是：Task A 两个 stage（flattening、folding），Task B 四个 stage（retrieving、flattening、folding、handover），Task C 三个 stage（retrieving、dressing the rack、hanging）。
-
-训练 pair 的构造也很关键。论文不是固定间隔取两帧，而是随机采样时间跨度 \(\Delta\)，令 \(s'=s_{t+\Delta}\)。这样可以减少对某个固定时间离散化的过拟合，让 advantage estimator 学“是否推进了当前阶段”，而不是只记住固定步长后的视觉变化。
+Figure 4 展示把阶段优势累积后得到的轨迹。先看衣服滑落后曲线下降、重抓与展平后的回升，再看遮挡引起的振荡与重复展平段。它说明模型尝试让进展信号与动作后果对应，曲线仍会受视觉遮挡影响，不能把一次可视化当成无误差的奖励函数。[↗](https://arxiv.org/pdf/2602.09021v3#page=5)
 
 ![Stage Advantage 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-3-stage-advantage.png){ width="820" }
 
-<small>图源：`kai0`，Figure 3。原论文图意：展示 Task A/B/C 中基于 Stage Advantage 的 cumulative value；绿色/红色区域分别标出正向进展和负向或不稳定片段。</small>
+*原论文 v3 Figure 4。三行分别来自 A/B/C，红、绿区域强调负向与正向进展；挂衣过程中的视觉遮挡仍可导致值振荡。* [↗](https://arxiv.org/pdf/2602.09021v3#page=5)
 
-**这张图看什么。**
-它不是在展示 policy 直接学会了完整物理规律，而是在展示 advantage signal 是否能沿长时任务给出更平滑的进展判断。Task A 里 cloth slips 后 value 下降，重新抓取并摊平后 value 回升；Task B 里取衣物、放错、拖到右侧这些阶段能被区分；Task C 里遮挡和挂衣阶段会造成振荡。
+### 二元“好动作”标签如何产生
 
-这说明 SA 更像一个训练用的 progress teacher：它帮助 policy 少学无效重复动作，多学能推进当前 stage 的动作。它不能替代环境 reward，也不能保证所有任务进展都是单调的。
+主文用 $I=\mathbf1[A_{\mathrm{stage}}>\epsilon]$ 概括把连续优势离散化的过程，附录则给出具体操作：按预测优势排序，取顶部 $\epsilon=0.3$ 比例为正样本，其余为负。这里应按**排名前 30%**理解，而不能把未归一化的优势绝对值 0.3 当成跨任务通用阈值。二元最优性条件随后用于偏向有效进展的策略学习。报告未展开条件 token 的完整编码与推理引导参数，因此这里能复用的是标签构造和训练思路，不能据此补出一套未披露的在线重排序流程。[↗](https://arxiv.org/pdf/2602.09021v3#page=14)
+
+它的监督来源也影响解释。附录说明，帧对的相对进展标签基于它们在轨迹中的时间位置差，属于时间进度代理。作者承认这种方法隐含任务完成过程近似单调的假设：后出现的状态不一定更有价值，特别是恢复可能要先退回较早姿态。因此，SA 减少某些估计不稳定，并没有从根本上解决“什么行为真正有助于成功”的奖励定义问题。论文将这种优势加权学习与离线 RL / AWR 联系起来，未使用 PPO 那样依赖大量在线试错的训练方案。[↗](https://arxiv.org/pdf/2602.09021v3#page=13)
+
+原图的训练损失曲线显示，SA 比自行实现的 $\pi_{0.6}^{*}$ 风格估计器收敛到更低损失。纵轴为对数刻度，这支持其在该进展监督上的拟合优势；是否转换为更好的真实机器人策略，还需要下一组实验。
 
 ![Stage Advantage loss curve 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-12-sa-loss-curve.jpeg){ width="760" }
 
-<small>图源：`kai0`，Figure 12。原论文图意：比较 SA 和 π₀.₆* style implementation 的训练 loss；SA 曲线下降更稳定，作为数值稳定性证据。</small>
+*原论文 v3 Figure 13，优势估计训练损失。它衡量的是监督目标拟合，不能代替任务完成率。* [↗](https://arxiv.org/pdf/2602.09021v3#page=15)
 
-## Train-Deploy Alignment：让动作真正落到机器人上
+### 更平滑的进展，并不自动带来更高成功率
 
-Train-Deploy Alignment 解决的是 \(Q_{\text{model}}\) 到 \(P_{\text{test}}\) 的落地问题。动作 chunking policy 往往一次输出一段未来动作，但推理耗时和控制器执行会造成旧 chunk 没执行完、新 chunk 已到来的接缝。这个接缝如果处理不好，机器人会出现突变、抖动或重复动作。
-
-![Train-Deploy Alignment 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-4-train-deploy-alignment.png){ width="820" }
-
-<small>图源：`kai0`，Figure 4。原论文图意：左侧展示 Heuristic DAgger、spatio-temporal augmentation 和 temporal chunk-wise smoothing 三类对齐策略；右侧用 T-SNE 表示策略分布逐步靠近部署分布。</small>
-
-论文的部署侧核心是 temporal chunk-wise smoothing。设旧动作 buffer 为 \(a^{old}\)，新预测 chunk 为 \(a^{new}\)，执行索引为 \(k\)，先丢掉因延迟变旧的命令，再对旧 buffer 剩余部分和新 chunk 前段做线性插值：
-
-$$
-\tilde a_i=w_i a^{old}_i+(1-w_i)a^{new}_{rem,i}.
-$$
-
-其中 \(w_i\) 从旧动作侧逐步过渡到新动作侧。这个方法不改模型结构，却能减少 chunk 切换时的执行跳变。
-
-另外两类 TDA 数据策略也很实用：
-
-| Strategy | What it changes | Engineering reading |
-| --- | --- | --- |
-| Heuristic DAgger | 直接把机器人初始化到人工设计的失败状态，采集恢复示教 | 不必等待策略自然失败，前置收集高价值 recovery data |
-| On-policy DAgger | 部署时失败后人工接管并保存 correction | 更真实，但耗时，且依赖人在环 |
-| Spatio-temporal Augmentation | 左右翻转并交换左右臂、跳帧模拟速度变化 | 零机器人时间扩展 \(P_{\text{train}}\)，但效果依赖任务和控制接口 |
-
-这里要分清三个层次。Spatio-temporal augmentation 的目的不是单纯把数据变多，而是让模型提前见到部署时可能出现的小偏差；论文里具体使用的是左右翻转并交换左右臂，以及通过跳帧模拟速度变化。Heuristic DAgger 则解决“失败状态原始示教里没有”的问题：与其等待策略自然失败，不如人工构造错位抓取、局部掉落这类失败初态，直接采恢复示教。Temporal chunk-wise smoothing 处理最后一公里：policy 输出的是动作块，如果两个 chunk 之间突变，机械臂就会抖动、方向跳变或放大误差，所以需要在 chunk 接缝处做平滑过渡。
-
-## 数据与训练细节
-
-这篇的训练细节值得单独看，因为论文的核心 claim 是 resource-aware。它不是靠无限扩数据，而是在比较清楚的资源约束下做后训练。
-
-| Hyperparameter | Value |
-| --- | --- |
-| *Data & Input* |  |
-| Expert demonstration hours | ~20 h per task |
-| Action chunk length \(K\) | 50 |
-| Execution frequency | 100 Hz |
-| *Optimization* |  |
-| Training steps | 80,000 |
-| Batch size | 128 |
-| Optimizer | AdamW |
-| Learning rate | \(2.5\times10^{-5}\) |
-| Cosine Decay Steps | 10,000 |
-| Conditioned noise level \(\sigma\) | [0.001, 1.0] |
-| Gradient Clip | 1.0 |
-| *Module-Specific* |  |
-| MA: Number of checkpoints | 4 |
-| SA: Advantage threshold \(\epsilon\) | 0.3 |
-| *Infrastructure* |  |
-| Training GPUs | 8 × A100 |
-| Inference GPUs | RTX 4090 |
-
-<small>表源：`kai0`，Table I。表格保留原论文英文字段；本站只把 LaTeX 表格改写为 Markdown。</small>
-
-训练链路可以拆成四步：
-
-1. **收集任务数据**：论文正文称每个任务约 20 小时 expert demonstrations；附录进一步给出 Task A 2668 episodes、Task B 3519 episodes、Task C 2988 episodes，数据采集频率 30 Hz，并随机化衣物位置、皱褶、尺寸、颜色和光照。
-2. **全参微调 π₀.₅**：每个任务独立 fine-tune open-source π₀.₅，使用 Flow Matching objective，8×A100 训练；π₀ 作为补充 baseline。
-3. **训练/使用三类模块**：MA 合并 4 个 checkpoint；SA 用同一 episode 中任意时间戳采样的 frame pairs 训练 advantage estimator，并把 top \(\epsilon=0.3\) fraction 标为 positive；TDA 负责数据增强、DAgger 和部署 smoothing。
-4. **真实机器人部署**：双臂系统包含 Agilex Piper 和 ARX X5 两类平台；每套系统有两个 6-DoF 机械臂和 1-DoF parallel gripper；三路 Intel RealSense D435i 相机采 640×480 RGB；视觉同步 30 Hz，低层控制器 100-200 Hz，推理用 Ubuntu 20.04 + RTX 4090。
-
-这里有一个边界要注意：正文的“约 20 小时示教”和附录 episode 统计不是一个可以随意相加的精确账本，后者包含更细的 DAgger / intervention 口径。读训练规模时应把它当成“有限资源下的任务级后训练规模”，不要当成完整可复现实验成本。
-
-### 评分标准
-
-论文的 Average Score 来自规则化子目标，下面保留原表英文格式。
-
-| Task | Sub-goals | Score |
-| --- | --- | --- |
-| Task A (Easy) | Flatten garment | +40 |
-| Task A (Easy) | 1st fold | +20 |
-| Task A (Easy) | 2nd fold | +20 |
-| Task A (Easy) | 3rd fold | +20 |
-| Task B -- T-shirt (Medium) | Retrieve & flatten | +40 |
-| Task B -- T-shirt (Medium) | 1st fold | +15 |
-| Task B -- T-shirt (Medium) | 2nd fold | +15 |
-| Task B -- T-shirt (Medium) | 3rd fold | +15 |
-| Task B -- T-shirt (Medium) | Stack to top-left | +15 |
-| Task B -- Shirt (Medium) | Retrieve from basket | +30 |
-| Task B -- Shirt (Medium) | Flatten | +50 |
-| Task B -- Shirt (Medium) | Pull to right-side table | +20 |
-| Task C (Hard) | Pull garment rightward | +15 |
-| Task C (Hard) | Grasp collar | +15 |
-| Task C (Hard) | Grasp hanger | +15 |
-| Task C (Hard) | Insert hanger into sleeve | +20 |
-| Task C (Hard) | Hook left collar on hanger | +20 |
-| Task C (Hard) | Hang on standing rack | +15 |
-
-<small>表源：`kai0`，Table II。原表标题为 `Score standard (normalized to 100)`。</small>
-
-## 实验结论
-
-论文评测三个衣物操作任务：Task A 是 T-shirt flattening and folding，Task B 是 conditional retrieval and sorting，Task C 是 garment hanging。指标包括 Success Rate、Throughput、Retry Cost 和 Average Score，每种任务/衣物设置按多次真实机器人 trial 统计。
-
-kai0 让两组双臂机器人协同完成长时程衣物操作，覆盖平整、折叠、交接和悬挂。论文主张在约 20 小时任务数据和 8×A100 训练资源下，相比开源 π₀.₅ baseline，成功率提升接近 250%。这组数字应按论文设置理解：它说明分布对齐模块在该真实机器人任务族里有效，不等于所有机器人任务都能用同样数据量达到同样可靠性。
-
-| Metric | Meaning | Direction |
-| --- | --- | --- |
-| Success Rate (SR) | 成功完成任务的 trial 比例 | Higher is better |
-| Throughput (TP) | 每小时预计完成任务数量 | Higher is better |
-| Retry Cost | 每个 episode 平均动作重试次数 | Lower is better |
-| Average Score | 基于规则子目标的归一化得分 | Higher is better |
-
-![kai0 system efficacy 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-6-system-efficacy.png){ width="840" }
-
-<small>图源：`kai0`，Figure 6。原论文图意：展示 Task A 上单模块、双模块和完整 kai0 系统的效果；完整系统在 success rate、throughput 和 average score 上达到最好，同时 retry cost 更低。</small>
-
-**系统消融怎么读。**
-单看某个模块容易误判。TDA 会显著推高成功率，但可能引入更多 retry；SA 对 throughput 更敏感，因为它减少无效动作和停滞；MA 对覆盖和 score 有帮助。完整系统的意义是把三者组合后，策略既愿意恢复，又不至于在失败附近无效重复。
-
-![Model Arithmetic ablation 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-7-model-arithmetic-ablation.png){ width="840" }
-
-<small>图源：`kai0`，Figure 7。原论文图意：展示 Task C 上 MA 变体相对 single-best 和 full-data candidate 的消融；OOD validation 在稳定性和标准误上更好。</small>
-
-MA 的关键证据不是“某个合并方法总是最好”，而是：subset-trained checkpoints 的合并能超过 single-best 和 full-data candidate。这提示一个工程现象：VLA 后训练可能存在大量参数冗余，不同数据子集让模型落到不同可用解，合并能比强行 joint training 更好吸收这些局部模式。
+Figure 9 对照 $\pi_{0.6}^{*}$-style、Direct、Direct + Stage。Direct 检验“配对预测”本身，Direct + Stage 再检验语义阶段条件。左侧使用 Smooth Frame Ratio（SFR）和 Mean Squared Temporal Difference（MSTD）描述数值行为，右侧给出实际策略的吞吐、重试、成功率和得分。原图将 SFR 标为越高越好、MSTD 标为越低越好；论文未完整交代两个指标的计算细节，因此可以比较图中的变化方向，但不能自行补出归一化方式或具体计算公式。[↗](https://arxiv.org/pdf/2602.09021v3#page=7)
 
 ![Stage Advantage ablation 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-8-stage-advantage-ablation.png){ width="840" }
 
-<small>图源：`kai0`，Figure 8。原论文图意：左侧用 SFR / MSTD 比较 advantage signal 数值稳定性；右侧展示 SA 相对 π₀.₆* style baseline 的性能收益。</small>
+*原论文 v3 Figure 9。青色 Task A、黄色 Task B。需要把同一任务在 SFR、Throughput、Retry Cost 与 Success Rate 中的柱子对应起来，避免只看稳定性指标。* [↗](https://arxiv.org/pdf/2602.09021v3#page=7)
 
-SA 的强证据是“稳定性指标和任务表现一起改善”。这比只看 loss 更有价值，因为它说明 advantage signal 不是仅在训练曲线上更平滑，而是能转成更少停滞、更高 throughput 或更好 score。
+Task A 中，加入阶段后吞吐、成功率和得分都较好。Task B 的结果更复杂：Direct + Stage 比 Direct 显著减少重试，也提高了后者的成功率，但其吞吐与成功率仍低于 $\pi_{0.6}^{*}$-style 基线；平均得分则提高。这意味着它可能更少空转、完成更多中间步骤，却没有在该对照中提高最终完成比例。把这组图概括为“阶段优势在各任务、各指标全面胜出”，会掩盖真正的权衡。
+
+Task C 的附录反例更明确。Direct + Stage 的平滑性表现继续改善，成功率、吞吐和 Average Score 却低于基线。Direct 单独使用时，成功率较高，但吞吐和平均得分更低、重试更多，也不能说它在所有维度胜出。作者把困难与基础模型缺少挂衣先验联系起来，这仍是解释性假设，实验没有单独控制预训练中的挂衣数据来验证它。[↗](https://arxiv.org/pdf/2602.09021v3#page=16) [↗](https://arxiv.org/pdf/2602.09021v3#page=17)
+
+![Stage Advantage on Task C](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-15-stage-task-c.png){ width="920" }
+
+*原论文 Figure 15。Direct + Stage 的低重试与较高 SFR，需要和低成功率一起理解；一条策略也可能因为缺少有效恢复而很少重试。* [↗](https://arxiv.org/pdf/2602.09021v3#page=16)
+
+因此，SA 的可复用对象是“阶段条件的配对进展建模”这一接口，以及分开比较信号稳定性和闭环表现的实验方法。阶段如何划分、时间代理是否适合任务、筛出的高进展片段是否包含必要恢复动作，都需要在目标任务上重新检查。
+
+## Train-Deploy Alignment，先让新动作块接到正确的时刻
+
+### 删除过期命令，再处理交接处的跳变
+
+异步推理能减少机器人等待，但新动作块到达时，旧块可能已经被执行了一段。如果直接切到新块开头，命令的时间基准会落后；如果硬切到某个新位置，相邻关节目标又可能跳变。Temporal Chunk-wise Smoothing 同时处理这两点，核心状态包括旧缓冲 $a^{\mathrm{old}}$、已消费索引 $k$、新预测 $a^{\mathrm{new}}$、最大删除量 $d_{\max}$ 和最小重叠长度 $m_{\min}$。[↗](https://arxiv.org/pdf/2602.09021v3#page=6)
+
+Algorithm 1 先计算 $d=\min(k,d_{\max})$。如果 $d$ 已达到或超过新块长度，说明没有可用的新命令，保留旧缓冲和索引；否则删除新块前 $d$ 个命令，得到 $a^{\mathrm{new}}_{\mathrm{rem}}$。当旧缓冲短于最小重叠要求时，通过重复末命令补齐，再取两段可用长度的最小值作为 $L$。[↗](https://arxiv.org/pdf/2602.09021v3#page=6)
+
+重叠区使用线性变化权重
+
+$$
+\tilde a_i=w_i a_i^{\mathrm{old}}+(1-w_i)a^{\mathrm{new}}_{\mathrm{rem},i},
+\qquad
+w_i=1-\frac{i}{\max(L-1,1)},\quad i=0,\ldots,L-1.
+$$
+
+当 $L>1$ 时，开头完全沿旧命令，末端完全采用新命令，中间平滑过渡。随后接上新块尚未用掉的尾部，重置消费索引为 0。分母中的 $\max(L-1,1)$ 避免只有一个重叠动作时除零；此时该位置按原算法保持旧命令。这个过程发生在执行缓冲层，不需要为了它重新设计动作专家网络。
+
+Figure 5 下方的 Drop、Fill 和 Soft Updating 正对应上述步骤。图右侧的 t-SNE 展示不同数据与执行分布的相对形态，是直观诊断，不提供某个严格概率距离已经缩小的定量证明。
+
+![Train-Deploy Alignment 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-4-train-deploy-alignment.png){ width="820" }
+
+*原论文 v3 Figure 5。三行分别改变恢复状态覆盖、时空数据覆盖和实际动作衔接；它们共同构成 TDA，不能都归为一种图像增强。* [↗](https://arxiv.org/pdf/2602.09021v3#page=5)
+
+### 恢复数据的成本，在于等待机器人走到失败附近
+
+标准 DAgger 先运行策略，出现持续失败后由人接管。附录给出的中断规则是连续超过 10 次抓衣失败，或超过 10 步重复无进展动作。软件停止向策略提供新观测和生成后续动作，机器人保持当前状态并切换遥操作；之前的策略轨迹和人工纠正轨迹都会保存。[↗](https://arxiv.org/pdf/2602.09021v3#page=14)
+
+Heuristic DAgger 把这一步前移。操作者直接将衣物和机器人布置在人工设计的失败附近，例如抓点错位或部分滑落，再采集恢复示范，省去等待策略自然失败的在线过程。节省的是等待与 rollout 成本，人工布置、遥操作和标注依然存在。它也有覆盖上的取舍：真实 DAgger 会暴露策略特有的失败状态，人工设计只能覆盖操作者预想到的状态。[↗](https://arxiv.org/pdf/2602.09021v3#page=6)
+
+时空增强提供另一种扩展。水平翻转图像时同步交换左右臂，保持视觉与动作对应；部分跳帧合成不同速度的运动片段。它们不增加机器人采集时间，但会改变策略看到的时空统计，必须与控制方式共同测试，不能直接把更多增强等同于更稳健。[↗](https://arxiv.org/pdf/2602.09021v3#page=6)
+
+Figure 10/11 分别检验 Task A/C 中恢复数据的价值。两类 DAgger 都显著改善成功率、吞吐和中间得分；但 Task A 的 $\pi_{0.5}$ 在标准 DAgger 下，比 Heuristic DAgger 吞吐更高、重试更少，说明更省采集等待的方案不一定是最终执行效率最好的方案。Task C 中人工失败初始化也明显优于 Base，同时保留了较高重试成本。[↗](https://arxiv.org/pdf/2602.09021v3#page=8)
+
+![DAgger and Heuristic DAgger results](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-10-11-dagger.png){ width="820" }
+
+*原论文 Figures 10、11 的原图面板，上方 Task A、下方 Task C。Base 重试少却成功率低，说明 Retry Cost 只有与 SR 和 TP 一起看，才能区分高效率与不会自救。* [↗](https://arxiv.org/pdf/2602.09021v3#page=8)
+
+### 平滑控制与增强要按组合评估
+
+Figure 12 比较 sync、naive async、temporal ensembling、RTC、chunk-wise smoothing 及 RTC + smoothing，并分别使用 Base、时间缩放、时间缩放加空间镜像数据。正确读法是先固定一组增强，再比较控制策略，随后再固定控制策略看增强的变化。否则容易把训练数据和执行方式的收益混在一起。
 
 ![TDA control ablation 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-11-control-ablation.png){ width="840" }
 
-<small>图源：`kai0`，Figure 11。原论文图意：比较 Task A 上 temporal chunk-wise smoothing、temporal ensembling、RTC 以及时空增强组合；论文结论是 temporal chunk-wise smoothing 多数设置下优于对照，和 RTC 组合还能继续提高表现。</small>
+*原论文 v3 Figure 12，Task A。平滑控制在多个配置中提高吞吐和成功率，但重试仍可能明显增加；组合 RTC 的作用也随增强配置改变。* [↗](https://arxiv.org/pdf/2602.09021v3#page=8)
 
-TDA 这组图最适合转成工程 checklist：部署动作 chunk policy 时，不要只盯模型输出，还要验收 chunk 切换、推理延迟、控制器频率和动作表示。论文还显示 spatio-temporal augmentation 有任务依赖性，在 Task A 上没有显著增益，因此增强策略不能脱离控制和任务形态单独吹。
+Base 与只做时间缩放时，chunk-wise smoothing 虽有较高吞吐，也付出较高重试；叠加 RTC 后，这两组的重试下降。但在时间缩放加镜像的设置中，组合方案的重试又高于单独平滑。作者在主文也指出，时空增强对 Task A 没有显著收益。这些结果支持控制与数据需要配套选择，无法支持“把所有模块打开总会更好”的部署规则。[↗](https://arxiv.org/pdf/2602.09021v3#page=8)
 
-## 和世界模型 / VLA 的关系
+附录进一步改变动作表示。Absolute Joint 预测绝对关节状态，Delta Joint 预测关节增量，两者对延迟、累计误差和细微动作的敏感性不同。Task C 的 Delta Joint / Base 下，同步控制的成功率与吞吐高于单独平滑及 RTC 组合，和图注的普遍优势概括并不一致；Task B 的 Absolute Joint / Base 中，同步控制的吞吐也更高。挂衣需要精确插入衣架，不能只沿用展平任务中表现最好的配置。[↗](https://arxiv.org/pdf/2602.09021v3#page=17) [↗](https://arxiv.org/pdf/2602.09021v3#page=18)
 
-| Dimension | LingBot-World | kai0 |
-| --- | --- | --- |
-| 目标 | 视频基础模型变成可交互世界模拟器 | VLA / robot policy 在真实部署中更可靠 |
-| 核心分布 | 历史视频、动作、未来视频 | \(P_{\text{train}}\)、\(Q_{\text{model}}\)、\(P_{\text{test}}\) |
-| 训练重点 | 长序列视频训练、动作条件、因果 rollout、蒸馏 | 全参 fine-tuning、checkpoint 合并、stage advantage、DAgger recovery |
-| 部署重点 | 因果注意力、KV cache、少步采样 | action chunk smoothing、推理-控制延迟、真实机器人恢复 |
-| 最强证据 | 交互生成 demo、系统 pipeline、可视化 | 真实双臂衣物操作、消融、24h stress test |
-| 不能证明 | 真实机器人控制收益 | 通用世界模拟或跨任务物理理解 |
+![Control and action representation on Task C](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-18-control-task-c.png){ width="1000" }
 
-对一个真实具身项目来说，这两篇可以互补。LingBot 提醒我们要让模型预测动作后的未来；kai0 提醒我们即使有强 policy，也要把训练数据、模型偏置和实际执行对齐，否则闭环会在边角状态中崩掉。
+*原论文 Figure 18。左侧 Absolute Joint，右侧 Delta Joint；右侧 Base 的同步基线是重要反例。不同动作表示和增强下的柱组应分别解读。* [↗](https://arxiv.org/pdf/2602.09021v3#page=17)
 
-## 局限风险
+## 实验预算与任务协议，决定“资源受限”如何理解
 
-1. **严格说不是生成式 world model**：它不显式预测未来视频或 latent dynamics，而是围绕 VLA policy 后训练和部署对齐。
-2. **任务域集中在衣物操作**：衣物是接触丰富、形变复杂的好测试，但不能直接推出 rigid-body assembly、移动操作或开放厨房任务都成立。
-3. **stage 标注是强先验**：SA 的收益依赖人类定义的语义 stage；如果任务非单调、stage 边界模糊或需要回退，优势标签可能误导训练。
-4. **DAgger 和 recovery 数据仍有人工成本**：Heuristic DAgger 降低了等待自然失败的成本，但仍需要人为设计失败状态和采集恢复示教。
-5. **资源口径需谨慎**：论文强调 20 h data 和 8×A100，但真实复现实验还包括硬件 SOP、相机布置、低层控制、标注和部署调试。
-6. **官方 release 不等于独立复现**：GitHub、HF 和项目页已提供官方材料，但本站没有声明复现实验通过。
+### 任务是分开训练的，硬件也并非完全相同
 
-## 项目启发
+| Task | Goal and success condition | Time limit stated |
+|---|---|---|
+| A: T-Shirt Flattening and Folding | 从任意初态展平并完成折叠，放到桌面中央 | 180 s |
+| B: Conditional Retrieval and Sorting | 取出并展平衣物；T 恤折叠堆到左上，有领衬衫交接到右侧 | 180 s |
+| C: Garment Hanging | 接收 Task B 的展平衬衫，挂到杆上且稳定不掉落 | 原文未给同样的 180 s 限制 |
 
-如果把 kai0 落到自己的 VLA / 具身智能项目里，最值得借鉴的不是某一个模块名，而是四条工程习惯。
+系统有两套双臂平台，分别采用 Agilex Piper 与 ARX X5。每条手臂为 6 自由度并配 1 自由度平行夹爪，两个平台第五关节的 pitch/yaw 配置不同。每套系统有一台固定头部相机和两台腕部 RealSense D435i，采集 $640\times480$ RGB 图像。具体任务模型分别微调，系统协作不能等价为一个模型无条件跨两种本体与所有任务部署。[↗](https://arxiv.org/pdf/2602.09021v3#page=6) [↗](https://arxiv.org/pdf/2602.09021v3#page=15)
 
-第一，数据集要单独保留 failure-adjacent states。成功示教只告诉模型“理想路径怎么走”，不能教它从偏差里回来。第二，validation set 要像部署错误，而不是像训练分布；否则 checkpoint 选择会高估顺境能力。第三，长时任务最好显式记录 stage、subtask、progress 和 retry，而不是只存一个 binary success。第四，action chunk policy 必须做真实控制链路验收，包括推理延迟、chunk 接缝、动作表示和低层控制频率。
+附录 Table I 给出了可直接用于预算判断的后训练配置。
 
-## 阅读结论
+| Hyperparameter | Value |
+|---|---:|
+| Expert demonstration hours | $\sim20$ h per task |
+| Action chunk length $K$ | 50 |
+| Execution frequency | 100 Hz |
+| Training steps | 80,000 |
+| Batch size | 128 |
+| Optimizer | AdamW |
+| Learning rate | $2.5\times10^{-5}$ |
+| Cosine Decay Steps | 10,000 |
+| Conditioned noise level $\sigma$ | $[0.001,1.0]$ |
+| Gradient Clip | 1.0 |
+| MA: Number of checkpoints | 4 |
+| SA: Advantage threshold $\epsilon$ | 0.3，附录按 top fraction 实现 |
+| Training GPUs | $8\times$ A100 |
+| Inference GPUs | RTX 4090 |
 
-kai0 是一篇很适合工程读者精读的机器人后训练论文。它的价值不在于提出一个更大的 VLA，而在于把真实部署中的分布错位具体化，并给出可操作的补救组合：Model Arithmetic 补训练覆盖，Stage Advantage 稳定长时进展信号，Train-Deploy Alignment 把失败恢复和动作平滑接回部署。
+训练对开源 $\pi_{0.5}$ 做全参数 flow-matching 微调。数据与视觉输入按 30 Hz 采样；低层关节控制器为 100–200 Hz，Table I 的执行频率为 100 Hz。**这些控制频率并不说明 VLA 每秒完成 100 次大模型前向。**动作块、相机采样和低层控制属于不同时间尺度，论文没有提供足以还原每次推理延迟或完整训练 GPU 小时的数字。[↗](https://arxiv.org/pdf/2602.09021v3#page=15)
 
-它最能外推到“VLA / 机器人闭环系统如何收数据、选 checkpoint、标注 progress、处理 action chunk”这些问题；不能外推成“少量数据解决通用机器人操作”。如果后续要复现或迁移，最该优先验证的是：OOD validation 是否真的像你的 \(P_{\text{test}}\)，stage label 是否稳定，temporal smoothing 是否适配你的控制频率，以及 recovery data 是否覆盖最常见失败。
+“每任务约 20 小时”也要与附录的数据统计分开。附录列出 A/B/C 分别为 2,668 / 3,519 / 2,988 个 episode，平均 30.41 / 34.40 / 39.01 秒，并注明包含较短的 DAgger 干预。按数量乘均值，分别约为 22.5 / 33.6 / 32.4 小时，这是对附录统计的计算，不等同于主文给出的约 20 小时专家示范口径。复用时应核对专家数据、干预与策略片段分别占多少，不应将整个项目或三项任务总共压缩成 20 小时。[↗](https://arxiv.org/pdf/2602.09021v3#page=15)
 
-## 外部精读
+### 四项指标分别奖励什么
 
-1. [kai0 arXiv](https://arxiv.org/abs/2602.09021)：读 Figure 1/2/3/4/6/7/8/11、Table I/II 和 appendix training details。
-2. [OpenDriveLab/KAI0 GitHub](https://github.com/OpenDriveLab/KAI0)：查看官方代码、模块目录、训练/推理脚本、数据和 checkpoint 下载说明。
-3. [OpenDriveLab-org/Kai0 on Hugging Face](https://huggingface.co/OpenDriveLab-org/Kai0)：核对模型卡、许可证和官方性能 claim。
-4. [HKU MMLab project page](https://mmlab.hk/research/kai0)：看项目介绍、3D t-SNE 和 demo 口径；demo 仍应回到论文实验验证。
-5. [LingBot-World](../world-models/lingbot-world.md) 与 [π0.5](pi05.md)：前者对比世界模拟器路线，后者对比 open-world VLA 基座与数据混合逻辑。
+每种衣物进行 10 次试验，三种衣物合计 30 次；论文报告均值及其所称的 accumulative standard error。Success Rate 衡量完整成功比例，Throughput 估计每小时能完成多少任务，Retry Cost 为每 episode 的平均动作重试数，Average Score 则按里程碑累计部分分。它们分别回答完成、效率、恢复代价与完成到哪一步的问题。[↗](https://arxiv.org/pdf/2602.09021v3#page=6) [↗](https://arxiv.org/pdf/2602.09021v3#page=7)
+
+Table II 的分数设计尤其影响长任务评价。同样“完成了一半动作”，不同任务和阶段未必拿到相同得分。
+
+| Task | Sub-goals and scores | Total |
+|---|---|---:|
+| A | Flatten garment +40；1st / 2nd / 3rd fold 各 +20 | 100 |
+| B – T-shirt | Retrieve & flatten +40；三次 fold 各 +15；Stack to top-left +15 | 100 |
+| B – Shirt | Retrieve from basket +30；Flatten +50；Pull to right-side table +20 | 100 |
+| C | Pull garment rightward +15；Grasp collar +15；Grasp hanger +15；Insert hanger into sleeve +20；Hook left collar on hanger +20；Hang on standing rack +15 | 100 |
+
+例如，Task C 已完成两侧衣物与衣架处理却没挂稳，仍能得到较高部分分，但 Success Rate 会判失败。反过来，学会多次恢复可能提高最终成功率，也会增加 Retry Cost 和耗时。低重试既可能来自一次做成，也可能来自失败后没有任何恢复尝试，必须放回 SR/TP 上解释。[↗](https://arxiv.org/pdf/2602.09021v3#page=15)
+
+## 完整系统的增益，要连同瓶颈和反例一起看
+
+Figure 7 是 Task A 的组件组合实验。原图的成功率从基线约四分之一，提高到完整系统接近全部成功的水平；吞吐从每小时个位数提高到约六七十次。这些仅是按坐标轴读取的量级，图中没有逐柱精确数值标签。论文所称近 250% 的提升是相对增幅，不是增加 250 个百分点，也不是保证任意任务获得相同倍数。[↗](https://arxiv.org/pdf/2602.09021v3#page=1) [↗](https://arxiv.org/pdf/2602.09021v3#page=7)
+
+![kai0 system efficacy 原论文图](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-6-system-efficacy.png){ width="840" }
+
+*原论文 v3 Figure 7，Task A 的模块组合。完整系统成功率与 Average Score 很高，但 SA + TDA 的吞吐均值略高于完整系统，不能把“组件越多”解释为每个指标都单调增加。* [↗](https://arxiv.org/pdf/2602.09021v3#page=7)
+
+单模块与组合之间的差异也有信息量。SA 的主要作用体现在推进效率，TDA 对最终完成更关键；MA 与其他模块组合后，能进一步改善候选策略的使用效果。图中不同配置的重试并非随成功率简单同向变化，说明某些恢复行为虽然要多尝试，却能把原本终止的回合接回任务。完整系统是这些环节在该任务上的配合结果，附录已经说明这种配合需要按任务重新选择。[↗](https://arxiv.org/pdf/2602.09021v3#page=7) [↗](https://arxiv.org/pdf/2602.09021v3#page=8)
+
+连续 24 小时运行展示回答的是系统能否持续执行这一工程问题。报告没有同时给出这 24 小时对应的标准化回合总数、失败分母和人工干预统计，因而无法用它计算生产系统的平均无故障时间，或把它当成百分之百成功的任务测试。标准任务指标与长时间展示应分别保留。[↗](https://arxiv.org/pdf/2602.09021v3#page=2)
+
+### 1,026 个失败案例把数据预算指向展平阶段
+
+附录 Figure 16 提供了比总体成功率更适合指导下一轮采集的证据。记录的 1,026 个 Task A 失败案例中，1,010 个发生在展平，折叠失败为 12 个，其他 4 个。展平失败进一步主要由长期重抓与冗余展平构成。
+
+![Task A failure decomposition](../../assets/images/paper-deep-dives/embodied-ai/kai0/figure-16-failure-analysis.png){ width="1000" }
+
+*原论文 Figure 16，失败案例的分类计数。这里的 1,026 是被分析的失败集合，不能当成完整系统所有评估回合的分母。* [↗](https://arxiv.org/pdf/2602.09021v3#page=16)
+
+| Failure category | Count |
+|---|---:|
+| Fail To Flatten | 1,010 |
+| └ Pro-longed Re-grasping | 874 |
+| └ Redundant Flattening | 85 |
+| └ Unable to reach | 18 |
+| └ Start Folding When Unflattened | 10 |
+| └ Unable to grasp the cloth | 23 |
+| Fail To Fold | 12 |
+| Others，Camera Collision 3 + Dual-arm Collision 1 | 4 |
+
+由计数计算，约 98.4% 的已记录失败落在展平阶段，长期重抓占全部失败约 85.2%。这直接说明采集重点为什么应放在失败后的抓点选择、布料状态恢复和停止无效重复上，而非继续均匀增加已经熟练的折叠示范。DAgger 会自然遇到这些瓶颈，Heuristic DAgger 则可以主动布置相近状态。[↗](https://arxiv.org/pdf/2602.09021v3#page=16) [↗](https://arxiv.org/pdf/2602.09021v3#page=17)
+
+附录还提出 **replay-ability（可回放性）** 作为数据质量原则：从相近初态开环重放示范，应能完成任务或带来明确进展。这既能筛掉损坏或错误示范，也能暴露采集与部署硬件之间的系统差异。它并不便宜，实际回放难以大规模并行；论文也把无需完整训练或大量物理回放的数据质量预测，列为未解决问题。[↗](https://arxiv.org/pdf/2602.09021v3#page=13)
+
+## 对已有机器人策略，最值得复用的是诊断顺序
+
+χ₀ 适合已经有可执行基础策略、但长流程可靠性不够的团队。可以先记录预测动作与实际执行的时间对应，确认新动作块是否过期、交接是否跳变；再按失败阶段统计恢复需求，决定使用真实 DAgger 还是人工失败初始化；如果问题集中在重复无进展与阶段混淆，再比较直接配对进展、阶段条件和原有价值差分。多个同任务检查点已经存在时，MA 提供了不增加在线模型数量的选择，但验证数据必须代表部署时真正会遇到的状态。
+
+这些建议来自不同实验的作用位置，不是所有任务必须依次开启全部组件的固定配方。Task C 的 SA 与 Delta Joint 控制反例表明，一个数值更稳定的估计器或更平滑的动作缓冲，仍可能降低最终完成率。目标指标应始终回到带有耗时、重试和阶段得分的真实闭环执行。
+
+论文没有系统验证后训练后通用能力的保留、刚体任务迁移，以及任意不同任务策略的合并。8 张 A100 与每任务约 20 小时示范，也建立在已有 $\pi_{0.5}$ 预训练能力之上。它最有用的认识是把可靠性损失定位到具体接口，再用匹配的恢复数据、进展监督和执行处理修复；“生产级”仍需要额外的任务覆盖与长期统计来证明。[↗](https://arxiv.org/pdf/2602.09021v3#page=9)

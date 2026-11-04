@@ -1,129 +1,48 @@
-# PTX / SASS 与编译检查
+# 从源码假设追到编译结果
 
-很多 kernel 调优到了后期，真正需要看的已经不只是源码，而是编译之后到底生成了什么。因为同一段高层代码，可能在不同编译器、不同版本、不同 GPU 上生成完全不同的底层结果。
-这也是为什么成熟的算子工程师，最终都会形成一个习惯：**必要时看 PTX，看 SASS，看寄存器和指令路径，而不是只相信源码意图。**
+假设把GEMM输出tile扩大后，逻辑上的数据复用增加，实际速度却下降。下一步要验证是否增加了寄存器占用、spill或其他成本。编译检查应服务这个具体问题，不能只凭看到某条矩阵指令就宣布优化成功。
+
+## PTX与SASS分别处于哪一层
+
+PTX是NVIDIA虚拟指令集表示，仍需进一步编译为目标GPU的机器指令。SASS反映具体架构上的指令。相同PTX在不同架构或工具链下可能产生不同资源使用与调度，不能把两者当作同一层证据。
+
+高层IR还能帮助确认布局转换与融合是否已经发生。先从接近源码的层看语义变化，再向下追具体指令，通常比直接读完整汇编更容易定位。
+
+## 把比较范围缩到一个shape
+
+固定输入M/N/K、dtype、stride、编译器和GPU，只改变tile参数。保存两版编译输出与资源信息，再比较实际耗时。否则一次编译器升级、dtype改变与tile改变同时发生，很难知道哪项导致差异。
+
+更大的输出tile需要更多累加器。如果寄存器需求超出可用资源，编译器可能产生local memory访问。看到spill统计或相关访存是支持证据，但local memory也可能来自明确的局部数组，仍应追源码用途。
+
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  S["更大tile的源码假设"] --> I["IR与PTX"] --> A["目标GPU SASS"] --> R["寄存器与spill证据"] --> P["同shape profile"] --> C["验证性能原因"]
+```
+
+编译结果与运行测量要绑定同一设备、shape和配置，避免把不同变体的证据拼在一起。
+
+## 源码表达dot不保证目标指令和效率
+
+矩阵尺寸、dtype、对齐、布局和编译配置都影响降级路径。检查是否生成预期矩阵运算，再看周围的转换、搬运与同步。即使矩阵指令存在，数据供给不足或小shape也可能限制整体效率。
+
+同理，向量化load存在不代表全局访问一定连续；需要把线程地址映射与实际内存事务联系起来。编译静态信息解释“程序会怎样执行”，profile解释“这次执行为何耗时”。
+
+## 利用库提供的可观测入口
+
+DeepGEMM固定版本README列出 `DG_JIT_DEBUG`、`DG_JIT_PTXAS_VERBOSE`、`DG_JIT_DUMP_PTX`、`DG_JIT_DUMP_SASS`以及检查spill/local memory的选项。这些是该版本查证过的接口，其他库和版本应查询各自文档。
+
+开启检查后先确认输出属于正在基准的那一个变体。JIT缓存、不同shape和fallback可能让源码与实际加载kernel不一致。记录编译配置和实际命中路径，才能把汇编证据与测量对应起来。
+
+## 什么时候可以停止下钻
+
+若完整请求时间主要在排队或CPU前处理，继续优化一个只占极少时间的kernel汇编，通常缺少收益来源。回到关键路径决定工作优先级。底层检查的目标是验证一个可行动假设，而非把所有指令都解释一遍。
 
 ![Nsight Systems synchronization calls](../assets/images/tools/nsight-systems/synchronization-calls.png){ width="820" }
 
 <small>图源：[NVIDIA Nsight Systems 文档](https://docs.nvidia.com/nsight-systems/)。原图表达同步调用和 kernel 时间线如何暴露源码意图之外的执行路径；读图重点是提醒编译检查要和 profile 结合：PTX/SASS 说明生成了什么，timeline 说明它何时真正阻塞。它不能替代逐条 SASS 审查。</small>
 
-## 为什么要看编译结果
+## 对照源码与延伸阅读
 
-因为源码层面你以为发生的事，未必真的发生了。例如：
-
-1. 你以为某些 load 被向量化了，结果并没有；
-2. 你以为用了 Tensor Core 路径，结果编译后走了普通 FMA；
-3. 你以为融合成功了，结果中间仍被拆开；
-4. 你以为寄存器够用，结果出现了 spill。
-
-所以编译结果检查，是源码和真实性能之间的最后一道验证。
-
-## PTX 和 SASS 分别代表什么
-
-**一个很粗略但够用的理解是**：
-
-1. `PTX` 更像面向虚拟架构的中间汇编；
-2. `SASS` 更接近最终在目标 GPU 上执行的机器级指令视图。
-
-**这意味着**：
-
-1. 看 PTX 能帮助你理解编译器大致生成了什么结构；
-2. 看 SASS 更能接近真实执行路径。
-
-## 什么情况下值得下钻到这一级
-
-**通常是在这些场景下**：
-
-1. profile 显示 kernel 明显不符合预期；
-2. Tensor Core 利用率异常低；
-3. 同一源码不同版本性能差异大；
-4. 怀疑编译器没有做你预期的优化；
-5. 需要确认寄存器、spill 或指令序列问题。
-
-如果只是早期原型期，没必要一开始就钻太深；
-但到了高性能调优后期，这一步往往非常值钱。
-
-## 你在编译结果里通常想确认什么
-
-**最常见的关注点包括**：
-
-1. 是否真的走到了目标指令路径；
-2. 是否有额外的 layout / move 指令；
-3. 是否有意外的分支；
-4. 是否出现过多寄存器占用；
-5. 是否有明显 spill；
-6. 某些关键内存访问是否按预期被组织。
-
-## Inspection 工作流
-
-```mermaid
-flowchart TD
-    A["profile 指向热点 kernel"] --> B["确认 shape / dtype / launch 参数"]
-    B --> C["保存源码与编译版本"]
-    C --> D["查看 IR / PTX"]
-    D --> E["查看 SASS / 指令路径"]
-    E --> F{"符合预期吗？"}
-    F -- "否" --> G["调整 layout / tile / compiler flag"]
-    F -- "是" --> H["记录证据进入发布单"]
-    G --> A
-```
-
-这张图的关键是：先有 profile，再看 PTX/SASS。不要为了“看起来专业”而在没有热点证据时读汇编；也不要在 profile 已经指向底层路径时继续只改高层源码。
-
-### 5.1 检查记录模板
-
-| 项 | 示例 |
-| --- | --- |
-| kernel | `fp8_gemm_bias_gelu_v3` |
-| shape / dtype | `M=4096,N=11008,K=4096, FP8/BF16 accumulate` |
-| 预期路径 | Tensor Core MMA + vectorized load |
-| 实际观察 | MMA 指令存在，寄存器 128/thread，无 spill |
-| 风险 | tail shape 走 fallback，H100 与 B200 需分开记录 |
-| 结论 | 可发布到指定 bucket，长尾 shape 继续通用路径 |
-
-## 为什么这件事对 Triton 和 CUDA 都有意义
-
-虽然 Triton 抽象更高，但最终也会生成底层代码。
-因此在调优后期，无论是手写 CUDA 还是 Triton kernel，都可能需要做同样的检查：
-
-1. 编译器是否按预期理解了你的 tile；
-2. 某些向量化是否真正发生；
-3. 某些优化是不是只停留在高层语义里。
-
-这一步不是在否定高层工具，而是在补足它们的“最后一跳可见性”。
-
-### 5.1 一个更稳的阅读顺序
-
-读编译结果时不要一上来就陷进所有指令细节。先从 profile 时间线确认问题是否真的在这个 kernel；再看是否走到预期的 Tensor Core、向量化 load/store 或 memory path；接着检查寄存器数量、spill、额外 move 和分支；最后才比较不同编译选项或不同写法生成的差异。
-
-如果源码改动前后性能差异很大，最好把两版的 IR / PTX / SASS 和关键 shape 绑定保存。这样后续升级编译器或 GPU 时，可以知道退化来自指令路径变化、寄存器压力变化，还是 runtime 选择了另一条 kernel。
-
-### 5.2 不要脱离 profile 读汇编
-
-PTX / SASS 检查最容易走偏的地方，是把所有可疑指令都当成瓶颈。真正该优先看的，是 profile 已经指向的热点：如果瓶颈是 memory throughput，就重点看 load/store、coalescing、cache hint 和额外 move；如果瓶颈是 Tensor Core 利用率，就看 MMA 指令、tile 形状和数据类型路径；如果瓶颈是 occupancy，就看寄存器、shared memory 和 block 配置。汇编是证据，不是起点。
-
-## 直觉例子
-
-可以把 PTX / SASS 检查看成工厂验收时拆开机器外壳看内部传动。设计图纸当然重要，但真正决定机器怎么跑的，是里面最后装出来的齿轮、传动轴和控制逻辑。源码是设计图，编译结果才是实际装配好的机器。高性能调优到后期，很多问题只能通过“拆开机器看内部”才能确认。
-
-## 读完以后怎么判断
-
-PTX / SASS 与编译检查，是高性能算子工程里靠近终局的一步。它不需要每次都做，但在关键热点和疑难性能问题上非常有价值。只要你建立了这个意识，就会更容易把“高层代码意图”和“底层真实执行”真正接起来，而不是停留在源码层面的想当然。
-
-## 工程收束
-
-PTX / SASS 检查要把 IR 结构、向量化、寄存器、访存指令和 Tensor Core 路径与真实 profile 绑定。不要过度迷信源码层直觉，也不要看到 PTX 就停止；上线前应先看时间线再下钻，把 IR / PTX / SASS 与 shape 绑定，并把 inspection 结果写进发布单。
-
-如果某个性能结论依赖具体编译器版本或 GPU 架构，就应把对应反汇编片段、关键 shape 和 profile 截图一起留档。否则下一次驱动、编译器或框架升级后，很难判断退化来自哪里。
-
-这类记录不需要覆盖所有代码，但要覆盖最贵、最热、最容易随版本漂移的路径。
-
-当性能退化出现时，这些记录能把排查范围从整套栈缩小到具体编译路径。
-
-这就是 inspection 的实际价值。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [该版本JIT调试、汇编与资源检查选项](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)
+- [tile与架构条件下的不同实现](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/09-persistent-matmul.py)

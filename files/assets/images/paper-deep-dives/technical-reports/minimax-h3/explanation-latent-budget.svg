@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="580" viewBox="0 0 1120 580" role="img" aria-label="压缩率改变的是潜表示预算">
+<title>压缩率改变的是潜表示预算</title>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#52687e"/></marker></defs>
+<rect width="100%" height="100%" fill="#f7fafc"/>
+<g font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif"><text x="36" y="46" font-size="27" font-weight="700" fill="#172f48">压缩率改变的是潜表示预算</text><text x="36" y="78" font-size="17" fill="#50677c">讲解示意 · 规则 latent 网格的计数，不是 H3 已公开的 VAE 配置或实测性能</text>
+<rect x="35" y="120" width="285" height="150" rx="13" fill="#fff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="55" y="154" font-size="21" fill="#233c54" font-weight="600">输入视频</text>
+<text x="55" y="186" font-size="18" fill="#233c54" font-weight="400">T 帧 × H 高 × W 宽</text>
+<text x="55" y="213" font-size="18" fill="#233c54" font-weight="400">时空压缩 c_t、c_h、c_w</text>
+<text x="55" y="240" font-size="18" fill="#233c54" font-weight="400">保留细节与时间变化</text>
+<rect x="410" y="120" width="305" height="150" rx="13" fill="#eaf3ff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="430" y="154" font-size="21" fill="#233c54" font-weight="600">潜空间网格</text>
+<text x="430" y="186" font-size="18" fill="#233c54" font-weight="400">约 T/c_t × H/c_h × W/c_w</text>
+<text x="430" y="213" font-size="18" fill="#233c54" font-weight="400">若每格作为一个 token</text>
+<text x="430" y="240" font-size="18" fill="#233c54" font-weight="400">得到序列长度 N</text>
+<path d="M320,195 L405,195" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="800" y="120" width="285" height="150" rx="13" fill="#fff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="820" y="154" font-size="21" fill="#233c54" font-weight="600">后续计算</text>
+<text x="820" y="186" font-size="18" fill="#233c54" font-weight="400">线性映射受 N 影响</text>
+<text x="820" y="213" font-size="18" fill="#233c54" font-weight="400">全连接 attention 受 N² 影响</text>
+<text x="820" y="240" font-size="18" fill="#233c54" font-weight="400">VAE 本身也需要计算</text>
+<path d="M715,195 L795,195" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="35" y="325" width="510" height="190" rx="13" fill="#e9f5ef" stroke="#b7c9d8" stroke-width="2"/>
+<text x="55" y="359" font-size="21" fill="#233c54" font-weight="600">说明性情形 A · 固定视频</text>
+<text x="55" y="391" font-size="18" fill="#233c54" font-weight="400">若总压缩增至 4 倍，N 可降至 N/4</text>
+<text x="55" y="418" font-size="18" fill="#233c54" font-weight="400">线性项约降至 1/4，二次项约降至 1/16</text>
+<text x="55" y="445" font-size="18" fill="#233c54" font-weight="400">这只是相应算子的规模关系</text>
+<rect x="575" y="325" width="510" height="190" rx="13" fill="#fff4e8" stroke="#b7c9d8" stroke-width="2"/>
+<text x="595" y="359" font-size="21" fill="#233c54" font-weight="600">说明性情形 B · 固定 token 预算</text>
+<text x="595" y="391" font-size="18" fill="#233c54" font-weight="400">可把节省的预算用于更多输入内容</text>
+<text x="595" y="418" font-size="18" fill="#233c54" font-weight="400">更长时长、更高分辨率或更多参考</text>
+<text x="595" y="445" font-size="18" fill="#233c54" font-weight="400">具体能力仍取决于质量和架构</text>
+</g></svg>

@@ -15,440 +15,241 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：未找到官方链接。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2606.19348)；Checked Date：2026-07-07；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 百万上下文的真正瓶颈是持续保存和读取历史
 
-### 研究背景
+DeepSeek-V4报告的是一个preview模型系列：Pro为1.6T总参数、49B激活，Flash为284B总参数、13B激活，两者支持百万token上下文。长上下文不只用于把更多文档一次放进prompt，也服务于长推理、工具调用和多轮任务。随着历史不断增长，每生成一个新token都要处理更多缓存；即便MLA已压缩每个token的KV宽度，token数量本身仍然是成本来源。
 
-DeepSeek-V4 报告延续 DeepSeek-V3 的 MoE、MLA 和高效训练路线，但把重点推到 million-token context intelligence。长上下文模型用于文档、代码库、agent 记忆和复杂推理时，普通 attention 的 FLOPs、KV cache 和训练稳定性会迅速成为瓶颈；只扩大 context window 而不改架构和训练，通常会在成本和质量上双输。
+V4的核心改变是沿序列维度压缩历史。CSA把较小窗口压成一个条目，再稀疏选择；HCA用更大压缩比保留一条较短的全局记忆；局部滑动窗口补回最近token的细节。模型还引入mHC残差连接、Muon优化，以及多教师on-policy蒸馏和FP4后训练，形成从训练到部署的一套配方。[↗](https://arxiv.org/pdf/2606.19348v1#page=4)
 
-### 问题（Challenge）
-
-论文要解决的问题是：如何让大模型在百万 token 上下文中保持推理、检索、agent 和长文档能力，同时控制训练和推理成本。挑战包括长上下文 attention 复杂度、KV cache 布局、MoE routing 稳定性、FP4/低精后训练、长上下文 curriculum、reasoning effort 管理和 serving 内存。这个问题有价值，因为长上下文不是“能塞进去”就够，还要能在长距离检索、多轮推理和 agent 状态中有效使用。
-
-### Finding
-
-DeepSeek-V4 的 finding 是：百万上下文能力需要同时改 attention 层级、KV 表示、训练 curriculum 和推理 effort，而不是只扩 positional encoding。报告把 CSA/HCA、mHC、FP4 后训练和 long-context curriculum 组合起来，说明长上下文效率是架构-训练-服务共同问题。这个 insight 把“更长窗口”翻转为“更高效的上下文智能”：模型必须选择性保留、压缩和调用长程信息。
-
-### 方法
-
-报告继续使用 DeepSeekMoE、MLA / MTP 等基础，加入面向长上下文的混合注意力和 KV cache 设计；训练上使用长上下文 curriculum、dense-to-sparse attention 过渡、Muon optimizer、稳定性补丁和后训练阶段；推理上关注 reasoning effort、KV cache layout、FP4 quantization / post-training 和长上下文服务成本。输入是百万 token 级文档、代码或 agent 历史，输出是长上下文问答、推理、代码和 agent 任务结果。
-
-### 结论
-
-报告用 MRCR、RULER / long-context、reasoning、代码、agent 等 benchmark 说明 DeepSeek-V4 在百万上下文和效率上相对前代提升；图表展示 reasoning effort 与成本、KV cache 布局、CSA/HCA 和 FP4 后训练的作用。边界是报告为官方自述，完整训练配方和系统环境不可完全复现；百万上下文 benchmark 也不能直接证明真实 agent 长期记忆可靠，需要任务级评测。
-
-### 关键术语
-
-- **Million-token Context（百万 token 上下文）**：模型可输入并利用百万级 token 序列的能力
-- **CSA / HCA（压缩/层级注意力）**：面向长上下文降低注意力和 KV 成本的注意力设计
-- **MTP（Multi-Token Prediction，多 token 预测）**：训练时预测多个未来 token 的辅助目标
-- **FP4 Post-training（FP4 后训练）**：将模型适配到 4-bit 浮点推理/训练路径的后训练流程
-- **Reasoning Effort（推理努力度）**：控制模型在推理时使用多少思考 token 和计算预算的机制
-
-报告给出的答案可以压缩成四条线：
-
-| 线索 | DeepSeek-V4 的做法 | 初学者应该抓住的点 |
-| --- | --- | --- |
-| 模型结构 | 继续使用 DeepSeekMoE 和 MTP，引入 mHC、CSA/HCA 混合注意力 | 能力来自 MoE 和训练规模，1M context 效率主要来自注意力和 KV 设计 |
-| 训练优化 | Muon optimizer、长上下文 curriculum、dense-to-sparse attention、稳定性补丁 | 训练 1.6T MoE 不是只堆数据，还要控制 outlier、routing 和数值稳定 |
-| 后训练 | specialist SFT/RL，再用 multi-teacher OPD 合成统一模型 | 不是把所有能力直接混在一个 RL 任务里，而是先分专家再蒸馏合并 |
-| 系统部署 | FP4 QAT、异构 KV cache、on-disk KV、MoE 通信计算重叠 | 长上下文模型是否可用，取决于推理时每个 token 的边际成本 |
-
-**阅读边界。**
-这是一份模型技术报告，不是经过同行评审的论文。里面的闭源/开源模型对比、内部 benchmark、Codeforces 评分、agent harness 和生产系统细节都应按“报告自述结果”理解。它很适合学习大模型系统设计，但不应把每个数值当成独立复现实验结论。
-
-## 论文位置
-
-DeepSeek-V3/V3.2 已经把 DeepSeekMoE、Multi-Token Prediction、FP8 训练和 sparse attention 等设计推到很强的开源基线。DeepSeek-V4 的问题意识更靠近下一阶段：
-
-```text
-更多 reasoning tokens
-  -> 更长上下文和更长 tool trajectory
-  -> attention FLOPs 与 KV cache 急剧上升
-  -> 需要压低每个新 token 的边际计算和存储成本
-```
-
-这里的“百万 token”不只是营销参数。对 agent 来说，长上下文意味着保留更多工具调用、文件内容、搜索记录和中间工作状态；对代码和企业任务来说，长上下文意味着把更多仓库、文档和历史决策放进同一个工作窗口。但如果每生成一个新 token 都要对 100 万历史 token 做高成本 dense attention，这个能力在生产环境里就会变成非常昂贵的展示功能。
+总图右侧应看同一上下文位置的单token FLOPs和累计KV，左侧才是能力比较。在1M位置，Pro相对V3.2需要约27%的单token推理FLOPs、约10%的KV缓存。这不是训练总费用降低73%，也不是任何请求的端到端时延都降低到27%。
 
 ![DeepSeek-V4 benchmark and long-context efficiency](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-1-benchmark-and-efficiency.png){ width="920" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 1。原报告图意：左侧比较 DeepSeek-V4-Pro-Max 与若干模型在知识、推理和 agentic benchmarks 上的表现；右侧比较 DeepSeek-V4 系列与 DeepSeek-V3.2 在不同 token position 下的 single-token FLOPs，以及不同 sequence length 下的 accumulated KV cache。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 1。</small>
 
-**Figure 1 怎么读。**
-左图强调 capability，右图强调 serving cost。初学者容易只看左边的分数，但这篇报告真正想推的是右边：在 1M-token context 下，DeepSeek-V4-Pro 的 single-token inference FLOPs 约为 DeepSeek-V3.2 的 27%，KV cache 约为 10%；DeepSeek-V4-Flash 进一步降到约 10% FLOPs 和 7% KV cache。
+## CSA与HCA分工，决定远处信息保留到什么粒度
 
-这说明 DeepSeek-V4 的长上下文不是靠“忍受更贵的 attention”硬撑出来，而是通过压缩 KV、稀疏选择、混合精度和异构 cache 管理，把长 context 的边际成本压下来。换个直观例子：如果 1M context 像一本很厚的书，普通 attention 每次回答都要把整本书逐页翻一遍；DeepSeek-V4 试图先把书分段压缩成索引，再只精读当前问题最可能需要的片段，同时保留最近几页的原文细节。
+两种attention交错使用，都以共享key-value的Multi-Query Attention为核心，并附加128-token局部窗口。Pro的CSA压缩率为4、top-k为1024；Flash同样压缩4倍，但top-k为512。HCA两者均每128个token压为一个条目。它们没有把所有历史压成一个固定向量，而是保留随上下文增长的压缩序列。[↗](https://arxiv.org/pdf/2606.19348v1#page=24)
 
-## 总体架构
-
-DeepSeek-V4 系列仍然是 Transformer + MoE 的大框架。报告中两个模型的关键规模是：
-
-| Model | # Total Params | # Activated Params | Context Length | Main Role |
-| --- | ---: | ---: | ---: | --- |
-| DeepSeek-V4-Flash | 284B | 13B | 1M | 更小激活参数、更低成本的高效模型 |
-| DeepSeek-V4-Pro | 1.6T | 49B | 1M | 更强知识、推理和 agentic 能力的主力模型 |
-
-架构上有三类新变化：
-
-1. **mHC**：把普通 residual connection 升级为 Manifold-Constrained Hyper-Connections，让跨层信号传播更稳定；
-2. **CSA/HCA**：把注意力换成压缩稀疏与重压缩 dense 的混合注意力，降低长序列 FLOPs 和 KV cache；
-3. **Muon**：大部分参数用 Muon optimizer，而不是全部沿用 AdamW。
+整体架构图先看不同层的attention类型，再看mHC扩宽的残差路径与MoE。它同时改变信息传播、历史粒度和专家计算，所以不能用一个“稀疏attention”概念概括全部机制。
 
 ![DeepSeek-V4 overall architecture](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-2-overall-architecture.png){ width="760" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 2。原报告图意：DeepSeek-V4 在 attention layer 使用 CSA/HCA，在 FFN layer 使用 DeepSeekMoE，并用 mHC 强化相邻 Transformer block 之间的 residual connection；顶部继续保留 LM loss 和 MTP loss。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 2。</small>
 
-**Figure 2 怎么读。**
-图里右侧的 `CSA / HCA` 和 `DeepSeekMoE` 是每个 Transformer block 的两大主干：attention 负责“从历史 token 中取信息”，MoE FFN 负责“对当前 token 做非线性计算”。左侧那些像多条残差流的结构对应 mHC，它不是把 layer 本身做宽，而是把 residual stream 扩成多个通道，再通过受约束的 mixing 把信息传给下一层。
+CSA的压缩器由输入隐藏状态 $H$ 生成KV候选与逐通道权重 $C_a,C_b,Z_a,Z_b$。每个输出条目结合当前 $m$ 个token的a分支与前一个 $m$ token块的b分支，经过位置bias和softmax得到权重后求和
 
-可以把普通 residual 想成一条单车道公路：每层都在同一条路上加一点变化。mHC 更像多车道加匝道，但匝道矩阵被约束在稳定范围里，避免车辆突然全部冲到某一车道造成数值爆炸。对深层 MoE 来说，这种稳定传播很重要，因为 routing 和 expert outlier 会放大训练不稳定。
+$$
+C_i^{\mathrm{Comp}}=\sum_{j=mi}^{m(i+1)-1}S_j^a\odot C_j^a+
+\sum_{j=m(i-1)}^{mi-1}S_j^b\odot C_j^b.
+$$
 
-## CSA：先压缩，再稀疏选择
+$S$ 在这 $2m$ 个候选位置上按通道归一化，$\odot$ 是逐元素乘法。相邻压缩块的来源相互重叠，但每 $m$ 个原token仍只增加一个压缩条目，因此总长度为原来的 $1/m$，不是 $1/(2m)$。这种可学习压缩允许不同通道关注不同位置，信息损失也必须由训练去适应。[↗](https://arxiv.org/pdf/2606.19348v1#page=10)
 
-Compressed Sparse Attention, 简称 CSA，可以分成两步：
+接着lightning indexer计算query与压缩key之间的低成本相关性
 
-| 步骤 | 做什么 | 目的 |
-| --- | --- | --- |
-| token-level compression | 把连续 KV tokens 压成更少的 compressed KV entries | 缩短注意力要看的历史长度 |
-| lightning indexer + top-k selector | 用轻量 indexer 选出最相关的 compressed KV entries | 避免每个 query 都看所有压缩块 |
+$$
+I_{t,s}=\sum_{h=1}^{n_h^I}w_{t,h}^I\operatorname{ReLU}(q_{t,h}^I\cdot K_s^{I\mathrm{Comp}}),
+$$
 
-DeepSeek-V4-Pro 中 CSA 的 compression rate \(m=4\)，attention top-k 为 1024；DeepSeek-V4-Flash 中 CSA 的 compression rate 同样为 4，top-k 为 512。两者还都保留 sliding window KV entries，用来处理最近 token 的局部依赖。
+选择得分最高的 $k$ 个已完成压缩块，送进主attention。图中应沿“压缩→索引→top-k→主attention”读，索引并未替代主attention的语义聚合，只负责决定访问哪些远程记忆。
 
 ![DeepSeek-V4 CSA architecture](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-3-csa.png){ width="920" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 3。原报告图意：CSA 先压缩 KV entries，再用 lightning indexer 计算 index scores，通过 top-k selector 选择压缩后的 KV entries；同时拼接 sliding window KV entries，并用 shared key-value multi-query attention 输出结果。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 3。</small>
 
-**CSA 的关键不是“稀疏”两个字。**
-稀疏 attention 有一个常见风险：如果选择器没选中真正相关的历史块，模型就会丢信息。CSA 的设计把选择拆成一个更便宜的 indexer 分支：indexer 不直接负责生成最终 attention 输出，而是先判断哪些压缩 KV entry 值得看；真正的 core attention 再在这些 selected entries 上计算。
+HCA采用更激进、无重叠的压缩
 
-这和检索系统很像。你不会先通读所有文档，而是先用索引找候选段落，再仔细读候选段落。区别在于这里的“索引”和“段落”都在 Transformer 内部以 KV entries 的形式存在，而且每一层都要和 kernel、cache layout、batching 约束配合。
+$$
+C_i^{\mathrm{Comp}}=\sum_{r=0}^{m'-1}S_{i,r}\odot C_{im'+r},\qquad
+Z_{i,r,c}=Z_{im'+r,c},\qquad
+S_{i,r,c}=\frac{\exp\left(Z_{i,r,c}+B_{r,c}\right)}
+{\sum_{u=0}^{m'-1}\exp\left(Z_{i,u,c}+B_{u,c}\right)},
+$$
 
-## HCA：压得更狠，但不做稀疏选择
-
-Heavily Compressed Attention, 简称 HCA，使用更大的 compression rate \(m'=128\)。它会把更长的一段 KV tokens 合并成一个 heavily compressed KV entry，然后仍然做 dense attention。直觉上：
-
-| Attention Type | Compression | Sparse Selection | 更适合什么 |
-| --- | --- | --- | --- |
-| CSA | 较轻，报告设置中 \(m=4\) | 有 top-k selector | 保留更多中远程细节，靠稀疏选择省计算 |
-| HCA | 更重，报告设置中 \(m'=128\) | 无 top-k selector | 用极小 KV footprint 覆盖超长历史的粗粒度信息 |
-| SWA branch | 不压缩最近窗口 | 只看局部窗口 | 保住最近 token 的精细依赖 |
+其中 $m'=128$，$i$ 表示当前的非重叠块，$r$ 是块内位置，$c$ 是通道。原文的 $Z$ 沿全序列产生，显式展开为 $Z_{i,r,c}=Z_{im'+r,c}$；$B$ 只为一个 $m'$ 行的块提供位置偏置；归一化是在每个块、每个通道内完成，而不是把不同块混在一起做一行 softmax。压缩后对全部已完成条目做attention，不再top-k。下图重点看它省去了indexer与选择器，代价是单个记忆条目概括更长文本。CSA提供较细的可选记忆，HCA提供低成本全局覆盖。
 
 ![DeepSeek-V4 HCA architecture](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-4-hca.png){ width="720" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 4。原报告图意：HCA 对 KV entries 做更重压缩，把 \(m'\) 个 tokens 合并为一个 compressed entry；同时保留 sliding window KV entries 来增强局部细粒度依赖。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 4。</small>
 
-**为什么 HCA 不也做 top-k。**
-HCA 已经把历史压得很短。如果再做 sparse top-k，可能进一步降低成本，但信息风险也会更大。报告的折中是：CSA 负责“压缩后仍较细的可选择历史”，HCA 负责“非常长历史的粗粒度全局记忆”，SWA 负责“最近窗口的原始细节”。这三者组合后，模型不需要在每层都用同一种 attention 处理所有距离。
+两者都只允许query读取此前已经完成的压缩块，避免当前块后续token泄漏。这样当前块内部的信息会缺席，所以局部窗口既用于细节建模，也填补压缩边界留下的因果访问空隙。它不是可以随意删除的附属加速技巧。[↗](https://arxiv.org/pdf/2606.19348v1#page=13)
 
-对初学者可以这样记：CSA 像从很多章节摘要里挑最相关的几节精读；HCA 像把整本书压成很粗的时间线，虽然细节少，但能覆盖很长范围；SWA 像随手翻看你刚刚读过的几页。
+## 共享KV之后，位置与数值稳定还要重新处理
 
-## mHC：残差连接也会影响大模型稳定性
+V4对query和共享KV做RMSNorm，抑制attention logits爆炸；向量末64维使用RoPE。由于同一条目既当key又当value，位置编码也会进入attention输出，作者再对输出相应维度施加反向位置旋转，使相对位置关系更合理。直接把普通attention的位置处理照搬到shared-KV，不能自动得到相同语义。
 
-普通 Transformer residual 大致是：
+输出投影也做了分组低秩处理，避免大量query heads的宽输出直接映射回hidden带来过高计算。attention sink则在softmax分母加入可学习项，让某个head总attention质量可以低于1、甚至接近0，不必被迫从不相关历史中取信息。
+
+部署精度进一步分工：RoPE维度KV保留BF16，其余KV用FP8，indexer QK路径用FP4。由此得到的缓存收益同时来自序列压缩、表示共享、局部窗口和精度降低，不能全部归为稀疏top-k。相对BF16、head128的GQA8基准，论文估计1M场景的KV约为2%；这个基准与前述V3.2的10%不是同一个分母。[↗](https://arxiv.org/pdf/2606.19348v1#page=13)
+
+## mHC约束残差混合，不是把主干宽度直接扩大四倍
+
+普通残差只有一条宽度 $d$ 的状态。Hyper-Connections将其扩为 $n_{hc}\times d$，V4取 $n_{hc}=4$，再用三种映射组织每层
 
 $$
-x_{l+1}=x_l+F_l(x_l).
+X_{l+1}=B_lX_l+C_lF_l(A_lX_l).
 $$
 
-它的好处是让深层网络更容易训练，但在超深 MoE 中，单一路径的 residual 也可能让 outlier 或 routing 抖动沿层传播。Hyper-Connections 的思路是扩展 residual stream 的宽度，把状态从一个向量扩成多个 residual channels。DeepSeek-V4 使用的是 mHC，即把 residual mapping 约束到 doubly stochastic matrices 所在的 manifold。
+$A_l$将多条残差状态合成为主层输入，$F_l$仍处理 $d$ 维向量，$C_l$把输出分配回多条流，$B_l$负责旧状态之间的混合。因此增加的是残差表达路径，不是把每个attention和MoE的hidden width乘四。
 
-报告里的关键约束可以理解为：
+不受约束的多层 $B_l$相乘可能放大信号。mHC将 $B_l$约束为非负、行和列均为1的双随机矩阵
 
-| 设计 | 作用 |
-| --- | --- |
-| residual mapping 约束为 doubly stochastic matrix | 让 mapping 的谱范数不超过 1，降低信号放大风险 |
-| Sinkhorn-Knopp projection | 把动态生成的 raw matrix 投影到稳定的矩阵集合 |
-| input/output mappings 用 Sigmoid 约束 | 避免负值抵消和无界放大 |
-| expansion factor \(n_{hc}=4\)，Sinkhorn iterations 为 20 | 在表达力、稳定性和额外成本之间折中 |
+$$
+B_l\mathbf1=\mathbf1,\qquad \mathbf1^\top B_l=\mathbf1^\top,\qquad B_l\ge0.
+$$
 
-**mHC 和 MoE 的关系。**
-MoE 的 routing 会让不同 token 进入不同 expert。某些 expert 或 token 组合可能产生异常大激活，进一步造成 loss spike。mHC 不能替代 routing 稳定策略，但它能让层间残差传递更受控，减少“某一层的异常被后面层继续放大”的风险。报告中还专门为 mHC 做了 fused kernels、选择性 recomputation 和 pipeline overlap 调整，把 mHC 的 wall-time overhead 控制在 overlapped 1F1B pipeline stage 的 6.7% 左右。
+该集合在矩阵乘法下封闭，单个残差混合映射的谱范数不超过1，因而不会单凭残差混合持续扩张。实现中对原始参数取exp，再以20轮Sinkhorn-Knopp交替行列归一化近似投影；$A_l$用sigmoid，$C_l$用两倍sigmoid保持有界非负。[↗](https://arxiv.org/pdf/2606.19348v1#page=7)
 
-## Muon：把矩阵更新先“正交化”再走一步
+这个保证针对被约束的残差映射，不包含主层 $F_l$、动态参数化和有限精度训练的全部行为。V4实际仍出现训练不稳定，后文的路由与SwiGLU措施正说明mHC不是全网络稳定性的充分条件。
 
-报告中大部分模块使用 Muon optimizer，但 embedding、prediction head、mHC 的静态 bias/gating factors、RMSNorm 权重仍用 AdamW。这个分工很实用：不是所有参数都适合矩阵正交化式更新，尤其是 embedding 和 norm 这类参数形态。
+## Muon更新矩阵方向，异常值仍需单独控制
+
+Muon先积累动量，对Nesterov组合后的更新矩阵做近似正交化，再按矩阵形状与目标RMS缩放。V4使用10轮hybrid Newton-Schulz，前8轮快速靠近目标奇异值，后2轮采用更稳定系数细化。图中应区分正交化后的更新 $O_t$ 与参数 $W_t$；被正交化的是优化器更新，不是要求模型权重本身成为正交矩阵。
 
 ![Muon optimizer algorithm](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/algorithm-1-muon.png){ width="900" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Algorithm 1。原报告图意：Muon 在每个 training step 中计算梯度、累积 momentum buffer，用 Nesterov trick 和 hybrid Newton-Schulz 近似正交化更新矩阵，再进行 RMS rescale、weight decay 和参数更新。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Algorithm 1。</small>
 
-**Muon 为什么值得单独讲。**
-AdamW 基本是对每个参数元素做自适应缩放；Muon 更关注一个 weight matrix 作为整体的更新方向。它先把带 momentum 的梯度矩阵通过 Newton-Schulz 近似变成更“正交”的更新，再按 RMS 做缩放。直觉上，这能减少某些方向被过度放大，让大矩阵更新更均衡。
+embedding、prediction head、RMSNorm以及mHC部分标量或bias仍用AdamW，其余主要矩阵用Muon。由于query与KV已直接归一化，V4没有采用Kimi K2式QK-Clip。不同attention参数化改变了适合的稳定手段，优化器名称相同并不表示整个训练recipe相同。[↗](https://arxiv.org/pdf/2606.19348v1#page=14)
 
-DeepSeek-V4 采用 10 次 hybrid Newton-Schulz iterations：前 8 次用更激进的系数快速把 singular values 推向 1，最后 2 次用较稳定的系数精修。报告还说明，因为 CSA/HCA 对 queries 和 KV entries 做 RMSNorm，能直接缓解 attention logits 爆炸，所以 DeepSeek-V4 的 Muon 设置没有继续使用 QK-Clip。
+Muon与ZeRO的组合也需要额外的分桶规则。稠密参数先限制ZeRO并行规模，再用knapsack把完整矩阵分到各rank；每个桶补齐到最大桶尺寸，便于reduce-scatter，本文设置下每rank至多管理5个矩阵，padding通常低于10%。当数据并行规模超过上限时，额外数据并行组会重复计算Muon更新，以换取更小的桶。MoE参数则把所有专家的down、up、gate矩阵分别展平，在不拆开逻辑矩阵的边界下补齐并均匀分发，同形状的连续参数再合并批量执行Newton–Schulz。
 
-## 长上下文推理：异构 KV cache 才是落地点
+MoE梯度先以随机舍入同步到BF16以减半通信量，但每个rank收到梯度后用FP32本地求和；这里用all-to-all替代树或环形reduce-scatter，目的是避免低精度加法累积误差。因而“BF16梯度”描述的是通信格式，不是把更新全程降到BF16。[↗](https://arxiv.org/pdf/2606.19348v1#page=20)
 
-如果只在论文图里说“KV 被压缩”，还不够。真正 serving 时，每个 request、每一层、每类 attention 的 KV entry 形态都不一样：
+报告对训练失败也给出实际处理。MoE离群值和路由反馈相关，简单rollback无法防止重复尖峰。Anticipatory Routing在历史参数 $\theta_{t-\Delta t}$ 下预先计算未来批量的路由索引，当前步骤用 $\theta_t$计算特征，从而暂时解耦路由与主干同步反馈。启用阶段约增加20% wall-clock，但只在尖峰触发后短期使用，再回到正常训练。SwiGLU另将线性分支限制在 $[-10,10]$，gate上界设为10。[↗](https://arxiv.org/pdf/2606.19348v1#page=26)
 
-| Cache Type | 存什么 | 为什么需要单独管理 |
-| --- | --- | --- |
-| SWA state cache | 最近窗口的未压缩 KV | 局部窗口随位置更新，体积大但范围有限 |
-| CSA/HCA state cache | 尚未凑够压缩块的 tail tokens | 不够一个 compression block 时不能直接写入压缩 KV |
-| classical KV cache | 已压缩的 CSA/HCA KV blocks | 可跨长 prefix 复用，但不同层大小和策略不同 |
+这些是经过运行验证的稳定策略，机制的完整理论解释仍未建立。它们也提醒读者，万亿规模训练的稳定不能只靠一项漂亮的谱范数性质。
+
+## 预训练扩大语料与上下文，同时调整路由结构
+
+Flash在32T tokens训练，Pro为33T，最大token batch分别75.5M与94.4M。数据继续保留数学代码与多语言知识，特别增加长文档，并在mid-training加入agentic数据。与V3不同，V4预训练采用样本级attention mask，避免packed文档互相可见。[↗](https://arxiv.org/pdf/2606.19348v1#page=24)
+
+序列长度从4K逐步到16K、64K和1M。Flash先用1T tokens做dense attention warmup，在64K阶段引入稀疏注意力，并先短期预热indexer；Pro使用更长dense阶段。这个顺序让表示与索引逐渐适应稀疏访问，模型并非一开始就在百万上下文上全程训练。
+
+| Configuration | Flash | Pro |
+| --- | ---: | ---: |
+| Layers / hidden width | 43 / 4096 | 61 / 7168 |
+| First two layers | pure SWA | HCA |
+| Total / activated parameters | 284B / 13B | 1.6T / 49B |
+| Routed experts / selected | 256 / 6 | 384 / 6 |
+| Shared experts | 1 | 1 |
+| Query heads / head dim / query compression dim | 64 / 512 / 1024 | 128 / 512 / 1536 |
+| Indexer query heads / dim | 64 / 128 | 64 / 128 |
+| Output groups / intermediate output dim | 8 / 1024 | 16 / 1024 |
+| CSA compression / top-k | 4 / 512 | 4 / 1024 |
+| HCA compression / local window | 128 / 128 | 128 / 128 |
+| Training tokens | 32T | 33T |
+
+前3层MoE按token ID的预定义hash路由，其余学习路由，affinity由sigmoid改为 $\sqrt{\operatorname{Softplus}(\cdot)}$。V4去掉V3的目标节点数限制，以新的专家并行系统承接通信。仍保留微小序列均衡项及1层MTP，说明它是对既有架构有选择的替换。[↗](https://arxiv.org/pdf/2606.19348v1#page=7)
+
+训练配置的可复用部分也在报告中给出。Flash的峰值/末端学习率为 $2.7\times10^{-4}/2.7\times10^{-5}$，Pro为 $2.0\times10^{-4}/2.0\times10^{-5}$，两者前2000步线性warmup；Muon动量为0.95、weight decay为0.1、每个更新矩阵RMS重缩放到0.18，AdamW为 $\beta_1=0.9,\beta_2=0.95,\epsilon=10^{-20}$、weight decay为0.1。无辅助损失的负载均衡bias更新速率为0.001，单序列balance loss权重为0.0001，MTP loss大部分训练为0.3，进入学习率衰减后为0.1。Flash前1T token使用dense attention；Pro只说明dense阶段更长，没有给出同样的token数。[↗](https://arxiv.org/pdf/2606.19348v1#page=25) [↗](https://arxiv.org/pdf/2606.19348v1#page=26)
+
+## 异构KV缓存与专家流水，决定理论节省能否兑现
+
+CSA、HCA与局部窗口的缓存增长规则不同。V4将缓存分为固定大小的state cache和随历史增长的compressed KV cache。state保存最近窗口和未凑齐压缩块的尾部状态；分页缓存以两个压缩率的最小公倍数对应的原token数组织，让不同层块边界一致。
+
+下图左侧是每请求的局部状态，右侧是压缩历史。不能因为长程缓存已经压缩，就丢掉尚未完成压缩的尾部，否则后续token不能恢复正确块表示。
 
 ![DeepSeek-V4 KV cache layout](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-6-kv-cache-layout.png){ width="920" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 6。原报告图意：KV cache 被组织成 state cache 和 classical KV cache 两类。state cache 管理 SWA 与尚未压缩的 CSA/HCA tail states；classical KV cache 按 block 存储 CSA indexer KV、CSA main KV 和 HCA KV。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 6。</small>
 
-**Figure 6 里的 state cache 是什么。**
-初学者可能会把 KV cache 想成一个简单数组：每来一个 token，就把该 token 的 key/value 追加进去。DeepSeek-V4 不是这样，因为 CSA/HCA 要等到凑够一段 token 才能压缩。没凑够的尾部 token 不能丢，也不能提前压成错误 block，所以需要 state cache 暂存。
+磁盘prefix复用还涉及重算。压缩条目可以完整保存，命中前缀最后不足一块的token需重新计算。局部窗口可选择全量保存、周期checkpoint或完全不保存；后者利用已有压缩缓存，重算最后 $n_{win}L$ 个token恢复 $L$ 层的局部状态。这是存储写放大与prefill重算之间的选择。[↗](https://arxiv.org/pdf/2606.19348v1#page=22)
 
-这也是为什么 PagedAttention 的标准假设不够用了。PagedAttention 很适合管理形态较统一的 KV blocks，而 DeepSeek-V4 的 KV 同时包含 SWA、CSA indexer、CSA main、HCA，以及未压缩 tail states。推理服务系统必须知道每类 cache 的 block alignment、命中策略和 eviction 策略。
+专家并行则将专家切成waves。一个wave数据到齐即可计算，不必等待整个layer所有专家dispatch完成；当前计算、下一wave传输和已完成结果combine同时进行。图中1.92倍是Flash配置下的理论重叠加速，不能直接当作整模型实测吞吐倍数。
 
-报告还提到 on-disk KV cache。对共享长前缀的请求，系统可以把压缩后的 CSA/HCA KV entries 存到磁盘；命中前缀时直接读出，避免重复 prefill。SWA 由于体积约为压缩 KV 的 8 倍，报告给了三种策略：Full SWA Caching、Periodic Checkpointing 和 Zero SWA Caching，分别在存储量和 recomputation 之间取不同平衡。
-
-## MoE 系统：把通信藏到计算下面
-
-MoE 的 expert parallelism 会带来 Dispatch 和 Combine 两段通信。DeepSeek-V4 的思路不是单纯追求更高网络带宽，而是把通信和 Linear-1、activation、Linear-2 分成更细的 expert waves，让下一波通信、当前波计算和上一波 combine 重叠起来。
+与未融合基线相比，实测一般推理的细粒度EP加速为 $1.50\sim1.73\times$，RL rollout与高速agent serving等对时延敏感场景最高为 $1.96\times$。因此图中的1.92倍理论重叠与这些kernel级实测区间必须分开报告，不能拿理论值当成端到端吞吐。[↗](https://arxiv.org/pdf/2606.19348v1#page=16)
 
 ![DeepSeek-V4 EP overlap](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-5-ep-overlap.png){ width="920" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 5。原报告图意：对比 naive EP、Comet 和 DeepSeek-V4 的 fine-grained EP scheme。DeepSeek-V4 把 experts 拆成 waves，让 Dispatch、Linear GEMM、SwiGLU + FP8 cast、Linear-2 GEMM 和 Combine 形成更细粒度 pipeline。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 5。</small>
 
-**这张图为什么和训练也有关。**
-MoE 层的慢点经常不在单个 GEMM，而在 token 需要跨设备送到目标 expert，再把结果收回来。图里的 `Dispatch` 和 `Combine` 是通信，`L1/Act/L2` 是计算。如果通信时间小于计算时间，理论上就可以把通信藏在计算下面。
+TileLang及确定性、batch-invariant内核支持快速实现与训练／采样一致性。batch-invariant要求同一token无论处于哪个batch位置都得到bitwise相同的结果，注意力与矩阵乘法会放弃大部分split-K路径，并固定累加顺序；稀疏attention backward为每个SM分开累加后做确定性求和，MoE backward先预处理token顺序并隔离跨rank buffer，mHC的小矩阵split-K则在后续kernel做确定性归约。这样才能把训练异常定位到数值原因，而不是累加顺序噪声。[↗](https://arxiv.org/pdf/2606.19348v1#page=18)
 
-DeepSeek-V4 把 experts 分成 waves 后，不必等全部 expert 的 token 都 dispatch 完再开始算。某一波 expert 数据到了就先算；同时下一波继续通信，上一波开始 combine。报告称这种 CUDA mega-kernel 在一般推理 workload 上相对强非融合基线有 1.50 到 1.73 倍 speedup，在 RL rollout 和高并发 agent serving 这类 latency-sensitive 场景最高接近 1.96 倍。
+在上下文并行中，每个rank把最后 $m$ 个未压缩KV条目传给下一个rank，由后者与本地 $s$ 个条目一起局部压缩，形成带padding的 $s/m+1$ 条；随后all-gather，再由fused select-and-pad重排成全量压缩KV。这样既处理跨rank压缩块边界，也保留每个query可见的top-k范围。[↗](https://arxiv.org/pdf/2606.19348v1#page=20)
 
-## 预训练细节
+mHC本身的工程开销主要来自变宽残差带来的额外中间状态内存与通信。报告降低这部分开销的措施分成三类：训练/推理融合kernel、只重算大多数层间hidden state和全部归一化输入、以及调整DualPipe 1F1B以重叠流水通信。报告所说的6.7%是相对于overlapped 1F1B pipeline stage的wall-time overhead，不是相对于整次训练或每个token的统一开销。[↗](https://arxiv.org/pdf/2606.19348v1#page=20)
 
-DeepSeek-V4 的预训练语料超过 32T tokens。报告特别强调了几类数据和处理：
+后训练服务的WAL和环境轨迹各有分工。LLM rollout的WAL按请求逐token追加“新生成的token”；如果从头重启未完成轨迹，随机重生成会偏向较短的幸存输出，token WAL保留原前缀，恢复或重做时可沿原轨迹继续，避免这种偏差。抢占时另外保存未完成请求的KV cache，恢复时用WAL和KV继续decode，硬件故障则可用WAL重做prefill。DSec沙箱则按全局顺序记录每次命令调用及其结果，用于回放、非幂等命令的快速恢复和状态溯源；它不是把每个token的KV写进环境日志。[↗](https://arxiv.org/pdf/2606.19348v1#page=35) [↗](https://arxiv.org/pdf/2606.19348v1#page=36)
 
-| Data / Processing | 报告中的作用 |
-| --- | --- |
-| mathematical contents 和 codes | 继续强化推理、数学和代码能力 |
-| agentic data during mid-training | 为工具使用、长流程任务和 coding agent 做铺垫 |
-| multilingual corpus | 覆盖更多 long-tail knowledge 和跨文化知识 |
-| long-document data | 支持 scientific papers、technical reports 等长上下文任务 |
-| token splitting、FIM、document packing | 继承 DeepSeek-V3 的预处理经验，减少截断浪费 |
-| sample-level attention masking | 让 packed samples 内部的注意力边界更可控 |
+## 多教师OPD整合能力，轨迹来自学生自己
 
-两个 base model 的关键训练设置如下，保留原报告的英文配置名：
+V4先在各领域训练specialists，包含SFT与GRPO，再用十余个教师整合成最终学生。与先前混合RL不同，最后融合阶段主要优化
 
-| Setup | DeepSeek-V4-Flash | DeepSeek-V4-Pro |
-| --- | --- | --- |
-| Training tokens | 32T | 33T |
-| Max batch size | 75.5M tokens | 94.4M tokens |
-| Peak learning rate | \(2.7 \times 10^{-4}\) | \(2.0 \times 10^{-4}\) |
-| End learning rate | \(2.7 \times 10^{-5}\) | \(2.0 \times 10^{-5}\) |
-| Sequence length curriculum | 4K -> 16K -> 64K -> 1M | 4K -> 16K -> 64K -> 1M |
-| Dense-to-sparse attention | dense warmup, sparse attention introduced at 64K | longer dense stage, then same two-stage sparse strategy |
-| MTP loss weight | 0.3 for most training, 0.1 at LR decay | same |
-| Auxiliary-loss-free bias update speed | 0.001 | 0.001 |
-| Sequence-wise balance loss weight | 0.0001 | 0.0001 |
+$$
+\mathcal L_{\mathrm{OPD}}(\theta)=\sum_{i=1}^{N}w_iD_{\mathrm{KL}}(\pi_\theta\|\pi_{E_i}).
+$$
 
-**为什么要先 dense，再 sparse。**
-Sparse attention 的选择器本身也要学。如果一开始就让模型在还没学好表示的时候依赖 sparse top-k，选择错误会直接变成训练噪声。DeepSeek-V4 先用 dense attention warmup，让模型有稳定基础；到 64K 长度时再引入 sparse attention，并先 warm up CSA 的 lightning indexer。这个流程和训练一个检索系统很像：先让底座能读懂文本，再训练它学会从长历史里挑重点。
+关键是前缀由当前学生采样，教师在学生实际访问的状态上给分布监督。数学任务选择对应专家，代码任务选择代码专家，不是把所有教师权重直接平均。reverse KL方向是student对teacher，训练目标与只拟合离线教师标准答案不同。[↗](https://arxiv.org/pdf/2606.19348v1#page=32)
 
-### 稳定性补丁：Anticipatory Routing 与 SwiGLU Clamping
+作者采用完整词表logits KL，而非每位置只用采样token的对数比估计，以降低梯度方差。为避免同时保存十余个万亿教师和超过100k词表的全部logits，系统按需加载教师，只缓存最终hidden states；训练时加载对应prediction head即时恢复logits，样本按教师分组，设备上最多保留一个教师head。由此将昂贵的数据体积换成少量重算和调度。
 
-报告说训练 trillion-parameter MoE 时遇到了 loss spike，并把问题经验性地关联到 MoE outliers 和 routing。两个实用补丁很值得记：
+领域教师仍由RL和奖励训练，所以OPD并未消除奖励设计。难验证任务使用rubric引导的Generative Reward Model，并同时训练模型的生成与评价能力；它是对标量奖励模型接口的改变，不能直接等同于不再需要人类标注或可靠评价标准。
 
-| Technique | 做法 | 解决什么 |
-| --- | --- | --- |
-| Anticipatory Routing | 用历史网络参数提前计算 routing indices，在后续 step 使用 | decouple backbone update 和 routing update，打断 routing-outlier 的恶性循环 |
-| SwiGLU Clamping | linear component clamp 到 \([-10,10]\)，gate component 上界为 10 | 直接压制异常大激活，减少 loss spike |
+## FP4后训练对齐实际部署的数值行为
 
-**Anticipatory Routing 的直觉。**
-普通 MoE routing 是“当前参数产生当前路由，当前路由又决定当前 expert 更新”。如果某次路由把大量异常 token 推到某些 expert，这些 expert 的更新可能让下一步路由更偏，形成正反馈。Anticipatory Routing 把 routing indices 的计算滞后一段，用历史参数给当前样本分配 expert，等于给 routing 加了一个缓冲器。
+QAT主要量化两类组件：MoE专家权重，以及CSA indexer的QK路径。专家FP32 master weights先量化为MXFP4，再反量化到FP8执行训练计算，反向用STE将梯度传回master weights。论文称FP4→FP8映射可无损，是在所测权重分块scale比例满足条件下成立；它不代表FP32→FP4没有量化误差。[↗](https://arxiv.org/pdf/2606.19348v1#page=33)
 
-报告中这个机制不是一直开，而是在检测到 loss spike 后触发短 rollback 并启用一段时间；活动期间额外 wall-clock overhead 约 20%，但因为只在异常时动态使用，整体额外成本较小。这类设计很有工程味：不是追求“永远最优雅”，而是让大规模训练在真的出问题时能稳定跑下去。
+rollout和部署直接使用原生FP4权重，使采样行为与线上数值一致。index scores另外从FP32降到BF16，top-k selector提速2倍，保留99.7%的KV条目召回。这个召回率测的是选择结果，不是最终任务准确率，更不是整个模型2倍加速。
 
-## 后训练：先培养专家，再用 OPD 合并
+这些设计说明后训练不能只优化理想高精度模型，再假设低精度部署自然相同。尤其是稀疏indexer，微小分数变化可能改变访问的历史条目，QAT要覆盖实际决策路径。
 
-DeepSeek-V4 的 post-training 可以分成两层：
+## Thinking与工具调用是有状态的接口
 
-```text
-Base model
-  -> domain specialists: SFT + GRPO-style RL
-  -> unified model: multi-teacher On-Policy Distillation
-```
+系列提供Non-think、High与Max三种reasoning effort。训练中通过不同长度惩罚与上下文设置塑造不同思考量，再用对应格式与Max专用提示区分。标准推理评估对三模式分别使用8K、128K和384K上下文，temperature为1；因此Max的结果同时对应更大的测试时预算。[↗](https://arxiv.org/pdf/2606.19348v1#page=29)
 
-第一层为 mathematics、coding、agent、instruction following 等目标分别训练 domain-specific experts。每个 expert 先做高质量 SFT，再用 GRPO 和面向领域的 reward signals 进一步优化。
-
-第二层不是简单把多个 expert 的权重平均，也不是直接把所有任务混在一个 RL 里继续训，而是使用 multi-teacher On-Policy Distillation, 简称 OPD。学生模型在自己采样出来的 trajectories 上，向多个 teacher 的输出分布做 reverse KL 学习。
-
-**OPD 和普通蒸馏有什么不同。**
-普通离线蒸馏经常是在固定数据上让 student 模仿 teacher。OPD 的重点是 on-policy：训练样本来自 student 自己当前会走到的状态。这样 student 不只学习 teacher 在标准数据上的答案，也学习“当 student 自己生成到某个中间状态时，哪个 teacher 的分布更该被模仿”。
-
-这对多专家合并尤其重要。数学 teacher、代码 teacher、agent teacher 的强项不同。如果直接混权重或混 RL signal，能力可能互相干扰；OPD 用 logits-level alignment 把多个 physically distinct expert weights 的能力压到一个统一参数空间里。
-
-### Reasoning modes
-
-报告把 reasoning effort 分成三档，原报告 Table 2 的核心格式如下：
-
-| Reasoning Mode | Characteristics | Typical Use Cases | Response Format |
-| --- | --- | --- | --- |
-| Non-think | Fast, intuitive responses based on habits or simple rules. | Routine daily tasks, emergency reactions, low-risk decisions. | `</think>summary` |
-| Think High | Conscious logical analysis, slower but more accurate. | Complex problem-solving, planning, medium-risk decisions. | `<think>thinking tokens</think>summary` |
-| Think Max | Push reasoning to its fullest extent. Slow but powerful. | Exploring the boundary of model reasoning capability. | special system prompt + `<think>thinking tokens</think>summary` |
-
-**reasoning effort 不只是输出更长。**
-表面上看，High/Max 只是“多想一会儿”。但训练和评测里它还对应不同 length penalties、context windows 和 response formats。报告在知识与推理评测中使用 8K、128K、384K 分别作为 Non-think、High、Max 的 context window；在代码 agent 和搜索 agent 评测里最大 context length 设置到 512K。也就是说，reasoning effort 是训练策略、上下文预算和推理协议一起定义的。
-
-### Generative Reward Model 与工具协议
-
-对于容易验证的任务，rule-based verifier 或 test cases 就能给 reward。困难在于 hard-to-verify tasks：比如开放式写作、复杂分析、长流程 agent 任务，很难用单个标量 reward model 稳定覆盖。报告提出使用 rubric-guided RL data 和 Generative Reward Model, 简称 GRM，并把模型的 judging 能力和生成能力一起优化。
-
-同时，DeepSeek-V4 引入新的 tool-call schema，使用 `|DSML|` special token 和 XML-like invocation format，目的是减少 escaping failures 和 tool-call errors。更重要的是，报告把 thinking trace 的保留策略分成两类：
+工具场景会保留跨tool result和新user turn的推理历史，普通聊天则在新user turn后丢弃旧推理。下图两条路径应按消息类型读，差别来自框架如何组织上下文，而非模型仅凭“这是agent任务”自行推断。
 
 ![DeepSeek-V4 thinking management](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-7-thinking-management.png){ width="620" .atlas-figure-tall }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 7。原报告图意：tool-calling scenarios 中保留跨轮 reasoning content；general conversational scenarios 中沿用新用户消息到来后丢弃旧 thinking content 的策略。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 7。</small>
 
-**Figure 7 的重点是 context policy。**
-工具调用场景里，模型可能先思考、调用工具、读结果、继续思考，再跨多个 user/tool turns 完成任务。如果每次新 user message 都清空 thinking trace，长流程 agent 会丢掉自己的工作记忆。DeepSeek-V4 借助 1M context，在 tool-calling path 里保留完整 reasoning history，让模型维持连续的问题求解状态。
+若框架把工具结果伪装成普通user消息，可能不能触发预期的工具上下文路径。官方因此建议这类框架考虑Non-think。DSML/XML工具格式还试图降低字符串转义错误；Quick Instruction则复用已有KV，通过专用token执行搜索意图、query生成等辅助任务，避免为这些任务重复prefill。[↗](https://arxiv.org/pdf/2606.19348v1#page=31)
 
-但普通对话不一定需要这样做。一直保留 thinking trace 会浪费上下文，也可能让新问题被旧思路干扰。因此报告对 general conversation 仍采用更紧凑的策略。这说明 1M context 不是“什么都塞进去”，而是要按 workflow 设计 context retention policy。
+## 能力收益与长上下文退化需要一起看
 
-## FP4 QAT：让训练行为贴近部署行为
+基座表显示Pro在MMLU-Pro73.5、SimpleQA-Verified55.2、LongBench-v2 51.5上高于V3.2-Base，但BigCodeBench59.2低于V3.2的63.9，CMath90.9也低于92.6。扩大模型、语料与上下文并没有使所有任务单调提高。[↗](https://arxiv.org/pdf/2606.19348v1#page=28)
 
-DeepSeek-V4 的 FP4 Quantization-Aware Training 主要作用在两处：
+以下为Table6指定版本与reasoning effort的结果，代码agent使用内部bash＋file-edit工具，最多500交互步、512K上下文；对照不都是同一基础模型或同一服务预算。[↗](https://arxiv.org/pdf/2606.19348v1#page=37)
 
-| Component | Precision choice | Why it matters |
-| --- | --- | --- |
-| MoE expert weights | FP4 (MXFP4) for routed expert parameters | expert weights 是显存和带宽大户，低比特能直接降低 deployment memory traffic |
-| CSA indexer QK path | QK activations cached、loaded、multiplied in FP4 | 长上下文里 indexer score computation 很频繁，FP4 可加速 attention selection |
-| index scores | FP32 -> BF16 during QAT | 报告称 top-k selector 有 2x speedup，同时保持 99.7% KV entry recall |
-
-报告的一个细节很关键：MoE expert weights 的 FP32 master weights 会先量化到 FP4，再无损 dequantize 回 FP8 用于计算。因为 FP8 E4M3 比 FP4 E2M1 有更多 exponent bits，在 scale factor 范围满足条件时，FP4 子块的细粒度 scale 可被 FP8 动态范围吸收。这样 QAT pipeline 可以复用既有 FP8 training framework。
-
-**为什么 rollout 阶段要用 native FP4。**
-如果训练时只是模拟量化，推理或 RL rollout 时却使用另一套真实量化 kernel，模型采样分布可能不一致。报告在 RL training 的 inference/rollout 阶段直接使用 native FP4 quantized weights，而不是只做 simulated quantization。这样采样行为更接近线上部署，也能真实降低显存和内存加载。
-
-## OPD 基础设施：full-vocabulary KL 怎么做得动
-
-OPD 想精确对齐 teacher 和 student 的完整输出分布，但大词表 logits 很大，teacher 又可能有十多个、每个都很大。报告的工程做法包括：
-
-| Problem | DeepSeek-V4 的处理 |
-| --- | --- |
-| teacher 模型太多太大 | teacher weights 放在 centralized distributed storage，按需加载，并做 ZeRO-like parameter sharding |
-| full logits 物化太占内存 | teacher forward 时只缓存 last-layer hidden states，训练时再通过对应 prediction head 重建 logits |
-| teacher head 占 GPU 内存 | 按 teacher index 排列样本，保证每个 mini-batch 尽量只加载一个 teacher head |
-| exact KL 计算成本高 | 用 specialized TileLang kernel 计算 teacher-student KL |
-
-**为什么不只用 token-level KL estimate。**
-报告提到，过去有些 OPD/RL 复用做法会把 full-vocabulary KL 简化成 token-level KL estimate，再把它当作 per-token advantage。这种做法省资源，但梯度方差大，容易不稳。DeepSeek-V4 选择 full-vocabulary logit distillation，是用更多系统工程换更稳定的 teacher signal。
-
-## Rollout 与 Sandbox：agent 训练不是只跑模型
-
-DeepSeek-V4 的 agent/RL/OPD 基础设施还包括两个容易被忽略的部分。
-
-第一是 preemptible and fault-tolerant rollout service。大规模 GPU 集群会被抢占，也会有硬件错误。报告用 token-granular Write-Ahead Log, 简称 WAL，记录每个生成请求已经产出的 token；抢占时保存未完成请求的 KV cache；恢复时用 WAL 和 KV cache 继续解码。报告特别指出，简单从头重新生成未完成请求会引入 length bias，因为短 response 更容易在中断前完成。
-
-第二是 DSec sandbox。agentic AI 训练和评测需要跑函数调用、容器、microVM、fullVM 等不同执行环境，还要记录命令、文件变更和结果。报告用 trajectory log 支持 fast-forward、provenance 和 deterministic replay，这和代码 agent / web agent 的训练闭环直接相关。
-
-**和 verl/RL 框架的呼应。**
-在 [verl 代码流程](../../reinforcement-learning/verl-code-flow.md) 里，rollout、reward、advantage、policy update 是 RLHF/RLVR 的核心数据流。DeepSeek-V4 报告展示的是同一类系统问题在百万上下文和多 teacher OPD 下的放大版本：rollout 不能只管“生成文本”，还要能容错、恢复、保留 KV、管理超长 token 字段，并让 teacher/student forward 的调度不把 GPU 内存打爆。
-
-### 实验结果怎么读
-
-### Base model 对比
-
-下面摘录原报告 Table 1 的关键行，保留原英文表头和指标格式：
-
-| Benchmark(Metric) | # Shots | DeepSeek-V3.2 Base | DeepSeek-V4-Flash Base | DeepSeek-V4-Pro Base |
-| --- | ---: | ---: | ---: | ---: |
-| Architecture | - | MoE | MoE | MoE |
-| # Activated Params | - | 37B | 13B | 49B |
-| # Total Params | - | 671B | 284B | 1.6T |
-| MMLU-Pro(EM) | 5-shot | 65.5 | 68.3 | 73.5 |
-| Simple-QA verified(EM) | 25-shot | 28.3 | 30.1 | 55.2 |
-| FACTS Parametric(EM) | 25-shot | 27.1 | 33.9 | 62.6 |
-| HumanEval(Pass@1) | 0-shot | 62.8 | 69.5 | 76.8 |
-| MATH(EM) | 4-shot | 60.5 | 57.4 | 64.5 |
-| LongBench-V2(EM) | 1-shot | 40.2 | 44.7 | 51.5 |
-
-<small>表源：`DeepSeek-V4 Technical Report`，Table 1 摘录。原报告表格要点：DeepSeek-V4-Flash-Base 在更小 activated/total params 下超过 DeepSeek-V3.2-Base 的多项指标；DeepSeek-V4-Pro-Base 在知识、代码和长上下文上进一步提升。</small>
-
-**Base table 的主要结论。**
-V4-Flash 的 activated params 只有 13B，小于 V3.2 的 37B，却在 MMLU-Pro、HumanEval 和 LongBench-V2 等指标上更强。这说明报告想证明的不是“参数越多越强”，而是架构和数据质量让更小激活规模也能更有效。V4-Pro 则通过更大总参数和激活参数把知识密集任务拉高，特别是 Simple-QA verified 和 FACTS Parametric 这类更依赖 parametric knowledge 的任务。
-
-### Reasoning effort 与长上下文
-
-报告中 Table 7 显示 High/Max mode 对困难任务提升很明显。下面保留几个能体现趋势的行：
-
-| Benchmark(Metric) | Flash Non-Think | Flash High | Flash Max | Pro Non-Think | Pro High | Pro Max |
+| Benchmark | Opus4.6 Max | GPT5.4 xHigh | Gemini3.1 Pro High | K2.6 Thinking | GLM-5.1 Thinking | V4-Pro Max |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| HLE(Pass@1) | 8.1 | 29.4 | 34.8 | 7.7 | 34.5 | 37.7 |
-| LiveCodeBench(Pass@1-COT) | 55.2 | 88.4 | 91.6 | 56.8 | 89.8 | 93.5 |
-| Codeforces (Rating) | - | 2816 | 3052 | - | 2919 | 3206 |
-| MRCR1M(MMR) | 37.5 | 76.9 | 78.7 | 44.7 | 83.3 | 83.5 |
-| BrowseComp(Pass@1) | - | 53.5 | 73.2 | - | 80.4 | 83.4 |
-| Toolathlon (Pass@1) | 40.7 | 43.5 | 47.8 | 46.3 | 49.0 | 51.8 |
+| SimpleQA-Verified | 46.2 | 45.3 | 75.6 | 36.9 | 38.1 | 57.9 |
+| GPQA Diamond | 91.3 | 93.0 | 94.3 | 90.5 | 86.2 | 90.1 |
+| HLE | 40.0 | 39.8 | 44.4 | 36.4 | 34.7 | 37.7 |
+| LiveCodeBench | 88.8 | — | 91.7 | 89.6 | — | 93.5 |
+| Apex Shortlist | 85.9 | 78.1 | 89.1 | 75.5 | 72.4 | 90.2 |
+| Terminal Bench2.0 | 65.4 | 75.1 | 68.5 | 66.7 | 63.5 | 67.9 |
+| SWE Verified | 80.8 | — | 80.6 | 80.2 | — | 80.6 |
+| SWE Pro | 57.3 | 57.7 | 54.2 | 58.6 | 58.4 | 55.4 |
+| HLE w/ tools | 53.1 | 52.0 | 51.6 | 54.0 | 50.4 | 48.2 |
+| Toolathlon | 47.2 | 54.6 | 48.8 | 50.0 | 40.7 | 51.8 |
 
-<small>表源：`DeepSeek-V4 Technical Report`，Table 7 摘录。原报告表格要点：Non-Think、High、Max 表示不同 reasoning effort；多数困难推理、代码、长上下文和 agentic tasks 随 reasoning effort 增大而提升。</small>
+这是Table 6的节选，加入K2.6与GLM-5.1后可以看到开放模型内部也有明显短板：V4在SWE-Pro为55.4，低于K2.6的58.6和GLM-5.1的58.4；HLE with tools为48.2，也低于两者的54.0和50.4。竞赛代码和Apex Shortlist很强，但知识、HLE和部分agent任务仍有闭源或开放模型对照领先。Codeforces3206来自14场Div.1、114题、每题先生成32候选再抽10次提交的预计评级，不是单次无重试解题成绩。[↗](https://arxiv.org/pdf/2606.19348v1#page=38)
+
+百万上下文也应直接看长度曲线。MRCR8-needle在128K附近较稳，Pro-Max从128K的约0.92降到512K的0.66、1024K的0.59；Flash-Max在128K约0.87，1024K约0.49。主表的MRCR汇总分83.5不能读成1024K这个单点的83.5%。
 
 ![DeepSeek-V4 MRCR long-context curve](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-9-mrcr.png){ width="760" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 9。原报告图意：DeepSeek-V4-Pro-Max 和 DeepSeek-V4-Flash-Max 在 MRCR 8-needle 任务上的 Average MMR 随 input tokens 从 8K 增加到 1024K 的变化。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 9。</small>
 
-**Figure 9 的含义。**
-MRCR 是长上下文 retrieval 类测试。图里 8K 到 128K 区间表现很稳定，超过 128K 后开始下降，但到 1024K 仍保留一定检索能力。这里不要只看“1M 还能跑”，更要看曲线形状：长上下文能力不是二值开关，而是随着长度增加逐步退化。工程上要为 256K、512K、1M 设计不同的 prompt packing、cache reuse 和检索辅助策略。
+长上下文的实际成果是成本可承受且仍保有相当检索能力，不是长度增加完全不损伤信息访问。CorpusQA的跨文档任务补充检索以外的证据，但长文档中需要精确定位的任务仍应关注长度分桶，而非只看“支持1M”的接口上限。[↗](https://arxiv.org/pdf/2606.19348v1#page=40)
+
+## 更长思考不总是最划算的配置
+
+Pro从High到Max，HLE34.5→37.7、LiveCodeBench89.8→93.5、TerminalBench63.3→67.9；但MCPAtlas74.2→73.6略降。Flash在TerminalBench56.6→56.9的增幅很小。图中横轴总tokens将这些质量变化放回成本坐标，适合判断某种任务是否值得启用Max。
 
 ![DeepSeek-V4 reasoning effort cost](../../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-10-reasoning-effort-cost.png){ width="860" }
 
-<small>图源：`DeepSeek-V4 Technical Report`，Figure 10。原报告图意：在 HLE 和 TerminalBench 2.0 上比较 DeepSeek-V4-Pro、DeepSeek-V4-Flash 和 DeepSeek-V3.2 的 performance by reasoning effort；横轴是 total tokens，纵轴是 Pass@1。</small>
+<small>图源：`DeepSeek-V4 Technical Report`，Figure 10。</small>
 
-**Figure 10 要看斜率。**
-这张图不是只说“Max 最强”，而是看额外 tokens 换来了多少分数。HLE 上，V4-Pro 从 None 到 High 的提升很大，从 High 到 Max 仍有提升但斜率变小；TerminalBench 2.0 上 V4-Pro 的 High/Max 也继续涨。V4-Flash 更便宜，但在 agentic coding 这类任务上和 Pro 有明显差距。选择模型时要问的是：你的任务是缺 reasoning tokens，还是缺模型容量和领域知识？
+真实使用评估同样有范围。内部30项中文专业任务中，Pro-Max相对Opus4.6-Max胜53%、平10%、负37%，所以63%是“不败率”，不是胜率。内部研发评测从约200候选任务筛到30项，Pro-Max通过率67%，Opus4.6 Thinking为80%；它支持V4可承担很多工程工作，同时保留高难内部任务差距。[↗](https://arxiv.org/pdf/2606.19348v1#page=43)
 
-### 最值得复用的工程经验
+中文写作的内部对照更具体：功能写作中Pro相对Gemini 3.1 Pro的总胜率为62.7%，对方为34.1%；创意写作的指令遵循胜率为60.0%，写作质量胜率为77.5%。但只取高复杂约束或多轮场景时，Claude Opus 4.5在指令遵循与多轮写作合计胜率为52.0%，Pro为45.9%。综合平均收益和困难子集负结果应同时保留，不能把“中文写作提升”写成所有场景都领先。[↗](https://arxiv.org/pdf/2606.19348v1#page=41)
 
-这份报告有几条经验适合迁移到自己的系统设计里：
+正式数学也有两个不能合并的计算协议。实践 regime 的 Putnam-200 Pass@8 在固定随机子集、少量工具和有界采样下，Flash-Max为81.00%，Seed-2.0-Prover为35.50%；frontier regime 的 Putnam-2025 使用混合形式/非形式推理与大规模计算，V4为120/120，Axiom同为120/120，Seed-1.5-Prover为110/120。前者是受限采样的通过率，后者是另一套题目及大规模预算下的120/120得分/满分结果，不能并称一个“数学胜率”。[↗](https://arxiv.org/pdf/2606.19348v1#page=40)
 
-| 经验 | 可迁移启发 |
-| --- | --- |
-| attention 不能只在算法层讨论 | CSA/HCA 必须和 KV cache layout、kernel、on-disk cache、prefix reuse 一起设计 |
-| MoE 性能瓶颈经常在通信 | expert waves 和 mega-kernel fusion 比单纯堆 bandwidth 更接近工程最优点 |
-| 大模型训练稳定性需要动态补丁 | Anticipatory Routing 这种按异常触发的机制，比一刀切改训练目标更现实 |
-| 后训练合并能力要看数据流 | specialist SFT/RL 和 OPD 的分层，减少多领域能力互相干扰 |
-| QAT 要贴近真实 rollout | RL/OPD 采样阶段用 native FP4，可减少训练采样与线上部署的分布差 |
-| 长上下文 agent 是系统问题 | context retention、tool schema、sandbox、WAL、KV persistence 都会影响模型是否可用 |
+搜索则显示工具预算的收益。869条内部问答比较中，agentic search胜RAG为61.7%，RAG胜18.3%，平20%；平均prefill tokens13649对10453，输出1526对1308，agentic search还平均调用16.2次工具，多数并行。这里增加的成本包含工具与环境，不应只比较输出token。[↗](https://arxiv.org/pdf/2606.19348v1#page=55)
 
-### 消融与诊断怎么读
-
-DeepSeek-V4 Pro 是技术报告，不是模块消融论文；读报告时要把系统对照、曲线和工程诊断分开。
-
-| Diagnostic | 报告证据 | 支撑什么 | 不能证明 |
-| --- | --- | --- | --- |
-| Base table | V3.2 / V4-Flash / V4-Pro | 架构、数据和训练提升效率 | 不能隔离单个模块贡献 |
-| MRCR / reasoning curves | Figure 9/10、Table 7 | 长上下文和 test-time compute 有收益曲线 | 不能把 Max mode 当默认最优 |
-| FP4 QAT / OPD | rollout 采样、full-vocab KL、TileLang kernel | 量化和蒸馏要贴近真实系统路径 | 不等于所有硬件都有同等收益 |
-| WAL / sandbox | KV persistence、trajectory replay | agent RL 基础设施必须容错 | 不能证明 agent 行为可靠 |
-
-项目借鉴时，优先复用可观测性：长上下文退化、reasoning tokens 效用、expert load、loss spike、KV 命中率和 rollout 恢复率。
-
-### 局限与风险
-
-第一，DeepSeek-V4 的架构很复杂。CSA、HCA、SWA、mHC、MoE、MTP、Muon、FP4 QAT、异构 KV cache、on-disk cache 和 OPD infrastructure 都有耦合。报告自己也承认未来要进一步提炼架构，把真正必要的设计筛出来。
-
-第二，训练稳定性的解释还不完整。Anticipatory Routing 和 SwiGLU Clamping 是有效工程经验，但报告也说其底层机制仍需进一步研究。对于复现者来说，这意味着不能只照抄超参，还要建立 outlier、routing、loss spike 和 expert load 的监控体系。
-
-第三，很多 benchmark 是内部 harness 或内部评测口径。尤其是 agent、search、white-collar task、R&D coding benchmark，不能和公开 leaderboard 直接混在一起比较。它们更适合说明 DeepSeek 的产品化方向，而不是作为独立可复现结论。
-
-第四，FP4 的硬件收益有一部分是面向未来硬件的。报告中提到 FP4 x FP8 在现有硬件上的 peak FLOPs 和 FP8 x FP8 相同，但未来硬件理论上可更高效。因此当前收益更多来自内存占用和 memory traffic，不能简单等同为所有场景 1/3 compute speedup。
-
-### 和站内章节连接
-
-如果你想把这篇报告放进现有知识地图，可以按这个顺序读：
-
-1. [训练：Megatron、DeepSpeed 与训练栈](../../training/megatron-lm-deepspeed-and-open-training-stacks.md)：理解 ZeRO、pipeline、expert parallel 和大规模训练栈；
-2. [训练：MTP 与投机解码](../../training/mtp-and-speculative-decoding.md)：理解 DeepSeek 系列为什么保留 MTP；
-3. [量化：FP8 与混合精度推理](../../quantization/fp8-and-mixed-precision-serving.md)：对照 DeepSeek-V4 的 FP8/FP4 训练和服务选择；
-4. [量化：QAT、Kernel 与 KV Cache](../../quantization/qat-kernels-and-kv-cache.md)：连接 FP4 QAT、KV cache 和实际 serving；
-5. [算子与编译器：FlashAttention 与长上下文](../../operators/long-context-and-flashattention-evolution.md)：理解为什么百万上下文必须改 attention kernel；
-6. [推理：上下文压缩与 KV 内存管理](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)：把 DeepSeek-V4 的异构 KV cache 和 on-disk KV 放到推理系统里看；
-7. [强化学习：verl 代码流程](../../reinforcement-learning/verl-code-flow.md)：对照 rollout、reward、advantage、policy update 和 OPD/RL 基础设施。
-
-## 阅读结论
-
-DeepSeek-V4 的重点不是某个单点指标，而是展示了一条百万上下文大模型的完整路线：**用 CSA/HCA 和异构 KV cache 压低长上下文边际成本，用 mHC/Muon/稳定性补丁把 trillion-scale MoE 训练跑稳，用 specialist + OPD 把多领域后训练能力合并到一个统一模型里，再用 FP4 QAT、rollout service 和 sandbox 把模型放进真实 agent 系统。**
-
-## 相关阅读与下一步
-
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=DeepSeek-V4%3A+Towards+Highly+Efficient+Million-Token+Context+Intelligence&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=DeepSeek-V4%3A+Towards+Highly+Efficient+Million-Token+Context+Intelligence)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=DeepSeek-V4%3A+Towards+Highly+Efficient+Million-Token+Context+Intelligence)。
-- 站内下一步：[论文精读专题](../index.md)。
+V4提供的采用路线是明确的：长历史由压缩与局部状态共同管理，领域能力通过学生自身轨迹上的蒸馏融合，实际部署数值进入后训练，工具接口保留正确的会话状态。对长任务系统而言，最值得复用的是这些信息与执行接口；对低时延应用，Flash、Non-think或High可能比一律Max更合适，选择应依据任务曲线和实际工具预算。

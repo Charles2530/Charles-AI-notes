@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="720" viewBox="0 0 1120 720" role="img" aria-label="高分辨率阶段重新获得原始参考">
+<title>高分辨率阶段重新获得原始参考</title>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#52687e"/></marker></defs>
+<rect width="100%" height="100%" fill="#f7fafc"/>
+<g font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif"><text x="36" y="46" font-size="27" font-weight="700" fill="#172f48">高分辨率阶段重新获得原始参考</text><text x="36" y="78" font-size="17" fill="#50677c">讲解示意 · 对比官方描述的信息来源；不表示内部层级、注意力方式或采样算法</text>
+<text x="35" y="125" font-size="21" fill="#233c54" font-weight="600">仅以低清结果为输入的恢复路径</text>
+<rect x="35" y="150" width="265" height="110" rx="13" fill="#fff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="55" y="184" font-size="21" fill="#233c54" font-weight="600">低分辨率视频</text>
+<text x="55" y="216" font-size="18" fill="#233c54" font-weight="400">部分小字已经模糊</text>
+<rect x="425" y="150" width="265" height="110" rx="13" fill="#fff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="445" y="184" font-size="21" fill="#233c54" font-weight="600">专用超分模块</text>
+<text x="445" y="216" font-size="18" fill="#233c54" font-weight="400">依据当前视频恢复细节</text>
+<path d="M300,205 L420,205" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="815" y="150" width="270" height="110" rx="13" fill="#fff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="835" y="184" font-size="21" fill="#233c54" font-weight="600">高分辨率结果</text>
+<text x="835" y="216" font-size="18" fill="#233c54" font-weight="400">缺失文字需要推测</text>
+<path d="M690,205 L810,205" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<text x="35" y="320" font-size="21" fill="#233c54" font-weight="600">H3 公开的 In-Context Regeneration 路径</text>
+<rect x="35" y="355" width="285" height="100" rx="13" fill="#eaf3ff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="55" y="389" font-size="21" fill="#233c54" font-weight="600">自己的低清输出</text>
+<text x="55" y="421" font-size="18" fill="#233c54" font-weight="400">保留构图与运动线索</text>
+<rect x="35" y="505" width="285" height="110" rx="13" fill="#fff4e8" stroke="#b7c9d8" stroke-width="2"/>
+<text x="55" y="539" font-size="21" fill="#233c54" font-weight="600">原始多模态上下文</text>
+<text x="55" y="571" font-size="18" fill="#233c54" font-weight="400">原图 / 视频 / 音频 / 指令</text>
+<text x="55" y="598" font-size="18" fill="#233c54" font-weight="400">再次提供目标细节</text>
+<rect x="430" y="415" width="300" height="150" rx="13" fill="#e9f5ef" stroke="#b7c9d8" stroke-width="2"/>
+<text x="450" y="449" font-size="21" fill="#233c54" font-weight="600">H3 基础模型再生成</text>
+<text x="450" y="481" font-size="18" fill="#233c54" font-weight="400">低清候选 + 原始参考</text>
+<text x="450" y="508" font-size="18" fill="#233c54" font-weight="400">复用已有生成能力</text>
+<path d="M320,405 L425,470" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M320,555 L425,510" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="825" y="430" width="260" height="120" rx="13" fill="#fff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="845" y="464" font-size="21" fill="#233c54" font-weight="600">高分辨率视频</text>
+<text x="845" y="496" font-size="18" fill="#233c54" font-weight="400">细节可由参考提供依据</text>
+<text x="845" y="523" font-size="18" fill="#233c54" font-weight="400">仍需检验时间与内容一致性</text>
+<path d="M730,490 L820,490" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<text x="35" y="678" font-size="18" fill="#233c54" font-weight="400">新增参考改善可恢复的信息条件；是否准确恢复，需要对照评估，不能仅凭流程保证。</text>
+</g></svg>

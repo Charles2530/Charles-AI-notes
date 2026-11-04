@@ -1,126 +1,83 @@
 # Offline Reinforcement Learning
 
-Offline Reinforcement Learning（Offline RL）只使用已经记录好的固定数据集训练策略，不在训练期间向环境请求新 transition。它适合机器人、医疗流程和推荐系统这类真实探索昂贵或危险的场景，但也把一个问题放到中心：策略一旦选择数据集没有覆盖的动作，价值估计还能不能相信？
+离线强化学习从一份固定的轨迹日志学习策略，训练期间不能通过新交互验证动作。日志可能来自机器人示范、旧控制器、历史推荐策略或过去的模拟实验。数据包含奖励和后继状态，因而能研究长期收益；但它只告诉我们采集策略确实做过的动作发生了什么。
 
-## 本章回答什么
+## 日志覆盖了哪些动作，决定了可以改进什么
 
-本章回答四个问题：Offline RL 与 behavior cloning、off-policy online RL 有什么区别；dataset support 为什么决定策略能学到什么；OOD action 如何造成 extrapolation error 和 value overestimation；离线指标为什么不能替代真实 closed-loop 证据。
+设机器人从入口状态选择绕行或近路，随后在货架前选择抓取。日志包含绕行后的几种抓法，价值分别约为 2 和 6；近路没有真实执行记录。高质量抓法并非每条轨迹都使用，因此有利用奖励改进的空间，但没有证据确认近路是否安全。这里的价值数值是教学构造，用于比较各个目标。
 
-主线是一个固定机器人数据集。日志包含相机观测、机械臂动作、奖励和终止标记，训练时不能让机器人试新动作。目标不是“把日志拟合得更好”，而是在不越出可靠数据支持的前提下，提高长期回报。
+行为克隆会按日志频率模仿绕行与两种抓法。如果日志中较差抓法很多，它也会被大量复制。离线 RL 试图提高有证据的好动作权重，同时避免利用近路上的虚高估计。即使日志片段可连接，连接后的状态也必须落在已有支持内；算法不能凭一句“轨迹拼接”获得从未观察的后果。
 
-## 先修知识
+## 为什么 replay 有用，固定 replay 却会出问题
 
-- [MDP、价值函数与 Bellman](mdp-value-bellman.md)：理解 transition、return、value 与 Bellman backup。
-- [动态规划、Monte Carlo 与 TD](dynamic-programming-monte-carlo-td.md)：理解 bootstrap 为什么会传播估计误差。
-- [连续控制与 SAC](continuous-control-and-sac.md)：理解 replay buffer、off-policy update 与连续动作。
-- [机器人状态、动作与数据集](../embodied-ai/state-action-robot-datasets.md)：理解机器人日志中的坐标系、频率和 episode boundary。
+回到入口，日志中的绕行动作有真实回报支持，网络对未见过的近路却偶然预测为 $20$。普通 Q-learning 的最大化会选中近路，随后把这个虚高值传播到前面的状态。训练日志中的 Bellman loss 可能很低，策略却正在追逐没有证据支持的动作。
 
-## 最小任务
+[DQN](q-learning-and-dqn.md) 和 [SAC](continuous-control-and-sac.md) 等 online off-policy 方法可以继续执行动作，收集反馈后纠错；offline 数据无法自动增加这个反例。因此关键限制是 support，候选策略要选择的状态动作对是否在数据分布中有足够覆盖。仅有很多轨迹或低训练误差，都不能回答这个问题。
 
-假设固定数据集 $\mathcal D$ 来自一个行为策略 $\mu$：
+Behavior cloning 直接最大化日志动作的概率，不用奖励判断哪种行为更好。它是重要基线，也能限制离线策略远离数据，但可能复制日志中的次优动作。离线 RL 要利用奖励改进行为，同时控制数据外的价值外推。
 
+## CQL 怎样对未见动作的高值施加代价
 
-```text
-observation -> 7-DoF end-effector action -> reward + next observation + done
-```
-
-数据大多是保守抓取，只有少量接近桌沿的失败。比较三种训练方式：
-
-| 方法 | 训练时的数据来源 | 能否主动纠正数据盲区 | 主要风险 |
-| --- | --- | --- | --- |
-| behavior cloning | fixed dataset 中的示范动作 | 不能 | 复制示范者错误；多步误差累积 |
-| off-policy online RL | replay 数据加持续环境交互 | 能，用新 transition 修正 | 在线探索成本与安全风险 |
-| offline RL | fixed dataset，不再交互 | 不能 | OOD action 的 value 被错误高估 |
-
-最小验收不是看训练 loss，而是同时报告：数据覆盖、策略动作相对行为数据的偏移、离线评估不确定性，以及进入仿真或真实机器人前的安全门禁。
-
-## 核心机制
-
-在 fixed dataset 条件下，behavior cloning、off-policy online RL 与 Offline RL 的关键差异，是策略遇到 distribution shift、离开日志支持区域后能否通过新交互纠错；下面从这个边界解释各类机制。
-
-### Dataset support 是可信区域
-
-数据由 behavior policy $\mu(a\mid s)$ 产生。若候选策略 $\pi$ 在某个状态选择 $\mu$ 几乎从未选择的动作，就离开了 dataset support。固定数据里没有这个动作的真实后果，Bellman target 却仍可能查询它：
-
+在有限离散动作的简化形式中，CQL 在 Bellman 误差之外加入
 
 \[
-y=r+\gamma(1-d)\max_{a'}Q(s',a').
+L_{\mathrm{CQL}}=\alpha\,\mathbb E_{s\sim D}\left[
+\log\sum_a\exp Q(s,a)-\mathbb E_{a\sim D(\cdot\mid s)}Q(s,a)\right].
 \]
 
-其中 $d$ 表示真实终止；最大化会偏好被高估的 OOD action。错误 target 再经过 bootstrap 传播，形成 extrapolation error 和 value overestimation。在线 off-policy 方法还能执行该动作并收集反例；Offline RL 没有这条纠错通道。
+第一项对高 Q 动作敏感，第二项抵消数据动作受到的压低作用。对每个 Q 的梯度为 softmax 概率减去数据动作频率。把问题放到同一状态的三动作表中，令两个有日志动作的 Q 为 2、6，未见动作的 Q 为 20，数据频率为 $[0.5,0.5,0]$。softmax 近似 $[0,0,1]$，正则梯度约为 $[-0.5,-0.5,1]$。梯度下降会提高有数据支持的动作、压低未见动作的虚高值。
 
-### 三类保守办法
-
-| 思路 | 做法 | 代表例子 | 边界 |
-| --- | --- | --- | --- |
-| behavior constraint | 只在行为数据附近选动作 | BCQ | 约束太强会退化为模仿，错过数据中可组合的改进 |
-| conservative value estimation | 压低数据外动作的 Q，保留数据内动作价值 | CQL | 保守强度过大时会系统性低估可行改进 |
-| avoid OOD action maximization | 只对数据动作拟合 value，再对高 advantage 数据做加权策略学习 | IQL | 仍依赖数据覆盖和 expectile/温度等选择 |
-
-BCQ、CQL、IQL 是准确理解这些机制的短例子，不是算法排行榜。BCQ 通过生成模型和扰动限制候选动作；CQL 在标准 Bellman error 外加入保守目标；IQL 避免直接评价未在数据中出现的动作，并做 advantage-weighted policy extraction。
-
-### Distribution shift 有两层
-
-第一层是 action shift：$\pi(a\mid s)$ 与 $\mu(a\mid s)$ 不同。第二层是 state shift：动作的小偏差在闭环中累积，把机器人带到日志很少覆盖的状态。即使单步动作误差很小，长 horizon 也可能让 observation 分布改变。
-
-因此 behavior cloning 不是 Offline RL 的同义词。BC 直接拟合动作标签；Offline RL 使用 reward 和长期价值寻找比平均行为更好的策略，但必须显式处理 support 外推。两者都无法凭固定日志证明真实部署安全。
-
-### Offline policy evaluation 的边界
-
-重要性采样可写为：
-
-
-\[
-\hat J(\pi)=\frac{1}{N}\sum_{i=1}^{N}
-\left(\prod_t\frac{\pi(a_t^i\mid s_t^i)}{\mu(a_t^i\mid s_t^i)}\right)G_i.
-\]
-
-其中连乘项是整条 trajectory 的策略概率比；当策略差异和 horizon 增大时，权重方差会迅速上升。若行为概率未记录或 support 不重叠，估计甚至不可用。FQE 等直接价值估计方法会引入函数逼近和 Bellman 外推误差；基于 learned dynamics 的 OPE 还会额外引入 model bias。Offline policy evaluation 可以筛掉明显失败方案，不能把日志之外的真实后果变成事实。
-
-## 训练数据流
-
-
-```text
-固定日志 D
-  -> 校验 observation/action/reward/done 与 episode 边界
-  -> 统计 state-action coverage、成功/失败桶和行为策略信息
-  -> 训练 Q / V / behavior model / policy
-  -> 约束或惩罚 dataset support 外的动作
-  -> logged data 上做 OPE、切片评测和不确定性检查
-  -> 仿真回放与 safety filter
-  -> 小流量真实 closed-loop 验证并记录失败
+```python
+import numpy as np
+q = np.array([2.0, 6.0, 20.0])
+probabilities = np.exp(q - q.max())
+probabilities /= probabilities.sum()
+regularizer_gradient = probabilities - np.array([0.5, 0.5, 0.0])
+assert (regularizer_gradient[:2] < 0).all()
+assert regularizer_gradient[2] > 0
 ```
 
-机器人数据要特别保留失败、人工接管、碰撞 near-miss 和恢复动作。只保留成功示范会让 reward/value 看不到危险边界，也让任何保守估计失去校准材料。
+完整优化还包括 Bellman 项、系数选择与目标策略，不能只运行这个正则就得到可靠策略。连续动作无法直接枚举求和，原论文使用相应采样近似。[CQL 的价值下界与改进保证](https://arxiv.org/abs/2006.04779)依赖具体假设，不能解释成任意神经网络训练后每个动作都安全或都不会被高估。
 
-| 阶段 | 必查字段 | 通过条件 |
+## IQL 为什么不直接对未见动作取最大值
+
+IQL 先从数据动作的 Q 值中拟合一个偏向较好动作的状态价值，再用它构造 Q target。其 value loss 使用 expectile 回归
+
+\[
+L_V=\mathbb E_{(s,a)\sim D}\left[|\tau-\mathbb 1[u<0]|u^2\right],\qquad
+u=Q_{\mathrm{target}}(s,a)-V(s).
+\]
+
+这里残差记作 $u$。当 $\tau>0.5$ 时，Q 高于 V 的正残差权重更大，因此 V 向数据中的高价值动作偏移。继续使用上述两个等频数据动作的 Q $2,6$，把未见动作的 20 排除在 value 拟合之外，$\tau=0.75$。若 V 位于二者之间，最优条件为 $0.25(V-2)+0.75(V-6)=0$，得到 $V=5$；普通均方回归则得到均值 $4$。
+
+随后 Q 拟合 $r+\gamma bV(s')$，避免在下一状态显式查询所有未见动作的 Q。Actor 再做 advantage-weighted behavior cloning
+
+\[
+L_\pi=-\mathbb E_{(s,a)\sim D}\left[
+\exp\bigl(\beta[Q(s,a)-V(s)]\bigr)\log\pi(a\mid s)\right].
+\]
+
+继续取 $V=5$，两个数据动作优势为 −3 和 1。若 $\beta=1$，权重分别约为 0.0498 和 2.718，相对比值约为 54.6，较好动作获得更多模仿权重。未见动作即使 Q 为 20，也没有对应行为克隆样本。这里约定 $\beta$ 乘在优势前，实际实现常对权重截顶。它让数据中的好动作获得更大模仿权重，但不会创造日志里从未存在的成功行为。算法原始解释见 [Offline Reinforcement Learning with Implicit Q-Learning](https://arxiv.org/abs/2110.06169)。
+
+| 方法思路 | 限制外推的位置 | 仍然需要的数据条件 |
 | --- | --- | --- |
-| 数据审计 | 动作单位、控制频率、terminated/truncated、reward 版本 | transition 语义一致，失败未被过滤 |
-| 策略训练 | Q 分布、动作偏移、support 距离 | 没有依靠极端 OOD Q 获得虚假提升 |
-| logged data 评估 | OPE 方差、有效样本量、分桶回报 | 结论写清覆盖范围与置信度 |
-| 部署前验证 | 仿真成功、约束违反、恢复率 | safety constraint 和人工接管可用 |
+| Behavior cloning | 直接拟合采集动作 | 示范质量与部署状态覆盖 |
+| BCQ | 将候选动作约束在数据附近 | 数据附近确实存在可用动作 |
+| CQL | 对过高的分布外价值加代价 | 正则、估计与覆盖假设合理 |
+| IQL | 用数据动作拟合 value，再加权模仿 | 高价值动作与可连接轨迹有足够支持 |
 
-## 常见失败
+[BCQ](https://arxiv.org/abs/1812.02900)和其他行为约束方法也处理同一个基本矛盾，约束太弱会外推，太强则可能难以超越原行为。
 
-1. **把 logged data 上的高 Q 当成真实 closed-loop 成功。** Q 和 offline policy evaluation 都依赖数据覆盖与建模假设；真实闭环会访问新的状态分布。
-2. **只比较平均 return。** 桌沿、遮挡、不同物体和长 horizon 失败可能被均值淹没，应按场景和风险桶拆分。
-3. **数据没有记录行为概率，却硬套重要性采样。** 此时比率无法可靠计算，需要明确行为模型估计带来的误差。
-4. **保守正则越大越安全。** 过强保守会拒绝数据内少量但有效的高回报行为；安全还需要动作限幅、碰撞检查、急停和 human intervention。
-5. **仿真通过就直接全量部署。** sim-to-real distribution shift 仍可能来自摩擦、延迟、传感器噪声和人类行为。
+## 离线评测为什么也依赖覆盖
 
-证据边界应写成：logged data evaluation 支持“在这些数据和假设下更有希望”；仿真 closed-loop 支持“在该模拟器动力学下可工作”；只有受控 real closed-loop 才直接支持真实系统回报与风险的结论。
+如果知道行为策略 $\mu$，可以考虑重要性采样权重
 
-## 自检与练习
+\[
+w(\tau)=\prod_t\frac{\pi(a_t\mid s_t)}{\mu(a_t\mid s_t)}.
+\]
 
-1. 为什么标准 Q-learning 在 fixed dataset 上会主动寻找估计误差，而 behavior cloning 通常不会？
-2. 为固定抓取日志画出 dataset support：哪些物体、姿态、动作方向和失败类型被覆盖？
-3. 比较 BCQ 的 behavior constraint、CQL 的 conservative value estimation 和 IQL 的 policy extraction，各自在哪一步减少 OOD action 风险？
-4. 设计一张 deployment checklist，至少包含动作限幅、碰撞检查、恢复策略、人工接管和失败回流。
-5. 解释为什么 OPE 置信区间很窄仍不能自动证明真实机器人安全。
+这要求目标策略可能采取的动作在行为策略下也有非零概率，且概率记录或估计可信。长轨迹的乘积容易造成少数样本主导。权重 $[1,1,8]$ 的有效样本量为 $(1+1+8)^2/(1+1+64)=100/66\approx1.52$，虽然名义上有三条轨迹，信息集中程度却接近只有一两条。
 
-权威起点：
+Fitted Q Evaluation 等方法通过另一个价值模型评价固定策略，也需要函数逼近与数据覆盖假设。它们可以提供证据和不确定性分析，但不能验证日志从未覆盖的真实后果。随机切分高度相关的同一条轨迹，还可能把相邻状态泄漏到评测集，应按 episode、时间或任务场景选择合适切分。
 
-- [Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems](https://arxiv.org/abs/2005.01643)：Offline RL 的问题定义、机器人案例与开放问题。
-- [Off-Policy Deep Reinforcement Learning without Exploration（BCQ）](https://arxiv.org/abs/1812.02900)：behavior-constrained value learning。
-- [Conservative Q-Learning](https://arxiv.org/abs/2006.04779)：保守价值估计。
-- [Offline Reinforcement Learning with Implicit Q-Learning](https://arxiv.org/abs/2110.06169)：不直接查询数据外动作的 value learning 与 policy extraction。
+实际阅读一份离线 RL 结果时，应同时检查采集策略、成功与失败轨迹比例、奖励标注、终止原因、行为克隆基线，以及独立闭环评测。方法分类与开放问题见[离线 RL 综述](https://arxiv.org/abs/2005.01643)。当环境模型参与生成新轨迹时，还需检查模型误差，详见[世界模型与 Model-based RL](rl-for-world-models.md)。

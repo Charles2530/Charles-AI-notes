@@ -15,247 +15,168 @@ paper_topic: 技术报告
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[www.alibabacloud.com/help/en/model-studio/qwen-omni](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2604.15804)；[官方 / 项目材料](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 一次视频对话里，有三条不同速度的信息流
 
-### 研究背景
+设想用户拿起手机，拍着电脑屏幕问“这里为什么报错，请小声解释”。助手要读取画面中的代码，听懂问题，结合前几轮对话判断错误，可能调用工具，最后组织解释并以合适的声音说出来。这里至少有三件事要同时做好。感知端要保留足够的画面与声音信息，理解端要给出正确回答，发声端要及时跟上，而且不能因为赶着开口而漏词、读错数字。
 
-Qwen3.5-Omni 报告处在 omni model 从多模态理解走向实时交互的阶段。很多 VLM 只处理图像/视频输入并输出文本；语音系统常是 ASR-LLM-TTS 级联；agent 模型又主要在文本和工具调用上训练。Qwen3.5-Omni 试图把文本、图像、视频、音频输入和文本/语音输出放进同一套 agentic 模型接口里。
+Qwen3.5-Omni 的主线就沿着这三条信息流展开。它沿用 Qwen2.5-Omni 与 Qwen3-Omni 的 **Thinker–Talker** 分工，让 Thinker 处理理解和文本生成，让 Talker 根据对话上下文生成语音。本代扩展了音视频数据与模型规模，采用 Hybrid Attention MoE、256K 上下文和显式时间戳，并用 **ARIA（Adaptive Rate Interleave Alignment，自适应速率交织对齐）** 组织文字与语音的流式输出。Plus、Flash 均为 instruct 模型；报告将系列规模描述为数千亿参数，未逐一给出两档模型可供还原的参数配置。[↗](https://arxiv.org/pdf/2604.15804v2#page=1)
 
-### 问题（Challenge）
-
-论文要解决的问题是：如何构建一个能听、看、读、说、调用工具并处理长上下文的 native omni agent。挑战在于不同模态的时间尺度和 token 结构差异很大：视频和音频是长时序，文本是离散 token，语音输出要求低延迟流式生成，工具调用又需要结构化决策。这个问题有价值，因为真实助手和具身系统面对的是连续多模态输入，而不是孤立图片或文本问题。
-
-### Finding
-
-报告的 finding 是：全模态模型不能只靠把模态 encoder 接到 LLM，而需要把“思考”和“说话/流式输出”分成协同模块。Thinker 负责多模态理解、推理、工具选择和文本决策；Talker 负责低延迟语音生成与流式交互。这个 insight 把 omni agent 从级联系统翻转为端到端协同系统：同一个上下文里既能整合音视频证据，又能决定何时搜索、调用函数或直接语音回应。
-
-### 方法
-
-模型采用 Thinker-Talker 架构。输入侧支持文本、图像、视频、音频和音视频流，通过各模态 tokenizer / encoder 转入统一上下文；Thinker 在长上下文中做理解、reasoning、tool use 和 function calling；Talker 负责把模型输出转为自然语音并支持低延迟流式。训练包括多模态预训练、SFT、语音/音视频任务、工具调用数据、长上下文训练和对齐。输出可以是文本、语音或工具调用结果。
-
-### 结论
-
-报告在文本、视觉、音频、视频、语音对话、音视频理解、工具使用和代码生成等 benchmark 上展示 Qwen3.5-Omni 的能力，并强调 256K 上下文和低延迟流式交互。结果说明，Thinker-Talker 能把全模态理解和实时输出放在同一系统里；但边界是官方评测不能完全代表真实实时助手，音频安全、工具可靠性、长视频记忆和跨模态幻觉仍需单独验收。
-
-### 关键术语
-
-- **Omni Model（全模态模型）**：统一处理文本、图像、音频、视频等输入/输出的模型
-- **Thinker-Talker（思考器-说话器）**：将多模态推理与语音生成分工协作的架构
-- **Streaming Speech（流式语音）**：边生成边输出语音，降低交互延迟
-- **Function Calling（函数调用）**：模型输出结构化工具调用请求以完成外部操作
-- **Audio-Visual Tool Use（音视频工具使用）**：基于音频/视频内容决定调用搜索、识别、代码或其他工具的能力
-
-| 线索 | Qwen3.5-Omni 的做法 | 读者应该抓住的点 |
-| --- | --- | --- |
-| 统一全模态理解 | Thinker 接收 text、audio、image、video / audio-video | 多模态不是 late fusion，而是统一进长上下文序列 |
-| 流式语音生成 | Talker 生成 RVQ speech tokens，MTP 补 residual codebooks，Code2Wav 增量合成 | 语音输出不是外接 TTS，而是模型体系内的 streaming generation |
-| 长上下文 | 256K tokens，支持 >10 hours audio 和 >400 seconds 720P video at 1 FPS | 音视频会迅速吃掉上下文，长上下文是 omni agent 的必要条件 |
-| 低延迟交互 | chunked prefilling、Hybrid MoE、Gated Delta Net、ARIA | 用户体验取决于 first-packet latency 和并发，而不只是 benchmark |
-| 训练路线 | 100M+ hours audio-visual content，三阶段 pretraining，Thinker 三阶段 post-training，Talker 四阶段训练 | 全模态能力来自分阶段数据和对齐，不是单次混合训练 |
+总览图把能力分成两个使用场景。左侧是读材料、生成细粒度音视频描述，右侧是语音控制、语义打断、声音定制和工具使用。看这张图时，应把“模型可以接收哪些信号”和“它在某项任务上做得多可靠”分开。后面的实验分别衡量理解、工具任务、语音内容与说话者相似度，不能用一项分数替代全部能力。
 
 ![Qwen3.5-Omni overview](../../assets/images/paper-deep-dives/technical-reports/qwen35-omni/figure-1-overview.png){ width="920" }
 
-<small>图源：`Qwen3.5-Omni Technical Report`，Figure 1，来自 arXiv source 包 `figures/image.png`。原图展示 Qwen3.5-Omni 统一处理 text、audio、image、video，并生成 text 或 real-time speech response，支持 voice dialogue、video dialogue、audio-visual tool use 等任务。</small>
+*原文 Figure 1。左侧偏向材料理解，右侧强调实时交互；图中的能力标签需要由对应实验进一步限定。*
 
-**总览图先看全模态输入输出是否都进入同一交互系统。**
-图里最重要的是“输入和输出都是多模态”。很多 VLM 只解决 image/video 到 text；很多 speech model 只解决 ASR 或 TTS；Qwen3.5-Omni 想做的是 end-to-end interaction：用户用语音、图像、视频或音视频流提问，模型既能用文本回答，也能直接用语音流式回答，还能调用工具。
+## Thinker 怎样把“这句话应该怎么说”交给 Talker
 
-这也是为什么报告反复强调 real-time、streaming、first-packet latency 和 tool use。全模态模型如果不能及时返回第一段语音，用户体验会明显退化；如果不能稳定调用工具，它就仍然只是感知模型，而不是 omni agent。
-
-## 论文位置
-
-Qwen3.5-Omni 继承 Qwen2.5-Omni / Qwen3-Omni 的 Thinker-Talker 思路，同时吸收 Qwen3.5 在文本、视觉、tokenizer、Hybrid MoE 和长上下文上的能力。报告中明确写到，它相对 Qwen3-Omni 有五个关键升级：
-
-| Upgrade | Qwen3.5-Omni |
-| --- | --- |
-| Hybrid-Attention MoE | both Thinker and Talker adopt Hybrid-Attention MoE designs |
-| Long-context modeling | up to 256k tokens, more than 10 hours audio, over 400 seconds 720P audio-visual content at 1 FPS |
-| Speech generation codec | multi-codebook codec representation enables single-frame, immediate synthesis |
-| ARIA | dynamically aligns text and speech units during streaming decoding |
-| Multilingual expansion | 113 languages and dialects for speech recognition, 36 for speech synthesis |
-
-这几个升级不是孤立功能，而是互相支撑。256K 上下文让长音频和长视频进来；Hybrid MoE 和 GDN 降低长序列推理成本；Talker 的 RVQ + MTP + Code2Wav 让语音输出可以逐帧生成；ARIA 则处理文本 token 和语音 token 速率不一致导致的流式合成不稳。
-
-## 总体架构
-
-Qwen3.5-Omni 继续采用 Thinker-Talker 架构。Thinker 负责多模态理解和文本生成；Talker 接收 Thinker 的高层表示和文本输出，负责生成流式 speech tokens。
+最容易误解的地方，是把 Thinker–Talker 想成“先输出完整文字，再调用一个独立 TTS”。报告实际传递的信息更多，输出也可以逐步推进。沿 Figure 2 从下往上看，视觉编码器与 AuT 音频编码器先把原始信号变成连续表示，和文本、时间戳一起进入 Thinker。Thinker 一边理解这些输入，一边生成文字；Talker 接收历史文字、当前流式文字，以及从 Thinker 中间层抽出的多模态表示。[↗](https://arxiv.org/pdf/2604.15804v2#page=3)
 
 ![Qwen3.5-Omni architecture](../../assets/images/paper-deep-dives/technical-reports/qwen35-omni/figure-2-architecture.png){ width="920" }
 
-<small>图源：`Qwen3.5-Omni Technical Report`，Figure 2，来自 arXiv source 包 `figures/model.jpg`。原图展示 Thinker-Talker 架构：Thinker 处理文本、图像、视频和音频输入；Talker 通过 RVQ tokens、MTP 和 Code2Wav 生成流式语音。</small>
+*原文 Figure 2。先看中间的 “Hidden Extraction From Middle Layers”，再看右上方 code 0、残差码本 1–15 和 Streaming Codec Decoder。两处分别说明上下文怎样传给 Talker，以及一帧声音怎样被还原。*
 
-架构可以按模块拆开：
+为什么传中间表示有用？同一句“可以继续”，在安静说明、紧张提醒或角色对话中，语气可能完全不同。纯文本能保存词句，原始音频中的说话方式、画面中的情境却未必都写进最终回答。报告给 Talker 的条件保留了这些模态表示，使它可以结合上下文调整韵律、音量和情绪。这解释了接口的用途；具体控制效果还要看语音评测，不能仅凭连接方式认定每次都能准确表达情绪。
 
-| Module | Role | Training / inference implication |
-| --- | --- | --- |
-| Vision Encoder | 处理 image / video frames | 继承 Qwen3.5 vision encoder，支持图像和视频理解 |
-| AuT | audio encoder | 40M hours audio-text pairs 训练，输出 6.25Hz audio tokens |
-| Thinker | unified multimodal reasoning and text generation | Hybrid MoE Transformer，支持 streaming input 和 256K context |
-| Talker | contextual speech generation | Hybrid MoE Transformer，接收 Thinker 表示并生成 RVQ speech tokens |
-| MTP | residual codebook prediction | 每个 decoding step 输出当前 frame 的 residual codebooks |
-| Code2Wav | waveform renderer | causal ConvNet，增量合成 waveform，支持 frame-by-frame streaming |
+Thinker 和 Talker 都采用 Hybrid MoE。这里有两个不同的效率来源。MoE 在模型容量与每次计算量之间做取舍；混合注意力中的 Gated Delta Net 则帮助减少长音视频序列的 KV-cache I/O。输入越来越长时，每一步生成都搬运历史状态会变得昂贵，降低这种访问负担有利于解码吞吐和并发。报告没有给出完整的层数、专家配置和混合比例，因而这里能复用的是模块分工与长序列瓶颈的判断，不能据此重建等规模网络。[↗](https://arxiv.org/pdf/2604.15804v2#page=6)
 
-**Thinker-Talker 为什么不是简单 ASR + LLM + TTS。**
-如果把语音系统拆成 ASR、LLM、TTS 三段，工程上容易做，但会丢失很多信息：语气、情绪、背景音、说话人、节奏、打断意图、音视频同步线索。Thinker-Talker 的好处是保留更丰富的中间表示，让 Talker 能根据多模态上下文调节 prosody、loudness、emotion 和 speaker style。
+### 一帧语音为什么有多个 code
 
-代价是训练和推理都更复杂。Talker 不是一个独立 TTS 小模型，它要和 Thinker 的文本输出、多模态表示、历史对话和语音 token 对齐。
+Talker 生成的是 **RVQ（Residual Vector Quantization，残差向量量化）** 语音表示。一帧声学信息由多个码本共同描述，后续码本继续补充前面表示尚未覆盖的细节。Figure 2 中，Talker 主干先给出 code 0，轻量 MTP 模块补齐当前帧的 code 1 到 code 15，码本嵌入合成后交给因果 ConvNet Code2Wav，增量还原波形。[↗](https://arxiv.org/pdf/2604.15804v2#page=5)
 
-## AuT：音频编码器
+用符号整理图中的求和，可以写成
 
-AuT 是 Qwen3.5-Omni 的 audio encoder。报告说它使用 transformer-based audio encoder，从 scratch 训练在 attention-encoder-decoder 模型中。
+$$
+\hat z_t=\sum_{j=0}^{15}E_j[c_{t,j}].
+$$
+
+这里 $t$ 是声学帧索引，$c_{t,j}$ 是第 $j$ 个码本的索引，$E_j[c_{t,j}]$ 是查到的向量，$\hat z_t$ 是合成后的当前帧表示。这是对架构图的说明性记号。它提醒我们，右上方的 MTP 主要补充**同一帧内的码本细节**，并不等于语言模型一次猜出多个未来文字 token。也不能把 AuT 的 160 ms 输入表示间隔，直接套到这里的输出 codec 帧上。
+
+Talker 还有自己的 system prompt，描述目标声音，既可以包含文字条件，也可以包含参考 codec 序列。参考声音提供“像谁说”的信息，多模态上下文提供“在什么情境下说”的信息，当前文字提供“说什么”。这些条件共同参与生成，但内容准确、身份相似和自然度仍然是三项不同的评价。
+
+## 十小时音频能放进去，首先是表示长度算得过来
+
+理解长音频之前，先做一个长度计算。原始波形按采样点送入大语言模型会产生极长序列，AuT 因而先在音频域提取和压缩表示。输入重采样到 16 kHz，再以 25 ms 窗、10 ms hop 计算 128 通道 mel-spectrogram。10 ms 一帧相当于每秒约 100 个特征位置，四个 Conv2D block 共同做 16 倍下采样，得到每秒约 6.25 个位置。[↗](https://arxiv.org/pdf/2604.15804v2#page=4)
 
 ![Qwen3.5-Omni AuT](../../assets/images/paper-deep-dives/technical-reports/qwen35-omni/figure-3-aut.png){ width="760" }
 
-<small>图源：`Qwen3.5-Omni Technical Report`，Figure 3，来自 arXiv source 包 `figures/3.5aut.png`。原图展示 AuT 概览：使用 40 million hours supervised data，获得 6.25Hz general purpose audio representation。</small>
+*原文 Figure 3。底部 FBank 经卷积下采样与 32 层编码器自注意力，形成 6.25 Hz 的 AuT Hidden；上方 8 层 decoder 在 AuT 训练中利用音频表示生成文字监督。进入 Figure 2 中 Thinker 的是编码器表示。*
 
-关键训练和输入细节如下：
+这张图还说明 AuT 的训练信号从哪里来。它作为 attention encoder–decoder 系统训练，上方 decoder 通过 cross-attention 读取压缩后的音频，学习产生配对文字；编码器必须在有限的位置数里保留足够的可识别信息。报告使用约 4000 万小时由 Qwen3-ASR 产生音频文字配对的数据，中文、英文、多语言占比为 3.5∶3.5∶3，多语言部分覆盖二十多种语言。动态 attention window 训练则照顾两种不同条件，实时输入只能逐块接收和缓存，离线理解可以利用更完整的上下文。
 
-| Item | Qwen3.5-Omni AuT Detail |
-| --- | --- |
-| Training data | 40 million hours audio-text pair data generated by Qwen3-ASR |
-| Audio feature | 16 kHz waveform -> 128-channel mel-spectrogram |
-| Window / hop | 25 ms window, 10 ms hop |
-| Downsampling | 4 Conv2D blocks, downsample 16 times |
-| Output rate | 6.25Hz audio tokens, about 160 ms per output frame |
-| Multilingual mix | more than 20 languages; Chinese : English : multilingual = 3.5 : 3.5 : 3 |
-| Training trick | dynamic attention window size training |
+按论文给出的表示速率，十小时纯音频大致需要
 
-这里的 6.25Hz 很关键。音频原始帧率非常高，如果直接把音频细粒度 token 全部塞进 LLM，上下文会被迅速吃光。AuT 通过降采样把音频压到约每 160ms 一个 token，让 10 小时级音频理解进入 256K context 成为可能。
+$$
+N_{\mathrm{audio}}=10\times3600\times6.25=225000
+$$
 
-## 多模态输入与时间编码
+个位置，小于最大上下文 262144。这是容量上的解释，文字、时间戳及其他模态还会继续占用预算。长音频“能进入窗口”与“任意细节都能准确找回”需要分别验证，报告没有提供覆盖十小时任意位置检索的完整准确率曲线。
 
-Qwen3.5-Omni 的 Thinker 把 text、audio、image、video 输入转成统一表示序列。报告里有几个容易被忽略但很重要的实现细节：
+视频还包含空间成本。报告列出的另一项规格，是 720P、1 fps 下约 400 秒音视频；不能据此推成同样时长的原始高帧率视频也具有相同成本。模型还支持动态采样帧率，实际送入哪些帧决定了它能看见哪些短暂事件。例如只保留稀疏帧时，按钮刚被按下的瞬间可能没有进入模型，之后再扩大文本回答长度也无法恢复这段证据。
 
-| Modality | Processing |
-| --- | --- |
-| Text | Qwen3.5 tokenizer, byte-level BPE, vocab size 250k, encoding / decoding efficiency improves 10-60% across most languages |
-| Audio | 16 kHz resampling, 128-channel mel-spectrogram, AuT output every ~160 ms |
-| Image / Video | Qwen3.5 vision encoder; dynamic frame rate to preserve video information while aligning audio stream |
-| Audio-video time | explicit timestamps inserted as formatted text strings in seconds |
-| Position | temporal IDs aligned to 160 ms resolution; modality positions made contiguous to avoid conflicts |
+文字 tokenizer 也影响预算。Qwen3.5 的 byte-level BPE 词表由 150K 扩至 250K，报告称多数语言的编码与解码效率提高 10%–60%。不同语言表达同一含义需要的 token 数可能不同，这种差异不仅影响输入长度，后面还会影响文字与语音的交织。
 
-Qwen3-Omni 使用 TMRoPE 提供 temporal awareness，但 Qwen3.5-Omni 认为直接把 temporal position IDs 绑定到 absolute time 会在长视频和音视频输入中产生过大、过稀疏的位置 ID，削弱 long-range temporal modeling，也提高多帧率训练数据构造成本。因此它在每个 video 或 audio-video temporal patch 前插入显式 timestamp 文本，让模型更自然地学习 timecode。
+### 时间戳给出可读的时间，位置编码维持序列关系
 
-**为什么 timestamp 文本有用。**
-对长音视频来说，“第 243 秒出现了什么”比“这是第 1518 个 temporal position ID”更接近语言模型已经擅长处理的符号结构。显式时间戳会稍微增加上下文长度，但它让模型能用文本式 timecode 学习跨模态对齐，尤其适合生成 script-level caption、自动分段和带时间戳的音视频描述。
+长音视频还有一个问题，同一事件的声音和画面要能够对上时间。报告沿用 TM-RoPE，但指出直接把绝对时间全部映射到 temporal position ID，会让长视频的视觉位置索引变得稀疏，也增加跨不同帧率构造训练样本的负担。
 
-## Talker 与 ARIA
+本代在每个视频或音视频 temporal patch 前加入以秒为单位的文本时间戳，并在纯音频序列的随机间隔插入时间标记。Figure 2 中的 `<0.0 seconds>`、`<4.0 seconds>`、`<600.0 seconds>` 就给出了这种输入形式。时间因此也成为模型能够读取和输出的文字信息，有利于回答“何时发生了什么”、生成带时间段的细粒度描述。[↗](https://arxiv.org/pdf/2604.15804v2#page=4)
 
-Talker 直接操作 Qwen3.5-Omni-Audio-Tokenizer 产生的 RVQ tokens。它用 MTP 模块建模 residual codebooks，再由 causal ConvNet Code2Wav 增量合成波形。
+文本时间戳没有取消位置编码。音频 temporal ID 按约 160 ms 的粒度组织，视频帧按真实时间调整对应 ID，高度与宽度仍有空间位置；后续模态从前一模态最大 position ID 加一开始编号，以避免位置冲突。两种表示各有作用，一种帮助表达可读时间，一种维持网络内部的时空关系。收益要付出少量额外上下文 token，这也是设计输入预算时必须保留的一部分。
 
-这套设计要解决两个问题。第一，语音输出必须低延迟，不能等整段文本和整段声学 token 全部生成完再播。第二，多语种场景下 text token 和 speech token 的比例差异很大，如果用固定 interleaving rate，容易出现跳词、错读、数字读法混乱或 prosody 不自然。
+## ARIA 怎样避免“声音已经往前说，文字还没准备好”
 
-ARIA, Adaptive Rate Interleave Alignment，就是为了解决这个速率不匹配问题。报告把它定义为：在任意生成 prefix 上，累计 speech-to-text token ratio 不能超过对应 item-level global ratio。也就是说，ARIA 不依赖 MFA-derived alignment，也不使用固定 interleaving rate，而是让文本和语音 token 在单一 stream 中按自适应速率单调交织。
+流式发声需要边收到文字边合成语音，但两种 token 的粒度并不一致。文字 tokenizer 会因语言、词形和数字写法产生不同长度，语音表示又按声学方式编码。如果强行使用固定的“几个文字对应几个语音 token”，一个语言里适用的比例换到另一个语言里可能就不够了。报告将漏词、发音错误和数字读法不稳定列为这种错配带来的问题。[↗](https://arxiv.org/pdf/2604.15804v2#page=5)
 
-**ARIA 的直觉。**
-文本 token 和语音 token 像两条速度不同的履带。英文、中文、数字、缩写、多语混合时，两条履带速度并不固定。如果强行每 N 个语音 token 配一个文本 token，就容易在某些语言或数字表达上错位。
+ARIA 把此前双轨组织改为文字和语音交织的单一序列，并约束每个前缀的累计比例。设全条样本有 $T$ 个文字 token、$S$ 个语音 token；走到第 $k$ 个位置时，已出现的数量为 $T_k,S_k$。将原文的文字规则记成公式，就是
 
-ARIA 的做法是给全局比例设一个单调约束：语音可以跟着文本往前走，但不能在任意 prefix 上跑得过快。这样既支持流式播放，也降低 text-speech alignment 崩掉的概率。
+$$
+\frac{S_k}{T_k}\leq\frac{S}{T},\qquad T_k>0.
+$$
 
-## 流式与延迟
+右边是这一条样本的整体比例，左边是当前已经生成的比例。它给语音推进设定一个随文字数量增长的上限，防止语音过早超过当前文字提供的预算。这是对报告规则的记号化表达，论文没有另外给出这一形式的训练损失。
 
-报告专门给了架构模块和 first-packet latency。表格保留原英文列名：
+下面用全句 4 个文字 token、8 个语音 token 举例。这个假设下，每累计一个文字 token，最多允许累计两个语音 token。先看前两行，它们的交织顺序不同，都满足约束；再看第三行，`T S S S` 在第四个位置就超限了。
 
-| Module | Architecture | Streaming |
-| --- | --- | --- |
-| Audio Encoder | AuT | ✓ |
-| Vision Encoder | SigLIP2 | -- |
-| Thinker | Hybrid MoE Transformer | ✓ |
-| Talker | Hybrid MoE Transformer | ✓ |
-| MTP | Dense Transformer | ✓ |
-| Code2wav | ConvNet | ✓ |
+![ARIA 合法与超前的文字语音前缀](../../assets/images/paper-deep-dives/technical-reports/qwen35-omni/explanation-aria-prefix.svg){ width="1000" }
 
-| Setting | First-Packet Latency |
-| --- | --- |
-| Audio Input | Plus: 435ms; Flash: 235ms |
-| Video Input | Plus: 651ms; Flash: 426ms |
+*依据原文 §2.4 绘制的讲解示意。T/S 数量为说明性假设，方块表示序列次序，不代表等长时间；该图没有指定真实声学帧率。*
 
-<small>表源：`Qwen3.5-Omni Technical Report`，Table 1。原论文表意：Qwen3.5-Omni 多个模块都支持 streaming，并给出 audio/video input 下 Plus 与 Flash 的端到端 first-packet latency。</small>
+这个例子也说明约束没有规定什么。`T S S` 重复可以合法，先给两个 `T` 再接四个 `S` 也可以合法，所以它不会唯一确定逐词时间戳，更不会要求每两个语音 token 恰好念完一个词。跨样本时，$S/T$ 可以变化，因而不需要把所有语言塞进同一个固定比例；它也不依赖 MFA 先提供逐词强制对齐。
 
-更细的并发延迟表如下，保留原英文字段：
+部署时仍需要决定整体比例如何估计、什么时候切换到语音、什么时候把波形块交给播放器。报告没有给出全部调度实现，不能用这一个不等式还原完整 Talker。不过它解释了作者想减少的负担，文字与语音在一条有序序列中推进，减少两条轨道之间的同步工作，再与 RVQ、轻量 MTP 和因果 codec decoder 配合实现连续输出。
 
-|  | Qwen3.5-Omni-Flash 1 Conc. | Flash 4 Conc. | Flash 8 Conc. | Qwen3.5-Omni-Plus 1 Conc. | Plus 4 Conc. | Plus 8 Conc. |
-| --- | --- | --- | --- | --- | --- | --- |
-| Thinker TTFT | 80/255ms | 86/446ms | 103/765ms | 162/377ms | 183/907ms | 260/1243ms |
-| Talker TTFC | 56/61ms | 68/108ms | 81/116ms | 54/56ms | 72/88ms | 95/116ms |
-| Thinker TPOP | 5.6/5.9ms | 8.2/9.2ms | 9.6/15.8ms | 17.4/18.5ms | 25.6/26.9ms | 33.3/40.2ms |
-| Talker TPOP | 14.2/14.2ms | 16.9/17.0ms | 20.5/20.6ms | 14.9/14.9ms | 21.0/21.3ms | 25.8/27.1ms |
-| Codec Decode | 3~5ms | 3~5ms | 3~5ms | 3~5ms | 3~5ms | 3~5ms |
-| Overall Latency | 235/426ms | 298/891ms | 352/1625ms | 435/651ms | 619/1515ms | 955/1980ms |
-| Thinker TPS | 177/171 | 556/457 | 942/598 | 57/54 | 156/149 | 266/240 |
-| Talker TPS | 70/70 | 237/235 | 389/388 | 67/67 | 191/189 | 320/296 |
+## 训练分阶段，是因为“听见了”和“回答得好”之间还隔着一段距离
+
+### 先接通模态，再共同训练，最后延长输入
+
+预训练的三个阶段分别处理接口、能力和长度。S1 固定 LLM，从 Qwen3.5 初始化主干与视觉编码器，从 AuT 初始化音频编码器；两条编码路径分别先训练 adapter，再训练 encoder。固定语言主干让新输入表示先学会进入已有语言空间，避免一开始就同时改变所有模块。[↗](https://arxiv.org/pdf/2604.15804v2#page=7)
+
+S2 解冻全部参数，以 32768 的序列长度进行多模态共同训练。以下是原文给出的数据量，单位为 trillion tokens。
+
+| Modality | Tokens (T) |
+| --- | ---: |
+| Text | 0.92 |
+| Audio | 1.99 |
+| Image | 0.95 |
+| Video | 0.14 |
+| Video-Audio | 0.29 |
+
+报告称该阶段约 4T，所列分项合计为 4.29T，阅读时应保留近似统计的含义。不同模态经过不同编码，一个音频表示位置与一个文字 token 的原始信息量并不相同，不能直接据此判断“哪种模态学得更多”。S3 再提高长音频、长视频的比例，把最大长度由 32768 提至 262144。只改最大长度的配置不会自动训练出长距离理解能力，长样本在这一阶段真正进入训练才是关键。
+
+### Thinker 的三步后训练针对三类失败
+
+第一步是 **Specialist Distillation**。团队从 Qwen3.5 base 分别训练文字、代码、agent、视觉和音频等领域的 SFT/RL 教师，让它们生成专门数据，再把这些能力蒸馏进统一模型。这样做的出发点是，各领域教师可以先把自己的任务学好，统一模型再学习它们的回答；代价是教师训练与数据构造也成为整个流程的一部分。
+
+第二步是报告称为 **On-Policy Distillation（OPD）** 的文字到音频回答迁移。作者观察到，同一问题用文字输入时已经能得到较好的回答，换成音频后，流畅性、推理或任务完成质量仍可能下降。于是针对配对的文字与音频问题，先获得文字条件下的回答，再把它作为对应音频问题的蒸馏目标。[↗](https://arxiv.org/pdf/2604.15804v2#page=8)
+
+![文字条件回答迁移到音频条件的训练关系](../../assets/images/paper-deep-dives/technical-reports/qwen35-omni/explanation-audio-distillation.svg){ width="1000" }
+
+*依据原文 §4.1 绘制。上方产生回答目标，下方在音频条件下学习；这张图表示训练关系，不要求上线时先转写、再调用文字模型。*
+
+这里监督的是“给这个问题一个更好的回答”，不只是识别器的转写准确率。若音频已经能被识别，但之后的解题表现下降，单纯继续堆转写样本未必针对这个缺口。配对问题让两个条件共享语义，较强的文字回答就能为音频条件提供更直接的目标。报告没有展开 OPD 的完整采样、损失与更新细节，因此不能自行补成某一种确定的 KL 方向或策略梯度公式。
+
+第三步是 **Interaction-Aligned RL**。单轮题目答对之后，长对话仍可能无意切换语言、丢失角色设定、忘记早先的指令。作者构造多轮交互轨迹，围绕这些体验问题设计奖励。它与前两步的区别在于评价单位已经扩展到持续交互，单轮回答正确不再足够。后面的指令遵循结果与这个目标一致，但报告没有拆开所有阶段做受控消融，不能把分数变化全部归到某一步。
+
+### Talker 还要单独学习声音质量与表达方式
+
+Talker 的四阶段训练沿着另一条线推进。首先使用超过 2000 万小时、带多模态上下文的多语言语音训练，加入按指令控制说话方式等任务。之后对数据做质量筛选，在高质量子集上持续预训练，借助 Qwen3-Omni-Captioner 改善噪声数据带来的监督问题，并把 Talker 自身上下文扩到 64K。这个 64K 与 Thinker 的 256K 属于不同模块，不能混成一个窗口规格。[↗](https://arxiv.org/pdf/2604.15804v2#page=8)
+
+随后，用人工标注的多语言偏好对做 DPO，再结合规则奖励和 GSPO；最后进行轻量 speaker fine-tuning，学习目标说话者的特征。这解释了为什么语音最终表现不能只归因于 ARIA，数据清理、偏好优化与声音微调也在改变输出。
+
+数据规模同样要区分口径。AuT 的 4000 万小时描述编码器配对训练，整体超过一亿小时音视频描述全模态数据，Talker 的 2000 多万小时描述语音生成训练。报告没有交代这些集合怎样重叠，把三项相加并称为去重训练时长没有依据。
+
+## 首包有多快，要和连续播放、多人并发一起看
+
+实时对话至少需要三个时间指标。**首包延迟**决定用户等多久听到第一段声音；**TPOP（Time Per Output Token）**描述稳定生成阶段每个输出 token 的耗时；**RTF（Real-Time Factor）**比较生成耗时与对应音频时长。RTF 小于 1 表示生成速度快于播放速度，有利于持续播放，但它不能保证第一段声音很快出现。
+
+报告 Table 2 使用内部 vLLM，并对 MTP 与 codec decoder 开启 `torch.compile` 和 CUDA Graph。作者称其为 theoretical first-packet latency，结果对应这套部署条件下的首个可播放音频包关键路径。下图将原表的 Overall Latency 按输入类型与并发量画出。先在同一个面板内比较不同并发量，观察音频、视频两条曲线分别怎样上升。[↗](https://arxiv.org/pdf/2604.15804v2#page=6)
+
+![Qwen3.5-Omni 首包延迟随并发量变化](../../assets/images/paper-deep-dives/technical-reports/qwen35-omni/plot-first-packet-latency.svg){ width="1000" }
+
+*由原文 Table 2 数值绘制，纵轴为 ms。Flash 与 Plus 使用不同资源分配和并行策略，两个面板不能作为相同硬件预算下的严格横向对照。*
+
+Flash 的视频首包从单并发 426 ms 增至八并发 1625 ms，音频首包则由 235 ms 增至 352 ms。输入形态会改变等待时间的增长，不能只引用最快的 235 ms 代表所有视频对话。Plus 的对应音频首包为 435、619、955 ms，视频为 651、1515、1980 ms。
+
+更完整的分项保留在下表。A/V 表示音频/视频输入，TPS 是 tokens/s。Codec Decode 在原表中统一列为 3–5 ms。
+
+| Metric (A / V) | Flash 1 Conc. | Flash 4 Conc. | Flash 8 Conc. | Plus 1 Conc. | Plus 4 Conc. | Plus 8 Conc. |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Thinker TTFT (ms) | 80 / 255 | 86 / 446 | 103 / 765 | 162 / 377 | 183 / 907 | 260 / 1243 |
+| Talker TTFC (ms) | 56 / 61 | 68 / 108 | 81 / 116 | 54 / 56 | 72 / 88 | 95 / 116 |
+| Thinker TPOP (ms) | 5.6 / 5.9 | 8.2 / 9.2 | 9.6 / 15.8 | 17.4 / 18.5 | 25.6 / 26.9 | 33.3 / 40.2 |
+| Talker TPOP (ms) | 14.2 / 14.2 | 16.9 / 17.0 | 20.5 / 20.6 | 14.9 / 14.9 | 21.0 / 21.3 | 25.8 / 27.1 |
+| Overall Latency (ms) | 235 / 426 | 298 / 891 | 352 / 1625 | 435 / 651 | 619 / 1515 | 955 / 1980 |
+| Thinker TPS | 177 / 171 | 556 / 457 | 942 / 598 | 57 / 54 | 156 / 149 | 266 / 240 |
+| Talker TPS | 70 / 70 | 237 / 235 | 389 / 388 | 67 / 67 | 191 / 189 | 320 / 296 |
 | Generation RTF | 0.178 | 0.211 | 0.257 | 0.187 | 0.267 | 0.334 |
 
-<small>表源：`Qwen3.5-Omni Technical Report`，Table 2。原论文说明：A/V 表示 audio/video input；整体延迟不是简单逐行相加，而是 ARIA 统一 interleaved stream 下的端到端 critical path。</small>
+这里有两种常见误读。第一，Flash 音频 Thinker TPS 从 177 增至 942，说明并发服务的总吞吐提高；同一表里的 Thinker TPOP 却从 5.6 ms 增至 9.6 ms，单条生成并没有因此快五倍。第二，Thinker TTFT、Talker TTFC、TPOP 和 codec 时间含有流水重叠与不同依赖，不能把几行数字相加，当作首包延迟。ARIA 的交织序列需要沿端到端关键路径计算。
 
-**这些延迟指标怎么读。**
-`TTFT` 是 Thinker 的第一 token 时间，`TTFC` 是 Talker 第一段音频 chunk 时间，`TPOP` 是稳定解码阶段每个输出 token 的时间，`RTF` 是生成音频相对真实播放时长的比例。RTF 小于 1 才有流式实时播放余量。
+RTF 的 0.178–0.334 则显示报告配置下有持续生成余量。对一个具体产品，更实际的检查顺序是先固定输入长度、视频采样和并发，再观察首包以及播放期间是否断流。表中未给出足以重建两档硬件配置的完整预算，也没有用户网络、麦克风、播放器缓冲的完整测量，不能把这些数字直接写成每个终端上的体验承诺。
 
-对语音产品来说，first-packet latency 往往比总推理吞吐更敏感。用户先听到第一段声音，后续只要生成速度快于播放速度，就能维持自然流式体验。
+## 统一音频能力之后，原来的文字和视觉保留了多少
 
-## 预训练数据与阶段
-
-Qwen3.5-Omni 的预训练数据覆盖 text、image-text、video-text、audio-text、video-audio、video-audio-text 和 pure text。报告摘要还说总计使用 heterogeneous text-vision pairs 和 100M+ hours audio-visual content。
-
-语言覆盖表如下，保留原英文列名：
-
-| Modality | # Varieties | Supported languages and dialects |
-| --- | ---: | --- |
-| Text | 201 | See Qwen3.5 for the complete list of supported languages. |
-| Speech Input | 113 | 74 languages + 39 Chinese dialects |
-| Speech Output | 36 | 29 languages + 7 Chinese dialects |
-
-<small>表源：`Qwen3.5-Omni Technical Report`，Table 3。原论文表意：Qwen3.5-Omni-Plus 支持 201 text varieties、113 speech input varieties、36 speech output varieties。</small>
-
-预训练分三阶段：
-
-| Stage | Training setup | Main purpose |
-| --- | --- | --- |
-| Encoder Alignment Stage (S1) | LLM initialized from Qwen3.5; vision encoder from Qwen3.5; audio encoder initialized with AuT; train encoders on fixed LLM, adapters first then encoders | 让 vision/audio encoder 与 LLM 语义空间对齐 |
-| General Stage (S2) | ~4T tokens: text 0.92T, audio 1.99T, image 0.95T, video 0.14T, video-audio 0.29T; sequence length 32,768 | 用大规模多模态数据提升 auditory、visual、textual、audio-visual understanding and interaction |
-| Long Context Stage (S3) | max token length from 32,768 to 262,144; higher proportion of long audio and long video | 提升复杂长序列音视频理解 |
-
-<small>表源：`Qwen3.5-Omni Technical Report`，Pretraining section。表格为按原文阶段信息重绘。</small>
-
-这三阶段很有工程意义。S1 不直接全参数混训，而是先锁住 LLM、对齐 encoder；S2 才全参数引入大规模多模态任务；S3 专门拉长上下文，增加长音频和长视频比例。这样做可以减少一开始多模态信号冲击语言底座，也能把长上下文能力作为后期能力增强，而不是在早期就承担高成本。
-
-## 后训练：Thinker
-
-Thinker 的 post-training 是三阶段，目标是保持各模态能力不退化、提升 audio query 下回答质量，并优化真实交互体验。
-
-| Stage | Qwen3.5-Omni Thinker Training |
-| --- | --- |
-| Stage 1: Specialist Distillation | train domain-specialized teacher models via independent SFT and RL from Qwen3.5 base; cover text agentic, coding, reasoning, vision, audio; generate domain-specific data and distill into one unified model |
-| Stage 2: On-Policy Distillation | for audio-text paired query, use text-conditioned response as target for audio-conditioned query; align audio-conditioned outputs with stronger text-conditioned behavior |
-| Stage 3: Interaction-Aligned Reinforcement Learning | construct multi-turn interaction trajectories and reward signals for language stability, persona consistency, instruction following over long contexts, and user experience |
-
-<small>表源：`Qwen3.5-Omni Technical Report`，Post-training section。表格为按原文阶段信息重绘。</small>
-
-**为什么 OPD 用 text response 教 audio response。**
-报告指出 audio query 下的 response quality 和 text query 之间仍有差距，尤其是 speech dialogue。这里的 OPD 很像跨模态行为对齐：同一个语义 query，如果文本输入能得到更流畅、更完整的回答，就把这个回答作为 audio-conditioned query 的训练目标。
-
-这不是普通 ASR 后再回答。它训练的是模型在音频条件下直接学会接近文本条件下的高质量行为，从而减少“听懂了但回答质量变差”的模态差距。
-
-## 后训练：Talker
-
-Talker 的训练是四阶段：
-
-| Stage | Qwen3.5-Omni Talker Training |
-| --- | --- |
-| General Stage | train on >20 million hours multilingual speech data paired with multimodal context; add instruction-following speech generation |
-| Long-Context Stage | data quality stratification + continual pre-training on high-quality subsets; augmented by Qwen3-Omni-Captioner; extend max context length to 64k tokens |
-| Reinforcement Learning Stage | DPO with multilingual human preference pairs; incorporate rule-based rewards and GSPO for stability |
-| Speaker Fine-tuning Stage | lightweight speaker fine-tuning for target speaker characteristics, naturalness, expressiveness, controllability |
-
-<small>表源：`Qwen3.5-Omni Technical Report`，Post-training section。表格为按原文阶段信息重绘。</small>
-
-Talker 训练里有两个重点。第一，它不是只做“文本到语音”的单调映射，而是用 multimodal context 做 speech generation，让语音能跟随对话历史、视觉/音频上下文和情绪。第二，它把 speaker fine-tuning 放在最后，说明 speaker identity、自然度和可控性更像产品化 polish，不应在基础语音能力还不稳时过早注入。
-
-## X to Text 评测
-
-Qwen3.5-Omni 的评测分成 `X -> Text` 和 `X -> Speech`。`X -> Text` 覆盖 text、audio、vision、audio-visual video。
-
-### Text to Text
+这组实验先回答“加入新模态是否挤掉原有能力”。Table 4 的主要对照是 Qwen3.5-Plus-Instruct，Omni-Flash 也一起列出，以便看模型档位的影响。Omni-Plus 在 MMLU-Redux 上为 94.2，对照为 94.3，知识表现接近；IFBench 从 51.1 到 52.6，指令遵循略有提高。但 AA-LCR 从 62.0 到 57.0，LiveCodeBench v6 从 67.1 到 65.6，BFCL-V4 从 66.1 到 63.3，长文本、代码和工具调用没有全部持平。[↗](https://arxiv.org/pdf/2604.15804v2#page=10)
 
 | Datasets | Qwen3.5-Plus-Instruct | Qwen3.5-Omni-Flash | Qwen3.5-Omni-Plus |
 | --- | ---: | ---: | ---: |
@@ -265,16 +186,59 @@ Qwen3.5-Omni 的评测分成 `X -> Text` 和 `X -> Speech`。`X -> Text` 覆盖 
 | C-Eval | 92.3 | 86.0 | 92.0 |
 | IFEval | 89.7 | 85.2 | 89.7 |
 | IFBench | 51.1 | 38.4 | 52.6 |
+| AA-LCR | 62.0 | 46.0 | 57.0 |
 | LongBench v2 | 60.2 | 46.4 | 59.6 |
+| GPQA | 85.9 | 76.4 | 83.9 |
 | LiveCodeBench v6 | 67.1 | 56.6 | 65.6 |
+| HMMT Nov 25 | 86.2 | 59.0 | 84.4 |
+| IMOAnswerBench | 68.3 | 51.5 | 65.5 |
 | BFCL-V4 | 66.1 | 55.3 | 63.3 |
 | TAU2Bench | 82.7 | 78.0 | 81.0 |
 
-<small>表源：`Qwen3.5-Omni Technical Report`，Table `Text -> Text performance` 摘录。原表比较 Qwen3.5-Omni 与 Qwen3.5-Plus-Instruct。</small>
+因此，“大体保留原有能力，同时有任务间变化”更符合这组数值。摘要的 no degradation 不能逐字理解成每一项都没有下降。Flash 在 HMMT、长文本等项目上与 Plus 的差距也较大，较快开口与复杂推理够不够用需要分别判断。
 
-这张表的意义是：Omni 模型加入音频、视觉、语音生成后，文本能力没有明显塌陷。Qwen3.5-Omni-Plus 在多数任务上接近 Qwen3.5-Plus-Instruct，IFBench 甚至更高。报告认为 OPD 和 interaction-aligned RL 对 omni LLM 的 instruction following 有正向作用。
+Table 6 检查视觉、文档、空间与视频。可以先看六个 Video Understanding 项目，Omni-Plus 相对同一对照全部提高，LVBench 为 71.2 对 68.6，MME-VideoOCR 为 77.0 对 74.2；这支持模型具备较强的动态视觉理解能力。但文档项目 MMLongBench-Doc 为 57.5 对 59.7，CharXiv 为 72.5 对 74.2，视频收益没有平均地出现在所有视觉任务上。
 
-### Audio to Text
+??? note "Table 6 · 全部视觉、文档、空间与视频结果"
+
+    | Datasets | Qwen3.5-Plus-Instruct | Qwen3.5-Omni-Flash | Qwen3.5-Omni-Plus |
+    | --- | ---: | ---: | ---: |
+    | MMMU | 81.0 | 76.9 | 80.1 |
+    | MMMU-Pro | 73.8 | 68.2 | 73.9 |
+    | MathVision | 73.6 | 65.4 | 73.0 |
+    | Mathvista (mini) | 86.9 | 82.9 | 86.1 |
+    | DynaMath | 84.2 | 79.3 | 83.8 |
+    | ZEROBench | 6 | 1 | 5 |
+    | ZEROBench_sub | 31.1 | 26.0 | 34.4 |
+    | RealWorldQA | 79.1 | 77.5 | 84.1 |
+    | MMStar | 80.3 | 75.7 | 79.4 |
+    | MMBenchEN-DEV-v1.1 | 93.8 | 88.8 | 92.8 |
+    | SimpleVQA | 66.1 | 54.4 | 65.3 |
+    | CharXiv (RQ) | 74.2 | 64.4 | 72.5 |
+    | CC-OCR | 83.0 | 80.8 | 83.4 |
+    | AI2D_TEST | 92.1 | 89.0 | 91.2 |
+    | MMLongBench-Doc | 59.7 | 53.6 | 57.5 |
+    | OCRBench | 91.4 | 89.1 | 91.3 |
+    | ERQA | 53.8 | 50.0 | 54.8 |
+    | CountBench | 95.1 | 88.2 | 95.1 |
+    | RefCOCO(avg) | 95.2 | 92.6 | 95.0 |
+    | ODInW13 | 50.3 | 46.8 | 49.5 |
+    | EmbSpatialBench | 83.4 | 82.7 | 85.4 |
+    | VideoMME(w/o sub.) | 81.0 | 77.0 | 81.9 |
+    | MLVU(M-Avg) | 85.1 | 81.9 | 86.8 |
+    | MVBench | 76.7 | 70.8 | 79.0 |
+    | LVBench | 68.6 | 65.7 | 71.2 |
+    | MMVU | 67.1 | 62.7 | 67.5 |
+    | MME-VideoOCR | 74.2 | 70.5 | 77.0 |
+    | SLAKE | 82.8 | 73.1 | 84.7 |
+    | PMC-VQA | 62.4 | 58.7 | 62.7 |
+    | MedXpertQA-MM | 55.3 | 44.8 | 54.7 |
+
+作者认为音视频共同训练可能有益于视频理解，这是合理的研究方向；表中同时变化的还有模型训练与数据，缺少只开关音频联合训练的对照，不能将六项提高直接当作音频融合的独立因果效果。医疗 VQA 的三行也只支持相应答题任务的判断，不能从这些分数跳到真实诊疗可靠性。[↗](https://arxiv.org/pdf/2604.15804v2#page=12)
+
+## 音频理解的优势，具体落在哪些任务上
+
+音频输入后输出文字，可以是转写、翻译、声音推理，也可以是口头提问后的回答。这四类任务的错误发生在不同环节。Table 5 前半部分先比较声音理解与对话，三列分别为 Gemini-3.1 Pro、Omni-Flash 和 Omni-Plus，以下指标按原表均为越高越好。
 
 | Datasets | Gemini-3.1 Pro | Qwen3.5-Omni-Flash | Qwen3.5-Omni-Plus |
 | --- | ---: | ---: | ---: |
@@ -282,114 +246,247 @@ Qwen3.5-Omni 的评测分成 `X -> Text` 和 `X -> Speech`。`X -> Text` 覆盖 
 | MMAR | 83.7 | 74.0 | 80.0 |
 | MMSU | 81.3 | 72.2 | 82.8 |
 | RUL-MuchoMusic | 59.6 | 60.5 | 72.4 |
+| SongFormBench-HarmonixSet (acc / hr.5f / hr3f) | 75.6 / 46.8 / 77.9 | 80.6 / 67.8 / 83.4 | 81.1 / 72.9 / 85.3 |
+| SongFormBench-CN (acc / hr.5f / hr3f) | 78.1 / 43.2 / 71.9 | 86.7 / 66.4 / 84.6 | 87.1 / 65.7 / 84.2 |
 | VoiceBench | 88.9 | 87.8 | 93.1 |
-| Fleurs xx↔zh/en (top59) | 32.1 | 29.4 | 32.8 |
-| Fleurs (top60) WER↓ | 7.32 | 10.75 | 6.55 |
-| CV15 (zh/yue/zh-tw) WER↓ | 8.59 / 13.40 / 6.78 | 4.25 / 3.45 / 2.68 | 3.46 / 1.95 / 2.27 |
-| LibriSpeech (clean/other) WER↓ | 3.36 / 4.41 | 1.30 / 2.43 | 1.11 / 2.23 |
+| URO-Bench-pro (U / R / O) | 69.1 / 84.0 / 99.2 | 64.1 / 83.8 / 98.7 | 66.3 / 86.3 / 99.8 |
+| SpeechRole | 124.2 | 119.8 | 123.5 |
+| WildSpeech-Bench | 76.3 | 72.2 | 75.4 |
 
-<small>表源：`Qwen3.5-Omni Technical Report`，Audio benchmark table 摘录。原表说明大多数 benchmark 越高越好，ASR benchmark 使用 WER 越低越好。</small>
+RUL-MuchoMusic 的 72.4 对 59.6 是较明显的音乐任务优势，VoiceBench 的 93.1 对 88.9 也支持口头对话能力。另一些项目需要反向读，MMAR 为 80.0 对 83.7，WildSpeech-Bench 为 75.4 对 76.3，SpeechRole 也略低于对照；不能把“音频有强项”写成每个维度领先。
 
-### Vision 和 Audio-Visual
+协议影响这些比较的含义。SongFormBench 使用统一提示，要求类似 SRT 的时间戳输出和 `SongForm-HX-8Class` 封闭标签集合，测到的是这个结构化标注条件下的能力。URO-Bench-pro 的 U、R、O 分别为 Understanding、Reasoning、Oral Conversation，口语维度采用 GenStyle-en、GenStyle-zh、Multilingual 任务。Omni-Plus 的 R/O 提高，U 则为 66.3，低于 Gemini 的 69.1，拆开看才能知道哪里还存在差距。[↗](https://arxiv.org/pdf/2604.15804v2#page=11)
 
-| Audio-Visual Dataset | Gemini-3.1 Pro | Qwen3.5-Omni-Flash | Qwen3.5-Omni-Plus |
+### 转写的平均优势，不保证每一种语言都更好
+
+Table 5 的识别部分使用错误率，越低越好，括号中的数据划分顺序与数值顺序一致。
+
+| Datasets | Gemini-3.1 Pro | Qwen3.5-Omni-Flash | Qwen3.5-Omni-Plus |
+| --- | ---: | ---: | ---: |
+| Fleurs (top60) | 7.32 | 10.75 | 6.55 |
+| CV15 (zh / yue / zh-tw) | 8.59 / 13.40 / 6.78 | 4.25 / 3.45 / 2.68 | 3.46 / 1.95 / 2.27 |
+| CV15 (en) | 8.73 | 5.90 | 4.83 |
+| Librispeech (clean / other) | 3.36 / 4.41 | 1.30 / 2.43 | 1.11 / 2.23 |
+| Weneetspeech (net / meeting) | 11.53 / 14.21 | 4.41 / 5.51 | 4.30 / 5.84 |
+| Kespeech | 23.67 | 4.47 | 3.46 |
+| MIR-1K (vocal-only) | 8.76 | 4.94 | 4.56 |
+| Opencpop | 6.83 | 1.11 | 1.49 |
+
+LibriSpeech 两个划分、中文方言相关集合和歌声转写都有较强结果。MIR-1K 的转写先转换为简体中文，比较时需要保留这个归一化条件。Flash 也不总是劣于 Plus，例如 Weneetspeech meeting 的 5.51 优于 5.84，Opencpop 的 1.11 优于 1.49。这些局部结果提醒我们，档位名称不能替代任务测试。
+
+附录 Table 13 将 FLEURS 拆成 60 种语言。Chinese、Cantonese、Korean、Thai、Vietnamese、Japanese 使用 CER，其余使用 WER，因此 6.6 的平均值沿用的是作者混合统计口径，不能叫作同一分词规则下的所有语言 WER。下表挑出部分优势与反例，数值保留附录的一位小数精度。
+
+| Language | Qwen3.5-Omni-Plus | Qwen3.5-Omni-Flash | Gemini-3.1 Pro | GPT-4o-Transcribe | Gemini-3-Flash |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Chinese | 2.9 | 2.9 | 3.6 | 2.6 | 4.6 |
+| English | 3.2 | 3.7 | 2.7 | 3.2 | 2.9 |
+| Cantonese | 2.2 | 3.1 | 6.3 | 5.2 | 10.8 |
+| Arabic | 11.7 | 13.6 | 9.2 | 13.0 | 10.1 |
+| Korean | 1.7 | 2.1 | 2.0 | 2.1 | 2.4 |
+| Japanese | 1.9 | 2.5 | 2.3 | 3.0 | 3.4 |
+| Hindi | 9.7 | 9.9 | 4.5 | 12.0 | 5.6 |
+| Persian | 12.0 | 12.1 | 8.9 | 9.9 | 10.0 |
+| Average | 6.6 | 10.8 | 7.3 | 10.4 | 10.5 |
+
+粤语的 2.2 对 6.3 很有吸引力，但英语为 3.2 对 2.7，印地语为 9.7 对 4.5，阿拉伯语与波斯语也高于 Gemini-3.1 Pro。若产品主要服务这些语言，平均排名就不够用了。识别器对方言、词汇和说话环境的表现，应当进入实际任务的选择条件。[↗](https://arxiv.org/pdf/2604.15804v2#page=26)
+
+### 翻译要保留方向，不能只写一个总分
+
+Table 5 给出 FLEURS top59 的双向语音到文本翻译汇总。Omni-Plus 在 `xx↔zh`、`xx↔en` 上分别为 30.2、35.4，Gemini-3.1 Pro 为 29.5、34.6，总汇总为 32.8 对 32.1。原表说明 top59 排除了缺少该翻译测试数据的 Afrikaans，它与 ASR top60 不是同一个测试口径。
+
+附录 Tables 14–15 的四个方向平均 BLEU 更能帮助选择使用场景。
+
+| Direction (BLEU ↑) | Qwen3.5-Omni-Plus | Qwen3.5-Omni-Flash | Gemini-3.1 Pro | Gemini-3-Flash |
+| --- | ---: | ---: | ---: | ---: |
+| English → Other Languages | 33.8 | 30.4 | 31.8 | 31.8 |
+| Chinese → Other Languages | 21.4 | 18.1 | 19.6 | 19.5 |
+| Other Languages → English | 37.0 | 33.5 | 37.4 | 36.6 |
+| Other Languages → Chinese | 38.9 | 35.7 | 39.4 | 38.9 |
+
+Omni-Plus 从中英文向其他语言翻译时平均更高，反过来向中英文翻译的平均值则略低于 Gemini-3.1 Pro。具体语言又有差异，例如 Cantonese→Chinese 为 36.8 对 21.2，English→Cantonese 为 40.1 对 25.5。要判断一个多语言助手，应先列出用户实际需要的源语言与目标语言，再读对应单元格；“支持多语言”和“某个方向更合适”是不同层次的结论。[↗](https://arxiv.org/pdf/2604.15804v2#page=27) [↗](https://arxiv.org/pdf/2604.15804v2#page=28)
+
+## 音视频融合与工具使用，为什么要单独评估
+
+正确听写和识别画面，不保证模型能把说话者、动作与事件对应起来。Table 7 因而加入同时需要音频与视频的任务，并进一步区分文字提问、音频提问、描述和工具使用。先看 DailyOmni 与 Omni-Cloze，再看 AV-SpeakerBench 和 OmniGAIA，就能看到能力并非同步提高。
+
+| Datasets | Gemini-3.1 Pro | Qwen3.5-Omni-Flash | Qwen3.5-Omni-Plus |
 | --- | ---: | ---: | ---: |
 | DailyOmni | 82.7 | 81.8 | 84.6 |
 | WorldSense | 65.5 | 57.9 | 62.8 |
 | AVUT | 85.6 | 81.4 | 85.0 |
 | AV-SpeakerBench | 75.1 | 65.2 | 71.3 |
-| VideoMME w/ audio | 89.0 | 79.3 | 83.7 |
+| VideoMME (with audio) | 89.0 | 79.3 | 83.7 |
 | Qualcomm IVD | 66.2 | 66.3 | 68.5 |
 | Omni-Cloze | 57.2 | 63.0 | 64.8 |
 | OmniGAIA | 68.9 | 33.9 | 57.2 |
 
-<small>表源：`Qwen3.5-Omni Technical Report`，Audio-Visual -> Text table。原表说明 VideoMME 使用 `use_audio_in_video=True`；OmniGAIA 不使用 thinking prompt 和 `<answer>` formatting，并使用 DeepSeek-V3.2-Thinking 作为 judge。</small>
+Omni-Plus 的 DailyOmni 为 84.6，对照为 82.7；Omni-Cloze 为 64.8 对 57.2，说明一般理解与细粒度描述有强项。音频提问的 Qualcomm IVD 为 68.5 对 66.2，也与实时交互目标一致。AV-SpeakerBench 为 71.3 对 75.1，WorldSense 为 62.8 对 65.5，说明说话者关联和另一组场景理解仍有差距。[↗](https://arxiv.org/pdf/2604.15804v2#page=13)
 
-这里有两个信号。第一，Qwen3.5-Omni-Plus 在 DailyOmni、Qualcomm IVD、Omni-Cloze 上很强，说明音视频融合和 caption 能力是重点优化方向。第二，OmniGAIA 仍低于 Gemini-3.1 Pro，说明 audio-visual tool use 虽然已进入评测主线，但还没有完全追平最强闭源系统。
+工具任务的差距更直接。OmniGAIA 中 Plus 得到 57.2，Flash 为 33.9，Gemini-3.1 Pro 为 68.9。这个 harness 没有加 thinking prompt，也没有要求 `<answer>` 格式，全部结果用 DeepSeek-V3.2-Thinking 评分。分数对应这些条件，不能与使用不同提示、预算和评分器的排行榜直接拼接。VideoMME 这一行还明确设置 `use_audio_in_video=True`，与前面无字幕视觉表的条件也要区分。
 
-## X to Speech 评测
+报告还描述 Audio-Visual Vibe Coding，让音视频指令直接进入代码生成，以及语义打断、声音控制等能力。这些描述展示了系统接口扩展到了哪里；本文的主表没有给出复杂软件项目长期运行、所有打断场景或所有情绪控制的统一量化结果。最有实际意义的判断仍然是，感知结果能否支持下一步动作，工具是否返回了需要的信息，最终任务有没有完成。
 
-语音生成部分主要看 zero-shot speech generation、multilingual speech generation、cross-lingual speech generation 和 custom-voice speech generation。
+## 说得对、声音像、跨语言稳定，要分三次检查
 
-| Dataset | Model | Performance |
-| --- | --- | --- |
-| SEED test-zh / test-en | Seed-TTS ICL | 1.11 / 2.24 |
-| SEED test-zh / test-en | Seed-TTS RL | 1.00 / 1.94 |
-| SEED test-zh / test-en | CosyVoice 3 | 0.71 / 1.45 |
-| SEED test-zh / test-en | Qwen3-Omni-30B-A3B | 1.07 / 1.39 |
-| SEED test-zh / test-en | Qwen3.5-Omni-Plus | 0.99 / 1.26 |
+理解实验输出的是文字，语音生成实验则给定文字与参考语音，检查合成后的声音。两者不能混读。例如 ASR 错误率衡量输入语音被识别得怎样，TTS 的内容一致性则是把**生成语音再次送给识别器**，比较识别文字与目标文字。
 
-<small>表源：`Qwen3.5-Omni Technical Report`，Zero-shot speech generation table 摘录。原表使用 WER，越低越好。</small>
+WER 的基本计数方式是
 
-Cross-lingual speech generation 摘录如下：
+$$
+\mathrm{WER}=\frac{N_{\mathrm{sub}}+N_{\mathrm{del}}+N_{\mathrm{ins}}}{N_{\mathrm{ref}}}\times100\%.
+$$
+
+三项分别为替换、删除和插入，分母为参考词数。它能暴露漏词、多说和读错内容，但分数还受识别器与文本归一化影响，也不会直接给出自然度。插入足够多时 WER 可以超过 100%，后面的商业声音结果里确实有这种数值，不能把它当作超出范围而裁掉。CER 使用字符级计数，跨语言比较时必须保留单位。
+
+### Zero-shot 先看中文和英文的内容一致性
+
+原文 Table 8 在 SEED-TTS 的 test-zh / test-en 上比较 13 个系统，使用参考语音的 zero-shot 条件，以下均为 WER，越低越好。
+
+| Model | test-zh | test-en |
+| --- | ---: | ---: |
+| Seed-TTS ICL | 1.11 | 2.24 |
+| Seed-TTS RL | 1.00 | 1.94 |
+| MaskGCT | 2.27 | 2.62 |
+| E2 TTS | 1.97 | 2.19 |
+| F5-TTS | 1.56 | 1.83 |
+| Spark TTS | 1.20 | 1.98 |
+| CosyVoice 2 | 1.45 | 2.57 |
+| CosyVoice 3 | 0.71 | 1.45 |
+| MiniMax-Speech | 0.83 | 1.65 |
+| MiMo-Audio-7B-Instruct | 1.96 | 5.37 |
+| Qwen2.5-Omni-7B | 1.42 | 2.33 |
+| Qwen3-Omni-30B-A3B | 1.07 | 1.39 |
+| Qwen3.5-Omni-Plus | 0.99 | 1.26 |
+
+Omni-Plus 相对 Qwen3-Omni 的两项都改善，英文 1.26 是表中最低；中文 0.99 仍高于 CosyVoice 3 的 0.71 和 MiniMax-Speech 的 0.83。表中没有人类自然度分数，也没有只开启 ARIA 或只开启 RLHF 的配对结果，所以它支持最终系统的内容保真度，不能独立证明某个组件改善了多少自然度。[↗](https://arxiv.org/pdf/2604.15804v2#page=13)
+
+### 多语言声音克隆同时报告 WER 与 SIM
+
+Table 9 使用 TTS multilingual test set，共 20 种语言，同时报告内容 WER 和说话者余弦相似度 SIM。后者衡量声音表征与目标说话者的接近程度，越高越好。按表中三套系统逐行比较，Omni-Plus 在 13/20 种语言上 WER 最低，在 15/20 种语言上 SIM 最高。
+
+??? note "Table 9 · 20 种语言的内容与说话者相似度"
+
+    | Language | Qwen WER ↓ | MiniMax WER ↓ | ElevenLabs WER ↓ | Qwen SIM ↑ | MiniMax SIM ↑ | ElevenLabs SIM ↑ |
+    | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+    | Chinese | 0.695 | 2.252 | 16.026 | 0.800 | 0.780 | 0.677 |
+    | English | 0.631 | 2.164 | 0.756 | 0.833 | 0.756 | 0.613 |
+    | German | 0.447 | 1.906 | 0.572 | 0.757 | 0.733 | 0.614 |
+    | Italian | 0.503 | 1.543 | 1.743 | 0.785 | 0.699 | 0.679 |
+    | Portuguese | 1.221 | 1.877 | 1.331 | 0.792 | 0.805 | 0.711 |
+    | Spanish | 0.862 | 1.029 | 1.084 | 0.797 | 0.762 | 0.615 |
+    | Japanese | 3.479 | 3.519 | 10.046 | 0.788 | 0.776 | 0.738 |
+    | Korean | 1.458 | 1.747 | 1.865 | 0.747 | 0.776 | 0.700 |
+    | French | 2.430 | 4.099 | 5.216 | 0.730 | 0.628 | 0.535 |
+    | Russian | 3.182 | 4.281 | 3.878 | 0.790 | 0.761 | 0.676 |
+    | Thai | 2.170 | 2.701 | 73.936 | 0.788 | 0.800 | 0.588 |
+    | Indonesian | 0.823 | 1.237 | 1.059 | 0.780 | 0.729 | 0.660 |
+    | Arabic | 2.602 | 1.665 | 1.666 | 0.745 | 0.736 | 0.706 |
+    | Vietnamese | 1.143 | 0.880 | 73.415 | 0.767 | 0.743 | 0.369 |
+    | Turkish | 0.938 | 1.520 | 0.699 | 0.747 | 0.779 | 0.596 |
+    | Finnish | 2.784 | 4.666 | 2.964 | 0.859 | 0.835 | 0.759 |
+    | Polish | 1.427 | 1.415 | 0.766 | 0.839 | 0.802 | 0.729 |
+    | Hindi | 6.444 | 6.962 | 5.827 | 0.797 | 0.818 | 0.730 |
+    | Dutch | 1.238 | 1.143 | 0.803 | 0.762 | 0.738 | 0.680 |
+    | Czech | 2.929 | 3.875 | 2.108 | 0.802 | 0.796 | 0.685 |
+
+    Qwen 为 Qwen3.5-Omni-Plus；WER 与 SIM 分别比较，不能跨列排序。
+
+两项指标不能互相代替。阿拉伯语中 Omni-Plus 的 SIM 为 0.745，高于 MiniMax 的 0.736，但 WER 为 2.602，高于 1.665；声音更接近参考，并不保证内容更准确。韩语则呈现另一种组合，Omni-Plus 的 WER 为 1.458，优于 MiniMax 的 1.747，SIM 却是 0.747 对 0.776。若只保留一列，就会遗漏真实选择中的取舍。[↗](https://arxiv.org/pdf/2604.15804v2#page=14)
+
+Table 10 另外检查九种语言，使用基于 FLEURS 的内部集合，识别器为 `GPT-4o-transcribe-2025-03-20`。这一表的对照是 **Ground Truth** 录音经识别器得到的错误率，未列出其他 TTS 厂商；SIM 的 Ground Truth 列没有数值。
+
+| Language | Qwen WER ↓ | Ground Truth WER ↓ | Qwen SIM ↑ |
+| --- | ---: | ---: | ---: |
+| Urdu | 14.819 | 17.822 | 0.775 |
+| Tagalog | 5.193 | 6.885 | 0.870 |
+| Swedish | 3.760 | 4.813 | 0.822 |
+| Danish | 3.636 | 6.403 | 0.775 |
+| Hebrew | 7.860 | 16.178 | 0.760 |
+| Icelandic | 10.244 | 11.451 | 0.764 |
+| Malay | 3.142 | 4.628 | 0.794 |
+| Norwegian | 3.613 | 4.442 | 0.825 |
+| Persian | 11.113 | 14.469 | 0.800 |
+
+这九行里，生成语音得到的 ASR 错误率低于原录音。例如 Hebrew 为 7.860 对 16.178，说明识别器在这些生成样本上更容易恢复目标文字；它没有测出“生成声音整体超过真人”，也没有提供九种语言上的厂商排名。原文把两组实验合称为 29 种语言，其中 22 种最低；使用这个概括时必须保留两张表的不同对照，不能改写为“在 29 种语言的同场厂商比较中赢了 22 种”。
+
+### 跨语言迁移必须看源语言和目标语言
+
+参考语音与目标文字跨语言时，模型既要保留声音特征，又要说对目标语言。原文 Table 11 以混合错误率检查内容，目标英语用 WER，其他目标语言用 CER；表中并没有同步给出各方向的身份相似度。
 
 | Language | Qwen3.5-Omni-Plus | Qwen3-Omni-30B-A3B | CosyVoice3 | CosyVoice2 |
 | --- | ---: | ---: | ---: | ---: |
 | English-to-Chinese | 4.86 | 5.37 | 5.09 | 13.5 |
+| Japanese-to-Chinese | 3.55 | 3.32 | 3.05 | 48.1 |
+| Korean-to-Chinese | 0.84 | 0.99 | 1.06 | 7.70 |
 | Chinese-to-English | 2.18 | 2.76 | 2.98 | 6.47 |
 | Japanese-to-English | 2.18 | 3.31 | 4.20 | 17.1 |
 | Korean-to-English | 2.51 | 3.34 | 4.19 | 11.2 |
 | Chinese-to-Japanese | 5.92 | 8.29 | 7.08 | 13.1 |
+| English-to-Japanese | 5.12 | 7.53 | 6.80 | 14.9 |
+| Korean-to-Japanese | 2.16 | 4.24 | 3.93 | 5.86 |
 | Chinese-to-Korean | 4.03 | 5.13 | 14.4 | 24.8 |
 | English-to-Korean | 3.72 | 4.96 | 5.87 | 21.9 |
+| Japanese-to-Korean | 5.12 | 6.23 | 7.92 | 21.5 |
 
-<small>表源：`Qwen3.5-Omni Technical Report`，Cross-lingual speech generation table 摘录。原表使用 mixed error rate，英文为 WER，其他语言为 CER，越低越好。</small>
+按显示数值逐行比较，Omni-Plus 在 11/12 个方向最低，唯一例外是 Japanese-to-Chinese，3.55 高于 Qwen3-Omni 的 3.32 和 CosyVoice 3 的 3.05。原文正文写的是 10/12，与表中数值不一致，因此这里按具体单元格解释，不沿用该计数。[↗](https://arxiv.org/pdf/2604.15804v2#page=15)
 
-报告特别指出，`zh-to-ko` 相比 CosyVoice3 从 14.4 降到 4.03，约 72% relative reduction。这说明 Qwen3.5-Omni 的语音生成不只是“读得像”，还在跨语言保持内容一致性和发音稳定性上有明显优化。
+Chinese-to-Korean 的改善尤其明显，4.03 相对 CosyVoice 3 的 14.4，按 $(14.4-4.03)/14.4$ 计算约降低 72.0%。这个百分比的基线是 CosyVoice 3，不能换成上一代 Qwen 的 5.13。它证明的是这一方向的内容错误减少，跨语言迁移时声音身份有没有同样保留，还需要相应的相似度或听测证据。
 
-## 关键贡献怎么理解
+### 定制声音经过微调，已经换了一种使用条件
 
-Qwen3.5-Omni 最值得学习的不是某一个 benchmark，而是几组工程取舍：
+Table 12 检查 speaker fine-tuning 后的 custom voice。Qwen 只用单语言声音数据微调，再测试 29 种语言，这是一个跨语言泛化问题；它与前面临时提供参考语音的 zero-shot 条件不同。对照商业接口取自 2026 年 3 月，指定了各自声音。
 
-| Problem | Qwen3.5-Omni answer |
+| System | API / voice setting |
 | --- | --- |
-| 长音频和长视频会吃爆上下文 | AuT 6.25Hz、dynamic frame rate、explicit timestamps、256K context |
-| 多模态输入难以对齐时间 | audio/video temporal IDs + timestamp text strings |
-| 语音生成和文本生成速率不匹配 | ARIA 自适应 interleaved single stream |
-| 语音输出要低延迟 | RVQ tokens + MTP residual codebooks + streaming Code2Wav |
-| Omni 模型容易损失文本能力 | Qwen3.5 初始化、specialist distillation、OPD、interaction-aligned RL |
-| 长交互容易语言切换/人设漂移/指令退化 | multi-turn interaction trajectories + reward signals |
+| ElevenLabs | Multilingual v2 / `9YHcvj6GT2YYXdXww` |
+| Gemini | 2.5 Pro-Preview-TTS / `Achernar` |
+| GPT-Audio | 2025-08-28 / `Alloy` |
+| MiniMax | Speech-2.8-HD / `English_expressive_narrator` |
 
-**为什么 Audio-Visual Vibe Coding 值得注意。**
-报告把 Audio-Visual Vibe Coding 描述为一种 emergent capability：模型能直接基于音视频指令生成可执行代码。它不是单纯听写用户说的话，而是把视觉界面、音频说明、任务意图和代码生成连接起来。
+??? note "Table 12 · 29 种语言的定制声音 WER"
 
-这类能力说明 omni agent 的边界正在从“看图回答”走向“看/听一个动态场景，然后执行工程任务”。但报告没有给出足够细的可复现训练/评测细节，所以更适合把它看作方向信号，而不是已经完全标准化的 benchmark 结论。
+    | Language | Qwen3.5-Omni-Plus | ElevenLabs | Gemini-2.5 Pro | GPT-Audio | MiniMax |
+    | --- | ---: | ---: | ---: | ---: | ---: |
+    | Chinese | 0.785 | 3.801 | 1.890 | 0.829 | 0.786 |
+    | English | 0.839 | 1.126 | 0.953 | 1.050 | 1.429 |
+    | German | 0.182 | 0.500 | 0.509 | 0.558 | 1.581 |
+    | Italian | 0.458 | 0.513 | 0.991 | 0.769 | 1.063 |
+    | Portuguese | 1.581 | 1.109 | 2.050 | 1.506 | 1.240 |
+    | Spanish | 0.768 | 0.520 | 0.891 | 0.936 | 0.691 |
+    | Japanese | 3.306 | 11.685 | 4.420 | 4.317 | 4.254 |
+    | Korean | 1.309 | 3.981 | 4.110 | 3.999 | 3.635 |
+    | French | 2.724 | 2.574 | 3.284 | 2.809 | 3.439 |
+    | Russian | 4.723 | 4.324 | 3.858 | 4.346 | 3.529 |
+    | Thai | 1.653 | 114.813 | 2.539 | 4.430 | 1.811 |
+    | Indonesian | 1.596 | 6.094 | 1.498 | 2.362 | 1.585 |
+    | Arabic | 3.183 | 5.400 | 5.525 | 5.326 | 3.309 |
+    | Vietnamese | 1.320 | 82.849 | 1.699 | 1.854 | 1.058 |
+    | Turkish | 1.309 | 0.551 | 2.237 | 1.389 | 0.652 |
+    | Finnish | 4.039 | 2.522 | 5.331 | 3.270 | 2.939 |
+    | Polish | 1.462 | 0.733 | 1.622 | 1.737 | 0.833 |
+    | Hindi | 6.776 | 6.388 | 6.596 | 7.191 | 6.146 |
+    | Dutch | 1.135 | 1.005 | 0.973 | 1.561 | 1.406 |
+    | Czech | 3.769 | 1.916 | 3.380 | 2.859 | 1.766 |
+    | Urdu | 14.916 | 12.970 | 14.141 | 13.362 | 24.151 |
+    | Tagalog | 5.090 | 5.473 | 6.784 | 5.352 | 5.674 |
+    | Swedish | 3.588 | 3.132 | 3.196 | 2.898 | 2.833 |
+    | Danish | 7.183 | 2.604 | 3.876 | 3.846 | 4.951 |
+    | Hebrew | 7.680 | 102.018 | 4.459 | 5.328 | 8.161 |
+    | Icelandic | 10.322 | 25.110 | 6.348 | 9.648 | 33.431 |
+    | Malay | 3.738 | 6.448 | 3.731 | 3.406 | 3.955 |
+    | Norwegian | 5.576 | 7.351 | 4.304 | 3.400 | 9.492 |
+    | Persian | 12.140 | 20.564 | 12.620 | 13.202 | 12.722 |
 
-## 局限和阅读边界
+Omni-Plus 在 10/29 种语言上 WER 最低，日语 3.306、韩语 1.309 有较强结果。但俄语 4.723 高于表中全部四个对照，丹麦语 7.183 也明显高于 ElevenLabs 的 2.604。表中支持“单语言微调的声音可以扩展到多语言，并在部分语言有优势”，并不支持每种目标语言都稳定领先。
 
-第一，Qwen3.5-Omni 是技术报告，很多评测来自内部实现、内部 vLLM、内部测试集或特定 API 日期。延迟表也明确说明 Flash 与 Plus 部署资源和并行策略不同，不适合严格横向比较。
+这里的声音与接口设置也是实验的一部分，换一个参考声线或服务版本，数值可能变化。Thai 的 ElevenLabs WER 为 114.813，Hebrew 为 102.018，应保留其原值，并结合前面的插入错误理解；不应把这种结果直接等同于发音自然度或声音身份评价。[↗](https://arxiv.org/pdf/2604.15804v2#page=16)
 
-第二，报告没有公开完整模型参数规模细表，只在摘要中说 scales to hundreds of billions of parameters，并区分 Plus / Flash。我们可以讨论架构、训练阶段、数据规模和接口能力，但不应编造具体 total/activated params。
+## 怎样把这份报告用到自己的系统设计里
 
-第三，音视频 benchmark 仍处于快速变化期。DailyOmni、Qualcomm IVD、OmniCloze、OmniGAIA 这类评测比传统 MMLU 更接近真实交互，但 judge、prompt、格式和工具协议都会影响结果。
+这份报告最值得带走的是几个明确的接口。AuT 先把音频压到可承担的序列长度，时间戳与位置编码帮助长材料保持时间关系；Thinker 将回答与多模态上下文传给 Talker；ARIA 约束文字与语音的推进，再由多码本表示和流式 codec 逐步生成可播放声音。训练又分别针对领域能力、音频条件回答质量和持续交互，避免把所有问题都归为“模型不够大”。
 
-第四，ARIA 是很有启发的工程设计，但报告给的是方法描述和系统结果，不是完整可复现实验消融。实际复现时还要知道 speech tokenizer、RVQ codebook、Talker schedule、decoder 和 serving pipeline 的更多细节。
+语言支持也需要沿这些接口拆开。Table 3 给出文字 201 种，语音输入 113 种语言及方言，其中 74 种语言、39 种中文方言；语音输出 36 种，其中 29 种语言、7 种中文方言。这里采用任务分项的详细表，不能把摘要中较笼统的语言数字套给每个模块。支持列表说明覆盖范围，前面的逐语言、逐方向测试才说明能力分布。[↗](https://arxiv.org/pdf/2604.15804v2#page=7)
 
-## 项目启发
+若要搭建一个视频语音助手，可以先固定真实使用任务，再沿三个接口定位问题。听错问题，检查采样、音频输入和识别；听懂却答得差，检查推理与音频条件回答；答案对但声音迟迟不来或播放断续，检查首包、并发、生成 RTF 与缓冲。需要工具时，再把“是否完成动作”作为独立评价。这样的诊断顺序能让输入表示、模型能力和服务延迟各自对应到可测的现象。
 
-Qwen3.5-Omni 给工程项目的启发主要有五条：
-
-1. **Omni 不是简单拼模块。** ASR + LLM + TTS 可以做产品原型，但要保留情绪、音视频同步、语音打断和上下文语音风格，就需要更深的 Thinker-Talker 式联合建模。
-2. **音视频长上下文要先算 token 账。** AuT 的 6.25Hz、动态帧率、256K context 和 timestamp 设计，本质都是在控制音视频输入的 token budget。
-3. **流式语音生成的难点是对齐。** ARIA 说明多语种下 text token 和 speech token 的速率差异会直接影响稳定性和自然度。
-4. **后训练要分 Thinker 和 Talker。** Thinker 侧重跨模态回答质量和交互对齐；Talker 侧重语音自然度、偏好对齐、speaker fidelity 和长期上下文语音输出。
-5. **Omni agent 的评测要覆盖行为。** 只看识别准确率不够，还要看 tool use、audio-visual QA、caption、voice cloning、first-packet latency、RTF 和多轮交互稳定性。
-
-## 阅读结论
-
-Qwen3.5-Omni 展示的是一条全模态 agent 模型路线：用 Thinker 统一理解文本、视觉、音频和音视频，用 Talker 生成低延迟流式语音，用 ARIA 解决文本与语音 token 速率对齐，再用分阶段预训练和分模块后训练把长上下文、语音自然度、跨模态回答质量和交互稳定性组合到一个系统里。
-
-读这篇报告时要把三类证据分开：overview 图说明能力覆盖，architecture 和 AUT 图说明结构分工，多模态 benchmark 说明报告设置下的任务表现。全模态强不等于工作流成功；真实应用还要验 first-packet latency、打断恢复、工具链、跨模态误触发和长上下文退化。
-
-## 站内延伸
-
-1. [Qwen3：Thinking 模式、36T 预训练与蒸馏](qwen3.md)：理解 Qwen 系列的文本模型和后训练基础；
-2. [Kimi K2：MuonClip、万亿 MoE 与 Agent 数据](kimi-k2.md)：对照 agentic data synthesis 和 RL 基础设施；
-3. [VLM/VLA：VLM 架构：视觉表征、连接器与记忆](../../vlm/architecture-and-training.md)：补多模态输入组织和连接器思路；
-4. [推理：RAG、Agent 与长上下文系统](../../inference/rag-agents-and-long-context-systems.md)：把 omni agent 放到工具和应用系统里看；
-5. [训练：训练数据系统与吞吐优化](../../training/data-systems-and-optimization.md)：理解多模态数据、质量过滤和训练阶段设计。
-
-## 外部精读
-
-1. [Qwen3.5-Omni Technical Report](https://arxiv.org/abs/2604.15804)
-2. [Alibaba Cloud Model Studio: Qwen Omni](https://www.alibabacloud.com/help/en/model-studio/qwen-omni)
+Plus 与 Flash 的选择也由这套任务来决定。某些简单对话可能更看重首包与并发，代码、长文本、音视频工具任务则需要先满足能力要求。报告提供 API 和在线演示入口，未给出足以完整还原模型和训练流程的配置；可以据此学习系统组织方式，并用自己的语言方向、视频采样、上下文长度和并发进行验证，而不是把单一最好分数当作整个应用的性能。

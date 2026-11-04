@@ -15,437 +15,369 @@ paper_topic: 扩散模型
     **GitHub / 项目：** GitHub：[github.com/buoyancy99/diffusion-forcing](https://github.com/buoyancy99/diffusion-forcing)；项目页：[www.boyuan.space/diffusion-forcing/](https://www.boyuan.space/diffusion-forcing/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2407.01392)；[GitHub API / repo](https://github.com/buoyancy99/diffusion-forcing)；[官方 / 项目材料](https://www.boyuan.space/diffusion-forcing/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 把每个位置的确定程度，变成序列模型可以使用的输入
 
-### 研究背景
+Diffusion Forcing（DF）提出了一种训练序列生成模型的方式，每个 token 都有独立的扩散噪声水平。一个位置可以完全已知，另一个位置可以只有模糊信息，再往后可以仍是纯噪声。模型学习在这些组合下恢复数据，推理时便能自行安排哪些位置先确定、哪些位置暂时保留不确定性。论文的主要实现是带因果依赖的循环网络，称为 Causal Diffusion Forcing（CDF）。[↗](https://arxiv.org/pdf/2407.01392v4#page=2)
 
-原论文从两类序列建模传统出发：next-token / teacher forcing 擅长因果生成和变长 rollout，但每一步只预测下一个 token，很难对整段未来施加约束；full-sequence diffusion 擅长连续信号生成和全局 guidance，但通常假设固定 horizon，且不天然适合在线反馈。视频预测、规划和机器人 imitation learning 都处在两者之间：前面一部分历史已经确定，未来一部分仍不确定，而且不同未来 token 的不确定性并不相同。
+这个问题来自两类序列模型各自的接口限制。普通 teacher forcing 使用真实历史预测下一 token，训练中历史通常被当作可靠条件；部署时一旦把自己的预测加入历史，误差就可能沿序列放大。逐 token 采样还往往先把当前 token 完全定稿，再生成后面内容，较远未来的目标很难反过来修正已经确定的较早选择。
 
-### 问题（Challenge）
+全序列扩散把一段固定长度的序列放在一起去噪，能够对整条候选轨迹施加引导，例如要求终点靠近目标。但常规做法让所有位置共享同一噪声级别，近期行动和很远的未来一起变清楚。对于需要先执行一步、再收到反馈的控制问题，这会把远期预测过早当成确定事实；生成长度、历史条件与未来计划窗口也不如逐 token 模型灵活。
 
-论文要解决的问题是：如何让一个序列模型同时拥有 next-token 的因果滚动能力和 diffusion 的整段优化能力。挑战在于传统 diffusion 通常给整段样本同一个噪声水平，这等价于“整段一起模糊、整段一起还原”；而在线序列生成需要表达“过去干净、近期部分确定、远未来接近纯噪声”的混合状态。这个问题有价值，因为规划任务需要对未来轨迹加约束，长视频需要 flexible horizon，机器人策略需要在闭环历史上继续生成。
+DF 让两种能力在一个训练接口中相遇。它仍按因果方向传递历史信息，却允许前后 token 处在不同的去噪阶段。一个近期动作尚未定稿时，模型已经可以从它展开多个未来，利用未来收益修正当前动作；实际执行后，又能用真实观测替换想象结果，再继续规划。长视频生成、可变时域规划和受损观测下的控制，都围绕这个接口展开。
 
-### Finding
-
-Diffusion Forcing 的 finding 是：噪声水平可以被看作连续版 mask，而且这个 mask 应该作用在每个时间 token 上，而不是作用在整段序列上。这个视角把 teacher forcing 和 diffusion 放到同一个坐标系里：teacher forcing 是沿时间轴遮未来，full-sequence diffusion 是沿噪声轴去噪整段样本，Diffusion Forcing 则允许每个 token 拥有独立噪声水平 \(k_t\)。一旦模型见过这种混合噪声序列，它就能在推理时自然处理已知历史、部分未来和远期不确定性。
-
-### 方法
-
-训练时，论文对序列 \(x_{1:T}\) 中每个 token 独立采样噪声水平 \(k_t\)，得到 \(x_t^{k_t}\)，再用因果序列模型读取这些带噪 token，并通过 diffusion head 预测噪声或干净 token。采样时，二维噪声日程同时沿时间和噪声两个轴移动：历史 token 保持低噪或干净，未来 token 从高噪逐渐去噪。论文还把这个框架接到 guidance、Monte Carlo Tree Guidance、视频预测、planning 和 robot imitation learning，让同一个目标覆盖条件生成、树搜索和控制数据。
-
-### 结论
-
-实验不是只证明一个 benchmark 分数，而是证明“per-token noise”这个表示能带来多种能力。规划实验显示，Diffusion Forcing 可以用 sequence-level guidance 和 tree search 处理目标约束；视频预测实验展示它在长 rollout 和 flexible horizon 上比普通序列模型更稳；机器人 imitation learning 实验说明同一训练原则可以迁移到动作序列。消融和诊断的重点是：独立噪声水平、因果结构和采样日程共同决定效果，少了其中任何一个，模型就会退回普通 teacher forcing 或普通 full-sequence diffusion 的局限。
-
-### 关键术语
-
-- **Per-token Noise Level（逐 token 噪声水平）**：序列中每个时间位置拥有独立扩散步数，用来表达不同程度的不确定性
-- **Noise as Partial Masking（噪声作为连续遮罩）**：把扩散噪声解释为从干净到未知的连续 mask，而不是单纯图像扰动
-- **Flexible Horizon（可变生成长度）**：模型能在不同未来长度上继续 rollout，不被固定 clip 长度锁死
-- **Monte Carlo Tree Guidance（蒙特卡洛树引导）**：在扩散采样中用树搜索评估多条未来分支，引导生成满足规划目标
-
-## 论文位置
-
-扩散模型在图像和视频里通常默认一次建模一个固定大小的样本，例如一张图或一段固定长度视频。放到序列问题里，这会形成两类路线：
-
-| Route | Strength | Main limitation |
-| --- | --- | --- |
-| Next-token prediction / teacher forcing | variable-length generation, causal rollout, online control | hard to guide a whole future trajectory, continuous signals easily drift in long rollout |
-| Full-sequence diffusion | strong continuous generation, can use guidance on a whole sequence | fixed horizon, usually non-causal, cannot naturally reuse online feedback |
-| Diffusion Forcing | variable horizon + sequence-level guidance + causal uncertainty | current paper implementation is still small-scale RNN, not internet-scale video generation |
-
-这篇论文值得放进扩散专题，是因为它把扩散从“整段样本一起去噪”的默认形态，推到“序列上每个 token 可以处于不同不确定性”的形态。它和 [视频与多模态扩散](../../diffusion/video-and-multimodal-diffusion.md)、[采样与推理加速](../../diffusion/inference.md)、[条件控制与 Guidance](../../diffusion/guidance-and-conditioning.md) 都有直接接口。
+下图的列分别对应引导、分支搜索、片段组合、因果不确定性和可变时域。它概括的是论文所比较的标准生成方式所拥有的直接能力，后面的实验才分别检验这些能力是否产生实际收益，不能把图中的勾号直接读成所有任务上的性能优势。
 
 ![Diffusion Forcing capabilities 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/diffusion-forcing-capabilities-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 1。原图表达：用 Guidance、Tree Search、Compositionality、Causal Uncertainty 和 Flexible Horizon 对比 Teacher Forcing、Full-Seq. Diffusion 与 Diffusion Forcing。本站读法：这张图先看能力列，再回到训练目标；DF 的卖点不是某个单独任务分数，而是“独立噪声水平”让同一个因果序列模型拥有整段 guidance 和 flexible horizon。</small>
+<small>原论文 Figure 1，沿用官方项目页原图。DF 将灵活的顺序生成接口与整段候选轨迹上的 guidance 联系起来；它并非少步蒸馏方法，推理仍包含多次扩散去噪。</small>
 
-## 核心问题
+## 两条时间轴，分别表示顺序与信息量
 
-设序列为：
+用下标 $t$ 表示序列时间，上标 $k$ 表示扩散噪声级别，$x_t^k$ 就是第 $t$ 个 token 在噪声级别 $k$ 下的状态。这里的 token 可以是一帧图像、一组叠放的视频帧、一个状态与动作向量，或者某个时刻的多变量观测，不必是离散词元。
 
-\[
-x_{1:T}^0 = (x_1^0, x_2^0, \dots, x_T^0),
-\]
+噪声沿扩散轴逐步增加。采用论文的 DDPM 记号，正向过程为
 
-其中上标 \(0\) 表示干净 token。token 可以是视频帧、状态、动作、奖励、时间序列向量，或者它们的组合。
+$$
+q(x^k\mid x^{k-1})
+=\mathcal N\!\left(
+\sqrt{1-\beta_k}\,x^{k-1},\beta_k I
+\right).
+$$
 
-普通 full-sequence diffusion 往往给整段序列同一个噪声水平 \(k\)：
+令 $\alpha_k=1-\beta_k$，$\bar\alpha_k=\prod_{j=1}^{k}\alpha_j$，则可直接从原始 token 采样指定噪声状态
 
-\[
-x_{1:T}^{k} = \sqrt{\bar\alpha_k}x_{1:T}^0 + \sqrt{1-\bar\alpha_k}\epsilon.
-\]
-
-这等价于“整段一起模糊，再整段一起还原”。它适合固定长度视频或轨迹，但不自然支持“前面已经确定、后面还不确定”的在线生成。
-
-Diffusion Forcing 改成给每个 token 采样独立噪声水平：
-
-\[
+$$
 x_t^{k_t}
-  = \sqrt{\bar\alpha_{k_t}}x_t^0
-  + \sqrt{1-\bar\alpha_{k_t}}\epsilon_t,
-\qquad
-k_t \sim \text{Uniform}(\{0,\dots,K\}).
-\]
+=\sqrt{\bar\alpha_{k_t}}\,x_t^0
++\sqrt{1-\bar\alpha_{k_t}}\,\epsilon_t,
+\qquad \epsilon_t\sim\mathcal N(0,I).
+$$
 
-于是同一条序列里可以同时出现：
+$k_t=0$ 表示数据没有被遮蔽，$k_t=K$ 对应近似不含原始信息的高斯噪声，中间值表示部分信息仍然可见。这就是论文的 **noise as partial masking**。普通 mask 往往只有“看见”和“看不见”，扩散噪声则提供连续程度的遮蔽。[↗](https://arxiv.org/pdf/2407.01392v4#page=4)
 
-1. \(k_t=0\)：这个 token 是干净观测，相当于已知上下文；
-2. \(0<k_t<K\)：这个 token 部分可见，表示中等不确定性；
-3. \(k_t=K\)：这个 token 接近纯噪声，相当于被完全遮住。
+DF 的训练从一条真实序列 $x_{1:T}$ 出发，独立抽取每个位置的 $k_t$，再分别加噪。独立采样很关键，它不要求后面的 token 一定更嘈杂，也不要求历史全部干净。训练样本可以是“清楚的过去、模糊的现在”，也可以是“部分缺失的历史、较清楚的当前观测”。于是模型学到的是如何使用不同可靠程度的信息，而非只适应一条预设的噪声斜坡。
 
-论文把这个解释成 **noise as partial masking**：噪声不是只能服务图像生成，它也可以作为连续版 mask。这个视角很关键，因为它把扩散模型和 teacher forcing、masked modeling 放到同一个坐标系里。
+这不等于假设各个 token 在数据中互相独立。视频帧、动作和观测之间仍然有很强的依赖，独立的是训练时给每个位置施加的噪声水平。模型必须利用因果历史解释当前 token，正是因为数据本身不是独立的。
 
-## 方法总览
-
-Diffusion Forcing 的训练可以理解成一条链：
-
-```text
-sample sequence x_1:T
-  -> sample independent noise level k_t for every token
-  -> diffuse every token to x_t^{k_t}
-  -> causal sequence model updates latent state z_t
-  -> diffusion head predicts noise / clean token
-  -> optimize denoising MSE over all tokens
-```
-
-论文在序列生成中使用的是 Causal Diffusion Forcing，简称 CDF。它要求模型在时间上因果，只能依赖过去和当前 token 的 noisy observation，而不能偷看未来干净 token。
+下图先看训练部分。DF 的输入颜色沿序列变化，表示不同噪声水平；Teacher Forcing 的历史是干净条件；Full-Sequence Diffusion 则在同一次训练中使用一致噪声。再看下半部分，DF 可以一边推进序列时间，一边让各位置以不同速度变清楚。
 
 ![Diffusion Forcing method 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/diffusion-forcing-method-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 2。原图展示 noise as masking、Diffusion Forcing、Teacher Forcing 和 Full-Seq. Diffusion 的训练与采样差异。</small>
+<small>原论文 Figure 2，沿用官方项目页原图。圆形是历史 latent state，方形是观测或生成 token。独立噪声训练提供了多种可用状态，采样日程决定部署时实际走哪条路径。</small>
 
-**Diffusion Forcing 方法图里的两个轴。**
-图里有两个轴：横轴是时间，决定 token 之间的因果关系；纵轴是噪声，决定每个 token 当前还有多少信息。Teacher forcing 基本只沿时间轴工作：过去是真值，预测下一个 token。Full-sequence diffusion 基本只沿噪声轴工作：整段序列共享一个噪声水平。Diffusion Forcing 则允许二维网格上每个位置有自己的噪声水平，训练模型学会从任意“部分确定、部分不确定”的序列中恢复干净 token。
+## 一个循环单元，同时接收过去与当前的带噪观测
 
-## 训练目标
+CDF 的基本单元接收上一个隐藏状态 $z_{t-1}$、当前带噪 token $x_t^{k_t}$ 和噪声级别 $k_t$，更新历史表示
 
-论文把 CDF 写成一个因果状态空间模型。可以用下面这个近似形式理解：
+$$
+z_t\sim p_\theta(z_t\mid z_{t-1},x_t^{k_t},k_t).
+$$
 
-\[
-z_t = f_\theta(z_{t-1}, x_t^{k_t}, k_t),
-\]
+论文用概率记号描述这个状态，但实际实现采用确定性更新。$z_t$ 是对历史信息及其可靠程度的压缩表示，研究者可以直接沿状态链反向传播梯度；它不是从一个显式后验分布中抽出的物理世界状态，也不自动具有精确校准的概率含义。
 
-\[
-\hat\epsilon_t = \epsilon_\theta(z_t, x_t^{k_t}, k_t).
-\]
+观察模型再从 $z_t$ 预测当前干净 token。将状态更新与观察模型合并，可以把整个循环单元写成一个条件噪声预测器 $\epsilon_\theta(z_{t-1},x_t^{k_t},k_t)$。主文 Eq. 3.1 的训练目标为
 
-训练损失仍然是标准扩散里的 noise prediction MSE，只是噪声水平从全序列共享改成逐 token 独立：
-
-\[
-\mathcal L(\theta)
-=
-\mathbb E_{x_{1:T}^0,\,k_{1:T},\,\epsilon_{1:T}}
+$$
+\mathcal L_{\mathrm{DF}}(\theta)
+=\mathbb E\left[
 \sum_{t=1}^{T}
-\left\lVert
-\epsilon_t - \epsilon_\theta(z_t, x_t^{k_t}, k_t)
-\right\rVert_2^2.
-\]
+\left\|
+\epsilon_t-
+\epsilon_\theta(z_{t-1},x_t^{k_t},k_t)
+\right\|_2^2
+\right].
+$$
 
-这点很重要：DF 没有抛弃扩散模型的基本训练范式。它仍然是加噪、预测噪声、MSE 训练。真正变化的是 **训练 batch 里同一条序列的每个 token 噪声水平不同**，并且模型结构保持因果。
+期望包含真实序列、逐 token 的独立噪声级别及正向加噪随机性。预测第 $t$ 个 token 时，$z_{t-1}$ 已经由前面各个带噪输入递归形成，因此损失既训练当前去噪，也训练如何把过去的信息存进状态。整个训练循环沿序列更新 latent，累积每个位置的去噪损失，再对模型参数反向传播。[↗](https://arxiv.org/pdf/2407.01392v4#page=5)
 
-论文给出的理论结果可以直观理解为：这种训练不只是一个 heuristic，它对应所有 noisy subsequence likelihood 的某种重加权 ELBO 下界。换句话说，模型被迫同时学习：
+这个形式与 Bayesian filtering 有一个有用的对应。当 $k_t=0$，当前观测可靠，状态更新类似吸收观测后的后验更新；当 $k_t=K$，输入近似纯噪声，无法提供实际观测信息，模型主要依靠历史做先验预测。介于两者之间的 $k_t$ 使同一个模型在“相信观测多少”这件事上具有可调接口。
 
-1. 给定完整过去，生成未来；
-2. 给定部分过去，补全缺失 token；
-3. 给定部分 noisy future，对更早 token 做 guidance；
-4. 给定任意长度上下文，维持因果状态。
+这里需要把建模直觉与实现保证分开。输入一个噪声标签，可以让模型按照训练过的可靠性条件处理观测；它不等于系统已经知道真实摄像头何时被遮挡，也不等于模型一定能检测所有分布外损坏。机器人实验会主动把受损观测标为带噪，检验的是给出这一条件之后模型能否继续控制。
 
-## 采样：二维噪声日程
+主文用噪声预测统一说明目标，实际不同任务采用了不同参数化。视频和时间序列使用 $v$-prediction，规划与模仿学习偏好 $x_0$-prediction。它们可通过扩散变量之间的仿射关系转换，但相应损失在不同噪声位置的权重并不相同，所以“都是去噪目标”不意味着训练效果和细节可以完全互换。
 
-普通 diffusion 的采样日程是一维的：
+## “覆盖所有子序列”的理论结论，需要保留哪些条件
 
-```text
-K -> K-1 -> ... -> 0
-```
+独立采样会产生大量噪声配置，论文希望说明训练一个模型为何能同时服务这些不同的条件任务。其理论从部分加噪序列的似然出发，把每一步的条件生成与历史 latent 连接起来，将去噪训练解释为一个经过重加权的变分下界代理。这里首先要求 latent 对过去构成充分的状态摘要，即给定 $z_{t-1}$ 后，生成当前 token 不再需要额外读取被省略的历史。[↗](https://arxiv.org/pdf/2407.01392v4#page=14)
 
-Diffusion Forcing 的采样日程是二维矩阵。列是时间 token，行是采样阶段，每个格子指定某个 token 当前要处于哪个噪声水平：
+当噪声水平在各位置均匀采样时，作者先得到对这些噪声配置平均的似然目标。推广到某个固定配置后，该配置所需的损失项可以从完整训练目标里选出，再施加相应权重。附录特别指出，普通训练目标本身不必就是每一个固定配置的数值下界；它提供的是包含相应条件任务的去噪项。
 
-```text
-time:       1    2    3    4    5
-step 1:     K    K    K    K    K
-step 2:     0    8   10   10   10
-step 3:     0    0    6    9   10
-step 4:     0    0    0    4    8
-step 5:     0    0    0    0    0
-```
+要进一步说“优化一个目标，就同时优化全部噪声配置”，还需要 latent 和函数逼近器足够有表达力，使这些条件任务的最优解能够同时达到。在这个理想条件下，各项最优解不因重新加权而发生冲突。有限容量的 RNN 共享同一组参数时，不同位置、不同噪声和不同历史之间仍可能争夺表达能力，训练权重就会影响收敛与实际性能。[↗](https://arxiv.org/pdf/2407.01392v4#page=15) [↗](https://arxiv.org/pdf/2407.01392v4#page=16)
 
-这个矩阵只是示意，真实 schedule 可以按任务设计。关键是：近处未来可以更干净，远处未来可以保持更 noisy。这样模型在做规划或视频 rollout 时，不必假装所有未来同样确定。
+令每个 $k_t$ 只取 0 或 $K$，就得到一个有意义的特例。一部分 token 保留，另一部分完全遮蔽，后者不再携带原数据的信息，保留部分就对应抽取出的子序列。因而“所有子序列”与“所有噪声配置”之间建立了联系；因果模型的前向仍不能直接读取未来观测来预测过去。这个结论解释独立噪声训练为何不局限于一个固定窗口的完整重建，却没有证明任意有限模型在未见过的无限时长上都能维持准确记忆。
+
+附录的公式还存在一个具体符号问题。A.2 的展开把 $\mathbb E_q\log(p/q)$ 写成了正的 $D_{\mathrm{KL}}(q\|p)$；按 KL 的标准定义，关系应为
+
+$$
+\mathbb E_q\log\frac{p}{q}
+=-D_{\mathrm{KL}}(q\|p).
+$$
+
+因此不能照抄该处正号，并据此把正的平方去噪误差当成需要最大化的似然下界。论文实际训练仍是最小化去噪误差；其理论解释应按“似然目标的重加权去噪代理”及上述表达力条件理解，具体下界展开需要保持这一符号一致性。[↗](https://arxiv.org/pdf/2407.01392v4#page=18)
+
+## 推理不是选一个统一步数，而是安排整张去噪日程
+
+DF 用一个二维矩阵 $\mathcal K$ 描述采样。列是序列位置，行是去噪轮次，矩阵元素给出这一轮每个 token 应处在什么噪声级别。开始时待生成部分为高斯噪声，结束时目标 token 都达到零噪声；每一轮按时间顺序经过循环单元，用当前可用历史完成指定的去噪更新。
+
+如果每一列同步下降，就得到类似全序列扩散的日程。如果先把一个 token 完全去噪，再处理下一个，则得到自回归采样。如果让近处更快变清楚、远处继续保持高噪声，就得到论文重点使用的 zig-zag 或 pyramid schedule。训练接口相同，改变的是推理时如何分配确定性。[↗](https://arxiv.org/pdf/2407.01392v4#page=6)
+
+以三个 token 为例，下面保留几个关键中间状态来说明这种次序，并非实际采样只调用模型三次。
+
+$$
+[x_1^K,x_2^K,x_3^K]
+\longrightarrow
+[x_1^0,x_2^{K/2},x_3^K]
+\longrightarrow
+[x_1^0,x_2^0,x_3^{K/2}]
+\longrightarrow
+[x_1^0,x_2^0,x_3^0].
+$$
+
+第一个 token 已经确定时，第二个只部分确定，第三个仍可代表很多未来。这尤其适合控制，下一步动作即将执行，值得尽早得到清楚的决策；几十步之后会收到新观测，未来轨迹无需现在就压成唯一答案。
+
+论文附录中的 pyramid matrix 更细致地表达了这一安排，第一列先从 $K$ 降到 $K-1$，后面的列保持 $K$，随后去噪波前沿序列向前推进。这里的“远期更不确定”是一种采样选择，不是训练时强制每条样本都服从同一条单调噪声斜线。相关工作 AR-Diffusion 和 Rolling Diffusion 已采用按位置关联的噪声调度；DF 通过独立噪声训练把可使用的调度范围扩展开，使推理时更换方案不必总是对应一次重新训练。[↗](https://arxiv.org/pdf/2407.01392v4#page=23) [↗](https://arxiv.org/pdf/2407.01392v4#page=25)
+
+下图的四个面板来自同一模型接口。稳定滚动保留略带噪声的历史状态，因果不确定性让远期保持较高噪声，整轨迹 guidance 把未来目标的梯度传回较早候选，受损观测则通过噪声条件减少当前输入的影响。
 
 ![Diffusion Forcing usage 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/diffusion-forcing-usage-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页。原图表达：同一个 DF 模型可以通过不同噪声日程支持稳定自回归 rollout、因果不确定性、整段轨迹 guidance 和 corrupted observation conditioning。本站读法：把每个小图都当成“采样日程改法”，而不是四个新模型。</small>
+<small>原论文第 6 页的能力示意，沿用官方项目页原图。横向箭头是顺序依赖，纵向是去噪，红色反向箭头表示优化候选轨迹时的梯度传播。</small>
 
-**usage 图展示的是同一个训练目标的多种采样方式。**
-这张图不是在列四个互不相关的应用，而是在说明同一个模型可以通过噪声日程变化服务不同任务。历史 token 可以保持低噪声来稳定 autoregressive rollout；远期未来可以保持高噪声来表达 causal uncertainty；目标或 reward 可以对整段未来施加 guidance；被污染的 observation 可以被当作带噪条件继续去噪。关键是 DF 把“时间上因果”和“噪声上可控”同时保留下来，所以采样阶段可以按任务重排噪声水平。
+## 稳定长滚动，靠的是不要把自己的输出当作绝对可靠历史
 
-这个采样自由度带来四个能力：
+普通 teacher-forced 模型训练时一直看到真实历史，推理时却只能接收自己的预测。一个小的纹理或状态偏差会变成下一步的确定条件，后续输出再把偏差固化。DF 已经在训练中见过带噪历史，因此可以在部署时用噪声水平表达“这份历史有一定误差”。
 
-| Capability | Why DF can do it |
-| --- | --- |
-| Stable autoregressive rollout | past tokens can be treated as slightly noisy rather than perfectly fixed, reducing error accumulation |
-| Causal uncertainty | near future can be low-noise while far future remains high-noise |
-| Long-horizon guidance | future reward gradients can guide earlier decisions without making the whole future clean |
-| Flexible horizon | padding or unused future tokens can be represented as pure noise |
+附录 B.4 描述的具体操作是，保留上一个 token 对应小噪声级别 $0<k_{\mathrm{small}}\ll K$ 的 latent，记为 $z_{t-1}^{k_{\mathrm{small}}}$，以它为条件把当前 token 从 $K$ 去噪到零。这个过程也得到一串不同噪声水平下的当前 latent。为下一步继续生成时，选择 $z_t^{k_{\mathrm{small}}}$，而不是只保留完全干净观测对应的状态。[↗](https://arxiv.org/pdf/2407.01392v4#page=20)
 
-## 为什么长视频 rollout 更稳
+这里被保留的是模型处理略带噪声 token 时形成的状态。它不是随意给隐藏向量 $z_t$ 直接添加高斯噪声，也不要求把交付给用户的视频帧变得模糊。输出图像可以完成去噪，内部用于继续预测的历史状态则保持与训练时某个非零噪声条件相对应。
 
-连续视频上的 next-frame 模型有一个常见问题：每一步预测都有一点误差，下一步又把上一步误差当真值输入，长 rollout 很快漂移。full-sequence diffusion 可以生成短段高质量视频，但固定窗口和非因果结构不适合无限向前生成。
+实际采样还利用了这个过程节省重复计算。每次去噪已经计算了 $z_t^{\mathrm{new}}$，Algorithm 2 直接沿用它，而不再用刚更新到更低噪声的 token 额外执行一次后验状态计算。附录 D.6 指出，这省去了该处第二次状态更新，同时使保留的 latent 对应略高于新输出的噪声水平，与稳定化的意图一致。这个局部计算节省不能直接换算成整个系统实测快两倍，但它说明采样状态如何更新会同时影响速度和后续条件的可靠性。
 
-DF 的稳定性来自一个很细但很关键的设计：在自回归 rollout 时，它可以让历史 token 保持一个很小的噪声水平，而不是把模型自己生成的帧当成绝对干净的观测。这让 recurrent latent state 不会过度相信已经有误差的生成帧，更像 Bayes filtering 里的“带不确定性的观测更新”。
+稳定化并不需要模型先把错误检测出来，再单独修复。它通过训练覆盖的带噪条件，让下一步不要过度相信上一帧的每个细节。其有效性仍取决于数据、噪声选择和模型容量，后面的长视频实验展示了收益，不能把这个接口本身当作不会累积错误的证明。
 
-论文在 DMLab 和 Minecraft 上用同一类卷积 RNN 架构比较三类方法：
+## 未来的梯度怎样修正当前，Monte Carlo Guidance 又增加了什么
 
-1. next-frame diffusion baseline，按 teacher forcing 训练；
-2. causal full-sequence diffusion baseline；
-3. Causal Diffusion Forcing。
+因果网络的前向依赖从过去走向未来，但优化候选序列时，梯度可以沿同一条计算图反向传播。设尚未确定的当前 token 影响之后的 latent，之后的 latent 又影响远期预测；如果远期预测离目标太远，对这个目标函数求导就能把修正传回当前 token。这不需要读取现实世界尚未发生的未来，它用的是模型自己展开的候选未来。
 
-实验结论是：DF 在训练 horizon 外仍能保持更稳定的视频结构，而 teacher forcing 和 causal full-sequence diffusion 更容易出现漂移或帧间跳变。
+扩散 guidance 在每次采样时修改去噪方向。论文以分类器引导为背景，也允许将未来累计奖励或终点距离作为引导信号。CDF 的特殊之处在于，它可以先展开未来，而保留较早 token 的部分噪声，使这些较早决策还可被梯度调整。普通逐 token 采样如果已经把早期 token 定稿并移出可更新状态，就失去了同样的长时域修正接口。[↗](https://arxiv.org/pdf/2407.01392v4#page=6)
+
+不过，单条想象轨迹仍可能具有偶然性。某个早期动作可能只在后续恰好发生一连串有利结果时看起来很好，而在其他可能未来里失败。Monte Carlo Guidance（MCG）从同一个当前候选和历史状态出发，采样多个未来，分别计算未来收益对当前候选的梯度，再求平均。
+
+用 $u$ 代表尚未确定的当前 token，$F^{(n)}(u)$ 代表第 $n$ 个条件未来，$R$ 代表未来收益，可以把这一操作示意为
+
+$$
+\widehat g(u)
+=\frac{1}{N}\sum_{n=1}^{N}
+\nabla_u R\bigl(u,F^{(n)}(u)\bigr).
+$$
+
+这是对论文操作的解释性记号。关键不是选出得分最高的一条路径直接照做，而是让当前候选接受多个条件未来共同提供的梯度。增加分支可以减少单条未来带来的偶然性，但需要更多采样与反向传播；论文没有把这一额外预算折算成统一的实时控制频率。
+
+让远期 token 保持较高噪声，与 MCG 互相配合。当前状态相近时，较嘈杂的远期仍能展开不同后续结果，平均梯度才有机会反映一组未来而非几条几乎相同的已定稿路径。附录 D.5 还讨论了噪声水平暂时不变的情形，除直接复制外，可以先反向去噪再正向加噪回原级别，用这种重采样生成 MCG 的多个候选；已经为零的 token 则直接保留。[↗](https://arxiv.org/pdf/2407.01392v4#page=7) [↗](https://arxiv.org/pdf/2407.01392v4#page=24)
+
+与全序列扩散的区别应限定在采样接口。常规同步去噪把全部 token 一起更新，在固定当前候选的同时重新抽取条件未来，并没有同样直接的分支入口。附录 B.5 也承认，额外设计非标准的条件替换方案可能模拟这种功能。因此，本文展示的是 DF 原生支持这一规划方式，不能把它扩大成所有全序列模型在数学上都不可能使用任何 Monte Carlo 引导。[↗](https://arxiv.org/pdf/2407.01392v4#page=21)
+
+## 从候选轨迹回到环境，模型必须接收真实反馈
+
+用于顺序决策时，论文把 token 定义为
+
+$$
+x_t=[a_t,r_t,o_{t+1}],
+$$
+
+即动作、回报以及动作之后的观测。已有历史由 $z_{t-1}$ 汇总，模型向前生成一段计划，包含预测动作 $\hat a_t$、预测回报 $\hat r_t$ 和预测观测 $\hat o_{t+1}$。接着只执行计划中的第一个动作，然后接收环境真正给出的 $r_t,o_{t+1}$。
+
+状态更新使用的 token 因而是 $[\hat a_t,r_t,o_{t+1}]$，并以 $k=0$ 作为已知经历输入。想象中的 $\hat r_t,\hat o_{t+1}$ 不会直接变成真实历史。这个区分让 DF 可以在每次行动后重新校准，再从新的状态向前规划，形成 model predictive control 式的闭环。[↗](https://arxiv.org/pdf/2407.01392v4#page=7)
+
+规划窗口较短时，模型接近快速给出下一动作的策略；窗口较长时，可以对远期目标施加引导。窗口也能随任务剩余时间缩短，而不要求修改网络结构或重新训练。可变时域的收益因此同时包含控制能力与计算选择，不过较长窗口仍需计算更多候选位置，MCG 还会进一步放大预算。
+
+迷宫实验并未完整照搬这个一般定义中的奖励建模。为了与 Diffuser 比较，作者丢弃数据集给出的 reward，使用目标位置构造引导，并考虑未来多个位置与目标的距离，使策略无需人为指定唯一的到达时刻。通用框架能使用奖励 token，不等于论文每一项实验都学习了一个完整的世界模型奖励函数。
+
+## 训练细节中，Fused SNR 解决的是历史也带有信号
+
+扩散训练常根据当前输入的信噪比调整损失权重。对序列模型，当前 token 的噪声并不能单独说明预测难度。即使当前帧非常嘈杂，可靠的历史也可能已经给出足够信息；如果历史和当前都很嘈杂，则是另一种条件。直接套用只看当前帧的权重，会忽略这个区别。
+
+附录 D.1 为此引入 Fused SNR reweighting。设 $S_t\in[0,1]$ 为归一化后的当前 token SNR 权重，例如先对 min-SNR 权重按上限归一化；用指数递推汇总历史信息
+
+$$
+\bar S_t
+=\gamma\bar S_{t-1}+(1-\gamma)S_t,
+\qquad 0<\gamma<1.
+$$
+
+再合并当前与历史贡献
+
+$$
+S'_t
+=1-(1-S_t)(1-\bar S_{t-1}).
+$$
+
+这个公式的直觉是，两种信息来源都没有提供足够信号时，预测才最缺乏依据。如果当前 $S_t$ 很低，但历史 $\bar S_{t-1}$ 很高，融合权重依然可以较高；反之，可靠的当前观测也能弥补较差历史。[↗](https://arxiv.org/pdf/2407.01392v4#page=23)
+
+作者把它解释为简化的独立事件组合模型，它不是对视频真实物理信噪比的精确推导，也没有把时间上相关的数据当作独立样本。其有效性来自训练经验，论文观察到它对视频收敛非常有用，但在非图像任务上未见明显增益，因此没有统一用于所有实验。这也说明，独立噪声增加了可处理的条件范围，具体任务仍需要匹配的参数化与损失权重。
+
+网络本身采用相对直接的结构。视频输入和 latent 都是带空间维度的张量，U-Net 输出与旧 latent 送入 GRU 得到新状态，再由一层 ResNet 加卷积的观察头预测当前数据。非图像向量使用 residual MLP 与 GRU。主实验没有靠一个新的大型 transformer 结构证明方法，transformer 扩展在附录中讨论，互联网规模训练与扩展规律不属于本论文的实证结果。
+
+| Setting | DMLab video | Minecraft video | Maze planning |
+| --- | --- | --- | --- |
+| Backbone | U-Net + GRU | U-Net + GRU | Residual MLP + GRU |
+| Parameters | 24M | 36M | 4.33M |
+| Latent channels | 16 | 32 | Vector latent |
+| Frame stacking | 4 | 8 | 10 |
+| Prediction parameterization | $v$ | $v$ | $x_0$ |
+| Noise schedule | Sigmoid | Sigmoid | Linear |
+| DDIM sampling steps | 100 | 100 | 50 |
+
+Frame stacking 把多个相邻时刻合成一个 token，减少对几乎相同输入反复执行状态更新的开销；它也让低维序列具有更多局部相关结构，便于使用已有扩散超参数。于是 token 数、原始视频帧数、环境动作步数不是同一个量，不能把一百个 DDIM 步直接理解为整段长视频只运行一百次网络。[↗](https://arxiv.org/pdf/2407.01392v4#page=24) [↗](https://arxiv.org/pdf/2407.01392v4#page=25)
+
+所有实验使用 fp16 混合精度。时间序列、迷宫、组合生成和视觉模仿可以在一张 11GB 的 2080 Ti 上训练，通常 50K–100K 步、约 4–8 小时；迷宫和组合任务 batch size 为 2,048，视觉模仿为 32。视频使用八张 A100，batch size 为 $8\times16$，训练设置为 50K 步，作者观察通常约 40K 步、12 小时收敛，时间含偶尔验证。扩散噪声训练级数为 $K=1000$，推理采用 DDIM 子采样，视频一百步、非视频五十步。[↗](https://arxiv.org/pdf/2407.01392v4#page=26)
+
+## 视频实验检验长期稳定，比较的是同一 RNN 下的训练方式
+
+视频任务使用 Minecraft 与 DMLab 的第一人称导航数据。Minecraft 是 128×128 的沼泽地形随机移动，训练子序列为 72 帧；DMLab 是 64×64 的三维迷宫导航。两套数据原本都带动作，作者在视频预测实验中丢弃动作，使未来移动更加随机，并因计算预算只使用约 10% 的数据序列。[↗](https://arxiv.org/pdf/2407.01392v4#page=31) [↗](https://arxiv.org/pdf/2407.01392v4#page=32)
+
+比较中，next-frame diffusion with teacher forcing 与 causal full-sequence diffusion 都使用和 DF 完全相同的 RNN 架构。前者检验干净历史训练下的误差累积，后者检验只有因果结构、却仍让整段共享噪声是否足够。这样得到的差异主要针对训练条件和采样方式，而不是把更大主干带来的收益算给独立噪声。
+
+下图从左侧红框条件帧向右看，再比较第 496、500、996、1000 帧。Teacher Forcing 的 DMLab 结果逐渐变成重复纹理，Minecraft 出现明显噪点与结构损坏。Causal Full-Sequence 的若干单帧仍有场景外观，但相邻位置之间的结构和视角不够连贯。DF 的两组结果在很远时刻仍保留可辨认的导航场景。
+
+![Diffusion Forcing long-rollout comparison 原图](../../assets/images/paper-deep-dives/diffusion/diffusion-forcing/figure-3-long-rollout-comparison.png){ width="1080" }
+
+<small>原论文 Figure 3。横向的省略号代表跨越了大量中间帧，不能把整行当成连续相邻帧；比较重点是长滚动后的结构是否崩坏。</small>
+
+这是一组定性证据。论文没有给出相应的 FVD、PSNR 或长期身份一致性统计表，因此不能由几组样例宣布所有视频质量维度都改善。它支持的是，在这些导航数据和相同 RNN 对照下，独立噪声训练配合略带噪声历史显著改善了长滚动的可用性。[↗](https://arxiv.org/pdf/2407.01392v4#page=8)
+
+下面两个项目原图提供更密集的时间观察。DMLab 中可以沿墙面与转角看视角如何移动；Minecraft 中可以沿地形、树木和地平线看局部场景如何延续。红框是用作条件的真实帧，后面的画面是模型生成，不能把它们当作对同一真实未来的逐帧准确复原。
 
 ![DMLab video prediction 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/dmlab-video-prediction-原图.png){ width="760" }
 
-<small>图源：`Diffusion Forcing` 官方项目页。DMLab 结果展示 DF 的视频预测样例，红框是 conditioning frames。</small>
+<small>官方项目页 DMLab 原图。条件帧之后，模型继续生成三维迷宫中的第一人称视角；场景连续性与真实运动轨迹预测准确率是不同判断。</small>
 
 ![Minecraft video prediction 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/minecraft-video-prediction-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页。原图表达：DF 在 128x128 Minecraft 视频上的自回归预测样例。本站读法：沿时间检查视角、地形块和物体身份是否保持连续；它支撑长 rollout 稳定性，不支撑高分辨率真实视频生成能力。</small>
+<small>官方项目页 Minecraft 原图。模型在低分辨率随机导航场景中生成地形和视角变化，这一结果不直接构成高分辨率开放场景视频生成的证据。</small>
 
-**视频预测图主要看长 rollout 是否漂移。**
-红框是 conditioning frames，后面的帧是模型自回归预测。读这类结果时不要只看第一两帧是否清晰，而要沿时间往后看：场景布局是否突然跳变，物体身份是否变形，视角运动是否连续，纹理是否逐渐糊成平均样子。DF 想解决的是 teacher forcing 长 rollout 的误差积累，所以 DMLab 和 Minecraft 图的重点是训练 horizon 外还能不能保持结构，而不是单帧视觉质量是否最锐。
+附录进一步展示了 180 帧的未挑选抽帧结果，并说明 RNN 可以连续运行而不重置初始状态，也不靠滑动窗口重新开始。对应长滚动实验的图注把训练长度写为 Minecraft 72 帧、DMLab 36 帧；数据设置 F.1 则另写 DMLab 使用 48 帧子序列。因此，对于那组 180 帧长滚动展示，应使用其 36 帧图注口径，不能把两个数字静默合并成一个统一设置。作者还报告尝试到 2,000 帧未观察到整体崩溃，但这仍是该实验范围内的观察，不是无限长度保证。[↗](https://arxiv.org/pdf/2407.01392v4#page=28)
 
-## 扩散规划：为什么 MCTG 有用
+数据也会塑造失败形式。Minecraft 随机移动代理遇到较高障碍时可能停住，画面被泥土或花岗岩纹理占满；这些片段大量进入数据后，生成模型也会出现类似状态。作者观察到某些生成在转向后可以恢复。长时间不出现整体画面崩坏，不等于模型一直产生有意义的新内容，更不等于长期记忆从不丢失。
 
-论文把 DF 用到离线强化学习和规划时，每个 token 不是单纯的视频帧，而是动作和后续观测的组合：
+## 迷宫规划的主收益，要结合动作接口和 MCG 消融来读
 
-\[
-x_t = (a_t, o_{t+1}).
-\]
+规划使用 D4RL 的三个二维迷宫，每个迷宫训练一个模型。观测是二维位置与二维速度，动作是二维加速度。离线数据由在各路口和拐点之间随机导航得到，轨迹通常避开墙壁，但不专门通向某个评测目标。Maze2D 使用固定目标、随机起点；Multi2D 进一步随机化目标。到达目标半径 0.5 的区域内获得奖励，否则为零。[↗](https://arxiv.org/pdf/2407.01392v4#page=32) [↗](https://arxiv.org/pdf/2407.01392v4#page=33)
 
-这样做的好处是：模型不只是生成一个未来状态序列，还生成“动作会导致什么观测”的因果结构。每执行一步动作，环境返回新观测，模型就可以用这个观测更新 latent state，再重新规划下一段。
+先看规划中的去噪过程。图的颜色从较早位置到较晚位置逐渐变浅，上排 DF 在采样中间阶段，靠近起点的路径已经较清楚，远处仍然散开；下排 Diffuser 的整段候选更同步地收缩。这对应两种对未来不确定性的处理方式，最终路径外观接近并不能抹去中间规划过程的区别。
 
-传统 Diffuser 类 full-sequence diffusion planner 可以对整段轨迹做 guidance，但它的动作和状态不一定因果一致。论文特别指出，Diffuser 的常用实现依赖手工 PD controller 从生成状态反推出动作，而不是直接执行扩散模型生成的动作。DF 的目标则是让生成动作本身和未来观测一致。
+![Diffusion Forcing planning denoising 原图](../../assets/images/paper-deep-dives/diffusion/diffusion-forcing/table-1-planning-denoising.png){ width="1080" }
 
-### Monte Carlo Tree Guidance
+<small>原论文 Table 1 上半部分。左侧为 Maze2D Medium，右侧为 Large；横向展示去噪阶段，上排图中 D3F 标签指本文方法。</small>
 
-MCTG 的直觉是：选择当前动作时，不只看一条未来样本，而是从当前 token 往后采样多条可能未来，用它们的期望 reward gradient 来指导当前去噪。
+完整回报表还包含一个关键接口差异。`Diffuser*` 忽略模型生成的动作，把生成状态交给手工 PD 控制器执行；`Diffuser w/ diffused action` 则直接执行生成动作。DF 直接执行自己的动作预测。星号这一实现差异决定了高回报究竟来自生成器的哪部分输出，不能省略。
 
-```text
-current token denoising
-  -> sample multiple noisy futures
-  -> evaluate reward / cost on those futures
-  -> average guidance gradients
-  -> update current token toward high expected reward
-```
-
-这只有在 DF 这种“当前更确定、远方仍不确定”的 schedule 下才自然。full-sequence diffusion 如果把整段轨迹都放在同一个噪声水平，就很难表达“当前动作要清楚，但远处结果还应保留多种可能”。
-
-### Table 1: Diffusion Forcing for Planning
-
-下面按论文 Table 1 的英文格式重绘。数值是 D4RL Maze2D / Multi2D 环境上的 reward，`Diffuser*` 表示使用 hand-crafted PD controller 的 Diffuser 设置。
-
-| Environment | MPPI | CQL | IQL | Diffuser* | Diffuser w/ diffused action | Ours w/o MCTG | Ours |
+| Environment | MPPI | CQL | IQL | Diffuser* | Diffuser w/ diffused action | DF w/o MCG | DF |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Maze2D U-Maze | 33.2 | 5.7 | 47.4 | 113.9 ± 3.1 | 6.3 ± 2.1 | 110.1 ± 3.9 | 116.7 ± 2.0 |
-| Maze2D Medium | 10.2 | 5.0 | 34.9 | 121.5 ± 2.7 | 13.5 ± 2.3 | 136.1 ± 10.2 | 149.4 ± 7.5 |
-| Maze2D Large | 5.1 | 12.5 | 58.6 | 123.0 ± 6.4 | 6.3 ± 2.1 | 142.8 ± 5.6 | 159.0 ± 2.7 |
-| Single-task Average | 16.2 | 7.7 | 47.0 | 119.5 | 8.7 | 129.67 | 141.7 |
-| Multi2D U-Maze | 41.2 | - | 24.8 | 128.9 ± 1.8 | 32.8 ± 1.7 | 107.7 ± 4.9 | 119.1 ± 4.0 |
-| Multi2D Medium | 15.4 | - | 12.1 | 127.2 ± 3.4 | 22.0 ± 2.7 | 145.6 ± 6.5 | 152.3 ± 9.9 |
-| Multi2D Large | 8.0 | - | 13.9 | 132.1 ± 5.8 | 6.9 ± 1.7 | 129.8 ± 1.5 | 167.1 ± 2.7 |
-| Multi-task Average | 21.5 | - | 16.9 | 129.4 | 20.57 | 127.7 | 146.17 |
+| Maze2D U-Maze | 33.2 | 5.7 | 47.4 | 113.9 ± 3.1 | 6.3 ± 2.1 | 110.1 ± 3.9 | **116.7 ± 2.0** |
+| Maze2D Medium | 10.2 | 5.0 | 34.9 | 121.5 ± 2.7 | 13.5 ± 2.3 | 136.1 ± 10.2 | **149.4 ± 7.5** |
+| Maze2D Large | 5.1 | 12.5 | 58.6 | 123.0 ± 6.4 | 6.3 ± 2.1 | 142.8 ± 5.6 | **159.0 ± 2.7** |
+| Single-task Average | 16.2 | 7.7 | 47.0 | 119.5 | 8.7 | 129.67 | **141.7** |
+| Multi2D U-Maze | 41.2 | — | 24.8 | **128.9 ± 1.8** | 32.8 ± 1.7 | 107.7 ± 4.9 | 119.1 ± 4.0 |
+| Multi2D Medium | 15.4 | — | 12.1 | 127.2 ± 3.4 | 22.0 ± 2.7 | 145.6 ± 6.5 | **152.3 ± 9.9** |
+| Multi2D Large | 8.0 | — | 13.9 | 132.1 ± 5.8 | 6.9 ± 1.7 | 129.8 ± 1.5 | **167.1 ± 2.7** |
+| Multi-task Average | 21.5 | — | 16.9 | 129.4 | 20.6 | 127.7 | **146.2** |
 
-<small>表源：`Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion`，Table 1。原论文表格要点：该表在 D4RL Maze2D / Multi2D 上比较 MPPI、CQL、IQL、Diffuser 和 Diffusion Forcing；`Ours` 的平均 reward 最高，且 `Ours w/o MCTG` 与 `Ours` 的差距显示 Monte Carlo Tree Guidance 对规划有额外收益。</small>
+表中是论文报告的回报分数，超过 100 不表示成功率超过百分之百。DF 的 single-task average 为 141.7，multi-task average 为 146.2，均高于列出的对照。Multi2D U-Maze 是明确反例，DF 的 119.1 低于 Diffuser* 的 128.9，故结果应表述为平均回报领先，不能沿用正文中“六个环境全部超过所有基线”的概括。[↗](https://arxiv.org/pdf/2407.01392v4#page=8)
 
-这张表支持的结论有三层：
+对动作接口的比较尤其有解释力。Diffuser 直接执行生成动作时，三个 Maze2D 分数只有 6.3、13.5、6.3，明显低于使用 PD 控制器后的结果。论文据此指出，联合生成的状态轨迹看起来可行，不代表同时生成的动作一定会让真实系统走出那条轨迹。DF 的因果结构和闭环方式在这里得到支持，它直接输出的动作具有较好的可执行性，不需要同样的手工状态跟踪器补足接口。
 
-1. `Ours` 在平均 reward 上最高，说明 DF 的 causal uncertainty 和 MCTG 对规划有实际收益；
-2. `Ours w/o MCTG` 仍然较强，但低于 `Ours`，说明多未来样本的 guidance 不是装饰项；
-3. `Diffuser w/ diffused action` 很低，说明直接执行生成动作时，full-sequence diffusion 的动作和状态一致性会成为问题。
+MCG 消融则把未来分支的作用单独拿出来。加入 MCG 后，六个环境的平均回报都提升，例如 Maze2D Large 从 142.8 到 159.0，Multi2D Large 从 129.8 到 167.1。Multi2D U-Maze 也从 107.7 到 119.1，但仍未超过 Diffuser*。因此，MCG 对本模型有稳定的均值收益，与“最终模型处处最佳”是两种结论。
 
-## 机器人 imitation learning
+回报指标本身还有一层限制。环境在目标附近持续给分，但数据没有“到达后原地停留”的示范，代理到达目标后可能继续离开；较慢的计划反而可能在目标邻域停留更多步。附录 D.8 因而建议进一步衡量首次到达目标所需时间。现有表格没有报告这一指标，不能把高回报直接解释成路径最短、到达最快，或所有控制维度都优越。[↗](https://arxiv.org/pdf/2407.01392v4#page=25)
 
-论文还把 DF 用在真实 Franka 机器人长时模仿学习上。任务是把苹果和橙子通过第三个空槽交换位置。这个任务的难点是非 Markov：只看当前画面，有时无法判断下一步应该移动哪个水果，必须记住初始配置。
+## 调节记忆，可以在保持原分布与拼接片段之间切换
+
+独立噪声使模型能处理不同可见历史，论文用一个二维轨迹例子展示这一性质如何影响组合生成。训练轨迹从正方形某个角走向对角，整体形成交叉形状。保留完整记忆时，模型知道当前轨迹从哪里来，继续沿对应对角线前进，复现原来的交叉分布。
+
+如果改用较短计划，并在 MPC 过程中不保留完整历史，交叉点附近的决策就不再被最初出发角约束。模型可以从一条训练轨迹的前半段接到另一条轨迹的后半段，形成训练整轨迹中没有的 V 形路径。下图先比较左、中两幅，确认完整记忆保留了原分布；再看右图的局部片段如何重新组合。
+
+![Diffusion Forcing compositional memory 原图](../../assets/images/paper-deep-dives/diffusion/diffusion-forcing/figure-7-compositional-memory.png){ width="880" }
+
+<small>原论文 Figure 7。左图为数据，中图保留记忆，右图不保留完整历史；变化来自采样条件和规划时域，而非为 V 形轨迹重新训练模型。</small>
+
+这项实验说明模型能够在局部动态支持的范围内组合片段。它没有证明忘记历史总是好事，也没有表明模型创造了任意新的动力学规律。恰恰相反，保留记忆和主动缩短记忆对应不同的条件分布，使用者需要决定任务要求保持最初承诺，还是允许在中途重新组合。[↗](https://arxiv.org/pdf/2407.01392v4#page=27) [↗](https://arxiv.org/pdf/2407.01392v4#page=28)
+
+## 机器人实验，把记忆和观测可信度分开检验
+
+真实机器人任务使用 Franka 机械臂，把苹果和橙子在两个槽位之间交换，并借助第三个空槽暂存。初始摆放随机，苹果可能从 A 开始，也可能从 B 开始；目标是相对起点完成交换，所以某个中间画面相同，正确的下一动作却可能不同。单帧观测无法完整决定策略，模型必须保留初始布局的信息。
+
+下图左侧的 Case A 与 Case B 正是这个区别。中间状态相同，下面目标状态不同；右侧则展示同一模型还可以由初始画面生成后续视频。视频外观生成说明模型具有相关时序表示，但不能仅由这一展示推断机器人已经用视频想象执行了通用长时域规划。
 
 ![Robot imitation learning 原图](../../assets/images/localized-remote/paper-deep-dives/diffusion/diffusion-forcing/robot-imitation-learning-原图.png){ width="920" }
 
-<small>图源：`Diffusion Forcing` 官方项目页，对应论文 Figure 4。原图表达：有记忆依赖的水果交换任务、生成视频预测和双相机观测。本站读法：先看任务为什么需要记住初始状态，再看 DF 如何把动作和未来观测绑在同一序列里；这张图支撑的是部分可观测控制，不是开放世界机器人泛化。</small>
+<small>原论文 Figure 4，沿用官方项目页原图。上、下视频行分别对应手腕相机与外部相机，左侧任务示意揭示了对起始状态的记忆需求。</small>
 
-**机器人图里的难点是记忆依赖。**
-这张图不要只看成机器人演示截图。水果交换任务要求模型记住初始摆放和中间操作历史，因为当前画面可能不足以判断下一步该移动哪个水果。DF 的优势在于它可以把过去观测作为较干净条件，把未来动作和观测作为带噪候选来生成；双相机输入提供不同视角，动作 token 则把视频预测和控制决策绑在一起。也就是说，这里测试的是“能不能在部分可观测、长时依赖任务里保持因果状态”，不是普通单步视觉分类。
+数据包含 150 条通过 VR 遥操作、阻抗控制收集的专家示范，两种初始槽位配置各占一半。每条示范有 500–600 帧及对应动作，记录手腕和正面两个相机视角，以及机械臂末端六自由度动作。训练将视频补齐并降采样到 40 帧，每个视觉时刻绑定 15 个动作。水果在槽位圆区内的位置也随机变化，避免模型只记住一个固定位置序列而完全忽略视觉反馈。[↗](https://arxiv.org/pdf/2407.01392v4#page=33)
 
-论文和附录给出的训练设置要点：
+正常观测下，DF 的任务成功率为 80%，论文报告无记忆的 Diffusion Policy 在这个任务上失败。这个对照支持 recurrent latent 对该部分可观测任务的帮助，但它不是“所有 Diffusion Policy 都不能处理长期任务”的结论，比较对象是否带历史记忆本身就是实验变量。
 
-| Item | Detail |
-| --- | --- |
-| Robot | Franka robot |
-| Data collection | VR teleoperation with impedance control |
-| Demonstrations | 150 expert demonstrations |
-| Cameras | two views, hand camera and front camera |
-| Action | 6-DoF robot hand actions |
-| Sequence preprocessing | each demonstration has about 500-600 frames/actions, padded and downsampled to 40 frames |
-| Action bundling | each frame is bundled with 15 actions |
+第二项实验检验观测受损时的处理方式。作者在执行中加入视觉干扰，甚至完全遮挡相机，并将相应观测用 $k>0$ 标成不可靠，让模型更多依靠历史与先验。DF 的成功率降到 76%，相对 80% 是下降 **4 个百分点**；必须把受损输入当作真实条件的 next-frame diffusion baseline 为 48%，与 DF 相差 28 个百分点。[↗](https://arxiv.org/pdf/2407.01392v4#page=10)
 
-从方法上看，机器人部分不是单独训练一个“看图出动作”的 policy，而是联合扩散 action-observation sequence。模型既生成动作，也能在同一框架下生成未来观测。因此它天然带一个 latent memory，用来保存初始水果位置这类只在早期画面中可见的信息。
+| Evaluation condition | Method | Success rate |
+| --- | --- | ---: |
+| Original observations | Diffusion Forcing | 80% |
+| Corrupted / missing observations | Diffusion Forcing, with noisy-observation conditioning | 76% |
+| Corrupted / missing observations | Next-frame diffusion baseline | 48% |
 
-论文报告 DF 在该记忆依赖任务上达到 80% success rate，而 Diffusion Policy 因为缺少长时记忆失败。加入视觉干扰或摄像头遮挡时，DF 可以把异常观测标记成 noisy observation，让 prior model 更多接管动作预测，成功率只下降 4% 到 76%；next-frame diffusion baseline 为 48%。
+这里的干扰实验并不等于噪声标签由模型自动预测。系统获得“这份观测应谨慎使用”的条件后，才展示出相应鲁棒性。论文未给出足以从这几个比例计算置信区间的完整试验次数，因此应把它理解为这项机器人设置中的报告结果，不能自行补出显著性判断。
 
-## 训练细节
+下面原图展示训练中没有出现过的 Target 购物袋被放到桌上。干扰显著改变相机外观，却不改变当前交换任务。附录描述的典型失败是机器人不再充分响应水果随机位置的视觉线索，说明过度依赖先验也会损害闭环控制，不能把所有坏观测都简单忽略到底。
 
-这一节把论文和官方 GitHub `paper` 分支中的训练配置合在一起读。需要注意：GitHub 主分支后来改成了带 temporal attention 的 v1.5 代码，复现论文原始 RNN 结果时，README 明确建议切到 `paper` 分支。
+![Diffusion Forcing robot observation corruption 原图](../../assets/images/paper-deep-dives/diffusion/diffusion-forcing/figure-16-robot-corruption.png){ width="600" }
 
-### 1. 模型结构
+<small>原论文 Figure 16。受损观测条件使模型能够降低对当前画面的信任；恢复可靠视觉反馈与继续使用历史同样重要。</small>
 
-论文的 CDF 实现是一个 convolutional RNN，而不是大规模 DiT。
+这项实验把序列生成中的噪声接口转化成了实际控制接口。记忆用于分辨相同画面背后的不同任务阶段，噪声级别用于调节当前观测相对历史的权重。两者共同解释了结果，不能只用“更强视频生成”概括机器人的成功。[↗](https://arxiv.org/pdf/2407.01392v4#page=30)
 
-| Component | Implementation detail |
-| --- | --- |
-| Token \(x_t\) | image frame, state-action token, or time-series vector |
-| Latent state \(z_t\) | recurrent hidden state summarizing past noisy observations |
-| Transition model | diffusion U-Net processes noisy observation, then GRU updates latent |
-| Observation model | ResNet-style head followed by conv layer predicts denoising target |
-| Causality | future tokens depend on past latent state, not future clean tokens |
-| Possible extension | masked transformer or DiT can replace RNN, but paper experiments use small RNN |
+## 时间序列实验说明适用范围，也保留了明显落后项
 
-RNN 的好处是在线控制友好：每次新观测到来，只要更新 latent state，不需要重新处理整段历史。缺点也明显：高分辨率视频和复杂分布很可能需要 transformer / DiT 与 latent diffusion 才能扩展。
+论文还在六套多变量时间序列上测试 DF，目的在于检查新的训练目标能否作为通用序列建模方法，而不只适用于图像或控制。每个时刻的整个多变量向量作为观测，任务是在给定历史后预测未来联合分布。数据维度从 8 到 2,000，采样频率与预测长度差异较大。
 
-### 2. Video prediction 配置
+| Dataset | Dimension | Frequency | Training steps in series | Prediction length |
+| --- | ---: | --- | ---: | ---: |
+| Exchange | 8 | Business day | 6,071 | 30 |
+| Solar | 137 | Hour | 7,009 | 24 |
+| Electricity | 370 | Hour | 5,833 | 24 |
+| Traffic | 963 | Hour | 4,001 | 24 |
+| Taxi | 1,214 | 30-min | 1,488 | 24 |
+| Wikipedia | 2,000 | Day | 792 | 30 |
 
-官方 `paper` 分支给出的 video 配置如下。
+表中的 training steps 指训练时间序列长度，不是优化器更新次数。历史窗口与预测窗口等长；特征按训练集均值、标准差归一化，还加入滞后输入、日历特征及嵌入等 covariates。模型在所有数据集上使用相同架构与超参数，一层 MLP 加四层 GRU，batch size 为 32，每个 epoch 有 100 个 batch，验证指标连续六个 epoch 未改善时早停。DF 的结果报告五个训练种子的均值与标准差。[↗](https://arxiv.org/pdf/2407.01392v4#page=26) [↗](https://arxiv.org/pdf/2407.01392v4#page=27)
 
-| Item | DMLab | Minecraft |
-| --- | ---: | ---: |
-| `n_frames` | 36 | 72 |
-| `resolution` | 64 | 128 |
-| `context_length` | 4 | 8 |
-| `frame_stack` | 4 | 8 |
-| `z_shape` channels | 16 | 32 |
-| `network_size` | 48 | 64 |
-| `objective` | `pred_v` | `pred_v` |
-| `sampling_timesteps` | 100 | 100 |
-| `ddim_sampling_eta` | 0.0 | 0.0 |
-| `beta_schedule` | cosine | sigmoid |
-| `cum_snr_decay` | 0.8 | 0.96 |
-| `clip_noise` | 6 | 6 |
+评测使用 $\mathrm{CRPS}_{\mathrm{sum}}$，越小越好。单变量 CRPS 比较预测累积分布与真实观测的位置
 
-这些细节说明几个工程判断：
+$$
+\mathrm{CRPS}(F,x)
+=\int_{\mathbb R}
+\bigl(F(z)-\mathbf 1\{x\leq z\}\bigr)^2\,\mathrm dz.
+$$
 
-1. 论文没有在像素上硬撑高分辨率，而是选择 DMLab 64x64 和 Minecraft 128x128 来验证长 rollout 机制；
-2. `pred_v`、SNR weighting、cumulative SNR decay 和 noise clipping 都是为了让扩散训练更稳；
-3. 100-step DDIM 采样说明论文重点不是“少步出视频”，而是先验证独立噪声 token 训练是否能稳定长序列；
-4. DMLab 和 Minecraft 的 schedule 不同，说明 noise schedule 不是无关紧要的常数，需要按数据集调。
+这里的 `sum` 表示先在每个预测时刻沿特征维求和，再比较这个总量的预测分布与真实总量，最后沿预测窗口取平均。它不是先计算每个特征的 CRPS 再简单相加。论文从 100 条采样轨迹估计 19 个分位点来近似相应 CDF，因此这一结果衡量的是总量概率预测，而非逐维均方误差或每个维度都准确的保证。[↗](https://arxiv.org/pdf/2407.01392v4#page=35)
 
-### 3. Planning 配置
+下面保留主要扩散对照、Transformer-MAF，以及在 Electricity 上有强结果的 NKF。各列均来自原论文 Table 2，不能把其中一个数据集的优势推广成全部数据集的结论。
 
-官方 `paper` 分支中的 planning 配置更轻量，输入不是图像，而是 Maze2D 的状态、动作和目标信息。
+| Method | Exchange ↓ | Solar ↓ | Electricity ↓ | Traffic ↓ | Taxi ↓ | Wikipedia ↓ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Transformer-MAF | 0.005 ± 0.003 | 0.301 ± 0.014 | 0.021 ± 0.000 | 0.056 ± 0.001 | 0.179 ± 0.002 | 0.063 ± 0.003 |
+| TimeGrad | 0.006 ± 0.001 | 0.287 ± 0.020 | 0.021 ± 0.001 | 0.044 ± 0.006 | 0.114 ± 0.020 | 0.049 ± 0.002 |
+| ScoreGrad sub-VP SDE | 0.006 ± 0.001 | **0.256 ± 0.015** | 0.019 ± 0.001 | 0.041 ± 0.004 | 0.101 ± 0.004 | **0.043 ± 0.002** |
+| NKF | — | 0.320 ± 0.020 | **0.016 ± 0.001** | 0.100 ± 0.002 | — | 0.071 ± 0.002 |
+| Diffusion Forcing | **0.003 ± 0.001** | 0.289 ± 0.002 | 0.023 ± 0.001 | **0.040 ± 0.004** | **0.075 ± 0.002** | 0.085 ± 0.007 |
 
-| Item | Detail |
-| --- | --- |
-| `z_shape` | `[128]` |
-| `frame_stack` | 10 |
-| `chunk_size` | `${dataset.episode_len}` |
-| `network_size` | 16 for medium/umaze, 32 for large |
-| `num_mlp_layers` | 4 |
-| `sampling_timesteps` | 50 |
-| `beta_schedule` | linear |
-| `snr_clip` | 5.0 |
-| `cum_snr_decay` | 0.98 |
-| `open_loop_horizon` | 10 |
-| sampling `guidance_scale` | commonly tuned from 1 to 5 in README examples |
+DF 在 Exchange、Traffic、Taxi 的报告均值最低。Taxi 的 0.075 比 TimeGrad 的 0.114 低约 34%，这个比例由表值计算；TimeGrad 同样是 next-token diffusion，但采用 teacher forcing，是理解训练方式差异的直接对照。Traffic 上 DF 的 0.040 与 ScoreGrad 的 0.041 很接近，两者表中误差项均为 0.004，不宜由千分之一的均值差声称稳健胜出。
 
-Planning 里最关键的不是网络规模，而是 token 设计和采样 schedule。把 token 定成 \((a_t,o_{t+1})\)，模型才会被迫学习“动作导致什么观测”。如果只生成状态轨迹，再用外部 controller 找动作，动作一致性问题会被评测掩盖。
+落后项也很清楚。Electricity 的 0.023 差于 TimeGrad 的 0.021，更差于 NKF 的 0.016；Wikipedia 的 0.085 则明显高于 ScoreGrad 的 0.043 和 TimeGrad 的 0.049。Solar 上 DF 也没有优于 ScoreGrad。数据支持 DF 可以跨领域工作，并在若干任务上表现较强，但不支持“新的训练目标没有任何性能取舍”或“除某一个对手外全部领先”的泛化表述。
 
-### 4. Robot 配置
+## 这项方法真正留下的是一个可以调度不确定性的接口
 
-官方 `paper` 分支中的 robot 配置继承了 video 配置，但对目标和步数做了调整：
+DF 把历史是否可靠、未来是否已经确定、接下来要计划多远，放进同一个逐 token 噪声接口。训练时独立采样各位置噪声，让模型见过多种信息组合；推理时再用调度矩阵选择近期与远期的确定速度。因果状态既支持连续滚动，又保留从当前候选展开多个未来的入口，因此 guidance 能够用于规划，MCG 能够在多个未来之间平均修正方向。
 
-| Item | Detail |
-| --- | --- |
-| `z_shape` | `[32, resolution, resolution]` |
-| `frame_stack` | 1 |
-| `weight_decay` | `1e-4` |
-| `warmup_steps` | 2500 |
-| `gt_first_frame` | 0.5 |
-| `objective` | `pred_x0` |
-| `sampling_timesteps` | 25 |
-| `beta_schedule` | cosine |
-| `network_size` | 32 |
-| `num_gru_layers` | 1 |
+采用这套方法时，首先应明确 token 的实际单位和历史表示。视频帧叠放、动作块和多变量观测对应不同计算成本，不能只比较去噪步数。随后要确定哪些输入是已发生的真实反馈，哪些只是模型想象；执行动作后的更新必须使用环境观测。对于受损历史，噪声标签提供调节信任的能力，但噪声检测、标签选择和恢复可靠观测仍是部署系统需要处理的具体问题。
 
-和视频预测相比，机器人控制更重视闭环反应和动作输出，因此采样步数降到 25，并使用 `pred_x0`。这也提醒一个实践点：DF 是训练范式，不绑定某一种扩散参数化。视频里可以用 `pred_v`，控制里可以用 `pred_x0`，关键是每个 token 的噪声水平独立、模型保持因果。
-
-## 和普通视频扩散的关系
-
-Diffusion Forcing 很容易被误读成“一个视频生成模型”。更准确地说，它是一个序列扩散训练范式。视频只是最直观的连续 token 序列之一。
-
-| Dimension | Standard video diffusion | Diffusion Forcing |
-| --- | --- | --- |
-| Training unit | fixed video clip | sequence with per-token noise |
-| Noise level | usually shared across all frames | independent for every token |
-| Architecture | often non-causal UNet/DiT | causal RNN or masked transformer |
-| Sampling | denoise whole clip | denoise through a time-noise schedule matrix |
-| Long rollout | sliding window or fixed horizon | recurrent latent rollout with stabilization |
-| Guidance | whole clip guidance | long-horizon causal guidance and MCTG |
-| Best current use | high-quality offline video generation | sequential prediction, planning, online control |
-
-这也解释了它和 LingBot-World 一类视频世界模型的关系。LingBot-World 更像“把强视频生成底座工程化成可交互世界模拟器”；Diffusion Forcing 更像“从训练目标层面说明怎样让扩散模型拥有因果、变长和不确定性控制”。两者可以互补：大型视频模型提供画质和语义先验，DF 类 schedule 提供更自然的因果 rollout 训练信号。
-
-## 消融与诊断怎么读
-
-Diffusion Forcing 的关键实验不是“画质超过大视频模型”，而是验证独立噪声 token 这件事是否真的改变序列建模能力。读结果时可以按下面几个诊断看。
-
-| Diagnostic | 对应设置 | 支撑的结论 | 不能证明 |
-| --- | --- | --- | --- |
-| Long video rollout | DMLab / Minecraft 长序列预测 | 独立噪声水平和因果结构能缓解长 rollout 漂移 | 不能证明高分辨率开放域视频生成已解决 |
-| Planning | Maze2D token 设计为 \((a_t,o_{t+1})\) | 动作和后果同 token 化可支撑规划 | 不能替代真实机器人接触和安全评测 |
-| Robot control | 减少 sampling steps，使用 `pred_x0` | DF 是训练范式，可按控制任务调整参数化 | 不能说明所有任务都适合相同 schedule |
-| MCTG | 多未来样本 guidance | 当前动作可优化期望未来，而不是单一路径 | guidance 成本和样本数仍是推理瓶颈 |
-| Noise schedule | DMLab/Minecraft/Planning/Robot 配置不同 | 二维噪声日程是核心超参，需要按任务调 | 不能把某个 schedule 当通用 recipe |
-
-如果要复现实验，最应该盯的是三条曲线：长 rollout 是否稳定、规划成功率是否随 guidance 改善、采样步数降低后控制是否仍稳。只看单帧 FVD 或一段 demo，很容易把 DF 误读成普通视频扩散。
-
-## 最值得复用的设计经验
-
-### 1. 把噪声当成连续 mask
-
-很多序列任务不只是“知道或不知道”。现实中常见的是不确定程度不同：近处未来更确定，远处未来更不确定；传感器观测可能部分损坏；模型生成的历史帧不应被当成真值。DF 把这种不确定性直接编码到噪声水平里。
-
-### 2. 训练时覆盖多种条件形态
-
-如果训练只见过“过去全干净、未来全未知”，推理时遇到部分 noisy 的过去或未来就会分布外。DF 每个 token 独立采噪声，相当于训练时系统性覆盖许多 conditioning pattern。
-
-### 3. 规划要让动作和后果同 token 化
-
-规划模型最怕生成的动作和状态不一致。DF 把 token 定成 \((a_t,o_{t+1})\)，让模型直接学习 action-conditioned transition。这比“先生成状态，再另找控制器”更接近真实闭环系统。
-
-### 4. Guidance 不一定要压成单未来
-
-MCTG 的价值在于把未来当分布而不是单条轨迹。当前动作应该优化期望未来，而不是只对一条 sampled future 过拟合。这个观点对机器人、自动驾驶和游戏 agent 都很重要。
-
-## 局限与风险
-
-1. **规模还小**：论文主实验使用小型 RNN，作者也明确指出高分辨率视频和复杂分布很可能需要大 transformer。
-2. **不是图像质量论文**：它证明序列训练范式有效，但没有和 SVD、Sora、Veo 这类大视频模型做画质级比较。
-3. **采样 schedule 变成新超参**：二维噪声日程很强，但也带来设计空间。不同任务需要不同 schedule。
-4. **长 rollout 不等于物理正确**：视频稳定不代表学到了真实动力学，仍需动作敏感性、闭环收益和反事实评测。
-5. **guidance 成本可能高**：MCTG 需要多未来样本，规划效果和计算预算之间有明显 tradeoff。
-6. **训练数据仍决定边界**：如果数据里没有动作分叉、长时依赖或异常观测，DF 的训练目标也不能凭空补出这些能力。
-
-## 阅读结论
-
-Diffusion Forcing 的关键贡献是把扩散模型从“一段序列共享一个噪声水平”推广到“每个 token 拥有独立噪声水平”。这个简单变化让同一个因果模型同时具备：
-
-1. next-token 模型的变长生成和在线更新；
-2. full-sequence diffusion 的整段 guidance；
-3. 对未来不确定性的显式表示；
-4. 长视频 rollout 的稳定机制；
-5. 规划和模仿学习中的闭环记忆。
-
-从工程角度看，它最值得借鉴的不是某个 RNN 结构，而是一个训练原则：**不要把所有未来 token 都当成同等不确定，也不要把模型自己生成的历史当成完全可信。把不确定性做成每个 token 的噪声水平，训练和采样就能表达更真实的序列状态。**
-
-## 外部精读
-
-- [Diffusion Forcing](https://arxiv.org/abs/2407.01392)：原论文，重点读独立 token 噪声、CDF、MCTG 和机器人实验。
-- [Diffusion Forcing project page](https://www.boyuan.space/diffusion-forcing/)：官方项目页，适合先用图建立“时间轴 × 噪声轴”的直觉。
-- [buoyancy99/diffusion-forcing](https://github.com/buoyancy99/diffusion-forcing)：官方代码，注意论文复现需要看 `paper` 分支说明。
-- [Diffuser](https://arxiv.org/abs/2205.09991)：把扩散模型用于规划的早期代表，适合和 DF 的动作-后果一致性对比。
-- [Decision Diffuser](https://arxiv.org/abs/2211.15657)：从 offline RL 角度理解 diffusion planner 的条件生成和 guidance。
+论文的实证范围也很明确，低分辨率导航视频检验了长期滚动，迷宫检验了条件分支与动作执行，机器人交换任务检验了记忆和观测鲁棒性，时间序列展示了跨领域适用性及取舍。大型视频 transformer、互联网规模训练和任意长期记忆并未在这里得到验证。最可复用的认识是，把未来保持为可修改、可分支的随机变量，可以改变序列模型的使用方式；这种能力只有与明确的状态更新、计算预算和任务指标连接起来，才会成为可靠的生成或控制系统。

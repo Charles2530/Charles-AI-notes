@@ -15,350 +15,388 @@ paper_topic: 世界模型 / 机器人想象强化学习
     **GitHub / 项目：** GitHub：[OpenDriveLab/RISE](https://github.com/OpenDriveLab/RISE)。<br>
     **元数据来源与核验口径：** 来源：arXiv metadata、论文 PDF、官方项目页、官方 GitHub README；Checked Date：2026-08-08；Repro Status：Paper / official project / official code reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 世界模型要成为训练环境，还必须能判断动作好在哪里
 
-### 研究背景
+机器人已经学会抓取积木，并不等于能在传送带移动时稳定追踪、抓住并按颜色放对箱子；会拉拉链，也不等于在布料卡住后懂得调整。模仿学习主要复现示范覆盖的行为，一旦自己的动作把状态推离示范，后续恢复就会缺少经验。真实在线强化学习能够补上这类经验，却需要机械臂执行、人工监控、失败处理和环境复位。
 
-RISE 的背景不是“视频世界模型能不能生成未来”，而是更具体的机器人训练问题：大 VLA 通过模仿学习能覆盖很多开放词汇任务，但在接触丰富、物体动态强、失败状态长尾的真实操作里，单纯行为克隆很容易暴露出 distribution shift。机器人一旦稍微抓偏、物体滑动或姿态偏离示教轨迹，策略就必须从自己造成的状态里恢复。
+RISE 把后续试错转入学到的视觉环境。策略提出动作，动力学模型生成动作之后的多视角观察，价值模型判断这些状态是否推进任务，再把评价结果变成策略训练条件。它的目标不只是在电脑里生成机器人视频，而是让想象中的成功和失败，最终改变真实部署时的动作分布。[原文 §I](https://arxiv.org/pdf/2602.11075#page=2)
 
-直接做真实机器人 on-policy RL 又很贵。它需要大量硬件交互、频繁 reset，还可能带来安全和设备磨损问题。于是论文把问题转向世界模型：如果我们能在模型里想象“执行这段动作后会看到什么”，再判断这些想象状态是否更接近成功，就可以把一部分 RL 更新搬到 imaginary space 里完成。
+![RISE overall learning pipeline](../../assets/images/paper-deep-dives/world-models/rise/figure-1-overview.png){ width="920" }
 
-### 问题（Challenge）
+*原文 Figure 1。左侧是真实世界 RL 的交互与复位成本，中央是由动力学和价值组成的想象环境，下方是三个真实任务的最终检验。*
 
-RISE 要解决的问题是：**如何在不大量增加真实机器人交互的情况下，让 VLA policy 通过 imagined rollout 自我改进。** 这个问题有两个硬约束。第一，动力学模型必须对动作敏感，不能只生成视觉上顺滑的平均未来；同一初始状态下，不同 action chunk 应该导向不同多视角未来。第二，训练信号不能只等 episode 末端奖励，因为真实机器人任务失败形态复杂，长 horizon 终点奖励既稀疏又容易被生成误差污染。
+这条路线面对两个相互独立的困难。视频必须跟随候选动作，不能仅仅看起来合理；评价必须识别中间进展与细小失败，不能等整项任务结束才给一个成败标签。否则，策略要么学会利用不可信的视觉后果，要么必须让视频模型滚动到很远的终点才能获得训练信号。
 
-因此 RISE 没有把 world model 做成一个单体 rollout simulator，而是拆成两个互补模块：一个 controllable dynamics model 负责预测未来观测，一个 progress value model 负责评价未来状态。前者回答“动作会把世界推向哪里”，后者回答“这个未来离成功近不近”。
+Compositional World Model 因而拆成动力学 $D$ 与价值 $V$，分别采用适合视觉生成和任务判断的预训练网络。两者训练好后，在策略自改进期间保持冻结。最终部署只运行改进后的 VLA，世界模型不在线参与动作选择，所以它增加的是训练成本，没有为真实控制额外增加视频预测和价值评估调用。[原文 §III-A、Appendix XI-C](https://arxiv.org/pdf/2602.11075#page=16)
 
-### Finding
+## 先把观察、动作和评价的接口分清
 
-论文的关键 finding 是：**机器人世界模型未必需要在部署时替代策略，它可以在训练时充当可评估的想象环境。** RISE 不是让机器人执行世界模型生成的视频，也不是把未来视频直接解码成动作；它用世界模型为候选 action chunk 打 advantage，然后用这个 advantage 反过来训练 VLA。
+令 $o_t=[m_t^1,\ldots,m_t^n]$ 表示当前多相机观察，$O_t$ 表示一段观察历史，$\ell$ 是任务语言。策略输出未来 $H$ 步动作块 $\mathbf a_t=[a_t,\ldots,a_{t+H-1}]$。动力学模块的概念接口为
 
-这个 finding 把世界模型的角色从“生成器”换成“训练信号生产器”。组合式拆分也很重要：dynamics model 可以继承视频生成模型的多视角未来预测能力，value model 可以继承 VLA 的任务理解并学习 progress / TD 信号。两者组合后，策略获得的是 dense action-level advantage，而不是一个脆弱的长时模拟终局 reward。
+$$
+\hat o_{t+1},\ldots,\hat o_{t+H}=D(O_t,\mathbf a_t).
+$$
 
-### 方法
+它要回答给定动作会造成什么后果。同一初始状态下，朝蓝色箱子移动和朝黄色箱子移动都可能生成清晰视频，但在蓝色积木分拣任务里，两者后果必须不同。这种 action controllability 决定了预测能否用作学习环境。[原文 Eq. 1](https://arxiv.org/pdf/2602.11075#page=2)
 
-RISE 的方法有四步。第一，训练 controllable dynamics model。它从 Genie Envisioner / LTX-Video 风格视频模型初始化，加入轻量 action encoder，在 AgiBot World、Galaxea 等动作标注数据上预训练，再用具体任务数据 fine-tune，并用 Task-Centric Batching 强化同一任务内不同动作导致不同后果的可控性。
+价值模型则接收单个时刻的多视角观察与指令，给出 $V(o_t,\ell)$。它不必承担整段视频生成，却必须知道当前场景对于指定任务意味着多少进展。两者组合后，RISE 用未来块内平均价值相对起点的提升作为优势。
 
-第二，训练 progress value model。它从预训练 VLA policy \(\pi_{0.5}\) 初始化，输入多视角 observation 和语言任务，输出状态进度值。训练目标同时包含按时间归一化的 progress loss 和带成功 / 失败终端信号的 TD loss。
+$$
+A(o_t,\mathbf a_t,\ell)=
+\frac1H\sum_{k=1}^{H}V(\hat o_{t+k},\ell)-V(o_t,\ell).
+$$
 
-第三，做 policy warm-up。RISE 先把 \(\pi_{0.5}\) 在离线数据上微调，包括人工示教、policy rollout 成功 / 失败轨迹、人类纠正数据。专家示教和纠正样本被视为 optimal advantage，rollout 样本则使用 value model 估计出的 advantage。
+平均未来值使一个动作块的评价不只依赖最后一帧。比如抓取后短暂遮挡可能让某帧判断波动，整个块的信息会共同参与标签。但它仍是论文定义的 chunk-wise advantage，不是一般强化学习中带完整折扣累计奖励的 $Q-V$ 原式，也不是 GAE。[原文 Eq. 2](https://arxiv.org/pdf/2602.11075#page=3)
 
-第四，进入 self-improving loop。rollout policy 在初始真实状态上以 optimal advantage 为条件提出 action chunk；dynamics model 想象未来多视角观测；value model 对 imagined observations 打分，得到 action advantage；训练 policy 学会在给定该 advantage 时输出相应动作。为了防止生成误差累积，连续 imagined interaction 最多只展开两次，并且训练时混入真实离线数据。
+这一设计允许只模拟短动作块，通过价值变化判断方向，不必每次把背包拉链或关盒任务一直模拟到终点。代价在于，价值模型的排序质量会直接影响策略更新；动作产生的图像与图像获得的高分必须都可信。
 
-### 结论
+![Compositional world model training and inference](../../assets/images/paper-deep-dives/world-models/rise/figure-4-cwm-workflow.png){ width="760" }
 
-论文在三个真实双臂操作任务上报告了明显提升：Dynamic Brick Sorting 从 \(\pi_{0.5}\) 的 35% 成功率提升到 85%，Backpack Packing 从 30% 到 85%，Box Closing 从 35% 到 95%。相较 RECAP，RISE 在三个任务上也分别提升到 85%、85%、95%。
+*原文 Figure 4。上方分别训练 dynamics 与 value；下方将动作条件预测交给价值模型评价，再送往 policy optimization。两种能力来自不同 backbone 和训练目标。*
 
-消融实验支持三点：更多 offline anchor data 能提高 imagined learning 稳定性；把 online action 和 online imagined state 接入 rollout 会提高 training-time 分布覆盖；dynamics pre-training、Task-Centric Batching、progress loss 和 TD learning 都会影响最终得分。边界同样清楚：RISE 仍依赖真实任务数据、世界模型训练成本高，且 value model 和 dynamics model 在罕见状态上可能给错奖励或想错未来。
+## 动力学模型的关键是同一场景里不同动作产生不同后果
 
-### 关键术语
+### 从 GE-base 出发，控制动作进入视频生成
 
-- **Compositional World Model（组合式世界模型）**：把世界建模拆成 dynamics prediction 和 value evaluation，而不是一个端到端黑盒 simulator。
-- **Controllable Dynamics Model（可控动力学模型）**：给定历史多视角观测和未来动作，预测未来多视角观测的视频模型。
-- **Progress Value Model（进度价值模型）**：把当前或想象观测映射为任务进度 / 价值的模型。
-- **Imaginary Rollout（想象 rollout）**：在 learned dynamics model 中展开候选 action，而不是让真实机器人执行。
-- **Advantage Conditioning（优势条件化）**：把动作好坏离散成 advantage bin，作为 VLA 训练和 rollout 条件。
-- **Task-Centric Batching（任务中心批采样）**：每个 batch 只采样少量任务、但包含同任务内更多动作变化样本，用来强化动作可控动态。
-- **Offline Anchor（离线锚点）**：训练中持续混入真实示教、纠正和 rollout 数据，防止 imagined data 把策略带离真实分布。
+动力学模型初始化自 Genie Envisioner 的 GE-base，继承 LTX-Video 系列的高效生成结构。这里的 GE-base 是机器人视频生成基础模型，不应与早期 Genie 的无动作标签游戏环境方法混为一谈。RISE 增加轻量 action encoder，再在 Agibot World 和 Galaxea 的机器人动作标注数据上预训练，随后对目标任务微调。[原文 §III-A](https://arxiv.org/pdf/2602.11075#page=4)
 
-## 论文位置
+选择 GE 还考虑了想象训练的吞吐。原文称生成 25 个多视角观察时，Cosmos 需要超过 10 分钟，GE 少于 2 秒，给出约 300× 的速度差。这是作者所用配置下的生成比较，报告此处没有足够配置细节支持任意 Cosmos/GE 版本、硬件和采样设置都具有同样倍数。实际意义在于，若每次想象都要等数分钟，在线生成训练数据会成为主要瓶颈。
 
-RISE 应该放在世界模型部分，而不是只放进具身智能或扩散生成部分。它的 dynamics model 确实使用视频生成 / flow matching 路线，但论文的核心问题是 world model 怎样进入机器人学习闭环。
+RISE 对历史 context frames 加入比原 GE 训练更强的噪声，以降低对运动模糊与视觉伪影的敏感性。这样的输入扰动同时针对真实录制中的不完美图像和自回归想象里已经带有误差的历史；它并不保证错误被消除，而是让模型不要只依赖干净上下文。
 
-和相邻工作相比，它的位置比较清楚：
+### Task-centric batching 改变一个 batch 内的信息密度
 
-| 路线 | 世界模型扮演的角色 | RISE 的区别 |
-| --- | --- | --- |
-| [Dreamer](dreamer.md) / DreamerV3 | 在 latent imagination 中训练 actor-critic | RISE 面向真实机器人 VLA，用视频 dynamics + value model 给 action chunk 打 advantage |
-| [LingBot-VA 2.0](lingbot-va2.md) | 原生 video-action policy，推理时预测未来和动作 | RISE 的 world model 只在训练期使用，部署时没有额外推理开销 |
-| [DreamZero](../embodied-ai/dreamzero.md) | WAM 直接作为闭环 policy | RISE 不让 world model 执行动作，而是把它当成 policy improvement 环境 |
-| [Diffusion Forcing](../diffusion/diffusion-forcing.md) | 统一 next-token 与全序列扩散的生成范式 | RISE 关注动作条件未来如何变成 RL advantage |
-| 普通视频生成模型 | 生成视觉上合理的未来 | RISE 要求未来对 action controllable，并能被 value model 评价 |
+异构机器人数据横跨不同任务和环境。如果每个 batch 都主要由互不相关的场景组成，优化时很大一部分变化来自背景、对象和外观，细小动作差异容易被淹没。
 
-这篇论文的读法可以压成一句话：**世界模型不一定要替代真实环境，它也可以成为训练期的 advantage factory。**
+Task-centric batching 每次只从较小一部分任务采样，同时增加同任务、相近场景但动作不同的样本。它优先展示“世界差不多，动作变了，结果就应当变”的关系，使动作条件在预测中更有辨识度。[原文 §III-A](https://arxiv.org/pdf/2602.11075#page=4)
 
-## 总体方案
+这项设计改变的是 batch 采样结构。论文没有把它定义成新的 task-centric loss，也没有提出用空间遮罩删掉无关背景。报告中的消融能够检验该采样策略是否有用，不能把解释中的“过滤干扰”写成网络真的执行了显式背景过滤。
 
-![RISE overview](../../assets/images/paper-deep-dives/world-models/rise/figure-1-overview.png){ width="920" }
+### 预测频率和动作频率不能混为一个数字
 
-<small>图源：`RISE: Self-Improving Robot Policy with Compositional World Model`，Figure 1。原图展示 RISE 先在离线数据上训练组合式世界模型，再用 imagined rollout 产生 advantage 监督，最后更新 VLA policy。</small>
+附录给出具体实现。模型读取 3 个相机视角，每帧 $192\times256$；每次输入 4 帧历史，预测 25 帧。预训练视频采样频率为 30 Hz，任务微调为 15 Hz。它采用 flow matching，训练噪声时间来自 logit-normal 分布。
 
-**这张图怎么读：先看真实世界和想象世界的分工。**
-左侧真实世界提供离线示教、纠正和 policy rollout 数据；中间的 compositional world model 把 action-conditioned future prediction 和 progress evaluation 拆开；右侧 policy improvement 不直接消耗真实机器人交互，而是用 model-generated observations 和 value-estimated advantage 更新 VLA。
+$$
+\operatorname{logit}(s)\sim\mathcal N(0.2,1.0^2).
+$$
 
-图里的关键不是“生成了视频”，而是“生成的视频被立刻拿去评价动作”。如果只生成未来，不评价 progress，它只是视频模型；如果只训练 value，不预测动作后果，它无法对候选 action 做反事实判断。RISE 的贡献正是在两者之间搭了一个训练闭环。
+context noise level 为 $\sigma=0.2$，AdamW 学习率 $10^{-4}$，前 2K steps warm-up，随后保持常数。预训练与任务微调分别为 120K、50K steps；推理用 Euler solver，50 个 denoising steps。[原文 Appendix XI-B、Table VIII](https://arxiv.org/pdf/2602.11075#page=17)
 
-## Compositional World Model
+这里的 50 次去噪与策略 50 步动作是不同计数。控制器 30 Hz 下 50 个动作约覆盖 1.67 秒，微调视频 15 Hz 下 25 帧也约覆盖相同量级的时间。这个名义跨度有助于理解为何动作数量与预测帧数不同，具体重采样和对齐仍不能只凭概念公式 Eq. 1 推断成每个动作必有一个预测图像。
 
-论文把机器人观测写成多视角 observation：
+## 价值模型必须同时平滑和对失败敏感
 
-\[
-o_t = [m_t^1, \ldots, m_t^n],
-\qquad
-O_t = \{o_{t-C+1},\ldots,o_t\}.
-\]
+### 时间进度是一个稳定的起点
 
-策略给出一个 action chunk：
+价值网络从 π0.5 初始化，以保留机器人场景理解与多视角输入能力。它看到的是同一时刻的三视角观察和任务指令，输出一个标量。与重新训练一个泛用单图 VLM 相比，这种初始化直接匹配机器人的感知接口。
 
-\[
-a_t = [a_t,\ldots,a_{t+H-1}] \sim \pi(\cdot \mid o_t,l).
-\]
+第一步使用专家轨迹的归一化时间 $t/T$ 作为 progress 监督。
 
-dynamics model 负责预测未来观测：
+$$
+\mathcal L_{\mathrm{prog}}=
+\mathbb E_{(o_t,\ell)\sim\mathcal D_{\mathrm{exp}}}
+\left(V(o_t,\ell)-\frac{t}{T}\right)^2.
+$$
 
-\[
-\hat{o}_{t+1:t+H}=D(O_t,a_t).
-\]
+成功示范通常从未完成走向完成，因此时间比例提供便宜、稠密且有整体方向的训练目标。它无需逐帧手工标注任务进度，却依赖专家轨迹本身接近正确执行。[原文 Eq. 5](https://arxiv.org/pdf/2602.11075#page=5)
 
-value model 负责评价状态：
+问题是，时间晚并不代表状态好。拉链拉了更久，可能其实卡住；夹爪已经移动到箱子上方，积木可能根本没抓住。仅做 progress regression 容易输出平滑上升的值，无法区分这些细小但决定成败的变化。
 
-\[
-V(\hat{o}_{t+k},l).
-\]
+### TD 把成败结果传回中间状态
 
-然后 action advantage 被定义为未来进度均值相对当前进度的提升：
+第二条监督使用成功与失败轨迹。
 
-\[
-A(o_t,a_t,l)
-=
-\frac{1}{H}\sum_{k=1}^{H}V(\hat{o}_{t+k},l)-V(o_t,l).
-\]
+$$
+\mathcal L_{\mathrm{TD}}=
+\mathbb E_{(o_t,\ell,o_{t+1})\sim\mathcal D}
+\left(V(o_t,\ell)-y_t\right)^2,
+\qquad y_t=r_t+\gamma V(o_{t+1},\ell).
+$$
 
-这个公式是 RISE 的核心。它避开了两种极端：不要求 dynamics model 一直 rollout 到任务终点，也不要求 value model 单独判断一个动作是否好。动作的好坏来自“执行这段 action 后，平均未来状态是否比当前更接近成功”。
+中间步 $r_t=0$，成功结束给 $+1$，失败结束给 $-1$；附录中折扣 $\gamma=0.995$。最终目标为 $\mathcal L_V=\mathcal L_{\mathrm{prog}}+\mathcal L_{\mathrm{TD}}$。先训练 10K steps progress，再训练 40K steps 两项联合，让稳定的粗进度先形成，再加入对失败后果的区分。[原文 Eq. 6、Table IX](https://arxiv.org/pdf/2602.11075#page=17)
 
-![RISE compositional world model](../../assets/images/paper-deep-dives/world-models/rise/figure-4-cwm-workflow.png){ width="760" }
+原文没有在这个公式里展开 terminal masking、target network 或 stop-gradient 的实现细节，因此不能擅自补成某个特定 actor-critic 实现。可以明确的是，两类监督分别承担稠密结构与成败敏感性，并最终服务于想象状态排序。
 
-<small>图源：论文 Figure 4。原图展示 dynamics model 和 value model 如何组合成 advantage estimator。</small>
+Figure 14 的重点是绿色成功片段与红色失败片段附近的曲线，而不只是整体向上还是向下。抓空、未释放物体和盒盖卡住等细节，应该在值上产生相应变化。
 
-**这张图怎么读：Dynamics 给反事实，Value 给标尺。**
-上半部分的 dynamics model 接收当前多视角历史和 action proposal，产生 \(H\) 步未来观测；下半部分 value model 对每个 imagined frame 打 progress 分。把这些分数和当前状态比较，就得到用于 policy update 的 advantage。换句话说，world model 不输出动作，它输出“这段动作值得学到什么程度”。
+![Value predictions for success and subtle failure](../../assets/images/paper-deep-dives/world-models/rise/figure-14-value-prediction.png)
 
-## 可控动力学模型
+*原文 Figure 14。价值模型对成功分拣、稳定抓取和压盖给出增长信号，对抓空、未松手、盒盖卡住作出下降或停滞反应。*
 
-RISE 的 dynamics model 不是从零训练。论文从 Genie Envisioner GE-base 初始化，而 GE-base 继承 LTX-Video 架构。这样做的理由很工程化：通用视频模型已经有较强视觉和时序先验；机器人任务需要在这个底座上补动作条件，而不是重学所有低层纹理和运动。
+Figure 15 再把两种损失拆开。Progress-only 曲线更平滑，但在关键插入步骤附近辨别力弱；TD-only 更敏感，却在反复尝试时波动明显；联合训练在这组示例中兼顾两者。
 
-动作条件通过 lightweight action encoder 注入模型。为了让模型真的看动作，而不是只依赖视觉惯性，论文使用两类训练手段：
+![Progress and TD value learning ablation](../../assets/images/paper-deep-dives/world-models/rise/figure-15-value-ablation.png)
 
-| 设计 | 作用 |
-| --- | --- |
-| 大规模 action-labeled video pre-training | 在 AgiBot World、Galaxea 等数据上学习动作和视觉变化的关系 |
-| Task-Centric Batching | 一个 batch 覆盖较少任务，但包含同任务内更多不同动作样本，强化 action controllability |
-| context frames stronger noise | 减少模型对条件帧复制的依赖，逼迫它使用动作信息预测未来 |
-| task-specific fine-tuning | 把通用动作动态适配到 Dynamic Brick Sorting、Backpack Packing、Box Closing 等任务 |
+*原文 Figure 15。绿色区段对应有利行为，灰色区段对应重试。比较的是状态判断的反应与稳定性，图中曲线本身不是价值校准误差统计。*
 
-论文还把速度作为现实约束来讨论。它报告 Cosmos 对 25 个多视角 future observations 的生成耗时超过 10 分钟，而 GE-base 小于 2 秒，约 300 倍加速。这个数字的意义不只是快，而是 imagined rollout 需要反复发生；如果每个候选动作都要分钟级生成，训练闭环就不可用。
+这些定性例子说明损失分工有实际对应，后面的策略消融再检验价值差异是否影响任务成功。它们仍不证明每个想象画面的分数都正确，特别是生成器产生训练数据中罕见的物理错误时，价值模型也可能误判。
 
-核心训练配置如下：
+## 优势条件化怎样替代直接优化每个动作的似然比
 
-| 项目 | 设置 |
-| --- | --- |
-| 观测 | 3 个视角，多视角 RGB，约 \(192 \times 256\) |
-| 输入 / 预测帧 | 4 / 25 |
-| 目标 | Flow Matching，logit-normal timestep schedule |
-| 采样 | Euler solver，50 denoising steps |
-| 预训练 | 16 张 H100，global batch 512，约 7 天 |
-| 任务微调 | 8 张 H100，global batch 64，约 3 天 |
-| 学习率 | AdamW，\(1\times10^{-4}\)，2k warm-up |
+RISE 延续 RECAP 类方法，将策略学习写成对高优势行为的条件生成。设 $\pi_{\mathrm{ref}}$ 为参考策略，$I$ 表示改善事件，目标分布按优势相关的改善概率加权。
 
-这里要注意一个边界：dynamics model 的质量直接决定 imagined advantage 的可靠性。视频越逼真不一定越适合 RL；更关键的是对动作的反事实敏感性，以及错误是否会系统性误导 value model。
+$$
+\hat\pi(\mathbf a_t\mid o_t,\ell)
+\propto \pi_{\mathrm{ref}}(\mathbf a_t\mid o_t,\ell)
+\,p\!\left(I\mid A^{\pi_{\mathrm{ref}}}(o_t,\mathbf a_t,\ell)\right)^\beta.
+$$
 
-## Progress Value Model
+因为改善判断通过动作优势决定，Bayes 关系把改善概率写成条件与非条件策略的密度比。
 
-RISE 的 value model 从 \(\pi_{0.5}\) 初始化，而不是从普通图像 encoder 开始。这样它继承了 VLA 对任务语言、物体和操作进度的理解。输入是多视角 observation 和语言指令，输出是一个标量 progress / value。
+$$
+p(I\mid\mathbf a_t,o_t,\ell)
+\propto
+\frac{\pi_{\mathrm{ref}}(\mathbf a_t\mid I,o_t,\ell)\,
+ p(I\mid o_t,\ell)}
+{\pi_{\mathrm{ref}}(\mathbf a_t\mid o_t,\ell)}.
+$$
 
-训练目标有两部分。第一部分是 progress loss，把轨迹中的时间位置映射到归一化进度：
+取 $\beta=1$，参考策略的无条件项相消，$p(I\mid o_t,\ell)$ 对动作固定，可以并入归一化常数，得到按改善条件生成动作的目标。论文实际将优势离散成档位，用档位作为策略输入；部署时请求高档位，就偏向训练中与高优势相对应的动作。[原文 Eq. 3–4](https://arxiv.org/pdf/2602.11075#page=3)
 
-\[
-\mathcal{L}_{prog}
-=
-\mathbb{E}\left[(V(o_t,l)-t/T)^2\right].
-\]
+这个推导解释了为什么可以在通用 flow-matching 动作训练框架中学习，而无需为策略每一步去噪专门建立 PPO 的概率比优化。它没有证明学到的高档位在真实世界一定改进，因为优势估计、生成动力学和条件策略拟合都可能有误差。
 
-第二部分是 TD loss，用成功 / 失败终端信号让 value 对真实结果敏感：
+还有一个关键点，低质量动作不必全部丢掉。它们带着低优势标签进入训练，让模型学到不同质量条件下的行为差异；如果把所有动作都标成最高档，再请求高档位，就失去了这种区分。
 
-\[
-\mathcal{L}_{TD}
-=
-\mathbb{E}\left[(V(o_t,l)-y_t)^2\right],
-\qquad
-y_t=r_t+\gamma V(o_{t+1},l).
-\]
+## Warm-up 先建立动作基础，也建立优势条件的含义
 
-其中中间步奖励为 0，成功终止为 \(+1\)，失败终止为 \(-1\)。最终目标是：
+策略从预训练 π0.5 出发，在目标任务离线数据上 warm-up。数据包括专家示范、旧策略的成功与失败 rollout，以及人工接管纠错。研究者希望先得到物理上可行的行为基础，再开始用世界模型扩大探索。
 
-\[
-\mathcal{L}_V=\mathcal{L}_{prog}+\mathcal{L}_{TD}.
-\]
+标签分配没有对所有来源一视同仁。策略 rollout 使用真实记录中的未来帧，通过价值模型和 Eq. 2 计算优势；专家示范与人工纠错直接赋最优标签 1。作者早期实验发现，连专家数据都用学到的价值重新标注，结果比只标 rollout 更差。[原文 §III-B](https://arxiv.org/pdf/2602.11075#page=5)
 
-这两个 loss 的互补性很重要。progress loss 稳定、密集，但可能把失败轨迹也当成“时间在前进”；TD loss 能感知成功 / 失败，但在稀疏信号下更容易不稳定。附录中的 value ablation 也显示，单独 progress 更平滑但不够敏感，单独 TD 更敏感但波动更大，组合后才适合给 imagined states 打分。
+附录还指出两点与 RECAP 实践的差别。RISE 将优势分成 10 个均匀区间，而原始 RECAP 方法采用二元分档；同时，RISE 的 π0.5 起点没有经过 π0.6 那样的 advantage-conditioned pre-training，所以最高档专家锚点对学习条件接口更重要。[原文 Appendix XI-D](https://arxiv.org/pdf/2602.11075#page=16)
 
-value model 训练配置：
+这里的“最优标签 1”是一项训练约定，并不表示专家每个动作都在任意物理状态下有理论最大优势。它把人类示范用作高质量参考，同时让失败 rollout 教会模型低质量行为的样子。
 
-| 项目 | 设置 |
-| --- | --- |
-| 初始化 | \(\pi_{0.5}\) |
-| 输入 | 1 帧、3 视角 observation |
-| 训练步数 | 50k steps |
-| 损失 schedule | 前 10k 只用 progress，后 40k 加 TD |
-| Batch / GPU | batch 64，8 张 GPU，约 1 天 |
-| 折扣因子 | \(\gamma=0.995\) |
-| 学习率 | AdamW，\(2.5\times10^{-5}\) |
+## 自改进闭环更新策略，世界模型保持冻结
 
-## Policy Warm-up 与 Self-Improving Loop
+Figure 5 需要沿上下两条路径看。上方 rollout 先请求好动作，再评价实际想象后果；下方训练使用评价得到的档位，而不是把请求时的高档位原封不动保存成标签。
 
-RISE 不是一开始就把策略丢进想象环境。它先做离线 warm-up，数据包括专家示教、policy rollout、失败轨迹和人类纠正。专家示教和纠正数据被配上 optimal advantage；rollout 数据则由 value model 估计 advantage。这样 policy 先学会“advantage 条件和动作质量之间的关系”。
+![Online imagination and advantage-conditioned policy training](../../assets/images/paper-deep-dives/world-models/rise/figure-5-self-improving-loop.png){ width="760" }
 
-随后进入 imagined self-improving loop：
+*原文 Figure 5。Prompted Advantage 表达期望，Evaluated Advantage 表达世界模型对这次动作的评价，两者在训练数据中承担不同角色。*
 
-1. 从离线数据中采样一个真实初始状态；
-2. rollout policy 以 optimal advantage 为条件提出 action chunk；
-3. dynamics model 根据真实历史和候选 action 生成未来多视角观测；
-4. value model 对 imagined observations 打分，得到 evaluated advantage；
-5. 将 advantage 离散成 bins，用作 policy 训练条件；
-6. 训练 policy 在给定 observation 和 evaluated advantage 时复现对应 action。
+一次迭代先从离线数据抽取初始观察，rollout policy 在优势条件 1 下提出动作。
 
-![RISE self-improving loop](../../assets/images/paper-deep-dives/world-models/rise/figure-5-self-improving-loop.png){ width="760" }
+$$
+\hat{\mathbf a}_t=\pi_{\mathrm{rollout}}(1,o_t,\ell).
+$$
 
-<small>图源：论文 Figure 5。原图展示 rollout stage 和 training stage 如何交替生成 imagined rollout data 并更新 VLA。</small>
+动力学接收历史与动作，产生未来观察；价值模型再计算实际优势，将它分入 10 档。系统保存 $(o_t,\hat{\mathbf a}_t,A_t)$，让行为策略在条件 $A_t$ 下学习生成这一动作，采用原有 flow-matching 训练准则。[原文 Eq. 7–8](https://arxiv.org/pdf/2602.11075#page=5)
 
-**这张图怎么读：上半部分生产数据，下半部分消费数据。**
-上半部分中，rollout policy 被“高 advantage”提示，先提出动作，再交给 compositional world model 评价；下半部分中，训练 policy 不追求永远输出高 advantage 动作，而是学习“给定某个 advantage 条件时，该动作是什么”。这种 advantage-conditioned imitation 让 policy 能吸收 imagined rollout 的排序信息。
+因此“请求高优势”不等于这次动作已经被认证为高优势。策略仍可能分错箱子或让拉链卡住，评价器会把这种动作分到较低档。反向训练使用的是被评价的标签，能够保留探索失败提供的信息。
 
-论文还做了两个保守设计。第一，rollout policy 是 behavior policy 的 EMA 版本，避免数据分布剧烈抖动。第二，连续 imagined interaction 最多两次，防止 dynamics error 经过多轮生成后放大。也就是说，RISE 的 imagined RL 是短程、锚定真实状态的，不是完全脱离真实数据的开放式梦境训练。
+RISE 还让生成状态成为下一次 rollout 的输入。仅在固定离线观察上换动作，主要扩展动作分布；继续从自己的后果出发，才会进入示范里没有出现的状态，学习偏离后的行为。每个离线起点最多连续交互两次，限制生成误差积累，而非无限滚动到任务成功。
 
-## 数据、机器人与训练配置
+rollout policy 通过行为策略参数的 EMA 更新，decay 为 0.995；训练 batch 继续混入离线标签数据，保留真实行为锚点。动力学与价值模块在整个自改进阶段冻结，更新对象是策略，不能把“self-improving”写成三个模型一起持续自我训练。[原文 Appendix XI-C–D、Table X](https://arxiv.org/pdf/2602.11075#page=17)
 
-三个任务都是真实双臂平台上的操作任务：
+这也不同于将视频预测和价值梯度端到端穿过世界模型直接优化动作。论文描述的接口是生成轨迹、评价优势、离散标注、条件训练；它依赖样本与标签传递学习信号。
 
-| 任务 | 数据规模 | 主要难点 |
-| --- | --- | --- |
-| Dynamic Brick Sorting | 3063 条人工示教 + 610 条 policy rollout | 动态积木、抓取滑动、分类和投放误差 |
-| Backpack Packing | 2478 条人工示教 + 507 条 policy rollout | 软物体、包内空间、拉链和遮挡 |
-| Box Closing | 2286 条人工示教 + 524 条 rollout + 540 条人类纠正 | 盒盖对齐、物体装载完整性、插舌和形变 |
+## 同一起点的成功和失败，必须由动力学与价值同时区分
 
-硬件和控制接口也会影响读数。论文使用双臂机器人平台，腕部相机加 top-down camera，多视角 RGB 进入模型。VLA 输出长度为 50 的 action chunk，action dimension 为 14；底层控制器以约 30 Hz 执行 joint commands，并用 Temporal Ensembling 平滑新旧 action chunk。
+Figure 16 将组合式设计放在一个具体例子里检验。起点是左手已经抓住蓝色积木，后续既可以放进蓝色箱，也可以误放进黄色箱。
 
-这些细节说明 RISE 的提升不是纯算法闭门造车。它依赖一整套真实数据、视频动力学、value learning 和动作块执行机制。世界模型在部署时没有额外 inference overhead，但训练它本身并不便宜。
+![Different imagined actions and their value trajectories](../../assets/images/paper-deep-dives/world-models/rise/figure-16-imagination-values.png)
 
-## 实验与结论
+*原文 Figure 16。第一行为专家轨迹，第二行为正确想象 rollout，第三行为错误 rollout；右侧曲线显示动作后果获得的学习信号。*
 
-主实验最直接的结论是：RISE 在三个任务上都比 \(\pi_{0.5}\)、DAgger、PPO、DSRL 和 RECAP 更高。
+正确轨迹中的机械臂接近蓝色箱子，评价随任务推进改善；错误轨迹在拿起积木时仍可能获得积极变化，但转向错误箱子后评价降低。图中所谓 reward curve 是模型产生的评价信号，不能当成外部真实奖励的逐帧人工标注。
 
-| 方法 | Dynamic Brick Sorting Success / Score | Backpack Packing Success / Score | Box Closing Success / Score |
-| --- | --- | --- | --- |
-| \(\pi_{0.5}\) | 35.00 / 8.28 | 30.00 / 4.25 | 35.00 / 7.50 |
-| \(\pi_{0.5}\) + DAgger | 15.00 / 6.10 | 50.00 / 7.00 | 40.00 / 7.50 |
-| \(\pi_{0.5}\) + PPO | 10.00 / 7.68 | 35.00 / 5.88 | 10.00 / 4.75 |
-| \(\pi_{0.5}\) + DSRL | 10.00 / 6.65 | 10.00 / 3.50 | 10.00 / 7.63 |
-| RECAP | 50.00 / 9.00 | 40.00 / 6.13 | 60.00 / 8.13 |
-| RISE | **85.00 / 9.78** | **85.00 / 9.50** | **95.00 / 9.88** |
+这个例子的价值在于把抓取与分拣分开。若动力学不能跟随动作，两条轨迹可能都生成“正确放置”；若价值只看抓取进度，两条轨迹都可能高分。组合模型只有同时保持动作差异与任务语义差异，才会给策略提供有效的改进标签。[原文 Appendix XIII](https://arxiv.org/pdf/2602.11075#page=18)
 
-表格怎么读：RISE 的优势不只是 score 更高，而是 success rate 在三个任务上都出现大幅提升。PPO / DSRL 在这些真实任务上反而很弱，说明直接套真实机器人 RL 或离线 RL baseline 并不能自动解决 VLA 的分布偏移。RISE 的改进来自“动作后果预测 + 进度评价 + advantage-conditioned policy update”这一整套闭环。
+## 三项真实任务怎样测量，机器人又如何执行动作块
 
-### 消融：offline ratio
+实验使用双臂 AgileX 平台，顶部相机提供全局观察，两只腕部相机补充局部接触视角。主文将每侧概括为 7-DoF，附录 Figure 11 进一步注明是每侧 6-DoF arm 加 1-DoF gripper，两侧合计 14 维动作，并非两只各有七个机械臂关节的机器人。
 
-论文在一个子任务设置里改变 offline data ratio。结果显示，真实数据锚点太少时，imagined learning 很不稳；ratio 提高后 pick / sort / complete 整体变好，但不是越高越单调。
+![RISE bimanual robot and three-camera setup](../../assets/images/paper-deep-dives/world-models/rise/figure-11-robot-setup.png)
 
-| Offline ratio | Pick Success | Sort Accuracy | Complete Success | Score |
-| --- | ---: | ---: | ---: | ---: |
+*原文 Figure 11。顶部相机高约 0.75 m；积木与背包使用 Gripper A，关盒使用更适合精细操作的 Gripper B。*
+
+控制使用绝对关节命令。VLA 在较低推理频率下预测 $H=50$ 步动作，控制器以 30 Hz 执行。新块到达时，与 buffer 中尚未执行的旧动作重叠，采用时间变化的线性权重进行 temporal ensembling，重叠前段偏重旧计划以保证连续，后段逐渐偏向新计划以响应最新观察。[原文 Appendix X-B](https://arxiv.org/pdf/2602.11075#page=15)
+
+因此 30 Hz 是低层命令执行频率，不能写成 VLA 每秒进行 30 次完整推理。异步融合仍是部署系统的一部分；“世界模型没有推理额外开销”也不表示动作生成和控制调度没有成本。
+
+三个任务分别检验不同困难。Dynamic Brick Sorting 在运行中的传送带上抓取积木，并放到颜色匹配的箱子；Backpack Packing 要打开背包、放入衣物、提起整理，再拉上拉链；Box Closing 要装入杯子、折好盒盖并将锁片插入。所有结果按 20 次自主试验统计，另外记录满分 10 分的阶段分数。
+
+| Task | Stage-wise scoring rule | 完成条件的含义 |
+|---|---|---|
+| Conveyor / Dynamic Brick Sorting | 每次抓住积木 1.0；放入匹配箱子再计 1.5；总分上限 10 | 抓取与正确分拣分别评价 |
+| Backpack Packing | 打开并放入物品 2.5；提起整理累计 5.0；拉链一半累计 7.5；完全拉好累计 10.0 | 后面的柔性物体操作决定完整成功 |
+| Box Closing | 装杯累计 2.5；折侧翼累计 5.0；折后盖累计 7.5；锁片插入累计 10.0 | 精细对齐和插入是最后一关 |
+
+*原文 Table VII。背包和盒子的数值是累计里程碑分数，不能将 2.5、5、7.5、10 相加成总分。*
+
+这种评分能区分完全失败、部分完成和最终成功。比如抓取大多正确但颜色分错，会有较高抓放率却较低完整成功；盒盖折好但锁片没进去，也可能得到较高阶段分数。完整成功率与阶段分数需要一起读。[原文 Appendix X-A](https://arxiv.org/pdf/2602.11075#page=15)
+
+## 真实数据仍是整个闭环的基础
+
+RISE 没有在自改进阶段继续进行大量物理试错，但在开始前使用了相当数量的目标任务数据。
+
+| Task | Human demonstrations | Policy rollouts | Human corrections explicitly listed |
+|---|---:|---:|---:|
+| Dynamic Brick Sorting | 3,063 | 610 | 本表未另列数量 |
+| Backpack Packing | 2,478 | 507 | 本表未另列数量 |
+| Box Closing | 2,286 | 524 | 540 |
+
+*原文 Appendix XI-A 的数据条目数；策略 rollout 包含成功与失败，不能全部计为成功示范。*
+
+动力学和价值模型使用相同任务的专家与 rollout 数据，策略训练另外纳入 DAgger 纠错经验。它改变了新增探索数据的获取方式，并没有取消真实数据对视觉、动作和价值的锚定作用。[原文 §III-D](https://arxiv.org/pdf/2602.11075#page=6)
+
+各基线都从 π0.5 初始化，但数据与训练方式按方法而异。纯 π0.5 只做专家示范模仿；DAgger 增加人类纠错；PPO 使用真实 rollout 的噪声、log probabilities 与优势做策略更新；DSRL 冻结基础 VLA，优化输入噪声，先用 10 条基础策略轨迹初始化，再进行 70 个 online steering episodes。[原文 Appendix XI-E](https://arxiv.org/pdf/2602.11075#page=16)
+
+DAgger 还受硬件切换约束，采用单次接管协议，人类在即将失败时接手并完成本回合。因此这个基线不是任意频繁切换的人机共同控制。RECAP 因原 π0.6 不可用，在相同 π0.5 骨干上重建，使用与 RISE 对应的离线语料和 warm-up 配方。结果反映这些实现条件下的 post-training 方法差异，不能直接当作官方 π0.6 系统的比较。
+
+## 主结果显示大幅提升，但并非每种在线 RL 都自然受益
+
+| Method | Brick Sorting Succ. (%) | Brick Score | Backpack Succ. (%) | Backpack Score | Box Closing Succ. (%) | Box Score |
+|---|---:|---:|---:|---:|---:|---:|
+| π0.5 | 35.00 | 8.28 | 30.00 | 4.25 | 35.00 | 7.50 |
+| π0.5 + DAgger | 15.00 | 6.10 | 50.00 | 7.00 | 40.00 | 7.50 |
+| π0.5 + PPO | 10.00 | 7.68 | 35.00 | 5.88 | 10.00 | 4.75 |
+| π0.5 + DSRL | 10.00 | 6.65 | 10.00 | 3.50 | 10.00 | 7.63 |
+| RECAP on π0.5 | 50.00 | 9.00 | 40.00 | 6.13 | 60.00 | 8.13 |
+| **RISE** | **85.00** | **9.78** | **85.00** | **9.50** | **95.00** | **9.88** |
+
+*原文 Table I。Success 是整项任务成功，Score 满分为 10。*
+
+相对 RECAP，RISE 在三项任务的提升分别为 $85-50=35$、$85-40=45$、$95-60=35$ 个百分点。原文正文把背包提升概括为 40%，与 Table I、摘要和 Figure 1 的 45 个百分点不一致；这里按表格可复算的值解释。[原文 §IV-B](https://arxiv.org/pdf/2602.11075#page=6)
+
+成绩还说明，不是加入一个“在线 RL”标签就必然改进。PPO 和 DSRL 在积木任务都从基础策略的 35% 降到 10%，DAgger 在同一任务也下降，但在背包上提高。接触丰富任务中的稳定优化、纠错数据分布和反馈质量，会改变方法是否有效。这些结果不能扩大为 PPO 或 DAgger 在所有机器人任务上都不适用。
+
+RISE 的阶段分数接近 10，表明完整成功增加的同时，失败回合也往往推进到较后阶段。20 次试验意味着一回合对应 5 个完整成功率百分点，95% 是这组评估中接近全成功，仍不等于长期部署零故障。论文未报告多随机种子置信区间，不能将点估计差异解释为已经完成严格显著性检验。
+
+## 在线动作与在线状态的消融揭示了收益来自哪里
+
+主表展示完整方法，Table III 则在动态积木任务中分离在线数据的两个维度。只生成新动作，状态仍来自离线集合；动作与状态一起在线扩展，才包含策略自身进入的新情境。
+
+| Online Action | Online State | Pick & Place Succ. (%) | Sort Acc. (%) | Complete Succ. (%) | Score |
+|---|---|---:|---:|---:|---:|
+| No | No | 80.00 | 76.56 | 35.00 | 6.98 |
+| Yes | No | 96.25 | 84.42 | 40.00 | 8.73 |
+| Yes | Yes | **98.75** | **92.41** | **70.00** | **9.43** |
+
+*原文 Table III。这里的 online 指与学到的世界模型交互，不能写成三种配置都新增了同样数量的真实机器人在线数据。*
+
+新动作首先明显改善抓放和分拣，完整成功率却只从 35% 增到 40%。继续让想象状态进入下一次决策后，完整成功增至 70%。这支持状态分布扩展的重要性，策略需要学会处理自己导致的后果，而不只是给原始示范观察增加不同动作标签。[原文 §IV-C](https://arxiv.org/pdf/2602.11075#page=7)
+
+Table III 的完整配置是 70%，主表是 85%。论文没有把两张表设成可直接逐项相减的统一贡献分解，因此不能拿主表 85% 减去这里的单项结果，声称某模块贡献了对应百分点。正确比较在同一消融表内部完成。
+
+## 保留多少真实数据，有一个任务相关的折中
+
+| Offline data ratio | Pick & Place Succ. (%) | Sort Acc. (%) | Complete Succ. (%) | Score |
+|---|---:|---:|---:|---:|
 | 0.1 | 15.00 | 83.33 | 5.00 | 1.35 |
 | 0.3 | 78.75 | 80.95 | 25.00 | 7.03 |
-| 0.6 | 90.00 | 87.50 | 50.00 | 8.32 |
+| **0.6** | **90.00** | **87.50** | **50.00** | **8.32** |
 | 0.9 | 90.00 | 80.56 | 30.00 | 7.90 |
 
-读数边界：这张表不是说 0.6 是通用最优比例，而是说明 RISE 的 imagined data 需要真实数据约束。offline anchor 太低，world model 和 policy 都容易偏离真实状态分布；offline anchor 太高，policy improvement 的探索和在线想象比例又可能不足。
+*原文 Table II。比例指训练 batch 中离线数据占比。*
 
-### 消融：online action 与 online state
+离线占比 0.1 时，完整成功只剩 5%，抓放率也大幅下降，与大量想象数据造成行为分布偏移的解释相符。提高到 0.6 后最好；继续提高到 0.9，则限制新经验的影响，完整成功回落到 30%。[原文 §IV-C](https://arxiv.org/pdf/2602.11075#page=7)
 
-| 设置 | Pick Success | Sort Accuracy | Complete Success | Score |
-| --- | ---: | ---: | ---: | ---: |
-| None | 80.00 | 76.56 | 35.00 | 6.98 |
-| + online action | 96.25 | 84.42 | 40.00 | 8.73 |
-| + online action + online state | **98.75** | **92.41** | **70.00** | **9.43** |
+这张表支持真实数据锚定与想象探索之间需要平衡，但没有验证一个跨任务通用的 0.6 最优定律。它的最佳完整成功为 50%，与 Table III 的 70% 以及主表 85% 属于不同报告组，不能把它们拼成同一训练过程的连续提升曲线。
 
-这个消融说明，RISE 不只是把离线数据重新标分。让 rollout policy 生成新 action，并把 imagined state 接入后续训练，能显著提高策略看到的状态-动作组合。但论文同时限制 consecutive imagined interaction，说明这种收益建立在短程想象和真实状态锚定上。
+低离线占比一行的 Sort Acc. 仍有 83.33%，并不能抵消抓放率仅 15% 的问题。这说明分项率与完整成功的分母和事件条件不同；原文没有在此明确给出 Sort Acc. 的完整计数公式，不宜自行将其乘法关系当成正式指标定义。
 
-### 消融：模块贡献
+## 模块消融让抓取能力与任务判断分开显现
 
-| 去掉的模块 | Pick Success | Sort Accuracy | Complete Success | Score |
-| --- | ---: | ---: | ---: | ---: |
-| Dynamics w/o Pre-train | 97.50 | 60.26 | 15.00 | 7.43 |
-| Dynamics w/o Task-Centric | 93.75 | 89.33 | 40.00 | 8.78 |
-| Value w/o Progress | 95.00 | 86.84 | 50.00 | 8.78 |
-| Value w/o TD Learning | 98.75 | 72.15 | 35.00 | 8.38 |
-| RISE all | **98.75** | **92.41** | **70.00** | **9.43** |
+| Module variant | Pick & Place Succ. (%) | Sort Acc. (%) | Complete Succ. (%) | Score |
+|---|---:|---:|---:|---:|
+| Dynamics — w/o Pre-train | 97.50 | 60.26 | 15.00 | 7.43 |
+| Dynamics — w/o Task-Centric | 93.75 | 89.33 | 40.00 | 8.78 |
+| Value — w/o Progress | 95.00 | 86.84 | 50.00 | 8.78 |
+| Value — w/o TD Learning | 98.75 | 72.15 | 35.00 | 8.38 |
+| **RISE with all designs** | **98.75** | **92.41** | **70.00** | **9.43** |
 
-这张表最有信息量的是 complete success。很多 ablation 仍能 pick 成功，但很难完成完整任务。这说明 RISE 的关键不是局部动作更像示教，而是让 value 和 dynamics 一起约束多步任务进度。
+*原文 Table IV。各项消融在动态积木分拣中比较，完整配置与 Table III 相同。*
 
-## Dynamics Model 的质量证据
+去掉动力学预训练，完整成功降至 15%，尽管抓放仍有 97.5%。说明视频环境提供的训练信号不只影响机械动作是否完成，也影响动作后果与任务语义能否正确联系。这里的 w/o Pre-train 是移除报告的动力学预训练阶段，不应顺手解释为模型完全随机初始化、没有 GE 基础先验。
 
-论文除了真实任务结果，还比较了 dynamics model 的预测质量。
+去掉 task-centric batching，完整成功为 40%，低于完整配置 30 个百分点，支持控制相关的数据组织有实际策略价值。价值侧去掉 progress 后为 50%，去掉 TD 后为 35%，分别呼应稠密结构与失败敏感性。[原文 §IV-C](https://arxiv.org/pdf/2602.11075#page=8)
 
-![RISE dynamics comparison](../../assets/images/paper-deep-dives/world-models/rise/figure-6-dynamics-comparison.png){ width="760" }
+最有解释力的是无 TD 行，抓放率与完整模型同为 98.75%，分拣准确率却从 92.41% 降到 72.15%。如果只看机械臂有没有把积木拿起来，两个系统似乎差不多；加入正确目标判断之后，完整任务差距就显现出来。这为“仅按时间进度评分不够”提供了策略层面的证据。
 
-<small>图源：论文 Figure 6。原图展示 Cosmos、Genie Envisioner、RISE dynamics 等模型在不同视角和时间步的未来预测可视化。</small>
+这些消融一次改变一个训练组件，能支持每项在当前系统中的作用。它们的差值不能相加，因为多个组件共同决定同一批数据与策略的行为，收益并不独立。
 
-**这张图怎么读：看动作后的局部物理变化，不只看画面清晰度。**
-用于 RISE 的 dynamics model 需要预测手、物体和容器随动作变化的细节。图中如果只看背景纹理，很容易高估模型；真正应该看的是抓取位置、物体移动方向、遮挡恢复和接触后的形变是否跟 action 一致。
+## 更像真实视频与更适合控制，有时会给出不同排序
 
-定量指标上，RISE dynamics 在真实机器人任务数据和 Bridge 数据上整体优于 Cosmos 与 GE。一个值得保留的细节是：在真实任务 Experiment #1 中，RISE w/o Task-Centric 的 FVD 数值比 full RISE 更低，但 full RISE 在 PSNR、LPIPS、SSIM 和 EPE 上更好。也就是说，生成指标之间并不完全一致，最终仍要看 imagined advantage 能否带来 policy improvement。
+Figure 6 对比同一任务中的真实后果与模型预测。应先看手、夹爪、物体是否出现在动作要求的位置，再看清晰度和局部纹理。一个细节丰富但让机械臂走错方向的片段，不能作为可靠的强化学习环境。
 
-| 模型 | PSNR | LPIPS ↓ | SSIM | FVD ↓ | EPE ↓ |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Cosmos | 21.17 | 0.14 | 0.79 | 97.90 | 1.21 |
-| GE | 21.16 | 0.11 | 0.79 | 85.72 | 1.05 |
-| RISE w/o Task-Centric | 22.67 | 0.08 | 0.80 | **61.22** | 0.68 |
-| RISE | **23.90** | **0.07** | **0.82** | 66.84 | **0.54** |
+![Dynamics models compared against ground truth](../../assets/images/paper-deep-dives/world-models/rise/figure-6-dynamics-comparison.png){ width="760" }
 
-表格怎么读：PSNR / LPIPS / SSIM 更偏视觉重建质量，FVD 更偏分布级视频质量，EPE 更关心运动误差。机器人 world model 要同时关心这些，但最终价值不是“视频指标最好”，而是“动作条件未来足够可靠，可以训练策略”。
+*原文 Figure 6。对比包括动作不一致、模糊和几何失真；原图的错误标记来自作者对这些示例的分析。*
 
-## 和扩散生成路线的关系
+量化表进一步把像素、感知、分布与运动指标放在一起。
 
-RISE 的 dynamics model 属于视频生成模型路线，训练目标使用 flow matching，采样用多步 solver；因此它和 [Wan2.1](../diffusion/wan.md)、[Diffusion Forcing](../diffusion/diffusion-forcing.md)、[CausVid](../diffusion/causvid.md) 这类视频扩散工作有技术联系。
+| Dataset / Method | PSNR ↑ | LPIPS ↓ | SSIM ↑ | FVD ↓ | EPE ↓ |
+|---|---:|---:|---:|---:|---:|
+| Target tasks / Cosmos | 21.17 | 0.14 | 0.79 | 97.90 | 1.21 |
+| Target tasks / GE | 21.16 | 0.11 | 0.79 | 85.72 | 1.05 |
+| Target tasks / RISE w/o Task-Centric | 22.67 | 0.08 | 0.80 | **61.22** | 0.68 |
+| Target tasks / RISE | **23.90** | **0.07** | **0.82** | 66.84 | **0.54** |
+| Bridge / Cosmos | 21.32 | 0.14 | 0.80 | 73.21 | 1.18 |
+| Bridge / GE | 21.47 | 0.12 | 0.79 | 64.55 | 0.96 |
+| Bridge / RISE w/o Task-Centric | 22.61 | **0.10** | 0.78 | 49.07 | 0.72 |
+| Bridge / RISE | **23.68** | **0.10** | **0.82** | **45.21** | **0.64** |
 
-但 RISE 的研究问题更接近世界模型和机器人学习。扩散生成论文通常关心更清晰、更长、更快的视频；RISE 关心的是这些视频能否承载 action-conditioned counterfactual，并通过 value model 转成 policy gradient 近似信号。它提醒我们：世界模型的生成质量不能只靠 FVD 或 LPIPS 判断，还要看生成结果是否能改变决策。
+*原文 Table V。上、下两组分别在目标任务与 Bridge 上微调后比较，不能混成一个数据集排行榜。*
 
-更具体地说，RISE 把视频生成模块接进了三层机器人闭环：
+目标任务中，完整 RISE 的 EPE 从 GE 的 1.05 降到 0.54，PSNR 从 21.16 升到 23.90。EPE 是光流 endpoint error，反映视觉运动与真实视频的差异，不是机械臂关节角误差，也不能直接当作接触力精度。
 
-| 层级 | 生成模型提供什么 | 机器人学习需要什么 |
-| --- | --- | --- |
-| 表示层 | 多视角未来观测 | 保留接触、抓取、物体位姿和任务相关状态 |
-| 反事实层 | 同一历史下不同动作的未来分叉 | action controllability，而不是平均未来 |
-| 优化层 | imagined observations | progress value 评价后形成 advantage |
+反例出现在 FVD。去掉 task-centric 的模型为 61.22，比完整模型 66.84 更低，但它的 EPE 更差，策略完整成功率也只有 40% 而非 70%。因此 FVD 单项更好并不足以证明模型更适合控制。任务学习关心的是同一条件动作下的正确后果，视觉分布质量无法完全替代这项要求。[原文 Table IV–V](https://arxiv.org/pdf/2602.11075#page=7)
 
-这也是它比“生成视频辅助机器人”更进一步的地方：视频不是展示用结果，而是 policy update 的中间证据。
+Bridge 上完整模型同时改善 FVD 与 EPE，但 LPIPS 与去掉 task-centric 的版本同为 0.10。不能把论文概括的“更好”写成每一列都严格领先。附录 Table VI 还显示，省略动力学预训练时 EPE 为 1.09、FVD 为 83.36，完整模型分别为 0.54、66.84，与额外机器人预训练有助于后续环境预测的结论一致。[原文 Appendix IX](https://arxiv.org/pdf/2602.11075#page=14)
 
-## 局限与风险
+## 优势档位确实改变行为，延长基线训练也未追平
 
-RISE 的局限不小，主要有六类。
+条件策略学好之后，输入不同档位应产生可观察的行为差异。Figure 7 固定已经学到的策略，分别请求高档 Bin 10、中间 Bin 5 与低档 Bin 1。
 
-第一，world model error 会进入 policy update。论文通过短 rollout、真实数据混合和 EMA rollout policy 缓解，但没有消除错误累积。第二，value model 在罕见失败状态上可能给错分，尤其是软物体、遮挡和接触变形场景。第三，任务范围仍是三个真实双臂操作任务，不能直接推出开放世界所有机器人任务都适用。
+![Task performance under different advantage bins](../../assets/images/paper-deep-dives/world-models/rise/figure-7-advantage-bins.png)
 
-第四，训练成本高。dynamics pre-training 和 fine-tuning 都需要多张 H100，RISE 只是部署时没有额外 world model inference overhead，不是训练免费。第五，它仍需要任务相关 offline data，包括示教、policy rollout 和人类纠正。第六，论文没有证明长 horizon imagined RL 可以无限延伸；相反，作者明确限制连续想象次数，说明当前方法更适合短程 advantage estimation。
+*原文 Figure 7。三组柱分别为 Pick & Place、Sort、Complete，不能只看抓放率就判断优势条件是否有效。*
 
-这些边界并不削弱论文价值，反而说明它的工程姿态很务实：先让世界模型在短程、可评价、真实状态锚定的区域里产生收益，而不是宣称一个生成模型可以完整替代真实环境。
+| Prompted bin | Pick & Place (%) | Sort (%) | Complete (%) |
+|---|---:|---:|---:|
+| 10 | 100.00 | 95.25 | 85.00 |
+| 5 | 95.00 | 90.79 | 60.00 |
+| 1 | 93.75 | 84.00 | 40.00 |
 
-## 主要贡献
+抓放从 100% 降到 93.75%，完整成功却从 85% 降到 40%，差异主要表现为分拣选择与整体稳定性。它支持档位确实关联不同质量的行为，而不是模型忽略了优势输入；仍不能据此证明档位数值与真实收益已经精确校准。[原文 Appendix IX](https://arxiv.org/pdf/2602.11075#page=14)
 
-RISE 的贡献可以归纳为三点。
+另一个问题是，RISE 的收益是否只因为多训练了一段。Figure 8 将 RECAP 与 DSRL 在相同 batch size 下额外训练 50K steps。RECAP 成功率约在 30%–50%，DSRL 约在 5%–10%，RISE 则用额外约 9K steps 从 50% 提高到 85%。
 
-第一，它提出了一个面向真实机器人 VLA 的 self-improving framework：不靠大量新增真实交互，而是在 learned world model 中生成短程 imagined rollout，给 action chunk 估计 advantage。
+![Learning curves with extended baseline training](../../assets/images/paper-deep-dives/world-models/rise/figure-8-learning-curves.png)
 
-第二，它把 world model 拆成 controllable dynamics model 和 progress value model。这种拆分让视频模型负责“预测动作后果”，让 VLA 初始化的 value model 负责“理解任务进度”，比单体模拟器更容易对齐训练目标。
+*原文 Figure 8。实线看左轴成功率，虚线看右轴阶段分数；RISE 的较短额外训练曲线与延长的基线曲线分别标出。*
 
-第三，它在真实双臂任务中展示了强结果，并用 offline ratio、online action / state、dynamics pre-training、Task-Centric Batching、progress / TD loss 等消融说明每个模块的作用。对世界模型研究来说，这篇论文最重要的不是某个指标，而是提供了一种把生成式世界模型接入 policy improvement 的清晰接口。
+这支持优势来自不同的训练经验与更新方式，而不只是简单延长所比较基线的训练。但训练步数不是统一算力单位，RISE 还要生成想象，并预先训练世界模型；图中不能直接推出总 GPU-hours 或经济成本更低。
 
-## 阅读结论
+## 计算投入替代了新增物理试错，并没有消失
 
-读 RISE 时不要把它理解成“又一个机器人视频生成模型”。更准确的读法是：它把视频动力学模型变成训练期的反事实环境，再用 progress value model 把想象未来压缩成 action advantage。
+| Component | Reported setup | Training scale |
+|---|---|---|
+| Dynamics pre-training | 16 NVIDIA H100，batch 512 | 120K steps，约 7 天 |
+| Dynamics task fine-tuning | 8 NVIDIA H100，batch 64 | 50K steps，约 3 天 |
+| Value training | 8 GPUs，batch 64，AdamW $2.5\times10^{-5}$ | 50K steps，约 1 天 |
+| Policy warm-up / self-improving | 8 GPUs，batch 64 | self-improving 约 10K steps |
 
-这篇论文对世界模型主线的启发是，world model 的价值可以有多种落点：可以像 Dreamer 那样在 latent imagination 里训练 actor-critic，可以像 DreamZero 那样直接变成 WAM policy，也可以像 RISE 这样只在训练期生产 dense supervision。对机器人来说，第三种路线尤其现实，因为它保留了真实策略部署的简洁性，同时把昂贵的自我试错搬进了模型空间。
+*原文 §III-D、Tables VIII–X。报告明确前两项硬件为 H100；策略与价值部分没有在对应描述中另列 GPU 型号。*
 
-最需要保留的怀疑是：RISE 的成功建立在短程、任务相关、真实数据锚定的 imagined rollout 上。它证明了组合式世界模型能显著改善三个真实操作任务，但还没有证明世界模型可以在没有真实数据刷新、没有任务 fine-tuning、长 horizon 完全开环的条件下可靠训练机器人。
+按作者给出的近似卡数与天数，动力学预训练约为 $16\times7\times24=2688$ H100 GPU-hours，任务微调约 $8\times3\times24=576$ H100 GPU-hours。这是粗略资源换算，不包含策略训练、价值训练、其他数据处理和未报告的运行开销，也不应将某次任务微调时间无依据乘以任务数量。
 
-## 外部精读
+Table X 给策略学习率 $10^{-4}$、minimum learning-rate ratio 0.1、rollout EMA 0.995。表中把 “Optimizer” 一栏写成 “cosine”，但 cosine 通常描述学习率变化方式，正文没有进一步说明此处具体优化器算法，因此这里保留学习率配置，不据此发明一种 cosine optimizer。
 
-- arXiv abstract：[RISE: Self-Improving Robot Policy with Compositional World Model](https://arxiv.org/abs/2602.11075)
-- 论文 PDF：[arxiv.org/pdf/2602.11075](https://arxiv.org/pdf/2602.11075)
-- 项目页：[OpenDriveLab RISE](https://opendrivelab.com/RISE/)
-- 官方代码：[OpenDriveLab/RISE](https://github.com/OpenDriveLab/RISE)
+实际采用时，最可复用的是模块接口。动力学可以先检查动作条件预测与光流误差，价值可以先检查细小失败的敏感性，策略可以检查不同优势档位是否产生质量差异。模块通过样本和评价连接，允许分别替换与验证；如果其中一环不可靠，扩大想象数据规模也未必会带来真实收益。
+
+## 失败案例提醒我们，短想象也不是物理真值
+
+![Remaining real-world failure modes](../../assets/images/paper-deep-dives/world-models/rise/figure-18-failure-cases.png)
+
+*原文 Figure 18。三行依次为动态积木、背包与关盒的失败，展示高成功率之后仍然存在的具体误差。*
+
+积木分拣仍会出现追踪时序不一致、抓取滑落和放错箱子；背包的高形变会导致衣物没塞好、提起不稳、拉链卡住或没抓到；关盒对几何容差和双臂同步要求高，可能装杯不到位、翼片错位或锁片变形。[原文 Appendix XIV](https://arxiv.org/pdf/2602.11075#page=18)
+
+这些错误也解释了为什么模型要限制每个真实起点最多连续想象两块，并保留离线数据。生成器在罕见状态里可能给出不真实转移，价值模型可能把伪影误当进展，策略则可能学习这种错误反馈。短 rollout 和真实锚点降低暴露程度，但论文没有建立严格的世界模型误差界或对抗性利用检测。
+
+作者明确把 uncertainty-aware imagination、显式物理约束以及真实与模拟数据比例的原则化选择列为后续问题。它们不属于当前 RISE 已实现的模块。世界模型的可用范围仍受数据覆盖与训练成本限制。[原文 §VII](https://arxiv.org/pdf/2602.11075#page=9)
+
+这篇论文把“用世界模型改进机器人”推进到一个可拆解、可验证的流程。高效动作条件视频负责短期后果，progress 与 TD 结合的价值负责中间任务判断，优势条件策略把不同质量的想象经验变成可部署行为。三项真实任务证明这条闭环在相应数据与计算条件下有效；进一步扩展时，最需要守住的是动作后果的可信度、失败评价的辨识力，以及真实数据对策略分布的约束。

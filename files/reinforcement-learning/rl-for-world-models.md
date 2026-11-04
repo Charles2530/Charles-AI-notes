@@ -1,175 +1,88 @@
 # Model-based RL 与世界模型
 
-Model-based RL 显式使用环境模型预测动作后果，再用规划或策略学习选择动作。模型可以是已知规则，也可以从真实 transition 中学习；world model 是 learned model 的一种，通常在 latent space 中预测状态、reward 与终止。统一判断标准是模型是否改善 closed-loop return。
+如果能预测“执行这个动作以后会怎样”，就能在真实执行前比较候选方案。Model-based RL 显式使用环境模型做规划、生成训练数据或训练策略。模型可以来自已知物理规则，也可以由交互日志学习；它的价值最终体现在决策后果，而不只在预测画面是否相似。
 
-## 模型怎样成为决策工具
+## 模型需要回答哪些问题
 
-核心链条是：已知或 learned transition model 如何进入规划；Dyna 怎样混合真实经验与模型生成经验；MPC 为什么每步只执行计划的第一个动作；PlaNet 与 Dreamer 怎样在 latent dynamics 中规划或训练 actor；model bias、compounding error 与 model exploitation 为什么必须回到真实闭环校准。
-
-LLM 的 GRPO、视频生成和机器人系统只在与这条链路相关时出现，重点是模型怎样成为 RL 的决策工具。
-
-## 先修知识
-
-- [MDP、价值函数与 Bellman](mdp-value-bellman.md)：真实 transition、reward、done 和长期价值。
-- [Offline Reinforcement Learning](offline-reinforcement-learning.md)：固定数据的 support 与分布外外推风险。
-- [Actor-Critic、GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md)：Dreamer 中 actor/critic 的基础。
-- [世界模型中的 RSSM、Dreamer 与规划](../world-models/rssm-dreamer-and-planning.md)：更深入的模型结构专题。
-
-## 最小任务
-
-考虑一个小车到达目标的任务。环境模型接收 (s_t,a_t)，输出下一状态、奖励和终止概率：
-
+一个最小环境模型接收状态与动作，预测后继状态、奖励及继续概率
 
 \[
-(\hat s_{t+1},\hat r_t,\hat d_t)=f_\phi(s_t,a_t).
+\hat s_{t+1}\sim p_\phi(s'\mid s_t,a_t),\qquad
+\hat r_t=r_\phi(s_t,a_t),\qquad
+\hat c_t=p_\phi(\text{继续}\mid s_t,a_t).
 \]
 
-比较两种模型：
+在部分可观测环境中，状态可能是由历史推断的 latent belief。模型输入必须包含动作，否则它只能猜测数据中常见的未来，无法区分控制器真正可选的后果。奖励与继续概率也很重要，预测画面接近却把碰撞奖励算错，规划器仍会选择错误动作。
 
-| 模型 | 来源 | 能做什么 | 主要误差 |
-| --- | --- | --- | --- |
-| known model | 物理方程或完整模拟器 | 直接规划、生成 transition | 参数与真实系统不匹配 |
-| learned model | 真实交互或离线日志拟合 | 在未知动力学中预测与想象 | 数据覆盖、训练误差与分布偏移 |
+从[MDP 与 Bellman](mdp-value-bellman.md)看，模型提供价值递推右侧的转移和奖励。它若已知且准确，可以直接求解；它若来自学习，则把模型误差也带进了目标。
 
-最小规划器枚举长度为 $H$ 的候选动作序列，用模型计算：
+## 一维小车上的规划计算
 
+考虑教学系统 $x_{k+1}=x_k+a_k$，动作只能取 $-1,0,1$，目标位置为 $2$，每步奖励为 $-(x_{k+1}-2)^2$。起点 $x_0=0$，规划两步，暂取 $\gamma=1$ 且没有终止。
 
-\[
-\hat G=\sum_{k=0}^{H-1}\gamma^k\hat r_{t+k}
-+\gamma^H\hat V(\hat s_{t+H}),
-\]
+动作序列 $[1,1]$ 产生位置 $[1,2]$，回报为 $-1+0=-1$；$[0,1]$ 产生 $[0,1]$，回报为 $-4-1=-5$；$[-1,1]$ 产生 $[-1,0]$，回报为 $-9-4=-13$。穷举九种长度为二的序列，可以选出最佳的 $[1,1]$。
 
-选择预测回报最高的序列，但只执行第一个动作，然后接收新观察再规划。验收时同时比较 model prediction error、action sensitivity 和真实 closed-loop return。
+```python
+from itertools import product
 
-## 核心机制
+def score(actions):
+    position, total = 0.0, 0.0
+    for action in actions:
+        position += action
+        total -= (position - 2.0) ** 2
+    return total
 
-### 从 model-free 到 Dyna
-
-Model-free RL 直接从真实 transition 更新 value 或 policy。Dyna 在同一 replay 中加入 model learning 和 planning：真实 transition 一方面更新 value/policy，另一方面训练 learned model；随后模型从已有状态产生 imagined transition，继续做 Bellman update。
-
-
-```text
-real environment -> real transition -> value/policy update
-                         |-> learned transition/reward/done model
-                                  |-> imagined transition -> value/policy update
+best = max(product((-1, 0, 1), repeat=2), key=score)
+assert best == (1, 1) and score(best) == -1.0
+assert score((0, 1)) == -5.0
 ```
 
-模型样本便宜，但不是独立事实。若 learned model 漏掉碰撞，增加 imagined rollout 数量只会更快传播错误。
+MPC 只执行选中序列的第一个动作，再用真实新观察重算。如果执行 $1$ 后实际只到达 $0.7$，下一次规划从 $0.7$ 开始，避免继续假定已经到达 $1$。这种 receding horizon 能利用反馈修正状态，但不能消除模型对所有候选动作都存在的偏差。
 
-### Planning 与 MPC
+若未来可能终止，奖励应只在仍然存活的轨迹前缀上累积。令 $w_0=1$、$w_{k+1}=w_k\hat c_k$，常见预测目标为
 
-给定 known model 或 learned model，planner 可以用动态规划、树搜索、随机 shooting 或 CEM 比较动作序列。Model Predictive Control（MPC）的关键是 receding horizon：每一步根据最新 observation 重新建立状态或 belief，重新计算候选序列。
+\[
+\hat G=\sum_{k=0}^{H-1}\gamma^k w_k\hat r_k+\gamma^H w_H\hat V(\hat s_H).
+\]
 
-MPC 缓解但不消除 compounding error。短 horizon 降低长期模型漂移，却可能看不到延迟收益；长 horizon 看得更远，却更容易被 model bias 支配。终端 value bootstrap、风险惩罚和不确定性阈值都是这个权衡的一部分。
+终止那一步的奖励保留，终止之后的奖励与尾部 value 则消失。把碰撞后的想象奖励继续加进去，会使规划器通过虚构未来抵消真实失败。
 
-### PlaNet：latent planning
+## 搜索预算与模型误差一起决定 horizon
 
-PlaNet 把像素观察编码为 latent belief，用 Recurrent State-Space Model（RSSM）学习 latent dynamics，再通过 CEM 做在线规划。
+动作数为 $A$、horizon 为 $H$ 时，离散穷举需要 $A^H$ 条候选。连续动作常用随机 shooting 或 CEM。CEM 先从动作序列分布采样，保留预测回报较好的候选，再拟合其均值与方差，重复若干轮后选择动作。它优化的是模型预测目标，搜索越充分并不保证真实结果越好。
+
+假设实际系统每步位移为 $0.8a$，模型却认为是 $a$，连续执行五个 $a=1$ 时，模型位置为 $5$，真实位置为 $4$。更一般地，若一步误差至多 $\varepsilon$、动力学对状态的 Lipschitz 常数为 $L$，误差满足 $e_{k+1}\le Le_k+\varepsilon$。$L=1$ 时上界线性积累，$L>1$ 时可能更快增长。这个教学界需要相应局部假设，不能直接当作任意神经世界模型的误差保证。
+
+模型还会被主动利用。假设普通动作真实与预测回报都是 $3$，极端动作真实回报 $-10$、模型误判为 $8$，更强的规划器会更稳定地选择极端动作。平均预测误差若被大量普通动作稀释，也可能看起来很好。因此要检查候选策略会访问的状态动作、奖励排序、终止校准和分布外不确定性，而不只看日志上的平均 reconstruction loss。
+
+## 同一小车模型可以被谁使用
+
+对一维小车，真实执行一次 $a=1$ 后发现只移动 0.8，可以用这条转移更新位移模型，再用更新后的模型生成其他位置的想象转移。Dyna 同时用真实转移更新价值和模型，再从模型生成 imagined transition 继续进行 Bellman 更新。模型生成样本节省真实交互，但共享同一模型偏差，不能当成同样数量的独立真实证据。真实步数、模型步数和优化器更新次数应分别报告。
+
+如果小车位置来自图像且部分被遮挡，就不能直接把一个标量 x 当完整已知状态。PlaNet 从像素推断 latent belief，用 RSSM 组合确定性记忆与随机状态，然后在 latent dynamics 中使用 CEM 搜索动作序列。每次真实执行后重新接收观察并更新 belief。
 
 ![PlaNet latent dynamics model designs](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="860" }
 
-<small>图源：[Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)，Figure 2。原图比较 RNN、SSM 与 RSSM dynamics；这里用于说明 deterministic memory 与 stochastic latent state 如何共同表示部分可观测控制状态。</small>
+<small>图源：[Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)，Figure 2。原图比较 RNN、SSM 与 RSSM dynamics。</small>
 
-
-```text
-latest observation -> latent belief
-  -> candidate action sequences
-  -> latent dynamics + reward rollout
-  -> choose highest predicted return
-  -> execute first action -> observe again
-```
-
-latent reconstruction 好不等于规划好。真正相关的是：更换 action 时预测是否相应改变，也就是 action sensitivity；预测的 reward、done 与风险是否校准；接入 planner 后 return 是否提高。
-
-### Dreamer：latent imagination 训练 policy
-
-Dreamer 不在每个执行步做昂贵搜索，而是从真实 replay 的 latent state 出发，在 world model 中展开 imagined trajectories，用它们训练 actor 与 critic；部署时 actor 直接输出动作。
+每次都对小车做 CEM 会支付在线搜索成本。另一种选择是先在模型内训练一个直接输出动作的 actor，Dreamer 将主要行为学习放到模型内。它从真实 replay 编码出的 latent state 开始展开想象，用预测奖励、继续信号和尾部价值训练 actor/critic；真实执行时 actor 直接产生动作。真实数据持续用于校准世界模型，想象数据服务策略改进，二者承担不同角色。
 
 ![Dreamer algorithm](../assets/images/paper-deep-dives/world-models/dreamer/algorithm-1-dreamer.png){ width="820" }
 
-<small>图源：[Dream to Control](https://arxiv.org/abs/1912.01603)，Algorithm 1。原图展示 dynamics learning、behavior learning 与 environment interaction 的交替；这里强调 imagined rollout 仍以真实 replay 校准。</small>
+<small>图源：[Dream to Control](https://arxiv.org/abs/1912.01603)，Algorithm 1。原图展示 dynamics learning、behavior learning 与 environment interaction 的交替。</small>
 
-| 子模型 | 监督信号 | 被谁消费 |
+更细的 latent 状态、posterior/prior 与训练损失见 [RSSM、Dreamer 与规划](../world-models/rssm-dreamer-and-planning.md)。Dyna 的原始来源是 [Integrated Architectures for Learning, Planning, and Reacting](https://dl.acm.org/doi/10.1145/122344.122377)，后续跨任务系统可阅读 [DreamerV3](https://arxiv.org/abs/2301.04104)。
+
+## 使用环境模型，与用 RL 训练生成器怎样区分
+
+| 路线 | 被优化的对象 | 评价时还缺什么 |
 | --- | --- | --- |
-| representation + transition | observation/action sequence | imagined rollout |
-| reward head | real reward | return target |
-| continuation/done head | real episode boundary | discount 与终止判断 |
-| actor/critic | imagined reward、continuation 与 bootstrap value | 执行策略 |
+| Model-based RL | 使用环境模型的 planner 或 actor | 真实闭环回报与模型校准 |
+| [RLVR-World](https://arxiv.org/abs/2505.13934) | 通过可验证奖励优化世界预测器 | 预测改进能否改善动作后果判断 |
+| [Decision Transformer](https://arxiv.org/abs/2106.01345) | 固定轨迹上的 return-conditioned action sequence model | 数据覆盖与部署闭环表现 |
+| [DDPO](https://arxiv.org/abs/2305.13301)、[Flow-GRPO](https://arxiv.org/abs/2505.05470) | diffusion/flow 生成器的采样策略 | 各自采样轨迹与 logprob 定义、生成质量和目标偏差 |
+| 可交互视频世界 | 可受控制输入影响的视觉环境 | 动作一致性、长期状态与目标任务有效性 |
 
-### 模型错误如何进入决策
+生成器内部的去噪轨迹与环境时间不是同一条时间轴。用 RL 优化视频生成器，不自动让它成为环境动力学模型；[Sora](https://openai.com/index/video-generation-models-as-world-simulators/)与 [Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)也应按各自公开接口和证据范围阅读。相关生成机制见[视频扩散](../diffusion/video-and-multimodal-diffusion.md)，策略目标见 [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md)。
 
-**Model bias** 是 learned model 对真实动力学的系统偏差。多步 rollout 会把每一步偏差带到新的输入分布，形成 **compounding error**。更危险的是 **model exploitation**：policy 或 planner 会主动寻找模型过于乐观的动作，而不是被动承受平均预测误差。
-
-例如模型没学会杯子与桌沿的接触，想象中“高速推”可穿过边界获得高 reward；actor 会利用这个漏洞。常见缓解包括缩短 horizon、真实 value bootstrap、模型集成与 uncertainty penalty、限制动作到数据支持区域，以及持续用 real data 检查失败桶。
-
-### Open-loop prediction 与 closed-loop return
-
-| 证据 | 测量什么 | 不能单独证明什么 |
-| --- | --- | --- |
-| one-step prediction | 局部 transition 拟合 | 长 horizon 稳定、planner 可用 |
-| open-loop rollout | 固定动作序列下的预测误差 | 策略会选择正确动作 |
-| counterfactual action test | 不同动作是否产生可辨别后果 | reward/risk 校准正确 |
-| model-based closed-loop return | 模型进入 planner/policy 后的任务结果 | 跨环境与真实机器人泛化 |
-
-自然视频可能忽略动作差异，仍有较好的视觉指标；这样的模型是有价值的预测先验，但不能仅凭 open-loop prediction 称为控制模型。决策模型还必须校准 terminal、reward 与 risk：done 太晚会让规划器穿过失败状态，reward 偏置会改变动作排序，风险低估会诱导危险探索。
-
-## 相邻路线的归属边界
-
-### 四条容易混淆的路线
-
-Model-based RL 的责任是让环境模型进入预测、规划或策略学习；相邻工作也可能使用 trajectory、reward 或 GRPO，但优化对象不同。下面只保留迁移桥，不把四条路线重新展开成独立综述。
-
-| 路线 | 课程归属 | 优化对象 | 证据边界 |
-| --- | --- | --- | --- |
-| RLVR-World | Model-based RL / learned transition | 用 RL 和 verifiable reward 直接优化 learned transition/world predictor 采样的 decoded prediction | verifier 指标改善不能证明 real closed-loop return；仍需 action sensitivity、transition 校准和 planner 评测。[RLVR-World](https://arxiv.org/abs/2505.13934) |
-| Decision Transformer | [Offline RL](offline-reinforcement-learning.md) | 对 fixed trajectory 做 return-conditioned sequence modeling，并从固定数据预测 action | 它不是 online environment interaction，仍受数据覆盖和分布外动作限制。[Decision Transformer](https://arxiv.org/abs/2106.01345) |
-| DDPO / Flow-GRPO / video generator RL | [LLM 强化学习中的通用 policy objective](llm-rlhf-rlvr-and-grpo.md)；[视频与多模态扩散](../diffusion/video-and-multimodal-diffusion.md) | 用 reward 优化 diffusion/flow generator/sampler 的生成轨迹 | 这是生成器策略优化，不是 learned environment transition，也不是 LLM 算法；DDPO 与 Flow-GRPO 的 logprob/采样器定义应分别核对。[DDPO](https://arxiv.org/abs/2305.13301)、[Flow-GRPO](https://arxiv.org/abs/2505.05470) |
-| interactive video worlds | [世界模型评测与失败模式](../world-models/evaluation-and-failure-modes.md)；[VLA 闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md) | 生成可受动作影响的视觉环境，供 agent 交互或评测 | visual playability/open-loop demo 不能证明 real closed-loop，更不能替代真实机器人风险与回报证据。[Sora](https://openai.com/index/video-generation-models-as-world-simulators/)、[Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/) |
-
-## 训练数据流
-
-
-```text
-real transition (observation, action, reward, done)
-  -> train representation + transition + reward + continuation/risk heads
-  -> start from real replay states
-  -> plan with MPC or generate imagined rollout
-  -> update value/policy or select the first action
-  -> execute in environment and collect fresh real data
-  -> audit model error, exploitation and closed-loop return
-```
-
-数据闭环中必须把“模型训练指标”和“策略消费指标”分开：
-
-| 层 | 指标示例 |
-| --- | --- |
-| 模型拟合 | one-step state error、reward error、done AUROC、risk calibration |
-| 长期预测 | horizon-bucketed latent/state error、action sensitivity |
-| 规划接口 | candidate ranking、planner latency、horizon 与采样预算 |
-| 决策结果 | return、success、constraint violation、real environment step |
-
-模型用离线日志预训练时，要继承 Offline RL 的 support 警告；上线收新数据后，又要记录当前 policy 改变了哪些状态分布。两部分缺一不可。
-
-## 常见失败
-
-1. **只优化 reconstruction。** 表征可能保留纹理却丢失速度、接触或小目标，导致 action sensitivity 下降。
-2. **把 imagined transition 当成真实样本计数。** 应分别报告 real environment steps 与 model steps。
-3. **rollout horizon 越长越好。** 长 horizon 会放大 compounding error，应按 horizon 分桶并做真实轨迹对照。
-4. **reward/done/risk head 缺席。** 只有下一帧预测时，planner 没有可靠的任务排序和失败边界。
-5. **open-loop 指标代替 closed-loop return。** 动作固定时预测准确，不代表模型能比较策略将主动选择的动作。
-6. **模型集成方差等于真实风险。** ensemble disagreement 只能覆盖模型族表达出的认知不确定性，仍可能共同漏掉同一类危险。
-
-## 自检与练习
-
-1. 对同一任务分别画出 Dyna、MPC/PlaNet 与 Dreamer 的 real data 和 imagined data 流向。
-2. 为什么 MPC 只执行动作序列的第一步？这能消除哪些误差，不能消除哪些误差？
-3. 设计 counterfactual action test：固定当前 observation，改变三个候选动作，检查哪些预测量必须变化。
-4. 给 reward、done 和 risk head 各写一个 calibration 指标，并解释它如何影响 planner。
-5. 找一个 open-loop 指标改善但 closed-loop return 下降的可能机制。
-
-权威起点：
-
-- [Integrated Architectures for Learning, Planning, and Reacting Based on Approximating Dynamic Programming](https://dl.acm.org/doi/10.1145/122344.122377)：Dyna 的原始框架。
-- [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)：PlaNet 的 latent dynamics 与在线规划。
-- [Dream to Control](https://arxiv.org/abs/1912.01603)：Dreamer 的 latent imagination actor-critic。
-- [DreamerV3](https://arxiv.org/abs/2301.04104)：统一 world model 与 imagined behavior learning 的后续系统。
+判断模型是否可用于控制，需要把一步预测、多步 rollout、反事实动作比较和真实 closed-loop return 连起来。已有日志之外的模型想象还受[离线数据支持](offline-reinforcement-learning.md)限制，机器人任务则要继续检查[闭环恢复](../vla/closed-loop-recovery-and-failure-analysis.md)与[世界模型失败模式](../world-models/evaluation-and-failure-modes.md)。

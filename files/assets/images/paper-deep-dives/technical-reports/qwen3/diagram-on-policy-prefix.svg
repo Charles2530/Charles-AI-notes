@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="390" viewBox="0 0 980 390" role="img" aria-labelledby="title desc">
+<title id="title">学生自己生成前缀，教师在同一前缀上给出分布监督</title><desc id="desc">On-policy 蒸馏的概念信息流。学生采样出轨迹，对同一前缀分别计算教师与学生下一 token 分布，通过 KL 对齐更新学生。教师不替学生重新生成整段答案。</desc>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#506078"/></marker></defs>
+<rect width="980" height="390" rx="16" fill="#f6f8fc"/>
+<g font-family="system-ui, -apple-system, PingFang SC, sans-serif" font-size="23" fill="#172b46">
+<text x="28" y="38" font-size="26" font-weight="700">On-policy 蒸馏  ·  监督学生实际走到的状态</text>
+<rect x="28" y="85" width="250" height="196" rx="14" fill="#e7efff" stroke="#91acd9"/>
+<text x="50" y="123" font-weight="600">学生先生成一条轨迹</text>
+<text x="50" y="165">问题 x → y₁ → … → yₜ₋₁</text>
+<text x="50" y="208">取当前前缀 hₜ</text>
+<text x="50" y="249" font-size="20">可能已经偏离教师范文</text>
+<path d="M278,180 H310 V125 H350" fill="none" stroke="#506078" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M310,180 V245 H350" fill="none" stroke="#506078" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="354" y="78" width="278" height="94" rx="12" fill="#fff1d8" stroke="#d6b577"/>
+<text x="376" y="115" font-weight="600">教师读取同一个 hₜ</text><text x="376" y="150">下一 token 分布 p<tspan baseline-shift="sub" font-size="16">T</tspan>(· | hₜ)</text>
+<rect x="354" y="200" width="278" height="94" rx="12" fill="#e7efff" stroke="#91acd9"/>
+<text x="376" y="237" font-weight="600">学生读取同一个 hₜ</text><text x="376" y="272">下一 token 分布 p<tspan baseline-shift="sub" font-size="16">S</tspan>(· | hₜ)</text>
+<path d="M632,125 H670 V175 H708" fill="none" stroke="#506078" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M632,245 H670 V207 H708" fill="none" stroke="#506078" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="712" y="130" width="238" height="123" rx="12" fill="#dff2ec" stroke="#7eb8a5"/>
+<text x="735" y="166" font-weight="600">比较两个分布</text><text x="735" y="201">KL 对齐</text><text x="735" y="235">更新学生参数</text>
+<text x="28" y="337" font-size="21">与 off-policy 的区别在前缀来自谁。单个答案标签 → 一组 token 的相对偏好。</text>
+<text x="28" y="371" font-size="18" fill="#52637b">机制示意，依据报告 §4.5；KL 方向、温度及损失权重未由报告给定。</text>
+</g></svg>

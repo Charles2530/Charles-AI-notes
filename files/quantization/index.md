@@ -1,48 +1,30 @@
-# 量化专题：低比特、质量与运行时取舍
+# 量化
 
-量化需要在模型质量、显存、带宽、kernel 支持、校准数据和业务风险之间做取舍。一个量化方案能不能上线，取决于误差从哪里来、有没有被校准吸收、运行时是否真能吃到低比特，以及评测是否覆盖了你关心的任务。
+量化用有限的码值近似模型里的数。若scale为0.25，浮点0.9可以存为整数4，读取时恢复成1.0。模型因此引入0.1的误差，同时有机会减少存储和数据搬运。这个误差进入矩阵乘以后是否重要，要看输入、后续计算以及任务输出。
 
-量化可以看成一条误差预算。权重、激活、KV cache 和累加器分别承担不同的误差；校准数据决定哪些通道会被保护；硬件和 kernel 决定低比特是否真的转化成吞吐或成本收益。只看模型文件大小，会漏掉这条链上最容易失败的环节。
+## 从一个数走到模型
 
-## 先分清量化路线
+[量化的格子、误差与线性层](symbols-and-minimal-math.md)从舍入、截断与zero point开始，手算同一权重误差怎样在两条输入上放大或抵消。接着读[GPTQ、AWQ与SmoothQuant](ptq-gptq-awq-smoothquant.md)，看三种方法分别怎样使用输入统计、通道缩放和补偿。
 
-| 你想弄清的问题 | 建议先读 |
+当少量大值使其他数都舍入成0时，[激活离群值与校准](activation-outliers-and-calibration-strategies.md)解释如何在截断、粒度和输入分布之间选择。
+
+## 训练和部署改变不同的状态
+
+[QLoRA](qlora-and-quantized-training.md)推导冻结4-bit底座时adapter与输入的梯度，说明低比特存储怎样减少微调预算。[模拟量化与真实执行](qat-kernels-and-kv-cache.md)则从STE的一次更新走到packing，并区分权重和不断增长的KV。
+
+若已经有checkpoint，[量化运行时](quantization-runtimes-and-frameworks.md)沿两个4-bit码值追到loader和kernel。[FP8服务](fp8-and-mixed-precision-serving.md)专门解释数据、scale与累加的接口；[显存与硬件取舍](serving-stacks-and-hardware-tradeoffs.md)把权重、KV和workspace放进同一预算。
+
+## 查表和验证
+
+| 当前问题 | 入口 |
 | --- | --- |
-| PTQ、GPTQ、AWQ、SmoothQuant 到底差在哪里 | [PTQ / GPTQ / AWQ / SmoothQuant](ptq-gptq-awq-smoothquant.md) |
-| activation outlier 为什么会让 INT8/INT4 变难 | [Activation Outliers 与校准策略](activation-outliers-and-calibration-strategies.md) |
-| FP8、混合精度和低比特整数各适合什么 | [FP8 与混合精度推理](fp8-and-mixed-precision-serving.md) |
-| QLoRA 为什么能省显存，但不是纯推理量化 | [QLoRA 与量化训练](qlora-and-quantized-training.md) |
+| 方法名称和格式分不清 | [方法与格式对照](comparison-table.md) |
+| 数值看起来接近，任务仍掉分 | [多模态与VLA误差传播](quantization-for-multimodal-and-vla-models.md) |
+| 模型文件小了，运行却没有更快 | [对照实验与部署检查](evaluation-and-deployment-checklist.md) |
+| 想看解包如何融进矩阵乘 | [低精度Kernel](../operators/low-precision-and-quantized-kernels.md) |
 
-## 再看能不能真正落地
+各页的手算数字用于验证机制。具体模型能压到多少bit、在哪种硬件上更快，需要在明确配置下测量。
 
-| 落地问题 | 建议先读 |
-| --- | --- |
-| QAT、attention kernel 和 KV cache 如何互相牵制 | [QAT、Kernel 与 KV Cache](qat-kernels-and-kv-cache.md) |
-| 多模态、VLM、VLA 量化为什么更容易伤语义和动作 | [多模态与 VLA 量化](quantization-for-multimodal-and-vla-models.md) |
-| 量化运行时和框架支持如何决定实际收益 | [量化运行时与框架](quantization-runtimes-and-frameworks.md) |
-| 服务硬件、吞吐和成本如何一起评估 | [Serving 栈与硬件取舍](serving-stacks-and-hardware-tradeoffs.md) |
+## 对照源码与延伸阅读
 
-## 做上线判断
-
-| 判断维度 | 建议先读 |
-| --- | --- |
-| 需要一页比较不同方法 | [量化方法对比表](comparison-table.md) |
-| 需要公式和符号最小集 | [量化符号与最小数学](symbols-and-minimal-math.md) |
-| 需要上线前检查清单 | [量化评测与部署清单](evaluation-and-deployment-checklist.md) |
-
-量化最常见的误判是只看模型文件变小。真正的验收要同时看质量回归、端到端延迟、吞吐、显存峰值、kernel 命中率和长上下文场景的 KV 行为。
-
-## 一套可复用的量化决策顺序
-
-先确定要解决的瓶颈，再选择量化对象。显存不足时优先盘点权重、KV 和 activation 的占比；带宽受限时关注权重读取和 cache 访问；算力不足时确认硬件是否有对应的低比特矩阵指令。随后用代表性校准集覆盖长短上下文、不同语言、工具调用和多模态输入，最后在真实 runtime 中比较质量与服务指标。
-
-| 目标 | 先量化什么 | 主要风险 |
-| --- | --- | --- |
-| 缩小常驻权重 | 权重，常见为 INT8/INT4 或 FP8 | 离群通道、格式转换和 kernel 不支持 |
-| 降低长上下文显存 | KV cache，必要时配合权重量化 | 累积误差、长程检索和生成稳定性 |
-| 降低训练显存 | LoRA/QLoRA、低比特 optimizer 或 activation | 梯度噪声、累加精度和训练收敛 |
-| 保护多模态能力 | 对视觉 encoder、connector、action head 分层处理 | OCR、细粒度定位和动作精度退化 |
-
-## 读结果时看四个对照
-
-同一模型要同时看 FP16/BF16 基线、量化后的离线任务、量化后的真实 runtime，以及长上下文和高并发场景。离线准确率没有下降，可能只是测试集太短；模型文件变小，可能只是把成本转移到了反量化、workspace 或 KV。最终要问的是单位有效结果的成本有没有下降，质量退化是否发生在可接受的任务桶内。
+- [一个实际量化器的完整定义](https://github.com/IST-DASLab/gptq/blob/2d65066eeb06a5c9ff5184d8cebdf33662c67faf/quant.py)

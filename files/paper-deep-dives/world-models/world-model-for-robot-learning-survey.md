@@ -15,1035 +15,480 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[NTUMARS/Awesome-World-Model-for-Robotics-Policy](https://github.com/NTUMARS/Awesome-World-Model-for-Robotics-Policy)；项目页：[ntumars.github.io/wm-robot-survey](https://ntumars.github.io/wm-robot-survey/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2605.00080)、论文 PDF、官方 GitHub / 项目页；Checked Date：2026-06-15；Repro Status：Survey / official resource list reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 先问未来预测进入了哪一条控制链
 
-### 研究背景
+机器人可以在执行前想象未来，也可以在一个学出来的环境里反复试错，还可以把未来预测只作为训练信号。这几种系统都常被称为 world-model-based policy，但它们的计算成本、数据要求和失败方式差别很大。
 
-这篇综述聚焦 robot learning 中的 world models。机器人学习正在从解析式控制和单任务策略，转向 VLA、行为克隆、扩散策略和大规模多任务策略；但纯反应式策略仍有长时规划、错误累积、数据效率和安全评估问题。世界模型可以在动作执行前预测未来状态、奖励、终止、风险或关键帧，从而辅助策略生成、训练和评估。
-
-综述的背景不是把所有“会生成视频”的模型都叫世界模型，而是区分它们在机器人系统里的功能：有的 world model 融入 policy，有的作为 simulator 生成 imagined rollouts，有的作为 video world model 提供 action-conditioned future，有的只做 representation 或 data augmentation。
-
-### 问题（Challenge）
-
-综述要解决的问题是：**机器人学习里的世界模型到底有哪些角色，如何判断一篇工作是在帮助动作决策、模拟训练，还是只是在生成未来视频？** 这个问题难在术语混乱。VLA、视频生成、latent dynamics、learned simulator、diffusion policy、action-conditioned prediction 都可能自称 world model，但证据强度差异很大。
-
-这个问题有价值，因为机器人领域关心最终动作效果。一个模型未来画面漂亮，如果没有改变 policy、planner、reward estimation 或 closed-loop success，就不能直接说明它是 actionable world model。
-
-### Finding
-
-综述的核心 finding 是：**机器人世界模型的价值不在未来画面是否逼真，而在预测是否被决策链路消费并改变动作选择、训练样本或评估结论。** 这个洞见把阅读标准从“生成质量”转成“decision utility”。
-
-这个 finding 解释了论文的 taxonomy。World model for policy 关注预测如何进入策略结构；world model as simulator 关注 imagined rollout 如何训练或评估 policy；robotic video generation 关注 action-conditioned future 是否能成为可控模拟信号；datasets/benchmarks 关注是否包含 transition、动作和闭环效用指标。最终判断都回到一个问题：预测有没有服务机器人决策。
-
-### 方法
-
-综述按功能把机器人世界模型分成几类。第一类是 world model for policy：预测模块可能与 policy 解耦、共享 backbone、通过 expert fusion 融合，或作为 latent internalization 隐式存在。第二类是 world model as simulator：模型在 imagined environment 中生成未来状态、奖励或视频，用于 policy training、candidate action evaluation 或 safety checking。第三类是 robotic video generation：从 task-conditioned、action-conditioned、structure-aware 到 foundation-scale video world model，逐步接近机器人可用的未来预测。
-
-论文还整理数据集、benchmark、评估指标和开放问题。它强调 POMDP 视角：真实 state 不可完全观测，world model 需要维护 latent state，使用 posterior 从真实观测校正当前状态，用 prior 按动作 rollout 未来。评估方面，不能只看 FVD/LPIPS 等视觉指标，还要看 rollout consistency、action controllability、planning success、policy improvement 和 real/sim transfer。
-
-### 结论
-
-综述的结论是：机器人 world model 已经从小规模 latent dynamics 扩展到 VLA 内部模块、learned simulator 和大规模视频世界模型，但仍缺少统一评估。未来关键方向包括 action-conditioned long-horizon prediction、真实机器人闭环验证、可控视频生成、3D/geometry-aware state、uncertainty estimation、安全评估和与基础 VLA 的深度融合。
-
-需要注意的是，综述本身不提供新模型实验；它的价值是阅读和选型框架。对本站专题来说，最重要的 takeaway 是：评价机器人世界模型时要追问最后一环，预测是否真的让动作更好，而不只是让未来看起来更像视频。
-
-### 关键术语
-
-- **World Model for Policy（策略内世界模型）**：直接或间接参与动作生成的预测模块。
-- **World Model as Simulator（作为模拟器的世界模型）**：生成 imagined rollouts，用于训练、评估或筛选动作。
-- **Robotic Video Generation（机器人视频生成）**：面向机器人任务的未来视觉预测，通常需要动作、任务和结构条件。
-- **Action-conditioned Prediction（动作条件预测）**：未来状态显式依赖动作输入，是机器人世界模型可用于决策的关键。
-- **Decision Utility（决策效用）**：预测对动作选择、策略训练或安全评估的实际帮助。
-- **Closed-loop Evaluation（闭环评估）**：让模型进入真实或模拟控制循环，用任务成功率等指标验证效用。
-
-这篇综述要解决的不是“再列一批世界模型论文”，而是给机器人学习里的世界模型划清三种用途：**放进 policy、变成 simulator、作为 video world model 提供可控未来**。读它最重要的收获，是以后看到一篇新工作时，能先问清楚：它到底在帮助动作生成、帮助模拟训练，还是只是在生成更像真的未来视频。
-
-一句话概括：**机器人世界模型的价值不在于未来画面是否漂亮，而在于预测是否能改变动作选择。**
-
-## 先抓主线
-
-这篇论文的所有分类都可以压到一个判断链路：
-
-```text
-当前观测 / 语言 / 动作
-  -> 预测未来状态、未来视频、reward、termination、value 或 latent
-  -> policy / planner / evaluator 使用这些预测
-  -> 动作选择、训练数据或评估结论发生变化
-```
-
-如果最后一步没有发生，模型最多只是 video predictor 或 representation learner，还不能强称为机器人学习里的 actionable world model。
-
-| 问题 | 论文对应章节 | 要判断的核心 |
-| --- | --- | --- |
-| 世界模型怎样帮助 policy 出动作 | Sec. 3 World Model for Policy | 预测未来是 decoupled、shared backbone、expert fusion，还是 latent internalization |
-| 世界模型怎样替代环境 | Sec. 4 World Model as Simulator | 它是在 imagined rollout 里训练 policy，还是在执行前评估候选动作 |
-| 视频生成怎样变成机器人世界模型 | Sec. 5 Robotic Video Generation | 它是否 task-conditioned、action-conditioned、structure-aware、foundation-scale |
-| 数据和评测怎么支撑这些 claim | Sec. 7 Benchmarks, Datasets, and Results | 数据是否包含 transition，评测是否看 closed-loop utility |
-
-所以这篇要按“功能角色”读，不要按论文发布时间或表格行数读。
-
-## 为什么 VLA 还需要世界模型
-
-机器人策略学习正在从“为单个任务手工设计控制流程”，转向“用基础模型统一感知、语言理解和动作生成”。VLA 正是这条路线的代表：它接收图像、语言和机器人状态，直接输出动作，随着模型、数据和任务规模扩大，已经表现出很强的跨任务和跨本体泛化能力。
-
-但一个只做
-
-```text
-当前观测 + 当前指令 -> 下一段动作
-```
-
-的反应式策略，在复杂真实环境中仍然会遇到三个相互关联的问题。
-
-| 问题 | 含义 | 机器人例子 | 世界模型补什么 |
-| --- | --- | --- | --- |
-| Long-horizon reasoning | 任务包含多个有依赖关系的子目标，当前动作必须服从后续计划 | 打开柜门、取出杯子、接水、再放到桌面 | 预测子目标完成后的状态，让策略知道当前动作在整条任务链中的位置 |
-| Temporal credit assignment | 最终成败与早期动作相隔很远，很难判断责任属于哪一步 | 最后抓取失败，根因可能是前面靠近角度已经错误 | 在 imagined rollout 中评估中间状态、progress、reward 或 value |
-| Robustness under compounding errors | 视觉、控制和接触误差会在长序列里逐步累积 | 夹爪每一步只偏一点，几秒后已经完全错过目标 | 预测动作后果，用真实观测回写并进行纠错或重规划 |
-
-因此，从 VLA 到世界模型并不是简单地在策略旁边“多放一个视频生成器”，而是把显式或隐式的未来预测引入动作生成：模型需要估计“如果执行这段动作，世界会怎样变化”，再据此约束当前决策。
-
-这也解释了动作条件视频模型为什么重要。普通视频生成模型学习 plausible future；动作条件视频世界模型进一步学习：
-
-$$
-p(o_{t+1:t+H}\mid o_t,a_{t:t+H-1},l)
-$$
-
-它把视频模型的时空预测能力和机器人动作后果连接起来，才有机会服务 planning、policy improvement、evaluation 和 synthetic data generation。
-
-## 机器人 Policy 的两层背景
-
-理解论文的分类前，需要先把“控制方式”和“学习策略架构”分开。
-
-### 从解析式控制到端到端学习
-
-传统 analytical controllers 依赖明确的数学模型和工程结构，例如 PID、LQR、MPC、逆运动学、轨迹优化和阻抗控制。工程师需要显式建模状态、动力学、约束、代价函数和控制律。
-
-端到端学习模型则从示范或交互数据中学习：
-
-$$
-\pi(a_{t+1:t+k}\mid o_t,l)
-$$
-
-其中 \(o_t\) 可以包含相机观测和 proprioception，\(l\) 是可选语言指令，\(a_{t+1:t+k}\) 是长度为 \(k\) 的 action chunk。动作分块比逐步输出更容易保持短时连续性，也能降低高频控制下的误差累积。
-
-端到端策略并不意味着解析控制彻底消失。实际系统常常让学习策略负责语义、subgoal 或末端轨迹，再由低层控制器负责频率更高、稳定性要求更强的执行。世界模型也通常位于高层预测和低层控制之间，而不是替代所有控制模块。
-
-### 两类主流学习策略
-
-| Policy family | 典型代表 | 优势 | 局限 |
-| --- | --- | --- | --- |
-| Specialized visuomotor policy | Diffusion Policy、ACT 等 | 模型较轻、控制精度高、部署延迟低，适合明确任务和固定本体 | 语义知识、开放词汇和跨任务迁移较弱 |
-| Generalist VLA | RT-2、OpenVLA、\(\pi_0\) 等 | 继承 VLM 的语义知识、开放词汇和跨任务/跨本体泛化 | 训练与部署成本高，动作精度、长时规划和闭环纠错仍是难点 |
-
-两类策略都在使用生成式动作建模，因为机器人示范通常是多模态分布：同一个任务可能有多条合理轨迹，直接回归均值容易得到一条谁都不像的动作。
-
-![Diffusion Policy input-output 原论文/项目图](../../assets/images/paper-figures/vla/diffusion-policy-input-output-padded.jpg){ width="880" }
-
-<small>图源：[Diffusion Policy](https://diffusion-policy.cs.columbia.edu/) 项目页 / 论文图。原图表达：策略把当前视觉观测作为条件，生成未来一段连续动作序列，并以 receding horizon 方式执行。本站读法：专用 visuomotor policy 的优势是动作分布建模精细、闭环延迟可控；但它通常不显式评估“如果换一个动作未来会怎样”。</small>
-
-![RT-2 VLA overview 原论文图](../../assets/images/paper-figures/vla/rt2-overall-wide.png){ width="920" }
-
-<small>图源：[RT-2](https://arxiv.org/abs/2307.15818)，Figure 1。原图表达：RT-2 将 web-scale VLM 预训练迁移到机器人动作 token 输出。本站读法：VLA 的强项是把视觉语言知识接到动作空间，但若没有 world-model-style 预测接口，它仍可能只是更强的 reactive policy。</small>
-
-### 动作怎样表示
-
-VLA 的 action head 主要有离散和连续两条路线。
-
-**离散动作 tokenization。**
-RT-2、OpenVLA 等方法把连续动作量化成离散 token，让 action token 和 text token 共用 next-token prediction 机制。它容易复用语言模型训练框架，但普通逐维分桶会带来量化误差和很长的高频动作序列。
-
-FAST 的改进是先用 DCT 把 action chunk 压到频率空间，再把压缩系数编码成更紧凑的 token 序列。直觉上，它不再逐时刻记录所有动作细节，而是先描述一段动作的低频趋势和必要的高频变化，从而减少 autoregressive decoding 长度。
-
-**连续动作生成。**
-\(\pi\) 系列和 Diffusion Policy 路线不把动作离散化，而是把 action head 设计成 diffusion 或 flow matching 条件生成器：
-
-$$
-p(a_{t+1:t+k}\mid o_t,l)
-$$
-
-模型从 Gaussian noise、视觉表征或 action history 等 base distribution 出发，逐步生成连续 action chunk。视觉表征能让采样起点更贴合当前场景，action history 则能提高动作连续性。
-
-世界模型会进入这两种 action head：它既可以提供显式未来视频，也可以提供 future latent、subgoal、value 或 motion feature。后面的架构分类，核心就是这些 predictive signals 在哪里进入动作生成。
-
-## 证据边界
-
-综述的强项是组织文献和统一问题语言；弱项是它不重新跑实验，也不统一所有论文的训练条件。下面这张表是读全文的证据口径。
-
-本文配图遵守同一个口径：正文只使用论文、官方项目页或研究博客中的原图 / 已归档图，不使用 image2 或自生成概念图。表格可以为讲解重排，但会保留英文列名和来源说明。
-
-| 论文结论 | 证据来源 | 证据等级 | 可以吸收什么 | 不能直接推出什么 |
-| --- | --- | --- | --- | --- |
-| 机器人世界模型应以 action usefulness 为中心 | 定义、Figure 1、evaluation discussion | Survey synthesis | 评测不能只看视觉质量，要看 action sensitivity、planning utility、policy ranking | 某个具体模型已经可靠控制真实机器人 |
-| policy coupling 正从 decoupled 走向 unified / MoE / latent | Figure 2、Figure 3、Table 1 | Literature taxonomy | 选型时先看未来预测是否 inference-active，以及动作和视频在哪里耦合 | shared backbone 一定优于 decoupled |
-| learned simulator 正从训练环境扩展到 evaluator | Figure 5、Sec. 4 | Functional taxonomy | world model 可以提供 reward、termination、policy ranking、candidate filtering | simulator 的 reward 或 ranking 一定可信 |
-| robotic video WM 的重点从 imagination 转向 controllable interface | Figure 6、Table 2 | Literature taxonomy | 视频底座训练要补动作、结构、长时一致和交互数据 | 普通 text-to-video 能力等同于机器人世界模型 |
-| 数据集要按 transition richness 判断 | Dataset tables、Sec. 7 | Survey synthesis | 数据 schema 要记录动作、语言、3D/multiview、接触、长 horizon | 表格就是数据集推荐榜 |
-
-## 定义：世界模型不是视频生成器
-
-论文采用的是 robotics-centered definition。它不要求世界模型一定预测像素，也不要求一定是 Dreamer 那类 latent dynamics。它要求预测必须对机器人决策有用。
-
-通用形式是：
-
-$$
-p(x_{t+1:t+H} \mid x_t, a_{t:t+H-1}, l)
-$$
-
-这里 \(x_t\) 是被建模的状态，可以是 RGB 视频、latent state、3D/occupancy、reward/value 相关状态，甚至 object relation / predicate 这类符号状态；\(a_{t:t+H-1}\) 是动作序列；\(l\) 是语言指令或高层任务目标。论文特别把语言也看成 high-level action，因为语言指定“未来应该实现什么”。
-
-如果状态落到视频空间，就得到：
-
-$$
-p(v_{t+1:t+H} \mid o_t, a_{t:t+H-1}, l)
-$$
-
-这也是为什么视频生成模型会进入世界模型讨论。但分界线很清楚：**视频模型生成 plausible future；机器人世界模型要生成 action-faithful future。**
-
-固定历史画面，如果输入“向左移动”和“向右移动”得到几乎同一个未来，那它可能是强视频先验，却不是可用于控制的动作条件世界模型。
-
-## 总图：三种用法，不是一条流水线
+这篇综述最有用的贡献，是把“用了世界模型”拆成三个可以分别回答的问题。未来预测怎样与动作生成连接，模型在系统中承担策略、模拟器还是评估器的职责，视频预测又具备哪些足以支持实际交互的能力。读清这些接口，比把所有工作按发布日期排成一列更有帮助。[原文 §1–2，PDF pp.1–5](https://arxiv.org/pdf/2605.00080v1#page=1)
 
 ![World Model for Robot Learning survey organization 原论文图](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-1-survey-organization.png){ width="920" }
 
-<small>图源：`World Model for Robot Learning: A Comprehensive Survey`，Figure 1。原论文图意：整篇综述按三个主轴组织：Sec. 3 讨论 world models 如何和 robot policies 耦合；Sec. 4 讨论 world models 作为 simulators；Sec. 5 讨论 robotic video world models 的能力演进。</small>
+*原文 Figure 1。上方按架构分策略，中间按用途分模拟器，下方按能力讨论机器人视频模型。三个区域使用不同分类轴，同一项工作可以同时出现在多个区域。*
 
-这张图不是在说三条路线按顺序发生，而是在说一个世界模型可能有三种身份。
+例如，一个共享视频与动作骨干的模型，属于策略架构的一种；若它还可以接受外部动作预测未来，就可能被用作模拟器；若预测结果经过价值模型打分，又能成为候选动作的评估器。架构相同不保证用途相同，用途相同也不要求架构相同。
 
-| 身份 | 输入 | 输出 | 下游使用者 | 主要风险 |
-| --- | --- | --- | --- | --- |
-| World Model for Policy | observation、language、history，有时有 future target | action、future latent、future image、subgoal | policy head / action decoder | 未来预测和动作生成脱节 |
-| World Model as Simulator | observation、candidate actions、instruction | imagined observation、reward、done、value | RL algorithm / evaluator / planner | simulator hallucination 污染训练或排序 |
-| Robotic Video World Model | observation、task、action、structure priors | future video / visual state | data engine / planner / policy evaluator | 视觉真实但动作不可信 |
-
-把这三种身份分开，文章就顺了：先看模型怎样进入 policy，再看怎样替代环境，最后看视频模型怎样变得可控。
+原文是 2026 年 4 月 30 日的 arXiv v1，PDF 共 43 页，正文到第 31 页，后面是参考文献，没有单独附录。它汇总已有研究，没有训练一个统一新模型，也没有在同一数据、硬件、随机种子下重新测试所有方法。后文的结果表应当作为跨论文证据索引阅读。
 
 ![Temporal evolution of representative works 原论文图](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-2-temporal-evolution.png){ width="920" }
 
-<small>图源：`World Model for Robot Learning: A Comprehensive Survey`，Figure 2。原论文图意：上支展示 world model for policy 从 IDM-style 走向 single-backbone、MoE/MoT、unified VLA 和 latent world modeling；下支展示 world model as simulator 从 validation / candidate evaluation 走向 RL、post-training 和 policy-world-model co-optimization。</small>
+*原文 Figure 2。上半部展示预测与动作逐渐出现更多耦合方式，下半部展示模拟器用途从验证扩展到策略训练和共同更新。图注强调这些是主要趋势，并非后来的方法严格替代早期方法。*
 
-Figure 2 的重点不是“新方法替代旧方法”，而是两个收敛趋势：policy 侧越来越把预测和动作生成绑紧；simulator 侧越来越把世界模型放进训练、评估和自我修正循环里。
+## “世界”可以是像素、潜变量，也可以是关系状态
 
-## 主线一：世界模型进入 Policy
+综述采用机器人学习中的功能定义。一个世界模型预测系统在动作影响下如何演化，输出必须能服务控制、规划、模拟、评估或数据生成。只生成一段看起来合理的视频，并不能单独说明它具有这种作用。
 
-policy 侧的核心问题是：**未来预测到底在哪里影响动作？**
-
-论文把 policy、world model、inverse dynamics 看成同一个联合分布的不同查询：
+原文 Eq.1 将问题写为
 
 $$
-p(o_{t+1:t+k}, a_{t+1:t+k} \mid o_t, l)
+p(x_{t+1:t+H}\mid x_t,a_{t:t+H-1},l).
 $$
 
-| Query | Formulation | 直觉 |
-| --- | --- | --- |
-| Policy Model | \(p(a_{t+1:t+k}\mid o_t,l)\) | 直接从当前观测和指令出动作 |
-| Passive World Model | \(p(o_{t+1:t+k}\mid o_t,l)\) | 不显式给动作，只按任务想象未来 |
-| Controllable World Model | \(p(o_{t+1:t+k}\mid o_t,a_{t+1:t+k})\) | 给定候选动作，预测后果 |
-| Inverse Dynamics Model | \(p(a_{t+1:t+k}\mid o_{t:t+k})\) | 给定状态变化，反推动作 |
+$x_t$ 是被建模的状态，可以是图像、隐藏表示、物理结构，也可以是规划器使用的符号。$a$ 表示底层动作，$l$ 表示任务或语言条件，$H$ 是预测范围。这个形式没有要求必须恢复全部世界信息，它要求选出的状态足以支持相应决策。[原文 §2.1，PDF pp.4–5](https://arxiv.org/pdf/2605.00080v1#page=4)
 
-这个视角很有用，因为很多论文看起来完全不同，本质上只是把未来预测放在了 policy 的不同位置。
+文章将语言指令也视为广义的高层 action，但始终用 $l$ 与底层控制 $a$ 区分。这个约定扩大了覆盖范围，让语言条件的视频规划也进入综述；它不表示“把杯子拿起来”和某一段关节命令是同一精度的干预。前者规定希望发生什么，后者决定机器人实际施加什么控制。
 
-### 同一个联合分布的四种读法
+当状态取视觉观察时，Eq.2 变为未来视频的条件分布。图像能保留接触、位置、遮挡和对象变化的丰富证据，也增加了建模负担。背景纹理与控制关键状态都进入生成目标，计算量随时空分辨率增长，预测还必须同时满足时间连续、动作跟随和长程一致。
 
-**Policy Model：只保留动作。**
-policy 把未来观测边缘化，只关心未来动作：
+因此，本文以视频路线为重点，是对近期文献规模的选择，不能理解成像素预测已经被证明是控制的最优抽象。符号状态可以表达“杯子在抽屉内”，潜变量可以保留抓取相关信息，深度或占据表示可以服务几何规划。是否需要生成完整画面，应由后续计算怎样使用预测来决定。
 
-$$
-p(a_{t+1:t+k}\mid o_t,l)
-=
-\int p(o_{t+1:t+k},a_{t+1:t+k}\mid o_t,l)\,d o
-$$
+## 从动作策略出发，才看得清增加未来变量的价值
 
-其中 \(o\) 表示被边缘化的未来观测序列；这行式子不是说 policy 不需要世界状态，而是说它把未来状态当作隐变量积分掉，只输出动作条件分布。
+原文首先回顾 imitation learning 中的策略。给定当前观察 $o_t$ 和任务 $l$，策略输出一段动作，写作 $p(a_{t+1:t+k}\mid o_t,l)$。动作分块把相邻控制一起建模，能够表达连贯行为；模型是否预测未来视觉，是另一项独立设计。
 
-它回答“当前看到这些、任务要求这些，下一段应该怎么动”。普通 VLA、Diffusion Policy 和 flow-based policy 都可以落在这个接口上，不要求显式生成未来画面。
+Diffusion Policy 等专门的 visuomotor policy 使用扩散或 flow matching 表达多模态动作分布。面对同一物体，可以从左侧或右侧接近，直接回归一个平均动作可能不合适，生成式策略则能够表达多种可行动作模式。原文也回顾了使用视觉表示、历史动作等更有信息的基础分布来改善采样效率的工作。[原文 §2.2，PDF pp.6–7](https://arxiv.org/pdf/2605.00080v1#page=6)
 
-**Passive World Model：只保留未来观测。**
-它把动作边缘化：
+![Diffusion Policy input-output 原论文/项目图](../../assets/images/paper-figures/vla/diffusion-policy-input-output-padded.jpg){ width="880" }
 
-$$
-p(o_{t+1:t+k}\mid o_t,l)
-=
-\int p(o_{t+1:t+k},a_{t+1:t+k}\mid o_t,l)\,d a
-$$
+*补充阅读图，来自已有 Diffusion Policy 原论文/项目资产，并非本综述 Figure。图中 observation horizon、prediction horizon 与 action horizon 分别说明观察范围、预测动作范围和实际执行范围，便于理解闭环分块控制。*
 
-它回答“在当前场景和任务下，未来大概会发生什么”。很多 text/image-conditioned video generator 更接近这一形式。因为动作不是显式输入，它适合做 visual planning 或 data generation，却很难直接比较候选控制序列。
+VLA 则利用视觉语言预训练提供语义知识，再通过机器人轨迹建立动作接口。RT-2、OpenVLA 等采用离散动作 token，FAST 用频域压缩改善动作序列表示；另一类通过连续扩散或 flow 动作头避免简单量化带来的精度限制。这里比较的是动作表示和训练起点，不能从“连续”或“离散”单独推导机器人是否理解未来。
 
-**Controllable World Model：固定动作，预测后果。**
+![RT-2 generalization comparison 原论文图](../../assets/images/paper-figures/vla/rt2-overall-wide.png){ width="920" }
+
+*补充阅读图，沿用已有 RT-2 资产。实际内容是已见任务与未见对象、背景、环境等条件下的比较柱状图，用于说明视觉语言迁移的研究背景；它不是本综述统一测试的结果，也不是世界模型架构图。*
+
+视频预训练提供的另一种先验来自时间演化。它可能学习运动连续性、遮挡变化和部分交互规律，而视觉语言预训练往往更直接强调语义对应。但综述明确保留了证据边界，目前不能据其汇总结果断言，在匹配规模、数据和训练预算后，视频骨干必然优于 VLM 骨干。下一步要理解的是怎样把这种预测先验接入策略。
+
+## 一个联合分布解释四种不同查询
+
+原文 §3.1 从未来观察与未来动作的联合分布出发。为避免重复长下标，下面记 $O=o_{t+1:t+k}$、$A=a_{t+1:t+k}$，其理想化共同对象为
 
 $$
-p(o_{t+1:t+k}\mid o_t,a_{t+1:t+k},l)
+p(O,A\mid o_t,l).
 $$
 
-它回答“如果执行这段动作，未来会变成什么”。planner 可以给出 \(a^{(1)},a^{(2)},a^{(3)}\) 等候选动作序列，让 world model 分别 rollout，再按 success、value、risk 或 progress 选择。对机器人控制而言，这是最关键的 world-model query。
-
-**Inverse Dynamics Model：看到变化，反推动作。**
+如果只想输出动作，可以把未来观察边缘化；如果只想生成未来，可以把动作边缘化。原文 Eq.5–6 的关系对应
 
 $$
-p(a_{t+1:t+k}\mid o_{t:t+k})
+p(A\mid o_t,l)=\int p(O,A\mid o_t,l)\,dO,
+\qquad
+p(O\mid o_t,l)=\int p(O,A\mid o_t,l)\,dA.
 $$
 
-它回答“环境从状态 A 变到状态 B，中间可能执行了什么动作”。这使系统能从无动作标签的人类视频或生成视频中恢复伪动作，也能把视觉计划转成机器人控制。
+这两个输出分别接近 policy model 与 passive world model。前者回答接下来怎样动，后者回答在当前任务下可能发生什么。若给定候选动作，再查询未来，就得到 controllable world model；若给定观察到的或计划的状态变化，再恢复动作，就得到 inverse dynamics model。[原文 Eq.4–8，PDF p.7](https://arxiv.org/pdf/2605.00080v1#page=7)
 
-四者并不是互斥模型。一个统一 video-action model 可以通过不同 mask、timestep 或 decoder 查询这些条件分布；一个 decoupled pipeline 则把它们实现成独立模块。
+| Query | 已给条件 | 希望得到的结果 | 对机器人系统的作用 |
+|---|---|---|---|
+| Policy Model | 当前观察、任务 | 未来动作 | 执行控制 |
+| Passive World Model | 当前观察、任务 | 可能的未来观察 | 提供视觉计划或未来表示 |
+| Controllable World Model | 当前观察、候选动作 | 与该动作相应的未来 | 模拟、评价或规划 |
+| Inverse Dynamics Model | 当前与未来观察 | 能实现状态变化的动作 | 将视觉计划落到控制空间 |
 
-![Policy paradigms 原论文图](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-3-policy-paradigms.png){ width="920" }
+这是一种组织方法的概率视角，并不保证四个独立训练的模型已经来自同一个一致联合分布。原文 Eq.7–8 还省略了部分任务条件，重点是查询对象的差别，不能将这种简写当成所有实现的条件独立假设。
 
-<small>图源：`World Model for Robot Learning: A Comprehensive Survey`，Figure 3。原论文图意：展示 IDM-style、single-backbone-style 和 MoT-style 三种用世界模型支撑 policy 的架构范式。</small>
+同样，观察数据中的条件概率不自动等于已识别的干预机制。若训练数据中某个任务几乎总和某种动作一起出现，模型可能主要根据任务猜测结果，忽略具体动作。对规划器而言，恰恰是候选动作不同造成的结果差异最重要。
 
-### 1. Decoupled / IDM-style：先想象，再反推动作
+这个联合视角也解释了为什么“未来预测只在训练时存在”仍可能有用。联合训练可以改变策略表示，部署时只查询动作；也可以保留未来分支，让它参与候选评价。是否在线生成未来，应当在训练目标之外单独检查。
 
-这类方法先用世界模型生成未来观测或未来 latent：
+## 第一类策略保留独立预测器，关键在中间表示
+
+IDM-style 方法采用先预测、再行动的模块化路径。世界模型给出任务条件的未来视频或潜在表示，独立策略再将它与当前观察结合，输出机器人动作。原文 Figure 3(a) 展示的正是这种串联关系。
+
+可以用下面的示意关系概括其信息流
 
 $$
-\hat{o}_{t+1:t+H}=\mathcal{W}(o_t,l)
+\hat O=W(o_t,l),
+\qquad
+A\sim\pi(\cdot\mid o_t,l,\Phi(\hat O)).
 $$
 
-再用 inverse dynamics 或 policy head 预测动作：
+这里的 $\Phi$ 表示策略实际读取的未来信息，可能是图像特征、去噪隐藏状态、运动轨迹或几何计划。这个式子是对原文 Eq.9–12 的统一解释，不是某篇方法的逐字损失函数。原文相应式子的动作下标在 chunk 与单步之间有所简写，实际实现还需区分视频预测范围 $H$ 与动作输出范围 $H'$。[原文 §3.2，PDF pp.9–10](https://arxiv.org/pdf/2605.00080v1#page=9)
 
-$$
-\pi(a_{t+1:t+H'} \mid o_t,l,\Phi(\hat{o}_{t+1:t+H}))
-$$
+### 从完整视频到潜在计划，减少的是哪些负担
 
-它的优点是模块清楚：world model 负责“未来会怎样”，policy 负责“怎么做过去”。问题也很直接：如果生成未来不受动作约束，IDM 会从一个错误或平均化的未来里恢复动作。
+UniPi 建立了生成任务视频再用逆动力学恢复动作的基本路线。VidMan、Vidar 等进一步强调与动作有关的区域，Gen2Act 则把生成的人类执行视频作为机器人动作推断的条件。共同问题是，未来必须既合理又可执行，不能只描绘任务成功的外观。
 
-训练上常见做法是先训练或适配 video predictor，再冻结或轻量适配它，最后训练 action decoder。VPP、Video2Act、MimicVideo 这类工作会进一步把 pixel rollout 压成 latent predictive features，减少完整视频生成成本。
-
-这条路线的发展不是简单增加模型数量，而是在不断改造 world model 和 policy 之间的接口：
-
-| 接口阶段 | 代表工作 | 给 policy 的未来信息 | 解决的问题 |
-| --- | --- | --- | --- |
-| Explicit future video | UniPi | 完整未来帧序列 | 建立“先预测、再行动”的基本范式 |
-| Action-focused visual change | VidMan、Vidar | masked / action-relevant regions | 避免 IDM 被背景和无关视觉变化干扰 |
-| Human-video condition | Gen2Act | 生成的人类执行视频 | 利用人类视频中的动作和语义先验 |
-| Latent predictive feature | VPP、Video2Act、MimicVideo | 视频扩散中间特征或部分去噪 latent | 避免完整像素 rollout，提高稳定性和效率 |
-| Visual goal + exploration | V2A | 合成视频状态作为 visual goal | 不直接回归 IDM，而是通过 hindsight-style exploration 学 goal-conditioned policy |
-| Structured execution plan | TC-IDM、LVP | tool trajectory、visual plan、几何结构 | 把视觉未来压成更容易执行的控制接口 |
-
-这张演进表揭示了 decoupled 方法的真正趋势：future representation 从“完整画面”逐步变成“动作相关、结构化、低成本的 predictive condition”。因此，decoupled 不等于落后；如果接口足够紧凑并能保留动作后果，它仍然是很实用的工程选择。
+若先把全部未来像素渲染出来，再由另一个网络重新提取控制信息，系统可能为无关细节支付两次成本。VPP、Video2Act 因而直接使用预训练视频扩散模型中的预测特征，将世界模型变成未来表示的来源。它们仍保留独立动作模块，改变的是模块间传递的内容。
 
 ![VPP overview 原论文图](../../assets/images/paper-deep-dives/embodied-ai/vpp/figure-1-overview.png){ width="920" }
 
-<small>图源：[Video Prediction Policy](https://arxiv.org/abs/2412.14803)，Figure 1。原图表达：视频 diffusion model 的内部表征包含当前视觉和未来预测信息，VPP 将这些 predictive visual representations 聚合后交给机器人 policy。本站读法：这张图正好说明 decoupled 路线的一个关键演进：未来不一定要以高清视频形式进入策略，控制侧真正需要的是可消费的预测表征。</small>
+*补充阅读图，来自已有 VPP 原论文资产。左侧 prediction horizon 与 future/current representation 展示预测特征如何进入动作学习；右侧原论文示例与结果属于 VPP 自己的实验，不是综述统一比较。*
 
-### 2. Single-backbone：未来视觉和动作一起生成
+MimicVideo 再向前一步，使用部分去噪的 latent visual plan。对控制有用的运动轮廓可能较早出现，策略未必需要等到纹理完全恢复。TC-IDM、LVP 则将未来整理成工具中心的几何轨迹或可重定向计划，让动作恢复更贴近执行约束。Say-Dream-ACT 使用视频计划作为另一策略的上下文提示，其作用与严格逐帧求逆并不完全相同。
 
-single-backbone 方法不再把 world model 和 policy 分成两个模块，而是把未来视觉表示 \(z^v\) 和动作表示 \(z^a\) 放进同一个生成过程：
+因此，IDM-style 在综述中是架构家族，包含多种 future-conditioned control 接口，不能要求每个成员都使用完全相同的相邻帧逆动力学损失。
 
-$$
-\mathbf{x}=[z^v;z^a], \qquad
-\hat{y}=f_\theta(\tilde{\mathbf{x}}_\tau,o_t,l,\tau)
-$$
+### 显式几何中间量增加了可执行约束
 
-这里 \(\tilde{\mathbf{x}}_\tau\) 可以是加噪 diffusion latent、flow matching 中间状态，或 masked token。目标 \(y\) 可能是 diffusion noise、velocity field 或 token target。训练压力来自联合预测：模型必须同时解释“未来世界怎样变”和“动作应该怎样出”。
+AVDC 从生成视频中提取密集对应关系，VidBot 关注人手三维轨迹和交互线索，object-centric motion field 与 NovaFlow 等把变化表示成对象中心的三维运动。它们试图缩短从“看到未来”到“知道怎样动”的距离。
 
-这条路线的关键收益是减少 representational gap。Cosmos Policy 把 action、future state、value 作为额外 latent frames；DreamZero 做 chunk-wise joint denoising；GigaWorld-Policy 让视觉分支在推理时可选。这些设计都说明一个事实：完整视频不是最终目的，真正重要的是可被动作生成使用的 predictive structure。
+这种结构也引入新的误差来源。像素对应错误会影响动作恢复，三维轨迹需要与机器人可达空间一致，人的手部运动不能直接复制成异构机器人控制。模块化便于替换预测器和动作头，却要求两者对中间状态的含义达成一致。
 
-这类方法的演进可以按“视觉分支在推理时还剩多少”来理解：
+原文将冻结、轻量适配或连接独立策略头列为这类方法的常见训练方式，并未规定统一流程。实际读一篇方法时，要确认世界模型是否更新，动作损失能否传回预测器，以及推理时读取完整视频还是隐藏表示，不能只凭“预训练视频模型”猜测训练成本。
 
-| 设计 | 代表工作 | 联合训练方式 | 推理时怎样用 |
-| --- | --- | --- | --- |
-| Joint video-action latent | UVA | 在共享 latent space 中同时监督 future visual 和 action | 用轻量 modality head 解码动作，可绕过完整视频渲染 |
-| Modality-specific diffusion time | UWA | 视频和动作处于同一 diffusion transformer，但使用不同 timestep / noise 状态 | 通过 timestep control 边缘化视觉未来，直接查询 action |
-| Video-Action DiT | VideoVLA、VideoPolicy | 把 pretrained video generator 改造成同时生成视频和动作的 backbone | 视频生成本身成为 policy substrate，动作由同一生成过程读出 |
-| Parallel action/state/value latent | Cosmos Policy | 把 action、future state、value 编码成视频序列中的额外 latent frames | direct policy 只取 action；planning mode 同时使用 future state 和 value |
-| Chunk-wise closed-loop generation | DreamZero | flow-matching DiT 共同去噪视频和动作 chunk | 每个 chunk 后接收真实观测，避免 free-running 长 rollout 漂移 |
-| Optional visual branch | GigaWorld-Policy | 共享 transformer 联合做 action prediction 和 action-conditioned video generation | 部署时可关闭视觉解码，保留 joint training 带来的动态先验 |
+## 第二类策略在同一个生成过程中预测视频与动作
 
-这几种设计回答了同一个工程问题：**能否享受视频预测带来的时序先验，又不在每个控制周期支付完整视频生成成本？**
-
-#### Single-backbone 的训练链路
-
-一个典型训练过程可以拆成四步：
-
-1. 从预训练 video diffusion / flow model 初始化时空 backbone；
-2. 把 action、proprioception、future state 或 value 编码成新 token / latent frame；
-3. 对视频分支和动作分支施加联合 diffusion、flow matching 或 discrete denoising loss；
-4. 推理时根据任务选择只解码动作，或保留 future/value 分支做 planning。
-
-联合训练并不意味着每个 loss 权重相同。视频 reconstruction/denoising 的梯度规模通常远大于低维动作 loss，若不做 modality-specific normalization、loss balancing 或独立 timestep，动作分支容易被视觉分支淹没。反过来，如果动作 loss 太强，也可能破坏视频底座已经学到的开放域时空先验。
-
-#### Single-backbone 的边界
-
-共享主干减少了模块间误差，但也把错误绑在了一起：未来视觉 hallucination 可能直接影响动作；动作数据规模远小于互联网视频，也可能让 joint finetuning 发生 catastrophic forgetting。因此 strong video prior 是有价值的 inductive bias，却不能自动证明它比同规模 VLM backbone 更适合机器人控制。
-
-### 3. MoE / MoT：视频专家和动作专家深度交互
-
-MoE/MoT-style 不完全共享所有参数，而是保留视频、动作、语言等专家分支，通过 shared attention、cross attention 或 interleaved sequence 交换信息：
+共享骨干路线把未来视觉表示 $z_v$ 与动作表示 $z_a$ 放入同一模型。原文 Eq.13–14 用一个通用去噪映射说明这个思路
 
 $$
-(\mathbf{h}^{v}_{\ell+1},\mathbf{h}^{a}_{\ell+1})
-=
-\mathcal{F}^{mix}_{\ell}(\mathbf{h}^{v}_{\ell},\mathbf{h}^{a}_{\ell};o_t,l)
+x=[z_v;z_a],
+\qquad
+\hat y=f_\theta(\tilde x_\tau,o_t,l,\tau),
+\qquad
+\mathcal L_{\mathrm{unified}}=\mathbb E[\ell(\hat y,y)].
 $$
 
-它的动机是视频预测和动作控制的频率、尺度、监督目标不同。强行完全共享 backbone 可能让两边互相拖累；完全拆开又让信息交互太浅。LingBot-VA、Motus、BagelVLA、Fast-WAM 等方法都在这条中间路线上做取舍。
+$\tau$ 是噪声或去噪时间，不能与机器人时间 $t$ 混淆。目标 $y$ 随具体模型变化，可以是扩散噪声、flow velocity 或离散 mask token。综述没有声称所有模型都采用同一个均方误差、相同噪声调度或相同采样器。[原文 §3.3，PDF pp.10–12](https://arxiv.org/pdf/2605.00080v1#page=11)
 
-MoE/MoT 路线可以继续拆成三种交互方式。
+![Policy paradigms 原论文图](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-3-policy-paradigms.png){ width="920" }
 
-**平行专家。**
-GE-Act 一类方法保留预训练视频 diffusion backbone，再增加较轻的 flow-matching action branch。视频专家提供未来动态特征，动作专家通过 cross-attention 读取这些特征。优势是能冻结大部分视频参数，只训练 action pathway 和连接层；问题是 cross-attention 太浅时，动作可能只读到视觉语义，而没有真正使用未来动态。
+*原文 Figure 3。左图通过模块接口传递未来，中图让观察与动作 token 经过共享骨干，右图保留专家参数并通过 joint attention 深度交换信息。三者的差异在参数与信息流组织。*
 
-**逐层深度交互。**
-Motus、LingBot-VA、BagelVLA、DiT4DiT 等方法让视频 expert 和 action expert 在多层 shared/joint attention 中持续交换信息。LingBot-VA 还把 video/action token 组织成因果序列，使 imagined future state 成为后续动作 refinement 的上下文。BagelVLA 进一步把语言规划、visual foresight 和 action generation 放在同一执行循环里，并用 single-step visual foresight 降低完整 rollout 成本。
+共享生成过程使视觉与动作约束能在内部交换。例如动作表示指向某个抓取位置，未来视觉应当反映相应运动；预测未来的几何变化也能影响动作生成。它提供了学习对齐的机会，但若训练信号允许一条分支忽视另一条，参数共享本身仍不是动作忠实性的证明。
 
-**latent-space expertization。**
-LDA-1B 不重建像素，而是在 DINO 等视觉 latent 空间预测未来；FRAPPE 则让多个 expert stream 对齐 future visual representation。它们保留 expert specialization，但把视频分支从“画未来”变成“预测控制相关表征”。
+### 相同共享骨干，不同部署查询
 
-| 设计问题 | MoE/MoT 的回答 | 工程代价 |
-| --- | --- | --- |
-| 视频和动作是否共享全部参数 | 不共享全部参数，只共享 attention 或跨分支交互 | 参数、显存和通信量增加 |
-| 两种模态频率不同怎么办 | 各自 tokenization、timestep、head 和 expert | 需要仔细做时间对齐和 loss balance |
-| 是否必须生成完整未来视频 | 不一定，可读取中间 denoising feature 或 latent state | 中间特征缺少直接可视化，验证更困难 |
-| 视频分支部署时能否关闭 | Fast-WAM 等路线允许 train-time co-training、test-time skipped | 必须证明移除视频分支后收益仍保留 |
+UVA 学习视频与动作联合潜空间，并用轻量解码头允许策略推理绕过显式视频生成。UWA 将视频与动作扩散放入同一个 Transformer，利用模态相关时间步控制查询方式。VideoVLA 则将视频 DiT 扩展为联合视觉未来与动作的 video-action 模型。
 
-MoE/MoT 的核心不是参数更多，而是把“共享什么”和“保留什么”分开设计。它适合视频和动作能力都很强、但数据频率和优化目标明显不同的系统；若任务简单或训练数据有限，复杂 expert fusion 也可能只是增加系统成本。
+Cosmos Policy 把动作、未来状态和价值表示成额外 latent frames。直接策略模式只需要执行动作输出，规划模式才进一步使用未来状态和价值为候选排序。DreamZero 使用自回归 flow matching 的视频动作模型，但综述强调其闭环分块联合去噪，不能把它等同于一次性自由生成很长轨迹再全部照做。
 
-### 4. Unified VLA / Latent-space WM：把未来预测内化进表征
+UD-VLA 将类似耦合放入离散多模态同步去噪过程，GigaWorld-Policy 则采用使视觉分支在推理时可选的因果设计。它们共同说明，共享训练与在线视频渲染并非捆绑关系。
+
+| Representative Work | 原文强调的耦合 | 部署时要追问的区别 |
+|---|---|---|
+| UVA | Joint video–action latent space | 是否通过专用头绕过视频解码 |
+| UWA | Joint diffusion with modality-specific timesteps | 怎样通过时间步查询动作边缘 |
+| VideoVLA | Joint future video and action prediction | 视觉分支参与多少推理计算 |
+| Cosmos Policy | Action, future-state and value latent frames | Direct policy 与 planning mode 是否相同 |
+| DreamZero | Chunk-wise joint video–action flow modeling | 何时重新观察并更新后续 chunk |
+| UD-VLA | Discrete synchronous denoising | 测试时效率技术如何影响生成流程 |
+| GigaWorld-Policy | Shared transformer with causal organization | 是否启用可选视觉分支 |
+
+表中是综述提供的设计差异，并非统一实测延迟表。若要做复现，仍需回到各原论文确定 chunk 长度、去噪步数、动作频率与硬件。
+
+## 第三类策略保留专家分工，让预测信息逐层参与动作
+
+视频与动作的尺度差别很大。视频包含大量空间 token，动作维度较低却可能更新更快；两种表示需要的网络容量、损失尺度与噪声过程也未必相同。MoE/MoT-style 路线由此保留模态专门参数，再通过 joint attention、cross-attention 或交错序列进行耦合。
+
+原文 Eq.15 将这种关系写成逐层混合
+
+$$
+(h_v^{\ell+1},h_a^{\ell+1})
+=F_{\mathrm{mix}}^{\ell}(h_v^{\ell},h_a^{\ell};o_t,l).
+$$
+
+它强调视频流与动作流都持续存在，并在多层里交换信息。这里的“专家”不一定采用 token 稀疏路由，也不表示每层只选一个专家执行；要以具体 MoT 或融合结构为准。[原文 §3.4，PDF pp.12–13](https://arxiv.org/pdf/2605.00080v1#page=12)
+
+GE-Act 的例子是预训练视频路径旁边增加 flow action 路径，用深层交叉注意力注入预测特征。Motus 明确保留理解、视频、动作专家。LingBot-VA 将视频与动作放进共享的因果序列，通过双流 MoT 让预测上下文参与动作细化。BagelVLA 将语言计划、视觉预测和动作连接成执行循环，并用 Residual Flow Guidance 缩短视觉预测过程。
+
+这里说的 LingBot-VA 是综述对应版本的工作，不将后续 LingBot-VA 2.0 的数据量和系统性能倒填入表格。类似地，BagelVLA 的单步视觉先见属于所引方法的效率设计，不能推广成全部专家架构都只需一次去噪。
+
+Fast-WAM 对这一家族提出值得注意的实验方向，收益可能更多来自训练时视频共训练，而非部署时显式想象。LDA-1B 将未来表示转移到 DINO latent space，FRAPPE 让平行专家对齐视觉基础模型的表示，DiT4DiT 使用视频去噪中间特征指导动作。
+
+这些方法逐渐把视频分支视为预测过程而不只是待显示的成品。可比较的问题因此变成，动作支路到底利用了什么未来信息，关闭或打乱这部分信息时表现怎样，节省解码以后是否保留了关键控制收益。综述组织了这些方向，没有提供把所有结构放在同一预算下的消融。
+
+## 第四与第五类把未来能力放回 VLA 内部
+
+前面三类主要围绕视频生成骨干与动作结合，统一 VLA 路线则从多模态策略本身出发。它在理解观察与语言的同时，联合学习未来图像、世界知识、视觉子目标或动态表示。[原文 §3.5–3.6，PDF pp.13–15](https://arxiv.org/pdf/2605.00080v1#page=13)
 
 ![UMM and latent-space VLA 原论文图](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-4-umm-latent-vla.png){ width="860" }
 
-<small>图源：`World Model for Robot Learning: A Comprehensive Survey`，Figure 4。原论文图意：展示两条 MLLM-based 路线：unified VLA 在同一模型里联合处理 observation、language、action 和未来辅助输出；latent-space WM 则把未来动态压进 compact world representation 或 latent prediction。</small>
+*原文 Figure 4。左侧统一多模态模型可同时输出推理、视觉预测和动作，右侧将未来信息压进 world representation 后服务动作。右图没有像素输出，不等于没有预测监督。*
 
-Unified VLA 不一定在线生成未来视频，但会用 future image prediction、visual foresight、structured world knowledge 或 latent future target 给 action learning 加预测压力。Latent-space WM 则更像 JEPA 路线：未来帧只产生 latent target，不要求像素重建。
+GR-1 和 UP-VLA 使用未来图像预测，WorldVLA 将动作、图像理解与生成统一，但未来图像主要作为共同训练信号。DreamVLA 预测动态、空间和语义等结构知识，UniVLA 在原生多模态 token 框架上学习世界建模，CoWVLA 更强调 latent motion 和紧凑未来视觉目标。
 
-这一类最关键的训练细节是防止 leakage。未来帧可以做监督目标，但推理时不能被模型偷看。VLA-JEPA 这类方法强调 leakage-free state prediction，本质上是在保证 future supervision 真正变成内部 predictive state，而不是训练捷径。
+F1、InternVLA-A1、HALO、TriVLA 又在统一模型中保留功能分工。它们与上一节一样可能使用多专家结构，但综述按预训练起点与预测支路角色将其放在 unified VLA 下。分类边缘会重叠，不能把表中的组名理解成数学上互斥的集合。
 
-这两条路线容易混在一起，可以按“未来预测是否有独立输出”区分。
+### 潜在空间路线要区分监督目标与推理输入
 
-#### Unified VLA：未来预测是辅助任务
+FLARE 将动作去噪网络的隐藏特征对齐到未来观察的 latent embedding。未来信息通过训练目标塑造动作表示，不要求每次控制都生成未来图像。
 
-Unified VLA 仍然以 MLLM / VLA 为主干，future modeling 作为联合训练目标进入同一模型。
+VLA-JEPA 进一步强调 leakage-free state prediction，未来帧只用于构造监督目标，避免模型在预测时直接读取答案。JEPA-VLA 采用另一条路，将视频 JEPA 学出的预测 embedding 作为现有 VLA 更好的表示基础。这两个名称相近的方法不能混成一个统一算法。
 
-| 未来监督形式 | 代表工作 | 训练作用 |
-| --- | --- | --- |
-| Future image prediction | GR-1、UP-VLA、WorldVLA | 让 backbone 不只理解当前画面，还学习任务执行后的视觉状态 |
-| Structured world knowledge | DreamVLA | 把 dynamic、spatial、semantic cues 作为中间预测目标 |
-| Compact latent dynamics | UniVLA、CoWVLA | 避免重建冗余像素，把监督集中到运动和未来状态 |
-| Visual foresight / subgoal | F1、InternVLA-A1、HALO、TriVLA | 先预测未来视觉目标或 episodic dynamics，再输出动作 |
+WoG 将预测对象缩小到动作生成所需的 future-oriented condition，DIAL 则把 VLM 特征空间中的潜在视觉先见作为高层意图与底层动作之间的瓶颈。它们共同追问，若动作只需要某部分未来信息，是否有必要重建所有像素。
 
-它们的共同目标不是训练一个可独立调用的 simulator，而是用 future-oriented auxiliary loss 改善 policy representation。推理时通常只保留动作路径，因此 latency 较低；代价是“模型是否真的会模拟未来”不容易单独验证。
+对这些路线，读者应检查目标编码器是否固定或更新、未来帧是否仅作为训练 target、动作头如何读取预测表示，以及推理中到底增加了哪些计算。综述概括这些设计原则，但没有列齐每篇方法的优化器、学习率、训练硬件和损失权重，不能从家族标签补出统一配方。
 
-#### Latent-space WM：未来预测本身就是内部状态
+### 非像素预测还可以交给符号规划器
 
-Latent-space 方法进一步取消显式像素目标，只要求当前观测和动作能够预测未来 representation。
+原文另外讨论 predicates、对象关系、affordances 和因果过程等结构状态。模型预测这些状态的转移，再由符号或任务运动规划器选择技能序列。它与 latent VLA 的共同点是避免不必要的像素重建，区别则在于状态是否显式、规划器如何查询，以及如何把视觉观察映射到这些状态。
 
-- FLARE 对齐 action denoising hidden feature 与 future observation latent；
-- VLA-JEPA 用 leakage-free JEPA objective 预测未来 state representation；
-- JEPA-VLA 直接把 V-JEPA 2 等 predictive encoder 作为 policy backbone；
-- WoG 只预测对动作生成有用的 future condition；
-- DIAL 用 latent visual foresight 把 high-level intent 和 low-level action 解耦。
+符号抽象可以稳定表达长程任务逻辑，但也可能遗漏接触细节或连续几何。感知与符号对齐失败时，推理规则正确仍不能保证执行成功。综述将其作为互补路线，并未声称显式符号能自动消除所有长程误差。
 
-可写成一个通用目标：
+## 原表一最值得读的列是推理时还生成什么
 
-$$
-\hat{z}_{t+1:t+H}
-=
-g_\theta(z_t,a_{t:t+H-1},l),
-\qquad
-\mathcal{L}_{latent}
-=
-d(\hat{z}_{t+1:t+H},
-\operatorname{sg}(E(o_{t+1:t+H})))
-$$
+下图保留原文 Table 1 的完整英文条目。横向读同一组，可以看到“用同类骨干”与“部署时做同样计算”之间的差距。
 
-其中 \(E\) 是 target encoder，\(\operatorname{sg}\) 表示 stop-gradient，\(d\) 是 cosine、L1/L2 或其他 representation distance。关键不是具体距离，而是 target branch 只能提供训练监督，不能把未来信息泄漏给 policy 输入。
+![Original Table 1 architectural paradigms](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/table-1-original.png){ width="1000" }
 
-latent prediction 的优势是省掉 VAE decode 和多步视频采样，也能忽略纹理、光照等控制无关细节。风险是 latent 很可能学成 benchmark shortcut：它在训练分布内能预测任务进度，却未必保存接触、物体身份和动作反事实所需的信息。因此仍要用 downstream control 和 action sensitivity 验证。
+*原文 Table 1，PDF p.8。Future Generation at Inference 一列从 explicit video rollout、latent predictive features 到 test-time skipped，说明预测能力可以通过不同形式进入控制。*
 
-#### 符号和结构化世界模型
+| Paradigm | Future Generation at Inference 的典型形式 | Coupling Style | 主要接口压力 |
+|---|---|---|---|
+| IDM-style | 视频、潜在计划或结构化计划 | Decoupled | 预测未来能否被动作模块执行 |
+| Single-backbone | 联合生成、并行状态/价值或可选视觉分支 | Shared backbone | 联合训练与部署查询如何对应 |
+| MoE/MoT | 预测隐藏流、专家 rollout 或训练后省略 | Expert fusion / MoT fusion | 模态尺度与计算分配 |
+| Unified VLA | 未来图像、子目标或世界知识 | Joint co-training 等 | 预测目标是否真正服务动作 |
+| Latent-space WM | 预测 embedding 或未来条件 | Latent internalization | 表示是否保留控制关键变化 |
 
-论文还把 predicate、object relation、affordance、occupancy 和 causal process 视为 latent world modeling 的相邻路线。它们不预测像素，而预测：
+前面三列对应原表的分类与信息，最后一列是本文的接口分析。它们没有一个天然占优的统一排序。若部署时延严格受限，训练期预测监督可能更合适；若需要展示或检查候选未来，显式生成又可能提供更直接的接口。
 
-```text
-drawer_closed -> drawer_open
-cup_on_table -> cup_in_gripper
-path_blocked -> path_clear
-```
+## 世界模型成为训练环境时，误差会进入优化目标
 
-这种表示更适合长时任务规划和约束检查，但前提是视觉输入能稳定 grounding 到符号状态。现实系统更可能采用 hybrid design：神经网络负责感知和短时动力学，结构化状态负责长时规划与安全约束。
-
-### Table 1：Architectural paradigms for world-model-based policies
-
-| Paradigm | Representative Work | Future Generation at Inference | Backbone | Coupling Style |
-| --- | --- | --- | --- | --- |
-| IDM-style | UniPi | Explicit video rollout | VGM | Decoupled |
-| IDM-style | VidMan | Explicit video rollout | VGM | Decoupled |
-| IDM-style | Vidar | Explicit video rollout | VGM | Decoupled |
-| IDM-style | Gen2Act | Explicit human-video rollout | VGM | Decoupled |
-| IDM-style | VPP | Latent predictive features | VGM | Decoupled |
-| IDM-style | Video2Act | Latent predictive features | VGM | Decoupled |
-| IDM-style | MimicVideo | Latent visual plan | VGM | Decoupled |
-| IDM-style | TC-IDM | Structured execution plan | VGM | Decoupled |
-| IDM-style | LVP | Visual plan | VGM | Decoupled |
-| IDM-style | Say-Dream-ACT | Video prompt | VGM | Decoupled |
-| Single-backbone | UVA | Joint latent prediction | VGM | Shared backbone |
-| Single-backbone | UWA | Joint diffusion process | VGM | Shared backbone |
-| Single-backbone | VideoVLA | Joint video rollout | VGM | Shared backbone |
-| Single-backbone | VideoPolicy | Video policy substrate | VGM | Shared backbone |
-| Single-backbone | Cosmos Policy | Parallel action/state/value outputs | VGM | Shared backbone |
-| Single-backbone | DreamZero | Chunk-wise joint rollout | VGM | Shared backbone |
-| Single-backbone | UD-VLA | Synchronous denoising | VGM | Shared backbone |
-| Single-backbone | GigaWorld-Policy | Optional visual branch | VGM | Shared backbone |
-| MoE/MoT | GE-Act | Latent visual guidance | VGM | Expert fusion |
-| MoE/MoT | Motus | Expert rollout | VGM | MoT fusion |
-| MoE/MoT | LingBot-VA | Visual predictive context | VGM | MoT fusion |
-| MoE/MoT | BagelVLA | Single-step visual foresight | VGM | MoT fusion |
-| MoE/MoT | Fast-WAM | Train-time video, test-time skipped | VGM | MoT fusion |
-| MoE/MoT | LDA-1B | Latent dynamics only | VGM | Expert fusion |
-| MoE/MoT | FRAPPE | Latent representation alignment | VGM | Parallel experts |
-| MoE/MoT | DiT4DiT | Latent video guidance | VGM | Expert fusion |
-| Unified VLA | GR-1 | Future image prediction | UMM | Joint co-training |
-| Unified VLA | UP-VLA | Future image prediction | UMM | Joint co-training |
-| Unified VLA | WorldVLA | Future image (mainly train-time) | UMM | Joint co-training |
-| Unified VLA | DreamVLA | Structured world knowledge | UMM | Joint co-training |
-| Unified VLA | UniVLA | Latent world modeling | UMM | Joint co-training |
-| Unified VLA | CoWVLA | Latent dynamics | UMM | Joint co-training |
-| Unified VLA | F1 | Visual foresight | UMM | Unified MoT |
-| Unified VLA | InternVLA-A1 | Latent foresight | UMM | Unified MoT |
-| Unified VLA | HALO | Visual subgoal prediction | UMM | Unified multi-expert |
-| Unified VLA | TriVLA | Episodic dynamics | UMM | Multi-system |
-| Latent-space WM | FLARE | Latent alignment | MLLM | Latent internalization |
-| Latent-space WM | VLA-JEPA | Latent target prediction | MLLM | Latent internalization |
-| Latent-space WM | JEPA-VLA | Predictive embeddings | MLLM | Latent internalization |
-| Latent-space WM | WoG | Future condition only | MLLM | Latent internalization |
-| Latent-space WM | DIAL | Latent visual foresight | MLLM | Latent internalization |
-
-<small>表源：`World Model for Robot Learning: A Comprehensive Survey`，Sec. 3 Table。原表英文列名保留。`VGM` 指 video generation model，`UMM` 指 unified multimodal model，`MLLM` 指 multimodal large language model。</small>
-
-这张表的用法很简单：不要横向比“谁更强”，而是先看 **Future Generation at Inference**。如果未来预测只在训练时出现，它更像 representation regularizer；如果推理时也 rollout，它就是 latency 和 simulator reliability 的核心成本。
-
-## 主线二：世界模型作为 Simulator
-
-simulator 侧的核心问题是：**世界模型是否能替代环境给 policy 反馈？**
-
-最一般形式是：
+模型作为模拟器的关键变化，是策略真的在它产生的状态中继续行动。给定历史、动作和任务，模型输出下一观察，并可能同时输出奖励与终止信号。原文 Eq.16 的形式为
 
 $$
-(\hat{o}_{t+1},\hat{r}_t,\hat{d}_t)
-\sim p_\phi(\cdot \mid o_{\le t},a_{\le t},l)
+(\hat o_{t+1},\hat r_t,\hat d_t)
+\sim p_\phi(\cdot\mid o_{\leq t},a_{\leq t},l).
 $$
 
-这里 \(\hat{o}_{t+1}\) 是想象下一观测，\(\hat{r}_t\) 是 reward / progress，\(\hat{d}_t\) 是 termination。policy 可以在 learned simulator 里最大化 imagined return：
+奖励和终止预测是可选能力，不能默认每个视频模型都具备。环境转移、任务进展评分、结束判断有时来自不同组件，其误差也会分别影响训练。[原文 §4.1，PDF pp.15–17](https://arxiv.org/pdf/2605.00080v1#page=16)
+
+策略随后在想象轨迹中提高回报，原文 Eq.17 写作
 
 $$
-J(\theta)=
-\mathbb{E}_{\hat{\tau}\sim(\pi_\theta,p_\phi)}
-\left[\sum_t \gamma^t \hat{r}_t\right]
+J(\theta)=\mathbb E_{\hat\tau\sim(\pi_\theta,p_\phi)}
+\left[\sum_t\gamma^t\hat r_t\right].
 $$
 
-对现代 VLA post-training，论文把它概括到 PPO / GRPO-style objective：
-
-$$
-\mathcal{L}_{RL}(\theta)=
--\mathbb{E}_t
-\left[
-\min(r_t(\theta)\hat{A}_t,
-\mathrm{clip}(r_t(\theta),1-\epsilon,1+\epsilon)\hat{A}_t)
-\right]
-$$
-
-这个公式不是说所有工作实现完全一样，而是把共同点说清：真实机器人交互贵、慢、危险、难 reset，所以大家试图在 learned world simulator 里产生 rollouts 和 feedback。
+这能减少真实机器人交互、复位和失败尝试的成本，也让策略有机会超出固定示范。但优化器追求的是模拟器中的高分，如果世界模型忽视某种动作后果，策略可能学会利用这一偏差，而非学到真实有效行为。
 
 ![World model for RL and validation 原论文图](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-5-rl-vs-validation.png){ width="860" }
 
-<small>图源：`World Model for Robot Learning: A Comprehensive Survey`，Figure 5。原论文图意：左侧是 world model as learned simulator for RL，右侧是 world model as validation / evaluator，用 imagined consequences 评分候选动作。</small>
+*原文 Figure 5。左图的想象轨迹进入 policy update，右图比较候选未来并选择动作。一个改变策略参数，一个主要改变当前选择，验证两者时需要不同证据。*
 
-### Simulator 有两种功能
+### 从固定模拟器到适配现代动作头
 
-| 功能 | 做什么 | 代表方向 | 最关键的风险 |
-| --- | --- | --- | --- |
-| Reinforcement Training | policy 在 learned simulator 里 rollout、收 reward、更新参数 | World-Env、VLA-RFT、WMPO、World4RL、World-Gymnast、PlayWorld、RehearseVLA | policy exploit simulator，reward / done head 被钻空子 |
-| Evaluation / Validation | policy 先提出候选动作，world model rollout 后排序、过滤或估值 | GPC、IRASim、World-in-World、DreamPlan、WorldEval、WorldArena | 候选排序和真实执行排序不一致 |
+UniSim、World-Env、VLA-RFT 展示了动作条件模拟与反馈结合的基本路径。DiWA 使用从大规模 play 数据中学习并冻结的世界模型，支持扩散策略的离线适配；World4RL 则探索高保真操作场景中的想象优化。
 
-这里有一个很重要的区别：RL route 会改变 policy 参数，validation route 不一定训练 policy，它可能只是 test-time selection 或 offline policy ranking。因此两条路线的证据也不同。RL 要看真实任务成功率是否提升；validation 要看 policy-ranking fidelity、value fidelity、failure detection 是否跟真实世界一致。
+随后，World-Gymnast、PlayWorld、RehearseVLA 等分别强调视频环境中的 RL、自治 play 数据，以及提供奖励和终止反馈的反思组件。WMPO 关注像素空间想象与 on-policy GRPO，ProphRL 针对 flow 动作头设计优化，RISE 引入组合动态建模和 progress-value 估计，GigaBrain-0.5M* 面向预训练 VLA 适配。
 
-### 1. 在 learned simulator 里做强化学习
-
-这一类工作的共同骨架并不复杂：
-
-```text
-real trajectories
-      ↓
-train action-conditioned world model
-      ↓
-policy proposes action chunks
-      ↓
-world model rolls out future observations
-      ↓
-reward / progress / termination / risk
-      ↓
-PPO / GRPO / flow-compatible policy update
-      ↓
-real replay or real-robot validation
-```
-
-真正拉开方法差异的不是“有没有 rollout”，而是 rollout 的表示、反馈头和 policy optimizer 是否匹配。
-
-| 发展层次 | 代表工作 | 训练重点 | 解决的核心问题 |
-| --- | --- | --- | --- |
-| Basic learned environment | UniSim、World-Env、VLA-RFT | action-conditioned transition + reward / termination | 证明机器人可以在 learned simulator 中进行低成本强化 |
-| Offline / frozen adaptation | DiWA | 冻结由大规模 play data 学到的 world model，离线适配 diffusion policy | 不额外采集真实交互也能改善策略 |
-| High-fidelity imagined optimization | World4RL、World-Gymnast、PlayWorld | diffusion/video rollout、autonomous play、end-to-end imagined update | 让 learned simulator 覆盖更复杂的操作分布 |
-| VLA post-training | RehearseVLA、WMPO、GigaBrain-0.5M | 物理一致 rollout、pixel-space imagination、on-policy GRPO | 把 simulator-based RL 接到预训练 VLA |
-| Optimizer-aware RL | ProphRL | FA-GRPO、FlowScale 等 flow-action 适配 | 避免把 token-policy 的 RL 目标生搬到 flow head |
-| Structured feedback | RISE | compositional dynamics + progress-value model | 不只判断最终成功，还为长任务提供稠密进度信号 |
-
-其中，reward 和 termination 不是附属模块，而是决定 imagined RL 是否有效的关键接口。仅预测未来画面时，policy 仍然不知道“这段未来值不值得”；只有加入 reward、progress、value、risk 或 done 信号，rollout 才能真正进入优化目标。
-
-#### 一次可靠的 imagined-RL 训练循环
-
-| 阶段 | 输入与处理 | 必须检查的误差 |
-| --- | --- | --- |
-| 1. Collect | 收集成功、失败、恢复、play 和策略在线轨迹 | 数据是否只覆盖专家流形 |
-| 2. Fit WM | 学习 observation transition、reward、done，必要时加入 multi-view / state | 动作是否真的改变预测，而不是只由历史决定 |
-| 3. Seed rollout | 从真实帧或关键帧初始化 imagined trajectory | 初始状态是否落在训练分布内 |
-| 4. Imagine | 用当前 policy 生成 action chunk，world model 多步 rollout | 长时漂移、接触错误和视角不一致 |
-| 5. Score | 计算 reward、progress、risk、termination 和 uncertainty | feedback head 是否可校准、是否有捷径 |
-| 6. Update policy | 用 PPO、GRPO 或 flow-compatible objective 更新 policy | policy 是否开始利用 simulator 漏洞 |
-| 7. Ground | 在真实 replay、软件仿真或少量真实执行中验证 | imagined gain 是否能转化为真实成功率 |
-
-这个流程中最危险的是 **model exploitation**。policy optimization 会主动寻找 world model 的盲点：例如让生成画面“看上去任务完成”，却没有真实接触；或利用 done head 的错误提前结束；或找到 reward model 的视觉捷径。因而 rollout 越多、policy 更新越激进，不一定越好。
-
-实用的防护手段包括：
-
-1. 用真实状态或关键帧频繁重新初始化，缩短 free-running horizon；
-2. 对 reward / done 做 hard-negative 和失败轨迹训练，而不是只见成功视频；
-3. 用 ensemble disagreement、prediction confidence 或 OOD detector 拒绝不可靠 rollout；
-4. 将 policy 更新限制在真实数据支持附近，并对大幅偏离 behavior policy 的动作加惩罚；
-5. 每轮 imagined update 后，用保留的真实 replay 和少量真实执行做回归测试。
-
-![LingBot-World 训练 pipeline 原论文图](../../assets/images/paper-deep-dives/world-models/lingbot-world/figure-4-training-pipeline.png){ width="920" }
-
-<small>图源：[Advancing Open-source World Models](https://arxiv.org/abs/2601.20540)，Figure 4。原图表达：从 foundation video generator 出发，经过 pre-training、middle-training、post-training 逐步得到可交互 world simulator。本站读法：这不是本文综述的原图，而是相邻系统论文的训练路线例子；它帮助理解为什么 learned simulator 需要数据、动作条件、因果 rollout 和推理加速一起设计。</small>
-
-### 2. 从固定 simulator 到 policy-world-model 共演化
-
-固定 world model 的隐含假设是：训练 simulator 的数据已经覆盖 policy 更新后会访问的状态。但 policy 一旦变强或变得更激进，就会进入新的状态分布，原来可靠的 simulator 可能马上失效。
-
-论文因此强调一个更前沿的 loop：world model 和 policy 共同演化。
+原文 Eq.18 用 clipped policy surrogate 表示一类训练方式。为了和环境奖励 $\hat r_t$ 区分，下面把概率比记成 $\rho_t$，其示意形式为
 
 $$
-\phi^{k+1}\leftarrow \mathrm{UpdateWM}
-(\phi^k,D_{real}\cup D_{policy}(\pi_{\theta^k}))
+\mathcal L_{\mathrm{RL}}(\theta)
+=-\mathbb E_t\left[
+\min\left(\rho_t(\theta)\hat A_t,
+\operatorname{clip}(\rho_t(\theta),1-\epsilon,1+\epsilon)\hat A_t\right)
+\right],
+\qquad
+\rho_t(\theta)=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t\mid s_t)}.
+$$
+
+它说明为何要限制策略一次偏离旧分布过远，但不是本节所有系统的共同代码实现。动作可能按 chunk 生成，flow head 的概率与优化也有专门处理，RISE 等方法又采用自己的改进机制。复现时不能把综述中的概括式直接当成每一项方法的损失函数。
+
+### 策略一变，模型需要预测的分布也会变
+
+固定世界模型的训练数据可能覆盖原策略的常见状态，却没有覆盖改进策略主动探索的新状态。策略表现提升或者偏离原行为后，模型误差的分布会跟着改变。增加同一静态数据上的训练轮数，未必能修复这种覆盖缺口。
+
+World-VLA-Loop 利用策略失败 rollout 改进模拟器，VLAW 在真实数据修复模拟器和合成数据改进策略之间交替，WoVR 则把动作跟随、关键帧初始化与策略模型共同演化放进同一循环。原文 Eq.19 概括为
+
+$$
+\phi_{k+1}\leftarrow\operatorname{UpdateWM}
+\left(\phi_k,\mathcal D_{\mathrm{real}}\cup\mathcal D_{\mathrm{policy}}(\pi_{\theta_k})\right),
 $$
 
 $$
-\theta^{k+1}\leftarrow
-\mathrm{UpdatePolicy}(\theta^k,\hat{D}(\phi^{k+1}))
+\theta_{k+1}\leftarrow\operatorname{UpdatePolicy}
+\left(\theta_k,\hat{\mathcal D}(\phi_{k+1})\right).
 $$
 
-直觉是：policy 失败轨迹暴露 simulator 盲区；更好的 simulator 再生成更有用的 imagined data。World-VLA-Loop、VLAW、WoVR 都在靠近这个方向。工程上要特别小心，因为一旦 simulator 对长 horizon、接触或动作分叉不可靠，policy 会沿着错误反馈越走越偏。
+这里 $k$ 是外层更新轮次。第一步用相关交互修复模型，第二步用更新后的模型生成经验。公式表达共同演化的组织原则，具体系统采用什么真实数据、多少想象数据以及怎样限制 rollout，需要分别核查。
 
-| 方法 | 共演化方式 | 值得借鉴的设计 |
-| --- | --- | --- |
-| World-VLA-Loop | 联合预测未来观测和 reward，再用 policy failure rollout 修补 simulator | 把失败看成 world model 的主动学习样本 |
-| VLAW | 真实数据修复 simulator、合成数据改善 VLA，交替迭代 | 明确区分“修模型”的真实数据和“训策略”的 imagined data |
-| WoVR | controllable video model + Keyframe-Initialized Rollouts + 显式共演化 | 用关键帧限制 rollout 漂移，把 simulator reliability 放在优化中心 |
+因此，可信的策略改进证据应包含真实执行或可靠外部环境中的复测。只报告模拟器内回报上升，无法区分策略真正变好与策略更会利用模型漏洞。
 
-共演化不是让两个模型无约束地互相生成数据。更稳妥的做法是把真实数据保留为锚点，让每轮 policy 产生的失败和新状态只负责扩展 simulator 的边界，而不能覆盖已有的真实动力学证据。
+## 世界模型成为评估器时，排序可信比画面精细更关键
 
-### 3. 世界模型作为执行前评估器
+评估用途不一定更新策略参数。给定当前观察，已有策略提出几个动作候选，世界模型预测各自后果，系统再评分、拒绝或修改候选。GPC 在冻结生成式策略外增加预测前瞻，IRASim 使用预测价值选择轨迹，World-in-World 让计划经历想象、评价和修订，DreamPlan 则进一步把 rollout 比较变成偏好训练信号。[原文 §4.2，PDF pp.17–18](https://arxiv.org/pdf/2605.00080v1#page=17)
 
-evaluation route 不一定更新 policy。它让 policy 先提出候选动作、候选计划或候选 checkpoint，再用 imagined consequence 做选择。根据“被比较的对象”不同，可以分成五种形式。
+这一用途尤其依赖候选之间的相对差异。若抓取候选 A 在现实中成功、B 在现实中失败，模拟器却把两者都画成抓起物体，那么画面再真实，也无法帮助选择。反过来，预测画面不够精美，但准确保留了碰撞、错位和任务进展的差别，仍可能对排序有用。
 
-| 评估形式 | 被比较的对象 | 代表工作 | 输出 |
-| --- | --- | --- | --- |
-| Candidate rollout ranking | 多个 action chunk / plan | GPC、IRASim、World-in-World、DreamPlan | 排名、拒绝、修订或 preference pair |
-| Continuous planning / MPC | 连续动作序列 | TD-MPC2、LeWorldModel | 经 imagined cost 优化后的动作 |
-| Policy / checkpoint ranking | 不同 policy 或同一 policy 的多个 checkpoint | Veo World Simulator、WorldEval、WorldArena、WorldGym | policy rank、value、safety estimate |
-| Explicit feedback heads | 单条 imagined trajectory | World-Env、VLA-RFT、World-VLA-Loop、RISE | reward、done、progress、risk |
-| Latent predictive planning | latent action / future embedding | V-JEPA 2、V-JEPA 2.1、LeWorldModel | goal distance、plausibility 或 latent cost |
+MPC 将这种查询进一步用于动作序列优化。它通过模型滚动评估代价，反复更新候选并只执行部分计划，然后重新观察。TD-MPC2、LeWorldModel 是综述引用的潜空间例子。这里不能将“优化动作序列”一概等同于“所有方法都通过模型做梯度下降”，具体规划器可以使用不同优化算法。
 
-**候选排序**是最直接的用法。GPC 不重新训练 frozen generative policy，而是在部署时生成多个 action candidates，再用 action-conditioned world model look-ahead 进行排序和 refinement。World-in-World 增加 revision policy：候选计划先在想象中执行，再根据失败迹象修订。DreamPlan 则把 rollout 排序转成 preference pairs，用来训练更好的策略。
+### 当前动作评估与整套策略评估不是同一测试
 
-**MPC**更进一步，不只在几个离散候选中选一个，而是在 learned dynamics 中反复优化动作序列：
+另一个用途是比较不同 policy 或 checkpoint，而非只挑当前一段动作。Veo World Simulator 中的机器人策略评估、WorldEval 与 WorldArena 等工作关注模型是否保留真实世界中的策略相对次序，能否用于分布外或安全探测。
 
-$$
-a_{t:t+H-1}^{*}
-=
-\arg\min_{a_{t:t+H-1}}
-\sum_{h=1}^{H}
-c(\hat{z}_{t+h},a_{t+h-1})
-$$
+World-Env 的奖励和终止预测、VLA-RFT 的反馈、World-VLA-Loop 的联合奖励输出，以及 RISE 的 progress value，都让想象轨迹具备可计算分数。但评分器如果共享生成模型的错误偏好，就可能给错误未来很高分。
 
-TD-MPC2 和 LeWorldModel 代表 latent-space 路线。它省去了高清像素解码，更适合在每个控制周期执行多次 rollout；但 latent cost 必须与真实任务进展对齐，否则“优化得动”不等于“执行得对”。
+| Use | 被比较的对象 | 应优先核对的外部证据 |
+|---|---|---|
+| Candidate assessment | 当前候选 action sequence | 预测排序与实际执行结果是否一致 |
+| MPC / iterative planning | 连续修订的动作序列 | 反复查询后的闭环成功率与计算预算 |
+| Offline policy evaluation | 不同策略或 checkpoint | 相对排名、价值估计与真实结果的对应 |
+| Safety / failure probing | 潜在失败轨迹 | 对真实危险或失败的识别和漏检情况 |
+| Imagined feedback for learning | 轨迹奖励、进展或完成信号 | 得分提高是否转化成真实策略改进 |
 
-**policy ranking**用于离线选择模型版本。WorldEval 的问题不是某条视频像不像，而是 learned simulator 能否保持真实世界中的相对顺序：如果 policy A 在真实机器人上优于 B，simulator 中也应如此。Veo World Simulator 一类大规模系统还把 OOD 和安全探测纳入离线评估。
+这是按原文用途整理的阅读表，没有填入原文未提供的统一误差指标。潜在空间 JEPA 系列可以支持规划和物理合理性判断，但综述也将其视为邻近方向，不能据此称所有 JEPA 模型都是成熟的完整策略评估器。
 
-#### Evaluator 应该报告什么
+## 视频能力的四个阶段分别增加了什么约束
 
-| Metric | 测什么 | 为什么比 FVD 更接近控制价值 |
-| --- | --- | --- |
-| Rank correlation | imagined policy 排名与真实排名的一致性 | 直接决定能否用 simulator 选 policy / checkpoint |
-| Value calibration | predicted success / return 与真实成功率的一致性 | 防止 evaluator 过度自信 |
-| Pairwise preference accuracy | 两条候选轨迹谁更好 | 对 candidate selection 和 preference learning 最直接 |
-| False-safe rate | 被判安全但真实失败的比例 | 安全过滤中最危险的错误 |
-| Planning success | 使用 world model 后的 closed-loop task success | 检验 rollout 是否真的改善动作选择 |
-| Horizon degradation | 指标随 rollout horizon 增长的下降曲线 | 暴露长时漂移，而不是只报短片平均质量 |
-| Action sensitivity | 替换动作后预测是否产生正确分叉 | 检验 causal conditioning，而非视觉惯性 |
-
-因此，simulator 的最终质量不应只由 reconstruction loss 决定。对 RL，它要经得住 policy exploitation；对 evaluation，它要保持真实世界中的排序、价值和风险关系。两者都要求 rollout 是 **action-faithful and decision-calibrated**，而不仅是 visually plausible。
-
-## 主线三：视频世界模型如何变成机器人世界模型
-
-视频世界模型部分最容易写成流水账，因为方法很多。更清楚的读法是看四个能力台阶。
+原文 §5 从生成模型本身出发，讨论 imagination、action-controllable、structure-aware 和 foundation world model 四类能力。它们强调的要求逐步增加，但分组并非互斥，也不是每一项模型都依次经过四个阶段。[原文 §5.1–5.6，PDF pp.19–23](https://arxiv.org/pdf/2605.00080v1#page=19)
 
 ![Robotic video world models 原论文图](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/figure-6-video-world-models.png){ width="920" }
 
-<small>图源：`World Model for Robot Learning: A Comprehensive Survey`，Figure 6。原论文图意：以 robotic video world model 为核心，展示它从 task-conditioned imagination，到 action conditioning，再到 structure priors 和 foundation-scale video backbone 的能力递进。</small>
+*原文 Figure 6。未来视频既可以作为想象监督，也可以在动作条件与结构条件下受到更强约束。图中 action、language 与 structure 是不同信息来源，不能只保留任务文字就假设低层动作已对齐。*
 
-| 台阶 | 解决的问题 | 训练信号 | 成熟后的用途 |
-| --- | --- | --- | --- |
-| Imagination-Based | 用未来视频补监督或视觉计划 | task / language conditioned video，inverse dynamics，latent action | data augmentation、visual planning |
-| Action-Controllable | 给定动作后未来要跟动作走 | \((o_t,a_t,o_{t+1})\)、frame-level action conditioning、多步 transition | policy evaluation、model-based planning |
-| Structure-Aware | RGB 不足以表达接触、遮挡和几何 | mask、depth、normal、multi-view、3D flow、object trajectory | contact-aware data、physically consistent rollout |
-| Foundation Video WM | 复用大规模视频底座并接到机器人 | video pretraining、action adaptation、post-training、distillation | reusable simulator、data engine、planning substrate |
+### 想象监督先补充行为覆盖，再解决动作落地
 
-这一段的主线是：**从“生成一个像任务的视频”，走向“给定动作和结构，生成可用于控制的未来”。**
+Dreamitate 在任务相关的人类示范上适配视频扩散模型，将新场景中的生成执行作为视觉计划。RoboDreamer 把任务拆成可复用成分，改善对象与动作组合的泛化；ManipDreamer 通过动作树、深度和语义引导增加结构约束。
 
-### 1. Imagination-Based：先把未来变成监督
+DreMa 将 Gaussian Splatting 与物理模拟结合，建立可操纵数字场景并生成更多示范。PhysWorld 从生成视频重建物理世界，再通过对象中心的残差强化学习落到可执行动作。它们说明，视觉计划可以借助显式动力学补充执行约束。
 
-最早一批方法没有要求模型精确响应低层机器人动作，而是先用语言或任务条件生成“应该发生什么”的视觉轨迹，再把轨迹转成 action supervision、visual goal 或 synthetic demonstration。
+DreamGen 将强视频生成器适配到目标 embodiment，合成神经轨迹，再用 latent action 或 IDM 恢复动作。这类系统扩大的是可用监督，生成视频还不等于完整机器人数据。动作标签如何得到、错误视频如何过滤、训练策略后是否在真实任务改善，都属于数据引擎的一部分。
 
-| 方法组 | 关键机制 | 从视频到动作的接口 |
-| --- | --- | --- |
-| UniPi、Video Language Planning | 把语言视为 high-level action，生成任务相关未来视频 | 未来帧作为视觉计划，再由 IDM / policy 执行 |
-| Dreamitate | 在任务相关人类示范上微调 video diffusion，在新场景生成执行视频 | 合成视频直接作为机器人动作引导 |
-| RoboDreamer | 将指令分解为可复用 primitive，再做 compositional generation | 未见过的 object-action 组合也可形成视觉计划 |
-| ManipDreamer | action tree + depth + semantic guidance | 用结构条件提高时序和物理一致性 |
-| DreMa | Gaussian Splatting + physics simulator 重建可操作 digital twin | 在显式场景中生成额外 imitation demonstrations |
-| PhysWorld | 从生成视频重建物理世界，再用 object-centric residual RL 对齐动作 | 把“看起来合理”进一步约束为可执行 |
-| DreamGen | 将强视频模型适配到目标 embodiment，生成 neural trajectories | 用 latent action model 或 IDM 恢复机器人动作 |
+### 动作可控要求画面随候选控制改变
 
-这一阶段最重要的贡献是 **data amplification**。互联网视频和人类演示没有机器人 action label，但包含大量对象交互先验。video model 先把这些先验转成目标环境中的视觉未来，再用 IDM、latent action 或 goal-conditioned policy 完成 embodiment grounding。
+IRASim 在 Transformer block 中引入帧级动作条件，把轨迹到视频的对应做得更细。RoboMaster 处理机器人和对象的协同轨迹与操作阶段，Ctrl-World 将多视角、帧级控制、记忆结合起来支持策略在环 rollout，EnerVerse-AC 同时服务数据生成与评估。
 
-它的边界也很清楚：language / task conditioning 只规定“要发生什么”，没有精确规定“机械臂每一步怎样动”。因此它可以产生合理的 visual plan，却不适合直接回答两个相近 action chunk 会造成怎样不同的结果。
+Interactive World Simulator 将目标进一步推向高频、长程、稳定的策略条件交互。EVA 则通过逆动力学奖励缩小“画面合理但动作难以执行”的差距。RoboEnvision 关注长程多任务中的语义和时间一致性，也被综述放在这一讨论范围内。
 
-### 2. Action-Controllable：从 plausible future 到 intervention outcome
+这里最重要的实验应改变动作而保持其他条件尽量一致。只有这样，才能检查模型是否跟随命令，而不是根据语言和背景完成一个最常见成功动画。文章称之为 causal alignment，但没有以此完成一般意义上的因果机制识别证明。
 
-第二阶段把低层动作显式放进动态路径：
+### 几何、身份和多视角一致性限制了自由幻觉
 
-$$
-\hat{o}_{t+1:t+H}
-\sim
-p_\phi(o_{t+1:t+H}\mid o_{\le t},a_{t:t+H-1},l)
-$$
+Mask2IV 先预测 actor 与 object 的交互轨迹，再据此生成视频，减少对用户提供稠密 mask 的依赖。TesserAct 同时预测 RGB、深度和法线，把空间关系纳入更丰富的四维表示。RoboVIP 通过 visual identity prompting 维持多视角与时间中的对象一致性，支持操作数据增广。
 
-关键不只是把 action embedding 拼到输入，而是建立帧与动作、机械臂与对象、多视角与时间之间的精确对应。
+这些结构会改变错误发生的位置。模型不能随意改变对象身份或几何而不违反额外监督；但若轨迹本身错了，后续视频可能只是更稳定地复现错误。因此仍要检验结构预测与动作后果，而不只是检查渲染结果是否连续。
 
-| 设计问题 | 代表工作 | 技术回答 |
-| --- | --- | --- |
-| 每个动作怎样影响对应帧 | IRASim | 在 transformer block 内加入 frame-level action conditioning |
-| 长任务如何保持语义和时序 | RoboEnvision | 面向 multi-task、long-horizon manipulation 约束持续一致性 |
-| 机械臂和对象怎样共同运动 | RoboMaster | phase decomposition + collaborative robot/object trajectory control |
-| 多相机和长时记忆怎样维持 | Ctrl-World | joint multi-view prediction + frame-level control + memory |
-| world model 怎样同时服务数据和评估 | EnerVerse-AC | action-conditional multi-view generation |
-| 怎样从离线视频走向交互 simulator | Interactive World Simulator | 高频、长时、policy-conditioned 的闭环 rollout |
-| 视觉合理怎样转成动作可执行 | EVA | 用 inverse-dynamics reward 对齐平滑、embodiment-consistent action |
+### 基础模型路线把预测器做成可复用接口
 
-这里最关键的训练样本是 transition tuple，而不只是 clip：
+Vid2World 将已有视频扩散骨干改造成动作条件的交互模型。Genie Envisioner 将视频世界建模与动作解码整合成平台。DreamDojo 先利用大规模人类第一视角视频学习，再通过连续 latent action 与机器人后训练连接目标 embodiment。
 
-```text
-(history observations, aligned action chunk, future observations,
- proprioception, camera metadata, optional reward / phase / contact)
-```
+WoW 强调来自机器人交互的数据，通过生成、逆动力学与 critique 连接想象和执行。GigaWorld-0 结合可控视频分支与具物理基础的三维分支，面向数据生产；ABot-PhysWorld 关注物理对齐与动作可控的操作视频。UnifoLM-WMA-0 和 Cosmos Predict 2.5 则体现可复用世界骨干的发展。
 
-动作和视频必须严格时间同步。若 action chunk 与 future frame 错位，模型会退化成依赖图像惯性和任务语义的 passive predictor。多视角模型还需要相机标定或稳定的 view identity，否则不同视角虽然各自“像”，却不属于同一个三维事件。
+![LingBot-World training pipeline 补充阅读图](../../assets/images/paper-deep-dives/world-models/lingbot-world/figure-4-training-pipeline.png){ width="920" }
 
-### 3. Structure-Aware：给像素预测加上可控制的骨架
+*补充阅读图，沿用站内 LingBot-World 的训练阶段资产，并非本综述六张 Figure 之一。它用于对照“通用视觉先验、交互动态适配、低延迟部署”的分工，不作为所有机器人世界模型都采用相同三阶段流程的证据。*
 
-机器人交互的难点集中在少量结构变量：抓取点、对象轨迹、遮挡关系、接触阶段、深度和表面法向。直接让视频模型从 RGB 自己发现全部结构，监督过于间接。structure-aware 方法因此先预测或显式输入这些变量，再生成视频。
+“基础模型”也不是所有能力已经完成的证书。预训练覆盖、多 embodiment 适配、动作接口、长期可靠性和服务速度仍要分别验证。尤其不能把某模型的人类视频预训练小时数直接当成其拥有同量机器人动作标签。
 
-**Mask2IV** 采用两阶段流程：先预测 actor 和 object 的 interaction trajectories，再以轨迹为条件生成视频。它让控制接口从 dense pixel 变成稀疏轨迹，同时避免用户逐帧提供 mask。
+![Original Table 2 robotic video world model capabilities](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/table-2-original.png){ width="1000" }
 
-**TesserAct** 将表示从 2D RGB 视频扩展到包含 RGB、depth 和 normal 的 4D embodied representation。深度和法向不只是提高画质，它们为 inverse dynamics、空间一致性和遮挡后的对象位置提供更直接的监督。
+*原文 Table 2，PDF p.20。Task-cond.、Action-cond.、Structure-aware、Foundation-scale 与 Main use 分别记录不同属性；勾选表示原论文明确支持或强调，横线不能自动解释成该模型被证明完全缺少该能力。*
 
-**RoboVIP** 面向机器人数据增强中的多视角一致性，用 visual identity prompting 约束不同相机中的机器人和对象身份。这样生成的多视角序列才能作为同一条 trajectory 进入 policy training。
+原表中也能看到分类重叠。DreMa 在 imagination 组却带动作与结构条件；foundation 组中的条目也不是每一列都打勾。这提醒读者将组名作为组织线索，同时阅读具体列和原论文，不要把表格压缩为四级能力认证。
 
-structure-aware 的核心不是“多预测几个通道”，而是把控制真正依赖的变量从像素中显式提取出来。它也自然连接到 object-centric、predicate、affordance 和 occupancy 等符号/结构化世界模型。
+## 导航与驾驶改变了未来状态应包含的内容
 
-### 4. Foundation Video WM：把通用视频先验变成机器人基础设施
+导航面对部分可观测环境，预测的价值常在于尚未看见的空间。Pathdreamer 生成未访问视角的全景 RGB、深度和语义观察；VISTA 与 VISTAv2 将语言条件想象、动作条件未来及在线价值图连接起来；NWM 和 EgoWM 探索可控第一视角预测，SparseVideoNav 则用稀疏未来减轻密集长 rollout 的成本。[原文 §6，PDF pp.23–24](https://arxiv.org/pdf/2605.00080v1#page=23)
 
-foundation-scale 路线不再从小规模机器人视频训练完整生成器，而是从大规模 video backbone 出发，逐步加入 embodiment、action 和交互约束。
+这些工作服务的决策包括未来是否可见目标、路线是否可通行、某个转向是否增加任务进展。完整照片级画面只是表达这些信息的一种方式。若稀疏预测或价值图已经足够选择路径，减少生成内容可能更符合部署需求。
 
-| 方法 | Foundation adaptation 的重点 | 最终角色 |
-| --- | --- | --- |
-| Vid2World | 将 pretrained video diffusion 系统化改造成 action-conditioned interactive predictor | learned simulator |
-| Genie Envisioner | 统一 video world modeling 与 action decoding | simulation + manipulation |
-| DreamDojo | human egocentric pretraining、continuous latent action、target embodiment post-training | long-horizon rollout、evaluation、planning |
-| WoW | 使用大规模机器人交互轨迹，而非只依赖 passive video；结合 rollout、IDM 和 critique | imagination-to-action loop |
-| UnifoLM-WMA-0、Cosmos Predict 2.5 | 提供可复用的 world-model backbone / platform | 多任务 simulator substrate |
-| GigaWorld-0 | controllable video branch + physically grounded 3D branch | 大规模 embodied data engine |
-| ABot-PhysWorld | 同时强化物理可信和动作可控 | physics-aligned simulator |
+自动驾驶则增加了多参与者、结构几何和安全相关长尾。MILE 使用带几何归纳偏置的 latent dynamics，OccWorld 在三维 occupancy space 中表达自车与场景演化，GAIA-1 联合视频、文本和动作 token，DriveDreamer 用结构条件约束交通视频。
 
-DreamDojo 和 WoW 恰好代表两种互补观点。前者强调人类第一视角视频提供大规模交互先验，再用 latent action 和 embodiment post-training 接入机器人；后者强调 passive observation 不足以学习物理直觉，必须加入真实机器人 interaction trajectories。更可能的答案不是二选一，而是分阶段混合：先从通用视频获得时空和语义先验，再用机器人交互校准动作因果与接触动力学。
+Drive-WM 通过可控多视角未来及图像奖励比较轨迹，UniDWM 强调结构与动态感知的统一 latent world representation，DriveWorld-VLA 让 latent world state 直接服务规划，DriveVLA-W0 使用未来图像预测提供比低维动作更密集的训练监督。SteerVLA 又将高层语义推理与低层控制分工。
 
-### Table 2：Robotic video WM capability regimes
+| Domain | 原文强调的预测对象 | 对控制有用的后果 |
+|---|---|---|
+| Manipulation | 对象、机器人、接触与任务进展 | 是否可达、是否抓稳、动作是否完成 |
+| Navigation | 未见视角、空间布局、未来价值 | 是否通行、何处观察、如何接近目标 |
+| Driving | 多车互动、几何占据、自车条件未来 | 候选轨迹风险与交通演化 |
 
-| Group | Method | Task-cond. | Action-cond. | Structure-aware | Foundation-scale | Main use |
-| --- | --- | --- | --- | --- | --- | --- |
-| Imagination-Based | UniPi | ✓ | -- | -- | ✓ | Plan. |
-| Imagination-Based | Video Language Planning | ✓ | -- | -- | ✓ | Plan. |
-| Imagination-Based | Dreamitate | -- | -- | -- | ✓ | Plan. |
-| Imagination-Based | RoboDreamer | ✓ | -- | -- | -- | Plan. |
-| Imagination-Based | ManipDreamer | ✓ | -- | ✓ | -- | Plan. |
-| Imagination-Based | DreMa | -- | ✓ | ✓ | -- | Data |
-| Imagination-Based | PhysWorld | ✓ | -- | ✓ | -- | Plan. |
-| Imagination-Based | DreamGen | ✓ | -- | -- | ✓ | Data |
-| Action-Controllable | IRASim | -- | ✓ | -- | -- | Plan. |
-| Action-Controllable | RoboEnvision | ✓ | -- | -- | -- | Plan. |
-| Action-Controllable | RoboMaster | -- | ✓ | ✓ | -- | Data |
-| Action-Controllable | Ctrl-World | -- | ✓ | ✓ | -- | Eval. |
-| Action-Controllable | EnerVerse-AC | -- | ✓ | ✓ | -- | Eval. |
-| Action-Controllable | Interactive World Simulator | -- | ✓ | -- | -- | Sim. |
-| Action-Controllable | EVA | ✓ | -- | -- | -- | Eval. |
-| Structure-Aware | Mask2IV | ✓ | -- | ✓ | -- | Data |
-| Structure-Aware | TesserAct | ✓ | -- | ✓ | -- | Sup. |
-| Structure-Aware | RoboVIP | ✓ | -- | ✓ | -- | Data |
-| Foundation Video WM | Vid2World | -- | ✓ | -- | ✓ | Sim. |
-| Foundation Video WM | Genie Envisioner | ✓ | ✓ | -- | ✓ | Sim. |
-| Foundation Video WM | DreamDojo | -- | ✓ | -- | ✓ | Sim. |
-| Foundation Video WM | WoW | -- | -- | -- | ✓ | Plan. |
-| Foundation Video WM | UnifoLM-WMA-0 | ✓ | ✓ | -- | -- | Sim. |
-| Foundation Video WM | Cosmos Predict 2.5 | ✓ | -- | -- | ✓ | Sim. |
-| Foundation Video WM | GigaWorld-0 | -- | -- | ✓ | ✓ | Data |
-| Foundation Video WM | ABot-PhysWorld | -- | ✓ | -- | ✓ | Sim. |
+最后一列是对原文用途的概括，不是统一评价指标。跨领域可迁移的是预测与决策的接口思想，具体动作空间、状态变量与误差后果仍然不同。
 
-<small>表源：`World Model for Robot Learning: A Comprehensive Survey`，Sec. 5 Table。原表英文列名保留。Checkbox 表示原论文明确支持或强调该能力。</small>
+## 评测需要在预测、闭环用途和失效机制之间来回验证
 
-表里最该看的不是方法数量，而是列名。`Task-cond.` 只能说明模型知道任务目标；`Action-cond.` 才开始接近控制；`Structure-aware` 说明模型额外看见几何、接触或对象结构；`Foundation-scale` 说明它可能继承大规模视频先验。一个机器人世界模型最好不是只占一列，而是能把动作、结构和长期记忆同时接起来。
+综述将评测分为三类。开放环测试生成结果是否连贯、动作是否跟随；闭环测试这些预测能否改善规划、评估或控制；诊断测试查出哪些物理与可执行性因素导致失效。三类证据互补。[原文 §7.1，PDF pp.24–26](https://arxiv.org/pdf/2605.00080v1#page=24)
 
-### 从视频底座到机器人 world model 的训练配方
+### 开放环便于标准化，却没有暴露全部反馈误差
 
-把这部分文献合在一起，可以抽象出一条相对完整的训练路线。
+在开放环中，模型接收既定观察、动作或任务，生成未来，不把自己的输出持续送入一个真实决策循环。RBench 强调结构一致、物理合理和动作完整，EWMBench 将场景一致、运动正确与语义对齐拆开，DreamGen Bench 关注指令与物理对齐，EVA-Bench 关注长程与视角、布局、运动分布变化。
 
-| Stage | Data | Objective | 这一阶段学什么 |
-| --- | --- | --- | --- |
-| 1. Video prior pretraining | web video、human egocentric video、大规模通用视频 | video denoising / flow matching / token prediction | 物体恒常性、常见运动、视角变化和语义 |
-| 2. Robot-domain adaptation | robot video、目标机型外观、多相机视频 | masked reconstruction、parameter-efficient finetuning | 机器人形态、工作台分布、相机视角 |
-| 3. Action grounding | 时间同步的 observation-action trajectories | action-conditioned future prediction、latent action、IDM | 机器人动作与视觉变化的因果对应 |
-| 4. Structure grounding | depth、normal、mask、trajectory、3D、contact | auxiliary geometry / interaction losses | 遮挡、抓取、对象运动和跨视角一致性 |
-| 5. Interactive post-training | play、failure、recovery、policy rollout | reward / done / value、closed-loop rollout loss | 长时稳定、失败识别、policy-in-the-loop 分布 |
-| 6. Deployment optimization | teacher rollout、latent target、cached features | distillation、partial denoising、latent prediction | 降低控制周期中的视频生成成本 |
-| 7. Closed-loop verification | held-out replay、sim、real robot | policy ranking、action sensitivity、task success | 验证世界模型是否真的对决策有用 |
+这能高效比较预测器的基本能力。但策略根据模型结果行动后，新的观察与动作分布可能改变，模型会进入开放环测试没有覆盖的区域。一次预测质量高，不等于多轮想象与行动仍然稳定。
 
-训练时不应一开始就把所有损失混在一起。更稳的顺序是先让模型学会 robot-domain video prediction，再加强 action conditioning，最后才加入 reward/value 和 policy optimization。否则 reward 梯度可能会鼓励模型生成“容易得分”的画面，而不是忠实模拟动作后果。
+### 闭环直接测试模型是否改变了正确的决定
 
-部署时也不必保留所有分支。若 world model 主要用于 representation learning，可以蒸馏 future latent 后关闭视频 decoder；若用于候选评估，则保留短 horizon rollout 和 value/risk head；若用于 data engine，则可以接受较慢但高质量的离线多视角生成。
+WorldArena 同时考察合成数据、策略评估与动作规划，WorldEval 检查策略及 checkpoint 的相对顺序，WorldGym 用交互环境中的 Monte Carlo 评估关联真实价值与成功趋势，World-in-World 则把模型放进迭代预测和重规划流程。
 
-## 延伸应用：导航与自动驾驶
+这些任务比平均像素误差更贴近实际用途，但也需要拆开系统贡献。若最终成功率上升，可能同时来自候选数增加、更强评分器或额外计算。对比时应检查模型替换之外是否改变其他资源，不能把整个系统收益全部归因于世界模型的一个结构选择。
 
-论文将导航和自动驾驶单独列出，因为它们揭示了 manipulation 之外的两个关键问题：**partial observability** 和 **structured safety-critical state**。
+### 可执行性诊断解释为什么漂亮视频也会失败
 
-### 导航：想象尚未看见的空间
+WorldSimBench 同时考虑视觉与操作评价，检查视频能否通过逆动力学恢复出可用动作。WoW-World-Eval 包含物理规律与执行相关判断，其 IDM-based Turing Test 关注视频诱导出的动作是否合理。DrivingGen 检验轨迹、时间一致与自车控制，WM-ABench 则分解空间、时间、运动、机械模拟和受控反事实等基础能力。
 
-导航 agent 的观测天然不完整。它站在当前视角，看不到拐角后、房门内或尚未访问的位置。世界模型的作用不是渲染漂亮的室内视频，而是把 unseen space 转成可以比较的 future observation、value map 或 traversability signal。
+IDM 能从视频产生平滑动作，是一种有价值的诊断信号，却不等于已验证全部真实动力学。动作可以平滑但接触位置不正确，预测可以符合机器人运动学却误判物体摩擦。诊断应该和真实或可信环境中的后果测试相互补充。
 
-| 路线 | 代表工作 | 预测接口 | 规划用途 |
-| --- | --- | --- | --- |
-| Unseen-view imagination | Pathdreamer | 未访问 viewpoint 的 360° RGB、depth、semantic observation | 缩小 imagined observation 与真实 future observation 的规划差距 |
-| Instruction-conditioned imagination | VISTA | 根据指令生成并对齐未来视觉 | 判断路径是否与语言目标一致 |
-| Future rollout to value map | VISTAv2 | candidate action 下的 egocentric future | 将未来投影到在线 value map |
-| Controllable navigation video | NWM | action-conditioned future video | trajectory ranking 和 look-ahead planning |
-| Sparse future generation | SparseVideoNav | 只生成关键未来状态 | 避免 dense long-horizon rollout 的延迟 |
-| Internet-prior adaptation | EgoWM | 轻量 action conditioning 适配互联网 video diffusion | 用大规模第一视角先验补足导航数据 |
+| Evaluation category | Representative benchmarks | 本文建议保留的比较条件 |
+|---|---|---|
+| Open-loop predictive quality | RBench, EWMBench, DreamGen Bench, EVA-Bench | 初始状态、动作条件、预测时长、分布外设置 |
+| Closed-loop utility | WorldArena, WorldEval, WorldGym, World-in-World | 候选预算、rollout 次数、真实对照、评分来源 |
+| Physical / executable diagnostics | WorldSimBench, WoW-World-Eval, DrivingGen | 物理属性、动作敏感性、执行映射与失败类型 |
+| Atomic capabilities | WM-ABench | 原子能力与实际闭环任务之间的对应关系 |
 
-导航特别适合 sparse / latent world model。路径规划通常不需要逐帧生成墙面纹理，而需要知道“往左走后是否看到目标、是否可通行、是否接近终点”。因此 keyframe、value map 和 latent future 往往比高清连续视频更符合实时需求。
+第三列是从综述讨论整理的复查条件。原文没有提供一个把所有维度加权成单一分数的公认方案，也没有依据支持仅用视觉指标替代下游评测。
 
-### 自动驾驶：为什么结构化状态更常见
+## 数据规模之外，还要检查动作、时长和接触证据
 
-驾驶比桌面操作更强调长 horizon、多智能体、几何和安全。周围车辆的运动、ego trajectory、道路拓扑和可占用空间都必须共同演化。因此 driving world model 经常在 latent、occupancy 或 multi-view representation 中建模，而不是只做单相机 RGB continuation。
+原文 Table 3 问数据实际包含什么，Table 4 问它可能支持什么能力。前者的列为跨 embodiment、动作、观察/三维、语言、其他模态或接触信号；后者再映射到通用轨迹、长程、跨平台、人类先验、物理接触和合成扩展。[原文 §7.2，PDF pp.26–28](https://arxiv.org/pdf/2605.00080v1#page=26)
 
-| 路线 | 代表工作 | 世界状态 | 对 planning 的价值 |
-| --- | --- | --- | --- |
-| Latent dynamics with geometry | MILE | 带几何归纳偏置的 compact latent | 低成本预测城市驾驶动态 |
-| Occupancy world model | OccWorld | ego motion + 3D occupancy evolution | 与碰撞检测和轨迹规划直接兼容 |
-| Multimodal generative modeling | GAIA-1 | video、text、action token sequence | 统一场景、语义和驾驶动作 |
-| Structure-constrained diffusion | DriveDreamer | 受结构条件约束的 future scene | 建模复杂交通演化 |
-| Multi-view imagined planning | Drive-WM | controllable multi-view future video | 用多未来和 image-based reward 选择更安全轨迹 |
-| Unified latent substrate | UniDWM | structure- and dynamics-aware latent | 统一 perception、prediction、planning |
-| Latent-state VLA planning | DriveWorld-VLA | action-conditioned latent world state | 避免昂贵 pixel rollout |
-| Future prediction as dense supervision | DriveVLA-W0 | future image target | 为 end-to-end driving VLA 提供比低维动作更密集的监督 |
-| Hierarchical semantic steering | SteerVLA | high-level VLM semantic world model | 用常识推理引导低层 VLA 处理长尾驾驶 |
+![Original Table 3 dataset attributes](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/table-3-original.png){ width="1000" }
 
-驾驶领域的经验反过来提醒 manipulation：如果下游 planner 真正在意的是碰撞、可达性和对象关系，就应让 world state 与这些变量对齐。像素可以保留丰富信息，但 occupancy、object track、contact graph 或 latent geometry 往往是更可计算的控制接口。
+*原文 Table 3。✓ 表示强支持，– 表示部分或中等支持，✗ 表示缺少或未强调。这里的 – 与 Table 2 的能力标记、Table 5–6 的结果缺失不是同一种含义。*
 
-## 数据：训练世界模型缺的不是视频，而是转移
-
-论文的 dataset 部分可以用一句话概括：**世界模型训练数据不是 video collection，而是 agent-environment transition collection。**
-
-理想数据样本不只是帧序列，还要包含动作、语言、embodiment 信息、任务阶段、失败和恢复、接触或力觉、多视角 / 3D 线索。否则模型学到的是“常见未来”，不是“动作后果”。
-
-### 世界模型需要的数据层次
-
-| 数据层 | 主要来源 | 提供什么 | 缺什么 |
-| --- | --- | --- | --- |
-| Passive visual prior | web video、human egocentric video | 大规模对象、动作、场景和时空先验 | 没有机器人动作，因果控制弱 |
-| Robot demonstrations | teleoperation、expert trajectory、OXE-style aggregation | observation-action 对齐和任务成功范式 | 失败、恢复和反事实分支不足 |
-| Autonomous interaction | play、exploration、policy rollout、failure collection | 动作覆盖、失败边界、恢复和 OOD 状态 | 数据噪声大，质量控制困难 |
-| Structured / multimodal data | multiview、depth、3D、force、tactile、contact | 几何、接触和物理可执行性 | 采集昂贵、频率和坐标系难对齐 |
-| Simulation / synthetic data | physics simulator、digital twin、generated trajectories | 可控变化、稀有事件和大规模 counterfactual | sim-to-real gap、生成偏差 |
-
-这几层数据不是替代关系。passive video 适合学 prior，robot demonstration 负责 action grounding，autonomous interaction 暴露 policy 会访问的真实状态，multimodal data 校准视觉看不见的物理量，simulation 则补足稀有和危险事件。
-
-对 action-conditioned world model，最有价值的数据往往不是另一条成功示范，而是 **同一状态附近不同动作的分叉**。只有看到“向左抓”和“向右抓”导致不同未来，模型才有机会学到 intervention，而不是根据任务意图猜一个平均未来。
+OXE 聚合多种机器人数据，DROID、BridgeData V2 等提供真实动作对齐轨迹。AgiBot World、Galaxea 数据扩展场景与行为覆盖，Humanoid Everyday、RoboMIND 2.0、FastUMI-100K、BRMData 等又在长程任务、平台多样性或额外信号上各有侧重。
 
 ![Open X-Embodiment dataset overview 原论文图](../../assets/images/paper-figures/vla/openx-data-vis.jpg){ width="920" }
 
-<small>图源：[Open X-Embodiment](https://arxiv.org/abs/2310.08864)，Figure 1。原图表达：跨机器人、跨任务、跨场景的数据集合并为通用机器人学习提供规模基础。本站读法：世界模型需要的不是“更多视频”本身，而是带动作、任务、机器人本体和环境变化的 transition-rich data；跨本体数据还会带来动作空间、频率和坐标系对齐问题。</small>
+*补充阅读图，来自已有 Open X-Embodiment 资产。图中不同平台、视角与任务说明数据聚合的异质性；其中规模数字属于该原图版本，不作为本文对当前数据集规模的重新统计。*
 
-### Table 3：Core attributes of representative datasets/resources
+数据聚合并不自动解决动作语义。不同机器人可能使用关节空间、末端位姿或夹爪开合表示，采样频率、坐标系和相机布局也不同。世界模型需要知道动作具体作用在哪个 embodiment 上，否则相同数值并不意味着相同物理变化。
 
-| Name | Year | Source | X-Emb. | Act. | Obs./3D | Lang. | M/C |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| RoVid-X | 2026 | Real/Robot video | partial | partial | partial | ✓ | × |
-| Open X-Embodiment (OXE) | 2024 | Real | ✓ | ✓ | partial | partial | partial |
-| DROID | 2024 | Real | × | ✓ | partial | ✓ | partial |
-| BridgeData V2 | 2023 | Real | × | ✓ | partial | ✓ | partial |
-| AgiBot World | 2025 | Real | partial | ✓ | partial | ✓ | partial |
-| Galaxea Open-World Dataset | 2025 | Real | partial | ✓ | partial | ✓ | partial |
-| Humanoid Everyday | 2025 | Real | partial | ✓ | ✓ | ✓ | ✓ |
-| RoboMIND 2.0 | 2025 | Real+Sim | ✓ | ✓ | partial | ✓ | ✓ |
-| FastUMI-100K | 2025 | Real | partial | ✓ | ✓ | ✓ | partial |
-| BRMData | 2024 | Real | partial | ✓ | ✓ | partial | partial |
-| UMI | 2024 | Real | partial | ✓ | partial | partial | × |
-| MV-UMI | 2025 | Real | ✓ | ✓ | ✓ | partial | × |
-| ActiveUMI | 2025 | Real | partial | ✓ | ✓ | partial | × |
-| TWIST2 | 2025 | Real | partial | ✓ | partial | × | × |
-| DexWild | 2025 | Human+Robot | ✓ | partial | partial | × | × |
-| EgoMimic | 2025 | Human+Robot | partial | partial | ✓ | × | × |
-| PHSD / In-N-On | 2025 | Human ego | × | partial | partial | × | × |
-| UniHand | 2025 | Human video | partial | partial | partial | ✓ | × |
-| UniHand 2.0 | 2026 | Human+Robot+VLM | ✓ | ✓ | partial | ✓ | × |
-| Hoi! | 2025 | Human+Robot | ✓ | ✓ | ✓ | × | ✓ |
-| FreeTacMan | 2025 | Robot-free | partial | ✓ | ✓ | × | ✓ |
-| Humanoid Visual-Tactile-Action | 2025 | Real | × | ✓ | partial | × | ✓ |
-| VTDexManip | 2025 | Human tactile | × | partial | partial | × | ✓ |
-| RH20T | 2023 | Real | partial | ✓ | partial | ✓ | ✓ |
-| RH20T-P | 2025 | Real | partial | ✓ | partial | ✓ | ✓ |
-| RoboTwin 2.0 | 2025 | Sim | ✓ | ✓ | partial | ✓ | partial |
-| Action100M | 2026 | Web video | × | partial | × | ✓ | × |
+### 人类视频提供交互先验，执行标签仍需连接
 
-<small>表源：`World Model for Robot Learning: A Comprehensive Survey`，Table "Core attributes of representative datasets/resources for embodied world model training"。原表英文列名保留。`X-Emb.` 是 cross-embodiment coverage；`Act.` 是 explicit action supervision or aligned action proxy；`Obs./3D` 是 multiview/depth/LiDAR/3D 等观测支持；`Lang.` 是 language/task conditioning；`M/C` 是 multimodal or contact-rich signals。</small>
+UMI、MV-UMI、ActiveUMI 等提供不同形式的人类采集与可迁移操作信息，DexWild、EgoMimic、PHSD / In-N-On、UniHand 系列扩展人类行为覆盖。它们对学习对象交互有价值，但机器人动作监督的形式并不统一。
 
-### Table 4：Dataset relevance to world-modeling capabilities
+原表将有无 explicit action supervision 或 aligned proxy 单列，就是为了避免把视频条数直接视作机器人控制标签数量。人手运动、相机运动、对象变化和电机命令之间需要额外对应，latent action 只是可能接口之一。
 
-| Name | General Traj. | Long-Horizon | X-Emb. Scaling | Human Prior | Contact / Physics | Synth. / Recipe |
-| --- | --- | --- | --- | --- | --- | --- |
-| RoVid-X | partial | partial | partial | × | partial | × |
-| Open X-Embodiment (OXE) | ✓ | partial | ✓ | × | partial | × |
-| DROID | ✓ | partial | × | × | partial | × |
-| BridgeData V2 | ✓ | partial | × | × | partial | × |
-| AgiBot World | ✓ | partial | partial | × | partial | × |
-| Galaxea Open-World Dataset | ✓ | partial | partial | × | partial | × |
-| Humanoid Everyday | ✓ | ✓ | partial | × | ✓ | × |
-| RoboMIND 2.0 | ✓ | ✓ | ✓ | × | ✓ | partial |
-| FastUMI-100K | ✓ | ✓ | partial | × | partial | × |
-| BRMData | ✓ | ✓ | partial | × | partial | × |
-| UMI | partial | partial | partial | ✓ | × | × |
-| MV-UMI | partial | partial | ✓ | ✓ | × | × |
-| ActiveUMI | partial | partial | partial | ✓ | × | × |
-| TWIST2 | partial | partial | partial | × | partial | × |
-| DexWild | partial | partial | ✓ | ✓ | × | × |
-| EgoMimic | × | partial | partial | ✓ | × | × |
-| PHSD / In-N-On | × | partial | × | ✓ | × | × |
-| UniHand | × | partial | partial | ✓ | × | × |
-| UniHand 2.0 | partial | partial | ✓ | ✓ | × | ✓ |
-| Hoi! | partial | partial | ✓ | partial | ✓ | × |
-| FreeTacMan | partial | partial | partial | partial | ✓ | × |
-| Humanoid Visual-Tactile-Action | partial | partial | × | × | ✓ | × |
-| VTDexManip | × | partial | × | ✓ | ✓ | × |
-| RH20T | partial | partial | partial | × | ✓ | × |
-| RH20T-P | partial | partial | partial | × | ✓ | × |
-| RoboTwin 2.0 | partial | partial | ✓ | × | partial | ✓ |
-| Action100M | × | partial | × | partial | × | ✓ |
+### 接触信号补上视觉看不见的状态
 
-<small>表源：`World Model for Robot Learning: A Comprehensive Survey`，Table "Relevance of representative datasets/resources to embodied world-modeling capabilities"。原表英文列名保留。`✓` 表示 strong relevance，`partial` 表示 partial relevance，`×` 表示 limited or no direct relevance。</small>
+FreeTacMan、Humanoid Visual-Tactile-Action、VTDexManip、RH20T 和 RH20T-P 等资源补充触觉、力或相关接触线索。摩擦、刚度、接触稳定性不能总从一张图像中判定，这些信号直接影响动作是否可执行。
 
-两张数据表应该合起来读。Table 3 看原始属性：有没有动作、多视角、语言、接触信号。Table 4 看训练用途：能不能支撑 general trajectory pretraining、long-horizon modeling、cross-embodiment scaling、human-prior transfer、contact / physics modeling。当前最大短板不是成功轨迹太少，而是失败恢复、动作反事实和接触临界样本太少。
+但多模态并不只是把向量拼接。触觉与视觉可能异步、频率不同，视觉 token 数量又远多于接触信号。若联合训练让视觉损失占主导，模型仍可能忽视决定动作成败的瞬态反馈。
 
-### 一条 episode 至少应该存什么
+![Original Table 4 dataset capability relevance](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/table-4-original.png){ width="1000" }
 
-| Field | 建议内容 | 对 world model 的作用 |
-| --- | --- | --- |
-| `timestamp` | 统一时钟、原始频率、重采样索引 | 保证 action 与 observation 不错位 |
-| `observations` | 多相机 RGB、depth、segmentation、view id | 学习视觉转移和跨视角一致性 |
-| `proprioception` | joint、pose、velocity、gripper state | 区分外观相似但机器人状态不同的场景 |
-| `actions` | 原始控制量、执行后动作、action chunk、control mode | 建立动作到后果的因果条件 |
-| `language` | task、subgoal、correction、operator note | 提供高层目标和失败解释 |
-| `phase / progress` | task phase、step completion、progress label | 训练长时 progress / value head |
-| `reward / done` | success、failure、timeout、termination reason | 支撑 simulator RL 和 evaluator |
-| `contact` | force、torque、tactile、collision、grasp event | 校准接触和物理可执行性 |
-| `calibration` | intrinsics、extrinsics、robot/camera frame transform | 统一 multi-view、3D 和 action 坐标 |
-| `provenance` | embodiment、operator、domain、policy version、sim/real | 做数据平衡、OOD 划分和共演化追踪 |
+*原文 Table 4。它评价各数据资源与不同世界建模能力的相关性，勾选不是作者已统一测量的训练增益；同一个资源可以横跨多个维度。*
 
-如果历史数据没有完整 schema，也应尽量保留原始时间戳和未压缩控制信号。后处理可以再生成 action chunk、phase label 和 progress target，但时间错位一旦在采集阶段丢失，后面很难恢复。
+| Resource | Source（按原 Table 3） | 两张表帮助辨别的用途 |
+|---|---|---|
+| Open X-Embodiment | Real | 动作对齐与跨 embodiment 聚合 |
+| DROID | Real | 真实通用轨迹，平台范围需单独看 |
+| RoboMIND 2.0 | Real+Sim | 长程、跨平台与接触相关覆盖 |
+| MV-UMI | Real | 多视角与人类先验到机器人迁移 |
+| UniHand 2.0 | Human+Robot+VLM | 人类、机器人与语言资源组合 |
+| FreeTacMan | Robot-free | 动作代理与接触相关信号 |
+| RH20T | Real | 语言条件、动作与多模态接触信息 |
+| RoboTwin 2.0 | Sim | 可控合成变化与跨 embodiment 数据 |
+| Action100M | Web video | 网络行为语义与数据构建配方 |
 
-### 数据混合与 curriculum
+表中用途是对原表多个列的合读，不能把“相关”改写成“已经证明训练该能力有效”。尤其是高质量成功示范增长很快，但失败恢复、决策敏感变化和稠密物理监督仍较少。若要训练可靠模拟器，恰好需要看到采取错误动作之后世界如何变化。
 
-训练 world model 时，不宜按样本量直接随机混合。web video 数量巨大，会淹没稀缺的机器人 transition；成功轨迹更规整，也会淹没失败和恢复。一个更合理的 curriculum 是：
+## LIBERO 结果要保留四个子集，平均值不能代替任务结构
 
-1. 用通用视频和人类第一视角数据预训练时空 backbone；
-2. 提高 robot trajectory 采样权重，完成 embodiment 和 action grounding；
-3. 对 failure、recovery、contact boundary、action branch 做 priority sampling；
-4. 加入 multi-view / depth / tactile auxiliary loss，校准结构和物理；
-5. 用当前 policy rollout 做最后的 on-policy repair，并保留真实 replay 防止遗忘。
+原文 Table 5 汇集标准 Spatial / Object / Goal / Long 四套 LIBERO 结果。它按世界建模接入方式分组，保留未报告项，不把只测试某个子集的工作强行补成四套平均。
 
-跨 embodiment 训练还要做 action normalization 和 embodiment conditioning。不同机器人即使都用 7-DoF，动作含义、控制频率、夹爪定义和坐标系也可能不同。若只把所有 action tensor 拼在一起，模型容易学到数据集身份，而不是可迁移的动力学。
+![Original Table 5 LIBERO results](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/table-5-original.png){ width="1000" }
 
-## 评测：从 open-loop 到 decision utility
-
-论文把 embodied world model evaluation 分成三层。层级越往后，越接近真正机器人价值。
-
-| Evaluation category | 关注点 | 典型问题 | 证据强度 |
-| --- | --- | --- | --- |
-| Action-conditioned generation and open-loop predictive quality | 给定历史和动作，未来是否语义正确、时序一致、动作敏感 | 视频看起来合理，但动作是否真的控制了未来 | 中 |
-| Closed-loop task utility and policy evaluation | 世界模型放进 planner / evaluator / simulator 后是否提升 decision utility | imagined rollout 的排序、value 和真实执行是否一致 | 高 |
-| Physical consistency, controllability, and executability diagnostics | 生成未来是否物理可信、动作可恢复、可执行 | 能否通过 IDM recovery、physical-law 或 execution-oriented checks | 高，但协议更难统一 |
-
-这也是为什么论文结果表不能当简单榜单。它们来自不同 benchmark 和不同 reporting protocol，更适合看设计趋势。
-
-### 三层 benchmark 各自回答什么
-
-**Open-loop predictive quality。**
-RBench 检查 diverse robotic tasks / embodiments 下的结构一致性、物理合理性和 action completeness；EWMBench 将问题拆成 scene consistency、motion correctness 和 semantic alignment。DreamGen Bench 进一步问生成轨迹能否作为 policy learning 的 synthetic experience；EVA-Bench 关注 long-horizon anticipation 和 viewpoint、layout、motion distribution 变化下的 OOD robustness。
-
-这层适合快速迭代生成模型，但不能单独证明控制价值。FVD、PSNR、LPIPS 等指标主要度量分布或像素相似性，同一个合理动作本来就可能存在多个未来，因而与 ground-truth frame 不像不一定错误；相反，复制背景、弱化动作变化也可能取得不错的视觉指标。
-
-**Closed-loop decision utility。**
-WorldArena 同时测 synthetic data、policy evaluation 和 planning；WorldEval 测 policy / checkpoint 的相对排序；WorldGym 用 learned model 做 Monte Carlo evaluation，比较 estimated value 与真实趋势；World-in-World 则把异构 world model 接入在线 planning，直接观察迭代预测与重规划后的 task success。
-
-这一层更接近真实价值，因为 model error 会通过 policy 反复反馈。但结果必须报告 rollout horizon、replanning frequency、candidate budget 和真实观测回写频率，否则不同系统并不公平。
-
-**Physical and executability diagnostics。**
-WorldSimBench 同时做 perceptual evaluation 和 manipulative evaluation，并检查生成视频能否支持 inverse-dynamics recovery；WoW-World-Eval 覆盖 perception、planning、prediction、execution、generalization，并加入 physical-law 和 IDM-based executability tests；WM-ABench 则把能力拆成空间、时间、运动、mechanistic simulation 和 controlled counterfactual reasoning。
-
-这层的价值是定位失败原因。若 closed-loop success 低，诊断 benchmark 可以区分是动作不敏感、物理不一致、长时漂移，还是 IDM 无法从生成未来恢复有效控制。
-
-### 一个完整的 world-model 评测协议
-
-| Test | 操作 | 应报告的结果 |
-| --- | --- | --- |
-| Action counterfactual | 固定 history / language，只替换 action chunk | future divergence、方向正确率、action sensitivity |
-| Temporal rollout | 在多个 horizon 上 free-run | consistency-horizon curve、failure time |
-| Structural consistency | 比较对象轨迹、depth、contact、multi-view geometry | trajectory error、geometry / identity consistency |
-| Reward and done calibration | 在真实 replay 上评估反馈头 | AUROC、ECE、false-safe / false-done rate |
-| Candidate ranking | 对同一状态的多条候选动作排序 | pairwise accuracy、Spearman / Kendall correlation |
-| Policy ranking | 在想象和真实环境中评估多个 policy / checkpoint | rank correlation、value calibration |
-| Closed-loop planning | 将模型放入 planner / MPC / selector | task success、planning latency、candidate budget |
-| OOD and safety | 改变对象、背景、视角、动作幅度和失败类型 | degradation curve、unsafe acceptance rate |
-
-最重要的实验是 action counterfactual。固定当前图像和指令，输入若干物理上不同的动作：向左、向右、闭合夹爪、保持不动。如果生成未来几乎一样，模型学到的是 task-conditioned video prior，而不是 controllable world model。
-
-### Table 5：LIBERO standard 4-suite results
+*原文 Table 5，PDF p.28。以下 Markdown 表保留原表 Method 名称、列和数值，单位为原表汇总的成功率百分数。– 表示没有按该协议直接报告，不是 0。*
 
 | Group | Method | Spatial | Object | Goal | Long | Avg |
-| --- | --- | --- | --- | --- | --- | --- |
-| Decoupled | UniPi | -- | -- | -- | 0.0 | -- |
+|---|---|---:|---:|---:|---:|---:|
+| Decoupled | UniPi | – | – | – | 0.0 | – |
 | Decoupled | MimicVideo | 94.2 | 96.8 | 90.6 | 94.0 | 93.9 |
 | Decoupled | Say-Dream-ACT | 99.4 | 99.2 | 98.6 | 95.4 | 98.1 |
-| Single-backbone | UVA | -- | -- | -- | 90.0 | -- |
-| Single-backbone | VideoPolicy | -- | -- | -- | 94.0 | -- |
+| Single-backbone | UVA | – | – | – | 90.0 | – |
+| Single-backbone | VideoPolicy | – | – | – | 94.0 | – |
 | Single-backbone | Cosmos Policy | 98.1 | 100.0 | 98.2 | 97.6 | 98.5 |
 | Single-backbone | UD-VLA | 94.1 | 95.7 | 91.2 | 89.6 | 92.7 |
 | MoE / MoT | Motus | 96.8 | 99.8 | 96.6 | 97.6 | 97.7 |
@@ -1058,110 +503,89 @@ WorldSimBench 同时做 perceptual evaluation 和 manipulative evaluation，并�
 | Latent-space WM | VLA-JEPA | 96.2 | 99.6 | 97.2 | 95.8 | 97.2 |
 | Latent-space WM | JEPA-VLA | 97.2 | 98.0 | 95.6 | 94.8 | 96.4 |
 
-<small>表源：`World Model for Robot Learning: A Comprehensive Survey`，Table "Representative results on the LIBERO standard 4-suite benchmark"。原表英文列名保留。`Avg` 是四个 LIBERO suite 平均成功率；`--` 表示原论文未按标准 Spatial/Object/Goal/Long 协议直接报告。</small>
+原表将 UniVLA 与 Unified VLA 分别列成两行，并使用其对应引用；这里保留作者标签，不根据名称相近自行合并。Avg 同样保留原文报告值，不重新四舍五入来替代来源。
 
-LIBERO 表最值得看的不是最高平均分，而是 Long suite。很多方法在 Spatial / Object 上已经很高，Long 更能暴露长时动作一致性、子任务衔接和错误恢复问题。
+这张表支持几项有限但具体的观察。Cosmos Policy 与 LingBot-VA 的 Avg 都是 98.5，但 Long 分别为 97.6 和 98.5，Goal 又分别是 98.2 与 97.2。相同平均数没有说明它们具有相同任务优势，也不能据一个子集就判定整体更强。
 
-### Table 6：RoboTwin, CALVIN, and SIMPLER-style results
+TriVLA 的 Object 为 93.8，Long 为 73.2，显示同一系统在长程设置中可能明显下降；而 MimicVideo 的 Long 为 94.0，高于其 Goal 的 90.6，因此“所有模型都在 Long 最差”同样不成立。原文强调长程任务具有区分度，并没有给出适用于每行的单调规律。
+
+多个家族都出现高分，说明有效预测结构可以通过不同架构进入控制。但跨论文比较没有控制预训练数据、示范量、训练预算、骨干规模、执行频率和评估种子。因此表中结果不能证明某类架构因果上优于另一类，也不能单独量化“增加世界模型”的净收益。[原文 §7.3，PDF pp.28–30](https://arxiv.org/pdf/2605.00080v1#page=28)
+
+## RoboTwin、CALVIN 与 SIMPLER 不能混成一个分数
+
+原文 Table 6 把其他常用平台并列，目的是展示跨 benchmark 的表现分布。不同列对应不同任务、机器人、协议和量纲，不能横向取平均再做总榜。
+
+![Original Table 6 cross-benchmark results](../../assets/images/paper-deep-dives/world-models/world-model-robot-learning-survey/table-6-original.png){ width="1000" }
+
+*原文 Table 6，PDF p.29。RT-A / RT-B 对应作者所述非随机化与更难的随机化 RoboTwin 设置；C-A / C-D 是两个 CALVIN 协议标签；S-G / S-W / S-O 分别为 Google Robot、WidowX 与其他 SIMPLER-style 设置。*
 
 | Group | Method | RT-A | RT-B | C-A | C-D | S-G | S-W | S-O |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Decoupled | UniPi | -- | -- | 0.92 | -- | -- | -- | -- |
-| Decoupled | VidMan | -- | -- | 3.42 | -- | -- | -- | -- |
-| Decoupled | Vidar | 65.8 | 17.5 | -- | -- | -- | -- | -- |
-| Decoupled | VPP | -- | -- | 4.33 | -- | -- | -- | -- |
-| Decoupled | Video2Act | 54.6 | 54.1 | -- | -- | -- | -- | -- |
-| Decoupled | MimicVideo | -- | -- | -- | -- | -- | -- | 46.9/56.3 |
-| Single-backbone | VideoVLA | -- | -- | -- | -- | 73.1/62.8 | 53.1 | 63.0 |
-| Single-backbone | UD-VLA | -- | -- | -- | 4.64 | -- | 62.5 | -- |
-| MoE / MoT | Motus | 88.7 | 87.0 | -- | -- | -- | -- | -- |
-| MoE / MoT | LingBot-VA | 92.9 | 91.6 | -- | -- | -- | -- | -- |
-| MoE / MoT | LingBot-VLA | 88.6 | 86.7 | -- | -- | -- | -- | -- |
-| MoE / MoT | BagelVLA | 75.3 | 20.9 | 4.41 | -- | -- | -- | -- |
-| MoE / MoT | FRAPPE | 57.5 | 25.5 | -- | -- | -- | -- | -- |
-| Unified VLA | GR-1 | -- | -- | 3.06 | 4.21 | -- | -- | -- |
-| Unified VLA | UP-VLA | -- | -- | 4.08 | 4.42 | -- | -- | -- |
-| Unified VLA | DreamVLA | -- | -- | 4.44 | -- | -- | -- | -- |
-| Unified VLA | Unified VLA | -- | -- | 4.41 | 4.63 | -- | 69.8 | -- |
-| Unified VLA | CoWVLA | -- | -- | 4.21 | 4.47 | 60.9 | 76.0 | -- |
-| Unified VLA | F1 | -- | -- | -- | -- | -- | -- | 72.9 |
-| Unified VLA | InternVLA-A1 | 89.4 | 87.0 | -- | -- | -- | -- | -- |
-| Unified VLA | HALO | 80.5 | 26.4 | -- | -- | -- | -- | -- |
-| Unified VLA | TriVLA | -- | -- | 4.37 | -- | -- | -- | -- |
-| Latent-space WM | VLA-JEPA | -- | -- | -- | -- | 65.2 | 57.3 | -- |
-| Latent-space WM | JEPA-VLA | 73.5 | 17.7 | -- | -- | -- | -- | -- |
-| Latent-space WM | WoG | -- | -- | -- | -- | 69.4 | 63.5 | -- |
+|---|---|---:|---:|---:|---:|---|---:|---|
+| Decoupled | UniPi | – | – | 0.92 | – | – | – | – |
+| Decoupled | VidMan | – | – | 3.42 | – | – | – | – |
+| Decoupled | Vidar | 65.8 | 17.5 | – | – | – | – | – |
+| Decoupled | VPP | – | – | 4.33 | – | – | – | – |
+| Decoupled | Video2Act | 54.6 | 54.1 | – | – | – | – | – |
+| Decoupled | MimicVideo | – | – | – | – | – | – | 46.9/56.3 |
+| Single-backbone | VideoVLA | – | – | – | – | 73.1/62.8 | 53.1 | 63.0 |
+| Single-backbone | UD-VLA | – | – | – | 4.64 | – | 62.5 | – |
+| MoE / MoT | Motus | 88.7 | 87.0 | – | – | – | – | – |
+| MoE / MoT | LingBot-VA | 92.9 | 91.6 | – | – | – | – | – |
+| MoE / MoT | LingBot-VLA | 88.6 | 86.7 | – | – | – | – | – |
+| MoE / MoT | BagelVLA | 75.3 | 20.9 | 4.41 | – | – | – | – |
+| MoE / MoT | FRAPPE | 57.5 | 25.5 | – | – | – | – | – |
+| Unified VLA | GR-1 | – | – | 3.06 | 4.21 | – | – | – |
+| Unified VLA | UP-VLA | – | – | 4.08 | 4.42 | – | – | – |
+| Unified VLA | DreamVLA | – | – | 4.44 | – | – | – | – |
+| Unified VLA | Unified VLA | – | – | 4.41 | 4.63 | – | 69.8 | – |
+| Unified VLA | CoWVLA | – | – | 4.21 | 4.47 | 60.9 | 76.0 | – |
+| Unified VLA | F1 | – | – | – | – | – | – | 72.9 |
+| Unified VLA | InternVLA-A1 | 89.4 | 87.0 | – | – | – | – | – |
+| Unified VLA | HALO | 80.5 | 26.4 | – | – | – | – | – |
+| Unified VLA | TriVLA | – | – | 4.37 | – | – | – | – |
+| Latent-space WM | VLA-JEPA | – | – | – | – | 65.2 | 57.3 | – |
+| Latent-space WM | JEPA-VLA | 73.5 | 17.7 | – | – | – | – | – |
+| Latent-space WM | WoG | – | – | – | – | 69.4 | 63.5 | – |
 
-<small>表源：`World Model for Robot Learning: A Comprehensive Survey`，Table "Representative results on RoboTwin, CALVIN, and SIMPLER-style benchmarks"。原表英文列名保留。`RT-A` / `RT-B` 是 RoboTwin 两种设置；`C-A` / `C-D` 是 CALVIN ABCD / ABCDD；`S-G`、`S-W`、`S-O` 是 SIMPLER-style 的 Google Robot、WidowX 和 other reported setups。</small>
+两处细节需要在表旁说明。其一，原表对 CALVIN 的脚注直接排成 ABCD 与 ABCDD，未清楚呈现训练集合到测试集合的箭头；本文保留 C-A / C-D 标签，严谨复现时必须回到对应原论文确认划分，不能仅凭连写字符串补定协议。CALVIN 这些值属于任务链完成类指标，不能读成 4.41% 的成功率。
 
-RoboTwin、CALVIN、SIMPLER-style 更碎，不能和 LIBERO 一起排绝对名次。它们更适合提醒我们：world model 方法对 embodiment、动作空间、仿真随机化和任务协议都很敏感。一个方法在单一 benchmark 上强，不等于它已经学到可迁移的物理世界模型。
+其二，$a/b$ 表示来源中两种协议变体的结果，不是误差条或置信区间；S-O 又汇集其他设置，不能将该列所有行当作相同机器人任务。横线仍表示未直接报告。
 
-## 从综述落到训练方案
+同一行的简单与随机化设置可以提示敏感性。例如 LingBot-VA 的 RT-A / RT-B 差 1.3 个百分点，BagelVLA 对应差 54.4 个百分点。这些是原表数字的算术差，不是控制数据与训练预算后的架构消融。模型使用的演示数量、随机化范围和原始实验协议仍需核对。
 
-如果要把这篇综述转成项目 checklist，最有价值的是下面五个训练问题。
+原文据此总结，强表现出现在多种架构中，长程鲁棒性、跨平台迁移和标准化报告仍然不足。更强的结论，例如某个范式已普遍解决机器人世界建模，超出了这些汇总表能够支持的范围。
 
-| 训练问题 | 综述给出的判断 | 工程检查项 |
-| --- | --- | --- |
-| 未来预测是否真的受动作控制 | controllable world model 要建模 \(p(o_{t+1:t+k}\mid o_t,a_{t+1:t+k})\) | 固定历史，替换候选动作，看 future latent / reward / risk 是否分叉 |
-| 视频分支推理时是否必要 | 很多方法只把 future prediction 作为 train-time auxiliary 或 latent guidance | 明确部署路径：full video rollout、partial denoising、latent features、test-time skipped |
-| 数据是否 transition-rich | 世界模型需要 action、long horizon、cross-embodiment、3D/multiview、contact-rich signals | 数据 schema 存动作、语言、状态、失败、恢复、接触、时间同步 |
-| simulator feedback 是否可信 | RL in learned world model 会放大 reward / termination 错误 | 用真实 replay、hard negative、policy ranking fidelity 检查 reward exploit |
-| 评测是否功能化 | open-loop realism 不能代表 control utility | 至少补 action sensitivity、closed-loop success、policy ranking、executability diagnostics |
+## 六类未解决问题都可以落到具体接口上
 
-一个很实际的结论是：完整像素级视频 rollout 经常太贵，也不一定必要。MimicVideo、LingBot-VA、Fast-WAM、LeWorldModel 等路线都指向同一件事：policy 很多时候需要的是 motion dynamics、latent foresight 或 train-time world-model regularization，而不是每次都生成高清未来视频。
+综述最后讨论的挑战并不只是继续扩大参数。每一项都对应前文一个可能失真的接口。[原文 §8，PDF pp.30–31](https://arxiv.org/pdf/2605.00080v1#page=30)
 
-## 局限与挑战
+第一项是动作条件不足。模型根据历史和任务猜到了一个常见未来，却没有响应当前候选控制。联合训练可能改善对齐，但仍要通过动作替换、反向动作或失败动作等设置检验预测是否真正改变。语言意图正确不能替代命令后果正确。
 
-论文最后的挑战可以按“为什么世界模型还不能放心进机器人闭环”来理解。
+第二项是效率。显式视频训练、联合生成和在线 rollout 各自产生成本。轻量适配降低的是参数更新负担，部分去噪减少生成过程，latent prediction 减少表示与解码，Fast-WAM 式训练后省略分支则改变部署流程。不同方案解决不同部分，单一“更快”不足以描述系统。
 
-| Challenge | 本质问题 | 对项目的提醒 |
-| --- | --- | --- |
-| Causal Conditioning Gaps | 未来预测更受历史和任务意图影响，而不是待执行动作影响 | action token 要进入 dynamic path，并做反事实动作评测 |
-| Efficiency Bottlenecks | 共同预测视频和动作、或扩散视频 rollout 会显著增加成本 | 优先尝试 latent prediction、partial denoising、train-time-only WM |
-| Multi-Modal Perception Bottlenecks | 仅靠 vision/proprioception 难以捕捉摩擦、刚度、接触稳定性 | 接触任务要引入 tactile、force、dense proprioception 或物理状态 |
-| Classical Control Integration | MPC 需要大量 rollout，高容量 world model 很难实时优化 | learned dynamics 要和稳定性、鲁棒控制、低层 controller 协同 |
-| Symbolic Structure Integration | 像素/latent rollout 长时会漂，符号和关系结构可提升组合泛化 | 长任务需要 object-centric、relational、predicate 或 occupancy abstraction |
-| Open Challenges in Evaluation Metrics | 缺少统一 metrics；视觉真实和功能价值经常脱钩 | 建议固定 task success、policy-ranking fidelity、executability diagnostics |
+第三项是多模态物理反馈。视觉与本体感知仍可能无法确定摩擦、刚度和稳定接触。触觉、力反馈能补充信息，但异步采样、信号尺度和模态权重会影响是否真正使用它们。模型接收传感器数据不等于已经学会依赖它。
 
-其中最关键的是 causal conditioning gap。很多系统有 world model head，但未来主要由历史画面和语言意图决定，动作只是弱条件。这样的模型可以辅助表征学习，却不能可靠做 candidate action evaluation。
+第四项是与经典控制结合。世界模型可以提供 MPC 所需的前向动态，反复候选 rollout 却可能限制实时性。更进一步的 Lyapunov 稳定或鲁棒控制保证，被文章提出为研究方向，不能写成现有视频策略已经具备形式化安全保证。
 
-### 1. Causal conditioning：从相关性预测到动作干预
+第五项是结构与符号抽象。对象、关系、规则可以减少长程推理时无关细节，也要求可靠感知落地。抽象太粗会漏掉决定动作成败的连续状态，抽象太细又可能失去简化优势，混合表示需要围绕任务检验。
 
-当前训练数据大多只有行为策略选择过的一条未来，因此 action、state 和 task 高度相关。模型可以忽略 action，仅凭“看到杯子 + 指令是拿杯子”生成一段抓取视频。解决这个问题不能只靠更大模型，还需要数据和目标共同改变：
+第六项是用途相关的评价。训练环境、策略评估器、视觉计划生成器所需指标不同。文章倡议把动作敏感性、长期一致、任务成功、策略排名和可执行诊断一起纳入比较，但并未提出已获共识的唯一总分。
 
-- 在相近状态采集不同动作、失败动作和 no-op，增加局部 counterfactual coverage；
-- 让 action token 进入每层 dynamic pathway，而不是只在输入端做一次拼接；
-- 训练 action contrastive / ranking objective，要求正确动作对应真实未来，错误动作对应不同结果；
-- 把 action sensitivity 作为独立验证门槛，不通过就不能宣称可用于 planning。
+| Interface | 可能出现的失败 | 更直接的检查 |
+|---|---|---|
+| Task / action → future | 任务成功动画压过候选动作 | 固定场景与任务，改变动作再比较后果 |
+| Future → executable action | 视觉轨迹不可达或控制不稳定 | 动作恢复与实际执行验证 |
+| Simulator → policy update | 策略利用模型漏洞 | 独立真实评估与失败轨迹回收 |
+| Rollout → ranking | 漂亮未来获得错误高分 | 与真实候选、策略排名对照 |
+| History → memory | 遮挡或长程后状态改变 | 回访、状态保持与任务链测试 |
+| Training prediction → deployment | 去掉分支后收益消失 | 部署模式下的等预算消融 |
 
-### 2. 效率：预测多少未来才够控制
+这张表是对综述的工程化整理，不是原文新的 benchmark。它把“模型质量”进一步拆成哪个接口没有履行职责，让失败更容易归因。
 
-完整高分辨率视频最容易解释，却通常不是最经济的控制表示。不同用途需要不同预算：
+## 用这篇综述设计研究，先写出预测将改变哪一步
 
-| 用途 | 推荐预测接口 | 原因 |
-| --- | --- | --- |
-| Policy representation learning | future latent / intermediate denoising feature | 训练时提供动态先验，部署时可移除 decoder |
-| Candidate selection | 短 horizon、低分辨率 rollout + value/risk head | 只需区分候选，不必生成细节 |
-| MPC | compact latent dynamics + differentiable cost | 每个控制周期需要大量 rollout |
-| Synthetic data engine | 高质量 multi-view video + structure channels | 离线生成可以接受较高成本 |
-| Human inspection / debugging | 可视化 pixel rollout | 便于识别 hallucination 和错误因果 |
+若现有策略的问题是动作歧义，未来条件或潜在目标可能提供有用结构；若问题是示范覆盖不足，合成行为还要连接动作恢复与数据过滤；若问题是缺乏失败学习，模拟器中的策略改进需要可信反馈和真实验证；若部署时只能增加少量计算，训练期的预测监督可能比完整在线想象更合适。
 
-MimicVideo、LingBot-VA 的 partial denoising，LeWorldModel 的 latent prediction，以及 Fast-WAM 的 train-time-only world modeling，都在说明同一原则：world model 的输出分辨率应由下游决策需要决定，而不是由视频生成能力决定。
+这些选择没有通用最优解，但可以形成可执行实验。先明确模型预测什么状态、接受哪种动作，再写出未来信息进入动作、评分或参数更新的位置；最后选对应的对照和真实结果指标。这样才能区分预测结构带来的价值、额外数据带来的价值和额外推理预算带来的价值。
 
-### 3. 多模态和控制：视觉之外的真实世界
-
-摩擦、刚度、接触稳定性和微小滑移很难仅从 RGB 推断。tactile / force 的频率通常远高于视频，维度却更低，直接拼接容易被视觉特征淹没。更合理的做法是使用独立 encoder、modality-specific timestep / normalization、事件级 contact token，再通过 cross-attention 或 shared latent 融合。
-
-与 classical control 的结合也不应只剩一个 MPC 名字。world model 可以负责高层 subgoal、对象动力学、risk 和 reference trajectory；低层 IK、impedance 或 robust controller 负责高频稳定执行。这样既使用 learned dynamics 的开放世界适应能力，也保留低层控制的稳定性和约束。
-
-### 4. 符号结构与像素结构需要互补
-
-像素/latent rollout 擅长开放场景感知，但长 horizon 会积累误差；predicate、object relation、affordance、occupancy 等结构更稳定，却依赖可靠 grounding。混合路线可以让视觉模型负责从观测更新 object-centric state，让 symbolic transition 负责长期计划，再由局部 video / latent world model验证接触和执行细节。
-
-因此，未来更可信的系统可能不是一个从像素端到端生成所有东西的单体模型，而是一个具有多种时间尺度和状态抽象的 predictive stack：语义/符号层管长程任务，latent dynamics 管候选动作，低层控制器管稳定执行，真实观测持续纠正三者。
-
-## 阅读结论
-
-这篇综述的成熟度是“前沿路线图 + 官方维护资源列表”，不是可复现单模型 recipe。它最值得复用的是三步判断法：第一，看世界模型是进入 policy、替代 simulator，还是作为 video WM；第二，看动作、未来、结构和 reward/value 在训练图里在哪里耦合；第三，看证据是 open-loop 视觉、closed-loop success，还是 policy-ranking / executability。
-
-对世界模型高效训练来说，它给出的最大启发是：不要把目标写成“生成更好看的未来视频”。更稳的目标是训练一个可被 policy 消费的预测接口，能在动作分叉、长 horizon、接触风险、reward / termination 和 policy ranking 上提供可靠信号。下一步最需要补的证据，是统一协议下的 action sensitivity、closed-loop task utility、simulator exploitation analysis 和跨 embodiment 复现。
+本文没有提供一套统一优化器或新模型训练配方，它提供的是拆解这些系统的共同语言。读完后最值得保留的判断，是世界模型的价值必须沿着信息流追到动作后果。预测画面、潜在表示、结构状态都可以成为接口，最终是否有用取决于它们是否让机器人在目标任务里作出更可靠的决定。

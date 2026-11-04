@@ -1,215 +1,90 @@
-# 数值、显存与运行时：模型为什么数学可行但系统跑不动
+# 数值精度、显存与运行时间
 
-模型从“公式上能算”到“线上能跑快、跑稳、跑得起”，中间会被数值、显存、带宽和运行时成本卡住。
+一个模型可能装得进显存，却在长上下文时 OOM；也可能显存占用下降了，生成速度却几乎不变。原因是参数存储、运行状态、计算量和数据搬运分别受不同因素控制。
 
-很多模型报告会同时出现 BF16、FP8、INT4、KV cache、FLOPs、bandwidth、kernel、runtime、TTFT、TPOT。它们是同一条执行链上的不同账本：数值格式决定每个值怎么表示，显存决定哪些张量能常驻，带宽决定数据搬得多快，kernel 决定硬件是否吃到高效路径，runtime 决定请求、batch、cache 和 shape 能否被组织起来。
+用一个假设模型做估算。设它有 70 亿个参数、32 层，每层 8 个 KV 头，每头维度 128。参数与 KV 都先按 BF16 存储，每个数 2 字节。以下只做容量和下界演算，不是硬件 benchmark。
 
-!!! tip "数学先修"
-    需要用到[浮点误差、条件数、FLOPs 与 bytes](../prerequisite-math/numerics-complexity-and-estimation.md)核算机器上的数值与搬运成本，并用[矩阵变换](../prerequisite-math/linear-algebra-and-geometry.md)连接 GEMM、attention 和 tensor layout。
+## 参数存储只是一部分显存
 
-## 第一张账：一个数占多少 bytes
+BF16 权重的原始数据量为 \(7\times10^9\times2=14\) GB，约 13.04 GiB。GB 按十进制，GiB 按 \(2^{30}\) 字节。不能把二者数字混写。
 
-先从最小账开始。一个张量的粗略显存是：
+若权重改为理想的 4-bit 打包，纯权重下界变为 3.5 GB。但实际格式还可能有 scale、zero point、padding、未量化层和运行缓冲区。框架如果把权重解包成高精度副本常驻，最终占用还会进一步增加。
 
-\[
-\text{bytes}
-=
-N_{\text{elements}}\times \text{bytes per value}
-\]
+训练另需梯度、优化器状态和激活。以一种常见混合精度 Adam 配置为例，BF16 权重和梯度各 2 字节、FP32 主权重 4 字节、两个 FP32 矩状态共 8 字节，合计可达每参数 16 字节，且还没算激活。具体框架可能省去主权重、改变梯度精度或分片，不能把 16 当成所有配置的固定常数。
 
-这行式子在说：shape 先决定元素个数，dtype 再决定每个元素多少字节。它还不是完整显存，但能把“一个张量大不大”先落到数量级。
+## 长前缀怎样吃掉 KV 显存
 
-常见格式可以先按这张表读：
-
-| 格式 | bytes/value | 常见用途 | 主要风险 |
-| --- | ---: | --- | --- |
-| FP32 | 4 | 参考路径、部分 optimizer state | 贵，带宽压力大 |
-| FP16 | 2 | 混合精度训练/推理 | 动态范围窄，训练常要 loss scaling |
-| BF16 | 2 | 大模型训练常用 | 范围宽但尾数少，精度仍低于 FP32 |
-| FP8 / INT8 | 1 | 新硬件训练/推理、量化路径 | scale、outlier、kernel 支持决定成败 |
-| INT4 / FP4 | 0.5 | 权重量化、极低比特实验 | 解包、scale、质量回归和 kernel 更敏感 |
-
-低精度的收益不是“格式名字更先进”，而是减少存储和搬运，最好还能命中更快的硬件指令。但每少一位，误差、动态范围、scale 和 fallback 风险都会变得更重要。
-
-## FP8 不是一个 dtype 开关
-
-FP8 常见 E4M3 和 E5M2。E4M3 给 mantissa 更多位，精度更细；E5M2 给 exponent 更多位，范围更宽。训练和推理系统通常不会把全模型硬改成 FP8，而是配合 scale、amax history、累加精度和敏感算子保护。
-
-![FP8 training loss curves 原论文图](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="760" }
-
-<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。原图对比 BF16 与 FP8 训练曲线。这张图说明：低精度是否可用，要看训练曲线、scale 策略和质量回归，而不是只看每个值从 2 bytes 降到 1 byte。</small>
-
-FP8 路径通常有一个缩放步骤：
+自回归 Transformer 为每个历史 token 保存 key 和 value。上述模型中，一条长度 S 的序列原始 KV 数据量为
 
 \[
-x_{\text{fp8}}
-=
-\operatorname{FP8Cast}\left(\frac{x}{s}\right)
+M_{KV}=2L S H_{kv}d_h b.
 \]
 
-这里 \(s\) 是 scale。公式读法是：先把原张量缩放到 FP8 能表示得比较舒服的范围，再 cast。scale 太小会 overflow；scale 太大，主体值会挤在粗糙格点里。NVIDIA Transformer Engine 的 delayed scaling 就是用历史 amax 统计来更新 scale，而不是把“转 FP8”当成孤立操作。
+前面的 2 来自 K 和 V，b 是每个元素字节数。S=32768 时，结果为 4 GiB；4 条同长度请求就是 16 GiB，还没算分页空隙、元数据或其他张量。
 
-实际混合精度常按路径拆：
+将权重从 BF16 压到 4 bit，节省约 10.5 GB 原始参数数据，却不会自动减少这 16 GiB KV。请求变多、上下文变长时，优化对象可能需要转向 KV、分块调度或有效上下文长度。
 
-| 路径 | 常见精度选择 | 原因 |
-| --- | --- | --- |
-| 大块 GEMM / Linear / MLP | FP8、BF16、FP16 | 计算和带宽收益最大 |
-| LayerNorm / RMSNorm | BF16/FP16 或更高保护 | 统计和缩放对误差敏感 |
-| Softmax / logits | BF16/FP16 或更高保护 | 指数、归一化和排序会放大误差 |
-| residual add | BF16/FP16 常见 | 跨层累积，误差会传播 |
-| optimizer state | FP32、BF16、低精分片 | 更新精度和恢复语义都重要 |
+GQA 让多个 query 头共享较少的 KV 头，公式中应填 KV 头数，不是 query 头数。混合 SSM 架构、滑动窗口和压缩注意力会改变历史状态形式，需按实际层结构分别计算。
 
-所以 FP8 的工程问题是：哪些张量低精，scale 怎么管，哪些 kernel 真命中，哪些路径保高精，质量回归有没有覆盖关键桶。
+![KV 的逻辑块与物理块映射](../assets/images/paper-figures/inference/vllm-logical-physical-block-table.png){ width="820" }
 
-## 第二张账：哪些张量常驻显存
+<small>图源：[vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)。</small>
 
-同一个模型，训练和推理的常驻状态不同。
+左侧请求按 token 顺序组织逻辑块，中间块表指向右侧可不连续的物理块。分页减少连续分配的要求并管理碎片，没有改变每个实际 KV 元素占多少字节；因此前面的 KV 容量估算仍然成立。
 
-| 阶段 | 主要显存账 | 备注 |
-| --- | --- | --- |
-| 训练 | parameters、gradients、optimizer state、activations、workspace | optimizer state 和 activation 常常比权重更麻烦 |
-| 推理 prefill | weights、prompt activations、KV 写入、workspace | 长 prompt 计算重，attention 和 GEMM 都忙 |
-| 推理 decode | weights、KV cache、采样状态、workspace | 每步生成少量 token，但反复读权重和历史 KV |
-| 多模态 | vision/video activations、connector、LLM states | 图像/视频 token 会推高激活和 prefill |
+## 浮点格式同时决定范围和间隔
 
-这解释了为什么“模型能推理”不代表“模型能训练”，也不代表“能高并发长上下文服务”。训练时 AdamW 可能要为每个参数保存 momentum、variance 和 master weights；推理时 optimizer 没了，但 KV cache 会随 batch 和上下文长度线性增长。
+FP16、BF16 都占 16 bit，但指数位和有效精度不同。BF16 的指数范围接近 FP32，正常数区间相对精度较低；较大范围有助于避免部分溢出，却不保证任何训练都稳定。
 
-一个 7B BF16 权重的最小常驻显存约为：
+例如 BF16 在 256 附近相邻可表示值间距为 2，把 1 加到 256 上可能按舍入规则回到 256。小更新相对大参数可能被吞掉，因此训练常保留更高精度的累加或主状态。低精度输入与低精度累加是两项不同选择。
+
+FP8/FP4 通常还依赖缩放。缩放不合适会导致大值溢出或饱和，小值下溢或舍入误差扩大。浮点格点并非等间距，不能直接照搬整数均匀量化的直觉。格式、分组方式和硬件转换语义都需要明确。
+
+![BF16 与 FP8 的训练曲线对照](../assets/images/paper-figures/foundations/fp8-formats-figure-1-training-loss.png){ width="820" }
+
+<small>图源：[FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)，Figure 1。</small>
+
+按图例将同一规模的两种精度曲线配对，横轴是训练进度，纵轴是训练损失。这些曲线支持论文配置下的比较，不能替代新模型上对 scale、溢出、累加精度和最终任务质量的检查。
+
+## 同一层在 prefill 和 decode 为什么速度不同
+
+线性层的输入可展平为 `[M,K]`，权重为 `[K,N]`，计算量约 \(2MKN\) FLOPs。Prefill 一次处理很多输入 token，M 较大，权重可被多个 token 复用；小 batch decode 每步只处理少量新 token，M 较小，同一份大权重仍需读取。
+
+粗略性能下界为
 
 \[
-7\times10^9\times2\approx14\text{ GB}
+t\ge\max\left(\frac{\mathrm{FLOPs}}{\text{有效计算速率}},
+\frac{\mathrm{bytes}}{\text{有效带宽}}\right).
 \]
 
-这行式子只算权重。若训练，还要加梯度、optimizer state、activation；若长上下文推理，还要算 KV cache。
+这只是计算与搬运的下界，未包括调度、通信、同步和无法重叠的开销。若假设读权重 14 GB、有效带宽 1 TB/s，仅完整读一遍的时间尺度就是 14 ms；缓存、批处理、分片和实际kernel会改变有效搬运量，不能把这个算式当成真实每token延迟。
 
-## KV cache：长上下文服务里的主角
+## 为什么 FlashAttention 与量化能互补
 
-自回归 decode 每生成一个 token，都要读取历史 token 的 Key/Value。KV cache 的数量级可以写成：
+标准 attention 的数学表达包含 S×S 分数矩阵。FlashAttention 通过分块与在线 softmax，避免将完整矩阵长期写入显存；它在实数算术下计算同一注意力，浮点运算顺序不同仍可能产生数值误差。
 
-\[
-\text{KV bytes}
-=
-2\times L_{\text{layers}}\times B\times T\times H_{kv}\times d_{head}\times \text{bytes}
-\]
+权重量化减少权重相关搬运，FlashAttention 主要处理注意力中间数据，两者针对的对象不同。解码时还要读历史 KV，序列越长，这部分越重要。单个 GEMM 变快，也可能被 KV 访问、排队或通信掩盖。
 
-这里前面的 2 表示 K 和 V，\(L_{\text{layers}}\) 是层数，\(B\) 是活跃序列数，\(T\) 是上下文长度，\(H_{kv}\) 是 KV head 数，\(d_{head}\) 是每个 head 的维度。读这行公式时抓住线性关系：batch 翻倍、上下文翻倍、KV heads 翻倍，KV 显存都会相应翻倍。
+## 如何把估算变成可判断的测量
 
-举个常见量级：32 层、batch 8、上下文 16k、8 个 KV heads、head dim 128、BF16：
+先固定模型、dtype、输入/输出长度、batch和硬件，再记录峰值显存、首token时间、后续token间隔与吞吐。GPU 异步执行意味着只量 Python 函数返回时间可能低估计算，测量需要正确同步或设备事件。冷启动编译和稳定运行也应分开。
 
-\[
-2\times32\times8\times16384\times8\times128\times2
-\approx 17.2\text{ GB}
-\]
+显存分配器的 reserved 往往高于 active allocated，前者包含预留空间；看到 reserved 高不能立刻断言张量泄漏。OOM出现在加载、前向、反向还是第一次 optimizer step，也会指向不同对象。
 
-如果是普通 MHA 而不是 GQA，KV heads 可能接近 query heads，KV cache 会更大。若使用 MQA/GQA/MLA，KV 宽度下降，decode 的显存和读带宽压力也会下降。判断长上下文是否跑得动，不能只看参数量，要看 layers、active batch、context、KV heads、head dim、dtype、paged cache 和 prefix reuse。
+```python
+params, layers, length, kv_heads, head_dim, byte = 7_000_000_000,32,32768,8,128,2
+weights = params*byte
+kv = 2*layers*length*kv_heads*head_dim*byte
+print(round(weights/1e9,2), round(weights/2**30,2))
+print(kv/2**30, 4*kv/2**30)
+```
 
-![vLLM logical physical block table](../assets/images/paper-figures/inference/vllm-logical-physical-block-table.png){ width="760" }
+输出 `14.0 13.04` 和 `4.0 16.0`。先做这种带单位的估算，再用 profiler 找到实际热点，能避免把优化精力放在占比很小的部分。
 
-<small>图源：[vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)。原图表达：sequence 的逻辑 KV block 可以映射到不连续的物理 block。这张图说明：serving runtime 的关键工作之一，是管理 KV cache 生命周期和碎片，而不是只调用一次模型 forward。</small>
+## 接着查哪一层
 
-PagedAttention、TensorRT-LLM KV cache reuse、KV offload、prefix cache 和 KV 量化，本质上都是围绕同一件事：有限 GPU 显存应该如何服务更多活跃请求，同时不伤质量和 P99。
+- [自动微分与训练显存](autograd-activation-checkpointing-and-memory.md)解释为什么反向需要保存中间值。
+- [量化](../quantization/index.md)解释低比特格式怎样落到真实算子。
+- [算子与性能](../operators/index.md)解释shape、带宽与测量。
 
-## 第三张账：FLOPs 不等于速度
-
-一个 Linear 层 \(y=xW\)，权重 \(W\in\mathbb{R}^{d_{\text{in}}\times d_{\text{out}}}\)。不含 bias 时：
-
-\[
-\text{Params}=d_{\text{in}}d_{\text{out}}
-\]
-
-\[
-\text{MACs/token}=d_{\text{in}}d_{\text{out}}
-\]
-
-这两行式子在说：单个 token 通过这层时，每个权重大致贡献一次乘加，所以参数量和单 token MACs 主项看起来相同。但它们不是同一件事。Params 是静态存储；MACs 是在某个输入 shape、某个阶段实际执行的乘加。batch、prefill、decode、MoE routing、attention 长度都会让二者分开。
-
-速度还取决于算术强度：
-
-\[
-\text{arithmetic intensity}
-=
-\frac{\text{operations}}{\text{bytes moved}}
-\]
-
-如果一个算子每搬很多 bytes 只做一点计算，它通常被 memory bandwidth 限制；如果每搬少量 bytes 做很多矩阵乘，它更可能 compute-bound。Roofline 图就是把“算力上限”和“带宽上限”放到同一张图里看。Nsight Compute 的 roofline 能帮助判断一个 kernel 是计算没吃满，还是数据搬运拖住。
-
-这就是为什么 FlashAttention 影响很大：它不是改变 attention 的数学结果，而是用 tiling 减少 HBM 和 SRAM 之间的读写，把原本 IO-heavy 的路径组织得更接近硬件友好。
-
-## 第四张账：kernel 命中和 runtime 调度
-
-低精度模型文件变小，不等于端到端变快。一个 INT4 权重模型若没有高效 INT4 kernel，可能先解包/反量化成 FP16，再走普通 GEMM；文件省了，TPOT 未必省，甚至可能更慢。
-
-上线前要把“格式支持”拆成四层：
-
-| 层 | 要确认什么 |
-| --- | --- |
-| 硬件 | 是否有对应 Tensor Core / MMA / 指令路径 |
-| kernel | 热点 shape 是否命中 FP8/INT8/INT4 GEMM、attention 或 fused kernel |
-| graph/runtime | cast、dequant、transpose、layout transform 是否被融合或隐藏 |
-| serving | batching、shape bucket、KV cache、prefix reuse、fallback 是否影响 P95/P99 |
-
-Runtime 负责把请求组织成硬件能吃的形状。prefill 通常 batch 大、矩阵乘更饱；decode 每步 token 少、请求进出频繁、KV 读写重，更容易被调度、内存和小 kernel 开销限制。一个方案在 microbenchmark 上快，不代表在真实请求分布上快。
-
-## 一个可复算例子：为什么权重量化不一定解决长上下文
-
-假设 70B 模型用 BF16 权重，权重约：
-
-\[
-70\times10^9\times2\approx140\text{ GB}
-\]
-
-如果权重量化到 4-bit，权重存储可以粗略降到约 35 GB。听起来已经解决问题，但长上下文服务可能仍被 KV cache 卡住。
-
-还是用 KV 公式。若模型 80 层，batch 8，上下文 32k，8 个 KV heads，head dim 128，BF16：
-
-\[
-2\times80\times8\times32768\times8\times128\times2
-\approx 85.9\text{ GB}
-\]
-
-这行计算表示：即使权重已经被压到 4-bit，KV cache 仍可能占掉几十 GB。若线上还要保留 page metadata、workspace、并发请求和碎片，显存压力不会因为权重变小就自动消失。此时更相关的手段可能是 GQA/MQA/MLA、KV 量化、paged cache、prefix cache、context trimming 或请求路由。
-
-| 优化动作 | 主要省什么 | 不一定省什么 |
-| --- | --- | --- |
-| 权重量化 | 权重显存、部分权重带宽 | KV cache、activation、decode 调度 |
-| KV 量化 | 长上下文并发显存、decode 读带宽 | prefill 计算、scale/dequant 开销 |
-| FlashAttention | attention 中间读写 | KV 生命周期和请求调度 |
-| CUDA Graph / compile | launch overhead、图执行开销 | 形状过散时命中率可能低 |
-| shape bucketing | padding 浪费、kernel 命中率 | 长尾请求和质量差异 |
-
-这个例子说明：系统优化要先找主瓶颈。权重、KV、activation、workspace、kernel、runtime 各自有不同解法。
-
-## 怎么验证系统改动真的有效
-
-一个低精度、KV cache 或 kernel 改动，至少要同时看：
-
-| 指标 | 说明什么 |
-| --- | --- |
-| peak memory / KV GiB | 是否真的降低常驻和峰值显存 |
-| TTFT | prefill、排队和 cache hit 是否改善 |
-| TPOT | decode 每步是否更快 |
-| P95/P99 | fallback、编译、cache miss、长尾请求是否拖慢 |
-| kernel trace | 是否真命中目标 dtype/kernel，而不是回退 |
-| quality buckets | 数学、代码、长上下文、OCR、工具调用是否退化 |
-| cost per successful request | 质量和系统成本是否一起改善 |
-
-不要只报平均吞吐。真实服务里，长 prompt、长输出、多轮工具调用、低 cache hit、低投机接受率、动态 batch、视觉输入和不规则 shape 都会制造尾延迟。系统报告如果只展示一个漂亮的 tokens/s，很难证明线上会更好。
-
-## 读完以后怎么判断
-
-数值格式决定每个值怎样表示，显存决定哪些状态能常驻，带宽决定数据搬运是否成瓶颈，kernel 决定低精度和融合能否兑现，runtime 决定请求、batch、KV cache 和 shape 是否被组织好。读 FP8、量化、FlashAttention、vLLM、TensorRT-LLM 或 DeepSeek-V3 这类材料时，不要先背技术名词，先问：它省的是哪张账，代价转移到哪里，质量和 P99 是否一起验证。
-
-## 外部材料
-
-- [NVIDIA Mixed Precision Training Guide](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html)：理解 loss scaling、Tensor Core 和混合精度训练的基本路径。
-- [NVIDIA Transformer Engine FP8 Delayed Scaling](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/features/low_precision_training/fp8_delayed_scaling/fp8_delayed_scaling.html)：理解 FP8 scale 和 amax history。
-- [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 E4M3/E5M2、scale 和训练曲线证据。
-- [Nsight Compute Roofline](https://docs.nvidia.com/nsight-compute/2023.3/NsightCompute/index.html)：理解 compute-bound 与 memory-bound 的判断方式。
-- [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 IO-aware attention 如何减少 HBM 读写。
-- [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：理解 KV cache block 管理、continuous batching 和 serving 内存浪费。
-- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)：理解 KV reuse、offload、eviction 和生产 runtime。
-- [General Compute: Quantization for Inference](https://www.generalcompute.com/blog/quantization-for-inference-gptq-awq-smoothquant-fp8)：用工程视角区分 GPTQ、AWQ、SmoothQuant 和 FP8 的适用瓶颈。
-
-- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- [Dive into Deep Learning](https://d2l.ai/)。
-- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+- [PyTorch 优化循环教程](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/beginner_source/basics/optimization_tutorial.py)，可对照前向、反向和参数更新分别在哪一步发生，再观察各阶段状态分配。

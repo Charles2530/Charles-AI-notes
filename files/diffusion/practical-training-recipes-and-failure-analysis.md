@@ -1,77 +1,91 @@
-# 扩散训练配方与排障
+# 训练 loss 下降，为什么生成结果仍然不对
 
-扩散训练最容易被误解成一组技巧：数据清洗、cosine schedule、EMA、condition dropout、CFG sweep、几个固定 prompt。真实项目里，这些开关构成一条排障链。样本糊、主体错、prompt 不听、视频闪烁、动作扩散成功率下降，都要追问：失败发生在哪个噪声区间，条件信号有没有进入 denoiser，训练分布和采样链路是否一致，模型容量和表示空间是否够用。
+假设一个模型的训练 loss 稳定下降，完整采样却总把提示中的红球画模糊。可以猜 VAE 压缩过强、网络没学会、噪声日程不合适，也可以不断换 sampler。但单个现象不足以区分这些原因。更有效的方式是固定同一份输入，逐次绕开组件，观察错误在哪一步首次出现。
 
-扩散训练看起来正常、采样却不对时，需要把失败归因到数据、噪声日程、参数化、条件接口、优化或部署预算，而不是孤立调开关。
+下面是一组用于诊断的实验设计，没有声称来自某次真实训练。它从普通图像出发，再说明怎样延伸到视频和少步学生。每次只改变一个能解释结果的因素，保留固定输入与失败输出。
 
-## Loss 只是入口，不是诊断结论
+## 先让重建路径回答是否丢失了信息
 
-常见噪声预测目标可以写成：
+选一张真实红球图，固定裁剪、分辨率与像素范围，只运行 VAE 编码、latent 尺度变换的逆过程和解码，不运行扩散网络。
+
+如果球的轮廓已经模糊，先检查预处理和编解码。输入本来只有低分辨率、错误地重复归一化、使用了不匹配的 VAE 权重，都可能产生同样现象。需要将预处理后实际进入 VAE 的图也保存下来，才能分清输入已经损坏还是重建损坏。
+
+如果重建清晰，才有理由继续查看生成主干。这个对照不能证明 VAE 对所有场景都足够，只能说明当前失败样本在已检查设置下具有可重建的表示。
+
+视频应逐帧回放，并把首帧、快速运动和分块边界单独标记。整体编码与带缓存分块编码的输出若只在边界显著不同，优先检查历史特征与步长相位，见[视频 VAE](video-vae-1029-1246.md)。仅凭“首帧比较清楚”无法确定原因。
+
+## 再固定一个样本、一个时间和一份噪声
+
+冻结外部组件，用同一份干净 latent、同一噪声和同一时间反复计算 loss，检查小网络是否能拟合这个明确目标。它暂时去掉了数据变化与时间抽样，方便检查梯度和目标构造。
+
+```python
+# 机制伪代码，只为定位接口与优化问题
+clean = frozen_encoder(fixed_image)
+noise = fixed_noise
+noisy = a * clean + b * noise
+for _ in range(debug_updates):
+    prediction = model(noisy, fixed_t, fixed_condition)
+    loss = mean((prediction - noise) ** 2)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+```
+
+若连这个任务都无法明显降低误差，先查参数是否在优化器内、是否被 `no_grad` 截断、目标是否在每次循环意外变化、学习率和数据尺度是否合理。注意，这种拟合容易让模型记住固定噪声，成功只能说明有监督的执行链可学习，不能证明生成泛化。
+
+通过以后逐项放开随机性，先固定小数据集但重新抽噪声，再增加时间变化，最后增加数据和条件。这样可以看到误差在哪项变化引入后显著增长。
+
+## 用代数检查区分参数化错误与模型误差
+
+假设真实 \(x_0=.5,\epsilon=-1,a=.8,b=.6\)，则 \(x_t=-.2\)。epsilon 模型的正确输出是 −1，v 模型的正确输出是 −1.1。若误把 −1.1 当成 epsilon，得到的数据估计为
 
 \[
-\mathcal L
-=
-\mathbb E_{x_0,\epsilon,t}
-\left[
-w(t)\|\epsilon-\epsilon_\theta(x_t,t,c)\|_2^2
-\right]
+\hat x_0=\frac{-.2-.6(-1.1)}{.8}=.575.
 \]
 
-这行式子看起来像普通 MSE，但里面每一项都对应一个工程选择。\(x_0\) 来自什么数据分布，决定模型会学到哪些外观和偏差；\(t\) 的采样分布决定训练更偏向高噪声语义还是低噪声细节；\(w(t)\) 决定不同 SNR 区间的梯度权重；条件 \(c\) 的质量和 dropout 决定推理时 CFG 有没有可靠的有条件/无条件差；\(\epsilon_\theta\) 的架构、参数化和优化器则决定这些监督信号能不能被稳定吸收。
+输出形状和有限性全部正常，却已经产生 .075 偏差。这个检查可以不训练网络，直接把准确目标送进 sampler，验证它是否得到预期更新。真实预测再与已知监督比较，才能分清转换错误和预测本身不准确。
 
-所以训练 loss 下降只能说明“在训练采到的噪声点上，某个回归目标变准”。它不能直接证明 prompt 对齐、少步采样、ControlNet、视频运动或机器人闭环成功率会变好。排障时要把平均 loss 拆到 SNR bucket、条件类型、采样器和真实任务指标里。
+还要核对训练末端是否接近采样先验。短 smoke 日程只验证代码执行，往往没有把数据充分加噪；直接从标准高斯开始生成就会遇到分布错配，详见[最小实现](minimal-ddpm-implementation.md)。
 
-## 数据和表示空间先决定上限
+## 平均 loss 为什么会掩盖发生变化的任务
 
-扩散模型对数据脏噪很敏感。图像数据里的低分辨率、压缩噪声、水印、拼图、模板图、重复样本和 caption 错配，会被模型当成真实分布的一部分。机器人或世界模型数据还会多出相机标定变化、动作标签延迟、轨迹截断、失败样本漏标、状态和图像不同步等问题。很多“模型不会画”“动作不敏感”的失败，第一根线索不是网络结构，而是数据和条件是否对齐。
+假设两个噪声桶的误差分别为 .1 和 1.0，原来各采一半，平均为 .55。后来模型完全没变，但采样比例变成九成低误差桶、一成高误差桶，平均便下降到 .19。曲线变好，预测能力没有变化。
 
-表示空间同样决定上限。Latent diffusion 通过 VAE 把高分辨率像素压到 latent，显著降低 U-Net / DiT 的 token 和空间成本；代价是 VAE 重建质量、压缩倍率和解码器能力会变成细节上限。视频 latent 更敏感，因为时间压缩、chunk 切分和因果性会影响身份、运动和遮挡能否被后端模型看见。
+因此比较训练阶段时，应在固定验证分布上按 SNR、条件和数据类型分桶，并同时记录样本数。不要将训练随机桶的均值与固定验证桶直接混比。不同参数化的无权重 MSE还具有不同隐含权重，epsilon loss 与数据 loss 的绝对值也不能跨目标直接排名。
 
-视频 VAE 排障要单独看首帧和 chunk 边界。Causal 3D VAE 常把第一帧作为单独 latent，再把后续帧按 temporal compression ratio 合并；或者在第一帧前使用 padding / cache 初始化。这样 \(z_0\) 和后续 temporal latent 可能不是完全同分布。训练 DiT 时，这种差异会变成模型输入分布的一部分；部署时，量化、tiling、cache、chunk overlap 和 long-video stitching 又会继续放大它。固定一段视频只做 encode-decode 回放，按帧画 PSNR、LPIPS、亮度均值和局部纹理 crop，往往比直接调 denoiser 更快定位问题。
+SNR 说明输入保留多少信号，不自动划分“语义阶段”和“纹理阶段”。模糊可能来自表示、数据、模型和求解器的多种组合，桶统计是缩小假设范围的证据。
 
 ![DiT compute scaling and FID](../assets/images/paper-figures/diffusion/dit-gflops-fid-compute.png){ width="860" }
 
 <small>图源：[Scalable Diffusion Models with Transformers](https://arxiv.org/abs/2212.09748)，Figures 8-9。原图用 forward pass GFLOPs 和训练计算量展示 DiT 模型规模与 FID 的关系。读图重点：扩散质量常常要用每步前向成本换；在视频和世界模型里，这个成本还会乘以帧数、候选动作数和去噪步数。</small>
 
-如果一个视频世界模型一次要处理多相机、多帧 latent，单次前向已经很贵，再乘以 20 到 50 个去噪步和多个候选 action sequence，闭环延迟会迅速失控。这里的排障顺序不是先问“用不用更 fancy 的 sampler”，而是先算 token 数、单步前向、采样步数、候选数和重规划频率。在线控制场景里，低 NFE 不是锦上添花，而是任务可用性的前提。
+图中的计算量与质量关系属于 DiT 的特定实验。扩大主干可能改善容量，也会增加每次前向成本。视频帧数通常已体现在单次输入规模中，不能计算了完整视频前向后再机械乘一次帧数。候选数、CFG 分支和去噪次数则会增加额外工作。
 
-## SNR bucket 能把“糊”和“画错”分开
+## 条件是否被用到，需要与打乱条件比较
 
-噪声日程和时间采样决定模型在哪些难度上练习。高噪声区负责全局语义、主体和大结构；中噪声区负责形状、布局和对象关系；低噪声区负责边缘、纹理、文字和局部细节。
+对同一个带噪 latent，分别提供正确 caption、空 caption 和其他图片的 caption。在固定时间上比较监督误差，再运行固定种子的完整生成。正确条件如果始终不带来区别，可能是文本编码没有接入、mask错位、数据错配，也可能是当前样本单靠视觉输入就足以预测。
 
-如果样本“画得精致但主体错”，通常要查高噪声区：caption 是否太短，条件编码器是否弱，timestep sampling 是否过度偏低噪声，CFG 是否把错误方向放大。若样本构图对但细节糊、手部和文字差，通常要查低噪声区：VAE 是否压缩太强，loss weighting 是否让低噪声贡献太小，采样尾段步数是否不足，训练数据里此类细节是否稀缺。
+因此还应选高歧义、确实需要文字区分的输入，例如同类对象的不同数量或运动方向。在低噪声完整图上做条件置换，模型可能从图像直接读到答案，容易低估条件作用。
 
-Improved DDPM 的 VLB timestep 分析和 Min-SNR weighting 都在提醒同一件事：不同噪声区间不是同一个任务。平均 loss 把它们揉成一条曲线，很容易遮住真正的问题。一个更有用的训练面板，应同时看 high / mid / low SNR loss、固定 seed 样例、真实 sampler 下的样例，以及 prompt / condition 分桶失败。
+当条件接口可靠以后，再扫描 CFG。提高引导强度改变方向场，不能补齐训练从未提供的关系。结构条件需要额外检查裁剪、resize、时间戳与 mask 含义，见[条件控制](guidance-and-conditioning.md)。
 
-## 条件接口决定 CFG 能不能工作
+## 完整采样怎样隔离数值问题
 
-文本、类别、边缘图、深度图、姿态、mask、参考图、首帧和动作历史都可以是条件，但它们不是同一种证据。文本主要提供语义和风格，结构条件提供空间约束，参考图提供身份或外观，动作条件提供反事实未来。训练时条件入口如果弱，推理时再提高 CFG scale，只是在放大一个不可靠方向。
+固定权重、初始噪声与条件，比较细时间网格和粗时间网格。细网格较稳定而粗网格退化，提示有限步求解或少步适配可能重要。二者都画错对象，则继续检查训练数据与条件，而非假定换 solver 必然修复。
 
-Classifier-free guidance 还要求训练时模型见过“有条件”和“无条件”两种输入。若 condition dropout 太低，无条件分支弱，CFG 的基准方向不稳；若 dropout 太高，条件对齐能力会被削弱。caption 质量也一样：短 caption 可能让模型学到粗语义，却学不到对象关系、数量、材质和动作；过度模板化 caption 又会让模型对真实用户 prompt 反应迟钝。
+比较 sampler 时，还要记录实际模型评估次数。Heun 一个间隔可能两次评估，CFG 合并 batch 仍包含两份工作。若把一个方法的 20 个间隔与另一个方法的 20 次评估直接比较，成本可能并不相等。
 
-结构条件要额外检查作用范围。ControlNet 或 adapter 不是更长的 prompt，而是把空间证据送进中间层。排障时要单独看纯文本、结构控制、参考图、局部编辑和视频首帧桶。只看平均 prompt adherence，很容易把“文本能听懂”误判成“所有条件都稳”。
-
-## EMA、优化和数值稳定性是在保住样本观感
-
-扩散训练常用 EMA 权重部署，因为生成质量对后期权重抖动很敏感：
+EMA 是另一项可以受控比较的选择
 
 \[
-\theta_{\mathrm{ema}}\leftarrow m\theta_{\mathrm{ema}}+(1-m)\theta
+\theta_{\mathrm{EMA}}\leftarrow m\theta_{\mathrm{EMA}}+(1-m)\theta.
 \]
 
-这行式子表示 EMA 权重保留大部分旧值，只混入一小部分当前训练权重。\(m\) 越接近 1，更新越慢、越平滑。EMA 不能让模型学会不存在的数据，但它能让采样观感从抖动的瞬时权重里稳定下来。
+较大的 \(m\) 让历史权重衰减更慢。用同一采样配置比较当前权重和 EMA，能判断平滑是否改善当前任务。EMA 可以滞后，不能修复错误标签、缺失条件或错误参数化。
 
-优化器、batch 和混合精度也要按失败现象排查。坏 batch 会造成 loss spike；过高学习率会让低噪声细节抖；梯度裁剪缺失可能让少数高难样本主导更新；FP16 / BF16 数值问题可能表现为颜色、亮度或局部纹理异常。扩散训练的“稳定”不是 loss 没有 NaN，而是固定 prompt、固定 seed、固定 sampler 下的样例随训练逐渐变好，并且长尾桶没有被平均指标掩盖。
+## 分布匹配训练要检查两个正在变化的模型
 
-## 必须回放真实采样链路
-
-训练点上的回归 loss 和推理时的采样轨迹不是同一件事。推理会引入 sampler、NFE、CFG scale、thresholding、ControlNet / adapter、VAE 解码、batching 和后处理。少步采样时，模型会访问更稀疏的噪声点；强 CFG 时，方向场会被拉陡；蒸馏学生还可能滚到 teacher 训练分布之外。
-
-因此验证不应只保存训练 loss。更可靠的做法是固定一组 prompt / condition / seed，每隔固定训练间隔用真实部署采样器回放。图像模型看主体、构图、细节、文字、手部、颜色和多样性；视频模型看身份一致性、运动、首帧保真、长时漂移和延迟；动作扩散看碰撞、接触成功、恢复窗口和 closed-loop success。排障的基本单位应该是失败桶，而不是单张最好看的样例图。
-
-## 分布匹配曲线要当动态系统看
-
-少步和一步蒸馏会引入另一类训练信号。\(v\)-prediction loss 常是局部回归误差，distribution matching loss 则在问学生最终生成分布是否接近 teacher 或真实分布。后者通常依赖 fake critic、score estimator 或判别信号，曲线不一定像 MSE 那样单调平滑。
+少步学生使用 DMD 类目标时，fake score 模型持续估计学生的当前分布。学生改得快、fake 模型跟不上，score 差可能给出偏移的梯度。这类训练不能只看某个回归 loss 单调下降。
 
 ![DMD2 brightness stability](../assets/images/paper-deep-dives/diffusion/dmd2/imagenet-brightness.png){ width="760" }
 
@@ -81,62 +95,21 @@ Classifier-free guidance 还要求训练时模型见过“有条件”和“无�
 
 <small>图源：[DMD2](https://arxiv.org/abs/2405.14867)，Appendix Figure 8。原图比较不同 fake critic update ratio 和原始 DMD 设置下的收敛表现。读图重点：少步蒸馏不能只看学生 loss；critic 更新、regression anchor、真实采样步数和样本多样性要一起看。</small>
 
-如果 \(v\)-loss 下降但样例变差，问题可能在 sampler、CFG 或 train-inference mismatch；如果 distribution matching loss 下降但多样性变差，可能是学生向高密度安全模式坍缩；如果亮度或颜色周期性晃动，要看 fake critic 更新频率、学习率、EMA 和 generated batch 分布。少步训练最怕“曲线看起来有进展，真实样例变钝”。
+两张图来自 DMD2 对更新比例与稳定性的具体分析，不能据此给所有数据集规定固定更新比。可记录同一批学生样本的亮度、条件指标和多样性，配合 fake 去噪误差与两边更新频率，检验变化是否同向。调整比例后仍需在独立验证提示上检查，避免只稳定某个外观统计。
 
-## DINO / VFM 对齐也要防止误用
+多步学生还需要读取自己生成的中间状态。训练只在真实图像加噪上表现正常，不能证明它能处理自己的偏差。可对同一初值比较 teacher-forced 输入与真实 rollout 输入，将差异定位到上下文分布。
 
-DINOv2、DINOv3、CLIP image encoder、MAE、SigLIP 等视觉基础模型，也常写作 VFM（Vision Foundation Model），现在经常被拿来给扩散训练加辅助目标。它们的共同思路是：冻结一个外部视觉编码器，把 clean frame、预测 \(x_0\) 或中间 hidden state 投到一个更语义化的特征空间，再让生成模型对齐过去。REPA、PixelGen、CREPA、Align4Gen 都属于这条大路线的不同位置。
+## 视频和动作输出增加哪些证据要求
 
-这类目标能帮模型更快学到对象、部件、布局和跨帧语义，但排障时要分清三件事：
+视频生成应沿时间检查运动、身份和事件顺序。平均特征相似度提高，可能只是视频更静止；需要同时观察动态程度与任务完成情况。新增 DINO 等表示对齐目标时，记录老师层、空间与时间对应、梯度范围和权重，再检查辅助目标是否牺牲运动。
 
-| 现象 | 可能原因 | 检查方式 |
-| --- | --- | --- |
-| DINO loss 下降，视频仍闪烁 | 只做逐帧语义对齐，没有约束跨帧轨迹 | 看 cross-frame feature distance、身份 crop 和短循环回放 |
-| 语义更稳但运动变小 | 对齐目标过强，把真实运动当成特征漂移压掉 | 分桶看 dynamic degree、相机运动和主体位移 |
-| 画面结构对但细节软 | DINO 偏全局结构，低层纹理仍靠 LPIPS、VAE 或低噪声采样 | 看局部 crop、频谱、LPIPS 和低 SNR bucket |
-| prompt 对齐没改善 | DINO 是视觉特征，不是文本对齐器 | 单独看 text encoder、caption、CFG 和 text-video alignment |
+动作扩散输出的是动作分布，不能用图像观感验收。在障碍两侧都有可行路径时，直接轨迹 MSE 的均值可能碰撞；扩散训练的噪声 MSE则服务整个生成分布，不能把它与直接动作回归的均值问题混同。最终还需执行动作前缀、重新观察，统计成功、碰撞和恢复，见[VLA 策略学习](../vla/data-and-policy-learning.md)。
 
-使用这类辅助目标时，最好记录目标编码器、取第几层、是否用 CLS 或 patch token、loss 权重、作用在哪些帧、是否跨帧、是否只训练 LoRA。否则“用了 DINO”这句话没有可复现含义。视频里还要额外检查特征抽帧策略：只取首帧会强化初始外观，却可能放过后半段漂移；均匀抽帧能覆盖全段，但会增加训练成本；取相邻帧做 cross-frame alignment 才更直接约束时间一致性。
+诊断记录应保存每次改变了什么、哪种假设因此得到或失去支持，以及仍不能排除什么。能复现的失败链比不断增加配置开关更有助于下一次定位。
 
-## 从现象反推原因
+## 参考资料
 
-生成很糊时，先区分是全局没学会，还是低噪声细化不足。前者常伴随主体和语义也不稳；后者常表现为构图对但纹理软、边缘脏、文字坏。对应检查数据质量、VAE、低噪声 loss、采样尾段和分辨率 curriculum。
-
-构图混乱或主体丢失时，优先看高噪声区、caption 和条件绑定。模型如果在高噪声阶段没有形成正确大结构，后面再多低噪声修补也只是把错误主体画精致。
-
-Prompt adherence 差时，不要只调 CFG。先看文本编码器、caption 质量、condition dropout、训练 prompt 分布和 negative prompt 是否误伤细节。CFG scale 越高，错误条件方向也越容易被放大。
-
-模式单一或风格一股味时，要查数据覆盖和训练权重。扩散比 GAN 更不容易经典坍缩，但在垂直商品图、固定 UI、单一艺术风格或 teacher 蒸馏场景里，学生仍可能只学到安全主模态。
-
-视频闪烁、变脸或运动变慢时，要把失败切到时间桶。问题可能来自 video VAE、时空 attention、低噪声细节、少步跨度或 motion data 过滤。单帧 FID 或美观样例不能证明视频基础模型能稳定 rollout。
-
-第一帧明显更清楚或更差时，不要立刻归因给 DiT。先用原视频跑 VAE reconstruction，比较 frame 0、frame 1 到 frame r、chunk 边界帧和普通中间帧。若重建阶段已经有系统差异，优先检查 temporal padding、首帧独立 latent、causal cache、temporal tiling、VAE 量化和 decoder overlap。若 VAE 重建正常，生成样本才出现首帧差异，再查 DiT 的 position embedding、首帧条件注入、loss mask、I2V conditioning 和采样时的 latent 初始化。
-
-DINO 指标变好但人眼觉得视频无聊时，要回到运动桶。DINO cosine 更容易读出主体和语义相似，不一定惩罚动作幅度不足、物理接触错误或镜头节奏变慢。少步蒸馏和偏好优化尤其要同时报告 DINO / LPIPS 多样性、motion score、人评和失败样例。
-
-动作扩散成功率下降时，平均 MSE 常常是误导。多峰动作分布里，MSE 会奖励平均轨迹，而平均轨迹可能正好碰撞或错过抓取。Diffusion Policy 这类路线的价值在于表达多峰 action distribution，但真实验收仍要看 closed-loop success、碰撞率、接触阶段和 receding-horizon 执行，而不是只看轨迹相似度。
-
-## 收束判断
-
-扩散训练排障的核心不是记住更多技巧，而是让每个失败现象能回到一个机制：数据是否干净，表示空间是否保真，SNR 区间是否平衡，条件接口是否可靠，优化是否稳定，采样链路是否与训练匹配，任务指标是否真的覆盖长尾风险。
-
-读训练日志时先问四件事：平均 loss 是否拆成 SNR bucket；固定样例是否用真实 sampler 回放；条件桶和长尾桶是否单独看；端到端延迟和闭环指标是否进入验收。做到这四件事，扩散训练就不再是靠经验调一堆旋钮，而是能一步步把错误定位到具体接口。
-
-## 外部材料
-
-- [DDPM](https://arxiv.org/abs/2006.11239)：理解噪声预测目标和反向链的训练基础。
-- [Improved DDPM](https://arxiv.org/abs/2102.09672)：理解 learned variance、cosine schedule 和 timestep 贡献差异。
-- [EDM](https://arxiv.org/abs/2206.00364)：理解噪声尺度、preconditioning、loss weighting 和 sampler 需要共同设计。
-- [Min-SNR Weighting](https://arxiv.org/abs/2303.09556)：理解按 SNR 调整训练权重来处理不同时间步冲突。
-- [Latent Diffusion Models](https://arxiv.org/abs/2112.10752)：理解为什么高分辨率生成常在 latent space 里训练，以及 VAE 会成为质量边界。
-- [Improved Video VAE](https://arxiv.org/abs/2411.06449)：理解视频 VAE 中 causal reasoning、关键帧压缩和帧间信息不均衡。
-- [DiT](https://arxiv.org/abs/2212.09748)：理解扩散 Transformer 的 compute / quality tradeoff。
-- [DINOv3](https://arxiv.org/abs/2508.10104) 与 [REPA](https://arxiv.org/abs/2410.06940)：理解冻结视觉编码器特征怎样加速 DiT / SiT 表示学习。
-- [CREPA](https://arxiv.org/abs/2506.09229) 与 [Align4Gen](https://arxiv.org/abs/2509.09547)：理解 DINO / 自监督视觉编码器在视频扩散训练里的跨帧对齐和多特征融合。
-- [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)：理解 condition dropout 与 CFG 的训练基础。
-- [DMD2](https://arxiv.org/abs/2405.14867)：理解 distribution matching 蒸馏中的 fake critic、regression anchor 和训练稳定性。
-- [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)：理解扩散用于动作策略时，评估目标如何从视觉质量转向 closed-loop control。
-
-- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+- [Hugging Face 从头扩散 notebook](https://github.com/huggingface/diffusion-models-class/blob/72bf3dd739da641075dcff0ee54ce28e7a38a8ab/unit1/02_diffusion_models_from_scratch.ipynb)通过可见的重建与生成结果逐步解释训练选择。
+- [EDM](https://arxiv.org/abs/2206.00364)讨论训练与采样设计的配合。
+- [DMD2](https://arxiv.org/abs/2405.14867)讨论 fake score 追踪与多步训练输入。
+- [视频训练与采样](video-training-and-sampling-1029-1246.md)提供有效区域 loss、速度与 CFG 的数值验证。

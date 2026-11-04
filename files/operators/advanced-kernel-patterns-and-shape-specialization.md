@@ -1,134 +1,55 @@
-# 高级 Kernel 模式与形状特化
+# 一个输出tile怎样进入流水与persistent调度
 
-真正高性能的 AI kernel，往往并不只靠一个技巧，而是若干模式叠加的结果：tiling、双缓冲、流水线、persistent kernel、epilogue fusion、threadblock swizzle、shape specialization、autotune。理解这些模式，能帮助你把很多看似不同的实现放到同一张设计图里。
+基础GEMM沿K读取tile、计算、再读下一块。高级调度仍在完成这件事，只是尝试让数据更早到达、让工作更均匀分配。讨论双缓冲或persistent之前，先固定一个输出tile的生命周期。
+
+## 串行读取为什么留下空隙
+
+教学设定中，读取一块需要3个时间单位，计算需要5个，处理4块完全串行为32。若读取下一块能与当前计算重叠，理想时间为首次读取3，加4次计算20，共23。最后一块之后没有下一次读取，不能再额外加一个3。
+
+要实现这个重叠，至少需要区分当前与下一块缓冲，以及“数据写完”“计算读完”的同步条件。若过早覆盖旧缓冲，结果可能偶发错误；若每次都等待全部工作结束，流水又退回串行。
+
+## 更多stage也会吃掉片上资源
+
+增加缓冲stage可以提前发起更多搬运，但占用shared memory；大输出tile增加累加器寄存器。资源过多可能减少同时驻留的block，甚至触发spill。因而stage数需要与tile和设备一起测量，不能从“重叠更多”直接推出“更快”。
+
+## Persistent GEMM在一次launch内调度多个tile
+
+普通实现常让每个program负责一个输出tile，persistent实现可让较少program循环领取多个tile。设共有10个tile、4个program，简单静态分配可为program0处理0、4、8，program1处理1、5、9，其余分别处理2、6和3、7。
+
+Triton官方persistent matmul用类似 `tile_id=start_pid; tile_id+=NUM_SMS` 的循环。普通GEMM本来也可能只有一次launch，因此这里不能泛称它一定减少了kernel launch次数。它改变的是CTA数量、设备端工作分配和可能的局部性；跨算子持续执行的persistent设计才可能同时减少多次launch。
+
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  T["10个输出tile"] --> P0["program0 · 0,4,8"]
+  T --> P1["program1 · 1,5,9"]
+  T --> P2["program2 · 2,6"]
+  T --> P3["program3 · 3,7"]
+  P0 --> W["一次launch内循环处理"]
+  P1 --> W
+  P2 --> W
+  P3 --> W
+```
+
+静态persistent示例改变一个launch内的工作分配；普通GEMM本来也可能只有一次launch。
+
+## 不规则尾块需要保留完整语义
+
+若M=130、tile高128，第二块仅2行有效。大tile可能让绝大部分位置成为mask或padding。选择小tile或独立尾块路径有机会减少浪费，但也新增配置、分支和维护成本。
+
+Triton grouped-GEMM将多个问题的tile串进工作序列，可以平衡一些大小不同的问题；动态负载或高度不均匀时，静态轮转也未必最优。应检查每个program的有效工作量和最后完成时间。
+
+## Shape特化需要明确适用条件
+
+一个快路径可要求dtype、K对齐、连续stride和特定M区间。条件不满足时回到通用实现，保持数学与输入契约一致。Autotune只在这个有效集合内比较参数，无法替代正确性判断。
+
+新路径的收益要按真实shape分布加权，还要计算JIT与预热成本。官方persistent教程也标明部分变体的架构和shared memory限制，不能把高级样例直接当作所有GPU的通用替代。
 
 ![FlashAttention IO-aware tiling](../assets/images/paper-figures/operators/flashattention-io-aware-tiling.png){ width="820" }
 
 <small>图源：[FlashAttention](https://arxiv.org/abs/2205.14135)。原图表达通过 tiling 避免 materialize 巨大 attention 矩阵、减少 HBM 往返；读图重点是把 tiling、流水、fusion 和 shape specialization 看成同一类“让数据在正确层级复用”的设计。它不能证明所有高级 kernel 都应照搬 FlashAttention 的 tile 结构。</small>
 
-## 为什么“高级模式”不是炫技
+## 对照源码与延伸阅读
 
-当算子真正接近硬件上限时，性能差异往往不再来自“会不会做矩阵乘”，而来自数据是否在正确时间到达正确层级内存、计算和访存是否能流水化、不同 shape 是否走了最适合的路径，以及 kernel 是否减少了长期驻留和调度开销。
-
-这也是高级 kernel 模式之所以重要的原因。
-
-## Tiling 是所有高级模式的起点
-
-无论 GEMM、attention、softmax 还是 norm，绝大多数高性能实现都从 tiling 开始：把问题切成适合 cache / shared memory / register 的块，让块内数据尽量复用，并降低 HBM 往返。
-
-高级模式并没有脱离 tiling，而是在 tiling 之上进一步设计流水、重叠和调度。
-
-## Double Buffering 与多阶段流水
-
-双缓冲的直觉是：当前 tile 在计算时，下一 tile 同时被预取，让计算和搬运尽量重叠。
-
-### 3.1 为什么这很重要
-
-因为很多 kernel 的瓶颈在“搬下一块数据时大家都在等”。
-双缓冲本质上是在减少这种等待。
-
-### 3.2 代价是什么
-
-代价是 shared memory 需求更高、寄存器使用可能增加、同步点更复杂，调试难度也会上升。
-
-## Persistent Kernel
-
-persistent kernel 的核心思路是：
-让少量常驻线程块长期处理一系列工作，而不是不断 launch 新 kernel。
-
-### 4.1 为什么它越来越重要
-
-它适合小而频繁的工作单元、decode 场景、不规则请求流和需要减少 launch overhead 的路径。因为现代服务里很多热点并不是大块计算，而是无数小步操作，persistent kernel 能把“不断启动新工人”变成“固定工人持续接活”。
-
-## Threadblock Swizzle 与调度布局
-
-有些高性能实现会改变 threadblock 处理 tile 的顺序，而不是简单按行列自然遍历。
-这样做通常是为了改善 L2 重用、减少 cache 冲突、让邻近 block 访问更有局部性，并平衡不同维度上的工作量。
-
-这类技巧从表面看像“遍历顺序的小变化”，但对大矩阵和长序列 kernel 可能有明显影响。
-
-## Epilogue Fusion 与 Tail 处理
-
-很多高性能 kernel 的关键，不在主计算，而在最后的写回阶段。
-如果能在 epilogue 阶段顺手完成 bias、scale、activation、clamp、quantize，就能减少额外 kernel 与中间张量。
-
-### 6.1 为什么 tail 处理常被低估
-
-所谓 tail，指那些不整齐 shape 的边界区域。
-很多 kernel 在主块上很快，但在尾块上会因为 mask、对齐不足、访存碎裂和向量化失效而明显退化。
-shape specialization 很大一部分就是在处理这些现实 shape。
-
-## Shape Specialization
-
-不是所有 shape 都值得走同一套 kernel。
-实际系统里，常常会针对常见 hidden size、head dim、sequence bucket 和 batch family 做专门优化路径。
-
-### 7.1 为什么这很有价值
-
-因为生产系统中的 shape 往往不是无限连续，而是聚集在一小批热点附近。
-只要把这些高频热点吃下来，就能显著提升整体收益。
-
-### 7.2 它的代价是什么
-
-代价是 dispatch 逻辑变复杂、编译和缓存版本增多、维护成本上升，极端边界仍然需要 fallback。
-
-## Autotune 与 Shape Specialization 的关系
-
-Autotune 解决的是在一组候选参数中找最优配置，为不同硬件、不同 shape 选择 tile 和流水线；shape specialization 解决的是不同 shape 本来就该走不同 kernel 路径。二者结合后，系统通常会先按 shape family 分流，再在每类 shape 内用 autotune 找最优配置。
-
-```mermaid
-flowchart LR
-    A["shape bucket"] --> B{"高频且稳定？"}
-    B -- "否" --> C["generic fallback"]
-    B -- "是" --> D["specialized kernel family"]
-    D --> E["autotune per bucket"]
-    E --> F["compile cache / warmup"]
-    F --> G["dispatch"]
-    G --> H["online hit-rate monitor"]
-    H --> A
-```
-
-这个流程能防止 specialization 失控。不是所有 shape 都应该专门优化；只有高频、稳定、端到端占比高的 bucket 才值得进入 specialized kernel family。否则模板、编译缓存、warmup 和维护成本会吞掉收益。
-
-## Dispatch 逻辑为什么是性能系统的一部分
-
-很多人把 dispatch 当成“小胶水逻辑”，但它实际决定哪种 shape 走哪条路径、是否命中编译缓存、是否误把小 shape 送进大 shape 专用 kernel，以及 fallback 路径触发频率。
-
-一个糟糕的 dispatch 系统，会让再好的 kernel 也发挥不出来。
-
-## Compile Cache 与版本爆炸
-
-当 shape specialization 越来越多时，编译缓存管理、内核版本膨胀、warmup 时间增长和在线首次请求抖动都会变成系统问题。
-
-因此高级 kernel 模式不仅是内核问题，也需要和编译缓存和服务部署协同设计。
-
-## 什么时候值得做高级模式
-
-通常要同时满足多项条件才值得做：算子是高频热点、默认实现明显慢、shape 分布相对可预测、业务收益足以覆盖维护成本，并且已经用 profile 明确定位到瓶颈。
-
-如果这几条都不满足，高级特化可能只是增加复杂度。
-
-## 一个务实的优化清单
-
-面对一个热点 kernel，通常先看是否已有成熟库，再看是否可通过图融合解决，之后才评估 Triton 级 block 特化、persistent / shape-specialized 路径，最后再考虑更重的底层定制。
-
-这种顺序能避免过早进入昂贵实现。
-
-## 直觉例子
-
-高级 kernel 模式就像把普通工厂升级成柔性自动化产线。Tiling 相当于把原材料按工位大小切好，double buffering 像前一道工序还在加工时下一批料已经在旁边待命，persistent kernel 像固定班组持续接单而不是每单重新招工，shape specialization 则像给高频规格产品配专用模具。真正的高吞吐并不是某个环节特别神，而是这些组织方式叠加起来，让整条产线更加贴近真实订单分布。
-
-## 读完以后怎么判断
-
-高级 kernel 模式的核心，不是追求“更复杂”，而是让计算、访存、调度和形状分布更好地匹配。理解 tiling 之后，再理解双缓冲、persistent kernel、shape specialization 和 dispatch，你会发现很多高性能实现其实共享一套非常一致的思想：
-**让热点 shape 走最适合的路径，让数据总是在被需要之前就处于最合适的位置。**
-
-## 工程收束
-
-高级 kernel 模式要按 persistent、grouped、split-k、warp specialization 和 shape specialization 定位。最容易误判的是热 shape 优化伤害冷 shape、模板爆炸、过度依赖单机假设；上线前要限定 specialization 边界，记录适用 shape family，准备 generic fallback，并把代码生成和维护成本一起算。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [Persistent matmul的tile循环与硬件限制](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/09-persistent-matmul.py)
+- [Grouped GEMM的固定CTA调度](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/08-grouped-gemm.py)

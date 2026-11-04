@@ -1,0 +1,81 @@
+quality-final.log
+$ python3 scripts/content_quality_report.py
+Scanned 326 markdown pages under files/
+Structural checks do not verify technical claims, formula correctness, or evidence quality.
+Excluded directories: roadmap, assets/javascripts/vendor
+No structural errors or requested review hints.
+$ python3 scripts/paper_deep_dive_audit.py
+Structural checks do not verify source credibility, technical claims, formula correctness, or evidence quality.
+Paper deep-dive structural audit passed. Scanned 92 pages under files/paper-deep-dives/
+
+
+tests-final.log
+........................................................................ [ 32%]
+........................................................................ [ 65%]
+...........................sssssssss.................................... [ 97%]
+.....                                                                    [100%]
+212 passed, 10 skipped in 5.36s
+
+
+build-final.log
+
+ │  ⚠  Warning from the Material for MkDocs team
+ │
+ │  MkDocs 2.0, the underlying framework of Material for MkDocs,
+ │  will introduce backward-incompatible changes, including:
+ │
+ │  × All plugins will stop working – the plugin system has been removed
+ │  × All theme overrides will break – the theming system has been rewritten
+ │  × No migration path exists – existing projects cannot be upgraded
+ │  × Closed contribution model – community members can't report bugs
+ │  × Currently unlicensed – unsuitable for production use
+ │
+ │  Our full analysis:
+ │
+ │  https://squidfunk.github.io/mkdocs-material/blog/2026/02/18/mkdocs-2.0/
+
+INFO    -  Cleaning site directory
+INFO    -  Building documentation to directory: /Users/charles/Documents/coding_file/lab/Charles-AI-notes/tmp/paper-v6-site
+INFO    -  Documentation built in 3.79 seconds
+
+
+diff-math-final.log
+$ git diff --check -- files/paper-deep-dives/diffusion files/paper-deep-dives/embodied-ai files/paper-deep-dives/foundations files/paper-deep-dives/inference files/paper-deep-dives/technical-reports files/paper-deep-dives/world-models
+$ python3 scripts/math_rendering_report.py --fail-on-issues --list
+Scanned 328 markdown pages under files/
+Math rendering flags:
+  latex-in-code-span: 1
+
+Flagged locations:
+- files/thinking-exploration/reconstruction-as-world-model-state-interface-0724-1059.md:45: latex-in-code-span: b_t = q(s_t | o_{\le t}, a_{<t})
+
+
+Batch validation
+{
+  "pages_total": 92,
+  "counts": {
+    "rewritten": 92,
+    "headers_preserved": 92,
+    "image_references": 585,
+    "inline_formulas": 1238,
+    "display_formulas": 305,
+    "markdown_tables": 175,
+    "local_links": 8
+  },
+  "categories": {
+    "diffusion": 18,
+    "embodied-ai": 23,
+    "foundations": 7,
+    "inference": 9,
+    "technical-reports": 13,
+    "world-models": 22
+  },
+  "errors": []
+}
+
+Rendered image validation
+{
+  "pages": 92,
+  "rendered_image_refs": 585,
+  "errors": []
+}

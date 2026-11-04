@@ -1,129 +1,91 @@
-# 最小 DDPM 实现：让公式、训练与采样逐行对齐
+# 一个 DDPM batch 怎样走完训练与采样
 
-这一实现只保留 DDPM 闭环中不可缺少的部分：噪声日程、任意时间步加噪、带时间条件的去噪网络、噪声预测损失、单步反向转移和完整采样链。目标是让每条核心公式都能在一份可测试的 PyTorch 代码里找到对应位置。
+本站的 [`minimal_ddpm.py`](../assets/examples/diffusion/minimal_ddpm.py)保留噪声日程、闭式加噪、时间条件网络、loss 和反向采样。它的用途是让公式能逐行核验。这里沿同一个 batch 追踪这些对象，并说明随机张量 smoke test 可以证明哪些执行性质。
 
-这份实现把 [DDPM 数学与训练](training.md) 中的六个对象映射到代码，并解释张量形状、时间下标和最终一步的边界处理。配套实现支持两种验证方式：
+公式推导见[DDPM 数学与训练](training.md)。代码使用 0-based 时间索引，数组 `t=0` 对应公式的第一个带噪状态 \(x_1\)，`t=T-1` 对应公式 \(x_T\)。干净数据变量在代码中仍叫 `x0`，它不对应日程数组的零号元素。
 
-- 单元测试分别检查 schedule、闭式加噪、网络 shape、参数更新和采样可复现性；
-- `smoke` 命令用随机张量完成一次优化器更新和一条短采样链，不下载数据集。
+## 日程怎样变成可索引数组
 
-完整代码见 [`minimal_ddpm.py`](../assets/examples/diffusion/minimal_ddpm.py)，测试见 [`test_minimal_ddpm.py`](../assets/examples/diffusion/test_minimal_ddpm.py)。
+`make_linear_schedule` 生成一维 `betas`，缓存 `alphas`、`alpha_bars`、前一累计值及根号系数。以下用两个 beta .2、.3 的教学配置手算
 
-## 本文解决什么问题
-
-这篇文章把 DDPM 的数学对象落到最小可运行代码：schedule 怎样缓存系数，`q_sample` 怎样闭式构造带噪样本，denoiser 为什么要读时间，loss 怎样对应噪声预测，采样循环怎样逐步调用 `p_sample`。读完后应该能从公式跳到代码，再从代码回到公式检查每个张量的形状和边界。
-
-## 前置知识
-
-- [扩散模型基础](foundations-and-core-intuition.md)：概率路径、局部预测与 sampler 的职责。
-- [DDPM 数学与训练](training.md)：前向边缘、反向均值和噪声预测目标。
-- PyTorch 的 BCHW 张量、`nn.Module`、反向传播和优化器。
-
-这里使用 0-based 时间下标：`t=0` 是训练日程中的第一个带噪状态，`t=T-1` 是噪声最强的状态。公式文献常使用 \(1,\ldots,T\)，对照代码时需要把下标整体平移。
-
-## 核心机制
-
-### 1. 预计算噪声日程
-
-`make_linear_schedule` 先构造 \(\beta_t\)，再一次性缓存：
-
-\[
-\alpha_t=1-\beta_t,\qquad
-\bar\alpha_t=\prod_{s=1}^{t}\alpha_s,\qquad
-\tilde\beta_t=
-\frac{1-\bar\alpha_{t-1}}{1-\bar\alpha_t}\beta_t.
-\]
-
-代码同时保存 \(\sqrt{\bar\alpha_t}\) 与 \(\sqrt{1-\bar\alpha_t}\)，避免每个 batch 重复计算。`DiffusionSchedule` 不是可学习模块；它描述前向路径以及教学版 DDPM sampler 使用的后验方差。
-
-线性 beta 日程便于对应原始 DDPM，但不代表它是所有数据、分辨率和参数化下的最佳选择。生产系统还常使用 cosine、log-SNR 或 \(\sigma\)-space 日程。
-
-### 2. 用闭式公式构造任意 \(x_t\)
-
-`q_sample` 实现：
-
-\[
-x_t=\sqrt{\bar\alpha_t}x_0+
-\sqrt{1-\bar\alpha_t}\epsilon.
-\]
-
-`_extract` 根据 batch 中每个样本自己的时间步，从一维 schedule 中取出系数，并 reshape 成 `[B, 1, 1, 1]`。广播后，同一张图的所有通道和像素使用相同噪声系数，但噪声张量 \(\epsilon\) 的每个元素仍独立采样。
-
-这个函数解释了为什么训练不需要真的执行 \(t\) 次前向转移：高斯线性链允许直接得到任意边缘 \(q(x_t\mid x_0)\)。
-
-### 3. 去噪器必须读取时间
-
-`TinyDenoiser` 是一层下采样、一层上采样的 U-Net 形状网络。它包含：
-
-- 正弦时间嵌入与 MLP；
-- 在残差块中注入的时间投影；
-- 编码器到解码器的 skip connection；
-- 与输入相同 shape 的噪声预测头。
-
-网络接口是：
-
-```python
-predicted_noise = model(xt, t)  # [B, C, H, W]
+```text
+array index                 0          1
+formula state               x1         x2
+beta                        .2         .3
+alpha                       .8         .7
+alpha_bar                   .8         .56
+alpha_bar_prev              1          .8
+posterior_variance          0          .1363636...
 ```
 
-这份网络刻意很小，只负责验证扩散接口。真实图像系统会增加多尺度 block、attention、条件注入和更大的通道数；DiT 则把主干改成 Transformer，但仍必须接收当前状态和时间。
+最后一行由 \(\beta_t(1-\bar\alpha_{t-1})/(1-\bar\alpha_t)\) 得到。索引 0 的前一状态是干净输入，所以前一累计值填 1，固定 posterior variance 为 0。这是最终采样不再加噪的边界来源。
 
-### 4. 一次训练更新
+这些数组不参与学习，网络参数才由优化器更新。日程可以换，但训练与采样必须使用相同的约定。
 
-`diffusion_loss` 对应最常见的简化目标：
+## 两个样本怎样读取各自的系数
 
-\[
-\mathcal L_{\text{simple}}
-=\mathbb E\left[
-\lVert\epsilon-\epsilon_\theta(x_t,t)\rVert_2^2
-\right].
-\]
+设 `x0.shape == [2,1,8,8]`，选 `t=[0,1]`。`_extract` 从一维日程中 `gather` 两个数，再 reshape 为 `[2,1,1,1]`。这样第一个样本的全部像素使用第一个噪声尺度，第二个样本使用第二个尺度。
 
-训练循环只需四步：
+如果保持 `[2]` 直接与图像相乘，广播会尝试把它对齐到最右侧宽度维。即使某些尺寸碰巧允许运行，也不能保证系数对应 batch。显式 reshape 的目的就是把“每个样本一个时间”落实到维度。
+
+`q_sample` 再执行
 
 ```python
-t = torch.randint(0, num_steps, (batch_size,))
+xt = signal_scale * x0 + noise_scale * noise
+```
+
+假设两张图某一位置都是 .5，对应噪声都是 −1。第一张该位置为 \(\sqrt{.8}(.5)-\sqrt{.2}=0\)，第二张为 \(\sqrt{.56}(.5)-\sqrt{.44}\approx-.28916\)。相同原像素和噪声，时间不同，网络输入也不同。
+
+## 网络在哪些层看到时间
+
+`TinyDenoiser` 是一层下采样与上采样的 U-Net 形状网络。默认宽度 32，输入 `[2,1,8,8]` 先变为 `[2,32,8,8]`；下采样后为 `[2,64,4,4]`，上采样回 `[2,32,8,8]`，与早期的 skip 拼接成 `[2,64,8,8]`，最后投影回 `[2,1,8,8]`。
+
+正弦时间嵌入产生 `[2,64]` 特征，经 MLP 后送进每个残差块。块内将时间投影成当前通道宽度，再扩成 `[B,C,1,1]` 加到空间特征。网络因此能对同样的观测值采用不同噪声水平下的预测。
+
+Skip 保存较高分辨率特征，低分辨率路径扩大感受野，两者在恢复空间结构时汇合。这里没有文本条件和 attention，只验证无条件图像去噪接口。输出没有 sigmoid，因为高斯噪声目标可以为负，也没有限定在 `[0,1]`。
+
+## loss 怎样沿相同数据流回传
+
+`diffusion_loss` 抽噪声、调用 `q_sample`、读取网络输出，再使用 `F.mse_loss(prediction, noise)`。默认 reduction 是所有 batch 和空间元素的均值。如果有 padding 或无效区域，就需要额外定义有效元素归约；这份固定尺寸实现没有 padding。
+
+```python
+# 假定 x0、model、schedule 已放在同一 device
+batch_size = x0.shape[0]
+t = torch.randint(0, num_steps, (batch_size,), device=x0.device)
 loss = diffusion_loss(model, x0, t, schedule)
 optimizer.zero_grad()
 loss.backward()
 optimizer.step()
 ```
 
-输入数据应先缩放到与训练配置一致的范围，例如 `[-1, 1]`。随机图像可以验证梯度和 shape，却不能让模型学到有意义的数据分布；要得到可辨识样本，必须接入真实数据、重复训练并保存 EMA 或 checkpoint。
+当 batch 中某个输出误差为 .1，该元素对 MSE 的贡献是 .01，但梯度还会除以总元素数。不能仅凭这个标量就判断某层权重变化有多大，后续还有网络 Jacobian 与优化器状态。
 
-### 5. 单步反向转移
+实现检查输出 shape 与噪声相同。形状正确仍不足以证明监督正确，例如误把 `xt` 当 target 也能运行。因此配套测试会独立核验加噪值、参数确实变化和采样边界。
 
-`p_sample` 先用噪声预测计算反向均值：
+## `p_sample` 怎样把预测转回状态
+
+`p_sample` 使用单步 `alpha_t`、`beta_t` 和累计 `alpha_bar_t` 计算 DDPM 反向均值
 
 \[
-\mu_\theta(x_t,t)=
-\frac{1}{\sqrt{\alpha_t}}
-\left(
-x_t-\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}
-\epsilon_\theta(x_t,t)
-\right).
+\mu_\theta=\alpha_t^{-1/2}
+\left(x_t-\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(x_t,t)\right).
 \]
 
-当 \(t>0\) 时，再加入方差为 \(\tilde\beta_t\) 的高斯噪声；当 `t == 0` 时直接返回均值。最后一步若仍加入随机噪声，会把已经恢复的样本再次污染。
+随后按 posterior variance 加入新噪声。若 batch 时间为 `[0,1]`，第一张必须保持均值，第二张可以添加随机项，因此实现使用逐样本 `nonzero_mask`。仅写 `if any(t == 0)` 并跳过整个 batch，会错误取消第二张的随机转移。
 
-实现允许 batch 中出现不同时间步，因而随机项使用逐样本 `nonzero_mask`。生产 sampler 通常让整个 batch 共享一个时间步，但显式处理 mask 能把边界条件写清楚。
+`sample_loop` 从标准高斯开始，倒序遍历全部日程，每次先预测再更新状态。新状态再次输入网络，形成完整轨迹。函数通过同一个生成器控制初值与各步随机项，便于固定 seed 对照。
 
-### 6. 从 \(x_T\) 执行完整采样链
+## smoke 输出为什么不代表生成能力
 
-`sample_loop` 从标准高斯初始化状态，然后倒序遍历整个日程：
+`smoke` 用随机小图做一次优化器更新，再执行一条短采样链，输出 loss、形状与有限性。它能发现设备、shape、梯度和数值执行错误，却没有训练真实数据分布。
 
-```python
-xt = torch.randn(shape, generator=generator)
-for step in reversed(range(num_steps)):
-    t = torch.full((batch_size,), step, dtype=torch.long)
-    xt = p_sample(model, xt, t, schedule, generator)
-```
+还要检查短日程的先验。默认 beta 在 .0001 到 .02 之间，如果只用 8 步，累计信号仍然很大，前向终点远没有接近纯高斯。smoke 从标准高斯初始化是为了走通采样代码，不能用这种配置评价 DDPM 图像质量。要做实际训练，应采用使末端分布与先验相容的完整配置，并检查数据尺度、训练收敛和真实采样结果。
 
-局部预测只有被 sampler 连成闭环后才构成生成模型。`seed` 同时控制初始噪声和各反向步的随机项，使测试可以验证完整链路是否可复现。
+这也说明为何“所有值有限”是执行检查，不是模型正确性的完整证明。一个恒零网络也可能输出有限值，形状也可以正确。
 
-### 7. 运行验证
+## 运行配套检查
 
-在仓库根目录执行：
+在仓库根目录创建一个专用虚拟环境并安装依赖
 
 ```bash
 python -m venv .venv-diffusion
@@ -133,28 +95,9 @@ python -m pytest files/assets/examples/diffusion/test_minimal_ddpm.py -q
 python files/assets/examples/diffusion/minimal_ddpm.py smoke
 ```
 
-最后一条命令会输出 JSON，其中包括本次 MSE、采样张量 shape，以及结果是否全部为有限值。环境安装、影响范围和清理方式见配套 [`README`](../assets/examples/diffusion/README.md)。
+这些命令会创建 `.venv-diffusion`，并从包索引下载依赖。环境清理与运行方式见[配套 README](../assets/examples/diffusion/README.md)。如果已有兼容 PyTorch 环境，可以直接执行最后两条，不必重复安装。本文解释了源码与机制，不声称已经训练出可辨识图像。
 
-## 常见误解与失效边界
+接入真实数据以后，可先固定很小的数据集、时间和噪声检查能否拟合，再恢复随机采样，最后比较完整生成。这个逐步放开随机性的过程能帮助判断失败发生在输入目标、优化，还是采样接口，具体见[训练配方与排障](practical-training-recipes-and-failure-analysis.md)。
 
-**把 smoke test 当成训练结果。**它只证明 forward、backward 和 sampler 能连通；随机张量不包含可学习的数据结构。
-
-**用很少的训练日程评价 DDPM 质量。**测试中的 4 到 8 步用于降低执行成本，不足以代表原始 DDPM 的生成设置。少步生成通常需要更合适的路径、solver 或蒸馏。
-
-**只把模型移到 GPU。**`x0`、`t` 和 schedule 必须与模型处在同一设备；实现会主动拒绝 schedule 与采样状态跨设备。
-
-**把 posterior variance 当成唯一正确选择。**这里采用 \(\tilde\beta_t\) 的固定方差版本。Improved DDPM、learned variance 与其他 sampler 的方差约定不同。
-
-**认为通过 shape 测试就代表数学正确。**shape 只能排除接口错误；因此测试还单独验证闭式加噪值、参数确实更新、`t=0` 无随机项以及固定 seed 的完整轨迹一致。
-
-## 检查理解
-
-1. `_extract` 为什么要把 `[B]` reshape 成 `[B, 1, 1, 1]`？
-2. `q_sample` 为什么能一次构造任意时间步，而 `sample_loop` 仍需逐步执行？
-3. 如果 `p_sample` 在 `t=0` 加入噪声，会出现什么结果？
-4. 为什么网络输出 shape 必须与采样噪声相同？
-5. smoke test 能证明哪些性质，不能证明哪些性质？
-
-## 相关阅读与下一步
-
-- 原始来源：[DDPM](https://arxiv.org/abs/2006.11239)、[Improved DDPM](https://arxiv.org/abs/2102.09672)。
+- [完整实现](../assets/examples/diffusion/minimal_ddpm.py)与[配套测试](../assets/examples/diffusion/test_minimal_ddpm.py)分别提供可执行对象和数值断言。
+- [Hugging Face 扩散实现 notebook](https://github.com/huggingface/diffusion-models-class/blob/72bf3dd739da641075dcff0ee54ce28e7a38a8ab/unit1/02_diffusion_models_from_scratch.ipynb)可对照从小 U-Net 到时间条件、噪声目标的组织方式。本站没有复制其安装环境或执行外部训练。

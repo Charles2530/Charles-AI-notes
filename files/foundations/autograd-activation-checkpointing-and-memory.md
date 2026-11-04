@@ -1,201 +1,177 @@
-# 自动微分与激活显存：训练为什么要保存中间值
+# 自动微分、激活重计算与训练显存
 
-训练显存不只要装下权重，还要容纳激活、梯度和优化器状态。
+一个模型完成前向计算以后，训练程序还要知道每个参数怎样影响损失。自动微分利用程序已经执行的运算和这些运算的导数，按链式法则计算梯度。它通常需要保留部分中间数据，这也是训练显存常高于普通推理显存的重要原因。
 
-推理只要把输入一路算到输出。训练不同，它还要知道“每个参数应该往哪边改”。这意味着框架不仅要执行 forward，还要为 backward 留下足够的信息：哪些算子参与了计算、哪些张量在反向公式里会被再次用到、梯度要累积到哪些参数上。自动微分让这件事看起来像一句 `loss.backward()`，但显存账就藏在这些被保存的中间值里。
+可以从一个标量模型看清整个过程。输入 \(x=2\)，参数 \(w=3,b=1\)，预测为 \(z=wx+b=7\)，目标为 \(y=10\)。取损失 \(\mathcal L=(z-y)^2/2\)，结果是 4.5。接下来只需沿着这几次运算反向求导，就能得到参数梯度。
 
-!!! tip "数学先修"
-    需要用到[微积分里的链式法则](../prerequisite-math/calculus-and-newton-leibniz.md)，并把 backward 写成 [Jacobian 与 VJP](../prerequisite-math/differential-jacobian-and-gradient-flow.md)。如果这些公式还不熟，先读对应数学页；已经熟悉可直接继续。
+链式法则的数学背景见[微分、Jacobian 与梯度流](../prerequisite-math/differential-jacobian-and-gradient-flow.md)。参数拿到梯度后如何更新，则在[优化与训练](optimization-and-training-basics.md)中讨论。
 
-## Backward 不是倒放 forward
+## 从损失开始，一步步传回梯度
 
-先看一个两层 MLP。这里先定义 forward 里会出现的变量槽位：\(x\) 是输入，\(W_1,W_2\) 是参数，\(z_1\) 是第一层线性输出，\(a\) 是激活后的中间表示，\(y\) 是预测，\(L\) 是 loss：
+先把前向计算拆成几个节点。
 
-\[
-z_1=xW_1,\qquad
-a=\phi(z_1),\qquad
-y=aW_2,\qquad
-L=\ell(y,t)
-\]
-
-反向传播时，\(W_2\) 的梯度需要 \(a\)：
-
-\[
-\frac{\partial L}{\partial W_2}=a^\top\frac{\partial L}{\partial y}
-\]
-
-这行式子在说：要更新第二层权重，必须同时知道进入第二层的 activation \(a\) 和 loss 对输出的梯度 \(\partial L/\partial y\)。\(W_1\) 的梯度更早一层，所以它还需要 \(x\)、\(z_1\) 和激活函数导数：
-
-\[
-\frac{\partial L}{\partial W_1}
-=
-x^\top\left(
-\frac{\partial L}{\partial y}W_2^\top
-\odot
-\phi'(z_1)
-\right)
-\]
-
-这两行式子在说 activation 显存的根源：反向不是把 forward 结果倒着播一遍，而是每个算子的 backward rule 会重新读取某些 forward 中间量。矩阵乘的 backward 要输入张量，GELU/SiLU 的 backward 要 pre-activation 或输出，dropout 的 backward 要 mask，attention 的 backward 可能要 \(Q,K,V\)、softmax 统计或 kernel 保存的辅助量。框架把这些值称为 saved tensors。
-
-自动微分系统做的事，可以粗略理解成保存一条 tape：forward 时把计算节点和必要张量记录下来；backward 时沿图反向调用每个算子的梯度规则。PyTorch、JAX、TensorFlow 的实现细节不同，但核心约束相同：如果 backward 公式需要某个中间值，你要么在 forward 后保存它，要么在 backward 前重新算出来。
-
-## Backward 通常在算 VJP，不会展开完整 Jacobian
-
-设一层向量函数是：
-
-\[
-y=f(x)
-\]
-
-它的 Jacobian 为：
-
-\[
-J_f(x)
-=
-\frac{\partial y}{\partial x}
-\]
-
-如果输出 \(y\) 有 \(m\) 维、输入 \(x\) 有 \(n\) 维，完整 Jacobian 是 \(m\times n\)。大模型 hidden state 的维度很高，显式构造每一层 Jacobian 会产生巨大矩阵，既浪费显存也没有必要。
-
-设上游已经给出 loss 对当前输出的梯度：
-
-\[
-g_y
-=
-\frac{\partial L}{\partial y}
-\]
-
-链式法则需要的是：
-
-\[
-g_x
-=
-J_f(x)^\top g_y
-\]
-
-转置后也可以写成：
-
-\[
-g_x^\top
-=
-g_y^\top J_f(x)
-\]
-
-右边就是 vector-Jacobian product，VJP。自动微分框架让每个算子的 backward rule 直接接收上游向量 \(g_y\)，返回这个乘积，而不是先物化 \(J_f\) 再做矩阵乘。
-
-这也更准确地解释 saved tensors 为什么存在。框架不是为了“记住所有 forward 输出”而保存 activation；它只需要保留当前算子计算 VJP 所需的局部量。例如矩阵乘要读输入，激活函数要读 pre-activation 或输出，softmax backward 要读 probability 或等价统计量。
-
-如果使用 activation checkpointing，就在需要计算这些局部 VJP 前重新执行一段 forward，把所需量恢复出来。Jacobian、JVP、VJP 的 shape 和方向在[微分、Jacobian 与梯度传播](../prerequisite-math/differential-jacobian-and-gradient-flow.md)中详细展开。
-
-## 训练显存是一张状态账
-
-训练显存通常由五类东西组成：
-
-| 项目 | 什么时候存在 | 为什么不能简单释放 |
+| 节点 | 运算 | 当前数值 |
 | --- | --- | --- |
-| Parameters | forward、backward、update | 模型权重本身，forward 和 optimizer 都需要 |
-| Gradients | backward 后到 optimizer step 前 | 参数更新需要，梯度累积时还要跨 micro-batch 保留 |
-| Optimizer states | 整个训练过程 | AdamW 要保存一阶动量、二阶矩，常常还有 FP32 master weights |
-| Activations / saved tensors | forward 后到对应 backward 完成前 | backward rule 需要读取 |
-| Temporary buffers | kernel、通信、workspace 期间 | attention、GEMM、all-reduce、fragmentation 都可能临时占用 |
+| \(u\) | \(wx\) | 6 |
+| \(z\) | \(u+b\) | 7 |
+| \(e\) | \(z-y\) | -3 |
+| \(\mathcal L\) | \(e^2/2\) | 4.5 |
 
-对 AdamW 来说，权重只是起点。若训练使用 BF16/FP16 权重、FP32 master weights、梯度、一阶动量和二阶矩，一个参数可能对应多份状态。ZeRO 论文常用这个账解释数据并行为什么浪费：普通 data parallel 的每张卡都保存完整参数、梯度和 optimizer state，而 ZeRO/FSDP 通过分片减少这些长期状态的重复。
-
-![ZeRO memory optimization stages 原论文图](../assets/images/paper-figures/training/zero-memory-stages.png){ width="820" }
-
-<small>图源：[ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)，Figure 1。原图表达：普通数据并行会复制 optimizer states、gradients 和 parameters；ZeRO 分阶段把它们切到不同 rank。这张图说明：activation checkpointing 只管中间激活，参数状态这张账要由 ZeRO/FSDP、低精度优化器或 offload 处理。</small>
-
-所以看到 OOM 时，不要只问“模型多少 B 参数”。更应该先拆账：是长期状态太大，还是 activation 太大，还是某个 attention kernel 或通信 workspace 峰值太高。不同账对应不同解法。
-
-## Activation 为什么会随序列和层数爆炸
-
-activation 是每层每个 token 的中间张量。一个粗略估算是：
+反向传播从 \(\partial\mathcal L/\partial\mathcal L=1\) 开始。损失对误差的导数是 \(e=-3\)，误差对预测的导数是 1，所以
 
 \[
-\text{activation bytes}
-\approx
-B\times T\times D\times L\times c\times b
+\frac{\partial\mathcal L}{\partial z}
+=\frac{\partial\mathcal L}{\partial e}\frac{\partial e}{\partial z}
+=-3.
 \]
 
-这里 \(B\) 是 batch size，\(T\) 是序列长度或视觉 token 数，\(D\) 是 hidden size，\(L\) 是层数，\(b\) 是每个值的字节数，\(c\) 是“每层到底保存多少中间量”的系数。\(c\) 不等于 1：attention 要保存或重建 QKV、attention score/softmax 相关状态，MLP 要保存投影和激活中间量，norm/dropout/residual 也可能留下辅助信息。
-
-长上下文和视频模型最容易在这里爆。假设一个多相机视频 batch：`B=2`，4 路相机，16 帧，每帧 1024 个视觉 token，hidden size 1024，BF16。仅一份 token hidden activation 就是：
+加法 \(z=u+b\) 对两个输入的局部导数都是 1，因此损失对 \(u\) 和 \(b\) 的导数都为 \(-3\)。乘法 \(u=wx\) 对 \(w\) 的局部导数是 \(x=2\)，对 \(x\) 的局部导数是 \(w=3\)，最终得到
 
 \[
-2\times4\times16\times1024\times1024\times2
-\approx 256\text{ MB}
+\frac{\partial\mathcal L}{\partial w}=-3\times2=-6,\qquad
+\frac{\partial\mathcal L}{\partial b}=-3,\qquad
+\frac{\partial\mathcal L}{\partial x}=-3\times3=-9.
 \]
 
-这行计算表示一层里仅保存一份 hidden activation 就可能达到 256 MB；这还只是一层、一类中间值。几十层叠起来，再加 attention/MLP 的 saved tensors，activation 很快会超过权重。很多“显存怎么这么离谱”的多模态训练问题，本质是 \(T\) 被图像 patch、视频帧、长文本上下文一起推高了。
+每一步都把从后面传来的梯度乘以当前运算的局部导数。网络增加层数以后，只是这条依赖关系更长、分支更多，计算原则不变。
 
-## Activation checkpointing：少存一点，多算一遍
+可以用中心差分近似检查权重梯度。将 \(w\) 分别增加和减小一个很小的 \(h\)，比较损失变化。
 
-activation checkpointing 的核心很简单：forward 时不要保存所有中间激活，只保存少数边界点；backward 走到某一段时，从最近的 checkpoint 重新 forward 这段，恢复 backward 需要的中间量，然后立刻反传。
+```python
+def loss(w):
+    x, b, target = 2.0, 1.0, 10.0
+    error = w * x + b - target
+    return 0.5 * error * error
 
-![Sublinear memory computation graph 原论文图](../assets/images/paper-figures/foundations/sublinear-memory-figure-1-computation-graph.png){ width="620" }
-
-<small>图源：[Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)，Figure 1。原图把前向计算表示成计算图，并说明反向需要中间节点值。这张图说明 checkpointing 的真正折中：不是“不需要 activation”，而是把部分 activation 从“长期保存”改成“反向前重算”。</small>
-
-以 6 层网络为例：
-
-```text
-x -> L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> loss
+w, h = 3.0, 1e-5
+numeric_gradient = (loss(w + h) - loss(w - h)) / (2 * h)
+analytic_gradient = (w * 2.0 + 1.0 - 10.0) * 2.0
+print(loss(w))
+print(round(numeric_gradient, 6), analytic_gradient)
 ```
 
-这里的 \(L1\) 到 \(L6\) 表示连续层或连续子模块。不做 checkpoint 时，forward 可能保存每一层的多种中间值；做 checkpoint 时，可以只保存 \(L2\)、\(L4\)、\(L6\) 的边界输出。反向传播到 \(L3/L4\) 这段时，从 \(L2\) 重新计算 \(L3\)、\(L4\)，拿到所需中间量后再求梯度。显存下降，代价是 backward 期间多做一部分 forward。
+输出为 `4.5` 和 `-6.0 -6.0`。数值差分适合检查小例子，但每次扰动一个参数都要重新计算损失，对大模型代价很高，而且步长过大有截断误差、过小有浮点抵消误差。自动微分直接组合局部导数，不依赖这种逐参数扰动。
 
-这不是免费午餐。checkpointing 省的是 activation residency，不省参数、梯度和 optimizer state；它增加 step time，也可能改变随机数处理。PyTorch 文档特别强调 RNG state：如果 checkpointed 区域里有 dropout，框架需要保存和恢复随机状态，才能让重算的 forward 与原 forward 对齐；关闭这项会更快，但可能改变梯度语义。
+## 同一个值经过多条路径时要相加
 
-## 怎么决定 checkpoint 切在哪里
+考虑 \(u=x^2\)、\(\mathcal L=u+x\)。\(x\) 一方面经过平方影响损失，另一方面直接参与最后的加法，所以
 
-切分点不是越多越好。保存太少，反向重算段很长，时间开销大；保存太多，显存省不下来。一个实用判断是看哪类张量最贵：
+\[
+\frac{d\mathcal L}{dx}
+=\frac{\partial\mathcal L}{\partial u}\frac{du}{dx}
++\left.\frac{\partial\mathcal L}{\partial x}\right|_{u\text{固定}}
+=2x+1.
+\]
 
-| 训练形态 | activation 压力来自哪里 | checkpointing 的常见边界 |
+在 \(x=2\) 时，梯度是 5。漏掉任意一条路径都会得到错误结果。残差连接、参数共享、多个损失项都需要这种梯度相加，因此反向传播不能简单理解成沿一条直线往回乘。
+
+张量运算使用相同规则。若 \(Y=XW\)，上游梯度为 \(G=\partial\mathcal L/\partial Y\)，则
+
+\[
+\frac{\partial\mathcal L}{\partial X}=GW^\top,\qquad
+\frac{\partial\mathcal L}{\partial W}=X^\top G.
+\]
+
+矩阵乘法的求和已经把多条元素级路径的贡献合并起来。这些式子也揭示了反向计算为什么可能需要前向输入 \(X\) 和参数 \(W\)。
+
+## 源码里的加等号和逆拓扑顺序
+
+micrograd 的加法与乘法反向函数都使用 `grad += contribution`。若写成赋值，刚才 \(u+x\) 的一条路径会覆盖另一条。同一个参数被多个 token、多个损失或多个模块重复使用，也需要这种累积。
+
+它的 `backward` 先按依赖关系建立拓扑顺序，再逆序执行各节点的局部反向函数。一个节点必须等所有下游用途的贡献到齐，才能把总梯度传给自己的输入。仅按创建变量的表面顺序倒着走，或遇到一个节点就立即向上递归，都可能在共享分支上出错。
+
+这个教学引擎把梯度放在 Value 对象里，适合观察机制。真实框架还需要处理张量广播、视图、原地修改、并行调度和保存张量的生命周期，不能把这个小实现当成生产引擎的完整行为。
+
+## 反向模式怎样避免构造巨大的 Jacobian
+
+设某个函数把 \(n\) 维输入映射为 \(m\) 维输出。它的 Jacobian 有 \(m\times n\) 个元素，记录每个输出对每个输入的偏导数。如果把神经网络每一层的 Jacobian 全部显式存下来，空间和计算都会很大。
+
+训练通常只关心一个标量损失对参数的梯度。假设某层输出已收到一个长度为 \(m\) 的梯度列向量 \(g\)，该层只需要计算 \(J^\top g\)，得到长度为 \(n\) 的输入梯度。反向自动微分直接执行这样的向量与 Jacobian 乘积，不必先构造完整的 \(J\)。
+
+这也是反向模式适合“许多参数、少量输出目标”的原因。前向模式传播输入方向的变化率，在输入维度很小或需要特定 Jacobian 向量乘积时可能更合适。两种模式都使用链式法则，只是传播方向和计算目标不同。
+
+自动微分还受运算定义限制。取整、离散采样或 argmax 不能直接提供通常训练所需的梯度；跨出自动微分框架做计算、显式 detach 或转换到不记录梯度的数据结构，也可能截断路径。遇到没有梯度的参数，要先确认损失是否仍通过可微运算依赖它。
+
+## 框架何时计算，何时累积，何时更新
+
+在 PyTorch 常见的 eager 执行中，参与求导的前向运算建立自动微分图。调用 `backward()` 计算并累积梯度，优化器的 `step()` 使用这些梯度改变参数，这两个动作分开进行。常见的单次更新顺序可以写成
+
+```text
+清除本次更新不需要的旧梯度
+用当前参数计算预测与损失
+沿计算图反向计算梯度
+必要时处理梯度缩放或裁剪
+优化器更新参数与自身状态
+```
+
+梯度默认累积到相应参数的梯度字段中，这支持多个 micro-batch 合成一次更新。若并不打算累积却忘记清除旧梯度，下一次更新就会混入之前的贡献。计算图的中间数据则通常在一次反向使用后释放；反复对同一图求导或求更高阶导数需要额外设置，也会增加内存需求。
+
+`model.eval()` 用来改变 dropout、batch normalization 等模块的训练行为，本身不会关闭自动微分。普通推理若不需要梯度，通常还会使用 `no_grad` 或适当的 inference mode。反过来，有些分析任务会在评估模式下计算输入梯度，所以两种开关承担不同职责。
+
+## 训练显存里究竟存着什么
+
+训练显存通常包含参数、梯度、优化器状态、反向所需的前向数据，以及执行过程中的临时空间。它们的生命周期和增长方式不同。
+
+| 数据 | 为什么需要 | 常见增长因素 |
 | --- | --- | --- |
-| 普通 decoder LLM | 层数、序列长度、MLP 中间维度 | 每个 Transformer block 或 attention/MLP 子块 |
-| 长上下文训练 | attention saved tensors、KV/QKV、softmax 相关状态 | attention kernel、context/sequence parallel 边界 |
-| VLM/VLA | 视觉 token、视频帧、多模态 connector | vision encoder、projector、LLM block 分段 |
-| diffusion / video model | U-Net/DiT 多尺度 feature、时空 token | residual block、attention block、stage 边界 |
+| 参数 | 计算模型输出 | 模型宽度、深度和词表大小 |
+| 参数梯度 | 给优化器提供更新信息 | 需要训练的参数量 |
+| 优化器状态 | 保存动量等历史统计 | 优化器种类与参数量 |
+| 已保存张量 | 计算局部反向导数 | batch、序列长度、网络结构 |
+| 临时缓冲区与工作空间 | 完成算子和通信 | 内核、布局、并行方式 |
 
-工程上还要看 kernel。FlashAttention 这类 IO-aware attention 会把 softmax 矩阵显存压力降下来，改变 checkpointing 的收益；fused MLP、fused norm 或 compiler remat 也会改变 saved tensors。也就是说，checkpointing 不是纯数学开关，而是和 kernel、编译器、并行策略一起决定最终显存峰值。
+假设参数和梯度均为 FP32，Adam 的两个状态也均为 FP32，那么这四部分合计每个参数约 16 字节，还没有算激活和临时空间。混合精度可能使用不同的参数、梯度和状态格式，有些方案额外保留高精度主权重。估算时应列明实际存储项，避免把某种实现的固定字节数当成通用规则。
 
-## 它和模型 checkpoint 不是一件事
+前向数据也并非全部必须保存。乘法、激活和归一化所需的反向信息不同，自动微分系统按算子的导数公式保存相应输入、输出或辅助量。有的运算只需要形状，有的需要原输入，有的可以利用输出计算导数。原地修改某个已保存的值，可能破坏反向所需的信息，因此框架会对部分情况报错。
 
-中文里 “checkpoint” 容易混成两件事。
+![ZeRO 的状态分片示意](../assets/images/paper-figures/training/zero-memory-stages.png){ width="820" }
 
-activation checkpointing 是训练过程中对中间激活的保存/重算策略，目标是降低一次 step 的 GPU 显存峰值。
+<small>图源为 [ZeRO](https://arxiv.org/abs/1910.02054)。图中区分参数、梯度和优化器状态，并逐步把它们分片到设备。激活重计算主要处理前向中间数据，两者可以组合使用，但各自节省的项目不同。</small>
 
-model checkpoint 是训练资产，通常包含权重、optimizer state、scheduler、RNG、数据游标、并行拓扑和配置，目标是恢复训练、导出模型或复现实验。
+一个 `[2, 1024, 768]` 的 BF16 激活具有 \(2\times1024\times768\times2\) 字节，即 3 MiB。若显式保存一个 batch 为 2、头数为 4、长度为 1024 的 BF16 注意力矩阵，单层数据量为
 
-二者有关但不能互相替代。你可以开 activation checkpointing 但不保存可恢复的 model checkpoint；也可以保存模型 checkpoint，但 activation 显存仍然爆掉。分布式训练里尤其要分清：ZeRO/FSDP 解决长期状态分片，activation checkpointing 解决中间激活 residency，training checkpoint 解决故障恢复和资产治理。
+\[
+2\times4\times1024^2\times2\ \mathrm{bytes}=16\ \mathrm{MiB}.
+\]
 
-## OOM 排查要先定位是哪张账
+16 层各保存这样一份矩阵时，总量为 256 MiB。这只是指定布局与保存方式下的演算，FlashAttention 等实现会改变中间数据的保存方式，实际训练也还有其他张量，不能把这个结果直接当成完整峰值显存。
 
-遇到 OOM，不要立刻把所有开关都打开。先判断峰值来自哪里。
+## 激活重计算怎样用算力换空间
 
-如果 OOM 出现在 forward 中段，通常优先看 activation、attention workspace、序列长度、视觉 token 和 micro-batch。可尝试 activation checkpointing、降低 resolution/token、FlashAttention、sequence/context parallel 或更小 micro-batch。
+考虑四段连续计算
 
-如果 OOM 出现在 backward 或 optimizer step，优先看 gradients、optimizer states、gradient accumulation、ZeRO/FSDP stage、offload 和 mixed precision optimizer。
+\[
+h_1=f_1(x),\quad h_2=f_2(h_1),\quad
+h_3=f_3(h_2),\quad h_4=f_4(h_3).
+\]
 
-如果 OOM 只在某些 batch 出现，优先看长度桶、图像分辨率、动态 padding、packing 后有效 token、临时 buffer 和碎片化。平均 batch 没问题不代表 P99 batch 没问题。
+普通反向可能需要在前向后保留这些模块内部的若干张量。激活重计算，也称 activation checkpointing 或 rematerialization，会选择一些边界保存，在反向需要内部数据时，再执行对应的一段前向。
 
-如果开了 checkpointing 后吞吐明显下降，要看重算区域是否太大、attention kernel 是否已经省掉很多中间状态、RNG preserve 是否带来额外开销，以及 pipeline/communication overlap 是否被重算打乱。
+例如把 \(f_1,f_2\) 作为一段，把 \(f_3,f_4\) 作为另一段。保存分段边界的输入后，反向经过第二段时，从 \(h_2\) 重新执行所需计算，得到该段求导要用的数据，使用后释放；再处理第一段。实际框架可能只重算必要部分，具体保存策略取决于实现。
 
-## 读完以后怎么判断
+![通过重计算降低训练内存的计算图](../assets/images/paper-figures/foundations/sublinear-memory-figure-1-computation-graph.png){ width="820" }
 
-自动微分通常从一个 scalar loss 开始，沿计算图用 VJP 得到所有参数梯度；它的显存成本来自这些局部 backward rule 对 forward 中间量的依赖。activation checkpointing 的本质不是魔法压缩，而是把“保存中间量”换成“反向时重算中间量”。它适合解决 activation 爆炸，尤其是长上下文、视频、多模态和极深网络；但参数、梯度、optimizer state、通信 buffer、训练恢复资产仍要靠 ZeRO/FSDP、低精度、offload、kernel 和 checkpoint 治理一起处理。
+<small>图源为 [Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174) Figure 1。图示比较保存中间节点与在反向阶段重新生成节点的方式。减少常驻中间数据需要付出额外计算，保存边界和临时峰值仍然占用内存。</small>
 
-## 外部材料
+重计算区域越大，通常越能减少长期保留的内部张量，但也可能增加重算工作和反向阶段的临时峰值。划分方式要结合激活大小与运算耗时。对已经非常昂贵、但保存数据很少的运算，重算收益可能有限；对中间数据很大且可较便宜地恢复的区域，收益可能更明显。
 
-- [Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174)：理解 activation checkpointing / rematerialization 的经典来源。
-- [PyTorch: Activation Checkpointing](https://pytorch.org/docs/stable/checkpoint.html)：看现代 PyTorch checkpoint 的 reentrant/non-reentrant、RNG state 和实现语义。
-- [JAX: Gradient checkpointing with `jax.checkpoint`](https://docs.jax.dev/en/latest/gradient-checkpointing.html)：理解 remat 策略如何由自动微分系统表达。
-- [ZeRO](https://arxiv.org/abs/1910.02054)：把参数、梯度、optimizer state 和 activation 分开记账。
-- [FlashAttention](https://arxiv.org/abs/2205.14135)：理解 attention saved tensors 和 IO-aware kernel 为什么会改变显存压力。
-- [Hugging Face Transformers performance guide](https://huggingface.co/docs/transformers/perf_train_gpu_one)：适合看 gradient checkpointing、mixed precision 和 batch 调整的实践入口。
-- [OneFlow 官方博客](https://blog.csdn.net/OneFlow_Official)：中文工程文章常用“显存账 + 并行策略 + kernel 细节”来组织讲解，可学习其问题驱动写法。
+这个方法要求重算与原前向在求导所需的意义上保持一致。dropout 等随机操作涉及随机数状态，带可变状态的模块可能在重复执行时再次修改状态，依赖外部输入或全局变量的函数也可能产生不同结果。框架提供的随机状态处理和执行模式需要按文档确认，不能把任意一段有副作用的代码包起来就假定梯度一定相同。
 
-- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- [Dive into Deep Learning](https://d2l.ai/)。
-- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+## 三种容易混淆的节省方式
+
+激活重计算减少保存的前向中间数据。把张量卸载到 CPU 则改变数据存放的位置，会引入传输成本。参数、梯度或优化器状态分片改变多设备之间的存储责任。它们可以共同使用，但处理的是不同部分，性能代价也不同。
+
+磁盘上的模型 checkpoint 又是另一件事。它通常保存参数、优化器状态、训练步数及恢复训练所需的信息，用来在进程中断后继续运行。激活 checkpointing 发生在一次训练计算中，不负责创建这样的恢复文件。
+
+遇到 OOM 时，应先观察峰值出现在哪个阶段。加载模型时就超出容量，优先看参数与状态；长度增加后前向峰值快速上升，要检查序列相关激活和注意力实现；第一次优化器更新才明显增加，可能与状态分配有关。内存分配器显示的保留量也可能高于当前活跃张量占用，不能只根据一个总数判断来源。
+
+实际测量方法和数值格式见[数值、显存与运行时](numerics-memory-and-runtime-basics.md)，多设备状态管理见[分布式训练与 checkpoint](../training/distributed-training-and-checkpointing.md)。
+
+## 参考资料
+
+- [PyTorch Autograd Mechanics](https://docs.pytorch.org/docs/stable/notes/autograd.html) 解释图的构建、已保存张量与梯度模式。
+- [PyTorch Activation Checkpointing](https://pytorch.org/docs/stable/checkpoint.html) 说明重计算实现、随机数状态和执行限制。
+- [Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174) 给出通过保存边界与重计算减少训练内存的方法。
+- [ZeRO](https://arxiv.org/abs/1910.02054) 讨论优化器状态、梯度与参数分片。
+
+- [micrograd engine.py](https://github.com/karpathy/micrograd/blob/7bc720e951fe422b8f8814aa5aa1b64121d26b4c/micrograd/engine.py)，用于把正文的数学对象对应到具体数据布局和执行顺序。

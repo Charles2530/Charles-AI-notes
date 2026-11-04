@@ -1,184 +1,106 @@
-# 视觉 Tokenizer 与连接器：视觉证据怎样被压成可用 token
+# 视觉 token 怎样形成与压缩
 
-VLM/VLA 的第一道瓶颈是视觉证据怎样进入后续模型。图片、视频、多相机、深度、点云和机器人 proprioception 都不能原样无限塞进上下文；它们必须先被切成 token、压成 latent，或者通过 query / cross-attention 被抽取成少量证据。
+把高清文档、几秒视频或多路相机输入语言模型之前，首先要决定视觉信息怎样表示。增加分辨率可以保留小字和边缘，也会增加序列长度。连接器承担的是一个具体接口问题，怎样把视觉编码器输出的网格变成下游能够计算、仍然有用的向量。
 
-视觉 tokenizer 和 connector 会压缩视觉输入，也会丢掉部分信息；关键是判断它们压缩什么、丢掉什么，以及这些丢失为什么会影响问答、动作和世界模型 rollout。
+## Patch embedding 实际做了一次矩阵乘法
 
-## 视觉 token 先来自空间切块
-
-ViT 把图像当成一串 patch token。假设输入图像大小是 \(H\times W\)，patch size 是 \(P\)，一帧图像会变成：
+设输入图像高宽为 \(H,W\)，有 3 个通道，采用边长 \(P\) 的非重叠 patch，并假定高宽都能被 \(P\) 整除。得到
 
 \[
-N_{\text{patch}}=\frac{H}{P}\times\frac{W}{P}
+N=(H/P)(W/P),\qquad X_p\in\mathbb R^{N\times3P^2}.
 \]
 
-这里 \(N_{\text{patch}}\) 表示视觉 encoder 看到的 patch 数。若 \(224\times224\) 图像用 \(16\times16\) patch，就得到 \(14\times14=196\) 个 patch token；若分辨率升到 \(448\times448\)，同样 patch size 下就变成 \(28\times28=784\) 个 token。
+每一行存一个 patch 的所有像素，乘以 \(W_E\in\mathbb R^{3P^2\times d_v}\) 后得到 \(N\) 个 \(d_v\) 维向量。这个映射等价于 kernel、stride 都为 \(P\) 的相应卷积实现，具体排列由代码决定。
 
-这就是视觉 tokenizer 的第一层含义：它不是“把图像变成一个向量”，而是把图像变成一串有空间位置的局部证据。patch 越细，小字、边缘、按钮、夹爪和接触点越可能保留；token 越多，后续 attention、KV cache、激活和通信成本越高。
+以 \(224\times224,P=16\) 为例，\(N=196\)，每个原始 patch 含 768 个数。若分辨率改成 \(448\times448\)，patch 数变为 784，增长 4 倍。视觉 Transformer 的全注意力配对数随 \(N^2\) 增长，这部分增长 16 倍；投影与前馈计算通常随 \(N\) 线性增长，实际时间还受到 kernel 和内存影响。
 
-文本 token 和视觉 token 的差别在这里很关键。一个句子少几个 token，语义可能仍然靠上下文补回来；视觉少几个局部 token，可能就是杯沿、按钮边界或遮挡前位置不见了。
+Patch 是局部输入区域，经过多层注意力以后，该位置的向量可以汇总全图信息。因此用最后一层 patch token 做定位时，仍需学习位置与目标的对应，不能把它直接等同于“这个格子里的唯一物体”。特殊分类 token、动态裁剪和后续合并会改变实际序列长度。
 
-## 多相机视频会把 token 数迅速放大
+## 只变宽度的 projector 不会减少 token 数
 
-一帧还好，多帧和多相机会把视觉长度乘起来。若 \(V\) 路相机、\(T\) 帧历史，每帧 \(N\) 个 patch token，原始视觉长度是：
+假设视觉特征 \(H_v\) 为 \([196,768]\)，语言模型隐藏宽度为 4096。线性连接器
 
 \[
-L_{\text{vision}}=V\times T\times N
+Z=H_vW+b,\qquad W\in\mathbb R^{768\times4096}
 \]
 
-这行式子表示：相机数、历史帧数和每帧 patch 数相乘，才是进入连接器前的视觉 token 量。一个桌面机器人若使用 4 路相机、16 帧历史，每帧 \(14\times14=196\) 个 patch，就有：
+输出 \([196,4096]\)，仍是 196 个位置。多层 MLP 可以增加非线性表达，但只要独立处理每个位置，序列长度也不变。
+
+这个计算需要区分两个预算。特征宽度从 768 增至 4096 后，送入语言模型的激活更多；序列位置数保持不变，后续上下文还要容纳文字、答案与特殊符号。若声称连接器“压缩了视觉输入”，应说明压缩的是位置、通道、精度，还是只换了表示空间。
+
+设这张 196 个 patch 的图片是一只杯子，杯身还有两个很小的字。投影层把每个 patch 从 768 维变成语言模型的 4096 维，只改变表达坐标和容量，196 个位置仍然都在。若小字在视觉编码器阶段已经分辨不清，增加投影宽度也不会恢复原来的像素证据。
+
+接下来若为了控制上下文长度，只保留 32 个视觉向量，就必须决定怎样汇总原来的位置。简单平均把所有位置混成一个向量，容易同时丢掉布局与局部差异；学习查询则可以让不同输出位置读取不同组合。它们没有自动获得“一个 query 专门读小字”的职责，只有当训练目标依赖这段文字，相关信息才有动力被保留下来。下面的 resampler 公式描述的正是这次有损汇总。
+
+## Query resampler 怎样把很多位置变成少量位置
+
+让 \(K\) 个可学习查询读取 \(N\) 个视觉位置。省略 batch 和多头细节，一次 cross-attention 为
 
 \[
-4\times16\times196=12544
+Q\in\mathbb R^{K\times d},\quad
+K_v\in\mathbb R^{N\times d},\quad
+V_v\in\mathbb R^{N\times d},
 \]
-
-也就是说，仅视觉侧就有 12,544 个 token。还没算语言指令、动作 token、proprioception、memory token 和未来预测 token。
-
-如果 connector 把每个相机每帧压成 \(K\) 个任务 token，压缩后长度变成：
 
 \[
-L_{\text{compressed}}=V\times T\times K
+Z=\operatorname{softmax}\left(\frac{QK_v^\top}{\sqrt d}\right)V_v.
 \]
 
-当 \(K=32\) 时：
+注意力权重矩阵大小为 \(K\times N\)，每一行对视觉位置归一化，结果为 \(K\) 个向量。若一个查询对四个位置的权重为 `[0.1,0.6,0.2,0.1]`，相应 value 的某个分量是 `[1,3,5,7]`，输出该分量为 \(0.1+1.8+1+0.7=3.6\)。真实网络还有学习到的投影、残差和多层处理，这个计算只展示证据怎样被加权汇总。
+
+Query 可以是固定可学习向量，也可以依赖文本或策略状态。固定 query 在训练中学到常用提取方式，不等同于每次由用户问题动态生成查询。用少量向量传递信息形成了容量限制，但信息丢失多少还由特征维度、网络、数据和目标共同决定。
+
+![Q-Former从视觉特征读取信息](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="900" }
+
+<small>图源为 [BLIP-2](https://arxiv.org/abs/2301.12597) Figure 2。彩色 query 通过 cross-attention 读取视觉 encoder 输出，并在不同掩码下参与图文对比、生成与匹配目标。图中的 query 数量是示意，实际配置应读论文与代码。</small>
+
+## 多相机历史的长度怎样计算
+
+如果有 4 路相机、每路 16 帧历史、每帧 196 个视觉 token，总输入是
 
 \[
-4\times16\times32=2048
+N_{\mathrm{raw}}=4\times16\times196=12544.
 \]
 
-视觉长度约下降 \(12544/2048\approx6.1\) 倍。如果后续模块对视觉 token 做全局 self-attention，attention score 的理论上界会从 \(12544^2\approx157M\) 个元素降到 \(2048^2\approx4.2M\)，大约 37 倍。FlashAttention 不会把 score 全量写回内存，但计算压力和上下文预算仍然受 \(L\) 或 \(L^2\) 影响。
-
-所以 connector 不是装饰层。它决定一个多相机长视频系统是能训练，还是只停留在 demo。
-
-## 连接器不是格式转换，而是选择证据
-
-现代 VLM 通常有三段：
+若每个相机每帧各自压成 32 个 query token，输出为 \(4\times16\times32=2048\) 个位置。位置数减少 6.125 倍。仅比较下游视觉部分的全注意力配对数，有
 
 \[
-I \xrightarrow{\text{vision encoder}} H_v
-\xrightarrow{\text{connector}} Z_v
-\xrightarrow{\text{LLM / policy / world model}} y,a,\hat s
+12544^2=157351936,\qquad2048^2=4194304,
 \]
 
-这里 \(I\) 是图像或视频，\(H_v\) 是视觉 encoder 输出的大量 patch / frame features，\(Z_v\) 是 connector 交给后续模型的视觉证据，\(y\) 是语言回答，\(a\) 是动作，\(\hat s\) 是预测状态。公式想表达的不是某个固定架构，而是一条信息链：后续模型从来没有直接读原图，它读的是已经被筛选后的 \(Z_v\)。
+约减少 37.52 倍。这个比值不包含前端视觉编码、resampler 自身、语言 token、前馈层和数据搬运，不能直接报告为系统加速倍数。
 
-最小 connector 可以写成：
+若所有相机与帧共同压成 32 个 token，预算又小得多，但要由这 32 个向量表达整段多视角历史。两种系统都可能写“32 query”，所以必须说明 query 是每帧、每视角还是每段共享。
 
-\[
-Z_v=g_\theta(H_v,Q)
-\]
+## 压缩怎样产生可观察的错误
 
-这里 \(g_\theta\) 是 connector，\(Q\) 可以是可学习 query、语言 token、policy token 或 resampler latent。若 \(Q\) 很少，token 成本低，但信息选择压力大；若 \(Q\) 很多，细节更容易保留，但长上下文成本会上升。
+假设一个按钮在原始 448 像素图中宽 12 像素，先缩到 224 后只剩约 6 像素。如果插值和视觉 encoder 已经把字符细节抹掉，后续 resampler 再增加 query 也无法唯一恢复原文字。需要提高输入细节、局部裁剪或改变编码方式。
 
-这就是为什么同一个视觉 encoder，换不同 connector 后表现会变。模型不是“看见了整张图再思考”，而是“看见 connector 允许它看见的证据再思考”。
+另一种情况是视觉特征仍含细节，query 没有把它传给下游。可以固定视觉 encoder，比较直接投影、不同 query 数量、局部目标优先的提取方式。固定其余训练条件，分别测 OCR、目标定位和任务结果，才能把“输入看不到”与“接口没传过去”区分开。
 
-## BLIP-2：Q-Former 把视觉证据压成 query token
+这里的按钮尺寸是教学构造，说明错误发生的位置。不能仅凭模型答错，就断定 connector 丢失信息，更不能由一次注意力图推导出真实因果关系。原始页面中没有实测依据的厘米级偏差不应作为真实案例引用。
 
-BLIP-2 是连接器瓶颈的好例子。它冻结强视觉 encoder 和强语言模型，中间训练 Q-Former，让少量 learnable query 从视觉特征里读信息。
+## 各种接法怎样改变计算位置
 
-![BLIP-2 Q-Former objectives](../assets/images/paper-figures/vlm/blip2-figure-2-qformer-objectives.jpg){ width="900" }
-
-<small>图源：[BLIP-2](https://arxiv.org/abs/2301.12597)，Figure 2。原图表达 Q-Former 用 learnable query 从冻结视觉 encoder 输出中抽取信息，并服务 image-text contrastive learning、image-grounded generation 和 image-text matching。这里的重点是：连接器是信息瓶颈，query 学到什么取决于训练目标。</small>
-
-读这张图时先看中间的 query tokens。它们不是普通文本 token，而是一组可训练的“视觉问题”：从海量 patch features 里问出哪些信息值得交给语言模型。训练目标如果是图文对比和 caption，query 会倾向保留类别、属性、关系和可描述细节；训练目标如果包含定位、OCR、动作或未来预测，query 才更可能保留局部几何、文字区域、接触状态和时间变化。
-
-这解释了一个常见现象：VQA 很好的 connector，不一定适合 VLA。它可能准确知道“桌上有红色杯子”，却没有保留杯口边缘、夹爪距离、桌边风险和遮挡前位置。
-
-## 三条常见接法，各自丢不同证据
-
-| 接法 | 机制 | 优点 | 主要风险 |
-| --- | --- | --- | --- |
-| Linear / MLP projector | 把视觉 patch 映射到 LLM embedding | 简单、稳定、LLaVA 式路线容易落地 | token 多，局部选择能力弱，依赖指令数据弥补 |
-| Q-Former / resampler | 少量 query 主动读视觉特征 | 控制 token 数，适合冻结大模型桥接 | query 数或训练目标不够时会压掉小结构 |
-| Cross-attention / visual memory | 语言或策略 token 按需读视觉 memory | 细节可以在层内被访问，适合多图/视频上下文 | 系统复杂，视觉 cache、调度和显存压力高 |
-
-Flamingo 代表 cross-attention / resampler 路线：Perceiver Resampler 把可变数量的图像或视频特征压成固定数量视觉 token，再让语言模型通过 gated cross-attention 读取。LLaVA 代表简单 projector 路线：CLIP vision encoder 加 projector，再用视觉指令数据把视觉 token 接到 LLM。两条路线都能做 VLM，但失败模式不同：前者工程复杂，后者更容易把视觉证据一次性压死。
-
-Perceiver 和 TokenLearner 这类工作提供了更一般的直觉：面对高维视觉输入，模型可以用少量 latent / learned tokens 主动抽取信息，而不是把所有 token 逐层保留。压缩不等于平均池化，好的压缩应该让 token 对任务有选择性。
-
-## 为什么“省 token”不等于“保留状态”
-
-把 12,544 个视觉 token 压成 2,048 个，成本显著下降。但问题是：剩下的 token 到底是什么？
-
-| 压缩策略 | token 省在哪里 | 容易保留 | 容易丢失 |
-| --- | --- | --- | --- |
-| 全图均匀 resampler | 每帧固定少量 latent | 场景类别、主要物体、粗位置 | 小物体、文字、接触边界 |
-| 目标/夹爪优先 token | 给目标物和 wrist crop 更多预算 | 抓取点、局部边缘、夹爪关系 | 背景布局、远处约束 |
-| 当前窗口 + memory token | 最近帧保细，历史压进 memory | 短期动作、长任务上下文 | memory 写错后长期污染 |
-| 3D / 深度增强 token | 把几何位置显式注入视觉 token | 距离、相对位置、可达性 | 深度噪声和标定误差会变成模型输入 |
-
-如果任务是静态图片问答，第一种可能足够。如果任务是机器人抓取，第二种或第四种通常更关键。如果任务是世界模型 rollout，第三种的 memory 写入质量会直接影响长期状态。
-
-视觉 token 压缩最危险的地方，是它在离线指标里不一定立刻暴露。caption 仍然正确，VQA 分数也许不掉，但动作坐标会飘，遮挡后物体会丢，未来预测会把不同动作滚成相似结果。
-
-## 世界模型和 VLA 要求动作敏感
-
-VLM 的典型问题是：
-
-\[
-p_\theta(y\mid I,x)
-\]
-
-给定图像 \(I\) 和文本 \(x\)，输出回答 \(y\)。这类任务要求视觉 token 支持语言解释。
-
-VLA 或 world model 更接近：
-
-\[
-\pi_\theta(a_t\mid Z_{\le t},l),
-\qquad
-p_\theta(s_{t+1}\mid s_t,a_t,l)
-\]
-
-这里 \(Z_{\le t}\) 是历史视觉证据，\(l\) 是语言指令，\(a_t\) 是动作，\(s_t\) 是当前状态。第一行表示策略要从视觉证据中选动作；第二行表示世界模型要预测动作后的下一状态。
-
-这两行式子说明：动作系统不仅要“看懂画面”，还要让视觉表示对候选动作敏感。同一历史下，左推、右抓、上提、noop 应该产生不同的 latent future。若 connector 把所有动作相关局部证据都压没了，后续模型会把不同动作想成差不多的未来。
-
-## 怎样判断 connector 是否压坏了信息
-
-不要只看 token compression ratio，也不要只看 VQA。更可靠的读法是把证据分成四类。
-
-| 证据 | 证明什么 | 不证明什么 |
+| 接法 | 下游实际读取什么 | 位置数怎样变化 |
 | --- | --- | --- |
-| Token / latency / memory 统计 | 压缩是否真的省成本 | 不证明状态还能控制 |
-| VQA / caption / OCR | 语义和文字是否保留 | 不证明动作坐标和接触 |
-| Grounding / coordinate error | 位置和局部证据是否保留 | 不证明多步未来 |
-| Action sensitivity / closed-loop success | 视觉证据是否能服务动作和 rollout | 不证明开放世界泛化 |
+| Linear/MLP projector | 映射后的视觉序列 | 通常保持原位置数 |
+| Q-Former/resampler | 查询汇总后的序列 | 由查询数量决定 |
+| 层内 cross-attention | 可重复访问的视觉 memory | 视觉 memory 可独立于文字序列保存 |
+| 动态裁剪与局部高分辨率 | 全图与局部视图的组合 | 由裁剪数量、尺寸和合并规则决定 |
 
-一个真实排查案例通常长这样：换成更小 resampler 后，VQA 指标几乎不变，训练 step time 变好，但抓小物体偏 2-4 cm，遮挡后更容易抓空。回放 attention 或 saliency 后发现，模型保留了目标大轮廓，却压掉了 wrist crop、接触点和遮挡前位置。这个 connector 对问答是成功的，对 VLA 是失败的。
+[Flamingo](https://arxiv.org/abs/2204.14198)把 resampler 与 gated cross-attention 组合，[LLaVA](https://arxiv.org/abs/2304.08485)使用视觉投影接入语言模型。表中的类别也可以组合，不能用某个模块名称直接预测其问答或机器人性能。
 
-## 多模态报告里的 video token 数要认真读
+对动作系统，控制需要的可观测变量值得单独检查。物体类别足以回答“桌上有什么”，抓取还需要相对位置、深度、接触和不确定性。特征能在一个任务上被线性读出，并不保证另一个动作头已经学会使用它；监督数据与动作接口同样重要。
 
-很多技术报告会给一个看似小的数字：每帧多少视觉 token。这个数字其实非常关键。比如 Gemini 2.5 技术报告提到视频 tokenizer 更高效，每帧 token 数相比前代显著下降，从而让 1M context 能覆盖更长视频。这里的能力提升不只是“模型更大”，而是 video tokenizer、采样率、上下文预算和推理成本一起改变了可处理的时间长度。
+## 从 token 预算到可验证的选择
 
-同理，Qwen2-VL / Qwen2.5-VL 一类模型强调动态分辨率和多模态位置编码，本质上也是在处理同一个矛盾：不同图片、文档、视频和界面截图需要不同 token 预算；如果强行固定分辨率，简单场景浪费 token，复杂场景又丢细节。
+比较两种压缩方案时，先固定输入、采帧率和任务，再记录编码时间、下游上下文长度与显存。随后在相同样本上比较语义、细节与位置。比如采用一组预先固定的遮挡前后图像，检查目标 ID 是否保持、定位误差是否增加；对机器人再测闭环恢复，而不是把 VQA 总分当成行动指标。
 
-读这类报告时不要只抄 benchmark。先找三个数字：视觉 token 数、最大上下文、视频采样策略。它们决定模型到底是在“看几张图”，还是能持续跟踪一段时间里的视觉状态。
+如果更小的接口使 OCR 下降但全局分类不变，得到的是任务相关的信息取舍。可以把预算分给局部高分辨率区域，也可以保留近期细节而压缩远期历史。后一种方案如何写入、更新和验证记忆，见[视频表征与长时记忆](video-representation-and-memory.md)。完整训练过程见[VLM 架构与训练](architecture-and-training.md)。
 
-## 读新论文时先问五个问题
+## 参考资料
 
-第一，视觉 token 从哪里来：ViT patch、CNN feature、VAE latent、VQ token、object token、3D token，还是多种混合？
-
-第二，压缩发生在哪里：encoder 内部、connector、cross-attention memory、KV cache，还是 world model latent？
-
-第三，训练目标要求保留什么：caption、contrastive alignment、OCR、grounding、动作、reward、future prediction，还是 closed-loop success？
-
-第四，后续模型怎样消费：LLM 一次性读视觉 token，还是每层 cross-attention 按需读 memory；policy 是直接读 token，还是先进入 state estimator？
-
-第五，失败证据有没有公开：小物体、遮挡、文字、坐标、接触、动作分叉、长视频记忆分别有没有 ablation？
-
-视觉 tokenizer 决定原始视觉证据怎样被切开，connector 决定哪些证据能穿过瓶颈进入 LLM、policy 或 world model。ViT 说明视觉 token 从 patch 来，Perceiver / TokenLearner 说明少量 latent 可以主动抽取信息，BLIP-2 说明 Q-Former 是连接器瓶颈，Flamingo 和 LLaVA 展示了 cross-attention 与 projector 两条常见路线。
-
-真正要记住的是：**token 少只是成本收益，证据没丢才是能力收益。** 对 VQA 来说，语义类别和文字可能足够；对 VLA 和世界模型来说，局部几何、接触、遮挡记忆、动作敏感性和多相机一致性才是关键。连接器一旦把这些压掉，后面的模型再大也只是基于不完整证据做推理。
-
-继续读相邻内容时，可以接 [VLM 架构：视觉证据怎样进入语言模型](architecture-and-training.md)、[VLM/VLA 与世界模型高效训练接口](vlm-vla-for-efficient-world-model-training.md)、[VLA 数据与策略学习](../vla/data-and-policy-learning.md) 和 [世界模型评测与失效模式](../world-models/evaluation-and-failure-modes.md)。
-
-## 外部材料
-
-- [Vision Transformer](https://arxiv.org/abs/2010.11929)：理解图片怎样从 patch 变成 token 序列。
-- [Perceiver](https://arxiv.org/abs/2103.03206)：理解用少量 latent array 读取高维输入的通用思想。
-- [TokenLearner](https://arxiv.org/abs/2106.11297)：理解图像/视频里学习少量 informative tokens 的路线。
-- [BLIP-2](https://arxiv.org/abs/2301.12597)：看 Q-Former 怎样从冻结视觉特征中抽取少量 query token。
-- [Flamingo](https://arxiv.org/abs/2204.14198)：理解 Perceiver Resampler 和 gated cross-attention。
-- [LLaVA](https://llava-vl.github.io/)：对照 projector + visual instruction tuning 的简单强路线。
-- [Hugging Face VLMs](https://huggingface.co/blog/vlms)：用 vision encoder、connector、language model 三段式复盘现代 VLM。
-- [Octo](https://octo-models.github.io/)：对照 VLA 场景里视觉 token、动作 chunk 和多机器人数据如何一起验收。
+- [Vision Transformer](https://arxiv.org/abs/2010.11929)说明图像 patch 序列与 Transformer。
+- [Perceiver](https://arxiv.org/abs/2103.03206)与[TokenLearner](https://arxiv.org/abs/2106.11297)讨论高维输入的 latent/token 提取。
+- [BLIP-2](https://arxiv.org/abs/2301.12597)、[Flamingo](https://arxiv.org/abs/2204.14198)、[LLaVA](https://arxiv.org/abs/2304.08485)提供不同视觉连接方式的具体实例。

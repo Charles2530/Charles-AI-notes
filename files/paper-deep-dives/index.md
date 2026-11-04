@@ -1,16 +1,24 @@
-# 论文精读专题：读机制、证据和不能外推的部分
+# 论文阅读与实现
 
-论文精读页不追求把摘要翻译一遍，而是回答四个问题：这篇工作真正改了哪一个机制；作者用什么实验支撑这个 claim；图表里哪些信息可以迁移到工程判断；还有哪些结论不能外推到别的模型、数据或部署场景。
+论文精读围绕一篇工作的具体问题、方法和实验展开。阅读目标是能说清它改了什么，把核心计算对应到实现，并知道实验支持的结论止于哪里。需要查原文时，使用各篇开头的论文链接。
 
-下面按领域列出已整理的 deep dive。读的时候不必从头到尾扫清单，可以先从自己正在研究的系统问题进入：训练显存、推理延迟、扩散少步、世界模型、VLA 或技术报告。写法会参考高质量博客和公众号的“问题驱动式精读”，但结论仍回到论文原文、代码、官方报告和本站来源台账。
+## 从技术机制进入论文
 
-## 怎么读一篇精读
+下面把基础解释、专题实现和论文放在一起，便于从熟悉的对象进入方法细节。小例子用于理解核心机制，其运行结果不能直接视为原论文实验的复现。
 
-| 阅读动作 | 目的 |
-| --- | --- |
-| 先读图和核心实验 | 看作者真正想证明什么，而不是只看方法名。 |
-| 再读方法拆解 | 判断改动发生在目标函数、架构、数据、系统还是评测。 |
-| 最后读局限和失败模式 | 决定这篇工作能不能迁移到你的任务。 |
+| 关心的问题 | 机制与实现 | 对应论文 |
+| --- | --- | --- |
+| 多步去噪怎样形成生成过程 | [DDPM 数学](../diffusion/training.md)与[最小 DDPM 实现](../diffusion/minimal-ddpm-implementation.md)，对照噪声构造、预测目标和采样循环 | [Score SDE](diffusion/score-sde.md)、[DPM-Solver++](diffusion/dpm-solver-plus-plus.md)，再进入[DMD](diffusion/dmd.md)的蒸馏目标 |
+| 参数、梯度、KV 为什么占据不同的显存 | [自动微分与激活](../foundations/autograd-activation-checkpointing-and-memory.md)、[分布式训练](../training/distributed-training-and-checkpointing.md)、[缓存与解码](../inference/caching-routing-and-speculative.md) | [ZeRO](foundations/zero.md)与[PagedAttention](inference/vllm-pagedattention.md)，区分状态切分与请求缓存管理 |
+| 预测未来怎样帮助决策 | [价值与 Bellman](../reinforcement-learning/mdp-value-bellman.md)、[世界模型基本对象](../world-models/beginner-world-models-primer.md)、[RSSM 与规划](../world-models/rssm-dreamer-and-planning.md) | [PlaNet](world-models/planet.md)、[Dreamer](world-models/dreamer.md)，比较规划与在想象轨迹中学习策略 |
+
+## 把论文公式落到代码
+
+方法部分的公式需要先确定输入、输出、形状和可学习参数。随后区分训练时已知的监督信息与推理时真正可获得的信息，再把损失和更新规则映射到代码。一个实现即使能运行，也可能因为掩码、归一化、采样分布或停止梯度的位置不同而改变算法。
+
+实验部分用于校验这些选择。数据划分、基线、模型规模和计算预算决定了比较是否公平；消融实验说明哪项改变可能带来收益；误差范围和失败案例说明结论的稳定程度。原文没有披露的训练细节应明确保留为空缺，不能把合理猜测写成作者的实际设置。
+
+下面保留完整主题索引，随时可以直接进入具体论文。
 
 ## 基础与训练
 
@@ -96,6 +104,7 @@
 - [Fast-WAM：训练时学世界，推理时不生成未来](embodied-ai/fast-wam.md)
 - [Motus：统一 latent action 世界模型](embodied-ai/motus.md)
 - [DreamZero：WAM 零样本策略](embodied-ai/dreamzero.md)
+- [OpenWAM：开放世界动作模型](embodied-ai/openwam.md)
 - [VO-DP：语义-几何自适应扩散策略](embodied-ai/vodp.md)
 - [VGGT：前向恢复相机、深度、点云与轨迹](embodied-ai/vggt.md)
 - [VGGT-Ω：几何重建怎样变成具身空间表征](embodied-ai/vggt-omega.md)

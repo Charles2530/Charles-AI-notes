@@ -1,0 +1,2877 @@
+{
+  "checked_at": "2026-10-29T20:18:40.767836+08:00",
+  "scope": "92 papers. Changed and self-reviewed do not mean independently accepted. Accepted records without a file hash remain unpinned records; depth-only review is separate.",
+  "papers": [
+    {
+      "path": "files/paper-deep-dives/diffusion/anyflow.md",
+      "title": "AnyFlow: Any-Step Video Diffusion Model with On-Policy Flow Map Distillation",
+      "arxiv": [
+        "2605.13724"
+      ],
+      "file_sha256": "712020ecb013ebb0e0b0d8891d60416ac7dc0626196bedef65c1ac964a714f87",
+      "body_sha256": "ea69909c6d09401a4345c451d543075fbd5a38cbd0409da5b4140edaad2757f9",
+      "body_chars": 21891,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2605.13724.pdf",
+        ".tmp/paper-text/2605.13724.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/88de0b3e-ea42-5307-9b92-e354a019b08b/original.pdf",
+        "files/paper-deep-dives/diffusion/anyflow.md",
+        "tmp/paper-v6-repair-1029-1537/evidence/anyflow-body.txt",
+        "tmp/paper-v6-repair-1029-1537/evidence/anyflow-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/anyflow.json",
+      "evidence_reported_status": "accepted",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "at": "2026-10-29T18:36:36.170668",
+          "notes": [
+            "Read entire21891characterbodyincludingthree-segmentsectionaftertruncatedfirstread.",
+            "Independentlyreadv1pp8–10and16:CFG1/gderivative,boundary50%adaptiveweight,threechainfullgradvsapproximationandcosttable.",
+            "Acceptedfull24rowablationandcounterexamples;greaterstepsnotuniversallygreaterquality;trainingbytes/stepsvswallclockdistinguished."
+          ]
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/causvid.md",
+      "title": "From Slow Bidirectional to Fast Autoregressive Video Diffusion Models",
+      "arxiv": [
+        "2412.07772"
+      ],
+      "file_sha256": "3b01dab194f1e6feddd85a22fffc9dd163bb4473b6516991e73837af6ecf4bf5",
+      "body_sha256": "e06b17b805352f540371e40f812d503376fb05a8f1ea59ad06f1cf31885d10ac",
+      "body_chars": 19724,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2412.07772.pdf",
+        ".tmp/paper-text/2412.07772.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/364d6b2b-2e2b-59a0-8ce4-139095ccc716/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/causvid.json",
+      "evidence_reported_status": "composed_self_reviewed_pending_parent_review",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "reviewed_at": "2026-10-29T19:23:28.839295+08:00",
+          "article_sha256": "3b01dab194f1e6feddd85a22fffc9dd163bb4473b6516991e73837af6ecf4bf5",
+          "coverage": [
+            "Full final article read in preceding context",
+            "Independent PDF v4 pages7,9,10,11,18 text; page9 rendered image",
+            "Confirmed dataset-derived independent block noising versus shared DMD noising; extra clean-cache forward; training budgets; full ablation;120frame throughput;29x3 combined preference;30s versus14min limits"
+          ],
+          "notes": [
+            "No substantive correction required in parent source check."
+          ]
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "article_sha256",
+          "matches": true
+        }
+      ],
+      "review_hash_matches": true
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/cps.md",
+      "title": "Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching",
+      "arxiv": [
+        "2509.05952"
+      ],
+      "file_sha256": "3604fbf024a46cc67d27a40d217b0928dac8b208b1073bc04774a414d7a275fb",
+      "body_sha256": "d4d2dbfb670564c7e151f63e28744b0fefe649626f766d690e3b7fdf421ee541",
+      "body_chars": 17625,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        "/Users/charles/Library/Application Support/PaperPilot/papers/ba961a0f-a217-56be-96ae-e14cad28ccd7/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/ba961a0f-a217-56be-96ae-e14cad28ccd7/parsed/parsed.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/cps.json",
+      "evidence_reported_status": "composed_self_reviewed_pending_parent_review",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/deltaquant.md",
+      "title": "DeltaQuant: 4-bit Video Diffusion Models with Spatiotemporal Delta Smoothing",
+      "arxiv": [],
+      "file_sha256": "575b159e60d60fe518bb329f2fc933af191f2adca9cbfc58cfa7dbdb50ebcc44",
+      "body_sha256": "154f782f63189ca6f745db57a3eb3db65791dae1c720375043f6b119c435a625",
+      "body_chars": 19720,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        "/Users/charles/Library/Application Support/PaperPilot/papers/445b79ec-1f5d-45fd-b7a1-38a543d88b2a/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/deltaquant.json",
+      "evidence_reported_status": "composed_self_reviewed_pending_parent_review",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/diffusion-forcing.md",
+      "title": "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion",
+      "arxiv": [
+        "2407.01392"
+      ],
+      "file_sha256": "cdfeafede72f46ad6133173ad362a92ea8f58b8a51122bebc818b07a1c051536",
+      "body_sha256": "a31be867b496b6c565fc36ada5653e3dc0c7df1df264a9f95b16874e437301bb",
+      "body_chars": 21141,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 10,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2407.01392.pdf",
+        ".tmp/paper-text/2407.01392.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/4cafd2c5-710c-5aa4-ad85-3dd427fc71cb/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/diffusion-forcing.json",
+      "evidence_reported_status": "composed_self_reviewed_pending_parent_review",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "stale_review_hash",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "checked_at": "2026-10-29T20:03:08.056773+08:00",
+          "coverage": "Entire final article read; independent source text pp8,9,15,16,18,20,23,26,35; rendered pp8,18,23 viewed.",
+          "findings": [
+            "Confirmed positive KL sign is printed source error, not OCR; article keeps correct negative identity and qualifies fully expressive surrogate.",
+            "Confirmed fixed-noise objective need not itself be each ELBO; latent sufficient-state and finite-capacity boundaries retained.",
+            "Confirmed stabilized latent corresponds to slight token noise, not arbitrary Gaussian hidden-state addition.",
+            "Confirmed Fused SNR formula, training compute, CRPSsum feature aggregation.",
+            "FullmazeTable1correct,MultiUcounterexample and rawactionvsPD distinction retained.",
+            "Main video qualitative evidence not invented FVD,robotnoisecondition not detection guarantee."
+          ],
+          "changes_required": [],
+          "body_sha256": "cdfeafede72f46ad6133173ad362a92ea8f58b8a51122bebc818b07a1c051536"
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "body_sha256",
+          "matches": false
+        }
+      ],
+      "review_hash_matches": false
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/dmd.md",
+      "title": "One-step Diffusion with Distribution Matching Distillation",
+      "arxiv": [
+        "2311.18828"
+      ],
+      "file_sha256": "456585c146b022c7d60fdb5c1526ae2bc2b59fa133e7f0d2b1abb221f9dff351",
+      "body_sha256": "ad1345fa5e5c87a5b1e564ecbf6debb6f29b04fd8689a7852b0833f07a5c9bad",
+      "body_chars": 20094,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2311.18828.pdf",
+        ".tmp/paper-text/2311.18828.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/172e96ac-80b9-5cad-a2ee-8adbbf409a69/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/172e96ac-80b9-5cad-a2ee-8adbbf409a69/parsed/parsed.md",
+        "files/paper-deep-dives/diffusion/dmd.md",
+        "tmp/paper-v6-repair-1029-1537/evidence/dmd-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/dmd.json",
+      "evidence_reported_status": "composed_self_reviewed_parent_depth_accepted",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "depth_review_only",
+      "review_records": {
+        "parent_review": {
+          "scope": "Parent read full article and accepted depth, specifically noting correct cumulative-change interpretation of Table5."
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/dmd2.md",
+      "title": "Improved Distribution Matching Distillation for Fast Image Synthesis",
+      "arxiv": [
+        "2405.14867"
+      ],
+      "file_sha256": "d96b6b94b9f068300f968feb5af54a4c7ef1c75645ebe703c6214733ab5f7d65",
+      "body_sha256": "52dacaf131532f4e1342f3c1fb971cb1c9544a5dcbc6902cd03e88a6d315e008",
+      "body_chars": 20310,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2405.14867.pdf",
+        ".tmp/paper-text/2405.14867.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/eed189fb-ae4a-5bff-8534-38b94f9284f4/original.pdf",
+        "files/paper-deep-dives/diffusion/dmd2.md",
+        "tmp/paper-v6-repair-1029-1537/evidence/dmd2-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/dmd2.json",
+      "evidence_reported_status": "composed_self_reviewed_parent_depth_accepted",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "depth_review_only",
+      "review_records": {
+        "parent_review": {
+          "scope": "Parent reported review of full method, experiment and recipe paragraphs and accepted the depth for continuing the next narrow batch.",
+          "content_audit": "Parent acceptance is recorded separately from local structural validation; no claim of independent reproduction."
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/dpm-solver-plus-plus.md",
+      "title": "DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models",
+      "arxiv": [
+        "2211.01095"
+      ],
+      "file_sha256": "b4c6fe28ac553ad8bfde0329563abdbcea40186409afebf7591e5dc9adcef4c3",
+      "body_sha256": "b9509e130f2769983d0ad09cf8cae6ea8ff8943711ebbf4d194f62c763222a5f",
+      "body_chars": 5440,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2211.01095.pdf",
+        ".tmp/paper-text/2211.01095.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/c85878fb-cdcc-5df0-8a2c-83492072746a/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/dpm-solver-plus-plus.json",
+      "evidence_reported_status": "extracted_before_composition",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/drifting.md",
+      "title": "Generative Modeling via Drifting",
+      "arxiv": [
+        "2602.04770"
+      ],
+      "file_sha256": "5aa161c78d7845db50fe9aedfabb40c3a88bc8dfe0fc1dedcfdb360255ac4e6a",
+      "body_sha256": "75a3ac83c9e06b5c457327da0d6e8a72e80fe13f1b5c02b6ac6385ec964defe9",
+      "body_chars": 5798,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 0,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/longlive2.md",
+      "title": "LongLive-2.0: An NVFP4 Parallel Infrastructure for Long Video Generation",
+      "arxiv": [
+        "2605.18739"
+      ],
+      "file_sha256": "96cf6f35584c5b1680e44423657a56596e865a20e6ddeeb15baa6ee985c6d7cd",
+      "body_sha256": "7f6d7bba6f42d035947b462e96ab3931440cc53071c1ced856fedc0eae987a82",
+      "body_chars": 20451,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 16,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        "/Users/charles/Library/Application Support/PaperPilot/papers/676a9fd0-7533-42a6-a09b-fc741815d649/notes/revision-5-a1ca9f2f-907c-4372-b96b-42b28410d45d.md",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/676a9fd0-7533-42a6-a09b-fc741815d649/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/676a9fd0-7533-42a6-a09b-fc741815d649/parsed/parsed.md",
+        "files/paper-deep-dives/diffusion/longlive2.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/longlive2.json",
+      "evidence_reported_status": "adapted_and_self_reviewed",
+      "evidence_output_hash": "96cf6f35584c5b1680e44423657a56596e865a20e6ddeeb15baa6ee985c6d7cd",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/phased-dmd.md",
+      "title": "Phased DMD: Few-step Distribution Matching Distillation via Score Matching within Subintervals",
+      "arxiv": [
+        "2510.27684"
+      ],
+      "file_sha256": "8d70402b427fe9d7301305c5bb87f9f9fb811973703936546b43e59900cba29a",
+      "body_sha256": "d9fd87f526f868d4dc882117c39178c80daa93723224ad3ed72190bc3eea2a64",
+      "body_chars": 20521,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 21,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2510.27684.pdf",
+        ".tmp/paper-text/2510.27684.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/8e9b438e-4574-512d-bddd-2c5772913be3/original.pdf",
+        "files/paper-deep-dives/diffusion/phased-dmd.md",
+        "tmp/paper-v6-repair-1029-1537/evidence/phased-dmd-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/phased-dmd.json",
+      "evidence_reported_status": "composed_self_reviewed_parent_depth_accepted",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "notes": [
+            "Parent read complete final article, checked Markov noising, velocity target substitution, phase/fake distinction, metric counterexamples andcostconditions.",
+            "Independently compared PDF p5,16,17 against phasegradient, time shift/clamps, trainablefake experts and fullVBenchvalues."
+          ]
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/pixeldit.md",
+      "title": "PixelDiT: Pixel Diffusion Transformers for Image Generation",
+      "arxiv": [
+        "2511.20645"
+      ],
+      "file_sha256": "f6e1e29a24ad29884075832563ee6050e6bae379a00d67eaf283c778b7ed0f04",
+      "body_sha256": "4f4855d9b7957c96e6451278ce569609822c19fe019fcb82e0f616e26eb8df4c",
+      "body_chars": 4537,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 4,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/rdm.md",
+      "title": "Representation Distribution Matching for One-Step Visual Generation",
+      "arxiv": [
+        "2607.02375"
+      ],
+      "file_sha256": "dfaa30f1e43bd7aebe36792d899ff047fe336d3797a6631e8a5663a49c71298a",
+      "body_sha256": "2fc7747ec8b02ee661512ef25a3a428e0b79c955827c7e90a2f4685d291e8e1a",
+      "body_chars": 22645,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        "files/paper-deep-dives/diffusion/rdm.md",
+        "tmp/paper-v6-repair-1029-1537/evidence/rdm-body.txt",
+        "tmp/paper-v6-repair-1029-1537/evidence/rdm-source.txt",
+        "tmp/paper-v6-rewrite-1029-1241/diffusion-sources/rdm.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/rdm.json",
+      "evidence_reported_status": "composed_self_reviewed_parent_depth_accepted",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "notes": [
+            "Read entire body previously, independently checked PDF pp19–20 for reference pool and distillation budget.",
+            "Confirmed all21bodyPDFlinks pinned to v1 and corrected generator phrase."
+          ],
+          "at": "2026-10-29T18:17:24.287941"
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/repa.md",
+      "title": "Representation Alignment for Generation: Training Diffusion Transformers Is Easier Than You Think",
+      "arxiv": [
+        "2410.06940"
+      ],
+      "file_sha256": "fc5ce58b1118001e3243ec76363eccc081a146eda5e8780672b9de8f01699949",
+      "body_sha256": "1b15bd64800ca950cfac7819d9a7fa947ca07a2c538adbcf3b48122001270bbb",
+      "body_chars": 4562,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/score-sde.md",
+      "title": "Score-Based Generative Modeling through Stochastic Differential Equations",
+      "arxiv": [
+        "2011.13456"
+      ],
+      "file_sha256": "50c50c8e7324675c367a21bcb9cb61362355a9cd631142be072bb2b8216af7d0",
+      "body_sha256": "988dcc60ee992111a2078ec6b7c3a2a0a51e1d331d1394ed8a7fc7c939b91d61",
+      "body_chars": 5263,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2011.13456.pdf",
+        ".tmp/paper-text/2011.13456.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/9c4bc000-b64e-5061-884a-6924354e5133/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/tbsm.md",
+      "title": "Three-Body Scattering for Generative Modeling",
+      "arxiv": [
+        "2607.18198"
+      ],
+      "file_sha256": "09aef0d9c8c1bc2b4a25d45f5d99efeaa1ea2a539b2444e9c55031e4d5572e7c",
+      "body_sha256": "cd942edd41092f57150912c24d86f3d7e8fde357d7eea7a94b0585fe48719800",
+      "body_chars": 6038,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 0,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/wan.md",
+      "title": "Wan: Open and Advanced Large-Scale Video Generative Models",
+      "arxiv": [
+        "2503.20314"
+      ],
+      "file_sha256": "a9974df66f8072e53979df327471e598f5501960f345afc357cdedbd8b0052a7",
+      "body_sha256": "fdd9f6632c45cd6931cdfbc7e8eda4b603368dccccec3f15410ddc065495c2f2",
+      "body_chars": 11075,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 13,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2503.20314.pdf",
+        ".tmp/paper-text/2503.20314.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/5e228e05-d372-5bd7-a0b7-1230db106e24/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/diffusion/z-image-pixel.md",
+      "title": "An Empirical Study of Training Pixel-Space Text-to-Image Diffusion Models",
+      "arxiv": [
+        "2608.16887"
+      ],
+      "file_sha256": "98f8eefb414ed6b3c06b0bf4f4b59efbfc75a378277ecb129476a2dff9dfa0d6",
+      "body_sha256": "c09793cd1b09020f85f89019aab3743382fde4814e1d60d3902ed222fd4a096c",
+      "body_chars": 5934,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        "/Users/charles/Library/Application Support/PaperPilot/papers/517bf106-d820-461f-9d3b-2ad0d0b8e9f1/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/517bf106-d820-461f-9d3b-2ad0d0b8e9f1/parsed/parsed.md"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/d4rt.md",
+      "title": "Efficiently Reconstructing Dynamic Scenes One D4RT at a Time",
+      "arxiv": [
+        "2512.08924"
+      ],
+      "file_sha256": "6250962530013f074fdf3711caab9d049670bb2cac95f1d04eb9540255cefabf",
+      "body_sha256": "43ab7ce2818c79c931129e24babfac2b94da9f9a7e94a043f295adfae2d2904a",
+      "body_chars": 19978,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2512.08924.pdf",
+        ".tmp/paper-text/2512.08924.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/e52823fc-c54f-5e69-a17a-3dac2b83eda8/original.pdf",
+        "files/paper-deep-dives/embodied-ai/d4rt.md",
+        "tmp/paper-v6-repair-1029-1537/d4rt-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/d4rt.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "at": "2026-10-29T18:58:05.868549+08:00",
+          "coverage": [
+            "Read entire final body",
+            "Independent source checks PDFv2 pp3,6,12,14; viewed p12 render"
+          ],
+          "findings": [
+            "Camera pose query keeps physical target fixed while changing reference camera; interface and output roles explicit",
+            "All Table4 counterexamples consistent with original known/unknown intrinsics split",
+            "Full p12 diagram confirms 13 outputs and loss typo/undefined Lconf; not invented",
+            "High-resolution table preserves S-AbsRel regression and distinguishes query density from patch fidelity",
+            "Long-video drift, per-track budget and offline window conditions retained"
+          ],
+          "output_sha256": "6250962530013f074fdf3711caab9d049670bb2cac95f1d04eb9540255cefabf"
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "output_sha256",
+          "matches": true
+        }
+      ],
+      "review_hash_matches": true
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/depth-anything-3.md",
+      "title": "Depth Anything 3: Recovering the Visual Space from Any Views",
+      "arxiv": [
+        "2511.10647"
+      ],
+      "file_sha256": "86c16736fb5e0c1de396c241170979d585e527d58aad023e7258f8da8827b9cc",
+      "body_sha256": "ff94b95656345dda82b3d0eeaddb4cf044141168077aab163e6c91e6020b3db5",
+      "body_chars": 25073,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 12,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2511.10647.pdf",
+        ".tmp/paper-text/2511.10647.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/829f3f80-18b3-5a23-bfad-1150082bcf56/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/depth-anything-3.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "stale_review_hash",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "checked_at": "2026-10-29T20:11:20.120724+08:00",
+          "coverage": "Entire final article read; independentPDFpp6,8,10,12,17,18,20,21; renderedpp6/18andmetricteacheroriginalfigureviewed.",
+          "findings": [
+            "Verified rayisnonunit,cameradepth vsEuclideanrange and sourcehomographyKRvsRKinvconflict genuine.",
+            "Verified confidence/normal/teacher-alignment objectives and meanabsdeviationaroundresidualmedian wording.",
+            "Checked camerahead vscondition vsGTfusion distinction and7Scenes negativecontrol.",
+            "Table6/7 negativeablationresultsnotlost;Table8parameterconflict and32imageFPSvsmaxcapacity separated.",
+            "Monocularunified/teacher/student/metricmodelresultsnotconflated.",
+            "NVSknownCOLMAPpose,12contexts,domainssplitsandpixelSplathalftrainingbudget retained."
+          ],
+          "changes_required": [],
+          "body_sha256": "86c16736fb5e0c1de396c241170979d585e527d58aad023e7258f8da8827b9cc"
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "body_sha256",
+          "matches": false
+        }
+      ],
+      "review_hash_matches": false
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/depth-anything-v2.md",
+      "title": "Depth Anything V2",
+      "arxiv": [
+        "2406.09414"
+      ],
+      "file_sha256": "f792c7efd969c66657b020e5ebd458ccb9cfb0415c01387db0523d9db5181e93",
+      "body_sha256": "2fe088fc7366749bac7c65d540095aae92590cbe6228f7c320471a7418b29ab3",
+      "body_chars": 18950,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 12,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2406.09414.pdf",
+        ".tmp/paper-text/2406.09414.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/fbda0c1b-4f21-5881-ad16-6111262fd33f/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/depth-anything-v2.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "stale_review_hash",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "checked_at": "2026-10-29T20:14:43.125542+08:00",
+          "coverage": "Entirefinalarticleread;sourcepp6,7,8,9,12,13,14,17independentlyread;renderedp13,DA2KannotationandHRWSIlabelmixfiguresviewed.",
+          "findings": [
+            "OutputdistillationvsretainedDINOsemanticfeaturesproperlyseparated.",
+            "MainV1/V2NYU,Sintel,ETHregressionsandregisterexceptionschecked.",
+            "595Kvs604Ksourceconflictgenuine;batchtimesstepcalculationsseparatefromuniqueimages.",
+            "DA2Kmanual/disagreementselectionandpredicteddepthratio>3retained;rankingnotmetricdepth.",
+            "Table5/11dataregimeandNTIREzeroshot/finetunedbudgetsnotconflated.",
+            "SyntheticmetricreleasevsrealindomainZoeDepthtransferdistinct."
+          ],
+          "changes_required": [],
+          "body_sha256": "f792c7efd969c66657b020e5ebd458ccb9cfb0415c01387db0523d9db5181e93"
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "body_sha256",
+          "matches": false
+        }
+      ],
+      "review_hash_matches": false
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/depth-anything.md",
+      "title": "Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data",
+      "arxiv": [
+        "2401.10891"
+      ],
+      "file_sha256": "d3b35a88fca47bb0692ab8fac84fd2edd5279368548829850ab4dcc756c9e6ee",
+      "body_sha256": "b411b40b2b000c2684ac956f9cf8ecfd91277f9d0ca2ade2ef6cab6329eb195c",
+      "body_chars": 16450,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 5,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2401.10891.pdf",
+        ".tmp/paper-text/2401.10891.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/f13de1ce-8f0d-519f-a87a-87903a4eb383/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/depth-anything.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "stale_review_hash",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "checked_at": "2026-10-29T20:17:56.265835+08:00",
+          "coverage": "Entirefinalarticleread;independentsourcepp3,4,5,8,9;renderedp9andNYUFigure6viewed.",
+          "findings": [
+            "Affineinverse-depthmeanabsdeviationandworkedexamplecorrect.",
+            "CutMixvalidregionnormalizationandareaweights sourceconfirmed,notglobalzero-filledstatistics.",
+            "Clean-teacher/perturbed-studentandfrozencontinuoussemanticfeatures separated.",
+            "TolerancealphaandTable13U-onlyvsL-onlycorrect;noinventedfourthrow.",
+            "Zero-shotGTscale/shiftalignmentandmetricencoderLRchange1/10→1/50retained.",
+            "DINOv2vsMiDaSinitializationcontrolsanddomainmetricfailurescorrect."
+          ],
+          "changes_required": [],
+          "body_sha256": "d3b35a88fca47bb0692ab8fac84fd2edd5279368548829850ab4dcc756c9e6ee"
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "body_sha256",
+          "matches": false
+        }
+      ],
+      "review_hash_matches": false
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/dm05.md",
+      "title": "DM0.5: An Open-World Foundation Model for General-Purpose Embodied Intelligence",
+      "arxiv": [
+        "2602.14974"
+      ],
+      "file_sha256": "6b3b888bc9472b8b2efc03d649e3b81967fd9b40bd42b13ba8cb0ffca53e497a",
+      "body_sha256": "533829d1bd774ba600cb32cb5d1e23672252af14f5cdd248e83c878b4be3bcdc",
+      "body_chars": 5219,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 5,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/dreamzero.md",
+      "title": "World Action Models are Zero-shot Policies",
+      "arxiv": [
+        "2602.15922"
+      ],
+      "file_sha256": "d99f40cc341793c04ec73fa9b2375901b3bd98699a6ea37d8763fda59a3e0a58",
+      "body_sha256": "7ee196510080464713a8f6f91d4346828284e9d87c51ef8bd2d036a84466259a",
+      "body_chars": 5794,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 10,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2602.15922.pdf",
+        ".tmp/paper-text/2602.15922.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/4cefddd0-60ae-59c1-bafa-14a98dc7cdd2/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/4cefddd0-60ae-59c1-bafa-14a98dc7cdd2/parsed/parsed.md"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/fast-wam.md",
+      "title": "Fast-WAM: Do World Action Models Need Test-time Future Imagination?",
+      "arxiv": [
+        "2603.16666"
+      ],
+      "file_sha256": "92123c93e1dbc46cfb0ca5b2dee2f2bb0f31ee273320017ca9820daedf947797",
+      "body_sha256": "5c2fbeb698603e9deef51064ccd89eaaf99efc0054245eacdf4cd1e630ee8402",
+      "body_chars": 3956,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 5,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2603.16666.pdf",
+        ".tmp/paper-text/2603.16666.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/3051648a-4ac5-5da7-a005-4c6970c6907f/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/genception.md",
+      "title": "Video Generation Models are General-Purpose Vision Learners",
+      "arxiv": [
+        "2607.09024"
+      ],
+      "file_sha256": "7eefde51c7d7e5d1880294f8edf133c892f66766e1cf1781eab224a42420123a",
+      "body_sha256": "df4f40b063a61449a6bf67247df8e9ab389c804c9db08c62975f4f47f7ac1869",
+      "body_chars": 4828,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 4,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/gr2.md",
+      "title": "GR-2: A Generative Video-Language-Action Model with Web-Scale Knowledge for Robot Manipulation",
+      "arxiv": [
+        "2410.06158"
+      ],
+      "file_sha256": "a00c1499a1546e7592f5449b8bcd6943b6eba1d9b2803a509385c73056be5f9d",
+      "body_sha256": "5f713a1b84611e6e11de8775201d6a96306be6c9f0f6dc9f35bda52a3dcd5b3e",
+      "body_chars": 4536,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2410.06158.pdf",
+        ".tmp/paper-text/2410.06158.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/a7ce9950-1564-53aa-82ca-6dafaf6c1f04/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/gr3.md",
+      "title": "GR-3 Technical Report",
+      "arxiv": [
+        "2507.15493"
+      ],
+      "file_sha256": "e454076e2b0851fda926879def34011e532f23566d59da381822176793ad3f26",
+      "body_sha256": "4269b75aa9ecc3ade93264c8b9386583235984eb02be0796fc3f926cffbfd97d",
+      "body_chars": 4426,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2507.15493.pdf",
+        ".tmp/paper-text/2507.15493.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/9cf01cd7-c0ab-5afe-8c42-6155749cc11b/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/kai0.md",
+      "title": "χ₀: Resource-Aware Robust Manipulation via Taming Distributional Inconsistencies",
+      "arxiv": [
+        "2602.09021"
+      ],
+      "file_sha256": "77f846a97a3157ad5d77defcfe2d073a2bb3ac080283bfff94bcb6c6babc1e4f",
+      "body_sha256": "ee5c5c797875c45accd61f4085ece7030202064cfb96342a82676310b06683fd",
+      "body_chars": 4467,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2602.09021.pdf",
+        ".tmp/paper-text/2602.09021.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/0ea27876-45cd-58a8-b041-cff9737bac1b/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/mapanything.md",
+      "title": "MapAnything: Universal Feed-Forward Metric 3D Reconstruction",
+      "arxiv": [
+        "2509.13414"
+      ],
+      "file_sha256": "f7bf0d62bdbfb890c81b066745586ccfb7f8c87a2870bdc251d20116e57572c1",
+      "body_sha256": "494a37b25e8e787baac078001bd3cb22236d0fcd06a1ce5d2fe9414e1988a866",
+      "body_chars": 4852,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2509.13414.pdf",
+        ".tmp/paper-text/2509.13414.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/c844833e-f88f-5536-921b-4149b7d53697/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/motus.md",
+      "title": "Motus: A Unified Latent Action World Model",
+      "arxiv": [
+        "2512.13030"
+      ],
+      "file_sha256": "0b098050054eae5e5f4c000c0138f38ac1ce32e21d417c1f57462ba0ab7b4a49",
+      "body_sha256": "a5aa37297c66951b309fcf0466238ed8133b6323ac5e2d946f27e65afc013033",
+      "body_chars": 4998,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2512.13030.pdf",
+        ".tmp/paper-text/2512.13030.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/9df8ce89-04ff-537e-a75e-fa7b53c5a97b/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/openwam.md",
+      "title": "OpenWAM: An Open, Modular Exploration Towards Systematic World–Action Model Pretraining",
+      "arxiv": [
+        "2609.07398"
+      ],
+      "file_sha256": "4708833f708dcbfcb0b2ba8a9ef8680e98b282845985274549f895e56d7c68dc",
+      "body_sha256": "0d5000c570d6765c475fe786cac8411ebce9c24ab41f9750f953f8c02a584706",
+      "body_chars": 6488,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/pi05.md",
+      "title": "π0.5: a Vision-Language-Action Model with Open-World Generalization",
+      "arxiv": [
+        "2504.16054"
+      ],
+      "file_sha256": "fdb20523f5d1f142da5e080459affe0cc06088fbc629aa1ec2ce76cf4a67d5aa",
+      "body_sha256": "b9e3ad99649a3b483ee39145c96b876fec6446ae662c11a48209f0f5c739a11c",
+      "body_chars": 22021,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 16,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2504.16054.pdf",
+        ".tmp/paper-text/2504.16054.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/fee479bf-4d60-5fba-b0d8-18a6568d5eb8/original.pdf",
+        "files/paper-deep-dives/embodied-ai/pi05.md",
+        "tmp/paper-v6-repair-1029-1537/pi05-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/pi05.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/qwen-robotmanip.md",
+      "title": "Qwen-RobotManip Technical Report: Alignment Unlocks Scale for Robotic Manipulation Foundation Models",
+      "arxiv": [
+        "2606.17846"
+      ],
+      "file_sha256": "b4ee249d1c51c525239e3a4376354bf402a0fad0accbf133bcd307d675cb7b8d",
+      "body_sha256": "f7d4e6f61ae9b517e18755804a96b359b5306d4d99beb27bba4bf402d0bccf0a",
+      "body_chars": 8265,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 10,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2606.17846.pdf",
+        ".tmp/paper-text/2606.17846.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/ae545741-9b97-53e5-a682-c3f6ffd79be8/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/robodojo.md",
+      "title": "RoboDojo: A Unified Sim-and-Real Benchmark for Comprehensive Evaluation of Generalist Robot Manipulation Policies",
+      "arxiv": [
+        "2607.04434"
+      ],
+      "file_sha256": "7c504f262aead2e6f6b09d4caad7dcc584f7f6a5e803130bac23d5bf94d9a797",
+      "body_sha256": "4ab6f1f524deb914a58cf8cfb16f567c7ba4093b6e7f9bc6732a96d2fbf66444",
+      "body_chars": 7635,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 3,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/rt2.md",
+      "title": "RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control",
+      "arxiv": [
+        "2307.15818"
+      ],
+      "file_sha256": "fc01ba79f410a1b400e3901e3584aa82eed4bca592b43c8dbddd3937b18d7276",
+      "body_sha256": "e3629e1a884117a9f95106a8299e329f3fd34bd91136eb184fa9266c9dcb89a9",
+      "body_chars": 14081,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2307.15818.pdf",
+        ".tmp/paper-text/2307.15818.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/99507723-7a39-510f-bb68-3a0c53dfe5ff/original.pdf",
+        "files/paper-deep-dives/embodied-ai/rt2.md",
+        "tmp/paper-v6-repair-1029-1537/rt2-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/rt2.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "notes": [
+            "Parent read complete final article and reviewed action/token interface, cofine objective and budget, deploymentfrequency, allresulttables, CoT boundaries anddynamicsfailures.",
+            "Independent source spotcheck PDFp21 and24:trainingsteps/lr,Table5/6 andPaLMErobotimagefootnote match."
+          ]
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/spatialvla.md",
+      "title": "SpatialVLA: Exploring Spatial Representations for Visual-Language-Action Models",
+      "arxiv": [
+        "2501.15830"
+      ],
+      "file_sha256": "deea077c1d45f2a013c61c281d1f17b9927a75168da7a7fa6e2eec7149c08860",
+      "body_sha256": "aab8cef4c24ade9ddb1f70b07411e2d66d9694932327d54256a967ea1432fe3a",
+      "body_chars": 18709,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2501.15830.pdf",
+        ".tmp/paper-text/2501.15830.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/6d1fd07a-b12c-5c45-a307-f2eba0b083c7/original.pdf",
+        "files/paper-deep-dives/embodied-ai/spatialvla.md",
+        "tmp/paper-v6-repair-1029-1537/spatialvla-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/spatialvla.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "notes": [
+            "Read complete final article: Ego3Dgeometry/encodingorder, boundedGaussianCDFgrid,tokenvocabularyandadaptation,training/deployment,allmainexperimentsandcounterexamples.",
+            "Independent PDFp14/15mechanismpartialandp16/p20fullspotchecks confirm204MLPinput,160K+40K,0.06s/20Hzboundary,TableIXandXII–XV success/graspdistinctions; no furthercorrection."
+          ]
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/vggt-omega.md",
+      "title": "VGGT-Ω",
+      "arxiv": [
+        "2605.15195"
+      ],
+      "file_sha256": "6e5c76dbc03134c34d36a40170e8e65c5edb0f6d62da72a3cce55e0c73461c32",
+      "body_sha256": "d112a719f7eb598d49609c2fe699b228cc973fccecc8f68db53368695b84c7b5",
+      "body_chars": 4917,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2605.15195.pdf",
+        ".tmp/paper-text/2605.15195.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/5350eaa8-89aa-58b4-accb-0fbb41ffae11/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/vggt.md",
+      "title": "VGGT: Visual Geometry Grounded Transformer",
+      "arxiv": [
+        "2503.11651"
+      ],
+      "file_sha256": "49566221e287c741ba6f39a4002847f8083d3cf18a61fd972654e5ba1d3ee365",
+      "body_sha256": "84abb439f11b8839e388450b5b79dedfa9c8e6e4599243589e8e313b92f234b8",
+      "body_chars": 4854,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 5,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2503.11651.pdf",
+        ".tmp/paper-text/2503.11651.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/801c806d-f45d-4775-8fed-52542202ee7c/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/video-prediction-policy.md",
+      "title": "Video Prediction Policy: A Generalist Robot Policy with Predictive Visual Representations",
+      "arxiv": [
+        "2412.14803"
+      ],
+      "file_sha256": "854738c1d66fe9da136a288dac44cbdb4cf402423d4fedc2a58892d62be8f3ce",
+      "body_sha256": "83ac5886f670de4acd584c777bb0a9fb1f682fa012b9e546774a1bbcc94879db",
+      "body_chars": 16286,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2412.14803.pdf",
+        ".tmp/paper-text/2412.14803.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/d03c56a3-9d65-5361-82e6-a4e9ea587585/original.pdf",
+        "files/paper-deep-dives/embodied-ai/video-prediction-policy.md",
+        "tmp/paper-v6-repair-1029-1537/video-prediction-policy-source.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/video-prediction-policy.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "at": "2026-10-29T18:33:58.388457",
+          "notes": [
+            "Read entire16286characterbody;independentlyrecheckedv2PDFpp4,13,14,16.",
+            "Verified fullfeatureaggregation/VideoFormer interfaces;10actionsteps vsonevideopass;dataholdouts;Table7Susieweightedmeanconflict;Table13action/token/batchshapes;allnegativecontrols preserved."
+          ]
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/embodied-ai/vodp.md",
+      "title": "VO-DP: Semantic-Geometric Adaptive Diffusion Policy for Vision-Only Robotic Manipulation",
+      "arxiv": [
+        "2510.15530"
+      ],
+      "file_sha256": "fe55c74ecf008d5dc9d350060158cadd860f1ad5f6b1dfd374fb8b78401e2cfc",
+      "body_sha256": "44b7068c2f9ce1115bf9cc351dac6e8efd80645b1ed1bae1a5f953681338966f",
+      "body_chars": 4824,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2510.15530.pdf",
+        ".tmp/paper-text/2510.15530.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/6a3f7925-c909-50b7-b6b0-844b2b7e5af6/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/foundations/attn-qat.md",
+      "title": "Attn-QAT: 4-Bit Attention With Quantization-Aware Training",
+      "arxiv": [
+        "2603.00040"
+      ],
+      "file_sha256": "94ffd9dac58a6986680691011ab0bab10bf96d6a7a4386cff9b89683df67b7c0",
+      "body_sha256": "ae918f48f2d32f861d25dbd5b7b5f156b68b7213fd5e88f1497242cd5a5c7e29",
+      "body_chars": 16483,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2603.00040.pdf",
+        ".tmp/paper-text/2603.00040.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/29bf40ae-96b3-5411-ae49-9f3a03171dfe/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/29bf40ae-96b3-5411-ae49-9f3a03171dfe/parsed/parsed.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/attn-qat.json",
+      "evidence_reported_status": "rewritten_and_self_reviewed",
+      "evidence_output_hash": "94ffd9dac58a6986680691011ab0bab10bf96d6a7a4386cff9b89683df67b7c0",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/foundations/gpu-utilization-misleading.md",
+      "title": "GPU Utilization is a Misleading Metric",
+      "arxiv": [],
+      "file_sha256": "ac9158f8f993a4230bb3eaaae1b21226c76a6291076414abc77575815e28fd4d",
+      "body_sha256": "58dd807171548da14e9bf8b576d5eeeb88fe423fe6d31415c735fc153f54fd89",
+      "body_chars": 8980,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 4,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        "files/paper-deep-dives/foundations/gpu-utilization-misleading.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/gpu-utilization-misleading.json",
+      "evidence_reported_status": "rewritten_and_self_reviewed",
+      "evidence_output_hash": "ac9158f8f993a4230bb3eaaae1b21226c76a6291076414abc77575815e28fd4d",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/foundations/magiattention.md",
+      "title": "MagiAttention: A Distributed Attention Towards Linear Scalability for Ultra-Long Context, Heterogeneous Mask Training",
+      "arxiv": [],
+      "file_sha256": "207358942ada3e9b1c362852f0a971eded125b5c723a9579f882915bed396c93",
+      "body_sha256": "f1c28da5a60adafdfe0cce7552f5fa0e0a1fa3d88663c70bd02a6a67fc9fd1f2",
+      "body_chars": 18436,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 16,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/magiattention.json",
+      "evidence_reported_status": "rewritten_and_self_reviewed",
+      "evidence_output_hash": "207358942ada3e9b1c362852f0a971eded125b5c723a9579f882915bed396c93",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/foundations/megatron-lm.md",
+      "title": "Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism",
+      "arxiv": [
+        "1909.08053"
+      ],
+      "file_sha256": "8ac39647dd88fbc596fda717c5dd86f186851ebb5bc3919a073d44d7b432dad2",
+      "body_sha256": "a5e7572eff57df471066bb1f84d29d8af8db2b084ff4f4e62f40b4d234a9f6f5",
+      "body_chars": 14938,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/1909.08053.pdf",
+        ".tmp/paper-text/1909.08053.txt",
+        "/Users/charles/Documents/coding_file/lab/Charles-AI-notes/.tmp/arxiv-meta/1909.08053.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/eb8e2ca4-5b16-5feb-9f53-cd432bc10d07/original.pdf",
+        "files/paper-deep-dives/foundations/megatron-lm.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/megatron-lm.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "8ac39647dd88fbc596fda717c5dd86f186851ebb5bc3919a073d44d7b432dad2",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/foundations/muon-is-scalable.md",
+      "title": "Muon is Scalable for LLM Training",
+      "arxiv": [
+        "2502.16982"
+      ],
+      "file_sha256": "3f76f9519155dba202ccc36d4c03d24611c6e43fb16c8226ee4b4d6de869f443",
+      "body_sha256": "0b0556f913fbdbcfbdff6d63bba97114fdf72c8f28bd51cf8ab06500a762e7a2",
+      "body_chars": 17784,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2502.16982.pdf",
+        ".tmp/paper-text/2502.16982.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/567363ae-0e14-52f3-b3c8-5083c08e90e4/original.pdf",
+        "files/paper-deep-dives/foundations/muon-is-scalable.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/muon-is-scalable.json",
+      "evidence_reported_status": "rewritten_and_self_reviewed",
+      "evidence_output_hash": "3f76f9519155dba202ccc36d4c03d24611c6e43fb16c8226ee4b4d6de869f443",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/foundations/sla-sparse-linear-attention.md",
+      "title": "SLA / SLA2: Sparse-Linear Attention for Diffusion Transformers",
+      "arxiv": [
+        "2602.12675"
+      ],
+      "file_sha256": "0c24e0557b0bb4fbbe62e0203a24f50268840d42aaa612d3723f3055e6e330c1",
+      "body_sha256": "82a7fb8aee7c2ab5283b66a106929269645a43a4cbd770a29f40bd691b1e8eec",
+      "body_chars": 22309,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2602.12675.pdf",
+        ".tmp/paper-text/2602.12675.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/20809227-ee1e-5c81-a589-a4393f88b84a/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/sla-sparse-linear-attention.json",
+      "evidence_reported_status": "rewritten_and_self_reviewed",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/foundations/zero.md",
+      "title": "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models",
+      "arxiv": [
+        "1910.02054"
+      ],
+      "file_sha256": "aeb24ef562dc4b2c6315b8f7e05534959410631218ac4e173f8c988909059305",
+      "body_sha256": "fd2533366cf4f1025a573a95d39d626326f071ad102921154bc65d0cfffc4597",
+      "body_chars": 13498,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/1910.02054.pdf",
+        ".tmp/paper-text/1910.02054.txt",
+        "/Users/charles/Documents/coding_file/lab/Charles-AI-notes/.tmp/arxiv-meta/1910.02054.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/67e49a15-5cef-58d4-b83b-9644a633ac06/original.pdf",
+        "files/paper-deep-dives/foundations/zero.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/zero.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "aeb24ef562dc4b2c6315b8f7e05534959410631218ac4e173f8c988909059305",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/eagle-2.md",
+      "title": "EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees",
+      "arxiv": [
+        "2406.16858"
+      ],
+      "file_sha256": "83afe9088eba214aa3db0c0a754d39dd941d91c1371e0ca265abafd562090e91",
+      "body_sha256": "2726dcf535e681c02345e4b6370ac915ed48b326d763ef3bf153fac4cf6f8cb3",
+      "body_chars": 10570,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2406.16858.pdf",
+        ".tmp/paper-text/2406.16858.txt",
+        "/Users/charles/Documents/coding_file/lab/Charles-AI-notes/.tmp/arxiv-meta/2406.16858.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/452a06ba-1d83-57c3-b737-8e0839222bdb/original.pdf",
+        "files/paper-deep-dives/inference/eagle-2.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/eagle-2.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "83afe9088eba214aa3db0c0a754d39dd941d91c1371e0ca265abafd562090e91",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/eagle-3.md",
+      "title": "EAGLE-3: Scaling up Inference Acceleration of Large Language Models via Training-Time Test",
+      "arxiv": [
+        "2503.01840"
+      ],
+      "file_sha256": "398116e5798913f97a46db49b63d85cbdc23263ec3ea4ebc2314824839538a4f",
+      "body_sha256": "00411ff53e5f50ecb93c1c9d25b84e2917fb6651d4a5d08e8d087ecbdbc95664",
+      "body_chars": 11559,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2503.01840.pdf",
+        ".tmp/paper-text/2503.01840.txt",
+        "/Users/charles/Documents/coding_file/lab/Charles-AI-notes/.tmp/arxiv-meta/2503.01840.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/5fa9f4ba-1cbe-5696-8c2f-709d87113a9c/original.pdf",
+        "files/paper-deep-dives/inference/eagle-3.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/eagle-3.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "398116e5798913f97a46db49b63d85cbdc23263ec3ea4ebc2314824839538a4f",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/eagle.md",
+      "title": "EAGLE: Speculative Sampling Requires Rethinking Feature Uncertainty",
+      "arxiv": [
+        "2401.15077"
+      ],
+      "file_sha256": "eb6c105b371f0e61d3fa95e79344e32cd2ddbbf9bd7902a71c3589d8b3d37b32",
+      "body_sha256": "3674ba8194fc3c3593c4a7de8952174d4a6b3e6a225e0596e3433efccad7bba5",
+      "body_chars": 10831,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 5,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2401.15077.pdf",
+        ".tmp/paper-text/2401.15077.txt",
+        "/Users/charles/Documents/coding_file/lab/Charles-AI-notes/.tmp/arxiv-meta/2401.15077.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/db6be01d-ee03-53be-9388-39a0eff75ac7/original.pdf",
+        "files/paper-deep-dives/inference/eagle.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/eagle.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "eb6c105b371f0e61d3fa95e79344e32cd2ddbbf9bd7902a71c3589d8b3d37b32",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/fast-foundation-stereo.md",
+      "title": "Fast-FoundationStereo: Real-Time Zero-Shot Stereo Matching",
+      "arxiv": [
+        "2512.11130"
+      ],
+      "file_sha256": "5c57c8688a53310327730e57dcb66dbd5fa50cf4d4bf29ccbb885b1dc7a8962a",
+      "body_sha256": "aafbb1891251fca49cba210c4e91f2804f8b4d9e7737237f25599fb700139dd1",
+      "body_chars": 17244,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 12,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2512.11130.pdf",
+        ".tmp/paper-text/2512.11130.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/506166b9-8477-5f04-bc3c-b51072930653/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/fast-foundation-stereo.json",
+      "evidence_reported_status": "rewritten and self-reviewed",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/kvslimmer.md",
+      "title": "KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging",
+      "arxiv": [
+        "2603.00907"
+      ],
+      "file_sha256": "22a29d8e7b4f159ab3e9448cda93ad070b247487fe1c0ae013b7d3299c4a12b1",
+      "body_sha256": "0ad629189048af06a1866afc84df6df144109bd0888bb2428206adbc1add493e",
+      "body_chars": 4838,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2603.00907.pdf",
+        ".tmp/paper-text/2603.00907.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/1264e1f3-4bdb-5435-ba59-afbc0e684252/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/low-bit-llm-survey.md",
+      "title": "A Survey of Low-bit Large Language Models: Basics, Systems, and Algorithms",
+      "arxiv": [
+        "2409.16694"
+      ],
+      "file_sha256": "4eb91d8f6af18880e5536f69564f35882416f1646faab7752e247426840fd5e2",
+      "body_sha256": "73353c65d5be1986e172098bc997603a43b201eaa3a0dca11570c2b3ac035e85",
+      "body_chars": 9569,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 10,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2409.16694.pdf",
+        ".tmp/paper-text/2409.16694.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/40ff7868-0449-5327-9020-ae441f9ef0c9/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/realtime-vla-flash-0928-1144.md",
+      "title": "Realtime-VLA FLASH: Speculative Inference Framework for Diffusion-based VLAs",
+      "arxiv": [
+        "2605.13778"
+      ],
+      "file_sha256": "18b43efd0572799e70b5723b76dc9b6b6eec195dd8b8f55eac8d846950a4a360",
+      "body_sha256": "3023147aecb26a92b08204f5f51372689367e12a84697674c1cc7dbe89009039",
+      "body_chars": 4816,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 2,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/vllm-pagedattention.md",
+      "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention",
+      "arxiv": [
+        "2309.06180"
+      ],
+      "file_sha256": "9b73ec5244bb3559fe54e21c1226d4a471a61722c62b43bd8cb965bd4dd72d58",
+      "body_sha256": "304bb2fa6bd91ba0d29f81c739dceaad63f4c9776e27a0cf217fd8b3e27d7fe1",
+      "body_chars": 15316,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 11,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2309.06180.pdf",
+        ".tmp/paper-text/2309.06180.txt",
+        "/Users/charles/Documents/coding_file/lab/Charles-AI-notes/.tmp/arxiv-meta/2309.06180.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/32447920-b863-590c-8bf3-e73c01cdbb3d/original.pdf",
+        "files/paper-deep-dives/inference/vllm-pagedattention.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/vllm-pagedattention.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "9b73ec5244bb3559fe54e21c1226d4a471a61722c62b43bd8cb965bd4dd72d58",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/inference/wa-specdec-0928-1144.md",
+      "title": "WA-SpecDec: World-Aware Speculative Decoding for Vision-Language-Action Models",
+      "arxiv": [
+        "2608.08725"
+      ],
+      "file_sha256": "08a357bf7da73aa9f0ff03b465a9b3f51c1def421e5b9c774248bbb0cca24734",
+      "body_sha256": "333c6c1d071d91f4437ecf8a67ac05293c91aea8cbc17262a1a485880c2fdde5",
+      "body_chars": 5374,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 2,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/cosmos3.md",
+      "title": "Cosmos 3: Omnimodal World Models for Physical AI",
+      "arxiv": [],
+      "file_sha256": "c59fc3faf7ef729e223cfff901d4aa1dd5454921c6f1004e22afd966603b6a9b",
+      "body_sha256": "04396c98dfc0a5a5da874d11b6663df2d54fb72a70e9c24e356c1d51af591416",
+      "body_chars": 13630,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/deepseek-r1.md",
+      "title": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+      "arxiv": [
+        "2501.12948"
+      ],
+      "file_sha256": "86ba7270472a55457b405f7516645e11231fcc1b790d50a6abf7b6157d33bb74",
+      "body_sha256": "323be863b7826f9956ff995bc7e499a317ebc2a120737b9b82c40c2259590b6b",
+      "body_chars": 23816,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 14,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2501.12948.pdf",
+        ".tmp/paper-text/2501.12948.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/93607663-13d0-5ec6-bca4-0225bae95efd/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/deepseek-r1.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "86ba7270472a55457b405f7516645e11231fcc1b790d50a6abf7b6157d33bb74",
+      "evidence_hash_matches": true,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "reviewed_at": "2026-10-29T19:42:32.457013+08:00",
+          "article_sha256": "86ba7270472a55457b405f7516645e11231fcc1b790d50a6abf7b6157d33bb74",
+          "coverage": [
+            "Full final body read",
+            "Independent v2 pp2,6,7,21,22,35,48,54,59,60 read; page7,page59 andFigure2 visuallyinspected",
+            "Confirmed clipped epsilon10 literal[-9,11] andlimits; Dev3 startsV3Base; two-stage verifierconstruction;correct-sample Figure18;pass@64oracle vsconsensus;raw/system safety andoriginal/rejection fractions; distillationLR andcostscope"
+          ],
+          "notes": [
+            "No substantive correction required."
+          ]
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "article_sha256",
+          "matches": true
+        }
+      ],
+      "review_hash_matches": true
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/deepseek-v3.md",
+      "title": "DeepSeek-V3 Technical Report",
+      "arxiv": [
+        "2412.19437"
+      ],
+      "file_sha256": "a3185e034fc81988b9e011024603b1ad553fd8c98fe820eca9c4ddc88b839f9c",
+      "body_sha256": "98bc13a8c4529ae0d30126922703331da2f36406b7bcd46505a706ea66f76560",
+      "body_chars": 28157,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 11,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2412.19437.pdf",
+        ".tmp/paper-text/2412.19437.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/791b2e35-0dde-5fa5-9c9d-428fad833db3/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/deepseek-v3.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "a3185e034fc81988b9e011024603b1ad553fd8c98fe820eca9c4ddc88b839f9c",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/deepseek-v4-pro.md",
+      "title": "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence",
+      "arxiv": [
+        "2606.19348"
+      ],
+      "file_sha256": "fed70dc39c9f514d3795f6e618e82290ea06790f17c5882272b92fe6c9ec64ca",
+      "body_sha256": "6fbd83da4268d56fa2107c3fa67d9c395fd048ac5cb739b31b5712ab554c2703",
+      "body_chars": 11318,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 10,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2606.19348.pdf",
+        ".tmp/paper-text/2606.19348.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/bc647f08-6bdc-5bc4-9bbc-c765507e01b7/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/bc647f08-6bdc-5bc4-9bbc-c765507e01b7/parsed/parsed.md"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/gemini-2-5.md",
+      "title": "Gemini 2.5: Pushing the Frontier with Advanced Reasoning, Multimodality, Long Context, and Next Generation Agentic Capabilities",
+      "arxiv": [],
+      "file_sha256": "76e78a03f02767242284dda39e8211ba0ac64b271db8f96a44a6202d185eddc0",
+      "body_sha256": "8588acf3527df0d66dc020edddc5fa57eb77828c2ef90e06eeaa077c3c0050c9",
+      "body_chars": 7116,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 1,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/gpt-4o-system-card.md",
+      "title": "GPT-4o System Card",
+      "arxiv": [],
+      "file_sha256": "e6946761a47d5eb43282a7cb921318ee8dc7a968d222ae8f4bb511ea9a86ca1f",
+      "body_sha256": "e97769685f846c9e3886c2a45ddf7e787fb20b50418667761ce3b252ba76d23d",
+      "body_chars": 6846,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/incoder-32b.md",
+      "title": "InCoder-32B: Code Foundation Model for Industrial Scenarios",
+      "arxiv": [
+        "2603.16790"
+      ],
+      "file_sha256": "0850a0109e6be8f4f1f042caba274b0fb6153b21185e9f64fe04f151382c8606",
+      "body_sha256": "45d2782788b0ca531378ee0ffda4bbfe01ea41b2127fe3dbce025b1e69bf1a6c",
+      "body_chars": 8943,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2603.16790.pdf",
+        ".tmp/paper-text/2603.16790.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/200e9791-a7c0-5bb2-af26-dd53ffe3ade1/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/kimi-k2.md",
+      "title": "Kimi K2: Open Agentic Intelligence",
+      "arxiv": [
+        "2507.20534"
+      ],
+      "file_sha256": "3f6ffe637611fdaab012ec7bbe5d61384c788d54fc3230a9983383f401dc0311",
+      "body_sha256": "c02dcd1fa107f28cfc9a234269e76cf251c5f3ca2ac91035feb767c8f137e6d2",
+      "body_chars": 12279,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 13,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2507.20534.pdf",
+        ".tmp/paper-text/2507.20534.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/5063fc2e-2d80-5288-98f0-467af2be71e4/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/longcat-video.md",
+      "title": "LongCat-Video Technical Report",
+      "arxiv": [
+        "2510.22200"
+      ],
+      "file_sha256": "b2e863a0167e911b38bfafe9a44318c1f6a1648038d2203b3d2ee42feb124db4",
+      "body_sha256": "3295fdddfc7993fd94b340f533ccc628abf1632f7c57f06a155b6097d6a1edd0",
+      "body_chars": 21362,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 18,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        "/Users/charles/Library/Application Support/PaperPilot/papers/b7056f3f-04df-585c-952e-cdc9c64a4675/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/b7056f3f-04df-585c-952e-cdc9c64a4675/parsed/parsed.md",
+        "files/paper-deep-dives/technical-reports/longcat-video.md"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/longcat-video.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "b2e863a0167e911b38bfafe9a44318c1f6a1648038d2203b3d2ee42feb124db4",
+      "evidence_hash_matches": true,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "independent_review": {
+          "status": "accepted",
+          "reviewer": "parent Codex",
+          "at": "2026-10-29T18:56:32.244742+08:00",
+          "coverage": [
+            "Read entire regenerated body",
+            "Independently checked PDFv2 pp8,14,29,30,32 and rendered p29",
+            "Viewed reward-hacking source image"
+          ],
+          "judgments": [
+            "Condition text cross-attention exclusion correctly explains cached KV independence",
+            "Flow time orientation explicit; GRPO on-policy ratio and unclipped schedule limitations retained",
+            "Refinement velocity denominator and high-resolution condition restoration explained",
+            "BSA token weighting/global normalization and matched speed comparisons preserve actual conditions",
+            "All evaluation negatives and 501 vs500 count conflict retained"
+          ],
+          "output_sha256": "b2e863a0167e911b38bfafe9a44318c1f6a1648038d2203b3d2ee42feb124db4"
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "independent_review",
+          "field": "output_sha256",
+          "matches": true
+        }
+      ],
+      "review_hash_matches": true
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/minimax-h3-1010-1401.md",
+      "title": "MiniMax H3: An Open Model Breaking the Boundaries Between Tasks and Modalities",
+      "arxiv": [],
+      "file_sha256": "bff3117fe5580e67b335097f21de31e2378ebe533ab61e8972b404688791a18e",
+      "body_sha256": "c4d7aaccac52f5d1255aaa67845516b61e16a2b76dfe02eb899beeecd8cd2828",
+      "body_chars": 4135,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 0,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/nemotron-3-super.md",
+      "title": "Nemotron 3 Super: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Model for Agentic Reasoning",
+      "arxiv": [
+        "2604.12374"
+      ],
+      "file_sha256": "a303490b45561cb1ba38cf77605385222e9cecde22a50afd1e10590a18710af5",
+      "body_sha256": "29dc574fc81609975ab117fd3dca253bcc227fd154ccebceedf907e9f0d0bc28",
+      "body_chars": 20515,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 11,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2604.12374.pdf",
+        ".tmp/paper-text/2604.12374.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/634f1608-c130-4dd1-8eae-aaad5756c7a2/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/qwen3.md",
+      "title": "Qwen3 Technical Report",
+      "arxiv": [
+        "2505.09388"
+      ],
+      "file_sha256": "a152bcf0de434c25f4d81d03d8d15ace1adc2d2b061311261dfd312e253d0b12",
+      "body_sha256": "13d908b34aca6a44ef1310d219c380d7540673e05e35d34eb05dd691ef7bdd28",
+      "body_chars": 22079,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2505.09388.pdf",
+        ".tmp/paper-text/2505.09388.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/7fdb6feb-9309-58ec-ac70-fd9a33ed1365/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/qwen3.json",
+      "evidence_reported_status": "regenerated_and_self_reviewed",
+      "evidence_output_hash": "a152bcf0de434c25f4d81d03d8d15ace1adc2d2b061311261dfd312e253d0b12",
+      "evidence_hash_matches": true,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/technical-reports/qwen35-omni.md",
+      "title": "Qwen3.5-Omni Technical Report",
+      "arxiv": [
+        "2604.15804"
+      ],
+      "file_sha256": "84266fb94d9f8756444ebe0fd4c4711194fb85f01dc1649d0e12a9e69b528746",
+      "body_sha256": "9259eb3db092e8783f823efbf2ebf8cfebc130062472f66e4eacd29d714ae556",
+      "body_chars": 8360,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 3,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2604.15804.pdf",
+        ".tmp/paper-text/2604.15804.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/024cfef8-9953-5d55-bc24-ebe6c170246a/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/bagel.md",
+      "title": "Emerging Properties in Unified Multimodal Pretraining",
+      "arxiv": [
+        "2505.14683"
+      ],
+      "file_sha256": "94e3df3e8c9ff7e283bf894eaa773028effef0aca8f1e86e7cfd0b16525f1438",
+      "body_sha256": "802fc6f94966eab346b608f193453efc34a8c4d9d2a51670a2e95169c86a48e7",
+      "body_chars": 25106,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 10,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2505.14683.pdf",
+        ".tmp/paper-text/2505.14683.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/7bbac30b-f295-5c22-b70d-934fd1180fe8/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/bagel.json",
+      "evidence_reported_status": "validated",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/beyond-language-modeling.md",
+      "title": "Beyond Language Modeling: An Exploration of Multimodal Pretraining",
+      "arxiv": [
+        "2603.03276"
+      ],
+      "file_sha256": "6ebd6066719f5176bc9ed04bc9f53d3006a1de7d672afce34d4769db0141674d",
+      "body_sha256": "4913a0b4cd2f03d0e244720f2b1b4f3f64bc7ccff70b5520a890782586b4c619",
+      "body_chars": 4190,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2603.03276.pdf",
+        ".tmp/paper-text/2603.03276.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/ad2f09c7-0540-5ce3-9ace-f2eedb4dcbb9/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/beyond-language-modeling.json",
+      "evidence_reported_status": "evidence_saved_before_body",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/dreamer.md",
+      "title": "Dream to Control: Learning Behaviors by Latent Imagination",
+      "arxiv": [
+        "1912.01603"
+      ],
+      "file_sha256": "f0e2bb8694c1248424d66a15bc110e9c8b0a54a952038dfd9ce9f937c0c86f28",
+      "body_sha256": "0f1dd2d08ddad6e801560065501acb76db06265abdd923e7cd8f19a2f7cf1ece",
+      "body_chars": 13403,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 8,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/1912.01603.pdf",
+        ".tmp/paper-text/1912.01603.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/5a0f5cf4-1faf-508e-9f5a-0a53dd02abeb/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/dreamer.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "notes": [
+            "Parent read complete final article and checked consistency of reward-only, bootstrap, lambda returns, actor/critic gradient paths and exact prior/posterior convention.",
+            "Checked evidence-backed taskcoverage18vs20,5Mvs100M, throughputtime units, fixedrepeatPlaNet andhorizon/representationcounterexamples; no furthercorrectionrequired."
+          ]
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/dreamerv2.md",
+      "title": "Mastering Atari with Discrete World Models",
+      "arxiv": [
+        "2010.02193"
+      ],
+      "file_sha256": "be8a30df27d3f67e816fc6cbe61f1aeb442b1f292b633b3b5f97cc6d3342c6e7",
+      "body_sha256": "a296ec59b5a392c3a7281055b88b07115b320f38797f3c7ae634e5406ae6f334",
+      "body_chars": 17483,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2010.02193.pdf",
+        ".tmp/paper-text/2010.02193.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/cf60a231-ac90-5384-957a-69a3ddcabe86/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/dreamerv2.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "notes": [
+            "Read full body previously and independently checked pp2–3,18–19.",
+            "Read Table3 addendum; explicit 22M/74M/40M,200M/4M/20B frames and10/40/80 accelerator-days; different hardware prevents same-hardware speed ranking."
+          ],
+          "at": "2026-10-29T18:17:24.289941"
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/dreamerv3.md",
+      "title": "Mastering Diverse Domains through World Models",
+      "arxiv": [
+        "2301.04104"
+      ],
+      "file_sha256": "b0bb9fc67a36293c0807a3a40fcc7444cac84f1c8a4b405bdf3ea1a8fd01d9ad",
+      "body_sha256": "09e34ee0d0886c8d53f8e9da83af44df24df93ccda3b930447b3f04267193623",
+      "body_chars": 22669,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 10,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2301.04104.pdf",
+        ".tmp/paper-text/2301.04104.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/cc42bbcd-4bf1-5538-963b-47b8839fb560/original.pdf",
+        "tmp/paper-v6-repair-1029-1537/sources/dreamerv3.txt"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/dreamerv3.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "awaiting_independent_review",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/emu3-5.md",
+      "title": "Emu3.5: Native Multimodal Models are World Learners",
+      "arxiv": [
+        "2510.26583"
+      ],
+      "file_sha256": "18de0574ee529f3c10843d70be9d0939c03862d975498789b5612875a2b9f208",
+      "body_sha256": "7ade8ac9d830f698afd0fe28e69337fbd79bb3ae8b1ce9fe1a8da2d6a38010d9",
+      "body_chars": 3744,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2510.26583.pdf",
+        ".tmp/paper-text/2510.26583.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/2da018a4-831b-58f1-b523-e4c527ea10db/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/genie.md",
+      "title": "Genie: Generative Interactive Environments",
+      "arxiv": [
+        "2402.15391"
+      ],
+      "file_sha256": "96f8957c42f0bb3b495b5a88fcb070e1cb25d56f31c9b663cd82655147d5161d",
+      "body_sha256": "93789d79e09b6cd37f22b824da30ebebd0ab2bb9fe5f8bb24c5570f62b87b4ca",
+      "body_chars": 3896,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2402.15391.pdf",
+        ".tmp/paper-text/2402.15391.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/553ca33f-37d1-5219-aac5-bfb9de34649c/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/h-jepa.md",
+      "title": "Introduction to Latent Variable Energy-Based Models: A Path Towards Autonomous Machine Intelligence",
+      "arxiv": [
+        "2306.02572"
+      ],
+      "file_sha256": "87ed21ec7c2eef162d2a8b35199f97f8ca8bc1c96779248f9ee2b91a5a0a9289",
+      "body_sha256": "0120ed781cc77cc449397bfae2249aa63cc9ccb1cfc7027ba273707dc4b614a6",
+      "body_chars": 3458,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2306.02572.pdf",
+        ".tmp/paper-text/2306.02572.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/3525aac8-c1d5-5180-8a14-20fec9d90949/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/jepa.md",
+      "title": "A Path Towards Autonomous Machine Intelligence",
+      "arxiv": [],
+      "file_sha256": "00d32ab0a14ef0ad5ec392f5f65d06ec520c995cbcd985aa38e97f7e0a701139",
+      "body_sha256": "6fb432e78cf643cb330f041f04edff28f70132ca3d0321a63f7932035ab9f7ea",
+      "body_chars": 3263,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/lance.md",
+      "title": "Lance: Unified Multimodal Modeling by Multi-Task Synergy",
+      "arxiv": [
+        "2605.18678"
+      ],
+      "file_sha256": "e7abf78afe4376f47fb405deb43858098874aa603ef47db74ce11a6472ec8c1d",
+      "body_sha256": "5e2dbdb583535cae95de136b850d1d65cd38801b69797548dd19bc6fe3258642",
+      "body_chars": 3355,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 4,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2605.18678.pdf",
+        ".tmp/paper-text/2605.18678.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/0478fae1-266b-54c5-bfec-5a9913e747bf/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/lingbot-va2.md",
+      "title": "Native Video-Action Pretraining for Generalizable Robot Control",
+      "arxiv": [
+        "2601.21998"
+      ],
+      "file_sha256": "7b3594577db7105dfd22e31709be4d07ad219bac51611de46186c91b428bdfa0",
+      "body_sha256": "eaf17522448f2b37690f7b43e5933f31b33ae2d86909684050d170153e91bfd1",
+      "body_chars": 6298,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 4,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/lingbot-world.md",
+      "title": "Advancing Open-source World Models with Video Generation Models",
+      "arxiv": [
+        "2601.20540"
+      ],
+      "file_sha256": "e247b0116bbbc84b43cb4b0b6e912c10beddd85cf162472d12352a60cc0f216d",
+      "body_sha256": "c12cd9e07bbfc3eda06bd0f5786a2862c1b208171a17af8b42d5f8f93ff3ef9b",
+      "body_chars": 4333,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 4,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2601.20540.pdf",
+        ".tmp/paper-text/2601.20540.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/cab596f9-0fac-50f2-a548-d0a82d228e21/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/lwm.md",
+      "title": "World Model on Million-Length Video And Language With Blockwise RingAttention",
+      "arxiv": [
+        "2402.08268"
+      ],
+      "file_sha256": "14ee0675700594d2fec84fff553cb74d6f34f8a41b0e06c8f0a7a58652fe205c",
+      "body_sha256": "4882289295046433bc80b7b1413932955861dac3a6a8449d17489e3165af6502",
+      "body_chars": 20504,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2402.08268.pdf",
+        ".tmp/paper-text/2402.08268.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/2fa087b0-5e61-52a9-bc49-8a1f2d4a2c0e/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/lwm.json",
+      "evidence_reported_status": "validated",
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "stale_review_hash",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "checked_at": "2026-10-29T20:07:19.627343+08:00",
+          "coverage": "Entire final article read; independent source pp4,5,6,7,8,15,17,25; renderedTable12–14andactualMFU/singleneedlefiguresviewed.",
+          "findings": [
+            "Threeinitializationpathsandnonprogressivetextchatcorrect.",
+            "Text/visualprecision,batchsize,TPUscale,LRwarmupandstagebudgetcheckedagainstTable12–14;notoverriddenbygenericAppendixA.",
+            "Maskedpacking jointattention/reweightingablationcorrectly notisolatedcausalattribution.",
+            "Multineedle,LOFTtaskinterface/windowconditionsandshorttaskregressions retained.",
+            "LongvideoFrames/Parametersbudgetsretained;singleNeedle,videoQAandgenerationareseparateevidence.",
+            "EOVendofvision and frame/token/timebudgetdistinctionscorrect."
+          ],
+          "changes_required": [],
+          "body_sha256": "14ee0675700594d2fec84fff553cb74d6f34f8a41b0e06c8f0a7a58652fe205c"
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "body_sha256",
+          "matches": false
+        }
+      ],
+      "review_hash_matches": false
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/muzero.md",
+      "title": "Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model",
+      "arxiv": [
+        "1911.08265"
+      ],
+      "file_sha256": "6e060ac7116522e79f1ffcc4bace2866e6ef53e69caf0923c41fa5843c0ada6d",
+      "body_sha256": "b767fd72cc2626930adfe6f2a57bbf8d3a079d468e01de245740823a135d6331",
+      "body_chars": 17991,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/1911.08265.pdf",
+        ".tmp/paper-text/1911.08265.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/b175d0ea-55b0-558a-a378-573b717f792b/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/muzero.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "at": "2026-10-29T18:57:18.752893+08:00",
+          "coverage": [
+            "Read entire final body",
+            "Independent source check v2 pp11,14,15,16; viewed rendered p14",
+            "Read official make_target and update_weights pseudocode"
+          ],
+          "findings": [
+            "Root reward target correctly distinguished from future transition reward; pseudo code explicitly predicts last received reward",
+            "601-support categorical output and inverse-of-expectation readout align with appendix",
+            "Reanalyze policy refresh, target-network value and combined hyperparameters separate",
+            "20B/200M budgets, per-game TPUs and per-game failures retained; search tests separated from training ablations"
+          ],
+          "output_sha256": "6e060ac7116522e79f1ffcc4bace2866e6ef53e69caf0923c41fa5843c0ada6d"
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "output_sha256",
+          "matches": true
+        }
+      ],
+      "review_hash_matches": true
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/planet.md",
+      "title": "Learning Latent Dynamics for Planning from Pixels",
+      "arxiv": [
+        "1811.04551"
+      ],
+      "file_sha256": "03e0918c8c744e1dbf6d707cb34121aafab2e7e49125a2cb09cdfa5acc49fcd5",
+      "body_sha256": "6849ac32dc37641db1135dcd12d333c6dc69c6a458638c0509ecddd33b7569b5",
+      "body_chars": 17350,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 9,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/1811.04551.pdf",
+        ".tmp/paper-text/1811.04551.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/2b2c2b57-e949-5c42-872a-2a013aa795d0/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/planet.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "accepted": true,
+          "at": "2026-10-29T18:33:58.386673",
+          "notes": [
+            "Read entire17350characterbody;sourceindependentlyrecheckedv5pp5–6,12,20.",
+            "Verified Eq5–7 expectations/stopgrad/conjecture;finalRSSMomitsovershooting;CEM actualbudgetandHindexcaveat;multitaskper-taskcounts andtrue-dynamicshorizon8."
+          ]
+        }
+      },
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/ringattention.md",
+      "title": "Ring Attention with Blockwise Transformers for Near-Infinite Context",
+      "arxiv": [
+        "2310.01889"
+      ],
+      "file_sha256": "fc2bf557a447a26f33c0c6cac49bb15b48a1fec5247bacf70a8647db0a7f783c",
+      "body_sha256": "7a5cb65c9012bc7d54f956b64b1dda07c4754887896f8bcdddb1d12e280ac0c4",
+      "body_chars": 14791,
+      "header_preserved": true,
+      "changed_since_round1": true,
+      "images": 5,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2310.01889.pdf",
+        ".tmp/paper-text/2310.01889.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/efe1bfd7-251f-411f-aaad-9991bec14e87/original.pdf"
+      ],
+      "evidence_file": "tmp/paper-v6-repair-1029-1537/evidence/ringattention.json",
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "accepted_record",
+      "review_records": {
+        "parent_review": {
+          "status": "accepted",
+          "reviewed_at": "2026-10-29T19:39:34.074415+08:00",
+          "article_sha256": "fc2bf557a447a26f33c0c6cac49bb15b48a1fec5247bacf70a8647db0a7f783c",
+          "coverage": [
+            "Full final article read",
+            "Independent v4 pp5,8,14,15,16 text; p16 rendered andMFU/line-retrieval originalfigures",
+            "Verified P-block loop and backward gradient ownership against actualJAXpseudocode;6BF16buffers discrepancy;bandwidthunits .00237;37.4x fixedtokenFLOPs;ExoRL+2.28%;approxMFU31-37and89%retrieval"
+          ],
+          "notes": [
+            "No substantive corrections required."
+          ]
+        }
+      },
+      "review_hash_checks": [
+        {
+          "record": "parent_review",
+          "field": "article_sha256",
+          "matches": true
+        }
+      ],
+      "review_hash_matches": true
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/rise.md",
+      "title": "RISE: Self-Improving Robot Policy with Compositional World Model",
+      "arxiv": [
+        "2602.11075"
+      ],
+      "file_sha256": "c7344ac62d7d62f56c8337be52faf96988e6e20ab8355e393dddee17b4e67254",
+      "body_sha256": "b8c5f8b35fb8a808206d9d4dafc7cee3a132676b3c164b71d7cf2013fe7365cc",
+      "body_chars": 4712,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 4,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/self-forcing.md",
+      "title": "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion",
+      "arxiv": [
+        "2506.08009"
+      ],
+      "file_sha256": "a4aa853b10e6b9d1e2e634513a3f87eba3b88ab1a24ec8b03b1dcac097323fef",
+      "body_sha256": "cb602443f3ae2f0796caa58cab2c7e6329f4d4ecd80bc06a928e3328cf7ecd13",
+      "body_chars": 3750,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 5,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2506.08009.pdf",
+        ".tmp/paper-text/2506.08009.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/ea001e30-b6fa-5507-91f4-7f0ad53f7bf5/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/ea001e30-b6fa-5507-91f4-7f0ad53f7bf5/parsed/parsed.md"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/towards-video-world-models.md",
+      "title": "Towards Video World Models",
+      "arxiv": [],
+      "file_sha256": "4bfae86f04efa309985ff54ad462cf48a084bf07f7b0fe63ef1a89cbd56c8663",
+      "body_sha256": "538399626d79d19481b5235702aa94100b06833c987e8f2e846aad658de71e6a",
+      "body_chars": 4405,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 6,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/v-jepa.md",
+      "title": "V-JEPA: Latent Video Prediction for Visual Representation Learning",
+      "arxiv": [
+        "2404.08471"
+      ],
+      "file_sha256": "369e1dcf2151c916b1d22d88ef837ae197e89e1fb7a487b3c1b76e62a9355011",
+      "body_sha256": "b2b1a3655a71d9c2bbd19549ab671977bd3bf2f2361e54a23b0a1da24dd164fb",
+      "body_chars": 3613,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 7,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2404.08471.pdf",
+        ".tmp/paper-text/2404.08471.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/afa89c4b-94a5-5b06-aeda-3d7c60bdfb4c/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/world-model-for-robot-learning-survey.md",
+      "title": "World Model for Robot Learning: A Comprehensive Survey",
+      "arxiv": [
+        "2605.00080"
+      ],
+      "file_sha256": "fe657605a5cc2bdfcc158b62662c6f7e22dbeb8183e9340178df794c1df97102",
+      "body_sha256": "e9a659f7b1319f89a67da676018f8f6d40df00af5b773b1124c7dfaa0964a8af",
+      "body_chars": 10922,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 11,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2605.00080.pdf",
+        ".tmp/paper-text/2605.00080.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/869a3cc2-9f6d-5836-81b1-f231e0fbf7ff/original.pdf",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/869a3cc2-9f6d-5836-81b1-f231e0fbf7ff/parsed/parsed.md"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    },
+    {
+      "path": "files/paper-deep-dives/world-models/world-models-embodied-ai-survey.md",
+      "title": "A Comprehensive Survey on World Models for Embodied AI",
+      "arxiv": [
+        "2510.16732"
+      ],
+      "file_sha256": "6c523b6c5e76944557a1851cc0da6e2f598087d83d70ba90ed33be4baa06cd86",
+      "body_sha256": "f7941f920c6c6369b0f25c5552de875408769613e78a9c5b986c45fbfdbade0e",
+      "body_chars": 9589,
+      "header_preserved": true,
+      "changed_since_round1": false,
+      "images": 5,
+      "missing_original_figures": {},
+      "missing_round1_figures": {},
+      "available_sources": [
+        ".tmp/arxiv-meta/2510.16732.pdf",
+        ".tmp/paper-text/2510.16732.txt",
+        "/Users/charles/Library/Application Support/PaperPilot/papers/edcf0140-fef7-5131-87b0-0ed6fa2f82b5/original.pdf"
+      ],
+      "evidence_file": null,
+      "evidence_reported_status": null,
+      "evidence_output_hash": null,
+      "evidence_hash_matches": null,
+      "independent_review": "not_rewritten",
+      "review_records": {},
+      "review_hash_checks": [],
+      "review_hash_matches": null
+    }
+  ],
+  "peer_report": {
+    "thread": "01a185a0-ddc6-7182-b712-5f3c51f54837",
+    "title": "用 deep:v6 重生成论文精读",
+    "latest_cursor": "92d03379-92fa-488d-82f2-c44eb688fff5:8",
+    "pending_review_requests": [
+      "deepseek-v3",
+      "qwen3"
+    ]
+  },
+  "stats": {
+    "total": 92,
+    "changed_since_round1": 42,
+    "with_evidence": 44,
+    "not_changed_since_round1": 50,
+    "review_status": {
+      "accepted_record": 15,
+      "awaiting_independent_review": 22,
+      "stale_review_hash": 5,
+      "depth_review_only": 2,
+      "not_rewritten": 48
+    },
+    "header_errors": 0,
+    "figure_preservation_errors": 0,
+    "review_records_with_matching_hash": 6,
+    "accepted_records_without_hash": 9
+  }
+}

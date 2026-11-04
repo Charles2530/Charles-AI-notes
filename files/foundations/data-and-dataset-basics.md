@@ -1,188 +1,92 @@
-# 数据与数据集基础：模型真正吃下去的不是“文件夹”
+# 数据怎样成为训练样本
 
-读到“我们用某数据集训练/评测”时，关键是判断这个结论是否可信。
+训练程序读取的张量与硬盘上的原始记录往往不是同一个对象。一段对话会被拼接、分词、截断，产生输入 token、目标 token 和 loss mask；图像会被缩放裁剪；机器人轨迹还要按时间对齐。理解数据集，需要能沿着一条记录走到模型真正收到的输入。
 
-数据集不是一个目录、一张表或若干 JSONL。它是一组样本定义、标签规则、来源记录、processor、split、过滤和版本共同构成的训练契约。只要契约说不清，后面的 loss、benchmark 和训练曲线都可能在回答错误问题。
+以一段客服对话为例，用户问“订单可以退吗”，回答是“签收后七天内可以申请”。这是一条原始记录。我们希望模型学习根据用户问题回答，而不要求它在这条 SFT 样本中学习生成用户提问。这个目标会决定后面的标签和 mask。
 
-!!! tip "数学先修"
-    需要用到[概率分布与条件概率](../prerequisite-math/probability-distributions-and-expectation.md)来说明样本从哪里来，也会用[因果与分布偏移](../prerequisite-math/causality-counterfactual-and-distribution-shift.md)区分数据相关性、泄漏和部署分布。已经熟悉可直接继续。
+## 先明确一条样本的边界
 
-## 样本不是一行数据，而是一份契约
+原始记录至少包含消息角色、文本、对话编号和来源版本。如果同一用户的多轮对话被拆成很多行，这些行并不相互独立；如果一个答案引用了某版退款规则，规则版本也是理解标签的一部分。
 
-一个样本可以先写成：
+标签表达的是训练目标。人工答案可能有误，规则生成答案会继承规则边界，教师模型答案会继承教师偏差。把它们统一命名为 `label` 并不会使它们自动成为事实。
+
+这里把对话简化成六个 token，仅用于解释索引。真实 tokenizer 往往会把一句话拆成更多 token。
+
+| 位置 | 符号 | 含义 |
+| --- | --- | --- |
+| 0 | BOS | 序列起点 |
+| 1 | USER | 用户角色 |
+| 2 | Q | 问题内容 |
+| 3 | ASSISTANT | 回答角色 |
+| 4 | A | 回答内容 |
+| 5 | EOS | 回答结束 |
+
+样本边界、结束标记、角色模板必须与模型使用方式一致。训练时有 EOS、推理时却换了一套停止规则，可能表现为答案不停续写或提前结束。
+
+## Shift 让输入位置预测下一个 token
+
+自回归训练的输入是 `[BOS, USER, Q, ASSISTANT, A]`，目标是 `[USER, Q, ASSISTANT, A, EOS]`。输入位置 3 的表示包含用户问题与回答角色，用它预测目标 A；输入位置 4 已经看到 A，用它预测 EOS。
+
+如果只训练回答，目标位置的 loss mask 可设为 `[0,0,0,1,1]`。有效损失是
 
 \[
-s_i=(x_i,\; y_i,\; m_i,\; r_i)
+\mathcal L=-\frac{\sum_t m_t\log p_\theta(y_t\mid x_{\le t})}{\sum_t m_t}.
 \]
 
-这行式子在说：第 \(i\) 个样本不只有输入 \(x_i\) 和目标 \(y_i\)，还应该有 metadata \(m_i\) 与 provenance / rights \(r_i\)。\(m_i\) 记录来源、时间、语言、设备、任务、标注者、机器人、场景等信息；\(r_i\) 记录许可、采集边界、可否商用、可否公开、是否包含敏感信息。
+分母是两个有效目标，不是五个总位置。全零 mask 的样本没有可用监督，代码要明确跳过或处理它，不能直接除零。
 
-不同任务里，这四项长得不一样：
+Attention mask 与 loss mask 不同。用户问题即使不计算损失，仍必须被回答位置看见；padding 位置即使不参与 loss，也应按模型约定禁止不必要的注意力。把两个 mask 混为一个，可能让模型失去理解问题所需的信息。
 
-| 场景 | \(x_i\) 输入 | \(y_i\) 目标 | \(m_i\) 为什么重要 |
-| --- | --- | --- | --- |
-| 分类 | 文本、图像或表格 | 类别 | 可以按来源、类别、时间、设备分桶看错因 |
-| LLM 预训练 | token 序列前缀 | 下一个 token | 来源和时间决定知识覆盖、污染和重复 |
-| SFT | 指令和上下文 | 示范回答 | 任务类型、语言、难度、风格会被模型一起学走 |
-| 偏好数据 | 同题多个回答 | 排序或胜负 | 标注者偏好、rubric 和冲突样本决定 reward 边界 |
-| RAG 文档 | 文档片段 | 可检索证据 | URL、版本、时间戳和章节层级决定引用是否可信 |
-| 机器人轨迹 | 观测、状态、语言目标 | 动作序列或成功信号 | 机器人、相机、频率、坐标系决定动作是否可迁移 |
-
-很多“数据质量”问题，其实是样本契约不完整：标签不知道怎么来的，split 不知道怎么切的，metadata 不足以解释失败，数据版本无法复现，许可和使用边界也没写清。
-
-## 标签不是事实，而是训练信号
-
-标签常被写成 ground truth，但它更准确地说是训练信号。它可以来自人工标注、规则生成、环境 reward、用户点击、模型伪标签、下一个 token 或同题回答排序。来源不同，含义完全不同。
-
-| 标签来源 | 它告诉模型什么 | 风险 |
-| --- | --- | --- |
-| 人工标注 | 人按说明书做出的判断 | 标注规范含糊、标注者不一致、文化偏差 |
-| 规则标签 | 代码或业务规则的输出 | 规则错会规模化复制，边界样本可能被硬切 |
-| 自监督目标 | 从数据本身构造目标，如 next-token、mask prediction | 学到的是分布相关性，不等于学会真实因果 |
-| 偏好排序 | 哪个回答更符合人类偏好 | 偏好可能奖励啰嗦、讨好或格式模板 |
-| 环境 reward | 动作是否成功、得分多少 | reward 稀疏或代理目标错，会诱导捷径 |
-| 伪标签 | teacher model 生成的标签 | teacher 的幻觉、拒答风格和偏见会被学生继承 |
-
-所以读训练数据时，不要只问“有多少条”，要问“这些标签在教什么”。一个问答数据集如果答案来自检索摘要，它在教证据整合；如果答案来自强模型，它在教 teacher 的风格和盲点；如果答案来自用户点赞，它还混入了界面、用户群体和推荐策略的选择偏差。
-
-## Processor 会改变模型看见的世界
-
-原始数据进入模型前，一定经过 processor。它可能叫 tokenizer、image processor、video sampler、audio tokenizer、document chunker、robot data loader，也可能藏在训练脚本里。
-
-```text
-raw source
-  -> parse / decode
-  -> clean / normalize
-  -> filter / deduplicate
-  -> tokenize / chunk / sample / align
-  -> batch / pack
-  -> model input
+```python
+sequence = ['BOS', 'USER', 'Q', 'ASSISTANT', 'A', 'EOS']
+inputs, targets = sequence[:-1], sequence[1:]
+loss_mask = [0, 0, 0, 1, 1]
+for token, target, use in zip(inputs, targets, loss_mask):
+    print(token, '->', target, 'train' if use else 'context')
 ```
 
-这条链路不是中性搬运，而是在改变分布。文本归一化会处理大小写、繁简、emoji 和乱码；图像 resize/crop 可能删掉小字和边缘物体；视频抽帧可能错过短动作；RAG chunking 会决定一句话和它的上下文能不能一起被检索；机器人数据同步会决定某个动作到底对应哪一帧视觉观测。
+最后两行应是 `ASSISTANT -> A train` 和 `A -> EOS train`。在大型训练开始前，打印几条这样的可读样本，经常比先观察总 loss 更容易发现错位。
 
-一个数据版本应该同时记录：
+## 处理过程会改变模型看见的任务
 
-| 版本对象 | 为什么必须记录 |
-| --- | --- |
-| raw data snapshot | 证明原始来源和时间 |
-| cleaning/filter code | 解释哪些样本被删掉，为什么删 |
-| tokenizer / processor | 同一文本或图像可能被切成不同 token/patch |
-| split rule | 证明 train、validation、test 的边界 |
-| packing / sampling policy | 影响长度分布、batch 组成和训练吞吐 |
-| license / risk policy | 决定数据能否用于目标产品或公开模型 |
+假设长度上限截断了最后的 A 和 EOS，保留下来的都是上下文，样本就没有回答监督。若从中间随机截取，可能保留答案却丢掉问题。Padding、packing 和滑动窗口都必须重新检查标签边界，不能把它们看成纯粹节省空间的操作。
 
-只记录训练代码版本不够。模型吃进去的是“代码 + 数据快照 + processor + split + 采样策略”的组合。
+图像裁剪的影响更直观。原问题问包装右下角的日期，裁剪却去掉日期区域，此时正确答案在原始文件里、却不在模型输入里。视频每秒只取一帧，持续 0.1 秒的动作可能完全没被采到。机器人动作和观测错开一个时间步，则会让模型学习错误的响应关系。
 
-## Split 和泄漏决定评测有没有意义
+因此一次数据检查应该同时查看原始记录、处理后的输入、目标和对应 metadata。只抽查原始文件，无法发现 processor 引入的问题。
 
-最常见的数据幻觉是：模型在评测集上表现很好，但它其实在训练中见过相同或近似内容。这个页面只把 split 当作数据契约的一部分：数据报告至少要说明 train、validation、test 怎样切开，以及这个切法防住了哪类泄漏。
+## 划分要按泄漏单位进行
 
-理想情况下，训练集和测试集的相关内容重叠应尽量低：
+若一段长文切成十个重叠片段，再逐片段随机分训练和测试，相邻文字很可能出现在两边。对话、用户、视频、机器人 episode 等对象也存在这种相关性。要测新对象上的泛化，应先按对象分组，再切片；要测未来数据，则可能需要按时间划分。
 
-\[
-\operatorname{NearDuplicate}(D_{\text{train}},D_{\text{test}})\approx 0
-\]
+分组规则要匹配问题。按用户隔离是在问能否服务新用户，按商品隔离是在问能否处理新商品，它们不是同一种测试。文本完全去重也不够，相同事实的改写、同一视频的近邻帧或同一任务的轻微变体仍可能泄漏。
 
-这里 NearDuplicate 不只是完全相同字符串，还包括题目改写、网页镜像、代码仓库 fork、同一视频切片、同一机器人轨迹的相邻片段、同一患者或同一设备的重复记录。只做 exact match 去重，通常挡不住这些污染。不同任务该用随机、实体、时间、来源还是轨迹切分，属于评测协议问题，继续读 [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)。
+## 抽样比例就是训练目标的一部分
 
-## 清洗、去重和过滤会改变数据分布
+设一个数据池 90% 是短问答、10% 是长文推理。如果均匀按记录采样，优化的是按记录平均的风险；如果按 token 平均，长样本自然得到更多总权重；如果人为把两类各采一半，又换了一个目标分布。
 
-清洗不是把数据变干净这么简单。它是在决定哪些信号被保留，哪些信号被删除。
+这不一定有问题，但必须知道改变了什么。过滤低质量数据可能同时删除罕见语言，去重可能改变常见主题比例，按模型困惑度过滤也可能偏向模型已经擅长的内容。数据“更干净”与任务覆盖“更充分”需要分别检查。
 
-| 操作 | 想解决什么 | 可能伤害什么 |
-| --- | --- | --- |
-| 乱码/坏文件过滤 | 防止无效样本污染训练 | 可能误删小语种、特殊格式或真实长尾 |
-| 低质网页过滤 | 提升平均可读性 | 可能把论坛、口语、领域文档删掉 |
-| 去重 | 防止重复内容主导 loss，减少评测污染 | 可能删掉合法重复模板或稀有格式 |
-| 安全过滤 | 降低敏感/违法/高风险内容 | 可能产生选择偏差，影响模型理解边界 |
-| 长度过滤 | 控制训练吞吐和上下文成本 | 可能删掉长文档、长推理和长时任务 |
-| 质量打分过滤 | 保留高质量样本 | scorer 的偏好会变成数据偏好 |
+![Open X-Embodiment 的数据组成](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="820" }
 
-大规模预训练数据报告，如 The Pile、Dolma、FineWeb 和 DataComp，最值得学习的不是某个数据量数字，而是它们会详细说明来源混合、过滤规则、去重、benchmark contamination 检查和数据版本。数据越大，越不能只看 total tokens；要看 mixture、质量、重复、污染和覆盖。
+<small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。</small>
 
-Mixture 会直接改变训练目标。假设数据来自 \(K\) 个来源，第 \(k\) 类来源权重是 \(w_k\)，训练目标可以粗略理解成：
+图分别统计机器人、场景、轨迹、技能和物体。某台机器人轨迹多，不代表任务种类同样丰富。用这些不同分母理解前面的采样权重，才能判断训练是在重复常见轨迹，还是覆盖新的动作与环境。
 
-\[
-\mathcal{L}(\theta)
-=
-\sum_{k=1}^{K}w_k\;
-\mathbb{E}_{(x,y)\sim D_k}
-\left[\ell(f_\theta(x),y)\right]
-\]
+## 保存什么才能重建同一批输入
 
-这行式子在说：模型不是在学习一个抽象的“互联网”，而是在按 mixture 权重学习不同来源的加权平均。代码、数学、网页、论文、论坛、多语言、指令数据、机器人轨迹各占多少，决定模型会把哪类模式当成常态。
+原始快照、处理代码、tokenizer 或 processor 版本、划分清单、过滤规则和抽样配置共同决定输入。源文件路径一样，不代表训练数据一样。对于随机裁剪、抽帧和 shuffle，还需记录随机状态或能恢复数据进度的规则。
 
-## Metadata 和数据卡让失败可追踪
+最有用的 metadata 往往服务于具体排查。例如回答变差时按规则版本分组，OCR 失败时按文字大小分组，机器人失败时按设备和相机标定分组。无需把所有字段塞进模型，字段可以只用于追踪与评价。
 
-![Data Cards stakeholder typology 原论文图](../assets/images/paper-figures/foundations/data-cards-typology.png){ width="800" }
+![数据生产、处理与使用的记录](../assets/images/paper-figures/foundations/data-cards-typology.png){ width="820" }
 
-<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。原图把 dataset 文档相关角色分为 producers、agents 和 users。这张图说明：数据文档不是附录礼仪，而是让不同角色能追问来源、用途、风险、评测和影响的共同接口。</small>
+<small>图源：[Data Cards: Purposeful and Transparent Dataset Documentation for Responsible AI](https://arxiv.org/abs/2204.01075)，Typology table。</small>
 
-Datasheets for Datasets 和 Data Cards 的共同思想是：数据集应该像模型和硬件一样有文档。基础阶段至少要能回答这些问题：
+沿表格的角色列查不同使用者需要的信息。本文的原始记录、去重、tokenizer、划分与采样版本应能串起同一条处理历史；仅保存最终训练文件，通常无法解释样本是怎样被筛选出来的。
 
-| 问题 | 最小记录 |
-| --- | --- |
-| 数据从哪里来 | 来源、采集时间、许可、采集设备、地理/语言/场景范围 |
-| 样本是什么 | 输入、目标、metadata、单位、shape、时间窗口 |
-| 标签怎么来 | 人工、规则、模型、环境 reward、偏好排序、伪标签 |
-| 怎么切分 | split 规则、entity/time/source/trajectory 边界、holdout |
-| 怎么清洗 | 过滤规则、去重方法、删除比例、已知误删风险 |
-| 怎么使用 | 推荐用途、禁止用途、已知偏差、高风险人群或场景 |
-| 当前版本 | raw snapshot、processor、tokenizer、schema、数据代码版本 |
+## 对照实现
 
-没有 metadata，平均分就很难解释。你不知道错误集中在哪个来源、哪种语言、哪个设备、哪个时间段、哪个任务难度，也不知道新模型提升到底来自真正能力提升，还是来自某个大桶样本被优化得更好。
+- [LLMs from scratch 的 GPTDatasetV1](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，观察同一 token 序列如何切出 input_chunk 与右移一位的 target_chunk；该例是语言建模，回答专用mask需按任务另外构造。
 
-## 具身数据的样本边界更长
-
-![Open X-Embodiment dataset overview 原论文图](../assets/images/paper-figures/embodied-ai/open-x-embodiment-figure-1-dataset.png){ width="760" }
-
-<small>图源：[Open X-Embodiment: Robotic Learning Datasets and RT-X Models](https://arxiv.org/abs/2310.08864)，Figure 1。原图统计 Open X-Embodiment 中 robot embodiment、scene、trajectory、skill 和 object category 的分布。这张图说明：机器人数据的样本不是单张图，而是跨机器人、场景、物体、技能和动作接口的轨迹分布。</small>
-
-机器人/VLA 数据里，一个样本常常是一段轨迹：
-
-\[
-\tau =
-(o_1,a_1,o_2,a_2,\ldots,o_T,a_T,m)
-\]
-
-这里 \(o_t\) 是第 \(t\) 步观测，可能包含多相机图像、深度、语言目标、关节状态和 gripper 状态；\(a_t\) 是动作，可能是末端位姿增量、关节控制、离散 action token 或 action chunk；\(m\) 记录机器人类型、相机标定、控制频率、任务、场景、成功信号和采集策略。
-
-具身数据难在三件事：
-
-| 难点 | 为什么影响训练 |
-| --- | --- |
-| embodiment 不同 | 同一句“向前移动”在不同机器人上对应不同坐标和控制接口 |
-| 时间对齐困难 | 视觉、状态和动作频率不同，错半拍就会学到错误因果 |
-| 分布外恢复缺失 | 专家轨迹大多在成功路径上，部署偏离后模型不知道如何回正 |
-
-所以 VLA 数据不能只看“多少条轨迹”。要看机器人种类、任务覆盖、失败样本、near-miss、动作接口、控制频率、相机视角、标定质量和 closed-loop 评测。只把轨迹压成“图片 + 文本标签”，会丢掉决定动作成败的接口信息。
-
-## 读数据报告时真正要抓什么
-
-读一篇模型报告的数据部分，可以按一条主线判断：
-
-| 报告写法 | 应该追问 |
-| --- | --- |
-| 使用了 N tokens / N samples | 来源 mixture、去重比例、质量过滤和版本是什么 |
-| 使用公开数据集 | split 是否防近重复、是否有 benchmark contamination 检查 |
-| 使用合成数据 | teacher 是谁，过滤器是什么，失败样本怎么处理 |
-| 使用高质量数据 | 质量 scorer 的定义是什么，会不会偏向某种格式或语言 |
-| 使用机器人数据 | 轨迹 schema、动作接口、时间同步和 closed-loop 证据是什么 |
-| 评测提升 | 提升来自整体能力，还是某个数据桶、模板或污染 |
-
-数据页最重要的结论很朴素：不要先相信“数据更多”，先问“数据是什么”。如果样本、标签、processor、split、去重、metadata、版本和使用边界说不清，训练曲线越漂亮，越可能只是把问题藏得更深。
-
-## 外部材料
-
-- [Datasheets for Datasets](https://arxiv.org/abs/1803.09010)：理解为什么数据集需要系统文档。
-- [Data Cards](https://arxiv.org/abs/2204.01075)：学习数据文档如何服务 producers、agents 和 users。
-- [The Pile](https://arxiv.org/abs/2101.00027)：看大规模语言数据 mixture、去重和污染检查。
-- [Dolma](https://arxiv.org/abs/2402.00159)：看开放预训练语料如何记录来源、过滤、去重和版本。
-- [FineWeb](https://huggingface.co/spaces/HuggingFaceFW/blogpost-fineweb-v1)：看网页语料处理、去重和质量过滤的工程化讲法。
-- [DataComp](https://arxiv.org/abs/2304.14108)：理解数据过滤策略本身也可以成为 benchmark。
-- [Open X-Embodiment](https://arxiv.org/abs/2310.08864)：理解机器人数据里的 embodiment、轨迹、动作接口和跨数据集异质性。
-
-- [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)。
-- [Dive into Deep Learning](https://d2l.ai/)。
-- [Distill Circuits](https://distill.pub/2020/circuits/visualizing-weights/)。
+标签错位与跨文档可见性可继续查看[位置编码与 mask](positional-encoding-masks-and-context.md)，划分后的指标计算见[评测基础](data-splits-metrics-and-evaluation-basics.md)。

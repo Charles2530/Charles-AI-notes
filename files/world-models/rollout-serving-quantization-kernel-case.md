@@ -1,82 +1,85 @@
-# Rollout 服务、量化与 Kernel：省成本不能省掉动作因果
+# Rollout 服务，一次候选规划请求的时间与显存
 
-世界模型进入系统后，问题会从“模型能不能预测未来”变成“能不能在规划器等待窗口内，以可接受成本预测多条候选未来”。这时量化、KV cache、少步视频生成、长上下文 attention 和 kernel 调度都会进入同一条链。
+抓取 planner 在同一段历史上提出十六条动作候选，希望在 100 ms 内得到各自后果。世界模型服务需要完成历史编码、分支预测、风险读出与返回，队列中的等待也属于这 100 ms。优化应先沿这一次请求计算，才能判断量化、缓存或少步生成真正改变了哪里。
 
-降低 rollout 成本时，必须同时证明动作分叉、风险判断和闭环收益没有被压坏。
+下文的层数、token 和时间都是教学假设，用于复算机制；它们不对应某个已部署系统。论文图保留为原始方法入口，不把其文本模型或视频测速外推为本抓取任务结果。
 
-## Rollout 服务到底在服务谁
+## 历史相同，不意味着所有候选都能共享缓存
 
-世界模型 rollout 可能服务三类消费者。第一类是 planner，需要比较多个候选动作；第二类是 risk gate，需要识别碰撞、滑落、遮挡、不可达和 near-miss；第三类是 data engine，需要生成反事实和失败回放。它们关心的不是同一个指标。
+假设自回归模型有 $L$ 层，每层 $n_{kv}$ 个 KV head，每头维数 $d$，缓存 $T$ 个 token，每个元素 $s$ 字节。普通密集 KV 大小为
 
-如果服务 planner，核心指标是候选动作排序是否正确；如果服务 risk gate，核心指标是危险未来有没有漏报；如果服务 data engine，核心指标是生成样本是否能补充失败桶，而不是视频是否更漂亮。
+\[
+M_{\mathrm{KV}}=2L n_{kv}dTs.
+\]
 
-所以系统优化的结论不能写成“KV 压缩使世界模型更好”。更稳的写法是：在指定硬件、context、batch、候选动作数和 SLO 下，某条优化降低了 rollout 成本，同时 action sensitivity、candidate ranking、risk calibration 和 failure replay 没有超过退化门槛。
+系数 2 对应 key 与 value。假设 $L=24,n_{kv}=8,d=64,s=2$，512 个历史 token 共需 24 MiB。每个候选再生成 64 个 token，新增缓存为 3 MiB。
 
-## 量化先解决显存和带宽边界
+如果十六个候选各自重复保存完整历史，总缓存为 $16(24+3)=432$ MiB。若运行时支持共享相同前缀、分叉后独立保存，则约为 $24+16\times3=72$ MiB，不含分页、元数据和临时缓冲。
 
-量化不只是模型文件变小。对 rollout 服务来说，它决定同一块 GPU 能同时保留多少历史、多少候选动作、多少并发请求，以及是否能在规划器等待窗口内返回结果。
+```python
+layers, kv_heads, head_dim, bytes_per_element = 24, 8, 64, 2
+bytes_per_token = 2 * layers * kv_heads * head_dim * bytes_per_element
+prefix = 512 * bytes_per_token
+branch = 64 * bytes_per_token
+assert prefix // 2**20 == 24
+assert branch // 2**20 == 3
+assert (prefix + 16 * branch) // 2**20 == 72
+```
+
+共享的前提是前缀计算真正相同。权重、位置编码、历史、条件和数值配置变化都可能使缓存失效。若候选动作通过双向条件影响历史 token 表示，连历史 KV 都未必相同。动作分叉以后继续复用另一候选的 KV，会把未来分支混起来。
+
+此外，并非所有世界模型都使用这个形式。RSSM 的循环状态、扩散模型的中间张量和 Transformer KV 是不同对象。上述账只适用于所声明的缓存结构。
+
+## 时间要按关键路径测量
+
+假设输入与编码共 10 ms，排队 5 ms，候选 batch 预测 60 ms，读出 5 ms，下发 10 ms，总计 90 ms，距离 100 ms deadline 仅余 10 ms。把预测加速 20% 后，该段变为 48 ms，总时间变为 78 ms，整体快约 $90/78=1.154$ 倍。
+
+这是假设串行、不重叠的账。真实系统可能并行编码或下发，应用时间戳应直接测 capture-to-apply，不能把重叠工作重复相加。十六个候选的 batch 时间也不能由单候选时间简单乘十六，矩阵利用率与显存压力都会变化。
+
+均值 90 ms 仍可能有较多请求超时。应观察与实际负载一致的 P95/P99，以及迟到结果如何处理。一个正确但已经过期的结果和一个准时但错误的结果都可能不可用，不能用二者择一来定义系统安全。
+
+## 量化降低的是哪一段搬运和计算
 
 ![SmoothQuant memory gap](../assets/images/paper-figures/quantization/smoothquant-figure-1-memory-gap.png){ width="740" }
 
-<small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 1。原图说明模型规模增长速度明显快于单卡 GPU 显存增长速度。读图重点：量化的第一动机是部署边界和带宽压力；但这张图不能证明 VLA 动作头、risk head 或视频 latent 在低比特下无损。</small>
+<small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)，Figure 1。图展示大模型与设备显存的规模关系；世界模型是否受同样瓶颈约束仍需测量。</small>
 
-世界模型量化要比普通文本模型更小心，因为关键输出可能不是主干语言 logits，而是 reward、risk、continue、action ranking 或视频 latent。一个可用的量化回归集至少要包含普通场景、动作边界场景、接触/遮挡场景、near-miss 和长 horizon drift。敏感头可以保留高精度，当前窗口和关键帧也可以保护。
+权重从 16 bit 变为 8 bit，在忽略 scale 与额外元数据时，存储约减半；KV 也可以单独量化。这不保证延迟减半，运行时还需进行格式转换、scale 处理，并有对应硬件与 kernel。若工作负载受计算或队列限制，省显存可能主要增加并发容量，而不是缩短单请求时间。
 
-## KV 压缩要保护当前窗口和动作切换帧
+SmoothQuant 通过通道尺度迁移处理激活难量化的问题。其等价变换在精确计算下保持矩阵乘结果，实际量化再引入近似。把方法迁移到视频或动作模型时，需要重新选择校准数据和模块范围，不能从原论文文本任务直接推断抓取风险头无损。
 
-长历史 rollout 里，KV cache 可能比权重更早成为瓶颈。尤其是视频、机器人和长任务 agent：历史帧、多相机、动作 chunk、工具调用和失败 replay 都会把上下文拉长。
+对 fast/slow 的分数差若只有 0.02，小数值误差就可能翻转选择。验证除了输出 MSE，还应查看候选间隔、危险事件漏报和完整任务。保留某些读出头高精度是一种待测方案，主干的误差仍可能传到这些头。
+
+## 缓存压缩与删除历史是不同近似
 
 ![KVSlimmer vs AsymKV](../assets/images/paper-deep-dives/inference/kvslimmer/figure-1-asymkv-vs-kvslimmer.png){ width="780" }
 
-<small>图源：[KVSlimmer: Theoretical Insights and Practical Optimizations for Asymmetric KV Merging](https://arxiv.org/abs/2603.00907)，Figure 1。原图比较 AsymKV 和 KVSlimmer 的合并路径。读图重点：Key 和 Value 不应被当成同一种对象压缩；世界模型还要额外保护当前窗口、接触帧、动作切换帧和失败回放。</small>
+<small>图源：[KVSlimmer](https://arxiv.org/abs/2603.00907)，Figure 1，非对称 KV 合并示意。原方法针对其论文模型与任务，不能将合并收益当成本页机器人结果。</small>
 
-KV 压缩的错误不一定表现成语言质量下降。它可能表现成：动作 A 和动作 B 的未来差异被抹平，当前窗口里刚发生的接触丢失，风险头漏报遮挡或碰撞，长时对象身份漂移。评测时要专门检查 top-k action ranking、risk recall、current-window protection 和 chunk boundary。
+Key 影响查询如何分配注意力，value 提供被加权汇总的信息。合并、量化或删除缓存会以不同方式改变结果。对抓取任务，较旧的一帧可能恰好是杯子被遮挡前最后一次可靠观测；单凭“旧”或低平均注意力不足以证明它可安全删除。
 
-## 长视频训练不是单 kernel 问题
+可以固定历史与动作，比较压缩前后的对象身份、接触事件、候选排序以及长时返回场景。压缩后节省的显存还要扣除索引、聚合与额外转换开销。当前窗口保护是一种启发式，需要检验它是否足以覆盖任务所需记忆。
 
-世界模型训练经常出现多相机、不同 episode 长度、局部 causal mask、memory token 和 action chunk。此时 attention 不能只按 token 数估算成本，还要看 mask 形状、dispatch、通信和 overlap。
+## Kernel 只能优化被正确表达的计算
 
 ![MagiAttention mask patterns](../assets/images/paper-deep-dives/foundations/magiattention/figure-4-mask-patterns.png){ width="920" }
 
-<small>图源：[MagiAttention official docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html)，Figure 4。原图展示 full、causal、block-causal、heterogeneous 等不同 attention mask pattern。读图重点：世界模型轨迹 packing 必须保留 episode boundary、action timestamp 和 causal/block mask，不能只把所有 token 拼成长序列。</small>
-
 ![MagiAttention overlap](../assets/images/paper-deep-dives/foundations/magiattention/figure-9-multi-stage-overlap.png){ width="920" }
 
-<small>图源：[MagiAttention official docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html)，Figure 9。原图展示多阶段通信与计算 overlap。读图重点：overlap 能降低长上下文训练 step time，但不能证明 dynamics 更准；训练报告还要写端到端 step time、通信占比、checkpoint I/O 和质量回归。</small>
+<small>图源：[MagiAttention 文档](https://sandai-org.github.io/MagiAttention/docs/main/index.html)，mask pattern 与计算通信重叠示意。它们对应长序列系统问题，不能直接证明动力学准确性。</small>
 
-长视频训练的系统优化应和数据语义绑定。episode 边界不能被 attention 泄漏破坏，动作时间戳不能在 packing 后错位，跨相机 token 不能因为 mask 优化失去对应关系。否则 kernel 更快只是在更快地训练错误问题。
+训练时，变长轨迹和多相机 token 产生不同可见关系；推理时，共享历史与候选分支也形成特定 mask。先保证计算与基准一致，再讨论更少 padding、负载均衡和通信重叠。若优化后跨 episode 泄漏，loss 可能更低，却是在使用部署时没有的信息。
 
-## 少步视频 rollout 不等于可规划
+融合可以减少中间张量写回与发射开销，也可能增加寄存器占用。只有看实际 shape、GPU 和端到端 trace，才能知道它降低了哪一段等待。一个 kernel 的峰值提升不等于请求关键路径同步改善。
 
-CausVid 这类工作提供了把高质量双向视频模型蒸馏成 causal streaming student 的路线。它对交互式世界模型很重要，因为真实交互不能每生成一帧都偷看未来，也不能用太多扩散步。
+## 少步生成改变预测过程，需要新的任务比较
 
 ![CausVid overview](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-3-causvid.jpg){ width="920" }
 
-<small>图源：[From Slow Bidirectional to Fast Autoregressive Video Diffusion Models](https://arxiv.org/abs/2412.07772)，CausVid 机制图。原图展示强 bidirectional video diffusion teacher 如何迁移/蒸馏为 causal autoregressive student。读图重点：少步 causal streaming 是交互 rollout 的系统前提，但仍需动作条件、reward/risk head 和 closed-loop eval 才能证明规划价值。</small>
+<small>图源：[CausVid](https://arxiv.org/abs/2412.07772)，双向 teacher 到因果流式 student 的机制示意。</small>
 
-视频延迟下降后，还要问未来是否对动作敏感、风险是否校准、候选动作排序是否正确。一个 1 秒返回错误未来的系统，比 5 秒返回正确风险排序的系统更危险。
+减少去噪步骤与缓存复用作用不同。前者改变采样近似，蒸馏还改变模型参数与目标；后者在满足前提时重用已有计算。视频生成更快之后，仍需确认动作条件与接触后果是否保留。
 
-## 上线验收应该怎么写
+还要区分去噪步骤和环境时间。四个去噪步骤可能生成未来 0.8 秒，不能称为四个机器人控制动作。候选预测窗口、执行前缀与每轮生成步骤是三个独立参数。
 
-上线验收至少要同时有系统账和任务账。系统账包括 P50/P95/P99 latency、GPU memory、KV GiB、tokens/s、rollout/s、batch setting、context length 和硬件拓扑。任务账包括 action sensitivity、candidate ranking agreement、risk ECE、near-miss recall、long-horizon drift、failure replay 和 closed-loop success。
-
-| 优化 | 必须回归的任务指标 |
-| --- | --- |
-| 权重量化 | 动作排序、risk head、reward/continue、关键任务桶 |
-| KV 压缩 | 当前窗口、动作切换帧、接触帧、长时身份保持 |
-| 少步视频生成 | temporal consistency、动作分叉、风险预测 |
-| attention/kernel 优化 | episode boundary、mask 语义、dynamics quality |
-| batching / SLO | P95/P99、fallback、cost per success |
-
-结论要保守：系统优化只有在成本下降且任务质量不过线退化时，才算世界模型工程改进。否则它只是一个有潜力的加速组件。
-
-## 外部材料
-
-- [SmoothQuant](https://arxiv.org/abs/2211.10438)：理解量化为什么首先是显存和带宽问题。
-- [KVSlimmer](https://arxiv.org/abs/2603.00907)：理解非对称 KV 合并为什么不能把 Key/Value 粗暴等同处理。
-- [MagiAttention docs](https://sandai-org.github.io/MagiAttention/docs/main/index.html)：理解长上下文异构 mask 和通信重叠的系统问题。
-- [CausVid](https://arxiv.org/abs/2412.07772)：理解视频模型因果化和少步流式 rollout 的意义。
-
-- [World Models 论文](https://arxiv.org/abs/1803.10122)。
-- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+对于 100 ms 请求，可以在固定候选数、固定任务集合下，分别测试原始路径、共享缓存、量化和少步模型，记录准确性、尾延迟和超时比例。最后再测试组合，因为多个近似的误差不一定相互独立。完整成本选择见[效率路线](efficient-training-roadmap.md)，任务侧指标见[世界模型评测](evaluation-and-failure-modes.md)。

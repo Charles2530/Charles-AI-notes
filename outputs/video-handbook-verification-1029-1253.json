@@ -1,0 +1,123 @@
+{
+  "files": [
+    {
+      "path": "files/diffusion/video-vae-1029-1246.md",
+      "sha256": "739f5f5ea84145d720449bac930f944b47ac9e653ed8ae0687b21662e0d5a8db"
+    },
+    {
+      "path": "files/diffusion/video-dit-1029-1246.md",
+      "sha256": "02dc6cc19db8af29b838ebf0094d92b37a874ed0d6d710c2bf82587f5586c994"
+    },
+    {
+      "path": "files/diffusion/video-training-and-sampling-1029-1246.md",
+      "sha256": "1cf78308806ae6af9b4ff87b47877e0d89cf465353cfcd9ec968f5dfbccc5d12"
+    },
+    {
+      "path": "files/diffusion/long-video-and-cache-1029-1246.md",
+      "sha256": "2e0ea157f3acbb891284e94ea7e63dc9adb0bc12d59e986abeaef3f229d7c1a2"
+    },
+    {
+      "path": "files/diffusion/video-and-multimodal-diffusion.md",
+      "sha256": "ca899b99088364a17f570d01eae18affc1d282ef8f742bed4f8ef876af1cd2cf"
+    },
+    {
+      "path": "mkdocs.yml",
+      "sha256": "af5526b30a0b30ffb97f72bce27ea0118173125958ff6f10021a7d43e665392a"
+    },
+    {
+      "path": "files/diffusion/index.md",
+      "sha256": "cf79178e1147d42487882d53cb0b3ae515df011b5ef3e9bab70fb35e58c950ef"
+    },
+    {
+      "path": "files/index.md",
+      "sha256": "847ae2a9ece55b070ce59a522330dc41c1e266edcfa15046897b7f6d44797ea1"
+    },
+    {
+      "path": "files/diffusion/architecture-and-stable-diffusion.md",
+      "sha256": "b4554e628c156e8d4c1f237b50715f3a74ab53e2df8a998f57ad3ed8d5eb870c"
+    },
+    {
+      "path": "files/assets/examples/diffusion/video_generation_mechanisms.py",
+      "sha256": "2afc896fed89063251dafba0e4d2eb653a6f15feb7bd4d72f740b1011da051a7"
+    },
+    {
+      "path": "tests/test_video_generation_mechanisms.py",
+      "sha256": "e5f68c24e1b8e1a0258354e9533db2788e378d90ff9cf959b99cdf5261dc48f8"
+    },
+    {
+      "path": "hooks/paper_deep_dives_sort.py",
+      "sha256": "c2b702fab096f083ae45cfb427273c57f750c5f01e8496b93df4d2a1a70dacea"
+    },
+    {
+      "path": "tests/test_paper_deep_dives_sort.py",
+      "sha256": "3a6c04f8210213c60373ee5f29d70abf87fd070f71e22e8d649d4199af76f59f"
+    },
+    {
+      "path": "files/assets/images/video-generation/training-and-sampling.svg",
+      "sha256": "3086b014e173f517c4125c9b642199f608890eab270a4d6687f4e3da17105c25"
+    }
+  ],
+  "browser": {
+    "viewport_mobile": 390,
+    "viewport_desktop": 1280,
+    "main_desktop_scroll_width": 1280,
+    "main_legacy_anchors_present": true,
+    "main_duplicate_ids": [],
+    "pages": [
+      {
+        "path": "video-and-multimodal-diffusion",
+        "math_rendered": 43,
+        "math_sources": 43,
+        "math_errors": 0,
+        "mobile_scroll_width": 390,
+        "images_loaded": true
+      },
+      {
+        "path": "video-vae-1029-1246",
+        "math_rendered": 53,
+        "math_sources": 53,
+        "math_errors": 0,
+        "mobile_scroll_width": 390,
+        "images_loaded": true
+      },
+      {
+        "path": "video-dit-1029-1246",
+        "math_rendered": 76,
+        "math_sources": 76,
+        "math_errors": 0,
+        "mobile_scroll_width": 390,
+        "images_loaded": true
+      },
+      {
+        "path": "video-training-and-sampling-1029-1246",
+        "math_rendered": 75,
+        "math_sources": 75,
+        "math_errors": 0,
+        "mobile_scroll_width": 390,
+        "images_loaded": true
+      },
+      {
+        "path": "long-video-and-cache-1029-1246",
+        "math_rendered": 60,
+        "math_sources": 60,
+        "math_errors": 0,
+        "mobile_scroll_width": 390,
+        "images_loaded": true
+      }
+    ],
+    "viewport_override_reset": true
+  },
+  "tests": {
+    "passed": 224,
+    "skipped": 10,
+    "new_video_tests": 10,
+    "new_navigation_regressions": 2
+  },
+  "strict_build": "passed",
+  "quality": "330 pages and 92 paper structural audits passed",
+  "changed_page_math": "passed",
+  "numeric_snippets": "VAE stdlib cache and DiT NumPy roundtrip executed",
+  "branch": "main",
+  "commit_created": false,
+  "model_training_run": false
+}

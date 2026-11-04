@@ -1,17 +1,6 @@
-# 读懂 Fast-FoundationStereo：从双目几何到高效推理
+# 怎样读懂双目模型的几何与加速
 
-Fast-FoundationStereo 的“推理”指机器人、AR、自动驾驶和工业视觉里的实时稠密深度感知。模型每慢几十毫秒，系统看到的世界就会滞后一截；模型每错一块边界，后面的避障、抓取或空间理解就可能跟着错。
-
-[Fast-FoundationStereo](../paper-deep-dives/inference/fast-foundation-stereo.md) 最值得读的地方，不只是“它比 FoundationStereo 快了十倍以上”，而是它把一个强但慢的 stereo foundation model 拆成三个热路径：feature backbone、cost filtering、disparity refinement，然后分别用蒸馏、分块 NAS 和结构化剪枝压成本。读这篇论文前，先把下面这张知识地图放进脑子里，会省很多绕路时间。
-
-```mermaid
-flowchart TD
-    A["相机几何<br/>baseline / disparity / depth"] --> B["双目匹配<br/>rectification / cost volume"]
-    B --> C["Stereo 网络<br/>backbone / cost filtering / refinement"]
-    C --> D["FoundationStereo<br/>强泛化但推理慢"]
-    D --> E["Fast-FoundationStereo<br/>分阶段加速"]
-    E --> F["读论文证据<br/>图表 / 消融 / runtime"]
-```
+双目网络输入左右图，输出视差；部署时又希望它足够快。理解Fast-FoundationStereo需要把两件事连起来，视差误差怎样改变深度，以及特征、代价体和迭代细化各消耗什么计算。本文沿同一组相机参数解释这些基础，再对照论文方法图。
 
 ## 先看任务：双目到底在估什么
 
@@ -35,6 +24,25 @@ disparity 越大，通常说明物体越近；disparity 越小，通常说明物
 输入：rectified left / right stereo images
 输出：dense disparity map，再转成 depth
 关键风险：低纹理、反光、透明、遮挡、远距离和标定漂移
+```
+
+## 远处为何对同样的视差误差更敏感
+
+设校正后的双目焦距f=700 pixel，基线B=0.12 m，则fB=84 pixel·m。视差d=28 pixel时，深度z=84/28=3 m；d=7时，深度为12 m。两种距离都发生1 pixel误差，结果却不同。
+
+| 真实视差 | 真实深度 | 视差少1 pixel的深度 | 深度偏差 |
+| --- | ---: | ---: | ---: |
+| 28 pixel | 3 m | 84/27≈3.111 m | 约0.111 m |
+| 7 pixel | 12 m | 84/6=14 m | 2 m |
+
+局部导数 `dz/dd=−fB/d²` 说明小视差更敏感，有限误差还呈非线性。正负1 pixel造成的米制误差并不对称。BP2统计超出2 pixel阈值的比例，不能独自表示不同距离的米制风险。
+
+```python
+fB = 700*0.12
+for d in [28.,7.]:
+    z = fB/d
+    shifted = fB/(d-1)
+    print(z, round(shifted-z,6))
 ```
 
 ## 从 Disparity 到 Cost Volume
@@ -74,9 +82,15 @@ cost volume 只是原始证据，还很嘈杂。低纹理墙面、玻璃、反�
 
 最后还需要 refinement。初始 disparity 往往在边界、薄结构和遮挡区域不够细，迭代 refinement 会用图像特征和 hidden state 一轮轮修正它。Fast-FoundationStereo 里提到的 ConvGRU refinement，就属于这条路径。
 
-## 为什么 Foundation Stereo 强但慢
+## 多一个视差轴，内存增加多少
 
-FoundationStereo 强，是因为它不只靠传统小 stereo 网络。它借用了更强的视觉基础模型和更复杂的 cost reasoning，让模型在未见过的数据集上也能保持较好的 zero-shot stereo 质量。问题也在这里：强 backbone、复杂 cost filtering、迭代 refinement 都在推理热路径里。
+假设特征高度128、宽度256，搜索64个视差，匹配特征有8通道，单个cost volume有 `8×64×128×256=16,777,216` 个元素，FP16约32 MiB。高度和宽度各扩大两倍变成128 MiB；若为了覆盖同一实际范围又把视差候选加倍，则变成256 MiB。
+
+这只是一份代价体，未包含反向激活和临时workspace。它解释了为什么搜索分辨率、视差范围和通道数都影响资源，不能仅看backbone参数量。具体实现可能用相关性、多尺度或按需查询，必须按实际张量计算。
+
+## 特征、代价过滤与细化各为什么耗时
+
+FoundationStereo将视觉特征、代价过滤与迭代细化接入同一前向。具体zero-shot效果要看原文任务与数据集；从计算结构上可以先确认，三部分都处于推理路径，需要分别计时。
 
 ![Fast-FoundationStereo framework 原图](../assets/images/paper-deep-dives/inference/fast-foundation-stereo/figure-3-framework.png){ width="920" }
 
@@ -145,20 +159,11 @@ Fast-FoundationStereo 的 TensorRT 版本进一步变快，也提醒我们：模
 1. 推理时模型更轻，latency 更低；
 2. 训练时用更好的真实分布伪标签，让轻模型不要因为容量小而丢掉 zero-shot 泛化。
 
-## 读论文时按这六个问题走
+## 把加速结果与几何误差一起检查
 
-读 Fast-FoundationStereo 正文时，可以边读边问：
+先保持同一相机、输入分辨率、视差范围与任务集，分别比较特征替换、结构搜索和剪枝。延迟表要包含硬件与runtime，质量表要包含距离、遮挡和薄结构等分组。若更快的版本主要在远处出错，总体BP指标可能不足以解释后续机器人定位误差。
 
-| 问题 | 对应章节 |
-| --- | --- |
-| 输入是不是 rectified stereo pair，输出是不是 dense disparity | 论文位置、伪标签流程 |
-| FoundationStereo 到底慢在哪里 | Figure 3、runtime decomposition |
-| Backbone 为什么用蒸馏而不是直接剪 | Backbone distillation |
-| Cost filtering 为什么用 blockwise NAS | Cost filtering search |
-| Refinement 为什么能 structured pruning | Refinement pruning |
-| 速度提升有没有保住 zero-shot 质量 | Figure 2、Table 1、Table 4、Table 5 |
-
-如果你能回答这六个问题，就已经不是在“看懂术语”，而是在看论文证据链了。
+论文的组合方案收益不能全部归给其中一种压缩。蒸馏数据和伪标签过滤也变化时，应查对应消融，再判断哪个机制支持哪个结论。
 
 ## 建议阅读路线
 
@@ -170,6 +175,3 @@ Fast-FoundationStereo 的 TensorRT 版本进一步变快，也提醒我们：模
 4. [模型压缩、剪枝与 NAS 入门](../foundations/model-compression-pruning-and-nas-basics.md)：理解 structured pruning、blockwise NAS、ILP 和 latency 验证。
 5. [Depth Anything V2](../paper-deep-dives/embodied-ai/depth-anything-v2.md)：理解单目深度 foundation model、pseudo-label 和真实分布补齐。
 6. [Fast-FoundationStereo](../paper-deep-dives/inference/fast-foundation-stereo.md)：回到论文，看它如何把这些知识合成一个实时 zero-shot stereo model。
-
-**一句话收束。**
-Fast-FoundationStereo 的基础知识不是零散概念，而是一条链：双目几何决定任务，cost volume 决定计算形态，foundation backbone 决定泛化，蒸馏/NAS/剪枝决定实时化，伪标签和 runtime 验证决定它能不能在真实场景里站住。

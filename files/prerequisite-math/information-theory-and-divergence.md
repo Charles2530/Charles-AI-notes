@@ -1,158 +1,142 @@
 # 信息论、熵与分布距离
 
-熵、交叉熵、KL 和互信息把模型输出的概率分布转成可优化、可比较的量。语言模型、扩散模型、蒸馏和 RLHF 的 loss 经常使用它们来衡量不确定性、编码代价以及两个分布之间的差异。
+一个分类器把真实类别分布 \(p=(0.75,0.25)\) 预测成 \(q=(0.5,0.5)\)。我们可以问数据本身有多不确定、用q编码要付出多少代价、错用q比知道p多付出多少。这三个问题分别得到熵、交叉熵和KL。
 
-## 熵：不确定性有多大
+下面一直沿这组概率计算。对数使用自然底，单位为nat；采用log2时单位变为bit，所有数值会按同一常数缩放。
 
-离散分布 \(p\) 的熵写成：
+## 同一组概率上的三次计算
+
+设真实类别分布为 \(p=[0.75,0.25]\)，模型分布为 \(q=[0.5,0.5]\)。结果越少见，\(-\log p_i\) 越大；把它按真实发生概率平均，得到熵
 
 \[
 H(p)=-\sum_i p_i\log p_i
+=-0.75\log0.75-0.25\log0.25\approx0.562335.
 \]
 
-如果分布很尖，大部分概率集中在一个结果上，熵低；如果分布很平，很多结果都差不多可能，熵高。
-
-这行公式里的 \(i\) 遍历所有可能结果，\(p_i\) 是第 \(i\) 个结果的概率，\(-\log p_i\) 可以理解为“这个结果出现时带来的惊讶程度”。概率越小，惊讶越大；概率越大，惊讶越小。熵就是把每个结果的惊讶程度按概率加权平均。
-
-举个极端例子：如果模型 100% 确定下一个 token 是 `cat`，熵接近 0；如果它在 1000 个 token 上几乎平均分配概率，熵就高得多。采样温度、top-p 和探索策略都会改变这种不确定性。
-
-生成模型里，熵会影响多样性；强化学习里，entropy bonus 可以鼓励探索；分类模型里，过低熵有时表示自信，也可能表示过度自信。
-
-## Policy entropy：探索分布还剩多少选择
-
-在状态 \(s\) 下，离散动作策略的熵是：
+如果用模型的概率编码真实结果，平均代价为交叉熵
 
 \[
-H(\pi(\cdot\mid s))=-\sum_a \pi(a\mid s)\log\pi(a\mid s)
+H(p,q)=-\sum_i p_i\log q_i=\log2\approx0.693147.
 \]
 
-求和遍历当前状态下所有动作，\(\pi(a\mid s)\) 同时决定动作出现的概率和它的“惊讶程度”。概率集中在少数动作上时，policy entropy 低，策略几乎只剩固定选择；概率分散在多个动作上时，entropy 高，采样仍可能探索不同路径。
-
-Entropy bonus 常用于阻止策略过早坍缩，但高熵本身不是任务目标：完全均匀地随机行动也可能回报很差。它表达的是探索分布还保留多少选择，必须与 reward、约束和采样成本一起权衡。具体策略更新见 [Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)。
-
-## 交叉熵：用一个分布编码另一个分布的代价
-
-交叉熵写成：
+两者相差约0.130812，正是
 
 \[
-H(p,q)=-\sum_i p_i\log q_i
+D_{\mathrm{KL}}(p\|q)=\sum_i p_i\log\frac{p_i}{q_i}
+=H(p,q)-H(p).
 \]
 
-这里 \(p\) 是真实分布，\(q\) 是模型分布。如果真实标签是 one-hot，交叉熵就变成：
+固定数据分布 \(p\) 时，\(H(p)\) 不随模型变化，最小化交叉熵等价于最小化这个方向的KL。单个观测标签可以表示成one-hot分布，交叉熵便是 \(-\log q_y\)；对许多标签求平均，才是在估计数据分布下的交叉熵。
+
+## 交叉熵怎样产生具体梯度
+
+模型先输出 logits \(z\)，再通过softmax得到 \(q_i=e^{z_i}/\sum_j e^{z_j}\)。标签分布 \(p\) 的分量和为1时，交叉熵对logit的导数为
 
 \[
--\log q_y
+\frac{\partial H(p,q)}{\partial z_j}=q_j-p_j.
 \]
 
-也就是惩罚模型给正确答案 \(y\) 的概率太低。语言模型训练常用的 next-token loss 就是这个思想。
+在上例中梯度为 `[-0.25,0.25]`。梯度下降会提高第一类logit、降低第二类logit，使预测向真实分布移动。若某个样本的真实标签是第一类，梯度则为 `[-0.5,0.5]`。逐样本信号不同，其期望与分布级梯度一致。
 
-如果正确 token 的模型概率是 \(q_y=0.8\)，loss 是 \(-\log 0.8\)，惩罚很小；如果 \(q_y=0.01\)，loss 是 \(-\log 0.01\)，惩罚会大很多。语言模型预训练就是在每个位置重复这个动作：让正确下一个 token 的概率变高。
+损失的梯度还会经过网络传回参数。不同token与样本共享参数，因此提高当前正确类别的概率并不保证每个其他样本都会改善。Label smoothing、软老师分布和token权重会改变 \(p\) 或各项权重，应按实际目标重新解释梯度。
 
-## KL：两个分布之间的信息代价
+## 为什么软标签CE和KL可训练同一个学生
 
-KL divergence 写成：
+当p来自固定标签或冻结教师时，\(H(p)\) 不随学生参数改变，\(H(p,q)=H(p)+\mathrm{KL}(p\|q)\) 因而给出相同学生梯度，但日志数值相差一个常数。若p本身也参与求导，这个推论不再自动成立，需要说明哪些分支停止梯度。
+
+反过来，\(\mathrm{KL}(q\|p)\) 的平均对象也变为q，其梯度包含q变化的影响。仅调换公式里的两个字母，已经换了优化目标；不能把两种方向当成名称差异。
+
+## KL方向与支持集决定怎样惩罚错误
+
+交换前面的两个分布，有
 
 \[
-D_{\mathrm{KL}}(p\|q)
-=
-\sum_i p_i\log\frac{p_i}{q_i}
+D_{\mathrm{KL}}(q\|p)
+=0.5\log(0.5/0.75)+0.5\log(0.5/0.25)
+\approx0.143841,
 \]
 
-它可以理解为：如果真实分布是 \(p\)，却用 \(q\) 来编码，会多付多少代价。
+与0.130812不同。KL不对称，也不满足一般距离的全部性质。
 
-逐项看，\(\frac{p_i}{q_i}\) 比较两个分布在第 \(i\) 个结果上的概率。如果 \(p_i\) 很大而 \(q_i\) 很小，说明 \(q\) 漏掉了 \(p\) 认为重要的结果，这一项惩罚就大。前面的 \(p_i\) 表示：只在 \(p\) 经常发生的地方重点计算代价。
+若 \(p_i>0\) 而 \(q_i=0\)，\(D_{\mathrm{KL}}(p\|q)\) 为无穷，因为模型把真实可能发生的事件判为绝不可能。反方向则按 \(q\) 采样和加权。常见的“覆盖模式”或“偏向某个模式”是特定近似族和分布上的结果，不能脱离支持集与模型能力只凭KL方向作普遍保证。
 
-KL 不对称：
+对连续变量，概率换成密度、求和换成积分。微分熵可以为负，并且会随坐标缩放改变；不能把离散熵非负的性质直接移过去。相同可逆坐标变换下，两分布的KL保持不变，因为密度变换的Jacobian因子在比值里抵消。
+
+## 单次log-ratio可以为负
+
+以当前策略 \(\pi=[0.75,0.25]\)、参考策略 \(\pi_{\rm ref}=[0.5,0.5]\) 为例，当前策略到参考策略的KL为
 
 \[
-D_{\mathrm{KL}}(p\|q)\neq D_{\mathrm{KL}}(q\|p)
+\mathbb E_{a\sim\pi}\left[\log\pi(a)-\log\pi_{\rm ref}(a)\right].
 \]
 
-这点很重要。不同方向的 KL 会偏好不同错误：有的更怕漏掉 \(p\) 支持的区域，有的更怕把概率放到 \(p\) 不支持的区域。VAE、RLHF、policy regularization 和蒸馏都会遇到这个差异。
+第一动作的log-ratio约为0.405465，第二动作约为-0.693147。按当前策略加权，得到非负的0.130812。一次抽到第二动作就会看到负值，它是一个样本，不是“KL算错了”。
 
-后续例子：RLHF 里常见 KL penalty：
+语言模型响应的概率按token条件概率相乘，对数比因此按token相加。对同一提示词分布，从当前策略采完整响应，再平均这些序列log-ratio，可估计相应序列KL。若token和前缀来自旧策略或截断采样分布，就需要明确分布差异，不能继续把未经修正的平均解释成同一个KL。
+
+RLHF中使用的KL惩罚控制策略偏离参考分布的代价。系数过大可能阻碍任务改进，过小可能让策略利用奖励模型漏洞。低KL只说明与所选参考接近，不证明事实正确或任务安全。
+
+## 策略熵鼓励保留哪些选择
+
+离散动作策略在状态 \(s\) 下的熵为
 
 \[
-r^{\text{total}}
-=
-r^{\text{task}}
--\beta D_{\mathrm{KL}}(\pi_\theta\|\pi_{\mathrm{ref}})
+H(\pi(\cdot\mid s))=-\sum_a\pi(a\mid s)\log\pi(a\mid s).
 \]
 
-这里 \(r^{\text{task}}\) 鼓励模型完成任务，\(\pi_\theta\) 是当前策略，\(\pi_{\mathrm{ref}}\) 是参考模型，\(\beta\) 控制“不要偏离参考模型太远”的力度。这个公式在平衡新能力和底座行为稳定性，不能读成 KL 越小越好。
+二动作均匀策略的熵为 \(\log2\approx0.693147\)，`[0.9,0.1]`的熵约为0.325083，确定性策略的熵为0。在最大化奖励的目标中加入 \(+\alpha H\)，可以奖励分布保留多个选择；若转成梯度下降损失，符号要相应反转。
 
-## KL 用在哪个方向必须写清楚
+高熵不等于有效探索。均匀选择已知坏动作也会提高熵；连续动作策略的微分熵还受动作单位、缩放和变换影响。SAC中的有界动作分布需要把变换的log-Jacobian纳入密度，不能仅对变换前的高斯熵作解释，详见[连续控制与SAC](../reinforcement-learning/continuous-control-and-sac.md)。
 
-固定状态 \(s\) 时，当前策略到参考策略这一方向的 KL 是：
+## 互信息测量知道一个变量后减少的未知
 
-\[
-D_{\mathrm{KL}}(\pi_\theta\|\pi_{\mathrm{ref}})
-=
-\mathbb E_{a\sim\pi_\theta}
-[\log\pi_\theta(a\mid s)-\log\pi_{\mathrm{ref}}(a\mid s)].
-\]
-
-这里的期望明确由当前策略 \(a\sim\pi_\theta(\cdot\mid s)\) 采样：当前策略经常选择的动作对这个 KL 贡献更大。反过来的 \(D_{\mathrm{KL}}(\pi_{\mathrm{ref}}\|\pi_\theta)\) 是另一个量，它按参考策略采样和加权；交换两个分布不能当作等价改写。
-
-这个方向的 KL 要有限，还要求当前策略相对于参考策略绝对连续：凡是 \(\pi_\theta(a\mid s)>0\) 的动作，都必须有 \(\pi_{\mathrm{ref}}(a\mid s)>0\)。如果参考策略在某个当前策略会采到的动作上概率为 0，forward KL 就是无穷大。token mask、词表约束或截断规则都可能改变支持集，因此比较前必须确认两边使用同一有效动作集合，或者明确支持集如何处理。
-
-在自回归策略里，状态 \(s_t\) 是 prompt 加已生成前缀，动作 \(a_t\) 是下一个 token。给定同一个 prompt，完整 response 由 \(\pi_\theta\) 采样；若还要对多个 prompt 平均，当前策略和参考策略的比较必须使用同一个 prompt 分布，否则结果还混入了 prompt distribution shift。沿当前策略采样的序列累加 token log-ratio，再对这些序列取平均，可以构成相应序列级 KL 的 Monte Carlo 估计。单个 token 上的
-
-\[
-\log\pi_\theta(a_t\mid s_t)-\log\pi_{\mathrm{ref}}(a_t\mid s_t)
-\]
-
-只是由 \(a_t\sim\pi_\theta(\cdot\mid s_t)\) 得到的一个逐点 log-ratio 样本，不是完整 KL；它甚至可以为负，而完整 KL 的期望非负。如果 token 或前缀来自其他采样分布，就必须把那个分布写出来，并处理分布不匹配，不能继续把样本平均默认解释成上述方向的 KL。PPO/RLHF 中的具体约束见 [Policy Gradient、Actor-Critic、PPO 与 GRPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)，对齐训练背景见 [预训练、微调与对齐](../training/pretraining-finetuning-alignment.md)。
-
-## 通信模型：信息要经过有噪声的通道
-
-![Shannon communication system](../assets/images/prerequisite-math/shannon-communication-system.svg){ width="720" }
-
-<small>图源：[Wikimedia Commons: Shannon communication system](https://commons.wikimedia.org/wiki/File:Shannon_communication_system.svg)。原图展示信息源、编码器、信道、噪声和解码器。这里的重点是：信息论研究如何在有噪声的通道里表示、传输和恢复信息；这和模型压缩、表示学习、tokenization、通信并行都有呼应。</small>
-
-把这个图放进 AI 里看：
-
-| 通信系统 | AI 系统里的对应物 |
-| --- | --- |
-| 信息源 | 文本、图像、状态、动作、奖励 |
-| 编码器 | tokenizer、vision encoder、latent encoder |
-| 信道噪声 | 数据噪声、量化误差、dropout、采样随机性 |
-| 解码器 | language head、diffusion decoder、action head |
-| 传输代价 | token 数、bit 数、显存、带宽、延迟 |
-
-## 互信息：两个变量共享多少信息
-
-互信息写成：
+对于离散变量，互信息可以写成
 
 \[
 I(X;Y)=H(X)-H(X\mid Y)
+=D_{\mathrm{KL}}(p(x,y)\|p(x)p(y)).
 \]
 
-它衡量知道 \(Y\) 之后，\(X\) 的不确定性减少了多少。表征学习常关心一个表示 \(Z\) 是否保留了对任务 \(Y\) 有用的信息，同时丢掉无关噪声。
-
-公式里的 \(H(X)\) 是不知道 \(Y\) 时对 \(X\) 的不确定性，\(H(X\mid Y)\) 是知道 \(Y\) 后剩下的不确定性。两者差得越大，说明 \(Y\) 对 \(X\) 越有信息量。
-
-在世界模型和 VLA 里，好的 latent 不只是压缩视频，还要保留动作、接触、遮挡、目标和风险的信息。压缩率高但互信息保错方向，后续控制会出问题。
-
-## Perplexity：语言模型里的指数化交叉熵
-
-Perplexity 常写成：
+构造一个公平二元变量 \(X\)，经过独立概率0.1的翻转得到 \(Y\)。不看 \(Y\) 时，\(H(X)=\log2\)。看到 \(Y\) 后，仍有0.1概率被翻转，条件熵为
 
 \[
-\mathrm{PPL}=\exp(\mathcal{L}_{\text{CE}})
+H(X\mid Y)=-0.9\log0.9-0.1\log0.1\approx0.325083.
 \]
 
-它可以直觉理解为：模型平均每一步还在多少个候选之间犹豫。PPL 低通常说明语言建模更好，但它不是所有能力的充分证明；推理、工具调用、安全和闭环任务还要看专门评测。
+所以互信息约为0.368064 nat。完全不翻转时达到 \(\log2\)，以0.5概率翻转时，输出不再透露输入信息，互信息为0。
 
-## 常见误读
+![信息经过有噪声的通道](../assets/images/prerequisite-math/shannon-communication-system.svg){ width="720" }
 
-| 误读 | 更稳的理解 |
-| --- | --- |
-| 熵越低越好 | 过低可能是过度自信，生成时也可能缺少多样性 |
-| KL 是距离 | KL 不对称，不满足普通距离直觉 |
-| 交叉熵只属于分类 | 语言模型、蒸馏、对齐和序列建模都在用它 |
-| PPL 低就代表模型全能 | PPL 是语言建模指标，不替代复杂能力评测 |
+<small>图源为 [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Shannon_communication_system.svg)。编码、信道噪声与解码共同决定可恢复的信息。</small>
 
-## 读完以后怎么判断
+若 \(X\to Z\to Y\) 构成Markov链，且有关互信息定义良好，数据处理不等式给出 \(I(X;Y)\le I(X;Z)\)。后处理不能从完全丢掉的信息中恢复与原输入的关联。不过生成器能利用先验补出合理内容，合理内容与忠实恢复原始细节是不同要求。对表示学习，更有用的问题是保留了多少与任务相关的信息，而非让某个泛化“信息量”无条件变大。
 
-看到熵、交叉熵、KL 或互信息，先问它在衡量哪个分布，分布来自数据、模型、teacher、reference policy 还是 posterior。分布来源一清楚，loss 的作用也会清楚。
+## Perplexity为何要先平均再指数化
+
+若一段序列两个真实token的预测概率分别是0.8和0.2，平均负对数似然为
+
+\[
+L=-\tfrac12(\log0.8+\log0.2)=\log2.5,
+\qquad\mathrm{PPL}=e^L=2.5.
+\]
+
+它等于真实token概率几何平均的倒数。若先求两个倒数再平均，会得到 \((1.25+5)/2=3.125\)，这是另一个量。
+
+PPL可以理解为达到同样平均编码代价的均匀分布候选数，不代表模型真的在每个位置考虑恰好2.5个候选。比较模型时还需固定tokenization、数据、有效token掩码和归一化方式。不同词表的每token PPL不能直接当成同一单位比较。
+
+## 重算分布级指标
+
+```python
+import math
+p, q = [0.75, 0.25], [0.5, 0.5]
+entropy = -sum(a * math.log(a) for a in p)
+cross_entropy = -sum(a * math.log(b) for a, b in zip(p, q))
+kl = sum(a * math.log(a / b) for a, b in zip(p, q))
+print(round(entropy, 6), round(cross_entropy, 6), round(kl, 6))
+assert abs(cross_entropy - entropy - kl) < 1e-12
+```
+
+输出为 `0.562335 0.693147 0.130812`。概率与条件平均的基础见[概率论](probability-distributions-and-expectation.md)，这些目标进入生成模型的方式见[潜变量与似然](latent-likelihood-and-generative-objectives.md)。
+
+
+- [PyTorch 蒸馏教程](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/beginner_source/knowledge_distillation_tutorial.py)，soft_targets固定，KL项与标签CE按权重共同训练学生。

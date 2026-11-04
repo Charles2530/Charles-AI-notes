@@ -1,62 +1,34 @@
-# 算子与编译器专题：把性能问题落到内存和形状
+# 算子与编译器
 
-算子优化不是把某个 kernel 换成更快的实现就结束了。一次矩阵乘、attention 或 reduction 能否提速，取决于输入 shape、数据布局、内存层级、并行切分、数值格式和运行时是否真的选中了这条路径。PyTorch、Triton、CUTLASS、cuBLAS、FlashAttention 与编译器工具链只是把这些约束暴露在不同层。
+一个张量操作先有数学定义，再由程序把输出位置映射到输入地址，划分成GPU工作块，最后由runtime选择并执行kernel。性能问题可以出现在任一层。这个专题沿数据与状态变化讲机制，再提供实现和诊断入口。
 
-读这个专题时，先追踪一块 tensor 的去向：它从哪里读入，在哪里重排，经过几次 HBM 往返，在哪个 kernel 中计算，最后是否因为 layout 或 dispatch 又付出一次转换成本。很多“算力不够”的问题，最后都落在搬运、空转和形状不匹配上。
+## 从能手算的kernel开始
 
-## 先建立一条性能判断链
+[CUDA](cuda-programming-model-and-memory.md)把1000个元素分给线程，解释warp、内存与同步；[Triton](triton-programming-model-and-autotuning.md)提供完整向量加代码，再连接二维tile。随后用[GEMM与融合](gemm-attention-and-fused-kernels.md)看同一块输入如何复用，用[归约、Norm与索引](reduction-norm-layout-and-indexing.md)理解多个元素如何共同决定输出。
 
-一个可复用的排查顺序是：先用 workload 和 shape 描述问题，再用 profiler 找到热点，接着判断热点受算力、带宽、同步还是 launch 限制，最后才决定融合、重排、量化或改并行策略。只看单个 kernel 的理论 TFLOPS，无法解释动态 batch、长序列和多卡通信下的端到端结果。
+## 模型里的具体计算路径
 
-| 先问什么 | 你要找的证据 | 建议入口 |
-| --- | --- | --- |
-| 工作负载是什么形状 | M/N/K、序列长度、batch、稀疏度、读写字节数 | [Workload Modeling 与 Shape Bucket](workload-modeling-and-shape-buckets.md) |
-| 时间花在哪里 | kernel 时间、launch 间隙、同步和通信 trace | [Profiling、调试与数值稳定](profiling-debugging-and-numerical-stability.md) |
-| 瓶颈属于哪一层 | 算术强度、带宽利用率、occupancy、L2 命中 | [Roofline 建模与性能案例](roofline-benchmarking-and-case-studies.md) |
-| 改动是否真的有效 | 相同输入桶下的端到端延迟、吞吐、误差和回归 | [测试、回归与维护](testing-regression-and-maintenance.md) |
-
-## 建立硬件和内存直觉
-
-| 你想弄清的问题 | 建议先读 |
+| 想弄清的问题 | 正文 |
 | --- | --- |
-| CUDA block、warp、shared memory、global memory 如何协作 | [CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md) |
-| GPU interconnect、NUMA、拓扑为什么影响分布式性能 | [GPU 互联与拓扑映射](gpu-interconnects-and-topology-mapping.md) |
-| Roofline 怎样判断瓶颈在算力还是带宽 | [Roofline 建模与性能案例](roofline-benchmarking-and-case-studies.md) |
-| profiling、NVTX、数值稳定如何一起排查 | [Profiling、调试与数值稳定](profiling-debugging-and-numerical-stability.md) |
+| 不存完整分数矩阵怎样做softmax | [FlashAttention](long-context-and-flashattention-evolution.md) |
+| 一次decode如何按页找到历史KV | [服务attention](serving-attention-and-kv-kernels.md) |
+| 4-bit码值怎样参与乘加 | [低精度kernel](low-precision-and-quantized-kernels.md) |
+| token怎样按专家重排再合并 | [MoE算子](moe-routing-and-sparse-kernels.md) |
+| 低精度前向以后怎样更新参数 | [FP8训练与优化器](fp8-training-and-optimizer-kernels.md) |
+| 四卡梯度怎样同步与重叠 | [通信算子](communication-kernels-and-overlap.md)、[物理拓扑](gpu-interconnects-and-topology-mapping.md) |
 
-## 进入常见高价值 kernel
+## 从解释走到实现
 
-| 主题 | 建议先读 |
-| --- | --- |
-| GEMM、attention、fused kernel 的基本模式 | [GEMM、Attention 与融合 Kernel](gemm-attention-and-fused-kernels.md) |
-| FlashAttention 和长上下文为什么改变 IO 模型 | [FlashAttention 与长上下文演进](long-context-and-flashattention-evolution.md) |
-| reduction、norm、layout、indexing 为什么经常拖慢训练 | [Reduction、Norm、Layout 与 Indexing](reduction-norm-layout-and-indexing.md) |
-| low precision、FP8、量化 kernel 如何服务训练和推理 | [低精度与量化 Kernel](low-precision-and-quantized-kernels.md)、[FP8 训练与优化器 Kernel](fp8-training-and-optimizer-kernels.md) |
+[CuTe/CUTLASS](cutlass-cute-and-compiler-stack.md)解释坐标、存储与线程布局；[高级调度](advanced-kernel-patterns-and-shape-specialization.md)沿tile讲双缓冲和persistent；[DeepGEMM机制](deepgemm-fp8-gemm-and-mega-moe.md)与[源码入口](deepgemm-source-and-integration.md)提供固定版本的阅读路线。
 
-## 进入工具栈和维护
+把kernel接入模型时，继续看[自定义算子注册](custom-op-development-and-framework-integration.md)、[runtime分流](runtime-dispatch-and-kernel-selection.md)和[测试](testing-regression-and-maintenance.md)。
 
-| 目标 | 建议先读 |
-| --- | --- |
-| 用 Triton 写可调优 kernel | [Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) |
-| 理解 CUTLASS、CuTe 和编译器栈 | [CUTLASS、CuTe 与编译器栈](cutlass-cute-and-compiler-stack.md) |
-| 选择 runtime dispatch 和 shape bucket | [Runtime Dispatch 与 Kernel 选择](runtime-dispatch-and-kernel-selection.md)、[Workload Modeling 与 Shape Bucket](workload-modeling-and-shape-buckets.md) |
-| 做自定义 op 的测试、回归和维护 | [自定义 Op 与框架集成](custom-op-development-and-framework-integration.md)、[测试、回归与维护](testing-regression-and-maintenance.md) |
+## 性能判断与查验工具
 
-算子篇的判断标准很朴素：改动后有没有更少的数据搬运、更好的并行度、更稳定的数值、更明确的 shape 适配，以及更可维护的回归测试。
+先用[workload与shape分桶](workload-modeling-and-shape-buckets.md)确定实际工作，再用[成本模型](kernel-cost-models-and-selection-heuristics.md)和[Roofline](roofline-benchmarking-and-case-studies.md)算量级。测量方法见[Profiling](profiling-debugging-and-numerical-stability.md)，需要下钻时读[PTX/SASS](ptx-sass-and-compiler-inspection.md)。
 
-## 三个容易误读的地方
+[硬件排查](hardware-aware-debug-checklist.md)用于缩小异常范围，[性能误判](performance-anti-patterns-and-failure-modes.md)用可复算反例说明局部加速为何未必改善完整请求。各页明确区分源码事实、数学推导和需要目标GPU验证的性能结论。
 
-**理论 FLOPS 高，不代表请求更快。** decode、reduction 和小矩阵 GEMM 往往受内存访问或 kernel launch 限制，峰值算力没有被吃满是结果，不一定是根因。
+## 对照源码与延伸阅读
 
-**融合越多，不代表一定越好。** 融合可以减少中间张量和 launch，但也可能扩大寄存器压力、降低 occupancy，或让动态 shape 失去可复用的实现。要把收益放回真实 shape 桶和完整请求链路里测。
-
-**编译器 fallback 也是产品行为。** Inductor、TensorRT 或自定义 dispatch 在某些 dtype、mask、stride、序列长度下可能回退到通用实现。上线前应记录实际命中的 kernel、覆盖的 shape，以及 fallback 对 P99 的影响。
-
-## 按问题进入
-
-| 现在遇到的问题 | 推荐路径 |
-| --- | --- |
-| GPU 利用率低，但 FLOPs 看起来不高 | [CUDA 编程模型与内存层次](cuda-programming-model-and-memory.md) → [Roofline](roofline-benchmarking-and-case-studies.md) → [Profiling](profiling-debugging-and-numerical-stability.md) |
-| attention 变快了，端到端却没有改善 | [FlashAttention 与长上下文演进](long-context-and-flashattention-evolution.md) → [Runtime Dispatch 与 Kernel 选择](runtime-dispatch-and-kernel-selection.md) |
-| 自定义 kernel 只在少数输入上有效 | [Workload Modeling 与 Shape Bucket](workload-modeling-and-shape-buckets.md) → [Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md) |
-| 多卡扩展后通信吞掉计算收益 | [GPU 互联与拓扑映射](gpu-interconnects-and-topology-mapping.md) → [通信 Kernel 与计算通信重叠](communication-kernels-and-overlap.md) |
+- [从向量加开始的官方教程入口](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/01-vector-add.py)

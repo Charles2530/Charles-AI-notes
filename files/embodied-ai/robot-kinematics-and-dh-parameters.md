@@ -1,26 +1,13 @@
 # 机器人运动学与 DH 参数：从关节状态算到末端位姿
 
-机器人数据中的关节角不是末端位置，视觉模型给出的目标位姿也不能直接变成电机角度。两者之间需要机器人运动学：正运动学把关节状态映射成末端位姿，逆运动学寻找满足目标与约束的关节解，规划和控制再决定怎样安全到达并稳定跟踪。
+机器人数据中的关节角不是末端位置，视觉模型给出的目标位姿也不能直接变成电机角度。两者之间需要机器人运动学：正运动学（Forward Kinematics）把关节状态映射成末端位姿，逆运动学寻找满足目标与约束的关节解，规划和控制再决定怎样安全到达并稳定跟踪。
 
-## 本章回答什么
 
-串联机械臂运动学需要解释关节空间、任务空间、Forward Kinematics（FK）、Inverse Kinematics（IK）和 Jacobian 的职责边界；经典 Denavit--Hartenberg（DH）四参数可以建立相邻连杆变换，二维两连杆和 NumPy 示例可以验证整条运动学链。
-
-读完以后，应能回答：
-
-1. 已知关节状态 \(q\)，末端执行器在 base frame 中的位姿怎样计算？
-2. DH 表中的 \(a_i,\alpha_i,d_i,\theta_i\) 分别描述什么？
-3. revolute 与 prismatic 关节把哪个参数作为变量？
-4. 为什么经典 DH、改进 DH、URDF 和厂商模型不能按参数名直接混用？
-5. 为什么 IK 不是把正运动学矩阵简单求逆？
-
-## 前置知识
+## 从坐标变换进入运动学
 
 - [坐标变换与手眼协调](coordinate-transforms-and-hand-eye-calibration.md)：齐次变换、组合、求逆和 frame 方向。
 - [机器人 State / Action 数据](state-action-robot-datasets.md)：关节状态、末端位姿和动作字段。
 - [动态系统、控制与状态空间](../prerequisite-math/dynamic-systems-and-control.md)：状态、动力学和反馈控制。
-
-## 核心机制
 
 ### 关节空间和任务空间是两种接口
 
@@ -55,7 +42,7 @@ FK 是确定的前向计算。IK 可能有多个解、没有解，或解落在�
 
 ### 经典 DH 用四个参数连接相邻连杆
 
-经典 DH 为每对相邻连杆分配一组参数：
+经典 DH（Denavit--Hartenberg）为每对相邻连杆分配一组参数。
 
 | 参数 | 名称 | 经典 DH 中的作用 |
 | --- | --- | --- |
@@ -112,7 +99,7 @@ s_{\theta_i} & c_{\theta_i}c_{\alpha_i} & -c_{\theta_i}s_{\alpha_i} & a_i s_{\th
 {}^{\mathrm{flange}}T_{\mathrm{tool}}.
 \]
 
-这也说明手眼标定和正运动学会在同一条系统链中相遇：FK 提供 base-to-gripper，手眼标定提供 gripper-to-camera。
+这也说明手眼标定和正运动学会在同一条系统链中相遇：按本文变换约定，FK 提供将 gripper 坐标转到 base 的矩阵，手眼标定提供将 camera 坐标转到 gripper 的矩阵。
 
 ### 二维两连杆先建立可手算直觉
 
@@ -132,6 +119,45 @@ y=l_1\sin\theta_1+l_2\sin(\theta_1+\theta_2).
 - \(\theta_1=90^\circ,\theta_2=-90^\circ\) 时，第二根连杆转向全局 \(x\) 轴，末端在 \((1,1)\)。
 
 这个例子说明关节角会通过连杆级联共同决定末端位置。同一个可达点可能存在肘上、肘下等多个 IK 解；距离 base 超过 \(l_1+l_2\) 的目标则不可达。
+
+### 两连杆的逆运动学为什么有多解
+
+将平面 FK 的两式平方相加，消去第一关节方向，得到
+
+\[
+x^2+y^2=l_1^2+l_2^2+2l_1l_2\cos\theta_2.
+\]
+
+因此 \(c_2=(x^2+y^2-l_1^2-l_2^2)/(2l_1l_2)\)。若 \(|c_2|>1\)，目标超出理想可达环；否则 \(\theta_2=\pm\arccos c_2\)，再求
+
+\[
+\theta_1=\operatorname{atan2}(y,x)-\operatorname{atan2}(l_2\sin\theta_2,l_1+l_2\cos\theta_2).
+\]
+
+取 \(l_1=l_2=1\)，目标 \((1,1)\) 得到 \((\theta_1,\theta_2)=(0,90^\circ)\) 或 \((90^\circ,-90^\circ)\)。二者末端位置相同，中间肘部位置不同，可能只有一条路径无碰撞。IK 的 seed、关节限位和与当前关节状态的距离决定选择，单看末端误差不足以验收。
+
+### Jacobian 把几何变成局部速度关系
+
+对 FK 求偏导得到
+
+\[
+J(q)=\begin{bmatrix}
+-l_1\sin\theta_1-l_2\sin(\theta_1+\theta_2)&-l_2\sin(\theta_1+\theta_2)\\
+l_1\cos\theta_1+l_2\cos(\theta_1+\theta_2)&l_2\cos(\theta_1+\theta_2)
+\end{bmatrix},\qquad\dot p=J(q)\dot q.
+\]
+
+在 \((90^\circ,-90^\circ)\) 且两连杆长 1 时，\(J=[[-1,0],[1,1]]\)。若 \(\dot q=(0.1,-0.1)\) 弧度每秒，末端瞬时速度是 \((-0.1,0)\) 米每秒。它是当前姿态的局部关系，不能用同一个固定 J 推完整条大范围运动。
+
+行列式 \(\det J=l_1l_2\sin\theta_2\)，当两杆共线时为零。此时某些末端运动方向无法由有限的瞬时关节速度产生，直接求逆会不稳定。阻尼最小二乘可用 \(\dot q=J^\top(JJ^\top+\lambda^2I)^{-1}\dot p\) 限制放大，但会引入跟踪误差，且不自动满足所有关节约束。
+
+### 局部修正怎样变成一次逆运动学迭代
+
+仍使用两根长度为 1 的连杆，取另一组已知解 \(q=(0,\pi/2)\)，末端在 \((1,1)\)。这里的 Jacobian 为 \(J=[[-1,-1],[1,0]]\)。希望末端沿 x 移动 .01 米、y 不变，线性方程 \(J\Delta q=(.01,0)\) 给出 \(\Delta q=(0,-.01)\) 弧度。
+
+将更新后的关节重新代入完整 FK，得到 \((1+\sin .01,\cos .01)\approx(1.0099998,.9999500)\)。实际 y 有约 .00005 米误差，来自一阶线性化。继续测量或重算误差、更新 Jacobian，再求一次增量，就形成数值 IK 的基本循环。大步长不能一直复用第一次的 Jacobian。
+
+[Modern Robotics 的 Python 实现](https://github.com/NxRLab/ModernRobotics/blob/cbd41fdf0bf75dbd5e986d832ae14226964ff0ac/packages/Python/modern_robotics/core.py)中的 `IKinBody` 和 `IKinSpace` 使用相应坐标中的位姿误差、Jacobian 伪逆和独立的角度/平移容差。它的 FK 使用螺旋轴与指数积，本文代码使用经典 DH，两者是不同参数化。能求到满足末端误差的关节解，仍不表示从当前位置走过去无碰撞，需要规划继续处理。
 
 ### 用 NumPy 从 DH 表计算正运动学
 
@@ -206,15 +232,6 @@ DH 和 FK 描述几何关系，不包含质量、惯量、摩擦、柔性、驱�
 7. 将不可达、IK 多解、奇异、碰撞和超限分别记录为不同失败类型。
 8. 真实执行前使用低速、限幅和安全工作区验证模型方向。
 
-## 检查理解
-
-1. 关节空间 \(q\) 和任务空间位姿分别服务哪些模块？
-2. Forward Kinematics、IK、Jacobian、planner 和 controller 的输出有什么不同？
-3. 经典 DH 的 \(a_i,\alpha_i,d_i,\theta_i\) 分别对应哪次平移或旋转？
-4. revolute 与 prismatic 关节通常把哪个 DH 参数作为变量？
-5. 为什么两连杆目标 \((1,1)\) 可能对应多个关节解？
-6. 为什么 URDF 不能被视为“换了格式的 DH 表”？
-7. FK 数值正确时，真实末端仍可能因哪些标定或执行因素产生偏差？
 
 ## 外部材料
 

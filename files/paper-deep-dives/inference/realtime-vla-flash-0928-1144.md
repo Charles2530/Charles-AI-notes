@@ -16,177 +16,340 @@ paper_topic: 高效推理
     **GitHub / 项目：** [dexmal/realtime-vla-flash](https://github.com/dexmal/realtime-vla-flash)、[项目页](https://dexmal.github.io/realtime-vla-flash)。<br>
     **元数据来源与核验口径：** arXiv v1 全文、附录及作者仓库 README；Checked Date：2026-09-28；Repro Status：Author Code available，本文未进行独立训练、仿真或真机复现。
 
-## 原论文故事线
+## 真正要减少的是机器人等待完整重规划的次数
 
-### 研究背景
+Realtime-VLA FLASH 把一个常被当成模型吞吐问题的瓶颈，放回了机器人控制循环中。π0 一类策略已经能一次输出未来几十步动作，机器人也能先执行其中一段，再观察、再规划。但新的动作块仍需等待图像编码、视觉语言模型 prefill 和多步动作去噪全部完成。如果传送带上的物体一直在移动，这段等待会让动作建立在过时的位置上。增大动作块只能降低调用频率，无法让本次观测更快变成新的控制命令。
 
-π0 一类 diffusion / flow-matching VLA 把图像、语言和机器人状态变成连续动作块。动作块让机器人可以在两次模型调用之间继续运动，但新的观测通常要等下一次重规划才会影响动作。对移动中的物体而言，模型延迟直接决定动作是否已经过时。
+论文的回答是让多数重规划采用一条便宜的路径。一个小模型根据新观测提出连续动作块，原策略的 Action Expert 在几个 flow 时刻并行检查它，系统只执行通过检查的前缀；当局部一致性不足、即将抓取或释放，或者缓存需要刷新时，再调用完整策略。最终的收益由这几部分共同产生，既依赖草稿够便宜，也依赖验证能筛掉不合适的动作，更依赖运行时知道什么时候应恢复完整计算。[↗](https://arxiv.org/pdf/2605.13778v1#page=2)
 
-### 问题（Challenge）
+在四个 LIBERO suite 上，FLASH 与 Triton 优化结合，把平均重规划延迟从 58.0 ms 降到 19.1 ms，平均成功率从 94.1% 变为 93.8%。最短的 7.8 ms 是一次快路径调用，并非所有调用的平均。真机实验则检验这部分节省能否让机器人抓住更快移动的物体。理解这篇论文，需要始终区分“某一轮很快”“整条任务少等了多久”和“任务是否完成”三个层次。[↗](https://arxiv.org/pdf/2605.13778v1#page=8)
 
-每次重规划都完整执行图像编码、VLM prefill 和多步 Action Expert 去噪，成本很高。LLM 投机解码的办法是先猜 token 再并行验证，但 flow-based VLA 没有同样的离散 token 概率接口。假如验证候选动作还要重跑完整去噪，就没有省下多少计算。
+## 完整路径为何慢，快路径留下了哪些新旧信息
 
-### Finding
+对时刻 $t$ 的观测，论文写成
 
-Flow matching 的训练路径提供了一个可利用的结构。把 draft 动作终点与高斯噪声插值到若干中间时刻，Action Expert 可以分别预测局部速度，再重建动作终点。各检查点相互独立，能够并行执行；重建终点是否接近 draft，则成为便宜的局部一致性信号。
+$$
+o_t=[I_t^1,\ldots,I_t^n,\ell_t,q_t],
+\qquad
+A_t=[a_t,a_{t+1},\ldots,a_{t+H-1}].
+$$
 
-### 方法
+$I_t^i$ 是不同相机的图像，$\ell_t$ 是语言指令，$q_t$ 是机器人状态。每个动作包含末端位置、旋转和夹爪通道。$H$ 表示预测时域，不意味着会不经观察就执行所有 $H$ 步。实验取 $H=50$，每次至多执行 12 步便重规划；快路径通过的前缀更短时，执行长度还会缩短。
 
-FLASH 增加一条 flash path。当前图像经过 encoder，约 110M 参数的 draft model 一次提出完整动作块；Action Expert 复用最近 full path 的视觉语言 KV，在少量 flow timestep 上并行验证。系统执行所有检查点共同接受的最长前缀，零接受或夹爪切换等情形触发 full-path fallback。LIBERO-10 的最终配置还包含周期性 full-path refresh。
+完整 π0 路径先编码当前图像，再由 VLM 处理图像和语言前缀，得到条件 KV Cache，最后由 Action Expert 求解从高斯噪声到动作的 ODE。原文在 RTX 4090D 上测得 Image Encoder 为 11.3 ms、VLM prefill 为 26.7 ms、10 步 Action Denoise 为 20.0 ms，总计 58.0 ms。其 roofline 分析把前两部分放在主要受计算限制的一侧，把 Action Denoise 放在主要受内存访问限制的一侧。后者的十次调用顺序依赖，又反复访问条件缓存，使部分算力没有用满。这是本文在该硬件上尝试“跳过 prefill、把验证时刻并成 batch”的出发点，不能直接推广成所有设备上的瓶颈排序。[↗](https://arxiv.org/pdf/2605.13778v1#page=4)
 
-### 结论
-
-在单张 RTX 4090D 的 LIBERO 评测中，FLASH+Triton 相对 Torch-π0 将平均 replanning latency 从 58.0 ms 降到 19.1 ms，作者报告 3.04× 加速；平均成功率由 94.1% 变为 93.8%。这是算法与 Triton 优化的组合结果。仅 FLASH 的结果为 34.9 ms、1.66×；7.8 ms 则是快速分支的单轮耗时。
-
-### 关键术语
-
-- **Action Expert（动作专家）**：接收视觉语言条件并生成连续动作的模块，本文同时承担候选验证。
-- **Flow Consistency（流一致性）**：检查候选诱导的插值状态经速度场重建后是否回到相近动作终点。
-- **Executable Prefix（可执行前缀）**：从动作块起点开始连续通过所有检查点的动作序列。
-- **Phase-aware Fallback（阶段感知回退）**：利用夹爪状态切换提示精细操作阶段，返回完整推理。
-- **Periodic Full-path Refresh（周期性完整路径刷新）**：定期更新视觉语言上下文并纠正长期漂移。
-
-## 论文位置：省掉一次完整调用，比单步去噪更快更关键
-
-[EAGLE-3](eagle-3.md)优化 draft 质量，以减少 target 的逐 token 调用；FLASH 把问题移到连续动作重规划。它保留原主策略的 flow-matching 形式，通过便宜路径承接一部分调用。与[扩散少步采样](../../diffusion/inference.md)相比，这里的核心改动是“哪些重规划轮次需要完整策略”，并不把主策略统一蒸馏成一步模型。
-
-原文 Section 3.1 对 Torch-π0 的分解为 image encoder 11.3 ms、VLM prefill 26.7 ms、action denoise 20.0 ms。只加速去噪还会留下较贵的 prefill；FLASH 因而复用视觉语言 KV，并让验证取代多步串行去噪。图像编码仍然存在，不能说快速路径完全跳过视觉处理。
-
-## 两条路径怎样交换状态
+框架图应沿上下两条路线阅读。上路经过 VLM 和 AE，负责生成高保真的动作并更新条件缓存；下路仍经过 Vision Encoder，但把视觉特征交给轻量 Draft，再由 Verify 检查。右侧的 learned action queries 则给草稿网络提供固定的动作输出位置。
 
 ![FLASH 双路径框架与 draft 架构原图](../../assets/images/paper-deep-dives/inference/realtime-vla-flash/figure-3-framework.png){ width="800" }
 
-<small>图源：[Realtime-VLA FLASH v1](https://arxiv.org/abs/2605.13778v1)，Figure 3，PDF 第 4 页。原图裁切保留框架与 draft 结构。读图时看 Full Path 如何刷新上下文，以及 Draft 和 Verify 如何构成较短分支；图内延迟标注不能代替任务平均耗时。</small>
+*原论文 Figure 3。快路径绕过 VLM prefill，但没有绕过当前图像编码；两个路径共享动作表示与主策略的 Action Expert。*
 
-| 状态或输入 | Flash path 的处理 | 为什么影响可靠性 |
+这里最容易混淆的是“复用上下文”究竟复用了什么。Draft 看到的是当前图像特征、语言和当前机器人状态；Verifier 读取的是最近一次完整路径建立的视觉语言 KV Cache，同时读取当前机器人状态。各部分的输入可按下表区分：
+
+| Information | Draft | Verifier |
 | --- | --- | --- |
-| 当前图像 | 仍调用主模型 image encoder，供 draft 使用 | draft 可以利用新观测 |
-| 视觉语言 KV | verifier 复用最近 full path 的结果 | 验证条件可能比当前图像更旧 |
-| 机器人 state | 每次验证使用最新 state | 不能把本体状态也解释成旧缓存 |
-| 连续动作候选 | draft 输出，经过多时刻验证后截取前缀 | 接受长度决定实际可执行动作数 |
-| 完整推理结果 | 回退时重新计算，同时刷新缓存 | 修正上下文失配与动作漂移 |
+| Current image features | 本轮重新编码并输入 | 不重新做完整 VLM prefill |
+| Visual-language context | 由轻量 block 处理当前前缀 | 使用最近 full path 的 KV |
+| Robot state | 本轮状态 | 本轮状态 |
+| Action chunk | 一次预测候选 | 检查候选诱导的中间状态 |
 
-这个信息新鲜度差异是理解论文的关键。draft 看到当前图像，并不意味着 verifier 也已获得当前图像经过 VLM prefill 后的完整语义条件。因此，局部一致性检查还需要回退机制配合。
+因此，验证失败可能与旧视觉上下文不再适合有关，但也可能来自草稿误差或局部场预测误差。失败会触发刷新，不等于它已经识别出唯一原因。反过来，机器人状态每次都会更新，不能把所有条件误差都归结为“用了上一轮状态”。这个区分也是附录解释验证边界时专门强调的内容。[↗](https://arxiv.org/pdf/2605.13778v1#page=13)
 
-## Draft 怎样从一个 Gemma Block 变成动作块预测器
+## 草稿模型学的是主策略动作，训练目标偏向近期执行段
 
-Draft 包含单个 Gemma block 和共享 linear action head，参数量约 110M，论文用于比较的 VLM 约 2.7B。输入包括视觉、语言、投影后的机器人状态，以及 \(H\) 个可学习的 action queries。每个 query 对应未来一个动作位置，queries 可以在同一前向中并行产生整块动作。
+草稿网络用一个 Gemma block 和一个共享线性 action head。视觉与语言组成条件前缀，机器人状态映射到相同 hidden space，随后接上 $H$ 个可学习的输出查询：
 
-注意力采用 blockwise mask。视觉与语言构成条件前缀，state 单独成块，action queries 可以读取条件并在动作块内交互。固定的 action slots 明确了“动作写到哪里”，共享 action head 则把各位置 hidden state 映射为连续控制量。
+$$
+Q=[q_1,\ldots,q_H],
+\qquad
+\hat a^d_{t+h-1}=W_{\mathrm{act}}z_h+b_{\mathrm{act}}.
+$$
 
-Appendix A 说明 draft 回归到冻结 full-path policy 的输出，并对早期动作给予更高权重。原因与部署直接相关：模型虽然预测长度 50 的 chunk，默认重规划窗口只有 12 个执行动作，早期前缀误差对下一轮控制更直接。
+这里 $q_h$ 表示第 $h$ 个未来动作的查询位置，$z_h$ 是该位置经过 block 后的 hidden state。它与上一节用 $q_t$ 表示的机器人状态承担不同角色。action block 可以读取视觉语言前缀与状态，内部查询也能相互交互，因此所有未来动作在一次前向中共同生成。它没有逐步生成动作 token，也没有用十次去噪慢慢构成候选。约 110M 参数指这套轻量草稿模块，约 2.7B 是对照中的 VLM 规模；快路径仍然需要原图像编码器与验证器，不能把 110M 当成整个部署系统的参数量。[↗](https://arxiv.org/pdf/2605.13778v1#page=5)
 
-| Item | Value |
+主文把监督目标概括为
+
+$$
+\mathcal L_{\mathrm{draft}}
+=\sum_{h=1}^{H}w_h\,
+\ell(\hat a^d_{t+h-1},a_{t+h-1}).
+$$
+
+附录明确说明，回归目标来自冻结的 full-path policy。特别在真机适配中，观测来自采集的示范，动作标签则由微调后的主模型生成，并非直接把原始示范动作作为草稿标签。这样训练直接服务于验证所要求的“草稿与主策略一致”：如果草稿逼近的是另一套动作目标，即使行为看起来合理，也可能频繁被原 Action Expert 拒绝。[↗](https://arxiv.org/pdf/2605.13778v1#page=12) [↗](https://arxiv.org/pdf/2605.13778v1#page=14)
+
+为什么给前段更大权重，也与运行时有关。50 步候选中，当前最多执行 12 步，远期动作通常会被下一次重规划覆盖。训练因此使用 prefix-weighted Smooth L1 / Huber loss，把更多容量留给近期可执行动作，同时以非零 tail weight 约束后段。四个 LIBERO suite 分别训练各自的草稿模型，设置如下。
+
+| Item | Simulation draft training |
 | --- | --- |
 | Optimizer | AdamW |
-| Learning rate | \(2\times10^{-3}\) |
-| Weight decay | 0.01 |
-| Batch size | 64 |
-| Epochs | 100 |
+| Learning rate / Weight decay | $2\times10^{-3}$ / 0.01 |
+| Batch size / Epochs | 64 / 100 |
 | Precision | FP32 |
-| Loss | Weighted Smooth L1 / Huber loss, \(\beta=1.0\) |
-| Prefix weighting | Sampled prefix up to 16 steps, \(\gamma_{\mathrm{prefix}}=0.9\), tail weight 0.1 |
-| Checkpoint | Best validation RMS over the first 12 executable steps |
-| Compute cost | 4 NVIDIA RTX 4090D GPUs, approximately 6 hours per draft model |
+| Loss | Weighted Smooth L1 / Huber, $\beta=1.0$ |
+| Prefix weighting | sampled prefix up to 16 steps, $\gamma_{\mathrm{prefix}}=0.9$, tail weight 0.1 |
+| Checkpoint selection | best validation RMS over first 12 executable steps |
+| Compute per draft model | 4 RTX 4090D GPUs, approximately 6 hours |
 
-<small>表源：原论文 Appendix A，Table 5。保留英文列名与配置含义。仿真为每个 LIBERO suite 分别训练 draft，不能把每个模型约 6 小时理解为全部实验总训练成本。</small>
+这些设置使 FLASH 成为需要训练草稿的加速方案。主策略的 flow 形式可以保留，但更换任务域、主策略或动作标准化以后，小模型是否仍能保持较高接受率，需要重新评估。[↗](https://arxiv.org/pdf/2605.13778v1#page=13)
 
-## 连续动作怎样并行验证
+官方实现把标签生成进一步具体化。在公开 commit `da6cecc` 的 `enc_cache.py` 中，默认 `teacher_zero_noise` 先计算当前观测的完整前缀，再用全零初始噪声调用主策略生成 teacher chunk；脚本另有 `gt` 分支。这是该版本的离线标签构造方式，能够为同一输入提供确定的回归目标。它不表示草稿已拟合主策略在所有随机初始噪声下的完整分布。训练脚本还对 Huber 的动作维度取平均，再按归一化步权重加权，具体落实了“近期优先”的设计。[↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/scripts/spec/enc_cache.py#L199) [↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/scripts/spec/spec_draft_train.py#L76)
 
-记 draft 动作块为 \(\hat A_t^{(d)}\)，所有验证时刻共享同一份高斯噪声 \(\epsilon\)。对选定时刻 \(\tau\)，构造
+## 已知候选终点，顺序生成就能改造成并行检查
 
-\[
-\tilde A_\tau=\tau\hat A_t^{(d)}+(1-\tau)\epsilon,
-\qquad
-\hat A_t(\tau)=\tilde A_\tau+(1-\tau)v_\theta(\tilde A_\tau,\tau\mid c_t,s_t).
-\]
+原策略按照论文的时间约定，从 $\tau=0$ 的噪声走向 $\tau=1$ 的动作：
 
-\(c_t\) 是复用的视觉语言 KV，\(s_t\) 是当前机器人状态。第一步把候选终点放回 flow 的中间状态，第二步根据局部速度外推剩余区间，得到该检查点认可的终点估计。多个 \(\tau\) 都从同一个 draft 构造输入，不必沿上一个检查点的输出继续计算。
+$$
+\frac{dA_t^\tau}{d\tau}
+=v_\theta(A_t^\tau,\tau,o_t),
+\qquad A_t^0\sim\mathcal N(0,I).
+$$
+
+真正生成时，第 $k+1$ 步的输入依赖第 $k$ 步积分得到的状态，因此不能直接把十步互换成十个独立任务。FLASH 改变了要回答的问题。它已经拿到草稿终点 $\hat A_t^{(d)}$，现在只想知道这个终点是否与主模型学到的局部速度场相容。
+
+对同一份高斯噪声 $\epsilon$，任取检查时刻 $\tau$，都能直接构造
+
+$$
+\widetilde A^\tau
+=\tau\hat A_t^{(d)}+(1-\tau)\epsilon.
+$$
+
+这个状态位于噪声与草稿之间的直线上。接着让 Action Expert 预测局部速度，以一次剩余区间外推得到终点估计：
+
+$$
+\widehat A_t(\tau)
+=\widetilde A^\tau
+ +(1-\tau)v_\theta(\widetilde A^\tau,\tau\mid c_t,s_t).
+$$
+
+$c_t$ 是旧的视觉语言缓存，$s_t$ 是新的机器人状态。多个 $\tau_k$ 的输入都能从同一草稿直接构造，互不依赖，所以可以合并成一次 batch 来调用 Action Expert。共享 $\epsilon$ 使不同分支的差异主要反映所选检查位置，而不是混进多份互不相关的噪声路径。[↗](https://arxiv.org/pdf/2605.13778v1#page=5)
+
+原图左侧画的是沿场顺序积分，中间画的是从几处草稿插值点向终点作局部重建。应注意中间的黄色箭头并没有复现左边整条曲线；它们提供几个局部检验。右侧的终点估计偏离候选较大，就会使相应动作拒绝。
 
 ![FLASH 多时刻并行验证原图](../../assets/images/paper-deep-dives/inference/realtime-vla-flash/figure-4-parallel-verification.png){ width="800" }
 
-<small>图源：原论文 Figure 4，PDF 第 5 页。左侧顺序去噪逐步推进，中间与右侧展示从若干中间点重建终点。绿色聚合提示一致，红色偏离提示拒绝。图表示局部检查机制，不是严格的轨迹等价证明。</small>
+*原论文 Figure 4。Parallel Verify 的可并行性来自候选终点已经给定，不能据此认为原始 ODE 的顺序依赖消失了。*
 
-对第 \(k\) 个时刻和第 \(h\) 个动作，计算连续平移与旋转通道的距离 \(d_h^{(k)}\)，找出从开头连续满足 \(d_h^{(k)}\leq\delta\) 的长度 \(L^{(k)}\)，最终
+把这两个公式相减，可以更直接地看出验证器在量什么。下面是对原式的代数展开：
 
-\[
-L=\min_k L^{(k)}.
-\]
+$$
+\widehat A_t(\tau)-\hat A_t^{(d)}
+=(1-\tau)
+\left[
+ v_\theta(\widetilde A^\tau,\tau\mid c_t,s_t)
+ -(\hat A_t^{(d)}-\epsilon)
+\right].
+$$
 
-因此某个后续动作通过检查，也不能绕过前面被拒绝的动作直接执行。夹爪通道具有开闭语义，单独用于阶段判断。论文基础 verifier 配置为 \(K=2\)、\(\delta=0.15\)；阈值依赖动作标准化，不能直接读成厘米或角度。
+如果局部速度正好等于该直线的速度 $\hat A_t^{(d)}-\epsilon$，重建终点就与候选相同。但实际网络学习的是条件速度场，草稿也未必是训练数据中的真实终点，等式右侧一般不为零。验证比较的是这个局部残差，不能把“小残差”直接换成“沿完整 ODE 一定会到达同一终点”。
 
-## 为什么通过验证仍然需要回退
+这个展开还说明，检查时刻与接受阈值不能独立理解。在 $0≤\tau<1$ 内采用同一种齐次距离时，固定终点阈值 $\delta$ 对应的速度残差阈值是 $\delta/(1-\tau)$；越靠近终点，外推区间越短，同样的速度偏差在终点距离中就越小。如果取 $\tau=1$，重建就恒等于草稿，检验本身失去作用。这个关系是公式推得的解释，不是论文额外测得的精度结果。
 
-Appendix B 明确将此检查解释为 heuristic local consistency test。Action Expert 在训练时学习的是目标动作诱导的插值路径，而验证时输入来自 draft 诱导的路径；单次速度外推也不等于完整积分。再叠加旧 KV 的条件失配，通过检查不足以保证与 full path 产生相同轨迹或任务结果。
+官方代码使用相反时间方向，写成 $x_u=u\epsilon+(1-u)x_0$ 与 $\hat x_0=x_u-u v_u$。因此代码的 `t_list=(0.10,0.05)` 对应论文的 $\tau=(0.90,0.95)$，速度方向也随时间变换反转。直接把这两个代码数值写成论文坐标下“靠近噪声端的检查”会得出相反结论。实现还把这些状态展成 $B K$ 的 batch，同时扩展状态与缓存供验证使用；并行减少顺序等待，但增加 $K$ 仍需更多计算与条件访问。[↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/src/openpi/models_pytorch/spec_pi0_pytorch.py#L665)
 
-FLASH 在两个地方返回较贵路径。其一是 \(L=0\)，候选没有任何可执行前缀；其二是验证分支中出现夹爪状态切换，提示抓取或释放等精细阶段。LIBERO 的夹爪值经标准化后两种模式仍分处零点两侧，作者以过零判断切换。这是该接口下的启发式，不能不经校准迁移到所有夹爪。
+## 只接受连续前缀，距离阈值并不包含所有动作语义
 
-更长任务还需要周期性刷新。下面的消融比平均 speedup 更能解释它的作用。
+对第 $k$ 个检查时刻、第 $h$ 个动作，算法先计算连续通道距离
+
+$$
+d_h^{(k)}
+=\operatorname{Dist}_{\mathrm{cont}}
+\left(\hat a^d_{t+h-1},\hat a^{(k)}_{t+h-1}\right).
+$$
+
+每个分支的最长连续通过前缀为
+
+$$
+L^{(k)}
+=\sum_{h=1}^{H}\prod_{j=1}^{h}
+\mathbf1[d_j^{(k)}\le\delta],
+\qquad
+L=\min_{k=1,\ldots,K}L^{(k)}.
+$$
+
+乘积保证一旦某个位置失败，后面位置即使单独通过也不能被接到可执行前缀中；跨分支取最小值，保证执行的每一步都经过所有时刻的检查。例如，一个分支的通过模式是“通过、通过、失败、通过”，其前缀只能是 2；另一个分支通过前三步，最终仍只能执行前两步。这是解释公式的例子，并非实验轨迹。[↗](https://arxiv.org/pdf/2605.13778v1#page=6)
+
+论文把位置与旋转视为连续通道，把夹爪单独处理。公开实现的 `_compute_radius_prefix_acceptance` 对选中的维度计算
+
+$$
+d_h^{(k)}
+=\frac{\|\hat a_{h,1:d}^{(k)}-\hat a_{h,1:d}^{\mathrm{draft}}\|_2}{\sqrt d},
+$$
+
+也就是通道 RMS；当动作至少有 7 维时，函数把距离维数上限设为 6，排除夹爪。尽管配置中可见 `dist_dims=7`，真正执行的函数会进行这个截断。$\delta=0.15$ 因而是策略动作表示空间的距离阈值，不能直接解释成 15 厘米或某个旋转角。实现仅在下一次重规划前最多会执行的 12 个位置上计算前缀，论文 Algorithm 1 则用一般的 $H$ 写法。[↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/src/openpi/models_pytorch/spec_pi0_pytorch.py#L126)
+
+如果 $L=0$，草稿没有可执行前缀，运行时转回完整路径。$L>0$ 也不表示整个 50 步块已获批准，更不表示任务后续都可以保持当前缓存。执行一段后仍要获得新观测，再次生成与验证。
+
+附录 B 用一个非正式关系概括剩余误差：
+
+$$
+\|\hat A_t^{(d)}-A_t^\star\|
+\lesssim
+\delta+\epsilon_{\mathrm{AE}}
++\epsilon_{\mathrm{cond}}+\epsilon_{\mathrm{path}}.
+$$
+
+$A_t^\star$ 是当前条件下完整路径的输出；$\epsilon_{\mathrm{AE}}$ 包含速度场近似和单步终点重建误差，$\epsilon_{\mathrm{cond}}$ 来自复用视觉语言条件，$\epsilon_{\mathrm{path}}$ 则来自草稿诱导的插值点与训练终点路径、真实积分路径的差别。作者将其表述为 informal interpretation，没有给出能直接计算的严格全局界。它帮助解释为什么还需要多个检查时刻、保守阈值和回退，不能用来证明草稿与原策略分布相同，或保证接受后必然成功。[↗](https://arxiv.org/pdf/2605.13778v1#page=13)
+
+## 抓取与释放附近，局部一致性仍可能不够
+
+距离验证关注当前候选在几个位置上的局部一致性，但任务中的误差敏感性并不均匀。空旷运动时，一点位置偏差可能在下次观测后被纠正；把碗放到盘边时，同样的偏差可能直接使任务失败。FLASH 用夹爪切换作为进入精细操作阶段的启发式信号。
+
+在 LIBERO 中，夹爪开闭编码为 $-1/+1$。经过策略使用的标准化以后，两种模式仍可用零阈值分开。论文规则是：只要任一验证分支的候选动作中出现夹爪模式切换，就回到完整路径，以更高保真的条件和动作规划处理抓取、释放附近的变化。它检测的是预测动作中的模式变化，不是一个独立的接触传感器，也不等价于识别了所有高风险阶段。[↗](https://arxiv.org/pdf/2605.13778v1#page=7)
+
+Figure 5 的阅读重点是轨迹末端。左边的绿色 speculative trajectory 在最终放置处偏离原轨迹，右边则在夹爪切换相关位置恢复 full path。蓝色与橙色点分别标出完整、快路径调用，不能把右图理解为整条运动都换回了完整模型。
+
+![精细放置阶段的轨迹漂移与回退](../../assets/images/paper-deep-dives/inference/realtime-vla-flash/figure-5-phase-fallback.png)
+
+*原论文 Figure 5。示例说明平滑运动中可容忍的偏差，在最终放置时可能变成失败。*
+
+对应关键帧进一步显示失败的物理含义。上排一直沿快路径完成最后放置，碗与盘没有对齐；下排在部分阶段使用蓝框标出的完整路径，完成了放置。这个单任务示例为设计提供直观动机，跨任务可靠性仍要由后面的主实验和消融判断。
+
+![回退前后的放置关键帧](../../assets/images/paper-deep-dives/inference/realtime-vla-flash/figure-6-fallback-keyframes.png)
+
+*原论文 Figure 6。橙框是 flash path，蓝框是 full path；回退按阶段发生。*
+
+周期性刷新处理的是另一类问题。即使没有夹爪切换，连续使用旧 KV 和短前缀也可能逐步积累误差，因此运行时允许每若干快路径轮次强制一次 full path。夹爪触发、验证拒绝和周期刷新分别根据任务阶段、当前不一致和经过的轮次决定恢复计算，不能把完整系统的结果全部归因于单个距离阈值。
+
+## 主实验的 3.04 倍加速，是系统与运行时共同产生的
+
+LIBERO 实验在单张 RTX 4090D 上在线推理。四个 suite 各有 10 个任务，每任务 50 次试验。Table 1 同时比较原始 Torch、仅 Triton、仅 FLASH 和两者结合，能够区分“把一次计算做快”与“减少完整计算次数”的作用。
+
+| Methods | Spatial SR (%) | Object SR (%) | Goal SR (%) | LIBERO-10 SR (%) | Average SR (%) | Lat. (ms) | /Act (ms) | Speedup |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Torch-π0 | 96.8 | 98.8 | 95.8 | 85.2 | 94.1 | 58.0 | 5.0 | 1.00× |
+| Triton-π0 | 96.4 | 98.8 | 95.0 | 86.6 | 94.2 | 39.7 | 3.5 | 1.46× |
+| FLASH-π0 | 96.4 | 99.2 | 94.6 | 83.4 | 93.4 | 34.9 | 3.0 | 1.66× |
+| FLASH+Triton-π0 | 96.8 | 99.2 | 94.4 | 84.6 | 93.8 | 19.1 | 1.9 | 3.04× |
+
+原文 Table 1。[↗](https://arxiv.org/pdf/2605.13778v1#page=8)
+
+这里有三个具体判断。第一，仅 Triton 就把 58.0 ms 降到 39.7 ms，说明系统实现贡献很大。第二，在 Triton 基础上再加入 FLASH，平均延迟进一步降到 19.1 ms，按表值计算约为 $39.7/19.1=2.08$ 倍；论文的 3.04 倍则以最初 Torch 为分母，不能全部归为投机算法本身。第三，成功率变化是混合的：组合方案在 Spatial 与 Torch 相同、Object 高 0.4 个百分点，但 Goal 低 1.4、LIBERO-10 低 0.6。平均下降 0.3 个百分点支持“基本保留性能”，并非精确无损；表中也没有给出足以将这些小差异全部判为显著的置信区间。
+
+附录的组件成本进一步解释两条路线各花了什么。
+
+| Component | Torch-π0 | Triton-π0 | FLASH-π0 | FLASH+Triton-π0 |
+| --- | ---: | ---: | ---: | ---: |
+| Full path: Image encoder (ms) | 11.3 | 4.7 | 11.3 | 4.7 |
+| Full path: VLM prefill (ms) | 26.7 | 22.4 | 26.7 | 22.4 |
+| Full path: Action denoise (ms) | 20.0 | 12.6 | 20.0 | 12.6 |
+| Full-path total (ms) | 58.0 | 39.7 | 58.0 | 39.7 |
+| Flash path: Image encoder (ms) | — | — | 11.0 | 4.7 |
+| Flash path: Draft model (ms) | — | — | 3.5 | 0.9 |
+| Flash path: Parallel verifier (ms) | — | — | 3.4 | 2.2 |
+| Flash-path total (ms) | — | — | 17.9 | 7.8 |
+
+原文 Table 6，单位均为 ms。[↗](https://arxiv.org/pdf/2605.13778v1#page=13)
+
+快路径中的 7.8 ms 由当前图像编码 4.7、draft 0.9、parallel verifier 2.2 构成。完整路径的 VLM prefill 22.4 ms 被跳过，12.6 ms 的顺序去噪则换成 2.2 ms 的局部检查，这解释了为什么两个层面的优化可以叠加。与此同时，编码图像已占快路径一半以上，继续只压小 draft 的绝对收益会受到其他环节限制。
+
+将 7.8 ms 取倒数约为 128 次/秒，只能描述这一类调用的理想吞吐尺度，不能说整条机器人闭环已经实现 128 Hz。平均重规划加速按 $58.0/19.1\approx3.04$ 计算，每动作延迟改善按 $5.0/1.9\approx2.63$ 计算。两者不同，是因为不同轮次可能执行不同长度的前缀；最终还存在机器人执行、通信与观测环节，模型调用倒数不是物理控制频率。
+
+## 接受长度与快路径占比，决定一次省下的时间能否留到任务末尾
+
+Table 2 定义了两个容易混用的量。Acc. 是快路径轮次中平均接受前缀长度相对于 12 步重规划窗口的比例；FR. 是全部重规划轮次中采用快路径的比例。一个描述每次快路径能执行多长，另一个描述多常使用快路径。下表保留完整 suite 对照。
+
+| LIBERO Suite | FLASH Acc. (%) | +Triton Acc. (%) | FLASH FR. (%) | +Triton FR. (%) | FLASH Lat. (ms) | +Triton Lat. (ms) | FLASH /Act (ms) | +Triton /Act (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Spatial | 75.8 | 60.2 | 71.6 | 68.9 | 34.3 | 19.2 | 3.0 | 2.1 |
+| Object | 78.1 | 89.3 | 72.4 | 86.4 | 34.6 | 12.6 | 3.0 | 1.2 |
+| Goal | 81.4 | 66.9 | 63.7 | 62.4 | 37.5 | 20.5 | 3.3 | 2.1 |
+| 10 | 82.4 | 62.5 | 57.5 | 49.6 | 33.2 | 24.1 | 2.8 | 2.3 |
+| Average | 79.4 | 69.7 | 66.3 | 66.8 | 34.9 | 19.1 | 3.0 | 1.9 |
+
+原文 Table 2。[↗](https://arxiv.org/pdf/2605.13778v1#page=8)
+
+组合方案在 Object 中的 FR. 为 86.4%，接受长度为窗口的 89.3%，平均延迟最低，为 12.6 ms；在 LIBERO-10 中，FR. 只有 49.6%，延迟升到 24.1 ms。它仍然受益于快路径，但任务需要更频繁恢复完整计算。平均 69.7% 的 Acc. 若按定义换算，对应约 $12\times0.697=8.36$ 个动作位置，而不是“69.7% 的整块 50 步动作都能执行”。这个换算只是指标含义的说明。
+
+还应保留一个反向观察：纯 FLASH 的平均接受长度 79.4% 高于结合 Triton 的 69.7%，但延迟反而更高。接受率不是单独决定系统快慢的指标。两套执行的轨迹与接受统计也并不完全相同，不能把表中结果理解为固定同一串动作、只替换底层 kernel 的逐位等价对照。
+
+## 回退消融说明，最快配置可以非常不可靠
+
+LIBERO-10 对误差积累最敏感，因此作者固定 $K=2,\delta=0.15$，比较周期刷新 PF 与 phase-aware fallback FB。PF=$n$ 表示每经过 $n$ 个快路径轮次，强制一个完整路径轮次。
 
 | Configuration | SR (%) | Lat. (ms) |
 | --- | ---: | ---: |
 | Baseline (Flash-path only) | 58.4 | 13.3 |
 | + PF = 2 | 80.6 | 21.0 |
+| + PF = 3 | 82.0 | 18.6 |
+| + PF = 4 | 75.4 | 17.2 |
 | + FB | 66.8 | 17.7 |
 | + FB & PF = 2 | 84.6 | 24.1 |
+| + FB & PF = 3 | 81.6 | 21.9 |
+| + FB & PF = 4 | 78.4 | 20.2 |
 
-<small>表源：原论文 Table 3，摘录 LIBERO-10 的四种配置；\(\delta=0.15\)、\(K=2\)。PF = 2 表示每两轮 flash path 强制进行一次 full-path refresh；FB 表示 phase-aware fallback。</small>
+原文 Table 3；这里的 flash-path-only 基线仍属于该验证配置下的运行时比较。[↗](https://arxiv.org/pdf/2605.13778v1#page=8)
 
-快速路径单独运行虽然延迟低，成功率只有 58.4%。增加完整推理把延迟抬高，但最终成功率恢复到 84.6%。所以回退是最终算法的一部分，其成本和质量贡献都不能从 headline result 中删掉。
+只有快路径配置时，13.3 ms 很有吸引力，但成功率只有 58.4%。加入夹爪阶段回退得到 66.8%，说明有帮助，却远不足以恢复原策略水平；再结合 PF=2 才达到 84.6%，该配置也进入主表。相对最快配置，它多花 10.8 ms，换来 26.2 个百分点的成功率提升。这组实验使“何时不应该继续走快路径”成为方法不可缺少的一部分。
 
-## 实验与结论：把三张速度账分开
+结果也没有支持无限加强刷新必然更好。在仅 PF 的行中，PF=3 的 82.0%、18.6 ms 同时优于 PF=2 的 80.6%、21.0 ms；加入 FB 后，PF=2 才表现最好。可成立的判断是不同恢复机制相互作用、需要按任务选取，不能从几行数据总结成严格单调规律。
 
-仿真使用 π0、单张 RTX 4090D、chunk size 50、默认执行 12 个动作后重规划。四套 LIBERO 各含 10 个任务，每任务 50 次试验。以下为 Table 1 的完整方法行，合并表头展开为一层以便网页阅读。
+## 多检查几个时刻，为什么会逐渐失去加速
 
-| Methods | Spatial | Object | Goal | 10 | Average SR | Lat. (ms) | /Act (ms) | ΔSR | Speedup |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Torch-π0 | 96.8 | 98.8 | 95.8 | 85.2 | 94.1 | 58.0 | 5.0 | – | 1.00× |
-| Triton-π0 | 96.4 | 98.8 | 95.0 | 86.6 | 94.2 | 39.7 | 3.5 | +0.1 | 1.46× |
-| FLASH-π0 | 96.4 | 99.2 | 94.6 | 83.4 | 93.4 | 34.9 | 3.0 | -0.7 | 1.66× |
-| FLASH+Triton-π0 | 96.8 | 99.2 | 94.4 | 84.6 | 93.8 | 19.1 | 1.9 | -0.3 | 3.04× |
+前一节在固定验证器上比较运行时。附录 C.1 则先不加 phase-aware 与周期刷新，单独扫描检查数 $K$ 和阈值 $\delta$，回答验证器自身的取舍。应先看下图上表的 $K=1,2,4$ 三组，再看下表固定 $K=2$ 的跨 suite 变化。
 
-<small>表源：原论文 Table 1。Success Rate 与 Average SR 的单位为 %，ΔSR 为百分点；Speedup 相对 Torch-π0。数字为作者报告，没有独立复现。</small>
+![不同验证时刻数与阈值的完整消融原表](../../assets/images/paper-deep-dives/inference/realtime-vla-flash/tables-7-8-verifier-ablation.png){ width="980" }
 
-第一张账是运行时组合。3.04× 来自 FLASH 与 Triton 的共同作用。若与同样采用 Triton 的 39.7 ms 基线比较，19.1 ms 对应约 **2.08×**，这是本文根据表中延迟计算的比值。不同基线应分别注明，不能把全部 3.04× 归为投机算法本身。
+*原论文 Tables 7–8。上表的第一列 Lat. 是 verifier 本身成本，右侧 Lat. 才是任务中的平均推理延迟，两个数不能混用。*
 
-第二张账是快速分支与任务平均。Table 6 的 FLASH+Triton 快速分支由 image encoder 4.7 ms、draft 0.9 ms、verifier 2.2 ms 构成，共 7.8 ms；完整路径仍为 39.7 ms。Table 2 报告约 66.8% 的重规划轮次走快速路径，所以任务平均还包含大量完整推理。
+在 $\delta=0.15$ 时，Table 7 中 $K=1,2,4$ 的成功率分别为 53.8%、58.4%、86.2%，对应任务延迟 12.5、13.3、39.9 ms。检查更多时刻能在这个设置下提高可靠性，但更严格的联合通过条件让更多候选被拒绝。特别是 $K=4$ 时，快路径比例只有 9.2%，已经接近主要依赖完整路径。verifier 本身也从 $K=1$ 的 1.4 ms 增至 $K=2$ 的 2.2、$K=4$ 的 4.3 ms，批量并行并非免费。[↗](https://arxiv.org/pdf/2605.13778v1#page=14)
 
-第三张账是动作数量。论文报告 per-action latency 从 5.0 ms 变为 1.9 ms，约 2.63× 改善；它与 replanning latency 的 3.04× 不相同，因为各轮接受和执行的前缀长度不同。接受前缀覆盖率 69.7% 是相对 12 步重规划窗口归一化的统计，不是“候选 token 正确率”。
+把阈值压得很小还可能比直接完整推理更慢。$K=4,\delta=0.05$ 的 FR. 已为 0，平均延迟却是 52.4 ms，高于主表中 Triton full path 的 39.7 ms。这种配置支付了投机检查成本，却没有得到可用前缀。$\delta=0$ 也只是使此距离测试中的草稿被拒绝，不能反过来作为 FLASH 保留原分布的证明。
 
-### 真机结果证明了什么
+跨 suite 的结果显示了相同的覆盖率变化，同时保留任务间差异。
 
-作者在 UR5 与两台 RealSense D435i 上做传送带分拣，对 toy dog、hairbrush 各收集 200 条示范并进行 LoRA 适配。每种物体、每种速度评测 10 次，所有方法使用同步推理，不叠加异步执行或 real-time chunking，以隔离推理延迟影响。
+| $K=2$, $\delta$ | Average SR (%) | Average Lat. (ms) | Average FR. (%) | LIBERO-10 SR (%) |
+| --- | ---: | ---: | ---: | ---: |
+| 0.30 | 83.9 | 11.1 | 91.3 | 53.8 |
+| 0.25 | 83.4 | 11.1 | 91.4 | 53.8 |
+| 0.20 | 83.5 | 11.2 | 90.9 | 54.3 |
+| 0.15 | 86.1 | 12.7 | 84.9 | 58.4 |
+| 0.10 | 92.0 | 20.4 | 46.6 | 79.4 |
+| 0.05 | 93.5 | 41.0 | 2.5 | 87.2 |
+| 0.00 | 94.1 | 47.5 | 0.0 | 85.6 |
 
-| Methods | Medium: Toy dog | Medium: Hairbrush | High: Toy dog | High: Hairbrush | Extra High: Toy dog | Extra High: Hairbrush |
+原文 Table 8。表中只提炼跨 suite 平均与最敏感的 LIBERO-10，完整四 suite 数值见原表。[↗](https://arxiv.org/pdf/2605.13778v1#page=14)
+
+从 0.15 收紧到 0.10，平均成功率上升 5.9 个百分点，平均延迟增加 7.7 ms；收紧到 0.05 时，FR. 降到 2.5%，加速空间几乎消失。成功率也并非逐任务单调，例如 Spatial 从 $\delta=0.10$ 的 97.2% 变成 $0.05$ 的 93.8%。作者选择 $K=2,\delta=0.15$，是为了让基础验证器保留足够的快路径覆盖，再由完整运行时恢复可靠性，并非这个点单独就验证得最准确。
+
+原文两张表在 $K=2,\delta=0.05$ 的 LIBERO-10 行还存在具体差异：Table 7 写 93.5% 与 44.9 ms，Table 8 对应列写 87.2% 与 41.6 ms。两表都标为上述验证器研究，却未解释该点差别。因而可以据各自表格讨论局部趋势，不能挑出较好的一项并与另一表的较低成本合成新的“最佳配置”。
+
+## 真机检验的是同步推理下可完成任务的速度范围
+
+真机使用 UR5 和两台 RealSense D435i，一台主视角、一台腕部视角。任务是在传送带上抓取 toy dog 或 hairbrush 并放入盒子，每类采集 200 条示范，示范采集速度为 6 m/min。部署比较采用相同的同步循环，不叠加异步推理、real-time chunking 等隐藏延迟的机制，因此能较直接地观察模型等待时间对追踪移动物体的影响。[↗](https://arxiv.org/pdf/2605.13778v1#page=8)
+
+平台图应同时看相机和目标的运动位置。模型需要从当前画面判断物体在哪里，但动作抵达时传送带已经继续前进；腕部视角提供近处信息，也不能自动消除计算期间的位移。
+
+![UR5 传送带分拣实验平台](../../assets/images/paper-deep-dives/inference/realtime-vla-flash/figure-8-platform.png)
+
+*原论文 Figure 8。在线结果来自单臂、两视角的这一平台；训练资源与在线推理资源分开报告。*
+
+| Methods | 10 m/min: Toy dog SR (%) | 10 m/min: Hairbrush SR (%) | 13 m/min: Toy dog SR (%) | 13 m/min: Hairbrush SR (%) | 15 m/min: Toy dog SR (%) | 15 m/min: Hairbrush SR (%) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | JAX-π0 | 20.0 | 50.0 | 0.0 | 0.0 | 0.0 | 0.0 |
 | Triton-π0 | 80.0 | 40.0 | 30.0 | 10.0 | 0.0 | 0.0 |
 | FLASH+Triton-π0 | 80.0 | 90.0 | 50.0 | 30.0 | 20.0 | 10.0 |
 
-<small>表源：原论文 Table 4，表头合并单元格展开；单位为成功率 %。Medium / High / Extra High 分别为 10 / 13 / 15 m/min，示范采集速度为 6 m/min。</small>
+原文 Table 4，每个对象、速度、方法条件各测试 10 次。[↗](https://arxiv.org/pdf/2605.13778v1#page=9)
 
-在 15 m/min 下 FLASH 有成功案例，而两个对照均为零；但其成功率仅为 20% 和 10%，不能改写成该速度下的稳定可靠抓取。每条件 10 次也意味着一个成功案例就改变 10 个百分点。这组实验支持“降低延迟有助于动态操作”，对泛化可靠性的证明仍有限。
+10 m/min 时，toy dog 在 Triton 与组合方案下都是 80%，hairbrush 则从 40% 变为 90%；到了 13 m/min，组合方案仍有 50% 和 30%，但显然已不是高成功率区间。15 m/min 下的 20% 与 10% 只对应 2/10 和 1/10 次成功，支持“在基线全失败的设置中仍有非零成功”，不能改写成可靠完成高速分拣。JAX 与 Triton 在 10 m/min hairbrush 上还分别为 50% 和 40%，也提醒人们，有限试验中的成功率不会仅按计算速度严格排序。
 
-## 主要贡献与工程入口
+作者观察到的慢基线失败，多是机器人赶到旧位置、落在物体后方，或者夹爪闭合太晚；hairbrush 的薄形状给时机和姿态留下的余量更小。这与延迟瓶颈的解释一致，但实验没有把每一类失败单独做成受控因果干预。可用一个明确标为计算例子的尺度帮助理解：15 m/min 等于 0.25 m/s，等待 40 ms 时物体前进约 1 cm。这个计算说明毫秒级差别为何可能影响抓取，不是论文测得的平均末端误差。
 
-本文最有价值的贡献，是为连续动作构造了可并行的候选检查，并把验证、缓存和回退组织成完整运行时。单独把 draft 做快不足以获得这些收益，还需要正确记录 KV 来自哪一轮、最新 state 对应何时、哪些候选真正提交给执行器。
+为了得到这些策略，主模型先由预训练 π0 进行 LoRA 适配，随后训练同域草稿。主模型使用 batch 128、20K steps、500 步 warmup，学习率从峰值 $10^{-4}$ 余弦衰减到 $10^{-5}$。真机 draft 使用每 GPU batch 64、100 epochs、一个 warmup epoch、最低学习率 $10^{-5}$、global norm 1.0 的梯度裁剪；prefix cap 从仿真的 16 改为 20。论文报告 8 张 H20 上主模型微调约 12 小时、草稿训练约 2 小时。这个离线适配预算不能遗漏，也不能混成线上推理需要 8 张 H20。[↗](https://arxiv.org/pdf/2605.13778v1#page=15)
 
-作者仓库 README 提供了 `scripts/spec/enc_cache.py`、`spec_draft_train.py`、`spec_serve_policy.py` 和 `spec_client_libero.py` 等入口，分别对应缓存准备、draft 训练、服务和 LIBERO 客户端；本文只核对文档，没有执行这些脚本。复现实验时应先建立 Torch / Triton full-path 对照，再测 draft、verify、fallback 和完整 episode，避免只测最短路径。
+## 采用时要复用完整的条件与回退接口
 
-## 局限与风险
+公开代码给出了可落地的顺序：先产生前缀 embedding 与 teacher 动作缓存，训练相应 suite 的 draft；再将主模型与 draft 权重转换成 Triton 布局，由 policy server 维护缓存、接受长度和回退状态，客户端按接受前缀执行并回传新观测。单纯拿小网络替换原 Action Expert，会丢掉论文真正用于控制错误的验证与上下文刷新。[↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/README.md)
 
-阈值与验证时刻带有启发式，论文没有给出严格的分布保持或轨迹等价保证。旧视觉语言 KV、局部外推误差与 draft 分布偏移可能共同影响接受质量。夹爪切换也只覆盖部分精细操作，不能捕获所有接触和环境突变。
+同一个公开 commit 的 `main_exp.json` 还说明，实验配置并非所有 suite 一套通用参数。下面是该配置文件的值，属于具体代码版本，不能据此反推论文每次运行都恰好使用这个版本。
 
-结果主要围绕 π0、指定 GPU、LIBERO 与两个传送带物体。跨动作空间、跨平台和异步控制的收益需要重新验证。训练每套任务的 draft、维护 Triton 权重布局和回退策略也有工程成本，不能仅由 110M 参数量判断部署代价。
+| Suite | Code `t_list` | Distance threshold | Gripper verification / post-check | Periodic full refresh |
+| --- | --- | ---: | --- | --- |
+| Spatial | [0.10, 0.05] | 0.15 | enabled / enabled | disabled |
+| Object | [0.10, 0.05] | 0.15 | disabled / disabled | disabled |
+| Goal | [0.10, 0.05] | 0.15 | enabled / enabled | every 4 draft rounds |
+| 10 | [0.10, 0.05] | 0.15 | enabled / enabled | every 2 draft rounds |
 
-## 阅读结论
+代码时刻需按前文转换到论文的时间方向。服务脚本的默认距离阈值是 0.3、默认周期刷新关闭，与此主实验配置不同，因此直接启动默认服务不等于复现主表。实现的夹爪检查也限制在待执行窗口，并另有接受前缀的 post-check；这些都是动作块输出以后仍需维护的运行时状态。[↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/scripts/spec/exp/config/main_exp.json) [↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/scripts/spec/spec_serve_policy.py#L83)
 
-FLASH 让连续动作投机推理有了可执行的验证接口，但可靠性来自整条路径，包括最新观测、缓存条件、多时刻检查和必要的完整推理。最值得带走的实验是 LIBERO-10 的回退消融，它解释了为什么“少调用主策略”必须与“何时重新调用主策略”一起设计。
-
-## 外部精读与延伸阅读
-
-- [原论文 HTML 与附录](https://arxiv.org/html/2605.13778v1)：重点看 Algorithm 1、Table 1/3/6 和 Appendix B。
-- [作者代码与复现入口](https://github.com/dexmal/realtime-vla-flash)：核对 checkpoint、Triton 转换与套件配置。
-- [VLA 投机推理路线综述](../../inference/vla-speculative-decoding-0928-1144.md)：与离散动作、剪枝和执行期验证对照。
-- [WA-SpecDec](wa-specdec-0928-1144.md)：比较“改善验证条件表征”和“改变连续动作验证接口”两种思路。
-- [VLA 动作分块](../../vla/action-chunking-hierarchical-policies-and-latent-skills.md)：接回执行长度与反馈频率。
+FLASH 最有用的认识是，连续动作模型的投机机制可以建立在“已知候选终点后的局部一致性”上，而不必先为每个动作构造离散 token 概率。但这也决定了它的证据标准：看完整任务成功率、真正执行的前缀、恢复完整条件的频率与平均延迟。对于新的任务域，优先确定哪些条件能够暂时复用、哪些阶段必须刷新，再联动选择草稿训练与验证参数，比只追求更短的单次调用更接近论文已经证明可行的用法。

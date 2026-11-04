@@ -61,6 +61,7 @@
     overlay.setAttribute("aria-hidden", "true");
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "放大图片");
 
     closeButton = document.createElement("button");
     closeButton.type = "button";
@@ -99,6 +100,7 @@
     activeImage = img;
 
     const caption = imageCaption(img);
+    popup.setAttribute("aria-label", caption || "放大图片");
     imageEl.src = img.currentSrc || img.src;
     imageEl.alt = img.alt || caption || "";
     captionEl.textContent = caption;
@@ -150,6 +152,11 @@
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Tab" && overlay?.dataset.open === "true") {
+        event.preventDefault();
+        closeButton.focus({ preventScroll: true });
+        return;
+      }
       if (event.key === "Escape") {
         closeLightbox();
         return;

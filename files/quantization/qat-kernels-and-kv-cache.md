@@ -1,176 +1,63 @@
-# QAT、Kernel 与 KV Cache
+# 从模拟量化训练到真正的低比特执行
 
-`QAT`、`kernel` 和 `KV cache quantization` 是三件不同的事：`QAT` 解决模型怎样适应量化误差，`kernel` 决定低比特是否真的跑得快，`KV cache quantization` 解决长上下文推理里的动态显存和带宽。
+量化感知训练 QAT 可以让浮点参数在前向中经历舍入和截断，提前适应将来的离散表示。但训练时的浮点张量仍可能占用原来的存储。要获得显存和速度收益，还需要把码值打包，并由理解这种格式的 kernel 执行。
 
-## 核心问题
+## 舍入的导数为什么造成困难
 
-量化落地最容易出错的地方，是把“模型能承受低比特误差”“低比特路径真的跑得快”“长上下文显存真的下降”混成一件事。实际上它们对应三条不同证据链：QAT 看质量恢复，kernel 看 profiler 和端到端延迟，KV cache 量化看长上下文并发和长程质量。
+设 $\hat w=s\operatorname{round}(w/s)$，s固定。w在同一个格子内变化时，$\hat w$完全不变，导数几乎处处为0。直接使用这个导数，模型无法沿通常的梯度下降方向跨过量化格子。
 
-量化要按执行链路读：训练阶段是否让模型适应误差，导出后 runtime 是否命中低比特 kernel，decode 阶段 KV cache 是否成为新瓶颈。只有三条链都过关，量化才算从论文数字变成服务能力。
+常见 fake quant 前向仍用 $\hat w$，反向在未截断范围内近似取 $\partial\hat w/\partial w=1$，称为 straight-through estimator，即STE。它是人为定义的近似梯度，不能当成round的真实导数。截断区间外的梯度、scale是否可学等，要看具体量化器。
 
-## QAT 在优化什么
+## 用一个参数看它怎样移动
 
-QAT，quantization-aware training，会在训练时模拟量化误差。一个简化目标可以写成：
+教学设定为 $s=0.25,w=0.6,x=2$，目标输出1.5，损失 $L=\frac12(\hat wx-1.5)^2$。前向先把0.6量化到0.5，输出1，loss为0.125。STE给出的梯度为 $(1-1.5)\times2=-1$。
 
-\[
-\min_\theta\ \mathcal{L}(f_{\hat{\theta}}(x),y)
-\]
+学习率0.1时，浮点w更新到0.7。下一次前向量化为0.75，输出恰为1.5。保存的可训练浮点值跨过了一个舍入边界，前向使用的码值才跟着改变。
 
-这行式子表示训练时就让模型看到量化后的自己 \(f_{\hat{\theta}}\)，让参数 \(\theta\) 学会在低比特误差存在时仍然输出正确结果。PTQ 是训练完再压，QAT 是训练过程中就把低比特误差纳入优化。
+如果每次更新都立即把主参数永久舍入，细小变化可能反复丢失。QAT通常需要区分可训练主参数与用于前向的近似值。训练是否稳定还取决于量化插入位置、尺度估计和数据，不能保证所有QAT都优于PTQ。
 
-### fake quant 怎么理解
-
-训练中常见 fake quant 形式：
-
-\[
-\hat{x}=s\left(\mathrm{round}\left(\frac{x}{s}\right)-z\right)
-\]
-
-fake quant 的直觉是：前向时加入量化误差，反向时通常用近似梯度让训练能继续。它不一定真的把训练中的所有算子都换成低比特硬件执行，而是在训练信号里模拟未来推理会遇到的量化扰动。
-
-## 什么时候值得做 QAT
-
-| 场景 | 为什么 PTQ 可能不够 |
-| --- | --- |
-| 低到 4bit/2bit 或更激进 | 误差太大，单纯校准难恢复 |
-| W&A 同时量化 | activation 动态变化大 |
-| 高质量生产服务 | 关键任务掉点不可接受 |
-| 多模态/VLA | 视觉、动作、安全头更敏感 |
-| 特定硬件低比特路径 | 模型要配合硬件格式和 kernel |
-
-**一句话**：PTQ 是低成本起点；QAT 是质量门槛更高时，让模型主动适应低比特。
-
-## Kernel 决定收益是否兑现
-
-量化线性层不只是 \(Y=XW\)，真实执行常包含：
-
-```text
-load packed low-bit weight
--> load scale / zero-point
--> unpack
--> dequant or low-bit matmul
--> accumulate
--> output cast
+<!-- systems-workflow-visual -->
+```mermaid
+flowchart LR
+  W["浮点主参数w=0.6"] --> Q["前向量化到0.5"] --> Y["x=2 · 输出1"] --> L["目标1.5 · loss0.125"]
+  L --> G["STE梯度 -1"] --> U["lr0.1 · 主参数0.7"] --> N["下一前向量化0.75"]
 ```
 
-两条常见路径：
+离散前向与浮点主参数更新分开保存，STE提供近似反向方向。
 
-| 路径 | 发生什么 | 主要收益 | 风险 |
-| --- | --- | --- | --- |
-| weight-only + dequant | 权重低比特存储，计算前反量化到 FP16/BF16 | 省权重显存和带宽 | GEMM 本身未必低比特 |
-| W&A low-bit kernel | 权重和激活都低比特，直接走 INT/FP8 matmul | 有机会同时省带宽和计算 | 对硬件、layout、scale 粒度要求高 |
+## Fake quant 之后还要经过 packing
 
-**常见误解。**
-“runtime 支持 INT4”不等于每个请求都走高效 INT4 kernel。实际可能因为模型结构、group size、GPU 架构、batch shape 或 LoRA 组合而 fallback。
+假设模拟量化得到两个无符号码值3和12。它们可打包成一个字节 $3+(12\ll4)=195$。运行时分别用 `byte & 15` 和 `(byte >> 4) & 15` 取出，再结合scale和zero point恢复数值。
 
-## Q/DQ、packing、dequant fusion 分别是什么
-
-| 名称 | 含义 | 初学者理解 |
-| --- | --- | --- |
-| Q | quantize，把浮点转低比特 | 把数塞进格子 |
-| DQ | dequantize，把低比特还原近似浮点 | 取出来再乘 scale |
-| packing | 把多个低比特值塞进一个更大 word | 例如 8 个 INT4 放进 32bit |
-| fusion | 把 dequant 和 GEMM 等操作合并 | 减少中间读写和 kernel launch |
-| accumulation | 矩阵乘累加精度 | 低比特输入常用更高精累加 |
-
-量化收益常常死在 Q/DQ 和 scale 读取上。好的 kernel 会尽量把 unpack、scale 和 matmul 融合进一条高效路径。反过来，如果 profiler 里看到大量单独 dequant、layout transform 或 fallback kernel，低比特权重可能只是在文件里更小，热路径并没有真正变快。
+AWQ源码把 `pseudo_quantize_model_weight` 与 `real_quantize_model_weight` 分开，就是一个清楚的实现例子。模拟阶段适合检查误差，真实阶段构造包含打包权重的线性层。若推理先把整模型恢复为BF16常驻显存，文件虽小，设备上的权重压缩收益就没有保住。
 
 ![Quantization data transmission](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-5-data-transmission.png){ width="690" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 5。原论文图意：展示 quantized weight preparation、weight-only quantization 和 weight & activation quantization 的数据传输过程。</small>
 
-左边是离线准备和 packing；中间是 weight-only，搬运低比特权重但计算前可能 dequant 到 FP；右边是 W&A，目标是让 activation 和 MatMul 也进入低比特路径。绿色箭头是潜在收益，灰色箭头是新增开销。
+## KV 量化沿用表示原理，但状态生命周期不同
 
-## KV cache 为什么是长上下文主角
+权重加载后基本固定，KV随着每个新token产生。一个请求在L层、$H_{kv}$个KV头、头维d、T个历史token、每元素b字节时，KV主体存储为
 
-生成模型每生成一个 token，都要保存每层历史 token 的 Key 和 Value。KV cache 显存可粗略估算为：
+$$
+M_{KV}=2LTH_{kv}db.
+$$
 
-\[
-\mathrm{KV\ Memory}\approx2\times L\times B\times T\times H_{\text{kv}}\times d_h\times \mathrm{bytes}
-\]
+例如L=32、$H_{kv}=8$、d=128、T=32768，BF16主体为4GiB。若改为每元素1字节，主体理论上变为2GiB，还需加尺度、页表和对齐等开销。
 
-上下文越长、并发越高、层数越多，KV cache 越大。权重已经量化后，KV cache 可能成为新的显存瓶颈。
+写入时必须知道对应scale；读取attention时必须按同样约定恢复。K的误差改变打分 $qk^\top$，V的误差改变加权输出，两者经过softmax的路径不同。因此同样的位宽未必适合相同粒度。
 
 ![KV cache quantization](../assets/images/paper-deep-dives/inference/low-bit-llm-survey/figure-6-kv-cache.png){ width="620" }
 
 <small>图源：`A Survey of Low-bit Large Language Models`，Figure 6。原论文图意：quantized KV cache 减少缓存存储和数据传输，并在 attention forward 前 dequantize。</small>
 
-图里的低比特 KV 主要省缓存存储和读写带宽。attention 真正计算前可能仍然要 dequant，所以要同时看显存下降、decode 带宽、dequant 开销和长程任务质量。
+## 训练模拟应尽量对齐部署路径
 
-## KV 量化的小账
+若训练用per-channel scale，部署只支持per-tensor；或者训练模拟BF16累加，实际kernel采用另一种中间精度，二者优化的函数就不同。先用同一小张量对齐fake quant与真实kernel，再扩展到层输出、完整模型和服务负载。
 
-假设：
+KV量化还要加入长上下文与重复生成测试，因为误差在每一步都会参与新预测。这里只推导存储和数值路径，没有测得某模型可接受的最低bit数。
 
-| 变量 | 值 |
-| --- | --- |
-| \(L\) | 32 层 |
-| \(B\) | 8 |
-| \(T\) | 16k |
-| \(H_{\text{kv}}d_h\) | 4096 |
-| BF16 bytes | 2 |
 
-则：
+## 对照源码与延伸阅读
 
-\[
-2\times32\times8\times16384\times4096\times2\approx64\mathrm{GiB}
-\]
-
-这行估算的两个 `2` 分别表示 K/V 两份 cache 和 BF16 每个元素 2 bytes；32 是层数，8 是 batch，16384 是上下文长度，4096 是每层 KV hidden 宽度。它算的是未量化 KV cache 的显存量级。
-
-如果 KV 改成 INT8，bytes 从 2 降到 1，理论上 KV 本体接近减半。但实际还要加 scale 元数据、page 管理、碎片、workspace，以及 dequant 成本。
-
-## KV cache 量化的质量风险
-
-| 风险 | 表现 |
-| --- | --- |
-| 长程记忆变弱 | 前文事实引用错、跨段一致性下降 |
-| attention 排名变化 | 原本应该关注的 token 被弱化 |
-| 工具/代码任务掉点 | 细节 token、括号、变量名更容易丢 |
-| 多轮对话漂移 | 越到后面越不稳定 |
-| VLA/世界模型 drift | 长 horizon 状态和风险判断变差 |
-
-**验收重点**：KV 量化不能只看短问答。必须看长文档、代码、多轮、RAG 引用、长推理和业务高风险样本。
-
-## QAT、kernel、KV 的端到端链路
-
-```mermaid
-flowchart LR
-    A["训练好模型"] --> B["PTQ 或 QAT"]
-    B --> C["导出量化权重和 scale"]
-    C --> D["Runtime 加载"]
-    D --> E["低比特 GEMM / dequant fusion"]
-    D --> F["KV cache dtype"]
-    E --> G["TTFT / TPOT / 吞吐"]
-    F --> G
-    G --> H["任务桶质量回归"]
-    H --> I["上线或回退"]
-```
-
-这张图的重点是：QAT 只解决模型能否适应量化误差；kernel 才决定速度；KV cache 决定长上下文并发；最终仍要由任务桶质量决定是否可上线。
-
-## 实践验收
-
-| 问题 | 要看什么 |
-| --- | --- |
-| QAT 是否值得做 | PTQ 掉点是否不可接受，训练预算是否允许 |
-| 低比特 kernel 是否命中 | profiler、kernel name、fallback、dequant 时间 |
-| scale 粒度是否匹配 kernel | group size、alignment、layout |
-| packing 是否带来收益 | 权重加载带宽、unpack 开销 |
-| KV 量化是否划算 | 长上下文显存、TPOT、任务一致性 |
-| 是否有回退路径 | 敏感层保高精、KV dtype 可切换、全精 checkpoint |
-
-## 读完以后怎么判断
-
-QAT、kernel 和 KV cache 是量化落地的三块拼图。QAT 让模型适应误差，kernel 把低比特转成真实速度，KV cache 解决长上下文动态显存。只有三者和任务质量一起过关，量化才算从论文数字变成可用系统。
-
-## 外部材料
-
-- [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：先区分 quantization scheme、granularity 和 technique。
-- [A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)：看 weight-only、W&A、KV cache 和低比特系统路径的总览。
-- [QLoRA](https://arxiv.org/abs/2305.14314)：理解低比特底座训练和内存节省。
-- [TensorRT-LLM documentation](https://nvidia.github.io/TensorRT-LLM/)：看低比特 kernel、FP8/INT8/INT4 和 serving engine 如何落到 NVIDIA 部署栈。
-- [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：对照理解 KV cache 管理和 KV 量化为什么是两类问题。
-
-- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- [AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- [模拟量化与真实打包的两个实现入口](https://github.com/mit-han-lab/llm-awq/blob/d6e797a42b9ef7778de8ee2352116e0f48a78d61/awq/quantize/quantizer.py)

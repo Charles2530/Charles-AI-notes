@@ -1,144 +1,73 @@
 # 规划即推理与潜在动作
 
-世界模型与规划有一条重要线索：规划不一定只能写成显式搜索或值函数优化，也可以写成推断问题。与此同时，复杂动作空间直接规划太难，很多系统会把动作片段压缩成潜在动作或技能代码，再在更紧凑的空间里做推理。
+一维小车从位置 0 出发，目标位置为 2，动力学为 $x_{k+1}=x_k+a_k$。两步动作 `[1,1]` 到达目标，`[0,1]` 仍差一格。规划可以直接比较这两条轨迹，也可以让高回报轨迹获得更大的采样概率。这个视角把行为先验、收益和约束放到同一个计算中，便于理解 soft policy、轨迹采样和 latent action 搜索。
 
-规划即推理、潜在动作和 `WM / WAM / VAM` 连接三件事：奖励最大化如何改写成后验推断，潜在动作为什么适合高维控制，以及这条路线怎样接入世界模型接口。
+## 奖励怎样改变轨迹分布
 
-## 规划为什么可以写成推断
-
-传统控制常写成：
+先限定一个可行轨迹集合与基准分布 $p_0(\tau)$。令总回报为 $R(\tau)$、温度为 $\alpha>0$，定义
 
 \[
-\max_\pi \mathbb{E}_{\pi}\left[\sum_{t=1}^{T} r(s_t,a_t)\right]
+q^*(\tau)=\frac1Zp_0(\tau)\exp(R(\tau)/\alpha).
 \]
 
-`Planning as Inference` 会引入“最优性变量” \(\mathcal{O}_t\)，把高奖励轨迹视作更高后验概率的轨迹：
+同一基准概率下，高回报轨迹权重更大；$\alpha$ 越小，分布越集中到高回报部分。该式等价于在允许的分布族中最大化
 
 \[
-p(a_{1:T},s_{1:T}\mid \mathcal{O}_{1:T}=1)
+\mathbb E_q[R(\tau)]-\alpha D_{\mathrm{KL}}(q\|p_0).
 \]
 
-一个常见构造是：
+证明只需展开 $\log q^*=\log p_0+R/\alpha-\log Z$，代入 $D_{\mathrm{KL}}(q\|q^*)$。与 $q$ 无关的 $\alpha\log Z$ 不影响优化，因此最小化 KL 就对应上述收益与先验偏移的折中。
 
-\[
-p(\mathcal{O}_t=1\mid s_t,a_t)\propto \exp(r(s_t,a_t))
-\]
+引入“最优性变量”时，有时写 $p(\mathcal O=1\mid\tau)\propto\exp(R/\alpha)$。如果把它当作真正二元概率，必须保证归一化后的值不超过 $1$；一般更稳妥地把指数项理解成非负势函数，而不是任意正奖励下都合法的 Bernoulli 概率。
 
-于是轨迹后验可写成：
+## 小车的回报怎样改变采样概率
 
-\[
-p(\tau\mid \mathcal{O}_{1:T}=1)
-\propto
-p(\tau)\prod_{t=1}^{T}\exp(r(s_t,a_t))
-\]
+令每步奖励为 $-(x_{k+1}-2)^2$，则 `[1,1]` 的回报为 $-1$，`[0,1]` 为 $-5$。基准分布对二者各给 0.5，取 $\alpha=2$。二者指数权重之比为 $\exp((-1+5)/2)=e^2$，所以归一化概率约为 0.8808 和 0.1192。
 
-取对数后，奖励项推动轨迹更优，轨迹先验 \(p(\tau)\) 起到正则化作用。这也是为什么 planning as inference 常和 behavior prior、KL-regularized control、maximum-entropy RL 放在一起讨论。
+```python
+import math
+rewards = [-1.0, -5.0]
+alpha = 2.0
+weights = [0.5 * math.exp(r / alpha) for r in rewards]
+probabilities = [w / sum(weights) for w in weights]
+assert abs(probabilities[0] - 0.880797078) < 1e-9
+```
+
+减小温度会更集中于第一条，但不会让不存在于基准支持里的轨迹凭空出现。若基准不给 `[1,1]` 任何概率，单靠乘指数权重仍无法选它。行为先验限制了搜索范围，也可能排除了更好的方案。
+
+随机环境中还要限制哪些分布可由策略实现。直接对整条轨迹做无约束后验优化，可能同时偏爱“环境恰好走运”的状态转移；真实控制器只能选动作，不能修改转移随机性。控制即推断需要把真实动力学作为约束，或使用相应的变分推断形式，不能把任意后验直接当作可执行 policy。理论背景见 [Reinforcement Learning and Control as Probabilistic Inference](https://arxiv.org/abs/1805.00909)。
 
 ![Uncertain planning with latent variables](../assets/images/paper-deep-dives/world-models/jepa/figure-17-uncertain-planning.png){ width="860" }
 
-<small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 17。原论文图意：在不确定环境中，latent variables 表达不能从先验观测推出的预测信息；规划时可以采样多条 latent trajectory，并通过均值、方差或风险敏感目标选择动作序列。</small>
+<small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 17，潜变量与不确定未来的规划示意。</small>
 
-**难点解释：为什么规划要保留多种未来。**
-如果世界模型只给一个平均未来，planner 会误以为环境是确定的；但真实场景里可能有遮挡目标、未观测意图或随机干扰。latent variable 让模型保留多条可能轨迹，规划器就能比较“平均收益高但风险大”和“收益略低但更稳”的选择。这也是 planning as inference 比单纯最大化一条 reward 轨迹更自然的地方。
+## 为什么把动作块压成 latent
 
-## 这个视角对世界模型有什么用
-
-世界模型通常已经在学习：
-
-1. 状态转移；
-2. 观测分布；
-3. reward / cost / risk；
-4. 隐变量或 belief state。
-
-设隐状态为 \(s_t\)，动作为 \(a_t\)。世界模型通常提供三类预测分布：
+若机械臂每步有七维动作，预测 16 步就有 112 个连续变量。直接在这个空间随机采样，绝大多数序列可能不平滑或不可执行。潜在动作 $u$ 用 decoder 生成动作块
 
 \[
-p(s_{t+1}\mid s_t,a_t),\qquad
-p(o_t\mid s_t),\qquad
-p(r_t\mid s_t,a_t)
+u\sim p(u\mid h,g),\qquad a_{t:t+K-1}=D_\psi(u,h).
 \]
 
-在此基础上引入最优性变量，规划就可以变成隐状态轨迹上的后验推断。经典 `WM` 更强调“给定动作后世界怎么变”，planning as inference 进一步问：“在这些世界演化规律之上，什么动作后验最像成功轨迹？”
+这里 $u$ 表示 latent action，与世界状态 $z$ 分开记号。可以用自编码器从示范动作块学习 $u$，或用 inverse dynamics 从相邻观察推断变化编码。前者有真实动作监督，后者可能只有视频中的变化，含义与可执行性不同。
 
-这个视角的价值是，它天然容纳不确定性、行为先验、约束和部分可观测状态，不必把规划、状态估计和动作先验拆成完全独立的问题。
+压缩后的搜索空间小，不代表每个 latent 都有合法动作。Decoder 输出还必须满足动作范围、速度、控制模式与身体几何。若训练只见过抓杯子，latent 插值可能产生一段平滑但碰撞的动作；动作平滑性与任务可行性也不同。
 
-## 潜在动作为什么必要
+## Latent action 什么时候只是运动标签
 
-真实机器人或复杂 agent 的原始动作空间往往高维、噪声大、短时强相关。机械臂每一步可能包含末端位姿增量、抓手开合、关节速度和力控制参数；网页 agent 的动作可能包含点击、输入、等待、工具调用和状态检查。直接在这些原始动作上做长时搜索，很快会遇到组合爆炸。
+无动作视频中，两个帧之间的变化可能来自机器人、相机移动、外部人或物体自身运动。Inverse model 若把这些因素混入 latent，操纵这个 latent 可能改变相机视角而非机器人动作。[Genie](https://arxiv.org/abs/2402.15391)展示从视频学习 latent action 的具体路线，其可交互语义不等于任意机器人上的已标定控制命令。
 
-潜在动作的想法是：先把动作片段压缩成低维代码 \(z\)，再规划：
-
-\[
-z_{1:K} \rightarrow a_{1:T}
-\]
-
-这样 planner 不必在每个细粒度控制量上搜索，而是在“接近把手”“抓取并提起”“重新观察”“调用工具并检查结果”这类更高层动作单元上推理。
-
-潜在动作的关键要求是：
-
-1. 足够紧凑，便于规划；
-2. 足够可解码，能还原可执行动作；
-3. 足够有语义，能表达任务阶段和技能；
-4. 与世界模型 latent 对齐，方便预测动作后果。
+若要落到机器人，可用带动作数据学习 $D_\psi(u,h)$，核对同一 latent 在不同状态和 embodiment 下的实际后果，必要时引入状态条件或层级技能。不能仅靠 latent 可视化聚类就宣称它有稳定物理语义。
 
 ![Hierarchical JEPA planning 原论文图](../assets/images/paper-deep-dives/world-models/jepa/figure-16-hierarchical-planning.png){ width="920" }
 
-<small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 16。原论文图意：分层 JEPA / world model 可以在不同抽象层级上预测和规划，高层处理慢变量与目标，低层处理更细的动作和观测。</small>
+<small>图源：[A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)，Figure 16，分层规划示意。</small>
 
-## 潜在动作如何学习
+## 从抽象目标回到真实反馈
 
-常见路线包括：
+回到小车，可以让一个标量 latent $u$ 生成两步同幅动作 $D(u)=[u,u]$。搜索维数从二变一，但无法生成 `[1,0]` 这样的先走后停轨迹。降维同时改变了可行集合；如果目标需要中途避障，少一个变量可能恰好丢掉必要行为。机器人技能 decoder 也有同样限制，只是更难从高维轨迹中直接看出。
 
-| 路线 | 做法 | 适合场景 |
-| --- | --- | --- |
-| VAE 动作片段 | \(q_\phi(z\mid a_{t:t+H})\) 编码，\(p_\theta(a_{t:t+H}\mid z)\) 解码 | 连续控制、可微优化 |
-| 离散技能代码 | tokenizer/codebook 把动作片段离散化 | 高层规划、技能组合 |
-| 行为分段 | 从演示中切出技能原语 | 机器人任务、流程型 agent |
-| Action chunk | 直接把固定长度动作块当规划单位 | VLA、遥操作学习 |
-| World-action latent | 在世界模型 latent 中联合定义动作转移 | WAM/VAM 路线 |
 
-不同路线的取舍在于：连续 latent 更适合梯度优化，离散技能更像程序或 token 组合，action chunk 工程上简单但解释性和复用性较弱。
+一种层级系统由高层选择子目标或 latent skill，低层 decoder/controller 执行动作前缀，世界模型再根据新观察更新状态。上层 horizon 较长，底层刷新较快，二者通过可验证的完成条件连接。若“到达杯子附近”没有距离、姿态和接触定义，上层计划就无法判断技能何时结束。
 
-## 和 WM、WAM、VAM 的关系
-
-Planning as inference 与潜在动作可以接到三类世界模型上：
-
-1. **WM**：给定候选 latent action，世界模型 rollout 未来状态、reward 和 risk，再由 planner 选择；
-2. **WAM**：模型直接联合生成未来动作和未来观测，planner 更像在联合后验中采样；
-3. **VAM**：视频 latent 提供时空先验，潜在动作对齐视频变化，用于动作生成或数据合成。
-
-这也是为什么潜在动作是连接经典 world model 和现代 action-conditioned generative model 的桥。它把“世界如何变”和“动作如何组织”放到同一个推理框架里。
-
-## 工程风险
-
-这条路线常见失败模式包括：
-
-| 风险 | 表现 | 处理方向 |
-| --- | --- | --- |
-| Latent 不可执行 | planner 找到高分 \(z\)，解码动作做不出来 | 加可执行性约束和行为先验 |
-| Latent 无语义 | 搜索空间变小但不可控 | 加任务阶段、技能标签或离散代码 |
-| World model 偏差 | imagined success 线上失败 | 做模型不确定性和真实回放校验 |
-| 长时 rollout 漂移 | 短期可用，长任务崩 | 缩短 horizon、replan、引入风险头 |
-| 先验过强 | 模型只会模仿旧行为 | 加反事实数据和探索机制 |
-
-不要只看 imagined return。真正要看的是接入 planner 后的闭环成功率、恢复能力、风险率和系统延迟。
-
-## 评测清单
-
-评估这类方法时建议同时报告：
-
-1. latent action 重建误差和可执行率；
-2. latent 空间中的任务阶段可分性；
-3. world model 对不同 latent action 的未来分叉是否合理；
-4. planner 在固定计算预算下的成功率和风险率；
-5. replan 频率、单步延迟和 horizon 成本；
-6. OOD 状态下是否能回退到保守动作；
-7. 与原始动作搜索、行为克隆和经典 MPC 的对比。
-
-Planning as inference 的价值不在于把控制问题换个数学名字，而在于把奖励、先验、约束、不确定性和动作表示放进同一个概率框架。潜在动作则让这个框架在高维真实动作空间里更可计算。
-
-## 外部材料
-
-- [World Models 论文](https://arxiv.org/abs/1803.10122)。
-- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+比较 latent 搜索与原始动作搜索时，应保持环境任务与真实交互预算一致，再分别记录候选数量、horizon、decoder 成本和闭环成功。低维搜索节省候选评估，但 decoder 的偏差可能限制可达到的动作集合。模型错误与不可执行 latent 的诊断分别见[世界模型评测](evaluation-and-failure-modes.md)和[动作接口](wm-wam-vam-and-action-conditioned-modeling.md)。

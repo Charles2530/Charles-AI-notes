@@ -9,14 +9,14 @@ cuRobo / STOMP 更像“轨迹规划器”
 success checker 更像“自动判卷器”
 ```
 
-它们不是同一层工具，不能横向比较。一个完整数据生成系统通常会把它们接起来。
+这些对象处于不同层级，工程上可以按需求组合，但 RoboTwin 不是 Isaac Sim 的默认插件。具体版本采用的仿真后端、资产格式和规划接口要以该项目代码为准，迁移需要适配。
 
 ![RoboTwin 2.0 benchmark overview 官方图](../assets/images/localized-remote/embodied-ai/isaacsim-and-robotwin/robotwin-2-0-benchmark-overview-官方图.png){ width="960" }
 
 <small>图源：[RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/index.html)。这张官方 overview 图同时展示了双臂任务、物体库、domain randomization、sim2real、benchmark、开源数据和策略部署，正好对应“仿真不是一个画面，而是任务、资产、轨迹、判定和数据保存的系统”。</small>
 
 **这张 RoboTwin 图怎么读。**
-先看任务和资产从哪里来，再看 domain randomization 如何扩展场景，然后看 expert trajectory / policy training 如何生成数据，最后看 benchmark 和 sim2real 如何验收。Isaac Sim 提供物理和渲染能力，RoboTwin 风格 pipeline 提供任务、标注、判卷和数据组织方式。
+先看任务和资产从哪里来，再看 domain randomization 如何扩展场景，然后看 expert trajectory / policy training 如何生成数据，最后看 benchmark 和 sim2real 如何验收。图中描述的是 RoboTwin 自身的数据与评测链，不能据此推断它底层运行于 Isaac Sim。二者可以借鉴同一种任务组织方式，但不是自动兼容的上下游。
 
 ## Isaac Sim 是什么
 
@@ -74,7 +74,7 @@ RoboTwin 可以理解为一套面向机器人操作任务的 benchmark / pipelin
 | 相机图像怎么来 | 渲染 RGB、Depth、Segmentation | 决定哪些相机视角进入训练/评测 |
 | 成功怎么判 | 提供状态查询和仿真结果 | 写具体 success checker |
 
-更准确地说，Isaac Sim 是“仿真世界和传感器”，RoboTwin 是“任务和数据集组织方式”。
+Isaac Sim 提供仿真平台能力，RoboTwin 是具体机器人操作任务与数据生成项目。这里“RoboTwin 风格”仅指可借鉴的组织模式，并不声称其任务脚本可直接在 Isaac Sim 中执行。
 
 ## cuRobo / STOMP 在哪里
 
@@ -97,6 +97,18 @@ Isaac Sim / simulator 给出当前状态和障碍物
 ```
 
 如果 planner 生成失败，不一定是 planner 不行，也可能是抓取点不可达、collision mesh 过大、机器人初始姿态不合理，或目标物体摆放太靠边。
+
+## 仿真、控制与渲染有三只时钟
+
+假设物理步长为 1/240 秒，控制频率 20 Hz，相机 30 Hz。每个控制周期需要 12 个物理子步，每次相机采样间隔 8 个物理子步。控制和相机只每 24 个物理步在相位对齐时重合，不能简单把相机第 n 帧与动作第 n 行配对。
+
+记录时使用统一仿真时间戳，再按策略定义的“最近可用观测”取帧。渲染线程的墙钟耗时不等于仿真时间。如果模拟以慢于实时速度运行，仍可得到正确控制频率的离线数据，但部署延迟不能从它直接推断。
+
+重置也需要分层。恢复物体位姿后还要清零速度、机器人控制目标和控制器内部状态，等待接触稳定，并清理上一 episode 的传感器缓存。仅将视觉 mesh 移回原位可能留下旧速度，导致初始状态表面相同、实际不同。
+
+在 240Hz 物理、20Hz 控制和30Hz 相机的例子中，控制发生在第 0、12、24 个物理步，相机发生在第 0、8、16、24 步。第12步决策能读取的最新相机是第8步画面，观测年龄已为4个物理步，约16.7毫秒；第24步若事件顺序允许读取新帧，年龄才可能为零。相同平均频率仍会产生周期性相位差。
+
+因此训练样本要记录采集时刻与决策截止时刻，而不只是“当前控制步”。Reset时还需清理传感器和控制器的历史状态，否则新episode第一步可能读取上一场景的缓存。这样的错误很容易被模型当成随机噪声吸收，最后表现为只在任务开头失败。
 
 ## 一个最小数据生成闭环
 
@@ -158,22 +170,11 @@ for task in task_suite:
 
 RoboTwin 的启发在于：资产标注要服务任务。随机标一个抓取轴可能能拿起物体，但未必能完成后续任务。比如锤子抓锤头可以拿起来，但无法正常使用锤子。
 
-## 生成式数字孪生资产流程
+## 从生成资产到物理资产的校验
 
-RoboTwin 1.0 的生成式数字孪生流程很适合放到这里：它把“从一张图生成仿真资产”拆成了可检查的中间产物。
+从参考图生成 mesh 可以增加外观多样性，但单张图无法唯一确定背面结构、真实尺寸、密度与摩擦。生成器给出的材质描述也不是物理测量。进入任务前需补齐米制尺度、碰撞体、质量惯量、关节轴与功能点，并记录哪些值来自测量、估计或随机化。
 
-| 步骤 | 处理 | 为什么对具身数据重要 |
-| --- | --- | --- |
-| 参考图 | 输入单张 RGB 物体图 | 给资产生成一个真实外观锚点 |
-| 视觉描述 | GPT-4V 描述类别、部件、形状、材质线索 | 让后续生成保留可操作语义 |
-| 变体扩展 | LLM 生成同类物体不同外观和视角描述 | 增加资产多样性 |
-| 2D 生成 | SDXL-Turbo 生成多样化物体图像 | 给 3D 生成模型提供更丰富条件 |
-| 3D 合成 | Rodin 生成几何、法线、线框和纹理 | 得到可导入仿真的 mesh |
-| 物理属性 | 估计材质、质量、摩擦，并做小范围随机化 | 让抓取和碰撞更接近真实分布 |
-| 碰撞处理 | convex decomposition、mesh merge、collision 资产清理 | 避免仿真穿模、卡顿和不稳定 |
-| 功能标注 | 标注 functional point / axis，并迁移到变体资产 | 让任务脚本和 success checker 知道“哪里可操作” |
-
-这条链路的重点是：生成式资产只有进入“物理属性 + 碰撞体 + 功能点 + success checker”的格式后，才真正变成具身智能训练数据。否则它只是好看的 3D 模型。
+例如一只容器至少要验证开口是否真的空、内壁碰撞是否合理、质心是否位于合理位置、放置后是否稳定。视觉上漂亮的空心杯若碰撞体是实心凸包，会让插入任务系统性失败。资产质量验收应以任务接触为中心。
 
 ## Isaac Sim 和 SAPIEN 怎么理解
 
@@ -260,7 +261,7 @@ read state
 9. `camera config`：相机视角、深度、分割是否覆盖目标物体。
 10. `success checker`：阈值、夹爪状态、物体稳定性判断是否正确。
 
-不要一开始就怀疑模型。大多数早期失败来自资产、坐标系、碰撞、抓取和任务判定。
+先验证资产、坐标与任务判定，可以排除不依赖学习模型的确定性错误；只有记录具体失败分布后，才能判断当前项目的主要瓶颈。
 
 ## 和其他页面的连接
 
@@ -271,3 +272,5 @@ read state
 | [一个任务跑通具身闭环](closed-loop-task-walkthrough.md) | 一个具体任务如何从状态定义走到轨迹和判定 |
 | [Sim2Real 与具身数据引擎](sim2real-and-data-engines.md) | 仿真数据怎样走向真实系统，以及失败如何回流 |
 | [VLA、WAM 与世界模型地图](vla-wam-world-model-system-map.md) | 这些仿真数据如何服务 π0.5 式 VLA 和 DreamZero 式 WAM |
+
+原始工具资料见 [Isaac Sim 文档](https://docs.isaacsim.omniverse.nvidia.com/latest/overview/overview.html)与 [RoboTwin 项目](https://robotwin-platform.github.io/)。具体安装和 API 依赖版本，本页伪代码只解释数据流。

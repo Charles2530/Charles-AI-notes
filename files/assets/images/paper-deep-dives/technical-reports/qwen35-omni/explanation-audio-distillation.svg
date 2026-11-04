@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="625" viewBox="0 0 1120 625" role="img"><title>同一个问题，说出来之后也应得到足够好的回答</title><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#52687e"/></marker></defs><rect width="100%" height="100%" fill="#f7fafc"/><g font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+<text x="36" y="46" font-size="27" font-weight="700" fill="#172f48">同一个问题，说出来之后也应得到足够好的回答</text><text x="36" y="80" font-size="17" fill="#50677c">Thinker 后训练示意 · 依据 §4.1；箭头表示训练数据与目标的关系，不是推理时的 ASR 串联系统</text>
+<rect x="35" y="124" width="260" height="122" rx="12" fill="#fff4e8" stroke="#b7c9d8" stroke-width="2"/>
+<text x="53" y="156" font-size="21" fill="#233c54" font-weight="600">配对问题</text>
+<text x="53" y="188" font-size="18" fill="#233c54" font-weight="400">音频提问 q_audio</text>
+<text x="53" y="216" font-size="18" fill="#233c54" font-weight="400">对应文字 q_text</text>
+<rect x="380" y="124" width="300" height="122" rx="12" fill="#eaf3ff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="398" y="156" font-size="21" fill="#233c54" font-weight="600">文字条件生成回答</text>
+<text x="398" y="188" font-size="18" fill="#233c54" font-weight="400">输入 q_text</text>
+<text x="398" y="216" font-size="18" fill="#233c54" font-weight="400">得到较强的回答 y_text</text>
+<path d="M295,181 L375,181" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="380" y="327" width="300" height="122" rx="12" fill="#e9f5ef" stroke="#b7c9d8" stroke-width="2"/>
+<text x="398" y="359" font-size="21" fill="#233c54" font-weight="600">音频条件训练</text>
+<text x="398" y="391" font-size="18" fill="#233c54" font-weight="400">输入 q_audio</text>
+<text x="398" y="419" font-size="18" fill="#233c54" font-weight="400">学习产生对应回答</text>
+<path d="M165,246 L165,388" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M165,388 L375,388" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M530,247 L530,321" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<text x="553" y="292" font-size="19" fill="#233c54" font-weight="400">y_text 作为蒸馏目标</text>
+<rect x="785" y="227" width="300" height="145" rx="12" fill="#fff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="803" y="259" font-size="21" fill="#233c54" font-weight="600">希望缩小的差距</text>
+<text x="803" y="291" font-size="18" fill="#233c54" font-weight="400">识别出问题之后</text>
+<text x="803" y="319" font-size="18" fill="#233c54" font-weight="400">仍可能在推理、流畅性</text>
+<text x="803" y="347" font-size="18" fill="#233c54" font-weight="400">或任务完成上退步</text>
+<path d="M680,388 L780,328" stroke="#52687e" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="35" y="505" width="1050" height="82" rx="12" fill="#eaf3ff" stroke="#b7c9d8" stroke-width="2"/>
+<text x="53" y="537" font-size="21" fill="#233c54" font-weight="600">其他阶段处理不同问题</text>
+<text x="53" y="569" font-size="18" fill="#233c54" font-weight="400">此前用各领域教师汇集专门能力；此后用多轮交互奖励改善串语种、角色漂移与长对话失忆。</text>
+</g></svg>

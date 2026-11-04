@@ -16,6 +16,7 @@ paper_topic: 世界模型
 
 !!! info "论文信息"
     **论文题名：** {title}。<br>
+    **原始来源：** [Paper](https://arxiv.org/abs/2401.00001)。<br>
     **时间 / 主题：** 2026-01；世界模型。<br>
     **元数据来源与核验口径：** Checked Date：2026-06-15；Repro Status：Paper reviewed。
 
@@ -91,7 +92,7 @@ class PaperDeepDiveAuditTests(TestCase):
 
             self.assertFalse(any("short deep dive" in finding.reason for finding in findings))
 
-    def test_missing_reading_conclusion_is_reported(self):
+    def test_reading_conclusion_heading_is_not_required(self):
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             page = root / "world-models" / "missing-conclusion.md"
@@ -100,7 +101,7 @@ class PaperDeepDiveAuditTests(TestCase):
 
             findings = audit_page(page, include_hints=False, root=root)
 
-            self.assertTrue(any("missing 阅读结论 section" in finding.reason for finding in findings))
+            self.assertEqual(findings, [])
 
     def test_missing_frontmatter_field_is_reported(self):
         with TemporaryDirectory() as tmpdir:
@@ -113,7 +114,7 @@ class PaperDeepDiveAuditTests(TestCase):
 
             self.assertTrue(any("missing frontmatter fields: paper_topic" in finding.reason for finding in findings))
 
-    def test_missing_story_section_is_reported(self):
+    def test_alternative_story_headings_are_accepted(self):
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             page = root / "world-models" / "missing-story-section.md"
@@ -122,4 +123,111 @@ class PaperDeepDiveAuditTests(TestCase):
 
             findings = audit_page(page, include_hints=False, root=root)
 
-            self.assertTrue(any("missing required story sections: ### Finding" in finding.reason for finding in findings))
+            self.assertEqual(findings, [])
+
+    def test_official_technical_material_header_is_accepted(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "report.md"
+            page.write_text(_valid_page("Official report").replace('info "论文信息"', 'info "资料信息"'), encoding="utf-8")
+            self.assertEqual(audit_page(page, include_hints=False, root=root), [])
+
+    def test_any_long_article_is_a_review_hint_not_an_error(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "long-method.md"
+            page.write_text(_valid_page("Detailed method") + "\nTechnical discussion." * 1800, encoding="utf-8")
+            self.assertEqual(audit_page(page, include_hints=False, root=root), [])
+            findings = audit_page(page, include_hints=True, root=root)
+            self.assertTrue(any(item.severity == "hint" and "length" in item.reason for item in findings))
+            self.assertFalse(any(item.severity == "error" for item in findings))
+
+    def test_absent_diagnostic_keywords_do_not_claim_missing_evidence(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "method.md"
+            page.write_text(_valid_page("Method", body="控制其他变量后比较两种设置。"), encoding="utf-8")
+            self.assertEqual(audit_page(page, include_hints=False, root=root), [])
+
+    def test_source_link_must_exist_in_information_block(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "unsourced.md"
+            text = _valid_page("Unsourced").replace('    **原始来源：** [Paper](https://arxiv.org/abs/2401.00001)。<br>\n', '')
+            text += "\n[Unrelated further reading](https://example.org/another-paper)\n"
+            page.write_text(text, encoding="utf-8")
+            findings = audit_page(page, include_hints=False, root=root)
+            self.assertTrue(any(item.severity == "error" and "source URL" in item.reason for item in findings))
+
+    def test_empty_metadata_value_is_missing(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "empty-title.md"
+            for value in ('', '""', "'  '", 'null', '~', '# not supplied', '"" # not supplied'):
+                with self.subTest(value=value):
+                    page.write_text(_valid_page("Title").replace('paper_title: "Title"', f'paper_title: {value}'), encoding="utf-8")
+                    findings = audit_page(page, include_hints=False, root=root)
+                    self.assertTrue(any("paper_title" in item.reason and item.severity == "error" for item in findings))
+
+    def test_missing_or_duplicated_information_block_is_an_error(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "method.md"
+            original = _valid_page("Method")
+            for text in (original.replace('!!! info "论文信息"', '!!! note "背景"'), original + '\n!!! info "资料信息"\n    https://example.org/paper\n'):
+                with self.subTest(text=text):
+                    page.write_text(text, encoding="utf-8")
+                    findings = audit_page(page, include_hints=False, root=root)
+                    self.assertTrue(any(item.severity == "error" and "exactly one" in item.reason for item in findings))
+
+    def test_source_url_without_a_host_is_an_error(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "method.md"
+            page.write_text(_valid_page("Method").replace('https://arxiv.org/abs/2401.00001', 'https:///missing-host'), encoding="utf-8")
+            findings = audit_page(page, include_hints=False, root=root)
+            self.assertTrue(any(item.severity == "error" and "source URL" in item.reason for item in findings))
+
+    def test_missing_markdown_and_html_resources_are_errors(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "papers"
+            root.mkdir()
+            page = root / "method.md"
+            page.write_text(_valid_page("Method") + '\n[Missing](absent.md)\n![Figure](absent.png)\n<img src="../missing.svg">\n', encoding="utf-8")
+            findings = audit_page(page, include_hints=False, root=root)
+            reasons = "\n".join(item.reason for item in findings if item.severity == "error")
+            for name in ("absent.md", "absent.png", "../missing.svg"):
+                self.assertIn(name, reasons)
+
+    def test_existing_shared_assets_and_fragment_links_are_accepted(self):
+        with TemporaryDirectory() as tmpdir:
+            docs = Path(tmpdir)
+            root = docs / "papers"
+            root.mkdir()
+            (docs / "figure.svg").write_text("<svg></svg>", encoding="utf-8")
+            (root / "related.md").write_text("# Related", encoding="utf-8")
+            page = root / "method.md"
+            page.write_text(_valid_page("Method") + '\n[Related](related.md#topic)\n![Figure](../figure.svg)\n<img src="../../figure.svg">\n[Same page](#topic)\n', encoding="utf-8")
+            self.assertEqual(audit_page(page, include_hints=False, root=root), [])
+
+    def test_links_in_code_examples_are_ignored(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            page = root / "method.md"
+            page.write_text(_valid_page("Method") + '\n~~~markdown\n[Template](missing.md)\n~~~\n```markdown\n![Template](missing.png)\n```\n', encoding="utf-8")
+            self.assertEqual(audit_page(page, include_hints=False, root=root), [])
+
+    def test_index_reports_stale_links_as_well_as_coverage(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "index.md").write_text("[Deleted article](gone.md)\n", encoding="utf-8")
+            findings = audit_root(root, include_hints=False)
+            self.assertTrue(any(item.path == Path("index.md") and "gone.md" in item.reason for item in findings))
+
+    def test_index_code_sample_does_not_count_as_article_coverage(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "method.md").write_text(_valid_page("Method"), encoding="utf-8")
+            (root / "index.md").write_text("~~~markdown\n[Method](method.md)\n~~~\n", encoding="utf-8")
+            findings = audit_root(root, include_hints=False)
+            self.assertTrue(any("index.md missing links for: method.md" in item.reason for item in findings))

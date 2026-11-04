@@ -1,249 +1,195 @@
-# DDPM 数学与训练：从前向高斯链到噪声预测
+# DDPM 如何把反向生成变成噪声回归
 
-DDPM 把生成问题写成两个方向相反的过程：前向过程用固定高斯转移逐步破坏数据，反向过程用神经网络近似未知的反向条件分布。训练的关键，是利用已知前向过程把变分目标转成不同噪声水平上的监督回归。
+给一张图逐步加噪很容易。已知当前噪声图，想知道前一步可能是什么，却需要知道哪些图像结构在数据里常见。DDPM 把容易的方向固定下来，再利用它构造可以训练的反向模型。这里从两次加噪开始，推到后验、损失和采样，沿用同一套离散时间记号。
 
-DDPM 数学需要连接六个对象：逐步前向转移 \(q(x_t\mid x_{t-1})\)、任意时刻的闭式边缘 \(q(x_t\mid x_0)\)、可计算的后验 \(q(x_{t-1}\mid x_t,x_0)\)、需要学习的反向分布 \(p_\theta(x_{t-1}\mid x_t)\)、噪声预测 loss，以及从 \(x_T\) 到 \(x_0\) 的 DDPM 采样算法。
+\(x_0\) 是干净样本，\(t=1,\ldots,T\) 是噪声步骤，\(\beta_t\) 是单步噪声方差。定义 \(\alpha_t=1-\beta_t\)、\(\bar\alpha_t=\prod_{s=1}^t\alpha_s\)，并令 \(\bar\alpha_0=1\)。图像中的每个元素遵循相同的加噪规则，网络则通过联合读取图像来预测。
 
-这里采用离散时间、方差保持（variance preserving）DDPM 记号。连续噪声尺度、EDM preconditioning、score SDE 和 Flow Matching 分别使用不同公式边界。
+## 两次高斯加噪为什么可以合并
 
-## 本文解决什么问题
-
-这篇文章把 DDPM 的前向高斯链、闭式边缘、可计算后验、噪声预测 loss 和逐步采样放到同一套记号里。目标不是背公式，而是知道训练时为什么能直接采样任意 \(x_t\)，为什么模型通常预测噪声，以及 sampler 怎样把网络输出还原成 \(p_\theta(x_{t-1}\mid x_t)\) 的更新。
-
-## 前置知识
-
-- [扩散模型基础](foundations-and-core-intuition.md)：概率路径、局部预测和采样轨迹。
-- [概率分布与条件概率](../prerequisite-math/probability-distributions-and-expectation.md)：高斯分布、条件分布和期望。
-- [潜变量与生成目标](../prerequisite-math/latent-likelihood-and-generative-objectives.md)：对数似然、潜变量和变分下界。
-
-统一记号如下：
-
-| 符号 | 含义 |
-| --- | --- |
-| \(x_0\) | 来自真实数据分布的干净样本 |
-| \(x_t\) | 第 \(t\) 个噪声水平的随机变量 |
-| \(\beta_t\) | 第 \(t\) 步加入的方差，满足 \(0<\beta_t<1\) |
-| \(\alpha_t=1-\beta_t\) | 单步保留的信号方差比例 |
-| \(\bar\alpha_t=\prod_{s=1}^{t}\alpha_s\) | 从 0 到 \(t\) 的累计信号比例 |
-| \(\epsilon\sim\mathcal N(0,I)\) | 标准高斯噪声 |
-| \(q\) | 固定的前向过程及其可计算分布 |
-| \(p_\theta\) | 参数为 \(\theta\) 的反向生成模型 |
-
-## 核心机制
-
-### 逐步前向高斯链
-
-DDPM 规定一个马尔可夫前向过程：
-
-\[
-q(x_t\mid x_{t-1})
-=\mathcal N\!\left(x_t;\sqrt{\alpha_t}x_{t-1},\beta_t I\right),
-\qquad \alpha_t=1-\beta_t.
-\]
-
-等价的采样式为：
+前向一步为
 
 \[
 x_t=\sqrt{\alpha_t}x_{t-1}+\sqrt{\beta_t}\epsilon_t,
 \qquad \epsilon_t\sim\mathcal N(0,I).
 \]
 
-每一步缩小已有信号，再加入独立高斯噪声。若 \(\beta_t\) 足够小并且累计步数足够多，\(x_T\) 会接近标准高斯。这个过程没有可学习参数；noise schedule 完全由训练配置规定。
+不同步骤的 \(\epsilon_t\) 独立。高斯分布记法中的第二个参数是协方差，因此
+
+\[
+q(x_t\mid x_{t-1})=\mathcal N(\sqrt{\alpha_t}x_{t-1},\beta_t I).
+\]
+
+取两步都为 \(\beta=.2\) 的教学日程，把第一步代入第二步
+
+\[
+x_2=.8x_0+\sqrt{.8}\sqrt{.2}\epsilon_1+\sqrt{.2}\epsilon_2.
+\]
+
+后两项的方差为 \(.8\times.2+.2=.36\)，所以它们的和可以重新写成 \(.6\epsilon\)，其中 \(\epsilon\) 是新的标准高斯变量。于是 \(x_2=.8x_0+.6\epsilon\)。这里合并的是分布，新的 \(\epsilon\) 不等于任意一个原始噪声。
+
+把这个过程递推下去，得到
+
+\[
+q(x_t\mid x_0)=\mathcal N(\sqrt{\bar\alpha_t}x_0,(1-\bar\alpha_t)I),
+\quad
+x_t=\sqrt{\bar\alpha_t}x_0+\sqrt{1-\bar\alpha_t}\epsilon.
+\]
+
+因此训练可以随机抽一个 \(t\) 直接构造带噪输入。取 \(x_0=.5,\epsilon=-1\)，上面的两步边缘给出 \(x_2=-.2\)。下一节仍用这组数。
 
 ![DDPM 前向与反向图模型](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="700" }
 
 <small>图源：[Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)，Figure 2。左到右是固定前向链，右到左是需要学习的反向链。图能说明条件依赖关系，不能说明实际训练必须逐步生成所有中间状态。</small>
 
-### 任意时间步可以闭式采样
-
-独立高斯噪声在线性组合下仍是高斯，因此可以把前 \(t\) 步合并：
-
-\[
-q(x_t\mid x_0)
-=\mathcal N\!\left(
-x_t;\sqrt{\bar\alpha_t}x_0,(1-\bar\alpha_t)I
-\right).
-\]
-
-用重参数化形式采样：
-
-\[
-x_t
-=\sqrt{\bar\alpha_t}x_0
-+\sqrt{1-\bar\alpha_t}\epsilon,
-\qquad \epsilon\sim\mathcal N(0,I).
-\]
-
-这条公式解释了训练为何可以随机抽一个 \(t\)，直接从 \(x_0\) 构造 \(x_t\)。模型仍覆盖整条路径，因为不同 batch 会采到不同时间步；单个训练样本不需要真的执行 \(t\) 次加噪。
-
 ![DDPM 数据与噪声系数](../assets/images/paper-figures/diffusion/ddpm-orthogonal-coefficients.svg){ width="760" }
 
 <small>这张示意图把 \(x_t\) 画成数据分量和噪声分量的系数组合，用来读取 \(\sqrt{\bar\alpha_t}\) 与 \(\sqrt{1-\bar\alpha_t}\) 的消长。它是参数化直觉，不是在断言真实图像向量与某次噪声样本在像素空间必然正交。</small>
 
-### 已知 \(x_0\) 时，单步后验仍是高斯
+累计信号接近零时，\(q(x_T\mid x_0)\) 才接近标准高斯。仅仅设置“有 T 个步骤”不保证这一点。若把 1000 步日程截成 8 步又保留很小的 beta，终点仍含大量信号，从纯噪声采样就会遇到训练分布错配。
 
-训练推导中 \(x_0\) 已知。利用高斯条件分布，可以得到：
+## 反向一步为什么多了一个已知的干净样本
+
+训练时知道 \(x_0\)，可以计算 \(q(x_{t-1}\mid x_t,x_0)\)。先对一个标量推导，向量情形的各维具有相同系数。令 \(y=x_{t-1}\)，根据贝叶斯公式
 
 \[
-q(x_{t-1}\mid x_t,x_0)
-=\mathcal N\!\left(
-x_{t-1};\tilde\mu_t(x_t,x_0),\tilde\beta_t I
-\right),
+q(y\mid x_t,x_0)\propto q(x_t\mid y)q(y\mid x_0).
 \]
 
-其中：
+忽略与 \(y\) 无关的归一化常数，负对数为
 
 \[
-\tilde\mu_t(x_t,x_0)
-=
+\frac{(x_t-\sqrt{\alpha_t}y)^2}{2\beta_t}
++\frac{(y-\sqrt{\bar\alpha_{t-1}}x_0)^2}
+{2(1-\bar\alpha_{t-1})}.
+\]
+
+把 \(y^2\) 与 \(y\) 的系数分别收集起来。高斯精度，即方差倒数，是
+
+\[
+A=\frac{\alpha_t}{\beta_t}+\frac1{1-\bar\alpha_{t-1}}
+=\frac{1-\bar\alpha_t}{\beta_t(1-\bar\alpha_{t-1})}.
+\]
+
+一次项对应
+
+\[
+B=\frac{\sqrt{\alpha_t}x_t}{\beta_t}
++\frac{\sqrt{\bar\alpha_{t-1}}x_0}{1-\bar\alpha_{t-1}}.
+\]
+
+配方成 \(\tfrac A2(y-B/A)^2\)，后验均值为 \(B/A\)，方差为 \(1/A\)。由此得到
+
+\[
+\tilde\beta_t=\frac{1-\bar\alpha_{t-1}}{1-\bar\alpha_t}\beta_t,
+\]
+
+\[
+\tilde\mu_t=
 \frac{\sqrt{\bar\alpha_{t-1}}\beta_t}{1-\bar\alpha_t}x_0
-+
-\frac{\sqrt{\alpha_t}(1-\bar\alpha_{t-1})}{1-\bar\alpha_t}x_t,
++\frac{\sqrt{\alpha_t}(1-\bar\alpha_{t-1})}{1-\bar\alpha_t}x_t.
 \]
 
+这段推导适用于 \(t\ge2\)。在两步例子中，\(\tilde\beta_2=1/9\)，两个均值系数都约为 .4969，因此 \(\tilde\mu_2=.4969(.5-.2)\approx.1491\)。即使知道两个端点，中间状态仍有不确定性，因为两次噪声可以有不同组合。
+
+生成时只有 \(x_t\)，没有 \(x_0\)。真实反向条件 \(q(x_{t-1}\mid x_t)\) 会把各种可能的 \(x_0\) 混合起来，一般不再是单个高斯。DDPM 使用小步高斯模型近似这个反向转移。步长很大时，这种近似的误差也需要考虑。
+
+## 用噪声预测表达反向均值
+
+将边缘采样式重排，有
+
 \[
-\tilde\beta_t
-=\frac{1-\bar\alpha_{t-1}}{1-\bar\alpha_t}\beta_t.
+x_0=\frac{x_t-\sqrt{1-\bar\alpha_t}\epsilon}{\sqrt{\bar\alpha_t}}.
 \]
 
-这个后验说明：如果知道干净样本，反向一步的均值和方差都能直接计算。但生成时只有 \(x_t\)，不知道对应的 \(x_0\)，所以需要模型提供足够的信息来近似反向均值。
-
-### 学习反向条件分布
-
-DDPM 用参数化高斯分布近似真实反向条件：
+把它代入后验均值，整理可得
 
 \[
-p_\theta(x_{t-1}\mid x_t)
-=\mathcal N\!\left(
-x_{t-1};\mu_\theta(x_t,t),\Sigma_t
-\right).
+\tilde\mu_t=
+\frac1{\sqrt{\alpha_t}}
+\left(x_t-\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon\right).
 \]
 
-原始 DDPM 常固定反向方差，只学习均值。把均值改写成噪声预测形式：
+这样，网络可以预测 \(\epsilon_\theta(x_t,t)\)，再用相同系数得到模型均值 \(\mu_\theta\)。前面的数值代入准确噪声 −1，结果仍是 .1491。若网络只预测到 −.9，均值变为约 .1118；噪声误差会通过已知系数转成下一步状态误差。
+
+网络面对许多可能的干净样本，平方误差最优预测是 \(\mathbb E[\epsilon\mid x_t,t]\)，通常无法逐次找回训练时抽到的具体噪声。这个条件均值恰好能提供平均的反向均值信息，见[二点分布的完整计算](foundations-and-core-intuition.md)。
+
+## 似然目标怎样产生加权 MSE
+
+模型先验为 \(p(x_T)\)，反向链为
 
 \[
-\mu_\theta(x_t,t)
-=\frac{1}{\sqrt{\alpha_t}}
-\left(
-x_t-
-\frac{\beta_t}{\sqrt{1-\bar\alpha_t}}
-\epsilon_\theta(x_t,t)
-\right).
+p_\theta(x_{0:T})=p(x_T)\prod_{t=1}^T p_\theta(x_{t-1}\mid x_t).
 \]
 
-网络 \(\epsilon_\theta\) 读取带噪样本和时间步，预测构造 \(x_t\) 时使用的标准高斯噪声。给定噪声预测，也能反推出干净样本估计：
+对隐藏路径用已知的前向分布建立变分下界，负 ELBO 可分成三种项
 
 \[
-\hat x_0(x_t,t)
-=\frac{x_t-\sqrt{1-\bar\alpha_t}\epsilon_\theta(x_t,t)}
-{\sqrt{\bar\alpha_t}}.
-\]
-
-因此 ε-prediction 和 \(x_0\)-prediction 描述的是同一局部信息的不同坐标，但优化权重和数值稳定性并不自动相同。
-
-### 从变分下界到噪声预测 MSE
-
-反向生成模型的联合分布为：
-
-\[
-p_\theta(x_{0:T})
-=p(x_T)\prod_{t=1}^{T}p_\theta(x_{t-1}\mid x_t).
-\]
-
-最大化数据对数似然可以转成对前向路径取期望的变分下界。中间时间步对应真实后验 \(q(x_{t-1}\mid x_t,x_0)\) 与模型反向分布 \(p_\theta(x_{t-1}\mid x_t)\) 的 KL 项。两者都是高斯，在固定方差和噪声参数化下，均值匹配可转成带时间权重的噪声预测误差。
-
-DDPM 实践中常用简化目标：
-
-\[
-\mathcal L_{\text{simple}}
-=\mathbb E_{x_0,t,\epsilon}
-\left[
-\lVert\epsilon-\epsilon_\theta(x_t,t)\rVert_2^2
+\mathcal L_{\mathrm{VLB}}=
+\mathbb E_q\left[
+D_{\mathrm{KL}}(q(x_T\mid x_0)\|p(x_T))
++\sum_{t=2}^T D_{\mathrm{KL}}
+(q(x_{t-1}\mid x_t,x_0)\|p_\theta(x_{t-1}\mid x_t))
+-\log p_\theta(x_0\mid x_1)
 \right].
 \]
 
-这里的监督目标 \(\epsilon\) 是训练时真实采样的噪声。简化目标和完整 VLB 有明确联系，但不能把“无权重 MSE”说成与每个 VLB 项数值完全相同；不同方差参数化、时间权重和 learned variance 会改变目标。
+第一项检查末端是否接近先验。中间项要求模型的反向转移接近可计算后验。最后一项是靠近数据端的重建似然，不能机械地当作方差为零的普通高斯 KL。
 
-### 时间步和网络架构的接口
-
-同一个 \(x_t\) 数值在不同 \(t\) 下代表不同信噪比，因此网络必须读取时间步或噪声嵌入。无条件模型接口为：
+若模型反向方差固定为 \(\sigma_{p,t}^2I\)，中间 KL 中与网络均值有关的部分为
 
 \[
-\epsilon_\theta(x_t,t),
+\frac1{2\sigma_{p,t}^2}\|\tilde\mu_t-\mu_\theta\|^2
+=
+\frac{\beta_t^2}
+{2\sigma_{p,t}^2\alpha_t(1-\bar\alpha_t)}
+\|\epsilon-\epsilon_\theta(x_t,t)\|^2.
 \]
 
-条件模型则为：
+这说明噪声回归与变分目标有明确关系，也说明不同时间天然带有不同权重。常用简化目标取均匀时间并去掉这组权重
 
 \[
-\epsilon_\theta(x_t,t,c).
+\mathcal L_{\text{simple}}
+=\mathbb E_{x_0,t,\epsilon}\|\epsilon-\epsilon_\theta(x_t,t)\|^2.
 \]
 
-扩散目标不要求网络必须是 U-Net。U-Net、DiT 或其他主干只要能处理样本表示、时间信息和条件，就能承担 denoiser。组件细节见[架构与 Stable Diffusion](architecture-and-stable-diffusion.md)。
+它改变了各噪声任务的优化比例。把简化目标叫作负 ELBO 的逐项等价实现，会漏掉这个选择。学习方差的实现还会引入额外目标，不能仅替换上式一个符号就认为全部推导不变。
 
 ## DDPM 训练算法
 
-```text
-repeat:
-    x_0 ~ p_data
-    t ~ Uniform({1, ..., T})
-    epsilon ~ Normal(0, I)
-    x_t = sqrt(alpha_bar_t) * x_0
-          + sqrt(1 - alpha_bar_t) * epsilon
-    epsilon_pred = epsilon_theta(x_t, t, condition)
-    loss = mean_square_error(epsilon_pred, epsilon)
-    update theta with gradient(loss)
-```
+训练程序抽取数据、时间和噪声，用闭式公式构造输入。网络只执行一次前向与反向，每个 batch 中的不同图像可以选择不同时间。\(t\) 需要作为嵌入传进网络，因为同样的观测值在不同噪声水平下对应不同后验。
 
-训练只需网络一次前向和一次反向，不随 \(t\) 线性增加计算。若时间步采样不是均匀分布，loss weighting 必须与采样分布一起解释，否则某些噪声区间会被隐式放大或削弱。
+```python
+# 机制伪代码，系数需按 batch 广播
+noise = randn_like(x0)
+xt = sqrt_alpha_bar[t] * x0 + sqrt_one_minus_alpha_bar[t] * noise
+prediction = model(xt, t)
+loss = mean((prediction - noise) ** 2)
+optimizer.zero_grad()
+loss.backward()
+optimizer.step()
+```
 
 ## DDPM 采样算法
 
-先从简单先验采样：
+生成从 \(x_T\sim\mathcal N(0,I)\) 开始，按 \(T,T-1,\ldots,1\) 调用模型。在固定后验方差的教学版本里
 
 \[
-x_T\sim\mathcal N(0,I).
+x_{t-1}=\mu_\theta(x_t,t)+\sqrt{\tilde\beta_t}\xi_t,
+\qquad\xi_t\sim\mathcal N(0,I),\quad t>1.
 \]
 
-然后对 \(t=T,T-1,\ldots,1\) 执行：
-
-```text
-epsilon_pred = epsilon_theta(x_t, t, condition)
-mean = 1 / sqrt(alpha_t) * (
-    x_t - beta_t / sqrt(1 - alpha_bar_t) * epsilon_pred
-)
-if t > 1:
-    z ~ Normal(0, I)
-    x_{t-1} = mean + sqrt(posterior_variance_t) * z
-else:
-    x_0 = mean
-```
-
-这里采用 \(\tilde\beta_t\) 作为 posterior variance 的教学版本。不同实现可能使用 \(\beta_t\)、learned variance 或其他插值；比较 sampler 时必须同时记录方差约定和时间下标。
+最后 \(t=1\) 返回均值，不再添加随机项。这里的 \(\xi_t\) 是生成中新抽的噪声，与训练构造 \(x_t\) 的 \(\epsilon\) 不同。另一些实现选用不同反向方差或最终输出分布，读取代码时要明确它实际采用的版本。
 
 ![DDPM 渐进生成](../assets/images/paper-figures/diffusion/ddpm-figure-14-progressive-generation.jpg){ width="700" }
 
 <small>图源：[DDPM](https://arxiv.org/abs/2006.11239)，Figure 14。图展示反向链中的样本逐渐出现结构；它不能证明每个时间区间只负责一种固定语义或纹理。</small>
 
-## 常见误解与失效边界
+本站 [PyTorch 实现](minimal-ddpm-implementation.md)把公式时间 \(1,\ldots,T\) 存在数组索引 \(0,\ldots,T-1\)。因此源码里 `t == 0` 指最后一次去噪所读取的带噪状态，和公式里的干净 \(x_0\) 不是同一个下标约定。先写出这个映射，可以避免把边界 mask 加错一位。
 
-**把 \(\beta_t\) 当成噪声标准差。**在上述记号中 \(\beta_t\) 是单步方差，采样噪声项使用 \(\sqrt{\beta_t}\)。代码里混淆两者会直接破坏 schedule。
+## 继续核对公式与实现
 
-**把 \(\alpha_t\) 和 \(\bar\alpha_t\) 混用。**前者是单步系数，后者是累计乘积。闭式构造 \(x_t\) 使用 \(\bar\alpha_t\)，反向均值同时使用单步和累计量。
+[噪声日程与参数化](noise-schedules-and-parameterization.md)解释为什么预测噪声、数据和 velocity 虽能互换，却会得到不同的损失权重。[采样与推理](inference.md)进一步计算 DDIM 如何使用同一噪声预测跳到更低噪声水平。
 
-**在 \(t=0\) 继续加入随机噪声。**最终一步应返回均值估计；否则生成结果会被额外污染。不同代码使用 0-based 或 1-based 时间下标，必须先确认边界。
-
-**认为训练 MSE 可以单独评价生成质量。**MSE 是局部预测指标；真实结果还受 VAE、条件、时间离散、solver、CFG 和误差累积影响。
-
-**把 ε、score 和 \(v\) 当成完全独立模型。**在给定路径和系数时它们可以转换，但 loss weighting、preconditioning 和有限精度行为不同。转换公式见[噪声日程与参数化](noise-schedules-and-parameterization.md)。
-
-## 检查理解
-
-1. 从 \(q(x_t\mid x_{t-1})\) 到 \(q(x_t\mid x_0)\) 的闭式形式为什么依赖高斯噪声可合并性？
-2. 为什么 \(q(x_{t-1}\mid x_t,x_0)\) 在训练推导中可计算，而生成时不能直接使用？
-3. 噪声预测怎样进入反向均值 \(\mu_\theta\)？
-4. 简化 MSE 与完整变分下界是什么关系，为什么不能说二者逐项数值相等？
-5. 代码里将 \(\alpha_t\) 写成 \(\bar\alpha_t\) 会影响哪几个步骤？
-
-## 相关阅读与下一步
-
-- 原始来源：[DDPM](https://arxiv.org/abs/2006.11239)、[Improved DDPM](https://arxiv.org/abs/2102.09672)。
+- [DDPM 原论文](https://arxiv.org/abs/2006.11239)对应高斯链、ELBO 分解与简化目标。
+- [Improved DDPM](https://arxiv.org/abs/2102.09672)讨论学习方差、噪声日程与似然目标。
+- [本站 minimal_ddpm.py](../assets/examples/diffusion/minimal_ddpm.py)使用固定 posterior variance，便于核验上述系数。

@@ -1,282 +1,117 @@
-# 潜变量、似然与生成模型目标
+# 潜变量、似然与生成目标
 
-latent、prior、posterior、likelihood、ELBO、score matching、denoising loss 和 flow matching 都在描述生成过程：数据来自哪个分布、哪个隐藏状态，或哪条从噪声到样本的路径。公式里因此会同时出现可见变量 \(x\)、潜变量 \(z\)、噪声状态 \(x_t\)、先验、后验和各种下界或匹配目标。
+观察到一个结果，可能存在多种隐藏解释。潜变量模型把这些解释记为 z，把观测记为 x，再用联合分布描述二者。生成时先选解释再产生观测，推断时则从观测反过来判断解释。
 
-## 潜变量：看不见但解释观测的因素
+从两个隐藏状态开始。设 \(z\in\{0,1\}\)，先验各为 0.5；某个已观察事件 x 在两状态下的概率分别为 0.2 和 0.8。我们可以枚举所有情况，核对后验、似然与下界，而不先面对一个不可算的高维积分。
 
-潜变量模型常写成：
+## 联合概率加起来得到似然
 
-\[
-z\sim p(z),\quad x\sim p_\theta(x\mid z)
-\]
-
-这里 \(z\) 是隐藏原因，\(x\) 是观测。生成方向是先抽 \(z\)，再由 decoder 或生成模型产生 \(x\)。
-
-在图像里，\(z\) 可能编码姿态、光照、身份和风格；在世界模型里，\(z_t\) 可能编码当前 belief state；在视频扩散里，latent 可能是压缩后的图像网格，而不是语义变量。读论文时不要把 latent 当成固定含义，要问它服务重建、生成、预测、压缩还是规划。
-
-## 先验和后验：生成前相信什么，观察后相信什么
-
-先验：
+两个联合概率为 \(p(x,z=0)=0.1\)、\(p(x,z=1)=0.4\)，相加得到 \(p(x)=0.5\)。看到 x 后，对隐藏状态重新归一化
 
 \[
-p(z)
+p(z\mid x)=\frac{p(x\mid z)p(z)}{p(x)}=(0.2,0.8).
 \]
 
-表示还没看到当前样本前，对隐藏变量的默认分布。
+先验相信两个状态一样可能，观测使第二个状态更可信。这里 \(p(x\mid z)\) 是随 z 变化的似然，\(p(z\mid x)\) 是对 z 归一化后的后验，不能对调。
 
-后验：
+连续潜变量把求和换成积分 \(p_\theta(x)=\int p_\theta(x\mid z)p(z)\,dz\)。生成仍容易按条件采样，边缘似然却可能难算。变分推断正是在这个位置引入一个容易计算的近似后验 q。
+
+## 下界来自哪一步
+
+假设 q 的支持覆盖联合分布中需要积分的区域，乘除 q 后可写
 
 \[
-p_\theta(z\mid x)
+\log p_\theta(x)=\log\mathbb E_{q(z\mid x)}
+\left[\frac{p_\theta(x,z)}{q(z\mid x)}\right]
+\ge\mathbb E_q\left[\log\frac{p_\theta(x,z)}{q(z\mid x)}\right].
 \]
 
-表示看到样本 \(x\) 后，对隐藏变量 \(z\) 的更新信念。根据贝叶斯公式：
+不等式来自 log 的凹性。把联合分布展开，右侧就是
 
 \[
-p_\theta(z\mid x)
-=
-\frac{p_\theta(x\mid z)p(z)}
-{p_\theta(x)}
+\operatorname{ELBO}=
+\mathbb E_q[\log p_\theta(x\mid z)]
+-\mathrm{KL}(q(z\mid x)\|p(z)).
 \]
 
-难点在分母：
+第一项使用近似推断出的解释去预测观测，第二项比较这些解释与先验。两项合起来是下界，单独最大化重建项没有同样的含义。
+
+## 两个 KL 各在比较什么
+
+若近似推断器仍输出 \(q=(0.5,0.5)\)，它与先验的 KL 为零，ELBO 为
 
 \[
-p_\theta(x)
-=
-\int p_\theta(x\mid z)p(z)\,dz
+0.5\log0.2+0.5\log0.8=\log0.4=-0.916291.
 \]
 
-高维神经生成模型里，这个积分通常不可算，所以需要近似推断。
-
-## 似然：模型解释数据的能力
-
-最大似然训练希望：
+真实 log 似然为 \(\log0.5=-0.693147\)。两者差为 0.223144，恰好等于
 
 \[
-\max_\theta \sum_i \log p_\theta(x_i)
+\mathrm{KL}(q(z\mid x)\|p_\theta(z\mid x))
+=0.5\log(0.5/0.2)+0.5\log(0.5/0.8).
 \]
 
-直觉是让真实数据在模型分布下更可能。但很多生成模型不会直接计算完整 \(p_\theta(x)\)。自回归模型用条件概率连乘；VAE 用 ELBO；扩散用加噪去噪目标近似分布学习；flow matching 学连续路径的速度场。
+ELBO 内部的 KL 比较近似后验与先验；下界间隙的 KL 比较近似后验与真实后验。先验 KL 为零，不意味着推断正确。
 
-所以看到 likelihood 时要问：它是显式可算的，还是被某个下界、代理 loss 或采样路径替代了。
+把 q 改成真实后验 `(0.2,0.8)` 后，重建期望约 -0.500402，先验 KL 约 0.192745，ELBO 变成 -0.693147，间隙为零。生成模型固定时，这是收紧下界的明确例子；联合更新生成模型时，真实后验也会移动，不能保证间隙逐步缩小。
 
-## ELBO：把不可算似然换成可优化下界
+```python
+import math
+prior, like = [.5,.5], [.2,.8]
+evidence = sum(a*b for a,b in zip(prior,like))
+posterior = [a*b/evidence for a,b in zip(prior,like)]
+for q in [[.5,.5],posterior]:
+    recon = sum(a*math.log(b) for a,b in zip(q,like))
+    kl_prior = sum(a*math.log(a/b) for a,b in zip(q,prior))
+    bound = recon-kl_prior
+    gap = sum(a*math.log(a/b) for a,b in zip(q,posterior))
+    print(round(bound,6), round(math.log(evidence)-bound,6), round(gap,6))
+```
 
-VAE 引入近似后验：
+两行分别是 `-0.916291 0.223144 0.223144` 与 `-0.693147 0.0 0.0`。高斯 VAE 的采样与梯度在[潜变量模型基础](../foundations/probability-latent-variables-and-generative-models.md)中继续计算。
+
+## 能量先给相对权重，再谈归一化
+
+另一种建模方式是给候选分配能量 E，令 \(p(y\mid x)=e^{-E(x,y)}/Z(x)\)。对于两个候选，能量 `(0,log3)` 对应未归一化权重 `(1,1/3)`，归一化后概率是 `(0.75,0.25)`。
+
+同时给两个能量减去100，概率不变。因此“数据能量降低”本身无法证明数据概率提高。最大似然负损失梯度还包含模型分布上的对照项
 
 \[
-q_\phi(z\mid x)
+\nabla_\theta[-\log p_\theta(x)]
+=\nabla_\theta E_\theta(x)
+-\mathbb E_{X\sim p_\theta}[\nabla_\theta E_\theta(X)].
 \]
 
-先把边际似然乘除同一个 \(q_\phi(z\mid x)\)：
+第二项约束其他区域的相对能量，却要求从模型分布采样。直接搜索最小能量解、从规范化分布采样、用对比损失训练，是不同操作。一个叫 energy 的相似度函数不自动附带最大似然训练或可计算分区函数。
 
-\[
-p_\theta(x)
-=
-\int
-q_\phi(z\mid x)
-\frac{
-p_\theta(x,z)
-}{
-q_\phi(z\mid x)
-}
-\,dz
-\]
+## Score 避开了对输入无关的常数
 
-也就是：
+对密度的输入坐标求导，定义 score \(s(x)=\nabla_x\log p(x)\)。若 \(p(x)\propto e^{-E(x)}\)，归一化常数与 x 无关，所以 \(s(x)=-\nabla_xE(x)\)。它描述密度上升方向，不是对模型参数的梯度。
 
-\[
-\log p_\theta(x)
-=
-\log
-\mathbb E_{q_\phi(z\mid x)}
-\left[
-\frac{
-p_\theta(x,z)
-}{
-q_\phi(z\mid x)
-}
-\right]
-\]
+高斯 \(\mathcal N(\mu,\sigma^2)\) 的 score 为 \(-(x-\mu)/\sigma^2\)。取 \(\mu=2,\sigma=2,x=6\)，结果是 -1。仅沿 score 做梯度上升会趋向密度峰，不等于从完整分布采样；采样器还需规定漂移、噪声或确定性流的完整动力学。
 
-因为 \(\log\) 是凹函数，Jensen 不等式给出：
+在高斯加噪 \(x_t=\alpha_tx_0+\sigma_t\epsilon\) 下，条件 score 是 \(-\epsilon/\sigma_t\)。平方误差最优噪声预测为 \(\mathbb E[\epsilon\mid x_t]\)，因此可联系到边缘 score。这个关系依赖加噪形式和时间约定，不适用于任意写着 denoising 的目标。
 
-\[
-\log
-\mathbb E_q[R]
-\ge
-\mathbb E_q[\log R]
-\]
+## 速度目标描述另一种局部变化
 
-所以：
+Flow matching 训练向量场 \(v_\theta(x_t,t)\)，生成时解 \(dx_t/dt=v_\theta(x_t,t)\)。若端点为噪声1、数据5，线性路径 \(x_t=(1-t)1+t5\) 在 t=0.25 处是2，条件速度标签为4。
 
-\[
-\log p_\theta(x)
-\ge
-\mathbb E_{q_\phi(z\mid x)}
-\left[
-\log
-\frac{
-p_\theta(x,z)
-}{
-q_\phi(z\mid x)
-}
-\right]
-\equiv
-\mathcal L_{\mathrm{ELBO}}(x)
-\]
+训练时知道端点，所以能构造这个标签；生成时不知道数据端，网络只能根据当前位置、时间和条件预测。不同端点对可能经过相同位置，平方误差最优预测是条件平均速度，不能把每条训练直线误认为最终生成轨迹。
 
-“lower bound” 就来自这一步：先在 log 外取期望，再把 log 移到期望里面，会得到不超过真实 log likelihood 的量。把联合分布 \(p_\theta(x,z)=p_\theta(x\mid z)p(z)\) 展开，ELBO 常写成：
+![DDPM 的隐藏状态链](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="620" }
 
-\[
-\mathcal{L}_{\text{ELBO}}(x)
-=
-\mathbb{E}_{q_\phi(z\mid x)}
-\left[
-\log p_\theta(x\mid z)
-\right]
--
-D_{\mathrm{KL}}
-\left(
-q_\phi(z\mid x)\,\|\,p(z)
-\right)
-\]
+<small>[DDPM Figure 2](https://arxiv.org/abs/2006.11239)。隐藏变量可以是一串噪声状态。离散下界、score和连续速度场在不同建模路线中各有作用，比较时要确认变量与目标。</small>
 
-第一项让 latent 能解释当前样本，第二项把每个样本的 posterior 拉回统一 prior。KL 太弱，latent 空间可能碎掉，采样差；KL 太强，decoder 可能忽略 latent，出现 posterior collapse。
+进一步阅读[Score SDE](../diffusion/score-matching-sde-and-probability-flow.md)和[Flow matching](../diffusion/index.md)时，可把每个式子对回三个对象：当前状态、训练可见标签、生成时可见条件。
 
-训练时还要从 \(q_\phi(z\mid x)\) 采样。对高斯 posterior，可以写成：
+![潜状态沿真实时间递推](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="820" }
 
-\[
-\epsilon\sim\mathcal N(0,I),
-\qquad
-z
-=
-\mu_\phi(x)
-+
-\sigma_\phi(x)\odot\epsilon
-\]
+<small>图源：[PlaNet](https://arxiv.org/abs/1811.04551)，Figure 2。</small>
 
-这一步把随机性搬到与参数无关的 \(\epsilon\)，让 reconstruction term 的梯度能沿 \(z\) 回到 encoder。ELBO 本身说明“优化什么下界”，重参数化说明“这个随机目标怎样反向传播”；更完整的训练信号比较见[梯度估计、离散变量与训练信号](../foundations/gradient-estimators-and-training-signals.md)。
+这里的索引对应环境时间。RNN 传递确定性记忆，SSM 使用随机状态，RSSM 组合二者。在有观测时推断隐状态，与没有未来观测时按动力学预测，是两条不同的信息路径；它们都可使用前文的条件分布语言。
 
-![DDPM graphical model](../assets/images/paper-figures/diffusion/ddpm-figure-2-graphical-model.png){ width="820" }
+## 推导来源
 
-<small>图源：`Denoising Diffusion Probabilistic Models`，Figure 2，已本地化。原图展示扩散模型的正向加噪链和反向生成链。这里的重点是：生成模型常把直接建模 \(p(x)\) 改写成一条包含 latent/noise states 的逐步过程。</small>
+- [Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114)给出变分下界与可微采样。
 
-## Energy-Based Model：先学兼容性，再决定怎样归一化和搜索
-
-有些模型不直接输出规范化概率，而是学习能量：
-
-\[
-E_\theta(x,y)
-\]
-
-给定输入 \(x\)，兼容的 \(y\) 应该有较低能量，不兼容的 \(y\) 应该有较高能量。如果要把它写成条件概率，可以定义：
-
-\[
-p_\theta(y\mid x)
-=
-\frac{
-\exp(-E_\theta(x,y))
-}{
-Z_\theta(x)
-}
-\]
-
-其中：
-
-\[
-Z_\theta(x)
-=
-\int
-\exp(-E_\theta(x,y'))
-\,dy'
-\]
-
-叫 partition function。分子只给出未归一化相对权重，分母把所有可能 \(y'\) 的权重加起来，才让概率积分为 1。高维连续输出里 \(Z_\theta(x)\) 往往很难计算，这正是 EBM 灵活但训练和采样不轻松的地方。
-
-EBM 的推理可以是：
-
-\[
-y^*
-=
-\arg\min_y E_\theta(x,y)
-\]
-
-也可以通过 sampling 找多个低能量解。它适合表达“一种输入对应多个合理输出”：不必把多种未来平均成一个点，只要给不同合理区域较低能量。
-
-但 energy function 不是训练 loss 的同义词。只降低真实样本能量，会让所有位置都变低，形成 energy collapse。训练必须同时塑造不合理区域，常见路线包括 negative / contrastive samples，或对表示方差、协方差和 latent capacity 加约束。H-JEPA 里出现的 latent EBM 就建立在这个通用视角上；论文特有架构留到[H-JEPA 精读](../paper-deep-dives/world-models/h-jepa.md)展开。
-
-可以先这样区分三类对象：
-
-| 对象 | 学到什么 | 推理时做什么 |
-| --- | --- | --- |
-| 显式 likelihood model | 规范化 \(p_\theta(x)\) 或条件概率 | 直接算概率或按分解采样 |
-| EBM | 未归一化兼容性 \(E_\theta(x,y)\) | 优化或采样寻找低能量状态 |
-| Score-based model | 数据空间里的 \(\nabla_x\log p_t(x)\) | 沿 SDE / ODE 或采样器更新样本 |
-
-## Score：概率密度地形的方向
-
-score 定义为：
-
-\[
-\nabla_x \log p_t(x)
-\]
-
-它表示在噪声水平 \(t\) 下，样本 \(x\) 往哪个方向移动会让 log density 上升。扩散模型常以噪声预测或 denoising MSE 的形式训练，实际学习的是不同噪声水平下的概率方向。
-
-如果模型学到的 score 不准，采样路径就会偏；如果少步蒸馏让某些噪声阶段退化，生成会出现结构、纹理或动态上的问题。DMD、DMD2、Score SDE、Phased DMD 都能从这个角度读。
-
-## Flow matching：学习从噪声到数据的速度场
-
-Flow matching 常把生成看成连续路径：
-
-\[
-\frac{dx_t}{dt}
-=
-v_\theta(x_t,t)
-\]
-
-这里 \(dx_t/dt\) 表示样本状态随连续时间的瞬时变化率，\(v_\theta(x_t,t)\) 表示模型在当前位置和时间给出的速度方向。
-
-训练目标让模型速度 \(v_\theta\) 接近某个目标速度 \(u_t\)：
-
-\[
-\mathcal{L}_{\text{FM}}
-=
-\mathbb{E}_{t,x_t}
-\left[
-\|v_\theta(x_t,t)-u_t\|^2
-\right]
-\]
-
-这和 score matching 的读法相近：模型在每个时间点告诉采样器下一步往哪里走，而不是一次输出最终样本。Rectified Flow、flow matching action head、连续时间视频生成都在使用这类语言。
-
-## 世界模型里的 latent：要服务决策
-
-世界模型里的 latent state 常写成：
-
-\[
-p_\theta(z_{t+1}\mid z_t,a_t)
-\]
-
-这里 latent 不只是压缩图像。它要保留未来预测、动作后果、reward、risk 和 planning 需要的信息。
-
-![PlaNet latent dynamics](../assets/images/paper-deep-dives/world-models/planet/figure-2-latent-dynamics.png){ width="820" }
-
-<small>图源：`PlaNet`，Figure 2，已本地化。原图比较不同 latent dynamics 设计。这里的重点是：世界模型里的 latent state 既要压缩历史，也要表达可 rollout 的不确定未来。</small>
-
-## 常见误读
-
-| 误读 | 更稳的理解 |
-| --- | --- |
-| latent 就是压缩向量 | latent 可能是生成原因、belief state、噪声状态或动作相关状态 |
-| 重建好就代表 latent 好 | 重建可能保留纹理，却丢掉动作、接触和风险 |
-| likelihood 高就一定样本好 | likelihood、视觉质量和下游决策价值不完全等价 |
-| 低 energy 就已经是规范化概率 | 还需要 partition function；很多 EBM 推理直接使用相对能量 |
-| energy function 就是训练时直接最小化的 loss | 训练要塑造正负区域的能量差，不能把所有位置一起压低 |
-| denoising loss 只是像素误差 | 它常在近似学习分布方向或生成路径 |
-
-## 读完以后怎么判断
-
-看到 latent、prior、posterior、ELBO、energy、score 或 flow matching，先问：随机变量是什么，生成链从哪里开始，推断链看到什么，训练目标是在逼近 likelihood、下界、兼容性、方向场还是下游 reward，评测是否覆盖采样质量和决策价值。这个问题链会支撑 VAE、EBM、DDPM、Score SDE、DMD、Dreamer、PlaNet、V-JEPA、JEPA 和视频世界模型论文。
+- [D2L 概率章节](https://github.com/d2l-ai/d2l-zh/blob/e6b18ccea71451a55fcd861d7b96fddf2587b09a/chapter_preliminaries/probability.md)，先用联合分布和条件化核对离散例子，再扩展到潜变量积分。

@@ -1,142 +1,44 @@
-# DeepGEMM：FP8 GEMM 与 Mega-MoE
+# DeepGEMM里的低精度矩阵乘与专家批量
 
-`DeepGEMM` 值得单独讲，因为它把现代大模型算子工程中的几个关键趋势压缩到同一个样本里：细粒度 FP8 scaling、Hopper/Blackwell 硬件特化、运行时 JIT、MoE grouped GEMM、decode masked layout，以及从单个 GEMM 走向融合通信与计算的 Mega MoE 思路。
+DeepGEMM提供面向特定GPU路径的矩阵乘及相关kernel。理解它先从输入shape、低精度数据与scale布局开始，再看多个专家如何组织。本文依据commit `5081f851`的README与Python导出，接口描述限定在这一版本。
 
-DeepGEMM 的主线要放在 FP8 GEMM、MoE dispatch、kernel 调度和服务接入之间看。源码阅读、API 名称和接入检查见 [DeepGEMM 源码与接入](deepgemm-source-and-integration.md)。
+## 普通GEMM先确定矩阵方向
+
+该版本的 `fp8_gemm_nt` 对应使用A与B转置的乘法，逻辑上A为M×K、B为N×K，输出M×N。调用名中的nt描述矩阵方向，不应把B误当作已按K×N存放的普通行优先矩阵。
+
+README还规定scale布局。SM90路径使用FP32尺度，SM100相关路径使用打包UE8M0尺度，左侧尺度有转置和TMA对齐要求。实际调用前要核对data tensor与scale tensor两份布局。
+
+输入转换和转置由调用方负责，README明确提醒辅助PyTorch处理可能较慢。因此单独GEMM的吞吐不包含全部量化准备成本。
+
+## 多个专家可以沿M合并
+
+假设两个专家的输入宽K、输出宽N相同，分别收到3和5个token。它们的M不同，W形状相同。Contiguous grouped模式把各专家token段放在同一个大输入中，另用元数据标识段与专家。
+
+该版本M-grouped接口要求N/K固定，并有每专家段M对齐要求。不能仅因为名字叫grouped就假定M/N/K都可任意不同。Padding可能增加实际计算，尤其每专家token很少时，需要纳入收益分析。
+
+## Decode为什么需要masked布局
+
+CUDA Graph场景希望图结构和缓冲区稳定，而每个专家实际收到的token数量会变化。Masked grouped接口用有效计数等元数据限定计算范围，让固定缓冲区表达动态有效工作。
+
+这与attention的causal mask不是同一个含义。一个描述专家段中哪些行有效，另一个描述query可以看到哪些key，不能混用概念。
+
+## MegaMoE把哪些操作放在一起
+
+该commit的README描述MegaMoE融合并重叠EP dispatch、两次专家线性层、SwiGLU及EP combine，并要求多进程与对称内存。调用前需要准备路由索引、路由权重、输入数据与scale，并按所需布局转换专家权重。
+
+这些前置操作、缓冲分配和权重转换仍有成本。融合kernel不意味着整个MoE模型没有其他工作，也不能把单机普通GEMM的条件直接套到MegaMoE。
+
+## 怎样读性能数字
+
+先确认计时包含的是已准备数据的kernel，还是含quantize、转置、dispatch和combine的完整专家层。再固定每专家token分布、top-k、dtype、设备数量与拓扑。平均token数相同，负载偏斜和padding也可能产生不同时间。
+
+源码和README在持续演进。这里的接口地图用于读懂固定版本，接入前应对照实际安装版本的函数签名和测试，不能将本文当作永久API保证。
 
 ![DeepSeek-V3 FP8 framework](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-6-fp8-framework.png){ width="860" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)，Figure 6。原图表达 FP8 mixed precision 训练框架中的高精保留、scale 和累加路径；读图重点是把 DeepGEMM / FP8 GEMM 看成“低精度格式、scale layout、硬件搬运和 kernel 形状”共同设计的问题。它不能证明 DeepGEMM 在所有 GEMM 上优于通用库。</small>
 
-## 一、DeepGEMM 到底是什么
+## 对照源码与延伸阅读
 
-按照工程定位，`DeepGEMM` 是一组面向大模型热点工作负载的高性能 tensor core kernel 库。它覆盖 `FP8 / FP4 / BF16 GEMM`、MoE grouped GEMM、服务态注意力相关 kernel 和 Mega MoE 等路径，并采用运行时 JIT，而不是安装时预编译所有 kernel。
-
-它的关键不是“把 dtype 改成 FP8”，而是把 workload 假设、scale layout、硬件数据搬运、kernel 形状和运行时缓存一起写进接口设计。也就是说，`DeepGEMM` 不是一个通用线性代数抽象，而是一组面向 LLM/MoE 热路径的强特化实现。
-
-可以用一张表概括：
-
-| 维度 | DeepGEMM 的特点 |
-| --- | --- |
-| 精度路线 | 细粒度 scaling 的 FP8/FP4，而不是简单低精度矩阵乘 |
-| 硬件路线 | 强绑定 Hopper/Blackwell，重视 TMA、Tensor Core 和流水线组织 |
-| 编译路线 | Fully JIT，按运行时 shape 和配置生成/缓存 kernel |
-| 服务路线 | 关注 grouped GEMM、masked layout、decode 和 MoE 热路径 |
-| 系统路线 | 从 GEMM 扩到 MQA、Mega MoE 这类更系统级 kernel |
-
-## 二、为什么它不是普通 GEMM 库
-
-传统 GEMM 库追求通用性：不同 dtype、layout、transpose、batch 形状、硬件和调用方式都要覆盖。`DeepGEMM` 更像把“通用性成本”换成“特定大模型热点路径的深优化”。
-
-### 细粒度 FP8 Scaling
-
-FP8 训练和推理最难的部分之一是 scaling。scale factor 的粒度、布局、对齐和读取方式会直接影响性能和数值稳定性。`DeepGEMM` 把 scale layout 当成接口语义的一部分，例如要求某些 scale factor 以 TMA-friendly 的方式组织。这说明低精度 kernel 的性能不只来自 tensor core，还来自“scale 数据如何被搬运和消费”。
-
-### Fully JIT
-
-Fully JIT 的现实吸引力在于：大模型服务中的热 shape 通常有限，但部署组合很多。如果安装时预编译全部 kernel，编译成本和二进制体积都会很高；运行时 JIT 则可以按实际 shape 编译和缓存。
-
-代价也很明确：首次请求编译延迟、JIT cache 管理、线上可观测性和版本一致性都要处理好。JIT 是系统权衡，不是无条件收益。
-
-### Hopper/Blackwell 特化
-
-`DeepGEMM` 的很多价值来自对新硬件特性的直接利用。TMA、persistent thread specialization、two-level accumulation、block scheduler、SASS interleaving 等设计，都说明它把数据搬运和 tensor core 计算作为同一个流水线问题处理。它适合硬件环境较集中、工作负载较稳定、团队愿意维护特化路径的场景。
-
-## 三、和 cuBLASLt、CUTLASS、CuTe、Triton 的关系
-
-`DeepGEMM` 不是要替代所有现有库。更合理的理解是：它在大模型算子栈里占据“极热点特化库”的位置。
-
-| 工具 | 更适合什么 | 主要优势 | 主要边界 |
-| --- | --- | --- | --- |
-| `cuBLASLt` | 通用 matmul 生产默认路径 | 稳定、覆盖广、NVIDIA 官方维护 | 对特殊 LLM/MoE 热路径不一定最激进 |
-| `CUTLASS / CuTe` | 深度定制 CUDA kernel | 模板能力强、硬件控制细 | 学习和维护成本高 |
-| `Triton` | 快速写中高性能自定义 kernel | 迭代快、适合实验和定制 | 极限硬件特化不如手写 CUDA |
-| `DeepGEMM` | Hopper/Blackwell 上 FP8/MoE 热路径 | 假设强、路径短、JIT 友好 | 硬件和 layout 绑定强，通用性有限 |
-
-一个成熟系统通常不是四选一，而是分层使用：
-
-1. 默认 matmul 走 `cuBLASLt`；
-2. 快速实验和非核心定制走 `Triton`；
-3. 超核心长期维护 kernel 用 `CUTLASS/CuTe` 或手写 CUDA；
-4. 命中 `Hopper/Blackwell + FP8 + MoE` 热点时，再考虑 `DeepGEMM`。
-
-判断是否接入 `DeepGEMM`，关键不是“它 benchmark 快不快”，而是你的 workload 是否命中它的前提：shape 是否稳定，scale layout 是否能配合，硬件是否集中，MoE grouped GEMM 是否是瓶颈，运行时是否能管理 JIT。
-
-## 四、在 MoE Serving 里的位置
-
-`DeepGEMM` 在 MoE serving 中最典型的位置，是 expert dispatch 之后、combine 之前的核心 expert 计算区。简化链路如下：
-
-```text
-tokens
-  -> router scores
-  -> top-k expert selection
-  -> dispatch / permute
-  -> grouped GEMM / masked grouped GEMM
-  -> activation / projection
-  -> combine / unpermute
-  -> residual path
-```
-
-在 prefill 阶段，token 数通常更大，grouped GEMM 更接近高吞吐路径；在 decode 阶段，token 数小、shape 动态、请求持续进出，masked layout 和 CUDA Graph 友好性更重要。
-
-`DeepGEMM` 的价值不是“某个 GEMM 快一点”，而是把 MoE 的 expert 计算切成更适合特化的热路径块：
-
-1. expert shape 固定但 token 数变化，适合 M 轴 grouped GEMM；
-2. decode 中 shape 小而碎，masked layout 有利于稳定执行路径；
-3. FP8 scale layout 与 kernel 共同设计，减少低精度额外开销；
-4. Mega MoE 进一步尝试把通信、dispatch、计算和 combine 的边界向融合方向推进。
-
-但 Mega MoE 也意味着更强系统前提。runtime、通信库、显存布局、JIT cache、CUDA Graph 和容错都要配合。它不是单个 API 替换，而是服务链路重构。
-
-## 五、性能应该怎么读
-
-读 `DeepGEMM` 性能时，最容易犯两个错误：把 microbenchmark 当端到端收益，把单一 shape 胜出当通用胜出。
-
-更可靠的评估应同时看：
-
-1. 目标 shape 是否覆盖真实流量；
-2. prefill 和 decode 分开测；
-3. JIT 首次编译和 cache 命中后的差异；
-4. scale layout、dispatch、permute、combine 是否计入端到端；
-5. 多租户、LoRA、MoE 热点专家是否破坏 shape 稳定性；
-6. CUDA Graph、调度器和 KV cache 是否能与它共存；
-7. 出错时是否能 fallback 到 cuBLASLt/Triton 路径。
-
-一个常见上线顺序是：
-
-1. 用现有 runtime 和 `cuBLASLt/Triton` 建立基线；
-2. 从 profiling 中确认 MoE grouped GEMM 或 FP8 GEMM 是真实热点；
-3. 在离线 replay 中替换单一路径；
-4. 分 prefill/decode、分 shape bucket 测端到端收益；
-5. 小流量灰度并保留 fallback；
-6. 稳定后再考虑更深的 Mega MoE 融合。
-
-## 六、边界和风险
-
-`DeepGEMM` 的强项也是它的边界。
-
-| 风险 | 具体表现 |
-| --- | --- |
-| 硬件绑定 | 非 Hopper/Blackwell 环境收益可能不明显，甚至不可用 |
-| Layout 前提强 | 上游张量、scale、MoE dispatch 必须愿意配合 |
-| JIT 运维复杂 | 首次编译、缓存、版本、灰度和复现都要治理 |
-| Benchmark 误读 | 单 kernel 快不代表端到端快 |
-| 系统耦合 | 与 runtime、CUDA Graph、通信、KV、MoE 路由强相关 |
-
-因此 `DeepGEMM` 更适合被当成“核心热路径特化武器”，而不是默认替换所有 GEMM 的通用方案。
-
-## 七、学习它最该抓住什么
-
-从学习角度看，`DeepGEMM` 最值得学的不是某个 API 名字，而是三种工程思维：
-
-1. **把 workload 假设写进接口**：dense、grouped、masked、scale layout 都不是外部杂务，而是性能路径的一部分。
-2. **把硬件特性转成数据流结构**：TMA、Tensor Core、persistent scheduling、two-level accumulation 都服务于同一个目标，即减少搬运并保持计算流水线。
-3. **从 kernel 走向系统热路径**：MoE serving 的瓶颈不只在 GEMM，还在 dispatch、layout、JIT、通信、combine 和 runtime 调度之间的边界。
-
-如果只记一句话：`DeepGEMM` 展示的是现代大模型算子优化的新边界，已经从“写快一个矩阵乘”扩展到“围绕低精度、MoE、JIT、硬件和服务运行时共同设计热路径”。
-
-## 外部材料
-
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)。
-- [Triton 文档](https://triton-lang.org/main/index.html)。
-- [CUTLASS 文档](https://docs.nvidia.com/cutlass/)。
+- [固定commit的接口、scale、grouped和MegaMoE说明](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)
+- [该版本实际Python导出](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/deep_gemm/__init__.py)

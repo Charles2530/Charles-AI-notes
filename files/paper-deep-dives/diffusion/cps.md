@@ -18,372 +18,405 @@ paper_topic: 扩散模型
 
 本文只追一个问题：Flow Matching 的 RL rollout 加入随机性后，怎样避免采样器把额外噪声带进 reward 输入？读完后，你应能检查少步 Flow-SDE 是否超出 scheduler 的噪声预算，判断更换 sampler 时是否必须同步调整 log-prob / KL，以及代理 reward 上升能否支持真实人评结论。
 
-## 原论文故事线
+## 奖励学习之前，采样器已经改变了问题
 
-### 研究背景
+CPS 研究的是 Flow Matching 的在线强化学习。它不增加新的奖励模型，也不改变预训练网络结构，而是追问一个容易被忽略的环节：模型为了探索而生成的训练图像，是否仍落在预训练时规定的噪声水平上？如果采样器额外留下了颗粒和伪影，奖励函数评估的便同时包含模型能力、探索效果和数值误差，后面的 GRPO 会据此更新参数。[↗](https://arxiv.org/pdf/2509.05952v4#page=1)
 
-Flow Matching 和 diffusion 模型进入 RL 后训练时，采样器不再只是“生成最终图像”的工具，还变成了 policy rollout 的一部分。Flow-GRPO、Dance-GRPO 这类方法需要为同一个 prompt 生成一组多样样本，再由 reward model 或可验证规则给分，最后用 GRPO 风格目标更新生成模型。为了得到多样性，它们把原本确定性的 Flow-ODE 改写成带随机性的 Flow-SDE。
+这里的“确定性”需要先限定范围。给定当前状态、提示和模型参数，ODE 的下一状态是确定的；不同初始高斯噪声仍可生成不同图像。Flow-GRPO、Dance-GRPO 引入逐步随机转移，是为了在去噪过程中探索，并构造可计算的条件概率和策略比率。问题因此不在于 ODE 完全没有多样性，而在于怎样增加**逐转移的随机性**，同时维持模型熟悉的信号与噪声尺度。
 
-这个改写听起来合理：RL 需要探索，SDE 能注入随机性。但视觉生成和文本 token 采样不一样。文本里采到哪个 token 就是哪个离散动作；Flow Matching 的状态是连续 latent，一步里多加一点噪声会改变 scheduler 期望的样本 / 噪声系数。CPS 论文正是抓住了这个接口问题：**采样随机性本身可能污染 reward model 看到的图像。**
-
-### 问题（Challenge）
-
-论文要解决的问题是：怎样给 Flow Matching 的 RL rollout 注入随机性，同时不破坏原 scheduler 规定的噪声水平。Flow-SDE 会同时改动确定性轨迹的 score / velocity 项并加入 Wiener 噪声项；如果两部分没有共同满足目标时间步的总噪声水平，latent 会在每一步被过量加噪。最终训练样本可能带明显噪声伪影，而 reward model 对美学、人类偏好、文字渲染这类指标的打分会被伪影干扰。
-
-### Finding
-
-论文的关键发现是：**Flow-RL 的随机采样必须保持两个系数约束：样本系数由 scheduler 决定，总噪声水平也必须和 scheduler 对齐。** 原 Flow-SDE 只是在连续极限里近似合理；一旦现代生成模型常用 4、6、10、16 步采样，\(\Delta t\) 不再足够小，Taylor 近似误差就会变成可见噪声。
-
-这改变了 Flow-RL 的问题 framing。此前大家容易把多样性看成“加噪声越强，探索越充分”；CPS 把问题改成“探索只能花 scheduler 允许的噪声预算”，在保留随机性的同时重新分配预算。
-
-### 方法
-
-CPS 借鉴 DDIM 的随机采样形式，用新噪声替换掉一部分预测噪声，使总噪声标准差仍等于当前时间步的目标噪声水平。论文把这个思路推广到 Flow Matching：先从当前 \(x_t\) 和 velocity 预测出 \(\hat{x}_0\) 与 \(\hat{x}_1\)，再在 \(\hat{x}_1\) 和新采样噪声 \(\epsilon\) 之间做一个受控旋转。这样既有随机性，又不让总噪声超过 \(t-\Delta t\)。
-
-### 结论
-
-论文在 GenEval、PickScore、HPSv2 和 OCR reward 上比较 Flow-SDE 与 Flow-CPS。最稳定的结论是：CPS 生成给 reward model 的训练样本更干净，因此在 PickScore、HPSv2、OCR 上收敛更快，最终 reward 更高；GenEval 接近饱和时最终分数与 baseline 持平，但 CPS 仍显示更快收敛。边界也很明确：这些是作者在图像生成基线上报告的结果，论文没有独立证明 CPS 已经解决视频 Flow-RL、reward hacking 或多步 credit assignment。
-
-### 关键术语
-
-- **Coefficients-Preserving Sampling（系数保持采样）**：采样时同时保持 scheduler 规定的样本系数与总噪声水平
-- **Flow-CPS（Flow 系数保持采样）**：用预测噪声与新噪声的受控组合，在噪声预算内为 Flow Matching rollout 注入随机性
-- **Flow-SDE（Flow 随机微分方程采样）**：在 Flow-ODE 轨迹中加入 Wiener 噪声，为 RL rollout 提供样本多样性
-- **Total Noise Level（总噪声水平）**：多个独立噪声项的标准差按 RSS 合成后的总量，CPS 要求它与目标时间步一致
-- **Reward Contamination（奖励污染）**：采样噪声伪影进入 reward model 输入，使 advantage 混入生成质量以外的采样器影响
-- **Scheduler（噪声日程）**：规定每个时间步样本系数、噪声系数或等价噪声水平的调度器
-- **GRPO（Group Relative Policy Optimization）**：对同一 prompt 的一组 rollout 按相对 reward 构造 advantage 的策略优化方法
-
-## 它的效率贡献是什么
-
-| 维度 | 贡献 |
-| --- | --- |
-| 节省的成本 | 减少 RL 后训练中由噪声伪影带来的错误 reward、慢收敛和 train-test mismatch；NFE 不变 |
-| 核心机制 | 保持 scheduler 的样本系数与总噪声水平，把随机性从“额外叠加”改成“在噪声预算内重分配” |
-| 对扩散 / Flow 主线的意义 | 给 Flow Matching 接 GRPO 时补上采样接口约束，连接 [噪声日程与参数化](../../diffusion/noise-schedules-and-parameterization.md)、[采样与推理加速](../../diffusion/inference.md) 和 RL 后训练 |
-| 主要风险 | 实验主要是图像生成与 reward 曲线；不能直接推出视频后训练、真实人评、闭环世界模型或所有 reward model 都会同幅度受益 |
-| 应接到本站哪里 | [视频与多模态扩散](../../diffusion/video-and-multimodal-diffusion.md)、[PPO / GRPO](../../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)、[DPM-Solver++](dpm-solver-plus-plus.md)、[DMD2](dmd2.md) |
-
-## 证据等级与外推边界
-
-| 论文结论 | 证据来源 | Evidence Type | Repro Status | 可外推到工程判断 | 不能直接外推 |
-| --- | --- | --- | --- | --- | --- |
-| Flow-SDE 会产生过量噪声并污染训练样本 | Figure 1、Equation 10/11、Figure 2 | Paper Result（qualitative） | Paper Only | Flow-RL rollout 不能只看随机性强度，还要看 scheduler 噪声守恒 | 不能说明所有 SDE sampler 都有同样问题 |
-| CPS 保持样本系数和总噪声水平 | Definition 1、Equation 12/13、Figure 3 | Paper Result（theorem） | Paper Only | 采样器设计应检查系数与总噪声是否同时对齐 | 依赖 predicted noise 近似标准高斯且独立于新噪声的假设 |
-| CPS 提升 reward 优化稳定性 | Table 1-4、Figure 4-6 | Paper Result（benchmark） | Paper Only | PickScore / HPSv2 / OCR 这类 reward 容易受图像伪影影响 | 不等于真实人类偏好一定提升，也不消除 reward hacking |
-| 低步采样更容易暴露 Flow-SDE 误差 | Figure 2、Theorem 1 | Paper Result（theorem / qualitative） | Paper Only | 4-step / few-step Flow-RL 要特别警惕连续极限近似失效 | 不能替代每个 scheduler / solver 的单独验证 |
-
-本页有官方仓库可供检查，因此页面整体的 Repro Status 可记为 Author Code / Official Repo；表中每条论文结果仍是作者报告，本站未标记 Independent Reproduced。
-
-对本站主线来说，CPS 最值得吸收的是一个约束：**在 Flow Matching 上做 RL，不要把 sampler 当作无害的探索开关；sampler 直接决定 reward model 看到的状态分布。**
-
-## 论文位置
-
-Flow Matching 的基础路径通常写成：
-
-\[
-x_t=(1-t)x_0+tx_1,
-\]
-
-其中 \(x_0\) 是数据样本，\(x_1\) 是高斯噪声，\(t\in[0,1]\) 表示噪声水平。模型学习 velocity：
-
-\[
-v=x_1-x_0.
-\]
-
-确定性采样时，从 \(x_t\) 往 \(x_{t-\Delta t}\) 走一步：
-
-\[
-x_{t-\Delta t}=x_t-\hat{v}_\theta(x_t,t)\Delta t.
-\]
-
-RL rollout 需要同一个 prompt 下有多样样本，于是 Flow-GRPO / Dance-GRPO 用 Flow-SDE 注入随机性。随机性同时影响 diversity 和 reward 的输入质量：
-
-```text
-prompt
-  -> stochastic Flow rollout
-  -> generated image
-  -> reward model / rule-based reward
-  -> advantage
-  -> GRPO update
-```
-
-如果 stochastic rollout 把图像推到过噪分布，后面的 reward ranking 就会被污染。CPS 因此不是一个普通加速 sampler，而是 Flow-RL 的 rollout 可靠性修正。
+先看原论文 Figure 1。图中分别比较 FLUX.1-dev 的 8 步采样与 FLUX.1-schnell 的 4 步采样，并逐列提高随机强度。可以沿着同一行观察探索增强后的噪声颗粒，再在相同模型的上下两行间比较两种采样。CPS 的直接视觉证据是，在这些样例中保留不同生成结果的同时，没有像所比较的 Flow-SDE 那样留下明显噪声。它尚不能单独证明奖励模型的分数更接近真实人类偏好。[↗](https://arxiv.org/pdf/2509.05952v4#page=2)
 
 ![Flow-SDE 与 Flow-CPS 采样图像对比](../../assets/images/paper-deep-dives/diffusion/cps/figure-1-flow-sde-vs-cps.png){ width="920" }
 
-<small>图源：[原论文，Figure 1](https://arxiv.org/abs/2509.05952)。原论文图意：Flow-SDE 在较高噪声参数下会出现明显噪声伪影；Flow-CPS 在相同随机性设置下保持图像干净。论文强调这些样本会进入 reward model。</small>
+<small>图源：[原论文 v4，第 2 页，Figure 1](https://arxiv.org/pdf/2509.05952v4#page=2)。上两行为 dev 的 8 步生成，下两行为 schnell 的 4 步生成；后面的 dev PickScore 训练使用另一组步数设置。</small>
 
-**Figure 1 要按 reward 输入读。**
-这张图展示的是训练链路里的观测污染，不能只按“CPS 图更好看”来读。Flow-SDE 的 noisy sample 会被拿去算 PickScore、HPSv2、OCR 或规则 reward；一旦 reward model 对噪声敏感，GRPO 看到的 advantage 就会同时混入采样器伪影、prompt alignment 和图像质量信号。
+论文的技术贡献沿着这条链展开。先将一次更新拆成预测信号、已有噪声和新噪声，找出有限步 Flow-SDE 超出噪声预算的来源；再用闭式系数重新分配旧、新噪声；最后将采样规则接入 GRPO，并同步修改优化所用的 log-prob 与参考模型惩罚。实验支持这种组合在若干图像奖励任务上更快提升分数，但采样、优化权重和奖励本身仍是三个不同层面。
 
-## 系数保持到底保持什么
+## 一次图像 rollout 怎样变成 GRPO 更新
 
-论文先把 Flow-ODE 的一步采样改写成 \(\hat{x}_0\) 和 \(\hat{x}_1\) 的线性插值。根据 velocity 预测：
+设提示为 $c$，当前策略是速度网络 $v_\theta$。从初始高斯噪声出发，采样器反复调用网络，得到轨迹 $x_{t_0},x_{t_1},\ldots,x_{t_K}$，其中时间由接近 1 走向 0。最终状态解码成图像，奖励函数给出一个标量。同一提示的一组图像产生一组奖励 $r_1,\ldots,r_G$，GRPO 用组内均值和标准差构造优势
 
-\[
-\hat{x}_0=x_t-t\hat{v},\qquad
-\hat{x}_1=x_t+(1-t)\hat{v}.
-\]
+$$
+A_i=\frac{r_i-\operatorname{mean}(r_1,\ldots,r_G)}
+{\operatorname{std}(r_1,\ldots,r_G)}.
+$$
 
-于是确定性 ODE 一步可以写成：
+同一条轨迹的各个转移使用这个终端奖励优势。更新时，用新、旧策略对**同一个已采样转移**的概率比率衡量策略变化，再施加 PPO 风格的 clipping；参考模型惩罚则限制策略偏离原模型。这里采样器既决定奖励函数看到什么图像，也决定每一步的概率形式，所以改 sampler 不是一个只影响可视化的末端操作。[↗](https://arxiv.org/pdf/2509.05952v4#page=4)
 
-\[
-x_{t-\Delta t}
-=(1-(t-\Delta t))\hat{x}_0+(t-\Delta t)\hat{x}_1.
-\]
+这个接口也解释了为什么本文关心少步采样。在线 RL 每轮都要重新生成图像，较少的网络调用有利于降低 rollout 成本；但步数减少意味着每一步跨越的时间更大，连续时间公式的离散误差可能不再小。把一个在上千小步时近似合理的随机更新直接用到 4、6 或 10 步，既可能改变奖励输入，也可能放大训练与确定性评估之间的差异。
 
-这里的含义很直接：
+CPS 沿用原有的提示、速度网络、奖励和组内比较框架，主要替换两处。一处是网络调用之后如何算 $x_s$；另一处是训练中怎样由转移均值计算 log-prob 和参考惩罚。理解全文时，要持续区分生成轨迹的规则与优化轨迹的权重。
 
-| 项 | 系数 | 解释 |
-| --- | --- | --- |
-| \(\hat{x}_0\) | \(1-(t-\Delta t)\) | scheduler 指定的样本系数 |
-| \(\hat{x}_1\) | \(t-\Delta t\) | scheduler 指定的噪声系数 |
+## 把速度预测拆成两个端点，才能检查噪声预算
 
-CPS 的定义要求两件事同时成立：
+论文采用的 Flow Matching 插值为
 
-1. 样本系数必须严格由 scheduler 分配；
-2. 总噪声水平必须和 scheduler 对齐。如果有多个独立噪声项，总噪声水平按标准差平方和开根号计算。
+$$
+x_t=(1-t)x_0+t x_1,
+\qquad x_1\sim\mathcal N(0,I),\quad t\in[0,1].
+$$
 
-这个定义很像 DDIM 的随机版本。DDIM 让预测噪声和新噪声共同构成目标时间步的总噪声，因此随机性增加了，噪声预算没有超支。
+$x_0$ 是干净数据，$x_1$ 是标准高斯噪声；因此 $t=0$ 对应数据端，$t=1$ 对应噪声端。单条插值轨迹的目标速度是 $v=x_1-x_0$。网络输出 $\hat v=v_\theta(x_t,t,c)$ 后，可以用当前状态反推出两个端点估计
 
-## 为什么 Flow-SDE 不保系数
+$$
+\hat x_0=x_t-t\hat v,
+\qquad
+\hat x_1=x_t+(1-t)\hat v.
+$$
 
-论文把 Flow-SDE 的一步写回 \(\hat{x}_0,\hat{x}_1,\epsilon\) 的形式，得到：
+这不是另外训练两张网络，而是对同一个速度预测作代数重写。$\hat x_0$ 表示当前预测的干净信号，$\hat x_1$ 表示当前预测的噪声端点。设下一时刻 $s=t-\Delta t$，则 Euler 更新可写为
 
-\[
-x_{t-\Delta t}
-=
-(1-(t-\Delta t))\hat{x}_0
-+
-\left(t-\Delta t-\frac{\sigma_t^2\Delta t}{2t}\right)\hat{x}_1
-+
-\sigma_t\sqrt{\Delta t}\epsilon.
-\]
+$$
+\begin{aligned}
+x_s&=x_t-\Delta t\,\hat v\\
+&=(1-s)\hat x_0+s\hat x_1.
+\end{aligned}
+$$
 
-注意这里有两个噪声来源：被缩减后的 \(\hat{x}_1\)，以及新注入的 \(\epsilon\)。总噪声水平变成：
+第二行让一次更新的结构直接可见。信号的系数是 $1-s$，噪声的系数是 $s$，恰好对应训练插值在下一时间的形式。CPS 就从这个等式出发，而不是把“新噪声有多强”视作一个脱离 scheduler 的自由参数。[↗](https://arxiv.org/pdf/2509.05952v4#page=5)
 
-\[
-\sigma_{\text{total}}
-=
-\sqrt{
-\left(t-\Delta t-\frac{\sigma_t^2\Delta t}{2t}\right)^2
-+
-\sigma_t^2\Delta t
-}
-\ge t-\Delta t.
-\]
+若随机更新另外引入独立高斯 $\epsilon$，形式变成
 
-只有 \(\sigma_t=0\) 时等号成立，也就是完全没有随机性。换句话说，一旦 Flow-SDE 想要探索，它的总噪声通常就会超过 scheduler 目标。
+$$
+x_s=a_0\hat x_0+a_1\hat x_1+b\epsilon,
+$$
+
+作者要求两个条件同时成立。第一，信号系数仍为 $a_0=1-s$。第二，把预测噪声近似看成零均值、单位方差，并让新噪声与之独立时，总噪声标准差应满足
+
+$$
+\sqrt{a_1^2+b^2}=s.
+$$
+
+这是 **Coefficients-Preserving Sampling（系数保持采样）** 的含义。两个噪声系数不能直接相加，因为独立噪声首先相加的是方差。也不能要求信号系数与噪声系数的平方和为 1；本文的线性 Flow 插值使用 $1-s$ 和 $s$，与常见 VP 扩散的平方根日程不是同一组系数。
+
+这一定义的边界同样来自推导。新采样的 $\epsilon$ 可以按构造保证独立，但网络给出的 $\hat x_1$ 是条件预测，实际分布未必严格等于单位高斯；它还会受到模型误差和当前轨迹的影响。因此后面的“精确保持”首先是**显式系数恒等式**，不能直接升级为每一步真实边缘分布或信号、噪声联合分布都精确正确。
+
+## 所分析的 Flow-SDE 为什么会在有限步下加多噪声
+
+论文重点分析 Flow-GRPO 与 Dance-GRPO 使用的随机更新。两者在噪声日程上不同，前者使用 $\sigma_t=\eta\sqrt{t/(1-t)}$，后者使用 $\sigma_t=\eta$。在端点分解下，所分析的离散更新统一写为
+
+$$
+x_s=(1-s)\hat x_0+
+\left(s-\frac{\sigma_t^2\Delta t}{2t}\right)\hat x_1
++\sigma_t\sqrt{\Delta t}\,\epsilon.
+$$
+
+新增随机项的标准差是 $\sigma_t\sqrt{\Delta t}$，旧噪声项的系数也随之减小。问题不在于完全没有抵消，而在于这个抵消量只满足近似关系。按前面的方差口径计算
+
+$$
+\begin{aligned}
+\sigma_{\mathrm{total}}^2
+&=\left(s-\frac{\sigma_t^2\Delta t}{2t}\right)^2
++\sigma_t^2\Delta t\\
+&=s^2+\frac{(\sigma_t\Delta t)^2}{t}
++\left(\frac{\sigma_t^2\Delta t}{2t}\right)^2.
+\end{aligned}
+$$
+
+第二步用了 $t-s=\Delta t$。只要步长、随机强度都非零，且位于公式定义的内部时间区间，后面两项就使噪声方差大于目标 $s^2$。这也是少步时更严重的具体原因：有限步留下的是额外方差项，而不是一个只靠增加网络容量就能消去的常数偏差。[↗](https://arxiv.org/pdf/2509.05952v4#page=6)
+
+可以作一个与论文实验分开的解释性计算。取 $t=0.5$、$\Delta t=0.25$，下一时间为 $s=0.25$，并采用 Dance-GRPO 形式的 $\sigma_t=0.7$。旧噪声系数变成 $0.1275$，新噪声标准差为 $0.35$，二者的方差平方根是
+
+$$
+\sqrt{0.1275^2+0.35^2}=0.3725,
+$$
+
+而目标只应为 $0.25$。新噪声本身已经超过目标，旧项即使减小仍无法补回这个预算。这里的 $0.3725-0.25$ 是标准差差值；它不等于“额外方差的平方根”，两者不能混称同一个误差量。
+
+Figure 2 把这一检查扩展到完整日程。先沿每一行从左向右看 1000、16、4 步的区别，再观察不同 $\eta$ 下实际总噪声与目标曲线的偏离。步数多时曲线更接近；减少到 16 或 4 步后，特定端点处的失配变得明显。
 
 ![Flow-SDE 噪声水平偏离 scheduler](../../assets/images/paper-deep-dives/diffusion/cps/figure-2-noise-level-mismatch.png){ width="920" }
 
-<small>图源：[原论文，Figure 2](https://arxiv.org/abs/2509.05952)。原论文图意：Flow-GRPO 和 Dance-GRPO 的 SDE noise level 与 ideal noise level 对比；采样步数越少，偏离越明显，且在 \(t=0\) 或 \(t=1\) 附近有数值问题。</small>
+<small>图源：[原论文 v4，第 6 页，Figure 2](https://arxiv.org/pdf/2509.05952v4#page=6)。曲线按所分析公式计算；它呈现的是离散更新的系数失配。</small>
 
-**Figure 2 要看连续近似何时失效。**
-1000 steps 时，曲线大体贴近 ideal noise，但在端点仍可能出问题；16 steps 已经能看到偏移；4 steps 时偏移很明显。现代图像 / 视频 Flow 模型常在少步区间训练或推理，因此不能把连续时间 SDE 的推导直接当成少步离散 sampler 的保证。
+端点位置也解释了两种日程不同的数值问题。Flow-GRPO 的 $\sqrt{t/(1-t)}$ 在噪声端 $t\approx1$ 变大；Dance-GRPO 虽采用常数扩散强度，修正旧噪声时仍含 $1/t$，因而在数据端 $t\approx0$ 敏感。论文由此指出这些特定少步离散式的问题，不能据此否定所有连续时间 SDE，后面的 DPM-Solver++ 对照还会给出一个直接反例。
 
-论文进一步指出，Flow-SDE 可以看成 Flow-CPWS 的一阶 Taylor 近似。近似成立需要 \(\sigma_t\sqrt{\Delta t}\ll t-\Delta t\) 且 \(\Delta t\to0\)。少步采样不满足这个条件，端点附近的 \(1/t\) 项还会放大数值不稳定。
+## CPS 的更新，只需让旧噪声让出恰好的方差
 
-## Flow-CPS 怎么改
+如果希望新噪声标准差为 $b$，满足目标预算的旧噪声系数就应为 $\sqrt{s^2-b^2}$。这里专门用 $b$ 表示实际注入的标准差，避免与前面 SDE 的扩散强度 $\sigma_t$ 混淆。CPS 的一次更新是
 
-CPS 的构造方式是：保留 scheduler 给出的样本系数，把噪声部分拆成预测噪声和新噪声的受控组合。
+$$
+x_s=(1-s)\hat x_0+\sqrt{s^2-b^2}\,\hat x_1+b\epsilon,
+\qquad 0\le b\le s.
+$$
 
-若新注入噪声标准差为 \(\sigma_t\)，为了让总噪声仍等于 \(t-\Delta t\)，预测噪声系数应为：
+新噪声不能超过下一时刻的总预算，否则根号无实数解。作者进一步用角度参数化消去这一约束检查
 
-\[
-\sqrt{(t-\Delta t)^2-\sigma_t^2}.
-\]
+$$
+b=s\sin\left(\frac{\eta\pi}{2}\right),
+\qquad 0\le\eta\le1,
+$$
 
-其中，\(\sigma_t\) 表示新注入噪声的标准差，根号项表示留给预测噪声的系数；成立条件是 \(\sigma_t\le t-\Delta t\)。
+从而得到实际使用的 Flow-CPS
 
-因此：
+$$
+x_s=(1-s)\hat x_0
++s\cos\left(\frac{\eta\pi}{2}\right)\hat x_1
++s\sin\left(\frac{\eta\pi}{2}\right)\epsilon.
+$$
 
-\[
-x_{t-\Delta t}
-=
-(1-(t-\Delta t))\hat{x}_0
-+
-\sqrt{(t-\Delta t)^2-\sigma_t^2}\hat{x}_1
-+
-\sigma_t\epsilon.
-\]
+平方和恒等式给出
 
-为了避免根号内为负，论文把 \(\sigma_t\) 定义为下式，其中 \(\eta\in[0,1]\) 表示随机强度：
+$$
+\left[s\cos\left(\frac{\eta\pi}{2}\right)\right]^2
++\left[s\sin\left(\frac{\eta\pi}{2}\right)\right]^2=s^2.
+$$
 
-\[
-\sigma_t=(t-\Delta t)\sin\left(\frac{\eta\pi}{2}\right),\qquad \eta\in[0,1].
-\]
+于是随机强度改变的是旧噪声与新噪声的分配比例，而不再改变显式总噪声预算。$\eta=0$ 回到 Euler ODE；$\eta=1$ 完全去掉当前预测的噪声方向，使用新的高斯方向；中间值在两者之间分配。最后一步若 $s=0$，两个显式噪声项都消失，得到 $x_s=\hat x_0$，但网络的信号预测误差并不会因此自动消失。[↗](https://arxiv.org/pdf/2509.05952v4#page=6)
 
-代回去得到 Flow-CPS：
-
-\[
-x_{t-\Delta t}
-=
-(1-(t-\Delta t))\hat{x}_0
-+
-(t-\Delta t)\cos\left(\frac{\eta\pi}{2}\right)\hat{x}_1
-+
-(t-\Delta t)\sin\left(\frac{\eta\pi}{2}\right)\epsilon.
-\]
-
-随着 \(\eta\) 增大，新噪声变多，预测噪声相应变少，总噪声水平仍守住 \(t-\Delta t\)。
+Figure 3 提供了几何解释。先看同一信号分量，再看旧噪声与新噪声构成的平面。高维独立高斯向量近似正交，因此可以用圆上旋转直观表示固定总噪声尺度下的方向更新。这是高维直觉，不是说任意有限维的两次高斯采样都严格正交；系数的方差推导依靠独立性即可成立。
 
 ![CPS 与 DDIM 的几何直觉](../../assets/images/paper-deep-dives/diffusion/cps/figure-3-cps-geometry.png){ width="920" }
 
-<small>图源：[原论文，Figure 3](https://arxiv.org/abs/2509.05952)。原论文图意：DDIM 随机采样和 CPS 都在保持目标噪声半径的前提下，把一部分预测噪声替换为新噪声；图中 (d) 对应 Flow-CPS。</small>
+<small>图源：[原论文 v4，第 7 页，Figure 3](https://arxiv.org/pdf/2509.05952v4#page=7)。CPS 从 DDIM 借鉴的是新增随机性时同步减少已有噪声，而具体信号、噪声系数由 Flow Matching 的日程决定。</small>
 
-**Figure 3 要看噪声预算的重分配。**
-DDIM 的轨迹可以理解为圆弧上的系数组合，Flow-ODE 是直线插值，Flow-CPS 则在 Flow Matching 的直线坐标里加入类似 DDIM 的正交噪声替换。它不是把点推到更高噪声半径上，而是在同一个目标噪声半径内改变方向。
+这套参数化还留下两个使用层面的细节。首先，CPS 的固定 $\eta$ 更新没有额外乘 $\sqrt{\Delta t}$，不能直接称它为某个 Wiener 过程的标准离散化。其次，同一个 $\eta$ 在 CPS、Flow-GRPO 和 Dance-GRPO 中对应不同的实际注入方差，所以“$\eta$ 相同”是超参数标签相同，不等于各方法进行了方差完全匹配的探索实验。
 
-## Log-prob 为什么也要改
+## Taylor 展开说明了失配来自哪里，也限定了结论
 
-GRPO 需要每一步的概率比：
+为与连续时间随机过程联系，作者另定义 **Coefficients-Preserving Wiener Sampling（CPWS）**，让新增噪声带有 Wiener 增量的 $\sqrt{\Delta t}$ 因子
 
-\[
-r_t^i(\theta)=
-\frac{p_\theta(x_{t-\Delta t}^i|x_t^i)}
-{p_{\theta_{\text{old}}}(x_{t-\Delta t}^i|x_t^i)}.
-\]
+$$
+x_s=(1-s)\hat x_0+
+\sqrt{s^2-\sigma_t^2\Delta t}\,\hat x_1
++\sigma_t\sqrt{\Delta t}\,\epsilon.
+$$
 
-其中，\(p_\theta\) 和 \(p_{\theta_{\text{old}}}\) 分别表示当前策略与旧策略在给定 \(x_t^i\) 时产生下一状态的条件概率，\(i\) 是组内 rollout 样本索引。
+如果 $\sigma_t\sqrt{\Delta t}\ll s$，旧噪声系数可作一阶展开
 
-原实现通常把转移写成高斯 log-prob，并带有 \(2\sigma_t^2\) 分母。CPS 论文把均值写成：
+$$
+\begin{aligned}
+\sqrt{s^2-\sigma_t^2\Delta t}
+&=s\sqrt{1-\frac{\sigma_t^2\Delta t}{s^2}}\\
+&\approx s-\frac{\sigma_t^2\Delta t}{2s}\\
+&\approx s-\frac{\sigma_t^2\Delta t}{2t}.
+\end{aligned}
+$$
 
-\[
-\mu_\theta(x_t,t)
-=
-(1-(t-\Delta t))\hat{x}_0
-+
-(t-\Delta t)\cos\left(\frac{\eta\pi}{2}\right)\hat{x}_1.
-\]
+最后一步还用了 $s=t-\Delta t$ 与足够小的步长。这样便得到前面 Flow-SDE 的旧噪声系数。因此可以把所分析的更新理解为系数保持形式的一阶近似，丢掉的高阶项在少步时不能忽略。[↗](https://arxiv.org/pdf/2509.05952v4#page=7)
 
-然后把 log-prob 简化为：
+这里关键的是展开条件，不只是“步长趋于零”这句话。接近最后一步时 $s$ 本身也趋近零，即使 $\Delta t$ 看起来小，$\sigma_t^2\Delta t/s^2$ 仍可能很大，甚至使 CPWS 根号无实数解。只有在噪声幅度相对于目标剩余噪声足够小时，这个局部 Taylor 比较才成立。附录 A 对 VP-SDE 与 DDPM 的关系也使用连续极限和 Taylor 展开，作用是说明离散系数与连续近似之间的联系，不是证明随机微分方程框架本身失效。[↗](https://arxiv.org/pdf/2509.05952v4#page=13)
 
-\[
-\log p_\theta(x_{t-\Delta t}^i|x_t^i)
-=
--\lVert x_{t-\Delta t}-\mu_\theta(x_t,t)\rVert^2.
-\]
+附录 C 还尝试一种更小的改动：从 CPWS 的第一步 Taylor 近似出发，保留分母 $s$，再令 $\sigma_t=\eta s$，让扩散强度随下一时刻剩余噪声下降。这里并非直接向分母为 $t$ 的原 Flow-SDE 式子代入新日程。此时旧噪声系数为 $s(1-\eta^2\Delta t/2)$，新噪声标准差为 $\eta s\sqrt{\Delta t}$，总标准差变成
 
-论文给出的理由是：最后几个 timestep 的 \(\sigma_t\) 很小，保留 \(2\sigma_t^2\) 分母会导致近零除法或过度强调后期低随机性的步骤；去掉分母可以把更多权重留给早期高多样性的探索步骤。对应的 KL 项也去掉分母：
+$$
+\sigma_{\mathrm{total}}
+=s\sqrt{1+\left(\frac{\eta^2\Delta t}{2}\right)^2}.
+$$
 
-\[
-D_{\mathrm{KL}}(\pi_\theta||\pi_{\mathrm{ref}})
-=
-\lVert \mu_\theta(x_t)-\mu_{\mathrm{ref}}(x_t)\rVert^2.
-\]
+剩余误差比原日程小，但仍不严格等于 $s$。附录 Figure 8 显示，在其 $\eta\le1$、4 步及以上的设置中，这个修正的系数曲线已很接近目标，Figure 9 也给出较干净的样例。它说明通过重新设计扩散日程可以缓解失配；论文没有为这个变体提供与主方法同等完整的 RL 收益表，因而还不能只凭样例判定它在训练中与 CPS 等效。[↗](https://arxiv.org/pdf/2509.05952v4#page=15)
 
-这部分是工程上最容易漏掉的点：如果只替换采样公式，不同步改 log-prob / KL，policy gradient 的权重结构仍可能不稳定。论文 Appendix D 的 log-prob 消融显示，Flow-GRPO 去掉随 timestep 改变权重的 \(2\sigma_t^2\) 分母后只改善早期收敛，最终结果接近原版；Flow-CPS 保留该分母时未收敛。现有消融提示 sampler 与 log-prob 需要配套调整，但尚不能完全拆分两者对最终结果的贡献。
+## 真正接入 GRPO 时，作者还改变了 log-prob 和参考惩罚
 
-## 实验设置与主结果
+对一个非退化的 CPS 转移，给定 $x_t,t,c$ 后，网络决定均值
 
-论文覆盖两类 reward：
+$$
+\mu_\theta=(1-s)\hat x_0
++s\cos\left(\frac{\eta\pi}{2}\right)\hat x_1,
+$$
 
-| Reward 类型 | 任务 | 说明 |
+新噪声的标准差则为 $b=s\sin(\eta\pi/2)$。只要 $b>0$，条件分布为 $\mathcal N(\mu_\theta,b^2I)$，其真实高斯 log-density 含有
+
+$$
+\log p_\theta(x_s\mid x_t,c)
+=-\frac{\|x_s-\mu_\theta\|^2}{2b^2}
+-\frac d2\log(2\pi b^2),
+$$
+
+其中 $d$ 是状态维度。对同一时间、同一固定方差的新旧策略作概率比率，归一化常数会抵消；但两个残差的差值仍除以 $2b^2$，这个分母不会自行消失。
+
+作者实际采用的形式进一步删去分母
+
+$$
+\widetilde{\log p}_\theta(x_s\mid x_t,c)
+=-\|x_s-\mu_\theta\|^2.
+$$
+
+这么做首先为了避免接近数据端时 $b^2$ 很小，将很小的均值偏移放大为极大的 log-prob 变化。其次，它改变了不同时间步的相对权重。原本低噪声后期的残差被 $1/b^2$ 放大，删除后会减弱这部分相对影响，使早期、更多影响生成多样性的步骤得到相对更大的权重。[↗](https://arxiv.org/pdf/2509.05952v4#page=7)
+
+可以直接看新旧比率的变化。若记新、旧残差平方为 $E_\theta,E_{\mathrm{old}}$，真实高斯比率是 $\exp[-(E_\theta-E_{\mathrm{old}})/(2b^2)]$，替代形式则使用 $\exp[-(E_\theta-E_{\mathrm{old}})]$。二者一般不同，因此 clipping 实际约束的变化尺度也会不同。把后者解释为时间步重加权或温度发生变化的代理目标更准确，不能仍称它为原采样分布的精确似然比。
+
+参考模型项作了相同处理。相同协方差的两个高斯分布，其 KL 与 $\|\mu_\theta-\mu_{\mathrm{ref}}\|^2/(2b^2)$ 对应；论文 Equation 16 使用去掉分母的
+
+$$
+\widetilde D_{\mathrm{ref}}
+=\|\mu_\theta-\mu_{\mathrm{ref}}\|^2.
+$$
+
+因此 sampler、log-prob、ratio、reference penalty 和其系数 $\beta$ 共同决定新的优化过程。只替换生成公式而照搬原高斯分母，并不等于复现了论文实际使用的方法。
+
+端点还有一个数学区别。当 $\eta=0$ 或 $s=0$ 时，$b=0$，真实转移退化为确定映射，普通连续高斯密度公式不再适用。去掉分母后的残差代理仍能计算，不代表它恢复了一个本不存在的非退化转移密度。这也是不能把数值稳定性与概率解释完全等同的原因。
+
+## log-prob 消融支持组合改动，但没有分离出全部因果贡献
+
+附录 D 的 Figure 10 专门回答：性能改善是否只是去掉方差分母带来的？读图时先比较红、绿两条基线。绿色仍使用原 Flow-GRPO 采样，但移除 log-prob 分母；它在训练前段更快，最终表现与红色接近。再看蓝色 CPS，它达到高分所需的优化步数明显更少。
+
+![移除 log-prob 分母的消融](../../assets/images/paper-deep-dives/diffusion/cps/figure-10-logprob-ablation.png){ width="920" }
+
+<small>图源：[原论文 v4，第 16 页，Figure 10](https://arxiv.org/pdf/2509.05952v4#page=16)。绿色检验基线去分母，蓝色使用 CPS 配合修改后的 log-prob。</small>
+
+这一结果支持“仅改基线 log-prob 不能完全重现 CPS 组合收益”。但作者同时写明，CPS 若保留原 log-prob 分母，实验不能收敛，因此没有画出那条曲线。完整的 $2\times2$ 比较应包括两种 sampler 与两种概率定义；这里有一个组合失败，不能把其余三条成功曲线解释成已经独立量化了采样公式与目标权重各自贡献多少。[↗](https://arxiv.org/pdf/2509.05952v4#page=16)
+
+这个失败也很有实际价值。它说明 CPS 所产生的小方差转移与原目标的数值敏感性确实会相互作用，不能仅凭“更新公式只需几行”就假设训练接口无需调整。论文主表里的基线采用各自原 log-prob，CPS 采用删除分母的版本，主结果衡量的就是这套可训练组合。
+
+## 四类奖励分别在测什么
+
+实验在 8 张 NVIDIA A100 上完成，沿用 Flow-GRPO 与 Dance-GRPO 的实验设置，改变采样方法和 log-prob。四类任务涵盖可验证规则与学习得到的偏好分数，但它们的奖励来源和能够支持的判断不同。[↗](https://arxiv.org/pdf/2509.05952v4#page=8)
+
+| Reward | Scoring rule or target | What the result measures |
 | --- | --- | --- |
-| RLVR | GenEval、OCR | 规则或工具可验证 reward，检查对象组合、计数、位置、颜色、文字渲染 |
-| RLHF / preference | PickScore、HPSv2 | 基于人类偏好数据训练的 scoring model |
+| GenEval | Counting、object co-occurrence、position、color 等组合属性 | 指定物体及其关系、属性的满足程度 |
+| OCR | 识别生成图中文字，并与提示中的目标文本比较 | 被 OCR 系统识别出的文本准确度 |
+| PickScore | 由人类偏好数据训练的评分模型 | 该偏好代理给出的分数 |
+| HPSv2 | 由人类偏好数据训练的评分模型 | 另一种偏好代理给出的分数 |
 
-实验沿用 Flow-GRPO 与 Dance-GRPO 设置，只替换采样方法和 log-prob；论文报告所有实验在 8 张 NVIDIA A100 GPU 上完成。
+GenEval 中，计数奖励写为 $1-|N_{\mathrm{gen}}-N_{\mathrm{ref}}|/N_{\mathrm{ref}}$；位置、颜色任务先检查数量，数量正确给部分奖励，再根据位置或颜色是否正确补上其余奖励。OCR 的奖励是
 
-论文 Table 1-4 的关键数字如下：
+$$
+r_{\mathrm{OCR}}=\max\left(1-\frac{N_e}{N_{\mathrm{ref}}},0\right),
+$$
 
-| Task | Baseline / Method | Reported result |
-| --- | --- | ---: |
-| GenEval Overall | SD3.5-M base | 0.63 |
-| GenEval Overall | +Flow-GRPO w/ KL | 0.97 |
-| GenEval Overall | +Flow-CPS w/ KL | 0.97 |
-| PickScore | FLUX.1-schnell + Flow-GRPO | 23.39 |
-| PickScore | FLUX.1-schnell + Flow-CPS | 23.78 |
-| PickScore | FLUX.1-dev + Flow-GRPO | 23.90 |
-| PickScore | FLUX.1-dev + Flow-CPS | 24.25 |
-| HPSv2 | FLUX.1-schnell + Dance-GRPO | 0.364 |
-| HPSv2 | FLUX.1-schnell + Flow-CPS | 0.377 |
-| OCR | SD3.5-M + Flow-GRPO | 0.966 |
-| OCR | SD3.5-M + Flow-CPS | 0.975 |
+其中 $N_e$ 为识别文本与目标文本的最小编辑距离，$N_{\mathrm{ref}}$ 为提示引号中目标字符串的字符数。这个得分同时依赖生成文字与识别器，不能简单等同于所有人类读者的逐字判断。
 
-<small>表源：[原论文，Table 1–4](https://arxiv.org/abs/2509.05952)。GenEval 接近饱和，CPS 与 Flow-GRPO 最终分数持平；PickScore、HPSv2、OCR 上 CPS 报告更高最终 reward。</small>
+PickScore 与 HPSv2 的“人类偏好”来自评分模型的训练来源，本文使用它们作为自动奖励，并未在这些曲线中进行新的真人盲测。因此分数上涨可以证明对应代理更满意，不能直接换算成人类胜率。
+
+多数实验为训练速度省去了参考 KL 项，GenEval 是例外，作者发现其缺失会导致退化，并采用 $\beta=0.001$。后面的结果需结合这一点理解：更干净的 rollout 减少了一类噪声干扰，但不会取消过度优化奖励时的其他约束需求。[↗](https://arxiv.org/pdf/2509.05952v4#page=9)
+
+## PickScore 先看确定性评估，才能区分图像更干净与参数学得更好
+
+PickScore 实验使用两个 FLUX 模型。FLUX.1-dev 训练 rollout 为 6 步，评估为 28 步；FLUX.1-schnell 训练与评估均为 4 步。训练随机强度设置为 $\eta=0.9$，评估不额外注入随机性。下表保留原论文 Table 2 的数值。[↗](https://arxiv.org/pdf/2509.05952v4#page=8)
+
+| Model | Base | Flow-GRPO | Flow-CPS |
+| --- | ---: | ---: | ---: |
+| FLUX.1-schnell | 21.86 | 23.39 | 23.78 |
+| FLUX.1-dev | 22.06 | 23.90 | 24.25 |
+
+相对于基线，CPS 在 schnell、dev 上分别提高 0.39 和 0.35 个 PickScore 分数，差值由表中数值相减得到。更值得注意的是 Figure 4 的训练与评估线。训练起点的差异，在尚未充分学习时就出现，主要体现两种 sampler 给奖励模型的输入不同；确定性评估线从相同起点出发，之后才拉开，因而更能支持参数学习本身获益。
 
 ![PickScore reward 曲线](../../assets/images/paper-deep-dives/diffusion/cps/figure-4-pickscore-curves.png){ width="920" }
 
-<small>图源：[原论文，Figure 4](https://arxiv.org/abs/2509.05952)。原论文图意：在 FLUX.1-dev 和 FLUX.1-schnell 上，Flow-CPS 的 PickScore 训练 / 评估曲线整体高于 Flow-SDE；dev 设置训练 6 steps、评估 28 steps，schnell 设置训练和评估均为 4 steps。</small>
+<small>图源：[原论文 v4，第 9 页，Figure 4](https://arxiv.org/pdf/2509.05952v4#page=9)。左为 dev 的 6/28 步训练与评估，右为 schnell 的 4/4 步；横轴为优化 Step。</small>
 
-**PickScore 曲线要看 train-test gap。**
-论文说明评估阶段不加随机性，因此两种采样方法一开始评估 reward 相同。训练中 Flow-SDE 的样本更噪，reward 估计更不准；CPS 的训练曲线和评估曲线更快进入较高区间。这支持的是“干净 rollout 帮助 reward 优化”，不是“PickScore 已经等同真实人评”。
+这个设计避免了只用随机训练奖励证明最终模型改善的问题。与此同时，曲线支持的是较少优化步达到相应代理得分，以及表中最终评分更高；论文没有提供对应的完整墙钟时间与计算成本表，所以不能把曲线横向距离直接称为同样比例的训练时间加速。dev 的训练与评估使用不同采样步数，也应保留在复现和成本估计中。
+
+## GenEval 总分打平，参考约束与分项变化更值得看
+
+GenEval 使用 SD3.5-M，10 步训练、40 步评估，$\eta=0.7$。完整分项表能够防止只看 Overall 而误读所有能力都同时提升。[↗](https://arxiv.org/pdf/2509.05952v4#page=8)
+
+| Model | Overall | Single Obj. | Two Obj. | Counting | Colors | Position | Attr. Binding |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| SD3.5-M | 0.63 | 0.98 | 0.78 | 0.50 | 0.81 | 0.24 | 0.52 |
+| Flow-GRPO w/o KL | 0.95 | 0.99 | 0.98 | 0.95 | 0.92 | 0.95 | 0.83 |
+| Flow-CPS w/o KL | 0.94 | 0.99 | 0.95 | 0.95 | 0.89 | 0.93 | 0.83 |
+| Flow-GRPO w/ KL | 0.97 | 1.00 | 1.00 | 0.97 | 0.94 | 0.98 | 0.90 |
+| Flow-CPS w/ KL | 0.97 | 1.00 | 0.99 | 0.95 | 0.94 | 0.98 | 0.93 |
+
+带参考约束时，两种 RL 方法的 Overall 都为 0.97。CPS 的 Attr. Binding 从 0.90 到 0.93，但 Two Obj. 与 Counting 分别略低于基线；单物体、颜色和位置则打平。因此主表支持高分区域中的能力权衡，而不是逐项全面胜出。去掉参考约束时，CPS 总分 0.94，基线为 0.95，也不能只从“采样更干净”推导最终指标一定更高。
+
+原论文 Figure 5 左侧补上了表格看不到的时间维度。CPS 较早达到较高分数，但无 KL 的训练出现明显跌落、退化甚至崩溃。即便某个报告点的表格分数很高，也不能据此说整条训练过程稳定。
 
 ![GenEval 与 HPSv2 reward 曲线](../../assets/images/paper-deep-dives/diffusion/cps/figure-5-geneval-hpsv2-curves.png){ width="920" }
 
-<small>图源：[原论文，Figure 5](https://arxiv.org/abs/2509.05952)。原论文图意：左图展示 SD3.5 上 GenEval 优化；没有 KL 时两种方法都可能退化，加入 KL 后更稳。右图展示基于 Dance-GRPO 的 HPSv2 优化，CPS moving average 高于 SDE baseline。</small>
+<small>图源：[原论文 v4，第 9 页，Figure 5](https://arxiv.org/pdf/2509.05952v4#page=9)。左侧比较 GenEval 是否使用参考约束；右侧 HPSv2 只有训练曲线及其滑动平均。</small>
 
-**Figure 5 要同时看 KL 和 reward 类型。**
-GenEval 已经接近饱和，最终分数不容易拉开；但没有 KL 时两种方法都出现明显退化，说明 CPS 不是 reward hacking 的万能解。HPSv2 这种偏好模型对图像质量和伪影更敏感，CPS 的收益更明显。
+这组实验检验的是两个独立问题。采样规则能否更快提供可用于学习的图像，曲线给出正面证据；奖励优化是否仍需约束偏离，带与不带 KL 的差异同样给出明确答案。CPS 解决噪声系数失配，并没有替代参考模型约束。
+
+## HPSv2 的比较条件和论文内部标注应分别保留
+
+原论文 Table 3 的模型标题为 **FLUX.1-schnell**，报告如下。
+
+| Model | Base | Dance-GRPO | Flow-CPS |
+| --- | ---: | ---: | ---: |
+| FLUX.1-schnell | 0.304 | 0.364 | 0.377 |
+
+CPS 比 Dance-GRPO 高 0.013，二者均高于基础模型。不过 Figure 5 右侧标题、图注，以及附录 Figure 12 的定性样例都写的是 **FLUX.1-dev**。这一模型标注不一致使表格与曲线无法无条件合并为同一个明确模型的完整实验记录；这里保留各自的局部标签，不猜测哪处应改。[↗](https://arxiv.org/pdf/2509.05952v4#page=8) [↗](https://arxiv.org/pdf/2509.05952v4#page=9)
+
+曲线还有两点直接影响判断。第一，Dance-GRPO 代码没有提供在线评估，因此 Figure 5 画的是训练奖励和 moving average，不能将平滑后的训练分数称为独立评估。第二，CPS 使用 $\eta=0.7$，Dance-GRPO 使用其默认的 $\eta=0.3$，它不是相同超参数数值的对照，更不是相同实际注入方差的对照。
+
+这不抹掉表格和曲线的观察，但限定了归因。可确认的是，论文所采用的两套完整设置中，CPS 的 HPSv2 报告分数更高、训练曲线更快抬升；仅凭它们不足以量化在同一探索预算下 sampler 本身的净收益。
+
+## OCR 的探索消融说明，干净图像仍需要足够随机性
+
+OCR 使用 SD3.5-M。Table 4 中基础模型为 0.579，Flow-GRPO 为 0.966，CPS 为 0.975。这个任务将奖励直接连接到文字编辑距离，比偏好分数更容易解释，但仍需区分最终分数与训练过程。[↗](https://arxiv.org/pdf/2509.05952v4#page=8)
+
+| Model | Base | Flow-GRPO | Flow-CPS |
+| --- | ---: | ---: | ---: |
+| SD3.5-M | 0.579 | 0.966 | 0.975 |
+
+Figure 6 分别在两种 sampler 下改变 $\eta\in\{0.1,0.3,0.5,0.7,1.0\}$。先看同一面板中低随机强度与中高强度的区别，再比较两幅图达到高分的大致优化步数。两种方法都在 $\eta=0.7$ 获得最佳表现，而 $\eta=0.1$ 都不能良好收敛，CPS 的小 $\eta$ 曲线也有明显震荡。
 
 ![OCR reward 曲线](../../assets/images/paper-deep-dives/diffusion/cps/figure-6-ocr-reward-curves.png){ width="920" }
 
-<small>图源：[原论文，Figure 6](https://arxiv.org/abs/2509.05952)。原论文图意：Text Rendering Reward 中，Flow-CPS 相比 Flow-GRPO baseline 收敛更快；两者在 \(\eta=0.7\) 附近表现较好，\(\eta=0.1\) 难以收敛。</small>
+<small>图源：[原论文 v4，第 10 页，Figure 6](https://arxiv.org/pdf/2509.05952v4#page=10)。左右横轴的展示范围不同，比较的是优化步数趋势，不能直接读成等墙钟预算。</small>
 
-OCR 结果很适合解释 CPS 的实际价值。文字渲染 reward 对局部结构和可读性敏感，噪声伪影会直接影响识别结果。CPS 没有让 reward 目标更聪明，只是让 reward model 看到更符合 scheduler 分布的样本。
+这一消融支持 CPS 的一个具体用途：在保留较强逐步探索时，减少显式噪声超预算的副作用。但它也排除了“只要系数正确，就可以把随机性降到极低并保持稳定”的推断。有效探索仍然是 RL 的必要设计变量；系数保持控制的是随机性如何加入，不是证明任何随机强度都适合任务。
 
-## 和 DPM-Solver / DDIM 的关系
+## DPM-Solver++ 给出反例，SDE 名称本身不决定是否保持系数
 
-论文附录把 DPM-Solver 系列也放进 CPS 框架检查。结论很有用：
+附录 B 将同样的系数检查应用到 DPM-Solver 系列。这部分很关键，因为它防止把主文对两种 Flow-SDE 离散式的诊断扩大为对所有 SDE 求解器的否定。为避免附录与主文的时间符号方向混淆，这里用 current、next 表示相邻两个状态，并记对应日程为 $\alpha,\sigma$，半对数信噪比（$\log(\alpha/\sigma)$）的增量为
 
-| Sampler | 是否满足 CPS | 论文解释 |
-| --- | --- | --- |
-| DDIM with stochasticity | 是 | 预测噪声和新噪声的 RSS 正好等于 scheduler 噪声水平 |
-| Flow-SDE | 否 | 是 Flow-CPWS 的一阶 Taylor 近似，少步时误差不可忽略 |
-| SDE-DPM-Solver-1 | 否 | 总噪声水平大于目标 \(\sigma_t\) |
-| SDE-DPM-Solver++1 | 是 | 可重写成样本系数匹配、总噪声水平匹配的形式 |
+$$
+h=\log\frac{\alpha_{\mathrm{next}}}{\sigma_{\mathrm{next}}}
+-\log\frac{\alpha_{\mathrm{current}}}{\sigma_{\mathrm{current}}}.
+$$
 
-这说明 CPS 不是反对所有随机 sampler，而是提供一个检查器：把采样公式写成 sample coefficient + predicted noise + fresh noise，再检查样本系数和总噪声是否匹配 scheduler。
+作者对一阶形式的推导显示，SDE-DPM-Solver1 的总噪声标准差是
 
-## 主要贡献
+$$
+\sigma_{\mathrm{next}}
+\sqrt{2(\exp(h)-1)^2+1},
+$$
 
-1. 提出 coefficients-preserving sampling 的明确定义，把 Flow-RL 的随机性问题落到可检查的系数约束上。
-2. 证明 Flow-SDE 在有随机性时通常不满足总噪声水平约束，且少步采样会放大误差。
-3. 提出 Flow-CPS，用 DDIM 风格的噪声重分配替代直接 SDE 加噪。
-4. 给出与 GRPO 目标配套的 log-prob / KL 简化形式。
-5. 在 GenEval、PickScore、HPSv2、OCR 上报告更快或更高的 reward 优化结果。
+所以一般大于目标 $\sigma_{\mathrm{next}}$。但 **SDE-DPM-Solver++1** 可写成
 
-## 局限与风险
+$$
+x_{\mathrm{next}}=
+\alpha_{\mathrm{next}}\hat x_0
++\sigma_{\mathrm{next}}e^{-h}\hat x_1
++\sigma_{\mathrm{next}}\sqrt{1-e^{-2h}}\,\epsilon.
+$$
 
-CPS 的适用范围是 sampler 噪声错配，视觉 RL 后训练的其余问题仍需单独处理。论文结论需要按下面边界使用。
+它的旧、新噪声系数平方和恰好等于 $\sigma_{\mathrm{next}}^2$，因此符合 CPS 的判据。它与主方法的区别在于新噪声比例随 $h$ 变化，等效角度参数是
 
-| 风险 | 具体边界 |
-| --- | --- |
-| Work in progress | arXiv 页面与 PDF 标注 work in progress，后续公式、实现或实验可能变化 |
-| reward hacking 仍存在 | 论文 Appendix E 也指出更高 reward 不必然等于更好图像，优化样本可能堆过多细节 |
-| 视频外推不足 | 摘要提到 image and video generation，但实验主要是图像基线；不能直接当作视频 Flow-RL 的已验证结论 |
-| 假设依赖 | CPS 定义里把 predicted noise 近似为标准高斯，并假设它和新噪声独立；真实模型预测误差会带来偏差 |
-| log-prob 设计需单独验证 | 去掉 \(2\sigma_t^2\) 分母是论文经验设计，适合当前实验，但不同 scheduler / reward / RL 算法还要单独验证 |
-| 不能替代人评 | PickScore、HPSv2、OCR 和 GenEval 只是代理 reward；真实偏好和安全性仍需额外评估 |
+$$
+\eta_{\mathrm{eff}}
+=\frac{2}{\pi}\arcsin\sqrt{1-e^{-2h}}.
+$$
 
-## 项目启发
+附录给出的日程中，等效 $\eta$ 从 1 降到约 0.43，再回到 1。原 Figure 7 右侧纵轴实际画的是 **Injected Noise Level**，其最低点约 0.63，对应 $\sin(0.43\pi/2)$；不能把图上的纵轴数值直接称为 $\eta$。[↗](https://arxiv.org/pdf/2509.05952v4#page=14)
 
-如果把 CPS 落到工程项目里，可以先加三个检查项：
+![CPS 与 SDE-DPM-Solver++1 的 OCR 对比](../../assets/images/paper-deep-dives/diffusion/cps/figure-7-dpm-comparison.png){ width="920" }
 
-1. **采样公式审计。** 把 sampler 写成 \(\hat{x}_0\)、预测噪声和新噪声的系数组合，检查样本系数和总噪声水平是否与 scheduler 一致。
-2. **reward 输入审计。** RL 训练时同时保存 deterministic sample、stochastic training sample 和 reward model 输入，人工看噪声伪影是否改变排序。
-3. **少步风险审计。** 4-step / 8-step 训练不要直接套连续时间 SDE 直觉，必须画出每步的 ideal noise level 和 actual noise level。
+<small>图源：[原论文 v4，第 14 页，Figure 7](https://arxiv.org/pdf/2509.05952v4#page=14)。左侧为 CPS 的 OCR reward，中间为 SDE-DPM-Solver++1 的两次运行，右侧为随采样步骤变化的噪声注入比例。</small>
 
-这对视频生成尤其重要。视频 Flow-RL 不只会受单帧噪声伪影影响，还会叠加时序一致性、运动幅度、文字/物体漂移和 reward 延迟反馈。CPS 给出的最低要求是：先保证 rollout 样本没有被 sampler 自己推到过噪分布，再讨论 reward 是否真的对齐目标。
+附录 Table 5 报告了两次 SDE-DPM-Solver++1 运行及不同固定 $\eta$ 的 CPS。原文将前两次运行的数值描述为各自达到的峰值奖励，不是均值与标准差。
 
-## 阅读结论
+| Method | Setting | OCR Reward |
+| --- | --- | ---: |
+| SDE-DPM-Solver++1 | Run 1 | 0.966 |
+| SDE-DPM-Solver++1 | Run 2 | 0.970 |
+| Flow-CPS | $\eta=0.3$ | 0.973 |
+| Flow-CPS | $\eta=0.5$ | 0.963 |
+| Flow-CPS | $\eta=0.7$ | 0.975 |
 
-CPS 是一篇适合放在“扩散采样”和“视觉生成 RL”交叉处读的论文。它的成熟度是前沿待复现：理论分析和官方代码已经给出，作者实验也覆盖了多个 reward，但论文仍标注 work in progress；截至 2026-07-08，本站未核实到独立复现。可复用机制很清楚：给 Flow Matching 注入随机性时，必须保持 scheduler 的样本系数和总噪声水平。不可外推项也要守住：CPS 不证明所有视觉 RL 都稳定，不解决 reward hacking，不直接证明视频后训练收益。下一步证据应是视频 Flow-RL、真实人评、不同 solver / scheduler 和独立复现实验。
+Figure 7 中间显示，SDE-DPM-Solver++1 两次运行仍有奖励骤降；左侧 CPS 在 $\eta\le0.5$ 时也出现类似问题。作者把这种现象与探索多样性不足联系起来，同时承认根因尚未解决。因而系数保持可以排除一类显式噪声预算错误，却不足以保证整个 RL 过程稳定；这个附录对主方法的结论提供了实质限制。推导与实验集中在这里列出的一阶形式，也不能自动推广为所有高阶 DPM solver 的统一性质。
 
-## 自测题
+## 更高偏好奖励可能伴随过量细节，噪声问题解决后仍有奖励投机
 
-1. 你把一个 16-step Flow-SDE rollout 压到 4-step 后，训练样本开始出现噪点。除了调低随机强度，还应怎样逐步核对 scheduler 的目标噪声、预测噪声与新噪声系数，才能判断问题来自噪声预算超支？
-2. 一个项目只把 Flow-SDE sampler 换成 Flow-CPS，却保留原 log-prob 与 KL 的 \(2\sigma_t^2\) 分母。这个改动可能怎样重新加权不同 timestep 的 policy gradient，应该记录哪些量来确认训练是否仍稳定？
-3. CPS 训练后的 PickScore 与 OCR reward 都提高了，但真实人评尚未进行。代理 reward 可能受哪些分布偏差或 reward hacking 影响，最小的人评与对照采样设计应怎样区分“样本更干净”和“偏好确实更好”？
+附录的定性结果揭示了另一个层次。PickScore 优化后的图像通常增加纹理，HPSv2 优化后则增加细节和光影。Figure 12 可以沿着同一行比较 Base、Dance-GRPO 与 CPS，尤其观察浴室、公路和机械人的附加装饰：浴室出现更多花饰，公路场景增加高饱和的彩色植被与落叶，机械人包含更多饰件。这些变化会提高特定偏好代理的分数，但不等于每位用户都更喜欢这些额外内容。
 
-## 外部精读
+![HPSv2 优化后的细节与奖励过拟合样例](../../assets/images/paper-deep-dives/diffusion/cps/figure-12-hps-reward-overoptimization.png){ width="920" }
 
-- 原论文：[Coefficients-Preserving Sampling for Reinforcement Learning with Flow Matching](https://arxiv.org/abs/2509.05952)。
-- 官方实现：[IamCreateAI/FlowCPS](https://github.com/IamCreateAI/FlowCPS)。
-- 中文讲法参考：[系数保持采样：Flow Matching 随机性注入的正确打开方式](https://zhuanlan.zhihu.com/p/1948388095151026330)。
-- 站内下一步：[噪声日程与参数化](../../diffusion/noise-schedules-and-parameterization.md)。
-- 站内下一步：[采样与推理加速](../../diffusion/inference.md)。
-- 站内下一步：[PPO / GRPO](../../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)。
+<small>图源：[原论文 v4，第 18 页，Figure 12](https://arxiv.org/pdf/2509.05952v4#page=18)。该图标注为 FLUX.1-dev；按行固定 prompt 比较三列，注意新增纹理、装饰和光影。</small>
+
+作者在附录明确承认，过量细节可能属于 reward hacking。CPS 可以让 rollout 更少受残余噪声干扰，但更干净的输入仍可能被一个有偏的奖励模型鼓励产生过度装饰。前面“奖励计算更可靠”的动机，应理解为减少这一类噪声污染，不能理解为已经测得奖励与人类偏好之间的一致性必然提高。[↗](https://arxiv.org/pdf/2509.05952v4#page=16)
+
+论文结尾另外保留了两个未解决问题。多步探索仍用终端奖励评价整条轨迹，如何分配各步贡献并未解决；从初始输入噪声产生的随机性，也不是当前 Flow Matching GRPO 过程能够直接优化的对象。本文定量实验集中在图像生成，虽然动机涉及图像与视频 RL，不能据此宣称已经验证了视频模型上的同等收益。[↗](https://arxiv.org/pdf/2509.05952v4#page=10)
+
+## 可以复用的是一次采样与目标函数的联合检查
+
+CPS 最适合被理解为对在线 Flow-RL 接口的修正。网络输出速度后，先还原 $\hat x_0,\hat x_1$，再依据下一时间的日程分配旧、新噪声；训练更新则使用与论文设置相配套的残差代理及参考约束。它不要求增加另一套生成网络，新增计算主要是端点重组与高斯采样，但整体 RL 成本仍由重复 rollout、奖励计算和参数更新决定。
+
+实际采用时，第一项可复用工作是把已有 sampler 写成“信号系数、已有噪声系数、新噪声系数”三部分，直接检查下一时间的预算。第二项是明确目标究竟使用精确 Gaussian likelihood，还是经过时间步重加权的 surrogate；前者的概率解释和后者的稳定性动机不能混写。第三项是同时观察随机训练奖励、确定性评估、参考约束与低探索强度下的跌落，避免把一个较高峰值当成完整训练收益。
+
+本文最有分量的认识是，生成模型的 RL 奖励学习会受到数值采样规则的直接影响。减少有限步误差可以让探索更可用，但“系数正确”“训练稳定”“奖励更高”和“用户更满意”仍需要各自的证据。CPS 给出了前两者之间一个可操作的接口，同时用消融和失败案例显示，这条链并不会因为采样式变干净而自动闭合。

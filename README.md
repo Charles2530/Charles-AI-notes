@@ -1,22 +1,25 @@
 # Charles AI notes
 
-Charles AI notes 是一个持续维护的中文 AI 知识库。内容从前置数学与基础概念出发，逐步延伸到训练、推理、强化学习、生成模型、世界模型和具身智能，并通过知识 QA 与论文精读补充常见问题、研究脉络和工程判断。
-
+Charles AI notes 是一份可自由查阅的中文 AI 技术入门手册。内容连接数学、模型计算、训练、推理、生成模型、强化学习及多模态与具身系统，通过数值例子、实现和论文精读帮助读者理解机制及其适用条件。
 站点使用 MkDocs 与 Material for MkDocs 构建，支持本地阅读、全文检索、静态站点部署和可选的本地 AI 阅读助手。
 
 ## 当前内容
 
-知识库按学习与研究路径组织为九个一级专题：
+站点从[技术地图](./files/index.md)进入，按技术问题组织八个主要方向，并提供工具与查阅入口。
 
-- [前置数学知识](./files/prerequisite-math/index.md)：线性代数、概率统计、信息论、优化、随机过程、动态系统、几何视觉和数值计算
-- [基础概念](./files/foundations/index.md)：张量与计算图、Transformer、训练目标、生成解码、多模态、检索、压缩与架构搜索
-- [训练与推理系统](./files/training-and-inference-systems/index.md)：分布式训练、数据与配方、稳定性排障、推理引擎、KV cache、容量规划、量化、算子与编译器
-- [强化学习](./files/reinforcement-learning/index.md)：MDP、价值学习、策略梯度、离线强化学习、对齐训练、智能体与机器人控制
-- [世界模型与具身智能](./files/world-models-and-embodied-ai/index.md)：世界模型、视频动作模型、VLA、数据闭环、Sim2Real、评测与部署安全
-- [扩散与生成模型](./files/diffusion/index.md)：扩散过程、训练目标、采样器、蒸馏、一致性模型、视频扩散与生成系统
-- [思考探索](./files/thinking-exploration/index.md)：跨专题问题、研究假设、系统接口和方法论探索
-- [知识 QA](./files/knowledge-qa/foundations-and-transformer.md)：从基础章节提炼的高频问题、概念辨析与工程排障问答
-- [论文精读](./files/paper-deep-dives/index.md)：围绕重点论文整理的问题背景、方法机制、实验结论、局限与延伸阅读
+| 方向 | 内容 |
+| --- | --- |
+| [基础知识](./files/foundations/index.md) | 张量、梯度、数据与目标；[数学工具](./files/prerequisite-math/index.md)按需查阅 |
+| [模型结构](./files/model-architectures/index.md) | 线性层、MLP、卷积、Transformer、MoE 与 SSM |
+| [训练](./files/training/index.md) | 参数更新、预训练、微调、数据系统和分布式训练 |
+| [推理与效率](./files/inference/index.md) | 解码、缓存、调度、量化、算子与编译器 |
+| [生成模型](./files/diffusion/index.md) | 扩散目标、网络、采样、Flow Matching 与蒸馏 |
+| [强化学习](./files/reinforcement-learning/index.md) | 交互、价值、策略优化、离线数据与应用 |
+| [多模态与具身](./files/world-models-and-embodied-ai/index.md) | VLM、世界模型、VLA 与机器人系统 |
+| [论文精读](./files/paper-deep-dives/index.md) | 连接基础机制、方法实现和原始实验证据 |
+| [工具与查阅](./files/technical-reference/index.md) | 术语、知识 QA、探索文章与可运行示例 |
+
+[基础机制示例](./files/assets/examples/foundations/mechanisms.py)仅使用 Python 标准库，可以直接运行，对照线性层、梯度、因果注意力与解码的数值结果。
 
 ## 站点功能
 
@@ -143,10 +146,10 @@ make build
 
 | 命令 | 用途 |
 | --- | --- |
-| `make quality` | 检查内容结构、本地链接、图源说明和论文精读质量 |
+| `make quality` | 检查内容结构、本地链接、图源说明和精读索引完整性 |
 | `make quality-hints` | 在常规检查基础上显示低优先级改进提示 |
 | `make quality-pages` | 显示提示及对应页面，便于逐篇处理 |
-| `make paper-quality` | 单独检查论文精读内容 |
+| `make paper-quality` | 检查论文元数据、来源链接、索引与本地资源 |
 | `make image-quality` | 检查图片引用、清晰度、裁剪风险和未引用资源，并生成临时 contact sheet |
 | `make math-quality` | 检查数学公式的 Markdown 与渲染风险 |
 | `make blog-quality` | 评估文章作为独立博客发布时的完整度 |
@@ -159,7 +162,7 @@ make quality
 make build
 ```
 
-涉及图片、公式或论文精读时，再运行对应的专项检查。图片检查生成的 contact sheet 位于 `/private/tmp/charles-ai-notes-image-quality/`，只用于人工复核。
+自动检查验证结构与资源完整性，标题、篇幅和关键词仅作为人工复核提示，不据此证明知识深度或论文结论正确。涉及图片、公式或论文精读时，再运行对应的专项检查。图片检查生成的 contact sheet 位于 `/private/tmp/charles-ai-notes-image-quality/`，只用于人工复核。
 
 ## GitHub Pages 部署
 
@@ -169,7 +172,7 @@ make build
 
 ## 内容维护约定
 
-这个仓库按专题知识树维护，新增内容应尽量接入已有学习路径，而不是形成孤立页面。编写或更新文章时，建议同时检查：
+这个仓库按技术问题维护，新增内容应连接已有概念、实现或证据来源。编写或更新文章时，建议同时检查：
 
 - 概念定义、适用边界和必要前置知识是否完整
 - 方法、实现、评测、部署与失效模式是否形成闭环

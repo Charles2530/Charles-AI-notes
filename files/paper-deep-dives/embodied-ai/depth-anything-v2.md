@@ -15,353 +15,356 @@ paper_topic: 具身智能
     **GitHub / 项目：** GitHub：[github.com/DepthAnything/Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)；项目页：[depth-anything-v2.github.io/](https://depth-anything-v2.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2406.09414)；[GitHub API / repo](https://github.com/DepthAnything/Depth-Anything-V2)；[官方 / 项目材料](https://depth-anything-v2.github.io/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 问题从“能否预测深度”变成“监督允许模型看见什么”
 
-### 研究背景
+Depth Anything V2 的核心是重新安排深度知识的来源。先用精确合成深度训练一个足够强的教师，再让它标注大量真实图像，最后只用这些带伪标签的真实图像训练不同大小的学生。合成数据负责几何细节，真实图像负责外观与场景覆盖，大教师负责把两者连接起来。
 
-Depth Anything V2 仍然属于 monocular depth estimation，但它不是单纯换一个网络结构，而是重新审视单目深度基础模型的数据来源。DA1 已经证明，大规模无标注图像配合 teacher-student 和 DINOv2 语义先验，可以显著提升开放域深度泛化。与此同时，Marigold、Geowizard 等 diffusion depth model 展示了更强细节，但推理更慢；传统 discriminative depth model 高效，却容易在透明、反光、薄结构和边界上变粗。
+这条路线针对 V1 的一个具体短板。V1 已经利用大量真实图像获得较好的开放场景泛化，但树叶、车轮辐条、椅子腿、玻璃和镜面仍可能预测粗糙。V2 发现，问题未必来自判别式网络无法产生细节，训练标签本身常常就没有给出正确细节。继续扩大同类标签数量，可能只是更稳定地学到相同错误。
 
-对具身智能来说，深度模型不是视觉 demo，而是抓取、导航、避障和数据质检的几何底座。错误的边界、缺失的透明物体或过平滑的薄结构，都会传递到动作规划里。DA2 的背景判断是：要让高效 discriminative model 拥有接近 diffusion model 的细节，关键可能不在 fancy architecture，而在训练标签是否足够干净、细致、覆盖真实分布。
-
-### 问题（Challenge）
-
-论文要解决的问题是：**如何训练一个既高效又细节丰富、开放域泛化强的单目深度模型。** 这个问题有挑战性，是因为真实深度标签并不天然可靠。RGB-D sensor 对透明/反光表面会缺失，stereo matching 对低纹理区域不稳，SfM/COLMAP 对动态物体和 outlier 敏感，很多真实数据的 depth map 在边界和薄结构上反而粗糙。
-
-只用 synthetic depth 可以得到完整干净的几何标签，但合成图像有 domain gap；只用真实图像可以覆盖真实分布，但标签噪声会教坏模型；只用大模型则部署成本高。DA2 要同时解决标签质量、真实分布覆盖和模型效率三件事。
-
-### Finding
-
-作者的 finding 是：**单目深度基础模型的细节瓶颈主要来自监督信号质量，而不是缺少复杂模型结构；高精度 synthetic depth 可以训练出强 teacher，再用 teacher 伪标大规模真实图像，把“干净几何”和“真实分布”分阶段结合。** 这个洞见反转了“真实深度标签一定更真实、更好”的直觉。
-
-这个 finding 能解决挑战，是因为 synthetic data 负责提供边界、薄结构、透明/反光等区域的干净深度，真实无标注图像负责提供开放世界覆盖。teacher 先从合成标签中学到细粒度几何，再为 62M 真实图像生成 pseudo labels，student 则在真实视觉分布上学习这些更干净的深度目标。这样，DA2 不必让噪声真实标签直接支配训练，也不必把模型锁在合成域。
-
-### 方法
-
-DA2 的训练流程分为三步。第一，用 595K 高质量 synthetic images 及其精确深度标签训练最大的 DINOv2-G + DPT teacher。第二，用这个 teacher 给约 62M 真实无标注图像生成 pseudo depth labels。第三，用这些伪标真实图训练不同规模的 student，包括 Small/Base/Large 等可部署模型。
-
-模型结构保持简单，主要是 DINOv2 encoder 加 DPT decoder。训练目标使用 scale-shift-invariant depth loss，使不同来源数据的尺度和偏移可以被对齐；同时使用 gradient matching loss 强化边界和细粒度几何。论文还训练 metric depth 版本，在 NYUv2、KITTI 等带尺度数据上微调，让基础相对深度能力迁移到米制深度估计。
-
-### 结论
-
-实验表明，DA2 在作者提出的 DA-2K 相对深度 benchmark 上显著优于 DA1、MiDaS 和多种 diffusion-based depth model，同时推理速度远快于 Marigold/DepthFM 等生成式方法。论文强调 DA2 在透明、反光、薄结构和高分辨率边界上明显更好；在 Transparent Surface Challenge 上，DA2 zero-shot 得分达到 83.6%，而 MiDaS 和 DA1 明显更低。DA2 还展示了不同模型尺寸的速度/精度权衡，并通过 metric depth fine-tuning 刷新 NYUv2、KITTI 等设置下的结果。
-
-消融实验支撑了数据配方判断：只用真实噪声标签会伤害细节，只用 synthetic 又有 domain gap；大 teacher 对 synthetic-to-real transfer 很关键；gradient matching loss 能改善 fine-grained predictions；pseudo-labeled real images 是把模型带回真实分布的关键。边界是基础 DA2 输出仍是 affine-invariant / relative depth，不天然给出绝对尺度，真实机器人应用仍需标定、传感器融合和安全控制。
-
-### 关键术语
-
-- **Monocular Depth Estimation, MDE（单目深度估计）**：从单张 RGB 图像预测每个像素的深度或相对深度。
-- **Synthetic Depth Labels（合成深度标签）**：由渲染或仿真生成的深度真值，视觉分布可能不真实，但几何标签更干净完整。
-- **Pseudo Labels（伪标签）**：teacher model 为无标注真实图像生成的训练目标。
-- **Scale-Shift-Invariant Loss（尺度-偏移不变损失）**：比较深度形状前先对齐尺度和偏移，适合相对深度学习。
-- **Gradient Matching Loss（梯度匹配损失）**：约束深度图局部梯度，使边界和薄结构更清晰。
-- **Metric Depth（米制深度）**：带真实物理尺度的深度，通常需要额外有尺度数据微调。
-
-Depth Anything V2 放在具身智能专题里，不是因为它直接输出机器人动作，而是因为它补了机器人闭环里最基础的视觉状态：**从普通 RGB 图像得到更细、更稳、更开放域的深度先验**。抓取、导航、避障、重建、VLA 状态编码和仿真数据质检，都需要这层几何信号。
-
-DA2 的核心贡献很朴素：它几乎没有靠新奇结构取胜，而是把单目深度训练的数据链路重新排了一遍：
-
-```text
-precise synthetic labels
-  -> train the largest DINOv2-G teacher
-  -> pseudo-label 62M real images
-  -> train smaller and deployable students on pseudo-labeled real images
-```
-
-这条路线解释了为什么 DA2 能同时接近 diffusion depth model 的细节、保持 discriminative depth model 的效率，并比 [DA1](depth-anything.md) 更能处理透明、反光、复杂布局和薄结构。
-
-## 它的效率贡献是什么
-
-| 维度 | 贡献 |
-| --- | --- |
-| 节省的成本 | 不是依赖大规模人工深度标注，而是用 595K 高质量合成深度训练 teacher，再把 62M 真实无标注图像转成 pseudo labels；学生模型从 24.8M 到 335.3M 可部署 |
-| 核心机制 | synthetic teacher、label-level distillation、pseudo-labeled real images、DINOv2 + DPT、scale-shift-invariant / gradient matching loss |
-| 对具身主线的意义 | 给 VLA、几何规划、资产重建和数据质检提供单目深度底座；也是 [Depth Anything 3](depth-anything-3.md) 继续扩展到任意视角几何的重要前置 |
-| 主要风险 | 基础模型输出仍是 affine-invariant inverse depth，不天然拥有绝对尺度；metric depth 需要额外 fine-tune；单目估深度不能替代标定、RGB-D、力控和安全层 |
-| 应接到本站哪里 | [Depth Anything](depth-anything.md)、[相机、深度与机器人视觉](../../embodied-ai/cameras-depth-and-robot-vision.md)、[资产到轨迹：感知、抓取与数据管线](../../embodied-ai/asset-perception-grasp-and-trajectory-pipeline.md)、[Depth Anything 3](depth-anything-3.md) |
-
-## 论文位置
-
-DA2 回答的是一个很具体的问题：**单目深度模型到底是因为 discriminative architecture 不够强才缺细节，还是因为训练标签本身太粗、太噪？**
-
-论文的判断是后者。[DA1](depth-anything.md)、MiDaS、Metric3D 这类 discriminative depth 模型通常很快、泛化好，但在透明物体、反光表面、薄结构和边界细节上容易糊。Marigold、Geowizard 这类基于 Stable Diffusion 的 depth model 细节更强，但推理重、速度慢，也不一定在复杂真实场景里更稳。
-
-DA2 的目标是把这两边的优点合起来：
-
-- 保留 DINOv2 + DPT 这类 discriminative model 的效率和开放域泛化；
-- 用高精度 synthetic depth 把薄结构、边界、透明和反光监督补上；
-- 用大规模真实无标注图像把 synthetic-to-real 的 domain gap 补上；
-- 用 teacher-student 方式把 1.3B teacher 的能力迁移到小模型。
+先看 Figure 1 的金属结构与透明、反射区域，再看复杂人物场景。作者希望同时获得细结构和完整场景的可靠解释，而非仅在其中一类图片上表现好。图底部将这些能力与模型大小、V100 延迟并列，意味着最终目标还包括把大教师的能力交给可部署的小模型。
 
 ![Depth Anything V2 teaser 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-1-teaser.png){ width="920" }
 
-<small>图源：`Depth Anything V2`，Figure 1。原论文图意：DA2 相比 DA1 有更细的结构和更强鲁棒性；相比 SD-based depth model，在效率、参数量和精度上更适合实际使用。</small>
+*Figure 1，V2 的细节、复杂场景与效率比较。具体延迟条件在后文单独讨论。*[↗](https://arxiv.org/pdf/2406.09414v2#page=1)
 
-**DA2 teaser 先读数据配方带来的深度细节。**
-**输入输出**：输入是真实/合成图像、伪标签和深度监督，输出是更稳的单目深度模型。
-**效率机制**：通过数据配方和伪标签质量控制改善深度泛化。
-**对主线意义**：它帮助世界模型获得更稳几何观测，但不负责动作后果。
-**不能证明什么**：深度 benchmark 不能替代机器人闭环和接触失败回放。
+V2 没有提出新的深度解码器或扩散采样过程。它继续使用 DINOv2 编码器与 DPT 解码器，真正需要理解的是训练数据怎样经过三阶段转换，以及哪些实验能分别验证标签质量、教师能力和真实图像覆盖的作用。
 
-## 为什么真实深度标签反而会伤模型
+## 真实标签为什么会抹掉模型应该预测的结构
 
-这篇论文最值得记住的第一点，是它把“真实标注数据更多一定更好”这个直觉拆掉了。
+论文区分了两类监督问题。第一类是标签错误。深度传感器可能无法准确测量透明表面，立体匹配在无纹理或重复纹理处可能出错，SfM 则容易受到动态物体与异常匹配影响。第二类是标签不完整或过度平滑。树冠中的孔洞、细线、物体轮廓可能被忽略或填平；即使这些位置没有明显错误数值，也没有提供恢复精细结构所需的监督。
 
-真实深度标签常来自 RGB-D sensor、stereo matching、SfM / COLMAP、LiDAR 或其他重建管线。这些数据当然有价值，但它们在单目深度基础模型训练里有几个明显问题：
-
-| Source of real depth | Typical noise |
-| --- | --- |
-| Depth sensor | transparent / reflective surfaces are missing or wrong |
-| Stereo matching | low-texture or repetitive patterns are unstable |
-| SfM / COLMAP | dynamic objects and outliers can break geometry |
-| Dataset post-processing | ignored masks and sparse maps remove fine structures |
-
-对机器人来说，这些问题不是学术细枝末节。玻璃杯、镜面、电器屏幕、细杆、网格、透明包装、桌面边缘，恰恰是抓取、避障和放置里最容易出错的区域。如果训练标签在这些区域本来就是空洞或错误的，模型学到的就会是“看起来合理但几何上不可靠”的深度。
-
-DA2 的关键观察是：**合成图像的视觉分布不如真实图像自然，但它的深度标签可以是真正完整、干净、边界精确的。**
+Figure 4 上半部分比较真实数据与合成数据的标签，下半部分再比较相应模型。应先看合成标签中的金属网格、树叶和容器表面，然后观察它们是否出现在预测中。这个顺序把“输出太平滑”的问题追溯到训练目标，而不是直接假定网络容量或输出分辨率不足。
 
 ![Real and synthetic depth labels 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-4-real-synthetic-labels.png){ width="920" }
 
-<small>图源：`Depth Anything V2`，Figure 4。原论文图意：真实深度标签经常粗糙或缺失细节，而 synthetic depth 能保留薄结构、边界和透明/反光物体的真实几何；用 synthetic labels 训练出的模型也更容易保住细粒度预测。</small>
+*Figure 4，真实与合成深度标签，以及不同标签来源训练出的预测。*
 
-这不是说 synthetic data 单独就够。论文紧接着指出 synthetic data 有两个硬伤：分布偏移和场景覆盖不足。图像风格太干净、布局太规整、类别太有限，导致小模型直接从 synthetic transfer 到真实图像时会崩。
+合成引擎能提供场景表面的几何，即便这个表面透明或反光，也可以知道它在空间中的位置。这里希望模型学到的是表面几何，不是玻璃后背景或镜中虚像的视觉距离。因此，透明区域“看起来像背景”与“应该标成背景深度”并不是同一回事。[↗](https://arxiv.org/pdf/2406.09414v2#page=3) [↗](https://arxiv.org/pdf/2406.09414v2#page=4)
 
-![Synthetic-to-real transfer 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-5-encoder-transfer.png){ width="920" }
+一个自然的补救办法是混入真实标签来改善合成到真实的迁移。附录 B.9 专门检验了这个选择，将 V1 中表现较好的真实来源 HRWSI 加入合成训练集。它只占总训练图像约 5%，却已经在定性结果中明显损害细节。
 
-<small>图源：`Depth Anything V2`，Figure 5。原论文图意：只在 synthetic images 上训练后，只有 DINOv2-G 能较好迁移到真实图像；较小模型和其他 encoder 容易出现明显泛化问题。</small>
+Figure 12 的三列依次是输入、纯合成训练、合成加 HRWSI。树叶边缘、教堂座椅间的缝隙和羊身前的细线，是比大块颜色更有用的观察位置。混入真实粗标签后，模型仍能判断大体前后关系，但这些结构更容易被平滑掉。
 
-即使用 DINOv2-G 这个最大 teacher，只靠 synthetic 训练也不稳。论文展示了 sky 和 human head 的失败案例：teacher 在 synthetic training set 覆盖不到的真实模式上仍会犯错。
+![Real label mixing harms details](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-12-real-label-harm.png){ width="920" }
 
-![DINOv2-G synthetic-only failure 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-6-synthetic-only-failure.png){ width="920" }
+*Figure 12，少量粗糙真实标签对细结构预测的影响。*
 
-<small>图源：`Depth Anything V2`，Figure 6。原论文图意：只用 synthetic images 训练的 DINOv2-G teacher 仍可能在真实天空、人像等分布覆盖不足的区域失败。</small>
+这项实验解释了为什么教师阶段最终采用纯合成监督。不过 5% 是这组实验的设置，不是“真实标签超过 5% 就必然有害”的通用阈值；图示也没有给出所有真实数据源都更差的结论。[↗](https://arxiv.org/pdf/2406.09414v2#page=15)
 
-所以 DA2 的方案不是“synthetic 替代 real”，而是更精细的三段式分工：
+## 三阶段流程与模型实际输出
 
-1. synthetic labels 用来训练最强 teacher，保证几何监督干净；
-2. unlabeled real images 用来覆盖真实视觉分布；
-3. teacher 给真实图像打 pseudo labels，学生只学习这批更真实、更细的 pseudo-labeled real images。
+合成数据的困难也很明确。它们的颜色、材质和布局与真实照片存在分布差异，场景又通常来自预先建立的有限环境。一个游戏世界能生成很多帧，不等于覆盖了人体、云层、水下、复杂室内布局等所有现实模式。V2 因而让真实图像参与学习，但使用教师提供的深度标签。
 
-## 训练总路线
-
-DA2 的 Figure 7 可以看成整篇论文的工程路线图。
+Figure 7 可以沿箭头读成三个不同的训练或计算阶段。
 
 ![Depth Anything V2 training pipeline 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-7-training-pipeline.png){ width="920" }
 
-<small>图源：`Depth Anything V2`，Figure 7。原论文图意：先用 precise synthetic images 训练最大 teacher，再用 teacher 给 unlabeled real images 生成 pseudo labels，最后用 pseudo-labeled real images 训练 student models。</small>
+*Figure 7，精确合成监督经过大教师转移到真实图像，再训练学生。*
 
-**训练 pipeline 要看 synthetic teacher 到 pseudo-real student。**
-左侧 synthetic images 的优点是 `highly precise`，缺点是 `distribution shift` 和 `limited diversity`。中间 unlabeled real images 的作用是引入真实世界分布。右侧 pseudo-labeled real images 同时拥有真实图像分布和 teacher 生成的细粒度深度标签，所以更适合作为学生模型的最终训练数据。
+1. **训练教师。** 用 DINOv2-G 加 DPT，在五个合成集合上训练深度预测。其任务是尽可能保留几何标签中的精度，同时依靠预训练视觉表示跨越外观差异。
+2. **离线生成伪标签。** 将八个真实图像集合输入教师，保存预测深度。教师不需要这些真实图像原有的深度标注；数据集的原有分类、检测或分割标签也不是这里的深度监督。
+3. **训练学生。** 使用带伪标签的真实图像，训练 DINOv2-S、B、L、G 四种规模。最终方案在这个阶段去掉合成样本，部署时只需要所选学生的一次编码器与解码器前向。
 
-关键点是学生阶段不是把 synthetic 和 pseudo-real 简单混起来。论文的 ablation 显示，对 ViT-S / ViT-B 这类小模型，**只用 pseudo-labeled real images** 反而略好。这说明 teacher 已经把 synthetic 的干净几何知识转译到了真实图像上，学生再直接学习真实分布更有效。
+教师向学生传递的是深度预测。这种输出级蒸馏允许约 1.3B 参数教师指导约 25M 参数学生，不要求两者的中间特征维度、容量或表征方式一一对应。学生训练还包含保留预训练语义的特征约束，但那与强行让小学生逐维复制大教师隐藏状态是两件不同的事。[↗](https://arxiv.org/pdf/2406.09414v2#page=6)
 
-## 训练数据
+基础模型的输出是 **affine-invariant inverse depth（仿射不变逆深度）**。它适合表达哪些区域更近、哪些更远，却没有直接确定以米为单位的距离。为说明接口含义，可把预测与真实深度的关系概括成下式；这是对“仿射逆深度”的解释，不是论文另行提出的回归公式。
 
-Table 7 is redrawn below with the original English fields.
+$$
+q(p)\approx a\,z(p)^{-1}+b.
+$$
 
-| Dataset | Indoor | Outdoor | # Images |
-| --- | --- | --- | --- |
-| **Precise Synthetic Images (595K)** |  |  |  |
-| BlendedMVS | ✓ | ✓ | 115K |
-| Hypersim | ✓ |  | 60K |
-| IRS | ✓ |  | 103K |
-| TartanAir | ✓ | ✓ | 306K |
-| VKITTI 2 |  | ✓ | 20K |
-| **Pseudo-labeled Real Images (62M)** |  |  |  |
-| BDD100K |  | ✓ | 8.2M |
-| Google Landmarks |  | ✓ | 4.1M |
-| ImageNet-21K | ✓ | ✓ | 13.1M |
-| LSUN | ✓ |  | 9.8M |
-| Objects365 | ✓ | ✓ | 1.7M |
-| Open Images V7 | ✓ | ✓ | 7.8M |
-| Places365 | ✓ | ✓ | 6.5M |
-| SA-1B | ✓ | ✓ | 11.1M |
+这里 $p$ 是像素，$z$ 是真实深度，$q$ 是预测，$a,b$ 是尚未确定的尺度与偏移。因为存在 $b$，对输出简单取倒数也不能自动得到米制深度。把两张图各自归一化着色后放在一起，同样不表示两张图已经共享三维尺度。这一输出语义决定了后面为什么还需要单独的公制深度微调。
 
-<small>表源：`Depth Anything V2`，Table 7。原论文表格要点：teacher 阶段使用 5 个高精度 synthetic datasets；student 阶段使用 8 个真实无标注图像源，经 teacher 生成 pseudo depth 后训练。</small>
+## 为什么要用大教师，而不是让每个模型直接学合成数据
 
-这里有两个很有工程味的选择。
+Figure 5 将相同真实图片输入不同编码器构建的深度模型；所有模型都在合成数据上学习。要观察的是猫等物体的整体形状和遮挡关系是否稳定，而非仅看颜色是否平滑。
 
-第一，DA2 不对数据集做复杂重平衡，而是直接 concatenate training datasets。这个选择看起来粗糙，但它强调了作者真正依赖的是“标签质量 + 总体覆盖 + DINOv2 预训练先验”，不是复杂 sampling policy。
+![Synthetic-to-real transfer 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-5-encoder-transfer.png){ width="920" }
 
-第二，论文在 appendix 里专门分析了 unlabeled data 的必要性。只用单一 SA-1B 训练更多轮，不能替代多来源 62M 图像。原因很直接：单一数据源的循环次数不能补足场景多样性。对具身系统也一样，重复采很多相似桌面轨迹，不能替代厨房、仓库、户外、透明物体、拥挤遮挡和失败恢复的覆盖。
+*Figure 5，合成训练后直接迁移到真实图像的编码器比较。*
 
-## 模型结构：没有花活，但分工清楚
+作者在这组例子中发现 DINOv2-G 最可靠。附录 Table 13 给出了更完整的定量对照，下表保留五个数据集的 AbsRel，均为越低越好，训练仍是纯合成。
 
-DA2 结构上延续 [Depth Anything V1](depth-anything.md)：DINOv2 encoder + DPT depth decoder。
+| Encoder | KITTI AbsRel ↓ | NYU-D AbsRel ↓ | Sintel AbsRel ↓ | ETH3D AbsRel ↓ | DIODE AbsRel ↓ |
+|---|---:|---:|---:|---:|---:|
+| BEiT-L | 0.149 | 0.068 | 0.777 | 0.145 | 0.103 |
+| SAM-L | 0.104 | 0.186 | 0.703 | 0.143 | 0.108 |
+| SynCLR-L | 0.278 | 0.344 | 1.608 | 0.301 | 0.262 |
+| DINOv2-L | 0.081 | 0.048 | 0.516 | 0.133 | 0.071 |
+| DINOv2-L Reg | 0.078 | 0.049 | 0.522 | 0.138 | 0.068 |
+| DINOv2-G | 0.075 | 0.044 | 0.530 | 0.131 | 0.066 |
+| DINOv2-G Reg | 0.084 | 0.061 | 0.753 | 0.141 | 0.086 |
 
-| Component | DA2 choice | Why it matters |
-| --- | --- | --- |
-| Encoder | DINOv2 ViT-S / B / L / G | 继承大规模视觉预训练的开放域语义和几何先验 |
-| Decoder | DPT | 把 ViT 多尺度特征重组为 dense depth map |
-| Output | affine-invariant inverse depth | 更适合跨数据集相对深度训练，但不直接给绝对尺度 |
-| Model scales | 24.8M, 97.5M, 335.3M, 1.3B | 从部署小模型到最大 teacher 覆盖不同成本区间 |
+这支持 DINOv2 系列在本文合成到真实迁移中的优势，也说明大教师的选择不只是追求参数量。尤其在 Giant 规模，带 register 的版本五列 AbsRel 都差于原始 DINOv2-G，作者因此选择不带 register 的初始化。Large 规模的 register 结果则有好有坏，不能进一步概括成 register 对深度任务一律有害。
 
-官方仓库发布的相对深度模型包括：
+容量收益也不是每列单调。DINOv2-L 在 Sintel 为 0.516，优于 Giant 的 0.530。大教师提供的是总体更可靠的迁移基础，并不保证所有数据集或每张图片都更好。[↗](https://arxiv.org/pdf/2406.09414v2#page=14)
 
-| Model | Params | Role |
-| --- | --- | --- |
-| Depth-Anything-V2-Small | 24.8M | 实时、移动端或轻量感知候选 |
-| Depth-Anything-V2-Base | 97.5M | 质量和成本折中 |
-| Depth-Anything-V2-Large | 335.3M | 常用高质量推理基线 |
-| Depth-Anything-V2-Giant | 1.3B | 论文 teacher / 最强模型尺度 |
+即便选择 Giant，合成数据缺少的模式仍会造成问题。Figure 6 展示了天空被误判为较近区域，以及人头与身体深度不一致。右上角加入真实无标签图像后的结果说明，单纯把教师做大还没有完成场景覆盖。
 
-对机器人应用要特别小心 `affine-invariant inverse depth` 这句话。基础 DA2 更擅长相对深度：哪个更近、边界在哪里、结构如何连续。它不保证“这个点离相机 0.37 米”。如果任务需要绝对距离，仍要接 metric depth fine-tuning、相机标定、多视角几何或真实 depth sensor。
+![DINOv2-G synthetic-only failure 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-6-synthetic-only-failure.png){ width="920" }
 
-## 损失函数和训练细节
+*Figure 6，纯合成训练的 Giant 仍会在天空和人体上失败。*
 
-DA2 的训练细节非常值得看，因为它的收益主要来自数据和目标函数配合，而不是换了一个大模型名。
+因此，完整路径中“大教师”与“真实图像桥接”承担不同职责。前者提高从合成标签向真实输入推断的质量，后者让最终模型在大量真实外观与组合方式上直接学习这种深度知识。[↗](https://arxiv.org/pdf/2406.09414v2#page=5)
 
-### 1. Teacher stage
+## 数据与训练预算怎样落地
 
-teacher 使用 DINOv2-G，纯 synthetic data 训练：
+Table 7 的数据来源如下。教师阶段需要合成深度，学生阶段只取真实集合的图像，再使用教师生成的深度。
 
-| Setting | Value |
-| --- | --- |
-| Backbone | DINOv2-G |
-| Decoder | DPT |
-| Training data | 595K precise synthetic labeled images |
-| Input resolution | `518 x 518` after resizing shorter side to `518` and random crop |
-| Batch size | `64` |
-| Iterations | `160K` |
-| Optimizer | Adam |
-| Encoder learning rate | `5e-6` |
-| Decoder learning rate | `5e-5` |
-| Dataset sampling | concatenate datasets, no balancing |
+| Stage | Dataset | Indoor | Outdoor | # Images |
+|---|---|:---:|:---:|---:|
+| Synthetic teacher | BlendedMVS | ✓ | ✓ | 115K |
+| Synthetic teacher | Hypersim | ✓ |  | 60K |
+| Synthetic teacher | IRS | ✓ |  | 103K |
+| Synthetic teacher | TartanAir | ✓ | ✓ | 306K |
+| Synthetic teacher | VKITTI 2 |  | ✓ | 20K |
+| Pseudo-labeled student | BDD100K |  | ✓ | 8.2M |
+| Pseudo-labeled student | Google Landmarks |  | ✓ | 4.1M |
+| Pseudo-labeled student | ImageNet-21K | ✓ | ✓ | 13.1M |
+| Pseudo-labeled student | LSUN | ✓ |  | 9.8M |
+| Pseudo-labeled student | Objects365 | ✓ | ✓ | 1.7M |
+| Pseudo-labeled student | Open Images V7 | ✓ | ✓ | 7.8M |
+| Pseudo-labeled student | Places365 | ✓ | ✓ | 6.5M |
+| Pseudo-labeled student | SA-1B | ✓ | ✓ | 11.1M |
 
-teacher 阶段的目标是“宁可视觉分布不完整，也要深度标签干净”。它用 synthetic depth 教会模型细边界、薄结构、透明和反光这些真实标签经常坏掉的区域。
+论文称合成训练总量为 595K，但 Table 7 展示的五个分项相加为 604K；上表保留分项原值，不把不一致的数据量改成一份看似精确的新配方。真实图像总量以约 62M 描述。两阶段均直接拼接数据集，没有再按来源做平衡采样，因此数量大小也会影响训练时各来源被看到的频率。[↗](https://arxiv.org/pdf/2406.09414v2#page=12)
 
-### 2. Pseudo-labeling stage
+| Training item | Synthetic teacher | Pseudo-labeled student |
+|---|---|---|
+| Encoder | DINOv2-G | DINOv2-S / B / L / G |
+| Decoder | DPT | DPT |
+| Image preprocessing | Short side 518, random 518 × 518 crop | Short side 518, random 518 × 518 crop |
+| Batch size | 64 | 192 |
+| Iterations | 160K | 480K |
+| Optimizer | Adam | Adam |
+| Encoder learning rate | 5 × 10⁻⁶ | 5 × 10⁻⁶ |
+| Decoder learning rate | 5 × 10⁻⁵ | 5 × 10⁻⁵ |
+| Dataset balancing | None; concatenate | None; concatenate |
 
-teacher 给 62M 真实无标注图像生成 pseudo depth。这个阶段不是普通 feature distillation，而是 label-level distillation：学生看到的是真实图像和 teacher 生成的 dense depth label。
+按 batch size 乘迭代数计算，两个阶段分别包含约 10.24M 和 92.16M 次样本呈现。这是训练中读取样本的总次数，包含重复与随机裁剪，不能视为额外收集的独立图片数。62M 次教师标注又是训练学生之前的独立计算工作；学生推理快速，并不意味着整条训练流程成本低。论文在局限中明确将大规模无标签数据的计算负担列为问题。[↗](https://arxiv.org/pdf/2406.09414v2#page=8) [↗](https://arxiv.org/pdf/2406.09414v2#page=17)
 
-论文强调这种做法比直接做 feature-level / logit-level distillation 更稳，尤其当 teacher 和 student 尺度差距很大时。直观上，学生不必模仿 teacher 的内部表征，只要学习 teacher 在真实图像上输出的深度结构。
+## 损失如何利用精确标签，又怎样防止伪标签支配训练
 
-![Pseudo labels 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-17-pseudo-labels.png){ width="820" }
+V2 沿用 MiDaS 的 scale-and-shift-invariant loss $\mathcal L_{ssi}$ 与 gradient matching loss $\mathcal L_{gm}$。前者在不要求统一绝对尺度的条件下约束深度关系，后者约束预测与标签的空间变化，帮助细边界和孔洞进入训练目标。按照论文报告的 1:2 权重，深度监督部分可写成
 
-<small>图源：`Depth Anything V2`，Figure 17。原论文图意：teacher 在 BDD100K、Google Landmarks、ImageNet-21K、LSUN、Objects365、Open Images V7、Places365 和 SA-1B 等不同真实图像源上生成 pseudo depth labels。</small>
+$$
+\mathcal L_{\mathrm{depth}}=\mathcal L_{ssi}+2\mathcal L_{gm}.
+$$
 
-### 3. Student stage
+这里的改进不是发明新的梯度算子，而是让梯度监督有了足够准确的目标。如果标签已经把网格中的孔洞填平，增大梯度项只会更强地要求网络拟合这个粗糙目标；换成精确合成深度后，同一类损失才有机会学习真实细节。
 
-student 在 pseudo-labeled real images 上训练：
-
-| Setting | Value |
-| --- | --- |
-| Student backbones | DINOv2 ViT-S / ViT-B / ViT-L / ViT-G |
-| Training data | pseudo-labeled real images |
-| Input resolution | `518 x 518` |
-| Batch size | `192` |
-| Iterations | `480K` |
-| Optimizer | Adam |
-| Encoder learning rate | `5e-6` |
-| Decoder learning rate | `5e-5` |
-| Dataset sampling | concatenate datasets, no balancing |
-| Pseudo-label filtering | ignore top-10% largest-loss regions per pseudo-labeled sample |
-
-忽略每个 pseudo-labeled sample 中 top-10% largest-loss regions 是一个很实用的降噪技巧。teacher 再强也会在某些区域犯错；把这些区域从训练损失里排掉，可以避免学生被 pseudo-label 的局部错误拖偏。
-
-### 4. Loss design
-
-在 labeled synthetic images 上，DA2 使用两个 MiDaS 系目标：
-
-| Loss | Role |
-| --- | --- |
-| `L_ssi` | scale- and shift-invariant loss，约束相对深度结构 |
-| `L_gm` | gradient matching loss，强调边界、薄结构和局部几何变化 |
-
-论文设置 `L_ssi : L_gm = 1 : 2`。这个比例很关键，因为 DA2 发现 gradient matching loss 只有在 synthetic labels 足够完整、足够细时才真正有用。如果真实 depth map 本身粗糙、稀疏或有 ignored holes，梯度损失只是在强化噪声和缺失。
+Figure 10 固定输入，改变梯度项权重。自行车车轮中的辐条与树叶边缘会随着 0.5、2.0、4.0 的权重变化逐渐清晰。作者最终选择 2.0，在数值表现与锐利度之间折中，不能据此认为 4.0 是所有任务的最佳设置。
 
 ![Gradient matching loss 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-10-gradient-matching-loss.png){ width="820" }
 
-<small>图源：`Depth Anything V2`，Figure 10。原论文图意：在 synthetic labels 上提高 gradient matching loss 权重，会让细结构和边界更清晰；论文最终取权重 2.0 作为精度和锐度折中。</small>
+*Figure 10，梯度匹配权重与细节的定性关系。*[↗](https://arxiv.org/pdf/2406.09414v2#page=14)
 
-在 pseudo-labeled real images 上，论文还沿用 DA1 的 feature alignment loss，用来保留 DINOv2 encoder 里的语义信息。这个设计对具身场景有意义：深度图不只是几何连续面，还要和物体、场景、语义边界对齐，否则 VLA 或 planner 消费时会出现“深度边界和对象边界错位”的问题。
+真实图像的深度仍来自模型预测，因而需要处理教师错误。V2 对每张伪标签样本忽略损失最大的 10% 区域，将其视为可能有噪声的监督。这是按当前损失进行的筛选，不是拥有真实错误位置，也不能保证保留的 90% 都正确。它的作用是减少少数严重不一致区域对梯度的影响。
 
-## 为什么学生只吃 pseudo-real 反而更好
+此外，学生在伪标签图像上沿用 V1 的特征对齐损失，保留预训练 DINOv2 的语义信息。深度输出约束负责几何，特征约束避免只为深度拟合而遗失有用视觉语义。论文没有将这项损失作为新的蒸馏算法，也没有单独给出其在 V2 中贡献多少的消融，不能把后面的所有分割收益都归于这一项。[↗](https://arxiv.org/pdf/2406.09414v2#page=6)
 
-DA2 的 ablation 很有意思。直觉上，学生训练似乎应该混合 synthetic labeled data 和 pseudo-labeled real data。但论文发现，对 ViT-S 和 ViT-B，去掉 synthetic、只用 pseudo-labeled real images 还略好。
+## 真实图像桥接到底帮助了什么
 
-可以把原因理解成两层。
+Table 5 先问一个基础问题，学生能否直接从合成标签学到足够好的真实场景深度。$D^l$ 表示带精确标签的合成数据，$D^u$ 表示经教师标注的真实图像。下表同时保留传统测试的 AbsRel 与 DA-2K 的相对前后关系准确率。
 
-第一，synthetic 的价值已经被 teacher 吸收了。teacher 通过 synthetic labels 学到精细深度，再把这些知识翻译到真实图像上。学生直接学 pseudo-real，等于在真实视觉分布里学习 synthetic 几何知识。
+| Encoder | Training data | KITTI AbsRel ↓ | NYU-D AbsRel ↓ | Sintel AbsRel ↓ | DA-2K Acc (%) ↑ |
+|---|---|---:|---:|---:|---:|
+| ViT-S | $D^l$ | 0.104 | 0.084 | 0.518 | 89.8 |
+| ViT-S | $D^l+D^u$ | 0.085 | 0.054 | 0.491 | 94.1 |
+| ViT-S | $D^u$ | 0.078 | 0.053 | 0.500 | 95.3 |
+| ViT-B | $D^l$ | 0.094 | 0.062 | 0.618 | 92.9 |
+| ViT-B | $D^l+D^u$ | 0.080 | 0.049 | 0.515 | 96.7 |
+| ViT-B | $D^u$ | 0.078 | 0.049 | 0.495 | 97.0 |
+| ViT-L | $D^l$ | 0.081 | 0.048 | 0.516 | 96.0 |
+| ViT-L | $D^l+D^u$ | 0.075 | 0.045 | 0.542 | 97.3 |
+| ViT-L | $D^u$ | 0.074 | 0.045 | 0.487 | 97.1 |
 
-第二，小模型容量有限。让它同时适配 synthetic style 和 real style，可能会浪费容量；只训练在真实图像分布上，反而更符合最终推理环境。
+最稳定的变化是加入真实伪标签后，小模型显著改善。ViT-S 的 NYU-D AbsRel 从 0.084 降到 0.054，DA-2K 从 89.8 升到 94.1。进一步去掉学生阶段的合成图像，KITTI、NYU-D 和 DA-2K 还略有改善，于是作者采用更简单的纯伪标签方案。
+
+但移除合成数据不是每项都更好。ViT-S 的 Sintel 从 0.491 变成 0.500；ViT-L 的 DA-2K 从混合训练的 97.3 变成 97.1，ETH3D AbsRel 也从 0.130 变成 0.131。最终训练路线反映整体效果与流程简单性的选择，不能被改写成合成数据在学生阶段没有任何价值。[↗](https://arxiv.org/pdf/2406.09414v2#page=9)
+
+Figure 16 固定小模型，左边用合成标签直接训练，右边通过真实伪标签训练。应看动物、人物和室内物体能否维持完整且一致的几何，而不只是边缘是否锐利。
 
 ![Add unlabeled real images 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-16-add-unlabeled.png){ width="760" }
 
-<small>图源：`Depth Anything V2`，Figure 16。原论文图意：ViT-S 只用 synthetic labels 时真实场景泛化不足；加入 pseudo-labeled real images 后，复杂真实图像上的鲁棒性明显提升。</small>
+*Figure 16，DINOv2-S 在两种训练输入分布下的开放场景预测。*
 
-## 评测：为什么 DA-2K 很重要
+右侧改善说明真实图像桥接不是单纯压缩大教师参数。它把学生的学习问题从“在有限合成世界学几何并自行跨域”改成“在真实图像分布上模仿强模型的几何判断”。这使小容量模型也有机会获得稳定的复杂场景预测。[↗](https://arxiv.org/pdf/2406.09414v2#page=21)
 
-DA2 没有只盯传统 NYU-D、KITTI、Sintel、ETH3D、DIODE 这些 benchmark。论文认为这些测试集也存在 label noise、场景单一和分辨率偏低的问题，很难反映模型对透明、反光、薄结构、非真实图像、航拍、水下等开放场景的能力。
+## 固定图像再换标签，能否排除“只是用了更多数据”
 
-因此作者构建了 DA-2K：1K images、2K relative depth pairs，覆盖 8 类场景。标注方式是稀疏成对比较：给一张图的两个点，判断哪个更近。候选点来自 SAM mask，分歧较大的模型预测会被拿出来给人工标注，标注还会交叉检查。
+Table 6 使用同一来源 DIML 的真实图像，仅比较原有标签与教师生成标签训练出的迁移表现。原表将前者命名为 `Manual Label`，下表沿用这个行名。
 
-Table 3 is redrawn below with the original English fields.
+| Label Source | KITTI AbsRel ↓ | NYU-D AbsRel ↓ | Sintel AbsRel ↓ | ETH3D AbsRel ↓ | DIODE AbsRel ↓ | DA-2K Acc (%) ↑ |
+|---|---:|---:|---:|---:|---:|---:|
+| Manual Label | 0.122 | 0.074 | 0.581 | 0.159 | 0.126 | 80.2 |
+| Pseudo Label | 0.099 | 0.062 | 0.514 | 0.147 | 0.084 | 89.7 |
 
-| Method | Marigold | Geowizard | DepthFM | Depth Anything V1 | ViT-S | ViT-B | ViT-L | ViT-G |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Accuracy (%) | 86.8 | 88.1 | 85.8 | 88.5 | 95.3 | 97.0 | 97.1 | **97.4** |
+五列 AbsRel 均降低，DA-2K 提高 9.5 个百分点。这里没有把原图集合替换成额外 62M 图像，因此它比直接比较两套完整训练流程更清楚地支持“监督质量本身影响结果”。原有真实标签在该设置下没有构成不可超越的上限，强教师可以给出更适合学习的标签。
 
-<small>表源：`Depth Anything V2`，Table 3。原论文表格要点：在 DA-2K 上，即使最小的 DA2 ViT-S 也超过 Marigold、Geowizard、DepthFM 和 DA1；ViT-G 达到 97.4% relative depth accuracy。</small>
+这个结论针对 DIML 和本文教师，不等于任意伪标签都比传感器测量准确。教师仍会带有错误与偏差，V2 依靠模型能力、输入覆盖和高损失区域过滤共同控制这些问题。[↗](https://arxiv.org/pdf/2406.09414v2#page=10)
 
-这张表的结论不是“所有传统 benchmark 都没用”，而是：当模型已经很强时，旧 benchmark 的噪声和覆盖不足会掩盖真正差异。对具身系统尤其如此，真实部署更关心透明/反光/薄结构/极端场景，而不是只在固定 indoor 或 street 数据集上刷分。
+Figure 17 展示了教师面对八个真实集合时的伪标签。由上到下分别对应驾驶、地标、一般物体、室内、物体检测、开放图像、场景和 SA-1B。需要关注的是同一种监督接口能否覆盖这些不同外观，并保持物体完整与边缘细节。
 
-## Metric depth：能做，但要单独 fine-tune
+![Pseudo labels 原论文图](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-17-pseudo-labels.png){ width="820" }
 
-DA2 基础模型输出的是 affine-invariant inverse depth，所以它天然更像相对深度 foundation model。为了服务实际应用，论文又把 encoder 转到 metric depth estimation。
+*Figure 17，不同真实图像来源上的教师伪标签。定性例子展示覆盖范围，不代表每张自动标签都达到同等质量。*[↗](https://arxiv.org/pdf/2406.09414v2#page=22)
 
-有两条路线：
+## 数据来源的作用不能压缩成一个总图片数
 
-1. 按 DA1 / ZoeDepth pipeline，把 DA2 encoder 放进 metric depth model，在 NYU-D、KITTI 等 in-domain data 上训练；
-2. 为了服务 multi-view synthesis 等真实应用，在 Hypersim 和 Virtual KITTI synthetic datasets 上 fine-tune indoor / outdoor metric depth models。
+附录分别检验合成来源与真实来源。先看 Table 9，固定 ViT-L，单独使用各合成来源训练后测试泛化。
 
-这对机器人很关键。抓取和避障通常需要绝对尺度；如果只用 DA2 相对深度，系统知道“杯子比桌面近”，但不知道“夹爪还差 3cm 还是 12cm”。要进入控制闭环，就必须把 DA2 和相机内参、标定、多视角、RGB-D 或 metric fine-tuning 接起来。
+| Labeled Dataset | KITTI AbsRel ↓ | NYU-D AbsRel ↓ | Sintel AbsRel ↓ | ETH3D AbsRel ↓ | DIODE AbsRel ↓ |
+|---|---:|---:|---:|---:|---:|
+| BlendedMVS | 0.088 | 0.069 | 0.538 | 0.150 | 0.095 |
+| Hypersim | 0.086 | 0.054 | 0.550 | 0.123 | 0.088 |
+| IRS | 0.100 | 0.055 | 0.435 | 0.149 | 0.084 |
+| TartanAir | 0.094 | 0.063 | 0.618 | 0.159 | 0.088 |
+| VKITTI 2 | 0.102 | 0.127 | 0.887 | 0.215 | 0.134 |
+| All labeled data | 0.081 | 0.048 | 0.516 | 0.133 | 0.071 |
 
-## 和 DA1、DA3 的关系
+两种纯室内来源 Hypersim 与 IRS 具有很强的跨域价值。Hypersim 在 ETH3D 的 0.123 甚至优于混合后的 0.133，IRS 在 Sintel 的 0.435 也优于混合后的 0.516。这提醒读者，多源训练的意义是扩大综合能力，不是保证每个测试域都达到单源最佳。
 
-Depth Anything 系列可以这样串起来：
+VKITTI 2 的平均指标较差，但作者观察到它有益于树叶等细节；BlendedMVS 则有助鸟瞰视角。后两点属于论文的定性经验，表中并没有单独测量“锐利度贡献”或“鸟瞰提升幅度”。因此不能只按这五列误差删除某个来源，也不能将不同大小数据集的比较视为严格等样本量实验。[↗](https://arxiv.org/pdf/2406.09414v2#page=12)
 
-| Version | What it mainly solves | What it does not solve |
-| --- | --- | --- |
-| [Depth Anything / DA1](depth-anything.md) | 大规模 unlabeled data + auxiliary supervision 带来的开放域单目深度泛化 | 细结构、透明/反光和某些复杂几何仍不够稳 |
-| Depth Anything V2 / DA2 | synthetic teacher + pseudo-labeled real images，让单目深度更细、更稳、更高效 | 仍主要是单图相对深度，不直接解决多视角 pose 和 3D 融合 |
-| Depth Anything 3 / DA3 | 把 DA/DA2 的单目深度扩展到任意视角 geometry，输出 depth、ray、camera 和可融合 3D 表示 | 不直接解决机器人动作、接触动力学和控制安全 |
+真实数据的来源消融采用 ViT-S，在合成训练基础上分别加入某个伪标签集合。Table 10 中，加入室内 LSUN 后，NYU-D 的 $\delta_1$ 从 0.928 升到 0.970；KITTI 也从 0.889 升到 0.913，说明覆盖一个域并不只帮助同域测试。反过来，增加真实数据也不保证所有测试都改善，Sintel AbsRel 从基线 0.518 变为加入 LSUN 的 0.529、加入 SA-1B 的 0.652。这是合成游戏测试集与真实图像学习之间的具体反例。
 
-所以 DA2 是 DA3 的重要前置，但二者解决层级不同。DA2 把“单张图的深度估计”做得更稳；DA3 才进一步把多视角相机几何、ray map、点云融合和 3DGS 接口纳入系统。
+随后 Table 11 控制训练迭代数为 480K，比较重复使用约 11M SA-1B 与使用约 62M 八源集合。两行都来自数据规模消融设置，不能与最终纯伪标签学生的 Table 2 数值混用。
 
-## 对具身智能的启发
+| Unlabeled Sets | # Images | Iterations | KITTI AbsRel ↓ | NYU-D AbsRel ↓ | Sintel AbsRel ↓ | ETH3D AbsRel ↓ | DIODE AbsRel ↓ |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SA-1B | 11M | 480K | 0.090 | 0.073 | 0.588 | 0.141 | 0.073 |
+| All eight sets | 62M | 480K | 0.085 | 0.054 | 0.491 | 0.143 | 0.074 |
 
-DA2 给具身智能的启发，主要不是“拿来就能控制机器人”，而是四条更底层的工程经验。
+KITTI、NYU-D、Sintel 受益明显，NYU-D 的 $\delta_1$ 也从 0.948 升至 0.971；ETH3D 与 DIODE 的这些指标却略差。相同训练步数下，反复看一个大集合不能完整替代多来源数据。这个实验同时改变样本数量和来源构成，支持扩大覆盖的价值，但无法独立证明 62M 是必要门槛，也不能把全部提升只归于“更多图片”。[↗](https://arxiv.org/pdf/2406.09414v2#page=13)
 
-第一，**深度数据的标签质量比数量更关键**。真实数据如果标签粗、噪、缺洞，多喂只会把错误模式教给模型。对机器人轨迹也类似：大量干净成功 demo 不一定能教会失败恢复，低质量自动标注可能会系统性污染 policy。
+## 传统稠密测试给出的结果，比“V2 全面更强”复杂
 
-第二，**synthetic 和 real 应该分工，而不是互相替代**。synthetic 适合提供精确几何和可控长尾；real 适合提供真实分布和场景多样性。DA2 用 teacher 把 synthetic precision 转译到 real distribution，这个思路很适合机器人数据引擎。
+Table 2 在 KITTI、NYU-D、Sintel、ETH3D、DIODE 上比较零样本相对深度。下面每格为 `AbsRel / δ₁`，前者越低越好，后者越高越好。保留同为 ViT-L 的 V1/V2 是判断代际变化的主要入口。
 
-第三，**teacher-student 不一定要蒸馏内部特征**。在 teacher 和 student 差距很大时，label-level distillation 可能更稳。具身数据里也可以借鉴：用强模型或仿真器给真实轨迹补标签，再让轻量策略在真实分布上学习。
+| Method | Encoder | KITTI | NYU-D | Sintel | ETH3D | DIODE |
+|---|---|---:|---:|---:|---:|---:|
+| MiDaS V3.1 | ViT-L | 0.127 / 0.850 | 0.048 / 0.980 | 0.587 / 0.699 | 0.139 / 0.867 | 0.075 / 0.942 |
+| Depth Anything V1 | ViT-L | 0.076 / 0.947 | 0.043 / 0.981 | 0.458 / 0.760 | 0.127 / 0.882 | 0.066 / 0.952 |
+| Depth Anything V2 | ViT-S | 0.078 / 0.936 | 0.053 / 0.973 | 0.500 / 0.718 | 0.142 / 0.851 | 0.073 / 0.942 |
+| Depth Anything V2 | ViT-L | 0.074 / 0.946 | 0.045 / 0.979 | 0.487 / 0.752 | 0.131 / 0.865 | 0.066 / 0.952 |
+| Depth Anything V2 | ViT-G | 0.075 / 0.948 | 0.044 / 0.979 | 0.506 / 0.772 | 0.132 / 0.862 | 0.065 / 0.954 |
 
-第四，**评测要覆盖任务真正怕的区域**。如果 benchmark 不含透明、反光、薄结构、极端视角和高分辨率场景，那么分数可能无法预测真实部署风险。对 VLA 来说也是一样，不能只测短技能成功率，还要测无效指令、遮挡、失败恢复和长尾物体。
+V2-L 的 KITTI AbsRel 略好，但 $\delta_1$ 略差；DIODE 两项相同；NYU-D、Sintel 和 ETH3D 两项都不及 V1-L。即便相对 MiDaS，V2-L 的 NYU-D、ETH3D $\delta_1$ 也有小幅退步。表内结果不支持逐项全面胜出。
 
-## 局限与风险
+作者认为旧基准存在噪声、低分辨率与场景覆盖有限的问题，无法充分反映细结构、透明表面和复杂布局的改善。Figure 8 的镜面和细结构标签错误给出了这种担忧的具体例子。但发现一些标签错误，并不能直接证明所有分数下降都来自评测偏差。合理的阅读方式是保留传统基准的实际退步，再用针对新主张的评测检验额外能力。[↗](https://arxiv.org/pdf/2406.09414v2#page=7) [↗](https://arxiv.org/pdf/2406.09414v2#page=8)
 
-DA2 的边界也要说清楚。
+## DA-2K 测量相对关系，也带有明确的样本选择条件
 
-1. **相对深度不是绝对测量**：基础 DA2 输出 affine-invariant inverse depth，不能直接当成机器人控制里的厘米级距离。
-2. **单目估计仍受先验影响**：新相机、新尺度物体、新材料、新安装位置都可能带来偏差。
-3. **pseudo labels 仍可能有系统性错误**：top-10% loss filtering 能缓解局部噪声，但不能证明所有 long-tail 都被修正。
-4. **训练成本不低**：62M unlabeled real images 和 480K student iterations 本身就是相当重的数据与计算工程。
-5. **不解决多视角一致性**：点云融合、相机位姿、3D reconstruction 需要 DA3、VGGT、SLAM 或传统几何管线继续补。
-6. **不等于具身策略**：它提供视觉几何状态，不负责任务规划、动作生成、接触控制和安全恢复。
+为覆盖更丰富场景，作者构建 DA-2K，包含 1K 图像、2K 像素对，分为 Indoor、Outdoor、Non-real、Transparent / Reflective、Adverse style、Aerial、Underwater、Object 八类。图像由 GPT-4 生成场景关键词后从 Flickr 获取，多数分辨率约为 1500 × 2000。标注问题是两个像素中哪一个更近，而不是逐像素给出米制距离。
 
-## 阅读结论
+Figure 9 展示自动筛选路径。SAM 提供可提示出物体的关键点，然后随机选择点对，请 V1、V2、Marigold、Geowizard 判断前后顺序；出现分歧时交给人标注，全部一致时重新采样。这里使用的是 SAM 的关键点，不是直接把分割掩码当深度标签。
 
-DA2 最值得记住的一句话是：**单目深度 foundation model 的进步，不只来自更大模型，也来自把“干净几何监督”和“真实世界分布”拆成 teacher-student 数据路线。**
+![DA-2K annotation pipeline](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-9-da2k-annotation.png){ width="920" }
 
-这对具身智能很有用。机器人系统最怕的不是模型不会在 benchmark 上报高分，而是感知状态在真实边界条件下不可信。DA2 提供的经验是：先用 synthetic 获取可控、精确、完整的几何标签，再用真实无标注数据扩展分布，最后把能力蒸馏进可部署模型。这个模式会反复出现在后续 VLA、世界模型、仿真数据引擎和几何底座里。
+*Figure 9，模型分歧筛选与八类场景组成。*
 
-读 DA2 时要分清三件事：zero-shot 相对深度说明跨域排序能力，metric depth 才涉及绝对尺度，可视化图只能作为定性证据。synthetic-only failure、add-unlabeled 和 pseudo-label 图共同说明，数据质量比单纯数据量更关键；DA2 的重点是用更干净 teacher 与合成/真实数据配方降低 DA1 的噪声继承。
+这种路径可能漏掉四个模型一起犯错的情况，因此另有人工直接寻找困难点对的路径。Transparent 与 Object 两类完全依靠人工选取，其余场景混合使用两种方式。人可以跳过难以确定的样本，标注还由另外两名人员复核。
 
-## 外部精读
+附录 C.3 进一步说明，只向标注者呈现预测深度比大于 3 的点对，以减少歧义与标注负担。这是作者的候选筛选条件，不应解释成真实米制距离比一定大于 3，也不代表评测充分覆盖了两个几乎等深表面的辨别能力。V2 自身参与候选筛选，影响的是样本分布；最终前后标签由人确定。[↗](https://arxiv.org/pdf/2406.09414v2#page=7) [↗](https://arxiv.org/pdf/2406.09414v2#page=17)
 
-1. [arXiv:2406.09414](https://arxiv.org/abs/2406.09414)
-2. [Depth Anything V2 project page](https://depth-anything-v2.github.io/)
-3. [DepthAnything/Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)
-4. [DA-2K Benchmark](https://huggingface.co/datasets/depth-anything/DA-2K)
+| Method | DA-2K Accuracy (%) ↑ |
+|---|---:|
+| Marigold | 86.8 |
+| Geowizard | 88.1 |
+| DepthFM | 85.8 |
+| Depth Anything V1 | 88.5 |
+| Depth Anything V2 Small | 95.3 |
+| Depth Anything V2 Base | 97.0 |
+| Depth Anything V2 Large | 97.1 |
+| Depth Anything V2 Giant | 97.4 |
+
+Small 相对 V1 提高 6.8 个百分点，Giant 相对 Marigold 提高 10.6 个百分点。这两个差值按表中百分比直接相减，不是相对百分比增幅。更值得注意的是，Small 到 Base 提升 1.7 个百分点，Base 到 Giant 只再提升 0.4 个百分点；在这组任务上，最小模型已获得主要收益，参数继续增加的边际变化明显较小。
+
+DA-2K 的优势是可以检查噪声较少、场景明确的空间排序。它的限制也来自同一个接口，只要两个点顺序正确，距离差得很远仍可能得分。因此它补充传统稠密测试，不能替代点云重建、绝对距离或局部表面精度评测。论文自身也明确把它定位为补充基准。[↗](https://arxiv.org/pdf/2406.09414v2#page=8)
+
+按场景拆开，还能看到真实伪标签最明显帮助了什么。下表取 Table 14 的 Small 和 Large，数值均为准确率百分比。
+
+| Encoder / Data | Indoor | Outdoor | Non-real | Transparent | Adverse style | Aerial | Underwater | Object | Mean |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| ViT-S / Synthetic | 88.1 | 87.8 | 90.8 | 86.9 | 90.6 | 93.8 | 94.9 | 89.9 | 89.8 |
+| ViT-S / Pseudo real | 92.9 | 93.0 | 98.4 | 94.4 | 95.7 | 96.4 | 99.2 | 96.6 | 95.3 |
+| ViT-L / Synthetic | 94.5 | 93.9 | 98.4 | 93.9 | 96.3 | 97.4 | 99.2 | 98.0 | 96.0 |
+| ViT-L / Pseudo real | 96.4 | 93.9 | 99.0 | 96.3 | 97.3 | 99.5 | 99.2 | 98.0 | 97.1 |
+
+Small 在全部八类改善，Non-real 从 90.8 到 98.4、Transparent 从 86.9 到 94.4，说明桥接并不只适用于普通照片。Large 的 Outdoor、Underwater、Object 已较高，加入真实伪标签后保持不变。这样的分布更符合“补足小模型的泛化能力”的主张，而非每个模型每个场景都同幅提升。`Mean` 保留原表结果，不用八个类别的简单算术平均重算，因为类别样本比例不同。[↗](https://arxiv.org/pdf/2406.09414v2#page=16)
+
+## 透明表面的独立检验
+
+DA-2K 是作者新建的排序基准，透明表面还需要在另一套监督与指标下验证。附录采用 NTIRE 2024 Transparent Surface Challenge 的验证集，报告 $\delta_1$。
+
+| Setting | Method | δ₁ ↑ |
+|---|---|---:|
+| Zero-shot | MiDaS V3.1 | 0.259 |
+| Zero-shot | Depth Anything V1 | 0.535 |
+| Zero-shot | Depth Anything V2 | 0.836 |
+| Simple fine-tuning | DINOv2 | 0.758 |
+| Simple fine-tuning | Depth Anything V2 | 0.912 |
+| Challenge result | First place | 0.917 |
+
+V2 零样本相对 V1 从 0.535 提高到 0.836，即提高 30.1 个百分点。这项结果与“精确合成监督可以改善透明表面”直接对应。微调后，V2 初始化达到 0.912，比直接从 DINOv2 初始化的 0.758 高 15.4 个百分点，说明深度预训练保留了可转移价值。
+
+0.912 接近冠军的 0.917，但它们不是统一训练预算下的消融；也不能把微调后的 0.912 描述成零样本成绩。对导航应用而言，这些结果增强了使用 V2 作为几何先验的理由，仍需另行验证具体相机、材质和距离范围下的公制误差。[↗](https://arxiv.org/pdf/2406.09414v2#page=13)
+
+## 公制深度与语义分割，验证的是两种不同的可迁移能力
+
+基础输出只有相对逆深度。公制迁移实验先沿用 ZoeDepth 框架，将其 MiDaS 编码器替换为 V2 预训练编码器，再在 NYU-D 或 KITTI 上训练。Table 4 明确是 in-domain 设置，训练与测试属于同一数据域。
+
+| Method | NYU-D δ₁ ↑ | NYU-D AbsRel ↓ | NYU-D RMSE ↓ | KITTI δ₁ ↑ | KITTI AbsRel ↓ | KITTI RMSE ↓ |
+|---|---:|---:|---:|---:|---:|---:|
+| ZoeDepth | 0.951 | 0.077 | 0.282 | 0.971 | 0.054 | 2.281 |
+| Ours (ViT-S) | 0.961 | 0.073 | 0.261 | 0.973 | 0.053 | 2.235 |
+| Ours (ViT-B) | 0.977 | 0.063 | 0.228 | 0.979 | 0.048 | 1.999 |
+| Ours (ViT-L) | 0.984 | 0.056 | 0.206 | 0.983 | 0.045 | 1.861 |
+
+在两个域内任务上，Small 都超过这里的 ZoeDepth 对照，Large 改善更明显。但“小模型超过大模型”不应扩大到所有基线。原表 NYU-D 的 VPD 为 $\delta_1=0.964$、AbsRel 0.069、RMSE 0.254，仍优于 V2-S 的 0.961、0.073、0.261。
+
+更关键的是，这组好看的域内分数并没有消除真实深度标签的细节问题。作者指出，在 NYU-D 或 KITTI 上训练的模型仍可能损失细结构和透明表面可靠性。因此论文另外采用 Hypersim 与 Virtual KITTI 的合成公制标签，分别训练面向室内与室外的公制模型。它们与 Table 4 的真实数据域内微调实验不能混成同一组零样本结论。[↗](https://arxiv.org/pdf/2406.09414v2#page=9)
+
+Figure 15 比较合成数据微调的模型与 ZoeDepth。自行车辐条、礼堂座椅之间的间隔和前景椅子轮廓更清楚，是这组图能直接支持的观察。彩色深度图本身没有给出每个像素的米制误差，不能仅凭视觉锐利判断所有绝对距离都更准。
+
+![Metric depth model qualitative comparison](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-15-metric-depth.png){ width="820" }
+
+*Figure 15，ZoeDepth 与合成数据微调公制模型的细节比较。*[↗](https://arxiv.org/pdf/2406.09414v2#page=20)
+
+另一条迁移实验将编码器接入 Mask2Former，微调语义分割，检验深度学习后是否仍保留有用语义。Table 8 给出的结果如下，作者说明没有使用 Mapillary 或 COCO 预训练。
+
+| Depth Anything V2 encoder | Cityscapes mIoU ↑ | ADE20K mIoU ↑ |
+|---|---:|---:|
+| Small | 82.9 | 53.9 |
+| Base | 83.9 | 57.1 |
+| Large | 85.6 | 58.6 |
+
+原表中 OneFormer 配 ConvNeXt-XL 在 Cityscapes 为 83.6，ADE20K 的 ViT-Adapter 配 BEiT-L 为 58.3。V2-L 的 85.6 与 58.6 支持它作为下游初始化的价值。不过这些对照包含不同分割系统与骨干，不能单独归因于某一个深度损失；其直接含义是，V2 预训练没有把编码器局限成只能输出相对深度的模型。[↗](https://arxiv.org/pdf/2406.09414v2#page=12)
+
+## 推理分辨率、延迟与实际采用方式
+
+默认测试时把图像短边缩放到 518 并保持宽高比，和训练时随机裁成方形不同。附录 B.8 发现，在测试时提高输入分辨率可以得到更细预测，无需为每种分辨率另训模型。
+
+Figure 11 的重点是设备上的细绳与餐厅椅子轮廓。输入从基础分辨率变为 2 倍、4 倍，即短边约 1036、2072 后，原先模糊的窄结构更清楚。
+
+![Test-time resolution scaling](../../assets/images/paper-deep-dives/embodied-ai/depth-anything-v2/figure-11-resolution-scaling.png){ width="920" }
+
+*Figure 11，提高测试分辨率带来的细结构变化。*
+
+这提供了一种按任务预算调整空间细节的办法。它展示的是定性锐利度收益，没有同时给出全部数据集的误差变化或高分辨率延迟，不能理解为没有计算代价的质量提升。[↗](https://arxiv.org/pdf/2406.09414v2#page=14) [↗](https://arxiv.org/pdf/2406.09414v2#page=15)
+
+Figure 1 报告的 V100 延迟与参数量如下。这里的延迟对应作者图中的配置，不能直接套到上述 4 倍输入分辨率。
+
+| Method | Parameters | Latency on V100 | DA-2K Accuracy (%) ↑ |
+|---|---:|---:|---:|
+| Marigold (LCM) | 948M | 5.2 s | 86.8 |
+| DepthFM | 891M | 2.1 s | 85.8 |
+| Ours-Large | 335M | 213 ms | 97.1 |
+| Ours-Small | 25M | 60 ms | 95.3 |
+
+这些数值支持单次判别式预测在所报告条件下具有显著效率优势，并提供了可实际选择的容量梯度。但图中没有完整展开精度、预处理和各生成式方法的采样配置，因此不应把某个延迟比当成跨硬件、跨实现的固定倍数。[↗](https://arxiv.org/pdf/2406.09414v2#page=1)
+
+需要图像编辑遮挡关系、场景层次或稠密视觉先验时，可以直接采用相对深度学生；需要以米为单位的距离时，应选择并验证公制模型；需要多帧一致几何时，还要加入尺度对齐与时间一致性处理。V2 的单图接口本身没有提供相机位姿、跨帧对应或动作预测。
+
+这篇论文最值得复用的做法，是先检查监督究竟把哪些结构标对了，再安排模型容量与数据分工。强教师可以承担困难的合成到真实迁移，大规模真实图像把这种能力变成学生可学习的监督，而最终应用应根据相对关系、公制误差、细结构和延迟各自选择验证方式。

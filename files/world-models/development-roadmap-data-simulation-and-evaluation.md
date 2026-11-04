@@ -1,100 +1,71 @@
-# 世界模型开发路线：先把数据、动作和评测接成闭环
+# 从一次失败决定世界模型的下一项实验
 
-面向机器人任务开发世界模型，第一步是把“世界状态是什么、动作如何改变它、怎样判定成功”讲清楚。否则模型即使能生成未来，也不知道自己在预测哪个坐标系里的未来，更无法服务真实闭环。
+模型在日志上预测得很清楚，接入抓取 planner 后却频繁滑落。此时“换更大的 backbone”与“多收失败数据”都还只是猜测。下一项实验应尽量区分几种原因，减少把预算花在错误模块上的可能。
 
-能服务机器人任务的世界模型，需要把数据、几何、动作、仿真和评测接成闭环。
+下面沿桌边玻璃杯的失败设计开发过程。它可以在已有项目的任一阶段使用，无须按课程顺序完成所有步骤。完整接口见[VLA 到世界模型](vla-world-model-full-chain-case.md)，这里关注的是怎样从证据决定下一步。
+
+## 首先确认预测和执行谈论的是同一件事
+
+回放原观察、实际执行动作与预测未来。检查时间窗口、相机标定和动作单位。在模型看来向上 1 cm，在控制器看来却是归一化速度 0.01，两者即使张量 shape 完全一致也不是同一个动作。
+
+假设相机点坐标为 $p_C$，相机到机器人基座的变换为 $R_{BC},t_{BC}$，则
+
+\[
+p_B=R_{BC}p_C+t_{BC}.
+\]
+
+如果 $p_C$ 用毫米、$t_{BC}$ 用米，相加后数值仍能通过程序，却没有正确物理意义。先用已知标定点检查单位、方向与变换顺序，比从巨大训练 loss 猜错误更直接。
 
 ![Autonomous vehicle sensors](../assets/images/thinking-exploration/world-models-embodied-ai/autonomous-vehicle-equipment.jpg){ width="920" }
 
-<small>图源：[Wikimedia Commons: Equipment for self-driving car.jpg](https://commons.wikimedia.org/wiki/File:Equipment_for_self-driving_car.jpg)。原图展示自动驾驶车上的多传感器硬件。读图重点：世界模型的输入通常不是一张 RGB 图，而是一组带时间戳、坐标系、外参、深度、控制状态和风险语义的数据流。</small>
+<small>图源：[Wikimedia Commons，Equipment for self-driving car](https://commons.wikimedia.org/wiki/File:Equipment_for_self-driving_car.jpg)。多传感器意味着多条带时间与坐标的观测链；图片本身不证明某套融合方案有效。</small>
 
-## 先定义世界状态
+一次回放能确认的内容应明确记录。例如“相机重投影在此组静态标定点正确”比“数据已对齐”更准确，后者还包括动态时间同步、执行器延迟和数据转换。
 
-世界模型最容易失败的地方，是状态定义不稳定。比如同一个 episode 里，相机字段一会儿叫 `cam_pose_list`，一会儿叫 `cam_pos_list`；工件有 `gongjian_pose`，焊缝却缺少 `seam_pose`；动作日志有轨迹点，但没有控制频率和坐标系。模型训练还能勉强跑，评测和复现会立刻崩。
+## 如果信息根本不在输入里，先改变观察问题
 
-一个机器人世界模型的最小数据契约应包括四类字段。感知字段记录 RGB、depth、内参、外参、多相机同步和有效帧；机器人字段记录关节、末端位姿、夹爪状态、控制模式和频率；任务字段记录目标物、工件、焊缝、功能点、success checker 需要的几何或语义状态；动作字段记录动作 chunk、单位、坐标系、时间戳、planner 输出和控制器执行结果。
+玻璃杯被夹爪完全遮住时，只凭单帧 RGB 可能无法区分稳定夹紧与松动。训练更久不能从不存在的证据中恢复唯一真值。可以增加历史、本体反馈、接触传感或重新观察动作，也可以让模型表达多个可能状态。
 
-这不是文档洁癖。世界模型最终要学习类似下面的映射：
-
-$$
-z_{t+1:t+H}, r_{t:t+H}, c_{t:t+H}
-=
-W_\theta(z_t, a_{t:t+H-1}, g)
-$$
-
-这里 \(z_t\) 表示当前状态或 latent，\(a_{t:t+H-1}\) 是未来一段动作，\(g\) 是任务目标，\(r\) 是奖励或进展，\(c\) 可以表示 continuation、碰撞、可达性或失败风险。公式的重点是：如果 \(z_t\) 和 \(a_t\) 的物理含义没有固定，\(W_\theta\) 学到的只是混乱日志上的统计相关。
-
-## 几何账本比模型名更早
-
-机器人任务经常不是“图像里有什么”，而是“目标在哪里、从哪里能看见、夹爪是否可达、会不会碰撞”。所以世界模型项目要先建立几何账本：相机内外参、深度、点云、物体 pose、机器人末端位姿和任务功能点必须能放进同一坐标系。
-
-以焊缝观察任务为例，模型不需要一开始就生成高清视频。一个更可验收的目标是：给定多视角图像、相机位姿、工件 pose 和候选相机轨迹，预测每个焊缝点是否可见、是否被遮挡、轨迹是否可达、风险是否升高。
-
-$$
-\hat v_{i,t}, \hat c_t, \hat q_t
-=
-W_\theta(z_t, a_{t:t+H})
-$$
-
-其中 \(\hat v_{i,t}\) 表示第 \(i\) 个任务点在未来时刻 \(t\) 是否可见，\(\hat c_t\) 表示碰撞或不可达风险，\(\hat q_t\) 表示覆盖率或轨迹质量。这个目标比“未来视频像不像”更硬，因为它直接对应可见性、碰撞、覆盖率和闭环成功率。
-
-3D encoder 的作用就是帮这张账本变得可学习。Depth Anything、VGGT、MapAnything、DUSt3R / MoGe 这类模型可以提供 depth、camera、ray map、point map 或 3D state。它们不一定直接输出动作，但能告诉系统：目标是否在视野里，遮挡在哪里，候选视角是否覆盖关键区域，尺度和位姿是否可信。
+一个简单对照是保留原模型，用同一任务增加一个侧视角；另一个对照是保留相机，用短历史替代单帧。只改其中一项，才能知道改善来自新信息还是模型结构变化。若只能得到平均改善，也要查看究竟哪些遮挡情形仍无解。
 
 ![Velodyne LiDAR sensor](../assets/images/thinking-exploration/world-models-embodied-ai/velodyne-lidar.jpg){ width="760" }
 
-<small>图源：[Wikimedia Commons: Velodyne High-Def LIDAR.jpg](https://commons.wikimedia.org/wiki/File:Velodyne_High-Def_LIDAR.jpg)。原图展示 LiDAR 传感器。读图重点：depth、LiDAR、pose 和 point map 都在把视觉问题改写为空间问题；机器人世界模型要服务动作选择，就不能只停在图像语义。</small>
+<small>图源：[Wikimedia Commons，Velodyne High-Def LIDAR](https://commons.wikimedia.org/wiki/File:Velodyne_High-Def_LIDAR.jpg)。新的传感器能增加观测，但也带来同步、标定与成本；“有三维数据”不自动等于状态正确。</small>
 
-## 动作接口要能被反事实测试
+机器人任务的观测选择与自动驾驶不同，点云并不替代接触力，力传感也不替代远处道路布局。应从当前缺失变量倒推传感证据。
 
-动作条件是世界模型和普通视频续写器的分水岭。固定同一历史状态，换三组动作，未来状态、风险和成功概率应该合理分叉。如果换动作后模型给出几乎一样的未来，它只是带动作标签的视频模型。
+## 信息可见，却没有进入状态时，测试编码器
 
-动作接口至少要写清五件事：动作空间是关节、末端位姿、相机轨迹、离散技能还是语言子目标；动作频率和 chunk 长度是多少；动作在哪个坐标系里；归一化和单位如何定义；动作执行失败时记录什么原因。
+若原视频清楚显示杯子已经歪斜，latent probe 却无法辨认，可以固定动力学模块，比较原编码状态与带人工姿态信息的状态。这个替换不是部署方案，而是询问后续模块在获得正确信息时能否工作。
 
-这一步常被低估。VLA 可以输出动作 token，Diffusion Policy 可以输出连续动作块，planner 可以输出几何轨迹，但世界模型必须知道这些动作如何进入 dynamics。否则候选动作排序、风险预测和闭环评测都没有共同语言。
+Probe 也要控制复杂度。一个很大的 probe 可能重新学会整个任务，使弱表示看起来可用；过弱 probe 又可能读不出分布式表示。应同时比较模型实际使用的读出、简单基线以及相同预算下的替代表示。重建画面逼真只能说明某些信息可重建，未必说明当前决策头读得出来。
 
-## 仿真不是展示环境，而是自动判卷器
+压缩 token 的实验也放在这里。保持训练预算和输入分布，改变 resampler 数量，观察状态保真、模型时间和闭环后果。token 减少后若任务退化，不能只报告系统收益；若任务持平却没有时间收益，则要继续 profile encoder 与其他瓶颈。
 
-仿真环境的价值不只是“能生成数据”，而是把任务生成、轨迹执行、观测渲染、成功判定和失败回放接成流水线。RoboTwin、Isaac Sim / Isaac Lab、ManiSkill 和 cuRobo 各有不同位置：RoboTwin 适合看双臂任务、资产和 success checker；Isaac Sim 适合传感器、渲染、USD 资产和 headless 部署；ManiSkill 适合快速 baseline；cuRobo 适合把目标位姿转成可执行轨迹。
+## 状态正确以后，再测试动作动力学
+
+从相同已知状态执行不同动作，是检查动作条件的直接方式。对快抓与慢抓，应比较实际执行速度、夹紧和滑落，而不仅是两个动作名称。自然日志里快抓可能总发生在容易物体上，慢抓总发生在难物体上；直接相关性会把物体难度误归因给速度。
+
+在模拟器中可以固定初始状态、材料和随机种子做控制比较，但模拟器对摩擦与接触的假设也要校准。真实重复实验不能完全复位时，应记录剩余差异并估计不确定性。模型在其训练分布外的自信，不能代替这些证据。
 
 ![Simulation approaches for video world models 原论文图](../assets/images/paper-deep-dives/world-models/towards-video-world-models/figure-9-simulation-approaches.jpg){ width="960" }
 
-<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 9。原图比较不同模拟路线。读图重点：真实项目中的世界模型不是孤立预测器，而是在 data、reconstruction、simulation、policy/evaluation 之间反复循环。</small>
+<small>图源：[Towards Video World Models](https://www.xunhuang.me/blogs/world_model.html)，Figure 9。不同模拟来源带来不同可控变量和误差；选择工具应服务当前待区分的假设。</small>
 
-Success checker 要比最终状态更细。比如“把物体放进抽屉”不能只检查物体最后是否在抽屉范围内，还要检查抽屉是否打开、是否穿模、是否碰撞、夹爪是否释放、轨迹是否平滑、失败时是否可回放。一个只看最终坐标的 checker 会让模型学会钻评测漏洞。
+先测一步，再延长 horizon。若一步已错，增加多步 loss 未必解决输入或动作语义问题；若一步准确、长时漂移，则考虑状态记忆、滚动训练或反馈频率。模型在什么时刻开始偏离，比一个汇总分更能指导修复。
 
-## 最小闭环怎么搭
+## 模型预测对了，也可能被错误消费
 
-最稳的开发顺序是先小后大。
+假设未来预测已显示滑落，risk head 却输出低风险。应核对风险定义的事件和时间范围，特别是“下一步发生”与“整段至少一次”是否混淆。若概率正确但 planner 仍选危险动作，则检查代价函数和约束。真实目标可能要求风险低于阈值，简单相减的成功减风险不一定表达这个要求。
 
-第一步，冻结 episode schema，确认字段、shape、单位、坐标系、时间戳和控制频率。第二步，做 100 条样本的数据可视化，让相机、工件、机器人、目标物和轨迹出现在同一坐标系。第三步，在 10 条 episode 上复算 depth、pose、覆盖率和碰撞结果。第四步，用规则或 planner 先做轨迹 baseline。第五步，训练小模型预测可见性、风险、coverage 或 reward。第六步，把预测放回仿真执行，记录真实结果和失败原因。第七步，把遮挡、near-miss、不可达、误抓取、checker 分歧等样本回流。
+Success checker 同样属于被评测系统。杯子短暂接触托盘就算成功，与放开夹爪后稳定停留两秒，是不同任务。若模型学会利用判据漏洞，优化器只是忠实优化了错误定义。判据应在比较模型前冻结，并通过明确成功、失败和边界轨迹检查。
 
-可以把最小链路写成：
+最后检查时间。模型越复杂越慢，输出的正确未来也可能在控制器接收时已经过期。可以固定预测器，用更及时的状态重规划；也可以固定重规划频率，比较加速路径。将两者一起改变，难以判断收益来源。
 
-```text
-episode schema
-  -> geometry replay
-  -> candidate actions
-  -> world model predicts visibility/risk/reward
-  -> simulator/checker executes and scores
-  -> failure replay updates data buckets
-```
+## 让一次改进留下可以复核的证据
 
-这条链一旦存在，后面替换 VLA、扩散动作头、视频世界模型、低比特推理或更快 kernel，才有共同验收标准。
+对“快抓滑落”这一问题，实验记录应写清被检验的假设、只改变的变量、固定任务与预算、观察到的结果及仍未解释的失败。例如“增加侧视角后遮挡桶改善，而无遮挡桶持平”，能支持继续研究观测不足；它不能直接证明某种网络架构普遍更强。
 
-## 评测应该从第一天存在
+重训时保存数据版本、初始 checkpoint、代码版本与实际生效配置。静态 YAML、模型设计图和几条手工标签都不能替代训练日志。当前本站 mini-chain 的证据范围见[报告](world-model-efficient-training-experiment-report.md)。
 
-世界模型评测至少分四层。数据层看字段完整率、pose 复算误差和时间戳偏差；几何层看 depth、point map、可见性、覆盖率和遮挡判断；轨迹层看碰撞率、可达率、平滑度和控制器 reject；闭环层看任务成功率、near-miss、恢复成功率、人工接管率和 cost per success。
-
-视频世界模型还要额外看动作敏感性、长时一致性、因果 rollout 和决策收益。同一状态下换动作，未来是否合理分叉；绕回同一场景时物体是否还在；自回归 rollout 是否越滚越偏；接入 planner 或 policy 后是否真的提高成功率。
-
-## 外部材料
-
-- [Genie 3](https://deepmind.google/models/genie/)：理解实时交互世界模型的产品化方向，但要记住它不等于机器人闭环控制已经解决。
-- [NVIDIA Cosmos](https://www.nvidia.com/en-us/ai/cosmos/)：理解 physical AI 的 world foundation model 平台，适合看数据生成、仿真和评测工具链。
-- [V-JEPA 2 world model blog](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)：理解视频表征、物理推理和规划基准如何连接。
-- [RoboTwin 2.0 官方文档](https://robotwin-platform.github.io/doc/)：适合学习任务、资产、轨迹和 success checker 的组织方式。
-- [Isaac Sim container installation](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html)：适合看 headless 仿真和远程部署的工程口径。
-
-- [World Models 论文](https://arxiv.org/abs/1803.10122)。
-- [DeepMind Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)。
-- [Meta V-JEPA 2](https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/)。
+当状态、动力学、读出与时延都能被独立检查，再扩大任务规模、模型或合成数据，实验结果才比较容易解释。来源方法可从 [PlaNet](https://arxiv.org/abs/1811.04551) 的潜状态规划、[MWM](https://arxiv.org/abs/2206.14244) 的表示分工与 [V-JEPA 2](https://arxiv.org/abs/2506.09985) 的动作条件规划开始对照。

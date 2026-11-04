@@ -1,152 +1,54 @@
-# 激活离群值：为什么量化常常败在 activation 上
+# 激活离群值怎样改变量化格距
 
-量化听起来像一个存储问题：把 FP16/BF16 权重换成 INT8/INT4，显存立刻下降。但真正让低比特部署翻车的，往往是 activation。权重在推理前已经固定，可以离线统计、分组、搜索；activation 是每个 prompt、每张图、每段上下文现场产生的动态张量。校准集没有覆盖到的输入，可能在某一层某几个通道上突然出现很大的数值，这就是 activation outlier。
+某层激活为 `[0.2, 0.4, 1.0, 30.0]`。如果一整个张量共享 scale，最后的 30 会影响前三个普通数的精度。校准就是在实际输入产生的张量上决定范围、尺度和粒度，并验证这种决定是否适用于未见过的输入。
 
-少数 activation outlier 足以拉大量化范围，让一整层低比特量化变差。
+## 同一组数有两种很不同的误差
 
-## 量化是在给数分格子
+采用 $[-7,7]$ 的对称教学量化器。为完整容纳 30，选 $s=30/7\approx4.286$。前三个数除以 s 后都不到半格，舍入成 0；30 则恢复为30。平方误差和为 $0.2^2+0.4^2+1^2=1.2$。
 
-均匀量化可以写成：
+若改用 $s=1/7$，前三个数恢复为约 `[0.143,0.429,1.0]`，普通值更清楚了，30 却被截为1，单这一项平方误差就达到841。可见“忽略 outlier 能提高精度”需要说明提高了谁的精度、用什么分布和指标衡量。
 
-\[
-q=\mathrm{clip}\left(\mathrm{round}\left(\frac{x}{s}\right)+z,\ q_{\min},q_{\max}\right)
-\]
+```python
+values = [0.2, 0.4, 1.0, 30.0]
+for s in [30 / 7, 1 / 7]:
+    restored = [s * max(-7, min(7, round(x / s))) for x in values]
+    squared_error = sum((a - b) ** 2 for a, b in zip(values, restored))
+    print(restored, squared_error)
+```
 
-这里 \(x\) 是原始实数，\(s\) 是 scale，\(z\) 是 zero-point，\(q_{\min}\) 和 \(q_{\max}\) 是整数可表示范围。读这行式子时不要先背符号，先想成“给实数轴铺格子”：先用 \(s\) 决定每个格子多宽，再把 \(x\) 四舍五入到最近的整数格子，最后把越界的值裁掉。
+这四个数的平方误差按元素等权。真实任务关心的却可能是下一层输出，某个通道还会乘上权重。截断范围应根据选定的层输出或任务指标搜索，不能仅凭直方图好看。
 
-反量化是：
+## 先辨认大值沿哪一维出现
 
-\[
-\hat{x}=s(q-z)
-\]
+把激活写成 $X\in\mathbb R^{N\times d}$，N 是 token 数，d 是通道数。若大值只出现在一条输入的许多通道，per-token scale 可能比 per-tensor 更合适。若某个通道在许多输入上都偏大，按通道缩放更直接。若大值随输入变化且没有稳定模式，静态通道统计的帮助就有限。
 
-\(\hat{x}\) 表示低比特整数还原回来的近似值。误差可以写成：
+每种细分都增加元数据和计算。Per-token 动态量化要在请求到达后做归约；per-group 权重量化增加 scale 读取；只有 kernel 支持相应布局时，这些选择才可能带来系统收益。
 
-\[
-e=x-\hat{x}
-\]
+## 平滑会把压力转给另一侧
 
-这个误差来自三处：rounding 会把相邻实数吸到同一个格子；clipping 会把超出范围的值压到边界；后续矩阵乘又会把前一层误差沿着权重方向传播。低比特并不神秘，它本质是在问：有限的整数格子应该分给谁？
+设一条输入 $x=[1,30]$、权重 $w=[2,0.1]^\top$，输出为5。取 $D=\operatorname{diag}(1,10)$，变换后输入为 `[1,3]`，权重为 `[2,1]`，输出仍为5。
 
-## 一个 outlier 如何拉粗整层 scale
+激活最大值从30降到3，权重第二个通道则扩大10倍。SmoothQuant 的实际实现利用校准激活与权重范围选择尺度，并折叠进归一化和线性层。量化发生之后才产生新的误差，必须同时评估两侧。不能在实际网络上只缩激活、漏掉对应权重。
 
-对称量化里，一个最常见的 scale 选择是：
+## 校准集怎样覆盖部署输入
 
-\[
-s=\frac{\max(\lvert x\rvert)}{q_{\max}}
-\]
+先按真实输入类型和长度抽样，保留普通请求的主要分布，再为少见但代价高的情况建立单独分层。例如代码、表格和多轮工具结果可以各留一组。校准时可调整这些组的权重，报告时仍应分别展示自然流量加权结果和关键小组结果。
 
-其中 \(\max(\lvert x\rvert)\) 是这一组 activation 的最大绝对值，\(q_{\max}\) 是整数端最大正值。假设大多数 activation 都在 \([-2,2]\)，但某个通道偶尔出现 \(30\)。如果用 INT4，\(q_{\max}=7\)，那么：
+若一味塞入极端输入，可能让 scale 始终被极端范围主导，损害普通请求；若只抽平均请求，又可能完全看不到失效范围。需要比较候选校准配比的独立验证结果。
 
-\[
-s=\frac{30}{7}\approx4.29
-\]
+校准、选配置和最终测试承担不同用途。看过测试结果后不断改 scale，相当于把测试集也用来调参。应固定最终测试输入，另外保留新的时间切片，检查上下文长度或领域变化后范围是否漂移。
 
-这意味着每个整数格子宽约 4.29。主体区域 \([-2,2]\) 总宽度只有 4，几乎装不下两个格子；很多本来不同的小值，量化再反量化后会变得几乎一样。问题不是 outlier 本身占多少比例，而是它决定了 scale，scale 又决定了普通值还有多少分辨率。
+## 误差出现后怎样找到第一处偏离
 
-所以“不裁掉任何大值”并不总是安全。保住 outlier 会让主体区域的 rounding error 变大；裁掉 outlier 会制造 clipping error。量化方法的核心工作，就是在这两种错误之间找到对任务最不伤的折中。
+固定同一批输入，先比较浮点与模拟量化模型的对应层输入、输出，再比较真实 kernel 输出。若模拟量化已经偏离，检查范围和粒度；若模拟接近、打包后突然偏离，检查 zero point、scale 轴和布局。最后在任务输出上判断这点数值变化是否有实际影响。
 
-## 为什么大模型特别容易有 activation outlier
-
-LLM 和 VLM 的 activation outlier 常常不是随机噪声，而是模型结构和输入分布共同造成的。
-
-| 来源 | 直觉 | 量化后果 |
-| --- | --- | --- |
-| 残差连接 | 多层信息反复相加，少数方向会持续放大 | 个别 hidden channel 变成 scale 决定者 |
-| LayerNorm/RMSNorm | 归一化控制整体幅度，不保证每个通道都温和 | 通道之间 range 差异仍然很大 |
-| 稀有 token 和格式 | 代码、数字、表格、特殊符号会触发长尾路径 | 干净校准集看不到线上尖峰 |
-| 长上下文 | 后半段 token 的注意力和残差信息不同于短 prompt | KV cache 和 hidden states 分布漂移 |
-| 多模态输入 | 图像小字、表格、UI、机器人状态分布异质 | 视觉 connector 或动作头局部掉点 |
-
-[LLM.int8()](https://arxiv.org/abs/2208.07339) 的重要观察之一就是：大模型里会出现对模型质量很关键的 outlier feature dimensions。它的 mixed-precision decomposition 思路，是把少数 outlier 维度隔离出来用 16-bit 处理，大部分普通值仍走 8-bit。这个设计背后的判断很朴素：不要让少数尖峰污染整组普通值的量化格子，也不要粗暴删除可能重要的尖峰。
-
-## 粒度越细，outlier 影响越局部
-
-设某层 activation 为：
-
-\[
-X\in\mathbb{R}^{B\times T\times d}
-\]
-
-这里 \(B\) 是 batch，\(T\) 是序列长度，\(d\) 是 hidden dimension。量化 \(X\) 时，scale 可以按整张量、按通道、按 group、按 token 动态计算。粒度越粗，一个 outlier 影响的范围越大；粒度越细，scale 元数据和 kernel 复杂度越高。
-
-| 粒度 | 怎么选 scale | 优点 | 代价 |
-| --- | --- | --- | --- |
-| per-tensor | 整个张量共用一个 scale | 简单，kernel 友好 | 一个 outlier 影响全体值 |
-| per-channel | 每个 hidden channel 一个 scale | 适合通道 range 差异大 | scale 更多，布局更复杂 |
-| group-wise | 每组通道一个 scale | 精度和开销折中 | group size 会影响质量和速度 |
-| dynamic per-token | 按当前输入现场统计 | 更适应长尾输入 | 统计和 Q/DQ 开销可能吃掉收益 |
-
-这也是为什么“同样是 INT8”不能直接比较。一个 per-tensor 静态 INT8 和一个 per-channel 动态 INT8，数值风险、kernel 路径、延迟结构都不是一回事。
-
-## 校准真正选的是线上分布的影子
-
-静态量化需要校准集。校准不是随便喂几条样本，而是用一小批代表性输入估计线上会遇到的 range、scale、zero-point、截断阈值和敏感层。
-
-常见校准目标包括：
-
-| 目标 | 公式或读法 | 适合什么 |
-| --- | --- | --- |
-| MSE | \(\min \|x-\hat{x}\|_2^2\)，直接压数值误差 | 层输出或中间张量误差可解释时 |
-| KL divergence | 让量化前后分布更接近 | 概率分布或分类头附近 |
-| 输出误差 | \(\min \|XW-\hat{X}\hat{W}\|^2\)，关注 matmul 后结果 | 线性层端到端误差更重要时 |
-| 任务代理损失 | 用 perplexity、准确率、字段级指标选配置 | 生产部署和多任务模型 |
-
-最小 MSE 不一定带来最高任务质量。比如财务 VLM 里，普通问答样本上误差很小，但复杂发票的小数点、跨页金额、税率字段全部变差，原因可能是校准集没有覆盖高分辨率表格和低清扫描件。对这类模型，校准集应该按任务桶覆盖：短问答、长上下文、代码、表格、数学、多模态小字、工具返回、拒答样本和高风险失败样本。
-
-## SmoothQuant 的关键：把难度从 activation 迁移到 weight
-
-线性层输出是：
-
-\[
-Y=XW
-\]
-
-SmoothQuant 使用一个对角缩放矩阵 \(D\)，把它改写为：
-
-\[
-Y=(XD^{-1})(DW)
-\]
-
-这两行式子表达的是等价变换：\(D^{-1}\) 缩小 activation 中难量化的通道，\(D\) 再把对应权重通道放大，乘积 \(XW\) 的数学结果不变。为什么这样有用？因为权重 \(W\) 是静态的，放大后的权重可以离线量化、离线检查；activation \(X\) 是动态的，线上每次请求都变，最难救。SmoothQuant 的价值就是把“动态 outlier 的麻烦”搬一部分到“静态权重的麻烦”上。
+层误差能帮助定位，不能直接给出任务损失的通用阈值。某个输出头前的细小扰动可能改变离散选项，另一个层里较大的误差可能被后续归一化缓和。
 
 ![SmoothQuant intuition](../assets/images/paper-figures/quantization/smoothquant-figure-2-intuition.png){ width="730" }
 
 <small>图源：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)，Figure 2。原图表达：activation outlier 会拉大量化范围，使主体值只剩很少有效 bit；SmoothQuant 通过等价缩放把部分量化难度从 activation 迁移到 weight。读图重点：左边看 scale 为什么被尖峰决定，右边看缩放后普通 activation 如何重新获得分辨率。</small>
 
-SmoothQuant 不是万能的。它更适合 W8A8 这类希望 activation 也低比特的场景；如果部署栈只支持 weight-only INT4，或者 kernel 没有把 Q/DQ 和 matmul 融合好，端到端收益可能不如理论显存账漂亮。
+## 对照源码与延伸阅读
 
-## KV cache 也是 activation 问题
-
-长上下文推理里，KV cache 的显存近似为：
-
-\[
-\mathrm{KV\ Memory}\approx2\times L\times B\times T\times H_{\text{kv}}\times d_h\times \mathrm{bytes}
-\]
-
-这里 \(L\) 是层数，\(B\) 是 batch，\(T\) 是上下文长度，\(H_{\text{kv}}\) 是 KV heads，\(d_h\) 是每个 head 的维度。公式读法很直接：上下文越长，KV cache 线性增长；把 bytes 从 2 降到 1 或更低，长上下文服务立刻省显存。
-
-但 KV cache 是注意力的记忆。如果 K/V 的量化误差改变 attention logits，模型可能表现为引用错位、needle retrieval 失败、长文档后半段幻觉、数学推导中断。KV 量化不是只看平均 perplexity，还要看长上下文检索、跨段引用、代码定位、表格查数和高风险样本回放。
-
-## 部署时按三个问题做决策
-
-第一，outlier 是不是集中在少数层或少数通道？如果是，可以考虑 per-channel/group-wise、outlier channel 高精保留、SmoothQuant、rotation/shift 或 mixed precision；如果不是，可能需要提高 bit 或改校准集。
-
-第二，线上输入是不是比校准集更长、更杂、更多模态？如果是，静态 scale 会很脆弱。要把长上下文、代码、表格、截图、工具返回、机器人失败恢复这类长尾样本放进校准和回归。
-
-第三，kernel 是否真的支持目标量化形态？量化收益不只来自模型文件变小，还来自低比特 GEMM、Q/DQ 融合、KV cache 布局、batching 和调度。如果 trace 里 Q/DQ、动态统计或格式转换占了太多时间，低比特可能只是把显存问题换成延迟问题。
-
-## 外部材料
-
-- [SmoothQuant 论文](https://arxiv.org/abs/2211.10438)：最适合理解 activation smoothing 为什么是等价变换。
-- [LLM.int8() 论文](https://arxiv.org/abs/2208.07339)：理解 outlier feature dimensions 和 mixed-precision decomposition。
-- [Hugging Face Quantization Concepts](https://huggingface.co/docs/transformers/main/quantization/concept_guide)：部署侧量化概念整理。
-- [MIT HAN Lab SmoothQuant 项目](https://github.com/mit-han-lab/smoothquant)：看实现、校准和模型支持情况。
-
-## 读完以后怎么判断
-
-activation outlier 的要害不是“有几个异常值”，而是“谁决定 scale”。低比特量化把连续数轴切成有限格子，outlier 会把格子拉粗，让主体区域失去分辨率。理解这一点后，SmoothQuant、LLM.int8、KV cache quant、混合精度和校准集选择就不是一堆孤立技巧，而是在解决同一个问题：把有限的数值表示能力分给真正影响任务质量的地方。
-
-- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- [AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- [SmoothQuant 的尺度计算与折叠](https://github.com/mit-han-lab/smoothquant/blob/c61476d728e42ae0d8a35e7e78494edcac3237b5/smoothquant/smooth.py)
+- [AWQ 如何实际收集校准激活](https://github.com/mit-han-lab/llm-awq/blob/d6e797a42b9ef7778de8ee2352116e0f48a78d61/awq/quantize/pre_quant.py)

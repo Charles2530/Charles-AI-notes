@@ -15,303 +15,194 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：未找到官方链接；项目页：[huggingface.co/papers/2406.16858](https://huggingface.co/papers/2406.16858)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2406.16858)；[官方 / 项目材料](https://huggingface.co/papers/2406.16858)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 同一棵草稿树，为什么会在不同上下文里浪费预算
 
-### 研究背景
+EAGLE 已经能通过目标模型特征生成高接受率草稿，但它始终按预设树形状分配候选。有些上下文下一 token 几乎确定，应把预算用于往深处走；另一些上下文有多个合理分支，增加宽度可能更有用。固定树无法根据这一差别调整。
 
-原论文接在 speculative decoding 和 EAGLE 之后。投机解码的基本框架是：便宜 draft model 先生成候选 token，昂贵 target LLM 一次并行验证；EAGLE 把 draft 从独立小模型改成基于 target feature 的草稿生成，提升了候选质量。但原版 EAGLE 仍使用静态 draft tree：不管输入问题简单还是复杂、draft confidence 高还是低，都展开类似形状的候选树。
+EAGLE-2 保留 EAGLE 草稿模型和精确验证规则，把改动集中在树的扩展与筛选。它利用草稿置信度估计候选被接受的可能性，并且考虑整条祖先路径；因此不需要再训练一个专门预测树形状的网络。[↗](https://arxiv.org/pdf/2406.16858v2#page=4)
 
-### 问题（Challenge）
+草稿树的预算有两个方向。增加深度，是希望一次验证后连续走出更多 token；增加宽度，是给同一位置准备替代续写。二者都消耗目标模型的验证容量。若某条分支在很早的地方就被拒绝，为它准备的深层后代也无法进入输出，即使那些后代在各自条件下很容易预测。因此，树形状不是展示草稿的方式，而是决定这次大模型 forward 把计算花在哪里。
 
-EAGLE-2 要解决的问题是静态 draft tree 的浪费：如何在不重新训练 draft model、不改变 target LLM、不破坏 lossless verification 的前提下，让候选树按当前上下文自适应。挑战在于 target 验证成本与 draft tree 节点数相关，树太小会错过可接受 token，树太大会验证大量低价值分支；而每个上下文的 token 可预测性不同，固定树无法同时适配简单续写和高不确定推理。
+原 EAGLE 给所有上下文使用同一个预先安排的形状。EAGLE-2 则把每次草拟过程中已经产生的概率拿来调度：较确定时继续深入，有歧义时为多个分支保留位置。它没有修改目标模型权重，也没有另加一个树结构预测器。本文的核心问题因此可以精确表述为：**草稿模型相同、目标分布相同，怎样重新分配候选预算，让每次验证推进更多有效 token？**[↗](https://arxiv.org/pdf/2406.16858v2#page=2)
 
-### Finding
-
-EAGLE-2 的 finding 是：draft model 的 confidence score 可以作为 acceptance probability 的近似信号，用来动态分配树预算。这个 insight 把问题从“训练一个更强 draft model”翻转成“把已有 draft 的概率信息用在树构造上”。如果一个节点路径上的候选都高置信，就应该继续扩展；如果某条分支低置信，继续占用 target verification slot 的收益很低。这样可以在同样验证预算下提高平均接受长度。
-
-### 方法
-
-方法不新增模型训练。推理时，EAGLE-2 先用 draft model 生成候选节点，并用路径价值 \(V_i\) 汇总节点置信度；然后执行 expansion 和 reranking，从所有候选中选出更值得 target 验证的节点；最后把动态树 flatten 成 target model 可并行验证的形式。输入是当前上下文、EAGLE draft model 输出及其 confidence，输出是上下文相关的 draft tree。接受规则仍由 target LLM 决定，因此满足标准 speculative sampling 的无损加速条件。
-
-### 结论
-
-论文实验比较 EAGLE、SpecInfer 等投机解码方法，在多模型和多任务设置下报告 speedup、acceptance length 与 tree 相关指标。结果说明动态树能提高高价值候选比例，减少静态树中低接受概率节点的验证浪费；消融验证 confidence-based expansion、reranking 和 tree size 设计对速度收益有贡献。需要保留边界：收益依赖 draft confidence 校准、tree attention 实现、batch 调度以及目标任务和 draft 训练分布的匹配程度。
-
-### 关键术语
-
-- **Speculative Decoding（投机解码）**：先由便宜模型提出候选 token，再由目标模型并行验证以减少逐 token 解码次数
-- **Draft Tree（草稿树）**：一次验证前由 draft model 展开的候选 token 树
-- **Acceptance Probability（接受概率）**：候选 token 被 target LLM 验证通过的概率
-- **Dynamic Draft Tree（动态草稿树）**：根据当前上下文和 draft confidence 自适应调整形状的候选树
-- **Lossless Acceleration（无损加速）**：保持 target LLM 原始采样分布不变，只减少推理成本
-
-## 它的效率贡献是什么
-
-| Dimension | EAGLE-2 |
-| --- | --- |
-| Saved cost | Autoregressive decode steps、target model forward calls per generated token、static draft tree 中低价值分支的 verification overhead |
-| Main idea | Use the draft model confidence score to approximate acceptance probability and build a context-aware dynamic draft tree |
-| Algorithm core | Expansion by path value \(V_i\), reranking all draft nodes, flattening selected nodes for target-model verification |
-| Training requirement | No additional model training beyond the existing EAGLE draft model; no separate tree predictor is trained |
-| Inference role | Lossless speculative sampling when standard target-model verification is used |
-| Main risk | Benefit depends on draft confidence calibration, tree attention efficiency, batch scheduling, and whether task distribution matches draft-model training data |
-| Connect to | [缓存、路由与投机解码](../../inference/caching-routing-and-speculative.md)、[推理运行时](../../inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md)、[EAGLE-3](eagle-3.md) |
-
-## 证据等级与外推边界
-
-这篇论文的证据链很清楚：先证明 static draft tree 的位置假设不够，再证明 confidence score 可以近似 acceptance rate，然后给出动态建树算法和消融。
-
-| 论文结论 | 证据来源 | 证据等级 | 可外推到高效推理 | 不能直接外推 |
-| --- | --- | --- | --- | --- |
-| Draft token 接受率有上下文差异 | Figure 5：同一树位置的 acceptance rate 有明显方差 | Diagnostic evidence | draft tree 不应只按固定位置模板建 | 不能说明所有 draft model 都可动态树化 |
-| Draft confidence 可近似 acceptance rate | Figure 6：confidence interval 与平均接受率强相关 | Calibration evidence | 可以用 draft 侧低成本信号做 tree policy | confidence 失准时动态树会误选分支 |
-| Dynamic tree 提高 acceptance length | Table 1/2：EAGLE-2 的 \(\tau\) 普遍高于 EAGLE | Benchmark | 更长接受前缀能减少 target model 调用 | 不等于所有 runtime 都有同等端到端 speedup |
-| Value + reranking 都有贡献 | Table 3 消融 | Ablation | 不能只做局部 confidence top-k，还要看路径概率和最终树结构 | 真实系统还要考虑 attention mask 和 flatten 开销 |
-| 不改变输出分布 | 标准 speculative sampling 验证规则 | Algorithm guarantee | 适合高质量线上服务的保守加速 | 若放宽接受条件或改采样规则，lossless 保证不自动成立 |
-
-## 论文位置：从 Static Tree 到 Dynamic Tree
-
-标准 speculative sampling 通常是一条 draft chain。EAGLE 把它改成 tree-structured draft，这样某个分支被拒绝时还可以尝试其他分支。但 EAGLE 的树形状是固定的：无论 prompt 简单还是困难，都按同一套 tree shape 扩展。
-
-EAGLE-2 认为这个假设太粗。比如问题是 `10+2=`，下一个 token 很可能是 `1`，继续扩多个低概率分支是在浪费；但如果 prompt 是 `10+2`，下一步可能还没形成确定答案，多保留候选分支就更合理。
+下面的温度 1 与温度 0 图是两个独立条件。相同模型在采样更随机时通常更难连续预测；不同温度的倍数不能拼成一个统一排行榜。
 
 ![EAGLE-2 speedup temperature 1 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-1-speedup-temp1.png){ width="690" }
 
-<small>图源：`EAGLE-2`，Figure 1。原论文图意：temperature=1 时，EAGLE-2 在 MT-bench 上相对多种 speculative sampling 方法取得更高 speedup；论文只比较保持输出分布不变的 speculative sampling 方法。</small>
-
-**Figure 1 先看 speedup 来自哪里。**
-输入是上下文特征、候选草稿树和置信度信号，输出是动态 draft tree 与被接受 token。效率机制不是让 target model 变小，而是把 draft compute 集中到更可能被 target 接受的位置，减少低收益分支。它适合说明推理成本里的“平均吞吐”和“acceptance 分布”要一起看；但动态 draft tree 不能证明模型知识、推理能力或闭环任务质量提升。
-
 ![EAGLE-2 speedup temperature 0 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-2-speedup-temp0.png){ width="690" }
 
-<small>图源：`EAGLE-2`，Figure 2。原论文图意：temperature=0 时，EAGLE-2 在 MT-bench 上同样优于 EAGLE 等方法；部分模型缺少合适 draft model 时标为 N/A。</small>
+## 基础接口没变，变的是把哪些草稿交给大模型
 
-**Temperature 0/1 要一起看。**
-图里的重点不是每个柱子的绝对值，而是 EAGLE-2 在非贪心和贪心设置下都能保留优势。它不靠放宽接受条件换速度，而是让同样数量或相近数量的 draft token 更集中在高接受概率路径上。
-
-## 背景：EAGLE 的 Feature-level Draft
-
-EAGLE 不像普通 speculative sampling 那样用小 LLM 直接预测 token chain。它在 target model 的 feature space 里自回归预测，然后复用原 LLM 的 LM head 得到 draft token。为了处理采样带来的 feature uncertainty，EAGLE 还把前一步采样 token 的 embedding 输入 draft model。
+EAGLE 的草稿 head 接收 LM head 前的特征和提前一个时间步的 token embedding。它预测下一特征，再经目标 LM head 得到 token 分布。下面的草稿图说明这种内部特征复用与独立小 LLM 的差别。
 
 ![EAGLE drafting stage 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-3a-drafting-stage.png){ width="690" }
 
+验证阶段，目标模型用 tree attention 一次计算多个候选的条件分布。不同分支不可互相看见；接受或拒绝仍服从 speculative sampling 规则。对目标分布 $p$、草稿分布 $q$，接受概率是 $\min(1,p(\hat t)/q(\hat t))$，拒绝后使用归一化的 $\max(0,p-q)$ 残差分布。
+
 ![EAGLE verification stage 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-3b-verification-stage.png){ width="690" }
 
-<small>图源：`EAGLE-2`，Figure 3。原论文图意：EAGLE 在 drafting stage 做 feature-level autoregression，在 verification stage 使用 tree-structured draft；图中 \(e_i\) 表示 token embedding，\(f_i\) 表示 LM head 前的 feature vector。</small>
+动态树只改变候选集合及其组织方式，不靠放宽接受规则获得加速。这是“无损”的来源，也解释了为什么草稿预测得不好时主要损失速度，而不是由算法主动牺牲目标模型的分布。
 
-EAGLE-2 没有改变这个 draft model，也没有改变 target model verification。它只问一个更系统的问题：**既然 EAGLE 已经能给每个 draft token 一个概率，为什么还要用固定树形状？**
+这里有两个不同的概率用途。构树时，confidence 决定哪些候选值得准备，它可以是近似信号；验证时，目标模型的条件概率和精确接受规则决定哪些 token 真正输出，不能用 confidence 阈值替代。假如直接把草稿概率高于 0.9 的候选当作“足够可信”而跳过目标验证，就已经改变了本文的正确性条件。
 
-换成服务系统语言，EAGLE-2 在做的是 token 预算分配。一次 verification 能验证的候选数量有限，draft tree 越宽，候选覆盖越多但每条路径越浅；tree 越深，某条高置信路径可能一次接受更多 token，但低置信分支会浪费。动态树把这个固定超参改成按上下文调整的策略：容易的上下文走深一点，困难的上下文保留更多分支。
+被接受路径对应的目标模型特征与 KV cache 会用于下一轮草拟，其他候选的临时状态不成为正式前缀。一次循环因此包含草拟、组织树、并行验证、提交接受路径四个环节。动态选择发生在中间，下一轮仍从已经确认的上下文继续。随机采样下的“无损”指输出分布保持一致，不要求不同实现消耗随机数的次序相同，因而也不是承诺同一个 seed 会逐字得到同一个回答。
 
-## 观察一：Acceptance Rate 不是只由位置决定
+## 两个观察让动态树成为可计算的方案
 
-EAGLE、Medusa 这类 static draft tree 隐含一个假设：树里某个位置的 token 接受率相对稳定，所以 tree shape 可以固定。但 Figure 5 显示，同一位置的 acceptance rate 在不同 query 上有很大方差。
+第一个问题是同一树位置的接受率是否随上下文变化。作者在 Vicuna 7B 与 Alpaca 上测量若干固定位置：整体上较浅、较高概率的节点更容易接受，但同一位置的不同 query 有很大方差。
+
+先看位置示意，再对照散点图。横轴相同位置上的纵向离散程度，才是“不能只按位置分配预算”的证据。
 
 ![Draft tree positions 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-5a-draft-tree-positions.png){ width="620" }
 
 ![Acceptance rates by position 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-5b-acceptance-by-position.png){ width="620" }
 
-<small>图源：`EAGLE-2`，Figure 5。原论文图意：左图标出 draft tree 里的 P1-P6 位置；右图显示 Alpaca + Vicuna 7B 上这些位置的 acceptance rate，点代表不同 query。</small>
-
-这张图支撑的判断是：位置当然重要，P1 通常比 P6 更容易接受；但上下文同样重要，同一 P3 或 P4 在不同 query 上接受率可能差很多。固定树会把 token budget 浪费在一些当前上下文里明显低概率的分支上。
-
-## 观察二：Draft Confidence 可以近似 Acceptance Rate
-
-如果要动态建树，最自然的信号是每个 draft token 的真实接受率。但真实接受率需要 target model forward 才知道，这会抵消 speculative decoding 的目标。EAGLE-2 的关键发现是：EAGLE draft model 的 confidence score 和 acceptance rate 相关性很强。
+第二个问题是能否在调用目标模型之前估计这种差别。实验发现草稿 confidence 与接受率强相关：低于 0.05 的区间平均接受率约 0.04，高于 0.95 的区间约 0.98。下面的校准图支持把它用作廉价调度信号。[↗](https://arxiv.org/pdf/2406.16858v2#page=4)
 
 ![Draft confidence calibration 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-6-confidence-calibration.png){ width="690" }
 
-<small>图源：`EAGLE-2`，Figure 6。原论文图意：Vicuna 7B 上，draft confidence score 分桶后的平均 acceptance rate 接近红色 \(y=x\) 参考线；低于 0.05 的 confidence 对应约 0.04 的接受率，高于 0.95 的 confidence 对应约 0.98 的接受率。</small>
+位置散点与校准图回答的不是同一个问题。Figure 5 告诉我们，固定位置不能充分决定接受机会，所以静态树会浪费预算；Figure 6 才提供一个在真正验证前就可取得的替代信号。对于特征自回归的 EAGLE，草稿复用目标模型的内部表示和 LM head，置信度在该实验中有较好的校准关系，这使在线调度不必再运行昂贵的预测网络。
 
-**校准图看红线附近。**
-横轴是 draft model 自己给出的 confidence，纵轴是真实被 target 接受的比例。点越贴近红色 \(y=x\)，说明 confidence 越能当作 acceptance rate 的便宜代理。EAGLE-2 后面的动态树算法就建立在这个代理足够可靠的前提上。
+但不能只保留 Figure 6 的斜线而忽略它的统计口径。每根柱汇总的是落入某个置信度区间的候选接受情况，并未声称某个具体 token 的接受概率就等于它的 softmax 值。调度只需这种排序信号整体有用；精确采样则由后续验证保证。
 
-这就是 EAGLE-2 可行的原因：不用 target model 先验验证，也不用训练额外 policy model，直接用 draft model 已经输出的概率来估计接受概率。
+这里 confidence 并不在数学上等于接受概率。真实接受还涉及目标分布与草稿分布之比，图中关系是该模型与任务上的经验观察。动态树可以用近似信号来提高效率，最终正确性仍交给精确验证。
 
-## 方法：Expansion + Reranking
+## 路径 value 解决“局部很稳、祖先不稳”的问题
 
-EAGLE-2 的动态树分两步：先扩展，再重排。
+一个深层节点只有在祖先路径被接受后才有机会进入结果。假设节点 $t_i$ 的路径上各点接受概率为 $p_j$，作者定义全局 value：
 
-在 draft tree 里，某个 token 是否最终被接受，不只取决于它自己，还取决于从 root 到它的所有祖先是否被接受。因此论文定义节点 \(t_i\) 的 value：
+$$
+V_i=\prod_{t_j\in\operatorname{Path}(root,t_i)}p_j
+\approx\prod_{t_j\in\operatorname{Path}(root,t_i)}c_j,
+$$
 
-\[
-V_i=\prod_{t_j \in \mathrm{Path}(\mathrm{root},t_i)}p_j
-\approx
-\prod_{t_j \in \mathrm{Path}(\mathrm{root},t_i)}c_j
-\]
+其中 $c_j$ 是草稿 confidence。路径上的概率应理解为对应前缀条件下的概率；乘积表达连续到达该节点的机会。
 
-其中 \(p_j\) 是真实 acceptance rate，\(c_j\) 是 draft model confidence score。因为真实 \(p_j\) 昂贵，所以 EAGLE-2 用 \(c_j\) 的路径乘积近似全局接受概率。
+例如，作为解释性例子，一个节点自己的 confidence 为 0.95，但到达它之前要经过 confidence 0.2 的分支，路径值只有约 0.19；另一个节点局部只有 0.7、祖先为 0.9，路径值约 0.63。只按局部 confidence 选节点会偏向前者，按 value 则会优先后者。
 
-| Phase | What EAGLE-2 does | Why it matters |
-| --- | --- | --- |
-| Expansion | Select top-\(k\) nodes with the highest value in the latest layer and expand them with the draft model | 避免指数扩展，把 draft compute 用在更可能被接受的路径上 |
-| Reranking | Rerank all draft nodes by value and select top-\(m\) nodes | 深层节点 value 会自然变小，浅层未扩展节点可能更值得验证 |
-| Tie-breaking | For same value, prioritize shallower nodes | 保证最终选出的 top-\(m\) nodes 仍能形成 connected tree |
-| Flattening | Flatten selected nodes into a 1D sequence for verification | 让 target model 可以一次 forward 验证候选 |
-| Attention mask | Each token can only see its ancestor nodes | 保持 tree branch 之间不可见，避免破坏自回归一致性 |
+下面的静态/动态示例用“10+2”展示直觉：加入等号后，某个续写更确定，预算应改变。具体树形是调度结果，而不是另一个语言模型的输出。
 
 ![EAGLE vs EAGLE-2 static and dynamic tree 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-4-static-vs-dynamic-tree.png){ width="690" }
 
-<small>图源：`EAGLE-2`，Figure 4。原论文图意：EAGLE 使用固定 draft shape；EAGLE-2 根据上下文调整分支数量，简单上下文少扩分支，困难上下文多保留候选。</small>
+## 扩展与重排分别控制草稿成本和验证成本
+
+扩展阶段只从最新一层选 value 最大的 $k$ 个节点并行继续生成，避免每层全部分支造成指数增长。它控制的是草稿模型下一次 forward 的输入规模。
+
+重排阶段则回看已经生成的所有节点，从全树挑 value 最大的 $m$ 个送给目标模型。不能直接把扩展阶段选中的路径当成最终树，因为某个未继续扩展的浅层候选，可能比深层新节点更值得验证。
+
+由于每个置信度在 0 到 1 之间，子节点 value 不会大于祖先。相等时优先浅层节点，就能使 top-$m$ 结果保持祖先连通。随后把树 flatten 为一维 token 输入，并根据父子关系构造 attention mask，让每个节点只看祖先。
+
+这一连通性质让算法省去了一类复杂修补。若用任意局部打分从全树挑节点，可能选出孙节点却漏掉它的父节点，无法构成可验证的续写路径。路径乘积则保证，一旦深层节点进入 top-$m$，它分值不低的祖先也会优先进入；相同分值时再用深度处理并列。这个结论适用于论文这里的乘积打分与排序方式，不是所有“动态树”自动具备的性质。[↗](https://arxiv.org/pdf/2406.16858v2#page=5)
+
+下面的总图上半部分展示局部逐层扩展，下半部分展示全局重排与 mask。两次选择发生在不同候选范围，作用也不同。
 
 ![EAGLE-2 dynamic draft tree 原论文图](../../assets/images/paper-deep-dives/inference/eagle-2/figure-7-eagle2-dynamic-tree.png){ width="690" }
 
-<small>图源：`EAGLE-2`，Figure 7。原论文图意：边上的数字是 draft model confidence，方块中的括号数字是节点 value；expansion phase 选择当前层 value 最高的节点扩展，rerank phase 从所有节点里选 top nodes，最后根据树结构构造 attention mask。</small>
+### 沿 Figure 7 把一次决策算完
 
-**这里最容易漏掉的工程点。**
-Dynamic tree 不是只改变候选 token 排序，还会改变 target verification 的 attention mask。flatten 后的一维序列里，不同分支 token 不能互相看见，只能看见祖先节点。否则验证阶段就不再等价于原始自回归分布。
+根节点是 `It`，value 设为 1。第一层有 `is` 和 `has`，置信度分别为 0.6 与 0.2，对应路径值也为 0.6、0.2。第二层的数值开始体现祖先影响。
 
-## 训练相关细节：EAGLE-2 本身不额外训练，但很依赖 Draft Model
+| Candidate path | Local confidence | Path value |
+| --- | ---: | ---: |
+| It → is → a | 0.8 | 0.6 × 0.8 = 0.48 |
+| It → is → the | 0.1 | 0.6 × 0.1 = 0.06 |
+| It → has → to | 0.7 | 0.2 × 0.7 = 0.14 |
+| It → has → a | 0.1 | 0.2 × 0.1 = 0.02 |
 
-论文明确强调：EAGLE-2 相比 EAGLE **不需要训练任何额外模型**。它不训练 tree predictor，不更新 original LLM，也不放宽接受条件。它只是利用 draft model 本来就会输出的 probability/confidence。
+图中扩展预算为 top-2，于是下一次并行草拟选择最新一层的 `a` 与 `to`。注意这两个 token 属于不同前缀，虽然会放进同一次草稿 forward，不能彼此混用上下文。`a` 分支继续产生 `good` 与 `nice`，其 value 为 $0.48\times0.7=0.336$、$0.48\times0.1=0.048$；`to` 分支产生 `be` 与 `do`，value 为 $0.14\times0.6=0.084$、$0.14\times0.2=0.028$。原图将这些数四舍五入为 0.34、0.05、0.08、0.03。
 
-但这不代表训练不重要。EAGLE-2 的动态树建立在两个前提上：
+到了全局重排阶段，预算改为图示的 top-8，包含根节点。浅层 `the` 的 0.06 高于深层 `nice` 的约 0.05，因此虽然 `the` 没得到继续扩展的机会，最终却进入验证树；`nice` 被去掉。这个选择就是 reranking 的必要性：扩展阶段负责发现更深的候选，最终验证应重新比较所有已经发现的位置。
 
-1. draft model 本身要够准；
-2. draft model 的 confidence 要和真实 acceptance rate 校准得足够好。
+图中的一维排列为 `It, is, has, a, the, to, good, be`。它只是张量的存放顺序，不是一句连起来读的文本。检查 attention mask 中的 `good` 行，只允许读取 `It`、`is`、`a` 和它自己；`be` 行则读取 `It`、`has`、`to` 和它自己。两行共享 `It`，其余祖先不同。目标模型由此能在一次 forward 中处理两条条件正确的路径。[↗](https://arxiv.org/pdf/2406.16858v2#page=5)
 
-论文里和训练有关的细节可以整理成下面这张表：
+这个小例子用了 top-2 与 top-8 便于展示，实际实验的预算更大。它展示的是同一套扩展与筛选规则，不是论文给所有模型采用的固定八节点树。
 
-| Component | Training / setup detail |
-| --- | --- |
-| EAGLE-2 algorithm | No additional training; no separate model for tree structure prediction |
-| Original LLM | Not fine-tuned or updated |
-| EAGLE draft model | Vicuna and LLaMA2-Chat draft models use officially released weights |
-| LLaMA3-Instruct draft model | Trained using the ShareGPT dataset, consistent with Medusa and Hydra |
-| PLD / Lookahead | No training required |
-| Medusa / Hydra / EAGLE / EAGLE-2 | Use SFT datasets for draft-model training |
-| Standard Speculative Sampling | Uses Vicuna-68M as draft model; it uses both pre-training and SFT datasets, with pre-training data much larger |
+论文实现对 7B/8B、13B、70B 目标模型分别使用 60、50、48 个总草稿 token，树深 6，扩展阶段选 10 个节点。模型大小不同，验证额外候选的成本不同，这些预算是实验配置而非通用最佳值。EAGLE-2 复用原 EAGLE head；新目标模型仍需要自己的 head，所谓无需额外训练是相对于已经有合适 EAGLE 草稿权重而言。[↗](https://arxiv.org/pdf/2406.16858v2#page=12)
 
-这解释了论文里一个重要现象：Natural Questions 和 CNN/Daily Mail 上，Medusa、Hydra、EAGLE、EAGLE-2 的 \(\tau\) 与 speedup 都比其他任务低一些。作者认为原因可能是 draft model 只用了 SFT 数据，世界知识问答主要来自 pretraining，summarization 在 SFT 数据里覆盖也不足。也就是说，**EAGLE-2 不新增训练，但它的上限仍然被 draft model 的训练数据分布卡住。**
+## 测试时固定了什么，又在比较什么
 
-Appendix A 还给了具体实现设置：
+实验覆盖 Vicuna、LLaMA2-Chat、LLaMA3-Instruct 的多个规模。六类任务包括 MT-bench 对话、HumanEval 代码、GSM8K 数学、Alpaca 指令、CNN/DM 摘要和 Natural Questions 知识问答。同一个目标模型的草稿权重跨这些任务使用，而不是为每个测试集另训练一个 head。
 
-| Method | Implementation detail |
-| --- | --- |
-| Vanilla | HuggingFace Transformers with PyTorch backend and pre-allocated KV cache |
-| Standard Speculative Sampling | Assisted generation feature from HuggingFace Transformers |
-| PLD / Lookahead / Medusa / Hydra | Default settings and officially released weights |
-| EAGLE | Official draft weights for Vicuna and LLaMA2-Chat; ShareGPT-trained draft for LLaMA3-Instruct |
-| EAGLE-2 | Total draft tokens: `60` for 7B/8B, `50` for 13B, `48` for 70B; draft tree depth `6`; select `10` nodes during expansion |
+普通自回归基线采用 Hugging Face Transformers、PyTorch backend 和预分配 KV cache；其余方法也基于相同模型实现。作者通过 Spec-Bench 组织比较，在同一设备上测试对应方法。Vicuna 与 LLaMA2-Chat 的 EAGLE head 使用已发布权重，LLaMA3-Instruct 的 head 则用 ShareGPT 训练。因此，“EAGLE-2 无需额外训练”指从已存在的 EAGLE 草稿到动态调度不增加训练，不意味着新目标模型不需要适配草稿。[↗](https://arxiv.org/pdf/2406.16858v2#page=12)
 
-## 实验设置：模型、任务和指标
+两个主要指标各自承担一个问题。**Average Acceptance Length $\tau$** 衡量每轮草拟—验证能够推进多少 token，较少受硬件影响；**Speedup Ratio** 衡量实际时间相对普通解码改善多少，同时包含草稿与验证开销。论文没有另用接受率作为主要指标，因为 head 的预测能力没有被重新训练；树的组织却能使同样的预测能力换来更长的有效路径。
 
-论文实验覆盖三组模型和六类任务：
+可用一个成本分解帮助理解二者。这是解释性表达，不是论文单独测得的耗时分项：若普通解码每 token 需要 $T_{\mathrm{AR}}$，一轮动态树需要草拟 $T_D$、构树 $T_C$ 和验证 $T_V$，则稳态速度收益近似为
 
-| Category | Details |
-| --- | --- |
-| Models | Vicuna 7B/13B, LLaMA2-Chat 7B/13B/70B, LLaMA3-Instruct 8B/70B |
-| Tasks | MT-bench, HumanEval, GSM8K, Alpaca, CNN/Daily Mail, Natural Questions |
-| Baseline | Vanilla autoregressive decoding, speedup ratio `1.00x` |
-| Metrics | Speedup Ratio and Average Acceptance Length \(\tau\) |
-| Quality evaluation | Not separately evaluated because EAGLE-2 keeps original LLM verification and is lossless under standard rules |
+$$
+\mathrm{Speedup}\approx
+\frac{\tau\,T_{\mathrm{AR}}}{T_D+T_C+T_V}.
+$$
 
-论文强调 \(\tau\) 是硬件无关指标：它表示每次 drafting-verification cycle 平均生成多少 token。缺点是它不反映 draft model 开销，所以最终仍要看真实 speedup。
+增加节点可能同时提高分子和分母。模型规模、树深和节点总数的选择，实际是在这个关系中寻找平衡。所以既要检查 $\tau$ 是否增加，也要检查 wall-clock 是否真的下降。
 
-## Table 1：EAGLE vs EAGLE-2 的核心结果
+## 主表把动态预算的收益与任务差异分开
 
-Table 1 很大，下面抽出 EAGLE 和 EAGLE-2 的关键行，保留原表的英文列名和 \(\tau\) 指标。完整表还包括 SpS、PLD、Medusa、Lookahead、Hydra。
+Vicuna 13B、temperature 0 的同组比较如下。$\tau$ 是每轮平均接受长度，speedup 是相对普通解码的实测时间改善。
 
-| Model | Temperature | Method | MT-bench Speedup | MT-bench \(\tau\) | Mean Speedup | Mean \(\tau\) |
-| --- | ---: | --- | ---: | ---: | ---: | ---: |
-| V 13B | 0 | EAGLE | 3.07x | 3.98 | 2.95x | 3.82 |
-| V 13B | 0 | EAGLE-2 | 4.26x | 4.83 | 4.04x | 4.65 |
-| L2 13B | 0 | EAGLE | 3.03x | 3.90 | 3.09x | 3.89 |
-| L2 13B | 0 | EAGLE-2 | 4.21x | 4.75 | 4.10x | 4.68 |
-| V 7B | 0 | EAGLE | 2.90x | 3.94 | 2.78x | 3.79 |
-| V 7B | 0 | EAGLE-2 | 3.62x | 4.98 | 3.39x | 4.68 |
-| L2 7B | 0 | EAGLE | 2.78x | 3.62 | 2.78x | 3.71 |
-| L2 7B | 0 | EAGLE-2 | 3.43x | 4.70 | 3.43x | 4.64 |
-| V 13B | 1 | EAGLE | 2.32x | 3.20 | 2.39x | 3.39 |
-| V 13B | 1 | EAGLE-2 | 3.80x | 4.40 | 3.65x | 4.26 |
-| L2 13B | 1 | EAGLE | 2.68x | 3.45 | 2.64x | 3.53 |
-| L2 13B | 1 | EAGLE-2 | 3.92x | 4.51 | 3.88x | 4.51 |
-| V 7B | 1 | EAGLE | 2.13x | 3.17 | 2.18x | 3.20 |
-| V 7B | 1 | EAGLE-2 | 3.05x | 4.28 | 2.94x | 4.20 |
-| L2 7B | 1 | EAGLE | 2.22x | 3.30 | 2.32x | 3.37 |
-| L2 7B | 1 | EAGLE-2 | 3.19x | 4.41 | 3.15x | 4.41 |
-
-<small>表源：`EAGLE-2`，Table 1 摘录。原论文表意：EAGLE-2 在多模型、多任务、temperature=0/1 设置下普遍提高 speedup ratio 和 average acceptance length。</small>
-
-读这张表要注意两点。第一，EAGLE-2 对 temperature=1 也有效，说明它不是只服务 greedy decoding。第二，它的平均 \(\tau\) 通常提升到约 `4-5.5` token/cycle，这就是 target model 调用次数下降的直接来源。
-
-## Table 2：70B 与 LLaMA3 设置
-
-| Model | Method | Speedup | \(\tau\) |
-| --- | --- | ---: | ---: |
-| LLaMA2-Chat 70B | PLD | 1.31x | 1.39 |
-| LLaMA2-Chat 70B | Lookahead | 1.52x | 1.64 |
-| LLaMA2-Chat 70B | EAGLE | 3.01x | 3.81 |
-| LLaMA2-Chat 70B | EAGLE-2 | 3.51x | 4.48 |
-| LLaMA3-Instruct 70B | EAGLE | 2.83x | 3.62 |
-| LLaMA3-Instruct 70B | EAGLE-2 | 3.29x | 4.16 |
-| LLaMA3-Instruct 8B | EAGLE | 2.72x | 3.65 |
-| LLaMA3-Instruct 8B | EAGLE-2 | 3.46x | 4.53 |
-
-<small>表源：`EAGLE-2`，Table 2。原论文表意：在 MT-bench、temperature=0 上，EAGLE-2 在 LLaMA2-Chat 70B、LLaMA3-Instruct 70B/8B 上均优于 EAGLE。</small>
-
-70B 上的速度提升很关键，因为投机解码真正有价值的场景通常是 target model 足够大、decode 足够贵。EAGLE-2 没有增加新训练流程，能在这一级别上提升 \(\tau\)，说明动态树本身确实带来了更好的 draft token budget 分配。
-
-## Table 3：Value 和 Reranking 的消融
-
-| Method | MT-bench Speedup | MT-bench \(\tau\) | GSM8K Speedup | GSM8K \(\tau\) |
+| 任务 | EAGLE speedup | EAGLE $\tau$ | EAGLE-2 speedup | EAGLE-2 $\tau$ |
 | --- | ---: | ---: | ---: | ---: |
-| w/o both | 2.81x | 3.92 | 2.85x | 3.93 |
-| w/o value | 3.21x | 4.39 | 2.93x | 3.96 |
-| w/o reranking | 3.48x | 4.86 | 3.50x | 4.85 |
-| EAGLE-2 | 3.62x | 4.98 | 3.63x | 4.97 |
+| MT-bench | 3.07× | 3.98 | 4.26× | 4.83 |
+| HumanEval | 3.58× | 4.39 | 4.96× | 5.41 |
+| GSM8K | 3.08× | 3.97 | 4.22× | 4.79 |
+| Alpaca | 3.03× | 3.95 | 4.25× | 4.89 |
+| CNN/DM | 2.49× | 3.52 | 3.40× | 4.21 |
+| Natural Questions | 2.42× | 3.11 | 3.13× | 3.74 |
+| 六任务平均 | 2.95× | 3.82 | 4.04× | 4.65 |
 
-<small>表源：`EAGLE-2`，Table 3。原论文表意：路径 value 和 reranking 都对速度与接受长度有贡献；同时使用二者效果最好。</small>
+接受长度提高，说明同一草稿模型的候选被组织得更有效；wall-clock 提高则说明收益超过动态构树的额外成本。HumanEval 与 Natural Questions 的差异也提醒我们，投机收益依赖任务。作者将知识问答、摘要上的较弱表现与 SFT 草稿训练数据覆盖联系起来，这是对观察的解释，并非独立控制数据类型的因果消融。[↗](https://arxiv.org/pdf/2406.16858v2#page=7)
 
-这张消融能解释 EAGLE-2 为什么不是“confidence top-k”这么简单。只看当前 token 的 confidence 是局部判断，不能反映祖先链路的全部接受概率；只扩展不 rerank，又可能把一些浅层高 value 节点排除在 verification 之外。
+六任务平均加速从 2.95 倍到 4.04 倍，若按两个表中均值的比值计算，是约 $4.04/2.95-1=37\%$ 的相对提高。这是对汇总数值的换算，不是把各任务相对增幅再平均。平均接受长度从 3.82 到 4.65，增幅约 22%；两种比值不要求相等，因为树形组织也影响草拟与验证成本，且原表汇总的是不同任务上的指标。
 
-## 和 EAGLE-3 的关系
+对照其他方法时，可以进一步看到“多接受”为什么不能独立代表“更快”。同为 Vicuna 13B、temperature 0 的 CNN/DM，PLD 的 $\tau=2.50$、速度 2.42 倍；原 EAGLE 的 $\tau=3.52$，速度却只有 2.49 倍。PLD 通过检索构造草稿，开销低，能够把较短的接受长度转成接近同样的速度。EAGLE-2 则以 $\tau=4.21$ 达到 3.40 倍，在这组条件下将新增接受长度转化为更明显的实际收益。[↗](https://arxiv.org/pdf/2406.16858v2#page=7)
 
-EAGLE-2 和 EAGLE-3 很适合连读：
+论文指出，代码中常见的固定模式有利于连续草拟；摘要里的上下文重叠则有利于检索式草稿。这些任务结构解释了为何选择草稿方式不能只按参数量。对于 QA 与摘要，作者还提出扩大草稿训练数据的可能价值，但本文没有通过重新配置数据的控制实验检验这一建议。
 
-| Paper | It changes | It does not change | Main bottleneck it targets |
-| --- | --- | --- | --- |
-| EAGLE-2 | Draft tree shape and node selection | Draft model training objective | Static tree wastes token budget under context-dependent acceptance |
-| EAGLE-3 | Draft model training objective and feature input | Standard target-model verification | Feature prediction constraint and multi-step draft distribution shift |
+### 温度变化后，动态树是否仍然有效
 
-所以 EAGLE-2 更像一个 inference-time policy：用已校准 draft confidence 建更好的树。EAGLE-3 则更像 training-time and architecture upgrade：让 draft model 本身在多步预测上更强、更可扩展。
+| Vicuna 13B, Temperature = 1 | EAGLE speedup | EAGLE $\tau$ | EAGLE-2 speedup | EAGLE-2 $\tau$ |
+| --- | ---: | ---: | ---: | ---: |
+| MT-bench | 2.32× | 3.20 | 3.80× | 4.40 |
+| HumanEval | 2.65× | 3.63 | 4.22× | 4.89 |
+| Mean, six tasks | 2.39× | 3.39 | 3.65× | 4.26 |
 
-## 局限与工程风险
+这里仍能观察到更长的接受路径和更高的时间收益，说明动态调度的效果不限于贪心解码。非贪心主表没有把所有方法都列入：对放宽接受条件、不能保证相同目标分布的设置，作者不纳入这组无损比较。缺失的列不能当作方法不能运行，也不能与另一张采用不同接受标准的成绩直接混排。[↗](https://arxiv.org/pdf/2406.16858v2#page=7)
 
-第一，EAGLE-2 的前提是 confidence calibration。如果 draft model 对某类任务过度自信或系统性低估，dynamic tree 会把预算投错分支。
+temperature 1 下，Vicuna 13B 的 MT-bench 从 2.32 倍提高到 3.80 倍。不能因为采样条件下仍有收益，就断言任意高温度、任意校准误差下都有同样提升。
 
-第二，动态树会改变 verification 阶段的 mask 和 token flatten 方式。实现不当时，branch 之间互相可见会破坏分布一致性；实现太重时，tree attention 和调度开销会吃掉 speedup。
+### 更大目标模型与新模型家族的结果
 
-第三，\(\tau\) 高不等于线上 P95 一定好。真实 serving 还要看 batch、prefill/decode 混合、KV cache 临时分支、scheduler 合批，以及哪些请求桶启用 speculative。
+Table 2 固定 MT-bench、temperature 0，单独检查 70B 目标和 LLaMA3 家族。这里的三行是同任务比较，不应与上一表的六任务平均直接相除。
 
-第四，训练数据覆盖会影响 draft model 能力。论文已经观察到 Natural Questions 和 CNN/Daily Mail 上的收益相对低，提示 world knowledge 与 summarization 这类数据在 SFT draft 训练里可能不足。
+| Target model | EAGLE speedup | EAGLE $\tau$ | EAGLE-2 speedup | EAGLE-2 $\tau$ |
+| --- | ---: | ---: | ---: | ---: |
+| LLaMA2-Chat 70B | 3.01× | 3.81 | 3.51× | 4.48 |
+| LLaMA3-Instruct 70B | 2.83× | 3.62 | 3.29× | 4.16 |
+| LLaMA3-Instruct 8B | 2.72× | 3.65 | 3.46× | 4.53 |
 
-## 项目启发
+三组都提高了接受长度和实际速度，支持调度机制可以复用于不同目标模型。增益并不恒定：按表中比值，LLaMA3 8B 的相对速度改善约 27%，70B 约 16%。这种差异同时涉及草稿与目标模型的成本、预测表现和节点预算，论文没有通过只改变参数规模的一组控制实验把原因完全拆开。[↗](https://arxiv.org/pdf/2406.16858v2#page=8)
 
-EAGLE-2 最值得记住的是：**推理时的候选结构也可以用模型自己的置信度动态调度。**
+## 消融证明两次选择都在发挥作用
 
-这给高效推理带来一个通用思路：不要只优化模型前向本身，还要优化“把哪些候选送去昂贵验证”的策略。对 speculative decoding、检索重排、工具调用候选、甚至多步 agent plan 来说，昂贵模块前面的 cheap confidence signal 都可能决定端到端成本。
+| Vicuna 7B，temperature 0 | MT-bench speedup | MT-bench $\tau$ | GSM8K speedup | GSM8K $\tau$ |
+| --- | ---: | ---: | ---: | ---: |
+| 不用 value，也不重排 | 2.81× | 3.92 | 2.85× | 3.93 |
+| 用局部 confidence 替代 value | 3.21× | 4.39 | 2.93× | 3.96 |
+| 不做最终重排 | 3.48× | 4.86 | 3.50× | 4.85 |
+| 完整 EAGLE-2 | 3.62× | 4.98 | 3.63× | 4.97 |
 
-落地时可以按这几个问题验收：
+value 的作用是把祖先路径纳入选择，重排的作用是把浅层未扩展节点重新纳入验证竞争。结果支持二者互补，但贡献大小随任务变化，不能把单个增量当成固定百分比。[↗](https://arxiv.org/pdf/2406.16858v2#page=8)
 
-| Question | Why it matters |
-| --- | --- |
-| Draft confidence 是否校准 | EAGLE-2 的 value 近似依赖 confidence 与 acceptance rate 的相关性 |
-| Acceptance 是否按任务分桶统计 | 不同任务、温度、输出长度会改变动态树收益 |
-| Tree mask 是否严格按 ancestor 构造 | 这是保持 lossless verification 的关键 |
-| \(\tau\) 和 speedup 是否一起看 | \(\tau\) 衡量算法，speedup 衡量系统 |
-| Draft training data 是否覆盖目标任务 | SFT-only draft 在知识问答和总结任务上可能吃亏 |
+从 MT-bench 看，加入路径 value 但没有最终重排时，速度已达到 3.48 倍，重排再提高到 3.62 倍；如果有重排却只按局部 confidence 扩展，则为 3.21 倍。GSM8K 中局部 confidence 版本只有 2.93 倍，完整方法为 3.63 倍，祖先信息在这里尤其重要。两项设计各有作用，却并非相互独立、可以简单相加的固定增益。
 
-如果把 EAGLE-2 接到线上推理系统，它不是一个孤立算法，而是一套 draft policy、tree attention、verification mask、runtime scheduler 和观测指标共同组成的工程路径。
+还有一个细节值得保留：`w/o both` 的 MT-bench 为 2.81 倍，与主表原 EAGLE 的 2.90 倍并不相同。前者仍属于这套动态生成与预算配置的消融，不能把它直接改名为“原 EAGLE”，再用差值宣称完全隔离了全部改动。消融的可靠读法，是在它明确移除的组件范围内解释变化。
 
-## 阅读结论
+## 怎样把动态树接进已有推理服务
 
-EAGLE-2 的核心知识点是：投机解码的速度不只取决于 draft model 有多快，还取决于候选树把 token 预算投到哪里。固定树假设“同一位置的接受率差不多”，但论文用诊断图说明 acceptance 受上下文影响很大；动态树用 draft confidence 近似 acceptance rate，再用路径 value 和 reranking 选择更值得验证的节点。落地时最该验收三件事：confidence 是否校准，tree attention mask 是否严格只让节点看祖先，\(\tau\)、真实 speedup、P95/P99 和任务桶质量是否一起改善。
+已有 EAGLE 实现时，最直接的改动落在候选调度与树张量构造。每个候选保存父节点、局部 confidence、累积 value；每轮扩展从最新层取 top-$k$，结束后从全部候选取 top-$m$，再生成目标模型所需的 ancestry mask 与节点映射。接受路径返回后，KV 与特征的提交必须使用同一套节点映射，否则即使排序正确也会把另一条分支的状态带入下一轮。
 
-## 外部精读
+调参时应把展开深度、每层扩展数和最终验证节点数分开。扩大前两项主要增加候选发现成本，扩大最后一项直接增加目标验证规模。先固定论文给出的预算作为起点，再在目标任务上测量单轮开销与接受长度，才有依据决定应减少宽度还是深度。本文的 60、50、48 节点配置给出了可复用的实验起点，没有证明在所有设备、上下文长度和并发数下都最优。
 
-- [EAGLE-2](https://arxiv.org/abs/2406.16858)：原论文，重点读 acceptance-by-position、confidence calibration、dynamic tree 和消融。
-- [Hugging Face paper page: EAGLE-2](https://huggingface.co/papers/2406.16858)：适合快速核对论文摘要、社区讨论和相关资源。
-- [EAGLE](https://arxiv.org/abs/2401.15077)：理解 feature-level draft 的前置设计。
-- [SpecInfer](https://arxiv.org/abs/2305.09781)：理解 tree verification 为什么能并行验证多个候选。
-- [vLLM speculative decoding blog](https://vllm.ai/blog/spec-decode)：学习如何按 QPS、acceptance rate 和 workload 报告真实 serving 收益。
+论文这里没有进行完整的并发服务吞吐研究。把它接到大 batch 服务时，需要额外测量排队延迟、最大可用 batch、KV 占用与总 tokens/s；这些是部署决策中的检查项目，不是本文已经报告的实验结论。
+
+工程上最有用的迁移是把草稿预算视为在线决策。应同时测接受长度、草稿耗时、验证耗时和临时缓存占用，而不是只优化 confidence 排序。如果目标模型在大 batch 下已经计算饱和，更多候选可能不再便宜；如果新领域 confidence 校准变差，动态树也可能误分配预算。EAGLE-2 提供了可复用的调度方法，其实际收益仍应在目标服务负载中测量。

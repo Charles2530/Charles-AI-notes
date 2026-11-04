@@ -15,514 +15,312 @@ paper_topic: 具身智能
     **GitHub / 项目：** GitHub：[github.com/facebookresearch/map-anything](https://github.com/facebookresearch/map-anything)；项目页：[map-anything.github.io/](https://map-anything.github.io/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2509.13414)；[GitHub API / repo](https://github.com/facebookresearch/map-anything)；[官方 / 项目材料](https://map-anything.github.io/)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 重建系统已经知道一部分几何时，模型该怎样使用它
 
-### 研究背景
+同样是重建一个房间，输入可能只有手机照片，也可能带有相机内参、部分位姿或稀疏深度。已知量还不一定具有相同单位：视觉 SfM 的平移可能只确定到一个比例，深度相机却能提供米制距离。固定只接收 RGB 的模型无法直接利用这些信息；为每种组合训练一个专用模型，又会造成重复的数据处理与训练。MapAnything 把这些任务统一成一个接口，让图像始终作为输入，其他几何量按视图和类型选择性提供。[↗](https://arxiv.org/pdf/2509.13414v3#page=2)
 
-MapAnything 位于 image-based 3D reconstruction 和 feed-forward visual geometry 的交叉点。传统 3D 重建把问题拆成 feature matching、pose estimation、camera calibration、bundle adjustment、multi-view stereo、depth completion 等多个模块；每个模块都有专门假设和优化过程。近年的 DUSt3R、MASt3R、VGGT 等模型说明，很多几何任务可以由前向神经网络统一预测。
+其核心是一个可拆开、再组合的场景表示。相机射线描述每个像素朝向哪里，沿射线的深度描述表面离相机多远，相机位姿把不同视图放入同一坐标系，全局尺度再把相对几何变为米制结果。输入与输出采用相同的因子化思路，模型就能把“缺少哪些条件”作为任务变化，而无需为标定、SfM、深度补全分别更换整个网络。[↗](https://arxiv.org/pdf/2509.13414v3#page=3)
 
-但真实机器人、AR 和扫描系统的输入不是固定的：有时只有 RGB 图，有时知道内参，有时有 SLAM pose，有时有 RGB-D 深度或 partial reconstruction。已有 feed-forward 方法常只处理某一种输入配置，或者输出 up-to-scale pointmap，需要额外后处理恢复 metric scale。MapAnything 的背景就是：如果要做通用几何 backbone，模型必须能吃进可选几何先验，并直接输出 metric 3D reconstruction。
-
-### 问题（Challenge）
-
-论文要解决的问题是：**如何用单个 feed-forward 模型，在任意图像数量和可选几何输入下，直接恢复 metric-scale 3D geometry 和 camera。** 这个问题难在两个方向。输入端，intrinsics、poses、depth、partial reconstruction 可能存在也可能缺失，而且不同视角可用信息不一致；输出端，模型既要支持 uncalibrated SfM、calibrated MVS、camera localization、metric depth completion 等多任务，又要保持统一 metric frame。
-
-这个问题的价值在于减少几何系统的工程碎片化。对具身系统来说，机器人常常已有一部分几何信号，如果模型不能利用这些信号，就浪费了传感器和 SLAM 结果；如果每个输入组合都训练 specialist model，维护成本又很高。MapAnything 试图把这些输入输出组合统一成同一个表示学习问题。
-
-### Finding
-
-作者的 finding 是：**通用 3D 重建的关键不是为每个任务加一个 head，而是把多视角几何分解成 depth maps、local raymaps、camera poses 和 global metric scale factor 这组 factored representation。** 这个洞见把耦合的 pointmap / camera / scale 问题拆成可组合的几何因子。
-
-这个 finding 能解决挑战，是因为同一组 factored geometry 既能表达输入先验，也能表达输出目标。已知相机内参可以转成 ray direction，已知 pose 可以进入相机因子，已知 depth 或 partial reconstruction 可以作为几何输入；模型输出同样的 depth、ray、pose 和 scale 后，就能组合成全局 metric reconstruction。于是不同任务不再需要不同模型，只是“哪些因子已知、哪些因子要预测”的差别。
-
-### 方法
-
-MapAnything 是 transformer-based feed-forward model。输入是一组 \(N\) 张图像，以及可选的 intrinsics、poses、depth maps 或 partial reconstructions。模型使用 flexible input scheme 把这些几何信号标准化成统一 token / factor 表示，再输出 depth maps、local raymaps、camera poses 和 metric scale factor。metric scale factor 用来把局部重建升级到全局 metric frame。
-
-训练上，论文标准化了多数据集监督，聚合 13 个数据集，使用 covisibility-based multi-view sampling 保证输入视角属于同一可见连通组件；用 geometric input probability augmentation 让模型在训练时看到各种输入缺失/存在组合；用 log-space losses 和 two-stage view curriculum 提升 metric depth 与多视角稳定性。推理时，MapAnything 可以单次前向覆盖 uncalibrated SfM、calibrated SfM、MVS、camera localization、monocular depth 和 depth completion 等任务。
-
-### 结论
-
-实验显示，MapAnything 在 dense multi-view reconstruction、two-view reconstruction、single-view / multi-view metric estimation、camera localization 和 depth completion 等任务上，整体达到或超过 specialist feed-forward baselines。论文特别强调：只用图像输入时，MapAnything 已能与 VGGT 等强基线竞争；如果提供额外几何输入，重建性能还能进一步提升。消融支持 factored representation、flexible input augmentation 和统一训练的作用。
-
-边界是 MapAnything 仍然是静态或近静态几何重建 backbone，不解决动作、接触动力学、动态 scene flow 和控制安全；超大场景 memory、几何输入噪声和动态物体仍是未来方向。它对具身智能的贡献是提供统一 metric geometry interface，而不是替代机器人策略或世界动力学模型。
-
-### 关键术语
-
-- **Feed-Forward 3D Reconstruction（前向三维重建）**：不依赖迭代优化或重建 pipeline，单次模型前向直接预测几何结果。
-- **Metric 3D Reconstruction（米制三维重建）**：输出带真实尺度的 3D 几何，而不是只在相似变换下正确。
-- **Factored Representation（分解式表示）**：把场景几何拆成 depth、ray、pose、scale 等因子，而不是一个耦合输出。
-- **Raymap（射线图）**：每个像素对应的局部相机射线方向表示。
-- **Structure-from-Motion, SfM（运动恢复结构）**：从多视角图像估计相机运动和三维结构的经典任务。
-- **Depth Completion（深度补全）**：利用图像和稀疏/部分深度输入恢复稠密深度。
-
-MapAnything 的核心价值，是把原本分散在 SfM、MVS、相机标定、深度估计、定位和补全里的几何问题，压到一个统一的前向模型里：**输入可以只有图像，也可以额外带 intrinsics、poses、depth 或 partial reconstruction；输出则是一套可合成 metric 3D reconstruction 的 factored geometry。**
-
-它和 [VGGT](vggt.md) 很接近，但问题更“工程化”：VGGT 已经证明 camera、depth、point map、track 可以一起前向预测；MapAnything 继续追问，如果真实系统已经有一部分几何输入，比如机器人相机内参、SLAM 位姿、稀疏深度、RGB-D 深度，模型能不能把这些信息吃进去，并在同一个 metric scale 里输出更稳的重建。
-
-## 它的效率贡献是什么
-
-| Dimension | Contribution |
-| --- | --- |
-| Saved cost | 用一个 universal feed-forward model 覆盖 uncalibrated SfM、calibrated SfM、MVS、single-view calibration、camera localization、depth completion 等任务，减少为每种输入组合训练/维护 specialist model 的成本 |
-| Core mechanism | factored scene representation：ray directions、ray depths、poses、metric scaling factor；几何输入和输出都用同一套分解表示 |
-| Training contribution | 13 datasets 的监督标准化、covisibility-based multi-view sampling、geometric input probability augmentation、log-space losses、two-stage view curriculum |
-| Embodied relevance | 机器人经常知道相机内参、局部 SLAM 位姿或稀疏深度；MapAnything 能把这些 partial geometric priors 接进 dense metric reconstruction |
-| Main risk | 它仍是几何感知骨干，不建模动作、接触动力学、动态 scene flow 或控制安全；几何输入噪声和超大场景 memory 仍是限制 |
-
-## 论文位置
-
-传统 3D 重建常拆成一条长 pipeline：
-
-```text
-feature matching
-  -> camera calibration / relative pose
-  -> rotation & translation averaging
-  -> bundle adjustment
-  -> multi-view stereo
-  -> point cloud / mesh / map
-```
-
-VGGT、DUSt3R、MASt3R 这类 feed-forward 方法把 pipeline 里的很多优化步骤前移到了模型里。MapAnything 的新增问题是：真实系统的输入不是固定的。机器人、AR、自动驾驶或扫描设备常常有不同程度的先验：
-
-1. 只有一组 RGB 图像；
-2. 有 camera intrinsics / ray directions；
-3. 有 camera poses；
-4. 有 metric depth 或 sparse depth；
-5. 有 partial reconstruction；
-6. 有上述信号的一部分视角，而不是所有视角。
-
-这意味着模型不能只吃一种固定输入，也不能只输出 up-to-scale pointmaps。MapAnything 用 factored representation 同时解决两件事：**输入端可选、输出端 metric。**
+Figure 1 左侧应按可用信息阅读。Images 对应未标定重建，加入 Calibration 可做已标定 SfM，加入 Poses 与 Depth 又改变剩余未知量。右侧的 16.6 m 展示模型输出米制几何的目标，但这个单位来自什么信息，还需区分图像先验与外部测量。
 
 ![MapAnything overview 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-1-overview.png){ width="920" }
 
-<small>图源：`MapAnything`，Figure 1。原论文图意：MapAnything 用同一个 feed-forward 模型支持多种 input configuration，并输出 metric-scale 3D reconstruction 与 cameras；图中列出 unconstrained SfM、calibrated SfM、posed SfM、MVS、RGB-D localization 和 depth completion 等任务。</small>
+*原论文 Figure 1。不同输入配置共享重建网络；它们提供的信息量不同，不能跨配置直接比较模型强弱。* [↗](https://arxiv.org/pdf/2509.13414v3#page=1)
 
-**MapAnything 总图先看可选几何输入。**
-左侧不是简单的任务展示，而是在强调输入组合的可变性：Images、Calibration、Poses、Depth 都可能存在或缺失。右侧的关键是 `Metric-Scale 3D Reconstruction + Cameras`，说明论文想解决的不是相对几何漂亮不漂亮，而是能否把局部估计放进统一 metric frame。
+下面的结构与实验对应论文 v3 所描述的 2026 年 1 月版本。补充材料明确区分它与 2025 年 9 月初版，后者使用不同的图像编码器和多视图 Transformer；将旧版架构参数与新版成绩拼在一起，会误判模型规模及预训练来源。[↗](https://arxiv.org/pdf/2509.13414v3#page=11)
 
-对具身系统来说，这点很实用。真实机器人通常已经有相机内参，移动机器人可能有 SLAM pose，RGB-D 相机有深度但会有洞；一个能融合这些输入的几何 backbone，比只能从 RGB 重建的模型更容易进入 episode schema 和规划系统。
+## 四组几何量怎样生成一份一致的点云
 
-## 核心问题：为什么要 factored geometry
+给定 $N$ 幅 RGB 图像，模型可以接收部分视图的射线 $\hat R_i$、旋转四元数 $\hat Q_i$、平移 $\hat T_i$ 和 ray depth $\hat D_i$。不同类型可以对应不同的视图子集，旋转与平移也可单独提供。所有位姿以第一幅图像为参考坐标系。输出则包括每幅图像的单位射线 $R_i$、无绝对尺度深度 $\tilde D_i$、旋转 $O_i$、平移 $\tilde T_i$，以及整组图像共享的尺度 $m$。[↗](https://arxiv.org/pdf/2509.13414v3#page=4)
 
-MapAnything 不把场景直接表示成一组耦合 pointmaps，而是输出：
+从这些量到最终点云，只需三步几何组合
 
-\[
-\{m, (R_i, \tilde D_i, \tilde P_i)_{i=1}^{N}\}
-\]
+$$
+\tilde L_i=R_i\tilde D_i,
+\qquad
+\tilde X_i=O_i\tilde L_i+\tilde T_i,
+\qquad
+X_i^{\mathrm{metric}}=m\tilde X_i.
+$$
 
-其中：
+$\tilde L_i$ 是当前相机坐标系下的局部点图，$\tilde X_i$ 是第一视图坐标系中的共同点图。$O_i$ 由四元数转换得到；$m$ 同时缩放场景结构与相机平移，才能保持所有视图共享一个米制空间。这里的“world frame”是约定的第一相机参考系，不代表输出自动对齐地理坐标。[↗](https://arxiv.org/pdf/2509.13414v3#page=4)
 
-| Symbol | Meaning |
-| --- | --- |
-| \(R_i\) | local ray directions，等价于每个像素沿哪个相机射线出发 |
-| \(\tilde D_i\) | up-to-scale ray depths |
-| \(\tilde P_i\) | pose of image \(i\) in the frame of view 1，包含 quaternion \(Q_i\) 和 up-to-scale translation \(\tilde T_i\) |
-| \(m\) | global metric scaling factor |
+**Ray depth（沿射线深度）** 与普通 z-depth 有一个重要区别。由于 $R_i$ 已归一化为单位向量，$\tilde D_i$ 表示沿该方向的距离；其对应 z-depth 是局部点的第三坐标，也就是 $R_{i,z}\tilde D_i$。这是由上式直接得到的几何关系。接入外部深度传感器时，应先确认它输出的是哪一种深度，不能将光轴方向距离直接当作沿射线距离。
 
-从这些量可以恢复局部点云和全局 metric 重建：
+射线图也让模型摆脱“单一焦距、主点位于正中”的固定参数化。对中心投影相机，只要每个像素能表示为从同一中心出发的方向，就可进入该接口。不过，表示可以容纳更多相机模型，与训练已经验证了这些模型是两回事。论文的标定实验使用去畸变透视图像，鱼眼相机的泛化被描述为经适当训练后的潜力。[↗](https://arxiv.org/pdf/2509.13414v3#page=3) [↗](https://arxiv.org/pdf/2509.13414v3#page=6)
 
-\[
-\tilde L_i = R_i \cdot \tilde D_i
-\]
+这套表示还减少了输出冗余。DUSt3R 类方法把多种几何信息耦合在点图中，之后再恢复相机与尺度；VGGT 同时预测点图以及相机、深度，存在多条输出路径。MapAnything 先预测可以直接组合的因子，用一套局部稠密头和位姿头生成整体几何。它仍需要学习跨视图一致性，但不必额外训练一个独立全局点图头来描述同一场景。[↗](https://arxiv.org/pdf/2509.13414v3#page=3)
 
-这行式子在说：第 \(i\) 个视角的每条相机射线 \(R_i\) 乘上 up-to-scale 深度 \(\tilde D_i\)，得到局部坐标里的点 \(\tilde L_i\)。
+## 输入侧先拆尺度，网络才能同时接受米制和相对几何
 
-\[
-\tilde X_i = O_i \cdot \tilde L_i + \tilde T_i
-\]
+### 深度与平移采用不同的输入归一化
 
-\[
-X_i^{\text{metric}} = m \cdot \tilde X_i
-\]
+某幅图可能有深度却没有位姿，另一幅图可能只有旋转或相对平移。模型因此不能假定所有输入共用一个已知尺度。对深度，先计算每视图的平均 ray depth $\hat z_{d_i}$，把 $\hat D_i/\hat z_{d_i}$ 作为归一化形状；对可用平移，则用共享的平均平移范数
 
-这里 \(O_i\) 由 quaternion \(Q_i\) 转成 rotation matrix。这个分解的好处有三层：
+$$
+\hat z_p=\frac{1}{|S_t|}\sum_{i\in S_t}\|\hat T_i\|,
+\qquad \hat T_i^{\mathrm{norm}}=\hat T_i/\hat z_p.
+$$
 
-1. **camera calibration 与 depth 分开**：ray directions 可以表达更一般的 central camera，而不只是假设标准 pinhole；
-2. **pose 与 scale 分开**：位姿的旋转、平移方向和 metric scale 不再强行耦合；
-3. **partial supervision 更好用**：有些数据集只有 up-to-scale geometry，有些有 metric depth，有些有 pose，factored output 让不同数据都能贡献监督。
+$S_t$ 是具有平移输入的视图集合。深度尺度是每视图一个，位姿尺度是所有可用平移共享一个。只有当相应深度或位姿确认具有米制单位时，模型才额外编码这个尺度数值；相对几何只提供归一化部分。尺度编码前取对数，避免室内与大场景的数值范围差异直接支配特征。[↗](https://arxiv.org/pdf/2509.13414v3#page=4)
 
-## 总体架构
+因此，给定一组 up-to-scale 位姿仍有价值，它能约束视图间布局；但它不能提供真实相机基线长度。明确提供米制平移尺度，才额外给出绝对尺寸线索。输入的这一拆分与后文训练损失的归一化不同：输入侧允许各类信息独立存在，输出监督侧则要共同规范整组几何，才能约束多视图一致性。
+
+### 不同模态怎样变成同一组 patch token
+
+Figure 2 从上方输入读到下方输出。图像和稠密几何都有空间位置，全局位姿与尺度则广播到该视图的 patch；各路特征相加后，才进入跨视图网络。单独的 scale token 汇总整组视图，最后产生一个共同米制比例。
 
 ![MapAnything architecture 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-2-architecture.png){ width="920" }
 
-<small>图源：`MapAnything`，Figure 2。原论文图意：模型把 RGB 图像和可选几何输入编码到共同 latent space，加入 reference view embedding 与 scale token，通过 multi-view transformer 融合多视角信息，再由 DPT head、pose head 和 scale MLP 输出 factored metric 3D geometry。</small>
+*原论文 Figure 2。注意每视图深度尺度与跨视图 pose scale 的区别；右下的位姿、中央局部几何与左下全局尺度需要共同使用。* [↗](https://arxiv.org/pdf/2509.13414v3#page=3)
 
-**这张架构图怎么读。**
-上方每个 view 都有 `Visual Input` 和可选的 `Optional Geometric Inputs`。图像走 DINOv2，ray / depth 走浅层 convolutional encoder，pose rotation、normalized translation、pose scale、ray depth scale 走 MLP。所有特征先对齐到同一个 latent space，再相加，而不是把几何信号只作为 prompt。
+| Component | Implementation in v3 | Purpose |
+|---|---|---|
+| Image encoder | DINOv2 ViT-G 第 24 层归一化 patch 特征，维度 1536，patch size 14 | 保留可迁移的图像表示 |
+| Rays / normalized depth encoders | 浅卷积与一次 size-14 pixel unshuffle | 与图像特征对齐空间网格和维度 |
+| Rotation / translation / scale encoders | 4 层 GeLU MLP，输出 1536 维后广播 | 注入每视图或整组几何条件 |
+| Multi-view transformer | 16 层 alternating attention，24 heads，MLP ratio 4，维度 1536 | 交替进行视图内与跨视图信息融合 |
+| Dense head | 一个 DPT 头 | 预测射线、相对 ray depth、mask 与 pointmap confidence |
+| Pose head | 平均池化的卷积位姿头 | 预测单位四元数与相对平移 |
+| Scale head | scale token → 2 层 ReLU MLP → exponential | 得到正的全局米制尺度 |
 
-中间的 `Scale Token` 是 MapAnything 和普通 up-to-scale 重建的重要差异。局部几何和 pose 先在 up-to-scale 空间预测，scale token 再预测全局 metric scaling factor。这样既保留多视图相对几何，又能把结果拉回真实尺度。
+每路输入编码先 LayerNorm，再相加并再次归一化。第一视图的特征加入固定 reference embedding，所有视图 token 之外加入一个可学习 scale token。融合 Transformer 用 DINOv2 ViT-G 的后 16 层初始化；作者不使用 RoPE，而保留 DINOv2 的 patch 位置编码。这个选择属于本架构与训练设置的经验设计，不能泛化为几何任务都不适合 RoPE。[↗](https://arxiv.org/pdf/2509.13414v3#page=4)
 
-### Encoder
+补充材料给出版本差异：初版使用全部 24 层、1024 维的 DINOv2 ViT-L 编码器，搭配 24 层随机初始化、736 维的多视图 Transformer；新版改为上表中的 ViT-G 分割使用方式。两处同时改变，Figure S.3 只能说明整个新配置的表现改善，不能从中隔离出某一个结构改动的净收益。[↗](https://arxiv.org/pdf/2509.13414v3#page=11)
 
-MapAnything 的 image encoder 使用 DINOv2 ViT-G 的第 24 层 normalized patch features，特征维度是 1536，patch stride 对应 14。论文比较过 CroCoV2、DUSt3R image encoder、RADIO 和随机 patchification，认为 DINOv2 在下游性能、收敛速度和泛化上最好。
+## 损失函数怎样把形状错误和单位错误分开
 
-可选几何输入被分成两类：
+射线方向与旋转没有长度单位，直接监督即可。旋转采用 $\min(\|\hat Q_i-Q_i\|,\|-\hat Q_i-Q_i\|)$，因为 $Q$ 与 $-Q$ 代表同一个三维旋转。这个符号处理避免把等价四元数判成大误差，论文将其描述为与角距离相似的回归形式。[↗](https://arxiv.org/pdf/2509.13414v3#page=5)
 
-| Input factor | Encoder |
-| --- | --- |
-| ray directions | shallow convolutional encoder with pixel unshuffle size 14 |
-| normalized ray depths | shallow convolutional encoder with pixel unshuffle size 14 |
-| rotations as unit quaternions | 4-layer MLP with GeLU |
-| normalized translation directions | 4-layer MLP with GeLU |
-| depth scales | 4-layer MLP with GeLU after log-transform |
-| pose scales | 4-layer MLP with GeLU after log-transform |
+深度、平移、局部点图和共同点图则共享尺度。训练先在有效点掩码上计算真值与预测的点图范数尺度 $\hat z$、$\tilde z$，分别归一化相应几何量。预测与真值各自消除整体比例，模型就可以先学习形状和相机相对布局；带米制标注的数据再监督绝对尺度。
 
-这种输入分解很适合机器人：相机内参通常可靠，深度可能只对部分帧可靠，位姿可能来自 SLAM/odometry 且有尺度问题。把它们拆开编码，模型就能在不同输入可用性下保持同一套接口。
+对深度和点图，模型进一步使用径向对数变换
 
-### Multi-View Transformer
+$$
+f_{\log}(x)=\frac{x}{\|x\|}\log(1+\|x\|).
+$$
 
-所有 view 的 patch tokens 加上一个 learnable scale token 后，进入 multi-view transformer。论文使用：
+它保留向量方向、压缩模长，降低远距离点或大场景在误差上的支配程度。以深度为例，比较的是 $f_{\log}(\hat D_i/\hat z)$ 与 $f_{\log}(\tilde D_i/\tilde z)$；平移则在归一化后比较。局部点图损失保证每个相机内部的几何合理，全局点图损失约束跨视图变换后的一致性。[↗](https://arxiv.org/pdf/2509.13414v3#page=5)
 
-| Setting | Value |
-| --- | --- |
-| Transformer type | 16-layer Alternating-Attention transformer |
-| Attention heads | 24 |
-| Latent dimension | 1536 |
-| MLP ratio | 4 |
-| Initialization | last 16 layers of DINOv2 ViT-G |
-| Reference handling | constant reference view embedding added to view 1 tokens |
-| RoPE | not used |
+米制尺度的监督采用
 
-Alternating-Attention 继承了 VGGT 的核心直觉：跨帧 global attention 建立多视角几何关系，frame-wise attention 稳定每帧内部结构。MapAnything 的附录还用 ablation 说明，`Global w/ View PE` 在 50 views 上明显更差。
+$$
+z_{\mathrm{metric}}=m\,\operatorname{sg}(\tilde z),
+\qquad
+\mathcal L_{\mathrm{scale}}
+=\left\|f_{\log}(\hat z)-f_{\log}(z_{\mathrm{metric}})\right\|.
+$$
 
-### Heads
+$\operatorname{sg}$ 表示停止梯度。这个尺度损失通过 $m$ 调整米制比例，却不通过 $\tilde z$ 直接把无尺度形状拉大或压小。这样，单位不对与形状不对有不同的优化路径；对只提供相对几何的数据，仍可训练其有标注的几何部分。[↗](https://arxiv.org/pdf/2509.13414v3#page=5)
 
-| Head | Output |
-| --- | --- |
-| Single DPT Head | \(N\)-ray directions、\(N\)-ray depths、\(N\)-masks、\(N\)-confidences |
-| Pose Head | \(N\)-poses in view 1 frame |
-| Scale MLP | metric scaling factor |
+全局点图还使用预测置信度 $C_i$。把相应几何残差记作 $e_i$，原文的形式为 $C_i e_i-\alpha\log C_i$：第一项允许模型降低异常点权重，第二项避免通过让所有置信度趋近零来逃避监督。它是输出误差相关的置信度机制，不等同于显式判断输入位姿或深度传感器的不确定性。[↗](https://arxiv.org/pdf/2509.13414v3#page=5)
 
-DPT head 输出 local dense quantities；pose head 用 average-pooling-based convolutional design 输出 quaternion 和 up-to-scale translation；scale token 进入 2-layer MLP with ReLU，再通过 exponential scaling 得到 metric scaling factor。
+完整目标保留这些因子的对应关系
 
-## 训练目标
+$$
+\begin{aligned}
+\mathcal L={}&10\mathcal L_{\mathrm{pointmap}}
++\mathcal L_{\mathrm{rays}}+\mathcal L_{\mathrm{rot}}
++\mathcal L_{\mathrm{translation}}+\mathcal L_{\mathrm{depth}}\\
+&+\mathcal L_{\mathrm{lpm}}+\mathcal L_{\mathrm{scale}}
++\mathcal L_{\mathrm{normal}}+\mathcal L_{\mathrm{GM}}
++0.1\mathcal L_{\mathrm{mask}}.
+\end{aligned}
+$$
 
-MapAnything 的训练目标很值得细读，因为它的“universal”不是靠一句多任务学习完成的，而是靠输出分解、loss 归一化、输入增强和数据标准化一起撑起来。
+全局点图权重为 10，mask 权重为 0.1，强调几何一致性。训练排除最高的 5% 逐像素损失以减弱异常标签影响，并使用参数 $c=0.05,\alpha=0.5$ 的 adaptive robust loss；这里的 $\alpha$ 属于鲁棒损失参数，不能与前述置信度项系数混作同一数值。法向损失施加于局部点图，梯度匹配施加于局部 z-depth 的对数，仅用于合成数据，以免真实数据中粗糙几何标签迫使模型拟合错误细节。[↗](https://arxiv.org/pdf/2509.13414v3#page=5)
 
-对于不依赖 scene scale 的量，直接监督：
+## 通用能力来自怎样的训练组合
 
-\[
-L_{\text{rays}}=\sum_i\|\hat R_i-R_i\|
-\]
+### 随机缺失条件，替代逐个任务训练
 
-\[
-L_{\text{rot}}=\sum_i\min(\|\hat Q_i-Q_i\|,\|-\hat Q_i-Q_i\|)
-\]
+MapAnything 用不同概率提供几何输入，使同一个模型看到各种条件组合。没有输入的几何量仍可能有监督标签，输入缺失与标注缺失应分开理解。
 
-这里 \(L_{\text{rays}}\) 表示预测 ray direction \(\hat R_i\) 和真值 \(R_i\) 的误差和；\(L_{\text{rot}}\) 表示旋转 quaternion 的误差和。quaternion 有 \(Q\) 和 \(-Q\) 表达同一旋转的问题，所以 rotation loss 取二者较小值。
+| Input selection | Probability / rule |
+|---|---|
+| 启用额外几何输入 | 0.9 |
+| Rays、ray depth、pose 各类输入 | 各 0.5 |
+| 视图具有选定几何输入 | 0.95 |
+| 已选择深度时，dense / sparse | 各 0.5 |
+| Sparse depth | 随机移除 90% 有效深度，保留约 10% |
+| 对有米制标注的数据隐藏尺度输入 | 0.05 |
 
-对于 ray depths、pose translations、local pointmaps、world-frame pointmaps，论文沿用 DUSt3R 风格的 scale-invariant normalization，并把 log-space loss 作为关键设计。论文定义：
+补充材料把几何分解为六类因素，称其支持 $2^6=64$ 种输入组合，并展示 12 种代表性配置。这个数字描述接口的组合空间，不能理解为训练了 64 个网络，也不表示每种组合都有同样充分的独立评估。主要基准仍以所有视图具有相应输入为主，部分视图缺失几何是接口与训练允许的更一般情况。[↗](https://arxiv.org/pdf/2509.13414v3#page=5) [↗](https://arxiv.org/pdf/2509.13414v3#page=9)
 
-\[
-f_{\log}(x) = (x / \|x\|)\cdot \log(1+\|x\|)
-\]
+跨视图训练还有一个必要条件。作者依据真值深度与位姿预计算两两共视关系，以 25% 共视阈值构建图，再通过随机游走选出连通视图集合。这里不要求每一对图像都直接重叠，但要求整组图像能通过共视关系连接起来。主多视图测试也避免完全不相交的图像集合，因此“任意数量视图”不等于已经验证完全无连接图像能被可靠放进同一场景。[↗](https://arxiv.org/pdf/2509.13414v3#page=5) [↗](https://arxiv.org/pdf/2509.13414v3#page=6)
 
-并强调 ray depths、pointmaps 和 metric scale factor 都要在 log-space 里算 loss。为了避免 scale loss 的梯度污染 up-to-scale geometry，它使用：
+### 数据集与两种模型版本
 
-\[
-z^{\text{metric}}=m \cdot \text{sg}(\tilde z)
-\]
+基础配方使用 6 个数据集：BlendedMVS、Mapillary Planet-Scale Depth、ScanNet++ v2、Spring、TartanAirV2-WB 和 UnrealStereo4K。完整配方再加入 Aria Synthetic Environments、DL3DV-10K、Dynamic Replica、MegaDepth、MVS-Synth、ParallelDomain-4D 与 SAIL-VOS 3D，共 13 个。BlendedMVS、DL3DV 和 MegaDepth 不提供米制尺度，因子化监督使它们仍能贡献形状与相对几何学习。[↗](https://arxiv.org/pdf/2509.13414v3#page=5)
 
-其中 \(\text{sg}\) 表示 stop-gradient。
+数据规模并不均匀。MPSD 为 71,428 个场景，Aria Synthetic Environments 为 103,890 个场景，另一些数据集只有几十个。作者为原本作为单目深度数据使用的 MPSD 补充相机与位姿元数据，使约 72K 场景进入多视图训练。主测试使用 ETH3D 的 13 个场景、ScanNet++ v2 的 30 个场景和 TartanAirV2-WB 的 5 个场景；后两者是同一数据集内与训练场景隔离的 held-out 场景，应称场景隔离，不能把全部三个数据集都描述为未参与训练的新域。[↗](https://arxiv.org/pdf/2509.13414v3#page=5)
 
-总 loss 为：
+发布的 Apache 2.0 模型使用六数据集配方，CC BY-NC 4.0 模型使用十三数据集配方。Table 1 特别注明，作者获得了部分数据集权利方对训练与宽松模型发布的许可；模型许可不能反过来改变原始数据的使用条款。Figure S.2 显示六数据集版本有性能差距，但补充几何信息后仍能明显改善，这为模型选择提供了性能与使用条件的实际区别。[↗](https://arxiv.org/pdf/2509.13414v3#page=5) [↗](https://arxiv.org/pdf/2509.13414v3#page=10)
 
-\[
-\mathcal{L}
-=10\cdot \mathcal{L}_{\text{pointmap}}
-+\mathcal{L}_{\text{rays}}
-+\mathcal{L}_{\text{rot}}
-+\mathcal{L}_{\text{translation}}
-+\mathcal{L}_{\text{depth}}
-+\mathcal{L}_{\text{lpm}}
-+\mathcal{L}_{\text{scale}}
-+\mathcal{L}_{\text{normal}}
-+\mathcal{L}_{\text{GM}}
-+0.1\cdot \mathcal{L}_{\text{mask}}
-\]
+![MapAnything model variants](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-s2-model-variants.png){ width="1000" }
 
-训练细节里有几个很工程化的点：
+*原论文 Figure S.2。区分完整模型、Apache 模型和只完成最多 4 视图训练的模型；4V 版本能外推到更多视图，但仍有进一步训练带来的收益。* [↗](https://arxiv.org/pdf/2509.13414v3#page=10)
 
-1. global pointmap loss 权重设为 `10`，mask loss 权重设为 `0.1`；
-2. regression losses 使用 adaptive robust loss，参数 `c = 0.05`、\(\alpha = 0.5\)；
-3. 每个 pixel loss 里 top `5%` 被剔除，用于降低训练数据噪声和异常值影响；
-4. normal loss 和 multi-scale gradient matching loss 只用于 synthetic datasets，因为真实数据的几何可能粗糙或有噪声；
-5. mask 用 binary cross entropy，预测 non-ambiguous classes for depth。
+### 训练预算与视图课程
 
-这部分对具身系统的启发是：几何监督不是“有 depth 就直接 L1”。真实数据经常有洞、噪声、尺度不一致和标注不完整；如果不在 loss 和输入 schema 上处理，模型会把数据集误差学成几何规律。
+| Training setting | Value |
+|---|---|
+| Optimizer | AdamW，weight decay 0.05，$\beta_1=0.9,\beta_2=0.95$ |
+| Peak learning rate | DINOv2 encoder $5\times10^{-6}$；其他部分 $10^{-4}$ |
+| Schedule | 10% linear warmup；half-cycle cosine decay 到峰值的 1/100 |
+| Images / dense geometry | 最大边 518，长宽比随机在 3:1 至 1:2 之间 |
+| Augmentation | color jitter、Gaussian blur、grayscale |
+| Efficiency / stability | mixed precision、encoder gradient checkpointing、gradient norm clip 1 |
+| Stage 1 | 64 张 H200-140GB，6 天，2–4 视图，effective batch 1536–768 |
+| Stage 2 | 同样 64 张 H200，4 天，2–24 视图，effective batch 1536–128，峰值 LR 降低 10 倍 |
+| Total training steps | 420K |
 
-## 训练输入增强
+动态 batch 随视图数调整，让较长的多视图样本不突破显存预算。按文中 64 张卡、10 天相乘，课程训练对应约 15,360 GPU 小时，这是由报告配置计算的量，不包含 DINOv2 预训练、所有消融和开发尝试。论文的“高效通用训练”主要是相对训练多个专家而言，不能解读为整个骨干只需很小训练预算。[↗](https://arxiv.org/pdf/2509.13414v3#page=9)
 
-为了让一个模型支持多种输入组合，MapAnything 在训练时随机提供或隐藏几何输入：
+消融采用同类设置但 effective batch 小 8 倍。这个区别很重要：Table 5 的 50 视图 Images-only Points rel 为 0.28，而完整模型 Table S.1 为 0.15，二者不能直接当作同一预算模型的重复实验冲突，也不能混为某个单一模块带来的提升。[↗](https://arxiv.org/pdf/2509.13414v3#page=8) [↗](https://arxiv.org/pdf/2509.13414v3#page=9)
 
-| Training input choice | Value |
-| --- | --- |
-| Overall geometric input probability | 0.9 |
-| Individual factor probability | 0.5 each for ray directions, ray depth, pose |
-| Depth input mode | equal probability of dense depth or 90% randomly sparsified depth |
-| Per-view input probability | 0.95 |
-| Metric scale input dropout | not provide metric scale factors with probability 0.05 |
-| Supported exhaustive combinations | 64 possible input combinations in supplement |
+## 双视图实验，把视觉重建与几何条件收益分别量化
 
-这里的关键不是做数据增强本身，而是让模型学会“几何输入是可选的”。这和机器人部署很像：某些帧有深度、某些帧深度失效；某些相机标定可靠、某些外参刚重标定；SLAM 位姿有时漂移，有时可用。训练时把输入可用性打散，能减少模型对单一传感器契约的依赖。
+Table 2 使用 ETH3D、ScanNet++ v2 和 TartanAirV2-WB 的平均结果。Points / Depth rel 越低越好，Pose AUC 在 5° 阈值下越高越好，Rays err 为角度误差。下表保留主要输入组合，并将同条件的 VGGT 作为 Images-only 对照。
 
-## 训练数据
+| Method / Inputs | Scale rel ↓ | Points rel ↓ | Points τ ↑ | Pose ATE ↓ | Pose AUC ↑ | Depth rel ↓ | Rays err° ↓ |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| VGGT / Images | — | 0.20 | 43.2 | 0.07 | 34.2 | 0.13 | 2.34 |
+| MapAnything / Images | 0.13 | 0.08 | 57.5 | 0.02 | 56.0 | 0.07 | 0.85 |
+| MapAnything / Images + Intrinsics | 0.13 | 0.07 | 59.3 | 0.01 | 64.7 | 0.06 | 0.19 |
+| MapAnything / Images + Intrinsics + Poses | 0.05 | 0.06 | 60.4 | 0.01 | 93.6 | 0.06 | 0.18 |
+| MapAnything / Images + Intrinsics + Depth | 0.02 | 0.04 | 77.8 | 0.01 | 73.1 | 0.03 | 0.18 |
+| MapAnything / Images + Intrinsics + Poses + Depth | 0.01 | 0.02 | 82.0 | 0.00 | 94.8 | 0.02 | 0.16 |
 
-Table 1 is redrawn below with the original English fields.
+只给图像时，Points rel 从 VGGT 的 0.20 降到 0.08，按表中数值计算降低 60%；Pose AUC 提高 21.8 个百分点。加入内参后，射线角误差从 0.85° 降至 0.19°，但 Scale rel 仍为 0.13，符合内参主要约束成像方向、不能单独提供场景绝对长度的事实。加入位姿后 AUC 与尺度改善，加入深度后点图误差进一步下降。[↗](https://arxiv.org/pdf/2509.13414v3#page=7)
 
-| Dataset | License | # Scenes | Metric |
-| --- | --- | ---: | :---: |
-| BlendedMVS [80] | CC BY 4.0 | 493 | ✗ |
-| Mapillary Planet-Scale Depth [36] | CC BY-NC-SA | 71,428 | ✓ |
-| ScanNet++ v2 [81] | Non-commercial | 926 | ✓ |
-| Spring [37] | CC BY 4.0 | 37 | ✓ |
-| TartanAirV2-WB [73, 86] | CC BY 4.0 | 49 | ✓ |
-| UnrealStereo4K [59] | MIT | 9 | ✓ |
-| Additionally used for our CC BY-NC model: |  |  |  |
-| Aria Synthetic Environments [2] | Non-commercial | 103,890 | ✓ |
-| DL3DV-10K [32] | CC BY-NC 4.0 | 10,109 | ✗ |
-| Dynamic Replica [25] | Non-commercial | 523 | ✓ |
-| MegaDepth [30] | CC BY 4.0 | 269 | ✗ |
-| MVS-Synth [21] | Non-commercial | 120 | ✓ |
-| ParallelDomain-4D [62] | Non-commercial | 1,528 | ✓ |
-| SAIL-VOS 3D [20] | Non-commercial | 171 | ✓ |
-| Unique held-out scenes for dense up-to-N-view benchmarking: |  |  |  |
-| ETH3D [54] | CC BY-NC-SA 4.0 | 13 | ✓ |
-| ScanNet++ v2 [81] | Non-commercial | 30 | ✓ |
-| TartanAirV2-WB [73, 86] | CC BY 4.0 | 5 | ✓ |
+表中 $\tau$ 是原文的阈值内点比例，原表将阈值标为 1.03%；这里沿用该列而不额外改变其判定口径。平均相对误差和内点比例会给出不同排序。在完整输入条件下，Pow3R 的 Points rel 为 0.03，差于 MapAnything 的 0.02，但 Points $\tau$ 为 90.1，高于 82.0；Depth rel 同为 0.02，Depth $\tau$ 则是 89.0 对 81.5。这说明平均误差更低并不保证更多点进入某个严格阈值。[↗](https://arxiv.org/pdf/2509.13414v3#page=7)
 
-<small>表源：`MapAnything`，Table 1。原论文表格要点：训练数据覆盖真实室内、户外、合成、in-the-wild 和 metric / up-to-scale 场景；Apache 2.0 模型使用前 6 个数据集，CC BY-NC 4.0 模型额外使用后 7 个数据集。</small>
+另外，已知位姿作为网络条件输入，输出位姿仍由网络预测，论文并未把输入几何设成不可违反的硬约束。表中提供位姿后的 AUC 没有达到 100，也提醒读者这是一种学习条件融合。ATE 的 0.00 是表格显示精度，不能据此宣布所有相机位姿无误差。
 
-论文还补了一个细节：Mapillary Planet-Scale Depth 原本是 monocular metric depth dataset，作者额外获取 pose 和 camera information，使其变成约 `72K` scenes 的 real-world multi-view metric scale dataset，并开源这部分 metadata。
+## 米制尺度输入究竟增加了什么信息
 
-### Multi-View Sampling
+Table S.1 将相对位姿与米制位姿分开，能更直接检验尺度因子的作用。下表为 50 视图完整模型结果，保留原表的 Scale rel、Points rel 与 Points $\tau$。
 
-训练时，作者对每个 dataset 预计算同一 scene 内所有 image pair 的 covisibility。covisibility 用 ground-truth depth 和 pose 做 reprojection error check 得到。训练采样时使用 `25%` covisibility threshold，通过 random walk sampling 得到单连通的 covisible view graph。
+| Inputs | Metric scale supplied | Scale rel ↓ | Points rel ↓ | Points τ ↑ |
+|---|---|---:|---:|---:|
+| Images | None | 0.13 | 0.15 | 58.6 |
+| Images + Intrinsics | None | 0.13 | 0.14 | 61.5 |
+| Images + Poses | No | 0.11 | 0.04 | 76.8 |
+| Images + Poses | Pose scale | 0.02 | 0.04 | 75.3 |
+| Images + Intrinsics + Poses + Sparse Depth | No | 0.12 | 0.02 | 92.0 |
+| Images + Intrinsics + Poses + Sparse Depth | Pose and depth scale | 0.01 | 0.02 | 94.9 |
 
-这一步对具身数据也很重要。如果直接随机抽图，模型可能拿到彼此几乎不重叠的视角，训练信号会混乱；如果只抽高度重叠视角，模型又学不到大 baseline、遮挡和场景覆盖。covisibility graph 是把“多视角可对齐”变成训练样本约束。
+相对位姿已经能把 Points rel 从 0.15 降到 0.04，但 Scale rel 仍为 0.11；再提供米制位姿尺度，形状误差几乎不变，Scale rel 降到 0.02。类似地，内参、相对位姿和相对稀疏深度能给出很低的点图误差，却仍有 0.12 的尺度误差；标明米制尺度后才降至 0.01。这个对照正好验证了“形状”和“单位”应分开的设计。[↗](https://arxiv.org/pdf/2509.13414v3#page=12)
 
-## 训练配方
+原 Table S.1 还有两个容易遗漏的细节。名为 Images & Depth 的分组，其 K 列实际也打勾，不能转述成没有内参。完整输入中，稀疏深度版本的 Points $\tau$ 为 94.9，稠密深度版本为 84.4，尽管 Scale / Points rel 都为 0.01 / 0.02；相对位姿加入米制尺度后，内点比例也有小幅下降。因此，输入提供更多信息的总体趋势，不等于所有指标随每项输入严格单调改善。[↗](https://arxiv.org/pdf/2509.13414v3#page=12)
 
-Supplementary implementation details are redrawn below with the original English setting names.
+![MapAnything input configurations](../../assets/images/paper-deep-dives/embodied-ai/mapanything/table-s1-input-configurations.png){ width="760" }
 
-| Setting | Value |
-| --- | --- |
-| Optimizer | AdamW |
-| Peak LR for pre-trained DINOv2 encoder | \(5 \cdot 10^{-6}\) |
-| Peak LR for everything else | \(10^{-4}\) |
-| LR schedule | 10% linear warmup, then half-cycle cosine decay to 100x lower value |
-| Weight decay | 0.05 |
-| AdamW \(\beta_1, \beta_2\) | 0.9, 0.95 |
-| Max image dimension | 518 pixels |
-| Aspect ratio augmentation | randomized from 3:1 to 1:2 |
-| Data augmentation | color jitter, Gaussian blur, grayscale conversion |
-| Efficiency | mixed precision training, gradient checkpointing for DINOv2 encoder |
-| Gradient clipping | norm threshold 1 |
-| Batch scheme | dynamic batching based on number of views |
-| Curriculum | two-stage curriculum, 420K steps |
-| Stage 1 | 6 days on 64 H200-140GB GPUs, effective batch size 768-1536, views 4 to 2 |
-| Stage 2 | 4 days on 64 H200-140GB GPUs, 10x lower peak LR, effective batch size 128-1536, views 24 to 2 |
-| Ablation setup | same as above, but 8x lower effective batch size |
+*原论文 Table S.1。按实际勾选的 K、Poses、Depth 和 Metric Scale 列识别配置，不能只读分组名称。Sparse 指随机移除 90% 有效深度。* [↗](https://arxiv.org/pdf/2509.13414v3#page=12)
 
-<small>信息源：`MapAnything`，Supplementary Material B。原论文要点：训练采用 DINOv2 小学习率微调、其他模块较大学习率、动态 batch 和两阶段 view curriculum；先在少视图上建立能力，再扩到更多 views。</small>
-
-这份训练配方有三个值得记住的工程判断。
-
-第一，DINOv2 不是冻死不用，而是用很小 LR 微调。几何任务需要保留视觉语义和纹理先验，但 ray、depth、pose 监督会改变特征的使用方式，小步微调比完全冻结更灵活。
-
-第二，view curriculum 很关键。Stage 1 只在 `2-4` views 上训练，先把局部多视图几何学稳；Stage 2 扩到最多 `24` views，并降低 peak LR，让模型在更多视角下维持一致性。附录 Figure S.2 还显示，最多只训练到 4 views 的阶段模型，已经能泛化到更多 views，但最终模型明显更稳。
-
-第三，动态 batch 不是小实现细节。多视图 Transformer 的 token 数随 views 增长，dense DPT head 还要输出每个 view 的像素级结果。固定 batch 很容易要么爆显存，要么浪费吞吐；按 views 调 batch 是这类模型训练的基本工程动作。
-
-官方代码的 `train.md` 还把训练脚本拆成 Stage 1、Stage 2 和 Stage 3 confidence training。论文附录的主训练叙述是 two-stage curriculum；代码侧额外暴露 confidence 相关训练脚本，复现实验时应以具体 checkpoint / config 为准。
-
-## 实验：重建质量与输入组合
-
-![MapAnything qualitative comparison 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-3-qualitative-vggt.png){ width="920" }
-
-<small>图源：`MapAnything`，Figure 3。原论文图意：只用 in-the-wild images 作为输入时，MapAnything 与 VGGT 的 qualitative comparison；论文说明 MapAnything 在大视差变化、季节变化、无纹理表面、水体和大场景上更稳。</small>
-
-**Qualitative 图看几何连续性和断裂。**
-这不是闭环机器人实验，而是几何重建鲁棒性样例。绿色箭头强调 MapAnything 在大场景和困难表面上的连续性，红色箭头指出 VGGT 的 disjoint 或几何断裂。它支撑的是 feed-forward metric reconstruction 的视觉质量证据，不能证明动作规划或动态交互能力。
-
-![MapAnything multi-view results 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-4-multiview-results.png){ width="920" }
-
-<small>图源：`MapAnything`，Figure 4。原论文图意：MapAnything 在 2 到 100 views 以及不同 input configurations 下做 dense multi-view reconstruction，对比 VGGT 和 Pow3R-BA；指标覆盖 pointmaps、pose、depth、ray directions 和 metric scale。</small>
-
-**Figure 4 的正确读法。**
-先看横轴：views 从 `2` 增到 `100`。再看线型：同一个 MapAnything 在 `Input: Imgs`、`Input: Imgs, Calibration & Poses`、`Input: Imgs, Calibration, Poses & Sparse Depth` 下表现不同。结论不是“图像输入就够了”，而是模型能在同一 forward interface 里吸收额外几何信号；真实机器人越能提供可靠几何先验，MapAnything 越像一个融合器。
-
-### Two-View Dense Reconstruction
-
-Table 2 is redrawn below with the original English fields.
-
-| Average across ETH3D, SN++v2 & TAV2 | Methods | Scale rel↓ | Points rel↓ | Points τ↑ | Pose ATE↓ | Pose AUC↑ | Depth rel↓ | Depth τ↑ | Rays err°↓ |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| a) Input: Images | DUSt3R [72] | -- | 0.21 | 43.9 | 0.08 | 35.5 | 0.17 | 32.6 | 2.55 |
-| a) Input: Images | MASt3R [29] | 0.38 | 0.25 | 30.2 | 0.07 | 37.3 | 0.19 | 24.8 | 7.03 |
-| a) Input: Images | Pow3R [23] | -- | 0.22 | 43.1 | 0.09 | 36.9 | 0.19 | 35.0 | 2.06 |
-| a) Input: Images | VGGT [67] | -- | 0.20 | 43.2 | 0.07 | 34.2 | 0.13 | 29.3 | 2.34 |
-| a) Input: Images | MapAnything | **0.13** | **0.08** | **57.5** | **0.02** | **56.0** | **0.07** | **49.3** | **0.85** |
-| b) Input: Images & Intrinsics | Pow3R [23] | -- | 0.20 | 46.0 | 0.08 | 51.3 | 0.15 | 43.2 | 0.40 |
-| b) Input: Images & Intrinsics | MapAnything | **0.13** | **0.07** | **59.3** | **0.01** | **64.7** | **0.06** | **55.1** | **0.19** |
-| c) Input: Images, Intrinsics & Poses | Pow3R [23] | -- | 0.13 | 50.9 | 0.05 | 67.5 | 0.11 | 47.2 | 0.38 |
-| c) Input: Images, Intrinsics & Poses | MapAnything | **0.05** | **0.06** | **60.4** | **0.01** | **93.6** | **0.06** | **57.5** | **0.18** |
-| d) Input: Images, Intrinsics & Depth | Pow3R [23] | -- | 0.13 | **77.9** | 0.04 | 66.5 | 0.07 | **77.3** | 0.29 |
-| d) Input: Images, Intrinsics & Depth | MapAnything | **0.02** | **0.04** | 77.8 | **0.01** | **73.1** | **0.03** | 76.6 | **0.18** |
-| e) Input: Images, Intrinsics, Poses & Depth | Pow3R [23] | -- | 0.03 | **90.1** | 0.01 | 81.3 | 0.02 | **89.0** | 0.29 |
-| e) Input: Images, Intrinsics, Poses & Depth | MapAnything | **0.01** | **0.02** | 82.0 | **0.00** | **94.8** | **0.02** | 81.5 | **0.16** |
-
-<small>表源：`MapAnything`，Table 2。原论文表格要点：在 two-view reconstruction 上，MapAnything 在 images-only 和带几何输入时整体优于或匹配 specialist baselines；额外几何输入尤其改善 scale、pose 和 dense geometry。</small>
-
-这张表最该关注的是输入组合。MapAnything 不是只在 `Images` 下和 VGGT 比，而是展示了一个统一模型如何随着 `Intrinsics`、`Poses`、`Depth` 增加而改变输出质量。这对具身智能的启发是：不要把几何模型只当 RGB 网络；如果系统已有 calibration、odometry、sparse depth，应该让模型把它们作为一等输入。
-
-## 辅助几何输入为什么重要
+Figure S.5 把收益变成可观察的几何现象。上方面板中，在 100 张图像下重复出现的结构，加入标定与位姿后更好地合并；中间用同样 10 m 标尺比较，只有图像时尺寸不准，加入米制位姿后更接近真值；下方再展示从稀疏米制几何补全稠密结果。这三部分分别检验对齐、尺度和补全，不能只用“点云更漂亮”概括。
 
 ![MapAnything auxiliary inputs 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-s5-auxiliary-inputs.png){ width="920" }
 
-<small>图源：`MapAnything`，Figure S.5。原论文图意：辅助几何输入可以改善 MapAnything 的 feed-forward performance；包括用 calibration 和 metric poses 改善 alignment / metric scale，用 sparse metric point cloud 做 dense metric depth completion，以及输入 calibration 后改变物体中心场景的预测。</small>
+*原论文 Figure S.5。对齐与尺度改善来自新增几何条件，场景先验与物理尺度线索的作用应分开。* [↗](https://arxiv.org/pdf/2509.13414v3#page=13)
 
-**这张补充图怎么读。**
-上半部分说明，只靠 100 张图像时模型仍可能出现重复结构；加入 camera calibration 和 poses 后，几何对齐明显改善。中间展示 metric scale：images-only 的尺度估计不够准，加入 calibration 和 metric poses 后接近 ground truth。下半部分说明 sparse depth / calibration 不是装饰输入，它们会实际改变 dense reconstruction。
+## 单图标定较强，不代表所有米制深度基准都领先
 
-对机器人来说，这张图很关键：如果相机标定和局部位姿已经在系统里存在，就不该在模型输入层丢掉。MapAnything 的价值之一，就是把这些传统几何模块的输出重新变成 foundation model 的条件。
+### 单图标定验证了射线表示的作用
 
-## 关键消融
+标定测试从三个测试数据集中随机抽帧，并用 3:1 至 1:2 的随机裁剪制造非中心主点。模型虽然没有专门按单图输入训练，仍能从单图预测射线。Table 3 的平均角误差如下。
 
-Table 5 is redrawn below with the original English fields.
+| Method | Avg. ↓ | ETH3D ↓ | SN++v2 ↓ | TAV2 ↓ |
+|---|---:|---:|---:|---:|
+| VGGT | 4.00° | 2.83° | 5.21° | 3.95° |
+| MoGe-2 | 1.95° | 1.89° | 1.56° | 2.40° |
+| AnyCalib | 2.01° | 1.52° | 2.41° | 2.10° |
+| MapAnything | 1.06° | 1.33° | 0.39° | 1.47° |
 
-| (a) Scene Representation | Metric Scale rel↓ | Pointmaps rel↓ | Pointmaps τ↑ |
-| --- | ---: | ---: | ---: |
-| Input: Images Only |  |  |  |
+这组结果说明，多视图训练得到的局部射线表示可以服务单图标定，且不必把主点固定在图像中心。它仍属于所测透视图像与裁剪条件，不能直接外推到鱼眼或非中心相机。[↗](https://arxiv.org/pdf/2509.13414v3#page=6) [↗](https://arxiv.org/pdf/2509.13414v3#page=7)
+
+### Robust-MVD 把尺度问题暴露出来
+
+Table 4 采用 Robust-MVD 的数值口径，下面沿用原表的 rel 数值，不与前面的 0.08、0.13 直接拼接比较。K 表示是否提供内参，Poses 表示是否提供位姿。
+
+| Approach / Setting | K | Poses | KITTI rel ↓ | ScanNet rel ↓ |
+|---|---|---|---:|---:|
+| MapAnything / Single-View Metric | ✗ | ✗ | 9.69 | 27.77 |
+| MapAnything / Single-View Metric | ✓ | ✗ | 8.48 | 31.12 |
+| MapAnything / Multi-View Metric | ✗ | ✗ | 5.45 | 22.23 |
+| MapAnything / Multi-View Metric | ✓ | ✗ | 8.45 | 24.94 |
+| MapAnything / Multi-View Metric | ✓ | ✓ | 4.63 | 5.58 |
+| MVSA / Multi-View Metric | ✓ | ✓ | 3.20 | 3.70 |
+| MapAnything / Multi-View w/ Alignment | ✗ | ✗ | 4.04 | 3.47 |
+| MapAnything / Multi-View w/ Alignment | ✓ | ✗ | 3.97 | 3.34 |
+
+ScanNet 是米制尺度不够可靠的明确反例。只给图像时，多视图 rel 为 22.23；提供内参后为 24.94，并未改善；加入位姿后才降到 5.58。KITTI 上，内参单独加入也从 5.45 退化到 8.45。这些数据说明，条件输入能够利用，不等于所有数据域都能稳定获益。[↗](https://arxiv.org/pdf/2509.13414v3#page=8)
+
+再看 median scale alignment。相同的 Images-only 多视图结果在 ScanNet 从米制 rel 22.23 变为对齐后的 3.47，说明误差中有明显整体尺度成分。但对齐借助评估参考尺度，部署时不能把它视作免费获得的修正。即便去掉尺度影响，MapAnything 也不是所有形状指标的最优者：在 Multi-View w/ Alignment 中，$\pi^3$ 的 KITTI / ScanNet rel 为 3.09 / 1.98，VGGT 为 4.60 / 2.34，均呈现各自优势。[↗](https://arxiv.org/pdf/2509.13414v3#page=8)
+
+作者猜测 ScanNet 的尺度表现与基准数据质量有关，这是解释性判断，不能当作排除了模型泛化问题的证据。原表还用灰字标出部分方法的评估数据处于训练分布内；因此，各行并非完全相同的零样本条件。该基准也因畸变问题排除 ETH3D，因非米制原因排除 DTU 与 Tanks and Temples，不能用它替代前面三数据集的多视图实验。[↗](https://arxiv.org/pdf/2509.13414v3#page=7) [↗](https://arxiv.org/pdf/2509.13414v3#page=8)
+
+## 哪些设计真正被消融支持
+
+Table 5(a) 在较低训练预算下用 50 视图评估表示方案。仅把局部点图拆成 Rays / Depth / Pose，没有独立尺度，结果并没有更好；完整收益来自因子化与尺度分支的配合。
+
+| Representation, Images Only | Scale rel ↓ | Points rel ↓ | Points τ ↑ |
+|---|---:|---:|---:|
 | Local PM + Pose | 0.14 | 0.32 | 33.2 |
 | RDP | 0.17 | 0.33 | 32.6 |
 | LPMP & Scale | 0.16 | 0.30 | 38.7 |
-| RDP & Scale (ours) | **0.16** | **0.28** | **40.7** |
-| Input: Images, Intrinsics & Metric Poses |  |  |  |
-| Local PM + Pose | **0.04** | 0.08 | 53.5 |
-| RDP | 0.06 | 0.09 | 46.7 |
-| LPMP & Scale | 0.06 | **0.07** | 55.9 |
-| RDP & Scale (ours) | 0.05 | **0.07** | **57.8** |
+| RDP & Scale | 0.16 | 0.28 | 40.7 |
 
-| (b) Expert vs Universal Training | Metric Scale rel↓ | Pointmaps rel↓ | Pointmaps τ↑ |
-| --- | ---: | ---: | ---: |
-| Input: Images Only |  |  |  |
-| Expert Training | 0.16 | 0.29 | 31.8 |
-| Universal Training | **0.16** | **0.28** | **40.7** |
-| Input: Images, Intrinsics & Metric Poses |  |  |  |
-| Expert Training | **0.03** | **0.07** | 56.2 |
-| Universal Training | 0.05 | **0.07** | **57.8** |
-| Input: Images & Metric Depth |  |  |  |
-| Expert Training | **0.06** | **0.24** | 53.0 |
-| Universal Training | **0.06** | 0.25 | **54.0** |
+完整方案降低点图相对误差并提高内点比例，但其 Scale rel 0.16 仍不如 Local PM + Pose 的 0.14。提供内参与米制位姿时也有相同的权衡：完整方案 Points rel / $\tau$ 为 0.07 / 57.8，优于 0.08 / 53.5；Scale rel 却是 0.05 对 0.04。因子化首先改善多量共同建模，不能简化为它使每一个回归头都最好。[↗](https://arxiv.org/pdf/2509.13414v3#page=8)
 
-<small>表源：`MapAnything`，Table 5。原论文表格要点：`RDP & Scale` 的 factored representation 是关键；universal training 在多个输入配置上的表现接近或优于为特定输入配置训练的 expert models。</small>
+Table 5(b) 比较通用训练与输入配置专属训练。作者以相当于两个专属模型的计算量训练通用模型，再与三种专属配置比较，支持多任务训练的成本价值，但也保留了单项专家更好的指标。
 
-这张表支撑论文最核心的两个 claim：
+| Inputs | Training | Scale rel ↓ | Points rel ↓ | Points τ ↑ |
+|---|---|---:|---:|---:|
+| Images Only | Expert | 0.16 | 0.29 | 31.8 |
+| Images Only | Universal | 0.16 | 0.28 | 40.7 |
+| Images + Intrinsics + Metric Poses | Expert | 0.03 | 0.07 | 56.2 |
+| Images + Intrinsics + Metric Poses | Universal | 0.05 | 0.07 | 57.8 |
+| Images + Metric Depth | Expert | 0.06 | 0.24 | 53.0 |
+| Images + Metric Depth | Universal | 0.06 | 0.25 | 54.0 |
 
-1. **表示法重要**：只预测 local pointmap + pose，或者只做 RDP 而没有 metric scale，都不如 `RDP & Scale` 稳；
-2. **universal training 不只是省事**：一个统一模型不是明显弱于 specialist，反而在一些输入组合上更好。
+Images-only 的内点比例提升明显；已知米制位姿时，专家尺度更准；给米制深度时，专家的 Points rel 略低。通用化的实际价值是一个模型维持广泛接口并取得相近或更好表现，而非消灭所有专用优化空间。[↗](https://arxiv.org/pdf/2509.13414v3#page=8)
 
-Supplementary Table S.2 进一步显示：
+补充 Table S.2 再单独检验损失与注意力设计。去掉 log loss，Points rel 从 0.29 变为 0.39，内点比例从 31.8 降到 27.3；把 alternating attention 换成带 view positional encoding 的 global attention，Points rel 变为 0.53，内点比例为 19.7。这组 50 视图外推评估支持对数损失与交替融合在该训练方案中的作用，不能据此否定所有全局注意力实现。[↗](https://arxiv.org/pdf/2509.13414v3#page=12)
 
-| (a) Loss Scheme | Metric Scale rel↓ | Pointmaps rel↓ | Pointmaps τ↑ |
-| --- | ---: | ---: | ---: |
-| Overall Factored Loss | **0.16** | **0.29** | **31.8** |
-| No Log Loss | 0.17 | 0.39 | 27.3 |
+## 更多视图、更新基线与部署显存
 
-| (b) Attention Scheme | Metric Scale rel↓ | Pointmaps rel↓ | Pointmaps τ↑ |
-| --- | ---: | ---: | ---: |
-| Alternating [67] | **0.16** | **0.29** | **31.8** |
-| Global w/ View PE [78] | 0.20 | 0.53 | 19.7 |
+Figure 4 评估 2–100 个连通视图，并用线型区分 Images-only、加入标定与位姿、再加入稀疏深度。先固定线型看方法差异，再比较同一方法的不同条件。曲线也表明，更多视图会引入更大覆盖与更难的跨视图关系，Images-only 的点图和位姿误差并不随视图数量单调下降。
 
-<small>表源：`MapAnything`，Table S.2。原论文表格要点：log scaling 和 Alternating-Attention 对 50-view reconstruction 很关键，尤其是模型训练视角数少于评测视角数时。</small>
+![MapAnything multi-view results 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-4-multiview-results.png){ width="920" }
 
-## 推理速度与显存
+*原论文 Figure 4。缺失的基线点包括 GPU 显存不足，不能当作零分；这里的输入集合满足共视连通条件。* [↗](https://arxiv.org/pdf/2509.13414v3#page=7)
+
+新版补充实验加入截至 2026 年 1 月 20 日的 DA3-Nested 与 $\pi^3$-X。Figure S.6 中 MapAnything 的平均 Points / Depth rel 与尺度较好，但 $\pi^3$-X 在多个视图数下有更高的 Points / Depth 内点比例或 Pose AUC。按数据集拆开后，ETH3D 中 $\pi^3$-X 的点图与深度相对误差明显更低，MapAnything 在 TartanAirV2 的优势更突出。跨数据集均值因此不能替代目标场景下的比较。[↗](https://arxiv.org/pdf/2509.13414v3#page=14) [↗](https://arxiv.org/pdf/2509.13414v3#page=15)
+
+![MapAnything concurrent model comparison](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-s6-concurrent-models.png){ width="1000" }
+
+*原论文 Figure S.6。上方是 Images-only，下方是带辅助几何输入；平均误差与阈值内点比例的排序不同，新增输入也改变比较条件。* [↗](https://arxiv.org/pdf/2509.13414v3#page=14)
+
+Figure 3 的定性比较展示弱纹理、大视差、季节变化和大场景。两种方法使用相同的法向边缘后处理与 MapAnything 天空掩码，因而可以比较保留下来的结构；这项展示并不是两个模型未经处理的原始输出逐点对照。
+
+![MapAnything qualitative comparison 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-3-qualitative-vggt.png){ width="920" }
+
+*原论文 Figure 3。观察结构是否断开、弱纹理区域是否连贯，以及远处场景是否保持合理形状；定性外观仍需结合前面的几何与尺度指标。* [↗](https://arxiv.org/pdf/2509.13414v3#page=6)
+
+运行成本由视图数与稠密解码共同决定。Figure S.1 在一张 H200-140GB 上使用适当 autocast 精度，绘制 2–500 视图的推理频率与峰值显存。图中的 Hz 指完成一组重建的频率，不能当成每张图像或视频帧的处理速度。500 是输入视图数，也不意味着实时处理 500 FPS。
 
 ![MapAnything speed memory 原论文图](../../assets/images/paper-deep-dives/embodied-ai/mapanything/figure-s1-speed-memory.png){ width="920" }
 
-<small>图源：`MapAnything`，Figure S.1。原论文图意：在 H200-140GB GPU 上对比多视图 feed-forward reconstruction 模型的 inference speed 和 peak GPU memory；MapAnything 的 dense per-pixel regression 存在显存瓶颈，Mem Efficient 版本用 per-view decoding mini-batch loop 显著降低显存，速度损失很小。</small>
+*原论文 Figure S.1。区分普通调用与 Mem Efficient 版本，也区分 V1 和新版；原始稠密头的显存曲线很高，显存优势来自实际解码调度。* [↗](https://arxiv.org/pdf/2509.13414v3#page=10)
 
-**推理图怎么读。**
-左图看 view 数增加后 inference frequency 如何下降；右图看 peak GPU memory 如何上升。MapAnything 不是没有显存压力，瓶颈主要来自 dense per-pixel DPT decoding across views。论文的工程处理是把 per-view decoding 放进 mini-batched loop，降低显存峰值。
+作者发现，直接对全部视图运行 DPT 稠密头会成为显存瓶颈。Mem Efficient 改为按视图小批量解码，图中 minibatch size 为 1，在报告中仅带来较小速度代价，却显著降低峰值显存。它保留前面的多视图融合，只改变局部稠密输出的调度；这是一项容易被“单次前向”口号忽略的工程选择。逐像素输入与输出的一一对应仍限制超大场景规模，论文也没有给出压缩长期场景记忆的完整方案。[↗](https://arxiv.org/pdf/2509.13414v3#page=8) [↗](https://arxiv.org/pdf/2509.13414v3#page=10)
 
-这对机器人部署有现实含义：如果只是少量相机或短窗口，feed-forward geometry 很有吸引力；如果要把 100+ views、长期 map、dense depth 和在线规划放在一起，必须设计 memory-efficient decoding、滑动窗口、关键帧筛选或 scene memory。
+## 采用时应先确定信息来源，再确定相信哪一种输出
 
-## 它和 VGGT / Depth Anything 3 的关系
+MapAnything 最适合已有部分标定、位姿或深度，希望在不同信息完整度下复用同一重建骨干的系统。接入时首先统一参考坐标系、ray depth 与 z-depth 的定义，并明确哪些量具有真实米制单位；之后分别评价相对几何、姿态和尺度，必要时保留可靠外部测量作为参照。只给图像时，米制比例来自学习先验，无法消除投影几何本身的尺度歧义，ScanNet 的实验已经显示这种误差可能很大。
 
-| Method | Main state | Input flexibility | Metric scale | Embodied use |
-| --- | --- | --- | --- | --- |
-| [VGGT](vggt.md) | camera、depth、point map、tracks | 主要从多张 RGB 图像前向预测 | 通过训练规范和输出估计处理几何尺度 | 快速多视图几何状态和 tracking features |
-| [Depth Anything 3](depth-anything-3.md) | depth、ray、camera、3DGS-friendly geometry | 任意视角图像，强调 depth-ray / cross-view geometry | 面向多视角几何和渲染式输出 | 3D 几何底座、重建与渲染接口 |
-| MapAnything | ray directions、ray depths、poses、metric scale | RGB + 可选 intrinsics / poses / depth / partial reconstruction | 显式 global metric scaling factor | 统一几何融合器，适合接机器人已有 calibration、odometry、RGB-D 或 sparse depth |
+当前模型没有显式处理几何输入的噪声与不确定性，也不支持某个输入视图完全没有图像。输出置信度不等于输入传感器置信度，不能自动修正错误标定或单位。将预测重新输入以增加测试计算量，是论文提出的后续方向，尚未证明多迭代必然更好；场景参数化同样不描述动态运动或 scene flow。[↗](https://arxiv.org/pdf/2509.13414v3#page=8)
 
-MapAnything 最值得补进具身主线的原因，是它承认真实系统并不是“纯 RGB benchmark”。一个实际机器人 episode 里，常见字段会长这样：
-
-```text
-timestamp
-rgb_images
-camera_intrinsics / ray_directions
-camera_extrinsics / odometry / SLAM poses
-depth_or_sparse_depth
-validity_mask
-robot_base_to_camera
-task_state
-action
-success_checker
-```
-
-VGGT 这类模型告诉我们多视角 feed-forward 几何可行；MapAnything 进一步告诉我们，模型接口应该允许这些几何字段缺失、部分存在、带 metric scale 或只 up-to-scale。这个接口设计比单个 benchmark 分数更值得工程系统吸收。
-
-## 不能外推什么
-
-MapAnything 的边界也很清楚：
-
-1. **不建模动作和动力学**：它输出静态或准静态几何状态，不预测动作后果；
-2. **不处理 scene flow**：论文明确说当前 scene parameterization 不捕获 dynamic motion 或 scene flow；
-3. **不显式建模输入噪声**：几何输入可能来自 noisy SLAM、错误深度或漂移外参，论文把它列为未来方向；
-4. **大场景 memory 仍是问题**：一对一的 input pixels 到 output scene representation 会限制 scalability；
-5. **test-time compute scaling 未探索**：虽然架构可支持 iterative inference，但论文没有证明 test-time compute 如何稳定提升 3D reconstruction；
-6. **不能替代控制器**：metric geometry 能帮助 planning，但速度、力、碰撞、安全回退仍要由 planner/controller/safety layer 处理。
-
-## 项目启发
-
-如果把 MapAnything 接入具身系统，我会把它放在“几何状态融合器”位置，而不是直接当策略。
-
-```mermaid
-flowchart LR
-    A["RGB / RGB-D / multi-camera"] --> B["MapAnything geometry backbone"]
-    C["camera intrinsics / rays"] --> B
-    D["SLAM poses / odometry"] --> B
-    E["sparse depth / partial map"] --> B
-    B --> F["metric pointmaps + poses + confidence"]
-    F --> G["VLA state encoder / planner / world model"]
-    G --> H["controller + safety checker"]
-```
-
-最有价值的工程动作不是“替换掉所有传统几何模块”，而是把传统几何输出变成模型输入：
-
-| System signal | How MapAnything can use it |
-| --- | --- |
-| calibrated camera intrinsics | encode as ray directions |
-| known / estimated camera poses | encode as pose rotation and normalized translation |
-| RGB-D or LiDAR-projected sparse depth | encode as dense or 90% sparsified depth-style input |
-| partial reconstruction | condition dense metric completion |
-| uncertain geometry | current paper does not explicitly model it; should add uncertainty filtering before input |
-
-对 VLA 和世界模型来说，MapAnything 的输出可以作为 state，而不是直接作为 action。比如抓取前先把多相机 RGB-D 转成统一 metric pointmap，再让 planner 判断可达性、遮挡和碰撞；或者在世界模型里把 `metric geometry state + candidate action` 作为预测条件，而不是只用 RGB latent。
-
-MapAnything 属于“前沿但很工程化的几何 foundation model”。它的成熟证据主要来自官方论文、开源代码/模型、跨数据集 benchmark、输入组合消融、训练配方和速度显存 profiling；它尚未证明真实机器人闭环收益。
-
-最值得复用的是三件事：**factored scene representation、geometric input probability augmentation、two-stage view curriculum**。如果做具身项目，可以先把它作为几何状态层 baseline，而不是把它包装成完整具身智能方案。下一步最需要的证据，是带 noisy sensor / SLAM drift 的真实机器人 episode、与 planner/VLA/world model 的闭环 ablation，以及动态场景和失败恢复数据。
-
-## 阅读结论
-
-MapAnything 的方法证据来自 factored scene representation、几何输入增强和 view curriculum；实验要看多视图重建、速度显存和辅助输入消融。把它接入机器人时先作为几何状态层验收，再接 planner/VLA，不要直接当动作策略。
-
-## 相关阅读与下一步
-
-- 外部材料：[论文标题 arXiv 检索](https://arxiv.org/search/?query=MapAnything%3A+Universal+Feed-Forward+Metric+3D+Reconstruction&searchtype=title)。
-- 外部材料：[Semantic Scholar 标题检索](https://www.semanticscholar.org/search?q=MapAnything%3A+Universal+Feed-Forward+Metric+3D+Reconstruction)。
-- 外部材料：[Papers with Code 检索](https://paperswithcode.com/search?q=MapAnything%3A+Universal+Feed-Forward+Metric+3D+Reconstruction)。
-- 站内下一步：[论文精读专题](../index.md)。
+值得迁移的设计是输入与输出共同采用几何因子化，并把绝对尺度从形状学习中分离。它让额外传感信息有明确入口，让只有相对标注的数据仍能参与训练，也让实验能指出误差究竟来自相机、局部深度、跨视图对齐还是单位。一个统一模型因此不仅减少接口数量，还提供了更清楚的几何诊断方式。

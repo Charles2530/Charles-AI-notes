@@ -1,199 +1,104 @@
-# 推理服务系统：快模型为什么上线后仍然慢
+# 一条生成请求怎样被推理引擎执行
 
-离线测一个模型，常见做法是加载权重、喂 prompt、看 tokens/s。真正上线后，用户看到的是一条请求链：排队、鉴权、路由、prefill、KV cache 分配、decode 循环、采样、detokenize、安全检查、工具调用、流式返回、日志追踪。任何一段慢，都会把“模型很快”变成“服务很慢”。
+用户提交三个 prompt token，服务返回两个新 token。模型的数学任务是两次条件预测，推理引擎还要决定何时计算、KV 放在哪里、结果何时可以发出，以及请求结束后怎样释放状态。下面沿着这条短请求读 vLLM 的一次执行循环，再把并发和长上下文接进来。
 
-同一份模型权重在单请求 benchmark 里可能很快，在线上服务里仍可能让用户等待很久。
+本页对照 vLLM commit `fa3b9d13` 的 V1 引擎。源码版本持续变化，文中的函数与字段描述限定在这一版本；示意数字只用于理解状态，没有进行 GPU 性能测试。
 
-先把一次请求拆成状态机，而不是一次 `generate()`：
+## 入队时，模型还没有计算 prompt
 
-```text
-client
-  -> gateway / auth / quota
-  -> router / scheduler queue
-  -> prefill
-  -> KV cache allocation
-  -> decode loop
-  -> sampling / detokenization / safety / tool call
-  -> streaming response
-  -> trace / metrics / billing
-```
+设请求 A 的 prompt token 为 `[8,2,5]`，要求最多生成两个 token。刚入队时，已知 token 数为 3，已经计算的 token 数为 0，输出为空。它还需要模型权重、采样设置、位置编号、KV 分配以及停止条件。
 
-推理服务优化的核心，不是追一个最高 tokens/s，而是让不同类型请求在各自 SLO 内稳定完成。
+引擎的 [EngineCore.step](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/engine/core.py#L674)把一次推进拆成 `scheduler.schedule`、`model_executor.execute_model`、必要的 `sample_tokens`，以及 `scheduler.update_from_output`。这些是内部函数，不是建议应用直接调用的稳定公共 API。
 
-## 用户体感慢，先拆成三张账
+请求排队时，用户已经在等待，但 GPU 可能还没处理它。鉴权、路由、tokenization 与网络也发生在模型计算之外。测慢请求应保留这些阶段的起止点，避免把所有时间都记为模型耗时。
 
-LLM 服务里最容易混淆的是“模型速度”和“用户等待”。用户通常感受到三种时间：
+## 调度器决定这一轮处理哪些 token
 
-| 账 | 用户看到什么 | 常见瓶颈 |
-| --- | --- | --- |
-| TTFT | 第一个 token 迟迟不出来 | queue、prompt 太长、prefill、首轮 decode |
-| TPOT | 流式输出一顿一顿 | decode batch、KV 访存、采样、后处理 |
-| E2E latency | 整个任务完成慢 | 多轮工具、RAG、路由、fallback、安全检查 |
+在 [Scheduler.schedule](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py#L699) 的注释中，调度逻辑以 `num_computed_tokens` 与需要处理的 token 数描述请求，而非为 prefill 与 decode 各写一套完全独立状态机。它给请求分配本轮 token 预算，让已经计算的位置追上待处理位置。
 
-可以把 TTFT 简化写成：
+先忽略投机、多模态和异步 lookahead。对 A 来说，需要新算 $3-0=3$ 个 token。如果本轮预算足够，便安排完整 prompt；若只剩 2 个，可先计算前两个，下一轮继续。长 prompt 的 chunked prefill 就可以用这种“尚有位置未处理”的状态理解。
 
-\[
-\text{TTFT}\approx T_{\text{queue}}+T_{\text{prefill}}+T_{\text{first decode}}
-\]
+安排计算还必须获得 KV 空间。源码先调用 `kv_cache_manager.allocate_slots`，分配失败时会进入等待或抢占等分支。不能先完成 prefill、到最后才想起初始 KV 无处存放。被抢占的请求可能以后重算，这也是仅看输出吞吐会漏掉的额外工作。
 
-这里 \(T_{\text{queue}}\) 表示进入 GPU 前的排队时间，\(T_{\text{prefill}}\) 表示处理完整输入上下文的时间，\(T_{\text{first decode}}\) 表示第一次生成新 token 的时间。
+## Prefill 处理三个位置，首个输出来自最后位置
 
-稳定输出阶段可以看 TPOT：
+Worker 对 `[8,2,5]` 做前向。每个位置产生各层 K/V，因果 attention 让位置 0 只关注自身、位置 1 关注前两个、位置 2 关注三个。最后位置的 logits 给出下一个 token 分布，假设采样得到 7。
 
-\[
-\text{TPOT}\approx \frac{T_{\text{decode}}}{L_{\text{out}}}
-\]
-
-这里 \(T_{\text{decode}}\) 表示整个 decode 阶段耗时，\(L_{\text{out}}\) 表示输出 token 数。TTFT 好，不代表长回答流畅；TPOT 好，也不代表用户能很快看到首 token。聊天产品常盯 TTFT，代码补全更怕 TPOT 波动，agent 工作流还要看任务完成时间和每成功任务成本。
-
-## Prefill 和 Decode 是两种工作
-
-LLM 推理可以先粗分为 prefill 和 decode。
+这时可以向用户发出首个输出 7。无需为了“首个 token”再对完整 prompt 做一次额外 decode。Prompt 的 3 个位置已经写入 KV；刚采样的 7 还没有作为输入经过模型，所以它通常尚无自己的完整 K/V。
 
 ```text
-prefill: 读完整 prompt，一次性生成 prompt token 的 KV cache
-decode: 逐 token 生成，每一步读取历史 KV，再追加新 KV
+已知 token        [8, 2, 5, 7]
+已计算的前缀      [8, 2, 5]
+已提交输出        [7]
+下一轮需处理      [7]
 ```
 
-prefill 更像大块并行计算。输入越长，attention、MLP 和 KV 写入都变多。长文档问答、RAG、会议纪要、多模态上下文，经常慢在第一个 token 前面。
+已知序列长度、已计算长度和已分配容量是三个不同量。分页可能提前分配一整块，投机可能计算未被接受的候选，异步调度可能存在尚未回收的结果，因此生产实现还需要更多状态。
 
-decode 更像一个持续循环。每次只生成一个 token，却要在每层读取历史 KV，跑 attention 和 MLP，采样下一个 token，再把新 KV 追加回 cache。短 prompt 长输出、代码续写、创作型回答，经常慢在这个循环里。
+## Decode 读取历史，再把 7 写入 KV
 
-| 请求类型 | 容易慢在哪里 | 先看什么 |
-| --- | --- | --- |
-| 短聊天 | queue、batch wait、首步 decode | P95 TTFT、admission、batch window |
-| 长文档问答 | prefill、prefix cache、上下文裁剪 | prompt tokens、prefill tokens/s、prefix hit |
-| 长输出生成 | decode、KV 生命周期、采样 | TPOT、decode batch、输出长度 |
-| Agent / 工具链 | 多轮调用、共享前缀、外部工具 | trace waterfall、tool latency、cache reuse |
+下一轮只把新 token 7 送入模型，使用其正确位置编号。每层生成当前 query、key、value；query 读取历史 `[8,2,5]` 的 K/V，同时按实现处理当前 token，再得到新的隐藏表示和 logits。假设这次采样得到 1。
 
-这也是为什么 prefill / decode disaggregation 会出现。DistServe 这类系统把 prefill worker 和 decode worker 分开调度，是因为两段资源画像不同：prefill 更吃大块算力，decode 更吃 KV、显存、带宽和循环调度。这个设计适合规模和 SLO 都比较清楚的服务；小规模单机部署可能被 KV 传递、网络和调度复杂度抵消收益。
+输出已是 `[7,1]`，达到两个 token 的上限，请求结束。一般无需为了给最后采样的 1 建 KV 再运行一轮，因为没有后续预测需要它。若要继续会话，具体复用边界由下一请求的前缀匹配与缓存策略决定。
 
-## KV Cache 才是隐藏容量上限
+[update_from_output](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py#L2260)负责把 worker 结果映射回请求并更新状态。该版本还处理已取消请求、异步旧结果、KV 接收失败以及投机拒绝后的已计算长度回退。一次 forward 返回张量，只是请求推进过程的一部分。
 
-KV cache 保存每层 attention 的 key 和 value。没有 KV cache，decode 每生成一个 token 都要重算全部历史；用了 KV cache，历史不用重算，但显存会随着并发、上下文长度和输出长度增长。
+## 首 token 和后续间隔应怎样量
 
-KV cache 的数量级可以这样估算：
+设请求在 $t_0$ 发出，首 token 到达为 $t_1$，最后 token 到达为 $t_N$，输出 N 个 token。
 
-\[
-M_{\text{KV}}
-\approx
-2\cdot L\cdot B\cdot T\cdot H_{\text{kv}}\cdot D_{\text{head}}\cdot b
-\]
+$$
+\mathrm{TTFT}=t_1-t_0,\qquad
+\mathrm{TPOT}=\frac{t_N-t_1}{N-1}\quad(N>1).
+$$
 
-这里 \(2\) 表示 key 和 value 两份缓存，\(L\) 表示层数，\(B\) 表示活跃请求数，\(T\) 表示每个请求当前缓存 token 数，\(H_{\text{kv}}\) 表示 KV head 数，\(D_{\text{head}}\) 表示 head 维度，\(b\) 表示每个元素的字节数。
+若首 token 等待 300 ms，之后 100 个 token 平均间隔 40 ms，最后 token 约在 4.3 秒到达。单 token 输出的 TPOT 不适用。网络若一次发送多个 token，客户端测到的是 chunk 时间，不能据此声称知道每个 token 的精确时间戳。
 
-例如 32 层、batch 4、context 32k、8 个 KV heads、head dim 128、BF16：
+服务端还应单独记录排队、prefill、采样与发送。两段工作的 P95 不能简单相加得到总 P95，因为最慢的请求可能不是同一批；总时延分位数应由逐请求时间计算。
 
-\[
-2\times32\times4\times32768\times8\times128\times2
-\approx16\text{GiB}
-\]
+## 三条请求怎样共享一次迭代
 
-这行式子表示：仅 KV cache 就可能占掉十几 GiB。若 KV heads 从 8 变 32，显存大约再乘 4；若 context 从 32k 变 128k，也大约再乘 4。很多“支持 128k 上下文”的模型，上线后会被 batch、KV 精度、GQA/MQA、prefix cache、eviction 和 SLO 重新限制。
+设 A、B、C 分别还需生成 2、5、3 个 token。第一轮三条都参与；第二轮 A 完成；第三轮可以安排新请求 D 的工作，同时继续 B、C。它们无需等最长的 B 完成后再一起换批。
 
-## PagedAttention 把 KV 管成块表
-
-vLLM 的 PagedAttention 把 KV cache 切成 block，用 block table 把逻辑 token 位置映射到物理 block，思路接近操作系统里的分页内存。它解决的不是“模型算子本身变快”，而是动态请求长度下 KV 预留、碎片和共享的问题。
+新请求 D 仍有 prefill 工作，调度器要在 token 预算与 KV 空间内安排它。如果一段长 prefill 连续占据设备 200 ms，已在流式输出的 B 可能出现明显停顿。切块为调度器提供插入其他工作的机会，代价是更多调度和可能较低的单块效率。
 
 ![vLLM serving system overview](../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="900" }
 
 <small>图源：[vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)。这张图说明 scheduler、KV cache manager、CPU/GPU block allocator 和 worker 的关系。</small>
 
-读这张图时，先看三件事。第一，请求不是直接进入模型 worker，而是先被 scheduler 管理。第二，KV cache manager 和 block allocator 决定 GPU 显存怎样被分配、复用和释放。第三，worker 的吞吐和尾延迟取决于调度、KV 分配和 batch 形态，而不只取决于模型权重。
+图中的 scheduler、KV manager 与 worker 对应这三种职责。持续批处理提高资源利用的同时，也可能改变单轮耗时和请求等待。大 batch 的总 token/s 提高，不代表每条请求的 token 间隔都缩短。
 
-传统做法如果按最大上下文给每个请求预留 KV，短请求会浪费显存；如果临时扩容，又容易碎片化或搬移。PagedAttention 让请求需要多长就追加多少 block，请求结束就释放 block，共享前缀时还可以复用 block。这样 continuous batching 才有空间发挥：完成的请求可以从 batch 移走，新请求可以加入，GPU 不必等所有序列同长。
+## KV 从几个 token 变成显存上限
 
-但 PagedAttention 不是万能按钮。长 prompt 短输出主要痛在 prefill；短 prompt 长输出更容易痛在 decode 和 KV 带宽；agent 请求可能痛在共享前缀、分支、工具链和多轮 trace。读 vLLM benchmark 时，必须看 prompt/output 长度分布，而不是只看平均 tokens/s。
+对普通全注意力 Transformer，L 层、$H_{kv}$ 个 K/V heads、每 head 维度 d、每元素 b 字节，一个缓存 token 占
 
-## Continuous Batching 是吞吐和尾延迟的交换
+$$
+m_{token}=2L H_{kv} d b.
+$$
 
-静态 batch 要等一批请求凑齐再跑。continuous batching 允许 decode 每一步动态加入和移除请求：
+取 L=32、$H_{kv}=8$、d=128、BF16 的 b=2，结果为 128 KiB/token。32,768-token 单请求占 4 GiB，四条并发约占 16 GiB；若每条再生成 4,096 token，还会增加合计 2 GiB。权重、workspace、块表和临时状态需要另算。
 
-\[
-\mathcal B_{t+1}=(\mathcal B_t\setminus\mathcal F_t)\cup\mathcal A_t
-\]
+这个公式描述逻辑总量。TP 下各卡可能分片或复制 K/V，滑动窗口、MLA 与混合模型也有不同布局，应按实际实现重新计算，不能把总量机械除以卡数。
 
-这里 \(\mathcal B_t\) 表示当前 decode batch，\(\mathcal F_t\) 表示这一轮已经完成的请求，\(\mathcal A_t\) 表示新加入的请求。这个公式想表达 iteration-level scheduling：生成式模型的 batch 在每个 decode step 都可能变化。
+PagedAttention 将逻辑连续的 K/V 放进固定大小的物理块。每块容纳 16 token 时，34-token 请求需要三块，末块暂时空出 14 个位置。分页减少连续预留与外部碎片，但仍有尾块浪费和索引成本。
 
-它的好处是 GPU 不容易空转，整体吞吐上升。代价是调度更复杂，batch window、优先级、输入长度和输出长度会互相影响。一个常见故障是：把 batch window 拉大后，tokens/s 提升，短问答 TTFT P95 反而变差。原因不是模型变慢了，而是短请求为了合批在 queue 里等得更久。
+## 请求结束与取消都要回收状态
 
-Orca 的 iteration-level scheduling、vLLM 的 continuous batching、TensorRT-LLM 的 in-flight batching，本质上都在处理同一个事实：生成式请求不是一次固定 batch 的矩阵乘，而是一条每一步都在变化的流。
+A 完成后，块的活动引用可以释放；如果 prefix cache 选择保留公共前缀，块仍可能作为可复用状态驻留。另一条请求还引用的块不能提前释放，因此“请求结束”与“物理块立即全部回收”不总是一回事。
 
-## 路由、缓存和投机解码不要混成一个优化词
+取消也需要进入引擎状态机。仅关闭 HTTP 流，worker 仍可能继续生成；立即释放正在使用的 GPU 块，又可能让执行中的 kernel 读到被重用的内存。对照版本的调度器会忽略已结束请求的过期输出，并有延迟释放相关处理，具体时机依异步与传输配置而变。
 
-生产系统通常不该让所有请求走同一条路。闲聊、长文档、代码补全、多模态、工具 agent、高风险任务，对质量、延迟和成本的要求不同。
+验证服务生命周期时，至少应覆盖正常 EOS、最大输出长度、排队时取消、执行中取消和缓存失效。它们直接影响资源是否能持续被新请求使用。
 
-路由可以抽象成：
+## 优化应落在这条执行路径的具体位置
 
-\[
-m^\star
-=
-\arg\min_{m\in\mathcal M}
-\left(
-\lambda_1\text{cost}(m)
-+\lambda_2\text{latency}(m,x)
--\lambda_3\text{quality}(m,x)
-\right)
-\]
+共享前缀缓存减少重复 prefill，仍需后续 decode 读取历史 KV；投机解码用草稿和并行验证减少目标模型的串行轮次，还要回滚拒绝分支；量化减少某些张量载荷，收益取决于 kernel 与质量；拆分 prefill/decode 增加独立排程能力，也增加 KV 传输。
 
-这里 \(m^\star\) 表示选中的模型或服务链路，\(\mathcal M\) 表示候选集合，\(x\) 表示请求特征，\(\lambda\) 表示成本、延迟和质量的权重。这个公式不是让线上一定用线性打分，而是提醒：路由必须同时考虑任务类型、输入长度、输出长度、风险、缓存命中和 SLO。
+如果一个 Agent 任务总共 6 秒，其中工具占 4 秒、模型占 2 秒，把模型加速两倍后总耗时仍是 5 秒。先从 trace 找关键路径，再沿 [缓存与投机解码](caching-routing-and-speculative.md)、[GPU 执行](gpu-kernels-batching-and-memory-systems.md)或 [RAG 与工具系统](rag-agents-and-long-context-systems.md)继续分析。
 
-缓存也要分层看。Prompt cache / prefix cache 主要省重复输入的 prefill；KV block reuse 主要省显存分配和重复前缀；工具缓存主要省外部调用；RAG 缓存可能省检索，也可能伤新鲜度。把这些都叫 cache，会让排障变得很钝。
+## 对照源码与原始机制
 
-Speculative decoding 又是另一张账。它让 draft model 先猜多个 token，再由 target model 验证，命中时减少 target decode step。它适合 target decode 是瓶颈、draft 足够便宜且接受率高的场景。长 prompt 的 prefill 不会因为 draft 变快；结构化输出、低温采样、代码、工具调用和长上下文也会改变接受率。读 EAGLE、SpecInfer 或 vLLM speculative decoding 文档时，要看 draft 开销、接受率、target 验证开销和端到端 SLO。
-
-## 最小观测闭环：不要只看平均 tokens/s
-
-推理优化最怕“平均值看起来不错”。最小观测集应该按请求生命周期记录。
-
-| 类别 | 必看指标 |
-| --- | --- |
-| 请求形态 | 输入长度、输出长度、任务类型、模型路由 |
-| 队列 | queue time、admission reject、priority、batch wait |
-| prefill | prefill time、prefill tokens/s、prefix hit rate |
-| decode | TPOT、decode batch、tokens/s、sampling config |
-| KV | KV GiB、block usage、eviction、fragmentation、prefix reuse |
-| 尾延迟 | P50/P95/P99 TTFT、TPOT、end-to-end latency |
-| 质量 | 任务成功率、引用正确率、格式错误、fallback |
-| 成本 | 每请求成本、每 token 成本、每成功任务成本 |
-
-如果没有这些 trace，优化动作会互相打架：batch window 提升吞吐但伤 TTFT；压上下文省 prefill 但伤回答质量；低比特 KV 省显存但引入长上下文退化；路由省钱但让困难任务失败；投机解码提高 tokens/s 但对端到端 agent 任务没有收益。
-
-## 排查慢请求时按这组问题走
-
-第一，慢的是 TTFT、TPOT 还是 E2E？不要先说“模型慢”。
-
-第二，请求桶是什么？短聊天、长文档、长输出、代码、agent、多模态、高风险任务，不该混在一个平均数里。
-
-第三，队列里等了多久？如果 queue time 高，先看 admission、batch window、优先级和容量，而不是先换 kernel。
-
-第四，prefill 是否占主导？如果是，先看上下文长度、prefix hit、chunked prefill、上下文裁剪和 prefill 池。
-
-第五，decode 是否占主导？如果是，先看 KV cache、decode batch、attention backend、采样配置、投机解码和输出长度策略。
-
-第六，端到端慢是否来自模型外部？RAG、工具、格式修复、安全检查、网络和客户端 streaming 都可能让 GPU 指标看起来很好、用户体验仍然很差。
-
-## 最后判断
-
-推理服务系统的核心不是“哪个 runtime 最快”，而是一次请求在队列、prefill、KV cache、decode、采样、后处理和工具链中怎样流动。prefill 决定首 token 前的成本，decode 决定流式生成节奏，KV cache 决定并发和长上下文上限，batching 决定吞吐和尾延迟的取舍，路由决定不同任务是否走对链路。
-
-真正能落地的优化，通常不是一个开关，而是一张账单：这次改动省了 queue、prefill、KV、decode、工具链还是人工成本？又把成本转移到了质量、尾延迟、显存、工程复杂度还是可观测性上？把这张账拆清楚，推理服务才从黑箱变成可以改的系统。
-
-## 外部材料
-
-- [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：理解 KV cache 分页、block table 和 continuous batching。
-- [vLLM paper](https://arxiv.org/abs/2309.06180)：理解 PagedAttention 在论文里的内存管理和吞吐证据。
-- [Orca OSDI paper](https://www.usenix.org/conference/osdi22/presentation/yu)：理解 iteration-level scheduling 为什么适合生成式模型。
-- [DistServe paper](https://arxiv.org/abs/2401.09670)：理解 prefill / decode disaggregation 和 goodput-oriented serving。
-- [Hugging Face: Assisted Generation](https://huggingface.co/blog/assisted-generation)：理解 speculative decoding 的 draft / verify / acceptance 直觉。
-- [Hugging Face Text Generation Inference](https://huggingface.co/docs/text-generation-inference/index)：看成熟 LLM serving 栈的部署入口和功能边界。
-- [SGLang documentation](https://docs.sglang.ai/)：理解复杂生成程序、prefix reuse 和 RadixAttention。
-- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)：看 block pool、reuse、offload、eviction 与 GQA/MQA 等生产 KV 机制。
-- [NVIDIA Dynamo documentation](https://docs.nvidia.com/dynamo/latest/index.html)：理解现代推理服务里 disaggregated serving、routing 和 KV-aware 调度的系统方向。
-- [NVIDIA Inference Optimization blog](https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/)：补充 batching、quantization、KV cache 和 speculative decoding 的工程视角。
-- [智源转载：全栈 Transformer 推理优化](https://hub.baai.ac.cn/view/33449)：学习中文长文如何按模型、算子、显存、调度和工程分层讲推理优化。
-- [中国信通院：大模型推理优化关键技术与应用实践研究报告（2026）](https://www.caict.ac.cn/kxyj/qwfb/ztbg/202604/P020260415615308750699.pdf)：看产业报告如何组织模型压缩、PD 分离、KV 多级存储和服务调度。
-
-- [vLLM PagedAttention 博客](https://vllm.ai/blog/vllm)。
-- [TensorRT-LLM KV Cache System](https://nvidia.github.io/TensorRT-LLM/features/kvcache.html)。
-- [SGLang 文档](https://docs.sglang.ai/)。
+- [vLLM EngineCore](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/engine/core.py)，固定 commit `fa3b9d13`，从 `step` 追调度、执行、采样与状态更新。
+- [vLLM V1 Scheduler](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)，同一 commit，查看 token 预算、KV 分配、输出处理与拒绝回退。
+- [PagedAttention 论文](https://arxiv.org/abs/2309.06180)解释分页管理，论文结果限定于其硬件和请求设置。
+- [Orca](https://www.usenix.org/conference/osdi22/presentation/yu)解释 iteration-level scheduling 的系统背景。

@@ -1,133 +1,85 @@
-# 读完 12 份技术报告：前沿模型正在变成受约束的闭环
+# 模型权重之外，什么改变了任务结果
 
-把 12 份技术报告的目录并排，会看到一个反常现象：模型能力越强，报告花在数据、cache、rollout、工具环境和安全控制上的篇幅越多。**checkpoint 仍然重要，但它已经不足以描述一个前沿模型的真实能力。** 同一份权重接入不同的 KV cache、thinking budget、工具环境或安全控制，会表现出显著不同的能力与成本。
+给同一个代码模型两种设置。一种只能返回一段代码，另一种可以读取仓库、运行测试并根据报错修改。即使权重相同，二者接触的信息与可执行动作也不同。比较“模型能力”时，如果没有记录这些条件，分数差异很难解释。
 
-这也改变了我读技术报告的顺序。我现在会先找四件事：模型保存什么状态，系统允许它花多少计算，环境怎样返回反馈，失败后由谁截断或恢复。参数量和榜单分数仍然要看，但它们更像结果，不再是解释的起点。
+这里用修复一个函数的任务，连接参数、上下文、推理预算、工具反馈和评价。技术报告中的模型图与曲线是具体例子，不能把不同报告的结果拼成一条统一的因果结论。
 
-## 这 12 份报告各自把什么搬出了 checkpoint
+## 一次修复包含哪些可变条件
 
-| 报告 | 最值得带走的系统问题 |
-| --- | --- |
-| [DeepSeek-V3](../paper-deep-dives/technical-reports/deepseek-v3.md) | MoE 容量只有和 MLA、路由、FP8、通信重叠一起设计，才会转化为可训练、可服务的模型 |
-| [DeepSeek-R1](../paper-deep-dives/technical-reports/deepseek-r1.md) | R1-Zero 用 verifier、rollout 和 RL 激发长推理；产品级 R1 的可读性、稳定性与通用能力还依赖 SFT 和后续对齐 |
-| [DeepSeek-V4](../paper-deep-dives/technical-reports/deepseek-v4-pro.md) | 百万上下文必须接到压缩注意力、异构 KV cache、推理预算和 agent 基础设施 |
-| [Qwen3](../paper-deep-dives/technical-reports/qwen3.md) | thinking / non-thinking 是可切换的服务模式，小模型能力还依赖强模型蒸馏 |
-| [Qwen3.5-Omni](../paper-deep-dives/technical-reports/qwen35-omni.md) | 全模态交互受 token 速率、首包延迟、文本—语音对齐和多轮稳定性约束 |
-| [Cosmos 3](../paper-deep-dives/technical-reports/cosmos3.md) | Physical AI 需要理解、生成、动作、合成数据和部署设施共同组成训练平台 |
-| [Kimi K2](../paper-deep-dives/technical-reports/kimi-k2.md) | Agent 能力生长在工具模拟器、真实沙箱、轨迹过滤和异步 rollout 里 |
-| [LongCat-Video](../paper-deep-dives/technical-reports/longcat-video.md) | 长视频能力要同时处理续写接口、偏好奖励、误差累积和高分辨率推理成本 |
-| [Gemini 2.5](../paper-deep-dives/technical-reports/gemini-2-5.md) | dynamic thinking、搜索、代码执行和模型家族共同决定质量—成本边界 |
-| [GPT-4o System Card](../paper-deep-dives/technical-reports/gpt-4o-system-card.md) | 端到端语音让安全对象从文本回答扩展为实时交互轨迹 |
-| [InCoder-32B](../paper-deep-dives/technical-reports/incoder-32b.md) | 工业代码能力来自编译、仿真、测试、性能分析进入数据和评测闭环 |
-| [Nemotron 3 Super](../paper-deep-dives/technical-reports/nemotron-3-super.md) | Mamba、LatentMoE、MTP、NVFP4 和多环境 RL 都围绕 agent 工作负载重新分配成本 |
+任务要求函数同时处理普通列表、空列表与重复元素。模型先读函数和测试，再生成补丁，执行测试，然后决定是否修改。它可能在四个地方失败。
 
-这张表里很少有孤立的“模型技巧”。每一项都在处理模型与外部约束的接口。
+| 失败记录 | 所缺的信息或能力 | 可区分原因的对照 |
+| --- | --- | --- |
+| 没读到空列表约定 | 上下文或检索缺失 | 保持权重不变，显式提供约定 |
+| 约定已提供，代码仍索引第0项 | 条件理解或代码实现错误 | 提供反例，观察是否修正 |
+| 修正代码但没执行测试 | 工具使用或运行流程不足 | 比较允许执行与仅生成的设置 |
+| 所有可见测试通过，独立测试失败 | 测试覆盖或泛化不足 | 使用未参与开发的测试与输入分布 |
 
-## Checkpoint 更像闭环里的一个状态快照
+这些对照不一定只改变一种心理意义上的“能力”，却能明确改变了哪些信息和操作。应保留实际工具输入、返回状态和代码版本，不能把模型自述“已测试”当成执行证据。
 
-DeepSeek-V3、Kimi K2 和 Nemotron 3 Super 都使用稀疏专家扩大容量，但三者选择了不同的成本路径。DeepSeek-V3 用 MLA 压 KV、用 DualPipe 隐藏通信；Kimi K2 提高 expert sparsity，同时用 MuonClip 控制大规模训练里的 attention logit；Nemotron 3 Super 把专家计算搬到 latent space，并用 Mamba-heavy 主干降低长输出的状态成本。
+## 长上下文容量与有效使用是两件事
 
-如果只比较 total parameters，这些差异会消失。真正影响系统的量是：每个 token 激活多少参数，要搬多少 expert 权重，跨卡传多少 token，保存多少历史状态，草稿的平均接受长度是多少。
-
-DeepSeek-V4 又把这条线推到长上下文。CSA、HCA、滑动窗口和 on-disk KV 不是四个可以分开打分的模块；它们共同决定一段历史以什么粒度留在显存、内存或磁盘里。所谓百万上下文，落地后是一套分层状态管理策略。
+仓库越大，模型需要保留的文件、错误日志与修改历史越多。Attention历史状态可能增长，压缩或分层缓存可以降低存储成本，但也必须检验关键证据是否仍可读取。接收一百万token和能可靠解决一百万token中的任务，不是同一个评价。
 
 ![DeepSeek-V4 KV cache layout](../assets/images/paper-deep-dives/technical-reports/deepseek-v4-pro/figure-6-kv-cache-layout.png){ width="920" }
 
 <small>图源：[DeepSeek-V4 Technical Report](https://arxiv.org/abs/2606.19348)，Figure 6。原图展示 SWA、CSA、HCA 的 state cache 与 classical KV cache。这里的重点是：上下文长度最终会落实为多种状态的存储、压缩和复用规则；这张图本身不能证明百万 token 的真实 agent 任务已经可靠。</small>
 
-因此，我会把 checkpoint 理解成闭环里的一个状态快照。它封装了训练得到的参数，却没有封装完整的数据管线、运行时、工具权限、缓存策略和风险控制。单独下载权重，通常只能复现系统能力的一部分。
+图中区分不同注意力机制保存的状态。阅读时先数各类缓存的轴与长度，再检查生成新token时如何更新；如果改了缓存压缩，原来通过的远处证据检索用例也应重跑。图示布局本身没有给出所有长任务的成功保证。
 
-## 推理能力逐渐变成一项可分配资源
+[DeepSeek-V4报告](https://arxiv.org/abs/2606.19348)提供这种具体存储设计；基础计算见[KV与内存层次](../inference/context-compression-kv-eviction-and-memory-hierarchies.md)。这里引用它说明接口，未把原文性能当成本地测量。
 
-DeepSeek-R1 说明了长推理行为怎样在可验证任务上被 RL 激发；Qwen3 把 thinking 和 non-thinking 融进同一模型，并暴露 thinking budget；Gemini 2.5 与 DeepSeek-V4 则把 dynamic thinking 或 reasoning effort 放进产品和评测接口。
+## 增加生成预算，能改变什么
 
-把几份报告放在一起，更容易看出两个边界。
+给模型更多token，可能允许更完整的分析、更多候选或更多工具交互。它也可能重复错误前提。假设单个候选成功概率为0.3，且候选相互独立，采3个至少一次成功的概率是 `1−0.7³=0.657`。若候选完全相关，结果仍是0.3。
 
-第一，更多 thinking tokens 只在部分任务上有稳定回报。数学、代码和复杂检索往往能从额外计算中获益；简单问答、格式跟随或纯检索任务可能被过度思考拖慢，甚至受到干扰。
-
-第二，thinking budget 不能替代模型容量、知识和工具。一个任务失败，可能是推理不够，也可能是缺少领域知识、上下文没有取对、工具环境不可用，或者 verifier 奖励了错误方向。继续增加 token 只能解决第一类问题。
+即使至少一个候选正确，系统还需知道选哪一个。选择器可能误判，因此“生成集合包含正确答案”与“最终输出正确”必须分开报告。这个例子也不能用来解释所有长思考，因为一条更长轨迹与多个独立样本并不相同。
 
 ![Qwen3 thinking budget](../assets/images/paper-deep-dives/technical-reports/qwen3/figure-2-thinking-budget.png){ width="820" }
 
 <small>图源：[Qwen3 Technical Report](https://arxiv.org/abs/2505.09388)，Figure 2。原图展示若干数学、代码和 STEM 任务随 thinking budget 增加的表现曲线。它支持“测试时计算可以调节”的主张，但不能推出所有任务都应该使用更长思考。</small>
 
-我更愿意把 reasoning effort 看成和 batch、精度、上下文长度一样的运行时资源。产品路由需要直接判断：当前请求值得花多少内部计算、多少工具调用和多少验证成本。
+这张Qwen3曲线比较特定任务的thinking budget。沿横轴读预算，再分别看各任务曲线，不能用某一条上升曲线推断所有请求都值得增加计算。读源码时还需区分总输出上限、思考上限与工具次数，名称相似的参数未必控制同一个对象。
 
-## Agent 能力存在于环境与反馈里
+## 验证器也有覆盖边界
 
-Kimi K2、Gemini 2.5、InCoder-32B 和 Nemotron 3 Super 都把 agent 训练写到了环境层。工具调用要真的改变状态，代码要进入执行器，软件工程任务要能启动仓库和测试，长轨迹要能暂停、恢复和回放。
+函数编译成功只排除了部分语法与类型错误，可见测试通过只检查了已覆盖输入。若任务还要求低延迟或低内存，需要另加正确的性能测量，不能让模型通过删除功能获得高分。
 
-这说明静态数据只覆盖了 agent 行为的一部分。模型可以从 SFT 学会工具调用的格式，却要在环境中才会遇到参数错误、权限不足、超时、输出冲突和中间状态损坏。可靠性来自这些失败是否进入训练与评测。
+把一个简化选择器算清楚。假设100个候选中30个真正正确，验证器保留其中27个，也错误保留了7个错误候选。被保留集合的正确率为 `27/34≈79.4%`，高于原来30%，但仍有约20.6%错误。验证能改善筛选，却不等于保证。
+
+```python
+correct_kept, wrong_kept = 27, 7
+print(round(correct_kept/(correct_kept+wrong_kept)*100,2))
+```
+
+这个数字来自教学设定。真实验证器的误接收率需要独立标签；如果用同一个有偏judge既训练又评价，分数改善可能只是更适应它的偏好。
 
 ![InCoder Code-Flow pipeline](../assets/images/paper-deep-dives/technical-reports/incoder-32b/figure-3-code-flow-pipeline.png){ width="920" }
 
 <small>图源：InCoder-32B 报告，Figure 3；原报告入口见[论文专题页](../paper-deep-dives/technical-reports/incoder-32b.md)。图中 pre-train、mid-train、post-train 最终接到编译、仿真与执行验证。这里的重点是“评价工具也参与生产训练信号”，不据此比较工业榜单排名。</small>
 
-这里还有一个容易忽略的后果：环境定义了模型能学到的能力边界。
+InCoder的Code-Flow图把代码整理、上下文构造和执行反馈接进数据流程。验证结果用于形成监督材料，不应把整个过程直接叫作执行奖励强化学习；训练算法要按具体章节确认。[原文](https://arxiv.org/abs/2603.16790)与[项目](https://github.com/CSJianYang/Industrial-Coder)给出方法背景。
 
-| 环境只提供什么 | 模型更可能学到什么 | 仍然缺什么 |
-| --- | --- | --- |
-| 最终答案对错 | 解题和结果优化 | 中间步骤的可诊断性 |
-| 编译 / 单元测试 | 语法、功能修复 | 性能、可维护性、生产约束 |
-| 模拟工具反馈 | 工具协议和多轮格式 | 真实服务的延迟、权限与副作用 |
-| LLM judge 分数 | 开放任务的偏好近似 | judge 偏差之外的人类判断 |
-| 真实沙箱和失败日志 | 恢复、重试与状态修正 | 跨环境泛化和长期安全 |
+## 把工具状态与模型状态分开保存
 
-Agent 训练的核心资产因而不只是轨迹数量，还包括环境覆盖、反馈可信度和失败可回放性。没有这些，长轨迹可能只是更长的合成文本。
-
-## 全模态把实时性和安全带进了模型定义
-
-Qwen3.5-Omni 用 Thinker-Talker、低频音频 token、ARIA 和流式 Code2Wav 处理多模态交互；GPT-4o System Card 则从另一个方向提醒：语音的真人感、说话人信息和流式播放会产生文本评测覆盖不到的风险。
-
-两份报告放在一起读很有意思。前者说明全模态能力怎样被做出来，后者说明这种能力怎样改变上线边界。音频 token 压缩得够不够，决定长上下文能容纳多少小时；首包延迟够不够低，决定对话是否自然；针对预设声音偏离的流式分类器，则要在输出继续播放前尽早检测并中断。它不覆盖全部音频安全风险。
-
-Cosmos 3 和 LongCat-Video 又把同一问题扩展到视频与动作。视频模型一旦服务 Physical AI 或连续世界模拟，输出不再只接受“看起来不错”的评价。时间一致性、动作条件、物理状态和部署延迟都会成为模型接口的一部分。
-
-这几份材料让我形成了一个更具体的判断：**模态越接近真实时间，系统越不能把评测留到生成结束以后。** 语音需要流式检查，视频需要分段一致性，机器人动作需要闭环观测和安全控制。实时模态把监控从离线验收推到了生成过程内部。
-
-## 一个模型系统至少有五个相互约束的环
-
-下面这张图是我的综合推论，不是任何一份报告的原始架构。
+模型生成一个运行命令，只表示它提出了动作。工具实际执行后，系统才获得退出状态、输出和可能的文件变化。若超时或返回缺失，不能自动按成功推进；如果重试有副作用，也需要明确前一动作是否已发生。
 
 ```mermaid
-flowchart LR
-    A["数据环<br/>筛选、合成、失败回流"] --> B["训练环<br/>预训练、SFT、RL、蒸馏"]
-    B --> C["运行环<br/>cache、精度、thinking、draft"]
-    C --> D["环境环<br/>搜索、工具、代码、仿真、机器人"]
-    D --> E["验证环<br/>verifier、judge、测试、安全监控"]
-    E --> A
-    E --> C
+flowchart TD
+    O["任务、文件与约束"] --> M["模型产生补丁或工具请求"]
+    M --> X["执行器运行并记录状态"]
+    X --> R{"得到可用返回吗"}
+    R -->|是| V["检查功能与任务要求"]
+    R -->|否| F["保留失败状态，决定恢复或停止"]
+    V -->|需要修改| M
+    V -->|满足当前检查| E["独立评价最终结果"]
+    F --> M
 ```
 
-五个环之间不是固定流水线。验证结果会决定数据怎样回流，也会在运行时直接中断一次生成；环境成本会限制 RL 能采多少轨迹；部署精度会改变 rollout 分布；长上下文 cache 又会影响 agent 能保存多少工作状态。
+图中的回路没有要求无限重试。预算、环境和终止条件都是实验设置的一部分。恢复后使用的是哪些文件与工具结果，也会改变后续生成。
 
-技术报告里的很多“组合拳”，其实都在修这些接口：
+## 怎样报告一次可比较的结果
 
-- DeepSeek-R1、Qwen3 修训练环与验证环的连接
-- Kimi K2、InCoder、Nemotron 修环境环与训练环的连接
-- DeepSeek-V3/V4 修训练环与运行环的连接
-- Qwen3.5-Omni、GPT-4o 修实时运行与安全验证的连接
-- Cosmos 3、LongCat-Video 修生成模型与连续世界的连接
+至少固定或披露权重、tokenizer、上下文来源、提示模板、采样与预算、工具版本、可见测试、独立评价和运行设备。若只改工具权限，就报告该变化下的系统结果；若同时换权重与验证器，就不能把收益全部归给模型训练。
 
-这个视角也解释了为什么某些强模型很难被简单复现。论文公开了权重和部分代码，不代表环境、数据、judge、kernel、缓存与监控也被完整公开。
-
-## 以后我会怎样判断一份模型报告
-
-相比只抄 benchmark，我会多问下面六个问题。
-
-| 问题 | 想确认的事实 |
-| --- | --- |
-| 状态在哪里 | 参数、KV、Mamba state、工具状态、机器人状态分别存在哪里，能否恢复 |
-| 预算怎样分配 | thinking、上下文、采样步数、精度、工具次数由谁控制 |
-| 反馈是否可信 | reward 来自硬 verifier、模型 judge、仿真器还是人工偏好 |
-| 训练与部署是否同路 | rollout 精度、cache、工具协议和线上执行路径是否一致 |
-| 失败能否回放 | 日志、轨迹、测试、异常声音或控制失败是否能定位并进入数据环 |
-| 证据能否外推 | benchmark 是否绑定内部 harness、特定硬件、特定本体或官方 judge |
-
-这六个问题不会给出一个方便的总分，却更接近系统能否长期工作的判断。
-
-## 证据边界
-
-事实底稿来自站内 12 篇专题页及其对应技术报告。多数结果属于作者自述，部分模型闭源，很多 agent、长上下文、多模态和安全评测依赖内部 harness、工具权限、硬件或 judge。这里不把官方 benchmark 当作独立复现，也不从单项消融推导完整系统的因果贡献。
-
-“模型是受约束闭环”是我对这些报告的综合抽象。它能帮助组织问题，但还不是一个已有统一指标可以直接验证的理论。真正落地时，仍要按具体任务测量质量、延迟、成本、恢复率和安全事件。
+[数据划分与评测](../foundations/data-splits-metrics-and-evaluation-basics.md)解释独立估计，[RAG与Agent系统](../inference/rag-agents-and-long-context-systems.md)解释检索、工具和状态。沿着同一次请求追踪这些对象，可以把“模型更强”拆成可检查的具体变化。

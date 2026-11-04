@@ -1,84 +1,53 @@
-# 路线图
+# 技术知识地图
 
-路线图帮助你先选问题链，再决定先读什么、暂时跳过什么，以及遇到真实工程问题时该回到哪个专题下钻。常见入口包括生成模型、训练系统、推理部署、世界模型和具身闭环。
+同一个模型可以出现在训练脚本、生成服务和机器人系统中，每个位置需要理解的对象不同。这里按问题连接基础机制与专题，方便补齐缺口。你可以从当前问题进入，也可以沿一条数据流通读，不必按照固定周次或关卡推进。
 
-读站点时不要按目录顺序从头翻到尾。先把手头的问题写成一句可验证的话，例如“为什么量化后显存下降了，延迟却没有改善”，再沿着数据、模型、运行时和评测四个接口追踪。这样能知道每篇文章在回答哪一段问题，也能及时停在证据已经足够的位置。
+## 先看一条完整的数据流
 
-## 三条主线
-
-| 主线 | 适合读者 | 推荐入口 |
-| --- | --- | --- |
-| 生成与多模态 | 想从扩散模型走到 VLM/VLA，理解视觉、语言和生成的连接 | [扩散模型](../diffusion/index.md) -> [VLM/VLA](../vlm/index.md) -> [世界模型](../world-models/index.md) |
-| 训练与系统 | 更关心训练、量化、推理成本和上线稳定性 | [训练](../training/index.md) -> [量化](../quantization/index.md) -> [推理](../inference/index.md) |
-| 规划与具身 | 想理解 agent、世界模型、机器人和真实闭环 | [强化学习](../reinforcement-learning/index.md) -> [世界模型](../world-models/index.md) -> [具身智能](../embodied-ai/index.md) |
-
-三条主线可以交叉使用。比如 VLA 既需要多模态表征，也需要训练数据 recipe、推理延迟、世界模型前瞻和具身安全；做项目时通常需要跨专题回跳。
-
-## 先判断自己缺哪一层
-
-| 现象 | 可能缺的知识层 | 优先入口 |
-| --- | --- | --- |
-| 看懂公式，却说不清它如何影响显存或延迟 | 数学与基础机制 | [前置数学](../prerequisite-math/index.md) → [基础概念](../foundations/index.md) |
-| 模型训练正常，换数据或规模就不稳定 | 训练目标、数据和分布式状态 | [训练系统](../training/index.md) → [训练与推理系统](../training-and-inference-systems/index.md) |
-| benchmark 变快，线上 P99 没变 | 请求画像、runtime 和观测 | [推理系统](../inference/index.md) → [算子与编译器](../operators/index.md) |
-| demo 能完成，长任务或异常场景失败 | 闭环、恢复和安全 | [VLA](../vla/index.md) → [世界模型](../world-models/index.md) → [具身智能](../embodied-ai/index.md) |
-
-每次只补能解释当前现象的最短路径。基础章节的作用是拆接口，专题章节的作用是比较路线，论文精读的作用是检查具体方法有没有证据支持它的主张。
-
-## 按目标选择读法
-
-如果你想做文档问答、多模态助手或屏幕代理，先读 VLM/VLA 和推理系统，再补量化与服务栈。重点看视觉证据如何进入上下文、请求如何路由、成本和延迟能不能被控制。
-
-如果你想做文生图、视频生成或一步生成研究，先读扩散模型的训练、采样、蒸馏和整流路线，再回看论文专题中的 DMD、DMD2、Phased DMD、CausVid、WAN 等页面。不要一开始就陷进方法名，先分清训练目标、采样路径和少步生成各自解决什么。
-
-如果你想做机器人、VLA 或具身项目，先读具身智能路线图，再接 VLA 数据与动作接口、世界模型开发路线、规划控制与安全。这里最容易误判的是把“能输出动作”当成“能闭环部署”；真实系统还要处理传感器、标定、控制器、失败恢复和安全边界。
-
-## 一张全站阅读地图
+一段文本经过分词和打包，成为输入、标签与 mask；网络输出分数，损失把分数与目标比较，梯度改变参数。部署时固定参数，接收新请求，保存运行状态，并逐步产生输出。评测再比较输出与任务要求。
 
 ```mermaid
 flowchart TD
-    A["问题入口"] --> B{"你现在最想判断什么？"}
-    B --> C["能力从哪里来"]
-    B --> D["系统为什么贵"]
-    B --> E["闭环为什么失败"]
-    C --> C1["基础知识"]
-    C1 --> C2["扩散 / VLM / 强化学习"]
-    C2 --> C3["论文专题深读"]
-    D --> D1["训练系统"]
-    D1 --> D2["量化"]
-    D2 --> D3["推理系统"]
-    D3 --> D4["算子与编译器"]
-    E --> E1["VLA / 具身智能"]
-    E1 --> E2["世界模型"]
-    E2 --> E3["评测、失败回放与数据引擎"]
-    C3 --> F["横向比较"]
-    D4 --> F
-    E3 --> F
-    F --> G["项目设计 / 路线判断"]
+    D["原始记录与样本边界"] --> X["输入、目标、mask"]
+    X --> F["网络前向与状态"]
+    F --> L["损失、梯度、参数更新"]
+    L --> W["模型权重与配置"]
+    W --> S["请求、缓存、调度"]
+    S --> O["生成结果或动作"]
+    O --> E["任务评价与失败记录"]
+    E -. "修正数据和目标" .-> D
 ```
 
-先选问题入口，再沿主线下钻，最后回到横向比较。比如判断“FP8 对 VLA 有没有价值”，需要同时检查量化、视觉 connector、动作头、risk head、runtime 和闭环评测。
+图中的回路表示工程上根据评价修正方案，不表示测试集可以随意回流训练。用于独立报告结果的测试数据，需要与开发过程保持适当隔离。
 
-## 三种典型读者路径
+| 沿图遇到的疑问 | 对应文章 | 读完应能解释的对象 |
+| --- | --- | --- |
+| 同一批数字为什么有不同含义 | [张量、形状与计算图](../foundations/tensors-shapes-and-computation-graphs.md) | 样本轴、序列轴、通道轴及运算依赖 |
+| 数据怎样成为监督 | [数据与数据集](../foundations/data-and-dataset-basics.md) | 样本、右移标签、边界与采样权重 |
+| loss 怎样改动参数 | [用分类器读公式](../foundations/symbols-and-minimal-math.md) | logits、概率、损失、导数与更新 |
+| 为什么还需其他数学 | [数学工具](../prerequisite-math/index.md) | 当前式子使用的向量、概率或动力学假设 |
+| 同一网络怎样学不同能力 | [预训练目标与表示](../foundations/pretraining-objectives-and-representation-learning.md) | 可见输入、目标来源与误差方向 |
+| 为什么训练和部署占用不同 | [训练计算与推理服务](../training-and-inference-systems/index.md) | 梯度、优化器、激活与 KV 的生命周期 |
+| 一个高分究竟说明什么 | [数据划分与评测](../foundations/data-splits-metrics-and-evaluation-basics.md) | 样本来源、指标分母、权重与比较协议 |
 
-| 读者目标 | 第一遍要读 | 第二遍要补 | 最后要能做的判断 |
-| --- | --- | --- | --- |
-| 多模态应用工程 | VLM、推理、量化 | 评测、RAG、算子 | 哪些请求桶最贵，哪些视觉能力最脆弱 |
-| 训练系统工程 | 训练、数据、分布式 | 低精度、算子、推理成本 | 一个训练 recipe 的瓶颈在数据、显存、通信还是数值 |
-| 世界模型 / VLA | VLA、世界模型、具身智能 | 强化学习、视频模型、量化 | 动作接口、失败回放和 risk head 是否足以支撑闭环 |
+## 模型结构按信息怎样流动来查
 
-### 路径示例：从“读懂论文”到“会做方案”
+[Attention](../foundations/transformer-attention-and-tokenization.md)让当前位置读取其他位置，[位置与 Mask](../foundations/positional-encoding-masks-and-context.md)规定顺序及可见性；[Mamba](../foundations/mamba-and-hybrid-ssm-transformers.md)把历史压入递推状态；[MoE](../foundations/moe-and-large-model-architecture-basics.md)选择部分专家处理 token。它们可以组合，不能仅凭一个模型名字推断全部结构。
 
-如果读到一篇新 VLA 或世界模型论文，可以按下面顺序拆：
+碰到一张新架构图时，先沿输入走一遍，标出每条箭头的形状和是否跨时间保存，再确定输出被谁使用。具体索引见[模型结构](../model-architectures/index.md)。
 
-1. 先在 [VLA 路线图](../vla/index.md) 判断它解决的是数据、动作接口、评测还是安全。
-2. 再到 [世界模型路线图](../world-models/index.md) 判断它是 latent dynamics、视频模拟、动作条件还是风险规划。
-3. 接着到 [训练](../training/index.md) 和 [推理](../inference/index.md) 估计数据、显存、rollout 和服务成本。
-4. 如果它宣称低成本或高吞吐，再到 [量化](../quantization/index.md) 和 [算子](../operators/index.md) 检查收益是否能兑现。
-5. 最后回到评测页，问它的指标能不能解释真实失败。
+## 按实际问题进入生成、决策与系统
 
-这样读一篇论文，可以得到一张工程判断表：它适合哪里、贵在哪里、风险在哪里、下一步怎么验证。
+| 问题 | 建议连接的知识 | 为何需要这条连接 |
+| --- | --- | --- |
+| 视频为什么一开始正常，后面逐渐变形 | [视频生成](../diffusion/video-and-multimodal-diffusion.md) → [长视频与缓存](../diffusion/long-video-and-cache-1029-1246.md) | 区分噪声时间、帧时间、训练条件与生成历史 |
+| PPO loss 下降，策略行为却变差 | [强化学习](../reinforcement-learning/index.md) → [评测](../foundations/data-splits-metrics-and-evaluation-basics.md) | 优化的奖励、策略分布与真实任务可能不一致 |
+| 图表回答流畅，数字却错了 | [多模态证据](../foundations/multimodal-cot-and-reasoning-basics.md) → [视觉连接器](../vlm/visual-tokenizers-and-connectors.md) | 区分看不清、对象配错与算式错误 |
+| 预测视频很好，机器人仍抓不住 | [世界模型](../world-models/index.md) → [动作接口](../vla/action-representation-and-interfaces.md) | 视觉质量不直接检验动作条件、坐标与执行反馈 |
+| 量化后模型更小，响应没变快 | [量化](../quantization/index.md) → [算子](../operators/index.md) → [推理](../inference/index.md) | 存储、kernel 与请求耗时需要分别计算 |
 
-## 读完一个专题后应该留下什么
+## 从理解走到实现
 
-不要只记住术语。至少留下四个结果：一张输入到输出的流程图，一份主要状态和成本的清单，一组能区分方法的评测指标，以及一个可以在小规模实验中验证的假设。比如读完量化专题，应该能说明量化对象、误差来源、runtime 支持和质量回归如何互相约束，而不是只背下 INT4、FP8 和 GPTQ 的名称。
+[公式、代码与实验怎样对照](research-and-engineering-study-plan.md)用一个实际梯度推导说明最小实现的方法。[技术对照表](comparison-tables.md)按输入、目标、状态与成本比较方法。[技术决策](common-decision-patterns-and-tradeoffs.md)示范怎样用失败记录排除不相干的优化方向。
+
+术语记不清时可查[术语表](../glossary/index.md)，但术语定义不替代推导。能够把一个小输入算出结果，再解释换了条件会怎样，比记住一串方法缩写更接近实际理解。

@@ -66,7 +66,7 @@
     },
     {
       aliases: ["gradient", "Gradient", "Gradients"],
-      tip: "Gradient：梯度，表示参数往哪个方向改能让 loss 下降。可以把它理解成训练里的“下坡方向”。"
+      tip: "Gradient：梯度由各参数的偏导数组成。在欧氏空间中，它指向函数局部增长最快的方向；梯度下降沿负梯度更新，步长仍需合适。"
     },
     {
       aliases: ["batch", "Batch", "batch size", "Batch Size"],
@@ -101,8 +101,12 @@
       tip: "Bucket / 分桶：把样本按长度、任务、风险、模态、shape 或失败类型分组看指标。它能暴露平均分掩盖的局部问题。"
     },
     {
-      aliases: ["replay", "Replay", "回放", "replay set", "Replay Set"],
+      aliases: ["测试回放", "replay set", "Replay Set"],
       tip: "Replay / 回放：用固定历史请求、轨迹或失败样本反复测试新模型或新系统，帮助判断改动是否真的修复问题并避免回归。"
+    },
+    {
+      aliases: ["data replay", "Data Replay", "训练数据回放"],
+      tip: "Data Replay：训练中重新混入先前阶段或历史任务的数据，用来保持旧能力、减轻遗忘；它与用于检查系统回归的测试回放不同。"
     },
     {
       aliases: ["holdout", "Holdout", "holdout set", "Holdout Set"],
@@ -117,7 +121,7 @@
       tip: "Effective Token：真正参与学习或有效计算的 token。扣掉 padding、mask 区域、坏样本和重复曝光后，它比名义 token 数更能说明训练价值。"
     },
     {
-      aliases: ["data mixture", "Data Mixture", "mixture", "Mixture"],
+      aliases: ["data mixture", "Data Mixture"],
       tip: "Data Mixture：训练时不同数据源的采样配比。它像模型的课程表，会直接影响能力结构、风格和长尾覆盖。"
     },
     {
@@ -125,7 +129,7 @@
       tip: "Preflight：昂贵训练作业启动前的系统检查，通常覆盖节点健康、环境版本、数据状态、checkpoint、显存账本和配置一致性。"
     },
     {
-      aliases: ["hyperparameter", "Hyperparameter", "seed", "Seed"],
+      aliases: ["hyperparameter", "Hyperparameter", "random seed", "Random Seed"],
       tip: "Hyperparameter 是训练前设定的配置，如学习率、batch size、权重衰减；Seed 是随机种子，用于控制实验可复现性。"
     },
     {
@@ -133,7 +137,7 @@
       tip: "Logits 是 softmax 前的未归一化分数；Softmax 把分数变成概率；Cross Entropy 常用于分类和 next-token 训练。"
     },
     {
-      aliases: ["MSE", "L1", "MAE"],
+      aliases: ["MSE", "L1 loss", "L1 Loss", "MAE"],
       tip: "回归损失：MSE 强调大误差，L1/MAE 更关注绝对误差。选择哪种 loss 会影响模型对异常值的敏感度。"
     },
     {
@@ -173,8 +177,12 @@
       tip: "DPM-Solver：面向 diffusion ODE 的专用高阶求解器，目标是在较少采样步下保持生成质量。"
     },
     {
-      aliases: ["Euler"],
+      aliases: ["Euler method", "Euler Method", "Euler solver", "Euler Solver"],
       tip: "Euler：最简单的一阶数值积分方法。扩散采样里常作为快速、直接、好调试的低成本 solver。"
+    },
+    {
+      aliases: ["Euler angle", "Euler angles", "Euler Angle", "Euler Angles"],
+      tip: "Euler Angles：欧拉角，用三个按顺序执行的角度表示三维旋转；旋转轴顺序、内禀或外禀约定会影响结果。"
     },
     {
       aliases: ["Heun"],
@@ -293,7 +301,7 @@
       tip: "Transformer / Attention：现代大模型核心结构。Self-Attention 建模同一序列内部关系，Cross-Attention 用于把文本、图像或其他条件注入主干。"
     },
     {
-      aliases: ["QKV", "Q/K/V", "Query", "Key", "Value"],
+      aliases: ["QKV", "Q/K/V", "Query", "Key"],
       tip: "Q/K/V：Attention 的三组投影。Query 表示当前位置要找什么，Key 用于匹配，Value 是最终被加权读取的信息。"
     },
     {
@@ -313,11 +321,11 @@
       tip: "卷积/CNN 基础：Conv 用共享滑窗提取局部特征，Receptive Field 表示某个输出位置能看到的输入范围。"
     },
     {
-      aliases: ["pixel", "Pixel", "patch", "Patch", "patchify", "Patchify"],
+      aliases: ["pixel", "Pixel", "image patch", "Image Patch", "patchify", "Patchify"],
       tip: "视觉输入术语：Pixel 是图像最小网格点，Patch 是把图像切成的小块，Patchify 是把图像变成 patch token 序列。"
     },
     {
-      aliases: ["stride", "Stride", "padding", "Padding", "channel", "Channel"],
+      aliases: ["stride", "Stride", "channel", "Channel"],
       tip: "卷积形状术语：Stride 控制滑窗步长，Padding 控制边界补齐，Channel 表示特征通道数。"
     },
     {
@@ -405,7 +413,7 @@
       tip: "ONNX Runtime，常简称 ORT。它执行 ONNX 图，并通过不同 Execution Provider 对接 CPU、GPU 和厂商后端。"
     },
     {
-      aliases: ["Execution Provider", "EP", "OpenVINO", "DirectML", "QNN"],
+      aliases: ["Execution Provider", "OpenVINO", "DirectML", "QNN"],
       tip: "ONNX Runtime 后端术语：Execution Provider 负责把 ONNX 图交给具体硬件或库执行，例如 OpenVINO、DirectML、QNN、TensorRT EP。"
     },
     {
@@ -489,7 +497,7 @@
       tip: "PagedAttention：把 KV cache 像分页内存一样管理，降低碎片并提升 LLM serving 的并发能力。"
     },
     {
-      aliases: ["HBM", "L2", "SM", "Tensor Core", "Tensor Cores"],
+      aliases: ["HBM", "SM", "Tensor Core", "Tensor Cores"],
       tip: "GPU 硬件术语：HBM 是高带宽显存，L2 是片上缓存，SM 是流式多处理器，Tensor Core 是矩阵计算单元。"
     },
     {
@@ -501,8 +509,16 @@
       tip: "NVIDIA 硬件与互联术语：Hopper/Blackwell 是 GPU 架构，SM90/SM100 是对应代际 SM，NVSwitch 用于多 GPU 高带宽互联。"
     },
     {
-      aliases: ["PTX", "SASS"],
+      aliases: ["PTX assembly", "PTX Assembly", "GPU PTX", "SASS"],
       tip: "GPU 编译结果层级：PTX 类似中间汇编，SASS 是更接近 NVIDIA GPU 机器指令的最终汇编。"
+    },
+    {
+      aliases: ["PTX loss", "PTX Loss"],
+      tip: "PTX Loss：后训练中混入预训练式语言建模损失，用高质量文本保持原有能力、减轻遗忘；具体样本与权重由训练配方决定。"
+    },
+    {
+      aliases: ["L2 cache", "L2 Cache"],
+      tip: "L2 Cache：二级缓存。在 GPU 中通常由多个计算单元共享，用来减少对显存的重复访问；容量和组织方式取决于硬件。"
     },
     {
       aliases: ["TMA", "MMA", "WGMMA", "SIMT"],
@@ -549,8 +565,12 @@
       tip: "QPS：Queries Per Second，每秒请求数。衡量服务吞吐，但需要和延迟、质量一起看。"
     },
     {
-      aliases: ["SLO", "SLA", "SLI"],
+      aliases: ["SLO", "SLI", "Service Level Agreement"],
       tip: "服务可靠性术语：SLI 是指标，SLO 是目标，SLA 是对外承诺。推理服务常用它们约束延迟和可用性。"
+    },
+    {
+      aliases: ["Sparse-Linear Attention", "SLA2"],
+      tip: "Sparse-Linear Attention：将少数重要关系交给稀疏 attention，其余关系用线性分支近似。SLA2 进一步学习路由与混合系数，并通过量化感知训练适应低比特计算。"
     },
     {
       aliases: ["observability", "Observability", "trace", "Trace", "dashboard", "Dashboard"],
@@ -595,6 +615,10 @@
     {
       aliases: ["DP", "TP", "PP", "CP", "SP"],
       tip: "并行策略缩写：DP 数据并行，TP 张量并行，PP 流水并行，CP 上下文并行，SP 序列并行。"
+    },
+    {
+      aliases: ["Expert Parallelism", "expert parallelism", "Expert Parallel", "expert parallel"],
+      tip: "Expert Parallelism：专家并行，把 MoE 的不同专家放在不同设备上，按照路由结果分发 token，并收集专家输出；主要代价包括通信与负载不均。"
     },
     {
       aliases: ["Context Parallelism", "context parallelism", "Ulysses", "Ring Attention", "USP", "LoongTrain"],
@@ -677,7 +701,7 @@
       tip: "VQA：Visual Question Answering，视觉问答。模型根据图像内容回答问题。"
     },
     {
-      aliases: ["Grounding", "Referring", "Screen Agent", "Document Understanding"],
+      aliases: ["visual grounding", "Visual Grounding", "Referring", "Screen Agent", "Document Understanding"],
       tip: "VLM 任务术语：Grounding/Referring 关注语言到图像区域的定位，Screen Agent 面向屏幕操作，Document Understanding 处理文档结构与文字。"
     },
     {
@@ -797,7 +821,7 @@
       tip: "具身部署术语：Domain Randomization 让仿真随机化以提高鲁棒性，System ID 校准真实物理参数，Safety Case 是安全论证证据链。"
     },
     {
-      aliases: ["policy", "Policy", "reward", "Reward", "trajectory", "Trajectory"],
+      aliases: ["RL policy", "RL Policy", "reward", "Reward", "trajectory", "Trajectory"],
       tip: "控制与强化学习术语：Policy 是从状态到动作的策略，Reward 是反馈信号，Trajectory 是一段观测、动作和结果组成的轨迹。"
     },
     {
@@ -853,11 +877,11 @@
       tip: "RLVR：Reinforcement Learning with Verifiable Rewards，用规则、测试、指标等可验证奖励训练模型，常见于数学、代码和世界模型状态预测。"
     },
     {
-      aliases: ["Actor-Critic", "actor-critic", "critic", "Critic", "actor", "Actor"],
+      aliases: ["Actor-Critic", "actor-critic"],
       tip: "Actor-Critic：actor 负责生成动作或 token，critic 估计未来回报作为 baseline，帮助降低策略梯度方差。"
     },
     {
-      aliases: ["value", "Value", "value function", "Value Function", "Q-value", "Q Value"],
+      aliases: ["value function", "Value Function", "Q-value", "Q Value"],
       tip: "Value / Q-value：估计从当前状态或状态-动作对出发的未来回报。它不是当前 reward，而是长期收益预期。"
     },
     {
@@ -936,7 +960,7 @@
       tip: "Decode：自回归逐 token 生成阶段。它通常反复读取 KV cache，单步 batch 小、带宽敏感，优化重点和 prefill 不同；TPOT、tail latency、continuous batching 和 speculative decoding 都主要影响这里。"
     },
     {
-      aliases: ["MoE"],
+      aliases: ["MoE", "mixture-of-experts", "Mixture-of-Experts", "Mixture of Experts", "mixture of experts"],
       tip: "MoE：Mixture of Experts，专家混合模型。它通过路由让每个 token 只走少数 expert，用较低激活计算换更大总容量；工程瓶颈常在 expert 负载均衡、all-to-all 通信、路由稳定性和 serving 时的批处理碎片。"
     },
     {
@@ -961,13 +985,13 @@
     { aliases: ["gradient", "Gradient", "Gradients", "Forward", "forward", "Backward", "backward"], href: "foundations/autograd-activation-checkpointing-and-memory/" },
     { aliases: ["batch", "Batch", "batch size", "Batch Size", "effective token", "Effective Token", "effective tokens", "Effective Tokens", "有效 token"], href: "training/input-pipelines-packing-and-throughput-governance/" },
     { aliases: ["checkpoint", "Checkpoint"], href: "training/distributed-training-and-checkpointing/" },
-    { aliases: ["data mixture", "Data Mixture", "mixture", "Mixture"], href: "training/scaling-curriculum-and-data-mixture/" },
-    { aliases: ["train set", "Train Set", "validation set", "Validation Set", "test set", "Test Set", "holdout", "Holdout", "holdout set", "Holdout Set", "data leakage", "Data Leakage", "leakage", "污染", "数据污染", "bucket", "Bucket", "分桶", "replay", "Replay", "回放"], href: "foundations/data-splits-metrics-and-evaluation-basics/" },
+    { aliases: ["data mixture", "Data Mixture"], href: "training/scaling-curriculum-and-data-mixture/" },
+    { aliases: ["train set", "Train Set", "validation set", "Validation Set", "test set", "Test Set", "holdout", "Holdout", "holdout set", "Holdout Set", "data leakage", "Data Leakage", "leakage", "污染", "数据污染", "bucket", "Bucket", "分桶", "测试回放", "replay set", "Replay Set"], href: "foundations/data-splits-metrics-and-evaluation-basics/" },
 
     { aliases: ["SFT", "RLHF", "DPO"], href: "training/pretraining-finetuning-alignment/" },
     { aliases: ["MTP"], href: "training/mtp-and-speculative-decoding/" },
     { aliases: ["FP8", "FP4", "NVFP4", "QAT", "PTQ", "QLoRA"], href: "training/low-bit-training-and-numerics/" },
-    { aliases: ["MoE", "DeepSeekMoE", "auxiliary-loss-free"], href: "operators/moe-routing-and-sparse-kernels/" },
+    { aliases: ["MoE", "mixture-of-experts", "Mixture-of-Experts", "Mixture of Experts", "mixture of experts", "DeepSeekMoE", "auxiliary-loss-free"], href: "operators/moe-routing-and-sparse-kernels/" },
     { aliases: ["DualPipe"], href: "training/distributed-training-and-checkpointing/" },
 
     { aliases: ["KV Cache", "KV cache", "KV"], href: "inference/context-compression-kv-eviction-and-memory-hierarchies/" },
@@ -983,7 +1007,7 @@
     { aliases: ["CUDA"], href: "operators/cuda-programming-model-and-memory/" },
     { aliases: ["Triton"], href: "operators/triton-programming-model-and-autotuning/" },
     { aliases: ["CUTLASS", "CuTe"], href: "operators/cutlass-cute-and-compiler-stack/" },
-    { aliases: ["PTX", "SASS"], href: "operators/ptx-sass-and-compiler-inspection/" },
+    { aliases: ["PTX assembly", "PTX Assembly", "GPU PTX", "SASS"], href: "operators/ptx-sass-and-compiler-inspection/" },
     { aliases: ["GEMM"], href: "operators/gemm-attention-and-fused-kernels/" },
     { aliases: ["FlashAttention", "FA3", "FA4"], href: "operators/long-context-and-flashattention-evolution/" },
     { aliases: ["NCCL", "DeepEP"], href: "operators/communication-kernels-and-overlap/" },
@@ -991,7 +1015,7 @@
     { aliases: ["DDPM", "DDIM", "SDE", "ODE", "CFG", "DMD", "DMD2", "DPM-Solver", "Heun"], href: "diffusion/" },
     { aliases: ["Rectified Flow", "Flow Matching", "LCM", "Phased DMD"], href: "diffusion/consistency-models-and-rectified-flow/" },
 
-    { aliases: ["PPO", "GRPO", "RLVR", "policy", "Policy", "reward", "Reward", "trajectory", "Trajectory", "state", "State", "action", "Action", "advantage", "Advantage", "return", "Return", "Bellman", "Bellman Equation", "value", "Value", "value function", "Value Function", "Q-value", "Q Value"], href: "reinforcement-learning/" },
+    { aliases: ["PPO", "GRPO", "RLVR", "RL policy", "RL Policy", "reward", "Reward", "trajectory", "Trajectory", "state", "State", "action", "Action", "advantage", "Advantage", "return", "Return", "Bellman", "Bellman Equation", "value function", "Value Function", "Q-value", "Q Value"], href: "reinforcement-learning/" },
     { aliases: ["verl", "HybridFlow"], href: "reinforcement-learning/verl-code-flow/" },
 
     { aliases: ["World Model", "world model", "WM"], href: "world-models/" },
@@ -1015,6 +1039,7 @@
     "h2",
     "h3",
     ".arithmatex",
+    ".mermaid",
     ".MathJax",
     ".highlight",
     ".term-tip",

@@ -15,229 +15,204 @@ paper_topic: 高效推理
     **GitHub / 项目：** GitHub：[github.com/SafeAILab/EAGLE](https://github.com/SafeAILab/EAGLE)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2503.01840)；[GitHub API / repo](https://github.com/SafeAILab/EAGLE)；Checked Date：2026-06-15；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 原论文故事线
+## 更多数据没有自然带来更快的草稿模型
 
-### 研究背景
+EAGLE-3 从一个反常观察出发：扩大 EAGLE 的训练数据，推理加速并没有持续明显提高。第一代要求小 head 既预测正确 token，又逼近目标模型指定的顶层 hidden feature；后一个约束未必是提高接受率所必需的，却限制了小模型的表达方式。
 
-原论文延续 EAGLE 系列的投机解码路线。EAGLE 证明 draft 不一定要是独立小 LLM，可以利用 target LLM 的 feature 预测候选 token；EAGLE-2 又把静态树改成动态树。但当 draft model 要连续递归生成多步候选时，一个更深的问题出现了：训练时它通常看真实 token 前缀，推理时却会把自己前一步生成的 token / feature 再喂给自己。
+作者因而移除特征回归目标，让 head 直接服务于 token 预测。但只删 loss 会产生新的问题：第一步输出不再接近目标特征，第二步把这个自由向量作为输入时，就进入训练没见过的分布。EAGLE-3 用 training-time test 在训练里实际反馈草稿输出，再结合目标模型的低、中、高层特征，解决这一连串依赖。[↗](https://arxiv.org/pdf/2503.01840v3#page=2)
 
-### 问题（Challenge）
+这个问题和把草稿模型做大不同。推理时草稿必须比目标模型便宜，扩大网络会增加每轮开销；增加离线训练数据则有机会在不增加推理网络规模的情况下提高接受率。关键在于，学习目标是否允许这些数据转化为最终需要的能力。EAGLE-3 改的是这条关系，而不是单纯为原 head 多训练几个 epoch。
 
-EAGLE-3 要解决的是多步 draft 的 train-test mismatch。挑战在于 speculative decoding 的收益来自连续接受多个 token；如果 draft 第一步还不错，但第二步、第三步开始吃到自己生成的上下文，误差会沿 draft path 放大，acceptance length 很难随训练数据规模继续提升。这个问题有价值，因为 target model 越大，能多接受一个 token 的推理收益越高；draft 的稳定递归能力直接决定大模型部署加速上限。
+三代方法的改动位置可以先分清。EAGLE 通过目标特征与已采样 token，降低下一步草拟的难度；EAGLE-2 保留这个 head，动态决定候选树应该往哪里扩展；EAGLE-3 则重新设计 head 的输入、目标和训练递归，再配合第二代的动态树。比较时要同时看到草稿质量与调度预算，不能把三个名称当作只改了模型大小的版本。[↗](https://arxiv.org/pdf/2503.01840v3#page=4)
 
-### Finding
-
-EAGLE-3 的 finding 是：draft model 应该在训练阶段经历测试阶段会遇到的递归生成过程，也就是 training-time test。作者把 exposure bias 从文本生成质量问题转写成推理加速问题：draft 不是要写出最终答案，而是要生成 target 最可能接受的候选；如果训练时从未见过自己的中间错误，它无法学会在这些状态上继续给出可接受候选。让训练过程模拟测试递归，就能把更多训练数据转化为更长 acceptance。
-
-### 方法
-
-方法包括三处变化。第一，EAGLE-3 放弃原 EAGLE 的 feature regression constraint，改为直接预测 token，使 draft 目标更贴近 acceptance。第二，引入 training-time test：训练时递归生成 draft steps，让后续 step 的输入包含 draft 自己产生的中间状态。第三，融合 target LLM 的低层、中层、高层 feature，而不是只依赖 single high-level feature。推理时仍由 target LLM 对 draft tree 做标准验证，因此输出分布保持不变。
-
-### 结论
-
-论文用 scaling、MT-bench 等任务和多模型设置展示：EAGLE-3 的 speedup 与 acceptance length 能随训练数据规模继续增长，而原 EAGLE 更早饱和。消融表明，去掉 feature constraint、引入 multi-layer feature fusion、使用 training-time test 都能提高 acceptance；递归步数下的接受率曲线说明 draft 在多步生成中更稳。边界是它仍依赖 target feature 可访问、draft/target 工程集成和验证 kernel 效率。
-
-### 关键术语
-
-- **Training-Time Test（训练时测试）**：训练阶段模拟推理时的递归 draft 过程，让模型见到自生成状态
-- **Exposure Bias（暴露偏差）**：训练输入分布与推理输入分布不一致，导致多步生成误差累积
-- **Acceptance Length（接受长度）**：target LLM 一次验证中连续接受的 draft token 数
-- **Feature Regression Constraint（特征回归约束）**：要求 draft 输出逼近 target hidden feature 的训练限制
-- **Multi-layer Feature Fusion（多层特征融合）**：融合 target LLM 不同层表征作为 draft 输入
-
-## 从 EAGLE 到 EAGLE-3：放弃 feature regression 约束
-
-EAGLE 用 target LLM 的 second-to-top-layer feature 做 draft。这个思路很聪明，但原版 EAGLE 要求 draft head 预测 target feature，本质上有一个 feature regression constraint。这个约束让第一步 draft 比较稳，但也把 draft model 的表达空间绑死在“像不像 target feature”上；训练数据继续变多时，speedup 和 acceptance 的提升会变钝。
-
-EAGLE-3 做了三件事：
-
-| 改动 | 解决什么 |
-| --- | --- |
-| Direct token prediction | 不再强迫 draft output 回归 target feature，直接服务 token acceptance |
-| Training-time test | 训练时模拟多步 draft，缓解推理时 exposure bias |
-| Multi-layer feature fusion | 不只看 top-layer feature，而是融合低层、中层、高层特征 |
+下面两幅 scaling 图应一起看：横轴是相对 ShareGPT 的数据量，一幅看速度，一幅看接受长度。EAGLE-3 的增长表明新增数据能在该设置下转化为更好的草稿；这不是对无限扩大数据的普遍幂律证明。
 
 ![EAGLE 与 EAGLE-3 的 scaling law 原图](../../assets/images/paper-deep-dives/inference/eagle-3/figure-1-scaling-law-eagle.png){ width="720" }
 
 ![EAGLE-3 scaling law 原图](../../assets/images/paper-deep-dives/inference/eagle-3/figure-1-scaling-law-eagle3.png){ width="720" }
 
-<small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 1。原图表达：在 LLaMA-Instruct 3.1 8B + MT-bench 上，EAGLE 随 draft 训练数据增加收益有限，而 EAGLE-3 的 speedup 和 acceptance length 随数据规模继续提高。本站读法：这张图的关键是“数据规模能不能转成更多 accepted tokens”。</small>
+两幅图都使用 LLaMA-Instruct 3.1 8B、MT-bench，横轴为 1、2、4、8 倍 ShareGPT 数据。EAGLE-2 的加速约从 3.2 倍升到 3.3 倍后接近平坦，EAGLE-3 约从 3.7 倍升到 4.4 倍；接受长度则从约 5.2 增长到 6.1。这里的近似值按图读取，最终满量配置的精确表值在后文列出。
 
-## Training-time test 是什么
+已有小数据量时，新架构就更快；继续扩大数据后，它又能继续获益。这支持“训练设计释放了数据扩大的收益”，但四个点并没有给出无限扩展的函数规律，也没有将数据量、数据组成和目标回答生成的全部影响逐一隔离。把横轴称作 data scaling，并不等于已经测得完整的算力最优 scaling law。
 
-普通训练类似 teacher forcing：模型总是看到真实前缀。投机解码的测试时刻不是这样。第 1 个 draft token 由 target feature 条件生成；第 2 个 draft token 的输入已经包含 draft model 自己刚才的输出；第 3 步又吃第 2 步的输出。越往后，输入越不像训练数据。
+## 先解除输出约束，再让训练经历真实递归
 
-EAGLE-3 把这个过程搬到训练里：
+第一代 EAGLE 的输出 $\hat f$ 同时接受特征回归和 token 分类监督。EAGLE-3 的输出改记为 $a$：它仍是能送进 LM head 的隐藏向量，但不需要等于目标模型某一层的特征。所谓 direct token prediction 指优化目标直接围绕 token，不意味着模型内部完全没有连续表示。
 
-```text
-target features
-  -> draft step 1 -> draft hidden/output a1
-  -> feed a1 and sampled token back
-  -> draft step 2 -> draft hidden/output a2
-  -> feed a2 and sampled token back
-  -> draft step 3 ...
-```
+原来的回归约束有双重作用。一方面，它要求容量很小的 decoder 复现大模型内部的特定向量，这比只让正确 token 获得足够概率更苛刻；另一方面，正因为输出被拉回目标特征附近，下一步才可以把它当作训练时常见的输入。删去约束不能只看到释放表达能力这一面，也要接住它原来承担的接口匹配作用。
 
-训练时已经让 draft model 处理自己的中间输出，推理时多步递归就不再陌生。这就是 training-time test 的名字来源：把 test-time 的 draft 过程提前放进 training。
+一个能正确预测 token 的向量，并不必然是原目标特征的良好近似。即使两个向量都让某个词成为 top-1，其余 logits、几何位置与后续 decoder 响应也可以不同。于是第一步 token prediction 做得更好，与第二步输入更难处理，完全可能同时发生。论文的诊断正是把这两个问题分别测量。
+
+如果训练永远输入真实目标特征，推理却从第二步开始输入自生成 $a$，训练和使用条件就不一致。Training-time test 在训练中执行若干步草稿，把产生的 $a$ 继续反馈给同一个 decoder layer，并在后续 token 目标上学习。它让模型学会处理“真实目标信息加一段自己的输出”这种混合历史。
+
+下面的图按上、中、下三组比较。中间仅删除特征 loss 的方法可以提高第一步接受率，却会损害递归后的表现；底部在训练中加入测试式展开，才把解除约束的好处带到多步草稿。[↗](https://arxiv.org/pdf/2503.01840v3#page=3)
 
 ![Training-time test 原论文图](../../assets/images/paper-deep-dives/inference/eagle-3/figure-3-training-time-test.png){ width="760" }
 
-<small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 3。原图表达：EAGLE-3 不再预测 target feature，而是直接预测 token；训练阶段模拟测试阶段的多步生成。本站读法：看箭头如何把 draft model 自己的输出继续喂回下一步。</small>
+### Figure 4 如何识别“第一步很好、第二步失效”
 
-## 多层 feature fusion 为什么有用
+先看左图的 $0$-$\alpha$。不带 feature prediction 的黄色曲线随数据扩大，从约 0.75 升到 0.81，甚至高于完整 EAGLE-3 的第一步接受率。若只检查这一指标，很容易得出删 loss 已经足够的判断。
 
-EAGLE-3 推理时仍然依赖 target LLM 的一次前向。target model 会产生低层、中层、高层 feature，论文记作 \(l,m,h\)。它把这些 feature 拼接后投影成融合 feature：
+![第一步接受率随训练数据变化](../../assets/images/paper-deep-dives/inference/eagle-3/figure-4-acceptance-left.png)
 
-\[
-g = W[l;m;h]
-\]
+再看右图的 $1$-$\alpha$：输入里已经含有一次草稿自己的输出时，同一个黄色方案只有约 0.20–0.31，远低于 EAGLE 的约 0.67–0.69；加入 training-time test 的蓝线则约为 0.70–0.78。两图一起说明，问题不是单步分类器没学会，而是输出回到输入之后，模型缺少对这种状态的训练。[↗](https://arxiv.org/pdf/2503.01840v3#page=3)
 
-这里 \([l;m;h]\) 表示把三层 feature 串接，\(W\) 是全连接投影，\(g\) 是给 draft model 的条件表示。读这行式子时，重点不是矩阵乘，而是信息来源：低层 feature 保留局部和词法线索，中层 feature 保留结构，高层 feature 更接近语义和 logits。
+![反馈一次自身输出后的接受率](../../assets/images/paper-deep-dives/inference/eagle-3/figure-4-acceptance-right.png)
+
+这也让“训练时见过自己犯错”有了更精确的含义。EAGLE-3 不只是给真实特征加随机噪声；它实际产生自己的内部向量，把这些向量继续送入 decoder，并在后续 token 预测上接受监督。训练因此覆盖真实融合特征与自生成表示混合的历史。模型仍可能预测错误，改变的是它不再只在完全由目标模型提供输入的条件下学习。
+
+训练展开还涉及 attention mask。不同原序列位置产生的续写属于不同分支，不能互相看见。论文根据这些依赖调整 mask，并利用后续展开中稀疏的对应关系减少无效注意力计算。这属于训练数据依赖的正确表达，不是单纯把同一份 teacher-forcing 数据重复几次。
+
+### 同一训练序列怎样并行展开多个起点
+
+Figure 6 用 token 标记解释依赖，真实模型输入仍是前面讨论的特征和 embedding。第一轮有原序列 `How can I`，三个位置分别生成 `are`、`we`、`do`。它们对应三个不同前缀：`How are`、`How can we`、`How can I do`，并不是把 `are we do` 当作一句完整续写。
+
+![Training-time test 的分支注意力约束](../../assets/images/paper-deep-dives/inference/eagle-3/figure-6-training-mask-full.png)
+
+*原论文 Figure 6。灰色是原训练位置，蓝色和黄色是后续两轮草稿位置；矩阵中的勾表示允许的 attention。*
+
+第二轮的 `are` 只能看到 `How` 与自身，不能看到原序列的 `can I`，否则会获得不属于自己前缀的信息；`we` 能看到 `How can` 与自身；`do` 才能看到完整的 `How can I`。继续展开后，`you` 连接的是 `How → are`，`help` 连接的是 `How → can → we`，`it` 连接的是 `How → can → I → do`。读取矩阵时，先固定一行沿祖先追溯，最容易检查有没有串到其他分支。
+
+原序列作为 key 的部分保留因果关系；不同 rollout 轮次之间，每个 query 只连接自己对应的历史位置，因此块内主要是对角依赖。论文据此用对应向量的点积计算这些 attention scores，避免先算一个稠密矩阵再把绝大部分位置屏蔽。这样，mask 同时保证训练条件正确，并减少多步训练的无效计算。[↗](https://arxiv.org/pdf/2503.01840v3#page=5)
+
+HASS 也在训练中模拟多步草稿，并对注意力作类似处理。本文与它的差别不在“第一次使用训练展开”，而在取消特征回归约束后，允许输入改用多层融合表示。HASS 仍预测顶层特征、保留特征损失，主要处理特征误差累积；EAGLE-3 则将优化直接对准可接受的 token，并让新的内部表示在递归中学会工作。这是论文陈述的机制区别，不应把所有收益只归给 mask。[↗](https://arxiv.org/pdf/2503.01840v3#page=5)
+
+## 多层特征融合为什么在此时变得可行
+
+顶层特征紧邻 LM head，强烈服务于下一个 token 的预测。要连续预测更远处的 token，来自不同深度的表示可能提供额外信息。第一代强迫输出拟合某个顶层状态，使输入与输出接口绑定；移除这个约束并训练递归后，EAGLE-3 可以选择更丰富的目标特征。
+
+若目标 hidden size 为 $d$，低、中、高层特征分别是 $l_i,m_i,h_i$，融合可写成
+
+$$
+g_i=W_g[l_i;m_i;h_i],\qquad g_i\in\mathbb R^d.
+$$
+
+这是对论文 FC 融合操作的记号化表达。三组 $d$ 维特征先拼成 $3d$，再降回 $d$。接着把融合特征与已采样 token 的 embedding 拼接，经另一个 FC 和单层 decoder 产生 $a$，由 LM head 预测下一个 token。
+
+作者的解释是，最上层表示紧邻 LM head，在满秩线性读出条件下，与下一 token 的 logits 有很强的对应关系；它未必是预测更远位置最方便的接口。较低与中间层可以提供不同抽象程度的信息。这个论证说明为什么值得尝试多层融合，并不证明顶层完全不含未来语义，也不保证随意增加更多层就一定更好；融合是否有用，最终由后面的组件消融支持。
+
+下面的推理流程图从目标模型最近一次 prefill/verification 开始。第一步使用真实融合特征 $g$；尚未通过目标模型验证的新位置没有对应 $g$，于是使用上一草稿步输出 $a$ 替代。已采样 token 仍显式输入，保留 EAGLE 对采样不确定性的处理。
 
 ![EAGLE-3 inference pipeline 原论文图](../../assets/images/paper-deep-dives/inference/eagle-3/figure-5-inference-pipeline.png){ width="760" }
 
-<small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 5。原图表达：target model 的低层、中层、高层 feature 被融合后送入 draft model；后续 draft step 使用 draft model 自己的中间输出继续递归生成。本站读法：第一步依赖 target feature，后续步骤逐渐转为 draft 自回归。</small>
+因此 EAGLE-3 不是“每草稿一步再读取一次目标中间层”，否则会失去节省目标调用的意义。真实特征在目标模型本来就要运行的阶段采集，草稿内部自行递归；验证完成后再更新接受路径上的状态。[↗](https://arxiv.org/pdf/2503.01840v3#page=5)
 
-相比只用 top-layer feature，多层融合给 draft model 更完整的上下文条件。再配合 direct token prediction，draft model 不必先“像 target feature”，而是直接学习“哪些 token 更可能被 target 接受”。
+沿 Figure 5 的 “How can I” 可以把时间对齐说明得更具体。目标模型处理 `How can` 后已经采样到 `I`，草稿使用 $(g_{\mathrm{How}},e_{\mathrm{can}})$ 与 $(g_{\mathrm{can}},e_{\mathrm I})$，输出 $a_{\mathrm I}$，再从 LM head 采样 `do`。下一个草稿位置没有经过目标模型计算的 $g_{\mathrm I}$，便用 $(a_{\mathrm I},e_{\mathrm{do}})$ 接着预测 $a_{\mathrm{do}}$，再采样 `it`。
 
-## 消融实验怎么读
+`I` 虽然已由目标分布采样出来，却还没有作为输入 token 经过下一次目标 forward，因此此时缺的是它的目标特征，并非不知道它是什么 token。显式提供 embedding 正好解决后一种采样分支的不确定性，训练自反馈则解决前一种目标特征尚不可得的问题。两项设计处理的依赖不同，缺少任何一项都会改变草稿过程。
 
-论文 Table 2 清楚展示了三步增益。这里的 \(\tau\) 是 average acceptance length，也就是一次 target verification 平均能接受多少 draft token。
+## 树调度和分布保证沿用已有机制
 
-| Method | MT-bench Speedup | MT-bench \(\tau\) | GSM8K Speedup | GSM8K \(\tau\) |
+EAGLE-3 与 EAGLE-2 的动态树兼容：用草稿 confidence 的路径乘积选择扩展节点，再从全树重排候选。第三代主要提高草稿模型本身的能力，而第二代负责把有限候选预算用得更有效。
+
+最终验证仍由目标模型完成。标准规则对草稿 token $\hat t$ 以 $\min(1,p(\hat t)/q(\hat t))$ 接受，拒绝后按归一化的正残差 $\max(0,p-q)$ 采样；树形输入要求每个节点只能看到祖先。分布一致性来自这些规则，不来自草稿模型在 benchmark 上接近目标的程度。
+
+训练使用 ShareGPT 约 68K 与 UltraChat 约 464K 条数据，并调用目标模型生成回答；推理模型 DeepSeek-R1-Distill-LLaMA 8B 还使用 OpenThoughts-114k-math。AdamW 学习率为 $5\times10^{-5}$，$\beta=(0.9,0.95)$，梯度裁剪 0.5。约八倍数据既包含规模变化，也伴随目标回答生成等训练设置，采用时应计入离线训练与目标调用成本。[↗](https://arxiv.org/pdf/2503.01840v3#page=6)
+
+附录 A 还改变了一项与主结果相关的预算：EAGLE-2 的树深为 6，EAGLE-3 因多步接受更稳定，将树深提高到 8；总节点数保持不变，8B、13B、70B 目标分别仍为 60、50、48。也就是说，新增能力用于把候选预算放得更深，而非无限增加验证节点。原 EAGLE-2 扩展阶段每次选择 10 个节点。[↗](https://arxiv.org/pdf/2503.01840v3#page=12)
+
+这类比较要保留两层含义。相同总节点预算下更长的有效路径是方法的实际收益；主结果却不是严格固定所有树深配置后，仅替换训练 loss 的单变量实验。若想判断一个工程实现中的具体收益来自 head 还是树深，应分别测试，这也正是组件消融存在的理由。
+
+## 消融先检验架构，再看扩大数据的结果
+
+下面是 LLaMA-Instruct 3.1 8B 上的逐步改动。$\tau$ 表示平均接受长度。
+
+| 方法 | MT-bench speedup | MT-bench $\tau$ | GSM8K speedup | GSM8K $\tau$ |
 | --- | ---: | ---: | ---: | ---: |
-| EAGLE-2 | 3.16x | 4.05 | 3.39x | 4.24 |
-| + remove feature constraint | 3.82x | 5.37 | 3.77x | 5.22 |
-| + fused features (EAGLE-3) | 4.40x | 6.13 | 4.48x | 6.23 |
+| EAGLE-2 | 3.16× | 4.05 | 3.39× | 4.24 |
+| 去掉特征约束的改进 | 3.82× | 5.37 | 3.77× | 5.22 |
+| 再融合多层特征，EAGLE-3 | 4.40× | 6.13 | 4.48× | 6.23 |
 
-<small>表源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Table 2。原表表达：去掉 feature constraint 已经显著提高 acceptance length，多层 feature fusion 进一步提升 speedup。</small>
+这组实验支持解除约束后的训练设计和融合特征都有增益。不能把表中“去掉特征约束”理解成前述完全不处理递归分布偏移的失败版本；应与论文整体 training-time test 设计一起理解。[↗](https://arxiv.org/pdf/2503.01840v3#page=8)
 
-这张表的读法是：EAGLE-3 的核心收益先来自“解除 feature regression 约束”，再来自“用多层 feature 补足条件信息”。如果只看最终 speedup，很容易误以为是更大 draft 或更多数据；其实训练目标和输入分布才是关键。
-
-## 接受率为什么没有随深度崩掉
-
-投机解码最怕 draft 越往后越不准。EAGLE-3 的 Figure 7 比较了不同 draft 位置的接受率：EAGLE 随递归步数下降更明显，而 EAGLE-3 保持更平稳。
+接受率图进一步考察草稿递归深度。$n$-$\alpha$ 是输入已有 $n$ 个自生成状态、且此前 token 被接受的条件下，下一 token 的接受率。越往后越能暴露递归问题，所以第一步准确率不能替代这组检查。
 
 ![EAGLE vs EAGLE-3 acceptance rate 原论文图](../../assets/images/paper-deep-dives/inference/eagle-3/figure-7-acceptance-rate.png){ width="760" }
 
-<small>图源：[EAGLE-3](https://arxiv.org/abs/2503.01840)，Figure 7。原图表达：在 LLaMA-Instruct 3.1 8B + MT-bench 上，EAGLE-3 的 draft 接受率随递归步数增加仍保持稳定。本站读法：这张图是 training-time test 的机制证据，不只是速度结果。</small>
+Figure 7 的蓝线在 0 到 7 个自身输出位置上约保持 0.78–0.81，红线则从约 0.71 降到约 0.53，中间有波动。这里专门采用链式草稿测接受率，避免把树的备用分支计入分母。它支持递归稳定性的改善，但不能读成“一次连续接受八个 token 的概率约为 80%”：各点都以此前候选已被接受为条件，整条路径同时成功是另一种联合事件。[↗](https://arxiv.org/pdf/2503.01840v3#page=8)
 
-这里的直觉是：如果训练时已经模拟了第 2、第 3 步会看到的“draft 自己生成的输入”，推理时往后滚就不会快速偏离。接受率平稳意味着更深的 draft tree 变得值得验证。
+消融表与这张图共同建立了较完整的解释。取消特征约束并配合适当训练后，模型可以选择更适合 token 的内部表示；多层融合进一步提供信息；递归接受率说明改善能够延续到后续步骤。单看第一步 $0$-$\alpha$，反而可能选中 Figure 4 中递归最差的方案。
 
-## Runtime 结果不能只看单请求
+主实验在对话、代码、数学、指令和摘要上报告约 3.0–6.5 倍加速，最高值属于特定模型与任务配置。测试覆盖 Vicuna 13B、LLaMA 3.1 8B、LLaMA 3.3 70B 和蒸馏版 R1 8B，没有覆盖 405B 或 671B 目标模型，因此最高倍数不应直接套到更大模型部署。
 
-EAGLE-3 报告了 SGLang 和 vLLM 的集成结果。SGLang 表中，LLaMA-Instruct 3.1 8B 在 batch size 64 时仍有约 1.38x throughput improvement；单请求下，SGLang + EAGLE-3 的 token/s 高于无投机和 EAGLE-2。
+## 6.5 倍来自哪组任务，其他条件下又是多少
 
-这说明 EAGLE-3 不是只在离线 benchmark 上好看，它能进入 runtime 的 batch、KV、verify 路径。但线上判断仍然要分桶：
+主表相对 Hugging Face Transformers、PyTorch、预分配 KV cache 的普通自回归基线计算 speedup。五种任务共用对应目标模型的一套草稿权重，未为各测试集分别微调。先看 temperature 0 下各目标的五任务均值，再看典型任务行，能避免只取最大的一个数。
 
-| 请求桶 | 可能更适合 EAGLE-3 的原因 |
-| --- | --- |
-| 低温、长输出 | draft 更容易连续被接受 |
-| 数学/代码/格式稳定任务 | 模式更强，acceptance 更高 |
-| 小 batch 交互请求 | target decode 更容易有空闲计算可利用 |
-| 高温创作、短输出、工具 agent | draft 不确定性高，overhead 可能吃掉收益 |
+| Target model, Temperature = 0 | EAGLE-2 Mean speedup | EAGLE-2 Mean $\tau$ | EAGLE-3 Mean speedup | EAGLE-3 Mean $\tau$ |
+| --- | ---: | ---: | ---: | ---: |
+| Vicuna 13B | 4.22× | 4.83 | 5.51× | 6.62 |
+| LLaMA-Instruct 3.1 8B | 3.23× | 4.11 | 4.44× | 6.23 |
+| LLaMA-Instruct 3.3 70B | 2.85× | 3.78 | 4.12× | 5.88 |
+| DeepSeek-R1-Distill-LLaMA 8B | 3.26× | 3.92 | 4.16× | 5.84 |
 
-EAGLE-3 的 speedup 不是免费午餐。draft model 训练、feature export、tree attention、verification mask、KV 生命周期和 runtime 集成都要一起做。
+不同目标的均值均有提高。较大模型的绝对参数量并没有直接决定加速倍数，例如 70B 的 EAGLE-3 平均为 4.12 倍，低于 Vicuna 13B 的 5.51 倍。草稿对目标分布的拟合、任务类型与目标验证成本共同决定结果，不能用这四行推导参数越大、收益越大的规律。
 
-## 和 EAGLE、EAGLE-2 的连续关系
+| Target / Task, Temperature = 0 | EAGLE-2 speedup / $\tau$ | EAGLE-3 speedup / $\tau$ |
+| --- | ---: | ---: |
+| Vicuna 13B / HumanEval | 4.96× / 5.41 | 6.47× / 7.54 |
+| LLaMA 3.1 8B / MT-bench | 3.16× / 4.05 | 4.40× / 6.13 |
+| LLaMA 3.3 70B / CNN/DM | 2.44× / 3.55 | 3.27× / 5.02 |
+| DeepSeek R1 Distill 8B / GSM8K | 3.40× / 4.40 | 5.01× / 6.93 |
+| DeepSeek R1 Distill 8B / CNN/DM | 3.53× / 3.33 | 3.52× / 4.92 |
 
-| 论文 | 关键问题 | 解法 |
-| --- | --- | --- |
-| EAGLE | draft 不一定是完整小 LLM | feature-level draft + shifted-token |
-| EAGLE-2 | 静态 draft tree 浪费候选预算 | dynamic draft tree |
-| EAGLE-3 | draft 训练分布不像测试时多步输入 | direct token prediction + training-time test + fused features |
+最高的约 6.5 倍来自 Vicuna 13B 的代码任务，精确值为 6.47；平均接受长度为 7.54。作者将代码的优势联系到较多固定模式。推理模型则在 GSM8K 上最好，作者认为额外数学训练数据可能有帮助，但没有通过去掉该数据的控制实验单独证明因果关系。
 
-把三篇连起来看，主线很清楚：先找到 target feature 这个低成本接口，再把候选树按上下文动态分配，最后让 draft model 在训练时见过推理时的递归输入。
+最后一行是必须保留的反例。R1 蒸馏模型的 CNN/DM 接受长度从 3.33 提高到 4.92，速度却从 3.53 倍微降为 3.52 倍。它们在时间结果上基本相当，不能照抄主文“所有任务都最高”的概括，也不能由较长的 $\tau$ 推断每项 wall-clock 必然改善。这一行同样说明，草拟、构树与验证的额外成本需要一起计算。[↗](https://arxiv.org/pdf/2503.01840v3#page=7)
 
-## 训练和推理接口要逐项对齐
+temperature 1 下，四个目标的五任务平均速度分别从 EAGLE-2 的 3.76、2.80、2.65、2.77 倍，提高到 4.65、3.45、3.95、3.52 倍。更随机的采样条件下仍有收益，但数值通常低于对应的贪心配置。论文在这组比较中排除了放宽接受条件的非无损设置；不能把不同接受标准的结果补成同一个排名。
 
-EAGLE-3 最容易被讲成“训练时也做一次测试”，但工程上要拆成三个接口。第一个接口是 target feature export：target LLM 的低层、中层、高层 hidden states 必须在一次 forward 中稳定取出，并且和 LM head、position、attention mask 对齐。第二个接口是 draft recursion：draft model 第一轮吃 target fused feature，后续轮次吃自己的中间表示和采样 token。第三个接口是 target verification：候选树必须被构造成 target model 可以一次验证的 token/mask/KV 形状。
+## 生产运行时把收益压到更现实的尺度
 
-这三个接口任何一个错位，都会让论文里的 acceptance length 变成线上 bug。例如 fused feature 的层号和训练不一致，draft 会看到分布外输入；tree mask 如果让候选分支互相泄漏，就会破坏 speculative decoding 的分布保持；verification 阶段如果没有正确处理被拒绝 token 后的 KV cache，下一步 decode 会带着错误上下文继续跑。
+论文在 SGLang v0.4.4 上由 SGLang 团队评估单张 H100、LLaMA 3.1 8B、MT-bench。这里使用链式草稿，长度 3，没有使用树。batch 1 时，吞吐为：
 
-可以把 EAGLE-3 的上线检查写成一条状态机：
+| SGLang 配置 | Throughput，tokens/s ↑ |
+| --- | ---: |
+| 无投机解码 | 158.34 |
+| EAGLE-2 | 244.10 |
+| EAGLE-3 | 373.25 |
 
-```text
-prefill target LLM
-  -> collect multi-layer features
-  -> draft recursive candidates
-  -> build tree attention mask
-  -> target verifies all candidate paths
-  -> accept prefix / reject branch
-  -> commit only accepted KV and tokens
-```
+因此第三代相对这个已优化基线约为 $373.25/158.34\approx2.36$ 倍，相对 EAGLE-2 约 1.53 倍。它们与较早基线上的最高 6.5 倍不冲突，但测量口径不同。
 
-这个状态机解释了为什么论文同时报告 algorithm speedup 和 runtime integration。方法本身只让 draft 更准；真正落地还需要 scheduler 知道候选树占多少 token，KV manager 知道哪些 token 可以提交，sampling module 知道拒绝后从 target distribution 继续。
+大 batch 的收益更小，却更能说明新增草稿计算是否值得：
 
-## 证据链：不是一张速度图就够了
+| Batch size | EAGLE 相对无投机吞吐 | EAGLE-3 相对无投机吞吐 |
+| --- | ---: | ---: |
+| 8 | 1.23× | 1.62× |
+| 16 | 1.02× | 1.48× |
+| 24 | 0.93× | 1.39× |
+| 32 | 0.94× | 1.32× |
+| 64 | 0.99× | 1.38× |
 
-EAGLE-3 的论文证据可以按“机制、规模、系统”三层读。
+随着 batch 增大，目标模型原有的闲置算力减少，验证额外候选不再那么便宜。EAGLE-3 在 batch 64 仍提高 38% 吞吐，支持它在这组生产运行时配置中的价值，但不保证所有并发规模都持续获益。[↗](https://arxiv.org/pdf/2503.01840v3#page=8)
 
-| 证据节点 | 支撑的 claim | 不能证明什么 |
-| --- | --- | --- |
-| Figure 1 scaling law | direct token prediction 和 training-time test 能把更多数据转成 speedup / acceptance length | 不证明任意领域流量都能同样随数据扩展 |
-| Figure 3 training-time test | 训练过程显式模拟多步 draft recursion | 不证明 draft 输出质量本身优于 target |
-| Table 2 ablation | remove feature constraint 和 fused features 都贡献增益 | 不证明多层 feature 的最优层组合已经穷尽 |
-| Figure 7 acceptance by recursion step | 接受率随 draft 深度更稳定 | 不证明无限深 tree 都值得扩展 |
-| SGLang / vLLM runtime 表 | 方法能嵌入真实 serving runtime | 不证明所有 batch size、所有硬件和所有 prompt 分布下都更快 |
+SGLang 的两张表还要保留行名差异：batch 1 的 Table 4 写的是 EAGLE-2，较大 batch 的 Table 3 写的是 EAGLE。不能悄悄将后者改成 EAGLE-2，再给出一个论文未报告的跨 batch 第二代曲线。Table 3 的全部 EAGLE-3 比值在 1.32–1.82 之间波动，并非 batch 越大收益严格单调下降；总趋势是较大 batch 的额外算力更难摊销。
 
-这个分层很重要。投机解码的质量保持来自 target verification，不来自 draft model “更聪明”。因此 EAGLE-3 的核心指标不是 perplexity 或回答分，而是 accepted tokens、verification overhead、end-to-end throughput / latency。读 speedup 时还要确认 baseline 是否包含同等 runtime 优化、是否启用 tree attention、是否相同 sampling temperature、是否同样 batch size。
+### vLLM 的收益边界更早出现
 
-## 部署时最容易踩的坑
+vLLM 实验同样使用 LLaMA-Instruct 3.1 8B、MT-bench，但采用最大长度 2 的链式草稿，没有动态树。Table 5 的相对吞吐如下。
 
-第一类坑是 request mix。EAGLE-3 对低温、长输出、模式稳定的请求更友好；对短输出、工具调用、强随机采样和频繁 stop 的请求，draft 成本可能没有足够 token 可以摊销。线上不应只开全局开关，而应该按 route、temperature、max output、历史 acceptance rate 做 gating。
+| Batch size | EAGLE / no speculation | EAGLE-3 / no speculation |
+| --- | ---: | ---: |
+| 2 | 1.30× | 1.75× |
+| 4 | 1.25× | 1.68× |
+| 8 | 1.21× | 1.58× |
+| 16 | 1.10× | 1.49× |
+| 24 | 1.03× | 1.42× |
+| 32 | 0.93× | 1.36× |
+| 48 | 0.82× | 1.21× |
+| 56 | 0.71× | 1.01× |
 
-第二类坑是 memory accounting。draft tree 会增加一次 verification 的 token 数，target KV cache 也会临时承载候选路径。即使最终只提交 accepted prefix，中间 verification 的显存和 kernel 时间仍是真实成本。长上下文服务里，PagedAttention、prefix cache、speculative tree 和 batch scheduler 会互相影响。
+EAGLE 从 batch 32 开始低于基线，而 EAGLE-3 到 batch 56 仍略高于基线；不过 1.01 倍只剩约 1% 增益，不能称为仍有很大加速。表中的比值也没有给出每个 batch 的绝对 tokens/s，不能由它直接判断绝对吞吐峰值发生在哪个 batch。
 
-第三类坑是训练域。论文使用公开对话和 benchmark 说明 scaling 趋势，但企业流量可能包含代码补全、结构化 JSON、检索引用、工具轨迹、数学证明和多语言文本。EAGLE-3 的 training-time test 解决 exposure bias，不自动解决 domain mismatch。更稳的做法是对目标流量采样，按任务桶统计 acceptance，再决定是否补训 draft。
+这组实验的正文写 RTX3090，表题却写 A100。两处不一致影响硬件成本解释，因此这里只将其作为原文报告的相对曲线，不据此宣称某张 GPU 的确定绝对性能。它仍支持一个有用判断：更稳定的多步草稿能把“投机解码还值得”的负载范围推得更远，但收益最终会被额外计算抵消。[↗](https://arxiv.org/pdf/2503.01840v3#page=8)
 
-第四类坑是验证口径。只看单请求 latency 会低估 batch serving 的资源竞争；只看吞吐会掩盖 P95/P99 延迟；只看 accepted length 会忽略 tree construction 和 draft overhead。最终验收至少要同时看：target forward 次数、accepted tokens per verify、draft token cost、GPU memory peak、batch occupancy、P50/P95/P99 latency 和输出一致性。
+## 采用时，先检查训练接口与运行时支持
 
-## 最小复现实验应该怎么设计
+为新目标训练草稿时，需要从目标 forward 中取得对应的低、中、高层特征，并保证融合后的 $g$、自生成的 $a$ 与 shifted token embedding 在时间上对齐。训练只保留第一步分类，而不执行后续自反馈，就回到了 Figure 4 暴露的失败设置。训练展开中的分支 mask 和推理时的树 mask 也应分别检查，它们表达的依赖并不完全相同。
 
-复现 EAGLE-3 不必一开始就接完整线上 runtime。更稳的是先做三层小实验。
+数据准备应包含目标模型生成回答的成本。68K 与 464K 是数据条目数量，并非 token 数；模型回答长度会影响特征提取和训练总量，推理模型的长回答尤其如此。论文没有给出足以还原所有目标模型完整 GPU 小时的训练账单，因此不能用“约八倍数据”直接换算精确成本倍数。
 
-第一层是离线 acceptance 实验。固定 target model、prompt 集合、temperature 和 max tokens，比较原始 EAGLE-2、去 feature constraint、加入 fused features、加入 training-time test 后的 average acceptance length。这个实验不追求最高 tokens/s，只验证机制是否按论文方向工作。
+部署端则先选择匹配的运行时路径。完整动态树能利用较深且高接受率的候选；SGLang 与 vLLM 的本文测试采用短链，也仍能受益。是否采用树，应由目标 batch、验证 kernel、KV 管理与模型结构决定。实验给出的是这些已测配置中的收益，不意味着必须先实现全部动态树功能才能获得第三代 head 的价值。
 
-第二层是单请求端到端 latency。把 draft、tree construction、target verification 和 sampling 都放进同一条推理路径，统计每个模块耗时。这里要防止“只测 target 少跑几步”而漏掉 draft overhead。若 acceptance length 提高但端到端 latency 不降，说明 bottleneck 已转移到实现。
-
-第三层是 batch serving。用真实或合成的请求长度分布测试 batch size 1、8、32、64 等不同并发。记录 throughput、P95 latency、peak KV memory 和 acceptance rate。EAGLE-3 的论文结论可以作为预期方向，但最终上线阈值应来自本地 workload。
-
-| 实验层级 | 必看指标 | 失败信号 |
-| --- | --- | --- |
-| 离线 acceptance | accepted length、acceptance by depth | training-time test 后深层接受率仍快速下滑 |
-| 单请求 latency | draft time、verify time、total token/s | draft overhead 超过 target step 节省 |
-| Batch serving | throughput、P95/P99、peak memory | 高并发下 tree verification 挤占 KV 或 scheduler |
-
-这样设计的好处是能快速定位失败原因：机制没起作用、实现太慢、还是 workload 不适合。它也符合 EAGLE-3 的证据结构：先证明 draft 更会猜，再证明 runtime 真能获益。
-
-## 和其他推理优化的组合边界
-
-EAGLE-3 属于 decode-side acceleration，主要减少 target LLM 逐 token 前进的次数。它和 quantization、KV cache 压缩、PagedAttention、continuous batching 不是同一层优化。
-
-| 优化 | 作用层 | 和 EAGLE-3 的关系 |
-| --- | --- | --- |
-| Weight / activation quantization | 降低每次 forward 的算力和带宽 | target 和 draft 都可能受益，但量化误差会影响 acceptance，需要复测 |
-| KV cache paging / prefix cache | 管理长上下文和多请求 KV | draft tree 会增加临时候选 token，必须和 KV manager 协同 |
-| Continuous batching | 提高 GPU 批处理利用率 | 大 batch 下 target 已接近饱和，EAGLE-3 的边际收益可能下降 |
-| Disaggregated prefill | 分离 prompt 和 decode 资源 | EAGLE-3 主要作用在 decode，prefill-heavy 流量收益有限 |
-| Routing / model cascade | 按请求选不同模型或路径 | 可以只给适合请求开启 EAGLE-3，避免全局 overhead |
-
-这个表帮助避免一个常见误解：EAGLE-3 不会自动解决所有推理成本。它最擅长的是“target 每次 decode 很贵，而 draft 能连续猜中多个 token”的区间。若系统已经被 prefill、网络队列、工具调用或 CPU sampling 卡住，EAGLE-3 的接受率再高也不一定改善用户感知延迟。
-
-从项目取舍看，EAGLE-3 更像“decode path 的二级发动机”，不是新的 target model。它的评估要和容量规划放在一起：多一个 draft 模型意味着更多权重、更多调度路径和更多监控指标；少跑 target decode step 则意味着更低的高价模型调用成本。最终是否值得上线，取决于这两边的账能否在真实流量上闭合。
-
-一个合格的 EAGLE-3 实验报告最好不要只贴 speedup。它应该写清 target model、draft model、训练数据量、temperature、tree size、prompt/output 长度分布、runtime、batch size 和硬件；还要报告拒绝后的回退逻辑是否保持 target 分布。这样读者才能判断提升来自方法机制、实现优化，还是 benchmark 条件本身。
-
-如果这些条件没有列清，EAGLE-3 的结论只能作为方向参考，不能直接变成容量规划假设；真正的部署决策还要用本地请求回放验证。尤其是 agent 流量和代码流量，常常混合短回答、工具调用、长 JSON、重试和 stop sequence；它们的 acceptance pattern 可能和 MT-bench 完全不同，所以最好单独分桶统计，而不是把所有请求揉成一个平均 speedup。
-
-## 外部精读
-
-- [EAGLE-3 论文](https://arxiv.org/abs/2503.01840)：方法、scaling、消融和 runtime 表。
-- [EAGLE GitHub](https://github.com/SafeAILab/EAGLE)：系列实现入口。
-- [EAGLE 原论文](eagle.md)：理解 feature-level draft 和 shifted-token 的起点。
-- [缓存、路由与投机解码](../../inference/caching-routing-and-speculative.md)：把 EAGLE-3 放回服务系统的请求生命周期里看。
-
-## 阅读结论
-
-EAGLE-3 的核心不是“更强的草稿模型”，而是“draft 训练分布要像线上推理分布”。它放弃 feature regression 约束，直接服务 token acceptance；用多层 target feature 给 draft 更完整的条件；用 training-time test 让 draft model 在训练时就处理自己的递归输出。理解这三点后，EAGLE-3 的 speedup 表才有意义：收益来自 accepted tokens 增多，但能否落地还取决于请求桶、batch size、runtime 集成和 verification overhead。
+EAGLE-3 的实际启发是让训练目标与最终用途一致：草稿需要生成能被接受的 token，并在递归使用自己的输出时保持稳定，而不必模仿大模型某个指定中间表示。工程采用时则要同时考虑目标特征采集、草稿训练数据、运行时支持与 batch 分布；接受长度提高是必要证据，真正的交付指标仍是目标负载上的延迟和吞吐。

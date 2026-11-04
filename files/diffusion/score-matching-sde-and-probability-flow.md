@@ -1,225 +1,156 @@
-# Score Matching 到 SDE：扩散模型到底在学哪一个方向
+# Score 怎样把加噪分布变回数据分布
 
-扩散模型表面上是在预测噪声，采样时又像在逐步去噪。更统一的读法是：模型在每个噪声水平上学习一个方向场，告诉当前样本应该往哪里移动，才能从噪声分布回到数据分布。这个方向场的核心对象叫 **score**。
+对一维标准高斯，score 是 \(s(x)=-x\)。如果从任何分布出发，反复沿这个方向移动，所有点都会往 0 收缩。这会找到高密度位置，却无法产生方差为 1 的标准高斯样本。理解扩散的 score，需要同时解释密度梯度和分布怎样随时间变化。
 
-DDPM 的噪声预测、Score SDE 的反向过程、Probability Flow ODE 和 DPM-Solver，都围绕同一件事：学习一个可积分的生成方向。
+本文用数据 \(X_0\sim\mathcal N(0,1)\) 贯穿推导。这个分布已经能直接采样，选择它只是因为每一步都能解析核验，不代表真实图像也具有高斯密度。
 
-## score 是概率密度的坡度
+## 一条可以直接计算的加噪路径
 
-对一个连续分布 \(p(x)\)，score 定义为：
-
-\[
-s(x)=\nabla_x\log p(x)
-\]
-
-这里 \(x\) 是样本，\(p(x)\) 是样本密度，\(\log p(x)\) 是对数密度，\(\nabla_x\) 表示对样本坐标求梯度。白话说，score 指向“让当前点的概率密度上升最快”的方向。
-
-如果把数据分布想成地形，高概率区域像山脊，低概率区域像山脚。score 就是你脚下的坡度箭头。生成模型从噪声出发，需要知道每一步应该往哪个方向走，才能更像真实数据。
-
-问题是，真实图像分布 \(p_{\text{data}}(x)\) 没有解析公式。我们只有样本，没有办法直接算：
+令前向过程为布朗运动
 
 \[
-\nabla_x\log p_{\text{data}}(x)
+\mathrm dX_t=\mathrm dW_t.
 \]
 
-这就是 score matching 要解决的入口：既然不知道密度本身，能不能直接学它的梯度方向。
-
-## 扩散不是一个分布，而是一串分布
-
-扩散模型不会只在干净数据分布上学 score。它人为定义一串加噪分布：
-
-```text
-p_0(x): 干净数据分布
-p_t(x): 噪声水平 t 下的数据分布
-p_T(x): 接近标准高斯的噪声分布
-```
-
-所以扩散里的 score 是时间相关的：
+持续时间为 \(t\) 的布朗增量方差是 \(t\)，因此
 
 \[
-s(x_t,t)=\nabla_{x_t}\log p_t(x_t)
+X_t=X_0+\sqrt t E,
+\qquad E\sim\mathcal N(0,1),
+\qquad p_t=\mathcal N(0,1+t).
 \]
 
-这里 \(x_t\) 是噪声水平 \(t\) 下的样本，既不是完全干净的 \(x_0\)，也不是纯噪声。这个 score 告诉模型：在当前噪声水平下，这个样本往哪里移动，会更接近该时刻的高概率区域。
+\(X_0\) 与 \(E\) 独立。对数密度为
+
+\[
+\log p_t(x)=-\tfrac12\log(2\pi(1+t))-\frac{x^2}{2(1+t)},
+\]
+
+所以
+
+\[
+s(x,t)=\partial_x\log p_t(x)=-\frac{x}{1+t}.
+\]
+
+时间越大，分布越宽，同一个位置的坡度越小。这解释了为什么 score 网络必须接收噪声时间。直接使用干净分布的 \(-x\) 处理所有带噪状态，会把不同任务混为一谈。
 
 ![Score SDE reverse-time process](../assets/images/paper-figures/diffusion/score-sde-figure-1-reverse-sde.png){ width="920" }
 
 <small>图源：[Score-Based Generative Modeling through Stochastic Differential Equations](https://arxiv.org/abs/2011.13456)，Figure 1。原图表达正向过程把数据逐渐扰动成噪声，反向过程依赖每个中间分布的 score 从噪声生成数据。这里的重点是：扩散采样不是凭空“去噪”，而是在一串噪声分布上沿概率方向移动。</small>
 
-读这张图时先看时间方向。左到右是正向加噪：数据越来越像高斯。右到左是生成：先采一个高斯噪声，再用模型估计每个时刻的 score，把样本推回数据区域。模型难的不是“最后一步修图”，而是在所有噪声水平上都给出可用方向。
+## 没有真实密度，怎样得到监督
 
-## 噪声预测为什么能变成 score
-
-DDPM 常见的加噪形式可以写成：
+真实图像只有样本，通常无法计算 \(p_t(x)\)。但知道一个训练样本 \(x_0\) 后，人为加噪的条件分布已知。对一般形式 \(X_t=a_tX_0+b_tE\)，有
 
 \[
-x_t=\alpha_t x_0+\sigma_t\epsilon,\qquad
-\epsilon\sim\mathcal N(0,I)
+\nabla_x\log q_t(x\mid x_0)
+=-\frac{x-a_tx_0}{b_t^2}=-\frac{E}{b_t}.
 \]
 
-这里 \(x_0\) 是干净样本，\(\epsilon\) 是标准高斯噪声，\(\alpha_t\) 控制保留多少信号，\(\sigma_t\) 控制加入多少噪声。时间越靠后，\(\sigma_t\) 越大，\(x_t\) 越像噪声。
-
-在给定 \(x_0\) 的条件高斯分布里，score 可以直接算：
+这是条件 score。网络没有读取 \(x_0\)，只读取 \(x,t\)，怎样保证训练这个目标能够学到边缘 score？将混合密度的导数展开
 
 \[
-\nabla_{x_t}\log p(x_t\mid x_0)
-=
--\frac{x_t-\alpha_t x_0}{\sigma_t^2}
-=
--\frac{\epsilon}{\sigma_t}
+\nabla_x\log p_t(x)
+=\frac{\int p_0(x_0)\nabla_xq_t(x\mid x_0)\,\mathrm dx_0}{p_t(x)}
+=\mathbb E[\nabla_x\log q_t(x\mid X_0)\mid X_t=x].
 \]
 
-这行式子拆开读：\(x_t-\alpha_t x_0\) 正是加进去的噪声部分，等于 \(\sigma_t\epsilon\)；高斯 log density 对 \(x_t\) 求梯度后会指向均值 \(\alpha_t x_0\)，也就是“把噪声往回拉”的方向；最后得到 \(-\epsilon/\sigma_t\)。
+这里使用了可以交换微分与积分的常规光滑和可积条件。平方误差回归的最优输出正是目标的条件均值，因此可用每个样本的条件 score 训练边缘 score。噪声回归版本便得到 \(s_\theta=-\epsilon_\theta/b_t\)。
 
-所以模型预测噪声 \(\epsilon_\theta(x_t,t)\) 时，也在学一个可转成 score 的方向：
+回到高斯例子，\(t=1\) 时观测到 \(x=2\)。高斯条件均值给出 \(\mathbb E[X_0\mid X_1=2]=1\)、\(\mathbb E[E\mid X_1=2]=1\)，所以 score 为 −1，与 \(-2/(1+1)\) 一致。即使训练那一次可能来自 \(x_0=.5,E=1.5\)，网络面对相同观测也应综合所有可能配对，而非唯一恢复这次噪声。
+
+## 反向 SDE 为什么同时需要漂移和噪声
+
+对于前向过程
 
 \[
-s_\theta(x_t,t)\approx -\frac{1}{\sigma_t}\epsilon_\theta(x_t,t)
+\mathrm dX_t=f(X_t,t)\mathrm dt+g(t)\mathrm dW_t,
 \]
 
-这里的负号很重要。预测出的噪声方向表示“污染来自哪里”；去噪方向要反过来，往数据高概率区域移动。尺度 \(1/\sigma_t\) 表示不同噪声水平下，方向大小要按噪声强度校准。
-
-## 训练目标不是玄学，是条件 score matching
-
-理想目标是：
+在扩散系数只依赖时间的条件下，逆时间 SDE 为
 
 \[
-s_\theta(x_t,t)\approx \nabla_{x_t}\log p_t(x_t)
+\mathrm dX_t=[f(X_t,t)-g(t)^2s(X_t,t)]\mathrm dt
++g(t)\mathrm d\bar W_t.
 \]
 
-但边缘分布 \(p_t(x_t)\) 是所有数据点加噪后的混合分布，真实 score 仍然不可直接算。扩散训练绕过这个困难的方法是：我们知道每个训练样本 \(x_0\) 和自己采样的噪声 \(\epsilon\)，因此可以训练模型预测条件高斯里的修正方向。
+生成沿减小的 \(t\) 运行，\(\mathrm dt<0\)。数值步 \(t\to t-h\) 的随机增量尺度为 \(\sqrt h\)，不能对负时间差开平方。
 
-常见 DDPM loss 是：
+在布朗例子里 \(f=0,g=1\)，score 为 \(-x/(1+t)\)。Euler 反向一步是
 
 \[
-\mathcal L_{\epsilon}
-=
-\mathbb E_{x_0,\epsilon,t}
-\left[
-\left\|\epsilon-\epsilon_\theta(x_t,t)\right\|^2
-\right]
+X_{t-h}=\left(1-\frac h{1+t}\right)X_t+\sqrt h\,\xi,
+\qquad\xi\sim\mathcal N(0,1).
 \]
 
-这里期望里的 \(x_0\) 来自数据集，\(\epsilon\) 是我们主动采样的高斯噪声，\(t\) 是噪声水平。模型看到 noisy sample \(x_t\)，学习把当初加进去的噪声 \(\epsilon\) 预测出来。
-
-这就是很多中文资料强调的“条件得分匹配”：训练时目标来自 \(p(x_t\mid x_0)\) 这条可计算的条件分布，而不是直接拿不可知的 \(p_t(x_t)\) 来监督。经过对 \(x_0\) 的期望，它会成为学习边缘 score 的可行训练方式。
-
-## SDE 把离散加噪变成连续时间
-
-DDPM 使用有限个离散时间步。Score SDE 把步数推到连续时间，用随机微分方程描述正向加噪：
+如果当前方差准确等于 \(1+t\)，下一步方差为
 
 \[
-dx=f(x,t)dt+g(t)dW_t
+\left(1-\frac h{1+t}\right)^2(1+t)+h
+=1+t-h+\frac{h^2}{1+t}.
 \]
 
-这里 \(f(x,t)dt\) 是确定性漂移，\(g(t)dW_t\) 是随机噪声注入，\(W_t\) 是 Wiener process。直觉上，样本一边按规则漂移，一边不断被随机噪声扰动。
+目标方差是 \(1+t-h\)，差别为这个离散方法引入的二阶局部误差。漂移先收缩分布，随机项补回一部分方差。把随机项删除却保留整个漂移系数，会收缩过快。
 
-这个写法的价值不是把事情变难，而是统一：
+## Probability Flow ODE 为什么有一个二分之一
 
-| 离散/连续视角 | 它在说什么 |
-| --- | --- |
-| DDPM | 固定时间表上的逐步加噪和反向去噪 |
-| SMLD / VE-SDE | 噪声方差逐渐变大，数据被扩散到很宽的噪声分布 |
-| VP-SDE | 保持总体方差结构，DDPM 可以看成它的离散化 |
-| sub-VP-SDE | 为 likelihood 和采样稳定性改写噪声结构 |
-
-一旦写成 SDE，很多采样器就不再是孤立 trick，而是不同的数值求解方式。
-
-## 反向 SDE：回来时必须知道 score
-
-Score SDE 的关键公式是反向时间过程：
+相同的边缘密度也可以由确定性速度场输送。对应的 probability flow ODE 为
 
 \[
-dx=
-\left[
-f(x,t)-g(t)^2\nabla_x\log p_t(x)
-\right]dt
-+g(t)d\bar W_t
+\frac{\mathrm dX_t}{\mathrm dt}=f(X_t,t)-\frac12g(t)^2s(X_t,t).
 \]
 
-这里 \(\bar W_t\) 是反向时间里的 Wiener process。括号里的第一项 \(f(x,t)\) 来自正向 SDE 的漂移；第二项 \(-g(t)^2\nabla_x\log p_t(x)\) 使用 score 修正方向；最后的 \(g(t)d\bar W_t\) 保留随机性。
-
-真实 score 不知道，所以用网络替代：
+原因可以从密度方程看出。前向 SDE 的 Fokker–Planck 方程为
 
 \[
-\nabla_x\log p_t(x)\approx s_\theta(x,t)
+\partial_t p=-\nabla\cdot(fp)+\tfrac12g^2\Delta p.
 \]
 
-这两行式子合起来表达：只要模型在每个噪声水平都能估出足够好的 score，就可以从简单噪声分布反向积分回数据分布。反向 SDE 的随机项会带来采样多样性，但也意味着采样路径不是确定的。
-
-## Probability Flow ODE：同一边缘分布的确定路径
-
-同一个 score-based model 还对应一条确定性的 probability flow ODE：
+因为 \(p\nabla\log p=\nabla p\)，右侧可改写为
 
 \[
-\frac{dx}{dt}
-=
-f(x,t)-\frac{1}{2}g(t)^2\nabla_x\log p_t(x)
+-\nabla\cdot\left[\left(f-\tfrac12g^2\nabla\log p\right)p\right].
 \]
 
-这条 ODE 没有随机 Wiener 项，score 项前的系数也变成 \(\frac{1}{2}\)。它的关键性质是：它和反向 SDE 拥有相同的边缘分布 \(p_t(x)\)，但每个初始噪声点对应一条确定轨迹。
+这正是确定性 ODE 的连续性方程。二分之一由扩散项的密度演化产生，不能把反向 SDE 的噪声简单删掉就得到正确 ODE。
 
 ![Probability flow ODE](../assets/images/paper-deep-dives/diffusion/score-sde/figure-3-probability-flow-ode.png){ width="900" }
 
 <small>图源：[Score SDE](https://arxiv.org/abs/2011.13456)，Figure 3。原图表达 probability flow ODE 可以把数据确定性编码到 latent，也可以从 latent 确定性解码回数据。这里的重点是：ODE 视角让 likelihood、latent encoding 和高阶数值求解器进入扩散采样讨论。</small>
 
-ODE 视角解释了 DDIM、Euler、Heun、DPM-Solver 这些采样器为什么能接在扩散模型后面。模型提供方向场，采样器负责用有限步数积分这条路径。步数少时，主要风险不再是“模型不会去噪”，而是数值积分误差和方向场误差被放大。
-
-## sampler 是怎样使用这个方向场的
-
-有了 \(s_\theta\)、\(\epsilon_\theta\) 或 \(x_\theta\)，采样器要做的是把连续方向变成离散更新。最粗略的一阶更新可以写成：
+在高斯例子中
 
 \[
-x_{t-\Delta t}
-\approx
-x_t+\Delta t\cdot v_\theta(x_t,t)
+\frac{\mathrm dX_t}{\mathrm dt}=\frac{X_t}{2(1+t)},
+\qquad
+X_t=X_T\sqrt{\frac{1+t}{1+T}}.
 \]
 
-这里 \(v_\theta(x_t,t)\) 是由 score、noise prediction 或 data prediction 转换出的当前速度方向，\(\Delta t\) 是时间步长。Euler 是最直接的一阶近似；Heun 会先预测再校正；DPM-Solver 利用 diffusion ODE 的特殊结构做高阶更新。
+若从正确末端 \(X_T\sim\mathcal N(0,1+T)\) 出发，走到 0 恰好得到方差 1。取 \(T=3\)，初值 −2、0、2 分别到达 −1、0、1。给定初值时轨迹确定，初值来自随机分布，因此最终结果依然多样。
 
-这就是为什么同一个 checkpoint 换 sampler 会有不同质量和速度。模型学的是方向场，采样器决定如何走这条方向场。少步采样不是简单“跳过几步”，而是在更粗的时间网格上近似同一条或相近的生成轨迹。
+本例是方差增加路径，末端为 \(\mathcal N(0,1+T)\)，不能直接用标准高斯初始化。实际 VE 模型常在大噪声端采用相应尺度的高斯近似，VP 模型则通过缩小信号使末端接近标准高斯。先验必须和所用路径一致。
 
-## 和 Flow Matching / Rectified Flow 的关系
+## 为什么不能只沿密度梯度上升
 
-Score SDE 路线的核心是学 score，再由 SDE/ODE 定义反向路径。Flow Matching / Rectified Flow 则更直接：给定一条从噪声到数据的路径，训练模型预测这条路径上的速度场。
+如果在标准高斯的 score \(-x\) 上求解 \(\mathrm dx/\mathrm ds=-x\)，则 \(x(s)=x(0)e^{-s}\)，方差会趋于零。这是在寻找模式。Langevin 动力学通过匹配漂移与随机项，可以在适当条件下以给定密度为平稳分布；扩散的反向 SDE 与 probability flow ODE 则沿时间变化的分布工作。三者都用 score，但动态过程不同。
 
-可以这样区分：
+真实网络只给近似 score。即使 SDE 与 ODE 在准确 score 和精确积分下共享每个时刻的边缘分布，它们的单条轨迹也不同。近似模型与有限步求解进一步使最终分布出现差异，因此同一个 checkpoint 用不同采样器的结果仍需要实测。
 
-| 路线 | 模型主要学什么 | 采样时怎么走 |
-| --- | --- | --- |
-| DDPM / score-based diffusion | 噪声、score 或 data prediction | 沿反向 SDE/ODE 逐步积分 |
-| DDIM / ODE samplers | 同一个去噪模型的确定轨迹 | 用更稀疏时间网格跳步 |
-| DPM-Solver / DPM-Solver++ | diffusion ODE 的高阶积分 | 在少 NFE 下减小数值误差 |
-| Flow Matching / Rectified Flow | 路径上的 velocity field | 直接沿速度场从噪声流向数据 |
+DDPM 的小步极限对应 VP-SDE。若连续噪声率为 \(\beta(t)\)，则
 
-共同点是：生成都变成了沿某个方向场移动。区别在于方向场的定义、训练目标、时间参数化和路径形状。现代视频扩散和 rectified-flow 模型常喜欢 velocity 目标，是因为它更直接贴近 ODE 采样和少步化。
+\[
+f(x,t)=-\tfrac12\beta(t)x,
+\qquad g(t)=\sqrt{\beta(t)}.
+\]
 
-## 容易误读的地方
+前向漂移抵消一部分持续注入的方差，因此“方差保持”指单位方差输入的这一结构；任意初始数据方差不必在所有时间严格不变。[噪声日程](noise-schedules-and-parameterization.md)说明离散累计系数怎样对应这一尺度。
 
-| 误解 | 更准确的说法 |
-| --- | --- |
-| score 就是模型输出的噪声 | 噪声预测可以转换成 score，但有负号和噪声尺度。 |
-| DDPM loss 直接监督真实 score | 常见训练目标更像条件 score matching；真实边缘 score 不直接可见。 |
-| SDE 只是把公式写复杂 | 连续时间框架统一 DDPM、SMLD、ODE sampler、likelihood 和求解器。 |
-| ODE 采样一定比 SDE 好 | ODE 可确定、可用高阶 solver，但质量取决于模型、路径、步数和 guidance。 |
-| 少步采样只是少算几次模型 | 少步会放大方向场误差和数值积分误差，常需要 solver、蒸馏或重训目标。 |
+## 从公式读到实现
 
-## 读完以后怎么判断
+实现一个采样步时，先固定输入代表什么分布、时间朝哪个方向走、模型输出是什么量。若输出 epsilon，先按路径系数换成 score；若输出 Flow velocity，则使用它自己的 ODE 定义，不能再额外套一次 score 漂移。Euler、Heun 和专用扩散求解器的差异见[采样与推理](inference.md)。
 
-Score matching 到 SDE 这条线的核心知识不是记公式，而是抓住一个转换：扩散模型把“直接建模复杂数据分布”改写成“在每个噪声水平学习往数据分布走的方向”。DDPM 的噪声预测、Score SDE 的反向过程、Probability Flow ODE 和 DPM-Solver 都是在使用这个方向，只是训练参数化和采样求解方式不同。
+上述高斯方差是一个有用的机制核验。它可以检测负步长、随机项尺度和二分之一系数是否写错。通过这个解析例子只能验证公式实现，不能证明神经网络已经学到了图像分布。
 
-读扩散论文时可以先问三件事：模型输出的是噪声、score、\(x_0\) 还是 velocity；采样走的是随机 SDE、确定 ODE 还是 flow path；少步时靠 solver、蒸馏、consistency，还是重新训练目标。问清这三件事，DDPM、DDIM、Score SDE、DPM-Solver 和 Rectified Flow 就不再是一堆名字，而是一条生成轨迹的不同写法。
-
-## 外部材料
-
-- [Yang Song: Generative Modeling by Estimating Gradients of the Data Distribution](https://yang-song.net/blog/2021/score/)：作者博客，适合先建立 score、Langevin dynamics 和多噪声扰动的直觉。
-- [Lil'Log: What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)：把 DDPM、score、SDE、sampling 和 guidance 放在一条解释链里。
-- [Score-Based Generative Modeling through SDEs](https://arxiv.org/abs/2011.13456)：SDE / ODE 统一视角的核心论文。
-- [DDPM](https://arxiv.org/abs/2006.11239)：理解离散前向加噪、反向去噪和噪声预测目标。
-- [DDIM](https://arxiv.org/abs/2010.02502)：理解确定性采样、跳步和 probability-flow 直觉。
-- [DPM-Solver++](https://arxiv.org/abs/2211.01095)：看高阶 ODE solver 如何服务少步 guided diffusion。
-- [科学空间：得分匹配 = 条件得分匹配](https://spaces.ac.cn/archives/9509)：中文长文，适合补“为什么 DDPM 常见目标更准确地说是条件得分匹配”。
-
-- [Lil'Log：What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)。
-- [DDPM 论文](https://arxiv.org/abs/2006.11239)。
-- [Score SDE 论文](https://arxiv.org/abs/2011.13456)。
+- [Score SDE 原论文](https://arxiv.org/abs/2011.13456)给出反向时间 SDE、probability flow ODE 与采样关系。
+- [DDPM](https://arxiv.org/abs/2006.11239)给出离散噪声预测形式。
+- [本站最小 DDPM](minimal-ddpm-implementation.md)使用离散 Gaussian posterior；其反向方差不能与连续 Euler 噪声系数不加区分地混用。

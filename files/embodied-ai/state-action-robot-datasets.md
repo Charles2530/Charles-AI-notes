@@ -79,7 +79,7 @@ action 和 observation.state 维度一样吗？
 
 ## 第三问：同一行相等，不等于动作没意义
 
-如果你在 Kai0 或类似 LeRobot parquet 中看到：
+假设在某份机器人 parquet 中看到：
 
 ```text
 observation.state[i] == action[i]
@@ -95,7 +95,7 @@ observation.state[i] == action[i]
 
 第四，你比较的不是同一个数值域。LeRobot 的 metadata 会保存每个 feature 的统计量用于 normalization；训练 dataloader 输出、原始 parquet 和模型输出可能分别处在 raw、normalized、unnormalized 三个空间。
 
-因此，对 Kai0 这类数据更稳妥的表述是：
+在没有确认具体数据集协议前，只能先写成：
 
 ```text
 observation.state_t = 当前观测到的关节状态 q_t
@@ -121,41 +121,28 @@ import numpy as np
 import pandas as pd
 
 df = pd.read_parquet("your_file.parquet")
-
-def to_arr(series):
-    return np.stack(series.to_numpy()).astype(np.float64)
-
-def mae(x, y):
-    return np.mean(np.abs(x - y))
-
-episode_key = "episode_index" if "episode_index" in df.columns else None
-groups = df.groupby(episode_key) if episode_key else [("unknown", df)]
-
-err_same, err_next, err_delta = [], [], []
-step_mag, action_mag = [], []
-
-for _, g in groups:
-    if len(g) < 2:
+required = {"episode_index", "timestamp", "observation.state", "action"}
+if not required.issubset(df.columns):
+    raise ValueError("先补齐 episode 边界和时间戳，不能跨 episode 猜测对齐")
+errors = {"same": [], "next": [], "delta": [], "velocity": []}
+for _, group in df.groupby("episode_index", sort=False):
+    group = group.sort_values("timestamp")
+    if len(group) < 2:
         continue
-
-    states = to_arr(g["observation.state"])
-    actions = to_arr(g["action"])
-
-    s_t = states[:-1]
-    s_next = states[1:]
-    a_t = actions[:-1]
-
-    err_same.append(mae(a_t, s_t))
-    err_next.append(mae(a_t, s_next))
-    err_delta.append(mae(a_t, s_next - s_t))
-    step_mag.append(np.mean(np.abs(s_next - s_t)))
-    action_mag.append(np.mean(np.abs(a_t)))
-
-print("MAE action[t] vs state[t]:", np.mean(err_same))
-print("MAE action[t] vs state[t+1]:", np.mean(err_next))
-print("MAE action[t] vs state[t+1] - state[t]:", np.mean(err_delta))
-print("Mean |state[t+1] - state[t]|:", np.mean(step_mag))
-print("Mean |action[t]|:", np.mean(action_mag))
+    state = np.stack(group["observation.state"]).astype(float)
+    action = np.stack(group["action"]).astype(float)
+    dt = np.diff(group["timestamp"].to_numpy(dtype=float))
+    if state.shape != action.shape or np.any(dt <= 0):
+        raise ValueError("需先明确相同维度语义，并保证时间严格递增")
+    current, following, command = state[:-1], state[1:], action[:-1]
+    errors["same"].append(np.abs(command - current))
+    errors["next"].append(np.abs(command - following))
+    errors["delta"].append(np.abs(command - (following - current)))
+    # 速度假设使用动作积分后的状态误差，单位与 state 一致。
+    errors["velocity"].append(np.abs(following - current - command * dt[:, None]))
+for name, batches in errors.items():
+    if batches:
+        print(name, np.concatenate(batches).mean(axis=0))
 ```
 
 结果可以这样读：
@@ -169,6 +156,18 @@ print("Mean |action[t]|:", np.mean(action_mag))
 | 都不接近 | 可能是 Cartesian、torque、字段顺序不同或数值域不同 | schema、stats、controller |
 
 如果采样频率很高，相邻帧变化很小，`action_t` 同时接近 `state_t` 和 `state_{t+1}` 并不奇怪。此时要看明显运动片段、每个维度曲线、最大误差和误差分布，而不是只看一个全局 MAE。
+
+### 用一条构造轨迹检验假设
+
+假设关节位置依次为 \([0,0.1,0.3]\) 弧度，间隔均为 0.1 秒。前两个动作若记录为 \([0.1,0.3]\)，它们与下一位置相等；若记录为 \([0.1,0.2]\)，符合增量；若为 \([1,2]\)，符合每秒弧度的速度。在这个理想例子中，三种接口分别通过直接赋值、相加和乘时间步长得到相同轨迹。
+
+真实控制器有跟踪误差与延迟，绝对目标未必等于下一帧测量。可以扫描若干时间偏移，比较明显运动片段的误差曲线；最低点只提供对齐线索，仍需采集代码确认。静止片段、未知归一化与不同维度单位会掩盖差异。上面代码逐维输出并按有效转移数加权，避免长短 episode 被无意赋同等权重；缺少边界时直接报错，避免跨轨迹比较。
+
+四元数、角度绕回和 SE(3) 位姿不能直接沿用普通减法 MAE。它们需要适合旋转或位姿的距离，相关机制见[坐标变换](coordinate-transforms-and-hand-eye-calibration.md)。
+
+对这条 \(q=[0,.1,.3]\) 的构造轨迹，若时间间隔都为 .1 秒，两个区间的平均速度分别为 1 和 2 弧度每秒。若采集过程中丢了一帧，第二个间隔实际变成 .2 秒，则第二段平均速度改为 1。单看状态序列完全一样，速度标签已经不同，所以时间重采样不能只复制 action 列。
+
+绝对位置目标可以在声明的控制规则下重新取样，增量要随新区间重新组合，速度要用对应时长解释。旋转增量还需按正确顺序组合，不能一般地逐维相加。完成对齐后再切训练窗口，并且只在同一 episode 内取未来动作。若先打散行再寻找下一行，标签会跨到另一次任务，模型也许仍能让 loss 下降，却已失去正确的状态转移语义。
 
 ## VLA 里的 action token 也绕不开这些问题
 
@@ -204,7 +203,7 @@ control interpretation:
   added to the current state, multiplied by dt, or converted through IK.
 ```
 
-如果以 Kai0 这类“关节空间绝对目标”作为工作假设，可以写成：
+确认数据确实采用关节空间绝对目标后，可以写成：
 
 ```text
 observation.state:

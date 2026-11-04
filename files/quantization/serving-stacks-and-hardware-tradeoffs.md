@@ -1,175 +1,46 @@
-# 量化服务栈与硬件选择
+# 量化后省下的显存去了哪里
 
-量化放到服务系统里以后，需要按硬件、延迟、吞吐、成本和质量目标做取舍。具体 runtime 兼容性见 [量化运行时与部署框架](quantization-runtimes-and-frameworks.md)。
+设一个假想模型有8B个参数，GPU可用于模型执行的预算为24GiB。BF16权重主体约14.90GiB，4-bit码值主体约3.73GiB。这个变化看上去省了四分之三，但服务还要容纳KV、scale、workspace和运行时临时张量。
 
-## 核心问题
+## 把权重与KV放进同一预算
 
-量化服务选型真正要回答的是：**低比特带来的节省，是否能在你的硬件、runtime、请求分布和质量门槛下兑现成更低成本或更高容量。**
+若4-bit权重每128个元素存一个FP16 scale，尺度约0.116GiB，权重加scale约3.84GiB，暂不计zero point、padding和其他未量化模块。
 
-这句话里每个词都重要。硬件决定 FP8/INT8/INT4 kernel 是否成熟，runtime 决定 dequant、packing、batch 和 KV 管理是否命中高效路径，请求分布决定权重还是 KV 更贵，质量门槛决定哪些层和哪些请求必须保高精度。单独看“4bit”或“模型文件大小”没有意义。
+假设服务给KV留12GiB，workspace等占2GiB，BF16总量约28.90GiB，超出预算；量化后约17.84GiB，可以运行。实际节省比例约38%，明显不同于权重主体的75%。这些数字是明确配置下的算账示例，不对应某款模型实测。
+
+对于32层、8个KV头、头维128、BF16 KV的模型，每token需要128KiB。12GiB大约能放98304个历史token，若每个请求都占32768个token，理论上只够3条。权重压缩完成以后，长上下文并发仍可能受KV限制。
+
+## 容量收益和带宽收益如何分开
+
+容量收益是从“放不下”变成“放得下”，或允许更大的batch。带宽收益则要求每步实际减少从显存读取的字节。
+
+对于低batch decode，同一层权重可能只服务少量token，权重读取占比高；大batch或prefill把同一权重用于多行输入，复用增加，计算或其他路径可能成为瓶颈。若量化让GEMM提速，却新增反量化或布局转换，总收益需要把这些操作一同计算。
+
+一个只考虑算力与带宽的下界是
+
+$$
+T\ge\max(F/P,\ M/B),
+$$
+
+F为运算量，M为实际搬运字节，P与B为相应计算和带宽上限。这个下界不包括launch、通信、排队，也不保证实现能达到峰值。
+
+## 硬件支持需要落到具体路径
+
+先查目标设备是否具备相应矩阵指令，再查运行库是否支持当前shape、layout和scale。DeepGEMM的固定版本对不同架构规定了不同scale格式，这类接口条件比“GPU支持FP8”更具体。
+
+边缘设备、CPU与GPU的可用路径不同。某些格式的主要价值是减小内存容量，另一些能调用原生低精度乘法。不能把一个设备上较快的格式直接当作跨设备结论。
+
+## 如何选择下一步压缩对象
+
+如果权重放不下，先检查权重主体与未量化模块。若权重已经很小但长请求经常挤满KV，再考虑KV表示和调度。若显存充足而延迟差，先看trace里的权重读取、KV读取、转换与通信占比，容量压缩不一定解决当前问题。
+
+最后把质量约束放回成本。若一次请求便宜20%，但成功率下降导致更多重试，每成功任务成本可能上升。比较配置时固定请求分布，报告完成量、成功量与SLO内完成量，才能判断新增容量有没有变成可用服务。
 
 ![SmoothQuant precision mapping](../assets/images/paper-figures/quantization/smoothquant-figure-6-precision-mapping.png)
 
 <small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)。原图表达不同算子和张量在低精度部署中的精度映射；读图重点是：服务栈选型不是只选“几 bit”，而是要确认硬件 kernel、runtime fallback、activation scale 和质量门槛是否同时成立。它不能直接证明某张 GPU 上的线上 P99 收益，实际仍需按请求分布压测。</small>
 
-## 量化收益的三种来源
+## 对照源码与延伸阅读
 
-| 来源 | 例子 | 可能被什么抵消 |
-| --- | --- | --- |
-| 存储变小 | FP16 权重变 INT4/FP8 | scale 元数据、碎片、adapter |
-| 带宽下降 | decode 读权重或 KV 更少 | dequant、unpack、非连续访存 |
-| 计算更快 | FP8/INT8 tensor core | kernel 不支持、shape 不匹配、fallback |
-
-一个方案可以显存省很多，但速度不变；也可以速度提升，但质量掉点不可接受。上线必须把显存、延迟、吞吐和质量同表看。
-
-## 一个简化成本模型
-
-线上请求成本可以粗略拆成：
-
-\[
-\mathrm{Cost} \approx C_{\mathrm{weight}} + C_{\mathrm{kv}} + C_{\mathrm{compute}} + C_{\mathrm{runtime}} + C_{\mathrm{quality}}
-\]
-
-这行式子把系统成本拆成五项：权重常驻成本、KV cache 动态成本、计算成本、runtime 额外开销和质量退化成本。量化如果只降低 \(C_{\mathrm{weight}}\)，但 \(C_{\mathrm{kv}}\) 或 \(C_{\mathrm{quality}}\) 上升，整体未必划算。
-
-## 不同硬件的量化直觉
-
-| 硬件 | 常见特点 | 量化策略直觉 |
-| --- | --- | --- |
-| 数据中心新 GPU | FP8/INT8/部分 INT4 路径更成熟 | 优先用硬件原生支持格式 |
-| 消费级 GPU | 显存有限，低比特权重很有吸引力 | weight-only + 成熟 kernel 更现实 |
-| CPU/边缘设备 | 带宽和指令集差异大 | GGUF/INT8/INT4 格式要贴设备 |
-| 多卡服务 | 通信、并行和 KV 分布也重要 | 量化要和 tensor/pipeline parallel 配合 |
-
-**不要只按 GPU 型号拍脑袋。** 同一张卡上，不同 runtime、driver、batch shape、context length 和量化格式，结果可能差很多。硬件选择必须结合真实请求压测。
-
-## 服务目标不同，量化选择不同
-
-| 服务目标 | 优先关注 | 推荐起点 |
-| --- | --- | --- |
-| 低延迟聊天 | TTFT、TPOT、P95/P99 | 稳妥 W8/FP8 或成熟 W4A16 |
-| 高吞吐批处理 | tokens/s、GPU 利用率 | FP8/W8A8、较大 batch |
-| 长上下文 RAG | KV 显存、decode 带宽 | 权重量化 + KV cache 评估 |
-| 边缘/本地 | 模型能否装下、内存带宽 | INT4/GGUF/weight-only |
-| 多模态/VLA | 细节和控制稳定性 | 主体量化，projector/action/risk 保高精 |
-
-## 权重量化和 KV 量化的分工
-
-权重显存：
-
-\[
-\mathrm{WeightMemory}\approx N_{\mathrm{params}}\times \mathrm{bytes}
-\]
-
-其中 \(N_{\mathrm{params}}\) 表示模型参数量，\(\mathrm{bytes}\) 表示每个参数的存储字节数。权重量化主要降低这一项，所以它对“模型能不能装进显存”特别直接。
-
-KV 显存：
-
-\[
-\mathrm{KVMemory}\approx2\times L\times B\times T\times H_{\text{kv}}\times d_h\times \mathrm{bytes}
-\]
-
-权重量化主要影响模型常驻成本；KV 量化主要影响长上下文和并发。两者要分别评估。很多线上系统在权重已经 W4A16 后，真正限制并发的会变成 KV cache、prefix cache 命中率和 decode 带宽。
-
-## 低延迟和高吞吐的冲突
-
-| 目标 | 常见做法 | 量化影响 |
-| --- | --- | --- |
-| 低 TTFT | 小 batch、快速 prefill | dequant 开销更容易显眼 |
-| 低 TPOT | decode kernel 高效 | KV dtype 和权重带宽重要 |
-| 高吞吐 | 合批、连续 batching | 低比特 kernel 更可能摊薄开销 |
-| 稳 P99 | 避免 fallback 和动态转换 | 需要 shape bucket 和监控 |
-
-**直觉**：短请求、小 batch 下，量化额外开销可能盖过收益；长请求、大 batch 或带宽受限时，量化更容易兑现。
-
-## 混合精度是生产常态
-
-| 模块 | 更激进 | 更保守 |
-| --- | --- | --- |
-| LLM 主体 Linear | FP8/INT8/INT4 | BF16 |
-| attention / MLP GEMM | FP8/W8A8 | BF16/FP16 |
-| LayerNorm/Softmax | 通常不激进 | BF16/FP16 |
-| KV cache | INT8/FP8 | BF16/FP16 |
-| projector/action/risk head | 视任务谨慎 | BF16/FP16 |
-
-生产系统经常不是“全模型 4bit”，而是把低精度放在收益最大的位置，把高精度留给风险最高的位置。
-
-## 多租户和多模型场景
-
-量化在多租户里可能带来额外收益：
-
-| 收益 | 说明 |
-| --- | --- |
-| 单卡放更多模型 | 权重显存下降 |
-| 冷启动更快 | 权重加载更小 |
-| KV 并发更高 | KV dtype 降低时明显 |
-
-但也会带来复杂性：
-
-| 风险 | 说明 |
-| --- | --- |
-| 格式碎片 | 不同模型不同量化格式 |
-| kernel 混杂 | batch 中模型或 shape 不一致 |
-| 质量分层 | 不同租户容忍度不同 |
-| 回退成本 | 高价值请求可能要路由全精 |
-
-## 质量退化也是成本
-
-量化后如果高价值任务掉点，运营成本会吞掉硬件收益。
-
-| 掉点类型 | 业务成本 |
-| --- | --- |
-| RAG 引用错 | 人工复核、用户不信任 |
-| 代码补全错 | 开发者返工 |
-| 数字/表格错 | 财务和合规风险 |
-| 工具调用错 | agent 流程中断 |
-| 动作抖动 | 机器人失败或安全风险 |
-
-因此服务栈选择要把质量回归当成本项，而不是只算 GPU 小时。
-
-## 一个企业助手例子
-
-目标：70B 企业助手，服务长文档问答和工具调用。
-
-推荐路径：
-
-1. 先用 FP16/BF16 baseline 记录质量、TTFT、TPOT、峰值显存。
-2. 尝试 W4A16 或 FP8 主体，确认模型常驻显存和吞吐收益。
-3. 如果 32k/128k 文档并发受限，再评估 KV cache 量化。
-4. 对引用、表格、代码、工具调用、高权限操作做任务桶回归。
-5. 高风险请求保留全精或混合精度路由。
-
-## 一个边缘部署例子
-
-目标：本地代码助手，显存很小，延迟可接受但必须离线运行。
-
-推荐路径：
-
-1. 优先选择成熟 weight-only INT4/GGUF 类路线，让模型先放得下。
-2. 控制 context 和 batch，避免 KV cache 把内存吃满。
-3. 对目标语言、长文件、特殊符号和补全格式做回归。
-4. 接受吞吐不如服务器，但要保证稳定加载和可复现。
-
-## 设计建议
-
-1. 先确认瓶颈：权重、KV、compute、带宽、还是质量。
-2. 先选目标 runtime 和硬件，再选它们原生支持的量化格式。
-3. 不要把所有层统一压低；优先混合精度保护敏感路径。
-4. 短请求和长请求分开测，平均吞吐不能代表 P99。
-5. 把质量掉点和回退成本写进总拥有成本。
-
-## 读完以后怎么判断
-
-量化服务选型不是“哪个 bit 最低”，而是“在你的硬件、runtime、请求分布和质量门槛下，哪种精度分配最划算”。权重、KV、kernel 和业务质量要放在一张表里算，才不会把压缩率误当成系统收益。
-
-## 外部材料
-
-- [Hugging Face Quantization concept guide](https://huggingface.co/docs/transformers/quantization/concept_guide)：先把 scheme、granularity 和 technique 分开。
-- [TensorRT-LLM documentation](https://nvidia.github.io/TensorRT-LLM/)：理解 NVIDIA serving 栈里的 FP8/INT8/INT4、kernel 和 engine 构建。
-- [vLLM PagedAttention blog](https://vllm.ai/blog/2023-06-20-vllm)：理解权重量化之外，KV cache 管理为什么仍会限制并发。
-- [FP8 Formats for Deep Learning](https://arxiv.org/abs/2209.05433)：理解 FP8 作为硬件友好混合精度格式的动机。
-- [A Survey of Low-bit Large Language Models](https://arxiv.org/abs/2409.16694)：把低比特方法、系统传输和 KV cache 量化放在同一张图谱里。
-
-- [Hugging Face Quantization 概念指南](https://huggingface.co/docs/transformers/main/en/quantization/concept_guide)。
-- [GPTQ 论文](https://arxiv.org/abs/2210.17323)。
-- [AWQ 论文](https://arxiv.org/abs/2306.00978)。
+- [FP8执行路径与架构边界](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)
+- [KV容量与调度共同限制在途请求](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)

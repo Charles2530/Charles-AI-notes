@@ -1,130 +1,65 @@
 # VLA、机器人与闭环强化学习
 
-Vision-Language-Action（VLA）模型把视觉观察和语言任务映射为机器人动作。能预测示范动作只是起点：真实机器人还要在部分可观测、连续控制和安全约束下反复执行、重新观察、恢复失败。闭环强化学习关注的是这条执行链最终能否提高回报与成功率，而不是单帧动作误差是否更小。
+VLA 将视觉观察与语言目标映射为机器人动作。动作预测准确只是控制链中的一个环节，机器人还要按实际时钟执行，观察物体有没有移动，判断抓取是否成功，再决定继续、重抓或停止。强化学习优化的是这一连串行动产生的任务结果。
 
-## 本章回答什么
+## 抓杯子任务中的状态与动作
 
-本章回答：机器人为什么更接近 POMDP 而不是完全可观测 MDP；continuous action 与 action chunk 如何进入策略；demonstration、offline pretraining、simulation、world-model rollout 和 real deployment data 各自提供什么证据；open-loop action prediction、simulator closed-loop success 与 real closed-loop success 为什么不能互相替代；安全约束、恢复和 human intervention 如何进入数据闭环。
-
-## 先修知识
-
-- [Agent、环境与训练闭环](rl-agent-environment-loop.md)：observation、state、trajectory 与 termination。
-- [Offline Reinforcement Learning](offline-reinforcement-learning.md)：固定机器人日志的 dataset support 和 distribution shift。
-- [Model-based RL 与世界模型](rl-for-world-models.md)：MPC、world-model rollout 与 model exploitation。
-- [VLA 动作表示与接口](../vla/action-representation-and-interfaces.md)：坐标系、控制频率和动作 token/chunk。
-- [规划、控制与安全](../embodied-ai/planning-control-and-safety.md)：policy 输出之后的 controller 与 safety filter。
-
-## 最小任务
-
-任务是“拿起桌上的杯子放入托盘”。每个控制周期收到多相机图像、关节状态和语言指令，policy 输出未来 $K$ 步的末端位姿与夹爪命令。最小闭环为：
-
-
-```text
-observe -> update history/belief -> VLA proposes action chunk
-  -> safety filter/controller -> execute a short prefix
-  -> observe outcome -> continue, replan, recover, or stop
-```
-
-不要一次执行完整长 chunk 后才检查结果。执行前缀越长，推理调用越少，但环境变化和模型误差越可能积累；前缀越短，反馈及时，但 latency 与动作抖动更突出。
-
-最小验收必须分三层：
-
-| 评测层 | 指标例子 | 能证明什么 | 不能证明什么 |
-| --- | --- | --- | --- |
-| open-loop action prediction | action L1/L2、chunk likelihood、示范匹配 | held-out 日志上接近记录动作 | policy 能纠错、任务会成功 |
-| simulator closed-loop success | success、return、collision、recovery rate | 在该 simulation 动力学和传感器模型中可闭环 | 真实摩擦、延迟与长尾安全 |
-| real closed-loop success | 真实任务成功、人工接管、near-miss、cost per success | 在指定真实设置中的闭环表现 | 未测试场景、硬件和人群上的普遍泛化 |
-
-## 核心机制
-
-核心设计同时包含 POMDP belief、continuous action 与 action chunk、demonstration/offline pretraining、simulation/world-model rollout、real deployment data，以及独立于 reward 的 safety constraint、recovery 与 human intervention；缺一项都可能让 distribution shift 在闭环中失控。
-
-### POMDP、history 与 belief
-
-机器人真实 state 包含物体三维姿态、接触力、摩擦、遮挡后物体位置和人的意图；摄像头与 proprioception 只给 observation。因此更合适的形式是 POMDP。策略需要利用历史观察、动作和反馈形成 belief：
-
+设任务为“拿起杯子放到托盘”。观察包含多相机图像、关节位置和速度、夹爪状态与语言指令；完整状态还包括遮挡后的杯子姿态、摩擦、接触力和外部扰动。相似图像可能对应已经夹紧和即将滑落两种状态，因此需要历史 $h_t$ 或 belief
 
 \[
-b_t=p(s_t\mid o_{\le t},a_{<t}),\qquad
-a_t\sim\pi_\theta(a_t\mid b_t,l).
+b_t=p(s_t\mid o_{\le t},a_{<t}),\qquad a_t\sim\pi_\theta(a_t\mid b_t,l).
 \]
 
-VLA 的视觉 token、历史帧、语言目标和 recurrent/KV memory 都可能承载 belief，但长上下文不保证保留接触事件。应专门测试遮挡、物体滑动和动作执行失败后的状态更新。
+长上下文可以承载历史，但不能据此断言模型保留了接触事件。可通过遮挡后继续抓取、轻微滑落后纠正等情形检查历史是否真的改变动作。POMDP 的一般解释见[交互闭环](rl-agent-environment-loop.md)。
 
-### Continuous action 与 action chunk
+动作必须明确接口，例如末端平移三维增量、旋转三维表示与夹爪一维命令。相同的七个数值，若一个控制器解释为米与弧度，另一个解释为归一化位置或速度，行为会完全不同。坐标系、单位、控制周期、归一化和饱和限制都是动作定义的一部分，见 [VLA 动作接口](../vla/action-representation-and-interfaces.md)。
 
-机器人常见 continuous action 包括关节位置/速度/力矩，或末端平移、旋转与夹爪状态。VLA 可能直接回归连续量，也可能离散化为 action token。无论表示方式，都必须写清坐标系、单位、频率、归一化和 controller 接口。
+## 动作块怎样改变反馈延迟
 
-action chunk 一次预测 $a_{t:t+K-1}$，减少推理频率并表达连贯技能；但真实系统通常只执行短 prefix 后重新观察。chunk 长度、执行前缀与 replanning frequency 是闭环设计参数，不只是模型输出 shape。
+Action chunk 一次预测未来 $K$ 个控制动作，执行时可只取前 $M$ 步后重新观察。若底层控制频率为 20 Hz，$K=16$ 表示预测未来 0.8 秒；只执行 $M=4$ 步意味着每 0.2 秒重新规划。预测长度与实际开环执行长度因此是两个参数。
 
-### Demonstration 与 offline pretraining
-
-demonstration 提供“人或既有控制器做过什么”，适合 behavior cloning 和 offline pretraining。它能快速获得基础 manipulation skill，避免从危险随机探索开始，却不能提供数据外动作的真实反事实结果。
-
-失败数据同样重要：碰撞、抓空、滑落、人工接管和 recovery trajectory 能定义风险边界。只保留 imitation success 会让策略不知道失败前兆，也无法学习“何时停止或求助”。reward design 与 imitation success 必须分开：模仿标签描述示范动作，reward 描述任务进展、代价和约束，两者可能不一致。
-
-### Simulation、world model 与真实数据
-
-simulation 可以批量生成 closed-loop interaction、随机化物体和测试恢复；world-model rollout 可以更便宜地比较 action consequence；两者都可能有 model bias。策略会主动利用穿模、错误接触或不准确 risk head，因此仿真高回报必须通过 real deployment data 校准。
-
-真实部署数据最昂贵，也最接近目标环境。合理顺序通常是：demonstration/offline pretraining 建立初始策略，simulation 与 world-model rollout 扩展覆盖，受限真实试验验证，再把失败和干预回流。不是所有阶段都必须用 PPO；有些阶段是 imitation、offline RL、MPC 或安全约束优化。
-
-### Safety constraint、recovery 与 human intervention
-
-安全不能只压成一个 reward。碰撞、速度、工作空间、力矩、隐私和人机距离常是硬 constraint，由 controller、safety filter、急停和权限系统执行。reward 可以鼓励效率或平滑，但不能保证稀有危险永不发生。
-
-recovery policy 处理可恢复失败，例如重新定位、松开重抓或回到安全姿态；不可恢复或高风险状态应触发停止与 human intervention。接管不是“无效样本”，而是重要标签：它表明当时 policy confidence、risk estimate 或任务状态不足以安全自治。
-
-### Distribution shift 是闭环产生的
-
-相机、光照、物体、机器人动力学会造成外部 shift；更隐蔽的是 policy-induced shift。策略动作改变后续 observation，微小偏差会把系统带到 demonstration 没覆盖的状态。open-loop action prediction 无法暴露这条反馈链，必须用 closed-loop rollout 和失败桶观察。
-
-## 训练数据流
-
+假设杯子以每秒 0.1 米的速度移动，观察加推理造成 0.2 秒延迟，策略开始执行时杯子已经移动 2 厘米。执行更长前缀还会继续放大误差，哪怕模型在日志上的动作回归误差很低。更短前缀带来更及时反馈，同时增加推理负担，还可能让相邻 chunk 在边界产生不连续动作。
 
 ```text
-demonstrations + historical failures
-  -> schema/calibration/episode audit
-  -> imitation or offline pretraining
-  -> simulation + world-model rollout + safety tests
-  -> constrained closed-loop deployment with human intervention
-  -> bucket success, failure, recovery and near-miss trajectories
-  -> relabel reward/risk/termination and retrain
-  -> regression gate before the next deployment
+采集有时间戳的观察 -> 更新历史 -> 预测 action chunk
+-> 控制器/约束过滤 -> 执行短前缀 -> 读取执行结果
+-> 继续、重新规划、恢复或结束
 ```
 
-这个 flywheel 不是“自动采更多数据”就会变好。采样 policy、场景分布、人工接管规则和 reward 版本都会改变数据含义，必须随 trajectory 保存。
+因此延迟应记录从传感器采集到动作生效的时间，不能只报告模型前向耗时。异步推理还需要知道当前执行的是哪次观察产生的 chunk，并明确旧 chunk 何时失效。
 
-| 数据阶段 | 应记录 | 主要用途 |
+## 在一条滑落轨迹中定义奖励与恢复
+
+假设 0.0 秒采到杯子已接触的画面，0.2 秒推理结束并开始执行；0.3 秒杯子出现滑移，原 chunk 仍在抬升；0.4 秒新观察送入策略，0.6 秒恢复动作才可能生效。模型每 0.2 秒产一批动作，不代表它能在滑移发生后立刻纠正，反应还包含观测与推理延迟。
+
+任务奖励可以把稳定放置作为主要完成信号，耗时与动作平滑作为辅助项，滑落作为失败事件。但如果每次短暂接触都给正奖励，策略可能反复碰杯而不放好；如果所有抓空都立即终止，策略则没有机会体验重新观察后的恢复。奖励和终止定义直接决定哪些轨迹会被鼓励。
+
+对这条滑落轨迹，应保留 0.3 秒的首次异常、0.4 秒的观测、0.6 秒的恢复提议及是否真正执行。只保存最终成功或失败标签，会丢失动作为何错过纠正窗口的信息。若人工在 0.5 秒接管，则后续成功不能直接归为原策略自主恢复。
+
+## 动作被修改后，训练记录应该是谁的动作
+
+假设策略提出 0.1 米位移，控制器因工作空间限制实际只执行 0.02 米。环境转移由执行动作产生，Q 或动力学训练必须对应实际执行动作。若把奖励配给一个并未执行的 0.1 米动作，模型就会学到错误后果。
+
+策略梯度还要明确优化对象。可以把过滤器视为环境的一部分，以提出动作作为 agent action，再由环境映射到执行动作；此时 logprob 对应提出动作，完整转移定义必须包含过滤过程。也可以建模过滤后的执行策略，但不能直接用原 actor 的 logprob 冒充过滤后动作的概率。人工接管同样需要记录 actor 提议、接管动作、时间与原因。
+
+约束、reward 和 termination 各司其职。工作空间或力矩限制由控制器执行；时间、平滑性和任务进度可以进入 reward；任务成功、不可恢复失败等决定真实终止。抓空但仍可重试时，过早终止会让策略学不到恢复；外部试验时间耗尽则要按任务定义区分截止失败与采样截断。[规划、控制与安全](../embodied-ai/planning-control-and-safety.md)讨论执行层的约束方法。
+
+## 示范、仿真与真实反馈提供不同信息
+
+示范适合先学基本动作分布，失败与人工恢复轨迹则补充“偏离以后怎么办”。只做 behavior cloning，策略轻微偏移后进入未见状态，下一步误差可能继续扩大。这种 policy-induced distribution shift 是闭环产生的，单独打乱日志帧评估很难看到。
+
+固定日志可以用于[离线 RL](offline-reinforcement-learning.md)，但仍受动作覆盖限制。仿真可以生成可重置的交互，世界模型可以比较候选动作后果；接触、摩擦、延迟或遮挡建模错误时，策略可能利用模型漏洞。[Model-based RL](rl-for-world-models.md)中的模型校准必须覆盖实际候选动作，不能只在示范动作上预测准确。
+
+一份抓取轨迹至少应能恢复观察时间、提出动作、执行动作、关节反馈、奖励分量、终止原因、干预与恢复过程。示范、仿真、模型想象和真实执行还要标记来源，模型生成的步数不能计入真实机器人交互时间。
+
+## 三层评测分别能说明什么
+
+| 评测 | 观察到的证据 | 不能由此推出的结论 |
 | --- | --- | --- |
-| demonstration | observation、action、task、operator、calibration | imitation/offline pretraining |
-| simulation | seed、domain randomization、sim version、collision | closed-loop 压测和覆盖扩展 |
-| world-model rollout | model version、uncertainty、candidate actions | 规划与反事实排序，不当真实证据 |
-| real deployment data | hardware、latency、intervention、near-miss | 真实分布校准与失败回流 |
+| open-loop action prediction | 日志观察下的动作距离或似然 | 自己行动后能纠错并完成任务 |
+| simulator closed-loop success | 给定仿真动力学与传感器下的成功、碰撞和恢复 | 真实接触与延迟下同样有效 |
+| real closed-loop success | 指定硬件、物体、初始条件下的真实表现 | 未测试场景和硬件上的普遍泛化 |
 
-训练集、调参集和最终闭环评测场景要分开。重复在同一房间、物体和初始位姿上迭代，会把数据 flywheel 变成测试集过拟合。
+“杯子进入托盘”也要明确成功判据。若放下后立刻滑出，结束帧短暂接触托盘不应与稳定放置混为一谈。人工接管后完成的任务可计入辅助完成率，但不应直接算成全自主成功率。恢复成功率最好以发生可恢复失败的轨迹为分母，并同时报告这种失败出现的频率，避免一个指标掩盖另一个问题。
 
-## 常见失败
-
-1. **动作回归误差低就宣称机器人成功。** 多模态 demonstration 可有多个正确动作，open-loop 距离也看不到反馈纠错。
-2. **simulation success 当 real closed-loop success。** sim-to-real gap 包括视觉、接触、延迟、磨损和人的不可预测行为。
-3. **奖励越密越好。** shaping reward 可能鼓励靠近目标却反复碰撞；必须同时监控 constraint violation。
-4. **把 imitation success 当 reward design 已解决。** 示范动作可完成任务，但不定义效率、风险、恢复和长期代价。
-5. **长 action chunk 全部执行。** 环境变化后旧计划仍继续，容易把可恢复偏差变成碰撞。
-6. **只训练成功轨迹。** policy 看不到何时停止、恢复或请求 human intervention。
-7. **world-model rollout 当真实机器人小时。** 模型样本只能证明模型内行为，应分别报告 simulated/model/real steps。
-
-## 自检与练习
-
-1. 为杯子放置任务列出 latent state 与可观测 observation，说明 belief 需要哪些历史。
-2. 设计 $K=16$ 的 action chunk，但只执行前 4 步；列出重新规划的触发条件。
-3. 对 open-loop、simulator closed-loop 和 real closed-loop 各写一个能支持的 claim 与一个不能支持的 claim。
-4. 把碰撞、任务进度和人工接管分别放到 reward、constraint 或 termination 中，并解释选择。
-5. 设计 failure replay：如何采样抓空、滑落、遮挡和 recovery，避免平均成功样本淹没长尾。
-
-权威起点：
-
-- [RT-2](https://arxiv.org/abs/2307.15818)：把视觉语言表征接到机器人动作 token 的 VLA 代表。
-- [Open X-Embodiment](https://arxiv.org/abs/2310.08864)：多机器人 demonstration 数据与跨 embodiment 学习。
-- [OpenVLA](https://arxiv.org/abs/2406.09246)：开源 VLA 训练与评测案例。
-- [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)：部分可观测 latent planning 的基础。
+RT-2 的动作 token 建模见[原论文](https://arxiv.org/abs/2307.15818)，跨机器人示范数据见 [Open X-Embodiment](https://arxiv.org/abs/2310.08864)，VLA 训练与评测实例见 [OpenVLA](https://arxiv.org/abs/2406.09246)。它们提供具体系统设计，不能替代当前机器人接口和闭环结果的核查；部分可观测规划还可对照 [PlaNet](https://arxiv.org/abs/1811.04551)。
