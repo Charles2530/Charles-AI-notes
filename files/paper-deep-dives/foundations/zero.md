@@ -272,3 +272,7 @@ Figure 4 取消模型并行，使用 128 GPU。应先看绿色点延伸到的模
 长上下文任务还应单独测激活检查点和 attention 工作区。推理中的 KV cache 不属于本文的混合精度 Adam 账本。模型状态节省也不自动降低训练 FLOPs；它首先改变可运行的模型、batch 和并行配置，再通过这些改变影响吞吐。
 
 可复用的核心认识是把三个问题分开计算：**谁拥有状态、何时需要完整状态、为了取得它要传多少数据。** 沿这三个问题检查显存与通信时间线，比只比较 Stage 编号更接近实际训练效率。
+
+## 继续阅读
+
+ZeRO 的状态切分要接到[分布式训练与 checkpoint](../../training/distributed-training-and-checkpointing.md)理解；若要比较 Megatron、DeepSpeed 和并行组，再看[训练栈对照](../../training/megatron-lm-deepspeed-and-open-training-stacks.md)。

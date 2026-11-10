@@ -51,9 +51,9 @@ OPT-13B 的 $L=40$、$d_{\mathrm{KV}}=5120$、FP16 每元素 2 bytes，所以每
 
 Figure 2 的绿色部分才是正在保存有效 token states 的比例。先比较 Oracle 与 vLLM，能排除一个过于简单的解释：即使提前知道最终输出长度，也没有自动消除所有浪费。
 
-![不同缓存管理方式中的有效状态与浪费](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-2-memory-utilization.png){ width="760" }
+![不同缓存管理方式中的有效状态与浪费](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-2-memory-utilization.png){ width="615" }
 
-*原论文 Figure 2。四种设置的有效 token states 比例依次为 20.4%、26.8%、38.2%、96.3%；灰色还包含 external fragmentation 以外的其他开销。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 2。四种设置的有效 token states 比例依次为 20.4%、26.8%、38.2%、96.3%；灰色还包含 external fragmentation 以外的其他开销。*
 
 Orca Oracle 不再需要为错误的最大长度多留内部空间，但图中仍有 25.2% reservation，以及 36.6% external fragmentation & others。它从请求开始就为整个已知最终长度占住一段连续空间，当前未生成的位置仍不能交给别的请求。vLLM 的 96.3% 正是在按需增长与固定尺寸分配两方面同时改善的结果，而不是预测输出长度更准确。
 
@@ -65,7 +65,7 @@ Orca Oracle 不再需要为错误的最大长度多留内部空间，但图中�
 
 ![PagedAttention 原理图](../../assets/images/paper-figures/inference/vllm-pagedattention.png){ width="860" }
 
-*原论文 Figure 5。沿 query 到各个 K/V 块的箭头读，块中的位置仍属于同一条序列。分页改变地址映射，不删除历史。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 5。沿 query 到各个 K/V 块的箭头读，块中的位置仍属于同一条序列。分页改变地址映射，不删除历史。*
 
 为展开原文式（4），令 $\mathcal B_j$ 表示第 $j$ 个块内、当前 query 能看见的有效位置，$d_h$ 是单个 head 的维度。完整 softmax 分母为
 
@@ -93,7 +93,7 @@ Figure 6 采用 $B=4$。prompt 是 “Four score and seven years ago our”，�
 
 ![vLLM 逻辑块与物理块映射](../../assets/images/paper-figures/inference/vllm-logical-physical-block-table.png){ width="760" }
 
-*原论文 Figure 6。表中既记录 physical block number，也记录已填位置数。重点看第二个逻辑块从 3 个位置变成 4 个位置，以及下一个新块何时出现。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 6。表中既记录 physical block number，也记录已填位置数。重点看第二个逻辑块从 3 个位置变成 4 个位置，以及下一个新块何时出现。*
 
 prefill 后预测出 “fathers”。下一轮把它作为输入执行 decode，其新 KV 写入物理块 1 的最后一格，同时预测 “brought”。再下一轮处理 “brought” 时，原有块已满，管理器才分配物理块 3，并将新逻辑块映射过去。整个过程不需要找到一段能容纳未来最大输出长度的连续内存。
 
@@ -111,9 +111,9 @@ GPU worker 的 block engine 会预先分配一块物理显存池，并将它划�
 
 问题在于不满的最后一块。不同分支接下来可能生成不同 token，如果继续向同一物理块写，就会互相覆盖。Figure 8 沿用七 token prompt：两条样本都引用物理块 7 和 1，引用计数均为 2。当 A1 需要在尾块写入自己的新 KV 时，系统先将物理块 1 复制到新块 3，调整 A1 的映射，并把原块引用计数减到 1。A2 随后就能在原块中直接写入自己的分支。[↗](https://arxiv.org/pdf/2309.06180v1#page=7)
 
-![并行采样中的 copy-on-write](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-8-copy-on-write.png){ width="900" }
+![并行采样中的 copy-on-write](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-8-copy-on-write.png){ width="620" }
 
-*原论文 Figure 8。红色箭头只复制发生分叉的尾块，完整 prompt 块 7 仍由两条序列共享。先读 ref count 的变化，再看 “fathers” 与 “mothers” 的写入位置。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 8。红色箭头只复制发生分叉的尾块，完整 prompt 块 7 仍由两条序列共享。先读 ref count 的变化，再看 “fathers” 与 “mothers” 的写入位置。*
 
 这个 **Copy-on-write（写时复制）** 将成本限制在真正需要修改的共享块。它并不意味着任意相同 token 都可共享 KV：同一个词出现在不同前文或不同位置，其表示通常不同。共享成立的条件是相同有效前缀及对应模型计算上下文。
 
@@ -121,9 +121,9 @@ GPU worker 的 block engine 会预先分配一块物理显存池，并将它划�
 
 beam search 每轮保留最有希望的候选，多个新候选可能来自同一个旧候选，所以共享关系随搜索树变化。Figure 9 中，四个旧候选都分享块 0，候选 0–2 还分享块 1、3；下一轮保留下来的四个候选全部源于旧候选 1、2。
 
-![Beam search 的动态块共享](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-9-beam-sharing.png){ width="900" }
+![Beam search 的动态块共享](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-9-beam-sharing.png){ width="618" }
 
-*原论文 Figure 9。虚线表示候选更新边界，打叉的块失去全部引用；新候选沿已有树枝共享历史，再为后续位置申请新块。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 9。虚线表示候选更新边界，打叉的块失去全部引用；新候选沿已有树枝共享历史，再为后续位置申请新块。*
 
 淘汰旧候选 0、3 后，块 2、4、5、8 的引用归零，可以释放。新候选获得块 9–12，共享块 0、1、3，并按来源进一步共享块 6 或 7。传统连续张量若重新排列 beam，可能复制很长的历史；块表只需重建引用关系，在分叉落入不满旧块时才触发一个块的写时复制。
 
@@ -162,7 +162,7 @@ beam search 每轮保留最有希望的候选，多个新候选可能来自同�
 
 ![vLLM 服务系统总图](../../assets/images/paper-figures/inference/vllm-system-overview-padded.png){ width="860" }
 
-*原论文 Figure 4。先沿 scheduler 到 worker 的控制路径读，再看 CPU/GPU block allocator 与 cache engine 的关系。调度策略没有进入每个 attention head 的数值计算。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 4。先沿 scheduler 到 worker 的控制路径读，再看 CPU/GPU block allocator 与 cache engine 的关系。调度策略没有进入每个 attention head 的数值计算。*
 
 模型采用 Megatron-LM 风格张量并行时，各 GPU 处理相同 tokens，保存不同 attention heads 的 KV。所有 worker 使用相同物理块编号和逻辑映射，但编号对应的具体数据是本卡的 KV 分片。中央管理器因而只需统一广播管理决定；worker 之间的模型 all-reduce 由分布式执行本身完成，无需每次都经 scheduler 协调。[↗](https://arxiv.org/pdf/2309.06180v1#page=9)
 
@@ -216,7 +216,7 @@ Figure 12 每个面板固定模型与数据集，横轴是请求到达率，纵�
 
 ![单输出场景的请求率与延迟](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-12-throughput-latency.png){ width="1000" }
 
-*原论文 Figure 12。上排为 ShareGPT，下排为 Alpaca；各列分别是 OPT-13B、66B、175B。右下角是分页优势缩小的重要条件。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 12。上排为 ShareGPT，下排为 Alpaca；各列分别是 OPT-13B、66B、175B。右下角是分页优势缩小的重要条件。*
 
 ShareGPT 上，相同延迟水平下 vLLM 相对 Orca Oracle 可承受约 1.7–2.7 倍请求率，相对 Orca Max 为约 2.7–8 倍。相对 FasterTransformer 的最高值达到 22 倍，但同时包含后者缺少细粒度调度和预留浪费的影响。论文概述的 2–4 倍不是所有面板、所有基线、所有负载下恒定的加速系数。[↗](https://arxiv.org/pdf/2309.06180v1#page=11)
 
@@ -239,9 +239,9 @@ ShareGPT 的 30.42 相对 Oracle 的 13.62 约为 2.2 倍，相对 Max 的 7.00 
 
 Figure 15 的分母是“不共享时所需的总块数”，衡量共享减少了多少 KV 块。先比较左右两个面板，再比较每个面板中候选数增加的趋势。
 
-![并行采样与 beam search 的 KV 共享节省](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-15-sharing-savings.png){ width="880" }
+![并行采样与 beam search 的 KV 共享节省](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-15-sharing-savings.png){ width="618" }
 
-*原论文 Figure 15。OPT-13B、Alpaca 负载。左侧只共享 prompt，右侧还可以共享生成树中的历史。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 15。OPT-13B、Alpaca 负载。左侧只共享 prompt，右侧还可以共享生成树中的历史。*
 
 | Decoding method | 2 outputs / beams | 4 outputs / beams | 6 outputs / beams |
 | --- | ---: | ---: | ---: |
@@ -256,9 +256,9 @@ parallel sampling 的答案很快分叉，只共享 prompt，所以在短 prompt
 
 公共前缀实验使用 LLaMA-13B 和 WMT16 英译德任务。一个前缀包含一条翻译示例、共 80 tokens，另一个包含五条示例、共 341 tokens。注意正文任务是英译德，方法示意图中的英法示例不应替代实际实验设置。
 
-![不同公共前缀长度的吞吐实验](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-16-prefix-sharing.png){ width="820" }
+![不同公共前缀长度的吞吐实验](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-16-prefix-sharing.png){ width="613" }
 
-*原论文 Figure 16。先比较相同延迟下蓝绿曲线的横向距离，再比较单示例与五示例前缀。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 16。先比较相同延迟下蓝绿曲线的横向距离，再比较单示例与五示例前缀。*
 
 共享 80-token 前缀时，相对 Orca Oracle 的吞吐约提高 1.67 倍；341-token 前缀时提高到 3.58 倍。更长公共上下文提供了更大的重复计算与重复状态消除空间。这个实验支持预定义前缀接口的价值，并没有评测所有自动发现、淘汰或持久化前缀的策略。[↗](https://arxiv.org/pdf/2309.06180v1#page=12)
 
@@ -270,9 +270,9 @@ parallel sampling 的答案很快分叉，只共享 prompt，所以在短 prompt
 
 动态块表要求额外读取地址、执行分支并处理变长序列。Figure 18a 在 batch 8、32，以及 context length 64、128、256 下比较 attention kernel；vLLM 的延迟相对优化后的 FasterTransformer 高约 20%–26%。这个代价真实存在。
 
-![attention kernel 与块大小消融](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-18-kernel-block-size.png){ width="900" }
+![attention kernel 与块大小消融](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-18-kernel-block-size.png){ width="618" }
 
-*原论文 Figure 18。左图说明间接寻址的局部代价，右图说明不同工作负载对块大小的响应。两个面板的横轴与纵轴含义不同。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 18。左图说明间接寻址的局部代价，右图说明不同工作负载对块大小的响应。两个面板的横轴与纵轴含义不同。*
 
 但这项开销只发生在相应 attention 操作，不能直接等同于整个模型每步变慢 20%–26%。与此同时，分页让系统装下更多请求、减轻排队，并摊薄每请求承担的其他模型运算和访存成本。这就是局部微基准与整体吞吐可以朝不同方向变化的原因。[↗](https://arxiv.org/pdf/2309.06180v1#page=12)
 
@@ -284,9 +284,9 @@ parallel sampling 的答案很快分叉，只共享 prompt，所以在短 prompt
 
 Figure 19 左图测恢复操作本身，右图测相同请求率下的 OPT-13B、ShareGPT 服务。应先看小块处红色 swapping 曲线，再看中间块大小处两种方法的端到端曲线是否仍有明显差异。
 
-![重计算与 swapping 的恢复成本](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-19-recompute-swap.png){ width="860" }
+![重计算与 swapping 的恢复成本](../../assets/images/paper-deep-dives/inference/vllm-pagedattention/figure-19-recompute-swap.png){ width="613" }
 
-*原论文 Figure 19。左侧将 swap in、swap out 与往返总成本分开；右侧包含这些恢复操作对整个服务的影响。*
+*图源：[PagedAttention 论文](https://arxiv.org/abs/2309.06180)，Figure 19。左侧将 swap in、swap out 与往返总成本分开；右侧包含这些恢复操作对整个服务的影响。*
 
 小块导致大量 CPU–GPU 小传输，PCIe 有效带宽利用不好，swapping 开销很大。recomputation 通过一次已知序列前向完成，不依赖这些 KV 块的搬运粒度，所以微基准曲线相对平坦。块变大后，传输更有效，swapping 可以更有利；在 16–64 的中等块大小下，两种方法端到端表现接近。[↗](https://arxiv.org/pdf/2309.06180v1#page=13)
 
@@ -301,3 +301,5 @@ PagedAttention 提供的是一种让动态状态可以增长、共享和回收�
 采用时最值得复用的检查方式，是把四层指标连起来：有效 token states 占了多少 KV 池、平均同时运行多少请求、相同延迟下承受多少到达率，以及共享和恢复分别花了多少时间。若前三者没有相应变化，仅比较一个更复杂的分页 kernel，可能只看到间接寻址的代价。
 
 对于形状静态、分配可提前规划的训练任务，或者计算已经饱和的短请求服务，提高内存利用率未必带来吞吐提升。论文既给出了按需管理与共享的正例，也用短序列、大显存及 kernel 微基准划出了边界。可迁移的认识是沿请求生命周期管理状态，并让计算接口直接消费这种状态布局；具体收益仍由真实长度分布、到达流量与硬件决定。
+
+读实现时先看[上下文压缩、KV 驱逐与内存层级](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)，把“分页存放”和“删除历史”区分开；再看[服务系统总览](../../inference/serving-systems.md)，把 batching、队列和 SLO 放回请求生命周期。需要落到 kernel 地址计算时，可接[Serving attention 与 KV kernel](../../operators/serving-attention-and-kv-kernels.md)，对照逻辑 token、物理 block 和真实长度 mask。

@@ -1,6 +1,21 @@
 # 机器人运动学与 DH 参数：从关节状态算到末端位姿
 
-机器人数据中的关节角不是末端位置，视觉模型给出的目标位姿也不能直接变成电机角度。两者之间需要机器人运动学：正运动学（Forward Kinematics）把关节状态映射成末端位姿，逆运动学寻找满足目标与约束的关节解，规划和控制再决定怎样安全到达并稳定跟踪。
+机器人数据里的关节角为什么不能直接当成末端位置？视觉模型给出的目标位姿又怎样变成一组可执行的电机角度？中间需要正运动学、逆运动学、Jacobian、路径规划和反馈控制，每个模块处理的对象都不同。
+
+```mermaid
+flowchart LR
+    Q[关节状态 q] --> FK[FK / DH 连乘]
+    FK --> T[末端位姿 T_base_ee]
+    Target[目标位姿] --> IK[IK 候选解]
+    IK --> Check[关节限位与碰撞检查]
+    Check --> Plan[路径规划]
+    Plan --> Ctrl[控制器与反馈]
+    Ctrl --> Q
+    T --> J[Jacobian 局部速度关系]
+    J --> Ctrl
+```
+
+FK、IK、Jacobian 和控制器共享同一套坐标约定，却回答不同问题。把一组关节角直接当作末端坐标，会跳过这条接口链。
 
 
 ## 从坐标变换进入运动学
@@ -239,3 +254,5 @@ DH 和 FK 描述几何关系，不包含质量、惯量、摩擦、柔性、驱�
 - 正运动学参考：[Modern Robotics](https://modernrobotics.northwestern.edu/nu-gm-book-resource/4-1-1-product-of-exponentials-formula-in-the-space-frame/)。
 - 工业参数参考：[Universal Robots DH 参数](https://www.universal-robots.com/articles/ur/application-installation/dh-parameters-for-calculations-of-kinematics-and-dynamics/)。
 - 模型边界参考：[ROS 2 URDF 可动关节](https://docs.ros.org/en/rolling/Tutorials/Intermediate/URDF/Building-a-Movable-Robot-Model-with-URDF.html)。
+
+继续阅读：[坐标变换与手眼协调](coordinate-transforms-and-hand-eye-calibration.md)核对 frame 方向、相机外参和工具偏置；[动态系统、控制与状态空间](../prerequisite-math/dynamic-systems-and-control.md)说明 Jacobian 局部速度怎样进入闭环控制。

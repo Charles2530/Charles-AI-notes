@@ -17,21 +17,21 @@ paper_topic: 扩散模型
 
 ## 原论文故事线
 
-Wan2.1 的主要价值，是把一个可扩展的视频生成系统拆到了足以分析取舍的粒度。它同时面对三个约束。训练视频的质量、运动和描述并不稳定，模型很容易学到静态画面或错误的文字对应关系；视频序列在经过压缩后依然很长，全时空注意力会迅速吃掉计算与显存；同一个生成底座还要接收首帧、参考身份、编辑掩码、镜头轨迹等不同条件。这些问题不能靠扩大 DiT 参数量一次解决。报告给出的路线，是先组织数据与描述，再用因果视频 VAE 和并行系统降低训练成本，最后在共同的潜空间生成器上扩展条件接口。[↗](https://arxiv.org/pdf/2503.20314v2#page=3)
+读 Wan2.1 时，先看一条具体的工程链路：视频先被筛选和描述，随后压成时空 latent，DiT 在 latent 上反复预测速度，最后由 VAE 解码回视频。每一步都在解决一个不同的约束。数据可能静止、模糊或把字幕当成内容；压缩以后序列仍然很长，全时空注意力会迅速增加显存；同一个底座还要接收首帧、参考身份、编辑掩码和镜头轨迹等条件。报告的重点不只是 14B 这个数字，而是怎样把这些约束拆开处理。[↗](https://arxiv.org/pdf/2503.20314v2#page=3)
 
-从信息流看，原始视频先经过质量、内容和运动筛选，由专门的 caption 模型补充事件、动作、镜头和画面文字；Wan-VAE 把视频压成时空 latent，umT5 把文本变成条件序列；DiT 在有噪 latent 上预测 flow velocity，经过多步采样得到干净 latent，再由 VAE 解码。图生视频和编辑任务主要改变条件的组织方式，流式生成改变时间窗口与去噪调度，视频配音则训练另一个具有音频表示的生成器。共同底座减少了重复建模，但这些扩展仍需要各自的数据、训练和评估，不能把报告中的全部演示理解成一个基础权重天然拥有的全部能力。
+这条信息流也限定了后文的阅读范围。图生视频和编辑主要改动条件的组织方式，流式生成改动时间窗口与去噪调度，视频配音还需要带音频表示的另一套生成器。共同底座减少了重复建模，报告里的演示却不等于基础权重天然具备全部能力；每个扩展仍有自己的数据、训练和评估。
 
 最显眼的结果是 T2V 比较。Figure 1 左侧给出作者自建 Wan-Bench 得分，右侧给出作者人工比较中的胜、平、负比例。两部分分别回答“自动评测总体得分如何”和“配对样例中人更偏好谁”，并不共用一个分母。右侧 Wan 对 CN-TopA 的三项比例约为 0.69、0.06、0.25，对 Runway 为 0.82、0.03、0.15；这些绝对比例也有助于理解后文人工表格中含混的 win-rate gap 口径。
 
 ![Wan comparison results](../../assets/images/paper-deep-dives/diffusion/wan/figure-1-results.png){ width="920" }
 
-*Figure 1，原报告第 1 页。Wan-Bench 与人工偏好是两套证据；人工比较保留 draw，胜率差不能直接当成获胜比例。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 1，原报告第 1 页。Wan-Bench 与人工偏好是两套证据；人工比较保留 draw，胜率差不能直接当成获胜比例。*
 
 Figure 2 展示了模型希望覆盖的内容跨度，包括真实与风格化画面、人物、动物、空间运动和文字。它的作用是说明任务范围。单帧截图能显示外观和构图，连续样例才涉及运动变化，而整张展示图仍不足以给出复杂动作的成功率。后文需要用分维度结果补上这层判断。
 
 ![Wan generated examples](../../assets/images/paper-deep-dives/diffusion/wan/figure-2-examples.png){ width="720" .atlas-figure-tall }
 
-*Figure 2，原报告第 4 页。展示范围比单一视频基准更广，不能由精选样例推导每一类都同样可靠。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 2，原报告第 4 页。展示范围比单一视频基准更广，不能由精选样例推导每一类都同样可靠。*
 
 ## 数据工程先决定模型能学到什么
 
@@ -39,11 +39,11 @@ Figure 2 展示了模型希望覆盖的内容跨度，包括真实与风格化�
 
 视频数据的缺陷有几种不同来源。模糊、黑边和过曝损害视觉监督；字幕、水印和后期加工会改变画面分布；一段几乎没有主体运动的视频，即使画质很好，也很难教会模型生成动作。Wan 因此把数据处理分成逐级收缩的流程，而没有用一个美学分数承担所有筛选任务。初始来源包括内部版权数据和公开数据，去重之后做基础过滤，作者报告这一阶段移除了约一半数据。[↗](https://arxiv.org/pdf/2503.20314v2#page=6)
 
-Figure 3 的阅读顺序应沿数据从预训练走向后训练的路径。最早的筛选保证样本能用，中间的语义与质量评价提高平均质量，最后的小规模高质量集合决定模型细节与运动表现的调整方向。它不是把同一阈值不断调高，而是不同阶段选择不同的数据属性。
+Figure 3 可以沿数据从预训练走向后训练的路径阅读。最早的筛选保证样本能用，中间的语义与质量评价提高平均质量，最后的小规模高质量集合决定模型细节与运动表现的调整方向。三个阶段筛选的属性不同，不能简化成不断提高同一个阈值。
 
 ![Wan data provisioning](../../assets/images/paper-deep-dives/diffusion/wan/figure-data-stage.png){ width="920" }
 
-*Figure 3，原报告第 7 页。数据供给被分成基础过滤、质量与运动筛选、高质量后训练集合等阶段。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 3，原报告第 7 页。数据供给被分成基础过滤、质量与运动筛选、高质量后训练集合等阶段。*
 
 基础过滤包含 OCR 覆盖率、LAION aesthetic score、NSFW 检测、水印与黑边裁剪、过曝、模糊、生成图像过滤、视频时长和分辨率要求。视频时长筛选包含大于 4 秒的要求，分辨率门槛则跟随后续训练阶段。这里有两点需要放在各自语境理解。第一，报告认为少量生成图像混入也可能损害训练，甚至提到低于 10% 的比例；这是作者的数据经验，文中没有给出足以建立通用阈值的完整污染比例消融。第二，OCR 过滤用于控制普通训练素材中过量字幕等问题，而模型学习文字绘制另有专门的数据支路，不能概括成“所有有文字的画面都删除”。
 
@@ -77,7 +77,7 @@ CAPability 评估将描述拆成 10 个维度，每个维度使用 1,000 个视�
 
 ![Wan caption evaluation](../../assets/images/paper-deep-dives/diffusion/wan/figure-4-caption-evaluation.png){ width="920" }
 
-*Figure 4，原报告第 9 页。指标是 caption F1；Wan 在部分生成相关维度更强，但 Scene、OCR、Counting 等维度仍有落后。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 4，原报告第 9 页。指标是 caption F1；Wan 在部分生成相关维度更强，但 Scene、OCR、Counting 等维度仍有落后。*
 
 | Dimension | Gemini 1.5 Pro | Ours |
 | --- | ---: | ---: |
@@ -110,7 +110,7 @@ Figure 5 展示了因果编码器与解码器。沿时间轴追踪下采样，�
 
 ![Wan-VAE framework](../../assets/images/paper-deep-dives/diffusion/wan/figure-3-vae.png){ width="920" }
 
-*Figure 5，原报告第 10 页。时间压缩为 4 倍、空间每轴为 8 倍，首帧走仅空间压缩的边界处理。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 5，原报告第 10 页。时间压缩为 4 倍、空间每轴为 8 倍，首帧走仅空间压缩的边界处理。*
 
 架构中将 GroupNorm 替换为 RMSNorm，以维持时间因果性。如果归一化统计跨越整段时间，单看卷积的因果核仍不足以保证当前输出不依赖未来；分块计算也可能因块长变化而改变归一化结果。报告还将空间上采样层的特征通道减半，给出推理显存下降 33% 的结果。配合基础通道数调整，VAE 总参数量为 127M。这些改动针对的是编码解码的实际成本，不能直接写成整个视频生成器显存下降 33%。
 
@@ -126,7 +126,7 @@ VAE 要支持长视频，不能把所有帧同时留在显存里。Wan 将视频
 
 ![Wan causal feature cache](../../assets/images/paper-deep-dives/diffusion/wan/figure-6-causal-cache.png){ width="920" }
 
-*Figure 6，原报告第 11 页。左图是时间核为 3 的普通因果卷积，右图是时间步幅为 2 的下采样；二者的缓存边界不同。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 6，原报告第 11 页。左图是时间核为 3 的普通因果卷积，右图是时间步幅为 2 的下采样；二者的缓存边界不同。*
 
 默认情况下，卷积时间核为 3，当前处理块需要前面两个时间位置。初始块没有历史，用两个零位置填充；后续块复用前一块末尾的两个特征，并丢弃更早的数据。时间下采样步幅为 2 时，非初始块使用单帧缓存，以保证输出长度和下采样节奏正确。如果所有层都不加区分地缓存两帧，跨块时的长度对应可能发生偏移。这是 Figure 6 两个面板分别存在的原因。[↗](https://arxiv.org/pdf/2503.20314v2#page=12)
 
@@ -138,7 +138,7 @@ Figure 7 在 200 个视频上比较重建，统一为 25 帧、$720\times720$，
 
 ![Wan VAE reconstruction efficiency](../../assets/images/paper-deep-dives/diffusion/wan/figure-7-vae-efficiency.png){ width="920" }
 
-*Figure 7，原报告第 12 页。Wan 的主要优势是质量与处理速度的组合；图中 Hunyuan 的 PSNR 仍略高，不能写成 Wan 在每一轴都第一。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 7，原报告第 12 页。Wan 的主要优势是质量与处理速度的组合；图中 Hunyuan 的 PSNR 仍略高，不能写成 Wan 在每一轴都第一。*
 
 多数方法使用 $4\times8\times8$ 压缩与 16 个 latent 通道，但有例外。Open-Sora Plan 同样的几何压缩对应 4 个通道；SVD 是 $1\times8\times8$、4 通道；Mochi 是 $6\times8\times8$、12 通道；Step Video 是 $8\times16\times16$、64 通道。它们编码的信息预算不同，所以散点图展示的是若干成品 VAE 的系统取舍，不能当成只改变网络结构、其余完全一致的消融。2.5 倍也只属于这里的 VAE 重建过程，不等于完整 T2V 推理快 2.5 倍。
 
@@ -156,7 +156,7 @@ $$
 
 ![Wan DiT architecture](../../assets/images/paper-deep-dives/diffusion/wan/figure-4-dit.png){ width="920" }
 
-*Figure 9，原报告第 13 页。先区分视频 VAE 与文本编码器两条路径，再看它们如何进入潜空间 DiT；生成结束后才用 VAE 解码。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 9，原报告第 13 页。先区分视频 VAE 与文本编码器两条路径，再看它们如何进入潜空间 DiT；生成结束后才用 VAE 解码。*
 
 Transformer block 使用全时空 self-attention，让不同帧、不同空间位置直接交换信息；文本通过 cross-attention 注入。文本编码器选用 umT5，文本序列长度为 512。把文本编码与视频编码分开，使语言条件可以作用于全部视频位置；这不意味着模型已显式拥有对象轨迹或三维场景变量，它仍在学习一个受文字条件约束的视频 token 生成映射。
 
@@ -214,7 +214,7 @@ DiT 的参数分片采用 FSDP。激活沿序列维度分片，使用外层 Ring
 
 ![Wan DiT parallelism](../../assets/images/paper-deep-dives/diffusion/wan/figure-5-parallel.png){ width="820" }
 
-*Figure 11，原报告第 16 页。CP、FSDP 与 DP 的分组存在重叠，不能把图中的全部数字直接相乘。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 11，原报告第 16 页。CP、FSDP 与 DP 的分组存在重叠，不能把图中的全部数字直接相乘。*
 
 图中共有 128 GPU。CP 大小为 $8\times2=16$，FSDP 大小为 32，因而一个 FSDP 组内可以容纳两份独立 micro-batch；最外层 DP 为 4，得到全局 batch $8b$。若误把 FSDP=32、CP=16、DP=4 看成相互独立维度，就会得到错误的设备数。这里的解释也展示了设计顺序，先满足单样本长序列的显存与延迟要求，再把剩余设备用于增加独立数据吞吐。
 
@@ -234,7 +234,7 @@ CPU 内存也不是无限的，所以实现仍将 offloading 与 gradient checkp
 
 ![Wan multi-GPU inference scaling](../../assets/images/paper-deep-dives/diffusion/wan/figure-scaling.png){ width="820" }
 
-*Figure 12，原报告第 17 页。Wan 14B 的 2D CP 加 FSDP 在展示范围内接近线性扩展，图中是相对速度而非固定输出设置的通用耗时表。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 12，原报告第 17 页。Wan 14B 的 2D CP 加 FSDP 在展示范围内接近线性扩展，图中是相对速度而非固定输出设置的通用耗时表。*
 
 缓存则减少重复工作。报告观察到，同一 DiT block 在相邻采样步的 attention 输出具有相似性，于是只在选定步重新计算 attention，其他步复用缓存。另一个相似性出现在采样后期的 conditional 与 unconditional 输出之间，用于 CFG 的无条件分支不必在每一步完整执行，可以结合条件结果和残差补偿近似恢复。前者复用 block 内结果，后者减少 guidance 分支工作，不能混为单一的 KV cache。[↗](https://arxiv.org/pdf/2503.20314v2#page=18)
 
@@ -329,9 +329,9 @@ adaLN 消融控制其他参数，比较四种配置，均从头进行 T2I 训练
 | Full-shared-adaLN-1.5B | 1.5B | 35 | 全部 block 共享 |
 | Non-shared-adaLN-1.7B | 1.7B | 30 | 各 block 独立 |
 
-![Wan adaLN ablation](../../assets/images/paper-deep-dives/diffusion/wan/figure-16-adaln-ablation.png){ width="820" }
+![Wan adaLN ablation](../../assets/images/paper-deep-dives/diffusion/wan/figure-16-adaln-ablation.png){ width="800" }
 
-*Figure 16，原报告第 25 页。最有解释力的比较是两条同为 1.5B 的曲线，完整共享并增至 35 层的模型得到更低训练损失。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 16，原报告第 25 页。最有解释力的比较是两条同为 1.5B 的曲线，完整共享并增至 35 层的模型得到更低训练损失。*
 
 1.3B 全共享模型的损失稍高，说明节省参数并非没有代价；但在同为 1.5B 时，把额外参数投入深度优于只取消部分共享。1.7B 完全不共享也没有超过 1.5B、35 层方案。这支持在这套架构与训练任务下，时间调制网络并非最值得增加容量的位置。它不证明所有 diffusion transformer 都应采用相同共享比例，尤其不同条件接口、隐藏宽度和训练预算可能改变最佳分配。
 
@@ -370,7 +370,7 @@ mask 在压缩后空间大小上表示每个时间位置，按照 VAE 时间步�
 
 ![Wan-I2V framework](../../assets/images/paper-deep-dives/diffusion/wan/figure-6-i2v.png){ width="920" }
 
-*Figure 18，原报告第 27 页。局部 latent 条件与 CLIP 全局条件承担不同作用；mask 说明哪些帧已经给定，哪些帧需要合成。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 18，原报告第 27 页。局部 latent 条件与 CLIP 全局条件承担不同作用；mask 说明哪些帧已经给定，哪些帧需要合成。*
 
 另一条路径使用 CLIP 提取图像特征，经三层 MLP 投影，再以 decoupled cross-attention 提供全局上下文。这能补充仅靠局部 latent 难以表达的整体语义与外观信息。但它并非从训练开始就一直启用，报告先在没有 image encoder 分支的多任务阶段训练，保持模型对文字的敏感性，在 SFT 阶段才加入全局图像条件。这样安排针对一个常见冲突，若图像条件过早过强，模型可能满足“画面像输入”却忽略文字要求的新动作。[↗](https://arxiv.org/pdf/2503.20314v2#page=30)
 
@@ -399,7 +399,7 @@ Table 7 的人工比较仍使用 “Win rate gap” 标题，脚注却称比例�
 
 ![Wan video editing framework](../../assets/images/paper-deep-dives/diffusion/wan/figure-editing.png){ width="920" }
 
-*Figure 21，原报告第 31 页。先看下半部分的条件拆分与编码，再看上半部分 full fine-tuning 与 context adapter 两条训练路径。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 21，原报告第 31 页。先看下半部分的条件拆分与编码，再看上半部分 full fine-tuning 与 context adapter 两条训练路径。*
 
 在编码之前，concept decoupling 根据 mask 将输入分成
 
@@ -433,7 +433,7 @@ Figure 26 将 $K$ 张参考人脸放在目标视频之前，沿时间轴形成�
 
 ![Wan personalization condition](../../assets/images/paper-deep-dives/diffusion/wan/figure-26-personalization.png){ width="920" }
 
-*Figure 26，原报告第 37 页。上排是条件信号，下排是参与去噪的扩展视频；参考前缀在最终输出中移除。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 26，原报告第 37 页。上排是条件信号，下排是参与去噪的扩展视频；参考前缀在最终输出中移除。*
 
 训练时随机丢弃一部分参考脸，支持 0 到 $K$ 张参考图的条件数量。推理从扩展序列的噪声出发，将用户给定的人脸及 mask 放在对应条件位置，生成后去掉前缀。这个设计将多张身份参考与目标视频放在同一时空生成框架里，不需要每增加一个参考就创建新的独立身份模块。不过身份保持仍依赖模型在训练中学到跨位置对应，通道拼接本身并不保证绝对一致。
 
@@ -457,7 +457,7 @@ Wan 高于 CN-TopB、CN-TopC，低于 CN-TopA，因此属于有竞争力的结�
 
 ![Wan camera motion control](../../assets/images/paper-deep-dives/diffusion/wan/figure-28-camera-control.png){ width="820" }
 
-*Figure 28，原报告第 40 页。左侧相机编码器生成多层特征，右侧 adapter 将其转成 scale、shift 后注入 DiT。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 28，原报告第 40 页。左侧相机编码器生成多层特征，右侧 adapter 将其转成 scale、shift 后注入 DiT。*
 
 PixelUnshuffle 在降低空间分辨率的同时增加通道，使相机条件与视频 latent 分辨率对齐；随后卷积模块提取对应不同 DiT block 的特征。每层 adapter 用两个零初始化卷积预测 $\gamma_i$ 与 $\beta_i$，按
 
@@ -479,7 +479,7 @@ $$
 
 训练从预训练 DiT 微调，每次采样长度 $2w$ 的 video token 序列，其中 $w$ 是窗口长度，通常设为 solver 的步数 $T$。这个小节中的 $T$ 指去噪求解步数，与前面表示视频长度的 $T$ 不是同一个量。前 $w$ 个 token 用于 warmup，不参与损失，后 $w$ 个 token 计算训练损失；推理同样丢弃前 $w$ 个 warmup 输出，从第 $w+1$ 个 token 开始交付视频。[↗](https://arxiv.org/pdf/2503.20314v2#page=43)
 
-为使相邻窗口衔接，已生成 token 以噪声水平 0 重新进入队列，作为后续去噪的历史条件。这使新内容能看到最近的已完成结果，减少窗口边界跳变。训练必须覆盖这种混合状态，否则推理时“部分已干净、部分仍有噪”的输入分布会与常规整段同噪声训练不一致。因而 Streamer 不是给原始 checkpoint 换一个外部循环就自然成立，而是连同训练样本、损失位置与历史缓存一起调整。
+为使相邻窗口衔接，已生成 token 以噪声水平 0 重新进入队列，作为后续去噪的历史条件。这使新内容能看到最近的已完成结果，减少窗口边界跳变。训练必须覆盖这种混合状态，否则推理时“部分已干净、部分仍有噪”的输入分布会与常规整段同噪声训练不一致。Streamer 需要连同训练样本、损失位置与历史缓存一起调整，给原始 checkpoint 套上外部循环并不能得到同样的输入分布。
 
 ### 四步蒸馏与实时速度分别说明什么
 
@@ -497,7 +497,7 @@ Wan 的 V2A 是单独训练的音频生成分支，输入视频和文本，输�
 
 ![Wan V2A framework](../../assets/images/paper-deep-dives/diffusion/wan/figure-7-v2a.png){ width="920" }
 
-*Figure 32，原报告第 45 页。音频经 1D-VAE 建立时间 latent，视频帧特征对齐后与音频特征融合，文本提供声音内容与风格条件。*
+*图源：[Wan technical report](https://arxiv.org/abs/2503.20314)，Figure 32，原报告第 45 页。音频经 1D-VAE 建立时间 latent，视频帧特征对齐后与音频特征融合，文本提供声音内容与风格条件。*
 
 常见音频表示会先把波形变成 mel-spectrogram，再用图像 VAE 得到二维 latent；如果随后 patchify、展平，时间与频率会一同进入序列，给视觉音频的逐时间对齐增加困难。Wan 训练直接处理原始波形的 1D-VAE，输出 $T_a\times C_a$ 表示，保留明确的时间维。这里的核心取舍是接口，视频条件需要映射到音频时间位置，而不是仅给整段音频一个全局语义向量。
 
@@ -521,13 +521,13 @@ Wan2.2 A14B 有两个约 14B 的专家，总参数约 27B，每一步激活约 1
 
 ![Wan2.2 MoE architecture](../../assets/images/paper-deep-dives/diffusion/wan/wan22-moe-arch.png){ width="920" }
 
-*Wan2.2 官方 MoE 架构图。左侧是早期高噪声阶段，右侧是后期低噪声阶段，每步只使用对应专家。*
+*图源：[Wan2.2 官方 README](https://github.com/Wan-Video/Wan2.2#introduction-of-wan22)，MoE 架构图。左侧是早期高噪声阶段，右侧是后期低噪声阶段，每步只使用对应专家。*
 
 这把“一个网络必须同时擅长确定大结构和修复细节”的任务分配给两个容量更集中的网络。每步激活量接近原 14B，不代表总权重存储只有 14B，也不意味着任意部署都会保持相同显存；是否同时驻留两套权重、何时 offload、文本编码器怎样放置都会影响运行条件。官方 A14B 的单卡示例给出至少 80 GB 显存，不能借用 5B 路线的 24 GB 数字。
 
 ![Wan2.2 MoE SNR switch](../../assets/images/paper-deep-dives/diffusion/wan/wan22-moe-snr.png){ width="920" }
 
-*Wan2.2 官方 SNR 与 validation loss 图。左图显示按噪声阶段切换，右图比较两个单独替换专家的混合方案与完整 MoE。*
+*图源：[Wan2.2 官方 README](https://github.com/Wan-Video/Wan2.2#introduction-of-wan22)，SNR 与 validation loss 图。左图显示按噪声阶段切换，右图比较两个单独替换专家的混合方案与完整 MoE。*
 
 右图四组配置为 Wan2.1、仅替换高噪声专家、仅替换低噪声专家和完整 Wan2.2 MoE。完整 MoE 的验证损失最低，两个局部替换也有改善，支持两个阶段的专门化都可能贡献收益。但较低 validation loss 不能直接证明生成分布在所有距离定义下“最接近真实分布”，更不能代替视觉质量与动作评价。
 
@@ -541,7 +541,7 @@ Wan2.2 A14B 有两个约 14B 的专家，总参数约 27B，每一步激活约 1
 
 ![Wan2.2 high-compression VAE](../../assets/images/paper-deep-dives/diffusion/wan/wan22-vae.png){ width="920" }
 
-*Wan2.2 官方 VAE 比较表。Compression Ratio 描述时空轴缩减，Feature Dimension 描述 latent 通道，Information Compression Rate 另计 RGB 与 latent 元素数量。*
+*图源：[Wan2.2 官方 README](https://github.com/Wan-Video/Wan2.2#introduction-of-wan22)，VAE 比较表。Compression Ratio 描述时空轴缩减，Feature Dimension 描述 latent 通道，Information Compression Rate 另计 RGB 与 latent 元素数量。*
 
 忽略首帧边界后，按元素数量计算，Wan2.1 约为 $3\times4\times8\times8/16=48$，Wan2.2 约为 $3\times4\times16\times16/48=64$。这是表中 48 与 64 的来源，既不是“只压缩时间 64 倍”，也不是新模型的全部 token 减少 64 倍。表中 Wan2.1-VAE 的 PSNR、SSIM、LPIPS 为 32.222、0.911、0.026，Wan2.2-VAE 为 33.223、0.922、0.022；Hunyuan 的 PSNR 33.298 仍略高。新 VAE 在更高元素压缩下保持了较好的重建指标，但这张后续表的协议不能与原报告 Figure 7 的 PSNR 散点直接拼接比较。
 
@@ -551,7 +551,7 @@ Wan2.2 A14B 有两个约 14B 的专家，总参数约 27B，每一步激活约 1
 
 ![Wan2.2 performance comparison](../../assets/images/paper-deep-dives/diffusion/wan/wan22-performance.png){ width="920" }
 
-*Wan2.2 官方 Wan-Bench 2.0 比较图。它是后续的新基准，不能与 Wan2.1 Table 2 的数值混成同一排行榜。*
+*图源：[Wan2.2 官方 README](https://github.com/Wan-Video/Wan2.2#introduction-of-wan22)，Wan-Bench 2.0 比较图。它是后续的新基准，不能与 Wan2.1 Table 2 的数值混成同一排行榜。*
 
 A14B 在图中的 Aesthetics Quality、Dynamic Degree、Text Rendering 与 Camera Control 等维度表现较强，例如美学质量 85.3、文字绘制 66.5、镜头控制 39.6。但 Video Fidelity 为 73.7，低于 Seedance 1.0 的 81.8；Object Accuracy 为 78.2，低于 KLING 2.0 的 82.1。图支持多个方向的改善，同时保留了保真和物体准确率上的差距。它与 Wan2.1 的经验一致，综合能力提升需要按任务维度解释，不能把产品名称后面的版本号当成每项能力必然单调上升的证据。
 
@@ -582,3 +582,5 @@ Wan 最有用的部分，是把“底座能力”和“任务接口”连接得�
 **Consistency Distillation（一致性蒸馏）** 将多步去噪及 guidance 的行为迁移到少步生成器；在 Streamer 中，它负责压缩采样预算，滑动窗口另负责持续输出。
 
 **Denoising-stage MoE（按去噪阶段分工的混合专家）** 是 Wan2.2 A14B 的后续设计，用高噪声与低噪声专家接力执行生成，与 token 级 FFN 路由不同。
+
+把这篇放回主线时，可以先看[视频与多模态扩散](../../diffusion/video-and-multimodal-diffusion.md)理解视频 token 和条件分支，再看[Ring Attention](../world-models/ringattention.md)对照长序列通信。若要讨论训练而不是架构图，接着读[扩散模型训练](../../diffusion/training.md)，把 flow matching、时空数据和采样预算放在同一张实验表里。

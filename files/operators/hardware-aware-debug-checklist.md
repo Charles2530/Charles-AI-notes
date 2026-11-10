@@ -32,6 +32,20 @@ flowchart TD
 
 不要把逻辑GB/s与硬件计数器流量混为一谈。反复基准同一小tensor可能主要命中缓存，必须说明测量工作集与缓存条件。
 
+## 先算这段 kernel 值不值得优化
+
+假设一次完整 step 用时 100 ms，其中目标 kernel 占 20 ms。即使它理想地加速 2 倍，step 也只会变成 90 ms，整体提升约 11.1%。如果 kernel 只占 5 ms，同样的 2 倍加速只能把 step 从 100 ms 降到 97.5 ms。这个估算不是性能结论，却能在写新特化前提醒你先确认它是否位于关键路径。
+
+可以把每次候选实现记成一行：
+
+| 范围 | 原耗时 | 新耗时 | 关键路径占比 | 伴随变化 |
+| --- | ---: | ---: | ---: | --- |
+| kernel | 20 ms | 10 ms | 20% | 寄存器增加、occupancy 下降 |
+| 完整层 | 34 ms | 25 ms | 34% | layout copy 减少 |
+| 单卡请求 | 100 ms | 90 ms | 100% | 仍受排队和采样影响 |
+
+表里的“关键路径占比”必须来自同一条 trace，不能拿 kernel 的独立 benchmark 直接填入。若完整层只快 9 ms，说明 wrapper、转换或同步仍占据剩余时间；继续调 tile 之前，先查这些阶段有没有把收益吃掉。
+
 ## 对多卡先找最早落后的事件
 
 如果某rank进入collective前已经迟到，检查其数据、计算和设备状态；如果进入时间相近而交换阶段拖长，再检查拓扑和实际链路。记录rank到GPU映射及GPU到NIC/NUMA关系，换设备位置做对照可以帮助定位。
@@ -52,3 +66,30 @@ flowchart TD
 
 - [可固定shape与配置的矩阵乘基准](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/03-matrix-multiplication.py)
 - [实际配置和JIT观察入口](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)
+
+## 一次排查的证据包
+
+把排查结果固定成一个目录，而不是只贴一张 profiler 截图：
+
+```text
+repro/
+  workload.json       # shape、dtype、batch、长度
+  env.txt             # driver、CUDA、runtime、commit
+  topology.txt        # GPU/NIC/NUMA 映射
+  reference.json      # 数值 checksum 与容差
+  trace.nsys-rep      # CPU/GPU 时间线
+  counters.csv        # 带宽、SM、occupancy、功率、时钟
+  conclusion.md       # 假设、改变的变量、结论边界
+```
+
+如果没有环境和输入记录，下一次运行即使现象相同，也无法确认是同一问题。结论文件应明确哪些字段被改变、哪些仍未验证，以及结果只覆盖单卡、某个 shape 还是完整服务。
+
+## 先修复错误，再解释性能
+
+性能异常伴随数值差异时，优先保存最小输入并完成参考对照。错误 kernel 可能因为提前退出、少做计算或错误 mask 而“更快”；把它当成性能提升会污染后续判断。多卡问题还要确认 collective 的归约语义和全局分母没有变化。
+
+## 自测
+
+给出“单 kernel 变慢 20%，完整服务不变”的 trace，列出至少三个可能解释，并指定下一项最小对照。一个合理答案应包括：该 kernel 不在关键路径、wrapper/排队变化抵消、或测量边界不一致；不能只写“换更大 tile”。
+
+**来源与改编说明**：时间线、设备状态与矩阵乘入口参考 NVIDIA Nsight Systems、Triton 和固定版本 DeepGEMM README。页面的证据包结构是工程模板，不代表单一 profiler 能自动定位根因。

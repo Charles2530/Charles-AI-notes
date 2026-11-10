@@ -1,6 +1,6 @@
 # 数值精度、显存与运行时间
 
-一个模型可能装得进显存，却在长上下文时 OOM；也可能显存占用下降了，生成速度却几乎不变。原因是参数存储、运行状态、计算量和数据搬运分别受不同因素控制。
+为什么一个模型装得进显存，长上下文却 OOM；显存下降以后，生成速度又可能几乎不变？排查时先把参数、KV、workspace、计算和数据搬运分开列出来，确认瓶颈属于哪一栏，再决定优化方向。
 
 用一个假设模型做估算。设它有 70 亿个参数、32 层，每层 8 个 KV 头，每头维度 128。参数与 KV 都先按 BF16 存储，每个数 2 字节。以下只做容量和下界演算，不是硬件 benchmark。
 
@@ -88,3 +88,9 @@ print(kv/2**30, 4*kv/2**30)
 - [算子与性能](../operators/index.md)解释shape、带宽与测量。
 
 - [PyTorch 优化循环教程](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/beginner_source/basics/optimization_tutorial.py)，可对照前向、反向和参数更新分别在哪一步发生，再观察各阶段状态分配。
+
+## 公式和代码对照
+
+FlashAttention 的分块和在线 softmax 参考 [FlashAttention](https://arxiv.org/abs/2205.14135)，显存与异步测量的框架边界对照 [PyTorch CUDA Semantics](https://docs.pytorch.org/docs/stable/notes/cuda.html)，参数、KV 和运行缓冲区的算例是本站按明确假设计算的。数字用于建立量级，不代表某个 GPU 的实际峰值或服务 SLO。
+
+把一个小模型的参数、梯度、optimizer state、KV 和临时张量分别打印出来，再用设备事件测一次同步前后的时间。若只记录 `torch.cuda.memory_allocated()` 或 Python 函数返回时间，无法知道预留显存和异步 kernel 对结果造成了什么影响。

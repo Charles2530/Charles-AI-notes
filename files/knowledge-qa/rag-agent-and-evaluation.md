@@ -26,6 +26,31 @@ Recall只说明相关片段是否在候选集。Rerank可能把它排到后面�
 
 重试还涉及幂等性。重复读取通常容易处理，重复支付或写入则可能产生重复副作用，需要工具自身的请求标识和状态校验。Agent循环要受预算和停止条件控制，避免同样失败反复调用。见[Agent运行时](../inference/rag-agents-and-long-context-systems.md)。
 
+## 先保存一条 evidence trace，再讨论答案质量
+
+同一个问题至少要留下四份文本：召回候选、重排后的片段、最终 prompt 和答案中的引用映射。只保存最终回答，无法区分“没有找到证据”“证据被截断”和“模型看到了证据却推理错”。可以用下面的最小记录开始：
+
+```json
+{
+  "question_id": "policy-2026-01",
+  "query": "签收后第 9 天还能退货吗？",
+  "retrieved": [
+    {"doc_id": "policy-v2", "version": "2026-01", "rank": 1},
+    {"doc_id": "policy-v1", "version": "2025-06", "rank": 2}
+  ],
+  "prompt_context": ["policy-v2#return-window", "policy-v2#exception"],
+  "answer_claims": [
+    {"claim": "普通商品期限为 7 天", "evidence": ["policy-v2#return-window"]}
+  ],
+  "tool_calls": [],
+  "status": "needs_exception_check"
+}
+```
+
+这条记录仍然不能证明答案正确。它只证明版本较新的片段进入了 prompt，而且回答声称引用了它。验收时还要检查例外条款是否在同一版本中、用户条件是否满足，以及答案是否把“普通商品”误写成所有商品。把 `question_id` 同时写入实验日志和笔记，后续才能把检索改动、答案变化与人工复核连起来。
+
+一个实用的对照是固定问题，分别保存 `retrieval_only`、`rerank_only`、`full_prompt` 三个版本。若正确条款在候选中却不在最终 prompt，问题在截断或拼接；若条款已在 prompt，答案仍错，再检查版本过滤、数值计算和引用映射。这个分层比单报一个 recall 或 judge 分数更容易修复。
+
 ## JSON合法为什么不等于调用安全
 
 JSON schema可以约束字段类型与部分取值，无法单独判断订单是否属于当前用户，或目标资源是否允许修改。权限、范围、业务条件和执行前状态应由程序校验。
@@ -43,3 +68,7 @@ Judge是一个测量过程，也可能受答案长度、顺序、文风与自身
 取决于问题是否需要外部事实，以及已知信息是否足够。订单规则缺失时不能凭常识补政策；纯数学问题可能只需要给定条件。可以给出明确的条件答案，说明缺哪个决定性字段。
 
 无答案测试应与可回答测试同时存在，否则系统可能通过一律拒答获得表面安全，也可能为追求回答率编造内容。评价需要同时衡量正确回答、错误回答和适当拒答，不能只看覆盖率。
+
+## 来源与改编说明
+
+检索增强生成的基本问题对照 [Retrieval-Augmented Generation](https://arxiv.org/abs/2005.11401)，工具调用与轨迹证据的讨论对照 [ReAct](https://arxiv.org/abs/2210.03629)，提示注入和工具边界可继续查 [OWASP LLM01](https://genai.owasp.org/llmrisk/llm01-prompt-injection/)。版本政策、旧文档、工具返回和 judge 分数都是本站构造的排查例子，不代表这些来源中的 benchmark。

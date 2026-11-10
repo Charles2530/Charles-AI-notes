@@ -1,6 +1,6 @@
 # 双目匹配与 Cost Volume：把深度先变成对应点问题
 
-很多人第一次读 stereo matching，容易把它和 monocular depth 混在一起：都是输入图像，输出一张深度图。两者差异由问题假设决定。单目深度主要在一张图里利用纹理、透视和语义线索推断距离；双目深度先有一对同步、标定、校正过的左右图，再利用同一个 3D 点在两张图里的横向位移来三角测量。
+为什么两张图像能给出深度，而一张图像通常只能给出带先验的距离猜测？区别不在于最后都输出一张深度图，而在于双目有同步、标定、校正过的左右观测，可以利用同一个 3D 点的横向位移做三角测量。
 
 双目匹配可以沿着一条工程链读：
 
@@ -212,6 +212,8 @@ Middlebury v3 明确提供多种 disparity accuracy measures，包括 bad pixel�
 - [Fast-FoundationStereo](https://arxiv.org/abs/2512.11130)：理解一个强 stereo foundation model 如何被拆成实时系统。
 - [Middlebury Stereo Evaluation v3](https://vision.middlebury.edu/stereo/eval3/MiddEval3-newFeatures.html)：理解 bad pixel、平均误差和分位数指标。
 - [KITTI Stereo Evaluation](https://www.cvlibs.net/datasets/kitti/eval_scene_flow.php?benchmark=stereo)：理解自动驾驶场景里的 stereo benchmark 口径。
+
+继续阅读：[坐标变换与手眼协调](coordinate-transforms-and-hand-eye-calibration.md)把相机坐标中的深度点接到机器人基座；[机器人运动学与 DH 参数](robot-kinematics-and-dh-parameters.md)处理从感知位姿到可执行末端目标的后续链路。
 
 - [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
 - [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。

@@ -47,7 +47,42 @@ FP16反向中一些小梯度可能下溢。把loss乘以S，会让梯度也乘S�
 更低位宽的格式通常需要更强的范围、布局与kernel协同。应从已验证的局部路径逐步扩展，不把整个训练图简单改成一种dtype。
 
 
+## 继续读
+
+继续看[FP8 训练与 optimizer kernel](../operators/fp8-training-and-optimizer-kernels.md)和[QAT、kernel 与 KV cache](../quantization/qat-kernels-and-kv-cache.md)。
+
 ## 对照源码与延伸阅读
 
 - [混合精度训练循环与unscale顺序](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py)
 - [低精度矩阵乘的data/scale接口](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)
+
+## 先画一张数值账本
+
+低精度改造前，给每类张量写清楚四件事：存储 dtype、计算 dtype、累加 dtype、是否有 scale 或 master copy。一个简化账本可以是：
+
+| 张量 | 存储 | 计算/累加 | 额外状态 |
+| --- | --- | --- | --- |
+| 激活 | BF16/FP8 | BF16/FP32 | 动态或历史 scale |
+| 权重 | BF16/FP8 | BF16/FP32 | master weight 或反量化 scale |
+| 梯度 | BF16/FP16 | FP32 累加 | loss scale、overflow 标记 |
+| 优化器矩 | FP32 | FP32 | step、分片与 checkpoint |
+
+不同实现会有不同组合。账本的作用是防止把“某个 GEMM 用 FP8”误写成“整个训练图用 FP8”。如果一个张量在 forward、backward 和 optimizer step 中分别采用不同精度，应把转换位置画在计算图上，并把转换时间计入 benchmark。
+
+## AMP、FP8 和量化训练不是同一个开关
+
+AMP 通常根据算子选择低精度计算并保留必要的高精度路径；FP8 训练还需要 scale、格式、累加和 kernel 协同；QAT 则在训练中模拟量化误差，让最终部署格式进入优化目标。三者都可能出现“低精度”字样，但优化对象和验收指标不同。
+
+先用 [PyTorch AMP 文档](https://pytorch.org/docs/stable/amp.html)核对 autocast、GradScaler 与 unscale 顺序，再用 [torchao 量化训练入口](https://github.com/pytorch/ao/tree/main/torchao/quantization)或 [Transformer Engine 文档](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/index.html)核对具体 FP8/量化实现。官方 API 能说明支持的语义，不能替代目标 GPU 上的数值与性能测试。
+
+## 三阶段实验比一次全图替换更可靠
+
+1. **算子层**：固定输入，比较 FP32 参考、低精度输入加高精度累加、真实 kernel，分别记录绝对误差和非有限值。
+2. **短程训练**：固定小数据和随机种子，跑 100–1000 步，比较 loss、梯度范数、参数更新范数、scale 变化和跳步次数。
+3. **系统层**：加入真实数据管线、梯度累积、分片、checkpoint 恢复和独立评测，记录有效 token/s、step p95、峰值显存和任务指标。
+
+每阶段只改变一个主要变量。若第二阶段稳定而第三阶段退化，应优先检查数据顺序、通信、保存恢复和长序列分布，而不是直接提高 loss scale。
+
+## 自测：一次参数更新是否真的发生
+
+给定 master weight 为 1.0、梯度为 1.0、学习率为 0.001，分别计算 FP32 master、直接 BF16 写回和“master 更新后再生成 BF16 副本”三种结果。然后说明为什么最后一种仍可能在短期观察中显示参数副本不变，却在多步训练中逐渐反映更新。这个练习能把表示精度与优化器状态的职责分开。

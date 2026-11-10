@@ -154,3 +154,8 @@ MMD 的作用层次要和扩散机制分开。它可以直接作为一步生成�
 | TBSM | 一个 projectile、一个 real source、一个 generated source | 一步 | energy distance 是一种距离核 MMD；三体散射给出线性样本级随机梯度 |
 
 阅读后面三篇论文时，可以反复问四个问题：距离是在像素还是 frozen feature 上算，真实参考是每步重采样还是预先冻结，生成内部的 repulsion 有没有保留，有限 batch 的估计噪声由什么机制控制。答案决定了“分布匹配”到底是稳定的训练目标，还是一个容易被单一指标利用的近似。
+## 来源驱动的入门顺序
+
+先读本站[基础直觉](foundations-and-core-intuition.md)，确认“条件均值”和“反向采样”分别解决什么，再用[Annotated Diffusion](https://huggingface.co/blog/annotated-diffusion)对照一个最小 DDPM。需要理论时进入[Lilian Weng 的扩散综述](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)和[Score/SDE 原作者说明](https://yang-song.net/blog/2021/score/)，需要 API 时查[Diffusers scheduler 文档](https://huggingface.co/docs/diffusers/en/using-diffusers/schedulers)。
+
+扩散、flow matching、consistency、蒸馏和视频分别描述系统的不同层。阅读每个方法时先写清楚路径、网络输出和 sampler 更新式，再比较质量、步数或速度。

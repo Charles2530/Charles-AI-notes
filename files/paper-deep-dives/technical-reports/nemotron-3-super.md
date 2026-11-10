@@ -369,3 +369,7 @@ Nemotron 3 Super 的位置是一个重视服务吞吐、长上下文与工具任
 研究上可单独复用的环节很具体：用 latent dimension 重新分配 MoE 通信预算；用共享 MTP 头适应递归草稿；对 SFT 做对话级归一化，防止长答案支配学习；用多环境与多 harness 训练减少接口依赖；量化递归状态时同时检查回答长度。报告还开放 base、后训练、FP8/NVFP4 checkpoints、部分训练数据与环境，使这些设计可以被拆开验证。[模型与训练仓库](https://github.com/NVIDIA-NeMo/Nemotron)
 
 最终应把“能力是否够用”和“在目标硬件上怎样高效运行”一起评估。本文最清楚的贡献，正是把专家结构、训练数值、后训练行为与部署内核之间的相互影响具体展示出来。
+
+## 继续阅读
+
+Mamba-MoE 的训练和异步 RL 需要两条背景线，分别是[混合 SSM 与 Transformer](../../foundations/mamba-and-hybrid-ssm-transformers.md)和[世界模型与 RL](../../reinforcement-learning/rl-for-world-models.md)。

@@ -93,3 +93,6 @@ for dx,dy in [(.1,.1),(.1,-.1)]:
 - [Natural Gradient Works Efficiently in Learning](https://direct.mit.edu/neco/article/10/2/251/6143/Natural-Gradient-Works-Efficiently-in-Learning)介绍自然梯度。
 - [Limitations of the Empirical Fisher Approximation](https://papers.neurips.cc/paper_files/paper/2019/hash/46a558d97954d0692411c861cf78ef79-Abstract.html)讨论经验Fisher的适用边界。
 - [模型压缩、剪枝与结构搜索](../foundations/model-compression-pruning-and-nas-basics.md)将扰动近似用于具体删除决策。
+## 继续读
+
+继续看[优化器 kernel 与 FP8 训练](../operators/fp8-training-and-optimizer-kernels.md)和[数值、显存与运行时基础](../foundations/numerics-memory-and-runtime-basics.md)。

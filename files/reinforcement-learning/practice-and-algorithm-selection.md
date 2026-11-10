@@ -10,6 +10,20 @@
 
 本页的命令输出分别用来区分这些层次。读者可以按当前故障跳到对应部分，不必把所有算法各跑一遍再作判断。
 
+```mermaid
+flowchart TD
+    Q[先问数据从哪里来] --> I{还能在线交互吗?}
+    I -->|能| A{动作可枚举吗?}
+    I -->|不能| O[固定日志\n先查 support 与行为基线]
+    A -->|能| D[DQN 或表格方法]
+    A -->|不能| C[SAC / 连续动作策略]
+    D --> V[独立评测与失败轨迹]
+    C --> V
+    O --> V
+```
+
+这棵树只是排除明显不合适的候选，不会替实验做算法排名。每条分支都要回到同一组检查：奖励和终止是否正确、训练步数与更新次数是多少、评测有没有新状态，以及失败轨迹能否复算。
+
 ## 从任务约束缩小候选
 
 若动作不改变后续状态，先考虑 Bandit；若只有监督标签或高质量示范，先建立监督或模仿基线。存在延迟后果后，再根据数据来源与动作空间选择候选。
@@ -91,3 +105,41 @@ python files/assets/examples/reinforcement-learning/policy_objectives.py --seed 
 | 能跨场景泛化 | 明确未见场景与硬件上的评测 | 同一环境重复调参 |
 
 这些证据可以逐层增加，不能相互替代。最有用的失败记录通常是一条可复算轨迹，保留观察、动作、奖励、终止原因、目标值和更新前后概率，再配上它所代表的任务条件。这样才能区分数据协议错误、目标设计问题与算法假设不成立。
+
+## 一条从基线到复杂算法的顺序
+
+博士阶段做 RL 实验时，可以遵循“先证明任务，再证明算法”的顺序：
+
+1. 用随机、贪心或行为克隆基线确认环境、奖励和终止规则。
+2. 在小状态空间上用 DP 或精确 value 计算提供上界/参考。
+3. 用一个简单 online/offline 方法验证轨迹和目标的实现。
+4. 只改变一个算法因素，再扩大模型、环境或并行规模。
+5. 最后才加入世界模型、verifier、复杂奖励或真实机器人。
+
+每一步都保留固定 seed、环境版本、真实交互步数、optimizer updates、评测 episode 数和失败轨迹。否则复杂算法分数上升时，无法判断是奖励、探索、计算预算还是环境改变带来的。
+
+## 算法选择的实验矩阵
+
+| 维度 | 最小对照 | 要固定的变量 |
+| --- | --- | --- |
+| 数据来源 | online / fixed log | 行为策略、轨迹版本、support |
+| 动作空间 | discrete / continuous | 单位、边界、采样分布 |
+| 反馈 | dense / sparse / verifier | reward scale、终止和延迟 |
+| 估计器 | MC / TD / critic | bootstrap mask、target update |
+| 更新频率 | 每步 / 每 rollout | environment steps 与 optimizer updates |
+| 评测 | seen / unseen / real | reset、预算、人工接管 |
+
+一次只改变一列，才有可能把结果归因到某项设计。若同时切换算法、网络、奖励和环境，最终只能说“整套系统不同”。
+
+## 来源与改编说明
+
+- [OpenAI Spinning Up](https://spinningup.openai.com/en/latest/)提供概念、推导、运行实验和输出保存的教学结构。
+- [CleanRL PPO](https://docs.cleanrl.dev/rl-algorithms/ppo/)用于对照单文件实现和可复现实验参数；代码版本和环境需固定。
+- [Sutton & Barto](http://incompleteideas.net/book/the-book-2nd.html)提供价值、策略和探索的经典定义。
+
+## 自测
+
+1. 为什么先建立随机/行为克隆基线能减少 RL 排错范围？
+2. 如何区分 environment steps 和 optimizer updates 两种预算？
+3. 设计一个只改变 reward shaping 的实验，列出至少四个需要固定的条件。
+4. 一个算法在 seen 环境上提高、unseen 环境上下降，下一步应查看哪些轨迹证据？

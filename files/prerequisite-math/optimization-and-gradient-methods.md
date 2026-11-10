@@ -107,6 +107,47 @@ v_t=\beta_2 v_{t-1}+(1-\beta_2)g_t^2
 
 公式里 \(m_t\) 像“近期平均方向”，\(v_t\) 像“近期平方梯度尺度”。如果某个参数方向的梯度长期很大，Adam 会用较大的 \(\sqrt{v_t}\) 把步幅压下来；如果某个方向梯度很小，步幅会相对放大。代价是每个参数通常要额外存 \(m_t\) 和 \(v_t\)，这就是 optimizer state 显存来源之一。
 
+## 学习率日程改变的是每一步的尺度
+
+固定学习率只是最小的基线。训练中常见的分段衰减、余弦衰减和 warmup 都可以写成一个随 step 变化的 \(\eta_t\)。以线性 warmup 为例，若前 \(T_w\) 步从 0 增长到 \(\eta_{\max}\)，则
+
+\[
+\eta_t=\eta_{\max}\min\left(1,\frac{t}{T_w}\right).
+\]
+
+warmup 并没有改变梯度方向，也没有让 loss 变得更平滑，它只限制训练初期每一步的参数位移。大 batch、随机初始化、混合精度和预训练检查点切换都可能让前几步的梯度尺度与稳定阶段不同，所以 warmup 的步数应和 global batch、梯度累积步数一起记录。
+
+余弦衰减常写成
+
+\[
+\eta_t=\eta_{\min}+\frac12(\eta_{\max}-\eta_{\min})
+\left(1+\cos\frac{\pi t}{T}\right).
+\]
+
+这里的 \(T\) 是调度器使用的总 step，不一定等于 dataloader 的 epoch 数。若启用 gradient accumulation，每次 optimizer 更新才算一个 step；把每个 micro-batch 都误计入调度，会让学习率提前衰减。
+
+调度器也不能修复错误的 loss 或数据泄漏。比较两个实验时，至少保存 optimizer 类型、\(\eta_{\max}\)、warmup steps、衰减总 steps、global batch 和恢复 checkpoint 后的 scheduler state。
+
+## 梯度累积和裁剪分别解决什么问题
+
+显存不足时，可以让 \(K\) 个 micro-batch 共享一次参数更新。若每个 micro-batch 的平均梯度是 \(g_i\)，则目标梯度近似为
+
+\[
+\bar g=\frac1K\sum_{i=1}^{K}g_i.
+\]
+
+代码里应在每个 micro-batch loss 除以 \(K\)，或者在累积结束时统一除以 \(K\)。若损失已经是 token 平均，还要确认每个 micro-batch 的有效 token 数是否相等。直接对不同长度的序列做等权平均，可能与全局 token 平均不一致。
+
+梯度裁剪处理的是一次更新的范数，而不是每个参数的学习率。按全局 \(L_2\) 范数裁剪可写为
+
+\[
+g' = g\min\left(1,\frac{c}{\|g\|_2}\right).
+\]
+
+当 \(\|g\|_2\le c\) 时不改变梯度，超过阈值时把整组梯度按同一比例缩小。若在 AMP 下使用 loss scaling，应先 unscale，再计算范数和裁剪，否则阈值对应的是放大后的数值。裁剪能限制单次更新，不能证明训练目标已经稳定。
+
+一个实用的日志至少包含 `grad_norm_before_clip`、`grad_norm_after_clip`、`clip_fraction` 和有效 token 数。若裁剪比例突然从接近 0 变成几乎 1，通常比单看 loss 更早暴露数据、学习率或数值问题。
+
 ## 回到同一个起点比较第一步
 
 对起点梯度(1,10)，普通SGD取学习率0.1，更新为(-0.1,-1)，到达(0.9,0)。Adam从零状态开始，完成偏差修正并忽略epsilon后，两个分量都近似取梯度符号，因此更新约为(-0.1,-0.1)，到达(0.9,0.9)。
@@ -179,9 +220,46 @@ AdamW采用解耦的形式，例如 \(\theta_{t+1}=(1-\eta\lambda_w)\theta_t-\et
 
 \(\lambda\) 是正则强度。太小，正则几乎不起作用；太大，模型可能为了让参数小而牺牲任务能力。RLHF 的 KL 系数、量化校准里的误差权重、扩散蒸馏里的多项 loss 权重，都有类似的“拉哪一边”的作用。
 
+## 把一次更新的先后顺序写出来
+
+训练代码里最容易被忽略的是顺序。一个带 AMP、梯度累积和裁剪的最小循环可以写成下面这样。它只展示接口，不代表某个模型已经在本机跑过性能实验。
+
+```python
+import torch
+
+for micro_step, batch in enumerate(loader):
+    with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        loss = model_loss(batch) / accumulation_steps
+
+    scaler.scale(loss).backward()
+
+    if (micro_step + 1) % accumulation_steps == 0:
+        scaler.unscale_(optimizer)
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            model.parameters(), max_norm=1.0
+        )
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad(set_to_none=True)
+        scaler.update()
+```
+
+如果使用 BF16，某些实现不需要 loss scaler，但 `unscale_`、裁剪和 `step` 的关系仍要按实际 optimizer API 核对。`scheduler.step()` 放在 optimizer 更新之后还是之前，会改变第一个 step 使用的学习率；恢复 checkpoint 时还要恢复 optimizer、scheduler、scaler 和随机数状态。一个“loss 能下降”的短跑不足以证明这些状态已正确恢复。
+
+## 练习与自测
+
+1. 对 \(L(x,y)=x^2/2+5y^2\)，从 \((1,1)\) 出发，比较 \(\eta=0.1\) 和 \(\eta=0.3\) 的第一步损失。
+2. 三个 micro-batch 的有效 token 数是 2、2、6。若目标是 token 等权，怎样组合它们的梯度才不会让短序列占一半权重。
+3. 某一步 unscale 前梯度范数为 4096，loss scale 为 1024，裁剪阈值为 1。先裁剪再 unscale 与先 unscale 再裁剪分别会发生什么。
+4. 比较 L2 正则进入 Adam 梯度和 AdamW 解耦权重衰减的更新式，指出哪一个会让正则项受到二阶矩缩放。
+
+每题都应写出数值或更新顺序。若只能说“Adam 会自动处理”，就还没有区分优化器状态、调度器状态和数值缩放。
+
 ## 外部材料
 
 - [CS231n: Optimization](https://cs231n.github.io/optimization-1/)。
 
 
 - [PyTorch 优化循环](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/beginner_source/basics/optimization_tutorial.py)，确认梯度估计、状态更新和参数更新各发生在哪一步。
+
+继续阅读：[目标、优化器与学习率](../training/objectives-optimizers-and-schedules.md)把这些更新接到训练循环和调度；[训练稳定性与失败排查](../training/stability-numerics-and-failure-triage.md)处理梯度、AMP 和恢复状态在真实运行中的边界。

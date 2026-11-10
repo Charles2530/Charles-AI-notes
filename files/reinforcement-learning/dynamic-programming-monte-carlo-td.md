@@ -1,8 +1,20 @@
 # 动态规划、Monte Carlo 与 TD，怎样估计同一个价值
 
-六格地图中的策略在状态 0 选择向右，经过 $0\to1\to2\to5$ 到达终点，奖励为 $[-1,-1,0]$。只凭这条经历，应该怎样修改各状态的价值？如果还能查询环境所有动作后果，计算又有什么不同？动态规划、Monte Carlo 与 TD 共享价值定义，区别在于怎样获得未来的信息。
+六格地图中的策略在状态 0 选择向右，经过 $0\to1\to2\to5$ 到达终点，奖励为 $[-1,-1,0]$。只凭这条经历，应该怎样修改各状态的价值？如果还能查询环境所有动作后果，计算又有什么不同？动态规划、Monte Carlo 与 TD 共享价值定义，真正的差别在于它们拿到未来信息的方式。
 
 环境、终止奖励和动作编号沿用 [Bellman](mdp-value-bellman.md)。本文把策略固定下来讨论预测，再说明怎样进入控制，避免把评估一个策略和寻找最优策略混成同一项计算。
+
+```mermaid
+flowchart LR
+    M[能查询的模型\nP 和 R] --> DP[DP\n对所有后果求期望]
+    E[一条完整轨迹\n直到终点] --> MC[MC\n先算 G_t]
+    T[一次转移\nr_t, s_{t+1}] --> TD[TD\n立即 bootstrap]
+    DP --> V[更新同一个 V(s)]
+    MC --> V
+    TD --> V
+```
+
+三种方法最后都在改 $V(s)$，区别只在目标从哪里来。DP 读取环境模型，MC 等一整条轨迹结束，TD 在当前转移后就拿后继状态的估计补上未来。把这三个输入放在一起，后面的数字才不会看起来像三套互不相干的公式。
 
 ## 有模型时，当前没走过的分支也能算
 
@@ -89,6 +101,19 @@ G_t^{(n)}=\sum_{k=0}^{n-1}\gamma^k r_{t+k}+\gamma^nV(s_{t+n}).
 
 真实终止与采样边界仍需区分。若只收集到状态 2，任务尚未结束，应保留它的 bootstrap；若已进入终点 5，尾部价值为零。把外部截断后的未知未来当零，会改变估计目标。完整交互定义见[Agent 与环境](rl-agent-environment-loop.md)。
 
+### `terminated` 和 `truncated` 不能合并成一个 done
+
+在 Gymnasium 风格的环境里，`terminated=True` 表示任务按照环境规则结束，例如到达终点或撞毁；`truncated=True` 表示采样窗口或时间上限到了，未来状态仍可能继续。对 TD 目标，通常只在真实终止时去掉 bootstrap：
+
+```python
+bootstrap = 0.0 if terminated else 1.0
+target = reward + gamma * bootstrap * next_value
+```
+
+假设时间上限在状态 2 截断，`reward=-1`、`gamma=0.9`、`next_value=-1`。正确目标是 `-1.9`；如果把 `truncated` 当成终止，目标会变成 `-1`。这一个差值会沿多步回报传回更早状态，尤其在固定长度 rollout 中影响明显。
+
+数据集若只保存一个 `done` 字段，事后通常无法可靠恢复这两个原因。采集时至少保留 `terminated`、`truncated`、`final_observation` 和时间步；跨环境转换时再写一条明确的映射规则。否则同一套 TD 代码在不同环境上会学习到不同的终止语义。
+
 ## 从价值预测走向动作改进
 
 固定策略的 MC/TD 只告诉我们这个策略怎样。要改进动作，需要学习 Q 或利用环境模型比较动作。SARSA 把下一次实际选择的动作价值接进目标，Q-learning 接下一状态最大的动作价值，区别见 [Q-learning 与 DQN](q-learning-and-dqn.md)。
@@ -100,3 +125,11 @@ python files/assets/examples/reinforcement-learning/gridworld.py --seed 7
 ```
 
 `policy_value_mean` 是均匀策略的 DP 评估摘要，`optimal_value_start` 来自 value iteration，`q_mean` 是有限采样 Q 表的均值。它们跨不同策略和统计对象，不能直接把最大数字当最好方法。系统教材可对照 [Sutton 与 Barto](http://incompleteideas.net/book/the-book-2nd.html) 第 4、5、6 章，分别讨论动态规划、MC 与 TD。
+
+## 算法和环境依据
+
+六格地图和 `GridWorld` 是本站的可执行教学环境，公式和算法边界对照 [Sutton 与 Barto](http://incompleteideas.net/book/the-book-2nd.html) 第 4、5、6 章。`V_0`、策略、终止奖励和更新顺序都固定以后，DP、MC 与 TD 的差别才有可比性；页面里的 −0.75、−2.71 和 −1.9 是机制算例，不是学习曲线。
+
+`terminated` 与 `truncated` 的接口语义对照 [Gymnasium step API](https://gymnasium.farama.org/api/env/#gymnasium.Env.step)。页面中的 −1.9 与 −1 是用来检查 bootstrap mask 的算例，不代表任何环境的实测回报。
+
+运行示例后，分别记录策略评估、value iteration 和有限采样 Q 表的对象、输入数据和更新顺序。不要把三个数组的最大值放在同一列就叫作算法排名。

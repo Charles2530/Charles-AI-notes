@@ -86,3 +86,9 @@ MPC 只执行选中序列的第一个动作，再用真实新观察重算。如�
 生成器内部的去噪轨迹与环境时间不是同一条时间轴。用 RL 优化视频生成器，不自动让它成为环境动力学模型；[Sora](https://openai.com/index/video-generation-models-as-world-simulators/)与 [Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)也应按各自公开接口和证据范围阅读。相关生成机制见[视频扩散](../diffusion/video-and-multimodal-diffusion.md)，策略目标见 [LLM 强化学习](llm-rlhf-rlvr-and-grpo.md)。
 
 判断模型是否可用于控制，需要把一步预测、多步 rollout、反事实动作比较和真实 closed-loop return 连起来。已有日志之外的模型想象还受[离线数据支持](offline-reinforcement-learning.md)限制，机器人任务则要继续检查[闭环恢复](../vla/closed-loop-recovery-and-failure-analysis.md)与[世界模型失败模式](../world-models/evaluation-and-failure-modes.md)。
+
+## 算法和环境依据
+
+model-based RL 的模型、规划与 imagined data 参考 [Dyna](https://dl.acm.org/doi/10.1145/122344.122377)、[PlaNet](https://arxiv.org/abs/1811.04551) 和 [Dreamer](https://arxiv.org/abs/1912.01603)，后续稳定训练背景参考 [DreamerV3](https://arxiv.org/abs/2301.04104)。Decision Transformer、DDPO 和 Flow-GRPO 只用于说明“优化生成器”和“使用环境模型控制”是不同问题。小车移动 0.8、真实步数/模型步数和表格分类是本站整理的教学例子。
+
+自测时固定真实交互预算，分别报告真实转移、模型想象转移、优化器更新和闭环回报。若模型预测误差下降，却没有改善反事实动作排序或真实任务结果，不能把它写成控制能力提升。

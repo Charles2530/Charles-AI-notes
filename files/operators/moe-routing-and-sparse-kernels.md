@@ -1,6 +1,6 @@
 # 三个 token 怎样被送到两个专家
 
-MoE先为每个token选专家，再把属于同一专家的token凑成矩阵，执行专家网络，最后恢复原位置并加权合并。模型只激活部分专家，执行系统仍需完成这些索引和数据搬运。
+MoE 的计算可以从三个 token 看清楚。路由器给每个 token 选专家，系统把同一专家收到的 token 排成矩阵，专家网络算完以后再按原 token 编号放回去并加权合并。省下的是部分专家计算，索引、重排和数据搬运仍然存在。
 
 ## 把路由结果写成可检查的表
 
@@ -58,6 +58,10 @@ $$
 
 评估时把router、permute、dispatch、专家计算、combine放进同一时间线，统计每专家token数而非只看平均数。只有这样，才能分清慢在矩阵乘、网络还是少数专家拥塞。
 
+可以把每一轮路由写成一张小表：总 token 数、top-k、每个专家的 token 数、被截断或回退的数量、all-to-all 字节数、专家 GEMM 时间和 combine 时间。平均负载相同的两轮，最大专家负载可能完全不同，尾延迟也会跟着变化。容量因子调大可能减少丢 token，却会增加 padding 和计算；调小可能节省计算，却把质量损失藏在路由边界。
+
+如果一个优化只降低了专家 GEMM 时间，端到端仍慢，先比较 permute、dispatch、通信和 combine 的时间线。小 batch decode 还要单独测，因为每个专家行数很少时，稀疏 FLOPs 的减少未必能抵掉调度成本。
+
 ![DeepSeek-V3 expert load balance](../assets/images/paper-deep-dives/technical-reports/deepseek-v3/figure-9-expert-load.png){ width="760" }
 
 <small>图源：[DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)。原图表达 expert load 的均衡状态；读图重点是把 sparse kernel 性能先放回 token-to-expert 分布、grouped GEMM 和 all-to-all 账本。它不能证明路由天然均衡，也不能替代线上 expert 热点监控。</small>
@@ -66,3 +70,7 @@ $$
 
 - [Grouped GEMM 的设备端tile调度](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/08-grouped-gemm.py)
 - [MoE contiguous/masked与MegaMoE接口边界](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)
+
+**来源与改编说明**：设备端 grouped GEMM 的调度参考 Triton 教程，容量、路由和专家负载的讨论参考 DeepSeek-V3 技术报告与 DeepGEMM 固定版本 README。页面里的 token 数和输出数是构造算例，不代表某个模型的线上负载。
+
+把这张路由表接到服务端时，可继续看[MoE 多模型服务](../inference/moe-routing-and-multi-model-serving.md)里的请求与专家负载边界；想核对跨设备的 all-to-all 和重叠，再看[通信 kernel 与 overlap](communication-kernels-and-overlap.md)。

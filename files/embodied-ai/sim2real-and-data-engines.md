@@ -169,3 +169,6 @@ Open X-Embodiment 这类数据集说明：具身数据不是图片数据。不�
 - [DROID](https://droid-dataset.github.io/)：看真实世界机器人数据如何采集多场景、多任务和长轨迹。
 - [RoboCat](https://deepmind.google/discover/blog/robocat-a-self-improving-robotic-agent/)：理解“收集新任务数据，再训练，再扩展能力”的机器人自改进闭环。
 - [RoboTwin 2.0 docs](https://robotwin-platform.github.io/doc/)：理解仿真任务、资产、expert trajectory 和 success checker 如何组织成数据链。
+## 继续读
+
+继续看[部署模式与安全案例](deployment-patterns-and-safety-cases.md)和[家庭机器人工作流](household-robotics-workflows-and-failure-patterns.md)，比较数据闭环与真实执行边界。

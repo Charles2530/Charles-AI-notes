@@ -17,13 +17,13 @@ paper_topic: 高效训练
 
 ## 4-bit attention 的难点藏在反向重计算里
 
-Attn-QAT 研究的不是简单把模型权重存成 4 bit，而是让 attention 内的两次矩阵乘法能够使用 NVFP4。第一步 $QK^\top$ 决定关注哪些 token，第二步 $PV$ 按概率聚合信息；前者的误差会改变注意力分布，后者的误差又会改变模型收到的输出。即使其他层都保持高精度，这两处误差也可能破坏画面、运动与语言任务表现。
+Attn-QAT 要解决的是 attention 内两次矩阵乘法的 NVFP4 执行。第一步 $QK^\top$ 决定关注哪些 token，第二步 $PV$ 按概率聚合信息；前者的误差会改变注意力分布，后者的误差又会改变模型收到的输出。即使其他层都保持高精度，这两处误差也可能破坏画面、运动与语言任务表现。
 
 作者先观察到，直接用 FP4 attention 替换 BF16，视频质量明显下降；已有 SageAttention3 的平滑与两级量化只能恢复部分质量。于是选择 quantization-aware training（QAT，量化感知训练），让模型参数适应低比特执行的误差。真正的障碍随之出现：**FP4 前向直接接上现成 FlashAttention 的 BF16 反向，并不能自动得到正确的 QAT**。[↗](https://arxiv.org/pdf/2603.00040v2#page=2)
 
 原因不只在于反向精度够不够高。FlashAttention 为节省显存，会重计算中间概率，并用一个代数恒等式避免保存完整注意力矩阵。低精度前向改变了这些中间量，旧恒等式的适用条件也随之改变。Attn-QAT 的主要贡献，是指出两个具体不一致，并分别修正：重建 P 时匹配其量化路径；额外保存一个辅助输出 $O'$，供 Softmax 反向使用。
 
-下面的原图先建立问题。沿同一提示比较 BF16、SageAttention3、直接 NVFP4 和 Attn-QAT，直接 NVFP4 的主体形状与细节损坏尤其明显。静态帧只能显示部分问题，运动是否恢复还需要后面的 Dynamic Degree 与人工视频评价共同判断。
+原图先把问题摆出来。沿同一提示比较 BF16、SageAttention3、直接 NVFP4 和 Attn-QAT，直接 NVFP4 的主体形状与细节损坏尤其明显。静态帧只能显示部分问题，运动是否恢复还需要后面的 Dynamic Degree 与人工视频评价共同判断。
 
 ![Attn-QAT video quality comparison 原图](../../assets/images/paper-deep-dives/foundations/attn-qat/figure-1-video-quality.png){ width="760" }
 
@@ -35,7 +35,7 @@ Attn-QAT 研究的不是简单把模型权重存成 4 bit，而是让 attention 
 
 NVFP4 将每 16 个元素划为一块，元素使用 FP4 E2M1 表示，共享一个 E4M3 scale。作为对照，MXFP4 的块大小为 32，scale 为 E8M0。因而“FP4”并不是唯一确定的数值接口，分块大小和 scale 格式同样影响误差。
 
-论文对一块 $X_{ij}\in\mathbb R^{1\times16}$ 写出下面的量化定义：
+论文对一块 $X_{ij}\in\mathbb R^{1\times16}$ 使用如下量化定义：
 
 $$
 s_{ij}=\frac{\max|X_{ij}|}{6},\qquad
@@ -46,6 +46,8 @@ $$
 6 是 E2M1 的最大有限幅值。$\hat X$ 是低比特离散值，$X^F$ 是反量化回高精度载体后的近似值；原文将量化与反量化分别记为 $\phi$ 和 $\phi^{-1}$。实际 NVFP4 还要让 scale 本身服从其格式，不能把示意式里的实数 $s$ 当成无限精度的免费参数。[↗](https://arxiv.org/pdf/2603.00040v2#page=2)
 
 块缩放让大值不至于立刻超出范围，却也让同块的小值面对较粗的相对分辨率。FP4 只有很少的可表示数值；attention 中的重尾激活和离群值尤其容易占据一块的大部分范围。量化 Q/K 后，softmax 前的分数可能偏移；量化 P/V 后，某些概率和聚合贡献又会被舍入。这两类误差发生在不同位置，不能只检查最终输出的平均误差就认为前后向都一致。
+
+可以先用两个 key 看清第一种误差。若某个 query 的原始分数是 $[2,1]$，softmax 约为 $[0.731,0.269]$；量化后变成 $[1.5,1]$，概率约为 $[0.622,0.378]$。最大注意力从 0.731 降到 0.622，第二个 key 的权重明显上升。这个四舍五入例子不是论文的 kernel 结果，却说明 $QK^\top$ 的小偏移会先改掉信息路由，后面的 $PV$ 再把这份改变写进输出。
 
 ### SageAttention3 用显式预处理减轻误差
 
@@ -73,9 +75,9 @@ $$
 \mathrm dB\approx (A^F)^\top\mathrm dC.
 $$
 
-这使模型能在前向不断看到量化误差，同时通过高精度梯度更新参数。它不是离散舍入函数的精确数学导数，而是 QAT 采用的代理梯度。正确实现的目标，是忠实于这套代理计算图，而不是把所有量化误差在反向里假装消失。[↗](https://arxiv.org/pdf/2603.00040v2#page=3)
+这使模型能在前向不断看到量化误差，同时通过高精度梯度更新参数。舍入函数本身没有在这里使用精确数学导数，QAT 采用的是直通估计这一代理梯度。正确实现要忠实于这套代理计算图，并保留低精度前向对参数更新的影响。[↗](https://arxiv.org/pdf/2603.00040v2#page=3)
 
-先忽略分块细节，attention 可用下面的概念式表示：
+先忽略分块细节，attention 可以写成：
 
 $$
 S=\frac{Q^F(K^F)^\top}{\sqrt d},\qquad
@@ -219,7 +221,7 @@ Wan2.1-1.3B 的 Table 2 同时考察两类问题：额外平滑是否仍有必�
 
 再比较 4、8：去掉 P 的反向 fake quantization，综合分为 0.8254，反而略高于完整方案的 0.8252；loss 也接近，但梯度范数噪声更大。它支持这项修正更符合计算图、并改善训练动态，**不支持声称只移除它就一定无法收敛**。将两项设计都概括成“缺一必崩”，会超出消融实际显示的结果。[↗](https://arxiv.org/pdf/2603.00040v2#page=6)
 
-下面的 Figure 3 先对照 Wan 的 gradient norm 与 loss，再看 Qwen SFT 的 loss。红色低精度 O 反向与绿色未量化 P 反向的问题强度不同，不能只用“曲线不稳”概括成同一种失败。
+Figure 3 先对照 Wan 的 gradient norm 与 loss，再看 Qwen SFT 的 loss。红色低精度 O 反向与绿色未量化 P 反向的问题强度不同，不能只用“曲线不稳”概括成同一种失败。
 
 ![Attn-QAT training dynamics 原图](../../assets/images/paper-deep-dives/foundations/attn-qat/figure-3-training-dynamics.png){ width="820" }
 
@@ -335,3 +337,5 @@ SFT 部分则明确写 Qwen3-14B：长度 8192、每卡 batch 8、梯度累积 4
 Attn-QAT 让一个常被忽略的问题变得具体：即使算子输入输出形状完全不变，低精度前向也可能使原高性能反向的代数捷径失效。P 的量化影响 dV，未量化 P 决定 Softmax Jacobian，而 $O'$ 恢复行归约所需的恒等式；这三个角色必须同时分清。
 
 对于已经能承担模型适配训练、又希望使用 FP4 attention 的视频系统，本文提供了从 QAT 到原生 kernel 的完整验证路径。对于语言模型，它证明 continued training 和 SFT 都能容纳这套注意力，但更大模型仍有质量差距，原生解码与缓存收益也需要单独验证。实际采用时，应把匹配的 fake/real quant 定义、梯度正确性、分项质量、训练显存及整模型延迟放在同一组对照里，而不能用一个综合质量分或一个 kernel 峰值替代整条证据链。
+
+想把这套方法放回更大的系统，可以接着读[低精度与量化算子](../../operators/low-precision-and-quantized-kernels.md)，核对 scale、累加和 kernel 支持；再看[量化评测与部署检查](../../quantization/evaluation-and-deployment-checklist.md)，把单个 attention 的质量恢复和整模型延迟分开测量。

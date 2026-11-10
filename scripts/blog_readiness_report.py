@@ -22,13 +22,19 @@ UTILITY_PAGES = {
 URL_RE = re.compile(r"https?://[^\s)<>\"]+")
 LOCAL_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)#?]+)(?:#[^)]+)?\)")
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)|<img\b", re.IGNORECASE)
+DIAGRAM_RE = re.compile(r"^(?:```|~~~)(?:mermaid|dot|graphviz)\s*$", re.IGNORECASE | re.MULTILINE)
 SOURCE_RE = re.compile(
     r"(主要来源|相关阅读|参考|图源|图片来源|论文|官方文档|官方博客|项目页|"
+    r"来源与改编|这页怎么来的|本页的验证顺序|对照源码|"
+    r"公式和代码对照|源码版本和指标口径|实现依据|论文和实现依据|"
+    r"算法和部署依据|算法和环境依据|训练配方和实现依据|接口和论文依据|"
+    r"模型和实验依据|"
     r"arXiv|OpenReview|GitHub|Source|source)"
 )
 QUESTION_RE = re.compile(
     r"(这篇|本文|本页|这一页|为什么|如何|怎么|是什么|解决什么|"
-    r"要回答|读完|核心问题|一句话)"
+    r"要回答|读完|核心问题|一句话|假设|设 |给定|同一个|一条|一个|"
+    r"\b\d+(?:\.\d+)?\b|\[[A-ZBHLT]\b)"
 )
 class MkdocsLoader(yaml.SafeLoader):
     """YAML loader that tolerates MkDocs python/name tags."""
@@ -46,6 +52,7 @@ class PageAudit:
     kind: str
     urls: int
     images: int
+    diagrams: int
     local_links: int
     flags: tuple[str, ...]
 
@@ -113,6 +120,7 @@ def audit_page(path: Path, nav: set[str]) -> PageAudit:
         kind = "topic"
     urls = len(set(URL_RE.findall(text)))
     images = len(IMAGE_RE.findall(text))
+    diagrams = len(DIAGRAM_RE.findall(text))
     links = local_link_count(text)
     source_signal = bool(SOURCE_RE.search(text))
 
@@ -126,10 +134,18 @@ def audit_page(path: Path, nav: set[str]) -> PageAudit:
 
     if urls == 0 and kind == "topic":
         flags.append("no-external-url")
-    if images == 0 and kind == "topic":
+    if images + diagrams == 0 and kind == "topic":
         flags.append("no-image")
 
-    return PageAudit(path=path, kind=kind, urls=urls, images=images, local_links=links, flags=tuple(flags))
+    return PageAudit(
+        path=path,
+        kind=kind,
+        urls=urls,
+        images=images,
+        diagrams=diagrams,
+        local_links=links,
+        flags=tuple(flags),
+    )
 
 
 def main() -> int:
@@ -164,6 +180,7 @@ def main() -> int:
                 rel = audit.path.as_posix()
                 print(
                     f"- {rel}: kind={audit.kind}, urls={audit.urls}, images={audit.images}, "
+                    f"diagrams={audit.diagrams}, "
                     f"local_links={audit.local_links}, flags={','.join(audit.flags)}"
                 )
 

@@ -79,3 +79,9 @@ Activation checkpointing 减少保留的激活，代价是反向时重算；分�
 如果真实机器人时间紧张，优先比较固定真实数据下的策略效果；如果显存不足，测清参数、优化器、激活与缓存的各自占用；如果规划超时，拆开历史编码、候选分支、生成步骤、读出与排队。不同瓶颈需要不同实验。
 
 报告最终可以同时写出“减少多少真实采集”“每次更新耗时怎样变化”“在给定时限内成功率怎样变化”。只有把任务定义和质量条件固定，数字才有可比性。具体候选机制可查[效率技术对照](efficiency-technique-coverage-matrix.md)，部署中的 cache 与 deadline 推导见[rollout 服务](rollout-serving-quantization-kernel-case.md)。
+
+## 模型和实验依据
+
+真实交互与 imagined behavior 的区分参考 [Dreamer](https://arxiv.org/abs/1912.01603) 和 [DreamerV3](https://arxiv.org/abs/2301.04104)，表示与动力学分工参考 [MWM](https://arxiv.org/abs/2206.14244)，动作条件表征的规划接口参考 [V-JEPA 2](https://arxiv.org/abs/2506.09985)。MagiAttention 图只用于说明 mask 形状和可见性边界。采集 10 秒、重置 20 秒、3000 条轨迹和候选数是本站的成本算例，不是论文测速。
+
+复现实验时把机器人秒数、GPU 小时、候选数、生成步数、峰值显存、p95 延迟和闭环成功率分开记录。把其中一个数字换算成“总效率”前，先确认质量门槛和真实交互预算没有被一起改变。

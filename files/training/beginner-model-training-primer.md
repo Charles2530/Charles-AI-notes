@@ -1,6 +1,6 @@
 # 一段文本怎样变成一次参数更新
 
-训练代码最重要的几行很短，读取一批数据，前向计算，求 loss，反向传播，更新参数。难的是知道这些行之间传递的张量代表什么，以及哪些操作真正改变了模型。下面沿着同一段 token 走完一次更新，再对照 nanoGPT 的实际训练循环。先让计算完全可检查，再接入更大的模型。
+训练代码看起来只有几行，真正容易出错的是那些没有写在函数名里的约定。标签有没有错开，loss 按什么分母平均，梯度什么时候清零，checkpoint 能不能从同一个数据位置继续，都会改变结果。本页用一小段 token 走完一次更新，再把它对回 nanoGPT 的训练循环；例子先保持小到可以手算。
 
 ## 输入和答案只错开一个位置
 
@@ -186,3 +186,9 @@ nanoGPT 的 checkpoint 保存 `model`、`optimizer`、`model_args`、`iter_num`�
 - [nanoGPT train.py](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py)，固定 commit `3adf61e1`，对照 `get_batch`、梯度累积、AMP 与 checkpoint。
 - [nanoGPT model.py](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/model.py)，同一 commit，对照 `[B,T,V]` 与交叉熵。
 - [目标函数与优化器](objectives-optimizers-and-schedules.md)继续计算 Momentum、AdamW 与学习率日程。
+
+## 训练配方和实现依据
+
+实践上的取舍参考了 [A Recipe for Training Neural Networks](https://karpathy.github.io/2019/04/25/recipe/)，代码关系对照 [nanoGPT](https://github.com/karpathy/nanoGPT) 的 `3adf61e1`。四乘四的 bigram 表、手算梯度和 checkpoint 回放是本站自己写的教学例子，作用是验证机制，不是泛化实验。真实训练的吞吐、显存和故障数据应回到 `server_monitor` 与 W&B 记录。
+
+可以把四个位置拆成两个大小不同的 micro-batch，检查为什么不能简单平均两个 loss，再写出以 effective target tokens 为分母的聚合公式。

@@ -538,3 +538,5 @@ LingBot-VA 2.0 把几条常被分开处理的链路接到一起。视觉 tokeniz
 仍未解决的边界同样具体。被动视频学到的低维转移不保证自动成为可识别、可干预的物理动作；planner 与 policy 分别训练，依赖固定接口连接；主要控制证据集中在双臂操控，跨更多 embodiment 的泛化仍需验证。原文也将交互或强化信号、更紧密的高低层联合训练和更广主体覆盖列为后续方向。[原文 §6](https://github.com/Robbyant/lingbot-va/blob/main/LingBot_VA2_paper.pdf#page=22)
 
 本文最扎实的结论，是这套原生视频动作设计在报告的机器人任务、tokenizer 对照、MCP 训练曲线及累积部署测量中取得了相互呼应的结果。每个结论的强度仍取决于对应实验，完整系统的领先、单组件的作用和可迁移的工程经验应分别保留各自的证据边界。
+
+想看相邻路线，可以读[LingBot-World](lingbot-world.md)比较视频世界模型与视频动作模型的边界，再回到[VLA 的数据与策略学习](../../vla/data-and-policy-learning.md)检查动作表示、数据覆盖和闭环评测。若重点是部署时延，接[具身推理中的观测年龄](../../thinking-exploration/embodied-inference-observation-age-1009-2059.md)，把预测提前量、真实观测替换和低层控制频率放到同一条时间线上。

@@ -1,6 +1,6 @@
 # MoE 的路由、专家计算与通信
 
-普通 Transformer 的前馈层让每个 token 使用同一组参数。Mixture of Experts 把这组前馈网络换成多个候选专家，再为每个 token 选择其中少数几个。模型由此可以存储更多参数，同时控制一次 token 计算使用的参数量。
+一个 batch 里的 token 为什么不必经过同一组前馈权重？Mixture of Experts 把前馈层换成多个候选专家，再为每个 token 选择其中少数几个。这样可以存储更多参数，同时控制一次 token 真正使用的参数量。
 
 真正需要解释的是这几步如何连起来。路由结果是离散索引，GPU 喜欢连续矩阵；专家输出还要回到原来的 token 顺序，才能与残差相加。本文先用四个标量 token 和两个专家算完整个过程，再扩展到向量、容量和多卡通信。标量专家只是演示数据流，不代表真实模型能力。
 
@@ -48,6 +48,10 @@ print([round(v, 6) for v in y])
 
 ![四 token 的专家路由与归位](../assets/images/foundations/moe-four-token-routing.svg)
 
+<small>图源：本站根据上面的四个 token、两个专家和 router 概率重绘。图中展示的是分组、专家计算和按原位置归位，未包含真实实现中的容量溢出策略。</small>
+
+**读这张图。**先看 token 被分到哪个专家，再沿每个专家的局部输出回到原 token 位置；概率权重在归位时参与缩放。若容量不足，图示路径还需要额外的丢弃、转交或 dropless 规则。
+
 ## 离散选择以后，router 还怎样学习
 
 假设第一个 token 的专家选择暂时不变，\(y=2p_0\)，目标为 1，损失为 \((y-1)^2/2\)。在 \(p_0=0.8\) 时，\(y=1.6\)，所以 \(\partial\ell/\partial p_0=(1.6-1)2=1.2\)。
@@ -74,11 +78,15 @@ print([round(v, 6) for v in y])
 
 <small>[DeepSeek-V3 Technical Report Figure 2](https://arxiv.org/abs/2412.19437)。图中的注意力与专家分支承担不同工作。共享专家处理每个 token，路由专家只处理选中的 token；不能把减少 KV 的注意力设计直接归功于 MoE。</small>
 
+**读这张图。**沿一个 token 向右追踪，先经过共享的 attention 与 shared expert，再进入它被路由到的若干 routed experts。图示表达模块连接和参数归属，无法单独给出 dispatch、combine 或 all-to-all 的实际通信时间。
+
 小批次 decode 时，每个专家拿到的 token 可能很少，矩阵形状不利于 GPU 利用；大批次虽能提高专家计算效率，也可能增加通信和排队。比较 dense 与 MoE 应固定任务质量、请求长度、批次、硬件和并行方式。激活参数量不能单独预测延迟。
 
 ![标准 MoE 与 LatentMoE 的通信位置](../assets/images/paper-deep-dives/technical-reports/nemotron-3-super/figure-3-latent-moe.png){ width="820" }
 
 <small>图源：[Nemotron 3 Super Technical Report](../paper-deep-dives/technical-reports/nemotron-3-super.md)，Figure 3。</small>
+
+**读这张图。**比较左右两条路径时，重点看 latent 投影插入 all-to-all 的位置，以及专家计算前后的表示宽度。它说明通信对象可以改变，不能据此推出所有 batch 和硬件都获得相同加速。
 
 左侧为标准专家分发与合并，右侧在 all-to-all dispatch 前加 latent down-proj，在 combine 后加 latent up-proj。图要比较的是专家计算及通信所处的表示维度。它没有把本文的 top-1 标量算例变成通用路由规则，也不能单独证明特定硬件上的加速幅度。
 

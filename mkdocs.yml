@@ -138,11 +138,18 @@ nav:
     - 训练评测与消融设计: training/evaluation-and-ablation-methodology.md
     - W&B 实验追踪与治理: training/wandb-experiment-tracking-and-governance.md
     - 集群运维与实验治理: training/cluster-operations-and-experiment-management.md
+    - 从假设到证据的研究闭环: training/research-loop-from-hypothesis-to-evidence-1123-2351.md
     - 偏好数据与对齐失效: training/preference-data-and-alignment-pitfalls.md
     - 后训练数据引擎与 Judge 模型: training/post-training-data-engines-and-judge-models.md
     - MTP 与投机解码: training/mtp-and-speculative-decoding.md
     - 训练图片来源与授权: training/image-sources.md
   - 从训练到推理: training-and-inference-systems/index.md
+- 研究与工程路线:
+  - 技术知识地图: roadmap/index.md
+  - 公式、源码与实验怎样对照: roadmap/research-and-engineering-study-plan.md
+  - 常见技术决策与取舍: roadmap/common-decision-patterns-and-tradeoffs.md
+  - 技术对照表: roadmap/comparison-tables.md
+  - 内容来源与改编规范: roadmap/source-and-adaptation-guidelines-1110-0106.md
 - 推理与效率:
   - 推理系统专题: inference/index.md
   - 请求与执行:

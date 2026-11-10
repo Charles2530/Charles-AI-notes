@@ -1,6 +1,6 @@
 # 一张图怎样通过 Stable Diffusion 的各个组件
 
-一张 512 × 512 的 RGB 图像含有 786432 个颜色数值。直接在这个数组上反复去噪，每次都要处理完整空间网格。Latent Diffusion 先训练一个能够重建图像的压缩器，再让生成模型学习压缩表示的分布。这样形成了两套网络学习任务，压缩与重建，以及带条件的 latent 生成。
+一张 512 × 512 的 RGB 图像含有 786432 个颜色数值。直接在这个数组上反复去噪，每次都要处理完整空间网格。Latent Diffusion 把问题拆成两段，先问压缩器保留了什么，再让生成模型在这个表示上学习分布。这样做省了计算，也把一部分细节和失真责任交给了 VAE。
 
 下面以 Hugging Face 教学 notebook 使用的 Stable Diffusion 2.1 base 接口为具体参照。示例的 4 通道 latent、8 倍空间压缩和 77 个文本位置属于这类配置，不能推广成所有 Stable Diffusion 或视频模型的固定尺寸。代码 API 随版本变化，这里解释张量与计算关系，并以本站可运行的[最小 DDPM](minimal-ddpm-implementation.md)核验基本机制。
 
@@ -136,3 +136,9 @@ L=L_{\mathrm{diffusion}}+
 
 - [Hugging Face Stable Diffusion 组件 notebook](https://github.com/huggingface/diffusion-models-class/blob/72bf3dd739da641075dcff0ee54ce28e7a38a8ab/unit3/01_stable_diffusion_introduction.ipynb)提供 VAE、文本、U-Net、scheduler 和手写采样循环。其旧 API 不作为当前安装指南。
 - [Latent Diffusion](https://arxiv.org/abs/2112.10752)、[DiT](https://arxiv.org/abs/2212.09748)和[REPA](https://arxiv.org/abs/2410.06940)分别对应表示压缩、Transformer 主干和中间表示对齐。
+
+## 论文和实现依据
+
+整体分工参考 [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752)，Transformer 生成主干参考 [DiT](https://arxiv.org/abs/2212.09748)，张量接口对照 Hugging Face 的 Stable Diffusion 教学 notebook。512、64、4 通道和 `.18215` 只属于页面采用的教学配置；不同 VAE、checkpoint 或视频模型应重新核对缩放、latent shape 和解码路径。页面中的像素与 latent 对照不复现任何论文 benchmark。
+
+先单独测 `D(E(x))`，再测固定 latent 下的一次去噪，最后才接完整采样。这样能区分 VAE 重建已经丢掉的细节、生成网络的预测误差和 scheduler 的数值误差。

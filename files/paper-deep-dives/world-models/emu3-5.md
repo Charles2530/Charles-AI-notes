@@ -35,7 +35,7 @@ Emu3.5 的主线可以从一个实际困难讲起。一个模型若要逐步讲�
 
 ## 四个层次不能混为同一种“扩散模型”
 
-Emu3.5 同时涉及自回归、离散扩散和连续扩散，很容易因名称接近而混淆。首先，视觉 tokenizer 将图像变成离散编号；其次，统一 Transformer 学习这些编号与文本如何接续；第三，DiDA 改变这个 Transformer 生成图像编号的方式；最后，图像或视频 decoder 把编号转换回连续像素。后两个环节都可以涉及 diffusion，但解决的是不同问题。
+Emu3.5 同时涉及自回归、离散扩散和连续扩散，几个名词指向的对象并不相同。视觉 tokenizer 先把图像变成离散编号，统一 Transformer 再学习这些编号与文本如何接续。DiDA 只改动图像编号的生成方式，让图内 token 可以并行更新；图像或视频 decoder 负责把编号还原成连续像素。后两个环节都可能出现 diffusion，但前者处理的是视觉 token 的生成顺序，后者处理的是像素细节和视频运动。
 
 | Component | Input | Output | Main role |
 | --- | --- | --- | --- |
@@ -456,3 +456,7 @@ Judge 检查 Subtask Skill Clarity、Text-Image Alignment、Task Execution Progr
 成本也没有因为“统一”消失。512px 图像仍需 1024 个视觉 tokens，context 预算随图片数量快速消耗；即便采用 FlagScale 的 DiDA 配置，表内 1024px 单图仍需约 10 秒，这与高频机器人控制不是同一种延迟要求。视频连续化还依赖另一个 decoder，公开报告的部分数据来自内部渠道，精确复现实验需要的不只是主干权重。
 
 Emu3.5 证明了一条有实际结果支撑的路线，离散 next-token prediction 可以在大规模图文过程数据上建立多任务生成能力，再用较小规模的适配改变视觉生成的计算顺序。它最强的公开证据集中在文字绘制、综合编辑和自动评估下的多步视觉生成；关于长期物理一致性、真实执行与系统实时性，还需要独立的任务验证。把模型当作可以提出和呈现未来状态的组件，才便于继续补齐行动接口与反馈闭环。
+
+## 继续阅读
+
+原生多模态模型的世界学习能力要和[视频表征与记忆](../../vlm/video-representation-and-memory.md)对照；若关心行动和规划，再接[RSSM、Dreamer 与规划](../../world-models/rssm-dreamer-and-planning.md)。

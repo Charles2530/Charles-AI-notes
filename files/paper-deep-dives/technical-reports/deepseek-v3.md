@@ -581,3 +581,5 @@ V3 给小规模研究者留下的可验证问题，是在同一数据预算下�
 对训练系统而言，最值得复用的是精度边界。先测激活和梯度的离群值分布，再比较量化分组与部分和提升间隔，同时观察长程 loss；仅通过几个短 GEMM 的误差测试，不足以排除长程训练中的发散。对服务系统，先记录每专家负载、每专家 batch、KV 读取量和通信耗时，再决定专家副本、TP/EP 与 prefill/decode 切分。
 
 这几组测量对应着报告真正连起来的接口。容量由专家提供，表示和训练目标决定容量怎样被使用，数值与调度设计决定它能否在预算内运行；任何一个环节改变了数据分布、硬件或延迟约束，其他环节的最优配置也可能随之改变。
+
+工程上可以按三条线继续阅读：先看[MoE 路由与稀疏 kernel](../../operators/moe-routing-and-sparse-kernels.md)理解 token 如何落到专家，再看[FP8 训练与优化器 kernel](../../operators/fp8-training-and-optimizer-kernels.md)核对 scale、累加和溢出，最后回到[分布式训练与 checkpoint](../../training/distributed-training-and-checkpointing.md)检查通信、分片和恢复。三条线都涉及 V3，但任何一条局部结果都不能单独代表整套训练收益。

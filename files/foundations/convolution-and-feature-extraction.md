@@ -1,6 +1,6 @@
 # 卷积与多尺度视觉特征
 
-一张图片中的相邻像素往往有关联，同一种局部形状又可能出现在不同位置。卷积把这两件事写进计算方式：只连接一个小窗口，并在全图重复使用同一组权重。
+一个 `3×3` 输入经过 `2×2` kernel 后为什么会变成 `2×2` 输出？四个位置都用了同一组权重，反向传播时这组权重又怎样收到四处梯度？卷积的局部连接、权重共享和下采样都可以从这个小例子算出来。
 
 先看一个单通道 `3×3` 输入与 `2×2` kernel。这里按深度学习框架常用的互相关约定，不翻转 kernel。
 
@@ -18,6 +18,10 @@ Y=\begin{bmatrix}0&-1\\-1&1\end{bmatrix}.
 \]
 
 ![卷积窗口与输出位置逐个对应](../assets/images/foundations/convolution-window-example.svg)
+
+<small>图源：本站根据上面的 (3\times3) 输入和 (2\times2) kernel 重绘。四个输出位置共享同一组权重，图示用于核对窗口移动和输出索引。</small>
+
+**读这张图。**固定一个输出位置，沿窗口的四个元素相乘求和；再把窗口右移一格，就得到下一个输出。它展示的是互相关的索引关系，未涉及 padding、stride 或真实 GPU 线程映射。
 
 四个位置共享四个 kernel 参数。梯度反传时，这四次使用对同一个参数的贡献要相加；共享权重同时是减少参数和组合训练信号的机制。
 
@@ -81,7 +85,46 @@ U-Net 因此把编码器同尺度特征接到解码器。例如解码分支升�
 
 <small>图源：[U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597)，Figure 1。</small>
 
+**读这张图。**先看中间的低分辨率路径如何扩大感受野，再沿横向连接追踪高分辨率特征如何回到解码端。原论文使用 copy-and-crop，现代实现可能使用 padding 对齐，因此图中的尺寸不能直接套到所有 U-Net。
+
 先看竖向的分辨率变化，再看横向 copy-and-crop 箭头。横向连接带回较细的空间信息，原始 U-Net 还需裁剪以配合有效卷积；现代 padding 版本可能采用不同尺寸规则。拼接会增加通道数，下一层卷积需接收这个新尺寸。
+
+## padding 会改变边界看到的内容
+
+把前面的输入放在四周补一圈 0，再用同一个 \(2\times2\) kernel 计算，左上窗口变成
+
+\[
+\begin{bmatrix}0&0\\0&1\end{bmatrix},
+\qquad 0\times1+0\times0+0\times0+1\times(-1)=-1.
+\]
+
+原来左上输出是 0，现在变成 -1。输出尺寸增加了，边界位置也获得了一个包含人工 0 的上下文。zero padding、reflect padding 和 replicate padding 产生的边界信号不同，不能只看输出 shape 判断它们等价。
+
+stride 也会改变取样位置。输入长度 5、kernel 3、stride 2、无 padding 时，窗口起点只有 0 和 2，位置 4 不会成为窗口左端。若后续任务需要精确定位，应该记录输出网格中心映射回原图的位置，而不是只保存一个 `H_out`。
+
+## 共享权重怎样进入反向传播
+
+设一个 kernel 权重 \(w\) 在两个窗口中分别乘以输入 \(x_1,x_2\)，损失对两个输出的梯度为 \(g_1,g_2\)。由于这两个位置使用的是同一个参数，
+
+\[
+\frac{\partial\mathcal L}{\partial w}=g_1x_1+g_2x_2.
+\]
+
+把同一个参数误写成每个位置一份，前向结果仍可能看起来合理，反向更新却不再具有平移共享的含义。一个小测试可以把输入中只有一个像素设为 1，分别平移这个像素，再比较输出和 kernel 梯度是否按同样方式平移。它比只检查张量尺寸更容易发现权重索引错位。
+
+## 用 reference 把实现边界钉住
+
+卷积 kernel 的最小回归集应覆盖：
+
+| 对照 | 想检查的内容 |
+| --- | --- |
+| \(1\times1\)、全零输入 | bias 与空窗口行为 |
+| kernel 大于输入 | padding 和错误提示 |
+| stride 2、奇数尺寸 | 尾部窗口与输出网格 |
+| 非连续 view | stride 是否真的传入 kernel |
+| 多通道单输出 | 通道求和与 bias 位置 |
+
+先用手算或框架 reference 得到数值，再用 `torch.testing.assert_close` 比较自定义实现。随机测试可以发现更多组合，却不能替代这些能定位边界规则的固定样例。
 
 ## 从这个例子读实现
 
@@ -90,3 +133,5 @@ U-Net 因此把编码器同尺度特征接到解码器。例如解码分支升�
 - [D2L 卷积神经网络](https://github.com/d2l-ai/d2l-zh/tree/e6b18ccea71451a55fcd861d7b96fddf2587b09a/chapter_convolutional-neural-networks)从互相关窗口逐步展开多通道与池化。
 - [U-Net](https://arxiv.org/abs/1505.04597)给出编码器与解码器之间的高分辨率特征连接。
 - [卷积、频域与多尺度](../prerequisite-math/convolution-frequency-and-multiscale.md)进一步解释滤波、相位与降采样混叠。
+- [张量与 Shape](tensors-shapes-and-computation-graphs.md)补充布局、轴和 batch 维度的读法。
+- [数据划分与评测指标](data-splits-metrics-and-evaluation-basics.md)讨论视觉任务中分组划分和定位误差的统计单位。

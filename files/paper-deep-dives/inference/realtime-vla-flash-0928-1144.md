@@ -353,3 +353,7 @@ LIBERO-10 对误差积累最敏感，因此作者固定 $K=2,\delta=0.15$，比�
 代码时刻需按前文转换到论文的时间方向。服务脚本的默认距离阈值是 0.3、默认周期刷新关闭，与此主实验配置不同，因此直接启动默认服务不等于复现主表。实现的夹爪检查也限制在待执行窗口，并另有接受前缀的 post-check；这些都是动作块输出以后仍需维护的运行时状态。[↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/scripts/spec/exp/config/main_exp.json) [↗](https://github.com/dexmal/realtime-vla-flash/blob/da6ceccad603695a8a3d6fa14dd410c3aadb536f/scripts/spec/spec_serve_policy.py#L83)
 
 FLASH 最有用的认识是，连续动作模型的投机机制可以建立在“已知候选终点后的局部一致性”上，而不必先为每个动作构造离散 token 概率。但这也决定了它的证据标准：看完整任务成功率、真正执行的前缀、恢复完整条件的频率与平均延迟。对于新的任务域，优先确定哪些条件能够暂时复用、哪些阶段必须刷新，再联动选择草稿训练与验证参数，比只追求更短的单次调用更接近论文已经证明可行的用法。
+
+## 继续阅读
+
+VLA 的并行验证要放到[推理中的投机与缓存](../../inference/caching-routing-and-speculative.md)看请求生命周期；动作块与重规划边界见[VLA 动作 chunking](../../vla/action-chunking-hierarchical-policies-and-latent-skills.md)。

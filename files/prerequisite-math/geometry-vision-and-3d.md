@@ -185,3 +185,6 @@ E=[t]_\times R
 因此 embodied AI 论文会强调 calibration、multi-view、depth、normal、trajectory 和 3D flow。这些量给模型提供更强的空间约束。
 
 两类常见名字也可以先这样读：PnP 是用 3D 点和 2D 像素对应来估计相机位姿；ICP 是用两组点云反复找对应、估计刚体变换，让它们对齐。它们都不是神经网络专属方法，但会成为 3D foundation model 和机器人系统里的几何验算工具。
+## 继续读
+
+继续看[坐标变换与手眼标定](../embodied-ai/coordinate-transforms-and-hand-eye-calibration.md)和[立体匹配](../embodied-ai/stereo-matching-and-cost-volume.md)。

@@ -1,6 +1,8 @@
 # 可以算清的性能误判
 
-下面都是为解释机制构造的例子，没有声称发生在某个真实生产系统。每个例子给出局部数字为何不足，以及还需哪一项证据。
+一次 trace 里，某个 kernel 从 2 ms 降到 1.6 ms，整步延迟却从 18 ms 变成 19 ms。原因可能在队列、转换、通信或 fallback，单看这个 kernel 的计时找不到答案。
+
+下面的数字都是为解释机制构造的例子，不对应某个真实生产系统。每个例子先算局部变化，再指出还缺哪一项端到端证据。
 
 ## 一个算子快一倍，整步只快一点
 
@@ -54,8 +56,80 @@ Attention 的有效计算量还与 mask 有关。同样多的 token，落在因�
 
 每次优化记录“减少的成本”和“新增加的成本”，并把假设放回实际调用分布。这样即使结果不如预期，也能得到下一步应查什么。
 
+## 只优化了常见 shape，fallback 却接管了尾部流量
 
-## 对照源码与延伸阅读
+假设一个服务请求的 shape 分布为：`M=1` 占 60%，`M=8` 占 25%，`M=17` 占 15%。新 kernel 对前两种 shape 分别快 30% 和 20%，但 `M=17` 触发通用实现并慢 3 倍。平均吞吐可能仍然改善，P99 却会被少数长请求主导。
+
+因此优化报告应同时保存 shape bucket、命中路径和各 bucket 的请求权重。一个总体平均值不能说明“常见路径变快”是否转化成用户看到的延迟。若没有足够样本，至少把 fallback 次数和 fallback 原因单独列出。
+
+```text
+bucket: M=17, N=4096, K=4096
+selected_path: generic_fallback
+fallback_reason: unsupported_stride
+requests: 150 / 1000
+p50_ms: 2.1
+p99_ms: 8.7
+```
+
+当 fallback 原因是 stride、dtype 或对齐条件时，优先判断能否让上游直接产出目标 layout；当原因是 kernel 本身不支持某个边界，才考虑增加另一条特化路径。无条件扩展候选会增加编译、缓存和维护成本。
+
+## 平均延迟下降，队列等待却把 P99 推高
+
+单请求 kernel 从 2 ms 降到 1.6 ms，并不保证服务 p99 下降。若新 kernel 占用更多寄存器或显存，能够同时运行的请求数可能下降，排队时间会增加。请求总延迟应拆成
+
+\[
+T_{\mathrm{e2e}}=T_{\mathrm{queue}}+T_{\mathrm{preprocess}}+T_{\mathrm{kernel}}
+ +T_{\mathrm{postprocess}}+T_{\mathrm{transfer}}.
+\]
+
+压测时记录每一项的分布，而不是只记录 kernel timer。特别要固定并发、batch 上限和请求到达过程。离线单请求 benchmark 适合比较局部实现，不能独立证明线上尾延迟改善。
+
+如果平均值改善而 p99 变差，先检查显存峰值、并发上限、batch 形成时间和 fallback，再决定是否继续调 tile。把所有尾延迟问题归因于 kernel 指令效率，通常会错过队列层的变化。
+
+## 显存节省也可能制造碎片和同步
+
+融合或缓存复用减少了总字节数，却可能改变临时 buffer 的生命周期。若不同 shape 频繁申请大小不一的 workspace，分配器碎片和同步等待会出现在 kernel 之外。只看峰值显存不等于知道分配器是否在关键路径上阻塞。
+
+可在固定请求序列下记录：分配次数、复用命中率、workspace 大小、同步点和 allocator wait。把同一序列改成预分配或固定 bucket，若延迟变化明显，说明收益来自内存管理，而不只是 kernel 本身。
+
+## overlap 需要看关键路径和资源冲突
+
+两条 stream 同时有色块，只证明工作重叠发生过。若通信使用的链路和计算共享带宽，重叠可能令两者都变慢；若后续操作依赖通信的最后一段，前面的重叠也无法消掉关键路径尾部。
+
+建议在 trace 中标出事件的开始、结束和依赖关系，并记录最后完成的 rank 或 stream。比较优化前后关键路径长度、等待时间、通信带宽和设备利用率，不能只比较“重叠比例”。
+
+## 一个性能提案要有可证伪的账本
+
+可以把每次改动写成下面的卡片：
+
+```text
+hypothesis: fuse bias and activation to remove one intermediate write
+target_bucket: M=128, N=4096, K=4096, bf16
+expected_saving: 2 * M * N * bytes_per_element
+new_costs: register_pressure, gelu_math
+correctness_gate: max_abs_error <= 2e-2
+performance_gate: end_to_end_p95 improves >= 5%
+fallback: generic_gemm_if_registers_exceed_limit
+observed: ...
+decision: keep / narrow / revert
+```
+
+`expected_saving` 是假设，不是结果。只有把它和实际 profile、shape 分布及完整层时间放在同一张卡片里，失败实验才会告诉下一步要测什么。
+
+## 把一次失败写成可复查的账本
+
+可以为每个性能提案保留五列：原始关键路径、假设消除的成本、新增成本、命中的 shape 或流量桶、端到端结果。比如“融合减少一次写回”还要同时记录寄存器、spill、转换和同步；“通信与计算重叠”还要记录最后依赖、带宽竞争和等待的 rank。
+
+这张表的作用是让失败也有产出。若局部 kernel 变快而 P99 不变，结论可能是它不在主要关键路径；若平均时间变快而尾延迟变差，下一步要查的是 shape、排队或负载不均，而不是继续把平均值优化得更低。
+
+
+## 把反模式接到下一次 profile
+
+发现反模式后，应接着看[测试、回归与维护](testing-regression-and-maintenance.md)、[profiling 与数值稳定性](profiling-debugging-and-numerical-stability.md)和[kernel 成本模型](kernel-cost-models-and-selection-heuristics.md)。
+
+## 算例、工具和实现入口
 
 - [输入layout、候选与基准边界](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/03-matrix-multiplication.py)
 - [高级调度的资源和架构约束](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/09-persistent-matmul.py)
+
+**来源与改编说明**：Amdahl 风格的加权计算、融合和 persistent 调度例子是本站构造算例；实现边界参考 Triton 官方教程、DeepSeek-V3 技术报告和 MagiAttention 资料。算例用于解释如何找证据，不代表任何真实系统的性能结论。

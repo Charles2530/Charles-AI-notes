@@ -163,3 +163,6 @@ ApxInf 的公开 one-step warm-start 文档给出了一个具体实现。它把�
 - [6] [ApxInf 的 one-step warm-start 实现](https://github.com/infinigence/ApxInf/blob/4116fd7208669388d63d9ab4766a2913b9e6dc9c/doc/run_warmstart_with_onestep.md)。用于核对动作缓存、补尾、噪声混合与 episode 重置。
 
 公开资料核对日期为 2026 年 10 月 9 日。文中公式用于解释时间关系与计算变换；三个对照实验为本文提出的探索方案，尚无本文实测数据。
+## 继续读
+
+继续看[服务系统](../inference/serving-systems.md)和[缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)。

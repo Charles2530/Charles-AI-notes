@@ -1,6 +1,6 @@
 # 怎样确认计时测到了真正的GPU执行
 
-Python调用一个GPU算子后，设备通常还在异步执行。如果直接用CPU时钟包住函数调用，测到的可能主要是提交开销。开始优化前，要先定义计时边界并验证结果，否则很容易围绕错误数字改代码。
+Python 调用一个 GPU 算子后，CPU 可能已经返回，设备还在执行。若直接用 CPU 时钟包住函数调用，测到的可能只是提交开销。优化前先把计时边界和正确性检查写清楚，后面看到的数字才有意义。
 
 ## 分开冷启动和稳态
 
@@ -60,3 +60,17 @@ Softmax应先减最大值，避免直接对大logit求指数。LayerNorm在接�
 
 - [先对齐输出再计时的官方实例](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/01-vector-add.py)
 - [归约与数值路径的具体实现](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/05-layer-norm.py)
+
+接着读[通信 kernel 与计算重叠](communication-kernels-and-overlap.md)，把 ready、launch 和 consumer 的依赖放回 trace；再读[硬件感知调试清单](hardware-aware-debug-checklist.md)，把 shape、dtype、stream、fallback 和版本写进一次可复查的证据包。这样才能区分“计时方法错了”和“kernel 真慢”。
+
+## 一次 profiling 记录应能复现
+
+保存输入 shape、stride、dtype、设备、驱动、编译参数、预热次数、重复次数、计时边界和输出误差。若使用 Nsight，保留对应的 NVTX range、stream、同步点和采集命令。没有这些条件，单个 latency 数字不能作为回归证据。
+
+排查顺序可以固定为：先确认输出正确，再确认计时覆盖目标工作；然后看 CPU 空洞、GPU kernel、通信和同步；最后才钻进内存事务、寄存器和指令。这样能避免用低层优化掩盖错误的上层时间边界。
+
+## 来源与改编说明
+
+- **工具参考**：[NVIDIA Nsight Systems 官方说明](https://developer.nvidia.com/blog/nsight-systems-exposes-gpu-optimization/)，用于理解 CPU API、GPU kernel、同步和 NVTX 的时间线关系。
+- **实现参考**：[Triton vector add](https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html)，先做输出校验再做计时。
+- **自测**：解释为什么在异步 GPU 调用前后都加同步会改变真实流水，以及为什么第一次 JIT 时间不能与稳态 kernel 时间混成一个均值。

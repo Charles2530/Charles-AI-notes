@@ -57,6 +57,24 @@ flowchart LR
 
 <small>图源：[NVIDIA Nsight Systems / NVTX 文档](https://docs.nvidia.com/nsight-systems/)。原图表达用 NVTX 标记把 kernel、CPU 调用和时间线串起来；读图重点是：自定义 op 是否真的进了热路径，需要 profiler、dispatch、fallback 和端到端 trace 一起验证。它不能证明某个 custom op 正确或更快，只说明验证入口应该在哪里。</small>
 
-## 对照源码与延伸阅读
+## 代码入口和下一步阅读
 
 - [PyTorch mymuladd 的schema、fake、autograd和测试教程](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/advanced_source/cpp_custom_ops.rst)
+
+## 把 custom op 当成一个版本化接口
+
+发布前保存 schema、支持的 dtype/layout/device、是否可变、fake 输出约定、autograd 行为和 fallback 策略。输入契约发生变化时，应增加版本或更新测试，而不是让 wrapper 静默接受旧调用。尤其要记录是否允许非连续输入、是否保持 stride、是否支持 CUDA Graph 和 `torch.compile`。
+
+## 最小 CI 矩阵
+
+至少覆盖：CPU 参考、CUDA 快路径、连续/非连续输入、空与尾部 shape、前向、`gradcheck`、`opcheck`、compile、autograd、异常输入和 fallback。性能测试另用固定设备和 warmup，不能把 CI 中一次最小时间当作性能结论。
+
+若只支持连续输入，测试应明确验证非连续输入被拒绝或安全复制；若支持广播，需单独检查广播维的梯度归约。把这些契约写进错误信息，维护者才能判断是调用不合法还是 kernel 回归。
+
+## 自测：哪一层出了问题
+
+如果 eager 前向通过、`opcheck`通过，但 `gradcheck`失败，优先检查反向公式；如果前向和梯度都通过、`torch.compile`失败，优先检查 fake 元数据、alias 或 mutation 声明；如果全部通过但完整层变慢，检查转换、同步和 fallback。这个分层比只看“算子能运行”更接近真实集成。
+
+**来源与改编说明**：schema、fake、autograd、`gradcheck` 和 `opcheck` 的职责边界参考 PyTorch 自定义算子教程。算子测试矩阵是本站整理的工程检查，不代表任何自定义实现已经通过验证。
+
+如果前向和注册契约已经稳定，下一步可以读[算子测试、回归与维护](testing-regression-and-maintenance.md)，把错误输入、版本升级和性能回归纳入同一套记录；需要改写 kernel 时，再接着看[Triton 编程模型与自动调优](triton-programming-model-and-autotuning.md)。先确认框架接口，再优化设备代码，排查路径会短很多。

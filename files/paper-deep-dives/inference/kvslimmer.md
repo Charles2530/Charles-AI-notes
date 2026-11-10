@@ -409,3 +409,5 @@ AsymKV 与 KVSlimmer 两条曲线总体接近，明显高于图中多数其他�
 对已有推理系统，较稳妥的复用顺序是先确认压缩后基数与 attention 归一化一致，再核对无梯度权重公式和数值回退，最后测量取得前向统计本身的开销。质量测试需要保留 Full Context、AsymKV 和目标方案，并分别记录任务分数、压缩次数、压缩耗时及峰值显存。这样才能区分“合并更准确”与“只是压缩触发得更少”。
 
 KVSlimmer 留下的可用认识是，缓存算法的成本不仅由最后保留多少位置决定，还由每次压缩怎样取得决策信息决定。前向敏感性代理让局部非对称合并更接近实用，但它仍依赖相邻位置、经验对齐和均匀的逐层压缩设置。若下一步要处理相隔很远的相关证据，或按层分配不同预算，就需要重新验证代理的条件与任务质量，而不能直接沿用当前曲线上的收益。
+
+KVslimmer 的压缩取舍可以先对照[上下文压缩、KV 驱逐与内存层级](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)，明确保留、合并和删除历史分别改变什么；系统侧再看[Serving attention 与 KV kernel](../../operators/serving-attention-and-kv-kernels.md)核对 page、scale、mask 和真实长度。最终结论应绑定质量桶、长上下文长度和 p95，而不是只报压缩率。

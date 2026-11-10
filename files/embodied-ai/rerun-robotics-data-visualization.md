@@ -237,3 +237,6 @@ for step, sample in enumerate(episode):
 - [RT-2 官方博客](https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/)。
 - [Open X-Embodiment 论文](https://arxiv.org/abs/2310.08864)。
 - [RoboTwin 项目](https://robotwin-platform.github.io/)。
+## 继续读
+
+可接着看[状态、动作与机器人数据集](state-action-robot-datasets.md)和[sim-to-real 与数据引擎](sim2real-and-data-engines.md)，把可视化指标接到数据回收流程。

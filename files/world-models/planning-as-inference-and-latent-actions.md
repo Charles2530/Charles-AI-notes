@@ -1,6 +1,6 @@
 # 规划即推理与潜在动作
 
-一维小车从位置 0 出发，目标位置为 2，动力学为 $x_{k+1}=x_k+a_k$。两步动作 `[1,1]` 到达目标，`[0,1]` 仍差一格。规划可以直接比较这两条轨迹，也可以让高回报轨迹获得更大的采样概率。这个视角把行为先验、收益和约束放到同一个计算中，便于理解 soft policy、轨迹采样和 latent action 搜索。
+一维小车从位置 0 出发，目标位置为 2，动力学为 $x_{k+1}=x_k+a_k$。两步动作 `[1,1]` 到达目标，`[0,1]` 仍差一格。规划可以直接比较这两条轨迹，也可以让高回报轨迹获得更大的采样概率。这个小例子先把“规划即推断”落到两条可执行轨迹上，再讨论 soft policy、轨迹采样和 latent action 搜索，避免公式脱离控制接口。
 
 ## 奖励怎样改变轨迹分布
 
@@ -71,3 +71,9 @@ u\sim p(u\mid h,g),\qquad a_{t:t+K-1}=D_\psi(u,h).
 一种层级系统由高层选择子目标或 latent skill，低层 decoder/controller 执行动作前缀，世界模型再根据新观察更新状态。上层 horizon 较长，底层刷新较快，二者通过可验证的完成条件连接。若“到达杯子附近”没有距离、姿态和接触定义，上层计划就无法判断技能何时结束。
 
 比较 latent 搜索与原始动作搜索时，应保持环境任务与真实交互预算一致，再分别记录候选数量、horizon、decoder 成本和闭环成功。低维搜索节省候选评估，但 decoder 的偏差可能限制可达到的动作集合。模型错误与不可执行 latent 的诊断分别见[世界模型评测](evaluation-and-failure-modes.md)和[动作接口](wm-wam-vam-and-action-conditioned-modeling.md)。
+
+## 模型和实验依据
+
+轨迹分布的目标函数和 KL 约束参考 [Reinforcement Learning and Control as Probabilistic Inference](https://arxiv.org/abs/1805.00909)，latent action 的视频路线参考 [Genie](https://arxiv.org/abs/2402.15391)，分层规划的表示方式对照 [A Path Towards Autonomous Machine Intelligence](https://openreview.net/forum?id=BZ5a1r-kVsf)。小车、二维 latent 和动作 decoder 是本站的构造例子，重点是区分“搜索空间变小”和“可执行动作集合没有被错误压缩”。
+
+回放时固定同一环境和交互预算，分别记录原始动作搜索与 latent 搜索的候选数、decoder 时间、违规动作比例和闭环成功率。只报告 latent 维度变小，无法说明规划真的更便宜或更安全。

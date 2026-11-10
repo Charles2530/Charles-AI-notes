@@ -1,6 +1,6 @@
 # 用 Triton 把一段向量分给多个 program
 
-Triton让程序员描述一个program负责的一块数据，编译器再把块内操作映射到GPU执行资源。先实现长度1000的向量加，便能看清program、地址、mask与launch之间的对应关系，然后再把同样思路扩展到矩阵乘。
+一个向量加 kernel 只差几行代码，为什么仍可能读错非连续 view、在尾块越界，或者 benchmark 看起来比 PyTorch 快却在真实调用里变慢？Triton 的 program、地址、mask、stride 和 launch 参数需要一起看，长度 1000 的向量加正好能把这些边界暴露出来。
 
 ## 一个 program 负责256个位置
 
@@ -59,6 +59,54 @@ $B_M,B_N$增大会增加复用，也增加输出累加器；$B_K$改变每次读
 
 首次JIT与调优耗时应和预热后的执行时间分别报告。线上请求若会触发新shape，这些冷启动成本就需要计入对应延迟。
 
+## stride 是 kernel 接口的一部分
+
+如果矩阵逻辑尺寸相同，下面两个输入仍然不是同一种布局：
+
+```python
+x = torch.randn((8, 16), device="cuda")
+x_view = x[:, ::2]       # shape [8, 8]，最后一维 stride 为 2
+x_contig = x_view.contiguous()
+```
+
+只接收 `X + offsets` 的 kernel 只能处理 `x_contig`。要支持 `x_view`，wrapper 必须把 `stride_m`、`stride_n` 传入，并在 kernel 中按 `row * stride_m + col * stride_n` 计算地址。这个版本覆盖更多输入，却可能减少合并访问；把所有 stride 情况塞进同一个 autotune key，也会扩大编译缓存。接口选择应由真实调用分布决定。
+
+对矩阵乘，最小的形状 contract 至少包括 `M,N,K`、A/B/C 的 stride、dtype、是否转置和累加精度。只把 `M,N,K` 放进 key，可能让连续布局的最优配置被非连续输入复用；只把每个 stride 原值放进去，又可能为大量等价布局重复编译。可以先把 stride 归一化为 `contiguous`、`row_major`、`col_major` 等类别，再按类别测量。
+
+## autotune 的候选要有理由
+
+一个矩阵乘的最小骨架可以写成：
+
+```python
+@triton.autotune(
+    configs=[
+        triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "BLOCK_K": 32}, num_warps=4, num_stages=3),
+        triton.Config({"BLOCK_M": 128, "BLOCK_N": 64, "BLOCK_K": 32}, num_warps=8, num_stages=4),
+    ],
+    key=["M", "N", "K"],
+)
+@triton.jit
+def matmul_kernel(a_ptr, b_ptr, c_ptr, M, N, K,
+                  stride_am, stride_ak, stride_bk, stride_bn,
+                  stride_cm, stride_cn,
+                  BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr):
+    ...
+```
+
+这里的候选只是示意，不能直接当成所有 GPU 和 shape 的最佳配置。`BLOCK_M`、`BLOCK_N` 影响输出复用和寄存器数量，`BLOCK_K` 影响 K 维循环和内存访问，`num_warps` 与 `num_stages` 又会改变占用率和流水。候选集合应来自一个小型 shape sweep，保留每项配置的正确性结果、寄存器数和稳态时间。
+
+如果 `M,N,K` 的范围很大，可以把 key 拆成 `"M_BUCKET"`、`"N_BUCKET"`、`"K_BUCKET"`，例如按是否小于 64、是否为 128 的倍数以及 K 的数量级分桶。分桶过粗会复用错误配置，分桶过细会增加 JIT 与调优冷启动。上线前应把实际请求 shape 的频率乘进候选选择，而不是只看单个最大矩阵。
+
+## 正确性、冷启动和稳态计时要分开
+
+一个可复查的 kernel benchmark 至少分三段：
+
+1. 用随机输入、边界值、非整除 shape 和非连续 view 与 PyTorch reference 比较，记录最大绝对误差、相对误差和是否发生 NaN。
+2. 单独测第一次调用，把 JIT、autotune、CUDA context 和可能的内存分配列为 cold-start 成本。
+3. 预热后同步计时，固定迭代次数，报告中位数、p95、输入 shape、dtype、GPU、driver 和 Triton commit。若 wrapper 发生 `contiguous()`，完整算子计时必须把拷贝包含进去。
+
+`torch.cuda.synchronize()` 应放在计时边界附近，否则 CPU 记录到的可能只是 kernel launch 时间。对短 kernel，可以用 CUDA events 减少主机计时误差；无论采用哪种方式，都要说明同步协议。没有运行 GPU benchmark 时，页面只能给出预期瓶颈和实验方法，不能填写一个看起来精确的加速倍数。
+
 ![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="760" }
 
 <small>图源：[Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)，Figure 1。原图比较 Triton、cuBLAS、AutoTVM、Tensor Comprehensions 和 PlaidML 在矩阵乘 roofline 图上的位置；这里的重点是 Triton 的价值不是替代所有库，而是在高层框架和手写 CUDA 之间提供 tile 级表达能力。</small>
@@ -67,3 +115,19 @@ $B_M,B_N$增大会增加复用，也增加输出累加器；$B_K$改变每次读
 
 - [官方向量加教程](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/01-vector-add.py)
 - [官方矩阵乘的地址、tile和autotune](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/03-matrix-multiplication.py)
+
+## 本页的练习阶梯
+
+先把向量长度改成 1、255、256、257，检查尾块 mask；再传入非连续 view，观察 wrapper 为什么拒绝它；最后给矩阵乘加入一个 bias 和激活，比较分开写回与 epilogue fusion 的数值和计时。每次只改一个条件，并分别记录 JIT、autotune 和稳态执行时间。
+
+Triton 的高层表达减少了手写线程索引的负担，但并不自动保证地址、边界、stride、数值精度和性能正确。对每个 kernel，先写 reference 实现和 `torch.testing.assert_close`，再运行 benchmark。
+
+## 来源与改编说明
+
+- **主教程**：[Triton 官方矩阵乘教程](https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html)。
+- **编程模型**：[Triton 官方向量加教程](https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html)，用于核对 program ID、mask、load/store 和 wrapper 的边界。
+- **调优边界**：[Triton `autotune` 文档](https://triton-lang.org/main/python-api/generated/triton.autotune.html)，用于核对候选配置、key 和调优缓存行为。
+- **代码版本**：仓库链接固定到 commit，提交新版本时应重新检查 API 和候选配置。
+- **自测**：说明为什么把 `contiguous()` 放到 wrapper 里会改变完整算子成本，以及 autotune key 漏掉 stride 可能造成什么错误。
+
+继续阅读：[算子测试、回归与维护](testing-regression-and-maintenance.md)处理 reference、误差阈值和版本回归；[Roofline 与 benchmark 案例](roofline-benchmarking-and-case-studies.md)把 kernel 时间放回端到端算术强度和实际 HBM 流量。

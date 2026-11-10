@@ -253,3 +253,7 @@ Pro从High到Max，HLE34.5→37.7、LiveCodeBench89.8→93.5、TerminalBench63.3
 搜索则显示工具预算的收益。869条内部问答比较中，agentic search胜RAG为61.7%，RAG胜18.3%，平20%；平均prefill tokens13649对10453，输出1526对1308，agentic search还平均调用16.2次工具，多数并行。这里增加的成本包含工具与环境，不应只比较输出token。[↗](https://arxiv.org/pdf/2606.19348v1#page=55)
 
 V4提供的采用路线是明确的：长历史由压缩与局部状态共同管理，领域能力通过学生自身轨迹上的蒸馏融合，实际部署数值进入后训练，工具接口保留正确的会话状态。对长任务系统而言，最值得复用的是这些信息与执行接口；对低时延应用，Flash、Non-think或High可能比一律Max更合适，选择应依据任务曲线和实际工具预算。
+
+## 继续阅读
+
+百万上下文和 FP4 后训练要分别放到[量化验收](../../quantization/evaluation-and-deployment-checklist.md)与[上下文压缩和 KV](../../inference/context-compression-kv-eviction-and-memory-hierarchies.md)检查；训练系统的并行边界见[训练栈对照](../../training/megatron-lm-deepspeed-and-open-training-stacks.md)。

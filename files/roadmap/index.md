@@ -50,4 +50,8 @@ flowchart TD
 
 [公式、代码与实验怎样对照](research-and-engineering-study-plan.md)用一个实际梯度推导说明最小实现的方法。[技术对照表](comparison-tables.md)按输入、目标、状态与成本比较方法。[技术决策](common-decision-patterns-and-tradeoffs.md)示范怎样用失败记录排除不相干的优化方向。
 
+持续扩写网站时，先阅读[外部教程的来源、改编与证据边界](source-and-adaptation-guidelines-1110-0106.md)，再决定某篇材料适合独立讲解、许可范围内改编，还是只做导读链接。
+
+成熟教程的主题入口和当前核验状态见[成熟教程来源地图](mature-tutorial-source-map-1110-0711.md)。它用于安排查证顺序，不代表本站会逐段翻译这些来源。
+
 术语记不清时可查[术语表](../glossary/index.md)，但术语定义不替代推导。能够把一个小输入算出结果，再解释换了条件会怎样，比记住一串方法缩写更接近实际理解。

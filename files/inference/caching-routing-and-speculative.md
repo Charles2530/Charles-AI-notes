@@ -50,3 +50,67 @@ Draft先给出 `[a,b,c]`，目标模型核验各位置条件概率。若a接受�
 ## 对照源码与延伸阅读
 
 - [前缀状态、投机输出与请求生命周期](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)
+
+## Prefix cache 的 key 是一份协议
+
+一个可复用的前缀至少由以下身份共同决定：
+
+```text
+model_commit + tokenizer + adapter + modality_encoder
++ token_ids + position/mask rule + cache dtype/layout
+```
+
+任何一项变化都可能使已有 KV 失效。跨租户共享时还要把权限、数据敏感性和租约加入 key；只按文本 hash 做全局缓存可能把不应共享的状态暴露给另一个请求。
+
+缓存命中应同时记录：
+
+- 请求命中与未命中的数量。
+- 命中的 prefix token 数和总输入 token 数。
+- 节省的 prefill 时间与新增的查找/管理时间。
+- 缓存占用、淘汰原因、重算次数和质量/一致性检查。
+
+“命中率 80%”如果每次只命中 10 个 token，意义不同于命中率 40% 但每次命中 4000 个 token。
+
+## 淘汰策略改变的是成本分布
+
+LRU、按 token 数、按租户配额或按预估复用价值淘汰，会产生不同的长尾。长前缀占用多但可能复用高，短前缀占用少但可能频繁命中。容量实验应扫描 cache budget，并同时报告命中 token、prefill p95、decode p95 和 eviction 次数。
+
+活跃请求的 KV 与已结束请求的前缀缓存不能使用同一释放逻辑。一个共享页有多个引用时，任何单请求结束都不应直接回收它；取消和超时还需要清理尚未提交的临时状态。
+
+## 投机解码要验证“提交”而非“预测”
+
+设 draft 给出 (m) 个候选，target 逐位置核验。可用的系统指标包括：
+
+\[
+r_{\text{accept}}=\frac{\text{被提交的 draft token}}{\text{draft token 总数}},
+\qquad
+g=\frac{\text{每轮平均提交 token}}{\text{target 调用轮数}}.
+\]
+
+高接受率仍可能没有收益：draft 生成成本、tree 组织、临时 KV、核验 kernel 或调度开销可能抵消 target 调用减少。正确性测试要逐 token 对比不使用投机的 target 输出，在相同随机种子、采样规则和停止条件下确认提交序列一致或满足明确概率规则。
+
+## 路由、缓存和投机不能直接相乘
+
+一个请求先命中小模型 prefix cache，再升级大模型时，模型身份变化可能迫使重新 prefill；投机树又会增加临时 KV。应把端到端时间拆成：
+
+```text
+cache lookup + queue + draft + target verify
++ rollback/commit + remaining decode + retry/upgrade
+```
+
+按输入长度、输出长度、命中 token 数、升级率和接受率分桶，才能知道优化省下的是哪一段。
+
+## 来源与改编说明
+
+- [Hugging Face KV cache 文档](https://huggingface.co/docs/transformers/en/kv_cache)用于核对缓存对象、增长和实现接口。
+- [PagedAttention](https://arxiv.org/abs/2309.06180)用于理解逻辑 block 与物理 block 的映射；它不等于 prefix cache 或 speculative decoding 的全部机制。
+- [SpecInfer](https://arxiv.org/abs/2305.09781)与[EAGLE-2](https://arxiv.org/abs/2406.16858)用于对照 tree verification 和动态 draft tree；各自的接受规则和实验条件不能混用。
+
+## 自测
+
+1. 为什么同一段可见文本仍可能因为 adapter、tokenizer 或位置规则不同而不能复用 KV？
+2. 如何区别“请求命中率”和“命中 token 比例”？
+3. draft 接受率很高但 p95 变差时，应检查哪些开销？
+4. 设计一个逐 token 正确性回放，验证投机解码没有提交被拒绝的候选。
+
+如果要把这些局部规则放回请求生命周期，可以继续看[推理服务系统](serving-systems.md)的排队、prefill、decode 与取消；草稿模型的训练接口见[EAGLE-3](../paper-deep-dives/inference/eagle-3.md)。

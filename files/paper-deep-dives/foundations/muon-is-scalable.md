@@ -376,3 +376,7 @@ Muon 的最大 logit 在早期阶段升到 100 以上，随后逐渐回落，Ada
 需要同时记录的量也来自本文的具体发现：更新 RMS 能发现矩阵形状问题，权重与输出 RMS 能暴露长期尺度增长，attention logits 能揭示 loss 曲线看不见的极端值。SVD entropy 可以帮助理解变化，但不能替代任务分数。对仅能微调公开 checkpoint 的场景，Table 7 提供了更直接的判断依据，不能用预训练 scaling-law 曲线承诺微调收益。
 
 报告真正推进的是把矩阵几何、更新尺度、长期稳定性和分布式语义连成可运行的训练方案。约 52% FLOPs 是这套方案在特定 dense 模型、数据和预算范围中的证据；Moonlight 则证明它可以支撑一次 5.7T-token 的 MoE 训练，并把下一步问题收窄到跨模型、跨阶段的迁移是否仍然成立。
+
+## 继续阅读
+
+Muon 的更新规则应放回[优化器与学习率](../../prerequisite-math/optimization-and-gradient-methods.md)比较；大规模训练中的 optimizer state、通信和 checkpoint 见[分布式训练](../../training/distributed-training-and-checkpointing.md)。

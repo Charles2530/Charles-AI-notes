@@ -4,6 +4,17 @@
 
 扩散训练确实常用平方误差。为什么这种容易取平均的损失，最后能生成清楚且多样的样本？需要沿着一个带噪观测把问题算清。以下数值全部是教学构造，数据分布的符号使用 \(X\)，一次采到的值使用 \(x\)。
 
+## 本页的学习路线
+
+先只回答一个问题：模型如何从带噪状态得到“下一步该往哪里走”的统计信息。为此，本文固定一个只有 \(-1\) 和 \(+1\) 的数据分布，依次经过四个台阶：
+
+1. 观察平方误差为什么得到条件均值，以及它为什么不能直接当作最终样本。
+2. 让噪声水平变化，理解逐步反向转移怎样保留多种可能。
+3. 对照一次训练更新和多步生成，区分训练时的已知标签与采样时的模型反馈。
+4. 最后才比较噪声预测、数据预测、score、速度和不同 sampler 的接口。
+
+读者可以把“条件均值”和“反向采样”当作本页的两个检查点。若只能复述去噪网络，却不能解释为什么 0.4173 不是合法数据点，就先不要跳到 U-Net、CFG 或视频扩散。
+
 ## 从两种合法数据构造一个监督任务
 
 先自己规定加噪方式
@@ -106,3 +117,11 @@ loss = mean((prediction - noise) ** 2)
 - [DDPM 原论文](https://arxiv.org/abs/2006.11239)给出离散高斯链、变分训练与简化噪声目标。
 - [Hugging Face 从头实现扩散的教学 notebook](https://github.com/huggingface/diffusion-models-class/blob/72bf3dd739da641075dcff0ee54ce28e7a38a8ab/unit1/02_diffusion_models_from_scratch.ipynb)从一次重建的模糊现象逐步引出迭代生成。其最初的均匀噪声混合是教学模型，不能直接当成 DDPM 公式。
 - [本站最小 DDPM 实现](minimal-ddpm-implementation.md)说明一个 batch 的系数、网络输出和采样边界如何对应。
+
+## 来源与改编说明
+
+- **主线参考**：[Annotated Diffusion](https://huggingface.co/blog/annotated-diffusion)，Hugging Face；本文借鉴其“数学—网络—训练—采样”的顺序，但使用本站的 ±1 监督例子，没有搬运原文段落或图。
+- **理论交叉参考**：[What are Diffusion Models?](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)，Lilian Weng；作者 FAQ 要求翻译前事先邮件联系，因此这里只作为阅读和核对来源。
+- **边界**：本页只说明条件均值、逐步反向转移和输出参数化；score/SDE、flow matching、蒸馏和视频模型分别在后续页建立，不把受限条件下的等价关系扩大为普遍结论。
+
+**自测**：已知模型输出的是噪声预测 \\(\\hat\\epsilon\\)，请写出把它转换为 \\(\\hat x_0\\) 所需的信号系数和噪声系数；若没有给出时间步的日程，不能直接套用某个 sampler 的更新式。

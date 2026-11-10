@@ -4,6 +4,19 @@
 
 本文把这个过程算一遍。视频 VAE 负责什么、latent 怎样变成 token，分别见[视频压缩与重建](video-vae-1029-1246.md)和[Video DiT](video-dit-1029-1246.md)。这里先把 latent 当作一个浮点数组，所有公式都可以逐元素计算；数组里面不同位置之间的关系由网络学习。
 
+```mermaid
+flowchart LR
+    Z0[干净视频 latent z_0] --> MIX[按 tau 与噪声 epsilon 混合]
+    E[高斯噪声 epsilon] --> MIX
+    MIX --> ZT[带噪 latent z_tau]
+    ZT --> NET[Video DiT v_theta]
+    NET --> LOSS[与目标速度 epsilon - z_0 比较]
+    N[采样时从 z_1 开始] --> SOLVE[沿 tau: 1 -> 0 积分]
+    SOLVE --> DEC[VAE 解码视频]
+```
+
+训练路径知道 `z_0` 和 `epsilon`，所以能直接构造监督；采样路径只保留当前 latent 和模型预测，必须把每次更新后的结果继续交回网络。把两条路径混写，是视频 Flow Matching 代码最常见的接口错误之一。
+
 ## 先把视频时间与生成时间分开
 
 设真实视频编码后的 latent 为 \(z_0\in\mathbb R^{B\times C_z\times F_z\times H_z\times W_z}\)。\(F_z\) 是压缩后的帧数，下标 0 表示干净状态。使用 \(\tau\in[0,1]\) 表示噪声时间，约定 \(\tau=0\) 是数据、\(\tau=1\) 是纯噪声。

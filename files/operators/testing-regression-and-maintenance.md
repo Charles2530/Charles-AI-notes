@@ -1,6 +1,6 @@
 # 用边界输入检验一个kernel是否真的正确
 
-一个向量加kernel若忘了尾部mask，长度1024可能全部通过，长度1000却会越界。测试的价值来自输入能区分正确实现和常见错误，数量本身不能代替这种区分。
+一个向量加 kernel 若忘了尾部 mask，长度 1024 可能全部通过，长度 1000 却越界。测试的价值来自输入能区分正确实现和常见错误，数量本身不能代替这种区分。每个边界样本都应该能回答“它正在抓哪一种 bug”。
 
 ## 从具体缺陷反推样本
 
@@ -49,3 +49,27 @@ PyTorch官方教程明确区分 `gradcheck` 与 `opcheck`。前者用于梯度�
 
 - [向量加参考对齐与基准](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/01-vector-add.py)
 - [opcheck与梯度验证的明确边界](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/advanced_source/cpp_custom_ops.rst)
+
+## 把测试分成发布闸门
+
+一个新 kernel 进入主分支前，可以按以下顺序执行：
+
+1. **参考一致性**：随机与构造输入对齐高精度实现，覆盖边界 shape、dtype、layout 和 mask。
+2. **梯度与注册**：对声明支持的输入运行 `gradcheck`、`opcheck`，确认 autograd、设备与编译接口。
+3. **并发稳定性**：在多 stream、重复分配、不同填充值和目标 world size 下运行短回放。
+4. **性能门槛**：固定 warmup、同步和设备，比较 p50/p95；把转换、JIT、fallback 和端到端 wrapper 计入。
+5. **回退演练**：主动触发不支持的 shape、缓存失效和运行时异常，确认通用路径可用且有日志。
+
+每一层失败都应保留最小复现输入和软件/硬件环境。性能闸门不应覆盖正确性失败；一个“更快但错误”的候选不能因为平均端到端指标改善而合入。
+
+## 用生成样本补足手工边界
+
+边界列表之外，可以对维度、stride、mask 和数值范围做受约束随机生成，再将失败样本缩减到最小 shape。缩减后的样本进入固定回归集，避免同一个 bug 在下一次重构中重新出现。生成器也要遵守接口约束，例如合法的 head size、对齐要求和不允许的负 stride，不能把无效输入误报成 kernel 错误。
+
+对于非确定性归约，保存输入、随机种子、允许误差和确定性开关。这样后续维护者能分辨“数值顺序导致的小差异”和“地址、mask 或同步错误”。
+
+维护一组最小回归样本，比维护一张只写通过率的表更有用。每个样本保留触发条件、最小 shape、期望行为和首次发现的版本；修复以后仍让它跑过前向、反向和性能闸门。这样下一次改 layout 或 dispatch 时，失败会带着上下文回来。
+
+## 来源与自测
+
+边界 shape、`gradcheck`、`opcheck` 和 NVTX 时间线参考 Triton、PyTorch 与 NVIDIA 文档。自测时为一个尾块、非连续 stride 和重复索引各保留最小复现样本，并说明它们分别防止哪种错误。若要把失败样本接到性能定位，可继续看[profiling、调试与数值稳定性](profiling-debugging-and-numerical-stability.md)；需要决定是否值得做特化，再看[kernel 成本模型](kernel-cost-models-and-selection-heuristics.md)。

@@ -1,6 +1,6 @@
 # 序列、位置编码与注意力掩码
 
-一段 `[BOS,A,B,EOS]` 同时包含训练输入和标签，二者必须错开一位。本文沿这条序列看索引、可见性、位置与缓存，避免把“第t个输入”和“第t个预测目标”混为同一个对象。
+为什么输入 `[BOS,A,B]` 的第三个位置预测的是 `EOS`，而不是再次预测 `B`？一段 `[BOS,A,B,EOS]` 同时包含输入和标签，错位、可见性、位置与缓存只要有一处偏一位，模型仍可能运行，却会学到错误条件。
 
 Attention的行对应query，列对应key。先明确这两个轴，三角mask、位置旋转和KV追加的含义才一致。
 
@@ -151,3 +151,5 @@ KV cache 的数学意义是“历史序列已经被投影成可被未来 query �
 
 
 - [LLMs from scratch 的切片与因果注意力](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，对照input_chunk、target_chunk与mask轴。
+
+继续阅读：[Transformer、Tokenization 与注意力](../foundations/transformer-attention-and-tokenization.md)把两位置手算扩展到多头和 cross-attention；[缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)把位置语义放回批处理和 KV 生命周期。

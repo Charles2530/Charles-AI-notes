@@ -1,6 +1,6 @@
 # 归一化、残差与激活
 
-一个 Transformer 层收到向量以后，通常先调整它的数值尺度，再通过注意力或前馈网络产生改变量，最后加回原向量。这几个步骤常挤在一行代码中，却各自改变了不同的数学性质。
+一个 Transformer 层收到向量以后，通常先调整它的数值尺度，再通过注意力或前馈网络产生改变量，最后加回原向量。这几个步骤常挤在一行代码中，却各自改变了不同的数学性质。实际排查数值问题时，先把这几个动作拆开，往往比直接换激活函数更快找到原因。
 
 沿着一个输入 \(h=(1,3)\) 看一次残差块。我们先计算它进入分支前的归一化结果，再看残差怎样影响梯度，最后展开分支内部的非线性。例子省略 dropout，方便逐项复算。
 
@@ -112,3 +112,11 @@ print(round(g*s*v, 6), round(v*(s+g*s*(1-s)), 6))
 ## 源码阅读
 
 - [LLMs from scratch 的 LayerNorm 与 TransformerBlock](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，可逐行对应特征轴方差、两次残差和前馈网络；这份实现采用 GELU，不是 SwiGLU。
+
+## 来源和复算入口
+
+LayerNorm 的定义参考原论文 [Layer Normalization](https://arxiv.org/abs/1607.06450)，RMSNorm 的取舍参考 [Root Mean Square Layer Normalization](https://arxiv.org/abs/1910.07467)，代码排列对照 [LLMs from scratch 的 LayerNorm 与 TransformerBlock](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)。向量 `(1,3)`、门控激活数值和残差舍入是本站的手算例子；真实模型还要核对 epsilon、归一化轴、参数 dtype 和 kernel 累加精度。
+
+复算时把同一向量分别送入 LayerNorm、RMSNorm 和一个残差分支，记录均值、均方根、输出范数与梯度。再把输入尺度放大 100 倍，观察两种归一化如何改变结果。这个对照能把“归一化让训练稳定”拆成具体可测的量。
+
+读完后可以接着看[数值、显存与运行时](numerics-memory-and-runtime-basics.md)，理解低精度下的累加与舍入，再回到[Transformer 与注意力](transformer-attention-and-tokenization.md)对照归一化、注意力和前馈网络在一个 block 里的先后关系。

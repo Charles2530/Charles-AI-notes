@@ -56,3 +56,49 @@ KV量化近似每个数，仍保留对应位置；token选择或窗口截断改�
 ## 对照源码与延伸阅读
 
 - [活跃请求与缓存分配的执行背景](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)
+
+## 先定义“保留”的任务
+
+历史压缩可以服务三种不同目标：
+
+| 目标 | 允许的变化 | 主要指标 |
+| --- | --- | --- |
+| 只减少显存 | 数值近似、分层迁移 | bytes、带宽、恢复时间 |
+| 保持事实可检索 | 可重算但不能丢关键 token | 事实命中、引用位置、重算成本 |
+| 保持生成行为 | 近似输出或概率分布 | logits/输出差异、任务成功率 |
+
+如果目标没写清楚，“压缩率提高”没有可解释含义。删除 token、摘要、KV 量化和 CPU offload 对这三类目标的影响不同。
+
+## 近似 eviction 的实验应分离两个错误
+
+把历史分成保留窗口、重要 token 和可丢弃 token 后，至少测：
+
+1. **信息错误**：事实、引用、位置或对话关系是否丢失。
+2. **系统成本**：显存、传输、重算、排队和 TPOT 是否变化。
+
+长上下文平均 benchmark 可能看不出一个关键事实被删掉。建议构造事实位置、相似干扰项、跨段引用和不同距离的测试桶，逐桶报告准确率与延迟。
+
+## 分层存储的调度协议
+
+将 KV 从 GPU 搬到 CPU 或其他节点时，调度器需要知道：
+
+```text
+page id -> logical position -> tier -> bytes/scale
+last use -> next predicted use -> transfer state
+```
+
+预取太早会占用带宽和容量，太晚会让 decode 等待。应记录 page hit、page miss、transfer wait、重算和请求取消。单次传输带宽不能代表多请求共享链路下的实际性能。
+
+## 来源与改编说明
+
+- [Hugging Face KV cache 文档](https://huggingface.co/docs/transformers/en/kv_cache)用于核对 cache 对象与增长。
+- [StreamingLLM](https://arxiv.org/abs/2309.17453)用于理解 attention sink 与有限窗口的长序列行为；论文条件不能外推到所有任务。
+- [PagedAttention](https://arxiv.org/abs/2309.06180)用于区分分页管理和真正删除历史。
+
+## 自测
+
+1. 为什么释放闲置 prefix cache 与删除活跃请求历史不是同一种 eviction？
+2. 设计一个能分开信息错误和系统成本的长上下文评测。
+3. CPU offload 后 TPOT 变差，应该检查 page miss、带宽、预取时机还是模型计算？
+
+想继续看缓存如何进入调度，可以接[缓存、路由与投机解码](caching-routing-and-speculative.md)；若关心单请求时间怎样变成线上指标，再看[成本建模与 SLO](cost-modeling-and-slo-design.md)。

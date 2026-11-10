@@ -2,6 +2,12 @@
 
 [REINFORCE](policy-gradient-and-reinforce.md)已经让六格地图上的策略学会少撞边界。它仍有三个实际困难：完整回合结束前拿不到完整回报，同一个动作的回报会受后续随机行动影响，而花成本采到的一批轨迹通常只做一次策略更新。Actor-Critic、GAE 和 PPO 分别回应这些问题，下面沿用同一环境逐步改造训练循环。
 
+## 本页的依赖顺序
+
+先用上一页的 log-probability 和 return，理解 critic 为什么提供 baseline；再把 TD residual 串成 GAE；最后才引入 old/new policy ratio 和 clipping。每一步都检查 rollout 的终止边界与 advantage 的符号，不能直接从 PPO 伪代码跳到 RLHF 或 GRPO。
+
+本文的最小证据是：同一张地图上 actor 与 critic 参数确实更新，ratio 在旧策略附近受到约束，独立回放的回报没有被训练 loss 代替。运行 smoke 实验只能验证数据流，不能据此比较算法优劣。
+
 ## 先用 critic 估计尚未发生的未来
 
 状态价值 $V_\phi(s)$ 估计从当前状态继续执行策略的平均回报。上一页用它作 baseline，现在还让它补齐一步之后的未来。对转移 $(s_t,a_t,r_t,s_{t+1})$，TD residual 为

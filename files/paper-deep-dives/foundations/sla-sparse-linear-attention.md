@@ -444,3 +444,7 @@ SLA 提供的可复用设计，是把 attention 的近似预算分配给不同�
 SLA2 进一步提供了三处可独立思考的接口。第一，两个归一化分支相加前，先处理它们的概率质量和尺度；第二，用输出误差训练路由，而不只按权重大小猜测；第三，让端到端训练见到部署时的硬路由与低比特误差。它们把“少算哪些关系”“留下的关系怎么计算”“算完以后怎么合并”连成了一条完整路径。
 
 采用时最有价值的顺序是先测瓶颈，再验证近似。若 attention 仍占大头，可以在目标 Q/K/V 上测路由和输出误差，经过适应训练后联合检查内容、运动和语义；若 attention 已被压到个位数秒，MLP、投影、VAE 或数据搬运可能更值得投入。两篇论文的实验都提醒同一件事：高稀疏率只有在质量、算子成本和完整链路耗时同时成立时，才构成有用的加速。
+
+## 继续阅读
+
+稀疏线性 attention 的复杂度要与[Transformer 与注意力](../../foundations/transformer-attention-and-tokenization.md)的 dense 基线对照；长上下文的 kernel 和内存边界见[FlashAttention 演化](../../operators/long-context-and-flashattention-evolution.md)。

@@ -182,3 +182,9 @@ z_{\tau'}=z_\tau+(\tau'-\tau)v_\theta(z_\tau,\tau,c),
 - [Video Diffusion Models](https://arxiv.org/abs/2204.03458)讨论视频扩散中的时空建模与图像、视频联合训练。
 - [Flow Matching for Generative Modeling](https://arxiv.org/abs/2210.02747)提供速度场学习的理论背景。
 - [VBench](https://arxiv.org/abs/2311.17982)把视频质量与内容一致性分成多个评测维度。
+
+## 视频生成的阅读检查点
+
+先确认视频张量的帧数、帧率、布局和 latent shape，再区分压缩器、时空网络、条件接口和 sampler。训练时随机抽一个噪声时间并行构造监督，生成时把多次预测串成轨迹；这两条执行链不能混为“训练一次前向、生成一次前向”。
+
+**来源与改编说明**：[Wan2.1 技术报告](https://arxiv.org/abs/2503.20314)和[官方实现](https://github.com/Wan-Video/Wan2.1)提供配置与接口依据，[VBench](https://arxiv.org/abs/2311.17982)提供视频评测维度。本文的 shape 与时间数字是教学计算，不代表所有视频模型的固定结构。自测时固定初始噪声，只改变首帧条件，分别记录主体保持、运动变化和后续偏离。

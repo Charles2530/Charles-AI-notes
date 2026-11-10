@@ -135,3 +135,12 @@ benchmark 是有限样本和有限任务集合。读论文分数时，要问：
 4. 是否报告了不同任务桶、难度、长尾和失败案例。
 
 相关性、因果性和分布偏移在这里会合：一个模型可能在 benchmark 上相关性学得很好，但在反事实动作、OOD 场景或工具环境变化下失败。
+## 继续读
+
+继续看[分布偏移与泛化](../foundations/generalization-regularization-and-distribution-shift.md)和[评测与消融方法](../training/evaluation-and-ablation-methodology.md)。
+
+## 外部资料
+
+- [Causal Inference: What If](https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/) 用潜在结果和干预语言说明混杂、反事实与识别假设。
+- [DoWhy 文档](https://www.pywhy.org/dowhy/latest/) 将因果图、识别、估计和反驳拆成可执行步骤，适合把“算出一个差异”与“支持因果解释”分开。
+- [Dataset Shift 课程讲义](https://www.cs.cmu.edu/~epxing/Class/10708-19/notes/lecture-5.pdf) 用 covariate、label 和 concept shift 组织分布变化；本文的机器人例子按任务接口重新构造。

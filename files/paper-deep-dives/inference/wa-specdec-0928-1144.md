@@ -328,3 +328,7 @@ WA-SpecDec 给离散动作 VLA 提供了一个清楚的改造接口：保留原�
 代价包括新增当前帧 VAE/WAB 计算、目标适配训练，以及重新蒸馏 draft。论文报告 batch size 32、1,000 个 warm-up steps，训练、蒸馏和评估合计约 192 GPU hours，即四张 RTX A6000 运行约 48 小时；这笔预算包含多项工作，不能解释成单个 draft 的训练成本。已报告 speedup 包含 draft proposal、target verification、WAB 与 KV cache 更新，因而比只测某个模块的吞吐更接近实际推理收益。不过缺少分模块毫秒数、WAB 参数规模和真实机器人执行结果，使这些加速倍数不能直接换算成某款机器人可达到的控制频率。[↗](https://arxiv.org/pdf/2608.08725v1#page=14)
 
 采用时最有信息量的基线正是论文中的三层比较：原 target 的自回归表现、加入 WAB 后的新 target 自回归表现，以及新 target 配投机后的表现。它们分别回答表征有没有改善策略、表征花了多少时间、近似解码又付出了多少成功率。再按任务类型扫描容差，而不是只选平均 accepted length 最大的点，才能把这项设计转成明确的速度与可靠性选择。
+
+## 继续阅读
+
+共享物理表征的 speculative decoding 适合与[缓存、路由与投机解码](../../inference/caching-routing-and-speculative.md)的标准路径对照；若关心具身输入接口，再看[VLA 动作接口](../../vla/action-chunking-hierarchical-policies-and-latent-skills.md)。

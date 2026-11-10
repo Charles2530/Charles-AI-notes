@@ -1,8 +1,25 @@
 # 世界模型基础，怎样从观察预测动作后果
 
-机械臂看见杯子位于桌面左侧，准备向右轻推。仅有这一张图，模型不知道杯子正在滑动还是已经静止，也不知道桌面的摩擦。如果它直接记住“这类画面后面常出现杯子右移”，遇到不推、反向推或换材料时就可能出错。世界模型要处理的，是哪些信息影响未来，以及动作如何改变这些信息。
+只看一帧画面，机械臂不知道杯子是不是还在滑。两次画面都显示杯子位于同一个位置，一次速度是 0.2 米每秒，另一次速度是零。接下来施加同样的推力，结果会不同。世界模型要保留下来的，是这种会改变下一步动作的信息。
 
 本页用同一个杯子场景连接状态、观察、概率、训练和决策。它不要求模型必须生成视频；输出形式取决于后续要回答的问题。
+
+```mermaid
+flowchart LR
+    O[观察与历史<br/>o_≤t, a_<t] --> Z[潜状态 z_t<br/>保留速度、接触等信息]
+    A[动作 a_t] --> F[动作条件转移]
+    Z --> F
+    F --> ZN[预测未来 z_t+1]
+    ZN --> Y[预测观察、奖励和风险]
+    Y --> Q[规划或控制]
+    Q --> A
+    REAL[真实新观察] --> REFRESH[posterior / 状态刷新]
+    REFRESH --> Z
+    Z -. teacher-forced .-> TF[训练时可读取真实后继]
+    ZN -. open-loop .-> OL[展开时只用模型自己的预测]
+```
+
+这张图先把两个常被混在一起的过程分开。训练时可以用真实后继观察校正状态，开放循环评测时不能每一步把真实状态塞回模型；闭环控制则会在执行动作后重新获得真实观察，再规划下一步。
 
 ## 当前画面为什么不等于完整状态
 
@@ -73,6 +90,38 @@ print([round(e, 3) for e in errors])
 
 这段程序只演示确定性累积误差，输出 `[0.01, 0.02, 0.03, 0.04, 0.05]`。真实评测还要固定动作序列、说明中途是否读取真实观察，并分别查看状态与事件。RSSM 用 posterior 读取新观察、用 prior 展开未知未来，明确管理这条信息边界，见[RSSM 与 Dreamer](rssm-dreamer-and-planning.md)。
 
+## 三种评测回答三个不同问题
+
+世界模型常被一张漂亮的 rollout 图概括，但真正需要先分开三种评测。它们的输入、时间范围和结论都不同。
+
+| 评测 | 输入 | 主要测量 | 能支持的判断 |
+| --- | --- | --- | --- |
+| teacher-forced 一步预测 | 真实的 (z_t) 或观察 | 下一状态、奖励或观测误差 | 模型能否在训练分布附近完成局部转移 |
+| open-loop rollout | 初始真实状态，之后只用模型自己的预测 | 随 horizon 变化的状态误差、事件准确率 | 误差怎样沿想象轨迹积累 |
+| closed-loop 控制 | 模型规划动作，环境持续返回真实观察 | 成功率、碰撞、恢复和交互成本 | 预测是否真的改善决策 |
+
+同一个模型可能在第一项很好、第二项很快漂移，第三项仍然可用，因为控制器会频繁用新观察纠正；也可能画面相似度不错，风险事件判断却错误，导致第三项失败。报告时至少给出 horizon、是否刷新观察、动作序列来源和任务重置规则，不能把一项的结果写成另外两项的证据。
+
+一个最小的 rollout 评测可以固定同一批初始状态和动作序列，记录每个 horizon 的位置误差与事件标签：
+
+```python
+def evaluate_rollout(model, initial_state, actions, true_states, event_fn):
+    predicted = initial_state
+    rows = []
+    for horizon, action in enumerate(actions, start=1):
+        predicted = model.predict_next(predicted, action)
+        true_state = true_states[horizon]
+        rows.append({
+            'horizon': horizon,
+            'state_error': abs(predicted.x - true_state.x),
+            'predicted_event': event_fn(predicted),
+            'true_event': event_fn(true_state),
+        })
+    return rows
+```
+
+这段接口故意不指定模型框架。它要求 `true_states` 只用于评估，不回灌给 `model`；如果每一步都把真实状态重新喂回去，测到的是 teacher-forced 条件。事件准确率还应按碰撞、成功、越界等类别分桶，因为一个总体平均可能掩盖最危险的一类错误。
+
 ## 预测怎样影响当前动作
 
 回到桌边杯子，系统可以比较不推、继续推和制动，在各自未来中计算安全边界与任务代价，然后只执行第一小段，再根据真实新观察规划。这个 receding horizon 给了纠错机会，但预测偏差仍可能让它反复选错。
@@ -80,3 +129,9 @@ print([round(e, 3) for e in errors])
 另一种用法是在模型里训练 actor，部署时不再每步搜索；也可以把生成未来交给人做失败分析。三种用途需要不同输出与证据。模型若错误地认为杯子会悬浮在桌边，更充分的搜索可能更稳定地利用这个漏洞。
 
 因此入门之后最有用的检查，是沿一条任务追问输入的信息是否足够、动作语义是否正确、预测误差如何展开，以及使用者是否真正据此改善决策。后续可按问题阅读[表示预测](masked-jepa-and-latent-prediction.md)、[风险规划](uncertainty-and-risk-aware-planning.md)或[训练样本设计](action-conditioned-video-world-model-training-case.md)。原始方法入口是 [PlaNet](https://arxiv.org/abs/1811.04551) 与 [Dreamer](https://arxiv.org/abs/1912.01603)。
+
+## 来源与改编说明
+
+- **概念参考**：[World Models](https://worldmodels.github.io/) 提供 VAE、记忆动力学和 controller 的早期连贯示例，页面标注 CC BY 4.0；第三方图例需单独核对。
+- **方法入口**：[PlaNet](https://arxiv.org/abs/1811.04551) 与 [Dreamer](https://arxiv.org/abs/1912.01603)分别连接潜变量规划和想象轨迹中的策略学习。本文只讲状态、belief、动作条件和误差展开，不把生成视频质量等同于规划能力。
+- **自测**：为“向右推杯子”写出观测、belief、动作和下一状态四个接口；再列出一个会让单步预测正确、但多步 rollout 失败的误差来源。

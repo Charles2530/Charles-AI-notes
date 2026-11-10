@@ -193,3 +193,6 @@ print(kv/2**30)
 
 
 - [GPU Puzzles 的索引与访存示例](https://github.com/srush/GPU-Puzzles/blob/b3c4b237d7f0dc6d82055b753c8ea6e0cbb845eb/GPU_puzzlers.py)，逐项追踪哪些线程读写哪些元素，避免只数算术运算。
+## 继续读
+
+继续看[kernel 成本模型](../operators/kernel-cost-models-and-selection-heuristics.md)和[workload 与 shape bucket](../operators/workload-modeling-and-shape-buckets.md)。

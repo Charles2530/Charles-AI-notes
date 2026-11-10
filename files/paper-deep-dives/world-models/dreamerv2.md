@@ -15,13 +15,13 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/danijar/dreamerv2](https://github.com/danijar/dreamerv2)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2010.02193)；[GitHub API / repo](https://github.com/danijar/dreamerv2)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 在 Atari 上，世界模型终于足以承担策略训练
+## DreamerV2 先处理一个具体问题：潜变量会不会把 Atari 的状态混在一起
 
-DreamerV1 已证明，在潜在空间中想象轨迹，再沿多步价值学习策略，可以解决一批视觉连续控制任务。但 Atari 对模型提出了不同要求。物体可能突然消失、房间切换改变整个画面，奖励和动作后果并不总是平滑变化；一张图像中很小的对象，又可能决定整局游戏。一个看起来能重建画面的模型，未必能产生足够可靠的轨迹来训练策略。
+DreamerV1 已经展示了一个可行接口：把图像压到潜在状态，在潜在空间里想象未来，再用这些轨迹训练策略。Atari 的画面变化更突然，房间切换、物体消失和短暂出现的奖励都可能改变下一步动作。如果潜变量把两个不同画面压成相近的高斯分布，重建图像看起来仍然可以，想象出来的奖励却会错。
 
-DreamerV2 将问题集中到潜在状态与训练目标。它把 RSSM 的高斯随机变量换成多个类别变量，用 straight-through 梯度训练离散表示，并通过 KL balancing 让动力学 prior 更积极地追赶包含真实观察的 posterior。策略仍然在单独训练好的世界模型中学习，但 Atari 的 actor 改用主要依赖 REINFORCE 的梯度估计。这些变化共同把 imagined policy learning 带到更有竞争力的 Atari 水平。[↗](https://arxiv.org/pdf/2010.02193v4#page=2)
+DreamerV2 把 RSSM 的随机部分改成多个类别变量。每个状态由 32 个变量组成，每个变量有 32 个类别，前向使用 one-hot 样本，反向用 straight-through 近似传梯度。训练时再用 KL balancing 让只看历史的 prior 更快追上包含当前图像的 posterior。actor 和 critic 仍然在固定的世界模型中学习，Atari 部分主要使用 REINFORCE 式的 actor 梯度。[↗](https://arxiv.org/pdf/2010.02193v4#page=2)
 
-下图的横线是人类 gamer 参考分数，纵轴是跨游戏归一化后的中位数。DreamerV2 达到 2.15，表示这一汇总指标超过参考水平，不代表每个游戏都超过人类。
+下图的横线是人类 gamer 参考分数，纵轴是跨游戏归一化后的中位数。DreamerV2 达到 2.15，表示这项汇总指标超过参考水平，不代表每个游戏都超过人类。
 
 ![DreamerV2 的 Atari 汇总表现](../../assets/images/paper-deep-dives/world-models/dreamerv2/figure-1-first.png){ width="520" }
 
@@ -344,3 +344,9 @@ DreamerV2 的可复用部分是一个能从图像构建离散状态、学习动�
 论文给新任务的优先搜索项包括 KL scale $\beta\in\{0.1,0.3,1,3\}$、actor entropy scale $\eta\in\{3\times10^{-5},10^{-4},3\times10^{-4},10^{-3}\}$ 与 discount $\gamma\in\{0.99,0.999\}$。提高训练频率可以争取更高数据效率，但需要额外计算。这些建议与模型的实际瓶颈对应，分别控制表示压缩、探索和远期价值估计。[↗](https://arxiv.org/pdf/2010.02193v4#page=19)
 
 评估时应同时保留逐任务成绩、至少一种不会被少数极端高分主导的汇总指标，以及训练预算和随机种子。DreamerV2 的价值在于证明了独立学习的世界模型能够承担大部分策略训练，并在明确的 Atari 协议下超过强单 GPU 基线；Venture、Video Pinball 与 Montezuma 的结果也提醒读者，表示、重要小对象和探索仍可能成为新任务的主要障碍。
+
+## 把论文机制接回自己的实验
+
+先用[世界模型基础](../../world-models/beginner-world-models-primer.md)检查观察、belief、动作和奖励的接口，再与[Dreamer 的连续控制版本](dreamer.md)对照，确认离散 latent、Atari actor 和连续动作梯度分别发生在哪一层。若准备训练新任务，沿[算法选择与实验结果](../../reinforcement-learning/practice-and-algorithm-selection.md)先建立随机或 model-free 基线，再记录 latent 类型、KL balancing、actor 梯度路径和 imagination horizon 的受控消融。这样可以把“换了世界模型”拆成几项可以复查的变化。
+
+DreamerV2 适合和[RSSM、Dreamer 与规划](../../world-models/rssm-dreamer-and-planning.md)一起读，先把 latent dynamics、imagination 和 actor-critic 的数据流画出来；再回看[强化学习中的世界模型](../../reinforcement-learning/rl-for-world-models.md)比较 model bias 与真实环境反馈。实验选择可参考[世界模型评测与失败模式](../../world-models/evaluation-and-failure-modes.md)。

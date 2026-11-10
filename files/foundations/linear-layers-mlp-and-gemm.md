@@ -1,6 +1,6 @@
 # 线性层、MLP 与矩阵乘法
 
-线性层接收一组特征，再输出另一组特征。假设输入是两个数 \([1,2]\)，层的参数为
+先看一个会在代码里真的出错的小例子。输入是两个数 \([1,2]\)，层的参数为
 
 \[
 W=\begin{bmatrix}1&2\\3&4\end{bmatrix},\qquad
@@ -9,11 +9,11 @@ b=\begin{bmatrix}0.5&-0.5\end{bmatrix}.
 
 采用行向量写法，输出为 \(y=xW+b\)。第一个输出是 \(1\times1+2\times3+0.5=7.5\)，第二个输出是 \(1\times2+2\times4-0.5=9.5\)。每个输出都从全部输入中取值，由权重决定各输入的贡献，再加一个偏置。
 
-这个两维例子已经包含大模型中线性层的主要计算。模型变大以后，输入向量更长，输出更多，同一个权重矩阵会同时处理许多 token。理解它需要的数学是[矩阵乘法与线性变换](../prerequisite-math/linear-algebra-and-geometry.md)，轴的约定见[张量与 Shape](tensors-shapes-and-computation-graphs.md)。
+输出只有两个数，计算却已经暴露了线性层最容易混淆的地方。权重的行列方向、偏置的广播范围，以及一个 token 是否会看到别的 token，都要从这个例子对上。模型变大以后，输入向量更长，输出更多，同一个权重矩阵会同时处理许多 token。需要补数学时，可以看[矩阵乘法与线性变换](../prerequisite-math/linear-algebra-and-geometry.md)；需要核对轴含义时，回到[张量与 Shape](tensors-shapes-and-computation-graphs.md)。
 
 ## 一列权重怎样得到一个输出
 
-设输入有 \(D_{\mathrm{in}}\) 个特征，输出有 \(D_{\mathrm{out}}\) 个特征。本文统一使用
+设输入有 \(D_{\mathrm{in}}\) 个特征，输出有 \(D_{\mathrm{out}}\) 个特征。下面统一使用
 
 \[
 x\in\mathbb R^{1\times D_{\mathrm{in}}},\qquad
@@ -29,7 +29,7 @@ y_j=\sum_{i=1}^{D_{\mathrm{in}}}x_iW_{ij}+b_j.
 
 \(W\) 的第 \(j\) 列给出了生成这个输出所用的全部权重。上面的示例中，第一列是 `[1, 3]`，第二列是 `[2, 4]`。训练过程中，优化器会改变这些权重与偏置，输入输出维度则由网络设计确定。
 
-下面的 Python 代码不依赖深度学习框架，可以直接运行。
+把同一组数交给一段不依赖框架的 Python，先核对手算结果。
 
 ```python
 x = [1, 2]
@@ -63,7 +63,7 @@ D_{\mathrm{in}}D_{\mathrm{out}}+D_{\mathrm{out}}.
 
 对于文本张量 `[B, L, D_in]`，线性层分别处理每个样本、每个位置的最后一维，输出 `[B, L, D_out]`。它本身不会把相邻 token 的信息混在一起。Transformer 中逐位置的前馈网络继承了这个性质，跨位置读取则由注意力完成。
 
-具体代码中还可能看到与本文相反的权重 shape。PyTorch `nn.Linear(in_features, out_features)` 的参数 `weight` 存为 `[out_features, in_features]`，计算的是 `x @ weight.T + bias`。将它与本文的 \(W\) 对照时，需要转置一次。两种约定描述的是同一变换，不能在同一个推导中混用。
+具体代码中还可能看到与这里相反的权重 shape。PyTorch `nn.Linear(in_features, out_features)` 的参数 `weight` 存为 `[out_features, in_features]`，计算的是 `x @ weight.T + bias`。将它与上面的 \(W\) 对照时，需要转置一次。两种约定描述的是同一变换，不能在同一个推导中混用。
 
 ## 堆叠线性层为什么还不够
 
@@ -177,6 +177,78 @@ GPU 会把大矩阵分成块，使一次载入的输入和权重参与多次计�
 \]
 
 第一行权重的导数乘输入1，第二行乘输入2。换成 PyTorch 存储约定，`weight.grad` 应为这个矩阵的转置，而非直接相同。核对框架时，既要比较数值，也要比较每个数对应的输入输出通道。
+
+## 用 PyTorch 把两个约定放在同一张表里
+
+手算中的 \(W\) 是 `[D_in, D_out]`，PyTorch 中的 `weight` 是 `[D_out, D_in]`。不要只凭变量名判断方向，直接把前面的数字写进层里，再比较输出。
+
+```python
+import torch
+
+layer = torch.nn.Linear(2, 2, bias=True)
+with torch.no_grad():
+    # 手算里的 W = [[1, 2], [3, 4]]
+    # PyTorch 按输出通道存行，所以这里需要写成 W.T
+    layer.weight.copy_(torch.tensor([[1.0, 3.0], [2.0, 4.0]]))
+    layer.bias.copy_(torch.tensor([0.5, -0.5]))
+
+x = torch.tensor([[1.0, 2.0]])
+y = layer(x)
+expected = torch.tensor([[7.5, 9.5]])
+torch.testing.assert_close(y, expected)
+print(layer.weight.shape, y)
+```
+
+如果把 `[[1, 2], [3, 4]]` 原样复制给 `layer.weight`，程序仍然会运行，但输出会变成 `[5.5, 10.5]`。这类错误很危险，因为 shape、dtype 和反向传播都可能正常，只有和独立的手算或参考实现比较时才会暴露。最小核对应该同时保存输入、权重、偏置和期望输出，不要只检查 `loss.backward()` 是否报错。
+
+继续使用平方误差核对梯度。令目标为 `[1, 0]`，损失写成每个输出平方误差之和的一半，代码得到的梯度应与上一节相同。
+
+```python
+target = torch.tensor([[1.0, 0.0]])
+loss = 0.5 * (y - target).square().sum()
+loss.backward()
+
+expected_grad = torch.tensor([[6.5, 13.0], [9.5, 19.0]])
+expected_bias_grad = torch.tensor([6.5, 9.5])
+torch.testing.assert_close(layer.weight.grad, expected_grad)
+torch.testing.assert_close(layer.bias.grad, expected_bias_grad)
+```
+
+这里的 `expected_grad` 仍按 PyTorch 的 `[out_features, in_features]` 排列。手算得到的
+\(
+\begin{bmatrix}6.5&9.5\\13&19\end{bmatrix}
+\)
+是输入维度在前、输出维度在后的矩阵，放进 `weight.grad` 前需要转置。把两个矩阵并排写出来，比在文字里说“注意转置”更容易发现索引是否错了一位。
+
+## 三维输入只沿最后一维做同一件事
+
+Transformer 常把输入写成 `[B, L, D_in]`。线性层不会把 batch 或序列位置混在一起，它对每个位置独立执行 `x @ weight.T + bias`。下面的断言把三维结果展平成二维结果，检查这一点。
+
+```python
+layer.zero_grad(set_to_none=True)
+x3 = torch.tensor([
+    [[1.0, 2.0], [0.0, 1.0], [2.0, 0.0]],
+    [[1.0, 0.0], [0.0, 2.0], [2.0, 2.0]],
+])
+y3 = layer(x3)
+y2 = layer(x3.reshape(-1, 2)).reshape_as(y3)
+torch.testing.assert_close(y3, y2)
+assert y3.shape == (2, 3, 2)
+```
+
+如果误把序列轴和特征轴交换，程序仍可能得到一个形状正确的张量，但每个位置读到的两个数已经换了来源。
+
+```python
+x_bad = x3.transpose(1, 2).reshape(-1, 2)
+y_bad = layer(x_bad).reshape_as(y3)
+assert not torch.allclose(y_bad, y3)
+```
+
+这种错误不会总在第一行就报 shape mismatch。把一个位置的输入、正确输出和错误输出同时打印出来，通常比只看最终 loss 更快定位轴的含义。
+
+如果把 `x3` 沿序列维度求平均后再送入层，得到的已经是另一个模型：它先丢掉了 token 之间的差异，再做一次投影。注意力、卷积或池化可以引入跨位置交互，但线性层自身没有这项功能。排查 Transformer 的 shape 时，可以先把一个位置单独取出来，与三维调用的对应位置比较。
+
+最后把计算量估算和实际计时分开。对 `[B, L, D_in]` 到 `[B, L, D_out]` 的矩阵乘，理论乘加数约为 \(2BLD_{\mathrm{in}}D_{\mathrm{out}}\)。这个数字适合检查规模是否写错，不能直接当作 GPU 时间。实际时间还受到权重读取、layout 转换、kernel 选择、融合和 batch 形成过程影响。先用上述断言确认数学对象，再用固定 shape 的 benchmark 讨论性能，两个问题不要混在同一条结论里。
 
 ## 参考资料
 

@@ -9,6 +9,21 @@
 
 这正是策略梯度的起点。本文一直使用这张地图，把动作概率、轨迹概率、回报权重和一次实际训练连起来。环境实现是仓库已有的 [GridWorld](../assets/examples/reinforcement-learning/gridworld.py)，奖励与动作编号沿用 [Bellman 正文](mdp-value-bellman.md)。
 
+```mermaid
+flowchart LR
+    P[当前策略 πθ] --> A[采样动作 a_t]
+    A --> E[环境返回 r_t, s_{t+1}]
+    E --> T[完整轨迹 τ]
+    T --> G[计算 reward-to-go G_t]
+    G --> W[回报或优势作为权重]
+    A --> L[log πθ(a_t|s_t)]
+    W --> U[加权 log-prob 损失]
+    L --> U
+    U --> P
+```
+
+这条回路里，环境只负责给样本，梯度来自动作概率的 log，而不是从离散的地图转移上反向传播。读后面的推导时，可以一直追问一件事：这个数字来自轨迹、来自 baseline，还是来自策略参数本身。
+
 ## 先决定策略究竟有什么参数
 
 每个非终止格子保存四个 logits，记作 $\theta_{s,a}$，经过 softmax 得到动作概率

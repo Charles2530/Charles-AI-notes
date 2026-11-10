@@ -35,7 +35,7 @@ $$
 
 ![GPTQ procedure 原论文图](../assets/images/paper-figures/quantization/gptq-figure-2-procedure.png){ width="760" }
 
-<small>图源：[GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323)，Figure 2。原图表达 GPTQ 按列量化权重，并用近似 Hessian 信息更新尚未量化的列；这里的重点是 GPTQ 的重点是层输出重构，而不是单个权重逐个 round。</small>
+<small>图源：[GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323)，Figure 2。原图表达 GPTQ 按列量化权重，并用近似 Hessian 信息更新尚未量化的列；这里要抓住的是层输出重构，而不是单个权重逐个 round。</small>
 
 校准输入有完全相关的通道时，$X^\top X$ 可能奇异。阻尼能改善数值问题，也会改变所求近似。上面的二维例只说明补偿直觉，没有模拟源码的阻尼、分块与所有量化细节。
 
@@ -77,9 +77,89 @@ $$
 
 GPTQ、AWQ、SmoothQuant 描述的是处理误差的办法，W4A16、W8A8 描述的是数值路径，两组名字不能互相替代。同样的算法可以有不同 group size、scale 格式和打包布局。后续的 [运行时](quantization-runtimes-and-frameworks.md)会继续追踪一个 packed byte 怎样参与乘法。
 
+## 三种方法到底在保护什么
+
+| 方法 | 量化前要观察什么 | 主要改变 | 更适合用来回答的问题 |
+| --- | --- | --- | --- |
+| GPTQ | 校准输入在每个线性层的二阶误差 | 量化一部分权重后，用输入相关性修正其他权重 | 在给定输入分布下，怎样减少层输出重建误差 |
+| AWQ | 激活通道的幅度与出现频率 | 对通道做等价缩放，再量化权重 | 哪些权重会被真实激活反复放大，应该优先保护 |
+| SmoothQuant | 激活和权重的动态范围 | 将部分激活离群值转移到权重 | 怎样让激活也能进入更规整的低比特矩阵乘 |
+
+这个表只能帮助选择实验起点。GPTQ 的校准输入会进入曲率近似，AWQ 的缩放会改变相邻算子的数值范围，SmoothQuant 还要求折叠后的权重和激活路径在实现中保持等价。把三者都叫作“4 bit 量化”会漏掉真正需要检查的对象。
+
+## 先把浮点、伪量化和真实 kernel 分成三层
+
+对同一批输入，至少保存三份输出。第一份来自浮点参考模型，第二份来自仍以浮点张量执行的伪量化模型，第三份来自目标 runtime 的实际低比特 kernel。可以用下面的结果卡片记录一次比较：
+
+```text
+model_revision: <固定提交号>
+calibration_set: calib_v1
+evaluation_set: heldout_v1
+quantizer: awq
+weight_format: w4a16
+reference: fp16_model
+pseudo_quant: float_dequant_path
+real_kernel: <runtime 与 kernel 版本>
+layer_output_max_abs: ...
+logit_relative_l2: ...
+task_quality_delta: ...
+latency_p50_p95: ...
+fallback_count: ...
+```
+
+伪量化误差小而真实 kernel 误差大，优先检查 scale 的轴、权重转置、group 顺序、zero point 和 packed byte 解码。两者都接近浮点，但端到端速度没有变化，通常要查 kernel 是否真正命中、是否发生 dequant fallback、请求 shape 是否落在支持范围内。量化误差和部署收益由不同证据负责，不能合并成一个分数。
+
+## 校准集怎样暴露错误，而不是只让分数好看
+
+校准集应覆盖部署时会出现的长度、语言、代码或视觉 token。它只用于估计 scale、排序敏感性或曲率，最终质量评测需要保持独立。可以把输入按长度和任务切片，分别记录浮点与量化输出的差异。若短问答几乎没有变化、长代码明显退化，首先说明校准分布没有覆盖长代码，不能直接归因于 bit 数。
+
+一个足够小的层级实验可以固定输入矩阵 $X$ 和权重 $W$，依次比较
+
+```python
+import numpy as np
+
+reference = X @ W
+pseudo = X @ dequantize(quantize(W, scales))
+relative_l2 = np.linalg.norm(pseudo - reference) / np.linalg.norm(reference)
+print("relative_l2", relative_l2)
+```
+
+仓库还提供一个不依赖 GPU 的[逐行伪量化回放脚本](../assets/examples/quantization/ptq_layer_reconstruction.py)。从仓库根目录运行
+
+```bash
+python files/assets/examples/quantization/ptq_layer_reconstruction.py --bits 4
+```
+
+它会打印浮点输出范数、最大绝对误差、相对二范数误差和 scale 范围。这个脚本使用对称逐行舍入，只验证误差记账和 shape 约束，不实现 GPTQ 的 Hessian 补偿、AWQ 的激活搜索或任何真实低比特 kernel。
+
+然后用相同的 scale 和相同的打包格式送入真实 kernel，再比较 `real - pseudo`。这个顺序能把算法误差、反量化误差和 kernel 实现误差分开。若只跑端到端生成，最终文本变化很难告诉我们哪一层先出了问题。
+
+## 低比特验收至少要有四个结果
+
+第一项是数值一致性，记录层输出或 logits 的误差和异常样本。第二项是任务质量，按长度、任务类型和关键失败切片，而不是只报一个平均分。第三项是系统性能，固定输出长度后记录首 token、decode 间隔、吞吐、峰值显存和 fallback。第四项是可回滚性，保留原始权重、校准集、scale、打包版本和运行时配置。
+
+如果量化后平均质量只下降 0.2 分，却把某一类安全请求的拒答率改变了，平均数不能替代分桶结果。如果显存下降但 p95 延迟上升，应把它写成资源与时延的权衡，而不是“量化成功”。低比特路径真正可用的标准，是在指定硬件、请求集合和质量门槛下通过这四项检查。
+
+## 常见的四种失败定位
+
+| 现象 | 优先检查 |
+| --- | --- |
+| 伪量化和浮点接近，真实 kernel 偏差很大 | packed layout、scale 轴、反量化顺序和 dtype 转换 |
+| 只有长上下文或视觉输入退化 | 校准集覆盖、激活长尾和 KV 或视觉投影的独立格式 |
+| 某一个线性层误差远高于其他层 | 权重转置、group size、异常通道和该层是否共用 scale |
+| 质量变化很小，端到端速度也几乎不变 | kernel 命中、shape 分桶、通信和调度是否掩盖了矩阵乘收益 |
+
+每个现象都应回到一条固定输入、一个固定层和一次可重放的运行记录。临时改 scale 直到分数恢复，会破坏校准和评测边界，留下的结果无法解释。
+
 
 ## 对照源码与延伸阅读
 
 - [GPTQ add_batch 与 fasterquant](https://github.com/IST-DASLab/gptq/blob/2d65066eeb06a5c9ff5184d8cebdf33662c67faf/gptq.py)
 - [AWQ 激活收集、缩放与截断](https://github.com/mit-han-lab/llm-awq/blob/d6e797a42b9ef7778de8ee2352116e0f48a78d61/awq/quantize/pre_quant.py)
 - [SmoothQuant 等价变换](https://github.com/mit-han-lab/smoothquant/blob/c61476d728e42ae0d8a35e7e78494edcac3237b5/smoothquant/smooth.py)
+
+## 算法和部署依据
+
+GPTQ 的层输出重建目标和近似 Hessian 更新对照原论文与固定 commit 的实现，AWQ 的通道重要性与伪量化、真实量化路径对照论文和源码，SmoothQuant 的等价缩放对照原论文与 `smooth_ln_fcs`。二维补偿数字、三层输出对比和失败定位表是本站的教学设计，不是任何论文 benchmark。
+
+下一步可以把同一批 `calib_v1` 和 `heldout_v1` 接到[量化部署验收](evaluation-and-deployment-checklist.md)，再在[运行时与框架](quantization-runtimes-and-frameworks.md)中记录真实 kernel。只有当量化方法、数据切片、硬件和运行时都固定下来，页面里的“误差变小”才有明确含义。

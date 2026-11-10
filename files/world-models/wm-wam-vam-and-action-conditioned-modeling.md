@@ -64,3 +64,47 @@ p(o',a\mid h,g)=p(a\mid h,g)p(o'\mid h,a,g).
 因此反事实检查需要固定相同起点，改变动作，同时控制其他条件。可重置模拟器或重复的受控实验比任意日志中的“相似画面”更接近这个要求。[V-JEPA 2-AC](https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/)在表示空间接入动作条件规划，仍需要在其具体机器人与目标设置中解释证据。
 
 模型选择可按缺口进行。需要候选评分时关注可查询的动作条件动力学，需要直接控制时关注可执行策略与延迟，需要合成环境时关注持续交互、状态一致性和重置接口。Latent imagination 可对照 [DreamerV3](https://arxiv.org/abs/2301.04104)，交互视频可对照 [Genie 2](https://deepmind.google/blog/genie-2-a-large-scale-foundation-world-model/)与 [Genie 系列](https://deepmind.google/models/genie/)。接口评测方法见[评测页](evaluation-and-failure-modes.md)。
+
+## 用最小可辨识实验区分三种接口
+
+不要先根据模型名称决定它是什么。可以用同一批固定起点和三组查询做接口验收：
+
+| 查询 | WM 应给出 | WAM 应给出 | VLA / policy 应给出 |
+| --- | --- | --- | --- |
+| 指定动作 A | $p(o'mid h,A)$ 或状态分布 | 与动作 A 配对的未来与动作轨迹 | 不一定回答，可能只输出策略动作 |
+| 指定动作 B | 与 A 不同的后果分布 | 与 B 配对的未来和动作 | 仍可能输出同一个最优动作 |
+| 不给动作、给目标 | 需要 planner 或 actor 才能选动作 | 可联合生成候选 | 直接给动作是其主要接口 |
+
+最小数据集可以只有 20 个起点、每个起点 2 个相反动作和一个不动作对照。验收先看动作响应，再看长期任务。若模型对 A、B 的预测几乎相同，却在目标条件下生成漂亮视频，应把它归为“目标条件生成”而不是已验证的动作条件世界模型。
+
+## 风险敏感规划不能只取最大成功率
+
+设候选动作 $a_i$ 的模型预测成功率为 $hat p_i$，碰撞概率为 $hat c_i$，执行延迟为 $d_i$。一个教学用目标可以写成
+
+\[
+J(a_i)=\hat p_i-\lambda_c\hat c_i-\lambda_d d_i,
+\]
+
+但这个分数只有在三项量纲、校准方式和时间窗口一致时才有意义。对模型不确定度较大的候选，可以使用下置信界或把不确定度作为额外惩罚。最终仍需在真实环境或独立模拟器里执行 top-1 和若干低分对照，因为联合生成的未来与动作可能彼此“互相证明”。
+
+实验报告至少应给出：候选数量、搜索深度、每个候选的模型调用次数、成功率置信区间、碰撞与人工接管分母，以及模型预测和真实结果的混淆矩阵。没有这些信息，不能把 planner 选择的成功归因于世界模型本身。
+
+## 动作表示的三个隐藏契约
+
+WAM 或 VLA 的接口在跨机器人迁移时，最容易漏掉以下契约：
+
+1. **坐标系**：动作是相机坐标、基座坐标还是末端局部坐标，旋转采用欧拉角、轴角还是四元数。
+2. **时间尺度**：一个 action token 对应一个控制周期、一个 action chunk，还是一段高层技能；执行时是否允许提前终止。
+3. **安全范围**：速度、加速度、夹爪开合和工作空间边界由谁裁剪，裁剪后是否把实际动作回写给模型。
+
+把这些字段写入 trajectory schema，并在离线重放中验证“模型动作 → 安全层 → 执行动作”的差异。若安全层经常大幅修改动作，训练分布和真实执行分布已经不一致，应单独评估安全层，而不是继续调大模型。
+
+## 继续读
+
+继续看[世界模型论文综述](../paper-deep-dives/world-models/world-models-embodied-ai-survey.md)和[具身推理中的观测年龄](../thinking-exploration/embodied-inference-observation-age-1009-2059.md)。
+
+## 来源怎样支持具体主张
+
+[DreamerV3](https://arxiv.org/abs/2301.04104)适合支持 latent imagination 与策略学习的接口说明；[RT-2](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)适合说明视觉语言表示到动作 token 的一种路线；[Video Prediction Policy](https://arxiv.org/abs/2412.14803)适合说明视频预测表示可作为策略输入。它们的成功率、机器人配置和数据规模不能直接迁移到本地实验。
+
+阅读论文或项目页时，把“方法定义”“作者任务上的结果”“本地可复现实验”分成三栏。只有第三栏包含固定数据、配置、日志和独立执行结果时，才可以写成本项目的证据。

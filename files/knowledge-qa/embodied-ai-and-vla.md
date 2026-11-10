@@ -43,3 +43,9 @@
 先明确新的是物体、场景、任务语言、相机还是机器人本体。训练中见过同类物体的不同摆放，与全新物理结构不是同一难度。评测应按episode独立统计，并报告失败类型与不确定性。
 
 不同成功定义、试验次数和人工干预会改变结果。允许操作员每次救回失败的系统，不能和完全自主系统直接比较成功率。见[VLA benchmark与数据](../vla/benchmarks-and-data-engines.md)。
+
+## 快速自测
+
+选一次抓取失败，分别记录观测、policy action、commanded action、executed action 和 success predicate。再说明哪一项变化会让单步 MSE 看不出来、却改变闭环结果。完整接口见[VLA](../vla/index.md)和[具身系统](../embodied-ai/index.md)。
+
+**来源与改编说明**：动作接口和闭环误差的判断，分别对照 [RT-2](https://arxiv.org/abs/2307.15818)、[OpenVLA](https://arxiv.org/abs/2406.09246) 和 [LeRobot 文档](https://huggingface.co/docs/lerobot/en/index)。页内数字是教学构造，不能当作机器人 benchmark；具体数据集还要回到各自的动作定义和成功判据。

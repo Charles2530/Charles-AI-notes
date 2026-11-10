@@ -2085,7 +2085,8 @@ body.atlas-lightbox-open {
 }
 
 .md-tabs__item--active .md-tabs__link {
-  border-bottom-color: #fff;
+  border-bottom-color: var(--atlas-accent);
+  background: rgba(255, 255, 255, 0.06);
   opacity: 1;
 }
 
@@ -3004,7 +3005,18 @@ body.atlas-ai-open :is(.atlas-reader-controls, .md-top) {
 
 .md-typeset h1 + p {
   max-width: 56rem;
-  font-size: 0.98rem;
+  font-size: 1rem;
+  letter-spacing: 0.005em;
+}
+
+.md-typeset .info > .admonition-title {
+  background: linear-gradient(90deg, rgba(18, 95, 99, 0.1), rgba(18, 95, 99, 0.035));
+  letter-spacing: 0.015em;
+}
+
+.md-sidebar--primary .md-nav__item--active > .md-nav__link,
+.md-sidebar--primary .md-nav__link--active {
+  background: linear-gradient(90deg, rgba(18, 95, 99, 0.11), rgba(18, 95, 99, 0.035));
 }
 
 .md-typeset h2 {

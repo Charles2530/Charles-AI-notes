@@ -1,8 +1,8 @@
 # 位置编码、Mask 与上下文
 
-Attention 根据内容分数混合 Value。若同时交换输入 token 的位置，且不加入位置或可见性规则，输出通常只会相应交换。它知道哪些内容相关，却没有自动获得“谁先谁后”。
+Attention 根据内容分数混合 Value。把两个 token 的位置交换以后，模型为什么会跟着改变输出？如果没有位置或可见性规则，输出通常只会相应交换，因为内容相关性本身没有告诉模型“谁先谁后”。
 
-位置编码告诉模型位置关系，mask 决定哪些关系可以被读取。二者各自有用：给未来 token 编号，并不能阻止当前 token 读取未来答案。
+位置编码告诉模型位置关系，mask 决定哪些关系可以被读取。给未来 token 编号，并不能阻止当前 token 读取未来答案。
 
 ## 从一行注意力看可见性
 
@@ -10,7 +10,7 @@ Attention 根据内容分数混合 Value。若同时交换输入 token 的位置
 
 因此 mask 应进入 softmax 的归一化之前。softmax 后仅把未来权重置零而不重新归一化，会改变权重总和和输出尺度。不同 API 的布尔 mask 可能分别表示“允许”或“禁止”，不能只根据变量名套用。
 
-若一行所有位置都被禁止，直接对全负无穷做 softmax 可能产生 NaN。Padding query 要有明确的处理规则，例如避免生成这些行、保证有效位置或安全置零，不能假定算子总会自动修复。
+若一行所有位置都被禁止，直接对全负无穷做 softmax 可能产生 NaN，因为稳定 softmax 中的减最大值会遇到负无穷减负无穷。后面再乘零也不能保证修复，浮点运算中 NaN 乘零仍是 NaN。处理 padding query 时，需要在进入这一步之前决定如何跳过或安全计算这些行。
 
 ## 绝对位置与相对位置如何进入分数
 
@@ -26,6 +26,14 @@ q_m'=R(m\omega)q_m,\quad k_n'=R(n\omega)k_n.
 内积满足 \((q_m')^\top k_n'=q_m^\top R((n-m)\omega)k_n\)。位置以相对位移形式进入分数，但分数仍取决于内容向量，不能说 attention 只看距离。
 
 取 \(q=k=(1,0)\)，旋转差为零时内积 1，差为 \(\pi/2\) 时为 0，差为 \(\pi\) 时为 -1。真实模型使用多个频率和学习到的内容向量，远距离表现由训练分布与这些频率共同决定。
+
+把一个非对称的数值例算完，能看出“相对位移”从哪里来。取 \(q=(1,2)\)、\(k=(3,4)\)、\(\omega=\pi/4\)，令 query 在位置 \(m=1\)，key 在位置 \(n=3\)。两者的旋转差是 \((n-m)\omega=\pi/2\)，所以
+
+\[
+q^\top R(\pi/2)k=(1,2)\begin{bmatrix}-4\\3\end{bmatrix}=2.
+\]
+
+如果把两个向量都在位置 1 旋转，旋转差变成 0，内积则回到 \(q^\top k=11\)。这两个结果的变化来自位置差和内容向量的共同作用。只把它记成“距离越远分数越小”会丢掉旋转方向与通道内容。
 
 ALiBi 则为分数加入与距离相关的偏置，例如对过去位置加入 \(-m_h(i-j)\)。它不旋转向量，而是给各头不同的距离偏好。偏好近处仍不等于禁止远处，可见性由 mask 另外决定。
 
@@ -49,7 +57,45 @@ M=\begin{bmatrix}
 
 ![文档隔离与跨文档泄漏的 4×4 对照](../assets/images/foundations/packed-document-mask-example.svg)
 
-Position id 是否在文档边界重置，是另一项设计。重置位置不能代替块对角 mask，mask 正确也不自动保证 label 没跨文档。
+Position id 是否在文档边界重置，是另一项设计。先看上面的 RoPE 内积公式。如果文档 B 的位置由 `[0,1]` 改成 `[2,3]`，query 与 key 都增加了 2，差值 \(n-m\) 没变。在 Q/K 内容向量、频率和可见关系相同的纯 RoPE 计算中，块内分数也不变。因此，单凭“相位变了”不能断言打包结果变了。
+
+这个结论有明确前提。额外的绝对位置 embedding、随长度变化的频率规则，或只偏移新 query 却没有正确处理缓存 key，都需要另外检查。无论采用哪种位置编号，跨文档隔离仍由 mask 决定。
+
+### 把允许矩阵真正算一遍
+
+下面只用 Python 标准库，把每行分数设成零，重现前面的四个输出。`allowed[i][j]` 表示第 i 个 query 能否读取第 j 个 key。先定义矩阵，再检查因果性、当前位置和文档隔离，三个断言各管一件事。
+
+```python
+from math import exp, isfinite
+
+document_ids = [0, 0, 1, 1]
+values = [2.0, 4.0, 100.0, 200.0]
+allowed = [
+    [int(j <= i and document_ids[i] == document_ids[j]) for j in range(4)]
+    for i in range(4)
+]
+assert allowed[2][3] == 0       # 文档 B 不能读取自身的未来
+assert allowed[2][2] == 1       # 文档 B 的当前位置可见
+assert allowed[2][0] == allowed[2][1] == 0  # 文档 B 不能读取文档 A
+
+def masked_average(scores, values, row):
+    visible = [j for j, permit in enumerate(row) if permit]
+    if not visible:
+        return 0.0            # 本教学实现约定空行输出零，跳过 softmax
+    peak = max(scores[j] for j in visible)
+    weights = [exp(scores[j] - peak) for j in visible]
+    return sum(w * values[j] for w, j in zip(weights, visible)) / sum(weights)
+
+output = [masked_average([0.0] * 4, values, row) for row in allowed]
+padding_output = masked_average([0.0] * 4, values, [0, 0, 0, 0])
+assert output == [2.0, 3.0, 100.0, 150.0]
+assert padding_output == 0.0 and all(isfinite(x) for x in output)
+print(output)
+```
+
+第三个断言要检查 B 到 A 的连接。只检查 `allowed[2][3] == 0`，只能证明未来位置不可见，普通全局因果 mask 也能通过，无法发现跨文档泄漏。可以把 A 的 Value 改成很大的数，确认 B 的两个输出仍保持 100 和 150，再有意去掉文档条件，观察第三个断言失败。
+
+这里的空行分支是教学约定，输入分数和 Value 均假设为有限值。接入张量框架时，可以移除 padding query，或在 softmax 前给无效 query 安排一个有限的临时计算路径，再显式把输出置零。有效 query 仍不能读取 padding key，padding 对应的目标也要从 loss 中排除。仅把负无穷改成同一个有限负数，会让空行变成均匀权重，不能据此认为屏蔽已经正确。
 
 ![不同任务的 attention 可见性矩阵](../assets/images/paper-deep-dives/foundations/magiattention/figure-4-mask-patterns.png){ width="820" }
 
@@ -62,15 +108,6 @@ Position id 是否在文档边界重置，是另一项设计。重置位置不�
 一段 `[BOS,A,B,EOS]` 通常形成输入 `[BOS,A,B]` 与目标 `[A,B,EOS]`。若直接连接多篇文档再整体右移，文档末尾可能被要求预测下一篇的起始 token。是否允许这种跨文档目标，应按预训练定义决定；独立样本的 SFT 通常需要屏蔽相应边界。
 
 Loss mask 只决定哪些目标计入损失，attention mask 决定表示能读哪些输入。即使边界 label 不计算 loss，错误 attention 仍可能让后续位置读取不应可见的信息。
-
-```python
-values = [2.,4.,100.,200.]
-allowed = [[1,0,0,0],[1,1,0,0],[0,0,1,0],[0,0,1,1]]
-output = [sum(v for v,m in zip(values,row) if m)/sum(row) for row in allowed]
-print(output)
-```
-
-输出 `[2.0,3.0,100.0,150.0]`，对应这里的均匀分数情况。真实 attention 还需 QK 分数和数值稳定 softmax。
 
 ## 长上下文和缓存增加哪些要求
 
@@ -86,3 +123,7 @@ print(output)
 
 - [RoFormer](https://arxiv.org/abs/2104.09864)给出旋转位置编码的推导。
 - [序列与掩码数学](../prerequisite-math/sequence-position-and-masking.md)可对照索引、张量轴与概率分解。
+
+**来源与改编说明**：RoFormer、Attention Is All You Need 和 MagiAttention 用于核对位置表示与 mask 的定义；4×4 文档隔离矩阵、均匀 Value 例子和 Python 断言由本站重写。页面中的 mask 约定以“1 表示允许”为例，接入具体框架时仍需按 API 文档核对布尔含义。
+
+读完这里的 mask 后，可以回到[一次 attention 的完整计算](transformer-attention-and-tokenization.md)复算 Q、K、V 的轴；长上下文的缓存、淘汰和位置边界见[上下文压缩与 KV 分层](../inference/context-compression-kv-eviction-and-memory-hierarchies.md)。

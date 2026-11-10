@@ -166,3 +166,7 @@ $$
 最后只改动可以解释的一组因素，例如替换已定位的融合模块，或调整一种并行配置。先比较输出与梯度，再比较完整训练 step。吞吐改善后重新计算 MFU，并检查节省的显存、通信变化和训练稳定性是否影响实际可用的配置。这样才能知道局部 kernel 加速有没有转化为整个训练任务的收益。
 
 这篇案例最值得带走的工作习惯，是让监控指标承担它真正能回答的问题。GPU utilization 告诉你设备是否经常没有工作；更细粒度指标帮助定位执行瓶颈；固定训练工作所需的时间，负责决定优化是否成功。
+
+## 继续阅读
+
+GPU 利用率要和 kernel、内存与时间线一起看，下一步读[CUDA 编程模型与内存](../../operators/cuda-programming-model-and-memory.md)；服务侧的请求 trace 见[推理 GPU 与显存](../../inference/gpu-kernels-batching-and-memory-systems.md)。

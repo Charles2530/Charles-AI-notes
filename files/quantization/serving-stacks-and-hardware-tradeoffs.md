@@ -40,7 +40,39 @@ F为运算量，M为实际搬运字节，P与B为相应计算和带宽上限。�
 
 <small>图源：[SmoothQuant](https://arxiv.org/abs/2211.10438)。原图表达不同算子和张量在低精度部署中的精度映射；读图重点是：服务栈选型不是只选“几 bit”，而是要确认硬件 kernel、runtime fallback、activation scale 和质量门槛是否同时成立。它不能直接证明某张 GPU 上的线上 P99 收益，实际仍需按请求分布压测。</small>
 
+## 继续读
+
+继续看[服务 runtime](../inference/serving-runtimes-vllm-sglang-and-tensorrt-llm.md)和[推理成本模型与容量规划](../inference/cost-modeling-and-slo-design.md)。
+
 ## 对照源码与延伸阅读
 
 - [FP8执行路径与架构边界](https://github.com/deepseek-ai/DeepGEMM/blob/5081f8513af57e61696de4f4f04b0e707ffb503e/README.md)
 - [KV容量与调度共同限制在途请求](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)
+
+## 用“格式—执行—任务”三层矩阵选服务栈
+
+Hugging Face 的[量化文档](https://huggingface.co/docs/transformers/en/main_classes/quantization)和[方法选择指南](https://huggingface.co/docs/transformers/en/quantization/selecting)把量化方法、硬件与加载路径分开讨论。把这种思路落到本地部署时，可以建立三层矩阵：
+
+| 层次 | 要回答的问题 | 证据 |
+| --- | --- | --- |
+| 格式 | 权重、激活、KV、scale 分别是什么 dtype/粒度 | checkpoint 检查、张量统计 |
+| 执行 | 是否由目标 runtime 的原生 kernel 处理，是否发生 dequant/copy/fallback | trace、kernel 名称、转换时间 |
+| 任务 | 量化后长上下文、视觉细节、工具调用和成功率是否达标 | 固定回归集、分层指标 |
+
+只看到模型文件变小，最多证明第一层的一部分。第二层决定是否真的省带宽或计算，第三层决定是否值得上线。
+
+## 把硬件选择写成约束问题
+
+对每台候选设备记录显存、低精度矩阵指令、内存带宽、互联、驱动和 runtime 版本。然后先筛掉无法容纳权重加 KV 的配置，再在可行配置中比较端到端 p95。边缘设备上的低 bit 可能主要解决容量，数据中心 GPU 上的 FP8 可能同时改变矩阵乘和通信；不能用同一个“bit 越低越好”的排序覆盖两者。
+
+若硬件缺少目标格式的原生 kernel，运行时可能将权重解包到 BF16 后再计算。此时文件大小下降仍然有价值，但 decode 带宽、workspace 和转换成本要在 trace 中单独列出。一个正确的报告可以同时写“加载显存下降”和“端到端速度无改善”，这两项并不矛盾。
+
+## 迁移部署前做三次回放
+
+1. **加载回放**：检查权重、scale、未量化模块和 tokenizer 是否一致。
+2. **单请求回放**：固定输入长度，比较数值、任务结果和 kernel/转换路径。
+3. **并发回放**：使用真实长度分布，比较 KV 容量、队列、TTFT/TPOT、尾延迟和失败原因。
+
+每次回放都保存配置与 commit。量化运行时的版本升级可能改变 packing、kernel 选择或默认 scale 处理，不能只复用旧 benchmark 数字。
+
+**来源与改编说明**：权重、KV、runtime 和硬件路径参考 Hugging Face 量化文档、SmoothQuant、DeepGEMM 与 vLLM 源码入口。容量数字是明确假设下的教学算例，部署前仍需在目标设备和流量上回放。

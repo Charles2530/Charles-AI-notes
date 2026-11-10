@@ -128,3 +128,9 @@ L_z=\frac{\sum_{i,k}m_{ik}\|\hat z_{i,k}-\operatorname{sg}(E_{\bar\theta}(o_{i,k
 模型训练完成后，先固定同一真实历史比较快抓和慢抓，再让实际规划器选择并执行短前缀，接收新观察。训练 loss、动作条件响应和闭环成功分别对应不同层证据。仓库当前 fixture 能展示后两层应如何记账，却没有产生这些模型预测。复算过程见[评测报告](world-model-efficient-training-experiment-report.md)，完整系统的数据流见[VLA 到世界模型](vla-world-model-full-chain-case.md)。
 
 进一步读真实方法时，可以对照 [MWM](https://arxiv.org/abs/2206.14244) 的表征/动力学分工、[V-JEPA 2](https://arxiv.org/abs/2506.09985) 的动作条件预测与规划，以及 [PlaNet](https://arxiv.org/abs/1811.04551) 的历史状态推断。每一条路线都要回到同样的问题，模型在预测时究竟已知什么，损失用了什么真值，使用者又根据哪个输出改变了动作。
+
+## 模型和实验依据
+
+动作条件建模的参照来自 [PlaNet](https://arxiv.org/abs/1811.04551)、[MWM](https://arxiv.org/abs/2206.14244) 和 [V-JEPA 2](https://arxiv.org/abs/2506.09985)，联合视频动作的图示对照 [DreamZero](https://arxiv.org/abs/2602.15922)。杯子、快抓/慢抓、10 Hz、1.6 秒和线性动力学训练程序是本站构造的教学链路；仓库 fixture 没有视频张量、真实机器人 checkpoint 或动作成功率。
+
+沿 `state_id`、动作时间戳和 episode 边界回放一条样本，分别检查 teacher-forced 一步、多步 free-running、动作交换和 planner 读出。只有四项都能独立回答，才可以把“动作条件世界模型”写成可用接口。

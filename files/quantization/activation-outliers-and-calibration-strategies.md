@@ -52,3 +52,23 @@ for s in [30 / 7, 1 / 7]:
 
 - [SmoothQuant 的尺度计算与折叠](https://github.com/mit-han-lab/smoothquant/blob/c61476d728e42ae0d8a35e7e78494edcac3237b5/smoothquant/smooth.py)
 - [AWQ 如何实际收集校准激活](https://github.com/mit-han-lab/llm-awq/blob/d6e797a42b9ef7778de8ee2352116e0f48a78d61/awq/quantize/pre_quant.py)
+
+## max、percentile 与动态 scale 的选择
+
+用最大绝对值做 scale 不会截断校准样本，但一个极端值会降低主体值的有效分辨率。用 99.9% 分位数可能提高普通值精度，却要明确被截断的比例和这些值是否对应关键事件。动态 scale 可以按 token 或 batch 适应输入，代价是运行时归约、额外 metadata 和更复杂的 kernel。
+
+不要把某一种规则写成全模型默认。对每个敏感层保存候选规则、被截断比例、层输出误差和任务指标，再决定是否混合使用。校准集要与部署输入的 tokenizer、图像预处理、序列长度和工具结果格式一致。
+
+## 做一次层敏感度扫描
+
+先在固定校准集上逐层替换量化模块，记录下游 logits、动作头或检索分数的变化。将层按任务退化排序，再给最敏感的层保留更高精度或更细粒度 scale。这个扫描用于定位，不等于最终部署效果，因为多个模块同时量化可能存在交互。
+
+一份可复查的记录至少包含：层名、输入 shape、校准样本 ID、scale 规则、截断比例、参考输出 checksum、量化输出误差和任务结果。若只保存最终准确率，下一次修改校准集时无法解释差异。
+
+## 评测集必须与校准集隔离
+
+校准集用于估计范围和选择粒度，开发集用于调参，最终测试集只能在配置冻结后使用。还应保留一个时间切片或新领域集合，检查激活范围漂移。若部署输入比校准集更长、包含更多代码或工具结果，静态 scale 可能在上线后失效；此时要报告漂移监控和回退策略。
+
+**来源与改编说明**：SmoothQuant 与 AWQ 源码用于对照尺度迁移、校准激活和真实量化边界；数组、分位数和层扫描是本站可复算的教学例子。自测时说明校准集、开发集和最终测试集分别承担什么职责。
+
+继续阅读：[量化对照实验](evaluation-and-deployment-checklist.md)检查浮点、模拟量化和真实 kernel 的偏差；[PTQ、GPTQ、AWQ 与 SmoothQuant](ptq-gptq-awq-smoothquant.md)对比不同算法的误差对象和校准方式。

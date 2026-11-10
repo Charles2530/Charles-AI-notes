@@ -1,6 +1,6 @@
 # 数据划分与评测指标
 
-一个“准确率 90%”的系统，可能漏掉了一半真正需要处理的请求。分数没有算错，问题在于平均的对象与任务关心的错误不一致。评测需要把样本来源、决策规则、指标和比较协议连起来。
+为什么一个“准确率 90%”的系统，仍可能漏掉一半真正需要处理的请求？通常不是公式算错，而是分母、样本来源或错误代价没有和任务对齐。评测要把数据划分、决策阈值、指标和比较协议放在同一张表里。
 
 设我们在 100 条请求中判断哪些需要人工介入，真实需要介入的有 20 条。系统找出其中 10 条，也错误地把 5 条普通请求送给人工。下面一直用这组结果，看看不同指标各自说明什么。
 
@@ -90,3 +90,59 @@ print(round(100*a, 3), round(100*b, 3), round(100*(b-a), 3))
 
 - [Evaluating Large Language Models Trained on Code](https://arxiv.org/abs/2107.03374)给出 pass@k 的采样估计背景。
 - [评估与消融方法](../training/evaluation-and-ablation-methodology.md)进一步讨论训练预算和变量控制。
+
+## 任务不同，指标的分母也不同
+
+除分类外，常见任务还需要明确：
+
+| 任务 | 常见指标 | 必须补充的分母/协议 |
+| --- | --- | --- |
+| 回归 | MAE、RMSE、(R^2) | 单位、异常值处理、按用户/episode 聚合 |
+| 排序/检索 | Recall@k、MRR、NDCG | 候选集、相关性标注和 k |
+| 生成 | pass@k、BLEU/ROUGE、人工偏好 | 采样次数、验证器、prompt 和长度 |
+| 预测概率 | NLL、Brier、ECE | 概率校准、分桶和事件定义 |
+| 机器人闭环 | 成功率、恢复率、接管率 | episode、重置、超时和安全停止 |
+
+同一个“准确率”在逐 token、逐样本、逐任务和逐 episode 上可能有完全不同的意义。长回答按 token 平均会让少数长样本占更大权重；机器人逐帧准确率会掩盖一段任务最终失败。先选统计单位，再选指标。
+
+## 不确定性要跟着指标走
+
+对准确率、成功率或错误率，至少报告样本数和区间；对 episode 相关数据，应按 episode 或用户分组重采样，而不是把每一帧当独立观测。对多随机种子训练，还要区分：
+
+- 固定模型在测试集上的样本波动。
+- 不同训练 seed 的模型波动。
+- 不同环境/用户/时间窗口的部署波动。
+
+把三种波动合成一个标准差，会让读者无法判断“换模型”还是“换样本”造成变化。
+
+## 评测协议本身也要版本化
+
+评测记录至少包含：
+
+```yaml
+dataset_version: <immutable id>
+split_rule: <group/time/episode rule>
+prompt_template: <commit or file hash>
+sampling: {temperature: 0.0, top_p: 1.0, num_samples: 1}
+tools_and_retrieval: <enabled versions>
+judge_or_verifier: <version and seed>
+aggregation: <sample/token/episode and weights>
+failure_policy: <timeout/cancel/error handling>
+```
+
+如果 prompt、检索资料、工具权限或 judge 发生变化，前后分数不能只按模型版本比较。评测配置应与 W&B Run、PaperPilot 证据和教程实验合同共享一个 ID。
+
+## 来源与改编说明
+
+- [D2L 模型选择](https://zh.d2l.ai/chapter_multilayer-perceptrons/underfit-overfit.html)用于基础 train/validation/test 角色。
+- [Evaluating Large Language Models Trained on Code](https://arxiv.org/abs/2107.03374)用于 pass@k 的采样估计背景。
+- [Data Cards](https://arxiv.org/abs/2204.01075)用于把来源、组成、处理和限制写入评测上下文。
+
+## 自测
+
+1. 为什么逐 token accuracy 不能替代逐 episode 成功率？
+2. 两个模型在同一批题上比较时，为什么配对差值比两个独立标准误更有信息？
+3. 一项评测只改变 temperature，能否直接称为模型能力变化？
+4. 为一个机器人任务写出最小评测 YAML，包含 reset、timeout 和人工接管规则。
+
+继续阅读：[泛化、正则化与分布偏移](generalization-regularization-and-distribution-shift.md)讨论评测分数换域后怎样解释；[训练评测与消融方法](../training/evaluation-and-ablation-methodology.md)把同一套分母和实验单位接到训练实验。

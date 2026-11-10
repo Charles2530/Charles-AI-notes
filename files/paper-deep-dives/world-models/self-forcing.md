@@ -365,3 +365,5 @@ Self Forcing 将一个常被掩盖的差异显式化。把真实历史加噪、�
 当前方法也有明确边界。rolling cache 只保留有限上下文，视频远超训练长度仍会退化；KV detach 与去噪梯度截断虽然节省显存，也减少了长程反向学习路径。论文提出改进外推和探索 state-space 等循环结构作为后续方向，尚未由当前实验解决。[原文 §5](https://arxiv.org/pdf/2506.08009#page=10)
 
 真正值得带走的实践判断是，先检查模型训练时读到的历史是否来自同一个生成过程，再选择分布目标和加速方案。Self Forcing 的价值就在于把这三件事接起来，同时保留了足够具体的速度、质量和消融证据，让“低延迟连续生成”成为可以衡量的系统行为。
+
+读完可接[Diffusion Forcing](../diffusion/diffusion-forcing.md)，看不同噪声时间是否也在处理训练与推理的历史差异；再看[CausVid](../diffusion/causvid.md)，对照因果块、KV cache 和流式输出怎样把同一问题放到部署路径。若要把视频 rollout 接到机器人动作，还需要回到[动作条件世界模型训练案例](../../world-models/action-conditioned-video-world-model-training-case.md)检查动作是否真的改变了未来。

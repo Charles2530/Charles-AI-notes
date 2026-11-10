@@ -1,6 +1,8 @@
 # 用读写量和计算量选择优化方向
 
-一个kernel变慢，可能因为算得多、搬得多，也可能大部分时间花在启动与同步。成本模型先给出可计算的下界，再用实际时间判断还有哪些开销没有解释。它帮助缩小调查范围，不替代测量。
+一个 kernel 从 8 微秒变成 12 微秒，单看源码很难知道多出来的 4 微秒去了哪里。可能是读写字节增加了，可能是 tile 让计算单元吃不饱，也可能只是多了一次 launch 或同步。先算工作量和数据流量，再把它们与真实 trace 对照，才能知道下一步该改算法、layout，还是调度。
+
+这一页只做一件事：给性能差异建立一笔能复算的账。公式提供下界，benchmark 提供实际时间，二者之间的差值才是需要继续调查的部分。
 
 ## 向量加先算多少字节
 
@@ -50,11 +52,25 @@ flowchart LR
 
 每个提案先写明它要消除哪次读写、哪段等待或哪项浪费。若写不出这一步，继续profiling比直接改tile更有用。
 
+## 把模型落到一次 benchmark
+
+测一个 kernel 时，先固定 shape、dtype、batch 和 warmup 次数。记录端到端时间、纯 kernel 时间、实际读写字节、FLOPs、launch 次数和同步位置。向量加的有效带宽可以写成 (12N/t)，但这个数只在三次全局读写都确实发生时有意义；若输入已经留在片上缓存，报告里应把缓存命中和 HBM 流量分开。
+
+融合 softmax 的例子更能说明边界。Triton 教程把“行能否放进 GPU SRAM”作为适用条件，满足时可以减少中间写回；行太长、寄存器压力过大或形状不规则时，同一个融合方案可能失去优势。教程里的 benchmark 是方法示范，不是对所有 GPU 和 workload 的性能承诺。
+
+可以把一次测量整理成四列：理论下界、实际 kernel 时间、未解释差值、下一步验证。差值若随着 shape 增大而接近固定值，先查 launch 和同步；若随字节数变化，先查访存和 layout；若只在某些 shape 出现，优先查 dispatch、padding 和 tile 选择。
+
 ![Triton roofline comparison](../assets/images/paper-figures/operators/triton-roofline-comparison.png){ width="820" }
 
 <small>图源：[Triton MAPL 2019 paper](https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf)。原图表达实现结果相对 roofline 上限的位置；读图重点是把 kernel 选型先拆成 compute、memory 和 overhead 三张账。它不能替代真实 workload profile。</small>
+
+## 继续读
+
+成本估计需要真实 shape 支撑，可以接着看[workload 建模与 shape bucket](workload-modeling-and-shape-buckets.md)、[性能反模式](performance-anti-patterns-and-failure-modes.md)和[profiling 调试](profiling-debugging-and-numerical-stability.md)。
 
 ## 对照源码与延伸阅读
 
 - [向量加的有效流量口径](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/01-vector-add.py)
 - [融合softmax的读写分析](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/02-fused-softmax.py)
+
+**来源与改编说明**：流量、带宽和融合例子参考 [Triton Vector Addition](https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html) 与 [Fused Softmax](https://triton-lang.org/main/getting-started/tutorials/02-fused-softmax.html) 的教学口径。页面中的数值是可计算的教学例子，不代表某张 GPU 的实测结果。

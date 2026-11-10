@@ -25,7 +25,7 @@ MagiAttention 解决的是一个分布式执行问题。超长视频或多文档
 
 ![MagiAttention overview 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-1-overview.png){ width="820" }
 
-*官方总览图。上部决定工作和数据放在哪里，下部决定何时搬运、何时计算。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方总览图。上部决定工作和数据放在哪里，下部决定何时搬运、何时计算。*
 
 标题中的 linear scalability 指向增加设备后的分布式扩展目标。它没有把完整 attention 的二次交互改成线性算法；后面的实测曲线也并非每卡吞吐完全不下降。该工作的价值是让复杂 mask 更容易在多卡上有效执行，最终收益需要同时看算子效率、通信路径和实际任务大小。
 
@@ -41,7 +41,7 @@ MagiAttention 解决的是一个分布式执行问题。超长视频或多文档
 
 ![Ring-Attention load balance 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-2-ring-attention-load-balance.png){ width="760" }
 
-*官方 Ring Attention 切分示意，依次为 full、causal、varlen full、varlen causal。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 Ring Attention 切分示意，依次为 full、causal、varlen full、varlen causal。*
 
 ### 其他 CP 路线改变了哪一种布局
 
@@ -67,13 +67,13 @@ $$
 
 ![AttnSlice 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-3-attnslice.png){ width="760" }
 
-*官方 AttnSlice 重排示意。切片范围需要随数据布局一起转换。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 AttnSlice 重排示意。切片范围需要随数据布局一起转换。*
 
 再看下图第二行。Block-causal、varlen block-causal，以及额外带一个 global block 的情况，其差异都落在具体允许的区域中。FFA 要保持这些给定语义，而不是为了快而任意删除其中的注意力边。
 
 ![Mask patterns 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-4-mask-patterns.png){ width="780" }
 
-*官方 mask 示例，上排较规则，下排展示视频等工作负载中的组合结构。*[↗](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html#attnslice-representation)
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 mask 示例，上排较规则，下排展示视频等工作负载中的组合结构。*[↗](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html#attnslice-representation)
 
 ### 四种基本 mask 避免把滑动窗口拆成逐行任务
 
@@ -81,7 +81,7 @@ $$
 
 ![AttnSlice 在 query 比 key 短时的四种 mask](../../assets/images/paper-deep-dives/foundations/magiattention/mask-types-rectangular.png)
 
-*官方基本类型图，`QRange=[4,8)`、`KRange=[0,8)`。两条斜边采用不同对齐方式。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方基本类型图，`QRange=[4,8)`、`KRange=[0,8)`。两条斜边采用不同对齐方式。*
 
 这也解释了一个容易误读的名字。BI-CAUSAL 并非普通的“全双向注意力”：query 与 key 一样长时，两条边界重合，只剩主对角线；query 比 key 长时，交集可以为空。使用这种接口必须保留范围长度与边界对齐，不能只看到 `CAUSAL` 就假定所有子块都按全局左上角切三角形。[↗](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html#basic-mask-types-in-attnslice)
 
@@ -116,7 +116,7 @@ Hopper 路线的 FFA 基于 FA3，利用 TMA 加载数据，并将 AttnSlice 作
 
 ![FFA kernel 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-5-ffa-kernel.png){ width="780" }
 
-*官方 FFA 前后向示意。左侧合并 O/LSE，右侧累加 dQ、dK、dV。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 FFA 前后向示意。左侧合并 O/LSE，右侧累加 dQ、dK、dV。*
 
 反向收到上层 $dO$ 后，借助前向保存的整行 LSE 重建各有效分数对应的概率，再计算局部梯度。多个 key 切片会贡献到同一 dQ，多个 query 切片也可能贡献到同一 dK/dV，所以图右侧标出 atomic add。跨设备时，这些局部 dKV 还必须回到其原始 KV 所在 rank 并求和。
 
@@ -146,7 +146,7 @@ $$
 
 ![Dispatch solver 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-6-dispatch-solver.png){ width="760" }
 
-*官方 Greedy Load-Balance Dispatch Algorithm via Min-Heap。它是快速启发式分配，不是任意输入上的全局最优证明。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 Greedy Load-Balance Dispatch Algorithm via Min-Heap。它是快速启发式分配，不是任意输入上的全局最优证明。*
 
 仍用前面面积为 $1,2,\ldots,8$、四卡各装两个 chunk 的例子，算法先把 $8,7,6,5$ 分开，再依次把 $4,3,2,1$ 给当前最轻的 bucket，最终每卡总面积为 9。这说明它如何找到适合规则因果例子的平衡；复杂 mask 下是否同样理想，则由具体面积分布和容量共同决定。[↗](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html#dispatch-solver)
 
@@ -162,7 +162,7 @@ $$
 
 ![Ring P2P redundancy 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-7-ring-p2p-redundancy.png){ width="760" }
 
-*官方 Ring P2P 冗余示例。判断某次传输是否必要，依据是目的地是否有实际计算依赖。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 Ring P2P 冗余示例。判断某次传输是否必要，依据是目的地是否有实际计算依赖。*
 
 **GroupCast** 从一个所有者向真正需要该 KV 块的 rank 集合发送；**GroupReduce** 则把这些设备算出的局部 dKV 聚合回所有者。前向是按需求分发，反向是沿相应关系回收并相加。GroupReduce 不能简单选择某张卡的梯度，因为同一个 key/value 可能被多个远端 query 使用，每一处都对它产生导数。
 
@@ -170,7 +170,7 @@ $$
 
 ![GroupCast and GroupReduce 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-8-group-collectives.png){ width="760" }
 
-*官方基于 AlltoAll-v 的 GroupCast/GroupReduce 原型。Range-Gather 与 Range-Scatter-Reduce 负责组织和归约缓冲区。*[↗](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html#group-collective-primitives)
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方基于 AlltoAll-v 的 GroupCast/GroupReduce 原型。Range-Gather 与 Range-Scatter-Reduce 负责组织和归约缓冲区。*[↗](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html#group-collective-primitives)
 
 ### 接收者都必要，仍可能在慢链路上重复传同一份数据
 
@@ -200,7 +200,7 @@ KV-only 路线将 Q/O 留在本地。前向先处理本地就绪的 QKV，同时
 
 ![Multi-stage overlap 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-9-multi-stage-overlap.png){ width="760" }
 
-*官方多阶段调度示意。前向最后一段计算、反向最后一段 dKV 归约，处于不同的流水线尾部。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方多阶段调度示意。前向最后一段计算、反向最后一段 dKV 归约，处于不同的流水线尾部。*
 
 这个理想排程需要当前计算足够覆盖相关通信。`overlap_degree` 表示远端工作分成多少阶段；切得太少，单次通信可能暴露，切得太多，小块执行和启动成本又会上升。官方明确建议先在 1、2、3、4 等常见值中实测，再考虑自动搜索，因为计算通信比例估计不准时，自动方案可能更差。前向与反向的成本构成不同，也不应直接假定同一粒度对两者都最佳。[↗](https://sandai-org.github.io/MagiAttention/docs/main/blog/magi_attn.html#dynamic-overlap-stage-search)
 
@@ -301,7 +301,7 @@ H100 的分布式基线使用 FA3，MagiAttention 使用 FFA，便于比较相�
 
 ![H100 full mask forward kernel benchmark](../../assets/images/paper-deep-dives/foundations/magiattention/kernel-h100-full-forward.png)
 
-*官方单 kernel full-mask 前向图。这里没有跨设备通信，横轴是序列长度。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方单 kernel full-mask 前向图。这里没有跨设备通信，横轴是序列长度。*
 
 按原图刻度读取，1K 时 FFA 约 220 TFLOPs/s，FA3 约 560；32K 时约为 635 对 700。对应反向图在 32K 约为 575 对 600。它支持较长规则序列上 FFA 接近 FA3，同时显示短序列启动或切片组织成本不能忽略；并不支持“FFA 在所有情况下都比 FA3 更快”。[↗](https://sandai-org.github.io/MagiAttention/docs/main/blog/cp_benchmark.html#kernel-tflops-h100-full-mask-fwd)
 
@@ -311,7 +311,7 @@ H100 的分布式基线使用 FA3，MagiAttention 使用 FFA，便于比较相�
 
 ![H100 block-causal document forward kernel benchmark](../../assets/images/paper-deep-dives/foundations/magiattention/kernel-h100-block-causal-forward.png)
 
-*官方不规则 mask 前向图。X 表示该测试配置不支持或运行报错，可能包括 OOM，不是测得 0 TFLOPs/s。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方不规则 mask 前向图。X 表示该测试配置不支持或运行报错，可能包括 OOM，不是测得 0 TFLOPs/s。*
 
 32K 前向中，FFA 约为 570 TFLOPs/s，FlashMask 约 160，SDPA 约 20；反向对应约为 360 对 205，FFA 与 FlashMask 的差距比前向小。规则接口中的 FA2、FA3、cuDNN 在这幅图上标为 X，不能从缺失值计算无限倍加速，也不能扩展为这些软件永远不可能支持任何相似 mask。
 
@@ -325,7 +325,7 @@ H100 的分布式基线使用 FA3，MagiAttention 使用 FFA，便于比较相�
 
 ![H100 forward 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-10-h100-forward.png){ width="820" }
 
-*官方 H100 varlen-causal 前向图。按 benchmark 定义，纵轴读作每卡有效吞吐。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 H100 varlen-causal 前向图。按 benchmark 定义，纵轴读作每卡有效吞吐。*
 
 相同序列和 mask 下，更高的有效吞吐意味着这一 attention 阶段更快，但每卡吞吐随规模下降，说明通信与调度等影响尚未完全被隐藏。标题的扩展目标不能代替这条实测曲线。
 
@@ -333,7 +333,7 @@ H100 的分布式基线使用 FA3，MagiAttention 使用 FFA，便于比较相�
 
 ![H100 backward 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-11-h100-backward.png){ width="820" }
 
-*官方 H100 varlen-causal 反向图。反向既有更多矩阵乘法，也要归约 dKV，排序不能从前向直接推断。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 H100 varlen-causal 反向图。反向既有更多矩阵乘法，也要归约 dKV，排序不能从前向直接推断。*
 
 ### B200 的 native 收益主要在跨节点后扩大
 
@@ -341,13 +341,13 @@ B200 前向的 8 卡点，AlltoAll-v 约为 910，native 约为 870，后者略�
 
 ![B200 forward 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-12-b200-forward.png){ width="820" }
 
-*官方 B200 varlen-causal 前向图。8 卡时的交叉，说明 native 并非无条件胜出。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 B200 varlen-causal 前向图。8 卡时的交叉，说明 native 并非无条件胜出。*
 
 反向也有类似交叉：8 卡时 native 约 650、AlltoAll-v 约 690；64 卡时变为约 550 对 450。前后向趋势都提示，应按实际 CP 规模选择与测量通信后端，不能仅依据“native”这个名字做决定。
 
 ![B200 backward 原图](../../assets/images/paper-deep-dives/foundations/magiattention/figure-13-b200-backward.png){ width="820" }
 
-*官方 B200 varlen-causal 反向图。native 的每卡吞吐保持得更好，仍没有完全消除扩展成本。*
+*图源：[MagiAttention 官方文档](https://sandai-org.github.io/MagiAttention/)，官方 B200 varlen-causal 反向图。native 的每卡吞吐保持得更好，仍没有完全消除扩展成本。*
 
 为了把这些观察放到相同口径下，下面只摘取 8 卡与 64 卡端点。数值按图读取并取约数，单位统一为 TFLOPs/s/GPU。
 
@@ -369,3 +369,5 @@ MagiAttention 没有提出新的监督目标，也不依靠改变模型质量来
 采用这套方案，首先要判断 mask 的生成时机。固定文档边界适合提前 dispatch；每层生成的稀疏选择需要能搬动 Q/O 的动态调度，还要计入 CPU 求解与同步。其次要看部署规模：节点内与跨节点的主要瓶颈不同，native RDMA 去重的收益也会随拓扑改变。最后应分别测前向、反向与完整训练 step，把有效 FLOPs、最慢 rank、通信时间和额外缓冲区放在同一份记录中。
 
 这些区别使它更适合被理解成一套 mask 驱动的分布式 attention 执行系统。灵活性、均衡、按需传输和真正重叠需要一起成立，单独一张 kernel 峰值图或一条理想流水线都不足以替代完整结果。[官方代码](https://github.com/SandAI-org/MagiAttention)
+
+前置知识可以按三步补齐：先看[通信 kernel 与计算重叠](../../operators/communication-kernels-and-overlap.md)，确认 ready、launch 和 consumer 之间的依赖；再看[长上下文与 FlashAttention 演进](../../operators/long-context-and-flashattention-evolution.md)，区分 online softmax 与分布式切片；最后回到[分布式训练与 checkpoint](../../training/distributed-training-and-checkpointing.md)，检查局部结果怎样进入完整训练 step。这样读图时关注的是依赖和证据，不只是峰值 TFLOPs。

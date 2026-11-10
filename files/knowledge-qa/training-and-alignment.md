@@ -43,3 +43,9 @@ SFT学习示范目标的条件概率；DPO在特定推导与约定下用偏好�
 参数和优化器状态只覆盖一部分训练状态。数据顺序、采样器位置、随机数状态、混合精度scaler、scheduler和分布式实现都可能影响下一步。某些教学checkpoint只支持大致继续训练，没有承诺逐步完全一致。
 
 先比较恢复前后同一个固定batch的预测、梯度和一次更新，再检查数据进度与随机状态。即使记录完整，跨硬件或不同kernel仍可能带来数值差异。见[checkpoint与恢复](../training/distributed-training-and-checkpointing.md)。
+
+## 快速自测
+
+从一次“loss 下降但任务没改善”的实验中列出四项记录：样本经过的处理、loss 分母、独立评测、恢复状态。逐项说明哪一项缺失会让结论失去解释。完整实验方法见[评测与消融](../training/evaluation-and-ablation-methodology.md)。
+
+**来源与改编说明**：自回归目标和 checkpoint 约定对照 [PyTorch distributed checkpoint 文档](https://pytorch.org/docs/stable/distributed.checkpoint.html)，偏好优化可查 [DPO 论文](https://arxiv.org/abs/2305.18290) 与 [TRL 文档](https://huggingface.co/docs/trl/)。本页示例用于定位接口，不是算法效果报告。

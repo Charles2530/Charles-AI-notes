@@ -229,3 +229,5 @@ control interpretation:
 - [robosuite Controllers](https://robosuite.ai/docs/modules/controllers.html)：理解 controller 如何解释 policy action。
 - [MoveIt Pro IK docs](https://docs.picknik.ai/how_to/robotics_applications/computing_inverse_kinematics/)：理解 Cartesian 末端目标如何转成 joint states。
 - [Google DeepMind RT-2 blog](https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/)：理解 VLA 如何把动作写成 token，但仍然需要动作接口。
+
+这些字段进入策略以后，还要对照[动作表示与接口](../vla/action-representation-and-interfaces.md)的单位、时间步和控制语义；若要检查执行后的反馈，再看[闭环恢复与失败分析](../vla/closed-loop-recovery-and-failure-analysis.md)。

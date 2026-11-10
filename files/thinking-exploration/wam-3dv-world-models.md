@@ -75,3 +75,6 @@ DreamZero 的失败配对图将生成未来与执行结果放在一起。应沿�
 一个有诊断价值的实验可固定起点、杯子和三个候选推法，分别记录视频、关键点位移、碰撞或倾倒结果和总时延。再改变杯子材质、摩擦和遮挡，检查每种表示丢失的信息。只展示最好的一段视频，很难发现这些条件差异。
 
 三维表示提供几何查询，视频提供丰富可见线索，直接策略提供低成本反应。它们可以共同使用，也可以按任务选择。判断连接是否成立，应沿状态、动作、后果与反馈逐段检查，基础接口见[WM、WAM 与动作条件建模](../world-models/wm-wam-vam-and-action-conditioned-modeling.md)。
+## 继续读
+
+继续看[世界模型与机器人学习](../paper-deep-dives/world-models/world-model-for-robot-learning-survey.md)和[D4RT 几何查询](../paper-deep-dives/embodied-ai/d4rt.md)。

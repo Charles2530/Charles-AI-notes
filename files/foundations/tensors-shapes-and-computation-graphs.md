@@ -68,6 +68,28 @@ print(x + position_bias)
 
 广播最隐蔽的错误出现在两个轴恰好等长时。对于 `[2, 2]` 的矩阵，直接加 `[10, 20]` 会给第一列加 10、第二列加 20。即使编写者原本希望给第一行加 10、第二行加 20，程序也不会报错。检查一两个具体元素，往往比只打印输出 shape 更能发现问题。
 
+## padding mask 既改变数值，也改变损失分母
+
+自然语言 batch 往往需要把不同长度的序列补到同一个 `L`。设两条序列的有效长度分别为 2 和 4，补齐后的 `input_ids` 仍然可以组成 `[2, 4]`，但第二条样本以外的补齐位置没有真实 token。用 mask
+
+\[
+m_{b,l}=\begin{cases}
+1,&l<\ell_b\\
+0,&l\ge \ell_b
+\end{cases}
+\]
+
+记录有效位置，逐 token 损失应写成
+
+\[
+L=\frac{\sum_{b,l}m_{b,l}\ell_{b,l}}
+{\max(1,\sum_{b,l}m_{b,l})}.
+\]
+
+如果直接对 `[B, L]` 求平均，短序列会因为补齐位置被重复计权。注意力里的 padding mask 又是另一处接口，它通常把无效 key 的 score 设为负无穷，再做 softmax。query 位置是否也被屏蔽，需要根据 causal、padding 和 loss 的组合单独决定，不能把一个布尔张量无条件复用到所有地方。
+
+一个最小检查是构造长度为 2 和 4 的两条序列，分别打印有效 token 数、未屏蔽的 attention 权重和最终 loss。若删掉一条序列的 padding token 后，另一条样本的 loss 也改变，说明归一化分母或 mask 广播位置有问题。
+
 ## 广播在反向时要把共享贡献加回来
 
 前向中同一份偏置服务两行，反向就要收集两行的贡献。若上游梯度为 \(G=[[1,2,3],[4,5,6]]\)，偏置 `[3]` 的梯度为 `[5,7,9]`，沿样本轴求和；如果参数是每行一个偏置 `[2,1]`，梯度则为 `[[6],[15]]`，沿特征轴求和。
@@ -93,6 +115,26 @@ Y_{ij}=\sum_{k=1}^{K}A_{ik}W_{kj}.
 \]
 
 \(K\) 被求和消去，\(M\) 和 \(N\) 保留下来。把 `[B, L, D]` 与 `[D, H]` 相乘时，可以把前两轴看成 \(B L\) 个独立行向量，得到 `[B, L, H]`。这也解释了为什么矩阵乘法的尺寸检查只检查内维，却无法判断某个维度是否选对。
+
+### `einsum` 把轴的含义写进表达式
+
+同一个运算也可以用 Einstein summation 表示。线性层的批量计算可以写成
+
+```python
+import torch
+
+y = torch.einsum("bld,dh->blh", x, weight)
+```
+
+`b`、`l` 和 `h` 出现在输出里，`d` 只出现在输入里，所以沿 `d` 求和。注意力分数可以写成
+
+```python
+scores = torch.einsum("bqhd,bkhd->bhqk", q, k)
+```
+
+这里 `q` 和 `k` 分别表示 query 与 key 的位置，`h` 是 head，最后保留 `[B, H, Q, K]`。若把输出字符串误写成 `bhkq`，程序仍会返回一个张量，只是 query 和 key 轴被交换。`einsum` 的优点是轴意图显式，代价是字符串本身也需要逐字符核对。
+
+调试时可以先用小整数张量分别计算 `matmul` 和 `einsum`，再比较 `max(abs(a-b))`。不要只比较 shape，因为轴顺序错误通常不会改变元素总数。
 
 ## Shape 改变时，数据可能留在原处
 
@@ -146,6 +188,26 @@ shape 的乘法关系会直接改变这个数字。例如一段视频包含 4 �
 
 若再显式构造 `[B, Heads, L, L]` 的注意力分数，长度 \(L\) 就出现两次。这是长序列注意力开销增长很快的原因。具体的内存格式与量化可继续看[数值、显存与运行时](numerics-memory-and-runtime-basics.md)，减少注意力中间矩阵的方法见[长上下文与 FlashAttention](../operators/long-context-and-flashattention-evolution.md)。
 
+## dtype 和 device 也是张量接口的一部分
+
+两个张量即使 shape 完全相同，也可能因为 dtype 或 device 不同而不能直接计算。FP32 每个元素占 4 字节，FP16 和 BF16 通常占 2 字节，INT8 占 1 字节，但字节数只是存储大小，不等于运算一定使用相同精度。某些 GPU kernel 会把 FP16 或 BF16 输入提升到更高精度累加，再转换回输出 dtype。
+
+`device` 表示数据所在的位置。CPU 张量和 CUDA 张量不能在同一个普通算子里隐式互相搬运，否则一个看似简单的表达式可能产生同步和拷贝。初始化新张量时，最好从已有张量继承 `device` 和 `dtype`，例如 `torch.zeros_like(x)`；在 batch 循环里临时写死 `torch.tensor(...)`，很容易把数据放回 CPU。
+
+自动混合精度还会改变算子选择。矩阵乘法可以使用低精度输入，归约、指数和归一化可能保留更高精度。排查数值问题时，应同时记录输入 dtype、输出 dtype、累加 dtype、device 和是否处于 autocast 区域。只打印最终 loss，无法判断错误来自溢出、下溢、设备复制还是模型公式。
+
+```python
+import torch
+
+x = torch.ones(2, 3, dtype=torch.bfloat16)
+scale = torch.tensor(0.5, device=x.device, dtype=x.dtype)
+y = x * scale
+print(x.shape, x.dtype, x.device)
+print(y.shape, y.dtype, y.device)
+```
+
+这段代码只检查元数据和逐元素算术，不代表某个 GPU kernel 已经被调用。若要测速度，还要固定 warmup、同步设备并报告 shape、batch、dtype 与实现版本。
+
 ## 计算图记录数字怎样得到
 
 ![TensorFlow 原论文中的计算图](../assets/images/paper-figures/foundations/tensorflow-figure-2-simple-graph.svg){ .atlas-figure-compact width="380" }
@@ -165,6 +227,37 @@ shape 的乘法关系会直接改变这个数字。例如一段视频包含 4 �
 这里 \(G_i\) 是梯度矩阵的第 \(i\) 行。偏置梯度需要求和，因为前向时同一份偏置被广播到所有行。权重梯度需要输入 \(X\)，输入梯度需要权重 \(W\)。因此，自动微分系统会按具体算子的需要保存部分前向数据，训练显存也由此增加。完整数值推导和重计算方法在[自动微分与激活显存](autograd-activation-checkpointing-and-memory.md)中展开。
 
 PyTorch 的常见 eager 执行会在每次前向时按实际执行的运算建立自动微分图。它与论文中的结构图、编译器优化后的执行图用途不同。阅读代码时，可以先追踪一个张量从哪里来、每个轴怎样变化、最后进入哪个损失，再决定是否需要看底层执行方式。
+
+## 形状错误应当在边界处尽早暴露
+
+一个训练 batch 进入模型时，可以在数据加载器、模型入口、注意力模块和 loss 入口各保存一次 shape、dtype、device 与有效 token 数。出错后先比较第一处发生变化的位置，再看算子内部，而不是直接把整个网络换成另一套实现。
+
+```python
+def describe(name, x):
+    print({
+        "name": name,
+        "shape": tuple(x.shape),
+        "dtype": str(x.dtype),
+        "device": str(x.device),
+        "requires_grad": x.requires_grad,
+    })
+
+describe("hidden", hidden)
+describe("logits", logits)
+```
+
+如果只想检查结构，不要在每一步调用 `tensor.tolist()`，那会把整个张量搬到 CPU 或产生很大的日志。先打印元数据，再对一个固定索引保存数值。遇到 NaN 或 Inf 时，沿同一批输入检查输入、线性层输出、归一化输出和 loss；这样可以区分数据已经坏掉，还是某个算子第一次产生异常。
+
+自动微分还有两个容易混淆的边界。`detach()` 会切断当前张量到上游计算图的梯度，`no_grad()` 会让一个代码块不记录梯度；它们都可能减少显存，却不是同一个操作。评估阶段常用 `model.eval()` 改变 dropout 和 batch norm 的行为，同时仍可以在需要时保留梯度。模型模式、梯度记录和参数的 `requires_grad` 应分别记录。
+
+## 练习与自测
+
+1. 两条序列长度为 2 和 4，补齐到 `[2, 4]`。写出一个 `[2, 4]` 的 mask，并计算有效 token 平均损失的分母。
+2. 对 `x.shape == [2, 3, 4]` 和 `w.shape == [4, 5]`，写出线性层输出 shape。若把 `x` 改成 `[2, 4, 3]`，哪一个内维不再匹配。
+3. 取 `q.shape == [1, 2, 3, 4]`、`k.shape == [1, 5, 3, 4]`，用 `einsum` 写出 `[1, 3, 2, 5]` 的分数表达式。
+4. 先对一个转置视图调用 `view`，再调用 `reshape`，打印是否共享存储。若结果不同，解释是 stride 不满足还是数值被改变。
+
+这些题的目的不是熟悉某个框架 API，而是让每个轴都有一份可以口头说明的含义。答案如果只剩“运行一下看看”，就还没有完成接口检查。
 
 ## 参考资料
 

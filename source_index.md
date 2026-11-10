@@ -3,6 +3,8 @@
 - 来源站点：[https://datawhalechina.github.io/llm-algo-leetcode/](https://datawhalechina.github.io/llm-algo-leetcode/)
 - 抓取范围：站点首页侧边栏可达的全部唯一 HTML 页面。
 - 页面总数：68
+- 链接状态：这是历史抓取索引，不保证每个旧路径当前仍可访问。站点迁移后，先从来源站点首页和当前导航寻找新路径；本索引中的“历史 URL”不能代替当前版本、许可证或正文相似性核查。
+- 已核对的迁移路径：原 `17_vLLM_PagedAttention.html` 已迁到 `22_vLLM_PagedAttention.html`；原 `20_Quantization_W8A16.html` 已迁到 `25_Quantization_W8A16.html`；原 Triton GEMM 页面已迁到 `03_Triton_Kernels/04_Triton_GEMM_Tutorial.html`。
 
 ## llm-algo-leetcode 内容索引
 
@@ -45,10 +47,10 @@
 | ch02 PyTorch 核心算法实现实战 | 14. Attention Backward Math &#124; 注意力机制反向传播推导与自定义 Autograd (Attention Backward) | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/14_Attention_Backward_Math.html | Attention backward, 反向传播, QKV 梯度, Autograd, 矩阵求导 |
 | ch02 PyTorch 核心算法实现实战 | 15. FlashAttention Sim &#124; 深入理解 FlashAttention：分块计算与 Online Softmax | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/15_FlashAttention_Sim.html | FlashAttention, Online Softmax, 分块计算, IO 优化, 显存 |
 | ch02 PyTorch 核心算法实现实战 | 16. Decoding Strategies &#124; 大模型解码策略：Top-K, Top-p (Nucleus) 与 Temperature | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/16_Decoding_Strategies.html | Top-K, Top-P, Temperature, 解码策略, 采样 |
-| ch02 PyTorch 核心算法实现实战 | 17. vLLM PagedAttention &#124; 经典推理框架: 模拟 Continuous Batching 与 PagedAttention | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html | vLLM, PagedAttention, Continuous Batching, KV Cache, 分页管理 |
+| ch02 PyTorch 核心算法实现实战 | 17. vLLM PagedAttention &#124; 经典推理框架: 模拟 Continuous Batching 与 PagedAttention | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/22_vLLM_PagedAttention.html | vLLM, PagedAttention, Continuous Batching, KV Cache, 分页管理 |
 | ch02 PyTorch 核心算法实现实战 | 18. Speculative Decoding &#124; 投机解码：打破推理的访存瓶颈 (Speculative Decoding) | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/18_Speculative_Decoding.html | 投机解码, draft model, 验证采样, 接受率, 推理加速 |
 | ch02 PyTorch 核心算法实现实战 | 19. SGLang RadixAttention &#124; SGLang 与 RadixAttention: 突破 vLLM 多轮对话瓶颈 | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/19_SGLang_RadixAttention.html | SGLang, RadixAttention, 前缀树, Prefix Cache, 多轮对话 |
-| ch02 PyTorch 核心算法实现实战 | 20. Quantization W8A16 &#124; 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization) | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html | W8A16, INT8 量化, scale, 反量化, 权重量化 |
+| ch02 PyTorch 核心算法实现实战 | 20. Quantization W8A16 &#124; 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization) | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/25_Quantization_W8A16.html | W8A16, INT8 量化, scale, 反量化, 权重量化 |
 | ch02 PyTorch 核心算法实现实战 | 21. Gradient Checkpointing &#124; 极致显存优化：激活值重计算 (Gradient Checkpointing) | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/21_Gradient_Checkpointing.html | Gradient Checkpointing, activation, 重计算, 显存优化, 反向传播 |
 | ch02 PyTorch 核心算法实现实战 | 22. QLoRA and 4bit Quantization &#124; QLoRA 与 4-bit NormalFloat 量化核心机制 (QLoRA & 4bit) | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/22_QLoRA_and_4bit_Quantization.html | QLoRA, 4bit, NF4, LoRA, 量化微调 |
 | ch02 PyTorch 核心算法实现实战 | 23. ZeRO Optimizer Sim &#124; 显存优化进阶：模拟 ZeRO-1 切分与 ZeRO 原理 (ZeRO Optimizer) | https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/23_ZeRO_Optimizer_Sim.html | ZeRO, 优化器状态切分, 显存优化, 分布式训练, state partition |
@@ -58,7 +60,7 @@
 | ch03 CUDA C++ 与 Triton 算子开发 | 01. Triton Vector Addition &#124; Triton 入门与 Hello World：向量加法 (Vector Addition) | https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/01_Triton_Vector_Addition.html | Triton, 向量加法, block program, mask, kernel 入门 |
 | ch03 CUDA C++ 与 Triton 算子开发 | 02. Triton Fused SwiGLU &#124; Triton 算子开发：融合门控激活函数 (Fused SwiGLU) | https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/02_Triton_Fused_SwiGLU.html | SwiGLU, 门控激活, MLP, 前馈网络, LLaMA |
 | ch03 CUDA C++ 与 Triton 算子开发 | 03. Triton Fused RMSNorm &#124; Triton 算子开发实战：Fused RMSNorm | https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/03_Triton_Fused_RMSNorm.html | RMSNorm, 归一化, 方差, 残差, 稳定训练 |
-| ch03 CUDA C++ 与 Triton 算子开发 | 04. Triton GEMM Tutorial &#124; Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune) | https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html | Triton GEMM, 矩阵乘法, tiling, autotune, 吞吐优化 |
+| ch03 CUDA C++ 与 Triton 算子开发 | 04. Triton GEMM Tutorial &#124; Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune) | https://datawhalechina.github.io/llm-algo-leetcode/03_Triton_Kernels/04_Triton_GEMM_Tutorial.html | Triton GEMM, 矩阵乘法, tiling, autotune, 吞吐优化 |
 | ch03 CUDA C++ 与 Triton 算子开发 | 05. Triton Autotune and Profiling &#124; Triton 性能调优与基准测试 (Autotune & Profiling) | https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/05_Triton_Autotune_and_Profiling.html | Triton Autotune, profiling, block size, 性能调优, benchmark |
 | ch03 CUDA C++ 与 Triton 算子开发 | 06. Triton Fused Softmax &#124; Triton 进阶：跨线程归约与数值稳定 (Safe Softmax) | https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/06_Triton_Fused_Softmax.html | Triton Softmax, 跨线程归约, 数值稳定, kernel fusion, attention |
 | ch03 CUDA C++ 与 Triton 算子开发 | 07. Triton Fused RoPE &#124; Triton 进阶：融合旋转位置编码 (Fused RoPE) | https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/07_Triton_Fused_RoPE.html | RoPE, 旋转位置编码, 长上下文, 相对位置, 频率 |
@@ -414,7 +416,7 @@
 
 ### 38. 17. vLLM PagedAttention | 经典推理框架: 模拟 Continuous Batching 与 PagedAttention
 - 章节：ch02 PyTorch 核心算法实现实战
-- URL：https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/17_vLLM_PagedAttention.html
+- URL：https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/22_vLLM_PagedAttention.html
 - 核心知识点：难度： Hard | 标签： 推理架构 , vLLM | 目标人群： 核心 Infra 与算子开发 本章节的实战代码可以点击以下链接在免费 GPU 算力平台上直接运行： (国内推荐：魔搭社区免费实例) 本节我们将揭秘工业界大模型推理框架（如 vLLM ）的两大杀手锏技术： Continuous Batching (连续批处理/动态批处理) 和 PagedAttention (分页注意力池) 。 这是目前算法面经里含金量最高，但资料最匮乏的部分！
 - 算法 / 数据结构：vLLM, PagedAttention, Continuous Batching, KV Cache, 分页管理
 - 代码示例：python: PyTorch 示例; python: __init__; python: test_paged_attention_manager
@@ -441,7 +443,7 @@
 
 ### 41. 20. Quantization W8A16 | 模型量化基础: INT8 绝对最大值量化与反量化 (Quantization)
 - 章节：ch02 PyTorch 核心算法实现实战
-- URL：https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/20_Quantization_W8A16.html
+- URL：https://datawhalechina.github.io/llm-algo-leetcode/02_PyTorch_Algorithms/25_Quantization_W8A16.html
 - 核心知识点：难度： Medium | 标签： 推理优化 , 量化 , PTQ | 目标人群： 模型微调与工程部署 本章节的实战代码可以点击以下链接在免费 GPU 算力平台上直接运行： (国内推荐：魔搭社区免费实例) 大模型动辄百亿参数，显存占用极大。为了让 7B 模型能跑在消费级显卡（如 RTX 4090 / 3090）甚至手机端， 模型量化 (Quantization) 是不可或缺的技术。 本节我们将实现最基础、也是面试中最常考的 INT8 对称量化 (Symmetric Quantization) ，理解量化缩放因子。
 - 算法 / 数据结构：W8A16, INT8 量化, scale, 反量化, 权重量化
 - 代码示例：python: PyTorch 示例; python: absmax_quantize; python: test_quantization
@@ -531,7 +533,7 @@
 
 ### 51. 04. Triton GEMM Tutorial | Triton 矩阵乘法 (GEMM) 与自动调优 (Autotune)
 - 章节：ch03 CUDA C++ 与 Triton 算子开发
-- URL：https://datawhalechina.github.io/llm-algo-leetcode/03_CUDA_and_Triton_Kernels/04_Triton_GEMM_Tutorial.html
+- URL：https://datawhalechina.github.io/llm-algo-leetcode/03_Triton_Kernels/04_Triton_GEMM_Tutorial.html
 - 核心知识点：难度： Hard | 标签： Triton , GEMM , Compute Bound , Autotuning | 目标人群： 核心 Infra 与算子开发 本章节的实战代码可以点击以下链接在免费 GPU 算力平台上直接运行： (国内推荐：魔搭社区免费实例) 矩阵乘法 (GEMM: General Matrix Multiply) 是深度学习中最核心的计算操作，也是充分利用 GPU 算力的关键。本节我们将利用二维的 Thread Block，实现一个 C = A × B 的矩阵乘法。
 - 算法 / 数据结构：Triton GEMM, 矩阵乘法, tiling, autotune, 吞吐优化
 - 代码示例：python: PyTorch 示例; python: matmul_kernel; python: test_fused_gemm

@@ -663,3 +663,7 @@ Figure 5 从一个 FD-loss 训练的 JiT-B checkpoint 开始，在 ImageNet-256 
 **Corridor Conditioning（线段查询条件化）**：在生成样本与真实样本之间查询 tracker；改变可用条件信息，可能使其平均输出偏离原 projectile 的梯度场。
 
 TBSM 最值得留下的认识，是分布目标不一定要以整批样本损失的形式进入生成器。一个有正确期望的局部随机方向，加上清楚的 detach 接口，就能成为一步模型的训练信号；在线 tracker 则把降低噪声的问题转化为可分析的回归问题。理论端点、特征投影和经验训练配置之间的区别，也因此能够逐项写清，而不必用“一步生成”掩盖它们。
+
+## 继续阅读
+
+TBSM 把分布距离改写成一步监督，适合先补读[扩散蒸馏](../../diffusion/distillation.md)，再用[DMD2](dmd2.md)比较不同 score 或 critic 信号的作用。

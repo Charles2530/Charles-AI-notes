@@ -44,3 +44,10 @@ flowchart TB
 ## 阅读具体方法时保留证据边界
 
 预测自然的视频支持生成质量判断，动作改变后预测相应变化支持动作敏感性，独立环境中的闭环任务结果才进一步支持控制用途。Smoke代码只验证执行链条，手工fixture只验证指定计算。先明确当前证据覆盖哪一步，再讨论方法适用于什么系统。
+
+若要把“预测更好”推进到“动作选择更好”，可按[从假设到证据的研究闭环](../training/research-loop-from-hypothesis-to-evidence-1123-2351.md)记录候选动作、回报排序、闭环成功率和失败轨迹；论文证据放在 PaperPilot，任务日志与资源放在 `server_monitor`，页面只保留可迁移的机制、条件和反例。
+## 来源驱动的入门顺序
+
+先用[Robotics Book](https://www.roboticsbook.org/intro.html)和[Modern Robotics](https://modernrobotics.northwestern.edu/nu-gm-book-resource/introduction/)补齐位姿、运动学、动力学和规划，再读[MIT Manipulation](https://manipulation.mit.edu/)把这些量接到抓取闭环。VLM 可参考[HF VLM overview](https://huggingface.co/blog/vlms)，世界模型可先看[World Models](https://worldmodels.github.io/)，VLA 和 LeRobot 则作为案例与实现入口。
+
+判断一个模型是否真正进入具身闭环，要追踪观测、状态、动作、执行和新观测五个接口。只有展示预测画面或离线动作误差，不能自动推出真实环境控制能力。

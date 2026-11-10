@@ -1,6 +1,6 @@
 # 预训练目标与表示学习
 
-同一批图片可以用来训练分类器、重建器、图文检索器或生成器。数据相同，目标不同，模型必须保留的信息也不同。理解表示学习，需要看模型从什么输入预测什么目标，以及哪些错误会被损失惩罚。
+同一批图片可以训练分类器、重建器、图文检索器或生成器，为什么最后留下的表示会不一样？答案在模型从什么输入预测什么目标，以及损失究竟惩罚了哪些错误。
 
 先用两张图片说明对比学习。一张是杯子，一张是鞋；每张图片各做两种增强，形成两对应该匹配的视图。编码器把视图映射为向量，再比较相似度。它没有被直接告知“杯子”这个类别名，监督来自“这两个视图出自同一张图”。
 
@@ -58,6 +58,21 @@ for i,row in enumerate(scores):
 
 但是目标仍然奖励训练数据中出现的续写。它不直接验证句子为真，也不天然区分可靠知识与错误陈述。将网页噪声、代码、数学推导按不同权重混合，会改变模型收到的预测信号，参见[数据怎样成为样本](data-and-dataset-basics.md)。
 
+### 一个四 token 样本怎样变成三个监督位置
+
+把序列写成 `[BOS, red, cup, EOS]`。因果语言模型的输入是 `[BOS, red, cup]`，目标右移成 `[red, cup, EOS]`。第一行的预测只负责 `red`，第二行只负责 `cup`，第三行只负责 `EOS`。最后一个输入位置不是“没有目标”，它的目标正是序列结束标记。
+
+假设某一行模型给正确 token 的概率分别为 `0.8、0.5、0.25`，三处的负对数似然为
+
+$$
+[-\log 0.8,-\log 0.5,-\log 0.25]
+\approx[0.2231,0.6931,1.3863].
+$$
+
+若按有效 token 平均，loss 约为 `0.7675`。把 padding 位置也放进分母，会让同一组有效预测的 loss 随 padding 数量变化；用总和又会让长样本天然权重大。训练脚本里的 `ignore_index`、`loss_mask` 和 reduction 方式，实际都在决定这里的分母。
+
+把两篇文本拼成一个 batch 时，右移还要和文档边界一起检查。若第一篇以 `EOS` 结束，第二篇从 `BOS` 开始，通常不希望第一篇最后一个位置去预测第二篇的 `BOS`。这需要同时处理 attention mask 和 label mask；只屏蔽 loss 却让表示读取了另一篇文档，仍然会产生信息泄漏。相关的 4×4 例子见[位置编码、Mask 与上下文](positional-encoding-masks-and-context.md)。
+
 ## Masked modeling 为什么要控制可见内容
 
 遮掉输入的一部分，再要求预测被遮内容，可以让模型使用周围上下文。关键在于目标是否通过其他路径泄漏。例如预测图像 patch，却在全局预处理或教师特征中直接混入该 patch 的信息，任务可能比设计者以为的简单。
@@ -92,7 +107,11 @@ for i,row in enumerate(scores):
 
 ## 参考材料
 
+- [Dive into Deep Learning 的预训练章节](https://zh.d2l.ai/chapter_natural-language-processing-pretraining/index.html)按数据、目标和评测展开词嵌入与 BERT；本文的 token shift 算例与符号由本站重写。
+- [Stanford CS336 Spring 2025](https://stanford-cs336.github.io/spring2025/)把 tokenizer、数据混合和语言模型训练作为可运行作业；这里仅借鉴检查顺序，不搬用课程代码或作业文本。
 - [CLIP](https://arxiv.org/abs/2103.00020)展示图文对比目标与开放词汇迁移。
 - [Masked Autoencoders](https://arxiv.org/abs/2111.06377)展示高比例遮挡下的图像重建。
 
 - [LLMs from scratch 的数据集与GPT实现](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，可对照移位标签的构造、因果mask和模型前向；该文件不包含交叉熵训练循环。
+
+**来源与改编说明**：D2L 与 CS336 用于核对课程顺序和训练接口，CLIP、MAE、V-JEPA 与 DDPM 用于核对各类目标的事实。文中的杯子、鞋、四 token 序列和概率数字是本站构造的手算例子；它们用于解释监督信号，不是论文实验结果。

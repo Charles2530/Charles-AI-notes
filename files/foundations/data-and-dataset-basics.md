@@ -1,6 +1,6 @@
 # 数据怎样成为训练样本
 
-训练程序读取的张量与硬盘上的原始记录往往不是同一个对象。一段对话会被拼接、分词、截断，产生输入 token、目标 token 和 loss mask；图像会被缩放裁剪；机器人轨迹还要按时间对齐。理解数据集，需要能沿着一条记录走到模型真正收到的输入。
+训练程序读取的张量与硬盘上的原始记录往往不是同一个对象。一段对话会被拼接、分词、截断，产生输入 token、目标 token 和 loss mask；图像会被缩放裁剪；机器人轨迹还要按时间对齐。数据集最容易被忽略的地方，恰好在这些转换里。理解它，需要能沿着一条记录走到模型真正收到的输入，并说清楚中途删掉了什么。
 
 以一段客服对话为例，用户问“订单可以退吗”，回答是“签收后七天内可以申请”。这是一条原始记录。我们希望模型学习根据用户问题回答，而不要求它在这条 SFT 样本中学习生成用户提问。这个目标会决定后面的标签和 mask。
 
@@ -55,6 +55,50 @@ for token, target, use in zip(inputs, targets, loss_mask):
 
 因此一次数据检查应该同时查看原始记录、处理后的输入、目标和对应 metadata。只抽查原始文件，无法发现 processor 引入的问题。
 
+## Packing 后，第二条样本能不能看到第一条
+
+为了减少 padding，常把多条短序列拼到一个长序列里。假设两条独立样本分别是
+
+```text
+s1 = [BOS, A, EOS]
+s2 = [BOS, B, EOS]
+packed = [BOS, A, EOS, BOS, B, EOS]
+```
+
+如果任务要求每条样本独立预测，普通的下三角 causal mask 还不够。位置 4 的 `B` 会沿着因果方向看到位置 0 到 3，其中包括 `s1` 的内容；模型可能借到前一条样本的信息。需要再加一条按 segment 隔离的条件，query 和 key 只有在属于同一段时才允许连接。
+
+```python
+tokens = ['BOS', 'A', 'EOS', 'BOS', 'B', 'EOS']
+segment = [0, 0, 0, 1, 1, 1]
+
+allowed = []
+for q in range(len(tokens)):
+    row = []
+    for k in range(len(tokens)):
+        causal = k <= q
+        same_segment = segment[k] == segment[q]
+        row.append(int(causal and same_segment))
+    allowed.append(row)
+
+for row in allowed:
+    print(row)
+```
+
+输出的非零位置应形成两个互不相连的下三角块。第二个块的第一行只能看到自己的 `BOS`，不能回看 `s1` 的 `EOS`。这张矩阵是教学用的布尔关系；具体框架可能把禁止位置写成 `-inf` 加到 attention score，也可能通过 `cu_seqlens` 让 kernel 直接跳过跨段计算。
+
+targets 和 loss mask 也要按段重新对齐。若两条样本都训练回答，`EOS` 可以作为前一 token 的目标；若只训练回答字段，第二段的 mask 需要从它自己的回答开始，不能把 packed 后的全局位置直接切一段连续区间。最小检查应打印每个位置的 token、target、segment 和是否计入 loss：
+
+```python
+targets = ['A', 'EOS', '<ignored>', 'B', 'EOS', '<ignored>']
+loss_mask = [1, 1, 0, 1, 1, 0]
+for i, (token, target, seg, use) in enumerate(
+    zip(tokens, targets, segment, loss_mask)
+):
+    print(i, token, '->', target, 'segment', seg, 'loss' if use else 'ignore')
+```
+
+这个例子只说明独立样本 packing 的数据依赖。某些预训练实现会故意允许跨文档上下文，或只在文档边界重置位置编号；那是另一个训练目标，不能看到 `packed` 就默认它们都应使用同一张 mask。复现数据管线时，应同时记录是否跨段 attention、position id 是否重置、EOS 是否保留和 loss 的有效分母。
+
 ## 划分要按泄漏单位进行
 
 若一段长文切成十个重叠片段，再逐片段随机分训练和测试，相邻文字很可能出现在两边。对话、用户、视频、机器人 episode 等对象也存在这种相关性。要测新对象上的泛化，应先按对象分组，再切片；要测未来数据，则可能需要按时间划分。
@@ -90,3 +134,9 @@ for token, target, use in zip(inputs, targets, loss_mask):
 - [LLMs from scratch 的 GPTDatasetV1](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，观察同一 token 序列如何切出 input_chunk 与右移一位的 target_chunk；该例是语言建模，回答专用mask需按任务另外构造。
 
 标签错位与跨文档可见性可继续查看[位置编码与 mask](positional-encoding-masks-and-context.md)，划分后的指标计算见[评测基础](data-splits-metrics-and-evaluation-basics.md)。
+
+## 公式和代码对照
+
+token 窗口和目标右移对照 [LLMs from scratch 的 GPTDatasetV1](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，数据 worker 和预取边界对照 [PyTorch DataLoader 文档](https://docs.pytorch.org/docs/stable/data.html)，数据记录与使用者视角参考 [Data Cards](https://arxiv.org/abs/2204.01075)。客服对话、六个 token 和采样比例是本站的教学构造，用来检查样本边界、监督位置和数据分母，不代表某个真实数据集。
+
+回放时给两条长度不同的对话加上唯一 ID，打印原始记录、token、目标和 mask。再把它们 packing 到一行，验证第二条样本的 logits 是否按设计不受第一条样本修改的影响。这个小实验比只看最终 loss 更容易暴露跨样本泄漏。

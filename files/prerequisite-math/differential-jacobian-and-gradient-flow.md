@@ -61,6 +61,45 @@ J_{g\circ f}(x)=J_g(f(x))J_f(x).
 
 多个下游分支使用同一中间值时，它的梯度是各分支贡献之和。例如 \(L=u+x,u=x^2\)，在 x=2 处为 \(2x+1=5\)。只沿平方分支反传会漏掉直接相加的一项。源码中的 `+=` 就在收集这些路径。
 
+## 把这个例子的反向过程拆成局部贡献
+
+前面的结果可以完全按计算图重算一遍。令
+
+\[
+u=x_1+2x_2,\qquad v=x_1x_2,\qquad L=\frac12(u^2+v^2).
+\]
+
+在 \(x=(1,2)\) 处，\(u=5,v=2\)。从损失开始，先得到
+
+\[
+\bar u=\frac{\partial L}{\partial u}=5,
+\qquad
+\bar v=\frac{\partial L}{\partial v}=2.
+\]
+
+沿 \(u\) 这条分支，\(x_1\) 收到 \(5\times1=5\)，\(x_2\) 收到 \(5\times2=10\)。沿 \(v\) 这条分支，\(x_1\) 收到 \(2\times x_2=4\)，\(x_2\) 收到 \(2\times x_1=2\)。同一个输入节点要把两条路径的贡献相加，所以
+
+\[
+\bar x_1=5+4=9,\qquad \bar x_2=10+2=12.
+\]
+
+这正是 \(J_f^\top\nabla_yL\) 的结果。计算图教程常把它说成“沿边相乘，遇到汇合就相加”，在实现里对应保存中间值、按逆拓扑顺序执行局部反向函数，以及对已有梯度做累加。若把赋值写成覆盖，第二条路径就会悄悄丢失。
+
+可以用一个很小的 PyTorch 程序检查同一件事：
+
+```python
+import torch
+
+x = torch.tensor([1.0, 2.0], requires_grad=True)
+y = torch.stack((x[0] + 2 * x[1], x[0] * x[1]))
+loss = 0.5 * (y * y).sum()
+loss.backward()
+print(y.detach().tolist())       # [5.0, 2.0]
+print(x.grad.tolist())            # [9.0, 12.0]
+```
+
+这段程序只检查一个标量损失和两个输入，不能代替大模型的梯度检查。它适合在改写一个自定义算子或手写反向函数时先确认局部链式法则，再把问题扩大到 batch、广播和实际 dtype。
+
 ## Softmax 的各概率为什么相互影响
 
 Softmax 为 \(p_i=e^{z_i}/\sum_j e^{z_j}\)。对商求导可得
@@ -92,8 +131,10 @@ print([round(v,6) for v in grad])
 
 输出 `[9.0,12.0]`。步长过大有截断误差，过小有浮点抵消，数值差分是小规模检查方法，不是大型网络的常规求导方式。
 
-Hessian进一步对标量损失求二阶导数，Fisher则衡量参数对概率分布的影响，三者对象不同，详见[谱与二阶结构](spectral-second-order-and-low-rank.md)。
+Hessian进一步对标量损失求二阶导数，Fisher则衡量参数对概率分布的影响，三者对象不同，详见[谱与二阶结构](spectral-second-order-and-low-rank.md)。如果需要把这些局部导数放回真实训练图，可接着看[自动微分、检查点与显存](../foundations/autograd-activation-checkpointing-and-memory.md)。
 
 ## 对照源码
 
 - [micrograd 的 Value 与 backward](https://github.com/karpathy/micrograd/blob/7bc720e951fe422b8f8814aa5aa1b64121d26b4c/micrograd/engine.py)，逐个局部导数、分支累积和逆拓扑遍历对应本文的反向链式法则。
+
+- [Colah 对计算图与正反向模式的讲解](https://colah.github.io/posts/2015-08-Backprop/)，用于对照“路径贡献如何合并”的直觉。本文的数值例子和代码是本站重新写的。

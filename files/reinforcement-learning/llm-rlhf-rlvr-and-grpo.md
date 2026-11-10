@@ -1,6 +1,19 @@
 # LLM 强化学习、RLHF、RLVR 与 GRPO
 
-同一道算术题，语言模型生成了三个回答，分别答错、部分得分、完全正确。训练要根据这些反馈改变生成概率，但日志只给了完整回答的评价，没有直接标注哪一步 token 导致了错误。语言模型生成时，动作是下一个 token，状态是 prompt 与已经生成的前缀。模型每输出一个 token，前缀就变长；直到 EOS、任务结束或长度限制，才能得到完整回答的评价。强化学习把这个评价转化为动作概率的更新。
+同一道算术题，语言模型生成了三个回答，分别答错、部分得分、完全正确。训练要根据这些反馈改变生成概率，但日志只给了完整回答的评价，没有直接标注哪一步 token 导致了错误。语言模型生成时，动作是下一个 token，状态是 prompt 与已经生成的前缀。先把这条 credit assignment 链写清楚，再比较 RLHF、RLVR、GRPO 和 DPO，能避免把“用了奖励”当成同一个算法。
+
+```mermaid
+flowchart LR
+    X[Prompt x] --> P[策略生成 response tokens]
+    P --> Y[完整回答 y]
+    Y --> F[偏好模型或 verifier]
+    F --> R[序列奖励 R]
+    R --> A[按 token 分配回报或优势]
+    A --> L[masked policy objective]
+    L --> P
+```
+
+这里的奖励通常在回答结束后才出现，token 级的梯度只是把同一个序列信号沿有效 response 位置展开。padding、prompt token 和人工评语的作用不同，不能因为它们都出现在一个 batch 里就共用同一张 mask。
 
 ## 序列概率怎样连接到策略梯度
 
@@ -107,3 +120,9 @@ python files/assets/examples/reinforcement-learning/policy_objectives.py --seed 
 这个 NumPy 脚本输出两组奖励、组内优势、逐点 log-ratio 和 clipped loss。固定 seed 的 `clipped_policy_loss` 为 `0.000795`，format 组优势全为零，arithmetic 组为负、零、正。脚本使用构造的 logprob 数值检查目标函数，并没有运行语言模型，也没有证明模型正确率提高。训练和运行依赖的完整说明见[示例 README](../assets/examples/reinforcement-learning/README.md)。
 
 在真实训练中，同一 prompt 的 group id、采样温度、每条回答长度、结束原因、raw reward、各奖励分量与 policy 版本应一起保存。最大生成长度是否算任务结束，取决于具体优化任务；有 critic 时不能机械把所有长度截断当作真实终止。零优势组比例、隐藏集正确率、KL 与回答长度的联合变化，比单独一条平均 reward 曲线更能解释更新发生了什么。[DeepSeek-R1](https://arxiv.org/abs/2501.12948)可作为 RLVR 后续系统的原始阅读入口。
+
+## 算法和环境依据
+
+RLHF 的数据与 PPO 流程参考 [InstructGPT](https://arxiv.org/abs/2203.02155)，GRPO 的组内相对优势参考 [DeepSeekMath](https://arxiv.org/abs/2402.03300)，留一法 baseline 对照 [RLOO](https://arxiv.org/abs/2402.14740)，偏好直接优化参考 [DPO](https://arxiv.org/abs/2305.18290)。三条算术回答、组内奖励、token reduction 和示例脚本是本站构造的机制算例；它们不代表某个 RLHF 或 RLVR 训练已经提升了模型能力。
+
+真实实验至少同时保存 prompt/group、response token、old/current/reference logprob、raw reward、奖励分项、KL、长度和终止原因。单独看平均 reward 或 loss，无法判断提升来自正确率、长度偏置、奖励模型漏洞还是策略漂移。

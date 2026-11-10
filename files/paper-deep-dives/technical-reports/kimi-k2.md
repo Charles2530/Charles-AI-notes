@@ -638,3 +638,5 @@ K2 在 Harmful / Iterative Jailbreak 上优于对照，在同一大类的 Cresce
 若直接部署 K2，则应在将使用的框架、工具 schema 和尝试预算下评测。先测单次完整任务，再测多次尝试与 verifier 能带来多少收益，并同时记录 token、环境等待和失败恢复成本。报告的 SWE 三种模式已经说明，同一模型的最终分数会随这些条件明显变化。
 
 K2 让“能够行动”的模型训练变得更具体。它把数值稳定性、知识表达、带状态的交互数据、可验证反馈和权重传输都纳入同一个工程过程。可迁移的核心在于让每次行动都能得到可解释的反馈，并让获取这些反馈的成本足够低；对模拟真实性、评价偏差和任务外失败的检查，仍然需要跟着这个过程一起保留。
+
+Kimi K2 的 MoE 与 Muon 设计可以分别接[MoE 路由与稀疏 kernel](../../operators/moe-routing-and-sparse-kernels.md)和[Muon 的可扩展实现](../foundations/muon-is-scalable.md)，不要把路由负载、优化器和规模效应混成一个原因。若要复算训练账单，再看[Scaling law 与实验经济学](../../training/scaling-laws-and-experiment-economics.md)。

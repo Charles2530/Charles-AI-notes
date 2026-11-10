@@ -67,3 +67,48 @@ VAE-free 像素生成则重新选择建模空间。省去有损编解码，意�
 ## 原始资料
 
 [DDPM](https://arxiv.org/abs/2006.11239)、[DDIM](https://arxiv.org/abs/2010.02502)、[Score SDE](https://arxiv.org/abs/2011.13456)提供离散与连续基础；[Latent Diffusion](https://arxiv.org/abs/2112.10752)、[DiT](https://arxiv.org/abs/2212.09748)处理表示与主干；[Flow Matching](https://arxiv.org/abs/2210.02747)、[Consistency Models](https://arxiv.org/abs/2303.01469)、[DMD](https://arxiv.org/abs/2311.18828)分别提供速度、终点和分布监督。
+
+## 按瓶颈而不是按年份选择路线
+
+| 当前瓶颈 | 先比较 | 需要保留的条件 |
+| --- | --- | --- |
+| 每次采样调用太多 | DDIM、solver、蒸馏 | 训练目标、时间网格、NFE、质量和峰值显存 |
+| 单次网络太大 | latent、patch、DiT、kernel | VAE 重建、token 数、硬件和 batch |
+| 少步后细节崩坏 | progressive distillation、consistency、DMD | teacher 成本、学生训练预算和评测协议 |
+| 条件控制不稳定 | CFG、ControlNet、adapter | null 条件、条件 dropout、空间对齐 |
+| 视频时间一致性差 | causal VAE、时空 attention、chunk/cache | 帧率、上下文长度、首帧和动作条件 |
+
+这张表故意不提供固定优胜者。一个 sampler 的 NFE 少，可能把成本转移到更大的单步网络；一个 latent 模型的像素成本低，可能引入 VAE 细节损失；一个高 CFG scale 可能提升条件遵循，却降低多样性或放大伪影。
+
+## 阅读论文时保留五个接口
+
+每篇新方法先填写：
+
+```text
+representation: pixel / latent / patch / feature
+path: forward noise or endpoint construction
+prediction: epsilon / x0 / score / velocity / distribution signal
+condition: text / image / mask / action and injection point
+sampler: update equation, time grid, NFE and stochasticity
+```
+
+再把论文的质量结果拆成训练成本、推理成本和样本质量三张表。若论文只报告 FID 或用户偏好，不要把它翻译成统一的“速度更快”；若只报告采样时间，也要检查是否包含 VAE、文本编码器和 warm-up。
+
+## 一个最小路线实验
+
+固定初始噪声、prompt、分辨率、模型权重和硬件，只替换 scheduler，测 NFE、端到端时间、峰值显存和质量。第二组实验固定 scheduler，只改变 guidance scale。第三组固定所有推理设置，比较 teacher 多步与学生少步模型。
+
+这样可以把采样器、条件强度和模型蒸馏分开。如果第一组提升而第二组退化，说明问题可能是 guidance；如果学生只在短 prompt 上好，需按条件长度和主体复杂度分桶，而不是报告平均分。
+
+## 来源与改编说明
+
+- [Hugging Face Diffusion Course](https://huggingface.co/learn/diffusion-course/en/unit1/2)提供适合初学者的扩散对象和 pipeline 入口。
+- [Diffusers Scheduler 文档](https://huggingface.co/docs/diffusers/en/using-diffusers/schedulers)用于核对 scheduler 接口和参数化边界。
+- 原始论文链接见本页上方；方法结果始终保留其数据集、分辨率、采样步数和评测条件。
+
+## 自测
+
+1. 采样步数减少但端到端时间不变，可能是哪三种原因？
+2. 为什么 DiT、Flow Matching 和 VAE-free 分别描述不同层？
+3. 设计一个只替换 scheduler 的对照实验，并列出不能改变的变量。
+4. 论文宣称质量更好时，如何检查它是否同时增加了 teacher 或评测成本？

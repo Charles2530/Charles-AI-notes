@@ -455,3 +455,7 @@ $$
 原文留下的开放问题正落在这些连接处。H-JEPA 能否从复杂观察中学到合适概念，latent 应怎样限制，规划器与采样器怎样配合，记忆如何维持一致，以及 configurator 怎样发现并组织子目标，都需要进一步证据。[原文 §8.1](https://openreview.net/pdf?id=BZ5a1r-kVsf#page=43)
 
 沿着整套架构看，JEPA 的价值是为世界知识提供一种可用于预测的表示接口，H-JEPA 为不同时间尺度提供不同抽象，actor 与 cost 把预测转成目标驱动的选择，记忆和重新观察则持续修正当前状态。真正决定自主能力的，是这些连接在实际交互中能否同时成立。只有当表示保留了行动需要的信息、计划尊重不可控未来、执行后果又能回到学习中，预测模型才成为持续行动的一部分。
+
+## 继续阅读
+
+JEPA 的潜变量预测可与[Masked JEPA 与 latent prediction](../../world-models/masked-jepa-and-latent-prediction.md)接起来；从表征走向控制再看[RSSM、Dreamer 与规划](../../world-models/rssm-dreamer-and-planning.md)。

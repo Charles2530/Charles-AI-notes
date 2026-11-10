@@ -64,6 +64,31 @@ Warmup逐步提高学习率，后续衰减让更新更小。若训练总步数�
 
 nanoGPT用当前迭代计算学习率，反向累积后再执行一次optimizer step。移植日程时先确定计数单位。Warmup可能缓解某些起始数值问题，却不能修复数据loader阻塞或错误mask。
 
+## 梯度累积先把分母说清楚
+
+设一个有效 batch 被拆成 $K$ 个 micro-batch，每个 micro-batch 的 loss 已经按自己的 token 数取平均。若想得到有效 batch 的 token 平均梯度，不能无条件把 $K$ 个均值直接相加；不同 micro-batch 的有效 token 数不同时，应按有效 token 数加权。一个简单实现可以维护 `loss_sum` 与 `token_count`，再用总和除以总数。
+
+如果每个 micro-batch 恰好含有相同数量的有效 token，才可以把每次 loss 除以 $K$ 后累积。少除一次会让梯度和学习率都放大，训练曲线可能仍然下降，却已经改变了优化问题。梯度累积的更新次数也比 micro-batch 次数少，warmup、日志 step、学习率衰减和 checkpoint 间隔应以同一个计数单位定义。
+
+梯度裁剪还要放在一次有效 batch 的梯度已经合并之后。混合精度训练则先 unscale，再计算全局范数。若每个 micro-batch 各裁剪一次，得到的方向一般不等于先求总梯度再裁剪。
+
+## AdamW 的衰减不是随手加一项 L2
+
+对参数 $w$，解耦权重衰减的一个更新顺序可以写成
+
+$$
+w\leftarrow(1-\eta\lambda)w,\qquad
+w\leftarrow w-\eta\frac{\hat m}{\sqrt{\hat v}+\epsilon}.
+$$
+
+这里的衰减按参数本身缩放，和自适应梯度的坐标变换分开。把 $\lambda w$ 直接加到梯度里会得到另一种行为，尤其在不同参数的二阶矩差异很大时。实际训练常把 bias、LayerNorm 或 RMSNorm 的参数排除在 decay 之外，因此恢复 checkpoint 或比较两份配置时，要同时打印参数组。
+
+## 一个最小的优化器验收
+
+在固定的两三个样本上，分别记录 forward loss、每个参数的梯度、optimizer state 和 step 后的参数。先运行一次普通 SGD，再运行一次 AdamW；不要只看最终 loss。检查梯度清零位置、梯度累积分母、weight decay 参数组和学习率日程的计数是否与实验合同一致。
+
+若恢复训练后第一步与连续运行差异很大，优先比较 Adam 的一阶与二阶矩、学习率计数、随机数状态和数据位置。只恢复模型权重而忘记优化器状态，得到的是另一条训练轨迹。
+
 最终用固定小输入验证loss和梯度，再检查短程更新与恢复一致性。选择优化器的依据是当前目标与训练结果，不是把单个loss下降速度当成泛化能力。
 
 
@@ -71,3 +96,7 @@ nanoGPT用当前迭代计算学习率，反向累积后再执行一次optimizer 
 
 - [实际学习率、累积、裁剪和AdamW执行位置](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py)
 - [PyTorch基础优化循环](https://github.com/pytorch/tutorials/blob/5672cd98a7671eda4d9122b10f8eec580f74d03e/beginner_source/basics/optimization_tutorial.py)
+
+## 相关阅读与边界
+
+梯度累积、AMP 和参数组的具体 API 以 [PyTorch AMP 文档](https://pytorch.org/docs/stable/amp.html)与所用版本的 optimizer 文档为准。这里的数字例只验证更新顺序和分母，不能推出某个优化器在真实模型上一定更快收敛。要继续看数据规模、学习率和有效 token 的关系，可接着读[训练规模与实验经济学](scaling-laws-and-experiment-economics.md)；遇到首个 NaN，则转到[数值稳定性与故障排查](stability-numerics-and-failure-triage.md)。

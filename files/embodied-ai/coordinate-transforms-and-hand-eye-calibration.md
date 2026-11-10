@@ -1,6 +1,6 @@
 # 坐标变换与手眼协调：把相机观测接到机器人动作
 
-视觉模型可以在图像里找到物体，但机器人控制器不能直接执行“向图片左边移动”。视觉估计给出的位姿只有在坐标系、变换方向、单位、时间戳和标定版本都明确时，才能变成规划与控制目标。
+视觉模型说物体在图像左边，机器人为什么不能直接把末端向左移？因为这句话没有说明相机、末端、基座和世界坐标之间的关系。只有坐标系、变换方向、单位、时间戳和标定版本都明确，视觉位姿才足以进入规划与控制。
 
 
 ## 坐标链使用的基本对象
@@ -234,3 +234,5 @@ np.linalg.inv 适合这个教学验证；工程代码若已知输入是刚体变
 
 - 原始笔记：[机器人基础和控制、手眼协调](https://v11enp9ok1h.feishu.cn/wiki/D5tuwjNfOiWPeakiNEhc88yOnqd?from=from_copylink)。
 - 权威接口：[OpenCV calibrateHandEye](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html)。
+
+继续阅读：[机器人运动学与 DH 参数](robot-kinematics-and-dh-parameters.md)把 base、gripper 和 tool 的变换接到正逆运动学；[相机、深度与机器人视觉](cameras-depth-and-robot-vision.md)补充内参、深度和像素到相机坐标的入口。

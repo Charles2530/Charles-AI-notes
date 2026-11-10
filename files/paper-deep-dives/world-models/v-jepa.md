@@ -202,3 +202,5 @@ Table 15 的 fine-tuning 结果使用 16 frames 和多视角推理。V-JEPA H/16
 Table 12 还提醒评测协议不能混读。VideoMAE 在该表的 SSv2 attentive-probe 分数是 61.2，而 Table 5 主比较是 65.5；两张表的输入裁剪与多视角设置不同，不能把全部 4.3 个百分点差距严格归因于少一个 crop。图像任务中，V-JEPA-H/16 384 的 77.4 是一层 attentive probe；论文正文还报告两层 attentive probe 可到 77.9。
 
 V-JEPA 的论文贡献是让视频预测目标落在表示空间，并用时空 mask、EMA teacher 和 attentive readout 得到较强迁移结果。它没有动作输入、规划目标、闭环 rollout 或物理世界控制评测。把它用于全栈学习时，最适合把它当作“视频如何形成可预测表示”的一个完整案例，再与真正的 action-conditioned world model 分开比较。[论文第 10 页](https://arxiv.org/pdf/2404.08471v1#page=10)
+
+这篇论文可以和[JEPA 与 masked latent prediction](jepa.md)放在一起看，比较图像和视频的遮挡方式；若关心它离机器人还有多远，再读[世界模型基础](../../world-models/beginner-world-models-primer.md)与[动作条件的视频世界模型](../../world-models/action-conditioned-video-world-model-training-case.md)。前两页解决表征接口，后两页才开始处理动作后果，评测指标不能直接互换。

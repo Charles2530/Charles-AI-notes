@@ -83,3 +83,6 @@ Self-consistency 常对多次生成的最终答案进行汇总投票；验证器
 - [Self-Consistency](https://arxiv.org/abs/2203.11171)讨论多条推理样本的答案汇总。
 - [ReAct](https://arxiv.org/abs/2210.03629)展示推理与环境动作交替的任务流程。
 - [RAG、Agent 与长上下文系统](../inference/rag-agents-and-long-context-systems.md)进一步展开运行状态、缓存和评测。
+## 继续读
+
+继续看[RAG、Agent 与长上下文系统](../inference/rag-agents-and-long-context-systems.md)和[多模态 CoT 与推理基础](multimodal-cot-and-reasoning-basics.md)。

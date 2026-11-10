@@ -170,3 +170,6 @@ H(p)
 
 
 - [SwitchFeedForward](https://github.com/labmlai/annotated_deep_learning_paper_implementations/blob/2be1800d141eb2716d6079405bbe47ce1040ef85/labml_nn/transformers/switch/__init__.py)，分开查看torch.max产生的routes与仍保留梯度的route_prob_max。
+## 继续读
+
+继续看[MoE 路由与多模型服务](../inference/moe-routing-and-multi-model-serving.md)和[稀疏 kernel](../operators/moe-routing-and-sparse-kernels.md)。

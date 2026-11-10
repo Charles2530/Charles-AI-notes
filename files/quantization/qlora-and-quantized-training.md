@@ -2,7 +2,7 @@
 
 一个线性层有4096个输入和4096个输出，共约1678万个权重。仅用 BF16 保存，就需要32 MiB；若每个权重只存4 bit，码值占8 MiB，还要另加尺度等元数据。QLoRA 利用这个差别保存冻结底座，再训练一个较小的低秩增量。
 
-## 先写出前向计算
+## 冻结底座，训练哪两块矩阵
 
 设底座权重 $W_0\in\mathbb R^{d_{out}\times d_{in}}$，量化码与元数据记为 Q，反量化结果为 $\hat W_0=D(Q)$。LoRA 使用 $A\in\mathbb R^{r\times d_{in}}$、$B\in\mathbb R^{d_{out}\times r}$，对列向量输入 x 计算
 
@@ -56,6 +56,48 @@ Double quantization 进一步压缩量化尺度等统计量。它影响元数据
 
 官方脚本还把部分 norm 模块转为 FP32，并按配置处理 adapter dtype。这说明“4-bit训练”不足以描述完整计算图。实际实验应记录量化类型、计算dtype、LoRA目标模块、rank、序列长度与checkpoint设置。
 
+### 最小配置骨架应该检查哪几处
+
+下面的代码只展示当前 Transformers 与 PEFT 常见的接口关系，不能替代所安装版本的 API 文档，也没有在本机 GPU 上运行。
+
+```python
+import torch
+from transformers import BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True,
+)
+
+lora_config = LoraConfig(
+    r=8,
+    lora_alpha=16,
+    lora_dropout=0.05,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    task_type="CAUSAL_LM",
+)
+
+model = load_base_model(quantization_config=bnb_config)
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+```
+
+这段骨架有四个验收点。`load_in_4bit` 只决定底座的存储路径，`bnb_4bit_compute_dtype` 决定部分计算的输入与累加配置；`target_modules` 决定 LoRA 插入哪些线性层，不能因为模型都叫 Transformer 就照抄同一组名字；`print_trainable_parameters()` 应确认底座没有意外变成可训练。具体字段以 [Transformers bitsandbytes 文档](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes) 和 [PEFT 量化指南](https://huggingface.co/docs/peft/en/developer_guides/quantization) 的当前版本为准。
+
+训练结束只保存 adapter 时，还要把底座的模型 ID、revision、tokenizer、量化配置、LoRA target modules 和训练数据切分一起写入 manifest。重新加载的顺序应是“同一底座与 tokenizer → 同一量化配置 → adapter”，不能先把 adapter 合并到另一个量化版本再比较输出。
+
+| 现象 | 第一处应检查什么 |
+| --- | --- |
+| trainable 参数接近全部参数 | 是否在量化加载后错误地解冻底座，`print_trainable_parameters()` 的百分比是否合理 |
+| loss 很快出现 NaN | 计算 dtype、norm 的精度、梯度裁剪和输入归一化；不要只把学习率调小 |
+| 序列变长后突然 OOM | 激活、梯度累积和 checkpoint，而不是只看 4-bit 权重大小 |
+| adapter 能加载但输出明显变化 | 底座 revision、tokenizer、LoRA 目标层和 merge/re-quantize 路径是否一致 |
+
+这里的“最小回归”仍应包含未训练底座、独立 adapter、合并但未重新量化和重新量化四种输出。每种结果都固定同一批输入并保存 logits 或生成文本，才能定位差异是在 adapter 注入、合并，还是再次量化时产生的。
+
 ## 保存 adapter 后，推理要装回哪个底座
 
 A、B是在固定的 $\hat W_0$ 上学习到的。换成另一个底座版本、不同量化格式或不同tokenizer，即使adapter文件能加载，也可能改变函数。保存时应记录底座身份与量化配置。
@@ -64,7 +106,19 @@ A、B是在固定的 $\hat W_0$ 上学习到的。换成另一个底座版本、
 
 读[QAT](qat-kernels-and-kv-cache.md)时可用这个区别定位目标。QLoRA优化的是冻结近似底座上的增量；QAT会在训练前向模拟离散误差，让可训练参数适应目标量化路径。
 
+## 一个最小 QLoRA 回归应固定什么
+
+先固定底座 commit、tokenizer、量化类型、计算 dtype、LoRA 目标模块、rank、序列长度和数据切分。用同一小批样本比较四条结果：未训练的量化底座、LoRA 训练后的独立 adapter、合并后未重新量化的权重、重新量化后的权重。若差异从第二条开始出现，重点看 adapter 注入和训练状态；若只在第四条出现，重点看合并与再次量化。
+
+报告显存时把冻结权重、adapter、梯度、优化器、激活和临时 dequant 缓冲分别列出。这样才能解释为什么参数量少了，峰值显存却仍被长序列激活主导。这个小回归也能防止把“4-bit checkpoint 能加载”误写成“4-bit 训练已经完整复现”。
+
+
+## 继续读
+
+继续看[QAT、kernel 与 KV cache](qat-kernels-and-kv-cache.md)和[低 bit 训练与数值稳定性](../training/low-bit-training-and-numerics.md)。
 
 ## 对照源码与延伸阅读
 
 - [QLoRA 官方加载、dtype 与 LoRA 注入实现](https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py)
+
+**来源与改编说明**：量化底座、NF4、double quant 和 paged optimizer 的机制参考 [QLoRA 论文](https://arxiv.org/abs/2305.14314)，配置与注入边界对照固定版本的 [QLoRA 官方脚本](https://github.com/artidoro/qlora/blob/7f4e95a68dc076bea9b3a413d2b512eca6d004e5/qlora.py)。页面中的矩阵尺寸和梯度例子是教学计算，不是训练 benchmark。

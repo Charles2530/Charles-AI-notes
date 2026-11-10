@@ -43,3 +43,40 @@ Shape只记录轴长度，不记录轴含义。给2×2矩阵加`[10,20]`，默�
 Greedy每步选最高概率，不保证整段概率最高；整段概率最高也不保证事实正确。Top-p等采样则先修改候选分布，再随机选择，日志中的原始概率与实际行为概率可能不同。
 
 如果任务有确定性验证器，例如代码测试，可以生成多个候选再检查；这增加覆盖和计算成本，并不改变原模型保证。验证器检查了哪些行为、有没有漏掉边界，必须另行说明。见[生成与解码](../foundations/generation-and-decoding-basics.md)。
+
+## 快速自测
+
+挑一个“结果看起来对但可能有错”的张量或生成问题，分别写出轴含义、mask、随机状态、验证器和最终任务指标。若只能给出最终 loss 或一张 attention 图，说明还缺哪条证据。完整计算路径见[Transformer 与 attention](../foundations/transformer-attention-and-tokenization.md)。
+
+## 五分钟最小排查
+
+下面的代码不运行模型，只把最容易被 shape 掩盖的两个错误显式打印出来。它使用互不相等的轴长度，避免 `[2, 2]` 这类偶然合法的例子把问题藏起来。
+
+```python
+import numpy as np
+
+# b=2, l=3, d=4，每个轴都填入可追踪的整数
+x = np.arange(2 * 3 * 4).reshape(2, 3, 4)
+feature_bias = np.array([100, 200, 300, 400])
+position_bias = np.array([10, 20, 30]).reshape(1, 3, 1)
+
+by_feature = x + feature_bias
+by_position = x + position_bias
+assert by_feature.shape == x.shape
+assert by_position.shape == x.shape
+assert by_feature[1, 2, 3] == x[1, 2, 3] + 400
+assert by_position[1, 2, 3] == x[1, 2, 3] + 30
+
+# 只允许当前位置读取自己和过去的 key
+scores = np.arange(9, dtype=float).reshape(3, 3)
+future = np.triu(np.ones((3, 3), dtype=bool), k=1)
+masked = np.where(future, -np.inf, scores)
+weights = np.exp(masked - np.max(masked, axis=-1, keepdims=True))
+weights /= weights.sum(axis=-1, keepdims=True)
+assert np.allclose(weights[np.triu(future)], 0.0)
+assert np.allclose(weights.sum(axis=-1), 1.0)
+```
+
+这段检查只证明广播轴和因果 mask 的数值约定，不能证明模型学到了正确任务。若真实代码的 `logits` 与这里的结果不一致，先固定一个 batch、一个位置和一个 head 打印中间张量，再检查数据布局、mask 语义和归约轴；不要先调学习率或增大模型。
+
+**来源与改编说明**：张量和自动微分的 API 约定对照 [PyTorch Tensor 文档](https://pytorch.org/docs/stable/tensors.html) 与 [Autograd 文档](https://pytorch.org/docs/stable/autograd.html)，因果注意力对照 [Transformer 原论文](https://arxiv.org/abs/1706.03762)，生成参数对照 [Transformers generation 文档](https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)。示例数字和矩阵是教学构造，不能替代具体实现的单元测试。

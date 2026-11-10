@@ -61,3 +61,71 @@ Pipeline以microbatch穿过stage，启动与排空会产生bubble。增大microb
 ## 对照源码与延伸阅读
 
 - [DDP同步、优化器更新与示例checkpoint字段](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py)
+
+## Checkpoint 是状态协议，不只是模型文件
+
+一次可恢复的训练提交至少要区分四类状态：
+
+| 状态 | 例子 | 缺失后的表现 |
+| --- | --- | --- |
+| 模型 | 参数、共享权重、adapter | 输出可能直接改变 |
+| 优化器 | Adam 一阶/二阶矩、step、master weight | loss 可能连续但更新轨迹改变 |
+| 数值 | GradScaler、overflow 计数、loss scale | 恢复后突然 NaN 或更新过小 |
+| 数据与随机性 | sampler epoch、游标、RNG、并行组 | 重复样本、跳过样本或无法复现 |
+
+如果只保存 `model.pt`，它可以用于推理，却不一定可以继续训练。保存协议应在 manifest 中写出 schema 版本、global step、consumed tokens、world size、TP/PP/DP/EP 配置、数据版本和每个 shard 的校验值。
+
+## 一致快照需要提交边界
+
+可以把保存过程看成两阶段提交：
+
+```text
+冻结本轮状态
+  -> 每个 rank 写临时 shard 与校验值
+  -> rank 0 收齐 manifest 和所有校验值
+  -> 原子写入 COMMITTED 标记
+  -> 更新 latest 指针
+```
+
+`latest` 不能在所有 shard 完成前更新。恢复程序先读 manifest 和校验值，再决定是否加载；发现缺 shard、大小不符或提交标记缺失时，应回退到上一份完整快照，而不是拼出一个“看起来能读”的模型。
+
+异步保存可以减少训练停顿，但要先冻结一个不可变的内存视图。否则保存线程可能在 rank 0 读取参数时，optimizer 已经开始下一次写入，产生文件内部自洽但跨状态不一致的快照。
+
+## 改变 world size 时要验证什么
+
+改变 DP 数通常只改变数据分片，改变 TP/PP/参数分片则可能需要重排权重和优化器状态。恢复测试应覆盖：
+
+| 场景 | 必须比较 |
+| --- | --- |
+| 同 world size 继续 | 输入顺序、loss、参数和 optimizer step |
+| DP 改变 | 每个样本是否重复/遗漏，global batch 是否保持 |
+| TP/PP 改变 | shard 重组、层边界和激活 shape |
+| 只加载模型做推理 | 输出 logits 与原模型的容差 |
+| 缺 shard 或中断写入 | 是否安全回退，不污染 latest |
+
+如果目标只是“从相近状态继续优化”，可以允许非确定性；如果目标是逐样本重放，就要把 RNG、sampler 状态、数据版本和非确定性算子一起纳入验收。两种目标不要用同一条“恢复成功”描述。
+
+## 一个最小恢复实验
+
+用固定小数据和小模型做三条路径：
+
+1. 连续运行到 step 6。
+2. step 3 保存，停止进程，从 checkpoint 恢复到 step 6。
+3. 在写入中途模拟进程终止，再启动并确认回退到 step 3 或上一份 committed 快照。
+
+比较每一步的输入 ID、有效 token、loss、参数校验、optimizer step 和 RNG 派生结果。只有这些字段满足预先定义的容差，才可以说恢复语义成立；长作业“没有再次崩溃”不能替代这个短跑。
+
+## 来源与改编说明
+
+- [ZeRO](https://arxiv.org/abs/1910.02054)用于区分参数、梯度和优化器状态的分片层次。
+- [PyTorch Distributed Checkpoint](https://pytorch.org/docs/stable/distributed.checkpoint.html)提供分布式状态保存、加载和重分片的官方接口方向，具体 API 需按安装版本核对。
+- [Megatron-LM checkpoint 文档](https://github.com/NVIDIA/Megatron-LM/blob/main/README.md)用于对照并行组与 checkpoint 转换；不同版本的 shard schema 不能互相假定兼容。
+
+## 自测
+
+1. 为什么保存了模型参数仍可能无法逐样本恢复训练？
+2. `latest` 指针应该在什么时刻更新？缺少哪个证据时应回退？
+3. 改变 DP 和改变 TP 对恢复语义的影响有什么不同？
+4. 设计一个三步短跑，能区分“模型加载成功”和“训练轨迹恢复正确”。
+
+若要把状态分片与通信布局放在一起看，可以接[Megatron、DeepSpeed 与开放训练栈](megatron-lm-deepspeed-and-open-training-stacks.md)；实验记录的 question、checkpoint 和失败样本可沿[从假设到证据的研究闭环](research-loop-from-hypothesis-to-evidence-1123-2351.md)回放。

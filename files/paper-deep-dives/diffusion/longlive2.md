@@ -36,13 +36,21 @@ LongLive-2.0 是一篇**算法—系统协同设计论文**。它解决的不是
 
 图 2 可以沿两条训练支路和右侧部署路径阅读：一条支路直接对基础扩散模型进行长视频 AR training；另一条支路独立训练 DMD LoRA，最后将少步能力注入 AR 模型。部署再组合 W4A4、量化 KV cache 和异步解码。
 
-![LongLive-2.0 的训练支路与推理基础设施](../../assets/images/paper-deep-dives/diffusion/longlive2/figure-2-framework.png){ width="860" }
+![LongLive-2.0 的训练支路与推理基础设施](../../assets/images/paper-deep-dives/diffusion/longlive2/figure-2-framework.png){ width="720" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739)，Figure 2；图片保留原论文结构，下面的文字为本站解读。</small>
+
+**读这张图。**先沿左侧训练支路看基础 AR 训练，再看中间独立的 DMD LoRA，最后沿右侧推理路径追踪 W4A4、KV cache 和异步 VAE。图中这些模块共同组成端到端系统，不能把右侧的 model FPS 直接当成视频交付时间。
 
 这套设计把两种能力分开处理：**长视频 AR 训练负责长时、多镜头和交互能力；独立 DMD LoRA 负责减少去噪步数**。两者不再必须串行训练。[↗](https://arxiv.org/pdf/2605.18739v2#page=6) [↗](https://arxiv.org/pdf/2605.18739v2#page=19)
 
 图 4 进一步说明这种变化。应比较的是训练阶段之间的依赖，而不是模型大小：作者所画的 Self-Forcing 路线包含 ODE initialization 和后续 DMD，LongLive 还包含 long tuning；本文直接从基础模型进行长视频 AR 训练，再注入可独立训练的 LoRA。
 
 ![从串行多阶段训练转向直接 AR 训练与独立少步 LoRA](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_005.png){ width="920" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739)，Figure 4；本页按论文阶段关系重新说明。</small>
+
+**读这张图。**比较的是训练依赖关系，不是模型大小。上方路线先串行完成初始化、长视频调优和 DMD，下方路线把长视频 AR 训练与独立 LoRA 训练拆开，部署时再合并。
 
 因此，本文**没有取消蒸馏**。它取消或绕开的是部分串行初始化与渐进长视频调优环节，把 DMD 变成可并行、可复用的模块。[↗](https://arxiv.org/pdf/2605.18739v2#page=2) [↗](https://arxiv.org/pdf/2605.18739v2#page=20)
 
@@ -76,7 +84,11 @@ $$
 
 图 3 应先比较左、中部分每张 GPU 持有的内容，再看 VAE 输入箭头。中间布局不仅配对 clean/noisy tokens，还把原始视频准备一起分片。右侧 NVFP4 则是互补的 GEMM 优化，不是 Balanced SP 本身。
 
-![Balanced SP 的时间块所有权、VAE 分片与低精度计算](../../assets/images/paper-deep-dives/diffusion/longlive2/figure-3-training-infra.png){ width="860" }
+![Balanced SP 的时间块所有权、VAE 分片与低精度计算](../../assets/images/paper-deep-dives/diffusion/longlive2/figure-3-training-infra.png){ width="718" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739)，Figure 3；图片中的布局和设备标记来自论文。</small>
+
+**读这张图。**先看每张 GPU 是否同时拿到本地视频块、clean/noisy latent 和 loss，再看 VAE 的 halo 如何覆盖左侧时间依赖。右侧的 NVFP4 GEMM 是精度优化，和左侧 Balanced SP 的数据所有权属于两条不同的设计线。
 
 ### VAE 分片为什么需要 halo
 
@@ -261,7 +273,11 @@ LoRA rank=128、alpha=128、dropout=0，作用于 causal Wan attention blocks �
 
 表 1 报告端到端秒/iteration。先在 BF16 下比较普通 SP 和 Balanced SP，再比较同为 Balanced SP 的 BF16 与 NVFP4，才能分清两项设计的贡献。
 
-![不同视频长度下的训练迭代时间](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_009.png){ width="920" }
+![不同视频长度下的训练迭代时间](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_009.png){ width="454" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739) 的对应表图；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**先比较同一精度下的 SP 与 Balanced SP，再比较同一布局下的 BF16 与 NVFP4。64 秒的 OOM、秒/iteration 和最终加速分别属于不同证据，不能把四列压成一个“量化收益”。
 
 |输入视频长度|BF16 无 SP|BF16+SP|BF16+Balanced SP|NVFP4+Balanced SP|
 |---|---:|---:|---:|---:|
@@ -279,7 +295,11 @@ LoRA rank=128、alpha=128、dropout=0，作用于 causal Wan attention blocks �
 
 表 2 沿 Generator/Real/Fake 三列看各分支如何逐步量化，指标是**单 GPU 峰值显存**。
 
-![DMD 三分支渐进量化的单卡峰值显存](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_010.png){ width="920" }
+![DMD 三分支渐进量化的单卡峰值显存](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_010.png){ width="459" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739) 的对应表图；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**沿 Generator、Real-score、Fake-score 三列逐步改变精度，最后再看峰值显存。每一行同时改变了分支精度和 LoRA 配置，总差值不能单独归给某一列。
 
 |Generator|Real-score|Fake-score|峰值显存|
 |---|---|---|---:|
@@ -295,6 +315,10 @@ LoRA rank=128、alpha=128、dropout=0，作用于 causal Wan attention blocks �
 图 8 在 4 张 GB200 上比较 SP、TP 和 DP。应先看显存曲线随上下文增长是否交叉，而不是只看最短序列。
 
 ![SP、TP、DP 在不同上下文长度下的速度与显存](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_014.png){ width="920" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739) 的 Figure 8 对应图表；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**先看短上下文处 TP 的显存优势，再看长度增加后 TP/DP 曲线如何超过 SP。图中比较的是给定 4 张 GB200 和训练配置下的趋势，不能把交叉点直接外推到其他卡数或视频长度。
 
 在 128/256/512/768 个训练视频帧下：
 
@@ -329,13 +353,21 @@ $$
 
 图 7 应区分贯穿所有镜头的全局锚点，以及每次切镜头后重建的局部锚点，而不是把图中历史理解为全部稠密缓存。
 
-![全局和镜头级 attention sink 的保留方式](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_008.png){ width="920" }
+![全局和镜头级 attention sink 的保留方式](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_008.png){ width="329" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739) 的对应示意图；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**全局 sink 跨镜头保留，局部 sink 随镜头更新。窗口滚动时移动的是指针和可见范围，历史缓存并没有被整体复制到窗口前端。
 
 局部 sink 通过 START、LEN 指针跟踪；窗口越过后，将其虚拟前置，避免复制已有缓存。所谓零额外开销针对这一复用实现，不意味着锚点无需驻留。prompt 切换时更新局部 sink、重新初始化后续 cross-attention cache，同时保持全局 sink 和过去历史不变。[↗](https://arxiv.org/pdf/2605.18739v2#page=6) [↗](https://arxiv.org/pdf/2605.18739v2#page=17)
 
 图 10 的关键比较是第二镜头开始与结束的变化。作者展示，没有双层 sink 时，早期帧离开窗口后主体外观和场景布局发生漂移；加入后续写更稳定。
 
-![双层 attention sink 对后续镜头漂移的定性影响](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_017.png){ width="920" }
+![双层 attention sink 对后续镜头漂移的定性影响](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_017.png){ width="870" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739) 的对应定性图；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**对比第二个镜头开始和结束时的主体外观与场景布局。它展示的是漂移现象和修复后的视觉证据，不能从样例图单独估计 global sink 与 shot-level sink 的贡献比例。
 
 这给出了明确失败模式与修复示例，但没有量化分离 global sink 和 shot-level sink 各自的贡献。[↗](https://arxiv.org/pdf/2605.18739v2#page=18)
 
@@ -368,7 +400,11 @@ $$
 
 图 6 沿两张 GPU 的时间线阅读：DiT 生成 chunk $c+1$ 时，专门的 VAE GPU 解码 chunk $c$，不再等待全部 latent 生成完毕。
 
-![W4A4、量化缓存和独立 VAE GPU 的流水线](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_006.png){ width="920" }
+![W4A4、量化缓存和独立 VAE GPU 的流水线](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_006.png){ width="455" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739) 的对应系统图；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**DiT GPU 负责生成下一个 chunk 时，VAE GPU 解码上一个 chunk。两条时间线重叠后减少的是等待，model FPS 和完整视频交付时间仍需分别测量。
 
 逐 chunk 解码并立即 CPU offload，使 VAE 侧 GPU 显存由 $O(C\cdot T_c)$ 变为 $O(T_c)$，其中 $C$ 是累计 chunk 数；这不是整个系统总显存的复杂度。若每 chunk 的去噪延迟 $t_{\mathrm{DiT}}\ge t_{\mathrm{VAE}}$，总延迟近似从：
 
@@ -391,6 +427,10 @@ $$
 表 3 使用 GB200 180GB；启用 Async Decoding 时额外使用一张 GPU。先固定 4 步看模型和缓存量化，再看异步解码与减步数。
 
 ![GB200 上逐项启用优化的吞吐、端到端时间与显存](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_011.png){ width="920" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739)，Table 3 对应图表；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**按行观察优化逐项打开后的变化。NVFP4 改变 model FPS 和显存，KV cache 主要换取容量，Async Decoding 主要减少 E2E 等待，减步数再改变 model FPS；四种作用要分开读。
 
 |渐进配置|Model FPS|16 s 视频 E2E|32 s 视频 E2E|64 s 视频 E2E|所列显存|
 |---|---:|---:|---:|---:|---:|
@@ -417,6 +457,10 @@ $$
 
 ![VBench 上的生成速度与质量](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_012.png){ width="920" }
 
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739)，Table 4 对应图表；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**先比较同一 5B、1280×720 设置下的三行，再看 FPS 与 Total、Quality、Semantic 的交换。最快的两步配置不等于质量最高的四步配置。
+
 |本文配置|FPS|Total|Quality|Semantic|
 |---|---:|---:|---:|---:|
 |BF16，4 步|24.8|85.06|86.67|78.63|
@@ -431,7 +475,11 @@ $$
 
 表 7 固定 4 步、5B、720p，比较 BF16、直接 PTQ 和预先 NVFP4 训练。它回答的是训练—部署精度对齐的问题，不是尺度搜索相对固定尺度的独立消融。
 
-![固定步数和模型规格的精度设置比较](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_018.png){ width="920" }
+![固定步数和模型规格的精度设置比较](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_018.png){ width="621" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739) 的对应结果图；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**比较时先固定 4 步、5B 和 720p，再看三项指标。预先 NVFP4 训练提高 Total 和 Quality，Semantic 仍低于直接 PTQ，这组结果支持部分恢复而非全面等效。
 
 |精度设置|Total|Quality|Semantic|
 |---|---:|---:|---:|
@@ -445,6 +493,10 @@ $$
 
 ![PTQ 与预先 NVFP4 训练的时序面部细节比较](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_019.png){ width="920" }
 
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739)，Figure 11；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**比较后续镜头的眼部细节和时间一致性，先看 PTQ 与预训练 NVFP4 的局部差异，再回到表 7 的整体指标。样例图负责说明现象，不能替代定量评测。
+
 这一例子支持精度对齐对局部细节的帮助，但不替代定量评测，也不证明所有视频都会出现相同差异。[↗](https://arxiv.org/pdf/2605.18739v2#page=19)
 
 ### 60 秒长视频：一致性领先，动态程度存在明显代价
@@ -452,6 +504,10 @@ $$
 长视频实验使用 MovieGenBench prompts，以 4 步生成 60 秒视频。表 5 按六项百分比分数计算平均排名，分数越高越好，Avg. Rank 越低越好。
 
 ![60 秒生成的 VBench-Long 多维质量比较](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_013.png){ width="920" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739)，Table 5 对应图表；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**长视频的 Subject、Background、Motion Smoothness、Dynamic Degree 和 Avg. Rank 需要一起看。身份和背景分数较高时，动态程度仍可能偏低，不能用一个总排名替代各项取舍。
 
 |配置|Subject|Background|Motion Smoothness|Dynamic Degree|Aesthetic|Imaging|Avg. Rank|
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -482,7 +538,11 @@ $$
 
 图 9 沿 Linear→All-to-All→Attention→All-to-All 阅读，重点是压缩表示在哪里进入 collective，而不是把计算 kernel 与通信优化混为一谈。
 
-![SP 推理中低比特表示进入 All-to-All 的位置](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_016.png){ width="920" }
+![SP 推理中低比特表示进入 All-to-All 的位置](../../assets/images/paper-deep-dives/diffusion/longlive2/paperpilot-asset_016.png){ width="564" }
+
+<small>图源：LongLive-2.0 论文 [arXiv:2605.18739](https://arxiv.org/abs/2605.18739) 的对应通信示意图；图片由 PaperPilot 解析资产导出。</small>
+
+**读这张图。**沿 Linear、第一次 All-to-All、Attention、第二次 All-to-All 追踪低比特表示。图示说明通信载荷在哪里变小，不能直接给出端到端吞吐倍数。
 
 H100 的表 6 显示，低比特配置在相同 SP 大小下改善 E2E 和通信时间，但增加 GPU 数不一定更快。以实测的 16/32 秒视频为例：
 
@@ -523,3 +583,7 @@ H100 的表 6 显示，低比特配置在相同 SP 大小下改善 E2E 和通信
 |H100 等非 Blackwell 环境|SP 与低比特通信|多卡预算、互连和 SP degree 的选择|
 
 LongLive-2.0 最实用的启示是：**长视频系统的性能取决于数据和状态如何穿过各个模块，而不仅取决于模型本身有多快。**将时间分区、精度、缓存和解码接口对齐，可以把基础视频模型变成可按 chunk 改提示、保留历史并继续生成的系统；真正落地时，则应分别测量模型吞吐、总显存、端到端延迟和长程质量，而不是让一个最高 FPS 数字替代全部选择。[↗](https://arxiv.org/pdf/2605.18739v2#page=7) [↗](https://arxiv.org/pdf/2605.18739v2#page=8)
+
+## 继续阅读
+
+长视频的缓存和并行生成可以接[视频与多模态扩散](../../diffusion/video-and-multimodal-diffusion.md)；若关心低精度执行，再看[FP8 与混合精度服务](../../quantization/fp8-and-mixed-precision-serving.md)。

@@ -197,3 +197,6 @@ print([advantages[t] + values[t] for t in range(2)])  # [2.746, 2.0]
 
 
 - [Spinning Up 策略梯度推导](https://github.com/openai/spinningup/blob/038665d62d569055401d91856abb287263096178/docs/spinningup/rl_intro3.rst)，把每条轨迹概率展开后，再使用reward-to-go与baseline。
+## 继续读
+
+继续看[MDP、价值函数与 Bellman](../reinforcement-learning/mdp-value-bellman.md)和[策略梯度、Actor-Critic、PPO](../reinforcement-learning/policy-gradient-actor-critic-ppo-grpo.md)。

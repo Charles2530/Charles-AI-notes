@@ -47,7 +47,47 @@ K=3、a=0.8时为2.952。每轮成本包含draft、目标核验、采样与状�
 MTP能否作为有效draft，最终取决于候选质量、额外计算和状态接口。训练loss下降、draft准确率提高与端到端服务更快，需分别验证。
 
 
+## 继续读
+
+继续看[缓存、路由与投机解码](../inference/caching-routing-and-speculative.md)和[推理成本模型](../inference/cost-modeling-and-slo-design.md)。
+
 ## 对照源码与延伸阅读
 
 - [投机输出处理与computed token回退](https://github.com/vllm-project/vllm/blob/fa3b9d1377219247060d3c8b49eae199c9e7e154/vllm/v1/core/sched/scheduler.py)
 - [普通下一词目标的对照实现](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/model.py)
+
+## 把接受率和端到端速度拆开测
+
+一次投机迭代至少记录以下事件：draft 开始与结束、目标模型验证开始与结束、接受 token 数、拒绝位置、修正采样、KV 回滚和最终提交时间。接受率可以按位置统计：
+
+\[
+\hat a_j=\frac{\text{第 }j\text{ 个候选被接受的次数}}{\text{第 }j\text{ 个候选出现的次数}}.
+\]
+
+平均接受率高，不代表高位置候选经常被接受，也不代表每轮提交 token 数增加。服务报告应同时给出 accepted tokens/round、target forwards/request、tokens/s、TTFT、TPOT 和 p95/p99。
+
+[vLLM Benchmark CLI](https://docs.vllm.ai/en/latest/benchmarking/cli/)和其[指标说明](https://docs.vllm.ai/en/stable/design/metrics/)区分了 TTFT、inter-token latency、request-level TPOT 与端到端时延。投机实验应沿用这些定义，避免把一次流式输出间隔误写成整请求 TPOT。
+
+## 公平基线需要固定输出行为
+
+比较普通解码、draft/verify 和 MTP 时，固定 tokenizer、prompt 集、最大新 token、停止条件、采样温度、top-p、并发模型和硬件。若投机配置更早遇到 EOS 或改变了采样分布，应先检查输出质量与长度，再解释速度。
+
+建议至少做三组：
+
+| 组别 | 目的 |
+| --- | --- |
+| 目标模型普通解码 | 得到质量、长度和延迟基线 |
+| 相同目标模型的投机执行 | 隔离调度、KV 与验证开销 |
+| 训练过的 MTP/draft | 测量候选质量带来的额外收益 |
+
+如果第二组已经变慢，第三组即使接受率更高也未必值得部署；如果第二组变快但质量变化，先检查采样语义是否仍然等价。
+
+## MTP训练要做可归因消融
+
+MTP 的辅助 loss 可能改善共享 hidden state，也可能只是增加训练计算。至少比较普通 next-token、加入 MTP 但不启用推理、加入 MTP 并启用投机三种设置，固定总训练 token 或明确说明增加的 FLOPs。记录主任务 perplexity、各预测头 loss、draft 接受率和服务吞吐，不能只看最终 loss。
+
+对训练数据按长短、代码/自然语言、重复前缀和结构化输出分桶。某个头在平均数据上表现良好，却可能在长上下文或工具调用位置失效；这些位置正是服务端最可能受益或受损的地方。
+
+## 自测：拒绝后哪些 token 可以提交
+
+给出一个长度为 4 的候选，其中第 3 个 token 被拒绝。画出目标模型已经计算的条件、可以保留的前缀 KV、必须丢弃的后缀 KV，以及修正采样产生的新 token。再说明为什么不能把第 4 个候选直接接在修正 token 后面。这个图比记住接受公式更能避免实现中的状态污染。

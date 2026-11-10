@@ -239,3 +239,7 @@ RoboArena 提供真实机器人双盲成对比较，报告记录 2026 年 5 月 
 [Cosmos 代码](https://github.com/nvidia/cosmos)、[Cosmos Framework](https://github.com/nvidia/cosmos-framework)、基础与专用模型权重，以及五组 SDG 数据，构成这项工作的主要复用入口。结构化提示 schema、采样设置、动作坐标与数据归一化要与权重一起使用。图像或视频专家适合视觉内容生成和数据扩充，基础 Nano / Super 适合动作条件建模与领域适配，Policy-DROID 对应具体机器人与控制接口。
 
 Cosmos 3 最扎实的结果，是统一架构确实能成为多个下游任务的起点，动作中训练也能带来可量化的适配优势。它距离一个在任意物理环境中都能准确预测并可靠执行的通用模拟器仍有明显差距，证据就来自报告自身的闭环成功率、合成数据负迁移、声画质量差异和单步预测误差。理解这些差异，才能把它用作可检验的研究底座，而不把多模态支持范围当成已经解决的任务范围。
+
+## 继续阅读
+
+Cosmos 3 的物理 AI 数据与世界模型接口可以接[世界模型基础](../../world-models/beginner-world-models-primer.md)；真实部署的 observation、action 与安全边界见[具身闭环](../../embodied-ai/planning-control-and-safety.md)。

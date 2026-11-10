@@ -1,6 +1,24 @@
 # Agent、环境与训练闭环
 
-把机器人放进仓库，任务是从入口移动到货架。策略看到相机、激光雷达、轮速和目标位置，输出左右轮速度。环境执行动作后返回新传感器数据、奖励和结束标志。强化学习的基本单位是这次转移；网络结构只是决定动作的一种实现。
+仓库机器人每隔一小段时间收到一组传感器读数，再给左右轮一个速度命令。命令执行完，环境返回新的读数、奖励和结束原因。训练代码真正要对齐的是这一行 transition：动作对应哪一次执行，后继观察来自 reset 前还是 reset 后，价值目标是否还可以 bootstrap。
+
+```mermaid
+flowchart LR
+    O[观察 o_t<br/>图像 · 雷达 · 轮速] --> P[策略 π<br/>提出动作]
+    P --> A[动作 a_t<br/>控制器裁剪后执行]
+    A --> E[environment.step]
+    E --> R[奖励 r_t]
+    E --> N[后继观察 o_t+1]
+    E --> T{任务状态}
+    T -->|自然结束| D[terminated=True]
+    T -->|达到外部上限| C[truncated=True]
+    R --> B[transition 日志]
+    N --> B
+    D --> B
+    C --> B
+```
+
+图里的两个结束标志来自不同原因。它们都可能让采样器开始下一回合，却不能在价值目标里用同一个 mask 处理。
 
 ## 一条轨迹记录了什么
 
@@ -86,8 +104,51 @@ assert abs(truncated_target - 6.4) < 1e-12
 
 训练还需要第二种边界。GAE 的误差递推不能越过重置进入下一条轨迹，即使上一段因外部截断而保留了 value bootstrap。因此“是否继续估计未来价值”和“是否继续串接下一个采样误差”应分别记录，见 [GAE 与 PPO](policy-gradient-actor-critic-ppo-grpo.md)。
 
+## 先把环境返回值变成统一 transition
+
+研究代码经常在 Gymnasium、向量环境和自定义机器人接口之间切换。与其让每个算法文件自己解释 `done`，不如在环境边界统一产生一条 transition。下面的函数只表达数据合同，实际项目还要按环境是否自动 reset 检查 `next_observation` 的来源。
+
+```python
+def make_transition(observation, action, step_result, episode_id, step_id):
+    next_observation, reward, terminated, truncated, info = step_result
+    return {
+        'episode_id': episode_id,
+        'step_id': step_id,
+        'observation': observation,
+        'action': action,
+        'reward': float(reward),
+        'next_observation': next_observation,
+        'terminated': bool(terminated),
+        'truncated': bool(truncated),
+        'bootstrap_mask': 0.0 if terminated else 1.0,
+        'info': info,
+    }
+```
+
+两个标志允许同时为真。例如机器人恰好在外部步数上限那一步到达目标，底层环境返回 `terminated=True`，外层 `TimeLimit` 又设置 `truncated=True`。官方 [TimeLimit 源码](https://gymnasium.farama.org/_modules/gymnasium/wrappers/common/#TimeLimit.step)会保留底层的终止标志，不能在转换函数里断言二者互斥。此时任务已经终止，bootstrap mask 仍为零。
+
+```python
+transition = make_transition(
+    'before-goal', 'move',
+    ('at-goal', 1.0, True, True, {}),
+    episode_id=3, step_id=999,
+)
+assert transition['terminated'] and transition['truncated']
+assert transition['bootstrap_mask'] == 0.0
+```
+
+算法读取 `bootstrap_mask` 来计算 value target，读取 `terminated or truncated` 来结束当前采样段。两种用途分开后，外部时间限制可以保留最后状态的价值估计，真实任务终止则不会从不存在的后继状态 bootstrap。若环境包装器在结束时自动返回新 episode 的初始观察，应另外保存结束前的 observation，并在这里传入它；新回合的第一帧不能冒充旧回合的 `next_observation`。
+
+在机器人接口中，`action` 还应同时保存策略提出值和控制器实际执行值。例如策略提出角速度 0.4，安全层裁剪为 0.2，动力学转移由 0.2 产生。只保存 0.4 会让离线数据中的动作与后继观察不匹配，后续 world model 或 offline RL 可能把安全层造成的变化错误归因于策略。
+
 ## 一份能被重放和解释的数据
 
 每次交互至少保留观察、实际执行动作、奖励、后继观察、终止原因、episode id 和时间顺序。On-policy 更新还需要采样策略的动作 log probability；动作经安全过滤器改变时，还要分开记录提出动作与执行动作。采样策略版本、奖励版本和环境版本会影响数据含义。
 
 训练闭环随后分成两件工作。评估当前策略时保持参数不变，估计它在固定任务分布上的表现；改进策略时使用新的价值或梯度更新参数。混用训练探索动作和评测动作、在评测中继续更新、只报告未结束 episode 的部分回报，都会改变结论。[MDP 与 Bellman](mdp-value-bellman.md)把这种交互写成递推方程，[实践与算法选择](practice-and-algorithm-selection.md)解释如何读实验输出。
+
+## 算法和环境依据
+
+轨迹和 MDP 的对象沿用 [Sutton 与 Barto](http://incompleteideas.net/book/the-book-2nd.html)，`terminated` 与 `truncated` 的区分对照 [Gymnasium 时间限制说明](https://gymnasium.farama.org/tutorials/gymnasium_basics/handling_time_limits/)。仓库机器人、传感器、奖励和 1000 步边界是本站构造场景，用来说明环境包装器怎样改变 bootstrap，而不是某个真实导航任务的结果。
+
+最小回放要打印自动 reset 前的 final observation、`terminated`、`truncated` 和 bootstrap mask。若把 reset 后的初始观察误当作上一条轨迹的后继，数值仍可能有限，却已经训练了错误的目标。

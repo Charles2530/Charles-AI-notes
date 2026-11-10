@@ -15,19 +15,21 @@ paper_topic: 扩散模型 / 视频生成量化
     **GitHub / 项目：** 本次未在 CVF 页面确认官方代码仓库；CVF 页面说明 code and models will be released upon publication，作者主页提供 Paper / Supp / Video 链接。<br>
     **元数据来源与核验口径：** 来源：CVF Open Access HTML、本地 PDF `Li_DeltaQuant_4-bit_Video_Diffusion_Models_with_Spatiotemporal_Delta_Smoothing_CVPR_2026_paper.pdf`、作者主页检索；Checked Date：2026-07-25；Repro Status：Paper / official metadata reviewed, independent reproduction not claimed。
 
-## 视频量化的难处，正在从权重转向随输入变化的激活
+## attention 压下去以后，线性层反而成了大头
 
-DeltaQuant 的目标是让视频 DiT 的大部分线性层真正使用四比特权重与激活计算，同时保留接近原模型的生成结果。它的核心观察很具体：视频模型的异常激活会随去噪步骤移动，离线确定的通道缩放很难一直合适；但在同一次前向中，时空相邻 token 又常常共享大幅度的激活结构。把这个共享部分单独保存，剩余差分就更容易量化。[↗](https://openaccess.thecvf.com/content/CVPR2026/papers/Li_DeltaQuant_4-bit_Video_Diffusion_Models_with_Spatiotemporal_Delta_Smoothing_CVPR_2026_paper.pdf#page=2)
+Wan2.2 的一个 72K-token 配置里，原始 attention 计算量是 9.75 PF，线性层是 2.24 PF。加入 Radial 和 Sage Attention 后，attention 降到 1.14 PF，线性层仍然是 2.24 PF。此时继续优化 attention，已经绕不开线性层的低比特计算。[↗](https://openaccess.thecvf.com/content/CVPR2026/papers/Li_DeltaQuant_4-bit_Video_Diffusion_Models_with_Spatiotemporal_Delta_Smoothing_CVPR_2026_paper.pdf#page=3)
 
-方法因此同时保留两种结构。权重侧沿用 SVDQuant 的高精度低秩分支；激活侧新增动态的 **core token（核心 token）** 与 **delta tokens（差分 token）** 分解。局部 token 的均值作为 core，用 FP8 处理；每个 token 相对均值的差分用 FP4 处理。core 随当前输入重新计算，不需要对激活在线做 SVD，也不是缓存上一个去噪步骤的结果。
+DeltaQuant 针对的就是这个剩余部分。视频 DiT 的异常激活会随着去噪步骤移动，离线固定的通道缩放很难在所有 step 都合适；但同一次前向里的时空邻近 token 又常常共享一部分大幅度响应。把共享成分单独保留，剩下的差分就更容易放进 FP4 路径。这个观察来自论文的激活分析，不能扩大成“所有视频层的残差都很小”。[↗](https://openaccess.thecvf.com/content/CVPR2026/papers/Li_DeltaQuant_4-bit_Video_Diffusion_Models_with_Spatiotemporal_Delta_Smoothing_CVPR_2026_paper.pdf#page=2)
 
-原 Figure 2 可以从左右两个分解对象开始读。左侧拆的是固定权重，右侧拆的是当前激活；二者最后可以叠加在同一个线性层中。DeltaQuant 并未把 SVDQuant 整体丢掉，而是补上其静态激活平滑难以处理的输入变化。
+具体实现分成两个对象。权重侧继续使用 SVDQuant 的高精度低秩分支；激活侧对当前输入的局部 token 求均值，得到 **core token（核心 token）**，用 FP8 处理，再把每个 token 减去这份均值，得到用 FP4 表示的 **delta token（差分 token）**。core 不是上一个去噪 step 的缓存，也不是在线求一次 SVD，而是每次前向从当前 cube 重新算出。
+
+Figure 2 的左右两边分别对应固定权重和当前激活。DeltaQuant 沿用了前者的低秩保护，又给后者加了动态的 core-delta 分解，因此它处理的是两个不同的误差来源。
 
 ![DeltaQuant 方法对比](../../assets/images/paper-deep-dives/diffusion/deltaquant/figure-2-svdquant-vs-deltaquant.png){ width="860" }
 
 <small>图源：[原论文，第 2 页，Figure 2](https://openaccess.thecvf.com/content/CVPR2026/papers/Li_DeltaQuant_4-bit_Video_Diffusion_Models_with_Spatiotemporal_Delta_Smoothing_CVPR_2026_paper.pdf#page=2)。左侧是权重低秩分解，右侧是局部激活的 core-delta 分解。</small>
 
-论文最后将这套混合精度计算做成融合 CUDA 内核，并与少步蒸馏、稀疏注意力和量化注意力组合。在 Wan2.2 I2V 的链式实验中，整段 720p 视频的时间由 4818 秒降至 43.1 秒，其中 DeltaQuant 在前面优化已经完成的 131.0 秒基础上再缩短约三倍。理解这个结果，需要把数值误差、内核速度和整个 pipeline 的组合收益逐层拆开。
+作者把这两个分支做进融合 CUDA 内核，再与少步蒸馏、稀疏注意力和量化注意力串起来。Wan2.2 I2V 的整段 720p 结果从 4818 秒降到 43.1 秒，但 DeltaQuant 自己对应的是已经到 131.0 秒的 pipeline 再降到 43.1 秒。读这张表时，数值误差、kernel 速度和整条 pipeline 的组合收益要分开记。
 
 ## 为什么 attention 已经更快，模型仍然跑不动
 
@@ -350,3 +352,6 @@ DeltaQuant 提供了一种适合局部冗余数据的量化方法：将少量共
 具体落地时，首先需要保留模型的 latent 时空排列，并让 cube 对应真实局部邻域；其次需要同时保留高精度权重低秩分支、FP8 core 与 FP4 delta，不能把主方法简化成所有层直接转 FP4；最后需要融合均值生成、量化与输出累加，才能将算术结构变成设备上的速度收益。
 
 实验支持它在 Wan2.2 与 LTX-Video 上改善四比特量化的参考相似性，并在 RTX 5090 上取得可观的显存与时间收益。质量表中的反例和配置差异也说明，部署判断应同时看原模型相似性、目标任务质量、显存是否容纳以及真实 pipeline 时间。这里最可复用的认识是，低比特计算不一定要把所有元素都平等对待；只要共享结构能被低成本地识别，就可以让很少的高精度计算保护大量低精度计算。
+## 继续读
+
+量化方法可以接到[QAT、kernel 与 KV cache](../../quantization/qat-kernels-and-kv-cache.md)，再看[低精度与量化 kernel](../../operators/low-precision-and-quantized-kernels.md)理解为什么代数分解还需要融合实现；视频 token 的局部结构可与[长视频与缓存](../../diffusion/long-video-and-cache-1029-1246.md)对照。

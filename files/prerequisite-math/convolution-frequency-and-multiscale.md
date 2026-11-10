@@ -126,3 +126,12 @@ C_k=\alpha_k\sum_{n=0}^{N-1}x_n\cos\!\left[\frac{\pi}{N}(n+\tfrac12)k\right],
 <small>图源：`Wan2.2` 相关论文图，已本地化于视频扩散专题。原图展示 denoising timestep 与 SNR 阶段，以及不同 expert 在不同噪声区间的验证曲线。这里的重点是：timestep 可以被读成噪声尺度，不同阶段承担的生成职责不同。</small>
 
 分阶段去噪方法会利用不同噪声区间的统计差异。高噪声阶段常与整体结构恢复相关，低噪声阶段常与细节相关，但这是一种依赖数据谱、参数化和模型的经验概括，不能据此认定某个timestep只处理某个空间频段。SNR是信号与噪声尺度，频率是变化快慢，两者不是同一个坐标。
+## 继续读
+
+继续看[卷积与特征提取](../foundations/convolution-and-feature-extraction.md)和[立体匹配与 cost volume](../embodied-ai/stereo-matching-and-cost-volume.md)。
+
+## 外部资料
+
+- [D2L 卷积神经网络](https://d2l.ai/chapter_convolutional-neural-networks/index.html) 从互相关窗口、填充和步幅开始推导卷积层。
+- [SciPy FFT 文档](https://docs.scipy.org/doc/scipy/tutorial/fft.html) 说明 DFT、频率坐标和频谱分析的实现约定。
+- [U-Net 原论文](https://arxiv.org/abs/1505.04597) 展示编码器、解码器和跳连如何服务像素级输出。

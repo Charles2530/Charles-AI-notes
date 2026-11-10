@@ -15,6 +15,21 @@ A_t=(a_t,\ldots,a_{t+H-1}).
 
 图像应来自推理截止前已可获得的传感器记录。动作标签要声明是遥操作请求、经过控制器处理后的命令，还是实际测量；详情见[动作接口](action-representation-and-interfaces.md)。训练与验证先按 episode 或采集场景分组，再切窗口，避免高度相似邻帧泄漏。
 
+### 进入 batch 前先把一个窗口展开
+
+设控制频率为 10 Hz，决策时刻为 1.00 s，历史长度 $K=2$，预测长度 $H=3$。一个合法窗口至少应能写成下面这样。
+
+| 字段 | 实际时间 | 内容 | 进入模型前要检查什么 |
+| --- | ---: | --- | --- |
+| 图像历史 | 0.90、1.00 s | 两帧相机图像 | 每帧都早于或等于决策时刻 |
+| 本体状态 | 0.90、1.00 s | 关节与末端状态 | 单位、坐标系和标定版本一致 |
+| 动作标签 | 1.00、1.10、1.20 s | 三个未来动作 | 是目标、命令还是实测执行量 |
+| 有效 mask | 1、1、1 | 三个位置均存在 | 不把 episode 末尾补零当成停下 |
+
+如果图像时间戳是 0.95、1.05 s，第二帧已经看到了决策之后的画面，训练输入就偷看了未来；如果动作标签从 0.90 s 开始，模型学到的是“用当前动作解释过去状态”。这类错误通常不会让 tensor shape 报错，必须在样本打印阶段比较时间戳。
+
+LeRobotDataset v3 的官方示例把 `observation.state`、`action`、相机帧和 `timestamp` 作为独立字段读取，并用 `delta_timestamps` 请求历史窗口。[↗](https://huggingface.co/docs/lerobot/en/lerobot-dataset-v3) 这里借用的是字段和时间窗口的组织方式；具体 VLA 的 $K$、$H$、动作定义与 mask 仍由任务协议决定。可以把一个 batch 的第一条样本保存为 JSON，连同 episode ID、相机时间戳和归一化版本一起作为回归样本。
+
 ## 最大似然为什么变成 MSE
 
 行为克隆最小化
@@ -89,3 +104,9 @@ DAgger 的关键是访问学习器产生的状态，并请专家给这些状态�
 语义预训练可提供对象与语言表征，动作监督仍需对齐坐标、时间和控制器。RT-2 与 OpenVLA 的具体训练配方不同，不宜把“VLM 初始化”推断成所有模型均具备同样的操作能力。最终比较应固定任务、执行预算和干预规则，见[评测与数据引擎](benchmarks-and-data-engines.md)。
 
 原始资料包括 [DAgger](https://arxiv.org/abs/1011.0686)、[ACT](https://arxiv.org/abs/2304.13705)、[Diffusion Policy](https://arxiv.org/abs/2303.04137)、[OpenVLA](https://arxiv.org/abs/2406.09246)和 [Open X-Embodiment](https://robotics-transformer-x.github.io/)。
+
+## VLA 数据课的四个检查点
+
+先核对窗口和动作块的时间索引，再核对动作语义、坐标、单位和控制周期；随后按 episode/场景切分训练与验证，最后在策略自己访问的状态分布上评测恢复。帧数更多不等于有效数据更多，混合机器人数据也不等于接口已经统一。
+
+**来源与改编说明**：[DAgger](https://arxiv.org/abs/1011.0686)解释示范分布与部署分布的差异，[ACT](https://arxiv.org/abs/2304.13705)提供 CVAE/动作块案例，[Diffusion Policy](https://arxiv.org/abs/2303.04137)提供动作扩散案例，[Open X-Embodiment](https://robotics-transformer-x.github.io/)提供异构数据背景。自测时构造一个同观测对应两个动作模式的例子，说明普通 MSE 为什么可能输出不可执行的中间动作。

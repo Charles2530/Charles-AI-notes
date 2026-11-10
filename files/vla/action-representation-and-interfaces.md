@@ -1,6 +1,6 @@
 # 动作表示与控制接口
 
-一个七维数组本身不能告诉机器人怎么动。前三项可能是米、毫米、米每秒，也可能是已经归一化的数；同一个正号在相机坐标与末端坐标中可能指向不同方向。动作表示首先是一份能由执行端解释的协议，随后才是模型输出格式。
+一个七维数组本身不能告诉机器人怎么动。前三项可能是米、毫米、米每秒，也可能是已经归一化的数；同一个正号在相机坐标与末端坐标中可能指向不同方向。真正上线时，最先出错的往往不是网络，而是模型输出、反归一化和控制器对同一个字段有不同理解。动作表示首先是一份能由执行端解释的协议，随后才是模型输出格式。
 
 ## 一个七维动作的完整定义
 
@@ -70,3 +70,9 @@ RT-2 将动作离散后接入语言模型输出；OpenVLA 原论文逐维使用 
 比较跨机器人数据前，应逐个确认 state 是测量还是指令，动作是绝对量还是增量，旋转表示、夹爪方向、控制周期和坐标版本是否一致。Open X-Embodiment 是异构机器人数据集合，不能假设其中所有原始数据天然使用同一个末端坐标动作协议。
 
 继续看[策略学习](data-and-policy-learning.md)、[分块与技能](action-chunking-hierarchical-policies-and-latent-skills.md)和[机器人 state/action 数据](../embodied-ai/state-action-robot-datasets.md)。原始实现依据见 [RT-2](https://arxiv.org/abs/2307.15818)、[OpenVLA](https://arxiv.org/abs/2406.09246)、[ACT](https://arxiv.org/abs/2304.13705)与 [Diffusion Policy](https://arxiv.org/abs/2303.04137)。[FAST](https://arxiv.org/abs/2501.09747)可进一步了解动作序列压缩；压缩后仍需检验解码误差与接触时序。
+
+## 接口和论文依据
+
+动作进入视觉语言策略的接口参考 [RT-2](https://arxiv.org/abs/2307.15818) 和 [OpenVLA](https://arxiv.org/abs/2406.09246)，连续 action chunk 的执行方式参考 [ACT](https://arxiv.org/abs/2304.13705) 与 [Diffusion Policy](https://arxiv.org/abs/2303.04137)。跨机器人数据的协议差异需要回到 [Open X-Embodiment](https://robotics-transformer-x.github.io/) 的数据说明。七维动作、单位转换、坐标变换和反馈链路是本站构造的接口例子，不代表任意机器人控制器的默认约定。
+
+最小验收可以固定一条动作，分别记录原始输出、反归一化结果、限幅后命令、逆运动学目标和实际反馈。然后把控制频率从 10 Hz 改为 30 Hz，检查系统是否按协议保持相同速度，还是悄悄把每周期位移放大了三倍。

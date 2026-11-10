@@ -409,3 +409,7 @@ AsymFlow 的 GenEval 为 0.8181，高于 Ours 的 0.8096；其 DPG、OneIG、Lon
 **Fan-in Variance Preservation（输入规模变化下的方差保持）** 将输入投影复制四份时乘以 1/2，以近似补偿输入维度四倍增长带来的激活方差变化，并非对四个子块求平均。
 
 **Number of Function Evaluations / NFE（网络函数调用次数）** 采样所需的模型评估预算；本文 Turbo 为 4 NFE、无 CFG，与 100 NFE 模型的比较必须明确预算变化。
+
+## 继续阅读
+
+Z-Image-Pixel 的像素空间选择需要和[扩散架构](../../diffusion/architecture-and-stable-diffusion.md)一起读；如果关心 post-training 如何压少步数，再接[一致性模型与 Rectified Flow](../../diffusion/consistency-models-and-rectified-flow.md)。

@@ -1,10 +1,8 @@
 # Transformer、Tokenization 与注意力
 
-一段文本进入 Transformer 时，会先被切成 token，再转换成整数编号。模型根据编号取出向量，用注意力读取其他位置的信息，用前馈网络改写每个位置的表示，最后把向量投影成下一 token 的分数。
+把模型缩到一句“我喜欢猫”。预测“猫”时，当前位置可以读前面的词，不能偷看答案，注意力矩阵里的每个数字都和这件事有关。下面从编号和向量算到 Q/K/V 与 mask，再把它们放回 Transformer block 和自回归生成；数字选得很小，方便拿纸笔或 Python 复算，也不代表真实模型的参数。
 
-这些操作各有明确的输入和输出。Tokenization 决定序列由哪些单元组成，embedding 决定编号怎样变成可学习向量，attention 决定当前位置从哪些位置取信息。把这几个过程分开，再连接起来，结构图就容易读得多。
-
-这里会用到[张量与 Shape](tensors-shapes-and-computation-graphs.md)、[线性层与 MLP](linear-layers-mlp-and-gemm.md)，以及把一组分数归一化为概率的 softmax。下面先用小词表和二维向量演算，不要求先记住完整模型结构。
+这里会用到[张量与 Shape](tensors-shapes-and-computation-graphs.md)、[线性层与 MLP](linear-layers-mlp-and-gemm.md)，以及把一组分数归一化为概率的 softmax。遇到不熟的术语，可以先沿着这个例子继续，等矩阵的形状和信息流对上以后，再回头补定义。
 
 ## 文字怎样变成向量
 
@@ -187,3 +185,9 @@ Y=U+\operatorname{FFN}(\operatorname{Norm}(U)).
 - [Hugging Face BPE 说明](https://huggingface.co/docs/course/chapter6/5) 解释子词合并与编码流程。
 
 - [LLMs from scratch 的 GPT 实现](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py)，用于把正文的数学对象对应到具体数据布局和执行顺序。
+
+## 公式和代码对照
+
+我参考了[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)的图解顺序、[The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)的公式和实现注释，也对照了 [LLMs from scratch 的 GPT 实现](https://github.com/rasbt/LLMs-from-scratch/blob/cdbd33e6d57a71e20ea31434841095fac50cecd8/ch04/01_main-chapter-code/gpt.py) 的张量排列。正文没有逐段翻译这些页面，例子、数字和代码是本站重新写的；原论文的图仍按原链接标注，不能把它们当成本站绘制。
+
+这里最值得复算的是 `[B,H,L,d]` 的 shape、softmax 的 key 轴和 causal mask 的方向。把两位置例子中的 `V` 换成 `[[2, 0], [0, 3]]`，第二个位置应得到两个 value 按 `0.330238, 0.669762` 加权后的向量。若把 mask 的上三角方向写反，先指出它让哪个未来位置可见，再改代码。

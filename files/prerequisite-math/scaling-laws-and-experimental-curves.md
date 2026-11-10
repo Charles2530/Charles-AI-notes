@@ -123,3 +123,6 @@ Pareto边界只针对已比较的候选、指标和测量条件。漏掉显存�
 
 
 - [D2L 模型选择](https://github.com/d2l-ai/d2l-zh/blob/e6b18ccea71451a55fcd861d7b96fddf2587b09a/chapter_multilayer-perceptrons/underfit-overfit.md)，用独立验证与控制变量判断拟合收益。
+## 继续读
+
+继续看[研究闭环](../training/research-loop-from-hypothesis-to-evidence-1123-2351.md)和[评测与消融方法](../training/evaluation-and-ablation-methodology.md)。

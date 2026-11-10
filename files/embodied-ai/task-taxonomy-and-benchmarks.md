@@ -66,3 +66,9 @@ SPL把成功与路径长度合在一起，也会改变策略排序。假设两�
 | 仿真与实机关联 | [SimplerEnv](https://simpler-env.github.io/) | 哪些机器人与任务验证过关联 |
 
 同一 benchmark 的不同版本、控制模式和训练预算也不能直接比较。报告应让读者重建初始条件、试验次数、随机种子、人工干预与指标计算。具体统计方法见[VLA 评测](../vla/benchmarks-and-data-engines.md)，物理执行边界见[部署安全案例](deployment-patterns-and-safety-cases.md)。
+
+## benchmark 选择的检查点
+
+先写任务成功谓词，再写观测、动作、重置、控制周期、人工干预和训练预算；之后才选择 benchmark。不同 benchmark 的任务难度、仿真器、checker 和数据来源不同，不能只按一个成功率排序。
+
+**来源与改编说明**：[CALVIN](https://github.com/mees/calvin)、[LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO)、[MetaWorld](https://github.com/Farama-Foundation/Metaworld)、[Open X-Embodiment](https://robotics-transformer-x.github.io/)、[DROID](https://droid-dataset.github.io/)、[RoboTwin](https://robotwin-platform.github.io/)和[SimplerEnv](https://simpler-env.github.io/)承担不同的任务和数据问题。自测时挑两个 benchmark，列出至少三项不能直接比较的条件，并写出统一报告所需的额外字段。

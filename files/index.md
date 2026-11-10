@@ -7,11 +7,11 @@ hide:
 
 <div class="atlas-hero" markdown="1">
 
-# AI 技术入门
+# AI 研究与工程地图
 
-理解模型怎样计算、怎样学习，以及怎样在真实系统里运行。这里从具体问题讲到公式与实现，再通过论文理解方法的来由和适用条件。
+同一个模型，loss 在降，显存却先爆了；同一个 kernel，单测变快，端到端请求却没有变化。论文和代码真正难对上的地方，往往就在这些小断点里。
 
-每篇围绕一个具体问题展开，保留输入、公式、中间数值和实现之间的联系。可以按当前问题进入，随时补数学或查术语；这里没有必须按顺序完成的阶段。
+我把每个专题都从一个能检查的断点开始写：输入是什么，中间量变成什么，哪里会失败。公式、代码和来源跟在这个断点后面，论文结论、本站算例和本地运行结果也分开记。你可以从眼前的报错进入，也可以从基础一路读到训练、推理和具身系统。
 
 <div class="atlas-hero-actions">
   <a href="foundations/">从基础知识进入</a>
@@ -47,14 +47,26 @@ hide:
 | 当前奖励与长期价值有什么区别 | [价值函数与 Bellman](reinforcement-learning/mdp-value-bellman.md) | [从样本估计价值](reinforcement-learning/dynamic-programming-monte-carlo-td.md) |
 | 能预测未来画面，怎样才能帮助机器人行动 | [世界模型的基本对象](world-models/beginner-world-models-primer.md) | [RSSM、Dreamer 与规划](world-models/rssm-dreamer-and-planning.md) |
 
-## 从一次可复算的计算开始
+## 先把一件小事算清楚
 
 想知道模型如何学习，可以先算[两个样本的一次梯度更新](foundations/optimization-and-training-basics.md)。想理解生成，可以先算[一个VAE的采样、损失与梯度](foundations/probability-latent-variables-and-generative-models.md)，再进入扩散或视频。想理解条件计算，可以跟着[四个token经过两个MoE专家](foundations/moe-and-large-model-architecture-basics.md)，看路由如何变成真实分组与合并。
 
-正文中的手算与小程序用于验证机制；训练效果、GPU速度和闭环成功需要各自的实验。阅读时会明确区分这些证据，避免把程序能跑当成方法已经有效。
+正文里的手算和小程序只负责把机制讲明白。训练效果、GPU 速度和机器人闭环属于另外三类证据，需要各自的实验。能把程序跑通，是开始检查的条件，不是结论。
+
+本站参考外部教程时遵循[来源、改编与证据边界](roadmap/source-and-adaptation-guidelines-1110-0106.md)，将教材、官方文档、论文、源码、图片和本地实验分开记录。
+
+这里有一件事需要先说清楚。本站不是把某篇博客整篇搬过来的转载站。正文通常根据论文、官方文档、源码和少量教程重新组织，公式推导与小算例由本站重写，论文原图和第三方代码另记许可。历史记录显示，有 101 个页面曾吸收过 Datawhale 算法教程的基础或复杂度讲解块；目前的长句级重合检查没有发现已缓存来源中的精确复制，但它不能代替近似翻译、段落顺序和许可证的逐页复核。历史页面经历过批量辅助生成，不能因此把每一页都称作已经逐句人工审校的成稿。读到句式过整齐、段落像提纲的地方，应当把它看作待改稿，并沿页面来源回到原文核对。
 
 ## 知识之间怎样连接
 
 数学描述对象及其变化，模型结构把这些运算组合成预测函数，训练用数据改变函数的参数，推理把学习到的函数用于新输入。生成模型和强化学习进一步规定了输出如何形成，以及模型怎样处理未来和动作。多模态与具身系统则把这些机制接到图像、语言、空间与物理执行。
 
 读公式遇到困难时，可以从[数学工具](prerequisite-math/index.md)查当前需要的概念；需要区分相近名词时，查[术语表](glossary/index.md)和[知识 QA](knowledge-qa/foundations-and-transformer.md)。[工具与查阅](technical-reference/index.md)还收录可运行示例和探索文章。
+
+## 把知识变成研究记录
+
+读懂一个机制以后，把问题写成[实验合同](training/research-loop-from-hypothesis-to-evidence-1123-2351.md)。`server_monitor` 记录运行和观测，PaperPilot 保存论文证据与笔记版本，条件、反例和下一步实验再写回对应专题。
+
+## 三种进入方式
+
+如果只有半小时，挑一个[小算例](foundations/optimization-and-training-basics.md)或[可运行示例](assets/examples/reinforcement-learning/README.md)，先把输入、目标和更新顺序复算一遍。如果正在读论文，从[论文精读](paper-deep-dives/index.md)进入，回到正文中的公式、图表和代码提交。如果准备做实验，直接从[研究闭环](training/research-loop-from-hypothesis-to-evidence-1123-2351.md)写 `question_id`、对照、预算和停止条件，再把结果回写到对应专题。

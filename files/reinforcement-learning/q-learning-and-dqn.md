@@ -1,6 +1,6 @@
 # Q-learning 与 DQN
 
-六格地图中的智能体在状态 1 偶尔为了探索向左绕路。它仍能用这次经历学习以后怎样贪心走向终点，前提是分清实际执行的动作与构造目标时假设的动作。知道每个动作的长期价值，就能选择价值最高的动作。Q-learning 直接学习这个动作价值，不必先得到完整环境模型；DQN 用神经网络代替价值表，把方法扩展到图像等大输入。难点在于，网络拟合的目标本身也来自价值估计。
+六格地图中的智能体在状态 1 偶尔为了探索向左绕路。它仍能用这次经历学习以后怎样贪心走向终点，前提是分清实际执行的动作与构造目标时假设的动作。Q-learning 直接学习动作价值，DQN 用网络代替价值表；难点在于，网络拟合的目标本身也来自价值估计，所以目标网络、replay 和终止 mask 都会改变训练行为。
 
 ## 同一次转移，可以形成不同目标
 
@@ -16,6 +16,20 @@ y_t^{\mathrm{SARSA}}=r_t+\gamma b_tQ(s_{t+1},a_{t+1}),
 假设在状态 0 向右走到 1，奖励为 −1。当前对状态 1 的估计中，向右为 −1、向左为 −3，行为策略为了探索选择向左，$\gamma=0.9$。SARSA 目标是 $-1+0.9(-3)=-3.7$，Q-learning 目标是 $-1+0.9(-1)=-1.9$。前者把下一步确实会探索绕路的后果算进来；后者朝下一步贪心选择的目标更新。
 
 Q-learning 的行为策略可以是 $\epsilon$-greedy，目标策略却是贪心策略，这已经构成 off-policy。Replay 是数据重用机制，并不是 Q-learning 成为 off-policy 的原因。
+
+```mermaid
+flowchart LR
+    X[一次转移\ns,a,r,s',终止标志] --> B[Replay buffer]
+    B --> O[在线网络 Qθ\n读取 Qθ(s,a)]
+    B --> N[目标网络 Qbar\n读取 Qbar(s',·)]
+    N --> Y[目标 y\n奖励 + 折扣 × mask × max]
+    O --> L[Huber 或平方损失]
+    Y --> L
+    L --> U[只更新 θ]
+    U -. 定期复制或软更新 .-> N
+```
+
+这张图里有两个容易漏掉的边界。`s,a` 走在线网络，`s'` 的 bootstrap 走目标网络；真实终止才把 mask 置零。Replay 只负责把转移重新取出来，它没有替代目标网络，也没有改变 Q-learning 的 off-policy 定义。
 
 在有限表格、充分访问状态动作对、合适步长与有界奖励等条件下，可以讨论 Q-learning 的收敛。神经网络版本不自动继承这些保证。
 
@@ -108,3 +122,9 @@ python files/assets/examples/reinforcement-learning/deep_rl_smoke.py dqn --seed 
 Replay 中真实终止会去掉 bootstrap，外部截断保留最后有效后继状态的价值。`current_partial_episode_return` 是尚未结束那一段的回报，不能作为完整 episode 均值。有限 loss、非零参数变化和正确交互数量只能表明更新链路可执行；长时间价值发散、策略退化和多 seed 的性能仍需另外评测。
 
 检查异常时先重算一条样本的奖励、mask、下一状态 Q、目标与当前 Q。若 Q 尺度远高于可获得的折扣回报，检查奖励尺度、真实终止和最大化偏差；若训练误差很低但执行很差，检查 replay 覆盖、观察是否近似 Markov，以及评测环境。固定日志不能主动补充遗漏动作的反馈，这会进入[离线强化学习](offline-reinforcement-learning.md)的问题范围。动作连续到无法枚举时，则可用显式 actor，见 [SAC](continuous-control-and-sac.md)。
+
+## 算法和环境依据
+
+Q-learning、replay 和 DQN 的经典设置对照 [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/abs/1312.5602) 与 [Nature DQN](https://doi.org/10.1038/nature14236)，Double DQN 的选择与评测边界对照 [Deep Reinforcement Learning with Double Q-learning](https://arxiv.org/abs/1509.06461)。六格地图、CartPole smoke test 和目标数值是本站为了逐项核对 `reward`、`terminated`、online/target network 与 double selection 而写的机制例子。
+
+把一条 replay 样本的 `current_q`、`next_q`、目标和 mask 打印出来，再分别开启普通 DQN 与 Double DQN。若只比较最终回报，无法知道差异来自目标构造还是探索轨迹。

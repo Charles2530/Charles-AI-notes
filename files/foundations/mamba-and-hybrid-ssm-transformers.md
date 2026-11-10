@@ -1,6 +1,6 @@
 # Mamba 与混合状态空间架构
 
-自回归 attention 为历史位置保存 K/V，生成新 token 时重新读取历史。另一条路线把历史不断压缩进一个固定大小的状态，下一步只更新这个状态。Mamba 属于后一类，但它又让更新规则随输入变化，从而选择哪些信息继续保留。
+同样生成很长的序列，attention 可以回读所有历史，状态空间模型却只能带着一个固定大小的状态往前走。为什么要接受这个取舍，哪些信息会被压掉，又怎样把有用的信息留下来？Mamba 属于后一条路线，并让状态更新规则随输入变化。先把记忆如何被压缩算清楚，再去区分 Mamba、Mamba-2 和混合模型的名字。
 
 从一个标量递推开始，比直接比较模型名单更容易看清这种选择的含义。设输入依次为 \(u_1,u_2,u_3=(2,0,4)\)，状态初值为零，更新规则是
 
@@ -53,7 +53,9 @@ h_t=e^{\Delta_t A}h_{t-1}+\Delta_t B_tu_t,
 
 ![选择性状态空间模型概览](../assets/images/paper-figures/foundations/mamba-selective-ssm-overview.png){ width="920" }
 
-<small>[Mamba Figure 1](https://arxiv.org/abs/2312.00752)。先看输入如何影响选择参数，再看扩大的状态维度。高效实现需要避免把所有时间点、所有通道的完整内部状态长期写入显存。</small>
+<small>图源：[Mamba Figure 1](https://arxiv.org/abs/2312.00752)。先看输入如何影响选择参数，再看扩大的状态维度。高效实现需要避免把所有时间点、所有通道的完整内部状态长期写入显存。</small>
+
+**读这张图。**输入分支先产生选择参数，再进入状态更新；另一条分支提供门控。图中“选择性”发生在参数随输入变化这一处，不能把它理解成每个 token 都拥有一套独立的模型权重。
 
 在核对的 `mamba_simple.py` 中，`x_proj` 产生 \(\Delta\) 的低秩表示以及 B/C，`dt_proj` 展开时间步，softplus 使时间步为正；`A=-exp(A_log)` 使标量状态衰减项具有规定符号。短卷积还有自己的历史缓存，推理状态因此不只有 SSM state。
 
@@ -85,6 +87,10 @@ print(h, combined)
 
 ![仿射递推与结合律](../assets/images/foundations/mamba-affine-scan-example.svg)
 
+<small>图源：本站根据三步标量递推重绘。它只说明仿射更新可以按结合律合并，不代表任意递归网络都能并行 scan。</small>
+
+**读这张图。**每个小块表示一对 ((a_t,b_t))，合并时后一步的衰减系数会乘到前一步的写入量。沿序列合并后的结果应与逐步更新相同，初始状态和组合方向都不能颠倒。
+
 ## 固定大小状态带来的收益与限制
 
 生成时只需更新本层状态和短卷积缓存，存储不随已生成长度线性增加。这个结论针对固定模型宽度与状态维度的 SSM 层，不表示整个混合模型没有 KV，也不表示任意长度的信息都能无损保留。
@@ -99,3 +105,11 @@ Mamba-2 通过结构化状态空间对偶关系重新组织计算，使部分训
 
 - [selective_scan_ref](https://github.com/state-spaces/mamba/blob/e9594ce1c732d97440f0332fdc43170a2294dbfa/mamba_ssm/ops/selective_scan_interface.py)提供便于核对的循环表达，`deltaA`、`deltaB_u` 与本文递推对应。
 - [Mamba-2 / Transformers are SSMs](https://arxiv.org/abs/2405.21060)解释结构化状态空间对偶；继续阅读前先掌握这里的仿射递推。
+
+## 公式和代码对照
+
+连续状态空间模型的定义和输入相关选择机制参考 [Mamba](https://arxiv.org/abs/2312.00752)，训练计算重排参考 [Transformers are SSMs](https://arxiv.org/abs/2405.21060)，实现细节对照 [state-spaces/mamba](https://github.com/state-spaces/mamba/tree/e9594ce1c732d97440f0332fdc43170a2294dbfa)。标量递推、仿射结合律和“固定状态不等于无损记忆”是本站为读者构造的算例，不是论文 benchmark 的缩小版。
+
+可以把三个输入换成 `[(1, 0), (0, 1), (2, 0)]`，分别计算循环递推和结合律合成的结果。再问一个具体问题：如果任务必须精确找回第一个 token，固定大小状态为什么可能比带 KV 的 attention 更困难？这个问题比单独比较吞吐数字更能说明两种记忆的取舍。
+
+若要把这两种记忆放进同一条生成链，可以接着看[Transformer 的 attention 与 token 化](transformer-attention-and-tokenization.md)对照显式 KV 读取；服务侧的缓存代价见[上下文压缩与 KV 分层](../inference/context-compression-kv-eviction-and-memory-hierarchies.md)。

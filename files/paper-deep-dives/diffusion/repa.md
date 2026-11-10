@@ -511,7 +511,7 @@ REPA 的特点是无需另训表示生成器，也无需规定最后输出必须
 
 采用 REPA 时，最有依据的起点是保留已验证的生成训练路径，在一个较早层接三层 MLP，使用冻结视觉编码器的对应 patch 表示，并把 $\lambda=0.5$ 的 cosine loss 加到原目标上。对本文 B/2、L/2、XL/2，可分别从第 4、8、8 层开始；网络深度、token 网格或输入域变化后，这些层号需要重新测试，不能当成架构无关的常数。
 
-验证时至少同时看三件事。首先是固定 sampler、guidance 和生成样本数后的 FID 轨迹；其次是与基线相比的实际吞吐和峰值显存，判断少训练的收益能否覆盖教师分支成本；最后是逐层表示与生成质量是否出现冲突。Table 2 的 depth 实验已经说明，仅按 linear probing accuracy 选 checkpoint 或选层，会选到生成表现较差的配置。
+验证时先把 sampler、guidance 和生成样本数固定下来，再画 FID 随训练步数的变化。随后单独记录教师分支带来的吞吐、峰值显存和数据读取开销，少训练的收益要和这些成本放在同一张账上。还要把逐层表示指标与生成质量并排看，Table 2 已经显示，只按 linear probing accuracy 选 checkpoint 或选层，可能会得到生成表现较差的配置。
 
 仍然没有被解释清楚的是，为什么某个早期层最合适，以及教师表示中哪些信息真正帮助生成。分类能力、CKNNA 和 FID 的相关变化提供了线索，但“语义监督减轻训练负担”还不是一条完整的收敛理论。不同噪声区间能保留多少图像身份信息也不同；原文使用固定 $\lambda$，把按时间变化的 REPA 权重列为未来工作。像素域、视频域以及更大规模 T2I 的适配同样超出了这篇论文的主要验证范围。
 
@@ -526,3 +526,8 @@ REPA 的特点是无需另训表示生成器，也无需规定最后输出必须
 **Guidance Interval（引导区间）**：只在指定噪声时间段施加 CFG 的采样策略；它与训练期 REPA 是不同的改动。
 
 REPA 给生成训练提供了一个具体可复用的判断：如果主干还在缓慢形成语义结构，可以让已有视觉表示为早期层提供目标，同时继续用生成损失约束最终输出。真正需要保留的自由度在后续生成路径里；仅为了提高分类能力而不断把对齐位置移向更深层，实验上并不是更好的选择。
+
+REPA 的表示对齐问题可以接到[预训练目标与表征学习](../../foundations/pretraining-objectives-and-representation-learning.md)，先区分辅助表征损失和生成目标；再看[扩散模型训练](../../diffusion/training.md)比较额外 encoder、冻结目标和训练开销。若要判断辅助表示是否真的改变下游能力，应保留独立的[评测与消融方法](../../training/evaluation-and-ablation-methodology.md)协议。
+## 继续读
+
+继续看[预训练目标与表征学习](../../foundations/pretraining-objectives-and-representation-learning.md)和[扩散模型训练](../../diffusion/training.md)，再用[评测与消融方法](../../training/evaluation-and-ablation-methodology.md)复现实验对照。

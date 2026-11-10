@@ -43,3 +43,9 @@ Prefix cache进一步复用相同前缀的已计算状态，但匹配条件不�
 P99可能由排队、长请求、通信或少数慢路径决定。单个算子占请求时间10%，即使无限加速，其他部分不变时整体最多约1/0.9=1.111倍。还需确认优化是否命中真实shape和dtype。
 
 使用端到端trace把请求阶段与设备活动对齐，再比较固定负载下的分位数和吞吐。平均kernel时间不能替代尾延迟测量。见[可观测性与在线评测](../inference/observability-and-online-evaluation.md)。
+
+## 快速自测
+
+拿一条请求画出 queue、prefill、decode、工具和输出传输的时间线，再分别标出权重、KV、prefix cache 和 speculative decoding 改变了哪一段。最后写出一个会让平均延迟下降、P99 却上升的负载条件。具体实验入口见[推理服务](../inference/serving-systems.md)和[量化验收](../quantization/evaluation-and-deployment-checklist.md)。
+
+**来源与改编说明**：服务阶段和分页 KV 对照 [vLLM 文档](https://docs.vllm.ai/)、[PagedAttention 论文](https://arxiv.org/abs/2309.06180)；量化接口再看 [PyTorch AO](https://pytorch.org/ao/stable/) 和 [TensorRT-LLM 文档](https://nvidia.github.io/TensorRT-LLM/)。算例中的长度、时间和显存数字用于手算，不是线上测量。

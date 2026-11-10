@@ -106,3 +106,9 @@ Prefix/KV reuse 可以减少相同 prompt 的重复 prefill，不能免除每条
 <small>图源同上，3D-HybridEngine workflow in one RLHF iteration。权重同步与布局切换构成迭代成本，图示不承诺其他版本使用完全相同实现。</small>
 
 定位故障时先沿一条样本查 prompt id、response token、mask、reward 位置与四种概率，再查优势与更新，最后分析多 worker 的等待与通信。保存代码 commit、模型/tokenizer/reward 版本、采样参数、重试计数和 actor step，可以区分字段错位与真实策略漂移。若增加 `policy_version_id`、`rollout_version_id`，应说明它们是应用层审计字段，不能假设它们已是该版本内置 keys。完整仓库入口见 [verl GitHub](https://github.com/verl-project/verl)。
+
+## 算法和环境依据
+
+正文严格对照 verl commit `e5687fce0516d31e1fdc4580499074a9bd94c751` 的 `ray_trainer.py`、`agent_loop.py`、`rollout_corr_helper.py` 和 `core_algos.py`，并用 [HybridFlow](https://arxiv.org/abs/2409.19256) 的架构图解释资源映射。队列 80/10、约 8 秒等待和 16 个 optimizer step 是教学算例，不是 verl 的吞吐报告；新增审计字段也不是该 commit 的内置字段。
+
+复查新版本时，先锁 commit，再沿一条样本记录 response mask、old/current/reference logprob、reward、advantage、returns 和 policy version。最后用一个短 batch 对照 bypass 与 decoupled old-logprob 路径，确认差异来自配置而不是字段错位。

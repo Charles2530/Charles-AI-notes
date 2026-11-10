@@ -394,3 +394,5 @@ Genie 最有价值的结果，是证明缺失动作标签并不必然阻止交�
 **Controllability（可控性）** 本文主要通过动作替换引起的 PSNR 差异与定性轨迹衡量，强调动作条件是否影响生成；它不等同于目标任务成功率。
 
 **Behavioral Cloning（行为克隆）** 从专家示范学习动作预测。Genie 的迁移实验先学习 latent action policy，再用少量真实动作样本构建执行映射。
+
+入门时可先读[世界模型基础](../../world-models/beginner-world-models-primer.md)，明确状态、观测、动力学和读出各自的含义；再看[模拟器、反事实与合成 rollout](../../world-models/simulators-counterfactuals-and-synthetic-rollouts.md)，区分“能生成视频”和“能作为训练环境”。如果要评估动作代码是否真的可用，接着读[世界模型评测与失败模式](../../world-models/evaluation-and-failure-modes.md)，把可控性、长期一致性和任务结果分开记录。

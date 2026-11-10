@@ -1,6 +1,6 @@
 # 训练输入怎样变成 X、Y 与 Mask
 
-模型接到一个 `[B,T]` 张量时，不知道它原先来自几篇文档，也不知道某些位置属于用户问题还是目标答案。这些含义由读取、切片、分词和 mask 构造共同决定。下面从 nanoGPT 的 `get_batch` 走到两条问答的 packing，检查每次改动怎样影响目标与吞吐。
+模型接到一个 `[B,T]` 张量时，不知道它原先来自几篇文档，也不知道某些位置属于用户问题还是目标答案。这些含义由读取、切片、分词和 mask 构造共同决定。输入管线出错时，loss 往往还会正常下降，所以要沿一条样本把原文、token、目标、mask 和消费进度都打印出来。下面从 nanoGPT 的 `get_batch` 走到两条问答的 packing，检查每次改动怎样影响目标与吞吐。
 
 ## 从文件里读出连续窗口
 
@@ -114,3 +114,9 @@ nanoGPT 的简单随机窗口读取依赖 RNG，它的示例 checkpoint 没有�
 - [PyTorch 数据加载文档](https://docs.pytorch.org/docs/stable/data.html)说明 worker、预取与 iterable dataset 分片边界。
 - [数据系统](data-systems-and-optimization.md)继续计算来源比例与目标 token 曝光。
 - [分布式恢复](distributed-training-and-checkpointing.md)继续处理梯度、数据与 checkpoint 的共同提交。
+
+## 训练配方和实现依据
+
+连续窗口、右移目标和预取顺序对照 [nanoGPT](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py)，worker、分片和 prefetch 边界对照 [PyTorch DataLoader 文档](https://docs.pytorch.org/docs/stable/data.html)，GPipe 图只用于说明 micro-batch 如何进入更大的执行时间表。两条问答、packing mask、80/120 ms 生产消费和 20 条恢复数据是本站构造的可回放例子。
+
+最小回放保存每条样本 ID、原始长度、有效目标数、pack 边界和 worker seed。将两条样本分别运行与 packed 运行的对应 logits 做比较，再在第三步中断恢复，检查输入 ID 与有效目标数是否一致。这样可以把标签错位、跨样本泄漏和恢复漂移分开。

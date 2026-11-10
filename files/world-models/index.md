@@ -1,8 +1,10 @@
 # 世界模型
 
-世界模型学习环境怎样随时间和行动变化。它可以把历史压缩成内部状态，预测动作后果，估计奖励和终止，或生成供人和 agent 观察的未来视频。不同用途需要不同输出，判断模型是否有用，要看预测是否满足具体使用目的。用于控制时，需要进一步验证它是否改善动作选择。
+把机器人看到的最后一帧单独交给控制器，很多问题会在这里暴露。杯子被手挡住以后，系统仍要估计它在哪里；刚才松开夹爪以后，还要判断杯子是稳稳落下，还是已经滑向桌边。世界模型关注的正是这段看不见、却还要继续行动的时间。
 
-## 一个状态模型要接上哪些接口
+“世界模型”这个名称覆盖了几种差别很大的东西。有的模型把历史压成一个隐状态，有的预测未来视频，有的只预测对控制有用的表示。读论文或看代码时，我更愿意先问三件事，模型接收什么，预测什么，预测结果在哪里被使用。只要要拿它做控制，还得继续检查预测是否真的改变了动作选择。
+
+## 先问模型保留了什么
 
 把相机图像、机器人关节与动作历史记为 $h_t$，内部状态为 $z_t$。最小计算链是
 
@@ -23,7 +25,7 @@ z_t\sim q_\phi(z_t\mid h_t),\qquad
 | Predictive representation | 被遮挡或未来片段的目标表示 | 理解、检索、动作条件预测 | 表示是否保留控制因素 |
 | Generative simulation | 未来像素、视频 latent 或交互环境 | 可视化、合成数据、agent 环境 | 动作响应、记忆和物理事件 |
 
-三者可以组合。视频 autoencoder 可以定义压缩空间，动作条件 Transformer 预测其演化，额外输出奖励与风险。也可以只预测目标表示，完全不解码像素。是否生成视频不是唯一分类依据，输入和输出的数学关系更重要。
+三者可以组合。视频 autoencoder 负责压缩，动作条件 Transformer 预测压缩状态怎样变化，奖励头和风险头再为候选动作打分。也可以完全不解码像素，只预测一个供控制器使用的表示。判断路线时，先看输入和输出的数学关系，再看它是否生成视频。
 
 ## 按技术问题查阅
 
@@ -53,3 +55,15 @@ z_t\sim q_\phi(z_t\mid h_t),\qquad
 设两个动作真实回报为 $[2,1]$，模型预测为 $[1.1,1.2]$。预测的平均绝对误差只有 $0.55$，却把两个动作的顺序反了。若 planner 取预测最大值，它会选第二个动作，真实回报损失为 $1$。用于规划时，排序和选择后悔值比单独的平均预测误差更接近消费目标。
 
 同样，视觉压缩减少 token 不自动缩短等比例的总时间；模型内想象减少真实交互，也会增加计算并继承模型偏差。本站的[小型评测数据](../assets/examples/world-model-mini-chain/episodes.jsonl)与[计算脚本](../assets/examples/world-model-mini-chain/eval_mini_chain.py)专门保留了排序失败。它们用于解释指标，没有训练真实模型，也不构成机器人实验结果。
+
+## 怎样开始读和做
+
+第一次接触时，可以先读[世界模型基础](beginner-world-models-primer.md)和[RSSM、Dreamer](rssm-dreamer-and-planning.md)，把状态、动力学、奖励和 imagined rollout 放在同一条轨迹上。随后看[Masked / JEPA](masked-jepa-and-latent-prediction.md)，比较模型是在预测像素、latent，还是只保留任务相关信息的表示。
+
+再往后读[生成式模拟与视频](generative-simulation-and-video.md)和[动作条件建模](wm-wam-vam-and-action-conditioned-modeling.md)时，建议马上做三组小评测，teacher-forced、free-running，以及相同起点下的动作反事实。评测结果再和[评测与失败模式](evaluation-and-failure-modes.md)、[效率矩阵](efficiency-technique-coverage-matrix.md)、[Serving 案例](rollout-serving-quantization-kernel-case.md)放在一起看。这样能分开预测质量、任务收益和系统成本。
+
+每读完一段，写一句可以被实验推翻的话。例如“在固定起点和 0.8 秒动作窗口内，模型能分辨闭合夹爪与保持夹爪带来的接触事件”。如果句子里没有输入、时间范围、对照和指标，它还只是印象，不能直接拿来设计实验。
+
+## 与本地三个工具的分工
+
+本站保存概念、推导、来源边界和可复算小例子；PaperPilot 保存论文 PDF、页码证据、术语卡片和版本化笔记；server_monitor 保存真实训练或 rollout 的配置、资源曲线、日志和失败样本。一次研究闭环应能从本站的 `question_id` 找到 PaperPilot 的 `source_ref`，再找到 server_monitor 的运行 ID，最后把真实结果回写到对应章节。

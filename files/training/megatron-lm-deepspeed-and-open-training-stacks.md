@@ -41,7 +41,61 @@ Offload把状态移到其他存储层，减少设备驻留，但增加搬运。�
 nanoGPT提供较小的模型、DDP与optimizer循环，适合确认参数在哪里更新。再进入大型框架时，追踪同样的对象如何被包装、分片、收集和保存。本文没有逐版本验证Megatron、DeepSpeed与FSDP所有兼容组合，实际接入需以选定版本的接口和最小运行结果为准。
 
 
+## 继续读
+
+继续看[分布式训练与 checkpoint](distributed-training-and-checkpointing.md)和[集群运行与实验管理](cluster-operations-and-experiment-management.md)。
+
 ## 对照源码与延伸阅读
 
 - [小型DDP训练循环作为状态阅读起点](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/train.py)
 - [Transformer MLP与forward实现](https://github.com/karpathy/nanoGPT/blob/3adf61e154c3fe3fca428ad6bc3818b27a3b8291/model.py)
+
+## 用“超出哪份预算”选择并行方式
+
+先列出每张 GPU 的预算，而不是先选框架：
+
+| 超限对象 | 首选方向 | 新增代价 |
+| --- | --- | --- |
+| 参数驻留 | TP、PP、参数分片 | all-gather、stage 传输或调度 bubble |
+| 优化器/梯度 | ZeRO/FSDP 状态分片 | reduce-scatter、all-gather、保存重排 |
+| 激活 | microbatch、activation checkpoint、序列并行 | 重计算、同步和更复杂的调度 |
+| 单层矩阵计算 | TP 或 sequence parallel | 频繁 collective、shape 约束 |
+| 长序列 KV/激活 | context parallel、分块或重计算 | 跨卡历史访问与负载不均 |
+
+同一作业可以组合多个方向，但每个方向都要写出减少的字节和新增的通信。框架名称只是一种实现组织，不能替你完成预算。
+
+## MLP 切分之外还要检查哪些层
+
+Column/row parallel MLP 说明了局部激活和部分和的关系，但 attention 还涉及 Q/K/V 头、输出投影、mask 和 sequence parallel；归一化可能要求完整 hidden dimension；embedding 和 lm head 又可能共享权重。迁移框架时，应按层类型列出输入/输出 shard，而不是只验证 MLP。
+
+一个最小检查表：
+
+```text
+layer -> input layout -> local compute -> collective -> output layout
+```
+
+如果下一层期望 row-sharded，而上一层输出仍是完整张量，框架可能隐式 all-gather；这会改变通信量和显存峰值。性能报告需要把隐式通信也算进去。
+
+## 迁移框架的四个对照
+
+固定模型、数据、有效 batch 和精度，比较：
+
+1. 单卡或小规模参考实现。
+2. 纯 DDP，确认数据并行目标。
+3. 目标框架的 TP/PP 或状态分片。
+4. 目标框架 + checkpoint 恢复短跑。
+
+逐步增加复杂度能区分数学不一致、通信瓶颈和保存协议问题。每一步都比较初始 logits、loss 分母、step 时间、峰值显存和参数更新方向，不能只比较最终 loss。
+
+## 来源与改编说明
+
+- [Megatron-LM](https://github.com/NVIDIA/Megatron-LM)和[原始模型并行论文](https://arxiv.org/abs/1909.08053)用于核对 column/row parallel 的基本通信位置。
+- [DeepSpeed ZeRO](https://arxiv.org/abs/1910.02054)说明优化器、梯度和参数分片的层次。
+- [PyTorch FSDP](https://pytorch.org/docs/stable/fsdp.html)用于核对参数分片、all-gather 和状态字典边界。
+
+## 自测
+
+1. 为什么参数放得下仍可能被 optimizer state 或激活撑爆？
+2. MLP 的第二个矩阵为什么要做部分和归约，而不是拼接？
+3. 如何用四步实验区分 DDP 目标错误和 TP 通信瓶颈？
+4. 改变 TP/PP 后，checkpoint 还需要核对哪些 shard 信息？

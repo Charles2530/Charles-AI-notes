@@ -43,3 +43,40 @@
 能证明数据格式、前向、损失或报告路径按预期连接，前提是确实运行并检查输出。随机初始化预测、固定fixture和手工评分，不能证明模型训练有效、动作排序可信或闭环成功。
 
 报告应写清哪些数来自解析构造、哪些来自代码执行、哪些来自训练后独立评测。将同一fixture重复通过十次，也不等于十个独立控制实验。见[世界模型入门](../world-models/beginner-world-models-primer.md)。
+
+## 一个动作序列怎样区分三种评测
+
+设模型从状态 `s0` 开始，动作序列为 `[left, left, stop]`。同一条序列至少可以生成三种不同的测试：
+
+| 测试 | 第一步输入 | 后续输入 | 能回答什么 |
+| --- | --- | --- | --- |
+| teacher-forced | 真实 `s0` | 每步都换成真实后继 | 局部转移是否拟合训练分布 |
+| open-loop | 真实 `s0` | 使用模型上一步预测 | 误差怎样随 horizon 累积 |
+| closed-loop | 真实 `s0` | 执行动作后读取新观察 | 预测是否改善真实决策 |
+
+最小的记录接口可以写成：
+
+```python
+def rollout(model, initial_state, actions, true_states=None, refresh=False):
+    state = initial_state
+    rows = []
+    for t, action in enumerate(actions):
+        prediction = model.predict_next(state, action)
+        row = {"t": t, "predicted": prediction}
+        if true_states is not None:
+            row["true"] = true_states[t + 1]
+        rows.append(row)
+        if refresh:
+            state = true_states[t + 1]
+        else:
+            state = prediction
+    return rows
+```
+
+这里 `refresh=True` 只是表示评测接口每一步读取了真实后继，不能把它的误差曲线当成开放循环结果。真实机器人或仿真环境还要记录动作实际执行值、reset 原因和事件标签；只有位置误差下降，却没有测碰撞或任务成功，仍不足以证明规划变好了。
+
+## 快速自测
+
+给一个候选动作写出当前观测、belief、预测状态和真实验证结果。再说明视频自然度、一步误差和决策收益分别由什么数据支持。完整推导可回到[世界模型入门](../world-models/beginner-world-models-primer.md)和[世界模型评测](../world-models/evaluation-and-failure-modes.md)；本页用于定位问题，不能替代多步 rollout 或闭环实验。
+
+**来源与改编说明**：潜变量规划对照 [PlaNet](https://arxiv.org/abs/1811.04551)，想象轨迹对照 [DreamerV3](https://arxiv.org/abs/2301.04104)，表示预测可查 [I-JEPA](https://arxiv.org/abs/2301.08243)；MPC 的控制背景可看 [动态规划教材](http://www.athenasc.com/dpbook.html)。问答中的数值是解释机制的构造例子，不代表真实模型 benchmark。

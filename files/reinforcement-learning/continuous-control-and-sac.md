@@ -1,6 +1,20 @@
 # 连续控制与 SAC
 
-一根倒立摆需要在连续力矩中选择动作。仓库 SAC 示例使用 Pendulum-v1，观察包含角度的正余弦与角速度，动作范围为 `[-2,2]`。DQN 可以枚举几个离散按钮，连续力矩却有无限多个候选，通常需要 actor 直接产生动作。SAC 同时训练随机 actor 和动作价值 critic，并把策略熵放入回报目标，使策略在收益与随机性之间保持可调的权衡。
+一根倒立摆需要在连续力矩中选择动作。仓库 SAC 示例使用 Pendulum-v1，观察包含角度的正余弦与角速度，动作范围为 `[-2,2]`。DQN 可以枚举几个离散按钮，连续力矩却有无限多个候选，通常需要 actor 直接产生动作。SAC 同时训练随机 actor 和动作价值 critic，并把策略熵放入回报目标；读代码时应先分清三个更新分别消费哪一份动作和梯度。
+
+```mermaid
+flowchart LR
+    R[Replay 中的转移<br/>s, a_exec, r, s', terminal] --> C[Critic 更新<br/>拟合 soft target]
+    C --> Q[两个当前 Q]
+    S[Replay 中的状态 s] --> A[Actor 重新采样 a_new]
+    A --> Q
+    Q --> AL[Actor loss<br/>α logπ - min Q]
+    A --> TE[Temperature loss<br/>log α]
+    C -. Polyak .-> T[Target Q]
+    T --> C
+```
+
+同一个 batch 会被三个更新重复读取，但动作的来源不同。critic 用日志里真正执行过的 `a_exec`，actor 在相同状态上重新采样 `a_new`，temperature 只看当前策略的 log density。先把这三条线分开，SAC 代码里的 `detach`、`no_grad` 和参数冻结才有明确含义。
 
 ## 同一条摆杆经验怎样进入三个更新
 
@@ -97,3 +111,9 @@ python files/assets/examples/reinforcement-learning/deep_rl_smoke.py sac --seed 
 示例设定 `target_entropy=-1.0`，使用 scale-corrected environment-action logprob，即已经包含动作尺度修正的环境动作密度。实现保留 tanh 与 action-scale 的 log density 修正，actor 更新期间冻结 critic 参数，并独立优化 `log_alpha`。[示例 README](../assets/examples/reinforcement-learning/README.md)解释 `actor_loss`、`critic_loss`、`alpha`、参数变化和回报字段。短于完整 episode 的运行应报告 `completed_episode_return_mean=unavailable` 和 `current_partial_episode_return`，不能制造一个值为零的 completed return 均值。
 
 SAC 的多项 loss 都有限，只说明这些计算没有立即数值失败。策略是否学到稳定控制，还需要足够交互、多 seed、独立评测和动作分布检查。原始最大熵框架见 [SAC 论文](https://arxiv.org/abs/1801.01290)，自动温度与后续算法表述见 [Soft Actor-Critic Algorithms and Applications](https://arxiv.org/abs/1812.05905)。完全固定数据时还需面对[离线 RL](offline-reinforcement-learning.md)的分布外动作问题。
+
+## 算法和环境依据
+
+最大熵目标和 twin-Q 更新参考 [Soft Actor-Critic](https://arxiv.org/abs/1801.01290)，自动温度和工程化算法表述参考 [Soft Actor-Critic Algorithms and Applications](https://arxiv.org/abs/1812.05905)。Pendulum 的观察、动作范围、短运行和 log-prob 修正来自本站的 smoke test；它只验证更新链路，不证明 SAC 已学会稳定控制。
+
+自测时冻结同一批 replay，分别只执行 critic、actor 和 temperature 一步，打印每个参数集合的梯度是否存在。再去掉 tanh action-scale 的 log density 修正，比较 target 与 actor loss，能看到一个常被隐藏的接口错误。

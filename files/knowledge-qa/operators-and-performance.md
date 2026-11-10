@@ -43,3 +43,9 @@ Exact通常指计算同一数学attention，没有通过稀疏或低秩近似改
 先预热，使编译和初始化按预定方式完成；用设备事件或正确同步量执行时间；重复多次并记录分布。输入是否重复、缓存是否命中、时钟状态与并发负载也会影响结果。
 
 端到端优化还要检查调用是否真的命中新kernel。Amdahl定律给出简单上界：原耗时30%的部分加速2倍，理想总加速为1/(0.7+0.3/2)≈1.176。它假设其余成本不变，新增转换开销会让收益更低。见[性能回归与维护](../operators/testing-regression-and-maintenance.md)。
+
+## 快速自测
+
+选一个你想优化的算子，写出它的 shape、stride、dtype、理论读写量、实际 kernel 时间和端到端占比。再列一个能区分“算术不足”“访存不足”“转换或同步占主导”的 profile 证据。可继续读[成本模型](../operators/kernel-cost-models-and-selection-heuristics.md)与[回归维护](../operators/testing-regression-and-maintenance.md)。
+
+**来源与改编说明**：算子注册和梯度检查对照 [PyTorch custom operators](https://pytorch.org/tutorials/advanced/custom_ops_landing_page.html)，kernel 写法对照 [Triton tutorials](https://triton-lang.org/main/getting-started/tutorials/)，计时接口对照 [torch.utils.benchmark](https://pytorch.org/docs/stable/benchmark_utils.html)。页内数字是可复算的教学算例，不构成硬件性能承诺。

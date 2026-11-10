@@ -15,9 +15,11 @@ paper_topic: 世界模型
     **GitHub / 项目：** GitHub：[github.com/haoliuhl/ringattention](https://github.com/haoliuhl/ringattention)；项目页：[largeworldmodel.github.io/lwm/](https://largeworldmodel.github.io/lwm/)。<br>
     **元数据来源与核验口径：** 来源：[arXiv](https://arxiv.org/abs/2310.01889)；[GitHub API / repo](https://github.com/haoliuhl/ringattention)；[官方 / 项目材料](https://largeworldmodel.github.io/lwm/)；Checked Date：2026-06-04；Repro Status：Paper / official materials reviewed, independent reproduction not claimed。
 
-## 精确注意力省下矩阵之后，长序列仍然放不下
+## Ring Attention 解决的先是内存问题，随后才是通信调度
 
-Ring Attention 解决的是长上下文 Transformer 的执行与存储问题。它保留原来的 dense self-attention，不裁掉远处 token，不把全局注意力换成稀疏或低秩近似；改变的是哪些 token 放在哪台设备上，以及各设备何时计算、何时传输。一个长序列被沿序列维切开，query 与输出留在各自设备，key/value 块在设备之间环形流动。只要当前块的计算足够长，下一块的传输就有机会被遮住。[↗](https://arxiv.org/pdf/2310.01889v4#page=3)
+长序列的 attention 有一个直接的内存账单：如果序列长度是 $s$，完整的 score 矩阵需要 $s^2$ 个位置。FlashAttention 一类实现已经避免把这个矩阵整块保存下来，但训练时每层的激活仍随序列长度线性增长。序列再长一些，单张卡依然放不下。
+
+Ring Attention 保留 dense self-attention 的计算关系。它把序列切到多台设备上，每台设备固定自己的 query 和输出，只把 key/value 分块沿环传递。当前块计算时，下一块可以同时传输；计算完成后再合并在线 softmax 的统计量。它改变的是设备上的数据布局和执行顺序，远处 token 仍然参与 attention。[↗](https://arxiv.org/pdf/2310.01889v4#page=3)
 
 理解它的出发点，需要沿着内存瓶颈的转移往下看。普通 attention 直接物化 $s\times s$ 的注意力矩阵，序列长度 $s$ 增大时，矩阵占用按平方增长。memory-efficient attention 和 FlashAttention 一类方法通过分块与在线归一化，避免保存完整矩阵；但 FFN 的中间激活与每层输出仍随 $s$ 线性增长。Blockwise Parallel Transformer（BPT）进一步分块计算 FFN，减少该部分峰值，最后留下的仍是整段序列的状态本身。
 
@@ -275,3 +277,7 @@ Ring Attention 与 FSDP、tensor parallelism 解决的不是同一块内存。FS
 可执行的判断顺序是，先确认长上下文瓶颈来自哪部分，是否已采用 attention 与 FFN 分块；再根据本地工作集、实际 kernel 吞吐和单向互联带宽选择可重叠的块长；随后决定模型分片与序列分片的 mesh，并核对全局位置 mask、前向归一化和反向梯度归属。最后分别量化最大可运行长度、MFU、tokens/s 以及任务表现，避免用其中一项代替全部指标。
 
 这篇论文为长视频、长轨迹和长文本训练提供的是一项基础设施能力，让同一序列可以使用多台设备的激活内存，同时尽量不暴露 K/V 传输等待。它保留了全局 attention 的信息通路，也保留了全局 attention 的计算账单。最值得带走的结论是，长上下文扩展需要同时处理存储位置、计算调度和学习目标；Ring Attention 把前两项推进了一步，ExoRL 与行检索展示了部分可用性，至于更复杂的长程理解，仍要由后续模型和任务证据回答。
+
+## 把论文结果接到工程问题
+
+先读[长上下文与 FlashAttention](../../operators/long-context-and-flashattention-evolution.md)，区分在线 softmax 的局部统计量与跨设备 K/V 传输；再看[分布式训练与 checkpoint](../../training/distributed-training-and-checkpointing.md)，把序列分片和参数、梯度、优化器状态分片分开。若关注服务端长 prompt，继续看[推理中的 GPU、batch 与显存](../../inference/gpu-kernels-batching-and-memory-systems.md)，单独测 prefill 与 decode。Ring Attention 的训练 MFU 和 ExoRL 结果不能直接替代目标服务的 TTFT、TPOT 或任务成功率。

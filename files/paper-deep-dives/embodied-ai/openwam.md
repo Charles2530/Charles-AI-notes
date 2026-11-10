@@ -429,3 +429,8 @@ OpenWAM 提供的可复用方法，是先保持动作单位、相机布局、训
 最终 α 模型说明，独立动作容量、明确的 world-to-action 通路与多源预训练能够形成跨多类本体的强起点。它也保留了直接可见的不足，相机和噪声扰动、未见组合、开放任务以及长期记忆都可能先于普通分布内成功率成为瓶颈。论文未探索完整的后训练方法，也未纳入 UMI 类数据；紧凑而对环境变化稳健的视觉空间仍是开放问题。[↗](https://arxiv.org/pdf/2609.07398v1#page=33)
 
 对实际采用者，优先要判断目标平台与预训练数据在视角、动作语义和任务变化上相隔多远，再决定补充哪些目标示范及扰动测试。更大的视频模型和更高的总均值都不能替代这一步，而 OpenWAM 的模块接口与细分实验正好让这种判断有可操作的落点。
+
+OpenWAM 的视觉、动作和世界模型接口可以先对照[机器人与自动驾驶中的世界模型](../../world-models/applications-in-robotics-and-autonomous-driving.md)，再看[动作表示与接口](../../vla/action-representation-and-interfaces.md)检查坐标、单位和控制周期。若要解释真实执行中的失败，接[闭环恢复与失败分析](../../vla/closed-loop-recovery-and-failure-analysis.md)而不要只看离线 action loss。
+## 继续读
+
+继续看[动作表示与接口](../../vla/action-representation-and-interfaces.md)理解跨本体动作单位，再看[闭环恢复与失败分析](../../vla/closed-loop-recovery-and-failure-analysis.md)把离线成功率接到真实执行。

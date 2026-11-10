@@ -89,6 +89,10 @@ Prefill的query数量通常较多，适合块矩阵计算；decode常只有每�
 
 <small>图源：[Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889)。原图表达序列分块分布在多个设备上，并让 K/V block 沿设备环传递。这里用它说明：当上下文继续变长，问题会从单 kernel 的片上复用扩展到跨设备通信和 sequence parallel。</small>
 
+## 继续读
+
+长上下文优化落到实现时，继续看[attention 与 KV kernel](serving-attention-and-kv-kernels.md)、[通信和 kernel 重叠](communication-kernels-and-overlap.md)以及[推理缓存与投机](../inference/caching-routing-and-speculative.md)。
+
 ## 对照源码与延伸阅读
 
 - [固定版本的 FlashAttention v2 教程实现](https://github.com/triton-lang/triton/blob/cd2e01c6686d6503802e6cdfac56d5a5dfdb27a1/python/tutorials/06-fused-attention.py)
